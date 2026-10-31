@@ -6,7 +6,34 @@
 pub struct RawRegion {
     ptr: *mut u8,
     len: usize,
+    /// The VMM object that owns this memory (QEMU: the block's `MemoryRegion`), or none. Opaque.
+    owner: Owner,
 }
+
+/// ★ 2026-10-31: the VMM object that keeps a RAM block alive (QEMU: the `MemoryRegion *`), as an
+/// OPAQUE token: safe code may hold and copy it, it cannot read it, and only the layout guard
+/// hands it back to the VMM's hold/release verbs (`ramguard_unsafe.rs`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Owner(*mut core::ffi::c_void);
+
+impl Owner {
+    /// No owner (a region the VMM does not reference-count).
+    pub const NONE: Owner = Owner(core::ptr::null_mut());
+
+    /// Whether there is an owner to hold.
+    #[must_use]
+    pub fn is_some(self) -> bool {
+        !self.0.is_null()
+    }
+}
+
+// ⊘ No `Send`/`Sync` of its own: an `Owner` only ever travels inside a [`RawRegion`], whose manual
+// `Send`/`Sync` (below) covers it, and to the VMM's thread-safe hold/release verbs
+// (`memory_region_ref` / `memory_region_unref` are atomic reference counts).
+
+mod ramguard_unsafe;
+pub use ramguard_unsafe::{CMrHold, MrHold, QemuLayoutGuard};
+// (the verb types `MrRefFn` / `MrUnrefFn` are declared with the other C callbacks below)
 
 // SAFETY: the region is process memory QEMU keeps mapped from registration until the device (or
 // the RAM block) is torn down, which unregisters it here first. Concurrent access is the device's
@@ -24,7 +51,37 @@ impl RawRegion {
     /// every structure holding it (the device unregisters it before QEMU frees the memory).
     #[must_use]
     pub unsafe fn adopt(ptr: *mut u8, len: usize) -> RawRegion {
-        RawRegion { ptr, len }
+        RawRegion {
+            ptr,
+            len,
+            owner: Owner::NONE,
+        }
+    }
+
+    /// [`RawRegion::adopt`] for a region the VMM reference-counts through `owner` (QEMU: the
+    /// block's `MemoryRegion *`; null = none).
+    ///
+    /// # Safety
+    /// As [`RawRegion::adopt`]; and `owner` is null or a VMM object that stays alive for as long as
+    /// the VMM keeps the block registered, and for as long as a hold taken on it through the VMM's
+    /// own verb is held (`ramguard_unsafe.rs`).
+    #[must_use]
+    pub unsafe fn adopt_owned(
+        ptr: *mut u8,
+        len: usize,
+        owner: *mut core::ffi::c_void,
+    ) -> RawRegion {
+        RawRegion {
+            ptr,
+            len,
+            owner: Owner(owner),
+        }
+    }
+
+    /// The owner token (for the layout guard's hold; opaque).
+    #[must_use]
+    pub fn owner(&self) -> Owner {
+        self.owner
     }
 
     /// Length in bytes.
@@ -83,46 +140,6 @@ impl RawRegion {
         true
     }
 
-    /// The VMM address of the region's first byte, as an INTEGER (for `translate`'s plain-integer
-    /// `HostBlock`s). Nothing is ever dereferenced from it; turning an address back into memory
-    /// happens only here, in [`RawRegion::describe_range`].
-    #[must_use]
-    pub fn base_addr(&self) -> u64 {
-        self.ptr.addr() as u64
-    }
-
-    /// ★ 2026-10-31: `[off, off+len)` of this region as a [`kf_linux_raw::MappedRegion`] to
-    /// DESCRIBE to the host RM (an `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR`, which pins the pages) — the
-    /// guest-RAM object of a VMM whose RAM is not a file (`V3_GUEST_MEMORY.md` §5). The region
-    /// does not own the memory and never unmaps it. Bounds-checked against the adopted region.
-    ///
-    /// # Errors
-    /// Out of range, not host-page-aligned, or zero length, by name.
-    pub fn describe_range(
-        &self,
-        off: usize,
-        len: usize,
-    ) -> Result<kf_linux_raw::MappedRegion, kf_linux_raw::RawError> {
-        let p = self
-            .span(off, len)
-            .ok_or(kf_linux_raw::RawError::OutOfRange {
-                offset: off as u64,
-                len: len as u64,
-                object_len: self.len as u64,
-            })?;
-        // SAFETY: `span` bounds-checked `[off, off+len)` inside the adopted region, which QEMU keeps
-        // mapped read-write from registration until the device unregisters the block (`adopt`'s
-        // contract). The descriptor ioctl pins the pages and keeps no address; the returned region
-        // never `munmap`s and is dropped by the caller right after the ioctl.
-        unsafe {
-            kf_linux_raw::MappedRegion::adopt_foreign(
-                p.addr() as u64,
-                len as u64,
-                kf_linux_raw::HostProt::ReadWrite,
-            )
-        }
-    }
-
     /// Copy from the region at `off` into `dst`.
     pub fn read_into(&self, off: usize, dst: &mut [u8]) -> bool {
         let Some(p) = self.span(off, dst.len()) else {
@@ -149,19 +166,6 @@ impl BackendFd {
     #[must_use]
     pub unsafe fn adopt(fd: i32) -> Option<BackendFd> {
         (fd >= 0).then_some(BackendFd(fd))
-    }
-
-    /// ★ 2026-10-31: borrow it for as long as `holder` — the registry (`RamMap`) the block is
-    /// registered in — is borrowed, so [`kf_mem::guestmem::GuestMemory::export_fd`] can return a
-    /// `BorrowedFd` tied to the memory it describes. ⊘ Never closed here. The descriptor is open
-    /// while its block stays registered; a caller uses the borrow for one batch of syscalls, as it
-    /// uses [`BackendFd::borrow`].
-    #[must_use]
-    pub fn borrow_held<'a, T: ?Sized>(&self, holder: &'a T) -> std::os::fd::BorrowedFd<'a> {
-        let _ = holder;
-        // SAFETY: `adopt`'s contract — the descriptor is open while a `BackendFd` of it exists in
-        // the device, and `BorrowedFd` never closes it. The lifetime is the holder's borrow.
-        unsafe { std::os::fd::BorrowedFd::borrow_raw(self.0) }
     }
 
     /// Borrow it for one `mmap`. ⊘ Never closed here.
@@ -395,6 +399,11 @@ impl kf_broker::Host for BrokerHooks {
 // `kf3_display_cursor_apply` entry, so on QEMU's main loop with the BQL held; none may block or
 // re-enter an entry.
 
+/// ★ ABI 31: take one reference on a RAM block's owner (QEMU's `memory_region_ref`), any thread.
+pub type MrRefFn = unsafe extern "C" fn(mr: *mut core::ffi::c_void);
+/// ★ ABI 31: give that reference back (QEMU's `memory_region_unref`), any thread.
+pub type MrUnrefFn = unsafe extern "C" fn(mr: *mut core::ffi::c_void);
+
 /// A key edge by Linux evdev code; 1 = QEMU mapped it, 0 = no mapping (dropped).
 pub type InKeyFn =
     unsafe extern "C" fn(opaque: *mut core::ffi::c_void, evdev: u32, down: u32) -> i32;
@@ -624,49 +633,30 @@ pub(crate) fn test_owned_ram(bytes: usize) -> (RawRegion, BackendFd) {
         RawRegion {
             ptr: mem.as_mut_ptr(),
             len: mem.len(),
+            owner: Owner::NONE,
         },
         BackendFd(file.as_raw_fd()),
     )
 }
 
-/// ★ 2026-10-31 test-only: `bytes` of zeroed, 4 KiB-aligned memory that lives until process exit
-/// (a RAM block whose host address a plan and a descriptor can take).
+/// ★ 2026-10-31 test-only: `bytes` (a multiple of 4 KiB) of zeroed, 4 KiB-aligned memory that
+/// lives until process exit, owned by the opaque token `tag` (0 = none) — a RAM block as the VMM
+/// registers it. Safe: the block is a leaked `Vec`, aligned by pointer arithmetic.
 #[cfg(test)]
-pub(crate) fn test_aligned_ram(bytes: usize) -> RawRegion {
-    let layout = std::alloc::Layout::from_size_align(bytes, 4096).unwrap();
-    // SAFETY: `layout` has a non-zero size; the block is leaked, so it outlives every region.
-    let p = unsafe { std::alloc::alloc_zeroed(layout) };
-    assert!(!p.is_null());
-    RawRegion { ptr: p, len: bytes }
+pub(crate) fn test_aligned_ram_owned(bytes: usize, tag: usize) -> RawRegion {
+    let mem = Box::leak(vec![0u8; bytes + 4096].into_boxed_slice());
+    let pad = (4096 - (mem.as_ptr() as usize % 4096)) % 4096;
+    RawRegion {
+        ptr: mem.as_mut_ptr().wrapping_add(pad),
+        len: bytes,
+        owner: Owner(core::ptr::without_provenance_mut(tag)),
+    }
 }
 
-/// ★ 2026-10-31: `describe_range` hands the host RM a region over a block, bounds-checked and
-/// page-aligned, that never unmaps it.
+/// [`test_aligned_ram_owned`] with no owner.
 #[cfg(test)]
-mod describe_tests {
-    use super::*;
-
-    #[test]
-    fn describing_a_block_is_bounds_checked_and_aligned() {
-        let r = test_aligned_ram(0x4000);
-        assert_eq!(r.base_addr() % 4096, 0);
-        let whole = r.describe_range(0, 0x4000).expect("whole block");
-        assert_eq!(whole.len_bytes(), 0x4000);
-        drop(whole); // does not unmap: the block is still ours
-        assert!(r.store_u32(0, 7));
-        assert_eq!(r.load_u32(0), Some(7));
-        assert!(r.describe_range(0x1000, 0x3000).is_ok());
-        for (off, len) in [
-            (0, 0x4001),
-            (0x1000, 0x4000),
-            (usize::MAX, 2),
-            (1, 0x1000),
-            (0, 0x800),
-            (0, 0),
-        ] {
-            assert!(r.describe_range(off, len).is_err(), "{off:#x}+{len:#x}");
-        }
-    }
+pub(crate) fn test_aligned_ram(bytes: usize) -> RawRegion {
+    test_aligned_ram_owned(bytes, 0)
 }
 
 /// ★ ABI 23 (`V3_DISPLAY.md` §8.20): the QEMU sink's own conversions, against C-ABI verbs that

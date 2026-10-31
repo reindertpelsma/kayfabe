@@ -7,7 +7,7 @@
 //! `kf_cuda::diffmodel`), and [`crate::apply`] applies that diff. What stays here is what every
 //! target needs: the [`Desired`] row, the leaf → row classification, and the [`MapTarget`] verbs.
 
-use crate::ramobj::RamObjects;
+use crate::ramobj::RamObjectCell;
 
 /// One mapping a walk says the guest's tables currently express, as a slice of one of the two
 /// ground truths: the reserved store (`ram == false`, `off` = GPGA offset) or the guest-RAM
@@ -359,7 +359,7 @@ pub struct OwnView {
 pub const NOT_BATCHED: &str = "this target does not batch";
 
 /// ★ 2026-10-31 (`V3_GUEST_MEMORY.md` §5): what [`MapTarget::map_batch`] answers when the VMM's
-/// guest RAM offers NO file ([`crate::guestmem::GuestMemory::export_fd`] is `None`). The batch
+/// guest RAM has NO file (the adapter's `RamMap::backing_fd()` is `None`). The batch
 /// path stitches pieces of a file into one host view; without a file the capability is absent and
 /// every row goes through the per-run path (one host map per run, per host RAM object). Not a
 /// refusal: counted apart ([`crate::apply::Applied::batch_no_fd`]) and named once in the log.
@@ -399,10 +399,11 @@ pub struct HostVas<'rm> {
     /// memfd), `Desired::off` a file offset into it.
     pub ram_obj: Option<u32>,
     /// ★ 2026-10-31 (`V3_GUEST_MEMORY.md` §5): guest RAM that is NOT one file — one host object per
-    /// host segment, `Desired::off` a RAM offset ([`RamObjects`]). Wins over `ram_obj` when set;
+    /// host segment, `Desired::off` a RAM offset ([`crate::ramobj::RamObjects`]), the table held in
+    /// a cell a layout change replaces. Wins over `ram_obj` when set;
     /// a guest-RAM row inside ONE object maps from it, a row across an object edge is refused by
     /// name here (the batch layer cuts such rows first: [`crate::batch::SpaceVerbs::ram_cuts`]).
-    pub ram_objs: Option<&'rm RamObjects>,
+    pub ram_objs: Option<&'rm RamObjectCell>,
 }
 
 impl HostVas<'_> {

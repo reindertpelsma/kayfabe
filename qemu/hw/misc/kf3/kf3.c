@@ -832,6 +832,26 @@ static void kf3_db_section(Kf3State *s, MemoryRegionSection *sec, bool add)
     }
 }
 
+/* ★ ABI 31: the layout guard's hold on a RAM block (docs/design/V3_GUEST_MEMORY.md §2). The reference is
+ * on mr->owner; memory_region_ref/unref are atomic and callable from any thread. QEMU frees the RAMBlock
+ * only when the MemoryRegion is finalized (memory_region_destructor_ram -> qemu_ram_free ->
+ * call_rcu(reclaim_ramblock)), which a held owner reference prevents. No RCU read lock is taken: a
+ * read-side section as long as the RM's pin would stall drain_call_rcu() on the main loop. */
+static void kf3_mr_ref(void *mr)
+{
+    memory_region_ref((MemoryRegion *)mr);
+}
+
+static void kf3_mr_unref(void *mr)
+{
+    memory_region_unref((MemoryRegion *)mr);
+}
+
+static const Kf3RamOps kf3_ram_hold_ops = {
+    .mr_ref = kf3_mr_ref,
+    .mr_unref = kf3_mr_unref,
+};
+
 static void kf3_region_add(MemoryListener *l, MemoryRegionSection *sec)
 {
     Kf3State *s = container_of(l, Kf3State, listener);
@@ -845,7 +865,8 @@ static void kf3_region_add(MemoryListener *l, MemoryRegionSection *sec)
      * guest RAM from it into a CPU window when a walked leaf or the PRAMIN target is sysmem. */
     kf3_ram_add(s->h, sec->offset_within_address_space, hva, int128_get64(sec->size),
                 memory_region_get_fd(sec->mr),
-                qemu_ram_get_fd_offset(sec->mr->ram_block) + sec->offset_within_region);
+                qemu_ram_get_fd_offset(sec->mr->ram_block) + sec->offset_within_region,
+                sec->mr);
 }
 
 static void kf3_region_del(MemoryListener *l, MemoryRegionSection *sec)
@@ -1783,6 +1804,11 @@ static void kf3_dev_realize(PCIDevice *pci, Error **errp)
         goto fail;
     }
 
+    /* ★ ABI 31: the layout guard's hold verbs, before the listener's replay registers the first block. */
+    if (kf3_ram_ops(s->h, &kf3_ram_hold_ops) != 0) {
+        error_setg(errp, "kf3: Rust refused the RAM hold verbs");
+        goto fail;
+    }
     s->listener = (MemoryListener){
         .name = "kf3-guest-ram",
         .region_add = kf3_region_add,

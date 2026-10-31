@@ -206,8 +206,9 @@ enum Disposition {
     /// hole in a range the reservation still believes it owns, and the next placement
     /// into that hole would succeed against stale accounting.
     InsideReservation,
-    /// ★ 2026-10-31: **memory the VMM owns**, described to the host but never mapped or unmapped
-    /// by us ([`MappedRegion::adopt_foreign`]). Dropping it must do nothing at all.
+    /// ★ 2026-10-31: **memory the VMM owns**, seen through a [`RamSegment`] (a temporary
+    /// [`MappedRegion`] over it, for the copy and descriptor verbs). Never mapped or unmapped by
+    /// us: dropping it must do nothing at all.
     Foreign,
 }
 
@@ -437,62 +438,6 @@ pub struct MappedRegion {
 unsafe impl Send for MappedRegion {}
 
 impl MappedRegion {
-    /// ★★★ **Adopt memory the VMM already maps — to DESCRIBE it, never to own it** (2026-10-31,
-    /// `docs/design/V3_GUEST_MEMORY.md` §5). Guest RAM that is not a file is only ever known as
-    /// `translate(gpa, len)` blocks of VMM addresses; an `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` over one
-    /// host block needs a [`MappedRegion`] to describe ([`crate::Indirect::describing`]). This is
-    /// that region: no `mmap` was made, and dropping it does NOT `munmap` (the VMM's mapping is not
-    /// ours to take down).
-    ///
-    /// The address is taken as an integer, so no pointer crosses a crate boundary; it is stored,
-    /// never dereferenced here ([`MappedRegion::read_into`] and the other accessors would, and a
-    /// foreign region is handed ONLY to the descriptor ioctl — which pins its pages and keeps no
-    /// address).
-    ///
-    /// # Safety
-    /// `[base, base + len)` must be mapped in this process, readable and writable, and stay so for
-    /// as long as this region is used — i.e. until the RM object described from it is freed (RM pins
-    /// the pages; the VMM must not `munmap` them meanwhile). The caller must not use the region's
-    /// byte accessors unless that range is also valid for those accesses.
-    ///
-    /// # Errors
-    /// [`RawError::ZeroLength`] (a null `base` or a zero `len`), [`RawError::Misaligned`] (`base`
-    /// or `len` not a whole host page), [`RawError::LengthOverflow`] (`base + len` wraps),
-    /// [`RawError::TooLargeForHost`].
-    pub unsafe fn adopt_foreign(base: u64, len: u64, prot: HostProt) -> Result<Self, RawError> {
-        if len == 0 {
-            return Err(RawError::ZeroLength {
-                what: "foreign region length",
-            });
-        }
-        let page = HostPageSize::query().bytes();
-        for (what, value) in [
-            ("foreign region base", base),
-            ("foreign region length", len),
-        ] {
-            if value % page != 0 {
-                return Err(RawError::Misaligned {
-                    what,
-                    value,
-                    required: page,
-                });
-            }
-        }
-        base.checked_add(len)
-            .ok_or(RawError::LengthOverflow { offset: base, len })?;
-        let len_host =
-            usize::try_from(len).map_err(|_| RawError::TooLargeForHost { value: len })?;
-        let ptr = usize::try_from(base).map_err(|_| RawError::TooLargeForHost { value: base })?;
-        let base = NonNull::new(ptr as *mut u8).ok_or(RawError::ZeroLength {
-            what: "foreign region base",
-        })?;
-        Ok(MappedRegion {
-            map: Mapping::adopt(base, len_host, Disposition::Foreign),
-            prot,
-            cache: CachePolicy::WriteBack,
-        })
-    }
-
     /// ★★★★★ **Ask the kernel to change this mapping's protection — as a QUESTION, not a
     /// capability.**
     ///
@@ -1068,6 +1013,173 @@ impl HostSpan {
     }
 }
 
+/// ★★★ **A span of GUEST RAM as the VMM maps it, valid only while a layout guard is held**
+/// (2026-10-31, `docs/design/V3_GUEST_MEMORY.md`; `THE_CONSTRAINTS.md` §13).
+///
+/// The VMM-agnostic `kf_mem::guestmem` answers `translate(gpa, len)` with these. Safe code holds,
+/// slices and passes them; **it can neither read nor set the address**:
+///
+/// - the fields are private and there is ONE constructor, [`RamSegment::from_raw`], which is
+///   `unsafe` — only the VMM adapter (`kf-qemu`, under its layout guard) calls it, with the
+///   address of a RAM block it holds alive;
+/// - an offset is a [`HostOffset`] and every `(offset, len)` is validated by
+///   [`bounds::checked_span`] inside the method that uses it, so no unvalidated offset + length
+///   reaches an `unsafe` block ([`RamSegment::slice`], [`RamSegment::read_into`],
+///   [`RamSegment::write_from`]);
+/// - the descriptor verb gets a bounded [`MappedRegion`] for the duration of a closure
+///   ([`RamSegment::with_region`]) — never an address — and the RM keeps the pinned page array,
+///   not the address (`os-mlock.c:216-254`).
+///
+/// **Type invariant:** `[base, base + len)` is mapped read-write in this process for as long as
+/// `'g` — the lifetime of the guard `from_raw` borrowed — and `len > 0`. Nothing mutates the
+/// fields; `slice` yields a sub-range of the same mapping under the same `'g`.
+///
+/// Neither `Send` nor `Sync` (a `NonNull` field): a segment lives on the thread that took the
+/// guard, which is the property a guard-scoped borrow needs.
+#[derive(Debug)]
+pub struct RamSegment<'g> {
+    base: NonNull<u8>,
+    len: usize,
+    _guard: core::marker::PhantomData<&'g ()>,
+}
+
+impl<'g> RamSegment<'g> {
+    /// Make a segment over `[base, base + len)`, valid for as long as `guard` is borrowed.
+    ///
+    /// # Safety
+    /// `[base, base + len)` must be mapped read-write in this process and STAY mapped for as long
+    /// as `guard` is alive: `guard` must be the VMM adapter's layout guard (for QEMU: a hold on
+    /// the block's `MemoryRegion`), so the block cannot be freed or unmapped while the segment —
+    /// or any [`RamSegment::slice`] of it — can be used. The memory may be written concurrently by
+    /// the guest; every access here is a bounds-checked copy, never a reference.
+    ///
+    /// # Errors
+    /// [`RawError::ZeroLength`] for `len == 0`; [`RawError::LengthOverflow`] if `base + len`
+    /// wraps the address space.
+    pub unsafe fn from_raw<G: ?Sized>(
+        base: NonNull<u8>,
+        len: usize,
+        guard: &'g G,
+    ) -> Result<Self, RawError> {
+        let _ = guard;
+        if len == 0 {
+            return Err(RawError::ZeroLength {
+                what: "ram segment length",
+            });
+        }
+        let start = base.as_ptr() as usize;
+        start.checked_add(len).ok_or(RawError::LengthOverflow {
+            offset: start as u64,
+            len: len as u64,
+        })?;
+        Ok(RamSegment {
+            base,
+            len,
+            _guard: core::marker::PhantomData,
+        })
+    }
+
+    /// A segment over ordinary Rust memory — SAFE, because the shared borrow `cells` is held for
+    /// `'g` and `AtomicU8` is interior-mutable: the memory is valid read-write for exactly as long
+    /// as the segment can be used. For tests and model hypervisors; a VMM's own memory comes only
+    /// from [`RamSegment::from_raw`].
+    ///
+    /// # Errors
+    /// [`RawError::ZeroLength`] for an empty buffer.
+    pub fn over_cells(cells: &'g [core::sync::atomic::AtomicU8]) -> Result<Self, RawError> {
+        if cells.is_empty() {
+            return Err(RawError::ZeroLength {
+                what: "ram segment length",
+            });
+        }
+        // `AtomicU8` wraps an `UnsafeCell<u8>`: writing through a pointer derived from the shared
+        // slice is allowed by the type, which is the point of choosing it.
+        let base =
+            NonNull::new(cells.as_ptr().cast_mut().cast::<u8>()).ok_or(RawError::ZeroLength {
+                what: "ram segment base",
+            })?;
+        Ok(RamSegment {
+            base,
+            len: cells.len(),
+            _guard: core::marker::PhantomData,
+        })
+    }
+
+    /// Bytes in the segment (never 0).
+    #[must_use]
+    pub fn len(&self) -> u64 {
+        self.len as u64
+    }
+
+    /// Never true: a zero-length segment is refused at its constructors.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
+    /// ★ The sub-segment `[offset, offset + len)`, under the same guard. This is the ONLY way to
+    /// narrow a segment, and the only place its pointer moves; the range is established inside the
+    /// segment by [`bounds::checked_span`] (checked arithmetic) before the pointer is advanced.
+    ///
+    /// # Errors
+    /// As [`bounds::checked_span`]: zero length, overflow, or not inside the segment.
+    pub fn slice(&self, offset: HostOffset, len: u64) -> Result<RamSegment<'g>, RawError> {
+        let (start, n) = bounds::checked_span(self.len(), offset, len, "ram segment slice")?;
+        // `within` re-checks `start + n <= self.len` and advances the pointer inside the segment.
+        let sp = HostSpan::within(self.base, self.len, start, n).ok_or(RawError::OutOfRange {
+            offset: offset.get(),
+            len,
+            object_len: self.len(),
+        })?;
+        Ok(RamSegment {
+            base: sp.base,
+            len: sp.len,
+            _guard: core::marker::PhantomData,
+        })
+    }
+
+    /// Whether the segment starts and ends on a host page (what an OS descriptor over it needs).
+    #[must_use]
+    pub fn is_page_aligned(&self) -> bool {
+        let page = HostPageSize::query().bytes();
+        (self.base.as_ptr() as usize as u64).is_multiple_of(page) && self.len().is_multiple_of(page)
+    }
+
+    /// Copy `dst.len()` bytes from the segment at `offset` (a bounds-checked copy; the guest may
+    /// be writing the same bytes).
+    ///
+    /// # Errors
+    /// As [`MappedRegion::read_into`].
+    pub fn read_into(&self, offset: HostOffset, dst: &mut [u8]) -> Result<(), RawError> {
+        self.as_foreign().read_into(offset, dst)
+    }
+
+    /// Copy `src` into the segment at `offset`.
+    ///
+    /// # Errors
+    /// As [`MappedRegion::write_from`].
+    pub fn write_from(&self, offset: HostOffset, src: &[u8]) -> Result<(), RawError> {
+        self.as_foreign().write_from(offset, src)
+    }
+
+    /// Run `f` over a bounded [`MappedRegion`] view of the whole segment — the shape the RM's
+    /// OS-descriptor verb takes ([`crate::Indirect::describing`]). The view never unmaps
+    /// anything, cannot outlive the closure, and offers no address.
+    pub fn with_region<R>(&self, f: impl FnOnce(&MappedRegion) -> R) -> R {
+        let region = self.as_foreign();
+        f(&region)
+    }
+
+    /// A temporary foreign [`MappedRegion`] over exactly this segment (its drop is a no-op).
+    fn as_foreign(&self) -> MappedRegion {
+        MappedRegion {
+            map: Mapping::adopt(self.base, self.len, Disposition::Foreign),
+            prot: HostProt::ReadWrite,
+            cache: CachePolicy::WriteBack,
+        }
+    }
+}
+
 /// A page **real hardware** writes — semaphore payloads, USERD, fences.
 ///
 /// Accessed as `Relaxed` atomics, naturally aligned, ≤ 8 bytes, and *nothing else*
@@ -1589,60 +1701,71 @@ mod tests {
     use std::fs::File;
     use std::io::Write as _;
 
-    /// ★ 2026-10-31: a foreign region describes memory the VMM owns. Dropping it must not unmap
-    /// that memory, `reprotect`/`request_huge_pages` must refuse, and a bad base or length is
-    /// refused by name before anything is stored.
+    /// ★ 2026-10-31: a [`RamSegment`] is VMM memory seen under a guard. Dropping it or its slices
+    /// never unmaps anything; every slice is checked inside the segment; the copies are bounds
+    /// checked; a zero length or a wrapping range is refused by name.
     #[test]
-    fn a_foreign_region_never_unmaps_reprotects_or_advises_the_vmms_memory() {
+    fn a_ram_segment_is_bounded_and_never_unmaps_the_vmms_memory() {
         let page_bytes = page().bytes();
-        let owner = MappedRegion::map(
-            Backing::PrivateAnonymous,
-            4 * page_bytes,
-            HostProt::ReadWrite,
-            CachePolicy::WriteBack,
-            page(),
-        )
-        .unwrap();
-        owner.write_from(HostOffset::new(8), &[1, 2, 3, 4]).unwrap();
-        // SAFETY: test-only; `owner` outlives every use of the foreign view below.
-        let base = unsafe { owner.host_span().as_ptr() } as u64;
-        // SAFETY: `[base, base + 4 pages)` is `owner`'s live read-write mapping.
-        let foreign =
-            unsafe { MappedRegion::adopt_foreign(base, 4 * page_bytes, HostProt::ReadWrite) }
-                .unwrap();
-        assert_eq!(foreign.len_bytes(), 4 * page_bytes);
-        assert_eq!(
-            foreign.addr_at(HostOffset::new(page_bytes), 8),
-            Ok(base + page_bytes)
-        );
-        assert!(foreign.reprotect(HostProt::ReadWrite).is_err());
-        assert!(foreign.request_huge_pages().is_err());
-        drop(foreign);
-        // The VMM's mapping is untouched: still mapped, still holding its bytes.
+        let total = (4 * page_bytes) as usize;
+        // The VMM's memory: a leaked buffer, page-aligned by pointer arithmetic (safe).
+        let buf = Box::leak(vec![0u8; total + page_bytes as usize].into_boxed_slice());
+        let pad = (page_bytes as usize - (buf.as_ptr() as usize % page_bytes as usize))
+            % page_bytes as usize;
+        let base = NonNull::new(buf.as_mut_ptr().wrapping_add(pad)).unwrap();
+        let guard = ();
+        // SAFETY: `[base, base + 4 pages)` lies inside the leaked buffer, which is never freed.
+        let seg = unsafe { RamSegment::from_raw(base, total, &guard) }.unwrap();
+        assert_eq!(seg.len(), 4 * page_bytes);
+        assert!(seg.is_page_aligned());
+        seg.write_from(HostOffset::new(8), &[1, 2, 3, 4]).unwrap();
         let mut back = [0u8; 4];
-        owner.read_into(HostOffset::new(8), &mut back).unwrap();
+        seg.read_into(HostOffset::new(8), &mut back).unwrap();
         assert_eq!(back, [1, 2, 3, 4]);
-        // Refusals, by name.
-        for (b, l) in [
-            (0u64, page_bytes),
-            (base + 1, page_bytes),
-            (base, page_bytes + 1),
+        let sub = seg.slice(HostOffset::new(page_bytes), page_bytes).unwrap();
+        assert_eq!(sub.len(), page_bytes);
+        assert!(sub.is_page_aligned());
+        sub.write_from(HostOffset::new(16), &[9, 9]).unwrap();
+        let inner = sub.slice(HostOffset::new(8), 8).unwrap();
+        assert!(!inner.is_page_aligned());
+        // The bounds hold for every route, including u64::MAX.
+        for (o, l) in [
+            (0u64, 4 * page_bytes + 1),
+            (page_bytes, 4 * page_bytes),
+            (u64::MAX, 2),
+            (1, u64::MAX),
+            (u64::MAX, u64::MAX),
+            (4 * page_bytes, 1),
         ] {
-            // SAFETY: refused before any use.
-            let r = unsafe { MappedRegion::adopt_foreign(b, l, HostProt::ReadWrite) };
-            assert!(r.is_err(), "{b:#x}+{l:#x}");
+            assert!(seg.slice(HostOffset::new(o), l).is_err(), "{o:#x}+{l:#x}");
         }
-        // SAFETY: refused before any use.
-        let zero_len = unsafe { MappedRegion::adopt_foreign(base, 0, HostProt::ReadWrite) };
-        assert!(matches!(zero_len, Err(RawError::ZeroLength { .. })));
-        // SAFETY: refused before any use.
-        let wraps = unsafe {
-            MappedRegion::adopt_foreign(
-                u64::MAX - page_bytes + 1,
-                2 * page_bytes,
-                HostProt::ReadWrite,
+        assert!(
+            seg.read_into(HostOffset::new(4 * page_bytes), &mut [0u8; 1])
+                .is_err()
+        );
+        assert!(matches!(
+            seg.slice(HostOffset::new(0), 0),
+            Err(RawError::ZeroLength { .. })
+        ));
+        assert!(matches!(
+            sub.slice(HostOffset::new(0), page_bytes + 1),
+            Err(RawError::OutOfRange { .. })
+        ));
+        assert_eq!(seg.with_region(|r| r.len_bytes()), 4 * page_bytes);
+        // A segment owns nothing (it has no `Drop`): the VMM's memory is still there, holding the bytes.
+        let _ = (&inner, &sub, &seg);
+        assert_eq!(buf[pad + 8..pad + 12], [1, 2, 3, 4]);
+        assert_eq!(buf[pad + page_bytes as usize + 16..][..2], [9, 9]);
+        // Refusals at the constructor, by name.
+        let top = NonNull::new((usize::MAX - 8) as *mut u8).unwrap();
+        // SAFETY: both are refused (zero length; the range wraps) before any use.
+        let (zero, wraps) = unsafe {
+            (
+                RamSegment::from_raw(base, 0, &guard),
+                RamSegment::from_raw(top, 64, &guard),
             )
         };
+        assert!(matches!(zero, Err(RawError::ZeroLength { .. })));
         assert!(matches!(wraps, Err(RawError::LengthOverflow { .. })));
     }
 

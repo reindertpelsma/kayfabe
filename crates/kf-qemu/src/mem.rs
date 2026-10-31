@@ -54,15 +54,15 @@
     )
 )]
 
-use crate::raw_unsafe::{BackendFd, RawRegion};
+use crate::raw_unsafe::{BackendFd, MrHold, QemuLayoutGuard, RawRegion};
 use kf_host::{CpuViewRelease, HostRm, MapNode, ViewAccess};
 use kf_linux_raw::{
     Backing, CharDevice, GuestWindow, HostOffset, HostPageSize, Notifier, RawError, ScratchTile,
 };
 use kf_mem::cpuwin::{CpuWindow, PraminPool, SlotSource, ViewOps};
-use kf_mem::guestmem::{FdRange, GuestMemory, HostBlock, RamBlockSpec, RamLayout, TranslateError};
+use kf_mem::guestmem::{GuestMemory, LayoutEpoch, RamBlockSpec, RamLayout, TranslateError};
 use kf_mem::ledger::{Desired, HostVas, MapTarget, Mapped, Settle, UsermodeRow};
-use kf_mem::ramobj::{RamObjects, RamPlan, RamSegment};
+use kf_mem::ramobj::{RamObjectBook, RamObjectCell, RamObjectHost, RamPlan, Retiring, SyncError};
 use kf_mem::vasmgr::{GpuWalker, VaManager, VasKey};
 use kf_rm::barpde::{BarAperture, MemStatement};
 use kf_trap::pramin::{GRANULE, SLOTS, Target as WinTarget, WindowReg};
@@ -98,20 +98,18 @@ pub struct RamBlock {
 #[derive(Debug)]
 pub struct RamMap {
     blocks: RwLock<Vec<RamBlock>>,
+    /// The LAYOUT EPOCH: bumped (under the write lock) by every block add and removal the memory
+    /// listener reports. ⊘ Zero is terminal.
     generation: AtomicU64,
     /// ★ 2026-10-31: the RAM-offset plan of the registered blocks ([`RamMap::plan`]), cached by the
-    /// topology `generation` it was built at. Only fd-less RAM uses it.
+    /// topology `generation` it was built at.
     plan_cache: Mutex<Option<(u64, PlanResult)>>,
+    /// ★ 2026-10-31: how the layout guard holds a RAM block's owner (QEMU: `memory_region_ref`),
+    /// registered once by the device at realize. Without it no guard can be taken.
+    hold: std::sync::OnceLock<std::sync::Arc<dyn MrHold>>,
 }
 
-/// A RAM-offset plan and the VMM regions its segments describe, in the same order.
-#[derive(Debug)]
-pub(crate) struct PlanBundle {
-    pub(crate) plan: RamPlan,
-    pub(crate) regions: Vec<RawRegion>,
-}
-
-type PlanResult = Result<std::sync::Arc<PlanBundle>, String>;
+type PlanResult = Result<std::sync::Arc<RamPlan>, String>;
 
 impl Default for RamMap {
     fn default() -> Self {
@@ -119,6 +117,7 @@ impl Default for RamMap {
             blocks: RwLock::new(Vec::new()),
             generation: AtomicU64::new(1),
             plan_cache: Mutex::new(None),
+            hold: std::sync::OnceLock::new(),
         }
     }
 }
@@ -251,8 +250,12 @@ impl RamMap {
         self.blocks.read().is_ok_and(|v| !v.is_empty())
     }
 
-    /// ★ 2026-10-31: the registered blocks as a validated [`RamLayout`] of plain integers (the VMM
-    /// address of each block's first byte, taken from the adopted region).
+    /// ★ 2026-10-31: how a layout guard holds a block's owner. Set once at realize.
+    pub fn set_mr_hold(&self, hold: std::sync::Arc<dyn MrHold>) -> bool {
+        self.hold.set(hold).is_ok()
+    }
+
+    /// ★ 2026-10-31: the registered blocks as a validated [`RamLayout`] (pure `(gpa, len)`).
     ///
     /// # Errors
     /// The registry is poisoned, or the blocks are not a layout (overlap, zero length): by name.
@@ -264,9 +267,8 @@ impl RamMap {
         layout_of(&v)
     }
 
-    /// ★ 2026-10-31: the plan (RAM-offset numbering and one segment per block) of the registered
-    /// blocks, with the regions its segments describe, cached per topology generation. `None`
-    /// while no block is registered (retry later).
+    /// ★ 2026-10-31: the plan (numbering by guest-physical address, one segment per block) of the
+    /// registered blocks, cached per topology generation. `None` while no block is registered.
     pub(crate) fn plan(&self) -> Option<PlanResult> {
         let guard = match self.blocks.read() {
             Ok(g) => g,
@@ -288,13 +290,8 @@ impl RamMap {
             return Some(r.clone());
         }
         let built: PlanResult = layout_of(&guard).and_then(|l| {
-            RamPlan::new(&l)
-                .map(|plan| {
-                    std::sync::Arc::new(PlanBundle {
-                        plan,
-                        regions: guard.iter().map(|b| b.mem).collect(),
-                    })
-                })
+            RamPlan::by_gpa(&l)
+                .map(std::sync::Arc::new)
                 .map_err(|e| format!("guest RAM plan: {e}"))
         });
         *cache = Some((generation, built.clone()));
@@ -303,53 +300,46 @@ impl RamMap {
 
     /// ★ 2026-10-31: the offset the GPU-side rows use for guest-physical `[gpa, gpa+len)` — the
     /// numbering `Desired::off` carries (`kf_mem::ledger`). With a memfd it is the file offset,
-    /// exactly as before ([`RamMap::dma_to_file_range`]); WITHOUT one it is the RAM offset of the
-    /// block plan ([`RamPlan::ram_offset`]), which names a position among the host objects built by
-    /// [`MemPlane::guest_ram_objects`]. `None` for a range that is not wholly RAM.
+    /// exactly as before ([`RamMap::dma_to_file_range`]); WITHOUT one it is the block plan's number
+    /// ([`RamPlan::ram_offset`]: the guest-physical address itself, stable when another block is
+    /// added or removed), which names a position among the host objects of
+    /// [`MemPlane::sync_ram_objects`]. `None` for a range that is not wholly RAM.
     #[must_use]
     pub fn gpu_ram_offset(&self, gpa: u64, len: u64) -> Option<u64> {
         if self.backing_fd().is_some() {
             return self.dma_to_file_range(gpa, len);
         }
-        self.plan()?.ok()?.plan.ram_offset(gpa, len)
+        self.plan()?.ok()?.ram_offset(gpa, len)
     }
 }
 
-/// The registered blocks as a layout of plain integers.
+/// The registered blocks as a layout (pure geometry).
 fn layout_of(blocks: &[RamBlock]) -> Result<RamLayout, String> {
     let specs: Vec<RamBlockSpec> = blocks
         .iter()
         .map(|b| RamBlockSpec {
             gpa: b.gpa,
-            hva: b.mem.base_addr(),
             len: b.mem.len() as u64,
         })
         .collect();
     RamLayout::new(&specs).map_err(|e| format!("guest RAM layout: {e}"))
 }
 
-/// ★ 2026-10-31: guest RAM as the VMM-agnostic address map (`V3_GUEST_MEMORY.md`). `translate`
-/// answers from the blocks QEMU registered; `export_fd` is the OPTIONAL file capability — `Some`
-/// only when the whole range is one range of the one memory-backend fd.
+/// ★ 2026-10-31: guest RAM as the VMM-agnostic address map (`V3_GUEST_MEMORY.md`). A guard is taken
+/// from the registry under its read lock ([`QemuLayoutGuard`]): it holds every block's owner until
+/// dropped, carries the registry's generation as its [`LayoutEpoch`], and never blocks a block
+/// removal. No fd appears here.
 impl GuestMemory for RamMap {
-    fn translate(&self, gpa: u64, len: u64) -> Result<Vec<HostBlock>, TranslateError> {
-        // A registry that is not a layout (overlapping blocks, poison) backs nothing: refused at
-        // the first byte, never guessed at.
-        match self.layout() {
-            Ok(l) => l.translate(gpa, len),
-            Err(_) => Err(TranslateError::Unbacked { gpa }),
-        }
+    type Guard<'g> = QemuLayoutGuard<'g>;
+
+    fn lock_layout(&self) -> Result<QemuLayoutGuard<'_>, TranslateError> {
+        let hold = self.hold.get().cloned().ok_or(TranslateError::NoLayout)?;
+        let blocks = self.blocks.read().map_err(|_| TranslateError::NoLayout)?;
+        QemuLayoutGuard::take(blocks, &self.generation, hold)
     }
 
-    fn export_fd(&self, gpa: u64, len: u64) -> Option<FdRange<'_>> {
-        if len == 0 {
-            return None;
-        }
-        let (fd, offset) = self.file_range(gpa, len)?;
-        Some(FdRange {
-            fd: fd.borrow_held(self),
-            offset,
-        })
+    fn epoch(&self) -> LayoutEpoch {
+        LayoutEpoch::new(self.generation.load(Ordering::Acquire))
     }
 }
 
@@ -1890,12 +1880,23 @@ fn once_after<P, T: Clone>(
 /// idle, off every vCPU, from our own objects; nothing guest-visible.
 pub const PREWARM_SPARES: u64 = 3;
 
-/// ★ 2026-10-31: guest RAM as host objects, one per RAM block (no file), and the layout they
-/// describe.
-#[derive(Debug)]
-pub struct RamFragments {
-    objs: RamObjects,
-    layout: RamLayout,
+/// ★ 2026-10-31: the host RM's verbs for the guest-RAM objects: one OS descriptor per RAM block
+/// ([`HostRm::alloc_os_descriptor_ram`]) and its release.
+struct RmRamObjects<'r>(&'r HostRm);
+
+impl RamObjectHost for RmRamObjects<'_> {
+    fn alloc(&mut self, segment: &kf_linux_raw::RamSegment<'_>) -> Result<u32, String> {
+        self.0.alloc_os_descriptor_ram(segment).map_err(|e| {
+            format!(
+                "guest-RAM OS descriptor ({:#x} bytes): {e:?}",
+                segment.len()
+            )
+        })
+    }
+
+    fn free(&mut self, obj: u32) {
+        let _ = self.0.free(obj);
+    }
 }
 
 /// ★ P5: the mirrors, by VA-space object — written by the VA thread when it creates one, read by
@@ -2800,9 +2801,14 @@ pub struct MemPlane {
     /// ★ The guest-RAM host object — an OS descriptor over the WHOLE guest memfd (gate 3's
     /// recipe), created once, on the VA thread, the first time a space needs it: `(handle, len)`.
     ram_obj: std::sync::OnceLock<Result<(u32, u64), String>>,
-    /// ★ 2026-10-31: guest RAM that is NOT a file — one host object per RAM block, built once on
-    /// the VA thread ([`MemPlane::guest_ram_objects`]). Never set when a memfd backs RAM.
-    ram_frag: std::sync::OnceLock<Result<&'static RamFragments, String>>,
+    /// ★ 2026-10-31: guest RAM that is NOT a file — one host object per RAM block, kept in step with
+    /// the VMM's layout on the VA thread ([`MemPlane::sync_ram_objects`]). Never used while a memfd
+    /// backs RAM.
+    ram_book: Mutex<RamObjectBook>,
+    /// The table of `ram_book`, read by every space's host map; replaced on a layout change.
+    ram_cell: &'static RamObjectCell,
+    /// A host refusal of the first build, remembered so it is not retried by every mirror.
+    ram_refused: Mutex<Option<String>>,
     /// ★ P5: every mirrored space, for the channel plane.
     pub mirrors: Mirrors,
     /// The store's length (the identity window's).
@@ -2890,7 +2896,9 @@ impl MemPlane {
                 counters: MemCounters::default(),
                 ram,
                 ram_obj: std::sync::OnceLock::new(),
-                ram_frag: std::sync::OnceLock::new(),
+                ram_book: Mutex::new(RamObjectBook::new()),
+                ram_cell: Box::leak(Box::new(RamObjectCell::new())),
+                ram_refused: Mutex::new(None),
                 mirrors,
                 fb_len: layout.fb_length,
                 spares: Mutex::new(Vec::new()),
@@ -2958,106 +2966,117 @@ impl MemPlane {
         self.ram_obj.get().is_some()
     }
 
-    /// ★★ 2026-10-31 (`V3_GUEST_MEMORY.md` §5): **the guest-RAM host objects when RAM is NOT a
-    /// file** — one `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` per RAM block, each over that block's VMM
-    /// mapping (no fd anywhere), numbered by [`RamPlan`] so that `Desired::off` is a RAM offset
-    /// ([`RamMap::gpu_ram_offset`]). Built once, on the VA thread (it pins every page).
+    /// ★★ 2026-10-31 (`V3_GUEST_MEMORY.md` §5): **bring the guest-RAM host objects in line with the
+    /// VMM's layout** — one `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` per RAM block, each over that block's
+    /// VMM mapping (no fd anywhere), numbered by the block plan so that `Desired::off` is the
+    /// guest-physical address ([`RamMap::gpu_ram_offset`]). On the VA thread only (it pins every
+    /// page). The whole of `translate + descriptor creation` runs under ONE layout guard, and the
+    /// epoch is re-checked after every host call: a layout that moved under it is refused by name
+    /// ([`kf_mem::guestmem::LAYOUT_CHANGED`]), what the call made is freed, nothing is committed.
+    ///
+    /// A block that went away (hot-unplug, a resize) has its GPU-VA slices taken down by `unmap`
+    /// BEFORE its object is freed.
     ///
     /// ⚠ UNTESTED ON HARDWARE: the descriptor over VMM memory is the same ioctl as the memfd's, but
     /// over an anonymous/hugetlb mapping; only the GPU-free model (`kf_mem::sim`) and the unit
-    /// tests below ran. ⚠ Like the memfd object it pins all of guest RAM for the VM's life.
-    ///
-    /// ⊘ The objects describe the addresses the blocks had when this ran. A RAM topology change
-    /// afterwards ([`RamMap::add`]/[`RamMap::del`]) makes the result unusable
-    /// ([`MemPlane::ram_objects`] answers `None`): the layout is compared at every use, never
-    /// assumed.
+    /// tests ran. ⚠ Like the memfd object it pins all of guest RAM for the VM's life.
     ///
     /// # Errors
-    /// No RAM registered yet (not remembered), a layout the plan refuses (unaligned, overlapping),
-    /// or the host's refusal of a descriptor (by name, remembered; the objects already made are
-    /// freed).
-    pub fn guest_ram_objects(&self, rm: &'static HostRm) -> Result<&'static RamFragments, String> {
-        once_after(
-            &self.ram_frag,
-            || self.ram.plan(),
-            "no guest RAM registered yet",
-            |bundle| {
-                let bundle = bundle?;
-                let mut segs: Vec<RamSegment> = Vec::new();
-                for (i, (seg, region)) in bundle
-                    .plan
-                    .segments()
-                    .iter()
-                    .zip(bundle.regions.iter())
-                    .enumerate()
-                {
-                    let made = usize::try_from(seg.len)
-                        .map_err(|_| format!("RAM block {i}: length {:#x} does not fit", seg.len))
-                        .and_then(|len| {
-                            region
-                                .describe_range(0, len)
-                                .map_err(|e| format!("RAM block {i}: {e}"))
-                        })
-                        .and_then(|view| {
-                            rm.alloc_os_descriptor(&view, HostOffset::new(0), seg.len)
-                                .map_err(|e| {
-                                    format!(
-                                        "guest-RAM OS descriptor of block {i} ({:#x} bytes): {e:?}",
-                                        seg.len
-                                    )
-                                })
-                        });
-                    match made {
-                        Ok(obj) => segs.push(RamSegment {
-                            ram_off: seg.ram_off,
-                            len: seg.len,
-                            obj,
-                            obj_off: 0,
-                        }),
-                        Err(e) => {
-                            for done in &segs {
-                                let _ = rm.free(done.obj);
-                            }
-                            return Err(e);
-                        }
-                    }
+    /// [`SyncError`] (by name); a host refusal of the very first build is remembered.
+    pub fn sync_ram_objects(
+        &self,
+        rm: &HostRm,
+        unmap: &mut dyn FnMut(&Retiring) -> Result<(), String>,
+    ) -> Result<kf_mem::ramobj::SyncReport, SyncError> {
+        let mut book = self
+            .ram_book
+            .lock()
+            .map_err(|_| SyncError::Layout("guest-RAM object book poisoned".to_owned()))?;
+        let first = book.epoch().is_none();
+        if first && let Some(e) = self.ram_refused.lock().ok().and_then(|r| r.clone()) {
+            return Err(SyncError::Host(e));
+        }
+        let mut host = RmRamObjects(rm);
+        let report = book.sync(self.ram, &|b| Some(b.gpa), &mut host, unmap);
+        match report {
+            Ok(r) => {
+                match book.objects() {
+                    Ok(t) => self.ram_cell.set(t),
+                    Err(e) => return Err(SyncError::Layout(format!("guest-RAM objects: {e}"))),
                 }
-                let objs = RamObjects::new(&segs).map_err(|e| {
-                    for done in &segs {
-                        let _ = rm.free(done.obj);
-                    }
-                    format!("guest-RAM objects: {e}")
-                })?;
-                eprintln!(
-                    "kf3: guest-RAM objects: {} host object(s) over {:#x} bytes of guest RAM (no fd; one per RAM block)",
-                    segs.len(),
-                    bundle.plan.total_bytes()
-                );
-                let frag: &'static RamFragments = Box::leak(Box::new(RamFragments {
-                    objs,
-                    layout: bundle.plan.layout().clone(),
-                }));
-                Ok(frag)
-            },
-        )
-    }
-
-    /// The fragment objects, when they are built AND still describe the registered blocks; `None`
-    /// otherwise (not built, refused, or the RAM topology changed since). Every guest-RAM row of
-    /// a file-less VM is placed through this.
-    #[must_use]
-    pub fn ram_objects(&self) -> Option<&'static RamObjects> {
-        let frag = self.ram_frag.get()?.as_ref().ok().copied()?;
-        match self.ram.layout() {
-            Ok(now) if now == frag.layout => Some(&frag.objs),
-            _ => None,
+                if r.added > 0 || r.removed > 0 {
+                    eprintln!(
+                        "kf3: guest-RAM objects: {} host object(s) (+{} -{} ={}) over {:#x} bytes (no fd; one per RAM block)",
+                        book.blocks().len(),
+                        r.added,
+                        r.removed,
+                        r.kept,
+                        book.blocks()
+                            .iter()
+                            .fold(0u64, |a, b| a.saturating_add(b.len)),
+                    );
+                }
+                Ok(r)
+            }
+            Err(e) => {
+                if first
+                    && let SyncError::Host(h) = &e
+                    && let Ok(mut r) = self.ram_refused.lock()
+                {
+                    *r = Some(h.clone());
+                }
+                Err(e)
+            }
         }
     }
 
-    /// Whether [`Self::guest_ram_objects`] has an outcome to remember yet.
+    /// The first build of the block objects: only when none exists yet (a layout CHANGE is the VA
+    /// thread's [`resync_ram`], which can take down the GPU slices of a block that went). `Err`
+    /// "no guest RAM registered yet" is never remembered.
+    ///
+    /// # Errors
+    /// By name.
+    pub fn ensure_ram_objects(&self, rm: &HostRm) -> Result<(), String> {
+        if self.ram_objects_settled() {
+            return match self.ram_refused.lock().ok().and_then(|r| r.clone()) {
+                Some(e) => Err(e),
+                None => Ok(()),
+            };
+        }
+        if !self.ram.has_blocks() {
+            return Err("no guest RAM registered yet".to_owned());
+        }
+        self.sync_ram_objects(rm, &mut |t| {
+            Err(format!(
+                "unexpected retirement of RAM block {:#x}+{:#x} at the first build",
+                t.ram_off, t.len
+            ))
+        })
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+    }
+
+    /// The table of block objects, when RAM is carried per block (no memfd) — the cell every
+    /// space's host map reads. `None` while a memfd backs RAM.
     #[must_use]
-    pub fn guest_ram_objects_settled(&self) -> bool {
-        self.ram_frag.get().is_some()
+    pub fn ram_objects(&self) -> Option<&'static RamObjectCell> {
+        (self.ram.backing_fd().is_none() && self.ram.has_blocks()).then_some(self.ram_cell)
+    }
+
+    /// Whether the first build has an outcome to remember yet (built, or refused by the host).
+    #[must_use]
+    pub fn ram_objects_settled(&self) -> bool {
+        self.ram_book.lock().is_ok_and(|b| b.epoch().is_some())
+            || self.ram_refused.lock().is_ok_and(|r| r.is_some())
+    }
+
+    /// Whether the VMM's RAM layout moved since the objects were built (the VA thread then calls
+    /// [`resync_ram`]). `false` before the first build.
+    #[must_use]
+    pub fn ram_layout_moved(&self) -> bool {
+        self.ram_book
+            .lock()
+            .is_ok_and(|b| b.epoch().is_some() && !b.is_current(self.ram))
     }
 
     /// ★ Device reset: PRAMIN back to what realize left — every slot scratch, the window-base word
@@ -3366,7 +3385,7 @@ fn create_mirror(
         // ★ 2026-10-31: RAM is not a file. One host object per RAM block (the rows are cut at
         // their edges); the single-object handle stays absent, so a sysmem USERD or the T-space
         // window — which need a file offset — are refused by name, as before.
-        if let Err(e) = plane.guest_ram_objects(rm) {
+        if let Err(e) = plane.ensure_ram_objects(rm) {
             eprintln!("kf3: {key:?}: {e} — its sysmem leaves will be refused");
         }
         None
@@ -3430,7 +3449,7 @@ fn create_mirror(
 /// the log line. ⊘ Nothing here is guest-visible or guest-chosen: our space.
 pub fn prewarm(plane: &MemPlane, rm: &'static HostRm, store: u32) -> Option<String> {
     // ★ 2026-10-31: RAM with no file is carried by one host object per block instead
-    // ([`MemPlane::guest_ram_objects`]); the spare then holds no single-object handle.
+    // ([`MemPlane::sync_ram_objects`]); the spare then holds no single-object handle.
     let filed = plane.ram.backing_fd().is_some();
     if !filed && !plane.ram.has_blocks() {
         return None;
@@ -3440,15 +3459,15 @@ pub fn prewarm(plane: &MemPlane, rm: &'static HostRm, store: u32) -> Option<Stri
         plane.guest_ram_object(rm)
     } else {
         plane
-            .guest_ram_objects(rm)
-            .and_then(|_| Err("guest RAM is carried by per-block objects (no fd)".to_owned()))
+            .ensure_ram_objects(rm)
+            .and_then(|()| Err("guest RAM is carried by per-block objects (no fd)".to_owned()))
     };
     // The block went away between the two lookups (QEMU re-rendering guest RAM): nothing was
     // cached, so try again next tick instead of spending a spare on a space with no RAM window.
     let settled = if filed {
         plane.guest_ram_object_settled()
     } else {
-        plane.guest_ram_objects_settled()
+        plane.ram_objects_settled()
     };
     if ram_obj.is_err() && !settled {
         return None;
@@ -3483,6 +3502,59 @@ pub fn prewarm(plane: &MemPlane, rm: &'static HostRm, store: u32) -> Option<Stri
         "prewarm: spare host space {space:#x} ready before the guest runs — {windows} (vaspace {vas_us} us, ram_obj {ram_obj_us} us, total {} us)",
         t0.elapsed().as_micros()
     ))
+}
+
+/// ★★ 2026-10-31: the VMM's RAM layout moved (a block was added, removed or resized): bring the
+/// block objects in line, ON THE VA THREAD, in the same pass that owns the refresh. A block that
+/// went has every GPU-VA slice backed by it taken down FIRST (each mirror's rows that overlap its
+/// numbers are unmapped, deferred, then ONE invalidate per mirror), and only then is its object
+/// freed. The new objects are made under one layout guard with the epoch re-checked
+/// ([`MemPlane::sync_ram_objects`]). Returns the log line.
+///
+/// ⊘ A refusal leaves the objects it could not retire in place (still pinned, still listed) and the
+/// epoch behind, so the next tick retries; rows that map a block with no object are refused by name
+/// meanwhile ([`kf_mem::ramobj::RamObjError`]).
+pub fn resync_ram(m: &Manager, plane: &MemPlane, rm: &HostRm) -> Option<String> {
+    if !plane.ram_layout_moved() {
+        return None;
+    }
+    let mut taken_down = 0usize;
+    let mut unmap = |t: &Retiring| -> Result<(), String> {
+        for (key, _, _) in m.table.objects() {
+            let Some(Target::Gpu(g)) = m.table.target(key) else {
+                continue;
+            };
+            let rows: Vec<u64> = g
+                .rows
+                .read()
+                .map_err(|_| "placed rows poisoned".to_owned())?
+                .iter()
+                .filter(|(_, v)| {
+                    let (len, off, ram, _) = **v;
+                    ram && off < t.ram_off.saturating_add(t.len)
+                        && t.ram_off < off.saturating_add(len)
+                })
+                .map(|(&va, _)| va)
+                .collect();
+            if rows.is_empty() {
+                continue;
+            }
+            for va in &rows {
+                g.unmap(*va, true)?;
+            }
+            g.invalidate()?;
+            taken_down = taken_down.saturating_add(rows.len());
+        }
+        Ok(())
+    };
+    let r = plane.sync_ram_objects(rm, &mut unmap);
+    Some(match r {
+        Ok(r) => format!(
+            "guest-RAM layout moved: objects +{} -{} ={} ({taken_down} GPU-VA row(s) taken down first)",
+            r.added, r.removed, r.kept
+        ),
+        Err(e) => format!("guest-RAM layout moved: NOT brought in line ({e}); will retry"),
+    })
 }
 
 /// ★ P5c: the guest freed VA space `key` — unmap OUR rows (deferred, one invalidate) and keep the
@@ -5186,7 +5258,8 @@ mod memory_list_tests {
 #[cfg(test)]
 mod guest_memory_tests {
     use super::*;
-    use crate::raw_unsafe::{test_aligned_ram, test_owned_ram};
+    use crate::raw_unsafe::{test_aligned_ram, test_aligned_ram_owned, test_owned_ram};
+    use kf_mem::guestmem::LayoutGuard;
 
     const BLK: u64 = 0x4000;
 
@@ -5199,66 +5272,70 @@ mod guest_memory_tests {
         }
     }
 
-    /// Two adjacent guest blocks at gpa 0 and 0x4000, a hole, a third at 0x10000; no file.
-    fn fileless() -> (&'static RamMap, [RawRegion; 3]) {
-        let r = [
-            test_aligned_ram(BLK as usize),
-            test_aligned_ram(BLK as usize),
-            test_aligned_ram(2 * BLK as usize),
-        ];
+    /// Counts the holds and releases a layout guard takes on block owners.
+    #[derive(Debug, Default)]
+    struct Count {
+        holds: std::sync::atomic::AtomicUsize,
+        releases: std::sync::atomic::AtomicUsize,
+    }
+    impl MrHold for Count {
+        fn hold(&self, _: crate::raw_unsafe::Owner) {
+            self.holds.fetch_add(1, Ordering::SeqCst);
+        }
+        fn release(&self, _: crate::raw_unsafe::Owner) {
+            self.releases.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
+    /// Two adjacent guest blocks at gpa 0 and 0x4000, a hole, a third at 0x10000; no file; every
+    /// block owned (tag 1..3) and a counting hold registered.
+    fn fileless() -> (&'static RamMap, std::sync::Arc<Count>) {
         let ram = Box::leak(Box::new(RamMap::default()));
-        ram.add(block(0, r[0], None, 0));
-        ram.add(block(BLK, r[1], None, 0));
-        ram.add(block(0x1_0000, r[2], None, 0));
-        (ram, r)
+        let count = std::sync::Arc::new(Count::default());
+        assert!(ram.set_mr_hold(count.clone()));
+        ram.add(block(0, test_aligned_ram_owned(BLK as usize, 1), None, 0));
+        ram.add(block(BLK, test_aligned_ram_owned(BLK as usize, 2), None, 0));
+        ram.add(block(
+            0x1_0000,
+            test_aligned_ram_owned(2 * BLK as usize, 3),
+            None,
+            0,
+        ));
+        (ram, count)
     }
 
     #[test]
-    fn translate_names_the_vmm_blocks_in_order_and_merges_only_what_is_contiguous() {
-        let (ram, r) = fileless();
-        // Inside one block.
+    fn translate_names_the_segments_in_order_and_never_merges_blocks() {
+        let (ram, _) = fileless();
+        let g = ram.lock_layout().expect("guard");
+        // Inside one block: ONE segment of exactly the range.
+        let t = g.translate(0x100, 0x20).expect("RAM");
+        assert_eq!(t.segments().len(), 1);
+        assert_eq!(t.segments()[0].len(), 0x20);
+        assert_eq!(t.epoch(), g.epoch());
+        // Across the two adjacent guest blocks: TWO segments, in guest-physical order, even when the
+        // VMM happened to map them back to back (only the VMM can vouch that they stay together).
+        let across = g.translate(BLK - 0x10, 0x20).expect("RAM");
+        let lens: Vec<u64> = across.segments().iter().map(|s| s.len()).collect();
+        assert_eq!(lens, vec![0x10, 0x10]);
+        // A hole is named, at its first byte; so are zero length and overflow.
         assert_eq!(
-            ram.translate(0x100, 0x20),
-            Ok(vec![HostBlock {
-                hva: r[0].base_addr() + 0x100,
-                len: 0x20
-            }])
-        );
-        // Across the two adjacent guest blocks: one block iff the VMM mapped them back to back.
-        let across = ram.translate(BLK - 0x10, 0x20).expect("RAM");
-        let a_end = r[0].base_addr() + BLK;
-        if a_end == r[1].base_addr() {
-            assert_eq!(across.len(), 1);
-        } else {
-            assert_eq!(
-                across,
-                vec![
-                    HostBlock {
-                        hva: a_end - 0x10,
-                        len: 0x10
-                    },
-                    HostBlock {
-                        hva: r[1].base_addr(),
-                        len: 0x10
-                    }
-                ]
-            );
-        }
-        assert_eq!(across.iter().map(|b| b.len).sum::<u64>(), 0x20);
-        // A hole is named, at its first byte.
-        assert_eq!(
-            ram.translate(2 * BLK - 8, 0x20),
+            g.translate(2 * BLK - 8, 0x20).map(|t| t.total_len()),
             Err(TranslateError::Unbacked { gpa: 2 * BLK })
         );
         assert_eq!(
-            ram.translate(0x1_0000 + 2 * BLK - 4, 8),
+            g.translate(0x1_0000 + 2 * BLK - 4, 8)
+                .map(|t| t.total_len()),
             Err(TranslateError::Unbacked {
                 gpa: 0x1_0000 + 2 * BLK
             })
         );
-        assert_eq!(ram.translate(0, 0), Err(TranslateError::ZeroLength));
         assert_eq!(
-            ram.translate(u64::MAX, 2),
+            g.translate(0, 0).map(|t| t.total_len()),
+            Err(TranslateError::ZeroLength)
+        );
+        assert_eq!(
+            g.translate(u64::MAX, 2).map(|t| t.total_len()),
             Err(TranslateError::Overflow {
                 gpa: u64::MAX,
                 len: 2
@@ -5267,48 +5344,114 @@ mod guest_memory_tests {
     }
 
     #[test]
-    fn translate_refuses_a_registry_that_is_not_a_layout() {
+    fn what_the_segments_read_and_write_is_what_the_registry_holds() {
+        let (ram, _) = fileless();
+        let blocks = ram.blocks.read().unwrap();
+        for (i, b) in blocks.iter().enumerate() {
+            for k in 0..b.mem.len() {
+                assert!(b.mem.store(k, ((k + i * 5) & 0xff) as u64, 1));
+            }
+        }
+        drop(blocks);
+        let g = ram.lock_layout().expect("guard");
+        let t = g.translate(BLK - 4, 8).expect("across");
+        let mut got = [0u8; 8];
+        t.read_into(&mut got).expect("read");
+        let want: Vec<u8> = (BLK - 4..BLK)
+            .map(|k| (k & 0xff) as u8)
+            .chain((0..4u64).map(|k| ((k + 5) & 0xff) as u8))
+            .collect();
+        assert_eq!(got.as_slice(), want.as_slice());
+        t.write_from(&[0x5A; 8]).expect("write");
+        let blocks = ram.blocks.read().unwrap();
+        assert_eq!(blocks[0].mem.load_u32(BLK as usize - 4), Some(0x5A5A_5A5A));
+        assert_eq!(blocks[1].mem.load_u32(0), Some(0x5A5A_5A5A));
+    }
+
+    #[test]
+    fn a_guard_needs_the_hold_verbs_and_a_registry_that_is_a_layout() {
+        // No hold registered (the device has not called kf3_ram_ops): no guard, by name.
+        let bare = RamMap::default();
+        bare.add(block(0, test_aligned_ram(BLK as usize), None, 0));
+        assert!(matches!(bare.lock_layout(), Err(TranslateError::NoLayout)));
+        // Overlapping registrations are not a layout: refused, nothing held.
         let ram = Box::leak(Box::new(RamMap::default()));
-        let r = test_aligned_ram(BLK as usize);
-        ram.add(block(0, r, None, 0));
-        // Overlapping registration (a different gpa, overlapping range).
-        ram.add(block(BLK / 2, test_aligned_ram(BLK as usize), None, 0));
-        assert_eq!(
-            ram.translate(0, 8),
-            Err(TranslateError::Unbacked { gpa: 0 })
+        let count = std::sync::Arc::new(Count::default());
+        assert!(ram.set_mr_hold(count.clone()));
+        assert!(
+            !ram.set_mr_hold(count.clone()),
+            "the verbs are registered once"
         );
+        ram.add(block(0, test_aligned_ram_owned(BLK as usize, 1), None, 0));
+        ram.add(block(
+            BLK / 2,
+            test_aligned_ram_owned(BLK as usize, 2),
+            None,
+            0,
+        ));
+        assert!(matches!(
+            ram.lock_layout(),
+            Err(TranslateError::Inconsistent { index: 1 })
+        ));
+        assert_eq!(count.holds.load(Ordering::SeqCst), 0);
         assert!(ram.layout().is_err());
         // Removing it restores the answer.
         ram.del(BLK / 2);
-        assert!(ram.translate(0, 8).is_ok());
+        assert!(ram.lock_layout().is_ok());
     }
 
     #[test]
-    fn export_fd_is_the_optional_file_capability() {
-        // No file: None, always.
+    fn every_guard_holds_each_owner_once_and_releases_it_when_dropped() {
+        let (ram, count) = fileless();
+        let g1 = ram.lock_layout().expect("guard");
+        assert_eq!(count.holds.load(Ordering::SeqCst), 3);
+        {
+            let _g2 = ram.lock_layout().expect("second guard");
+            assert_eq!(count.holds.load(Ordering::SeqCst), 6);
+        }
+        assert_eq!(count.releases.load(Ordering::SeqCst), 3);
+        drop(g1);
+        assert_eq!(count.releases.load(Ordering::SeqCst), 6);
+    }
+
+    #[test]
+    fn the_epoch_moves_on_every_add_and_del_and_a_live_guard_notices_without_blocking_them() {
         let (ram, _) = fileless();
-        assert!(ram.export_fd(0x100, 8).is_none());
-        // With a file: Some for a range inside one block, at the block's file offset.
-        let ram = Box::leak(Box::new(RamMap::default()));
-        let (m, fd) = test_owned_ram(BLK as usize);
-        ram.add(block(0x2000, m, Some(fd), 0x5000));
-        let got = ram.export_fd(0x2100, 0x10).expect("fd range");
-        assert_eq!(got.offset, 0x5100);
-        // Across the block's end, in a hole, zero length: None (never an error).
-        assert!(ram.export_fd(0x2000 + BLK - 8, 0x10).is_none());
-        assert!(ram.export_fd(0x100, 8).is_none());
-        assert!(ram.export_fd(0x2000, 0).is_none());
+        let e0 = ram.epoch();
+        let g = ram.lock_layout().expect("guard");
+        assert_eq!(g.epoch(), e0);
+        assert!(g.still_current());
+        // The registry lock is NOT held by the guard: a block removal (QEMU's main loop) goes
+        // through while the guard lives, and the guard sees the epoch move.
+        ram.del(0x1_0000);
+        assert!(ram.epoch() > e0);
+        assert!(!g.still_current());
+        // It still reads the layout it saw (its hold keeps those blocks).
+        assert_eq!(g.layout().blocks().len(), 3);
+        assert!(g.translate(0x1_0000, 8).is_ok());
+        // A fresh guard sees the new layout.
+        let g2 = ram.lock_layout().expect("guard");
+        assert_eq!(g2.layout().blocks().len(), 2);
+        assert!(g2.translate(0x1_0000, 8).is_err());
+        ram.add(block(
+            0x1_0000,
+            test_aligned_ram_owned(BLK as usize, 4),
+            None,
+            0,
+        ));
+        assert!(!g2.still_current());
     }
 
     #[test]
-    fn gpu_rows_are_numbered_by_file_offset_with_a_file_and_by_ram_offset_without() {
+    fn gpu_rows_are_numbered_by_file_offset_with_a_file_and_by_gpa_without() {
         // With a memfd: unchanged (the file offset).
         let ram = Box::leak(Box::new(RamMap::default()));
         let (m, fd) = test_owned_ram(BLK as usize);
         ram.add(block(0x2000, m, Some(fd), 0x5000));
         assert_eq!(ram.gpu_ram_offset(0x2100, 0x10), Some(0x5100));
         assert_eq!(ram.gpu_ram_offset(0x100, 0x10), None);
-        // Without: the RAM offset (dense over the blocks; the hole costs nothing).
+        // Without: the guest-physical address itself (the hole costs nothing, and the number of a
+        // byte does not move when another block is added or removed).
         let (ram, _) = fileless();
         assert_eq!(ram.gpu_ram_offset(0x100, 0x10), Some(0x100));
         assert_eq!(
@@ -5316,9 +5459,11 @@ mod guest_memory_tests {
             Some(BLK - 8),
             "across adjacent blocks"
         );
-        assert_eq!(ram.gpu_ram_offset(0x1_0000, 8), Some(2 * BLK));
+        assert_eq!(ram.gpu_ram_offset(0x1_0000, 8), Some(0x1_0000));
         assert_eq!(ram.gpu_ram_offset(2 * BLK, 8), None, "the hole");
         assert_eq!(ram.gpu_ram_offset(2 * BLK - 4, 8), None);
+        ram.del(0);
+        assert_eq!(ram.gpu_ram_offset(0x1_0000, 8), Some(0x1_0000), "unmoved");
     }
 
     #[test]
@@ -5327,12 +5472,11 @@ mod guest_memory_tests {
         let a = ram.plan().expect("registered").expect("plan");
         let again = ram.plan().expect("registered").expect("plan");
         assert!(std::sync::Arc::ptr_eq(&a, &again), "cached per generation");
-        assert_eq!(a.plan.total_bytes(), 4 * BLK);
-        assert_eq!(a.regions.len(), 3);
+        assert_eq!(a.total_bytes(), 4 * BLK);
         ram.del(0x1_0000);
         let b = ram.plan().expect("registered").expect("plan");
         assert!(!std::sync::Arc::ptr_eq(&a, &b));
-        assert_eq!(b.plan.total_bytes(), 2 * BLK);
+        assert_eq!(b.total_bytes(), 2 * BLK);
         ram.del(0);
         ram.del(BLK);
         assert!(ram.plan().is_none(), "nothing registered: try again later");
@@ -5340,15 +5484,91 @@ mod guest_memory_tests {
     }
 
     #[test]
-    fn an_unaligned_block_is_refused_by_name_not_planned() {
+    fn an_unaligned_block_is_not_a_page_aligned_segment() {
         let ram = Box::leak(Box::new(RamMap::default()));
-        let (m, _) = test_owned_ram(BLK as usize); // a heap buffer: not page-aligned
+        assert!(ram.set_mr_hold(std::sync::Arc::new(Count::default())));
+        // A real heap buffer (aligned or not, whatever the allocator gave).
+        let (m, _) = test_owned_ram(BLK as usize);
         ram.add(block(0, m, None, 0));
-        // (If the allocator happened to align it, there is nothing to refuse.)
-        if m.base_addr() % 4096 != 0 {
-            let why = ram.plan().expect("registered").expect_err("unaligned");
-            assert!(why.contains("not 0x1000-aligned"), "{why}");
-            assert_eq!(ram.gpu_ram_offset(0, 8), None);
+        let g = ram.lock_layout().expect("guard");
+        let t = g.translate(0, BLK).expect("whole block");
+        let aligned_by_chance = t.segments()[0].is_page_aligned();
+        // The inner slice at +8 is never page aligned: the descriptor verb refuses such a segment
+        // by name (`kf_host::RAM_SEGMENT_UNALIGNED`), the check is on the segment, not an address.
+        let inner = g.translate(8, 64).expect("inner");
+        assert!(!inner.segments()[0].is_page_aligned());
+        let _ = aligned_by_chance;
+    }
+
+    /// A host that records objects and can move the layout while an object is being made.
+    struct FakeHost {
+        next: u32,
+        live: Vec<u32>,
+        mid_alloc: Option<Box<dyn Fn()>>,
+    }
+    impl RamObjectHost for FakeHost {
+        fn alloc(&mut self, segment: &kf_linux_raw::RamSegment<'_>) -> Result<u32, String> {
+            // The pin walks the pages: the segment must be readable right now.
+            let mut b = [0u8; 1];
+            segment
+                .read_into(kf_linux_raw::HostOffset::ZERO, &mut b)
+                .map_err(|e| e.to_string())?;
+            if let Some(f) = self.mid_alloc.take() {
+                f();
+            }
+            self.next += 1;
+            self.live.push(self.next);
+            Ok(self.next)
         }
+        fn free(&mut self, obj: u32) {
+            self.live.retain(|o| *o != obj);
+        }
+    }
+
+    #[test]
+    fn block_objects_follow_the_registry_and_a_removal_during_the_pin_is_refused_by_name() {
+        // The book is driven by the REAL registry and guard (not a model): a RAM block removed by
+        // the VMM between translate and the end of the descriptor call is `LAYOUT_CHANGED`.
+        let (ram, count) = fileless();
+        let mut host = FakeHost {
+            next: 0x900,
+            live: vec![],
+            mid_alloc: Some(Box::new(move || ram.del(0x1_0000))),
+        };
+        let mut book = RamObjectBook::new();
+        let e = book
+            .sync(ram, &|b| Some(b.gpa), &mut host, &mut |_| Ok(()))
+            .expect_err("layout moved under the call");
+        assert_eq!(e, SyncError::LayoutChanged);
+        assert!(
+            host.live.is_empty(),
+            "objects made by the refused call are freed"
+        );
+        assert_eq!(book.epoch(), None);
+        // Every hold the guard took was released.
+        assert_eq!(
+            count.holds.load(Ordering::SeqCst),
+            count.releases.load(Ordering::SeqCst)
+        );
+        // A new refresh sees two blocks and builds them; then a removal retires one, unmapping first.
+        let r = book
+            .sync(ram, &|b| Some(b.gpa), &mut host, &mut |_| Ok(()))
+            .expect("retry");
+        assert_eq!(r.added, 2);
+        ram.del(BLK);
+        let mut retired = Vec::new();
+        let r = book
+            .sync(ram, &|b| Some(b.gpa), &mut host, &mut |t| {
+                retired.push((t.ram_off, t.len));
+                Ok(())
+            })
+            .expect("after removal");
+        assert_eq!((r.removed, r.kept), (1, 1));
+        assert_eq!(retired, vec![(BLK, BLK)]);
+        assert_eq!(host.live.len(), 1);
+        assert_eq!(
+            count.holds.load(Ordering::SeqCst),
+            count.releases.load(Ordering::SeqCst)
+        );
     }
 }

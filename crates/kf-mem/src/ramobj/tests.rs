@@ -2,7 +2,8 @@
 //! the plan + table reach exactly the host bytes `translate` names.
 
 use super::*;
-use crate::guestmem::{GuestMemory, HostBlock, RamBlockSpec};
+use crate::guestmem::testvmm::TestVmm;
+use crate::guestmem::{GuestMemory, LayoutGuard, RamBlockSpec};
 
 const P: u64 = RAM_OBJ_ALIGN;
 
@@ -15,8 +16,8 @@ fn seg(ram_off: u64, len: u64, obj: u32, obj_off: u64) -> RamSegment {
     }
 }
 
-fn blk(gpa: u64, hva: u64, len: u64) -> RamBlockSpec {
-    RamBlockSpec { gpa, hva, len }
+fn blk(gpa: u64, len: u64) -> RamBlockSpec {
+    RamBlockSpec { gpa, len }
 }
 
 fn layout(b: &[RamBlockSpec]) -> RamLayout {
@@ -292,185 +293,458 @@ fn hostile_ranges_never_panic_or_allocate_unboundedly() {
 
 // --------------------------------------------------------------- the plan
 
-/// q35-like: below the hole, above 4 GiB, separate host mappings.
+/// q35-like: below the hole, above 4 GiB.
 fn q35() -> RamLayout {
-    layout(&[
-        blk(0, 0x7f00_0000_0000, 0x8000_0000),
-        blk(0x1_0000_0000, 0x7f00_8000_0000, 0x8000_0000),
-    ])
+    layout(&[blk(0, 0x8000_0000), blk(0x1_0000_0000, 0x8000_0000)])
 }
 
 #[test]
-fn one_object_per_block_and_a_hole_costs_no_ram_offset() {
-    let p = RamPlan::new(&q35()).expect("plan");
-    // The second block continues the first in the VMM, but a block is a VMM mapping: two objects.
+fn numbering_by_gpa_makes_one_object_per_block_and_a_hole_costs_nothing() {
+    let p = RamPlan::by_gpa(&q35()).expect("plan");
     assert_eq!(
         p.segments(),
         &[
             PlanSegment {
+                block: 0,
+                gpa: 0,
                 ram_off: 0,
-                hva: 0x7f00_0000_0000,
                 len: 0x8000_0000
             },
             PlanSegment {
-                ram_off: 0x8000_0000,
-                hva: 0x7f00_8000_0000,
+                block: 1,
+                gpa: 0x1_0000_0000,
+                ram_off: 0x1_0000_0000,
                 len: 0x8000_0000
             },
         ]
     );
-    // RAM offsets skip the hole: gpa 4 GiB is RAM offset 2 GiB.
-    assert_eq!(p.ram_offset(0x1_0000_0000, 8), Some(0x8000_0000));
-    assert_eq!(p.ram_offset(0x7fff_fff8, 8), Some(0x7fff_fff8));
-    assert_eq!(
-        p.ram_offset(0x7fff_fff8, 16),
-        None,
-        "a range across the hole is not RAM"
-    );
-    assert_eq!(p.ram_offset(0x8000_0000, 8), None);
     assert_eq!(p.total_bytes(), 0x1_0000_0000);
+    assert_eq!(p.ram_offset(0x2100, 0x10), Some(0x2100));
+    assert_eq!(p.ram_offset(0x1_0000_0100, 0x10), Some(0x1_0000_0100));
+    assert_eq!(p.ram_offset(0x8000_0000, 8), None, "the hole");
+    assert_eq!(p.ram_offset(0x7fff_fff8, 16), None, "across the hole");
 }
 
 #[test]
-fn adjacent_gpa_blocks_are_adjacent_ram_offsets_and_a_range_across_them_is_cut() {
-    let l = layout(&[blk(0, 0x10_0000, 4 * P), blk(4 * P, 0x90_0000, 2 * P)]);
-    let p = RamPlan::new(&l).expect("plan");
+fn cumulative_numbering_is_dense_and_adjacent_blocks_are_one_run() {
+    let l = layout(&[blk(0, P), blk(P, P), blk(4 * P, P)]);
+    let p = RamPlan::cumulative(&l).expect("plan");
     assert_eq!(
-        p.segments(),
-        &[
-            PlanSegment {
-                ram_off: 0,
-                hva: 0x10_0000,
-                len: 4 * P
-            },
-            PlanSegment {
-                ram_off: 4 * P,
-                hva: 0x90_0000,
-                len: 2 * P
-            },
-        ]
+        p.ram_offset(P - 8, 16),
+        Some(P - 8),
+        "across two adjacent blocks"
     );
-    // A guest range across the two blocks is ONE range in RAM offsets...
-    assert_eq!(p.ram_offset(3 * P, 2 * P), Some(3 * P));
-    // ...and the table cuts it at the object edge.
-    let t = RamObjects::new(&[seg(0, 4 * P, 1, 0), seg(4 * P, 2 * P, 2, 0)]).expect("table");
-    assert_eq!(t.cuts(3 * P, 2 * P), vec![4 * P]);
+    assert_eq!(p.ram_offset(4 * P, 8), Some(2 * P));
+    assert_eq!(p.ram_offset(2 * P - 8, 16), None, "into the hole");
+    assert_eq!(p.gpa_of(2 * P + 8), Some((4 * P + 8, P - 8)));
+    assert_eq!(p.gpa_of(3 * P), None);
 }
 
 #[test]
-fn plan_refuses_unaligned_and_empty_layouts_by_name() {
-    assert_eq!(RamPlan::new(&RamLayout::default()), Err(PlanError::Empty));
+fn a_run_is_cut_when_the_numbers_are_not_adjacent_even_if_the_blocks_are() {
+    // Adjacent in guest-physical space, but the second block is numbered far away (a file whose
+    // layout is not dense): the range across them has no single number.
+    let l = layout(&[blk(0, P), blk(P, P)]);
+    let p = RamPlan::new(&l, &[0, 10 * P]).expect("plan");
+    assert_eq!(p.ram_offset(P - 8, 16), None);
+    assert_eq!(p.ram_offset(P, 16), Some(10 * P));
+    assert_eq!(p.gpa_of(10 * P + 8), Some((P + 8, P - 8)));
+}
+
+#[test]
+fn plan_refuses_unaligned_empty_and_overlapping_numbers_by_name() {
     assert_eq!(
-        RamPlan::new(&layout(&[blk(0, 0x10_0000, P), blk(P, 0x20_0001, P)])),
+        RamPlan::by_gpa(&RamLayout::default()),
+        Err(PlanError::Empty)
+    );
+    assert_eq!(
+        RamPlan::by_gpa(&layout(&[blk(0, P), blk(P + 8, P)])),
         Err(PlanError::Unaligned { index: 1 })
     );
     assert_eq!(
-        RamPlan::new(&layout(&[blk(0, 0x10_0000, P + 8)])),
+        RamPlan::by_gpa(&layout(&[blk(0, P + 8)])),
         Err(PlanError::Unaligned { index: 0 })
     );
     assert_eq!(
-        RamPlan::new(&layout(&[blk(8, 0x10_0000, P)])),
+        RamPlan::by_gpa(&layout(&[blk(8, P)])),
         Err(PlanError::Unaligned { index: 0 })
+    );
+    let l = layout(&[blk(0, 2 * P), blk(2 * P, P)]);
+    assert_eq!(
+        RamPlan::new(&l, &[0, P]),
+        Err(PlanError::Numbering { index: 1 })
+    );
+    assert_eq!(
+        RamPlan::new(&l, &[0]),
+        Err(PlanError::Numbering { index: 1 })
+    );
+    assert_eq!(
+        RamPlan::new(&l, &[u64::MAX - P + 1, 0]),
+        Err(PlanError::Overflow)
     );
 }
 
-/// Objects for a plan: object `1000 + k` is segment `k`, described from its start.
-fn objects_of(p: &RamPlan) -> RamObjects {
-    let segs: Vec<RamSegment> = p
-        .segments()
-        .iter()
-        .enumerate()
-        .map(|(k, s)| seg(s.ram_off, s.len, 1000 + k as u32, 0))
-        .collect();
-    RamObjects::new(&segs).expect("table from plan")
-}
-
-/// The host bytes a plan + table reach for guest-physical `[gpa, gpa+len)`, as `translate` would
-/// name them: `None` when the plan does not call it RAM.
-fn via_objects(p: &RamPlan, t: &RamObjects, gpa: u64, len: u64) -> Option<Vec<HostBlock>> {
-    let off = p.ram_offset(gpa, len)?;
-    let mut out: Vec<HostBlock> = Vec::new();
-    for s in t.split(off, len).ok()? {
-        let k = (s.obj - 1000) as usize;
-        let hva = p.segments()[k].hva + s.obj_off;
-        match out.last_mut() {
-            Some(l) if l.hva + l.len == hva => l.len += s.len,
-            _ => out.push(HostBlock { hva, len: s.len }),
-        }
+#[test]
+fn numbers_by_gpa_do_not_move_when_another_block_goes() {
+    let three = layout(&[blk(0, P), blk(4 * P, P), blk(8 * P, P)]);
+    let two = layout(&[blk(0, P), blk(8 * P, P)]);
+    let a = RamPlan::by_gpa(&three).expect("plan");
+    let b = RamPlan::by_gpa(&two).expect("plan");
+    for gpa in [0, 8 * P, 8 * P + 100] {
+        assert_eq!(a.ram_offset(gpa, 16), b.ram_offset(gpa, 16), "{gpa:#x}");
     }
-    Some(out)
+    // Cumulative numbering is NOT stable: the last block's number shifts.
+    let ca = RamPlan::cumulative(&three).expect("plan");
+    let cb = RamPlan::cumulative(&two).expect("plan");
+    assert_ne!(ca.ram_offset(8 * P, 16), cb.ram_offset(8 * P, 16));
 }
 
 #[test]
-fn plan_plus_table_reach_exactly_the_host_bytes_translate_names() {
-    let mut r = Rng(0x0123_4567_89AB_CDEF);
-    let (mut agree_ok, mut agree_none) = (0u64, 0u64);
-    for _ in 0..3000 {
-        // Page-grain random layouts: holes, adjacent-contiguous, adjacent-discontiguous, aliases.
+fn plan_plus_table_cut_exactly_where_locate_cuts() {
+    let mut r = Rng(0x00C0_FFEE_1234_5678);
+    for _ in 0..1500 {
+        // A random layout on the object grain, some blocks adjacent.
         let n = 1 + r.below(8);
         let mut gpa = r.below(3) * P;
-        let mut hva = 0x100_0000 + r.below(16) * P;
-        let mut blocks: Vec<RamBlockSpec> = Vec::new();
+        let mut blocks = Vec::new();
         for _ in 0..n {
             let len = (1 + r.below(4)) * P;
-            blocks.push(blk(gpa, hva, len));
+            blocks.push(blk(gpa, len));
             gpa += len;
             if r.below(3) == 0 {
                 gpa += (1 + r.below(3)) * P;
             }
-            match r.below(4) {
-                0 => hva += len,
-                1 => hva += len + (1 + r.below(5)) * P,
-                2 => hva = hva.saturating_sub(len + P),
-                _ => hva = 0x200_0000 + r.below(64) * P,
-            }
         }
         let l = layout(&blocks);
-        let p = RamPlan::new(&l).expect("plan");
-        let t = objects_of(&p);
+        let p = RamPlan::by_gpa(&l).expect("plan");
+        let segs: Vec<RamSegment> = p
+            .segments()
+            .iter()
+            .map(|s| seg(s.ram_off, s.len, 0x100 + s.block as u32, 0))
+            .collect();
+        let t = RamObjects::new(&segs).expect("table");
         let top = gpa + 2 * P;
-        for _ in 0..60 {
-            let edge = if r.below(2) == 0 {
-                blocks[r.below(blocks.len() as u64) as usize].gpa
-            } else {
-                r.below(top)
-            };
-            let g = edge.saturating_sub(r.below(9));
+        let (mut ok, mut refused) = (0u32, 0u32);
+        for _ in 0..40 {
+            let g = r.below(top);
             let len = 1 + r.below(3 * P);
-            let want = l.translate(g, len).ok();
-            let got = via_objects(&p, &t, g, len);
-            // Where `translate` serves the range, the plan serves it and reaches the same host
-            // bytes; where it refuses, the plan refuses too (never bridges a hole).
-            assert_eq!(got, want, "{blocks:?} {g:#x}+{len:#x}");
-            if want.is_some() {
-                agree_ok += 1;
-            } else {
-                agree_none += 1;
+            let located = l.locate(g, len);
+            // With numbers = gpa, the plan numbers a range iff it is wholly RAM...
+            match (p.ram_offset(g, len), &located) {
+                (Some(off), Ok(runs)) => {
+                    ok += 1;
+                    assert_eq!(off, g);
+                    // ...and the table cuts it exactly where the layout does: same blocks, lengths.
+                    let pieces = t.split(off, len).expect("split");
+                    assert_eq!(pieces.len(), runs.len(), "{blocks:?} {g:#x}+{len:#x}");
+                    for (piece, run) in pieces.iter().zip(runs) {
+                        assert_eq!(piece.obj, 0x100 + run.index() as u32);
+                        assert_eq!(piece.obj_off, run.off());
+                        assert_eq!(piece.len, run.len());
+                    }
+                }
+                (None, Err(_)) => refused += 1,
+                // Adjacent-in-gpa blocks are number-adjacent under by_gpa, so a located range is
+                // always numbered and vice versa.
+                (a, b) => panic!("plan {a:?} vs locate {b:?} for {g:#x}+{len:#x} in {blocks:?}"),
             }
         }
+        assert!(ok + refused == 40);
     }
-    assert!(
-        agree_ok > 10_000 && agree_none > 10_000,
-        "{agree_ok} {agree_none}"
-    );
-}
-
-#[test]
-fn a_changed_layout_is_detectable() {
-    let a = RamPlan::new(&q35()).expect("plan");
-    let b = RamPlan::new(&layout(&[blk(0, 0x7f00_0000_0000, 0x8000_0000)])).expect("plan");
-    assert_ne!(a.layout(), b.layout());
-    assert_eq!(a.layout(), &q35());
 }
 
 #[test]
 fn ram_offset_hostile_inputs() {
-    let p = RamPlan::new(&q35()).expect("plan");
-    for &g in &[0u64, 1, u64::MAX, u64::MAX - 1, 1 << 63, 0x7fff_ffff] {
-        for &n in &[0u64, 1, u64::MAX, 1 << 63, 0x8000_0000, 0x1_0000_0000] {
-            let _ = p.ram_offset(g, n);
+    let p = RamPlan::by_gpa(&q35()).expect("plan");
+    for (g, n) in [
+        (0, 0),
+        (u64::MAX, 1),
+        (u64::MAX, u64::MAX),
+        (1, u64::MAX),
+        (0x1_0000_0000, u64::MAX),
+        (0x1_7fff_ffff, 2),
+    ] {
+        assert_eq!(p.ram_offset(g, n), None, "{g:#x}+{n:#x}");
+    }
+    assert_eq!(p.gpa_of(u64::MAX), None);
+    assert_eq!(p.gpa_of(0x9000_0000), None);
+}
+
+// ---------------------------------------------------- the book of objects
+
+use std::cell::RefCell;
+
+/// A hook run during the Nth allocation.
+type During = (usize, Box<dyn Fn(&TestVmm)>);
+
+/// A host that records every allocation and release, and can be told to fail or to move the
+/// VMM's layout in the middle of an allocation (the "RAM block freed between translate and the
+/// RM pin" race).
+struct FakeHost<'v> {
+    vmm: &'v TestVmm,
+    next: u32,
+    live: Vec<u32>,
+    log: std::rc::Rc<RefCell<Vec<String>>>,
+    fail_on_alloc: Option<usize>,
+    allocs: usize,
+    /// Run during the Nth allocation (after the segment was handed over, before it returns).
+    during: Option<During>,
+}
+
+impl<'v> FakeHost<'v> {
+    fn new(vmm: &'v TestVmm) -> Self {
+        Self {
+            vmm,
+            next: 0x500,
+            live: Vec::new(),
+            log: std::rc::Rc::default(),
+            fail_on_alloc: None,
+            allocs: 0,
+            during: None,
         }
     }
-    assert_eq!(p.ram_offset(0, 0), None);
-    assert_eq!(p.ram_offset(u64::MAX, 1), None);
+}
+
+impl RamObjectHost for FakeHost<'_> {
+    fn alloc(&mut self, segment: &kf_linux_raw::RamSegment<'_>) -> Result<u32, String> {
+        self.allocs += 1;
+        if self.fail_on_alloc == Some(self.allocs) {
+            return Err("RM said no".into());
+        }
+        if let Some((n, f)) = &self.during
+            && *n == self.allocs
+        {
+            f(self.vmm);
+        }
+        // The pin reads the memory: prove the segment is usable (the guard holds the block).
+        let mut b = [0u8; 1];
+        segment
+            .read_into(kf_linux_raw::HostOffset::ZERO, &mut b)
+            .map_err(|e| e.to_string())?;
+        self.next += 1;
+        self.live.push(self.next);
+        self.log
+            .borrow_mut()
+            .push(format!("alloc {:#x} len {:#x}", self.next, segment.len()));
+        Ok(self.next)
+    }
+    fn free(&mut self, obj: u32) {
+        self.live.retain(|o| *o != obj);
+        self.log.borrow_mut().push(format!("free {obj:#x}"));
+    }
+}
+
+fn by_gpa(b: &RamBlockSpec) -> Option<u64> {
+    Some(b.gpa)
+}
+
+fn vmm3() -> TestVmm {
+    let v = TestVmm::new();
+    v.add(0, P);
+    v.add(4 * P, 2 * P);
+    v.add(8 * P, P);
+    v
+}
+
+#[test]
+fn the_book_makes_one_object_per_block_and_a_second_sync_at_the_same_epoch_is_free() {
+    let vmm = vmm3();
+    let mut host = FakeHost::new(&vmm);
+    let mut book = RamObjectBook::new();
+    let mut unmaps = 0;
+    let r = book
+        .sync(&vmm, &by_gpa, &mut host, &mut |_| {
+            unmaps += 1;
+            Ok(())
+        })
+        .expect("sync");
+    assert_eq!((r.added, r.kept, r.removed), (3, 0, 0));
+    assert_eq!(host.live.len(), 3);
+    assert!(book.is_current(&vmm));
+    let t = book.objects().expect("table");
+    assert_eq!(t.segments().len(), 3);
+    assert_eq!(t.resolve(4 * P + 8, 8).map(|(_, off)| off), Ok(8));
+    // The middle block's object is the second one made.
+    assert_eq!(t.resolve(4 * P, 8).map(|(o, _)| o), Ok(0x502));
+    assert!(t.resolve(2 * P, 8).is_err(), "a hole is not carried");
+    assert!(t.resolve(5 * P, 2 * P).is_err() || t.resolve(5 * P, P).is_ok());
+    let before = host.log.borrow().len();
+    let again = book
+        .sync(&vmm, &by_gpa, &mut host, &mut |_| Ok(()))
+        .expect("sync");
+    assert_eq!((again.added, again.kept, again.removed), (0, 3, 0));
+    assert_eq!(
+        host.log.borrow().len(),
+        before,
+        "no host call at the same epoch"
+    );
+    assert_eq!(unmaps, 0);
+}
+
+#[test]
+fn a_layout_change_between_translate_and_descriptor_creation_is_refused_by_name() {
+    let vmm = vmm3();
+    let mut host = FakeHost::new(&vmm);
+    // While the SECOND object is being made, the VMM frees the third block.
+    host.during = Some((2, Box::new(|v: &TestVmm| v.remove(8 * P))));
+    let mut book = RamObjectBook::new();
+    let e = book
+        .sync(&vmm, &by_gpa, &mut host, &mut |_| Ok(()))
+        .expect_err("must refuse");
+    assert_eq!(e, SyncError::LayoutChanged);
+    assert!(e.to_string().starts_with("LAYOUT_CHANGED"));
+    // Everything this call made was freed; nothing was committed; the epoch did not advance.
+    assert!(host.live.is_empty(), "leaked {:?}", host.live);
+    assert!(book.blocks().is_empty());
+    assert_eq!(book.epoch(), None);
+    assert!(!book.is_current(&vmm));
+    // Not retried silently: the SECOND call (a new refresh) sees two blocks and succeeds.
+    host.during = None;
+    let r = book
+        .sync(&vmm, &by_gpa, &mut host, &mut |_| Ok(()))
+        .expect("retry");
+    assert_eq!(r.added, 2);
+    assert_eq!(book.blocks().len(), 2);
+    assert!(book.is_current(&vmm));
+}
+
+#[test]
+fn removing_a_block_unmaps_its_slices_then_frees_its_object_and_keeps_the_others() {
+    let vmm = vmm3();
+    let mut host = FakeHost::new(&vmm);
+    let mut book = RamObjectBook::new();
+    book.sync(&vmm, &by_gpa, &mut host, &mut |_| Ok(()))
+        .expect("first");
+    let objs_before = book.blocks().to_vec();
+    let order: RefCell<Vec<String>> = RefCell::new(Vec::new());
+    vmm.remove(4 * P);
+    let log = host.log.clone();
+    let r = {
+        let mut unmap = |t: &Retiring| {
+            // The object must still be live while its GPU slices are taken down.
+            order.borrow_mut().push(format!(
+                "unmap {:#x}+{:#x} obj {:#x}",
+                t.ram_off, t.len, t.obj
+            ));
+            assert!(
+                !log.borrow()
+                    .iter()
+                    .any(|l| l == &format!("free {:#x}", t.obj)),
+                "freed before unmapped"
+            );
+            Ok(())
+        };
+        book.sync(&vmm, &by_gpa, &mut host, &mut unmap)
+            .expect("sync")
+    };
+    assert_eq!((r.added, r.kept, r.removed), (0, 2, 1));
+    assert_eq!(
+        order.borrow().as_slice(),
+        [format!(
+            "unmap {:#x}+{:#x} obj {:#x}",
+            4 * P,
+            2 * P,
+            objs_before[1].obj
+        )]
+    );
+    assert!(!host.live.contains(&objs_before[1].obj));
+    // The kept blocks keep their object AND their numbers.
+    assert_eq!(book.blocks(), &[objs_before[0], objs_before[2]]);
+    assert!(book.objects().expect("table").resolve(4 * P, 8).is_err());
+}
+
+#[test]
+fn a_resize_retires_the_old_object_and_builds_one_over_the_new_length_without_moving_the_base() {
+    let vmm = TestVmm::new();
+    vmm.add_resizeable(0, P, 4 * P);
+    vmm.fill(0, |i| (i % 251) as u8);
+    let mut host = FakeHost::new(&vmm);
+    let mut book = RamObjectBook::new();
+    book.sync(&vmm, &by_gpa, &mut host, &mut |_| Ok(()))
+        .expect("first");
+    let old = book.blocks()[0];
+    vmm.resize(0, 3 * P);
+    let mut retired = Vec::new();
+    let r = book
+        .sync(&vmm, &by_gpa, &mut host, &mut |t| {
+            retired.push((t.ram_off, t.len));
+            Ok(())
+        })
+        .expect("resize");
+    assert_eq!((r.added, r.removed, r.kept), (1, 1, 0));
+    assert_eq!(retired, vec![(0, P)]);
+    let new = book.blocks()[0];
+    assert_ne!(new.obj, old.obj);
+    assert_eq!(new.len, 3 * P);
+    // The base did not move: the bytes of the old range are the same bytes.
+    let g = vmm.lock_layout().expect("layout");
+    let mut b = [0u8; 4];
+    g.translate(8, 4)
+        .expect("t")
+        .read_into(&mut b)
+        .expect("read");
+    assert_eq!(b, [8, 9, 10, 11]);
+}
+
+#[test]
+fn a_failed_unmap_keeps_the_object_and_the_next_sync_retries_it() {
+    let vmm = vmm3();
+    let mut host = FakeHost::new(&vmm);
+    let mut book = RamObjectBook::new();
+    book.sync(&vmm, &by_gpa, &mut host, &mut |_| Ok(()))
+        .expect("first");
+    vmm.remove(8 * P);
+    let e = book
+        .sync(&vmm, &by_gpa, &mut host, &mut |_| Err("RM busy".into()))
+        .expect_err("unmap refused");
+    assert_eq!(e, SyncError::Unmap("RM busy".into()));
+    assert_eq!(
+        host.live.len(),
+        3,
+        "not freed while its slices may still be mapped"
+    );
+    assert_eq!(book.blocks().len(), 3);
+    assert!(!book.is_current(&vmm));
+    let r = book
+        .sync(&vmm, &by_gpa, &mut host, &mut |_| Ok(()))
+        .expect("retry");
+    assert_eq!(r.removed, 1);
+    assert_eq!(host.live.len(), 2);
+    assert!(book.is_current(&vmm));
+}
+
+#[test]
+fn a_host_refusal_frees_what_the_call_made_and_commits_nothing() {
+    let vmm = vmm3();
+    let mut host = FakeHost::new(&vmm);
+    host.fail_on_alloc = Some(3);
+    let mut book = RamObjectBook::new();
+    let e = book
+        .sync(&vmm, &by_gpa, &mut host, &mut |_| Ok(()))
+        .expect_err("refused");
+    assert_eq!(e, SyncError::Host("RM said no".into()));
+    assert!(host.live.is_empty());
+    assert_eq!(book.epoch(), None);
+    host.fail_on_alloc = None;
+    assert!(book.sync(&vmm, &by_gpa, &mut host, &mut |_| Ok(())).is_ok());
+    assert_eq!(host.live.len(), 3);
+}
+
+#[test]
+fn a_layout_that_is_not_a_plan_is_refused_by_name_before_any_host_call() {
+    let vmm = TestVmm::new();
+    vmm.add(8, P); // not on the object grain
+    let mut host = FakeHost::new(&vmm);
+    let mut book = RamObjectBook::new();
+    let e = book
+        .sync(&vmm, &by_gpa, &mut host, &mut |_| Ok(()))
+        .expect_err("unaligned");
+    assert!(matches!(e, SyncError::Layout(_)), "{e:?}");
+    assert!(host.log.borrow().is_empty());
+    let none = TestVmm::new();
+    let mut host2 = FakeHost::new(&none);
+    assert!(matches!(
+        book.sync(&none, &by_gpa, &mut host2, &mut |_| Ok(())),
+        Err(SyncError::Layout(_))
+    ));
 }

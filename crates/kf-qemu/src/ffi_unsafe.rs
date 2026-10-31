@@ -73,7 +73,11 @@ use std::os::unix::ffi::OsStrExt as _;
 /// [`kf3_device_reset_wait`] (the `exit` phase's bounded wait) joins.
 /// 30 (2026-10-15, `claude/perf-fix-20261015`, `docs/design/V3_WINDOWS_PERF_20261015.md`): `kf3_realize` gains
 /// `user_view_keep` (the `user-view-keep` property; 0 = the default, 16) after `channel_budget`.
-pub const KF3_ABI: u32 = 30;
+/// 31 (2026-10-31, `claude/guestmem-translate-only-20261031`, `docs/design/V3_GUEST_MEMORY.md`): the layout
+/// guard. [`kf3_ram_add`] gains `mr` (the section's `MemoryRegion *`, opaque to Rust: its owner is what a guard
+/// holds), and [`kf3_ram_ops`] registers the two hold verbs ([`Kf3RamOps`]: `memory_region_ref` /
+/// `memory_region_unref`), before the memory listener is registered.
+pub const KF3_ABI: u32 = 31;
 
 /// The PCI identity the C device presents.
 #[repr(C)]
@@ -417,11 +421,11 @@ pub extern "C" fn kf3_bar0_read(h: *mut c_void, off: u64, width: u32) -> u64 {
 }
 
 /// Register guest RAM `[gpa, gpa+len)` at `hva`, backed by the memory backend's `fd` at file
-/// offset `fd_off` (`fd < 0`: none).
+/// offset `fd_off` (`fd < 0`: none), owned by the `MemoryRegion` `mr` (ABI 31).
 ///
 /// # Safety
-/// `hva` is valid for `len` bytes, and `fd` (when `>= 0`) stays open, until `kf3_ram_del` for the
-/// same `gpa`.
+/// `hva` is valid for `len` bytes, `fd` (when `>= 0`) stays open, and `mr` is null or the live
+/// `MemoryRegion` of the section, all until `kf3_ram_del` for the same `gpa`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn kf3_ram_add(
     h: *mut c_void,
@@ -430,20 +434,41 @@ pub unsafe extern "C" fn kf3_ram_add(
     len: u64,
     fd: i32,
     fd_off: u64,
+    mr: *mut c_void,
 ) -> i32 {
     let (Some(d), false) = (dev(h), hva.is_null()) else {
         return -1;
     };
-    // SAFETY: the caller keeps the RAM mapped until it unregisters it.
-    // SAFETY: the caller keeps the RAM mapped, and its backend fd open, until it unregisters it.
+    // SAFETY: the caller keeps the RAM mapped, its backend fd open and `mr` alive until it
+    // unregisters the block.
     let (mem, fd) = unsafe {
         (
-            RawRegion::adopt(hva, len as usize),
+            RawRegion::adopt_owned(hva, len as usize, mr),
             crate::raw_unsafe::BackendFd::adopt(fd),
         )
     };
     d.ram_add(gpa, mem, fd, fd_off);
     0
+}
+
+/// ★ ABI 31: register the verbs a layout guard holds a RAM block's owner with. Once, before the first
+/// [`kf3_ram_add`]; a second call is refused (-1). The C device passes a valid [`Kf3RamOps`] whose
+/// verbs are QEMU's `memory_region_ref` / `memory_region_unref` (callable from any thread with a `mr`
+/// that [`kf3_ram_add`] carried) — the contract [`crate::raw_unsafe::CMrHold`] documents. (A
+/// reference parameter, so a null `ops` is `None`; no `unsafe` is needed to read it.)
+#[unsafe(no_mangle)]
+pub extern "C" fn kf3_ram_ops(h: *mut c_void, ops: Option<&Kf3RamOps>) -> i32 {
+    let (Some(d), Some(ops)) = (dev(h), ops) else {
+        return -1;
+    };
+    let (Some(hold), Some(release)) = (ops.mr_ref, ops.mr_unref) else {
+        return -1;
+    };
+    if d.set_ram_hold(crate::raw_unsafe::CMrHold::new(hold, release)) {
+        0
+    } else {
+        -1
+    }
 }
 
 /// ★ P4: the host address backing a plain-RAM (disposition A) region — `[base, base+len)` of
@@ -787,6 +812,18 @@ pub struct Kf3InputOps {
     pub cursor_move: Option<crate::raw_unsafe::CurMoveFn>,
     /// Whether the console's pointer is absolute.
     pub cursor_absolute: Option<crate::raw_unsafe::CurAbsoluteFn>,
+}
+
+/// ★ ABI 31 (2026-10-31, `docs/design/V3_GUEST_MEMORY.md`): the two verbs a layout guard holds a RAM
+/// block's owner with — QEMU's `memory_region_ref` / `memory_region_unref` (atomic reference counts
+/// on `mr->owner`, callable from any thread). Called with the `mr` pointer `kf3_ram_add` carried.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Kf3RamOps {
+    /// Take a reference on the block's owner.
+    pub mr_ref: Option<crate::raw_unsafe::MrRefFn>,
+    /// Give it back.
+    pub mr_unref: Option<crate::raw_unsafe::MrUnrefFn>,
 }
 
 /// ★ ABI 10 (`v3-display2`'s 9; QEMU's main thread, the console's `gfx_update`): the newest frame

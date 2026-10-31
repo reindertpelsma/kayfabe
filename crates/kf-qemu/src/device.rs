@@ -1887,6 +1887,11 @@ impl Device {
         win.host_span(usize::try_from(rel).ok()?, usize::try_from(len).ok()?)
     }
 
+    /// ★ ABI 31: the verbs the layout guard holds a RAM block's owner with. `false` if already set.
+    pub fn set_ram_hold(&self, hold: crate::raw_unsafe::CMrHold) -> bool {
+        self.ram.set_mr_hold(std::sync::Arc::new(hold))
+    }
+
     /// Unregister the guest RAM block at `gpa`.
     pub fn ram_del(&self, gpa: u64) {
         self.ram.del(gpa);
@@ -2041,6 +2046,17 @@ impl Device {
                     "kf3: mem t={:.3}s [{prewarmed}/{}] {line}",
                     self.born.elapsed().as_secs_f64(),
                     crate::mem::PREWARM_SPARES
+                );
+            }
+            // ★ 2026-10-31 (`V3_GUEST_MEMORY.md` §5): the VMM's RAM layout moved (a block was added,
+            // removed or resized) — bring the block objects in line, taking down a removed block's
+            // GPU-VA slices first. Never while a walk is in flight.
+            if !m.in_flight()
+                && let Some(line) = crate::mem::resync_ram(&m, &self.mem, self.rm)
+            {
+                eprintln!(
+                    "kf3: mem t={:.3}s {line}",
+                    self.born.elapsed().as_secs_f64()
                 );
             }
             let mut ready = ReadyTokens::new();
