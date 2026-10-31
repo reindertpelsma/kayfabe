@@ -1,5 +1,11 @@
 # V3 — batched guest-RAM maps: N scattered runs, O(1) host calls
 
+**STATUS: LIVE, 2026-09-26 — CODE + MEASURED on `vh` (RTX 3060 GA106, 580.159.04).** Branch
+`v3-batchmap` (off master `ce2cb06d`). Verb choice read from ogkm-580.159.04 source; §7 holds the
+bench numbers and the revision they were measured at. Answers the follow-up `V3_BUILD.md` w829
+named (*"each scattered 4 KiB run is ONE host map call on the guest-RAM object … a batched verb is
+the next budget"*).
+
 **NOTE, 2026-10-31 (owner direction; `V3_GUEST_MEMORY.md`): the stitch below needs a FILE behind guest RAM, and a file is now
 an OPTIONAL capability.** Where the VMM's RAM is not a file, `map_batch` answers `kf_mem::ledger::NO_RAM_FD`, the apply layer
 counts it apart (`batch_no_fd`) and places every row per run, one host object per RAM block. With a memfd nothing here changes.
@@ -94,12 +100,6 @@ change inside a coalesced row transiently unmapped the unchanged pages (§8.2). 
 only touches what changed; outside any reservation one host mapping per guest leaf; batches only
 inside a VA-reserving `hDma` (guest reservation, or a micro reservation once §8.0 says so); range
 unmaps only over owned spans; no remap ever. Model-tested only; hardware verdict pending (§8.0).
-
-**STATUS: LIVE, 2026-09-26 — CODE + MEASURED on `vh` (RTX 3060 GA106, 580.159.04).** Branch
-`v3-batchmap` (off master `ce2cb06d`). Verb choice read from ogkm-580.159.04 source; §7 holds the
-bench numbers and the revision they were measured at. Answers the follow-up `V3_BUILD.md` w829
-named (*"each scattered 4 KiB run is ONE host map call on the guest-RAM object … a batched verb is
-the next budget"*).
 
 ## 1. The problem, measured
 
