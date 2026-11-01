@@ -73,7 +73,7 @@ GATE_NOTE device enabled once at 2026-11-01T01:57:00Z (guest clock)
   GATE_DISPLAY name='NVIDIA GeForce RTX 4090' driver=32.0.15.8088 code=0 status=OK pnp=OK
 GATE_STAGE enable EXIT ok 92s
 GATE_STAGE smi_probes START 2026-11-01T01:58:15+00:00
-GATE_NOTE guest nvidia-smi: GPU 0: NVIDIA GeForce RTX 4090 (UUID: GPU-6d044bfd-c79b-4589-86b3-8d85926fbd2b)
+GATE_NOTE guest nvidia-smi: GPU 0: NVIDIA GeForce RTX 4090 (UUID: GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001)
 GATE_PROBE_RESULT cup8 GATE_PROBE exe=cup8.exe arg= rc=0 secs=4 timeout=0
 GATE_PROBE_RESULT d3d11 GATE_PROBE exe=kf_dxprobe.exe arg=d3d11 rc=0 secs=2 timeout=0
 GATE_PROBE_RESULT cup3 GATE_PROBE exe=cup3.exe arg= rc=0 secs=2 timeout=0

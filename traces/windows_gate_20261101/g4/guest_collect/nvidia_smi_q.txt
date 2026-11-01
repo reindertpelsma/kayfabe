@@ -24,7 +24,7 @@ GPU 00000000:00:05.0
         Current                           : WDDM
         Pending                           : WDDM
     Serial Number                         : N/A
-    GPU UUID                              : GPU-6d044bfd-c79b-4589-86b3-8d85926fbd2b
+    GPU UUID                              : GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001
     GPU PDI                               : N/A
     Minor Number                          : N/A
     VBIOS Version                         : 95.02.3c.40.32

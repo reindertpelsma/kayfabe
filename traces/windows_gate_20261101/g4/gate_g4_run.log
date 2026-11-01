@@ -1,7 +1,7 @@
 [2026-11-01T01:43:56Z] OVERLAY_CREATED disk/gate_g4.qcow2 over base.qcow2
 [2026-11-01T01:43:56Z] waiting for the GPU lock /tmp/kayfabe-fastguest.lock (GPU work is strictly serial; up to 120s)
 [2026-11-01T01:43:57Z] WINVM_RUN_START tag=gate_g4 repo_rev=a5071c24 kf3=on qemu=/workspace/bench/kf3-bins/a5071c24/qemu-system-x86_64 host_driver=595.91.07 overlay=gate_g4 arm=B guest_driver=580.65.06 gop_efi=/workspace/winvm/secureboot/kf-gop.a5071c24.signed.efi sha256(gop_efi)=7b9810798901c37a
-[2026-11-01T01:43:57Z] kf3 device: kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=/workspace/winvm/secureboot/kf-gop.a5071c24.signed.efi,id=kf0,guest-driver=580.65.06,gpu-uuid=GPU-6d044bfd-c79b-4589-86b3-8d85926fbd2b
+[2026-11-01T01:43:57Z] kf3 device: kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=/workspace/winvm/secureboot/kf-gop.a5071c24.signed.efi,id=kf0,guest-driver=580.65.06,gpu-uuid=GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001
 [2026-11-01T01:43:57Z] VM_IDENTITY uuid=6d044bfd-c79b-4589-86b3-8d85926fbd2b serial=KF884B311E33 mac=52:54:00:f8:c6:fe
 [2026-11-01T01:43:57Z] ENV_FILE /root/kayfabe/scripts/bench/windows/kf3_flags.sample.env sha256=e5c254c811c6b3ac flags=19
 [2026-11-01T01:43:57Z] KF3_ENV KF3_ASYNC_PREEMPT=1 KF3_DEFERRED_API=1 KF3_DISPLAY_CAPS_PROBE=1 KF3_DISPLAY_CTRL_PROBE=1 KF3_DISPLAY_ILUT_OFFSET_256=1 KF3_DISPLAY_IMP_ENABLE=1 KF3_DISPLAY_LUT_MIRROR=1 KF3_DISPLAY_SDR_COLOR=1 KF3_GFX_POOL_PROBE=1 KF3_KERNEL_GR_CE=1 KF3_KERNEL_GR_WORK=1 KF3_MEMORY_LIST_PROBE=1 KF3_PREEMPT_BIND_PROBE=1 KF3_RPC_TRACE=1 KF3_SW_RUNLIST_HOST_OWNED=1 KF3_SW_RUNLIST_PROBE=1 KF3_TRANSLATED_CE_RELAY=1 KF3_WIN_TWIN_DEFAPI_OBJECT=1 KF3_WIN_USER_CHANNELS_PASSTHROUGH=1 KF3_ZCULL_BIND_PROBE=1 
