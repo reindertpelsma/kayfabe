@@ -1,3 +1,6 @@
+//! The bounded unprivileged host PRECOMP read (`kf_host::precomp::read_with`): READ32/GLOBAL only,
+//! fixed-size batches, no write and no channel target, and a refused or malformed batch abandons the
+//! whole snapshot. The reply fixture is synthetic.
 use kf_host::precomp::read_with;
 use std::cell::Cell;
 
@@ -19,7 +22,7 @@ fn reply(cmd: u32, p: &mut [u8], ops: &mut [u8]) -> Result<(), String> {
             assert_eq!(*byte, 0);
         }
     }
-    for op in ops.chunks_exact_mut(32) {
+    for op in ops.as_chunks_mut::<32>().0.iter_mut() {
         assert_eq!(op[0], 0, "READ32 only");
         assert_eq!(op[1], 0, "GLOBAL only");
         for (i, b) in op.iter().enumerate() {
