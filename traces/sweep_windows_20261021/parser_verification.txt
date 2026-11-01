@@ -1,0 +1,84 @@
+....
+----------------------------------------------------------------------
+Ran 4 tests in 0.004s
+
+OK
+
+MUTANT export.py exactly2killers
+FF..
+======================================================================
+FAIL: test_export_cursor_ordinal_counts_other_records (__main__.Metadata.test_export_cursor_ordinal_counts_other_records)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/sweep-wt2/traces/sweep_windows_20261021/box_scripts/test_rpc_metadata.py", line 26, in test_export_cursor_ordinal_counts_other_records
+    self.assertEqual([m[1] for l in [OTHER,OTHER,ALLOC] if (m:=p.search(l))], ['4','4','103'])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: ['103'] != ['4', '4', '103']
+
+First differing element 0:
+'103'
+'4'
+
+Second list contains 2 additional elements.
+First extra element 1:
+'4'
+
+- ['103']
++ ['4', '4', '103']
+
+======================================================================
+FAIL: test_export_other4_is_a_real_rpc (__main__.Metadata.test_export_other4_is_a_real_rpc)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/sweep-wt2/traces/sweep_windows_20261021/box_scripts/test_rpc_metadata.py", line 21, in test_export_other4_is_a_real_rpc
+    self.assertIsNotNone(m)
+    ~~~~~~~~~~~~~~~~~~~~^^^
+AssertionError: unexpectedly None
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.004s
+
+FAILED (failures=2)
+
+MUTANT rpc_timing.py exactly2killers
+..FF
+======================================================================
+FAIL: test_observer_cursor_ordinal_counts_other_records (__main__.Metadata.test_observer_cursor_ordinal_counts_other_records)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/sweep-wt2/traces/sweep_windows_20261021/box_scripts/test_rpc_metadata.py", line 35, in test_observer_cursor_ordinal_counts_other_records
+    self.assertEqual([m[1] for l in [OTHER,OTHER,ALLOC] if (m:=p.search(l))], ['4','4','103'])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: ['103'] != ['4', '4', '103']
+
+First differing element 0:
+'103'
+'4'
+
+Second list contains 2 additional elements.
+First extra element 1:
+'4'
+
+- ['103']
++ ['4', '4', '103']
+
+======================================================================
+FAIL: test_observer_other4_is_a_real_rpc (__main__.Metadata.test_observer_other4_is_a_real_rpc)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/sweep-wt2/traces/sweep_windows_20261021/box_scripts/test_rpc_metadata.py", line 30, in test_observer_other4_is_a_real_rpc
+    self.assertIsNotNone(m)
+    ~~~~~~~~~~~~~~~~~~~~^^^
+AssertionError: unexpectedly None
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.004s
+
+FAILED (failures=2)
+
+RESTORED
+....
+----------------------------------------------------------------------
+Ran 4 tests in 0.004s
+
+OK

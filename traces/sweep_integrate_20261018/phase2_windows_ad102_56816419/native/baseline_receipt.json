@@ -1,0 +1,34 @@
+{
+  "utc": "2026-10-20T01:20:36.414724+00:00",
+  "source": "0c87acda802b18a610739e75f2b50049a9247067",
+  "native_raw": "30/30",
+  "native_cuda": "4/4",
+  "n": 1,
+  "files": [
+    {
+      "path": "/root/prov/sweep_bare595.log",
+      "source_sha256": "53bd081edfffbc0a782b446705e9138fed49562da7c91bd0deaa91ba6eec0d61",
+      "export": "raw595.txt",
+      "export_sha256": "c302e11ddebb16f892c5d78c13a5211b9caafafe4eaeb5ce35d63ec77f69614a"
+    },
+    {
+      "path": "/workspace/bench/cl_sweep0c87acda_ad102_host.out",
+      "source_sha256": "1ae393a49f34bebf4d61b0b5f5d9c22f9da8878e97058dd5d7daedf802f3b0db",
+      "export": "cuda595.txt",
+      "export_sha256": "1ae393a49f34bebf4d61b0b5f5d9c22f9da8878e97058dd5d7daedf802f3b0db"
+    },
+    {
+      "path": "/root/prov/sweep_native_baseline.log",
+      "source_sha256": "7bea4ca577e4eb5b71e5ca9bf6e09af4079f9d3f3ff5da8c84a307f077d34e4e",
+      "export": "baseline_controller.txt",
+      "export_sha256": "7bea4ca577e4eb5b71e5ca9bf6e09af4079f9d3f3ff5da8c84a307f077d34e4e"
+    },
+    {
+      "path": "/root/prov/sweep_qemu_sha256",
+      "source_sha256": "f2860ce9e104070a9bd1864e10b83a1468427037a23753e072f06dab3b0644db",
+      "export": "qemu_sha256.txt",
+      "export_sha256": "f2860ce9e104070a9bd1864e10b83a1468427037a23753e072f06dab3b0644db"
+    }
+  ],
+  "limit": "Native negative fault arms may emit intentional hostXid31; no whole-run zero-host-Xid claim. Linux guest not implied."
+}

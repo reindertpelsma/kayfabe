@@ -1,0 +1,65 @@
+[
+    {
+        "backing-filename-format": "qcow2",
+        "virtual-size": 85899345920,
+        "filename": "/workspace/sweep-win-56788212/kfwin/disk/bw580_off.qcow2",
+        "cluster-size": 65536,
+        "format": "qcow2",
+        "actual-size": 200704,
+        "format-specific": {
+            "type": "qcow2",
+            "data": {
+                "compat": "1.1",
+                "compression-type": "zlib",
+                "lazy-refcounts": false,
+                "refcount-bits": 16,
+                "corrupt": false,
+                "extended-l2": false
+            }
+        },
+        "full-backing-filename": "/workspace/sweep-win-56788212/kfwin/disk/bw580_bind.qcow2",
+        "backing-filename": "/workspace/sweep-win-56788212/kfwin/disk/bw580_bind.qcow2",
+        "dirty-flag": false
+    },
+    {
+        "backing-filename-format": "qcow2",
+        "virtual-size": 85899345920,
+        "filename": "/workspace/sweep-win-56788212/kfwin/disk/bw580_bind.qcow2",
+        "cluster-size": 65536,
+        "format": "qcow2",
+        "actual-size": 5617872896,
+        "format-specific": {
+            "type": "qcow2",
+            "data": {
+                "compat": "1.1",
+                "compression-type": "zlib",
+                "lazy-refcounts": false,
+                "refcount-bits": 16,
+                "corrupt": false,
+                "extended-l2": false
+            }
+        },
+        "full-backing-filename": "/workspace/sweep-win-56788212/kfwin/disk/base.qcow2",
+        "backing-filename": "base.qcow2",
+        "dirty-flag": false
+    },
+    {
+        "virtual-size": 85899345920,
+        "filename": "/workspace/sweep-win-56788212/kfwin/disk/base.qcow2",
+        "cluster-size": 65536,
+        "format": "qcow2",
+        "actual-size": 7070191616,
+        "format-specific": {
+            "type": "qcow2",
+            "data": {
+                "compat": "1.1",
+                "compression-type": "zlib",
+                "lazy-refcounts": false,
+                "refcount-bits": 16,
+                "corrupt": false,
+                "extended-l2": false
+            }
+        },
+        "dirty-flag": false
+    }
+]

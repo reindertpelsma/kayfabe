@@ -1,0 +1,17 @@
+[
+  {
+    "mutant": "omit_permission_measurement",
+    "killers": [
+      "test_existing_constants_are_explicitly_subtracted",
+      "test_refusal_is_recorded_without_privileged_fallback",
+      "test_runtime_reply_is_measured_before_native_gates"
+    ]
+  },
+  {
+    "mutant": "bypass_actual_code0_proof",
+    "killers": [
+      "test_b1_is_conditional_on_actual_observer_code0",
+      "test_code0_gate_uses_observer_proof_not_rpc_progress"
+    ]
+  }
+]

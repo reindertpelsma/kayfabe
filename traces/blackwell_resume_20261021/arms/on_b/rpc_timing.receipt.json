@@ -1,0 +1,17 @@
+{
+  "rows": 4580,
+  "unparsed_rpc_lines": 0,
+  "reason": "qemu_exited_at_eof",
+  "source_bytes_read": 1582573,
+  "source_size_at_end": 1582573,
+  "complete_prefix": true,
+  "incomplete_line_bytes": 0,
+  "reached_eof": true,
+  "observation_time_not_driver_generation_time": true,
+  "limits": {
+    "seconds": 900,
+    "records": 32768,
+    "source_bytes": 67108864,
+    "line_bytes": 131072
+  }
+}

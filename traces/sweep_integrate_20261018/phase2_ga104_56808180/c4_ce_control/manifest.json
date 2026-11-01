@@ -1,0 +1,32 @@
+[
+  {
+    "path": "/root/prov/sweep_c4_ce_guest_ram_run.log",
+    "source_sha256": "29cf6b413804835bfb32361d0e20cbcd9a8c41a4718b11decbab094488f07ed0",
+    "export": "stdout.txt",
+    "export_sha256": "784b53def7637236e5f50eded57ac15ccf78c126f21ce3dfb06905c175f5e9c9"
+  },
+  {
+    "path": "/workspace/bench/fast_sweep_c4_ga104_guest580_ce_guest_ram_serial.log",
+    "source_sha256": "f6d93d7a6be3b63dfe5ae0c8ddec267e96ac5a1f7db8928eee4dda697ca7255a",
+    "export": "serial.txt",
+    "export_sha256": "769fd87b72c3c48668707f4ed5624fca26e989bc6bcb8a5a48f5c7968f959420"
+  },
+  {
+    "path": "/workspace/bench/fast_sweep_c4_ga104_guest580_ce_guest_ram_qemu.log",
+    "source_sha256": "e33d0d1e62c8285d0f0a83341b8fa3ed45578af88b6639351e90235a42e60c5c",
+    "export": "qemu.txt",
+    "export_sha256": "b5f0427c853aa09a2e47cc58938b43d9960b8900231da4031e0b0835b443802a"
+  },
+  {
+    "path": "/root/prov/sweep_c4_qemu_sha256",
+    "source_sha256": "6cebe51102d33b1b5a11e16ee04710001bf0a7144488358cabf39b37e155f6c8",
+    "export": "binary_sha256.txt",
+    "export_sha256": "6cebe51102d33b1b5a11e16ee04710001bf0a7144488358cabf39b37e155f6c8"
+  },
+  {
+    "path": "/root/prov/sweep_c4_guest_hashes",
+    "source_sha256": "b597afdb762ff9fb7eeff23e3c4d661b9820376e9fb64a2c780436ab2bc4d983",
+    "export": "guest_sha256.txt",
+    "export_sha256": "b597afdb762ff9fb7eeff23e3c4d661b9820376e9fb64a2c780436ab2bc4d983"
+  }
+]

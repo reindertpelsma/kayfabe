@@ -5,7 +5,7 @@
 # (consttab::parse_board_specific enforces both). The only source is the host's own answer to the identical request (tier 2,
 # kf_abi::gssreplay at realize); where the host did not answer, the guest is refused by name and the refusal is counted.
 # `seen` lists the measurements as `SKU=value` separated by `;` (product names only: never a serial, UUID or board identity).
-# The registry is itself checked against traces/constants_measure_20261014b/tier2_summary.tsv by tests/consttab_data.rs and tests/consttab_loader.rs: every
+# The registry is itself checked against traces/constants_measure_20261014b/tier2_summary.tsv by tests/consttab_data.rs, tests/consttab_loader.rs and tests/gpu_types_wiring.rs: every
 # (key, die) whose boards disagree there MUST be listed here.
 key	die	seen	evidence
 gss.0x20808162	GA102	RTX 3090 (570.86.15)=01; RTX A5000 (580.126.09)=00	traces/constants_measure_20261014b/tier2_summary.tsv

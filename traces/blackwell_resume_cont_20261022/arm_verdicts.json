@@ -1,0 +1,483 @@
+{
+  "on_c0": {
+    "source": "2c30a158c170a66baa37b77c19000993af1546a6",
+    "binary_sha256": "dfde463c9881e44525de4eaf91902ad5346e5653bc6236d7f279feaed4479864",
+    "qemu_pid": 94805,
+    "canonical_rpc_rows": 278,
+    "canonical_unparsed": 0,
+    "bugcheck": "0x50",
+    "parameters": [
+      "0xffffb90bd409fcc7",
+      "0x2",
+      "0xfffff80432bda1b0",
+      "0x2"
+    ],
+    "panic_host_utc": "2026-10-21T22:53:50.760915+00:00",
+    "xid_reaudit": {
+      "verdict": "CLEAN",
+      "xids": []
+    },
+    "reset_channel": [],
+    "unload": [],
+    "last_rpc": {
+      "ordinal": 277,
+      "observed_utc": "2026-10-21T22:53:50.792163+00:00",
+      "observer_monotonic_ns": 2879579562327,
+      "function": 103,
+      "kind": "RmAlloc",
+      "sequence": 0,
+      "selector": "0xca7a",
+      "trace_result": "0x0",
+      "file_offset_after": 323963
+    },
+    "acceptance": "FAIL; exploratory only because unmatched native Xid32 preceded Windows arms"
+  },
+  "on_c1": {
+    "source": "2c30a158c170a66baa37b77c19000993af1546a6",
+    "binary_sha256": "dfde463c9881e44525de4eaf91902ad5346e5653bc6236d7f279feaed4479864",
+    "qemu_pid": 95251,
+    "canonical_rpc_rows": 4542,
+    "canonical_unparsed": 0,
+    "bugcheck": "0x116",
+    "parameters": [
+      "0xffffe4848e6b7010",
+      "0xfffff8014f194930",
+      "0xffffffffc000009a",
+      "0x4"
+    ],
+    "panic_host_utc": "2026-10-21T22:57:29.633931+00:00",
+    "xid_reaudit": {
+      "verdict": "EXPECTED",
+      "xids": [
+        {
+          "code": 32,
+          "pid": 95251,
+          "channel": "0x00000014",
+          "intr": "00200000",
+          "line": "2026-10-21T22:57:19.237021+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 32, pid=95251, name=qemu-system-x86, channel 0x00000014 intr 00200000"
+        },
+        {
+          "code": 32,
+          "pid": 95251,
+          "channel": "0x0e00000b",
+          "intr": "00200000",
+          "line": "2026-10-21T22:57:19.268682+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 32, pid=95251, name=qemu-system-x86, channel 0x0e00000b intr 00200000"
+        }
+      ]
+    },
+    "reset_channel": [
+      {
+        "ordinal": 4108,
+        "observed_utc": "2026-10-21T22:57:24.028496+00:00",
+        "observer_monotonic_ns": 3092815897420,
+        "function": 76,
+        "kind": "RmControl",
+        "sequence": 0,
+        "selector": "0x906f0102",
+        "trace_result": "none",
+        "file_offset_after": 1360130
+      },
+      {
+        "ordinal": 4109,
+        "observed_utc": "2026-10-21T22:57:24.028533+00:00",
+        "observer_monotonic_ns": 3092815933800,
+        "function": 76,
+        "kind": "RmControl",
+        "sequence": 0,
+        "selector": "0x906f0102",
+        "trace_result": "none",
+        "file_offset_after": 1360424
+      },
+      {
+        "ordinal": 4110,
+        "observed_utc": "2026-10-21T22:57:24.028560+00:00",
+        "observer_monotonic_ns": 3092815960759,
+        "function": 76,
+        "kind": "RmControl",
+        "sequence": 0,
+        "selector": "0x906f0102",
+        "trace_result": "none",
+        "file_offset_after": 1360616
+      },
+      {
+        "ordinal": 4111,
+        "observed_utc": "2026-10-21T22:57:24.028640+00:00",
+        "observer_monotonic_ns": 3092816040919,
+        "function": 76,
+        "kind": "RmControl",
+        "sequence": 0,
+        "selector": "0x906f0102",
+        "trace_result": "none",
+        "file_offset_after": 1360808
+      }
+    ],
+    "unload": [
+      {
+        "ordinal": 4541,
+        "observed_utc": "2026-10-21T22:57:26.145758+00:00",
+        "observer_monotonic_ns": 3094933159073,
+        "function": 47,
+        "kind": "UnloadingGuestDriver",
+        "sequence": 0,
+        "selector": "-",
+        "trace_result": "0x0",
+        "file_offset_after": 1446599
+      }
+    ],
+    "last_rpc": {
+      "ordinal": 4541,
+      "observed_utc": "2026-10-21T22:57:26.145758+00:00",
+      "observer_monotonic_ns": 3094933159073,
+      "function": 47,
+      "kind": "UnloadingGuestDriver",
+      "sequence": 0,
+      "selector": "-",
+      "trace_result": "0x0",
+      "file_offset_after": 1446599
+    },
+    "acceptance": "FAIL; exploratory only because unmatched native Xid32 preceded Windows arms",
+    "init_before_xid_proof": [
+      {
+        "xid_utc": "2026-10-21T22:57:19.237021+00:00",
+        "rpcs_observed_before_xid": 4033,
+        "last_observed_ordinal_before_xid": 4032,
+        "full_init_proxy_already_satisfied": true
+      },
+      {
+        "xid_utc": "2026-10-21T22:57:19.268682+00:00",
+        "rpcs_observed_before_xid": 4033,
+        "last_observed_ordinal_before_xid": 4032,
+        "full_init_proxy_already_satisfied": true
+      }
+    ]
+  },
+  "on_c2": {
+    "source": "2c30a158c170a66baa37b77c19000993af1546a6",
+    "binary_sha256": "dfde463c9881e44525de4eaf91902ad5346e5653bc6236d7f279feaed4479864",
+    "qemu_pid": 95779,
+    "canonical_rpc_rows": 278,
+    "canonical_unparsed": 0,
+    "bugcheck": "0x50",
+    "parameters": [
+      "0xffffe50b1709fcc7",
+      "0x2",
+      "0xfffff8028178a1b0",
+      "0x2"
+    ],
+    "panic_host_utc": "2026-10-21T23:00:35.639259+00:00",
+    "xid_reaudit": {
+      "verdict": "CLEAN",
+      "xids": []
+    },
+    "reset_channel": [],
+    "unload": [],
+    "last_rpc": {
+      "ordinal": 277,
+      "observed_utc": "2026-10-21T23:00:35.658754+00:00",
+      "observer_monotonic_ns": 3284446154837,
+      "function": 103,
+      "kind": "RmAlloc",
+      "sequence": 0,
+      "selector": "0xca7a",
+      "trace_result": "0x0",
+      "file_offset_after": 316989
+    },
+    "acceptance": "FAIL; exploratory only because unmatched native Xid32 preceded Windows arms"
+  },
+  "on_c3": {
+    "source": "2c30a158c170a66baa37b77c19000993af1546a6",
+    "binary_sha256": "dfde463c9881e44525de4eaf91902ad5346e5653bc6236d7f279feaed4479864",
+    "qemu_pid": 96254,
+    "canonical_rpc_rows": 4519,
+    "canonical_unparsed": 0,
+    "bugcheck": "0x116",
+    "parameters": [
+      "0xffffc88bf9aca050",
+      "0xfffff803393d4930",
+      "0xffffffffc000009a",
+      "0x4"
+    ],
+    "panic_host_utc": "2026-10-21T23:04:17.741137+00:00",
+    "xid_reaudit": {
+      "verdict": "EXPECTED",
+      "xids": [
+        {
+          "code": 32,
+          "pid": 96254,
+          "channel": "0x00000014",
+          "intr": "00200000",
+          "line": "2026-10-21T23:04:07.866094+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 32, pid=96254, name=qemu-system-x86, channel 0x00000014 intr 00200000"
+        },
+        {
+          "code": 32,
+          "pid": 96254,
+          "channel": "0x0e00000b",
+          "intr": "00200000",
+          "line": "2026-10-21T23:04:07.904674+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 32, pid=96254, name=qemu-system-x86, channel 0x0e00000b intr 00200000"
+        }
+      ]
+    },
+    "reset_channel": [
+      {
+        "ordinal": 4081,
+        "observed_utc": "2026-10-21T23:04:12.144010+00:00",
+        "observer_monotonic_ns": 3500931410061,
+        "function": 76,
+        "kind": "RmControl",
+        "sequence": 0,
+        "selector": "0x906f0102",
+        "trace_result": "none",
+        "file_offset_after": 1358685
+      },
+      {
+        "ordinal": 4082,
+        "observed_utc": "2026-10-21T23:04:12.144031+00:00",
+        "observer_monotonic_ns": 3500931430791,
+        "function": 76,
+        "kind": "RmControl",
+        "sequence": 0,
+        "selector": "0x906f0102",
+        "trace_result": "none",
+        "file_offset_after": 1358979
+      },
+      {
+        "ordinal": 4083,
+        "observed_utc": "2026-10-21T23:04:12.144047+00:00",
+        "observer_monotonic_ns": 3500931446621,
+        "function": 76,
+        "kind": "RmControl",
+        "sequence": 0,
+        "selector": "0x906f0102",
+        "trace_result": "none",
+        "file_offset_after": 1359171
+      },
+      {
+        "ordinal": 4084,
+        "observed_utc": "2026-10-21T23:04:12.144062+00:00",
+        "observer_monotonic_ns": 3500931461841,
+        "function": 76,
+        "kind": "RmControl",
+        "sequence": 0,
+        "selector": "0x906f0102",
+        "trace_result": "none",
+        "file_offset_after": 1359363
+      }
+    ],
+    "unload": [
+      {
+        "ordinal": 4518,
+        "observed_utc": "2026-10-21T23:04:14.467974+00:00",
+        "observer_monotonic_ns": 3503255375926,
+        "function": 47,
+        "kind": "UnloadingGuestDriver",
+        "sequence": 0,
+        "selector": "-",
+        "trace_result": "0x0",
+        "file_offset_after": 1441047
+      }
+    ],
+    "last_rpc": {
+      "ordinal": 4518,
+      "observed_utc": "2026-10-21T23:04:14.467974+00:00",
+      "observer_monotonic_ns": 3503255375926,
+      "function": 47,
+      "kind": "UnloadingGuestDriver",
+      "sequence": 0,
+      "selector": "-",
+      "trace_result": "0x0",
+      "file_offset_after": 1441047
+    },
+    "acceptance": "FAIL; exploratory only because unmatched native Xid32 preceded Windows arms",
+    "init_before_xid_proof": [
+      {
+        "xid_utc": "2026-10-21T23:04:07.866094+00:00",
+        "rpcs_observed_before_xid": 4009,
+        "last_observed_ordinal_before_xid": 4008,
+        "full_init_proxy_already_satisfied": true
+      },
+      {
+        "xid_utc": "2026-10-21T23:04:07.904674+00:00",
+        "rpcs_observed_before_xid": 4009,
+        "last_observed_ordinal_before_xid": 4008,
+        "full_init_proxy_already_satisfied": true
+      }
+    ]
+  },
+  "off_c": {
+    "source": "2c30a158c170a66baa37b77c19000993af1546a6",
+    "binary_sha256": "dfde463c9881e44525de4eaf91902ad5346e5653bc6236d7f279feaed4479864",
+    "qemu_pid": 96783,
+    "canonical_rpc_rows": 4007,
+    "canonical_unparsed": 0,
+    "bugcheck": "0x116",
+    "parameters": [
+      "0xffff8485b160e010",
+      "0xfffff80020bf4930",
+      "0xffffffffc000009a",
+      "0x4"
+    ],
+    "panic_host_utc": "2026-10-21T23:07:48.144427+00:00",
+    "xid_reaudit": {
+      "verdict": "EXPECTED",
+      "xids": [
+        {
+          "code": 32,
+          "pid": 96783,
+          "channel": "0x0000000c",
+          "intr": "00200000",
+          "line": "2026-10-21T23:07:37.411873+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 32, pid=96783, name=qemu-system-x86, channel 0x0000000c intr 00200000"
+        },
+        {
+          "code": 32,
+          "pid": 96783,
+          "channel": "0x0e000007",
+          "intr": "00200000",
+          "line": "2026-10-21T23:07:37.425634+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 32, pid=96783, name=qemu-system-x86, channel 0x0e000007 intr 00200000"
+        }
+      ]
+    },
+    "reset_channel": [
+      {
+        "ordinal": 3673,
+        "observed_utc": "2026-10-21T23:07:41.829771+00:00",
+        "observer_monotonic_ns": 3710617174058,
+        "function": 76,
+        "kind": "RmControl",
+        "sequence": 0,
+        "selector": "0x906f0102",
+        "trace_result": "none",
+        "file_offset_after": 1084807
+      },
+      {
+        "ordinal": 3674,
+        "observed_utc": "2026-10-21T23:07:41.829820+00:00",
+        "observer_monotonic_ns": 3710617221478,
+        "function": 76,
+        "kind": "RmControl",
+        "sequence": 0,
+        "selector": "0x906f0102",
+        "trace_result": "none",
+        "file_offset_after": 1085101
+      },
+      {
+        "ordinal": 3675,
+        "observed_utc": "2026-10-21T23:07:41.829853+00:00",
+        "observer_monotonic_ns": 3710617253719,
+        "function": 76,
+        "kind": "RmControl",
+        "sequence": 0,
+        "selector": "0x906f0102",
+        "trace_result": "none",
+        "file_offset_after": 1085293
+      },
+      {
+        "ordinal": 3676,
+        "observed_utc": "2026-10-21T23:07:41.930279+00:00",
+        "observer_monotonic_ns": 3710717709161,
+        "function": 76,
+        "kind": "RmControl",
+        "sequence": 0,
+        "selector": "0x906f0102",
+        "trace_result": "none",
+        "file_offset_after": 1085485
+      }
+    ],
+    "unload": [
+      {
+        "ordinal": 4006,
+        "observed_utc": "2026-10-21T23:07:45.052210+00:00",
+        "observer_monotonic_ns": 3713839610634,
+        "function": 47,
+        "kind": "UnloadingGuestDriver",
+        "sequence": 0,
+        "selector": "-",
+        "trace_result": "0x0",
+        "file_offset_after": 1152784
+      }
+    ],
+    "last_rpc": {
+      "ordinal": 4006,
+      "observed_utc": "2026-10-21T23:07:45.052210+00:00",
+      "observer_monotonic_ns": 3713839610634,
+      "function": 47,
+      "kind": "UnloadingGuestDriver",
+      "sequence": 0,
+      "selector": "-",
+      "trace_result": "0x0",
+      "file_offset_after": 1152784
+    },
+    "acceptance": "FAIL; exploratory only because unmatched native Xid32 preceded Windows arms",
+    "probe": {
+      "summary_events": [
+        {
+          "line": "kf3: PROBE-DUMP t=3682.434127 tok=0x3 host=0x4000000a GUEST-SILENT-AFTER-COMPLETION (its GP_PUT has not moved since our fence completed): key=VasKey(13965662457344034928) forwarded=1 submissions=1 walks=0 serves=3 guest USERD GP_PUT=Some(1) GP_GET=Some(1) (authored Some(1)) put_moved=1 594ms ago our ring GP_GET/GP_PUT/fence=Some((0, 2, 1)) dead=None scheduled=true stopped=false disabled=false",
+          "offset": 467278,
+          "not_before_utc": "2026-10-21T23:07:13.702358+00:00",
+          "not_after_utc": "2026-10-21T23:07:13.702378+00:00"
+        },
+        {
+          "line": "kf3: PROBE-DUMP t=3682.434166 tok=0x802 host=0x400d000b GUEST-SILENT-AFTER-COMPLETION (its GP_PUT has not moved since our fence completed): key=VasKey(13965662457344034928) forwarded=1 submissions=1 walks=0 serves=3 guest USERD GP_PUT=Some(1) GP_GET=Some(1) (authored Some(1)) put_moved=1 594ms ago our ring GP_GET/GP_PUT/fence=Some((0, 2, 1)) dead=None scheduled=true stopped=false disabled=false",
+          "offset": 467801,
+          "not_before_utc": "2026-10-21T23:07:13.702358+00:00",
+          "not_after_utc": "2026-10-21T23:07:13.702378+00:00"
+        },
+        {
+          "line": "kf3: PROBE-DUMP t=3682.634465 tok=0x10 host=0x4000000b GUEST-SILENT-AFTER-COMPLETION (its GP_PUT has not moved since our fence completed): key=VasKey(13965662573308151888) forwarded=1 submissions=1 walks=0 serves=2 guest USERD GP_PUT=Some(1) GP_GET=Some(1) (authored Some(1)) put_moved=1 510ms ago our ring GP_GET/GP_PUT/fence=Some((0, 2, 1)) dead=None scheduled=true stopped=false disabled=false",
+          "offset": 505042,
+          "not_before_utc": "2026-10-21T23:07:13.905067+00:00",
+          "not_after_utc": "2026-10-21T23:07:13.905127+00:00"
+        },
+        {
+          "line": "kf3: PROBE-DUMP t=3682.634490 tok=0x80f host=0x400d000e GUEST-SILENT-AFTER-COMPLETION (its GP_PUT has not moved since our fence completed): key=VasKey(13965662573308151888) forwarded=2 submissions=2 walks=0 serves=5 guest USERD GP_PUT=Some(2) GP_GET=Some(2) (authored Some(2)) put_moved=2 507ms ago our ring GP_GET/GP_PUT/fence=Some((0, 4, 2)) dead=None scheduled=true stopped=false disabled=false",
+          "offset": 505566,
+          "not_before_utc": "2026-10-21T23:07:13.905067+00:00",
+          "not_after_utc": "2026-10-21T23:07:13.905127+00:00"
+        },
+        {
+          "line": "kf3: PROBE-DUMP t=3705.870944 tok=0x3 host=0x4000000a GUEST-SILENT-AFTER-COMPLETION (its GP_PUT has not moved since our fence completed): key=VasKey(13965662457344034928) forwarded=2 submissions=4 walks=0 serves=11 guest USERD GP_PUT=Some(2) GP_GET=Some(2) (authored Some(2)) put_moved=2 845ms ago our ring GP_GET/GP_PUT/fence=Some((0, 8, 4)) dead=None scheduled=true stopped=false disabled=false",
+          "offset": 1020609,
+          "not_before_utc": "2026-10-21T23:07:36.880494+00:00",
+          "not_after_utc": "2026-10-21T23:07:37.483081+00:00"
+        },
+        {
+          "line": "kf3: PROBE-DUMP t=3706.772104 tok=0x80f host=0x400d000e GUEST-SILENT-AFTER-COMPLETION (its GP_PUT has not moved since our fence completed): key=VasKey(13965662573308151888) forwarded=17081 submissions=1036 walks=121 serves=828 guest USERD GP_PUT=Some(697) GP_GET=Some(697) (authored Some(697)) put_moved=697 553ms ago our ring GP_GET/GP_PUT/fence=Some((0, 470, 458)) dead=None scheduled=true stopped=false disabled=false",
+          "offset": 1030488,
+          "not_before_utc": "2026-10-21T23:07:37.483225+00:00",
+          "not_after_utc": "2026-10-21T23:07:38.286586+00:00"
+        },
+        {
+          "line": "kf3: PROBE-DUMP t=3708.574173 tok=0x3 host=0x4000000a GUEST-SILENT-AFTER-COMPLETION (its GP_PUT has not moved since our fence completed): key=VasKey(13965662457344034928) forwarded=3 submissions=7 walks=0 serves=19 guest USERD GP_PUT=Some(3) GP_GET=Some(3) (authored Some(3)) put_moved=3 970ms ago our ring GP_GET/GP_PUT/fence=Some((0, 14, 7)) dead=None scheduled=true stopped=false disabled=false",
+          "offset": 1074506,
+          "not_before_utc": "2026-10-21T23:07:39.721362+00:00",
+          "not_after_utc": "2026-10-21T23:07:41.829656+00:00"
+        },
+        {
+          "line": "kf3: PROBE-DUMP t=3708.974770 tok=0x80f host=0x400d000e GUEST-SILENT-AFTER-COMPLETION (its GP_PUT has not moved since our fence completed): key=VasKey(13965662573308151888) forwarded=23342 submissions=1642 walks=146 serves=1299 guest USERD GP_PUT=Some(6958) GP_GET=Some(6958) (authored Some(6958)) put_moved=6958 852ms ago our ring GP_GET/GP_PUT/fence=Some((0, 384, 790)) dead=None scheduled=true stopped=false disabled=false",
+          "offset": 1082010,
+          "not_before_utc": "2026-10-21T23:07:39.721362+00:00",
+          "not_after_utc": "2026-10-21T23:07:41.829656+00:00"
+        }
+      ],
+      "guest_silent_after_completion": 8,
+      "host_fence_overdue": 0,
+      "inflight_fence_lines": 0,
+      "scope": "Translated slots readable by probe, busy slots skipped; not a complete fault-time host-channel map"
+    },
+    "canonical_teardown_start_ordinal": 3686,
+    "canonical_last_nonfree_before_teardown": 3685,
+    "init_before_xid_proof": [
+      {
+        "xid_utc": "2026-10-21T23:07:37.411873+00:00",
+        "rpcs_observed_before_xid": 3553,
+        "last_observed_ordinal_before_xid": 3552,
+        "full_init_proxy_already_satisfied": true
+      },
+      {
+        "xid_utc": "2026-10-21T23:07:37.425634+00:00",
+        "rpcs_observed_before_xid": 3553,
+        "last_observed_ordinal_before_xid": 3552,
+        "full_init_proxy_already_satisfied": true
+      }
+    ]
+  }
+}

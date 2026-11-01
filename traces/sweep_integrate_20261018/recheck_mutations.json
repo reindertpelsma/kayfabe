@@ -1,0 +1,28 @@
+[
+  {
+    "mutant": "C2_branch_recheck",
+    "path": "crates/kf-rm/src/consttab.rs",
+    "exit": 101,
+    "killing_tests": [
+      "consttab::tests::a_neighbour_dies_row_is_never_served",
+      "consttab_every_exact_row_selects_its_declared_branch"
+    ],
+    "kill_count": 2,
+    "passed": true,
+    "fixed_source_sha256": "92c4363df8903e9a5147b5db7cbc368ba07ce0a99a4d1fcf4b5f323d99471889",
+    "log_sha256": "a5504036eb2c39ab6b16032e6133653b56a3c536b72fec6cd9eec3831a0ed730"
+  },
+  {
+    "mutant": "GID1_drop_query",
+    "path": "crates/kf-abi/src/hostabi.rs",
+    "exit": 101,
+    "killing_tests": [
+      "hostabi::tests::host_gid_query_is_carried_at_every_measured_tag",
+      "hostabi::tests::host_gid_reply_preserves_uuid_bytes_at_every_measured_tag"
+    ],
+    "kill_count": 2,
+    "passed": true,
+    "fixed_source_sha256": "c7154f49a9ff34f767a19dcd1ef5df88aa1c9d9dc5dc643f7393c580cae9e4df",
+    "log_sha256": "eee638ac113558c16d301e13c3c3806b7cdeb2545a73a67177a5cb967feb5b42"
+  }
+]

@@ -1,0 +1,11 @@
+# Verbatim rows of seed58151__sequence.tsv with kind=alloc and control_or_class=0xb297 (4 commands, 4 replies), extracted 2026-11-01 from the native Windows 581.51 / AD102 metadata export.
+# Full file (not committed here): traces/die_driver_sweep_20261015/ad102_second_builds_20261016/native_windows58151/seed58151__sequence.tsv at commit 8d2cb7cf9 on origin/codex/sweep-blackwell-20261015, sha256 f2d2cab982964fcf367bad7ce5b8ac964664ba2717ceea6f05653c5b5857c0b3. Metadata only; no raw queue body.
+source	instance	ordinal	dir	element_sequence	function	rpc_result	rpc_result_private	rpc_sequence	kind	control_or_class	control_status	declared_params_bytes	decode
+1	1	4487	cmd	2245	0x67	0xffffffff	0xffffffff	2243	alloc	0xb297	-	12	ok
+1	1	4497	cmd	2246	0x67	0xffffffff	0xffffffff	2244	alloc	0xb297	-	12	ok
+1	1	4500	status	2248	0x67	0x0	0x0	2243	alloc	0xb297	-	12	ok
+1	1	4501	status	2249	0x67	0x0	0x0	2244	alloc	0xb297	-	12	ok
+1	1	4507	cmd	2253	0x67	0xffffffff	0xffffffff	2251	alloc	0xb297	-	12	ok
+1	1	4508	cmd	2254	0x67	0xffffffff	0xffffffff	2252	alloc	0xb297	-	12	ok
+1	1	4515	status	2256	0x67	0x0	0x0	2251	alloc	0xb297	-	12	ok
+1	1	4516	status	2257	0x67	0x0	0x0	2252	alloc	0xb297	-	12	ok

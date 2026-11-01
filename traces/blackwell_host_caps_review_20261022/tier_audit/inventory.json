@@ -1,0 +1,35 @@
+{
+  "scope": "CODE READ only: no native capture replay/import and no hardware access",
+  "public_layout_versions": {
+    "580.65.06": {
+      "commit": "307159f2623d3bf45feb9177bd2da52ffbc5ddf9",
+      "generated_classes_sha256": "194a697a1a752522215aaac0483edaf5d0e4e3e6924807a51a9e8b0c2efe9582"
+    },
+    "580.94.02": {
+      "commit": "a86526f4e235ae3d9e2842a11a3bb11db77450d8",
+      "generated_classes_sha256": "3c4543e191c069b214f93f1406605b89f8b734ba9418f47fe8b942e24a714cad"
+    },
+    "580.159.04": {
+      "commit": "b81d58ee0224d1d290bef1c080592b619e184042",
+      "generated_classes_sha256": "eadcfdf392074b9f321df94bf2146d7b06be33725b7e029043969592df883505"
+    },
+    "590.48.01": {
+      "commit": "2ccbad25e1af6a6ee6f38cf569f89f8b65d658ab",
+      "generated_classes_sha256": "e7d9e65d8ad625e6d373ff945cc5bf8964501b781b2bd96fa0a382539bf4414e"
+    },
+    "595.91.07": {
+      "commit": "9f087a6d4e86d85acc0ce1d354d6276fe5047b29",
+      "generated_classes_sha256": "84a92e22a0108a77544d168f15c219b4c13a19a730451e313c2a1f6627245ae6"
+    }
+  },
+  "public_fields_count": 41,
+  "all_five_layouts_identical": true,
+  "authored_family_report_sha256": "3b28b5304fa6b8dcf0ef41e645747263dc5e21b2c20848b10ddcc33e8c14a33c",
+  "field_policies": {
+    "T1-authored": 15,
+    "T1-authored-candidate": 2,
+    "T1-unclaimed": 10,
+    "unresolved": 14
+  },
+  "caveat": "Per-field values decoded from a checked-in authored report are CODE READ, not a fresh build, physical measurement or acceptance result."
+}

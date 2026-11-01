@@ -1,0 +1,30 @@
+{
+  "before": {
+    "kf-chan": {
+      "passed": 649,
+      "failed": 14,
+      "ignored": 4,
+      "targets": 27
+    },
+    "kf-qemu": {
+      "passed": 421,
+      "failed": 0,
+      "ignored": 0,
+      "targets": 10
+    }
+  },
+  "after": {
+    "kf-chan": {
+      "passed": 672,
+      "failed": 0,
+      "ignored": 4,
+      "targets": 27
+    },
+    "kf-qemu": {
+      "passed": 436,
+      "failed": 0,
+      "ignored": 0,
+      "targets": 10
+    }
+  }
+}

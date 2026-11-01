@@ -1,0 +1,10 @@
+{
+  "source_sha256": "c2035e17e2fe1a137059cd0a0543c28c6531b829c1aa1390d538c26dcc997b3d",
+  "total_rpc_records": 278,
+  "unparsed_rpc_lines": [],
+  "missing_observation_times_for_ordinals": [
+    213,
+    219
+  ],
+  "note": "Original276-row observer receipt retained unchanged. Complete-stream cursor ordinal277 equals legacy parsed275. Two Other(4) records have unknown observation times; none invented."
+}

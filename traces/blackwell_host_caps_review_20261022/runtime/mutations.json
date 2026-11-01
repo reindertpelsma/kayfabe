@@ -1,0 +1,147 @@
+{
+  "mutants": [
+    {
+      "mutant": "write_instead_of_read",
+      "killers": [
+        "a_later_failed_batch_does_not_return_a_partial_page",
+        "all_five_compiled_host_abis_use_the_same_read_only_contract",
+        "changed_first_register_is_a_malformed_reply",
+        "changed_last_register_is_a_malformed_reply",
+        "final_bounded_word_is_read_in_fixed_size_batches",
+        "final_denied_register_abandons_the_whole_snapshot",
+        "first_denied_register_abandons_the_whole_snapshot",
+        "first_precomp_values_are_read_without_write_or_channel_target"
+      ],
+      "seconds": 2.585
+    },
+    {
+      "mutant": "permit_administrator_bypass",
+      "killers": [
+        "root_capability_full_plan_never_uses_administrator_bypass",
+        "root_capability_small_plan_never_uses_administrator_bypass"
+      ],
+      "seconds": 2.547
+    },
+    {
+      "mutant": "ignore_per_register_denial",
+      "killers": [
+        "final_denied_register_abandons_the_whole_snapshot",
+        "first_denied_register_abandons_the_whole_snapshot"
+      ],
+      "seconds": 2.509
+    },
+    {
+      "mutant": "ignore_changed_register_metadata",
+      "killers": [
+        "changed_first_register_is_a_malformed_reply",
+        "changed_last_register_is_a_malformed_reply"
+      ],
+      "seconds": 2.469
+    },
+    {
+      "mutant": "return_partial_page_on_ioctl_failure",
+      "killers": [
+        "a_later_failed_batch_does_not_return_a_partial_page",
+        "absent_control_is_a_named_fallback",
+        "permission_refusal_is_a_named_fallback"
+      ],
+      "seconds": 2.554
+    },
+    {
+      "mutant": "remove_bounded_plan_checks",
+      "killers": [
+        "empty_plan_never_issues_an_ioctl",
+        "oversized_plan_never_issues_an_ioctl"
+      ],
+      "seconds": 2.489
+    },
+    {
+      "mutant": "use_fixed_wrong_register_address",
+      "killers": [
+        "final_bounded_word_is_read_in_fixed_size_batches",
+        "first_precomp_values_are_read_without_write_or_channel_target"
+      ],
+      "seconds": 2.575
+    },
+    {
+      "mutant": "guess_an_uncompiled_host_abi",
+      "killers": [
+        "newer_uncompiled_version_is_a_clean_fallback",
+        "uncompiled_host_version_is_not_a_neighbour_layout"
+      ],
+      "seconds": 2.482
+    },
+    {
+      "mutant": "discard_successful_host_snapshot",
+      "killers": [
+        "every_family_uses_its_generated_address_and_keeps_inactive_windows_derived",
+        "host_first_and_last_precomp_words_replace_only_their_t1_words",
+        "host_reply_can_remove_a_derived_feature_without_a_hybrid_page"
+      ],
+      "seconds": 5.709
+    },
+    {
+      "mutant": "or_t1_bits_into_host_values",
+      "killers": [
+        "every_family_uses_its_generated_address_and_keeps_inactive_windows_derived",
+        "host_first_and_last_precomp_words_replace_only_their_t1_words",
+        "host_reply_can_remove_a_derived_feature_without_a_hybrid_page"
+      ],
+      "seconds": 5.668
+    },
+    {
+      "mutant": "hide_host_provenance",
+      "killers": [
+        "every_family_uses_its_generated_address_and_keeps_inactive_windows_derived",
+        "host_first_and_last_precomp_words_replace_only_their_t1_words"
+      ],
+      "seconds": 5.667
+    },
+    {
+      "mutant": "reuse_another_die",
+      "killers": [
+        "a_snapshot_from_a_different_architecture_is_not_reused",
+        "a_snapshot_from_another_die_cannot_override_this_die"
+      ],
+      "seconds": 5.701
+    },
+    {
+      "mutant": "reuse_different_virtual_window_count",
+      "killers": [
+        "fewer_virtual_windows_do_not_import_hidden_host_windows",
+        "more_virtual_windows_do_not_make_a_partly_host_page"
+      ],
+      "seconds": 5.705
+    },
+    {
+      "mutant": "ignore_changed_public_field_layout",
+      "killers": [
+        "a_changed_guest_layout_keeps_the_entire_derived_fallback",
+        "a_changed_guest_register_address_uses_the_entire_derived_fallback"
+      ],
+      "seconds": 5.648
+    },
+    {
+      "mutant": "accept_wrong_length_snapshot",
+      "killers": [
+        "long_reply_abandons_the_whole_snapshot",
+        "short_reply_abandons_the_whole_snapshot"
+      ],
+      "seconds": 5.676
+    },
+    {
+      "mutant": "publish_empty_or_inaccessible_snapshot",
+      "killers": [
+        "an_all_ones_host_page_is_not_published",
+        "an_all_zero_host_page_is_not_a_claim_of_no_capabilities"
+      ],
+      "seconds": 5.705
+    }
+  ],
+  "restored_source_sha256": {
+    "crates/kf-host/src/precomp.rs": "9845385bce7e3b9675dc1230b7b50f4525e2cce68c0b79440ff9f66293171c98",
+    "crates/kf-host/src/precomp_layout.rs": "ff0b32622cb628a2dd2c9f2e120ea538eaf449c2582b2a55f66c3e5e192c0c82",
+    "crates/kf-disp/src/hostcaps.rs": "4ac628537f303643c1343d0c180fc5ab105ef0247f0b74ec0d6b119e3a918e04",
+    "crates/kf-disp/src/capsderive.rs": "5044f537ff8787fb56dd0be63caab8583e0d6ed7726953d66880d850c9ee22bc"
+  }
+}

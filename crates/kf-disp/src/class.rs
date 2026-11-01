@@ -130,6 +130,24 @@ impl ClassTable {
         }
     }
 
+    /// Every row named `NV<class>_<prefix>…`, as `(name without the class prefix, row)`, in name order.
+    /// For tools that decode a register word field by field (the caps page diff).
+    #[must_use]
+    pub fn rows_under(&self, class: u32, prefix: &str) -> Vec<(String, Row)> {
+        let head = format!("NV{class:04X}_");
+        let mut v: Vec<(String, Row)> = self
+            .rows
+            .iter()
+            .filter_map(|(k, r)| {
+                k.strip_prefix(&head)
+                    .filter(|n| n.starts_with(prefix))
+                    .map(|n| (n.to_string(), *r))
+            })
+            .collect();
+        v.sort_by(|a, b| a.0.cmp(&b.0));
+        v
+    }
+
     /// A field of the class-less `NV_DISP_NOTIFIER` family (`__0_STATUS` …).
     #[must_use]
     pub fn notifier_field(&self, name: &str) -> Option<(u8, u8)> {
@@ -176,9 +194,18 @@ pub fn put(v: u32, (hi, lo): (u8, u8), x: u32) -> u32 {
 /// The class table for a guest driver version, or `None` when it has not been derived.
 #[must_use]
 pub fn for_version(version: &str) -> Option<&'static ClassTable> {
+    static V580_94_02: OnceLock<ClassTable> = OnceLock::new();
+
     static V580_159_04: OnceLock<ClassTable> = OnceLock::new();
     static V580_65_06: OnceLock<ClassTable> = OnceLock::new();
+    static V595_91_07: OnceLock<ClassTable> = OnceLock::new();
+    static V590_48_01: OnceLock<ClassTable> = OnceLock::new();
     match version {
+        "580.94.02" => Some(
+            V580_94_02
+                .get_or_init(|| ClassTable::parse(include_str!("../data/classes-580.94.02.tsv"))),
+        ),
+
         "580.159.04" => Some(
             V580_159_04
                 .get_or_init(|| ClassTable::parse(include_str!("../data/classes-580.159.04.tsv"))),
@@ -189,6 +216,14 @@ pub fn for_version(version: &str) -> Option<&'static ClassTable> {
         "580.65.06" => Some(
             V580_65_06
                 .get_or_init(|| ClassTable::parse(include_str!("../data/classes-580.65.06.tsv"))),
+        ),
+        "590.48.01" => Some(
+            V590_48_01
+                .get_or_init(|| ClassTable::parse(include_str!("../data/classes-590.48.01.tsv"))),
+        ),
+        "595.91.07" => Some(
+            V595_91_07
+                .get_or_init(|| ClassTable::parse(include_str!("../data/classes-595.91.07.tsv"))),
         ),
         _ => None,
     }

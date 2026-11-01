@@ -1,0 +1,4 @@
+STAGE580_STATE version=32.0.15.8088 inf=oem7.inf problem=CM_PROB_DISABLED driverkey={4d36e968-e325-11ce-bfc1-08002be10318}\0001
+STAGE580_GSP path=HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0001 value=1
+STAGE580_GSP path=HKLM:\SYSTEM\CurrentControlSet\Services\nvlddmkm value=1
+STAGE580_READY=1 actual=32.0.15.8088 device_disabled=1 GSP_flags=1; fresh QEMU580.65.06 then one enable

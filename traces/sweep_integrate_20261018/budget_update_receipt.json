@@ -1,0 +1,14 @@
+{
+  "observed_utc": "2026-10-18T21:05:38.219472+00:00",
+  "authority": "Owner budget update in conversation, 2026-10-18",
+  "spend_cap_usd": 25,
+  "stop_renting_and_report_usd": 20,
+  "stretch_spend_usd": 0,
+  "created_ids": [],
+  "destroyed_ids": [],
+  "user": {
+    "credit": 43.559771576861976,
+    "balance": 0
+  },
+  "shared_account_instance_ids": []
+}

@@ -1,0 +1,19 @@
+WINDOWS_INIT_OBSERVER_START on_precision
+Traceback (most recent call last):
+  File "/root/sweep2/guard/blackwell/init_observer.py", line 71, in <module>
+    if __name__=='__main__':sys.exit(main())
+  File "/root/sweep2/guard/blackwell/init_observer.py", line 67, in main
+    ok=observe(a.phase,a.arm,fetch,ready,record,validate,alive,pause=lambda:time.sleep(1))
+  File "/root/sweep2/guard/blackwell/init_observer.py", line 34, in observe
+    text=fetch();row=result(text)
+  File "/root/sweep2/guard/blackwell/init_observer.py", line 58, in fetch
+    r=subprocess.run(command,stdin=subprocess.DEVNULL,capture_output=True,text=True,timeout=10)
+  File "/usr/lib/python3.10/subprocess.py", line 505, in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+  File "/usr/lib/python3.10/subprocess.py", line 1154, in communicate
+    stdout, stderr = self._communicate(input, endtime, timeout)
+  File "/usr/lib/python3.10/subprocess.py", line 2022, in _communicate
+    self._check_timeout(endtime, orig_timeout, stdout, stderr)
+  File "/usr/lib/python3.10/subprocess.py", line 1198, in _check_timeout
+    raise TimeoutExpired(
+subprocess.TimeoutExpired: Command '['timeout', '10', 'bash', 'scripts/bench/windows/win_vm.sh', 'ssh', 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\\kf\\init_state.ps1']' timed out after 10 seconds

@@ -1,0 +1,69 @@
+{
+  "source": "178862f82bcf8296de0f7ccab298d4761055eaf2",
+  "comparison_source": "2add71e8ca8ebb80c419ed2fdb0427dfcdc0ccd4",
+  "exit_code": 0,
+  "command": "cargo test --release -j2 -p kf-host -p kf-disp -p kf-chan -p kf-qemu --message-format=json",
+  "crates": {
+    "kf-chan": {
+      "before": {
+        "passed": 672,
+        "failed": 0,
+        "ignored": 4,
+        "targets": 27
+      },
+      "after": {
+        "passed": 672,
+        "failed": 0,
+        "ignored": 4
+      },
+      "after_targets": 27
+    },
+    "kf-disp": {
+      "before": {
+        "passed": 296,
+        "failed": 0,
+        "ignored": 5,
+        "targets": 13
+      },
+      "after": {
+        "passed": 311,
+        "failed": 0,
+        "ignored": 5
+      },
+      "after_targets": 14
+    },
+    "kf-host": {
+      "before": {
+        "passed": 66,
+        "failed": 0,
+        "ignored": 0,
+        "targets": 3
+      },
+      "after": {
+        "passed": 84,
+        "failed": 0,
+        "ignored": 0
+      },
+      "after_targets": 4
+    },
+    "kf-qemu": {
+      "before": {
+        "passed": 436,
+        "failed": 0,
+        "ignored": 0,
+        "targets": 10
+      },
+      "after": {
+        "passed": 436,
+        "failed": 0,
+        "ignored": 0
+      },
+      "after_targets": 10
+    }
+  },
+  "logs": {
+    "b1_tests.jsonl": "7453531cc63134defbb832d7b34d66cdd69b7dc7c61098caf59d67f82c8afc10",
+    "b1_tests.stderr": "16221d3ebd0e9b29dae737d86e0dc856bd5b8bedb93482b969344ea9f8b7f9bf"
+  },
+  "scope": "Four-crate interaction rerun only; inherited 22-crate3999-pass evidence was measured earlier, not rerun here."
+}

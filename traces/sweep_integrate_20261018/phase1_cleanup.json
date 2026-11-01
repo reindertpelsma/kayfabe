@@ -1,0 +1,10 @@
+{
+  "phase": "Phase1 end before rental",
+  "utc": "2026-10-19T17:41:55.072478+00:00",
+  "own_cargo_target_deleted": true,
+  "own_build_jobs_running": 0,
+  "own_rentals_created_this_stretch": 0,
+  "own_rentals_active": 0,
+  "own_gpu_locks_held": 0,
+  "free_root_bytes": 48496852992
+}

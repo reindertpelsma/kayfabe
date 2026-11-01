@@ -1,0 +1,12 @@
+{
+  "utc": 1792449220.2860603,
+  "roots": [
+    129049
+  ],
+  "own_controller_descendants_stopped": [
+    129049,
+    129797
+  ],
+  "GPU_VM_signalled": false,
+  "reason": "OFF refused gop-efi with gop=off; exact guard STOP, awaiting coordinator"
+}

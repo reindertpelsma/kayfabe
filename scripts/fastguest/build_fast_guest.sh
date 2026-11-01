@@ -59,6 +59,7 @@ die() { echo "build_fast_guest: $*" >&2; exit 1; }
 [ -x "$CLIENT" ] || die "no raw client at $CLIENT (cargo build --release -p kayfabe-rm-ladder --bin kayfabe-rm-ladder)"
 command -v busybox >/dev/null || die "busybox is not installed"
 command -v cpio    >/dev/null || die "cpio is not installed"
+command -v modinfo >/dev/null || die "modinfo is not installed (kmod)"
 
 # ⚠ The image must not be in use. A qcow2 read while QEMU writes it yields a torn read, and the
 # failure lands later as a module that will not load — attributed to the module.
@@ -67,6 +68,7 @@ if pgrep -x qemu-system-x86 >/dev/null 2>&1; then
 fi
 
 mkdir -p "$OUT" || die "cannot create $OUT"
+rm -f "$OUT/driver.STAGED"
 ROOT=$(mktemp -d) || die "mktemp"
 trap 'qemu-nbd --disconnect /dev/nbd0 >/dev/null 2>&1; umount "$ROOT/mnt" 2>/dev/null; rm -rf "$ROOT"' EXIT
 
@@ -587,6 +589,14 @@ chmod +x "$ROOT/ird/init"
 
 ( cd "$ROOT/ird" && find . | cpio -o -H newc --quiet | gzip -9 ) > "$OUT/initrd.cpio.gz" \
     || die "cpio failed"
+
+# The receipt describes the module actually packed, including when it came from a fat image
+# whose driver differs from the host. A failed rebuild leaves no valid profile receipt.
+PACKED_DRIVER=$(modinfo -F version "$ROOT/ird/lib/modules/nvidia.ko") || die "cannot identify the packed NVIDIA module"
+[[ "$PACKED_DRIVER" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] || die "invalid packed driver version: $PACKED_DRIVER"
+{ echo "version=$PACKED_DRIVER"; echo "kernel=$KREL"; } > "$OUT/driver.STAGED.tmp.$$"
+mv "$OUT/driver.STAGED.tmp.$$" "$OUT/driver.STAGED"
+echo "== GUEST DRIVER $PACKED_DRIVER (verified from the packed module; $OUT/driver.STAGED)"
 
 echo "== built: $OUT/vmlinuz  $(du -h "$OUT/vmlinuz" | cut -f1)"
 echo "== built: $OUT/initrd.cpio.gz  $(du -h "$OUT/initrd.cpio.gz" | cut -f1)"

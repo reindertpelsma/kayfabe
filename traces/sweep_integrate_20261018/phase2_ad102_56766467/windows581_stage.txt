@@ -1,0 +1,9 @@
+WINDOWS581_STAGE_START single upgrade after580PASS 2026-10-19T20:03:44+00:00
+FALSIFIER allocation accepted but same abort/unload point; scope AD102/581.51/wire580.94.02 only; scheduling20801111 stays refused.
+/workspace/sweep-win-media581/driver58151.exe: OK
+STAGE581_READY=1 actual=32.0.15.8151 device_disabled=1 GSP_flags=1; fresh QEMU580.94.02 then one enable
+[2026-10-19T20:18:34Z] stopping kfwin (pid 136024)
+[2026-10-19T20:19:02Z] stopped
+WINDOWS581_STAGE_EXIT rc=1 2026-10-19T20:19:02+00:00
+STAGE_CONTINUATION: originalstageexit1afterstop/no-QEMUguard; ownedQEMU136024gone and originallauncherWINVM_RUN_END observed. Exact no-QEMU guard nowPASS after natural reaping. No driver/installer replay; only previously unexecuted rename.
+WINDOWS581_COLD_READY source=24906bf334665c9000b16b271005593daa3586c7 2026-10-19T20:19:48+00:00

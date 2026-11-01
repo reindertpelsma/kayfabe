@@ -1,0 +1,111 @@
+{
+  "utc": "2026-10-23T02:46:01.117001+00:00",
+  "credit_usd": 34.01549535916115,
+  "offers": [
+    {
+      "id": 50694293,
+      "machine_id": 45428,
+      "gpu_name": "RTX 5060 Ti",
+      "candidate_die": "GB206",
+      "verification": "verified",
+      "dph_total": 0.3566481481481482,
+      "cpu_cores_effective": 20.0,
+      "cpu_ram": 96549,
+      "reliability": 0.996837,
+      "inet_down": 1096.1,
+      "disk_space": 1417.8
+    },
+    {
+      "id": 57143771,
+      "machine_id": 141173,
+      "gpu_name": "RTX 5060 Ti",
+      "candidate_die": "GB206",
+      "verification": "verified",
+      "dph_total": 0.3738518518518519,
+      "cpu_cores_effective": 32.0,
+      "cpu_ram": 257921,
+      "reliability": 0.9979223,
+      "inet_down": 1634.6,
+      "disk_space": 889.0
+    },
+    {
+      "id": 56550364,
+      "machine_id": 38619,
+      "gpu_name": "RTX 5060 Ti",
+      "candidate_die": "GB206",
+      "verification": "verified",
+      "dph_total": 0.38005555555555554,
+      "cpu_cores_effective": 20.0,
+      "cpu_ram": 128805,
+      "reliability": 0.9975085,
+      "inet_down": 1957.4,
+      "disk_space": 622.0
+    },
+    {
+      "id": 54462683,
+      "machine_id": 150531,
+      "gpu_name": "RTX 5070 Ti",
+      "candidate_die": "GB203",
+      "verification": "verified",
+      "dph_total": 0.2556481481481481,
+      "cpu_cores_effective": 24.0,
+      "cpu_ram": 64073,
+      "reliability": 0.9933734,
+      "inet_down": 726.7,
+      "disk_space": 700.0
+    },
+    {
+      "id": 43994882,
+      "machine_id": 69146,
+      "gpu_name": "RTX 5090",
+      "candidate_die": "GB202",
+      "verification": "deverified",
+      "dph_total": 0.38805555555555554,
+      "cpu_cores_effective": 32.0,
+      "cpu_ram": 64468,
+      "reliability": 0.9960246,
+      "inet_down": 1374.8,
+      "disk_space": 331.125
+    },
+    {
+      "id": 42143434,
+      "machine_id": 52992,
+      "gpu_name": "RTX 5090",
+      "candidate_die": "GB202",
+      "verification": "deverified",
+      "dph_total": 0.6416666666666667,
+      "cpu_cores_effective": 16.0,
+      "cpu_ram": 63940,
+      "reliability": 0.9897023,
+      "inet_down": 887.4,
+      "disk_space": 1463.5
+    },
+    {
+      "id": 55429765,
+      "machine_id": 152912,
+      "gpu_name": "RTX 5090",
+      "candidate_die": "GB202",
+      "verification": "unverified",
+      "dph_total": 0.6680555555555555,
+      "cpu_cores_effective": 24.0,
+      "cpu_ram": 64473,
+      "reliability": 0.9892205,
+      "inet_down": 949.1,
+      "disk_space": 373.125
+    },
+    {
+      "id": 56509993,
+      "machine_id": 152098,
+      "gpu_name": "RTX 5090",
+      "candidate_die": "GB202",
+      "verification": "verified",
+      "dph_total": 0.7361111111111112,
+      "cpu_cores_effective": 16.0,
+      "cpu_ram": 61689,
+      "reliability": 0.9867754,
+      "inet_down": 871.6,
+      "disk_space": 1368.0
+    }
+  ],
+  "authority": "owner22:50 all verified RTX50 series; other requirements unchanged"
+}

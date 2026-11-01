@@ -1,0 +1,47 @@
+{
+  "kf-disp": {
+    "before": {
+      "passed": 296,
+      "failed": 0,
+      "ignored": 5
+    },
+    "after": {
+      "passed": 311,
+      "failed": 0,
+      "ignored": 5
+    },
+    "old_targets_preserved": 13,
+    "new_targets": 14,
+    "all_prior_test_names_preserved": true
+  },
+  "kf-host": {
+    "before": {
+      "passed": 66,
+      "failed": 0,
+      "ignored": 0
+    },
+    "after": {
+      "passed": 84,
+      "failed": 0,
+      "ignored": 0
+    },
+    "old_targets_preserved": 3,
+    "new_targets": 4,
+    "all_prior_test_names_preserved": true
+  },
+  "kf-qemu": {
+    "before": {
+      "passed": 417,
+      "failed": 0,
+      "ignored": 0
+    },
+    "after": {
+      "passed": 417,
+      "failed": 0,
+      "ignored": 0
+    },
+    "old_targets_preserved": 10,
+    "new_targets": 10,
+    "all_prior_test_names_preserved": true
+  }
+}

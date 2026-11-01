@@ -1,0 +1,402 @@
+[
+  {
+    "class": "0xc67e",
+    "client": "0xc1d00002",
+    "parent": "0xff1fe100",
+    "handle": "0xff1fe120",
+    "body_status": "0x0",
+    "params_size": 40,
+    "public_params": {
+      "channelInstance": 0,
+      "hObjectBuffer": 4280279440,
+      "hObjectNotify": 0,
+      "offset": 0,
+      "pControl_nonzero": true,
+      "flags": 0,
+      "channelPBSize": 0,
+      "subDeviceId": 0
+    },
+    "screening": "pControl value omitted; only compiled public fields, no raw allocation body",
+    "trace_record": 76,
+    "rpc_result": "0x0"
+  },
+  {
+    "class": "0xc67e",
+    "client": "0xc1d00002",
+    "parent": "0xff1fe100",
+    "handle": "0xff1fe121",
+    "body_status": "0x0",
+    "params_size": 40,
+    "public_params": {
+      "channelInstance": 1,
+      "hObjectBuffer": 4280279441,
+      "hObjectNotify": 0,
+      "offset": 0,
+      "pControl_nonzero": true,
+      "flags": 0,
+      "channelPBSize": 0,
+      "subDeviceId": 0
+    },
+    "screening": "pControl value omitted; only compiled public fields, no raw allocation body",
+    "trace_record": 78,
+    "rpc_result": "0x0"
+  },
+  {
+    "class": "0xc67e",
+    "client": "0xc1d00002",
+    "parent": "0xff1fe100",
+    "handle": "0xff1fe122",
+    "body_status": "0x0",
+    "params_size": 40,
+    "public_params": {
+      "channelInstance": 2,
+      "hObjectBuffer": 4280279442,
+      "hObjectNotify": 0,
+      "offset": 0,
+      "pControl_nonzero": true,
+      "flags": 0,
+      "channelPBSize": 0,
+      "subDeviceId": 0
+    },
+    "screening": "pControl value omitted; only compiled public fields, no raw allocation body",
+    "trace_record": 80,
+    "rpc_result": "0x0"
+  },
+  {
+    "class": "0xc67e",
+    "client": "0xc1d00002",
+    "parent": "0xff1fe100",
+    "handle": "0xff1fe123",
+    "body_status": "0x0",
+    "params_size": 40,
+    "public_params": {
+      "channelInstance": 3,
+      "hObjectBuffer": 4280279443,
+      "hObjectNotify": 0,
+      "offset": 0,
+      "pControl_nonzero": true,
+      "flags": 0,
+      "channelPBSize": 0,
+      "subDeviceId": 0
+    },
+    "screening": "pControl value omitted; only compiled public fields, no raw allocation body",
+    "trace_record": 82,
+    "rpc_result": "0x0"
+  },
+  {
+    "class": "0xc67e",
+    "client": "0xc1d00002",
+    "parent": "0xff1fe100",
+    "handle": "0xff1fe124",
+    "body_status": "0x0",
+    "params_size": 40,
+    "public_params": {
+      "channelInstance": 4,
+      "hObjectBuffer": 4280279444,
+      "hObjectNotify": 0,
+      "offset": 0,
+      "pControl_nonzero": true,
+      "flags": 0,
+      "channelPBSize": 0,
+      "subDeviceId": 0
+    },
+    "screening": "pControl value omitted; only compiled public fields, no raw allocation body",
+    "trace_record": 84,
+    "rpc_result": "0x0"
+  },
+  {
+    "class": "0xc67e",
+    "client": "0xc1d00002",
+    "parent": "0xff1fe100",
+    "handle": "0xff1fe125",
+    "body_status": "0x0",
+    "params_size": 40,
+    "public_params": {
+      "channelInstance": 5,
+      "hObjectBuffer": 4280279445,
+      "hObjectNotify": 0,
+      "offset": 0,
+      "pControl_nonzero": true,
+      "flags": 0,
+      "channelPBSize": 0,
+      "subDeviceId": 0
+    },
+    "screening": "pControl value omitted; only compiled public fields, no raw allocation body",
+    "trace_record": 86,
+    "rpc_result": "0x0"
+  },
+  {
+    "class": "0xc67e",
+    "client": "0xc1d00002",
+    "parent": "0xff1fe100",
+    "handle": "0xff1fe126",
+    "body_status": "0x0",
+    "params_size": 40,
+    "public_params": {
+      "channelInstance": 6,
+      "hObjectBuffer": 4280279446,
+      "hObjectNotify": 0,
+      "offset": 0,
+      "pControl_nonzero": true,
+      "flags": 0,
+      "channelPBSize": 0,
+      "subDeviceId": 0
+    },
+    "screening": "pControl value omitted; only compiled public fields, no raw allocation body",
+    "trace_record": 88,
+    "rpc_result": "0x0"
+  },
+  {
+    "class": "0xc67e",
+    "client": "0xc1d00002",
+    "parent": "0xff1fe100",
+    "handle": "0xff1fe127",
+    "body_status": "0x0",
+    "params_size": 40,
+    "public_params": {
+      "channelInstance": 7,
+      "hObjectBuffer": 4280279447,
+      "hObjectNotify": 0,
+      "offset": 0,
+      "pControl_nonzero": true,
+      "flags": 0,
+      "channelPBSize": 0,
+      "subDeviceId": 0
+    },
+    "screening": "pControl value omitted; only compiled public fields, no raw allocation body",
+    "trace_record": 90,
+    "rpc_result": "0x0"
+  },
+  {
+    "class": "0xc67b",
+    "client": "0xc1d00002",
+    "parent": "0xff1fe100",
+    "handle": "0xff1fe130",
+    "body_status": "0x0",
+    "params_size": 40,
+    "public_params": {
+      "channelInstance": 0,
+      "hObjectBuffer": 4280279488,
+      "hObjectNotify": 0,
+      "offset": 0,
+      "pControl_nonzero": true,
+      "flags": 0,
+      "channelPBSize": 0,
+      "subDeviceId": 0
+    },
+    "screening": "pControl value omitted; only compiled public fields, no raw allocation body",
+    "trace_record": 92,
+    "rpc_result": "0x0"
+  },
+  {
+    "class": "0xc67b",
+    "client": "0xc1d00002",
+    "parent": "0xff1fe100",
+    "handle": "0xff1fe131",
+    "body_status": "0x0",
+    "params_size": 40,
+    "public_params": {
+      "channelInstance": 1,
+      "hObjectBuffer": 4280279489,
+      "hObjectNotify": 0,
+      "offset": 0,
+      "pControl_nonzero": true,
+      "flags": 0,
+      "channelPBSize": 0,
+      "subDeviceId": 0
+    },
+    "screening": "pControl value omitted; only compiled public fields, no raw allocation body",
+    "trace_record": 94,
+    "rpc_result": "0x0"
+  },
+  {
+    "class": "0xc67b",
+    "client": "0xc1d00002",
+    "parent": "0xff1fe100",
+    "handle": "0xff1fe132",
+    "body_status": "0x0",
+    "params_size": 40,
+    "public_params": {
+      "channelInstance": 2,
+      "hObjectBuffer": 4280279490,
+      "hObjectNotify": 0,
+      "offset": 0,
+      "pControl_nonzero": true,
+      "flags": 0,
+      "channelPBSize": 0,
+      "subDeviceId": 0
+    },
+    "screening": "pControl value omitted; only compiled public fields, no raw allocation body",
+    "trace_record": 96,
+    "rpc_result": "0x0"
+  },
+  {
+    "class": "0xc67b",
+    "client": "0xc1d00002",
+    "parent": "0xff1fe100",
+    "handle": "0xff1fe133",
+    "body_status": "0x0",
+    "params_size": 40,
+    "public_params": {
+      "channelInstance": 3,
+      "hObjectBuffer": 4280279491,
+      "hObjectNotify": 0,
+      "offset": 0,
+      "pControl_nonzero": true,
+      "flags": 0,
+      "channelPBSize": 0,
+      "subDeviceId": 0
+    },
+    "screening": "pControl value omitted; only compiled public fields, no raw allocation body",
+    "trace_record": 98,
+    "rpc_result": "0x0"
+  },
+  {
+    "class": "0xc67b",
+    "client": "0xc1d00002",
+    "parent": "0xff1fe100",
+    "handle": "0xff1fe134",
+    "body_status": "0x0",
+    "params_size": 40,
+    "public_params": {
+      "channelInstance": 4,
+      "hObjectBuffer": 4280279492,
+      "hObjectNotify": 0,
+      "offset": 0,
+      "pControl_nonzero": true,
+      "flags": 0,
+      "channelPBSize": 0,
+      "subDeviceId": 0
+    },
+    "screening": "pControl value omitted; only compiled public fields, no raw allocation body",
+    "trace_record": 100,
+    "rpc_result": "0x0"
+  },
+  {
+    "class": "0xc67b",
+    "client": "0xc1d00002",
+    "parent": "0xff1fe100",
+    "handle": "0xff1fe135",
+    "body_status": "0x0",
+    "params_size": 40,
+    "public_params": {
+      "channelInstance": 5,
+      "hObjectBuffer": 4280279493,
+      "hObjectNotify": 0,
+      "offset": 0,
+      "pControl_nonzero": true,
+      "flags": 0,
+      "channelPBSize": 0,
+      "subDeviceId": 0
+    },
+    "screening": "pControl value omitted; only compiled public fields, no raw allocation body",
+    "trace_record": 102,
+    "rpc_result": "0x0"
+  },
+  {
+    "class": "0xc67b",
+    "client": "0xc1d00002",
+    "parent": "0xff1fe100",
+    "handle": "0xff1fe136",
+    "body_status": "0x0",
+    "params_size": 40,
+    "public_params": {
+      "channelInstance": 6,
+      "hObjectBuffer": 4280279494,
+      "hObjectNotify": 0,
+      "offset": 0,
+      "pControl_nonzero": true,
+      "flags": 0,
+      "channelPBSize": 0,
+      "subDeviceId": 0
+    },
+    "screening": "pControl value omitted; only compiled public fields, no raw allocation body",
+    "trace_record": 104,
+    "rpc_result": "0x0"
+  },
+  {
+    "class": "0xc67b",
+    "client": "0xc1d00002",
+    "parent": "0xff1fe100",
+    "handle": "0xff1fe137",
+    "body_status": "0x0",
+    "params_size": 40,
+    "public_params": {
+      "channelInstance": 7,
+      "hObjectBuffer": 4280279495,
+      "hObjectNotify": 0,
+      "offset": 0,
+      "pControl_nonzero": true,
+      "flags": 0,
+      "channelPBSize": 0,
+      "subDeviceId": 0
+    },
+    "screening": "pControl value omitted; only compiled public fields, no raw allocation body",
+    "trace_record": 106,
+    "rpc_result": "0x0"
+  },
+  {
+    "class": "0xc67a",
+    "client": "0xc1d00002",
+    "parent": "0xff1fe100",
+    "handle": "0xff1fe108",
+    "body_status": "0x0",
+    "params_size": 16,
+    "public_params": {
+      "channelInstance": 0,
+      "hObjectNotify": 0,
+      "pControl_nonzero": true
+    },
+    "screening": "pControl value omitted; only compiled public fields, no raw allocation body",
+    "trace_record": 108,
+    "rpc_result": "0x0"
+  },
+  {
+    "class": "0xc67a",
+    "client": "0xc1d00002",
+    "parent": "0xff1fe100",
+    "handle": "0xff1fe109",
+    "body_status": "0x0",
+    "params_size": 16,
+    "public_params": {
+      "channelInstance": 1,
+      "hObjectNotify": 0,
+      "pControl_nonzero": true
+    },
+    "screening": "pControl value omitted; only compiled public fields, no raw allocation body",
+    "trace_record": 110,
+    "rpc_result": "0x0"
+  },
+  {
+    "class": "0xc67a",
+    "client": "0xc1d00002",
+    "parent": "0xff1fe100",
+    "handle": "0xff1fe10a",
+    "body_status": "0x0",
+    "params_size": 16,
+    "public_params": {
+      "channelInstance": 2,
+      "hObjectNotify": 0,
+      "pControl_nonzero": true
+    },
+    "screening": "pControl value omitted; only compiled public fields, no raw allocation body",
+    "trace_record": 112,
+    "rpc_result": "0x0"
+  },
+  {
+    "class": "0xc67a",
+    "client": "0xc1d00002",
+    "parent": "0xff1fe100",
+    "handle": "0xff1fe10b",
+    "body_status": "0x0",
+    "params_size": 16,
+    "public_params": {
+      "channelInstance": 3,
+      "hObjectNotify": 0,
+      "pControl_nonzero": true
+    },
+    "screening": "pControl value omitted; only compiled public fields, no raw allocation body",
+    "trace_record": 114,
+    "rpc_result": "0x0"
+  }
+]

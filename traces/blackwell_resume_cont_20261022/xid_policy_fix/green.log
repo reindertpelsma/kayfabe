@@ -1,0 +1,23 @@
+test_hex_lines_from_the_guest_collector_round_trip (test_blackwell_capture.DumpHeader.test_hex_lines_from_the_guest_collector_round_trip) ... ok
+test_reads_code_all_four_parameters_and_time (test_blackwell_capture.DumpHeader.test_reads_code_all_four_parameters_and_time) ... ok
+test_refuses_a_wrong_signature_and_a_short_buffer (test_blackwell_capture.DumpHeader.test_refuses_a_wrong_signature_and_a_short_buffer) ... ok
+test_a_line_before_the_first_row_has_no_lower_bound (test_blackwell_capture.KeylineTimes.test_a_line_before_the_first_row_has_no_lower_bound) ... ok
+test_maps_a_key_line_to_the_bracketing_rpc_times (test_blackwell_capture.KeylineTimes.test_maps_a_key_line_to_the_bracketing_rpc_times) ... ok
+test_all_six_types_equals_the_previous_page_b_for_the_precomp_region (test_blackwell_capture.PageSubset.test_all_six_types_equals_the_previous_page_b_for_the_precomp_region) ... ok
+test_no_native_types_is_the_derived_page (test_blackwell_capture.PageSubset.test_no_native_types_is_the_derived_page) ... ok
+test_selected_precomp_types_take_the_native_word_everywhere_and_nothing_else_moves (test_blackwell_capture.PageSubset.test_selected_precomp_types_take_the_native_word_everywhere_and_nothing_else_moves) ... ok
+test_text_form_round_trips_and_bounds_the_type_set (test_blackwell_capture.PageSubset.test_text_form_round_trips_and_bounds_the_type_set) ... ok
+test_arbitrary_channel_under_the_high_prefix_is_fatal (test_blackwell_capture.XidFailClosed.test_arbitrary_channel_under_the_high_prefix_is_fatal) ... ok
+test_high_channel_must_have_only_an_eight_bit_suffix (test_blackwell_capture.XidFailClosed.test_high_channel_must_have_only_an_eight_bit_suffix) ... ok
+test_malformed_xid_cannot_be_ignored_as_clean_noise (test_blackwell_capture.XidFailClosed.test_malformed_xid_cannot_be_ignored_as_clean_noise) ... ok
+test_unparsed_mmu_fault_is_fatal_even_in_exception_arm (test_blackwell_capture.XidFailClosed.test_unparsed_mmu_fault_is_fatal_even_in_exception_arm) ... ok
+test_any_xid_in_a_non_exception_arm_is_fatal (test_blackwell_capture.XidPolicy.test_any_xid_in_a_non_exception_arm_is_fatal) ... ok
+test_no_xid_is_clean_and_non_xid_lines_are_ignored (test_blackwell_capture.XidPolicy.test_no_xid_is_clean_and_non_xid_lines_are_ignored) ... ok
+test_on_arms_get_the_same_exception_only_after_full_init_and_only_in_the_observed_shape (test_blackwell_capture.XidPolicy.test_on_arms_get_the_same_exception_only_after_full_init_and_only_in_the_observed_shape) ... ok
+test_the_exact_exception_allows_two_matching_xids_after_code0_only (test_blackwell_capture.XidPolicy.test_the_exact_exception_allows_two_matching_xids_after_code0_only) ... ok
+test_third_other_code_other_pid_or_other_intr_is_fatal (test_blackwell_capture.XidPolicy.test_third_other_code_other_pid_or_other_intr_is_fatal) ... ok
+
+----------------------------------------------------------------------
+Ran 18 tests in 0.003s
+
+OK

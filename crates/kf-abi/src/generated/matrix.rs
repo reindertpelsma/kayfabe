@@ -6716,6 +6716,27 @@ pub const NV2080_CTRL_GPU_GET_ENGINES_V2_PARAMS: StructRuns = StructRuns {
     ],
 };
 
+const NV2080_CTRL_GPU_GET_GID_INFO_PARAMS_L0: Layout = Layout {
+    size: 268,
+    fields: &[
+        f("data", 12, 256, 1),
+        f("flags", 4, 4, 0),
+        f("index", 0, 4, 0),
+        f("length", 8, 4, 0),
+    ],
+};
+/// `NV2080_CTRL_GPU_GET_GID_INFO_PARAMS` — 1 distinct consumed layout(s) over 1 run(s).
+pub const NV2080_CTRL_GPU_GET_GID_INFO_PARAMS: StructRuns = StructRuns {
+    name: "NV2080_CTRL_GPU_GET_GID_INFO_PARAMS",
+    runs: &[
+        r(
+            v(535, 309, 1),
+            v(615, 71, 9),
+            Some(&NV2080_CTRL_GPU_GET_GID_INFO_PARAMS_L0),
+        ), // 535.309.01 … 615.71.09
+    ],
+};
+
 const NV2080_CTRL_GPU_GET_INFO_V2_PARAMS_L0: Layout = Layout {
     size: 516,
     fields: &[
@@ -15092,6 +15113,14 @@ pub const CTRL_CMDS_NV2080_CTRL_CMD_GPU_GET_ENGINES_V2: ValueRuns = ValueRuns {
     name: "ctrl_cmds:NV2080_CTRL_CMD_GPU_GET_ENGINES_V2",
     runs: &[
         r(v(535, 309, 1), v(615, 71, 9), Some(0x20800170)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `ctrl_cmds:NV2080_CTRL_CMD_GPU_GET_GID_INFO`
+pub const CTRL_CMDS_NV2080_CTRL_CMD_GPU_GET_GID_INFO: ValueRuns = ValueRuns {
+    name: "ctrl_cmds:NV2080_CTRL_CMD_GPU_GET_GID_INFO",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x2080014a)), // 535.309.01 … 615.71.09
     ],
 };
 
@@ -34622,6 +34651,7 @@ pub const ALL_STRUCTS: &[&StructRuns] = &[
     &NV2080_CTRL_GPU_EVICT_CTX_PARAMS,
     &NV2080_CTRL_GPU_GET_CONSTRUCTED_FALCON_INFO_PARAMS,
     &NV2080_CTRL_GPU_GET_ENGINES_V2_PARAMS,
+    &NV2080_CTRL_GPU_GET_GID_INFO_PARAMS,
     &NV2080_CTRL_GPU_GET_INFO_V2_PARAMS,
     &NV2080_CTRL_GPU_GET_NAME_STRING_PARAMS,
     &NV2080_CTRL_GPU_GET_PES_INFO_PARAMS,
@@ -35073,6 +35103,7 @@ pub const ALL_VALUES: &[&ValueRuns] = &[
     &CTRL_CMDS_NV2080_CTRL_CMD_GPU_EVICT_CTX,
     &CTRL_CMDS_NV2080_CTRL_CMD_GPU_GET_CONSTRUCTED_FALCON_INFO,
     &CTRL_CMDS_NV2080_CTRL_CMD_GPU_GET_ENGINES_V2,
+    &CTRL_CMDS_NV2080_CTRL_CMD_GPU_GET_GID_INFO,
     &CTRL_CMDS_NV2080_CTRL_CMD_GPU_GET_INFO_V2,
     &CTRL_CMDS_NV2080_CTRL_CMD_GPU_GET_NAME_STRING,
     &CTRL_CMDS_NV2080_CTRL_CMD_GPU_GET_PES_INFO,

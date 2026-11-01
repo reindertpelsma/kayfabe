@@ -1,0 +1,55 @@
+{
+  "utc": "2026-10-22T03:46:56.168743+00:00",
+  "own_id": 57148807,
+  "product": "8f3a9bb3a5d652b3f536ca015bf95735ec588924",
+  "verdict": "ABORTED at guard; not natural TDR measurement or PASS",
+  "kernel_xids": [
+    "2026-10-22T03:06:29.204943+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=89648, name=kayfabe-rm-ladd, channel 0x00000002, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE2 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-10-22T03:06:32.244864+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=89648, name=kayfabe-rm-ladd, channel 0x00000002, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE3 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-10-22T03:06:35.256886+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=89648, name=kayfabe-rm-ladd, channel 0x00000003, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE2 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-10-22T03:06:38.313883+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=89648, name=kayfabe-rm-ladd, channel 0x00000002, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE2 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-10-22T03:06:42.462901+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=89702, name=kayfabe-rm-ladd, channel 0x00000003, intr 00000000. MMU Fault: ENGINE GR_HOST0 HUBCLIENT_ESC0 faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE",
+    "2026-10-22T03:45:39.791886+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 32, pid=110641, name=qemu-system-x86, channel 0x0000000c intr 00200000",
+    "2026-10-22T03:45:39.800844+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 32, pid=110641, name=qemu-system-x86, channel 0x0e000007 intr 00200000"
+  ],
+  "scope": "OFF/GOPoff/emptyROM, no capturedcaps, completionprobe500",
+  "code0_before_fault_observed": false,
+  "init_receipt": {
+    "arm": "off_c",
+    "pid": 110641,
+    "exe": "/workspace/bench/kf3-bins/8f3a9bb3/qemu-system-x86_64",
+    "starttime": 275575,
+    "pci": "0000:00:07",
+    "rpc_path": "/root/prov/arms/off_c/rpc_timing.jsonl"
+  },
+  "canonical_rpc_receipt": {
+    "rows": 3303,
+    "unparsed_rpc_lines": 0,
+    "reason": "stop_after_eof",
+    "source_bytes_read": 859297,
+    "source_size_at_end": 859297,
+    "complete_prefix": true,
+    "incomplete_line_bytes": 0,
+    "reached_eof": true,
+    "observation_time_not_driver_generation_time": true,
+    "limits": {
+      "seconds": 900,
+      "records": 32768,
+      "source_bytes": 67108864,
+      "line_bytes": 131072
+    }
+  },
+  "fatal_marker": {
+    "STOP": "prior fatal marker",
+    "phase": [
+      "off_c",
+      110641
+    ],
+    "owned_pgid": 90110,
+    "detached_qemu_stopped": false
+  },
+  "marker_limitation": "second watcher overwrote first reason with prior fatal marker; original reason not retained",
+  "no_qemu": true,
+  "b1": "UNRUN after fatal guard; optional first next authorized lease",
+  "no_more_gpu": true
+}

@@ -1,0 +1,7 @@
+B2_DESKTOP_IMAGE_READY 2026-10-19T21:19:32+00:00
+B2_BASELINE_START 2026-10-19T21:22:56+00:00 source=24906bf334665c9000b16b271005593daa3586c7
+H_B2 falsifier mode rejection, missing NVIDIA/Cinnamon, black presented window, guestXid/flip timeout, or new hostXid. No additional caps group.
+/root/sweep_b2_run.sh: line 35: kill: (114955) - No such process
+OWN_LAUNCHER_EXITED
+B2_HOST_XID before=5 after=5
+B2_BASELINE_EXIT rc=3 2026-10-19T21:23:10+00:00

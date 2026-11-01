@@ -1,0 +1,42 @@
+{
+  "mutants": [
+    {
+      "mutant": "ignore_new_xid",
+      "distinct_killers": [
+        "test_a_new_fault_before_the_first_read_is_fatal",
+        "test_new_native32_while_waiting_is_fatal",
+        "test_new_xid_after_the_final_clean_census_is_fatal"
+      ],
+      "exit_code": 1
+    },
+    {
+      "mutant": "premature_owned_exit_deadline",
+      "distinct_killers": [
+        "test_owned_exit_at_sixty_seconds_is_bounded_and_accepted",
+        "test_owned_qemu_still_alive_at_sixty_seconds_is_fatal"
+      ],
+      "exit_code": 1
+    },
+    {
+      "mutant": "no_process_list_rereads",
+      "distinct_killers": [
+        "test_a_later_clean_fifth_read_does_not_extend_the_bound",
+        "test_last_of_three_rereads_must_use_a_fresh_clean_state",
+        "test_other_qemu_after_three_rereads_is_fatal",
+        "test_process_list_is_read_again_after_exit_in_flight"
+      ],
+      "exit_code": 1
+    },
+    {
+      "mutant": "accept_dirty_final_census",
+      "distinct_killers": [
+        "test_a_later_clean_fifth_read_does_not_extend_the_bound",
+        "test_last_of_three_rereads_must_use_a_fresh_clean_state",
+        "test_other_qemu_after_three_rereads_is_fatal",
+        "test_process_list_is_read_again_after_exit_in_flight"
+      ],
+      "exit_code": 1
+    }
+  ],
+  "restored_source_sha256": "cfbc831b28f9a5d53e62ea13cd2c9e23e832a57e4fcb529c719f95f726173334"
+}

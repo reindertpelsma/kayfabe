@@ -1,0 +1,7 @@
+{
+  "utc": "2026-10-22T01:09:40.703716+00:00",
+  "own_child_pid": 106478,
+  "exit": -9,
+  "target": "disposable owned sleep child, no GPU",
+  "pidfd_stop": "PASS"
+}

@@ -1,0 +1,70 @@
+[
+  {
+    "path": "/root/prov/sweep_windows580_accept.txt",
+    "source_sha256": "3566c6177a97417ac546528832eaa3ed9f86bc6975239fb083cc1a244f19cefe",
+    "export": "accept.txt",
+    "export_sha256": "e9da212e40655d24e933f298df6a2f7d0d3954a471082b297b071c123c179342"
+  },
+  {
+    "path": "/root/prov/sweep_windows580_hold.txt",
+    "source_sha256": "3f0224b5a56ce46d5a4cd806b8c3e7f5dc30dc373b5630bf93c00a67f7f0fcdb",
+    "export": "hold.txt",
+    "export_sha256": "9c670ea442bf16ccc4b6498e04f9c5835d7787bbd2efcd4f0ee6345a9f6b7c78"
+  },
+  {
+    "path": "/root/prov/sweep_windows580_check.txt",
+    "source_sha256": "22cc6cf4997c051454877124fd48e53f164d2c3dec9c776e4b980d883fc99e0e",
+    "export": "check.txt",
+    "export_sha256": "22cc6cf4997c051454877124fd48e53f164d2c3dec9c776e4b980d883fc99e0e"
+  },
+  {
+    "path": "/root/prov/sweep_windows580_validate.log",
+    "source_sha256": "e1998e18f3119014b85ee54c39994977a4d170cc69e67e0579fc4f5058f2be07",
+    "export": "validator.txt",
+    "export_sha256": "1fd839711172d670717ec52d52f0b68485847bbf59c377ef82251a87c4b704d1"
+  },
+  {
+    "path": "/root/prov/sweep_windows580_binding.json",
+    "source_sha256": "1f4cde1b18319b3fe76616028b7a4360d42a4abf167685374f2fe8190089bc8d",
+    "export": "binding.json",
+    "export_sha256": "0bcbdfa4f4f54a960ed06cf5887ee44c8bfd605ba8c80989d78c621002f88d2e"
+  },
+  {
+    "path": "/root/prov/sweep_windows580_cold_ready.txt",
+    "source_sha256": "8704d03ececbababe3f875cc215b1cbe53f7958cf7c32aef489ea54aea5330fe",
+    "export": "cold_ready.txt",
+    "export_sha256": "f576e771625cc85035467f7002c99c9e3766cbe77f0188f83e09d0baade8c0fd"
+  },
+  {
+    "path": "/root/prov/sweep580_validate_process_receipt.json",
+    "source_sha256": "ac88c5b431806a621113e2208165da3f25e29b54fb4708be612b5d21f812e7e7",
+    "export": "process_receipt.json",
+    "export_sha256": "ac88c5b431806a621113e2208165da3f25e29b54fb4708be612b5d21f812e7e7"
+  },
+  {
+    "path": "/root/prov/ada580_pass_export/api-full.tsv",
+    "source_sha256": "1790eb39a84113e87fa300fafedd9dfc90ef581579eff29d09eb301c490206af",
+    "export": "api.tsv",
+    "export_sha256": "1790eb39a84113e87fa300fafedd9dfc90ef581579eff29d09eb301c490206af"
+  },
+  {
+    "path": "/root/prov/ada580_pass_export/summary.json",
+    "source_sha256": "3532ba36aeea586e69e0c081dfe45906058c63c6513da3fbb785dcfde3cd7900",
+    "export": "trace_receipt.json",
+    "export_sha256": "3532ba36aeea586e69e0c081dfe45906058c63c6513da3fbb785dcfde3cd7900"
+  },
+  {
+    "path": "/root/prov/ada580_pass_export/public_projections.jsonl",
+    "source_sha256": "becfb12cec59bec8df07b249d5f7193823d1adcc9a81a1bd3c6020c9f8f2356f",
+    "export": "public_projections.jsonl",
+    "export_sha256": "becfb12cec59bec8df07b249d5f7193823d1adcc9a81a1bd3c6020c9f8f2356f"
+  },
+  {
+    "screenshot": "sweep580_accept.png",
+    "sha256": "47f4a2be9853e98ead856ddba86042bb5aa968aee7bcf2b87224631f2a60f8f9"
+  },
+  {
+    "screenshot": "sweep580_hold.png",
+    "sha256": "7ba492c13a65d0cb158e15e933af2b3b254df0d7ccfd90e46f2d634ff8082e0f"
+  }
+]

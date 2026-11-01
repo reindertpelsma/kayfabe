@@ -1,0 +1,9 @@
+{
+  "utc": "2026-10-22T00:54:28.555878+00:00",
+  "source": "d8c1e65ef5a3df15c0ca4d1d3f551a43683ede6f",
+  "binary": "/workspace/bench/kf3-bins/d8c1e65e/qemu-system-x86_64",
+  "binary_sha256": "e4890b89e64823c5961f03172b32b7c525eecc5cc1d5a1874f87a8ca0e32961b",
+  "state": "CPU-prepared only, not armed; complete tests/mutations still required before ARM_GO",
+  "primary_product_unchanged": "8f3a9bb3a5d652b3f536ca015bf95735ec588924",
+  "parent_difference": "B1 includes master CI-repair parent; optional revision arm is not isolated RC causality"
+}

@@ -14,6 +14,7 @@ pub mod bootclean;
 pub mod broker;
 pub mod cardbudget;
 pub mod chan;
+mod chanrc;
 pub mod defapi;
 pub mod device;
 pub mod display;
@@ -42,3 +43,5 @@ pub(crate) mod userbirth;
 pub(crate) mod userstore;
 pub mod userva;
 pub mod vblankgate;
+
+mod heartbeat;

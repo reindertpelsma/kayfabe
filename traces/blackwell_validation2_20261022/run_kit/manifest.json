@@ -1,0 +1,20 @@
+{
+  "product_head": "8f3a9bb3a5d652b3f536ca015bf95735ec588924",
+  "guard_source": "e16402b7ca0eae98159ac4a049fd0701b6582a40",
+  "guard_tests": 97,
+  "guard_mutants": 22,
+  "b1_merged_source": "2add71e8ca8ebb80c419ed2fdb0427dfcdc0ccd4",
+  "b1_release_totals": "1127/0/4; 3 crates",
+  "native32": "FATAL",
+  "auto_destroy_minutes": 170,
+  "budget_cutoff_minutes": 170,
+  "capc": "public precision14 only",
+  "sequence": [
+    "N0",
+    "disabled580bind",
+    "on_precision",
+    "off_c",
+    "on_b1"
+  ],
+  "cost_rule": "cheaper returned offer fits170min; higher-priced quote disappeared before creation"
+}

@@ -1,0 +1,62 @@
+[
+  {
+    "path": "/root/prov/bw580_off_no_rom_export_precleanup/api-full.tsv",
+    "source_sha256": "0d20befd25a832b84b58250475b4c40cea0caa6f154262b970bd3d3768d29dc2",
+    "export": "api.tsv",
+    "export_sha256": "0d20befd25a832b84b58250475b4c40cea0caa6f154262b970bd3d3768d29dc2"
+  },
+  {
+    "path": "/root/prov/bw580_off_no_rom_export_precleanup/summary.json",
+    "source_sha256": "d1d757ba3a18d2e07f754877f9039a2605a1bd54c343a2189959b226432ed376",
+    "export": "trace_receipt.json",
+    "export_sha256": "d1d757ba3a18d2e07f754877f9039a2605a1bd54c343a2189959b226432ed376"
+  },
+  {
+    "path": "/root/prov/bw580_off_no_rom_export_precleanup/public_projections.jsonl",
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "export": "public_projections.jsonl",
+    "export_sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+  },
+  {
+    "path": "/root/prov/bw580_off_no_rom_export_precleanup/precleanup_facts.json",
+    "source_sha256": "44c1b9a4acd7f7ac2f3daf1bdf60a73cfd9b9648b7c7a033a7d05e06ad79e3e5",
+    "export": "precleanup_facts.json",
+    "export_sha256": "44c1b9a4acd7f7ac2f3daf1bdf60a73cfd9b9648b7c7a033a7d05e06ad79e3e5"
+  },
+  {
+    "path": "/root/prov/bw580_off_no_rom_timeline.jsonl",
+    "source_sha256": "d79867dfd326348f264a8dcea99154f49c55acde16c7e1a64cac3349011328fd",
+    "export": "timeline.jsonl",
+    "export_sha256": "d79867dfd326348f264a8dcea99154f49c55acde16c7e1a64cac3349011328fd"
+  },
+  {
+    "path": "/root/prov/bw580_off_no_rom_diag.txt",
+    "source_sha256": "444b0e7cdb68dce59b63df17c54589b8a8f3f914f73594222be7185b930bb968",
+    "export": "diag.txt",
+    "export_sha256": "341655e5a7f4466b0e0c49f9d2b2fedd58c721f7e31e681521d12c92f700dc8a"
+  },
+  {
+    "path": "/root/prov/bw580_off_no_rom_enable.txt",
+    "source_sha256": "1d2a41f4a223d48e96729bdcad60c943812713b9c566195b35ac9c6ff7b39b97",
+    "export": "enable.txt",
+    "export_sha256": "4cc13366c535f448f0b6e11a4b7c62de61d640c764225013690dcf6fe7322106"
+  },
+  {
+    "path": "/root/prov/bw580_off_no_rom_pre_enable.txt",
+    "source_sha256": "516bc701a01fd2bb19a606c486aed13d58c3a53c48b782dcd12e88ceed7cdb47",
+    "export": "pre_enable.txt",
+    "export_sha256": "cdee624c5cc561d87591a5ed32e908ecd12a84513fc6f1d666915892bd2c6bab"
+  },
+  {
+    "path": "/root/prov/bw580_off_no_rom_effective_qom.json",
+    "source_sha256": "a37fe59fd6a5d0c62178bc086e1dca63559bbf8a8ebf44619b96af25f523bd75",
+    "export": "effective_qom.json",
+    "export_sha256": "a37fe59fd6a5d0c62178bc086e1dca63559bbf8a8ebf44619b96af25f523bd75"
+  },
+  {
+    "path": "/root/prov/bw580_off_no_rom_process_receipt.json",
+    "source_sha256": "517cededfc4d98d8e8284da5fbfd84902b7b8271b9434f50cf66c34ab4b80c9a",
+    "export": "process_receipt.json",
+    "export_sha256": "517cededfc4d98d8e8284da5fbfd84902b7b8271b9434f50cf66c34ab4b80c9a"
+  }
+]

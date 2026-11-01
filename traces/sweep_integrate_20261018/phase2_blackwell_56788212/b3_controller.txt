@@ -1,0 +1,23 @@
+B3_CONTROLLER_START wait source-matched build/guest packaging 2026-10-19T21:02:09+00:00
+SWEEP_BUILD_READY source=24906bf334665c9000b16b271005593daa3586c7 2026-10-19T21:06:47+00:00
+H_NATIVE falsifier any stock raw failure/crash or CUDA result mismatch; stop before guest attribution.
+BARE_SUITE_PASS=30 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0 ARMS=30
+NATIVE_CUDA4_PASS n=1 spread=N/A
+H_B3 falsifier any concurrency FAIL/TIMEOUT/CRASH at frozen180s or persistent heartbeat-domain warnings. Normal loglevel6, default hvc; same timer500ms.
+FAST_SUITE_PASS=1 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=1
+B3_CAPTURED_HEARTBEAT_WARNING_LINES=31
+[   20.127931] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1442837736 heartbeat 0 heartbeatWithOffsetMs 1442837956 diff 4294967076 timeout 5200
+[   20.135206] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1442837743 heartbeat 0 heartbeatWithOffsetMs 1442837956 diff 4294967083 timeout 5200
+[   20.142616] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1442837751 heartbeat 0 heartbeatWithOffsetMs 1442837956 diff 4294967091 timeout 5200
+[   20.149795] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1442837758 heartbeat 0 heartbeatWithOffsetMs 1442837956 diff 4294967098 timeout 5200
+[   20.157386] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1442837765 heartbeat 0 heartbeatWithOffsetMs 1442837956 diff 4294967105 timeout 5200
+[   20.164584] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1442837773 heartbeat 0 heartbeatWithOffsetMs 1442837956 diff 4294967113 timeout 5200
+[   20.171886] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1442837780 heartbeat 0 heartbeatWithOffsetMs 1442837956 diff 4294967120 timeout 5200
+[   20.179077] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1442837787 heartbeat 0 heartbeatWithOffsetMs 1442837956 diff 4294967127 timeout 5200
+[   20.186405] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1442837794 heartbeat 0 heartbeatWithOffsetMs 1442837956 diff 4294967134 timeout 5200
+[   20.193602] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1442837802 heartbeat 0 heartbeatWithOffsetMs 1442837956 diff 4294967142 timeout 5200
+[   20.200804] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1442837809 heartbeat 0 heartbeatWithOffsetMs 1442837956 diff 4294967149 timeout 5200
+[   20.207971] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1442837816 heartbeat 0 heartbeatWithOffsetMs 1442837956 diff 4294967156 timeout 5200
+B3_FORMULA_FREE=False
+B3_FIRST_ARM_COMPLETE 2026-10-19T21:10:19+00:00
+B3_CONTROLLER_EXIT rc=0 2026-10-19T21:10:19+00:00

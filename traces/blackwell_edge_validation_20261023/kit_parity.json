@@ -1,0 +1,11 @@
+{
+  "previous_kit": "traces/blackwell_fields_phase_20261022/run_kit",
+  "changed": [
+    "controller.sh",
+    "manifest.json"
+  ],
+  "arm_byte_identical": true,
+  "fixture": "618f0431815d037d4226b642ae37e76967353e90",
+  "product_unchanged": "6e3fd3fd6d809ae2c2a3504cd8be1ecd29b2b31b",
+  "bash_syntax": "PASS"
+}

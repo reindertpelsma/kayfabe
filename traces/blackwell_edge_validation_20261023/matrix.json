@@ -1,0 +1,71 @@
+{
+  "utc": "2026-10-22T22:22:13.496454+00:00",
+  "measurement_date_utc": "2026-10-22",
+  "die": "GB202",
+  "arch": "0x1b0",
+  "implementation": "0x2",
+  "gpu": "RTX5090",
+  "offer_class": "verified KVM",
+  "offer_id": 55630686,
+  "machine_id": 41833,
+  "instance_id": 57280677,
+  "host_driver": "595.91.07 open",
+  "product_source": "6e3fd3fd6d809ae2c2a3504cd8be1ecd29b2b31b",
+  "native_fixture_source": "618f0431815d037d4226b642ae37e76967353e90",
+  "guard_source": "1ac2b51d56ca5fc20bcc08b30c496e20d920635b",
+  "b1_source": "c130aa98ac2b922202282cd793f2a6d64be1f091",
+  "rows": [
+    {
+      "cell": "H0 PRECOMP unprivileged",
+      "verdict": "REFUSED0x1f",
+      "cause": "kernel non-admin denial0x640780",
+      "tier": "T2 does not provide page on this driver; T3 privileged measurement for physical values, public derivation for authored virtual fields"
+    },
+    {
+      "cell": "native595 gates",
+      "verdict": "PASS9/9+10 USER12/12"
+    },
+    {
+      "cell": "native595 raw",
+      "verdict": "PASS30/30"
+    },
+    {
+      "cell": "native595 CUDA",
+      "verdict": "PASS4/4"
+    },
+    {
+      "cell": "corrected native GR/CE fixture",
+      "verdict": "PASS15/15"
+    },
+    {
+      "cell": "Linux guest",
+      "verdict": "UNRUN; guest rebuilt only"
+    },
+    {
+      "cell": "Windows580.88 install/bind",
+      "verdict": "UNRUN; media guard STOP before VM creation"
+    },
+    {
+      "cell": "Windows580.88 field-ON",
+      "verdict": "UNRUN"
+    },
+    {
+      "cell": "Windows580.88 conditional B1",
+      "verdict": "UNRUN; no actual Code0"
+    }
+  ],
+  "kernel_xids": {
+    "intentional_source_matched31": 5,
+    "unexpected31": 0,
+    "native32": 0,
+    "qemu32": 0
+  },
+  "windows_code0": null,
+  "windows_code43": null,
+  "windows_tdr": null,
+  "windows_rpc_ordinals": null,
+  "scope": "Native pass on GB202 does not resolve historical Windows fourth-cursor0x50 or certify Windows acceptance on any Blackwell die.",
+  "cost_runtime_estimate_usd": 0.22821403645833335,
+  "phase_total_runtime_estimate_usd": 0.44361743169703705,
+  "api_absence_utc": "2026-10-22T22:21:09.613984+00:00"
+}

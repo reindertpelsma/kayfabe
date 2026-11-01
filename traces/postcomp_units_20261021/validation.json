@@ -1,0 +1,73 @@
+{
+  "base": "12c266ef3245d999734dc39d4db5e2708be3ab76",
+  "expected_red_commit": "d0c0d22c3d447144ee2a52eeae9e8e9ae428d847",
+  "release_counts": {
+    "baseline": {
+      "passed": 290,
+      "failed": 0,
+      "ignored": 5
+    },
+    "fixed": {
+      "passed": 293,
+      "failed": 0,
+      "ignored": 5
+    }
+  },
+  "rustfmt": "edition2024 final check passed",
+  "hardware": "UNRUN; isolated topic not in rental binary",
+  "logs": {
+    "baseline_fresh_test.log": {
+      "sha256": "bfda61b92605202deb53906e116b454c258a93c067d003f9a28bf0d71a4ae997",
+      "bytes": 37330
+    },
+    "expected_red.log": {
+      "sha256": "310c2958507ea62b2c7e38493c357a16b041e59f05b38e5e48d623688695aa88",
+      "bytes": 12921
+    },
+    "fixed_test_v4.log": {
+      "sha256": "cb687341e09b49353ef7c0857bc5768680541dbe25260cc94f3dd7e0b02c4da3",
+      "bytes": 37032
+    },
+    "regenerate.log": {
+      "sha256": "cf243dcf9bcd6d65a8439b06bdba9636646d01936c484d1dfac4c4f919388243",
+      "bytes": 144
+    },
+    "baseline_fresh_clippy.jsonl": {
+      "sha256": "503a695eeedc5cc0ed012c9e567646826f4ff0ca1ab0653607500d2bccd107a3",
+      "bytes": 173646
+    },
+    "fixed_clippy.jsonl": {
+      "sha256": "ae8586cd4890783056ea24eaba3f79a1f0705092cfaa05df8970348405a48c36",
+      "bytes": 173638
+    },
+    "zero_units.log": {
+      "sha256": "4a2ab657881fbb63a15b763b7a9719953a4ef586d1e69fc938119768bf385241",
+      "bytes": 12219
+    },
+    "omit_final_output.log": {
+      "sha256": "e09f03e0ff556bdc4269124dc8e0f7c5f99b0549d0c7dace62244d2bf558c22c",
+      "bytes": 12219
+    },
+    "hardcode_bit_layout.log": {
+      "sha256": "5d3c975b39c6cc31b0976087dce986cda385ff9c1b5c261efd14acca4386dfa0",
+      "bytes": 12595
+    },
+    "restored_green.log": {
+      "sha256": "58fb249b977d89a9e3f970d7ee2cda03c09afc7c0bd0ce44282a0c0a326a5e89",
+      "bytes": 11283
+    },
+    "fixed_test.log": {
+      "sha256": "f7ef69c958ce3b562ceed243523cb87e37be6c0927cac8285d8e2f7f66f33398",
+      "bytes": 32233
+    },
+    "fixed_test_v2.log": {
+      "sha256": "c2f92998bf4ee547244642f39256b1e810b85f504ec9bf3c9d58115b2fdc1bdf",
+      "bytes": 33611
+    },
+    "fixed_test_v3.log": {
+      "sha256": "b4afac8e7b863bda7890985ce71ea0a1ca4820a552c7247c50b7849746f43d62",
+      "bytes": 68510
+    }
+  },
+  "published_log_projection": "Focus/count excerpts; trailing whitespace/blank EOF normalized; full originals retained on dev box with SHA256."
+}

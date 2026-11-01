@@ -1,0 +1,8 @@
+{
+  "url": "https://windbg.download.prss.microsoft.com/dbazure/prod/1-2610-1001-0/windbg.msixbundle",
+  "offset": 399587992,
+  "bytes": 404832537,
+  "crc32": 1017757559,
+  "source": "Microsoft official WinDbg download; inspected ZIP directory via bounded HTTP range, no binary executed",
+  "cdb_path": "amd64/cdb.exe"
+}

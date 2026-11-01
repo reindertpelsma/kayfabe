@@ -1,0 +1,94 @@
+[
+  {
+    "path": "crates/kf-chan/src/user_loop.rs",
+    "candidate5_blob": "f61541b1f4fd0cf6244a6eae71a09e0c725c75a5",
+    "current_blob": "f61541b1f4fd0cf6244a6eae71a09e0c725c75a5",
+    "byte_identical": true
+  },
+  {
+    "path": "crates/kf-chan/tests/user_loop_model.rs",
+    "candidate5_blob": "b1d01d68881644222da367985ec9dc74c0f2b26d",
+    "current_blob": "b1d01d68881644222da367985ec9dc74c0f2b26d",
+    "byte_identical": true
+  },
+  {
+    "path": "crates/kf-qemu/src/userpump.rs",
+    "candidate5_blob": "d7ab5b31edbf5b3aac3f1a47948315af2f47d432",
+    "current_blob": "d7ab5b31edbf5b3aac3f1a47948315af2f47d432",
+    "byte_identical": true
+  },
+  {
+    "path": "crates/kf-qemu/src/chan.rs",
+    "candidate5_blob": "926b81c67a70e67f1bc8f3310074e0417e634313",
+    "current_blob": "926b81c67a70e67f1bc8f3310074e0417e634313",
+    "byte_identical": true
+  },
+  {
+    "path": "crates/kf-qemu/src/latejoin.rs",
+    "candidate5_blob": "5d5e47f0b475498587f7e637f4e1474cb6deca9b",
+    "current_blob": "5d5e47f0b475498587f7e637f4e1474cb6deca9b",
+    "byte_identical": true
+  },
+  {
+    "path": "crates/kf-qemu/src/userbirth.rs",
+    "candidate5_blob": "fdb3a85678a68c3365bd47b8277de3a4de9220e7",
+    "current_blob": "fdb3a85678a68c3365bd47b8277de3a4de9220e7",
+    "byte_identical": true
+  },
+  {
+    "path": "crates/kf-qemu/src/userquota.rs",
+    "candidate5_blob": "77c230f281f39c050ff92afd7e0a4876552d617f",
+    "current_blob": "77c230f281f39c050ff92afd7e0a4876552d617f",
+    "byte_identical": true
+  },
+  {
+    "path": "crates/kf-qemu/src/userstore.rs",
+    "candidate5_blob": "3edefb68e2b9b9de711ce402a42f5aa7ba6467f4",
+    "current_blob": "3edefb68e2b9b9de711ce402a42f5aa7ba6467f4",
+    "byte_identical": true
+  },
+  {
+    "path": "crates/kf-qemu/src/userread.rs",
+    "candidate5_blob": "85f4369d200cd9ee9db72501bc8c5ddc90628c45",
+    "current_blob": "85f4369d200cd9ee9db72501bc8c5ddc90628c45",
+    "byte_identical": true
+  },
+  {
+    "path": "crates/kf-qemu/src/mem.rs",
+    "candidate5_blob": "6abc8fa1e6fecd12434130da1f4c3db8f8154830",
+    "current_blob": "6abc8fa1e6fecd12434130da1f4c3db8f8154830",
+    "byte_identical": true
+  },
+  {
+    "path": "crates/kf-qemu/src/reset.rs",
+    "candidate5_blob": "361e831c0ec45f9f4c8ce39626bff3b66bc7ae92",
+    "current_blob": "361e831c0ec45f9f4c8ce39626bff3b66bc7ae92",
+    "byte_identical": true
+  },
+  {
+    "path": "crates/kf-qemu/src/bootclean.rs",
+    "candidate5_blob": "e9d8d9028c4c46499ac9f526aa1e342a81ee0cdb",
+    "current_blob": "e9d8d9028c4c46499ac9f526aa1e342a81ee0cdb",
+    "byte_identical": true
+  },
+  {
+    "path": "crates/kf-qemu/src/scrub.rs",
+    "candidate5_blob": "ca2af1efbb7170ccd562b21e3863a55b264fc526",
+    "current_blob": "ca2af1efbb7170ccd562b21e3863a55b264fc526",
+    "byte_identical": true
+  },
+  {
+    "path": "crates/kf-qemu/src/gop.rs",
+    "candidate5_blob": "5908cc513369c7c489cd4d1c554a58b8c43ea4ed",
+    "current_blob": "d451e0b321785732df8612ff743030dc478da548",
+    "byte_identical": false,
+    "approved_delta": "heartbeat documentation correction only; non-comment code identical"
+  },
+  {
+    "path": "crates/kf-host/src/timer.rs",
+    "candidate5_blob": "af3ed78dcf82c6168dfb4a4de5bfb898cd3b09f2",
+    "current_blob": "e532071ac343a3439d78480f1e73040990cced61",
+    "byte_identical": false,
+    "approved_delta": "heartbeat documentation correction only; non-comment code identical"
+  }
+]

@@ -1,0 +1,42 @@
+{
+  "source": "c130aa98ac2b922202282cd793f2a6d64be1f091",
+  "parents": [
+    "6e3fd3fd6d809ae2c2a3504cd8be1ecd29b2b31b",
+    "178862f82bcf8296de0f7ccab298d4761055eaf2"
+  ],
+  "counts": {
+    "kf-chan": {
+      "passed": 672,
+      "failed": 0,
+      "ignored": 4
+    },
+    "kf-disp": {
+      "passed": 324,
+      "failed": 0,
+      "ignored": 5
+    },
+    "kf-host": {
+      "passed": 84,
+      "failed": 0,
+      "ignored": 0
+    },
+    "kf-qemu": {
+      "passed": 436,
+      "failed": 0,
+      "ignored": 0
+    }
+  },
+  "primary_named_tests_retained": true,
+  "kf_chan_before": {
+    "source": "traces/blackwell_validation_20261022/b1_gate/all_crate_results.json",
+    "passed": 672,
+    "ignored": 4
+  },
+  "field_policy_source_parity": {
+    "crates/kf-disp/src/precomp_fields.rs": "a18ecfe02895b92249c20f4a646250787842743934ae8c90e1ff807902ca009d",
+    "crates/kf-disp/src/capsderive.rs": "3215fa08b25d0ae66f41412bb5b30103014778a2eac15cd9340a7481e3837613",
+    "crates/kf-host/src/precomp.rs": "9845385bce7e3b9675dc1230b7b50f4525e2cce68c0b79440ff9f66293171c98",
+    "crates/kf-qemu/examples/precomp_host_read.rs": "f2ae7d1ca64bf065ba0799b18bce59c7a3bee47ba4c4ec900a92509fcc34648f"
+  },
+  "scope": "separate optional arm; includes B1 CI-repair ancestor; no RC-only causality"
+}

@@ -1,0 +1,13 @@
+{
+  "checked_utc": "2026-10-21T18:01:53.676424+00:00",
+  "own_ids_absent": [
+    57046541,
+    57064037,
+    57081143
+  ],
+  "current_credit_observed_usd": 21.38107079596284,
+  "runtime_cost_estimate_usd": 3.5400564489057404,
+  "no_new_lease": true,
+  "reason": "First clock read after owner decision2 was 2026-10-21 18:01:23 UTC, after the binding 18:00 UTC lease-start cutoff.",
+  "credit_note": "Shared-account credit observation; not exclusive or settled sweep-spend attribution."
+}

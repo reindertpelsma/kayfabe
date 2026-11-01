@@ -1,0 +1,60 @@
+[
+  {
+    "path": "/root/prov/bw580_on_export_precleanup/api-full.tsv",
+    "source_sha256": "df3db6a24bf33993d836d9247e074e0dd688801dc0abf3fcc12da95211904267",
+    "export": "api.tsv",
+    "export_sha256": "df3db6a24bf33993d836d9247e074e0dd688801dc0abf3fcc12da95211904267"
+  },
+  {
+    "path": "/root/prov/bw580_on_export_precleanup/summary.json",
+    "source_sha256": "e847c61fa0b2d62d00b2b53874432d150273743a38cf962c27e1d710be9ba11b",
+    "export": "trace_receipt.json",
+    "export_sha256": "e847c61fa0b2d62d00b2b53874432d150273743a38cf962c27e1d710be9ba11b"
+  },
+  {
+    "path": "/root/prov/bw580_on_export_precleanup/public_projections.jsonl",
+    "source_sha256": "06c44a3305855ed34539fd119ac40759e83f726175bdc4d2a10415115be221a1",
+    "export": "public_projections.jsonl",
+    "export_sha256": "06c44a3305855ed34539fd119ac40759e83f726175bdc4d2a10415115be221a1"
+  },
+  {
+    "path": "/root/prov/bw580_on_export_precleanup/observed_before_cleanup.txt",
+    "source_sha256": "fc077f867069bc4984880bcf5f8f76cade042274da8d2b2326d5a03173febce1",
+    "export": "precleanup_observed_utc.txt",
+    "export_sha256": "fc077f867069bc4984880bcf5f8f76cade042274da8d2b2326d5a03173febce1"
+  },
+  {
+    "path": "/root/prov/bw580_on_timeline.jsonl",
+    "source_sha256": "e62554d22f33b921d390a2c3c27d638a0b10622585b50f592266ed3ff29e8ed2",
+    "export": "timeline.jsonl",
+    "export_sha256": "e62554d22f33b921d390a2c3c27d638a0b10622585b50f592266ed3ff29e8ed2"
+  },
+  {
+    "path": "/root/prov/bw580_on_diag.txt",
+    "source_sha256": "50eeedddc281992cf29c5260e2c90d2e914adb5998d67c21fc5e96246645def6",
+    "export": "diag.txt",
+    "export_sha256": "bceb09ced6ed8ced3d95e43f12797a76e62a9920b5a22e990161e6c55e82b3bf"
+  },
+  {
+    "path": "/root/prov/bw580_on_enable.txt",
+    "source_sha256": "896285c12b88b84884683b6c3753f16e0509c7c024feafc37034b5e1b5743110",
+    "export": "enable.txt",
+    "export_sha256": "77b012860cbd649f6cbf9538adf30cb91713e1004eba3113034c4d64e153b021"
+  },
+  {
+    "path": "/root/prov/bw580_on_pre_enable.txt",
+    "source_sha256": "516bc701a01fd2bb19a606c486aed13d58c3a53c48b782dcd12e88ceed7cdb47",
+    "export": "pre_enable.txt",
+    "export_sha256": "cdee624c5cc561d87591a5ed32e908ecd12a84513fc6f1d666915892bd2c6bab"
+  },
+  {
+    "path": "/root/prov/bw580_on_process_receipt.json",
+    "source_sha256": "d31057a558d248eb66325aa68fbb2cef23ebe65700ee7c207acc1ff77eda64fe",
+    "export": "process_receipt.json",
+    "export_sha256": "d31057a558d248eb66325aa68fbb2cef23ebe65700ee7c207acc1ff77eda64fe"
+  },
+  {
+    "screenshot": "bw580_on.png",
+    "sha256": "61598d0c85256a79f0d2f5c15f9fc198f6f2fe05baa9aa506aabd62bfe4c2437"
+  }
+]

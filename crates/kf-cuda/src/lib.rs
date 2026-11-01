@@ -28,6 +28,7 @@
 
 pub mod abi;
 pub mod capacity;
+mod completion;
 pub mod diffmodel;
 pub mod display;
 pub mod driver_unsafe;

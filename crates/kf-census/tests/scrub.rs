@@ -920,3 +920,41 @@ fn a_message_that_never_completes_cannot_make_the_scrub_hold_the_whole_file() {
     let r = run_capture(&out);
     assert_eq!(r.messages[1], 40, "every status message survived");
 }
+
+#[test]
+fn bodies_are_collected_only_from_scrubbed_sources_and_hold_no_planted_bytes() {
+    let msgs = hostile_conversation();
+    let mut runs = runs_of(&msgs, &natural_seqs(&msgs));
+    plant(&mut runs);
+    let cap = capture(&runs, 4, true);
+    // an unscrubbed source: nothing is collected even when asked
+    let mut an = analyzer_for(common::TAG, &[]).unwrap();
+    an.collect_bodies();
+    stream::read(&mut an, "raw", &cap[..]).unwrap();
+    let rep = an.finish();
+    assert!(
+        rep.bodies
+            .as_ref()
+            .is_some_and(std::collections::BTreeMap::is_empty)
+    );
+    // a scrubbed source: allow-listed bodies only, never the fill, never a needle
+    let allow = AllowList::builtin();
+    let (out, _) = scrub_cap(&cap, &allow);
+    let mut an = analyzer_for(common::TAG, &[]).unwrap();
+    an.collect_bodies();
+    stream::read(&mut an, "scrubbed", &out[..]).unwrap();
+    let rep = an.finish();
+    let b = rep.bodies.as_ref().unwrap();
+    assert!(!b.is_empty(), "allow-listed bodies are reported");
+    for (cmd, _, _, body) in b.keys() {
+        assert!(allow.contains(*cmd), "{cmd:#x} is not allow-listed");
+        assert!(!body.is_empty() && !is_filled(body));
+        for (name, n) in needles() {
+            assert!(!contains(body, &n), "{name} reported as a body");
+        }
+    }
+    let tsv = report::bodies_tsv(&rep).unwrap();
+    for (name, n) in needles() {
+        assert!(!contains_hex(&tsv, &n), "{name} in the bodies table");
+    }
+}

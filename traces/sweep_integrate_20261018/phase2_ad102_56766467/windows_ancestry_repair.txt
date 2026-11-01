@@ -1,0 +1,2 @@
+BEFORE: ancestry guard returned1 in shallow rental clone; full dev clone returned0; no product run started.
+AFTER: unchanged original ancestry guard nowPASS after fetching history; source/check-out unchanged24906bf33; candidate5f8f9d1a5f unchanged.

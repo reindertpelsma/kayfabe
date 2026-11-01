@@ -1,0 +1,7 @@
+...............................PHASE_XID_STOP: Command 'journalctl' returned non-zero exit status 1.
+.PHASE_XID_STOP: Command 'journalctl' timed out after 10 seconds
+.................................
+----------------------------------------------------------------------
+Ran 65 tests in 0.020s
+
+OK

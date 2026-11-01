@@ -1,0 +1,11 @@
+.......................PHASE_XID_STOP: Command 'journalctl' returned non-zero exit status 1.
+.PHASE_XID_STOP: Command 'journalctl' timed out after 10 seconds
+............PHASE_XID_STOP: new fault without current arm/init proof
+.PHASE_XID_STOP: new fault without current arm/init proof
+...............PHASE_XID_STOP: Command 'journalctl' returned non-zero exit status 1.
+.PHASE_XID_STOP: Command 'journalctl' timed out after 10 seconds
+...................................................
+----------------------------------------------------------------------
+Ran 104 tests in 0.042s
+
+OK

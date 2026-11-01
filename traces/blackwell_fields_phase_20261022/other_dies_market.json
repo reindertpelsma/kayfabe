@@ -1,0 +1,63 @@
+{
+  "utc": "2026-10-22T20:21:18.398697+00:00",
+  "scope": "read-only KVM offer planning, no rentals",
+  "offers": {
+    "RTX_5080": [
+      {
+        "id": 33642337,
+        "machine_id": 58911,
+        "gpu_name": "RTX 5080",
+        "verification": "deverified",
+        "dph_total": 0.20138888888888887,
+        "cpu_cores_effective": 32.0,
+        "cpu_ram": 15971,
+        "reliability": 0.9874367,
+        "inet_down": 1332.9,
+        "disk_space": 344.0
+      }
+    ],
+    "RTX_5070_Ti": [],
+    "RTX_5070": [
+      {
+        "id": 48947858,
+        "machine_id": 51428,
+        "gpu_name": "RTX 5070",
+        "verification": "verified",
+        "dph_total": 0.22074074074074074,
+        "cpu_cores_effective": 6.0,
+        "cpu_ram": 64243,
+        "reliability": 0.9942062,
+        "inet_down": 3080.7,
+        "disk_space": 569.5
+      },
+      {
+        "id": 54571903,
+        "machine_id": 30498,
+        "gpu_name": "RTX 5070",
+        "verification": "verified",
+        "dph_total": 0.41338888888888886,
+        "cpu_cores_effective": 32.0,
+        "cpu_ram": 128899,
+        "reliability": 0.9984186,
+        "inet_down": 1541.3,
+        "disk_space": 466.75
+      }
+    ],
+    "RTX_5060_Ti": [
+      {
+        "id": 49956220,
+        "machine_id": 54598,
+        "gpu_name": "RTX 5060 Ti",
+        "verification": "verified",
+        "dph_total": 0.2011574074074074,
+        "cpu_cores_effective": 8.0,
+        "cpu_ram": 64243,
+        "reliability": 0.9976953,
+        "inet_down": 1691.7,
+        "disk_space": 203.5
+      }
+    ],
+    "RTX_5060": [],
+    "RTX_5050": []
+  }
+}
