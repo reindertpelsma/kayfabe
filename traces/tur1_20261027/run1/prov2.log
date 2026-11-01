@@ -1,0 +1,20 @@
+START 2026-10-26T23:15:52+00:00
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0  0  378M    0 15545    0     0  51950      0  2:07:25 --:--:--  2:07:25 51989  7  378M    7 29.2M    0     0  22.4M      0  0:00:16  0:00:01  0:00:15 22.4M 16  378M   16 60.7M    0     0  26.4M      0  0:00:14  0:00:02  0:00:12 26.4M 26  378M   26  100M    0     0  30.5M      0  0:00:12  0:00:03  0:00:09 30.5M 35  378M   35  134M    0     0  31.1M      0  0:00:12  0:00:04  0:00:08 31.1M 45  378M   45  172M    0     0  32.4M      0  0:00:11  0:00:05  0:00:06 34.3M 56  378M   56  214M    0     0  33.9M      0  0:00:11  0:00:06  0:00:05 36.8M 67  378M   67  256M    0     0  35.0M      0  0:00:10  0:00:07  0:00:03 39.0M 78  378M   78  296M    0     0  35.7M      0  0:00:10  0:00:08  0:00:02 39.2M 88  378M   88  336M    0     0  36.1M      0  0:00:10  0:00:09  0:00:01 40.3M 97  378M   97  370M    0     0  35.9M      0  0:00:10  0:00:10 --:--:-- 39.6M100  378M  100  378M    0     0  35.7M      0  0:00:10  0:00:10 --:--:-- 38.5M
+-rw-r--r-- 1 root root 397162548 Oct 26 23:16 /root/NVIDIA-Linux-x86_64-580.159.04.run
+TREE_RC=0
+    Finished `release` profile [optimized] target(s) in 29.23s
+[2026-10-26T23:21:34+00:00] B4: guest ladder built: 5058240 bytes
+[2026-10-26T23:21:34+00:00] BENCH_TREE_DONE
+LADDER_RC=0
+FG_RC=0
+== built: /workspace/bench/fastguest/initrd.cpio.gz  151M
+== kernel release: 6.8.0-59-generic
+KF3_RC=0
+KF3_BUILT /workspace/bench/kf3-bins/67339dc0/qemu-system-x86_64 rev=67339dc0 mtime=2026-10-26 23:22:32.337479827 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+total 12
+drwxr-xr-x 3 root root 4096 Oct 26 23:18 .
+drwxr-xr-x 6 root root 4096 Oct 26 23:21 ..
+drwxr-xr-x 2 root root 4096 Oct 26 23:22 67339dc0
+EXIT 2026-10-26T23:22:32+00:00

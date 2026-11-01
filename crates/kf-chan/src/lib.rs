@@ -41,5 +41,6 @@ pub mod user_stream;
 pub mod user_turn;
 pub mod userd_relay;
 pub mod video_generated;
+pub mod wakeverdict;
 pub mod vtables;
 pub mod worker;
