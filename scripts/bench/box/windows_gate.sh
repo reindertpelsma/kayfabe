@@ -174,6 +174,13 @@ pack_evidence() {
 conclude() {
     local failstage=$STAGE xid_in xid_delta
     [ -z "$FAILSTAGE" ] || failstage=$FAILSTAGE
+    # the state at failure, while the guest still runs (bounded; a hung guest just yields nothing)
+    if [ "$FAILMODE" != none ] && [ -n "$ENABLE_UTC" ] && qemu_alive; then
+        gps 150 'C:\kf\gate_state.ps1' -Mode tdr -Since "$ENABLE_UTC" > "$EV/state_at_failure_tdr.txt" 2>&1
+        gps 100 'C:\kf\gate_state.ps1' -Mode display > "$EV/state_at_failure_display.txt" 2>&1
+        grep -a '^GATE_TDR\|^GATE_LIVEDUMP\|^GATE_DISPLAY' "$EV/state_at_failure_tdr.txt" "$EV/state_at_failure_display.txt" 2> /dev/null \
+            | sed 's/^[^:]*://' | while read -r l; do say "  AT_FAILURE $l"; done
+    fi
     teardown_guest
     if [ "$GUEST_STARTED" = 1 ] && [ "$HOSTREF_AFTER" = unrun ]; then
         STAGE=hostref_after
