@@ -1,0 +1,2 @@
+FAIL cuInit(0) -> unknown error (999)
+GATE_PROBE exe=cup8.exe arg= rc=1 secs=26 timeout=0

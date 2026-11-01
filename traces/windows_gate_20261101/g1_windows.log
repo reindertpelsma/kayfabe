@@ -1,0 +1,27 @@
+WINDOWS_GATE_START tag=g1 rev=ed37318e source=/root/kayfabe 2026-11-01T00:48:04+00:00 idle_s=300 flags=kf3_flags.sample.env guest_driver=580.65.06 arm=B
+WINDOWS_GATE_REQUESTED=1
+GATE_STAGE preflight START 2026-11-01T00:48:04+00:00
+GATE_NOTE host: gpu="NVIDIA GeForce RTX 4090" driver=595.91.07 cpus=15 ram_gb=98 disk_free_gb=105
+GATE_STAGE preflight EXIT ok 0s
+GATE_STAGE hostref_before START 2026-11-01T00:48:04+00:00
+GATE_HOSTREF before green cup8=PASS xid_count=0 xid_delta=0 gpu="NVIDIA GeForce RTX 4090, 595.91.07, 24564 MiB, P8"
+GATE_STAGE hostref_before EXIT ok 1s
+GATE_STAGE prereqs START 2026-11-01T00:48:05+00:00
+GATE_STAGE prereqs EXIT ok 0s
+GATE_STAGE kf3_binary START 2026-11-01T00:48:05+00:00
+GATE_NOTE no kf3 QEMU at /workspace/bench/kf3-bins/ed37318e/qemu-system-x86_64: building this revision
+GATE_NOTE kf3 qemu=/workspace/bench/kf3-bins/ed37318e/qemu-system-x86_64 sha256=211e882783f62eda rev=ed37318e
+GATE_STAGE kf3_binary EXIT ok 14s
+GATE_STAGE install START 2026-11-01T00:48:19+00:00
+GATE_NOTE Windows already installed on this box (2026-11-01T00:47:05Z repo=b6ad020e): install once per lease
+GATE_STAGE install EXIT ok 1s
+GATE_STAGE probes_build START 2026-11-01T00:48:20+00:00
+GATE_NOTE probes built: 817b8bdbd49c fbb9be21ef94 05d71486a689 596b0817fe87 
+GATE_STAGE probes_build EXIT ok 4s
+GATE_STAGE boot1 START 2026-11-01T00:48:24+00:00
+GATE_NOTE QEMU is gone while waiting for ssh
+GATE_HOSTREF after green cup8=PASS xid_count=0 xid_delta=0 gpu="NVIDIA GeForce RTX 4090, 595.91.07, 24564 MiB, P8"
+WINDOWS_GATE_UNATTRIBUTED class=BAR1_EXCEPTION stage=boot1 why="the guest never answered ssh after boot 1 (900 s); run log: [2026-11-01T00:48:26Z] WINVM_BOOT_END boot=1 rc=1 reason=no-events-file kf3_lines=8 host_xid=0 [2026-11-01T00:48:26Z] WINVM_RUN_END tag=gate_g1 boots=1 reason=no-events-file  (kf3 refused a BAR1 size: the documented Vast exception; kayfabe's only if windows-on-vast native fails too)" rev=ed37318e gpu="NVIDIA GeForce RTX 4090" hostref=green/green secs=27
+GATE_NOTE evidence: /root/prov/g1_windows (23 files), /root/prov/g1_windows.tgz sha256=f2c268c8641f4463
+WINDOWS_GATE_TIMING total=27s preflight=0s hostref_before=1s prereqs=0s kf3_binary=14s install=1s probes_build=4s
+WINDOWS_GATE_EXIT rc=3 2026-11-01T00:48:31+00:00
