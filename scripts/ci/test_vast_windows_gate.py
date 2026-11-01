@@ -80,7 +80,7 @@ class GateVerdicts(unittest.TestCase):
     def test_the_selftest_classifies_every_case(self):
         p = run_gate("--selftest")
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
-        self.assertRegex(p.stdout, r"^WINDOWS_GATE_SELFTEST_OK cases=10$")
+        self.assertRegex(p.stdout, r"^WINDOWS_GATE_SELFTEST_OK cases=11$")
 
     def test_a_guest_failure_is_kayfabes_only_with_both_references_green(self):
         text = code(GATE)
@@ -95,15 +95,24 @@ class GateVerdicts(unittest.TestCase):
         for line in (
             "WINDOWS_GATE_PASS",
             "WINDOWS_GATE_FAIL",
-            "WINDOWS_GATE_UNATTRIBUTED",
+            "WINDOWS_GATE_RETRY",
             "WINDOWS_GATE_REFUSED",
             "WINDOWS_GATE_EXIT",
         ):
             self.assertIn(line, text)
-        # the EXIT trap turns a missing verdict into UNATTRIBUTED, never into a pass
+        # the EXIT trap turns a missing verdict into RETRY (non-zero), never into a pass
         trap = text[text.index("on_exit()") : text.index("trap on_exit EXIT")]
         self.assertIn("gate script ended without a verdict", trap)
         self.assertNotIn("WINDOWS_GATE_PASS", trap)
+
+    def test_only_a_pass_exits_zero(self):
+        # owner, 2026-11-01: the gate is the guest passing; a host, harness or rental fault is RETRY (non-zero)
+        text = code(GATE)
+        self.assertEqual(len(re.findall(r"rc_final=0[ ;]", text)), 1)  # the init line is "rc_final=0" alone
+        pass_branch = text[text.index("PASS) say"):].split("\n")[0]
+        self.assertIn("rc_final=0", pass_branch)
+        self.assertNotIn("UNATTRIBUTED", text)
+        self.assertIn("action=rerun-on-a-fresh-box", text)
 
     def test_the_exit_codes(self):
         text = code(GATE)

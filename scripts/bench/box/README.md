@@ -84,7 +84,7 @@ ssh <alias> 'cat /root/prov/<tag>.log'           # V3_GATES_SUMMARY / KF3_RC / F
   census). It installs Windows 11 LTSC once per box (`win_vm.sh install`, 20-45 min on a nested box), boots it on
   kf3 with the stock 580.88 driver and GSP forced, and needs a signed-in desktop, `nvidia-smi`, a CUDA matmul and
   a D3D11 readback, a bounded idle (300 s) and zero resets. It ends in one of `WINDOWS_GATE_PASS` (exit 0),
-  `WINDOWS_GATE_FAIL class=KAYFABE` (1), `WINDOWS_GATE_UNATTRIBUTED class=...` (3: rental, media, our script, or a
+  `WINDOWS_GATE_FAIL` (1), `WINDOWS_GATE_RETRY class=...` (3: re-run on a fresh box; rental, media, our script, or a
   host GPU reference that was not green) or `WINDOWS_GATE_REFUSED` (2), then `WINDOWS_GATE_EXIT rc=N`; the log is
   `<prov>/<tag>_windows.log` and the evidence is `<prov>/<tag>_windows.tgz`. A Windows-only lease can run
   `windows_lane.sh` (provision and install) and then `bash scripts/bench/box/windows_gate.sh <tag>` by hand.

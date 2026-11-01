@@ -12,7 +12,7 @@
 # A second opt-in stage, KF_MERGE_WINDOWS=1 (windows_gate.sh, LAST, after the census): Windows 11 LTSC on kf3,
 # installed once per box, the stock 580.88 driver with GSP forced, a signed-in desktop, nvidia-smi, a CUDA
 # matmul and a D3D11 readback, a bounded idle, zero resets. It adds an install of about 20-45 minutes and
-# ends with WINDOWS_GATE_PASS, or FAIL (kayfabe, both same-box host references green) or UNATTRIBUTED.
+# ends with WINDOWS_GATE_PASS, or FAIL (the guest failed) or RETRY (host, harness or rental fault: re-run on a fresh box); every non-PASS verdict exits non-zero.
 # ⊘ Never hold /tmp/kayfabe-fastguest.lock across fast_suite: run_fast_guest takes it per arm.
 # Never reuse a previous initrd after a build failure, delete a shared checkout, or hide a
 # failed cargo behind a successful log filter. Every stage fails closed and keeps its log.

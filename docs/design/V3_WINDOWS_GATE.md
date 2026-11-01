@@ -35,27 +35,36 @@ It is a stable-enough check, not a soak, and it makes no performance claim. It d
 coverage, other dies, other drivers, sleep/wake, a reboot loop, multi-GPU, or the flag-free default route (the
 flag list is a sample whose header says it is unconfirmed as the production list).
 
-## 2. Verdicts, and what counts against kayfabe
+## 2. Verdicts: the gate is the guest passing
+
+**Correction, 2026-11-01 (owner, on PR #238), folded above the text it corrects.** The merge gate is the GUEST
+passing. A host failure, a harness failure or an unattributed rental error is never an excuse to allow a merge:
+that outcome means "not passed, re-run on a fresh box", and if a host fails the test script probably has an error
+that has to be found and fixed. `windows_gate.sh` therefore exits non-zero unless the verdict is a real
+`WINDOWS_GATE_PASS`. The host reference (nvidia-smi plus the host `cup8`, before and after) and the
+KAYFABE/OPERATOR classes are diagnostics in the log: they pick the label of a non-zero exit, they never turn one
+into zero. The earlier wording of this section ("UNATTRIBUTED, not kayfabe's") treated those outcomes as outside
+the gate's concern; they are inside it, as RETRY. The Vast BAR1 exception stays exactly as documented, as a
+RETRY class, and no new exception is added.
 
 The last lines of `<tag>_windows.log` are one verdict and an EXIT line. A log without `WINDOWS_GATE_EXIT` belongs
-to a dead run. The EXIT trap turns a gate that died without a verdict into UNATTRIBUTED, never into a pass.
+to a dead run. The EXIT trap turns a gate that died without a verdict into RETRY (non-zero), never into a pass.
 
 | line | exit | meaning |
 |---|---|---|
-| `WINDOWS_GATE_PASS rev= gpu= ...` | 0 | every step above held, both host references green, no new host Xid |
-| `WINDOWS_GATE_FAIL class=KAYFABE stage= why=` | 1 | the guest failed (or a host Xid appeared) with the same-box host reference green BEFORE and AFTER |
-| `WINDOWS_GATE_UNATTRIBUTED class= stage= why=` | 3 | not kayfabe's: PROVIDER (rental, network, apt), MEDIA (a pinned file's hash), OPERATOR (our script, or a step that did not read back), HOSTREF (the host GPU reference was not green), BAR1_EXCEPTION |
-| `WINDOWS_GATE_REFUSED why=` | 2 | a precondition: not root, no `/dev/kvm`, little disk or RAM, no flag file |
+| `WINDOWS_GATE_PASS rev= gpu= ...` | 0 | every step above held, both host references green, no new host Xid. The only zero. |
+| `WINDOWS_GATE_FAIL diag= stage= why=` | 1 | the guest failed (or a host Xid appeared) with the same-box host reference green BEFORE and AFTER (`diag=KAYFABE`) |
+| `WINDOWS_GATE_RETRY action=rerun-on-a-fresh-box class= stage= why=` | 3 | not a pass and not a verdict on the guest: PROVIDER (rental, network, apt), MEDIA (a pinned file's hash), OPERATOR (our script, or a step that did not read back: fix the script), HOSTREF (the host GPU reference was red before or after: fix the script or change the box), BAR1_EXCEPTION (documented Vast limit) |
+| `WINDOWS_GATE_REFUSED why=` | 2 | a precondition: not root, no `/dev/kvm`, little disk or RAM, no flag file; also not a pass |
 
-The attribution rule is the owner's of 2026-10-26: a failure on a rented box is kayfabe's only if the same
-box's Linux host shows a healthy GPU before and after. The host reference is `nvidia-smi` plus `cup8` built
-natively against the host driver (`CUP8 VERDICT: PASS`); the Xid count is recorded as a baseline and its delta
-over the guest run is a gate criterion of its own. A failure of the harness (a script step, an scp, a registry
-value that does not read back) is OPERATOR whatever the references say. The Vast BAR1 limit is the documented
-exception (owner, 2026-10-24): a kf3 realize refusal naming BAR1 before the first ssh is BAR1_EXCEPTION, and it
-counts against kayfabe only if the native `windows-on-vast` reference fails on the same box type too. The
-classification is exercised without a box by `windows_gate.sh --selftest` (10 cases), which
-`scripts/ci/test_vast_windows_gate.py` runs in CI.
+Diagnostics: the host reference is `nvidia-smi` plus `cup8` built natively against the host driver
+(`CUP8 VERDICT: PASS`); the Xid count is a baseline and its delta over the guest run is a gate criterion of its
+own. A guest failure with a red reference is RETRY (the box cannot vouch for the result), with green references
+it is FAIL. A failure of the harness (a script step, an scp, a registry value that does not read back) is RETRY
+class OPERATOR whatever the references say. A kf3 realize refusal naming BAR1 before the first ssh is
+BAR1_EXCEPTION (owner, 2026-10-24); it is still non-zero. The classification is exercised without a box by
+`windows_gate.sh --selftest` (11 cases), which `scripts/ci/test_vast_windows_gate.py` runs in CI together with a
+check that exactly one branch of the script sets a zero exit.
 
 ## 3. Bounds
 
@@ -72,7 +81,7 @@ classification is exercised without a box by `windows_gate.sh --selftest` (10 ca
 
 | file | role |
 |---|---|
-| `scripts/bench/box/windows_gate.sh` | the gate; `--selftest` for the verdict logic |
+| `scripts/bench/box/windows_gate.sh` | the gate; `--selftest` for the verdict logic; it sizes `fb-mb` from the host VRAM on cards of 10 GiB or less |
 | `scripts/bench/box/merge_check.sh` | calls it last, only for `KF_MERGE_WINDOWS=1` |
 | `scripts/bench/box/windows_lane.sh` | provisions a Windows-only lease and installs (the gate installs too if the lane did not) |
 | `scripts/bench/windows/gate_state.ps1` | read-only guest state: desktop, adapter code, reset counters |

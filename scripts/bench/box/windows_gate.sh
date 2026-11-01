@@ -18,18 +18,23 @@
 #   the WATCHDOG live dumps (LiveKernelEvent 193, no reset: a recorded open defect) are counted and reported, and gate
 #   only with KF_WINGATE_STRICT_LKE=1; then a graceful stop.
 #
-# Verdict lines (fail closed: anything else, or no EXIT line, is not a pass):
-#   WINDOWS_GATE_PASS rev=<rev> gpu="<name>" ...                    exit 0
-#   WINDOWS_GATE_FAIL class=KAYFABE stage=<s> why=<w> ...           exit 1  a guest-side defect WITH both host references green
-#   WINDOWS_GATE_UNATTRIBUTED class=<c> stage=<s> why=<w> ...       exit 3  not kayfabe's: PROVIDER (rental, network), MEDIA (a pinned
-#                                                                           file changed), OPERATOR (our script or configuration),
-#                                                                           HOSTREF (the same-box host GPU reference was not green),
-#                                                                           BAR1_EXCEPTION (the Vast BAR1 limit: counts only if the
-#                                                                           windows-on-vast native reference also fails)
-#   WINDOWS_GATE_REFUSED why=<w>                                    exit 2  a precondition (not root, no /dev/kvm, little disk)
-#   WINDOWS_GATE_EXIT rc=<n> <utc>                                  always last (an EXIT trap)
-# The owner rule (2026-10-26): a failure on a rented box is kayfabe's only if the SAME box's host-side GPU
-# reference (nvidia-smi plus a CUDA matmul on the Linux host) is green before AND after the guest run.
+# Verdict lines. THE GATE IS THE GUEST PASSING: exit 0 only for WINDOWS_GATE_PASS (owner, 2026-11-01). A host
+# failure, a harness failure or a rental fault is never an excuse to merge: it is RETRY, non-zero, "re-run on a
+# fresh box", and a host or harness fault is a script bug to find and fix. Fail closed: a log without
+# WINDOWS_GATE_EXIT, or with any other last verdict, is not a pass.
+#   WINDOWS_GATE_PASS rev=<rev> gpu="<name>" ...                          exit 0  the guest passed AND the host reference is green
+#   WINDOWS_GATE_FAIL diag=<d> stage=<s> why=<w> ...                      exit 1  the guest failed with the host reference green
+#                                                                                 before and after (diag=KAYFABE), or a new host Xid
+#   WINDOWS_GATE_RETRY action=rerun-on-a-fresh-box class=<c> stage=<s> ...  exit 3  not a pass, not a verdict on the guest: PROVIDER
+#                                                                                 (rental, network, apt), MEDIA (a pinned file changed),
+#                                                                                 OPERATOR (our script or configuration), HOSTREF (the
+#                                                                                 same-box host GPU reference was red), BAR1_EXCEPTION
+#                                                                                 (the Vast BAR1 limit, as documented; never new excuses)
+#   WINDOWS_GATE_REFUSED why=<w>                                          exit 2  a precondition (not root, no /dev/kvm, little disk)
+#   WINDOWS_GATE_EXIT rc=<n> <utc>                                        always last (an EXIT trap)
+# The host reference (nvidia-smi plus a CUDA matmul on the Linux host, before and after) and the KAYFABE/OPERATOR
+# classes are DIAGNOSTICS in the log. They decide the label of a non-zero exit (FAIL or RETRY); they never make an
+# exit zero.
 #
 # Knobs (all optional): KF_WINGATE_STRICT_LKE (0: 1 makes LiveKernelEvent 193 gate), KF_WINGATE_IDLE_S (300), KF_WINGATE_BUDGET_S (9000: the wall for everything after the
 # install; the install itself is bounded by WINVM_INSTALL_WAIT_S, 4200), KF_WINGATE_FLAGS (the kf3 env file,
@@ -78,7 +83,7 @@ T0=$(date +%s)
 DEADLINE=0                      # set after the install: the wall for every later wait
 TIMING=()
 GPU_NAME=unknown
-VERDICT=""                      # set by verdict(); the EXIT trap turns a missing one into UNATTRIBUTED
+VERDICT=""                      # set by verdict(); the EXIT trap turns a missing one into RETRY
 HOSTREF_BEFORE=unrun HOSTREF_AFTER=unrun
 STAGE=start
 GUEST_STARTED=0                 # 1 once a kf3 QEMU was started: only then can a failure be kayfabe's
@@ -91,7 +96,7 @@ STAGE_T=0
 # ------------------------------------------------------------------------------------------------
 # verdicts
 # ------------------------------------------------------------------------------------------------
-verdict() { # KIND CLASS WHY...   KIND: PASS|FAIL|UNATTRIBUTED
+verdict() { # KIND CLASS WHY...   KIND: PASS|FAIL|RETRY
     local kind=$1 class=$2 why total
     shift 2
     why=$*
@@ -99,8 +104,8 @@ verdict() { # KIND CLASS WHY...   KIND: PASS|FAIL|UNATTRIBUTED
     total=$(($(date +%s) - T0))
     case "$kind" in
         PASS) say "WINDOWS_GATE_PASS rev=$REV gpu=\"$GPU_NAME\" idle_s=$IDLE_S hostref=$HOSTREF_BEFORE/$HOSTREF_AFTER secs=$total $why"; rc_final=0 ;;
-        FAIL) say "WINDOWS_GATE_FAIL class=$class stage=$STAGE why=\"$why\" rev=$REV gpu=\"$GPU_NAME\" hostref=$HOSTREF_BEFORE/$HOSTREF_AFTER secs=$total"; rc_final=1 ;;
-        *) say "WINDOWS_GATE_UNATTRIBUTED class=$class stage=$STAGE why=\"$why\" rev=$REV gpu=\"$GPU_NAME\" hostref=$HOSTREF_BEFORE/$HOSTREF_AFTER secs=$total"; rc_final=3 ;;
+        FAIL) say "WINDOWS_GATE_FAIL diag=$class stage=$STAGE why=\"$why\" rev=$REV gpu=\"$GPU_NAME\" hostref=$HOSTREF_BEFORE/$HOSTREF_AFTER secs=$total"; rc_final=1 ;;
+        *) say "WINDOWS_GATE_RETRY action=rerun-on-a-fresh-box class=$class stage=$STAGE why=\"$why\" rev=$REV gpu=\"$GPU_NAME\" hostref=$HOSTREF_BEFORE/$HOSTREF_AFTER secs=$total"; rc_final=3 ;;
     esac
 }
 refuse() { say "WINDOWS_GATE_REFUSED why=$1"; VERDICT=REFUSED; rc_final=2; exit 2; }
@@ -179,19 +184,19 @@ conclude() {
     xid_in=$(sed -n 's/^host_xid_in_boots=//p' "$EV/gsp_signals.txt" 2> /dev/null)
     xid_delta=$(sed -n 's/^HOSTREF_XID_DELTA //p' "$EV/hostref_after.txt" 2> /dev/null)
     case "$FAILMODE" in
-        op) verdict UNATTRIBUTED OPERATOR "$FAILWHY" ;;
+        op) verdict RETRY OPERATOR "$FAILWHY" ;;
         guest)
             if bar1_refusal; then
-                verdict UNATTRIBUTED BAR1_EXCEPTION "$FAILWHY (kf3 refused a BAR1 size: the documented Vast exception; kayfabe's only if windows-on-vast native fails too)"
+                verdict RETRY BAR1_EXCEPTION "$FAILWHY (kf3 refused a BAR1 size: the documented Vast exception; kayfabe's only if windows-on-vast native fails too)"
             elif [ "$HOSTREF_BEFORE" != green ] || [ "$HOSTREF_AFTER" != green ]; then
-                verdict UNATTRIBUTED HOSTREF "$FAILWHY (host reference before=$HOSTREF_BEFORE after=$HOSTREF_AFTER)"
+                verdict RETRY HOSTREF "$FAILWHY (host reference before=$HOSTREF_BEFORE after=$HOSTREF_AFTER)"
             else
                 verdict FAIL KAYFABE "$FAILWHY"
             fi ;;
         *)
             if [ "$HOSTREF_AFTER" != green ]; then
                 STAGE=hostref_after
-                verdict UNATTRIBUTED HOSTREF "the guest passed, but the host reference after the run is $HOSTREF_AFTER"
+                verdict RETRY HOSTREF "the guest passed, but the host reference after the run is $HOSTREF_AFTER"
             elif [ "${xid_in:-0}" != 0 ] || [ "${xid_delta:-0}" != 0 ]; then
                 STAGE=host_xid
                 verdict FAIL KAYFABE "new host Xid during the Windows run (in boots: ${xid_in:-?}, delta: ${xid_delta:-?}) with both host references green"
@@ -215,8 +220,8 @@ on_exit() {
     local rc=$?
     if [ -z "$VERDICT" ]; then
         # the script died without a verdict: never a pass
-        VERDICT=UNATTRIBUTED
-        say "WINDOWS_GATE_UNATTRIBUTED class=OPERATOR stage=$STAGE why=\"gate script ended without a verdict (rc=$rc)\" rev=$REV gpu=\"$GPU_NAME\" hostref=$HOSTREF_BEFORE/$HOSTREF_AFTER"
+        VERDICT=RETRY
+        say "WINDOWS_GATE_RETRY action=rerun-on-a-fresh-box class=OPERATOR stage=$STAGE why=\"gate script ended without a verdict (rc=$rc)\" rev=$REV gpu=\"$GPU_NAME\" hostref=$HOSTREF_BEFORE/$HOSTREF_AFTER"
         rc_final=3
     fi
     if [ "$GUEST_STARTED" = 1 ] && [ -e "$VM/run/qemu.pid" ]; then teardown_guest; fi
@@ -350,16 +355,17 @@ selftest() {
         bad=$((bad + 1))
         echo "WINDOWS_GATE_SELFTEST_FAIL case=$name want_rc=$wrc want=\"$wtext\" got: $out"
     }
-    sc guest-both-green 1 'WINDOWS_GATE_FAIL class=KAYFABE' guest green green
-    sc guest-before-red 3 'WINDOWS_GATE_UNATTRIBUTED class=HOSTREF' guest RED green
-    sc guest-after-red 3 'WINDOWS_GATE_UNATTRIBUTED class=HOSTREF' guest green RED
-    sc guest-after-unrun 3 'WINDOWS_GATE_UNATTRIBUTED class=HOSTREF' guest green unrun
-    sc guest-bar1 3 'WINDOWS_GATE_UNATTRIBUTED class=BAR1_EXCEPTION' guest green green 1
-    sc harness-both-green 3 'WINDOWS_GATE_UNATTRIBUTED class=OPERATOR' op green green
+    sc guest-both-green 1 'WINDOWS_GATE_FAIL diag=KAYFABE' guest green green
+    sc guest-before-red 3 'WINDOWS_GATE_RETRY action=rerun-on-a-fresh-box class=HOSTREF' guest RED green
+    sc guest-after-red 3 'WINDOWS_GATE_RETRY action=rerun-on-a-fresh-box class=HOSTREF' guest green RED
+    sc guest-after-unrun 3 'WINDOWS_GATE_RETRY action=rerun-on-a-fresh-box class=HOSTREF' guest green unrun
+    sc guest-bar1 3 'WINDOWS_GATE_RETRY action=rerun-on-a-fresh-box class=BAR1_EXCEPTION' guest green green 1
+    sc harness-both-green 3 'WINDOWS_GATE_RETRY action=rerun-on-a-fresh-box class=OPERATOR' op green green
+    sc harness-hostref-red 3 'WINDOWS_GATE_RETRY action=rerun-on-a-fresh-box class=OPERATOR' op RED RED
     sc pass 0 'WINDOWS_GATE_PASS' none green green
     sc pass-after-red 3 'class=HOSTREF' none green RED
-    sc pass-with-xid 1 'WINDOWS_GATE_FAIL class=KAYFABE' none green green 0 2
-    sc pass-with-flag-refusal 1 'WINDOWS_GATE_FAIL class=KAYFABE' none green green 0 0 1
+    sc pass-with-xid 1 'WINDOWS_GATE_FAIL diag=KAYFABE' none green green 0 2
+    sc pass-with-flag-refusal 1 'WINDOWS_GATE_FAIL diag=KAYFABE' none green green 0 0 1
     if [ "$bad" = 0 ]; then
         echo "WINDOWS_GATE_SELFTEST_OK cases=$n"
         exit 0
@@ -387,10 +393,19 @@ mem_gb=$(free -g | awk '/^Mem:/{print $2}')
 [ "${mem_gb:-0}" -ge 20 ] || refuse "ram-${mem_gb:-0}G-need-20G"
 [ -r "$FLAGS" ] || refuse "no-flags-file-$FLAGS"
 if ! nvidia-smi -L > "$EV/nvidia_smi_L.txt" 2>&1; then
-    verdict UNATTRIBUTED PROVIDER "nvidia-smi -L failed on the host: $(head -c 200 "$EV/nvidia_smi_L.txt")"
+    verdict RETRY PROVIDER "nvidia-smi -L failed on the host: $(head -c 200 "$EV/nvidia_smi_L.txt")"
     finish
 fi
 GPU_NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader | head -1)
+# kf3's fb-mb is real host VRAM: leave 2 GiB on a card of 10 GiB or less (an 8 GB RTX 20xx cannot take win_vm.sh's
+# 8192 default; traces/tur1_20261027/README.md uses 6144). An explicit WINVM_KF3_FB_MB always wins.
+if [ -z "${WINVM_KF3_FB_MB:-}" ]; then
+    vram_mb=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits | head -1 | tr -dc 0-9)
+    if [ "${vram_mb:-0}" -gt 0 ] && [ "$vram_mb" -le 10240 ]; then
+        export WINVM_KF3_FB_MB=$(((vram_mb - 2048) / 1024 * 1024))
+        say "GATE_NOTE host VRAM ${vram_mb} MiB: WINVM_KF3_FB_MB=$WINVM_KF3_FB_MB"
+    fi
+fi
 say "GATE_NOTE host: gpu=\"$GPU_NAME\" driver=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader | head -1) cpus=$(nproc) ram_gb=$mem_gb disk_free_gb=$avail_gb"
 stage_end
 
@@ -403,7 +418,7 @@ if ! gcc -O0 -I "$SOURCE/scripts/bench/cuda_min" -o "$EV/cup8_host" "$SOURCE/scr
 fi
 hostref before
 if [ "$HOSTREF_BEFORE" != green ]; then
-    verdict UNATTRIBUTED HOSTREF "the host GPU reference is not green BEFORE the guest (hostref_before.txt, hostref_before_cup8.txt)"
+    verdict RETRY HOSTREF "the host GPU reference is not green BEFORE the guest (hostref_before.txt, hostref_before_cup8.txt)"
     finish
 fi
 stage_end
@@ -421,7 +436,7 @@ if [ "$missing" = 1 ]; then
     if ! DEBIAN_FRONTEND=noninteractive timeout 900 apt-get -o DPkg::Lock::Timeout=300 install -y -qq \
         ovmf swtpm swtpm-tools sbsigntool python3-virt-firmware xorriso netpbm p7zip-full \
         gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64 > "$EV/apt.txt" 2>&1; then
-        verdict UNATTRIBUTED PROVIDER "apt could not install the Windows prerequisites: $(tail -2 "$EV/apt.txt" | tr '\n' ' ')"
+        verdict RETRY PROVIDER "apt could not install the Windows prerequisites: $(tail -2 "$EV/apt.txt" | tr '\n' ' ')"
         finish
     fi
 fi
@@ -431,11 +446,11 @@ stage_begin kf3_binary
 if [ ! -x "$WINVM_QEMU" ]; then
     say "GATE_NOTE no kf3 QEMU at $WINVM_QEMU: building this revision"
     if ! (cd "$SOURCE" && bash scripts/bench/build_kf3.sh "$BENCH/qemu-10.2.4" "$BENCH/qemu-build-kf3") > "$EV/build_kf3.txt" 2>&1; then
-        verdict UNATTRIBUTED OPERATOR "build_kf3.sh failed: $(tail -2 "$EV/build_kf3.txt" | tr '\n' ' ')"
+        verdict RETRY OPERATOR "build_kf3.sh failed: $(tail -2 "$EV/build_kf3.txt" | tr '\n' ' ')"
         finish
     fi
 fi
-if [ ! -x "$WINVM_QEMU" ]; then verdict UNATTRIBUTED OPERATOR "no kf3 QEMU at $WINVM_QEMU after the build"; finish; fi
+if [ ! -x "$WINVM_QEMU" ]; then verdict RETRY OPERATOR "no kf3 QEMU at $WINVM_QEMU after the build"; finish; fi
 say "GATE_NOTE kf3 qemu=$WINVM_QEMU sha256=$(sha256sum "$WINVM_QEMU" | cut -c1-16) rev=$REV"
 stage_end
 
@@ -450,7 +465,7 @@ else
         cls=OPERATOR
         grep -q 'sha256' "$EV/install_stdout.txt" && cls=MEDIA
         grep -qE 'curl: |Could not resolve|Connection (timed out|refused)' "$EV/install_stdout.txt" && cls=PROVIDER
-        verdict UNATTRIBUTED "$cls" "win_vm.sh install rc=$irc: $(grep -aE 'REFUSED|TIMEOUT|EXIT .* rc=[1-9]' "$EV/install_stdout.txt" | tail -2 | tr '\n' ' ')"
+        verdict RETRY "$cls" "win_vm.sh install rc=$irc: $(grep -aE 'REFUSED|TIMEOUT|EXIT .* rc=[1-9]' "$EV/install_stdout.txt" | tail -2 | tr '\n' ' ')"
         finish
     fi
 fi
@@ -461,7 +476,7 @@ stage_begin probes_build
 PROBES=$(mktemp -d "$BENCH/wingate-probes.XXXXXX")   # build outputs stay out of the evidence (only their sha256 goes in)
 mkdir -p "$PROBES"
 if ! bash "$WIN/cuda/build_cup_win.sh" "$PROBES" > "$EV/probes_build.txt" 2>&1; then
-    verdict UNATTRIBUTED OPERATOR "build_cup_win.sh failed: $(tail -2 "$EV/probes_build.txt" | tr '\n' ' ')"
+    verdict RETRY OPERATOR "build_cup_win.sh failed: $(tail -2 "$EV/probes_build.txt" | tr '\n' ' ')"
     finish
 fi
 DXSRC=$WIN/appmatrix/tools/src/kf_dxprobe.cpp
@@ -470,7 +485,7 @@ if ! x86_64-w64-mingw32-g++ "${DXFLAGS[@]}" "$DXSRC" -o "$PROBES/kf_dxprobe.exe"
     # Ubuntu 22.04's mingw lacks D3D_FEATURE_LEVEL_12_2 (traces/tur1_20261027/README.md)
     if ! x86_64-w64-mingw32-g++ "${DXFLAGS[@]}" -D'D3D_FEATURE_LEVEL_12_2=((D3D_FEATURE_LEVEL)0xc200)' "$DXSRC" -o "$PROBES/kf_dxprobe.exe" \
         -ld3d11 -ld3d12 -ldxgi -ldxguid >> "$EV/probes_build.txt" 2>&1; then
-        verdict UNATTRIBUTED OPERATOR "kf_dxprobe did not build: $(tail -2 "$EV/probes_build.txt" | tr '\n' ' ')"
+        verdict RETRY OPERATOR "kf_dxprobe did not build: $(tail -2 "$EV/probes_build.txt" | tr '\n' ' ')"
         finish
     fi
 fi
@@ -484,7 +499,7 @@ stage_end
 # ------------------------------------------------------------------------------------------------
 stage_begin boot1
 if ! bash "$WV" sign > "$EV/sign.txt" 2>&1; then
-    verdict UNATTRIBUTED OPERATOR "win_vm.sh sign failed: $(tail -2 "$EV/sign.txt" | tr '\n' ' ')"
+    verdict RETRY OPERATOR "win_vm.sh sign failed: $(tail -2 "$EV/sign.txt" | tr '\n' ' ')"
     finish
 fi
 GUEST_STARTED=1
