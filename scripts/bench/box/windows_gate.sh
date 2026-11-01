@@ -138,7 +138,9 @@ collect_evidence() {
     {
         echo "qemu_log=$(basename "${lastq:-none}")"
         echo "gsp_lines=$(grep -ac 'GSP\|gsp' "${lastq:-/dev/null}" || true)"
-        echo "refused_0x2080121f=$(grep -ac '0x2080121f' "${lastq:-/dev/null}" || true)"
+        # the no-flags signature is a REFUSAL of GFX_POOL_QUERY_SIZE; the control's served trace line (result=0x0) is not one
+        echo "refused_0x2080121f=$(grep -a 'REFUSED' "${lastq:-/dev/null}" | grep -ac '0x2080121f' || true)"
+        echo "served_0x2080121f=$(grep -a 'rpc-trace' "${lastq:-/dev/null}" | grep -a '0x2080121f' | grep -ac 'result=0x0' || true)"
         echo "gsp_refused_lines=$(grep -ac 'GSP REFUSED' "${lastq:-/dev/null}" || true)"
         echo "unloading_guest_driver=$(grep -ac 'UNLOADING_GUEST_DRIVER' "${lastq:-/dev/null}" || true)"
         echo "running_to_suspending=$(grep -ac 'Running -> Suspending' "${lastq:-/dev/null}" || true)"
