@@ -1,0 +1,705 @@
+{
+  "applied": true,
+  "source": "origin/claude/gpu-types-20261015",
+  "baseline": "a7a19bf68",
+  "paths": [
+    {
+      "path": "crates/kf-abi/src/cudartinit.rs",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "5ab31c3e48fb94a169c5218129ab6434a43a41f2",
+      "candidate5_blob": "656d39c4d9799fd525b6afdc4e01543716c9c1e1"
+    },
+    {
+      "path": "crates/kf-abi/src/gssreplay.rs",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "76fcec46be436ed69ed5d532283de4c39efe6e20",
+      "candidate5_blob": "17f36a60153ca6267ae160c980f1a368b48d0c26"
+    },
+    {
+      "path": "crates/kf-abi/src/hostabi.rs",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "ec9bd198ec1b0fdde6ea78b24e93f9f6515071a2",
+      "candidate5_blob": "4a467759e6bc3bd4744a64526dc997484f7232ec"
+    },
+    {
+      "path": "crates/kf-abi/tests/truncated_row_reads.rs",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "ff88a5ddfd02ba30e1a6f98af9b35f01e1e77ba9",
+      "candidate5_blob": "5f140d81aa30914e32ccecc3d558063b723271f8"
+    },
+    {
+      "path": "crates/kf-arch/src/gsp.rs",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "e80f36c86216baec667ec413cd907a2d7127f6f6",
+      "candidate5_blob": "629533a79a67f107e0867ae23aec4bb8a8991d60"
+    },
+    {
+      "path": "crates/kf-census/src/analyze.rs",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "6582d93f4fdf19f140eb53e283b8a2ecc5e69297",
+      "candidate5_blob": "5980ec4d27852b9a3aab427c251e60b0443d37bb"
+    },
+    {
+      "path": "crates/kf-census/src/main.rs",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "70f35b120a7a02c39041c1da7e8c7153eadb189a",
+      "candidate5_blob": "03e6f89b69999fc0e30a743599cff5082fa2a9f7"
+    },
+    {
+      "path": "crates/kf-census/src/report.rs",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "b547bc87675885b1c0de8124c11c9be0bc6ae9cf",
+      "candidate5_blob": "916c4f74cb46b346aeeb6cc9ffcc57becab00864"
+    },
+    {
+      "path": "crates/kf-census/tests/scrub.rs",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "916238862313b80a3d858359f75d444834e8e2bb",
+      "candidate5_blob": "d930f11b0271a21247a718c3a11cc493e9fba5f8"
+    },
+    {
+      "path": "crates/kf-chan/src/grtables.rs",
+      "disposition": "preserve approved F2 implementation and its new tests",
+      "source_blob": "921fd750046c1b959f4ebb62c563efceee3a9eca",
+      "candidate5_blob": "497939a6ff4c325efa8c840896615f62f35dbc70"
+    },
+    {
+      "path": "crates/kf-chan/src/tmode.rs",
+      "disposition": "preserve approved F2 implementation and its new tests",
+      "source_blob": "35d88ede463a350735ace5d577619596aeb9972f",
+      "candidate5_blob": "1b05d02b75c70c158e7bec676a69bc7d152f1262"
+    },
+    {
+      "path": "crates/kf-chan/src/user_loop.rs",
+      "disposition": "preserve current; excluded USER topic/dependencies",
+      "source_blob": "2a8d88eb19811ae6126de7a833eba0db64daeff9",
+      "candidate5_blob": "f61541b1f4fd0cf6244a6eae71a09e0c725c75a5"
+    },
+    {
+      "path": "crates/kf-chan/tests/user_loop_model.rs",
+      "disposition": "preserve current; excluded USER topic/dependencies",
+      "source_blob": "74b299296dc0242807b64995b45e87574373088d",
+      "candidate5_blob": "b1d01d68881644222da367985ec9dc74c0f2b26d"
+    },
+    {
+      "path": "crates/kf-chip/src/bar0.rs",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "ca875a053b8d2fefec7095965b007d7743817c3d",
+      "candidate5_blob": "a5c6135c1c99c649bcda669fa3391bbe0db041db"
+    },
+    {
+      "path": "crates/kf-chip/src/die.rs",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "f5d9754ac7a2e4cc9bfb557eaec2e7999684dcff",
+      "candidate5_blob": null
+    },
+    {
+      "path": "crates/kf-chip/src/falcon_gsp.rs",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "d250549f0cdff1fe66ab6d9679fef290049ebbfa",
+      "candidate5_blob": "b4fb6a1e21eee137aa372f5b20aad5aa314bf5be"
+    },
+    {
+      "path": "crates/kf-chip/src/fsp_gsp.rs",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "de5a78e18326df7c7fb1365ec7bcc07914750350",
+      "candidate5_blob": "b10daa28f68bbcb510ed222d44b0c43cfb96ac1b"
+    },
+    {
+      "path": "crates/kf-chip/src/lib.rs",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "747b34983386cc95f188a02dee2737e6f9c54860",
+      "candidate5_blob": "f7b95ec4a606ec2314b5c39691750f369a932762"
+    },
+    {
+      "path": "crates/kf-chip/tests/answer_on_store.rs",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "d89f7179ec79e1931c2280b6647aced91370e641",
+      "candidate5_blob": "f35e975fafbe1867487793c19bfd230f9a1ef73a"
+    },
+    {
+      "path": "crates/kf-chip/tests/fsp_cot_sequence.rs",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "b2be4dbb8a99ed738ab4d4c6d5623afbb4546574",
+      "candidate5_blob": "b2d0ad0dd9253707162b075373a123f0619f08f7"
+    },
+    {
+      "path": "crates/kf-chip/tests/gsp_reset_fsm.rs",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "4cf27110c69f71130468160e1a18d7305e7d7e70",
+      "candidate5_blob": null
+    },
+    {
+      "path": "crates/kf-cuda/src/display.rs",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "a89f561ce1700d4e55de00ba3a5907747870a2bb",
+      "candidate5_blob": "a89f561ce1700d4e55de00ba3a5907747870a2bb"
+    },
+    {
+      "path": "crates/kf-disp/data/caps_family_pages.tsv",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "b78d35a1402047a41e237ec2afb863021645460c",
+      "candidate5_blob": null
+    },
+    {
+      "path": "crates/kf-disp/data/caps_measured.tsv",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "5653c7021383c50d2f6ec659e19368fbb8f887e8",
+      "candidate5_blob": null
+    },
+    {
+      "path": "crates/kf-disp/data/caps_rows.tsv",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "8a1b105ad16dcffaf33b9d5dbe0436ee33eef95d",
+      "candidate5_blob": null
+    },
+    {
+      "path": "crates/kf-disp/src/caps.rs",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "ee955ac8bc7add2f4455603626f7791f29a6c3f4",
+      "candidate5_blob": "4c19e389e5f7a4b237cf0c7182de261da669d5ea"
+    },
+    {
+      "path": "crates/kf-disp/src/capsderive.rs",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "bbe2b3d6f43c8b86ee4167a0a9b795fd999273be",
+      "candidate5_blob": null
+    },
+    {
+      "path": "crates/kf-disp/src/class.rs",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "588816385421812c20adea755965513c70cb7f2d",
+      "candidate5_blob": "39185e235f7c8d1f186994b92b0c232536d423c6"
+    },
+    {
+      "path": "crates/kf-disp/src/engine.rs",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "0f786b9300c0cf15462d3bed763e6fa5e65ea167",
+      "candidate5_blob": "e87daa32b2e1b61e9ec8013ae163f229f6f6d71a"
+    },
+    {
+      "path": "crates/kf-disp/src/engine/tests.rs",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "27a4af5a03e6381d892acf2d9b83ab508ece53e9",
+      "candidate5_blob": "41c986d2ba9b5bd012fc2e0264afc888bda0c023"
+    },
+    {
+      "path": "crates/kf-disp/src/lib.rs",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "e61d39a1700bb9b0fd6e0dd112f7d60739531372",
+      "candidate5_blob": "993cac5600cf07338e941f0edf1d0e8532d7bdf2"
+    },
+    {
+      "path": "crates/kf-disp/src/scanout.rs",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "7c9efa83e32e96c03c5e78e1e2c0fe0343f7e904",
+      "candidate5_blob": "2fa9e29a790237ad26ff9ff4c3ebff32d55b82e1"
+    },
+    {
+      "path": "crates/kf-disp/tests/caps_derive.rs",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "17cb4b7516d76401e7db088d5aeac00ec6a0b81d",
+      "candidate5_blob": null
+    },
+    {
+      "path": "crates/kf-disp/tests/fixtures/caps_page_ad104_580.65.06.txt",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "e64bb0c12e678e56af4ff479f87f4a0efad87f53",
+      "candidate5_blob": null
+    },
+    {
+      "path": "crates/kf-gsp/src/boot.rs",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "005059245ad1b514154eefd747034628725ea88d",
+      "candidate5_blob": "0b25ec45421dded5a64d943aa49e0045cb0c6d70"
+    },
+    {
+      "path": "crates/kf-harness/src/bin/kf-ctl-probe.rs",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "72edfb21c8d6865a8eb01222694a36f6debfa19e",
+      "candidate5_blob": null
+    },
+    {
+      "path": "crates/kf-harness/src/bin/kf-syncwait-stress.rs",
+      "disposition": "preserve current; excluded USER topic/dependencies",
+      "source_blob": "705e61a6f6b8629e773959e3f8b03bcc1b9087c5",
+      "candidate5_blob": "1d91750d33d3592622191fd2d3c33f25785d0858"
+    },
+    {
+      "path": "crates/kf-host/src/lib.rs",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "59a081a6114b93ec72967d05a6bec546f7440ac4",
+      "candidate5_blob": "85a6965263f767f55acfd24f388c50a5822d5a93"
+    },
+    {
+      "path": "crates/kf-qemu/src/bar1phys.rs",
+      "disposition": "preserve current; incoming change is formatting only",
+      "source_blob": "d5a5d51ced2196811f789baeb3fae4cea9f027cd",
+      "candidate5_blob": "e6ea8aebe858a11af3593951b6f9b2250f65a89e"
+    },
+    {
+      "path": "crates/kf-qemu/src/chan.rs",
+      "disposition": "preserve current; incoming change is formatting only",
+      "source_blob": "9074ec7701ab0615e77aa6fe02cec5027b819223",
+      "candidate5_blob": "926b81c67a70e67f1bc8f3310074e0417e634313"
+    },
+    {
+      "path": "crates/kf-qemu/src/device.rs",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "e310181827559abbed7d5fe33cc3d243239361b4",
+      "candidate5_blob": "af3d3555245cab0b907f95b3f1f34c96a86e7cdd"
+    },
+    {
+      "path": "crates/kf-qemu/src/display.rs",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "256252e01569c1d2488e0720a66760fca17e9a2b",
+      "candidate5_blob": "9cd650a187b7bde7627ff8be879c39a9b4cf2a17"
+    },
+    {
+      "path": "crates/kf-qemu/src/mem.rs",
+      "disposition": "preserve current; incoming change is formatting only",
+      "source_blob": "bd1550407b2570ae2780384bdd05c2bc87ca951f",
+      "candidate5_blob": "6abc8fa1e6fecd12434130da1f4c3db8f8154830"
+    },
+    {
+      "path": "crates/kf-qemu/src/reset.rs",
+      "disposition": "preserve current; incoming change is formatting only",
+      "source_blob": "8592c5fba0fcc7792a99d818d79687e33c58149a",
+      "candidate5_blob": "361e831c0ec45f9f4c8ce39626bff3b66bc7ae92"
+    },
+    {
+      "path": "crates/kf-qemu/src/rmfacts.rs",
+      "disposition": "preserve current; incoming change is formatting only",
+      "source_blob": "18ca4480902e03ec5762083ca5c4f850e97ff86d",
+      "candidate5_blob": "cbd07b734fd9dafdb6f692243eefec8396e1a6b3"
+    },
+    {
+      "path": "crates/kf-qemu/src/userbirth.rs",
+      "disposition": "preserve current; incoming change is formatting only",
+      "source_blob": "f269a76ef21c52d6ebca7e0ed4594799ee05c6e3",
+      "candidate5_blob": "fdb3a85678a68c3365bd47b8277de3a4de9220e7"
+    },
+    {
+      "path": "crates/kf-qemu/src/userpump.rs",
+      "disposition": "preserve current; excluded USER topic/dependencies",
+      "source_blob": "91059610c4b5ea01247badcda1943aa1f4142cc0",
+      "candidate5_blob": "d7ab5b31edbf5b3aac3f1a47948315af2f47d432"
+    },
+    {
+      "path": "crates/kf-qemu/src/userquota.rs",
+      "disposition": "preserve current; incoming change is formatting only",
+      "source_blob": "9e642542e0c6287570c0b0b25bfa6027b8406729",
+      "candidate5_blob": "77c230f281f39c050ff92afd7e0a4876552d617f"
+    },
+    {
+      "path": "crates/kf-qemu/src/userread.rs",
+      "disposition": "preserve current; excluded USER topic/dependencies",
+      "source_blob": "dd6e061306ce149b9a27d409aee7c9f8b1e96990",
+      "candidate5_blob": "85f4369d200cd9ee9db72501bc8c5ddc90628c45"
+    },
+    {
+      "path": "crates/kf-qemu/src/userrelay.rs",
+      "disposition": "preserve current; excluded USER topic/dependencies",
+      "source_blob": "5ceb34a6fa04bf64a088a3af74202b901e3b520c",
+      "candidate5_blob": "e7e329557af7d3dd7fec4b14bc44643ae47e2293"
+    },
+    {
+      "path": "crates/kf-qemu/src/userstore.rs",
+      "disposition": "preserve current; incoming change is formatting only",
+      "source_blob": "fe4d910d56e1ad99a51d00e9f2701d603127da36",
+      "candidate5_blob": "3edefb68e2b9b9de711ce402a42f5aa7ba6467f4"
+    },
+    {
+      "path": "crates/kf-qemu/tests/channel_budget_lazy.rs",
+      "disposition": "preserve current; incoming change is formatting only",
+      "source_blob": "9a978eb73f940203465d034f627f2b9988619fc8",
+      "candidate5_blob": "57a95896efc6bfbd1b4d8ffd27c88d53ae829f2e"
+    },
+    {
+      "path": "crates/kf-rm/data/board_specific.tsv",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "1f0776a2b84a7435dda393bc21658900b1f7dd56",
+      "candidate5_blob": null
+    },
+    {
+      "path": "crates/kf-rm/data/measured_constants.tsv",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "3963609971f47dccaf0e0799516552e18aae320d",
+      "candidate5_blob": null
+    },
+    {
+      "path": "crates/kf-rm/src/consttab.rs",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "43cb09ca7ac95f8f9fdc55471519fc65e0b135d6",
+      "candidate5_blob": null
+    },
+    {
+      "path": "crates/kf-rm/src/hostfacts.rs",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "2eb404b0f8812f1a480897b05bf33f7c56ca8b80",
+      "candidate5_blob": "d80ef772a2ff190b111081bc4fc0dc4c7a812d4f"
+    },
+    {
+      "path": "crates/kf-rm/src/hostquery.rs",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "9e039c1a60257dbefdf352505ce434308f5c6c42",
+      "candidate5_blob": "c8f972b5ce2e2df3617509d46b2a68daecddb6f1"
+    },
+    {
+      "path": "crates/kf-rm/src/inittables.rs",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "cf5e7ffcd0f6951fe56ac409cc48f97eb99e4b97",
+      "candidate5_blob": "d5f6342f5f64f85f6a260d2e8ea429bde9eb5ae7"
+    },
+    {
+      "path": "crates/kf-rm/src/lib.rs",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "00e44eb7c6a04def552a367683b50a75f9016939",
+      "candidate5_blob": "1694c16226e631a3406e00905eb79193c004a219"
+    },
+    {
+      "path": "crates/kf-rm/src/rowserve.rs",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "a1792c70a5ac86766f2206f9d4b91fc30e996f94",
+      "candidate5_blob": null
+    },
+    {
+      "path": "crates/kf-rm/src/zbc.rs",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "69e0eb1902f8859e445e8ec25c43882e05bed5eb",
+      "candidate5_blob": "fcfe0fa6ac554a64ad384388aefa7997b1abb997"
+    },
+    {
+      "path": "crates/kf-rm/tests/cudart_gate_ad104_oracle.rs",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "db024197277139251af44e0395a639a4c6ec4e90",
+      "candidate5_blob": null
+    },
+    {
+      "path": "crates/kf-rm/tests/cudart_gate_per_die.rs",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "c096d0ace6ebe9fb82bf825dc213f96480fa7dce",
+      "candidate5_blob": null
+    },
+    {
+      "path": "crates/kf-rm/tests/gpu_types_wiring.rs",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "fe82c24b508e38b1db9aa584ddf0ed542559130e",
+      "candidate5_blob": null
+    },
+    {
+      "path": "crates/kf-rm/tests/gss_exact_zero_rows.rs",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "a3e118215d14c313016b863877c8822f22e43221",
+      "candidate5_blob": null
+    },
+    {
+      "path": "crates/kf-rm/tests/host_facts_ga106.rs",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "1c6bf4faef8a0f2eb3ea5a0106405f14035eeb4d",
+      "candidate5_blob": "ef6365c6f9cdbf86205fdf24d0c76c315ed34cb0"
+    },
+    {
+      "path": "crates/kf-rm/tests/support/ga106.rs",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "5c1aa996487b175e9db5039eb7b6fb0432b643a7",
+      "candidate5_blob": "87ab941b171dcc8eeeee6c449fd442f0f779f636"
+    },
+    {
+      "path": "crates/kf-rm/tests/windows_rows_vs_authored.rs",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "5d681adf529b2cb0d052b64c95bdc1e7a0ba821a",
+      "candidate5_blob": null
+    },
+    {
+      "path": "crates/kf-rm/tests/zbc_defaults_per_die.rs",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "87c2b585940d43ac864ea5dc04106bb0503e8f5b",
+      "candidate5_blob": null
+    },
+    {
+      "path": "scripts/bench/constants/branch_sizes.py",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "1262b9d5a31b62c87f4e52ddf683828b55cab7e5",
+      "candidate5_blob": null
+    },
+    {
+      "path": "scripts/bench/constants/compare_runs.py",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "5a8291202fa06f9b8d964ff42233024049ee03c0",
+      "candidate5_blob": null
+    },
+    {
+      "path": "scripts/bench/constants/cudart_rows.tsv",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "9de9ed32d20aa92724885256e8a973b773551d1e",
+      "candidate5_blob": null
+    },
+    {
+      "path": "scripts/bench/constants/gen_rows.py",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "5f3afd4e08aae5931f91603cdbb80230f5107375",
+      "candidate5_blob": null
+    },
+    {
+      "path": "scripts/bench/constants/process_capture.sh",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "90f8266fa3877a05396ead4a46d976509ed49531",
+      "candidate5_blob": null
+    },
+    {
+      "path": "scripts/bench/constants/rows_595_shapes.tsv",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "bd22df191a96ad772198b8b3e6c2fc09d232c92f",
+      "candidate5_blob": null
+    },
+    {
+      "path": "scripts/bench/constants/run_container_probe.sh",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "5c9f2d0fe3d507158fd97bd9dbbe011fe5c32a92",
+      "candidate5_blob": null
+    },
+    {
+      "path": "scripts/bench/constants/shapes_by_host.py",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "613ec018ded22719151dbf5aec5893022446b845",
+      "candidate5_blob": null
+    },
+    {
+      "path": "scripts/bench/constants/sizes_matrix.py",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "e53f290b38163929919a512a7c16b406a0798188",
+      "candidate5_blob": null
+    },
+    {
+      "path": "scripts/bench/constants/summarize_tier2.py",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "6be4a5b7a7f7787926691016f14daf6a2438d78c",
+      "candidate5_blob": null
+    },
+    {
+      "path": "scripts/bench/constants/tier2_probe_box.sh",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "97c954cf93109707fdcde7f63093c805d96c6e2c",
+      "candidate5_blob": null
+    },
+    {
+      "path": "scripts/bench/constants/windows_rows.py",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "1a631d74a66d212312526b3294ce15f106711606",
+      "candidate5_blob": null
+    },
+    {
+      "path": "scripts/bench/diesweep/box_facts.sh",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "0cb2bbcff924b860ba70ebf979551e71b3940c0c",
+      "candidate5_blob": null
+    },
+    {
+      "path": "scripts/bench/diesweep/collect.sh",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "4fc780e8d0f91d7605e8f039585968809c64eb6c",
+      "candidate5_blob": null
+    },
+    {
+      "path": "scripts/bench/diesweep/diag_events.ps1",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "34de2972081a79e8c941302c485b8526f79411d9",
+      "candidate5_blob": null
+    },
+    {
+      "path": "scripts/bench/diesweep/die_run.sh",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "13436077e545369d2721cde23716a34fba460da1",
+      "candidate5_blob": null
+    },
+    {
+      "path": "scripts/bench/diesweep/drvbind.ps1",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "68b61a305e78ea72f4973fcf6d58e88a19083066",
+      "candidate5_blob": null
+    },
+    {
+      "path": "scripts/bench/diesweep/evidence.ps1",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "244606066f89d328ae4b3b1d639ce535a024b71c",
+      "candidate5_blob": null
+    },
+    {
+      "path": "scripts/bench/diesweep/gsp_fw_list.ps1",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "9c01fc88c37f98561b388d9eb21058f23e249d74",
+      "candidate5_blob": null
+    },
+    {
+      "path": "scripts/bench/diesweep/inf_cover.ps1",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "0c142a8b410161d2e382f1fc657332757a0ddad3",
+      "candidate5_blob": null
+    },
+    {
+      "path": "scripts/bench/diesweep/inf_ids.ps1",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "d52a4a870c1baba39e9987cd5032e1cdfd556869",
+      "candidate5_blob": null
+    },
+    {
+      "path": "scripts/bench/diesweep/phase1.ps1.in",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "6f0c659068674bb719ac598c0d01da8e112bb189",
+      "candidate5_blob": null
+    },
+    {
+      "path": "scripts/bench/diesweep/push_image.sh",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "fc1ea05b64981a13dbf4f09a7ecd7f4c34612d5d",
+      "candidate5_blob": null
+    },
+    {
+      "path": "scripts/bench/diesweep/win_die.sh",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "f1079c4008d361ff5b55aa24513be04705d92b37",
+      "candidate5_blob": null
+    },
+    {
+      "path": "scripts/bench/display/desktop_smoke.sh",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "b3688f8b239d0d4f9478d17923ad715ad0f34ade",
+      "candidate5_blob": "b3688f8b239d0d4f9478d17923ad715ad0f34ade"
+    },
+    {
+      "path": "scripts/bench/windows/host_tools/runners/winprod/windows_broker_prod.sh",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "9d70eaf0dc050e51ee05de650012465283ab7a93",
+      "candidate5_blob": "1ccc1257c64b6a35886b792c90cb381b41402d11"
+    },
+    {
+      "path": "scripts/bench/windows/host_tools/runners/winprod/windows_broker_prod2.sh",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "ad06f44dc9a22064f1638b648f55329e0b9bdcaf",
+      "candidate5_blob": "1bd04afca2c7d94b7c9a9afddc8f2f7e7f555d42"
+    },
+    {
+      "path": "tools/api_boundaries/analyze.py",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "db40fca127a10c7d2f8750c75e84696e87345a78",
+      "candidate5_blob": null
+    },
+    {
+      "path": "tools/api_boundaries/derive_served.py",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "7678bb482f6172661af8fd9024e3df49d25a76b9",
+      "candidate5_blob": null
+    },
+    {
+      "path": "tools/api_boundaries/extra_ids.txt",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "86a7b8e09db2de39c3c0819876e1d2ce65c6a0bd",
+      "candidate5_blob": null
+    },
+    {
+      "path": "tools/api_boundaries/extract_tag.py",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "ced03be8516b56354f0f6a6e6df3a983746bf253",
+      "candidate5_blob": null
+    },
+    {
+      "path": "tools/api_boundaries/kf_idents.py",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "943cf068191b561322811c32e238957dd093b689",
+      "candidate5_blob": null
+    },
+    {
+      "path": "tools/api_boundaries/measured_points.tsv",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "8d18d151ae4847fb3206a5b3ad7310cf5444e73f",
+      "candidate5_blob": null
+    },
+    {
+      "path": "tools/api_boundaries/run_all.sh",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "8cd4c4a688f645adc74b641d59490cb7af230e60",
+      "candidate5_blob": null
+    },
+    {
+      "path": "tools/api_boundaries/served.json",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "3883487210c3159f0fcfcea05816a8992e0a6a79",
+      "candidate5_blob": null
+    },
+    {
+      "path": "tools/api_boundaries/sweep.py",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "888621fedf08035ea2b624dcbaa9ede3d875f415",
+      "candidate5_blob": null
+    },
+    {
+      "path": "tools/api_boundaries/sweep_setup.sh",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "0bb3b9bbd85bde9854af47c5f5c6512c2ad771d8",
+      "candidate5_blob": null
+    },
+    {
+      "path": "tools/api_boundaries/windows_controls.py",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "8e53e718718a3d84602543beaff858b3623b8f79",
+      "candidate5_blob": null
+    },
+    {
+      "path": "tools/api_boundaries/windows_controls.tsv",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "5abae301ed3a007bf0607b8c34c31a037bb7f5d7",
+      "candidate5_blob": null
+    },
+    {
+      "path": "tools/api_boundaries/windows_ids.txt",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "ad3322a9aee3fedbc301dfc08140920edf5dfc18",
+      "candidate5_blob": null
+    },
+    {
+      "path": "tools/derive_die_names.sh",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "7eb134240e123f8f591c7695e1d69ebb6e155877",
+      "candidate5_blob": null
+    },
+    {
+      "path": "tools/derive_display_caps.sh",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "b0751af234bbcc2f2f267d972a79f6d030469067",
+      "candidate5_blob": null
+    },
+    {
+      "path": "tools/read_display_caps_page.py",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "eaeeae898aa6fdf302e01877c09cd452afbfd8fa",
+      "candidate5_blob": null
+    },
+    {
+      "path": "tools/windows-guest/first_start_repro_flag.py",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "0dc9dfa1b9aac8228c8c0404192c45a5efe047a0",
+      "candidate5_blob": null
+    },
+    {
+      "path": "tools/windows-guest/first_start_repro_v2.py",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "b53841848c02060231f8e0cd628a7e3ca7512f77",
+      "candidate5_blob": null
+    },
+    {
+      "path": "tools/windows-guest/kf-gsp-on.cmd",
+      "disposition": "imported code/tests through pinned three-way tree; later stack changes retained",
+      "source_blob": "3081da7b57da3fc287f129aa6cc09fadc815073a",
+      "candidate5_blob": null
+    }
+  ],
+  "integration_line": "f8f9d1a5f",
+  "topic_commits": {
+    "chip": "35cd6d276",
+    "constants": "797ca55eb",
+    "display": "e634e495b",
+    "tools": "668032fb7",
+    "executable_modes": "939d31382"
+  }
+}

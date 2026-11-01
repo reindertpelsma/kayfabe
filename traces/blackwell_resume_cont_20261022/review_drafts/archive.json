@@ -1,0 +1,7 @@
+{
+  "base": "b22e1be62bedb425cd51ef6642d5c5cce781ad34",
+  "state": "UNAPPLIED pre-steering experiments, retained for review only; not deployed or approved as a runtime guard",
+  "native_checks": "prior CPU-only 15 -> 19 release tests; two mutants each two killers; clippy 284 -> 284, added zero",
+  "guard_checks": "prior CPU-only combined 40 tests green in patch, 22 test-first cases committed separately; new guard mutation checks and runtime-error review incomplete",
+  "latest_instruction": "Documentation and derivation only; no hardware or rentals"
+}

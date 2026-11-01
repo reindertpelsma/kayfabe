@@ -1,0 +1,77 @@
+{
+  "instance": 57064037,
+  "utc": "2026-10-21T15:10:57.610407+00:00",
+  "source": "1ce11cf4d640087d5be41b14b4f0b70cfc77e8c6",
+  "files": {
+    "install": {
+      "source_sha256": "983e8091af026394fe578adc90d624ae39deba255ed599a616eb96fac1af26df",
+      "source_bytes": 6364,
+      "public_lines": [
+        "WIN_BASE_INSTALL_START pinned-QEMU/std-VGA baseline preparation 2026-10-21T14:44:30+00:00",
+        "[2026-10-21T14:45:14Z] QEMU_START tag=install boot=1 pid=91672 log=logs/install_b1_qemu.log",
+        "[2026-10-21T15:06:12Z] INSTALL_BOOT_END rc=0 reason=guest-shutdown",
+        "[2026-10-21T15:06:12Z] START check-boot",
+        "[2026-10-21T15:06:12Z] QEMU_START tag=installcheck boot=1 pid=93698 log=logs/installcheck_b1_qemu.log",
+        "WIN_EDITION PASS Microsoft Windows 11 Enterprise LTSC Evaluation build 26100 10.0.26100",
+        "WIN_SECUREBOOT PASS Confirm-SecureBootUEFI=True",
+        "WIN_DB_HAS_KAYFABE PASS db contains 'kayfabe GOP'=True; Microsoft entries: Windows Production PCA 2011; Microsoft Corporation UEFI CA 2011; Windows UEFI CA 2023; Microsoft UEFI CA 2023; Microsoft Option ROM UEFI CA 2023",
+        "WIN_TPM PASS present=True ready=True enabled=True activated=True owned=True spec=2.0, 0, 1.64",
+        "WIN_BITLOCKER PASS VolumeStatus=FullyDecrypted ProtectionStatus=Off PreventDeviceEncryption=1; manage-bde: Conversion Status: Fully Decrypted; Percentage Encrypted: 0.0%; Encryption Method: None; Protection Status: Protection Off",
+        "WIN_VBS PASS VirtualizationBasedSecurityStatus=0",
+        "WIN_VIRTIO PASS store: fwcfg.inf,pvpanic.inf,smbus.inf,viorng.inf,vioser.inf,viostor.inf,netkvm.inf; missing: ; balloon/viomem staged: ; bound: QEMU FwCfg Device; QEMU PVPanic Device; Red Hat VirtIO SCSI controller; VirtIO RNG Device; VirtIO Serial Driver; Red Hat VirtIO Ethernet Adapter",
+        "WIN_PNP_CLEAN PASS problem devices:",
+        "WIN_DISPLAY INFO Microsoft Basic Display Adapter [PCI\\VEN_1234&DEV_1111&SUBSYS_11001AF4&REV_02\\3&11583659&0&08] status=OK problem=CM_PROB_NONE",
+        "WIN_SERVICES PASS QEMU-GA=Running sshd=Running",
+        "WIN_WU_OFF PASS NoAutoUpdate=1 ExcludeWUDriversInQualityUpdate=1 wuauserv=Running",
+        "WIN_NO_HIBER PASS HiberbootEnabled=0",
+        "WIN_SAC_OFF PASS VerifiedAndReputablePolicyState=0",
+        "WIN_FIRSTLOGON PASS KF_FIRSTLOGON OK 2026-10-21T15:05:37.2944937+00:00",
+        "WIN_CHECK_DONE fail=0",
+        "[2026-10-21T15:08:44Z] CHECK_BOOT_END rc=0 reason=guest-shutdown check_rc=0",
+        "[2026-10-21T15:08:44Z] SEALED disk/base.qcow2 (0400); unattend.iso (it held the password) deleted; every run uses an overlay",
+        "[2026-10-21T15:08:44Z] EXIT seal rc=0",
+        "[2026-10-21T15:08:44Z] WINVM_INSTALL_DONE name=kfwin",
+        "WIN_BASE_INSTALL_EXIT rc=0 2026-10-21T15:08:44+00:00"
+      ]
+    },
+    "media": {
+      "source_sha256": "5220c165f305f369b14ba9e87e9e4af380116ce14317b9b6a56b08969346cf7c",
+      "source_bytes": 13121,
+      "public_lines": [
+        "WIN_MEDIA_START 2026-10-21T14:41:10+00:00",
+        "[2026-10-21T14:43:10Z] MEDIUM_OK win11_ltsc_2024_eval_x64_en-us.iso sha256=67cec5865eaa037a72ddc633a717a10a2bed50778862267223ddb9c60ef5da68 bytes=5112850432",
+        "[2026-10-21T14:43:24Z] MEDIUM_OK virtio-win-0.1.302.iso sha256=303f7ae40dad495d6ae474fdc571df58958a4dbc5c37a522d80f9a203867949d bytes=877373440",
+        "[2026-10-21T14:43:25Z] MEDIUM_OK OpenSSH-Win64-v10.0.0.0.msi sha256=ddec9c53864280759cf9f74791cefd387100e3946aa849a1c138a4ed1b96b7d9 bytes=6586368",
+        "[2026-10-21T14:43:48Z] MEDIUM_OK 580.88-desktop-win10-win11-64bit-international-dch-whql.exe sha256=90c49f925b41ee062e02cc8094a16b6d057abfde4e85235a76d63ffe267f63a9 bytes=890807536",
+        "WIN_MEDIA_EXIT rc=0 2026-10-21T14:43:48+00:00"
+      ]
+    },
+    "check": {
+      "source_sha256": "852e635e5397c56064e30340eca2f4888773d5ff415f62ed415f0b67df2e17f3",
+      "source_bytes": 1645,
+      "public_lines": [
+        "WIN_EDITION PASS Microsoft Windows 11 Enterprise LTSC Evaluation build 26100 10.0.26100",
+        "WIN_SECUREBOOT PASS Confirm-SecureBootUEFI=True",
+        "WIN_DB_HAS_KAYFABE PASS db contains 'kayfabe GOP'=True; Microsoft entries: Windows Production PCA 2011; Microsoft Corporation UEFI CA 2011; Windows UEFI CA 2023; Microsoft UEFI CA 2023; Microsoft Option ROM UEFI CA 2023",
+        "WIN_TPM PASS present=True ready=True enabled=True activated=True owned=True spec=2.0, 0, 1.64",
+        "WIN_BITLOCKER PASS VolumeStatus=FullyDecrypted ProtectionStatus=Off PreventDeviceEncryption=1; manage-bde: Conversion Status: Fully Decrypted; Percentage Encrypted: 0.0%; Encryption Method: None; Protection Status: Protection Off",
+        "WIN_VBS PASS VirtualizationBasedSecurityStatus=0",
+        "WIN_VIRTIO PASS store: fwcfg.inf,pvpanic.inf,smbus.inf,viorng.inf,vioser.inf,viostor.inf,netkvm.inf; missing: ; balloon/viomem staged: ; bound: QEMU FwCfg Device; QEMU PVPanic Device; Red Hat VirtIO SCSI controller; VirtIO RNG Device; VirtIO Serial Driver; Red Hat VirtIO Ethernet Adapter",
+        "WIN_PNP_CLEAN PASS problem devices:",
+        "WIN_DISPLAY INFO Microsoft Basic Display Adapter [PCI\\VEN_1234&DEV_1111&SUBSYS_11001AF4&REV_02\\3&11583659&0&08] status=OK problem=CM_PROB_NONE",
+        "WIN_SERVICES PASS QEMU-GA=Running sshd=Running",
+        "WIN_WU_OFF PASS NoAutoUpdate=1 ExcludeWUDriversInQualityUpdate=1 wuauserv=Running",
+        "WIN_NO_HIBER PASS HiberbootEnabled=0",
+        "WIN_SAC_OFF PASS VerifiedAndReputablePolicyState=0",
+        "WIN_FIRSTLOGON PASS KF_FIRSTLOGON OK 2026-10-21T15:05:37.2944937+00:00",
+        "WIN_CHECK_DONE fail=0"
+      ]
+    }
+  },
+  "installed_marker": "2026-10-21T15:08:44Z repo=1ce11cf4\n",
+  "base_mode": "0o400",
+  "unattend_removed": true,
+  "kernel_xid_count": 5,
+  "kernel_xid_log_sha256": "b123de969370556697ff21620621d83fe2c32592e099c5036f072b6f0189d275",
+  "qemu_processes": []
+}

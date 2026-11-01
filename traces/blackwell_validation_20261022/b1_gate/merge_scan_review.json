@@ -1,0 +1,9 @@
+{
+  "base": "8f3a9bb3a5d652b3f536ca015bf95735ec588924",
+  "b1": "1c6452a276d7014bece3adf42d68cbd4edffbc18",
+  "scan_matches": 1,
+  "review": "existing non-secret source-comment quote, byte-identical in frozen base and upstream B1 ledger; no new path disclosed",
+  "quoted_value_sha256": "7817f0c6cf00ab563626f00b524c6b5f0de59f575510c3a7e3f8e5617ff77e76",
+  "new_source_edits": false,
+  "runtime_diff_from_b1_except_grtier": []
+}

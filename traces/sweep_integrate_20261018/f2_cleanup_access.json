@@ -1,0 +1,15 @@
+{
+  "observed_utc": "2026-10-19T00:04:14.742579+00:00",
+  "created_ids": [],
+  "destroyed_ids": [],
+  "stretch_spend_usd": 0,
+  "spend_cap_usd": 25,
+  "stop_renting_and_report_usd": 20,
+  "target_exists": false,
+  "user": {
+    "credit": 43.559771576861976,
+    "balance": 0
+  },
+  "shared_account_instance_ids": [],
+  "running_own_target_executables": []
+}

@@ -1,0 +1,115 @@
+{
+  "utc": "2026-10-20T20:38:01.451639+00:00",
+  "source": "772c7b81b167fa7fbe7e7f53e4ad0263de80e01b",
+  "mutants": [
+    {
+      "name": "remove_public_CFFA",
+      "path": "crates/kf-abi/src/capability.rs",
+      "args": [
+        "-p",
+        "kf-abi",
+        "--lib",
+        "nvofa_cffa_"
+      ],
+      "required_killing_tests": 2
+    },
+    {
+      "name": "remove_notifier196_stub",
+      "path": "crates/kf-abi/src/eventnotify.rs",
+      "args": [
+        "-p",
+        "kf-rm",
+        "--test",
+        "event_set_notification"
+      ],
+      "required_killing_tests": 2
+    },
+    {
+      "name": "remove_exact_GB202_measurement",
+      "path": "crates/kf-disp/data/caps_measured.tsv",
+      "args": [
+        "-p",
+        "kf-disp",
+        "--test",
+        "gb202_caps_word",
+        "--test",
+        "caps_derive"
+      ],
+      "required_killing_tests": 2
+    },
+    {
+      "name": "misassign_GB202_measurement_to_GB203",
+      "path": "crates/kf-disp/data/caps_measured.tsv",
+      "args": [
+        "-p",
+        "kf-disp",
+        "--test",
+        "gb202_caps_word",
+        "--test",
+        "caps_derive"
+      ],
+      "required_killing_tests": 2
+    },
+    {
+      "name": "remove_Blackwell_report_family",
+      "path": "crates/kf-chan/src/grtables.rs",
+      "args": [
+        "-p",
+        "kf-chan",
+        "--lib",
+        "blackwell_"
+      ],
+      "required_killing_tests": 2
+    },
+    {
+      "name": "narrow_Blackwell_report_upper",
+      "path": "crates/kf-chan/src/grtables.rs",
+      "args": [
+        "-p",
+        "kf-chan",
+        "--lib",
+        "blackwell_"
+      ],
+      "required_killing_tests": 2
+    },
+    {
+      "name": "remove_POSTCOMP_derivation",
+      "path": "crates/kf-disp/src/caps.rs",
+      "args": [
+        "-p",
+        "kf-disp",
+        "--test",
+        "ca73_postcomp_caps",
+        "--test",
+        "caps_derive"
+      ],
+      "required_killing_tests": 2
+    },
+    {
+      "name": "omit_POSTCOMP_DSC",
+      "path": "crates/kf-disp/src/caps.rs",
+      "args": [
+        "-p",
+        "kf-disp",
+        "--test",
+        "ca73_postcomp_caps",
+        "--test",
+        "caps_derive"
+      ],
+      "required_killing_tests": 2
+    },
+    {
+      "name": "claim_POSTCOMP_scaler",
+      "path": "crates/kf-disp/src/caps.rs",
+      "args": [
+        "-p",
+        "kf-disp",
+        "--test",
+        "ca73_postcomp_caps",
+        "--test",
+        "caps_derive"
+      ],
+      "required_killing_tests": 2
+    }
+  ]
+}

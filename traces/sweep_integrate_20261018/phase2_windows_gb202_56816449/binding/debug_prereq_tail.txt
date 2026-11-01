@@ -1,0 +1,5 @@
+NEEDRESTART-SVC: systemd-resolved.service
+NEEDRESTART-SVC: systemd-timesyncd.service
+NEEDRESTART-SVC: systemd-udevd.service
+NEEDRESTART-SVC: user@0.service
+DEBUG_PREREQ_EXIT rc=0 2026-10-20T01:38:47+00:00

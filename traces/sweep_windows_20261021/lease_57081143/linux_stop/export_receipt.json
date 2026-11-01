@@ -1,0 +1,40 @@
+{
+  "native_xid_fatal.json": {
+    "source_sha256": "820ae6a06f709f3770013425d832d901b662e0598474c732b5b79ebb3b831da7",
+    "export_sha256": "820ae6a06f709f3770013425d832d901b662e0598474c732b5b79ebb3b831da7"
+  },
+  "guard_abort_tree_receipt.json": {
+    "source_sha256": "9295644be9ff217625d50133b3355e69d7ef77f48de23ad4515bc06c839bf071",
+    "export_sha256": "9295644be9ff217625d50133b3355e69d7ef77f48de23ad4515bc06c839bf071"
+  },
+  "sweep_20261020_provision.log": {
+    "source_sha256": "57e8baef3db6068919bc81d6e55c8a1d924bce7bd879aac03cf333be27532d37",
+    "export_sha256": "57e8baef3db6068919bc81d6e55c8a1d924bce7bd879aac03cf333be27532d37"
+  },
+  "sw2ad106d1_595_suite.out": {
+    "source_sha256": "0a5c252e07afa6c8b84bea264ce7a223d46348d7660a12c2844d2e3ff8e0c4e4",
+    "export_sha256": "0a5c252e07afa6c8b84bea264ce7a223d46348d7660a12c2844d2e3ff8e0c4e4"
+  },
+  "kernel_xids.log": {
+    "source_sha256": "47d1984bdfd22bdb68e3085f2afab8c7621609d2a0a0c8d11a045b7ef30a571b",
+    "export_sha256": "47d1984bdfd22bdb68e3085f2afab8c7621609d2a0a0c8d11a045b7ef30a571b"
+  },
+  "fast_sw2ad106d1_595_defer-liveness_serial.log.projection.txt": {
+    "source_sha256": "ca8e76f66bbd3e730c3027d65a8c837203e1823a968df306d014df9d37aa2d2f",
+    "source_bytes": 25301,
+    "projection": "bounded native-control marker/outcome and public channel metadata lines only",
+    "export_sha256": "7b8ddfe816d84d33340041cda6fabcfd157267b04c00b7d1f3f9022f84067042"
+  },
+  "fast_sw2ad106d1_595_defer-liveness_ttyS0.log.projection.txt": {
+    "source_sha256": "d3cbb5bba906b8fe53c8197909cd873725bca6cdc9f4f06b7fa8b1b878eadc81",
+    "source_bytes": 11536,
+    "projection": "bounded native-control marker/outcome and public channel metadata lines only",
+    "export_sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+  },
+  "fast_sw2ad106d1_595_defer-liveness_qemu.log.projection.txt": {
+    "source_sha256": "c6dc2bca7b663b511412209a3b8014801c2818aaaefe455dba70f161abc1d490",
+    "source_bytes": 146652,
+    "projection": "bounded native-control marker/outcome and public channel metadata lines only",
+    "export_sha256": "99ad4a0bacd4f5e06de6ce7b4b2b43d8d92e05eb020087d40f51eea823539a93"
+  }
+}

@@ -1,0 +1,175 @@
+[
+  {
+    "mutant": "C2_branch_recheck",
+    "path": "crates/kf-rm/src/consttab.rs",
+    "exit": 101,
+    "killing_tests": [
+      "consttab::tests::a_neighbour_dies_row_is_never_served"
+    ],
+    "kill_count": 1,
+    "passed": false,
+    "fixed_source_sha256": "92c4363df8903e9a5147b5db7cbc368ba07ce0a99a4d1fcf4b5f323d99471889",
+    "log_sha256": "d009dee6f13abd845baab469f1e4add5a509910a2413188817b99ebcbfae13c2"
+  },
+  {
+    "mutant": "D2_ignore_caps_branch",
+    "path": "crates/kf-disp/src/capsderive.rs",
+    "exit": 101,
+    "killing_tests": [
+      "an_ad102_measurement_does_not_authorize_an_unmeasured_guest_branch",
+      "an_unmeasured_die_gets_the_clean_page_and_the_notice_never_a_neighbours_row",
+      "the_ad102_580_caps_word_has_its_own_native_measurement",
+      "the_gb206_580_caps_word_requires_its_own_native_measurement",
+      "the_tu106_580_caps_word_has_its_own_native_measurement",
+      "two_separate_gb205_measurements_do_not_authorize_590_or_610"
+    ],
+    "kill_count": 6,
+    "passed": true,
+    "fixed_source_sha256": "611daa165111b9073d7b4348e31a345ad36e4428e576c03c3921d3bf5033e198",
+    "log_sha256": "1f8159b45e7588d0c62af881b974fc600278751a7ffcadc7c1f64e08fe3865f7"
+  },
+  {
+    "mutant": "RPC1_unbound_metadata",
+    "path": "crates/kf-rm/src/census.rs",
+    "exit": 101,
+    "killing_tests": [
+      "a_single_long_lived_policy_has_the_same_process_trace_limit",
+      "actual_metadata_output_is_bounded_across_policy_recreation",
+      "recreating_the_policy_on_every_request_cannot_rearm_the_trace_limit"
+    ],
+    "kill_count": 3,
+    "passed": true,
+    "fixed_source_sha256": "b6dce30fa9593961bd77c76152ca3c0620f892885677a00f3f8a73e71e355698",
+    "log_sha256": "8a3e3ada6103dc527f146635b4ed42f5ee88a3f289a8774db4483c8e39379518"
+  },
+  {
+    "mutant": "RPC2_rearm_metadata",
+    "path": "crates/kf-rm/src/census.rs",
+    "exit": 101,
+    "killing_tests": [
+      "a_single_long_lived_policy_has_the_same_process_trace_limit",
+      "actual_metadata_output_is_bounded_across_policy_recreation",
+      "recreating_the_policy_on_every_request_cannot_rearm_the_trace_limit"
+    ],
+    "kill_count": 3,
+    "passed": true,
+    "fixed_source_sha256": "b6dce30fa9593961bd77c76152ca3c0620f892885677a00f3f8a73e71e355698",
+    "log_sha256": "ce144221d0347cf2fe40da6959da82e932b28612eff2ae9cb0ed37bdcdfb2b78"
+  },
+  {
+    "mutant": "GID1_drop_query",
+    "path": "crates/kf-abi/src/hostabi.rs",
+    "exit": 101,
+    "killing_tests": [
+      "hostabi::tests::host_gid_query_is_carried_at_every_measured_tag"
+    ],
+    "kill_count": 1,
+    "passed": false,
+    "fixed_source_sha256": "f38c9fa8a4e0db0a1a0a942dde8acc9ebf29460934671a548b5e816e332be35e",
+    "log_sha256": "233792e5f2cf89ab2f7955c32c5d1c14831a4eb3996860da7a62b1900849d994"
+  },
+  {
+    "mutant": "Q1_abandon_original_process",
+    "path": "scripts/bench/windows/qmp.py",
+    "exit": 1,
+    "killing_tests": [
+      "test_deadline_expires_during_reconnection (test_qga_exec.GuestExecTests.test_deadline_expires_during_reconnection)",
+      "test_real_socket_disconnect_does_not_duplicate_guest_execution (test_qga_exec.GuestExecTests.test_real_socket_disconnect_does_not_duplicate_guest_execution)",
+      "test_status_timeout_reconnects_to_the_same_process (test_qga_exec.GuestExecTests.test_status_timeout_reconnects_to_the_same_process)",
+      "test_unavailable_reconnect_preserves_the_original_pid (test_qga_exec.GuestExecTests.test_unavailable_reconnect_preserves_the_original_pid)"
+    ],
+    "kill_count": 4,
+    "passed": true,
+    "fixed_source_sha256": "7703284474fa59e2def3e6140e15e973137362706e459162c4636ab493fbcd4c",
+    "log_sha256": "06ec80668bcad057b4b4389855cbb727e9c5a8333f048280bf3cb576b5ef416c"
+  },
+  {
+    "mutant": "Q2_drop_requested_deadline",
+    "path": "scripts/bench/windows/qmp.py",
+    "exit": 1,
+    "killing_tests": [
+      "test_cli_deadline_allows_a_seven_minute_probe (test_qga_exec.GuestExecTests.test_cli_deadline_allows_a_seven_minute_probe)",
+      "test_short_cli_deadline_stops_before_an_unrequested_status_poll (test_qga_exec.GuestExecTests.test_short_cli_deadline_stops_before_an_unrequested_status_poll)"
+    ],
+    "kill_count": 2,
+    "passed": true,
+    "fixed_source_sha256": "7703284474fa59e2def3e6140e15e973137362706e459162c4636ab493fbcd4c",
+    "log_sha256": "09250e8de55fa2de5c9740db1e0b4251bfee76991a6ae2dfe6865925573c04b3"
+  },
+  {
+    "mutant": "PROFILE1_force_fixed_driver",
+    "path": "scripts/bench/guest_profile.sh",
+    "exit": 1,
+    "killing_tests": [
+      "test_empty_and_malformed_versions_are_refused (test_guest_profile.GuestProfileTests.test_empty_and_malformed_versions_are_refused)",
+      "test_explicit_profile_overrides_the_receipt (test_guest_profile.GuestProfileTests.test_explicit_profile_overrides_the_receipt)",
+      "test_receipt_contents_are_never_executed (test_guest_profile.GuestProfileTests.test_receipt_contents_are_never_executed)",
+      "test_two_part_version_is_valid (test_guest_profile.GuestProfileTests.test_two_part_version_is_valid)"
+    ],
+    "kill_count": 4,
+    "passed": true,
+    "fixed_source_sha256": "ea21f03c6c5fbc2f11642b2e01a449c681eddf082eb02fb915ef36b43da862c1",
+    "log_sha256": "40a9964e523885d8bf3cadb22d9aae6fb7553c6c196dbc8bce0a7ace2721d92d",
+    "initial_parser_kill_count": 3,
+    "parser_correction": "Unittest subTest suffixes normalized to their distinct parent tests; original runtime log unchanged."
+  },
+  {
+    "mutant": "HOST1_restore_name_whitelist",
+    "path": "scripts/bench/host_preflight.sh",
+    "exit": 1,
+    "killing_tests": [
+      "test_every_target_family_is_eligible_for_host_derived_gates (test_host_family.HostFamilyTests.test_every_target_family_is_eligible_for_host_derived_gates)",
+      "test_healthy_datacenter_names_are_eligible_without_a_geforce_whitelist (test_host_family.HostFamilyTests.test_healthy_datacenter_names_are_eligible_without_a_geforce_whitelist)"
+    ],
+    "kill_count": 2,
+    "passed": true,
+    "fixed_source_sha256": "e9a99976255ef012ff126be887a3c703418e5159c3d497d4d21e9ad435730db0",
+    "log_sha256": "1abc2b697ca210a6d6ce6808c230647c9ad7a75ae787cd1b94fd3d0377e502f9",
+    "initial_parser_kill_count": 0,
+    "parser_correction": "Unittest subTest suffixes normalized to their distinct parent tests; original runtime log unchanged."
+  },
+  {
+    "mutant": "IMAGE1_unbound_file_source",
+    "path": "scripts/bench/diesweep/stream_image_range.py",
+    "exit": 1,
+    "killing_tests": [
+      "test_invalid_or_truncated_range_emits_no_bytes (test_image_range.ImageRangeTests.test_invalid_or_truncated_range_emits_no_bytes)",
+      "test_non_regular_source_is_refused (test_image_range.ImageRangeTests.test_non_regular_source_is_refused)"
+    ],
+    "kill_count": 2,
+    "passed": true,
+    "fixed_source_sha256": "296368ddeb53077d4e458d4c05b608169b74c3e1a7677b04b30288daff9774e2",
+    "log_sha256": "52ac64be5001a67593e1831f7a7b4e0e8928db043023c2c2aca07e401d258907",
+    "initial_parser_kill_count": 1,
+    "parser_correction": "Unittest subTest suffixes normalized to their distinct parent tests; original runtime log unchanged."
+  },
+  {
+    "mutant": "FILE1_skip_sync",
+    "path": "scripts/bench/diesweep/qga_file_put.py",
+    "exit": 1,
+    "killing_tests": [
+      "test_fresh_sync_discards_stale_error_and_garbage_before_writing (test_qga_file_put.FilePut.test_fresh_sync_discards_stale_error_and_garbage_before_writing)",
+      "test_lost_readonly_sync_can_reconnect_before_any_file_command (test_qga_file_put.FilePut.test_lost_readonly_sync_can_reconnect_before_any_file_command)",
+      "test_lost_write_reply_is_not_replayed_on_a_new_connection (test_qga_file_put.FilePut.test_lost_write_reply_is_not_replayed_on_a_new_connection)",
+      "test_short_write_fails_before_the_next_chunk (test_qga_file_put.FilePut.test_short_write_fails_before_the_next_chunk)",
+      "test_uncertain_close_is_not_replayed_on_the_same_handle (test_qga_file_put.FilePut.test_uncertain_close_is_not_replayed_on_the_same_handle)"
+    ],
+    "kill_count": 5,
+    "passed": true,
+    "fixed_source_sha256": "e194f918ba0be91b3c33cac35f79a845348f68bf7566716ec94acc7e6e73d6ac",
+    "log_sha256": "279426a4bd3f6e9898f2de8ff253a9db2cfa99ba133fcba3ca22fa482796dd15"
+  },
+  {
+    "mutant": "FMC1_wrong_indirection",
+    "path": "tools/vfio-gsp-observer/core/observer.c",
+    "exit": 1,
+    "killing_tests": [
+      "fmc_coherent",
+      "fmc_noncoherent"
+    ],
+    "kill_count": 2,
+    "passed": true,
+    "fixed_source_sha256": "1c50ec6c8f72b1bbb717efaee401091c5faffc1aa528a73fe480d2e7826654de",
+    "log_sha256": "5a932dec4ff1d7b583704dc414eb8f730a943ab8387848bc70b4236e0e77fb15"
+  }
+]

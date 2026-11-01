@@ -1,0 +1,14 @@
+SWEEP_PROVISION_START own_instance=57046541 2026-10-21T11:48:45+00:00
+From https://github.com/reindertpelsma/kayfabe
+ * branch                af8bdcda4c700d8b40163ee3bf27feb7cfa6539c -> FETCH_HEAD
+HEAD is now at af8bdcda4 evidence(sweep-win): accept merged2875-test stack and bounded Windows-first deployment
+NVIDIA GeForce RTX 5090, 595.91.07, 32607 MiB
+VERDICT=SOUND
+PROBE_START pid=76713 uid=Uid: 65534 65534 65534 65534 CapEff=0x0 cap_sys_admin=false
+kf-host: host tier: stock
+PROBE_SESSION driver=595.91.07
+PROBE_DIE arch=0x1b0 impl=0x2 die=GB202
+PROBE_END admin_run=false
+V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS
+SWEEP_BUILD_READY source=af8bdcda4c700d8b40163ee3bf27feb7cfa6539c 2026-10-21T12:01:12+00:00
+GR_TIER_VERDICT=PASS

@@ -1,0 +1,10 @@
+COLLECT_START run=bw_off_m1 (standard VGA, no kf3 device) 2026-10-21T13:43:39+00:00
+[2026-10-21T13:43:39Z] detached: tag=bw_off_m1_collect, log logs/bw_off_m1_collect_run.log (stdout logs/bw_off_m1_collect_run.out)
+KF_SSH_UP
+COLLECT_DONE
+COLLECT_METADATA_READY 2026-10-21T13:46:20+00:00
+WER_TIMES_DONE
+METADATA_ONLY: public-symbol rerun requires the pending owner decision
+[2026-10-21T13:46:44Z] stopping kfwin (pid 100684)
+[2026-10-21T13:47:11Z] stopped
+COLLECT_EXIT run=bw_off_m1 rc=0 2026-10-21T13:47:11+00:00

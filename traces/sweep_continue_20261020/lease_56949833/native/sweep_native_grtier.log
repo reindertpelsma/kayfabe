@@ -1,0 +1,9 @@
+kf-host: host tier: stock
+kf-cuda: cuda thread posture thread=main cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+MEASURE tspace fb=0x120000000+0x4000000 ram=0x124000000+0x1000000 rings=0xff00000000
+kf-host: channel birth h=0xcafe000b engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=not-held
+CHECK host_channel_asserted_user PASS Ok(BirthPrivilege { reply_flags: 128 }) chan=Channel { tsg: cafe000a, chan: cafe000b, token: 4000000a, born_user: Some(BirthPrivilege { reply_flags: 80 }) }
+kf-chan: GR tier admitted host channel 0xcafe000b (token 0x4000000a) reply_flags=0x00000080 privilege=USER objects=[(902d, cafe000e), (cd40, cafe000f), (ce97, cafe0010), (cec0, cafe000d)]
+CHECK gr_tier_objects_allocated PASS Ok([(902d, cafe000e), (cd40, cafe000f), (ce97, cafe0010), (cec0, cafe000d)]) context=Some((cafe000d, cec0))
+CHECK run FAIL pump: Host("GR CE route: SET_OBJECT is not one admitted class")
+GR_TIER_VERDICT=FAIL

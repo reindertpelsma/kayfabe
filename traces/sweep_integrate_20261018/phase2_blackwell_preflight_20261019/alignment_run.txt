@@ -1,0 +1,35 @@
+native_vs_gb206
+native_commands=4807 virtual_commands=385 matched=301 native_only=4506 virtual_only=84
+unpaired_native_replies=0 unpaired_virtual_replies=0; API alignment and FIFO pairing are inferred; bodies are not compared
+
+ada249_vs_gb206
+native_commands=8461 virtual_commands=385 matched=305 native_only=8156 virtual_only=80
+unpaired_native_replies=0 unpaired_virtual_replies=0; API alignment and FIFO pairing are inferred; bodies are not compared
+
+CURRENT_ALIGNER_TESTS
+/workspace/sweep-wt/tools/tests/test_align_metadata.py:40: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpjaxk1_ks/out.tsv' mode='r' encoding='UTF-8'>
+  rows = list(csv.DictReader(paths[2].open(), delimiter="\t")) if paths[2].exists() else []
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+./workspace/sweep-wt/tools/tests/test_align_metadata.py:40: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpho7nx481/out.tsv' mode='r' encoding='UTF-8'>
+  rows = list(csv.DictReader(paths[2].open(), delimiter="\t")) if paths[2].exists() else []
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+./workspace/sweep-wt/tools/tests/test_align_metadata.py:40: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpa2fnn53m/out.tsv' mode='r' encoding='UTF-8'>
+  rows = list(csv.DictReader(paths[2].open(), delimiter="\t")) if paths[2].exists() else []
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+../workspace/sweep-wt/tools/tests/test_align_metadata.py:40: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpmu579p7n/out.tsv' mode='r' encoding='UTF-8'>
+  rows = list(csv.DictReader(paths[2].open(), delimiter="\t")) if paths[2].exists() else []
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+./workspace/sweep-wt/tools/tests/test_align_metadata.py:40: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp24t340fs/out.tsv' mode='r' encoding='UTF-8'>
+  rows = list(csv.DictReader(paths[2].open(), delimiter="\t")) if paths[2].exists() else []
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+./workspace/sweep-wt/tools/tests/test_align_metadata.py:40: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp2t5wjyuj/out.tsv' mode='r' encoding='UTF-8'>
+  rows = list(csv.DictReader(paths[2].open(), delimiter="\t")) if paths[2].exists() else []
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+./workspace/sweep-wt/tools/tests/test_align_metadata.py:40: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpqi2yljdi/out.tsv' mode='r' encoding='UTF-8'>
+  rows = list(csv.DictReader(paths[2].open(), delimiter="\t")) if paths[2].exists() else []
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+..
+----------------------------------------------------------------------
+Ran 9 tests in 0.336s
+
+OK

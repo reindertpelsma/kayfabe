@@ -127,7 +127,12 @@ typedef struct kfwc_layout {
 #define KFWC_REG_PMC_BOOT_0 0x00000000u       /* liveness only (all-ones = not readable) */
 #define KFWC_REG_GSP_MAILBOX0 0x00110040u     /* NV_PGSP_FALCON_MAILBOX0 (TU10x..AD10x boot args low) */
 #define KFWC_REG_GSP_MAILBOX1 0x00110044u     /* NV_PGSP_FALCON_MAILBOX1 (boot args high) */
-#define KFWC_BAR0_MAP_BYTES 0x00112000u       /* the driver maps this prefix of BAR0 only */
+/* Privileged measurement only: NV_PDISP_FE_SW, the C573/C673/C773/CA73 capabilities page
+ * (ogkm kdispGetDisplayCapsBaseAndSize; V3_DISPLAY_CAPS_DERIVATION_20261014.md). */
+#define KFWC_DISPLAY_CAPS_BASE 0x00640000u
+#define KFWC_DISPLAY_CAPS_WORDS 1024u
+#define KFWC_DISPLAY_CAPS_BYTES (KFWC_DISPLAY_CAPS_WORDS * 4u)
+#define KFWC_BAR0_MAP_BYTES (KFWC_DISPLAY_CAPS_BASE + KFWC_DISPLAY_CAPS_BYTES)
 #define KFWC_MAILBOX0_SUSPENDED 0x80000000u   /* suspend sentinel (kf-chip PROCESSOR_SUSPENDED) */
 
 #endif /* KFWC_WIRE_H */

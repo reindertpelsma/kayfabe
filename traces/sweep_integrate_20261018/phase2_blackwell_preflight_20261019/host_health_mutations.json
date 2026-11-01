@@ -1,0 +1,35 @@
+[
+  {
+    "mutant": "ignore_name_query_failure",
+    "runtime_killers": [
+      "test_failed_name_query_cannot_report_a_cached_gpu_as_healthy",
+      "test_transient_name_query_failure_cannot_report_a_healthy_gpu"
+    ],
+    "count": 2
+  },
+  {
+    "mutant": "ignore_driver_query_failure",
+    "runtime_killers": [
+      "test_failed_driver_query_cannot_report_a_cached_version_as_healthy",
+      "test_transient_driver_query_failure_cannot_report_a_healthy_gpu"
+    ],
+    "count": 2
+  },
+  {
+    "mutant": "accept_missing_gpu_name",
+    "runtime_killers": [
+      "test_a_driver_returning_no_gpu_still_fails_health",
+      "test_no_devices_error_is_not_a_gpu_even_with_a_numeric_driver"
+    ],
+    "count": 2
+  },
+  {
+    "mutant": "accept_nonversion_driver_output",
+    "runtime_killers": [
+      "test_empty_driver_query_is_not_a_driver_identity",
+      "test_error_text_is_not_a_driver_version_even_with_zero_exit_status",
+      "test_malformed_numeric_driver_version_is_not_accepted"
+    ],
+    "count": 3
+  }
+]

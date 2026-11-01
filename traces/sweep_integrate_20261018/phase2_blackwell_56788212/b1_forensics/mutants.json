@@ -1,0 +1,52 @@
+[
+  {
+    "mutant": "flat_layout_lost",
+    "rc": 1,
+    "runtime_killing_tests": [
+      "test_flat_actual_shape_selects_large_windows",
+      "test_flat_single_windows_partition"
+    ],
+    "killers": 2,
+    "bytecode_cache_removed_before_run": true
+  },
+  {
+    "mutant": "smallest_volume",
+    "rc": 1,
+    "runtime_killing_tests": [
+      "test_flat_actual_shape_selects_large_windows",
+      "test_nested_selects_windows_over_recovery"
+    ],
+    "killers": 2,
+    "bytecode_cache_removed_before_run": true
+  },
+  {
+    "mutant": "unknown_filesystem",
+    "rc": 1,
+    "runtime_killing_tests": [
+      "test_flat_unknown_filesystem_refused",
+      "test_nested_unknown_filesystem_refused"
+    ],
+    "killers": 2,
+    "bytecode_cache_removed_before_run": true
+  },
+  {
+    "mutant": "other_device",
+    "rc": 1,
+    "runtime_killing_tests": [
+      "test_flat_other_device_refused",
+      "test_nested_other_device_refused"
+    ],
+    "killers": 2,
+    "bytecode_cache_removed_before_run": true
+  },
+  {
+    "mutant": "tiny_partition",
+    "rc": 1,
+    "runtime_killing_tests": [
+      "test_tiny_flat_recovery_refused",
+      "test_tiny_nested_recovery_refused"
+    ],
+    "killers": 2,
+    "bytecode_cache_removed_before_run": true
+  }
+]

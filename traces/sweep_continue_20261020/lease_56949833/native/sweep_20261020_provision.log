@@ -1,0 +1,14 @@
+SWEEP_PROVISION_START own_instance=56949833 2026-10-20T20:54:43+00:00
+From https://github.com/reindertpelsma/kayfabe
+ * branch                90e7f2a54dcf4a885d5d1bb7cd442a8b96309686 -> FETCH_HEAD
+HEAD is now at 90e7f2a54 evidence(sweep2): accept GPU-free stack and reconcile the final Blackwell handoff
+NVIDIA GeForce RTX 5090, 595.91.07, 32607 MiB
+VERDICT=SOUND
+PROBE_START pid=78711 uid=Uid: 65534 65534 65534 65534 CapEff=0x0 cap_sys_admin=false
+kf-host: host tier: stock
+PROBE_SESSION driver=595.91.07
+PROBE_DIE arch=0x1b0 impl=0x2 die=GB202
+PROBE_END admin_run=false
+V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS
+SWEEP_BUILD_READY source=90e7f2a54dcf4a885d5d1bb7cd442a8b96309686 2026-10-20T21:06:38+00:00
+SWEEP_PROVISION_EXIT rc=1 2026-10-20T21:07:52+00:00

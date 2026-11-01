@@ -1,0 +1,97 @@
+{
+  "die": "GB202",
+  "device": "RTX5090",
+  "lease": 57310491,
+  "date": "2026-10-23",
+  "product": "6e3fd3fd6d809ae2c2a3504cd8be1ecd29b2b31b",
+  "host_driver": "595.91.07",
+  "windows_driver": "580.88",
+  "flags_file": "run_kit/p19.flags",
+  "native_fixture": "618f0431815d037d4226b642ae37e76967353e90",
+  "guard_readiness": "9ff51a6e9432ed4d5f51636c7606360728de5b6c",
+  "tier3": "a6456796e4af84d3b0c8bcb3558b63c2e85df42e",
+  "b1_prepared_source": "c130aa98ac2b922202282cd793f2a6d64be1f091",
+  "stages": [
+    {
+      "stage": "native_linux",
+      "driver": "595.91.07",
+      "verdict": "PASS",
+      "gates": 9,
+      "gate10": "PASS",
+      "raw": 30,
+      "cuda_primary": 4,
+      "gr_ce": 15,
+      "intentional_xid31": 5,
+      "unmatched_xid": 0,
+      "native32": 0,
+      "evidence": "N0_RESULT.md"
+    },
+    {
+      "stage": "tier2_precomp",
+      "verdict": "REFUSED",
+      "rm_status": "0x1f",
+      "privileged_fallback_in_product": false
+    },
+    {
+      "stage": "tier3_precomp",
+      "verdict": "PASS",
+      "words": 48,
+      "fields": 328,
+      "tag": "measured:GB202,595.91.07,2026-10-23",
+      "evidence": "TIER3_RESULT.md"
+    },
+    {
+      "stage": "windows_ltsc_install",
+      "verdict": "PASS"
+    },
+    {
+      "stage": "windows_disabled_bind",
+      "verdict": "PASS",
+      "config_manager_error_code": 22,
+      "actual_version": "32.0.15.8088",
+      "shutdown_census": "PASS"
+    },
+    {
+      "stage": "windows_field_ON",
+      "verdict": "FAIL_BUGCHECK_0x50",
+      "canonical_rpc_rows": 278,
+      "final_zero_based_ordinal": 277,
+      "unparsed_rpc_lines": 0,
+      "trace_complete_prefix_at_eof": true,
+      "ca7a_successful_posted_replies": 4,
+      "code0_observed": false,
+      "code43_observed": false,
+      "new_host_xids": 0,
+      "evidence": "WINDOWS_RESULT.md"
+    },
+    {
+      "stage": "windows_600s_hold_apps",
+      "verdict": "UNRUN",
+      "reason": "no actual Code0"
+    },
+    {
+      "stage": "B1_ON",
+      "verdict": "UNRUN",
+      "reason": "no actual Code0; separate binary prepared only"
+    },
+    {
+      "stage": "linux_guest",
+      "verdict": "UNRUN",
+      "reason": "595fastguest built; no guest acceptance executed"
+    },
+    {
+      "stage": "teardown",
+      "verdict": "PASS",
+      "api_absence_utc": "2026-10-23T03:22:38.970768+00:00",
+      "own_ids_absent": 14
+    }
+  ],
+  "cost": {
+    "this_runtime_estimate_usd": 0.5083367143518519,
+    "phase_runtime_estimate_usd": 2.0275535587957405,
+    "cap_usd": 8,
+    "stop_usd": 6,
+    "reserve_usd": 5,
+    "shared_credit_after_usd": 33.177616159161516
+  }
+}

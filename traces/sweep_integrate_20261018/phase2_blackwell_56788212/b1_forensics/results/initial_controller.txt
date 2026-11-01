@@ -1,0 +1,6 @@
+LINUX_ARM_EXIT kind=raw version=595 rc=0 2026-10-19T22:44:34+00:00
+Traceback (most recent call last):
+  File "<stdin>", line 4, in <module>
+AssertionError: No NTFS partition discovered; do not guess
+/dev/nbd15 disconnected
+EVTX_READONLY_EXIT rc=1 2026-10-19T22:45:31+00:00

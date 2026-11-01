@@ -1,0 +1,42 @@
+{
+  "utc": "2026-10-19T20:46:41.519651+00:00",
+  "settled": false,
+  "own_charges": [
+    {
+      "instance_id": 56765201,
+      "amount": "0.010",
+      "quantity": "0.077",
+      "type": "charge",
+      "rate": "0.1333",
+      "timestamp": 1792368000,
+      "description": "Instance 56765201 GPU  charge:    hours * $/hr"
+    },
+    {
+      "instance_id": 56765201,
+      "amount": "0.007",
+      "quantity": "0.161",
+      "type": "charge",
+      "rate": "0.0417",
+      "timestamp": 1792368000,
+      "description": "Instance 56765201 storage charge: hours * $/hr"
+    },
+    {
+      "instance_id": 56766467,
+      "amount": "1.232",
+      "quantity": "2.801",
+      "type": "charge",
+      "rate": "0.4400",
+      "timestamp": 1792368000,
+      "description": "Instance 56766467 GPU  charge:    hours * $/hr"
+    },
+    {
+      "instance_id": 56766467,
+      "amount": "0.142",
+      "quantity": "2.848",
+      "type": "charge",
+      "rate": "0.0500",
+      "timestamp": 1792368000,
+      "description": "Instance 56766467 storage charge: hours * $/hr"
+    }
+  ]
+}

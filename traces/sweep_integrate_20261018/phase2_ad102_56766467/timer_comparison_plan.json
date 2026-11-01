@@ -1,0 +1,14 @@
+{
+  "recorded_utc": "2026-10-19T18:29:12.133667+00:00",
+  "measured_current_timer": "FAIL: R19 sequential mirror-page difference8000480ns exceeds frozen1000000ns bound; both advance",
+  "native_timer": "PASS within native30/30",
+  "hypothesis": "an integration-specific timer-domain defect versus candidate4",
+  "falsifier_before_C4_run": "candidate4 shows the same R19 disagreement under the same guest/initrd/driver/grader/launch route",
+  "candidate4": "0452613b5c71cb175271230b3e14c8e3c3eef2db",
+  "integrated": "24906bf334665c9000b16b271005593daa3586c7",
+  "controlled_variable": "product QEMU revision; same integrated launcher through documented QEMU_BIN override",
+  "hypothesis2_code_read": "serial output occurs between the readings; output latency could violate the1msassumption, not yet established as cause",
+  "early_heartbeat_warnings": "separate measured finding; B3 not declared fixed",
+  "budget_seconds": 180,
+  "attempt_policy": "current full-suite batch then one C4 timer control; no grader or timeout change"
+}

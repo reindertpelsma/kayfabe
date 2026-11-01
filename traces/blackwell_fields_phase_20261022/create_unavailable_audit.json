@@ -1,0 +1,10 @@
+{
+  "utc": "2026-10-22T21:03:56.367010+00:00",
+  "offer_id": 55276777,
+  "http_status": 400,
+  "cause": "not available",
+  "created_own_ids": [],
+  "own_label_absence_verified": true,
+  "action": "exclude this unavailable ask; select next verified eligible offer by same die/price preference",
+  "no_hardware_started": true
+}

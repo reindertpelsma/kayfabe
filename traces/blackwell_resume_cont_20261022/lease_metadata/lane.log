@@ -1,0 +1,26 @@
+LANE_START 2026-10-21T22:06:14+00:00
+/root/sweep2/lane.sh: line 8: cd: /root/kayfabe: No such file or directory
+ARM_BEGIN on_c0 2026-10-21T22:51:15+00:00
+ARM_RC on_c0 rc=255
+VERDICT on_c0 types=- -> PANIC50 rpcs=278
+ARM_BEGIN on_c1 2026-10-21T22:54:23+00:00
+ARM_RC on_c1 rc=255
+VERDICT on_c1 types=0,1,2 -> FIXED rpcs=4542
+ARM_BEGIN on_c2 2026-10-21T22:58:03+00:00
+ARM_RC on_c2 rc=255
+VERDICT on_c2 types=0,1 -> PANIC50 rpcs=278
+ARM_BEGIN on_c3 2026-10-21T23:01:08+00:00
+ARM_RC on_c3 rc=255
+VERDICT on_c3 types=2 -> FIXED rpcs=4519
+BISECT_RESULT minimal_candidate=2 arms_used=3
+ARM_BEGIN off_c 2026-10-21T23:04:52+00:00
+ARM_RC off_c rc=255
+GPU 0: NVIDIA GeForce RTX 5090 (UUID: GPU-UUID-REMOVED)
+[Wed Oct 21 22:57:18 2026] NVRM: Xid (PCI:0000:00:08): 32, pid=95251, name=qemu-system-x86, channel 0x00000014 intr 00200000
+[Wed Oct 21 22:57:18 2026] NVRM: Xid (PCI:0000:00:08): 32, pid=95251, name=qemu-system-x86, channel 0x0e00000b intr 00200000
+[Wed Oct 21 23:04:07 2026] NVRM: Xid (PCI:0000:00:08): 32, pid=96254, name=qemu-system-x86, channel 0x00000014 intr 00200000
+[Wed Oct 21 23:04:07 2026] NVRM: Xid (PCI:0000:00:08): 32, pid=96254, name=qemu-system-x86, channel 0x0e00000b intr 00200000
+[Wed Oct 21 23:07:37 2026] NVRM: Xid (PCI:0000:00:08): 32, pid=96783, name=qemu-system-x86, channel 0x0000000c intr 00200000
+[Wed Oct 21 23:07:37 2026] NVRM: Xid (PCI:0000:00:08): 32, pid=96783, name=qemu-system-x86, channel 0x0e000007 intr 00200000
+LANE_DONE 2026-10-21T23:11:18+00:00
+LANE_EXIT rc=0 2026-10-21T23:11:18+00:00

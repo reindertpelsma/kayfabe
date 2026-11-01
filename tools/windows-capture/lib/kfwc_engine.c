@@ -584,6 +584,92 @@ static void poll_dir(kfwc_engine *e, kfwc_u32 d, kfwc_u32 *emitted)
 /* searching                                                                                */
 /* ------------------------------------------------------------------------------------- */
 
+static int bind_fresh(kfwc_engine *e, kfwc_u64 pa, kfwc_u32 method)
+{
+    if (e->plat.ram_contains(e->plat.ctx, pa, KFWC_PAGE) &&
+        kfwc_bind_candidate(&e->plat, &e->bind, pa) == 0) {
+        kfwc_u32 d;
+        int fresh = 1;
+        e->bind.layout = e->cfg.layout;
+        for (d = 0; d < 2 && fresh; d++) {
+            kfwc_elem_info info, copied;
+            kfwc_u32 i;
+            if (!e->bind.q[d].valid)
+                continue; /* the status header may not yet be published */
+            if (read_elem_part(e, d, 0, 0, e->run, KFWC_PAGE)) {
+                fresh = 0;
+                break;
+            }
+            for (i = 0; i < KFWC_PAGE && e->run[i] == 0; i++) {}
+            if (i == KFWC_PAGE && e->bind.q[d].write_ptr == 0)
+                continue;
+            if (peek_slot(e, d, 0, &info) != KFWC_ELEM_OK || info.seq != 0 ||
+                info.elems > e->bind.q[d].count || load_verified(e, d, 0, &info) != 0 ||
+                kfwc_elem_peek(kfwc_layout_get(info.layout), e->run, &copied) != KFWC_ELEM_OK ||
+                copied.seq != 0 || copied.elems != info.elems || copied.msg_bytes != info.msg_bytes) {
+                fresh = 0;
+                break;
+            }
+            e->bind.layout = info.layout; /* both prefixes must use the same layout */
+        }
+        if (fresh) {
+            e->bind.method = method;
+            do_attach(e);
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/* A retained location is an ordering hint, never a fact about the next epoch.
+ * For a short startup window, scan at most 1 GiB forward, repeatedly, keeping
+ * the same per-step byte bound. Only fresh validated candidates may attach. */
+int kfwc_engine_recent_scan_due(kfwc_engine *e)
+{
+    return e->state == KFWC_ST_SEARCHING && e->cfg.use_scan &&
+           e->cfg.recent_table_pa && e->cfg.recent_window_bytes >= KFWC_PAGE &&
+           e->cfg.recent_window_ticks &&
+           now_ticks(e) - e->start_ticks < e->cfg.recent_window_ticks &&
+           e->plat.ram_contains(e->plat.ctx, e->cfg.recent_table_pa, KFWC_PAGE);
+}
+
+static int recent_scan_step(kfwc_engine *e)
+{
+    kfwc_u64 limit = e->cfg.recent_window_bytes;
+    kfwc_u32 budget = e->cfg.scan_bytes_per_step;
+    if (limit > (1ull << 30)) limit = 1ull << 30;
+    limit &= ~(kfwc_u64)(KFWC_PAGE - 1u);
+    if (budget > KFWC_SCAN_CHUNK) budget = KFWC_SCAN_CHUNK;
+    if (budget > limit) budget = (kfwc_u32)limit;
+    budget &= ~(KFWC_PAGE - 1u);
+    while (budget) {
+        kfwc_u64 pa, left;
+        kfwc_u32 n, i;
+        if (e->recent_cursor >= limit) e->recent_cursor = 0;
+        if (e->cfg.recent_table_pa > ~(kfwc_u64)0 - e->recent_cursor) return 0;
+        pa = e->cfg.recent_table_pa + e->recent_cursor;
+        left = limit - e->recent_cursor;
+        n = left < budget ? (kfwc_u32)left : budget;
+        /* Split at RAM holes; never ask the platform to read an invalid page. */
+        if (!e->plat.ram_contains(e->plat.ctx, pa, n)) n = KFWC_PAGE;
+        if (e->plat.ram_contains(e->plat.ctx, pa, n)) {
+            e->stats.scan_bytes += n;
+            if (e->plat.read_ram(e->plat.ctx, pa, e->scan_buf, n)) {
+                e->stats.read_failures++;
+            } else {
+                for (i = 0; i < n; i += KFWC_PAGE) {
+                    if (!kfwc_scan_signature(pa + i, e->scan_buf + i)) continue;
+                    e->stats.scan_candidates++;
+                    if (bind_fresh(e, pa + i, KFWC_METHOD_NEARBY)) return 1;
+                }
+            }
+        }
+        e->recent_cursor += n;
+        budget -= n;
+    }
+    return 0;
+}
+
 static int scan_step(kfwc_engine *e)
 {
     kfwc_u32 nranges = e->plat.ram_range_count(e->plat.ctx);
@@ -672,7 +758,8 @@ static int scan_gate_open(const kfwc_engine *e, kfwc_u64 now)
 
 int kfwc_engine_scan_due(kfwc_engine *e)
 {
-    return e->state == KFWC_ST_SEARCHING && e->cfg.use_scan && scan_gate_open(e, now_ticks(e));
+    return e->state == KFWC_ST_SEARCHING && e->cfg.use_scan &&
+           (kfwc_engine_recent_scan_due(e) || scan_gate_open(e, now_ticks(e)));
 }
 
 static void search_step(kfwc_engine *e)
@@ -695,6 +782,17 @@ static void search_step(kfwc_engine *e)
     }
     if (!e->cfg.use_scan)
         return;
+    /* A previous validated queue's table can be reused by the next driver life.
+     * This hint comes only from the module, not a caller-supplied address. Check
+     * it before the bulk-scan delay, with the same full region/geometry checks.
+     * Both published queues must be empty or retain their sequence-zero first
+     * message. Retained old traffic must never be relabelled a fresh capture. */
+    if (e->cfg.recent_table_pa && bind_fresh(e, e->cfg.recent_table_pa, KFWC_METHOD_REVISIT))
+        return;
+    if (kfwc_engine_recent_scan_due(e)) {
+        (void)recent_scan_step(e);
+        return;
+    }
     if (scan_gate_open(e, now))
         (void)scan_step(e);
 }
@@ -730,6 +828,15 @@ void kfwc_engine_init(kfwc_engine *e, const kfwc_platform *p, const kfwc_sink *s
     e->start_ticks = now_ticks(e);
     e->scan_backoff_cur = e->cfg.scan_backoff_initial_ticks;
     e->stats.scan_backoff_ticks = e->scan_backoff_cur;
+}
+
+kfwc_u64 kfwc_engine_recent_table(const kfwc_engine *e)
+{
+    if (e->state != KFWC_ST_ATTACHED || !e->dir[0].seq_known || !e->dir[1].seq_known ||
+        !e->bind.q[0].valid || !e->bind.q[1].valid ||
+        e->dir[0].next_seq <= e->bind.q[0].count || e->dir[1].next_seq <= e->bind.q[1].count)
+        return 0;
+    return e->bind.table_pa;
 }
 
 kfwc_u32 kfwc_engine_step(kfwc_engine *e)

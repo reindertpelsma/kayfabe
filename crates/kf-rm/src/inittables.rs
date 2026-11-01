@@ -1973,6 +1973,36 @@ impl CommandPolicy for InitTablePolicy {
                 }
             }
         }
+        // ★ 2026-10-15: the Windows-captured statics the published table carries (`rm.*`, group P/K/A). A hit on this die and
+        // this guest branch for exactly the measured request is served; anything else falls through UNCHANGED to the refusal
+        // the control got before (counted notice naming the key). Keys whose serving is an owner decision are `Withheld`.
+        if let Some(key) = crate::rowserve::key_of_control(req.cmd)
+            && WantedTable::from_cmd(req.cmd).is_none()
+            && !kf_abi::rpc_params_are_serialized(req.rmapi_rpc_flags)
+        {
+            let ps = req.params_size as usize;
+            if cmd.payload.len() >= req.params_at + ps {
+                let request = &cmd.payload[req.params_at..req.params_at + ps];
+                if let crate::rowserve::Resolution::Serve(params, _) = crate::rowserve::resolve(
+                    key,
+                    self.host.die,
+                    self.driver.driver_version().major,
+                    request,
+                    None,
+                ) && params.len() == ps
+                {
+                    let mut body = cmd.payload.clone();
+                    body[CONTROL_STATUS_OFF..CONTROL_STATUS_OFF + 4]
+                        .copy_from_slice(&NV_OK.to_le_bytes());
+                    body[req.params_at..req.params_at + ps].copy_from_slice(&params);
+                    return Some(Reply {
+                        rpc_result_private: None,
+                        rpc_result: NV_OK,
+                        body,
+                    });
+                }
+            }
+        }
         if kf_abi::videocaps::caps_len(req.cmd).is_some()
             && !kf_abi::rpc_params_are_serialized(req.rmapi_rpc_flags)
         {
@@ -2301,9 +2331,16 @@ impl CommandPolicy for InitTablePolicy {
             // itself (`kern_gmmu.c:1909`), and a size that is not a multiple of
             // `NVC369_BUF_SIZE` is a partial fault packet in a queue whose capacity is a
             // division (`kern_gmmu.c:1725`).
+            // ★ 2026-10-15 (`rowserve`, `docs/design/V3_GPU_TYPES_20261015.md`): a row measured on THIS die at THIS guest
+            // branch (the Windows-captured GSP statics) wins; otherwise the AUTHORED value is served, labelled and counted
+            // (the matrix says AUTHORED; the AD104 states other numbers - owner decision D-1, so no AD104 row is published).
             WantedTable::GmmuStaticInfo => {
-                match gmmustatic::encode_gmmu_static_info(&self.host.gmmu_static) {
-                    Ok(p) => p,
+                match crate::rowserve::gmmu_static(
+                    self.host.die,
+                    self.driver.driver_version().major,
+                    &self.host.gmmu_static,
+                ) {
+                    Ok((p, _origin)) => p,
                     Err(e) => return refuse_named(req.cmd, &e),
                 }
             }
@@ -2572,9 +2609,16 @@ impl CommandPolicy for InitTablePolicy {
             // (`ogkm-580: mem_desc.c:239-241`) — and a policy whose worst case is a *silent*
             // wall is exactly the shape `#127`'s named-refusal default forbids.
             WantedTable::CeFaultMethodBufferSize => {
-                match kf_abi::fmbsize::encode_fault_method_buffer_size(
+                // ★ 2026-10-15: measured row for (die, guest branch), else the authored value, labelled and counted.
+                let size = match crate::rowserve::ce_fault_method_buffer_size(
+                    self.host.die,
+                    self.driver.driver_version().major,
                     self.host.ce_fault_method_buffer_size,
                 ) {
+                    Ok((v, _origin)) => v,
+                    Err(e) => return refuse_named(req.cmd, &e),
+                };
+                match kf_abi::fmbsize::encode_fault_method_buffer_size(size) {
                     Ok(p) => p,
                     Err(e) => return refuse_named(req.cmd, &e),
                 }
@@ -3066,14 +3110,44 @@ impl CommandPolicy for InitTablePolicy {
             // site exists — a synchronous host verb from `respond` trips R1. This table is
             // what makes the runtime work in the meantime, and it carries its own expiry
             // conditions in `kf_abi::cudartinit`.
-            WantedTable::CudartWatchdogInfo
-            | WantedTable::CudartInit9009
-            | WantedTable::CudartInit9001
-            | WantedTable::CudartInit9064
-            | WantedTable::CudartInit9A001 => {
+            // ★ 2026-11-01 (Blackwell-into-next merge): `0x20802209` is RM SOFTWARE STATE (watchdog
+            // INITIALIZED | DISABLED, `ogkm-595.84: kernel_rc_watchdog_ctrl.c:30-60`), not a die fact, so
+            // the published table holds no row for it (next's `tests/consttab_data.rs`: "software-state rule
+            // is separate"). It is answered here by the rule in `kf_abi::cudartinit`, for every die, as
+            // before the table was wired; the four observation controls below are the table's.
+            WantedTable::CudartWatchdogInfo => {
                 match kf_abi::cudartinit::answer_cudart_init(req.cmd, want.params_size()) {
                     Ok(p) => p,
                     Err(e) => return refuse_named(req.cmd, &e),
+                }
+            }
+            WantedTable::CudartInit9009
+            | WantedTable::CudartInit9001
+            | WantedTable::CudartInit9064
+            | WantedTable::CudartInit9A001 => {
+                // ★★ Lane C 2026-10-14: no longer one GA106 capture served to every die. The
+                // host's own answer to the identical request was tried above (`gssreplay`,
+                // tier 2); only when the host did not answer does the PUBLISHED table answer,
+                // and only with a row measured on THIS die at THIS guest branch (or a row whose
+                // tag states a mechanism). Anything else is refused by name and counted
+                // (`crate::consttab`, `docs/design/V3_CONSTANT_MATRIX_20261014.md`).
+                let at = req.params_at;
+                let request = &cmd.payload[at..at + want.params_size()];
+                match crate::consttab::answer(
+                    &crate::consttab::cudart_key(req.cmd),
+                    self.host.die,
+                    self.driver.driver_version().major,
+                    request,
+                ) {
+                    Ok(p) => p,
+                    Err(e) => {
+                        eprintln!(
+                            "W349REFUSE cmd={:#010x} why=consttab {e} (refusals so far: {})",
+                            req.cmd,
+                            crate::consttab::refusal_count()
+                        );
+                        return refuse();
+                    }
                 }
             }
             // ★★★ The SPLICE arm: keep the guest's own request and overwrite only the words
@@ -3109,7 +3183,7 @@ impl CommandPolicy for InitTablePolicy {
                     None => return refuse(),
                 }
             }
-            WantedTable::GssLegacy8159 | WantedTable::GssLegacy8162 => {
+            WantedTable::GssLegacy8159 => {
                 let at = req.params_at;
                 match kf_abi::gsslegacy::answer_gss_legacy(
                     req.cmd,
@@ -3117,6 +3191,28 @@ impl CommandPolicy for InitTablePolicy {
                 ) {
                     Ok(p) => p,
                     Err(e) => return refuse_named(req.cmd, &e),
+                }
+            }
+            // ★ Lane C 2026-10-14: `0x20808162` writes a byte the guest did not send, and that byte
+            // differs per die (GA106/580: 1, AD104/595: 0 [measured]). The host's answer was tried
+            // above (`gssreplay` exact row); otherwise the published table, per die; else refused.
+            WantedTable::GssLegacy8162 => {
+                let at = req.params_at;
+                match crate::consttab::answer(
+                    &crate::consttab::gss_key(req.cmd),
+                    self.host.die,
+                    self.driver.driver_version().major,
+                    &cmd.payload[at..at + want.params_size()],
+                ) {
+                    Ok(p) => p,
+                    Err(e) => {
+                        eprintln!(
+                            "W349REFUSE cmd={:#010x} why=consttab {e} (refusals so far: {})",
+                            req.cmd,
+                            crate::consttab::refusal_count()
+                        );
+                        return refuse();
+                    }
                 }
             }
             // ★★ The one arm whose value is an ARGUMENT rather than a capture, and the flag

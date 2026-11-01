@@ -1506,7 +1506,7 @@
   "crates/kf-disp/src/ports.rs|unattributed|f2abc7da6592b07e5d6c11a6fa10b0c4ff7fc24b396499402621a26a079eaacd": "UPDATEs differently (`[measured]` the overlay stall H1: window 0's UPDATE joined an earlier group of",
   "crates/kf-disp/src/scanout.rs|unattributed|0d1ee799099cdc607bee6d1a6663a120d7b963ec8d9d10582baafa63e83fe293": "\u2605 Measurement only: the store span of the start of a cursor's surface that the debug dump may",
   "crates/kf-disp/src/scanout.rs|unattributed|484859f49f05e5bfacd06cbc7db4e335f45fcc6b98ae9557e8a3f7c1bd7a97f2": "\u2605 Measurement only (`KF3_DEBUG_CURSOR`, never required to boot): the most of a cursor surface a",
-  "crates/kf-disp/src/scanout.rs|unattributed|4ef81ee2da4856b41c71314aea5fc8af055f2277099e937114d30639719a10f8": "The measured Windows I-beam (`/data/claude-cursor/dump/cursor-d12026f40bd56ee8.bin`, run 2990):",
+  "crates/kf-disp/src/scanout.rs|unattributed|4ef81ee2da4856b41c71314aea5fc8af055f2277099e937114d30639719a10f8": "The measured Windows I-beam (`[owner-run path omitted]`, run 2990):",
   "crates/kf-disp/src/scanout.rs|unattributed|71b8254268c4c750f77aef9d723d2223294f069623dfcf748a10a819ec819e99": "bit is not a mask: measured), so an all-zero image composes to nothing and a white pixel inverts.",
   "crates/kf-disp/src/scanout.rs|unattributed|909da29c5f8ca4f123e3a045d2fa7aaaccd875623fea8322000eb548fa76867c": "\u2605 A broker that shows XOR cursors itself (`CAP_XOR_CURSOR`): the measured I-beam becomes an",
   "crates/kf-disp/src/scanout.rs|unattributed|e40f217c3c71b5ec7d76d45d697a766b54a9582dbeb11d5013dcd87938e3fbf7": "\u2605 Measurement only: the debug dump is bounded (the span, the text) and says what the format",

@@ -1,0 +1,26 @@
+[
+  {
+    "input": "gb206_native.tsv",
+    "source": "codex/sweep-blackwell-20261015:traces/die_driver_sweep_20261015/blackwell_5060/native_trace_revisit_20261016/revisitwindow580/sequence.tsv",
+    "sha256": "d484c92047437eafab4fcb605989eef17acecde26e6715ac60d0c13ab9b2ffa1",
+    "bytes": 646558
+  },
+  {
+    "input": "gb206_virtual_complete.tsv",
+    "source": "codex/sweep-blackwell-20261015:traces/die_driver_sweep_20261015/blackwell_5060/offline_alignment_20261016/virtual-complete.tsv",
+    "sha256": "e00c69a3be8c09510995a92a349b31e7a8bfb3d60b04c9b1138566b8a8c22c47",
+    "bytes": 16437
+  },
+  {
+    "output": "/workspace/codex/sweep-blackwell-step0-current/native_vs_gb206.tsv",
+    "sha256": "803c06e75266b7b018e13d6725ad4813b62e2a35f2262ae93889ba8142e41daf",
+    "bytes": 669634,
+    "full_alignment_local_only": true
+  },
+  {
+    "output": "/workspace/codex/sweep-blackwell-step0-current/ada249_vs_gb206.tsv",
+    "sha256": "26216859a52a041ea36719bcc8fef74f0095ca2b9cc873667e90a3205d5f0274",
+    "bytes": 944928,
+    "full_alignment_local_only": true
+  }
+]

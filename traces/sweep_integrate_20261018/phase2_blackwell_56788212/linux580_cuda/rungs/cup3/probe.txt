@@ -1,0 +1,356 @@
+=== boot_capture tag=cl_sweep249_gb202_cuda580_cup3_1 at 2026-10-19T22:59:06+00:00 ===
+=== source revision: 24906bf33 ===
+=== qemu binary: -rwxr-xr-x 1 root root 96044008 Oct 19 21:02 /workspace/bench/kf3-bins/24906bf3/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY:
+=== BUILD_REV.txt says (informational, NOT authoritative):
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /root/kayfabe/scripts/bench/boot_nvkvm.sh  sha256=0c01dc8eb42df9a4
+    used: /root/kayfabe/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Mon Oct 19 22:59:10 2026
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 5090        Off |   00000000:00:03.0 Off |                  N/A |
+| N/A   N/A  N/A             N/A  /  N/A  |       0MiB /   8192MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+SMI_RC=0
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Oct 19 22:59 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Oct 19 22:59 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Oct 19 22:59 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Oct 19 22:59 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Oct 19 22:59 .
+drwxr-xr-x 18 root root   4000 Oct 19 22:59 ..
+cr--------  1 root root 240, 1 Oct 19 22:59 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Oct 19 22:59 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2166784  0
+nvidia              14417920  1 nvidia_uvm
+ecc                    45056  1 nvidia
+=== POST_CAPTURE_HOOK /root/kayfabe/scripts/bench/cup3_hook.sh at 2026-10-19T22:59:10+00:00 ===
+=== source (md5 — a run cannot silently be a different copy) ===
+    /root/kayfabe/scripts/bench/cup3.c                          82 lines  md5 b353d96b3694261293e5bdd409c0863e
+    ⊘ NOT the vendored cup3.c: this source is md5 b353d96b3694261293e5bdd409c0863e, the C artifact's
+      tests/mode2/cup3.c is md5 3c90b0f5f9b7deedc9d9bea471ee551a. ⇒ this run is a VARIANT and the
+      two stacks are NOT running the same program. Read every comparison accordingly.
+
+=== ★★★ GUEST PRECONDITION — the PTX JIT (cuModuleLoadData needs it) ===
+    /usr/lib/x86_64-linux-gnu/libnvidia-ptxjitcompiler.so
+    /usr/lib/x86_64-linux-gnu/libnvidia-ptxjitcompiler.so.1
+    /usr/lib/x86_64-linux-gnu/libnvidia-ptxjitcompiler.so.580.159.04
+    JIT_PRESENT=yes
+
+=== push + build in the guest ===
+GCC_CUP3_RC=0
+GCC_SHIM_RC=0
+    UVMSHIM_PRESENT=yes
+
+=== launch cup3 DETACHED under its own 120s timeout ===
+    ⊘ NOT comparable to the cup2 baseline of 180s — a different program, a longer bound.
+strace: must have PROG [ARGS] or -p PID
+Try 'strace -h' for more information.
+Try 'timeout --help' for more information.
+LAUNCHED pid=1939
+
+=== waiting for cup3's terminator (poll 120s + 60s slack) ===
+    SPIN-SAMPLE pid=1939 state=R wchan=0
+    SPIN-SAMPLE syscall=
+          -- strace -c, TOP of a %time-DESCENDING table --
+    strace: attach: ptrace(PTRACE_SEIZE, 1939): Operation not permitted
+          -- UVM pending pushes (its own dump; needs ~30s of being stuck) --
+          (NO UVM spin-loop print in dmesg - it is not stuck in uvm_tracker_wait)
+          -- threads (stime is process-wide; the ioctl thread is the R one) --
+        TID STAT     TIME
+          -- kernel stack of the BUSY thread, x3 (same stack thrice = a loop) --
+          busy_tid=
+            (stack unreadable - running in userspace or no permission)
+            ---- sample 1 ----
+            (stack unreadable - running in userspace or no permission)
+            ---- sample 2 ----
+            (stack unreadable - running in userspace or no permission)
+            ---- sample 3 ----
+          -- which KERNEL function is burning the CPU (settles the fault reading) --
+          -- the ioctl stream itself (which call is being repeated) --
+    strace: attach: ptrace(PTRACE_SEIZE, 1939): No such process
+          -- userspace backtrace (names the spin, or says why it could not) --
+          (no gdb in the guest; fetching it once)
+    terminator present at ~0s
+
+=== ★ cup3 FINAL OUTPUT, verbatim ===
+    ok   cuInit(0)
+    ok   cuDeviceGetCount(&n)
+    ok   cuDeviceGet(&d,0)
+    UVMPARAM >>> #1 CREATE_RANGE  base=0x0000000200000000 length=0x400000 (4096 KiB)
+    UVMPARAM <<< #1 CREATE_RANGE  returned 0
+    UVMPARAM >>> #1 MAP_EXTERNAL  base=0x0000000200000000 length=0x400000 (4096 KiB)
+    UVMPARAM <<< #1 MAP_EXTERNAL  returned 0
+    UVMPARAM >>> #2 CREATE_RANGE  base=0x0000010000000000 length=0x200000 (2048 KiB)
+    UVMPARAM <<< #2 CREATE_RANGE  returned 0
+    UVMPARAM >>> #2 MAP_EXTERNAL  base=0x0000010000000000 length=0x200000 (2048 KiB)
+    UVMPARAM <<< #2 MAP_EXTERNAL  returned 0
+    UVMPARAM >>> #3 CREATE_RANGE  base=0x0000010002000000 length=0x200000 (2048 KiB)
+    UVMPARAM <<< #3 CREATE_RANGE  returned 0
+    UVMPARAM >>> #3 MAP_EXTERNAL  base=0x0000010002000000 length=0x200000 (2048 KiB)
+    UVMPARAM <<< #3 MAP_EXTERNAL  returned 0
+    UVMPARAM >>> #4 CREATE_RANGE  base=0x000077c006000000 length=0x200000 (2048 KiB)
+    UVMPARAM <<< #4 CREATE_RANGE  returned 0
+    UVMPARAM >>> #4 MAP_EXTERNAL  base=0x000077c006000000 length=0x200000 (2048 KiB)
+    UVMPARAM <<< #4 MAP_EXTERNAL  returned 0
+    UVMPARAM >>> #5 CREATE_RANGE  base=0x0000000200400000 length=0x200000 (2048 KiB)
+    UVMPARAM <<< #5 CREATE_RANGE  returned 0
+    UVMPARAM >>> #5 MAP_EXTERNAL  base=0x0000000200400000 length=0x200000 (2048 KiB)
+    UVMPARAM <<< #5 MAP_EXTERNAL  returned 0
+    UVMPARAM >>> #6 CREATE_RANGE  base=0x0000000200600000 length=0x2800000 (40960 KiB)
+    UVMPARAM <<< #6 CREATE_RANGE  returned 0
+    UVMPARAM >>> #6 MAP_EXTERNAL  base=0x0000000200600000 length=0x2800000 (40960 KiB)
+    UVMPARAM <<< #6 MAP_EXTERNAL  returned 0
+    UVMPARAM >>> #7 CREATE_RANGE  base=0x0000000206a00000 length=0x200000 (2048 KiB)
+    UVMPARAM <<< #7 CREATE_RANGE  returned 0
+    UVMPARAM >>> #7 MAP_EXTERNAL  base=0x0000000206a00000 length=0x200000 (2048 KiB)
+    UVMPARAM <<< #7 MAP_EXTERNAL  returned 0
+    UVMPARAM >>> #8 CREATE_RANGE  base=0x0000000206c00000 length=0x200000 (2048 KiB)
+    UVMPARAM <<< #8 CREATE_RANGE  returned 0
+    UVMPARAM >>> #8 MAP_EXTERNAL  base=0x0000000206c00000 length=0x200000 (2048 KiB)
+    UVMPARAM <<< #8 MAP_EXTERNAL  returned 0
+    UVMPARAM >>> #9 CREATE_RANGE  base=0x000077c006200000 length=0x200000 (2048 KiB)
+    UVMPARAM <<< #9 CREATE_RANGE  returned 0
+    UVMPARAM >>> #9 MAP_EXTERNAL  base=0x000077c006200000 length=0x200000 (2048 KiB)
+    UVMPARAM <<< #9 MAP_EXTERNAL  returned 0
+    UVMPARAM >>> #10 CREATE_RANGE  base=0x000077c006400000 length=0x200000 (2048 KiB)
+    UVMPARAM <<< #10 CREATE_RANGE  returned 0
+    UVMPARAM >>> #10 MAP_EXTERNAL  base=0x000077c006400000 length=0x200000 (2048 KiB)
+    UVMPARAM <<< #10 MAP_EXTERNAL  returned 0
+    UVMPARAM >>> #11 CREATE_RANGE  base=0x000077c006600000 length=0x200000 (2048 KiB)
+    UVMPARAM <<< #11 CREATE_RANGE  returned 0
+    UVMPARAM >>> #11 MAP_EXTERNAL  base=0x000077c006600000 length=0x200000 (2048 KiB)
+    UVMPARAM <<< #11 MAP_EXTERNAL  returned 0
+    UVMPARAM >>> #12 CREATE_RANGE  base=0x000077c006800000 length=0x200000 (2048 KiB)
+    UVMPARAM <<< #12 CREATE_RANGE  returned 0
+    UVMPARAM >>> #12 MAP_EXTERNAL  base=0x000077c006800000 length=0x200000 (2048 KiB)
+    UVMPARAM <<< #12 MAP_EXTERNAL  returned 0
+    UVMPARAM >>> #13 CREATE_RANGE  base=0x0000000207000000 length=0x200000 (2048 KiB)
+    UVMPARAM <<< #13 CREATE_RANGE  returned 0
+    UVMPARAM >>> #13 MAP_EXTERNAL  base=0x0000000207000000 length=0x200000 (2048 KiB)
+    UVMPARAM <<< #13 MAP_EXTERNAL  returned 0
+    UVMPARAM >>> #14 CREATE_RANGE  base=0x0000000207200000 length=0x200000 (2048 KiB)
+    UVMPARAM <<< #14 CREATE_RANGE  returned 0
+    UVMPARAM >>> #14 MAP_EXTERNAL  base=0x0000000207200000 length=0x200000 (2048 KiB)
+    UVMPARAM <<< #14 MAP_EXTERNAL  returned 0
+    UVMPARAM >>> #15 CREATE_RANGE  base=0x000077c006a00000 length=0x200000 (2048 KiB)
+    UVMPARAM <<< #15 CREATE_RANGE  returned 0
+    UVMPARAM >>> #15 MAP_EXTERNAL  base=0x000077c006a00000 length=0x200000 (2048 KiB)
+    UVMPARAM <<< #15 MAP_EXTERNAL  returned 0
+    UVMPARAM >>> #16 CREATE_RANGE  base=0x000077c006c00000 length=0x200000 (2048 KiB)
+    UVMPARAM <<< #16 CREATE_RANGE  returned 0
+    UVMPARAM >>> #16 MAP_EXTERNAL  base=0x000077c006c00000 length=0x200000 (2048 KiB)
+    UVMPARAM <<< #16 MAP_EXTERNAL  returned 0
+    UVMPARAM >>> #17 CREATE_RANGE  base=0x0000000207400000 length=0x200000 (2048 KiB)
+    UVMPARAM <<< #17 CREATE_RANGE  returned 0
+    UVMPARAM >>> #17 MAP_EXTERNAL  base=0x0000000207400000 length=0x200000 (2048 KiB)
+    UVMPARAM <<< #17 MAP_EXTERNAL  returned 0
+    UVMPARAM >>> #18 CREATE_RANGE  base=0x0000000207600000 length=0x200000 (2048 KiB)
+    UVMPARAM <<< #18 CREATE_RANGE  returned 0
+    UVMPARAM >>> #18 MAP_EXTERNAL  base=0x0000000207600000 length=0x200000 (2048 KiB)
+    UVMPARAM <<< #18 MAP_EXTERNAL  returned 0
+    UVMPARAM >>> #19 CREATE_RANGE  base=0x000077c007000000 length=0x200000 (2048 KiB)
+    UVMPARAM <<< #19 CREATE_RANGE  returned 0
+    UVMPARAM >>> #19 MAP_EXTERNAL  base=0x000077c007000000 length=0x200000 (2048 KiB)
+    UVMPARAM <<< #19 MAP_EXTERNAL  returned 0
+    UVMPARAM >>> #20 CREATE_RANGE  base=0x000077c007200000 length=0x200000 (2048 KiB)
+    UVMPARAM <<< #20 CREATE_RANGE  returned 0
+    UVMPARAM >>> #20 MAP_EXTERNAL  base=0x000077c007200000 length=0x200000 (2048 KiB)
+    UVMPARAM <<< #20 MAP_EXTERNAL  returned 0
+    UVMPARAM >>> #21 CREATE_RANGE  base=0x000077c007400000 length=0x200000 (2048 KiB)
+    UVMPARAM <<< #21 CREATE_RANGE  returned 0
+    UVMPARAM >>> #21 MAP_EXTERNAL  base=0x000077c007400000 length=0x200000 (2048 KiB)
+    UVMPARAM <<< #21 MAP_EXTERNAL  returned 0
+    UVMPARAM >>> #22 CREATE_RANGE  base=0x000077c007600000 length=0x200000 (2048 KiB)
+    UVMPARAM <<< #22 CREATE_RANGE  returned 0
+    UVMPARAM >>> #22 MAP_EXTERNAL  base=0x000077c007600000 length=0x200000 (2048 KiB)
+    UVMPARAM <<< #22 MAP_EXTERNAL  returned 0
+    UVMPARAM >>> #23 CREATE_RANGE  base=0x000077c007800000 length=0x200000 (2048 KiB)
+    UVMPARAM <<< #23 CREATE_RANGE  returned 0
+    UVMPARAM >>> #23 MAP_EXTERNAL  base=0x000077c007800000 length=0x200000 (2048 KiB)
+    UVMPARAM <<< #23 MAP_EXTERNAL  returned 0
+    UVMPARAM >>> #24 CREATE_RANGE  base=0x000077c007a00000 length=0x5ec000 (6064 KiB)
+    UVMPARAM <<< #24 CREATE_RANGE  returned 0
+    UVMPARAM >>> #24 MAP_EXTERNAL  base=0x000077c007a00000 length=0x5ec000 (6064 KiB)
+    UVMPARAM <<< #24 MAP_EXTERNAL  returned 0
+    UVMPARAM >>> #25 CREATE_RANGE  base=0x000077c000000000 length=0x4200000 (67584 KiB)
+    UVMPARAM <<< #25 CREATE_RANGE  returned 0
+    UVMPARAM >>> #25 MAP_EXTERNAL  base=0x000077c000000000 length=0x4200000 (67584 KiB)
+    UVMPARAM <<< #25 MAP_EXTERNAL  returned 0
+    UVMPARAM >>> #26 CREATE_RANGE  base=0x000077c004200000 length=0x200000 (2048 KiB)
+    UVMPARAM <<< #26 CREATE_RANGE  returned 0
+    UVMPARAM >>> #26 MAP_EXTERNAL  base=0x000077c004200000 length=0x200000 (2048 KiB)
+    UVMPARAM <<< #26 MAP_EXTERNAL  returned 0
+    UVMPARAM >>> #27 CREATE_RANGE  base=0x000077bfe6000000 length=0x19000000 (409600 KiB)
+    UVMPARAM <<< #27 CREATE_RANGE  returned 0
+    UVMPARAM >>> #27 MAP_EXTERNAL  base=0x000077bfe6000000 length=0x19000000 (409600 KiB)
+    UVMPARAM <<< #27 MAP_EXTERNAL  returned 0
+    ok   cuCtxCreate(&ctx,0,d)
+    CTX OK
+    PTX_TARGET=sm_86 (device cc 12.0)
+    ok   cuModuleLoadData(&mod,PTX)
+    MODULE OK
+    ok   cuModuleGetFunction(&fn,mod,"k")
+    FUNC OK
+    UVMPARAM >>> #28 CREATE_RANGE  base=0x000077bfff000000 length=0x200000 (2048 KiB)
+    UVMPARAM <<< #28 CREATE_RANGE  returned 0
+    UVMPARAM >>> #28 MAP_EXTERNAL  base=0x000077bfff000000 length=0x200000 (2048 KiB)
+    UVMPARAM <<< #28 MAP_EXTERNAL  returned 0
+    ok   cuMemAlloc(&d_in,4)
+    ok   cuMemAlloc(&d_out,4)
+    MEMALLOC in=0x77bfff000000 out=0x77bfff000200
+    ok   cuMemcpyHtoD(d_in,&hv,4)
+    ok   cuMemsetD32(d_out,0,1)
+    ok   cuLaunchKernel(fn, 1,1,1, 1,1,1, 0, 0, args, 0)
+    LAUNCH OK
+    ok   cuCtxSynchronize()
+    SYNC OK
+    ok   cuMemcpyDtoH(&rv,d_out,4)
+    KERNEL rv=43 want=43 -> PASS
+    DONE
+CUP3_OUT_BYTES=7459
+=== the last ioctls cup3 issued (it dies HERE) ===
+    1939  22:59:23.917410 ioctl(30, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2b, 0x30), 0x7fffcdd47560) = 0
+    1939  22:59:23.917946 ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7fffcdd464c0) = 0
+    1939  22:59:23.918675 ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7fffcdd46570) = 0
+    1939  22:59:23.919538 ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7fffcdd46610) = 0
+    1939  22:59:23.920294 ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2b, 0x30), 0x7fffcdd46b40) = 0
+    1939  22:59:23.920624 ioctl(9, _IOC(_IOC_NONE, 0, 0x49, 0), 0x7fffcdd467f0) = 0
+    1939  22:59:23.920991 ioctl(9, _IOC(_IOC_NONE, 0, 0x21, 0), 0x7fffcdd443e0) = 0
+    1939  22:59:23.932358 ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7fffcdd46610) = 0
+    1939  22:59:24.228160 ioctl(8, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2b, 0x30), 0x7fffcdd47640) = 0
+    1939  22:59:24.228451 ioctl(9, _IOC(_IOC_NONE, 0, 0x49, 0), 0x7fffcdd472f0) = 0
+    1939  22:59:24.228645 ioctl(9, _IOC(_IOC_NONE, 0, 0x21, 0), 0x7fffcdd44ee0) = 0
+    1940  22:59:24.233890 +++ exited with 0 +++
+    2033  22:59:32.499301 +++ exited with 0 +++
+    1939  22:59:32.500000 +++ exited with 0 +++
+=== UVM map parameters (a >>> with no <<< is the call that never returned) ===
+    UVMPARAM >>> #23 CREATE_RANGE  base=0x000077c007800000 length=0x200000 (2048 KiB)
+    UVMPARAM <<< #23 CREATE_RANGE  returned 0
+    UVMPARAM >>> #23 MAP_EXTERNAL  base=0x000077c007800000 length=0x200000 (2048 KiB)
+    UVMPARAM <<< #23 MAP_EXTERNAL  returned 0
+    UVMPARAM >>> #24 CREATE_RANGE  base=0x000077c007a00000 length=0x5ec000 (6064 KiB)
+    UVMPARAM <<< #24 CREATE_RANGE  returned 0
+    UVMPARAM >>> #24 MAP_EXTERNAL  base=0x000077c007a00000 length=0x5ec000 (6064 KiB)
+    UVMPARAM <<< #24 MAP_EXTERNAL  returned 0
+    UVMPARAM >>> #25 CREATE_RANGE  base=0x000077c000000000 length=0x4200000 (67584 KiB)
+    UVMPARAM <<< #25 CREATE_RANGE  returned 0
+    UVMPARAM >>> #25 MAP_EXTERNAL  base=0x000077c000000000 length=0x4200000 (67584 KiB)
+    UVMPARAM <<< #25 MAP_EXTERNAL  returned 0
+    UVMPARAM >>> #26 CREATE_RANGE  base=0x000077c004200000 length=0x200000 (2048 KiB)
+    UVMPARAM <<< #26 CREATE_RANGE  returned 0
+    UVMPARAM >>> #26 MAP_EXTERNAL  base=0x000077c004200000 length=0x200000 (2048 KiB)
+    UVMPARAM <<< #26 MAP_EXTERNAL  returned 0
+    UVMPARAM >>> #27 CREATE_RANGE  base=0x000077bfe6000000 length=0x19000000 (409600 KiB)
+    UVMPARAM <<< #27 CREATE_RANGE  returned 0
+    UVMPARAM >>> #27 MAP_EXTERNAL  base=0x000077bfe6000000 length=0x19000000 (409600 KiB)
+    UVMPARAM <<< #27 MAP_EXTERNAL  returned 0
+    UVMPARAM >>> #28 CREATE_RANGE  base=0x000077bfff000000 length=0x200000 (2048 KiB)
+    UVMPARAM <<< #28 CREATE_RANGE  returned 0
+    UVMPARAM >>> #28 MAP_EXTERNAL  base=0x000077bfff000000 length=0x200000 (2048 KiB)
+    UVMPARAM <<< #28 MAP_EXTERNAL  returned 0
+=== the UVM call sequence in order (the port spec) ===
+    0x1 0x27 0x25 0x46 0x17 0x19 0x49 0x21 0x49 0x21 0x49 0x21 0x49 0x21 0x49 0x21 0x49 0x21 0x49 0x21 0x1b 0x49 0x21 0x49 0x21 0x44 0x48 0x17 0x49 0x21
+    (decode: 0x21=33 MAP_EXTERNAL_ALLOCATION, 0x25=37 REGISTER_GPU, 0x19=25 REGISTER_GPU_VASPACE,
+             0x49=73 CREATE_EXTERNAL_RANGE, 0x17=23 CREATE_RANGE_GROUP, 0x46=70 PAGEABLE_MEM_ACCESS)
+=== ioctl request histogram (the repeat stands out) ===
+        293 ioctl(8, _IOC(_IOC_READ|_IOC_WRITE
+         88 ioctl(9, _IOC(_IOC_NONE
+          6 ioctl(12, _IOC(_IOC_READ|_IOC_WRITE
+          3 ioctl(30, _IOC(_IOC_READ|_IOC_WRITE
+          3 ioctl(28, _IOC(_IOC_READ|_IOC_WRITE
+          3 ioctl(26, _IOC(_IOC_READ|_IOC_WRITE
+          3 ioctl(24, _IOC(_IOC_READ|_IOC_WRITE
+          3 ioctl(21, _IOC(_IOC_READ|_IOC_WRITE
+          3 ioctl(19, _IOC(_IOC_READ|_IOC_WRITE
+          3 ioctl(17, _IOC(_IOC_READ|_IOC_WRITE
+    CUP3_IOCTL_LINES=415
+
+CUP3_RC=0
+
+=== cup3 did not produce a value within 120s - WHERE IS IT? ===
+    CUP3_GONE - it exited without writing a value
+CUP3_VAL=43
+CUP3_KERNEL_LINE=KERNEL rv=43 want=43 -> PASS
+CUP3_JIT_PRESENT=yes
+
+=== ★★★★★ THE VALUE LADDER — what this reading MEANS ===
+    ★★★★★ 43 — PASS. out = in*3+1 computed on the GPU. UN-FORGEABLE: no copy,
+          fill, or forged completion in our stack can produce this number.
+
+=== ★ THE STAGE LADDER — how far it got (the furthest line present wins) ===
+    ✔ CTX OK
+    ✔ MODULE OK
+    ✔ FUNC OK
+    ✔ MEMALLOC
+    ✔ LAUNCH OK
+    ✔ SYNC OK
+    ✔ KERNEL rv=
+    ✔ DONE
+    ⊘ the FIRST ✘ after a run of ✔ is the wall; a ✘ before any ✔ means it never started.
+=== ★ the FAIL line, if cup3 named its own failure ===
+
+=== ★ guest dmesg tail (NVRM/Xid land here, not in the serial log) ===
+    [   55.383913] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+    [   55.384276] NVRM: kbifInitLtr_GB202: LTR is disabled in the hierarchy
+    [   55.385424] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+    [   55.385491] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_CE_GET_PCE_CONFIG_FOR_LCE_TYPE, &pceConfigParams, sizeof(pceConfigParams)) @ kernel_ce.c:1020
+    [   55.385495] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kceGetPceConfigForLceType(pGpu, pKCe, NV2080_CTRL_CE_LCE_TYPE_DECOMP, &numPcesPerLce, &numLces, &supportedPceMask, &supportedLceMask, &pcesPerHshub) @ kernel_ce_gp100.c:62
+    [   55.385525] NVRM: kccuGetBufSize_GB100: CCU sample size retrieval failed with status: 0x56
+    [   55.385558] NVRM: kccuStateLoad_IMPL: Failed to get the buffer size info(status: 86)
+    [   55.700158] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgrobjPromoteContext(pGpu, pKernelGraphicsObject, pKernelGraphics) @ kernel_graphics_object.c:224
+    [   55.701300] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->AllocWithHandle(pRmApi, hClientId, hChannelId, hObj3D, classNum, NULL, 0) @ kernel_graphics.c:2519
+    [   55.704730] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+    [   55.704732] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+    [   55.704733] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+    [   55.704734] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+    [   55.710989] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgraphicsCreateGoldenImageChannel(pGpu, pKernelGraphics) @ kernel_graphics.c:508
+    [   55.710992] NVRM: nvAssertFailedNoLog: Assertion failed: 0 @ kernel_fifo.c:3129
+    [   55.723742] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00013; hParent=0x31415903; hObject=0x31415900; hClass=0x0000c36f; paramsSize=0x00000170; paramsStatus=0x00000056; status=0x00000056
+    [   55.723745] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from status @ kernel_channel.c:2827
+    [   55.723748] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from _kchannelSendChannelAllocRpc(pKernelChannel, pChannelGpfifoParams, pKernelChannelGroup, bFullSriov) @ kernel_channel.c:940
+    [   55.724355] NVRM: nvAssertFailedNoLog: Assertion failed: status == NV_OK @ kernel_rc_watchdog.c:1198
+    [   55.726338] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00014; hParent=0xcaf00001; hObject=0xcaf00002; hClass=0x0000402c; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+    [   63.228821] ptrace attach of "./cup3"[1939] was attempted by "cut -c1-40 /proc/1939/syscall"[2020]
+    [   66.638979] NVRM: kgmmuClientShadowFaultBufferUnregister_IMPL: Unregistering non-replayable fault buffer failed (status=0x00000056), proceeding...
+    [   66.639280] NVRM: kgmmuFaultBufferReplayableDestroy_IMPL: Unregistering Replayable Fault buffer failed (status=0x00000056), proceeding...
+    [   66.639716] NVRM: uvmTerminateAccessCntrBuffer_IMPL: Unloading UVM Access counters failed (status=0x00000056), proceeding...
+    [   70.704634] NVRM: _threadNodeCheckTimeout: _threadNodeCheckTimeout: currentTime: f420a7f080cc0 >= f420a7f080cc0
+    [   70.704807] NVRM: _threadNodeCheckTimeout: _threadNodeCheckTimeout: Timeout was set to: 4000 msecs!
+    [   70.704939] NVRM: scrubberDestruct:  Timed out when waiting for the scrub to complete the pending work .
+    [   74.705505] NVRM: nvAssertFailedNoLog: Assertion failed: pCeUtils->lastCompletedPayload == lastSubmittedPayload @ ce_utils.c:349
+    [   74.720433] NVRM: _kccuUnmapAndFreeMemory: CCU memdesc unmap request failed with status: 0x56
+    [   74.781031] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:213
+=== cup3 hook DONE ===
+HOOK_RC=0
+=== GUEST dmesg AFTER the workload (phase 3b captured 31 lines BEFORE it) ===
+GUEST_DMESG_AFTER_LINES=63
+GUEST_DMESG_AFTER_NVRM=59
+GUEST_DMESG_WORKLOAD_DELTA=32
+=== HOST dmesg delta for this boot (watermark 1126 → 1127) ===
+HOST_DMESG_LINES=1
+HOST_DMESG_NVRM=1
+HOST_DMESG_XID=0
+0

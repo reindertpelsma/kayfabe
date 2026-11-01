@@ -1,0 +1,12 @@
+B2_DESKTOP_IMAGE_READY 2026-10-19T21:19:32+00:00
+B2_BASELINE_START 2026-10-19T22:07:32+00:00 source=45a4d91b56b6819fa4e67687d7f3f348647a325e
+H_CODEC_B2 falsifier same black frame or flip timeout despite corrected public class format; second/final B2arm this lease. Postbaseline disk-state confound retained; no causal overclaim.
+B2_REAL_PROCESS_VERIFIED 122859 {'KF3_REV': '45a4d91b', 'KF3_RPC_TRACE': '1'}
+B2_GUEST_PROBE_EXIT=0
+B2_ACTUAL_PRESENTED_WINDOW {'width': 1920, 'height': 1080, 'colors': 1, 'pixel_sha256': '788ae0147bdf979a6575938ca2d7d4403788588f7be2010f03776c968fd1ab49', 'public_window_only': True, 'nonblank': False}
+Traceback (most recent call last):
+  File "/root/sweep_b2_codec_capture.py", line 21, in <module>
+    assert n>50,'the actual presented desktop is black or placeholder only'
+AssertionError: the actual presented desktop is black or placeholder only
+B2_HOST_XID before=5 after=5
+B2_BASELINE_EXIT rc=1 2026-10-19T22:10:53+00:00

@@ -1,0 +1,111 @@
+F.EF.FEEFE.
+======================================================================
+ERROR: test_last_of_three_rereads_must_use_a_fresh_clean_state (test_shutdown_census.ShutdownCensus.test_last_of_three_rereads_must_use_a_fresh_clean_state)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "scripts/bench/blackwell/test_shutdown_census.py", line 23, in test_last_of_three_rereads_must_use_a_fresh_clean_state
+    values=iter(([99],[99],[99],[]));r=self.run_case(lambda t:False,lambda:next(values));self.assertEqual(self.c.sleeps,[5,5,5]);self.assertEqual(r['rereads'],3)
+                                       ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "scripts/bench/blackwell/test_shutdown_census.py", line 14, in run_case
+    return await_shutdown(lambda:alive(self.c.now),census,xids,('baseline',),self.c.sleep,self.c.time)
+  File "scripts/bench/blackwell/shutdown_census.py", line 9, in await_shutdown
+    raise CensusRefused('QEMU still present')
+shutdown_census.CensusRefused: QEMU still present
+
+======================================================================
+ERROR: test_owned_exit_after_five_seconds_is_not_a_failure (test_shutdown_census.ShutdownCensus.test_owned_exit_after_five_seconds_is_not_a_failure)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "scripts/bench/blackwell/test_shutdown_census.py", line 17, in test_owned_exit_after_five_seconds_is_not_a_failure
+    self.run_case(lambda t:t<5,lambda:[]);self.assertEqual(self.c.now,5)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "scripts/bench/blackwell/test_shutdown_census.py", line 14, in run_case
+    return await_shutdown(lambda:alive(self.c.now),census,xids,('baseline',),self.c.sleep,self.c.time)
+  File "scripts/bench/blackwell/shutdown_census.py", line 9, in await_shutdown
+    raise CensusRefused('QEMU still present')
+shutdown_census.CensusRefused: QEMU still present
+
+======================================================================
+ERROR: test_owned_exit_at_sixty_seconds_is_bounded_and_accepted (test_shutdown_census.ShutdownCensus.test_owned_exit_at_sixty_seconds_is_bounded_and_accepted)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "scripts/bench/blackwell/test_shutdown_census.py", line 19, in test_owned_exit_at_sixty_seconds_is_bounded_and_accepted
+    self.run_case(lambda t:t<60,lambda:[]);self.assertEqual(self.c.now,60)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "scripts/bench/blackwell/test_shutdown_census.py", line 14, in run_case
+    return await_shutdown(lambda:alive(self.c.now),census,xids,('baseline',),self.c.sleep,self.c.time)
+  File "scripts/bench/blackwell/shutdown_census.py", line 9, in await_shutdown
+    raise CensusRefused('QEMU still present')
+shutdown_census.CensusRefused: QEMU still present
+
+======================================================================
+ERROR: test_process_list_is_read_again_after_exit_in_flight (test_shutdown_census.ShutdownCensus.test_process_list_is_read_again_after_exit_in_flight)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "scripts/bench/blackwell/test_shutdown_census.py", line 21, in test_process_list_is_read_again_after_exit_in_flight
+    values=iter(([99],[]));self.run_case(lambda t:False,lambda:next(values));self.assertEqual(self.c.sleeps,[5])
+                           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "scripts/bench/blackwell/test_shutdown_census.py", line 14, in run_case
+    return await_shutdown(lambda:alive(self.c.now),census,xids,('baseline',),self.c.sleep,self.c.time)
+  File "scripts/bench/blackwell/shutdown_census.py", line 9, in await_shutdown
+    raise CensusRefused('QEMU still present')
+shutdown_census.CensusRefused: QEMU still present
+
+======================================================================
+FAIL: test_a_later_clean_fifth_read_does_not_extend_the_bound (test_shutdown_census.ShutdownCensus.test_a_later_clean_fifth_read_does_not_extend_the_bound)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "scripts/bench/blackwell/test_shutdown_census.py", line 33, in test_a_later_clean_fifth_read_does_not_extend_the_bound
+    self.assertEqual(self.c.sleeps,[5,5,5])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: [] != [5, 5, 5]
+
+Second list contains 3 additional elements.
+First extra element 0:
+5
+
+- []
++ [5, 5, 5]
+
+======================================================================
+FAIL: test_new_native32_while_waiting_is_fatal (test_shutdown_census.ShutdownCensus.test_new_native32_while_waiting_is_fatal)
+----------------------------------------------------------------------
+shutdown_census.CensusRefused: QEMU still present
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "scripts/bench/blackwell/test_shutdown_census.py", line 35, in test_new_native32_while_waiting_is_fatal
+    with self.assertRaisesRegex(CensusRefused,'Xid'):self.run_case(lambda t:t<10,lambda:[],lambda:('baseline',) if self.c.now<5 else ('baseline','native32'))
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+AssertionError: "Xid" does not match "QEMU still present"
+
+======================================================================
+FAIL: test_other_qemu_after_three_rereads_is_fatal (test_shutdown_census.ShutdownCensus.test_other_qemu_after_three_rereads_is_fatal)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "scripts/bench/blackwell/test_shutdown_census.py", line 29, in test_other_qemu_after_three_rereads_is_fatal
+    self.assertEqual(self.c.sleeps,[5,5,5])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: [] != [5, 5, 5]
+
+Second list contains 3 additional elements.
+First extra element 0:
+5
+
+- []
++ [5, 5, 5]
+
+======================================================================
+FAIL: test_owned_qemu_still_alive_at_sixty_seconds_is_fatal (test_shutdown_census.ShutdownCensus.test_owned_qemu_still_alive_at_sixty_seconds_is_fatal)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "scripts/bench/blackwell/test_shutdown_census.py", line 26, in test_owned_qemu_still_alive_at_sixty_seconds_is_fatal
+    self.assertEqual(self.c.now,60)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+AssertionError: 0 != 60
+
+----------------------------------------------------------------------
+Ran 11 tests in 0.003s
+
+FAILED (failures=4, errors=4)

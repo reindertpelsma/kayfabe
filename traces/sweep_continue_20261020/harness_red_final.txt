@@ -1,0 +1,34 @@
+running 3 tests
+test fixture_tests::an_unallocated_graphics_object_refuses_the_oracle_fixture ... FAILED
+test fixture_tests::blackwell_fixture_selects_its_own_i2m_3d_and_compute_objects ... FAILED
+test fixture_tests::native_fixture_only_binds_graphics_objects_allocated_for_that_family ... FAILED
+
+failures:
+
+---- fixture_tests::an_unallocated_graphics_object_refuses_the_oracle_fixture stdout ----
+
+thread 'fixture_tests::an_unallocated_graphics_object_refuses_the_oracle_fixture' (1473430) panicked at crates/kf-harness/src/bin/kf-gr-tier.rs:788:9:
+assertion failed: gr_segment(&[]).is_err()
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- fixture_tests::blackwell_fixture_selects_its_own_i2m_3d_and_compute_objects stdout ----
+
+thread 'fixture_tests::blackwell_fixture_selects_its_own_i2m_3d_and_compute_objects' (1473431) panicked at crates/kf-harness/src/bin/kf-gr-tier.rs:774:9:
+assertion `left == right` failed: I2M binding
+  left: 41280
+ right: 52544
+
+---- fixture_tests::native_fixture_only_binds_graphics_objects_allocated_for_that_family stdout ----
+
+thread 'fixture_tests::native_fixture_only_binds_graphics_objects_allocated_for_that_family' (1473432) panicked at crates/kf-harness/src/bin/kf-gr-tier.rs:756:21:
+Turing: unallocated class 0xc997
+
+
+failures:
+    fixture_tests::an_unallocated_graphics_object_refuses_the_oracle_fixture
+    fixture_tests::blackwell_fixture_selects_its_own_i2m_3d_and_compute_objects
+    fixture_tests::native_fixture_only_binds_graphics_objects_allocated_for_that_family
+
+test result: FAILED. 0 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p kf-harness --bin kf-gr-tier`

@@ -98,6 +98,11 @@ pub struct Row {
     pub size: usize,
     /// The input words that select the answer (everything else is zero in the request).
     pub inputs: &'static [(usize, u32)],
+    /// ★ Lane C 2026-10-14: the guest's request must equal [`Row::request`] byte for byte
+    /// (every byte not named in `inputs` zero). For controls whose request layout is unknown but
+    /// whose real-driver request was MEASURED all-zero: no word is guessed to be an input, and any
+    /// non-zero byte makes it a different question.
+    pub exact: bool,
 }
 
 /// ★ Every request this device asks its host at realize.
@@ -106,17 +111,20 @@ pub const ROWS: &[Row] = &[
     Row {
         cmd: GSS_CLOCK_DOMAINS,
         size: 520,
+        exact: false,
         inputs: &[(0, 0), (4, 1), (8, 8)],
     },
     // One-domain clock queries for the two domains the library has been seen to ask.
     Row {
         cmd: GSS_CLOCK_QUERY,
         size: 0x890,
+        exact: false,
         inputs: &[(0, 1), (8, 1), (0x0c, DOMAIN_NVD), (0x20c, DOMAIN_NVD)],
     },
     Row {
         cmd: GSS_CLOCK_QUERY,
         size: 0x890,
+        exact: false,
         inputs: &[(0, 1), (8, 1), (0x0c, DOMAIN_GPC), (0x20c, DOMAIN_GPC)],
     },
     // ★ v3-refusals: cudart's pair, the request words exactly as recorded calls carried them — `a084`
@@ -126,11 +134,13 @@ pub const ROWS: &[Row] = &[
     Row {
         cmd: GSS_CUDART_A084,
         size: 4,
+        exact: false,
         inputs: &[(0, 0)],
     },
     Row {
         cmd: GSS_CUDART_CLOCKS,
         size: 532,
+        exact: false,
         inputs: &[
             (0x00, 0x400),
             (0x08, 0),
@@ -145,7 +155,173 @@ pub const ROWS: &[Row] = &[
             (0x30, 0),
         ],
     },
+    // ★★ Lane C 2026-10-14 — cudart's init gate asked of the HOST (tier 2) instead of served from
+    // one GA106 capture to every die (`crate::cudartinit` rows → `kf_rm::consttab`, now the
+    // fallback). `[measured AD104 / 595.91.07, 2026-10-14, unprivileged libcudart 13.3 under the
+    // nvdiff recorder, traces/constants_night_20261014/]` cudart's own requests: `0x20809009` and
+    // `0x20809001` all zero (8 B), `0x20809064` `{0, 2, 1, 0, 0, 0, 4, 0…}` (520 B) — every word
+    // named here; the host answered each `NV_OK` with exactly the GA106 rows' values.
+    Row {
+        cmd: CUDART_GSS_9009,
+        size: 8,
+        exact: false,
+        inputs: &[(0, 0), (4, 0)],
+    },
+    Row {
+        cmd: CUDART_GSS_9001,
+        size: 8,
+        exact: false,
+        inputs: &[(0, 0), (4, 0)],
+    },
+    Row {
+        cmd: GSS_CLOCK_DOMAINS,
+        size: 520,
+        exact: false,
+        inputs: &[(0, 0), (4, 2), (8, 1), (0x18, 4)],
+    },
+    // cudart's fallback, reached only when `a084`/`a026` fail; the guest's request is `{0,0,0,0}`
+    // (`[measured GA106 / 580.159.04, 2026-08-20]`, `crate::cudartinit::CUDART_INIT_0XA001`).
+    Row {
+        cmd: CUDART_GSS_A001,
+        size: 16,
+        exact: false,
+        inputs: &[(0, 0), (4, 0), (8, 0), (0x0c, 0)],
+    },
+    // ★★ Lane C 2026-10-14 — Windows-only GSS-legacy queries whose real-driver request is MEASURED
+    // all-zero (`[measured AD103 / Windows 580.88, GSP firmware 580.65.05, kfwc capture, 2026-10-14]`
+    // request bodies: 0x2080852a x61, 0x20808524 x3, 0x2080a70a x3, 0x2080852e x55, 0x2080853a x3,
+    // 0x2080a618 x58, 0x2080a088 6 of 12 calls) and that the host answers NV_OK to a zero request
+    // unprivileged (`[measured AD103 / Linux 575.51.03, traces/real_hw_20261013/probe_unpriv.txt]`
+    // all seven; `[measured AD104 / 595.91.07, traces/ctl_probe_20261013/]` 852a, 8524, a70a, a088).
+    // Purpose unknown (no open header): the guest gets the HOST's bytes for the identical question,
+    // never a captured row; any non-zero request byte is a different question (refused as before).
+    Row {
+        cmd: 0x2080_852a,
+        size: 1784,
+        exact: true,
+        inputs: &[],
+    },
+    Row {
+        cmd: 0x2080_8524,
+        size: 4,
+        exact: true,
+        inputs: &[],
+    },
+    Row {
+        cmd: 0x2080_a70a,
+        size: 26,
+        exact: true,
+        inputs: &[],
+    },
+    Row {
+        cmd: 0x2080_a088,
+        size: 12,
+        exact: true,
+        inputs: &[],
+    },
+    Row {
+        cmd: 0x2080_852e,
+        size: 528,
+        exact: true,
+        inputs: &[],
+    },
+    Row {
+        cmd: 0x2080_853a,
+        size: 1456,
+        exact: true,
+        inputs: &[],
+    },
+    Row {
+        cmd: 0x2080_a618,
+        size: 8620,
+        exact: true,
+        inputs: &[],
+    },
+    // ★★ Lane C 2026-10-14 (resumed, daytime) — the SAME controls at the 595 firmware branch. Their paramsSize changed with
+    // the branch (the request stays all-zero): `[measured GA104 / Windows 596.51, GSP firmware 595.76, kfwc capture,
+    // 2026-10-14, traces/constants_measure_20261014b/ga104_596.51/]` 0x2080852e 596 (was 528), 0x2080853a 15352 (was 1456),
+    // 0x2080a618 8632 (was 8620), 0x2080853b 14320 with request word 1 = 1 (the AD103 580.88 capture issued it once at 1832);
+    // 0x2080852a, 0x20808524, 0x2080a70a, 0x2080a088 are unchanged. A host answers a zero request only at the size of its own
+    // branch (`[measured, traces/constants_measure_20261014b/tier2/]` 580.x hosts: 528/1456/8620 NV_OK and 596/15352/8632
+    // INVALID_ARGUMENT; 595.84 / 595.91.07 hosts: the reverse) — that is F-4 of the matrix: the INVALID_ARGUMENT at 595.91.07 was
+    // the 580-branch SIZE, not the control. The size is part of the question (`Row::matches`), so a row whose size the host
+    // refuses is simply not answered, and a guest of either branch gets the host's bytes for ITS size or a refusal, never
+    // another branch's row.
+    Row {
+        cmd: 0x2080_852e,
+        size: 596,
+        exact: true,
+        inputs: &[],
+    },
+    Row {
+        cmd: 0x2080_853a,
+        size: 15352,
+        exact: true,
+        inputs: &[],
+    },
+    Row {
+        cmd: 0x2080_a618,
+        size: 8632,
+        exact: true,
+        inputs: &[],
+    },
+    Row {
+        cmd: 0x2080_853b,
+        size: 14320,
+        exact: true,
+        inputs: &[(4, 1)],
+    },
+    // ★ Windows captures of the SAME die (GA106, RTX 3060) under six Windows drivers, 2026-10-14
+    // (`traces/constants_measure_20261014b/ga106_*`; the GSP firmware string of each is in its `cell.json`/README): the request
+    // of 852a/852e/853a/a618 is all-zero in every one and only the size moves — 852a 1716 under GSP 570.133.07 (1784 from
+    // 575.64.01), a618 8236 under 570.133.07 (8620 575..590, 8632 595.71.01, 20000 610.57.01). Rows for the sizes not above:
+    Row {
+        cmd: 0x2080_852a,
+        size: 1716,
+        exact: true,
+        inputs: &[],
+    },
+    Row {
+        cmd: 0x2080_a618,
+        size: 8236,
+        exact: true,
+        inputs: &[],
+    },
+    Row {
+        cmd: 0x2080_a618,
+        size: 20000,
+        exact: true,
+        inputs: &[],
+    },
+    // ★ The 610 branch (`[measured, tier-2 kit on hosts 610.43.02 (RTX 5090 GB202) and 615.71.09 (L4 AD104),
+    // traces/constants_measure_20261014b/tier2/]` the host's smallest accepted zero-request size for 0x2080852e is 1432; 0x2080853a stays 15352,
+    // 0x2080a618 is accepted at no size 4..16384 — its 610 size is 20000, outside that scan range, see the Windows 610.88 capture above). ⚠ Only the HOST side is measured: no Windows
+    // 610 capture exists, so that a 610 guest sends an all-zero request of 1432 B is [I]; if it sends anything else this row
+    // simply does not match (the size and every byte are part of the question).
+    Row {
+        cmd: 0x2080_852e,
+        size: 1432,
+        exact: true,
+        inputs: &[],
+    },
+    // ★ Lane C 2026-10-14: `0x20808162` (1 byte, request `00`): the GA106 at 580.159.04 answered
+    // `01` (`crate::gsslegacy`), the AD104 at 595.91.07 answers `00` [measured, unprivileged,
+    // traces/constants_night_20261014/probe_8162_595.txt] — a captured byte served to every die was
+    // wrong there. Asked of the host at realize instead.
+    Row {
+        cmd: 0x2080_8162,
+        size: 1,
+        exact: true,
+        inputs: &[],
+    },
 ];
+
+/// `0x20809009` — cudart init gate (GSS-legacy, 8 B).
+pub const CUDART_GSS_9009: u32 = 0x2080_9009;
+/// `0x20809001` — cudart init gate (GSS-legacy, 8 B).
+pub const CUDART_GSS_9001: u32 = 0x2080_9001;
+/// `0x2080a001` — cudart's clock fallback (GSS-legacy, 16 B).
+pub const CUDART_GSS_A001: u32 = 0x2080_a001;
 
 impl Row {
     /// The request buffer: zero, with the input words set.
@@ -181,6 +357,7 @@ impl Row {
                 .inputs
                 .iter()
                 .all(|&(o, v)| params.get(o..o + 4).is_some_and(|w| w == v.to_le_bytes()))
+            && (!self.exact || params == self.request().as_slice())
     }
 }
 

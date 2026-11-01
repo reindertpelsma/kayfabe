@@ -1,0 +1,290 @@
+{
+  "candidate4": "0452613b5c71cb175271230b3e14c8e3c3eef2db",
+  "incoming": "1cb0486100a0c9b434ae56880ca6f23971e9a34a",
+  "preflight_result_tree": "921827adbd65d90061eb1a6236e327363592e2dd",
+  "applied": false,
+  "files": [
+    {
+      "path": "crates/kf-chan/src/user_loop.rs",
+      "stage_blob_ids": {
+        "1": "f0ce46dd148ddda44dc7cf5421e58036a96dce2b",
+        "2": "f61541b1f4fd0cf6244a6eae71a09e0c725c75a5",
+        "3": "2a8d88eb19811ae6126de7a833eba0db64daeff9"
+      },
+      "hunks": [
+        {
+          "id": "H1",
+          "result_lines": [
+            254,
+            331
+          ],
+          "current_lines": 6,
+          "incoming_lines": 69,
+          "current_sha256": "5d291c20f7139e19c8079e6cc3301dfb25dcd43654f645c875f6ecc786c2985d",
+          "incoming_sha256": "e80882cd9ef805205578c23d230042aa6aeb14c21117986d4060d51f335aafb8",
+          "current_first_lines": [
+            "    /// \u2605 2026-10-16: the USER-ring lifecycle's counters (`crate::user_lifecycle`), printed on their own",
+            "    /// line (`USER_RING_LIFECYCLE SUMMARY`).",
+            "    pub life: crate::user_lifecycle::LifecycleStats,"
+          ],
+          "incoming_first_lines": [
+            "    // ---- 2026-10-14 flow counters (what one turn costs: how many turns, entries, publications, host",
+            "    // doorbells). Always on: relaxed atomics, no clock.",
+            "    /// Relay turns run (`Pump::turn`)."
+          ],
+          "winner": "UNRESOLVED: owner decision required"
+        },
+        {
+          "id": "H2",
+          "result_lines": [
+            397,
+            401
+          ],
+          "current_lines": 1,
+          "incoming_lines": 1,
+          "current_sha256": "c334eaef2bb40b509e653175e2a758e7d8548bb63a7eddc9fe0b6d3a4fff019e",
+          "incoming_sha256": "3ee15874a6ce502f99601393d378543f321e47aba084e7bfd2f757001c2a2440",
+          "current_first_lines": [
+            "            \"wakes(doorbell={} event={} spin={} backstop={}) backstop_found(work={} carried={} contended={}) event_without_progress={} gates={} carried_ungated={} credit_waits={} contended_turns={} pop_writebacks={} markers={} drain_us_log2={drain:?}\","
+          ],
+          "incoming_first_lines": [
+            "            \"wakes(doorbell={} event={} spin={} backstop={}) backstop_found(work={} carried={} contended={} put_ahead={}) event_without_progress={} gates={} carried_ungated={} credit_waits={} contended_turns={} pop_writebacks={} markers={} drain_us_log2={drain:?} flow(turns={} segments={} publications={} host_doorbells={} put_reads={} get_writebacks={} entries_per_turn_log2={per_turn:?} put_delta_entries_log2={delta:?} segment_words_log2={seg_words:?} words_total={}){stages}\","
+          ],
+          "winner": "UNRESOLVED: owner decision required"
+        }
+      ]
+    },
+    {
+      "path": "crates/kf-chan/tests/user_loop_model.rs",
+      "stage_blob_ids": {
+        "1": "fa048386abf483e4d0cfdf5041748ac1f296bde5",
+        "2": "b1d01d68881644222da367985ec9dc74c0f2b26d",
+        "3": "74b299296dc0242807b64995b45e87574373088d"
+      },
+      "hunks": [
+        {
+          "id": "H1",
+          "result_lines": [
+            153,
+            159
+          ],
+          "current_lines": 2,
+          "incoming_lines": 2,
+          "current_sha256": "dc506a2e54731e928fc54facbdb5e106abda340c40d7fe4e3bf3af51beacc96a",
+          "incoming_sha256": "10f9a7d4326732a476894820f5e7bf9205fcec68d8af8daa2c02009e7fbba053",
+          "current_first_lines": [
+            "    /// The RETIRED idle backstop: read `GP_PUT` and ring the relay when it is ahead of the cursor.",
+            "    backstop_polls_put: bool,"
+          ],
+          "incoming_first_lines": [
+            "    /// \u2605 batching (doc \u00a79): the chain ends without ringing the host doorbell it owes.",
+            "    no_final_bell: bool,"
+          ],
+          "winner": "UNRESOLVED: owner decision required"
+        }
+      ]
+    },
+    {
+      "path": "crates/kf-qemu/src/userpump.rs",
+      "stage_blob_ids": {
+        "1": "17de3089909cb66daacc26b4dd32919fb6e8f000",
+        "2": "d7ab5b31edbf5b3aac3f1a47948315af2f47d432",
+        "3": "91059610c4b5ea01247badcda1943aa1f4142cc0"
+      },
+      "hunks": [
+        {
+          "id": "H1",
+          "result_lines": [
+            481,
+            523
+          ],
+          "current_lines": 4,
+          "incoming_lines": 36,
+          "current_sha256": "a16949b885b768715ae8959e08e528f861bdc9f21c1c1da7fcee5926863689c5",
+          "incoming_sha256": "01edb06e3e41d36c98f07c43d556467a8aa1536784900f78de6bd1e60f7d0427",
+          "current_first_lines": [
+            "    /// The loaded entry's guards and the turn's reporting state (see [`Aux`]).",
+            "    aux: Aux,",
+            "    /// The channel's software object once known (Scan and Window refresh it; Pointer only reads it)."
+          ],
+          "incoming_first_lines": [
+            "    /// Published guest work not yet followed by a batch marker.",
+            "    unnotified: bool,",
+            "    /// The most recent marker the relay published carries an interrupt (false = a control witness)."
+          ],
+          "winner": "UNRESOLVED: owner decision required"
+        },
+        {
+          "id": "H2",
+          "result_lines": [
+            1039,
+            1059
+          ],
+          "current_lines": 2,
+          "incoming_lines": 16,
+          "current_sha256": "36af056c7a03af044969effbfdb8325603e653132a031d6809fd00c546890201",
+          "incoming_sha256": "1eca0126276c3924e83157af67bc2ed3d8539a26146d51fefa98ed4e533ee579",
+          "current_first_lines": [
+            "            aux: Aux::default(),",
+            "            sw: None,"
+          ],
+          "incoming_first_lines": [
+            "            unnotified: false,",
+            "            marker_event: false,",
+            "            gate_at: None,"
+          ],
+          "winner": "UNRESOLVED: owner decision required"
+        },
+        {
+          "id": "H3",
+          "result_lines": [
+            1881,
+            1947
+          ],
+          "current_lines": 21,
+          "incoming_lines": 43,
+          "current_sha256": "5aefe9bf2f6112b05420653dd2859bbfdd0f4ed44bad44f5ab3552f6be5b6898",
+          "incoming_sha256": "71349768a86ef5e572ad8468bd0238d4bfa1ce7bacd1bc4d64739b6db0b9275e",
+          "current_first_lines": [
+            "        self.core.need = Need::Idle;",
+            "        self.core.again = false;",
+            "        let out = self.turn_body(me, r);"
+          ],
+          "incoming_first_lines": [
+            "        self.need = Need::Idle;",
+            "        self.again = false;",
+            "        self.seg_turn = 0;"
+          ],
+          "winner": "UNRESOLVED: owner decision required"
+        },
+        {
+          "id": "H4",
+          "result_lines": [
+            2014,
+            2242
+          ],
+          "current_lines": 42,
+          "incoming_lines": 184,
+          "current_sha256": "b7b22c43f2b3e51e95ed4a96061d5252ee539f762c191716cc0a6d6cd84933cd",
+          "incoming_sha256": "80e7eee4d6146c69ac4de638c4eaabcbc1566de51e7b9a3c367230e477858710",
+          "current_first_lines": [
+            "        // \u2605 2026-10-16 (PHASE 1b): observe, write back, read GP_PUT, load, plan, gate, publish / read / scan all run",
+            "        // in `kf_chan::user_turn::Relay` (the same code the interleaving model drives); the pump takes over for a",
+            "        // segment in flight and for a scanned segment (`segment_turn`)."
+          ],
+          "incoming_first_lines": [
+            "        if !self.chained {",
+            "            let t_obs = me.relay_stats.t0();",
+            "            let (get, reference) = {"
+          ],
+          "winner": "UNRESOLVED: owner decision required"
+        },
+        {
+          "id": "H5",
+          "result_lines": [
+            2262,
+            2383
+          ],
+          "current_lines": 0,
+          "incoming_lines": 119,
+          "current_sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+          "incoming_sha256": "94cc0ea5cb5e76b29f1c49f11c3473c2e0386d653c5f5dcfafc99cb58f2ebf65",
+          "current_first_lines": [],
+          "incoming_first_lines": [
+            "            if matches!(descriptor, kf_chan::user_stream::Source::Nop) {",
+            "                // one slot stays back for the batch marker",
+            "                if self.fetch.available() < 2 {"
+          ],
+          "winner": "UNRESOLVED: owner decision required"
+        },
+        {
+          "id": "H6",
+          "result_lines": [
+            2405,
+            2504
+          ],
+          "current_lines": 4,
+          "incoming_lines": 93,
+          "current_sha256": "5d769f8ce1ab16e81e3c7f99b7fcca33eb9ba031eb09b722aed462922a60b86b",
+          "incoming_sha256": "a06958514d763a4c06005f6530563edfdea98fc7ba07f626ea091739ddc6447b",
+          "current_first_lines": [
+            "    /// Measurement only: the final scan refusal of the turn (the relay stopped at it).",
+            "    fn trace_scan_failure(&mut self, me: &ChanPlane, r: &userrelay::Record, why: &Failure) {",
+            "        let Some(kf_chan::user_stream::Source::Segment(d)) = self.core.desc else {"
+          ],
+          "incoming_first_lines": [
+            "    /// \u2605 2026-10-14 -- the batch marker (`kf_chan::user_loop`, design doc \u00a73.3): one private segment",
+            "    /// `[NON_STALL_INTERRUPT, 0]` behind everything published so far. Its `GP_GET` passing is the",
+            "    /// proof every earlier entry began processing; its interrupt (the engine's non-stall event, in the"
+          ],
+          "winner": "UNRESOLVED: owner decision required"
+        },
+        {
+          "id": "H7",
+          "result_lines": [
+            2666,
+            2759
+          ],
+          "current_lines": 4,
+          "incoming_lines": 87,
+          "current_sha256": "cc0b534e23794aa71a6b1cea008a24318ba64244289c770568ae7b92760f99ea",
+          "incoming_sha256": "1c3ec1d450e7f7d088f6c0a77a4aa5c616f9ded158bcbb7d4ad9164ad31c08ea",
+          "current_first_lines": [
+            "        let ram_generation = self.ram_generation;",
+            "        publish_guarded(me, r, ram_generation, software, ring, gp, pb, |storage| {",
+            "            write(self, storage)"
+          ],
+          "incoming_first_lines": [
+            "        if me.inbox.walk_busy() {",
+            "            me.inbox.wait_walk(r.idx);",
+            "            return Err(Failure::Retry);"
+          ],
+          "winner": "UNRESOLVED: owner decision required"
+        },
+        {
+          "id": "H8",
+          "result_lines": [
+            2844,
+            2855
+          ],
+          "current_lines": 5,
+          "incoming_lines": 4,
+          "current_sha256": "7d225a0cdda688cab5deddf0da0c49eb21208af9ff324b0192559810192ff51c",
+          "incoming_sha256": "5cd37f2d7d140a7abd4ba7e0f4e3853fce3f696ecc1dd7e33e256677eaa37a72",
+          "current_first_lines": [
+            "            self.core.scan = next;",
+            "            self.core.life.segment_scanned(self.core.scan.carried().is_some());",
+            "            self.core.cursor = s.guest_get;"
+          ],
+          "incoming_first_lines": [
+            "            self.scan = next;",
+            "            self.cursor = s.guest_get;",
+            "            self.unnotified = true;"
+          ],
+          "winner": "UNRESOLVED: owner decision required"
+        },
+        {
+          "id": "H9",
+          "result_lines": [
+            2939,
+            2948
+          ],
+          "current_lines": 2,
+          "incoming_lines": 5,
+          "current_sha256": "9f9b32abbc47b51d7f1e77007d2824cdbad04c9a38097549effad5498cfe9914",
+          "incoming_sha256": "b91efc60ca3dbe807636fca0c3086e196e5c2d74b132726066c27c8027d15382",
+          "current_first_lines": [
+            "        self.core.scan = next;",
+            "        self.core.life.segment_scanned(self.core.scan.carried().is_some());"
+          ],
+          "incoming_first_lines": [
+            "        if !s.rare_counted {",
+            "            s.rare_counted = true;",
+            "            self.seg_turn += 1;"
+          ],
+          "winner": "UNRESOLVED: owner decision required"
+        }
+      ]
+    }
+  ]
+}

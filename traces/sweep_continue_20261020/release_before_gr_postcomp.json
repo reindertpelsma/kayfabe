@@ -1,0 +1,42 @@
+{
+  "source": "ccb4b706c36b23e1f2947dc0dae9487269e09140",
+  "counts_pass_fail_ignore": {
+    "kf-abi": [
+      608,
+      0,
+      0
+    ],
+    "kf-chan": [
+      530,
+      0,
+      3
+    ],
+    "kf-chip": [
+      86,
+      0,
+      0
+    ],
+    "kf-disp": [
+      286,
+      0,
+      5
+    ],
+    "kf-qemu": [
+      407,
+      0,
+      0
+    ],
+    "kf-rm": [
+      812,
+      0,
+      0
+    ]
+  },
+  "total": [
+    2729,
+    0,
+    8
+  ],
+  "exit": 0,
+  "log_sha256": "47b1d86f5cb92da8f32dcd6afe343279ea39c5559ff3774aa8affbaff34c0fc9"
+}

@@ -1,0 +1,25 @@
+{
+   "blockdevices": [
+      {
+         "path": "/dev/nbd15",
+         "size": 85899345920,
+         "fstype": null
+      },{
+         "path": "/dev/nbd15p1",
+         "size": 314572800,
+         "fstype": "vfat"
+      },{
+         "path": "/dev/nbd15p2",
+         "size": 16777216,
+         "fstype": null
+      },{
+         "path": "/dev/nbd15p3",
+         "size": 84884324352,
+         "fstype": "ntfs"
+      },{
+         "path": "/dev/nbd15p4",
+         "size": 680525824,
+         "fstype": "ntfs"
+      }
+   ]
+}

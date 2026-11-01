@@ -1,0 +1,9 @@
+{
+  "original_log_bytes": 1473734,
+  "hits": [
+    {
+      "offset": 1360220,
+      "line": "kf3: GSP REFUSED fn76/0x906f0102=0x56 (GSP_RM_CONTROL) first_seq=0 \u2014 the guest read a non-OK status"
+    }
+  ]
+}

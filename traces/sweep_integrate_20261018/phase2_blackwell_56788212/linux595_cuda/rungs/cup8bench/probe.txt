@@ -1,0 +1,377 @@
+=== boot_capture tag=cl_sweep249_gb202_cuda595_cup8bench_1 at 2026-10-19T22:54:37+00:00 ===
+=== source revision: 24906bf33 ===
+=== qemu binary: -rwxr-xr-x 1 root root 96044008 Oct 19 21:02 /workspace/bench/kf3-bins/24906bf3/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY:
+=== BUILD_REV.txt says (informational, NOT authoritative):
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /root/kayfabe/scripts/bench/boot_nvkvm.sh  sha256=0c01dc8eb42df9a4
+    used: /root/kayfabe/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Mon Oct 19 22:54:40 2026
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 595.91.07              Driver Version: 595.91.07      CUDA Version: 13.2     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 5090        Off |   00000000:00:03.0 Off |                  N/A |
+| N/A   N/A  N/A             N/A  /  N/A  |       0MiB /   8192MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+SMI_RC=0
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Oct 19 22:54 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Oct 19 22:54 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Oct 19 22:54 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Oct 19 22:54 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Oct 19 22:54 .
+drwxr-xr-x 19 root root   4020 Oct 19 22:54 ..
+cr--------  1 root root 240, 1 Oct 19 22:54 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Oct 19 22:54 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2064384  0
+nvidia_drm            139264  0
+nvidia_modeset       1748992  1 nvidia_drm
+nvidia              14815232  2 nvidia_uvm,nvidia_modeset
+video                  77824  1 nvidia_modeset
+ecc                    45056  1 nvidia
+=== POST_CAPTURE_HOOK /root/kayfabe/scripts/bench/cup8bench_hook.sh at 2026-10-19T22:54:41+00:00 ===
+BENCH_ONLY=measure
+=== source (md5 — a run cannot silently be a different copy) ===
+    /root/kayfabe/scripts/bench/cup8bench.c                   1124 lines  md5 6c9f86d2581016ec9d34d6a7636fc8b5
+BENCH_SRC_MD5=6c9f86d2581016ec9d34d6a7636fc8b5
+    ★ THE SAME FILE the native arm builds — w311_native.sh copies THIS path. The md5 is
+      printed by both arms so 'same source' is a comparison, not a template sentence.
+BENCH_PARAMS sizes=16,2048 iters=20 batch=10 verify=1
+BENCH_W322_PARAMS hostmem=0 alloc=[] bw=[] bw_iters=7 bw_target_mib=256 bw_only=0 bw_reps=0 nolaunch=0 fill_chunk_mib=[<default:8>]
+
+=== ★★★ GUEST PRECONDITION 1 — the PTX JIT (cuModuleLoadData needs it) ===
+    /usr/lib/x86_64-linux-gnu/libnvidia-ptxjitcompiler.so
+    /usr/lib/x86_64-linux-gnu/libnvidia-ptxjitcompiler.so.1
+    /usr/lib/x86_64-linux-gnu/libnvidia-ptxjitcompiler.so.595.91.07
+BENCH_JIT_PRESENT=yes
+
+=== ★★ GUEST PRECONDITION 2 — HOST-SIDE RAM. cup8bench mallocs 3 x N^2 x 4 per size ===
+    ⊘ At N=2048 that is 48 MiB of GUEST RAM. If malloc fails it prints 'OOM host' and
+      exits 1 — a GUEST-IMAGE failure, not our address plane.
+                   total        used        free      shared  buff/cache   available
+    Mem:            1967         456        1301           0         353        1510
+BENCH_GUEST_MEMFREE_MB=1306
+
+=== push + build in the guest ===
+    ⊘ cup8bench.c does NOT include <cuda.h>: it declares the Driver-API entry points it
+      uses, so guest and host build it with the same one-line gcc invocation. That is
+      what makes the two arms comparable at all.
+BENCH_GCC_RC=0
+BENCH_GUEST_SRC_MD5=6c9f86d2581016ec9d34d6a7636fc8b5
+
+=== launch [measure] DETACHED under its own 1100s timeout ===
+    LAUNCHED pid=1935
+    STARTED 2026-10-19T22:54:44+00:00 epoch=1792450484
+=== waiting for [measure] terminator — deadline 1220s from now ===
+    [+1s] ok   cuDeviceGet(&d,0)
+    [+7s] ★ terminator present
+BENCH_measure_TERMINATOR_SEEN=yes
+BENCH_measure_HOOK_WAITED_S=7
+BENCH_measure_WALL_S=11
+BENCH_measure_RC=0
+
+=== ★ [measure] FULL OUTPUT, verbatim (⚠ INDENTED — the graded lines below are NOT) ===
+    BENCH_BUILD sizes=[16,2048] iters=20 batch=10 verify_every=1 nolaunch=0
+    BENCH_W320 batch_sweep=[] batch_reps=5 ctx_flags=0x0 hostmem=0
+    BENCH_W322 alloc=[vram] bw=[] bw_iters=7 bw_target_mib=256 bw_only=0 bw_reps=0
+    BENCH_TSTATE_AVAILABLE=yes cpu_ms=1.880100 nvcsw=0
+    BENCH_CLOCK_ORIGIN mono_ms=72644.389 real_ms=1792450484337.649
+    BENCH_MODE=MEASURE
+    ok   cuInit(0)
+    BENCH_INIT_MS=8196.38
+    ok   cuDeviceGetCount(&nd)
+    ok   cuDeviceGet(&d,0)
+    BENCH_DEVICE=[NVIDIA GeForce RTX 5090]
+    ok   cuCtxCreate_v2(&ctx,CTXFLAGS,d)
+    BENCH_CTX_MS=910.72
+    PTX_TARGET=sm_86 (device cc 12.0)
+    PTX_TARGET=sm_86 (device cc 12.0)
+    ok   cuModuleLoadData(&mod,PTX)
+    BENCH_MODULE_MS=287.03
+    ok   cuModuleGetFunction(&fn,mod,"mm")
+
+    BENCH_SIZE_BEGIN N=16 per_matrix_MiB=0 device_MiB=0
+    B16_ALLOC_MS=2.82
+    B16_PTRS=A:0x7104eb000000,B:0x7104eb000400,C:0x7104eb000800
+    B16_H2D_MS=0.56  (2 x 0 MiB)
+    B16_GRID=(1,1)x(16,16)
+    ITER N=16 i=0 launch_ms=1.898 submit_ms=1.894 sync_ms=0.004 t0_mono_ms=82046.268 sub_cpu_ms=1.853 syn_cpu_ms=0.004 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.004 syn_stime_ms=0.000 verified=yes bad=0
+    ITER N=16 i=1 launch_ms=0.022 submit_ms=0.019 sync_ms=0.003 t0_mono_ms=82048.272 sub_cpu_ms=0.021 syn_cpu_ms=0.002 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.002 syn_stime_ms=0.000 verified=yes bad=0
+    ITER N=16 i=2 launch_ms=0.020 submit_ms=0.018 sync_ms=0.002 t0_mono_ms=82048.339 sub_cpu_ms=0.020 syn_cpu_ms=0.002 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.000 syn_stime_ms=0.003 verified=yes bad=0
+    ITER N=16 i=3 launch_ms=0.021 submit_ms=0.019 sync_ms=0.003 t0_mono_ms=82048.407 sub_cpu_ms=0.021 syn_cpu_ms=0.003 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.001 syn_stime_ms=0.002 verified=yes bad=0
+    ITER N=16 i=4 launch_ms=0.020 submit_ms=0.017 sync_ms=0.002 t0_mono_ms=82048.472 sub_cpu_ms=0.019 syn_cpu_ms=0.002 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.000 syn_stime_ms=0.002 verified=yes bad=0
+    ITER N=16 i=5 launch_ms=0.020 submit_ms=0.018 sync_ms=0.002 t0_mono_ms=82048.534 sub_cpu_ms=0.019 syn_cpu_ms=0.002 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.000 syn_stime_ms=0.003 verified=yes bad=0
+    ITER N=16 i=6 launch_ms=0.029 submit_ms=0.026 sync_ms=0.003 t0_mono_ms=82048.597 sub_cpu_ms=0.028 syn_cpu_ms=0.002 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.000 syn_stime_ms=0.002 verified=yes bad=0
+    ITER N=16 i=7 launch_ms=0.020 submit_ms=0.018 sync_ms=0.002 t0_mono_ms=82048.669 sub_cpu_ms=0.020 syn_cpu_ms=0.002 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.000 syn_stime_ms=0.002 verified=yes bad=0
+    ITER N=16 i=8 launch_ms=0.020 submit_ms=0.017 sync_ms=0.002 t0_mono_ms=82048.732 sub_cpu_ms=0.019 syn_cpu_ms=0.002 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.000 syn_stime_ms=0.002 verified=yes bad=0
+    ITER N=16 i=9 launch_ms=0.020 submit_ms=0.017 sync_ms=0.002 t0_mono_ms=82048.793 sub_cpu_ms=0.019 syn_cpu_ms=0.002 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.000 syn_stime_ms=0.002 verified=yes bad=0
+    ITER N=16 i=10 launch_ms=0.020 submit_ms=0.017 sync_ms=0.002 t0_mono_ms=82048.855 sub_cpu_ms=0.019 syn_cpu_ms=0.002 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.000 syn_stime_ms=0.003 verified=yes bad=0
+    ITER N=16 i=11 launch_ms=0.020 submit_ms=0.017 sync_ms=0.003 t0_mono_ms=82048.917 sub_cpu_ms=0.019 syn_cpu_ms=0.003 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.000 syn_stime_ms=0.002 verified=yes bad=0
+    ITER N=16 i=12 launch_ms=0.020 submit_ms=0.018 sync_ms=0.002 t0_mono_ms=82048.979 sub_cpu_ms=0.020 syn_cpu_ms=0.002 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.000 syn_stime_ms=0.003 verified=yes bad=0
+    ITER N=16 i=13 launch_ms=0.021 submit_ms=0.018 sync_ms=0.002 t0_mono_ms=82049.070 sub_cpu_ms=0.020 syn_cpu_ms=0.002 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.002 syn_stime_ms=0.000 verified=yes bad=0
+    ITER N=16 i=14 launch_ms=0.020 submit_ms=0.017 sync_ms=0.002 t0_mono_ms=82049.134 sub_cpu_ms=0.019 syn_cpu_ms=0.002 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.003 syn_stime_ms=0.000 verified=yes bad=0
+    ITER N=16 i=15 launch_ms=0.020 submit_ms=0.018 sync_ms=0.002 t0_mono_ms=82049.235 sub_cpu_ms=0.020 syn_cpu_ms=0.002 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.003 syn_stime_ms=0.000 verified=yes bad=0
+    ITER N=16 i=16 launch_ms=0.020 submit_ms=0.017 sync_ms=0.002 t0_mono_ms=82049.299 sub_cpu_ms=0.019 syn_cpu_ms=0.002 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.002 syn_stime_ms=0.000 verified=yes bad=0
+    ITER N=16 i=17 launch_ms=0.020 submit_ms=0.017 sync_ms=0.002 t0_mono_ms=82049.359 sub_cpu_ms=0.019 syn_cpu_ms=0.002 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.003 syn_stime_ms=0.000 verified=yes bad=0
+    ITER N=16 i=18 launch_ms=0.020 submit_ms=0.017 sync_ms=0.002 t0_mono_ms=82049.420 sub_cpu_ms=0.019 syn_cpu_ms=0.002 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.002 syn_stime_ms=0.000 verified=yes bad=0
+    ITER N=16 i=19 launch_ms=0.020 submit_ms=0.017 sync_ms=0.002 t0_mono_ms=82049.480 sub_cpu_ms=0.019 syn_cpu_ms=0.002 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.003 syn_stime_ms=0.000 verified=yes bad=0
+
+    B16_N=16
+    B16_ITERS=20
+    B16_FIRST_MS=1.898
+    B16_MEDIAN_MS=0.020
+    B16_P90_MS=0.021
+    B16_MIN_MS=0.020
+    B16_MAX_MS=0.029
+    B16_MEAN_MS=0.021
+    B16_GFLOPS=0.409
+    B16_BATCH=10
+    B16_BATCH_TOTAL_MS=0.217
+    B16_BATCH_PER_LAUNCH_MS=0.022
+    B16_BATCH_GFLOPS=0.378
+    B16_BATCH_BAD=0
+    B16_H2D_MS=0.564
+    B16_D2H_MED_MS=0.018
+    B16_ALLOC_MS2=2.816
+    B16_SUBMIT_MED_MS=0.017
+    B16_SYNC_MED_MS=0.002
+    B16_SYNC_CPU_MED_MS=0.002
+    B16_SYNC_OFFCPU_MED_MS=0.000
+    B16_SYNC_NVCSW_MED=0.0
+    B16_SUBMIT_CPU_MED_MS=0.019
+    B16_SUBMIT_MAX_MS=0.026
+    B16_SYNC_MAX_MS=0.003
+    B16_WINDOW_MONO_MS=82046.268..82049.500
+    B16_BAD=0
+    B16_MAXERR=0
+    BSUM N=16 iters=20 first_ms=1.898 med_ms=0.020 p90_ms=0.021 min_ms=0.020 max_ms=0.029 gflops=0.409 batch_per_launch_ms=0.022 batch_gflops=0.378 h2d_ms=0.564 d2h_med_ms=0.018 submit_med_ms=0.017 sync_med_ms=0.002 sync_cpu_med_ms=0.002 sync_offcpu_med_ms=0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.019 bad=0 maxerr=0
+    BENCH_SIZE_END N=16
+
+    BENCH_SIZE_BEGIN N=2048 per_matrix_MiB=16 device_MiB=48
+    B2048_ALLOC_MS=6.35
+    B2048_PTRS=A:0x7104eb000000,B:0x7104f0400000,C:0x7104c6000000
+    B2048_H2D_MS=2.49  (2 x 16 MiB)
+    B2048_GRID=(128,128)x(16,16)
+    ITER N=2048 i=0 launch_ms=2.716 submit_ms=0.019 sync_ms=2.697 t0_mono_ms=82329.155 sub_cpu_ms=0.021 syn_cpu_ms=2.697 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=1.965 syn_stime_ms=0.732 verified=yes bad=0
+    ITER N=2048 i=1 launch_ms=2.532 submit_ms=0.019 sync_ms=2.513 t0_mono_ms=82470.863 sub_cpu_ms=0.022 syn_cpu_ms=2.513 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=2.513 syn_stime_ms=0.000 verified=yes bad=0
+    ITER N=2048 i=2 launch_ms=2.530 submit_ms=0.018 sync_ms=2.512 t0_mono_ms=82477.435 sub_cpu_ms=0.020 syn_cpu_ms=2.512 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=2.512 syn_stime_ms=0.000 verified=yes bad=0
+    ITER N=2048 i=3 launch_ms=2.558 submit_ms=0.045 sync_ms=2.513 t0_mono_ms=82483.993 sub_cpu_ms=0.047 syn_cpu_ms=2.513 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=2.513 syn_stime_ms=0.000 verified=yes bad=0
+    ITER N=2048 i=4 launch_ms=2.534 submit_ms=0.018 sync_ms=2.516 t0_mono_ms=82490.563 sub_cpu_ms=0.020 syn_cpu_ms=2.516 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=2.516 syn_stime_ms=0.000 verified=yes bad=0
+    ITER N=2048 i=5 launch_ms=2.536 submit_ms=0.018 sync_ms=2.518 t0_mono_ms=82497.099 sub_cpu_ms=0.020 syn_cpu_ms=2.518 syn_offcpu_ms=-0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=2.518 syn_stime_ms=0.000 verified=yes bad=0
+    ITER N=2048 i=6 launch_ms=2.542 submit_ms=0.019 sync_ms=2.523 t0_mono_ms=82503.630 sub_cpu_ms=0.022 syn_cpu_ms=2.522 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=2.522 syn_stime_ms=0.000 verified=yes bad=0
+    ITER N=2048 i=7 launch_ms=2.532 submit_ms=0.018 sync_ms=2.514 t0_mono_ms=82510.274 sub_cpu_ms=0.020 syn_cpu_ms=2.514 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=2.513 syn_stime_ms=0.000 verified=yes bad=0
+    ITER N=2048 i=8 launch_ms=2.538 submit_ms=0.018 sync_ms=2.520 t0_mono_ms=82516.937 sub_cpu_ms=0.020 syn_cpu_ms=2.520 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=2.519 syn_stime_ms=0.000 verified=yes bad=0
+    ITER N=2048 i=9 launch_ms=2.539 submit_ms=0.020 sync_ms=2.520 t0_mono_ms=82523.687 sub_cpu_ms=0.022 syn_cpu_ms=2.520 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=2.520 syn_stime_ms=0.000 verified=yes bad=0
+    ITER N=2048 i=10 launch_ms=2.537 submit_ms=0.019 sync_ms=2.518 t0_mono_ms=82530.377 sub_cpu_ms=0.021 syn_cpu_ms=2.518 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=2.518 syn_stime_ms=0.000 verified=yes bad=0
+    ITER N=2048 i=11 launch_ms=2.568 submit_ms=0.059 sync_ms=2.509 t0_mono_ms=82536.994 sub_cpu_ms=0.061 syn_cpu_ms=2.509 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=2.508 syn_stime_ms=0.000 verified=yes bad=0
+    ITER N=2048 i=12 launch_ms=2.538 submit_ms=0.018 sync_ms=2.520 t0_mono_ms=82543.656 sub_cpu_ms=0.021 syn_cpu_ms=2.520 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=2.520 syn_stime_ms=0.000 verified=yes bad=0
+    ITER N=2048 i=13 launch_ms=2.536 submit_ms=0.018 sync_ms=2.517 t0_mono_ms=82550.268 sub_cpu_ms=0.020 syn_cpu_ms=2.517 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=2.517 syn_stime_ms=0.000 verified=yes bad=0
+    ITER N=2048 i=14 launch_ms=2.541 submit_ms=0.018 sync_ms=2.523 t0_mono_ms=82556.873 sub_cpu_ms=0.020 syn_cpu_ms=2.522 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=2.523 syn_stime_ms=0.000 verified=yes bad=0
+    ITER N=2048 i=15 launch_ms=2.548 submit_ms=0.018 sync_ms=2.530 t0_mono_ms=82563.482 sub_cpu_ms=0.020 syn_cpu_ms=2.530 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=2.530 syn_stime_ms=0.000 verified=yes bad=0
+    ITER N=2048 i=16 launch_ms=2.539 submit_ms=0.018 sync_ms=2.521 t0_mono_ms=82570.122 sub_cpu_ms=0.020 syn_cpu_ms=2.521 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=2.520 syn_stime_ms=0.000 verified=yes bad=0
+    ITER N=2048 i=17 launch_ms=2.536 submit_ms=0.018 sync_ms=2.518 t0_mono_ms=82576.737 sub_cpu_ms=0.020 syn_cpu_ms=2.518 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=2.518 syn_stime_ms=0.000 verified=yes bad=0
+    ITER N=2048 i=18 launch_ms=2.533 submit_ms=0.018 sync_ms=2.515 t0_mono_ms=82583.348 sub_cpu_ms=0.020 syn_cpu_ms=2.515 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=2.515 syn_stime_ms=0.000 verified=yes bad=0
+    ITER N=2048 i=19 launch_ms=2.533 submit_ms=0.018 sync_ms=2.514 t0_mono_ms=82589.950 sub_cpu_ms=0.021 syn_cpu_ms=2.514 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=2.515 syn_stime_ms=0.000 verified=yes bad=0
+
+    B2048_N=2048
+    B2048_ITERS=20
+    B2048_FIRST_MS=2.716
+    B2048_MEDIAN_MS=2.537
+    B2048_P90_MS=2.548
+    B2048_MIN_MS=2.530
+    B2048_MAX_MS=2.568
+    B2048_MEAN_MS=2.539
+    B2048_GFLOPS=6772.583
+    B2048_BATCH=10
+    B2048_BATCH_TOTAL_MS=25.073
+    B2048_BATCH_PER_LAUNCH_MS=2.507
+    B2048_BATCH_GFLOPS=6851.845
+    B2048_BATCH_BAD=0
+    B2048_H2D_MS=2.492
+    B2048_D2H_MED_MS=1.221
+    B2048_ALLOC_MS2=6.348
+    B2048_SUBMIT_MED_MS=0.018
+    B2048_SYNC_MED_MS=2.518
+    B2048_SYNC_CPU_MED_MS=2.518
+    B2048_SYNC_OFFCPU_MED_MS=0.000
+    B2048_SYNC_NVCSW_MED=0.0
+    B2048_SUBMIT_CPU_MED_MS=0.020
+    B2048_SUBMIT_MAX_MS=0.059
+    B2048_SYNC_MAX_MS=2.530
+    B2048_WINDOW_MONO_MS=82329.155..82592.483
+    B2048_BAD=0
+    B2048_MAXERR=0
+    BSUM N=2048 iters=20 first_ms=2.716 med_ms=2.537 p90_ms=2.548 min_ms=2.530 max_ms=2.568 gflops=6772.583 batch_per_launch_ms=2.507 batch_gflops=6851.845 h2d_ms=2.492 d2h_med_ms=1.221 submit_med_ms=0.018 sync_med_ms=2.518 sync_cpu_med_ms=2.518 sync_offcpu_med_ms=0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.020 bad=0 maxerr=0
+    BENCH_SIZE_END N=2048
+    BENCH_CLOCK_END mono_ms=82632.509 real_ms=1792450494325.768
+
+    BENCH_SIZES_DONE=2
+    BENCH_TOTAL_BAD=0
+    BENCH_VERDICT: PASS (every timed iteration verified)
+    DONE
+BENCH_MEASURE_OUT_BYTES=11869
+
+=== ★★★★★ THE GUEST METRICS — anchored, one line per measured quantity ===
+GUEST_B16_ALLOC_MS=2.82
+GUEST_B16_PTRS=A:0x7104eb000000,B:0x7104eb000400,C:0x7104eb000800
+GUEST_B16_H2D_MS=0.56  (2 x 0 MiB)
+GUEST_B16_GRID=(1,1)x(16,16)
+GUEST_B16_N=16
+GUEST_B16_ITERS=20
+GUEST_B16_FIRST_MS=1.898
+GUEST_B16_MEDIAN_MS=0.020
+GUEST_B16_P90_MS=0.021
+GUEST_B16_MIN_MS=0.020
+GUEST_B16_MAX_MS=0.029
+GUEST_B16_MEAN_MS=0.021
+GUEST_B16_GFLOPS=0.409
+GUEST_B16_BATCH=10
+GUEST_B16_BATCH_TOTAL_MS=0.217
+GUEST_B16_BATCH_PER_LAUNCH_MS=0.022
+GUEST_B16_BATCH_GFLOPS=0.378
+GUEST_B16_BATCH_BAD=0
+GUEST_B16_H2D_MS=0.564
+GUEST_B16_D2H_MED_MS=0.018
+GUEST_B16_ALLOC_MS2=2.816
+GUEST_B16_SUBMIT_MED_MS=0.017
+GUEST_B16_SYNC_MED_MS=0.002
+GUEST_B16_SYNC_CPU_MED_MS=0.002
+GUEST_B16_SYNC_OFFCPU_MED_MS=0.000
+GUEST_B16_SYNC_NVCSW_MED=0.0
+GUEST_B16_SUBMIT_CPU_MED_MS=0.019
+GUEST_B16_SUBMIT_MAX_MS=0.026
+GUEST_B16_SYNC_MAX_MS=0.003
+GUEST_B16_WINDOW_MONO_MS=82046.268..82049.500
+GUEST_B16_BAD=0
+GUEST_B16_MAXERR=0
+GUEST_B2048_ALLOC_MS=6.35
+GUEST_B2048_PTRS=A:0x7104eb000000,B:0x7104f0400000,C:0x7104c6000000
+GUEST_B2048_H2D_MS=2.49  (2 x 16 MiB)
+GUEST_B2048_GRID=(128,128)x(16,16)
+GUEST_B2048_N=2048
+GUEST_B2048_ITERS=20
+GUEST_B2048_FIRST_MS=2.716
+GUEST_B2048_MEDIAN_MS=2.537
+GUEST_B2048_P90_MS=2.548
+GUEST_B2048_MIN_MS=2.530
+GUEST_B2048_MAX_MS=2.568
+GUEST_B2048_MEAN_MS=2.539
+GUEST_B2048_GFLOPS=6772.583
+GUEST_B2048_BATCH=10
+GUEST_B2048_BATCH_TOTAL_MS=25.073
+GUEST_B2048_BATCH_PER_LAUNCH_MS=2.507
+GUEST_B2048_BATCH_GFLOPS=6851.845
+GUEST_B2048_BATCH_BAD=0
+GUEST_B2048_H2D_MS=2.492
+GUEST_B2048_D2H_MED_MS=1.221
+GUEST_B2048_ALLOC_MS2=6.348
+GUEST_B2048_SUBMIT_MED_MS=0.018
+GUEST_B2048_SYNC_MED_MS=2.518
+GUEST_B2048_SYNC_CPU_MED_MS=2.518
+GUEST_B2048_SYNC_OFFCPU_MED_MS=0.000
+GUEST_B2048_SYNC_NVCSW_MED=0.0
+GUEST_B2048_SUBMIT_CPU_MED_MS=0.020
+GUEST_B2048_SUBMIT_MAX_MS=0.059
+GUEST_B2048_SYNC_MAX_MS=2.530
+GUEST_B2048_WINDOW_MONO_MS=82329.155..82592.483
+GUEST_B2048_BAD=0
+GUEST_B2048_MAXERR=0
+GUEST_BSUM N=16 iters=20 first_ms=1.898 med_ms=0.020 p90_ms=0.021 min_ms=0.020 max_ms=0.029 gflops=0.409 batch_per_launch_ms=0.022 batch_gflops=0.378 h2d_ms=0.564 d2h_med_ms=0.018 submit_med_ms=0.017 sync_med_ms=0.002 sync_cpu_med_ms=0.002 sync_offcpu_med_ms=0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.019 bad=0 maxerr=0
+GUEST_BSUM N=2048 iters=20 first_ms=2.716 med_ms=2.537 p90_ms=2.548 min_ms=2.530 max_ms=2.568 gflops=6772.583 batch_per_launch_ms=2.507 batch_gflops=6851.845 h2d_ms=2.492 d2h_med_ms=1.221 submit_med_ms=0.018 sync_med_ms=2.518 sync_cpu_med_ms=2.518 sync_offcpu_med_ms=0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.020 bad=0 maxerr=0
+GUEST_BSWEEPSUM_ROWS=0
+GUEST_BENCH_W320=batch_sweep=[] batch_reps=5 ctx_flags=0x0 hostmem=0
+GUEST_TSTATE_AVAILABLE=yes
+GUEST_BENCH_DEVICE=[NVIDIA GeForce RTX 5090]
+GUEST_BENCH_INIT_MS=8196.38
+GUEST_BENCH_CTX_MS=910.72
+GUEST_BENCH_MODULE_MS=287.03
+GUEST_BENCH_TOTAL_BAD=0
+GUEST_BENCH_VERDICT=PASS (every timed iteration verified)
+GUEST_SIZES_DONE=2
+    ⊘ GUEST_SIZES_DONE counts sizes that reached their own summary. A size that was cut
+      off by the deadline is UNMEASURED — it is not a slow measurement, it is none.
+
+=== ★ THE STAGE LADDER — how far it got (furthest ✔ before the first ✘ is the wall) ===
+    ✔ BENCH_MODE
+    ✔ BENCH_INIT_MS
+    ✔ BENCH_DEVICE
+    ✔ BENCH_CTX_MS
+    ✔ BENCH_MODULE_MS
+    ✔ BENCH_SIZE_BEGIN
+    ✘ B512_H2D_MS
+    ✘ ITER N=512
+    ✘ BSUM N=512
+    ✘ BSUM N=1024
+    ✔ BSUM N=2048
+    ✔ BENCH_TOTAL_BAD
+    ✔ DONE
+    ⊘ ALL ✘ means the output file is empty — a state that needs its own check, NOT 'not yet'.
+=== ★ the FAIL line, if the workload named its own failure ===
+
+=== ⊘ NEGATIVE CONTROL SKIPPED (KAYFABE_BENCH_ONLY=measure) — the measurement above
+    is UNGUARDED by construction. Say so; do not report it as guarded.
+GUEST_NEGCTRL_TOTAL_BAD=SKIPPED_BY_ARM
+
+=== ★ guest dmesg tail (NVRM/Xid land here, not in the serial log) ===
+    [   66.735408] NVRM: GPU0 nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgrobjPromoteContext(pGpu, pKernelGraphicsObject, pKernelGraphics) @ kernel_graphics_object.c:224
+    [   66.736554] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->AllocWithHandle(pRmApi, hClientId, KGRAPHICS_CHANNEL_HANDLE_CHANNELID, KGRAPHICS_CHANNEL_HANDLE_3DOBJ, classNum, NULL, 0) @ kernel_graphics.c:2549
+    [   66.740007] NVRM: GPU0 vaListDestroy: non-zero mapCount(pVaList): 0x1
+    [   66.740010] NVRM: GPU0 vaListDestroy: non-zero mapCount(pVaList): 0x1
+    [   66.740011] NVRM: GPU0 vaListDestroy: non-zero mapCount(pVaList): 0x1
+    [   66.740012] NVRM: GPU0 vaListDestroy: non-zero mapCount(pVaList): 0x1
+    [   66.746049] NVRM: GPU0 nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgraphicsCreateGoldenImageChannel(pGpu, pKernelGraphics) @ kernel_graphics.c:513
+    [   66.746052] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: 0 @ kernel_fifo.c:3110
+    [   66.758945] NVRM: GPU0 rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1e00009; hParent=0x31415903; hObject=0x31415900; hClass=0x0000c36f; paramsSize=0x00000170; paramsStatus=0x00000056; status=0x00000056
+    [   66.758948] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from status @ kernel_channel.c:2769
+    [   66.758966] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from _kchannelSendChannelAllocRpc(pKernelChannel, pChannelGpfifoParams, pKernelChannelGroup, bFullSriov) @ kernel_channel.c:964
+    [   66.761419] NVRM: GPU0 rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1e0000a; hParent=0xcaf00001; hObject=0xcaf00002; hClass=0x0000402c; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+    [   66.972023] [drm] Initialized nvidia-drm 0.0.0 20160202 for 0000:00:03.0 on minor 0
+    [   66.993764] nvidia 0000:00:03.0: [drm] No compatible format found
+    [   66.993860] nvidia 0000:00:03.0: [drm] Cannot find any crtc or sizes
+    [   68.838089] NVRM: nvCheckFailedNoLog: Check failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ gpu_user_shared_data.c:503
+    [   68.838111] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from _gpushareddataSendDataPollRpc(pGpu, polledDataMask, pollingIntervalMs) @ gpu_user_shared_data.c:618
+    [   68.838113] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from _handlePollMaskHelper(pGpu, NV_FALSE, NV_FALSE) @ gpu_user_shared_data.c:688
+    [   68.840632] NVRM: nvCheckFailedNoLog: Check failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ gpu_user_shared_data.c:503
+    [   68.840635] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from _gpushareddataSendDataPollRpc(pGpu, polledDataMask, pollingIntervalMs) @ gpu_user_shared_data.c:618
+    [   68.840637] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from _handlePollMaskHelper(pGpu, NV_FALSE, NV_FALSE) @ gpu_user_shared_data.c:688
+    [   68.844214] NVRM: nvCheckFailedNoLog: Check failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ gpu_user_shared_data.c:503
+    [   68.844217] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from _gpushareddataSendDataPollRpc(pGpu, polledDataMask, pollingIntervalMs) @ gpu_user_shared_data.c:618
+    [   68.844218] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from _handlePollMaskHelper(pGpu, NV_FALSE, NV_FALSE) @ gpu_user_shared_data.c:688
+    [   68.852738] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0000c; hParent=0xa55a0030; hObject=0xa55a0070; hClass=0x0000208f; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+    [   73.066040] NVRM: GPU0 nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_STATIC_GRMGR_GET_SKYLINE_INFO, &internalParams, sizeof(internalParams)) @ subdevice_ctrl_gpu_smc.c:64
+    [   83.160093] NVRM: GPU0 kgmmuClientShadowFaultBufferUnregister_IMPL: Unregistering non-replayable fault buffer failed (status=0x00000056), proceeding...
+    [   83.161684] NVRM: GPU0 kgmmuFaultBufferReplayableDestroy_IMPL: Unregistering Replayable Fault buffer failed (status=0x00000056), proceeding...
+    [   83.163006] NVRM: GPU0 uvmTerminateAccessCntrBuffer_IMPL: Unloading UVM Access counters failed (status=0x00000056), proceeding...
+    [   86.331290] workqueue: vmstat_update hogged CPU for >10000us 4 times, consider switching to WQ_UNBOUND
+GUEST_XID_COUNT=0
+=== cup8bench hook DONE ===
+HOOK_RC=0
+=== GUEST dmesg AFTER the workload (phase 3b captured 25 lines BEFORE it) ===
+GUEST_DMESG_AFTER_LINES=30
+GUEST_DMESG_AFTER_NVRM=26
+GUEST_DMESG_WORKLOAD_DELTA=5
+=== HOST dmesg delta for this boot (watermark 1117 → 1118) ===
+HOST_DMESG_LINES=1
+HOST_DMESG_NVRM=1
+HOST_DMESG_XID=0
+0

@@ -1,0 +1,50 @@
+ERROR: test_blackwell_source_channel_address_type_controls_are_accepted (test_phase_xid_guard.NativeControls.test_blackwell_source_channel_address_type_controls_are_accepted)
+Traceback (most recent call last):
+    self.assertEqual(G.native_baseline(self.j, self.d, self.m), G.N.xid_lines(self.j))
+                     ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+    return N.approve_native(journal, defer, missing)
+           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+    raise GuardRefused("Xid type/channel/address/source multiset differs from fault controls")
+native_xid_guard.GuardRefused: Xid type/channel/address/source multiset differs from fault controls
+ERROR: test_client_route_names_are_metadata_not_a_neighbour_die_row (test_phase_xid_guard.NativeControls.test_client_route_names_are_metadata_not_a_neighbour_die_row)
+Traceback (most recent call last):
+    self.assertEqual(G.native_baseline(j, self.d, self.m), G.N.xid_lines(j))
+                     ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+    return N.approve_native(journal, defer, missing)
+           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+    raise GuardRefused("Xid type/channel/address/source multiset differs from fault controls")
+native_xid_guard.GuardRefused: Xid type/channel/address/source multiset differs from fault controls
+ERROR: test_exact_pair_after_init_off_is_accepted (test_phase_xid_guard.PhaseGuard.test_exact_pair_after_init_off_is_accepted)
+Traceback (most recent call last):
+    self.assertEqual(G.evaluate_snapshot(XID+'\n'+HIGH, (), (), 'off_c', 96783, INIT), (XID, HIGH))
+                     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    N.check_unchanged(journal, accepted)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+    raise GuardRefused("new/replaced/lost Xid after frozen native proof")
+native_xid_guard.GuardRefused: new/replaced/lost Xid after frozen native proof
+ERROR: test_exact_pair_after_init_on_is_accepted (test_phase_xid_guard.PhaseGuard.test_exact_pair_after_init_on_is_accepted)
+Traceback (most recent call last):
+    self.assertEqual(G.evaluate_snapshot(XID+'\n'+HIGH, (), (), 'on_p1', 96783, INIT), (XID, HIGH))
+                     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    N.check_unchanged(journal, accepted)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+    raise GuardRefused("new/replaced/lost Xid after frozen native proof")
+native_xid_guard.GuardRefused: new/replaced/lost Xid after frozen native proof
+FAIL: test_pid_one_cannot_be_the_owned_vm_on_this_box (test_phase_xid_guard.ParserBoundary.test_pid_one_cannot_be_the_owned_vm_on_this_box)
+Traceback (most recent call last):
+    self.assertEqual(P.judge([XID.replace('96783','1')], 'off_c', 1, True)['verdict'], 'FATAL')
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FAIL: test_trailing_garbage_is_fatal (test_phase_xid_guard.ParserBoundary.test_trailing_garbage_is_fatal)
+Traceback (most recent call last):
+    self.assertEqual(P.judge([XID+' unexpected'], 'on_p1', 96783, True)['verdict'], 'FATAL')
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FAIL: test_trailing_second_payload_is_fatal (test_phase_xid_guard.ParserBoundary.test_trailing_second_payload_is_fatal)
+Traceback (most recent call last):
+    self.assertEqual(P.judge([XID+'; channel 0x00000001'], 'off_c', 96783, True)['verdict'], 'FATAL')
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FAIL: test_zero_pid_cannot_be_an_owned_qemu (test_phase_xid_guard.ParserBoundary.test_zero_pid_cannot_be_an_owned_qemu)
+Traceback (most recent call last):
+    self.assertEqual(P.judge([XID.replace('96783','0')], 'on_p1', 0, True)['verdict'], 'FATAL')
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Ran 40 tests in 0.009s
+FAILED (failures=4, errors=4)

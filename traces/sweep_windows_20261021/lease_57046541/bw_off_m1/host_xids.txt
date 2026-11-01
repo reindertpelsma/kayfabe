@@ -1,0 +1,3 @@
+2026-10-21T13:39:14.975419+0000 ubuntu kernel: NVRM:unknown NVRM ioctl command: 0xf0
+2026-10-21T13:42:27.205488+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 32, pid=99683, name=qemu-system-x86, channel 0x0000000c intr 00200000
+2026-10-21T13:42:27.234361+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 32, pid=99683, name=qemu-system-x86, channel 0x0e000007 intr 00200000

@@ -1,0 +1,45 @@
+{
+  "utc": "2026-10-23T02:27:22.945760+00:00",
+  "all_owned_ids": [
+    57099244,
+    57107585,
+    57108853,
+    57117614,
+    57132969,
+    57142142,
+    57143789,
+    57148807,
+    57273215,
+    57280677,
+    57285340,
+    57296911,
+    57302449
+  ],
+  "remaining_owned_ids": [],
+  "api_absence_verified": true,
+  "own_timers": {
+    "auto_destroy_pid": {
+      "pid": 904229,
+      "same_owned_process_alive": false
+    },
+    "budget_watch_pid": {
+      "pid": 904231,
+      "same_owned_process_alive": false
+    }
+  },
+  "phase_runtime_estimate_usd": 1.5192168444438887,
+  "current_runtime_estimate_usd": 0.42689334101518517,
+  "shared_credit_observed": 34.30682600516138,
+  "known_bad_machines": [
+    {
+      "machine_id": 150531,
+      "instance_id": 57296911,
+      "reason": "provider_host_error",
+      "utc": "2026-10-23T00:46:20.609095+00:00",
+      "source": "own exact-id teardown/API absence already verified; owner03:15 retry grant"
+    }
+  ],
+  "provider_retries_used": 1,
+  "no_second_replacement_after_native": true,
+  "dev_cargo_target_created": false
+}

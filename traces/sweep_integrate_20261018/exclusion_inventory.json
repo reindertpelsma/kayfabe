@@ -1,0 +1,584 @@
+{
+  "status": "planned exclusion; no product edit applied",
+  "owner_decision": "Coordinator approval in conversation, 2026-10-18; original protected-conflict ruling superseded",
+  "excluded_commits": [
+    {
+      "commit": "24e7a297a6b9f18d4de359f4e55b0e51d58ea209",
+      "subject": "measurement: relay flow counters (turns, entries, publications, host doorbells, PUT reads, write-backs, entries per turn) and per-stage timers (KF3_USER_RING_STAGES=1, off by default)",
+      "paths": [
+        "crates/kf-chan/src/user_loop.rs",
+        "crates/kf-qemu/src/userpump.rs"
+      ],
+      "decision": "EXCLUDE original topic and dependent edits; preserve current integration code/tests"
+    },
+    {
+      "commit": "639acf57d0550ac9638dd87205657c489dd2250a",
+      "subject": "measurement: PUT-delta and segment-size histograms; stress tool 'flood' family (many small plain segments)",
+      "paths": [
+        "crates/kf-chan/src/user_loop.rs",
+        "crates/kf-harness/src/bin/kf-syncwait-stress.rs",
+        "crates/kf-qemu/src/userpump.rs"
+      ],
+      "decision": "EXCLUDE original topic and dependent edits; preserve current integration code/tests"
+    },
+    {
+      "commit": "7476ef69f218e352be8c8a2ed7e8d8e249d6303c",
+      "subject": "tests (failing): batching -- a claim relays covered entries in a chain, one host doorbell per chain; counters; design doc section 9",
+      "paths": [
+        "crates/kf-chan/src/user_loop.rs",
+        "crates/kf-chan/tests/user_loop_model.rs",
+        "docs/design/V3_USER_RING_EVENT_LOOP_20261014.md"
+      ],
+      "decision": "EXCLUDE original topic and dependent edits; preserve current integration code/tests"
+    },
+    {
+      "commit": "edcaaca67a10ecbf64169e017e461041c02c958b",
+      "subject": "USER-ring relay: a claim relays the covered entries in a chain and rings the host doorbell once (bounded by a count; one GP_PUT read, one observation, one write-back per chain); model chains and defers the bell",
+      "paths": [
+        "crates/kf-chan/src/user_loop.rs",
+        "crates/kf-chan/tests/user_loop_model.rs",
+        "crates/kf-qemu/src/userpump.rs"
+      ],
+      "decision": "EXCLUDE original topic and dependent edits; preserve current integration code/tests"
+    },
+    {
+      "commit": "29eae05a46061bcbfd5bfe67d72b7fa3039ad774",
+      "subject": "Merge origin/claude/userring-eventloop-20261014 (batching bd079a8df and later) into claude/gpu-types-20261015",
+      "paths": [
+        "crates/kf-chan/src/user_loop.rs",
+        "crates/kf-chan/tests/user_loop_model.rs",
+        "crates/kf-harness/src/bin/kf-syncwait-stress.rs",
+        "crates/kf-qemu/src/userpump.rs",
+        "crates/kf-qemu/src/userread.rs",
+        "docs/STATUS_AND_HANDOFF.md",
+        "docs/design/V3_USER_RING_EVENT_LOOP_20261014.md"
+      ],
+      "decision": "EXCLUDE original topic and dependent edits; preserve current integration code/tests"
+    }
+  ],
+  "merge_side_history": [
+    "bd079a8df979ce2be3ec68a7450b96dfe79ababb docs: fix escaped apostrophes",
+    "8f4610bc515268534fdcb7ec510c341ee5689d46 docs: batching validation and handoff entry",
+    "6c2cb43717584947c85f0609b4c24f5345d5d56d userread: correct the resolve() comment (measured gain ~100 ns per snapshot; perf call chains were misattributed)",
+    "d5be61ed11b87043f7df651f5b0defbbc4516bf2 userread: resolve() reserves spans as it finds them, not the whole PIECES budget up front (perf: finish_grow+malloc ~18% of a relay worker under flood)",
+    "a4027e16eb9369634d21c84f0d42becef81df5a3 docs: batching results (section 9.5)",
+    "edcaaca67a10ecbf64169e017e461041c02c958b USER-ring relay: a claim relays the covered entries in a chain and rings the host doorbell once (bounded by a count; one GP_PUT read, one observation, one write-back per chain); model chains and defers the bell",
+    "7476ef69f218e352be8c8a2ed7e8d8e249d6303c tests (failing): batching -- a claim relays covered entries in a chain, one host doorbell per chain; counters; design doc section 9",
+    "639acf57d0550ac9638dd87205657c489dd2250a measurement: PUT-delta and segment-size histograms; stress tool 'flood' family (many small plain segments)",
+    "24e7a297a6b9f18d4de359f4e55b0e51d58ea209 measurement: relay flow counters (turns, entries, publications, host doorbells, PUT reads, write-backs, entries per turn) and per-stage timers (KF3_USER_RING_STAGES=1, off by default)"
+  ],
+  "dropped_first_parent_merge_hunks": [
+    {
+      "path": "crates/kf-chan/src/user_loop.rs",
+      "hunks": [
+        {
+          "id": 1,
+          "header": "@@ -166,0 +167,22 @@ pub const fn idle(waiting: bool, spin_left: u32) -> Idle {",
+          "added": 22,
+          "removed": 0,
+          "patch_sha256": "fa040a31f851d8a926e5f279d652de9bfa9cb0f18ec8374b7b94f2c5b0ec2d5e"
+        },
+        {
+          "id": 2,
+          "header": "@@ -209,0 +232,69 @@ pub struct Stats {",
+          "added": 69,
+          "removed": 0,
+          "patch_sha256": "bad0e0d2fac5fc4f7dc298618a949c67be5dd541b1f7317fd11b50ed2ab01386"
+        },
+        {
+          "id": 3,
+          "header": "@@ -216,0 +308,35 @@ impl Stats {",
+          "added": 35,
+          "removed": 0,
+          "patch_sha256": "b8bab8ef7dbb496ada00913435fdb18b61aba5350512409e14793c110b56a947"
+        },
+        {
+          "id": 4,
+          "header": "@@ -226,0 +353,12 @@ impl Stats {",
+          "added": 12,
+          "removed": 0,
+          "patch_sha256": "d352e4c0742c4de1dd3119544d396bce5f26ae5ca886393bade6b44f716c6197"
+        },
+        {
+          "id": 5,
+          "header": "@@ -228 +366 @@ impl Stats {",
+          "added": 1,
+          "removed": 1,
+          "patch_sha256": "0abc2350c2b9e314995ce7fafab3882444a1de843ebfad015760e13bdd8099a2"
+        },
+        {
+          "id": 6,
+          "header": "@@ -243,0 +382,7 @@ impl Stats {",
+          "added": 7,
+          "removed": 0,
+          "patch_sha256": "90c36b60be241116925ae2b1c4a3393d6dfe2aa2617c55d446457cf50b60e1c7"
+        },
+        {
+          "id": 7,
+          "header": "@@ -251,0 +397,11 @@ mod tests {",
+          "added": 11,
+          "removed": 0,
+          "patch_sha256": "fc290a13d63b1ac33e845aeaab6207718fbbc79f666acbabc9bd50eb4d9acbbf"
+        }
+      ]
+    },
+    {
+      "path": "crates/kf-chan/tests/user_loop_model.rs",
+      "hunks": [
+        {
+          "id": 1,
+          "header": "@@ -152,0 +153,2 @@ struct Mutant {",
+          "added": 2,
+          "removed": 0,
+          "patch_sha256": "364130b266b3ed07f1538ab0bee1dd815eef48d0e36661905ac5f3f7d8299af4"
+        },
+        {
+          "id": 2,
+          "header": "@@ -195,0 +198,24 @@ struct Cfg {",
+          "added": 24,
+          "removed": 0,
+          "patch_sha256": "aa9184fb2f9c68359a60cb358fb01dd5f893c238f4632884bb1657c859004a8e"
+        },
+        {
+          "id": 3,
+          "header": "@@ -213,0 +240,3 @@ impl Cfg {",
+          "added": 3,
+          "removed": 0,
+          "patch_sha256": "8147a6fb7d61ae9c2578e5f432fa663e880c88fc2b0a608f3995dd17d3f167f5"
+        },
+        {
+          "id": 4,
+          "header": "@@ -330,0 +360,14 @@ struct Chan {",
+          "added": 14,
+          "removed": 0,
+          "patch_sha256": "925225872104cf6b1935794d41cb4ed7c0093fa56a51be7d41c3bd1c24e7eb9a"
+        },
+        {
+          "id": 5,
+          "header": "@@ -390,0 +434 @@ const V_UNBOUNDED: u32 = 1 << 9;",
+          "added": 1,
+          "removed": 0,
+          "patch_sha256": "0d6a917e1436e1022132f0d940f62086f432da02515e3ef4a3c984f33d94d9c9"
+        },
+        {
+          "id": 6,
+          "header": "@@ -432,0 +477,4 @@ fn viol_names(v: u32) -> Vec<&'static str> {",
+          "added": 4,
+          "removed": 0,
+          "patch_sha256": "38861830f017999c0f70e48a08637f8003edc66e267a093a616d17d85c47c73b"
+        },
+        {
+          "id": 7,
+          "header": "@@ -487,0 +536,7 @@ impl Chan {",
+          "added": 7,
+          "removed": 0,
+          "patch_sha256": "123f8a90169aab1a565feb328b958401ca6da037ef270d84e9c06e7999af5e97"
+        },
+        {
+          "id": 8,
+          "header": "@@ -504,0 +560 @@ impl Chan {",
+          "added": 1,
+          "removed": 0,
+          "patch_sha256": "560db62f5699e365888ebdaaed8243b147e538ab74725faf9028bcbf464d058b"
+        },
+        {
+          "id": 9,
+          "header": "@@ -610,0 +667,6 @@ fn guest_steps(cfg: &Cfg, w: &World, out: &mut Vec<Step>) {",
+          "added": 6,
+          "removed": 0,
+          "patch_sha256": "3f2dac3dd5e6834ae1204fbea8a71d59fed12b73b1d8a353ca0f5506f9297f3a"
+        },
+        {
+          "id": 10,
+          "header": "@@ -616 +678 @@ fn hw_steps(cfg: &Cfg, w: &World, out: &mut Vec<Step>) {",
+          "added": 1,
+          "removed": 1,
+          "patch_sha256": "3ee3b8ccca746b048d59c24b2be7a387d6eb62d375db46a1f300a2ee180f3dfa"
+        },
+        {
+          "id": 11,
+          "header": "@@ -779,0 +842,14 @@ fn finish(cfg: &Cfg, n: &mut World, need: Need) {",
+          "added": 14,
+          "removed": 0,
+          "patch_sha256": "b3a3012fe80483b40d4e52cf113fc63dd53b682cc5ca3b09cbcdd9b72d8cf259"
+        },
+        {
+          "id": 12,
+          "header": "@@ -1058,0 +1135,4 @@ fn turn_step(cfg: &Cfg, w: &World, stage: u8, out: &mut Vec<Step>) {",
+          "added": 4,
+          "removed": 0,
+          "patch_sha256": "46f8fa3ceeb9edb6de40fe2561a840dc9c83aa35986f386a58432c0947c827ec"
+        },
+        {
+          "id": 13,
+          "header": "@@ -1091,2 +1171,8 @@ fn turn_step(cfg: &Cfg, w: &World, stage: u8, out: &mut Vec<Step>) {",
+          "added": 8,
+          "removed": 2,
+          "patch_sha256": "110cf2485bdd246332d06581ab9c6bace93b6f94e248b3fb7059067ba72fc2b7"
+        },
+        {
+          "id": 14,
+          "header": "@@ -1234,0 +1321,8 @@ fn turn_step(cfg: &Cfg, w: &World, stage: u8, out: &mut Vec<Step>) {",
+          "added": 8,
+          "removed": 0,
+          "patch_sha256": "49b89095728efaaf0bb0b62bbe2c8b2f2315871f21bb39335cdde181efaf73a9"
+        },
+        {
+          "id": 15,
+          "header": "@@ -1248,2 +1342,12 @@ fn turn_step(cfg: &Cfg, w: &World, stage: u8, out: &mut Vec<Step>) {",
+          "added": 12,
+          "removed": 2,
+          "patch_sha256": "b1bb32c43068c9de07aa3b278774973c90df249b15f6f0c309b0f90ecbac068a"
+        },
+        {
+          "id": 16,
+          "header": "@@ -1263 +1367 @@ fn normalize(cfg: &Cfg, w: &mut World) {",
+          "added": 1,
+          "removed": 1,
+          "patch_sha256": "ec7e98982aff8fb3da7395dc97be079cd9e6d06daa3afa0e6f4c7a482f14bfda"
+        },
+        {
+          "id": 17,
+          "header": "@@ -1346,0 +1451,3 @@ struct Explored {",
+          "added": 3,
+          "removed": 0,
+          "patch_sha256": "e1a219185c5a423f4678b4360bf3119331bd46d8d04947ae6254c0c8bc331568"
+        },
+        {
+          "id": 18,
+          "header": "@@ -1379,0 +1487 @@ fn explore(cfg: &Cfg, allow: u32) -> Result<Explored, Counterexample> {",
+          "added": 1,
+          "removed": 0,
+          "patch_sha256": "f92e5d04ddab72a92f0da9343936205f6d49c3d2fc80740beedd3fb1650c39ae"
+        },
+        {
+          "id": 19,
+          "header": "@@ -1407,0 +1516,7 @@ fn explore(cfg: &Cfg, allow: u32) -> Result<Explored, Counterexample> {",
+          "added": 7,
+          "removed": 0,
+          "patch_sha256": "54810dd9a9fe899ec31b059b752b1d08c47454a5820a5ae457a59f31adce5c2c"
+        },
+        {
+          "id": 20,
+          "header": "@@ -1428 +1543,5 @@ fn explore(cfg: &Cfg, allow: u32) -> Result<Explored, Counterexample> {",
+          "added": 5,
+          "removed": 1,
+          "patch_sha256": "2ea8c79001684bd2f13cdfe5f1ec9850347ba3e0a89e5dd4b0870277b79d8900"
+        },
+        {
+          "id": 21,
+          "header": "@@ -1987,0 +2107,2 @@ fn design_pt_admission_contention_is_spin_then_the_counted_backstop() {",
+          "added": 2,
+          "removed": 0,
+          "patch_sha256": "b9e42dea2f1d28f23f0b8cd12c29a4308ef8324193348836a30090635f7b7f02"
+        },
+        {
+          "id": 22,
+          "header": "@@ -1988,0 +2110 @@ fn design_pt_admission_contention_is_spin_then_the_counted_backstop() {",
+          "added": 1,
+          "removed": 0,
+          "patch_sha256": "66942fabf211eed8e6fa09dcc0abe0a21cd8c2404a354fa85ff59f642a6af426"
+        },
+        {
+          "id": 23,
+          "header": "@@ -2003,0 +2126,28 @@ fn design_pt_admission_contention_is_spin_then_the_counted_backstop() {",
+          "added": 28,
+          "removed": 0,
+          "patch_sha256": "067888bf5280c257005964b87ae6e946e9529ce9329894ae03b6ad24011749d2"
+        },
+        {
+          "id": 24,
+          "header": "@@ -2021,0 +2172 @@ fn mutant_a_ring_during_a_turn_is_lost_is_found() {",
+          "added": 1,
+          "removed": 0,
+          "patch_sha256": "9e9ab5827e017d5806dae0efb865c161575f8043c4f3697173fb3da5f4947f49"
+        },
+        {
+          "id": 25,
+          "header": "@@ -2022,0 +2174,7 @@ fn mutant_a_ring_during_a_turn_is_lost_is_found() {",
+          "added": 7,
+          "removed": 0,
+          "patch_sha256": "31c802e0dcdfee016de0ed780e58781acca42e6b0138f6846f2d593107a71a36"
+        },
+        {
+          "id": 26,
+          "header": "@@ -2405,0 +2564,173 @@ fn a_guest_with_a_full_ring_behind_its_own_gate_deadlocks_by_construction() {",
+          "added": 173,
+          "removed": 0,
+          "patch_sha256": "a8269d46a2c21917ed1eaf8e101d735a5e275ca89347c4c69bbf3791dd0b2cf5"
+        }
+      ]
+    },
+    {
+      "path": "crates/kf-harness/src/bin/kf-syncwait-stress.rs",
+      "hunks": [
+        {
+          "id": 1,
+          "header": "@@ -716,0 +717,35 @@ fn main() {",
+          "added": 35,
+          "removed": 0,
+          "patch_sha256": "3a5e5272b641d1a77974273b7bd506dd2d35f23a5bd24a4bbed0629bffb17ee9"
+        }
+      ]
+    },
+    {
+      "path": "crates/kf-qemu/src/userpump.rs",
+      "hunks": [
+        {
+          "id": 1,
+          "header": "@@ -434,0 +435,14 @@ pub(super) struct Pump {",
+          "added": 14,
+          "removed": 0,
+          "patch_sha256": "1c0b25c4f33c99c9bbcc9d7af84a4e6d3c560ff7e9e63e66507768b14d714b18"
+        },
+        {
+          "id": 2,
+          "header": "@@ -451,0 +466,2 @@ struct Segment {",
+          "added": 2,
+          "removed": 0,
+          "patch_sha256": "e2999bdfae04ad82f9988abdcf515727079be7a118d453556b6c637c642d6840"
+        },
+        {
+          "id": 3,
+          "header": "@@ -501,0 +518,5 @@ impl Pump {",
+          "added": 5,
+          "removed": 0,
+          "patch_sha256": "9ff768dcd64e503dd9e421d4a65400ba22309ac2eb9a93caa611cceab4f149f3"
+        },
+        {
+          "id": 4,
+          "header": "@@ -1260 +1281,41 @@ impl Pump {",
+          "added": 41,
+          "removed": 1,
+          "patch_sha256": "57138d089359ce7df765c21162f6da562caa1bd6bc605bae467bd0c43b5e1009"
+        },
+        {
+          "id": 5,
+          "header": "@@ -1285,12 +1346,16 @@ impl Pump {",
+          "added": 16,
+          "removed": 12,
+          "patch_sha256": "2706cf59f5b8e4cd2fd637cbce3a4925faca60b3eff1192a5ab6b465e61753e0"
+        },
+        {
+          "id": 6,
+          "header": "@@ -1298,16 +1363,14 @@ impl Pump {",
+          "added": 14,
+          "removed": 16,
+          "patch_sha256": "71386d36d92e88558ecfb1341a9d2a7715966f52ea665caa4fd747420fc73481"
+        },
+        {
+          "id": 7,
+          "header": "@@ -1315 +1378,11 @@ impl Pump {",
+          "added": 11,
+          "removed": 1,
+          "patch_sha256": "66b1a43981b089ebbc28aa02134277038d34447637ff3fb8f5753a254d08fa9e"
+        },
+        {
+          "id": 8,
+          "header": "@@ -1317,2 +1389,0 @@ impl Pump {",
+          "added": 0,
+          "removed": 2,
+          "patch_sha256": "b26a1ded64f0796d536b30189e8b56d568b42a2ac9f50a1dc0058f5678c51c33"
+        },
+        {
+          "id": 9,
+          "header": "@@ -1328,17 +1399,30 @@ impl Pump {",
+          "added": 30,
+          "removed": 17,
+          "patch_sha256": "7a60a62547dfadc6b35dc2e3a2c75283e8c45bb06953c8c3f845cc8348c56009"
+        },
+        {
+          "id": 10,
+          "header": "@@ -1350,0 +1435 @@ impl Pump {",
+          "added": 1,
+          "removed": 0,
+          "patch_sha256": "3e7bd8bd47e9901850e977f18bdbb4953d66b929b0f5beada6071b38411ffe79"
+        },
+        {
+          "id": 11,
+          "header": "@@ -1375,0 +1461 @@ impl Pump {",
+          "added": 1,
+          "removed": 0,
+          "patch_sha256": "bf10efc0eafda709c75d3a5758e07bf127b0277b0d05a31e28da7c15642a3ab0"
+        },
+        {
+          "id": 12,
+          "header": "@@ -1376,0 +1463 @@ impl Pump {",
+          "added": 1,
+          "removed": 0,
+          "patch_sha256": "8a698847d4398d4cffb84405ccbca73c2d7fdfd727d775bbfd3e39eb8fee7c7a"
+        },
+        {
+          "id": 13,
+          "header": "@@ -1412,0 +1500 @@ impl Pump {",
+          "added": 1,
+          "removed": 0,
+          "patch_sha256": "fa7bbdceb110ecfe383f72b86d2efebd66bb424f7faf39827ee019cfca4d0468"
+        },
+        {
+          "id": 14,
+          "header": "@@ -1433,0 +1522 @@ impl Pump {",
+          "added": 1,
+          "removed": 0,
+          "patch_sha256": "41bb7fa1e1625bc220203a9da984167650a08041a8ad3ee6fbc5bc86d6db91ed"
+        },
+        {
+          "id": 15,
+          "header": "@@ -1519,0 +1609 @@ impl Pump {",
+          "added": 1,
+          "removed": 0,
+          "patch_sha256": "b2cce4b07fe81465de34033adb1a333b03f872ef3e771ef75bafe66b1e68441d"
+        },
+        {
+          "id": 16,
+          "header": "@@ -1524,0 +1615 @@ impl Pump {",
+          "added": 1,
+          "removed": 0,
+          "patch_sha256": "b3dc8b97ac70bd74d73370072eaad384e85ad30e6efd14678d111bb97608e144"
+        },
+        {
+          "id": 17,
+          "header": "@@ -1530,0 +1622,2 @@ impl Pump {",
+          "added": 2,
+          "removed": 0,
+          "patch_sha256": "96eaefe53c5f555c94e6345fb628e8396bd203e38f20c4ab9fb3ef5072f0a2fe"
+        },
+        {
+          "id": 18,
+          "header": "@@ -1542 +1635,4 @@ impl Pump {",
+          "added": 4,
+          "removed": 1,
+          "patch_sha256": "aa6ea250d912b98757c9dfdace3390f14feb82b7edfb37800f48df7bf9cd77bc"
+        },
+        {
+          "id": 19,
+          "header": "@@ -1599,0 +1696 @@ impl Pump {",
+          "added": 1,
+          "removed": 0,
+          "patch_sha256": "f19be3a242db4291e919d8706d7fbbbfb16cab0e737c23e6785f66adcf530f33"
+        },
+        {
+          "id": 20,
+          "header": "@@ -1627,0 +1725,7 @@ impl Pump {",
+          "added": 7,
+          "removed": 0,
+          "patch_sha256": "b6b89151a06375b3e459a23f2c29a2f827b8e67cceff2721b844eb831f8cfde4"
+        },
+        {
+          "id": 21,
+          "header": "@@ -1865,0 +1970 @@ impl Pump {",
+          "added": 1,
+          "removed": 0,
+          "patch_sha256": "e1fc7291ce3e38a72c77a5b9db61d6f6be31deb2be9ece0ffb3b6f7bc3ca6114"
+        },
+        {
+          "id": 22,
+          "header": "@@ -1925 +2030,19 @@ impl Pump {",
+          "added": 19,
+          "removed": 1,
+          "patch_sha256": "6702d8a9645bc57fa9ee84d0e85bd9ed779c0240af1a7b5c553ba10dc2adcace"
+        },
+        {
+          "id": 23,
+          "header": "@@ -1927 +2050,3 @@ impl Pump {",
+          "added": 3,
+          "removed": 1,
+          "patch_sha256": "9ba307e8e0bd868a3d3adde4ffd03cc47c3d5656d5202d7e411faf14c8f3def8"
+        },
+        {
+          "id": 24,
+          "header": "@@ -2014,0 +2140 @@ impl Pump {",
+          "added": 1,
+          "removed": 0,
+          "patch_sha256": "14cc618a200019ae37e53f3565c8356907407b1627436d3856e4ade134498dd9"
+        },
+        {
+          "id": 25,
+          "header": "@@ -2096,0 +2223,4 @@ impl Pump {",
+          "added": 4,
+          "removed": 0,
+          "patch_sha256": "3377e7725f884cba00ceefc8c60bea76c71c0beb74a77b6d9a900d8e3c1c771a"
+        },
+        {
+          "id": 26,
+          "header": "@@ -2479,0 +2610 @@ impl ChanPlane {",
+          "added": 1,
+          "removed": 0,
+          "patch_sha256": "aeef7116fc7f6054139197f70c8d9d580a74f8871c0816b7c13ce46600995100"
+        },
+        {
+          "id": 27,
+          "header": "@@ -2530,0 +2662 @@ impl ChanPlane {",
+          "added": 1,
+          "removed": 0,
+          "patch_sha256": "343a7afa8bc84d60e6b37450900cd991ccc3790709c21b4d4e5fe26e163103f1"
+        }
+      ]
+    },
+    {
+      "path": "crates/kf-qemu/src/userread.rs",
+      "hunks": [
+        {
+          "id": 1,
+          "header": "@@ -199,0 +200,2 @@ fn resolve(",
+          "added": 2,
+          "removed": 0,
+          "patch_sha256": "a5cb91dfc296a96b97de6dbd4c2a8ebae50f24462ee4d6d69bb9bd48d214db13"
+        },
+        {
+          "id": 2,
+          "header": "@@ -201,3 +202,0 @@ fn resolve(",
+          "added": 0,
+          "removed": 3,
+          "patch_sha256": "a767d4a11875f5549688463dfc41a7fcd8b93920bcc6ea48733ecd01b372d7f1"
+        },
+        {
+          "id": 3,
+          "header": "@@ -208,0 +208 @@ fn resolve(",
+          "added": 1,
+          "removed": 0,
+          "patch_sha256": "4a088c3f42295424223154a1e5c254a9fe09f12ae1444bd59ac0d35e56ba1157"
+        },
+        {
+          "id": 4,
+          "header": "@@ -341,0 +342,29 @@ mod tests {",
+          "added": 29,
+          "removed": 0,
+          "patch_sha256": "1d077b3e143402e33d7eba9114f3bcca278821d598dfa62f68d2998944706dbf"
+        }
+      ]
+    },
+    {
+      "path": "docs/STATUS_AND_HANDOFF.md",
+      "hunks": [
+        {
+          "id": 1,
+          "header": "@@ -2,0 +3,14 @@",
+          "added": 14,
+          "removed": 0,
+          "patch_sha256": "a034faa51decbaa3a9cc2279f7d8a2cd66be0e78fca1569190c1d4612c5dfd2c"
+        }
+      ]
+    },
+    {
+      "path": "docs/design/V3_USER_RING_EVENT_LOOP_20261014.md",
+      "hunks": [
+        {
+          "id": 1,
+          "header": "@@ -405,0 +406,167 @@ table bounds the relay's share per SYNC_WAIT at <= 4 ms per 3 gates before and ~",
+          "added": 167,
+          "removed": 0,
+          "patch_sha256": "7ea134e2e259112831f562db57b01befa13f166cf367020ced621a39beafcd12"
+        }
+      ]
+    }
+  ],
+  "independent_topic_held_for_new_stop": {
+    "commit": "3970937f6f417d2779b5ffbb63a0b8fa9c382224",
+    "paths": [
+      "crates/kf-chan/src/grtables.rs",
+      "crates/kf-chan/src/tmode.rs"
+    ],
+    "reason": "Kept F-2 ABI width rule changes kf-chan, triggering approval condition 2; no dependency on old USER batching"
+  }
+}

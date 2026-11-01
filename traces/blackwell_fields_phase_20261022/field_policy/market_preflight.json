@@ -1,0 +1,60 @@
+{
+  "utc": "2026-10-22T19:46:00.555939+00:00",
+  "created_instances": 0,
+  "phase_budget_cap": 8,
+  "phase_stop": 6,
+  "reserve": 5,
+  "credit": 37.611542332060935,
+  "offers": [
+    {
+      "id": 43994882,
+      "machine_id": 69146,
+      "gpu_name": "RTX 5090",
+      "dph_total": 0.38805555555555554,
+      "verification": "deverified",
+      "reliability": 0.9960238,
+      "inet_down": 1374.8,
+      "disk_space": 331.125
+    },
+    {
+      "id": 38341563,
+      "machine_id": 59458,
+      "gpu_name": "RTX 5090",
+      "dph_total": 0.40138888888888885,
+      "verification": "deverified",
+      "reliability": 0.9741593,
+      "inet_down": 1375.8,
+      "disk_space": 612.0
+    },
+    {
+      "id": 57254348,
+      "machine_id": 41010,
+      "gpu_name": "RTX 5090",
+      "dph_total": 0.5347222222222222,
+      "verification": "verified",
+      "reliability": 0.9639101,
+      "inet_down": 935.8,
+      "disk_space": 1545.0
+    },
+    {
+      "id": 55429765,
+      "machine_id": 152912,
+      "gpu_name": "RTX 5090",
+      "dph_total": 0.6680555555555555,
+      "verification": "unverified",
+      "reliability": 0.9889822,
+      "inet_down": 949.1,
+      "disk_space": 375.375
+    },
+    {
+      "id": 53219819,
+      "machine_id": 34729,
+      "gpu_name": "RTX 5090",
+      "dph_total": 1.929443111111111,
+      "verification": "verified",
+      "reliability": 0.9965587,
+      "inet_down": 715.8,
+      "disk_space": 1219.0
+    }
+  ]
+}

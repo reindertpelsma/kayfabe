@@ -1,0 +1,14 @@
+/workspace/bw-capc-validation/kfwin/disk/bw580_bind.qcow2: OK
+ARM_START run=on_precision source=6e3fd3fd6d809ae2c2a3504cd8be1ecd29b2b31b profile=on 2026-10-22T23:55:37+00:00
+[2026-10-22T23:55:37Z] detached: tag=on_precision, log logs/on_precision_run.log (stdout logs/on_precision_run.out)
+KF_SSH_UP
+{"pid": 115848, "exe": "/workspace/bench/kf3-bins/6e3fd3fd/qemu-system-x86_64", "sha256": "9aff3cc4688e7c417ea1100491da34d91f075e3f365cd48c1fd31efd63475424", "kf3_device": "kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=/workspace/bw-capc-validation/secureboot/kf-gop.6e3fd3fd.signed.efi,id=kf0,guest-driver=580.65.06"}
+STAGE580_READY=1 actual=32.0.15.8088 device_disabled=1 GSP_flags=1; fresh QEMU580.65.06 then one enable
+/root/sweep2/arm.sh: line 125: kill: (116672) - No such process
+INIT_OBSERVER_FAILED_BEFORE_ENABLE
+PRE_CLEANUP_START rc=22 2026-10-22T23:58:03+00:00
+{"rpcs": 0, "unload_ordinals": [], "teardown_start_ordinal": null, "last_nonfree_before_teardown": []}
+[2026-10-22T23:58:03Z] stopping kfwin (pid 115848)
+[2026-10-22T23:58:23Z] stopped
+/workspace/bw-capc-validation/kfwin/disk/bw580_bind.qcow2: OK
+ARM_EXIT run=on_precision rc=22 2026-10-22T23:59:02+00:00

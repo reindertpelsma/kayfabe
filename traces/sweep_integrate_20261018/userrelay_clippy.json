@@ -1,0 +1,10 @@
+{
+  "base_diagnostics": 451,
+  "fixed_diagnostics": 451,
+  "added_diagnostics": 0,
+  "identity": "package/level/code/message/primary files, excluding line offsets",
+  "added": [],
+  "base_exit": 101,
+  "fixed_exit": 101,
+  "inherited_errors_per_build": 89
+}

@@ -1,0 +1,60 @@
+# Control ids that the matrix (docs/design/V3_CONSTANT_MATRIX_20261014.md, section 2.3 / 3 / 7) names but
+# that are not (all) literals in kayfabe code. Hex, one per line; '#' starts a comment.
+# F-4 (host 595.91.07 answers INVALID_ARGUMENT to the 580-branch shapes)
+0x2080852e
+0x2080852f
+0x2080853a
+0x2080853b
+0x2080a618
+0x2080b201
+# GMMU static info, GSS-legacy 8162
+0x20800a59
+0x20808162
+# group P (admin)
+0x00731369
+0x20802801
+0x20802a12
+0x50700709
+0x50700118
+# group K (kernel-only)
+0x0073014b
+0x007302a2
+0x2080121f
+# group I (internal)
+0x20800a3f
+0x20800a80
+0x20800a2e
+0x20800a87
+0x20800ab8
+0x20800b03
+# group A (absent from open tables)
+0x00730122
+0x00730128
+0x007302a3
+0x007302a5
+0x20802806
+0x0073011a
+# section 2.3 / 3 rows
+0x20809009
+0x20809001
+0x20809064
+0x20809004
+0x2080a001
+0x2080a084
+0x2080a026
+0x2080a028
+0x20802209
+0x20808159
+0x2080852a
+0x20808524
+0x2080a70a
+0x2080a088
+0x2080a060
+0x2080a630
+0x2080a801
+0x2080a619
+0x2080a02f
+0x00809908
+0x20810108
+0x2081010d
+0x20801111

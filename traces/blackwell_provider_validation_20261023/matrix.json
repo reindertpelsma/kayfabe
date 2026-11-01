@@ -1,0 +1,53 @@
+[
+  {
+    "stage": "native",
+    "instance": 57302449,
+    "die": "GB206",
+    "host_driver": "595.91.07",
+    "product": "6e3fd3fd6d809ae2c2a3504cd8be1ecd29b2b31b",
+    "native_fixture": "618f0431815d037d4226b642ae37e76967353e90",
+    "gates": "9/9+10PASS",
+    "raw": "30/30",
+    "cuda": "4/4",
+    "gr_ce": "15/15",
+    "intentional_source_matched_xid31": 5,
+    "unexpected_xids": 0
+  },
+  {
+    "stage": "tier3",
+    "instance": 57302449,
+    "die": "GB206",
+    "host_driver": "595.91.07",
+    "source": "a6456796e4af84d3b0c8bcb3558b63c2e85df42e",
+    "result": "PASS_READ_ONLY_MEASUREMENT",
+    "words": 48,
+    "field_rows": 328,
+    "tag": "measured:GB206,595.91.07,2026-10-23"
+  },
+  {
+    "stage": "checkpoint",
+    "result": "HARNESS_FALSE_REFUSAL",
+    "cause": "tuple-versus-JSON-list comparison",
+    "actual_xids_equal_approved_ordered": true,
+    "fix": "da6d5498dd091ca3d30fef943f5225c45fbc22b6",
+    "resume": "PREPARED_NOT_EXECUTED_LEASE_CLOSED_PENDING_CHECKPOINT_DECISION"
+  },
+  {
+    "stage": "Windows580.88_fieldON_hold_B1",
+    "result": "UNRUN",
+    "code0": null,
+    "code43": null,
+    "tdr": null,
+    "rpcs": null
+  },
+  {
+    "stage": "teardown",
+    "instance": 57302449,
+    "api_absence_utc": "2026-10-23T02:25:37.530362+00:00",
+    "all_owned_ids_absent": 13,
+    "current_runtime_estimate_usd": 0.42689334101518517,
+    "phase_runtime_estimate_usd": 1.5192168444438887,
+    "credit_after_observed": 34.30682600516138,
+    "not_a_provider_failure": true
+  }
+]

@@ -1,0 +1,14 @@
+{
+  "utc": "2026-10-22T22:58:55.640040+00:00",
+  "own_id": 57285340,
+  "workers_per_file": 8,
+  "file_start_stagger_seconds": 3,
+  "helper_unmodified": true,
+  "helper_sha256": "5415c4fb76c193b70db7d200a384da81e478c820316eaebdc1f545e3a2e674c3",
+  "original_deadline_utc": "2026-10-22T23:12:10+00:00",
+  "deadline_unchanged": true,
+  "previous_16_stream_result": "15chunks sent, one BrokenPipe; no file publication",
+  "cause": "inferred SSH unauthenticated-start burst; measured maxstartups10:30:100",
+  "hypothesis": "tested8-stream groups with staggered starts finish within original bound",
+  "falsifier": "any failed chunk/size/hash or deadline; no controller starts on failure"
+}

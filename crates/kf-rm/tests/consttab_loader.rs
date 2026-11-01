@@ -18,7 +18,12 @@ fn parse_row(row: &str) -> Result<Vec<consttab::Row>, String> {
 fn published_rows_validate_with_existing_evidence() {
     let repo = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let rows = consttab::table().expect("published table");
-    assert_eq!(rows.len(), 95);
+    // 2026-11-01 (Blackwell-into-next merge): the table is the CW1 file (95 observation rows, unchanged)
+    // plus the privileged PRECOMP rows of `data/precomp_measured.tsv`; both files' citations are checked.
+    let cw1 = consttab::parse(consttab::TABLE_TSV).expect("CW1 file");
+    let precomp = consttab::parse(consttab::PRECOMP_TSV).expect("PRECOMP file");
+    assert_eq!(cw1.len(), 95);
+    assert_eq!(rows.len(), cw1.len() + precomp.len());
     consttab::validate_evidence(rows, |path| repo.join(path).exists())
         .expect("every citation exists");
     for row in rows {

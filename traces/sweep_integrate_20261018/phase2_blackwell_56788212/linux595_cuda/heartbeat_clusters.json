@@ -1,0 +1,28 @@
+{
+  "classification": "MEASURED timestamp clustering; reset/epoch cause INFERRED and not proved",
+  "largest_gap_seconds": 5.609765999999993,
+  "clusters": [
+    {
+      "count": 144,
+      "first_s": 100.921698,
+      "last_s": 101.003124,
+      "span_s": 0.08142599999999334,
+      "raw_heartbeat_values": [
+        5472
+      ],
+      "first": "[  100.921698] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1448864316 heartbeat 5472 heartbeatWithOffsetMs 1448869753 diff 4294961859 timeout 5200",
+      "last": "[  101.003124] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1448864397 heartbeat 5472 heartbeatWithOffsetMs 1448869753 diff 4294961940 timeout 5200"
+    },
+    {
+      "count": 160,
+      "first_s": 106.61289,
+      "last_s": 106.674757,
+      "span_s": 0.061867000000006556,
+      "raw_heartbeat_values": [
+        5345
+      ],
+      "first": "[  106.612890] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1448870006 heartbeat 5345 heartbeatWithOffsetMs 1448875322 diff 4294961980 timeout 5200",
+      "last": "[  106.674757] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1448870068 heartbeat 5345 heartbeatWithOffsetMs 1448875322 diff 4294962042 timeout 5200"
+    }
+  ]
+}

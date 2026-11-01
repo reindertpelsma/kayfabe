@@ -1,0 +1,23 @@
+{
+  "utc": "2026-10-22T20:26:44.371675+00:00",
+  "owned_prior_ids": [
+    57099244,
+    57107585,
+    57108853,
+    57117614,
+    57132969,
+    57142142,
+    57143789,
+    57148807
+  ],
+  "owned_live_ids": [],
+  "phase_created_ids": [],
+  "creation_attempted": false,
+  "account_credit_observed_usd": 37.49974663106104,
+  "phase_runtime_cost_usd": 0.0,
+  "historical_stretch_runtime_estimate_usd": 4.832256623,
+  "reserve_usd": 5.0,
+  "rental_preflight_exit": 75,
+  "rental_preflight_reason": "NO_SUITABLE_REPLACEMENT_OFFERS: zero verified RTX5090 offers within frozen requirements; no create API call",
+  "foreign_instances": "not acted on or exported"
+}
