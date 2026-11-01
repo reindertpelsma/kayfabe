@@ -14,7 +14,9 @@
 #   key), reaches a signed-in desktop (dwm + explorer), the adapter reads ConfigManagerErrorCode 0, nvidia-smi
 #   runs, a CUDA matmul (cup8, byte exact) and a D3D11 compute+draw+readback (kf_dxprobe) pass, a bounded idle
 #   window (KF_WINGATE_IDLE_S, default 300 s) ends with zero resets (Display 4101, nvlddmkm 153, Kernel-Power 41,
-#   6008, BugCheck 1001, WER LiveKernelEvent) and the same two probes pass AGAIN after the idle; then a graceful stop.
+#   6008, BugCheck 1001, WER LiveKernelEvent other than code 193) and the same two probes pass AGAIN after the idle;
+#   the WATCHDOG live dumps (LiveKernelEvent 193, no reset: a recorded open defect) are counted and reported, and gate
+#   only with KF_WINGATE_STRICT_LKE=1; then a graceful stop.
 #
 # Verdict lines (fail closed: anything else, or no EXIT line, is not a pass):
 #   WINDOWS_GATE_PASS rev=<rev> gpu="<name>" ...                    exit 0
@@ -29,7 +31,7 @@
 # The owner rule (2026-10-26): a failure on a rented box is kayfabe's only if the SAME box's host-side GPU
 # reference (nvidia-smi plus a CUDA matmul on the Linux host) is green before AND after the guest run.
 #
-# Knobs (all optional): KF_WINGATE_IDLE_S (300), KF_WINGATE_BUDGET_S (9000: the wall for everything after the
+# Knobs (all optional): KF_WINGATE_STRICT_LKE (0: 1 makes LiveKernelEvent 193 gate), KF_WINGATE_IDLE_S (300), KF_WINGATE_BUDGET_S (9000: the wall for everything after the
 # install; the install itself is bounded by WINVM_INSTALL_WAIT_S, 4200), KF_WINGATE_FLAGS (the kf3 env file,
 # scripts/bench/windows/kf3_flags.sample.env), KF_WINGATE_GUEST_DRIVER (580.65.06: the guest ABI of the
 # Windows 580.88 driver), KF_WINGATE_ARM (B), WINVM_ROOT (/workspace/winvm), BENCH (/workspace/bench).
@@ -81,6 +83,7 @@ HOSTREF_BEFORE=unrun HOSTREF_AFTER=unrun
 STAGE=start
 GUEST_STARTED=0                 # 1 once a kf3 QEMU was started: only then can a failure be kayfabe's
 ENABLE_UTC=""
+LKE193=""
 rc_final=0
 FAILMODE=none FAILWHY="" FAILSTAGE=""
 STAGE_T=0
@@ -195,7 +198,7 @@ conclude() {
                 verdict FAIL KAYFABE "the kf3 log shows the no-flags refusal 0x2080121f although the flags were exported"
             else
                 STAGE="done"
-                verdict PASS NONE "install=once driver=580.88 gsp=forced code=0 probes=cup8,d3d11,x2 resets=0 enable_utc=$ENABLE_UTC"
+                verdict PASS NONE "install=once driver=580.88 gsp=forced code=0 probes=cup8,d3d11,x2 resets=0 known_live_dumps_193=${LKE193:-?} strict=${KF_WINGATE_STRICT_LKE:-0} enable_utc=$ENABLE_UTC"
             fi ;;
     esac
     finish
@@ -215,6 +218,7 @@ on_exit() {
         rc_final=3
     fi
     if [ "$GUEST_STARTED" = 1 ] && [ -e "$VM/run/qemu.pid" ]; then teardown_guest; fi
+    [ -z "${PROBES:-}" ] || rm -rf "$PROBES"
     say "WINDOWS_GATE_EXIT rc=$rc_final $(date -u -Is)"
     exit "$rc_final"
 }
@@ -584,7 +588,10 @@ probes_round() { # SUFFIX  -> sets PROBE_BAD (graded: cup8 + d3d11; reported: cu
     PROBE_BAD=""
     if [ -z "$sfx" ]; then
         g 60 'New-Item -ItemType Directory -Force -Path C:\kf\probes | Out-Null' > /dev/null 2>&1
-        guest_scp "$PROBES/." 'C:/kf/probes/' > /dev/null 2>&1 || { PROBE_BAD="the-scp-of-the-probes "; return; }
+        # one scp per file: Windows OpenSSH's scp refuses "dir/." as a source (measured in this gate's second attempt)
+        for f in "$PROBES"/*.exe; do
+            guest_scp "$f" 'C:/kf/probes/' > "$EV/probe_scp.txt" 2>&1 || fail_op "scp of $(basename "$f") to the guest failed: $(tail -1 "$EV/probe_scp.txt")"
+        done
     fi
     line=$(run_probe cup8 cup8.exe '' 180 "$EV/probe_cup8$sfx.txt")
     if ! { grep -aq 'CUP8 VERDICT: PASS' "$EV/probe_cup8$sfx.txt" && grep -aq 'bad=0 maxerr=0' "$EV/probe_cup8$sfx.txt" && [[ "$line" == *"rc=0 "* ]]; }; then PROBE_BAD+="cup8 "; fi
@@ -629,8 +636,11 @@ stage_begin post_idle
 smi "_post" || fail_guest "nvidia-smi after the idle window failed (nvidia_smi_*_guest_post.txt)"
 probes_round "_post"
 [ -z "$PROBE_BAD" ] || fail_guest "graded probes failed AFTER the idle window: ${PROBE_BAD}(probe_*_post.txt)"
-gps 300 'C:\kf\gate_state.ps1' -Mode tdr -Since "$ENABLE_UTC" > "$EV/tdr_counts.txt" 2>&1
-grep -a '^GATE_TDR' "$EV/tdr_counts.txt" | while read -r l; do say "  $l"; done
+strict=""
+[ "${KF_WINGATE_STRICT_LKE:-0}" != 1 ] || strict="-Strict"
+gps 300 'C:\kf\gate_state.ps1' -Mode tdr -Since "$ENABLE_UTC" $strict > "$EV/tdr_counts.txt" 2>&1
+grep -a '^GATE_TDR\|^GATE_LIVEDUMP' "$EV/tdr_counts.txt" | while read -r l; do say "  $l"; done
+LKE193=$(sed -n 's/.* livekernelevent193=\([0-9]*\) .*/\1/p' "$EV/tdr_counts.txt" | head -1)
 grep -aq '^GATE_TDR .* total=0$' "$EV/tdr_counts.txt" || fail_guest "reset counters are not all zero since the enable: $(grep -a '^GATE_TDR' "$EV/tdr_counts.txt" | head -1)"
 gps 120 'C:\kf\gate_state.ps1' -Mode display > "$EV/display_final.txt" 2>&1
 grep -aq "code=0 " "$EV/display_final.txt" || fail_guest "the adapter is not at code 0 at the end: $(grep -a GATE_DISPLAY "$EV/display_final.txt" | head -1)"

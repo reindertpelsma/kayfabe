@@ -23,6 +23,7 @@ $sw = [Diagnostics.Stopwatch]::StartNew()
 $a = @{ FilePath = $Exe; RedirectStandardOutput = $out; RedirectStandardError = $err; PassThru = $true; WindowStyle = 'Hidden' }
 if ($Arg) { $a['ArgumentList'] = $Arg }
 $p = Start-Process @a
+$null = $p.Handle   # without this, ExitCode stays empty after WaitForExit(ms) with -PassThru
 $done = $p.WaitForExit($TimeoutS * 1000)
 $to = 0
 $rc = -1
