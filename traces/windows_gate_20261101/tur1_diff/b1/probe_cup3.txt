@@ -1,0 +1,6 @@
+GATE_PROBE_START exe=cup3.exe utc=2026-11-01T21:36:09Z
+ok   cuInit(0)
+ok   cuDeviceGetCount(&n)
+ok   cuDeviceGet(&d,0)
+FAIL cuCtxCreate(&ctx,0,d) -> unknown error (999)
+GATE_PROBE exe=cup3.exe arg= rc=1 secs=13 timeout=0

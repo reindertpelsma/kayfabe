@@ -1,6 +1,6 @@
 # V3: the Windows stage of the merge bar (`KF_MERGE_WINDOWS=1`, `windows_gate.sh`)
 
-STATUS: LIVE, 2026-11-01 (first hardware run: section 6). The gate is implemented (`scripts/bench/box/windows_gate.sh`, wired into
+STATUS: LIVE, 2026-11-01 (first hardware run: section 6; Turing differential against the tur1 branch: the correction at the head of section 7). The gate is implemented (`scripts/bench/box/windows_gate.sh`, wired into
 `scripts/bench/box/merge_check.sh` as an opt-in last stage). The first real run is recorded in
 `traces/windows_gate_20261101/README.md`; this file carries the design and the rules, that file carries the
 numbers. It implements the verification plan of [`V3_WINDOWS_ON_VAST.md`](V3_WINDOWS_ON_VAST.md) (bar (b)) as a
@@ -111,6 +111,8 @@ box that is then destroyed loses the install; the evidence is exported by the ga
 - **Not run on that lease:** `merge_check.sh` end to end with `KF_MERGE_WINDOWS=1`, a native Windows reference, any other die.
 
 ## 7. Per die (owner follow-up 2026-11-01; evidence in `traces/windows_gate_20261101/`)
+
+**Correction, 2026-11-01 (tur1 differential, `traces/windows_gate_20261101/tur1_diff/README.md`), folded above the text it corrects.** The Turing failure below is NOT a gap in code that lives on `origin/claude/tur1-20261027` and not on the gate head. MEASURED (code read and a GPU-free merge): the Turing fixes of that branch (Windows USER ring class 0xc46f, 32-bit Turing window semaphores, the `HSCE` Xid spelling, the ring given back by a worker that finds its slot locked, `WINVM_KF3_DISPLAY=off`, `windows_lane.sh`) are already in the gate head under other SHAs (PRs #161, #162, #164, #168); the net code that a real merge adds is the lost-wake completion probe only (diagnostic, off unless `KF3_COMPLETION_PROBE`; `claude/tur1-gate-candidate-20261101` at `1581edb4`). MEASURED (Vast lease 58705804, GTX 1660 SUPER = TU116, the only Turing KVM die on offer that day; not a TU106, not US): the gate head `f9883ecc` ends `WINDOWS_GATE_FAIL` (`cup8` passed, then `d3d11` died with a guest bugcheck 0x113), the merged candidate `1581edb4` ends `WINDOWS_GATE_FAIL` (`cup8` `cuInit` 999, 20 RM unloads, `nvlddmkm` 153 x36), both with the host reference green before and after and the V3 gates 9/9 on the same box. So the hypothesis "merge tur1 and Turing passes" is falsified on that box, and "the TU106 failure was one bad box" is not supported; INFERRED: Turing on Windows is not stable in `next` in either form, as `traces/tur1_20261027/README.md` already said (n=2 boots, different outcomes). Also MEASURED: on both Turing runs the LiveKernelEvent 193 dump (+33 s, +37 s after the enable) came BEFORE the first reset-class event, so the falsifier kept in the open-defect paragraph below is triggered for Turing (not for the AD102 runs). Not done: a TU106 box (none was on offer), a TU116 native Windows reference.
 
 | die | gate revision | result (MEASURED 2026-11-01) |
 |---|---|---|

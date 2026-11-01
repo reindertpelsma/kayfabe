@@ -1,0 +1,85 @@
+WINDOWS_GATE_START tag=a1 rev=f9883ecc source=/root/kayfabe 2026-11-01T20:47:31+00:00 idle_s=300 flags=kf3_flags.sample.env guest_driver=580.65.06 arm=B
+WINDOWS_GATE_REQUESTED=1
+GATE_STAGE preflight START 2026-11-01T20:47:31+00:00
+GATE_NOTE host VRAM 6144 MiB: WINVM_KF3_FB_MB=4096
+GATE_NOTE host: gpu="NVIDIA GeForce GTX 1660 SUPER" driver=595.91.07 cpus=5 ram_gb=49 disk_free_gb=109
+GATE_STAGE preflight EXIT ok 0s
+GATE_STAGE hostref_before START 2026-11-01T20:47:31+00:00
+GATE_HOSTREF before green cup8=PASS xid_count=0 xid_delta=0 gpu="NVIDIA GeForce GTX 1660 SUPER, 595.91.07, 6144 MiB, P8"
+GATE_STAGE hostref_before EXIT ok 1s
+GATE_STAGE prereqs START 2026-11-01T20:47:32+00:00
+GATE_STAGE prereqs EXIT ok 14s
+GATE_STAGE kf3_binary START 2026-11-01T20:47:46+00:00
+GATE_NOTE kf3 qemu=/workspace/bench/kf3-bins/f9883ecc/qemu-system-x86_64 sha256=211e882783f62eda rev=f9883ecc
+GATE_STAGE kf3_binary EXIT ok 1s
+GATE_STAGE install START 2026-11-01T20:47:47+00:00
+GATE_NOTE Windows already installed on this box (2026-11-01T20:47:02Z repo=f9883ecc): install once per lease
+GATE_STAGE install EXIT ok 0s
+GATE_STAGE probes_build START 2026-11-01T20:47:47+00:00
+GATE_NOTE probes built: 55922e9ff849 70e0b2582071 d6e024629c8f 1e6decaa2a7a 
+GATE_STAGE probes_build EXIT ok 4s
+GATE_STAGE boot1 START 2026-11-01T20:47:51+00:00
+GATE_NOTE ssh up after 0s
+GATE_STAGE boot1 EXIT ok 92s
+GATE_STAGE check_kf3 START 2026-11-01T20:49:23+00:00
+GATE_NOTE check --kf3 (before the driver): 13 PASS lines, WIN_CHECK_DONE fail=0
+GATE_STAGE check_kf3 EXIT ok 39s
+GATE_STAGE nv_install START 2026-11-01T20:50:02+00:00
+  GSP_ON device PCI\VEN_10DE&DEV_21C4&SUBSYS_877E1043&REV_A1\3&11583659&0&28 name='Microsoft Basic Display Adapter' status=OK problem=CM_PROB_NONE inf=display.inf driverkey={fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0003}\0001
+  GSP_ON nvlddmkm.sys signature status=Valid signer='CN=NVIDIA Corporation, OU=1-F, O=NVIDIA Corporation, L=Santa Clara, S=California, C=US'
+  GSP_ON disable: Microsoft PnP Utility
+  GSP_ON disable:
+  GSP_ON disable: Disabling device:          PCI\VEN_10DE&DEV_21C4&SUBSYS_877E1043&REV_A1\3&11583659&0&28
+  GSP_ON disable: Device disabled successfully.
+  GSP_ON disable:
+  GSP_ON add-driver: Microsoft PnP Utility
+  GSP_ON add-driver:
+  GSP_ON add-driver: Adding driver package:  nv_dispi.inf
+  GSP_ON add-driver: Driver package added successfully.
+  GSP_ON add-driver: Published Name:         oem7.inf
+  GSP_ON add-driver: Driver package installed on device: PCI\VEN_10DE&DEV_21C4&SUBSYS_877E1043&REV_A1\3&11583659&0&28
+  GSP_ON add-driver:
+  GSP_ON add-driver: Total driver packages:  1
+  GSP_ON add-driver: Added driver packages:  1
+  GSP_ON add-driver rc=0
+  GSP_ON after install: inf=oem7.inf driverkey={fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0003}\0001 version=32.0.15.8088
+  GSP_ON readback HKLM:\SYSTEM\CurrentControlSet\Control\Class\{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0003}\0001 EnableGpuFirmware=1
+  GSP_ON readback HKLM:\SYSTEM\CurrentControlSet\Services\nvlddmkm EnableGpuFirmware=1
+GATE_STAGE nv_install EXIT ok 309s
+GATE_STAGE desktop_prep START 2026-11-01T20:55:11+00:00
+  DESKTOP_PREP AutoAdminLogon=1 want=1 OK
+  DESKTOP_PREP DefaultUserName=kf want=kf OK
+  DESKTOP_PREP DefaultDomainName=. want=. OK
+  DESKTOP_PREP DefaultPassword_matches=True want=True OK
+  DESKTOP_PREP AutoLogonCount_absent=True want=True OK
+  DESKTOP_PREP DevicePasswordLessBuildVersion=0 want=0 OK
+  DESKTOP_PREP OverlayTestMode=5 want=5 OK
+  DESKTOP_PREP_DONE fail=0
+  [2026-11-01T20:55:35Z] DESKTOP_PREP_OK user=kf (autologon and OverlayTestMode apply at the next boot of this disk)
+GATE_STAGE desktop_prep EXIT ok 25s
+GATE_STAGE reboot START 2026-11-01T20:55:36+00:00
+GATE_NOTE second QEMU started after 20s
+GATE_NOTE ssh up after 10s
+GATE_STAGE reboot EXIT ok 146s
+GATE_STAGE desktop START 2026-11-01T20:58:02+00:00
+  GATE_BOOT utc=2026-11-01T20:56:36Z os='Microsoft Windows 11 Enterprise LTSC Evaluation' build=26100
+  GATE_DESKTOP user='KFWIN\kf' dwm=1 explorer=1
+  GATE_SESSIONS USERNAME SESSIONNAME ID STATE IDLE TIME LOGON TIME kf console 1 Active none 11/1/2026 8:57 PM
+  GATE_DISPLAY name='NVIDIA GeForce GTX 1660 SUPER' driver=32.0.15.8088 code=22 status=Error pnp=Error
+  GATE_STATE_DONE mode=desktop
+GATE_STAGE desktop EXIT ok 41s
+GATE_STAGE enable START 2026-11-01T20:58:43+00:00
+GATE_NOTE device enabled once at 2026-11-01T20:59:01Z (guest clock)
+  GATE_DISPLAY name='NVIDIA GeForce GTX 1660 SUPER' driver=32.0.15.8088 code=0 status=OK pnp=OK
+GATE_STAGE enable EXIT ok 63s
+GATE_STAGE smi_probes START 2026-11-01T20:59:46+00:00
+GATE_NOTE guest nvidia-smi: GPU 0: NVIDIA GeForce GTX 1660 SUPER (UUID: GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001)
+GATE_PROBE_RESULT cup8 GATE_PROBE exe=cup8.exe arg= rc=0 secs=7 timeout=0
+GATE_PROBE_RESULT d3d11 
+GATE_PROBE_RESULT cup3 
+GATE_PROBE_RESULT d3d12 
+GATE_HOSTREF after green cup8=PASS xid_count=0 xid_delta=0 gpu="NVIDIA GeForce GTX 1660 SUPER, 595.91.07, 6144 MiB, P2"
+WINDOWS_GATE_FAIL diag=KAYFABE stage=smi_probes why="graded probes failed: d3d11 (probe_*.txt)" rev=f9883ecc gpu="NVIDIA GeForce GTX 1660 SUPER" hostref=green/green secs=945
+GATE_NOTE evidence: /root/prov/a1_windows (49 files), /root/prov/a1_windows.tgz sha256=a8a9ff54f8d05160
+WINDOWS_GATE_TIMING total=945s preflight=0s hostref_before=1s prereqs=14s kf3_binary=1s install=0s probes_build=4s boot1=92s check_kf3=39s nv_install=309s desktop_prep=25s reboot=146s desktop=41s enable=63s
+WINDOWS_GATE_EXIT rc=1 2026-11-01T21:03:16+00:00

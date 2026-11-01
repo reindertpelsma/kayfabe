@@ -1,0 +1,2 @@
+Connection to 127.0.0.1 closed by remote host.
+GATE_PROBE_START exe=kf_dxprobe.exe utc=2026-11-01T21:02:27Z

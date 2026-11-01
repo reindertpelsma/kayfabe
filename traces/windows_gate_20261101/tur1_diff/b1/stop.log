@@ -1,0 +1,6 @@
+[2026-11-01T21:14:34Z] stopping kfwin (pid 77628)
+[2026-11-01T21:17:43Z] guest did not power off in 180s: QMP system_powerdown
+[2026-11-01T21:19:44Z] still running: QMP quit
+[2026-11-01T21:19:44Z] stopped
+[2026-11-01T21:39:06Z] stopping kfwin (pid 82118)
+[2026-11-01T21:40:06Z] stopped

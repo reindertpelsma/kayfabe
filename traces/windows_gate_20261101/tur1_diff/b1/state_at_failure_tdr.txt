@@ -1,0 +1,3 @@
+GATE_TDR since=2026-11-01T21:31:56Z display4101=0 nvlddmkm153=36 kernelpower41=0 eventlog6008=0 bugcheck1001=0 livekernelevent_other=71 livekernelevent193=13 strict=0 total=107
+GATE_LIVEDUMP 2026-11-01T21:32:33Z WATCHDOG-20261101-2132.dmp bytes=1381797888
+GATE_STATE_DONE mode=tdr

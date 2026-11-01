@@ -1,0 +1,778 @@
+WINDOWS_GATE_START tag=b1 rev=1581edb4 source=/root/kayfabe 2026-11-01T21:21:27+00:00 idle_s=300 flags=flags_probe.env guest_driver=580.65.06 arm=B
+WINDOWS_GATE_REQUESTED=1
+GATE_STAGE preflight START 2026-11-01T21:21:27+00:00
+GATE_NOTE host VRAM 6144 MiB: WINVM_KF3_FB_MB=4096
+GATE_NOTE host: gpu="NVIDIA GeForce GTX 1660 SUPER" driver=595.91.07 cpus=5 ram_gb=49 disk_free_gb=99
+GATE_STAGE preflight EXIT ok 0s
+GATE_STAGE hostref_before START 2026-11-01T21:21:27+00:00
+GATE_HOSTREF before green cup8=PASS xid_count=0 xid_delta=0 gpu="NVIDIA GeForce GTX 1660 SUPER, 595.91.07, 6144 MiB, P8"
+GATE_STAGE hostref_before EXIT ok 1s
+GATE_STAGE prereqs START 2026-11-01T21:21:28+00:00
+GATE_STAGE prereqs EXIT ok 0s
+GATE_STAGE kf3_binary START 2026-11-01T21:21:28+00:00
+GATE_NOTE no kf3 QEMU at /workspace/bench/kf3-bins/1581edb4/qemu-system-x86_64: building this revision
+GATE_NOTE kf3 qemu=/workspace/bench/kf3-bins/1581edb4/qemu-system-x86_64 sha256=5db5cf3f54aecc5d rev=1581edb4
+GATE_STAGE kf3_binary EXIT ok 33s
+GATE_STAGE install START 2026-11-01T21:22:01+00:00
+GATE_NOTE Windows already installed on this box (2026-11-01T20:47:02Z repo=f9883ecc): install once per lease
+GATE_STAGE install EXIT ok 0s
+GATE_STAGE probes_build START 2026-11-01T21:22:01+00:00
+GATE_NOTE probes built: c7e965d4a9c6 340b0354d424 1a0d387259bb d740542dc8f0 
+GATE_STAGE probes_build EXIT ok 5s
+GATE_STAGE boot1 START 2026-11-01T21:22:06+00:00
+GATE_NOTE ssh up after 0s
+GATE_STAGE boot1 EXIT ok 79s
+GATE_STAGE check_kf3 START 2026-11-01T21:23:25+00:00
+GATE_NOTE check --kf3 (before the driver): 13 PASS lines, WIN_CHECK_DONE fail=0
+GATE_STAGE check_kf3 EXIT ok 42s
+GATE_STAGE nv_install START 2026-11-01T21:24:07+00:00
+  GSP_ON device PCI\VEN_10DE&DEV_21C4&SUBSYS_877E1043&REV_A1\3&11583659&0&28 name='Microsoft Basic Display Adapter' status=OK problem=CM_PROB_NONE inf=display.inf driverkey={fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0003}\0001
+  GSP_ON nvlddmkm.sys signature status=Valid signer='CN=NVIDIA Corporation, OU=1-F, O=NVIDIA Corporation, L=Santa Clara, S=California, C=US'
+  GSP_ON disable: Microsoft PnP Utility
+  GSP_ON disable:
+  GSP_ON disable: Disabling device:          PCI\VEN_10DE&DEV_21C4&SUBSYS_877E1043&REV_A1\3&11583659&0&28
+  GSP_ON disable: Device disabled successfully.
+  GSP_ON disable:
+  GSP_ON add-driver: Microsoft PnP Utility
+  GSP_ON add-driver:
+  GSP_ON add-driver: Adding driver package:  nv_dispi.inf
+  GSP_ON add-driver: Driver package added successfully.
+  GSP_ON add-driver: Published Name:         oem7.inf
+  GSP_ON add-driver: Driver package installed on device: PCI\VEN_10DE&DEV_21C4&SUBSYS_877E1043&REV_A1\3&11583659&0&28
+  GSP_ON add-driver:
+  GSP_ON add-driver: Total driver packages:  1
+  GSP_ON add-driver: Added driver packages:  1
+  GSP_ON add-driver rc=0
+  GSP_ON after install: inf=oem7.inf driverkey={fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0003}\0001 version=32.0.15.8088
+  GSP_ON readback HKLM:\SYSTEM\CurrentControlSet\Control\Class\{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0003}\0001 EnableGpuFirmware=1
+  GSP_ON readback HKLM:\SYSTEM\CurrentControlSet\Services\nvlddmkm EnableGpuFirmware=1
+GATE_STAGE nv_install EXIT ok 269s
+GATE_STAGE desktop_prep START 2026-11-01T21:28:36+00:00
+  DESKTOP_PREP AutoAdminLogon=1 want=1 OK
+  DESKTOP_PREP DefaultUserName=kf want=kf OK
+  DESKTOP_PREP DefaultDomainName=. want=. OK
+  DESKTOP_PREP DefaultPassword_matches=True want=True OK
+  DESKTOP_PREP AutoLogonCount_absent=True want=True OK
+  DESKTOP_PREP DevicePasswordLessBuildVersion=0 want=0 OK
+  DESKTOP_PREP OverlayTestMode=5 want=5 OK
+  DESKTOP_PREP_DONE fail=0
+  [2026-11-01T21:28:59Z] DESKTOP_PREP_OK user=kf (autologon and OverlayTestMode apply at the next boot of this disk)
+GATE_STAGE desktop_prep EXIT ok 23s
+GATE_STAGE reboot START 2026-11-01T21:28:59+00:00
+GATE_NOTE second QEMU started after 15s
+GATE_NOTE ssh up after 10s
+GATE_STAGE reboot EXIT ok 99s
+GATE_STAGE desktop START 2026-11-01T21:30:38+00:00
+  GATE_BOOT utc=2026-11-01T21:29:47Z os='Microsoft Windows 11 Enterprise LTSC Evaluation' build=26100
+  GATE_DESKTOP user='KFWIN\kf' dwm=1 explorer=1
+  GATE_SESSIONS USERNAME SESSIONNAME ID STATE IDLE TIME LOGON TIME kf console 1 Active none 11/1/2026 9:30 PM
+  GATE_DISPLAY name='NVIDIA GeForce GTX 1660 SUPER' driver=32.0.15.8088 code=22 status=Error pnp=Error
+  GATE_STATE_DONE mode=desktop
+GATE_STAGE desktop EXIT ok 56s
+GATE_STAGE enable START 2026-11-01T21:31:34+00:00
+GATE_NOTE device enabled once at 2026-11-01T21:31:56Z (guest clock)
+  GATE_DISPLAY name='NVIDIA GeForce GTX 1660 SUPER' driver=32.0.15.8088 code=0 status=OK pnp=OK
+GATE_STAGE enable EXIT ok 71s
+GATE_STAGE smi_probes START 2026-11-01T21:32:45+00:00
+GATE_NOTE guest nvidia-smi: GPU 0: NVIDIA GeForce GTX 1660 SUPER (UUID: GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001)
+GATE_PROBE_RESULT cup8 GATE_PROBE exe=cup8.exe arg= rc=1 secs=12 timeout=0
+GATE_PROBE_RESULT d3d11 GATE_PROBE exe=kf_dxprobe.exe arg=d3d11 rc=0 secs=4 timeout=0
+GATE_PROBE_RESULT cup3 GATE_PROBE exe=cup3.exe arg= rc=1 secs=13 timeout=0
+GATE_PROBE_RESULT d3d12 GATE_PROBE exe=kf_dxprobe.exe arg=d3d12 rc=0 secs=21 timeout=0
+  GATE_WER_REPORT dir=Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 where=ReportQueue mtime=2026-11-01T21:37:57Z event_time=2026-11-01T21:36:17Z
+  GATE_WER_PARAM Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 EventType=LiveKernelEvent
+  GATE_WER_PARAM Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 ReportType=4
+  GATE_WER_PARAM Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 ReportStatus=2049
+  GATE_WER_PARAM Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 Sig[0].Name=Code
+  GATE_WER_PARAM Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 Sig[0].Value=117
+  GATE_WER_PARAM Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 Sig[1].Name=Parameter 1
+  GATE_WER_PARAM Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 Sig[1].Value=ffffe48d9b448050
+  GATE_WER_PARAM Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 Sig[2].Name=Parameter 2
+  GATE_WER_PARAM Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 Sig[2].Value=fffff8025ca04580
+  GATE_WER_PARAM Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 Sig[3].Name=Parameter 3
+  GATE_WER_PARAM Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 Sig[3].Value=0
+  GATE_WER_PARAM Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 Sig[4].Name=Parameter 4
+  GATE_WER_PARAM Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 Sig[4].Value=ffffe48d94bde080
+  GATE_WER_PARAM Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 Sig[5].Name=OS version
+  GATE_WER_PARAM Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 Sig[5].Value=10_0_26100
+  GATE_WER_PARAM Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 Sig[6].Name=Service Pack
+  GATE_WER_PARAM Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 Sig[6].Value=0_0
+  GATE_WER_PARAM Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 Sig[7].Name=Product
+  GATE_WER_PARAM Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 Sig[7].Value=256_1
+  GATE_WER_PARAM Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 DynamicSig[1].Name=OS Version
+  GATE_WER_PARAM Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 DynamicSig[1].Value=10.0.26100.2.0.0.256.129
+  GATE_WER_PARAM Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 DynamicSig[2].Name=Locale ID
+  GATE_WER_PARAM Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 DynamicSig[2].Value=1033
+  GATE_WER_PARAM Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 FriendlyEventName=Hardware error
+  GATE_WER_REPORT dir=Kernel_117_735bd9bec2293ecf76d04a904210a81d605c9e_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0005 where=ReportQueue mtime=2026-11-01T21:37:59Z event_time=2026-11-01T21:37:50Z
+  GATE_WER_PARAM Kernel_117_735bd9bec2293ecf76d04a904210a81d605c9e_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0005 EventType=LiveKernelEvent
+  GATE_WER_PARAM Kernel_117_735bd9bec2293ecf76d04a904210a81d605c9e_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0005 ReportType=4
+  GATE_WER_PARAM Kernel_117_735bd9bec2293ecf76d04a904210a81d605c9e_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0005 ReportStatus=2049
+  GATE_WER_PARAM Kernel_117_735bd9bec2293ecf76d04a904210a81d605c9e_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0005 Sig[0].Name=Code
+  GATE_WER_PARAM Kernel_117_735bd9bec2293ecf76d04a904210a81d605c9e_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0005 Sig[0].Value=117
+  GATE_WER_PARAM Kernel_117_735bd9bec2293ecf76d04a904210a81d605c9e_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0005 Sig[1].Name=Parameter 1
+  GATE_WER_PARAM Kernel_117_735bd9bec2293ecf76d04a904210a81d605c9e_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0005 Sig[1].Value=ffffe48d9b2721d0
+  GATE_WER_PARAM Kernel_117_735bd9bec2293ecf76d04a904210a81d605c9e_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0005 Sig[2].Name=Parameter 2
+  GATE_WER_PARAM Kernel_117_735bd9bec2293ecf76d04a904210a81d605c9e_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0005 Sig[2].Value=fffff8025ca04580
+  GATE_WER_PARAM Kernel_117_735bd9bec2293ecf76d04a904210a81d605c9e_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0005 Sig[3].Name=Parameter 3
+  GATE_WER_PARAM Kernel_117_735bd9bec2293ecf76d04a904210a81d605c9e_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0005 Sig[3].Value=0
+  GATE_WER_PARAM Kernel_117_735bd9bec2293ecf76d04a904210a81d605c9e_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0005 Sig[4].Name=Parameter 4
+  GATE_WER_PARAM Kernel_117_735bd9bec2293ecf76d04a904210a81d605c9e_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0005 Sig[4].Value=ffffe48d9523a080
+  GATE_WER_PARAM Kernel_117_735bd9bec2293ecf76d04a904210a81d605c9e_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0005 Sig[5].Name=OS version
+  GATE_WER_PARAM Kernel_117_735bd9bec2293ecf76d04a904210a81d605c9e_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0005 Sig[5].Value=10_0_26100
+  GATE_WER_PARAM Kernel_117_735bd9bec2293ecf76d04a904210a81d605c9e_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0005 Sig[6].Name=Service Pack
+  GATE_WER_PARAM Kernel_117_735bd9bec2293ecf76d04a904210a81d605c9e_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0005 Sig[6].Value=0_0
+  GATE_WER_PARAM Kernel_117_735bd9bec2293ecf76d04a904210a81d605c9e_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0005 Sig[7].Name=Product
+  GATE_WER_PARAM Kernel_117_735bd9bec2293ecf76d04a904210a81d605c9e_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0005 Sig[7].Value=256_1
+  GATE_WER_PARAM Kernel_117_735bd9bec2293ecf76d04a904210a81d605c9e_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0005 DynamicSig[1].Name=OS Version
+  GATE_WER_PARAM Kernel_117_735bd9bec2293ecf76d04a904210a81d605c9e_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0005 DynamicSig[1].Value=10.0.26100.2.0.0.256.129
+  GATE_WER_PARAM Kernel_117_735bd9bec2293ecf76d04a904210a81d605c9e_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0005 DynamicSig[2].Name=Locale ID
+  GATE_WER_PARAM Kernel_117_735bd9bec2293ecf76d04a904210a81d605c9e_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0005 DynamicSig[2].Value=1033
+  GATE_WER_PARAM Kernel_117_735bd9bec2293ecf76d04a904210a81d605c9e_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0005 FriendlyEventName=Hardware error
+  GATE_WER_REPORT dir=Kernel_117_a236fdba3741646537a9b67116a4ee412d2636_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0006 where=ReportQueue mtime=2026-11-01T21:37:56Z event_time=2026-11-01T21:33:32Z
+  GATE_WER_PARAM Kernel_117_a236fdba3741646537a9b67116a4ee412d2636_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0006 EventType=LiveKernelEvent
+  GATE_WER_PARAM Kernel_117_a236fdba3741646537a9b67116a4ee412d2636_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0006 ReportType=4
+  GATE_WER_PARAM Kernel_117_a236fdba3741646537a9b67116a4ee412d2636_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0006 ReportStatus=2049
+  GATE_WER_PARAM Kernel_117_a236fdba3741646537a9b67116a4ee412d2636_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0006 Sig[0].Name=Code
+  GATE_WER_PARAM Kernel_117_a236fdba3741646537a9b67116a4ee412d2636_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0006 Sig[0].Value=117
+  GATE_WER_PARAM Kernel_117_a236fdba3741646537a9b67116a4ee412d2636_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0006 Sig[1].Name=Parameter 1
+  GATE_WER_PARAM Kernel_117_a236fdba3741646537a9b67116a4ee412d2636_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0006 Sig[1].Value=ffffe48d9b5581d0
+  GATE_WER_PARAM Kernel_117_a236fdba3741646537a9b67116a4ee412d2636_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0006 Sig[2].Name=Parameter 2
+  GATE_WER_PARAM Kernel_117_a236fdba3741646537a9b67116a4ee412d2636_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0006 Sig[2].Value=fffff8025ca04580
+  GATE_WER_PARAM Kernel_117_a236fdba3741646537a9b67116a4ee412d2636_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0006 Sig[3].Name=Parameter 3
+  GATE_WER_PARAM Kernel_117_a236fdba3741646537a9b67116a4ee412d2636_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0006 Sig[3].Value=0
+  GATE_WER_PARAM Kernel_117_a236fdba3741646537a9b67116a4ee412d2636_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0006 Sig[4].Name=Parameter 4
+  GATE_WER_PARAM Kernel_117_a236fdba3741646537a9b67116a4ee412d2636_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0006 Sig[4].Value=ffffe48d95b2b080
+  GATE_WER_PARAM Kernel_117_a236fdba3741646537a9b67116a4ee412d2636_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0006 Sig[5].Name=OS version
+  GATE_WER_PARAM Kernel_117_a236fdba3741646537a9b67116a4ee412d2636_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0006 Sig[5].Value=10_0_26100
+  GATE_WER_PARAM Kernel_117_a236fdba3741646537a9b67116a4ee412d2636_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0006 Sig[6].Name=Service Pack
+  GATE_WER_PARAM Kernel_117_a236fdba3741646537a9b67116a4ee412d2636_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0006 Sig[6].Value=0_0
+  GATE_WER_PARAM Kernel_117_a236fdba3741646537a9b67116a4ee412d2636_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0006 Sig[7].Name=Product
+  GATE_WER_PARAM Kernel_117_a236fdba3741646537a9b67116a4ee412d2636_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0006 Sig[7].Value=256_1
+  GATE_WER_PARAM Kernel_117_a236fdba3741646537a9b67116a4ee412d2636_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0006 DynamicSig[1].Name=OS Version
+  GATE_WER_PARAM Kernel_117_a236fdba3741646537a9b67116a4ee412d2636_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0006 DynamicSig[1].Value=10.0.26100.2.0.0.256.129
+  GATE_WER_PARAM Kernel_117_a236fdba3741646537a9b67116a4ee412d2636_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0006 DynamicSig[2].Name=Locale ID
+  GATE_WER_PARAM Kernel_117_a236fdba3741646537a9b67116a4ee412d2636_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0006 DynamicSig[2].Value=1033
+  GATE_WER_PARAM Kernel_117_a236fdba3741646537a9b67116a4ee412d2636_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0006 FriendlyEventName=Hardware error
+  GATE_WER_REPORT dir=Kernel_117_a30fe58e89694ceb917188941b0c356a6905cfc_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0007 where=ReportQueue mtime=2026-11-01T21:37:58Z event_time=2026-11-01T21:37:04Z
+  GATE_WER_PARAM Kernel_117_a30fe58e89694ceb917188941b0c356a6905cfc_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0007 EventType=LiveKernelEvent
+  GATE_WER_PARAM Kernel_117_a30fe58e89694ceb917188941b0c356a6905cfc_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0007 ReportType=4
+  GATE_WER_PARAM Kernel_117_a30fe58e89694ceb917188941b0c356a6905cfc_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0007 ReportStatus=2049
+  GATE_WER_PARAM Kernel_117_a30fe58e89694ceb917188941b0c356a6905cfc_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0007 Sig[0].Name=Code
+  GATE_WER_PARAM Kernel_117_a30fe58e89694ceb917188941b0c356a6905cfc_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0007 Sig[0].Value=117
+  GATE_WER_PARAM Kernel_117_a30fe58e89694ceb917188941b0c356a6905cfc_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0007 Sig[1].Name=Parameter 1
+  GATE_WER_PARAM Kernel_117_a30fe58e89694ceb917188941b0c356a6905cfc_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0007 Sig[1].Value=ffffe48d8ffa9050
+  GATE_WER_PARAM Kernel_117_a30fe58e89694ceb917188941b0c356a6905cfc_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0007 Sig[2].Name=Parameter 2
+  GATE_WER_PARAM Kernel_117_a30fe58e89694ceb917188941b0c356a6905cfc_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0007 Sig[2].Value=fffff8025ca04580
+  GATE_WER_PARAM Kernel_117_a30fe58e89694ceb917188941b0c356a6905cfc_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0007 Sig[3].Name=Parameter 3
+  GATE_WER_PARAM Kernel_117_a30fe58e89694ceb917188941b0c356a6905cfc_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0007 Sig[3].Value=0
+  GATE_WER_PARAM Kernel_117_a30fe58e89694ceb917188941b0c356a6905cfc_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0007 Sig[4].Name=Parameter 4
+  GATE_WER_PARAM Kernel_117_a30fe58e89694ceb917188941b0c356a6905cfc_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0007 Sig[4].Value=ffffe48d9b2020c0
+  GATE_WER_PARAM Kernel_117_a30fe58e89694ceb917188941b0c356a6905cfc_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0007 Sig[5].Name=OS version
+  GATE_WER_PARAM Kernel_117_a30fe58e89694ceb917188941b0c356a6905cfc_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0007 Sig[5].Value=10_0_26100
+  GATE_WER_PARAM Kernel_117_a30fe58e89694ceb917188941b0c356a6905cfc_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0007 Sig[6].Name=Service Pack
+  GATE_WER_PARAM Kernel_117_a30fe58e89694ceb917188941b0c356a6905cfc_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0007 Sig[6].Value=0_0
+  GATE_WER_PARAM Kernel_117_a30fe58e89694ceb917188941b0c356a6905cfc_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0007 Sig[7].Name=Product
+  GATE_WER_PARAM Kernel_117_a30fe58e89694ceb917188941b0c356a6905cfc_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0007 Sig[7].Value=256_1
+  GATE_WER_PARAM Kernel_117_a30fe58e89694ceb917188941b0c356a6905cfc_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0007 DynamicSig[1].Name=OS Version
+  GATE_WER_PARAM Kernel_117_a30fe58e89694ceb917188941b0c356a6905cfc_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0007 DynamicSig[1].Value=10.0.26100.2.0.0.256.129
+  GATE_WER_PARAM Kernel_117_a30fe58e89694ceb917188941b0c356a6905cfc_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0007 DynamicSig[2].Name=Locale ID
+  GATE_WER_PARAM Kernel_117_a30fe58e89694ceb917188941b0c356a6905cfc_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0007 DynamicSig[2].Value=1033
+  GATE_WER_PARAM Kernel_117_a30fe58e89694ceb917188941b0c356a6905cfc_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0007 FriendlyEventName=Hardware error
+  GATE_WER_REPORT dir=Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 where=ReportQueue mtime=2026-11-01T21:37:57Z event_time=2026-11-01T21:35:54Z
+  GATE_WER_PARAM Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 EventType=LiveKernelEvent
+  GATE_WER_PARAM Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 ReportType=4
+  GATE_WER_PARAM Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 ReportStatus=2049
+  GATE_WER_PARAM Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 Sig[0].Name=Code
+  GATE_WER_PARAM Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 Sig[0].Value=117
+  GATE_WER_PARAM Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 Sig[1].Name=Parameter 1
+  GATE_WER_PARAM Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 Sig[1].Value=ffffe48d95cdd010
+  GATE_WER_PARAM Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 Sig[2].Name=Parameter 2
+  GATE_WER_PARAM Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 Sig[2].Value=fffff8025ca04580
+  GATE_WER_PARAM Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 Sig[3].Name=Parameter 3
+  GATE_WER_PARAM Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 Sig[3].Value=0
+  GATE_WER_PARAM Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 Sig[4].Name=Parameter 4
+  GATE_WER_PARAM Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 Sig[4].Value=ffffe48d97bed080
+  GATE_WER_PARAM Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 Sig[5].Name=OS version
+  GATE_WER_PARAM Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 Sig[5].Value=10_0_26100
+  GATE_WER_PARAM Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 Sig[6].Name=Service Pack
+  GATE_WER_PARAM Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 Sig[6].Value=0_0
+  GATE_WER_PARAM Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 Sig[7].Name=Product
+  GATE_WER_PARAM Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 Sig[7].Value=256_1
+  GATE_WER_PARAM Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 DynamicSig[1].Name=OS Version
+  GATE_WER_PARAM Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 DynamicSig[1].Value=10.0.26100.2.0.0.256.129
+  GATE_WER_PARAM Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 DynamicSig[2].Name=Locale ID
+  GATE_WER_PARAM Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 DynamicSig[2].Value=1033
+  GATE_WER_PARAM Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 FriendlyEventName=Hardware error
+  GATE_WER_REPORT dir=Kernel_117_bb1168525d1abfbdb41ad8c0cdca515e50bed25a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0009 where=ReportQueue mtime=2026-11-01T21:37:57Z event_time=2026-11-01T21:34:19Z
+  GATE_WER_PARAM Kernel_117_bb1168525d1abfbdb41ad8c0cdca515e50bed25a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0009 EventType=LiveKernelEvent
+  GATE_WER_PARAM Kernel_117_bb1168525d1abfbdb41ad8c0cdca515e50bed25a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0009 ReportType=4
+  GATE_WER_PARAM Kernel_117_bb1168525d1abfbdb41ad8c0cdca515e50bed25a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0009 ReportStatus=2049
+  GATE_WER_PARAM Kernel_117_bb1168525d1abfbdb41ad8c0cdca515e50bed25a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0009 Sig[0].Name=Code
+  GATE_WER_PARAM Kernel_117_bb1168525d1abfbdb41ad8c0cdca515e50bed25a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0009 Sig[0].Value=117
+  GATE_WER_PARAM Kernel_117_bb1168525d1abfbdb41ad8c0cdca515e50bed25a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0009 Sig[1].Name=Parameter 1
+  GATE_WER_PARAM Kernel_117_bb1168525d1abfbdb41ad8c0cdca515e50bed25a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0009 Sig[1].Value=ffffe48d95e02050
+  GATE_WER_PARAM Kernel_117_bb1168525d1abfbdb41ad8c0cdca515e50bed25a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0009 Sig[2].Name=Parameter 2
+  GATE_WER_PARAM Kernel_117_bb1168525d1abfbdb41ad8c0cdca515e50bed25a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0009 Sig[2].Value=fffff8025ca04580
+  GATE_WER_PARAM Kernel_117_bb1168525d1abfbdb41ad8c0cdca515e50bed25a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0009 Sig[3].Name=Parameter 3
+  GATE_WER_PARAM Kernel_117_bb1168525d1abfbdb41ad8c0cdca515e50bed25a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0009 Sig[3].Value=0
+  GATE_WER_PARAM Kernel_117_bb1168525d1abfbdb41ad8c0cdca515e50bed25a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0009 Sig[4].Name=Parameter 4
+  GATE_WER_PARAM Kernel_117_bb1168525d1abfbdb41ad8c0cdca515e50bed25a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0009 Sig[4].Value=ffffe48d97d570c0
+  GATE_WER_PARAM Kernel_117_bb1168525d1abfbdb41ad8c0cdca515e50bed25a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0009 Sig[5].Name=OS version
+  GATE_WER_PARAM Kernel_117_bb1168525d1abfbdb41ad8c0cdca515e50bed25a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0009 Sig[5].Value=10_0_26100
+  GATE_WER_PARAM Kernel_117_bb1168525d1abfbdb41ad8c0cdca515e50bed25a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0009 Sig[6].Name=Service Pack
+  GATE_WER_PARAM Kernel_117_bb1168525d1abfbdb41ad8c0cdca515e50bed25a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0009 Sig[6].Value=0_0
+  GATE_WER_PARAM Kernel_117_bb1168525d1abfbdb41ad8c0cdca515e50bed25a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0009 Sig[7].Name=Product
+  GATE_WER_PARAM Kernel_117_bb1168525d1abfbdb41ad8c0cdca515e50bed25a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0009 Sig[7].Value=256_1
+  GATE_WER_PARAM Kernel_117_bb1168525d1abfbdb41ad8c0cdca515e50bed25a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0009 DynamicSig[1].Name=OS Version
+  GATE_WER_PARAM Kernel_117_bb1168525d1abfbdb41ad8c0cdca515e50bed25a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0009 DynamicSig[1].Value=10.0.26100.2.0.0.256.129
+  GATE_WER_PARAM Kernel_117_bb1168525d1abfbdb41ad8c0cdca515e50bed25a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0009 DynamicSig[2].Name=Locale ID
+  GATE_WER_PARAM Kernel_117_bb1168525d1abfbdb41ad8c0cdca515e50bed25a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0009 DynamicSig[2].Value=1033
+  GATE_WER_PARAM Kernel_117_bb1168525d1abfbdb41ad8c0cdca515e50bed25a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0009 FriendlyEventName=Hardware error
+  GATE_WER_REPORT dir=Kernel_117_d1732aa2796eee6ade52a03f1a14bc271a447c8_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000a where=ReportQueue mtime=2026-11-01T21:37:56Z event_time=2026-11-01T21:33:56Z
+  GATE_WER_PARAM Kernel_117_d1732aa2796eee6ade52a03f1a14bc271a447c8_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000a EventType=LiveKernelEvent
+  GATE_WER_PARAM Kernel_117_d1732aa2796eee6ade52a03f1a14bc271a447c8_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000a ReportType=4
+  GATE_WER_PARAM Kernel_117_d1732aa2796eee6ade52a03f1a14bc271a447c8_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000a ReportStatus=2049
+  GATE_WER_PARAM Kernel_117_d1732aa2796eee6ade52a03f1a14bc271a447c8_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000a Sig[0].Name=Code
+  GATE_WER_PARAM Kernel_117_d1732aa2796eee6ade52a03f1a14bc271a447c8_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000a Sig[0].Value=117
+  GATE_WER_PARAM Kernel_117_d1732aa2796eee6ade52a03f1a14bc271a447c8_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000a Sig[1].Name=Parameter 1
+  GATE_WER_PARAM Kernel_117_d1732aa2796eee6ade52a03f1a14bc271a447c8_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000a Sig[1].Value=ffffe48d976d7010
+  GATE_WER_PARAM Kernel_117_d1732aa2796eee6ade52a03f1a14bc271a447c8_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000a Sig[2].Name=Parameter 2
+  GATE_WER_PARAM Kernel_117_d1732aa2796eee6ade52a03f1a14bc271a447c8_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000a Sig[2].Value=fffff8025ca04580
+  GATE_WER_PARAM Kernel_117_d1732aa2796eee6ade52a03f1a14bc271a447c8_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000a Sig[3].Name=Parameter 3
+  GATE_WER_PARAM Kernel_117_d1732aa2796eee6ade52a03f1a14bc271a447c8_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000a Sig[3].Value=0
+  GATE_WER_PARAM Kernel_117_d1732aa2796eee6ade52a03f1a14bc271a447c8_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000a Sig[4].Name=Parameter 4
+  GATE_WER_PARAM Kernel_117_d1732aa2796eee6ade52a03f1a14bc271a447c8_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000a Sig[4].Value=ffffe48d96478080
+  GATE_WER_PARAM Kernel_117_d1732aa2796eee6ade52a03f1a14bc271a447c8_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000a Sig[5].Name=OS version
+  GATE_WER_PARAM Kernel_117_d1732aa2796eee6ade52a03f1a14bc271a447c8_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000a Sig[5].Value=10_0_26100
+  GATE_WER_PARAM Kernel_117_d1732aa2796eee6ade52a03f1a14bc271a447c8_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000a Sig[6].Name=Service Pack
+  GATE_WER_PARAM Kernel_117_d1732aa2796eee6ade52a03f1a14bc271a447c8_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000a Sig[6].Value=0_0
+  GATE_WER_PARAM Kernel_117_d1732aa2796eee6ade52a03f1a14bc271a447c8_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000a Sig[7].Name=Product
+  GATE_WER_PARAM Kernel_117_d1732aa2796eee6ade52a03f1a14bc271a447c8_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000a Sig[7].Value=256_1
+  GATE_WER_PARAM Kernel_117_d1732aa2796eee6ade52a03f1a14bc271a447c8_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000a DynamicSig[1].Name=OS Version
+  GATE_WER_PARAM Kernel_117_d1732aa2796eee6ade52a03f1a14bc271a447c8_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000a DynamicSig[1].Value=10.0.26100.2.0.0.256.129
+  GATE_WER_PARAM Kernel_117_d1732aa2796eee6ade52a03f1a14bc271a447c8_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000a DynamicSig[2].Name=Locale ID
+  GATE_WER_PARAM Kernel_117_d1732aa2796eee6ade52a03f1a14bc271a447c8_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000a DynamicSig[2].Value=1033
+  GATE_WER_PARAM Kernel_117_d1732aa2796eee6ade52a03f1a14bc271a447c8_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000a FriendlyEventName=Hardware error
+  GATE_WER_REPORT dir=Kernel_117_dd8af4def5654e7332dfe14a6e135324f4f36_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000b where=ReportQueue mtime=2026-11-01T21:37:58Z event_time=2026-11-01T21:36:42Z
+  GATE_WER_PARAM Kernel_117_dd8af4def5654e7332dfe14a6e135324f4f36_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000b EventType=LiveKernelEvent
+  GATE_WER_PARAM Kernel_117_dd8af4def5654e7332dfe14a6e135324f4f36_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000b ReportType=4
+  GATE_WER_PARAM Kernel_117_dd8af4def5654e7332dfe14a6e135324f4f36_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000b ReportStatus=2049
+  GATE_WER_PARAM Kernel_117_dd8af4def5654e7332dfe14a6e135324f4f36_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000b Sig[0].Name=Code
+  GATE_WER_PARAM Kernel_117_dd8af4def5654e7332dfe14a6e135324f4f36_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000b Sig[0].Value=117
+  GATE_WER_PARAM Kernel_117_dd8af4def5654e7332dfe14a6e135324f4f36_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000b Sig[1].Name=Parameter 1
+  GATE_WER_PARAM Kernel_117_dd8af4def5654e7332dfe14a6e135324f4f36_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000b Sig[1].Value=ffffe48d9b6e51d0
+  GATE_WER_PARAM Kernel_117_dd8af4def5654e7332dfe14a6e135324f4f36_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000b Sig[2].Name=Parameter 2
+  GATE_WER_PARAM Kernel_117_dd8af4def5654e7332dfe14a6e135324f4f36_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000b Sig[2].Value=fffff8025ca04580
+  GATE_WER_PARAM Kernel_117_dd8af4def5654e7332dfe14a6e135324f4f36_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000b Sig[3].Name=Parameter 3
+  GATE_WER_PARAM Kernel_117_dd8af4def5654e7332dfe14a6e135324f4f36_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000b Sig[3].Value=0
+  GATE_WER_PARAM Kernel_117_dd8af4def5654e7332dfe14a6e135324f4f36_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000b Sig[4].Name=Parameter 4
+  GATE_WER_PARAM Kernel_117_dd8af4def5654e7332dfe14a6e135324f4f36_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000b Sig[4].Value=ffffe48d976bb240
+  GATE_WER_PARAM Kernel_117_dd8af4def5654e7332dfe14a6e135324f4f36_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000b Sig[5].Name=OS version
+  GATE_WER_PARAM Kernel_117_dd8af4def5654e7332dfe14a6e135324f4f36_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000b Sig[5].Value=10_0_26100
+  GATE_WER_PARAM Kernel_117_dd8af4def5654e7332dfe14a6e135324f4f36_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000b Sig[6].Name=Service Pack
+  GATE_WER_PARAM Kernel_117_dd8af4def5654e7332dfe14a6e135324f4f36_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000b Sig[6].Value=0_0
+  GATE_WER_PARAM Kernel_117_dd8af4def5654e7332dfe14a6e135324f4f36_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000b Sig[7].Name=Product
+  GATE_WER_PARAM Kernel_117_dd8af4def5654e7332dfe14a6e135324f4f36_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000b Sig[7].Value=256_1
+  GATE_WER_PARAM Kernel_117_dd8af4def5654e7332dfe14a6e135324f4f36_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000b DynamicSig[1].Name=OS Version
+  GATE_WER_PARAM Kernel_117_dd8af4def5654e7332dfe14a6e135324f4f36_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000b DynamicSig[1].Value=10.0.26100.2.0.0.256.129
+  GATE_WER_PARAM Kernel_117_dd8af4def5654e7332dfe14a6e135324f4f36_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000b DynamicSig[2].Name=Locale ID
+  GATE_WER_PARAM Kernel_117_dd8af4def5654e7332dfe14a6e135324f4f36_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000b DynamicSig[2].Value=1033
+  GATE_WER_PARAM Kernel_117_dd8af4def5654e7332dfe14a6e135324f4f36_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000b FriendlyEventName=Hardware error
+  GATE_WER_REPORT dir=Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c where=ReportQueue mtime=2026-11-01T21:37:57Z event_time=2026-11-01T21:35:06Z
+  GATE_WER_PARAM Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c EventType=LiveKernelEvent
+  GATE_WER_PARAM Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c ReportType=4
+  GATE_WER_PARAM Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c ReportStatus=2049
+  GATE_WER_PARAM Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c Sig[0].Name=Code
+  GATE_WER_PARAM Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c Sig[0].Value=117
+  GATE_WER_PARAM Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c Sig[1].Name=Parameter 1
+  GATE_WER_PARAM Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c Sig[1].Value=ffffe48d97af1010
+  GATE_WER_PARAM Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c Sig[2].Name=Parameter 2
+  GATE_WER_PARAM Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c Sig[2].Value=fffff8025ca04580
+  GATE_WER_PARAM Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c Sig[3].Name=Parameter 3
+  GATE_WER_PARAM Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c Sig[3].Value=0
+  GATE_WER_PARAM Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c Sig[4].Name=Parameter 4
+  GATE_WER_PARAM Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c Sig[4].Value=ffffe48d973a4080
+  GATE_WER_PARAM Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c Sig[5].Name=OS version
+  GATE_WER_PARAM Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c Sig[5].Value=10_0_26100
+  GATE_WER_PARAM Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c Sig[6].Name=Service Pack
+  GATE_WER_PARAM Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c Sig[6].Value=0_0
+  GATE_WER_PARAM Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c Sig[7].Name=Product
+  GATE_WER_PARAM Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c Sig[7].Value=256_1
+  GATE_WER_PARAM Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c DynamicSig[1].Name=OS Version
+  GATE_WER_PARAM Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c DynamicSig[1].Value=10.0.26100.2.0.0.256.129
+  GATE_WER_PARAM Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c DynamicSig[2].Name=Locale ID
+  GATE_WER_PARAM Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c DynamicSig[2].Value=1033
+  GATE_WER_PARAM Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c FriendlyEventName=Hardware error
+  GATE_WER_REPORT dir=Kernel_117_e71ea269acd21812762ba7ce3cdd9377c4f828_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000d where=ReportQueue mtime=2026-11-01T21:37:58Z event_time=2026-11-01T21:37:28Z
+  GATE_WER_PARAM Kernel_117_e71ea269acd21812762ba7ce3cdd9377c4f828_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000d EventType=LiveKernelEvent
+  GATE_WER_PARAM Kernel_117_e71ea269acd21812762ba7ce3cdd9377c4f828_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000d ReportType=4
+  GATE_WER_PARAM Kernel_117_e71ea269acd21812762ba7ce3cdd9377c4f828_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000d ReportStatus=2049
+  GATE_WER_PARAM Kernel_117_e71ea269acd21812762ba7ce3cdd9377c4f828_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000d Sig[0].Name=Code
+  GATE_WER_PARAM Kernel_117_e71ea269acd21812762ba7ce3cdd9377c4f828_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000d Sig[0].Value=117
+  GATE_WER_PARAM Kernel_117_e71ea269acd21812762ba7ce3cdd9377c4f828_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000d Sig[1].Name=Parameter 1
+  GATE_WER_PARAM Kernel_117_e71ea269acd21812762ba7ce3cdd9377c4f828_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000d Sig[1].Value=ffffe48d97db51d0
+  GATE_WER_PARAM Kernel_117_e71ea269acd21812762ba7ce3cdd9377c4f828_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000d Sig[2].Name=Parameter 2
+  GATE_WER_PARAM Kernel_117_e71ea269acd21812762ba7ce3cdd9377c4f828_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000d Sig[2].Value=fffff8025ca04580
+  GATE_WER_PARAM Kernel_117_e71ea269acd21812762ba7ce3cdd9377c4f828_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000d Sig[3].Name=Parameter 3
+  GATE_WER_PARAM Kernel_117_e71ea269acd21812762ba7ce3cdd9377c4f828_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000d Sig[3].Value=0
+  GATE_WER_PARAM Kernel_117_e71ea269acd21812762ba7ce3cdd9377c4f828_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000d Sig[4].Name=Parameter 4
+  GATE_WER_PARAM Kernel_117_e71ea269acd21812762ba7ce3cdd9377c4f828_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000d Sig[4].Value=ffffe48d9b3d7240
+  GATE_WER_PARAM Kernel_117_e71ea269acd21812762ba7ce3cdd9377c4f828_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000d Sig[5].Name=OS version
+  GATE_WER_PARAM Kernel_117_e71ea269acd21812762ba7ce3cdd9377c4f828_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000d Sig[5].Value=10_0_26100
+  GATE_WER_PARAM Kernel_117_e71ea269acd21812762ba7ce3cdd9377c4f828_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000d Sig[6].Name=Service Pack
+  GATE_WER_PARAM Kernel_117_e71ea269acd21812762ba7ce3cdd9377c4f828_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000d Sig[6].Value=0_0
+  GATE_WER_PARAM Kernel_117_e71ea269acd21812762ba7ce3cdd9377c4f828_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000d Sig[7].Name=Product
+  GATE_WER_PARAM Kernel_117_e71ea269acd21812762ba7ce3cdd9377c4f828_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000d Sig[7].Value=256_1
+  GATE_WER_PARAM Kernel_117_e71ea269acd21812762ba7ce3cdd9377c4f828_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000d DynamicSig[1].Name=OS Version
+  GATE_WER_PARAM Kernel_117_e71ea269acd21812762ba7ce3cdd9377c4f828_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000d DynamicSig[1].Value=10.0.26100.2.0.0.256.129
+  GATE_WER_PARAM Kernel_117_e71ea269acd21812762ba7ce3cdd9377c4f828_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000d DynamicSig[2].Name=Locale ID
+  GATE_WER_PARAM Kernel_117_e71ea269acd21812762ba7ce3cdd9377c4f828_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000d DynamicSig[2].Value=1033
+  GATE_WER_PARAM Kernel_117_e71ea269acd21812762ba7ce3cdd9377c4f828_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000d FriendlyEventName=Hardware error
+  GATE_WER_REPORT dir=Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e where=ReportQueue mtime=2026-11-01T21:37:57Z event_time=2026-11-01T21:34:43Z
+  GATE_WER_PARAM Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e EventType=LiveKernelEvent
+  GATE_WER_PARAM Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e ReportType=4
+  GATE_WER_PARAM Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e ReportStatus=2049
+  GATE_WER_PARAM Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e Sig[0].Name=Code
+  GATE_WER_PARAM Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e Sig[0].Value=117
+  GATE_WER_PARAM Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e Sig[1].Name=Parameter 1
+  GATE_WER_PARAM Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e Sig[1].Value=ffffe48d9422a460
+  GATE_WER_PARAM Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e Sig[2].Name=Parameter 2
+  GATE_WER_PARAM Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e Sig[2].Value=fffff8025ca04580
+  GATE_WER_PARAM Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e Sig[3].Name=Parameter 3
+  GATE_WER_PARAM Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e Sig[3].Value=0
+  GATE_WER_PARAM Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e Sig[4].Name=Parameter 4
+  GATE_WER_PARAM Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e Sig[4].Value=ffffe48d976c90c0
+  GATE_WER_PARAM Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e Sig[5].Name=OS version
+  GATE_WER_PARAM Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e Sig[5].Value=10_0_26100
+  GATE_WER_PARAM Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e Sig[6].Name=Service Pack
+  GATE_WER_PARAM Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e Sig[6].Value=0_0
+  GATE_WER_PARAM Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e Sig[7].Name=Product
+  GATE_WER_PARAM Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e Sig[7].Value=256_1
+  GATE_WER_PARAM Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e DynamicSig[1].Name=OS Version
+  GATE_WER_PARAM Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e DynamicSig[1].Value=10.0.26100.2.0.0.256.129
+  GATE_WER_PARAM Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e DynamicSig[2].Name=Locale ID
+  GATE_WER_PARAM Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e DynamicSig[2].Value=1033
+  GATE_WER_PARAM Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e FriendlyEventName=Hardware error
+  GATE_WER_REPORT dir=Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f where=ReportQueue mtime=2026-11-01T21:37:57Z event_time=2026-11-01T21:35:31Z
+  GATE_WER_PARAM Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f EventType=LiveKernelEvent
+  GATE_WER_PARAM Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f ReportType=4
+  GATE_WER_PARAM Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f ReportStatus=2049
+  GATE_WER_PARAM Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f Sig[0].Name=Code
+  GATE_WER_PARAM Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f Sig[0].Value=117
+  GATE_WER_PARAM Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f Sig[1].Name=Parameter 1
+  GATE_WER_PARAM Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f Sig[1].Value=ffffe48d96111010
+  GATE_WER_PARAM Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f Sig[2].Name=Parameter 2
+  GATE_WER_PARAM Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f Sig[2].Value=fffff8025ca04580
+  GATE_WER_PARAM Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f Sig[3].Name=Parameter 3
+  GATE_WER_PARAM Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f Sig[3].Value=0
+  GATE_WER_PARAM Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f Sig[4].Name=Parameter 4
+  GATE_WER_PARAM Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f Sig[4].Value=ffffe48d972d60c0
+  GATE_WER_PARAM Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f Sig[5].Name=OS version
+  GATE_WER_PARAM Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f Sig[5].Value=10_0_26100
+  GATE_WER_PARAM Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f Sig[6].Name=Service Pack
+  GATE_WER_PARAM Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f Sig[6].Value=0_0
+  GATE_WER_PARAM Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f Sig[7].Name=Product
+  GATE_WER_PARAM Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f Sig[7].Value=256_1
+  GATE_WER_PARAM Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f DynamicSig[1].Name=OS Version
+  GATE_WER_PARAM Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f DynamicSig[1].Value=10.0.26100.2.0.0.256.129
+  GATE_WER_PARAM Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f DynamicSig[2].Name=Locale ID
+  GATE_WER_PARAM Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f DynamicSig[2].Value=1033
+  GATE_WER_PARAM Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f FriendlyEventName=Hardware error
+  GATE_WER_REPORT dir=Kernel_193_7b99f9e9913268cdae6e2f0a16324587c38b5bb_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0010 where=ReportQueue mtime=2026-11-01T21:37:56Z event_time=2026-11-01T21:33:08Z
+  GATE_WER_PARAM Kernel_193_7b99f9e9913268cdae6e2f0a16324587c38b5bb_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0010 EventType=LiveKernelEvent
+  GATE_WER_PARAM Kernel_193_7b99f9e9913268cdae6e2f0a16324587c38b5bb_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0010 ReportType=4
+  GATE_WER_PARAM Kernel_193_7b99f9e9913268cdae6e2f0a16324587c38b5bb_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0010 ReportStatus=2049
+  GATE_WER_PARAM Kernel_193_7b99f9e9913268cdae6e2f0a16324587c38b5bb_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0010 Sig[0].Name=Code
+  GATE_WER_PARAM Kernel_193_7b99f9e9913268cdae6e2f0a16324587c38b5bb_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0010 Sig[0].Value=193
+  GATE_WER_PARAM Kernel_193_7b99f9e9913268cdae6e2f0a16324587c38b5bb_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0010 Sig[1].Name=Parameter 1
+  GATE_WER_PARAM Kernel_193_7b99f9e9913268cdae6e2f0a16324587c38b5bb_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0010 Sig[1].Value=815
+  GATE_WER_PARAM Kernel_193_7b99f9e9913268cdae6e2f0a16324587c38b5bb_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0010 Sig[2].Name=Parameter 2
+  GATE_WER_PARAM Kernel_193_7b99f9e9913268cdae6e2f0a16324587c38b5bb_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0010 Sig[2].Value=2
+  GATE_WER_PARAM Kernel_193_7b99f9e9913268cdae6e2f0a16324587c38b5bb_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0010 Sig[3].Name=Parameter 3
+  GATE_WER_PARAM Kernel_193_7b99f9e9913268cdae6e2f0a16324587c38b5bb_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0010 Sig[3].Value=ffffe48d94dd3080
+  GATE_WER_PARAM Kernel_193_7b99f9e9913268cdae6e2f0a16324587c38b5bb_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0010 Sig[4].Name=Parameter 4
+  GATE_WER_PARAM Kernel_193_7b99f9e9913268cdae6e2f0a16324587c38b5bb_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0010 Sig[4].Value=0
+  GATE_WER_PARAM Kernel_193_7b99f9e9913268cdae6e2f0a16324587c38b5bb_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0010 Sig[5].Name=OS version
+  GATE_WER_PARAM Kernel_193_7b99f9e9913268cdae6e2f0a16324587c38b5bb_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0010 Sig[5].Value=10_0_26100
+  GATE_WER_PARAM Kernel_193_7b99f9e9913268cdae6e2f0a16324587c38b5bb_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0010 Sig[6].Name=Service Pack
+  GATE_WER_PARAM Kernel_193_7b99f9e9913268cdae6e2f0a16324587c38b5bb_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0010 Sig[6].Value=0_0
+  GATE_WER_PARAM Kernel_193_7b99f9e9913268cdae6e2f0a16324587c38b5bb_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0010 Sig[7].Name=Product
+  GATE_WER_PARAM Kernel_193_7b99f9e9913268cdae6e2f0a16324587c38b5bb_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0010 Sig[7].Value=256_1
+  GATE_WER_PARAM Kernel_193_7b99f9e9913268cdae6e2f0a16324587c38b5bb_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0010 DynamicSig[1].Name=OS Version
+  GATE_WER_PARAM Kernel_193_7b99f9e9913268cdae6e2f0a16324587c38b5bb_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0010 DynamicSig[1].Value=10.0.26100.2.0.0.256.129
+  GATE_WER_PARAM Kernel_193_7b99f9e9913268cdae6e2f0a16324587c38b5bb_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0010 DynamicSig[2].Name=Locale ID
+  GATE_WER_PARAM Kernel_193_7b99f9e9913268cdae6e2f0a16324587c38b5bb_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0010 DynamicSig[2].Value=1033
+  GATE_WER_PARAM Kernel_193_7b99f9e9913268cdae6e2f0a16324587c38b5bb_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0010 FriendlyEventName=Hardware error
+  GATE_WER_DUMP 2026-11-01T21:32:33Z WATCHDOG-20261101-2132.dmp bytes=1381797888
+  GATE_WER_DUMP 2026-11-01T21:38:06Z WATCHDOG-20261101-2138.dmp bytes=1148236
+GATE_TIMELINE enable=2026-11-01T21:31:56Z first_probe=2026-11-01T21:34:58Z first_dump=2026-11-01T21:32:33Z dump_minus_enable=37s dump_minus_first_probe=-145s
+  GATE_WER_NEAR report=Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 dt=111 2026-11-01T21:38:07Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 dt=111 2026-11-01T21:38:07Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 dt=109 2026-11-01T21:38:06Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 dt=88 2026-11-01T21:37:45Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 dt=88 2026-11-01T21:37:45Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 dt=86 2026-11-01T21:37:42Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 dt=66 2026-11-01T21:37:22Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 dt=66 2026-11-01T21:37:22Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 dt=64 2026-11-01T21:37:20Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 dt=42 2026-11-01T21:36:59Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 dt=42 2026-11-01T21:36:58Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 dt=40 2026-11-01T21:36:57Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 dt=20 2026-11-01T21:36:36Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 dt=20 2026-11-01T21:36:36Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 dt=17 2026-11-01T21:36:33Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 dt=-4 2026-11-01T21:36:13Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 dt=-4 2026-11-01T21:36:12Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 dt=-6 2026-11-01T21:36:11Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 dt=-28 2026-11-01T21:35:49Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 dt=-28 2026-11-01T21:35:49Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 dt=-30 2026-11-01T21:35:46Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 dt=-52 2026-11-01T21:35:24Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 dt=-53 2026-11-01T21:35:24Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 dt=-55 2026-11-01T21:35:22Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 dt=-76 2026-11-01T21:35:00Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 dt=-76 2026-11-01T21:35:00Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 dt=-78 2026-11-01T21:34:59Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 dt=-99 2026-11-01T21:34:37Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 dt=-99 2026-11-01T21:34:37Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_6c1e7ea380b7e55a7bb13fb0d7b3cf2e66894488_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 dt=-101 2026-11-01T21:34:35Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_735bd9bec2293ecf76d04a904210a81d605c9e_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0005 dt=18 2026-11-01T21:38:07Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_735bd9bec2293ecf76d04a904210a81d605c9e_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0005 dt=18 2026-11-01T21:38:07Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_735bd9bec2293ecf76d04a904210a81d605c9e_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0005 dt=16 2026-11-01T21:38:06Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_735bd9bec2293ecf76d04a904210a81d605c9e_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0005 dt=-5 2026-11-01T21:37:45Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_735bd9bec2293ecf76d04a904210a81d605c9e_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0005 dt=-5 2026-11-01T21:37:45Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_735bd9bec2293ecf76d04a904210a81d605c9e_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0005 dt=-7 2026-11-01T21:37:42Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_735bd9bec2293ecf76d04a904210a81d605c9e_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0005 dt=-27 2026-11-01T21:37:22Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_735bd9bec2293ecf76d04a904210a81d605c9e_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0005 dt=-27 2026-11-01T21:37:22Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_735bd9bec2293ecf76d04a904210a81d605c9e_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0005 dt=-29 2026-11-01T21:37:20Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_735bd9bec2293ecf76d04a904210a81d605c9e_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0005 dt=-51 2026-11-01T21:36:59Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_735bd9bec2293ecf76d04a904210a81d605c9e_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0005 dt=-51 2026-11-01T21:36:58Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_735bd9bec2293ecf76d04a904210a81d605c9e_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0005 dt=-53 2026-11-01T21:36:57Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_735bd9bec2293ecf76d04a904210a81d605c9e_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0005 dt=-73 2026-11-01T21:36:36Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_735bd9bec2293ecf76d04a904210a81d605c9e_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0005 dt=-73 2026-11-01T21:36:36Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_735bd9bec2293ecf76d04a904210a81d605c9e_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0005 dt=-76 2026-11-01T21:36:33Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_735bd9bec2293ecf76d04a904210a81d605c9e_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0005 dt=-97 2026-11-01T21:36:13Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_735bd9bec2293ecf76d04a904210a81d605c9e_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0005 dt=-97 2026-11-01T21:36:12Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_735bd9bec2293ecf76d04a904210a81d605c9e_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0005 dt=-99 2026-11-01T21:36:11Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_a236fdba3741646537a9b67116a4ee412d2636_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0006 dt=113 2026-11-01T21:35:24Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_a236fdba3741646537a9b67116a4ee412d2636_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0006 dt=112 2026-11-01T21:35:24Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_a236fdba3741646537a9b67116a4ee412d2636_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0006 dt=110 2026-11-01T21:35:22Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_a236fdba3741646537a9b67116a4ee412d2636_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0006 dt=89 2026-11-01T21:35:00Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_a236fdba3741646537a9b67116a4ee412d2636_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0006 dt=89 2026-11-01T21:35:00Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_a236fdba3741646537a9b67116a4ee412d2636_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0006 dt=87 2026-11-01T21:34:59Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_a236fdba3741646537a9b67116a4ee412d2636_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0006 dt=66 2026-11-01T21:34:37Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_a236fdba3741646537a9b67116a4ee412d2636_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0006 dt=66 2026-11-01T21:34:37Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_a236fdba3741646537a9b67116a4ee412d2636_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0006 dt=64 2026-11-01T21:34:35Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_a236fdba3741646537a9b67116a4ee412d2636_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0006 dt=43 2026-11-01T21:34:14Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_a236fdba3741646537a9b67116a4ee412d2636_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0006 dt=43 2026-11-01T21:34:14Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_a236fdba3741646537a9b67116a4ee412d2636_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0006 dt=40 2026-11-01T21:34:12Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_a236fdba3741646537a9b67116a4ee412d2636_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0006 dt=19 2026-11-01T21:33:51Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_a236fdba3741646537a9b67116a4ee412d2636_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0006 dt=19 2026-11-01T21:33:51Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_a236fdba3741646537a9b67116a4ee412d2636_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0006 dt=17 2026-11-01T21:33:49Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_a236fdba3741646537a9b67116a4ee412d2636_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0006 dt=-4 2026-11-01T21:33:27Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_a236fdba3741646537a9b67116a4ee412d2636_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0006 dt=-5 2026-11-01T21:33:27Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_a236fdba3741646537a9b67116a4ee412d2636_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0006 dt=-6 2026-11-01T21:33:25Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_a236fdba3741646537a9b67116a4ee412d2636_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0006 dt=-29 2026-11-01T21:33:02Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_a236fdba3741646537a9b67116a4ee412d2636_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0006 dt=-29 2026-11-01T21:33:02Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_a236fdba3741646537a9b67116a4ee412d2636_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0006 dt=-32 2026-11-01T21:32:59Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_a30fe58e89694ceb917188941b0c356a6905cfc_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0007 dt=64 2026-11-01T21:38:07Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_a30fe58e89694ceb917188941b0c356a6905cfc_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0007 dt=64 2026-11-01T21:38:07Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_a30fe58e89694ceb917188941b0c356a6905cfc_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0007 dt=62 2026-11-01T21:38:06Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_a30fe58e89694ceb917188941b0c356a6905cfc_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0007 dt=41 2026-11-01T21:37:45Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_a30fe58e89694ceb917188941b0c356a6905cfc_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0007 dt=41 2026-11-01T21:37:45Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_a30fe58e89694ceb917188941b0c356a6905cfc_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0007 dt=39 2026-11-01T21:37:42Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_a30fe58e89694ceb917188941b0c356a6905cfc_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0007 dt=19 2026-11-01T21:37:22Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_a30fe58e89694ceb917188941b0c356a6905cfc_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0007 dt=19 2026-11-01T21:37:22Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_a30fe58e89694ceb917188941b0c356a6905cfc_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0007 dt=17 2026-11-01T21:37:20Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_a30fe58e89694ceb917188941b0c356a6905cfc_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0007 dt=-5 2026-11-01T21:36:59Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_a30fe58e89694ceb917188941b0c356a6905cfc_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0007 dt=-5 2026-11-01T21:36:58Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_a30fe58e89694ceb917188941b0c356a6905cfc_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0007 dt=-7 2026-11-01T21:36:57Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_a30fe58e89694ceb917188941b0c356a6905cfc_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0007 dt=-27 2026-11-01T21:36:36Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_a30fe58e89694ceb917188941b0c356a6905cfc_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0007 dt=-27 2026-11-01T21:36:36Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_a30fe58e89694ceb917188941b0c356a6905cfc_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0007 dt=-30 2026-11-01T21:36:33Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_a30fe58e89694ceb917188941b0c356a6905cfc_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0007 dt=-51 2026-11-01T21:36:13Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_a30fe58e89694ceb917188941b0c356a6905cfc_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0007 dt=-51 2026-11-01T21:36:12Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_a30fe58e89694ceb917188941b0c356a6905cfc_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0007 dt=-53 2026-11-01T21:36:11Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_a30fe58e89694ceb917188941b0c356a6905cfc_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0007 dt=-75 2026-11-01T21:35:49Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_a30fe58e89694ceb917188941b0c356a6905cfc_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0007 dt=-75 2026-11-01T21:35:49Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_a30fe58e89694ceb917188941b0c356a6905cfc_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0007 dt=-77 2026-11-01T21:35:46Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_a30fe58e89694ceb917188941b0c356a6905cfc_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0007 dt=-99 2026-11-01T21:35:24Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_a30fe58e89694ceb917188941b0c356a6905cfc_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0007 dt=-100 2026-11-01T21:35:24Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_a30fe58e89694ceb917188941b0c356a6905cfc_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0007 dt=-102 2026-11-01T21:35:22Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 dt=111 2026-11-01T21:37:45Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 dt=111 2026-11-01T21:37:45Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 dt=109 2026-11-01T21:37:42Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 dt=89 2026-11-01T21:37:22Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 dt=89 2026-11-01T21:37:22Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 dt=87 2026-11-01T21:37:20Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 dt=65 2026-11-01T21:36:59Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 dt=65 2026-11-01T21:36:58Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 dt=63 2026-11-01T21:36:57Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 dt=43 2026-11-01T21:36:36Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 dt=43 2026-11-01T21:36:36Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 dt=40 2026-11-01T21:36:33Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 dt=19 2026-11-01T21:36:13Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 dt=19 2026-11-01T21:36:12Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 dt=17 2026-11-01T21:36:11Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 dt=-5 2026-11-01T21:35:49Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 dt=-5 2026-11-01T21:35:49Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 dt=-7 2026-11-01T21:35:46Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 dt=-29 2026-11-01T21:35:24Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 dt=-30 2026-11-01T21:35:24Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 dt=-32 2026-11-01T21:35:22Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 dt=-53 2026-11-01T21:35:00Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 dt=-53 2026-11-01T21:35:00Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 dt=-55 2026-11-01T21:34:59Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 dt=-76 2026-11-01T21:34:37Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 dt=-76 2026-11-01T21:34:37Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 dt=-78 2026-11-01T21:34:35Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 dt=-99 2026-11-01T21:34:14Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 dt=-99 2026-11-01T21:34:14Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_b6e846a1e26f8f93cf8e4adae44041c399332a8a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 dt=-102 2026-11-01T21:34:12Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_bb1168525d1abfbdb41ad8c0cdca515e50bed25a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0009 dt=114 2026-11-01T21:36:13Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_bb1168525d1abfbdb41ad8c0cdca515e50bed25a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0009 dt=114 2026-11-01T21:36:12Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_bb1168525d1abfbdb41ad8c0cdca515e50bed25a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0009 dt=112 2026-11-01T21:36:11Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_bb1168525d1abfbdb41ad8c0cdca515e50bed25a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0009 dt=90 2026-11-01T21:35:49Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_bb1168525d1abfbdb41ad8c0cdca515e50bed25a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0009 dt=90 2026-11-01T21:35:49Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_bb1168525d1abfbdb41ad8c0cdca515e50bed25a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0009 dt=88 2026-11-01T21:35:46Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_bb1168525d1abfbdb41ad8c0cdca515e50bed25a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0009 dt=66 2026-11-01T21:35:24Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_bb1168525d1abfbdb41ad8c0cdca515e50bed25a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0009 dt=65 2026-11-01T21:35:24Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_bb1168525d1abfbdb41ad8c0cdca515e50bed25a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0009 dt=63 2026-11-01T21:35:22Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_bb1168525d1abfbdb41ad8c0cdca515e50bed25a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0009 dt=42 2026-11-01T21:35:00Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_bb1168525d1abfbdb41ad8c0cdca515e50bed25a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0009 dt=42 2026-11-01T21:35:00Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_bb1168525d1abfbdb41ad8c0cdca515e50bed25a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0009 dt=40 2026-11-01T21:34:59Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_bb1168525d1abfbdb41ad8c0cdca515e50bed25a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0009 dt=19 2026-11-01T21:34:37Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_bb1168525d1abfbdb41ad8c0cdca515e50bed25a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0009 dt=19 2026-11-01T21:34:37Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_bb1168525d1abfbdb41ad8c0cdca515e50bed25a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0009 dt=17 2026-11-01T21:34:35Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_bb1168525d1abfbdb41ad8c0cdca515e50bed25a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0009 dt=-4 2026-11-01T21:34:14Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_bb1168525d1abfbdb41ad8c0cdca515e50bed25a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0009 dt=-4 2026-11-01T21:34:14Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_bb1168525d1abfbdb41ad8c0cdca515e50bed25a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0009 dt=-7 2026-11-01T21:34:12Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_bb1168525d1abfbdb41ad8c0cdca515e50bed25a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0009 dt=-28 2026-11-01T21:33:51Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_bb1168525d1abfbdb41ad8c0cdca515e50bed25a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0009 dt=-28 2026-11-01T21:33:51Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_bb1168525d1abfbdb41ad8c0cdca515e50bed25a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0009 dt=-30 2026-11-01T21:33:49Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_bb1168525d1abfbdb41ad8c0cdca515e50bed25a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0009 dt=-51 2026-11-01T21:33:27Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_bb1168525d1abfbdb41ad8c0cdca515e50bed25a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0009 dt=-52 2026-11-01T21:33:27Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_bb1168525d1abfbdb41ad8c0cdca515e50bed25a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0009 dt=-53 2026-11-01T21:33:25Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_bb1168525d1abfbdb41ad8c0cdca515e50bed25a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0009 dt=-76 2026-11-01T21:33:02Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_bb1168525d1abfbdb41ad8c0cdca515e50bed25a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0009 dt=-76 2026-11-01T21:33:02Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_bb1168525d1abfbdb41ad8c0cdca515e50bed25a_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0009 dt=-79 2026-11-01T21:32:59Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_d1732aa2796eee6ade52a03f1a14bc271a447c8_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000a dt=113 2026-11-01T21:35:49Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_d1732aa2796eee6ade52a03f1a14bc271a447c8_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000a dt=113 2026-11-01T21:35:49Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_d1732aa2796eee6ade52a03f1a14bc271a447c8_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000a dt=111 2026-11-01T21:35:46Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_d1732aa2796eee6ade52a03f1a14bc271a447c8_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000a dt=89 2026-11-01T21:35:24Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_d1732aa2796eee6ade52a03f1a14bc271a447c8_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000a dt=88 2026-11-01T21:35:24Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_d1732aa2796eee6ade52a03f1a14bc271a447c8_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000a dt=86 2026-11-01T21:35:22Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_d1732aa2796eee6ade52a03f1a14bc271a447c8_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000a dt=65 2026-11-01T21:35:00Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_d1732aa2796eee6ade52a03f1a14bc271a447c8_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000a dt=65 2026-11-01T21:35:00Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_d1732aa2796eee6ade52a03f1a14bc271a447c8_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000a dt=63 2026-11-01T21:34:59Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_d1732aa2796eee6ade52a03f1a14bc271a447c8_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000a dt=42 2026-11-01T21:34:37Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_d1732aa2796eee6ade52a03f1a14bc271a447c8_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000a dt=42 2026-11-01T21:34:37Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_d1732aa2796eee6ade52a03f1a14bc271a447c8_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000a dt=40 2026-11-01T21:34:35Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_d1732aa2796eee6ade52a03f1a14bc271a447c8_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000a dt=19 2026-11-01T21:34:14Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_d1732aa2796eee6ade52a03f1a14bc271a447c8_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000a dt=19 2026-11-01T21:34:14Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_d1732aa2796eee6ade52a03f1a14bc271a447c8_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000a dt=16 2026-11-01T21:34:12Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_d1732aa2796eee6ade52a03f1a14bc271a447c8_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000a dt=-5 2026-11-01T21:33:51Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_d1732aa2796eee6ade52a03f1a14bc271a447c8_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000a dt=-5 2026-11-01T21:33:51Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_d1732aa2796eee6ade52a03f1a14bc271a447c8_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000a dt=-7 2026-11-01T21:33:49Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_d1732aa2796eee6ade52a03f1a14bc271a447c8_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000a dt=-28 2026-11-01T21:33:27Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_d1732aa2796eee6ade52a03f1a14bc271a447c8_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000a dt=-29 2026-11-01T21:33:27Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_d1732aa2796eee6ade52a03f1a14bc271a447c8_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000a dt=-30 2026-11-01T21:33:25Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_d1732aa2796eee6ade52a03f1a14bc271a447c8_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000a dt=-53 2026-11-01T21:33:02Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_d1732aa2796eee6ade52a03f1a14bc271a447c8_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000a dt=-53 2026-11-01T21:33:02Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_d1732aa2796eee6ade52a03f1a14bc271a447c8_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000a dt=-56 2026-11-01T21:32:59Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_dd8af4def5654e7332dfe14a6e135324f4f36_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000b dt=86 2026-11-01T21:38:07Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_dd8af4def5654e7332dfe14a6e135324f4f36_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000b dt=86 2026-11-01T21:38:07Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_dd8af4def5654e7332dfe14a6e135324f4f36_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000b dt=84 2026-11-01T21:38:06Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_dd8af4def5654e7332dfe14a6e135324f4f36_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000b dt=63 2026-11-01T21:37:45Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_dd8af4def5654e7332dfe14a6e135324f4f36_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000b dt=63 2026-11-01T21:37:45Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_dd8af4def5654e7332dfe14a6e135324f4f36_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000b dt=61 2026-11-01T21:37:42Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_dd8af4def5654e7332dfe14a6e135324f4f36_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000b dt=41 2026-11-01T21:37:22Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_dd8af4def5654e7332dfe14a6e135324f4f36_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000b dt=41 2026-11-01T21:37:22Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_dd8af4def5654e7332dfe14a6e135324f4f36_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000b dt=39 2026-11-01T21:37:20Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_dd8af4def5654e7332dfe14a6e135324f4f36_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000b dt=17 2026-11-01T21:36:59Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_dd8af4def5654e7332dfe14a6e135324f4f36_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000b dt=17 2026-11-01T21:36:58Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_dd8af4def5654e7332dfe14a6e135324f4f36_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000b dt=15 2026-11-01T21:36:57Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_dd8af4def5654e7332dfe14a6e135324f4f36_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000b dt=-5 2026-11-01T21:36:36Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_dd8af4def5654e7332dfe14a6e135324f4f36_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000b dt=-5 2026-11-01T21:36:36Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_dd8af4def5654e7332dfe14a6e135324f4f36_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000b dt=-8 2026-11-01T21:36:33Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_dd8af4def5654e7332dfe14a6e135324f4f36_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000b dt=-29 2026-11-01T21:36:13Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_dd8af4def5654e7332dfe14a6e135324f4f36_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000b dt=-29 2026-11-01T21:36:12Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_dd8af4def5654e7332dfe14a6e135324f4f36_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000b dt=-31 2026-11-01T21:36:11Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_dd8af4def5654e7332dfe14a6e135324f4f36_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000b dt=-53 2026-11-01T21:35:49Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_dd8af4def5654e7332dfe14a6e135324f4f36_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000b dt=-53 2026-11-01T21:35:49Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_dd8af4def5654e7332dfe14a6e135324f4f36_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000b dt=-55 2026-11-01T21:35:46Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_dd8af4def5654e7332dfe14a6e135324f4f36_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000b dt=-77 2026-11-01T21:35:24Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_dd8af4def5654e7332dfe14a6e135324f4f36_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000b dt=-78 2026-11-01T21:35:24Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_dd8af4def5654e7332dfe14a6e135324f4f36_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000b dt=-80 2026-11-01T21:35:22Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_dd8af4def5654e7332dfe14a6e135324f4f36_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000b dt=-101 2026-11-01T21:35:00Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_dd8af4def5654e7332dfe14a6e135324f4f36_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000b dt=-101 2026-11-01T21:35:00Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_dd8af4def5654e7332dfe14a6e135324f4f36_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000b dt=-103 2026-11-01T21:34:59Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c dt=113 2026-11-01T21:36:59Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c dt=113 2026-11-01T21:36:58Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c dt=111 2026-11-01T21:36:57Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c dt=91 2026-11-01T21:36:36Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c dt=91 2026-11-01T21:36:36Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c dt=88 2026-11-01T21:36:33Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c dt=67 2026-11-01T21:36:13Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c dt=67 2026-11-01T21:36:12Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c dt=65 2026-11-01T21:36:11Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c dt=43 2026-11-01T21:35:49Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c dt=43 2026-11-01T21:35:49Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c dt=41 2026-11-01T21:35:46Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c dt=19 2026-11-01T21:35:24Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c dt=18 2026-11-01T21:35:24Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c dt=16 2026-11-01T21:35:22Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c dt=-5 2026-11-01T21:35:00Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c dt=-5 2026-11-01T21:35:00Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c dt=-7 2026-11-01T21:34:59Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c dt=-28 2026-11-01T21:34:37Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c dt=-28 2026-11-01T21:34:37Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c dt=-30 2026-11-01T21:34:35Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c dt=-51 2026-11-01T21:34:14Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c dt=-51 2026-11-01T21:34:14Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c dt=-54 2026-11-01T21:34:12Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c dt=-75 2026-11-01T21:33:51Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c dt=-75 2026-11-01T21:33:51Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c dt=-77 2026-11-01T21:33:49Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c dt=-98 2026-11-01T21:33:27Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c dt=-99 2026-11-01T21:33:27Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_de989292f512c88776ef2437ccd737bf788e184_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c dt=-100 2026-11-01T21:33:25Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_e71ea269acd21812762ba7ce3cdd9377c4f828_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000d dt=40 2026-11-01T21:38:07Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_e71ea269acd21812762ba7ce3cdd9377c4f828_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000d dt=40 2026-11-01T21:38:07Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_e71ea269acd21812762ba7ce3cdd9377c4f828_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000d dt=38 2026-11-01T21:38:06Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_e71ea269acd21812762ba7ce3cdd9377c4f828_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000d dt=17 2026-11-01T21:37:45Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_e71ea269acd21812762ba7ce3cdd9377c4f828_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000d dt=17 2026-11-01T21:37:45Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_e71ea269acd21812762ba7ce3cdd9377c4f828_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000d dt=15 2026-11-01T21:37:42Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_e71ea269acd21812762ba7ce3cdd9377c4f828_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000d dt=-5 2026-11-01T21:37:22Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_e71ea269acd21812762ba7ce3cdd9377c4f828_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000d dt=-5 2026-11-01T21:37:22Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_e71ea269acd21812762ba7ce3cdd9377c4f828_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000d dt=-7 2026-11-01T21:37:20Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_e71ea269acd21812762ba7ce3cdd9377c4f828_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000d dt=-29 2026-11-01T21:36:59Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_e71ea269acd21812762ba7ce3cdd9377c4f828_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000d dt=-29 2026-11-01T21:36:58Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_e71ea269acd21812762ba7ce3cdd9377c4f828_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000d dt=-31 2026-11-01T21:36:57Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_e71ea269acd21812762ba7ce3cdd9377c4f828_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000d dt=-51 2026-11-01T21:36:36Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_e71ea269acd21812762ba7ce3cdd9377c4f828_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000d dt=-51 2026-11-01T21:36:36Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_e71ea269acd21812762ba7ce3cdd9377c4f828_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000d dt=-54 2026-11-01T21:36:33Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_e71ea269acd21812762ba7ce3cdd9377c4f828_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000d dt=-75 2026-11-01T21:36:13Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_e71ea269acd21812762ba7ce3cdd9377c4f828_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000d dt=-75 2026-11-01T21:36:12Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_e71ea269acd21812762ba7ce3cdd9377c4f828_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000d dt=-77 2026-11-01T21:36:11Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_e71ea269acd21812762ba7ce3cdd9377c4f828_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000d dt=-99 2026-11-01T21:35:49Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_e71ea269acd21812762ba7ce3cdd9377c4f828_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000d dt=-99 2026-11-01T21:35:49Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_e71ea269acd21812762ba7ce3cdd9377c4f828_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000d dt=-101 2026-11-01T21:35:46Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e dt=114 2026-11-01T21:36:36Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e dt=114 2026-11-01T21:36:36Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e dt=111 2026-11-01T21:36:33Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e dt=90 2026-11-01T21:36:13Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e dt=90 2026-11-01T21:36:12Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e dt=88 2026-11-01T21:36:11Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e dt=66 2026-11-01T21:35:49Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e dt=66 2026-11-01T21:35:49Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e dt=64 2026-11-01T21:35:46Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e dt=42 2026-11-01T21:35:24Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e dt=41 2026-11-01T21:35:24Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e dt=39 2026-11-01T21:35:22Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e dt=18 2026-11-01T21:35:00Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e dt=18 2026-11-01T21:35:00Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e dt=16 2026-11-01T21:34:59Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e dt=-5 2026-11-01T21:34:37Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e dt=-5 2026-11-01T21:34:37Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e dt=-7 2026-11-01T21:34:35Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e dt=-28 2026-11-01T21:34:14Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e dt=-28 2026-11-01T21:34:14Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e dt=-31 2026-11-01T21:34:12Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e dt=-52 2026-11-01T21:33:51Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e dt=-52 2026-11-01T21:33:51Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e dt=-54 2026-11-01T21:33:49Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e dt=-75 2026-11-01T21:33:27Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e dt=-76 2026-11-01T21:33:27Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e dt=-77 2026-11-01T21:33:25Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e dt=-100 2026-11-01T21:33:02Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e dt=-100 2026-11-01T21:33:02Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_e913e7556fd507fbade1bbe65d324b52dad298d_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000e dt=-103 2026-11-01T21:32:59Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f dt=112 2026-11-01T21:37:22Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f dt=112 2026-11-01T21:37:22Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f dt=110 2026-11-01T21:37:20Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f dt=88 2026-11-01T21:36:59Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f dt=88 2026-11-01T21:36:58Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f dt=86 2026-11-01T21:36:57Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f dt=66 2026-11-01T21:36:36Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f dt=66 2026-11-01T21:36:36Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f dt=63 2026-11-01T21:36:33Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f dt=42 2026-11-01T21:36:13Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f dt=42 2026-11-01T21:36:12Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f dt=40 2026-11-01T21:36:11Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f dt=18 2026-11-01T21:35:49Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f dt=18 2026-11-01T21:35:49Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f dt=16 2026-11-01T21:35:46Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f dt=-6 2026-11-01T21:35:24Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f dt=-7 2026-11-01T21:35:24Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f dt=-9 2026-11-01T21:35:22Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f dt=-30 2026-11-01T21:35:00Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f dt=-30 2026-11-01T21:35:00Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f dt=-32 2026-11-01T21:34:59Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f dt=-53 2026-11-01T21:34:37Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f dt=-53 2026-11-01T21:34:37Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f dt=-55 2026-11-01T21:34:35Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f dt=-76 2026-11-01T21:34:14Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f dt=-76 2026-11-01T21:34:14Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f dt=-79 2026-11-01T21:34:12Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f dt=-100 2026-11-01T21:33:51Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f dt=-100 2026-11-01T21:33:51Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_117_eb65d7a957acddbda75b17812b19b9a602f679f_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f dt=-102 2026-11-01T21:33:49Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_193_7b99f9e9913268cdae6e2f0a16324587c38b5bb_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0010 dt=113 2026-11-01T21:35:00Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_193_7b99f9e9913268cdae6e2f0a16324587c38b5bb_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0010 dt=113 2026-11-01T21:35:00Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_193_7b99f9e9913268cdae6e2f0a16324587c38b5bb_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0010 dt=111 2026-11-01T21:34:59Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_193_7b99f9e9913268cdae6e2f0a16324587c38b5bb_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0010 dt=90 2026-11-01T21:34:37Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_193_7b99f9e9913268cdae6e2f0a16324587c38b5bb_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0010 dt=90 2026-11-01T21:34:37Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_193_7b99f9e9913268cdae6e2f0a16324587c38b5bb_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0010 dt=88 2026-11-01T21:34:35Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_193_7b99f9e9913268cdae6e2f0a16324587c38b5bb_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0010 dt=67 2026-11-01T21:34:14Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_193_7b99f9e9913268cdae6e2f0a16324587c38b5bb_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0010 dt=67 2026-11-01T21:34:14Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_193_7b99f9e9913268cdae6e2f0a16324587c38b5bb_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0010 dt=64 2026-11-01T21:34:12Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_193_7b99f9e9913268cdae6e2f0a16324587c38b5bb_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0010 dt=43 2026-11-01T21:33:51Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_193_7b99f9e9913268cdae6e2f0a16324587c38b5bb_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0010 dt=43 2026-11-01T21:33:51Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_193_7b99f9e9913268cdae6e2f0a16324587c38b5bb_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0010 dt=41 2026-11-01T21:33:49Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_193_7b99f9e9913268cdae6e2f0a16324587c38b5bb_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0010 dt=20 2026-11-01T21:33:27Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_193_7b99f9e9913268cdae6e2f0a16324587c38b5bb_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0010 dt=19 2026-11-01T21:33:27Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_193_7b99f9e9913268cdae6e2f0a16324587c38b5bb_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0010 dt=18 2026-11-01T21:33:25Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_193_7b99f9e9913268cdae6e2f0a16324587c38b5bb_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0010 dt=-5 2026-11-01T21:33:02Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_193_7b99f9e9913268cdae6e2f0a16324587c38b5bb_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0010 dt=-5 2026-11-01T21:33:02Z nvlddmkm 153
+  GATE_WER_NEAR report=Kernel_193_7b99f9e9913268cdae6e2f0a16324587c38b5bb_00000000_fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0010 dt=-8 2026-11-01T21:32:59Z nvlddmkm 153
+  GATE_WER_NEAR report=WATCHDOG-20261101-2132.dmp dt=101 2026-11-01T21:34:14Z nvlddmkm 153
+  GATE_WER_NEAR report=WATCHDOG-20261101-2132.dmp dt=101 2026-11-01T21:34:14Z nvlddmkm 153
+  GATE_WER_NEAR report=WATCHDOG-20261101-2132.dmp dt=98 2026-11-01T21:34:12Z nvlddmkm 153
+  GATE_WER_NEAR report=WATCHDOG-20261101-2132.dmp dt=77 2026-11-01T21:33:51Z nvlddmkm 153
+  GATE_WER_NEAR report=WATCHDOG-20261101-2132.dmp dt=77 2026-11-01T21:33:51Z nvlddmkm 153
+  GATE_WER_NEAR report=WATCHDOG-20261101-2132.dmp dt=75 2026-11-01T21:33:49Z nvlddmkm 153
+  GATE_WER_NEAR report=WATCHDOG-20261101-2132.dmp dt=54 2026-11-01T21:33:27Z nvlddmkm 153
+  GATE_WER_NEAR report=WATCHDOG-20261101-2132.dmp dt=54 2026-11-01T21:33:27Z nvlddmkm 153
+  GATE_WER_NEAR report=WATCHDOG-20261101-2132.dmp dt=52 2026-11-01T21:33:25Z nvlddmkm 153
+  GATE_WER_NEAR report=WATCHDOG-20261101-2132.dmp dt=29 2026-11-01T21:33:02Z nvlddmkm 153
+  GATE_WER_NEAR report=WATCHDOG-20261101-2132.dmp dt=29 2026-11-01T21:33:02Z nvlddmkm 153
+  GATE_WER_NEAR report=WATCHDOG-20261101-2132.dmp dt=26 2026-11-01T21:32:59Z nvlddmkm 153
+  GATE_WER_NEAR report=WATCHDOG-20261101-2138.dmp dt=2 2026-11-01T21:38:07Z nvlddmkm 153
+  GATE_WER_NEAR report=WATCHDOG-20261101-2138.dmp dt=2 2026-11-01T21:38:07Z nvlddmkm 153
+  GATE_WER_NEAR report=WATCHDOG-20261101-2138.dmp dt=0 2026-11-01T21:38:06Z nvlddmkm 153
+  GATE_WER_NEAR report=WATCHDOG-20261101-2138.dmp dt=-21 2026-11-01T21:37:45Z nvlddmkm 153
+  GATE_WER_NEAR report=WATCHDOG-20261101-2138.dmp dt=-21 2026-11-01T21:37:45Z nvlddmkm 153
+  GATE_WER_NEAR report=WATCHDOG-20261101-2138.dmp dt=-23 2026-11-01T21:37:42Z nvlddmkm 153
+  GATE_WER_NEAR report=WATCHDOG-20261101-2138.dmp dt=-43 2026-11-01T21:37:22Z nvlddmkm 153
+  GATE_WER_NEAR report=WATCHDOG-20261101-2138.dmp dt=-43 2026-11-01T21:37:22Z nvlddmkm 153
+  GATE_WER_NEAR report=WATCHDOG-20261101-2138.dmp dt=-46 2026-11-01T21:37:20Z nvlddmkm 153
+  GATE_WER_NEAR report=WATCHDOG-20261101-2138.dmp dt=-67 2026-11-01T21:36:59Z nvlddmkm 153
+  GATE_WER_NEAR report=WATCHDOG-20261101-2138.dmp dt=-67 2026-11-01T21:36:58Z nvlddmkm 153
+  GATE_WER_NEAR report=WATCHDOG-20261101-2138.dmp dt=-69 2026-11-01T21:36:57Z nvlddmkm 153
+  GATE_WER_NEAR report=WATCHDOG-20261101-2138.dmp dt=-89 2026-11-01T21:36:36Z nvlddmkm 153
+  GATE_WER_NEAR report=WATCHDOG-20261101-2138.dmp dt=-89 2026-11-01T21:36:36Z nvlddmkm 153
+  GATE_WER_NEAR report=WATCHDOG-20261101-2138.dmp dt=-92 2026-11-01T21:36:33Z nvlddmkm 153
+  GATE_WER_NEAR report=WATCHDOG-20261101-2138.dmp dt=-113 2026-11-01T21:36:13Z nvlddmkm 153
+  GATE_WER_NEAR report=WATCHDOG-20261101-2138.dmp dt=-113 2026-11-01T21:36:12Z nvlddmkm 153
+  GATE_WER_NEAR report=WATCHDOG-20261101-2138.dmp dt=-115 2026-11-01T21:36:11Z nvlddmkm 153
+  AT_FAILURE GATE_TDR since=2026-11-01T21:31:56Z display4101=0 nvlddmkm153=36 kernelpower41=0 eventlog6008=0 bugcheck1001=0 livekernelevent_other=71 livekernelevent193=13 strict=0 total=107
+  AT_FAILURE GATE_LIVEDUMP 2026-11-01T21:32:33Z WATCHDOG-20261101-2132.dmp bytes=1381797888
+  AT_FAILURE GATE_DISPLAY name='NVIDIA GeForce GTX 1660 SUPER' driver=32.0.15.8088 code=0 status=OK pnp=OK
+GATE_NOTE graceful stop of the guest
+GATE_HOSTREF after green cup8=PASS xid_count=0 xid_delta=0 gpu="NVIDIA GeForce GTX 1660 SUPER, 595.91.07, 6144 MiB, P2"
+WINDOWS_GATE_FAIL diag=KAYFABE stage=smi_probes why="graded probes failed: cup8 (probe_*.txt)" rev=1581edb4 gpu="NVIDIA GeForce GTX 1660 SUPER" hostref=green/green secs=1120
+GATE_NOTE evidence: /root/prov/b1_windows (56 files), /root/prov/b1_windows.tgz sha256=f4341040a4fb6eaa
+WINDOWS_GATE_TIMING total=1120s preflight=0s hostref_before=1s prereqs=0s kf3_binary=33s install=0s probes_build=5s boot1=79s check_kf3=42s nv_install=269s desktop_prep=23s reboot=99s desktop=56s enable=71s
+WINDOWS_GATE_EXIT rc=1 2026-11-01T21:40:07+00:00
