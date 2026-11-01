@@ -88,7 +88,8 @@ ssh <alias> 'cat /root/prov/<tag>.log'           # V3_GATES_SUMMARY / KF3_RC / F
   host GPU reference that was not green) or `WINDOWS_GATE_REFUSED` (2), then `WINDOWS_GATE_EXIT rc=N`; the log is
   `<prov>/<tag>_windows.log` and the evidence is `<prov>/<tag>_windows.tgz`. A Windows-only lease can run
   `windows_lane.sh` (provision and install) and then `bash scripts/bench/box/windows_gate.sh <tag>` by hand.
-  Design and the attribution rule: `docs/design/V3_WINDOWS_GATE.md`. A box with under 20 GB of RAM, or
+  Design and the attribution rule: `docs/design/V3_WINDOWS_GATE.md`; first real run (Vast lease 58592558, RTX 4090,
+  `WINDOWS_GATE_PASS rev=a5071c24`): `traces/windows_gate_20261101/`. A box with under 20 GB of RAM, or
   under 45 GB of free disk before the install (20 GB after), is refused, not tried.
 - A merge to master needs `V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS` (2026-10-10: `gate10=FALLBACK` = host RM refused all small micro reservations by a refusal status AND the probe proved a per-2-MiB-leaf reservation works at the flat FB alias, accepted but loud; `gate10=FAIL` never), `KF3_RC=0`,
   `FAST_SUITE_PASS=30` and `BIRTH_CENSUS_OK` on the **exact revision** promoted (docs-only commits on

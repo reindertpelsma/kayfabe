@@ -1,6 +1,6 @@
 # V3: the Windows stage of the merge bar (`KF_MERGE_WINDOWS=1`, `windows_gate.sh`)
 
-STATUS: LIVE, 2026-11-01. The gate is implemented (`scripts/bench/box/windows_gate.sh`, wired into
+STATUS: LIVE, 2026-11-01 (first hardware run: section 6). The gate is implemented (`scripts/bench/box/windows_gate.sh`, wired into
 `scripts/bench/box/merge_check.sh` as an opt-in last stage). The first real run is recorded in
 `traces/windows_gate_20261101/README.md`; this file carries the design and the rules, that file carries the
 numbers. It implements the verification plan of [`V3_WINDOWS_ON_VAST.md`](V3_WINDOWS_ON_VAST.md) (bar (b)) as a
@@ -27,7 +27,8 @@ One run proves this, on one box, in one boot of one freshly installed image:
    back, `KFDX RESULT OK`). `cup3` and `kf_dxprobe d3d12` run and are reported, not graded.
 6. A bounded idle (`KF_WINGATE_IDLE_S`, 300 s) with QEMU liveness, `GUEST_PANICKED` and ssh liveness polled.
 7. The same probes pass again after the idle, and the reset counters since the enable instant are all zero:
-   Display 4101, `nvlddmkm` 153, Kernel-Power 41, EventLog 6008, BugCheck 1001, WER LiveKernelEvent.
+   Display 4101, `nvlddmkm` 153, Kernel-Power 41, EventLog 6008, BugCheck 1001, WER LiveKernelEvent (code 193, the
+   WATCHDOG live dump, is counted and reported apart and gates only with `KF_WINGATE_STRICT_LKE=1`: section 6).
 8. A graceful stop (guest shutdown, then QMP powerdown), and the same-box host reference after the run.
 
 It is a stable-enough check, not a soak, and it makes no performance claim. It does not prove application
@@ -91,3 +92,11 @@ official URLs and are never published.
 On a nested box the install is 19 to 41 minutes and dominates; the rest of the gate is about 25 to 35 minutes
 with the default idle. The gate adds that to a merge check, so it is opt-in. A failure after the install on a
 box that is then destroyed loses the install; the evidence is exported by the gate before it returns.
+
+## 6. What the first lease showed (2026-11-01, `traces/windows_gate_20261101/README.md`)
+
+- **The gate passes on one Ada box.** `WINDOWS_GATE_PASS rev=a5071c24 gpu="NVIDIA GeForce RTX 4090" ... known_live_dumps_193=2 strict=0` (gate run g4, Vast lease 58592558, `traces/windows_gate_20261101/g4_windows.log`). The Windows install on that lease took 1838 s (`lane/winlane.log`), the gate 1621 s (`WINDOWS_GATE_TIMING` in the same g4 log). It is n=1: one die, one box, one passing run after three runs that the gate's own bugs ended (the README of the trace lists them).
+- **Open defect the gate reports but does not gate on: WATCHDOG live dumps (LiveKernelEvent 193).** In gate runs g3 and g4 two reports and one 1.4 GB `WATCHDOG-*.dmp` appear about a minute after the device enable, with zero Display 4101, `nvlddmkm` 153, Kernel-Power 41, 6008, BugCheck 1001 or other LiveKernelEvent codes and passing probes before and after the idle (`tdr_counts.txt`, `guest_collect/dumps.txt` in the trace). `KF_WINGATE_STRICT_LKE=1` makes them gate, and those runs then fail. Keeping 193 non-gating is a choice made by the author of the gate to have a gate that can pass while the defect is open, flagged for the owner; it is not a finding that the dumps are harmless. Falsifier for "non-gating is safe": a Windows run on which 193 dumps precede a reset or a probe failure within the same gate window.
+- **`gpu-uuid=auto` needs a host answer that the stock 595.91.07 host does not give** (`g1_windows.log`), so the gate passes an explicit per-VM UUID. `win_vm.sh run` has the same limit on such a host.
+- **Harness lessons kept as rules:** Windows OpenSSH's `scp` refuses `dir/.`; a probe's `ExitCode` is empty after `WaitForExit(ms)` unless the process handle is read first (`gate_run.ps1`); the no-flags refusal is a `REFUSED` line, not the served trace line of the same control.
+- **Not run on that lease:** `merge_check.sh` end to end with `KF_MERGE_WINDOWS=1`, a native Windows reference, any other die.
