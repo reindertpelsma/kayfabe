@@ -146,6 +146,7 @@ gpu_settle() {  # 0: nvidia-smi names the GPU (after <= KF_RECOVER_TRIES recover
   return 8
 }
 # KF_GPU_SETTLE_END
+nouveau_guard
 # Fresh cloud images need not ship headers for their running kernel. Install them
 # before stopping/removing the current driver; a missing package is provisioning
 # failure, not evidence that the GPU or requested driver is unsupported.
@@ -155,7 +156,6 @@ if [ ! -d "/lib/modules/$(uname -r)/build" ]; then
     exit 5
   }
 fi
-nouveau_guard
 
 HELD=$(apt-mark showhold | tr '\n' ' ')
 echo "held packages: ${HELD:-<none>}"
