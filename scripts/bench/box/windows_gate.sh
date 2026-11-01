@@ -110,9 +110,10 @@ fail_op() { FAILMODE=op FAILWHY=$*; FAILSTAGE=$STAGE; conclude; }
 fail_guest() { FAILMODE=guest FAILWHY=$*; FAILSTAGE=$STAGE; conclude; }
 ssh_seen() { grep -q 'SSH_UP' "$EV/ssh_seen" 2> /dev/null; }
 bar1_refusal() {
+    # only the reason text after "realize refused" counts: the device's own argument list names bar1-size too
     local q=$VM/logs/${TAG}_b1_qemu.log
     [ -s "$q" ] || return 1
-    grep -qiE 'bar1.*(too large|exceed|cannot|refus|invalid|power of)|(too large|exceed|refus).*bar1' "$q" && ! ssh_seen
+    grep -a 'realize refused' "$q" | sed 's/.*realize refused//' | grep -qi 'bar1' && ! ssh_seen
 }
 
 # the host side of the run, copied into the evidence directory (text only: never secrets/, tpm/ or firmware/)
@@ -481,7 +482,13 @@ if ! bash "$WV" sign > "$EV/sign.txt" 2>&1; then
     finish
 fi
 GUEST_STARTED=1
-if ! bash "$WV" run --detach --overlay "$TAG" --arm "$ARM" --guest-driver "$GDRV" --env-file "$FLAGS" --tag "$TAG" > "$EV/run_launch.txt" 2>&1 < /dev/null; then
+# An explicit, per-VM GPU UUID (derived from the VM's own identity): gpu-uuid=auto needs the host RM to answer
+# NV2080_CTRL_CMD_GPU_GET_GID_INFO, and the stock host driver (595.91.07) has no host-ABI row for it, so kf3
+# refuses to realize (measured in this gate's first attempt, traces/windows_gate_20261101/README.md).
+vmuuid=$(sed -n 's/^VM_UUID=//p' "$VM/identity.env" 2> /dev/null | head -1)
+[[ "$vmuuid" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]] || fail_op "no per-VM identity (VM_UUID) in $VM/identity.env"
+if ! bash "$WV" run --detach --overlay "$TAG" --arm "$ARM" --guest-driver "$GDRV" --kf3-extra "gpu-uuid=GPU-$vmuuid" \
+    --env-file "$FLAGS" --tag "$TAG" > "$EV/run_launch.txt" 2>&1 < /dev/null; then
     fail_op "win_vm.sh run did not start: $(tail -2 "$EV/run_launch.txt" | tr '\n' ' ')"
 fi
 sleep 5
