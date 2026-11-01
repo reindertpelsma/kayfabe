@@ -273,6 +273,52 @@ fn caps_probe_page(base: u64, caps_class: u32) -> Option<kf_disp::caps::CapsPage
     })
 }
 
+/// ⚠⚠ DIAGNOSTIC (default off, 2026-11-01, branch `claude/turing-windows-fix-20261101`, NEVER
+/// shipped: the page it serves is a per-die read, the defect v3 exists to end) —
+/// `KF3_DIAG_CAPS_PAGE_FILE=<path>`, read once at realize (never on a vCPU). The falsifier arm of
+/// H-caps-Turing (`traces/windows_gate_20261101/turing_caps/README.md`): does the box's OWN caps
+/// page, read as root with `tools/read_display_caps_page.py`, end the Turing reset loop?
+/// `WORD <off> <val>` lines replace the authored page with exactly those words (the own-die page);
+/// `ORWORD <off> <val>` lines are then OR-ed into the result (the two bisected facts over the
+/// authored page, `V3_DISPLAY_CAPS_DERIVATION_20261014.md` §3 on `claude/display-caps-derive-20261014`).
+/// Every other line is ignored. Bounded: at most 1024 lines of each kind, offsets inside the 4 KiB
+/// page and 4-byte aligned, zero values dropped; an offset given twice keeps the last value.
+/// Returns the page and the number of WORD and ORWORD lines applied.
+fn diag_caps_page(
+    mut page: kf_disp::caps::CapsPage,
+    text: &str,
+) -> (kf_disp::caps::CapsPage, usize, usize) {
+    fn parse(l: &str, kind: &str) -> Option<(u32, u32)> {
+        let mut f = l.split_whitespace();
+        if f.next()? != kind {
+            return None;
+        }
+        let hex = |s: &str| u32::from_str_radix(s.trim_start_matches("0x"), 16).ok();
+        let (o, v) = (hex(f.next()?)?, hex(f.next()?)?);
+        (f.next().is_none() && o < 0x1000 && o % 4 == 0).then_some((o, v))
+    }
+    let words: Vec<(u32, u32)> = text
+        .lines()
+        .filter_map(|l| parse(l, "WORD"))
+        .take(1024)
+        .collect();
+    let ors: Vec<(u32, u32)> = text
+        .lines()
+        .filter_map(|l| parse(l, "ORWORD"))
+        .take(1024)
+        .collect();
+    let mut map: std::collections::BTreeMap<u32, u32> = if words.is_empty() {
+        page.words.iter().copied().collect()
+    } else {
+        words.iter().copied().collect()
+    };
+    for (o, v) in &ors {
+        *map.entry(*o).or_insert(0) |= v;
+    }
+    page.words = map.into_iter().filter(|(_, v)| *v != 0).collect();
+    (page, words.len(), ors.len())
+}
+
 /// Lines per kind the display write trace prints in a run.
 const DISPLAY_TRACE_CAP_DEFAULT: u32 = 4096;
 
@@ -2206,6 +2252,28 @@ impl DisplayPlane {
             }
         } else {
             caps
+        };
+        // ⚠⚠ DIAGNOSTIC (default off, never shipped): the box's own caps page, H-caps-Turing's falsifier
+        let caps = match std::env::var("KF3_DIAG_CAPS_PAGE_FILE") {
+            Ok(path) => match std::fs::read_to_string(&path) {
+                Ok(text) => {
+                    let was = caps.words.len();
+                    let (p, w, o) = diag_caps_page(caps, &text);
+                    eprintln!(
+                        "kf3: display: DIAGNOSTIC KF3_DIAG_CAPS_PAGE_FILE caps page from {path}: {w} WORD + {o} ORWORD lines, {} words (authored {was}); caps class {:#x}",
+                        p.words.len(),
+                        row.classes.caps
+                    );
+                    p
+                }
+                Err(e) => {
+                    eprintln!(
+                        "kf3: display: DIAGNOSTIC KF3_DIAG_CAPS_PAGE_FILE {path} unreadable ({e}); the page stays"
+                    );
+                    caps
+                }
+            },
+            Err(_) => caps,
         };
         let layout = Layout::from_regs(&regs)
             .ok_or("display=on: the instance-memory layout is not derived")?;
@@ -6880,6 +6948,55 @@ mod tests {
         // the window-capability difference the record names: even windows scaler + TMO, odd not
         assert_ne!(p.word(0x780), p.word(0x7a0));
         assert_eq!(authored.word(0x780), authored.word(0x7a0));
+    }
+
+    /// ⚠⚠ DIAGNOSTIC `KF3_DIAG_CAPS_PAGE_FILE`: WORD lines replace the page, ORWORD lines are OR-ed
+    /// in, and the parser is bounded (inside the page, aligned, at most 1024 lines per kind, zero
+    /// values dropped); a file with neither keeps the authored page as it was.
+    #[test]
+    fn the_diag_caps_page_file_replaces_or_overlays_within_bounds() {
+        let authored = kf_disp::caps::CapsPage {
+            base: 0x0064_0000,
+            words: vec![(0x0, 0xf0f), (0x4, 0xff), (0x780, 0x01d7_0000)],
+        };
+        let (p, w, o) = diag_caps_page(authored.clone(), "# comment\nDECISIVE 0x00c 0x100\n");
+        assert_eq!(
+            (p.clone(), w, o),
+            (authored.clone(), 0, 0),
+            "nothing applied"
+        );
+        let own = "# kf-display-caps-page v1\nDECISIVE 0x00c 0x00000100\nEVENCAPA 0 0x780 0x01df21d0\n\
+                   WORD 0x000 0x00000f0f\nWORD 0x00c 0x00000100\nWORD 0x780 0x01df21d0\n\
+                   WORD 0x1000 0x1\nWORD 0x003 0x1\nWORD 0x010 0x0\nWORD 0x020\nWORD 0x024 0x1 0x2\n";
+        let (p, w, o) = diag_caps_page(authored.clone(), own);
+        assert_eq!(
+            (w, o),
+            (4, 0),
+            "out-of-page, unaligned and malformed lines refused"
+        );
+        assert_eq!(p.base, authored.base);
+        assert_eq!(
+            p.words,
+            vec![(0x0, 0xf0f), (0xc, 0x100), (0x780, 0x01df_21d0)]
+        );
+        assert_eq!(p.word(0x4), 0, "replace: the authored word is gone");
+        let two = "ORWORD 0x00c 0x100\nORWORD 0x780 0x80000\nORWORD 0x7c0 0x80000\n";
+        let (p, w, o) = diag_caps_page(authored, two);
+        assert_eq!((w, o), (0, 3));
+        assert_eq!(p.word(0x4), 0xff, "overlay keeps the authored words");
+        assert_eq!(p.word(0xc), 0x100);
+        assert_eq!(
+            p.word(0x780),
+            0x01d7_0000 | 0x8_0000,
+            "SCLR_PRESENT OR-ed into window 0"
+        );
+        assert_eq!(p.word(0x7c0), 0x8_0000);
+        let many: String = (0..5000)
+            .map(|i| format!("WORD {:#x} 0x1\n", (i % 1024) * 4))
+            .collect();
+        let (p, w, _) = diag_caps_page(p, &many);
+        assert_eq!(w, 1024, "bounded");
+        assert!(p.words.len() <= 1024);
     }
 
     /// ★ 2026-10-14 — THE SCAN LINE IS LIVE. The words the Windows driver reads per vblank and per
