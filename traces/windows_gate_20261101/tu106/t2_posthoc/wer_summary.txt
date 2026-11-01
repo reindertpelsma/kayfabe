@@ -1,0 +1,17 @@
+POST-HOC read of the t2 overlay (a manual boot after the gate run, tag posthoc2), gate_state.ps1 -Mode wer
+reports=49 codes={'117': 49} dump_files=0
+first_event_time=2026-11-01T14:14:09Z last_event_time=2026-11-01T15:06:54Z
+first report: Kernel_117_ebf5394d72c7981b871e4aff42553 event_time 2026-11-01T14:14:09Z
+events within +-120 s of the first report (dt seconds, utc, provider, id):
+   (-11, '2026-11-01T14:13:58Z', 'nvlddmkm', '153')
+   (-8, '2026-11-01T14:14:00Z', 'nvlddmkm', '153')
+   (-8, '2026-11-01T14:14:00Z', 'nvlddmkm', '153')
+   (24, '2026-11-01T14:14:33Z', 'nvlddmkm', '153')
+   (26, '2026-11-01T14:14:35Z', 'nvlddmkm', '153')
+   (27, '2026-11-01T14:14:35Z', 'nvlddmkm', '153')
+   (56, '2026-11-01T14:15:05Z', 'nvlddmkm', '153')
+   (59, '2026-11-01T14:15:08Z', 'nvlddmkm', '153')
+   (59, '2026-11-01T14:15:08Z', 'nvlddmkm', '153')
+   (89, '2026-11-01T14:15:37Z', 'nvlddmkm', '153')
+   (91, '2026-11-01T14:15:39Z', 'nvlddmkm', '153')
+   (91, '2026-11-01T14:15:40Z', 'nvlddmkm', '153')

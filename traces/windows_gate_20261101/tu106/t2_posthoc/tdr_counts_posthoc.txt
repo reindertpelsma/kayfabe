@@ -1,0 +1,2 @@
+GATE_TDR since=2026-11-01T14:11:43Z display4101=0 nvlddmkm153=147 kernelpower41=2 eventlog6008=1 bugcheck1001=2 livekernelevent_other=1006 livekernelevent193=43 strict=0 total=1158
+GATE_STATE_DONE mode=tdr

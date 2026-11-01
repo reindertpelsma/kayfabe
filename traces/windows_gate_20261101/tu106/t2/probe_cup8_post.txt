@@ -1,0 +1,5 @@
+ok   cuInit(0)
+ok   cuDeviceGetCount(&nd)
+ok   cuDeviceGet(&d,0)
+FAIL cuCtxCreate(&ctx,0,d) -> unknown error (999)
+GATE_PROBE exe=cup8.exe arg= rc=1 secs=25 timeout=0
