@@ -170,6 +170,28 @@ pack_evidence() {
     say "GATE_NOTE evidence: $EV ($(find "$EV" -type f | wc -l) files), $PROV/${T}_windows.tgz sha256=$(sha256sum "$PROV/${T}_windows.tgz" | cut -c1-16)"
 }
 
+# The small WER texts of the LiveKernelEvent/WATCHDOG reports (P1..P8), the dump times, the display-stack events within
+# +-120 s of each, and the timeline enable -> first probe -> first dump (never the dump). Evidence for the open
+# defect "LiveKernelEvent 193"; falsifier kept in the log: a dump that precedes a reset, a TDR or a probe failure.
+wer_timeline() { # OUTFILE
+    local out="$EV/$1" first_probe first_dump
+    gps 150 'C:\kf\gate_state.ps1' -Mode wer > "$out" 2>&1
+    grep -a '^GATE_WER_REPORT\|^GATE_WER_PARAM\|^GATE_WER_DUMP' "$out" | while read -r l; do say "  $l"; done
+    first_probe=$(cat "$EV"/probe_*.txt 2> /dev/null | sed -n 's/^GATE_PROBE_START .* utc=//p' | sort | head -1)
+    first_dump=$(sed -n 's/^GATE_WER_DUMP \([0-9TZ:-]*\) .*/\1/p' "$out" | sort | head -1)
+    say "GATE_TIMELINE enable=${ENABLE_UTC:-none} first_probe=${first_probe:-none} first_dump=${first_dump:-none}$(timeline_deltas "$first_probe" "$first_dump")"
+    grep -a '^GATE_WER_NEAR' "$out" | while read -r l; do say "  $l"; done
+}
+timeline_deltas() { # FIRST_PROBE FIRST_DUMP -> " dump_minus_enable=Ns dump_minus_first_probe=Ns" when both parse
+    local e p d s=""
+    e=$(date -u -d "${ENABLE_UTC:-x}" +%s 2> /dev/null) || e=""
+    p=$(date -u -d "${1:-x}" +%s 2> /dev/null) || p=""
+    d=$(date -u -d "${2:-x}" +%s 2> /dev/null) || d=""
+    [ -z "$e" ] || [ -z "$d" ] || s+=" dump_minus_enable=$((d - e))s"
+    [ -z "$p" ] || [ -z "$d" ] || s+=" dump_minus_first_probe=$((d - p))s"
+    echo "$s"
+}
+
 # the end of every path that started a guest: stop it, take the host reference AFTER, collect, then the verdict
 conclude() {
     local failstage=$STAGE xid_in xid_delta
@@ -177,6 +199,7 @@ conclude() {
     # the state at failure, while the guest still runs (bounded; a hung guest just yields nothing)
     if [ "$FAILMODE" != none ] && [ -n "$ENABLE_UTC" ] && qemu_alive; then
         gps 150 'C:\kf\gate_state.ps1' -Mode tdr -Since "$ENABLE_UTC" > "$EV/state_at_failure_tdr.txt" 2>&1
+        wer_timeline "state_at_failure_wer.txt"
         gps 100 'C:\kf\gate_state.ps1' -Mode display > "$EV/state_at_failure_display.txt" 2>&1
         grep -a '^GATE_TDR\|^GATE_LIVEDUMP\|^GATE_DISPLAY' "$EV/state_at_failure_tdr.txt" "$EV/state_at_failure_display.txt" 2> /dev/null \
             | sed 's/^[^:]*://' | while read -r l; do say "  AT_FAILURE $l"; done
@@ -665,6 +688,7 @@ strict=""
 gps 300 'C:\kf\gate_state.ps1' -Mode tdr -Since "$ENABLE_UTC" $strict > "$EV/tdr_counts.txt" 2>&1
 grep -a '^GATE_TDR\|^GATE_LIVEDUMP' "$EV/tdr_counts.txt" | while read -r l; do say "  $l"; done
 LKE193=$(sed -n 's/.* livekernelevent193=\([0-9]*\) .*/\1/p' "$EV/tdr_counts.txt" | head -1)
+wer_timeline "wer_reports.txt"
 grep -aq '^GATE_TDR .* total=0$' "$EV/tdr_counts.txt" || fail_guest "reset counters are not all zero since the enable: $(grep -a '^GATE_TDR' "$EV/tdr_counts.txt" | head -1)"
 gps 120 'C:\kf\gate_state.ps1' -Mode display > "$EV/display_final.txt" 2>&1
 grep -aq "code=0 " "$EV/display_final.txt" || fail_guest "the adapter is not at code 0 at the end: $(grep -a GATE_DISPLAY "$EV/display_final.txt" | head -1)"

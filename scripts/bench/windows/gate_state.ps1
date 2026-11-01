@@ -5,6 +5,8 @@
 #   -Mode desktop        the console user, dwm.exe and explorer.exe counts, the NVIDIA adapter's
 #                        ConfigManagerErrorCode, the driver version, the last boot time (UTC)
 #   -Mode display        only the NVIDIA adapter line (cheap; the gate polls it after the enable)
+#   -Mode wer            the small WER report text (EventType, P1..P8) of LiveKernelEvent/WATCHDOG reports, the dump files' times
+#                        and the display-stack events within +-120 s of each (never the dump itself)
 #   -Mode tdr -Since T   the reset counters from T (an ISO-8601 UTC stamp taken IN THE GUEST): Display 4101,
 #                        nvlddmkm 153, Kernel-Power 41, EventLog 6008, BugCheck 1001, WER LiveKernelEvent
 #                        (code 193 counted apart, gating only with -Strict), and the live dumps written since T.
@@ -12,7 +14,7 @@
 #
 # It changes nothing in the guest. `GATE_STATE_DONE mode=<m>` is the last line.
 param(
-    [ValidateSet('desktop', 'display', 'tdr')][string]$Mode = 'desktop',
+    [ValidateSet('desktop', 'display', 'tdr', 'wer')][string]$Mode = 'desktop',
     [string]$Since = '',
     [switch]$Strict
 )
@@ -44,6 +46,53 @@ if ($Mode -eq 'desktop') {
     Say "SESSIONS $sess"
     Show-Display
     Say 'STATE_DONE mode=desktop'
+    exit 0
+}
+
+if ($Mode -eq 'wer') {
+    # The small text of the WATCHDOG / LiveKernelEvent WER reports (never the dump itself), the dump files' times
+    # and every display-stack event within +-120 s of each report. Read-only.
+    #   GATE_WER_REPORT dir=<name> where=<archive|queue> mtime=<utc> event_time=<utc from the report's FILETIME>
+    #   GATE_WER_PARAM <dir> <key>=<value>        EventType, Sig[n] (P1..P8), DynamicSig[1..2]
+    #   GATE_WER_DUMP <utc> <name> bytes=<n>
+    #   GATE_WER_NEAR report=<dir> dt=<+-seconds> <utc> <provider> <id>
+    $wer = 'C:\ProgramData\Microsoft\Windows\WER'
+    $keep = '^(EventType|ReportType|ReportStatus|FriendlyEventName|Sig\[\d+\]\.(Name|Value)|DynamicSig\[(1|2)\]\.(Name|Value))='
+    $times = @()
+    foreach ($where in 'ReportArchive', 'ReportQueue') {
+        $root = Join-Path $wer $where
+        if (-not (Test-Path $root)) { continue }
+        foreach ($d in Get-ChildItem $root -Directory -ErrorAction SilentlyContinue) {
+            $f = Join-Path $d.FullName 'Report.wer'
+            if (-not (Test-Path $f)) { continue }
+            $raw = [IO.File]::ReadAllText($f)
+            if ($raw -replace "`0", '' -notmatch 'LiveKernelEvent|WATCHDOG|Kernel_1') { continue }
+            $lines = ($raw -replace "`0", '') -split "`r?`n"
+            $et = ($lines | Where-Object { $_ -match '^EventTime=' } | Select-Object -First 1) -replace '^EventTime=', ''
+            $evUtc = ''
+            if ($et -match '^\d+$') { $evUtc = [DateTime]::FromFileTimeUtc([int64]$et).ToString('yyyy-MM-ddTHH:mm:ssZ') }
+            $mt = $d.LastWriteTimeUtc
+            $times += @{ dir = $d.Name; t = $(if ($evUtc) { [DateTime]::Parse($evUtc).ToUniversalTime() } else { $mt }) }
+            Say ("WER_REPORT dir=$($d.Name) where=$where mtime=" + $mt.ToString('yyyy-MM-ddTHH:mm:ssZ') + " event_time=$evUtc")
+            foreach ($l in $lines) { if ($l -match $keep) { Say ("WER_PARAM $($d.Name) $l") } }
+        }
+    }
+    $dumps = @(Get-ChildItem C:\Windows\LiveKernelReports -Recurse -ErrorAction SilentlyContinue | Where-Object { -not $_.PSIsContainer } | Sort-Object LastWriteTime)
+    foreach ($f in $dumps) { Say ("WER_DUMP " + $f.LastWriteTimeUtc.ToString('yyyy-MM-ddTHH:mm:ssZ') + " $($f.Name) bytes=$($f.Length)") }
+    $anchors = @($times)
+    foreach ($f in $dumps) { $anchors += @{ dir = $f.Name; t = $f.LastWriteTimeUtc } }
+    foreach ($a in $anchors) {
+        $from = $a.t.AddSeconds(-120).ToLocalTime()
+        $to = $a.t.AddSeconds(120).ToLocalTime()
+        $ev = @(Get-WinEvent -FilterHashtable @{ LogName = 'System'; StartTime = $from; EndTime = $to } -ErrorAction SilentlyContinue |
+            Where-Object { $_.ProviderName -match 'nvlddmkm|Display|dxgkrnl|Dxgkrnl|Kernel-Power|BugCheck' })
+        foreach ($e in $ev) {
+            $dt = [int]($e.TimeCreated.ToUniversalTime() - $a.t).TotalSeconds
+            Say ("WER_NEAR report=$($a.dir) dt=$dt " + $e.TimeCreated.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ') + " $($e.ProviderName) $($e.Id)")
+        }
+        if (-not $ev) { Say ("WER_NEAR report=$($a.dir) none within +-120s") }
+    }
+    Say 'STATE_DONE mode=wer'
     exit 0
 }
 

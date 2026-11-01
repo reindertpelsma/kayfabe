@@ -226,6 +226,17 @@ class GuestScripts(unittest.TestCase):
         self.assertIn("STATE_DONE", ps)
         self.assertIn("-Mode desktop", ps)
 
+    def test_the_wer_mode_reads_report_text_and_never_copies_a_dump(self):
+        ps = (WIN / "gate_state.ps1").read_text()
+        for needle in ("-Mode wer", "ReportArchive", "ReportQueue", "Report.wer", "Sig\\[", "WER_NEAR"):
+            self.assertIn(needle, ps)
+        for bad in ("Copy-Item", "Compress-Archive", "scp", "Get-Content -Raw C:\\Windows\\LiveKernelReports"):
+            self.assertNotIn(bad, ps)
+        text = code(GATE)
+        self.assertIn("wer_timeline", text)
+        self.assertNotIn(".dmp", text.replace("*.dmp", ""))  # the gate never names a dump file to fetch
+        self.assertNotRegex(text, r"scp-from[^\n]*(LiveKernelReports|\.dmp)")
+
     def test_gate_run_only_runs_probes_under_the_probe_directory(self):
         ps = (WIN / "gate_run.ps1").read_text()
         self.assertIn(r"^C:\\kf\\probes\\", ps)

@@ -19,6 +19,7 @@ if (-not (Test-Path $Exe)) { Write-Output "GATE_PROBE exe=$name REFUSED missing"
 $out = "C:\kf\probes\$name.out.txt"
 $err = "C:\kf\probes\$name.err.txt"
 Remove-Item $out, $err -ErrorAction SilentlyContinue
+Write-Output ("GATE_PROBE_START exe=$name utc=" + (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ'))
 $sw = [Diagnostics.Stopwatch]::StartNew()
 $a = @{ FilePath = $Exe; RedirectStandardOutput = $out; RedirectStandardError = $err; PassThru = $true; WindowStyle = 'Hidden' }
 if ($Arg) { $a['ArgumentList'] = $Arg }
