@@ -2,6 +2,13 @@
 
 STATUS: DESIGN-ONLY, 2026-10-31. Research and design for the Windows 11 lane that Codex will operate. Nothing here was run: no rental, no box, no VM, no secret. The only live check is a header-only HTTP probe of the vendor download URLs from a GPU-free sandbox (section 4). Every number is labelled `MEASURED` (with run, date and path), `CODE READ`, or `INFERRED`. An unlabelled sentence in a table cell inherits the label of its row's source column.
 
+**Update, 2026-11-01: bar (b) is implemented as an opt-in merge-bar stage.** `scripts/bench/box/windows_gate.sh`
+(`KF_MERGE_WINDOWS=1` in `merge_check.sh`) runs the install, the bind with GSP forced, the desktop, `nvidia-smi`, a
+CUDA matmul, a D3D11 readback, a bounded idle and the reset counters, and ends in one verdict line. Its design is
+[`V3_WINDOWS_GATE.md`](V3_WINDOWS_GATE.md); the first real lease is `traces/windows_gate_20261101/README.md`. The
+section 3 items 1 to 5 were already in `next` (PR #234); the acceptance criteria of section 6.1 are the gate's.
+Sections 2 to 8 below are unchanged and still describe the manual lane.
+
 Owner ruling, 2026-10-31 (given to this task, not yet in `docs/OWNER_RULINGS.md`): no `next` to `master` merge until Windows is verified. The bare-metal Windows host is gone, so Windows is verified on rented Vast boxes. Minimum bar (b): ONE full Windows 11 LTSC (Microsoft evaluation) desktop boot on a Vast KVM box through `scripts/bench/windows/win_vm.sh`: install once, NVIDIA driver 580.88 with the GSP keys, `OverlayTestMode=5`, desktop reached, `nvidia-smi` plus a small D3D or compute probe pass, and no TDR in a bounded idle-plus-probe window.
 
 ## 0. Answer first

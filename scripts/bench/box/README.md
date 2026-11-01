@@ -80,6 +80,16 @@ ssh <alias> 'cat /root/prov/<tag>.log'           # V3_GATES_SUMMARY / KF3_RC / F
 - *[2026-10-26]* `merge_check.sh` runs no crate tests: the GPU-free `cargo test` of every kf-* crate is CI's `stable` job
   on every commit (a repeat on the box cost 31 min and ended rc=101 in gate run 40263112941). The /dev/kvm-gated
   tests, which CI skips, are opt-in: `KF_MERGE_KVM_TESTS=1` (`kvm_tests.sh`, `KVM_TESTS passed N failed 0 kvm_ran=R kvm_skipped=0`).
+- *[2026-11-01]* The Windows stage is opt-in too: `KF_MERGE_WINDOWS=1` runs `windows_gate.sh` last (after the
+  census). It installs Windows 11 LTSC once per box (`win_vm.sh install`, 20-45 min on a nested box), boots it on
+  kf3 with the stock 580.88 driver and GSP forced, and needs a signed-in desktop, `nvidia-smi`, a CUDA matmul and
+  a D3D11 readback, a bounded idle (300 s) and zero resets. It ends in one of `WINDOWS_GATE_PASS` (exit 0),
+  `WINDOWS_GATE_FAIL class=KAYFABE` (1), `WINDOWS_GATE_UNATTRIBUTED class=...` (3: rental, media, our script, or a
+  host GPU reference that was not green) or `WINDOWS_GATE_REFUSED` (2), then `WINDOWS_GATE_EXIT rc=N`; the log is
+  `<prov>/<tag>_windows.log` and the evidence is `<prov>/<tag>_windows.tgz`. A Windows-only lease can run
+  `windows_lane.sh` (provision and install) and then `bash scripts/bench/box/windows_gate.sh <tag>` by hand.
+  Design and the attribution rule: `docs/design/V3_WINDOWS_GATE.md`. A box with under 20 GB of RAM, or
+  under 45 GB of free disk before the install (20 GB after), is refused, not tried.
 - A merge to master needs `V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS` (2026-10-10: `gate10=FALLBACK` = host RM refused all small micro reservations by a refusal status AND the probe proved a per-2-MiB-leaf reservation works at the flat FB alias, accepted but loud; `gate10=FAIL` never), `KF3_RC=0`,
   `FAST_SUITE_PASS=30` and `BIRTH_CENSUS_OK` on the **exact revision** promoted (docs-only commits on
   top are fine; say so). *[2026-10-03, `v3-sec-nonpriv`]* `BIRTH_CENSUS_OK` (`birth_census.sh`,

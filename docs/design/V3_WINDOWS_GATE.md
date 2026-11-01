@@ -1,0 +1,93 @@
+# V3: the Windows stage of the merge bar (`KF_MERGE_WINDOWS=1`, `windows_gate.sh`)
+
+STATUS: LIVE, 2026-11-01. The gate is implemented (`scripts/bench/box/windows_gate.sh`, wired into
+`scripts/bench/box/merge_check.sh` as an opt-in last stage). The first real run is recorded in
+`traces/windows_gate_20261101/README.md`; this file carries the design and the rules, that file carries the
+numbers. It implements the verification plan of [`V3_WINDOWS_ON_VAST.md`](V3_WINDOWS_ON_VAST.md) (bar (b)) as a
+small, bounded check, and it is the "master gate" half of the owner's 2026-10-31 split: a small and fast Windows
+gate for `next` to `master`, a separate release soak (full Windows 11, SPECviewperf, all families), and a small
+driver sweep.
+
+## 1. What it is, and what it is not
+
+One run proves this, on one box, in one boot of one freshly installed image:
+
+1. Windows 11 Enterprise LTSC 2024 (Microsoft's 90-day evaluation, build 26100) installs unattended through
+   `win_vm.sh install`, once per box, with the pinned media (sha256 and size checked by `win_vm.sh fetch`).
+2. The installed disk boots on kayfabe's `kf3-gpu` device with the 19 `KF3_*` flags of
+   `scripts/bench/windows/kf3_flags.sample.env` and `guest-driver=580.65.06`, and passes `check.ps1 --kf3`.
+3. NVIDIA's stock 580.88 driver is installed with GSP forced on (`EnableGpuFirmware=1` in the adapter's class key
+   and in the `nvlddmkm` service key, read back) while the device is still disabled (`nv-install --no-enable`);
+   autologon and `Dwm\OverlayTestMode=5` are set (`desktop-prep`).
+4. The guest reboots (a fresh QEMU, same vars and TPM), the desktop comes up signed in as `kf` (`dwm.exe` and
+   `explorer.exe` running), and the device is enabled once. The adapter must reach `ConfigManagerErrorCode 0` at
+   driver 32.0.15.8088.
+5. `nvidia-smi -L` and `-q` run in the guest; the graded probes pass: `cup8` (a 2048 x 2048 fp32 matmul, byte
+   exact, `CUP8 VERDICT: PASS` and `bad=0 maxerr=0`) and `kf_dxprobe d3d11` (compute shader plus a draw, both read
+   back, `KFDX RESULT OK`). `cup3` and `kf_dxprobe d3d12` run and are reported, not graded.
+6. A bounded idle (`KF_WINGATE_IDLE_S`, 300 s) with QEMU liveness, `GUEST_PANICKED` and ssh liveness polled.
+7. The same probes pass again after the idle, and the reset counters since the enable instant are all zero:
+   Display 4101, `nvlddmkm` 153, Kernel-Power 41, EventLog 6008, BugCheck 1001, WER LiveKernelEvent.
+8. A graceful stop (guest shutdown, then QMP powerdown), and the same-box host reference after the run.
+
+It is a stable-enough check, not a soak, and it makes no performance claim. It does not prove application
+coverage, other dies, other drivers, sleep/wake, a reboot loop, multi-GPU, or the flag-free default route (the
+flag list is a sample whose header says it is unconfirmed as the production list).
+
+## 2. Verdicts, and what counts against kayfabe
+
+The last lines of `<tag>_windows.log` are one verdict and an EXIT line. A log without `WINDOWS_GATE_EXIT` belongs
+to a dead run. The EXIT trap turns a gate that died without a verdict into UNATTRIBUTED, never into a pass.
+
+| line | exit | meaning |
+|---|---|---|
+| `WINDOWS_GATE_PASS rev= gpu= ...` | 0 | every step above held, both host references green, no new host Xid |
+| `WINDOWS_GATE_FAIL class=KAYFABE stage= why=` | 1 | the guest failed (or a host Xid appeared) with the same-box host reference green BEFORE and AFTER |
+| `WINDOWS_GATE_UNATTRIBUTED class= stage= why=` | 3 | not kayfabe's: PROVIDER (rental, network, apt), MEDIA (a pinned file's hash), OPERATOR (our script, or a step that did not read back), HOSTREF (the host GPU reference was not green), BAR1_EXCEPTION |
+| `WINDOWS_GATE_REFUSED why=` | 2 | a precondition: not root, no `/dev/kvm`, little disk or RAM, no flag file |
+
+The attribution rule is the owner's of 2026-10-26: a failure on a rented box is kayfabe's only if the same
+box's Linux host shows a healthy GPU before and after. The host reference is `nvidia-smi` plus `cup8` built
+natively against the host driver (`CUP8 VERDICT: PASS`); the Xid count is recorded as a baseline and its delta
+over the guest run is a gate criterion of its own. A failure of the harness (a script step, an scp, a registry
+value that does not read back) is OPERATOR whatever the references say. The Vast BAR1 limit is the documented
+exception (owner, 2026-10-24): a kf3 realize refusal naming BAR1 before the first ssh is BAR1_EXCEPTION, and it
+counts against kayfabe only if the native `windows-on-vast` reference fails on the same box type too. The
+classification is exercised without a box by `windows_gate.sh --selftest` (10 cases), which
+`scripts/ci/test_vast_windows_gate.py` runs in CI.
+
+## 3. Bounds
+
+| bound | value |
+|---|---|
+| install | `WINVM_INSTALL_WAIT_S` 4200 s (on timeout `win_vm.sh` screendumps and quits QEMU) |
+| everything after the install | `KF_WINGATE_BUDGET_S` 9000 s; every wait is `min(wait, what is left)` |
+| ssh to the guest | per attempt `WINVM_SSH_CONNECT_TIMEOUT` + 12 s; boot waits 900 s |
+| each probe | killed in the guest after its own limit (`gate_run.ps1`), 180 s for the graded two |
+| GPU lock | `WINVM_LOCK_WAIT_S` 120 s |
+| idle | `KF_WINGATE_IDLE_S` 300 s |
+
+## 4. Files
+
+| file | role |
+|---|---|
+| `scripts/bench/box/windows_gate.sh` | the gate; `--selftest` for the verdict logic |
+| `scripts/bench/box/merge_check.sh` | calls it last, only for `KF_MERGE_WINDOWS=1` |
+| `scripts/bench/box/windows_lane.sh` | provisions a Windows-only lease and installs (the gate installs too if the lane did not) |
+| `scripts/bench/windows/gate_state.ps1` | read-only guest state: desktop, adapter code, reset counters |
+| `scripts/bench/windows/gate_enable.ps1` | the one-time device enable and its guest-clock stamp |
+| `scripts/bench/windows/gate_run.ps1` | one probe with a hard time limit |
+| `scripts/bench/windows/win_vm.sh`, `gsp_on.ps1`, `desktop_prep.ps1`, `check.ps1`, `collect.ps1` | reused unchanged |
+| `scripts/bench/windows/cuda/build_cup_win.sh`, `appmatrix/tools/src/kf_dxprobe.cpp` | the probes, cross-built with mingw-w64 on the box, never committed |
+| `scripts/ci/test_vast_windows_gate.py` | GPU-free falsifiers |
+
+Evidence stays in `<prov-dir>/<tag>_windows/` and `<tag>_windows.tgz` (text, gzip logs, a sha256 manifest, two
+small screenshots). `secrets/`, `tpm/` and `firmware/` of the VM are never copied, and the evidence is scanned for
+the guest password before it is packed. The Windows, NVIDIA and virtio media are downloaded on the box from their
+official URLs and are never published.
+
+## 5. Costs and limits (INFERRED from the numbers in `V3_WINDOWS_ON_VAST.md` section 5; the first run's own numbers are in the trace)
+
+On a nested box the install is 19 to 41 minutes and dominates; the rest of the gate is about 25 to 35 minutes
+with the default idle. The gate adds that to a merge check, so it is opt-in. A failure after the install on a
+box that is then destroyed loses the install; the evidence is exported by the gate before it returns.
