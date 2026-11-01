@@ -30,8 +30,9 @@ export HOST_DRIVER KF_HOST_DRIVER=$HOST_DRIVER
 export CARGO_BUILD_JOBS=${CARGO_BUILD_JOBS:-$(nproc)}
 export PATH=$HOME/.cargo/bin:$PATH
 export WINVM_ROOT=${WINVM_ROOT:-/workspace/winvm}
-# a per-VM SMBIOS identity from the first boot on (an installed VM must not change identity later), and a
-# bound on the install wait: a lease is shorter than win_vm.sh's 4 h default (V3_WINDOWS_ON_VAST.md 3.1)
+# a per-VM SMBIOS identity from the first boot on (an installed VM must not change
+# identity later), and a bound on the install wait: a lease is shorter than win_vm.sh's
+# 4 h default (docs/design/V3_WINDOWS_ON_VAST.md 3.1)
 export WINVM_VM_IDENTITY=${WINVM_VM_IDENTITY:-1}
 export WINVM_INSTALL_WAIT_S=${WINVM_INSTALL_WAIT_S:-4200}
 GUEST_RUN=/root/NVIDIA-Linux-x86_64-580.159.04.run
