@@ -1,11 +1,11 @@
-**UPDATE, 2026-10-22 CEST:** execution/continuation decisions below are amended by [the SW2 result memo](V3_BLACKWELL_CONTINUATION_20261022.md). The transferred lease is closed; CAPC isolated as an exploratory candidate, an unmatched native32 contaminates the baseline, no Windows acceptance PASS. Original Claude branch remained read-only; this annotation is on the new Codex branch. Earlier execution and pending-decision text is historical.
-
-**STATUS: LIVE-RESEARCH, 2026-10-21 (evening).** GB202 (RTX 5090) Windows 580.88 under kayfabe, resumed from
+**STATUS: RESEARCH, 2026-10-21 (evening).** GB202 (RTX 5090) Windows 580.88 under kayfabe, resumed from
 Codex's sweep (`codex/sweep-win-20261021` @6728c49b9, frozen product source af8bdcda4). Branch
 `claude/blackwell-resume-20261021`. Part 1-4 are GPU-free analysis of committed evidence (written before any
 run). Part 5 is the run plan; part 7 records what was executed. Labels: **MEASURED** = a committed artifact
 named here; **CODE READ** = repo source or public ogkm; **INFERRED** = reasoning, never evidence. No value in
 this document is derived from a closed binary; no closed-driver bytes were opened.
+
+**UPDATE, 2026-10-22 CEST:** execution/continuation decisions below are amended by [the SW2 result memo](V3_BLACKWELL_CONTINUATION_20261022.md). The transferred lease is closed; CAPC isolated as an exploratory candidate, an unmatched native32 contaminates the baseline, no Windows acceptance PASS. Original Claude branch remained read-only; this annotation is on the new Codex branch. Earlier execution and pending-decision text is historical.
 
 # 1. What the committed evidence says (new cross-reads, not in SW2.md)
 
