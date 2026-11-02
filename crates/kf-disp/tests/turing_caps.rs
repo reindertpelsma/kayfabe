@@ -42,10 +42,18 @@ fn tu106_claims_the_main_layer_scaler_and_its_measured_word() {
     for sdr in [false, true] {
         let d = turing(TU106, sdr);
         assert!(d.unmeasured.is_empty(), "TU106 has a measured 0x00c row");
-        assert_eq!(d.page.word(0x00c), 0x100, "the TU106 read (native Windows 580.88 and box 58721898)");
+        assert_eq!(
+            d.page.word(0x00c),
+            0x100,
+            "the TU106 read (native Windows 580.88 and box 58721898)"
+        );
         for w in 0..8u32 {
             let capa = d.page.word(0x780 + 0x20 * w);
-            assert_eq!(capa & SCLR != 0, w % 2 == 0, "window {w}: only main-layer windows claim a scaler");
+            assert_eq!(
+                capa & SCLR != 0,
+                w % 2 == 0,
+                "window {w}: only main-layer windows claim a scaler"
+            );
         }
     }
 }
@@ -54,6 +62,13 @@ fn tu106_claims_the_main_layer_scaler_and_its_measured_word() {
 fn an_unmeasured_turing_die_gets_the_clean_page_and_a_notice_never_a_neighbours_row() {
     let d = turing(TU116, true);
     assert_eq!(d.page.word(0x00c), 0, "no TU106 value is served to a TU116");
-    assert_eq!(d.unmeasured.iter().map(|(o, _)| *o).collect::<Vec<_>>(), vec![0x00c]);
-    assert_ne!(d.page.word(0x780) & SCLR, 0, "the T1 rule still holds on an unmeasured die");
+    assert_eq!(
+        d.unmeasured.iter().map(|(o, _)| *o).collect::<Vec<_>>(),
+        vec![0x00c]
+    );
+    assert_ne!(
+        d.page.word(0x780) & SCLR,
+        0,
+        "the T1 rule still holds on an unmeasured die"
+    );
 }

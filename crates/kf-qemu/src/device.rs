@@ -927,6 +927,10 @@ impl Device {
                 let plane = on_cuda_thread("kf3-cuda-disp", || {
                     crate::display::DisplayPlane::build(
                         row,
+                        kf_disp::capsderive::Die {
+                            architecture,
+                            implementation,
+                        },
                         table,
                         &bdf,
                         fd,

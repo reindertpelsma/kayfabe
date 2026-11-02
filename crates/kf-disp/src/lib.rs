@@ -27,6 +27,7 @@
 //! - [`tick`] — the tick source: the free-running clock, the broker's events, the handoff rules.
 
 pub mod caps;
+pub mod capsderive;
 pub mod class;
 pub mod color;
 pub mod dispcaps;

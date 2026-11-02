@@ -1,0 +1,9 @@
+# kf-disp caps FAMILY ROWS — the one hand-kept part of the derived display capabilities page.
+# Columns (TAB): LAYER  main|overlay  register  field  TRUE|FALSE|number  required|optional  basis
+# `main` = the window that is layer 0 of its head, `overlay` = every other layer. Window i is layer
+# i % (windows/heads) of head i / (windows/heads) (ogkm nvkms-rm.c ProbeHeadCountAndWindowAssignment).
+# Register/field names are the class header's own (class prefix dropped); the loader refuses a name the
+# family's header lacks unless the row is `optional`. A row claims only what kayfabe's engine implements.
+# Only rows that a hardware bisection showed the Windows display driver needs are here
+# (docs/design/V3_DISPLAY_CAPS_DERIVATION_20261014.md §3); the rest of the measured page is not claimed.
+LAYER	main	PRECOMP_WIN_PIPE_HDR_CAPA	SCLR_PRESENT	TRUE	required	main layer has a precomp scaler (console scales; limit fields 0; AD104 bisection f5)

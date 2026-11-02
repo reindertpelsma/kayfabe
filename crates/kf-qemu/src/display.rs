@@ -2165,8 +2165,10 @@ impl DisplayPlane {
     ///
     /// # Errors
     /// By name — `display=on` never starts on a guessed display.
+    #[allow(clippy::too_many_arguments)]
     pub fn build(
         row: &'static kf_chip::display::DisplayRow,
+        die: kf_disp::capsderive::Die,
         table: &kf_abi::versions::DriverAbiTable,
         bdf: &str,
         store_fd: i32,
@@ -2219,19 +2221,46 @@ impl DisplayPlane {
                 "display=on: SDR processing cannot be combined with constructor-only probes".into(),
             );
         }
-        let caps = if sdr_color {
-            kf_disp::caps::sdr_page(
+        // ★ 2026-11-01 (H01 on the gate head; `traces/windows_gate_20261101/turing_caps/`): the page is
+        // DERIVED per die (`kf_disp::capsderive`, from `claude/display-caps-derive-20261014`): the authored base
+        // page, the window-layer family rows (T1: main-layer `SCLR_PRESENT`) and this die's measured words (T3,
+        // `data/caps_measured.tsv`). `[measured, lease 58721898, TU106]` without it Windows never programs a
+        // window after the modeset and the RM unloads every ~25 s; with it the Windows gate passes. The
+        // constructor-only diagnostics keep their own nested pages.
+        let caps = if constructor_probe {
+            caps_author(t, &regs, row.classes.caps, row.heads, row.windows)
+                .map_err(|e| format!("display=on: caps page: {}", e.0))?
+        } else {
+            let branch = version.split('.').next().unwrap_or("").to_string();
+            let d = kf_disp::capsderive::derive(
                 t,
                 &regs,
-                row.classes.caps,
-                classes.core,
-                row.heads,
-                row.windows,
+                row,
+                die,
+                sdr_color,
+                kf_disp::capsderive::shipped_rows(),
+                kf_disp::capsderive::shipped_measured(),
+                &branch,
+                &kf_disp::capsderive::HostFacts::default(),
             )
-        } else {
-            caps_author(t, &regs, row.classes.caps, row.heads, row.windows)
-        }
-        .map_err(|e| format!("display=on: caps page: {}", e.0))?;
+            .map_err(|e| format!("display=on: caps page: {}", e.0))?;
+            for (off, why) in &d.unmeasured {
+                eprintln!(
+                    "kf3: display: NO MEASURED caps word {off:#05x} for die arch {:#x} impl {:#x}, driver branch {branch}: the authored page stays clean and a Windows guest's display may not come up ({why}). Read the die's word with tools/read_display_caps_page.py and add a row to crates/kf-disp/data/caps_measured.tsv (OWNER_RULINGS §AH: a value measured on one die is never served to another)",
+                    die.architecture, die.implementation
+                );
+            }
+            let tiers =
+                |x: kf_disp::capsderive::Tier| d.provenance.iter().filter(|p| p.tier == x).count();
+            eprintln!(
+                "kf3: display: caps page derived — {} words: {} T1 rule, {} T3 measured ({} unmeasured)",
+                d.page.words.len(),
+                tiers(kf_disp::capsderive::Tier::Rule),
+                tiers(kf_disp::capsderive::Tier::Measured),
+                d.unmeasured.len()
+            );
+            d.page
+        };
         // ⚠⚠ PROBE (default off, H-caps): the real GPU's caps page instead of the authored one
         let caps = if caps_probe_on() {
             match caps_probe_page(caps.base, row.classes.caps) {
