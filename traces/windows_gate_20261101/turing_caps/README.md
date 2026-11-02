@@ -53,3 +53,33 @@ environment, logged in `KF3_ENV`); max 3 negative boots; the diagnostic is never
 defect v3 exists to end; the product route is the derived page plus a T3 row, `OWNER_RULINGS.md` §AH).
 
 ## RESULTS
+
+MEASURED 2026-11-01/02, Vast lease 58721898 (own id; RTX 2060 SUPER = TU106, Quebec CA, 21 vCPU, 24 GB, host driver
+575.51.03 on arrival, 595.91.07 after the lane), rev `67f4b2ed`, the gate script and `kf3_flags.sample.env` unchanged.
+A first rental (58720148, offer 57046638) ended in vast's `GPU error, unable to start instance` and was destroyed after
+11 min without use. Lane: `winlane.log` (`WINLANE_TIMING total=4040s ... install_windows=2419s`, `WINLANE_EXIT rc=0`).
+
+- The box's own caps page (`tu106_box58721898_host575_caps_page.txt`, `tools/read_display_caps_page.py` as root, host
+  575.51.03): 90 words, `DECISIVE 0x00c 0x00000100`, even-window CAPA `0x01df21d0`; its 90 `WORD` lines are identical to
+  the stock Windows 580.88 read of another TU106 (`tu106_native_windows580_caps_page.txt`, box 56117789, 2026-10-15).
+- **d1 (own page, `KF3_DIAG_CAPS_PAGE_FILE`, 90 WORD lines): `WINDOWS_GATE_PASS`** (`d1_windows.log`): Code 0, cup8 and
+  d3d11 pass before and after the 300 s idle (cup3, d3d12 too), `nvlddmkm153=0`, every reset counter 0
+  (`d1/tdr_counts.txt`), host reference green/green, Xid 0, `running_to_suspending=1` (the graceful stop only,
+  `d1/gsp_signals.txt`). kf3 log `d1/gate_d1_b2_qemu.log.gz`: driver-start display init `methods=5338 puts=35` (the
+  AD102 PASS numbers exactly; the authored Turing page gave 8330/31), head armed +42.1 s after fn70, `console shows head 0
+  ... [window 0` 12.4 s after the arm, `puts=5792 updates=2282 releases=1135` at the end; one fn 47, at the stop.
+- **d2 (authored page + `two_facts_overlay.txt`: `0x00c`=0x100 and main-layer `SCLR_PRESENT`): `WINDOWS_GATE_PASS`**
+  (`d2_windows.log`): the same probes pass, all reset counters 0, `running_to_suspending=1` (the stop), window 0 scanned
+  12.5 s after the arm, `puts=5068 updates=1992 releases=990` (driver-start init `methods=9098 puts=43`).
+- Both runs still show LiveKernelEvent 193 (3 per run; dumps +35 s after the enable: `d1/guest_dumps.txt`), as on
+  AD102: the 193 live dump is NOT the storm's cause (the gate design's falsifier "a 193 precedes a reset" is not
+  triggered: there is no reset).
+
+Verdict: H-caps-Turing NOT falsified, and supported on the failing die: the same box class, image, flags and binary
+that fail with the authored page (t1/t2) pass the gate with the die's own page (d1) and with only the two bisected facts
+(d2). Negative boots: 0. n=1 per arm, one box, TU106 only.
+
+Fix (branch `claude/turing-windows-fix-20261101`): `493c6b7f` (EXPECTED RED test) and `1204f31f` (port of
+`kf_disp::capsderive` to the gate head; the derived page = authored + T1 main-layer scaler + T3 `0x00c`, TU106 row
+present). NOT run on hardware as a binary: for TU106 it serves the d2 page (INFERRED from the code and its test, not
+booted). TU116 has no measured row: it keeps the clean page and the notice until its `0x00c` is read.
