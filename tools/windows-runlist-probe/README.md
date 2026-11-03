@@ -12,6 +12,15 @@ STATUS: RESEARCH, 2026-10-05; provenance corrected 2026-10-31; Windows 581.51 al
 > column, checked by `crates/kf-abi/tests/windows_cell_provenance.rs`. One thing the traces do not
 > show is that the class's parameters are *exactly* the 12-byte public struct; the table records
 > that as `params_binding`, backed only by the accepted allocation in run53 (see "Verify the cell").
+>
+> **Correction, 2026-11-01.** The earlier text said the legacy generator and artifact were
+> unchanged. The legacy generator `derive.py` and its generated table were removed on 2026-10-31
+> [provenance fix, see the 2026-10-31 correction above]; only `derive_native.py` remains, and it reads
+> OGKM headers and published native metadata only. 2026-11-01: the generated cell now carries a
+> provenance row per item like the legacy cell's, citing the committed verbatim excerpts
+> `traces/die_driver_sweep_20261015/ad102_second_builds_20261016/native_windows58151/*58151__alloc_b297.tsv`
+> (8 rows each, taken from the two digest-pinned captures); `crates/kf-abi/tests/windows_cell_provenance.rs`
+> checks every cited line.
 
 # Software-runlist allocation probe
 
@@ -41,14 +50,7 @@ It verifies both published metadata digests, declared sizes and unique successfu
 request/reply pairs. Its class binding is tagged
 `measured:AD102,581.51,2026-10-17` (the 2026-10-31 tag grammar; the first draft wrote
 `Windows581.51` as the driver). Generating this artifact never reads a closed
-executable. (Correction, 2026-11-01: the earlier text said the legacy generator and artifact were
-unchanged. The legacy generator `derive.py` and its generated table were removed on 2026-10-31
-[provenance fix, see the correction at the top]; only `derive_native.py` remains, and it reads
-OGKM headers and published native metadata only. 2026-11-01: the generated cell now carries a
-provenance row per item like the legacy cell's, citing the committed verbatim excerpts
-`traces/die_driver_sweep_20261015/ad102_second_builds_20261016/native_windows58151/*58151__alloc_b297.tsv`
-(8 rows each, taken from the two digest-pinned captures); `crates/kf-abi/tests/windows_cell_provenance.rs`
-checks every cited line.)
+executable.
 
 Tier reasons: the public header defines the parameter type but contains no class
 ID for it. The unprivileged Linux host's engine/class controls do not establish the
@@ -205,9 +207,11 @@ device/client, graph quota exhaustion, default refusal, and refusal by object
 backends without this explicit graph-only seam. Hardware validation belongs to
 the root's serial Windows experiment; it has not been claimed by this change.
 
+> **Correction (applies to the paragraph below).** It is from the generated-table version; on 2026-10-31
+> the values were re-pinned byte for byte by unit tests, see the correction at the top.
+
 Validation on the controller: 1,245 tests passed across `kf-abi`, `kf-arch`, `kf-rm`
 and `kf-qemu`; zero failures or ignored tests. The additional real served-chain
 test passed both isolated environments: default/off refuses the allocation,
 opt-in accepts it, neither timeout nor scheduling control is answered successfully, and no
-channel action occurs. (That paragraph is from the generated-table version; on 2026-10-31
-the values were re-pinned byte for byte by unit tests, see the correction at the top.)
+channel action occurs.
