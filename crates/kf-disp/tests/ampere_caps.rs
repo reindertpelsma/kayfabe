@@ -49,7 +49,11 @@ fn ga102_is_fully_derived_with_its_own_measured_word() {
             "GA102 has a measured 0x00c row for branch 580: {:?}",
             d.unmeasured
         );
-        assert_eq!(d.page.word(0x00c), GA102_00C, "the GA102 read on lease 58969637");
+        assert_eq!(
+            d.page.word(0x00c),
+            GA102_00C,
+            "the GA102 read on lease 58969637"
+        );
         for w in 0..8u32 {
             let capa = d.page.word(0x780 + 0x20 * w);
             assert_eq!(
@@ -64,7 +68,11 @@ fn ga102_is_fully_derived_with_its_own_measured_word() {
 #[test]
 fn the_ga102_row_is_scoped_to_its_driver_branch() {
     let d = ampere(GA102, true, "595");
-    assert_eq!(d.page.word(0x00c), 0, "no 580-branch read is served to a 595 guest");
+    assert_eq!(
+        d.page.word(0x00c),
+        0,
+        "no 580-branch read is served to a 595 guest"
+    );
     assert_eq!(
         d.unmeasured.iter().map(|(o, _)| *o).collect::<Vec<_>>(),
         vec![0x00c]
