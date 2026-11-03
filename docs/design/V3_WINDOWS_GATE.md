@@ -137,6 +137,7 @@ box that is then destroyed loses the install; the evidence is exported by the ga
 | AD102, RTX 4090, Vast lease 58592558 | `a5071c24` (g4) | `WINDOWS_GATE_PASS`, `known_live_dumps_193=2`, n=1 (`g4_windows.log`) |
 | TU106, RTX 2060 SUPER, Vast lease 58656298 | `8597d90e` (t1), `0860f249` (t2) | `WINDOWS_GATE_FAIL` twice: t1 `cup8` `cuInit` 999 with 16 RM unloads, t2 `cup8` `cuCtxCreate` 999 after the idle with 42 RM unloads; Code 0 and `nvidia-smi` worked in both (`tu106/t1_windows.log`, `tu106/t2_windows.log`) |
 | TU106, RTX 2060 SUPER, Vast lease 58957107 (2026-11-03) | `e6dad00f` (tbB1) | `WINDOWS_GATE_PASS ... resets=0 known_live_dumps_193=3` with the derived caps page (`traces/turing_boot_20261103/`) |
+| GA102, RTX 3090, Vast lease 58969637 (2026-11-03) | `006d845a` (am1, am2) | `WINDOWS_GATE_PASS ... resets=0` twice (`known_live_dumps_193=3`, `=4`) with the derived page and the die's own measured `0x00c` (`traces/ampere_hw_20261103/`); the first Ampere result. Other GA10x dies have no T3 row yet |
 | GB20x (Blackwell) | not run | not supported on Windows at `next` (below) |
 
 - ★ *[correction 2026-11-03, `traces/turing_boot_20261103/README.md`]* **The Turing storm's cause was found and fixed:
