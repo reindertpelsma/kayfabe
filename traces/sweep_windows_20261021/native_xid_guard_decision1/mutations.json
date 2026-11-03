@@ -1,0 +1,33 @@
+{
+  "source_restored_sha256": "f2e3c71a643c245f7ccbf17ed7c6c3d493e951eb1bfbaf8c5aea1c3601b7ff69",
+  "mutants": [
+    {
+      "mutant": "accept_wrong_code",
+      "killing_tests": [
+        "test_unmatched_xid32_in_defer_still_stops",
+        "test_unmatched_xid32_in_missing_page_still_stops"
+      ]
+    },
+    {
+      "mutant": "ignore_channels",
+      "killing_tests": [
+        "test_changed_defer_channel_is_fatal",
+        "test_changed_missing_page_channel_is_fatal"
+      ]
+    },
+    {
+      "mutant": "ignore_addresses",
+      "killing_tests": [
+        "test_changed_defer_address_is_fatal",
+        "test_changed_missing_page_address_is_fatal"
+      ]
+    },
+    {
+      "mutant": "count_only_snapshot",
+      "killing_tests": [
+        "test_same_count_replacement_with_other_address_is_fatal",
+        "test_same_count_replacement_with_xid32_is_fatal"
+      ]
+    }
+  ]
+}

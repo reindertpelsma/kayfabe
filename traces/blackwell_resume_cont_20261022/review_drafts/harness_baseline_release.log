@@ -1,0 +1,280 @@
+    --> crates/kf-util/src/lock.rs:1150:5
+     |
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: requested on the command line with `-W missing-docs`
+    --> crates/kf-util/src/lock.rs:1432:5
+     |
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    | |____________________^
+    |
+    = note: requested on the command line with `-W missing-docs`
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    --> crates/kf-linux-raw/src/mapping_unsafe.rs:1196:5
+     |
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: requested on the command line with `-W missing-docs`
+    --> crates/kf-gsp/src/boot.rs:2797:5
+     |
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: requested on the command line with `-W missing-docs`
+    --> crates/kf-gsp/src/boot.rs:2915:5
+     |
+     | |_____________________________^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    | ^^^^^^^^^^^^^^^^^
+    |
+    | ^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^
+    |
+    |     ^^^^^^^
+    |
+    |     ^^^^^^^
+    |
+    |         ^^^^^^^
+    |
+    |         ^^^^^^^^^
+    |
+    |         ^^^^^^^^
+    |
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    |    ^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^
+    |
+    |         ^^^^^^^^^^^^^^^^
+    |
+    | ^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    |                ^^^^^^^^^^^^^^^^^
+    |
+    |                ^^^^^^^^^
+    |
+    |                           ^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    | ^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    --> crates/kf-cuda/src/driver_unsafe.rs:1873:9
+     |
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: maybe it is overwritten before being read?
+     = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+    |
+    |             ----^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+    |
+    |            ---- fields in this struct
+    |                ^^^^^^^^^^
+    |                ^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+    --> crates/kf-cuda/src/driver_unsafe.rs:1811:5
+     |
+     | |___________________________________________^
+     |
+     = note: requested on the command line with `-W missing-docs`
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    |              ^^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+    |
+    |
+    |
+    |                 ^^^^^^^^^
+    |
+    = note: requested on the command line with `-W missing-docs`
+    |
+    |                            ^^^^^^^^^
+    |
+    |                 ^^^^^^^^^
+    |
+    |                      ^^^^^^^^^^^^^^
+    |
+    |                                      ^^^^^^^^^
+    |
+    |                                                 ^^^^^^^^
+    |
+    |         ----^^^^^^
+    |         |
+    |         help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+    |
+    |         ----^^^^^
+    |         |
+    |         help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+    Finished `release` profile [optimized] target(s) in 32.46s
+     Running unittests src/lib.rs (/workspace/bw-follow-target/release/deps/kf_harness-2e6fda49dd5b91f4)
+running 3 tests
+test tables::tests::move_pd1_repoints_the_parent_and_returns_the_level ... ok
+test tables::tests::the_unused_big_half_is_invalid ... ok
+test tables::tests::ver3_move_pd1_repoints_the_parent ... ok
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-ctl-probe.rs (/workspace/bw-follow-target/release/deps/kf_ctl_probe-0e65df3552da4718)
+running 0 tests
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-deferred-update-probe.rs (/workspace/bw-follow-target/release/deps/kf_deferred_update_probe-fe243fbf24574e5c)
+running 0 tests
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-encoder-session-probe.rs (/workspace/bw-follow-target/release/deps/kf_encoder_session_probe-987f4d33048608c6)
+running 0 tests
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-gate1.rs (/workspace/bw-follow-target/release/deps/kf_gate1-2c2765085037daa7)
+running 0 tests
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-gate2.rs (/workspace/bw-follow-target/release/deps/kf_gate2-3ec94f8db474f0d1)
+running 0 tests
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-gate3.rs (/workspace/bw-follow-target/release/deps/kf_gate3-97153649f19d6445)
+running 0 tests
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-gate4.rs (/workspace/bw-follow-target/release/deps/kf_gate4-0c194c15eef3d866)
+running 0 tests
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-gate5.rs (/workspace/bw-follow-target/release/deps/kf_gate5-e2e3473c1abcb025)
+running 0 tests
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-gate6.rs (/workspace/bw-follow-target/release/deps/kf_gate6-6184fbabc1f5f724)
+running 0 tests
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-gate7.rs (/workspace/bw-follow-target/release/deps/kf_gate7-73c96ad7dcde10d4)
+running 0 tests
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-gate8.rs (/workspace/bw-follow-target/release/deps/kf_gate8-5c2aeceac67454df)
+running 0 tests
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-gate9.rs (/workspace/bw-follow-target/release/deps/kf_gate9-3b126481e57082e3)
+running 0 tests
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-gr-tier.rs (/workspace/bw-follow-target/release/deps/kf_gr_tier-90c5179479ea0a26)
+running 3 tests
+test fixture_tests::an_unallocated_graphics_object_refuses_the_oracle_fixture ... ok
+test fixture_tests::blackwell_fixture_selects_its_own_i2m_3d_and_compute_objects ... ok
+test fixture_tests::native_fixture_only_binds_graphics_objects_allocated_for_that_family ... ok
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-micro-reserve-probe.rs (/workspace/bw-follow-target/release/deps/kf_micro_reserve_probe-9e46a11e4830a5d5)
+running 3 tests
+test tests::only_a_host_rm_refusal_status_is_a_refusal ... ok
+test tests::the_alias_ladder_fits_one_refreshs_budget_and_a_4_gib_row_does_not ... ok
+test tests::the_fallback_posture_needs_all_five_small_refused_by_status ... ok
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-nvdec-context.rs (/workspace/bw-follow-target/release/deps/kf_nvdec_context-384cb83c70f3e31e)
+running 0 tests
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-phys-oracle.rs (/workspace/bw-follow-target/release/deps/kf_phys_oracle-f777d7988104f4b1)
+running 0 tests
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-rc-journal-probe.rs (/workspace/bw-follow-target/release/deps/kf_rc_journal_probe-e349ca50685d8876)
+running 0 tests
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-syncwait-stress.rs (/workspace/bw-follow-target/release/deps/kf_syncwait_stress-d12a48240c4bc03c)
+running 0 tests
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-timer-probe.rs (/workspace/bw-follow-target/release/deps/kf_timer_probe-0b8120aea17b79a7)
+running 0 tests
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-user-ring-probe.rs (/workspace/bw-follow-target/release/deps/kf_user_ring_probe-b64e62a2a60124ae)
+running 6 tests
+test tests::attempted_store_is_inside_the_private_mapping_before_real_tail ... ok
+test tests::large_storage_prefix_keeps_commands_and_adds_only_public_nops ... ok
+test tests::malformed_mode_cannot_launch_hardware ... ok
+test tests::reference_tail_follows_virtual_copy_and_all_scope_wfi ... ok
+test tests::positive_ab_changes_only_gpu_mapping_permission ... ok
+test tests::reference_level_probe_changes_only_first_gp_level ... ok
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-video-semaphore-probe.rs (/workspace/bw-follow-target/release/deps/kf_video_semaphore_probe-41ac0b75c56c2eea)
+running 0 tests
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+running 0 tests
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

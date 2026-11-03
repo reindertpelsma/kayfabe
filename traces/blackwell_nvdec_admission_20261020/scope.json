@@ -1,0 +1,30 @@
+{
+  "base": "6976a94fef48a6dc6530cd743a66910cba52a860",
+  "expected_red": "340c12909",
+  "source_hashes": {
+    "crates/kf-abi/src/capability.rs": "5e5fd1836f6120ee749ff340c2b539e75311e0949407bdb32e0e4bcd7c41e417",
+    "crates/kf-abi/tests/capability_policy_550.rs": "efa75d48ea065636ee0149442cc680874b94459cd6b33be2cbc6fbf068399a32",
+    "crates/kf-chip/src/classes.rs": "4f531a47050e9e3f0d2310cec8361720c2754ac4400a6a4230e1ff00e8fb8b68"
+  },
+  "protected_byte_unchanged": [
+    {
+      "path": "crates/kf-qemu/src/chan.rs",
+      "sha256": "59ad2edea33be57eadd436aab0d49c918ad3fb4abe1727ac9f16cec46d36093c"
+    },
+    {
+      "path": "crates/kf-qemu/src/userrelay.rs",
+      "sha256": "9d9ba1cb0dd4f7b6a7c6a68ab3362dd8b22559664829a777e7e6f65412c55e31"
+    },
+    {
+      "path": "crates/kf-chan/src/grtables.rs",
+      "sha256": "eb57b9bec06904d314579213fdfde63a0509878899e3dab28bc9f52b0e09aa69"
+    },
+    {
+      "path": "crates/kf-chan/src/tmode.rs",
+      "sha256": "85da7f7ead7ecdbcc9c92f8125a0d37dbe38ec58db9bff74b212b9983a7c0534"
+    }
+  ],
+  "historical_fixture_unchanged": true,
+  "no_excluded_batching_dependency": true,
+  "candidate_windows_hardware": "UNRUN; two product initialization attempts exhausted"
+}

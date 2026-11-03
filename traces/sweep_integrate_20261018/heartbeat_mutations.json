@@ -1,0 +1,132 @@
+[
+  {
+    "mutant": "HB_drop_offset",
+    "exit": 101,
+    "killing_tests": [
+      "heartbeat::tests::fractional_operands_are_rounded_separately_again",
+      "heartbeat::tests::hostile_offset_extremes_are_bounded_clock_arithmetic",
+      "heartbeat::tests::millisecond_wrap_is_unsigned_in_both_operands",
+      "heartbeat::tests::public595_formula_applies_guest_offset_once",
+      "heartbeat::tests::round_before_subtracting_like_guest_not_after"
+    ],
+    "kill_count": 5,
+    "passed": true,
+    "fixed_sha256": "3117bc8fc46b41c7815bf5a71ad414dbf839fe49fa8d84430185dfb86563f807",
+    "log_sha256": "ef9b708c0cb355b5325f37e7c21a6078449fd6991c1ac671a5db6fefb97a9dab"
+  },
+  {
+    "mutant": "HB_round_after_subtract",
+    "exit": 101,
+    "killing_tests": [
+      "heartbeat::tests::fractional_operands_are_rounded_separately_again",
+      "heartbeat::tests::hostile_offset_extremes_are_bounded_clock_arithmetic",
+      "heartbeat::tests::round_before_subtracting_like_guest_not_after"
+    ],
+    "kill_count": 3,
+    "passed": true,
+    "fixed_sha256": "3117bc8fc46b41c7815bf5a71ad414dbf839fe49fa8d84430185dfb86563f807",
+    "log_sha256": "22d176e2dc730d77e33f51247fc2a2e4f4b244692b415b4c08197aa9ee7d7aab"
+  },
+  {
+    "mutant": "HB_zero_decoded_offset",
+    "exit": 101,
+    "killing_tests": [
+      "heartbeat::tests::nonzero_offset_decodes_the_guest_body_not_a_default",
+      "heartbeat::tests::offset_is_decoded_at_every_exact_compiled_tag",
+      "heartbeat::tests::truncated_or_wrong_size_or_unknown_abi_is_refused",
+      "heartbeat::tests::wrong_declaration_never_supplies_an_offset"
+    ],
+    "kill_count": 4,
+    "passed": true,
+    "fixed_sha256": "3117bc8fc46b41c7815bf5a71ad414dbf839fe49fa8d84430185dfb86563f807",
+    "log_sha256": "b7e39288eced1f7e0fad1894b883d78ea328283e8ed97b02c8c3fcfca87c3771"
+  },
+  {
+    "mutant": "HB_accept_wrong_declared_size",
+    "exit": 101,
+    "killing_tests": [
+      "heartbeat::tests::truncated_or_wrong_size_or_unknown_abi_is_refused",
+      "heartbeat::tests::wrong_declaration_never_supplies_an_offset"
+    ],
+    "kill_count": 2,
+    "passed": true,
+    "fixed_sha256": "3117bc8fc46b41c7815bf5a71ad414dbf839fe49fa8d84430185dfb86563f807",
+    "log_sha256": "bb3b7132c303df64776386af5088db07490ac420525dbc6219a38fa14241ebfd"
+  },
+  {
+    "mutant": "HB_wait_on_gsp_lock",
+    "exit": 101,
+    "killing_tests": [
+      "heartbeat::tests::busy_gsp_state_never_enters_clock_read",
+      "heartbeat::tests::busy_gsp_state_returns_without_waiting"
+    ],
+    "kill_count": 2,
+    "passed": true,
+    "fixed_sha256": "921b30651359670c515d23729b50edb9fc964b039b0df9072a10b6f2bae4de37",
+    "log_sha256": "18e3dd51112429ff4ff31f8e37bd143f5d468d78952361f37876855168799960",
+    "prior_receipt_fixed_sha256": "3117bc8fc46b41c7815bf5a71ad414dbf839fe49fa8d84430185dfb86563f807",
+    "note": "rechecked after strengthening the populated-metadata contention case"
+  },
+  {
+    "mutant": "HB_wait_on_fn72_lock",
+    "exit": 101,
+    "killing_tests": [
+      "sysinfo::tests::heartbeat_busy_empty_cell_returns_without_waiting",
+      "sysinfo::tests::heartbeat_busy_populated_cell_returns_without_waiting"
+    ],
+    "kill_count": 2,
+    "passed": true,
+    "fixed_sha256": "8004f9aedf79dffa89cd444b3346ed69a825ebd41265d62ae690543bcf1d0d0f",
+    "log_sha256": "d8b0c4c6bb0adb08d7c974d0c77103d8cc9d0b591de986ff0532afee4c937750"
+  },
+  {
+    "mutant": "HB_reuse_previous_life",
+    "exit": 101,
+    "killing_tests": [
+      "boot::device_reset_from_every_phase::heartbeat_falcon_new_life_rejects_old_fn72_after_other_commands",
+      "boot::device_reset_from_every_phase::heartbeat_fsp_new_life_rejects_old_fn72_after_other_commands"
+    ],
+    "kill_count": 2,
+    "passed": true,
+    "fixed_sha256": "4bbe25be6f56c729b70dc94da27e611225146c8bdfa5a7b52c789d745beac3ba",
+    "log_sha256": "7e00d4d49db02ffa988c33587d4be9ed86b2d21508578191726ccce66bd76893"
+  },
+  {
+    "mutant": "HB_reuse_previous_queue",
+    "exit": 101,
+    "killing_tests": [
+      "boot::device_reset_from_every_phase::heartbeat_falcon_fresh_queue_needs_its_own_fn72",
+      "boot::device_reset_from_every_phase::heartbeat_fsp_fresh_queue_needs_its_own_fn72"
+    ],
+    "kill_count": 2,
+    "passed": true,
+    "fixed_sha256": "4bbe25be6f56c729b70dc94da27e611225146c8bdfa5a7b52c789d745beac3ba",
+    "log_sha256": "f1e59536b7ba0a9476f14469ad2567d9e4da0eb5d85c28328d94ddb80535ccf3",
+    "original_parser_count": 1,
+    "parser_correction": "parallel stderr interleaved a FAILED line; authoritative failures footer names both runtime failures, same log/hash"
+  },
+  {
+    "mutant": "HB_forge_missing_offset",
+    "exit": 101,
+    "killing_tests": [
+      "heartbeat::tests::absent_offset_does_not_even_read_the_clock",
+      "heartbeat::tests::missing_offset_never_publishes_wrong_epoch"
+    ],
+    "kill_count": 2,
+    "passed": true,
+    "fixed_sha256": "3117bc8fc46b41c7815bf5a71ad414dbf839fe49fa8d84430185dfb86563f807",
+    "log_sha256": "5de5b0814a0c5901095ee98a6bbf9b6633f5122f33410b61ecb231032757108f"
+  },
+  {
+    "mutant": "HB_forge_missing_clock",
+    "exit": 101,
+    "killing_tests": [
+      "heartbeat::tests::missing_clock_never_forges_freshness",
+      "heartbeat::tests::second_failed_clock_cannot_publish_freshness"
+    ],
+    "kill_count": 2,
+    "passed": true,
+    "fixed_sha256": "3117bc8fc46b41c7815bf5a71ad414dbf839fe49fa8d84430185dfb86563f807",
+    "log_sha256": "4eb9712d1e0b3d4f6f8e947e0f0a61099897820bdda18b75d4299670952932ff"
+  }
+]

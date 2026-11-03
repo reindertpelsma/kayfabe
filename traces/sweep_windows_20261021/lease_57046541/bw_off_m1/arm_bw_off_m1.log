@@ -1,0 +1,21 @@
+/workspace/sweep-win-57046541/kfwin/disk/bw580_bind.qcow2: OK
+ARM_START run=bw_off_m1 source=af8bdcda4c700d8b40163ee3bf27feb7cfa6539c profile=off 2026-10-21T13:39:14+00:00
+[2026-10-21T13:39:14Z] detached: tag=bw_off_m1, log logs/bw_off_m1_run.log (stdout logs/bw_off_m1_run.out)
+KF_SSH_UP
+{"pid": 99683, "exe": "/workspace/bench/kf3-bins/af8bdcda/qemu-system-x86_64", "sha256": "c305c5ad0b993ce84cfb605c26a6de7d203edf0e4bf6183d23820863c8811c86", "kf3_device": "kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=/workspace/sweep-win-57046541/secureboot/kf-gop.af8bdcda.signed.efi,id=kf0,guest-driver=580.65.06,display=off,gop=off,gop-efi="}
+STAGE580_READY=1 actual=32.0.15.8088 device_disabled=1 GSP_flags=1; fresh QEMU580.65.06 then one enable
+ENABLE580_START actual=32.0.15.8088 UTC=2026-10-21T13:41:41.6749225Z
+Microsoft PnP Utility
+
+Enabling device:          PCI\VEN_10DE&DEV_2B85&SUBSYS_89EE1043&REV_A1\3&11583659&0&28
+Device enabled successfully.
+
+ENABLE580_PNPUTIL_RC=0
+{"Name":"NVIDIA GeForce RTX 5090","DriverVersion":"32.0.15.8088","ConfigManagerErrorCode":0}
+{"FriendlyName":"NVIDIA GeForce RTX 5090","Status":"OK","Problem":0}
+ENABLE580_OBSERVED UTC=2026-10-21T13:42:23.6440579Z; device status is verdict, not this command rc
+PRE_CLEANUP_START rc=255 2026-10-21T13:42:52+00:00
+{"rpcs": 3921, "unload_ordinals": [3920], "teardown_start_ordinal": 3624, "last_nonfree_before_teardown": [[3621, "76", "RmControl", "0", "0x20801211", "0x0"], [3622, "76", "RmControl", "0", "0x20801211", "0x0"], [3623, "76", "RmControl", "0", "0x50800101", "0x0"]]}
+OWN_VM_ALREADY_EXITED
+/workspace/sweep-win-57046541/kfwin/disk/bw580_bind.qcow2: OK
+ARM_EXIT run=bw_off_m1 rc=255 2026-10-21T13:43:24+00:00

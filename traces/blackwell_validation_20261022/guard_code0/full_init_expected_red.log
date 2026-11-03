@@ -1,0 +1,31 @@
+PHASE_XID_STOP: test end
+FPHASE_XID_STOP: test end
+F
+======================================================================
+FAIL: test_progress_while_windows_reports_code43_stops (test_full_init_gate.FullInitWatch.test_progress_while_windows_reports_code43_stops)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "scripts/bench/blackwell/test_full_init_gate.py", line 30, in test_progress_while_windows_reports_code43_stops
+    def test_progress_while_windows_reports_code43_stops(self):self.check_no_code0({'code':43,'driver':'32.0.15.8088','observed_utc':INIT})
+                                                               ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "scripts/bench/blackwell/test_full_init_gate.py", line 28, in check_no_code0
+    self.assertFalse(accepted.exists(),'fault was accepted before actual Code0 evidence')
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: True is not false : fault was accepted before actual Code0 evidence
+
+======================================================================
+FAIL: test_progress_without_any_windows_code0_stops (test_full_init_gate.FullInitWatch.test_progress_without_any_windows_code0_stops)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "scripts/bench/blackwell/test_full_init_gate.py", line 29, in test_progress_without_any_windows_code0_stops
+    def test_progress_without_any_windows_code0_stops(self):self.check_no_code0(None)
+                                                            ~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "scripts/bench/blackwell/test_full_init_gate.py", line 28, in check_no_code0
+    self.assertFalse(accepted.exists(),'fault was accepted before actual Code0 evidence')
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: True is not false : fault was accepted before actual Code0 evidence
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.028s
+
+FAILED (failures=2)

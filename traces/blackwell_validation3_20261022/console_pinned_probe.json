@@ -1,0 +1,22 @@
+{
+  "utc": "2026-10-22T02:32:11.168889+00:00",
+  "id": 57143789,
+  "console_public_host_key_kinds": [
+    "ecdsa-sha2-nistp256",
+    "ssh-ed25519"
+  ],
+  "probes": [
+    {
+      "route": "direct",
+      "exit_code": 255,
+      "ready": false,
+      "error": "ssh: connect to host 176.122.158.245 port 41628: Connection refused\n"
+    },
+    {
+      "route": "proxy",
+      "exit_code": 255,
+      "ready": false,
+      "error": "ssh: connect to host ssh9.vast.ai port 26858: Connection refused\n"
+    }
+  ]
+}

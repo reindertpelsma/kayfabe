@@ -1,0 +1,9 @@
+{
+  "product_head": "8f3a9bb3a5d652b3f536ca015bf95735ec588924",
+  "guard_tests": 65,
+  "guard_mutants": 12,
+  "native_fixture_release_passed": 19,
+  "capc": "public precision14 only",
+  "native32": "FATAL",
+  "auto_destroy_minutes": 170
+}

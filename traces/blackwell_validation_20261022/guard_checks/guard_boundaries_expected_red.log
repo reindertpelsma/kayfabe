@@ -1,0 +1,196 @@
+.......FFFFFFEE.FFFFFFFFF
+======================================================================
+ERROR: test_failed_subprocess_aborts_owned_tree (test_guard_boundaries.ObserverErrors.test_failed_subprocess_aborts_owned_tree)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-cont-wt/scripts/bench/blackwell/test_guard_boundaries.py", line 107, in test_failed_subprocess_aborts_owned_tree
+    self.check_error(subprocess.CalledProcessError(1,'journalctl'))
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/bw-cont-wt/scripts/bench/blackwell/test_guard_boundaries.py", line 99, in check_error
+    self.assertEqual(G.main(),7)
+                     ~~~~~~^^
+  File "/workspace/bw-cont-wt/scripts/bench/blackwell/phase_xid_guard.py", line 136, in main
+    journal = N.kernel_snapshot()
+  File "/usr/lib/python3.14/unittest/mock.py", line 1176, in __call__
+    return self._mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/unittest/mock.py", line 1180, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/unittest/mock.py", line 1241, in _execute_mock_call
+    raise effect
+subprocess.CalledProcessError: Command 'journalctl' returned non-zero exit status 1.
+
+======================================================================
+ERROR: test_timeout_aborts_owned_tree (test_guard_boundaries.ObserverErrors.test_timeout_aborts_owned_tree)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-cont-wt/scripts/bench/blackwell/test_guard_boundaries.py", line 104, in test_timeout_aborts_owned_tree
+    self.check_error(subprocess.TimeoutExpired('journalctl',10))
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/bw-cont-wt/scripts/bench/blackwell/test_guard_boundaries.py", line 99, in check_error
+    self.assertEqual(G.main(),7)
+                     ~~~~~~^^
+  File "/workspace/bw-cont-wt/scripts/bench/blackwell/phase_xid_guard.py", line 136, in main
+    journal = N.kernel_snapshot()
+  File "/usr/lib/python3.14/unittest/mock.py", line 1176, in __call__
+    return self._mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/unittest/mock.py", line 1180, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/unittest/mock.py", line 1241, in _execute_mock_call
+    raise effect
+subprocess.TimeoutExpired: Command 'journalctl' timed out after 10 seconds
+
+======================================================================
+FAIL: test_defer_cannot_be_reported_as_graphics_write_route (test_guard_boundaries.NativeOwnership.test_defer_cannot_be_reported_as_graphics_write_route)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-cont-wt/scripts/bench/blackwell/test_guard_boundaries.py", line 51, in test_defer_cannot_be_reported_as_graphics_write_route
+    with self.assertRaises(G.N.GuardRefused): G.verify_native_run(self.j.replace('ENGINE CE0','ENGINE GR_HOST0'),self.d,self.m,self.proofs,'0000:00:08')
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+AssertionError: GuardRefused not raised
+
+======================================================================
+FAIL: test_extra_native_marker_stops (test_guard_boundaries.NativeOwnership.test_extra_native_marker_stops)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-cont-wt/scripts/bench/blackwell/test_guard_boundaries.py", line 57, in test_extra_native_marker_stops
+    with self.assertRaises(G.N.GuardRefused): G.verify_native_run('NVRM: Xid unexplained '+self.j,self.d,self.m,self.proofs,'0000:00:08')
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+AssertionError: GuardRefused not raised
+
+======================================================================
+FAIL: test_missing_page_cannot_be_reported_as_copy_read_route (test_guard_boundaries.NativeOwnership.test_missing_page_cannot_be_reported_as_copy_read_route)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-cont-wt/scripts/bench/blackwell/test_guard_boundaries.py", line 54, in test_missing_page_cannot_be_reported_as_copy_read_route
+    with self.assertRaises(G.N.GuardRefused): G.verify_native_run(self.j.replace('ENGINE GR_HOST0','ENGINE CE0'),self.d,self.m,self.proofs,'0000:00:08')
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+AssertionError: GuardRefused not raised
+
+======================================================================
+FAIL: test_other_pci_stops (test_guard_boundaries.NativeOwnership.test_other_pci_stops)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-cont-wt/scripts/bench/blackwell/test_guard_boundaries.py", line 48, in test_other_pci_stops
+    with self.assertRaises(G.N.GuardRefused): G.verify_native_run(self.j,self.d,self.m,self.proofs,'0000:00:09')
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+AssertionError: GuardRefused not raised
+
+======================================================================
+FAIL: test_wrong_defer_pid_stops (test_guard_boundaries.NativeOwnership.test_wrong_defer_pid_stops)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-cont-wt/scripts/bench/blackwell/test_guard_boundaries.py", line 41, in test_wrong_defer_pid_stops
+    with self.assertRaises(G.N.GuardRefused): G.verify_native_run(self.j,self.d,self.m,self.proofs,'0000:00:08')
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+AssertionError: GuardRefused not raised
+
+======================================================================
+FAIL: test_wrong_missing_page_pid_stops (test_guard_boundaries.NativeOwnership.test_wrong_missing_page_pid_stops)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-cont-wt/scripts/bench/blackwell/test_guard_boundaries.py", line 45, in test_wrong_missing_page_pid_stops
+    with self.assertRaises(G.N.GuardRefused): G.verify_native_run(self.j,self.d,self.m,self.proofs,'0000:00:08')
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+AssertionError: GuardRefused not raised
+
+======================================================================
+FAIL: test_missing_process_stops (test_guard_boundaries.OwnedPhase.test_missing_process_stops)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-cont-wt/scripts/bench/blackwell/test_guard_boundaries.py", line 87, in test_missing_process_stops
+    with self.assertRaises(G.N.GuardRefused): G.validate_phase_owner(self.phase,self.root)
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+AssertionError: GuardRefused not raised
+
+======================================================================
+FAIL: test_other_gpu_stops (test_guard_boundaries.OwnedPhase.test_other_gpu_stops)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-cont-wt/scripts/bench/blackwell/test_guard_boundaries.py", line 83, in test_other_gpu_stops
+    with self.assertRaises(G.N.GuardRefused): G.validate_phase_owner(self.phase,self.root)
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+AssertionError: GuardRefused not raised
+
+======================================================================
+FAIL: test_pid_one_stops (test_guard_boundaries.OwnedPhase.test_pid_one_stops)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-cont-wt/scripts/bench/blackwell/test_guard_boundaries.py", line 91, in test_pid_one_stops
+    with self.assertRaises(G.N.GuardRefused): G.validate_phase_owner(self.phase,self.root)
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+AssertionError: GuardRefused not raised
+
+======================================================================
+FAIL: test_reused_pid_stops (test_guard_boundaries.OwnedPhase.test_reused_pid_stops)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-cont-wt/scripts/bench/blackwell/test_guard_boundaries.py", line 75, in test_reused_pid_stops
+    with self.assertRaises(G.N.GuardRefused): G.validate_phase_owner(self.phase,self.root)
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+AssertionError: GuardRefused not raised
+
+======================================================================
+FAIL: test_wrong_executable_stops (test_guard_boundaries.OwnedPhase.test_wrong_executable_stops)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-cont-wt/scripts/bench/blackwell/test_guard_boundaries.py", line 79, in test_wrong_executable_stops
+    with self.assertRaises(G.N.GuardRefused): G.validate_phase_owner(self.phase,self.root)
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+AssertionError: GuardRefused not raised
+
+======================================================================
+FAIL: test_hidden_first_marker_stops_off (test_guard_boundaries.ParseBoundaries.test_hidden_first_marker_stops_off)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-cont-wt/scripts/bench/blackwell/test_guard_boundaries.py", line 21, in test_hidden_first_marker_stops_off
+    self.assertEqual(P.judge(['NVRM: Xid 31 unknown '+XID], 'off_c', 96783, True)['verdict'], 'FATAL')
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'EXPECTED' != 'FATAL'
+- EXPECTED
++ FATAL
+
+
+======================================================================
+FAIL: test_hidden_first_marker_stops_on (test_guard_boundaries.ParseBoundaries.test_hidden_first_marker_stops_on)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-cont-wt/scripts/bench/blackwell/test_guard_boundaries.py", line 18, in test_hidden_first_marker_stops_on
+    self.assertEqual(P.judge(['NVRM: Xid unexplained '+XID], 'on_precision', 96783, True)['verdict'], 'FATAL')
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'EXPECTED' != 'FATAL'
+- EXPECTED
++ FATAL
+
+
+======================================================================
+FAIL: test_non_qemu_name_is_not_our_vm (test_guard_boundaries.ParseBoundaries.test_non_qemu_name_is_not_our_vm)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-cont-wt/scripts/bench/blackwell/test_guard_boundaries.py", line 24, in test_non_qemu_name_is_not_our_vm
+    self.assertEqual(P.judge([XID.replace('name=qemu-system-x86', 'name=kf-gr-tier')], 'on_precision', 96783, True)['verdict'], 'FATAL')
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'EXPECTED' != 'FATAL'
+- EXPECTED
++ FATAL
+
+
+======================================================================
+FAIL: test_other_process_name_is_not_our_vm (test_guard_boundaries.ParseBoundaries.test_other_process_name_is_not_our_vm)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-cont-wt/scripts/bench/blackwell/test_guard_boundaries.py", line 27, in test_other_process_name_is_not_our_vm
+    self.assertEqual(P.judge([XID.replace('name=qemu-system-x86', 'name=raw-client')], 'off_c', 96783, True)['verdict'], 'FATAL')
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'EXPECTED' != 'FATAL'
+- EXPECTED
++ FATAL
+
+
+----------------------------------------------------------------------
+Ran 25 tests in 0.015s
+
+FAILED (failures=15, errors=2)

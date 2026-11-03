@@ -1,0 +1,81 @@
+{
+  "own_id": 57081143,
+  "source": "74aa78abeb1eda67143a9dbbe8c3313e8f614e12",
+  "owner_decision": "2026-10-21 18:10CEST, exact source-matched FAULT_MARK native baseline; all new/unmatched Xids fatal",
+  "product_dirs_equal_af8": true,
+  "scripts": [
+    {
+      "file": "events.ps1",
+      "sha256": "46af7f0f18188f30383a72993779b81d2ecc39fe6b98ff37bebd65cce59f3790"
+    },
+    {
+      "file": "controller.sh",
+      "sha256": "dda41885782147d85b779b24612e295f7ce64f0450c1d70e2cd554d00ed88478"
+    },
+    {
+      "file": "collect_crash.ps1",
+      "sha256": "a7df0bb2c8af4c8ff659f45c682d36b95c649653ea66c061c433b35674c63bd1"
+    },
+    {
+      "file": "bind.sh",
+      "sha256": "ecf2af285b1d9973b4849bbb2643e54fc8c6cf1cbe4ffa5cc684890f3c18fc6e"
+    },
+    {
+      "file": "bind_receipt.py",
+      "sha256": "75b79df8f9a5569c1569d7485125166a66f7fff575d7bb1f52a782da2240bb2a"
+    },
+    {
+      "file": "p19.flags",
+      "sha256": "9e2207bc7f0fe1caa56b5fbc35cad57d51b063389dd50ffbb85851a50200732d"
+    },
+    {
+      "file": "export.py",
+      "sha256": "8c42fc13fd8da8b6d65ebc3fd2eaf729eed04d88323faecb498dad0667677ea1"
+    },
+    {
+      "file": "native_baseline.sh",
+      "sha256": "916b6716d351e624bb496165e9218905156c952b8eedc8f4524d92a3c50907d8"
+    },
+    {
+      "file": "crashdump.ps1",
+      "sha256": "e1b979b219858ec1897ba26bfedf442e2875a5dd93ad8ddae9b48e5a92419f76"
+    },
+    {
+      "file": "prepare_cold580.ps1",
+      "sha256": "5f51cac6a1f8d717de70c4ebd9cc9411569f68c6ddc714d64b8e0bda4c84cb67"
+    },
+    {
+      "file": "install.sh",
+      "sha256": "9a2cd369e09f208e131dde143f7075c51a7edd0c7b23fc82eba773513d3f350f"
+    },
+    {
+      "file": "verify_stage580.ps1",
+      "sha256": "62a76988a62a6f05586e856e54b5c9dfe61838727a11f6de45fd387a5641ae3c"
+    },
+    {
+      "file": "receipt.py",
+      "sha256": "90d673538a27632a416e57b9ff788db78562c622a7fc03355d6bfc62acf441d7"
+    },
+    {
+      "file": "enable580_once.ps1",
+      "sha256": "95a0a82dbb3db421e75634966d7aefd986aa7432f2031851c6fc51d00e92ee0d"
+    },
+    {
+      "file": "media.sh",
+      "sha256": "8bcd1019b22f2169d908f1c723ba0430ebafcece7eeda36777db49590010994a"
+    },
+    {
+      "file": "diag580.ps1",
+      "sha256": "217e3e9c7832e7a33570e20965bfe463bdea8601f6d0d5fb0d0f17526e2918a4"
+    },
+    {
+      "file": "common.sh",
+      "sha256": "1c6cf5f237cc038bb281cf670e99db10314c833a1956db1fdc9e230e3afc4d91"
+    },
+    {
+      "file": "alloc_headers.py",
+      "sha256": "f5bbd0371dd179bf7d4348646904984072eead9661005672152ce31da26d97ff"
+    }
+  ],
+  "changes": "Own source/id, tested exact native-fault guard and PGID watcher, media prepared during CPU provisioning, then serial fullLinux595->LTSCinstall->disabled8088bind->ON600hold/apps. No product/driver timers or flags changed."
+}

@@ -104,6 +104,11 @@ fn is_self_referential(path: &str) -> bool {
         // there is a MEASUREMENT of that id, not a consumer of the captured row's body — the
         // capture-reliance question this gate asks does not apply to it.
         || path.ends_with("crates/kf-abi/src/generated/matrix.rs")
+        // ★ 2026-10-14 (lane C, after merging `claude/ctl-probe-20261013`): the unprivileged
+        // control probe sends each listed id with ZEROED input and prints only RM's status and a
+        // reply prefix — a measurement of the id at the host, never a reader of the captured
+        // row's body.
+        || path.ends_with("crates/kf-harness/src/bin/kf-ctl-probe.rs")
 }
 
 /// The forms a control id is written in here: `0x2080_0a40`, `0x20800a40`, `ctl_20800a40`,

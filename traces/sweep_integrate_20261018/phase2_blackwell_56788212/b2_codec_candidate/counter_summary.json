@@ -1,0 +1,10 @@
+{
+  "classification": "MEASURED counters; no causal attribution",
+  "declared_pushbuffers": 17,
+  "declared_limits": {
+    "4095": 17
+  },
+  "last_display": "writes=220 puts=175 methods=38295 updates=27 notifies=20 releases=2 vblanks=7399 irqs=10 exceptions=0 refused=0 scanouts=174 scanout_refused=0 scanout_avg_us=21011 scanout_max_us=3522188",
+  "last_broker": "up=1 sent=174 gpucopy=0 gpucopy_backoffs=0 dmabuf_trips=0 carrier_refused=0 carrier_unchecked=0 formats_unasked=0 dropped=0 uncommitted=0 recovered=0 releases=174 unknown_releases=0 reclaims=0 blocked=0 backstops=0 reconnects=0 failed_attempts=0 peer_refused=0 cursor=hover cursor_sets=0 cursor_hides=0 cursor_shows=0 cursor_moves=0 cursor_refused=0",
+  "limit": "Broker send/release does not prove nonblack or correct guest content. Candidate did not fix B2; public64KiB format is CPU-tested, this guest declared4KiB."
+}

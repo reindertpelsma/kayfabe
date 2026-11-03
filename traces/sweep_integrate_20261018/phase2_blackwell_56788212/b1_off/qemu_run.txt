@@ -1,0 +1,6 @@
+[2026-10-19T23:16:54Z] waiting for the GPU lock /tmp/kayfabe-fastguest.lock (GPU work is strictly serial)
+[2026-10-19T23:16:54Z] WINVM_RUN_START tag=bw580_off_no_rom repo_rev=24906bf3 kf3=on qemu=/workspace/bench/kf3-bins/24906bf3/qemu-system-x86_64 host_driver=595.91.07 overlay=bw580_off_no_rom arm=B guest_driver=580.65.06 gop_efi=/workspace/sweep-win-56788212/secureboot/kf-gop.24906bf3.signed.efi sha256(gop_efi)=f97d65eda385181c
+[2026-10-19T23:16:54Z] kf3 device: kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=/workspace/sweep-win-56788212/secureboot/kf-gop.24906bf3.signed.efi,id=kf0,guest-driver=580.65.06,display=off,gop=off,gop-efi=
+[2026-10-19T23:16:54Z] QEMU_START tag=bw580_off_no_rom boot=1 pid=150681 log=logs/bw580_off_no_rom_b1_qemu.log
+[2026-10-19T23:27:44Z] WINVM_BOOT_END boot=1 rc=0 reason=host-qmp-quit kf3_lines=371 host_xid=0
+[2026-10-19T23:27:44Z] WINVM_RUN_END tag=bw580_off_no_rom boots=1 reason=host-qmp-quit

@@ -1,0 +1,58 @@
+COLLECT now=2026-10-21T13:46:16.4735938Z boot=2026-10-21T13:43:50.5000000Z
+FILE C:\Windows\Minidump\102126-79250-01.dmp 1897770 2026-10-21T13:44:54.5118002Z
+FILE C:\Windows\LiveKernelReports\WATCHDOG-20261021-1341.dmp 1007878144 2026-10-21T13:42:18.5852324Z
+EVT log=System t=2026-10-21T13:45:07.1151636Z prov=Microsoft-Windows-WER-SystemErrorReporting id=1001 msg=The computer has rebooted from a bugcheck. The bugcheck was: 0x00000116 (0xffff868ee2921010, 0xfffff80129944930, 0xffffffffc000009a, 0x0000000000000004). A dump was saved in: C:\WINDOWS\Minidump\102126-79250-01.dmp. Report Id: f2164cc3-115f-459d-899f-4e4d767741ee.
+EVT log=System t=2026-10-21T13:44:24.9753832Z prov=Microsoft-Windows-Kernel-Power id=41 msg=The system has rebooted without cleanly shutting down first. This error could be caused if the system stopped responding, crashed, or lost power unexpectedly.
+EVT log=System t=2026-10-21T13:45:18.8738323Z prov=EventLog id=6008 msg=The previous system shutdown at 1:40:16 PM on ?10/?21/?2026 was unexpected.
+EVTQ_NONE log=System id=4101 prov=
+EVTQ_NONE log=System id=4117 prov=
+EVTQ_NONE log=System id=4119 prov=
+EVTQ_NONE log=System id= prov=nvlddmkm
+EVTQ_NONE log=System id= prov=Display
+EVT log=Application t=2026-10-21T13:45:43.8075343Z prov=Windows Error Reporting id=1001 msg=Fault bucket , type 0 Event Name: LiveKernelEvent Response: Not available Cab Id: 0 Problem signature: P1: 141 P2: ffff868ee29102e0 P3: fffff80129944580 P4: 0 P5: ffff868edfc27080 P6: 10_0_26100 P7: 0_0 P8: 256_1 P9: P10: Attached files: \\?\C:\WINDOWS\LiveKernelReports\WATCHDOG\WATCHDOG-20261021-1342.dmp \\?\C:\WINDOWS\SystemTemp\WER-79281-0.sysdata.xml \\?\C:\ProgramData\Microsoft\Windows\WER\Te
+EVT log=Application t=2026-10-21T13:45:44.1377020Z prov=Windows Error Reporting id=1001 msg=Fault bucket , type 0 Event Name: LiveKernelEvent Response: Not available Cab Id: 0 Problem signature: P1: 141 P2: ffff868ee29102e0 P3: fffff80129944580 P4: 0 P5: ffff868edfc27080 P6: 10_0_26100 P7: 0_0 P8: 256_1 P9: P10: Attached files: \\?\C:\WINDOWS\LiveKernelReports\WATCHDOG\WATCHDOG-20261021-1342.dmp \\?\C:\WINDOWS\SystemTemp\WER-79281-0.sysdata.xml \\?\C:\ProgramData\Microsoft\Windows\WER\Te
+EVT log=Application t=2026-10-21T13:45:44.2624085Z prov=Windows Error Reporting id=1001 msg=Fault bucket , type 0 Event Name: BlueScreen Response: Not available Cab Id: 0 Problem signature: P1: 116 P2: ffff868ee2921010 P3: fffff80129944930 P4: ffffffffc000009a P5: 4 P6: 10_0_26100 P7: 0_0 P8: 256_1 P9: P10: Attached files: \\?\C:\WINDOWS\Minidump\102126-79250-01.dmp \\?\C:\WINDOWS\SystemTemp\WER-79281-0.sysdata.xml \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.55ef7291-2bc7-46bd-a940
+EVT log=Application t=2026-10-21T13:45:44.9261617Z prov=Windows Error Reporting id=1001 msg=Fault bucket , type 0 Event Name: LiveKernelEvent Response: Not available Cab Id: 0 Problem signature: P1: 141 P2: ffff868ee29102e0 P3: fffff80129944580 P4: 0 P5: ffff868edfc27080 P6: 10_0_26100 P7: 0_0 P8: 256_1 P9: P10: Attached files: \\?\C:\WINDOWS\LiveKernelReports\WATCHDOG\WATCHDOG-20261021-1342.dmp \\?\C:\WINDOWS\SystemTemp\WER-79281-0.sysdata.xml \\?\C:\ProgramData\Microsoft\Windows\WER\Te
+EVT log=Application t=2026-10-21T13:45:45.4354513Z prov=Windows Error Reporting id=1001 msg=Fault bucket , type 0 Event Name: BlueScreen Response: Not available Cab Id: 0 Problem signature: P1: 116 P2: ffff868ee2921010 P3: fffff80129944930 P4: ffffffffc000009a P5: 4 P6: 10_0_26100 P7: 0_0 P8: 256_1 P9: P10: Attached files: \\?\C:\WINDOWS\Minidump\102126-79250-01.dmp \\?\C:\WINDOWS\SystemTemp\WER-79281-0.sysdata.xml \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.55ef7291-2bc7-46bd-a940
+EVTQ_NONE log=Application id=1000 prov=
+WER C:\ProgramData\Microsoft\Windows\WER\ReportQueue\Kernel_116_ac151a17e9be904cd57fb4c430de7291be6a5ef_00000000_5e2baf9f-9101-498e-b1a4-52a34fbcd8ec\Report.wer
+  EventType=BlueScreen
+  Sig[0].Name=Code
+  Sig[0].Value=116
+  Sig[1].Name=Parameter 1
+  Sig[1].Value=ffff868ee2921010
+  Sig[2].Name=Parameter 2
+  Sig[2].Value=fffff80129944930
+  Sig[3].Name=Parameter 3
+  Sig[3].Value=ffffffffc000009a
+  Sig[4].Name=Parameter 4
+  Sig[4].Value=4
+  Sig[5].Name=OS version
+  Sig[5].Value=10_0_26100
+  Sig[6].Name=Service Pack
+  Sig[6].Value=0_0
+  Sig[7].Name=Product
+  Sig[7].Value=256_1
+  FriendlyEventName=Shut down unexpectedly
+  AppName=Windows
+WER C:\ProgramData\Microsoft\Windows\WER\ReportQueue\Kernel_141_d668e25488f0adcd97aa9166300dec77a16a2ce_00000000_1bc0c81a-34cd-4142-9048-1dbee01aa37e\Report.wer
+  EventType=LiveKernelEvent
+  Sig[0].Name=Code
+  Sig[0].Value=141
+  Sig[1].Name=Parameter 1
+  Sig[1].Value=ffff868ee29102e0
+  Sig[2].Name=Parameter 2
+  Sig[2].Value=fffff80129944580
+  Sig[3].Name=Parameter 3
+  Sig[3].Value=0
+  Sig[4].Name=Parameter 4
+  Sig[4].Value=ffff868edfc27080
+  Sig[5].Name=OS version
+  Sig[5].Value=10_0_26100
+  Sig[6].Name=Service Pack
+  Sig[6].Value=0_0
+  Sig[7].Name=Product
+  Sig[7].Value=256_1
+  FriendlyEventName=Hardware error
+  AppName=Windows
+COLLECT_DONE

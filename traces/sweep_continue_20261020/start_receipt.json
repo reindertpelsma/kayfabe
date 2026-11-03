@@ -1,0 +1,18 @@
+{
+  "utc": "2026-10-20T20:19:59.254893+00:00",
+  "wall_start_utc": "2026-10-20T20:15:25+00:00",
+  "hard_teardown_utc": "2026-10-21T04:30:00+00:00",
+  "source_base": "048c28b9c645190adf5bcaf859284adb8eb222ed",
+  "credit_usd": 29.987922351862608,
+  "stretch_cap_usd": 15,
+  "stretch_stop_usd": 12,
+  "credit_reserve_usd": 5,
+  "own_new_instances": [],
+  "other_session_instances_seen": [
+    {
+      "id": 56939139,
+      "status": "running"
+    }
+  ],
+  "action": "No rental while predecessor active. No access to its VM, files, SSH, timers, or teardown. Read published handoff only."
+}

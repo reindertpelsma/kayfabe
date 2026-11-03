@@ -1,0 +1,25 @@
+{
+  "date_utc": "2026-10-19T11:00:42.031997+00:00",
+  "cargo_target_deleted": true,
+  "own_sweep_runner_processes": 0,
+  "own_active_instances": [],
+  "instances_created_this_stretch": [],
+  "instances_destroyed_this_stretch": [],
+  "spent_usd_this_stretch": 0,
+  "new_autodestroy_timers": 0,
+  "locks_held": 0,
+  "removed_own_scratch_dirs": [
+    "sweep-kfwc-mutant",
+    "sweep-observer-mutant",
+    "sweep-kfwc-negative",
+    "sweep-kfwc-build",
+    "sweep-held-heartbeat"
+  ],
+  "retained_outside_repo": [
+    "trusted Windows driver/collector cross-build",
+    "pinned SDK/WDK cache",
+    "small local text logs"
+  ],
+  "phase1": "partial: two protected scope decisions pending; independent work complete",
+  "phase2": "not started; no rental authorized before Phase1 acceptance"
+}

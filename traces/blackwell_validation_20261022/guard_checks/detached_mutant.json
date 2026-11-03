@@ -1,0 +1,16 @@
+{
+  "omit_detached_stop": {
+    "killers": [
+      "test_first_detached_owned_vm_is_stopped",
+      "test_next_detached_owned_vm_is_stopped"
+    ],
+    "count": 2
+  },
+  "omit_runtime_stop": {
+    "killers": [
+      "test_failed_journal_stops_detached_vm_before_controller_abort",
+      "test_timeout_stops_detached_vm_before_controller_abort"
+    ],
+    "count": 2
+  }
+}

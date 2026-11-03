@@ -1,0 +1,14 @@
+{
+  "warning_records": 31,
+  "raw_zero": 31,
+  "raw_nonzero": 0,
+  "first": [
+    "[   20.127931] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1442837736 heartbeat 0 heartbeatWithOffsetMs 1442837956 diff 4294967076 timeout 5200"
+  ],
+  "last": [
+    "[   20.345237] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1442837953 heartbeat 0 heartbeatWithOffsetMs 1442837956 diff 4294967293 timeout 5200"
+  ],
+  "capture_bytes": 19830,
+  "concurrency": "PASS41s/client19350ms/n1/spreadN/A",
+  "warning_free": false
+}

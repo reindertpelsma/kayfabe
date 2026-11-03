@@ -1,0 +1,47 @@
+{
+  "results": [
+    {
+      "mutant": "M1_narrow_all",
+      "exit_code": 101,
+      "killing_tests": [
+        "tmode::f2_tests::f2_blackwell_compute_notifier_preserves_all_25_upper_bits",
+        "tmode::f2_tests::f2_hopper_notifier_preserves_all_25_upper_bits",
+        "tmode::f2_tests::f2_hopper_report_semaphore_preserves_all_25_upper_bits"
+      ],
+      "kill_count": 3,
+      "log_sha256": "d53f7773d38e58ab126e128325e66147a8b9aa2f9b0d9f130ca3bf369f2a016b"
+    },
+    {
+      "mutant": "M2_widen_all",
+      "exit_code": 101,
+      "killing_tests": [
+        "tmode::f2_tests::f2_ada_compute_keeps_8_bit_upper",
+        "tmode::f2_tests::f2_ada_three_d_keeps_8_bit_upper"
+      ],
+      "kill_count": 2,
+      "log_sha256": "2c2a5e72f77242cc3e61c642bafd5628336b7f70e6ef2f7a8683c0190955ff82"
+    },
+    {
+      "mutant": "M3_admit_bit25",
+      "exit_code": 101,
+      "killing_tests": [
+        "tmode::f2_tests::f2_blackwell_compute_refuses_upper_bit_25",
+        "tmode::f2_tests::f2_hopper_refuses_upper_bit_25"
+      ],
+      "kill_count": 2,
+      "log_sha256": "1b36d81cc1f34c4fbc65ff4e90cd7188b4725e4d6f876cac3ad01a6e76de96d5"
+    },
+    {
+      "mutant": "M4_drop_class",
+      "exit_code": 101,
+      "killing_tests": [
+        "tmode::f2_tests::f2_hopper_notifier_preserves_all_25_upper_bits",
+        "tmode::f2_tests::f2_blackwell_compute_notifier_preserves_all_25_upper_bits",
+        "tmode::f2_tests::f2_hopper_report_semaphore_preserves_all_25_upper_bits"
+      ],
+      "kill_count": 3,
+      "log_sha256": "5f3ae3ec12f08ff4ffe8a5f1489113baa45da84c8041e5ec021b7f577ff3e5b8"
+    }
+  ],
+  "fixed_source_restored": true
+}

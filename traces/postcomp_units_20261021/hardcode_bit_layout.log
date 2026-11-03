@@ -1,0 +1,28 @@
+running 3 tests
+test caps::tests::postcomp_units_refuse_a_missing_public_field ... FAILED
+test caps::tests::postcomp_units_follow_the_generated_register_and_field_layout ... FAILED
+test caps::tests::postcomp_units_match_public_nvkms_for_every_family ... ok
+
+failures:
+
+---- caps::tests::postcomp_units_refuse_a_missing_public_field stdout ----
+
+thread 'caps::tests::postcomp_units_refuse_a_missing_public_field' (2072385) panicked at crates/kf-disp/src/caps.rs:741:76:
+called `Result::unwrap_err()` on an `Ok` value: CapsPage { base: 6553600, words: [(0, 3855), (4, 255), (16, 524288), (324, 2816), (332, 2816), (340, 2816), (348, 2816), (1512, 119), (1516, 119), (1520, 119), (1524, 119), (1544, 3932160), (1548, 3932160), (1552, 3932160), (1556, 3932160), (1664, 512), (1696, 512), (1728, 512), (1760, 512), (1920, 29818880), (1952, 29818880), (1984, 29818880), (2016, 29818880), (2048, 29818880), (2080, 29818880), (2112, 29818880), (2144, 29818880)] }
+
+---- caps::tests::postcomp_units_follow_the_generated_register_and_field_layout stdout ----
+
+thread 'caps::tests::postcomp_units_follow_the_generated_register_and_field_layout' (2072383) panicked at crates/kf-disp/src/caps.rs:714:17:
+assertion `left == right` failed: 580.65.06 relocated tile 0
+  left: 0
+ right: 16
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    caps::tests::postcomp_units_follow_the_generated_register_and_field_layout
+    caps::tests::postcomp_units_refuse_a_missing_public_field
+
+test result: FAILED. 1 passed; 2 failed; 0 ignored; 0 measured; 248 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `-p kf-disp --lib`

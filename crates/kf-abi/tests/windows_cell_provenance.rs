@@ -29,6 +29,9 @@ fn all_rows() -> Vec<(String, &'static [Row])> {
     }
     let s = sw_runlist::cell(windows_wire()).expect("sw_runlist cell");
     out.push(("sw_runlist".to_string(), s.rows));
+    for (name, rows) in sw_runlist::native_cell_rows() {
+        out.push((format!("sw_runlist native {name}"), rows));
+    }
     out
 }
 
@@ -40,6 +43,16 @@ fn every_row_of_every_windows_cell_has_an_accepted_source_tag() {
     }
     let s = sw_runlist::cell(windows_wire()).unwrap();
     check_rows(s.rows, sw_runlist::ITEMS).unwrap_or_else(|e| panic!("sw_runlist: {e}"));
+    // 2026-11-01: the measured allocation-only cell merged from the Blackwell branch follows the same rule.
+    let native: Vec<_> = sw_runlist::native_cell_rows().collect();
+    assert!(
+        !native.is_empty(),
+        "the measured allocation-only cell is gone"
+    );
+    for (name, rows) in native {
+        check_rows(rows, sw_runlist::NATIVE_ITEMS)
+            .unwrap_or_else(|e| panic!("sw_runlist native {name}: {e}"));
+    }
     let rows = all_rows();
     assert!(
         rows.iter().map(|(_, r)| r.len()).sum::<usize>() >= 8,

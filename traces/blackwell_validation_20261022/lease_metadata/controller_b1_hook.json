@@ -1,0 +1,5 @@
+{
+  "old_sha256": "fa2407972769774a4a6ab3e57a13b59539c9885c74336bf3d13fdde97cb3238c",
+  "new_sha256": "4f6d9ed04b76d51400ac68d2adc8f5dfe493cf23f1d732d68e02fde43c36f1bb",
+  "scope": "additive optional B1 stage; product/guard unchanged; before native raw or Windows arms"
+}

@@ -1,0 +1,66 @@
+BARE_SUITE_STARTED=2026-10-23T02:02:46+00:00 arms=30 budget=180s
+bin=/root/sweep2/native_wrap.py  rev=6e3fd3fd6
+gpu=NVIDIA GeForce RTX 5060 Ti  driver=595.91.07(open)  pci_dev=0x2D0410DE  cc=12.0
+ARM                          VERDICT    secs  why
+--timer                      PASS         0s  0s
+BARE_CELL_ARM arm=timer verdict=PASS secs=0 ms=187 rc=0 pci_dev=0x2D0410DE drv=595.91.07 kmod=open cc=12.0 rev=6e3fd3fd6
+--engines                    PASS         1s  1s
+BARE_CELL_ARM arm=engines verdict=PASS secs=1 ms=329 rc=0 pci_dev=0x2D0410DE drv=595.91.07 kmod=open cc=12.0 rev=6e3fd3fd6
+--doorbell-census            PASS         0s  0s
+BARE_CELL_ARM arm=doorbell-census verdict=PASS secs=0 ms=340 rc=0 pci_dev=0x2D0410DE drv=595.91.07 kmod=open cc=12.0 rev=6e3fd3fd6
+--gpu-info-sweep             PASS         0s  0s
+BARE_CELL_ARM arm=gpu-info-sweep verdict=PASS secs=0 ms=164 rc=0 pci_dev=0x2D0410DE drv=595.91.07 kmod=open cc=12.0 rev=6e3fd3fd6
+--bus-info-sweep             PASS         4s  4s
+BARE_CELL_ARM arm=bus-info-sweep verdict=PASS secs=4 ms=3375 rc=0 pci_dev=0x2D0410DE drv=595.91.07 kmod=open cc=12.0 rev=6e3fd3fd6
+--concurrency                PASS         5s  5s
+BARE_CELL_ARM arm=concurrency verdict=PASS secs=5 ms=5838 rc=0 pci_dev=0x2D0410DE drv=595.91.07 kmod=open cc=12.0 rev=6e3fd3fd6
+--defer-liveness             PASS        13s  13s
+BARE_CELL_ARM arm=defer-liveness verdict=PASS secs=13 ms=12358 rc=0 pci_dev=0x2D0410DE drv=595.91.07 kmod=open cc=12.0 rev=6e3fd3fd6
+--blockage-coverage          PASS         0s  0s
+BARE_CELL_ARM arm=blockage-coverage verdict=PASS secs=0 ms=615 rc=0 pci_dev=0x2D0410DE drv=595.91.07 kmod=open cc=12.0 rev=6e3fd3fd6
+--alias-two-vas              PASS         1s  1s
+BARE_CELL_ARM arm=alias-two-vas verdict=PASS secs=1 ms=175 rc=0 pci_dev=0x2D0410DE drv=595.91.07 kmod=open cc=12.0 rev=6e3fd3fd6
+--alias-unmap-observe        PASS         0s  0s
+BARE_CELL_ARM arm=alias-unmap-observe verdict=PASS secs=0 ms=172 rc=0 pci_dev=0x2D0410DE drv=595.91.07 kmod=open cc=12.0 rev=6e3fd3fd6
+--map-propagation            PASS         0s  0s
+BARE_CELL_ARM arm=map-propagation verdict=PASS secs=0 ms=169 rc=0 pci_dev=0x2D0410DE drv=595.91.07 kmod=open cc=12.0 rev=6e3fd3fd6
+--late-map-race              PASS         1s  1s
+BARE_CELL_ARM arm=late-map-race verdict=PASS secs=1 ms=604 rc=0 pci_dev=0x2D0410DE drv=595.91.07 kmod=open cc=12.0 rev=6e3fd3fd6
+--missing-page-fault         PASS         3s  3s
+BARE_CELL_ARM arm=missing-page-fault verdict=PASS secs=3 ms=3237 rc=0 pci_dev=0x2D0410DE drv=595.91.07 kmod=open cc=12.0 rev=6e3fd3fd6
+--uvm-invalidate             PASS         0s  0s
+BARE_CELL_ARM arm=uvm-invalidate verdict=PASS secs=0 ms=320 rc=0 pci_dev=0x2D0410DE drv=595.91.07 kmod=open cc=12.0 rev=6e3fd3fd6
+--uvm-mean                   PASS         1s  1s
+BARE_CELL_ARM arm=uvm-mean verdict=PASS secs=1 ms=452 rc=0 pci_dev=0x2D0410DE drv=595.91.07 kmod=open cc=12.0 rev=6e3fd3fd6
+--executor-vas               PASS         0s  0s
+BARE_CELL_ARM arm=executor-vas verdict=PASS secs=0 ms=199 rc=0 pci_dev=0x2D0410DE drv=595.91.07 kmod=open cc=12.0 rev=6e3fd3fd6
+--guest-ring-channel         PASS         0s  0s
+BARE_CELL_ARM arm=guest-ring-channel verdict=PASS secs=0 ms=200 rc=0 pci_dev=0x2D0410DE drv=595.91.07 kmod=open cc=12.0 rev=6e3fd3fd6
+--dictated-ring              PASS         0s  0s
+BARE_CELL_ARM arm=dictated-ring verdict=PASS secs=0 ms=166 rc=0 pci_dev=0x2D0410DE drv=595.91.07 kmod=open cc=12.0 rev=6e3fd3fd6
+--dictated-ring-negative     PASS         0s  0s
+BARE_CELL_ARM arm=dictated-ring-negative verdict=PASS secs=0 ms=158 rc=0 pci_dev=0x2D0410DE drv=595.91.07 kmod=open cc=12.0 rev=6e3fd3fd6
+--ce-client                  PASS         1s  1s
+BARE_CELL_ARM arm=ce-client verdict=PASS secs=1 ms=173 rc=0 pci_dev=0x2D0410DE drv=595.91.07 kmod=open cc=12.0 rev=6e3fd3fd6
+--ce-client-guest-ram        PASS         3s  3s
+BARE_CELL_ARM arm=ce-client-guest-ram verdict=PASS secs=3 ms=3721 rc=0 pci_dev=0x2D0410DE drv=595.91.07 kmod=open cc=12.0 rev=6e3fd3fd6
+--guest-ram-pin              PASS         0s  0s
+BARE_CELL_ARM arm=guest-ram-pin verdict=PASS secs=0 ms=96 rc=0 pci_dev=0x2D0410DE drv=595.91.07 kmod=open cc=12.0 rev=6e3fd3fd6
+--bar1-crossing              PASS         1s  1s
+BARE_CELL_ARM arm=bar1-crossing verdict=PASS secs=1 ms=123 rc=0 pci_dev=0x2D0410DE drv=595.91.07 kmod=open cc=12.0 rev=6e3fd3fd6
+--atomics-probe              PASS         0s  0s
+BARE_CELL_ARM arm=atomics-probe verdict=PASS secs=0 ms=145 rc=0 pci_dev=0x2D0410DE drv=595.91.07 kmod=open cc=12.0 rev=6e3fd3fd6
+--pce-mask-probe             PASS         0s  0s
+BARE_CELL_ARM arm=pce-mask-probe verdict=PASS secs=0 ms=142 rc=0 pci_dev=0x2D0410DE drv=595.91.07 kmod=open cc=12.0 rev=6e3fd3fd6
+--gpga-reserve-probe         PASS        75s  75s
+BARE_CELL_ARM arm=gpga-reserve-probe verdict=PASS secs=75 ms=74980 rc=0 pci_dev=0x2D0410DE drv=595.91.07 kmod=open cc=12.0 rev=6e3fd3fd6
+--map-stress                 PASS         0s  0s
+BARE_CELL_ARM arm=map-stress verdict=PASS secs=0 ms=219 rc=0 pci_dev=0x2D0410DE drv=595.91.07 kmod=open cc=12.0 rev=6e3fd3fd6
+--concurrent-fuzz            PASS         1s  1s
+BARE_CELL_ARM arm=concurrent-fuzz verdict=PASS secs=1 ms=602 rc=0 pci_dev=0x2D0410DE drv=595.91.07 kmod=open cc=12.0 rev=6e3fd3fd6
+--cross-client-leak          PASS         0s  0s
+BARE_CELL_ARM arm=cross-client-leak verdict=PASS secs=0 ms=183 rc=0 pci_dev=0x2D0410DE drv=595.91.07 kmod=open cc=12.0 rev=6e3fd3fd6
+--rpc-mixed-allocs           PASS         1s  1s
+BARE_CELL_ARM arm=rpc-mixed-allocs verdict=PASS secs=1 ms=982 rc=0 pci_dev=0x2D0410DE drv=595.91.07 kmod=open cc=12.0 rev=6e3fd3fd6
+BARE_SUITE_PASS=30 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0 ARMS=30
+BARE_CELL pci_dev=0x2D0410DE gpu="NVIDIA GeForce RTX 5060 Ti" drv=595.91.07 kmod=open cc=12.0 rev=6e3fd3fd6 pass=30 fail=0 crash=0 arms=30 uuid=GPU-UUID-REMOVED

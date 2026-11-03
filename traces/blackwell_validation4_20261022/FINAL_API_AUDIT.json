@@ -1,0 +1,53 @@
+{
+  "utc": "2026-10-22T03:52:30.475871+00:00",
+  "owned_ids": [
+    {
+      "id": 57099244,
+      "absence_verified_utc": "2026-10-21T19:20:35.862711+00:00",
+      "runtime_cost_estimate_usd": 0.1439251234601852
+    },
+    {
+      "id": 57107585,
+      "absence_verified_utc": "2026-10-21T20:40:03.957348+00:00",
+      "runtime_cost_estimate_usd": 0.16164350246872428
+    },
+    {
+      "id": 57108853,
+      "absence_verified_utc": "2026-10-21T21:58:42.731754+00:00",
+      "runtime_cost_estimate_usd": 1.2431400871962965
+    },
+    {
+      "id": 57117614,
+      "absence_verified_utc": "2026-10-21T23:28:51.639175+00:00",
+      "runtime_cost_estimate_usd": 1.091743181512963
+    },
+    {
+      "id": 57132969,
+      "absence_verified_utc": "2026-10-22T01:30:18.160966+00:00",
+      "runtime_cost_estimate_usd": 0.8242402222166668
+    },
+    {
+      "id": 57142142,
+      "absence_verified_utc": "2026-10-22T02:07:19.719143+00:00",
+      "runtime_cost_estimate_usd": 0.14870356523333333
+    },
+    {
+      "id": 57143789,
+      "absence_verified_utc": "2026-10-22T02:36:32.836171+00:00",
+      "runtime_cost_estimate_usd": 0.31496747201388886
+    },
+    {
+      "id": 57148807,
+      "absence_verified_utc": "2026-10-22T03:47:36.458262+00:00",
+      "runtime_cost_estimate_usd": 0.9038934685462963
+    }
+  ],
+  "owned_live_api_ids": [],
+  "foreign_count_untouched": 1,
+  "lane_runtime_total_usd": 4.832256622648354,
+  "latest_account_credit_observed": 40.452860542661256,
+  "cost_scope": "per-ID elapsed runtime estimates, not final settled invoices or shared credit delta",
+  "own_build_targets_absent": {
+    "/workspace/bw-b1-validation-target": true
+  }
+}

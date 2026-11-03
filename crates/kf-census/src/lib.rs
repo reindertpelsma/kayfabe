@@ -22,6 +22,7 @@ pub mod observer;
 pub mod oracle;
 pub mod report;
 pub mod scrub;
+pub mod sequence;
 pub mod stream;
 
 use analyze::Analyzer;

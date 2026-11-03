@@ -1,0 +1,44 @@
+{
+  "api.tsv": {
+    "rental_path": "/root/prov/arms/bw_on_m1_canonical/api.tsv",
+    "original_bytes": 8907,
+    "original_sha256": "c91af3e044873ef7892dde502a25ba7616a25cd257f334d7c470aa6d2ae763a2",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "c91af3e044873ef7892dde502a25ba7616a25cd257f334d7c470aa6d2ae763a2"
+  },
+  "allocations.jsonl": {
+    "rental_path": "/root/prov/arms/bw_on_m1_canonical/allocations.jsonl",
+    "original_bytes": 27468,
+    "original_sha256": "c3774297597bb49fbee83d4d855f930aa96eb4d0d05186ff8c731b626faa700c",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "c3774297597bb49fbee83d4d855f930aa96eb4d0d05186ff8c731b626faa700c"
+  },
+  "allocations.receipt.json": {
+    "rental_path": "/root/prov/arms/bw_on_m1_canonical/allocations.receipt.json",
+    "original_bytes": 488,
+    "original_sha256": "6fab307b48a246dee0c15636a5f8b5015210bad493638c1de7d60ca581d358fb",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "6fab307b48a246dee0c15636a5f8b5015210bad493638c1de7d60ca581d358fb"
+  },
+  "summary.json": {
+    "rental_path": "/root/prov/arms/bw_on_m1_canonical/summary.json",
+    "original_bytes": 2773,
+    "original_sha256": "19d05162f666238ffe8af8f51abb498d712d145e52e7c0bdb53d69b4330d79e3",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "19d05162f666238ffe8af8f51abb498d712d145e52e7c0bdb53d69b4330d79e3"
+  },
+  "abort_context.txt": {
+    "rental_path": "/root/prov/arms/bw_on_m1_canonical/abort_context.txt",
+    "original_bytes": 1,
+    "original_sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+  },
+  "kf_line_census.txt": {
+    "rental_path": "/root/prov/arms/bw_on_m1_canonical/kf_line_census.txt",
+    "original_bytes": 7734,
+    "original_sha256": "953148a9b4ff9884b238493022517cd5b8eefe665f6851f508c771e37139c40f",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "138263d9cc80ad79471590048eae535b921a588019346fd10960482dfbe74767"
+  }
+}

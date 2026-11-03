@@ -1,0 +1,84 @@
+{
+  "case": "baseline",
+  "source": "e8553e6ce7ec557aef9ff96c3c876e3060a6b9f8",
+  "own_id": 56808180,
+  "utc": "2026-10-20T00:23:15.141302+00:00",
+  "normalization": "UTF8 replacement, universal newlines, trailing whitespace, GPU identifiers redacted; source/export hashes preserved",
+  "files": [
+    {
+      "source": "/root/prov/sweep_host_preflight.log",
+      "export": "strict_health_before_gates.txt",
+      "source_bytes": 410,
+      "source_sha256": "7148089961e46ffc5ac3d95c0072203b93cb88ddacd4249bab11d7c0cd176e13",
+      "export_sha256": "7148089961e46ffc5ac3d95c0072203b93cb88ddacd4249bab11d7c0cd176e13",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/root/prov/sweep_host_die.log",
+      "export": "host_die.txt",
+      "source_bytes": 209,
+      "source_sha256": "b8142d5365055de5fe035bc8fd18d3c2b364cf391aa9d4d93f38c6f8746153b5",
+      "export_sha256": "b8142d5365055de5fe035bc8fd18d3c2b364cf391aa9d4d93f38c6f8746153b5",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/root/prov/sweep_gates.log",
+      "export": "native_gates.txt",
+      "source_bytes": 25234,
+      "source_sha256": "c85b52b0639e73c68d88e5410766774bdb38de08c41e1eb523d0ee21ededfb76",
+      "export_sha256": "0b2a2ceb9496b7dca2b2b8781424180d61cfff4aad9626f6a42c5c1ec224ed74",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/root/prov/sweep_bare595.log",
+      "export": "native_raw595.txt",
+      "source_bytes": 5842,
+      "source_sha256": "df7430737f5b709b360a3ca349892ac04d5ec795d02dbbbfb7422a0a16852be2",
+      "export_sha256": "4c5b23ad295f84c814bdd01b41c01985dbcd353354ddf58c61b597a2142cde0d",
+      "gpu_identifier_redactions": 1
+    },
+    {
+      "source": "/root/prov/sweep_cuda_host.log",
+      "export": "native_cuda595_cli.txt",
+      "source_bytes": 2379,
+      "source_sha256": "23f8a9a18842c243770e0b73da574129f3edba08b97f11f6e21a395f18a1a608",
+      "export_sha256": "23f8a9a18842c243770e0b73da574129f3edba08b97f11f6e21a395f18a1a608",
+      "gpu_identifier_redactions": 0,
+      "note": "CLI stdout repeats the first three rows before printing the canonical table; retained, not graded as seven rungs."
+    },
+    {
+      "source": "/root/prov/sweep_product_source",
+      "export": "source.txt",
+      "source_bytes": 41,
+      "source_sha256": "36ef554e9818548679e79301af4f6c993df55f20030f4b7c2e5bf6eabd077e1a",
+      "export_sha256": "36ef554e9818548679e79301af4f6c993df55f20030f4b7c2e5bf6eabd077e1a",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/root/prov/sweep_qemu_sha256",
+      "export": "qemu_sha256.txt",
+      "source_bytes": 120,
+      "source_sha256": "cdce1abcb2163002eb2fbeeac8e5745f8304a7346c988c341637514c4b4d4ec0",
+      "export_sha256": "cdce1abcb2163002eb2fbeeac8e5745f8304a7346c988c341637514c4b4d4ec0",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/root/prov/sweep_native_baseline.log",
+      "export": "controller.txt",
+      "source_bytes": 351,
+      "source_sha256": "92e601ee0eec5c6487cad52a421b86489ca65a7885040bca0337285e3c1ddca0",
+      "export_sha256": "92e601ee0eec5c6487cad52a421b86489ca65a7885040bca0337285e3c1ddca0",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/cl_sweepe855_ga104_host.out",
+      "export": "native_cuda595.txt",
+      "source_bytes": 1726,
+      "source_sha256": "d70691016ee4b027e4a44cda33d6b1e4d0cb68ec5455604b9bc03c6001694ddc",
+      "export_sha256": "d70691016ee4b027e4a44cda33d6b1e4d0cb68ec5455604b9bc03c6001694ddc",
+      "gpu_identifier_redactions": 0,
+      "note": "Canonical exactly-four-rung table graded by the native controller before guest execution."
+    }
+  ],
+  "canonical_cuda_export_added_utc": "2026-10-20T00:24:20.265282+00:00"
+}

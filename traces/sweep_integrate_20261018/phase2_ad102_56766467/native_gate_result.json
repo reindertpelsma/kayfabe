@@ -1,0 +1,28 @@
+{
+  "instance_id": 56766467,
+  "physical_die": "AD102",
+  "architecture": "0x190",
+  "implementation": "0x2",
+  "die_authority": "unprivileged host MC_GET_ARCH_INFO, admin_run=false",
+  "host_driver": "595.91.07",
+  "host_kernel": "6.8.0-59-generic",
+  "product_revision": "24906bf334665c9000b16b271005593daa3586c7",
+  "native_gates": {
+    "passed": 9,
+    "failed": 0,
+    "gate10": "PASS",
+    "births": 12,
+    "user": 12,
+    "refused": 0,
+    "n": 1,
+    "spread": "N/A"
+  },
+  "guest_raw_cuda_broker_windows": "UNRUN",
+  "evidence_sha256": {
+    "host_die.txt": "9d67ae07ba59bc7c01e0d05dce8fda6dc9b62357ef5683f3ef548e72b20bd5e6",
+    "native_gates.txt": "06d3314bf65dfd9f3fc7377b199c9b5ea7525ef1f2f6d12facb9901aedf73c6c",
+    "host_health595.txt": "c77abdbcddd2efb9107fff717fcc589862da4cc376b76c5e72265db5789a87f6"
+  },
+  "original_native_gate_log_sha256": "8787ae9f6b943dcc185ba7d4a3b5b536b98f4846065ea44a60ba2d3b4711b07c",
+  "evidence_normalization": "trailing whitespace stripped from committed text only; raw text retained on dev box"
+}

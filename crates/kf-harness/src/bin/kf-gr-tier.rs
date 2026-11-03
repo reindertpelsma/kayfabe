@@ -128,6 +128,41 @@ const RUN31_CE: [u32; 7] = [
     0x0000_0001,
 ];
 
+/// Build the native GR oracle's segment separately from its placement and GPU run.
+fn gr_segment(classes: &[u32]) -> Result<Vec<u32>, String> {
+    let mut words = RUN31_GR.to_vec();
+    words.extend_from_slice(&RUN32_GR_TAIL);
+    let mut at = 0;
+    while at < words.len() {
+        let h = kf_abi::submit::method_header_decode(words[at]).ok_or("native fixture header")?;
+        if h.method == kf_abi::submit::SET_OBJECT
+            && h.arg_words == 1
+            && let Some(kind) = kf_chan::grtables::GrClass::of_class(words[at + 1])
+        {
+            words[at + 1] = classes
+                .iter()
+                .copied()
+                .find(|c| kf_chan::grtables::GrClass::of_class(*c) == Some(kind))
+                .ok_or_else(|| format!("native fixture requires allocated {}", kind.name()))?;
+        }
+        at += 1 + h.arg_words;
+    }
+    Ok(words)
+}
+
+// Native CE fixture seam, separate from placement and execution.
+fn ce_segment(host_ce_class: u32) -> Result<Vec<u32>, String> {
+    if !kf_chip::is_any_dma_copy_class(host_ce_class) {
+        return Err("native CE fixture requires an allocated copy-engine class".into());
+    }
+    let mut words = RUN31_CE.to_vec();
+    // Native execution must bind the class allocated on THIS host channel.
+    // The historical guest fixture used Ampere's class; the CE host path does
+    // not have the graphics-runlist compatibility rewriter.
+    words[4] = host_ce_class;
+    Ok(words)
+}
+
 fn main() {
     let mut l = Checks::default();
     if let Err(e) = run(&mut l) {
@@ -285,14 +320,31 @@ fn put(walk: &WalkKernel, off: u64, v: u32) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
-/// Poll `fd` once for `ms`: did it become ready?
-fn ready_within(fd: std::os::fd::BorrowedFd<'_>, ms: u32) -> Result<bool, String> {
-    let p = Poller::create().map_err(|e| format!("epoll: {e:?}"))?;
-    p.watch(fd, 1).map_err(|e| format!("watch: {e:?}"))?;
-    let mut r = ReadyTokens::new();
-    Ok(p.wait(&mut r, PollTimeout::Millis(ms))
-        .map_err(|e| format!("wait: {e:?}"))?
-        > 0)
+#[path = "kf-gr-tier/edge_probe.rs"]
+mod edge_probe;
+
+struct EventSource<'fd> {
+    fd: std::os::fd::BorrowedFd<'fd>,
+    poller: Option<Poller>,
+}
+impl edge_probe::Source for EventSource<'_> {
+    fn register(&mut self) -> Result<(), String> {
+        let p = Poller::create().map_err(|e| format!("epoll: {e:?}"))?;
+        p.watch(self.fd, 1).map_err(|e| format!("watch: {e:?}"))?;
+        self.poller = Some(p);
+        Ok(())
+    }
+    fn wait(&mut self, ms: u32) -> Result<bool, String> {
+        let p = self.poller.as_ref().ok_or("unregistered event source")?;
+        let mut r = ReadyTokens::new();
+        Ok(p.wait(&mut r, PollTimeout::Millis(ms))
+            .map_err(|e| format!("wait: {e:?}"))?
+            > 0)
+    }
+}
+
+fn event_source(fd: std::os::fd::BorrowedFd<'_>) -> EventSource<'_> {
+    EventSource { fd, poller: None }
 }
 
 #[allow(clippy::too_many_lines)]
@@ -368,19 +420,8 @@ fn run(l: &mut Checks) -> Result<(), String> {
         off: CHAN,
         gp_get_cpu_stores: Cell::new(0),
     };
-    // GP 0: run32's whole 46-word segment, unchanged (it releases nothing: GP_GET is its
+    // GP 0: run32's 46-word segment, with allocated native-family classes (it releases nothing: GP_GET is its
     // completion). GP 1: a semaphore release. GP 2 (hostile): a 3D notifier address no row covers.
-    let mut gp0 = RUN31_GR.to_vec();
-    gp0.extend_from_slice(&RUN32_GR_TAIL);
-    // ★ Batch 3: GP 1 is run44's 3D report-semaphore release first, then the host release.
-    let mut gp1 = report_release(VA_CHAN + SEM_3D, P3);
-    gp1.extend(release(P1));
-    let gp2 = m(0, 0x0104, &[0x5, 0]);
-    stage(&walk, CHAN, VA_CHAN, &[&gp0, &gp1, &gp2])?;
-    walk.write_store(CHAN + SEM_GR, &0u32.to_le_bytes())
-        .map_err(|e| e.to_string())?;
-    walk.write_store(CHAN + SEM_3D, &0u32.to_le_bytes())
-        .map_err(|e| e.to_string())?;
 
     let mut host = HostRing::on_engine_layout(
         &rm,
@@ -414,6 +455,17 @@ fn run(l: &mut Checks) -> Result<(), String> {
         },
         format!("{objects:x?} context={:x?}", host.gr_context()),
     );
+    let gp0 = gr_segment(&classes)?;
+    // ★ Batch 3: GP 1 is run44's 3D report-semaphore release first, then the host release.
+    let mut gp1 = report_release(VA_CHAN + SEM_3D, P3);
+    gp1.extend(release(P1));
+    let gp2 = m(0, 0x0104, &[0x5, 0]);
+    stage(&walk, CHAN, VA_CHAN, &[&gp0, &gp1, &gp2])?;
+    walk.write_store(CHAN + SEM_GR, &0u32.to_le_bytes())
+        .map_err(|e| e.to_string())?;
+    walk.write_store(CHAN + SEM_3D, &0u32.to_le_bytes())
+        .map_err(|e| e.to_string())?;
+
     let gp_get_at = win
         .fb(CHAN + USERD + kf_abi::submit::USERD_GP_GET, 4)
         .ok_or("USERD GP_GET outside the store window")?;
@@ -435,8 +487,10 @@ fn run(l: &mut Checks) -> Result<(), String> {
         .map_err(|e| format!("gr0 event: {e:?}"))?;
     rm.arm_repeat(GR0_NOTIFIER)
         .map_err(|e| format!("gr0 arm: {e:?}"))?;
-    let idle35 = ready_within(done.event_fd(), 200)?;
-    let idle_gr0 = ready_within(gr0.as_fd(), 200)?;
+    let mut fifo_probe = edge_probe::Probe::prepare(event_source(done.event_fd()))?;
+    let mut gr_probe = edge_probe::Probe::prepare(event_source(gr0.as_fd()))?;
+    let idle35 = fifo_probe.ready_within(200)?;
+    let idle_gr0 = gr_probe.ready_within(200)?;
 
     put(&walk, CHAN, 2)?;
     let t0 = std::time::Instant::now();
@@ -452,8 +506,8 @@ fn run(l: &mut Checks) -> Result<(), String> {
         )
     };
     let mut state = pump(&mut chan, &g).map_err(|e| format!("pump: {e:?}"))?;
-    let woke35 = ready_within(done.event_fd(), 1000)?;
-    let woke_gr0 = ready_within(gr0.as_fd(), 300)?;
+    let woke35 = fifo_probe.ready_within(1000)?;
+    let woke_gr0 = gr_probe.ready_within(300)?;
     l.measure(
         "completion_edges",
         format!(
@@ -464,7 +518,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
     while !(state == Pumped::Caught && chan.last_gp_get() == Some(2))
         && std::time::Instant::now() < deadline
     {
-        let _ = ready_within(gr0.as_fd(), 100)?;
+        let _ = gr_probe.ready_within(100)?;
         state = pump(&mut chan, &g).map_err(|e| format!("pump: {e:?}"))?;
     }
     let (fetched, submissions, _) = chan.counts();
@@ -553,7 +607,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
         off: CHAN2,
         gp_get_cpu_stores: Cell::new(0),
     };
-    let mut c0 = RUN31_CE.to_vec();
+    let mut c0 = ce_segment(rm.ce_class_id())?;
     c0.extend(release(P2));
     let c1 = m(5, 0x0100, &[0]);
     stage(&walk, CHAN2, VA_CHAN, &[&c0, &c1])?;
@@ -588,13 +642,14 @@ fn run(l: &mut Checks) -> Result<(), String> {
     .map_err(|e| format!("ce event: {e:?}"))?;
     rm.arm_repeat(kf_host::event::notifier_ce(lce))
         .map_err(|e| format!("ce arm: {e:?}"))?;
-    let idle35_ce = ready_within(done.event_fd(), 200)?;
-    let idle_ce = ready_within(ce_fd.as_fd(), 200)?;
+    let mut ce_probe = edge_probe::Probe::prepare(event_source(ce_fd.as_fd()))?;
+    let idle35_ce = fifo_probe.ready_within(200)?;
+    let idle_ce = ce_probe.ready_within(200)?;
     put(&walk, CHAN2, 1)?;
     let t1 = std::time::Instant::now();
     let mut st2 = pump(&mut chan2, &g2).map_err(|e| format!("ce pump: {e:?}"))?;
-    let woke35_ce = ready_within(done.event_fd(), 1000)?;
-    let woke_ce = ready_within(ce_fd.as_fd(), 300)?;
+    let woke35_ce = fifo_probe.ready_within(1000)?;
+    let woke_ce = ce_probe.ready_within(300)?;
     l.measure(
         "ce_completion_edges",
         format!(
@@ -604,7 +659,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
     while !(st2 == Pumped::Caught && chan2.last_gp_get() == Some(1))
         && t1.elapsed() < std::time::Duration::from_secs(3)
     {
-        let _ = ready_within(done.event_fd(), 100)?;
+        let _ = fifo_probe.ready_within(100)?;
         st2 = pump(&mut chan2, &g2).map_err(|e| format!("ce pump: {e:?}"))?;
     }
     let sem2 = word(&walk, CHAN2 + SEM_CE)?;
@@ -711,4 +766,117 @@ fn run(l: &mut Checks) -> Result<(), String> {
         freed.join(" | "),
     );
     Ok(())
+}
+
+#[cfg(test)]
+mod fixture_tests {
+    use super::*;
+    use kf_abi::submit::{SET_OBJECT, method_header_decode};
+    use kf_chan::grtables::GrClass;
+
+    fn allocated(family: kf_chip::Family) -> Option<Vec<u32>> {
+        let classes = kf_chip::classes::classes_for(family);
+        [
+            GrClass::TwoD,
+            GrClass::InlineToMemory,
+            GrClass::ThreeD,
+            GrClass::Compute,
+        ]
+        .iter()
+        .map(|k| classes.of_kind(k.kind()).last().copied())
+        .collect()
+    }
+
+    #[test]
+    fn native_fixture_only_binds_graphics_objects_allocated_for_that_family() {
+        let mut families = 0;
+        for family in kf_chip::Family::ALL {
+            let Some(classes) = allocated(family) else {
+                continue;
+            };
+            families += 1;
+            let words = gr_segment(&classes).unwrap();
+            let mut at = 0;
+            let mut binds = 0;
+            while at < words.len() {
+                let header = method_header_decode(words[at]).unwrap();
+                if header.method == SET_OBJECT && GrClass::of_class(words[at + 1]).is_some() {
+                    assert!(
+                        classes.contains(&words[at + 1]),
+                        "{family:?}: unallocated class {:#x}",
+                        words[at + 1]
+                    );
+                    binds += 1;
+                }
+                at += 1 + header.arg_words;
+            }
+            assert_eq!(binds, 4);
+        }
+        assert!(families >= 4);
+    }
+
+    #[test]
+    fn blackwell_fixture_selects_its_own_i2m_3d_and_compute_objects() {
+        let classes = allocated(kf_chip::Family::Blackwell).unwrap();
+        let words = gr_segment(&classes).unwrap();
+        assert_eq!(words[4], classes[1], "I2M binding");
+        assert_eq!(words[RUN31_GR.len() + 3], classes[2], "3D binding");
+        assert_eq!(words[RUN31_GR.len() + 8], classes[3], "compute binding");
+        let mut original = RUN31_GR.to_vec();
+        original.extend_from_slice(&RUN32_GR_TAIL);
+        for (i, value) in original.iter().enumerate() {
+            if ![4, 6, RUN31_GR.len() + 3, RUN31_GR.len() + 8].contains(&i) {
+                assert_eq!(words[i], *value, "non-graphics operand {i}");
+            }
+        }
+    }
+
+    #[test]
+    fn an_unallocated_graphics_object_refuses_the_oracle_fixture() {
+        assert!(gr_segment(&[]).is_err());
+        let mut classes = allocated(kf_chip::Family::Blackwell).unwrap();
+        classes.retain(|c| GrClass::of_class(*c) != Some(GrClass::ThreeD));
+        assert!(gr_segment(&classes).is_err());
+    }
+    #[test]
+    fn native_ce_fixture_uses_the_allocated_class_for_every_family() {
+        for family in kf_chip::Family::ALL {
+            for &class in
+                kf_chip::classes::classes_for(family).of_kind(kf_chip::classes::Kind::DmaCopy)
+            {
+                let words = ce_segment(class).unwrap();
+                assert_eq!(
+                    words[4], class,
+                    "{family:?}: native bind must select its allocated host object"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn blackwell_ce_fixture_changes_only_the_class_operand() {
+        let classes = kf_chip::classes::classes_for(kf_chip::Family::Blackwell);
+        let class = *classes
+            .of_kind(kf_chip::classes::Kind::DmaCopy)
+            .last()
+            .unwrap();
+        let words = ce_segment(class).unwrap();
+        assert_ne!(class, RUN31_CE[4]);
+        assert_eq!(words[4], class);
+        for (i, original) in RUN31_CE.iter().enumerate() {
+            if i != 4 {
+                assert_eq!(words[i], *original, "operand{i}");
+            }
+        }
+    }
+
+    #[test]
+    fn native_ce_fixture_refuses_a_zero_class() {
+        assert!(ce_segment(0).is_err());
+    }
+
+    #[test]
+    fn native_ce_fixture_refuses_a_graphics_class() {
+        assert!(ce_segment(0x902d).is_err());
+    }
 }

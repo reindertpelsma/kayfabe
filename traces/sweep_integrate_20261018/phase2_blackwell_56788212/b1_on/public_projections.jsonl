@@ -1,0 +1,1 @@
+{"body_status": 0, "control": "0x730151", "envelope_private_result": "0x0", "envelope_result": "0x0", "fields": {"bMap": 1, "subDeviceInstance": 0}, "message_seq": 54, "params_size": 40, "posted_payload_sha256": "dbc8d5bf9060f9ddcb4baddd058cbdc17ad9c52b1187100c6592498951414e06", "public_type": "NV0073_CTRL_CMD_SYSTEM_MAP_SHARED_DATA_PARAMS", "record": 15}

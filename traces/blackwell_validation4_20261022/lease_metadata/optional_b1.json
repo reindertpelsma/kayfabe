@@ -1,0 +1,14 @@
+{
+  "enabled": true,
+  "tests_verified_before_arms": true,
+  "source": "2add71e8ca8ebb80c419ed2fdb0427dfcdc0ccd4",
+  "parents": [
+    "8f3a9bb3a5d652b3f536ca015bf95735ec588924",
+    "1c6452a276d7014bece3adf42d68cbd4edffbc18"
+  ],
+  "binary": "/workspace/bench/kf3-bins/2add71e8/qemu-system-x86_64",
+  "binary_sha256": "e4890b89e64823c5961f03172b32b7c525eecc5cc1d5a1874f87a8ca0e32961b",
+  "utc": "2026-10-22T03:07:49.912496+00:00",
+  "verification": "merged source1127/0/4 in3crates; B1 full3999/0/22 and15mutants>=2killers; hardwareUNRUN",
+  "scope": "includes B1 CI-repair parent, not RC-only causality"
+}

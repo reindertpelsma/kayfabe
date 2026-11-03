@@ -1,0 +1,13 @@
+{
+  "utc": "2026-10-20T20:46:59.715047+00:00",
+  "base": "aa8fdea9c",
+  "head_code": "048c28b9c",
+  "command": "cargo clippy --release -j2 --all-targets --message-format=json -p kf-abi -p kf-chip -p kf-chan -p kf-disp -p kf-rm -p kf-qemu",
+  "rustflags": "--cap-lints=warn (same on base/head to inspect all crates despite inherited denies; no lint suppressed)",
+  "baseline_diagnostics": 557,
+  "head_diagnostics": 557,
+  "added": [],
+  "added_count": 0,
+  "source_restored": true,
+  "comparison": "code/message/path/primary snippet, ignoring line shifts and severity cap"
+}

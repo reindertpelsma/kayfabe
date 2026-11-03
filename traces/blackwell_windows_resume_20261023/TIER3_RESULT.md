@@ -1,0 +1,5 @@
+STATUS: LIVE, 2026-10-23 — privileged read-only GB202 PRECOMP kit result, own lease57310491.
+
+2026-10-23 MEASURED kit a6456796e completed03:05:49UTC with exit0, 48 named words and328 decoded fields, each tagged measured:GB202,595.91.07,2026-10-23 in lease_metadata/precomp_tier3.txt. Public READ32/GLOBAL access with effective CAP_SYS_ADMIN is a tier3 measurement, separate from unprivileged product runtime. The unprivileged runtime returned0x1f / helper exit2; tier2 still does not provide the page on this driver. No new Xid was observed by the exact-five checkpoint.
+
+2026-10-23 SCOPE: these rows validate physical facts for this die and driver only; no captured word becomes product input, no whole-page overlay is restored, and physical FVLUT presence proves no virtual implementation support. The 14 unresolved fields, two inferred precision declarations and ten unclaimed words remain unchanged. GB206's existing root measurement57302449 is subtracted from future repeats; other audit-covered tier2 groups were not recaptured.

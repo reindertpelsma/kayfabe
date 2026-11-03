@@ -1,0 +1,1 @@
+DESKTOP_READY=1 user=KFWIN\kf explorer=1 dwm=1 LogonUI=0 actual8088_Code0=1

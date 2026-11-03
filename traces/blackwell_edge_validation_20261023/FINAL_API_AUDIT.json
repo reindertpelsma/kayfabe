@@ -1,0 +1,28 @@
+{
+  "utc": "2026-10-22T22:22:13.496454+00:00",
+  "owned_ids_checked": [
+    57099244,
+    57107585,
+    57108853,
+    57117614,
+    57132969,
+    57142142,
+    57143789,
+    57148807,
+    57273215,
+    57280677
+  ],
+  "owned_ids_present": [],
+  "no_remaining_owned_lease": true,
+  "last_lease_absence_verified_utc": "2026-10-22T22:21:09.613984+00:00",
+  "credit_after_observed": 36.88001020926117,
+  "phase_runtime_estimate_usd": 0.44361743169703705,
+  "historical_prior_stretch_usd_separate": 4.832256623,
+  "credit_reserve_usd": 5,
+  "stop_usd": 6,
+  "phase_cap_usd": 8,
+  "timers_cancelled_only_after_absence": true,
+  "targets_created_on_dev_this_turn": [],
+  "auto_destroy_pid_same_process_still_present": false,
+  "budget_watch_pid_same_process_still_present": false
+}

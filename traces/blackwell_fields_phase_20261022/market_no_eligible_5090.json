@@ -1,0 +1,55 @@
+{
+  "utc": "2026-10-22T20:24:55.033688+00:00",
+  "query": "vms_enabled=true num_gpus=1 gpu_name=RTX_5090 disk_space>=180 cpu_cores_effective>=16 cpu_ram>=32 inet_down>200 reliability>=0.94 verified=any",
+  "offers": [
+    {
+      "id": 43994882,
+      "machine_id": 69146,
+      "gpu_name": "RTX 5090",
+      "verification": "deverified",
+      "dph_total": 0.38805555555555554,
+      "cpu_cores_effective": 32.0,
+      "cpu_ram": 64468,
+      "reliability": 0.9960239,
+      "inet_down": 1374.8,
+      "disk_space": 331.125
+    },
+    {
+      "id": 38341566,
+      "machine_id": 59458,
+      "gpu_name": "RTX 5090",
+      "verification": "deverified",
+      "dph_total": 0.40138888888888885,
+      "cpu_cores_effective": 24.0,
+      "cpu_ram": 64392,
+      "reliability": 0.9741692,
+      "inet_down": 1375.8,
+      "disk_space": 612.0
+    },
+    {
+      "id": 42143434,
+      "machine_id": 52992,
+      "gpu_name": "RTX 5090",
+      "verification": "deverified",
+      "dph_total": 0.6416666666666667,
+      "cpu_cores_effective": 16.0,
+      "cpu_ram": 63940,
+      "reliability": 0.9894354,
+      "inet_down": 931.0,
+      "disk_space": 1451.0
+    },
+    {
+      "id": 55429765,
+      "machine_id": 152912,
+      "gpu_name": "RTX 5090",
+      "verification": "unverified",
+      "dph_total": 0.6680555555555555,
+      "cpu_cores_effective": 24.0,
+      "cpu_ram": 64473,
+      "reliability": 0.9890156,
+      "inet_down": 949.1,
+      "disk_space": 375.375
+    }
+  ],
+  "creation_attempted": false
+}

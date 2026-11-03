@@ -1,0 +1,15 @@
+--- a/README.md
++++ b/README.md
+@@ -45,0 +46,12 @@
++## Comparing with a Kayfabe guest
++
++This installer supplies a Windows reference on the rental's assigned GPU. A
++Windows guest under Kayfabe is a separate VM on a Linux host; this script does
++not prepare that nested guest. Validate the reference and Kayfabe guest
++separately, recording the actual GPU die, Windows driver build and GSP state.
++For the guest also record the Kayfabe source revision and process flags.
++
++The setup's `complete: true` check is not an application-suite result. Run real
++CUDA and hardware D3D workloads, and retain their results and the TDR count over
++the chosen hold, before comparing the reference with the guest.
++

@@ -1,0 +1,34 @@
+{
+  "sweep_bare595.log": {
+    "rental_original_sha256": "7c022536fee97252439b6251fbbfcd6825511a0555413c77e44031bc5e8cc8bd",
+    "export_transform": "strip trailing whitespace only"
+  },
+  "sweep_cuda_host.log": {
+    "rental_original_sha256": "29a5e45a26c1cfdf2ceeb2e28dcb372267781a8433ab801729b724855277b539",
+    "export_transform": "strip trailing whitespace only"
+  },
+  "sweep_host_die.log": {
+    "rental_original_sha256": "bb6eef6d924f6fad65bc1cc966996beb30a12129ab11bcf66dec944a6e3c02a0",
+    "export_transform": "strip trailing whitespace only"
+  },
+  "sweep_20261020_provision.log": {
+    "rental_original_sha256": "1deb37a9153e243b88c4c87f88d15f1a183b23154c41130769e14095627b760e",
+    "export_transform": "strip trailing whitespace only"
+  },
+  "sweep_native_baseline.log": {
+    "rental_original_sha256": "0dd4fdaeb75f6bfd2b35da6f317999072b790c7db1421beec8ae723f2eaace3b",
+    "export_transform": "strip trailing whitespace only"
+  },
+  "sweep_gates.log": {
+    "rental_original_sha256": "d0671b18062b942aa9555e65565b26d209ec8d42af37fca008eb665721ecf78f",
+    "export_transform": "strip trailing whitespace only"
+  },
+  "sweep_host_preflight.log": {
+    "rental_original_sha256": "6f3fce01393606c5256e2adb9c2589ce35be6fce909cc7746be80b45f7633ac3",
+    "export_transform": "strip trailing whitespace only"
+  },
+  "sweep_native_grtier.log": {
+    "rental_original_sha256": "66dbd501c3d4bf80aba49fb1555ce2eb855bec8d5ba39b80aaf1fdbcb65da432",
+    "export_transform": "strip trailing whitespace only"
+  }
+}

@@ -1,0 +1,5 @@
+STRICT_HEALTH_ACCEPTED_BEFORE_GATES 2026-10-19T20:59:19+00:00
+    PID STAT COMMAND
+   2041 Ts   bash /root/sweep_provision.sh
+  23079 Z    [bash] <defunct>
+OWN_PROVISION_RESUMED

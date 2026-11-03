@@ -1,0 +1,2 @@
+2026-10-19T18:12:12.477332Z qemu-system-x86_64: unsupported machine type
+Use -machine help to list supported machines

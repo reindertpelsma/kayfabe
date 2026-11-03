@@ -1,0 +1,20 @@
+{
+  "classification": "MEASURED diagnostic snapshot; no TDR or Code43 inferred",
+  "bytes": 490811,
+  "rpc_count": 0,
+  "unload_fn47_count": 0,
+  "host_xid_lines_in_log": 0,
+  "counters": {
+    "phase": "Cold",
+    "trapped": "0",
+    "applied": "0",
+    "refused": "0",
+    "read_exits": "0",
+    "last_off": "0x0",
+    "rc": "armed=0 unarmed=0 wakes=0 seen=0 posted=0",
+    "irq": "writes=0 raised=0 held=0 oor=0",
+    "reset": "req=1 (main=1 vcpu=0 wake=0) done=1 kept=0 pristine=1 waits_timed_out=0 stage=Idle dropped=0",
+    "gsp_refusals": "total=0 distinct=0 ["
+  },
+  "explicit_refusal_identifiers": []
+}

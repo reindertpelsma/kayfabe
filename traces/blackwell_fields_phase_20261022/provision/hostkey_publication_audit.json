@@ -1,0 +1,17 @@
+{
+  "utc": "2026-10-22T21:10:27.630621+00:00",
+  "console_rc": 0,
+  "console_bytes": 74727,
+  "console_sha256": "dde76d6f0062871b16ab915fc9c43d5a4fca2b8fc6f7e0df59b94de31b64d5c6",
+  "console_fingerprint_lines": [
+    "<14>Oct 22 21:08:55 cloud-init: 256 SHA256:wS+QN5rGbi64x35ezg9cr+SdIpgGOUNMUK6AqAPBbyE root@ubuntu (ED25519)",
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICqdfloi34PeBXNmyxDrU291Lh1LityrWqJ7w8ZPiYp/ root@ubuntu"
+  ],
+  "scan_rc": 0,
+  "scan_candidates": [
+    {
+      "fingerprint": "SHA256:wS+QN5rGbi64x35ezg9cr+SdIpgGOUNMUK6AqAPBbyE",
+      "in_console": true
+    }
+  ]
+}

@@ -1,0 +1,3551 @@
+{
+  "candidate_M_release": {
+    "rc": 0,
+    "counts_pass_fail_ignore": {
+      "kf-abi": [
+        592,
+        0,
+        0
+      ],
+      "kf-chan": [
+        636,
+        0,
+        4
+      ],
+      "kf-chip": [
+        72,
+        0,
+        0
+      ],
+      "kf-disp": [
+        247,
+        0,
+        3
+      ],
+      "kf-harness": [
+        12,
+        0,
+        0
+      ],
+      "kf-qemu": [
+        387,
+        0,
+        0
+      ],
+      "kf-rm": [
+        750,
+        0,
+        0
+      ]
+    },
+    "total": [
+      2696,
+      0,
+      7
+    ],
+    "log_sha256": "a2d612556c8972cf72d02e04a6f32bf12fdcd760b9a331b7cfc72ee4d028331b"
+  },
+  "candidate_M_clippy": {
+    "rc": 0,
+    "diagnostics": [
+      {
+        "code": "clippy::empty_line_after_doc_comments",
+        "message": "empty line after doc comment",
+        "path": "crates/kf-util/src/trapwitness.rs",
+        "snippet": "/// \u2298 The count itself lives in `kayfabe-fwd`, beside the decision it measures.\n"
+      },
+      {
+        "code": "clippy::unusual_byte_groupings",
+        "message": "digits of hex, binary or octal literal not in groups of equal size",
+        "path": "crates/kf-util/src/trapwitness.rs",
+        "snippet": "bar == 0 && (off == 0x0017_00 || (0x0070_0000..0x0080_0000).contains(&off))"
+      },
+      {
+        "code": "clippy::unnecessary_sort_by",
+        "message": "consider using `sort_by_key`",
+        "path": "crates/kf-util/src/lock.rs",
+        "snippet": "out.sort_by(|a, b| b.1.cmp(&a.1));"
+      },
+      {
+        "code": "clippy::unnecessary_sort_by",
+        "message": "consider using `sort_by_key`",
+        "path": "crates/kf-util/src/lock.rs",
+        "snippet": "out.sort_by(|a, b| b.1.cmp(&a.1));"
+      },
+      {
+        "code": "clippy::needless_range_loop",
+        "message": "the loop variable `i` is used to index `IN_TRAP_SITE`",
+        "path": "crates/kf-util/src/lock.rs",
+        "snippet": "for i in 0..SITE_SLOTS {"
+      },
+      {
+        "code": "clippy::unnecessary_sort_by",
+        "message": "consider using `sort_unstable_by_key`",
+        "path": "crates/kf-util/src/lock.rs",
+        "snippet": "rows.sort_unstable_by(|a, b| b.0.cmp(&a.0));"
+      },
+      {
+        "code": "clippy::unnecessary_sort_by",
+        "message": "consider using `sort_unstable_by_key`",
+        "path": "crates/kf-util/src/lock.rs",
+        "snippet": "rows.sort_unstable_by(|a, b| b.0.cmp(&a.0));"
+      },
+      {
+        "code": "clippy::unnecessary_sort_by",
+        "message": "consider using `sort_by_key`",
+        "path": "crates/kf-util/src/trapwitness.rs",
+        "snippet": "out.sort_by(|a, b| b.1.cmp(&a.1));"
+      },
+      {
+        "code": "clippy::collapsible_if",
+        "message": "this `if` statement can be collapsed",
+        "path": "crates/kf-util/src/trapwitness.rs",
+        "snippet": "if let Ok(v) = std::env::var(\"KAYFABE_TRAP_CPU_SITE\") {\nif let Ok(off) = u64::from_str_radix(v.trim_start_matches(\"0x\"), 16) {\nCPU_SITE.store(off, std::sync::atomic::Ordering::Relaxed);\n}\n}"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a function",
+        "path": "crates/kf-util/src/lock.rs",
+        "snippet": "pub fn note_wait(rank: LockRank, d: Duration) {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a function",
+        "path": "crates/kf-util/src/lock.rs",
+        "snippet": "pub fn note_hold(rank: LockRank, d: Duration) {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a function",
+        "path": "crates/kf-util/src/lockwitness.rs",
+        "snippet": "pub fn is_vcpu() -> bool {"
+      },
+      {
+        "code": "clippy::useless_conversion",
+        "message": "useless conversion to the same type: `i32`",
+        "path": "crates/kf-linux-raw/src/chardev_unsafe.rs",
+        "snippet": "crate::ioctltrace::record(request, arg, i32::try_from(rc).unwrap_or(-1));"
+      },
+      {
+        "code": "clippy::too_many_arguments",
+        "message": "this function has too many arguments (8/7)",
+        "path": "crates/kf-linux-raw/src/window_unsafe.rs",
+        "snippet": "fn fixed_map(\n&self,\noffset: HostOffset,\nlen: u64,\nfd: libc::c_int,\nfile_offset: libc::off_t,\nshare_flags: libc::c_int,\nprot: libc::c_int,\nwhat: &'static str,\n) -> Result<(), RawError> {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a method",
+        "path": "crates/kf-linux-raw/src/mapping_unsafe.rs",
+        "snippet": "pub fn load_u32(&self, offset: HostOffset) -> Result<u32, RawError> {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a method",
+        "path": "crates/kf-arch/src/gsp.rs",
+        "snippet": "fn on_read(\n&self,\n_model: &dyn GspModel,\n_bar: u8,\n_off: u64,\n_ctx: &BootContext,\n_state: &ArchBootState,\n) -> Option<u64> {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a method",
+        "path": "crates/kf-arch/src/gsp.rs",
+        "snippet": "fn libos_region_layout(&self) -> LibosRegionLayout;"
+      },
+      {
+        "code": "deprecated",
+        "message": "use of deprecated method `std::sync::atomic::Atomic::<u32>::fetch_update`: renamed to `try_update` for consistency",
+        "path": "crates/kf-cuda/src/refusal_samples.rs",
+        "snippet": ".fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| {"
+      },
+      {
+        "code": "unused_assignments",
+        "message": "value assigned to `prop` is never read",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "prop.alloc_flags_reserved = [0; 4];"
+      },
+      {
+        "code": "unused_mut",
+        "message": "variable does not need to be mutable",
+        "path": "crates/kf-cuda/src/walk.rs",
+        "snippet": "let mut h: KfDev = crate::driver_unsafe::zeroed();"
+      },
+      {
+        "code": "dead_code",
+        "message": "fields `cuMemUnmap` and `cuMemAddressFree` are never read",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "pub(crate) cuMemUnmap: Option<unsafe extern \"C\" fn(u64, usize) -> CUresult>,"
+      },
+      {
+        "code": "dead_code",
+        "message": "fields `cuMemUnmap` and `cuMemAddressFree` are never read",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "pub(crate) cuMemAddressFree: Option<unsafe extern \"C\" fn(u64, usize) -> CUresult>,"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "unsafe { core::mem::transmute(p) }"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "unsafe { core::mem::transmute(p) }"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "unsafe { core::mem::transmute(p) }"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "unsafe { core::mem::transmute(p) }"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "unsafe { core::mem::transmute(p) }"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "unsafe { core::mem::transmute(p) }"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "unsafe { core::mem::transmute(p) }"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "unsafe { core::mem::transmute(p) }"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "unsafe { core::mem::transmute(p) }"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "unsafe { core::mem::transmute(p) }"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "unsafe { core::mem::transmute(p) }"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "unsafe { core::mem::transmute(p) }"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "unsafe { core::mem::transmute(p) }"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "unsafe { core::mem::transmute(p) }"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "unsafe { core::mem::transmute(p) }"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "unsafe { core::mem::transmute(p) }"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "unsafe { core::mem::transmute(p) }"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "unsafe { core::mem::transmute(p) }"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "unsafe { core::mem::transmute(p) }"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "unsafe { core::mem::transmute(p) }"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "unsafe { core::mem::transmute(p) }"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "unsafe { core::mem::transmute(p) }"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "unsafe { core::mem::transmute(p) }"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "unsafe { core::mem::transmute(p) }"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "unsafe { core::mem::transmute(p) }"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "unsafe { core::mem::transmute(p) }"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "unsafe { core::mem::transmute(p) }"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "unsafe { core::mem::transmute(p) }"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "unsafe { core::mem::transmute(p) }"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "unsafe { core::mem::transmute(p) }"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "unsafe { core::mem::transmute(p) }"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "unsafe { core::mem::transmute(p) }"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "Some(unsafe { core::mem::transmute(raw) })"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "Some(unsafe { core::mem::transmute(raw) })"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "Some(unsafe { core::mem::transmute(raw) })"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "Some(unsafe { core::mem::transmute(raw) })"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "Some(unsafe { core::mem::transmute(raw) })"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "Some(unsafe { core::mem::transmute(raw) })"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "Some(unsafe { core::mem::transmute(raw) })"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "Some(unsafe { core::mem::transmute(raw) })"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "Some(unsafe { core::mem::transmute(raw) })"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "Some(unsafe { core::mem::transmute(raw) })"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "Some(unsafe { core::mem::transmute(raw) })"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "Some(unsafe { core::mem::transmute(raw) })"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "Some(unsafe { core::mem::transmute(raw) })"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "Some(unsafe { core::mem::transmute(raw) })"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "Some(unsafe { core::mem::transmute(raw) })"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "Some(unsafe { core::mem::transmute(raw) })"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "Some(unsafe { core::mem::transmute(raw) })"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "Some(unsafe { core::mem::transmute(raw) })"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "Some(unsafe { core::mem::transmute(raw) })"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "Some(unsafe { core::mem::transmute(raw) })"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "Some(unsafe { core::mem::transmute(raw) })"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "Some(unsafe { core::mem::transmute(raw) })"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "Some(unsafe { core::mem::transmute(raw) })"
+      },
+      {
+        "code": "clippy::missing_transmute_annotations",
+        "message": "transmute used without annotations",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "Some(unsafe { core::mem::transmute(err_name) })"
+      },
+      {
+        "code": "clippy::too_many_arguments",
+        "message": "this function has too many arguments (8/7)",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "pub fn launch_args(\n&self,\nstream: StreamHandle,\nf: Func,\ngrid: u32,\nblock: u32,\nshmem: u32,\nparams: &mut [Vec<u8>],\nwhat: &'static str,\n) -> Result<(), CudaError> {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a method",
+        "path": "crates/kf-cuda/src/driver_unsafe.rs",
+        "snippet": "pub fn export_device_allocation(\n&self,\ndevice: i32,\nbytes: usize,\n) -> Result<ExportedAllocation, String> {"
+      },
+      {
+        "code": "clippy::type_complexity",
+        "message": "very complex type used. Consider factoring parts into `type` definitions",
+        "path": "crates/kf-broker/src/conn.rs",
+        "snippet": "moved: Option<((i32, i32), Option<(i32, i32)>)>,"
+      },
+      {
+        "code": "clippy::chunks_exact_to_as_chunks",
+        "message": "using `chunks_exact` with a constant chunk size",
+        "path": "crates/kf-abi/src/bringup.rs",
+        "snippet": "for chunk in b.chunks_exact(Self::SIZE) {"
+      },
+      {
+        "code": "clippy::manual_is_multiple_of",
+        "message": "manual implementation of `.is_multiple_of()`",
+        "path": "crates/kf-abi/src/bringup.rs",
+        "snippet": "if at % NVOS46_BIG_PAGE_BYTES == 0"
+      },
+      {
+        "code": "clippy::manual_is_multiple_of",
+        "message": "manual implementation of `.is_multiple_of()`",
+        "path": "crates/kf-abi/src/bringup.rs",
+        "snippet": "&& offset % NVOS46_BIG_PAGE_BYTES == 0"
+      },
+      {
+        "code": "clippy::manual_is_multiple_of",
+        "message": "manual implementation of `.is_multiple_of()`",
+        "path": "crates/kf-abi/src/bringup.rs",
+        "snippet": "&& len % NVOS46_BIG_PAGE_BYTES == 0"
+      },
+      {
+        "code": "clippy::needless_lifetimes",
+        "message": "the following explicit lifetimes could be elided: 'a",
+        "path": "crates/kf-abi/src/matrix.rs",
+        "snippet": "fn children<'a>(l: &'a Layout, parent: &str) -> Vec<(&'static str, FieldAt)> {"
+      },
+      {
+        "code": "clippy::needless_lifetimes",
+        "message": "the following explicit lifetimes could be elided: 'a",
+        "path": "crates/kf-abi/src/matrix.rs",
+        "snippet": "fn children<'a>(l: &'a Layout, parent: &str) -> Vec<(&'static str, FieldAt)> {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-abi/src/chanbudget.rs",
+        "snippet": "NoChannels { engine: u32 },"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-abi/src/chanbudget.rs",
+        "snippet": "BelowMinimum { asked: u32 },"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-abi/src/chanbudget.rs",
+        "snippet": "AboveLimit { asked: u32, limit: u32, engine: u32, total: u32, in_use: u32 },"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-abi/src/chanbudget.rs",
+        "snippet": "AboveLimit { asked: u32, limit: u32, engine: u32, total: u32, in_use: u32 },"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-abi/src/chanbudget.rs",
+        "snippet": "AboveLimit { asked: u32, limit: u32, engine: u32, total: u32, in_use: u32 },"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-abi/src/chanbudget.rs",
+        "snippet": "AboveLimit { asked: u32, limit: u32, engine: u32, total: u32, in_use: u32 },"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-abi/src/chanbudget.rs",
+        "snippet": "AboveLimit { asked: u32, limit: u32, engine: u32, total: u32, in_use: u32 },"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-abi/src/chanbudget.rs",
+        "snippet": "HostTooFull { derived: u32, engine: u32, total: u32, in_use: u32 },"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-abi/src/chanbudget.rs",
+        "snippet": "HostTooFull { derived: u32, engine: u32, total: u32, in_use: u32 },"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-abi/src/chanbudget.rs",
+        "snippet": "HostTooFull { derived: u32, engine: u32, total: u32, in_use: u32 },"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-abi/src/chanbudget.rs",
+        "snippet": "HostTooFull { derived: u32, engine: u32, total: u32, in_use: u32 },"
+      },
+      {
+        "code": "clippy::chunks_exact_to_as_chunks",
+        "message": "using `chunks_exact` with a constant chunk size",
+        "path": "crates/kf-gsp/src/element.rs",
+        "snippet": "for chunk in bytes[..end].chunks_exact(8) {"
+      },
+      {
+        "code": "clippy::chunks_exact_to_as_chunks",
+        "message": "using `chunks_exact` with a constant chunk size",
+        "path": "crates/kf-gsp/src/ram.rs",
+        "snippet": "for (i, chunk) in buf.chunks_exact(8).enumerate() {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a method",
+        "path": "crates/kf-gsp/src/boot.rs",
+        "snippet": "pub fn release_held(&mut self, ram: &mut dyn GuestRam) -> Result<usize, GspFault> {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a method",
+        "path": "crates/kf-gsp/src/boot.rs",
+        "snippet": "pub fn post_event(\n&mut self,\nram: &mut dyn GuestRam,\nrpc: &OutgoingRpc,\n) -> Result<(), GspFault> {"
+      },
+      {
+        "code": "clippy::manual_is_multiple_of",
+        "message": "manual implementation of `.is_multiple_of()`",
+        "path": "crates/kf-chip/src/bar0.rs",
+        "snippet": "if fb_mb % unit == 0 && fb_mb / unit >= 1 && fb_mb / unit <= 0x3F {"
+      },
+      {
+        "code": "clippy::collapsible_if",
+        "message": "this `if` statement can be collapsed",
+        "path": "crates/kf-chip/src/bar0.rs",
+        "snippet": "if matches!(family, Family::Turing | Family::Ampere) {\nif let Some(value) = local_memory_range_gp102(f.fb_mb) {\nv.push(BootReg {\noff: NV_PFB_PRI_MMU_LOCAL_MEMORY_RANGE_GP102,\nvalue,\nname: \"NV_PFB_PRI_MMU_LOCAL_MEMORY_RANGE\",\nfrom: Provenance::Host(\"the store's reserved size (constraint 15), kmemsysReadUsableFbSize_GP102 encoding\"),\n});\n}\n}"
+      },
+      {
+        "code": "clippy::doc_lazy_continuation",
+        "message": "doc list item without indentation",
+        "path": "crates/kf-chip/src/fsp_gsp.rs",
+        "snippet": "//! \u2298 And WPR2's value is DERIVED from the framebuffer size (as the falcon model does) \u2014 the old"
+      },
+      {
+        "code": "clippy::doc_lazy_continuation",
+        "message": "doc list item without indentation",
+        "path": "crates/kf-chip/src/fsp_gsp.rs",
+        "snippet": "//! models' `0x02FF_E000` was self-described as INVENTED. Only nonzero is load-bearing"
+      },
+      {
+        "code": "clippy::doc_lazy_continuation",
+        "message": "doc list item without indentation",
+        "path": "crates/kf-chip/src/fsp_gsp.rs",
+        "snippet": "//! (`kgspIsWpr2Up_TU102`: `_VAL != 0`), and a derived nonzero value is the same for every die."
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a constant",
+        "path": "crates/kf-trap/src/bitmap.rs",
+        "snippet": "pub const N_TOKENS: usize = 1 << TOKEN_BITS;"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a constant",
+        "path": "crates/kf-trap/src/bitmap.rs",
+        "snippet": "pub const N_WORDS: usize = N_TOKENS / 64;"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a constant",
+        "path": "crates/kf-trap/src/bitmap.rs",
+        "snippet": "pub const N_SUMMARY: usize = N_WORDS / 64;"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct",
+        "path": "crates/kf-trap/src/bitmap.rs",
+        "snippet": "pub struct RungBitmap {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for an associated function",
+        "path": "crates/kf-trap/src/bitmap.rs",
+        "snippet": "pub fn new() -> RungBitmap {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a constant",
+        "path": "crates/kf-trap/src/memmap.rs",
+        "snippet": "pub const PAGE: u64 = 0x1000;"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-trap/src/memmap.rs",
+        "snippet": "Hole { why: &'static str },"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-trap/src/memmap.rs",
+        "snippet": "pub bar: Bar,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-trap/src/memmap.rs",
+        "snippet": "pub base: u64,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-trap/src/memmap.rs",
+        "snippet": "pub len: u64,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-trap/src/memmap.rs",
+        "snippet": "pub how: Disposition,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-trap/src/memmap.rs",
+        "snippet": "pub regions: Vec<Region>,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-trap/src/memmap.rs",
+        "snippet": "pub bar0_bytes: u64,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-trap/src/memmap.rs",
+        "snippet": "pub bar1_bytes: u64,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-trap/src/memmap.rs",
+        "snippet": "pub bar2_bytes: u64,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for an enum",
+        "path": "crates/kf-trap/src/model.rs",
+        "snippet": "pub enum S {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a variant",
+        "path": "crates/kf-trap/src/model.rs",
+        "snippet": "Idle,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a variant",
+        "path": "crates/kf-trap/src/model.rs",
+        "snippet": "Rung,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a variant",
+        "path": "crates/kf-trap/src/model.rs",
+        "snippet": "Busy,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a variant",
+        "path": "crates/kf-trap/src/model.rs",
+        "snippet": "BusyRung,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-trap/src/ring.rs",
+        "snippet": "pub bar: u8,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-trap/src/ring.rs",
+        "snippet": "pub offset: u32,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-trap/src/ring.rs",
+        "snippet": "pub value: u64,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-trap/src/ring.rs",
+        "snippet": "pub width: u8,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for an enum",
+        "path": "crates/kf-trap/src/ring.rs",
+        "snippet": "pub enum Push {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct",
+        "path": "crates/kf-trap/src/ring.rs",
+        "snippet": "pub struct PrivRing {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for an associated function",
+        "path": "crates/kf-trap/src/ring.rs",
+        "snippet": "pub fn new() -> PrivRing {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a method",
+        "path": "crates/kf-trap/src/ring.rs",
+        "snippet": "pub fn is_poisoned(&self) -> bool {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a method",
+        "path": "crates/kf-trap/src/ring.rs",
+        "snippet": "pub fn occupancy(&self) -> usize {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for an associated function",
+        "path": "crates/kf-trap/src/shadow.rs",
+        "snippet": "pub const fn new() -> Cell {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a method",
+        "path": "crates/kf-trap/src/shadow.rs",
+        "snippet": "pub fn read(&self) -> u64 {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for an enum",
+        "path": "crates/kf-trap/src/shadow.rs",
+        "snippet": "pub enum ClearOutcome {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for an associated function",
+        "path": "crates/kf-trap/src/shadow.rs",
+        "snippet": "pub const fn new() -> Trigger {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a method",
+        "path": "crates/kf-trap/src/shadow.rs",
+        "snippet": "pub fn completed(&self) -> u64 {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a constant",
+        "path": "crates/kf-trap/src/timer.rs",
+        "snippet": "pub const GA106_BAR0_PAGES: u32 = GA106_BAR0_BYTES >> 12;"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a constant",
+        "path": "crates/kf-trap/src/timer.rs",
+        "snippet": "pub const VF_TIME_1: u32 = 0x30084;"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-trap/src/timer.rs",
+        "snippet": "pub hal: TimerHal,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a constant",
+        "path": "crates/kf-trap/src/token.rs",
+        "snippet": "pub const HOST_TOKEN_MASK: u64 = (1 << HOST_TOKEN_BITS) - 1;"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-trap/src/token.rs",
+        "snippet": "pub state: State,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-trap/src/token.rs",
+        "snippet": "pub route: Route,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-trap/src/token.rs",
+        "snippet": "pub host_token: u32,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for an associated function",
+        "path": "crates/kf-trap/src/token.rs",
+        "snippet": "pub fn decode(w: u64) -> Token {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a method",
+        "path": "crates/kf-trap/src/token.rs",
+        "snippet": "pub fn encode(self) -> u64 {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for an associated function",
+        "path": "crates/kf-trap/src/token.rs",
+        "snippet": "pub const fn new() -> TokenWord {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a method",
+        "path": "crates/kf-trap/src/token.rs",
+        "snippet": "pub fn load(&self) -> Token {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-trap/src/trap.rs",
+        "snippet": "readable: bool,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-trap/src/trap.rs",
+        "snippet": "semantics: WriteSemantics,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-trap/src/trap.rs",
+        "snippet": "RingHostInline { host_token: u32 },"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-trap/src/trap.rs",
+        "snippet": "pub tokens: &'a [TokenWord],"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-trap/src/trap.rs",
+        "snippet": "pub bits: &'a RungBitmap,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-trap/src/trap.rs",
+        "snippet": "pub drainer_wake: &'a WakeWord,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-trap/src/trap.rs",
+        "snippet": "pub ring: &'a PrivRing,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a constant",
+        "path": "crates/kf-trap/src/trappolicy.rs",
+        "snippet": "pub const PRAMIN_LEN: u64 = 0x0010_0000;"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-trap/src/trappolicy.rs",
+        "snippet": "pub bar: Bar,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-trap/src/trappolicy.rs",
+        "snippet": "pub base: u64,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-trap/src/trappolicy.rs",
+        "snippet": "pub len: u64,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-trap/src/vmm.rs",
+        "snippet": "RingHostInline { host_token: u32 },"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a method",
+        "path": "crates/kf-trap/src/vmm.rs",
+        "snippet": "fn remove_memslot(&self, slot: SlotId) -> Result<(), VmmError>;"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a method",
+        "path": "crates/kf-trap/src/vmm.rs",
+        "snippet": "fn signal_drainer(&self);"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct",
+        "path": "crates/kf-trap/src/vmm.rs",
+        "snippet": "pub struct SlotId(pub u32);"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for an enum",
+        "path": "crates/kf-trap/src/vmm.rs",
+        "snippet": "pub enum VmmError {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a variant",
+        "path": "crates/kf-trap/src/vmm.rs",
+        "snippet": "BadGpa,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a variant",
+        "path": "crates/kf-trap/src/vmm.rs",
+        "snippet": "NoSlots,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a variant",
+        "path": "crates/kf-trap/src/vmm.rs",
+        "snippet": "Refused,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-trap/src/vmm.rs",
+        "snippet": "bar: u8,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-trap/src/vmm.rs",
+        "snippet": "base: u64,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-trap/src/vmm.rs",
+        "snippet": "len: u64,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a function",
+        "path": "crates/kf-trap/src/vmm.rs",
+        "snippet": "pub fn store_value(data: &mut [u8], v: u64) {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct",
+        "path": "crates/kf-trap/src/wake.rs",
+        "snippet": "pub struct WakeWord(AtomicU64);"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for an associated function",
+        "path": "crates/kf-trap/src/wake.rs",
+        "snippet": "pub const fn new() -> WakeWord {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a method",
+        "path": "crates/kf-trap/src/wake.rs",
+        "snippet": "pub fn pollers(&self) -> u64 {"
+      },
+      {
+        "code": "clippy::chunks_exact_to_as_chunks",
+        "message": "using `chunks_exact` with a constant chunk size",
+        "path": "crates/kf-abi/src/bringup.rs",
+        "snippet": "for chunk in b.chunks_exact(Self::SIZE) {"
+      },
+      {
+        "code": "clippy::manual_is_multiple_of",
+        "message": "manual implementation of `.is_multiple_of()`",
+        "path": "crates/kf-abi/src/bringup.rs",
+        "snippet": "if at % NVOS46_BIG_PAGE_BYTES == 0"
+      },
+      {
+        "code": "clippy::manual_is_multiple_of",
+        "message": "manual implementation of `.is_multiple_of()`",
+        "path": "crates/kf-abi/src/bringup.rs",
+        "snippet": "&& offset % NVOS46_BIG_PAGE_BYTES == 0"
+      },
+      {
+        "code": "clippy::manual_is_multiple_of",
+        "message": "manual implementation of `.is_multiple_of()`",
+        "path": "crates/kf-abi/src/bringup.rs",
+        "snippet": "&& len % NVOS46_BIG_PAGE_BYTES == 0"
+      },
+      {
+        "code": "dead_code",
+        "message": "function `host_version_gate` is never used",
+        "path": "crates/kf-host/src/lib.rs",
+        "snippet": "fn host_version_gate(reported: Option<&str>) -> Result<String, String> {"
+      },
+      {
+        "code": "clippy::manual_is_multiple_of",
+        "message": "manual implementation of `.is_multiple_of()`",
+        "path": "crates/kf-host/src/channel.rs",
+        "snippet": "if len == 0 || at % 4096 != 0 || len % 4096 != 0 {"
+      },
+      {
+        "code": "clippy::manual_is_multiple_of",
+        "message": "manual implementation of `.is_multiple_of()`",
+        "path": "crates/kf-host/src/channel.rs",
+        "snippet": "if len == 0 || at % 4096 != 0 || len % 4096 != 0 {"
+      },
+      {
+        "code": "clippy::manual_is_multiple_of",
+        "message": "manual implementation of `.is_multiple_of()`",
+        "path": "crates/kf-host/src/channel.rs",
+        "snippet": "|| ring.userd_offset % USERD_ALIGNMENT != 0"
+      },
+      {
+        "code": "clippy::type_complexity",
+        "message": "very complex type used. Consider factoring parts into `type` definitions",
+        "path": "crates/kf-host/src/lib.rs",
+        "snippet": "classes_for: &dyn Fn(u32, u32, &[u32]) -> Result<Box<dyn HostClasses>, String>,"
+      },
+      {
+        "code": "clippy::collapsible_if",
+        "message": "this `if` statement can be collapsed",
+        "path": "crates/kf-core/src/caps.rs",
+        "snippet": "if let Some(n) = self.chan_live_rl.get_mut(runlist as usize) {\nif *n > 0 {\n*n -= 1;\nself.live[0] = self.live[0].saturating_sub(1);\n}\n}"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a variant",
+        "path": "crates/kf-core/src/caps.rs",
+        "snippet": "Channel,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a variant",
+        "path": "crates/kf-core/src/caps.rs",
+        "snippet": "EngineObject,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a variant",
+        "path": "crates/kf-core/src/caps.rs",
+        "snippet": "AddressSpace,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for an enum",
+        "path": "crates/kf-core/src/caps.rs",
+        "snippet": "pub enum Refusal {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-core/src/caps.rs",
+        "snippet": "OverDeclaredCap { twin: Twin, cap: u32, asked: u32 },"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-core/src/caps.rs",
+        "snippet": "OverDeclaredCap { twin: Twin, cap: u32, asked: u32 },"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-core/src/caps.rs",
+        "snippet": "OverDeclaredCap { twin: Twin, cap: u32, asked: u32 },"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a method",
+        "path": "crates/kf-core/src/caps.rs",
+        "snippet": "pub fn acquire(&mut self, t: Twin) -> Result<(), Refusal> {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a method",
+        "path": "crates/kf-core/src/caps.rs",
+        "snippet": "pub fn release(&mut self, t: Twin) {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a method",
+        "path": "crates/kf-core/src/caps.rs",
+        "snippet": "pub fn live(&self, t: Twin) -> u32 {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a variant",
+        "path": "crates/kf-core/src/caps.rs",
+        "snippet": "Backed {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-core/src/caps.rs",
+        "snippet": "host_offset: u64,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct",
+        "path": "crates/kf-core/src/caps.rs",
+        "snippet": "pub struct Aperture {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a method",
+        "path": "crates/kf-core/src/caps.rs",
+        "snippet": "pub fn back(&mut self, offset: u64, len: u64) -> Backing {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a method",
+        "path": "crates/kf-core/src/caps.rs",
+        "snippet": "pub fn len(&self) -> u64 {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a method",
+        "path": "crates/kf-core/src/caps.rs",
+        "snippet": "pub fn is_empty(&self) -> bool {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a method",
+        "path": "crates/kf-core/src/caps.rs",
+        "snippet": "pub fn refusals(&self) -> u64 {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a variant",
+        "path": "crates/kf-core/src/channel.rs",
+        "snippet": "AtAllocation,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct",
+        "path": "crates/kf-core/src/channel.rs",
+        "snippet": "pub struct Submission {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-core/src/channel.rs",
+        "snippet": "pub owner: Owner,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-core/src/channel.rs",
+        "snippet": "pub route: Route,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-core/src/channel.rs",
+        "snippet": "pub all_operands_translatable: bool,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-core/src/channel.rs",
+        "snippet": "Modelled { operand_words: u8 },"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-core/src/channel.rs",
+        "snippet": "TooLarge { want: u64, max: u64 },"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-core/src/channel.rs",
+        "snippet": "TooLarge { want: u64, max: u64 },"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a method",
+        "path": "crates/kf-core/src/channel.rs",
+        "snippet": "pub fn name(&self) -> &'static str {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for an enum",
+        "path": "crates/kf-core/src/completion.rs",
+        "snippet": "pub enum Raise {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for an associated function",
+        "path": "crates/kf-core/src/completion.rs",
+        "snippet": "pub const fn new() -> EngineIrq {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a method",
+        "path": "crates/kf-core/src/completion.rs",
+        "snippet": "pub fn arm(&self) {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a method",
+        "path": "crates/kf-core/src/completion.rs",
+        "snippet": "pub fn mask(&self) {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a method",
+        "path": "crates/kf-core/src/completion.rs",
+        "snippet": "pub fn retired_count(&self) -> u64 {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-core/src/leaf.rs",
+        "snippet": "pub block: u32,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-core/src/leaf.rs",
+        "snippet": "pub offset: u64,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-core/src/leaf.rs",
+        "snippet": "pub len: u64,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for an enum",
+        "path": "crates/kf-core/src/leaf.rs",
+        "snippet": "pub enum LeafRefusal {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a method",
+        "path": "crates/kf-core/src/leaf.rs",
+        "snippet": "pub fn contains_gpa(&self, gpa: u64) -> bool {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for an associated function",
+        "path": "crates/kf-core/src/leaf.rs",
+        "snippet": "pub fn new() -> GuestRamLayout {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a method",
+        "path": "crates/kf-core/src/leaf.rs",
+        "snippet": "pub fn register(&mut self, b: GuestRamBlock) {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a constant",
+        "path": "crates/kf-core/src/lifetime.rs",
+        "snippet": "pub const ORDER: [Step; 9] = ["
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for an enum",
+        "path": "crates/kf-core/src/lifetime.rs",
+        "snippet": "pub enum TeardownError {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-core/src/lifetime.rs",
+        "snippet": "OutOfOrder { attempted: Step, expected: Step },"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-core/src/lifetime.rs",
+        "snippet": "OutOfOrder { attempted: Step, expected: Step },"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for an associated function",
+        "path": "crates/kf-core/src/lifetime.rs",
+        "snippet": "pub fn new() -> Teardown {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a method",
+        "path": "crates/kf-core/src/lifetime.rs",
+        "snippet": "pub fn run(&mut self, s: Step) -> Result<(), TeardownError> {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a method",
+        "path": "crates/kf-core/src/lifetime.rs",
+        "snippet": "pub fn complete(&self) -> bool {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for an enum",
+        "path": "crates/kf-core/src/lifetime.rs",
+        "snippet": "pub enum Diff {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for an associated function",
+        "path": "crates/kf-core/src/plane.rs",
+        "snippet": "pub const fn new() -> Vmm {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-core/src/plane.rs",
+        "snippet": "pub tokens: Vec<TokenWord>,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-core/src/plane.rs",
+        "snippet": "pub bits: RungBitmap,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-core/src/plane.rs",
+        "snippet": "pub ring: PrivRing,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-core/src/plane.rs",
+        "snippet": "pub token_mask: u32,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a method",
+        "path": "crates/kf-core/src/plane.rs",
+        "snippet": "pub fn worker_wake(&self) -> &WakeWord {"
+      },
+      {
+        "code": "clippy::single_match",
+        "message": "you seem to be trying to use `match` for destructuring a single pattern. Consider using `if let`",
+        "path": "crates/kf-abi/src/hostabi.rs",
+        "snippet": "match id {\nSome(id) => {\nassert_eq!(id, u64::from(c.cmd), \"{} at {v}\", c.name);\nassert!(\nlay.is_some(),\n\"{} exists at {v} but {} does not\",\nc.name,\nruns.name\n);\nseen = true;\n}\nNone => {}\n}"
+      },
+      {
+        "code": "clippy::needless_lifetimes",
+        "message": "the following explicit lifetimes could be elided: 'a",
+        "path": "crates/kf-abi/src/matrix.rs",
+        "snippet": "fn children<'a>(l: &'a Layout, parent: &str) -> Vec<(&'static str, FieldAt)> {"
+      },
+      {
+        "code": "clippy::needless_lifetimes",
+        "message": "the following explicit lifetimes could be elided: 'a",
+        "path": "crates/kf-abi/src/matrix.rs",
+        "snippet": "fn children<'a>(l: &'a Layout, parent: &str) -> Vec<(&'static str, FieldAt)> {"
+      },
+      {
+        "code": "deprecated",
+        "message": "use of deprecated method `std::sync::atomic::Atomic::<u64>::fetch_update`: renamed to `try_update` for consistency",
+        "path": "crates/kf-chan/src/dbfast.rs",
+        "snippet": ".fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_sub(1));"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-abi/src/chanbudget.rs",
+        "snippet": "NoChannels { engine: u32 },"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-abi/src/chanbudget.rs",
+        "snippet": "BelowMinimum { asked: u32 },"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-abi/src/chanbudget.rs",
+        "snippet": "AboveLimit { asked: u32, limit: u32, engine: u32, total: u32, in_use: u32 },"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-abi/src/chanbudget.rs",
+        "snippet": "AboveLimit { asked: u32, limit: u32, engine: u32, total: u32, in_use: u32 },"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-abi/src/chanbudget.rs",
+        "snippet": "AboveLimit { asked: u32, limit: u32, engine: u32, total: u32, in_use: u32 },"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-abi/src/chanbudget.rs",
+        "snippet": "AboveLimit { asked: u32, limit: u32, engine: u32, total: u32, in_use: u32 },"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-abi/src/chanbudget.rs",
+        "snippet": "AboveLimit { asked: u32, limit: u32, engine: u32, total: u32, in_use: u32 },"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-abi/src/chanbudget.rs",
+        "snippet": "HostTooFull { derived: u32, engine: u32, total: u32, in_use: u32 },"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-abi/src/chanbudget.rs",
+        "snippet": "HostTooFull { derived: u32, engine: u32, total: u32, in_use: u32 },"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-abi/src/chanbudget.rs",
+        "snippet": "HostTooFull { derived: u32, engine: u32, total: u32, in_use: u32 },"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-abi/src/chanbudget.rs",
+        "snippet": "HostTooFull { derived: u32, engine: u32, total: u32, in_use: u32 },"
+      },
+      {
+        "code": "unused_imports",
+        "message": "unused import: `crate::tick::Handoff`",
+        "path": "crates/kf-disp/src/pace.rs",
+        "snippet": "use crate::tick::Handoff;"
+      },
+      {
+        "code": "clippy::chunks_exact_to_as_chunks",
+        "message": "using `chunks_exact` with a constant chunk size",
+        "path": "crates/kf-chan/src/ring.rs",
+        "snippet": ".chunks_exact(4)"
+      },
+      {
+        "code": "clippy::manual_clamp",
+        "message": "clamp-like pattern without using clamp function",
+        "path": "crates/kf-chan/src/user_batch.rs",
+        "snippet": "let capacity = words.capacity().saturating_mul(2).max(4).min(WORDS);"
+      },
+      {
+        "code": "clippy::should_implement_trait",
+        "message": "method `next` can be confused for the standard trait method `std::iter::Iterator::next`",
+        "path": "crates/kf-chan/src/user_progress.rs",
+        "snippet": "pub fn next(&mut self) -> Result<Option<Work<'_>>, Refusal> {\nlet Some(active) = self.active.as_mut() else {\nreturn Ok(None);\n};\nlet Some(ticket) = active.ready_ticket() else {\nreturn Ok(None);\n};\nlet publication = if ticket.kind == Kind::Commands {\nif self.commands.inner.available_gp() < 3 {\nreturn Ok(None);\n}\n// All refusals precede native I/O and leave both ledgers unchanged.\nSome(self.commands.publish(ticket)?)\n} else {\nNone\n};\nactive.issued += 1;\nOk(Some(\nmatch (&active.actions[ticket.ordinal as usize], publication) {\n(Action::Commands(words), Some(publication)) => {\nWork::Commands { publication, words }\n}\n(Action::OwnInvalidate, None) => Work::OwnInvalidate { ticket },\n(Action::Software(call), None) => Work::Software {\nticket,\ncall: *call,\n},\n_ => unreachable!(\"private ready_ticket kind agrees with immutable action\"),\n},\n))\n}"
+      },
+      {
+        "code": "clippy::map_identity",
+        "message": "unnecessary map of the identity function",
+        "path": "crates/kf-chan/src/user_scan.rs",
+        "snippet": "carried: self.pending.map(|(h, n)| (h, n)),"
+      },
+      {
+        "code": "clippy::manual_is_multiple_of",
+        "message": "manual implementation of `.is_multiple_of()`",
+        "path": "crates/kf-chan/src/user_storage.rs",
+        "snippet": "if va % 0x10000 != 0 || va.checked_add(BYTES).is_none_or(|end| end > 1 << 40) {"
+      },
+      {
+        "code": "clippy::manual_is_multiple_of",
+        "message": "manual implementation of `.is_multiple_of()`",
+        "path": "crates/kf-chan/src/user_storage.rs",
+        "snippet": "|| offset % 4 != 0"
+      },
+      {
+        "code": "clippy::manual_is_multiple_of",
+        "message": "manual implementation of `.is_multiple_of()`",
+        "path": "crates/kf-chan/src/user_storage.rs",
+        "snippet": "|| bytes % 4 != 0"
+      },
+      {
+        "code": "clippy::manual_is_multiple_of",
+        "message": "manual implementation of `.is_multiple_of()`",
+        "path": "crates/kf-chan/src/user_storage.rs",
+        "snippet": "if offset % 4 != 0 || offset.checked_add(bytes).is_none_or(|end| end > GP_OFFSET) {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-chan/src/translated.rs",
+        "snippet": "BadHeader { at: usize, word: u32 },"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-chan/src/translated.rs",
+        "snippet": "BadHeader { at: usize, word: u32 },"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-chan/src/translated.rs",
+        "snippet": "Truncated { at: usize },"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-chan/src/translated.rs",
+        "snippet": "Untranslatable { target: Target, phys: u64, len: u64 },"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-chan/src/translated.rs",
+        "snippet": "Untranslatable { target: Target, phys: u64, len: u64 },"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-chan/src/translated.rs",
+        "snippet": "Untranslatable { target: Target, phys: u64, len: u64 },"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for an enum",
+        "path": "crates/kf-chan/src/user_batch.rs",
+        "snippet": "pub enum Refusal {"
+      },
+      {
+        "code": "dead_code",
+        "message": "function `head` is never used",
+        "path": "crates/kf-disp/src/pace.rs",
+        "snippet": "fn head(h: u32, period_ns: u64) -> HeadMode {"
+      },
+      {
+        "code": "dead_code",
+        "message": "function `sent` is never used",
+        "path": "crates/kf-disp/src/pace.rs",
+        "snippet": "fn sent(digest: u64) -> Sent {"
+      },
+      {
+        "code": "clippy::manual_is_multiple_of",
+        "message": "manual implementation of `.is_multiple_of()`",
+        "path": "crates/kf-disp/src/pushbuf.rs",
+        "snippet": "|| get % 4 != 0"
+      },
+      {
+        "code": "clippy::manual_is_multiple_of",
+        "message": "manual implementation of `.is_multiple_of()`",
+        "path": "crates/kf-disp/src/pushbuf.rs",
+        "snippet": "|| put % 4 != 0"
+      },
+      {
+        "code": "clippy::chunks_exact_to_as_chunks",
+        "message": "using `chunks_exact` with a constant chunk size",
+        "path": "crates/kf-disp/src/scanout.rs",
+        "snippet": ".chunks_exact(2)"
+      },
+      {
+        "code": "unused_imports",
+        "message": "unused import: `kf_abi::submit as s`",
+        "path": "crates/kf-rm/src/authored.rs",
+        "snippet": "use kf_abi::submit as s;"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a constant",
+        "path": "crates/kf-mem/src/addr.rs",
+        "snippet": "pub const PAGE: u64 = 0x1000;"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for an enum",
+        "path": "crates/kf-mem/src/store.rs",
+        "snippet": "pub enum StoreRefusal {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-mem/src/store.rs",
+        "snippet": "offset: u64,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-mem/src/store.rs",
+        "snippet": "len: u64,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-mem/src/store.rs",
+        "snippet": "object: u64,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a variant",
+        "path": "crates/kf-mem/src/store.rs",
+        "snippet": "ZeroLength,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a method",
+        "path": "crates/kf-mem/src/store.rs",
+        "snippet": "pub fn name(&self) -> &'static str {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for an associated function",
+        "path": "crates/kf-mem/src/store.rs",
+        "snippet": "pub fn new(token: HostToken, len: u64) -> Store {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a method",
+        "path": "crates/kf-mem/src/store.rs",
+        "snippet": "pub fn token(&self) -> HostToken {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a method",
+        "path": "crates/kf-mem/src/store.rs",
+        "snippet": "pub fn len(&self) -> u64 {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a method",
+        "path": "crates/kf-mem/src/store.rs",
+        "snippet": "pub fn is_empty(&self) -> bool {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a method",
+        "path": "crates/kf-mem/src/vasmgr.rs",
+        "snippet": "pub fn walker_mut(&mut self) -> &mut W {"
+      },
+      {
+        "code": "unused_mut",
+        "message": "variable does not need to be mutable",
+        "path": "crates/kf-harness/src/bin/kf-gate9.rs",
+        "snippet": "let mut gpu_at = |n: u64, v: &mut Vec<u64>, us: u64| {"
+      },
+      {
+        "code": "clippy::useless_format",
+        "message": "useless use of `format!`",
+        "path": "crates/kf-harness/src/bin/kf-gate9.rs",
+        "snippet": "format!(\"{census}\"),"
+      },
+      {
+        "code": "unused_mut",
+        "message": "variable does not need to be mutable",
+        "path": "crates/kf-harness/src/bin/kf-gate9.rs",
+        "snippet": "let mut gpu_at = |n: u64, v: &mut Vec<u64>, us: u64| {"
+      },
+      {
+        "code": "clippy::useless_format",
+        "message": "useless use of `format!`",
+        "path": "crates/kf-harness/src/bin/kf-gate9.rs",
+        "snippet": "format!(\"{census}\"),"
+      },
+      {
+        "code": "clippy::manual_is_multiple_of",
+        "message": "manual implementation of `.is_multiple_of()`",
+        "path": "crates/kf-rm/src/hostfacts.rs",
+        "snippet": "if num_tpc == 0 || usize::from(num_sm) > GR_GLOBAL_SM_ORDER_MAX_SM || num_sm % num_tpc != 0 {"
+      },
+      {
+        "code": "clippy::map_identity",
+        "message": "unnecessary map of the identity function",
+        "path": "crates/kf-rm/src/hostquery.rs",
+        "snippet": "Ok(g) => query_intr_table(host, kinds.as_deref().map_err(|e| e), *g),"
+      },
+      {
+        "code": "clippy::type_complexity",
+        "message": "very complex type used. Consider factoring parts into `type` definitions",
+        "path": "crates/kf-rm/src/rmrpc/policy.rs",
+        "snippet": "accepted: Option<Box<dyn FnMut(&RpcCommand) + Send>>,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a function",
+        "path": "crates/kf-rm/src/rpc.rs",
+        "snippet": "pub fn name_of(function: u32) -> Option<&'static str> {"
+      },
+      {
+        "code": "clippy::doc_lazy_continuation",
+        "message": "doc list item without indentation",
+        "path": "crates/kf-harness/src/bin/kf-gate6.rs",
+        "snippet": "//! Completion is the guest's own business (it polls its semaphore), exactly as on bare metal."
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a constant",
+        "path": "crates/kf-rm/src/rpc.rs",
+        "snippet": "pub const CONTROLS: [(u32, ControlDisposition); 33] = ["
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a function",
+        "path": "crates/kf-rm/src/rpc.rs",
+        "snippet": "pub fn control_disposition(cmd: u32) -> ControlDisposition {"
+      },
+      {
+        "code": "clippy::needless_lifetimes",
+        "message": "the following explicit lifetimes could be elided: 'a",
+        "path": "crates/kf-harness/src/bin/kf-syncwait-stress.rs",
+        "snippet": "fn run_family<'a>("
+      },
+      {
+        "code": "clippy::needless_lifetimes",
+        "message": "the following explicit lifetimes could be elided: 'a",
+        "path": "crates/kf-harness/src/bin/kf-syncwait-stress.rs",
+        "snippet": "rm: &'a HostRm,"
+      },
+      {
+        "code": "clippy::doc_lazy_continuation",
+        "message": "doc list item without indentation",
+        "path": "crates/kf-harness/src/bin/kf-gate6.rs",
+        "snippet": "//! Completion is the guest's own business (it polls its semaphore), exactly as on bare metal."
+      },
+      {
+        "code": "deprecated",
+        "message": "use of deprecated method `std::sync::atomic::Atomic::<u64>::fetch_update`: renamed to `try_update` for consistency",
+        "path": "crates/kf-qemu/src/chan.rs",
+        "snippet": ".fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_sub(1));"
+      },
+      {
+        "code": "deprecated",
+        "message": "use of deprecated method `std::sync::atomic::Atomic::<u32>::fetch_update`: renamed to `try_update` for consistency",
+        "path": "crates/kf-qemu/src/device.rs",
+        "snippet": "let _ = w.fetch_update(Ordering::AcqRel, Ordering::Acquire, |old| {"
+      },
+      {
+        "code": "deprecated",
+        "message": "use of deprecated method `std::sync::atomic::Atomic::<u64>::fetch_update`: renamed to `try_update` for consistency",
+        "path": "crates/kf-qemu/src/device.rs",
+        "snippet": "left.fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| n.checked_sub(1))"
+      },
+      {
+        "code": "deprecated",
+        "message": "use of deprecated method `std::sync::atomic::Atomic::<u64>::fetch_update`: renamed to `try_update` for consistency",
+        "path": "crates/kf-qemu/src/mem.rs",
+        "snippet": ".fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_add(1))"
+      },
+      {
+        "code": "unused_mut",
+        "message": "variable does not need to be mutable",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": "let mut word = |off: u64| {"
+      },
+      {
+        "code": "unused_mut",
+        "message": "variable does not need to be mutable",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": "let mut word = |off: u64| {"
+      },
+      {
+        "code": "clippy::clone_on_copy",
+        "message": "using `clone` on type `Result<Translation, BridgeRefusal>` which implements the `Copy` trait",
+        "path": "crates/kf-rm/tests/rmrpc_bridge.rs",
+        "snippet": "assert_eq!(first, vec![Ok(Translation::Held), want.clone()]);"
+      },
+      {
+        "code": "unused_mut",
+        "message": "variable does not need to be mutable",
+        "path": "crates/kf-qemu/src/display.rs",
+        "snippet": "let mut engine = if constructor_probe {"
+      },
+      {
+        "code": "clippy::unusual_byte_groupings",
+        "message": "digits of hex, binary or octal literal not in groups of equal size",
+        "path": "crates/kf-rm/tests/gvas_publication.rs",
+        "snippet": "b[8..16].copy_from_slice(&0x2_efbc_302u64.to_le_bytes());"
+      },
+      {
+        "code": "clippy::unusual_byte_groupings",
+        "message": "digits of hex, binary or octal literal not in groups of equal size",
+        "path": "crates/kf-rm/tests/gvas_publication.rs",
+        "snippet": "assert!(matches!(g2.lock().unwrap()[2], MemStatement::BarPde(p) if p.entry == 0x2_efbc_302));"
+      },
+      {
+        "code": "private_bounds",
+        "message": "trait `userstore::Host` is more private than the item `userstore::Cache`",
+        "path": "crates/kf-qemu/src/userstore.rs",
+        "snippet": "pub(crate) struct Cache<H: Host = Native> {"
+      },
+      {
+        "code": "private_bounds",
+        "message": "trait `userstore::Host` is more private than the item `userstore::Cache<H>`",
+        "path": "crates/kf-qemu/src/userstore.rs",
+        "snippet": "impl<H: Host> Cache<H> {"
+      },
+      {
+        "code": "dead_code",
+        "message": "method `is_current` is never used",
+        "path": "crates/kf-qemu/src/userbirth.rs",
+        "snippet": "pub(crate) fn is_current(&self, birth: &Arc<Birth<V>>) -> bool {"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": "self.puts_with_db += 1;"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": "self.puts_without_db += 1;"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": "let _ = write!(out, \"  {:5}:\", i * 8);"
+      },
+      {
+        "code": "clippy::chunks_exact_to_as_chunks",
+        "message": "using `chunks_exact` with a constant chunk size",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": "for word in pb.bytes.chunks_exact(4) {"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": "self.aux.sync_carried += 1;"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": "self.aux.grace_reported += 1;"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": "t.seq += 1;"
+      },
+      {
+        "code": "clippy::indexing_slicing",
+        "message": "slicing may panic",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": "let kept = words[..words.len().min(TRACE_WORDS)].to_vec();"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": "t.straddles += 1;"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": "due: now + std::time::Duration::from_millis(delay_ms),"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": "&& t.verified + (t.rereads.len() as u64) < 40_000"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": "due: now + std::time::Duration::from_micros(delay_us),"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": "|| (t.history_words + kept.len() > TRACE_HISTORY_WORDS && !t.history.is_empty())"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": "t.history_words -= old.words.len();"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": "t.history_words += kept.len();"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": "t.slots.push_back((first + i as u64, d));"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": ".filter(|(q, _)| q + 8 >= fetched && *q <= fetched + 8)"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": ".filter(|(q, _)| q + 8 >= fetched && *q <= fetched + 8)"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": "(pb_get >= d.gpu_va && pb_get <= d.gpu_va + d.len_bytes)"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": ".then(|| (h, d.gpu_va, ((pb_get - d.gpu_va) / 4) as usize))"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": "let hi = (at + 8).min(h.words.len());"
+      },
+      {
+        "code": "clippy::chunks_exact_to_as_chunks",
+        "message": "using `chunks_exact` with a constant chunk size",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": ".chunks_exact(4)"
+      },
+      {
+        "code": "clippy::indexing_slicing",
+        "message": "indexing may panic",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": ".map(|w| u32::from_le_bytes([w[0], w[1], w[2], w[3]]))"
+      },
+      {
+        "code": "clippy::indexing_slicing",
+        "message": "indexing may panic",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": ".map(|w| u32::from_le_bytes([w[0], w[1], w[2], w[3]]))"
+      },
+      {
+        "code": "clippy::indexing_slicing",
+        "message": "indexing may panic",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": ".map(|w| u32::from_le_bytes([w[0], w[1], w[2], w[3]]))"
+      },
+      {
+        "code": "clippy::indexing_slicing",
+        "message": "indexing may panic",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": ".map(|w| u32::from_le_bytes([w[0], w[1], w[2], w[3]]))"
+      },
+      {
+        "code": "clippy::indexing_slicing",
+        "message": "indexing may panic",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": ".filter(|&i| fresh[i] != x.words[i])"
+      },
+      {
+        "code": "clippy::indexing_slicing",
+        "message": "indexing may panic",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": ".filter(|&i| fresh[i] != x.words[i])"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": "t.verified += 1;"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": "t.stale_prefetch += 1;"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": "t.stale += 1;"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": "t.stale_desync += 1;"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": "& (entries - 1);"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": "let at = r.source.0 + u64::from(idx) * 8;"
+      },
+      {
+        "code": "clippy::collapsible_if",
+        "message": "this `if` statement can be collapsed",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": "if x.delay_ms == 200 {\nif let Some(dir) = trace_dir() {\nlet mut out = format!(\n\"STRADDLE {:#x}:{:#x} seq={} pb_va={:#x} bytes={}\\nas scanned:\\n\",\nr.key.0, r.key.1, x.seq, x.va, x.bytes\n);\nwords_text(&mut out, &x.words);\nout.push_str(\"re-read +200ms:\\n\");\nwords_text(&mut out, &fresh[..fresh.len().min(TRACE_WORDS)]);\nlet _ = std::fs::create_dir_all(dir).and_then(|()| {\nstd::fs::write(\ndir.join(format!(\n\"user-ring-straddle-{:x}-{:x}-{}.txt\",\nr.key.0, r.key.1, x.seq\n)),\nout.as_bytes(),\n)\n});\n}\n}"
+      },
+      {
+        "code": "clippy::indexing_slicing",
+        "message": "slicing may panic",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": "words_text(&mut out, &fresh[..fresh.len().min(TRACE_WORDS)]);"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": "& (entries - 1);"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": "let at = r.source.0 + u64::from(idx) * 8;"
+      },
+      {
+        "code": "clippy::chunks_exact_to_as_chunks",
+        "message": "using `chunks_exact` with a constant chunk size",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": ".chunks_exact(4)"
+      },
+      {
+        "code": "clippy::indexing_slicing",
+        "message": "indexing may panic",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": ".map(|w| u32::from_le_bytes([w[0], w[1], w[2], w[3]]))"
+      },
+      {
+        "code": "clippy::indexing_slicing",
+        "message": "indexing may panic",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": ".map(|w| u32::from_le_bytes([w[0], w[1], w[2], w[3]]))"
+      },
+      {
+        "code": "clippy::indexing_slicing",
+        "message": "indexing may panic",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": ".map(|w| u32::from_le_bytes([w[0], w[1], w[2], w[3]]))"
+      },
+      {
+        "code": "clippy::indexing_slicing",
+        "message": "indexing may panic",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": ".map(|w| u32::from_le_bytes([w[0], w[1], w[2], w[3]]))"
+      },
+      {
+        "code": "clippy::indexing_slicing",
+        "message": "indexing may panic",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": ".filter(|&i| w2[i] != words[i])"
+      },
+      {
+        "code": "clippy::indexing_slicing",
+        "message": "indexing may panic",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": ".filter(|&i| w2[i] != words[i])"
+      },
+      {
+        "code": "clippy::collapsible_if",
+        "message": "this `if` statement can be collapsed",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": "if let (Some(w2), Some(n)) = (&words2, changed) {\nif n > 0 {\nlet _ = writeln!(out, \"  reread words:\");\nwords_text(&mut out, &w2[..w2.len().min(TRACE_WORDS)]);\n}\n}"
+      },
+      {
+        "code": "clippy::indexing_slicing",
+        "message": "slicing may panic",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": "words_text(&mut out, &w2[..w2.len().min(TRACE_WORDS)]);"
+      },
+      {
+        "code": "clippy::indexing_slicing",
+        "message": "slicing may panic",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": "words_text(&mut out, &words[..words.len().min(TRACE_WORDS)]);"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": "let va = r.source.0 + u64::from(self.core.cursor) * 8;"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": "target: self.core.fetch.fetched() + 1,"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": "let guest_get = (self.core.cursor + 1) & (r.source.1 - 1);"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": "let guest_get = (self.core.cursor + 1) & (r.source.1 - 1);"
+      },
+      {
+        "code": "clippy::too_many_arguments",
+        "message": "this function has too many arguments (8/7)",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": "fn publish(\n&mut self,\nme: &ChanPlane,\nr: &userrelay::Record,\nsoftware: Option<&Option<Software>>,\nring: Option<&Mapping<'static>>,\ngp: Option<&Snapshot<'static>>,\npb: Option<&Snapshot<'static>>,\nwrite: impl FnOnce(\n&mut Self,\n&kf_chan::user_storage::Storage<kf_chan::user_storage::CpuView>,\n) -> Result<(), String>,\n) -> Turn<()> {"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": "& (entries - 1);"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": ".snapshot(me, r, r.source.0 + u64::from(idx) * 8, 8)"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": "self.snapshot(me, r, u.gpfifo_va + i * 8, 8)"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": "let n = counter.fetch_add(1, Ordering::Relaxed) + 1;"
+      },
+      {
+        "code": "clippy::print_literal",
+        "message": "literal with an empty format string",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": "false"
+      },
+      {
+        "code": "clippy::collapsible_if",
+        "message": "this `if` statement can be collapsed",
+        "path": "crates/kf-qemu/src/userrelay.rs",
+        "snippet": "if let Ok(r) = self.inner.try_lock() {\nif !self.canceled.load(Ordering::Acquire) && active(&r) {\nring(self.idx);\n}\n}"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userrelay.rs",
+        "snippet": "at: base - page,"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userrelay.rs",
+        "snippet": "Ok(kf_linux_raw::HostOffset::new(self.at + offset))"
+      },
+      {
+        "code": "clippy::collapsible_if",
+        "message": "this `if` statement can be collapsed",
+        "path": "crates/kf-qemu/src/userrelay.rs",
+        "snippet": "if let Ok(mut r) = record.lock() {\nif let Some(n) = r.notifier.take() {\nme.release_notifier(n);\n}\n}"
+      },
+      {
+        "code": "clippy::needless_borrow",
+        "message": "this expression creates a reference which is immediately dereferenced by the compiler",
+        "path": "crates/kf-qemu/src/userrelay.rs",
+        "snippet": ".initialize(&r.allocation, &identity)"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userrelay.rs",
+        "snippet": "let n = self.relay_reports.fetch_add(1, Ordering::Relaxed) + 1;"
+      },
+      {
+        "code": "clippy::collapsible_if",
+        "message": "this `if` statement can be collapsed",
+        "path": "crates/kf-qemu/src/userrelay.rs",
+        "snippet": "if let Some(record) = self.user_ring_record(token) {\nif let Ok(mut r) = record.lock() {\nif Arc::ptr_eq(&r.allocation, allocation) && r.notifier.is_none() {\nr.notifier = Some(n);\nreturn;\n}\n}\n}"
+      },
+      {
+        "code": "clippy::collapsible_if",
+        "message": "this `if` statement can be collapsed",
+        "path": "crates/kf-qemu/src/userrelay.rs",
+        "snippet": "if let Ok(mut r) = record.lock() {\nif Arc::ptr_eq(&r.allocation, allocation) && r.notifier.is_none() {\nr.notifier = Some(n);\nreturn;\n}\n}"
+      },
+      {
+        "code": "clippy::collapsible_if",
+        "message": "this `if` statement can be collapsed",
+        "path": "crates/kf-qemu/src/userrelay.rs",
+        "snippet": "if self.inbox.user_va.release_after_channel_free(lease).is_ok() && sources_ok {\nif let Ok(mut holds) = self.user_birth_holds.lock() {\nholds.retain(|(id, _)| !Arc::ptr_eq(id, &identity));\n}\n}"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userstrand.rs",
+        "snippet": "lines += 1;"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userstrand.rs",
+        "snippet": "lines += 1;"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userstrand.rs",
+        "snippet": "iters - e.iters_then,"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userstrand.rs",
+        "snippet": "lines += 1;"
+      },
+      {
+        "code": "clippy::manual_is_multiple_of",
+        "message": "manual implementation of `.is_multiple_of()`",
+        "path": "crates/kf-qemu/src/usershadow.rs",
+        "snippet": "if bytes.len() > maximum || bytes.len() % 4 != 0 {"
+      },
+      {
+        "code": "clippy::chunks_exact_to_as_chunks",
+        "message": "using `chunks_exact` with a constant chunk size",
+        "path": "crates/kf-qemu/src/usershadow.rs",
+        "snippet": "for b in bytes.chunks_exact(4) {"
+      },
+      {
+        "code": "clippy::indexing_slicing",
+        "message": "indexing may panic",
+        "path": "crates/kf-qemu/src/usershadow.rs",
+        "snippet": "words.push(u32::from_le_bytes([b[0], b[1], b[2], b[3]]));"
+      },
+      {
+        "code": "clippy::indexing_slicing",
+        "message": "indexing may panic",
+        "path": "crates/kf-qemu/src/usershadow.rs",
+        "snippet": "words.push(u32::from_le_bytes([b[0], b[1], b[2], b[3]]));"
+      },
+      {
+        "code": "clippy::indexing_slicing",
+        "message": "indexing may panic",
+        "path": "crates/kf-qemu/src/usershadow.rs",
+        "snippet": "words.push(u32::from_le_bytes([b[0], b[1], b[2], b[3]]));"
+      },
+      {
+        "code": "clippy::indexing_slicing",
+        "message": "indexing may panic",
+        "path": "crates/kf-qemu/src/usershadow.rs",
+        "snippet": "words.push(u32::from_le_bytes([b[0], b[1], b[2], b[3]]));"
+      },
+      {
+        "code": "clippy::indexing_slicing",
+        "message": "indexing may panic",
+        "path": "crates/kf-qemu/src/usershadow.rs",
+        "snippet": "counts[Class::InitialMaskHypothesis as usize] = 1;"
+      },
+      {
+        "code": "clippy::indexing_slicing",
+        "message": "indexing may panic",
+        "path": "crates/kf-qemu/src/usershadow.rs",
+        "snippet": "let c = &mut self.counts[class as usize];"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/usershadow.rs",
+        "snippet": "self.remaining -= bytes;"
+      },
+      {
+        "code": "clippy::indexing_slicing",
+        "message": "slicing may panic",
+        "path": "crates/kf-qemu/src/usershadow.rs",
+        "snippet": "match scan.segment(&words[at..], &software) {"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/usershadow.rs",
+        "snippet": "at += t.end;"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/chan.rs",
+        "snippet": "h.arg_words.min(words.len().saturating_sub(i + 1)).max(1)"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/chan.rs",
+        "snippet": "MethodForm::Incrementing => arg as u32 * 4,"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/chan.rs",
+        "snippet": "let method = h.method + advance;"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/chan.rs",
+        "snippet": "words.get(i + 1 + arg).copied()"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/chan.rs",
+        "snippet": "let nth = p.defapi_triggers.fetch_add(1, Ordering::Relaxed) + 1;"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/chan.rs",
+        "snippet": "let nth = DONE.fetch_add(1, Ordering::Relaxed) + 1;"
+      },
+      {
+        "code": "clippy::type_complexity",
+        "message": "very complex type used. Consider factoring parts into `type` definitions",
+        "path": "crates/kf-qemu/src/chan.rs",
+        "snippet": "dbg: Mutex<HashMap<(u32, u32), (u32, u32, u32)>>,"
+      },
+      {
+        "code": "clippy::type_complexity",
+        "message": "very complex type used. Consider factoring parts into `type` definitions",
+        "path": "crates/kf-qemu/src/chan.rs",
+        "snippet": "acts: Mutex<Option<std::sync::mpsc::Sender<(Act, kf_gsp::Deferred, &'static str)>>>,"
+      },
+      {
+        "code": "clippy::type_complexity",
+        "message": "very complex type used. Consider factoring parts into `type` definitions",
+        "path": "crates/kf-qemu/src/chan.rs",
+        "snippet": "groups: Mutex<HashMap<(u32, u32, u32), (u32, u32)>>,"
+      },
+      {
+        "code": "clippy::indexing_slicing",
+        "message": "indexing may panic",
+        "path": "crates/kf-qemu/src/chan.rs",
+        "snippet": "self.db_census[i].fetch_add(1, Ordering::Relaxed);"
+      },
+      {
+        "code": "clippy::indexing_slicing",
+        "message": "indexing may panic",
+        "path": "crates/kf-qemu/src/chan.rs",
+        "snippet": "std::array::from_fn(|i| self.db_census[i].load(Ordering::Relaxed))"
+      },
+      {
+        "code": "clippy::collapsible_if",
+        "message": "this `if` statement can be collapsed",
+        "path": "crates/kf-qemu/src/chan.rs",
+        "snippet": "if let Some(sw) = &t.user_defapi {\nif (key.0 == client && sw.guest == object)\n|| (ChanScope {\ntsg: t.tsg,\nparent: t.parent,\ndevice: t.device,\n})\n.freed_by(*key, client, object)\n{\nsw.live.store(false, Ordering::Release);\n}\n}"
+      },
+      {
+        "code": "clippy::indexing_slicing",
+        "message": "slicing may panic",
+        "path": "crates/kf-qemu/src/chan.rs",
+        "snippet": "&update.bundle[..update.bundle.len().min(64)]"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/chan.rs",
+        "snippet": "let n = me.birth_refused_cap.fetch_add(1, Ordering::Relaxed) + 1;"
+      },
+      {
+        "code": "clippy::collapsible_if",
+        "message": "this `if` statement can be collapsed",
+        "path": "crates/kf-qemu/src/chan.rs",
+        "snippet": "if g.last_put == Some(0) && g.serves <= 3 {\nif let UserdView::Store { region, at, .. } = &g.userd {\nlet nz: Vec<String> = (0..0x1000u64)\n.step_by(4)\n.filter_map(|o| {\nregion\n.load_u32(HostOffset::new(o))\n.ok()\n.filter(|v| *v != 0)\n.map(|v| format!(\"+{o:#x}={v:#x}\"))\n})\n.take(16)\n.collect();\neprintln!(\n\"kf3: chan token {:#x}: GP_PUT=0 at USERD+{at:#x}+0x8c; non-zero words in its page: [{}]\",\ng.guest_idx,\nnz.join(\" \")\n);\n}\n}"
+      },
+      {
+        "code": "clippy::collapsible_if",
+        "message": "this `if` statement can be collapsed",
+        "path": "crates/kf-qemu/src/device.rs",
+        "snippet": "if let Some(Ok(v)) = fsm.mmio_read_with(model.as_ref(), 0, off) {\nif published.insert(off, v) != Some(v) {\nself.shadow_store(off, v, 4);\n}\n}"
+      },
+      {
+        "code": "clippy::manual_checked_ops",
+        "message": "manual checked division",
+        "path": "crates/kf-qemu/src/device.rs",
+        "snippet": "let avg = |sum: u64, n: u64| if n == 0 { 0 } else { sum / n / 1000 };"
+      },
+      {
+        "code": "clippy::manual_checked_ops",
+        "message": "manual checked division",
+        "path": "crates/kf-qemu/src/device.rs",
+        "snippet": "if tm.walks == 0 {"
+      },
+      {
+        "code": "clippy::borrow_deref_ref",
+        "message": "deref on an immutable reference",
+        "path": "crates/kf-qemu/src/device.rs",
+        "snippet": "&*self.chans,"
+      },
+      {
+        "code": "clippy::type_complexity",
+        "message": "very complex type used. Consider factoring parts into `type` definitions",
+        "path": "crates/kf-qemu/src/display.rs",
+        "snippet": "rg_scan_line: Option<(u64, u64, (u8, u8), (u8, u8))>,"
+      },
+      {
+        "code": "clippy::chunks_exact_to_as_chunks",
+        "message": "using `chunks_exact` with a constant chunk size",
+        "path": "crates/kf-qemu/src/display.rs",
+        "snippet": ".chunks_exact(4)"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userread.rs",
+        "snippet": "out.push_str(&format!(\"(+{} more)\", self.spans.len() - 8));"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userread.rs",
+        "snippet": "pieces += 1;"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userread.rs",
+        "snippet": "let len = (row_end - at).min(end - at);"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userread.rs",
+        "snippet": "let len = (row_end - at).min(end - at);"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userread.rs",
+        "snippet": ".checked_add(at - base)"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userread.rs",
+        "snippet": "at += len;"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userread.rs",
+        "snippet": "let end = va + bytes as u64;"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userread.rs",
+        "snippet": "let dest = out.get_mut(done..done + len).ok_or(Refusal::Bounds)?;"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userread.rs",
+        "snippet": "ram_pieces += 1;"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userread.rs",
+        "snippet": "let pos = usize::try_from(off - b.fd_off).map_err(|_| Refusal::Bounds)?;"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userread.rs",
+        "snippet": "let n = (b.mem.len() - pos).min(len - copied);"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userread.rs",
+        "snippet": "let n = (b.mem.len() - pos).min(len - copied);"
+      },
+      {
+        "code": "clippy::indexing_slicing",
+        "message": "slicing may panic",
+        "path": "crates/kf-qemu/src/userread.rs",
+        "snippet": "if !b.mem.read_into(pos, &mut dest[copied..copied + n]) {"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userread.rs",
+        "snippet": "if !b.mem.read_into(pos, &mut dest[copied..copied + n]) {"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userread.rs",
+        "snippet": "copied += n;"
+      },
+      {
+        "code": "clippy::arithmetic_side_effects",
+        "message": "arithmetic operation that can potentially result in unexpected side-effects",
+        "path": "crates/kf-qemu/src/userread.rs",
+        "snippet": "done += len;"
+      },
+      {
+        "code": "clippy::manual_range_contains",
+        "message": "manual `Range::contains` implementation",
+        "path": "crates/kf-qemu/src/mem.rs",
+        "snippet": "let in_region = va >= RING_REGION_BASE && va < RING_REGION_BASE + RING_REGION_BYTES;"
+      },
+      {
+        "code": "clippy::type_complexity",
+        "message": "very complex type used. Consider factoring parts into `type` definitions",
+        "path": "crates/kf-qemu/src/userbirth.rs",
+        "snippet": "pending: Mutex<HashMap<(u32, u32), Weak<Birth<V>>>>,"
+      },
+      {
+        "code": "clippy::type_complexity",
+        "message": "very complex type used. Consider factoring parts into `type` definitions",
+        "path": "crates/kf-qemu/src/userbirth.rs",
+        "snippet": ") -> Result<Option<Result<Arc<Lease<V>>, String>>, String> {"
+      },
+      {
+        "code": "clippy::type_complexity",
+        "message": "very complex type used. Consider factoring parts into `type` definitions",
+        "path": "crates/kf-qemu/src/userva.rs",
+        "snippet": "pub fn take(&self) -> Result<Option<Result<Arc<Lease<V>>, String>>, String> {"
+      },
+      {
+        "code": "clippy::needless_borrow",
+        "message": "this expression creates a reference which is immediately dereferenced by the compiler",
+        "path": "crates/kf-qemu/src/userva.rs",
+        "snippet": "lease.reply.publish(Ok(Arc::downgrade(&lease)));"
+      },
+      {
+        "code": "clippy::collapsible_if",
+        "message": "this `if` statement can be collapsed",
+        "path": "crates/kf-qemu/src/userva.rs",
+        "snippet": "if let Ok(mut held) = self.held.lock() {\nif let Some(i) = held.iter().position(|v| Arc::ptr_eq(v, lease)) {\nheld.remove(i);\nlease\n.mirror\n.live\n.fetch_sub(1, std::sync::atomic::Ordering::AcqRel);\n}\n}"
+      },
+      {
+        "code": "clippy::explicit_counter_loop",
+        "message": "the variable `next` is used as a loop counter",
+        "path": "crates/kf-rm/tests/rmgraph.rs",
+        "snippet": "for &class in &all {"
+      },
+      {
+        "code": "clippy::type_complexity",
+        "message": "very complex type used. Consider factoring parts into `type` definitions",
+        "path": "crates/kf-rm/tests/host_facts_query_ga106.rs",
+        "snippet": "ctrls: BTreeMap<u32, Vec<(Vec<u8>, u32, Vec<u8>)>>,"
+      },
+      {
+        "code": "clippy::type_complexity",
+        "message": "very complex type used. Consider factoring parts into `type` definitions",
+        "path": "crates/kf-rm/tests/host_facts_query_ga106.rs",
+        "snippet": "let mut ctrls: BTreeMap<u32, Vec<(Vec<u8>, u32, Vec<u8>)>> = BTreeMap::new();"
+      },
+      {
+        "code": "clippy::needless_lifetimes",
+        "message": "the following explicit lifetimes could be elided: 'a",
+        "path": "crates/kf-harness/src/bin/kf-syncwait-stress.rs",
+        "snippet": "fn run_family<'a>("
+      },
+      {
+        "code": "clippy::needless_lifetimes",
+        "message": "the following explicit lifetimes could be elided: 'a",
+        "path": "crates/kf-harness/src/bin/kf-syncwait-stress.rs",
+        "snippet": "rm: &'a HostRm,"
+      },
+      {
+        "code": "clippy::doc_lazy_continuation",
+        "message": "doc list item without indentation",
+        "path": "crates/kf-harness/src/bin/kf-gate5.rs",
+        "snippet": "//! Completion is the guest's own business (it polls its semaphore), exactly as on bare metal."
+      },
+      {
+        "code": "clippy::doc_lazy_continuation",
+        "message": "doc list item without indentation",
+        "path": "crates/kf-harness/src/bin/kf-gate5.rs",
+        "snippet": "//! Completion is the guest's own business (it polls its semaphore), exactly as on bare metal."
+      },
+      {
+        "code": "deprecated",
+        "message": "use of deprecated method `std::sync::atomic::Atomic::<u64>::fetch_update`: renamed to `try_update` for consistency",
+        "path": "crates/kf-qemu/src/chan.rs",
+        "snippet": ".fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_sub(1));"
+      },
+      {
+        "code": "unused_mut",
+        "message": "variable does not need to be mutable",
+        "path": "crates/kf-harness/src/bin/kf-gate4.rs",
+        "snippet": "let mut plane = Plane::for_family("
+      },
+      {
+        "code": "clippy::manual_is_multiple_of",
+        "message": "manual implementation of `.is_multiple_of()`",
+        "path": "crates/kf-harness/src/bin/kf-gate4.rs",
+        "snippet": "if off % 4 != 0 || out.len() % 4 != 0 {"
+      },
+      {
+        "code": "clippy::chunks_exact_to_as_chunks",
+        "message": "using `chunks_exact_mut` with a constant chunk size",
+        "path": "crates/kf-harness/src/bin/kf-gate4.rs",
+        "snippet": "for (i, chunk) in out.chunks_exact_mut(4).enumerate() {"
+      },
+      {
+        "code": "clippy::type_complexity",
+        "message": "very complex type used. Consider factoring parts into `type` definitions",
+        "path": "crates/kf-harness/src/bin/kf-gate4.rs",
+        "snippet": "chans: Vec<(u32, Mutex<(TranslatedChannel, Option<String>)>)>,"
+      },
+      {
+        "code": "clippy::type_complexity",
+        "message": "very complex type used. Consider factoring parts into `type` definitions",
+        "path": "crates/kf-harness/src/bin/kf-gate4.rs",
+        "snippet": "fn slot(&self, host_token: u32) -> Option<(u32, &Mutex<(TranslatedChannel, Option<String>)>)> {"
+      },
+      {
+        "code": "deprecated",
+        "message": "use of deprecated method `std::sync::atomic::Atomic::<u32>::fetch_update`: renamed to `try_update` for consistency",
+        "path": "crates/kf-qemu/src/device.rs",
+        "snippet": "let _ = w.fetch_update(Ordering::AcqRel, Ordering::Acquire, |old| {"
+      },
+      {
+        "code": "deprecated",
+        "message": "use of deprecated method `std::sync::atomic::Atomic::<u64>::fetch_update`: renamed to `try_update` for consistency",
+        "path": "crates/kf-qemu/src/device.rs",
+        "snippet": "left.fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| n.checked_sub(1))"
+      },
+      {
+        "code": "unused_mut",
+        "message": "variable does not need to be mutable",
+        "path": "crates/kf-harness/src/bin/kf-gate4.rs",
+        "snippet": "let mut plane = Plane::for_family("
+      },
+      {
+        "code": "clippy::manual_is_multiple_of",
+        "message": "manual implementation of `.is_multiple_of()`",
+        "path": "crates/kf-harness/src/bin/kf-gate4.rs",
+        "snippet": "if off % 4 != 0 || out.len() % 4 != 0 {"
+      },
+      {
+        "code": "clippy::chunks_exact_to_as_chunks",
+        "message": "using `chunks_exact_mut` with a constant chunk size",
+        "path": "crates/kf-harness/src/bin/kf-gate4.rs",
+        "snippet": "for (i, chunk) in out.chunks_exact_mut(4).enumerate() {"
+      },
+      {
+        "code": "clippy::type_complexity",
+        "message": "very complex type used. Consider factoring parts into `type` definitions",
+        "path": "crates/kf-harness/src/bin/kf-gate4.rs",
+        "snippet": "chans: Vec<(u32, Mutex<(TranslatedChannel, Option<String>)>)>,"
+      },
+      {
+        "code": "clippy::type_complexity",
+        "message": "very complex type used. Consider factoring parts into `type` definitions",
+        "path": "crates/kf-harness/src/bin/kf-gate4.rs",
+        "snippet": "fn slot(&self, host_token: u32) -> Option<(u32, &Mutex<(TranslatedChannel, Option<String>)>)> {"
+      },
+      {
+        "code": "clippy::doc_lazy_continuation",
+        "message": "doc list item without indentation",
+        "path": "crates/kf-harness/src/bin/kf-gate3.rs",
+        "snippet": "//! Every pump runs on the doorbell or on an event-fd wake; nothing polls a completion."
+      },
+      {
+        "code": "deprecated",
+        "message": "use of deprecated method `std::sync::atomic::Atomic::<u64>::fetch_update`: renamed to `try_update` for consistency",
+        "path": "crates/kf-qemu/src/mem.rs",
+        "snippet": ".fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_add(1))"
+      },
+      {
+        "code": "clippy::doc_lazy_continuation",
+        "message": "doc list item without indentation",
+        "path": "crates/kf-harness/src/bin/kf-gate3.rs",
+        "snippet": "//! Every pump runs on the doorbell or on an event-fd wake; nothing polls a completion."
+      },
+      {
+        "code": "unused_mut",
+        "message": "variable does not need to be mutable",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": "let mut word = |off: u64| {"
+      },
+      {
+        "code": "unused_mut",
+        "message": "variable does not need to be mutable",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": "let mut word = |off: u64| {"
+      },
+      {
+        "code": "clippy::assertions_on_constants",
+        "message": "this assertion has a constant value",
+        "path": "crates/kf-harness/src/bin/kf-user-ring-probe.rs",
+        "snippet": "assert!(SENTINEL + 4 <= BYTES);"
+      },
+      {
+        "code": "unused_mut",
+        "message": "variable does not need to be mutable",
+        "path": "crates/kf-qemu/src/display.rs",
+        "snippet": "let mut engine = if constructor_probe {"
+      },
+      {
+        "code": "unused_imports",
+        "message": "unused import: `kf_abi::submit as s`",
+        "path": "crates/kf-rm/src/authored.rs",
+        "snippet": "use kf_abi::submit as s;"
+      },
+      {
+        "code": "clippy::unusual_byte_groupings",
+        "message": "digits of hex, binary or octal literal not in groups of equal size",
+        "path": "crates/kf-rm/src/barpde.rs",
+        "snippet": "let p = decode_update_bar_pde(&body(BAR_TYPE_2, 0x2_efbc_302, 47)).unwrap();"
+      },
+      {
+        "code": "clippy::unusual_byte_groupings",
+        "message": "digits of hex, binary or octal literal not in groups of equal size",
+        "path": "crates/kf-rm/src/barpde.rs",
+        "snippet": "entry: 0x2_efbc_302,"
+      },
+      {
+        "code": "clippy::unusual_byte_groupings",
+        "message": "digits of hex, binary or octal literal not in groups of equal size",
+        "path": "crates/kf-rm/src/barpde.rs",
+        "snippet": "body(BAR_TYPE_2, 0x2_efbc_302, 47),"
+      },
+      {
+        "code": "private_bounds",
+        "message": "trait `userstore::Host` is more private than the item `userstore::Cache`",
+        "path": "crates/kf-qemu/src/userstore.rs",
+        "snippet": "pub(crate) struct Cache<H: Host = Native> {"
+      },
+      {
+        "code": "private_bounds",
+        "message": "trait `userstore::Host` is more private than the item `userstore::Cache<H>`",
+        "path": "crates/kf-qemu/src/userstore.rs",
+        "snippet": "impl<H: Host> Cache<H> {"
+      },
+      {
+        "code": "clippy::chunks_exact_to_as_chunks",
+        "message": "using `chunks_exact` with a constant chunk size",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": "for word in pb.bytes.chunks_exact(4) {"
+      },
+      {
+        "code": "clippy::chunks_exact_to_as_chunks",
+        "message": "using `chunks_exact` with a constant chunk size",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": ".chunks_exact(4)"
+      },
+      {
+        "code": "clippy::collapsible_if",
+        "message": "this `if` statement can be collapsed",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": "if x.delay_ms == 200 {\nif let Some(dir) = trace_dir() {\nlet mut out = format!(\n\"STRADDLE {:#x}:{:#x} seq={} pb_va={:#x} bytes={}\\nas scanned:\\n\",\nr.key.0, r.key.1, x.seq, x.va, x.bytes\n);\nwords_text(&mut out, &x.words);\nout.push_str(\"re-read +200ms:\\n\");\nwords_text(&mut out, &fresh[..fresh.len().min(TRACE_WORDS)]);\nlet _ = std::fs::create_dir_all(dir).and_then(|()| {\nstd::fs::write(\ndir.join(format!(\n\"user-ring-straddle-{:x}-{:x}-{}.txt\",\nr.key.0, r.key.1, x.seq\n)),\nout.as_bytes(),\n)\n});\n}\n}"
+      },
+      {
+        "code": "clippy::chunks_exact_to_as_chunks",
+        "message": "using `chunks_exact` with a constant chunk size",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": ".chunks_exact(4)"
+      },
+      {
+        "code": "clippy::collapsible_if",
+        "message": "this `if` statement can be collapsed",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": "if let (Some(w2), Some(n)) = (&words2, changed) {\nif n > 0 {\nlet _ = writeln!(out, \"  reread words:\");\nwords_text(&mut out, &w2[..w2.len().min(TRACE_WORDS)]);\n}\n}"
+      },
+      {
+        "code": "clippy::too_many_arguments",
+        "message": "this function has too many arguments (8/7)",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": "fn publish(\n&mut self,\nme: &ChanPlane,\nr: &userrelay::Record,\nsoftware: Option<&Option<Software>>,\nring: Option<&Mapping<'static>>,\ngp: Option<&Snapshot<'static>>,\npb: Option<&Snapshot<'static>>,\nwrite: impl FnOnce(\n&mut Self,\n&kf_chan::user_storage::Storage<kf_chan::user_storage::CpuView>,\n) -> Result<(), String>,\n) -> Turn<()> {"
+      },
+      {
+        "code": "clippy::print_literal",
+        "message": "literal with an empty format string",
+        "path": "crates/kf-qemu/src/userpump.rs",
+        "snippet": "false"
+      },
+      {
+        "code": "clippy::collapsible_if",
+        "message": "this `if` statement can be collapsed",
+        "path": "crates/kf-qemu/src/userrelay.rs",
+        "snippet": "if let Ok(r) = self.inner.try_lock() {\nif !self.canceled.load(Ordering::Acquire) && active(&r) {\nring(self.idx);\n}\n}"
+      },
+      {
+        "code": "clippy::collapsible_if",
+        "message": "this `if` statement can be collapsed",
+        "path": "crates/kf-qemu/src/userrelay.rs",
+        "snippet": "if let Ok(mut r) = record.lock() {\nif let Some(n) = r.notifier.take() {\nme.release_notifier(n);\n}\n}"
+      },
+      {
+        "code": "clippy::needless_borrow",
+        "message": "this expression creates a reference which is immediately dereferenced by the compiler",
+        "path": "crates/kf-qemu/src/userrelay.rs",
+        "snippet": ".initialize(&r.allocation, &identity)"
+      },
+      {
+        "code": "clippy::collapsible_if",
+        "message": "this `if` statement can be collapsed",
+        "path": "crates/kf-qemu/src/userrelay.rs",
+        "snippet": "if let Some(record) = self.user_ring_record(token) {\nif let Ok(mut r) = record.lock() {\nif Arc::ptr_eq(&r.allocation, allocation) && r.notifier.is_none() {\nr.notifier = Some(n);\nreturn;\n}\n}\n}"
+      },
+      {
+        "code": "clippy::collapsible_if",
+        "message": "this `if` statement can be collapsed",
+        "path": "crates/kf-qemu/src/userrelay.rs",
+        "snippet": "if let Ok(mut r) = record.lock() {\nif Arc::ptr_eq(&r.allocation, allocation) && r.notifier.is_none() {\nr.notifier = Some(n);\nreturn;\n}\n}"
+      },
+      {
+        "code": "clippy::collapsible_if",
+        "message": "this `if` statement can be collapsed",
+        "path": "crates/kf-qemu/src/userrelay.rs",
+        "snippet": "if self.inbox.user_va.release_after_channel_free(lease).is_ok() && sources_ok {\nif let Ok(mut holds) = self.user_birth_holds.lock() {\nholds.retain(|(id, _)| !Arc::ptr_eq(id, &identity));\n}\n}"
+      },
+      {
+        "code": "clippy::manual_is_multiple_of",
+        "message": "manual implementation of `.is_multiple_of()`",
+        "path": "crates/kf-qemu/src/usershadow.rs",
+        "snippet": "if bytes.len() > maximum || bytes.len() % 4 != 0 {"
+      },
+      {
+        "code": "clippy::chunks_exact_to_as_chunks",
+        "message": "using `chunks_exact` with a constant chunk size",
+        "path": "crates/kf-qemu/src/usershadow.rs",
+        "snippet": "for b in bytes.chunks_exact(4) {"
+      },
+      {
+        "code": "clippy::type_complexity",
+        "message": "very complex type used. Consider factoring parts into `type` definitions",
+        "path": "crates/kf-qemu/src/chan.rs",
+        "snippet": "dbg: Mutex<HashMap<(u32, u32), (u32, u32, u32)>>,"
+      },
+      {
+        "code": "clippy::type_complexity",
+        "message": "very complex type used. Consider factoring parts into `type` definitions",
+        "path": "crates/kf-qemu/src/chan.rs",
+        "snippet": "acts: Mutex<Option<std::sync::mpsc::Sender<(Act, kf_gsp::Deferred, &'static str)>>>,"
+      },
+      {
+        "code": "clippy::type_complexity",
+        "message": "very complex type used. Consider factoring parts into `type` definitions",
+        "path": "crates/kf-qemu/src/chan.rs",
+        "snippet": "groups: Mutex<HashMap<(u32, u32, u32), (u32, u32)>>,"
+      },
+      {
+        "code": "clippy::collapsible_if",
+        "message": "this `if` statement can be collapsed",
+        "path": "crates/kf-qemu/src/chan.rs",
+        "snippet": "if let Some(sw) = &t.user_defapi {\nif (key.0 == client && sw.guest == object)\n|| (ChanScope {\ntsg: t.tsg,\nparent: t.parent,\ndevice: t.device,\n})\n.freed_by(*key, client, object)\n{\nsw.live.store(false, Ordering::Release);\n}\n}"
+      },
+      {
+        "code": "clippy::collapsible_if",
+        "message": "this `if` statement can be collapsed",
+        "path": "crates/kf-qemu/src/chan.rs",
+        "snippet": "if g.last_put == Some(0) && g.serves <= 3 {\nif let UserdView::Store { region, at, .. } = &g.userd {\nlet nz: Vec<String> = (0..0x1000u64)\n.step_by(4)\n.filter_map(|o| {\nregion\n.load_u32(HostOffset::new(o))\n.ok()\n.filter(|v| *v != 0)\n.map(|v| format!(\"+{o:#x}={v:#x}\"))\n})\n.take(16)\n.collect();\neprintln!(\n\"kf3: chan token {:#x}: GP_PUT=0 at USERD+{at:#x}+0x8c; non-zero words in its page: [{}]\",\ng.guest_idx,\nnz.join(\" \")\n);\n}\n}"
+      },
+      {
+        "code": "clippy::collapsible_if",
+        "message": "this `if` statement can be collapsed",
+        "path": "crates/kf-qemu/src/device.rs",
+        "snippet": "if let Some(Ok(v)) = fsm.mmio_read_with(model.as_ref(), 0, off) {\nif published.insert(off, v) != Some(v) {\nself.shadow_store(off, v, 4);\n}\n}"
+      },
+      {
+        "code": "clippy::manual_checked_ops",
+        "message": "manual checked division",
+        "path": "crates/kf-qemu/src/device.rs",
+        "snippet": "let avg = |sum: u64, n: u64| if n == 0 { 0 } else { sum / n / 1000 };"
+      },
+      {
+        "code": "clippy::manual_checked_ops",
+        "message": "manual checked division",
+        "path": "crates/kf-qemu/src/device.rs",
+        "snippet": "if tm.walks == 0 {"
+      },
+      {
+        "code": "clippy::borrow_deref_ref",
+        "message": "deref on an immutable reference",
+        "path": "crates/kf-qemu/src/device.rs",
+        "snippet": "&*self.chans,"
+      },
+      {
+        "code": "clippy::type_complexity",
+        "message": "very complex type used. Consider factoring parts into `type` definitions",
+        "path": "crates/kf-qemu/src/display.rs",
+        "snippet": "rg_scan_line: Option<(u64, u64, (u8, u8), (u8, u8))>,"
+      },
+      {
+        "code": "clippy::chunks_exact_to_as_chunks",
+        "message": "using `chunks_exact` with a constant chunk size",
+        "path": "crates/kf-qemu/src/display.rs",
+        "snippet": ".chunks_exact(4)"
+      },
+      {
+        "code": "clippy::field_reassign_with_default",
+        "message": "field assignment outside of initializer for an instance created with Default::default()",
+        "path": "crates/kf-qemu/src/display.rs",
+        "snippet": "gpu.barrier = 1;"
+      },
+      {
+        "code": "clippy::manual_range_contains",
+        "message": "manual `Range::contains` implementation",
+        "path": "crates/kf-qemu/src/mem.rs",
+        "snippet": "let in_region = va >= RING_REGION_BASE && va < RING_REGION_BASE + RING_REGION_BYTES;"
+      },
+      {
+        "code": "clippy::type_complexity",
+        "message": "very complex type used. Consider factoring parts into `type` definitions",
+        "path": "crates/kf-qemu/src/userbirth.rs",
+        "snippet": "pending: Mutex<HashMap<(u32, u32), Weak<Birth<V>>>>,"
+      },
+      {
+        "code": "clippy::type_complexity",
+        "message": "very complex type used. Consider factoring parts into `type` definitions",
+        "path": "crates/kf-qemu/src/userbirth.rs",
+        "snippet": ") -> Result<Option<Result<Arc<Lease<V>>, String>>, String> {"
+      },
+      {
+        "code": "clippy::type_complexity",
+        "message": "very complex type used. Consider factoring parts into `type` definitions",
+        "path": "crates/kf-qemu/src/userva.rs",
+        "snippet": "pub fn take(&self) -> Result<Option<Result<Arc<Lease<V>>, String>>, String> {"
+      },
+      {
+        "code": "clippy::needless_borrow",
+        "message": "this expression creates a reference which is immediately dereferenced by the compiler",
+        "path": "crates/kf-qemu/src/userva.rs",
+        "snippet": "lease.reply.publish(Ok(Arc::downgrade(&lease)));"
+      },
+      {
+        "code": "clippy::collapsible_if",
+        "message": "this `if` statement can be collapsed",
+        "path": "crates/kf-qemu/src/userva.rs",
+        "snippet": "if let Ok(mut held) = self.held.lock() {\nif let Some(i) = held.iter().position(|v| Arc::ptr_eq(v, lease)) {\nheld.remove(i);\nlease\n.mirror\n.live\n.fetch_sub(1, std::sync::atomic::Ordering::AcqRel);\n}\n}"
+      },
+      {
+        "code": "clippy::type_complexity",
+        "message": "very complex type used. Consider factoring parts into `type` definitions",
+        "path": "crates/kf-qemu/src/userva.rs",
+        "snippet": "on_op: std::cell::RefCell<Option<(&'static str, Box<dyn FnOnce()>)>>,"
+      },
+      {
+        "code": "clippy::collapsible_if",
+        "message": "this `if` statement can be collapsed",
+        "path": "crates/kf-disp/tests/lockstep_threads.rs",
+        "snippet": "if held & (1 << j) != 0 && Some(j) != newest.map(|n| n.1) {\nif let Some(f) = ring.fds(j) {\nb.released.push((now + Duration::from_millis(3), f.memfd_id()));\n}\n}"
+      },
+      {
+        "code": "clippy::too_many_arguments",
+        "message": "this function has too many arguments (8/7)",
+        "path": "crates/kf-disp/tests/lockstep_threads.rs",
+        "snippet": "fn worker_thread(\nsh: Arc<Shared>,\nscn: Scn,\nring: Arc<FrameRing>,\nshare: Arc<TickShare>,\nframe_wake: Arc<AtomicBool>,\nrx: mpsc::Receiver<ToWorker>,\ndone: mpsc::Sender<u64>,\nbase: Instant,\n) {"
+      },
+      {
+        "code": "clippy::collapsible_if",
+        "message": "this `if` statement can be collapsed",
+        "path": "crates/kf-disp/tests/lockstep_threads.rs",
+        "snippet": "if i != T_GUEST || !done_flips {\nif last != 0 && now_us.saturating_sub(last) > 1_500_000 {\nsh.bad(format!(\"the {} thread made no progress for {} ms: it is BLOCKED\", NAMES[i], (now_us - last) / 1000));\nsh.stop.store(true, Ordering::Relaxed);\n}\n}"
+      },
+      {
+        "code": "clippy::manual_isolate_lowest_one",
+        "message": "manual implementation of `isolate_lowest_one`",
+        "path": "crates/kf-rm/src/display.rs",
+        "snippet": "get_type.set(\"displayId\", mask & mask.wrapping_neg());"
+      },
+      {
+        "code": "clippy::manual_is_multiple_of",
+        "message": "manual implementation of `.is_multiple_of()`",
+        "path": "crates/kf-rm/src/hostfacts.rs",
+        "snippet": "if num_tpc == 0 || usize::from(num_sm) > GR_GLOBAL_SM_ORDER_MAX_SM || num_sm % num_tpc != 0 {"
+      },
+      {
+        "code": "clippy::map_identity",
+        "message": "unnecessary map of the identity function",
+        "path": "crates/kf-rm/src/hostquery.rs",
+        "snippet": "Ok(g) => query_intr_table(host, kinds.as_deref().map_err(|e| e), *g),"
+      },
+      {
+        "code": "clippy::type_complexity",
+        "message": "very complex type used. Consider factoring parts into `type` definitions",
+        "path": "crates/kf-rm/src/rmrpc/policy.rs",
+        "snippet": "accepted: Option<Box<dyn FnMut(&RpcCommand) + Send>>,"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a function",
+        "path": "crates/kf-rm/src/rpc.rs",
+        "snippet": "pub fn name_of(function: u32) -> Option<&'static str> {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a constant",
+        "path": "crates/kf-rm/src/rpc.rs",
+        "snippet": "pub const CONTROLS: [(u32, ControlDisposition); 33] = ["
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a function",
+        "path": "crates/kf-rm/src/rpc.rs",
+        "snippet": "pub fn control_disposition(cmd: u32) -> ControlDisposition {"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for the crate",
+        "path": "crates/kf-chan/tests/user_progress_model.rs",
+        "snippet": "use kf_chan::tmode::SwCall;\nuse kf_chan::user_batch::{self, Action};\nuse kf_chan::user_consumption::ConsumedSource;\nuse kf_chan::user_progress::{Channel, Refusal, Work};\nuse kf_chan::user_stream::{self, Commands, Op, State};\n\nfn source() -> ConsumedSource {\nConsumedSource {\ngeneration: 91,\nguest_get: 7,\n}\n}\nfn software() -> Action {\nAction::Software(SwCall {\nsub: 6,\nvalue: 9,\nmethod: 0x200,\ndata: 27,\n})\n}\nfn put(c: &mut Channel) -> Option<u32> {\nmatch c.next().unwrap() {\nSome(Work::Commands { publication, words }) => {\nassert!(!words.is_empty());\nSome(publication.put)\n}\nNone => None,\n_ => panic!(\"expected a command cell\"),\n}\n}\n\n#[test]\nfn single_active_plan_blocks_cross_plan_software_and_requires_once_only_take() {\nlet state = State::default();\nlet commands = vec![Action::Commands(vec![0, 0])];\nlet mut c = Channel::new(8, 1).unwrap();\nc.start(source(), vec![software()], &state).unwrap();\nlet ticket = match c.next().unwrap().unwrap() {\nWork::Software { ticket, .. } => ticket,\n_ => panic!(\"software\"),\n};\nassert!(matches!(\nc.start(source(), commands.clone(), &state),\nErr(Refusal::Order)\n));\nassert!(matches!(\nc.start_noop(source(), &state),\nErr(Refusal::Order)\n));\nassert!(c.next().unwrap().is_none());\nassert_eq!(c.source_progress(), None);\nc.software_done(ticket).unwrap();\nassert_eq!(c.source_progress(), Some(source()));\nassert!(\nc.start(source(), commands.clone(), &state).is_err(),\n\"completed but not taken is still active\"\n);\nassert!(c.take_source_progress(90).is_err());\nassert!(c.start(source(), commands.clone(), &state).is_err());\nassert_eq!(c.take_source_progress(91).unwrap(), source());\nassert!(c.take_source_progress(91).is_err());\nc.start(source(), commands, &state).unwrap();\nassert!(c.software_done(ticket).is_err(), \"old plan ticket is stale\");\nassert_eq!(put(&mut c), Some(3));\nassert_eq!(c.source_progress(), None);\nc.observe_get(1, 3).unwrap();\nassert_eq!(c.take_source_progress(91).unwrap(), source());\n}\n\n#[test]\nfn header_only_empty_snapshot_is_not_a_noop_or_retired_source() {\nlet mut state = State::default();\nlet header =\nkf_abi::submit::method_header_inc(0, kf_abi::submit::fifo::SET_REFERENCE_C56F, 1).unwrap();\nlet words = Commands::copy_from(&[header], 8).unwrap();\nlet ops = user_stream::feed(&words, &mut state, |_| None).unwrap();\nassert!(ops.is_empty());\nassert!(state.has_pending());\nlet mut c = Channel::new(8, 1).unwrap();\nassert!(matches!(\nc.start(source(), user_batch::plan(&ops).unwrap(), &state),\nErr(Refusal::Plan)\n));\nassert!(matches!(c.start_noop(source(), &state), Err(Refusal::Plan)));\nassert_eq!(c.source_progress(), None);\n// Aggregate the contributing source pins through the complete continuation.\nlet words = Commands::copy_from(&[42], 8).unwrap();\nlet ops = user_stream::feed(&words, &mut state, |_| None).unwrap();\nassert!(!state.has_pending());\nc.start(source(), user_batch::plan(&ops).unwrap(), &state)\n.unwrap();\nassert_eq!(put(&mut c), Some(3));\nc.observe_get(1, 3).unwrap();\nassert_eq!(c.take_source_progress(91).unwrap(), source());\n// Explicit fully inspected no-op has no GPU work to wait for.\nassert!(c.start(source(), vec![], &state).is_err());\nc.start_noop(source(), &state).unwrap();\nassert_eq!(c.take_source_progress(91).unwrap(), source());\n}\n\n#[test]\nfn backpressure_wrap_software_and_final_source_progress_share_one_ledger() {\nlet mut ops = vec![Op::GuestReference(1); user_batch::WORDS + 1];\nops.push(Op::Software(SwCall {\nsub: 6,\nvalue: 9,\nmethod: 0x200,\ndata: 27,\n}));\nops.push(Op::GuestReference(2));\nlet mut c = Channel::new(8, 1).unwrap();\nc.start(source(), user_batch::plan(&ops).unwrap(), &State::default())\n.unwrap();\nassert_eq!(put(&mut c), Some(3));\nassert_eq!(put(&mut c), Some(6));\nassert_eq!(put(&mut c), None, \"Full leaves the third cell unissued\");\nassert!(c.observe_get(2, 3).is_err());\nassert!(c.observe_get(1, 7).is_err());\nc.observe_get(1, 3).unwrap();\nassert_eq!(\nput(&mut c),\nSome(1),\n\"same third cell retries after real credit\"\n);\nassert!(c.next().unwrap().is_none(), \"SW awaits command receipts\");\nc.observe_get(1, 1).unwrap();\nlet ticket = match c.next().unwrap().unwrap() {\nWork::Software { ticket, .. } => ticket,\n_ => panic!(\"SW\"),\n};\nassert!(c.next().unwrap().is_none());\nassert_eq!(c.source_progress(), None);\nc.software_done(ticket).unwrap();\nassert_eq!(put(&mut c), Some(4));\nassert_eq!(c.source_progress(), None);\nc.observe_get(1, 4).unwrap();\nassert_eq!(c.take_source_progress(91).unwrap(), source());\n}\n\n#[test]\nfn own_space_invalidate_waits_for_receipts_and_blocks_later_publication() {\nuse kf_chan::user_progress::{Channel, Work};\nlet mut channel = Channel::new(16, 7).unwrap();\nlet source = ConsumedSource {\ngeneration: 3,\nguest_get: 1,\n};\nlet actions = user_batch::plan(&[\nOp::GuestReference(1),\nOp::OwnInvalidate,\nOp::GuestReference(2),\n])\n.unwrap();\nchannel.start(source, actions, &State::default()).unwrap();\nlet Some(Work::Commands { publication, .. }) = channel.next().unwrap() else {\npanic!()\n};\nassert_eq!(publication.put, 3);\nassert!(\nchannel.next().unwrap().is_none(),\n\"prior commands are not HOST-consumed\"\n);\nchannel.observe_get(7, 3).unwrap();\nlet Some(Work::OwnInvalidate { ticket }) = channel.next().unwrap() else {\npanic!()\n};\nassert!(\nchannel.next().unwrap().is_none(),\n\"VA-manager result still pending\"\n);\nassert_eq!(channel.source_progress(), None);\nchannel.software_done(ticket).unwrap();\nlet Some(Work::Commands { publication, .. }) = channel.next().unwrap() else {\npanic!()\n};\nassert_eq!(publication.put, 6);\nassert_eq!(channel.source_progress(), None);\nchannel.observe_get(7, 6).unwrap();\nassert_eq!(channel.take_source_progress(3).unwrap(), source);\n}"
+      },
+      {
+        "code": "unused_imports",
+        "message": "unused imports: `Witness` and `witness`",
+        "path": "crates/kf-chan/tests/user_loop_model.rs",
+        "snippet": "use kf_chan::user_gate::{Gate, SyncGate, Witness, witness};"
+      },
+      {
+        "code": "unused_imports",
+        "message": "unused imports: `Witness` and `witness`",
+        "path": "crates/kf-chan/tests/user_loop_model.rs",
+        "snippet": "use kf_chan::user_gate::{Gate, SyncGate, Witness, witness};"
+      },
+      {
+        "code": "clippy::collapsible_if",
+        "message": "this `if` statement can be collapsed",
+        "path": "crates/kf-chan/tests/user_loop_model.rs",
+        "snippet": "if let Some(Some((g, get))) = m.pend.pop_front() {\nif g == m.gener {\nm.wb = Some((g, get));\n}\n}"
+      },
+      {
+        "code": "clippy::collapsible_if",
+        "message": "this `if` statement can be collapsed",
+        "path": "crates/kf-chan/tests/user_loop_model.rs",
+        "snippet": "if succ.is_empty() && cfg.liveness {\nif let Some(why) = goal_failure(cfg, &w) {\nreturn Err(Counterexample {\nwhy: format!(\"DEADLOCK: {why}\"),\ntrace: trace_of(&seen, k),\nstates,\n});\n}\n}"
+      },
+      {
+        "code": "clippy::map_entry",
+        "message": "usage of `contains_key` followed by `insert` on a `HashMap`",
+        "path": "crates/kf-chan/tests/user_loop_model.rs",
+        "snippet": "if !seen.contains_key(&nk) {\nseen.insert(nk, (k, s.label));\nq.push_back(s.w);\n}"
+      },
+      {
+        "code": "clippy::redundant_locals",
+        "message": "redundant redefinition of a binding `hard`",
+        "path": "crates/kf-chan/tests/user_lifecycle_stress.rs",
+        "snippet": "let hard = hard;"
+      },
+      {
+        "code": "clippy::too_many_arguments",
+        "message": "this function has too many arguments (8/7)",
+        "path": "crates/kf-chan/tests/user_lifecycle_props.rs",
+        "snippet": "fn run_pair(\nstream: &[Ge],\nsched: &[Sched],\nmode: LifecycleMode,\nring: u32,\npriv_entries: u32,\nchunk: usize,\nrate: Option<usize>,\ncfg: kf_chan::user_lazy::LazyConfig,\n) -> Pair {"
+      },
+      {
+        "code": "clippy::manual_is_multiple_of",
+        "message": "manual implementation of `.is_multiple_of()`",
+        "path": "crates/kf-chan/tests/user_lazy_model.rs",
+        "snippet": "let entries: Vec<_> = (0..2048).map(|_| random_step(&mut rng) % 3 != 0).collect();"
+      },
+      {
+        "code": "clippy::manual_is_multiple_of",
+        "message": "manual implementation of `.is_multiple_of()`",
+        "path": "crates/kf-chan/tests/user_lazy_model.rs",
+        "snippet": "if random_step(&mut rng) % 4 == 0 {"
+      },
+      {
+        "code": "clippy::manual_clamp",
+        "message": "clamp-like pattern without using clamp function",
+        "path": "crates/kf-chan/tests/user_lazy_turn.rs",
+        "snippet": "let cap = u64::from(entries / 2).max(1).min(OBSERVE_INTERVAL);"
+      },
+      {
+        "code": "unused_imports",
+        "message": "unused import: `HashSet`",
+        "path": "crates/kf-chan/tests/relay_fairness.rs",
+        "snippet": "use std::collections::{HashMap, HashSet, VecDeque};"
+      },
+      {
+        "code": "deprecated",
+        "message": "use of deprecated method `std::sync::atomic::Atomic::<u64>::fetch_update`: renamed to `try_update` for consistency",
+        "path": "crates/kf-chan/src/dbfast.rs",
+        "snippet": ".fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_sub(1));"
+      },
+      {
+        "code": "clippy::chunks_exact_to_as_chunks",
+        "message": "using `chunks_exact` with a constant chunk size",
+        "path": "crates/kf-chan/src/ring.rs",
+        "snippet": ".chunks_exact(4)"
+      },
+      {
+        "code": "clippy::manual_clamp",
+        "message": "clamp-like pattern without using clamp function",
+        "path": "crates/kf-chan/src/user_batch.rs",
+        "snippet": "let capacity = words.capacity().saturating_mul(2).max(4).min(WORDS);"
+      },
+      {
+        "code": "clippy::chunks_exact_to_as_chunks",
+        "message": "using `chunks_exact` with a constant chunk size",
+        "path": "crates/kf-chan/src/user_batch.rs",
+        "snippet": "for packet in words.chunks_exact(2) {"
+      },
+      {
+        "code": "clippy::should_implement_trait",
+        "message": "method `next` can be confused for the standard trait method `std::iter::Iterator::next`",
+        "path": "crates/kf-chan/src/user_progress.rs",
+        "snippet": "pub fn next(&mut self) -> Result<Option<Work<'_>>, Refusal> {\nlet Some(active) = self.active.as_mut() else {\nreturn Ok(None);\n};\nlet Some(ticket) = active.ready_ticket() else {\nreturn Ok(None);\n};\nlet publication = if ticket.kind == Kind::Commands {\nif self.commands.inner.available_gp() < 3 {\nreturn Ok(None);\n}\n// All refusals precede native I/O and leave both ledgers unchanged.\nSome(self.commands.publish(ticket)?)\n} else {\nNone\n};\nactive.issued += 1;\nOk(Some(\nmatch (&active.actions[ticket.ordinal as usize], publication) {\n(Action::Commands(words), Some(publication)) => {\nWork::Commands { publication, words }\n}\n(Action::OwnInvalidate, None) => Work::OwnInvalidate { ticket },\n(Action::Software(call), None) => Work::Software {\nticket,\ncall: *call,\n},\n_ => unreachable!(\"private ready_ticket kind agrees with immutable action\"),\n},\n))\n}"
+      },
+      {
+        "code": "clippy::map_identity",
+        "message": "unnecessary map of the identity function",
+        "path": "crates/kf-chan/src/user_scan.rs",
+        "snippet": "carried: self.pending.map(|(h, n)| (h, n)),"
+      },
+      {
+        "code": "clippy::items_after_test_module",
+        "message": "items after a test module",
+        "path": "crates/kf-chan/src/user_storage.rs",
+        "snippet": "mod tests {"
+      },
+      {
+        "code": "clippy::items_after_test_module",
+        "message": "items after a test module",
+        "path": "crates/kf-chan/src/user_storage.rs",
+        "snippet": "impl Storage<CpuView> {"
+      },
+      {
+        "code": "clippy::manual_is_multiple_of",
+        "message": "manual implementation of `.is_multiple_of()`",
+        "path": "crates/kf-chan/src/user_storage.rs",
+        "snippet": "if va % 0x10000 != 0 || va.checked_add(BYTES).is_none_or(|end| end > 1 << 40) {"
+      },
+      {
+        "code": "clippy::manual_is_multiple_of",
+        "message": "manual implementation of `.is_multiple_of()`",
+        "path": "crates/kf-chan/src/user_storage.rs",
+        "snippet": "|| offset % 4 != 0"
+      },
+      {
+        "code": "clippy::manual_is_multiple_of",
+        "message": "manual implementation of `.is_multiple_of()`",
+        "path": "crates/kf-chan/src/user_storage.rs",
+        "snippet": "|| bytes % 4 != 0"
+      },
+      {
+        "code": "clippy::manual_is_multiple_of",
+        "message": "manual implementation of `.is_multiple_of()`",
+        "path": "crates/kf-chan/src/user_storage.rs",
+        "snippet": "if offset % 4 != 0 || offset.checked_add(bytes).is_none_or(|end| end > GP_OFFSET) {"
+      },
+      {
+        "code": "clippy::manual_is_multiple_of",
+        "message": "manual implementation of `.is_multiple_of()`",
+        "path": "crates/kf-chan/src/user_storage.rs",
+        "snippet": "assert!(offset < BYTES && offset % 4096 == 0);"
+      },
+      {
+        "code": "clippy::assertions_on_constants",
+        "message": "this assertion has a constant value",
+        "path": "crates/kf-chan/src/user_storage.rs",
+        "snippet": "assert!(USERD_OFFSET + 512 <= BYTES);"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-chan/src/translated.rs",
+        "snippet": "BadHeader { at: usize, word: u32 },"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-chan/src/translated.rs",
+        "snippet": "BadHeader { at: usize, word: u32 },"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-chan/src/translated.rs",
+        "snippet": "Truncated { at: usize },"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-chan/src/translated.rs",
+        "snippet": "Untranslatable { target: Target, phys: u64, len: u64 },"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-chan/src/translated.rs",
+        "snippet": "Untranslatable { target: Target, phys: u64, len: u64 },"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for a struct field",
+        "path": "crates/kf-chan/src/translated.rs",
+        "snippet": "Untranslatable { target: Target, phys: u64, len: u64 },"
+      },
+      {
+        "code": "missing_docs",
+        "message": "missing documentation for an enum",
+        "path": "crates/kf-chan/src/user_batch.rs",
+        "snippet": "pub enum Refusal {"
+      },
+      {
+        "code": "unused_mut",
+        "message": "variable does not need to be mutable",
+        "path": "crates/kf-disp/src/tick.rs",
+        "snippet": "let mut check = |e: Option<Emitted>, s: &TickSource, ticks: &mut Vec<Emitted>| {"
+      },
+      {
+        "code": "dead_code",
+        "message": "fields `seq` and `want` are never read",
+        "path": "crates/kf-disp/src/engine/lockstep_soak.rs",
+        "snippet": "Tick { seq: u32, want: bool },"
+      },
+      {
+        "code": "dead_code",
+        "message": "fields `seq` and `want` are never read",
+        "path": "crates/kf-disp/src/engine/lockstep_soak.rs",
+        "snippet": "Tick { seq: u32, want: bool },"
+      },
+      {
+        "code": "dead_code",
+        "message": "field `seq` is never read",
+        "path": "crates/kf-disp/src/engine/lockstep_soak.rs",
+        "snippet": "Stale { seq: u32 },"
+      },
+      {
+        "code": "dead_code",
+        "message": "field `0` is never read",
+        "path": "crates/kf-disp/src/engine/lockstep_soak.rs",
+        "snippet": "Noise(u16),"
+      },
+      {
+        "code": "dead_code",
+        "message": "field `imm` is never read",
+        "path": "crates/kf-disp/src/engine/lockstep_soak.rs",
+        "snippet": "Flip { imm: bool },"
+      },
+      {
+        "code": "dead_code",
+        "message": "fields `from` and `seq` are never read",
+        "path": "crates/kf-disp/src/engine/lockstep_soak.rs",
+        "snippet": "Vblank { from: Source, seq: u64 },"
+      },
+      {
+        "code": "dead_code",
+        "message": "fields `from` and `seq` are never read",
+        "path": "crates/kf-disp/src/engine/lockstep_soak.rs",
+        "snippet": "Vblank { from: Source, seq: u64 },"
+      },
+      {
+        "code": "dead_code",
+        "message": "field `0` is never read",
+        "path": "crates/kf-disp/src/engine/lockstep_soak.rs",
+        "snippet": "Handoff(Handoff),"
+      },
+      {
+        "code": "dead_code",
+        "message": "field `slot` is never read",
+        "path": "crates/kf-disp/src/engine/lockstep_soak.rs",
+        "snippet": "Publish { slot: usize },"
+      },
+      {
+        "code": "dead_code",
+        "message": "field `seq` is never read",
+        "path": "crates/kf-disp/src/engine/lockstep_soak.rs",
+        "snippet": "Commit { seq: u32 },"
+      },
+      {
+        "code": "dead_code",
+        "message": "field `seq` is never read",
+        "path": "crates/kf-disp/src/engine/lockstep_soak.rs",
+        "snippet": "NoChange { seq: u32 },"
+      },
+      {
+        "code": "dead_code",
+        "message": "field `0` is never read",
+        "path": "crates/kf-disp/src/engine/lockstep_soak.rs",
+        "snippet": "Act(&'static str),"
+      },
+      {
+        "code": "dead_code",
+        "message": "field `req` is never read",
+        "path": "crates/kf-disp/src/engine/lockstep_soak.rs",
+        "snippet": "Grant { req: u32 },"
+      },
+      {
+        "code": "dead_code",
+        "message": "field `log_lines` is never read",
+        "path": "crates/kf-disp/src/engine/lockstep_soak.rs",
+        "snippet": "log_lines: usize,"
+      },
+      {
+        "code": "dead_code",
+        "message": "field `t0` is never read",
+        "path": "crates/kf-disp/src/engine/lockstep_soak.rs",
+        "snippet": "t0: std::time::Instant,"
+      },
+      {
+        "code": "dead_code",
+        "message": "constant `CALLS` is never used",
+        "path": "crates/kf-disp/src/engine/lockstep_soak.rs",
+        "snippet": "const CALLS: usize = 192;"
+      },
+      {
+        "code": "clippy::too_many_arguments",
+        "message": "this function has too many arguments (8/7)",
+        "path": "crates/kf-disp/src/engine/lockstep_exhaustive.rs",
+        "snippet": "fn go(\nops: &[ReqOp],\ndepth: usize,\nr: &Requests,\no: &ReqOracle,\nhi: Option<u32>,\nnow: u64,\ngap: u64,\nn: &mut u64,\n) {"
+      },
+      {
+        "code": "clippy::manual_clamp",
+        "message": "clamp-like pattern without using clamp function",
+        "path": "crates/kf-disp/src/engine/lockstep_soak.rs",
+        "snippet": "if out.len() > cap.max(1).min(READ_BATCH) {"
+      },
+      {
+        "code": "clippy::some_filter",
+        "message": "use of `Some(x).filter(|_| predicate)`",
+        "path": "crates/kf-disp/src/engine/lockstep_soak.rs",
+        "snippet": "Some((self.broker.last_emit_at + g).max(now)).filter(|_| opted_now);"
+      },
+      {
+        "code": "clippy::unnecessary_min_or_max",
+        "message": "`self.gate.c.granted` is never smaller than `0` and has therefore no effect",
+        "path": "crates/kf-disp/src/engine/lockstep_soak.rs",
+        "snippet": "if self.gate.pending().is_some() && self.gate.c.granted > self.gate.c.granted.max(0) {"
+      },
+      {
+        "code": "clippy::manual_contains",
+        "message": "using `contains()` instead of `iter().any()` is more efficient",
+        "path": "crates/kf-disp/src/model.rs",
+        "snippet": "st.iter().any(|x| *x\n== Statement::SharedData(Some(InstMem {\nphys: 0xe9f0_0000,\nsize: 32,\naddr_space: 2\n}))),"
+      },
+      {
+        "code": "clippy::manual_is_multiple_of",
+        "message": "manual implementation of `.is_multiple_of()`",
+        "path": "crates/kf-chip/src/bar0.rs",
+        "snippet": "if fb_mb % unit == 0 && fb_mb / unit >= 1 && fb_mb / unit <= 0x3F {"
+      },
+      {
+        "code": "clippy::collapsible_if",
+        "message": "this `if` statement can be collapsed",
+        "path": "crates/kf-chip/src/bar0.rs",
+        "snippet": "if matches!(family, Family::Turing | Family::Ampere) {\nif let Some(value) = local_memory_range_gp102(f.fb_mb) {\nv.push(BootReg {\noff: NV_PFB_PRI_MMU_LOCAL_MEMORY_RANGE_GP102,\nvalue,\nname: \"NV_PFB_PRI_MMU_LOCAL_MEMORY_RANGE\",\nfrom: Provenance::Host(\"the store's reserved size (constraint 15), kmemsysReadUsableFbSize_GP102 encoding\"),\n});\n}\n}"
+      },
+      {
+        "code": "clippy::manual_range_contains",
+        "message": "manual `!Range::contains` implementation",
+        "path": "crates/kf-disp/src/model.rs",
+        "snippet": "assert!(line >= 1121 || line < 41, \"{v}: line {line}\");"
+      },
+      {
+        "code": "clippy::doc_lazy_continuation",
+        "message": "doc list item without indentation",
+        "path": "crates/kf-chip/src/fsp_gsp.rs",
+        "snippet": "//! \u2298 And WPR2's value is DERIVED from the framebuffer size (as the falcon model does) \u2014 the old"
+      },
+      {
+        "code": "clippy::doc_lazy_continuation",
+        "message": "doc list item without indentation",
+        "path": "crates/kf-chip/src/fsp_gsp.rs",
+        "snippet": "//! models' `0x02FF_E000` was self-described as INVENTED. Only nonzero is load-bearing"
+      },
+      {
+        "code": "clippy::doc_lazy_continuation",
+        "message": "doc list item without indentation",
+        "path": "crates/kf-chip/src/fsp_gsp.rs",
+        "snippet": "//! (`kgspIsWpr2Up_TU102`: `_VAL != 0`), and a derived nonzero value is the same for every die."
+      },
+      {
+        "code": "clippy::manual_is_multiple_of",
+        "message": "manual implementation of `.is_multiple_of()`",
+        "path": "crates/kf-disp/src/pushbuf.rs",
+        "snippet": "|| get % 4 != 0"
+      },
+      {
+        "code": "clippy::manual_is_multiple_of",
+        "message": "manual implementation of `.is_multiple_of()`",
+        "path": "crates/kf-disp/src/pushbuf.rs",
+        "snippet": "|| put % 4 != 0"
+      },
+      {
+        "code": "clippy::chunks_exact_to_as_chunks",
+        "message": "using `chunks_exact` with a constant chunk size",
+        "path": "crates/kf-disp/src/scanout.rs",
+        "snippet": ".chunks_exact(2)"
+      },
+      {
+        "code": "clippy::chunks_exact_to_as_chunks",
+        "message": "using `chunks_exact_mut` with a constant chunk size",
+        "path": "crates/kf-disp/src/scanout.rs",
+        "snippet": "for p in frame.chunks_exact_mut(4) {"
+      }
+    ]
+  }
+}

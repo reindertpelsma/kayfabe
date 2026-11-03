@@ -1,0 +1,13 @@
+{
+  "repository": "https://github.com/NVIDIA/open-gpu-kernel-modules",
+  "tag": "580.159.04",
+  "commit": "b81d58ee0224d1d290bef1c080592b619e184042",
+  "public_files_sha256": {
+    "src/nvidia-modeset/src/nvkms-evo3.c": "64014e164d6902bb9efd21be33901912135246fa1f37b7923cd2a634255de33b",
+    "src/nvidia-modeset/src/nvkms-evo4.c": "99e2d28014670538e76e499d22b7fe7a08e11b4d96a6b0061d1906c67bf058ab",
+    "src/common/sdk/nvidia/inc/class/clca73.h": "3ccf370358ac101e3f1d92320b69dbc51e8581314ce8fa3ddad88fdcb64bc4ed"
+  },
+  "class_rule": "UNIT_WIDTH=16 for every usable output; offsets/fields selected from generated class vocabulary",
+  "source_call_chain": "EvoParseCapabilityNotifierCA -> nvEvoParseCapabilityNotifier6 -> EvoParseCapabilityNotifierC5C6Common -> UNIT_WIDTH assertion",
+  "derivation": "tools/derive_display_caps.sh; no native/captured row imported"
+}

@@ -1,0 +1,2 @@
+2026-10-22T23:55:37.402274+0000 ubuntu kernel: NVRM:unknown NVRM ioctl command: 0xf0
+2026-10-22T23:55:37.738254+0000 ubuntu kernel: NVRM: GPU0 gpuValidateRegOffset_IMPL: User does not have permission to access register offset 0x640780

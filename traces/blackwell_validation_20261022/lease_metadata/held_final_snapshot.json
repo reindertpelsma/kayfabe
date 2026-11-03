@@ -1,0 +1,37 @@
+{
+  "utc": "2026-10-22T01:28:51.767168+00:00",
+  "own_instance": 57132969,
+  "qemu": [],
+  "xid_stop": false,
+  "note": "read-only held-lease snapshot; no guard recheck used to resume",
+  "phase": {
+    "arm": "bind",
+    "pid": 104100,
+    "exe": "/workspace/bench/kf3-bins/8f3a9bb3/qemu-system-x86_64",
+    "starttime": 202969,
+    "pci": "0000:00:08",
+    "rpc_path": null
+  },
+  "secondary_guard_pid": 104388,
+  "secondary_guard_alive": true,
+  "parent_hash_receipt_exists": false,
+  "bind_stopped_ready_marker": false,
+  "primary_checkout": "8f3a9bb3a5d652b3f536ca015bf95735ec588924",
+  "kernel_xids": [
+    "2026-10-22T00:39:34.296938+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 31, pid=90201, name=kayfabe-rm-ladd, channel 0x00000002, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE2 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-10-22T00:39:37.350588+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 31, pid=90201, name=kayfabe-rm-ladd, channel 0x00000002, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE3 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-10-22T00:39:40.364608+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 31, pid=90201, name=kayfabe-rm-ladd, channel 0x00000003, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE2 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-10-22T00:39:43.434574+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 31, pid=90201, name=kayfabe-rm-ladd, channel 0x00000002, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE2 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-10-22T00:39:47.981594+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 31, pid=90255, name=kayfabe-rm-ladd, channel 0x00000003, intr 00000000. MMU Fault: ENGINE GR_HOST0 HUBCLIENT_ESC0 faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE"
+  ],
+  "unique_b1_build_tail": [
+    "",
+    "Found ninja-1.10.1 at /usr/bin/ninja",
+    "Running postconf script '/workspace/bench/qemu-build-b1-merged/pyvenv/bin/python3 /workspace/bench/qemu-10.2.4/scripts/symlink-install-tree.py'",
+    "[1/5] Generating qemu-version.h with a custom command (wrapped by meson to capture output)",
+    "[2/3] Compiling C object libsystem.a.p/hw_misc_kf3_kf3.c.o",
+    "[3/3] Linking target qemu-system-x86_64",
+    "KF3_BUILT /workspace/bench/kf3-bins/2add71e8/qemu-system-x86_64 rev=2add71e8 mtime=2026-10-22 01:27:57.085830248 +0000 (shared build dir /workspace/bench/qemu-build-b1-merged)",
+    "B1_MERGED_UNIQUE_BUILD_EXIT rc=0 2026-10-22T01:27:57+00:00"
+  ]
+}

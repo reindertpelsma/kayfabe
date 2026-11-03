@@ -6,6 +6,10 @@
 #
 # ## The rule this file exists to enforce: A TIMEOUT IS A CRASH.
 #
+# 2026-10-16: a deadline remains a failed arm while SIGTERM cleanup finishes.
+# Never SIGKILL a GPU VM, and refuse an existing lane instead of killing it.
+# Cleanup time after the deadline cannot turn a timed-out arm into a pass.
+#
 # `[measured w760]` the fat-guest suite gave a timing-out arm 300 s, SIGKILLed it, and the arm
 # AFTER it then failed on a device the kill had left unusable. Hours went into separating "this
 # arm is broken" from "its predecessor poisoned it" — and the answer was collateral three times
@@ -36,7 +40,7 @@ if [ "${KF_DEVICE:-kf3}" = kf3 ]; then
         echo "run_fast_guest: no kf3 binary for this checkout's revision ($KF3_REV) at $Q — run scripts/bench/build_kf3.sh from this checkout (or set QEMU_BIN)"
         exit 2
     }
-    echo "== kf3 binary: $Q (rev $KF3_REV)"
+    echo "== kf3 binary: $Q (binary directory $(basename "$(dirname "$Q")"); harness rev $KF3_REV)"
 else
     Q=${QEMU_BIN:-$BENCH/qemu-build/qemu-system-x86_64}
 fi
@@ -50,7 +54,7 @@ rm -f "$SER"
 
 # ★★★★★ **SERIALIZE, OR TWO RUNS DESTROY EACH OTHER — measured 2026-09-20 (w812).**
 #
-# The `pkill` below is deliberate (a clean slate per boot), and that makes ANY two concurrent
+# Historically a startup `pkill` attempted a clean slate and made any two concurrent
 # invocations mutually destructive: each kills the other's QEMU, and the loser leaves a
 # **zero-byte serial log** behind. ⊘ `[measured w812]` two arms re-run in parallel with a
 # timeout sweep produced exactly that — two 0-byte logs, freshly timestamped, which read as
@@ -67,17 +71,16 @@ if command -v flock >/dev/null 2>&1; then
     echo "== serializing on ${KF_LOCK:-/tmp/kayfabe-fastguest.lock} (GPU runs are strictly serial)"
     flock 9 || { echo "run_fast_guest: could not take the run lock" >&2; exit 2; }
 else
-    echo "run_fast_guest: ⚠ no flock(1) — CONCURRENT RUNS WILL KILL EACH OTHER; run serially" >&2
+    echo "run_fast_guest: no flock(1); cannot enforce serial ownership" >&2
+    exit 2
 fi
 
-# ⊘ `pkill` on its own line and with the bracket trick: a pattern that appears later on the same
-# command line matches the shell running it, and then everything after silently never runs
-# (`nvkvm-pv`, 2026-08-17).
-# ★ 2026-09-26 (V3_MULTI_GPU_AUDIT §2 harness): kill ONLY this lane's own QEMUs — the ones started
-# with `-name kf-fastguest` below — never every `qemu-system-x86` on the box (that shot other VMs,
-# and ruled out several VMs per host by construction). The lock above already serializes this lane.
-pkill -9 -f '[k]f-fastguest' 2>/dev/null
-sleep 1
+# The name identifies a lane, not permission to terminate its process. A live
+# predecessor must be stopped by its owner; do not launch a second GPU job.
+if pgrep -f '[k]f-fastguest' >/dev/null 2>&1; then
+    echo "run_fast_guest: existing kf-fastguest process; refusing without signals" >&2
+    exit 2
+fi
 
 # ⊘⊘⊘ **ONE WHITESPACE-FREE TOKEN, OR THE ARMS SILENTLY DO NOT ARRIVE.** The kernel command
 # line is split on whitespace and no quoting survives it, so a space-separated `KF_ARMS`
@@ -238,13 +241,16 @@ fi
 MGPU_TOK=""
 case "$KF_DEVICE" in
     kf3)
+        . "$KF3_REPO/scripts/bench/guest_profile.sh"
+        _profile=$(kf_guest_driver_arg "$FG/initrd.cpio.gz" "${KF3_DEV_EXTRA:-}" "$FG/driver.STAGED") || exit 2
+        case ",${KF3_DEV_EXTRA:-}," in *,guest-driver=*,*) _profile= ;; *) _profile=",$_profile" ;; esac
         if [ -z "${KF3_GPUS:-}" ]; then
-            DEVARGS=(-device "kf3-gpu,fb-mb=${KF3_FB_MB:-8192},bar1-size=$BAR1_BYTES,bar2-size=33554432,id=kf0${KF3_DEV_EXTRA:+,$KF3_DEV_EXTRA}")
+            DEVARGS=(-device "kf3-gpu,fb-mb=${KF3_FB_MB:-8192},bar1-size=$BAR1_BYTES,bar2-size=33554432,id=kf0${_profile}${KF3_DEV_EXTRA:+,$KF3_DEV_EXTRA}")
         else
             case "$KF3_GPUS" in *[!0-9,]*|,*|*,|*,,*) echo "run_fast_guest: KF3_GPUS must be comma-separated host minors, got [$KF3_GPUS]" >&2; exit 2 ;; esac
             DEVARGS=(); _i=0
             for _m in $(echo "$KF3_GPUS" | tr ',' ' '); do
-                DEVARGS+=(-device "kf3-gpu,gpu-minor=$_m,fb-mb=${KF3_FB_MB:-8192},bar1-size=$BAR1_BYTES,bar2-size=33554432,id=kf$_i${KF3_DEV_EXTRA:+,$KF3_DEV_EXTRA}")
+                DEVARGS+=(-device "kf3-gpu,gpu-minor=$_m,fb-mb=${KF3_FB_MB:-8192},bar1-size=$BAR1_BYTES,bar2-size=33554432,id=kf$_i${_profile}${KF3_DEV_EXTRA:+,$KF3_DEV_EXTRA}")
                 _i=$((_i+1))
             done
             # ★ The guest's side of the contract, in whitespace-free tokens (see KF_ARMS above).
@@ -297,7 +303,7 @@ if [ -n "${KF_TRACE_EVENTS:-}" ]; then
 fi
 
 start=$(date +%s)
-timeout --kill-after=3 "$BUDGET" "$Q" -name kf-fastguest \
+timeout --signal=TERM "$BUDGET" "$Q" -name kf-fastguest \
     "${RAMARGS[@]}" -cpu host -smp "${KF_SMP:-3}" \
     -kernel "$FG/vmlinuz" -initrd "$FG/initrd.cpio.gz" \
     -append "$CONSOLE panic=1 loglevel=6 ${KF_APPEND:-}${MGPU_TOK}KF_ARMS=$ARMS_TOK KF_IOCTL_TRACE=${KF_IOCTL_TRACE:-ring} KF_BUDGET_S=$BUDGET" \

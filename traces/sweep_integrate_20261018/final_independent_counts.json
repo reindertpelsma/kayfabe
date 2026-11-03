@@ -1,0 +1,102 @@
+[
+  {
+    "crate": "kf-abi",
+    "scope": "full release",
+    "source": "7326d3184f41a4fdac55515598fb88e1cb4a9172",
+    "exit": 0,
+    "passed": 594,
+    "failed": 0,
+    "ignored": 0,
+    "log_sha256": "ecb65962eed21b023eeb4fb4609a36f3e8187ba0b21deba76e69053c72a818da"
+  },
+  {
+    "crate": "kf-chip",
+    "scope": "full release",
+    "source": "7326d3184f41a4fdac55515598fb88e1cb4a9172",
+    "exit": 0,
+    "passed": 84,
+    "failed": 0,
+    "ignored": 0,
+    "log_sha256": "5d32ee909ad6fd2c567bc201ca2ec1b5a8cbb1be1c58cbbd746c712864dbae41"
+  },
+  {
+    "crate": "kf-census",
+    "scope": "full release",
+    "source": "7326d3184f41a4fdac55515598fb88e1cb4a9172",
+    "exit": 0,
+    "passed": 57,
+    "failed": 0,
+    "ignored": 1,
+    "log_sha256": "c62b76e29ce43ed291f2947c6caaf5fd6c8f0f1d36ed1f513d92f23a24492074"
+  },
+  {
+    "crate": "kf-cuda",
+    "scope": "full release",
+    "source": "7326d3184f41a4fdac55515598fb88e1cb4a9172",
+    "exit": 0,
+    "passed": 80,
+    "failed": 0,
+    "ignored": 0,
+    "log_sha256": "d619f69a16eaf3e6836b79ca6181952fbfb61e04fbc9c2a44319a4d91bf0c465"
+  },
+  {
+    "crate": "kf-disp",
+    "scope": "full release",
+    "source": "7326d3184f41a4fdac55515598fb88e1cb4a9172",
+    "exit": 0,
+    "passed": 284,
+    "failed": 0,
+    "ignored": 5,
+    "log_sha256": "5c3ef5c256ae187cb18cc2ce19acaa875fec087a13120075645733363e582381"
+  },
+  {
+    "crate": "kf-gsp",
+    "scope": "full release",
+    "source": "7326d3184f41a4fdac55515598fb88e1cb4a9172",
+    "exit": 0,
+    "passed": 54,
+    "failed": 0,
+    "ignored": 0,
+    "log_sha256": "aa4287efcde84c63ae92447777f7ed516b71339b6b0d76f00d79e0eda655827b"
+  },
+  {
+    "crate": "kf-rm",
+    "scope": "full release",
+    "source": "7326d3184f41a4fdac55515598fb88e1cb4a9172",
+    "exit": 0,
+    "passed": 811,
+    "failed": 0,
+    "ignored": 0,
+    "log_sha256": "924942afdeeeedbcb10c8edfed1eddbca4cb838c781d2d615957263daf1d822d"
+  },
+  {
+    "crate": "kf-harness",
+    "scope": "full release",
+    "source": "7326d3184f41a4fdac55515598fb88e1cb4a9172",
+    "exit": 0,
+    "passed": 12,
+    "failed": 0,
+    "ignored": 0,
+    "log_sha256": "651d466c74ccbc917139535948ef3db95800a304e8ff8586fabcb6de7c3c9d28"
+  },
+  {
+    "crate": "kf-host",
+    "scope": "full release",
+    "source": "7326d3184f41a4fdac55515598fb88e1cb4a9172",
+    "exit": 0,
+    "passed": 66,
+    "failed": 0,
+    "ignored": 0,
+    "log_sha256": "485b73d2d20d2aeac7174ef6fc28cdcb1108b35baca96d473fec426abae33850"
+  },
+  {
+    "crate": "kf-qemu",
+    "scope": "integration tests only; unit fixture adaptation awaits approval",
+    "source": "7326d3184f41a4fdac55515598fb88e1cb4a9172",
+    "exit": 0,
+    "passed": 21,
+    "failed": 0,
+    "ignored": 0,
+    "log_sha256": "404c1555844fb1efe74fd8314336c37c45f6469a1a7cced26cda124413caced0"
+  }
+]

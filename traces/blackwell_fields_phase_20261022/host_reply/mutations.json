@@ -1,0 +1,25 @@
+[
+  {
+    "mutant": "discard_actual_values",
+    "killers": [
+      "tests::first_reply_retains_its_actual_address_and_value",
+      "tests::last_bounded_reply_is_recorded_without_truncation"
+    ]
+  },
+  {
+    "mutant": "remove_count_bound",
+    "killers": [
+      "tests::an_empty_plan_does_not_emit_a_fake_success",
+      "tests::an_oversized_plan_cannot_emit_unbounded_evidence",
+      "tests::long_reply_cannot_be_labelled_complete",
+      "tests::short_reply_cannot_be_labelled_complete"
+    ]
+  },
+  {
+    "mutant": "replace_reply_by_fixed_value",
+    "killers": [
+      "tests::first_reply_retains_its_actual_address_and_value",
+      "tests::last_bounded_reply_is_recorded_without_truncation"
+    ]
+  }
+]

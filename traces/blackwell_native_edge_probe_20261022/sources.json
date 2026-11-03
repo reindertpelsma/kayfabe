@@ -1,0 +1,21 @@
+{
+  "linux": {
+    "url": "https://github.com/torvalds/linux/blob/v6.8/fs/eventpoll.c",
+    "raw_sha256": "c8b2fed972bcb1621c8efec4b299ee5011f398d1ca2d95be9bb20f08ce8c6d96",
+    "lines": [
+      1560,
+      1730
+    ]
+  },
+  "nvidia": {
+    "commit": "9f087a6d4e86d85acc0ce1d354d6276fe5047b29",
+    "file": "kernel-open/nvidia/nv.c",
+    "sha256": "5d31dc828b62e74366e41884d27cdddc01fb44219ecdb3900cab7a3f1758757e",
+    "lines": [
+      2290,
+      2330,
+      2333
+    ]
+  },
+  "scope": "public source reading only; no code copied into product or measured register values used"
+}

@@ -2,6 +2,10 @@
 //! ★ The DERIVED display capabilities page (`NV_PDISP_FE_SW`, BAR0 `0x640000`), by tier —
 //! `docs/design/V3_DISPLAY_CAPS_DERIVATION_20261014.md`.
 //!
+//! 2026-10-23: this module builds the lower-tier page and legacy unnamed rows.
+//! Production GB20x construction then applies the approved complete PRECOMP table
+//! through `kf_rm::precomp`; see V3_BLACKWELL_PRECOMP_CONSTTAB_20261023.md.
+//!
 //! The page a die presents is built from three kinds of source, and every word of it records which:
 //!
 //! - **T1, a rule** over the family's class header (`data/classes-*.tsv`, generated from ogkm) and the
@@ -11,11 +15,13 @@
 //!   `window / layers_per_head` (NVKMS: windows `2N`/`2N+1` belong to head `N`, ogkm
 //!   `nvkms-rm.c ProbeHeadCountAndWindowAssignment`); layer 0 is the main layer, the others are overlay
 //!   layers, and the two have different pipelines.
-//! - **T2, the host's own unprivileged control reply**: none exists for this page. The page is only
-//!   exposed through the display object, which the open RM allocates for a privileged client only
-//!   (`RS_FLAGS_ALLOC_PRIVILEGED`, ogkm `resource_list.h`), and `NV2080_CTRL_GPU_INFO_INDEX_DISPLAY_ENABLED`
-//!   is the one display fact an unprivileged subdevice control carries. The hook is
-//!   [`HostFacts`]; it is empty today.
+//! - **T2, a same-die startup snapshot** from host-authored READ32 regops. The
+//!   display-capabilities object is privileged; the generic regops endpoint is
+//!   NON_PRIVILEGED but each address still requires the host's GSP allowlist.
+//!   [`crate::hostcaps`] binds physical observations to die/class/windows/layout.
+//!   Field-level virtual support has priority: no residual host-backed guest field
+//!   is approved today. Refusal keeps the same derived virtual page.
+//!   No physical-page access permission is assumed from the endpoint's flags.
 //! - **T3, a privileged per-die measurement** (`data/caps_measured.tsv`, `tools/read_display_caps_page.py`):
 //!   only for words no class header names and the Windows display driver needs (bisected on hardware).
 //!   A die with no row gets the clean authored page and [`Derived::unmeasured`] says so — never a
@@ -36,7 +42,7 @@ pub enum Tier {
     Rule,
     /// T2: the host's own unprivileged control reply.
     Host,
-    /// T3: a privileged per-die measurement row.
+    /// T3: a privileged per-die table row.
     Measured,
 }
 
@@ -49,12 +55,12 @@ pub struct Die {
     pub implementation: u32,
 }
 
-/// One measured word of one die (tier 3).
+/// One tier-3 word of one die.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MeasuredWord {
     /// The die it was read on.
     pub die: Die,
-    /// The guest-driver branch the row was measured for (`580`), or `*` for a row the driver does not matter to.
+    /// The guest-driver branch the row was recorded for (`580`), or `*` for a row the driver does not matter to.
     pub branch: String,
     /// The caps class of the page it was read from.
     pub caps_class: u32,
@@ -62,15 +68,18 @@ pub struct MeasuredWord {
     pub offset: u32,
     /// The value.
     pub value: u32,
-    /// Where it came from (`measured:<die>,<how>,<date>`); a row without one is refused.
+    /// Where it came from (`measured:<die>,<how>,<date>`, dated 2026-10-15 in the shipped rows); a row without one is refused.
     pub source: String,
 }
 
-/// Facts the host's own unprivileged controls could supply (tier 2). Empty: see the module docs.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct HostFacts {}
+/// Facts obtained from the host's own unprivileged controls at realize (tier2).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct HostFacts {
+    /// A complete same-die PRECOMP snapshot, or the unchanged derived fallback.
+    pub precomp: Option<crate::hostcaps::HostPrecomp>,
+}
 
-/// The measured words shipped with kayfabe (`data/caps_measured.tsv`).
+/// The tier-3 words shipped with kayfabe (`data/caps_measured.tsv`).
 ///
 /// # Panics
 /// Never at run time: the committed file is parsed by a test.
@@ -188,7 +197,7 @@ pub struct Provenance {
     pub offset: u32,
     /// The tier that last wrote it.
     pub tier: Tier,
-    /// What wrote it (a rule's basis, or the measurement's source).
+    /// What wrote it (a rule's basis, or the tier-3 row's source).
     pub why: String,
 }
 
@@ -199,8 +208,8 @@ pub struct Derived {
     pub page: CapsPage,
     /// Per word: tier and reason (every word of the page, in offset order).
     pub provenance: Vec<Provenance>,
-    /// Words the Windows display driver needs that no header names and that have no measured row for
-    /// this die: `(offset, why it is needed)`. Empty when the die is measured.
+    /// Words the Windows display driver needs that no header names and that have no tier-3 row for
+    /// this die: `(offset, why it is needed)`. Empty when the die has a tier-3 row.
     pub unmeasured: Vec<(u32, &'static str)>,
 }
 
@@ -250,7 +259,7 @@ fn resolve_row(
 /// ★ Derive the page one die presents.
 ///
 /// `sdr` selects the SDR-colour base page (the production profile); `rows` are the window-layer family
-/// rows; `measured` the T3 rows (only this die's, this class's and this driver `branch`'s rows are used);
+/// rows; `measured` the T3 rows (`data/caps_measured.tsv`, dated 2026-10-15 to 2026-10-20; only this die's, this class's and this driver `branch`'s rows are used);
 /// `host` the T2 facts.
 ///
 /// # Errors
@@ -323,7 +332,10 @@ pub fn derive(
             );
         }
     }
-    // T3: this die's measured words
+    // Tier1 derives each supported named field. Host facts remain physical
+    // observations: no residual field is eligible to alter this virtual page.
+    crate::precomp_fields::apply(t, row, die, &mut words)?;
+    // T3: this die's tier-3 words
     let mut unmeasured: Vec<(u32, &'static str)> = Vec::new();
     for (off, because) in REQUIRED_UNNAMED {
         let hit = measured.iter().find(|m| {

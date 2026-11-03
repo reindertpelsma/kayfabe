@@ -649,6 +649,15 @@ pub const CAPTURE_RELIANCE: &[CaptureReliance] = &[
               port states it (81, one past the last cursor channel number) instead",
     },
     CaptureReliance {
+        cmd: 0x2080_0b03,
+        read_end: 0,
+        sites: &["crates/kf-harness/src/bin/kf-ctl-probe.rs"],
+        why: "NOT A READ of the capture. 2026-11-01 (Blackwell-into-next merge): the unprivileged \
+              host probe SENDS this control with zeroed inputs to the real host GPU and prints the \
+              host's own status and a reply prefix; it decodes no byte of the truncated C row \
+              (8192 of 16352 bytes kept), which is never consulted",
+    },
+    CaptureReliance {
         cmd: 0x2080_0a49,
         read_end: 0,
         sites: &["crates/kf-rm/src/display.rs"],

@@ -1,0 +1,8 @@
+ENABLE580_START actual=32.0.15.8088 UTC=2026-10-21T23:00:26.1036090Z
+Microsoft PnP Utility
+
+Enabling device:          PCI\VEN_10DE&DEV_2B85&SUBSYS_F3181569&REV_A1\3&11583659&0&28
+Device enabled successfully.
+
+ENABLE580_PNPUTIL_RC=0
+Connection to 127.0.0.1 closed by remote host.

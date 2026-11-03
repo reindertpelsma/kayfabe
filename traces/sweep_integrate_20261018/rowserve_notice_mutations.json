@@ -1,0 +1,29 @@
+[
+  {
+    "mutant": "N1_unbounded_set",
+    "exit": 101,
+    "killing_tests": [
+      "changing_guest_branches_share_the_same_process_notice_budget",
+      "repeated_refusal_counters_cannot_create_unbounded_notices"
+    ],
+    "log_sha256": "7dfa55eec23bd684ca27646b057356cd1e2a1d4b9cae44c94f71d59c30e285a8"
+  },
+  {
+    "mutant": "N2_rearm_each_call",
+    "exit": 101,
+    "killing_tests": [
+      "changing_guest_branches_share_the_same_process_notice_budget",
+      "repeated_refusal_counters_cannot_create_unbounded_notices"
+    ],
+    "log_sha256": "dfe7c06db29a755f604eeeef72b7649a92376c40e1904a497b0d59fa7645f232"
+  },
+  {
+    "mutant": "N3_repeat_limit_marker",
+    "exit": 101,
+    "killing_tests": [
+      "changing_guest_branches_share_the_same_process_notice_budget",
+      "repeated_refusal_counters_cannot_create_unbounded_notices"
+    ],
+    "log_sha256": "e95f9119cfd3abe2d299cca9bab3e42234f6b573020354970d8661d909f7a319"
+  }
+]

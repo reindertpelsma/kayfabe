@@ -1,0 +1,31 @@
+test_new_xid_terminates_nested_timeout_group (test_xid_abort_tree.AbortTreeTests.test_new_xid_terminates_nested_timeout_group) ... FAIL
+test_new_xid_terminates_owned_setsid_descendant (test_xid_abort_tree.AbortTreeTests.test_new_xid_terminates_owned_setsid_descendant) ... FAIL
+
+======================================================================
+FAIL: test_new_xid_terminates_nested_timeout_group (test_xid_abort_tree.AbortTreeTests.test_new_xid_terminates_nested_timeout_group)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/sweep-wt2/scripts/bench/tests/test_xid_abort_tree.py", line 75, in test_new_xid_terminates_nested_timeout_group
+    self.run_case('timeout')
+    ~~~~~~~~~~~~~^^^^^^^^^^^
+  File "/workspace/sweep-wt2/scripts/bench/tests/test_xid_abort_tree.py", line 63, in run_case
+    self.assertFalse(any(live(p) for p in [root.pid,*pids]),f'owned {mode} descendants survived abort: {[p for p in [root.pid,*pids] if live(p)]}')
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: True is not false : owned timeout descendants survived abort: [2114701, 2114702, 2114703]
+
+======================================================================
+FAIL: test_new_xid_terminates_owned_setsid_descendant (test_xid_abort_tree.AbortTreeTests.test_new_xid_terminates_owned_setsid_descendant)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/sweep-wt2/scripts/bench/tests/test_xid_abort_tree.py", line 78, in test_new_xid_terminates_owned_setsid_descendant
+    self.run_case('setsid')
+    ~~~~~~~~~~~~~^^^^^^^^^^
+  File "/workspace/sweep-wt2/scripts/bench/tests/test_xid_abort_tree.py", line 63, in run_case
+    self.assertFalse(any(live(p) for p in [root.pid,*pids]),f'owned {mode} descendants survived abort: {[p for p in [root.pid,*pids] if live(p)]}')
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: True is not false : owned setsid descendants survived abort: [2114719, 2114720, 2114720]
+
+----------------------------------------------------------------------
+Ran 2 tests in 4.220s
+
+FAILED (failures=2)

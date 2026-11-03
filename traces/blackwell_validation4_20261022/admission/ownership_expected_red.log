@@ -1,0 +1,32 @@
+.F.F.F.
+======================================================================
+FAIL: test_another_owners_box_does_not_block_a_closed_lane (test_lease_ownership.LeaseOwnership.test_another_owners_box_does_not_block_a_closed_lane)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "scripts/bench/blackwell/test_lease_ownership.py", line 6, in test_another_owners_box_does_not_block_a_closed_lane
+    def test_another_owners_box_does_not_block_a_closed_lane(self):self.assertTrue(may_rent([{'id':901,'label':'other'}],{701,702}))
+                                                                   ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true
+
+======================================================================
+FAIL: test_foreign_label_collision_does_not_transfer_ownership (test_lease_ownership.LeaseOwnership.test_foreign_label_collision_does_not_transfer_ownership)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "scripts/bench/blackwell/test_lease_ownership.py", line 10, in test_foreign_label_collision_does_not_transfer_ownership
+    def test_foreign_label_collision_does_not_transfer_ownership(self):self.assertTrue(may_rent([{'id':902,'label':'our-lane'}],{700}))
+                                                                       ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true
+
+======================================================================
+FAIL: test_other_ada_lane_does_not_consume_our_one_box (test_lease_ownership.LeaseOwnership.test_other_ada_lane_does_not_consume_our_one_box)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "scripts/bench/blackwell/test_lease_ownership.py", line 5, in test_other_ada_lane_does_not_consume_our_one_box
+    def test_other_ada_lane_does_not_consume_our_one_box(self):self.assertTrue(may_rent([{'id':900,'label':'other-Ada'}],{700}))
+                                                               ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true
+
+----------------------------------------------------------------------
+Ran 7 tests in 0.001s
+
+FAILED (failures=3)

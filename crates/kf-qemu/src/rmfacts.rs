@@ -101,6 +101,53 @@ pub fn host_facts(rm: &kf_host::HostRm, family: Family) -> Result<HostFacts, Str
     query_host_facts(&mut Session(rm, None), family).map_err(|e| e.to_string())
 }
 
+/// Optional startup-only display facts. The request is authored from the HOST's
+/// public class/register vocabulary on this same selected die. A complete refusal
+/// keeps the existing derived page; no privileged BAR mapping or captured file.
+pub fn display_precomp(
+    rm: &kf_host::HostRm,
+    row: &kf_chip::display::DisplayRow,
+    die: kf_disp::capsderive::Die,
+) -> kf_disp::capsderive::HostFacts {
+    let probe = || {
+        let version = rm.driver_version();
+        let table = kf_disp::class::for_version(version)
+            .ok_or_else(|| format!("no compiled host display classes for {version}"))?;
+        let regs = kf_disp::regs::Regs::for_ip(version, row.ip_version)
+            .ok_or_else(|| format!("no compiled host display registers for {version}"))?;
+        kf_disp::hostcaps::query(table, &regs, row, die, |addresses| {
+            rm.read_precomp_capabilities(addresses)
+        })
+    };
+    // This is the private realize thread, before any guest runs, with no vCPU
+    // lock. The bracket refuses before calling probe if capget/capset fails.
+    let result = kf_linux_raw::capability::with_effective_cap_cleared(
+        kf_linux_raw::capability::CAP_SYS_ADMIN,
+        probe,
+    );
+    match result {
+        Ok((Ok(snapshot), _)) => {
+            eprintln!(
+                "kf3: PRECOMP source=T2 own-die unprivileged regops; host={} class={:#x} windows={}",
+                rm.driver_version(),
+                row.classes.caps,
+                row.windows
+            );
+            kf_disp::capsderive::HostFacts {
+                precomp: Some(snapshot),
+            }
+        }
+        Ok((Err(error), _)) => {
+            eprintln!("kf3: PRECOMP source=T1 fallback: {error}");
+            kf_disp::capsderive::HostFacts::default()
+        }
+        Err(error) => {
+            eprintln!("kf3: PRECOMP source=T1 fallback: capability bracket refused: {error:?}");
+            kf_disp::capsderive::HostFacts::default()
+        }
+    }
+}
+
 /// ★ 2026-10-11 (`docs/design/V3_CHANNEL_BUDGET.md`): resolve the VM's channel budget — the count per
 /// runlist the guest is told AND the cap kayfabe enforces — from the host's own unprivileged
 /// `FIFO_GET_INFO` answers (one per served runlist) and the `channel-budget` property (`0` = derive).

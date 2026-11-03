@@ -1,0 +1,86 @@
+{
+  "on_c0": {
+    "page_sha256": "c667b79c09271037bfb1f6a566c13c8674bb39fc73c491a93ad108e58e7fd75b",
+    "changed_offsets_vs_control": [],
+    "changed_precomp_types": [],
+    "only_declared_precomp_region": true
+  },
+  "on_c1": {
+    "page_sha256": "2e13b2e90fa54cb2b9572e055fc206afa025134880b1bef6e6c20cdbf9454aa0",
+    "changed_offsets_vs_control": [
+      "0x780",
+      "0x784",
+      "0x788",
+      "0x7a0",
+      "0x7a4",
+      "0x7a8",
+      "0x7c0",
+      "0x7c4",
+      "0x7c8",
+      "0x7e0",
+      "0x7e4",
+      "0x7e8",
+      "0x800",
+      "0x804",
+      "0x808",
+      "0x820",
+      "0x824",
+      "0x828",
+      "0x840",
+      "0x844",
+      "0x848",
+      "0x860",
+      "0x864",
+      "0x868"
+    ],
+    "changed_precomp_types": [
+      0,
+      1,
+      2
+    ],
+    "only_declared_precomp_region": true
+  },
+  "on_c2": {
+    "page_sha256": "2b8dbec93b0f655382f904943d79b95538ad0a505b41eb899a10944f14263952",
+    "changed_offsets_vs_control": [
+      "0x780",
+      "0x784",
+      "0x7a0",
+      "0x7a4",
+      "0x7c0",
+      "0x7c4",
+      "0x7e0",
+      "0x7e4",
+      "0x800",
+      "0x804",
+      "0x820",
+      "0x824",
+      "0x840",
+      "0x844",
+      "0x860",
+      "0x864"
+    ],
+    "changed_precomp_types": [
+      0,
+      1
+    ],
+    "only_declared_precomp_region": true
+  },
+  "on_c3": {
+    "page_sha256": "c1b162bc146682e546d36b8adfa0e4fc89c28348fb393e6a8b5cfcf764578a68",
+    "changed_offsets_vs_control": [
+      "0x788",
+      "0x7a8",
+      "0x7c8",
+      "0x7e8",
+      "0x808",
+      "0x828",
+      "0x848",
+      "0x868"
+    ],
+    "changed_precomp_types": [
+      2
+    ],
+    "only_declared_precomp_region": true
+  }
+}

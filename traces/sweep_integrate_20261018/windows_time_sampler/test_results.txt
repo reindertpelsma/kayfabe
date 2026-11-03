@@ -1,0 +1,15 @@
+test_fn48_is_not_unload (test_sampler.SnapshotTests.test_fn48_is_not_unload) ... ok
+test_input_quota_refuses_before_parse (test_sampler.SnapshotTests.test_input_quota_refuses_before_parse) ... ok
+test_metadata_quota_refuses (test_sampler.SnapshotTests.test_metadata_quota_refuses) ... ok
+test_non_unload_is_not_unload (test_sampler.SnapshotTests.test_non_unload_is_not_unload) ... ok
+test_ordinal_counts_only_complete_rpc_lines (test_sampler.SnapshotTests.test_ordinal_counts_only_complete_rpc_lines) ... ok
+test_partial_tail_cannot_claim_unload (test_sampler.SnapshotTests.test_partial_tail_cannot_claim_unload) ... ok
+test_private_body_bytes_never_exported (test_sampler.SnapshotTests.test_private_body_bytes_never_exported) ... ok
+test_tail_without_newline_is_not_complete (test_sampler.SnapshotTests.test_tail_without_newline_is_not_complete) ... ok
+test_timestamp_and_hash_retained (test_sampler.SnapshotTests.test_timestamp_and_hash_retained) ... ok
+test_unload_ordinal_comes_from_actual_fn47 (test_sampler.SnapshotTests.test_unload_ordinal_comes_from_actual_fn47) ... ok
+
+----------------------------------------------------------------------
+Ran 10 tests in 0.001s
+
+OK

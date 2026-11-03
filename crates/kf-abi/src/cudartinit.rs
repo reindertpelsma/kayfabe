@@ -1,5 +1,15 @@
 //! ★★★★★ **The four controls the CUDA RUNTIME issues that the DRIVER API never does.**
 //!
+//! ⊘ **SUPERSEDED as a served table, 2026-10-14 (lane C, `docs/design/V3_CONSTANT_MATRIX_20261014.md`).**
+//! [`SERVED`] is no longer what the guest is answered from: these rows were ONE GA106 capture served
+//! to every die (the defect "Derive, never capture" names). The guest is now answered (1) with the
+//! HOST's reply to cudart's identical request, asked at realize (`crate::gssreplay` rows for
+//! `0x20809009`, `0x20809001`, `0x20809064` `{0,2,1,..,4}`, `0x2080a001`; measured answerable
+//! unprivileged at host 595.91.07 on an AD104, `traces/constants_night_20261014/`), then (2) from the
+//! published, source-tagged table `kf_rm::consttab` (`crates/kf-rm/data/measured_constants.tsv`),
+//! which serves a row only to the die and guest branch it was measured on, and (3) otherwise refuses
+//! by name. [`SERVED`] stays as the GA106 oracle the table's GA106 rows are tested against.
+//!
 //! `[measured 2026-08-20, real GA106 (RTX 3060) on 580.159.04, bench 48097794]`
 //!
 //! # Why this module exists

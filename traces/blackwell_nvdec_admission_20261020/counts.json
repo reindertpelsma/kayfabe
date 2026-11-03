@@ -1,0 +1,62 @@
+[
+  {
+    "crate": "kf-abi",
+    "before": [
+      594,
+      0,
+      0
+    ],
+    "after": [
+      604,
+      0,
+      0
+    ],
+    "before_provenance": "accepted integrated release batch, source-equivalent to6976a94fe",
+    "retention": "All existing test functions/assertions retained; historical policy fixture byte unchanged. Count goldens account only for three new classes."
+  },
+  {
+    "crate": "kf-chip",
+    "before": [
+      84,
+      0,
+      0
+    ],
+    "after": [
+      86,
+      0,
+      0
+    ],
+    "before_provenance": "accepted integrated release batch, source-equivalent to6976a94fe",
+    "retention": "All existing test functions/assertions retained; historical policy fixture byte unchanged. Count goldens account only for three new classes."
+  },
+  {
+    "crate": "kf-rm",
+    "before": [
+      811,
+      0,
+      0
+    ],
+    "after": [
+      811,
+      0,
+      0
+    ],
+    "before_provenance": "accepted integrated release batch, source-equivalent to6976a94fe",
+    "retention": "All existing test functions/assertions retained; historical policy fixture byte unchanged. Count goldens account only for three new classes."
+  },
+  {
+    "crate": "kf-qemu",
+    "before": [
+      407,
+      0,
+      0
+    ],
+    "after": [
+      407,
+      0,
+      0
+    ],
+    "before_provenance": "accepted integrated release batch, source-equivalent to6976a94fe",
+    "retention": "All existing test functions/assertions retained; historical policy fixture byte unchanged. Count goldens account only for three new classes."
+  }
+]

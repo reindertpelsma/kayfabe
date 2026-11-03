@@ -1,0 +1,1 @@
+STATUS: LIVE,2026-10-20. MEASURED ON Code43, actual8088/oem7,0System4101, SSH reachable.386GSPRPCs and explicitunload385 BEFORE any cleanup request. CA70ordinal233;CA7A271/273/275/277. Source0c87acda8/P19+RPCdiagnostics, same frozen disabled parent asOFF, originalTPMidentity. This is the second and FINAL product initialization attempt this lease. No TDR/fullsuitePASS.

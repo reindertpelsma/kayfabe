@@ -441,6 +441,7 @@ pub const MEMORY_SYSTEM: MemorySystemRow = MemorySystemRow {
 pub fn host_facts() -> HostFacts {
     HostFacts {
         family: kf_chip::Family::Ampere,
+        die: kf_chip::DieId::new(kf_chip::arch::GA100, 6),
         has_c2c: false,
         ce_caps: ce_caps(),
         engines: ENGINES.to_vec(),

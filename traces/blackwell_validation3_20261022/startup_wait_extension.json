@@ -1,0 +1,7 @@
+{
+  "utc": "2026-10-22T02:25:49.015600+00:00",
+  "id": 57143789,
+  "reason": "provider reached actual running02:24:06 after long imagepull; allow SSH initialization within20min creation bound under owner conservative-continuation rule; no pin/disk/KVM/N0 changes",
+  "owned_read_only_waiters_replaced": [],
+  "teardown_deadline_unchanged": "2026-10-22T04:50:00Z"
+}

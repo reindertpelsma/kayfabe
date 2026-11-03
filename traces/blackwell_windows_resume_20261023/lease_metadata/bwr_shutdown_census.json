@@ -1,0 +1,1 @@
+{"rereads": 0, "elapsed_seconds": 0.01996721700015769, "verdict": "CLEAN", "pid": 106424, "rule": "owned exit<=60s; initial+3fresh reads5s apart; no new Xid"}

@@ -1,0 +1,12 @@
+/workspace/sweep-win-56816449/kfwin/disk/bw580_bind.qcow2: OK
+NVIDIA GeForce RTX 5090, 595.91.07
+NAME    TYPE   SIZE FSTYPE  MOUNTPOINT
+loop0   loop  63.8M         /snap/core20/2571
+loop1   loop  89.4M         /snap/lxd/31333
+loop2   loop  50.9M         /snap/snapd/24671
+vda     disk   180G
+├─vda1  part 179.9G ext4    /
+├─vda14 part     4M
+└─vda15 part   106M vfat    /boot/efi
+vdb     disk   368K iso9660
+ac7faa15a606116ea162b2df95af9a5f7a163f0436989cfda92f2b7ab3e65af0  /root/sweep-native-install.sh

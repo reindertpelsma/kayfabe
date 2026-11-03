@@ -1,0 +1,402 @@
+{
+  "classification": "MEASURED full30raw serial captures, no silenttruncation",
+  "source": "24906bf334665c9000b16b271005593daa3586c7",
+  "actual_guest": "595.91.07",
+  "files": [
+    {
+      "file": "fast_sweep249_gb202_raw595_alias-two-vas_serial.log",
+      "bytes": 10965,
+      "sha256": "3e975c0309ac8f4b98072041deccb3fb32d39934afce32688055e6180018329e",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[   11.094839] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw595_alias-unmap-observe_serial.log",
+      "bytes": 10901,
+      "sha256": "b582ae5fd83f7fe26784950750a817396b17b894425b5a9e27f4057480c44b34",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[   16.487740] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw595_atomics-probe_serial.log",
+      "bytes": 11972,
+      "sha256": "819e01274f778d514fe481f08c1114fc0087371c723e311478793c3d709a60b9",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[   12.895826] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw595_bar1-crossing_serial.log",
+      "bytes": 10481,
+      "sha256": "af6e240d9c706479ddeb6a893ae373ae5bb7669458856dd6821202c8ea096921",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[   12.759107] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw595_blockage-coverage_serial.log",
+      "bytes": 11418,
+      "sha256": "0edb053eb8f0b3bbfc62dcdcefd7c5465e34d8de806f7e09f15dff4331b9ec42",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[   14.705560] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw595_bus-info-sweep_serial.log",
+      "bytes": 15518,
+      "sha256": "5863f189e79e83e528c991906c3005e4b8cf580a316963c71a2b9cc227c2f299",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[   10.749798] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw595_ce-client-guest-ram_serial.log",
+      "bytes": 9304,
+      "sha256": "1a693318a039d9dc28d3197687f9f04ca1910d1d9ba4111cf8fed2937a32483c",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[    9.907440] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw595_ce-client_serial.log",
+      "bytes": 21203,
+      "sha256": "799845b1028ba93c742429b1d5c1ad64056345491005dfcc0a57d5961e7d65c6",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[   14.468166] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw595_concurrency_serial.log",
+      "bytes": 12502,
+      "sha256": "df5ef008b52eb2f3f4d79ab8ea7c70a9746f960b39cfc945b66b090433120edb",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[   11.180353] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw595_concurrent-fuzz_serial.log",
+      "bytes": 165016,
+      "sha256": "f24a13bf8424f58cfbaf63a7f97f0afeef2b11c747261f944a3ee1c6f85a636e",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[   17.222579] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw595_cross-client-leak_serial.log",
+      "bytes": 11452,
+      "sha256": "dec250d42b6dc1c71e2cac84ac1f89ca325c920cfe7182b26ef91868a9146240",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[   11.356527] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw595_defer-liveness_serial.log",
+      "bytes": 22621,
+      "sha256": "b1ea86dbfc9cd2fca71f070c3d8e7d0b38f11636f007e29bde4414d3f8c57f39",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[   14.715932] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw595_dictated-ring-negative_serial.log",
+      "bytes": 9013,
+      "sha256": "fe22623d12ca521e2566f29b790cbe0c79c40c5d1edf516e07e082d2a07c076a",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[   11.682964] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw595_dictated-ring_serial.log",
+      "bytes": 9343,
+      "sha256": "66825bb1c786204aed24a620ee7da202763a58615388e3f5d9b935a6592ff107",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[   13.048429] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw595_doorbell-census_serial.log",
+      "bytes": 40316,
+      "sha256": "f455b605ae85483c7aaa09b69f9ee3ea5fe0ec5f84a0c6115e55a520d6d0b01b",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[   19.056627] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw595_engines_serial.log",
+      "bytes": 17198,
+      "sha256": "ec269186bd8e6d923c71d0c77372dd2825fe6866752436959818bc5ff4e1800f",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[   16.370052] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw595_executor-vas_serial.log",
+      "bytes": 10327,
+      "sha256": "5616a1547e17459df6300b37b3b9e6d7c639793009306c7314153fd44ca8c2fc",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[   11.754268] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw595_gpga-reserve-probe_serial.log",
+      "bytes": 9900,
+      "sha256": "226d8a55fcddd87ac8ea1cc32bd076e6bc07f546a9618c5df58dcae91e8af242",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[   16.603153] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw595_gpu-info-sweep_serial.log",
+      "bytes": 12835,
+      "sha256": "512285d4374aaa0f41c5a761b4a48206852dc6e099d9ddbcbaed379efe2c54a5",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[   13.456100] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw595_guest-ram-pin_serial.log",
+      "bytes": 9088,
+      "sha256": "b0493f7ceb3ae3bd49632c9a0a0b62d9f30bf0ab82eefcefb1de5377054bb421",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[   13.769971] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw595_guest-ring-channel_serial.log",
+      "bytes": 10536,
+      "sha256": "87662aeb8df3ce01eada875cfe77e3ba97404222abb9f4457cf4a5f8a1f52b31",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[   11.234771] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw595_late-map-race_serial.log",
+      "bytes": 10880,
+      "sha256": "20031c85d018ade661b75120a77e045534d482f29d7af6d5ee557580c6e83d2a",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[   15.441352] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw595_map-propagation_serial.log",
+      "bytes": 9916,
+      "sha256": "4fea170a74cac01d3b6008210fadf0de5dd04769e8e750901fad5277d3157c94",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[   16.104459] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw595_map-stress_serial.log",
+      "bytes": 62020,
+      "sha256": "c58791c8a165256535696e432779cd1902a1c16f39990e039c84e3f3343f2dd5",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[   17.147022] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw595_missing-page-fault_serial.log",
+      "bytes": 10721,
+      "sha256": "0263e611f12ef7b0f3c8c8947349f7c77c03a4af5580ec386330d964f02bf78b",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[   12.617014] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw595_pce-mask-probe_serial.log",
+      "bytes": 9095,
+      "sha256": "9737f8cc3ad07cac4da5eeb6a3e68935365fcf38daf44db6a86c5f3af1bb5952",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[   14.233369] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw595_rpc-mixed-allocs_serial.log",
+      "bytes": 19975,
+      "sha256": "5dde6c019403a267a47568e2acc956853c8d0e8eff78396ad81aa50a0cc1bcb9",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[   16.185873] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw595_timer_serial.log",
+      "bytes": 9985,
+      "sha256": "ad3ec70651748013b58d1d3ae82f7c69458548eef7de1e712d92cc67efde3684",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[   13.728748] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw595_uvm-invalidate_serial.log",
+      "bytes": 9752,
+      "sha256": "809cfa552bd79b47d1b249f9cefd84529b93d7cfc4d50cf4430de68a0248a566",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[   14.272408] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw595_uvm-mean_serial.log",
+      "bytes": 24288,
+      "sha256": "4c79534c017182ecee7a72d38854c2f9e23267d36a5a6326dec65048dd9901cb",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[   12.301972] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026"
+      ]
+    }
+  ],
+  "total_heartbeat_warnings": 0,
+  "nonzero_heartbeat_warnings": 0,
+  "xid_total": 0,
+  "flip_timeout_total": 0,
+  "limit": "Raw30pass does not imply warning-free heartbeat or graphics/broker acceptance"
+}

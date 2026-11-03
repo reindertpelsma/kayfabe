@@ -1,0 +1,149 @@
+{
+  "original_log_bytes": 1176205,
+  "hits": [
+    {
+      "offset": 467278,
+      "line": "kf3: PROBE-DUMP t=3682.434127 tok=0x3 host=0x4000000a GUEST-SILENT-AFTER-COMPLETION (its GP_PUT has not moved since our fence completed): key=VasKey(13965662457344034928) forwarded=1 submissions=1 walks=0 serves=3 guest USERD GP_PUT=Some(1) GP_GET=Some(1) (authored Some(1)) put_moved=1 594ms ago our ring GP_GET/GP_PUT/fence=Some((0, 2, 1)) dead=None scheduled=true stopped=false disabled=false"
+    },
+    {
+      "offset": 467674,
+      "line": "kf3: PROBE-DUMP   completed fence seq=1 gp_get=Some(1) submit->seen=372us seen 594ms ago; at completion []; NOW [] data NOW []"
+    },
+    {
+      "offset": 467801,
+      "line": "kf3: PROBE-DUMP t=3682.434166 tok=0x802 host=0x400d000b GUEST-SILENT-AFTER-COMPLETION (its GP_PUT has not moved since our fence completed): key=VasKey(13965662457344034928) forwarded=1 submissions=1 walks=0 serves=3 guest USERD GP_PUT=Some(1) GP_GET=Some(1) (authored Some(1)) put_moved=1 594ms ago our ring GP_GET/GP_PUT/fence=Some((0, 2, 1)) dead=None scheduled=true stopped=false disabled=false"
+    },
+    {
+      "offset": 468199,
+      "line": "kf3: PROBE-DUMP   completed fence seq=1 gp_get=Some(1) submit->seen=642us seen 593ms ago; at completion []; NOW [] data NOW []"
+    },
+    {
+      "offset": 468326,
+      "line": "kf3: PROBE-DUMP   device t=3682.434212: intr [leaf0=0x0/0x1ff leaf2=0x0/0x101 leaf4=0x0/0xc10007a] top_en=0xffffffff top=0x0 irq[writes=6257 raised=13 held=0 oor=0] nsi[GR0:wakes=2,raised=4,nolive=0,novec=0,live=0,vec=Some(0) CE0:wakes=0,raised=0,nolive=0,novec=0,live=0,vec=Some(0) CE4:wakes=3,raised=3,nolive=0,novec=0,live=0,vec=Some(1) CE5:wakes=0,raised=0,nolive=0,novec=0,live=0,vec=Some(2) NVENC1:wakes=0,raised=0,nolive=0,novec=0,live=0,vec=Some(5) NVENC2:wakes=0,raised=0,nolive=0,novec=0,live=0,vec=Some(6) NVENC3:wakes=0,raised=0,nolive=0,novec=0,live=0,vec=Some(7) NVDEC0:wakes=0,raised=0,nolive=0,novec=0,live=0,vec=Some(3) NVDEC3:wakes=0,raised=0,nolive=0,novec=0,live=0,vec=Some(4) OFA:wakes=0,raised=0,nolive=0,novec=0,live=0,vec=Some(8)] inflight_tokens=[] workers[served=25 parks=4572 host_rings=6 timeouts_with_work=0] chan[contended=0 poisoned=0] relay[wakes(doorbell=22 event=6 spin=0 backstop=4543 busy_looks=23 unannounced_spins=0) backstop_found(work=0 carried=0 contended=0) event_without_progress=0 gates=0 carried_ungated=0 credit_waits=0 contended_turns=0 pop_writebacks=0 markers=0 drain_us_log2=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] handoff(registered=0 rung=0 retried=0)]"
+    },
+    {
+      "offset": 505042,
+      "line": "kf3: PROBE-DUMP t=3682.634465 tok=0x10 host=0x4000000b GUEST-SILENT-AFTER-COMPLETION (its GP_PUT has not moved since our fence completed): key=VasKey(13965662573308151888) forwarded=1 submissions=1 walks=0 serves=2 guest USERD GP_PUT=Some(1) GP_GET=Some(1) (authored Some(1)) put_moved=1 510ms ago our ring GP_GET/GP_PUT/fence=Some((0, 2, 1)) dead=None scheduled=true stopped=false disabled=false"
+    },
+    {
+      "offset": 505439,
+      "line": "kf3: PROBE-DUMP   completed fence seq=1 gp_get=Some(1) submit->seen=559us seen 509ms ago; at completion []; NOW [] data NOW []"
+    },
+    {
+      "offset": 505566,
+      "line": "kf3: PROBE-DUMP t=3682.634490 tok=0x80f host=0x400d000e GUEST-SILENT-AFTER-COMPLETION (its GP_PUT has not moved since our fence completed): key=VasKey(13965662573308151888) forwarded=2 submissions=2 walks=0 serves=5 guest USERD GP_PUT=Some(2) GP_GET=Some(2) (authored Some(2)) put_moved=2 507ms ago our ring GP_GET/GP_PUT/fence=Some((0, 4, 2)) dead=None scheduled=true stopped=false disabled=false"
+    },
+    {
+      "offset": 505964,
+      "line": "kf3: PROBE-DUMP   completed fence seq=1 gp_get=Some(1) submit->seen=343us seen 637ms ago; at completion []; NOW [] data NOW []"
+    },
+    {
+      "offset": 506091,
+      "line": "kf3: PROBE-DUMP   completed fence seq=2 gp_get=Some(2) submit->seen=257us seen 507ms ago; at completion []; NOW [] data NOW []"
+    },
+    {
+      "offset": 506218,
+      "line": "kf3: PROBE-DUMP   device t=3682.634540: intr [leaf0=0x0/0x1ff] top_en=0xffffffc7 top=0x0 irq[writes=7898 raised=13 held=0 oor=0] nsi[GR0:wakes=2,raised=4,nolive=0,novec=0,live=0,vec=Some(0) CE0:wakes=0,raised=0,nolive=0,novec=0,live=0,vec=Some(0) CE4:wakes=3,raised=3,nolive=0,novec=0,live=0,vec=Some(1) CE5:wakes=0,raised=0,nolive=0,novec=0,live=0,vec=Some(2) NVENC1:wakes=0,raised=0,nolive=0,novec=0,live=0,vec=Some(5) NVENC2:wakes=0,raised=0,nolive=0,novec=0,live=0,vec=Some(6) NVENC3:wakes=0,raised=0,nolive=0,novec=0,live=0,vec=Some(7) NVDEC0:wakes=0,raised=0,nolive=0,novec=0,live=0,vec=Some(3) NVDEC3:wakes=0,raised=0,nolive=0,novec=0,live=0,vec=Some(4) OFA:wakes=0,raised=0,nolive=0,novec=0,live=0,vec=Some(8)] inflight_tokens=[] workers[served=25 parks=4580 host_rings=6 timeouts_with_work=0] chan[contended=0 poisoned=0] relay[wakes(doorbell=22 event=6 spin=0 backstop=4551 busy_looks=23 unannounced_spins=0) backstop_found(work=0 carried=0 contended=0) event_without_progress=0 gates=0 carried_ungated=0 credit_waits=0 contended_turns=0 pop_writebacks=0 markers=0 drain_us_log2=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] handoff(registered=0 rung=0 retried=0)]"
+    },
+    {
+      "offset": 1020609,
+      "line": "kf3: PROBE-DUMP t=3705.870944 tok=0x3 host=0x4000000a GUEST-SILENT-AFTER-COMPLETION (its GP_PUT has not moved since our fence completed): key=VasKey(13965662457344034928) forwarded=2 submissions=4 walks=0 serves=11 guest USERD GP_PUT=Some(2) GP_GET=Some(2) (authored Some(2)) put_moved=2 845ms ago our ring GP_GET/GP_PUT/fence=Some((0, 8, 4)) dead=None scheduled=true stopped=false disabled=false"
+    },
+    {
+      "offset": 1021006,
+      "line": "kf3: PROBE-DUMP   completed fence seq=1 gp_get=Some(1) submit->seen=372us seen 24031ms ago; at completion []; NOW [] data NOW []"
+    },
+    {
+      "offset": 1021135,
+      "line": "kf3: PROBE-DUMP   completed fence seq=2 gp_get=None submit->seen=287026us seen 558ms ago; at completion []; NOW [] data NOW []"
+    },
+    {
+      "offset": 1021262,
+      "line": "kf3: PROBE-DUMP   completed fence seq=3 gp_get=None submit->seen=223us seen 557ms ago; at completion []; NOW [] data NOW []"
+    },
+    {
+      "offset": 1021386,
+      "line": "kf3: PROBE-DUMP   completed fence seq=4 gp_get=Some(2) submit->seen=186us seen 557ms ago; at completion []; NOW [] data NOW []"
+    },
+    {
+      "offset": 1021513,
+      "line": "kf3: PROBE-DUMP   device t=3705.871037: intr [leaf0=0x0/0x1ff] top_en=0xffffffc7 top=0x0 irq[writes=50079 raised=664 held=0 oor=0] nsi[GR0:wakes=5,raised=8,nolive=0,novec=0,live=1,vec=Some(0) CE0:wakes=0,raised=0,nolive=0,novec=0,live=0,vec=Some(0) CE4:wakes=370,raised=259,nolive=0,novec=0,live=0,vec=Some(1) CE5:wakes=0,raised=0,nolive=0,novec=0,live=1,vec=Some(2) NVENC1:wakes=0,raised=0,nolive=0,novec=0,live=0,vec=Some(5) NVENC2:wakes=0,raised=0,nolive=0,novec=0,live=0,vec=Some(6) NVENC3:wakes=0,raised=0,nolive=0,novec=0,live=0,vec=Some(7) NVDEC0:wakes=0,raised=0,nolive=0,novec=0,live=0,vec=Some(3) NVDEC3:wakes=0,raised=0,nolive=0,novec=0,live=0,vec=Some(4) OFA:wakes=0,raised=0,nolive=0,novec=0,live=0,vec=Some(8)] inflight_tokens=[] workers[served=686 parks=6301 host_rings=394 timeouts_with_work=0] chan[contended=0 poisoned=0] relay[wakes(doorbell=622 event=411 spin=0 backstop=5439 busy_looks=634 unannounced_spins=0) backstop_found(work=0 carried=0 contended=0) event_without_progress=0 gates=0 carried_ungated=0 credit_waits=0 contended_turns=0 pop_writebacks=0 markers=0 drain_us_log2=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] handoff(registered=0 rung=0 retried=0)]"
+    },
+    {
+      "offset": 1030488,
+      "line": "kf3: PROBE-DUMP t=3706.772104 tok=0x80f host=0x400d000e GUEST-SILENT-AFTER-COMPLETION (its GP_PUT has not moved since our fence completed): key=VasKey(13965662573308151888) forwarded=17081 submissions=1036 walks=121 serves=828 guest USERD GP_PUT=Some(697) GP_GET=Some(697) (authored Some(697)) put_moved=697 553ms ago our ring GP_GET/GP_PUT/fence=Some((0, 470, 458)) dead=None scheduled=true stopped=false disabled=false"
+    },
+    {
+      "offset": 1030909,
+      "line": "kf3: PROBE-DUMP   completed fence seq=455 gp_get=Some(491) submit->seen=68us seen 558ms ago; at completion []; NOW [] data NOW []"
+    },
+    {
+      "offset": 1031039,
+      "line": "kf3: PROBE-DUMP   completed fence seq=456 gp_get=Some(593) submit->seen=65us seen 554ms ago; at completion []; NOW [] data NOW []"
+    },
+    {
+      "offset": 1031169,
+      "line": "kf3: PROBE-DUMP   completed fence seq=457 gp_get=Some(695) submit->seen=80us seen 552ms ago; at completion []; NOW [] data NOW []"
+    },
+    {
+      "offset": 1031299,
+      "line": "kf3: PROBE-DUMP   completed fence seq=458 gp_get=Some(697) submit->seen=81us seen 550ms ago; at completion []; NOW [] data NOW []"
+    },
+    {
+      "offset": 1031429,
+      "line": "kf3: PROBE-DUMP   device t=3706.772181: intr [leaf0=0x0/0x1ff leaf2=0x0/0x101 leaf4=0x0/0xc10007a] top_en=0xffffffff top=0x0 irq[writes=50449 raised=830 held=0 oor=0] nsi[GR0:wakes=6,raised=9,nolive=0,novec=0,live=1,vec=Some(0) CE0:wakes=0,raised=0,nolive=0,novec=0,live=0,vec=Some(0) CE4:wakes=444,raised=333,nolive=0,novec=0,live=0,vec=Some(1) CE5:wakes=1,raised=1,nolive=0,novec=0,live=1,vec=Some(2) NVENC1:wakes=0,raised=0,nolive=0,novec=0,live=0,vec=Some(5) NVENC2:wakes=0,raised=0,nolive=0,novec=0,live=0,vec=Some(6) NVENC3:wakes=0,raised=0,nolive=0,novec=0,live=0,vec=Some(7) NVDEC0:wakes=0,raised=0,nolive=0,novec=0,live=0,vec=Some(3) NVDEC3:wakes=0,raised=0,nolive=0,novec=0,live=0,vec=Some(4) OFA:wakes=0,raised=0,nolive=0,novec=0,live=0,vec=Some(8)] inflight_tokens=[] workers[served=894 parks=6478 host_rings=482 timeouts_with_work=0] chan[contended=0 poisoned=0] relay[wakes(doorbell=753 event=504 spin=0 backstop=5445 busy_looks=805 unannounced_spins=149280) backstop_found(work=0 carried=0 contended=0) event_without_progress=47 gates=1 carried_ungated=0 credit_waits=0 contended_turns=0 pop_writebacks=0 markers=1 drain_us_log2=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] handoff(registered=0 rung=0 retried=0)]"
+    },
+    {
+      "offset": 1074506,
+      "line": "kf3: PROBE-DUMP t=3708.574173 tok=0x3 host=0x4000000a GUEST-SILENT-AFTER-COMPLETION (its GP_PUT has not moved since our fence completed): key=VasKey(13965662457344034928) forwarded=3 submissions=7 walks=0 serves=19 guest USERD GP_PUT=Some(3) GP_GET=Some(3) (authored Some(3)) put_moved=3 970ms ago our ring GP_GET/GP_PUT/fence=Some((0, 14, 7)) dead=None scheduled=true stopped=false disabled=false"
+    },
+    {
+      "offset": 1074904,
+      "line": "kf3: PROBE-DUMP   completed fence seq=4 gp_get=Some(2) submit->seen=186us seen 3260ms ago; at completion []; NOW [] data NOW []"
+    },
+    {
+      "offset": 1075032,
+      "line": "kf3: PROBE-DUMP   completed fence seq=5 gp_get=None submit->seen=388980us seen 581ms ago; at completion []; NOW [] data NOW []"
+    },
+    {
+      "offset": 1075159,
+      "line": "kf3: PROBE-DUMP   completed fence seq=6 gp_get=None submit->seen=108us seen 581ms ago; at completion []; NOW [] data NOW []"
+    },
+    {
+      "offset": 1075283,
+      "line": "kf3: PROBE-DUMP   completed fence seq=7 gp_get=Some(3) submit->seen=67us seen 580ms ago; at completion []; NOW [] data NOW []"
+    },
+    {
+      "offset": 1075409,
+      "line": "kf3: PROBE-DUMP   device t=3708.574286: intr [leaf0=0x0/0x1ff leaf2=0x0/0x101 leaf4=0x0/0xc10007a] top_en=0xffffffff top=0x0 irq[writes=51912 raised=1323 held=0 oor=0] nsi[GR0:wakes=9,raised=13,nolive=0,novec=0,live=3,vec=Some(0) CE0:wakes=0,raised=0,nolive=0,novec=0,live=0,vec=Some(0) CE4:wakes=718,raised=431,nolive=0,novec=0,live=0,vec=Some(1) CE5:wakes=1,raised=1,nolive=0,novec=0,live=2,vec=Some(2) NVENC1:wakes=0,raised=0,nolive=0,novec=0,live=0,vec=Some(5) NVENC2:wakes=0,raised=0,nolive=0,novec=0,live=0,vec=Some(6) NVENC3:wakes=0,raised=0,nolive=0,novec=0,live=0,vec=Some(7) NVDEC0:wakes=0,raised=0,nolive=0,novec=0,live=0,vec=Some(3) NVDEC3:wakes=0,raised=0,nolive=0,novec=0,live=0,vec=Some(4) OFA:wakes=0,raised=0,nolive=0,novec=0,live=0,vec=Some(8)] inflight_tokens=[] workers[served=1380 parks=6478 host_rings=846 timeouts_with_work=0] chan[contended=0 poisoned=0] relay[wakes(doorbell=759 event=904 spin=0 backstop=5445 busy_looks=1216 unannounced_spins=618598) backstop_found(work=0 carried=0 contended=0) event_without_progress=847 gates=1 carried_ungated=0 credit_waits=0 contended_turns=0 pop_writebacks=0 markers=1 drain_us_log2=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] handoff(registered=0 rung=0 retried=0)]"
+    },
+    {
+      "offset": 1082010,
+      "line": "kf3: PROBE-DUMP t=3708.974770 tok=0x80f host=0x400d000e GUEST-SILENT-AFTER-COMPLETION (its GP_PUT has not moved since our fence completed): key=VasKey(13965662573308151888) forwarded=23342 submissions=1642 walks=146 serves=1299 guest USERD GP_PUT=Some(6958) GP_GET=Some(6958) (authored Some(6958)) put_moved=6958 852ms ago our ring GP_GET/GP_PUT/fence=Some((0, 384, 790)) dead=None scheduled=true stopped=false disabled=false"
+    },
+    {
+      "offset": 1082436,
+      "line": "kf3: PROBE-DUMP   completed fence seq=787 gp_get=None submit->seen=53us seen 589ms ago; at completion []; NOW [] data NOW []"
+    },
+    {
+      "offset": 1082561,
+      "line": "kf3: PROBE-DUMP   completed fence seq=788 gp_get=None submit->seen=50us seen 589ms ago; at completion []; NOW [] data NOW []"
+    },
+    {
+      "offset": 1082686,
+      "line": "kf3: PROBE-DUMP   completed fence seq=789 gp_get=None submit->seen=51us seen 589ms ago; at completion []; NOW [] data NOW []"
+    },
+    {
+      "offset": 1082811,
+      "line": "kf3: PROBE-DUMP   completed fence seq=790 gp_get=Some(6958) submit->seen=44us seen 589ms ago; at completion []; NOW [] data NOW []"
+    },
+    {
+      "offset": 1082942,
+      "line": "kf3: PROBE-DUMP   device t=3708.974883: intr [leaf0=0x0/0x1ff leaf2=0x0/0x101 leaf4=0x0/0xc10007a] top_en=0xffffffff top=0x0 irq[writes=51912 raised=1323 held=0 oor=0] nsi[GR0:wakes=9,raised=13,nolive=0,novec=0,live=3,vec=Some(0) CE0:wakes=0,raised=0,nolive=0,novec=0,live=0,vec=Some(0) CE4:wakes=718,raised=431,nolive=0,novec=0,live=0,vec=Some(1) CE5:wakes=1,raised=1,nolive=0,novec=0,live=2,vec=Some(2) NVENC1:wakes=0,raised=0,nolive=0,novec=0,live=0,vec=Some(5) NVENC2:wakes=0,raised=0,nolive=0,novec=0,live=0,vec=Some(6) NVENC3:wakes=0,raised=0,nolive=0,novec=0,live=0,vec=Some(7) NVDEC0:wakes=0,raised=0,nolive=0,novec=0,live=0,vec=Some(3) NVDEC3:wakes=0,raised=0,nolive=0,novec=0,live=0,vec=Some(4) OFA:wakes=0,raised=0,nolive=0,novec=0,live=0,vec=Some(8)] inflight_tokens=[] workers[served=1380 parks=6478 host_rings=846 timeouts_with_work=0] chan[contended=0 poisoned=0] relay[wakes(doorbell=759 event=904 spin=0 backstop=5445 busy_looks=1216 unannounced_spins=716213) backstop_found(work=0 carried=0 contended=0) event_without_progress=847 gates=1 carried_ungated=0 credit_waits=0 contended_turns=0 pop_writebacks=0 markers=1 drain_us_log2=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] handoff(registered=0 rung=0 retried=0)]"
+    },
+    {
+      "offset": 1084897,
+      "line": "kf3: GSP REFUSED fn76/0x906f0102=0x56 (GSP_RM_CONTROL) first_seq=0 \u2014 the guest read a non-OK status"
+    }
+  ]
+}

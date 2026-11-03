@@ -1,0 +1,41 @@
+{"chunk": 12, "offset": 4939776, "bytes": 411648, "elapsed_s": 1.728}
+{"chunk": 6, "offset": 2469888, "bytes": 411648, "elapsed_s": 1.731}
+{"chunk": 9, "offset": 3704832, "bytes": 411648, "elapsed_s": 1.735}
+{"chunk": 15, "offset": 6174720, "bytes": 411648, "elapsed_s": 1.74}
+{"chunk": 1, "offset": 411648, "bytes": 411648, "elapsed_s": 3.413}
+{"chunk": 4, "offset": 1646592, "bytes": 411648, "elapsed_s": 3.513}
+{"chunk": 2, "offset": 823296, "bytes": 411648, "elapsed_s": 3.516}
+{"chunk": 3, "offset": 1234944, "bytes": 411648, "elapsed_s": 3.522}
+{"chunk": 13, "offset": 5351424, "bytes": 411648, "elapsed_s": 3.545}
+{"chunk": 8, "offset": 3293184, "bytes": 411648, "elapsed_s": 3.631}
+{"chunk": 0, "offset": 0, "bytes": 411648, "elapsed_s": 3.71}
+{"chunk": 10, "offset": 4116480, "bytes": 411648, "elapsed_s": 3.831}
+{"chunk": 11, "offset": 4528128, "bytes": 411648, "elapsed_s": 3.835}
+{"chunk": 5, "offset": 2058240, "bytes": 411648, "elapsed_s": 4.019}
+{"chunk": 7, "offset": 2881536, "bytes": 411648, "elapsed_s": 4.329}
+Traceback (most recent call last):
+  File "/workspace/codex/bw-cached-validation-20261023/checked_chunks.py", line 107, in <module>
+    main()
+    ~~~~^^
+  File "/workspace/codex/bw-cached-validation-20261023/checked_chunks.py", line 103, in main
+    dispatch(ranges, send, publish)
+    ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/codex/bw-cached-validation-20261023/checked_chunks.py", line 41, in dispatch
+    job.result()
+    ~~~~~~~~~~^^
+  File "/usr/lib/python3.14/concurrent/futures/_base.py", line 443, in result
+    return self.__get_result()
+           ~~~~~~~~~~~~~~~~~^^
+  File "/usr/lib/python3.14/concurrent/futures/_base.py", line 395, in __get_result
+    raise self._exception
+  File "/usr/lib/python3.14/concurrent/futures/thread.py", line 86, in run
+    result = ctx.run(self.task)
+  File "/usr/lib/python3.14/concurrent/futures/thread.py", line 73, in run
+    return fn(*args, **kwargs)
+  File "/workspace/codex/bw-cached-validation-20261023/checked_chunks.py", line 85, in send
+    stream(stream_in, child.stdin, offset, count)
+    ~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/codex/bw-cached-validation-20261023/checked_chunks.py", line 32, in stream
+    if sink.write(block) != len(block):
+       ~~~~~~~~~~^^^^^^^
+BrokenPipeError: [Errno 32] Broken pipe

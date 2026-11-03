@@ -1,0 +1,27 @@
+{
+  "utc": "2026-10-23T00:07:02.436117+00:00",
+  "owned_ids_checked": [
+    57099244,
+    57107585,
+    57108853,
+    57117614,
+    57132969,
+    57142142,
+    57143789,
+    57148807,
+    57273215,
+    57280677,
+    57285340
+  ],
+  "owned_ids_present": [],
+  "last_absence_verified_utc": "2026-10-23T00:05:16.556788+00:00",
+  "runtime_cost_estimate_usd": 0.58451785469,
+  "phase_total_runtime_estimate_usd": 1.028135286387037,
+  "credit_after_observed": 35.622229970261856,
+  "reserve_usd": 5,
+  "stop_usd": 6,
+  "cap_usd": 8,
+  "timers_cancelled_only_after_absence": true,
+  "auto_destroy_pid_same_process_still_present": false,
+  "budget_watch_pid_same_process_still_present": false
+}

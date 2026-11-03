@@ -1,0 +1,1 @@
+MEASURED, CPU2026-10-22: eight wiring cases EXPECTED RED alone at cfcda2e10/7eac4535f, then eight green; full inherited bench125→133, no case removed. Two mutations killed by3/2 distinct cases; all shell scripts pass bash -n. This is orchestration evidence, not hardware acceptance. Frozen product6e3fd3fd6, independent observer1ac2b51d5, optional B1c130aa98a.

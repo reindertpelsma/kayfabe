@@ -1,0 +1,29 @@
+..FF.
+======================================================================
+FAIL: test_first_detached_owned_vm_is_stopped (test_detached_qemu_guard.DetachedQemu.test_first_detached_owned_vm_is_stopped)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-cont-wt/scripts/bench/blackwell/test_detached_qemu_guard.py", line 16, in test_first_detached_owned_vm_is_stopped
+    def test_first_detached_owned_vm_is_stopped(self):self.check_owned(42)
+                                                      ~~~~~~~~~~~~~~~~^^^^
+  File "/workspace/bw-cont-wt/scripts/bench/blackwell/test_detached_qemu_guard.py", line 13, in check_owned
+    self.assertTrue(G.abort_owned_qemu(phase))
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true
+
+======================================================================
+FAIL: test_next_detached_owned_vm_is_stopped (test_detached_qemu_guard.DetachedQemu.test_next_detached_owned_vm_is_stopped)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-cont-wt/scripts/bench/blackwell/test_detached_qemu_guard.py", line 17, in test_next_detached_owned_vm_is_stopped
+    def test_next_detached_owned_vm_is_stopped(self):self.check_owned(43)
+                                                     ~~~~~~~~~~~~~~~~^^^^
+  File "/workspace/bw-cont-wt/scripts/bench/blackwell/test_detached_qemu_guard.py", line 13, in check_owned
+    self.assertTrue(G.abort_owned_qemu(phase))
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.003s
+
+FAILED (failures=2)

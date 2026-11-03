@@ -1,0 +1,100 @@
+{
+  "scope": "MEASURED physical fields only; does not prove virtual support or a family rule",
+  "die": "GB206",
+  "host_driver": "595.91.07",
+  "date": "2026-10-23",
+  "words": 48,
+  "field_rows": 328,
+  "fields": [
+    {
+      "field": "CSC00_PRECISION",
+      "public_bits": "4:0",
+      "GB202_prior_observed": [
+        14
+      ],
+      "GB206_595_observed": [
+        14
+      ],
+      "agrees_with_GB202": true,
+      "virtual_field_rule": [
+        14
+      ],
+      "differs_from_virtual_rule": false
+    },
+    {
+      "field": "CSC00_UNITY_CLAMP",
+      "public_bits": "5:5",
+      "GB202_prior_observed": [
+        0
+      ],
+      "GB206_595_observed": [
+        0
+      ],
+      "agrees_with_GB202": true,
+      "virtual_field_rule": [
+        0
+      ],
+      "differs_from_virtual_rule": false
+    },
+    {
+      "field": "CSC0LUT_FVLUT",
+      "public_bits": "13:13",
+      "GB202_prior_observed": [
+        1
+      ],
+      "GB206_595_observed": [
+        1
+      ],
+      "agrees_with_GB202": true,
+      "virtual_field_rule": [
+        0
+      ],
+      "differs_from_virtual_rule": true
+    },
+    {
+      "field": "CSC0LUT_DIRECT",
+      "public_bits": "15:15",
+      "GB202_prior_observed": [
+        0
+      ],
+      "GB206_595_observed": [
+        0
+      ],
+      "agrees_with_GB202": true,
+      "virtual_field_rule": [
+        0
+      ],
+      "differs_from_virtual_rule": false
+    },
+    {
+      "field": "CSC01_PRECISION",
+      "public_bits": "20:16",
+      "GB202_prior_observed": [
+        14
+      ],
+      "GB206_595_observed": [
+        14
+      ],
+      "agrees_with_GB202": true,
+      "virtual_field_rule": [
+        14
+      ],
+      "differs_from_virtual_rule": false
+    },
+    {
+      "field": "CSC01_UNITY_CLAMP",
+      "public_bits": "21:21",
+      "GB202_prior_observed": [
+        0
+      ],
+      "GB206_595_observed": [
+        0
+      ],
+      "agrees_with_GB202": true,
+      "virtual_field_rule": [
+        0
+      ],
+      "differs_from_virtual_rule": false
+    }
+  ]
+}

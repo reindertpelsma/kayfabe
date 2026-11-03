@@ -1,0 +1,13 @@
+{
+  "utc": "2026-10-22T03:37:03.586745+00:00",
+  "own_id": 57148807,
+  "profile": "on",
+  "run": "on_precision",
+  "source": "8f3a9bb3a5d652b3f536ca015bf95735ec588924",
+  "binary": "/workspace/bench/kf3-bins/8f3a9bb3/qemu-system-x86_64",
+  "binary_sha256": "a7c86110b7c55121eff8ecbe2e4fdd3829f628e18d1ae3f15b5e2a8ff44f27de",
+  "harness_sha256": "0130d66b292a6c79ac436de2108d34f2df26325db97b1891c92f6f806c4a7b2a",
+  "rpc_observer_sha256": "be45a303b43ca56a205b016d876a8c0c2f2d57686c4b66e58ffc3c2c887600e0",
+  "cell_attempt": 1,
+  "latest_start_utc": "2026-10-22T04:25:00.410087+00:00"
+}

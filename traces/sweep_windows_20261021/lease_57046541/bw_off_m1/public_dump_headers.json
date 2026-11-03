@@ -1,0 +1,32 @@
+{
+  "source": "https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/System/Diagnostics/Debug/struct.DUMP_HEADER64.html",
+  "public_related_structures": [
+    "DUMP_HEADER64_0:700byte buffer with8byte descriptor alignment",
+    "EXCEPTION_RECORD64:152bytes"
+  ],
+  "offsets_computed_from_public_C_layout": {
+    "BugCheckCode": 56,
+    "SystemTime": 4008
+  },
+  "projection": "only signature/build/bugcheck/time metadata, no context/memory/closed-code bytes exported",
+  "dumps": [
+    {
+      "file": "LiveKernelReports/WATCHDOG-20261021-1341.dmp",
+      "bytes": 1007878144,
+      "signature": "PAGEDU64",
+      "bugcheck": "0x193",
+      "system_time_filetime": "134370637168629955",
+      "system_time_utc": "2026-10-21T13:41:56.862995+00:00",
+      "build": 26100
+    },
+    {
+      "file": "Minidump/102126-79250-01.dmp",
+      "bytes": 1897770,
+      "signature": "PAGEDU64",
+      "bugcheck": "0x116",
+      "system_time_filetime": "134370637657093532",
+      "system_time_utc": "2026-10-21T13:42:45.709353+00:00",
+      "build": 26100
+    }
+  ]
+}

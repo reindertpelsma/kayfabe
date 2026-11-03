@@ -1,0 +1,191 @@
+{
+  "arm_on_a_start_receipt.json": {
+    "rental_path": "/root/prov/arm_on_a_start_receipt.json",
+    "original_bytes": 578,
+    "original_sha256": "f9a31ba11b72ac3d2bc3c330c85630d4efb412e324aa1485b98c09d38a0ab402",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "f9a31ba11b72ac3d2bc3c330c85630d4efb412e324aa1485b98c09d38a0ab402"
+  },
+  "arm_on_a_process_receipt.json": {
+    "rental_path": "/root/prov/arm_on_a_process_receipt.json",
+    "original_bytes": 1216,
+    "original_sha256": "c0ed33dfb744cbb7fb3aa65a0c652f005b5b35dc0c115d87f0d6e2bb1642b6de",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "c0ed33dfb744cbb7fb3aa65a0c652f005b5b35dc0c115d87f0d6e2bb1642b6de"
+  },
+  "arm_on_a_pre_enable.txt": {
+    "rental_path": "/root/prov/arm_on_a_pre_enable.txt",
+    "original_bytes": 426,
+    "original_sha256": "516bc701a01fd2bb19a606c486aed13d58c3a53c48b782dcd12e88ceed7cdb47",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "cdee624c5cc561d87591a5ed32e908ecd12a84513fc6f1d666915892bd2c6bab"
+  },
+  "arm_on_a_enable.txt": {
+    "rental_path": "/root/prov/arm_on_a_enable.txt",
+    "original_bytes": 287,
+    "original_sha256": "da801e1b77da52e18e32760d346f1a524f0f80a17698f3044ef0bd452bfdc693",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "d5bff5a244c6f68da7e8aeeac842ce66b0408d406a0d94aac31c7e4d5e3b2b96"
+  },
+  "arm_on_a_cleanup_started.txt": {
+    "rental_path": "/root/prov/arm_on_a_cleanup_started.txt",
+    "original_bytes": 26,
+    "original_sha256": "30d5dc465aec2bda3e5fe59f7558815be63fcc34d5aa72d59716369776614a1a",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "30d5dc465aec2bda3e5fe59f7558815be63fcc34d5aa72d59716369776614a1a"
+  },
+  "arm_on_a.log": {
+    "rental_path": "/root/prov/arm_on_a.log",
+    "original_bytes": 1079,
+    "original_sha256": "d844df494706ba5192e22e2b7e9175d0a4ad93b5b29ae98a380a19cdbda5848d",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "c81d8a11512da8bf88d822ee741247651c3467883ebe3c02b4b113ef17371243"
+  },
+  "collect_on_a.txt": {
+    "rental_path": "/root/prov/collect_on_a.txt",
+    "original_bytes": 2851,
+    "original_sha256": "1545b298b8bc3ad8d683935f3dffc0512dc80a36f340fd4e6e560ec64bf65f92",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "eb7bfaf7bf81d30d7f955556852adaeeafb45d282e20a98c0ad6a049e5e7362a"
+  },
+  "collect_on_a.log": {
+    "rental_path": "/root/prov/collect_on_a.log",
+    "original_bytes": 548,
+    "original_sha256": "2eaf0881083d804133d33c60dbe8ca0f3a0c3fdc2cdec7972923954fb4e01d46",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "18bd861937abc3286e21f351f656191fcb77a636683d89f79d0b4fcbbc02f072"
+  },
+  "api.tsv": {
+    "rental_path": "/root/prov/arms/on_a/api.tsv",
+    "original_bytes": 8861,
+    "original_sha256": "d697076aa3f6eff799cb47f19d432299d6059206d15b27bbf8b390ae5d11385b",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "d697076aa3f6eff799cb47f19d432299d6059206d15b27bbf8b390ae5d11385b"
+  },
+  "allocations.jsonl": {
+    "rental_path": "/root/prov/arms/on_a/allocations.jsonl",
+    "original_bytes": 27468,
+    "original_sha256": "c3774297597bb49fbee83d4d855f930aa96eb4d0d05186ff8c731b626faa700c",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "c3774297597bb49fbee83d4d855f930aa96eb4d0d05186ff8c731b626faa700c"
+  },
+  "allocations.receipt.json": {
+    "rental_path": "/root/prov/arms/on_a/allocations.receipt.json",
+    "original_bytes": 488,
+    "original_sha256": "7b261902159a93b19e8b346c0b911d89f85afdadd9f694382fc4b09198e45269",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "7b261902159a93b19e8b346c0b911d89f85afdadd9f694382fc4b09198e45269"
+  },
+  "summary.json": {
+    "rental_path": "/root/prov/arms/on_a/summary.json",
+    "original_bytes": 2773,
+    "original_sha256": "c1f18ad8b281ae3cf04bfb5bc6cc276490bca0c1ec547d1ff345c87f2a680116",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "c1f18ad8b281ae3cf04bfb5bc6cc276490bca0c1ec547d1ff345c87f2a680116"
+  },
+  "abort_context.txt": {
+    "rental_path": "/root/prov/arms/on_a/abort_context.txt",
+    "original_bytes": 1,
+    "original_sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+  },
+  "kf_line_census.txt": {
+    "rental_path": "/root/prov/arms/on_a/kf_line_census.txt",
+    "original_bytes": 7734,
+    "original_sha256": "96973cdef8ec1f673f14909dc5266e9b928bd83a00736107d93923131f2eff9e",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "54bc0ba5f160caddfc2f8a08d3f5e268d09409700d389fd89a5b55a268898c5d"
+  },
+  "channel_state.tsv": {
+    "rental_path": "/root/prov/arms/on_a/channel_state.tsv",
+    "original_bytes": 7077,
+    "original_sha256": "2390ed9334972a2dad20a9b176fdba664fec2f04796e6fef26101c2f8059c757",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "2390ed9334972a2dad20a9b176fdba664fec2f04796e6fef26101c2f8059c757"
+  },
+  "state_receipt.json": {
+    "rental_path": "/root/prov/arms/on_a/state_receipt.json",
+    "original_bytes": 421,
+    "original_sha256": "99850e30a21b793dba1469aecd825c12b3b160c5d7729cf3ff1cc45ff8b0aa6f",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "99850e30a21b793dba1469aecd825c12b3b160c5d7729cf3ff1cc45ff8b0aa6f"
+  },
+  "rpc_timing.jsonl": {
+    "rental_path": "/root/prov/arms/on_a/rpc_timing.jsonl",
+    "original_bytes": 61106,
+    "original_sha256": "3e2b5235e4f5ff55407d136b5532861aa0f13b0e8ddabfcadae4d5df0efdfbb8",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "3e2b5235e4f5ff55407d136b5532861aa0f13b0e8ddabfcadae4d5df0efdfbb8"
+  },
+  "rpc_timing.receipt.json": {
+    "rental_path": "/root/prov/arms/on_a/rpc_timing.receipt.json",
+    "original_bytes": 393,
+    "original_sha256": "e0f538d039763de6959c097ad44725b1f305d2961b901f323c17d710758e9f53",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "e0f538d039763de6959c097ad44725b1f305d2961b901f323c17d710758e9f53"
+  },
+  "rpc_timing_controller.log": {
+    "rental_path": "/root/prov/arms/on_a/rpc_timing_controller.log",
+    "original_bytes": 0,
+    "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "host_kernel.log": {
+    "rental_path": "/root/prov/arms/on_a/host_kernel.log",
+    "original_bytes": 469,
+    "original_sha256": "53fcebff6274769a9b42a38cb5d54754d1b492d7fa317677f09d5c4a8dc3c53a",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "53fcebff6274769a9b42a38cb5d54754d1b492d7fa317677f09d5c4a8dc3c53a"
+  },
+  "keylines.jsonl": {
+    "rental_path": "/root/prov/arms/on_a/keylines.jsonl",
+    "original_bytes": 79317,
+    "original_sha256": "b9099ccf874f2eb86d723b8e0994861c0a43b484aa35273f2cf3b4c044f59b48",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "b9099ccf874f2eb86d723b8e0994861c0a43b484aa35273f2cf3b4c044f59b48"
+  },
+  "xid_policy.json": {
+    "rental_path": "/root/prov/arms/on_a/xid_policy.json",
+    "original_bytes": 33,
+    "original_sha256": "17bf7693757a6f2c9fc8da60465269867817bacebd89059b05f76d403da7a50a",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "17bf7693757a6f2c9fc8da60465269867817bacebd89059b05f76d403da7a50a"
+  },
+  "dump_headers.jsonl": {
+    "rental_path": "/root/prov/arms/on_a/dump_headers.jsonl",
+    "original_bytes": 265,
+    "original_sha256": "e3ae3fad03c633fd9ee71acf12cb8b3537da473dae0475c4adbb50014895350e",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "e3ae3fad03c633fd9ee71acf12cb8b3537da473dae0475c4adbb50014895350e"
+  },
+  "display_driver.json": {
+    "rental_path": "/root/prov/arms/on_a/display_driver.json",
+    "original_bytes": 144,
+    "original_sha256": "6d441b302422474302b6c77cc151641d5a694d0338a518ea5352f884a41d3fcd",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "90aa4e85891b0e2c4e8e18dc1ca2c6f471e5ecd48ae64e8b1ff71ea711cca6d1"
+  },
+  "minidump_sha256.txt": {
+    "rental_path": "/root/prov/arms/on_a/minidump_sha256.txt",
+    "original_bytes": 117,
+    "original_sha256": "83d0a252668aeedcbdea7fd5988b0c1a3e6a9a9f362c8f2a5ed2200f4003cedb",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "83d0a252668aeedcbdea7fd5988b0c1a3e6a9a9f362c8f2a5ed2200f4003cedb"
+  },
+  "wer_times_on_a.txt": {
+    "rental_path": "/root/prov/wer_times_on_a.txt",
+    "original_bytes": 818,
+    "original_sha256": "0d59450fd8a97f67516c9dce227267cbad3f4f59129e21788da59aab3d0f34cb",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "62844a60a67810d358cd9e2da6db7994eefecb9f828eaec62ecd42d405c366aa"
+  },
+  "dump_hdr_on_a.txt": {
+    "rental_path": "/root/prov/dump_hdr_on_a.txt",
+    "original_bytes": 8096,
+    "original_sha256": "118f9a17e8f3ad22c7befe5ead35890176283233c19ebd2c472a6cd3afcdcaa6",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "5c5c95345e4c1864ffcb010dfcfd2967aacbcd6d2876eaf9df63f49e4d8ab7b3"
+  }
+}

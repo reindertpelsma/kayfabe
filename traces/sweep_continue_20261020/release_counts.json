@@ -1,0 +1,46 @@
+{
+  "utc": "2026-10-20T20:36:09.800713+00:00",
+  "source_code": "048c28b9c645190adf5bcaf859284adb8eb222ed",
+  "invoked_head": "7d5e0fc5fb1627721ed7169de100e53edf7a9946",
+  "source_note": "Only owned documentation commits landed while tests ran; all product/test bytes stayed equal to048c until this run completed. Mutations run sequentially afterward.",
+  "counts_pass_fail_ignore": {
+    "kf-abi": [
+      608,
+      0,
+      0
+    ],
+    "kf-chan": [
+      532,
+      0,
+      3
+    ],
+    "kf-chip": [
+      86,
+      0,
+      0
+    ],
+    "kf-disp": [
+      288,
+      0,
+      5
+    ],
+    "kf-qemu": [
+      407,
+      0,
+      0
+    ],
+    "kf-rm": [
+      812,
+      0,
+      0
+    ]
+  },
+  "totals": [
+    2733,
+    0,
+    8
+  ],
+  "log_sha256": "89d57785e89a0c9621fbac0f0dad22cee7df3135cbb78dae1fdb2de246939ef5",
+  "runtime_target_count": 134,
+  "initial_interrupted_launch": "Excluded: SIGINT/130 to correct older global lock path. This accepted run used documented /tmp/claude-0/kf-local-cargo.lock, nice19/-j2, own target2."
+}

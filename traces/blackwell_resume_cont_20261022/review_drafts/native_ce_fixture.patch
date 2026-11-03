@@ -1,0 +1,23 @@
+diff --git a/crates/kf-harness/src/bin/kf-gr-tier.rs b/crates/kf-harness/src/bin/kf-gr-tier.rs
+index a652d1c25..a585ee41d 100644
+--- a/crates/kf-harness/src/bin/kf-gr-tier.rs
++++ b/crates/kf-harness/src/bin/kf-gr-tier.rs
+@@ -154,2 +154,10 @@ fn gr_segment(classes: &[u32]) -> Result<Vec<u32>, String> {
+-fn ce_segment(_host_ce_class: u32) -> Result<Vec<u32>, String> {
+-    Ok(RUN31_CE.to_vec())
++fn ce_segment(host_ce_class: u32) -> Result<Vec<u32>, String> {
++    if !kf_chip::is_any_dma_copy_class(host_ce_class) {
++        return Err("native CE fixture requires an allocated copy-engine class".into());
++    }
++    let mut words = RUN31_CE.to_vec();
++    // Native execution must bind the class allocated on THIS host channel.
++    // The historical guest fixture used Ampere's class; the CE host path does
++    // not have the graphics-runlist compatibility rewriter.
++    words[4] = host_ce_class;
++    Ok(words)
+@@ -838 +846 @@ mod fixture_tests {
+-        for i in 0..RUN31_CE.len() {
++        for (i, original) in RUN31_CE.iter().enumerate() {
+@@ -840 +848 @@ mod fixture_tests {
+-                assert_eq!(words[i], RUN31_CE[i], "operand{i}");
++                assert_eq!(words[i], *original, "operand{i}");
