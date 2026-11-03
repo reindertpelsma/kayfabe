@@ -9,6 +9,10 @@
 # kf-* crates is CI's `stable` job (every commit); the only tests that differ on a box are the
 # /dev/kvm-gated ones, an opt-in stage: KF_MERGE_KVM_TESTS=1 (kvm_tests.sh). Live gate run
 # 40263112941 spent 31 minutes and ended rc=101 in the old all-crates run.
+# A second opt-in stage, KF_MERGE_WINDOWS=1 (windows_gate.sh, LAST, after the census): Windows 11 LTSC on kf3,
+# installed once per box, the stock 580.88 driver with GSP forced, a signed-in desktop, nvidia-smi, a CUDA
+# matmul and a D3D11 readback, a bounded idle, zero resets. It adds an install of about 20-45 minutes and
+# ends with WINDOWS_GATE_PASS, or FAIL (the guest failed) or RETRY (host, harness or rental fault: re-run on a fresh box); every non-PASS verdict exits non-zero.
 # ⊘ Never hold /tmp/kayfabe-fastguest.lock across fast_suite: run_fast_guest takes it per arm.
 # Never reuse a previous initrd after a build failure, delete a shared checkout, or hide a
 # failed cargo behind a successful log filter. Every stage fails closed and keeps its log.
@@ -82,3 +86,6 @@ bash scripts/bench/box/birth_census.sh "$BENCH_DIR" "$T" "$PROV/${T}_gates.log" 
     || { grep -a '^BIRTH_CENSUS_FAIL' "$PROV/${T}_births.log"; exit 1; }
 grep -a '^BIRTH_CENSUS_SUITE\|^BIRTH_CENSUS_GATES' "$PROV/${T}_births.log"
 grep -a '^BIRTH_CENSUS_OK' "$PROV/${T}_births.log"
+if [ "${KF_MERGE_WINDOWS:-0}" = 1 ]; then
+    bash scripts/bench/box/windows_gate.sh "$T" "$PROV"
+fi

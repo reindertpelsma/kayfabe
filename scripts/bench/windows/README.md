@@ -82,6 +82,13 @@ sets. **None of this has run on hardware yet.**
 
 **Fresh Vast box to a sealed Windows image: `scripts/bench/box/windows_lane.sh`** (added 2026-10-31 from draft PR #165; not yet run on hardware in this form). It provisions the box, fetches the pinned media in parallel with the host driver and the kf3 build, and runs `win_vm.sh install` with every core (at most 16) and `WINVM_INSTALL_CACHE=unsafe`. It prints `STAGE <name> START|EXIT rc=N`, a `WINLANE_TIMING` line and a last `WINLANE_EXIT rc=N` line to `/root/prov/winlane.log`; a log without `WINLANE_EXIT` belongs to a dead run. It does not run the Linux suites and does not restore a prebuilt image.
 
+**The merge-bar Windows gate: `scripts/bench/box/windows_gate.sh`** (added 2026-11-01; `KF_MERGE_WINDOWS=1` in
+`merge_check.sh`). It drives this script through install, `run`, `check --kf3`, `nv-install --no-enable`,
+`desktop-prep`, a guest reboot, a one-time device enable (`gate_enable.ps1`), `nvidia-smi`, two probes
+(`cup8`, `kf_dxprobe d3d11`), a 300 s idle and the reset counters (`gate_state.ps1`, `gate_run.ps1`), and ends in one
+`WINDOWS_GATE_*` verdict line; the same-box host GPU reference decides whether a failure is kayfabe's. Design
+and the first real run: [`docs/design/V3_WINDOWS_GATE.md`](../../../docs/design/V3_WINDOWS_GATE.md).
+
 **Remote access.** Use `ssh -J <gpu-host> -p 2224 kf@127.0.0.1` with a key you passed to
 `install --authorized-key`. No public port is opened.
 
