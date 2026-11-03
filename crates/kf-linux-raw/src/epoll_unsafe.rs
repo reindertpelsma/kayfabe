@@ -329,6 +329,52 @@ mod tests {
         );
     }
 
+    /// ★ 2026-11-03 (walk wake): a pending GPU walk is checked on a microsecond scale. The
+    /// wait must time out in microseconds, not round up to a millisecond, and must still be a
+    /// real sleep (never a spin). The upper bound is loose for loaded CI hosts (best of 20).
+    #[test]
+    fn a_microsecond_timeout_sleeps_that_long_and_no_millisecond_more() {
+        assert!(crate::set_current_thread_timer_slack_ns(1_000));
+        assert_eq!(crate::current_thread_timer_slack_ns(), Some(1_000));
+        let p = Poller::create().expect("readiness set");
+        let mut ready = ReadyTokens::new();
+        let mut best = std::time::Duration::MAX;
+        for _ in 0..20 {
+            let t = std::time::Instant::now();
+            assert_eq!(
+                p.wait(&mut ready, PollTimeout::Micros(200)).expect("wait"),
+                0
+            );
+            let took = t.elapsed();
+            assert!(
+                took >= std::time::Duration::from_micros(200),
+                "{took:?}: woke before the timeout"
+            );
+            best = best.min(took);
+        }
+        assert!(
+            best < std::time::Duration::from_micros(900),
+            "best {best:?}: the timeout was rounded up to a millisecond"
+        );
+    }
+
+    #[test]
+    fn a_microsecond_wait_reports_readiness_at_once() {
+        let p = Poller::create().expect("readiness set");
+        let n = Notifier::create().expect("counter");
+        p.watch(n.as_source_fd(), 9).expect("watch");
+        n.signal().expect("signal");
+        let mut ready = ReadyTokens::new();
+        let t = std::time::Instant::now();
+        assert_eq!(
+            p.wait(&mut ready, PollTimeout::Micros(5_000_000))
+                .expect("wait"),
+            1
+        );
+        assert!(t.elapsed() < std::time::Duration::from_secs(1));
+        assert_eq!(ready.iter().collect::<Vec<_>>(), vec![9]);
+    }
+
     /// ★ A peer-closed pipe is **permanently readable and drains nothing** — the exact
     /// hazard §3.4(c)'s "every source is a counter we drain" does not cover, pinned here
     /// at the layer that can see it. `SourceKind::Worker` is this shape (§3.1: readiness

@@ -17,6 +17,7 @@ pub(crate) const fn poll_ms(in_flight: bool) -> u32 {
 mod tests {
     use super::*;
     use std::cell::Cell;
+    use std::time::Duration;
 
     #[test]
     fn a_signal_cannot_complete_a_pending_gpu_event() {
@@ -53,5 +54,54 @@ mod tests {
     fn a_walk_is_checked_promptly_and_idle_keeps_the_backstop() {
         assert_eq!(poll_ms(true), 1);
         assert_eq!(poll_ms(false), 50);
+    }
+
+    fn us(n: u64) -> Duration {
+        Duration::from_micros(n)
+    }
+
+    /// The VA worker's checks of a pending walk, simulated: the walk age at the first check
+    /// at or after `done_us`, and how many checks (wakes) it took.
+    fn collected_at(done_us: u64) -> (u64, u32) {
+        let (mut t, mut checks) = (0u64, 0u32);
+        while t < done_us {
+            t += u64::from(poll_us(Some(us(t))));
+            checks += 1;
+        }
+        (t, checks)
+    }
+
+    /// ★ Ada lane 2026-11-03: an 85-200 us walk was collected only when the 1 ms wait expired
+    /// (`vat[walk_avg_us]` 1008-1011 us). The check follows the walk's own time scale.
+    #[test]
+    fn a_fresh_walk_is_checked_on_its_gpu_time_scale() {
+        assert_eq!(poll_us(Some(Duration::ZERO)), 50);
+        assert_eq!(poll_us(Some(us(99))), 50);
+        assert_eq!(poll_us(Some(us(300))), 150);
+        assert_eq!(poll_us(Some(us(5_000))), 1_000);
+        // An 85 us Ada walk is seen by 100 us; a slower walk within about 1.5x of its time.
+        assert!(collected_at(85).0 <= 100, "{:?}", collected_at(85));
+        assert!(collected_at(200).0 <= 225, "{:?}", collected_at(200));
+        assert!(collected_at(400).0 <= 600, "{:?}", collected_at(400));
+    }
+
+    /// Bounded both ways: never a spin (a zero or tiny wait), never slower than the old 1 ms
+    /// check, and a long walk costs a bounded number of wakes.
+    #[test]
+    fn the_pending_check_never_spins_and_never_exceeds_a_millisecond() {
+        for age in (0..20_000).step_by(7) {
+            let w = poll_us(Some(us(age)));
+            assert!(
+                (PENDING_MIN_US..=PENDING_MAX_US).contains(&w),
+                "age {age} us -> {w} us"
+            );
+        }
+        assert!(collected_at(1_000).1 <= 10, "{:?}", collected_at(1_000));
+        assert!(collected_at(10_000).1 <= 20, "{:?}", collected_at(10_000));
+    }
+
+    #[test]
+    fn idle_keeps_the_fifty_millisecond_backstop() {
+        assert_eq!(poll_us(None), 50_000);
     }
 }
