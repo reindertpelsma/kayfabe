@@ -67,3 +67,19 @@ line `caps page derived — N words: a T1 rule, b T2 host, c T3 measured (u unme
   budget fails or crashes, or passes in clearly more than ~205 s, or its kf3 counters stop advancing (hung).
 
 ## RESULTS
+
+### Box A, Linux bar (MEASURED 2026-11-03, rev `08dae8a3`, host 580.159.04, `boxA/tbA1.log`, `boxA/tbA1_suite.out`)
+
+- `V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS`, `KF3_RC=0`, `BARE_SUITE_PASS=30 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0
+  ARMS=30`, `FG_RC=0`.
+- Thin guest: `FAST_SUITE_PASS=29 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=1 NOTRUN=0 ARMS=30` — the one miss is
+  `ce-client-guest-ram verdict=TIMEOUT secs=185`; its kf3 counters kept advancing to the kill (slow, not hung). So
+  `merge_check.sh` ended `EXIT rc=1` and its Windows stage did not run; the census was not reached.
+- The arm alone at 600 s (`boxA/tbA1gr_suite.out`): `verdict=PASS secs=310 client_ms=281890`.
+- **H-guest-ram-perf: FALSIFIED as stated** — 310 s (client 282 s) against the 203 s (client 187 s) of lease 57882297.
+  The arm is slower than before, not only slow. INFERRED attribution: not this branch's change — this branch's crate
+  code is `next`'s plus one test file (`git diff origin/next -- crates/` = `kf-disp/tests/turing_caps.rs`), and the
+  Ada-PC lane measured a walk-latency regression of `next` 70e3fabd8 against 9297ffdd9 on an RTX 4070 (walk 1009 us vs
+  ~110 us, suite client time 1.91x; `traces/ada_pc_20261103/` on `claude/ada-pc-regression-20261103`), which a
+  separate lane is fixing in kf-cuda/kf-qemu. Not measured here: the same arm on this box at 9297ffdd9. The two
+  reference runs also differ in box and host driver (595.91.07 then, 580.159.04 now).
