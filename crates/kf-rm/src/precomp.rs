@@ -27,6 +27,8 @@ pub struct Inheritance {
 }
 
 /// Owner-approved scope, 2026-10-23; an exact future row always takes precedence.
+/// 2026-11-03: GB203 now has its own exact rows (lease 58957600, equal to GB202 on all 48 words and
+/// 328 decoded fields), so its entry below is only the fallback when those rows are absent.
 pub const INHERITANCE: &[Inheritance] = &[
     Inheritance {
         die: "GB203",
