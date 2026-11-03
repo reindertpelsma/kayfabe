@@ -73,6 +73,36 @@ The thin-guest suite took 870 s of arm time (sum of `secs=`, `boxA/am1_suite.out
 119 s (`client_ms=98070`) inside the 180 s budget, so the walk-latency exception pre-stated above did not arise on
 this box. (INFERRED: a 30-vCPU box hides most of it; no comparison against 9297ffdd9 was run here.)
 
+### Box A, Windows gate run am1 (MEASURED 2026-11-03, rev `006d845a`, the `KF_MERGE_WINDOWS=1` stage of the same merge check)
+
+The first Windows gate result on any Ampere die. `boxA/am1_windows.log`:
+
+```
+WINDOWS_GATE_PASS rev=006d845a gpu="NVIDIA GeForce RTX 3090" idle_s=300 hostref=green/green secs=3661 install=once driver=580.88 gsp=forced code=0 probes=cup8,d3d11,x2 resets=0 known_live_dumps_193=3 stale_lke_resubmits=0 strict=0 enable_utc=2026-11-03T15:28:07Z
+WINDOWS_GATE_EXIT rc=0 2026-11-03T15:42:50+00:00
+```
+
+`WINDOWS_GATE_TIMING total=3662s ... install=1852s ... nv_install=444s ... idle=329s ...` (install SMP 16, `cache=unsafe`).
+Against the pre-registered falsifier (files under `boxA/am1_win/`; UUIDs scrubbed, so `MANIFEST.sha256` no longer
+matches the scrubbed files):
+
+- kf3 log `gate_am1_b2_qemu.log.gz`: `caps page derived — 56 words: 55 T1 rule, 0 T2 host, 1 T3 measured (0
+  unmeasured)` — the GA102 row served, no notice; `+253541 ms the console shows head 0 1920x1080: [window 0 ...]`
+  (a window PUT after the modeset).
+- User rings: 0 `USER_RING_SCAN` lines; the guest's `0xC56F` channels were allocated (`RmAlloc ... class=0xc56f
+  result=0x0`) and the GR tier admitted host channels `privilege=USER`; no `PRIVILEGED_CHANNEL=` line other than 0.
+- `gsp_signals.txt`: `running_to_suspending=1` (the stop), `unloading_guest_driver=1`, `host_xid_in_boots=0`.
+- `tdr_counts.txt`: `display4101=0 nvlddmkm153=0 kernelpower41=0 eventlog6008=0 bugcheck1001=0
+  livekernelevent_other=0 livekernelevent193=3 ... total=0`; one WATCHDOG dump 15:29:03Z, +56 s after the enable,
+  before the probes (the same reported-not-gated LiveKernelEvent 193 as on AD102 and TU106).
+- Host reference green before and after (`hostref_after.txt`: `HOSTREF_CUP8 PASS`, `HOSTREF_XID_DELTA 0`; the
+  count of 10 is the suites' intentional Xid controls). Host BAR1 is 256 MiB on this box; kf3 ran `bar1-size=128 MiB`,
+  `fb-mb=8192`.
+- The one `kf3: device reset #1 ... before the vCPUs resume` is the platform reset at boot, as in TU106 tbA2.
+- No QEMU and no `win_vm.sh run` loop after the gate (`pgrep`, empty, before am2 was launched).
+
+H-windows-ampere: not falsified (n=1).
+
 ⚠ Evidence hygiene: commit `edd35d3a` carried this board's GPU UUID in `boxA/am1_host.log` (the bare-metal suite's
 `nvidia-smi` line). `d4347d7a` scrubs it at HEAD (`no_gpu_uuids.py`: new=0); the repository refuses
 force-pushes, so the UUID stays in that one commit's history (for the release history sweep).
