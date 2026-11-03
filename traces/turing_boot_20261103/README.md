@@ -95,6 +95,21 @@ The new `gate_state.ps1` (`c290ec24`, stale-LKE filter) was parse- and run-check
 window (read-only, `-Mode tdr`): it printed `livekernelevent_stale=0 ... total=0` and `GATE_STATE_DONE`. Its stale
 branch (an old report re-submitted) is not exercised on a fresh image.
 
+### Box B, Windows gate run tbB2 (MEASURED 2026-11-03, rev `c71c07cb`: the gate fixes `08dae8a3` + `c290ec24` included)
+
+A fresh overlay and a fresh QEMU on the same installed image (`boxB/tbB2_windows.log`, launched 12:56:56Z):
+
+```
+WINDOWS_GATE_PASS rev=c71c07cb gpu="NVIDIA GeForce RTX 2060 SUPER" idle_s=300 hostref=green/green secs=1449 install=once driver=580.88 gsp=forced code=0 probes=cup8,d3d11,x2 resets=0 known_live_dumps_193=3 stale_lke_resubmits=0 strict=0 enable_utc=2026-11-03T13:07:22Z
+WINDOWS_GATE_EXIT rc=0 2026-11-03T13:21:05+00:00
+```
+
+Same signals as tbB1: `caps page derived — 56 words: 55 T1 rule, 0 T2 host, 1 T3 measured (0 unmeasured)`, window 0
+scanned +179.8 s, `running_to_suspending=1`, `host_xid_in_boots=0`, `GATE_TDR ... livekernelevent_stale=0 ... total=0`
+(the new counter ran in the gate). No QEMU and no `win_vm.sh run` loop left after the gate (`pgrep`, empty). H-derived-
+TU106 not falsified (n=2 on box B). Box B destroyed 13:22Z (`vastai destroy instance 58957107 -y`; the listing then
+held only 58956007 of this lane).
+
 ### Box A, Linux bar (MEASURED 2026-11-03, rev `08dae8a3`, host 580.159.04, `boxA/tbA1.log`, `boxA/tbA1_suite.out`)
 
 - `V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS`, `KF3_RC=0`, `BARE_SUITE_PASS=30 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0
