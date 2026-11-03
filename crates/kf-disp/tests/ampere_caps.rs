@@ -13,9 +13,11 @@ const GA102: Die = Die {
     architecture: 0x170,
     implementation: 0x2,
 };
-const GA104: Die = Die {
+/// GA107 stays unmeasured: GA104 and GA106 are measured by the caps sweep (`caps_sweep_20261103.rs`), no GA107 board
+/// was on offer.
+const GA107: Die = Die {
     architecture: 0x170,
-    implementation: 0x4,
+    implementation: 0x7,
 };
 /// The GA102 read (`traces/ampere_hw_20261103/caps/`).
 const GA102_00C: u32 = 0x100;
@@ -81,8 +83,8 @@ fn the_ga102_row_is_scoped_to_its_driver_branch() {
 
 #[test]
 fn an_unmeasured_ampere_die_gets_the_clean_page_and_a_notice_never_a_neighbours_row() {
-    let d = ampere(GA104, true, "580");
-    assert_eq!(d.page.word(0x00c), 0, "no GA102 value is served to a GA104");
+    let d = ampere(GA107, true, "580");
+    assert_eq!(d.page.word(0x00c), 0, "no GA102 value is served to a GA107");
     assert_eq!(
         d.unmeasured.iter().map(|(o, _)| *o).collect::<Vec<_>>(),
         vec![0x00c]

@@ -250,14 +250,27 @@ fn every_word_names_its_tier() {
 #[test]
 fn an_unmeasured_die_gets_the_clean_page_and_the_notice_never_a_neighbours_row() {
     for (row, die) in [
-        (&ADA, AD106),
-        (&ADA, AD103),
-        (&AMPERE, GA104),
+        // the 2026-11-03 caps sweep measured GA104/GA106, TU102/TU104/TU116 and AD103/AD106 (and AD107 on a 595 host
+        // only): what is left unmeasured on branch 580 is AD107, GA107 and TU117
+        (
+            &ADA,
+            Die {
+                implementation: 7,
+                ..AD104
+            },
+        ),
+        (
+            &AMPERE,
+            Die {
+                implementation: 7,
+                ..GA104
+            },
+        ),
         (
             &TURING,
             Die {
                 architecture: 0x160,
-                implementation: 4,
+                implementation: 7,
             },
         ),
         (
