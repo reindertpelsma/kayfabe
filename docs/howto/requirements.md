@@ -42,6 +42,7 @@ What has been run (the README's list; revisions and boxes are in the repository'
 | Blackwell GB205 | yes | an idle ten-minute run passed once, with two fixes that are not merged yet; no apps run; without the fixes the driver crashes the guest <!-- src: branch claude/blackwell-fixes-20261024, one run (n=1) --> |
 | Blackwell GB202 | branch-only: thin 30/30 and CUDA 4/4 with guest and host 595.91.07 [measured at revision `24906bf33`, lease 56788212, n=1]. The [record](https://github.com/reindertpelsma/kayfabe/blob/0bbf3c55f/traces/sweep_integrate_20261018/phase2_blackwell_56788212/B3_RESULT.md) on `codex/sweep-integrate-20261018` is not merged. Heartbeat warnings are retained, and a desktop attempt with guest 580.159.04 showed a black frame | **open:** one run crashed within seconds, not yet explained; a run on another machine did not repeat it <!-- src: branches codex/bw6b-20261024 and claude/bw11-20261026 --> |
 | Blackwell GB206 | passed at earlier revisions | **open: Code 43** |
+| Blackwell GB203 (RTX 5070 Ti) | yes (merge bar 9/9 and 30/30) | branch-only: the Windows gate passed once (desktop, `nvidia-smi`, CUDA and D3D11 probes, a 300 s idle, no resets) <!-- src: traces/blackwell_win_20261103/, branch claude/blackwell-win-20261103 rev 54410b7d, Vast lease 58971826, n=1 --> |
 
 <!-- src: README.md "GPUs:" paragraph; docs/STATUS_DETAIL.md section 0; traces/sw3_die_sweep_20261024/README.md -->
 

@@ -1,0 +1,6 @@
+# AUTHORED diagnostic (not a read): POSTCOMP_HDR_CAPA(0..3) = the die own no-scaler tile word 0x007b01d0 (tiles 4..7 of the read)
+# pci 0000:00:07.0 vendor 0x10de device 0x2c05 bar0 0x640000+0x1000 (PROT_READ, 32-bit loads)
+WORD 0x680 0x007b01d0
+WORD 0x6a0 0x007b01d0
+WORD 0x6c0 0x007b01d0
+WORD 0x6e0 0x007b01d0
