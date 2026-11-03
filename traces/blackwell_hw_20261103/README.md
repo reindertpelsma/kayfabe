@@ -55,7 +55,7 @@ suites' source-matched intentional Xid 31 controls (`gb203_merge/host_xids.txt`)
 the enable to `code=0` at driver 32.0.15.8088, guest `nvidia-smi`, and every probe before AND after the 300 s idle
 (`cup8` PASS, `d3d11` OK, `cup3`, `d3d12` OK); zero Display 4101, `nvlddmkm` 153, Kernel-Power 41, 6008, BugCheck 1001.
 
-**What failed (MEASURED):** one LiveKernelEvent triplet per boot, about 38 s after the enable: `0x193` (P1 `815`,
+**What failed (MEASURED in run `bwhw2` at rev `a042c863`, 2026-11-03, `gb203_merge_bwhw2/`):** one LiveKernelEvent triplet per boot, about 38 s after the enable: `0x193` (P1 `815`,
 as on AD102), plus `0x1A8` and `0x1B8` with P1 `a` (both "Hardware error", WER retries make the counts 10/4), one
 WATCHDOG dump. The gate counts LiveKernelEvent codes other than 193, so it fails; that is the gate working as
 designed (AD102 g4 had zero of them), not a harness fault. The kf3 log shows the display was never lit: the
