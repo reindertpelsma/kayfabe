@@ -1,6 +1,6 @@
 # V3: the Windows stage of the merge bar (`KF_MERGE_WINDOWS=1`, `windows_gate.sh`)
 
-STATUS: LIVE, 2026-11-01 (first hardware run: section 6). The gate is implemented (`scripts/bench/box/windows_gate.sh`, wired into
+STATUS: LIVE, 2026-11-03 (first hardware run: section 6; teardown and state-at-failure fixes: section 3a). The gate is implemented (`scripts/bench/box/windows_gate.sh`, wired into
 `scripts/bench/box/merge_check.sh` as an opt-in last stage). The first real run is recorded in
 `traces/windows_gate_20261101/README.md`; this file carries the design and the rules, that file carries the
 numbers. It implements the verification plan of [`V3_WINDOWS_ON_VAST.md`](V3_WINDOWS_ON_VAST.md) (bar (b)) as a
@@ -76,6 +76,26 @@ check that exactly one branch of the script sets a zero exit.
 | each probe | killed in the guest after its own limit (`gate_run.ps1`), 180 s for the graded two |
 | GPU lock | `WINVM_LOCK_WAIT_S` 120 s |
 | idle | `KF_WINGATE_IDLE_S` 300 s |
+| teardown | the run loop of the tag must end within 180 s of the stop request (else a loud note; never a kill) |
+| post-mortem boot (a dead guest only) | `min(900 s, what is left)`, skipped with a note under 300 s |
+
+### 3a. Teardown and the state at failure (2026-11-03, the two defects of the TU106 runs)
+
+- **No QEMU outlives the gate.** A guest that reboots on its own (a bugcheck under `-action panic=none` reboots,
+  and `reboot=shutdown` ends that QEMU) is started again by the detached `win_vm.sh run` loop unless
+  `run/stop-requested` exists, and `win_vm.sh stop` touches that file only while a QEMU runs. A teardown that landed
+  between two boots therefore left the next QEMU, the loop and the GPU lock running after the gate (TU106 t2 post-hoc
+  boot). The teardown now writes the stop request first, then stops any QEMU that is up until the loop of its tag has
+  ended; the EXIT trap does the same even when there is no `qemu.pid`.
+- **A dead guest still yields its state.** The state at failure was skipped when QEMU was gone and came back as
+  empty files when the guest no longer answered ssh (TU106 t2: `state_at_failure_*.txt` were 0 bytes). The guest's
+  event log and WER reports are on the overlay disk, so a dead or silent guest is now read from one bounded
+  post-mortem boot of the same overlay with **no kf3 device** (`win_vm.sh run --once --no-kf3`, std VGA, so the
+  NVIDIA stack that failed does not run): the reset counters since the enable (`gate_state.ps1 -Mode tdr`) and the
+  WER timeline, into the same `state_at_failure_*.txt` files and `AT_FAILURE postmortem` log lines. The adapter state
+  is not asked (there is no adapter in that boot). The verdict is unchanged by it: it is evidence only.
+- Tests: the gate's `--selftest` (18 cases, 7 for these two) and four mutants in
+  `scripts/ci/test_vast_windows_gate.py`, each re-creating one defect and each failing the selftest.
 
 ## 4. Files
 
