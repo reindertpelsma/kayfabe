@@ -89,6 +89,7 @@ STAGE=start
 GUEST_STARTED=0                 # 1 once a kf3 QEMU was started: only then can a failure be kayfabe's
 ENABLE_UTC=""
 LKE193=""
+LKESTALE=""                     # WER re-submissions of reports older than the enable (never gate)
 rc_final=0
 FAILMODE=none FAILWHY="" FAILSTAGE=""
 STAGE_T=0
@@ -240,7 +241,7 @@ conclude() {
                 verdict FAIL KAYFABE "the kf3 log shows the no-flags refusal 0x2080121f although the flags were exported"
             else
                 STAGE="done"
-                verdict PASS NONE "install=once driver=580.88 gsp=forced code=0 probes=cup8,d3d11,x2 resets=0 known_live_dumps_193=${LKE193:-?} strict=${KF_WINGATE_STRICT_LKE:-0} enable_utc=$ENABLE_UTC"
+                verdict PASS NONE "install=once driver=580.88 gsp=forced code=0 probes=cup8,d3d11,x2 resets=0 known_live_dumps_193=${LKE193:-?} stale_lke_resubmits=${LKESTALE:-?} strict=${KF_WINGATE_STRICT_LKE:-0} enable_utc=$ENABLE_UTC"
             fi ;;
     esac
     finish
@@ -817,6 +818,7 @@ strict=""
 gps 300 'C:\kf\gate_state.ps1' -Mode tdr -Since "$ENABLE_UTC" $strict > "$EV/tdr_counts.txt" 2>&1
 grep -a '^GATE_TDR\|^GATE_LIVEDUMP' "$EV/tdr_counts.txt" | while read -r l; do say "  $l"; done
 LKE193=$(sed -n 's/.* livekernelevent193=\([0-9]*\) .*/\1/p' "$EV/tdr_counts.txt" | head -1)
+LKESTALE=$(sed -n 's/.* livekernelevent_stale=\([0-9]*\) .*/\1/p' "$EV/tdr_counts.txt" | head -1)
 wer_timeline "wer_reports.txt"
 grep -aq '^GATE_TDR .* total=0$' "$EV/tdr_counts.txt" || fail_guest "reset counters are not all zero since the enable: $(grep -a '^GATE_TDR' "$EV/tdr_counts.txt" | head -1)"
 gps 120 'C:\kf\gate_state.ps1' -Mode display > "$EV/display_final.txt" 2>&1

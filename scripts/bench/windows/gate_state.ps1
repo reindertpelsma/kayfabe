@@ -109,8 +109,50 @@ function CountEv([string]$log, [string]$prov, [int]$id, [string]$like = '') {
 # WER LiveKernelEvents by their first parameter. 193 is a WATCHDOG live dump: the system keeps running, nothing
 # resets, and it is a recorded open defect on rented-box Ada/Blackwell runs (docs/design/V3_WINDOWS_GATE.md, section 6).
 # It is counted and reported separately and gates only with -Strict; every other LiveKernelEvent code gates.
-$lke = @(Get-WinEvent -FilterHashtable @{ LogName = 'Application'; Id = 1001; ProviderName = 'Windows Error Reporting'; StartTime = $t.ToLocalTime() } -ErrorAction SilentlyContinue |
+$lkeAll = @(Get-WinEvent -FilterHashtable @{ LogName = 'Application'; Id = 1001; ProviderName = 'Windows Error Reporting'; StartTime = $t.ToLocalTime() } -ErrorAction SilentlyContinue |
     Where-Object { $_.Message -like '*LiveKernelEvent*' })
+# ⊘ [2026-11-03, Ada-PC lane, traces/ada_pc_20261103/ on claude/ada-pc-regression-20261103] On a non-fresh image WER
+# RE-SUBMITS reports already queued on the disk: each re-submission is a NEW 1001 event (TimeCreated after $t) of an
+# OLD report (78 events of 26 code-141 reports with event times 2026-10-20..22, no dump written after the boot). Such
+# an event is not a reset of this run. So an event is matched to its Report.wer (by `Report Id:` = ReportIdentifier,
+# else by the report directory the message names) and is STALE when that report's own EventTime is before $t. Stale
+# events are counted apart and never gate; an event whose report cannot be found still counts (fail closed).
+$repTime = @{}
+foreach ($where in 'ReportArchive', 'ReportQueue') {
+    $root = Join-Path 'C:\ProgramData\Microsoft\Windows\WER' $where
+    if (-not (Test-Path $root)) { continue }
+    foreach ($d in Get-ChildItem $root -Directory -ErrorAction SilentlyContinue) {
+        $f = Join-Path $d.FullName 'Report.wer'
+        if (-not (Test-Path $f)) { continue }
+        $lines = ([IO.File]::ReadAllText($f) -replace "`0", '') -split "`r?`n"
+        $et = ($lines | Where-Object { $_ -match '^EventTime=\d+$' } | Select-Object -First 1) -replace '^EventTime=', ''
+        if (-not $et) { continue }
+        $evt = [DateTime]::FromFileTimeUtc([int64]$et)
+        $rid = ($lines | Where-Object { $_ -match '^ReportIdentifier=' } | Select-Object -First 1) -replace '^ReportIdentifier=', ''
+        if ($rid) { $repTime['id:' + $rid.Trim().ToLower()] = $evt }
+        $repTime['dir:' + $d.Name.ToLower()] = $evt
+    }
+}
+function Get-ReportTime($e) {
+    if ($e.Message -match 'Report Id:\s*([0-9a-fA-F-]{36})') {
+        $k = 'id:' + $Matches[1].ToLower()
+        if ($repTime.ContainsKey($k)) { return $repTime[$k] }
+    }
+    if ($e.Message -match '\\WER\\Report(Archive|Queue)\\([^\\\r\n]+)') {
+        $k = 'dir:' + $Matches[2].Trim().ToLower()
+        if ($repTime.ContainsKey($k)) { return $repTime[$k] }
+    }
+    return $null
+}
+$lke = @()
+$lkeStale = 0
+foreach ($e in $lkeAll) {
+    $rt = Get-ReportTime $e
+    if ($null -ne $rt -and $rt -lt $t) {
+        $lkeStale++
+        Say ("LKE_STALE event=" + $e.TimeCreated.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ') + " report_event_time=" + $rt.ToString('yyyy-MM-ddTHH:mm:ssZ'))
+    } else { $lke += $e }
+}
 $lke193 = @($lke | Where-Object { $_.Message -match 'P1:\s*193\b' }).Count
 $lkeOther = $lke.Count - $lke193
 $c = [ordered]@{
@@ -124,7 +166,7 @@ $c = [ordered]@{
 $total = 0
 foreach ($k in $c.Keys) { $total += [int]$c[$k] }
 if ($Strict) { $total += $lke193 }
-Say ("TDR since=$Since " + (($c.Keys | ForEach-Object { "$_=$($c[$_])" }) -join ' ') + " livekernelevent193=$lke193 strict=" + [int][bool]$Strict + " total=$total")
+Say ("TDR since=$Since " + (($c.Keys | ForEach-Object { "$_=$($c[$_])" }) -join ' ') + " livekernelevent193=$lke193 livekernelevent_stale=$lkeStale strict=" + [int][bool]$Strict + " total=$total")
 Get-ChildItem C:\Windows\LiveKernelReports -Recurse -ErrorAction SilentlyContinue | Where-Object { -not $_.PSIsContainer -and $_.LastWriteTimeUtc -ge $t } |
     Sort-Object LastWriteTime | ForEach-Object { Say ("LIVEDUMP " + $_.LastWriteTimeUtc.ToString('yyyy-MM-ddTHH:mm:ssZ') + " " + $_.Name + " bytes=" + $_.Length) }
 Say 'STATE_DONE mode=tdr'

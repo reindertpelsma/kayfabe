@@ -284,6 +284,32 @@ class GuestScripts(unittest.TestCase):
         self.assertNotIn(".dmp", text.replace("*.dmp", ""))  # the gate never names a dump file to fetch
         self.assertNotRegex(text, r"scp-from[^\n]*(LiveKernelReports|\.dmp)")
 
+    def test_a_resubmitted_old_report_is_stale_and_never_gates(self):
+        # 2026-11-03, Ada-PC lane (traces/ada_pc_20261103/ on claude/ada-pc-regression-20261103): WER re-submits
+        # reports queued on a non-fresh image; each re-submission is a new 1001 event of an OLD report. The counter
+        # must judge an event by its report's own EventTime, not by when the event was logged.
+        ps = (WIN / "gate_state.ps1").read_text()
+        tdr = ps[ps.index("# tdr") :]
+        lines = [ln for ln in tdr.splitlines() if not ln.lstrip().startswith("#")]
+        body = "\n".join(lines)
+        for needle in ("ReportIdentifier=", "Report Id:", "EventTime=", "FromFileTimeUtc", "ReportArchive", "ReportQueue"):
+            self.assertIn(needle, body)
+        # stale = the report's event time is before -Since; such events are counted apart, not in the gated counters
+        self.assertRegex(body, r"\$rt -lt \$t")
+        self.assertIn("$lkeStale++", body)
+        self.assertIn("livekernelevent_stale=$lkeStale", body)
+        gated = body[body.index("$lke193 ="):]
+        self.assertIn("$lke | Where-Object", gated)  # 193 and other are counted over the filtered set
+        self.assertNotIn("$lkeAll |", gated)
+        self.assertNotIn("lkeStale", body[body.index("$total = 0"): body.index("Say (\"TDR")])
+        # fail closed: an event whose report is not found is kept (only a FOUND old report is stale)
+        self.assertRegex(body, r"\$null -ne \$rt -and \$rt -lt \$t")
+        # the gate reports the count and still parses the 193 field (followed by a space) and total=0 last
+        text = code(GATE)
+        self.assertIn("livekernelevent_stale=", text)
+        self.assertIn("stale_lke_resubmits=", text)
+        self.assertRegex(ps, r'livekernelevent193=\$lke193 livekernelevent_stale=\$lkeStale strict=.*total=\$total"')
+
     def test_gate_run_only_runs_probes_under_the_probe_directory(self):
         ps = (WIN / "gate_run.ps1").read_text()
         self.assertIn(r"^C:\\kf\\probes\\", ps)
