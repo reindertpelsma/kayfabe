@@ -48,4 +48,31 @@ Turing storm (traces/turing_boot_20261103/) and the GB203 bwhw1 run show what th
 
 ## RESULTS
 
-(pending)
+### Box A (MEASURED 2026-11-03): GA102 RTX 3090 `10de:2204`, 30 vCPU, 98 GB RAM, 155 GB root, host 580.159.04
+
+`boxA/prov.log`: `BOX_RC=0 DRIVER_RC=0 TREE_RC=0 LADDER_RC=0 FG_RC=0 KF3_RC=0`, `READY driver=580.159.04` (14 min).
+
+**H-ga-00c-measurable: not falsified.** `caps/ga102_caps_host580.txt` (read 14:14Z, host driver up, no guest):
+`DECISIVE 0x00c 0x00000100`, `EVENCAPA` of windows 0/2/4/6 = `0x01df21d0` (bit 19, `SCLR_PRESENT`, set), 95
+non-zero words, tool rc=0, host Xid 0 before and 0 after (`caps/read_context.txt`). Row added for branch 580
+(`crates/kf-disp/data/caps_measured.tsv`, commit `57e8fed2`); test `crates/kf-disp/tests/ampere_caps.rs` red before
+the row (`caps/test_red.txt`: `GA102 has a measured 0x00c row ... [(12, ...)]`), green after (`caps/test_green.txt`);
+`cargo test -p kf-disp` all green. GA103/GA104/GA106/GA107 still have no row and keep the clean page and the notice.
+
+**H-linux-ampere: not falsified** (`merge_check.sh claude/ampere-hw-20261103 am1`, rev `006d845a`, `boxA/am1.log`):
+
+```
+V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS
+KF3_RC=0
+BARE_SUITE_PASS=30 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0 ARMS=30
+FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+BIRTH_CENSUS_OK arms=30 suite_births=161 gate_births=12 all PRIVILEGED_CHANNEL=0 privilege=USER
+```
+
+The thin-guest suite took 870 s of arm time (sum of `secs=`, `boxA/am1_suite.out`); `ce-client-guest-ram` passed in
+119 s (`client_ms=98070`) inside the 180 s budget, so the walk-latency exception pre-stated above did not arise on
+this box. (INFERRED: a 30-vCPU box hides most of it; no comparison against 9297ffdd9 was run here.)
+
+⚠ Evidence hygiene: commit `edd35d3a` carried this board's GPU UUID in `boxA/am1_host.log` (the bare-metal suite's
+`nvidia-smi` line). `d4347d7a` scrubs it at HEAD (`no_gpu_uuids.py`: new=0); the repository refuses
+force-pushes, so the UUID stays in that one commit's history (for the release history sweep).
