@@ -1,0 +1,35 @@
+START 2026-11-03T12:11:39+00:00
+Preparing worktree (detached HEAD 993b844af)
+HEAD=993b844af0c4ff68421b12f43849da1be9b07813 CHECKOUT=/workspace/bench/verify-worktrees/bwhw1.GhRPNs
+GATES_RC=0
+V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS
+KF3_RC=0
+KF3_BUILT /workspace/bench/kf3-bins/993b844a/qemu-system-x86_64 rev=993b844a mtime=2026-11-03 12:12:19.329919715 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+BARE_SUITE_PASS=30 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0 ARMS=30
+FG_RC=0
+SUITE_RC=0
+FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+BIRTH_CENSUS_SELFTEST cases=11 wrong=0
+BIRTH_CENSUS_SUITE arms=30 births=146 user=146 cuda_threads=90
+BIRTH_CENSUS_GATES births=12 user=12 refused=0
+BIRTH_CENSUS_OK arms=30 suite_births=146 gate_births=12 all PRIVILEGED_CHANNEL=0 privilege=USER
+WINDOWS_GATE_START tag=bwhw1 rev=993b844a source=/workspace/bench/verify-worktrees/bwhw1.GhRPNs 2026-11-03T12:20:52+00:00 idle_s=300 flags=kf3_flags.sample.env guest_driver=580.65.06 arm=B
+WINDOWS_GATE_REQUESTED=1
+GATE_STAGE preflight START 2026-11-03T12:20:52+00:00
+GATE_NOTE host: gpu="NVIDIA GeForce RTX 5070 Ti" driver=595.91.07 cpus=15 ram_gb=23 disk_free_gb=138
+GATE_STAGE preflight EXIT ok 0s
+GATE_STAGE hostref_before START 2026-11-03T12:20:52+00:00
+GATE_HOSTREF before green cup8=PASS xid_count=10 xid_delta=0 gpu="NVIDIA GeForce RTX 5070 Ti, 595.91.07, 16303 MiB, P0"
+GATE_STAGE hostref_before EXIT ok 0s
+GATE_STAGE prereqs START 2026-11-03T12:20:52+00:00
+GATE_STAGE prereqs EXIT ok 7s
+GATE_STAGE kf3_binary START 2026-11-03T12:20:59+00:00
+GATE_NOTE kf3 qemu=/workspace/bench/kf3-bins/993b844a/qemu-system-x86_64 sha256=95988d19041d803e rev=993b844a
+GATE_STAGE kf3_binary EXIT ok 1s
+GATE_STAGE install START 2026-11-03T12:21:00+00:00
+GATE_NOTE Windows already installed on this box (2026-11-03T12:11:01Z repo=3e8d054d): install once per lease
+GATE_STAGE install EXIT ok 0s
+GATE_STAGE probes_build START 2026-11-03T12:21:00+00:00
+GATE_NOTE probes built: d10457a2cacd d88c77c138da 7687d14821c0 33e48276bfa9 
+GATE_STAGE probes_build EXIT ok 1s
+GATE_STAGE boot1 START 2026-11-03T12:21:01+00:00
