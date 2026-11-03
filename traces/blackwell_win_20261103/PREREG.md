@@ -61,3 +61,16 @@ stopping and reporting. The result is reported either way, below this line.
 ---
 
 ## Results
+
+(Appended 2026-11-03 after the lease; details and the boot table in `README.md`.)
+
+- **H1: FALSIFIED.** Gate `bwwin1` at `6763a35a` (fix 1): no core `UPDATE`, `WINDOWS_GATE_FAIL ...
+  livekernelevent_other=10`. The guest's control order did not change.
+- **H1': HELD.** Boot A (the die's whole page laid over): the guest issued `DFP_ASSIGN_SOR` x5 and PRE_MODESET x5, so
+  the caps page is a cause. It also exposed a second defect: kf3 halted the 64 KiB core ring at 4 KiB (`PUT 0x1d70`).
+- Bisection (with the 64 KiB decoder fixed): the decisive words are `POSTCOMP_HDR_CAPA(0..3)`, and within them the two
+  bits `SCLR_PRESENT` + `VFILTER_PRESENT` (boot K lights head 0; boot J, the die's widths without them, does not).
+- Product with both fixes (`54410b7d`): `WINDOWS_GATE_PASS rev=54410b7d ... resets=0 known_live_dumps_193=3`.
+- Boots beyond the pre-registered plan: the bisection used 9 boots (C..K) rather than four, because the decisive
+  group was the last one tried and then had to be split to the field; L (fixes 1+2 reverted) checked necessity.
+  Negative boots: bwwin1, B, then the bisection negatives (C, E, G, J), each of which narrowed the search.

@@ -76,6 +76,13 @@ changes, and the engine logs no `updates completed` line, while AD102 g4 logs `t
   (24 `Put` writes, all classified), and the engine executes them (`chn 0 PUT 0xe00: 12 effects`, method trace).
   It never posts a core `UPDATE`: the guest stops before any modeset. So the engine, the PUT path and the
   pushbuffer size (64 KiB on GB203 against 4 KiB on AD102) are NOT where it stops.
+- ⊘ **CORRECTED 2026-11-03 (`traces/blackwell_win_20261103/README.md`), above the text it corrects.** The
+  inference below ("an NV0073 answer tells the guest there is no connector") is wrong: the reply params of every
+  `0x0073` control before the divergence are byte-identical to the AD102 pass (MEASURED from the `rpc-trace` lines of
+  diag3 and g4). The cause is in the caps PAGE and the display decoder, found by a hardware bisection on GB203:
+  the derived CA73 page stated type-1 tiles (`POSTCOMP_HDR_CAPA` without SCLR/VFILTER), and the decoder read
+  GB20x's 64 KiB pushbuffers with Volta's 4 KiB / 13:2 / 11:2 format. With both fixed the gate passes
+  (`WINDOWS_GATE_PASS rev=54410b7d`).
 - **Where the guest diverges (MEASURED, `display_controls_ad102_g4_vs_gb203_bwhw2.txt`).** Same order of NV0073
   controls up to `SYSTEM_GET_INTERNAL_DISPLAYS` (0x730116) on AD102 under kayfabe, GB203 under kayfabe and the
   native GB202 Windows 580.88 trace. After it, AD102 and native GB202 ask `GET_CONNECTOR_TABLE` (0x73011d) and

@@ -1,0 +1,11 @@
+﻿
+
+Caption        : Microsoft Windows 11 Enterprise LTSC Evaluation
+Version        : 10.0.26100
+BuildNumber    : 26100
+LastBootUpTime : 11/3/2026 4:23:02 PM
+
+
+
+2026-11-03T16:34:07.9815151+00:00
+
