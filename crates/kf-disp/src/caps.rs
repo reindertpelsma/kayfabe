@@ -563,6 +563,15 @@ pub fn page(
     for h in 0..heads {
         set(a(postcomp, h)?, unit_width, 16);
     }
+    // ⊘ CORRECTED 2026-11-03 (Blackwell Windows display, `traces/blackwell_win_20261103/`), above the
+    // text it corrects ("SCLR and VFILTER stay absent", type 1): each virtual tile is TYPE 0 — SCLR_PRESENT
+    // and VFILTER_PRESENT are stated, their limits (CAPD VSCLR_MAX_PIXELS, CAPF VFILTER_MAX_PIXELS) stay
+    // 0, as the main layer's precomp scaler row does (`data/caps_rows.tsv`). [MEASURED GB203, Windows
+    // 580.88, boots diagJ/diagK] with type-1 tiles the driver never routes a head (no
+    // GET_HEAD_ROUTING_MAP, no DFP_ASSIGN_SOR, no core UPDATE; LiveKernelEvent 0x1A8/0x1B8); the two bits
+    // laid over the derived page light head 0, the die's widths without them do not. [INFERRED] the
+    // driver drives a head only from a tile with a post-composition scaler (NVKMS's own name for it:
+    // `NV_EVO_HW_TILE_TYPE_0`, `nvkms-evo4.c` EvoGetHwTileType).
     // ★ 2026-10-20 (bw-resume): the per-TILE post-composition pipe of a class that names it
     // `POSTCOMP_HDR_CAPA(i)` (CA73; Turing..Ada name a per-head `POSTCOMP_HEAD_HDR_*` and are untouched).
     // Public NVKMS reads it for every usable tile and asserts OCSC0/OCSC1/HCLPF/OSCAN/DTH/DSC present
@@ -583,6 +592,8 @@ pub fn page(
                 "POSTCOMP_HDR_CAPA_OSCAN_PRESENT",
                 "POSTCOMP_HDR_CAPA_DTH_PRESENT",
                 "POSTCOMP_HDR_CAPA_DSC_PRESENT",
+                "POSTCOMP_HDR_CAPA_SCLR_PRESENT",
+                "POSTCOMP_HDR_CAPA_VFILTER_PRESENT",
             ] {
                 set(off, f(fld)?, v(&format!("{fld}_TRUE"))?);
             }
