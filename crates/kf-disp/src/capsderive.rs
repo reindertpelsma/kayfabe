@@ -68,7 +68,7 @@ pub struct MeasuredWord {
     pub offset: u32,
     /// The value.
     pub value: u32,
-    /// Where it came from (`measured:<die>,<how>,<date>`, dated 2026-10-15 in the shipped rows); a row without one is refused.
+    /// Where it came from (`measured:<die>,<how>,<date>`, dated 2026-10-15 to 2026-10-20 in the shipped rows); a row without one is refused.
     pub source: String,
 }
 

@@ -7,7 +7,8 @@
 //!   measured on (GA106 at 580 here), and only for the measured request;
 //! - every other die is REFUSED by name (never a neighbour's row): AD104/TU116/GB205 at 580 with
 //!   no host answer get `NV_ERR_NOT_SUPPORTED`, not GA106's bytes;
-//! - `0x20802209` carries a mechanism tag (RM software state) and answers on every die.
+//! - `0x20802209` is RM software state (`kf_abi::cudartinit`, value `0x5`), answered on every die by that
+//!   rule; it is absent from the published table (no row, so no mechanism tag).
 
 #[path = "support/ga106.rs"]
 mod ga106;
