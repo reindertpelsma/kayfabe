@@ -847,6 +847,14 @@ mod tests {
                     .map_err(|_| Refusal::Store)
             }
         }
+        impl Counters {
+            /// Every injected failure kind has fired at least once.
+            fn injections_ran(&self) -> bool {
+                self.arm_refused.load(Relaxed) > 0
+                    && self.release_refused.load(Relaxed) > 0
+                    && self.partial.load(Relaxed) > 0
+            }
+        }
         fn maps_with_name() -> usize {
             std::fs::read_to_string("/proc/self/maps")
                 .unwrap()
@@ -883,6 +891,12 @@ mod tests {
             let c = Arc::new(Counters::default());
             let bound = BYTES * 256;
             let deadline = std::time::Instant::now() + std::time::Duration::from_secs(secs);
+            // Injections are random (3% arm, 1.5% release, 0.75% partial per RM map), so a fixed time
+            // budget on a loaded machine can end before the rarest kind has fired once (partial=0 in
+            // 4 of 60 runs under 8 busy loops, with 380-600 maps each). Like the MIN_TURNS floor in the
+            // kf-chan stress, the run therefore continues past the deadline until every kind has fired,
+            // bounded by `hard`; the final assertion still fails a run in which an injection never happens.
+            let hard = deadline + std::time::Duration::from_secs(60);
             let handles: Vec<_> = (0..threads)
                 .map(|t| {
                     let c = c.clone();
@@ -893,7 +907,9 @@ mod tests {
                         cache.keep = 2 + (t % 15);
                         let hostile = t == 0; // thread 0 hammers distinct windows (no working set)
                         let mut snaps = 0u64;
-                        while std::time::Instant::now() < deadline {
+                        while std::time::Instant::now() < deadline
+                            || (!c.injections_ran() && std::time::Instant::now() < hard)
+                        {
                             let n_spans = 1 + rng(&mut r) % 3;
                             let mut spans = Vec::new();
                             for _ in 0..n_spans {
@@ -949,13 +965,7 @@ mod tests {
             assert_eq!(c.live_regions.load(Relaxed), 0);
             assert_eq!(maps_with_name(), maps0, "no leaked mapping");
             assert!(fds() <= fds0 + 1, "descriptors back to baseline");
-            assert!(
-                snaps > 0
-                    && c.arm_refused.load(Relaxed) > 0
-                    && c.release_refused.load(Relaxed) > 0
-                    && c.partial.load(Relaxed) > 0,
-                "the injections ran"
-            );
+            assert!(snaps > 0 && c.injections_ran(), "the injections ran");
         }
     }
 }

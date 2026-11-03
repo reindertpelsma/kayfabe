@@ -14,6 +14,10 @@ import test_vast_box as box
 setUpModule = box.setUpModule
 tearDownModule = box.tearDownModule
 HERE = Path(__file__).resolve().parent
+# The deadline the fake outer timer enforces, and the slack allowed on top of it. The slack is
+# generous (a loaded runner) yet far below the time an un-killed transport would take.
+OUTER_DEADLINE = 0.15
+SLACK = 2.5
 
 
 class BlobRetry(unittest.TestCase):
@@ -97,7 +101,7 @@ class BlobRetry(unittest.TestCase):
         path.write_text(
             '#!/bin/sh\nprintf "%s\\n" "$@" > "$KF_TIMEOUT_ARGS"\n'
             "signal=$1; shift\nrequested=$1; shift\n"
-            'exec /usr/bin/timeout "$signal" 0.15s "$@"\n'
+            f'exec /usr/bin/timeout "$signal" {OUTER_DEADLINE}s "$@"\n'
         )
         path.chmod(0o700)
 
@@ -111,13 +115,27 @@ class BlobRetry(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)
             self.short_outer_timer(root)
+            pidfile = root / "transport-pid"
+            # The stub ignores TERM (so only the KILL deadline can stop it) and then becomes the
+            # long sleep itself: `exec` keeps the ignored TERM and keeps the pid, and leaves no
+            # orphaned child holding the helper's stdout/stderr pipes open after the kill. (A
+            # child that outlives the killed shell keeps communicate() waiting until the child
+            # exits, and the elapsed time then measures the child's sleep, not the deadline.
+            # uutils timeout, unlike GNU timeout, signals only the monitored pid, not its group.)
             curl = root / "curl"
-            curl.write_text('#!/bin/sh\ntrap "" TERM\nsleep 2\nprintf "eventually"\n')
+            curl.write_text(
+                '#!/bin/sh\ntrap "" TERM\nprintf "%s" "$$" > ' + str(pidfile) + "\nexec sleep 60\n"
+            )
             curl.chmod(0o700)
-            rc, _, _, seconds = self.run_helper(root, "https://broker.example/prefix", path=root)
+            rc, out, _, seconds = self.run_helper(root, "https://broker.example/prefix", path=root)
             self.assertNotEqual(rc, 0)
-            self.assertLess(seconds, 1.5)
+            self.assertEqual(out, b"")
+            self.assertLess(seconds, OUTER_DEADLINE + SLACK)
             self.assert_outer_budget(root)
+            # The stuck transport really ran, and is gone: killed by the deadline, not left running.
+            pid = int(pidfile.read_text())
+            with self.assertRaises(ProcessLookupError):
+                os.kill(pid, 0)
 
     def test_outer_deadline_bounds_a_permanent_created_401(self):
         with tempfile.TemporaryDirectory() as d:
@@ -128,7 +146,7 @@ class BlobRetry(unittest.TestCase):
             try:
                 rc, _, _, seconds = self.run_helper(root, broker.url, path=root)
                 self.assertNotEqual(rc, 0)
-                self.assertLess(seconds, 1.5)
+                self.assertLess(seconds, OUTER_DEADLINE + SLACK)
                 self.assert_outer_budget(root)
             finally:
                 broker.stop()
