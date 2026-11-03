@@ -11,7 +11,7 @@ product code), cross-checked on `../tur1_diff/b1/` and `../tu106/t1/`. Clock: kf
 `+N ms` lines and the 2 s heartbeat's `vblanks=` (60 Hz from the first armed head) agree with it. Anchor: the guest RM's
 first `fn70 Bar2` (the RM start), AD102 t=265.04, TU116 t=187.59.
 
-| event (MEASURED) | AD102 g4 (PASS) | TU116 a1 (FAIL) |
+| event (MEASURED, runs of 2026-11-01) | AD102 g4 (PASS) | TU116 a1 (FAIL) |
 |---|---|---|
 | display methods/PUTs at the driver-start init (first heartbeat after the RM start) | `methods=5338 puts=35` (+1.7 s) | `methods=8330 puts=31` (+2.3 s) |
 | guest arms head 0 (modeset), UPDATEs | +11.5 s, 5 updates, `methods=5628 puts=43` | +32.2 s, 4 updates, `methods=8611 puts=38` |
