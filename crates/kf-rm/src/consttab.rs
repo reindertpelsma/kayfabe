@@ -1,6 +1,8 @@
 //! ★★★ **The published constant table** — the ONE place a measured per-die value may live
 //! CODE READ: extracted from codex/sweep-dies-20261022 at commit bc3a967e0.
-//! No consumer is wired; the published subset contains only observation rows.
+//! Consumers are wired (2026-11-03): `inittables` (cudart/GSS init controls), `rowserve`, `zbc` and
+//! `precomp` read this table; the published subset contains only observation rows (no software-state
+//! rule such as `0x20802209`, which `kf_abi::cudartinit` answers).
 //! (owner rulings §AF/§AH; `docs/design/V3_CONSTANT_STRATEGY.md` §1-§3; `V3_PROVENANCE.md` §1;
 //! matrix `docs/design/V3_CONSTANT_MATRIX_20261014.md`). Lane C, 2026-10-14.
 //!
