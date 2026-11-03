@@ -1,0 +1,15 @@
+{
+  "utc": "2026-10-22T22:56:08.624163+00:00",
+  "own_id": 57285340,
+  "old_sender": 581906,
+  "old_sender_parent": 581693,
+  "reason": "serial 122060800 bytes in about109s; optimize before transfer bound",
+  "hypothesis": "sixteen checked SSH streams improve aggregate throughput",
+  "falsifier": "no aggregate improvement, any failed chunk or final size/SHA refusal",
+  "original_deadline_utc": "2026-10-22T23:12:10+00:00",
+  "deadline_unchanged": true,
+  "public_helper_revision": "50737c9a5f61db9d15ecf70994bf57cd9278d699",
+  "helper_sha256": "5415c4fb76c193b70db7d200a384da81e478c820316eaebdc1f545e3a2e674c3",
+  "controller_not_started": true,
+  "windows_guards_unchanged": true
+}

@@ -1,0 +1,51 @@
+[
+  {
+    "instance": 57296911,
+    "date": "2026-10-23",
+    "offer_class": "verified RTX5070Ti",
+    "candidate_die": "GB203",
+    "measured_die": null,
+    "measured_host_driver": null,
+    "stage": "provider_startup",
+    "result": "FAIL_INFRA",
+    "evidence": "PROVIDER_START_FAILURE.json",
+    "detail": "timed out waiting for memory to free; no SSH, no bundle upload, no GPU probe, no VM"
+  },
+  {
+    "instance": 57296911,
+    "date": "2026-10-23",
+    "stage": "privileged_PRECOMP",
+    "source": "a6456796e4af84d3b0c8bcb3558b63c2e85df42e",
+    "result": "UNRUN",
+    "tagged_measurement_rows": 0
+  },
+  {
+    "instance": 57296911,
+    "date": "2026-10-23",
+    "stage": "native_N0",
+    "product_source": "6e3fd3fd6d809ae2c2a3504cd8be1ecd29b2b31b",
+    "fixture_source": "618f0431815d037d4226b642ae37e76967353e90",
+    "result": "UNRUN"
+  },
+  {
+    "instance": 57296911,
+    "date": "2026-10-23",
+    "stage": "Windows_disabled_bind_then_field_ON",
+    "planned_driver": "580.88",
+    "product_source": "6e3fd3fd6d809ae2c2a3504cd8be1ecd29b2b31b",
+    "harness_source": "8e623d92ee2cb74fc5765d8abce78d33a7e09e3c",
+    "result": "UNRUN",
+    "code0": null,
+    "code43": null,
+    "tdr": null,
+    "canonical_rpcs": null
+  },
+  {
+    "instance": 57296911,
+    "date": "2026-10-23",
+    "stage": "hold_apps_B1",
+    "planned_driver": "580.88",
+    "source": "c130aa98ac2b922202282cd793f2a6d64be1f091",
+    "result": "UNRUN"
+  }
+]

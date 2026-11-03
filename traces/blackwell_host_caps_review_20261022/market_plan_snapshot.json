@@ -1,0 +1,32 @@
+{
+  "utc": "2026-10-22T04:53:36.270388+00:00",
+  "created_instances": 0,
+  "lane_runtime_usd": 4.832256622648354,
+  "lane_hard_stop_usd": 7,
+  "credit_reserve_usd": 5,
+  "account_credit_observed": 39.535856918661125,
+  "offers": [
+    {
+      "id": 48425036,
+      "machine_id": 34351,
+      "quote_dph": 0.9080555555555556,
+      "verification": "verified",
+      "reliability": 0.990935
+    },
+    {
+      "id": 55276777,
+      "machine_id": 18855,
+      "quote_dph": 1.200925925925926,
+      "verification": "verified",
+      "reliability": 0.9969184
+    },
+    {
+      "id": 56638594,
+      "machine_id": 53347,
+      "quote_dph": 1.2013888888888888,
+      "verification": "verified",
+      "reliability": 0.9904617
+    }
+  ],
+  "scope": "read-only planning snapshot; shared-account debit is not exclusive attribution"
+}

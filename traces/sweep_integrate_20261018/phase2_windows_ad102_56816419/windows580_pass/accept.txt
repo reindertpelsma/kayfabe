@@ -1,0 +1,115 @@
+WIN_ACCEPT_START 2026-10-20T01:45:25.4619612Z
+{"Name":"NVIDIA GeForce RTX 4090","DriverVersion":"32.0.15.8088","Status":"OK","ConfigManagerErrorCode":0}
+WIN_DESKTOP dwm=1 explorer=1
+ok   cuInit(0)
+ok   cuDeviceGetCount(&n)
+devices=1
+ok   cuDeviceGet(&d,0)
+ok   cuDeviceGetName(nm,256,d)
+name=NVIDIA GeForce RTX 4090
+ok   cuDeviceGetAttribute(&maj,CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR,d)
+ok   cuDeviceGetAttribute(&min,CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR,d)
+compute=8.9
+ok   cuDeviceTotalMem(&tot,d)
+totalMem=7931 MiB
+ok   cuCtxCreate(&ctx,0,d)
+CTX OK
+ok   cuMemAlloc(&dp,4096)
+MEMALLOC OK 0x617a00000
+ok   cuMemcpyHtoD(dp,&hv,4)
+ok   cuMemcpyDtoH(&rv,dp,4)
+CE rv=0xabcd1234 want=0xabcd1234 -> PASS
+DONE
+WIN_CUDA cup2 rc=0
+ok   cuInit(0)
+ok   cuDeviceGetCount(&n)
+ok   cuDeviceGet(&d,0)
+ok   cuCtxCreate(&ctx,0,d)
+CTX OK
+PTX_TARGET=sm_86 (device cc 8.9)
+ok   cuModuleLoadData(&mod,PTX)
+MODULE OK
+ok   cuModuleGetFunction(&fn,mod,"k")
+FUNC OK
+ok   cuMemAlloc(&d_in,4)
+ok   cuMemAlloc(&d_out,4)
+MEMALLOC in=0x617a00000 out=0x617a00200
+ok   cuMemcpyHtoD(d_in,&hv,4)
+ok   cuMemsetD32(d_out,0,1)
+ok   cuLaunchKernel(fn, 1,1,1, 1,1,1, 0, 0, args, 0)
+LAUNCH OK
+ok   cuCtxSynchronize()
+SYNC OK
+ok   cuMemcpyDtoH(&rv,d_out,4)
+KERNEL rv=43 want=43 -> PASS
+DONE
+WIN_CUDA cup3 rc=0
+ok   cuInit(0)
+ok   cuDeviceGetCount(&nd)
+ok   cuDeviceGet(&d,0)
+ok   cuCtxCreate(&ctx,0,d)
+CTX OK
+PTX_TARGET=sm_86 (device cc 8.9)
+ok   cuModuleLoadData(&mod,PTX)
+MODULE OK
+ok   cuModuleGetFunction(&fn,mod,"mm")
+FUNC OK
+CUP8 matmul N=2048  per-matrix=16 MiB  device=48 MiB
+ok   cuMemAlloc(&dA,sz)
+ok   cuMemAlloc(&dB,sz)
+ok   cuMemAlloc(&dC,sz)
+MEMALLOC A=0x617a00000 B=0x618a00000 C=0x619a00000
+ok   cuMemcpyHtoD(dA,hA,sz)
+ok   cuMemcpyHtoD(dB,hB,sz)
+ok   cuMemsetD32(dC,0,(size_t)N*N)
+LAUNCH grid=(128,128) block=(16,16)
+ok   cuLaunchKernel(fn, g,g,1, 16,16,1, 0,0, args,0)
+LAUNCH OK
+ok   cuCtxSynchronize()
+SYNC OK
+ok   cuMemcpyDtoH(hC,dC,sz)
+CUP8 RESULT N=2048 bad=0 maxerr=0 C[0]=2048(exp 2048) -> PASS
+CUP8 VERDICT: PASS (host GR matmul byte-exact at scale)
+DONE
+WIN_CUDA cup8 rc=0
+KFDX start api=d3d11 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2684 luid=0x00000000_0x00005c7f dedicated_mb=7853 software=0 name="NVIDIA GeForce RTX 4090"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x00006657 dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 4090"
+KFDX ok D3D11CreateDevice(hardware, chosen adapter)
+KFDX feature_level 0xb100
+KFDX ok compile cs_5_0
+KFDX ok CreateComputeShader
+KFDX ok CreateUnorderedAccessView
+KFDX compute iters=20 bad=0 ms=156
+KFDX ok compute shader result matches (UAV readback)
+KFDX ok compile vs_5_0/ps_5_0
+KFDX ok Map staging texture
+KFDX pixel 64,127,191,255
+KFDX ok draw result matches (centre pixel 64,128,191,255)
+KFDX RESULT OK api=d3d11 adapter="NVIDIA GeForce RTX 4090"
+WIN_D3D d3d11 rc=0
+KFDX start api=d3d12 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2684 luid=0x00000000_0x00005c7f dedicated_mb=7853 software=0 name="NVIDIA GeForce RTX 4090"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x00006657 dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 4090"
+KFDX ok D3D12CreateDevice(chosen adapter)
+KFDX feature_level 0xc200
+KFDX vidmem budget_mb=7085 usage_mb=7
+KFDX ok DIRECT
+KFDX ok DIRECT queue fence Signal/Wait x3
+KFDX ok COPY
+KFDX ok COPY queue fence Signal/Wait x3
+KFDX ok compile cs_5_0
+KFDX ok serialize root signature
+KFDX ok CreateRootSignature
+KFDX ok CreateComputePipelineState
+KFDX compute iters=20 bad=0 fence_wait_ok=1 ms=63
+KFDX ok compute queue fence completed
+KFDX ok compute shader result matches (UAV copy-back)
+KFDX RESULT OK api=d3d12 adapter="NVIDIA GeForce RTX 4090"
+WIN_D3D d3d12 rc=0
+WIN_TDR_SINCE_BOOT=0
+WIN_ACCEPT_EXIT rc=0 2026-10-20T01:45:42.0325236Z

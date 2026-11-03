@@ -1,0 +1,38 @@
+{
+  "sweep_20261020_provision.log": {
+    "source_sha256": "3c75cf05169d978f1ebaaf50c3edaa39c46efc41085144880d845a9304277733",
+    "export_transform": "rstrip trailing whitespace only"
+  },
+  "sweep_host_preflight.log": {
+    "source_sha256": "ee2ffbf35983e3aee5f6a66828837fcb612b09c31ba4f1a9a204c1f9a3036a54",
+    "export_transform": "rstrip trailing whitespace only"
+  },
+  "sweep_host_die.log": {
+    "source_sha256": "263c48b25c6e452dd7f1b1ed441e8ea3b004255aac24617bcd58311ebd64adb5",
+    "export_transform": "rstrip trailing whitespace only"
+  },
+  "sweep_gates.log": {
+    "source_sha256": "45d7d8fb1e04d0ff946739e3e6c4591970d7596367bce15ec60aa4747d27c2b3",
+    "export_transform": "rstrip trailing whitespace only"
+  },
+  "sweep_native_baseline.log": {
+    "source_sha256": "8b986ebf6274e15574f47862374d85ef4e81224db1ece2056d7105c3eca5221b",
+    "export_transform": "rstrip trailing whitespace only"
+  },
+  "sweep_bare595.log": {
+    "source_sha256": "b85501685f85548ff75d1fe1f149f384f64eab18d79d71c63470c6f988f7fb7b",
+    "export_transform": "rstrip trailing whitespace only"
+  },
+  "sweep_cuda_host.log": {
+    "source_sha256": "04f05691577bb5460fd0b14a0a6fad86ad25973c2017f5091db6407e8ca5d646",
+    "export_transform": "rstrip trailing whitespace only"
+  },
+  "sweep_native_grtier.log": {
+    "source_sha256": "9e8be21418a9008e5c5ae1b7709e0592a17e0217b70937311818c215a2d1cfcc",
+    "export_transform": "rstrip trailing whitespace only"
+  },
+  "sweep_qemu_sha256": {
+    "source_sha256": "b115cc1cd76770bb4c8bf7915c0e242cee62c954c7464d9891c8423451882fe8",
+    "export_transform": "rstrip trailing whitespace only"
+  }
+}

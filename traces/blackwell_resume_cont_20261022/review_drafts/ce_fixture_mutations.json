@@ -1,0 +1,16 @@
+{
+  "old_ampere_bind": {
+    "killers": [
+      "fixture_tests::blackwell_ce_fixture_changes_only_the_class_operand",
+      "fixture_tests::native_ce_fixture_uses_the_allocated_class_for_every_family"
+    ],
+    "count": 2
+  },
+  "accept_non_ce_class": {
+    "killers": [
+      "fixture_tests::native_ce_fixture_refuses_a_graphics_class",
+      "fixture_tests::native_ce_fixture_refuses_a_zero_class"
+    ],
+    "count": 2
+  }
+}

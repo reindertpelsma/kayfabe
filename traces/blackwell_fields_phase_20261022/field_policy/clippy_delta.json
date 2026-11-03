@@ -1,0 +1,14 @@
+{
+  "touched_crate": "kf-disp",
+  "isolated_base": 77,
+  "isolated_after": 77,
+  "isolated_added": 0,
+  "isolated_exit_codes": [
+    0,
+    0
+  ],
+  "global_added_vs_base_union": 0,
+  "global_base_errors": 93,
+  "global_after_errors": 93,
+  "baseline_supplement": "complete kf-disp all-targets, since inherited93errors cut parallel global scheduling short; source-snippet multiset identity"
+}

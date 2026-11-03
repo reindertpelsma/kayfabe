@@ -1,0 +1,41 @@
+{
+  "kf-disp": {
+    "before": {
+      "passed": 311,
+      "failed": 0,
+      "ignored": 5
+    },
+    "after": {
+      "passed": 324,
+      "failed": 0,
+      "ignored": 5
+    },
+    "all_old_named_tests_retained": true
+  },
+  "kf-host": {
+    "before": {
+      "passed": 84,
+      "failed": 0,
+      "ignored": 0
+    },
+    "after": {
+      "passed": 84,
+      "failed": 0,
+      "ignored": 0
+    },
+    "all_old_named_tests_retained": true
+  },
+  "kf-qemu": {
+    "before": {
+      "passed": 417,
+      "failed": 0,
+      "ignored": 0
+    },
+    "after": {
+      "passed": 417,
+      "failed": 0,
+      "ignored": 0
+    },
+    "all_old_named_tests_retained": true
+  }
+}

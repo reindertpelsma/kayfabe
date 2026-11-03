@@ -1,0 +1,445 @@
+HOLD_ADAPTER driver=32.0.15.8088 code=0 dwm=1 explorer=1
+HOLD_START utc=2026-10-19T19:52:45.8167733Z requested_seconds=420 repeated_d3d_probes=1
+KFDX start api=d3d11 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2684 luid=0x00000000_0x000057c6 dedicated_mb=7853 software=0 name="NVIDIA GeForce RTX 4090"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000061ee dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 4090"
+KFDX ok D3D11CreateDevice(hardware, chosen adapter)
+KFDX feature_level 0xb100
+KFDX ok compile cs_5_0
+KFDX ok CreateComputeShader
+KFDX ok CreateUnorderedAccessView
+KFDX compute iters=20 bad=0 ms=140
+KFDX ok compute shader result matches (UAV readback)
+KFDX ok compile vs_5_0/ps_5_0
+KFDX ok Map staging texture
+KFDX pixel 64,127,191,255
+KFDX ok draw result matches (centre pixel 64,128,191,255)
+KFDX RESULT OK api=d3d11 adapter="NVIDIA GeForce RTX 4090"
+HOLD_D3D round=1 api=d3d11 rc=0 elapsed=2.89
+KFDX start api=d3d12 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2684 luid=0x00000000_0x000057c6 dedicated_mb=7853 software=0 name="NVIDIA GeForce RTX 4090"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000061ee dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 4090"
+KFDX ok D3D12CreateDevice(chosen adapter)
+KFDX feature_level 0xc200
+KFDX vidmem budget_mb=7085 usage_mb=7
+KFDX ok DIRECT
+KFDX ok DIRECT queue fence Signal/Wait x3
+KFDX ok COPY
+KFDX ok COPY queue fence Signal/Wait x3
+KFDX ok compile cs_5_0
+KFDX ok serialize root signature
+KFDX ok CreateRootSignature
+KFDX ok CreateComputePipelineState
+KFDX compute iters=20 bad=0 fence_wait_ok=1 ms=204
+KFDX ok compute queue fence completed
+KFDX ok compute shader result matches (UAV copy-back)
+KFDX RESULT OK api=d3d12 adapter="NVIDIA GeForce RTX 4090"
+HOLD_D3D round=1 api=d3d12 rc=0 elapsed=10.61
+HOLD_ADAPTER driver=32.0.15.8088 code=0 dwm=1 explorer=1
+KFDX start api=d3d11 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2684 luid=0x00000000_0x000057c6 dedicated_mb=7853 software=0 name="NVIDIA GeForce RTX 4090"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000061ee dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 4090"
+KFDX ok D3D11CreateDevice(hardware, chosen adapter)
+KFDX feature_level 0xb100
+KFDX ok compile cs_5_0
+KFDX ok CreateComputeShader
+KFDX ok CreateUnorderedAccessView
+KFDX compute iters=20 bad=0 ms=78
+KFDX ok compute shader result matches (UAV readback)
+KFDX ok compile vs_5_0/ps_5_0
+KFDX ok Map staging texture
+KFDX pixel 64,127,191,255
+KFDX ok draw result matches (centre pixel 64,128,191,255)
+KFDX RESULT OK api=d3d11 adapter="NVIDIA GeForce RTX 4090"
+HOLD_D3D round=2 api=d3d11 rc=0 elapsed=43.54
+KFDX start api=d3d12 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2684 luid=0x00000000_0x000057c6 dedicated_mb=7853 software=0 name="NVIDIA GeForce RTX 4090"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000061ee dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 4090"
+KFDX ok D3D12CreateDevice(chosen adapter)
+KFDX feature_level 0xc200
+KFDX vidmem budget_mb=7085 usage_mb=7
+KFDX ok DIRECT
+KFDX ok DIRECT queue fence Signal/Wait x3
+KFDX ok COPY
+KFDX ok COPY queue fence Signal/Wait x3
+KFDX ok compile cs_5_0
+KFDX ok serialize root signature
+KFDX ok CreateRootSignature
+KFDX ok CreateComputePipelineState
+KFDX compute iters=20 bad=0 fence_wait_ok=1 ms=141
+KFDX ok compute queue fence completed
+KFDX ok compute shader result matches (UAV copy-back)
+KFDX RESULT OK api=d3d12 adapter="NVIDIA GeForce RTX 4090"
+HOLD_D3D round=2 api=d3d12 rc=0 elapsed=51.31
+HOLD_ADAPTER driver=32.0.15.8088 code=0 dwm=1 explorer=1
+KFDX start api=d3d11 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2684 luid=0x00000000_0x000057c6 dedicated_mb=7853 software=0 name="NVIDIA GeForce RTX 4090"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000061ee dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 4090"
+KFDX ok D3D11CreateDevice(hardware, chosen adapter)
+KFDX feature_level 0xb100
+KFDX ok compile cs_5_0
+KFDX ok CreateComputeShader
+KFDX ok CreateUnorderedAccessView
+KFDX compute iters=20 bad=0 ms=140
+KFDX ok compute shader result matches (UAV readback)
+KFDX ok compile vs_5_0/ps_5_0
+KFDX ok Map staging texture
+KFDX pixel 64,127,191,255
+KFDX ok draw result matches (centre pixel 64,128,191,255)
+KFDX RESULT OK api=d3d11 adapter="NVIDIA GeForce RTX 4090"
+HOLD_D3D round=3 api=d3d11 rc=0 elapsed=84.07
+KFDX start api=d3d12 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2684 luid=0x00000000_0x000057c6 dedicated_mb=7853 software=0 name="NVIDIA GeForce RTX 4090"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000061ee dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 4090"
+KFDX ok D3D12CreateDevice(chosen adapter)
+KFDX feature_level 0xc200
+KFDX vidmem budget_mb=7085 usage_mb=7
+KFDX ok DIRECT
+KFDX ok DIRECT queue fence Signal/Wait x3
+KFDX ok COPY
+KFDX ok COPY queue fence Signal/Wait x3
+KFDX ok compile cs_5_0
+KFDX ok serialize root signature
+KFDX ok CreateRootSignature
+KFDX ok CreateComputePipelineState
+KFDX compute iters=20 bad=0 fence_wait_ok=1 ms=141
+KFDX ok compute queue fence completed
+KFDX ok compute shader result matches (UAV copy-back)
+KFDX RESULT OK api=d3d12 adapter="NVIDIA GeForce RTX 4090"
+HOLD_D3D round=3 api=d3d12 rc=0 elapsed=91.8
+HOLD_ADAPTER driver=32.0.15.8088 code=0 dwm=1 explorer=1
+KFDX start api=d3d11 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2684 luid=0x00000000_0x000057c6 dedicated_mb=7853 software=0 name="NVIDIA GeForce RTX 4090"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000061ee dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 4090"
+KFDX ok D3D11CreateDevice(hardware, chosen adapter)
+KFDX feature_level 0xb100
+KFDX ok compile cs_5_0
+KFDX ok CreateComputeShader
+KFDX ok CreateUnorderedAccessView
+KFDX compute iters=20 bad=0 ms=94
+KFDX ok compute shader result matches (UAV readback)
+KFDX ok compile vs_5_0/ps_5_0
+KFDX ok Map staging texture
+KFDX pixel 64,127,191,255
+KFDX ok draw result matches (centre pixel 64,128,191,255)
+KFDX RESULT OK api=d3d11 adapter="NVIDIA GeForce RTX 4090"
+HOLD_D3D round=4 api=d3d11 rc=0 elapsed=124.67
+KFDX start api=d3d12 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2684 luid=0x00000000_0x000057c6 dedicated_mb=7853 software=0 name="NVIDIA GeForce RTX 4090"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000061ee dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 4090"
+KFDX ok D3D12CreateDevice(chosen adapter)
+KFDX feature_level 0xc200
+KFDX vidmem budget_mb=7085 usage_mb=7
+KFDX ok DIRECT
+KFDX ok DIRECT queue fence Signal/Wait x3
+KFDX ok COPY
+KFDX ok COPY queue fence Signal/Wait x3
+KFDX ok compile cs_5_0
+KFDX ok serialize root signature
+KFDX ok CreateRootSignature
+KFDX ok CreateComputePipelineState
+KFDX compute iters=20 bad=0 fence_wait_ok=1 ms=156
+KFDX ok compute queue fence completed
+KFDX ok compute shader result matches (UAV copy-back)
+KFDX RESULT OK api=d3d12 adapter="NVIDIA GeForce RTX 4090"
+HOLD_D3D round=4 api=d3d12 rc=0 elapsed=132.81
+HOLD_ADAPTER driver=32.0.15.8088 code=0 dwm=1 explorer=1
+KFDX start api=d3d11 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2684 luid=0x00000000_0x000057c6 dedicated_mb=7853 software=0 name="NVIDIA GeForce RTX 4090"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000061ee dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 4090"
+KFDX ok D3D11CreateDevice(hardware, chosen adapter)
+KFDX feature_level 0xb100
+KFDX ok compile cs_5_0
+KFDX ok CreateComputeShader
+KFDX ok CreateUnorderedAccessView
+KFDX compute iters=20 bad=0 ms=125
+KFDX ok compute shader result matches (UAV readback)
+KFDX ok compile vs_5_0/ps_5_0
+KFDX ok Map staging texture
+KFDX pixel 64,127,191,255
+KFDX ok draw result matches (centre pixel 64,128,191,255)
+KFDX RESULT OK api=d3d11 adapter="NVIDIA GeForce RTX 4090"
+HOLD_D3D round=5 api=d3d11 rc=0 elapsed=165.54
+KFDX start api=d3d12 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2684 luid=0x00000000_0x000057c6 dedicated_mb=7853 software=0 name="NVIDIA GeForce RTX 4090"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000061ee dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 4090"
+KFDX ok D3D12CreateDevice(chosen adapter)
+KFDX feature_level 0xc200
+KFDX vidmem budget_mb=7085 usage_mb=7
+KFDX ok DIRECT
+KFDX ok DIRECT queue fence Signal/Wait x3
+KFDX ok COPY
+KFDX ok COPY queue fence Signal/Wait x3
+KFDX ok compile cs_5_0
+KFDX ok serialize root signature
+KFDX ok CreateRootSignature
+KFDX ok CreateComputePipelineState
+KFDX compute iters=20 bad=0 fence_wait_ok=1 ms=156
+KFDX ok compute queue fence completed
+KFDX ok compute shader result matches (UAV copy-back)
+KFDX RESULT OK api=d3d12 adapter="NVIDIA GeForce RTX 4090"
+HOLD_D3D round=5 api=d3d12 rc=0 elapsed=173.36
+HOLD_ADAPTER driver=32.0.15.8088 code=0 dwm=1 explorer=1
+KFDX start api=d3d11 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2684 luid=0x00000000_0x000057c6 dedicated_mb=7853 software=0 name="NVIDIA GeForce RTX 4090"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000061ee dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 4090"
+KFDX ok D3D11CreateDevice(hardware, chosen adapter)
+KFDX feature_level 0xb100
+KFDX ok compile cs_5_0
+KFDX ok CreateComputeShader
+KFDX ok CreateUnorderedAccessView
+KFDX compute iters=20 bad=0 ms=94
+KFDX ok compute shader result matches (UAV readback)
+KFDX ok compile vs_5_0/ps_5_0
+KFDX ok Map staging texture
+KFDX pixel 64,127,191,255
+KFDX ok draw result matches (centre pixel 64,128,191,255)
+KFDX RESULT OK api=d3d11 adapter="NVIDIA GeForce RTX 4090"
+HOLD_D3D round=6 api=d3d11 rc=0 elapsed=206.12
+KFDX start api=d3d12 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2684 luid=0x00000000_0x000057c6 dedicated_mb=7853 software=0 name="NVIDIA GeForce RTX 4090"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000061ee dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 4090"
+KFDX ok D3D12CreateDevice(chosen adapter)
+KFDX feature_level 0xc200
+KFDX vidmem budget_mb=7085 usage_mb=7
+KFDX ok DIRECT
+KFDX ok DIRECT queue fence Signal/Wait x3
+KFDX ok COPY
+KFDX ok COPY queue fence Signal/Wait x3
+KFDX ok compile cs_5_0
+KFDX ok serialize root signature
+KFDX ok CreateRootSignature
+KFDX ok CreateComputePipelineState
+KFDX compute iters=20 bad=0 fence_wait_ok=1 ms=109
+KFDX ok compute queue fence completed
+KFDX ok compute shader result matches (UAV copy-back)
+KFDX RESULT OK api=d3d12 adapter="NVIDIA GeForce RTX 4090"
+HOLD_D3D round=6 api=d3d12 rc=0 elapsed=214.11
+HOLD_ADAPTER driver=32.0.15.8088 code=0 dwm=1 explorer=1
+KFDX start api=d3d11 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2684 luid=0x00000000_0x000057c6 dedicated_mb=7853 software=0 name="NVIDIA GeForce RTX 4090"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000061ee dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 4090"
+KFDX ok D3D11CreateDevice(hardware, chosen adapter)
+KFDX feature_level 0xb100
+KFDX ok compile cs_5_0
+KFDX ok CreateComputeShader
+KFDX ok CreateUnorderedAccessView
+KFDX compute iters=20 bad=0 ms=94
+KFDX ok compute shader result matches (UAV readback)
+KFDX ok compile vs_5_0/ps_5_0
+KFDX ok Map staging texture
+KFDX pixel 64,127,191,255
+KFDX ok draw result matches (centre pixel 64,128,191,255)
+KFDX RESULT OK api=d3d11 adapter="NVIDIA GeForce RTX 4090"
+HOLD_D3D round=7 api=d3d11 rc=0 elapsed=246.95
+KFDX start api=d3d12 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2684 luid=0x00000000_0x000057c6 dedicated_mb=7853 software=0 name="NVIDIA GeForce RTX 4090"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000061ee dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 4090"
+KFDX ok D3D12CreateDevice(chosen adapter)
+KFDX feature_level 0xc200
+KFDX vidmem budget_mb=7085 usage_mb=7
+KFDX ok DIRECT
+KFDX ok DIRECT queue fence Signal/Wait x3
+KFDX ok COPY
+KFDX ok COPY queue fence Signal/Wait x3
+KFDX ok compile cs_5_0
+KFDX ok serialize root signature
+KFDX ok CreateRootSignature
+KFDX ok CreateComputePipelineState
+KFDX compute iters=20 bad=0 fence_wait_ok=1 ms=157
+KFDX ok compute queue fence completed
+KFDX ok compute shader result matches (UAV copy-back)
+KFDX RESULT OK api=d3d12 adapter="NVIDIA GeForce RTX 4090"
+HOLD_D3D round=7 api=d3d12 rc=0 elapsed=254.88
+HOLD_ADAPTER driver=32.0.15.8088 code=0 dwm=1 explorer=1
+KFDX start api=d3d11 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2684 luid=0x00000000_0x000057c6 dedicated_mb=7853 software=0 name="NVIDIA GeForce RTX 4090"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000061ee dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 4090"
+KFDX ok D3D11CreateDevice(hardware, chosen adapter)
+KFDX feature_level 0xb100
+KFDX ok compile cs_5_0
+KFDX ok CreateComputeShader
+KFDX ok CreateUnorderedAccessView
+KFDX compute iters=20 bad=0 ms=78
+KFDX ok compute shader result matches (UAV readback)
+KFDX ok compile vs_5_0/ps_5_0
+KFDX ok Map staging texture
+KFDX pixel 64,127,191,255
+KFDX ok draw result matches (centre pixel 64,128,191,255)
+KFDX RESULT OK api=d3d11 adapter="NVIDIA GeForce RTX 4090"
+HOLD_D3D round=8 api=d3d11 rc=0 elapsed=287.69
+KFDX start api=d3d12 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2684 luid=0x00000000_0x000057c6 dedicated_mb=7853 software=0 name="NVIDIA GeForce RTX 4090"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000061ee dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 4090"
+KFDX ok D3D12CreateDevice(chosen adapter)
+KFDX feature_level 0xc200
+KFDX vidmem budget_mb=7085 usage_mb=7
+KFDX ok DIRECT
+KFDX ok DIRECT queue fence Signal/Wait x3
+KFDX ok COPY
+KFDX ok COPY queue fence Signal/Wait x3
+KFDX ok compile cs_5_0
+KFDX ok serialize root signature
+KFDX ok CreateRootSignature
+KFDX ok CreateComputePipelineState
+KFDX compute iters=20 bad=0 fence_wait_ok=1 ms=109
+KFDX ok compute queue fence completed
+KFDX ok compute shader result matches (UAV copy-back)
+KFDX RESULT OK api=d3d12 adapter="NVIDIA GeForce RTX 4090"
+HOLD_D3D round=8 api=d3d12 rc=0 elapsed=294.58
+HOLD_ADAPTER driver=32.0.15.8088 code=0 dwm=1 explorer=1
+KFDX start api=d3d11 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2684 luid=0x00000000_0x000057c6 dedicated_mb=7853 software=0 name="NVIDIA GeForce RTX 4090"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000061ee dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 4090"
+KFDX ok D3D11CreateDevice(hardware, chosen adapter)
+KFDX feature_level 0xb100
+KFDX ok compile cs_5_0
+KFDX ok CreateComputeShader
+KFDX ok CreateUnorderedAccessView
+KFDX compute iters=20 bad=0 ms=93
+KFDX ok compute shader result matches (UAV readback)
+KFDX ok compile vs_5_0/ps_5_0
+KFDX ok Map staging texture
+KFDX pixel 64,127,191,255
+KFDX ok draw result matches (centre pixel 64,128,191,255)
+KFDX RESULT OK api=d3d11 adapter="NVIDIA GeForce RTX 4090"
+HOLD_D3D round=9 api=d3d11 rc=0 elapsed=327.37
+KFDX start api=d3d12 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2684 luid=0x00000000_0x000057c6 dedicated_mb=7853 software=0 name="NVIDIA GeForce RTX 4090"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000061ee dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 4090"
+KFDX ok D3D12CreateDevice(chosen adapter)
+KFDX feature_level 0xc200
+KFDX vidmem budget_mb=7085 usage_mb=7
+KFDX ok DIRECT
+KFDX ok DIRECT queue fence Signal/Wait x3
+KFDX ok COPY
+KFDX ok COPY queue fence Signal/Wait x3
+KFDX ok compile cs_5_0
+KFDX ok serialize root signature
+KFDX ok CreateRootSignature
+KFDX ok CreateComputePipelineState
+KFDX compute iters=20 bad=0 fence_wait_ok=1 ms=187
+KFDX ok compute queue fence completed
+KFDX ok compute shader result matches (UAV copy-back)
+KFDX RESULT OK api=d3d12 adapter="NVIDIA GeForce RTX 4090"
+HOLD_D3D round=9 api=d3d12 rc=0 elapsed=334.97
+HOLD_ADAPTER driver=32.0.15.8088 code=0 dwm=1 explorer=1
+KFDX start api=d3d11 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2684 luid=0x00000000_0x000057c6 dedicated_mb=7853 software=0 name="NVIDIA GeForce RTX 4090"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000061ee dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 4090"
+KFDX ok D3D11CreateDevice(hardware, chosen adapter)
+KFDX feature_level 0xb100
+KFDX ok compile cs_5_0
+KFDX ok CreateComputeShader
+KFDX ok CreateUnorderedAccessView
+KFDX compute iters=20 bad=0 ms=125
+KFDX ok compute shader result matches (UAV readback)
+KFDX ok compile vs_5_0/ps_5_0
+KFDX ok Map staging texture
+KFDX pixel 64,127,191,255
+KFDX ok draw result matches (centre pixel 64,128,191,255)
+KFDX RESULT OK api=d3d11 adapter="NVIDIA GeForce RTX 4090"
+HOLD_D3D round=10 api=d3d11 rc=0 elapsed=367.71
+KFDX start api=d3d12 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2684 luid=0x00000000_0x000057c6 dedicated_mb=7853 software=0 name="NVIDIA GeForce RTX 4090"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000061ee dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 4090"
+KFDX ok D3D12CreateDevice(chosen adapter)
+KFDX feature_level 0xc200
+KFDX vidmem budget_mb=7085 usage_mb=7
+KFDX ok DIRECT
+KFDX ok DIRECT queue fence Signal/Wait x3
+KFDX ok COPY
+KFDX ok COPY queue fence Signal/Wait x3
+KFDX ok compile cs_5_0
+KFDX ok serialize root signature
+KFDX ok CreateRootSignature
+KFDX ok CreateComputePipelineState
+KFDX compute iters=20 bad=0 fence_wait_ok=1 ms=141
+KFDX ok compute queue fence completed
+KFDX ok compute shader result matches (UAV copy-back)
+KFDX RESULT OK api=d3d12 adapter="NVIDIA GeForce RTX 4090"
+HOLD_D3D round=10 api=d3d12 rc=0 elapsed=375.4
+HOLD_ADAPTER driver=32.0.15.8088 code=0 dwm=1 explorer=1
+KFDX start api=d3d11 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2684 luid=0x00000000_0x000057c6 dedicated_mb=7853 software=0 name="NVIDIA GeForce RTX 4090"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000061ee dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 4090"
+KFDX ok D3D11CreateDevice(hardware, chosen adapter)
+KFDX feature_level 0xb100
+KFDX ok compile cs_5_0
+KFDX ok CreateComputeShader
+KFDX ok CreateUnorderedAccessView
+KFDX compute iters=20 bad=0 ms=62
+KFDX ok compute shader result matches (UAV readback)
+KFDX ok compile vs_5_0/ps_5_0
+KFDX ok Map staging texture
+KFDX pixel 64,127,191,255
+KFDX ok draw result matches (centre pixel 64,128,191,255)
+KFDX RESULT OK api=d3d11 adapter="NVIDIA GeForce RTX 4090"
+HOLD_D3D round=11 api=d3d11 rc=0 elapsed=408.32
+KFDX start api=d3d12 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2684 luid=0x00000000_0x000057c6 dedicated_mb=7853 software=0 name="NVIDIA GeForce RTX 4090"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000061ee dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 4090"
+KFDX ok D3D12CreateDevice(chosen adapter)
+KFDX feature_level 0xc200
+KFDX vidmem budget_mb=7085 usage_mb=7
+KFDX ok DIRECT
+KFDX ok DIRECT queue fence Signal/Wait x3
+KFDX ok COPY
+KFDX ok COPY queue fence Signal/Wait x3
+KFDX ok compile cs_5_0
+KFDX ok serialize root signature
+KFDX ok CreateRootSignature
+KFDX ok CreateComputePipelineState
+KFDX compute iters=20 bad=0 fence_wait_ok=1 ms=218
+KFDX ok compute queue fence completed
+KFDX ok compute shader result matches (UAV copy-back)
+KFDX RESULT OK api=d3d12 adapter="NVIDIA GeForce RTX 4090"
+HOLD_D3D round=11 api=d3d12 rc=0 elapsed=416.29
+HOLD_ADAPTER driver=32.0.15.8088 code=0 dwm=1 explorer=1
+HOLD_ADAPTER driver=32.0.15.8088 code=0 dwm=1 explorer=1
+HOLD_TDR_COUNT=0 elapsed_seconds=420.9 rounds=11
+HOLD_EXIT rc=0 utc=2026-10-19T19:59:46.7498311Z

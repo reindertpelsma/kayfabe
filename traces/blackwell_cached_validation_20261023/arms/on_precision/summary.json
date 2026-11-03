@@ -1,0 +1,12 @@
+{
+ "log_sha256": "1f04ff59f380ef52de13e9d9d42d1bd14d9dd9c63641b3c803f69c529ba11592",
+ "rpcs": 0,
+ "unload_ordinals": [],
+ "teardown_start_ordinal": null,
+ "last_nonfree_before_teardown": [],
+ "policy_nonok": [],
+ "alloc_posted_nonzero_body_status": [],
+ "cfb0_posted": [],
+ "ca7a_posted": [],
+ "cbcb_posted": []
+}

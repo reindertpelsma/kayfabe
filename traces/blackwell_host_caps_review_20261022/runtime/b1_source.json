@@ -1,0 +1,31 @@
+{
+  "optional_merge": "178862f82bcf8296de0f7ccab298d4761055eaf2",
+  "parents": [
+    "ab91b4acc9ab80d0755fe3542299858406dcfd30",
+    "2add71e8ca8ebb80c419ed2fdb0427dfcdc0ccd4"
+  ],
+  "runtime_source_parity_sha256": {
+    "crates/kf-host/src/precomp.rs": "9845385bce7e3b9675dc1230b7b50f4525e2cce68c0b79440ff9f66293171c98",
+    "crates/kf-host/src/precomp_layout.rs": "ff0b32622cb628a2dd2c9f2e120ea538eaf449c2582b2a55f66c3e5e192c0c82",
+    "crates/kf-host/tests/precomp_read.rs": "43c30c1cf13af1dd2d90c82b15c3d6ad57ddf569da7b74b28ddbfd397774f7ef",
+    "crates/kf-disp/src/hostcaps.rs": "4ac628537f303643c1343d0c180fc5ab105ef0247f0b74ec0d6b119e3a918e04",
+    "crates/kf-disp/src/capsderive.rs": "5044f537ff8787fb56dd0be63caab8583e0d6ed7726953d66880d850c9ee22bc",
+    "crates/kf-disp/tests/host_precomp.rs": "297557decf98132b753a43a6e4e3aa1e92f0f339db734de8f490eaf62c4c867c",
+    "crates/kf-qemu/examples/precomp_host_read.rs": "d5ed6466ab31f3a94bebaf4d49f6baeaff8fe7125ed32ecdce4f342483a07d2c",
+    "crates/kf-qemu/src/rmfacts.rs": "7e7da08f39627435e1e872a7ea7dbe78a76ee38681063452b0f8a5a5cc642ea6"
+  },
+  "manual_merge_rust_edits": false,
+  "metadata_redaction": {
+    "file": "scripts/ci/claims-debt.json",
+    "before_sha256": "b51b4612d2280005134e89a554262253e0ca1715c955d5ba1e66373a329d8a52",
+    "after_sha256": "944f7749e336cf57967252d7031941d42889f28788a3f4ab5707b3dd687559a0",
+    "changes": [
+      {
+        "json_pointer": "/crates/kf-disp/src/scanout.rs|unattributed|4ef81ee2da4856b41c71314aea5fc8af055f2277099e937114d30639719a10f8",
+        "original_value_sha256": "7817f0c6cf00ab563626f00b524c6b5f0de59f575510c3a7e3f8e5617ff77e76",
+        "scope": "one inherited owner-run path reference, public hygiene only"
+      }
+    ]
+  },
+  "comparison_limit": "B1 includes CI-repair parent and published artifacts; no RC-only causal claim. No hardware validation in this task."
+}

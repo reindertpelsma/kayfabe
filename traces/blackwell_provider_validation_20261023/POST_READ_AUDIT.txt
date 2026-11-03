@@ -1,0 +1,25 @@
+UTC 2026-10-23T02:17:47.326582+00:00
+POST_READ_XID_AUDIT {
+  "got_type": "tuple",
+  "allowed_type": "list",
+  "got_count": 5,
+  "allowed_count": 5,
+  "equal_as_sets": true,
+  "unexpected": [],
+  "missing": [],
+  "XID_STOP": false
+}
+precomp_tier3_exit.txt 50
+PRECOMP_TIER3_EXIT rc=0 2026-10-23T02:05:23+00:00
+precomp_tier3.txt 42596
+measured:GB206,595.91.07,2026-10-23	word	window=7	type=F	address=0x00640874	value=0x0a001400
+measured:GB206,595.91.07,2026-10-23	field	window=7	name=PRECOMP_WIN_PIPE_HDR_CAPF_VSCLR_MAX_PIXELS_2TAP	bits=15:0	value=5120
+measured:GB206,595.91.07,2026-10-23	field	window=7	name=PRECOMP_WIN_PIPE_HDR_CAPF_VSCLR_MAX_PIXELS_5TAP	bits=31:16	value=2560
+PRECOMP_TIER3=OK measured:GB206,595.91.07,2026-10-23 CAP_SYS_ADMIN=effective READ32_GLOBAL_only=1
+guard_watch.log 0
+
+sweep_cuda_host.log 2377
+CL_BENCH mode=host rep=1 BENCH_MODULE_MS=28.47
+CL_BENCH mode=host rep=1 BSUM N=16 iters=20 first_ms=0.040 med_ms=0.010 p90_ms=0.011 min_ms=0.009 max_ms=0.012 gflops=0.853 batch_per_launch_ms=0.005 batch_gflops=1.532 h2d_ms=0.030 d2h_med_ms=0.009 submit_med_ms=0.005 sync_med_ms=0.004 sync_cpu_med_ms=0.004 sync_offcpu_med_ms=0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.007 bad=0 maxerr=0
+CL_BENCH mode=host rep=1 BSUM N=2048 iters=20 first_ms=11.697 med_ms=11.735 p90_ms=11.743 min_ms=11.713 max_ms=11.745 gflops=1463.936 batch_per_launch_ms=11.814 batch_gflops=1454.141 h2d_ms=5.216 d2h_med_ms=2.825 submit_med_ms=0.007 sync_med_ms=11.729 sync_cpu_med_ms=11.728 sync_offcpu_med_ms=0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.011 bad=0 maxerr=0
+CUDA_LADDER_DONE=2026-10-23T02:04:42+00:00

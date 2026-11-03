@@ -1,0 +1,6 @@
+subdevice	0x20809009	8
+subdevice	0x20809001	8
+subdevice	0x20809064	520	4=2,8=1,18=4
+subdevice	0x20808162	1
+subdevice	0x2080a001	16
+subdevice	0x2080a084	4

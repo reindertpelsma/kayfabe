@@ -1,0 +1,21 @@
+{
+  "mutants": [
+    {
+      "mutant": "global_account_must_be_empty",
+      "killers": [
+        "test_another_owners_box_does_not_block_a_closed_lane",
+        "test_foreign_label_collision_does_not_transfer_ownership",
+        "test_other_ada_lane_does_not_consume_our_one_box"
+      ]
+    },
+    {
+      "mutant": "ignore_own_live_lease",
+      "killers": [
+        "test_a_different_label_does_not_hide_our_own_id",
+        "test_mixed_account_still_blocks_if_any_own_box_is_live",
+        "test_our_own_active_box_blocks_a_second_lease"
+      ]
+    }
+  ],
+  "restored_sha256": "4679961c9f90d044d86cbe264839e9684c3ba056dafc96d4bc7fe7e1cb0bf658"
+}

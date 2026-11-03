@@ -1,0 +1,52 @@
+[
+  {
+    "mutant": "HB_drop_offset",
+    "path": "crates/kf-qemu/src/heartbeat.rs",
+    "falsifier": "fewer than two distinct runtime killing tests, or only a compilation failure"
+  },
+  {
+    "mutant": "HB_round_after_subtract",
+    "path": "crates/kf-qemu/src/heartbeat.rs",
+    "falsifier": "fewer than two distinct runtime killing tests, or only a compilation failure"
+  },
+  {
+    "mutant": "HB_zero_decoded_offset",
+    "path": "crates/kf-qemu/src/heartbeat.rs",
+    "falsifier": "fewer than two distinct runtime killing tests, or only a compilation failure"
+  },
+  {
+    "mutant": "HB_accept_wrong_declared_size",
+    "path": "crates/kf-qemu/src/heartbeat.rs",
+    "falsifier": "fewer than two distinct runtime killing tests, or only a compilation failure"
+  },
+  {
+    "mutant": "HB_wait_on_gsp_lock",
+    "path": "crates/kf-qemu/src/heartbeat.rs",
+    "falsifier": "fewer than two distinct runtime killing tests, or only a compilation failure"
+  },
+  {
+    "mutant": "HB_wait_on_fn72_lock",
+    "path": "crates/kf-gsp/src/sysinfo.rs",
+    "falsifier": "fewer than two distinct runtime killing tests, or only a compilation failure"
+  },
+  {
+    "mutant": "HB_reuse_previous_life",
+    "path": "crates/kf-gsp/src/boot.rs",
+    "falsifier": "fewer than two distinct runtime killing tests, or only a compilation failure"
+  },
+  {
+    "mutant": "HB_reuse_previous_queue",
+    "path": "crates/kf-gsp/src/boot.rs",
+    "falsifier": "fewer than two distinct runtime killing tests, or only a compilation failure"
+  },
+  {
+    "mutant": "HB_forge_missing_offset",
+    "path": "crates/kf-qemu/src/heartbeat.rs",
+    "falsifier": "fewer than two distinct runtime killing tests, or only a compilation failure"
+  },
+  {
+    "mutant": "HB_forge_missing_clock",
+    "path": "crates/kf-qemu/src/heartbeat.rs",
+    "falsifier": "fewer than two distinct runtime killing tests, or only a compilation failure"
+  }
+]

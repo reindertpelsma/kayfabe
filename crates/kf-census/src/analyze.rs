@@ -25,6 +25,9 @@ use kf_gsp::{GspAbi, RpcCommand, RpcFunction, decode_message, peek_elem_count, p
 use kf_util::sha256::sha256;
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 
+/// Distinct control bodies: `(cmd, dir, reply status, body)` -> messages (requests: status 0).
+pub type Bodies = BTreeMap<(u32, Dir, u32, Vec<u8>), u64>;
+
 /// Examples kept per anomaly kind.
 pub const EXAMPLE_CAP: usize = 12;
 
@@ -309,6 +312,11 @@ pub struct Report {
     pub functions: BTreeMap<(Dir, u32), FuncRow>,
     /// Per-control census.
     pub controls: Vec<ControlRow>,
+    /// Distinct control parameter bodies, only when [`Analyzer::collect_bodies`] was called,
+    /// and only from sources that went through the scrub stage (a body that is the fill
+    /// pattern is never recorded). Key `(cmd, dir, reply status, body)`, value: messages.
+    /// Requests carry status 0.
+    pub bodies: Option<Bodies>,
 }
 
 impl Report {
@@ -354,11 +362,17 @@ pub struct Analyzer {
     large: HashMap<StreamKey, Assembler>,
     large_joined: u64,
     tap: Option<MessageTap>,
+    record_tap: Option<MessageRecordTap>,
+    bodies: Option<Bodies>,
 }
 
 /// A callback that sees every message run exactly as it reached the analyzer (tests use it to
 /// compare reassembled bytes with the bytes that were sent).
 pub type MessageTap = Box<dyn FnMut(Dir, &[u8])>;
+
+/// A diagnostic tap with source and queue-instance context. The bytes remain
+/// host-only; exporters must select metadata explicitly, never copy payloads.
+pub type MessageRecordTap = Box<dyn for<'a> FnMut(usize, &In<'a>)>;
 
 fn dir_ix(d: Dir) -> usize {
     match d {
@@ -403,12 +417,26 @@ impl Analyzer {
             large: HashMap::new(),
             large_joined: 0,
             tap: None,
+            record_tap: None,
+            bodies: None,
         }
+    }
+
+    /// Keep every distinct control body of a **scrubbed** source for [`Report::bodies`].
+    /// Bodies of a source without the scrubbed flag are never kept: only a scrub decides which
+    /// bytes may leave the trusted host, and its fill pattern is never recorded as a body.
+    pub fn collect_bodies(&mut self) {
+        self.bodies = Some(BTreeMap::new());
     }
 
     /// Install a [`MessageTap`].
     pub fn set_tap(&mut self, tap: MessageTap) {
         self.tap = Some(tap);
+    }
+
+    /// Install a diagnostic tap retaining source/queue identity across restarts.
+    pub fn set_record_tap(&mut self, tap: MessageRecordTap) {
+        self.record_tap = Some(tap);
     }
 
     /// The ABI bundle (sources need the element size).
@@ -560,6 +588,9 @@ impl Analyzer {
             dir: m.dir,
         };
         self.messages[dir_ix(m.dir)] += 1;
+        if let Some(t) = self.record_tap.as_mut() {
+            t(source, &m);
+        }
         if let Some(t) = self.tap.as_mut() {
             t(m.dir, m.bytes);
         }
@@ -806,6 +837,13 @@ impl Analyzer {
         let scrubbed =
             self.sources.last().is_some_and(|s| s.scrubbed) && crate::scrub::is_filled(&params);
         let params: Option<Vec<u8>> = if scrubbed { None } else { Some(params) };
+        if let (Some(b), Some(p)) = (self.bodies.as_mut(), params.as_ref())
+            && !p.is_empty()
+            && self.sources.last().is_some_and(|s| s.scrubbed)
+        {
+            let st = if m.dir == Dir::Status { status } else { 0 };
+            *b.entry((req.cmd, m.dir, st, p.clone())).or_default() += 1;
+        }
         let acc = self.controls.entry(req.cmd).or_default();
         if scrubbed {
             acc.scrubbed += 1;
@@ -903,6 +941,7 @@ impl Analyzer {
             large_joined: self.large_joined,
             functions: self.functions,
             controls,
+            bodies: self.bodies,
         }
     }
 }

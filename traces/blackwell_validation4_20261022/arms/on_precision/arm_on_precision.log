@@ -1,0 +1,11 @@
+/workspace/bw-capc-validation/kfwin/disk/bw580_bind.qcow2: OK
+ARM_START run=on_precision source=8f3a9bb3a5d652b3f536ca015bf95735ec588924 profile=on 2026-10-22T03:37:03+00:00
+[2026-10-22T03:37:03Z] detached: tag=on_precision, log logs/on_precision_run.log (stdout logs/on_precision_run.out)
+KF_SSH_UP
+{"pid": 108258, "exe": "/workspace/bench/kf3-bins/8f3a9bb3/qemu-system-x86_64", "sha256": "a7c86110b7c55121eff8ecbe2e4fdd3829f628e18d1ae3f15b5e2a8ff44f27de", "kf3_device": "kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=/workspace/bw-capc-validation/secureboot/kf-gop.8f3a9bb3.signed.efi,id=kf0,guest-driver=580.65.06"}
+STAGE580_READY=1 actual=32.0.15.8088 device_disabled=1 GSP_flags=1; fresh QEMU580.65.06 then one enable
+PRE_CLEANUP_START rc=255 2026-10-22T03:38:02+00:00
+{"rpcs": 276, "unload_ordinals": [], "teardown_start_ordinal": null, "last_nonfree_before_teardown": []}
+OWN_VM_ALREADY_EXITED
+/workspace/bw-capc-validation/kfwin/disk/bw580_bind.qcow2: OK
+ARM_EXIT run=on_precision rc=255 2026-10-22T03:38:16+00:00

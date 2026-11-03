@@ -1,0 +1,22 @@
+test a_broker_that_cannot_prove_a_dma_buf_gets_shared_memory ... ignored, needs KF_BROKER_BIN (nvkvm-pv's broker at badf2d7+), root and /dev/udmabuf
+test a_rejected_attach_is_reclaimed_by_rule ... ignored, needs KF_BROKER_BIN (nvkvm-pv's broker at 368d2db)
+test a_squatter_under_another_uid_is_refused_before_hello ... ignored, needs root
+test a_squatter_who_owns_the_sockets_directory_is_refused ... ignored, needs root
+test a_stopped_broker_never_blocks_the_relay ... ignored, needs KF_BROKER_BIN (nvkvm-pv's broker at 368d2db)
+test linear_udmabuf_frames_release_and_scripted_input ... ignored, needs KF_BROKER_BIN (nvkvm-pv's broker at 368d2db)
+test shm_frames_and_an_shm_replay_after_kill_9 ... ignored, needs KF_BROKER_BIN (nvkvm-pv's broker at 368d2db)
+test the_broker_answers_query_format_for_the_implicit_modifier ... ignored, needs KF_BROKER_BIN (nvkvm-pv's broker at 368d2db)
+test the_relay_and_the_real_broker_agree_on_ticks_requests_and_silence ... ignored, needs KF_BROKER_BIN (this repository's broker)
+test regenerate_the_runs_file ... ignored, writes tests/golden/conversation.runs; run with KF_CENSUS_REGEN=1 when the encoder changes
+test a6_open_a_rebind_in_pointer_mode_is_not_known_to_the_window ... ignored, OPEN: a rebind of the software subchannel while in Pointer mode is invisible; a later trigger on the new subchannel is missed (Open question 5)
+test b_open_continued_indices_need_the_new_gp_put_preset_before_the_switch ... ignored, OPEN: if the indices continue across the growth, the new USERD's GP_PUT must already hold the continued value when the relay switches (Open question 4)
+test i6_open_pointer_mode_credit_waits_need_no_look ... ignored, OPEN: Pointer mode cannot announce private-ring credit without a marker (Open question 1)
+test p10_publish_reads_back_before_the_native_doorbell ... ignored, OPEN (EXPECTED RED since the previous commit): owner decision on a read-back before the private doorbell; docs/design/V3_USER_RING_EVENT_LOOP_20261014.md section 9.2
+test engine::lockstep_exhaustive::lockstep_exhaustive_deep_frames ... ignored, deep: minutes
+test engine::lockstep_exhaustive::lockstep_exhaustive_deep_time_and_silence ... ignored, deep: minutes
+test engine::lockstep_soak::lockstep_soak_long ... ignored, long soak: 10M flips (minutes)
+test dump_derived_vs_measured ... ignored, prints the diff for the design document
+test emit_family_rows ... ignored, emits data/caps_family_pages.tsv for tools/derive_display_caps.sh
+test sim::adversarial::adversarial_debug_replay ... ignored, debug replay
+test sim::fuzz::hostile_rows_replay ... ignored, debug replay
+test sim::tests::property_debug_replay ... ignored, debug replay: KF_SIM_SEED, KF_SIM_FAULT=every,after, KF_SIM_BATCH, KF_SIM_LOW

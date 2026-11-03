@@ -1,0 +1,244 @@
+[   80.540031] nvidia-nvlink: Nvlink Core is being initialized, major device number 239
+
+[   80.550592] nvidia 0000:00:03.0: vgaarb: VGA decodes changed: olddecodes=none,decodes=none:owns=io+mem
+[   80.553784] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026
+[   82.529711] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275872 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961184 timeout 5200
+[   82.529716] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   82.529721] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275872 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961184 timeout 5200
+[   82.529722] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   82.529751] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275872 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961184 timeout 5200
+[   82.529753] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   82.529757] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275872 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961184 timeout 5200
+[   82.529758] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   82.530101] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275872 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961184 timeout 5200
+[   82.530103] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   82.530107] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275872 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961184 timeout 5200
+[   82.530108] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   82.530181] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275872 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961184 timeout 5200
+[   82.530182] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   82.530186] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275872 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961184 timeout 5200
+[   82.530187] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   82.530269] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275872 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961184 timeout 5200
+[   82.530271] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   82.530275] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275872 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961184 timeout 5200
+[   82.530276] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   82.530459] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275873 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961185 timeout 5200
+[   82.530460] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   82.530464] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275873 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961185 timeout 5200
+[   82.530465] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   82.530579] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275873 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961185 timeout 5200
+[   82.530581] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   82.530585] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275873 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961185 timeout 5200
+[   82.530586] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   82.530620] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275873 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961185 timeout 5200
+[   82.530621] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   82.530625] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275873 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961185 timeout 5200
+[   82.530626] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   82.535151] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275877 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961189 timeout 5200
+[   82.535181] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   82.535185] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275877 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961189 timeout 5200
+[   82.535186] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   82.542280] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275884 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961196 timeout 5200
+[   82.542284] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   82.542288] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275884 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961196 timeout 5200
+[   82.542289] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   82.543044] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275885 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961197 timeout 5200
+[   82.543046] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   82.543050] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275885 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961197 timeout 5200
+[   82.543051] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   82.543149] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275885 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961197 timeout 5200
+[   82.543213] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   82.543219] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275885 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961197 timeout 5200
+[   82.543221] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   82.543634] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275886 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961198 timeout 5200
+[   82.543635] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   82.543641] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275886 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961198 timeout 5200
+[   82.543644] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   82.546608] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275889 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961201 timeout 5200
+[   82.546610] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   82.546614] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275889 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961201 timeout 5200
+[   82.546615] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   82.546663] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275889 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961201 timeout 5200
+[   82.546664] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   82.546668] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275889 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961201 timeout 5200
+[   82.546669] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   82.546969] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275889 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961201 timeout 5200
+[   82.546970] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   82.546974] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275889 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961201 timeout 5200
+[   82.546976] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   82.556848] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275899 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961211 timeout 5200
+[   82.556850] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   82.556888] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275899 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961211 timeout 5200
+[   82.556889] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   82.556945] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275899 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961211 timeout 5200
+[   82.556947] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   82.556953] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275899 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961211 timeout 5200
+[   82.556955] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   82.556992] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275899 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961211 timeout 5200
+[   82.556993] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   82.556999] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275899 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961211 timeout 5200
+[   82.557000] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   82.557026] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275899 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961211 timeout 5200
+[   82.557028] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   82.557034] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275899 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961211 timeout 5200
+[   82.557035] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   82.557532] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275900 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961212 timeout 5200
+[   82.557534] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   82.557538] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275900 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961212 timeout 5200
+[   82.557539] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   82.646604] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275989 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961301 timeout 5200
+[   82.646606] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   82.646611] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275989 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961301 timeout 5200
+[   82.646612] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   82.646615] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:297
+[   82.646652] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275989 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961301 timeout 5200
+[   82.646653] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   82.646657] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275989 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961301 timeout 5200
+[   82.646682] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   82.646684] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_USER_SHARED_DATA_SET_DATA_POLL, &params, sizeof(params)) @ gpu_user_shared_data.c:362
+[   82.646794] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275989 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961301 timeout 5200
+[   82.646796] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   82.646824] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275989 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961301 timeout 5200
+[   82.646825] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   82.646872] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275989 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961301 timeout 5200
+[   82.646874] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   82.646878] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275989 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961301 timeout 5200
+[   82.646879] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   82.646910] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275989 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961301 timeout 5200
+[   82.646911] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   82.646915] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275989 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961301 timeout 5200
+[   82.646917] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   82.646950] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275989 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961301 timeout 5200
+[   82.646951] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   82.646955] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275989 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961301 timeout 5200
+[   82.646956] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   82.646985] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275989 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961301 timeout 5200
+[   82.646987] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   82.646991] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275989 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961301 timeout 5200
+[   82.646992] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   82.647020] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275989 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961301 timeout 5200
+[   82.647021] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   82.647026] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275989 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961301 timeout 5200
+[   82.647027] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   82.652464] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275995 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961307 timeout 5200
+[   82.652466] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   82.652471] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275995 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961307 timeout 5200
+[   82.652472] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   82.656961] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275999 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961311 timeout 5200
+[   82.656964] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   82.656968] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275999 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961311 timeout 5200
+[   82.656969] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   82.657120] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275999 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961311 timeout 5200
+[   82.657122] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   82.657126] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275999 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961311 timeout 5200
+[   82.657151] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   82.657400] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275999 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961311 timeout 5200
+[   82.657402] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   82.657406] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451275999 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961311 timeout 5200
+[   82.657408] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   82.657442] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451276000 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961312 timeout 5200
+[   82.657443] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   82.657453] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451276000 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961312 timeout 5200
+[   82.657454] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   82.657479] NVRM: GPU0 kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   82.657575] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451276000 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961312 timeout 5200
+[   82.657577] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   82.657581] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451276000 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961312 timeout 5200
+[   82.657582] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   82.657615] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451276000 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961312 timeout 5200
+[   82.657616] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   82.657620] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451276000 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961312 timeout 5200
+[   82.657622] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   82.657660] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451276000 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961312 timeout 5200
+[   82.657663] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   82.657670] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451276000 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961312 timeout 5200
+[   82.657673] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   82.657719] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451276000 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961312 timeout 5200
+[   82.657720] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   82.657728] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451276000 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961312 timeout 5200
+[   82.657731] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   82.657891] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451276000 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961312 timeout 5200
+[   82.657893] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   82.657897] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451276000 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961312 timeout 5200
+[   82.657898] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   82.657928] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451276000 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961312 timeout 5200
+[   82.657929] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   82.657933] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451276000 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961312 timeout 5200
+[   82.657966] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   82.658000] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451276000 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961312 timeout 5200
+[   82.658001] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   82.658005] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451276000 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961312 timeout 5200
+[   82.658006] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   82.658032] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451276000 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961312 timeout 5200
+[   82.658034] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   82.658038] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451276000 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961312 timeout 5200
+[   82.658039] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   82.658065] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451276000 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961312 timeout 5200
+[   82.658067] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   82.658071] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451276000 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961312 timeout 5200
+[   82.658072] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   82.658121] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451276000 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961312 timeout 5200
+[   82.658122] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   82.658126] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451276000 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961312 timeout 5200
+[   82.658127] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   82.658152] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451276000 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961312 timeout 5200
+[   82.658153] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   82.658157] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451276000 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961312 timeout 5200
+[   82.658158] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   82.658189] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451276000 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961312 timeout 5200
+[   82.658191] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   82.658222] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451276000 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961312 timeout 5200
+[   82.658224] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   82.662748] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451276005 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961317 timeout 5200
+[   82.662750] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   82.662754] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451276005 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961317 timeout 5200
+[   82.662756] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   82.662757] NVRM: GPU0 kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   82.662791] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451276005 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961317 timeout 5200
+[   82.662792] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   82.662796] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451276005 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961317 timeout 5200
+[   82.662821] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   82.662823] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_CE_GET_PCE_CONFIG_FOR_LCE_TYPE, &pceConfigParams, sizeof(pceConfigParams)) @ kernel_ce.c:1086
+[   82.662826] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kceGetPceConfigForLceType(pGpu, pKCe, NV2080_CTRL_CE_LCE_TYPE_DECOMP, &numPcesPerLce, &numLces, &supportedPceMask, &supportedLceMask, &pcesPerHshub) @ kernel_ce_gp100.c:62
+[   82.662874] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451276005 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961317 timeout 5200
+[   82.662876] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   82.662880] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451276005 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961317 timeout 5200
+[   82.662881] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   82.662882] NVRM: GPU0 kccuGetBufSize_GB100: CCU sample size retrieval failed with status: 0x56
+[   82.662884] NVRM: GPU0 kccuStateLoad_IMPL: Failed to get the buffer size info(status: 86)
+[   82.673509] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451276016 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961328 timeout 5200
+[   82.673512] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   82.673516] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451276016 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961328 timeout 5200
+[   82.673517] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   82.673539] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451276016 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961328 timeout 5200
+[   82.673541] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   82.673550] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451276016 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961328 timeout 5200
+[   82.673551] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   82.681441] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451276024 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961336 timeout 5200
+[   82.681443] NVRM: GPU0 _kgspRpcRecvPoll: GSP RM heartbeat timed out
+[   82.681447] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1451276024 heartbeat 6147 heartbeatWithOffsetMs 1451281984 diff 4294961336 timeout 5200
+[   82.681449] NVRM: GPU0 _kgspRpcRecvPoll: LibOS heartbeat timed out
+[   83.016718] NVRM: GPU0 nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgrobjPromoteContext(pGpu, pKernelGraphicsObject, pKernelGraphics) @ kernel_graphics_object.c:224
+[   83.017888] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->AllocWithHandle(pRmApi, hClientId, KGRAPHICS_CHANNEL_HANDLE_CHANNELID, KGRAPHICS_CHANNEL_HANDLE_3DOBJ, classNum, NULL, 0) @ kernel_graphics.c:2549
+[   83.021327] NVRM: GPU0 vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   83.021329] NVRM: GPU0 vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   83.021330] NVRM: GPU0 vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   83.021331] NVRM: GPU0 vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   83.027292] NVRM: GPU0 nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgraphicsCreateGoldenImageChannel(pGpu, pKernelGraphics) @ kernel_graphics.c:513
+[   83.027295] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: 0 @ kernel_fifo.c:3110
+[   83.039821] NVRM: GPU0 rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1e00008; hParent=0x31415903; hObject=0x31415900; hClass=0x0000c36f; paramsSize=0x00000170; paramsStatus=0x00000056; status=0x00000056
+[   83.039851] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from status @ kernel_channel.c:2769
+[   83.039869] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from _kchannelSendChannelAllocRpc(pKernelChannel, pChannelGpfifoParams, pKernelChannelGroup, bFullSriov) @ kernel_channel.c:964
+[   83.042133] NVRM: GPU0 rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1e00009; hParent=0xcaf00001; hObject=0xcaf00002; hClass=0x0000402c; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[   84.294475] NVRM: nvCheckFailedNoLog: Check failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ gpu_user_shared_data.c:503
+[   84.294641] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from _gpushareddataSendDataPollRpc(pGpu, polledDataMask, pollingIntervalMs) @ gpu_user_shared_data.c:618
+[   84.294643] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from _handlePollMaskHelper(pGpu, NV_FALSE, NV_FALSE) @ gpu_user_shared_data.c:688
+[   84.313194] NVRM: nvCheckFailedNoLog: Check failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ gpu_user_shared_data.c:503
+[   84.313197] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from _gpushareddataSendDataPollRpc(pGpu, polledDataMask, pollingIntervalMs) @ gpu_user_shared_data.c:618
+[   84.313200] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from _handlePollMaskHelper(pGpu, NV_FALSE, NV_FALSE) @ gpu_user_shared_data.c:688
+[   84.340072] NVRM: nvCheckFailedNoLog: Check failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ gpu_user_shared_data.c:503
+[   84.340075] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from _gpushareddataSendDataPollRpc(pGpu, polledDataMask, pollingIntervalMs) @ gpu_user_shared_data.c:618
+[   84.340076] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from _handlePollMaskHelper(pGpu, NV_FALSE, NV_FALSE) @ gpu_user_shared_data.c:688
+[   84.347419] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00001; hParent=0xa55a0030; hObject=0xa55a0070; hClass=0x0000208f; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[   84.402936] NVRM: GPU0 _kccuUnmapAndFreeMemory: CCU memdesc unmap request failed with status: 0x56
+[   84.413889] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:248

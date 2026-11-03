@@ -1,0 +1,6 @@
+[2026-10-22T23:55:37Z] waiting for the GPU lock /tmp/kayfabe-fastguest.lock (GPU work is strictly serial)
+[2026-10-22T23:55:37Z] WINVM_RUN_START tag=on_precision repo_rev=6e3fd3fd kf3=on qemu=/workspace/bench/kf3-bins/6e3fd3fd/qemu-system-x86_64 host_driver=595.91.07 overlay=on_precision arm=B guest_driver=580.65.06 gop_efi=/workspace/bw-capc-validation/secureboot/kf-gop.6e3fd3fd.signed.efi sha256(gop_efi)=5f401168d7ce0ab2
+[2026-10-22T23:55:37Z] kf3 device: kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=/workspace/bw-capc-validation/secureboot/kf-gop.6e3fd3fd.signed.efi,id=kf0,guest-driver=580.65.06
+[2026-10-22T23:55:37Z] QEMU_START tag=on_precision boot=1 pid=115848 log=logs/on_precision_b1_qemu.log
+[2026-10-22T23:58:23Z] WINVM_BOOT_END boot=1 rc=0 reason=guest-shutdown kf3_lines=200 host_xid=0
+[2026-10-22T23:58:23Z] WINVM_RUN_END tag=on_precision boots=1 reason=guest-shutdown

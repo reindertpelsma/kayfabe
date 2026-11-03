@@ -205,6 +205,16 @@ fn info_list_request(size: usize, indices: &[u32]) -> Vec<u8> {
 /// # Errors
 /// [`FieldCause`].
 pub fn query_arch(host: &mut dyn HostControls) -> Result<(Family, u8), FieldCause> {
+    query_arch_die(host).map(|(f, s, _)| (f, s))
+}
+
+/// ★ Lane C 2026-10-14: `MC_GET_ARCH_INFO` → `(family, subRevision, die)` from ONE host answer.
+///
+/// # Errors
+/// [`FieldCause`].
+pub fn query_arch_die(
+    host: &mut dyn HostControls,
+) -> Result<(Family, u8, kf_chip::DieId), FieldCause> {
     let r = ask(
         host,
         kf_chip::NV2080_CTRL_CMD_MC_GET_ARCH_INFO,
@@ -213,6 +223,7 @@ pub fn query_arch(host: &mut dyn HostControls) -> Result<(Family, u8), FieldCaus
     Ok((
         hostfacts::derive_family(&r)?,
         hostfacts::derive_sub_revision(&r)?,
+        hostfacts::derive_die(&r)?,
     ))
 }
 
@@ -440,6 +451,11 @@ pub fn query_gss_replay(host: &mut dyn HostControls) -> Vec<kf_abi::gssreplay::A
     for row in kf_abi::gssreplay::ROWS {
         let mut p = row.request();
         match host.control(row.cmd, &mut p) {
+            // ★ Lane C 2026-10-14: an EXACT row (layout unknown, real request measured all-zero)
+            // is asked once, zero only — a background fill would be a different, unmeasured
+            // question to the host. The guest's request must then be all-zero too, so the bytes
+            // the host changed are the whole answer.
+            Ok(()) if row.exact => out.push(kf_abi::gssreplay::Answer::from_host(*row, &p)),
             Ok(()) => {
                 let mut b = row.request_over(kf_abi::gssreplay::PROBE_BACKGROUND);
                 let bg = host.control(row.cmd, &mut b).ok().map(|()| b);
@@ -1739,11 +1755,15 @@ pub fn query_host_facts(
     host: &mut dyn HostControls,
     family: Family,
 ) -> Result<HostFacts, HostFactsRefused> {
-    let arch = query_arch(host);
+    let arch = query_arch_die(host);
     let asked = family;
     let family = match &arch {
-        Ok((f, _)) if *f == asked => Ok(*f),
-        Ok((f, _)) => Err(FieldCause::FamilyMismatch { asked, host: *f }),
+        Ok((f, _, _)) if *f == asked => Ok(*f),
+        Ok((f, _, _)) => Err(FieldCause::FamilyMismatch { asked, host: *f }),
+        Err(e) => Err(e.clone()),
+    };
+    let die = match &arch {
+        Ok((_, _, d)) => Ok(*d),
         Err(e) => Err(e.clone()),
     };
     let has_c2c = query_has_c2c(host);
@@ -1815,7 +1835,7 @@ pub fn query_host_facts(
         (r, _) => r,
     };
     let chip_info = match &arch {
-        Ok((_, sub)) => query_chip_info(host, *sub),
+        Ok((_, sub, _)) => query_chip_info(host, *sub),
         Err(_) => Err(FieldCause::DependsOn("family")),
     };
     let gr_info = query_gr_info(host, asked);
@@ -1873,6 +1893,7 @@ pub fn query_host_facts(
     }
     // ★ PROVENANCE order, so the refusal list reads like the table.
     let family = take!(family);
+    let die = take!(die);
     let has_c2c = take!(has_c2c);
     let ce_caps = take!(ce_caps);
     let engines = take!(engines);
@@ -1904,6 +1925,7 @@ pub fn query_host_facts(
 
     match (
         family,
+        die,
         has_c2c,
         ce_caps,
         engines,
@@ -1935,6 +1957,7 @@ pub fn query_host_facts(
     ) {
         (
             Some(family),
+            Some(die),
             Some(has_c2c),
             Some(ce_caps),
             Some(engines),
@@ -1965,6 +1988,7 @@ pub fn query_host_facts(
             Some(perf_level_info_v2),
         ) if refusals.is_empty() => Ok(HostFacts {
             family,
+            die,
             has_c2c,
             ce_caps,
             engines,

@@ -1,0 +1,191 @@
+{
+  "arm_on_precision_start_receipt.json": {
+    "rental_path": "/root/prov/arm_on_precision_start_receipt.json",
+    "original_bytes": 586,
+    "original_sha256": "85aa154736a42c00914079925ccde0a8074504d235ffc997d079b0e5e520a33b",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "85aa154736a42c00914079925ccde0a8074504d235ffc997d079b0e5e520a33b"
+  },
+  "arm_on_precision_process_receipt.json": {
+    "rental_path": "/root/prov/arm_on_precision_process_receipt.json",
+    "original_bytes": 1240,
+    "original_sha256": "c0f668aaf89aa4301bf90f14791ce89f59597ab5bbef90ee9119207a50224a92",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "c0f668aaf89aa4301bf90f14791ce89f59597ab5bbef90ee9119207a50224a92"
+  },
+  "arm_on_precision_pre_enable.txt": {
+    "rental_path": "/root/prov/arm_on_precision_pre_enable.txt",
+    "original_bytes": 426,
+    "original_sha256": "516bc701a01fd2bb19a606c486aed13d58c3a53c48b782dcd12e88ceed7cdb47",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "cdee624c5cc561d87591a5ed32e908ecd12a84513fc6f1d666915892bd2c6bab"
+  },
+  "arm_on_precision_enable.txt": {
+    "rental_path": "/root/prov/arm_on_precision_enable.txt",
+    "original_bytes": 287,
+    "original_sha256": "6e77286117f6e4701c5c51dbe3c8a2f9f8c36e9bd0f85329a1664a6c35a32603",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "83d894d1553c601c4eb4c53f9bc5d50f36422aec949578ca77204f3ce63b2267"
+  },
+  "arm_on_precision_cleanup_started.txt": {
+    "rental_path": "/root/prov/arm_on_precision_cleanup_started.txt",
+    "original_bytes": 26,
+    "original_sha256": "5359a4ff0e3def3ad536c1d258db7f95223004d12ddd3262ec30af2766968cab",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "5359a4ff0e3def3ad536c1d258db7f95223004d12ddd3262ec30af2766968cab"
+  },
+  "arm_on_precision_accepted_start.json": {
+    "rental_path": "/root/prov/arm_on_precision_accepted_start.json",
+    "original_bytes": 1327,
+    "original_sha256": "fb3063b7cc678038a702fde14deb1312a5c24c29e2ef2c7f572349e12cd116cc",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "fb3063b7cc678038a702fde14deb1312a5c24c29e2ef2c7f572349e12cd116cc"
+  },
+  "arm_on_precision.log": {
+    "rental_path": "/root/prov/arm_on_precision.log",
+    "original_bytes": 1062,
+    "original_sha256": "741100c863b7cee5c9a0f715472765db178f46f2482cc8762540bd7e150de7c4",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "03e494e86f5864dcc929b4f728ced62be4cf9467854387d7ed37950deb77bf05"
+  },
+  "collect_on_precision.txt": {
+    "rental_path": "/root/prov/collect_on_precision.txt",
+    "original_bytes": 2850,
+    "original_sha256": "c7d1214ad7dafcf5ec7c17daca01d2c20c705b6303bc0b86d20ff6f02bb69812",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "7e4f8506e9246ce729aed3f3c73214e1808896d35a9c3edbf54b6eb63b77c0c8"
+  },
+  "collect_on_precision.log": {
+    "rental_path": "/root/prov/collect_on_precision.log",
+    "original_bytes": 589,
+    "original_sha256": "a69a34e8f465f5705c0b4ea8c3fb210ba81d3be6799429f13cc52b10952034de",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "6e15d28fbc74557e2826ea77d0a5a6634036673a2cdbdcc61093ac7f44e20a35"
+  },
+  "api.tsv": {
+    "rental_path": "/root/prov/arms/on_precision/api.tsv",
+    "original_bytes": 8861,
+    "original_sha256": "5dc34b90366aa4ebd768913f20b11761748fc1170cb08bb4ca81d9d8238a826d",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "5dc34b90366aa4ebd768913f20b11761748fc1170cb08bb4ca81d9d8238a826d"
+  },
+  "allocations.jsonl": {
+    "rental_path": "/root/prov/arms/on_precision/allocations.jsonl",
+    "original_bytes": 27468,
+    "original_sha256": "c3774297597bb49fbee83d4d855f930aa96eb4d0d05186ff8c731b626faa700c",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "c3774297597bb49fbee83d4d855f930aa96eb4d0d05186ff8c731b626faa700c"
+  },
+  "allocations.receipt.json": {
+    "rental_path": "/root/prov/arms/on_precision/allocations.receipt.json",
+    "original_bytes": 488,
+    "original_sha256": "a29696346f5d2fc3f69f54da886a12afe072f67596124f81c6be6656b5f64674",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "a29696346f5d2fc3f69f54da886a12afe072f67596124f81c6be6656b5f64674"
+  },
+  "summary.json": {
+    "rental_path": "/root/prov/arms/on_precision/summary.json",
+    "original_bytes": 2773,
+    "original_sha256": "a5b322f80ec6c9a90c536db197b3aefd5e740d92b4f7c6c0e919d5a827aafff9",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "a5b322f80ec6c9a90c536db197b3aefd5e740d92b4f7c6c0e919d5a827aafff9"
+  },
+  "abort_context.txt": {
+    "rental_path": "/root/prov/arms/on_precision/abort_context.txt",
+    "original_bytes": 1,
+    "original_sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+  },
+  "kf_line_census.txt": {
+    "rental_path": "/root/prov/arms/on_precision/kf_line_census.txt",
+    "original_bytes": 7736,
+    "original_sha256": "42dea6bb6fecf1bc384436d1cc4dff9c17fab4ae69b45f7119d46882fba04958",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "2685e2c2379731df60eae775b8e7f5594d9331c2d7546137516e4136f4f2d36c"
+  },
+  "channel_state.tsv": {
+    "rental_path": "/root/prov/arms/on_precision/channel_state.tsv",
+    "original_bytes": 7069,
+    "original_sha256": "c06d6fa3923673c7f5e29f79150b14416933bca8dc265eb2537673a44e26bb0d",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "c06d6fa3923673c7f5e29f79150b14416933bca8dc265eb2537673a44e26bb0d"
+  },
+  "state_receipt.json": {
+    "rental_path": "/root/prov/arms/on_precision/state_receipt.json",
+    "original_bytes": 421,
+    "original_sha256": "2f9ba1143a07938d9922885a3d6be50e14e0696e13801bcd1cd3ec8c09c9904b",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "2f9ba1143a07938d9922885a3d6be50e14e0696e13801bcd1cd3ec8c09c9904b"
+  },
+  "rpc_timing.jsonl": {
+    "rental_path": "/root/prov/arms/on_precision/rpc_timing.jsonl",
+    "original_bytes": 61068,
+    "original_sha256": "cd7f384511986306c8eba61253024b0b816bb92e48edfc4d6085a3c5e179dd10",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "cd7f384511986306c8eba61253024b0b816bb92e48edfc4d6085a3c5e179dd10"
+  },
+  "rpc_timing.receipt.json": {
+    "rental_path": "/root/prov/arms/on_precision/rpc_timing.receipt.json",
+    "original_bytes": 393,
+    "original_sha256": "3d6152bad1f8deea27312c3930660218bb996133fe2a00dd4086821272b24613",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "3d6152bad1f8deea27312c3930660218bb996133fe2a00dd4086821272b24613"
+  },
+  "rpc_timing_controller.log": {
+    "rental_path": "/root/prov/arms/on_precision/rpc_timing_controller.log",
+    "original_bytes": 0,
+    "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "host_kernel.log": {
+    "rental_path": "/root/prov/arms/on_precision/host_kernel.log",
+    "original_bytes": 472,
+    "original_sha256": "93e7ce318c1ad10d60503ec7c9bf2fcbcb85795599566532bf96688ef096755b",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "93e7ce318c1ad10d60503ec7c9bf2fcbcb85795599566532bf96688ef096755b"
+  },
+  "keylines.jsonl": {
+    "rental_path": "/root/prov/arms/on_precision/keylines.jsonl",
+    "original_bytes": 79243,
+    "original_sha256": "5cfb81e989458371f1781280e5e3fd6dd8bd565cd5b9da98389976309e9abf1a",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "5cfb81e989458371f1781280e5e3fd6dd8bd565cd5b9da98389976309e9abf1a"
+  },
+  "dump_headers.jsonl": {
+    "rental_path": "/root/prov/arms/on_precision/dump_headers.jsonl",
+    "original_bytes": 265,
+    "original_sha256": "dc26e8b1d2fb484e91460e8fc33801dc6aa7dbaec4aa08552a8ee5a32030411c",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "dc26e8b1d2fb484e91460e8fc33801dc6aa7dbaec4aa08552a8ee5a32030411c"
+  },
+  "display_driver.json": {
+    "rental_path": "/root/prov/arms/on_precision/display_driver.json",
+    "original_bytes": 144,
+    "original_sha256": "6d441b302422474302b6c77cc151641d5a694d0338a518ea5352f884a41d3fcd",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "90aa4e85891b0e2c4e8e18dc1ca2c6f471e5ecd48ae64e8b1ff71ea711cca6d1"
+  },
+  "minidump_sha256.txt": {
+    "rental_path": "/root/prov/arms/on_precision/minidump_sha256.txt",
+    "original_bytes": 125,
+    "original_sha256": "ece99b1c3561ad68c598f1e25638944ce06951cccc72bdab7636fd9d3a95c2e9",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "ece99b1c3561ad68c598f1e25638944ce06951cccc72bdab7636fd9d3a95c2e9"
+  },
+  "wer_times_on_precision.txt": {
+    "rental_path": "/root/prov/wer_times_on_precision.txt",
+    "original_bytes": 817,
+    "original_sha256": "b7477e0127bbd3796eb424a7266b62d6874452accfecddc69e30a48dd1ad1bb5",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "7b1e4726002907a5fffd650d352809a6734f17c7343e035a9b32afd430aee2e3"
+  },
+  "dump_hdr_on_precision.txt": {
+    "rental_path": "/root/prov/dump_hdr_on_precision.txt",
+    "original_bytes": 8096,
+    "original_sha256": "3af90c6b16ef800f9f195bf6a9dab7af31ddba8c15654977745932fb094ea177",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "0139457fd1f4d76bac424b3ad7e56593579d8f6324993f25a5c618635fd510b3"
+  }
+}

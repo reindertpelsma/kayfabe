@@ -1,0 +1,14 @@
+{
+  "tool": "tools/align_metadata.py unchanged/current9testsPASS",
+  "reference": "AD10224906bf33/580.88 sameP19 passing8461RPCs",
+  "GB202_calls": 99,
+  "matched": 94,
+  "Ada_only": 8367,
+  "GB202_only": 5,
+  "full_alignment_bytes": 931551,
+  "full_alignment_sha256": "3cb44c92560dff7a311c0f58bc67932fd7e3f2091c32ce0df2db17c0f59dcbcf",
+  "committed_excerpt": "Every GB202 call retained; unmatched reference tail omitted. Order-preserving API correspondence is inferred, not reply/body equality.",
+  "last_correspondence": "GB20298/90f10106 corresponds Ada97; next Ada98/20802a08",
+  "strict_prefix_match": 26,
+  "causal_conclusion": "none"
+}

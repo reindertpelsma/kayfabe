@@ -1,0 +1,91 @@
+test_existing_unparseable_fatal_still_stops_and_is_preserved (test_fatal_receipt.FatalReceipt.test_existing_unparseable_fatal_still_stops_and_is_preserved) ... FAIL
+test_first_fault_publishes_its_complete_reason (test_fatal_receipt.FatalReceipt.test_first_fault_publishes_its_complete_reason) ... ok
+test_prior_native32_stop_keeps_its_cause_and_still_aborts (test_fatal_receipt.FatalReceipt.test_prior_native32_stop_keeps_its_cause_and_still_aborts) ... PHASE_XID_STOP: prior fatal marker
+FAIL
+test_prior_unproven_init_stop_keeps_its_cause_and_still_aborts (test_fatal_receipt.FatalReceipt.test_prior_unproven_init_stop_keeps_its_cause_and_still_aborts) ... PHASE_XID_STOP: prior fatal marker
+FAIL
+test_second_watcher_cannot_replace_original_fault (test_fatal_receipt.FatalReceipt.test_second_watcher_cannot_replace_original_fault) ... FAIL
+test_simultaneous_watchers_publish_one_whole_receipt (test_fatal_receipt.FatalReceipt.test_simultaneous_watchers_publish_one_whole_receipt) ... ERROR
+
+======================================================================
+ERROR: test_simultaneous_watchers_publish_one_whole_receipt (test_fatal_receipt.FatalReceipt.test_simultaneous_watchers_publish_one_whole_receipt)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-cont-wt/scripts/bench/blackwell/test_fatal_receipt.py", line 70, in test_simultaneous_watchers_publish_one_whole_receipt
+    list(workers.map(publish, reasons))
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/concurrent/futures/_base.py", line 639, in result_iterator
+    yield _result_or_cancel(fs.pop())
+          ~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "/usr/lib/python3.14/concurrent/futures/_base.py", line 311, in _result_or_cancel
+    return fut.result(timeout)
+           ~~~~~~~~~~^^^^^^^^^
+  File "/usr/lib/python3.14/concurrent/futures/_base.py", line 450, in result
+    return self.__get_result()
+           ~~~~~~~~~~~~~~~~~^^
+  File "/usr/lib/python3.14/concurrent/futures/_base.py", line 395, in __get_result
+    raise self._exception
+  File "/usr/lib/python3.14/concurrent/futures/thread.py", line 86, in run
+    result = ctx.run(self.task)
+  File "/usr/lib/python3.14/concurrent/futures/thread.py", line 73, in run
+    return fn(*args, **kwargs)
+  File "/workspace/bw-cont-wt/scripts/bench/blackwell/test_fatal_receipt.py", line 67, in publish
+    G.record_fatal(path, reason)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+  File "/workspace/bw-cont-wt/scripts/bench/blackwell/phase_xid_guard.py", line 185, in record_fatal
+    atomic_json(path, data)
+    ~~~~~~~~~~~^^^^^^^^^^^^
+  File "/workspace/bw-cont-wt/scripts/bench/blackwell/phase_xid_guard.py", line 180, in atomic_json
+    tmp.replace(p)
+    ~~~~~~~~~~~^^^
+  File "/usr/lib/python3.14/pathlib/__init__.py", line 1092, in replace
+    os.replace(self, target)
+    ~~~~~~~~~~^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/tmp/tmp7561push/fatal.tmp' -> '/tmp/tmp7561push/fatal'
+
+======================================================================
+FAIL: test_existing_unparseable_fatal_still_stops_and_is_preserved (test_fatal_receipt.FatalReceipt.test_existing_unparseable_fatal_still_stops_and_is_preserved)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-cont-wt/scripts/bench/blackwell/test_fatal_receipt.py", line 57, in test_existing_unparseable_fatal_still_stops_and_is_preserved
+    self.assertEqual(path.read_bytes(), original)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: b'{"STOP": "prior fatal marker"}\n' != b'partial original stop evidence\n'
+
+======================================================================
+FAIL: test_prior_native32_stop_keeps_its_cause_and_still_aborts (test_fatal_receipt.FatalReceipt.test_prior_native32_stop_keeps_its_cause_and_still_aborts)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-cont-wt/scripts/bench/blackwell/test_fatal_receipt.py", line 29, in test_prior_native32_stop_keeps_its_cause_and_still_aborts
+    self.check_prior_fatal_still_terminates_its_controller('native32 outside approved source controls')
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/bw-cont-wt/scripts/bench/blackwell/test_fatal_receipt.py", line 26, in check_prior_fatal_still_terminates_its_controller
+    self.assertEqual(path.read_bytes(), original)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: b'{"STOP": "prior fatal marker", "phase": null, "owne[43 chars]e}\n' != b'{"STOP": "native32 outside approved source controls[17 chars]101}'
+
+======================================================================
+FAIL: test_prior_unproven_init_stop_keeps_its_cause_and_still_aborts (test_fatal_receipt.FatalReceipt.test_prior_unproven_init_stop_keeps_its_cause_and_still_aborts)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-cont-wt/scripts/bench/blackwell/test_fatal_receipt.py", line 32, in test_prior_unproven_init_stop_keeps_its_cause_and_still_aborts
+    self.check_prior_fatal_still_terminates_its_controller('new fault without current arm/init proof')
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/bw-cont-wt/scripts/bench/blackwell/test_fatal_receipt.py", line 26, in check_prior_fatal_still_terminates_its_controller
+    self.assertEqual(path.read_bytes(), original)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: b'{"STOP": "prior fatal marker", "phase": null, "owne[43 chars]e}\n' != b'{"STOP": "new fault without current arm/init proof"[16 chars]101}'
+
+======================================================================
+FAIL: test_second_watcher_cannot_replace_original_fault (test_fatal_receipt.FatalReceipt.test_second_watcher_cannot_replace_original_fault)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-cont-wt/scripts/bench/blackwell/test_fatal_receipt.py", line 48, in test_second_watcher_cannot_replace_original_fault
+    self.assertEqual(path.read_bytes(), original)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: b'{"STOP": "prior fatal marker", "detached_qemu_stopped": false}\n' != b'{"STOP":"first cause","detached_qemu_stopped":true}\n'
+
+----------------------------------------------------------------------
+Ran 6 tests in 0.008s
+
+FAILED (failures=4, errors=1)

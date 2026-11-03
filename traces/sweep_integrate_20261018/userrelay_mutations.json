@@ -1,0 +1,41 @@
+[
+  {
+    "mutant": "M1_ampere_only",
+    "exit": 101,
+    "killing_tests": [
+      "chan::userrelay::tests::user_ring_source_accepts_generated_non_ada_channels",
+      "chan::userrelay::tests::user_ring_source_rejects_unknown_and_foreign_channel_ids",
+      "chan::userrelay::tests::user_ring_source_turing_accepts_both_ring_size_boundaries"
+    ],
+    "killed": true
+  },
+  {
+    "mutant": "M2_widen_ada",
+    "exit": 101,
+    "killing_tests": [
+      "chan::userrelay::tests::user_ring_source_ada_generated_predecessors_remain_refused",
+      "chan::userrelay::tests::user_ring_source_ad104_ada_accepts_exactly_the_previous_c56f_set"
+    ],
+    "killed": true
+  },
+  {
+    "mutant": "M3_any_class",
+    "exit": 101,
+    "killing_tests": [
+      "chan::userrelay::tests::user_ring_source_ad104_ada_accepts_exactly_the_previous_c56f_set",
+      "chan::userrelay::tests::user_ring_source_ada_generated_predecessors_remain_refused",
+      "chan::userrelay::tests::user_ring_source_rejects_generated_non_channel_objects",
+      "chan::userrelay::tests::user_ring_source_rejects_unknown_and_foreign_channel_ids"
+    ],
+    "killed": true
+  },
+  {
+    "mutant": "M4_geometry_bypass",
+    "exit": 101,
+    "killing_tests": [
+      "chan::userrelay::tests::user_ring_source_geometry_refuses_hostile_maximum_declarations",
+      "chan::userrelay::tests::user_ring_source_geometry_rejects_small_rings_alignment_and_overflow"
+    ],
+    "killed": true
+  }
+]

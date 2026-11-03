@@ -424,6 +424,89 @@ fn user_ring_class_admitted(class: u32) -> bool {
     class == kf_abi::generated::classes::AMPERE_CHANNEL_GPFIFO_A || class == TURING_CHANNEL_GPFIFO_A
 }
 
+/// Whether the private-ring relay can serve a channel of `class` on `family`: the class/family part
+/// of the birth admission ([`source_declaration`]), and the route's condition ([`ring_relay_route`])
+/// — one decision, so a routed channel is never refused at its birth.
+///
+/// ★ 2026-10-24 (GB205 round B1n, lease 57472433): the relay's turn learns its fetch credit from the
+/// private USERD `GP_GET` (`user_storage::Storage::gpu_get`) and its gate / batch proof from the
+/// private USERD `REFERENCE` its marker's `SET_REFERENCE` writes (`Storage::gpu_reference`). Both are
+/// words the ENGINE writes back. A family whose engine writes no USERD word
+/// ([`kf_chip::Family::engine_writes_userd_gp_get`]; its control struct names only `GPPut`) can never
+/// prove a marker, whatever class it binds — the generated Blackwell set also names `0xc56f`.
+///
+/// # Errors
+/// The admission's refusal, by name.
+pub(super) fn ring_relay_serves(family: kf_chip::Family, class: u32) -> Result<(), &'static str> {
+    // Preserve the integration line's exact Ada admission set. The generated
+    // Ada list also names c36f/c46f; admitting them needs separate native proof.
+    let ada_allowed = family != kf_chip::Family::Ada
+        || class == kf_abi::generated::classes::AMPERE_CHANNEL_GPFIFO_A;
+    if !ada_allowed
+        || family.classes().kind_of(class) != Some(kf_chip::classes::Kind::ChannelGpfifo)
+    {
+        return Err("USER_RING_SOURCE_DECLARATION");
+    }
+    if !family.engine_writes_userd_gp_get() {
+        return Err("USER_RING_FAMILY_WRITES_NO_USERD");
+    }
+    // 2026-11-01 (Blackwell-into-next merge): next's class gate (2026-10-27, TU106 Windows 580.88)
+    // is the LAST gate, after the family's own reasons, so a Blackwell channel is still refused
+    // BY ITS NAME (`USER_RING_FAMILY_WRITES_NO_USERD`) rather than as an unknown class.
+    if !user_ring_class_admitted(class) {
+        return Err("USER_RING_SOURCE_DECLARATION");
+    }
+    Ok(())
+}
+
+/// The route of a permitted Windows user-work channel: `true` = the private-ring relay
+/// ([`ChanPlane::birth_user_ring`]), `false` = the USERD-relay Passthrough birth
+/// (`KF3_WIN_USER_RING_RELAY=0`'s route, the same USER twin privilege). `enabled` is [`enabled`],
+/// `permitted` = the channel carries a `WindowsUserRingPermit`. A channel the private ring cannot
+/// serve ([`ring_relay_serves`]) takes the USERD-relay route instead of a birth that would refuse it.
+pub(super) fn ring_relay_route(
+    enabled: bool,
+    permitted: bool,
+    family: kf_chip::Family,
+    class: u32,
+) -> bool {
+    enabled && permitted && ring_relay_serves(family, class).is_ok()
+}
+
+/// Once per VM, by name: a permitted Windows user-work channel was kept off the private ring.
+pub(super) fn note_route_declined(family: kf_chip::Family, class: u32) {
+    static ONCE: std::sync::OnceLock<()> = std::sync::OnceLock::new();
+    if let Err(why) = ring_relay_serves(family, class) {
+        ONCE.get_or_init(|| {
+            eprintln!(
+                "kf3: USER_RING_ROUTE_DECLINED family={family:?} class={class:#x}: {why} — Windows user-work takes the USERD-relay route (as KF3_WIN_USER_RING_RELAY=0), USER twin unchanged (logged once)"
+            );
+        });
+    }
+}
+
+/// Validate class and bounded ring geometry before resolving own-VM USERD storage.
+fn source_declaration(
+    family: kf_chip::Family,
+    class: u32,
+    entries: u32,
+    gpfifo_va: u64,
+) -> Result<(), &'static str> {
+    ring_relay_serves(family, class)?;
+    if entries < 2
+        || !entries.is_power_of_two()
+        || entries > (1 << 20)
+        || gpfifo_va & 7 != 0
+        || u64::from(entries)
+            .checked_mul(8)
+            .and_then(|n| gpfifo_va.checked_add(n))
+            .is_none()
+    {
+        return Err("USER_RING_SOURCE_DECLARATION");
+    }
+    Ok(())
+}
+
 struct Birth {
     a: ChannelAlloc,
     mirror: Mirror,
@@ -461,18 +544,8 @@ impl Birth {
         // The CPU-RM resolved descriptor supplies bounded own-VM RAM; runtime
         // CPU access additionally retains exact Pt allocation identity.
         let source = (|| {
-            if !user_ring_class_admitted(a.class)
-                || a.entries < 2
-                || !a.entries.is_power_of_two()
-                || a.entries > (1 << 20)
-                || a.gpfifo_va & 7 != 0
-                || u64::from(a.entries)
-                    .checked_mul(8)
-                    .and_then(|n| a.gpfifo_va.checked_add(n))
-                    .is_none()
-            {
-                return Err("USER_RING_SOURCE_DECLARATION".to_string());
-            }
+            source_declaration(me.family, a.class, a.entries, a.gpfifo_va)
+                .map_err(str::to_string)?;
             let declared = a.subdevice_id.ok_or("USER_RING_SUBDEVICE_ID_UNMEASURED")?;
             let native_id = if shadow_enabled() && declared == 0 {
                 0 // Existing opaque diagnostic retains the host default.
@@ -1083,7 +1156,10 @@ mod tests {
     #[test]
     fn the_birth_gate_uses_the_class_predicate() {
         let src = include_str!("userrelay.rs");
-        assert!(src.contains("!user_ring_class_admitted(a.class)"));
+        // The birth goes through `source_declaration` -> `ring_relay_serves`, whose last gate is the
+        // predicate (2026-11-01 merge: the family-aware route and the class gate are one decision).
+        assert!(src.contains("source_declaration(me.family, a.class, a.entries, a.gpfifo_va)"));
+        assert!(src.contains("!user_ring_class_admitted(class)"));
         let direct = concat!(
             "a.class != kf_abi",
             "::generated::classes::AMPERE_CHANNEL_GPFIFO_A"
@@ -1092,6 +1168,201 @@ mod tests {
             !src.contains(direct),
             "the gate compares one class directly again"
         );
+    }
+
+    #[test]
+    fn user_ring_source_accepts_generated_non_ada_channels() {
+        // ★ 2026-10-24: narrowed from the 2026-10-19 family admission (871c38fad). A family whose
+        // engine writes no USERD word (Blackwell) is refused by name: the private ring's marker and
+        // fetch credit read engine-written USERD words (`ring_relay_serves`).
+        for family in kf_chip::Family::ALL {
+            if family == kf_chip::Family::Ada {
+                continue;
+            }
+            for &class in family.classes().channel_gpfifo {
+                // ★ 2026-11-01 (merge with next's 2026-10-27 class gate): the private ring also needs
+                // the class to be one the relay admits (`user_ring_class_admitted`: c46f, c56f), so
+                // Hopper's c86f stays declined as on next; Blackwell keeps its own, more precise name.
+                let want = if !family.engine_writes_userd_gp_get() {
+                    Err("USER_RING_FAMILY_WRITES_NO_USERD")
+                } else if user_ring_class_admitted(class) {
+                    Ok(())
+                } else {
+                    Err("USER_RING_SOURCE_DECLARATION")
+                };
+                assert_eq!(
+                    source_declaration(family, class, 1024, 0x300200000),
+                    want,
+                    "{family:?} {class:#x}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn user_ring_source_turing_accepts_both_ring_size_boundaries() {
+        for entries in [2, 1 << 20] {
+            assert_eq!(
+                source_declaration(kf_chip::Family::Turing, 0xc46f, entries, 0),
+                Ok(())
+            );
+        }
+    }
+
+    #[test]
+    fn user_ring_source_ad104_ada_accepts_exactly_the_previous_c56f_set() {
+        for class in (0..=u16::MAX as u32).chain([0x1c56f, u32::MAX]) {
+            assert_eq!(
+                source_declaration(kf_chip::Family::Ada, class, 1024, 0x1000).is_ok(),
+                class == 0xc56f,
+                "Ada class {class:#x}"
+            );
+        }
+    }
+
+    #[test]
+    fn user_ring_source_ada_generated_predecessors_remain_refused() {
+        let family = kf_chip::Family::Ada;
+        for class in [0xc36f, 0xc46f] {
+            assert!(family.classes().channel_gpfifo.contains(&class));
+            assert_eq!(
+                source_declaration(family, class, 2, 0),
+                Err("USER_RING_SOURCE_DECLARATION")
+            );
+        }
+    }
+
+    #[test]
+    fn user_ring_source_rejects_generated_non_channel_objects() {
+        for family in kf_chip::Family::ALL {
+            for kind in kf_chip::classes::Kind::ALL {
+                if kind == kf_chip::classes::Kind::ChannelGpfifo {
+                    continue;
+                }
+                for &class in family.classes().of_kind(kind) {
+                    assert!(
+                        source_declaration(family, class, 1024, 0x1000).is_err(),
+                        "{family:?} {kind:?} {class:#x}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn user_ring_source_rejects_unknown_and_foreign_channel_ids() {
+        for (family, classes) in [
+            (kf_chip::Family::Turing, [0, 0xc56f, 0xca6f, u32::MAX]),
+            (kf_chip::Family::Ada, [0, 0xc86f, 0xca6f, u32::MAX]),
+        ] {
+            for class in classes {
+                assert!(source_declaration(family, class, 1024, 0x1000).is_err());
+            }
+        }
+    }
+
+    #[test]
+    fn user_ring_source_geometry_rejects_small_rings_alignment_and_overflow() {
+        let family = kf_chip::Family::Ada;
+        for entries in [0, 1, 3, (1 << 20) + 1, 1 << 21] {
+            assert!(source_declaration(family, 0xc56f, entries, 0x1000).is_err());
+        }
+        for va in [1, 7, u64::MAX - 7] {
+            assert!(source_declaration(family, 0xc56f, 2, va).is_err());
+        }
+    }
+
+    #[test]
+    fn user_ring_source_geometry_refuses_hostile_maximum_declarations() {
+        let family = kf_chip::Family::Ada;
+        for entries in [0, 1, 5, (1 << 20) + 2, u32::MAX] {
+            assert!(source_declaration(family, 0xc56f, entries, 0).is_err());
+        }
+        for va in [2, 6, u64::MAX - 15] {
+            assert!(source_declaration(family, 0xc56f, 1024, va).is_err());
+        }
+    }
+
+    /// ★ 2026-10-24, GB205 round B1n (lease 57472433, arm `on_urt`, B1 binary cb80cbd29): the first DWM
+    /// process's two Windows user-work channels as the kf3 log declared them -- GR
+    /// `0xc1d00126:0xff04000b` (class `0xca6f`, engine 1, GPFIFO `0x4000000` x 8192) and CE
+    /// `0xc1d00129:0xff04000c` (class `0xca6f`, engine `0x10`, GPFIFO `0x4036000` x 8192), each with a
+    /// Windows user-work permit and the relay on (the default). Both were BORN on the private-ring relay
+    /// (host `0x40000014` / `0x4010000b`), whose USERD the trace then read as all zero (`gp_get=0 ref=0x0`),
+    /// and both took Xid 32 METHOD at the relay's first publication.
+    const GB20X_DWM: [(u32, &str); 2] =
+        [(0xca6f, "GR 0x4000000x8192"), (0xca6f, "CE 0x4036000x8192")];
+
+    #[test]
+    fn a_gb20x_windows_user_channel_takes_the_userd_relay_route_not_the_private_ring() {
+        // The family's engine writes no USERD GP_GET (kf_chip::Family::engine_writes_userd_gp_get,
+        // whose row cites its GB203 bare-metal run) and its control struct names neither GPGet nor Reference
+        // (clc96f.h / clca6f.h): the two words the private-ring relay reads as its fetch credit and
+        // as its marker proof. The relay-off arm of the same lease (USERD-relay route, same USER twin
+        // privilege) survived a 10-minute hold with no Xid.
+        for (class, what) in GB20X_DWM {
+            assert!(
+                !ring_relay_route(true, true, kf_chip::Family::Blackwell, class),
+                "{what}: a Blackwell Windows user-work channel must not be born on the private ring"
+            );
+        }
+    }
+
+    #[test]
+    fn every_routed_channel_is_one_the_private_ring_birth_admits() {
+        // A route the birth then refuses (`USER_RING_SOURCE_DECLARATION`) fails the guest's channel
+        // allocation: route and admission must be one decision.
+        for family in kf_chip::Family::ALL {
+            let classes = family.classes().channel_gpfifo;
+            for &class in classes
+                .iter()
+                .chain(&[kf_abi::generated::classes::AMPERE_CHANNEL_GPFIFO_A])
+            {
+                if ring_relay_route(true, true, family, class) {
+                    assert_eq!(
+                        ring_relay_serves(family, class),
+                        Ok(()),
+                        "{family:?} {class:#x}: routed to the private ring, refused at its birth"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_private_ring_is_served_only_where_the_engine_writes_its_userd_words() {
+        // Derived, never captured: the class's own control struct (generated from ogkm) must name the
+        // GP_GET word the relay's observe phase reads, and the family row must say the engine writes it.
+        for family in kf_chip::Family::ALL {
+            for &class in family.classes().channel_gpfifo {
+                if ring_relay_serves(family, class).is_ok() {
+                    assert!(family.engine_writes_userd_gp_get(), "{family:?} {class:#x}");
+                    assert_eq!(
+                        kf_chip::hwref::expect::class_offset(&format!("Nv{class:x}Control.GPGet")),
+                        Some(kf_abi::submit::USERD_GP_GET),
+                        "{family:?} {class:#x}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn ada_c56f_keeps_the_private_ring_and_the_negative_control_keeps_the_old_route() {
+        let (ada, c56f) = (
+            kf_chip::Family::Ada,
+            kf_abi::generated::classes::AMPERE_CHANNEL_GPFIFO_A,
+        );
+        assert!(ring_relay_route(true, true, ada, c56f));
+        assert!(
+            !ring_relay_route(false, true, ada, c56f),
+            "KF3_WIN_USER_RING_RELAY=0"
+        );
+        assert!(
+            !ring_relay_route(true, false, ada, c56f),
+            "no Windows permit"
+        );
+        assert_eq!(ring_relay_serves(ada, c56f), Ok(()));
     }
 
     #[test]

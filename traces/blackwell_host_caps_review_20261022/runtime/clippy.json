@@ -1,0 +1,17 @@
+{
+  "base_diagnostics": 462,
+  "after_diagnostics": 457,
+  "added": 0,
+  "removed": 5,
+  "base_inherited_errors": 93,
+  "after_inherited_errors": 93,
+  "comparison": "message/code/source-snippet/relative-file multiset; canonical4460f3433 base plus isolated base lockstep_threads target, versus ab91b4acc all targets including native example",
+  "baseline_supplement_reason": "Inherited errors stop parallel clippy scheduling; three unchanged lockstep_threads warnings appear only when target is reached. Target-only base command emitted the identical warnings.",
+  "unchanged_supplement_source_sha256": "c72e985a08c3c436b9a87f60f8cc4dea18ca2174cc3e9d95e584313d534fa353",
+  "raw_exit_codes": {
+    "base_all_targets": 101,
+    "base_lockstep_threads": 0,
+    "after_all_targets": 101
+  },
+  "native_example_build_exit": 0
+}

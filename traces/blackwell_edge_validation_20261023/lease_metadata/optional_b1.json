@@ -1,0 +1,14 @@
+{
+  "enabled": true,
+  "tests_verified_before_arms": true,
+  "source": "c130aa98ac2b922202282cd793f2a6d64be1f091",
+  "parents": [
+    "6e3fd3fd6d809ae2c2a3504cd8be1ecd29b2b31b",
+    "178862f82bcf8296de0f7ccab298d4761055eaf2"
+  ],
+  "binary": "/workspace/bench/kf3-bins/c130aa98/qemu-system-x86_64",
+  "binary_sha256": "4631fa5dd635c33725f1235276a981dcae3dc3bbde3d7b6a71119d698e818f05",
+  "utc": "2026-10-22T22:19:44.912300+00:00",
+  "verification": "CPU combined release host84/disp324/chan672/qemu436 failed0 ignored9; field policy plus B1; hardwareUNRUN",
+  "scope": "includes B1 CI-repair parent, not RC-only causality"
+}

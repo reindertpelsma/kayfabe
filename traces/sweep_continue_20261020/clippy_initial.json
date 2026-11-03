@@ -1,0 +1,22 @@
+{
+  "utc": "2026-10-20T20:42:28.273538+00:00",
+  "base": "aa8fdea9c",
+  "head_code": "048c28b9c",
+  "command": "cargo clippy --release -j2 --all-targets --message-format=json -p kf-abi -p kf-chip -p kf-chan -p kf-disp -p kf-rm -p kf-qemu",
+  "rustflags": "--cap-lints=warn (same on base/head to inspect all crates despite inherited denies; no lint suppressed)",
+  "baseline_diagnostics": 557,
+  "head_diagnostics": 558,
+  "added": [
+    {
+      "code": "clippy::single_element_loop",
+      "level": "warning",
+      "message": "for loop over a single element",
+      "path": "crates/kf-disp/tests/caps_derive.rs",
+      "line": 543,
+      "snippet": "for implementation in [0x3] {\nlet die = Die {\nimplementation,\n..GB206\n};\nlet d = go(&BLACKWELL_GB20X, die, true, true, \"580\");\nassert_eq!(\nd.page.word(0x00c),\n0,\n\"a neighbouring die cannot borrow the row\"\n);\nassert_eq!(d.unmeasured.len(), 1);\n}"
+    }
+  ],
+  "added_count": 1,
+  "source_restored": true,
+  "comparison": "code/message/path/primary snippet, ignoring line shifts and severity cap"
+}

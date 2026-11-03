@@ -1,0 +1,20 @@
+{
+  "base": "124a37ce3",
+  "expected_red": [
+    "374db4984",
+    "f914a60ed"
+  ],
+  "tested_sha256": {
+    "crates/kf-disp/data/caps_family_pages.tsv": "bdabf368db08dc9f92c15cbc2206330262202e3a048e084954432d6cf3a9215f",
+    "crates/kf-disp/data/caps_rows.tsv": "0d01f710e92b2c60497be337e01c37c739639e7a467e121aebe79e8d381a0187",
+    "crates/kf-disp/src/capsderive.rs": "3215fa08b25d0ae66f41412bb5b30103014778a2eac15cd9340a7481e3837613",
+    "crates/kf-disp/src/hostcaps.rs": "7933c254be086ac670f7ea2cd19ff5ae8d4312cfccd65f1e76cd2a1b2d30ee90",
+    "crates/kf-disp/src/lib.rs": "a4d0b2d80ea19cd74f4979bcc3d7a7621260f6a40dd36ab7931bfb372a215b34",
+    "crates/kf-disp/src/precomp_fields.rs": "a18ecfe02895b92249c20f4a646250787842743934ae8c90e1ff807902ca009d",
+    "crates/kf-disp/tests/caps_derive.rs": "77e387619cb5b43907a25235a9dd881e3de02c575b9c96ab95c6af16eb581c21",
+    "crates/kf-disp/tests/host_precomp.rs": "53fc0c4875a2d3b50296247d560e0b1bba52dbc03a9195ffb10f39bb130a4c14",
+    "crates/kf-disp/tests/precomp_csc_precision.rs": "9037c18826b81512bb7f1fdaa56cb1bccc8cab4b37eeaf53189026e3cc530a31"
+  },
+  "all_prior_tests_retained": true,
+  "production_numeric_T1_values_unchanged": true
+}

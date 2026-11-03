@@ -1,0 +1,15 @@
+=== kayfabe host preflight 2026-10-19T17:48:11+00:00 on ubuntu ===
+  ✔ /dev/kvm present
+  ✔ CPU virt extensions present
+  ✔ GPU: NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running.  driver: NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running.
+  ✘ HOST FAULT: /dev/nvidiactl MISSING
+  ✘ HOST FAULT: /dev/nvidia0 MISSING
+  ⚠ /dev/nvidia-uvm absent (loads on first CUDA use; not fatal here)
+  ✔ disk free 167G
+  ✔ RAM 49G
+  ✘ HOST FAULT: only 5 cores
+  ✔ apt mirror 456974 B/s
+  ✔ https egress works
+=== PREFLIGHT DONE ===
+VERDICT=HOST_FAULT
+EXIT=2

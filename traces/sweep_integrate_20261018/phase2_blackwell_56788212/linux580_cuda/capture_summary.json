@@ -1,0 +1,192 @@
+{
+  "classification": "MEASURED complete textlogs; pre/postmayoverlap",
+  "source": "24906bf334665c9000b16b271005593daa3586c7",
+  "actual_guest": "580.159.04",
+  "rungs": [
+    {
+      "rung": "cup2",
+      "logs": {
+        "dmesg_after.txt": {
+          "bytes": 10086,
+          "normalized_sha256": "9f1b844176783432d3bba3c3ab4e076aaf0b6ee079c0f15f7baa21612e3dea94"
+        },
+        "hostdmesg.txt": {
+          "bytes": 154,
+          "normalized_sha256": "17793b8d3f0e47a2bff5a9d07ea24f07047222b23c9aae4d3c3a8f8e349c3f21"
+        },
+        "qemu.txt": {
+          "bytes": 297410,
+          "normalized_sha256": "995340af3a602bda5e5506bf66bbe54f9885aaa995338628db3b0e7a25cd1826"
+        },
+        "dmesg.txt": {
+          "bytes": 4929,
+          "normalized_sha256": "0eadf2823441e342b0b6b53414295c484fca4e4b92ec9932ecd186496f952b87"
+        },
+        "controller.txt": {
+          "bytes": 5677,
+          "normalized_sha256": "7463493079ce358d56d0234cf18819d2733a612bf5e6aa643bf6e85c6f19b19e"
+        },
+        "probe.txt": {
+          "bytes": 10600,
+          "normalized_sha256": "de3cccc117044cff49efab2b35bc7fd478392b913d7bcf5c884cbb7ee7818410"
+        }
+      },
+      "dmesg": {
+        "heartbeat_warnings": 0,
+        "xid": 0,
+        "flip_timeout": 0,
+        "module_banners": [
+          "[   44.278371] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026"
+        ]
+      },
+      "dmesg_after": {
+        "heartbeat_warnings": 0,
+        "xid": 0,
+        "flip_timeout": 0,
+        "module_banners": [
+          "[   44.278371] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026"
+        ]
+      },
+      "host_xid": 0
+    },
+    {
+      "rung": "cup3",
+      "logs": {
+        "dmesg_after.txt": {
+          "bytes": 9976,
+          "normalized_sha256": "1ab2d4ef6a18a70b8241e56f3856139a58962b117e6464d8a9e2292fa3afc13b"
+        },
+        "hostdmesg.txt": {
+          "bytes": 53,
+          "normalized_sha256": "325e551a2a1ca492c2b14deb2f572c6d88abbe19a7e2fe144b35478497f307c0"
+        },
+        "qemu.txt": {
+          "bytes": 381283,
+          "normalized_sha256": "254d1645e0c47ed18f422e7c32b7860ada6d98a015c213ff444b7322fe01e546"
+        },
+        "dmesg.txt": {
+          "bytes": 4929,
+          "normalized_sha256": "72d59a312557afd80e4d0b9ee18309ebd7eeaa52029f5270c583fc70d08c4bb7"
+        },
+        "controller.txt": {
+          "bytes": 5668,
+          "normalized_sha256": "2581f21eeb85dc7da92e2986cb5121f0565cd61c4cfed9b60ebafad10f62d73e"
+        },
+        "probe.txt": {
+          "bytes": 23163,
+          "normalized_sha256": "cb82515f045a641507cdb3e06d86318e3854f1f9186d66fe43c43eaec01bcfcb"
+        }
+      },
+      "dmesg": {
+        "heartbeat_warnings": 0,
+        "xid": 0,
+        "flip_timeout": 0,
+        "module_banners": [
+          "[   49.449360] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026"
+        ]
+      },
+      "dmesg_after": {
+        "heartbeat_warnings": 0,
+        "xid": 0,
+        "flip_timeout": 0,
+        "module_banners": [
+          "[   49.449360] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026"
+        ]
+      },
+      "host_xid": 0
+    },
+    {
+      "rung": "cup8",
+      "logs": {
+        "dmesg_after.txt": {
+          "bytes": 9874,
+          "normalized_sha256": "7f050a38967eb4ade0c460de098980d947b721568969c65efc55dbd3e7bf001e"
+        },
+        "hostdmesg.txt": {
+          "bytes": 53,
+          "normalized_sha256": "091de482a1298e78de18aa32d8646fbd4f597bd1da31e104b1bb0377f853b83c"
+        },
+        "qemu.txt": {
+          "bytes": 309453,
+          "normalized_sha256": "49bc65286594818047a471e3825eb2685d864e80835355972f10e0ec71407307"
+        },
+        "dmesg.txt": {
+          "bytes": 4929,
+          "normalized_sha256": "15725063cfbaf9bc3980e205385d4e0e4246824631b1a81d104ed7b8dec8cddc"
+        },
+        "controller.txt": {
+          "bytes": 5674,
+          "normalized_sha256": "bc4f20eea8ff5083938a58ef4c7e7c7115f5fb4efb77a16d6c09b22c9ad2b665"
+        },
+        "probe.txt": {
+          "bytes": 13280,
+          "normalized_sha256": "751ad3bbf94d9416b7b299ca29cbce79fd729a32caa03626ad42a143f0fce8ea"
+        }
+      },
+      "dmesg": {
+        "heartbeat_warnings": 0,
+        "xid": 0,
+        "flip_timeout": 0,
+        "module_banners": [
+          "[   53.145718] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026"
+        ]
+      },
+      "dmesg_after": {
+        "heartbeat_warnings": 0,
+        "xid": 0,
+        "flip_timeout": 0,
+        "module_banners": [
+          "[   53.145718] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026"
+        ]
+      },
+      "host_xid": 0
+    },
+    {
+      "rung": "cup8bench",
+      "logs": {
+        "dmesg_after.txt": {
+          "bytes": 9874,
+          "normalized_sha256": "b2e163c8b90911a24f6af024d1949027cb307dd141264c273894500002e0a845"
+        },
+        "hostdmesg.txt": {
+          "bytes": 53,
+          "normalized_sha256": "31303ca2418b0bcaeb32015ffb50fe479c79c6160f43779fc104394a782b31ee"
+        },
+        "qemu.txt": {
+          "bytes": 299479,
+          "normalized_sha256": "e15cb795d4ecaddd64e3a76939cd29612e83932dcef1a7b37e116f1169e7ca3d"
+        },
+        "dmesg.txt": {
+          "bytes": 4929,
+          "normalized_sha256": "67c1cf5201a42aa36a67d40786478a284cfe5b161f649262a3990527a9caac2c"
+        },
+        "controller.txt": {
+          "bytes": 5822,
+          "normalized_sha256": "0c450f636b107bb754d3c76d19bd9b24950ecccf7af764b409bb5a523a3aa032"
+        },
+        "probe.txt": {
+          "bytes": 26706,
+          "normalized_sha256": "a687f27e66e1d15147d046aa1a0f0a3ff3a9a26c43ba7c32e39bd8b1393d5da2"
+        }
+      },
+      "dmesg": {
+        "heartbeat_warnings": 0,
+        "xid": 0,
+        "flip_timeout": 0,
+        "module_banners": [
+          "[   42.635076] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026"
+        ]
+      },
+      "dmesg_after": {
+        "heartbeat_warnings": 0,
+        "xid": 0,
+        "flip_timeout": 0,
+        "module_banners": [
+          "[   42.635076] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026"
+        ]
+      },
+      "host_xid": 0
+    }
+  ],
+  "legacy_gate_limit": "Pre-v3marker gate notclaimedgreen; v3controllerscarryactualperrevisionbinarypath/hash."
+}

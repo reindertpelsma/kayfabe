@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "tests_verified_before_arms": true,
+  "verification_head": "1c6452a276d7014bece3adf42d68cbd4edffbc18",
+  "source": "d8c1e65ef5a3df15c0ca4d1d3f551a43683ede6f",
+  "binary": "/workspace/bench/kf3-bins/d8c1e65e/qemu-system-x86_64",
+  "binary_sha256": "e4890b89e64823c5961f03172b32b7c525eecc5cc1d5a1874f87a8ca0e32961b",
+  "full_tests": "3999/0/22, 22 crates",
+  "mutants": "15 variants/16 runs, minimum2killers",
+  "clippy_added": 0,
+  "scope": "separate revision arm includes master CI-repair parent; mandatory ON/OFF remain8f; not isolated RC causality",
+  "sealed_utc": "2026-10-22T01:09:40.695748+00:00"
+}

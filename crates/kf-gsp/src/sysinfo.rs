@@ -144,6 +144,13 @@ impl SystemInfoCell {
         }
     }
 
+    /// Borrow bounded fn72 metadata without waiting or allocating. Busy or poisoned
+    /// metadata is unavailable for this tick; the ordinary console reader is unchanged.
+    pub fn try_with_latest<R>(&self, read: impl FnOnce(&StashedSystemInfo) -> R) -> Option<R> {
+        let guard = self.0.try_lock().ok()?;
+        guard.as_ref().map(read)
+    }
+
     /// The last fn 72 stored, if any.
     #[must_use]
     pub fn latest(&self) -> Option<StashedSystemInfo> {
@@ -222,5 +229,41 @@ mod tests {
         let s = c.latest().unwrap();
         assert_eq!(s.declared_len, big.len());
         assert_eq!(s.bytes.len(), system_info_max());
+    }
+
+    fn heartbeat_cell_contention(present: bool) {
+        use std::sync::mpsc;
+        use std::time::Duration;
+        let cell = SystemInfoCell::new();
+        if present {
+            cell.store(&[1, 2, 3], 1);
+        }
+        let held = cell.0.lock().unwrap();
+        let worker_cell = cell.clone();
+        let (tx, rx) = mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            tx.send(worker_cell.try_with_latest(|_| 42)).unwrap();
+        });
+        let observed = rx.recv_timeout(Duration::from_millis(250));
+        drop(held);
+        worker.join().unwrap();
+        assert_eq!(observed, Ok(None), "heartbeat waited on fn72 metadata");
+    }
+    #[test]
+    fn heartbeat_busy_empty_cell_returns_without_waiting() {
+        heartbeat_cell_contention(false);
+    }
+    #[test]
+    fn heartbeat_busy_populated_cell_returns_without_waiting() {
+        heartbeat_cell_contention(true);
+    }
+    #[test]
+    fn heartbeat_reads_metadata_without_cloning() {
+        let cell = SystemInfoCell::new();
+        cell.store(&[1, 2, 3], 9);
+        assert_eq!(
+            cell.try_with_latest(|info| (info.bytes.len(), info.sequence)),
+            Some((3, 9))
+        );
     }
 }

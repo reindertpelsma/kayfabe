@@ -1,0 +1,645 @@
+{
+  "source": "e8553e6ce7ec557aef9ff96c3c876e3060a6b9f8",
+  "guest_driver": "595.91.07",
+  "die": "GA104",
+  "raw30_result": "PASS",
+  "rows": [
+    {
+      "arm": "alias-two-vas",
+      "warnings": 14,
+      "zero_raw_heartbeat": 14,
+      "nonzero_raw_heartbeat": 0,
+      "unsigned_future_pattern": 0,
+      "first": [
+        1454520295,
+        0,
+        0,
+        1454520295,
+        5200
+      ],
+      "last": [
+        1454520692,
+        0,
+        0,
+        1454520692,
+        5200
+      ]
+    },
+    {
+      "arm": "alias-unmap-observe",
+      "warnings": 12,
+      "zero_raw_heartbeat": 12,
+      "nonzero_raw_heartbeat": 0,
+      "unsigned_future_pattern": 0,
+      "first": [
+        1454540233,
+        0,
+        0,
+        1454540233,
+        5200
+      ],
+      "last": [
+        1454540615,
+        0,
+        0,
+        1454540615,
+        5200
+      ]
+    },
+    {
+      "arm": "atomics-probe",
+      "warnings": 6,
+      "zero_raw_heartbeat": 6,
+      "nonzero_raw_heartbeat": 0,
+      "unsigned_future_pattern": 0,
+      "first": [
+        1454971645,
+        0,
+        0,
+        1454971645,
+        5200
+      ],
+      "last": [
+        1454971811,
+        0,
+        0,
+        1454971811,
+        5200
+      ]
+    },
+    {
+      "arm": "bar1-crossing",
+      "warnings": 6,
+      "zero_raw_heartbeat": 6,
+      "nonzero_raw_heartbeat": 0,
+      "unsigned_future_pattern": 0,
+      "first": [
+        1454952091,
+        0,
+        0,
+        1454952091,
+        5200
+      ],
+      "last": [
+        1454952238,
+        0,
+        0,
+        1454952238,
+        5200
+      ]
+    },
+    {
+      "arm": "blockage-coverage",
+      "warnings": 4,
+      "zero_raw_heartbeat": 4,
+      "nonzero_raw_heartbeat": 0,
+      "unsigned_future_pattern": 0,
+      "first": [
+        1454500014,
+        0,
+        0,
+        1454500014,
+        5200
+      ],
+      "last": [
+        1454500126,
+        0,
+        0,
+        1454500126,
+        5200
+      ]
+    },
+    {
+      "arm": "bus-info-sweep",
+      "warnings": 12,
+      "zero_raw_heartbeat": 12,
+      "nonzero_raw_heartbeat": 0,
+      "unsigned_future_pattern": 0,
+      "first": [
+        1454393588,
+        0,
+        0,
+        1454393588,
+        5200
+      ],
+      "last": [
+        1454393959,
+        0,
+        0,
+        1454393959,
+        5200
+      ]
+    },
+    {
+      "arm": "ce-client-guest-ram",
+      "warnings": 16,
+      "zero_raw_heartbeat": 16,
+      "nonzero_raw_heartbeat": 0,
+      "unsigned_future_pattern": 0,
+      "first": [
+        1454765469,
+        0,
+        0,
+        1454765469,
+        5200
+      ],
+      "last": [
+        1454765962,
+        0,
+        0,
+        1454765962,
+        5200
+      ]
+    },
+    {
+      "arm": "ce-client",
+      "warnings": 8,
+      "zero_raw_heartbeat": 8,
+      "nonzero_raw_heartbeat": 0,
+      "unsigned_future_pattern": 0,
+      "first": [
+        1454746006,
+        0,
+        0,
+        1454746006,
+        5200
+      ],
+      "last": [
+        1454746219,
+        0,
+        0,
+        1454746219,
+        5200
+      ]
+    },
+    {
+      "arm": "concurrency",
+      "warnings": 2,
+      "zero_raw_heartbeat": 2,
+      "nonzero_raw_heartbeat": 0,
+      "unsigned_future_pattern": 0,
+      "first": [
+        1454416807,
+        0,
+        0,
+        1454416807,
+        5200
+      ],
+      "last": [
+        1454416837,
+        0,
+        0,
+        1454416837,
+        5200
+      ]
+    },
+    {
+      "arm": "concurrent-fuzz",
+      "warnings": 4,
+      "zero_raw_heartbeat": 4,
+      "nonzero_raw_heartbeat": 0,
+      "unsigned_future_pattern": 0,
+      "first": [
+        1455075691,
+        0,
+        0,
+        1455075691,
+        5200
+      ],
+      "last": [
+        1455075792,
+        0,
+        0,
+        1455075792,
+        5200
+      ]
+    },
+    {
+      "arm": "cross-client-leak",
+      "warnings": 6,
+      "zero_raw_heartbeat": 6,
+      "nonzero_raw_heartbeat": 0,
+      "unsigned_future_pattern": 0,
+      "first": [
+        1455103504,
+        0,
+        0,
+        1455103504,
+        5200
+      ],
+      "last": [
+        1455103681,
+        0,
+        0,
+        1455103681,
+        5200
+      ]
+    },
+    {
+      "arm": "defer-liveness",
+      "warnings": 14,
+      "zero_raw_heartbeat": 14,
+      "nonzero_raw_heartbeat": 0,
+      "unsigned_future_pattern": 0,
+      "first": [
+        1454467402,
+        0,
+        0,
+        1454467402,
+        5200
+      ],
+      "last": [
+        1454467886,
+        0,
+        0,
+        1454467886,
+        5200
+      ]
+    },
+    {
+      "arm": "dictated-ring-negative",
+      "warnings": 8,
+      "zero_raw_heartbeat": 8,
+      "nonzero_raw_heartbeat": 0,
+      "unsigned_future_pattern": 0,
+      "first": [
+        1454726100,
+        0,
+        0,
+        1454726100,
+        5200
+      ],
+      "last": [
+        1454726418,
+        0,
+        0,
+        1454726418,
+        5200
+      ]
+    },
+    {
+      "arm": "dictated-ring",
+      "warnings": 8,
+      "zero_raw_heartbeat": 8,
+      "nonzero_raw_heartbeat": 0,
+      "unsigned_future_pattern": 0,
+      "first": [
+        1454706345,
+        0,
+        0,
+        1454706345,
+        5200
+      ],
+      "last": [
+        1454706606,
+        0,
+        0,
+        1454706606,
+        5200
+      ]
+    },
+    {
+      "arm": "doorbell-census",
+      "warnings": 4,
+      "zero_raw_heartbeat": 4,
+      "nonzero_raw_heartbeat": 0,
+      "unsigned_future_pattern": 0,
+      "first": [
+        1454349584,
+        0,
+        0,
+        1454349584,
+        5200
+      ],
+      "last": [
+        1454349685,
+        0,
+        0,
+        1454349685,
+        5200
+      ]
+    },
+    {
+      "arm": "engines",
+      "warnings": 2,
+      "zero_raw_heartbeat": 2,
+      "nonzero_raw_heartbeat": 0,
+      "unsigned_future_pattern": 0,
+      "first": [
+        1454328205,
+        0,
+        0,
+        1454328205,
+        5200
+      ],
+      "last": [
+        1454328235,
+        0,
+        0,
+        1454328235,
+        5200
+      ]
+    },
+    {
+      "arm": "executor-vas",
+      "warnings": 14,
+      "zero_raw_heartbeat": 14,
+      "nonzero_raw_heartbeat": 0,
+      "unsigned_future_pattern": 0,
+      "first": [
+        1454666753,
+        0,
+        0,
+        1454666753,
+        5200
+      ],
+      "last": [
+        1454667221,
+        0,
+        0,
+        1454667221,
+        5200
+      ]
+    },
+    {
+      "arm": "gpga-reserve-probe",
+      "warnings": 12,
+      "zero_raw_heartbeat": 12,
+      "nonzero_raw_heartbeat": 0,
+      "unsigned_future_pattern": 0,
+      "first": [
+        1455010407,
+        0,
+        0,
+        1455010407,
+        5200
+      ],
+      "last": [
+        1455010739,
+        0,
+        0,
+        1455010739,
+        5200
+      ]
+    },
+    {
+      "arm": "gpu-info-sweep",
+      "warnings": 4,
+      "zero_raw_heartbeat": 4,
+      "nonzero_raw_heartbeat": 0,
+      "unsigned_future_pattern": 0,
+      "first": [
+        1454374173,
+        0,
+        0,
+        1454374173,
+        5200
+      ],
+      "last": [
+        1454374273,
+        0,
+        0,
+        1454374273,
+        5200
+      ]
+    },
+    {
+      "arm": "guest-ram-pin",
+      "warnings": 10,
+      "zero_raw_heartbeat": 10,
+      "nonzero_raw_heartbeat": 0,
+      "unsigned_future_pattern": 0,
+      "first": [
+        1454932205,
+        0,
+        0,
+        1454932205,
+        5200
+      ],
+      "last": [
+        1454932527,
+        0,
+        0,
+        1454932527,
+        5200
+      ]
+    },
+    {
+      "arm": "guest-ring-channel",
+      "warnings": 6,
+      "zero_raw_heartbeat": 6,
+      "nonzero_raw_heartbeat": 0,
+      "unsigned_future_pattern": 0,
+      "first": [
+        1454687124,
+        0,
+        0,
+        1454687124,
+        5200
+      ],
+      "last": [
+        1454687291,
+        0,
+        0,
+        1454687291,
+        5200
+      ]
+    },
+    {
+      "arm": "late-map-race",
+      "warnings": 12,
+      "zero_raw_heartbeat": 12,
+      "nonzero_raw_heartbeat": 0,
+      "unsigned_future_pattern": 0,
+      "first": [
+        1454581642,
+        0,
+        0,
+        1454581642,
+        5200
+      ],
+      "last": [
+        1454582009,
+        0,
+        0,
+        1454582009,
+        5200
+      ]
+    },
+    {
+      "arm": "map-propagation",
+      "warnings": 8,
+      "zero_raw_heartbeat": 8,
+      "nonzero_raw_heartbeat": 0,
+      "unsigned_future_pattern": 0,
+      "first": [
+        1454560649,
+        0,
+        0,
+        1454560649,
+        5200
+      ],
+      "last": [
+        1454560883,
+        0,
+        0,
+        1454560883,
+        5200
+      ]
+    },
+    {
+      "arm": "map-stress",
+      "warnings": 5,
+      "zero_raw_heartbeat": 5,
+      "nonzero_raw_heartbeat": 0,
+      "unsigned_future_pattern": 0,
+      "first": [
+        1455054412,
+        0,
+        0,
+        1455054412,
+        5200
+      ],
+      "last": [
+        1455054533,
+        0,
+        0,
+        1455054533,
+        5200
+      ]
+    },
+    {
+      "arm": "missing-page-fault",
+      "warnings": 10,
+      "zero_raw_heartbeat": 10,
+      "nonzero_raw_heartbeat": 0,
+      "unsigned_future_pattern": 0,
+      "first": [
+        1454601399,
+        0,
+        0,
+        1454601399,
+        5200
+      ],
+      "last": [
+        1454601689,
+        0,
+        0,
+        1454601689,
+        5200
+      ]
+    },
+    {
+      "arm": "pce-mask-probe",
+      "warnings": 10,
+      "zero_raw_heartbeat": 10,
+      "nonzero_raw_heartbeat": 0,
+      "unsigned_future_pattern": 0,
+      "first": [
+        1454991177,
+        0,
+        0,
+        1454991177,
+        5200
+      ],
+      "last": [
+        1454991462,
+        0,
+        0,
+        1454991462,
+        5200
+      ]
+    },
+    {
+      "arm": "rpc-mixed-allocs",
+      "warnings": 6,
+      "zero_raw_heartbeat": 6,
+      "nonzero_raw_heartbeat": 0,
+      "unsigned_future_pattern": 0,
+      "first": [
+        1455123220,
+        0,
+        0,
+        1455123220,
+        5200
+      ],
+      "last": [
+        1455123404,
+        0,
+        0,
+        1455123404,
+        5200
+      ]
+    },
+    {
+      "arm": "timer",
+      "warnings": 8,
+      "zero_raw_heartbeat": 8,
+      "nonzero_raw_heartbeat": 0,
+      "unsigned_future_pattern": 0,
+      "first": [
+        1454308871,
+        0,
+        0,
+        1454308871,
+        5200
+      ],
+      "last": [
+        1454309087,
+        0,
+        0,
+        1454309087,
+        5200
+      ]
+    },
+    {
+      "arm": "uvm-invalidate",
+      "warnings": 12,
+      "zero_raw_heartbeat": 12,
+      "nonzero_raw_heartbeat": 0,
+      "unsigned_future_pattern": 0,
+      "first": [
+        1454624057,
+        0,
+        0,
+        1454624057,
+        5200
+      ],
+      "last": [
+        1454624460,
+        0,
+        0,
+        1454624460,
+        5200
+      ]
+    },
+    {
+      "arm": "uvm-mean",
+      "warnings": 8,
+      "zero_raw_heartbeat": 8,
+      "nonzero_raw_heartbeat": 0,
+      "unsigned_future_pattern": 0,
+      "first": [
+        1454645527,
+        0,
+        0,
+        1454645527,
+        5200
+      ],
+      "last": [
+        1454645739,
+        0,
+        0,
+        1454645739,
+        5200
+      ]
+    }
+  ],
+  "totals": {
+    "warnings": 251,
+    "zero_raw_heartbeat": 251,
+    "nonzero_raw_heartbeat": 0,
+    "unsigned_future_pattern": 0
+  },
+  "scope": "Complete30rawseriallogs; distinct captures, no before/after duplication. This is an observation, not an epoch-cause proof."
+}

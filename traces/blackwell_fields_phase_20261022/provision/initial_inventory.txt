@@ -1,0 +1,4 @@
+Thu Oct 22 21:12:19 UTC 2026
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/root       175G  8.2G  167G   5% /
+KVM_DISK_PASS

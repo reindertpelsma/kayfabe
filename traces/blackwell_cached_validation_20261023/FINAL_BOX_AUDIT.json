@@ -1,0 +1,41 @@
+{
+  "utc": "2026-10-23T00:02:53.452214+00:00",
+  "own_id": 57285340,
+  "qemu": [],
+  "xid_stop": false,
+  "controller_exit": [
+    "ARM_HARNESS_REFUSAL_STOP run=on_precision rc=22",
+    "SWEEP_PROVISION_EXIT rc=22 2026-10-22T23:59:02+00:00"
+  ],
+  "binding": {
+    "Name": "NVIDIA GeForce RTX 5070",
+    "DriverVersion": "32.0.15.8088",
+    "ConfigManagerErrorCode": 22,
+    "PNPDeviceID": "PCI\\VEN_10DE&DEV_2F04&SUBSYS_53231462&REV_A1\\3&11583659&0&28"
+  },
+  "shutdown_census": {
+    "rereads": 0,
+    "elapsed_seconds": 0.10900237699979698,
+    "verdict": "CLEAN",
+    "pid": 112658,
+    "rule": "owned exit<=60s; initial+3fresh reads5s apart; no new Xid"
+  },
+  "field_arm_exit": [
+    "INIT_OBSERVER_FAILED_BEFORE_ENABLE",
+    "PRE_CLEANUP_START rc=22 2026-10-22T23:58:03+00:00",
+    "ARM_EXIT run=on_precision rc=22 2026-10-22T23:59:02+00:00"
+  ],
+  "enable_file_exists": false,
+  "early_code0_exists": false,
+  "rpc_count": 0,
+  "observer_log": "WINDOWS_INIT_OBSERVER_START on_precision\nTraceback (most recent call last):\n  File \"/root/sweep2/guard/blackwell/init_observer.py\", line 71, in <module>\n    if __name__=='__main__':sys.exit(main())\n  File \"/root/sweep2/guard/blackwell/init_observer.py\", line 67, in main\n    ok=observe(a.phase,a.arm,fetch,ready,record,validate,alive,pause=lambda:time.sleep(1))\n  File \"/root/sweep2/guard/blackwell/init_observer.py\", line 34, in observe\n    text=fetch();row=result(text)\n  File \"/root/sweep2/guard/blackwell/init_observer.py\", line 58, in fetch\n    r=subprocess.run(command,stdin=subprocess.DEVNULL,capture_output=True,text=True,timeout=10)\n  File \"/usr/lib/python3.10/subprocess.py\", line 505, in run\n    stdout, stderr = process.communicate(input, timeout=timeout)\n  File \"/usr/lib/python3.10/subprocess.py\", line 1154, in communicate\n    stdout, stderr = self._communicate(input, endtime, timeout)\n  File \"/usr/lib/python3.10/subprocess.py\", line 2022, in _communicate\n    self._check_timeout(endtime, orig_timeout, stdout, stderr)\n  File \"/usr/lib/python3.10/subprocess.py\", line 1198, in _check_timeout\n    raise TimeoutExpired(\nsubprocess.TimeoutExpired: Command '['timeout', '10', 'bash', 'scripts/bench/windows/win_vm.sh', 'ssh', 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\\\\kf\\\\init_state.ps1']' timed out after 10 seconds\n",
+  "parent_sha256_check": "/workspace/bw-capc-validation/kfwin/disk/bw580_bind.qcow2: OK",
+  "kernel_xids": [
+    "2026-10-22T23:18:24.308571+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=93881, name=kayfabe-rm-ladd, channel 0x00000002, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE2 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-10-22T23:18:27.343318+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=93881, name=kayfabe-rm-ladd, channel 0x00000002, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE3 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-10-22T23:18:30.351236+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=93881, name=kayfabe-rm-ladd, channel 0x00000003, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE2 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-10-22T23:18:33.429242+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=93881, name=kayfabe-rm-ladd, channel 0x00000002, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE2 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-10-22T23:18:37.892280+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=93935, name=kayfabe-rm-ladd, channel 0x00000003, intr 00000000. MMU Fault: ENGINE GR_HOST0 HUBCLIENT_ESC0 faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE"
+  ],
+  "exact_native_accepted_only": true
+}

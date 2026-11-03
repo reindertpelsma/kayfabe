@@ -1,0 +1,88 @@
+{
+  "scope": "CAPC word type only; not the whole PRECOMP region or complete caps page",
+  "native_input_sha256": "6f9d39cff8daf9681d19e2560c919094dbc07ed59616b6a13497ee466efb6287",
+  "native_input_provenance": "retained read-only BAR0 resource0 measurement; no input words copied",
+  "public_header_commit": "b81d58ee0224d1d290bef1c080592b619e184042",
+  "public_header_path": "src/common/sdk/nvidia/inc/class/clca73.h",
+  "public_header_sha256": "3ccf370358ac101e3f1d92320b69dbc51e8581314ce8fa3ddad88fdcb64bc4ed",
+  "derived_product": "8f3a9bb3a5d652b3f536ca015bf95735ec588924",
+  "derived_family_rows_sha256": "4a6d22792c9cf48d29b8a4b82bb6ac05515c969d31a1aab1b49a482f13f0e2d3",
+  "fields": [
+    {
+      "field": "CSC00_PRECISION",
+      "public_bits": "4:0",
+      "windows": "0..7",
+      "native_observed": [
+        14
+      ],
+      "derived_rule": [
+        14
+      ],
+      "differs": false
+    },
+    {
+      "field": "CSC00_UNITY_CLAMP",
+      "public_bits": "5:5",
+      "windows": "0..7",
+      "native_observed": [
+        0
+      ],
+      "derived_rule": [
+        0
+      ],
+      "differs": false
+    },
+    {
+      "field": "CSC0LUT_FVLUT",
+      "public_bits": "13:13",
+      "windows": "0..7",
+      "native_observed": [
+        1
+      ],
+      "derived_rule": [
+        0
+      ],
+      "differs": true
+    },
+    {
+      "field": "CSC0LUT_DIRECT",
+      "public_bits": "15:15",
+      "windows": "0..7",
+      "native_observed": [
+        0
+      ],
+      "derived_rule": [
+        0
+      ],
+      "differs": false
+    },
+    {
+      "field": "CSC01_PRECISION",
+      "public_bits": "20:16",
+      "windows": "0..7",
+      "native_observed": [
+        14
+      ],
+      "derived_rule": [
+        14
+      ],
+      "differs": false
+    },
+    {
+      "field": "CSC01_UNITY_CLAMP",
+      "public_bits": "21:21",
+      "windows": "0..7",
+      "native_observed": [
+        0
+      ],
+      "derived_rule": [
+        0
+      ],
+      "differs": false
+    }
+  ],
+  "all_named_fields_covered": true,
+  "unassigned_bits_nonzero": false,
+  "windows_8_through_31": "all six fields zero on native input; inactive virtual words zero",
+  "causality": "onlyFVLUT remains as current CAPC field delta, but earlier baseline contaminated; necessity/sufficiency unproved"
+}

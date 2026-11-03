@@ -1,0 +1,37 @@
+{
+  "targets": [
+    {
+      "target": "cudart_gate_ad104_oracle",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "source": "7e9145ff8d5ea8a238e34064b7636024ed0d62c8"
+    },
+    {
+      "target": "host_facts_ga106",
+      "passed": 13,
+      "failed": 0,
+      "ignored": 0,
+      "source": "7e9145ff8d5ea8a238e34064b7636024ed0d62c8"
+    },
+    {
+      "target": "host_facts_query_ga106",
+      "passed": 28,
+      "failed": 0,
+      "ignored": 0,
+      "source": "7e9145ff8d5ea8a238e34064b7636024ed0d62c8"
+    },
+    {
+      "target": "consttab_scope",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "source": "7e9145ff8d5ea8a238e34064b7636024ed0d62c8"
+    }
+  ],
+  "unit_consttab_passes": 10,
+  "strict_native_page_equal": false,
+  "strict_native_differing_words": 100,
+  "strict_source": "7fb36324ab42a7c27d65aae4cc5aadcf6225ff20",
+  "host_used": false
+}

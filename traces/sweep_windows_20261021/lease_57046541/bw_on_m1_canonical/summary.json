@@ -1,0 +1,111 @@
+{
+ "log_sha256": "c2035e17e2fe1a137059cd0a0543c28c6531b829c1aa1390d538c26dcc997b3d",
+ "rpcs": 278,
+ "unload_ordinals": [],
+ "teardown_start_ordinal": null,
+ "last_nonfree_before_teardown": [],
+ "policy_nonok": [
+  [
+   109,
+   "76",
+   "RmControl",
+   "0",
+   "0x20809064",
+   "0x56"
+  ],
+  [
+   150,
+   "103",
+   "RmAlloc",
+   "0",
+   "0xcbcb",
+   "0x56"
+  ]
+ ],
+ "alloc_posted_nonzero_body_status": [
+  {
+   "body_status": "0x56",
+   "body_truncated_on_rental": false,
+   "class_from_header": "0x0",
+   "class_selector": "0x0",
+   "declared_params_bytes": 0,
+   "diagnostic_record": 32,
+   "envelope_private_result": "0x56",
+   "envelope_result": "0x56",
+   "function": "0x67",
+   "header_decode": "PUBLIC_FIXED_HEADER",
+   "posted_message_sequence": 151,
+   "posted_payload_bytes": 32,
+   "private_body_exported": false,
+   "saved_bytes_on_rental": 32
+  }
+ ],
+ "cfb0_posted": [],
+ "ca7a_posted": [
+  {
+   "body_status": "0x0",
+   "body_truncated_on_rental": false,
+   "class_from_header": "0xca7a",
+   "class_selector": "0xca7a",
+   "declared_params_bytes": 16,
+   "diagnostic_record": 105,
+   "envelope_private_result": "0x0",
+   "envelope_result": "0x0",
+   "function": "0x67",
+   "header_decode": "PUBLIC_FIXED_HEADER",
+   "posted_message_sequence": 272,
+   "posted_payload_bytes": 48,
+   "private_body_exported": false,
+   "saved_bytes_on_rental": 48
+  },
+  {
+   "body_status": "0x0",
+   "body_truncated_on_rental": false,
+   "class_from_header": "0xca7a",
+   "class_selector": "0xca7a",
+   "declared_params_bytes": 16,
+   "diagnostic_record": 107,
+   "envelope_private_result": "0x0",
+   "envelope_result": "0x0",
+   "function": "0x67",
+   "header_decode": "PUBLIC_FIXED_HEADER",
+   "posted_message_sequence": 274,
+   "posted_payload_bytes": 48,
+   "private_body_exported": false,
+   "saved_bytes_on_rental": 48
+  },
+  {
+   "body_status": "0x0",
+   "body_truncated_on_rental": false,
+   "class_from_header": "0xca7a",
+   "class_selector": "0xca7a",
+   "declared_params_bytes": 16,
+   "diagnostic_record": 109,
+   "envelope_private_result": "0x0",
+   "envelope_result": "0x0",
+   "function": "0x67",
+   "header_decode": "PUBLIC_FIXED_HEADER",
+   "posted_message_sequence": 276,
+   "posted_payload_bytes": 48,
+   "private_body_exported": false,
+   "saved_bytes_on_rental": 48
+  },
+  {
+   "body_status": "0x0",
+   "body_truncated_on_rental": false,
+   "class_from_header": "0xca7a",
+   "class_selector": "0xca7a",
+   "declared_params_bytes": 16,
+   "diagnostic_record": 111,
+   "envelope_private_result": "0x0",
+   "envelope_result": "0x0",
+   "function": "0x67",
+   "header_decode": "PUBLIC_FIXED_HEADER",
+   "posted_message_sequence": 278,
+   "posted_payload_bytes": 48,
+   "private_body_exported": false,
+   "saved_bytes_on_rental": 48
+  }
+ ],
+ "cbcb_posted": []
+}

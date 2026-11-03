@@ -1,0 +1,46 @@
+[
+  {
+    "mutant": "late_registration",
+    "killers": [
+      "edge_probe::tests::completion_between_preparation_and_first_wait_is_observed",
+      "edge_probe::tests::fifo_and_ce_sources_cannot_borrow_each_others_readiness",
+      "edge_probe::tests::one_event_does_not_forge_a_second_positive_observation",
+      "edge_probe::tests::registration_error_is_reported_during_preparation",
+      "edge_probe::tests::successive_completions_keep_the_original_registration"
+    ]
+  },
+  {
+    "mutant": "reregister_before_every_wait",
+    "killers": [
+      "edge_probe::tests::completion_between_preparation_and_first_wait_is_observed",
+      "edge_probe::tests::fifo_and_ce_sources_cannot_borrow_each_others_readiness",
+      "edge_probe::tests::one_event_does_not_forge_a_second_positive_observation",
+      "edge_probe::tests::successive_completions_keep_the_original_registration"
+    ]
+  },
+  {
+    "mutant": "ignore_registration_error",
+    "killers": [
+      "edge_probe::tests::a_failed_registration_never_enters_the_observation_phase",
+      "edge_probe::tests::registration_error_is_reported_during_preparation"
+    ]
+  },
+  {
+    "mutant": "forge_readiness",
+    "killers": [
+      "edge_probe::tests::a_source_without_an_event_stays_not_ready",
+      "edge_probe::tests::ce_observation_keeps_its_existing_300ms_bound",
+      "edge_probe::tests::fifo_and_ce_sources_cannot_borrow_each_others_readiness",
+      "edge_probe::tests::idle_observation_keeps_its_existing_200ms_bound",
+      "edge_probe::tests::one_event_does_not_forge_a_second_positive_observation",
+      "edge_probe::tests::successive_completions_keep_the_original_registration"
+    ]
+  },
+  {
+    "mutant": "extend_observation_timeout",
+    "killers": [
+      "edge_probe::tests::ce_observation_keeps_its_existing_300ms_bound",
+      "edge_probe::tests::idle_observation_keeps_its_existing_200ms_bound"
+    ]
+  }
+]

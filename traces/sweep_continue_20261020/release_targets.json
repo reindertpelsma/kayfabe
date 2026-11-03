@@ -1,0 +1,538 @@
+[
+  {
+    "crate": "kf-abi",
+    "target": "Running unittests src/lib.rs (/workspace/sweep-target2/release/deps/kf_abi-5619445d7555d625)"
+  },
+  {
+    "crate": "kf-abi",
+    "target": "Running tests/capability_policy_550.rs (/workspace/sweep-target2/release/deps/capability_policy_550-dd36f64753f383c8)"
+  },
+  {
+    "crate": "kf-abi",
+    "target": "Running tests/driver_matrix.rs (/workspace/sweep-target2/release/deps/driver_matrix-52b8fb0773841fe5)"
+  },
+  {
+    "crate": "kf-abi",
+    "target": "Running tests/fixed_map_page_size.rs (/workspace/sweep-target2/release/deps/fixed_map_page_size-072519daff47d2e2)"
+  },
+  {
+    "crate": "kf-abi",
+    "target": "Running tests/fn1_negotiation_oracle.rs (/workspace/sweep-target2/release/deps/fn1_negotiation_oracle-f3bd633720760ff2)"
+  },
+  {
+    "crate": "kf-abi",
+    "target": "Running tests/gr_static_info.rs (/workspace/sweep-target2/release/deps/gr_static_info-a1b4bf00ca14e319)"
+  },
+  {
+    "crate": "kf-abi",
+    "target": "Running tests/gvaspace_pdes.rs (/workspace/sweep-target2/release/deps/gvaspace_pdes-cf44ec3a60d09ebd)"
+  },
+  {
+    "crate": "kf-abi",
+    "target": "Running tests/initctrl_census.rs (/workspace/sweep-target2/release/deps/initctrl_census-d03c5ca3af1764a7)"
+  },
+  {
+    "crate": "kf-abi",
+    "target": "Running tests/invariant_classes.rs (/workspace/sweep-target2/release/deps/invariant_classes-cae15d8cdbf82eef)"
+  },
+  {
+    "crate": "kf-abi",
+    "target": "Running tests/mean_wire.rs (/workspace/sweep-target2/release/deps/mean_wire-889e04d6ee9f248e)"
+  },
+  {
+    "crate": "kf-abi",
+    "target": "Running tests/oracle_layout.rs (/workspace/sweep-target2/release/deps/oracle_layout-c68b9721577c87cc)"
+  },
+  {
+    "crate": "kf-abi",
+    "target": "Running tests/real_ga106_bodies.rs (/workspace/sweep-target2/release/deps/real_ga106_bodies-c4b35dc3431cd507)"
+  },
+  {
+    "crate": "kf-abi",
+    "target": "Running tests/truncated_row_reads.rs (/workspace/sweep-target2/release/deps/truncated_row_reads-47e2462813332434)"
+  },
+  {
+    "crate": "kf-chan",
+    "target": "Running unittests src/lib.rs (/workspace/sweep-target2/release/deps/kf_chan-f6cc2223d93f2309)"
+  },
+  {
+    "crate": "kf-chan",
+    "target": "Running tests/channel_formats_vs_ogkm.rs (/workspace/sweep-target2/release/deps/channel_formats_vs_ogkm-82a3b41b31e5c7af)"
+  },
+  {
+    "crate": "kf-chan",
+    "target": "Running tests/dbfast_bench.rs (/workspace/sweep-target2/release/deps/dbfast_bench-6c0a8470f2f71d4b)"
+  },
+  {
+    "crate": "kf-chan",
+    "target": "Running tests/dbfast_exhaust.rs (/workspace/sweep-target2/release/deps/dbfast_exhaust-99610073d5db3613)"
+  },
+  {
+    "crate": "kf-chan",
+    "target": "Running tests/dbfast_kvm.rs (/workspace/sweep-target2/release/deps/dbfast_kvm-f0a8b5a1f79b3344)"
+  },
+  {
+    "crate": "kf-chan",
+    "target": "Running tests/notifiers_vs_ogkm.rs (/workspace/sweep-target2/release/deps/notifiers_vs_ogkm-e67e63356ec30a9c)"
+  },
+  {
+    "crate": "kf-chan",
+    "target": "Running tests/ring.rs (/workspace/sweep-target2/release/deps/ring-cc2263bb66b3fd81)"
+  },
+  {
+    "crate": "kf-chan",
+    "target": "Running tests/tmode.rs (/workspace/sweep-target2/release/deps/tmode-bdc2d57d7c4e0329)"
+  },
+  {
+    "crate": "kf-chan",
+    "target": "Running tests/translated_rewrite.rs (/workspace/sweep-target2/release/deps/translated_rewrite-9981015a2c3469ed)"
+  },
+  {
+    "crate": "kf-chan",
+    "target": "Running tests/user_consumption_model.rs (/workspace/sweep-target2/release/deps/user_consumption_model-4ef398aac07acae9)"
+  },
+  {
+    "crate": "kf-chan",
+    "target": "Running tests/user_gate_rules.rs (/workspace/sweep-target2/release/deps/user_gate_rules-a06175a706a59a56)"
+  },
+  {
+    "crate": "kf-chan",
+    "target": "Running tests/user_lazy_model.rs (/workspace/sweep-target2/release/deps/user_lazy_model-2238cdf3f3075c4c)"
+  },
+  {
+    "crate": "kf-chan",
+    "target": "Running tests/user_lazy_turn.rs (/workspace/sweep-target2/release/deps/user_lazy_turn-1163226883d83775)"
+  },
+  {
+    "crate": "kf-chan",
+    "target": "Running tests/user_lifecycle_model.rs (/workspace/sweep-target2/release/deps/user_lifecycle_model-f94d8315736e0d2a)"
+  },
+  {
+    "crate": "kf-chan",
+    "target": "Running tests/user_lifecycle_props.rs (/workspace/sweep-target2/release/deps/user_lifecycle_props-0a61ce9804dc9f68)"
+  },
+  {
+    "crate": "kf-chan",
+    "target": "Running tests/user_lifecycle_stress.rs (/workspace/sweep-target2/release/deps/user_lifecycle_stress-a22e3fa825a9e7f7)"
+  },
+  {
+    "crate": "kf-chan",
+    "target": "Running tests/user_loop_model.rs (/workspace/sweep-target2/release/deps/user_loop_model-94bc4abc81a6a04d)"
+  },
+  {
+    "crate": "kf-chan",
+    "target": "Running tests/user_progress_model.rs (/workspace/sweep-target2/release/deps/user_progress_model-b389ed3206f87bd0)"
+  },
+  {
+    "crate": "kf-chan",
+    "target": "Running tests/user_ring_model.rs (/workspace/sweep-target2/release/deps/user_ring_model-a7febc8b8c69c227)"
+  },
+  {
+    "crate": "kf-chan",
+    "target": "Running tests/user_stream_model.rs (/workspace/sweep-target2/release/deps/user_stream_model-e21836a68ebca563)"
+  },
+  {
+    "crate": "kf-chan",
+    "target": "Running tests/user_turn_unit.rs (/workspace/sweep-target2/release/deps/user_turn_unit-39c7701894dec1d6)"
+  },
+  {
+    "crate": "kf-chip",
+    "target": "Running unittests src/lib.rs (/workspace/sweep-target2/release/deps/kf_chip-442c9fa1346fd0e1)"
+  },
+  {
+    "crate": "kf-chip",
+    "target": "Running tests/answer_on_store.rs (/workspace/sweep-target2/release/deps/answer_on_store-e2fd3e5a017d801d)"
+  },
+  {
+    "crate": "kf-chip",
+    "target": "Running tests/bar0_boot_regs.rs (/workspace/sweep-target2/release/deps/bar0_boot_regs-00c32df81e278ffd)"
+  },
+  {
+    "crate": "kf-chip",
+    "target": "Running tests/boot_sequence_read_gate.rs (/workspace/sweep-target2/release/deps/boot_sequence_read_gate-c1729534724608ff)"
+  },
+  {
+    "crate": "kf-chip",
+    "target": "Running tests/console_region.rs (/workspace/sweep-target2/release/deps/console_region-56c8c83132a7d13d)"
+  },
+  {
+    "crate": "kf-chip",
+    "target": "Running tests/falcon_gsp_fb_size.rs (/workspace/sweep-target2/release/deps/falcon_gsp_fb_size-bb67459976cc5802)"
+  },
+  {
+    "crate": "kf-chip",
+    "target": "Running tests/family_from_arch.rs (/workspace/sweep-target2/release/deps/family_from_arch-de0ac0e670f2bc53)"
+  },
+  {
+    "crate": "kf-chip",
+    "target": "Running tests/fsp_cot_sequence.rs (/workspace/sweep-target2/release/deps/fsp_cot_sequence-45f0170baaf45df6)"
+  },
+  {
+    "crate": "kf-chip",
+    "target": "Running tests/fsp_model_selection.rs (/workspace/sweep-target2/release/deps/fsp_model_selection-9235dfdadd0bd4f2)"
+  },
+  {
+    "crate": "kf-chip",
+    "target": "Running tests/gsp_reset_fsm.rs (/workspace/sweep-target2/release/deps/gsp_reset_fsm-b5f6a6078084481b)"
+  },
+  {
+    "crate": "kf-chip",
+    "target": "Running tests/gsp_teardown.rs (/workspace/sweep-target2/release/deps/gsp_teardown-dd1eba7e448f3ac3)"
+  },
+  {
+    "crate": "kf-chip",
+    "target": "Running tests/hwref_is_current.rs (/workspace/sweep-target2/release/deps/hwref_is_current-c4d3efa2391867fc)"
+  },
+  {
+    "crate": "kf-chip",
+    "target": "Running tests/riscv_bcr_ctrl.rs (/workspace/sweep-target2/release/deps/riscv_bcr_ctrl-3c8d9a38de75caad)"
+  },
+  {
+    "crate": "kf-chip",
+    "target": "Running tests/usable_heap.rs (/workspace/sweep-target2/release/deps/usable_heap-5612f8dbb9597b62)"
+  },
+  {
+    "crate": "kf-chip",
+    "target": "Running tests/wpr_end_margin.rs (/workspace/sweep-target2/release/deps/wpr_end_margin-28d4123827b586d6)"
+  },
+  {
+    "crate": "kf-disp",
+    "target": "Running unittests src/lib.rs (/workspace/sweep-target2/release/deps/kf_disp-2166b735185da115)"
+  },
+  {
+    "crate": "kf-disp",
+    "target": "Running tests/abi_5809402.rs (/workspace/sweep-target2/release/deps/abi_5809402-17aa5e1a213176c8)"
+  },
+  {
+    "crate": "kf-disp",
+    "target": "Running tests/bl_pack_kernel.rs (/workspace/sweep-target2/release/deps/bl_pack_kernel-f5c30d8bdec502fa)"
+  },
+  {
+    "crate": "kf-disp",
+    "target": "Running tests/ca73_postcomp_caps.rs (/workspace/sweep-target2/release/deps/ca73_postcomp_caps-6bf6c8b54749da47)"
+  },
+  {
+    "crate": "kf-disp",
+    "target": "Running tests/caps_derive.rs (/workspace/sweep-target2/release/deps/caps_derive-d32d9486929c8ca9)"
+  },
+  {
+    "crate": "kf-disp",
+    "target": "Running tests/compose_kernel.rs (/workspace/sweep-target2/release/deps/compose_kernel-cbedf9e2d47d4daa)"
+  },
+  {
+    "crate": "kf-disp",
+    "target": "Running tests/gb202_caps_word.rs (/workspace/sweep-target2/release/deps/gb202_caps_word-d9c6f8768b7e75e7)"
+  },
+  {
+    "crate": "kf-disp",
+    "target": "Running tests/gb205_caps_word.rs (/workspace/sweep-target2/release/deps/gb205_caps_word-3e46ee122882750d)"
+  },
+  {
+    "crate": "kf-disp",
+    "target": "Running tests/lockstep_threads.rs (/workspace/sweep-target2/release/deps/lockstep_threads-6f18373b6b15b5d7)"
+  },
+  {
+    "crate": "kf-disp",
+    "target": "Running tests/yuv_kernel.rs (/workspace/sweep-target2/release/deps/yuv_kernel-6033c6a10f9de452)"
+  },
+  {
+    "crate": "kf-qemu",
+    "target": "Running unittests src/lib.rs (/workspace/sweep-target2/release/deps/kf_qemu-377a752895ad55b0)"
+  },
+  {
+    "crate": "kf-qemu",
+    "target": "Running tests/bar0_trace_gate.rs (/workspace/sweep-target2/release/deps/bar0_trace_gate-e3d471b4661a0e40)"
+  },
+  {
+    "crate": "kf-qemu",
+    "target": "Running tests/channel_budget_lazy.rs (/workspace/sweep-target2/release/deps/channel_budget_lazy-ec5fa56db5cc9893)"
+  },
+  {
+    "crate": "kf-qemu",
+    "target": "Running tests/doorbell_no_put_poll.rs (/workspace/sweep-target2/release/deps/doorbell_no_put_poll-5f86002b9ff83782)"
+  },
+  {
+    "crate": "kf-qemu",
+    "target": "Running tests/gop_rom_knobs.rs (/workspace/sweep-target2/release/deps/gop_rom_knobs-57bcaeeaf6355467)"
+  },
+  {
+    "crate": "kf-qemu",
+    "target": "Running tests/gpu_uuid_property.rs (/workspace/sweep-target2/release/deps/gpu_uuid_property-1e0ed5ffe30b65e0)"
+  },
+  {
+    "crate": "kf-qemu",
+    "target": "Running tests/kf3_realize_discard.rs (/workspace/sweep-target2/release/deps/kf3_realize_discard-fcc50f41c20ae44e)"
+  },
+  {
+    "crate": "kf-qemu",
+    "target": "Running tests/max_fps_property.rs (/workspace/sweep-target2/release/deps/max_fps_property-afaee3d4601929b8)"
+  },
+  {
+    "crate": "kf-qemu",
+    "target": "Running tests/wire_mirror.rs (/workspace/sweep-target2/release/deps/wire_mirror-57e3b715fa58248a)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running unittests src/lib.rs (/workspace/sweep-target2/release/deps/kf_rm-805d365c3aa5fca9)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/bus_get_c2c_info.rs (/workspace/sweep-target2/release/deps/bus_get_c2c_info-7f0600a7b09505e7)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/bus_get_info_v2.rs (/workspace/sweep-target2/release/deps/bus_get_info_v2-885fbee69d69c848)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/bus_get_pcie_supported_gpu_atomics.rs (/workspace/sweep-target2/release/deps/bus_get_pcie_supported_gpu_atomics-de62b693987da63d)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/carried_controls.rs (/workspace/sweep-target2/release/deps/carried_controls-c752d5b9dc76cc99)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/ce_fault_method_buffer_size.rs (/workspace/sweep-target2/release/deps/ce_fault_method_buffer_size-edc1bf18d07861a3)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/ce_get_all_physical_caps.rs (/workspace/sweep-target2/release/deps/ce_get_all_physical_caps-8f425d026901769d)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/chip_info.rs (/workspace/sweep-target2/release/deps/chip_info-8b412edadf8bbe27)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/cmc_log_probe.rs (/workspace/sweep-target2/release/deps/cmc_log_probe-54de4dfbd33a3636)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/code43_startdevice_batch.rs (/workspace/sweep-target2/release/deps/code43_startdevice_batch-d7ae054ba2b8166c)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/console_region.rs (/workspace/sweep-target2/release/deps/console_region-d75127f2d3e586da)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/constructed_falcon_info.rs (/workspace/sweep-target2/release/deps/constructed_falcon_info-22f943d45219c5f0)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/consttab_scope.rs (/workspace/sweep-target2/release/deps/consttab_scope-f94bcc8d74fdcf68)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/control_census.rs (/workspace/sweep-target2/release/deps/control_census-0b912031292c555a)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/cudart_clocks.rs (/workspace/sweep-target2/release/deps/cudart_clocks-6d20479562409b4b)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/cudart_gate_ad104_oracle.rs (/workspace/sweep-target2/release/deps/cudart_gate_ad104_oracle-3e10bd929cae9e54)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/cudart_gate_per_die.rs (/workspace/sweep-target2/release/deps/cudart_gate_per_die-8fcef6a510098338)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/deferred_api.rs (/workspace/sweep-target2/release/deps/deferred_api-f93ef8ffa70d8fd2)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/display_seat.rs (/workspace/sweep-target2/release/deps/display_seat-8ae31a7f98a940e8)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/engine_nonstall_notifiers.rs (/workspace/sweep-target2/release/deps/engine_nonstall_notifiers-ad0f26b4dd126e1e)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/event_set_notification.rs (/workspace/sweep-target2/release/deps/event_set_notification-af8122d21d12abab)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/fault_buffer_recorder.rs (/workspace/sweep-target2/release/deps/fault_buffer_recorder-67689d115ced014d)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/fb_get_info_v2.rs (/workspace/sweep-target2/release/deps/fb_get_info_v2-3225432af5707f95)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/fn1_negotiation_oracle.rs (/workspace/sweep-target2/release/deps/fn1_negotiation_oracle-f3a9edc4fe950258)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/gpu_types_wiring.rs (/workspace/sweep-target2/release/deps/gpu_types_wiring-11dcd08eaa5e8ddb)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/gpu_uuid.rs (/workspace/sweep-target2/release/deps/gpu_uuid-20f5713e64ba8f16)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/gr_info.rs (/workspace/sweep-target2/release/deps/gr_info-98ab663ddae36072)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/gr_static_floorswept.rs (/workspace/sweep-target2/release/deps/gr_static_floorswept-81bc1d8298c4d0b6)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/grmgr_get_gr_fs_info.rs (/workspace/sweep-target2/release/deps/grmgr_get_gr_fs_info-63427071f5f3251b)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/gsp_get_features.rs (/workspace/sweep-target2/release/deps/gsp_get_features-fec6c0c1776e2c39)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/gsp_static_info.rs (/workspace/sweep-target2/release/deps/gsp_static_info-388b3ee3f363c847)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/gss_exact_zero_rows.rs (/workspace/sweep-target2/release/deps/gss_exact_zero_rows-10d84077c7bb54c0)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/gss_legacy_answer.rs (/workspace/sweep-target2/release/deps/gss_legacy_answer-633693d4758e5e61)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/gss_native.rs (/workspace/sweep-target2/release/deps/gss_native-1131aa0b880f7d6e)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/guest_system_info.rs (/workspace/sweep-target2/release/deps/guest_system_info-0c2710a00fc9fb74)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/gvas_publication.rs (/workspace/sweep-target2/release/deps/gvas_publication-7a7ae20936157cd9)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/host_facts_ga106.rs (/workspace/sweep-target2/release/deps/host_facts_ga106-1ea2f5bb863fd4ae)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/host_facts_query_ga106.rs (/workspace/sweep-target2/release/deps/host_facts_query_ga106-8b83c72c0d714d89)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/inert.rs (/workspace/sweep-target2/release/deps/inert-8018080ce1b21773)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/init_tables.rs (/workspace/sweep-target2/release/deps/init_tables-b34f89c662e265cb)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/internal_device_info_table.rs (/workspace/sweep-target2/release/deps/internal_device_info_table-149cc181f9962ce0)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/internal_gpu_get_smc_mode.rs (/workspace/sweep-target2/release/deps/internal_gpu_get_smc_mode-d9b5693776591905)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/l2_invalidate_evict.rs (/workspace/sweep-target2/release/deps/l2_invalidate_evict-42eda0f76cfc9762)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/mc_service_interrupts.rs (/workspace/sweep-target2/release/deps/mc_service_interrupts-e3be555471bbc148)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/memory_list_chain.rs (/workspace/sweep-target2/release/deps/memory_list_chain-ef33b46249ce4b25)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/memsys_static_config.rs (/workspace/sweep-target2/release/deps/memsys_static_config-e1b95e06bbfdc2e7)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/notify_slots_are_reclaimed.rs (/workspace/sweep-target2/release/deps/notify_slots_are_reclaimed-05ed61e96d61b0fa)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/ofa_engine.rs (/workspace/sweep-target2/release/deps/ofa_engine-447e139c272e1425)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/pci_bar_info.rs (/workspace/sweep-target2/release/deps/pci_bar_info-8511d1915122ed77)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/promote_fault_method_buffers.rs (/workspace/sweep-target2/release/deps/promote_fault_method_buffers-36a80fb7d8be8a1e)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/register_fault_buffer.rs (/workspace/sweep-target2/release/deps/register_fault_buffer-6bb8a522e2974c9e)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/reselect_at_fn1.rs (/workspace/sweep-target2/release/deps/reselect_at_fn1-372373ab53fe3a15)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/rmgraph.rs (/workspace/sweep-target2/release/deps/rmgraph-aea46f555ca61a63)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/rmrpc_bridge.rs (/workspace/sweep-target2/release/deps/rmrpc_bridge-7265ee7058f33fc1)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/rowserve_notice_budget.rs (/workspace/sweep-target2/release/deps/rowserve_notice_budget-5ed71058707e7d51)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/rpc_trace_budget.rs (/workspace/sweep-target2/release/deps/rpc_trace_budget-326bb1700d33fe2e)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/sw_runlist_probe_chain.rs (/workspace/sweep-target2/release/deps/sw_runlist_probe_chain-9713f033836ef600)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/sweep_batch_controls.rs (/workspace/sweep-target2/release/deps/sweep_batch_controls-b087513acfbd6a64)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/sweep_triage.rs (/workspace/sweep-target2/release/deps/sweep_triage-e26ed52ac2406272)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/sysmembar.rs (/workspace/sweep-target2/release/deps/sysmembar-5992fdce8d209110)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/unserviced_ledger.rs (/workspace/sweep-target2/release/deps/unserviced_ledger-3a2f88d10bfb24b3)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/user_register_access_map.rs (/workspace/sweep-target2/release/deps/user_register_access_map-6ac10ff806e61fda)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/video_engines.rs (/workspace/sweep-target2/release/deps/video_engines-bd6a657457517d73)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/wanted_table_versions.rs (/workspace/sweep-target2/release/deps/wanted_table_versions-dfb4846f4d8ed651)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/windows_rows_vs_authored.rs (/workspace/sweep-target2/release/deps/windows_rows_vs_authored-21f222642792bb81)"
+  },
+  {
+    "crate": "kf-rm",
+    "target": "Running tests/zbc_defaults_per_die.rs (/workspace/sweep-target2/release/deps/zbc_defaults_per_die-040c1fec829ff171)"
+  }
+]

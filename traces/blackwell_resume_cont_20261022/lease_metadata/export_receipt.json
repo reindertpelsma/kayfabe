@@ -1,0 +1,117 @@
+{
+  "lane.log": {
+    "source_sha256": "b3d642e13a7623b315528e977fdad58415c2a08bb167c07bd3bf420a54053d67",
+    "export_sha256": "8997b6b91e9869341414f6136196ace47e1cc67e69d67520cf2c47eb73983355",
+    "redaction": "GPU UUID removed; trailing whitespace normalized"
+  },
+  "sweep_20261020_provision.log": {
+    "source_sha256": "a559942df6a87d6141c5dde4f31682bb70a1e9e3aa45209fbb96e8c1f5aa549d",
+    "export_sha256": "a559942df6a87d6141c5dde4f31682bb70a1e9e3aa45209fbb96e8c1f5aa549d",
+    "redaction": "GPU UUID removed; trailing whitespace normalized"
+  },
+  "sweep_host_die.log": {
+    "source_sha256": "bbc13bb66d1d556ccdd31baa7c91368c33813dc5d6008ecdceb876462b6c2692",
+    "export_sha256": "bbc13bb66d1d556ccdd31baa7c91368c33813dc5d6008ecdceb876462b6c2692",
+    "redaction": "GPU UUID removed; trailing whitespace normalized"
+  },
+  "sweep_host_preflight.log": {
+    "source_sha256": "dfbfccc013c927d44d891ecab8bf2672cba426261fb0e14ba55fd9e5c205f9ed",
+    "export_sha256": "dfbfccc013c927d44d891ecab8bf2672cba426261fb0e14ba55fd9e5c205f9ed",
+    "redaction": "GPU UUID removed; trailing whitespace normalized"
+  },
+  "sweep_gates.log": {
+    "source_sha256": "d6870bc15f894ab883bcfe8481bce08b093f1f0af5e83f02ba360634e7263525",
+    "export_sha256": "ef87bb21da00bb9e5b8cdd5b84b7c3db7e1deaf0847491c951bb805fb0d48b3e",
+    "redaction": "GPU UUID removed; trailing whitespace normalized"
+  },
+  "sweep_bare595.log": {
+    "source_sha256": "37e49e1024daf29e0fbc50852a24c0e61f0ef15a2997da6d38f083246075c977",
+    "export_sha256": "e191dd0b163d3419ba370b719fcaf60859f4c0cec4c589ae669e716f442e3205",
+    "redaction": "GPU UUID removed; trailing whitespace normalized"
+  },
+  "sweep_cuda_host.log": {
+    "source_sha256": "0163e0b2b3360d18010819152627529357f81a907ffbcae0fcf50c1d9b469515",
+    "export_sha256": "0163e0b2b3360d18010819152627529357f81a907ffbcae0fcf50c1d9b469515",
+    "redaction": "GPU UUID removed; trailing whitespace normalized"
+  },
+  "sweep_native_baseline.log": {
+    "source_sha256": "65ed5a65c2304ddb79f2fbe259b2e1b3deaed304d12c36e126bca3d12e2da804",
+    "export_sha256": "65ed5a65c2304ddb79f2fbe259b2e1b3deaed304d12c36e126bca3d12e2da804",
+    "redaction": "GPU UUID removed; trailing whitespace normalized"
+  },
+  "sweep_native_grtier.log": {
+    "source_sha256": "1146c4e1d6098fbcc54ffd178c4d8f0107528788fcfd092c96e1587072b1ea4e",
+    "export_sha256": "1146c4e1d6098fbcc54ffd178c4d8f0107528788fcfd092c96e1587072b1ea4e",
+    "redaction": "GPU UUID removed; trailing whitespace normalized"
+  },
+  "sweep_qemu_sha256": {
+    "source_sha256": "e4fb720fbef77febf1a7a3c8f73c2f9a74bf4e06b4f8c086119a05216587a868",
+    "export_sha256": "e4fb720fbef77febf1a7a3c8f73c2f9a74bf4e06b4f8c086119a05216587a868",
+    "redaction": "GPU UUID removed; trailing whitespace normalized"
+  },
+  "sweep_product_source": {
+    "source_sha256": "9d2a62135348045101d2f7aeb7b90b29592d2b868b212bc20a0dca37d8a4d7cd",
+    "export_sha256": "9d2a62135348045101d2f7aeb7b90b29592d2b868b212bc20a0dca37d8a4d7cd",
+    "redaction": "GPU UUID removed; trailing whitespace normalized"
+  },
+  "on_c0_run.log": {
+    "source_sha256": "9570f48526fd86ff5381b76b10adf42aaa1b4a5bee9486a4b9b073aea5439c98",
+    "export_sha256": "9570f48526fd86ff5381b76b10adf42aaa1b4a5bee9486a4b9b073aea5439c98",
+    "redaction": "GPU UUID removed; trailing whitespace normalized"
+  },
+  "on_c0_probe_lines.json": {
+    "source_sha256": "772a4e0cc04ed0407fe7c5cc139ece1fa1d54768cd38f9c78ffb98841c1af878",
+    "export_sha256": "021bd077243b7748abd7855deb0bba8b658b5cb964d338d0af2d28419523c5d2",
+    "redaction": "GPU UUID removed; trailing whitespace normalized"
+  },
+  "on_c1_run.log": {
+    "source_sha256": "6df4b3961f7fbd53fa9f8397dc6e667409dd054645ad93bd5508a3b4ceb64ed5",
+    "export_sha256": "6df4b3961f7fbd53fa9f8397dc6e667409dd054645ad93bd5508a3b4ceb64ed5",
+    "redaction": "GPU UUID removed; trailing whitespace normalized"
+  },
+  "on_c1_probe_lines.json": {
+    "source_sha256": "2a2b3c07e9aeb34c87c8593c9f59239a8f9ca1d7f2c327de51abe364ff869139",
+    "export_sha256": "d1033bab4c6111260ddc46bab6c19a0fbc258fadaba3c0476b662d43aaa7e58e",
+    "redaction": "GPU UUID removed; trailing whitespace normalized"
+  },
+  "on_c2_run.log": {
+    "source_sha256": "ae1b3b237e1ba66f4ace006fbc8abbcb0ac7abe80c3e4f4e960509d9a09b2647",
+    "export_sha256": "ae1b3b237e1ba66f4ace006fbc8abbcb0ac7abe80c3e4f4e960509d9a09b2647",
+    "redaction": "GPU UUID removed; trailing whitespace normalized"
+  },
+  "on_c2_probe_lines.json": {
+    "source_sha256": "5604b9a820be92b42cc9cfefb34515e1c5328b17e6b44b36a549aee13b147786",
+    "export_sha256": "cf162a4381d9a304ec2d4f32d0099d464f92d8c4f4f2eea02ab457e9792b20ad",
+    "redaction": "GPU UUID removed; trailing whitespace normalized"
+  },
+  "on_c3_run.log": {
+    "source_sha256": "f3989151ea8038600d8717d6765ae43ee61cc0145432b206d0fe8963aa84b913",
+    "export_sha256": "f3989151ea8038600d8717d6765ae43ee61cc0145432b206d0fe8963aa84b913",
+    "redaction": "GPU UUID removed; trailing whitespace normalized"
+  },
+  "on_c3_probe_lines.json": {
+    "source_sha256": "cfcd2572bf77aa945ab4f7d046e8bbacb6544239d304721a96d9086edf1c31b2",
+    "export_sha256": "0e42adce6ff0c3a3fd90644e2279cdd42f52e66e8b70aed3326492b3d1fda31a",
+    "redaction": "GPU UUID removed; trailing whitespace normalized"
+  },
+  "off_c_run.log": {
+    "source_sha256": "b5d5e6edde8d9d2106e92ca226c2ecc04224e94c28b639e60fa27447f0ca284e",
+    "export_sha256": "b5d5e6edde8d9d2106e92ca226c2ecc04224e94c28b639e60fa27447f0ca284e",
+    "redaction": "GPU UUID removed; trailing whitespace normalized"
+  },
+  "off_c_probe_lines.json": {
+    "source_sha256": "01e51b8b9582383fb5b2e2355a371918e27b5c20a8fb4f35141cf0edb65b3af2",
+    "export_sha256": "5a24e567065e0426706769723b067fc7e7aa04c1f356133bdd22aa69958e4501",
+    "redaction": "GPU UUID removed; trailing whitespace normalized"
+  },
+  "page_change_receipt.json": {
+    "source_sha256": null,
+    "export_sha256": "65577499c0d7e44b3aab3a2d4bdd518c5a6d86e9355d80643688ff7ed8ec1487",
+    "redaction": "GPU UUID removed; trailing whitespace normalized"
+  },
+  "cleanup_before_destroy.json": {
+    "source_sha256": null,
+    "export_sha256": "1c3bff341d80b964a48e62ed6f95f96db14b14f44424c6f83c4fbe26c46fd027",
+    "redaction": "GPU UUID removed; trailing whitespace normalized"
+  }
+}

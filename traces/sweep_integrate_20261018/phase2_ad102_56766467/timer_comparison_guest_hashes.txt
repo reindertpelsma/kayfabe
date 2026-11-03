@@ -1,0 +1,2 @@
+cc849876f5d396be95e2ad9592e1e8f9cb31e4f58d1ee0eaab8d0d794f1136bb  /workspace/bench/fastguest595/initrd.cpio.gz
+83e65926d2372894688b118fc04ae0cb279aa7f5a616a76c26254e2d032c28d4  /workspace/bench/fastguest595/vmlinuz

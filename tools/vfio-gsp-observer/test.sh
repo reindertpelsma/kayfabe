@@ -9,5 +9,7 @@ for compiler in cc clang; do
         -fno-sanitize-recover=all -Icore core/queue.c core/observer.c tests/core_test.c \
         -o "$observer_test_build/core-test"
     "$observer_test_build/core-test"
+    "$observer_test_build/core-test" --fmc-coherent
+    "$observer_test_build/core-test" --fmc-noncoherent
 done
 python3 tests/test_decode.py

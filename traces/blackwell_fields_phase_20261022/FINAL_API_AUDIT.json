@@ -1,0 +1,27 @@
+{
+  "utc": "2026-10-22T21:40:11.447832+00:00",
+  "owned_ids": [
+    57099244,
+    57107585,
+    57108853,
+    57117614,
+    57132969,
+    57142142,
+    57143789,
+    57148807,
+    57273215
+  ],
+  "owned_live_ids": [],
+  "phase_created_ids": [
+    57273215
+  ],
+  "phase_destroyed_ids": [
+    57273215
+  ],
+  "runtime_cost_estimate_usd": 0.21540339523870372,
+  "account_credit_observed_usd": 37.13898210206105,
+  "reserve_usd": 5,
+  "absence_verified_utc": "2026-10-22T21:34:29.366086+00:00",
+  "timers_cancelled_only_after_absence": true,
+  "foreign_instances": "not acted on or exported"
+}

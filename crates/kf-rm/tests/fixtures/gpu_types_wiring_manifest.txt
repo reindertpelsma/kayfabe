@@ -1,0 +1,8 @@
+| `rm.0x20800a59` | serve, authored fallback | GMMU static info. Hit (GA106 570..610, GA104 595): the measured sizes, validated by the encoder. Miss: the AUTHORED sizes (`authored::GMMU_STATIC`, matrix says AUTHORED), served with a counted `W349AUTHORED` notice naming key, die and branch. No AD104 row is published (owner decision D-1, below), so on AD104 the authored value is served exactly as before. |
+| `rm.0x20802a08` | serve, authored fallback | CE fault-method buffer size, same rule. |
+| `rm.0x20802806` | serve, refuse on a miss | Group P scalar (`{3}` -> `{0}`). Hit: served for exactly the measured request. Miss: falls through UNCHANGED to the refusal it got before; counted `W349REFUSE`. **New behaviour on GA106/GA104 only, never run under a Windows guest.** |
+| `rm.0x20802801` | serve, refuse on a miss | Group P scalar (`{3}` -> `{2}`), same rule. |
+| `rm.0x2080121f` | withheld | GFX_POOL_QUERY_SIZE. Rows exist (GA106, GA104 differ: the pool is die-sized) but `kf_abi::gfxpool` states the pool is a VIRTUAL design with no captured per-die sizes and host preemption storage stays host-owned: serving the Windows GSP's numbers is an owner decision. Counted `W349WITHHELD`; behaviour unchanged (refused). |
+| `rm.0x50700709` | withheld | NV5070 caps table (display object). Semantics unread, display-state dependent. Counted, unchanged. |
+BOARD-SPECIFIC: `cudart.0x20809001 AD104`, `cudart.0x2080a001 AD104`, `gss.0x20808162 GA102`
+ZBC-MEASURED: AD102 AD103 AD104 AD106 GA102 GA104 GA106 GB202 GB203 GB206 TU102 TU106 TU116

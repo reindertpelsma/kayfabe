@@ -1,0 +1,5 @@
+STATUS: ANSWERED, 2026-10-22. Startup for own57285340, verified5070 offer54571906, expectedGB205; actual die is still pending the own-host probe.
+
+MEASURED API and pinned console on 2026-10-22, lease57285340: initial readiness refused because the scanned host key was not yet in the authenticated console. Read-only re-query at22:51:23UTC found the exact same ED25519 key in that console; unchanged guard then passed22:52:00UTC. No TOFU, host-key-check bypass or guest/GPU activity occurred before that pass. See provision/pin_publication.json for key fingerprint, console hash and external publication evidence.
+
+MEASURED at 2026-10-22 22:52:03UTC, lease57285340: KVM present, root175GB/167GBfree, actualall-in0.462USD/h. Original four official media are uploading into a separate cache before controller launch; remote hash/size verification and unmodified fetch re-verification remain mandatory. Timer deadline01:39:21UTC, priorphase0.443617432USD and5USD credit reserve unchanged. No Windows or native GPU result yet.

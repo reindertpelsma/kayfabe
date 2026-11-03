@@ -1,0 +1,2226 @@
+{
+  "classification": "MEASURED public projections, semantic alignment INFERRED; die-dependent differences not defects by themselves",
+  "source_abi": "580.65.06",
+  "Ada_total_records": 74,
+  "GB202_final_records": 44,
+  "late_GB202_timing_limit": "Final Windows display traffic acquired during cleanup; no confirmed StartDevice failure position/Code43",
+  "controls": [
+    {
+      "control": "0x730101",
+      "Ada_projected": 2,
+      "GB202_projected": 2,
+      "equal_distinct_public_shapes": true,
+      "Ada_shapes": [
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "capsTbl": 3072
+          },
+          "params_size": 2,
+          "public_type": "NV0073_CTRL_SYSTEM_GET_CAPS_V2_PARAMS",
+          "count": 2
+        }
+      ],
+      "GB202_shapes": [
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "capsTbl": 3072
+          },
+          "params_size": 2,
+          "public_type": "NV0073_CTRL_SYSTEM_GET_CAPS_V2_PARAMS",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "control": "0x730102",
+      "Ada_projected": 1,
+      "GB202_projected": 1,
+      "equal_distinct_public_shapes": true,
+      "Ada_shapes": [
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "flags": 0,
+            "numHeads": 4,
+            "subDeviceInstance": 0
+          },
+          "params_size": 12,
+          "public_type": "NV0073_CTRL_SYSTEM_GET_NUM_HEADS_PARAMS",
+          "count": 1
+        }
+      ],
+      "GB202_shapes": [
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "flags": 0,
+            "numHeads": 4,
+            "subDeviceInstance": 0
+          },
+          "params_size": 12,
+          "public_type": "NV0073_CTRL_SYSTEM_GET_NUM_HEADS_PARAMS",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "control": "0x730107",
+      "Ada_projected": 1,
+      "GB202_projected": 1,
+      "equal_distinct_public_shapes": true,
+      "Ada_shapes": [
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "displayMask": 256,
+            "displayMaskDDC": 256,
+            "subDeviceInstance": 0
+          },
+          "params_size": 12,
+          "public_type": "NV0073_CTRL_SYSTEM_GET_SUPPORTED_PARAMS",
+          "count": 1
+        }
+      ],
+      "GB202_shapes": [
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "displayMask": 256,
+            "displayMaskDDC": 256,
+            "subDeviceInstance": 0
+          },
+          "params_size": 12,
+          "public_type": "NV0073_CTRL_SYSTEM_GET_SUPPORTED_PARAMS",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "control": "0x730108",
+      "Ada_projected": 3,
+      "GB202_projected": 2,
+      "equal_distinct_public_shapes": true,
+      "Ada_shapes": [
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "displayMask": 256,
+            "flags": 0,
+            "retryTimeMs": 0,
+            "subDeviceInstance": 0
+          },
+          "params_size": 16,
+          "public_type": "NV0073_CTRL_SYSTEM_GET_CONNECT_STATE_PARAMS",
+          "count": 3
+        }
+      ],
+      "GB202_shapes": [
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "displayMask": 256,
+            "flags": 0,
+            "retryTimeMs": 0,
+            "subDeviceInstance": 0
+          },
+          "params_size": 16,
+          "public_type": "NV0073_CTRL_SYSTEM_GET_CONNECT_STATE_PARAMS",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "control": "0x730109",
+      "Ada_projected": 0,
+      "GB202_projected": 0,
+      "equal_distinct_public_shapes": null,
+      "Ada_shapes": [],
+      "GB202_shapes": [],
+      "comparison_limit": "No projected fields on one/both sides; presence difference or omitted schema, not body equality"
+    },
+    {
+      "control": "0x73010a",
+      "Ada_projected": 1,
+      "GB202_projected": 0,
+      "equal_distinct_public_shapes": null,
+      "Ada_shapes": [
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "flags": 0,
+            "hotplugAfterEdidMask": 256,
+            "subDeviceInstance": 0
+          },
+          "params_size": 12,
+          "public_type": "NV0073_CTRL_SYSTEM_GET_HOTPLUG_STATE_PARAMS",
+          "count": 1
+        }
+      ],
+      "GB202_shapes": [],
+      "comparison_limit": "No projected fields on one/both sides; presence difference or omitted schema, not body equality"
+    },
+    {
+      "control": "0x73010b",
+      "Ada_projected": 4,
+      "GB202_projected": 0,
+      "equal_distinct_public_shapes": null,
+      "Ada_shapes": [
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "displayMask": 256,
+            "headRoutingMap": 0,
+            "oldDisplayMask": 256,
+            "oldHeadRoutingMap": 0,
+            "subDeviceInstance": 0
+          },
+          "params_size": 20,
+          "public_type": "NV0073_CTRL_SYSTEM_GET_HEAD_ROUTING_MAP_PARAMS",
+          "count": 1
+        },
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "displayMask": 256,
+            "headRoutingMap": 1,
+            "oldDisplayMask": 256,
+            "oldHeadRoutingMap": 1,
+            "subDeviceInstance": 0
+          },
+          "params_size": 20,
+          "public_type": "NV0073_CTRL_SYSTEM_GET_HEAD_ROUTING_MAP_PARAMS",
+          "count": 1
+        },
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "displayMask": 256,
+            "headRoutingMap": 2,
+            "oldDisplayMask": 256,
+            "oldHeadRoutingMap": 2,
+            "subDeviceInstance": 0
+          },
+          "params_size": 20,
+          "public_type": "NV0073_CTRL_SYSTEM_GET_HEAD_ROUTING_MAP_PARAMS",
+          "count": 1
+        },
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "displayMask": 256,
+            "headRoutingMap": 3,
+            "oldDisplayMask": 256,
+            "oldHeadRoutingMap": 3,
+            "subDeviceInstance": 0
+          },
+          "params_size": 20,
+          "public_type": "NV0073_CTRL_SYSTEM_GET_HEAD_ROUTING_MAP_PARAMS",
+          "count": 1
+        }
+      ],
+      "GB202_shapes": [],
+      "comparison_limit": "No projected fields on one/both sides; presence difference or omitted schema, not body equality"
+    },
+    {
+      "control": "0x73010c",
+      "Ada_projected": 8,
+      "GB202_projected": 0,
+      "equal_distinct_public_shapes": null,
+      "Ada_shapes": [
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "displayId": 0,
+            "flags": 0,
+            "head": 0,
+            "subDeviceInstance": 0
+          },
+          "params_size": 16,
+          "public_type": "NV0073_CTRL_SYSTEM_GET_ACTIVE_PARAMS",
+          "count": 2
+        },
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "displayId": 0,
+            "flags": 0,
+            "head": 1,
+            "subDeviceInstance": 0
+          },
+          "params_size": 16,
+          "public_type": "NV0073_CTRL_SYSTEM_GET_ACTIVE_PARAMS",
+          "count": 2
+        },
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "displayId": 0,
+            "flags": 0,
+            "head": 2,
+            "subDeviceInstance": 0
+          },
+          "params_size": 16,
+          "public_type": "NV0073_CTRL_SYSTEM_GET_ACTIVE_PARAMS",
+          "count": 2
+        },
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "displayId": 0,
+            "flags": 0,
+            "head": 3,
+            "subDeviceInstance": 0
+          },
+          "params_size": 16,
+          "public_type": "NV0073_CTRL_SYSTEM_GET_ACTIVE_PARAMS",
+          "count": 2
+        }
+      ],
+      "GB202_shapes": [],
+      "comparison_limit": "No projected fields on one/both sides; presence difference or omitted schema, not body equality"
+    },
+    {
+      "control": "0x730116",
+      "Ada_projected": 1,
+      "GB202_projected": 1,
+      "equal_distinct_public_shapes": true,
+      "Ada_shapes": [
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "availableInternalDisplaysMask": 0,
+            "internalDisplaysMask": 0,
+            "subDeviceInstance": 0
+          },
+          "params_size": 12,
+          "public_type": "NV0073_CTRL_SYSTEM_GET_INTERNAL_DISPLAYS_PARAMS",
+          "count": 1
+        }
+      ],
+      "GB202_shapes": [
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "availableInternalDisplaysMask": 0,
+            "internalDisplaysMask": 0,
+            "subDeviceInstance": 0
+          },
+          "params_size": 12,
+          "public_type": "NV0073_CTRL_SYSTEM_GET_INTERNAL_DISPLAYS_PARAMS",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "control": "0x73012c",
+      "Ada_projected": 3,
+      "GB202_projected": 1,
+      "equal_distinct_public_shapes": true,
+      "Ada_shapes": [
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "bAddition": 0,
+            "displayId": 256,
+            "subDeviceInstance": 0
+          },
+          "params_size": 12,
+          "public_type": "NV0073_CTRL_SYSTEM_VRR_DISPLAY_INFO_PARAMS",
+          "count": 3
+        }
+      ],
+      "GB202_shapes": [
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "bAddition": 0,
+            "displayId": 256,
+            "subDeviceInstance": 0
+          },
+          "params_size": 12,
+          "public_type": "NV0073_CTRL_SYSTEM_VRR_DISPLAY_INFO_PARAMS",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "control": "0x73013d",
+      "Ada_projected": 1,
+      "GB202_projected": 1,
+      "equal_distinct_public_shapes": true,
+      "Ada_shapes": [
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "muxDisplayMask": 0,
+            "subDeviceInstance": 0
+          },
+          "params_size": 8,
+          "public_type": "NV0073_CTRL_CMD_SYSTEM_QUERY_DISPLAY_IDS_WITH_MUX_PARAMS",
+          "count": 1
+        }
+      ],
+      "GB202_shapes": [
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "muxDisplayMask": 0,
+            "subDeviceInstance": 0
+          },
+          "params_size": 8,
+          "public_type": "NV0073_CTRL_CMD_SYSTEM_QUERY_DISPLAY_IDS_WITH_MUX_PARAMS",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "control": "0x73014b",
+      "Ada_projected": 1,
+      "GB202_projected": 1,
+      "equal_distinct_public_shapes": true,
+      "Ada_shapes": [
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "bIsSidebandI2cSupported": 0,
+            "subDeviceInstance": 0
+          },
+          "params_size": 8,
+          "public_type": "NV0073_CTRL_CMD_SYSTEM_CHECK_SIDEBAND_I2C_SUPPORT_PARAMS",
+          "count": 1
+        }
+      ],
+      "GB202_shapes": [
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "bIsSidebandI2cSupported": 0,
+            "subDeviceInstance": 0
+          },
+          "params_size": 8,
+          "public_type": "NV0073_CTRL_CMD_SYSTEM_CHECK_SIDEBAND_I2C_SUPPORT_PARAMS",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "control": "0x730151",
+      "Ada_projected": 1,
+      "GB202_projected": 2,
+      "equal_distinct_public_shapes": false,
+      "Ada_shapes": [
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "bMap": 1,
+            "subDeviceInstance": 0
+          },
+          "params_size": 40,
+          "public_type": "NV0073_CTRL_CMD_SYSTEM_MAP_SHARED_DATA_PARAMS",
+          "count": 1
+        }
+      ],
+      "GB202_shapes": [
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "bMap": 1,
+            "subDeviceInstance": 0
+          },
+          "params_size": 40,
+          "public_type": "NV0073_CTRL_CMD_SYSTEM_MAP_SHARED_DATA_PARAMS",
+          "count": 1
+        },
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "bMap": 0,
+            "subDeviceInstance": 0
+          },
+          "params_size": 40,
+          "public_type": "NV0073_CTRL_CMD_SYSTEM_MAP_SHARED_DATA_PARAMS",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "control": "0x730240",
+      "Ada_projected": 1,
+      "GB202_projected": 1,
+      "equal_distinct_public_shapes": true,
+      "Ada_shapes": [
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "displayId": 256,
+            "displayType": 2,
+            "subDeviceInstance": 0
+          },
+          "params_size": 12,
+          "public_type": "NV0073_CTRL_SPECIFIC_GET_TYPE_PARAMS",
+          "count": 1
+        }
+      ],
+      "GB202_shapes": [
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "displayId": 256,
+            "displayType": 2,
+            "subDeviceInstance": 0
+          },
+          "params_size": 12,
+          "public_type": "NV0073_CTRL_SPECIFIC_GET_TYPE_PARAMS",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "control": "0x730245",
+      "Ada_projected": 8,
+      "GB202_projected": 1,
+      "equal_distinct_public_shapes": true,
+      "Ada_shapes": [
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "bufferSize": 128,
+            "displayId": 256,
+            "edidBuffer": {
+              "public_edid_hex": "00ffffffffffff002cc201000100000027240104a119197806ee91a3544c99260f50542108008180a9c0b30001010101010101010101023a801871382d40582c4500fc1d1100001e000000fd00184b0fa011000a202020202020000000fc006b6179666162650a20202020200000001000000000000000000000000000000083",
+              "unused_tail_omitted": 1920
+            },
+            "flags": 0,
+            "subDeviceInstance": 0
+          },
+          "params_size": 2064,
+          "public_type": "NV0073_CTRL_SPECIFIC_GET_EDID_V2_PARAMS",
+          "count": 8
+        }
+      ],
+      "GB202_shapes": [
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "bufferSize": 128,
+            "displayId": 256,
+            "edidBuffer": {
+              "public_edid_hex": "00ffffffffffff002cc201000100000027240104a119197806ee91a3544c99260f50542108008180a9c0b30001010101010101010101023a801871382d40582c4500fc1d1100001e000000fd00184b0fa011000a202020202020000000fc006b6179666162650a20202020200000001000000000000000000000000000000083",
+              "unused_tail_omitted": 1920
+            },
+            "flags": 0,
+            "subDeviceInstance": 0
+          },
+          "params_size": 2064,
+          "public_type": "NV0073_CTRL_SPECIFIC_GET_EDID_V2_PARAMS",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "control": "0x730250",
+      "Ada_projected": 0,
+      "GB202_projected": 0,
+      "equal_distinct_public_shapes": null,
+      "Ada_shapes": [],
+      "GB202_shapes": [],
+      "comparison_limit": "No projected fields on one/both sides; presence difference or omitted schema, not body equality"
+    },
+    {
+      "control": "0x730287",
+      "Ada_projected": 1,
+      "GB202_projected": 1,
+      "equal_distinct_public_shapes": true,
+      "Ada_shapes": [
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "headMask": 15,
+            "subDeviceInstance": 0
+          },
+          "params_size": 8,
+          "public_type": "NV0073_CTRL_SPECIFIC_GET_ALL_HEAD_MASK_PARAMS",
+          "count": 1
+        }
+      ],
+      "GB202_shapes": [
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "headMask": 15,
+            "subDeviceInstance": 0
+          },
+          "params_size": 8,
+          "public_type": "NV0073_CTRL_SPECIFIC_GET_ALL_HEAD_MASK_PARAMS",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "control": "0x73028a",
+      "Ada_projected": 1,
+      "GB202_projected": 1,
+      "equal_distinct_public_shapes": true,
+      "Ada_shapes": [
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "displayId": 256,
+            "orPclkLimit": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "pclkLimit": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "subDeviceInstance": 0,
+            "vbPclkLimit": {
+              "nonzero": true,
+              "redacted": true
+            }
+          },
+          "params_size": 20,
+          "public_type": "NV0073_CTRL_SPECIFIC_GET_PCLK_LIMIT_PARAMS",
+          "count": 1
+        }
+      ],
+      "GB202_shapes": [
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "displayId": 256,
+            "orPclkLimit": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "pclkLimit": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "subDeviceInstance": 0,
+            "vbPclkLimit": {
+              "nonzero": true,
+              "redacted": true
+            }
+          },
+          "params_size": 20,
+          "public_type": "NV0073_CTRL_SPECIFIC_GET_PCLK_LIMIT_PARAMS",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "control": "0x73028b",
+      "Ada_projected": 4,
+      "GB202_projected": 3,
+      "equal_distinct_public_shapes": true,
+      "Ada_shapes": [
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "bIsDispDynamic": 0,
+            "bIsLitByVbios": 0,
+            "dcbIndex": 0,
+            "displayId": 256,
+            "ditherAlgo": 0,
+            "ditherType": 0,
+            "index": 0,
+            "location": 0,
+            "protocol": 1,
+            "rootPortId": 0,
+            "subDeviceInstance": 0,
+            "type": 2,
+            "vbiosAddress": {
+              "nonzero": false,
+              "redacted": true
+            }
+          },
+          "params_size": 56,
+          "public_type": "NV0073_CTRL_SPECIFIC_OR_GET_INFO_PARAMS",
+          "count": 4
+        }
+      ],
+      "GB202_shapes": [
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "bIsDispDynamic": 0,
+            "bIsLitByVbios": 0,
+            "dcbIndex": 0,
+            "displayId": 256,
+            "ditherAlgo": 0,
+            "ditherType": 0,
+            "index": 0,
+            "location": 0,
+            "protocol": 1,
+            "rootPortId": 0,
+            "subDeviceInstance": 0,
+            "type": 2,
+            "vbiosAddress": {
+              "nonzero": false,
+              "redacted": true
+            }
+          },
+          "params_size": 56,
+          "public_type": "NV0073_CTRL_SPECIFIC_OR_GET_INFO_PARAMS",
+          "count": 3
+        }
+      ]
+    },
+    {
+      "control": "0x7302a4",
+      "Ada_projected": 2,
+      "GB202_projected": 0,
+      "equal_distinct_public_shapes": null,
+      "Ada_shapes": [
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "enable": 1,
+            "newDevices": 256,
+            "properties": 0,
+            "subDeviceInstance": 0
+          },
+          "params_size": 16,
+          "public_type": "NV0073_CTRL_SPECIFIC_DISPLAY_CHANGE_PARAMS",
+          "count": 1
+        },
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "enable": 0,
+            "newDevices": 256,
+            "properties": 0,
+            "subDeviceInstance": 0
+          },
+          "params_size": 16,
+          "public_type": "NV0073_CTRL_SPECIFIC_DISPLAY_CHANGE_PARAMS",
+          "count": 1
+        }
+      ],
+      "GB202_shapes": [],
+      "comparison_limit": "No projected fields on one/both sides; presence difference or omitted schema, not body equality"
+    },
+    {
+      "control": "0x730301",
+      "Ada_projected": 2,
+      "GB202_projected": 0,
+      "equal_distinct_public_shapes": null,
+      "Ada_shapes": [
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "action": 2,
+            "event": 1,
+            "hEvent": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "subDeviceInstance": 0
+          },
+          "params_size": 16,
+          "public_type": "NV0073_CTRL_EVENT_SET_NOTIFICATION_PARAMS",
+          "count": 1
+        },
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "action": 2,
+            "event": 2,
+            "hEvent": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "subDeviceInstance": 0
+          },
+          "params_size": 16,
+          "public_type": "NV0073_CTRL_EVENT_SET_NOTIFICATION_PARAMS",
+          "count": 1
+        }
+      ],
+      "GB202_shapes": [],
+      "comparison_limit": "No projected fields on one/both sides; presence difference or omitted schema, not body equality"
+    },
+    {
+      "control": "0x731140",
+      "Ada_projected": 1,
+      "GB202_projected": 1,
+      "equal_distinct_public_shapes": true,
+      "Ada_shapes": [
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "UHBRSupportedByDfp": 0,
+            "displayId": 256,
+            "flags": 1048576,
+            "subDeviceInstance": 0
+          },
+          "params_size": 16,
+          "public_type": "NV0073_CTRL_DFP_GET_INFO_PARAMS",
+          "count": 1
+        }
+      ],
+      "GB202_shapes": [
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "UHBRSupportedByDfp": 0,
+            "displayId": 256,
+            "flags": 1048576,
+            "subDeviceInstance": 0
+          },
+          "params_size": 16,
+          "public_type": "NV0073_CTRL_DFP_GET_INFO_PARAMS",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "control": "0x731142",
+      "Ada_projected": 1,
+      "GB202_projected": 0,
+      "equal_distinct_public_shapes": null,
+      "Ada_shapes": [
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "displayId": 256,
+            "flags": 0,
+            "maxTmdsClkRateHz": 0,
+            "subDeviceInstance": 0
+          },
+          "params_size": 16,
+          "public_type": "NV0073_CTRL_DFP_GET_DISPLAYPORT_DONGLE_INFO_PARAMS",
+          "count": 1
+        }
+      ],
+      "GB202_shapes": [],
+      "comparison_limit": "No projected fields on one/both sides; presence difference or omitted schema, not body equality"
+    },
+    {
+      "control": "0x731152",
+      "Ada_projected": 1,
+      "GB202_projected": 0,
+      "equal_distinct_public_shapes": null,
+      "Ada_shapes": [
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "bIs2Head1Or": 0,
+            "displayId": 256,
+            "flags": 0,
+            "reservedSorMask": {
+              "nonzero": false,
+              "redacted": true
+            },
+            "slaveDisplayId": 0,
+            "sorAssignList": {
+              "bytes": 16,
+              "omitted": "non-scalar field"
+            },
+            "sorExcludeMask": 0,
+            "subDeviceInstance": 0
+          },
+          "params_size": 80,
+          "public_type": "NV0073_CTRL_DFP_ASSIGN_SOR_PARAMS",
+          "count": 1
+        }
+      ],
+      "GB202_shapes": [],
+      "comparison_limit": "No projected fields on one/both sides; presence difference or omitted schema, not body equality"
+    },
+    {
+      "control": "0x731369",
+      "Ada_projected": 1,
+      "GB202_projected": 1,
+      "equal_distinct_public_shapes": true,
+      "Ada_shapes": [
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "UHBRSupportedByGpu": 0,
+            "bAvoidHBR3": 0,
+            "bFECSupported": 0,
+            "bHasIncreasedWatermarkLimits": {
+              "nonzero": false,
+              "redacted": true
+            },
+            "bIsDpTunnelingHwBugWarEnabled": 0,
+            "bIsMultistreamSupported": 0,
+            "bIsPC2Disabled": 0,
+            "bIsSCEnabled": 0,
+            "bIsTrainPhyRepeater": 0,
+            "bOverrideLinkBw": 0,
+            "bSupportDPDownSpread": 0,
+            "bUseRgFlushSequence": 0,
+            "dpVersionsSupported": 0,
+            "isSingleHeadMSTSupported": 0,
+            "maxLinkRate": 0,
+            "sorIndex": 0,
+            "subDeviceInstance": 0
+          },
+          "params_size": 60,
+          "public_type": "NV0073_CTRL_CMD_DP_GET_CAPS_PARAMS",
+          "count": 1
+        }
+      ],
+      "GB202_shapes": [
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "UHBRSupportedByGpu": 0,
+            "bAvoidHBR3": 0,
+            "bFECSupported": 0,
+            "bHasIncreasedWatermarkLimits": {
+              "nonzero": false,
+              "redacted": true
+            },
+            "bIsDpTunnelingHwBugWarEnabled": 0,
+            "bIsMultistreamSupported": 0,
+            "bIsPC2Disabled": 0,
+            "bIsSCEnabled": 0,
+            "bIsTrainPhyRepeater": 0,
+            "bOverrideLinkBw": 0,
+            "bSupportDPDownSpread": 0,
+            "bUseRgFlushSequence": 0,
+            "dpVersionsSupported": 0,
+            "isSingleHeadMSTSupported": 0,
+            "maxLinkRate": 0,
+            "sorIndex": 0,
+            "subDeviceInstance": 0
+          },
+          "params_size": 60,
+          "public_type": "NV0073_CTRL_CMD_DP_GET_CAPS_PARAMS",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "control": "0x20800a58",
+      "Ada_projected": 21,
+      "GB202_projected": 21,
+      "equal_distinct_public_shapes": false,
+      "Ada_shapes": [
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "addressSpace": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "cacheSnoop": 1,
+            "channelInstance": 0,
+            "channelPBSize": 0,
+            "hclass": 51069,
+            "limit": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "pbTargetAperture": 3,
+            "physicalAddr": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "subDeviceId": 0,
+            "valid": 1
+          },
+          "params_size": 56,
+          "public_type": "NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS",
+          "count": 1
+        },
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "addressSpace": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "cacheSnoop": 1,
+            "channelInstance": 0,
+            "channelPBSize": 0,
+            "hclass": 50814,
+            "limit": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "pbTargetAperture": 3,
+            "physicalAddr": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "subDeviceId": 0,
+            "valid": 1
+          },
+          "params_size": 56,
+          "public_type": "NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS",
+          "count": 1
+        },
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "addressSpace": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "cacheSnoop": 1,
+            "channelInstance": 1,
+            "channelPBSize": 0,
+            "hclass": 50814,
+            "limit": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "pbTargetAperture": 3,
+            "physicalAddr": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "subDeviceId": 0,
+            "valid": 1
+          },
+          "params_size": 56,
+          "public_type": "NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS",
+          "count": 1
+        },
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "addressSpace": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "cacheSnoop": 1,
+            "channelInstance": 2,
+            "channelPBSize": 0,
+            "hclass": 50814,
+            "limit": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "pbTargetAperture": 3,
+            "physicalAddr": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "subDeviceId": 0,
+            "valid": 1
+          },
+          "params_size": 56,
+          "public_type": "NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS",
+          "count": 1
+        },
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "addressSpace": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "cacheSnoop": 1,
+            "channelInstance": 3,
+            "channelPBSize": 0,
+            "hclass": 50814,
+            "limit": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "pbTargetAperture": 3,
+            "physicalAddr": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "subDeviceId": 0,
+            "valid": 1
+          },
+          "params_size": 56,
+          "public_type": "NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS",
+          "count": 1
+        },
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "addressSpace": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "cacheSnoop": 1,
+            "channelInstance": 4,
+            "channelPBSize": 0,
+            "hclass": 50814,
+            "limit": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "pbTargetAperture": 3,
+            "physicalAddr": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "subDeviceId": 0,
+            "valid": 1
+          },
+          "params_size": 56,
+          "public_type": "NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS",
+          "count": 1
+        },
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "addressSpace": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "cacheSnoop": 1,
+            "channelInstance": 5,
+            "channelPBSize": 0,
+            "hclass": 50814,
+            "limit": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "pbTargetAperture": 3,
+            "physicalAddr": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "subDeviceId": 0,
+            "valid": 1
+          },
+          "params_size": 56,
+          "public_type": "NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS",
+          "count": 1
+        },
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "addressSpace": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "cacheSnoop": 1,
+            "channelInstance": 6,
+            "channelPBSize": 0,
+            "hclass": 50814,
+            "limit": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "pbTargetAperture": 3,
+            "physicalAddr": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "subDeviceId": 0,
+            "valid": 1
+          },
+          "params_size": 56,
+          "public_type": "NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS",
+          "count": 1
+        },
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "addressSpace": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "cacheSnoop": 1,
+            "channelInstance": 7,
+            "channelPBSize": 0,
+            "hclass": 50814,
+            "limit": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "pbTargetAperture": 3,
+            "physicalAddr": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "subDeviceId": 0,
+            "valid": 1
+          },
+          "params_size": 56,
+          "public_type": "NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS",
+          "count": 1
+        },
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "addressSpace": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "cacheSnoop": 1,
+            "channelInstance": 0,
+            "channelPBSize": 0,
+            "hclass": 50811,
+            "limit": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "pbTargetAperture": 3,
+            "physicalAddr": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "subDeviceId": 0,
+            "valid": 1
+          },
+          "params_size": 56,
+          "public_type": "NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS",
+          "count": 1
+        },
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "addressSpace": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "cacheSnoop": 1,
+            "channelInstance": 1,
+            "channelPBSize": 0,
+            "hclass": 50811,
+            "limit": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "pbTargetAperture": 3,
+            "physicalAddr": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "subDeviceId": 0,
+            "valid": 1
+          },
+          "params_size": 56,
+          "public_type": "NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS",
+          "count": 1
+        },
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "addressSpace": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "cacheSnoop": 1,
+            "channelInstance": 2,
+            "channelPBSize": 0,
+            "hclass": 50811,
+            "limit": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "pbTargetAperture": 3,
+            "physicalAddr": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "subDeviceId": 0,
+            "valid": 1
+          },
+          "params_size": 56,
+          "public_type": "NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS",
+          "count": 1
+        },
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "addressSpace": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "cacheSnoop": 1,
+            "channelInstance": 3,
+            "channelPBSize": 0,
+            "hclass": 50811,
+            "limit": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "pbTargetAperture": 3,
+            "physicalAddr": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "subDeviceId": 0,
+            "valid": 1
+          },
+          "params_size": 56,
+          "public_type": "NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS",
+          "count": 1
+        },
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "addressSpace": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "cacheSnoop": 1,
+            "channelInstance": 4,
+            "channelPBSize": 0,
+            "hclass": 50811,
+            "limit": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "pbTargetAperture": 3,
+            "physicalAddr": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "subDeviceId": 0,
+            "valid": 1
+          },
+          "params_size": 56,
+          "public_type": "NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS",
+          "count": 1
+        },
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "addressSpace": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "cacheSnoop": 1,
+            "channelInstance": 5,
+            "channelPBSize": 0,
+            "hclass": 50811,
+            "limit": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "pbTargetAperture": 3,
+            "physicalAddr": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "subDeviceId": 0,
+            "valid": 1
+          },
+          "params_size": 56,
+          "public_type": "NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS",
+          "count": 1
+        },
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "addressSpace": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "cacheSnoop": 1,
+            "channelInstance": 6,
+            "channelPBSize": 0,
+            "hclass": 50811,
+            "limit": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "pbTargetAperture": 3,
+            "physicalAddr": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "subDeviceId": 0,
+            "valid": 1
+          },
+          "params_size": 56,
+          "public_type": "NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS",
+          "count": 1
+        },
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "addressSpace": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "cacheSnoop": 1,
+            "channelInstance": 7,
+            "channelPBSize": 0,
+            "hclass": 50811,
+            "limit": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "pbTargetAperture": 3,
+            "physicalAddr": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "subDeviceId": 0,
+            "valid": 1
+          },
+          "params_size": 56,
+          "public_type": "NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS",
+          "count": 1
+        },
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "addressSpace": {
+              "nonzero": false,
+              "redacted": true
+            },
+            "cacheSnoop": 0,
+            "channelInstance": 0,
+            "channelPBSize": 0,
+            "hclass": 50810,
+            "limit": {
+              "nonzero": false,
+              "redacted": true
+            },
+            "pbTargetAperture": 0,
+            "physicalAddr": {
+              "nonzero": false,
+              "redacted": true
+            },
+            "subDeviceId": 0,
+            "valid": 0
+          },
+          "params_size": 56,
+          "public_type": "NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS",
+          "count": 1
+        },
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "addressSpace": {
+              "nonzero": false,
+              "redacted": true
+            },
+            "cacheSnoop": 0,
+            "channelInstance": 1,
+            "channelPBSize": 0,
+            "hclass": 50810,
+            "limit": {
+              "nonzero": false,
+              "redacted": true
+            },
+            "pbTargetAperture": 0,
+            "physicalAddr": {
+              "nonzero": false,
+              "redacted": true
+            },
+            "subDeviceId": 0,
+            "valid": 0
+          },
+          "params_size": 56,
+          "public_type": "NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS",
+          "count": 1
+        },
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "addressSpace": {
+              "nonzero": false,
+              "redacted": true
+            },
+            "cacheSnoop": 0,
+            "channelInstance": 2,
+            "channelPBSize": 0,
+            "hclass": 50810,
+            "limit": {
+              "nonzero": false,
+              "redacted": true
+            },
+            "pbTargetAperture": 0,
+            "physicalAddr": {
+              "nonzero": false,
+              "redacted": true
+            },
+            "subDeviceId": 0,
+            "valid": 0
+          },
+          "params_size": 56,
+          "public_type": "NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS",
+          "count": 1
+        },
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "addressSpace": {
+              "nonzero": false,
+              "redacted": true
+            },
+            "cacheSnoop": 0,
+            "channelInstance": 3,
+            "channelPBSize": 0,
+            "hclass": 50810,
+            "limit": {
+              "nonzero": false,
+              "redacted": true
+            },
+            "pbTargetAperture": 0,
+            "physicalAddr": {
+              "nonzero": false,
+              "redacted": true
+            },
+            "subDeviceId": 0,
+            "valid": 0
+          },
+          "params_size": 56,
+          "public_type": "NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS",
+          "count": 1
+        }
+      ],
+      "GB202_shapes": [
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "addressSpace": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "cacheSnoop": 1,
+            "channelInstance": 0,
+            "channelPBSize": 4,
+            "hclass": 51837,
+            "limit": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "pbTargetAperture": 3,
+            "physicalAddr": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "subDeviceId": 0,
+            "valid": 1
+          },
+          "params_size": 56,
+          "public_type": "NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS",
+          "count": 1
+        },
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "addressSpace": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "cacheSnoop": 1,
+            "channelInstance": 0,
+            "channelPBSize": 4,
+            "hclass": 51838,
+            "limit": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "pbTargetAperture": 3,
+            "physicalAddr": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "subDeviceId": 0,
+            "valid": 1
+          },
+          "params_size": 56,
+          "public_type": "NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS",
+          "count": 1
+        },
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "addressSpace": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "cacheSnoop": 1,
+            "channelInstance": 1,
+            "channelPBSize": 4,
+            "hclass": 51838,
+            "limit": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "pbTargetAperture": 3,
+            "physicalAddr": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "subDeviceId": 0,
+            "valid": 1
+          },
+          "params_size": 56,
+          "public_type": "NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS",
+          "count": 1
+        },
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "addressSpace": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "cacheSnoop": 1,
+            "channelInstance": 2,
+            "channelPBSize": 4,
+            "hclass": 51838,
+            "limit": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "pbTargetAperture": 3,
+            "physicalAddr": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "subDeviceId": 0,
+            "valid": 1
+          },
+          "params_size": 56,
+          "public_type": "NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS",
+          "count": 1
+        },
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "addressSpace": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "cacheSnoop": 1,
+            "channelInstance": 3,
+            "channelPBSize": 4,
+            "hclass": 51838,
+            "limit": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "pbTargetAperture": 3,
+            "physicalAddr": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "subDeviceId": 0,
+            "valid": 1
+          },
+          "params_size": 56,
+          "public_type": "NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS",
+          "count": 1
+        },
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "addressSpace": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "cacheSnoop": 1,
+            "channelInstance": 4,
+            "channelPBSize": 4,
+            "hclass": 51838,
+            "limit": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "pbTargetAperture": 3,
+            "physicalAddr": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "subDeviceId": 0,
+            "valid": 1
+          },
+          "params_size": 56,
+          "public_type": "NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS",
+          "count": 1
+        },
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "addressSpace": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "cacheSnoop": 1,
+            "channelInstance": 5,
+            "channelPBSize": 4,
+            "hclass": 51838,
+            "limit": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "pbTargetAperture": 3,
+            "physicalAddr": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "subDeviceId": 0,
+            "valid": 1
+          },
+          "params_size": 56,
+          "public_type": "NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS",
+          "count": 1
+        },
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "addressSpace": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "cacheSnoop": 1,
+            "channelInstance": 6,
+            "channelPBSize": 4,
+            "hclass": 51838,
+            "limit": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "pbTargetAperture": 3,
+            "physicalAddr": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "subDeviceId": 0,
+            "valid": 1
+          },
+          "params_size": 56,
+          "public_type": "NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS",
+          "count": 1
+        },
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "addressSpace": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "cacheSnoop": 1,
+            "channelInstance": 7,
+            "channelPBSize": 4,
+            "hclass": 51838,
+            "limit": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "pbTargetAperture": 3,
+            "physicalAddr": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "subDeviceId": 0,
+            "valid": 1
+          },
+          "params_size": 56,
+          "public_type": "NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS",
+          "count": 1
+        },
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "addressSpace": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "cacheSnoop": 1,
+            "channelInstance": 0,
+            "channelPBSize": 0,
+            "hclass": 51835,
+            "limit": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "pbTargetAperture": 3,
+            "physicalAddr": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "subDeviceId": 0,
+            "valid": 1
+          },
+          "params_size": 56,
+          "public_type": "NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS",
+          "count": 1
+        },
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "addressSpace": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "cacheSnoop": 1,
+            "channelInstance": 1,
+            "channelPBSize": 0,
+            "hclass": 51835,
+            "limit": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "pbTargetAperture": 3,
+            "physicalAddr": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "subDeviceId": 0,
+            "valid": 1
+          },
+          "params_size": 56,
+          "public_type": "NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS",
+          "count": 1
+        },
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "addressSpace": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "cacheSnoop": 1,
+            "channelInstance": 2,
+            "channelPBSize": 0,
+            "hclass": 51835,
+            "limit": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "pbTargetAperture": 3,
+            "physicalAddr": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "subDeviceId": 0,
+            "valid": 1
+          },
+          "params_size": 56,
+          "public_type": "NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS",
+          "count": 1
+        },
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "addressSpace": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "cacheSnoop": 1,
+            "channelInstance": 3,
+            "channelPBSize": 0,
+            "hclass": 51835,
+            "limit": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "pbTargetAperture": 3,
+            "physicalAddr": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "subDeviceId": 0,
+            "valid": 1
+          },
+          "params_size": 56,
+          "public_type": "NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS",
+          "count": 1
+        },
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "addressSpace": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "cacheSnoop": 1,
+            "channelInstance": 4,
+            "channelPBSize": 0,
+            "hclass": 51835,
+            "limit": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "pbTargetAperture": 3,
+            "physicalAddr": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "subDeviceId": 0,
+            "valid": 1
+          },
+          "params_size": 56,
+          "public_type": "NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS",
+          "count": 1
+        },
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "addressSpace": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "cacheSnoop": 1,
+            "channelInstance": 5,
+            "channelPBSize": 0,
+            "hclass": 51835,
+            "limit": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "pbTargetAperture": 3,
+            "physicalAddr": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "subDeviceId": 0,
+            "valid": 1
+          },
+          "params_size": 56,
+          "public_type": "NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS",
+          "count": 1
+        },
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "addressSpace": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "cacheSnoop": 1,
+            "channelInstance": 6,
+            "channelPBSize": 0,
+            "hclass": 51835,
+            "limit": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "pbTargetAperture": 3,
+            "physicalAddr": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "subDeviceId": 0,
+            "valid": 1
+          },
+          "params_size": 56,
+          "public_type": "NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS",
+          "count": 1
+        },
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "addressSpace": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "cacheSnoop": 1,
+            "channelInstance": 7,
+            "channelPBSize": 0,
+            "hclass": 51835,
+            "limit": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "pbTargetAperture": 3,
+            "physicalAddr": {
+              "nonzero": true,
+              "redacted": true
+            },
+            "subDeviceId": 0,
+            "valid": 1
+          },
+          "params_size": 56,
+          "public_type": "NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS",
+          "count": 1
+        },
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "addressSpace": {
+              "nonzero": false,
+              "redacted": true
+            },
+            "cacheSnoop": 0,
+            "channelInstance": 0,
+            "channelPBSize": 0,
+            "hclass": 51834,
+            "limit": {
+              "nonzero": false,
+              "redacted": true
+            },
+            "pbTargetAperture": 0,
+            "physicalAddr": {
+              "nonzero": false,
+              "redacted": true
+            },
+            "subDeviceId": 0,
+            "valid": 0
+          },
+          "params_size": 56,
+          "public_type": "NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS",
+          "count": 1
+        },
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "addressSpace": {
+              "nonzero": false,
+              "redacted": true
+            },
+            "cacheSnoop": 0,
+            "channelInstance": 1,
+            "channelPBSize": 0,
+            "hclass": 51834,
+            "limit": {
+              "nonzero": false,
+              "redacted": true
+            },
+            "pbTargetAperture": 0,
+            "physicalAddr": {
+              "nonzero": false,
+              "redacted": true
+            },
+            "subDeviceId": 0,
+            "valid": 0
+          },
+          "params_size": 56,
+          "public_type": "NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS",
+          "count": 1
+        },
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "addressSpace": {
+              "nonzero": false,
+              "redacted": true
+            },
+            "cacheSnoop": 0,
+            "channelInstance": 2,
+            "channelPBSize": 0,
+            "hclass": 51834,
+            "limit": {
+              "nonzero": false,
+              "redacted": true
+            },
+            "pbTargetAperture": 0,
+            "physicalAddr": {
+              "nonzero": false,
+              "redacted": true
+            },
+            "subDeviceId": 0,
+            "valid": 0
+          },
+          "params_size": 56,
+          "public_type": "NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS",
+          "count": 1
+        },
+        {
+          "body_status": 0,
+          "envelope_private_result": "0x0",
+          "envelope_result": "0x0",
+          "fields": {
+            "addressSpace": {
+              "nonzero": false,
+              "redacted": true
+            },
+            "cacheSnoop": 0,
+            "channelInstance": 3,
+            "channelPBSize": 0,
+            "hclass": 51834,
+            "limit": {
+              "nonzero": false,
+              "redacted": true
+            },
+            "pbTargetAperture": 0,
+            "physicalAddr": {
+              "nonzero": false,
+              "redacted": true
+            },
+            "subDeviceId": 0,
+            "valid": 0
+          },
+          "params_size": 56,
+          "public_type": "NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS",
+          "count": 1
+        }
+      ]
+    }
+  ]
+}

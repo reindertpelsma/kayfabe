@@ -1,0 +1,46 @@
+40	strand_diagnostic	kf3: PROGRESS_STRAND diagnostic on (threshold 1000 ms)
+214	engine_or_refusal	kf3: GSP REFUSED fn76/0x20800a87=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+276	engine_or_refusal	kf3: GSP REFUSED fn76/0x20800afe=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+281	engine_or_refusal	kf3: GSP REFUSED fn76/0x20800aff=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+310	engine_or_refusal	kf3: GSP REFUSED fn76/0x20800aaf=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+357	engine_or_refusal	kf3: GSP REFUSED fn76/0x00800292=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+362	engine_or_refusal	kf3: GSP REFUSED fn76/0x20800a80=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+383	engine_or_refusal	kf3: GSP REFUSED fn76/0x20800a89=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+401	engine_or_refusal	kf3: GSP REFUSED fn76/0x20802a0f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+406	engine_or_refusal	kf3: GSP REFUSED fn76/0x20800ab2=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+417	engine_or_refusal	kf3: GSP REFUSED fn76/0x2080017e=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+465	engine_or_refusal	kf3: GSP REFUSED fn76/0x20800a30=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+473	engine_or_refusal	kf3: GSP REFUSED fn76/0x20800a2e=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+481	engine_or_refusal	kf3: GSP REFUSED fn76/0x20800b03=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+486	engine_or_refusal	kf3: GSP REFUSED fn76/0x20800b05=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+494	engine_or_refusal	kf3: GSP REFUSED fn76/0x20800a3f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+562	engine_or_refusal	kf3: act birth translated: chan 0xc1e00007:0xbaba0045 BORN Translated: token 0x1 -> host 0x40000012 in VasKey(13970166077300801602) gpfifo=0x0x32 userd=Some(Framebuffer { base: 8315469824, size: 512 }) engine=0x1 tsg=None kernel_by=PRIVILEGE=KERNEL rm-internal ring_va=0xff00000000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B gr_tier=true gp_get_by_engine=true sw_subch_inert=false scheduled_at_birth=true fast=off (6409 us, off the GSP lock)
+630	channel_census	kf3: chan token 0x1 (host 0x40000012) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=0 last_put=None gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=true gr[methods=0 inert_binds=0 objects=[(902d, cafe002b), (cd40, cafe002c), (ce97, cafe002d), (cec0, cafe002a)]] gp_get_by_engine=(true, 0)
+706	engine_or_refusal	kf3: mem t=52.917s REFUSED VasKey(13970166078463016970) root 0x1efba2000: 1 run(s) not applied: leaf 0x30fc00000+0x10400000 names store 0x1efc00000, inside the firmware carve-out at 0x1efbe0000 — a twin maps no kayfabe memory (§Q)
+712	engine_or_refusal	kf3: mem t=52.922s REFUSED VasKey(13970166078463016970) root 0x1efba2000: 1 run(s) not applied: leaf 0x30fc00000+0x10400000 names store 0x1efc00000, inside the firmware carve-out at 0x1efbe0000 — a twin maps no kayfabe memory (§Q)
+715	engine_or_refusal	kf3: mem t=52.923s REFUSED VasKey(13970166078463016970) root 0x1efba2000: 1 run(s) not applied: leaf 0x30fc00000+0x10400000 names store 0x1efc00000, inside the firmware carve-out at 0x1efbe0000 — a twin maps no kayfabe memory (§Q)
+727	engine_or_refusal	kf3: act birth translated: chan 0xc1e00008:0x2 BORN Translated: token 0x1 -> host 0x400d000e in VasKey(13970166078463016970) gpfifo=0x320064000x4096 userd=Some(Framebuffer { base: 8311865344, size: 512 }) engine=0x9 tsg=None kernel_by=PRIVILEGE=KERNEL rm-internal ring_va=0xff00000000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B gr_tier=false gp_get_by_engine=false sw_subch_inert=false scheduled_at_birth=true fast=off (2867 us, off the GSP lock)
+736	engine_or_refusal	kf3: chan 0xc1e00008:0x2 BIND engine=0x9 (host 0x400d000e)
+754	engine_or_refusal	kf3: GSP REFUSED fn76/0x2080013f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+767	engine_or_refusal	kf3: GSP REFUSED fn76/0x20809064=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+775	engine_or_refusal	kf3: GSP REFUSED fn76/0x00801306=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+780	engine_or_refusal	kf3: GSP REFUSED fn76/0x20810108=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+857	engine_or_refusal	kf3: GSP REFUSED fn76/0x20800ab8=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+862	engine_or_refusal	kf3: GSP REFUSED fn76/0x20800173=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+870	engine_or_refusal	kf3: GSP REFUSED fn76/0x20802a12=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+901	engine_or_refusal	kf3: GSP REFUSED fn76/0x20800160=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+907	engine_or_refusal	kf3: GSP REFUSED fn103/0x0000cbcb=0x56 (GSP_RM_ALLOC) first_seq=0 — the guest read a non-OK status
+913	engine_or_refusal	kf3: GSP REFUSED fn76/0x20802801=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+921	engine_or_refusal	kf3: GSP REFUSED fn76/0x2080012f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+952	engine_or_refusal	kf3: GSP REFUSED fn76/0x20802806=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+978	engine_or_refusal	kf3: GSP REFUSED fn76/0x2080205b=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+984	engine_or_refusal	kf3: GSP REFUSED fn76/0x2080a060=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+989	engine_or_refusal	kf3: GSP REFUSED fn76/0x20802068=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+994	engine_or_refusal	kf3: GSP REFUSED fn76/0x00800106=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1005	engine_or_refusal	kf3: GSP REFUSED fn76/0x2080a801=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1041	engine_or_refusal	kf3: GSP REFUSED fn76/0x2080a02f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1050	engine_or_refusal	kf3: GSP REFUSED fn76/0x208081ea=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1106	engine_or_refusal	kf3: GSP REFUSED fn76/0x00730285=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1183	engine_or_refusal	kf3: GSP REFUSED fn76/0x20800a3a=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1188	engine_or_refusal	kf3: GSP REFUSED fn76/0x20801110=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1234	engine_or_refusal	kf3: GSP REFUSED fn76/0x2080080b=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status

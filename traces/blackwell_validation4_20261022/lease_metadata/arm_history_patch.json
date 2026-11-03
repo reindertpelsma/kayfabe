@@ -1,0 +1,9 @@
+{
+  "utc": "2026-10-22T03:29:17.047321+00:00",
+  "source": "1e19cefbc",
+  "scope": "same corrected per-arm history gate for primary and B1 before either starts; no product/flag/driver timer change",
+  "sha256": {
+    "helper": "73ae5d56ae54639dbdb0a76203a66f1507393dfb7cce97cd892332764989fa08",
+    "arm": "0130d66b292a6c79ac436de2108d34f2df26325db97b1891c92f6f806c4a7b2a"
+  }
+}

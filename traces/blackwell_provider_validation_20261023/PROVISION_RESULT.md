@@ -1,0 +1,5 @@
+STATUS: LIVE, 2026-10-23. MEASURED own57302449 startup/media only; no GPU result yet.
+
+2026-10-23 Strict console-pinned SSH succeeded; KVM present, root175GiB/167GiB free. Provider all-in rate0.428666667USD/h. Media upload first refused the absent cache directory before transferring files or starting any controller; install-d-m0755 prepared it, and transfer resumed within the ORIGINAL20-minute deadline. No provider retry, timeout reset or product/guard bypass occurred. Directory receipt records the repair.
+
+2026-10-23 All4 original official media full size/SHA checks passed remotely at01:37:31UTC. Unchanged source-pinned8-worker chunk transport (file-group stagger3s) records whole-file receipts; WindowsISO5.1GB completed331.376s including publication checks. Controller5162 launched only afterward. Frozen runtime product6e3fd3fd6, readiness/provider9ff51a6e9, nativefixture618f04318, tier3a6456796e and optionalB1c130aa98a. Actual own die/host driver and native/T3/Windows outcomes remain pending.

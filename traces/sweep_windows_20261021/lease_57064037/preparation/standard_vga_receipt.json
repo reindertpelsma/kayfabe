@@ -1,0 +1,15 @@
+{
+  "utc": "2026-10-21T14:56:17.828504+00:00",
+  "instance": 57064037,
+  "phase": "generic LTSC install, GPU steps still STOPPED pending decision",
+  "source": "1ce11cf4d640087d5be41b14b4f0b70cfc77e8c6",
+  "qemu_pid": 91672,
+  "kf3_device_count": 0,
+  "vga": "std",
+  "binary_sha256": "c305c5ad0b993ce84cfb605c26a6de7d203edf0e4bf6183d23820863c8811c86",
+  "projection": "PID/cmdline inspected on rental; no full argv, environment or secrets exported",
+  "screenshots": {
+    "install_145402.png": "5928ecd0aa676bb3ffb07be7413a6bde724d828a5f37f2f52c5716031e908128",
+    "install_1500.png": "ba310cadc79f06b216fd513823b1345d1944df8761d493bd1ad0375c8bea1592"
+  }
+}

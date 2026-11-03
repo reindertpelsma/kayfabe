@@ -1,0 +1,42 @@
+{
+  "lane_spent_runtime_estimate": 4.832256622648354,
+  "hard_stop": 7,
+  "available": 2.1677433773516457,
+  "reserve": 5,
+  "teardown_allowance": 0.5,
+  "auto_destroy_minutes": 170,
+  "examples": [
+    {
+      "actual_price_per_hour": 0.78,
+      "guard_price_per_hour": 0.8969999999999999,
+      "budget_minutes_max": 111,
+      "proposed_minutes": 105,
+      "guard_lane_total_with_allowance": 6.902006622648354,
+      "actual_projected_lane_runtime": 6.1972566226483545
+    },
+    {
+      "actual_price_per_hour": 0.9580555555555555,
+      "guard_price_per_hour": 1.1017638888888888,
+      "budget_minutes_max": 90,
+      "proposed_minutes": 90,
+      "guard_lane_total_with_allowance": 6.984902455981688,
+      "actual_projected_lane_runtime": 6.269339955981687
+    },
+    {
+      "actual_price_per_hour": 1.0333333333333334,
+      "guard_price_per_hour": 1.1883333333333335,
+      "budget_minutes_max": 84,
+      "proposed_minutes": 80,
+      "guard_lane_total_with_allowance": 6.916701067092799,
+      "actual_projected_lane_runtime": 6.210034400426132
+    },
+    {
+      "actual_price_per_hour": 1.25,
+      "guard_price_per_hour": 1.4375,
+      "budget_minutes_max": 69,
+      "proposed_minutes": 65,
+      "guard_lane_total_with_allowance": 6.889548289315021,
+      "actual_projected_lane_runtime": 6.186423289315021
+    }
+  ]
+}

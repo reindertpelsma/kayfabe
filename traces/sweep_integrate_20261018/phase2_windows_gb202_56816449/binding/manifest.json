@@ -1,0 +1,38 @@
+[
+  {
+    "path": "/root/prov/sweep_windows_install.log",
+    "source_sha256": "3bd5757f3540b1ad4bd3d314a0a64551046daf9df94d391cf93f43ff90fa9b5e",
+    "export": "baseline_install.txt",
+    "export_sha256": "2c5fd6ce2bc8980998fee02c8598587f9f93810e9c6fec56fa8c9bbfbc936001"
+  },
+  {
+    "path": "/root/prov/sweep_windows580_binding.json",
+    "source_sha256": "1913bb307ef2da1335cd03d1e00ddaf74730cfa9fcf9e6cd99e509667ef16f4e",
+    "export": "binding.json",
+    "export_sha256": "422efa44adee4b8b09f7fda7df7c96e118b906fdc5915a9c50f8b5c0c1fa7b36"
+  },
+  {
+    "path": "/root/prov/sweep_windows580_cold_ready.txt",
+    "source_sha256": "d2c880a7888640e46af1b4edd92f3986d3f7ed749835704d63e0aad7d5a9ac39",
+    "export": "cold_ready.txt",
+    "export_sha256": "9d8bf7733a3465ada4a53604dbcf6d8878cbb105240aacbbfcaeaa6c2946a937"
+  },
+  {
+    "path": "/root/prov/bw580_bind_bind_process_receipt.json",
+    "source_sha256": "83cefe32500c70d33d291b2c5bf21586cbe551fe1d2d853c2d8fbd48d0f3ff20",
+    "export": "process_receipt.json",
+    "export_sha256": "83cefe32500c70d33d291b2c5bf21586cbe551fe1d2d853c2d8fbd48d0f3ff20"
+  },
+  {
+    "path": "/root/prov/bw580_frozen_parent.sha256",
+    "source_sha256": "2a09248513dbf63beb9546d586bc4211a4f67cb189969912acc60c42ee24dfd9",
+    "export": "parent_sha256.txt",
+    "export_sha256": "2a09248513dbf63beb9546d586bc4211a4f67cb189969912acc60c42ee24dfd9"
+  },
+  {
+    "path": "/root/prov/sweep_debug_prereq.log",
+    "source_sha256": "0d3911b90407ce71a95cc614c7f354b8ad50b2ed51aea92757dac222cb7fad46",
+    "export": "debug_prereq_tail.txt",
+    "export_sha256": "0d3911b90407ce71a95cc614c7f354b8ad50b2ed51aea92757dac222cb7fad46"
+  }
+]

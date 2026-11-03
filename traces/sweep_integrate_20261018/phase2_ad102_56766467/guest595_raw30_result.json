@@ -1,0 +1,20 @@
+{
+  "instance_id": 56766467,
+  "source": "24906bf334665c9000b16b271005593daa3586c7",
+  "die": "AD102",
+  "host_driver": "595.91.07",
+  "guest_driver": "595.91.07",
+  "budget_seconds_per_arm": 180,
+  "passed": 29,
+  "failed": 1,
+  "crash": 0,
+  "notrun": 0,
+  "n": 1,
+  "spread": "N/A",
+  "failure": "timer/R19: mirror sampled8000480nsafterPTIMERpage, bound1000000ns",
+  "native_same_client": "raw30/30 and CUDA4/4 PASS",
+  "current_cell_status": "FAIL",
+  "candidate4_timer_control": "planned next; no cause declared",
+  "grader_unchanged": true,
+  "raw_log_sha256": "c08a54bc5c36077418d500f5181d264d7eddffac7b0e6d2a85b6930ee40f230c"
+}

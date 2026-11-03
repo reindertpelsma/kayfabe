@@ -326,12 +326,36 @@ impl ControlCensusLog {
 }
 
 /// ★ 2026-10-04 (branch `v3-windows`, runbook C3): `KF3_RPC_TRACE=1` logs every command this chain
-/// answers — the function, the control id or the alloc class, and the result the guest reads — so a
+/// answers, up to the fixed process lifetime quota below — the function, the control id or the alloc class, and the result the guest reads — so a
 /// Windows guest's command stream can be diffed against a Linux guest's
 /// (`docs/design/V3_WINDOWS_DISCOVERY.md`). Log only and off by default: it changes no reply.
 fn rpc_trace() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| std::env::var_os("KF3_RPC_TRACE").is_some_and(|v| v == "1"))
+}
+
+// This process owns the quota, not a policy or guest life: re-selection, device
+// reset and new census wrappers cannot replenish a guest-driven emit budget.
+// Each admitted command has one fixed-field metadata line and at most one
+// promotion line whose entries are bounded by the compiled parameter layout.
+fn rpc_trace_slot() -> bool {
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    if !rpc_trace() {
+        return false;
+    }
+    static LEFT: AtomicUsize = AtomicUsize::new(16_384);
+    static ANNOUNCED: AtomicBool = AtomicBool::new(false);
+    if LEFT
+        .try_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_sub(1))
+        .is_ok()
+    {
+        true
+    } else {
+        if !ANNOUNCED.swap(true, Ordering::Relaxed) {
+            eprintln!("kf-rm: rpc-trace lifetime limit reached (16384 commands); trace truncated");
+        }
+        false
+    }
 }
 
 /// One `KF3_RPC_TRACE` line.
@@ -502,7 +526,7 @@ impl<P: CommandPolicy> CommandPolicy for ControlCensus<P> {
             None
         };
         let reply = self.inner.respond(cmd);
-        if rpc_trace() {
+        if rpc_trace_slot() {
             trace_line(&self.driver, cmd, req.as_ref(), reply.as_ref());
             if let Some(record) = self.take_promotion_record(cmd, req.as_ref()) {
                 eprintln!("{record}");

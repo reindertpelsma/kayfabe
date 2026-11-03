@@ -1,0 +1,14 @@
+[
+  {
+    "input": "CE rv=0xabcd1234 want=0xabcd1234 -> PASS",
+    "rc": 0
+  },
+  {
+    "input": "CE rv=0x0 want=0xabcd1234 -> MISMATCH",
+    "rc": 1
+  },
+  {
+    "input": "WIN_CUDA cup2 rc=0",
+    "rc": 1
+  }
+]

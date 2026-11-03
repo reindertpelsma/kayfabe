@@ -24,6 +24,13 @@
 #define KFWC_IOCTL_EVENTS KFWC_CTL(0x802u)   /* out: array of kfwc_event (drains them) */
 #define KFWC_IOCTL_START KFWC_CTL(0x803u)    /* in: kfwc_start_req; resets the stream (counter 0) and starts */
 #define KFWC_IOCTL_STOP KFWC_CTL(0x804u)     /* no buffers; stops, writes END; records stay readable */
+#define KFWC_IOCTL_DISPLAY_CAPS KFWC_CTL(0x805u) /* no input; out: kfwc_display_caps_out */
+
+typedef struct kfwc_display_caps_out {
+    kfwc_u32 pci_vendor_id, pci_device_id, word_count, reserved;
+    kfwc_u32 words[KFWC_DISPLAY_CAPS_WORDS];
+} kfwc_display_caps_out;
+KFWC_STATIC_ASSERT(kfwc_display_caps_out_is_fixed, sizeof(kfwc_display_caps_out) == 4112u);
 
 #define KFWC_DEVICE_USER_PATH "\\\\.\\KayfabeWinCapture"
 #define KFWC_MIN_READ_BYTES (70u * 1024u)    /* one record is at most 32 + 64 KiB */

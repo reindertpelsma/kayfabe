@@ -1,0 +1,28 @@
+=== kayfabe host preflight 2026-10-19T20:54:48+00:00 on ubuntu ===
+  ✔ /dev/kvm present
+  ✔ CPU virt extensions present
+  ✔ GPU: No devices were found  driver: No devices were found
+  ✔ /dev/nvidiactl present
+  ✔ /dev/nvidia0 present
+  ✔ /dev/nvidia-uvm present
+  ✔ disk free 167G
+  ✔ RAM 48G
+  ✔ cores 30
+  ✔ apt mirror 2068687 B/s
+  ✔ https egress works
+=== PREFLIGHT DONE ===
+VERDICT=SOUND
+EXIT=0
+INITIAL_DRIVER_VERSION
+NVRM version: NVIDIA UNIX x86_64 Kernel Module  575.51.03  Wed Apr 16 14:22:51 UTC 2025
+GCC version:  gcc version 12.3.0 (Ubuntu 12.3.0-1ubuntu1~22.04)
+00:07.0 VGA compatible controller [0300]: NVIDIA Corporation Device [10de:2b85] (rev a1)
+00:08.0 Audio device [0403]: NVIDIA Corporation Device [10de:22e8] (rev a1)
+[  102.779466] NVRM: The NVIDIA GPU 0000:00:07.0 (PCI ID: 10de:2b85)
+               NVRM: installed in this system requires use of the NVIDIA open kernel modules.
+[  102.779512] NVRM: GPU 0000:00:07.0: RmInitAdapter failed! (0x22:0x56:884)
+[  102.781882] NVRM: GPU 0000:00:07.0: rm_init_adapter failed, device minor number 0
+[  102.835789] NVRM: The NVIDIA GPU 0000:00:07.0 (PCI ID: 10de:2b85)
+               NVRM: installed in this system requires use of the NVIDIA open kernel modules.
+[  102.835817] NVRM: GPU 0000:00:07.0: RmInitAdapter failed! (0x22:0x56:884)
+[  102.838423] NVRM: GPU 0000:00:07.0: rm_init_adapter failed, device minor number 0

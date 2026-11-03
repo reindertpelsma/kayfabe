@@ -1,0 +1,18 @@
+H_CLOCK_VIEWS_FALSIFIER_native_PTIMER_and_VF_agree_within_existing10ms_all3rounds
+de17df72f863b7abad3897692afb95036d5656133e324b1ab8fc00b7d5822486  /opt/sweep-tools/kf-timer-probe
+Uid:	65534	65534	65534	65534
+Gid:	65534	65534	65534	65534
+Groups:
+CapInh:	0000000000000000
+CapPrm:	0000000000000000
+CapEff:	0000000000000000
+CapBnd:	0000000000000000
+CapAmb:	0000000000000000
+NoNewPrivs:	1
+kf-host: host tier: stock
+host_driver=595.91.07 arch=(432, 2, 161)
+round=0 base=0x9000 layout=TimerLayout { register_bytes: 1044, time_low: 1024, time_high: 1040 } first=1792451087700158016 second=1792451087720247776 delta=20089760 usermode=1792451087720253472 delta_to_usermode=5696
+round=1 base=0x9000 layout=TimerLayout { register_bytes: 1044, time_low: 1024, time_high: 1040 } first=1792451087721502688 second=1792451087742026400 delta=20523712 usermode=1792451087742032096 delta_to_usermode=5696
+round=2 base=0x9000 layout=TimerLayout { register_bytes: 1044, time_low: 1024, time_high: 1040 } first=1792451087743471456 second=1792451087763854848 delta=20383392 usermode=1792451087763860576 delta_to_usermode=5728
+PASS native read-only timer map/read/drop x3
+NATIVE_CLOCK_PROBE_EXIT=0

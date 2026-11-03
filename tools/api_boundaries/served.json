@@ -1,0 +1,2244 @@
+{
+ "alloc_structs": [
+  "NV0000_ALLOC_PARAMETERS",
+  "NV0005_ALLOC_PARAMETERS",
+  "NV0080_ALLOC_PARAMETERS",
+  "NV2080_ALLOC_PARAMETERS",
+  "NV2081_ALLOC_PARAMETERS",
+  "NV5080_ALLOC_PARAMS",
+  "NV50VAIO_CHANNELDMA_ALLOCATION_PARAMETERS",
+  "NV50VAIO_CHANNELPIO_ALLOCATION_PARAMETERS",
+  "NV83DE_ALLOC_PARAMETERS",
+  "NV9072_ALLOCATION_PARAMETERS",
+  "NVB0B5_ALLOCATION_PARAMETERS",
+  "NVOS00_PARAMETERS",
+  "NVOS02_PARAMETERS",
+  "NVOS21_PARAMETERS",
+  "NVOS33_PARAMETERS",
+  "NVOS34_PARAMETERS",
+  "NVOS46_PARAMETERS",
+  "NVOS47_PARAMETERS",
+  "NVOS54_PARAMETERS",
+  "NVOS55_PARAMETERS",
+  "NVOS64_PARAMETERS",
+  "NV_BSP_ALLOCATION_PARAMETERS",
+  "NV_CHANNEL_ALLOC_PARAMS",
+  "NV_CHANNEL_GROUP_ALLOCATION_PARAMETERS",
+  "NV_CONTEXT_DMA_ALLOCATION_PARAMS",
+  "NV_CTXSHARE_ALLOCATION_PARAMETERS",
+  "NV_GR_ALLOCATION_PARAMETERS",
+  "NV_MEMORY_ALLOCATION_PARAMS",
+  "NV_MEMORY_LIST_ALLOCATION_PARAMS",
+  "NV_MEMORY_VIRTUAL_ALLOCATION_PARAMS",
+  "NV_MSENC_ALLOCATION_PARAMETERS",
+  "NV_NVDEC_ALLOCATION_PARAMETERS",
+  "NV_NVENC_ALLOCATION_PARAMETERS",
+  "NV_UVM_CHANNEL_RETAINER_ALLOC_PARAMS",
+  "NV_VASPACE_ALLOCATION_PARAMETERS"
+ ],
+ "classes": {
+  "ADA_COMPUTE_A": 51648,
+  "AMPERE_B": 51095,
+  "AMPERE_CHANNEL_GPFIFO_A": 50543,
+  "AMPERE_COMPUTE_B": 51136,
+  "AMPERE_DMA_COPY_B": 51125,
+  "AMPERE_USERMODE_A": 50529,
+  "FERMI_CONTEXT_SHARE_A": 36967,
+  "FERMI_VASPACE_A": 37105,
+  "GP100_UVM_SW": 49270,
+  "HOPPER_CHANNEL_GPFIFO_A": 51311,
+  "HOPPER_COMPUTE_A": 52160,
+  "HOPPER_DMA_COPY_A": 51381,
+  "HOPPER_USERMODE_A": 50785,
+  "KEPLER_CHANNEL_GROUP_A": 41068,
+  "NV01_DEVICE_0": 128,
+  "NV01_EVENT_KERNEL_CALLBACK": 120,
+  "NV01_EVENT_KERNEL_CALLBACK_EX": 126,
+  "NV01_EVENT_OS_EVENT": 121,
+  "NV01_ROOT": 0,
+  "NV01_ROOT_CLIENT": 65,
+  "NV2081_BINAPI": 8321,
+  "NV20_SUBDEVICE_0": 8320,
+  "NV50_DEFERRED_API_CLASS": 20608,
+  "NVA06F_SUBCHANNEL_COPY_ENGINE": 4,
+  "UVM_CHANNEL_RETAINER": 50548
+ },
+ "ctrl_id_sources": {
+  "0x00410103": [
+   "code"
+  ],
+  "0x00410110": [
+   "code"
+  ],
+  "0x00730101": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x00730102": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x00730107": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x00730108": [
+   "windows_ids.txt"
+  ],
+  "0x00730109": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x0073010a": [
+   "windows_ids.txt"
+  ],
+  "0x0073010b": [
+   "windows_ids.txt"
+  ],
+  "0x0073010c": [
+   "windows_ids.txt"
+  ],
+  "0x00730116": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x0073011a": [
+   "code",
+   "extra_ids.txt",
+   "windows_ids.txt"
+  ],
+  "0x0073011d": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x00730122": [
+   "code",
+   "extra_ids.txt",
+   "windows_ids.txt"
+  ],
+  "0x00730128": [
+   "code",
+   "extra_ids.txt",
+   "windows_ids.txt"
+  ],
+  "0x00730129": [
+   "code"
+  ],
+  "0x0073012c": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x0073013d": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x0073014b": [
+   "code",
+   "extra_ids.txt",
+   "windows_ids.txt"
+  ],
+  "0x00730151": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x00730240": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x00730245": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x00730250": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x00730273": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x00730280": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x00730282": [
+   "windows_ids.txt"
+  ],
+  "0x00730285": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x00730287": [
+   "windows_ids.txt"
+  ],
+  "0x00730288": [
+   "windows_ids.txt"
+  ],
+  "0x0073028a": [
+   "windows_ids.txt"
+  ],
+  "0x0073028b": [
+   "windows_ids.txt"
+  ],
+  "0x00730293": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x007302a2": [
+   "code",
+   "extra_ids.txt",
+   "windows_ids.txt"
+  ],
+  "0x007302a3": [
+   "code",
+   "extra_ids.txt",
+   "windows_ids.txt"
+  ],
+  "0x007302a4": [
+   "windows_ids.txt"
+  ],
+  "0x007302a5": [
+   "code",
+   "extra_ids.txt",
+   "windows_ids.txt"
+  ],
+  "0x007302a6": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x00730301": [
+   "windows_ids.txt"
+  ],
+  "0x00730401": [
+   "code"
+  ],
+  "0x00730404": [
+   "windows_ids.txt"
+  ],
+  "0x00731140": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x00731142": [
+   "windows_ids.txt"
+  ],
+  "0x00731144": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x00731152": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x00731153": [
+   "code"
+  ],
+  "0x0073117a": [
+   "windows_ids.txt"
+  ],
+  "0x00731341": [
+   "windows_ids.txt"
+  ],
+  "0x00731365": [
+   "windows_ids.txt"
+  ],
+  "0x00731369": [
+   "code",
+   "extra_ids.txt",
+   "windows_ids.txt"
+  ],
+  "0x00738285": [
+   "code"
+  ],
+  "0x0073ffff": [
+   "code"
+  ],
+  "0x00800000": [
+   "code"
+  ],
+  "0x00800106": [
+   "windows_ids.txt"
+  ],
+  "0x00800201": [
+   "code"
+  ],
+  "0x00800280": [
+   "code"
+  ],
+  "0x00800288": [
+   "code"
+  ],
+  "0x00800289": [
+   "code"
+  ],
+  "0x0080028b": [
+   "code"
+  ],
+  "0x0080028e": [
+   "code"
+  ],
+  "0x00800292": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x00800294": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x00801102": [
+   "code"
+  ],
+  "0x00801104": [
+   "code"
+  ],
+  "0x00801109": [
+   "code"
+  ],
+  "0x00801301": [
+   "code"
+  ],
+  "0x00801306": [
+   "windows_ids.txt"
+  ],
+  "0x00801307": [
+   "code"
+  ],
+  "0x00801401": [
+   "code"
+  ],
+  "0x00801402": [
+   "code"
+  ],
+  "0x00801701": [
+   "code"
+  ],
+  "0x00801707": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x0080170d": [
+   "code"
+  ],
+  "0x0080170e": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x0080170f": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x00801713": [
+   "code"
+  ],
+  "0x00801714": [
+   "code"
+  ],
+  "0x00801801": [
+   "code"
+  ],
+  "0x00801806": [
+   "code"
+  ],
+  "0x00801809": [
+   "code"
+  ],
+  "0x0080180d": [
+   "code"
+  ],
+  "0x00801812": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x00801813": [
+   "code"
+  ],
+  "0x00801814": [
+   "code"
+  ],
+  "0x00801815": [
+   "code"
+  ],
+  "0x00801909": [
+   "code"
+  ],
+  "0x00801b01": [
+   "code"
+  ],
+  "0x00801b02": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x00801c02": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x00802004": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x00802009": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x0080200a": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x00808123": [
+   "code"
+  ],
+  "0x00809908": [
+   "code",
+   "extra_ids.txt",
+   "windows_ids.txt"
+  ],
+  "0x00da0002": [
+   "code"
+  ],
+  "0x00da0006": [
+   "code"
+  ],
+  "0x00de0001": [
+   "code"
+  ],
+  "0x00f10003": [
+   "code"
+  ],
+  "0x00fd0101": [
+   "code"
+  ],
+  "0x00fd0102": [
+   "code"
+  ],
+  "0x00fd0104": [
+   "code"
+  ],
+  "0x00fd0105": [
+   "code"
+  ],
+  "0x20800000": [
+   "code"
+  ],
+  "0x20800101": [
+   "code"
+  ],
+  "0x20800102": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20800110": [
+   "code"
+  ],
+  "0x20800111": [
+   "code"
+  ],
+  "0x20800119": [
+   "code"
+  ],
+  "0x20800122": [
+   "code"
+  ],
+  "0x20800123": [
+   "code"
+  ],
+  "0x2080012b": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x2080012c": [
+   "code"
+  ],
+  "0x2080012d": [
+   "code"
+  ],
+  "0x2080012f": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20800131": [
+   "code"
+  ],
+  "0x20800133": [
+   "code"
+  ],
+  "0x2080013f": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20800142": [
+   "code"
+  ],
+  "0x20800145": [
+   "code"
+  ],
+  "0x20800146": [
+   "code"
+  ],
+  "0x20800147": [
+   "code"
+  ],
+  "0x2080014a": [
+   "code"
+  ],
+  "0x2080014b": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20800156": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20800157": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x2080015a": [
+   "code"
+  ],
+  "0x2080015f": [
+   "windows_ids.txt"
+  ],
+  "0x20800160": [
+   "windows_ids.txt"
+  ],
+  "0x20800168": [
+   "code"
+  ],
+  "0x20800169": [
+   "code"
+  ],
+  "0x2080016c": [
+   "code"
+  ],
+  "0x20800170": [
+   "code"
+  ],
+  "0x20800173": [
+   "windows_ids.txt"
+  ],
+  "0x20800177": [
+   "code"
+  ],
+  "0x2080017e": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x2080018b": [
+   "code"
+  ],
+  "0x2080018d": [
+   "code"
+  ],
+  "0x2080018e": [
+   "code"
+  ],
+  "0x20800195": [
+   "code"
+  ],
+  "0x208001a3": [
+   "code"
+  ],
+  "0x208001a4": [
+   "windows_ids.txt"
+  ],
+  "0x208001b0": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20800301": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20800403": [
+   "code"
+  ],
+  "0x20800404": [
+   "code"
+  ],
+  "0x20800406": [
+   "code"
+  ],
+  "0x20800407": [
+   "code"
+  ],
+  "0x20800513": [
+   "code"
+  ],
+  "0x20800802": [
+   "code"
+  ],
+  "0x20800803": [
+   "code"
+  ],
+  "0x20800806": [
+   "code"
+  ],
+  "0x20800808": [
+   "code"
+  ],
+  "0x2080080b": [
+   "windows_ids.txt"
+  ],
+  "0x2080080e": [
+   "code"
+  ],
+  "0x20800810": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20800a00": [
+   "code"
+  ],
+  "0x20800a01": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20800a1c": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20800a1d": [
+   "code"
+  ],
+  "0x20800a1f": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20800a22": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20800a26": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20800a2a": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20800a2c": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20800a2e": [
+   "code",
+   "extra_ids.txt",
+   "windows_ids.txt"
+  ],
+  "0x20800a30": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20800a32": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20800a34": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20800a36": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20800a37": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20800a38": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20800a39": [
+   "windows_ids.txt"
+  ],
+  "0x20800a3a": [
+   "windows_ids.txt"
+  ],
+  "0x20800a3d": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20800a3f": [
+   "code",
+   "extra_ids.txt",
+   "windows_ids.txt"
+  ],
+  "0x20800a40": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20800a41": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20800a48": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20800a49": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20800a4b": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20800a4c": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20800a58": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20800a59": [
+   "code",
+   "extra_ids.txt",
+   "windows_ids.txt"
+  ],
+  "0x20800a5c": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20800a5d": [
+   "code"
+  ],
+  "0x20800a61": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20800a69": [
+   "code"
+  ],
+  "0x20800a6c": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20800a70": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20800a80": [
+   "code",
+   "extra_ids.txt",
+   "windows_ids.txt"
+  ],
+  "0x20800a87": [
+   "code",
+   "extra_ids.txt",
+   "windows_ids.txt"
+  ],
+  "0x20800a9a": [
+   "windows_ids.txt"
+  ],
+  "0x20800a9b": [
+   "code"
+  ],
+  "0x20800a9d": [
+   "code"
+  ],
+  "0x20800a9f": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20800aac": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20800aaf": [
+   "windows_ids.txt"
+  ],
+  "0x20800ab8": [
+   "code",
+   "extra_ids.txt",
+   "windows_ids.txt"
+  ],
+  "0x20800ac6": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20800adf": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20800af0": [
+   "windows_ids.txt"
+  ],
+  "0x20800af1": [
+   "windows_ids.txt"
+  ],
+  "0x20800af2": [
+   "windows_ids.txt"
+  ],
+  "0x20800af3": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20800afe": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20800aff": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20800b00": [
+   "code"
+  ],
+  "0x20800b03": [
+   "code",
+   "extra_ids.txt",
+   "windows_ids.txt"
+  ],
+  "0x20800b05": [
+   "windows_ids.txt"
+  ],
+  "0x20801109": [
+   "code"
+  ],
+  "0x2080110b": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20801110": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20801111": [
+   "code",
+   "extra_ids.txt",
+   "windows_ids.txt"
+  ],
+  "0x20801112": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20801116": [
+   "code"
+  ],
+  "0x20801117": [
+   "code"
+  ],
+  "0x20801119": [
+   "code"
+  ],
+  "0x20801201": [
+   "code"
+  ],
+  "0x20801206": [
+   "code"
+  ],
+  "0x20801208": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20801209": [
+   "code"
+  ],
+  "0x20801210": [
+   "code"
+  ],
+  "0x20801211": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20801218": [
+   "code"
+  ],
+  "0x20801219": [
+   "code"
+  ],
+  "0x2080121b": [
+   "code"
+  ],
+  "0x2080121f": [
+   "code",
+   "extra_ids.txt",
+   "windows_ids.txt"
+  ],
+  "0x20801220": [
+   "windows_ids.txt"
+  ],
+  "0x20801221": [
+   "windows_ids.txt"
+  ],
+  "0x20801222": [
+   "windows_ids.txt"
+  ],
+  "0x20801227": [
+   "code"
+  ],
+  "0x20801228": [
+   "code"
+  ],
+  "0x2080122a": [
+   "code"
+  ],
+  "0x2080122b": [
+   "code"
+  ],
+  "0x2080122d": [
+   "code"
+  ],
+  "0x20801230": [
+   "code"
+  ],
+  "0x20801232": [
+   "code"
+  ],
+  "0x20801234": [
+   "code"
+  ],
+  "0x20801237": [
+   "code"
+  ],
+  "0x20801239": [
+   "code"
+  ],
+  "0x20801301": [
+   "code"
+  ],
+  "0x20801303": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x2080130e": [
+   "code"
+  ],
+  "0x20801315": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20801320": [
+   "code"
+  ],
+  "0x20801322": [
+   "windows_ids.txt"
+  ],
+  "0x20801344": [
+   "windows_ids.txt"
+  ],
+  "0x20801347": [
+   "windows_ids.txt"
+  ],
+  "0x20801352": [
+   "code"
+  ],
+  "0x20801357": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20801358": [
+   "code"
+  ],
+  "0x20801359": [
+   "code"
+  ],
+  "0x20801701": [
+   "code"
+  ],
+  "0x20801702": [
+   "code"
+  ],
+  "0x2080170d": [
+   "code"
+  ],
+  "0x2080170e": [
+   "code"
+  ],
+  "0x2080170f": [
+   "code"
+  ],
+  "0x20801801": [
+   "code"
+  ],
+  "0x20801802": [
+   "code"
+  ],
+  "0x20801803": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20801813": [
+   "windows_ids.txt"
+  ],
+  "0x20801819": [
+   "windows_ids.txt"
+  ],
+  "0x20801823": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20801829": [
+   "windows_ids.txt"
+  ],
+  "0x2080182a": [
+   "code"
+  ],
+  "0x2080182b": [
+   "code"
+  ],
+  "0x20801830": [
+   "windows_ids.txt"
+  ],
+  "0x2080200a": [
+   "code"
+  ],
+  "0x2080200b": [
+   "code"
+  ],
+  "0x2080205a": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x2080205b": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20802068": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20802205": [
+   "code"
+  ],
+  "0x20802209": [
+   "code",
+   "extra_ids.txt"
+  ],
+  "0x2080220c": [
+   "code"
+  ],
+  "0x2080220d": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x2080220e": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20802210": [
+   "code"
+  ],
+  "0x20802213": [
+   "code"
+  ],
+  "0x20802502": [
+   "code"
+  ],
+  "0x20802801": [
+   "code",
+   "extra_ids.txt",
+   "windows_ids.txt"
+  ],
+  "0x20802806": [
+   "code",
+   "extra_ids.txt",
+   "windows_ids.txt"
+  ],
+  "0x20802a01": [
+   "code"
+  ],
+  "0x20802a02": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20802a03": [
+   "code"
+  ],
+  "0x20802a06": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20802a07": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20802a08": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20802a0a": [
+   "code"
+  ],
+  "0x20802a0b": [
+   "code"
+  ],
+  "0x20802a0d": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20802a0f": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20802a12": [
+   "code",
+   "extra_ids.txt",
+   "windows_ids.txt"
+  ],
+  "0x20803001": [
+   "code"
+  ],
+  "0x20803002": [
+   "code"
+  ],
+  "0x20803039": [
+   "code"
+  ],
+  "0x20803083": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20803088": [
+   "code"
+  ],
+  "0x20803125": [
+   "code"
+  ],
+  "0x20803400": [
+   "windows_ids.txt"
+  ],
+  "0x20803401": [
+   "windows_ids.txt"
+  ],
+  "0x20803404": [
+   "windows_ids.txt"
+  ],
+  "0x20803601": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20803801": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20803c01": [
+   "windows_ids.txt"
+  ],
+  "0x20803d07": [
+   "code"
+  ],
+  "0x20804123": [
+   "code"
+  ],
+  "0x20807fff": [
+   "code"
+  ],
+  "0x20808000": [
+   "code"
+  ],
+  "0x20808123": [
+   "code"
+  ],
+  "0x20808124": [
+   "code"
+  ],
+  "0x20808159": [
+   "code",
+   "extra_ids.txt",
+   "windows_ids.txt"
+  ],
+  "0x20808162": [
+   "code",
+   "extra_ids.txt"
+  ],
+  "0x20808163": [
+   "code"
+  ],
+  "0x20808164": [
+   "code"
+  ],
+  "0x208081ea": [
+   "windows_ids.txt"
+  ],
+  "0x20808513": [
+   "code"
+  ],
+  "0x20808524": [
+   "code",
+   "extra_ids.txt",
+   "windows_ids.txt"
+  ],
+  "0x2080852a": [
+   "code",
+   "extra_ids.txt",
+   "windows_ids.txt"
+  ],
+  "0x2080852b": [
+   "windows_ids.txt"
+  ],
+  "0x2080852c": [
+   "windows_ids.txt"
+  ],
+  "0x2080852e": [
+   "code",
+   "extra_ids.txt",
+   "windows_ids.txt"
+  ],
+  "0x2080852f": [
+   "code",
+   "extra_ids.txt",
+   "windows_ids.txt"
+  ],
+  "0x20808530": [
+   "windows_ids.txt"
+  ],
+  "0x20808532": [
+   "windows_ids.txt"
+  ],
+  "0x20808536": [
+   "windows_ids.txt"
+  ],
+  "0x20808537": [
+   "windows_ids.txt"
+  ],
+  "0x20808539": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x2080853a": [
+   "code",
+   "extra_ids.txt",
+   "windows_ids.txt"
+  ],
+  "0x2080853b": [
+   "code",
+   "extra_ids.txt",
+   "windows_ids.txt"
+  ],
+  "0x20808542": [
+   "windows_ids.txt"
+  ],
+  "0x20808546": [
+   "windows_ids.txt"
+  ],
+  "0x2080880f": [
+   "windows_ids.txt"
+  ],
+  "0x20809001": [
+   "code",
+   "extra_ids.txt",
+   "windows_ids.txt"
+  ],
+  "0x20809004": [
+   "code",
+   "extra_ids.txt",
+   "windows_ids.txt"
+  ],
+  "0x20809009": [
+   "code",
+   "extra_ids.txt",
+   "windows_ids.txt"
+  ],
+  "0x20809019": [
+   "windows_ids.txt"
+  ],
+  "0x2080901b": [
+   "windows_ids.txt"
+  ],
+  "0x20809029": [
+   "windows_ids.txt"
+  ],
+  "0x2080902a": [
+   "windows_ids.txt"
+  ],
+  "0x2080902b": [
+   "windows_ids.txt"
+  ],
+  "0x2080902c": [
+   "windows_ids.txt"
+  ],
+  "0x20809037": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20809038": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x20809063": [
+   "windows_ids.txt"
+  ],
+  "0x20809064": [
+   "code",
+   "extra_ids.txt",
+   "windows_ids.txt"
+  ],
+  "0x2080a001": [
+   "code",
+   "extra_ids.txt"
+  ],
+  "0x2080a026": [
+   "code",
+   "extra_ids.txt",
+   "windows_ids.txt"
+  ],
+  "0x2080a028": [
+   "code",
+   "extra_ids.txt",
+   "windows_ids.txt"
+  ],
+  "0x2080a02f": [
+   "code",
+   "extra_ids.txt",
+   "windows_ids.txt"
+  ],
+  "0x2080a060": [
+   "code",
+   "extra_ids.txt",
+   "windows_ids.txt"
+  ],
+  "0x2080a079": [
+   "windows_ids.txt"
+  ],
+  "0x2080a080": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x2080a081": [
+   "windows_ids.txt"
+  ],
+  "0x2080a084": [
+   "code",
+   "extra_ids.txt",
+   "windows_ids.txt"
+  ],
+  "0x2080a088": [
+   "code",
+   "extra_ids.txt",
+   "windows_ids.txt"
+  ],
+  "0x2080a095": [
+   "windows_ids.txt"
+  ],
+  "0x2080a097": [
+   "code"
+  ],
+  "0x2080a0a4": [
+   "windows_ids.txt"
+  ],
+  "0x2080a0a7": [
+   "windows_ids.txt"
+  ],
+  "0x2080a0a8": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x2080a0c4": [
+   "windows_ids.txt"
+  ],
+  "0x2080a0c5": [
+   "windows_ids.txt"
+  ],
+  "0x2080a0c8": [
+   "windows_ids.txt"
+  ],
+  "0x2080a0cc": [
+   "windows_ids.txt"
+  ],
+  "0x2080a0d1": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x2080a0f2": [
+   "windows_ids.txt"
+  ],
+  "0x2080a612": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x2080a618": [
+   "code",
+   "extra_ids.txt",
+   "windows_ids.txt"
+  ],
+  "0x2080a619": [
+   "code",
+   "extra_ids.txt"
+  ],
+  "0x2080a630": [
+   "code",
+   "extra_ids.txt",
+   "windows_ids.txt"
+  ],
+  "0x2080a637": [
+   "windows_ids.txt"
+  ],
+  "0x2080a63c": [
+   "windows_ids.txt"
+  ],
+  "0x2080a70a": [
+   "code",
+   "extra_ids.txt",
+   "windows_ids.txt"
+  ],
+  "0x2080a801": [
+   "code",
+   "extra_ids.txt",
+   "windows_ids.txt"
+  ],
+  "0x2080b201": [
+   "code",
+   "extra_ids.txt",
+   "windows_ids.txt"
+  ],
+  "0x2080b202": [
+   "windows_ids.txt"
+  ],
+  "0x2080b209": [
+   "windows_ids.txt"
+  ],
+  "0x2080b210": [
+   "windows_ids.txt"
+  ],
+  "0x2080b216": [
+   "windows_ids.txt"
+  ],
+  "0x2080d02d": [
+   "windows_ids.txt"
+  ],
+  "0x2080dead": [
+   "code"
+  ],
+  "0x2080e0af": [
+   "windows_ids.txt"
+  ],
+  "0x2080e123": [
+   "code"
+  ],
+  "0x20810001": [
+   "code"
+  ],
+  "0x20810107": [
+   "code"
+  ],
+  "0x20810108": [
+   "code",
+   "extra_ids.txt",
+   "windows_ids.txt"
+  ],
+  "0x2081010d": [
+   "code",
+   "extra_ids.txt",
+   "windows_ids.txt"
+  ],
+  "0x20820001": [
+   "code"
+  ],
+  "0x208f1105": [
+   "code"
+  ],
+  "0x50700000": [
+   "code"
+  ],
+  "0x50700117": [
+   "windows_ids.txt"
+  ],
+  "0x50700118": [
+   "extra_ids.txt",
+   "windows_ids.txt"
+  ],
+  "0x5070020d": [
+   "windows_ids.txt"
+  ],
+  "0x50700709": [
+   "extra_ids.txt",
+   "windows_ids.txt"
+  ],
+  "0x50800101": [
+   "windows_ids.txt"
+  ],
+  "0x50800104": [
+   "windows_ids.txt"
+  ],
+  "0x906f0101": [
+   "code"
+  ],
+  "0x906f0102": [
+   "code"
+  ],
+  "0x906f0106": [
+   "code"
+  ],
+  "0x90960101": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x90960102": [
+   "code"
+  ],
+  "0x90960103": [
+   "code"
+  ],
+  "0x90960104": [
+   "code"
+  ],
+  "0x90960105": [
+   "code"
+  ],
+  "0x90960106": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x90960107": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0x90e70113": [
+   "windows_ids.txt"
+  ],
+  "0x90f10106": [
+   "windows_ids.txt"
+  ],
+  "0xa06c0101": [
+   "windows_ids.txt"
+  ],
+  "0xa06c0103": [
+   "windows_ids.txt"
+  ],
+  "0xa06c010a": [
+   "windows_ids.txt"
+  ],
+  "0xa06f0103": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0xa06f0104": [
+   "code",
+   "windows_ids.txt"
+  ],
+  "0xa06f0112": [
+   "code"
+  ],
+  "0xc36f0101": [
+   "code"
+  ],
+  "0xc36f0108": [
+   "code"
+  ],
+  "0xc36f010a": [
+   "code"
+  ],
+  "0xc3700104": [
+   "windows_ids.txt"
+  ],
+  "0xc3700201": [
+   "windows_ids.txt"
+  ],
+  "0xc3720101": [
+   "windows_ids.txt"
+  ],
+  "0xc56f010b": [
+   "code"
+  ]
+ },
+ "ctrl_ids": [
+  "0x00410103",
+  "0x00410110",
+  "0x00730101",
+  "0x00730102",
+  "0x00730107",
+  "0x00730108",
+  "0x00730109",
+  "0x0073010a",
+  "0x0073010b",
+  "0x0073010c",
+  "0x00730116",
+  "0x0073011a",
+  "0x0073011d",
+  "0x00730122",
+  "0x00730128",
+  "0x00730129",
+  "0x0073012c",
+  "0x0073013d",
+  "0x0073014b",
+  "0x00730151",
+  "0x00730240",
+  "0x00730245",
+  "0x00730250",
+  "0x00730273",
+  "0x00730280",
+  "0x00730282",
+  "0x00730285",
+  "0x00730287",
+  "0x00730288",
+  "0x0073028a",
+  "0x0073028b",
+  "0x00730293",
+  "0x007302a2",
+  "0x007302a3",
+  "0x007302a4",
+  "0x007302a5",
+  "0x007302a6",
+  "0x00730301",
+  "0x00730401",
+  "0x00730404",
+  "0x00731140",
+  "0x00731142",
+  "0x00731144",
+  "0x00731152",
+  "0x00731153",
+  "0x0073117a",
+  "0x00731341",
+  "0x00731365",
+  "0x00731369",
+  "0x00738285",
+  "0x0073ffff",
+  "0x00800000",
+  "0x00800106",
+  "0x00800201",
+  "0x00800280",
+  "0x00800288",
+  "0x00800289",
+  "0x0080028b",
+  "0x0080028e",
+  "0x00800292",
+  "0x00800294",
+  "0x00801102",
+  "0x00801104",
+  "0x00801109",
+  "0x00801301",
+  "0x00801306",
+  "0x00801307",
+  "0x00801401",
+  "0x00801402",
+  "0x00801701",
+  "0x00801707",
+  "0x0080170d",
+  "0x0080170e",
+  "0x0080170f",
+  "0x00801713",
+  "0x00801714",
+  "0x00801801",
+  "0x00801806",
+  "0x00801809",
+  "0x0080180d",
+  "0x00801812",
+  "0x00801813",
+  "0x00801814",
+  "0x00801815",
+  "0x00801909",
+  "0x00801b01",
+  "0x00801b02",
+  "0x00801c02",
+  "0x00802004",
+  "0x00802009",
+  "0x0080200a",
+  "0x00808123",
+  "0x00809908",
+  "0x00da0002",
+  "0x00da0006",
+  "0x00de0001",
+  "0x00f10003",
+  "0x00fd0101",
+  "0x00fd0102",
+  "0x00fd0104",
+  "0x00fd0105",
+  "0x20800000",
+  "0x20800101",
+  "0x20800102",
+  "0x20800110",
+  "0x20800111",
+  "0x20800119",
+  "0x20800122",
+  "0x20800123",
+  "0x2080012b",
+  "0x2080012c",
+  "0x2080012d",
+  "0x2080012f",
+  "0x20800131",
+  "0x20800133",
+  "0x2080013f",
+  "0x20800142",
+  "0x20800145",
+  "0x20800146",
+  "0x20800147",
+  "0x2080014a",
+  "0x2080014b",
+  "0x20800156",
+  "0x20800157",
+  "0x2080015a",
+  "0x2080015f",
+  "0x20800160",
+  "0x20800168",
+  "0x20800169",
+  "0x2080016c",
+  "0x20800170",
+  "0x20800173",
+  "0x20800177",
+  "0x2080017e",
+  "0x2080018b",
+  "0x2080018d",
+  "0x2080018e",
+  "0x20800195",
+  "0x208001a3",
+  "0x208001a4",
+  "0x208001b0",
+  "0x20800301",
+  "0x20800403",
+  "0x20800404",
+  "0x20800406",
+  "0x20800407",
+  "0x20800513",
+  "0x20800802",
+  "0x20800803",
+  "0x20800806",
+  "0x20800808",
+  "0x2080080b",
+  "0x2080080e",
+  "0x20800810",
+  "0x20800a00",
+  "0x20800a01",
+  "0x20800a1c",
+  "0x20800a1d",
+  "0x20800a1f",
+  "0x20800a22",
+  "0x20800a26",
+  "0x20800a2a",
+  "0x20800a2c",
+  "0x20800a2e",
+  "0x20800a30",
+  "0x20800a32",
+  "0x20800a34",
+  "0x20800a36",
+  "0x20800a37",
+  "0x20800a38",
+  "0x20800a39",
+  "0x20800a3a",
+  "0x20800a3d",
+  "0x20800a3f",
+  "0x20800a40",
+  "0x20800a41",
+  "0x20800a48",
+  "0x20800a49",
+  "0x20800a4b",
+  "0x20800a4c",
+  "0x20800a58",
+  "0x20800a59",
+  "0x20800a5c",
+  "0x20800a5d",
+  "0x20800a61",
+  "0x20800a69",
+  "0x20800a6c",
+  "0x20800a70",
+  "0x20800a80",
+  "0x20800a87",
+  "0x20800a9a",
+  "0x20800a9b",
+  "0x20800a9d",
+  "0x20800a9f",
+  "0x20800aac",
+  "0x20800aaf",
+  "0x20800ab8",
+  "0x20800ac6",
+  "0x20800adf",
+  "0x20800af0",
+  "0x20800af1",
+  "0x20800af2",
+  "0x20800af3",
+  "0x20800afe",
+  "0x20800aff",
+  "0x20800b00",
+  "0x20800b03",
+  "0x20800b05",
+  "0x20801109",
+  "0x2080110b",
+  "0x20801110",
+  "0x20801111",
+  "0x20801112",
+  "0x20801116",
+  "0x20801117",
+  "0x20801119",
+  "0x20801201",
+  "0x20801206",
+  "0x20801208",
+  "0x20801209",
+  "0x20801210",
+  "0x20801211",
+  "0x20801218",
+  "0x20801219",
+  "0x2080121b",
+  "0x2080121f",
+  "0x20801220",
+  "0x20801221",
+  "0x20801222",
+  "0x20801227",
+  "0x20801228",
+  "0x2080122a",
+  "0x2080122b",
+  "0x2080122d",
+  "0x20801230",
+  "0x20801232",
+  "0x20801234",
+  "0x20801237",
+  "0x20801239",
+  "0x20801301",
+  "0x20801303",
+  "0x2080130e",
+  "0x20801315",
+  "0x20801320",
+  "0x20801322",
+  "0x20801344",
+  "0x20801347",
+  "0x20801352",
+  "0x20801357",
+  "0x20801358",
+  "0x20801359",
+  "0x20801701",
+  "0x20801702",
+  "0x2080170d",
+  "0x2080170e",
+  "0x2080170f",
+  "0x20801801",
+  "0x20801802",
+  "0x20801803",
+  "0x20801813",
+  "0x20801819",
+  "0x20801823",
+  "0x20801829",
+  "0x2080182a",
+  "0x2080182b",
+  "0x20801830",
+  "0x2080200a",
+  "0x2080200b",
+  "0x2080205a",
+  "0x2080205b",
+  "0x20802068",
+  "0x20802205",
+  "0x20802209",
+  "0x2080220c",
+  "0x2080220d",
+  "0x2080220e",
+  "0x20802210",
+  "0x20802213",
+  "0x20802502",
+  "0x20802801",
+  "0x20802806",
+  "0x20802a01",
+  "0x20802a02",
+  "0x20802a03",
+  "0x20802a06",
+  "0x20802a07",
+  "0x20802a08",
+  "0x20802a0a",
+  "0x20802a0b",
+  "0x20802a0d",
+  "0x20802a0f",
+  "0x20802a12",
+  "0x20803001",
+  "0x20803002",
+  "0x20803039",
+  "0x20803083",
+  "0x20803088",
+  "0x20803125",
+  "0x20803400",
+  "0x20803401",
+  "0x20803404",
+  "0x20803601",
+  "0x20803801",
+  "0x20803c01",
+  "0x20803d07",
+  "0x20804123",
+  "0x20807fff",
+  "0x20808000",
+  "0x20808123",
+  "0x20808124",
+  "0x20808159",
+  "0x20808162",
+  "0x20808163",
+  "0x20808164",
+  "0x208081ea",
+  "0x20808513",
+  "0x20808524",
+  "0x2080852a",
+  "0x2080852b",
+  "0x2080852c",
+  "0x2080852e",
+  "0x2080852f",
+  "0x20808530",
+  "0x20808532",
+  "0x20808536",
+  "0x20808537",
+  "0x20808539",
+  "0x2080853a",
+  "0x2080853b",
+  "0x20808542",
+  "0x20808546",
+  "0x2080880f",
+  "0x20809001",
+  "0x20809004",
+  "0x20809009",
+  "0x20809019",
+  "0x2080901b",
+  "0x20809029",
+  "0x2080902a",
+  "0x2080902b",
+  "0x2080902c",
+  "0x20809037",
+  "0x20809038",
+  "0x20809063",
+  "0x20809064",
+  "0x2080a001",
+  "0x2080a026",
+  "0x2080a028",
+  "0x2080a02f",
+  "0x2080a060",
+  "0x2080a079",
+  "0x2080a080",
+  "0x2080a081",
+  "0x2080a084",
+  "0x2080a088",
+  "0x2080a095",
+  "0x2080a097",
+  "0x2080a0a4",
+  "0x2080a0a7",
+  "0x2080a0a8",
+  "0x2080a0c4",
+  "0x2080a0c5",
+  "0x2080a0c8",
+  "0x2080a0cc",
+  "0x2080a0d1",
+  "0x2080a0f2",
+  "0x2080a612",
+  "0x2080a618",
+  "0x2080a619",
+  "0x2080a630",
+  "0x2080a637",
+  "0x2080a63c",
+  "0x2080a70a",
+  "0x2080a801",
+  "0x2080b201",
+  "0x2080b202",
+  "0x2080b209",
+  "0x2080b210",
+  "0x2080b216",
+  "0x2080d02d",
+  "0x2080dead",
+  "0x2080e0af",
+  "0x2080e123",
+  "0x20810001",
+  "0x20810107",
+  "0x20810108",
+  "0x2081010d",
+  "0x20820001",
+  "0x208f1105",
+  "0x50700000",
+  "0x50700117",
+  "0x50700118",
+  "0x5070020d",
+  "0x50700709",
+  "0x50800101",
+  "0x50800104",
+  "0x906f0101",
+  "0x906f0102",
+  "0x906f0106",
+  "0x90960101",
+  "0x90960102",
+  "0x90960103",
+  "0x90960104",
+  "0x90960105",
+  "0x90960106",
+  "0x90960107",
+  "0x90e70113",
+  "0x90f10106",
+  "0xa06c0101",
+  "0xa06c0103",
+  "0xa06c010a",
+  "0xa06f0103",
+  "0xa06f0104",
+  "0xa06f0112",
+  "0xc36f0101",
+  "0xc36f0108",
+  "0xc36f010a",
+  "0xc3700104",
+  "0xc3700201",
+  "0xc3720101",
+  "0xc56f010b"
+ ],
+ "ctrl_names": [
+  "NV0000_CTRL_CMD_CLIENT_GET_ADDR_SPACE_TYPE",
+  "NV0000_CTRL_CMD_CLIENT_SET_INHERITED_SHARE_POLICY",
+  "NV0000_CTRL_CMD_GPU_ASYNC_ATTACH_ID",
+  "NV0000_CTRL_CMD_GPU_ATTACH_IDS",
+  "NV0000_CTRL_CMD_GPU_DETACH_IDS",
+  "NV0000_CTRL_CMD_GPU_GET_ACTIVE_DEVICE_IDS",
+  "NV0000_CTRL_CMD_GPU_GET_ATTACHED_IDS",
+  "NV0000_CTRL_CMD_GPU_GET_DEVICE_IDS",
+  "NV0000_CTRL_CMD_GPU_GET_ID_INFO",
+  "NV0000_CTRL_CMD_GPU_GET_ID_INFO_V2",
+  "NV0000_CTRL_CMD_GPU_GET_MEMOP_ENABLE",
+  "NV0000_CTRL_CMD_GPU_GET_PCI_INFO",
+  "NV0000_CTRL_CMD_GPU_GET_PROBED_IDS",
+  "NV0000_CTRL_CMD_GPU_GET_UUID_FROM_GPU_ID",
+  "NV0000_CTRL_CMD_GPU_QUERY_DRAIN_STATE",
+  "NV0000_CTRL_CMD_GPU_WAIT_ATTACH_ID",
+  "NV0000_CTRL_CMD_GSYNC_GET_ATTACHED_IDS",
+  "NV0000_CTRL_CMD_OS_UNIX_EXPORT_OBJECT_TO_FD",
+  "NV0000_CTRL_CMD_OS_UNIX_IMPORT_OBJECT_FROM_FD",
+  "NV0000_CTRL_CMD_SYNC_GPU_BOOST_GROUP_INFO",
+  "NV0000_CTRL_CMD_SYSTEM_GET_BUILD_VERSION",
+  "NV0000_CTRL_CMD_SYSTEM_GET_CPU_INFO",
+  "NV0000_CTRL_CMD_SYSTEM_GET_FABRIC_STATUS",
+  "NV0000_CTRL_CMD_SYSTEM_GET_FEATURES",
+  "NV0000_CTRL_CMD_SYSTEM_GET_P2P_CAPS",
+  "NV0000_CTRL_CMD_SYSTEM_GET_P2P_CAPS_MATRIX",
+  "NV0000_CTRL_CMD_SYSTEM_GET_P2P_CAPS_V2",
+  "NV0041_CTRL_CMD_GET_SURFACE_INFO",
+  "NV0041_CTRL_CMD_GET_SURFACE_PHYS_ATTR",
+  "NV0073_CTRL_CMD_DFP_ASSIGN_SOR",
+  "NV0073_CTRL_CMD_DFP_ASSIGN_SOR_MAX_SORS",
+  "NV0073_CTRL_CMD_DFP_GET_DISPLAYPORT_DONGLE_INFO",
+  "NV0073_CTRL_CMD_DFP_GET_INFO",
+  "NV0073_CTRL_CMD_EVENT_SET_NOTIFICATION",
+  "NV0073_CTRL_CMD_INTERNAL_GET_HOTPLUG_UNPLUG_STATE",
+  "NV0073_CTRL_CMD_SPECIFIC_DISPLAY_CHANGE",
+  "NV0073_CTRL_CMD_SPECIFIC_GET_ALL_HEAD_MASK",
+  "NV0073_CTRL_CMD_SPECIFIC_GET_BACKLIGHT_BRIGHTNESS",
+  "NV0073_CTRL_CMD_SPECIFIC_GET_CONNECTOR_DATA",
+  "NV0073_CTRL_CMD_SPECIFIC_GET_EDID_V2",
+  "NV0073_CTRL_CMD_SPECIFIC_GET_PCLK_LIMIT",
+  "NV0073_CTRL_CMD_SPECIFIC_GET_TYPE",
+  "NV0073_CTRL_CMD_SPECIFIC_GET_VALID_HEAD_WINDOW_ASSIGNMENT",
+  "NV0073_CTRL_CMD_SPECIFIC_IS_DIRECTMODE_DISPLAY",
+  "NV0073_CTRL_CMD_SPECIFIC_OR_GET_INFO",
+  "NV0073_CTRL_CMD_SPECIFIC_SET_EDID_V2",
+  "NV0073_CTRL_CMD_SYSTEM_GET_ACTIVE",
+  "NV0073_CTRL_CMD_SYSTEM_GET_BOOT_DISPLAYS",
+  "NV0073_CTRL_CMD_SYSTEM_GET_CAPS_V2",
+  "NV0073_CTRL_CMD_SYSTEM_GET_CONNECT_STATE",
+  "NV0073_CTRL_CMD_SYSTEM_GET_HEAD_ROUTING_MAP",
+  "NV0073_CTRL_CMD_SYSTEM_GET_HOTPLUG_STATE",
+  "NV0073_CTRL_CMD_SYSTEM_GET_INTERNAL_DISPLAYS",
+  "NV0073_CTRL_CMD_SYSTEM_GET_NUM_HEADS",
+  "NV0073_CTRL_CMD_SYSTEM_GET_SUPPORTED",
+  "NV0073_CTRL_CMD_SYSTEM_MAP_SHARED_DATA",
+  "NV0080_CTRL_CMD_BSP_GET_CAPS_V2",
+  "NV0080_CTRL_CMD_DMA_ADV_SCHED_GET_VA_CAPS",
+  "NV0080_CTRL_CMD_DMA_GET_CAPS",
+  "NV0080_CTRL_CMD_DMA_GET_PDE_INFO",
+  "NV0080_CTRL_CMD_DMA_GET_PTE_INFO",
+  "NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY",
+  "NV0080_CTRL_CMD_DMA_UNSET_PAGE_DIRECTORY",
+  "NV0080_CTRL_CMD_FB_GET_CAPS",
+  "NV0080_CTRL_CMD_FB_GET_CAPS_V2",
+  "NV0080_CTRL_CMD_FIFO_GET_CAPS",
+  "NV0080_CTRL_CMD_FIFO_GET_CAPS_V2",
+  "NV0080_CTRL_CMD_FIFO_GET_CHANNELLIST",
+  "NV0080_CTRL_CMD_FIFO_GET_ENGINE_CONTEXT_PROPERTIES",
+  "NV0080_CTRL_CMD_FIFO_GET_LATENCY_BUFFER_SIZE",
+  "NV0080_CTRL_CMD_FIFO_IDLE_CHANNELS",
+  "NV0080_CTRL_CMD_GPU_GET_BRAND_CAPS",
+  "NV0080_CTRL_CMD_GPU_GET_CLASSLIST",
+  "NV0080_CTRL_CMD_GPU_GET_CLASSLIST_V2",
+  "NV0080_CTRL_CMD_GPU_GET_NUM_SUBDEVICES",
+  "NV0080_CTRL_CMD_GPU_GET_VGX_CAPS",
+  "NV0080_CTRL_CMD_GPU_GET_VIRTUALIZATION_MODE",
+  "NV0080_CTRL_CMD_GPU_QUERY_SW_STATE_PERSISTENCE",
+  "NV0080_CTRL_CMD_GR_GET_CAPS",
+  "NV0080_CTRL_CMD_GR_GET_CAPS_V2",
+  "NV0080_CTRL_CMD_GR_GET_INFO",
+  "NV0080_CTRL_CMD_HOST_GET_CAPS",
+  "NV0080_CTRL_CMD_HOST_GET_CAPS_V2",
+  "NV0080_CTRL_CMD_INTERNAL_PERF_CUDA_LIMIT_DISABLE",
+  "NV0080_CTRL_CMD_INTERNAL_PERF_CUDA_LIMIT_SET_CONTROL",
+  "NV0080_CTRL_CMD_MSENC_GET_CAPS",
+  "NV0080_CTRL_CMD_MSENC_GET_CAPS_V2",
+  "NV0080_CTRL_CMD_PERF_CUDA_LIMIT_SET_CONTROL",
+  "NV00DE_CTRL_CMD_REQUEST_DATA_POLL",
+  "NV00E0_CTRL_CMD_IMPORT_MEM",
+  "NV00F1_CTRL_CMD_DISABLE_IMPORTERS",
+  "NV00F8_CTRL_CMD_ATTACH_MEM",
+  "NV00FD_CTRL_CMD_ATTACH_GPU",
+  "NV00FD_CTRL_CMD_ATTACH_MEM",
+  "NV00FD_CTRL_CMD_DETACH_MEM",
+  "NV00FD_CTRL_CMD_GET_INFO",
+  "NV2080_CTRL_CMD_BIOS_GET_INFO",
+  "NV2080_CTRL_CMD_BIOS_GET_INFO_V2",
+  "NV2080_CTRL_CMD_BUS_GET_C2C_INFO",
+  "NV2080_CTRL_CMD_BUS_GET_C2C_INFO_PARAMS",
+  "NV2080_CTRL_CMD_BUS_GET_INFO",
+  "NV2080_CTRL_CMD_BUS_GET_INFO_V2",
+  "NV2080_CTRL_CMD_BUS_GET_PCIE_SUPPORTED_GPU_ATOMICS",
+  "NV2080_CTRL_CMD_BUS_GET_PCIE_SUPPORTED_GPU_ATOMICS_PARAMS",
+  "NV2080_CTRL_CMD_BUS_GET_PCI_BAR_INFO",
+  "NV2080_CTRL_CMD_BUS_GET_PCI_INFO",
+  "NV2080_CTRL_CMD_CE_GET_ALL_CAPS",
+  "NV2080_CTRL_CMD_CE_GET_ALL_PHYSICAL_CAPS",
+  "NV2080_CTRL_CMD_CE_GET_CAPS",
+  "NV2080_CTRL_CMD_CE_GET_CAPS_V2",
+  "NV2080_CTRL_CMD_CE_GET_CE_PCE_MASK",
+  "NV2080_CTRL_CMD_CE_GET_FAULT_METHOD_BUFFER_SIZE",
+  "NV2080_CTRL_CMD_CE_GET_PHYSICAL_CAPS",
+  "NV2080_CTRL_CMD_DMA_INVALIDATE_TLB",
+  "NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION",
+  "NV2080_CTRL_CMD_FB_FLUSH_GPU_CACHE",
+  "NV2080_CTRL_CMD_FB_GET_FB_REGION_INFO",
+  "NV2080_CTRL_CMD_FB_GET_GPU_CACHE_INFO",
+  "NV2080_CTRL_CMD_FB_GET_INFO",
+  "NV2080_CTRL_CMD_FB_GET_INFO_V2",
+  "NV2080_CTRL_CMD_FB_GET_SEMAPHORE_SURFACE_LAYOUT",
+  "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT",
+  "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT_V575",
+  "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_STATUS",
+  "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_STATUS_V575",
+  "NV2080_CTRL_CMD_FIFO_DISABLE_CHANNELS",
+  "NV2080_CTRL_CMD_FIFO_DISABLE_USERMODE_CHANNELS",
+  "NV2080_CTRL_CMD_FIFO_GET_ALLOCATED_CHANNELS",
+  "NV2080_CTRL_CMD_FIFO_GET_DEVICE_INFO_TABLE",
+  "NV2080_CTRL_CMD_FIFO_GET_INFO",
+  "NV2080_CTRL_CMD_FLCN_GET_CTX_BUFFER_SIZE",
+  "NV2080_CTRL_CMD_GET_GPU_FABRIC_PROBE_INFO",
+  "NV2080_CTRL_CMD_GPU_ACQUIRE_COMPUTE_MODE_RESERVATION",
+  "NV2080_CTRL_CMD_GPU_EVICT_CTX",
+  "NV2080_CTRL_CMD_GPU_EXEC_REG_OPS",
+  "NV2080_CTRL_CMD_GPU_GET_ACTIVE_PARTITION_IDS",
+  "NV2080_CTRL_CMD_GPU_GET_COMPUTE_POLICY_CONFIG",
+  "NV2080_CTRL_CMD_GPU_GET_CONSTRUCTED_FALCON_INFO",
+  "NV2080_CTRL_CMD_GPU_GET_ENCODER_CAPACITY",
+  "NV2080_CTRL_CMD_GPU_GET_ENGINES",
+  "NV2080_CTRL_CMD_GPU_GET_ENGINES_V2",
+  "NV2080_CTRL_CMD_GPU_GET_ENGINE_PARTNERLIST",
+  "NV2080_CTRL_CMD_GPU_GET_GID_INFO",
+  "NV2080_CTRL_CMD_GPU_GET_ID",
+  "NV2080_CTRL_CMD_GPU_GET_INFOROM_IMAGE_VERSION",
+  "NV2080_CTRL_CMD_GPU_GET_INFOROM_OBJECT_VERSION",
+  "NV2080_CTRL_CMD_GPU_GET_INFO_V2",
+  "NV2080_CTRL_CMD_GPU_GET_NAME_STRING",
+  "NV2080_CTRL_CMD_GPU_GET_OEM_BOARD_INFO",
+  "NV2080_CTRL_CMD_GPU_GET_PES_INFO",
+  "NV2080_CTRL_CMD_GPU_GET_PIDS",
+  "NV2080_CTRL_CMD_GPU_GET_PID_INFO",
+  "NV2080_CTRL_CMD_GPU_GET_SHORT_NAME_STRING",
+  "NV2080_CTRL_CMD_GPU_GET_SIMULATION_INFO",
+  "NV2080_CTRL_CMD_GPU_PROMOTE_CTX",
+  "NV2080_CTRL_CMD_GPU_QUERY_COMPUTE_MODE_RULES",
+  "NV2080_CTRL_CMD_GPU_QUERY_ECC_CONFIGURATION",
+  "NV2080_CTRL_CMD_GPU_QUERY_ECC_STATUS",
+  "NV2080_CTRL_CMD_GPU_QUERY_INFOROM_ECC_SUPPORT",
+  "NV2080_CTRL_CMD_GPU_RELEASE_COMPUTE_MODE_RESERVATION",
+  "NV2080_CTRL_CMD_GPU_REPORT_NON_REPLAYABLE_FAULT",
+  "NV2080_CTRL_CMD_GRMGR_GET_GR_FS_INFO",
+  "NV2080_CTRL_CMD_GR_CTXSW_ZCULL_BIND",
+  "NV2080_CTRL_CMD_GR_GET_CAPS_V2",
+  "NV2080_CTRL_CMD_GR_GET_CTX_BUFFER_INFO",
+  "NV2080_CTRL_CMD_GR_GET_CTX_BUFFER_SIZE",
+  "NV2080_CTRL_CMD_GR_GET_ENGINE_CONTEXT_PROPERTIES",
+  "NV2080_CTRL_CMD_GR_GET_GFX_GPC_AND_TPC_INFO",
+  "NV2080_CTRL_CMD_GR_GET_GLOBAL_SM_ORDER",
+  "NV2080_CTRL_CMD_GR_GET_GPC_MASK",
+  "NV2080_CTRL_CMD_GR_GET_INFO",
+  "NV2080_CTRL_CMD_GR_GET_INFO_V2",
+  "NV2080_CTRL_CMD_GR_GET_NUM_TPCS_FOR_GPC",
+  "NV2080_CTRL_CMD_GR_GET_PHYS_GPC_MASK",
+  "NV2080_CTRL_CMD_GR_GET_SM_ISSUE_RATE_MODIFIER",
+  "NV2080_CTRL_CMD_GR_GET_TPC_MASK",
+  "NV2080_CTRL_CMD_GR_GET_ZCULL_INFO",
+  "NV2080_CTRL_CMD_GR_GET_ZCULL_MASK",
+  "NV2080_CTRL_CMD_GR_SET_CTXSW_PREEMPTION_MODE",
+  "NV2080_CTRL_CMD_GSP_GET_FEATURES",
+  "NV2080_CTRL_CMD_INTERNAL_BIF_GET_STATIC_INFO",
+  "NV2080_CTRL_CMD_INTERNAL_BUS_FLUSH_WITH_SYSMEMBAR",
+  "NV2080_CTRL_CMD_INTERNAL_CONF_COMPUTE_GET_STATIC_INFO",
+  "NV2080_CTRL_CMD_INTERNAL_DISPLAY_ACPI_SUBSYSTEM_ACTIVATED",
+  "NV2080_CTRL_CMD_INTERNAL_DISPLAY_GET_ACTIVE_DISPLAY_DEVICES",
+  "NV2080_CTRL_CMD_INTERNAL_DISPLAY_POST_MODESET",
+  "NV2080_CTRL_CMD_INTERNAL_DISPLAY_POST_UNIX_CONSOLE",
+  "NV2080_CTRL_CMD_INTERNAL_DISPLAY_PRE_MODESET",
+  "NV2080_CTRL_CMD_INTERNAL_DISPLAY_PRE_UNIX_CONSOLE",
+  "NV2080_CTRL_CMD_INTERNAL_DISPLAY_PRE_UNIX_CONSOLE_PARAMS",
+  "NV2080_CTRL_CMD_INTERNAL_FIFO_GET_NUM_CHANNELS",
+  "NV2080_CTRL_CMD_INTERNAL_GET_DEVICE_INFO_TABLE",
+  "NV2080_CTRL_CMD_INTERNAL_GMMU_COPY_RESERVED_SPLIT_GVASPACE_PDES_TO_SERVER",
+  "NV2080_CTRL_CMD_INTERNAL_GMMU_GET_STATIC_INFO",
+  "NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_CLIENT_SHADOW_FAULT_BUFFER",
+  "NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_FAULT_BUFFER",
+  "NV2080_CTRL_CMD_INTERNAL_GPU_GET_CHIP_INFO",
+  "NV2080_CTRL_CMD_INTERNAL_GPU_GET_SMC_MODE",
+  "NV2080_CTRL_CMD_INTERNAL_GPU_GET_USER_REGISTER_ACCESS_MAP",
+  "NV2080_CTRL_CMD_INTERNAL_INTR_GET_KERNEL_TABLE",
+  "NV2080_CTRL_CMD_INTERNAL_MEMSYS_GET_STATIC_CONFIG",
+  "NV2080_CTRL_CMD_INTERNAL_MEMSYS_L2_INVALIDATE_EVICT",
+  "NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_CAPS",
+  "NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_CONTEXT_BUFFERS_INFO",
+  "NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_FECS_RECORD_SIZE",
+  "NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_FECS_RECORD_SIZE_PARAMS",
+  "NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_FLOORSWEEPING_MASKS",
+  "NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_GLOBAL_SM_ORDER",
+  "NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_INFO",
+  "NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_PDB_PROPERTIES",
+  "NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_SM_ISSUE_RATE_MODIFIER",
+  "NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_ZCULL_INFO",
+  "NV2080_CTRL_CMD_INTERNAL_UVM_REGISTER_ACCESS_CNTR_BUFFER",
+  "NV2080_CTRL_CMD_MC_GET_ARCH_INFO",
+  "NV2080_CTRL_CMD_MC_GET_ENGINE_NOTIFICATION_INTR_VECTORS",
+  "NV2080_CTRL_CMD_MC_GET_INTR_CATEGORY_SUBTREE_MAP",
+  "NV2080_CTRL_CMD_MC_GET_STATIC_INTR_TABLE",
+  "NV2080_CTRL_CMD_MC_SERVICE_INTERRUPTS",
+  "NV2080_CTRL_CMD_NVLINK_GET_NVLINK_CAPS",
+  "NV2080_CTRL_CMD_NVLINK_GET_NVLINK_STATUS",
+  "NV2080_CTRL_CMD_NVLINK_GET_PLATFORM_INFO",
+  "NV2080_CTRL_CMD_OS_UNIX_VIDMEM_PERSISTENCE_STATUS",
+  "NV2080_CTRL_CMD_PERF_BOOST",
+  "NV2080_CTRL_CMD_PERF_GET_CURRENT_PSTATE",
+  "NV2080_CTRL_CMD_PERF_GET_LEVEL_INFO_V2",
+  "NV2080_CTRL_CMD_RC_GET_WATCHDOG_INFO",
+  "NV2080_CTRL_CMD_RC_RECOVERY_PARAMS",
+  "NV2080_CTRL_CMD_RC_RELEASE_WATCHDOG_REQUESTS",
+  "NV2080_CTRL_CMD_RC_SOFT_DISABLE_WATCHDOG",
+  "NV2080_CTRL_CMD_SYNTHETIC_LEGACY_MASKED",
+  "NV2080_CTRL_CMD_THERMAL_SYSTEM_EXECUTE_V2",
+  "NV2080_CTRL_CMD_TIMER_GET_GPU_CPU_TIME_CORRELATION_INFO",
+  "NV2080_CTRL_CMD_TIMER_GET_REGISTER_OFFSET",
+  "NV2080_CTRL_CMD_TIMER_GET_TIME",
+  "NV2080_CTRL_CMD_TIMER_SET_GR_TICK_FREQ",
+  "NV208F_CTRL_CMD_GPU_VERIFY_INFOROM",
+  "NV503C_CTRL_CMD_REGISTER_VA_SPACE",
+  "NV503C_CTRL_CMD_REGISTER_VIDMEM",
+  "NV503C_CTRL_CMD_UNREGISTER_VIDMEM",
+  "NV5070_CTRL_CMD_IMP_SET_GET_PARAMETER",
+  "NV5070_CTRL_CMD_SET_RMFREE_FLAGS",
+  "NV5070_CTRL_CMD_SYSTEM_GET_CAPS_V2",
+  "NV5080_CTRL_CMD_DEFERRED_API",
+  "NV5080_CTRL_CMD_DEFERRED_API_INTERNAL",
+  "NV5080_CTRL_CMD_DEFERRED_API_V2",
+  "NV5080_CTRL_CMD_REMOVE_API",
+  "NV83DE_CTRL_CMD_DEBUG_CLEAR_ALL_SM_ERROR_STATES",
+  "NV83DE_CTRL_CMD_DEBUG_READ_ALL_SM_ERROR_STATES",
+  "NV83DE_CTRL_CMD_DEBUG_RESUME_CONTEXT",
+  "NV83DE_CTRL_CMD_DEBUG_SET_EXCEPTION_MASK",
+  "NV83DE_CTRL_CMD_DEBUG_SET_MODE_MMU_DEBUG",
+  "NV83DE_CTRL_CMD_DEBUG_SUSPEND_CONTEXT",
+  "NV906F_CTRL_CMD_GET_MMU_FAULT_INFO",
+  "NV906F_CTRL_CMD_RESET_CHANNEL",
+  "NV9096_CTRL_CMD_GET_ZBC_CLEAR_TABLE_ENTRY",
+  "NV9096_CTRL_CMD_GET_ZBC_CLEAR_TABLE_SIZE",
+  "NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR",
+  "NV90E6_CTRL_CMD_MASTER_GET_VIRTUAL_FUNCTION_ERROR_CONT_INTR_MASK",
+  "NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES",
+  "NVA06C_CTRL_CMD_BIND",
+  "NVA06C_CTRL_CMD_GPFIFO_SCHEDULE",
+  "NVA06C_CTRL_CMD_INTERNAL_PROMOTE_FAULT_METHOD_BUFFERS",
+  "NVA06C_CTRL_CMD_PREEMPT",
+  "NVA06C_CTRL_CMD_PREEMPT_MAX_MANUAL_TIMEOUT_US",
+  "NVA06C_CTRL_CMD_SET_TIMESLICE",
+  "NVA06F_CTRL_CMD_BIND",
+  "NVA06F_CTRL_CMD_GPFIFO_SCHEDULE",
+  "NVA06F_CTRL_CMD_STOP_CHANNEL",
+  "NVB0CC_CTRL_CMD_ALLOC_PMA_STREAM",
+  "NVB0CC_CTRL_CMD_EXEC_REG_OPS",
+  "NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN",
+  "NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN_PARAMS",
+  "NVC36F_CTRL_CMD_GPFIFO_SET_WORK_SUBMIT_TOKEN_NOTIF_INDEX",
+  "NVC370_CTRL_CMD_GET_ACCL",
+  "NVC370_CTRL_CMD_GET_CHANNEL_INFO",
+  "NVC370_CTRL_CMD_GET_CHANNEL_INFO_PARAMS",
+  "NVC370_CTRL_CMD_GET_LOCKPINS_CAPS",
+  "NVC370_CTRL_CMD_IDLE_CHANNEL",
+  "NVC370_CTRL_CMD_SET_ACCL",
+  "NVC370_CTRL_CMD_SET_SWAPRDY_GPIO_WAR",
+  "NVC372_CTRL_CMD_IS_MODE_POSSIBLE",
+  "NVC56F_CTRL_CMD_GET_KMB"
+ ]
+}

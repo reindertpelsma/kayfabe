@@ -1,0 +1,12 @@
+{
+  "utc": 1792448991.0410018,
+  "stopped_only_own_unresponsive_shutdown_controller": {
+    "127874": "timeout 245 bash scripts/bench/windows/win_vm.sh stop ",
+    "127875": "bash scripts/bench/windows/win_vm.sh stop ",
+    "128071": "sleep 5 "
+  },
+  "gpu_vm_signalled": false,
+  "qmp_powerdown_rc": 0,
+  "qmp_powerdown_stdout": "{}\n",
+  "grace_seconds_before_qmp_quit": 120
+}

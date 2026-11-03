@@ -1,0 +1,23 @@
+{
+  "omit_csc00": {
+    "killing_tests": [
+      "declared_csc_stages_report_public_precision_in_every_display_cell",
+      "precision_uses_generated_addresses_and_fields_including_the_final_window"
+    ],
+    "count": 2
+  },
+  "omit_csc01": {
+    "killing_tests": [
+      "declared_csc_stages_report_public_precision_in_every_display_cell",
+      "precision_uses_generated_addresses_and_fields_including_the_final_window"
+    ],
+    "count": 2
+  },
+  "omit_overlay_precision": {
+    "killing_tests": [
+      "precision_uses_generated_addresses_and_fields_including_the_final_window",
+      "declared_csc_stages_report_public_precision_in_every_display_cell"
+    ],
+    "count": 2
+  }
+}

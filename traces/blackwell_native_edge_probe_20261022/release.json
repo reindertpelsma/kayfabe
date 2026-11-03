@@ -1,0 +1,13 @@
+{
+  "before": {
+    "passed": 19,
+    "failed": 0,
+    "ignored": 0
+  },
+  "after": {
+    "passed": 32,
+    "failed": 0,
+    "ignored": 0
+  },
+  "all_old_targets_and_named_tests_retained": true
+}

@@ -21,9 +21,12 @@ kf_packages() {
   local required=(build-essential pkg-config git curl python3 kmod pciutils cpio zstd
                   psmisc busybox-static openssh-client)
   local optional=(clang lld libssl-dev)
+  # libzstd-dev (QEMU zstd image decoding) and iptables: ported from the Blackwell branch's
+  # provision_bench_tree.sh list (c3924ce8c) when the package list moved here (2026-11-01 merge).
   local bench=(ninja-build meson python3-venv python3-pip python3-tomli libglib2.0-dev
                libpixman-1-dev flex bison qemu-utils cloud-image-utils genisoimage
-               qemu-system-x86 ovmf musl-tools libslirp-dev)
+               qemu-system-x86 ovmf musl-tools libslirp-dev
+               libzstd-dev iptables)
   case "$profile" in
     ci) printf '%s\n' "${required[@]}" ;;
     full) printf '%s\n' "${required[@]}" "${optional[@]}" ;;

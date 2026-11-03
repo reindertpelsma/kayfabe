@@ -1,0 +1,6 @@
+WINDOWS580_EXIT rc=0 2026-10-19T22:21:23+00:00
+COLD580_READY=1; cold QEMU required; this is not a suite PASS
+BW580_ARM_START profile=off source=24906bf334665c9000b16b271005593daa3586c7 2026-10-19T22:32:06+00:00
+H_B1 falsifier: display-off still Code43 without CA70/NV0073/CA7A; exact teardown path and explicit fn47 must be measured. No reply guesses.
+[2026-10-19T22:32:06Z] detached: tag=bw580_off, log logs/bw580_off_run.log (stdout logs/bw580_off_run.out)
+BW580_ARM_EXIT profile=off rc=0 2026-10-19T22:33:40+00:00

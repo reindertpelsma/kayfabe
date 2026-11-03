@@ -1,0 +1,35 @@
+{
+  "utc": "2026-10-20T23:06:58.363020+00:00",
+  "code_head": "26691c14a",
+  "accepted_gpu_free": true,
+  "release_pass_fail_ignore": [
+    2750,
+    0,
+    8
+  ],
+  "six_crates_before_after": [
+    2733,
+    2735
+  ],
+  "harness_before_after": [
+    12,
+    15
+  ],
+  "mutants": 4,
+  "killers": [
+    3,
+    2,
+    2,
+    2
+  ],
+  "clippy_base_head": [
+    582,
+    582
+  ],
+  "clippy_added": 0,
+  "rustfmt": "3 changed Rust files pass, edition2024",
+  "tests_removed_or_loosened": [],
+  "test_corrections": "Initial native fixture operand indices4/6 and tail8 corrected in separate EXPECTED RED commits; old constructor restored and all3 runtime failures re-proved before the fix. Original oracle assertions and every non-class datum retained.",
+  "inherited_acceptance": "Previous9 mutants/2733tests/clippy557\u2192557 retained in acceptance.json; no protected relay changes.",
+  "hardware": "Pending; firstlease stopped at native oracle and was destroyed. No Windows PASS."
+}

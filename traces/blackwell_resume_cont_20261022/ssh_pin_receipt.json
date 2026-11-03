@@ -1,0 +1,10 @@
+{
+  "utc": "2026-10-21T23:26:29.530457+00:00",
+  "id": 57117614,
+  "trust_source": "public ED25519 host key published in this instance authenticated Vast console output",
+  "pinned_fingerprint": "SHA256:MYKNBIBfyB1we/l7f6RT3y3383miVrRVAU4k39XaG1s",
+  "fresh_endpoint_key_exactly_matches_console": true,
+  "strict_host_key_checking": "yes",
+  "old_missing_pin_not_reused": true,
+  "connection_not_yet_authenticated": true
+}

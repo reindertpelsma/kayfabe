@@ -18,6 +18,10 @@
   "doorbells": 8,
   "irq_clear": 1114116,
   "irq_status": 1114120,
+  "fmc_target": 40,
+  "fmc_libos": 48,
+  "fmc_coherent": 1,
+  "fmc_noncoherent": 2,
   "source": "OGKM580.65.06",
   "revision": "307159f2623d3bf45feb9177bd2da52ffbc5ddf9"
 }

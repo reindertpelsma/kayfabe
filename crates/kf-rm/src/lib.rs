@@ -17,6 +17,7 @@ pub mod authored;
 pub mod barpde;
 pub mod census;
 pub mod chanlink;
+pub mod cmc_log_probe;
 pub mod consttab;
 pub mod defapi;
 pub mod display;
@@ -36,9 +37,11 @@ pub mod memory_access;
 pub mod memory_list;
 pub mod osevent;
 pub mod pmsr;
+pub mod precomp;
 pub mod preempt_bind_probe;
 pub mod rmgraph;
 pub mod rmrpc;
+pub mod rowserve;
 pub mod rpc;
 pub mod staticinfo;
 pub mod sticky;
@@ -503,7 +506,7 @@ pub fn served_chain(
         && let Some(policy) = objects.take()
     {
         let (probe, observer) =
-            sw_runlist_probe::Probe::new(driver, authored::engine_caps(&host.engines));
+            sw_runlist_probe::Probe::new(driver, authored::engine_caps(&host.engines), host.die);
         objects = Some(policy.with_sw_runlist_probe(probe));
         chain.push(Box::new(observer));
         eprintln!(
@@ -526,6 +529,14 @@ pub fn served_chain(
         eprintln!(
             "kf-rm: {}=1: software-runlist submits answered NV_OK and ignored; kernel channels scheduled at birth — AWAITING OWNER CONFIRMATION",
             sw_runlist_host::FLAG
+        );
+    }
+    // Diagnostic-only B1 rank2, default off. No firmware logger or host DMA is created.
+    if cmc_log_probe::enabled() {
+        chain.push(Box::new(cmc_log_probe::CmcLogProbe::new(driver)));
+        eprintln!(
+            "kf-rm: PROBE {}=1: CMC log-buffer registration echo only; no log writer or host action",
+            cmc_log_probe::FLAG
         );
     }
     // ⚠ PROBE (default off): H-preempt-bind, 2026-10-08 — `preempt_bind_probe.rs`. Answers
@@ -649,7 +660,7 @@ pub fn served_chain(
         Box::new(pmsr::PmSuspendResumePolicy::new(driver)),
         // ★ v3-gfx: the per-VM ZBC table — claims only `0x9096xxxx` controls, answers them from
         // its own state and never forwards (`zbc.rs`).
-        Box::new(zbc::ZbcPolicy::new(driver, host.zbc_table_sizes)),
+        Box::new(zbc::ZbcPolicy::new(driver, host.zbc_table_sizes, host.die)),
         // ★ 2026-10-07: RC-recovery GET/SET (a stub under owner ruling §S) and the power source,
         // answered per VM; never forwarded (`vfguest.rs`).
         Box::new(vfguest::VfGuestPolicy::new(driver)),

@@ -1,0 +1,158 @@
+{
+  "sweep_20261020_provision.log": {
+    "source_sha256": "a56f65eb6bf420c4e8e9c632c981c411554074586578ec23b166071a50e22414",
+    "export_sha256": "33409ff3a0e18da6a98818ad5c677db012c25ea6be93ffd3248d58b57b583b03"
+  },
+  "sweep_host_die.log": {
+    "source_sha256": "59cb02a20415a0bc2ca968313803bc53b25f03c978b6235ff96a658f5843f822",
+    "export_sha256": "59cb02a20415a0bc2ca968313803bc53b25f03c978b6235ff96a658f5843f822"
+  },
+  "sweep_host_preflight.log": {
+    "source_sha256": "d3130501d0bdb1875c80052c7d8239f5f0b2629f914b2836b843afefea7f132a",
+    "export_sha256": "d3130501d0bdb1875c80052c7d8239f5f0b2629f914b2836b843afefea7f132a"
+  },
+  "sweep_gates.log": {
+    "source_sha256": "49e06eb03294d31f15f33ae9df18ead08a7f7a45a898272b9bca764d021ddd88",
+    "export_sha256": "186efe39397dafb2c755f7537d66438fa174a964de949b41fe0f3d79c8e85f7d"
+  },
+  "sweep_bare595.log": {
+    "source_sha256": "b4375028aa05c5bb025ca46ab90e59157150d93edca1236eb3d5068a64f4a7d1",
+    "export_sha256": "2029851b34db9d7edad039b0851a978a3a82bc54863b653511d8bcc9a17bd26e"
+  },
+  "sweep_cuda_host.log": {
+    "source_sha256": "7ebea1cc4752f4d197668fe0968a24b152153490c4441e933f8218d4fe47ce12",
+    "export_sha256": "7ebea1cc4752f4d197668fe0968a24b152153490c4441e933f8218d4fe47ce12"
+  },
+  "sweep_native_grtier.log": {
+    "source_sha256": "8ec35a22f87075a9b9b103c718f9c5bce355b0edfffa514404b59e9aacc68664",
+    "export_sha256": "8ec35a22f87075a9b9b103c718f9c5bce355b0edfffa514404b59e9aacc68664"
+  },
+  "sweep_qemu_sha256": {
+    "source_sha256": "284d2854b3238bb31e423a405b70df95992c919e89bcc936f179a603e3bd97e4",
+    "export_sha256": "284d2854b3238bb31e423a405b70df95992c919e89bcc936f179a603e3bd97e4"
+  },
+  "sweep_product_source": {
+    "source_sha256": "11dc747c78a5284d18016893041fe06aed3fd689083b2a162bdd444a6db8da13",
+    "export_sha256": "11dc747c78a5284d18016893041fe06aed3fd689083b2a162bdd444a6db8da13"
+  },
+  "native_fixture_receipt.json": {
+    "source_sha256": "87c301c52f79d2a8aad691e163ca8867a5e75ce3263192f48c4bb26362cab420",
+    "export_sha256": "87c301c52f79d2a8aad691e163ca8867a5e75ce3263192f48c4bb26362cab420"
+  },
+  "media_cache_receipt.json": {
+    "source_sha256": "f55aa6d99027bfa777c452ea3b07bc12535c9712a25ce3e1bd1c3e96a992695d",
+    "export_sha256": "f55aa6d99027bfa777c452ea3b07bc12535c9712a25ce3e1bd1c3e96a992695d"
+  },
+  "audit_gb205_zbc.log": {
+    "source_sha256": "d0e6ad32b64b5601bf9a25b078dd516f2e2cffb51ed66c6aab799244c7e1ee2e",
+    "export_sha256": "d0e6ad32b64b5601bf9a25b078dd516f2e2cffb51ed66c6aab799244c7e1ee2e"
+  },
+  "audit_gb205_8162.log": {
+    "source_sha256": "a73f0fa18bde0f8b6cc010460501ef113ba3136723024956bc19db83fb10570c",
+    "export_sha256": "a73f0fa18bde0f8b6cc010460501ef113ba3136723024956bc19db83fb10570c"
+  },
+  "precomp_runtime.txt": {
+    "source_sha256": "3ad8a5089fadf80b4cee8ec101c07edfc10fabebc8b4e83124797a4d55fe1a01",
+    "export_sha256": "3ad8a5089fadf80b4cee8ec101c07edfc10fabebc8b4e83124797a4d55fe1a01"
+  },
+  "precomp_exit.txt": {
+    "source_sha256": "1cbe6ca13b7ff22c2af9686f1d533d73eb529b804fb1795b02e8ccf14cbb7112",
+    "export_sha256": "1cbe6ca13b7ff22c2af9686f1d533d73eb529b804fb1795b02e8ccf14cbb7112"
+  },
+  "guard_watch.log": {
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "export_sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+  },
+  "native_receipt.json": {
+    "source_sha256": "72c575fa7290878a44a0ab0f6dc62875e24b0111b7eb79e38a10cba3e0652dfa",
+    "export_sha256": "72c575fa7290878a44a0ab0f6dc62875e24b0111b7eb79e38a10cba3e0652dfa"
+  },
+  "native_receipt.json.accepted.json": {
+    "source_sha256": "6a59e31c0d5f740708452e69b04e1f774602c654db6331478845d9c027eae5a1",
+    "export_sha256": "6a59e31c0d5f740708452e69b04e1f774602c654db6331478845d9c027eae5a1"
+  },
+  "native_processes.jsonl": {
+    "source_sha256": "a01920d680ee488ecb33033f2354ac31fe9996b196635737a034723c92a32f5c",
+    "export_sha256": "a01920d680ee488ecb33033f2354ac31fe9996b196635737a034723c92a32f5c"
+  },
+  "source_defer-liveness.log": {
+    "source_sha256": "c69b964e2ff049d5c507231573ea1ee5cb8ab6a0bb851c1db96cb73f185794ee",
+    "export_sha256": "2d417cf75ecac8b4005d168cbbaa77de984d796e71f6320cd014d1a1f8e620ed"
+  },
+  "source_missing-page-fault.log": {
+    "source_sha256": "e36adbf9c6f8843d506a9d38d16da33db3a5468a0a5126a73e9f8e7e533bbcc2",
+    "export_sha256": "e36adbf9c6f8843d506a9d38d16da33db3a5468a0a5126a73e9f8e7e533bbcc2"
+  },
+  "bwr_bind.log": {
+    "source_sha256": "c969f43413d36be177d326fb1b554b069a86d4a6978559f1381a1c60e51f8a91",
+    "export_sha256": "de7514f704e12b146852a3b3b89b8a7b5abb63509f6a43590225a2b1a3c54a2d"
+  },
+  "bwr_binding.json": {
+    "source_sha256": "4d24b182c4e95b08354b2eb7db41734e98c80ec5c2a83edfe14dd392dacbc7cd",
+    "export_sha256": "3cefdb3a5881730e1e271a72b3ebde4c3494df820859b2f559aef0e17f7ff8e5"
+  },
+  "bwr_cold_ready.txt": {
+    "source_sha256": "d2c880a7888640e46af1b4edd92f3986d3f7ed749835704d63e0aad7d5a9ac39",
+    "export_sha256": "9d8bf7733a3465ada4a53604dbcf6d8878cbb105240aacbbfcaeaa6c2946a937"
+  },
+  "sweep_windows_media.log": {
+    "source_sha256": "cff4a986a98734569f71b20d4210b93882446c99a10ab3755cf438869d9e855b",
+    "export_sha256": "cff4a986a98734569f71b20d4210b93882446c99a10ab3755cf438869d9e855b"
+  },
+  "optional_b1.json": {
+    "source_sha256": "8fd24fda86602b4c729abc0bd8d66b9fd6c0db63c41f556b5498c6eb6cda0de0",
+    "export_sha256": "8fd24fda86602b4c729abc0bd8d66b9fd6c0db63c41f556b5498c6eb6cda0de0"
+  },
+  "secondary_guard_receipt.json": {
+    "source_sha256": "692c84db9370266495c15d116916ebcab8d097ea6042417b1cf001399a13d359",
+    "export_sha256": "692c84db9370266495c15d116916ebcab8d097ea6042417b1cf001399a13d359"
+  },
+  "secondary_guard.log": {
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "export_sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+  },
+  "secondary_receipt.json.accepted.json": {
+    "source_sha256": "6a59e31c0d5f740708452e69b04e1f774602c654db6331478845d9c027eae5a1",
+    "export_sha256": "6a59e31c0d5f740708452e69b04e1f774602c654db6331478845d9c027eae5a1"
+  },
+  "pidfd_runtime_smoke.json": {
+    "source_sha256": "3ea9e253a6ca26d87445e01f84e1e1f5baad53ddc2f858a396774373f0541544",
+    "export_sha256": "3ea9e253a6ca26d87445e01f84e1e1f5baad53ddc2f858a396774373f0541544"
+  },
+  "bwr_shutdown_census.json": {
+    "source_sha256": "956c46b42d3d62d7511b4347f8f41e8990012aa0c3e1b878dff6d9c4a140e294",
+    "export_sha256": "956c46b42d3d62d7511b4347f8f41e8990012aa0c3e1b878dff6d9c4a140e294"
+  },
+  "bwr_parent_sha256.txt": {
+    "source_sha256": "9fd020883da9d6c3495afa6cf53658bf2349d698b718e64a18d4a324fa5f9496",
+    "export_sha256": "9fd020883da9d6c3495afa6cf53658bf2349d698b718e64a18d4a324fa5f9496"
+  },
+  "native_receipt.json.ready.json": {
+    "source_sha256": "4f9d47fcc92a34bb334d953c4321a5d7d54aceaf2757215c4cf80d531d35f3bb",
+    "export_sha256": "4f9d47fcc92a34bb334d953c4321a5d7d54aceaf2757215c4cf80d531d35f3bb"
+  },
+  "secondary_receipt.json.ready.json": {
+    "source_sha256": "496b01cbf2beea5273f18fb590034eef961c1d0cd350abf43857926ed73b83fa",
+    "export_sha256": "496b01cbf2beea5273f18fb590034eef961c1d0cd350abf43857926ed73b83fa"
+  },
+  "budget_start_on_precision.json": {
+    "source_sha256": "8156d205597ac544a63fe5abfaf1120c70a767e96a966c0b62d9294ad1c6c61b",
+    "export_sha256": "8156d205597ac544a63fe5abfaf1120c70a767e96a966c0b62d9294ad1c6c61b"
+  },
+  "sweep_windows_install.log": {
+    "source_sha256": "f92697babf50422356d5504bd4f72c0841f13bb7e927c7b6e7c31c0a1a128e55",
+    "export_sha256": "c057610b0b7b62334f8a191332fb89ace9a3cceb24dcdbf81c01ec1f55314509"
+  },
+  "kernel_xids.json": {
+    "source_sha256": "b74c095896c47d814d8c37ce421a8c3d2ec936249ae55ac5f6caa1e89da01934",
+    "export_sha256": "a504da922d3d9478ecbe8404ee186d60e1956866e36c0f6523223188a0147ad7"
+  },
+  "precomp_kernel_permission.json": {
+    "source_sha256": "b74c095896c47d814d8c37ce421a8c3d2ec936249ae55ac5f6caa1e89da01934",
+    "export_sha256": "9067ba1ea3ad394603d583acb020452917487e6666725212569df2838703b2fb"
+  },
+  "on_precision_run.log": {
+    "source_sha256": "8795828226583957c18e497e80335f3c040ddc6d11e2d012f2918f5e68ebcf18",
+    "export_sha256": "8795828226583957c18e497e80335f3c040ddc6d11e2d012f2918f5e68ebcf18"
+  }
+}
