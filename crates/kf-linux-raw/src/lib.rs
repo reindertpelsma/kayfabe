@@ -292,6 +292,7 @@ pub mod pagemap;
 pub mod scratch;
 mod signal_unsafe;
 mod sysconf_unsafe;
+mod timerslack_unsafe;
 pub mod udmabuf_gate;
 mod unixsock_unsafe;
 mod vcpu_unsafe;
@@ -305,7 +306,9 @@ pub use drm_unsafe::{
     DMA_BUF_EXPORT_SYNC_FILE, GEM_CLOSE, PRIME_HANDLE_TO_FD, dma_buf_idle, gem_close,
     prime_handle_to_fd,
 };
-pub use epoll_unsafe::{MAX_READY_BATCH, PollTimeout, Poller, ReadyTokens};
+pub use epoll_unsafe::{
+    MAX_READY_BATCH, PollTimeout, Poller, ReadyTokens, micro_timeouts_available,
+};
 pub use error::RawError;
 pub use host_fd_unsafe::{
     Carrier, DMA_BUF_MAGIC, Notifier, SharedRam, TMPFS_MAGIC, descriptor_budget, fd_carrier,
@@ -324,6 +327,7 @@ pub use scratch::{
 pub use signal_unsafe::{
     BREAK_SIGNAL, ThreadId, current_thread_id, install_break_handler, interrupt_thread,
 };
+pub use timerslack_unsafe::{current_thread_timer_slack_ns, set_current_thread_timer_slack_ns};
 pub use unixsock_unsafe::{
     PeerCredentials, Received, SUN_PATH_BYTES, check_socket_path, effective_uid, peer_credentials,
     recv_bounded, send_record, unix_connect,

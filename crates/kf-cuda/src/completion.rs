@@ -13,6 +13,30 @@ pub(crate) const fn poll_ms(in_flight: bool) -> u32 {
     if in_flight { 1 } else { 50 }
 }
 
+/// The shortest wait between two looks at a pending walk: never a spin.
+pub(crate) const PENDING_MIN_US: u32 = 50;
+/// The longest: a long walk is still looked at every millisecond (the pre-2026-11-03 rate).
+pub(crate) const PENDING_MAX_US: u32 = 1_000;
+/// No walk in flight: the idle backstop.
+pub(crate) const IDLE_US: u32 = 50_000;
+
+/// ★ 2026-11-03 (Ada lane): how long the VA worker may sleep before it next queries a pending
+/// walk's GPU event, given how long ago the walk was submitted (`None`: nothing in flight).
+///
+/// No host callback signals a walk (the R34 per-walk nonstall interrupt, `fc5c83379`), so the
+/// only way to see a finished walk is to look. A fixed 1 ms look added ~0.9 ms to every 85 us
+/// walk. Here the wait is half the walk's age, clamped to 50 us..1 ms: a walk is collected
+/// within about 1.5x its own time (plus 50 us), and a long one costs a logarithmic number of
+/// wakes before settling at one per millisecond. A look is a hint to query, never a proof
+/// ([`ready`] decides).
+pub(crate) fn poll_us(pending_for: Option<std::time::Duration>) -> u32 {
+    let Some(age) = pending_for else {
+        return IDLE_US;
+    };
+    let half = u32::try_from(age.as_micros() / 2).unwrap_or(PENDING_MAX_US);
+    half.clamp(PENDING_MIN_US, PENDING_MAX_US)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
