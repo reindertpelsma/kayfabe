@@ -56,7 +56,7 @@ pub struct PbLoc {
     pub sysmem: bool,
     /// Guest physical address, or framebuffer offset.
     pub addr: u64,
-    /// Bytes (≤ 4 KiB, [`pushbuf::MAX_PUSHBUFFER`]).
+    /// Bytes (≤ the class's own bound, [`Engine::pushbuffer_bound`]; ≤ [`pushbuf::MAX_PUSHBUFFER`]).
     pub bytes: u32,
 }
 
@@ -402,6 +402,12 @@ pub struct Vocab {
     k_interlock: u32,
     k_ilk_core: Option<(u8, u8)>,
     k_window_interlock: u32,
+    /// ★ 2026-11-03: each DMA class's own pushbuffer format (`pushbuf::Format`; 64 KiB on GB20x).
+    f_core: pushbuf::Format,
+    f_window: pushbuf::Format,
+    f_imm: pushbuf::Format,
+    /// The cursor class is PIO on every family (no pushbuffer); a DMA cursor class would carry one.
+    f_cursor: Option<pushbuf::Format>,
 }
 
 type InlineMethod = (u32, usize, bool, (u8, u8), (u8, u8));
@@ -445,6 +451,13 @@ impl Vocab {
             .map(|(a, b)| a - b)
             .ok_or_else(|| miss("NV_UDISP_FE_CHN_ASSY_BASEADR_WIN(i)"))?;
         let (core, win, imm, cur) = (c.core, c.window, c.window_imm, c.cursor);
+        let fmt = |cl: u32| {
+            pushbuf::Format::resolve(t, cl).ok_or_else(|| {
+                miss(&format!(
+                    "NV{cl:04X}_DMA_METHOD_OFFSET / _DMA_JUMP_OFFSET (pushbuffer format)"
+                ))
+            })
+        };
         Ok(Vocab {
             // the core's user area is ASSEMBLY then ARMED; every other channel's page is split in two
             // (`kdispGetDisplayChannelUserBaseAndSize_v03_00`: "all other channels are 4KB (2K for
@@ -564,7 +577,22 @@ impl Vocab {
             k_interlock: v(cur, "SET_INTERLOCK_FLAGS")?,
             k_ilk_core: t.f(cur, "SET_INTERLOCK_FLAGS_INTERLOCK_WITH_CORE"),
             k_window_interlock: v(cur, "SET_WINDOW_INTERLOCK_FLAGS")?,
+            f_core: fmt(core)?,
+            f_window: fmt(win)?,
+            f_imm: fmt(imm)?,
+            f_cursor: pushbuf::Format::resolve(t, cur),
         })
+    }
+
+    /// ★ The pushbuffer format of a channel kind's class (`None`: a PIO class, no pushbuffer).
+    #[must_use]
+    pub fn format(&self, kind: ChannelKind) -> Option<pushbuf::Format> {
+        match kind {
+            ChannelKind::Core => Some(self.f_core),
+            ChannelKind::Window => Some(self.f_window),
+            ChannelKind::WindowImm => Some(self.f_imm),
+            ChannelKind::Cursor => self.f_cursor,
+        }
     }
 
     fn iso_enabled(&self, word: u32) -> bool {
@@ -855,6 +883,13 @@ impl Engine {
         st
     }
 
+    /// ★ The largest pushbuffer a channel of `kind` can have: what its class's JUMP can address
+    /// (4 KiB on Volta..Ada, 64 KiB on GB20x); 0 for a PIO class.
+    #[must_use]
+    pub fn pushbuffer_bound(&self, kind: ChannelKind) -> u32 {
+        self.vocab.format(kind).map_or(0, |f| f.bytes())
+    }
+
     /// The channel number of `(kind, instance)` if the display has it.
     #[must_use]
     pub fn channel_number(&self, kind: ChannelKind, instance: u32) -> Option<u32> {
@@ -1095,13 +1130,18 @@ impl Engine {
     }
 
     fn decode(&mut self, chn: u32, pb: &[u8], put: u32, st: &mut Step) {
+        let vocab = &self.vocab;
         let Some(c) = self.chans.get_mut(chn as usize).and_then(|c| c.as_mut()) else {
             return;
         };
         if c.halted || c.decoded == put {
             return;
         }
-        let (groups, end, err) = pushbuf::decode_groups(pb, c.decoded, put);
+        // a PIO class has no pushbuffer, so there is nothing to decode
+        let Some(f) = vocab.format(c.kind) else {
+            return;
+        };
+        let (groups, end, err) = pushbuf::decode_groups(&f, pb, c.decoded, put);
         let over = c.queue.len() + groups.len() > MAX_QUEUE;
         if !over {
             c.queue.extend(groups);

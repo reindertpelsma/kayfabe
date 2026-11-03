@@ -3113,14 +3113,17 @@ impl Device {
                         pb,
                         life,
                     } => {
-                        // ⊘ bounded by the declared size, the context DMA's limit and the decoder's 4 KiB
+                        // ⊘ bounded by the declared size, the context DMA's limit and what the class's
+                        // JUMP can address (★ 2026-11-03: 64 KiB on GB20x, 4 KiB before; was 4 KiB fixed)
+                        let bound = engine
+                            .pushbuffer_bound(kind)
+                            .min(kf_disp::pushbuf::MAX_PUSHBUFFER);
                         let loc = pb.map(|p| {
                             let lim = u32::try_from(p.limit.saturating_add(1)).unwrap_or(u32::MAX);
                             PbLoc {
                                 sysmem: p.addr_space == 1,
                                 addr: p.phys,
-                                bytes: p.bytes().min(lim).min(kf_disp::pushbuf::MAX_PUSHBUFFER)
-                                    & !3,
+                                bytes: p.bytes().min(lim).min(bound) & !3,
                             }
                         });
                         if pb.is_some_and(|p| p.addr_space != 1 && p.addr_space != 2) {
