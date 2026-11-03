@@ -268,7 +268,7 @@ fn well_behaved(priv_entries: u32, lazy: kf_chan::user_lazy::LazyConfig, reg_mod
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs_f64(secs);
     // A lazy run is bounded by what it exercised as well as by time: both counters count work that needs both
     // threads to take turns (a registration is a handshake between them), so on a loaded machine the time budget
-    // alone ends the run with a handful of hits (measured: 10 to 50 hits, against 700000 unloaded), which is a
+    // alone ends the run with a handful of hits (seen in local runs under 8 busy loops: 10 to 50 hits, against about 700000 unloaded; PR #244), which is a
     // statement about the machine, not about the relay. The guest therefore continues past the deadline until the
     // floor is reached (`lazy_floor_reached`), as `hostile` does with MIN_TURNS; the hard deadline still fails a
     // relay that stops making progress, and the final assertions still fail a run that never exercises the cache.
