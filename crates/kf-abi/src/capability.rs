@@ -1576,7 +1576,13 @@ pub(crate) static CLASSES_FROM_570_86_15: &[ClassEntry] = &[
     },
     // Public580resource_list.h:1877: OfaContext under KernelChannel, optional
     // NV_OFA_ALLOCATION_PARAMETERS, the same modeled constructor as admitted C9FA.
-    // [measured 2026-10-20, GB202 Win580.88] the guest's next wall once CFB0 is admitted.
+    // [inferred] the guest's next wall once CFB0 is admitted. (2026-10-20 is the commit date of
+    // the admission, not a measurement date; the arms the 2026-10-20 lane cites,
+    // `traces/blackwell_resume_20261020/arms/cand_off_1`, are not committed. The committed run that
+    // shows the guest sending this class is the 2026-10-21 `on_b` arm, GB202 Windows 580.88:
+    // `traces/blackwell_resume_20261021/arms/on_b/api.tsv:509`, an `0xcffa` RmAlloc after the
+    // `0xcfb0` allocations, result 0x0 with the class admitted, so it shows the request, not the
+    // refusal.)
     ClassEntry {
         class: public_class_since(
             &crate::generated::matrix::CLASS_IDS_NVCFFA_VIDEO_OFA,
@@ -2890,8 +2896,11 @@ mod tests {
         }
     }
 
-    // [measured 2026-10-20, GB202 Windows 580.88 / ABI 580.65.06, own lease 56909569,
-    // traces/blackwell_resume_20261020/arms/cand_off_1] with CFB0 admitted the guest's
+    // [inferred; the cited 2026-10-20 arms (lease 56909569,
+    // traces/blackwell_resume_20261020/arms/cand_off_1) are not committed, and 2026-10-20 is the
+    // commit date; the committed 2026-10-21 `on_b` arm,
+    // traces/blackwell_resume_20261021/arms/on_b/api.tsv:509, shows the 0xcffa RmAlloc sent
+    // after CFB0, admitted] with CFB0 admitted the guest's
     // next wall is the NVCFFA_VIDEO_OFA constructor (refused NotOnAllowlist, then teardown
     // and Code 43). Public 580 resource_list.h:1877 gives it the same shape as the admitted
     // NVC9FA (OfaContext under KernelChannel, optional NV_OFA_ALLOCATION_PARAMETERS).

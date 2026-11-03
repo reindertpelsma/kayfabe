@@ -196,3 +196,22 @@ each gated on a probe the GPU answers.
 ★ `0x20800a87` (`INTERNAL_NVLINK_GET_NVLINK_DEVICE_INFO`) answers `NV_ERR_NOT_SUPPORTED` on the
 4090 — like the 3060, unlike the 3090. Three boards, two architectures, two driver versions, and
 the only variable predicting the answer is whether the board has the connector.
+
+## Hashes recorded before the GPU-UUID scrub no longer match (2026-11-03)
+
+The UUID scrubs replaced real GPU board UUIDs in committed trace files with placeholders
+(`646758133` and `cde3c60b0`, 2026-10-24: `sweep_dies_20261018/lease_57209908/safety_stopped/native_kernel_snapshot.log`;
+`078b3e739`, 2026-10-31: 39 `vulkaninfo*` logs, `real_ga106/gpuinfo_bisect_guest_gis1_e6ed6bc.txt` and
+`windows_flag_ablation_20261010/host_tools/abl-batch.sh`). Only the matching `SHA256SUMS` lines were
+updated (`v3_candidates/cand2_20261004`, `v3_display/m3{f,h,z}_20260930`). Receipts and manifests
+that recorded a SHA-256 of a scrubbed file were **not** rewritten: they record what was hashed at
+capture time, so their hashes of those files are pre-scrub, and a hash recomputed from the file in
+this tree will not equal them. That is expected, not corruption, and says nothing about the run.
+
+Found (2026-11-03) by hashing every scrubbed file at its pre-scrub revision and searching the tree for
+that hash: the `source_sha256` entries of `v3_candidates/cand1_20261004/source_manifest.json`,
+`v3_candidates/cand2_20261004/apps_batched/source_manifest.json` and
+`v3_candidates/cand2_20261004/apps_guest/source_manifest.json`. No `export_receipt.json` matched, so
+this search does not show that any of them is affected; it also cannot see a hash taken over an
+archive or a concatenation. To check a recorded hash against a scrubbed file, hash the file at the
+parent of the scrub commit (`git show <commit>^:<path> | sha256sum`).
