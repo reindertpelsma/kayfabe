@@ -45,6 +45,10 @@ struct Shared {
     wrote_lo: Mutex<Vec<HashSet<u32>>>,
     wrote_hi: Mutex<Vec<HashSet<u32>>>,
     log: Mutex<Vec<Pub>>,
+    /// The relay's lazy counters, mirrored after every turn so that the guest can see whether the run has
+    /// exercised the cache and the skipped observations yet (see `lazy_floor_reached`).
+    lazy_hits: AtomicU64,
+    lazy_skipped: AtomicU64,
     markers: AtomicU64,
     pb_reads: AtomicU64,
     pb_reads_in_pointer: AtomicU64,
@@ -65,6 +69,8 @@ impl Shared {
             wrote_lo: Mutex::new((0..N).map(|_| HashSet::from([0])).collect()),
             wrote_hi: Mutex::new((0..N).map(|_| HashSet::from([0])).collect()),
             log: Mutex::new(Vec::new()),
+            lazy_hits: AtomicU64::new(0),
+            lazy_skipped: AtomicU64::new(0),
             markers: AtomicU64::new(0),
             pb_reads: AtomicU64::new(0),
             pb_reads_in_pointer: AtomicU64::new(0),
@@ -222,6 +228,10 @@ fn run_relay_until(
             }
         }
         turns += 1;
+        sh.lazy_hits
+            .store(relay.lazy.counts.put_cache_hits, Ordering::Relaxed);
+        sh.lazy_skipped
+            .store(relay.lazy.counts.obs_skipped, Ordering::Relaxed);
         if !relay.again && relay.cursor == sh.put.load(Ordering::Acquire) {
             std::thread::yield_now();
         }
@@ -245,11 +255,29 @@ fn lazy_a_well_behaved_guest_with_concurrent_registrations_loses_and_duplicates_
     well_behaved(256, kf_chan::user_lazy::LazyConfig::ON.with_interval(2), 7);
 }
 
+/// Whether a lazy run has exercised what its final assertions require (the cache hit more than 100 times, and
+/// observations were skipped more than 100 times where rule B applies).
+fn lazy_floor_reached(sh: &Shared, lazy: kf_chan::user_lazy::LazyConfig) -> bool {
+    (sh.lazy_hits.load(Ordering::Relaxed) > 100 || lazy.interval == 1)
+        && (sh.lazy_skipped.load(Ordering::Relaxed) > 100 || !lazy_b(lazy))
+}
+
 fn well_behaved(priv_entries: u32, lazy: kf_chan::user_lazy::LazyConfig, reg_mod: u32) {
     let sh = Shared::new();
     let secs = stress_secs();
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs_f64(secs);
-    let hard = hard_deadline(secs);
+    // A lazy run is bounded by what it exercised as well as by time: both counters count work that needs both
+    // threads to take turns (a registration is a handshake between them), so on a loaded machine the time budget
+    // alone ends the run with a handful of hits (measured: 10 to 50 hits, against 700000 unloaded), which is a
+    // statement about the machine, not about the relay. The guest therefore continues past the deadline until the
+    // floor is reached (`lazy_floor_reached`), as `hostile` does with MIN_TURNS; the hard deadline still fails a
+    // relay that stops making progress, and the final assertions still fail a run that never exercises the cache.
+    let lazy_on = lazy != kf_chan::user_lazy::LazyConfig::OFF;
+    let hard = if lazy_on {
+        deadline + std::time::Duration::from_secs(70)
+    } else {
+        hard_deadline(secs)
+    };
     let sent = Arc::new(Mutex::new(Vec::<u64>::new())); // raw of every entry the guest published, in order
     let post_marks = Arc::new(Mutex::new(Vec::<(usize, bool)>::new())); // (index, published while a registration was live)
     let done = Arc::new(AtomicBool::new(false));
@@ -291,7 +319,12 @@ fn well_behaved(priv_entries: u32, lazy: kf_chan::user_lazy::LazyConfig, reg_mod
                 };
                 push(ge(0, Kind::SetObj).raw(), false, &sh);
                 let mut i = 0u32;
-                while std::time::Instant::now() < deadline && !sh.stop.load(Ordering::Relaxed) {
+                while (std::time::Instant::now() < deadline
+                    || (lazy_on
+                        && !lazy_floor_reached(&sh, lazy)
+                        && std::time::Instant::now() < hard - std::time::Duration::from_secs(10)))
+                    && !sh.stop.load(Ordering::Relaxed)
+                {
                     for _ in 0..(1 + i % 5) {
                         i += 1;
                         push(ge(1 + (i % 100) as u8, Kind::Plain).raw(), false, &sh);
