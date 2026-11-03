@@ -114,8 +114,7 @@ fn provenance(name: &str) {
         .collect();
     assert_eq!(measured.len(), 48);
     assert!(measured.iter().all(|p| {
-        p.why
-            .contains(&format!("measured:{name},595.91.07,"))
+        p.why.contains(&format!("measured:{name},595.91.07,"))
             && p.why.contains("evidence=traces/")
             && !p.why.contains("inherited-with-reason")
     }));
@@ -268,7 +267,11 @@ fn gb203_measurement_equals_its_former_donor() {
             .iter()
             .find(|r| r.key == row.key && r.die == DieScope::Die(die("GB202")))
             .unwrap();
-        assert_eq!(row.words, donor.words, "GB203 {} differs from GB202", row.key);
+        assert_eq!(
+            row.words, donor.words,
+            "GB203 {} differs from GB202",
+            row.key
+        );
         assert!(matches!(&row.source, SourceTag::Measured { die, date, .. }
             if die == "GB203" && date == "2026-11-03"));
     }
@@ -278,14 +281,20 @@ fn gb203_measurement_equals_its_former_donor() {
 #[test]
 fn gb203_exact_rows_precede_inheritance() {
     let d = run("GB203", &rows()).unwrap();
-    assert!(!d.provenance.iter().any(|p| p.why.contains("inherited-with-reason")));
+    assert!(
+        !d.provenance
+            .iter()
+            .any(|p| p.why.contains("inherited-with-reason"))
+    );
 }
 
 /// Without its rows GB203 still falls back to the approved GB202 inheritance, labelled as such.
 #[test]
 fn gb203_without_rows_falls_back_to_labelled_inheritance() {
     let mut all = rows();
-    all.retain(|r| !(r.key.starts_with("display.precomp.") && r.die == DieScope::Die(die("GB203"))));
+    all.retain(|r| {
+        !(r.key.starts_with("display.precomp.") && r.die == DieScope::Die(die("GB203")))
+    });
     inherited_in("GB203", &all);
 }
 
