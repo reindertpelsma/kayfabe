@@ -1,0 +1,3 @@
+box 58969637 GA102 10de:2204, host driver 580.159.04 (open, provisioned), read 2026-11-03 during provisioning (host driver up, no guest)
+xid_before=0 xid_after=0 (dmesg NVRM: Xid count)
+tool rc=0
