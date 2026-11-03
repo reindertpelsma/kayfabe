@@ -1782,6 +1782,86 @@ impl VramWorker {
 /// ★ The pack kernel on SYNTHETIC frames into slot `sid` before it is ever exported, compared byte
 /// for byte with `kf_disp::vramslot::pack_reference` (the same reference the host-compiled kernel
 /// is held to in kf-disp's `tests/bl_pack_kernel.rs`).
+/// ⊘ DIAGNOSTIC ONLY (`kf_disp::capsoverlay`; never a shipped behaviour, no boot needs it): with
+/// `KF3_DISPLAY_CAPS_OVERLAY_FILE=<read>` (a `tools/read_display_caps_page.py` read of THIS host GPU),
+/// lay the read's words over the derived page — every group, or the groups named in
+/// `KF3_DISPLAY_CAPS_OVERLAY_GROUPS` (`sys,bwexist,unnamed,…`) plus the offsets in
+/// `KF3_DISPLAY_CAPS_OVERLAY_WORDS` (`0x030,0x034`). A read of any other PCI id refuses the realize
+/// (OWNER_RULINGS §AH: never a neighbour's page). Unset: the page is returned unchanged.
+fn caps_overlay_diagnostic(
+    caps: kf_disp::caps::CapsPage,
+    bdf: &str,
+) -> Result<kf_disp::caps::CapsPage, String> {
+    let Ok(path) = std::env::var("KF3_DISPLAY_CAPS_OVERLAY_FILE") else {
+        return Ok(caps);
+    };
+    let e = |w: String| format!("display=on: KF3_DISPLAY_CAPS_OVERLAY_FILE: {w}");
+    // bounded: a page read is about 130 short lines
+    let text = std::fs::read(&path).map_err(|x| e(format!("{path}: {x}")))?;
+    if text.len() > 64 * 1024 {
+        return Err(e(format!("{path}: larger than 64 KiB")));
+    }
+    let read = kf_disp::capsoverlay::parse_read(&String::from_utf8_lossy(&text)).map_err(e)?;
+    let sysfs = |f: &str| {
+        let p = format!("/sys/bus/pci/devices/{bdf}/{f}");
+        std::fs::read_to_string(&p)
+            .ok()
+            .and_then(|s| u16::from_str_radix(s.trim().trim_start_matches("0x"), 16).ok())
+            .ok_or_else(|| e(format!("cannot read {p}")))
+    };
+    let (vendor, device) = (sysfs("vendor")?, sysfs("device")?);
+    if !read.is_die(vendor, device) {
+        return Err(e(format!(
+            "the read is of {:04x}:{:04x}, the host GPU {bdf} is {vendor:04x}:{device:04x}: refused (never a neighbour's page)",
+            read.vendor, read.device
+        )));
+    }
+    let names = std::env::var("KF3_DISPLAY_CAPS_OVERLAY_GROUPS").unwrap_or_default();
+    let mut groups = 0u32;
+    for n in names.split(',').map(str::trim).filter(|n| !n.is_empty()) {
+        let bit = kf_disp::capsoverlay::GROUPS
+            .iter()
+            .find(|(g, _)| *g == n)
+            .map(|(_, b)| *b)
+            .ok_or_else(|| e(format!("unknown group {n:?}")))?;
+        groups |= bit;
+    }
+    let mut extra = Vec::new();
+    for w in std::env::var("KF3_DISPLAY_CAPS_OVERLAY_WORDS")
+        .unwrap_or_default()
+        .split(',')
+        .map(str::trim)
+        .filter(|w| !w.is_empty())
+        .take(1024)
+    {
+        extra.push(
+            u32::from_str_radix(w.trim_start_matches("0x"), 16)
+                .map_err(|_| e(format!("bad offset {w:?}")))?,
+        );
+    }
+    if names.trim().is_empty() && extra.is_empty() {
+        groups = u32::MAX;
+    }
+    let out = kf_disp::capsoverlay::overlay(&caps, &read, groups, &extra);
+    let changed: Vec<String> = out
+        .words
+        .iter()
+        .map(|(o, _)| *o)
+        .chain(caps.words.iter().map(|(o, _)| *o))
+        .collect::<std::collections::BTreeSet<u32>>()
+        .into_iter()
+        .filter(|o| out.word(*o) != caps.word(*o))
+        .map(|o| format!("{o:#05x}:{:#x}->{:#x}", caps.word(o), out.word(o)))
+        .collect();
+    eprintln!(
+        "kf3: display: DIAGNOSTIC caps overlay (not a shipped behaviour) from {path} ({vendor:04x}:{device:04x}, {} words read): groups={groups:#x} extra={extra:x?}: {} words changed [{}]",
+        read.words.len(),
+        changed.len(),
+        changed.join(" ")
+    );
+    Ok(out)
+}
+
 fn selftest_pack(gpu: &mut DisplayGpu, sid: kf_cuda::display::SlotId) -> Result<(), String> {
     use kf_disp::vramslot::{GOB_GA106, pack_reference, slot_geom};
     for (w, h, bh) in crate::gpucopy::selftest_cases() {
@@ -2114,6 +2194,7 @@ impl DisplayPlane {
             );
             d.page
         };
+        let caps = caps_overlay_diagnostic(caps, bdf)?;
         let layout = Layout::from_regs(&regs)
             .ok_or("display=on: the instance-memory layout is not derived")?;
         let map = RegMap::resolve(&regs, t, row)?;
