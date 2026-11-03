@@ -1,0 +1,8 @@
+DIAG3_START 2026-11-03T13:30:12+00:00
+[2026-11-03T13:30:12Z] detached: tag=diag3, log logs/diag3_run.log (stdout logs/diag3_run.out)
+/workspace/winvm/kfwin/logs/shots/diag3_after300s.png
+[2026-11-03T13:35:19Z] stopping kfwin (pid 143656)
+[2026-11-03T13:35:37Z] stopped
+WTRACE lines: 24
+PUT writes: 24
+DIAG3_EXIT rc=0 2026-11-03T13:35:42+00:00

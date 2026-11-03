@@ -37,4 +37,69 @@ equal GB202's; any differing field falsifies it for GB203.**
 
 ## 2. The merge bar and the Windows gate on GB203
 
-(filled in as each step finishes)
+Strictly serial on the one box: `windows_lane.sh` (install, 1158 s, `gb203_merge/lane/winlane.log`), then
+`merge_check.sh` with `KF_MERGE_WINDOWS=1`, twice.
+
+| run | revision | v3 gates | bare metal | fast suite | census | Windows gate |
+|---|---|---|---|---|---|---|
+| `bwhw1` | `993b844a` (merge + GB203 PRECOMP rows) | `V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS` | `BARE_SUITE_PASS=30 ... ARMS=30` | `FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30` | `BIRTH_CENSUS_OK` | `WINDOWS_GATE_FAIL diag=KAYFABE stage=post_idle ... livekernelevent_other=10 livekernelevent193=5` |
+| `bwhw2` | `a042c863` (+ GB203 caps word 0x00c) | same, 9/9 gate10=PASS | 30/30 | 30/30 | OK | `WINDOWS_GATE_FAIL diag=KAYFABE stage=post_idle ... livekernelevent_other=4 livekernelevent193=3` |
+
+Files: `gb203_merge/bwhw1*.log`, `gb203_merge/bwhw1_windows/`, `gb203_merge_bwhw2/`. Host reference green before and
+after in both gate runs (`GATE_HOSTREF ... green cup8=PASS ... xid_delta=0`); the host Xid count of 10 / 20 is the
+suites' source-matched intentional Xid 31 controls (`gb203_merge/host_xids.txt`).
+
+**What passed in both Windows runs (MEASURED):** install, `check.ps1 --kf3` fail=0, GSP keys, signed-in desktop,
+the enable to `code=0` at driver 32.0.15.8088, guest `nvidia-smi`, and every probe before AND after the 300 s idle
+(`cup8` PASS, `d3d11` OK, `cup3`, `d3d12` OK); zero Display 4101, `nvlddmkm` 153, Kernel-Power 41, 6008, BugCheck 1001.
+
+**What failed (MEASURED):** one LiveKernelEvent triplet per boot, about 38 s after the enable: `0x193` (P1 `815`,
+as on AD102), plus `0x1A8` and `0x1B8` with P1 `a` (both "Hardware error", WER retries make the counts 10/4), one
+WATCHDOG dump. The gate counts LiveKernelEvent codes other than 193, so it fails; that is the gate working as
+designed (AD102 g4 had zero of them), not a harness fault. The kf3 log shows the display was never lit: the
+console goes from the boot layer to `NOTHING yet (no head has scanned a window) (core channel FREE)` and never
+changes, and the engine logs no `updates completed` line, while AD102 g4 logs `the guest armed its first head`,
+`head 0 ACTIVE raster 2200x1125` and `updates completed` about 12 s after the same point.
+
+### Root-cause work on the display wall (three negative boots: bwhw1, bwhw2, diag3; stopped there)
+
+- **H-00c, falsified as the sufficient fix.** kf3 warned at realize in bwhw1: `NO MEASURED caps word 0x00c for die
+  arch 0x1b0 impl 0x3, driver branch 580 ... a Windows guest's display may not come up`. GB202, GB205 and GB206
+  each had a row, GB203 none. Falsifier (before bwhw2): with the die's own word served, the core channel is
+  still never armed or 0x1A8/0x1B8 still appear. MEASURED on this die (`gb203_caps/`): `DECISIVE 0x00c 0x00000102`
+  under host 580.159.04 and 595.91.07, all 127 words equal, no new Xid; rows added (`crates/kf-disp/data/caps_measured.tsv`).
+  bwhw2 realized with `caps page derived — 73 words ... 49 T3 measured (0 unmeasured)` and still failed the same
+  way. The rows stay (they are the die's own facts and kf3 asks for them); they do not fix the wall.
+- **diag3** (`gb203_diag3/`: bwhw2's overlay, `KF3_DISPLAY_WRITE_TRACE=1`, `KF3_DISPLAY_METHOD_TRACE=1`,
+  `KF3_DISPLAY_TRACE=1`): the triplet again (`wer_1001.txt`: 0x193, 0x1A8, 0x1B8). MEASURED: the guest allocates
+  the core, 8 window, 8 window-immediate and 4 cursor channels, posts core `PUT` 0x20 .. 0xe00 and window `PUT`s
+  (24 `Put` writes, all classified), and the engine executes them (`chn 0 PUT 0xe00: 12 effects`, method trace).
+  It never posts a core `UPDATE`: the guest stops before any modeset. So the engine, the PUT path and the
+  pushbuffer size (64 KiB on GB203 against 4 KiB on AD102) are NOT where it stops.
+- **Where the guest diverges (MEASURED, `display_controls_ad102_g4_vs_gb203_bwhw2.txt`).** Same order of NV0073
+  controls up to `SYSTEM_GET_INTERNAL_DISPLAYS` (0x730116) on AD102 under kayfabe, GB203 under kayfabe and the
+  native GB202 Windows 580.88 trace. After it, AD102 and native GB202 ask `GET_CONNECTOR_TABLE` (0x73011d) and
+  `GET_HEAD_ROUTING_MAP` (0x73010b; native 1960 times, AD102 4) and go on to `DFP_ASSIGN_SOR` (0x731152; native 6,
+  AD102 1) and, on AD102, `INTERNAL_DISPLAY_PRE/POST_MODESET`. The GB203 guest under kayfabe goes straight to
+  `GET_HOTPLUG_CONFIG`, never asks the connector table, the head routing map or a SOR, and polls
+  `SYSTEM_GET_ACTIVE` (0x73010c) 36 times. INFERRED (not measured): an answer the GB203 guest reads before that
+  point (candidates: `SYSTEM_GET_CAPS_V2` 0x730101, `GET_CONNECT_STATE` 0x730108, `GET_INTERNAL_DISPLAYS`
+  0x730116, `SPECIFIC_GET_ACPI_DOD_DISPLAY_PORT_ATTACHMENT` 0x730285 which native asks 4 more times right there)
+  tells it there is no connector to route, so it never modesets and dxgkrnl's black-screen detection fires.
+- **Next decisive experiment (not run: the 3-boot limit was reached):** one boot with the RPC body trace on and
+  the reply payloads of 0x730101/0x730108/0x730116/0x730285 compared word by word with the AD102 run and with the
+  public NV0073 structures for a GB20x display topology (4 heads, its own SOR/DisplayId map). Falsifier: the
+  replies are field-for-field what the public structures require for one connected DFP on GB20x; then the
+  divergence is upstream (a GSP-side 0x2080 answer; GB203-only refusals are listed in the same file: 0x0090010b
+  x16, 0x20800a89, 0x20800ab2/ab4, 0x2080852b/852c, 0x2080a06e).
+
+Not known: whether GB202/GB205/GB206 reproduce the same wall on this merged tree (only GB203 was leased), and
+whether the native windows-on-vast reference on GB203 lights the display (no BAR1 exception is claimed: kf3
+realized fine, `bar1-size=134217728`).
+
+## Cost
+
+Own leases 58955664 (about 9 min at 0.747 USD/h), 58956569 (no `/dev/kvm`, minutes), 58957600 (11:43:00Z to
+13:36:10Z, about 1 h 53 min at 0.517 USD/h): about 1.1 USD in all (INFERRED from the rates; the account credit
+moved 39.97 -> 38.46 USD over the same window, which also carries another session's lease). All three ids destroyed
+by id, `vastai show instances-v1 --raw` lists none of them.
