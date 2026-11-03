@@ -1,6 +1,6 @@
 # Turing: the derived caps page booted (Windows gate) and the Linux bar on the same die (2026-11-03)
 
-STATUS: RESEARCH, 2026-11-03. The pre-registration below was written and pushed BEFORE any run on the boxes;
+STATUS: ANSWERED, 2026-11-03 (verdict under RESULTS). The pre-registration below was written and pushed BEFORE any run on the boxes;
 results are appended under "RESULTS". MEASURED = a line in a committed log, named with its file; INFERRED =
 reasoning; COMPUTED = a GPU-free computation from the committed code (reproducible, named).
 
@@ -68,6 +68,23 @@ line `caps page derived — N words: a T1 rule, b T2 host, c T3 measured (u unme
 
 ## RESULTS
 
+### Verdict (2026-11-03)
+
+- **H-derived-TU106: not falsified, n=3.** `WINDOWS_GATE_PASS ... resets=0` three times on TU106 with the derived
+  page and no diagnostic: box B tbB1 (`e6dad00f`) and tbB2 (`c71c07cb`, fresh overlays of one image, host
+  595.91.07), and box A tbA2 (`0aaba25c`, a different machine, host 580.159.04). Each one had 1 RM unload (the
+  stop), window 0 scanned after the modeset, 0 host Xid, and 2-3 LiveKernelEvent-193 WATCHDOG dumps that are
+  reported and not gated, as on AD102.
+- **H-linux-not-regressed: partly.** Gates 9/9 + gate10, kf3 build, bare metal 30/30 and the birth census are green.
+  The thin guest is 29/30 at 180 s: `ce-client-guest-ram` timed out, and it passes alone in 310 s. That arm is
+  slower than in the pre-change Turing reference (203 s). INFERRED: the cause is `next`'s walk-latency regression,
+  not this branch. This branch's crate code is `next`'s. So the Linux merge bar is NOT met on this die at this
+  revision.
+- **TU116: not measured.** The one TU116 rental (58957109, Austria) ended in `GPU error, unable to start instance`
+  and was destroyed unused. TU116 still has no T3 row, so it gets the clean page.
+- Cost: about 0.6 USD in all (INFERRED from the per-hour prices and lifetimes: A 2.5 h at 0.151, B 1.75 h at
+  0.114, C 0.3 h at 0.069; the account balance is shared with other lanes). Negative boots: 0.
+
 ### Box B, Windows gate run tbB1 (MEASURED 2026-11-03, rev `e6dad00f` = `08dae8a3` + docs, host 595.91.07, `boxB/`)
 
 Lane: `boxB/winlane.log` `WINLANE_TIMING total=2031s ... install_windows=1226s`, `WINLANE_EXIT rc=0` (5 vCPU, install
@@ -109,6 +126,24 @@ scanned +179.8 s, `running_to_suspending=1`, `host_xid_in_boots=0`, `GATE_TDR ..
 (the new counter ran in the gate). No QEMU and no `win_vm.sh run` loop left after the gate (`pgrep`, empty). H-derived-
 TU106 not falsified (n=2 on box B). Box B destroyed 13:22Z (`vastai destroy instance 58957107 -y`; the listing then
 held only 58956007 of this lane).
+
+### Box A, Windows gate run tbA2 (MEASURED 2026-11-03, rev `0aaba25c` = `c290ec24` + docs/traces, host 580.159.04)
+
+`merge_check.sh` stopped at the fast suite (below), so its Windows stage never ran. The gate was run by hand from the
+checkout (`bash scripts/bench/box/windows_gate.sh tbA2`), the call the stage makes. Windows was installed first by
+`win_vm.sh install` (SMP 15, `cache=unsafe`, 46 min, `boxA/win_install.log`). `boxA/tbA2_windows.log`:
+
+```
+WINDOWS_GATE_PASS rev=0aaba25c gpu="NVIDIA GeForce RTX 2060 SUPER" idle_s=300 hostref=green/green secs=2320 install=once driver=580.88 gsp=forced code=0 probes=cup8,d3d11,x2 resets=0 known_live_dumps_193=2 stale_lke_resubmits=0 strict=0 enable_utc=2026-11-03T13:30:54Z
+WINDOWS_GATE_EXIT rc=0 2026-11-03T13:53:52+00:00
+```
+
+`caps page derived — 56 words: 55 T1 rule, 0 T2 host, 1 T3 measured (0 unmeasured)`, window 0 scanned +264.0 s,
+`running_to_suspending=1`, `host_xid_in_boots=0`, every reset counter 0 (`tbA2/tdr_counts.txt`). No QEMU and no run
+loop left after the gate. This is the first Windows gate PASS on the 580.159.04 host driver (all earlier ones ran on
+595.91.07). The birth census over this box's suite and gate logs: `BIRTH_CENSUS_OK arms=30 suite_births=165
+gate_births=12 all PRIVILEGED_CHANNEL=0 privilege=USER` (`boxA/tbA1_births.log`, run by hand after the gate).
+Box A destroyed 13:54Z (`vastai destroy instance 58956007 -y`; the listing was then empty of this lane's ids).
 
 ### Box A, Linux bar (MEASURED 2026-11-03, rev `08dae8a3`, host 580.159.04, `boxA/tbA1.log`, `boxA/tbA1_suite.out`)
 
