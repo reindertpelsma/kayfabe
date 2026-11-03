@@ -14,6 +14,8 @@ Gate semantics changed in the follow-up (`docs/design/V3_WINDOWS_GATE.md` sectio
 | TU106 (RTX 2060 SUPER, Turing) | lease 58656298, Quebec CA | t1 `8597d90e`, t2 `0860f249` | `WINDOWS_GATE_FAIL` twice (hostref green/green both times), plus a third negative boot (post-hoc, see below) | `tu106/` |
 | GB20x (Blackwell) | not leased | | NOT SUPPORTED on Windows at `next` today: see the end of this file | |
 
+⊘ *[superseded 2026-11-03]* The TU106 FAILs below were caused by kf3's authored display caps page (`turing_caps/README.md`); with the derived page the gate passes on TU106 (`traces/turing_boot_20261103/README.md`, lease 58957107, `WINDOWS_GATE_PASS rev=e6dad00f`).
+
 ### TU106 (MEASURED 2026-11-01, lease 58656298, `tu106/t1_windows.log`, `tu106/t2_windows.log`, `tu106/t2_posthoc/`)
 
 - Box: RTX 2060 SUPER (8192 MiB, TU106) behind a 21 vCPU / 24 GB guest, 0.107 USD/h, created 2026-11-01T12:19Z, destroyed 15:11Z (about 2 h 52 min, 0.34 USD from the account credit 40.73 to 40.39). Host driver 595.91.07 open. The gate sized `fb-mb` from the VRAM itself (`WINVM_KF3_FB_MB=6144`; `tu106/t1_windows.log`, `GATE_NOTE host VRAM 8192 MiB`).

@@ -79,6 +79,8 @@ Verdict: H-caps-Turing NOT falsified, and supported on the failing die: the same
 that fail with the authored page (t1/t2) pass the gate with the die's own page (d1) and with only the two bisected facts
 (d2). Negative boots: 0. n=1 per arm, one box, TU106 only.
 
+⊘ *[2026-11-03]* The fix below has since been booted: `next`'s equivalent derivation (PR #239), merged into `claude/turing-boot-20261103`, passes the gate on TU106 (`traces/turing_boot_20261103/README.md`); the page it serves differs from d2 in 12 words (`derived_vs_d2_page.txt` there).
+
 Fix (branch `claude/turing-windows-fix-20261101`): `493c6b7f` (EXPECTED RED test) and `1204f31f` (port of
 `kf_disp::capsderive` to the gate head; the derived page = authored + T1 main-layer scaler + T3 `0x00c`, TU106 row
 present). NOT run on hardware as a binary: for TU106 it serves the d2 page (INFERRED from the code and its test, not

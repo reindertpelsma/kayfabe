@@ -136,8 +136,16 @@ box that is then destroyed loses the install; the evidence is exported by the ga
 |---|---|---|
 | AD102, RTX 4090, Vast lease 58592558 | `a5071c24` (g4) | `WINDOWS_GATE_PASS`, `known_live_dumps_193=2`, n=1 (`g4_windows.log`) |
 | TU106, RTX 2060 SUPER, Vast lease 58656298 | `8597d90e` (t1), `0860f249` (t2) | `WINDOWS_GATE_FAIL` twice: t1 `cup8` `cuInit` 999 with 16 RM unloads, t2 `cup8` `cuCtxCreate` 999 after the idle with 42 RM unloads; Code 0 and `nvidia-smi` worked in both (`tu106/t1_windows.log`, `tu106/t2_windows.log`) |
+| TU106, RTX 2060 SUPER, Vast lease 58957107 (2026-11-03) | `e6dad00f` (tbB1) | `WINDOWS_GATE_PASS ... resets=0 known_live_dumps_193=3` with the derived caps page (`traces/turing_boot_20261103/`) |
 | GB20x (Blackwell) | not run | not supported on Windows at `next` (below) |
 
+- ★ *[correction 2026-11-03, `traces/turing_boot_20261103/README.md`]* **The Turing storm's cause was found and fixed:
+  kf3's authored display caps page.** With the per-die DERIVED page (`kf_disp::capsderive`: authored base + T1
+  main-layer `SCLR_PRESENT` + the die's measured T3 word `0x00c`), now in `next` through PR #239, the gate PASSES on
+  TU106 (Vast lease 58957107, `WINDOWS_GATE_PASS rev=e6dad00f ... resets=0`, `running_to_suspending=1`), after the
+  bisection arms d1/d2 of `traces/windows_gate_20261101/turing_caps/` (lease 58721898). A Turing die with no T3 row
+  (TU116, TU104, TU102 today) still gets the clean page and a loud realize notice, and is not expected to pass. The
+  text below is the 2026-11-01 state and is superseded by this correction.
 - **Turing** is supported to the extent that it reaches Code 0 with the same GSP keys and `guest-driver=580.65.06`, but it does not pass the gate: the reset storm that `traces/tur1_20261027/README.md` recorded on the same die appears inside the gate window. A post-hoc read of the t2 overlay counts, since the enable, `nvlddmkm` 153 = 147, Kernel-Power 41 = 2, 6008 = 1, BugCheck 1001 = 2, LiveKernelEvent other than 193 = 1006 (all of the 49 reports still on disk are code 117), 193 = 43 (`tu106/t2_posthoc/`). The cause of the storm is not found here; it is a product defect on this die, not a gate bug, with the host reference green before and after in both runs. Three negative boots were spent on the die (t1, t2, and the post-hoc boot that panicked); no fresh-box rerun was made.
 - **Blackwell** is not leased for: the Windows results for GB202/GB205/GB206 are all from `claude/blackwell-fixes-20261024` (503 commits not in `next`), and its relay-route fix (`engine_writes_userd_gp_get`) is not in `next`. What is missing is that branch's code merged and validated; the driver pin (580.88) and the host driver (595.91.07) are not the blocker.
 
