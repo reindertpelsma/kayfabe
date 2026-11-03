@@ -144,12 +144,26 @@ fn the_derived_gb203_page_keeps_the_topology_words() {
         )
         .unwrap();
         assert_eq!(
-            mask(t, c, &d.page, "SYS_CAPE", "SYS_CAPE_VIRWIN_EXISTS", row.windows),
+            mask(
+                t,
+                c,
+                &d.page,
+                "SYS_CAPE",
+                "SYS_CAPE_VIRWIN_EXISTS",
+                row.windows
+            ),
             (1 << row.windows) - 1,
             "{v}"
         );
         assert_eq!(
-            mask(t, c, &d.page, "LINK_CAP", "LINK_CAP_PHYCTRL_EXISTS", row.heads),
+            mask(
+                t,
+                c,
+                &d.page,
+                "LINK_CAP",
+                "LINK_CAP_PHYCTRL_EXISTS",
+                row.heads
+            ),
             (1 << row.heads) - 1,
             "{v}"
         );

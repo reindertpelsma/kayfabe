@@ -523,6 +523,33 @@ pub fn page(
             set(off, fa("SYS_CAPC_TILE_EXISTS", h)?, 1);
         }
     }
+    // ★ 2026-11-03 (Blackwell Windows display, `traces/blackwell_win_20261103/`): CA73 names two more
+    // existence registers no earlier caps class has, and the page left both 0 (the Ada shape: "no virtual
+    // window, no output link"). They state the virtual engine's own topology, never the die's word:
+    // - `SYS_CAPE.VIRWIN_EXISTS(i)`: one virtual window per presented window. Public NVKMS for GB20X:
+    //   "the number of physical windows is same as the number of windows" (ogkm 595.84 `nvkms-evo4.c`
+    //   EvoGetCapabilitiesCA, `numHwPhywins = numWindows`), so the virtual set is SYS_CAPB's set.
+    // - `LINK_CAP.PHYCTRL_EXISTS(i)`: one output link per presented SOR (connector `i` is TMDS on SOR `i`,
+    //   `model.rs`; a SOR drives one link). [INFERRED] the index pairing: no public source maps a SOR to a
+    //   PHY controller; the GB203's own page has five (`0x1f`) for its four SORs.
+    if t.fa(caps, "SYS_CAPE_VIRWIN_EXISTS", 0).is_some() {
+        let off = v("SYS_CAPE")?;
+        if windows > v("SYS_CAPE_VIRWIN_EXISTS__SIZE_1")? {
+            return Err(m("SYS_CAPE virtual windows outside layout".into()));
+        }
+        for i in 0..windows {
+            set(off, fa("SYS_CAPE_VIRWIN_EXISTS", i)?, 1);
+        }
+    }
+    if t.fa(caps, "LINK_CAP_PHYCTRL_EXISTS", 0).is_some() {
+        let off = v("LINK_CAP")?;
+        if heads > v("LINK_CAP_PHYCTRL_EXISTS__SIZE_1")? {
+            return Err(m("LINK_CAP output links outside layout".into()));
+        }
+        for s in 0..heads {
+            set(off, fa("LINK_CAP_PHYCTRL_EXISTS", s)?, 1);
+        }
+    }
     // Public NVKMS EvoParseCapabilityNotifierC5C6Common asserts UNIT_WIDTH=16
     // for every usable output (ogkm 580.159.04, nvkms-evo3.c:5858-5863).
     // EvoParseCapabilityNotifierCA calls that parser through C6 as well; only
