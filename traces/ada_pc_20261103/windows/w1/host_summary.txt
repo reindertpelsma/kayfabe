@@ -1,0 +1,33 @@
+DISPLAY fps lines=511; kms series (first 10 / last 10): ['0.0', '36.9', '18.6', '42.3', '29.9', '1.9', '0.9', '8.8', '3.9', '1.9'] ... ['29.9', '33.9', '28.5', '31.9', '32.4', '33.9', '32.9', '32.9', '31.9', '34.9']
+DISPLAY windows with kms>0: 127 of 502
+COUNT 'STOPPED': 0
+COUNT 'STALL': 0
+COUNT 'REFUSED': 145
+COUNT 'Xid': 0
+COUNT 'panicked': 0
+COUNT 'USER_RING_REFUSED': 0
+COUNT 'RESET_CHANNEL': 0
+COUNT 'WATCHDOG': 0
+COUNT 'flip timeout': 0
+COUNT 'kf3: display: TRACE': 0
+WALK this run: windows=116 walks=25442 walk_avg_us(weighted)=885 gpu_avg_us=115 inval_arrive_to_clear_avg_us=1199 invals=7840 per-window walk_avg_us p50=985 max=1171
+WALK this run light windows (<=50 walks): windows=56 walks=338 walk_avg_us=876 gpu_avg_us=135 p50 window walk_avg_us=1016
+WALK this run first 60 windows with walks (boot+desktop): walks=15746 walk_avg_us=856 gpu_avg_us=106
+WALK reference /data/hp1-20261025/baseline3/qemu.log: windows=1804 walks=179011 walk_avg_us(weighted)=4651 gpu_avg_us=2173 inval_arrive_to_clear_avg_us=3292 invals=16752 per-window walk_avg_us p50=20393 max=306904
+WALK reference /data/hp1-20261025/baseline3/qemu.log light windows (<=50 walks): windows=1290 walks=14910 walk_avg_us=31206 gpu_avg_us=15952 p50 window walk_avg_us=31242
+WALK reference /data/hp1-20261025/baseline3/qemu.log first 60 windows with walks (boot+desktop): walks=21161 walk_avg_us=179 gpu_avg_us=127
+CPU over 996s: qemu total 222.1% of one core
+  qemu-system-x86      199.83%
+  kf3-worker1            6.59%
+  kf3-worker0            5.22%
+  kf3-display            3.63%
+  cuda-EvtHandlr         3.59%
+  kf3-vamgr              1.76%
+  kf3-scanline           1.18%
+  kf3-chan-act           0.16%
+  kf3-drainer            0.12%
+  kf-view-reaper         0.04%
+  kf3-cuda-walk          0.01%
+  kf3-cuda-disp          0.00%
+  cuda0000d400036        0.00%
+  kf3-vram-provis        0.00%

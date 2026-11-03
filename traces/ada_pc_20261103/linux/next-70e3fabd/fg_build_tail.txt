@@ -1,0 +1,8 @@
+==   wmi.ko
+==   video.ko
+==   nvidia-modeset.ko
+== firmware taken from the host: 280 file(s)
+== GUEST DRIVER 595.91.07 (verified from the packed module; /data/claude-ada-20261103/validate-70e3fabd/fastguest/driver.STAGED)
+== built: /data/claude-ada-20261103/validate-70e3fabd/fastguest/vmlinuz  17M
+== built: /data/claude-ada-20261103/validate-70e3fabd/fastguest/initrd.cpio.gz  361M
+== kernel release: 7.0.0-34-generic

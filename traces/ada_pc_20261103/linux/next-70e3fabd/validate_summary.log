@@ -1,0 +1,30 @@
+VALIDATE_START rev=70e3fabd 2026-11-03T12:25:40+01:00 host_driver=595.91.07 gpu="NVIDIA GeForce RTX 4070" xid=0
+UNIT rc=0 passed=4375 failed=0 ignored=22 failing_tests=0 secs=685
+BUILD_KF3 rc=0 [1686/1686] Linking target qemu-system-x86_64 KF3_BUILT /var/lib/kf-windows-20261005/kf3-bins/70e3fabd/qemu-system-x86_64 rev=70e3fabd mtime=2026-11-03 12:37:45.308079327 +0100 (shared build dir /var/lib/kf-windows-20261005/qemu-build-kf3)  secs=40
+total 95196
+drwxr-xr-x   2 root root     4096 Nov  3 12:37 .
+drwxr-xr-x 252 root root    12288 Nov  3 12:37 ..
+lrwxrwxrwx   1 root root       51 Nov  3 12:37 pc-bios -> /var/lib/kf-windows-20261005/qemu-build-kf3/pc-bios
+lrwxrwxrwx   1 root root       55 Nov  3 12:37 qemu-bundle -> /var/lib/kf-windows-20261005/qemu-build-kf3/qemu-bundle
+-rwxr-xr-x   1 root root 97460432 Nov  3 12:37 qemu-system-x86_64
+GATES rc=0 V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS V3_GATES_BIRTHS births=12 user=12 refused=0 ok=1 V3_GATES_EXIT pass=9 fail=0 births_ok=1 gate10=PASS 2026-11-03T12:38:06+01:00  secs=21
+CLIENT rc=0
+FG rc=1  build_fast_guest: no raw client at /data/claude-ada-20261103/kayfabe/target/release/kayfabe-rm-ladder (cargo build --release -p kayfabe-rm-ladder --bin kayfabe-rm-ladder)
+FAST rc=2 FAST_SUITE_PASS=0 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=30 ARMS=30 FAST_SUITE_RC=2  secs=1
+--timer                      NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+--engines                    NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+--doorbell-census            NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+--gpu-info-sweep             NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+--bus-info-sweep             NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+--concurrency                NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+--defer-liveness             NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+--blockage-coverage          NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+--alias-two-vas              NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+--alias-unmap-observe        NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+VALIDATE_EXIT rev=70e3fabd 2026-11-03T12:38:17+01:00 xid=0
+RERUN fast step: harness fix (CLIENT path under CARGO_TARGET_DIR)
+VALIDATE_START rev=70e3fabd 2026-11-03T12:38:33+01:00 host_driver=595.91.07 gpu="NVIDIA GeForce RTX 4070" xid=0
+CLIENT rc=0
+FG rc=0 == GUEST DRIVER 595.91.07 (verified from the packed module; /data/claude-ada-20261103/validate-70e3fabd/fastguest/driver.STAGED) == kernel release: 7.0.0-34-generic
+FAST rc=0 FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30 FAST_SUITE_RC=0  secs=238
+VALIDATE_EXIT rev=70e3fabd 2026-11-03T12:42:50+01:00 xid=5

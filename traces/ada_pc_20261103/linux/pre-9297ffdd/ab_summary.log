@@ -1,0 +1,4 @@
+AB_START pre=9297ffdd 2026-11-03T12:43:36+01:00 xid=5
+BUILD_KF3 rc=0 KF3_BUILT /var/lib/kf-windows-20261005/kf3-bins/9297ffdd/qemu-system-x86_64 rev=9297ffdd mtime=2026-11-03 12:44:14.429620109 +0100 (shared build dir /var/lib/kf-windows-20261005/qemu-build-kf3) secs=38
+FAST rc=0 FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30 FAST_SUITE_RC=0  secs=171
+AB_EXIT 2026-11-03T12:47:05+01:00 xid=10

@@ -1,0 +1,5 @@
+GATE_BOOT utc=2026-11-03T11:05:45Z os='Microsoft Windows 11 Pro' build=26200
+GATE_DESKTOP user='kayfabe-windows\kfadmin' dwm=1 explorer=1
+GATE_SESSIONS USERNAME SESSIONNAME ID STATE IDLE TIME LOGON TIME kfadmin console 1 Active none 03/11/2026 12:06
+GATE_DISPLAY name='NVIDIA GeForce RTX 4070' driver=32.0.15.8088 code=0 status=OK pnp=OK
+GATE_STATE_DONE mode=desktop

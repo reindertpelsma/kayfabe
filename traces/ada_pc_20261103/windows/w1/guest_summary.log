@@ -1,0 +1,86 @@
+2026-11-03T11:48:15Z GUEST_START arm=w1 idle_s=600
+2026-11-03T11:48:24Z AGENT_UP after 9 s
+2026-11-03T11:48:24Z SHOT desktop_first /data/claude-ada-20261103/win-w1/desktop_first.png
+2026-11-03T11:48:33Z STEP fetch rc=0 
+2026-11-03T11:48:38Z STEP desktop rc=0 GATE_DESKTOP user='kayfabe-windows\kfadmin' dwm=1 explorer=1
+ GATE_DISPLAY name='NVIDIA GeForce RTX 4070' driver=32.0.15.8088 code=0 status=OK pnp=OK
+ 
+2026-11-03T11:48:38Z GUEST_BOOT_UTC 2026-11-03T10:48:08Z
+2026-11-03T11:48:42Z STEP smi_L rc=0 GPU 0: NVIDIA GeForce RTX 4070 (UUID: GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001)
+ 
+2026-11-03T11:48:45Z STEP smi_q rc=0 GPU 00000000:00:06.0
+ 
+2026-11-03T11:48:52Z STEP cup8_pre rc=0 CUP8 RESULT N=2048 bad=0 maxerr=0 C[0]=2048(exp 2048) -> PASS
+ CUP8 VERDICT: PASS (host GR matmul byte-exact at scale)
+ GATE_PROBE exe=cup8.exe arg= rc=0 secs=4 timeout=0
+ 
+2026-11-03T11:49:02Z STEP d3d11_pre rc=0 KFDX compute iters=50 bad=0 ms=3078
+ KFDX RESULT OK api=d3d11 adapter="NVIDIA GeForce RTX 4070"
+ GATE_PROBE exe=kf_dxprobe.exe arg=d3d11 rc=0 secs=7 timeout=0
+ 
+2026-11-03T11:49:07Z STEP cup3_pre rc=0 GATE_PROBE exe=cup3.exe arg= rc=0 secs=2 timeout=0
+ 
+2026-11-03T11:49:14Z STEP d3d12_pre rc=0 KFDX compute iters=50 bad=0 fence_wait_ok=1 ms=62
+ KFDX RESULT OK api=d3d12 adapter="NVIDIA GeForce RTX 4070"
+ GATE_PROBE exe=kf_dxprobe.exe arg=d3d12 rc=0 secs=4 timeout=0
+ 
+2026-11-03T11:51:00Z STEP gears_pre rc=0 KFGL gears frames=388746 secs=90.0 fps=4319.4 glerr=0x0
+ KFGL RESULT OK
+ GEARS_END utc=2026-11-03T10:50:57Z task_result=0
+ 
+2026-11-03T11:51:04Z STEP display_pre rc=0 GATE_DISPLAY name='NVIDIA GeForce RTX 4070' driver=32.0.15.8088 code=0 status=OK pnp=OK
+ 
+2026-11-03T11:51:04Z SHOT after_probes_pre /data/claude-ada-20261103/win-w1/after_probes_pre.png
+2026-11-03T11:51:04Z IDLE_START 600s
+2026-11-03T11:52:07Z STEP idle_display rc=0 GATE_DISPLAY name='NVIDIA GeForce RTX 4070' driver=32.0.15.8088 code=0 status=OK pnp=OK
+ 
+2026-11-03T11:53:10Z STEP idle_display rc=0 GATE_DISPLAY name='NVIDIA GeForce RTX 4070' driver=32.0.15.8088 code=0 status=OK pnp=OK
+ 
+2026-11-03T11:54:11Z STEP idle_display rc=0 GATE_DISPLAY name='NVIDIA GeForce RTX 4070' driver=32.0.15.8088 code=0 status=OK pnp=OK
+ 
+2026-11-03T11:55:14Z STEP idle_display rc=0 GATE_DISPLAY name='NVIDIA GeForce RTX 4070' driver=32.0.15.8088 code=0 status=OK pnp=OK
+ 
+2026-11-03T11:56:15Z STEP idle_display rc=0 GATE_DISPLAY name='NVIDIA GeForce RTX 4070' driver=32.0.15.8088 code=0 status=OK pnp=OK
+ 
+2026-11-03T11:57:18Z STEP idle_display rc=0 GATE_DISPLAY name='NVIDIA GeForce RTX 4070' driver=32.0.15.8088 code=0 status=OK pnp=OK
+ 
+2026-11-03T11:58:22Z STEP idle_display rc=0 GATE_DISPLAY name='NVIDIA GeForce RTX 4070' driver=32.0.15.8088 code=0 status=OK pnp=OK
+ 
+2026-11-03T11:59:25Z STEP idle_display rc=0 GATE_DISPLAY name='NVIDIA GeForce RTX 4070' driver=32.0.15.8088 code=0 status=OK pnp=OK
+ 
+2026-11-03T12:00:28Z STEP idle_display rc=0 GATE_DISPLAY name='NVIDIA GeForce RTX 4070' driver=32.0.15.8088 code=0 status=OK pnp=OK
+ 
+2026-11-03T12:01:29Z STEP idle_display rc=0 GATE_DISPLAY name='NVIDIA GeForce RTX 4070' driver=32.0.15.8088 code=0 status=OK pnp=OK
+ 
+2026-11-03T12:01:29Z IDLE_END
+2026-11-03T12:01:30Z SHOT after_idle /data/claude-ada-20261103/win-w1/after_idle.png
+2026-11-03T12:01:35Z STEP cup8_post rc=0 CUP8 RESULT N=2048 bad=0 maxerr=0 C[0]=2048(exp 2048) -> PASS
+ CUP8 VERDICT: PASS (host GR matmul byte-exact at scale)
+ GATE_PROBE exe=cup8.exe arg= rc=0 secs=2 timeout=0
+ 
+2026-11-03T12:01:39Z STEP d3d11_post rc=0 KFDX compute iters=50 bad=0 ms=16
+ KFDX RESULT OK api=d3d11 adapter="NVIDIA GeForce RTX 4070"
+ GATE_PROBE exe=kf_dxprobe.exe arg=d3d11 rc=0 secs=1 timeout=0
+ 
+2026-11-03T12:01:43Z STEP cup3_post rc=0 GATE_PROBE exe=cup3.exe arg= rc=0 secs=1 timeout=0
+ 
+2026-11-03T12:01:48Z STEP d3d12_post rc=0 KFDX compute iters=50 bad=0 fence_wait_ok=1 ms=156
+ KFDX RESULT OK api=d3d12 adapter="NVIDIA GeForce RTX 4070"
+ GATE_PROBE exe=kf_dxprobe.exe arg=d3d12 rc=0 secs=2 timeout=0
+ 
+2026-11-03T12:03:25Z STEP gears_post rc=0 KFGL gears frames=356787 secs=90.0 fps=3964.3 glerr=0x0
+ KFGL RESULT OK
+ GEARS_END utc=2026-11-03T11:03:22Z task_result=0
+ 
+2026-11-03T12:03:28Z STEP display_post rc=0 GATE_DISPLAY name='NVIDIA GeForce RTX 4070' driver=32.0.15.8088 code=0 status=OK pnp=OK
+ 
+2026-11-03T12:03:28Z SHOT after_probes_post /data/claude-ada-20261103/win-w1/after_probes_post.png
+2026-11-03T12:03:32Z STEP tdr rc=0 GATE_TDR since=2026-11-03T10:48:08Z display4101=0 nvlddmkm153=0 kernelpower41=0 eventlog6008=0 bugcheck1001=0 livekernelevent_other=78 livekernelevent193=0 strict=0 total=78
+ 
+2026-11-03T12:03:37Z STEP wer rc=0 
+2026-11-03T12:03:41Z STEP smi_q_post rc=0 GPU 00000000:00:06.0
+ 
+2026-11-03T12:03:44Z STEP desktop_post rc=0 GATE_DESKTOP user='kayfabe-windows\kfadmin' dwm=1 explorer=1
+ GATE_DISPLAY name='NVIDIA GeForce RTX 4070' driver=32.0.15.8088 code=0 status=OK pnp=OK
+ 
+2026-11-03T12:03:44Z GUEST_DONE secs=929
