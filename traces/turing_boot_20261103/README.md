@@ -68,6 +68,33 @@ line `caps page derived — N words: a T1 rule, b T2 host, c T3 measured (u unme
 
 ## RESULTS
 
+### Box B, Windows gate run tbB1 (MEASURED 2026-11-03, rev `e6dad00f` = `08dae8a3` + docs, host 595.91.07, `boxB/`)
+
+Lane: `boxB/winlane.log` `WINLANE_TIMING total=2031s ... install_windows=1226s`, `WINLANE_EXIT rc=0` (5 vCPU, install
+SMP 5, 20 min). Gate `boxB/tbB1_windows.log`, launched 12:21:32Z on the sealed image, flags file unchanged, no
+`KF3_DIAG_*` variable:
+
+```
+WINDOWS_GATE_PASS rev=e6dad00f gpu="NVIDIA GeForce RTX 2060 SUPER" idle_s=300 hostref=green/green secs=1481 install=once driver=580.88 gsp=forced code=0 probes=cup8,d3d11,x2 resets=0 known_live_dumps_193=3 strict=0 enable_utc=2026-11-03T12:32:35Z
+WINDOWS_GATE_EXIT rc=0 2026-11-03T12:46:13+00:00
+```
+
+Against the pre-registered falsifier (every item from a committed file):
+- kf3 log (`tbB1/gate_tbB1_b2_qemu.log.gz`): `caps page derived — 56 words: 55 T1 rule, 0 T2 host, 1 T3 measured (0
+  unmeasured)` (56 words, as computed in `derived_vs_d2_page.txt`; T2 supplied nothing at run time) and `+184046 ms
+  the console shows head 0 1920x1080: [window 0 ...]` (a window PUT after the modeset).
+- `tbB1/gsp_signals.txt`: `running_to_suspending=1` (the stop), `unloading_guest_driver=1`, `host_xid_in_boots=0`.
+- `tbB1/tdr_counts.txt`: every reset counter 0, `livekernelevent193=3` (one WATCHDOG dump 12:33:04Z, +29 s after the
+  enable, before the probes; as on AD102 and d1/d2).
+- probes: cup8 3 s, d3d11 2 s, cup3, d3d12 all rc=0 before and after the idle (the t2 failure run needed 56 s for
+  cup8 and failed it after the idle).
+- No QEMU left after the gate (`pgrep qemu-system` empty; `run/stop-requested` present).
+- Not falsified: H-derived-TU106 holds for this run (n=1 on box B).
+
+The new `gate_state.ps1` (`c290ec24`, stale-LKE filter) was parse- and run-checked on this guest during the idle
+window (read-only, `-Mode tdr`): it printed `livekernelevent_stale=0 ... total=0` and `GATE_STATE_DONE`. Its stale
+branch (an old report re-submitted) is not exercised on a fresh image.
+
 ### Box A, Linux bar (MEASURED 2026-11-03, rev `08dae8a3`, host 580.159.04, `boxA/tbA1.log`, `boxA/tbA1_suite.out`)
 
 - `V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS`, `KF3_RC=0`, `BARE_SUITE_PASS=30 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0
