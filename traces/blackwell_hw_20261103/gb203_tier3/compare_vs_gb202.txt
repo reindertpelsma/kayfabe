@@ -1,0 +1,3 @@
+REF ['measured:GB202,595.91.07,2026-10-23'] words 48 fields 328
+NEW ['measured:GB203,595.91.07,2026-11-03'] words 48 fields 328
+PRECOMP_COMPARE words_differ=0 fields_differ=0 fields_ref=328 fields_new=328
