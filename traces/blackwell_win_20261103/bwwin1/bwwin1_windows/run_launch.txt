@@ -1,0 +1,1 @@
+[2026-11-03T14:50:53Z] detached: tag=gate_bwwin1, log logs/gate_bwwin1_run.log (stdout logs/gate_bwwin1_run.out)

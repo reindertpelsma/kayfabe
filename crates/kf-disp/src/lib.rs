@@ -28,6 +28,7 @@
 
 pub mod caps;
 pub mod capsderive;
+pub mod capsoverlay;
 pub mod class;
 pub mod color;
 pub mod dispcaps;

@@ -1,5 +1,14 @@
 //! ★ The NVDisplay channel pushbuffer decoder — bounded, total, and blind to method meaning.
 //!
+//! ⊘ CORRECTED 2026-11-03 (Blackwell Windows display, `traces/blackwell_win_20261103/`), above the text
+//! it corrects: the offset widths and the ring size are the CLASS's, not one table for every class.
+//! `C37D`..`C77D` and their window classes have `DMA_METHOD_OFFSET 13:2` and `DMA_JUMP_OFFSET 11:2` (a
+//! 4 KiB ring); `CA7D`/`CA7E`/`CA7B` (GB20x) have `15:2` for both (a 64 KiB ring, methods up to
+//! `0xfffc`). [`Format::resolve`] reads them from the generated class table; the ring a JUMP can address
+//! is the largest pushbuffer the class has (`1 << (JUMP_OFFSET.hi + 1)` bytes). The fixed 13:2 / 11:2 /
+//! 4 KiB decoder halted the GB203 Windows driver's 64 KiB core ring at `PUT 0x1d70` (MEASURED,
+//! `diagA_b1_qemu.log.gz`). The text below describes the Volta..Ada layout only.
+//!
 //! A display DMA channel's pushbuffer is at most 4 KiB (`NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_
 //! PUSHBUFFER`'s limit, `ogkm-580: ctrl2080internal.h:1343-1400`), and its command words are the
 //! NVDisplay DMA format every class from `C37D` to `CC7D` shares (`ogkm-580:
@@ -16,6 +25,42 @@
 //! `(method_address, data)` pairs; it never loops on guest data (a JUMP is followed at most once
 //! per pass and a pass is bounded by `len / 4` words), and an out-of-range count or an unknown
 //! opcode ends the pass with an error the caller turns into the channel's error state.
+
+use crate::class::ClassTable;
+
+/// ★ A DMA channel class's command-word layout, from the generated class table.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Format {
+    /// `DMA_METHOD_OFFSET` (hi, lo).
+    pub method: (u8, u8),
+    /// `DMA_JUMP_OFFSET` (hi, lo).
+    pub jump: (u8, u8),
+}
+
+impl Format {
+    /// The layout of DMA class `class` (`NV<class>_DMA_METHOD_OFFSET` / `_DMA_JUMP_OFFSET`). `None`
+    /// when either is missing, does not address 32-bit words (`lo` 2), or addresses more than
+    /// [`MAX_PUSHBUFFER`].
+    #[must_use]
+    pub fn resolve(t: &ClassTable, class: u32) -> Option<Format> {
+        let f = Format {
+            method: t.f(class, "DMA_METHOD_OFFSET")?,
+            jump: t.f(class, "DMA_JUMP_OFFSET")?,
+        };
+        let ok = |(hi, lo): (u8, u8)| lo == 2 && hi > lo && hi < 16;
+        (ok(f.method) && ok(f.jump)).then_some(f)
+    }
+
+    /// The largest ring this class can address (bytes): what a JUMP can reach.
+    #[must_use]
+    pub fn bytes(&self) -> u32 {
+        1u32 << (u32::from(self.jump.0) + 1)
+    }
+
+    fn field(w: u32, (hi, lo): (u8, u8)) -> u32 {
+        (w >> lo) & ((1u32 << (hi - lo + 1)) - 1)
+    }
+}
 
 /// One decoded method write.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -47,16 +92,22 @@ pub enum DecodeError {
     Runaway,
 }
 
-/// The largest pushbuffer a display channel may declare (bytes).
-pub const MAX_PUSHBUFFER: u32 = 4096;
+/// The largest pushbuffer any display channel class may declare (bytes): a 16-bit JUMP_OFFSET
+/// (`15:2`, GB20x). A class's own bound is [`Format::bytes`]; this one bounds every read.
+pub const MAX_PUSHBUFFER: u32 = 65536;
 
-/// ★ Decode `[get, put)` of `pb` (the channel's whole pushbuffer, `pb.len()` bytes, ≤ 4 KiB).
+/// ★ Decode `[get, put)` of `pb` (the channel's whole pushbuffer, `pb.len()` bytes, ≤ `f.bytes()`).
 ///
 /// Returns the method writes in order and the new GET (== `put` on success). On error the writes
 /// decoded so far are returned with the offset the pass stopped at, so the caller can report the
 /// error at that GET (what the hardware's error notifier does) instead of guessing past it.
-pub fn decode(pb: &[u8], get: u32, put: u32) -> (Vec<MethodWrite>, u32, Option<DecodeError>) {
-    let (groups, end, err) = decode_groups(pb, get, put);
+pub fn decode(
+    f: &Format,
+    pb: &[u8],
+    get: u32,
+    put: u32,
+) -> (Vec<MethodWrite>, u32, Option<DecodeError>) {
+    let (groups, end, err) = decode_groups(f, pb, get, put);
     (groups.into_iter().map(|g| g.write).collect(), end, err)
 }
 
@@ -74,11 +125,17 @@ pub struct Located {
 /// ★ As [`decode`], with each write's group position — what a channel that STOPS at an `UPDATE`
 /// (waiting for its interlocked channels or the next vblank) needs to publish a GET that stands
 /// before the unconsumed method, and to resume from exactly there.
-pub fn decode_groups(pb: &[u8], get: u32, put: u32) -> (Vec<Located>, u32, Option<DecodeError>) {
+pub fn decode_groups(
+    f: &Format,
+    pb: &[u8],
+    get: u32,
+    put: u32,
+) -> (Vec<Located>, u32, Option<DecodeError>) {
     let len = u32::try_from(pb.len()).unwrap_or(0);
     let mut out = Vec::new();
     if len == 0
         || len > MAX_PUSHBUFFER
+        || len > f.bytes()
         || len % 4 != 0
         || get % 4 != 0
         || put % 4 != 0
@@ -109,7 +166,7 @@ pub fn decode_groups(pb: &[u8], get: u32, put: u32) -> (Vec<Located>, u32, Optio
         }
         let opcode = w >> 29;
         let count = (w >> 18) & 0x3ff;
-        let offset = ((w >> 2) & 0xfff) << 2;
+        let offset = Format::field(w, f.method) << 2;
         match opcode {
             0 | 2 => {
                 // data must lie in [at+4, put) without wrapping (a method never spans a JUMP)
@@ -133,7 +190,7 @@ pub fn decode_groups(pb: &[u8], get: u32, put: u32) -> (Vec<Located>, u32, Optio
                 at = end;
             }
             1 => {
-                let target = ((w >> 2) & 0x3ff) << 2;
+                let target = Format::field(w, f.jump) << 2;
                 if target >= len {
                     return (out, at, Some(DecodeError::BadPointers));
                 }
@@ -152,6 +209,12 @@ pub fn decode_groups(pb: &[u8], get: u32, put: u32) -> (Vec<Located>, u32, Optio
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The Volta..Ada layout (`NVC67D_DMA_*`), the format these unit tests' rings use.
+    const F: Format = Format {
+        method: (13, 2),
+        jump: (11, 2),
+    };
 
     fn pb(words: &[u32]) -> Vec<u8> {
         let mut v: Vec<u8> = words.iter().flat_map(|w| w.to_le_bytes()).collect();
@@ -180,7 +243,7 @@ mod tests {
             1,
             0,
         ]);
-        let (w, get, err) = decode(&b, 0, 32);
+        let (w, get, err) = decode(&F, &b, 0, 32);
         assert_eq!(err, None);
         assert_eq!(get, 32);
         assert_eq!(
@@ -211,7 +274,7 @@ mod tests {
     #[test]
     fn writes_know_their_group() {
         let b = pb(&[0, method(2, 0x204), 7, 8, method(1, 0x200), 1]);
-        let (g, get, err) = decode_groups(&b, 0, 24);
+        let (g, get, err) = decode_groups(&F, &b, 0, 24);
         assert_eq!((get, err), (24, None));
         assert_eq!(
             g.iter()
@@ -230,7 +293,7 @@ mod tests {
         b[0xff0..0xff4].copy_from_slice(&method(1, 0x80).to_le_bytes());
         b[0xff4..0xff8].copy_from_slice(&9u32.to_le_bytes());
         b[0xff8..0xffc].copy_from_slice(&(1u32 << 29).to_le_bytes());
-        let (w, get, err) = decode(&b, 0xff0, 8);
+        let (w, get, err) = decode(&F, &b, 0xff0, 8);
         assert_eq!(err, None);
         assert_eq!(get, 8);
         assert_eq!(
@@ -248,21 +311,27 @@ mod tests {
         );
         // a JUMP to itself, with PUT elsewhere: bounded
         let b = pb(&[1u32 << 29]);
-        assert_eq!(decode(&b, 0, 8).2, Some(DecodeError::Runaway));
+        assert_eq!(decode(&F, &b, 0, 8).2, Some(DecodeError::Runaway));
         // header claims 3 words, only 1 before PUT
         let b = pb(&[method(3, 0x100), 1]);
-        assert_eq!(decode(&b, 0, 8).2, Some(DecodeError::Truncated { at: 0 }));
+        assert_eq!(
+            decode(&F, &b, 0, 8).2,
+            Some(DecodeError::Truncated { at: 0 })
+        );
         // opcode 7
         let b = pb(&[7 << 29]);
         assert!(matches!(
-            decode(&b, 0, 4).2,
+            decode(&F, &b, 0, 4).2,
             Some(DecodeError::BadOpcode { at: 0, .. })
         ));
         // unaligned / out of range / oversize
-        assert_eq!(decode(&pb(&[]), 2, 8).2, Some(DecodeError::BadPointers));
-        assert_eq!(decode(&pb(&[]), 0, 8192).2, Some(DecodeError::BadPointers));
+        assert_eq!(decode(&F, &pb(&[]), 2, 8).2, Some(DecodeError::BadPointers));
         assert_eq!(
-            decode(&vec![0u8; 8192], 0, 8).2,
+            decode(&F, &pb(&[]), 0, 8192).2,
+            Some(DecodeError::BadPointers)
+        );
+        assert_eq!(
+            decode(&F, &vec![0u8; 8192], 0, 8).2,
             Some(DecodeError::BadPointers)
         );
     }
