@@ -59,4 +59,11 @@ line `caps page derived — N words: a T1 rule, b T2 host, c T3 measured (u unme
 | B | 58957107 | RTX 2060 SUPER (TU106, 10de:1f06), 5 vCPU, 24 GB, 155 GB disk | 58947025 | Quebec CA | 2026-11-03T11:36Z |
 | C | 58957109 | GTX 1660 SUPER (TU116) | 58437683 | Austria AT | 2026-11-03T11:36Z |
 
+### Added at 12:25Z, when the arm re-run below was launched (before its result)
+
+- **H-guest-ram-perf**: box A's one fast-suite miss (`--ce-client-guest-ram` TIMEOUT at 185 s of the 180 s budget) is
+  the known Turing PERF case of `traces/tur1_20261027/README.md` (lease 57882297, before this change: TIMEOUT at
+  180 s, PASS in 203 s at 600 s, 187 s in a 300 s suite), not a regression. FALSIFIER: the arm alone at a 600 s
+  budget fails or crashes, or passes in clearly more than ~205 s, or its kf3 counters stop advancing (hung).
+
 ## RESULTS
