@@ -99,6 +99,18 @@ Note the GA106 pair: two boards, two PCI device ids, the same die, the same word
 - The falsifier for a family rule ("two dies of one family disagree") was NOT triggered in any family. That is
   agreement, not a mechanism: no wildcard row is added.
 
+### Rows and tests
+
+Eight rows in `crates/kf-disp/data/caps_measured.tsv` (GA104, GA106, TU102, TU104, TU116, AD103, AD106 for branch 580;
+AD107 for branch 595 only), no wildcard. `crates/kf-disp/tests/caps_sweep_20261103.rs` was committed alone and red first
+(`test_red.txt`: the two row-dependent tests fail with `has a measured 0x00c row ... [(12, ...)]`), green after the
+rows (`test_green.txt`). The three older "unmeasured die" tests (`ampere_caps.rs`, `turing_caps.rs`, `caps_derive.rs`)
+named GA104, TU116/TU104, AD103/AD106 as their unmeasured examples and now name GA107, TU117 and AD107-on-580. The full
+`cargo test -p kf-disp --no-fail-fast` ran green apart from those two targets before the fix (250 lib tests + all
+integration targets), and `caps_derive`, `turing_caps`, `ampere_caps` and `caps_sweep_20261103` are green after.
+INFERRED: kf3's realize-time die (RM `MC_GET_ARCH_INFO`) equals the `NV_PMC_BOOT_42` decode used here, as it does for
+every existing row; no host RM control was run on these leases.
+
 ### Not measured, and why
 
 TU117 (no GTX 1650 / 1630 / T400-class offer on Vast during the sweep), GB207 (no RTX 5050 offer), GA103 (skipped by

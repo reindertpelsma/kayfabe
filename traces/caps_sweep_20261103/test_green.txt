@@ -1,0 +1,6 @@
+test each_swept_row_is_scoped_to_the_branch_it_was_read_on_and_names_its_die ... ok
+test the_sweep_adds_no_family_wildcard ... ok
+test a_swept_branch_is_not_served_to_another_branch ... ok
+test dies_the_sweep_could_not_reach_still_get_the_clean_page_and_a_notice ... ok
+test every_swept_die_is_fully_derived_with_its_own_measured_word ... ok
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
