@@ -75,7 +75,7 @@ GPU work to fail; none supplies a host address, host verb flags, cross-VM destin
 per-wake list. Retired pending events are pruned. The only worker-path change is the narrow RC check before a Translated pump. Relay and VA code
 are unchanged. No timeout, polling interval, boot flag or completion rule changes.
 
-MEASURED baseline (2026-10-18 lane): `traces/translated_rc_20261018/` records baseline/EXPECTED RED counts, isolated
+MEASURED baseline (recorded 2026-10-22; `2026-10-18` is only the evidence directory's name, and no record in it carries that date): `traces/translated_rc_20261018/` records baseline/EXPECTED RED counts, isolated
 EXPECTED RED commits, mutation killers and clippy delta. Hardware numbers: n=0 in this lane.
 
 **SUPERSEDED by the master-merge update above (owner authorized resume).**

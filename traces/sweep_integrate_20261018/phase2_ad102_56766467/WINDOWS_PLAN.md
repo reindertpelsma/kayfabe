@@ -22,7 +22,7 @@ are verified in guest. No executable or VM/TPM/key material is copied back.
 Optional bounded RPC body tracing supplies an integrated Ada display reference
 only if this run passes; native-headless is not a display-subtree reference.
 
-H_AD102_581 allocation diagnostic (one run, after580): native-measured (per this 2026-10-19 plan) exact
+H_AD102_581 allocation diagnostic (one run, after580): native-measured (the 2026-10-17 native Windows 581.51 capture, tagged `measured:AD102,581.51,2026-10-17`; this plan's 2026-10-19 date is when it was written, not when it was measured) exact
 AD102/Windows581 public class0xb297/12-byte unscheduled layout is admitted by
 P19 SW_RUNLIST_PROBE; schedule20801111 stays refused/NOT_DERIVABLE. Falsifier:
 allocation accepted but same driver abort/unload ordinal.581.51 actualbuild
