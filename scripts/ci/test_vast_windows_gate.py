@@ -80,7 +80,7 @@ class GateVerdicts(unittest.TestCase):
     def test_the_selftest_classifies_every_case(self):
         p = run_gate("--selftest")
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
-        self.assertRegex(p.stdout, r"^WINDOWS_GATE_SELFTEST_OK cases=11$")
+        self.assertRegex(p.stdout, r"^WINDOWS_GATE_SELFTEST_OK cases=18$")
 
     def test_a_guest_failure_is_kayfabes_only_with_both_references_green(self):
         text = code(GATE)
@@ -143,6 +143,53 @@ class GateVerdicts(unittest.TestCase):
         p = run_gate("../x")
         self.assertEqual(p.returncode, 2)
         self.assertIn("invalid-tag", p.stdout)
+
+
+class GateTeardownAndStateAtFailure(unittest.TestCase):
+    """2026-11-03, the two defects of the TU106 runs (traces/windows_gate_20261101/tu106/): a teardown between two
+    boots left the run loop's next QEMU running after the gate, and the state at failure of a dead guest was skipped
+    (or came back as empty files). Each mutant re-creates one defect; the gate's own selftest must catch it."""
+
+    MUTANTS = {
+        # the old teardown: nothing asks the run loop to stop
+        "no-stop-request": ('mkdir -p "$VM/run" && touch "$VM/run/stop-requested"', ":"),
+        # the old teardown: stop the QEMU that is up, never wait for the run loop
+        "no-loop-wait": ('run_loop_alive "$tag" || return 0', "return 0"),
+        # the old state at failure: asked of the guest whatever its state
+        "always-live": ("if qemu_alive && guest_answers; then", "if true; then"),
+        # a dead guest yields nothing
+        "no-postmortem": ("            postmortem_state\n", "            :\n"),
+    }
+
+    def test_each_mutant_fails_the_selftest(self):
+        src = GATE.read_text()
+        for name, (old, new) in self.MUTANTS.items():
+            with self.subTest(name):
+                self.assertEqual(src.count(old), 1, old)
+                with tempfile.TemporaryDirectory() as d:
+                    m = Path(d) / "windows_gate.sh"
+                    m.write_text(src.replace(old, new))
+                    p = subprocess.run(
+                        ["bash", str(m), "--selftest"], capture_output=True, text=True, timeout=120
+                    )
+                    self.assertNotEqual(p.returncode, 0, name + ": " + p.stdout)
+                    self.assertIn("WINDOWS_GATE_SELFTEST_FAIL", p.stdout)
+
+    def test_the_postmortem_boot_is_the_same_overlay_without_kf3_once(self):
+        text = code(GATE)
+        body = text[text.index("postmortem_state() {") :]
+        body = body[: body.index("\n}\n")]
+        self.assertRegex(body, r'run --detach --once --no-kf3 --overlay "\$TAG"')
+        self.assertIn("-Mode tdr -Since", body)
+        self.assertNotIn("-Mode display", body)  # no adapter in that boot
+        self.assertIn('teardown_guest "$pm"', body)
+        self.assertIn("cap 900", body)  # bounded by the gate's budget
+
+    def test_the_exit_trap_tears_down_between_boots_too(self):
+        trap = code(GATE)
+        trap = trap[trap.index("on_exit()") : trap.index("trap on_exit EXIT")]
+        self.assertIn('if [ "$GUEST_STARTED" = 1 ]; then teardown_guest; fi', trap)
+        self.assertNotIn("qemu.pid", trap)
 
 
 class GateRules(unittest.TestCase):

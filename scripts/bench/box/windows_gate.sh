@@ -196,13 +196,18 @@ timeline_deltas() { # FIRST_PROBE FIRST_DUMP -> " dump_minus_enable=Ns dump_minu
 conclude() {
     local failstage=$STAGE xid_in xid_delta
     [ -z "$FAILSTAGE" ] || failstage=$FAILSTAGE
-    # the state at failure, while the guest still runs (bounded; a hung guest just yields nothing)
-    if [ "$FAILMODE" != none ] && [ -n "$ENABLE_UTC" ] && qemu_alive; then
-        gps 150 'C:\kf\gate_state.ps1' -Mode tdr -Since "$ENABLE_UTC" > "$EV/state_at_failure_tdr.txt" 2>&1
-        wer_timeline "state_at_failure_wer.txt"
-        gps 100 'C:\kf\gate_state.ps1' -Mode display > "$EV/state_at_failure_display.txt" 2>&1
-        grep -a '^GATE_TDR\|^GATE_LIVEDUMP\|^GATE_DISPLAY' "$EV/state_at_failure_tdr.txt" "$EV/state_at_failure_display.txt" 2> /dev/null \
-            | sed 's/^[^:]*://' | while read -r l; do say "  AT_FAILURE $l"; done
+    # the state at failure (bounded). A live guest is asked directly. ⊘ [2026-11-03] A dead one (QEMU gone after a
+    # bugcheck, or alive but not answering ssh) used to be skipped or to yield empty files (TU106 t2:
+    # state_at_failure_*.txt were 0 bytes); its event log and WER reports are on the overlay disk, so they are read
+    # from a post-mortem boot of the same overlay WITHOUT the kf3 device (postmortem_state).
+    if [ "$FAILMODE" != none ] && [ -n "$ENABLE_UTC" ]; then
+        if qemu_alive && guest_answers; then
+            state_at_failure_live
+        else
+            say "GATE_NOTE the guest is dead at the failure (qemu_alive=$(qemu_alive && echo 1 || echo 0)): the state comes from a post-mortem boot of the overlay without kf3"
+            teardown_guest
+            postmortem_state
+        fi
     fi
     teardown_guest
     if [ "$GUEST_STARTED" = 1 ] && [ "$HOSTREF_AFTER" = unrun ]; then
@@ -254,7 +259,8 @@ on_exit() {
         say "WINDOWS_GATE_RETRY action=rerun-on-a-fresh-box class=OPERATOR stage=$STAGE why=\"gate script ended without a verdict (rc=$rc)\" rev=$REV gpu=\"$GPU_NAME\" hostref=$HOSTREF_BEFORE/$HOSTREF_AFTER"
         rc_final=3
     fi
-    if [ "$GUEST_STARTED" = 1 ] && [ -e "$VM/run/qemu.pid" ]; then teardown_guest; fi
+    # also between two boots (no qemu.pid yet): the run loop would start the next QEMU after this gate has exited
+    if [ "$GUEST_STARTED" = 1 ]; then teardown_guest; fi
     [ -z "${PROBES:-}" ] || rm -rf "$PROBES"
     say "WINDOWS_GATE_EXIT rc=$rc_final $(date -u -Is)"
     exit "$rc_final"
@@ -318,11 +324,63 @@ run_probe() { # NAME EXE ARG TIMEOUT OUTFILE -> echoes the GATE_PROBE line
     say "GATE_PROBE_RESULT $name $line" >&2
     echo "$line"
 }
-teardown_guest() {
-    if qemu_alive; then
-        say "GATE_NOTE graceful stop of the guest"
-        timeout 420 bash "$WV" stop > "$EV/stop_cleanup.txt" 2>&1 < /dev/null || say "GATE_NOTE stop returned non-zero; see stop_cleanup.txt"
+# ⊘ [2026-11-03] A guest that reboots on its own (a bugcheck under -action panic=none reboots, and reboot=shutdown ends
+# that QEMU) is started again by the detached `win_vm.sh run` loop unless run/stop-requested exists, and `win_vm.sh
+# stop` touches that file only when a QEMU is running. A teardown that landed between two boots therefore left the
+# next QEMU (and the loop, and the GPU lock) running after the gate had exited (TU106 t2 post-hoc boot). So: ask the
+# loop to stop FIRST, then stop whatever QEMU is up, until the loop of this tag has ended (bounded; never a kill).
+TEARDOWN_POLL_S=3
+teardown_guest() { # [TAG]: the gate's own run loop by default
+    local tag=${1:-$TAG} w=0
+    mkdir -p "$VM/run" && touch "$VM/run/stop-requested"
+    while [ "$w" -le 180 ]; do
+        if qemu_alive; then
+            say "GATE_NOTE graceful stop of the guest ($tag)"
+            guest_stop || say "GATE_NOTE stop returned non-zero; see stop_cleanup.txt"
+        fi
+        run_loop_alive "$tag" || return 0
+        sleep "$TEARDOWN_POLL_S"
+        w=$((w + TEARDOWN_POLL_S + 1))
+    done
+    say "GATE_NOTE the run loop of $tag did not end within 180 s of the stop (pids: $(run_loop_pids "$tag")); not killed"
+}
+guest_stop() { timeout 420 bash "$WV" stop >> "$EV/stop_cleanup.txt" 2>&1 < /dev/null; }
+run_loop_pids() { pgrep -f "win_vm\.sh run .*--tag $1( |$)" | tr '\n' ' '; }
+run_loop_alive() { [ -n "$(run_loop_pids "$1" | tr -d ' ')" ]; }
+guest_answers() { g 60 'echo KF_SSH_UP' 2> /dev/null | grep -q KF_SSH_UP; }
+
+# the state at failure of a guest that still answers: reset counters, WER timeline, adapter state
+state_at_failure_live() {
+    gps 150 'C:\kf\gate_state.ps1' -Mode tdr -Since "$ENABLE_UTC" > "$EV/state_at_failure_tdr.txt" 2>&1
+    wer_timeline "state_at_failure_wer.txt"
+    gps 100 'C:\kf\gate_state.ps1' -Mode display > "$EV/state_at_failure_display.txt" 2>&1
+    grep -a '^GATE_TDR\|^GATE_LIVEDUMP\|^GATE_DISPLAY' "$EV/state_at_failure_tdr.txt" "$EV/state_at_failure_display.txt" 2> /dev/null \
+        | sed 's/^[^:]*://' | while read -r l; do say "  AT_FAILURE $l"; done
+}
+# the state at failure of a DEAD guest: one bounded boot of the same overlay with no kf3 device (std VGA, no GPU, so
+# the NVIDIA stack that failed does not run), the same read-only gate_state.ps1 queries (it was staged in C:\kf at the
+# desktop stage), then the teardown of that boot. The adapter state is not asked: there is no adapter in that boot.
+postmortem_state() {
+    local pm=${TAG}_pm t
+    t=$(cap 900)
+    if [ "$t" -lt 300 ]; then
+        say "GATE_NOTE no post-mortem boot: ${t}s of the budget left"
+        return 0
     fi
+    if ! bash "$WV" run --detach --once --no-kf3 --overlay "$TAG" --arm "$ARM" --tag "$pm" > "$EV/postmortem_launch.txt" 2>&1 < /dev/null; then
+        say "GATE_NOTE the post-mortem boot did not start: $(tail -2 "$EV/postmortem_launch.txt" | tr '\n' ' ')"
+        return 0
+    fi
+    sleep 5
+    if wait_ssh $((t - 180)); then
+        gps 150 'C:\kf\gate_state.ps1' -Mode tdr -Since "$ENABLE_UTC" > "$EV/state_at_failure_tdr.txt" 2>&1
+        wer_timeline "state_at_failure_wer.txt"
+        grep -a '^GATE_TDR\|^GATE_LIVEDUMP' "$EV/state_at_failure_tdr.txt" 2> /dev/null | while read -r l; do say "  AT_FAILURE postmortem $l"; done
+    else
+        say "GATE_NOTE the post-mortem boot never answered ssh"
+    fi
+    teardown_guest "$pm"
+    cp "$VM/logs/${pm}_run.log" "$EV/" 2> /dev/null || true
 }
 
 # ------------------------------------------------------------------------------------------------
@@ -361,6 +419,8 @@ hostref() { # before|after
 selftest() {
     local n=0 bad=0 out
     trap - EXIT
+    eval "real_$(declare -f teardown_guest)"
+    eval "real_$(declare -f postmortem_state)"
     teardown_guest() { :; }
     collect_evidence() { :; }
     hostref() { :; }
@@ -396,6 +456,75 @@ selftest() {
     sc pass-after-red 3 'class=HOSTREF' none green RED
     sc pass-with-xid 1 'WINDOWS_GATE_FAIL diag=KAYFABE' none green green 0 2
     sc pass-with-flag-refusal 1 'WINDOWS_GATE_FAIL diag=KAYFABE' none green green 0 0 1
+    # teardown: a stubbed `win_vm.sh run` loop that, whenever its QEMU is gone, ends if stop-requested exists (HONOUR=1)
+    # or starts the next QEMU (a guest that rebooted on its own). Nothing may be left running after the teardown.
+    td() { # NAME WANT_TEXT HONOUR QEMU_UP_AT_START
+        local name=$1 want=$2 honour=$3 up=$4
+        n=$((n + 1))
+        out=$(
+            S=$(mktemp -d)
+            VM=$S/vm EV=$S LOG=$S/log TAG=gate_t TEARDOWN_POLL_S=0
+            mkdir -p "$VM/run"
+            touch "$S/loop_up"
+            [ "$up" != 1 ] || touch "$S/qemu_up"
+            qemu_alive() { [ -e "$S/qemu_up" ]; }
+            guest_stop() { rm -f "$S/qemu_up"; }
+            run_loop_alive() {
+                if [ -e "$S/loop_up" ] && [ ! -e "$S/qemu_up" ]; then
+                    if [ "$honour" = 1 ] && [ -e "$VM/run/stop-requested" ]; then rm -f "$S/loop_up"; else touch "$S/qemu_up"; fi
+                fi
+                [ -e "$S/loop_up" ]
+            }
+            run_loop_pids() { [ ! -e "$S/loop_up" ] || echo 4242; }
+            real_teardown_guest
+            echo "QEMU_LEFT=$([ -e "$S/qemu_up" ] && echo 1 || echo 0) LOOP_LEFT=$([ -e "$S/loop_up" ] && echo 1 || echo 0)"
+            rm -rf "$S"
+        )
+        [[ "$out" == *"$want"* ]] && return 0
+        bad=$((bad + 1))
+        echo "WINDOWS_GATE_SELFTEST_FAIL case=$name want=\"$want\" got: $out"
+    }
+    td teardown-between-boots 'QEMU_LEFT=0 LOOP_LEFT=0' 1 0
+    td teardown-running 'QEMU_LEFT=0 LOOP_LEFT=0' 1 1
+    td teardown-loop-ignores-stop 'did not end within 180 s' 0 0
+    # the state at failure: a dead or silent guest is read from the post-mortem boot, a live one directly
+    dg() { # NAME WANT_TEXT QEMU_ALIVE ANSWERS
+        local name=$1 want=$2 alive=$3 answers=$4
+        n=$((n + 1))
+        out=$(
+            EV=$(mktemp -d)
+            LOG=$EV/log
+            GUEST_STARTED=1 HOSTREF_BEFORE=green HOSTREF_AFTER=green FAILMODE=guest FAILWHY=why STAGE=idle
+            ENABLE_UTC=2026-11-03T00:00:00Z
+            printf 'refused_0x2080121f=0\nhost_xid_in_boots=0\n' > "$EV/gsp_signals.txt"
+            printf 'HOSTREF_XID_DELTA 0\n' > "$EV/hostref_after.txt"
+            qemu_alive() { [ "$alive" = 1 ]; }
+            guest_answers() { [ "$answers" = 1 ]; }
+            state_at_failure_live() { echo STATE_LIVE; }
+            postmortem_state() { echo STATE_POSTMORTEM; }
+            conclude
+            echo "RC=$rc_final"
+            rm -rf "$EV"
+        )
+        [[ "$out" == *"$want"* && "$out" == *"RC=1"* ]] && return 0
+        bad=$((bad + 1))
+        echo "WINDOWS_GATE_SELFTEST_FAIL case=$name want=\"$want\" got: $out"
+    }
+    dg state-dead-guest 'STATE_POSTMORTEM' 0 0
+    dg state-silent-guest 'STATE_POSTMORTEM' 1 0
+    dg state-live-guest 'STATE_LIVE' 1 1
+    # no budget left: no post-mortem boot is started
+    n=$((n + 1))
+    out=$(
+        EV=$(mktemp -d)
+        LOG=$EV/log DEADLINE=$(($(date +%s) + 100)) WV=/nonexistent/win_vm.sh
+        real_postmortem_state
+        rm -rf "$EV"
+    )
+    if [[ "$out" != *"no post-mortem boot"* ]]; then
+        bad=$((bad + 1))
+        echo "WINDOWS_GATE_SELFTEST_FAIL case=postmortem-no-budget got: $out"
+    fi
     if [ "$bad" = 0 ]; then
         echo "WINDOWS_GATE_SELFTEST_OK cases=$n"
         exit 0
