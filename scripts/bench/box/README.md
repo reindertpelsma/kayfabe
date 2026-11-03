@@ -91,6 +91,9 @@ ssh <alias> 'cat /root/prov/<tag>.log'           # V3_GATES_SUMMARY / KF3_RC / F
   Design and the attribution rule: `docs/design/V3_WINDOWS_GATE.md`; first real run (Vast lease 58592558, RTX 4090,
   `WINDOWS_GATE_PASS rev=a5071c24`): `traces/windows_gate_20261101/`. A box with under 20 GB of RAM, or
   under 45 GB of free disk before the install (20 GB after), is refused, not tried.
+  *[2026-11-03]* The gate leaves no QEMU or `win_vm.sh run` loop behind (the teardown writes `run/stop-requested` first),
+  reads a dead guest's reset counters from a post-mortem boot of the same overlay without kf3, and counts a WER
+  re-submission of an old report as `livekernelevent_stale` (never gating). First Turing PASS: `traces/turing_boot_20261103/`.
 - A merge to master needs `V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS` (2026-10-10: `gate10=FALLBACK` = host RM refused all small micro reservations by a refusal status AND the probe proved a per-2-MiB-leaf reservation works at the flat FB alias, accepted but loud; `gate10=FAIL` never), `KF3_RC=0`,
   `FAST_SUITE_PASS=30` and `BIRTH_CENSUS_OK` on the **exact revision** promoted (docs-only commits on
   top are fine; say so). *[2026-10-03, `v3-sec-nonpriv`]* `BIRTH_CENSUS_OK` (`birth_census.sh`,
