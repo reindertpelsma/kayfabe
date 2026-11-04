@@ -958,18 +958,6 @@ pub static HOST_CONTROLS: &[HostControl] = &[
             size: 1440,
         },
     },
-    // ★ 2026-11-04 (die coverage, Ada): `0x2080852b` at the Windows 580.88 guest's size, 2836 B (gate run ada102r). A zero
-    // request is accepted at 595.91.07 only at 3324 B (AD104 scan); this row lets realize ask the guest's own question at 2836.
-    HostControl {
-        name: "",
-        cmd: 0x2080_852b,
-        params: HostParams::MeasuredOpaque {
-            source: "2026-11-04; the Windows 580.88 guest's size (W343GSSREQ, gate run ada102r); host answer asked at realize, \
-                     traces/die_coverage_20261104/ada/README.md",
-            versions: &[HOST_595_91_07],
-            size: 2836,
-        },
-    },
     HostControl {
         name: "",
         cmd: 0x2080_8162,

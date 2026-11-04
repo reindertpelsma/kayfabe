@@ -199,15 +199,6 @@ pub const ROWS: &[Row] = &[
         exact: false,
         inputs: &[(0, 0), (4, 0), (8, 0x1f)],
     },
-    // ★ 2026-11-04 (die coverage, Ada): `0x2080852b`, the same question shape as 852c. MEASURED (AD102, host 595.91.07, gate run
-    // ada102r, `W343GSSREQ`, 3 of 3 identical): 2836 B, words 0..9 `{0, 0, 0x1f, 0, ...}`. A zero request is accepted by this host
-    // only at 3324 B (AD104 scan); whether it answers this one is asked at realize like every row.
-    Row {
-        cmd: 0x2080_852b,
-        size: 2836,
-        exact: false,
-        inputs: &[(0, 0), (4, 0), (8, 0x1f)],
-    },
     // cudart's fallback, reached only when `a084`/`a026` fail; the guest's request is `{0,0,0,0}`
     // (`[measured GA106 / 580.159.04, 2026-08-20]`, `crate::cudartinit::CUDART_INIT_0XA001`).
     Row {
