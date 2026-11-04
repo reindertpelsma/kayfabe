@@ -3,7 +3,7 @@
 **STATUS: LIVE, 2026-11-04.** The pre-registration, written before the first run. The results go
 in `RESULTS.md` next to this file.
 
-## The observation (measured, by the coordinator)
+## The observation (Worker CI run 41763934006, rev 942ca5431, 2026-11-04, read by the coordinator)
 
 Worker CI run 41763934006, rev 942ca5431, RTX 3060 (GA106), Quebec machine 22775, 2026-11-04: the
 thin-guest fast suite printed `FAST_CELL_ARM arm=concurrent-fuzz verdict=FAIL secs=29
@@ -11,7 +11,7 @@ client_ms=8620` with `raw client rc=1`. Every other arm passed, and bare metal (
 gates (9/9) passed on the same box. The same arm passed on the same machine in run 41749680326 and
 in the other integration-revision runs that day. The job log holds only the trimmed arm output.
 
-## Facts read before the run (measured from the source and from git, not from a box)
+## Facts read before the run (from the source and from git on 2026-11-04, not from a box)
 
 - **rc=1 is the graded exit, not the watchdog.** `concurrent_fuzz()` returns `verdict == "PASS"`
   and `main` maps false to `ExitCode::from(1)`
