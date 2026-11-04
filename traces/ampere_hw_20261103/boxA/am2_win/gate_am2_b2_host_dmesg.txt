@@ -1,0 +1,7 @@
+[ 6558.299696] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 6560.397158] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[ 6560.685087] NVRM: gpuValidateRegOffset_IMPL: User does not have permission to access register offset 0x640780
+[ 6761.122469] x86/PAT: kf3-vamgr:96766 freeing invalid memtype [mem 0x2000520000-0x200071ffff]
+[ 6761.123193] x86/PAT: kf3-vamgr:96766 freeing invalid memtype [mem 0x2000720000-0x200091ffff]
+[ 6812.477522] x86/PAT: kf3-vamgr:96766 freeing invalid memtype [mem 0x2002e20000-0x2002e8ffff]
+[ 7609.168424] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0

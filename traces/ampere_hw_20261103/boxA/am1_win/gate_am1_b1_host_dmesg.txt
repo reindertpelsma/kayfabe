@@ -1,0 +1,4 @@
+[ 4133.843909] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 4135.979245] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[ 4136.264357] NVRM: gpuValidateRegOffset_IMPL: User does not have permission to access register offset 0x640780
+[ 4821.541350] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
