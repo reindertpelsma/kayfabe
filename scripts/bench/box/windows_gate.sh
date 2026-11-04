@@ -712,6 +712,12 @@ stage_begin reboot
 g 60 'shutdown /r /t 0' > /dev/null 2>&1
 w=0
 until grep -q "QEMU_START tag=$TAG boot=2" "$VM/logs/${TAG}_run.log" 2> /dev/null; do
+    # ⊘ [2026-11-04, GA106 gate run dca106a] The run loop restarts only on a recorded guest-reset; when
+    # its QMP event logger never attached it ends with reason=no-events-file. That is the harness
+    # failing to observe the reboot, not the guest failing to reboot: OPERATOR (RETRY), not FAIL.
+    if grep -q "WINVM_RUN_END tag=$TAG .*reason=no-events-file" "$VM/logs/${TAG}_run.log" 2> /dev/null; then
+        fail_op "the run loop ended with reason=no-events-file after shutdown /r (its QMP event logger never attached; the guest's reboot was not observed)"
+    fi
     sleep 5
     w=$((w + 5))
     [ "$w" -lt "$(cap 420)" ] || fail_guest "the guest did not restart within 420 s of shutdown /r (no second QEMU)"
