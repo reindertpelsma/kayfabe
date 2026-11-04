@@ -34,6 +34,34 @@ in the other integration-revision runs that day. The job log holds only the trim
   Measured from git. ⇒ **The walk-wake change cannot have caused the observed failure.** "The
   integration tree plus the Windows harness" did not hold for `crates/` in that run.
 
+## Amendment before the first run (2026-11-04 ~05:00 CET): a known instrument property
+
+- **Precedent (measured, 2026-09-26, `traces/v3_gpcmask/fast_suite_524b3d17_concurrent_fuzz_seed.txt`).**
+  The same arm went red once with `FUZZ_REASON=CONTROL_FAILED`. Its control drew no engine op
+  (`alloc=3 free=2 idle=59`). The drawn seed `1790429157394970003`, replayed on **bare metal**,
+  went red identically. `docs/design/V3_FLOORSWEPT_GR.md` records it as "the raw client's own".
+- **The seed is drawn from the wall clock** (`SystemTime` nanos `| 1`) on every run without
+  `--seed`. That is how the suite runs. The control (T=1, jitter 0, 64 iterations, seed
+  `cfg.seed ^ 0x385`) passes only if an engine op (write / alias_prop / unmap_b) ran.
+- **Offline replay (`control_sim.py`, this directory).** Before the first engine op no verb draws
+  from the RNG, so the control's op sequence up to that point is a pure function of the seed,
+  given that the RM verbs succeed. The replay reproduces the 2026-09-26 census exactly
+  (`idle=59 alloc=3 free=2`, seed 1790429157394970003). Over 200 000 random seeds,
+  **0.79 %** of the seeds give a control with no engine op (1586/200 000). That makes it an
+  **expected red about once in 126 runs of the arm, on any box, on bare metal as well.** Measured
+  offline. Its applicability to the 41763934006 red is an **inference**: the CI log holds no seed
+  and no FUZZ_REASON, and the run has no artifacts (checked: `gh api …/runs/41763934006/artifacts`
+  is empty).
+- **H1b. The 41763934006 red is the seed-drawn control with no engine op.** It cannot be tested
+  directly, because the seed is lost. What the loop can test: every failure seen here whose
+  reason is `CONTROL_FAILED` should have a seed that `control_sim.py` predicts as no-engine, and
+  should replay red on bare metal. *Falsifier:* a `CONTROL_FAILED` iteration whose seed the
+  replay calls engine-positive, or a seed the replay calls no-engine that passes the control. With
+  p≈0.8 %, 80 iterations will very likely show zero such cases (P(≥1) ≈ 47 %). So the loop's main
+  power is as a **bound on every other failure class** (H1, H2, H3). The loop records every
+  iteration's seed, and the replay is checked against **every** iteration: each predicted pass
+  must pass its control.
+
 ## Hypotheses, each with its falsifier
 
 - **H1. Instrument defect (an arm went unmeasured).** The failure is `FUZZ_REASON=ARM_UNMEASURED`:

@@ -45,7 +45,7 @@ for i in $(seq 1 "$N"); do
     printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$i" "${v:-?}" "${s:-?}" "${c:-?}" "${crc:-?}" \
         "${reason:-?}" "${seed:-?}" "pre=$((x1-x0)),fuzz=$((x2-x1))" "$codes" "$pre_v" "$arms" >> "$SUM"
     # per-iteration client summary lines, always (small)
-    grep -a -E 'FUZZ_|W385 (CONTROL|control|ARM|FUZZ CLEAN|replay)|RUNG_concurrent_fuzz|RUNGCTL|REV_UNDER_TEST|UNMEASURED|FASTGUEST: (ready|client rc|DONE)' "$ser" 2>/dev/null \
+    grep -a -E 'FUZZ_|W385|RUNG_concurrent_fuzz|RUNGCTL|REV_UNDER_TEST|UNMEASURED|FASTGUEST: (ready|client rc|DONE)' "$ser" 2>/dev/null \
         | tr -d '\r' | cut -c1-400 > "$OUT/it_${i}_fuzz.txt"
     if [ "${v:-?}" != PASS ]; then
         cp "$ser" "$OUT/fail/it_${i}_serial.log" 2>/dev/null
