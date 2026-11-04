@@ -1,0 +1,1 @@
+[2026-11-04T01:51:20Z] KF_GOP_SIGNED /workspace/winvm/secureboot/kf-gop.0c515b3b.signed.efi sha256=6ab39c2f29cfa9ebf3fbc4b17d958bed6b9bc6956e49e784c354a6c474cb0812 unsigned_sha256=e2616ad8d4cb09da88399218144b6bdea9d2cb3148b701964f926604b7d6dff6

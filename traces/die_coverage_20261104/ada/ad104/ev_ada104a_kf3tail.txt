@@ -1,0 +1,5 @@
+Running postconf script '/workspace/bench/qemu-build-kf3/pyvenv/bin/python3 /workspace/bench/qemu-10.2.4/scripts/symlink-install-tree.py'
+[1/5] Generating qemu-version.h with a custom command (wrapped by meson to capture output)
+[2/3] Compiling C object libsystem.a.p/hw_misc_kf3_kf3.c.o
+[3/3] Linking target qemu-system-x86_64
+KF3_BUILT /workspace/bench/kf3-bins/0c515b3b/qemu-system-x86_64 rev=0c515b3b mtime=2026-11-04 00:39:58.837685961 +0000 (shared build dir /workspace/bench/qemu-build-kf3)

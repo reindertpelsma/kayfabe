@@ -1,0 +1,63 @@
+WINDOWS_GATE_START tag=dca106a rev=0c515b3b source=/workspace/bench/verify-worktrees/dca106a.1lKXuA 2026-11-04T00:50:28+00:00 idle_s=300 flags=kf3_flags.sample.env guest_driver=580.65.06 arm=B
+WINDOWS_GATE_REQUESTED=1
+GATE_STAGE preflight START 2026-11-04T00:50:28+00:00
+GATE_NOTE host: gpu="NVIDIA GeForce RTX 3060" driver=580.159.04 cpus=21 ram_gb=49 disk_free_gb=92
+GATE_STAGE preflight EXIT ok 9s
+GATE_STAGE hostref_before START 2026-11-04T00:50:37+00:00
+GATE_HOSTREF before green cup8=PASS xid_count=10 xid_delta=0 gpu="NVIDIA GeForce RTX 3060, 580.159.04, 12288 MiB, P0"
+GATE_STAGE hostref_before EXIT ok 5s
+GATE_STAGE prereqs START 2026-11-04T00:50:42+00:00
+GATE_STAGE prereqs EXIT ok 32s
+GATE_STAGE kf3_binary START 2026-11-04T00:51:14+00:00
+GATE_NOTE kf3 qemu=/workspace/bench/kf3-bins/0c515b3b/qemu-system-x86_64 sha256=de572ee144772e84 rev=0c515b3b
+GATE_STAGE kf3_binary EXIT ok 1s
+GATE_STAGE install START 2026-11-04T00:51:15+00:00
+GATE_STAGE install EXIT ok 2748s
+GATE_STAGE probes_build START 2026-11-04T01:37:03+00:00
+GATE_NOTE probes built: 3994bce9c07d 74a3c023c839 8d0af71b563b 45f48bb24464 
+GATE_STAGE probes_build EXIT ok 8s
+GATE_STAGE boot1 START 2026-11-04T01:37:11+00:00
+GATE_NOTE ssh up after 10s
+GATE_STAGE boot1 EXIT ok 75s
+GATE_STAGE check_kf3 START 2026-11-04T01:38:26+00:00
+GATE_NOTE check --kf3 (before the driver): 13 PASS lines, WIN_CHECK_DONE fail=0
+GATE_STAGE check_kf3 EXIT ok 62s
+GATE_STAGE nv_install START 2026-11-04T01:39:28+00:00
+  GSP_ON device PCI\VEN_10DE&DEV_2504&SUBSYS_88101043&REV_A1\3&11583659&0&28 name='Microsoft Basic Display Adapter' status=OK problem=CM_PROB_NONE inf=display.inf driverkey={fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0100}\0001
+  GSP_ON nvlddmkm.sys signature status=Valid signer='CN=NVIDIA Corporation, OU=1-F, O=NVIDIA Corporation, L=Santa Clara, S=California, C=US'
+  GSP_ON disable: Microsoft PnP Utility
+  GSP_ON disable:
+  GSP_ON disable: Disabling device:          PCI\VEN_10DE&DEV_2504&SUBSYS_88101043&REV_A1\3&11583659&0&28
+  GSP_ON disable: Device disabled successfully.
+  GSP_ON disable:
+  GSP_ON add-driver: Microsoft PnP Utility
+  GSP_ON add-driver:
+  GSP_ON add-driver: Adding driver package:  nv_dispi.inf
+  GSP_ON add-driver: Driver package added successfully.
+  GSP_ON add-driver: Published Name:         oem7.inf
+  GSP_ON add-driver: Driver package installed on device: PCI\VEN_10DE&DEV_2504&SUBSYS_88101043&REV_A1\3&11583659&0&28
+  GSP_ON add-driver:
+  GSP_ON add-driver: Total driver packages:  1
+  GSP_ON add-driver: Added driver packages:  1
+  GSP_ON add-driver rc=0
+  GSP_ON after install: inf=oem7.inf driverkey={fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0100}\0001 version=32.0.15.8088
+  GSP_ON readback HKLM:\SYSTEM\CurrentControlSet\Control\Class\{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0100}\0001 EnableGpuFirmware=1
+  GSP_ON readback HKLM:\SYSTEM\CurrentControlSet\Services\nvlddmkm EnableGpuFirmware=1
+GATE_STAGE nv_install EXIT ok 354s
+GATE_STAGE desktop_prep START 2026-11-04T01:45:22+00:00
+  DESKTOP_PREP AutoAdminLogon=1 want=1 OK
+  DESKTOP_PREP DefaultUserName=kf want=kf OK
+  DESKTOP_PREP DefaultDomainName=. want=. OK
+  DESKTOP_PREP DefaultPassword_matches=True want=True OK
+  DESKTOP_PREP AutoLogonCount_absent=True want=True OK
+  DESKTOP_PREP DevicePasswordLessBuildVersion=0 want=0 OK
+  DESKTOP_PREP OverlayTestMode=5 want=5 OK
+  DESKTOP_PREP_DONE fail=0
+  [2026-11-04T01:45:53Z] DESKTOP_PREP_OK user=kf (autologon and OverlayTestMode apply at the next boot of this disk)
+GATE_STAGE desktop_prep EXIT ok 31s
+GATE_STAGE reboot START 2026-11-04T01:45:53+00:00
+GATE_HOSTREF after green cup8=PASS xid_count=10 xid_delta=0 gpu="NVIDIA GeForce RTX 3060, 580.159.04, 12288 MiB, P0"
+WINDOWS_GATE_FAIL diag=KAYFABE stage=reboot why="the guest did not restart within 420 s of shutdown /r (no second QEMU)" rev=0c515b3b gpu="NVIDIA GeForce RTX 3060" hostref=green/green secs=3762
+GATE_NOTE evidence: /root/prov/dca106a_windows (32 files), /root/prov/dca106a_windows.tgz sha256=b553784cf28acdf8
+WINDOWS_GATE_TIMING total=3762s preflight=9s hostref_before=5s prereqs=32s kf3_binary=1s install=2748s probes_build=8s boot1=75s check_kf3=62s nv_install=354s desktop_prep=31s
+WINDOWS_GATE_EXIT rc=1 2026-11-04T01:53:10+00:00

@@ -1,0 +1,10 @@
+# Same-box A/B, AD104 RTX 4070 SUPER, host 595.91.07, Vast 59031342, 2026-11-04. int = 0c515b3b (ada104a, int104b), pre = 9297ffdd9 (pre104, pre104b); same harness/fast guest (0c515b3b checkout), QEMU_BIN swapped.
+# no-walk arms = the 21 arms with zero walks on the Ada PC (traces/walk_wake_20261103/linux/fix_vs_pre.txt)
+ada104a vs pre104: no-walk median +131 ms mean +131 min -590 max +671; uvm-invalidate 3549/2689 uvm-mean 3630/4000 sum ratio 1.07; total 222739/237095=0.94
+ada104a vs pre104b: no-walk median +171 ms mean +200 min -289 max +671; uvm-invalidate 3549/2790 uvm-mean 3630/3370 sum ratio 1.17; total 222739/235195=0.95
+int104b vs pre104: no-walk median +259 ms mean +188 min -1001 max +480; uvm-invalidate 3019/2689 uvm-mean 3630/4000 sum ratio 0.99; total 218989/237095=0.92
+int104b vs pre104b: no-walk median +221 ms mean +258 min +30 max +551; uvm-invalidate 3019/2790 uvm-mean 3630/3370 sum ratio 1.08; total 218989/235195=0.93
+noise ada104a vs int104b: no-walk median -159 ms mean -58 min -580 max +450; uvm sum 7179/6649
+noise pre104 vs pre104b: no-walk median +11 ms mean +70 min -310 max +1101; uvm sum 6689/6160
+mean-of-2 int vs mean-of-2 pre: no-walk median +190 ms mean +194; uvm sum ratio 1.08
+verdicts: ada104a=30arms int104b=30arms pre104=30arms pre104b=30arms

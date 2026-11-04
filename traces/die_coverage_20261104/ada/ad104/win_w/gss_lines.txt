@@ -1,0 +1,7 @@
+    135 W349REFUSE cmd=0x20809064 why=consttab cudart.0x20809064: unmeasured on AD104 branch 580 (measured on: GA106/580, AD104/595) — refused, a neighbour's row is never served 
+      4 kf-rm: rpc-trace fn=76 RmControl cmd=0x2080852a result=0x0
+      6 kf-rm: rpc-trace fn=76 RmControl cmd=0x2080852c result=none
+      1 kf-rm: rpc-trace fn=76 RmControl cmd=0x20809064 result=0x0
+    135 kf-rm: rpc-trace fn=76 RmControl cmd=0x20809064 result=0x56
+      1 kf3: display: +N ms the console shows head 0 1920x1080: [window 0 iso 0xff1d1002+0x0 1920x1080 pitch 120 fmt 0xcf] (core channel allocated)
+      1 kf3: display: caps page derived — 56 words: 55 T1 rule, 0 T2 host, 1 T3 measured (0 unmeasured)

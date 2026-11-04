@@ -1,0 +1,49 @@
+[2026-11-04T00:28:09Z] WINVM_INSTALL_START name=kfwin repo=0c515b3b qemu=/workspace/bench/kf3-bins/0c515b3b/qemu-system-x86_64 host_driver=595.91.07 install_wait_s=4200
+[2026-11-04T00:28:09Z] VM_IDENTITY_CREATED /workspace/winvm/kfwin/identity.env
+[2026-11-04T00:28:09Z] VM_IDENTITY uuid=<uuid> serial=<serial> mac=<mac>
+[2026-11-04T00:28:09Z] START prereqs
+[2026-11-04T00:28:09Z] EXIT prereqs rc=0
+[2026-11-04T00:28:09Z] START fetch
+[2026-11-04T00:28:36Z] MEDIUM_OK win11_ltsc_2024_eval_x64_en-us.iso sha256=67cec5865eaa037a72ddc633a717a10a2bed50778862267223ddb9c60ef5da68 bytes=5112850432
+[2026-11-04T00:28:40Z] MEDIUM_OK virtio-win-0.1.302.iso sha256=303f7ae40dad495d6ae474fdc571df58958a4dbc5c37a522d80f9a203867949d bytes=877373440
+[2026-11-04T00:28:40Z] MEDIUM_OK OpenSSH-Win64-v10.0.0.0.msi sha256=ddec9c53864280759cf9f74791cefd387100e3946aa849a1c138a4ed1b96b7d9 bytes=6586368
+[2026-11-04T00:28:45Z] MEDIUM_OK 580.88-desktop-win10-win11-64bit-international-dch-whql.exe sha256=90c49f925b41ee062e02cc8094a16b6d057abfde4e85235a76d63ffe267f63a9 bytes=890807536
+[2026-11-04T00:28:45Z] EXIT fetch rc=0
+[2026-11-04T00:28:45Z] START apparmor
+[2026-11-04T00:28:45Z] AppArmor: swtpm may use /workspace/winvm
+[2026-11-04T00:28:45Z] EXIT apparmor rc=0
+[2026-11-04T00:28:45Z] START secrets
+[2026-11-04T00:28:45Z] generated the Windows password (secrets/win_password, 0600)
+[2026-11-04T00:28:45Z] generated the harness ssh key (secrets/ssh_ed25519)
+[2026-11-04T00:28:45Z] EXIT secrets rc=0
+[2026-11-04T00:28:45Z] START secureboot-key
+[2026-11-04T00:28:46Z] generated this host's kayfabe Secure Boot db key (/workspace/winvm/secureboot/db.key, never leaves the host)
+[2026-11-04T00:28:46Z] SB_DB_CERT subject=CN = kayfabe GOP db key (ubuntu 2026-11-04) sha256 Fingerprint=<mac>:<mac>:<mac>:<mac>:<mac>:F6:41 
+[2026-11-04T00:28:46Z] EXIT secureboot-key rc=0
+[2026-11-04T00:28:46Z] START ovmf-vars
+[2026-11-04T00:28:49Z] VARS_CREATED /workspace/winvm/kfwin/firmware/OVMF_VARS.fd
+[2026-11-04T00:28:49Z] VARS_DB CN=Microsoft Windows Production PCA 2011; CN=Microsoft Corporation UEFI CA 2011; CN=kayfabe GOP db key (ubuntu 2026-11-04); 
+[2026-11-04T00:28:49Z] EXIT ovmf-vars rc=0
+[2026-11-04T00:28:49Z] START tpm-manufacture
+[2026-11-04T00:28:52Z] TPM_MANUFACTURED /workspace/winvm/kfwin/tpm (5993 bytes of state)
+[2026-11-04T00:28:52Z] EXIT tpm-manufacture rc=0
+[2026-11-04T00:28:52Z] START disk
+[2026-11-04T00:28:52Z] DISK_CREATED base.qcow2 80G
+[2026-11-04T00:28:52Z] EXIT disk rc=0
+[2026-11-04T00:28:52Z] START unattend
+[2026-11-04T00:28:52Z] UNATTEND_ISO secrets/unattend.iso (6985728 bytes; 1 authorized key(s))
+[2026-11-04T00:28:52Z] EXIT unattend rc=0
+[2026-11-04T00:28:52Z] START install-boot
+[2026-11-04T00:28:52Z] QEMU_START tag=install boot=1 pid=73150 log=logs/install_b1_qemu.log
+[2026-11-04T00:57:48Z] INSTALL_BOOT_END rc=0 reason=guest-shutdown
+[2026-11-04T00:57:48Z] EXIT install-boot rc=0
+[2026-11-04T00:57:48Z] START check-boot
+[2026-11-04T00:57:48Z] QEMU_START tag=installcheck boot=1 pid=75095 log=logs/installcheck_b1_qemu.log
+[2026-11-04T00:58:45Z] SSH_UP after 10s
+[2026-11-04T00:59:01Z] first logon said: KF_FIRSTLOGON OK 2026-11-04T00:56:44.0775417+00:00
+[2026-11-04T01:00:34Z] CHECK_BOOT_END rc=0 reason=guest-shutdown check_rc=0
+[2026-11-04T01:00:34Z] EXIT check-boot rc=0
+[2026-11-04T01:00:34Z] START seal
+[2026-11-04T01:00:34Z] SEALED disk/base.qcow2 (0400); unattend.iso (it held the password) deleted; every run uses an overlay
+[2026-11-04T01:00:34Z] EXIT seal rc=0
+[2026-11-04T01:00:34Z] WINVM_INSTALL_DONE name=kfwin
