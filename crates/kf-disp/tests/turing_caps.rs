@@ -12,9 +12,9 @@ const TU106: Die = Die {
     architecture: 0x160,
     implementation: 0x6,
 };
-const TU116: Die = Die {
+const TU117: Die = Die {
     architecture: 0x160,
-    implementation: 0x8,
+    implementation: 0x7,
 };
 /// `PRECOMP_WIN_PIPE_HDR_CAPA(w)` = `0x780 + 0x20 * w`; `SCLR_PRESENT` is bit 19 in every family's caps class.
 const SCLR: u32 = 1 << 19;
@@ -60,8 +60,8 @@ fn tu106_claims_the_main_layer_scaler_and_its_measured_word() {
 
 #[test]
 fn an_unmeasured_turing_die_gets_the_clean_page_and_a_notice_never_a_neighbours_row() {
-    let d = turing(TU116, true);
-    assert_eq!(d.page.word(0x00c), 0, "no TU106 value is served to a TU116");
+    let d = turing(TU117, true);
+    assert_eq!(d.page.word(0x00c), 0, "no TU106 value is served to a TU117");
     assert_eq!(
         d.unmeasured.iter().map(|(o, _)| *o).collect::<Vec<_>>(),
         vec![0x00c]

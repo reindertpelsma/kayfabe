@@ -1,0 +1,10 @@
+date 2026-11-03T16:23:36Z
+kernel 5.15.0-186-generic
+NVRM version: NVIDIA UNIX x86_64 Kernel Module  580.159.03  Fri Apr 24 06:16:47 UTC 2026
+smi NVIDIA GeForce GTX 1660 SUPER, 580.159.03, 00000000:84:00.0
+xid_before 0
+== bdf 0000:84:00.0 (the container's own GPU)
+BOOT_0 0x168000a1 BOOT_42 0x168a1000
+CHIPSET 0x168 ARCH 0x160 IMPL 0x8
+tool_rc=0
+xid_after 0

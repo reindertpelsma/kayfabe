@@ -1,0 +1,14 @@
+date 2026-11-03T16:21:05Z
+kernel 6.8.0-138-generic
+NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.159.03  Release Build  (dvs-builder@U22-I3-AM27-29-6)  Fri Apr 24 06:03:03 UTC 2026
+smi NVIDIA GeForce RTX 3070, 580.159.03, 00000000:8A:00.0
+xid_before 0
+== bdf 0000:8a:00.0 (the container's own GPU; the other 7 GPUs of the host were also read in this first attempt, read-only, and are not kept)
+BOOT_0 0xb74000a1 BOOT_42 0x174a1000
+CHIPSET 0x174 ARCH 0x170 IMPL 0x4
+tool_rc=0
+# kf-display-caps-page v1
+# pci 0000:8a:00.0 vendor 0x10de device 0x2484 bar0 0x640000+0x1000 (PROT_READ, 32-bit loads)
+DECISIVE 0x00c 0x00000100
+EVENCAPA 0 0x780 0x01df21d0
+xid_after 0
