@@ -56,3 +56,55 @@ containers, which cannot run a kf3 guest.
 | B | 59031423 | GTX 1660 Ti (TU116 expected) | 50291703 | UK, 0.069 USD/h | 2026-11-04T00:09:41Z |
 
 ## RESULTS
+
+### Verdict (2026-11-04, rev `0c515b3b3`, host driver 580.159.04 open on both boxes)
+
+| die | SKU, PCI id | box (own id) | host driver as found -> run | v3 gates | bare metal | thin guest 30 arms @180 s | census | Windows gate |
+|---|---|---|---|---|---|---|---|---|
+| TU106 | RTX 2060 SUPER, `10de:1f06` | 59031420, Sweden, 11 vCPU, 24 GB, 146 GB root | 575.51.03 -> 580.159.04 | 9/9, gate10=PASS | 30/30 | **30/30** | OK | **PASS** (`tu106a1`) |
+| TU116 | GTX 1660 Ti, `10de:2182` | 59031423, UK, 7 vCPU, 24 GB, 146 GB root | 575.51.03 -> 580.159.04 | 9/9, gate10=PASS | 30/30 | **30/30** | OK | **PASS** (`tu116b1`) |
+| TU104, TU102, TU117 | - | - | - | not run: no VM offer (see *Offers seen* and *Scans*) | | | | |
+
+- **H-walkwake-TU106: not falsified.** MEASURED (`tu106_box59031420/tu106a1.log`, run `tu106a1`, 2026-11-04, rev
+  `0c515b3b3`): `FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30`; `ce-client-guest-ram
+  verdict=PASS secs=88 client_ms=71929` (`tu106a1_suite.out`), against `TIMEOUT secs=185` in tbA1 (rev `08dae8a3`,
+  another TU106 machine, same host driver). Other walk-heavy arms moved the same way: `concurrency` 28 s / client
+  11,680 ms (tbA1: 82 s / 54,879 ms), `concurrent-fuzz` 20 s / 3,969 ms (tbA1: 50 s / 22,450 ms). Client time summed
+  over the 30 arms: 159,885 ms (tbA1: 245,971 ms over 29 arms, the timed-out arm excluded). The kf3 log of every
+  arm carries `pending-walk wait 50us..1ms (epoll_pwait2) (timer slack 5us)`; per-walk latency `vat[walk_avg_us]`
+  is 149-254 us on the arms with walks (`tu106a1_armstats.txt`: `ce-client-guest-ram` 254 us, GPU 191 us;
+  `concurrency` 158 us, GPU 136 us). GPU nonstall: `nsi=[CE2:823/0raised]` on `concurrency`, `CE2:4/0raised` on
+  `ce-client-guest-ram` (the counts the walk-wake fix must not inflate; no per-walk nonstall burst). INFERRED: the
+  earlier TU106 miss was `next`'s 1 ms pending-walk poll, as on AD104; tbA1 ran on another machine, so the
+  machine is a second variable (n=1 per side).
+- **H-gate-TU106: not falsified (n=4 with the three runs of 2026-11-03).** MEASURED
+  (`tu106_box59031420/tu106a1_windows.log`): `WINDOWS_GATE_PASS rev=0c515b3b gpu="NVIDIA GeForce RTX 2060 SUPER"
+  idle_s=300 hostref=green/green secs=1282 install=once driver=580.88 gsp=forced code=0 probes=cup8,d3d11,x2 resets=0
+  known_live_dumps_193=3 stale_lke_resubmits=0 strict=0`. kf3 (`tu106a1_windows/gate_tu106a1_b2_qemu.log.gz`): `caps
+  page derived — 56 words: 55 T1 rule, 0 T2 host, 1 T3 measured (0 unmeasured)`, window 0 scanned at +176.2 s;
+  `gsp_signals.txt`: `running_to_suspending=1`, `host_xid_in_boots=0`; `tdr_counts.txt`: every reset counter 0,
+  `livekernelevent193=3` (reported, not gated).
+- **H-TU116-row: not falsified. First Windows gate PASS on TU116.** MEASURED (`tu116_box59031423/tu116b1.log`, run
+  `tu116b1`, 2026-11-04, rev `0c515b3b3`): `V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS`, `KF3_RC=0`, `BARE_SUITE_PASS=30`,
+  `FAST_SUITE_PASS=30 ... ARMS=30`, `BIRTH_CENSUS_OK arms=30 suite_births=165 gate_births=12`, and
+  (`tu116b1_windows.log`) `WINDOWS_GATE_PASS rev=0c515b3b gpu="NVIDIA GeForce GTX 1660 Ti" idle_s=300
+  hostref=green/green secs=1926 ... code=0 probes=cup8,d3d11,x2 resets=0 known_live_dumps_193=2`. kf3: `caps page
+  derived — 56 words: 55 T1 rule, 0 T2 host, 1 T3 measured (0 unmeasured)`, window 0 scanned at +250.4 s,
+  `running_to_suspending=1` (the stop only), `host_xid_in_boots=0`, every reset counter 0. The storm shape of
+  2026-11-01 (no window PUT after the modeset, an RM unload every ~25 s) is absent. INFERRED: the TU116 T3 `0x00c` row
+  (measured on a GTX 1660 SUPER, `10de:21c4`) serves this GTX 1660 Ti (`10de:2182`) because rows are keyed by
+  arch/impl (0x160/0x8), not by PCI id; the log's `1 T3 measured (0 unmeasured)` shows the row was used.
+- Host Xids: 10 per box, all from the two Linux suites (bare metal + thin guest), 2 x the 5 admitted shapes
+  (`tu116_box59031423/host_xid_lines.txt`: Xid 31 CE `FAULT_PTE` at `0x60_/0x62_/0x62_/0x64_00010000` and one
+  `FAULT_PDE VIRT_WRITE` at `0xa_11000000` per suite); the Windows gate's host reference read `xid_delta=0` before
+  and after on both boxes.
+- Lane timings (`*/winlane.log`): TU106 1822 s (install 1257 s), TU116 2725 s (install 1566 s); merge check incl.
+  Windows: TU106 00:54:58Z -> 01:32:05Z, TU116 01:04:32Z -> 01:56:55Z.
+
+### Findings
+
+- The slowest arm on TU116 (7 vCPU box) is `ce-client-guest-ram` at 125 s of the 180 s budget (client 104,199 ms);
+  on TU106 (11 vCPU) 88 s. Margin 55 s. MEASURED, n=1 each; not a failure. INFERRED: the remaining cost is per-box
+  (nested KVM exits), walk latency is in the fixed range on both (TU116 173-256 us, `tu116b1_armstats.txt`).
+- Unmeasured on this lane: TU104, TU102, TU117 (no Vast VM offer during the lane); no PRECOMP or GSS-size question
+  arises for Turing in these runs (kf3 logged no `NO MEASURED` line in either gate boot).
