@@ -1,0 +1,4 @@
+FASTGUEST: ready 11.69s
+REV_UNDER_TEST=unstamped
+FASTGUEST: client rc=0 at 16.80s
+FASTGUEST: DONE

@@ -1,0 +1,14 @@
+CFZ_START arm=--concurrent-fuzz phase=A2 n=12 pre=none rev=d6066c8a6 at=2026-11-04T04:44:40+00:00
+CFZ_ITER phase=A2 i=1 verdict=PASS secs=25 client_ms=6449 rc=0 reason=CLEAN
+CFZ_ITER phase=A2 i=2 verdict=PASS secs=23 client_ms=4850 rc=0 reason=CLEAN
+CFZ_ITER phase=A2 i=3 verdict=PASS secs=23 client_ms=4670 rc=0 reason=CLEAN
+CFZ_ITER phase=A2 i=4 verdict=PASS secs=25 client_ms=5420 rc=0 reason=CLEAN
+CFZ_ITER phase=A2 i=5 verdict=PASS secs=24 client_ms=4949 rc=0 reason=CLEAN
+CFZ_ITER phase=A2 i=6 verdict=PASS secs=24 client_ms=4410 rc=0 reason=CLEAN
+CFZ_ITER phase=A2 i=7 verdict=PASS secs=24 client_ms=5329 rc=0 reason=CLEAN
+CFZ_ITER phase=A2 i=8 verdict=PASS secs=25 client_ms=5430 rc=0 reason=CLEAN
+CFZ_ITER phase=A2 i=9 verdict=PASS secs=24 client_ms=5500 rc=0 reason=CLEAN
+CFZ_ITER phase=A2 i=10 verdict=PASS secs=22 client_ms=4369 rc=0 reason=CLEAN
+CFZ_ITER phase=A2 i=11 verdict=PASS secs=24 client_ms=4410 rc=0 reason=CLEAN
+CFZ_ITER phase=A2 i=12 verdict=PASS secs=24 client_ms=5590 rc=0 reason=CLEAN
+CFZ_EXIT phase=A2 pass=12 total=12 at=2026-11-04T04:50:18+00:00

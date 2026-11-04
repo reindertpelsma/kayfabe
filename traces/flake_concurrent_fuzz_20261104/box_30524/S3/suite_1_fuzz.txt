@@ -1,0 +1,23 @@
+FUZZ_SEED=0x18e4bf6006b31fa9
+info  W385 control  census = 64 ops over 1 workers in 264 ms, 0 refused, 1/1 workers finished
+info  W385 control  verbs  = alloc=7 map_a=5 map_b=6 write=7 alias_prop=8 unmap_b=1 probe=2 free=5 recycle=3 idle=20
+info  W385 control  op us   = n=44 min=923 p50=4915 p90=8252 p99=12761 max=17400  ⊘ a distribution, because one number is not a measurement
+info  W385 control  overlap = 0 pairs of RM-verb intervals from DIFFERENT threads intersected, over 44/44 spans
+info  W385 control  handles = 11 minted across 1 worker(s), each checked for collision against every other worker OF THE SAME CLIENT
+info  W385 control  pinning = mode unpinned — 0/1 workers accepted a mask; observed core sets {"0-2"}
+ok    W385 control        = 64 single-threaded ops of which 16 ran the ENGINE, zero violations — the verbs, the channel and the oracle all work
+FUZZ_ARM=unpinned verdict=PASS why=CLEAN threads=3 pin=unpinned cores=3 ops=192 engine_ops=21 alias_ops=10 overlap=165 viol=0 refused=0 pinned=0/3 finished=3/3
+FUZZ_ARM=percore verdict=PASS why=CLEAN threads=3 pin=percore cores=3 ops=192 engine_ops=21 alias_ops=10 overlap=151 viol=0 refused=0 pinned=3/3 finished=3/3
+FUZZ_ARM=crowd-free verdict=PASS why=CLEAN threads=9 pin=unpinned cores=3 ops=576 engine_ops=72 alias_ops=35 overlap=1897 viol=0 refused=0 pinned=0/9 finished=9/9
+FUZZ_ARM=crowd verdict=PASS why=CLEAN threads=9 pin=crowd cores=3 ops=576 engine_ops=72 alias_ops=35 overlap=1869 viol=0 refused=0 pinned=9/9 finished=9/9
+FUZZ_THREADS=3
+FUZZ_CORES=3
+FUZZ_ITERS=64
+FUZZ_CLIENTS=2
+FUZZ_ARMS=4
+FUZZ_OPS=1536
+FUZZ_OVERLAP_PAIRS=4082
+FUZZ_VIOLATIONS=0
+FUZZ_REFUSED=0
+FUZZ_REASON=CLEAN
+RUNG_concurrent_fuzz=PASS

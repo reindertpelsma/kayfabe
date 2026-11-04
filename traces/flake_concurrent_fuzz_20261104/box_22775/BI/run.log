@@ -1,0 +1,9 @@
+CFZ_START arm=--bus-info-sweep phase=BI n=15 pre=none rev=d6066c8a6 at=2026-11-04T05:10:46+00:00
+CFZ_ITER phase=BI i=1 verdict=PASS secs=23 client_ms=5710 rc=0 reason=?
+CFZ_ITER phase=BI i=2 verdict=PASS secs=23 client_ms=5699 rc=0 reason=?
+CFZ_ITER phase=BI i=3 verdict=PASS secs=22 client_ms=5850 rc=0 reason=?
+CFZ_ITER phase=BI i=4 verdict=PASS secs=22 client_ms=5620 rc=0 reason=?
+CFZ_ITER phase=BI i=5 verdict=PASS secs=22 client_ms=5150 rc=0 reason=?
+CFZ_ITER phase=BI i=6 verdict=PASS secs=22 client_ms=5640 rc=0 reason=?
+CFZ_ITER phase=BI i=7 verdict=PASS secs=23 client_ms=5789 rc=0 reason=?
+CFZ_ITER phase=BI i=8 verdict=PASS secs=24 client_ms=6570 rc=0 reason=?

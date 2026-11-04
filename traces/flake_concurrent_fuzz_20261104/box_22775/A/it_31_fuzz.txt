@@ -1,0 +1,66 @@
+FASTGUEST: ready 9.63s
+REV_UNDER_TEST=unstamped
+info  W385 fuzz           = GPU 0, euid 0 — 3 threads x 64 iterations over 2 RM client(s), jitter <= 200 us
+info  W385 topology       = host offers 3 core(s); the pinned arms use 3 — the bench guest's `-smp` (scripts/bench/boot_nvkvm.sh). ★ In kayfabe EACH GUEST vCPU IS A HOST THREAD, so this is the contention the product must survive
+FUZZ_SEED=0x18e4bcb13c57c74d
+info  W385 replay         = --concurrent-fuzz --seed 1793766021007918925 --fuzz-threads 3 --fuzz-iters 64 --fuzz-clients 2
+info  W385 the bar        = five invariants, each refused BY NAME: VA_DOUBLE_BOUND, MAP_NOT_ATOMIC, ALIAS_MISMATCH/ALIAS_REVOKED, CROSS_CLIENT_LEAK, FREED_HANDLE_RESOLVES/VA_NOT_RECOVERED/STALE_READ
+⊘     W385 seed scope     = the seed replays the DECISION SEQUENCE, not the OS SCHEDULE. A red names a reproducible program; the interleaving that made it red is not ours to reproduce
+info  W385 hClients       = ["0xc1d0000b", "0xc1d0000c"] — 2 distinct root(s)
+info  W385 CONTROL        = the SAME verbs at T=1 with NO jitter. ⊘ If this reds, the RUNG is broken, not the system, and everything below is UNINTERPRETABLE
+info  W385 control  census = 64 ops over 1 workers in 444 ms, 0 refused, 1/1 workers finished
+info  W385 control  verbs  = alloc=4 map_a=5 map_b=6 write=12 alias_prop=4 unmap_b=4 probe=2 free=2 recycle=2 idle=23
+info  W385 control  op us   = n=41 min=2529 p50=7539 p90=17145 p99=20311 max=24393  ⊘ a distribution, because one number is not a measurement
+info  W385 control  overlap = 0 pairs of RM-verb intervals from DIFFERENT threads intersected, over 41/41 spans
+info  W385 control  handles = 7 minted across 1 worker(s), each checked for collision against every other worker OF THE SAME CLIENT
+info  W385 control  pinning = mode unpinned — 0/1 workers accepted a mask; observed core sets {"0-2"}
+ok    W385 control        = 64 single-threaded ops of which 20 ran the ENGINE, zero violations — the verbs, the channel and the oracle all work
+info  W385 ARM unpinned   = 3 threads across 2 client(s), placement unpinned, seeded jitter <= 200 us
+info  W385 unpinned census = 192 ops over 3 workers in 795 ms, 0 refused, 3/3 workers finished
+info  W385 unpinned verbs  = alloc=20 map_a=11 map_b=15 write=29 alias_prop=5 unmap_b=5 probe=2 free=15 recycle=5 idle=85
+info  W385 unpinned op us   = n=107 min=2351 p50=13123 p90=34124 p99=47928 max=61590  ⊘ a distribution, because one number is not a measurement
+info  W385 unpinned overlap = 165 pairs of RM-verb intervals from DIFFERENT threads intersected, over 107/107 spans
+info  W385 unpinned handles = 28 minted across 3 worker(s), each checked for collision against every other worker OF THE SAME CLIENT
+info  W385 unpinned pinning = mode unpinned — 0/3 workers accepted a mask; observed core sets {"0-2"}
+FUZZ_ARM=unpinned verdict=PASS why=CLEAN threads=3 pin=unpinned cores=3 ops=192 engine_ops=39 alias_ops=5 overlap=165 viol=0 refused=0 pinned=0/3 finished=3/3
+info  W385 ARM percore    = 3 threads across 2 client(s), placement percore, seeded jitter <= 200 us
+info  W385 percore  census = 192 ops over 3 workers in 759 ms, 0 refused, 3/3 workers finished
+info  W385 percore  verbs  = alloc=20 map_a=11 map_b=15 write=29 alias_prop=5 unmap_b=5 probe=2 free=15 recycle=5 idle=85
+info  W385 percore  op us   = n=107 min=1836 p50=12618 p90=32746 p99=47280 max=64607  ⊘ a distribution, because one number is not a measurement
+info  W385 percore  overlap = 172 pairs of RM-verb intervals from DIFFERENT threads intersected, over 107/107 spans
+info  W385 percore  handles = 28 minted across 3 worker(s), each checked for collision against every other worker OF THE SAME CLIENT
+info  W385 percore  pinning = mode percore — 3/3 workers accepted a mask; observed core sets {"0", "1", "2"}
+FUZZ_ARM=percore verdict=PASS why=CLEAN threads=3 pin=percore cores=3 ops=192 engine_ops=39 alias_ops=5 overlap=172 viol=0 refused=0 pinned=3/3 finished=3/3
+info  W385 ARM crowd-free = 9 threads across 2 client(s), placement unpinned, seeded jitter <= 200 us
+info  W385 crowd-free census = 576 ops over 9 workers in 1969 ms, 0 refused, 9/9 workers finished
+info  W385 crowd-free verbs  = alloc=58 map_a=36 map_b=42 write=90 alias_prop=15 unmap_b=16 probe=9 free=42 recycle=11 idle=257
+info  W385 crowd-free op us   = n=319 min=1748 p50=32261 p90=88278 p99=139745 max=171613  ⊘ a distribution, because one number is not a measurement
+info  W385 crowd-free overlap = 2006 pairs of RM-verb intervals from DIFFERENT threads intersected, over 319/319 spans
+info  W385 crowd-free handles = 78 minted across 9 worker(s), each checked for collision against every other worker OF THE SAME CLIENT
+info  W385 crowd-free pinning = mode unpinned — 0/9 workers accepted a mask; observed core sets {"0-2"}
+FUZZ_ARM=crowd-free verdict=PASS why=CLEAN threads=9 pin=unpinned cores=3 ops=576 engine_ops=121 alias_ops=15 overlap=2006 viol=0 refused=0 pinned=0/9 finished=9/9
+info  W385 ARM crowd      = 9 threads across 2 client(s), placement crowd, seeded jitter <= 200 us
+info  W385 crowd    census = 576 ops over 9 workers in 1992 ms, 0 refused, 9/9 workers finished
+info  W385 crowd    verbs  = alloc=58 map_a=36 map_b=42 write=90 alias_prop=15 unmap_b=16 probe=9 free=42 recycle=11 idle=257
+info  W385 crowd    op us   = n=319 min=2112 p50=33494 p90=90696 p99=158028 max=192921  ⊘ a distribution, because one number is not a measurement
+info  W385 crowd    overlap = 2044 pairs of RM-verb intervals from DIFFERENT threads intersected, over 319/319 spans
+info  W385 crowd    handles = 78 minted across 9 worker(s), each checked for collision against every other worker OF THE SAME CLIENT
+info  W385 crowd    pinning = mode crowd — 9/9 workers accepted a mask; observed core sets {"0-2"}
+FUZZ_ARM=crowd verdict=PASS why=CLEAN threads=9 pin=crowd cores=3 ops=576 engine_ops=121 alias_ops=15 overlap=2044 viol=0 refused=0 pinned=9/9 finished=9/9
+FUZZ_THREADS=3
+FUZZ_CORES=3
+FUZZ_ITERS=64
+FUZZ_CLIENTS=2
+FUZZ_ARMS=4
+FUZZ_OPS=1536
+FUZZ_OVERLAP_PAIRS=4387
+FUZZ_VIOLATIONS=0
+FUZZ_REFUSED=0
+info  W385 pairing        = percore=PASS vs unpinned=PASS — placement did not change the answer
+info  W385 pairing        = crowd=PASS vs crowd-free=PASS — placement did not change the answer
+FUZZ_REASON=CLEAN
+★     W385 FUZZ CLEAN     = 1536 operations over 4 arms (up to 9 threads, 2 client(s), 3 cores), 4387 measured cross-thread overlaps, zero invariant violations. ⚠ THAT IS A BUDGET, NOT A PROOF: absence of a red is not absence of a race, and every arm sampled ONE schedule of one seed
+RUNGCTL_concurrent_fuzz=PASS
+RUNG_concurrent_fuzz=PASS
+FASTGUEST: client rc=0 at 18.14s
+FASTGUEST: DONE

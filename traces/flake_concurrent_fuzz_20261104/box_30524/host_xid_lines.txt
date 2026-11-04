@@ -1,0 +1,10 @@
+[  961.002211] NVRM: Xid (PCI:0000:00:07): 31, pid=72484, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @
+[  964.131684] NVRM: Xid (PCI:0000:00:07): 31, pid=72484, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @
+[  967.142796] NVRM: Xid (PCI:0000:00:07): 31, pid=72484, name=qemu-system-x86, channel 0x0000001b, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @
+[  970.266113] NVRM: Xid (PCI:0000:00:07): 31, pid=72484, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @
+[ 1118.639796] NVRM: Xid (PCI:0000:00:07): 31, pid=73352, name=qemu-system-x86, channel 0x0000001b, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @
+[ 2513.046868] NVRM: Xid (PCI:0000:00:07): 31, pid=83471, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @
+[ 2516.163382] NVRM: Xid (PCI:0000:00:07): 31, pid=83471, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @
+[ 2519.177093] NVRM: Xid (PCI:0000:00:07): 31, pid=83471, name=qemu-system-x86, channel 0x0000001b, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @
+[ 2522.293245] NVRM: Xid (PCI:0000:00:07): 31, pid=83471, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @
+[ 2672.990725] NVRM: Xid (PCI:0000:00:07): 31, pid=84340, name=qemu-system-x86, channel 0x0000001b, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @

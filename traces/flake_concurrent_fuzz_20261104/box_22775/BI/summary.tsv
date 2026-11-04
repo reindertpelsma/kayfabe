@@ -1,0 +1,9 @@
+iter	verdict	secs	client_ms	client_rc	fuzz_reason	seed	xid_delta	xid_codes	pre_verdict	arms	refused_walk
+1	PASS	23	5710	0	?	?	pre=0,fuzz=0	-	-		0
+2	PASS	23	5699	0	?	?	pre=0,fuzz=0	-	-		0
+3	PASS	22	5850	0	?	?	pre=0,fuzz=0	-	-		0
+4	PASS	22	5620	0	?	?	pre=0,fuzz=0	-	-		0
+5	PASS	22	5150	0	?	?	pre=0,fuzz=0	-	-		0
+6	PASS	22	5640	0	?	?	pre=0,fuzz=0	-	-		0
+7	PASS	23	5789	0	?	?	pre=0,fuzz=0	-	-		0
+8	PASS	24	6570	0	?	?	pre=0,fuzz=0	-	-		0

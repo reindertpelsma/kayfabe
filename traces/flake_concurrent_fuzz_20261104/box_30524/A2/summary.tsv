@@ -1,0 +1,13 @@
+iter	verdict	secs	client_ms	client_rc	fuzz_reason	seed	xid_delta	xid_codes	pre_verdict	arms	refused_walk
+1	PASS	25	6449	0	CLEAN	1793767503703234613	pre=0,fuzz=0	-	-	unpinned:PASS:CLEAN percore:PASS:CLEAN crowd-free:PASS:CLEAN crowd:PASS:CLEAN 	0
+2	PASS	23	4850	0	CLEAN	1793767532166992307	pre=0,fuzz=0	-	-	unpinned:PASS:CLEAN percore:PASS:CLEAN crowd-free:PASS:CLEAN crowd:PASS:CLEAN 	0
+3	PASS	23	4670	0	CLEAN	1793767559392756493	pre=0,fuzz=0	-	-	unpinned:PASS:CLEAN percore:PASS:CLEAN crowd-free:PASS:CLEAN crowd:PASS:CLEAN 	0
+4	PASS	25	5420	0	CLEAN	1793767586587158651	pre=0,fuzz=0	-	-	unpinned:PASS:CLEAN percore:PASS:CLEAN crowd-free:PASS:CLEAN crowd:PASS:CLEAN 	0
+5	PASS	24	4949	0	CLEAN	1793767615581505237	pre=0,fuzz=0	-	-	unpinned:PASS:CLEAN percore:PASS:CLEAN crowd-free:PASS:CLEAN crowd:PASS:CLEAN 	0
+6	PASS	24	4410	0	CLEAN	1793767643834435451	pre=0,fuzz=0	-	-	unpinned:PASS:CLEAN percore:PASS:CLEAN crowd-free:PASS:CLEAN crowd:PASS:CLEAN 	0
+7	PASS	24	5329	0	CLEAN	1793767671432233467	pre=0,fuzz=0	-	-	unpinned:PASS:CLEAN percore:PASS:CLEAN crowd-free:PASS:CLEAN crowd:PASS:CLEAN 	0
+8	PASS	25	5430	0	CLEAN	1793767700310214809	pre=0,fuzz=0	-	-	unpinned:PASS:CLEAN percore:PASS:CLEAN crowd-free:PASS:CLEAN crowd:PASS:CLEAN 	0
+9	PASS	24	5500	0	CLEAN	1793767729129894669	pre=0,fuzz=0	-	-	unpinned:PASS:CLEAN percore:PASS:CLEAN crowd-free:PASS:CLEAN crowd:PASS:CLEAN 	0
+10	PASS	22	4369	0	CLEAN	1793767756859938043	pre=0,fuzz=0	-	-	unpinned:PASS:CLEAN percore:PASS:CLEAN crowd-free:PASS:CLEAN crowd:PASS:CLEAN 	0
+11	PASS	24	4410	0	CLEAN	1793767784801718283	pre=0,fuzz=0	-	-	unpinned:PASS:CLEAN percore:PASS:CLEAN crowd-free:PASS:CLEAN crowd:PASS:CLEAN 	0
+12	PASS	24	5590	0	CLEAN	1793767811981068573	pre=0,fuzz=0	-	-	unpinned:PASS:CLEAN percore:PASS:CLEAN crowd-free:PASS:CLEAN crowd:PASS:CLEAN 	0

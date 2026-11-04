@@ -1,0 +1,66 @@
+FAST_SUITE_STARTED=2026-11-04T04:40:25+00:00 arms=30 budget=180s
+rev=d6066c8a6
+ARM                          VERDICT   secs  why
+--timer                      PASS      20s   20s
+FAST_CELL_ARM arm=timer verdict=PASS secs=20 client_ms=2900
+--engines                    PASS      19s   19s
+FAST_CELL_ARM arm=engines verdict=PASS secs=19 client_ms=2740
+--doorbell-census            PASS      23s   23s
+FAST_CELL_ARM arm=doorbell-census verdict=PASS secs=23 client_ms=5859
+--gpu-info-sweep             PASS      21s   21s
+FAST_CELL_ARM arm=gpu-info-sweep verdict=PASS secs=21 client_ms=2449
+--bus-info-sweep             PASS      23s   23s
+FAST_CELL_ARM arm=bus-info-sweep verdict=PASS secs=23 client_ms=6050
+--concurrency                PASS      43s   43s
+FAST_CELL_ARM arm=concurrency verdict=PASS secs=43 client_ms=26080
+--defer-liveness             PASS      32s   32s
+FAST_CELL_ARM arm=defer-liveness verdict=PASS secs=32 client_ms=14419
+--blockage-coverage          PASS      20s   20s
+FAST_CELL_ARM arm=blockage-coverage verdict=PASS secs=20 client_ms=3550
+--alias-two-vas              PASS      20s   20s
+FAST_CELL_ARM arm=alias-two-vas verdict=PASS secs=20 client_ms=3039
+--alias-unmap-observe        PASS      20s   20s
+FAST_CELL_ARM arm=alias-unmap-observe verdict=PASS secs=20 client_ms=2930
+--map-propagation            PASS      21s   21s
+FAST_CELL_ARM arm=map-propagation verdict=PASS secs=21 client_ms=2500
+--late-map-race              PASS      21s   21s
+FAST_CELL_ARM arm=late-map-race verdict=PASS secs=21 client_ms=3619
+--missing-page-fault         PASS      23s   23s
+FAST_CELL_ARM arm=missing-page-fault verdict=PASS secs=23 client_ms=6250
+--uvm-invalidate             PASS      20s   20s
+FAST_CELL_ARM arm=uvm-invalidate verdict=PASS secs=20 client_ms=3109
+--uvm-mean                   PASS      21s   21s
+FAST_CELL_ARM arm=uvm-mean verdict=PASS secs=21 client_ms=4760
+--executor-vas               PASS      20s   20s
+FAST_CELL_ARM arm=executor-vas verdict=PASS secs=20 client_ms=2390
+--guest-ring-channel         PASS      20s   20s
+FAST_CELL_ARM arm=guest-ring-channel verdict=PASS secs=20 client_ms=2039
+--dictated-ring              PASS      20s   20s
+FAST_CELL_ARM arm=dictated-ring verdict=PASS secs=20 client_ms=2689
+--dictated-ring-negative     PASS      20s   20s
+FAST_CELL_ARM arm=dictated-ring-negative verdict=PASS secs=20 client_ms=2320
+--ce-client                  PASS      21s   21s
+FAST_CELL_ARM arm=ce-client verdict=PASS secs=21 client_ms=2389
+--ce-client-guest-ram        PASS      127s  127s
+FAST_CELL_ARM arm=ce-client-guest-ram verdict=PASS secs=127 client_ms=108500
+--guest-ram-pin              PASS      20s   20s
+FAST_CELL_ARM arm=guest-ram-pin verdict=PASS secs=20 client_ms=1990
+--bar1-crossing              PASS      20s   20s
+FAST_CELL_ARM arm=bar1-crossing verdict=PASS secs=20 client_ms=2060
+--atomics-probe              PASS      19s   19s
+FAST_CELL_ARM arm=atomics-probe verdict=PASS secs=19 client_ms=2460
+--pce-mask-probe             PASS      19s   19s
+FAST_CELL_ARM arm=pce-mask-probe verdict=PASS secs=19 client_ms=1529
+--gpga-reserve-probe         PASS      37s   37s
+FAST_CELL_ARM arm=gpga-reserve-probe verdict=PASS secs=37 client_ms=19970
+--map-stress                 PASS      21s   21s
+FAST_CELL_ARM arm=map-stress verdict=PASS secs=21 client_ms=4140
+--concurrent-fuzz            PASS      28s   28s
+FAST_CELL_ARM arm=concurrent-fuzz verdict=PASS secs=28 client_ms=10010
+--cross-client-leak          PASS      21s   21s
+FAST_CELL_ARM arm=cross-client-leak verdict=PASS secs=21 client_ms=2430
+--rpc-mixed-allocs           PASS      21s   21s
+FAST_CELL_ARM arm=rpc-mixed-allocs verdict=PASS secs=21 client_ms=2939
+
+FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+FAST_SUITE_RC=0
