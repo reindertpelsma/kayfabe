@@ -125,3 +125,38 @@ About 1.92 USD in all (GB202 87 min = 1.03, GB205 131 min = 0.48, GB206 115 min 
 listed rates and the times above; the account credit is shared with other lanes, so it cannot attribute the spend). Each
 id was destroyed by id; `vastai show instances-v1 --raw` at 02:20Z lists none of the three (it lists other sessions'
 instances, which were left alone). Safety destroy timers (10500 s) were armed at creation and cancelled after teardown.
+
+## Follow-up 2026-11-04 02:20-03:09Z: GB202 0x113 repeat runs (pre-registered in `PREREG_GB202_0x113.md`)
+
+**No new gate run completed.** MEASURED (own ids, `PREREG_GB202_0x113.md`): 59044337 (Australia) and 59045484 (Spain)
+were created stopped (`vastai start`: "Required resources are currently unavailable"), both destroyed unused; 59045517
+(RTX 5090 `10de:2b85`, Czechia, machine 35231, reliability 0.896) provisioned (box, driver, tree, kf3, prereqs rc=0)
+and started the Windows install at 02:53Z, then the host went `offline` (ssh timed out from about 03:00Z, Vast status
+`offline`); destroyed by id at 03:08:55Z. No other RTX 5090 offer was listed. The pre-registered hypotheses H-rate and
+H-timing are therefore **undecided** (no new data). Cost of the follow-up about 0.63 USD (37.5 min at 1.004 USD/h;
+INFERRED from the rate), the two stopped instances only minutes of storage.
+
+### What the existing seven gate runs already show (MEASURED, files in this directory)
+
+| run | verdict | WATCHDOG dump | dump - enable | LKE 193 | `display life ENDED` mid-run |
+|---|---|---|---|---|---|
+| GB202 r1 | FAIL (0x113) | yes, 1.59 GB | 15 s | 0 | yes (RM unload + re-init, then 0x113) |
+| GB202 r2 | PASS | none | - | 0 | no (only at the final shutdown) |
+| GB202 r3 | PASS | none | - | 0 | no |
+| GB205 r1 | PASS | yes, 1.33 GB | 30 s | 3 | no |
+| GB205 r2 | PASS | yes, 1.33 GB | 28 s | 3 | no |
+| GB206 r1 | PASS | yes, 1.36 GB | 52 s | 3 | no |
+| GB206 r2 | PASS | yes, 1.37 GB | 58 s | 3 | no |
+
+(`GATE_TIMELINE`, `GATE_WER_DUMP`, `GATE_TDR` lines of each `*_windows.log`; `display life ENDED` counted in the
+`*_qemu.log.gz` of each run.)
+
+- H-precursor (falsifier: no passing GB202 run shows a watchdog dump, an LKE other than 193, or a mid-run RM unload):
+  **the falsifier fired for GB202** - its two passing runs show none of them. On GB205/GB206 every passing run has the
+  known watchdog event (LiveKernelEvent 193, no reset, 28-58 s after the enable).
+- INFERRED (not measured; the guest's dumps were not opened): the GB202 r1 watchdog 15 s after the enable is the same
+  early-driver watchdog that GB205/GB206 hit on every run as a benign LKE 193; on GB202 it fired in 1 of 3 runs, and
+  that once it went to a TDR recovery (RM unload + re-init) that ended in 0x113, where on GB205/GB206 it never reset.
+  Falsifier for the next lease: a GB202 run with a WATCHDOG dump and LKE 193 that passes, or a GB202 0x113 without a
+  preceding dump.
+- Next experiment (unchanged): n >= 5 GB202 gate runs on one install, on a box whose offer actually starts.
