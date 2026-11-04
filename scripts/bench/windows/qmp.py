@@ -23,6 +23,7 @@ one-word reason of `last-shutdown`.
 import base64
 import json
 import math
+import os
 import socket
 import sys
 import time
@@ -52,16 +53,22 @@ def recv(f):
 
 def qmp_open(path, timeout=10.0):
     s, f = connect(path, timeout)
-    greeting = recv(f)
-    if "QMP" not in greeting:
-        raise RuntimeError(f"not a QMP greeting: {greeting}")
-    send(f, {"execute": "qmp_capabilities"})
-    while True:
-        r = recv(f)
-        if "return" in r:
-            return s, f
-        if "error" in r:
-            raise RuntimeError(f"qmp_capabilities: {r['error']}")
+    try:
+        greeting = recv(f)
+        if "QMP" not in greeting:
+            raise RuntimeError(f"not a QMP greeting: {greeting}")
+        send(f, {"execute": "qmp_capabilities"})
+        while True:
+            r = recv(f)
+            if "return" in r:
+                return s, f
+            if "error" in r:
+                raise RuntimeError(f"qmp_capabilities: {r['error']}")
+    except BaseException:
+        # a QMP server socket serves one client at a time: a half-open client left behind would
+        # keep every later attach from getting its greeting
+        s.close()
+        raise
 
 
 def qmp_cmd(f, name, args=None):
@@ -87,8 +94,27 @@ def cmd(sock, name, args_json=None):
     return 0
 
 
-def events(sock, out):
-    s, f = qmp_open(sock)
+def events(sock, out, attach_s=None):
+    # ⊘ [2026-11-04, GA106 gate run dca106a, traces/die_coverage_20261104/ampere/] One attempt with a
+    # 10 s greeting timeout lost the logger when QEMU's main loop was still busy in kf3's realize: no
+    # events file, so the run loop read the guest's reboot as reason=no-events-file and did not start
+    # the second QEMU. Attach is now retried until KF_QMP_EVENTS_ATTACH_S (default 120 s) has passed;
+    # the file is still created only once attached, so "no-events-file" keeps meaning "never attached".
+    if attach_s is None:
+        try:
+            attach_s = float(os.environ.get("KF_QMP_EVENTS_ATTACH_S", "120"))
+        except ValueError:
+            attach_s = 120.0
+    deadline = time.time() + attach_s
+    while True:
+        try:
+            s, f = qmp_open(sock, timeout=30.0)
+            break
+        except (OSError, EOFError, ValueError, RuntimeError) as e:
+            if time.time() >= deadline:
+                print(f"qmp events: not attached after {attach_s:.0f} s: {e}", file=sys.stderr)
+                return 1
+            time.sleep(0.5)
     s.settimeout(None)
     with open(out, "a", encoding="utf-8") as o:
         o.write(json.dumps({"event": "KF_LOGGER_ATTACHED", "timestamp": {"seconds": int(time.time())}}) + "\n")
