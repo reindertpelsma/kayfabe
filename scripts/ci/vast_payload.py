@@ -122,6 +122,58 @@ def merge_rows(text, rc, sha):
     return rows
 
 
+WINDOWS_VERDICT = re.compile(r"^WINDOWS_GATE_(PASS|FAIL|RETRY|REFUSED)\b([^\n]*)$", re.M)
+WINDOWS_RETRY_CLASSES = {"PROVIDER", "MEDIA", "OPERATOR", "HOSTREF", "BAR1_EXCEPTION"}
+
+
+def windows_rows(text, rc, sha):
+    """Grade scripts/bench/box/windows_gate.sh. THE GATE IS THE GUEST PASSING (owner, 2026-11-01):
+    only one WINDOWS_GATE_PASS for this revision with exit 0 is a row that passes. RETRY (and a
+    refused precondition) is a host, harness or rental fault: never a pass, never a verdict on the
+    guest; its row is named windows_retry_<class> so the runner can say "re-run on a fresh box"."""
+    verdicts = WINDOWS_VERDICT.findall(text)
+    exits = re.findall(r"^WINDOWS_GATE_EXIT rc=([0-9]+)\b", text, re.M)
+    kinds = {kind for kind, _ in verdicts}
+    if len(verdicts) == 1 and len(exits) == 1:
+        kind, rest = verdicts[0]
+        if (
+            kind == "PASS"
+            and rc == 0
+            and exits[0] == "0"
+            and re.match(r" rev=" + re.escape(sha[:8]) + r"[0-9a-f]* ", rest)
+        ):
+            return [row("windows_gate", 1)]
+        if kind == "FAIL" and rc not in (0, 3):
+            raise EvidenceError("windows_gate")
+    if kinds == {"RETRY"} and len(verdicts) == 1:
+        found = re.search(r" class=([A-Z0-9_]+)\b", verdicts[0][1])
+        cls = found[1] if found and found[1] in WINDOWS_RETRY_CLASSES else "OPERATOR"
+        raise EvidenceError("windows_retry_" + cls.lower())
+    if kinds == {"REFUSED"}:
+        raise EvidenceError("windows_retry_refused")
+    if "FAIL" in kinds:
+        raise EvidenceError("windows_gate")
+    # No verdict, two verdicts, a PASS of another revision or with a non-zero exit: the
+    # harness did not end cleanly. Not a pass; a fresh box decides.
+    raise EvidenceError("windows_retry_operator")
+
+
+def windows_requested(environ):
+    """The Worker states the tier as KF_MERGE_WINDOWS (ci/vast-broker/src/tier.js): 1 for the master
+    gate (profile check), 0 for the die sweep. A box started by a Worker that predates the field
+    gets the master gate: a missing statement never makes the required check weaker."""
+    value = environ.pop("KF_MERGE_WINDOWS", None)
+    if value not in (None, "0", "1"):
+        raise EvidenceError("preflight")
+    return value != "0", "worker" if value is not None else "default"
+
+
+# The Windows stage needs about an hour on a fresh box (install 19-31 min, gate 27 min, MEASURED
+# traces/windows_gate_20261101/, traces/blackwell_hw_20261103/); it does not start with less than
+# this left before the soft deadline, and that shortfall is a RETRY, not a verdict.
+WINDOWS_MIN_REMAINING_MS = 75 * 60000
+
+
 def ladder_rows(text, rc, mode, sha):
     name = "cuda_host" if mode == "host" else "cuda_fat"
     if mode not in {"host", "guest"} or rc:
@@ -619,7 +671,10 @@ def execute_stages(stages, soft, result, destination, runner=run_bounded):
             persist_result(destination, result)
         print("KF_PAYLOAD_STAGE_START name=" + name, flush=True)
         start = time.monotonic()
-        rc = runner(stage["command"], soft, stage["output"], stage["progress"])
+        need = stage.get("min_remaining_ms")
+        # Too little time left to finish: not run (rc 125), and not a verdict on the guest.
+        short = need is not None and soft - int(time.time() * 1000) < need
+        rc = 125 if short else runner(stage["command"], soft, stage["output"], stage["progress"])
         elapsed = int((time.monotonic() - start) * 1000)
         record.update(rc=rc, duration_ms=elapsed, result="PASS")
         print(
@@ -627,6 +682,8 @@ def execute_stages(stages, soft, result, destination, runner=run_bounded):
             flush=True,
         )
         try:
+            if short:
+                raise EvidenceError(stage["short_row"])
             rows = stage["grade"](rc)
             if rc == 124:
                 raise EvidenceError("timeout", rows)
@@ -890,6 +947,12 @@ def main():
     old_term = signal.signal(signal.SIGTERM, terminate)
     try:
         soft = int(os.environ["KF_SOFT_DEADLINE_MS"])
+        # Popped before any stage runs: merge_check.sh must not run the gate inside merge_bar.
+        windows, windows_source = windows_requested(os.environ)
+        print(
+            "KF_PAYLOAD_TIER windows=" + str(int(windows)) + " source=" + windows_source,
+            flush=True,
+        )
         subprocess.run(["df", "-h", "/"], check=True)
         free = shutil.disk_usage("/").free
         print("KF_PREFLIGHT_FREE_BYTES=" + str(free), flush=True)
@@ -1034,6 +1097,19 @@ def main():
                 lambda rc: ladder_rows(bounded_text(path), rc, "guest", sha),
             )
         )
+        if windows:
+            # Last, after every Linux guest has stopped: windows_gate.sh owns the GPU from here.
+            output = evidence / "windows.run"
+            stage = make_stage(
+                "windows_gate",
+                ["bash", str(root / "scripts/bench/box/windows_gate.sh"), tag, PROV_DIR],
+                output,
+                [],
+                lambda rc: windows_rows(bounded_text(output), rc, sha),
+                [Path(PROV_DIR) / (tag + "_windows.log")],
+            )
+            stage.update(min_remaining_ms=WINDOWS_MIN_REMAINING_MS, short_row="windows_retry_time")
+            stages.append(stage)
         return execute_stages(stages, soft, result, destination)
     except EvidenceError as error:
         if isinstance(error, ProviderFault):
