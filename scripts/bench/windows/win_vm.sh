@@ -665,7 +665,10 @@ install_boot() {
   SHOT_EVERY=60 vm_start install 1
   # "Press any key to boot from CD or DVD": answered for the first boot only. Later in-QEMU reboots
   # let the prompt time out, so the installed disk boots.
-  $QMP "$VM/run/qmp.sock" keys ret 30 >/dev/null 2>&1 || log "send-key failed (see the screenshots)"
+  # ⚠ UNTESTED (2026-11-04, traces/die_coverage_20261104/blackwell/README.md Finding 2): 30 s of Enter reached Setup's
+  # focused Cancel on a fast box (GB202 lease 59031351: "Are you sure you want to quit?" for 20 min). The presses now
+  # stop after WINVM_BOOTKEY_S (8 s); a slow box whose prompt comes later would boot the empty disk instead.
+  $QMP "$VM/run/qmp.sock" keys ret "${WINVM_BOOTKEY_S:-8}" >/dev/null 2>&1 || log "send-key failed (see the screenshots)"
   vm_wait "$INSTALL_WAIT_S"   # default 14400 (4 h); a 3 h Vast lease sets WINVM_INSTALL_WAIT_S
   log "INSTALL_BOOT_END rc=$BOOT_RC reason=$BOOT_REASON"
   [ "$BOOT_REASON" = guest-shutdown ] || { log "the install did not end in a guest shutdown"; return 1; }
