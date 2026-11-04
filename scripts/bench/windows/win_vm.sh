@@ -524,7 +524,8 @@ vm_start() {
   QPID=$!
   echo "$QPID" > "$VM/run/qemu.pid"
   for _ in $(seq 1 100); do [ -S "$VM/run/qmp-ev.sock" ] && break; kill -0 "$QPID" 2>/dev/null || break; sleep 0.2; done
-  $QMP "$VM/run/qmp-ev.sock" events "$BOOT_EV" >/dev/null 2>&1 7>&- 8>&- &
+  # (its stderr is kept: a logger that never attached, GA106 dca106a 2026-11-04, left no trace of why)
+  $QMP "$VM/run/qmp-ev.sock" events "$BOOT_EV" >/dev/null 2>"${BOOT_EV%.jsonl}.err" 7>&- 8>&- &
   EVPID=$!
   log "QEMU_START tag=$tag boot=$n pid=$QPID log=logs/${tag}_b${n}_qemu.log"
   # one screendump every SHOT_EVERY seconds while this QEMU lives. ⊘ Helpers never inherit the VM
