@@ -1,0 +1,14 @@
+{
+  "name": "kayfabe-platform-api",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "mutate": "node scripts/mutate.mjs",
+    "seed": "node scripts/seed.mjs",
+    "fixture": "node scripts/make-fixture.mjs"
+  }
+}
