@@ -15,6 +15,7 @@ const SPARSE = [
   '!/traces/',
   '/traces/blackwell_consttab_20261023/generate_rows.py',
   '/traces/blackwell_host_caps_review_20261022/tier_audit/precomp_fields.tsv',
+  '/traces/blackwell_hw_20261103/gb203_tier3/precomp_tier3.txt',
   '/traces/blackwell_provider_validation_20261023/lease_metadata/precomp_tier3.txt',
   '/traces/blackwell_windows_resume_20261023/lease_metadata/precomp_tier3.txt',
   '/traces/c_oracle_census/',

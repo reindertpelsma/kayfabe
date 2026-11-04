@@ -1,0 +1,131 @@
+WINDOWS_GATE_START tag=tbA2 rev=0aaba25c source=/root/kayfabe 2026-11-03T13:15:12+00:00 idle_s=300 flags=kf3_flags.sample.env guest_driver=580.65.06 arm=B
+WINDOWS_GATE_REQUESTED=1
+GATE_STAGE preflight START 2026-11-03T13:15:12+00:00
+GATE_NOTE host VRAM 8192 MiB: WINVM_KF3_FB_MB=6144
+GATE_NOTE host: gpu="NVIDIA GeForce RTX 2060 SUPER" driver=580.159.04 cpus=15 ram_gb=98 disk_free_gb=114
+GATE_STAGE preflight EXIT ok 7s
+GATE_STAGE hostref_before START 2026-11-03T13:15:19+00:00
+GATE_HOSTREF before green cup8=PASS xid_count=10 xid_delta=0 gpu="NVIDIA GeForce RTX 2060 SUPER, 580.159.04, 8192 MiB, P0"
+GATE_STAGE hostref_before EXIT ok 5s
+GATE_STAGE prereqs START 2026-11-03T13:15:24+00:00
+GATE_STAGE prereqs EXIT ok 0s
+GATE_STAGE kf3_binary START 2026-11-03T13:15:24+00:00
+GATE_NOTE no kf3 QEMU at /workspace/bench/kf3-bins/0aaba25c/qemu-system-x86_64: building this revision
+GATE_NOTE kf3 qemu=/workspace/bench/kf3-bins/0aaba25c/qemu-system-x86_64 sha256=3adafac3dd6e8077 rev=0aaba25c
+GATE_STAGE kf3_binary EXIT ok 21s
+GATE_STAGE install START 2026-11-03T13:15:45+00:00
+GATE_NOTE Windows already installed on this box (2026-11-03T13:14:53Z repo=08dae8a3): install once per lease
+GATE_STAGE install EXIT ok 0s
+GATE_STAGE probes_build START 2026-11-03T13:15:45+00:00
+GATE_NOTE probes built: c446af2fdca2 7281e12e5881 192d85b7e863 842a479251ed 
+GATE_STAGE probes_build EXIT ok 7s
+GATE_STAGE boot1 START 2026-11-03T13:15:52+00:00
+GATE_NOTE ssh up after 10s
+GATE_STAGE boot1 EXIT ok 111s
+GATE_STAGE check_kf3 START 2026-11-03T13:17:43+00:00
+GATE_NOTE check --kf3 (before the driver): 13 PASS lines, WIN_CHECK_DONE fail=0
+GATE_STAGE check_kf3 EXIT ok 74s
+GATE_STAGE nv_install START 2026-11-03T13:18:57+00:00
+  GSP_ON device PCI\VEN_10DE&DEV_1F06&SUBSYS_652019DA&REV_A1\3&11583659&0&28 name='Microsoft Basic Display Adapter' status=OK problem=CM_PROB_NONE inf=display.inf driverkey={fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e1002}\0001
+  GSP_ON nvlddmkm.sys signature status=Valid signer='CN=NVIDIA Corporation, OU=1-F, O=NVIDIA Corporation, L=Santa Clara, S=California, C=US'
+  GSP_ON disable: Microsoft PnP Utility
+  GSP_ON disable:
+  GSP_ON disable: Disabling device:          PCI\VEN_10DE&DEV_1F06&SUBSYS_652019DA&REV_A1\3&11583659&0&28
+  GSP_ON disable: Device disabled successfully.
+  GSP_ON disable:
+  GSP_ON add-driver: Microsoft PnP Utility
+  GSP_ON add-driver:
+  GSP_ON add-driver: Adding driver package:  nv_dispi.inf
+  GSP_ON add-driver: Driver package added successfully.
+  GSP_ON add-driver: Published Name:         oem7.inf
+  GSP_ON add-driver: Driver package installed on device: PCI\VEN_10DE&DEV_1F06&SUBSYS_652019DA&REV_A1\3&11583659&0&28
+  GSP_ON add-driver:
+  GSP_ON add-driver: Total driver packages:  1
+  GSP_ON add-driver: Added driver packages:  1
+  GSP_ON add-driver rc=0
+  GSP_ON after install: inf=oem7.inf driverkey={fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e1002}\0001 version=32.0.15.8088
+  GSP_ON readback HKLM:\SYSTEM\CurrentControlSet\Control\Class\{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e1002}\0001 EnableGpuFirmware=1
+  GSP_ON readback HKLM:\SYSTEM\CurrentControlSet\Services\nvlddmkm EnableGpuFirmware=1
+GATE_STAGE nv_install EXIT ok 452s
+GATE_STAGE desktop_prep START 2026-11-03T13:26:29+00:00
+  DESKTOP_PREP AutoAdminLogon=1 want=1 OK
+  DESKTOP_PREP DefaultUserName=kf want=kf OK
+  DESKTOP_PREP DefaultDomainName=. want=. OK
+  DESKTOP_PREP DefaultPassword_matches=True want=True OK
+  DESKTOP_PREP AutoLogonCount_absent=True want=True OK
+  DESKTOP_PREP DevicePasswordLessBuildVersion=0 want=0 OK
+  DESKTOP_PREP OverlayTestMode=5 want=5 OK
+  DESKTOP_PREP_DONE fail=0
+  [2026-11-03T13:27:10Z] DESKTOP_PREP_OK user=kf (autologon and OverlayTestMode apply at the next boot of this disk)
+GATE_STAGE desktop_prep EXIT ok 41s
+GATE_STAGE reboot START 2026-11-03T13:27:10+00:00
+GATE_NOTE second QEMU started after 25s
+GATE_NOTE ssh up after 0s
+GATE_STAGE reboot EXIT ok 134s
+GATE_STAGE desktop START 2026-11-03T13:29:24+00:00
+  GATE_BOOT utc=2026-11-03T13:28:10Z os='Microsoft Windows 11 Enterprise LTSC Evaluation' build=26100
+  GATE_DESKTOP user='KFWIN\kf' dwm=1 explorer=1
+  GATE_SESSIONS USERNAME SESSIONNAME ID STATE IDLE TIME LOGON TIME kf console 1 Active none 11/3/2026 1:29 PM
+  GATE_DISPLAY name='NVIDIA GeForce RTX 2060 SUPER' driver=32.0.15.8088 code=22 status=Error pnp=Error
+  GATE_STATE_DONE mode=desktop
+GATE_STAGE desktop EXIT ok 54s
+GATE_STAGE enable START 2026-11-03T13:30:18+00:00
+GATE_NOTE device enabled once at 2026-11-03T13:30:54Z (guest clock)
+  GATE_DISPLAY name='NVIDIA GeForce RTX 2060 SUPER' driver=32.0.15.8088 code=0 status=OK pnp=OK
+GATE_STAGE enable EXIT ok 100s
+GATE_STAGE smi_probes START 2026-11-03T13:31:58+00:00
+GATE_NOTE guest nvidia-smi: GPU 0: NVIDIA GeForce RTX 2060 SUPER (UUID: GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e1001)
+GATE_PROBE_RESULT cup8 GATE_PROBE exe=cup8.exe arg= rc=0 secs=7 timeout=0
+GATE_PROBE_RESULT d3d11 GATE_PROBE exe=kf_dxprobe.exe arg=d3d11 rc=0 secs=4 timeout=0
+GATE_PROBE_RESULT cup3 GATE_PROBE exe=cup3.exe arg= rc=0 secs=4 timeout=0
+GATE_PROBE_RESULT d3d12 GATE_PROBE exe=kf_dxprobe.exe arg=d3d12 rc=0 secs=11 timeout=0
+GATE_STAGE smi_probes EXIT ok 170s
+GATE_STAGE idle START 2026-11-03T13:34:48+00:00
+GATE_NOTE idle window observed 300s of 300s
+GATE_STAGE idle EXIT ok 352s
+GATE_STAGE post_idle START 2026-11-03T13:40:40+00:00
+GATE_PROBE_RESULT cup8 GATE_PROBE exe=cup8.exe arg= rc=0 secs=4 timeout=0
+GATE_PROBE_RESULT d3d11 GATE_PROBE exe=kf_dxprobe.exe arg=d3d11 rc=0 secs=4 timeout=0
+GATE_PROBE_RESULT cup3 GATE_PROBE exe=cup3.exe arg= rc=0 secs=4 timeout=0
+GATE_PROBE_RESULT d3d12 GATE_PROBE exe=kf_dxprobe.exe arg=d3d12 rc=0 secs=11 timeout=0
+  GATE_TDR since=2026-11-03T13:30:54Z display4101=0 nvlddmkm153=0 kernelpower41=0 eventlog6008=0 bugcheck1001=0 livekernelevent_other=0 livekernelevent193=2 livekernelevent_stale=0 strict=0 total=0
+  GATE_LIVEDUMP 2026-11-03T13:31:30Z WATCHDOG-20261103-1331.dmp bytes=1306800128
+  GATE_WER_REPORT dir=Kernel_193_b9f82eeb3eced7a1958f6a4a6d5c5a36a7831_00000000_787d0c26-5e7d-4b57-a3c6-92cc2a8c0a1b where=ReportQueue mtime=2026-11-03T13:32:09Z event_time=2026-11-03T13:32:07Z
+  GATE_WER_PARAM Kernel_193_b9f82eeb3eced7a1958f6a4a6d5c5a36a7831_00000000_787d0c26-5e7d-4b57-a3c6-92cc2a8c0a1b EventType=LiveKernelEvent
+  GATE_WER_PARAM Kernel_193_b9f82eeb3eced7a1958f6a4a6d5c5a36a7831_00000000_787d0c26-5e7d-4b57-a3c6-92cc2a8c0a1b ReportType=4
+  GATE_WER_PARAM Kernel_193_b9f82eeb3eced7a1958f6a4a6d5c5a36a7831_00000000_787d0c26-5e7d-4b57-a3c6-92cc2a8c0a1b ReportStatus=2049
+  GATE_WER_PARAM Kernel_193_b9f82eeb3eced7a1958f6a4a6d5c5a36a7831_00000000_787d0c26-5e7d-4b57-a3c6-92cc2a8c0a1b Sig[0].Name=Code
+  GATE_WER_PARAM Kernel_193_b9f82eeb3eced7a1958f6a4a6d5c5a36a7831_00000000_787d0c26-5e7d-4b57-a3c6-92cc2a8c0a1b Sig[0].Value=193
+  GATE_WER_PARAM Kernel_193_b9f82eeb3eced7a1958f6a4a6d5c5a36a7831_00000000_787d0c26-5e7d-4b57-a3c6-92cc2a8c0a1b Sig[1].Name=Parameter 1
+  GATE_WER_PARAM Kernel_193_b9f82eeb3eced7a1958f6a4a6d5c5a36a7831_00000000_787d0c26-5e7d-4b57-a3c6-92cc2a8c0a1b Sig[1].Value=815
+  GATE_WER_PARAM Kernel_193_b9f82eeb3eced7a1958f6a4a6d5c5a36a7831_00000000_787d0c26-5e7d-4b57-a3c6-92cc2a8c0a1b Sig[2].Name=Parameter 2
+  GATE_WER_PARAM Kernel_193_b9f82eeb3eced7a1958f6a4a6d5c5a36a7831_00000000_787d0c26-5e7d-4b57-a3c6-92cc2a8c0a1b Sig[2].Value=2
+  GATE_WER_PARAM Kernel_193_b9f82eeb3eced7a1958f6a4a6d5c5a36a7831_00000000_787d0c26-5e7d-4b57-a3c6-92cc2a8c0a1b Sig[3].Name=Parameter 3
+  GATE_WER_PARAM Kernel_193_b9f82eeb3eced7a1958f6a4a6d5c5a36a7831_00000000_787d0c26-5e7d-4b57-a3c6-92cc2a8c0a1b Sig[3].Value=ffff830b8fd6f080
+  GATE_WER_PARAM Kernel_193_b9f82eeb3eced7a1958f6a4a6d5c5a36a7831_00000000_787d0c26-5e7d-4b57-a3c6-92cc2a8c0a1b Sig[4].Name=Parameter 4
+  GATE_WER_PARAM Kernel_193_b9f82eeb3eced7a1958f6a4a6d5c5a36a7831_00000000_787d0c26-5e7d-4b57-a3c6-92cc2a8c0a1b Sig[4].Value=0
+  GATE_WER_PARAM Kernel_193_b9f82eeb3eced7a1958f6a4a6d5c5a36a7831_00000000_787d0c26-5e7d-4b57-a3c6-92cc2a8c0a1b Sig[5].Name=OS version
+  GATE_WER_PARAM Kernel_193_b9f82eeb3eced7a1958f6a4a6d5c5a36a7831_00000000_787d0c26-5e7d-4b57-a3c6-92cc2a8c0a1b Sig[5].Value=10_0_26100
+  GATE_WER_PARAM Kernel_193_b9f82eeb3eced7a1958f6a4a6d5c5a36a7831_00000000_787d0c26-5e7d-4b57-a3c6-92cc2a8c0a1b Sig[6].Name=Service Pack
+  GATE_WER_PARAM Kernel_193_b9f82eeb3eced7a1958f6a4a6d5c5a36a7831_00000000_787d0c26-5e7d-4b57-a3c6-92cc2a8c0a1b Sig[6].Value=0_0
+  GATE_WER_PARAM Kernel_193_b9f82eeb3eced7a1958f6a4a6d5c5a36a7831_00000000_787d0c26-5e7d-4b57-a3c6-92cc2a8c0a1b Sig[7].Name=Product
+  GATE_WER_PARAM Kernel_193_b9f82eeb3eced7a1958f6a4a6d5c5a36a7831_00000000_787d0c26-5e7d-4b57-a3c6-92cc2a8c0a1b Sig[7].Value=256_1
+  GATE_WER_PARAM Kernel_193_b9f82eeb3eced7a1958f6a4a6d5c5a36a7831_00000000_787d0c26-5e7d-4b57-a3c6-92cc2a8c0a1b DynamicSig[1].Name=OS Version
+  GATE_WER_PARAM Kernel_193_b9f82eeb3eced7a1958f6a4a6d5c5a36a7831_00000000_787d0c26-5e7d-4b57-a3c6-92cc2a8c0a1b DynamicSig[1].Value=10.0.26100.2.0.0.256.129
+  GATE_WER_PARAM Kernel_193_b9f82eeb3eced7a1958f6a4a6d5c5a36a7831_00000000_787d0c26-5e7d-4b57-a3c6-92cc2a8c0a1b DynamicSig[2].Name=Locale ID
+  GATE_WER_PARAM Kernel_193_b9f82eeb3eced7a1958f6a4a6d5c5a36a7831_00000000_787d0c26-5e7d-4b57-a3c6-92cc2a8c0a1b DynamicSig[2].Value=1033
+  GATE_WER_PARAM Kernel_193_b9f82eeb3eced7a1958f6a4a6d5c5a36a7831_00000000_787d0c26-5e7d-4b57-a3c6-92cc2a8c0a1b FriendlyEventName=Hardware error
+  GATE_WER_DUMP 2026-11-03T13:31:30Z WATCHDOG-20261103-1331.dmp bytes=1306800128
+GATE_TIMELINE enable=2026-11-03T13:30:54Z first_probe=2026-11-03T13:33:22Z first_dump=2026-11-03T13:31:30Z dump_minus_enable=36s dump_minus_first_probe=-112s
+  GATE_WER_NEAR report=Kernel_193_b9f82eeb3eced7a1958f6a4a6d5c5a36a7831_00000000_787d0c26-5e7d-4b57-a3c6-92cc2a8c0a1b none within +-120s
+  GATE_WER_NEAR report=WATCHDOG-20261103-1331.dmp none within +-120s
+GATE_NOTE check --kf3 (after the driver): 0 FAIL line(s),   WIN_CHECK_DONE fail=0
+GATE_STAGE post_idle EXIT ok 248s
+GATE_STAGE collect_stop START 2026-11-03T13:44:48+00:00
+GATE_STAGE collect_stop EXIT ok 490s
+GATE_NOTE graceful stop of the guest (gate_tbA2)
+GATE_HOSTREF after green cup8=PASS xid_count=10 xid_delta=0 gpu="NVIDIA GeForce RTX 2060 SUPER, 580.159.04, 8192 MiB, P0"
+WINDOWS_GATE_PASS rev=0aaba25c gpu="NVIDIA GeForce RTX 2060 SUPER" idle_s=300 hostref=green/green secs=2320 install=once driver=580.88 gsp=forced code=0 probes=cup8,d3d11,x2 resets=0 known_live_dumps_193=2 stale_lke_resubmits=0 strict=0 enable_utc=2026-11-03T13:30:54Z
+GATE_NOTE evidence: /root/prov/tbA2_windows (89 files), /root/prov/tbA2_windows.tgz sha256=6c106f6b80831d90
+WINDOWS_GATE_TIMING total=2320s preflight=7s hostref_before=5s prereqs=0s kf3_binary=21s install=0s probes_build=7s boot1=111s check_kf3=74s nv_install=452s desktop_prep=41s reboot=134s desktop=54s enable=100s smi_probes=170s idle=352s post_idle=248s collect_stop=490s
+WINDOWS_GATE_EXIT rc=0 2026-11-03T13:53:52+00:00

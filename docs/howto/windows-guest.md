@@ -123,6 +123,7 @@ Rules the script enforces: every step logs `START` and `EXIT rc=` (a log with no
 - **Windows sleep/wake is not supported yet.** <!-- src: docs/WINDOWS_GUEST_SETUP.md, README.md -->
 - Edge can reset the display driver after 7 to 16 minutes of playback. <!-- src: README.md "Not finished" -->
 - Other GPU dies need more work under Windows; GB206 under Windows is open (Code 43). <!-- src: README.md "GPUs:" -->
+- On GB203 (RTX 5070 Ti) the Windows gate passed once with the display fixes of 2026-11-03; before them the driver loaded but never lit the display (a black screen). Other Blackwell dies were not run with these fixes. <!-- src: traces/blackwell_win_20261103/, n=1 -->
 - `nv-install` is slow: it copies the 2.6 GB driver package over user networking at about 2.4 MB/s (18 minutes). <!-- src: scripts/bench/windows/README.md "Known limits" -->
 - **A failed NVIDIA driver slows everything down.** With the driver in Code 43, boot to ssh took about 20 minutes and the guest ignored `shutdown /s` for 5 minutes. <!-- src: scripts/bench/windows/README.md "Known limits" -->
 - The guest changes its own Secure Boot variables (it adds the 2023 CAs to `db` and updates `dbx`). The variables file is per-VM live state; never regenerate it or copy it to another VM. <!-- src: scripts/bench/windows/README.md "Known limits" -->

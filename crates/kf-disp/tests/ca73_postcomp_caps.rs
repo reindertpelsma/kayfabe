@@ -39,15 +39,30 @@ fn every_virtual_tile_has_the_postcomp_pipe_nvkms_asserts() {
                 let want = u32::from(i < row.heads);
                 assert_eq!(get(w, t.f(c, f).unwrap()), want, "{ver} tile {i} {f}");
             }
+            // ⊘ CORRECTED 2026-11-03 (above the assertion it replaces, which required both bits 0 — "an
+            // unscaled tile", type 1): MEASURED on GB203 Windows 580.88 (traces/blackwell_win_20261103/,
+            // boots diagJ/diagK) the driver routes and modesets a head only when the tiles are type 0:
+            // SCLR_PRESENT + VFILTER_PRESENT laid over the derived page lights head 0, the die's widths
+            // without them do not. Their limit words (CAPD VSCLR_MAX_PIXELS, CAPF VFILTER_MAX_PIXELS)
+            // stay 0, as the main layer's precomp scaler row does.
             for f in [
                 "POSTCOMP_HDR_CAPA_SCLR_PRESENT",
                 "POSTCOMP_HDR_CAPA_VFILTER_PRESENT",
             ] {
                 assert_eq!(
                     get(w, t.f(c, f).unwrap()),
-                    0,
-                    "{ver} tile {i} {f}: unscaled tile"
+                    u32::from(i < row.heads),
+                    "{ver} tile {i} {f}: a type-0 tile per head"
                 );
+            }
+            for f in [
+                "POSTCOMP_HDR_CAPD_VSCLR_MAX_PIXELS_2TAP",
+                "POSTCOMP_HDR_CAPD_VSCLR_MAX_PIXELS_5TAP",
+                "POSTCOMP_HDR_CAPF_VFILTER_MAX_PIXELS",
+            ] {
+                let reg = &f[..f.find("_V").unwrap()];
+                let w = p.word(t.a(c, reg, i).unwrap());
+                assert_eq!(get(w, t.f(c, f).unwrap()), 0, "{ver} tile {i} {f}");
             }
         }
     }
