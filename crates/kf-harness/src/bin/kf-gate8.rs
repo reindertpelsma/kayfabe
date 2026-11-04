@@ -298,7 +298,7 @@ fn round(
             poller
                 .wait(
                     &mut ready,
-                    PollTimeout::Millis(m.walker().inner.kernel.completion_poll_ms()),
+                    PollTimeout::Micros(m.walker().inner.kernel.completion_poll_us()),
                 )
                 .map_err(|e| format!("epoll: {e:?}"))?;
             let mut walk_woke = false;

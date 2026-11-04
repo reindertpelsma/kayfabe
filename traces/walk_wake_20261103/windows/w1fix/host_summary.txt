@@ -1,0 +1,30 @@
+DISPLAY fps lines=482; kms series (first 10 / last 10): ['0.0', '22.9', '24.9', '46.9', '46.8', '0.0', '0.0', '0.0', '0.0', '0.0'] ... ['0.9', '31.9', '32.4', '30.9', '32.4', '32.9', '33.4', '30.9', '31.9', '32.9']
+DISPLAY windows with kms>0: 121 of 474
+COUNT 'STOPPED': 0
+COUNT 'STALL': 0
+COUNT 'REFUSED': 138
+COUNT 'Xid': 0
+COUNT 'panicked': 0
+COUNT 'USER_RING_REFUSED': 0
+COUNT 'RESET_CHANNEL': 0
+COUNT 'WATCHDOG': 0
+COUNT 'flip timeout': 0
+COUNT 'kf3: display: TRACE': 0
+WALK this run: windows=110 walks=23954 walk_avg_us(weighted)=178 gpu_avg_us=117 inval_arrive_to_clear_avg_us=396 invals=7454 per-window walk_avg_us p50=203 max=695
+WALK this run light windows (<=50 walks): windows=57 walks=313 walk_avg_us=196 gpu_avg_us=123 p50 window walk_avg_us=213
+WALK this run first 60 windows with walks (boot+desktop): walks=14673 walk_avg_us=165 gpu_avg_us=105
+CPU over 936s: qemu total 230.1% of one core
+  qemu-system-x86      209.75%
+  kf3-worker0            5.72%
+  kf3-worker1            4.57%
+  kf3-display            3.62%
+  cuda-EvtHandlr         3.08%
+  kf3-vamgr              1.86%
+  kf3-scanline           1.19%
+  kf3-chan-act           0.16%
+  kf3-drainer            0.12%
+  kf-view-reaper         0.06%
+  kf3-cuda-walk          0.01%
+  kf3-cuda-disp          0.00%
+  cuda0000d400036        0.00%
+  kf3-vram-provis        0.00%

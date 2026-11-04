@@ -43,6 +43,12 @@ pub enum PollTimeout {
     Immediate,
     /// Block for at most this many milliseconds.
     Millis(u32),
+    /// ★ 2026-11-03: block for at most this many **microseconds** (`epoll_pwait2`, Linux
+    /// 5.11+). A kernel or sandbox without that call gets the wait rounded **up** to whole
+    /// milliseconds — later, never earlier, and never a spin; [`micro_timeouts_available`]
+    /// says which one this process has. The calling thread's timer slack still applies
+    /// (`crate::set_current_thread_timer_slack_ns`).
+    Micros(u32),
     /// Block until something is ready. The reactor loop's normal mode: it is woken by
     /// its own notify source for shutdown and injected work (§3.6), so an indefinite
     /// wait is not a liveness hazard — it is the absence of a poll.
@@ -57,9 +63,36 @@ impl PollTimeout {
             // kernel's argument can express gets the longest expressible wait, never a
             // spin (which is what a wrapped negative-to-zero would produce).
             PollTimeout::Millis(ms) => libc::c_int::try_from(ms).unwrap_or(libc::c_int::MAX),
+            // The fallback when `epoll_pwait2` is missing: rounded UP, so 1..=999 us is 1 ms
+            // and never the 0 that would turn a short wait into a spin.
+            PollTimeout::Micros(us) => {
+                libc::c_int::try_from(us.div_ceil(1_000)).unwrap_or(libc::c_int::MAX)
+            }
             PollTimeout::Blocking => -1,
         }
     }
+}
+
+/// `epoll_pwait2` state for this process: unknown until first used, then whether it works.
+const PWAIT2_UNKNOWN: u8 = 0;
+const PWAIT2_YES: u8 = 1;
+const PWAIT2_NO: u8 = 2;
+static PWAIT2: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(PWAIT2_UNKNOWN);
+
+/// Whether [`PollTimeout::Micros`] waits are microsecond-exact in this process (`epoll_pwait2`
+/// accepted), or rounded up to milliseconds. Probes once with a 1 us wait on a fresh, empty
+/// readiness set if no microsecond wait has run yet.
+///
+/// # Panics
+/// If called with any ranked lock held (R1, §4.5) — it waits.
+#[must_use]
+pub fn micro_timeouts_available() -> bool {
+    if PWAIT2.load(std::sync::atomic::Ordering::Relaxed) == PWAIT2_UNKNOWN
+        && let Ok(p) = Poller::create()
+    {
+        let _ = p.wait(&mut ReadyTokens::new(), PollTimeout::Micros(1));
+    }
+    PWAIT2.load(std::sync::atomic::Ordering::Relaxed) == PWAIT2_YES
 }
 
 /// The tokens one [`Poller::wait`] reported, in kernel order.
@@ -190,29 +223,75 @@ impl Poller {
         lockwitness::assert_lock_free("waiting on the readiness set");
         leafwitness::assert_leaf_free("waiting on the readiness set");
         let mut events = [libc::epoll_event { events: 0, u64: 0 }; MAX_READY_BATCH];
-        // SAFETY: `events` is a live array of exactly `MAX_READY_BATCH`
-        // `libc::epoll_event`s in this frame, and the count passed is derived from that
-        // same array's length on this line — no caller supplies it — so the kernel writes
-        // at most the bytes this borrow covers. `self.fd` is live for this borrow. The
-        // return value is checked below before any element is read.
-        let rc = unsafe {
-            libc::epoll_wait(
-                self.fd.as_raw_fd(),
-                events.as_mut_ptr(),
-                libc::c_int::try_from(MAX_READY_BATCH).unwrap_or(libc::c_int::MAX),
-                timeout.as_millis(),
-            )
-        };
+        let max = libc::c_int::try_from(MAX_READY_BATCH).unwrap_or(libc::c_int::MAX);
+        let mut rc: libc::c_long = -1;
+        let mut call = "epoll_wait";
+        let mut done = false;
+        if let PollTimeout::Micros(us) = timeout
+            && PWAIT2.load(std::sync::atomic::Ordering::Relaxed) != PWAIT2_NO
+        {
+            let ts = libc::timespec {
+                tv_sec: libc::time_t::from(us / 1_000_000),
+                tv_nsec: libc::c_long::from(us % 1_000_000) * 1_000,
+            };
+            // SAFETY: as the `epoll_wait` below — `events` is a live array of exactly
+            // `MAX_READY_BATCH` entries in this frame and `max` is derived from that same
+            // constant, so the kernel writes at most the bytes it covers. `ts` is a live
+            // `timespec` in this frame that the kernel only reads, for the call's duration.
+            // The signal mask is NULL (no mask change; the size argument is then unused).
+            // `self.fd` is live for this borrow. The return value is checked below.
+            rc = unsafe {
+                libc::syscall(
+                    libc::SYS_epoll_pwait2,
+                    self.fd.as_raw_fd(),
+                    events.as_mut_ptr(),
+                    max,
+                    &raw const ts,
+                    core::ptr::null::<libc::sigset_t>(),
+                    0usize,
+                )
+            };
+            call = "epoll_pwait2";
+            done = true;
+            if rc < 0
+                && matches!(
+                    std::io::Error::last_os_error().raw_os_error(),
+                    Some(libc::ENOSYS | libc::EPERM)
+                )
+            {
+                // A kernel before 5.11, or a sandbox that refuses the call: round up to ms.
+                PWAIT2.store(PWAIT2_NO, std::sync::atomic::Ordering::Relaxed);
+                done = false;
+            } else {
+                PWAIT2.store(PWAIT2_YES, std::sync::atomic::Ordering::Relaxed);
+            }
+        }
+        if !done {
+            call = "epoll_wait";
+            // SAFETY: `events` is a live array of exactly `MAX_READY_BATCH`
+            // `libc::epoll_event`s in this frame, and the count passed is derived from that
+            // same array's length — no caller supplies it — so the kernel writes at most the
+            // bytes this borrow covers. `self.fd` is live for this borrow. The return value
+            // is checked below before any element is read.
+            rc = libc::c_long::from(unsafe {
+                libc::epoll_wait(
+                    self.fd.as_raw_fd(),
+                    events.as_mut_ptr(),
+                    max,
+                    timeout.as_millis(),
+                )
+            });
+        }
         if rc < 0 {
             return match std::io::Error::last_os_error().raw_os_error() {
                 Some(e) if e == libc::EINTR => {
                     out.len = 0;
                     Ok(0)
                 }
-                _ => Err(last_syscall_error("epoll_wait")),
+                _ => Err(last_syscall_error(call)),
             };
         }
-        let n = (rc as usize).min(MAX_READY_BATCH);
+        let n = usize::try_from(rc).unwrap_or(0).min(MAX_READY_BATCH);
         for (slot, ev) in out.tokens[..n].iter_mut().zip(events[..n].iter()) {
             *slot = ev.u64;
         }
@@ -327,6 +406,52 @@ mod tests {
                 errno: Some(libc::ENOENT),
             }
         );
+    }
+
+    /// ★ 2026-11-03 (walk wake): a pending GPU walk is checked on a microsecond scale. The
+    /// wait must time out in microseconds, not round up to a millisecond, and must still be a
+    /// real sleep (never a spin). The upper bound is loose for loaded CI hosts (best of 20).
+    #[test]
+    fn a_microsecond_timeout_sleeps_that_long_and_no_millisecond_more() {
+        assert!(crate::set_current_thread_timer_slack_ns(1_000));
+        assert_eq!(crate::current_thread_timer_slack_ns(), Some(1_000));
+        let p = Poller::create().expect("readiness set");
+        let mut ready = ReadyTokens::new();
+        let mut best = std::time::Duration::MAX;
+        for _ in 0..20 {
+            let t = std::time::Instant::now();
+            assert_eq!(
+                p.wait(&mut ready, PollTimeout::Micros(200)).expect("wait"),
+                0
+            );
+            let took = t.elapsed();
+            assert!(
+                took >= std::time::Duration::from_micros(200),
+                "{took:?}: woke before the timeout"
+            );
+            best = best.min(took);
+        }
+        assert!(
+            best < std::time::Duration::from_micros(900),
+            "best {best:?}: the timeout was rounded up to a millisecond"
+        );
+    }
+
+    #[test]
+    fn a_microsecond_wait_reports_readiness_at_once() {
+        let p = Poller::create().expect("readiness set");
+        let n = Notifier::create().expect("counter");
+        p.watch(n.as_source_fd(), 9).expect("watch");
+        n.signal().expect("signal");
+        let mut ready = ReadyTokens::new();
+        let t = std::time::Instant::now();
+        assert_eq!(
+            p.wait(&mut ready, PollTimeout::Micros(5_000_000))
+                .expect("wait"),
+            1
+        );
+        assert!(t.elapsed() < std::time::Duration::from_secs(1));
+        assert_eq!(ready.iter().collect::<Vec<_>>(), vec![9]);
     }
 
     /// ★ A peer-closed pipe is **permanently readable and drains nothing** — the exact

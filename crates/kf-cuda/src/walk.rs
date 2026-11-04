@@ -18,6 +18,10 @@
 //!   has no host callback per walk (the TU106 R34 callback/IRQ experiment, 2026-10-15).
 //! - [`WalkKernel::try_collect`] never blocks: `cuEventQuery` must prove the current walk
 //!   finished before the pinned report is decoded; a device fault is named and refuses it.
+//! - ★ Correction 2026-11-03 (Ada lane, `traces/walk_wake_20261103/`): "at most every
+//!   millisecond" below was the whole wait — nothing else wakes the worker for a finished
+//!   walk, so every walk took ~1 ms. It now waits half the walk's age, 50 us..1 ms
+//!   ([`WalkKernel::completion_poll_us`], a microsecond `epoll_pwait2`), still query-only.
 //! - The VA worker checks a pending event at most every millisecond, retaining its 50ms
 //!   idle backstop and every observed nonstall interrupt. [`WalkKernel::refresh`] keeps a
 //!   bounded harness-only `poll(2)` between queries. No `cuCtxSynchronize` is added;
@@ -1305,8 +1309,17 @@ impl WalkKernel {
         crate::completion::poll_ms(self.in_flight())
     }
 
+    /// ★ 2026-11-03: the VA worker's event-loop sleep, in **microseconds**, before it next
+    /// queries this walk's GPU event: on the walk's own time scale while one is pending
+    /// (50 us..1 ms, `completion::poll_us`), the 50 ms idle backstop otherwise. Replaces the
+    /// fixed 1 ms pending wait that put ~0.9 ms on every walk (Ada lane, 2026-11-03).
+    #[must_use]
+    pub fn completion_poll_us(&self) -> u32 {
+        crate::completion::poll_us(self.inflight.map(|f| f.submitted.elapsed()))
+    }
+
     /// Bring-up completion fd, retained for existing epoll registration. Pending walks use
-    /// [`Self::completion_poll_ms`] and real GPU-event queries; no per-walk callback writes it.
+    /// [`Self::completion_poll_us`] and real GPU-event queries; no per-walk callback writes it.
     #[must_use]
     pub fn completion_fd(&self) -> &CompletionFd {
         &self.done_fd
