@@ -1,7 +1,28 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
-**STATUS: LIVE, 2026-10-22.** The newest UPDATE below is the resume point; the sections after
+**STATUS: LIVE, 2026-11-04.** The newest UPDATE below is the resume point; the sections after
 it are dated checkpoints, kept as history.
+
+## UPDATE 2026-11-04 — Windows is required on the gpu-vast master gate (lane 2)
+
+Branch `claude/gate-windows-required-20261104`, PR against `next`. It merges #242, #243, #247 and #246 (with #245).
+Design: `docs/design/V3_CI_VAST_GPU_20261021.md` (lane 2 section), `docs/design/V3_WINDOWS_GATE.md` §0.
+Evidence: `traces/gate_windows_ci_20261104/README.md`.
+- CODE READ: the Worker profile `check` sends `KF_MERGE_WINDOWS=1` (`ci/vast-broker/src/tier.js`). The payload runs
+  `windows_gate` as the last stage, and only `WINDOWS_GATE_PASS` passes. RETRY is a failing `windows_retry_<class>` row,
+  and the check fails with "GPU gate RETRY". Check hard limit 300 min, sweep 180, runner 330/200, job 345/step 340,
+  reaper 300.
+- MEASURED (runs 41746194587 and 41746861215, 2026-11-04): two deployment-state blockers, both outside this change.
+  (1) The deployed Worker (07a0d4eb) differed from master's pin (2828bf41), so every master-PR run was rejected by
+  runner.py line 644 after the Worker had rented. The coordinator redeployed 2828bf41.
+  (2) Next's `Cargo.lock` and package policy had drifted from `scripts/ci/setup-cache.lock.json` since
+  2026-10-31, so every next tree failed `KF_SETUP_CACHE_REFUSED` on a Worker box. A new cache
+  (`setup-cache-jammy-amd64-20261104-v1`, now with the Windows packages) is published, and
+  `scripts/ci/test_vast_setup_lock_fresh.py` now catches the drift in GPU-free CI.
+- Owed by the coordinator after the merge: deploy the reaper (300) first, then Worker bundle
+  `d6bd6b363fc04592dc18d7f607178c981bb97983ce36b5c4037bafda1a337b0a`. master's runner must carry the matching pin,
+  and the 330-minute budget must be on master before the 300-minute Worker goes live, or master PRs get
+  `NOT_ELIGIBLE RUNNER_TIME`.
 
 ## UPDATE 2026-10-22 — Vast broker callbacks, mock validation only
 
