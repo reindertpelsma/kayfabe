@@ -19,9 +19,9 @@ HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\nvlddmkm\Parameters
 HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\nvlddmkm\State
 HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\nvlddmkm\Video
 HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\nvlddmkm\Enum
-== class key {UUID-SCRUBBED}\0001
+== class key {4d36e968-e325-11ce-bfc1-08002be10318}\0001
 
-HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Class\{UUID-SCRUBBED}\0001
+HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0001
     EnableGpuFirmware    REG_DWORD    0x1
 
 
