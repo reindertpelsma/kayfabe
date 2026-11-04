@@ -4,6 +4,11 @@ STATUS: LIVE, 2026-11-04. Written at 02:23Z, before the lease below ran anything
 `README.md` (GB202 gate r1 at `0c515b3b`: bugcheck 0x113 about 20 s after the enable; r2, r3 passed).
 Revision `0c515b3b3` (pin branch `claude/die-coverage-blackwell-pin-20261104`), no code change.
 
+⊘ CORRECTED 02:33Z (before any run): 59044337 and the next try 59045484 (offer 59030076, Spain) were created STOPPED
+(`success False`; `vastai start` answered "Required resources are currently unavailable"); both destroyed by id, never
+ran. The lease is **Vast 59045517** (own id), offer 49824506 (RTX 5090 `10de:2b85`, Czechia, machine 35231, 1.004 USD/h
+listed, 15 vCPU, 49 GB), created 02:31:27Z, safety timer 7200 s; also a different machine from 59031351.
+
 Lease: Vast 59044337 (own id), offer 58921244 (RTX 5090, Australia, 0.739 USD/h listed), created 02:21:53Z, a
 DIFFERENT machine from the first GB202 lease (59031351, machine 151715). Safety destroy timer 7200 s.
 
