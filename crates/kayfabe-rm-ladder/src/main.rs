@@ -9728,6 +9728,62 @@ const W385_SPAN_CAP: usize = 6000;
 
 /// Run one phase: spawn `cfg.threads` workers across `cfg.clients` RM clients, join them,
 /// and fold their reports into one.
+/// ⊘⊘ 2026-11-04 (UNTESTED on hardware). The control worker's decision sequence (tid 0,
+/// jitter 0, every verb succeeding) up to its first ENGINE op, replayed without a GPU. Until
+/// that op no verb draws from the RNG, so this is exact under that assumption. It uses the
+/// real [`W385Op::draw`] and [`W385Op::admits`], and the same per-worker seed derivation as
+/// [`w385_phase`] (tid 0).
+fn w385_control_reaches_engine(seed: u64, iters: u64) -> bool {
+    let wseed = seed.wrapping_mul(0x2545_F491_4F6C_DD1D);
+    let mut rng = W385Rng::new(wseed);
+    let dummy = || kayfabe_isolate::HostHandle::new(IsolateId::new(0, GpuId(0)), 0);
+    let mut slots: Vec<Option<W385Slot>> = (0..W385_SLOTS).map(|_| None).collect();
+    for _ in 0..iters {
+        let op = W385Op::draw(&mut rng);
+        let cand: Vec<usize> = (0..W385_SLOTS)
+            .filter(|&i| op.admits(slots[i].as_ref()))
+            .collect();
+        if cand.is_empty() {
+            continue;
+        }
+        let s = cand[rng.below(cand.len() as u64) as usize];
+        if W385Op::ENGINE.contains(&op) {
+            return true;
+        }
+        match op {
+            W385Op::Alloc | W385Op::Recycle => {
+                slots[s] = Some(W385Slot {
+                    mem: dummy(),
+                    va_a: None,
+                    va_b: None,
+                })
+            }
+            W385Op::MapA => {
+                if let Some(sl) = slots[s].as_mut() {
+                    sl.va_a = Some(1);
+                }
+            }
+            W385Op::MapB => {
+                if let Some(sl) = slots[s].as_mut() {
+                    sl.va_b = Some(2);
+                }
+            }
+            W385Op::Free => slots[s] = None,
+            _ => {}
+        }
+    }
+    false
+}
+
+/// The first of `base, base+1, …` (at most 64 steps) whose control reaches an engine op;
+/// `base` itself when none does (the control then reds by name, as before).
+fn w385_control_seed(base: u64, iters: u64) -> u64 {
+    (0..64u64)
+        .map(|k| base.wrapping_add(k))
+        .find(|&s| w385_control_reaches_engine(s, iters))
+        .unwrap_or(base)
+}
+
 fn w385_phase(
     cfg: W385Cfg,
     conns: &[std::sync::Arc<RmConnection>],
@@ -10092,12 +10148,28 @@ fn concurrent_fuzz(
         "\ninfo  W385 CONTROL        = the SAME verbs at T=1 with NO jitter. ⊘ If this reds, \
          the RUNG is broken, not the system, and everything below is UNINTERPRETABLE"
     );
+    // ⊘⊘ 2026-11-04 (UNTESTED on hardware): a drawn seed can give a control that never
+    // reaches an engine op. `[measured 2026-09-26, traces/v3_gpcmask/…_seed.txt]` seed
+    // 1790429157394970003 drew `alloc=3 free=2 idle=59` and went red identically on bare
+    // metal. An offline replay (traces/flake_concurrent_fuzz_20261104/control_sim.py) puts
+    // this at 0.79 % of seeds. That is a red of the INSTRUMENT about once in 126 runs. ⇒ Keep
+    // the control seeded by `cfg.seed` (still replayable), but step to the first derived seed
+    // whose decision sequence reaches an engine op, and print the choice.
+    let ctl_iters = cfg.iters.clamp(24, 96);
+    let ctl_seed = w385_control_seed(cfg.seed ^ 0x385, ctl_iters);
+    if ctl_seed != cfg.seed ^ 0x385 {
+        println!(
+            "info  W385 control seed  = {ctl_seed:#018x} (stepped from {:#018x}: the first \
+             derived seed whose single-thread sequence reaches an engine op)",
+            cfg.seed ^ 0x385
+        );
+    }
     let ctl_cfg = W385Cfg {
         threads: 1,
-        iters: cfg.iters.clamp(24, 96),
+        iters: ctl_iters,
         clients: 1,
         jitter_us: 0,
-        seed: cfg.seed ^ 0x385,
+        seed: ctl_seed,
         // ⊘ The control is UNPINNED on purpose: its job is to say the VERBS work, and a
         // control that also changed the placement could not do that for either arm.
         pin: W385Pin::Unpinned,
@@ -19358,5 +19430,36 @@ mod mean {
             );
         }
         verdict
+    }
+}
+
+#[cfg(test)]
+mod w385_control_seed_tests {
+    use super::*;
+
+    /// `[measured 2026-09-26]` the drawn seed 1790429157394970003 gave a control census of
+    /// `alloc=3 free=2 idle=59` (no engine op) in the guest and on bare metal.
+    const RED_SEED: u64 = 1_790_429_157_394_970_003;
+
+    #[test]
+    fn the_measured_red_seed_is_recognised_and_stepped_past() {
+        let base = RED_SEED ^ 0x385;
+        assert!(!w385_control_reaches_engine(base, 64));
+        let s = w385_control_seed(base, 64);
+        assert_ne!(s, base);
+        assert!(w385_control_reaches_engine(s, 64));
+    }
+
+    #[test]
+    fn an_engine_positive_seed_is_kept_unchanged() {
+        let base = 0x385_u64 ^ 0x385 ^ 1;
+        if w385_control_reaches_engine(base, 64) {
+            assert_eq!(w385_control_seed(base, 64), base);
+        }
+        // the replay's rate over a fixed seed walk stays near the offline 0.79 %
+        let bad = (0..20_000u64)
+            .filter(|k| !w385_control_reaches_engine(k.wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1, 64))
+            .count();
+        assert!(bad > 40 && bad < 400, "bad={bad}");
     }
 }
