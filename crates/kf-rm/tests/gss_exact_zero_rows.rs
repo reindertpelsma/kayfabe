@@ -22,7 +22,7 @@ const PARAMS_AT: usize = 40;
 
 /// The zero-request rows: the 580 branch's sizes (AD103/GA106 Windows 580.88 captures) and, below them, the 595 branch's
 /// (GA104 Windows 596.51 / GSP 595.76 capture): the same controls, a different `paramsSize` per firmware branch.
-const EXACT: [(u32, usize); 15] = [
+const EXACT: [(u32, usize); 14] = [
     (0x2080_852a, 1784),
     (0x2080_8524, 4),
     (0x2080_a70a, 26),
@@ -37,9 +37,6 @@ const EXACT: [(u32, usize); 15] = [
     (0x2080_852a, 1716),
     (0x2080_a618, 8236),
     (0x2080_a618, 20000),
-    // 2026-11-04: host 595.91.07 accepts a zero 0x2080852c request at exactly 1440 B (AD104, kf-ctl-probe scan), the size the
-    // Windows 580.88 guest sends (AD102 gate ada102a, W343GSSCENSUS); the guest's request bytes are not measured.
-    (0x2080_852c, 1440),
 ];
 
 /// `0x2080853b` at the 595 branch: 14320 B, request word 1 = 1, the rest zero (the 580 capture issued it once at 1832).

@@ -1905,13 +1905,17 @@ impl CommandPolicy for InitTablePolicy {
             );
         }
 
-        // ★ 2026-11-04 (die coverage, Ada): `0x20809064` from the Windows 580.88 guest is refused (no gssreplay row
-        // matches its request, no consttab row for the die). Which request it sends is the open question; print the
-        // first ten request words, bounded to 8 lines a process. Read-only: it changes no reply.
-        if req.cmd == 0x2080_9064 {
-            static SAID: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        // ★ 2026-11-04 (die coverage, Ada): the Windows 580.88 guest's `0x20809064` and `0x2080852c` requests were
+        // refused (no gssreplay row matched them). Diagnostic: print the first ten request words, bounded to 8 lines a
+        // process for each. Read-only: it changes no reply.
+        if req.cmd == 0x2080_9064 || req.cmd == 0x2080_852c {
+            static SAID: [std::sync::atomic::AtomicUsize; 2] = [
+                std::sync::atomic::AtomicUsize::new(0),
+                std::sync::atomic::AtomicUsize::new(0),
+            ];
             let ps = req.params_size as usize;
-            if SAID.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 8
+            let slot = usize::from(req.cmd == 0x2080_852c);
+            if SAID[slot].fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 8
                 && cmd.payload.len() >= req.params_at + ps
             {
                 let words: Vec<String> = cmd.payload[req.params_at..req.params_at + ps.min(40)]

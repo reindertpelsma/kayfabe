@@ -314,16 +314,6 @@ pub const ROWS: &[Row] = &[
         exact: true,
         inputs: &[],
     },
-    // ★ 2026-11-04 (die coverage, Ada, `traces/die_coverage_20261104/ada/README.md`): `0x2080852c`. MEASURED: the Windows
-    // 580.88 guest asks it at 1440 B (AD102 gate run ada102a, `W343GSSCENSUS`), and host 595.91.07 answers a zero request at
-    // exactly that size and no other (AD104, kf-ctl-probe scan, unprivileged). ⚠ The guest's request BYTES are not measured:
-    // that they are all-zero is [I]. If they are not, this exact row never matches and the control is refused as before.
-    Row {
-        cmd: 0x2080_852c,
-        size: 1440,
-        exact: true,
-        inputs: &[],
-    },
     // ★ Lane C 2026-10-14: `0x20808162` (1 byte, request `00`): the GA106 at 580.159.04 answered
     // `01` (`crate::gsslegacy`), the AD104 at 595.91.07 answers `00` [measured, unprivileged,
     // traces/constants_night_20261014/probe_8162_595.txt] — a captured byte served to every die was
