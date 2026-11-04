@@ -1,0 +1,8 @@
+{"event": "KF_LOGGER_ATTACHED", "timestamp": {"seconds": 1793542151}}
+{"timestamp": {"seconds": 1793542153, "microseconds": 780882}, "event": "RTC_CHANGE", "data": {"offset": 0, "qom-path": "/machine/unattached/device[10]/rtc"}}
+{"timestamp": {"seconds": 1793542154, "microseconds": 616075}, "event": "RTC_CHANGE", "data": {"offset": 0, "qom-path": "/machine/unattached/device[10]/rtc"}}
+{"timestamp": {"seconds": 1793542173, "microseconds": 400976}, "event": "NIC_RX_FILTER_CHANGED", "data": {"path": "/machine/peripheral-anon/device[1]/virtio-backend"}}
+{"timestamp": {"seconds": 1793544816, "microseconds": 106085}, "event": "GUEST_PANICKED", "data": {"action": "run", "info": {"arg5": 18446732530241647040, "arg4": 18446732530241649112, "arg3": 18446735310540121130, "arg2": 18446744072635809797, "arg1": 126, "type": "hyper-v"}}}
+{"timestamp": {"seconds": 1793544827, "microseconds": 885497}, "event": "GUEST_CRASHLOADED", "data": {"action": "run"}}
+{"timestamp": {"seconds": 1793544935, "microseconds": 651522}, "event": "POWERDOWN"}
+{"timestamp": {"seconds": 1793544935, "microseconds": 653170}, "event": "SHUTDOWN", "data": {"guest": true, "reason": "guest-shutdown"}}

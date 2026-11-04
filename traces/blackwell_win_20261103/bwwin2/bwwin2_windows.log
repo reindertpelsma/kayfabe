@@ -1,0 +1,129 @@
+WINDOWS_GATE_START tag=bwwin2 rev=54410b7d source=/root/kayfabe 2026-11-03T16:15:59+00:00 idle_s=300 flags=kf3_flags.sample.env guest_driver=580.65.06 arm=B
+WINDOWS_GATE_REQUESTED=1
+GATE_STAGE preflight START 2026-11-03T16:15:59+00:00
+GATE_NOTE host: gpu="NVIDIA GeForce RTX 5070 Ti" driver=595.91.07 cpus=15 ram_gb=23 disk_free_gb=148
+GATE_STAGE preflight EXIT ok 0s
+GATE_STAGE hostref_before START 2026-11-03T16:15:59+00:00
+GATE_HOSTREF before green cup8=PASS xid_count=0 xid_delta=0 gpu="NVIDIA GeForce RTX 5070 Ti, 595.91.07, 16303 MiB, P8"
+GATE_STAGE hostref_before EXIT ok 1s
+GATE_STAGE prereqs START 2026-11-03T16:16:00+00:00
+GATE_STAGE prereqs EXIT ok 0s
+GATE_STAGE kf3_binary START 2026-11-03T16:16:00+00:00
+GATE_NOTE kf3 qemu=/workspace/bench/kf3-bins/54410b7d/qemu-system-x86_64 sha256=fae452ffcaafb0dc rev=54410b7d
+GATE_STAGE kf3_binary EXIT ok 0s
+GATE_STAGE install START 2026-11-03T16:16:00+00:00
+GATE_NOTE Windows already installed on this box (2026-11-03T14:49:45Z repo=6763a35a): install once per lease
+GATE_STAGE install EXIT ok 0s
+GATE_STAGE probes_build START 2026-11-03T16:16:00+00:00
+GATE_NOTE probes built: 3687c76804d7 16210ba935bb db6588dabede 9a2ce6072830 
+GATE_STAGE probes_build EXIT ok 1s
+GATE_STAGE boot1 START 2026-11-03T16:16:01+00:00
+GATE_NOTE ssh up after 10s
+GATE_STAGE boot1 EXIT ok 93s
+GATE_STAGE check_kf3 START 2026-11-03T16:17:34+00:00
+GATE_NOTE check --kf3 (before the driver): 13 PASS lines, WIN_CHECK_DONE fail=0
+GATE_STAGE check_kf3 EXIT ok 23s
+GATE_STAGE nv_install START 2026-11-03T16:17:57+00:00
+  GSP_ON device PCI\VEN_10DE&DEV_2C05&SUBSYS_53101462&REV_A1\3&11583659&0&28 name='Microsoft Basic Display Adapter' status=OK problem=CM_PROB_NONE inf=display.inf driverkey={4d36e968-e325-11ce-bfc1-08002be10318}\0001
+  GSP_ON nvlddmkm.sys signature status=Valid signer='CN=NVIDIA Corporation, OU=1-F, O=NVIDIA Corporation, L=Santa Clara, S=California, C=US'
+  GSP_ON disable: Microsoft PnP Utility
+  GSP_ON disable:
+  GSP_ON disable: Disabling device:          PCI\VEN_10DE&DEV_2C05&SUBSYS_53101462&REV_A1\3&11583659&0&28
+  GSP_ON disable: Device disabled successfully.
+  GSP_ON disable:
+  GSP_ON add-driver: Microsoft PnP Utility
+  GSP_ON add-driver:
+  GSP_ON add-driver: Adding driver package:  nv_dispi.inf
+  GSP_ON add-driver: Driver package added successfully.
+  GSP_ON add-driver: Published Name:         oem7.inf
+  GSP_ON add-driver: Driver package installed on device: PCI\VEN_10DE&DEV_2C05&SUBSYS_53101462&REV_A1\3&11583659&0&28
+  GSP_ON add-driver:
+  GSP_ON add-driver: Total driver packages:  1
+  GSP_ON add-driver: Added driver packages:  1
+  GSP_ON add-driver rc=0
+  GSP_ON after install: inf=oem7.inf driverkey={4d36e968-e325-11ce-bfc1-08002be10318}\0001 version=32.0.15.8088
+  GSP_ON readback HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0001 EnableGpuFirmware=1
+  GSP_ON readback HKLM:\SYSTEM\CurrentControlSet\Services\nvlddmkm EnableGpuFirmware=1
+GATE_STAGE nv_install EXIT ok 266s
+GATE_STAGE desktop_prep START 2026-11-03T16:22:23+00:00
+  DESKTOP_PREP AutoAdminLogon=1 want=1 OK
+  DESKTOP_PREP DefaultUserName=kf want=kf OK
+  DESKTOP_PREP DefaultDomainName=. want=. OK
+  DESKTOP_PREP DefaultPassword_matches=True want=True OK
+  DESKTOP_PREP AutoLogonCount_absent=True want=True OK
+  DESKTOP_PREP DevicePasswordLessBuildVersion=0 want=0 OK
+  DESKTOP_PREP OverlayTestMode=5 want=5 OK
+  DESKTOP_PREP_DONE fail=0
+  [2026-11-03T16:22:35Z] DESKTOP_PREP_OK user=kf (autologon and OverlayTestMode apply at the next boot of this disk)
+GATE_STAGE desktop_prep EXIT ok 12s
+GATE_STAGE reboot START 2026-11-03T16:22:35+00:00
+GATE_NOTE second QEMU started after 15s
+GATE_NOTE ssh up after 10s
+GATE_STAGE reboot EXIT ok 148s
+GATE_STAGE desktop START 2026-11-03T16:25:03+00:00
+  GATE_BOOT utc=2026-11-03T16:23:02Z os='Microsoft Windows 11 Enterprise LTSC Evaluation' build=26100
+  GATE_DESKTOP user='KFWIN\kf' dwm=1 explorer=1
+  GATE_SESSIONS USERNAME SESSIONNAME ID STATE IDLE TIME LOGON TIME kf console 1 Active none 11/3/2026 4:24 PM
+  GATE_DISPLAY name='NVIDIA GeForce RTX 5070 Ti' driver=32.0.15.8088 code=22 status=Error pnp=Error
+  GATE_STATE_DONE mode=desktop
+GATE_STAGE desktop EXIT ok 34s
+GATE_STAGE enable START 2026-11-03T16:25:37+00:00
+GATE_NOTE device enabled once at 2026-11-03T16:25:46Z (guest clock)
+  GATE_DISPLAY name='NVIDIA GeForce RTX 5070 Ti' driver=32.0.15.8088 code=0 status=OK pnp=OK
+GATE_STAGE enable EXIT ok 58s
+GATE_STAGE smi_probes START 2026-11-03T16:26:35+00:00
+GATE_NOTE guest nvidia-smi: GPU 0: NVIDIA GeForce RTX 5070 Ti (UUID: GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0016)
+GATE_PROBE_RESULT cup8 GATE_PROBE exe=cup8.exe arg= rc=0 secs=2 timeout=0
+GATE_PROBE_RESULT d3d11 GATE_PROBE exe=kf_dxprobe.exe arg=d3d11 rc=0 secs=1 timeout=0
+GATE_PROBE_RESULT cup3 GATE_PROBE exe=cup3.exe arg= rc=0 secs=1 timeout=0
+GATE_PROBE_RESULT d3d12 GATE_PROBE exe=kf_dxprobe.exe arg=d3d12 rc=0 secs=3 timeout=0
+GATE_STAGE smi_probes EXIT ok 53s
+GATE_STAGE idle START 2026-11-03T16:27:28+00:00
+GATE_NOTE idle window observed 300s of 300s
+GATE_STAGE idle EXIT ok 316s
+GATE_STAGE post_idle START 2026-11-03T16:32:44+00:00
+GATE_PROBE_RESULT cup8 GATE_PROBE exe=cup8.exe arg= rc=0 secs=1 timeout=0
+GATE_PROBE_RESULT d3d11 GATE_PROBE exe=kf_dxprobe.exe arg=d3d11 rc=0 secs=1 timeout=0
+GATE_PROBE_RESULT cup3 GATE_PROBE exe=cup3.exe arg= rc=0 secs=1 timeout=0
+GATE_PROBE_RESULT d3d12 GATE_PROBE exe=kf_dxprobe.exe arg=d3d12 rc=0 secs=3 timeout=0
+  GATE_TDR since=2026-11-03T16:25:46Z display4101=0 nvlddmkm153=0 kernelpower41=0 eventlog6008=0 bugcheck1001=0 livekernelevent_other=0 livekernelevent193=3 strict=0 total=0
+  GATE_LIVEDUMP 2026-11-03T16:26:25Z WATCHDOG-20261103-1625.dmp bytes=1375784960
+  GATE_WER_REPORT dir=Kernel_193_3cc5f9c3b85bbdad8dfb1fe4f45f74c6f8d2207f_00000000_448c2c16-6218-484e-93a5-45f7753deb62 where=ReportQueue mtime=2026-11-03T16:26:57Z event_time=2026-11-03T16:26:41Z
+  GATE_WER_PARAM Kernel_193_3cc5f9c3b85bbdad8dfb1fe4f45f74c6f8d2207f_00000000_448c2c16-6218-484e-93a5-45f7753deb62 EventType=LiveKernelEvent
+  GATE_WER_PARAM Kernel_193_3cc5f9c3b85bbdad8dfb1fe4f45f74c6f8d2207f_00000000_448c2c16-6218-484e-93a5-45f7753deb62 ReportType=4
+  GATE_WER_PARAM Kernel_193_3cc5f9c3b85bbdad8dfb1fe4f45f74c6f8d2207f_00000000_448c2c16-6218-484e-93a5-45f7753deb62 ReportStatus=2049
+  GATE_WER_PARAM Kernel_193_3cc5f9c3b85bbdad8dfb1fe4f45f74c6f8d2207f_00000000_448c2c16-6218-484e-93a5-45f7753deb62 Sig[0].Name=Code
+  GATE_WER_PARAM Kernel_193_3cc5f9c3b85bbdad8dfb1fe4f45f74c6f8d2207f_00000000_448c2c16-6218-484e-93a5-45f7753deb62 Sig[0].Value=193
+  GATE_WER_PARAM Kernel_193_3cc5f9c3b85bbdad8dfb1fe4f45f74c6f8d2207f_00000000_448c2c16-6218-484e-93a5-45f7753deb62 Sig[1].Name=Parameter 1
+  GATE_WER_PARAM Kernel_193_3cc5f9c3b85bbdad8dfb1fe4f45f74c6f8d2207f_00000000_448c2c16-6218-484e-93a5-45f7753deb62 Sig[1].Value=815
+  GATE_WER_PARAM Kernel_193_3cc5f9c3b85bbdad8dfb1fe4f45f74c6f8d2207f_00000000_448c2c16-6218-484e-93a5-45f7753deb62 Sig[2].Name=Parameter 2
+  GATE_WER_PARAM Kernel_193_3cc5f9c3b85bbdad8dfb1fe4f45f74c6f8d2207f_00000000_448c2c16-6218-484e-93a5-45f7753deb62 Sig[2].Value=2
+  GATE_WER_PARAM Kernel_193_3cc5f9c3b85bbdad8dfb1fe4f45f74c6f8d2207f_00000000_448c2c16-6218-484e-93a5-45f7753deb62 Sig[3].Name=Parameter 3
+  GATE_WER_PARAM Kernel_193_3cc5f9c3b85bbdad8dfb1fe4f45f74c6f8d2207f_00000000_448c2c16-6218-484e-93a5-45f7753deb62 Sig[3].Value=ffff8b0919c7d080
+  GATE_WER_PARAM Kernel_193_3cc5f9c3b85bbdad8dfb1fe4f45f74c6f8d2207f_00000000_448c2c16-6218-484e-93a5-45f7753deb62 Sig[4].Name=Parameter 4
+  GATE_WER_PARAM Kernel_193_3cc5f9c3b85bbdad8dfb1fe4f45f74c6f8d2207f_00000000_448c2c16-6218-484e-93a5-45f7753deb62 Sig[4].Value=0
+  GATE_WER_PARAM Kernel_193_3cc5f9c3b85bbdad8dfb1fe4f45f74c6f8d2207f_00000000_448c2c16-6218-484e-93a5-45f7753deb62 Sig[5].Name=OS version
+  GATE_WER_PARAM Kernel_193_3cc5f9c3b85bbdad8dfb1fe4f45f74c6f8d2207f_00000000_448c2c16-6218-484e-93a5-45f7753deb62 Sig[5].Value=10_0_26100
+  GATE_WER_PARAM Kernel_193_3cc5f9c3b85bbdad8dfb1fe4f45f74c6f8d2207f_00000000_448c2c16-6218-484e-93a5-45f7753deb62 Sig[6].Name=Service Pack
+  GATE_WER_PARAM Kernel_193_3cc5f9c3b85bbdad8dfb1fe4f45f74c6f8d2207f_00000000_448c2c16-6218-484e-93a5-45f7753deb62 Sig[6].Value=0_0
+  GATE_WER_PARAM Kernel_193_3cc5f9c3b85bbdad8dfb1fe4f45f74c6f8d2207f_00000000_448c2c16-6218-484e-93a5-45f7753deb62 Sig[7].Name=Product
+  GATE_WER_PARAM Kernel_193_3cc5f9c3b85bbdad8dfb1fe4f45f74c6f8d2207f_00000000_448c2c16-6218-484e-93a5-45f7753deb62 Sig[7].Value=256_1
+  GATE_WER_PARAM Kernel_193_3cc5f9c3b85bbdad8dfb1fe4f45f74c6f8d2207f_00000000_448c2c16-6218-484e-93a5-45f7753deb62 DynamicSig[1].Name=OS Version
+  GATE_WER_PARAM Kernel_193_3cc5f9c3b85bbdad8dfb1fe4f45f74c6f8d2207f_00000000_448c2c16-6218-484e-93a5-45f7753deb62 DynamicSig[1].Value=10.0.26100.2.0.0.256.129
+  GATE_WER_PARAM Kernel_193_3cc5f9c3b85bbdad8dfb1fe4f45f74c6f8d2207f_00000000_448c2c16-6218-484e-93a5-45f7753deb62 DynamicSig[2].Name=Locale ID
+  GATE_WER_PARAM Kernel_193_3cc5f9c3b85bbdad8dfb1fe4f45f74c6f8d2207f_00000000_448c2c16-6218-484e-93a5-45f7753deb62 DynamicSig[2].Value=1033
+  GATE_WER_PARAM Kernel_193_3cc5f9c3b85bbdad8dfb1fe4f45f74c6f8d2207f_00000000_448c2c16-6218-484e-93a5-45f7753deb62 FriendlyEventName=Hardware error
+  GATE_WER_DUMP 2026-11-03T16:26:25Z WATCHDOG-20261103-1625.dmp bytes=1375784960
+GATE_TIMELINE enable=2026-11-03T16:25:46Z first_probe=2026-11-03T16:27:02Z first_dump=2026-11-03T16:26:25Z dump_minus_enable=39s dump_minus_first_probe=-37s
+  GATE_WER_NEAR report=Kernel_193_3cc5f9c3b85bbdad8dfb1fe4f45f74c6f8d2207f_00000000_448c2c16-6218-484e-93a5-45f7753deb62 none within +-120s
+  GATE_WER_NEAR report=WATCHDOG-20261103-1625.dmp none within +-120s
+GATE_NOTE check --kf3 (after the driver): 0 FAIL line(s),   WIN_CHECK_DONE fail=0
+GATE_STAGE post_idle EXIT ok 73s
+GATE_STAGE collect_stop START 2026-11-03T16:33:57+00:00
+GATE_STAGE collect_stop EXIT ok 170s
+GATE_NOTE graceful stop of the guest
+GATE_HOSTREF after green cup8=PASS xid_count=0 xid_delta=0 gpu="NVIDIA GeForce RTX 5070 Ti, 595.91.07, 16303 MiB, P1"
+WINDOWS_GATE_PASS rev=54410b7d gpu="NVIDIA GeForce RTX 5070 Ti" idle_s=300 hostref=green/green secs=1271 install=once driver=580.88 gsp=forced code=0 probes=cup8,d3d11,x2 resets=0 known_live_dumps_193=3 strict=0 enable_utc=2026-11-03T16:25:46Z
+GATE_NOTE evidence: /root/prov/bwwin2_windows (88 files), /root/prov/bwwin2_windows.tgz sha256=28fa21cad33a6df9
+WINDOWS_GATE_TIMING total=1271s preflight=0s hostref_before=1s prereqs=0s kf3_binary=0s install=0s probes_build=1s boot1=93s check_kf3=23s nv_install=266s desktop_prep=12s reboot=148s desktop=34s enable=58s smi_probes=53s idle=316s post_idle=73s collect_stop=170s
+WINDOWS_GATE_EXIT rc=0 2026-11-03T16:37:10+00:00

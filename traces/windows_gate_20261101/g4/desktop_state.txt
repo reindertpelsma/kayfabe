@@ -1,0 +1,5 @@
+GATE_BOOT utc=2026-11-01T01:53:56Z os='Microsoft Windows 11 Enterprise LTSC Evaluation' build=26100
+GATE_DESKTOP user='KFWIN\kf' dwm=1 explorer=1
+GATE_SESSIONS USERNAME SESSIONNAME ID STATE IDLE TIME LOGON TIME kf console 1 Active none 11/1/2026 1:55 AM
+GATE_DISPLAY name='NVIDIA GeForce RTX 4090' driver=32.0.15.8088 code=22 status=Error pnp=Error
+GATE_STATE_DONE mode=desktop

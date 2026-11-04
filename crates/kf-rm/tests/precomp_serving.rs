@@ -114,17 +114,19 @@ fn provenance(name: &str) {
         .collect();
     assert_eq!(measured.len(), 48);
     assert!(measured.iter().all(|p| {
-        p.why
-            .contains(&format!("measured:{name},595.91.07,2026-10-23"))
+        p.why.contains(&format!("measured:{name},595.91.07,"))
             && p.why.contains("evidence=traces/")
             && !p.why.contains("inherited-with-reason")
     }));
 }
 
 fn inherited(name: &str) {
-    let all = rows();
-    let own = run(name, &all).unwrap();
-    let donor = run("GB202", &all).unwrap();
+    inherited_in(name, &rows());
+}
+
+fn inherited_in(name: &str, all: &[Row]) {
+    let own = run(name, all).unwrap();
+    let donor = run("GB202", all).unwrap();
     let table = kf_disp::class::for_version("580.65.06").unwrap();
     let row = &kf_chip::display::BLACKWELL_GB20X;
     for window in 0..row.windows {
@@ -239,14 +241,62 @@ macro_rules! cases {
         $(#[test] fn $test() { $helper($name); })+
     };
 }
-cases!(measured_words; gb202_real_display_page => "GB202", gb206_real_display_page => "GB206");
-cases!(provenance; gb202_provenance => "GB202", gb206_provenance => "GB206");
-cases!(inherited; gb203_explicit_inheritance => "GB203", gb205_explicit_inheritance => "GB205",
-    gb207_explicit_inheritance => "GB207");
-cases!(exact_wins; gb203_exact_precedes_inherited => "GB203", gb205_exact_precedes_inherited => "GB205");
-cases!(partial_own_never_borrows; gb203_partial_is_not_patched => "GB203",
-    gb205_partial_is_not_patched => "GB205");
-cases!(zero_stays_explicit; gb202_zero_is_complete => "GB202", gb206_zero_is_complete => "GB206");
+cases!(measured_words; gb202_real_display_page => "GB202", gb203_real_display_page => "GB203",
+    gb206_real_display_page => "GB206");
+cases!(provenance; gb202_provenance => "GB202", gb203_provenance => "GB203", gb206_provenance => "GB206");
+cases!(inherited; gb205_explicit_inheritance => "GB205", gb207_explicit_inheritance => "GB207");
+cases!(exact_wins; gb205_exact_precedes_inherited => "GB205", gb207_exact_precedes_inherited => "GB207");
+cases!(partial_own_never_borrows; gb205_partial_is_not_patched => "GB205",
+    gb207_partial_is_not_patched => "GB207");
+cases!(zero_stays_explicit; gb202_zero_is_complete => "GB202", gb203_zero_is_complete => "GB203",
+    gb206_zero_is_complete => "GB206");
+
+/// 2026-11-03, lease 58957600: GB203 was measured on its own die and its exact rows serve it. The
+/// owner's falsifier for the inheritance ("it holds iff every decoded field equals GB202's") did not
+/// fire: all 48 words are GB202's. Should a later GB203 row differ, this test names the word.
+#[test]
+fn gb203_measurement_equals_its_former_donor() {
+    let all = rows();
+    let own: Vec<_> = all
+        .iter()
+        .filter(|r| r.key.starts_with("display.precomp.") && r.die == DieScope::Die(die("GB203")))
+        .collect();
+    assert_eq!(own.len(), 48);
+    for row in own {
+        let donor = all
+            .iter()
+            .find(|r| r.key == row.key && r.die == DieScope::Die(die("GB202")))
+            .unwrap();
+        assert_eq!(
+            row.words, donor.words,
+            "GB203 {} differs from GB202",
+            row.key
+        );
+        assert!(matches!(&row.source, SourceTag::Measured { die, date, .. }
+            if die == "GB203" && date == "2026-11-03"));
+    }
+}
+
+/// The exact GB203 rows take precedence: nothing on the GB203 page is labelled inherited.
+#[test]
+fn gb203_exact_rows_precede_inheritance() {
+    let d = run("GB203", &rows()).unwrap();
+    assert!(
+        !d.provenance
+            .iter()
+            .any(|p| p.why.contains("inherited-with-reason"))
+    );
+}
+
+/// Without its rows GB203 still falls back to the approved GB202 inheritance, labelled as such.
+#[test]
+fn gb203_without_rows_falls_back_to_labelled_inheritance() {
+    let mut all = rows();
+    all.retain(|r| {
+        !(r.key.starts_with("display.precomp.") && r.die == DieScope::Die(die("GB203")))
+    });
+    inherited_in("GB203", &all);
+}
 
 #[test]
 fn gb202_missing_first_word_refuses() {
@@ -298,14 +348,14 @@ fn ampere_is_unchanged() {
     );
 }
 #[test]
-fn gb203_empty_inheritance_reason_refuses() {
+fn gb207_empty_inheritance_reason_refuses() {
     let rules = [Inheritance {
-        die: "GB203",
+        die: "GB207",
         donor: "GB202",
         branch: 595,
         reason: "",
     }];
-    assert!(run_with(die("GB203"), "595.91.07", &rows(), &rules).is_err());
+    assert!(run_with(die("GB207"), "595.91.07", &rows(), &rules).is_err());
 }
 #[test]
 fn gb205_empty_inheritance_reason_refuses() {
@@ -318,16 +368,16 @@ fn gb205_empty_inheritance_reason_refuses() {
     assert!(run_with(die("GB205"), "595.91.07", &rows(), &rules).is_err());
 }
 #[test]
-fn gb203_ada_donor_refuses_even_with_fabricated_rows() {
+fn gb207_ada_donor_refuses_even_with_fabricated_rows() {
     let mut all = rows();
     all.extend(prospective("AD104"));
     let rules = [Inheritance {
-        die: "GB203",
+        die: "GB207",
         donor: "AD104",
         branch: 595,
         reason: "synthetic",
     }];
-    assert!(run_with(die("GB203"), "595.91.07", &all, &rules).is_err());
+    assert!(run_with(die("GB207"), "595.91.07", &all, &rules).is_err());
 }
 #[test]
 fn gb205_ampere_donor_refuses_even_with_fabricated_rows() {

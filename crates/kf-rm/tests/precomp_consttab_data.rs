@@ -7,6 +7,11 @@ const GB202: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../traces/blackwell_windows_resume_20261023/lease_metadata/precomp_tier3.txt"
 ));
+// 2026-11-03: GB203 measured on its own die, own Vast lease 58957600 (equal to GB202 on every word).
+const GB203: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../traces/blackwell_hw_20261103/gb203_tier3/precomp_tier3.txt"
+));
 const GB206: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../traces/blackwell_provider_validation_20261023/lease_metadata/precomp_tier3.txt"
@@ -58,6 +63,10 @@ fn values(name: &str, evidence: &str) {
 }
 
 fn provenance(name: &str, evidence: &str, path: &str) {
+    provenance_dated(name, evidence, path, "2026-10-23");
+}
+
+fn provenance_dated(name: &str, evidence: &str, path: &str, date: &str) {
     for (offset, _) in samples(evidence) {
         let row = consttab::lookup(&key(offset), DieId::from_name(name).unwrap(), 595).unwrap();
         assert_eq!(row.die, DieScope::Die(DieId::from_name(name).unwrap()));
@@ -67,7 +76,7 @@ fn provenance(name: &str, evidence: &str, path: &str) {
             SourceTag::Measured {
                 die: name.into(),
                 driver: "595.91.07".into(),
-                date: "2026-10-23".into(),
+                date: date.into(),
             }
         );
         assert_eq!(row.evidence, path);
@@ -77,6 +86,26 @@ fn provenance(name: &str, evidence: &str, path: &str) {
 #[test]
 fn gb202_every_word_matches_its_measurement() {
     values("GB202", GB202);
+}
+
+#[test]
+fn gb203_every_word_matches_its_measurement() {
+    values("GB203", GB203);
+}
+
+#[test]
+fn gb203_every_word_retains_its_measured_source_and_evidence() {
+    provenance_dated(
+        "GB203",
+        GB203,
+        "traces/blackwell_hw_20261103/gb203_tier3/precomp_tier3.txt",
+        "2026-11-03",
+    );
+}
+
+#[test]
+fn gb203_independent_public_field_decode_matches_all_measurements() {
+    decoded_fields("GB203", GB203);
 }
 
 #[test]
@@ -144,7 +173,7 @@ fn gb206_independent_public_field_decode_matches_all_measurements() {
 #[test]
 fn every_measured_die_has_exactly_48_published_rows_and_the_measured_zero_count() {
     let rows = consttab::table().unwrap();
-    for (name, evidence) in [("GB202", GB202), ("GB206", GB206)] {
+    for (name, evidence) in [("GB202", GB202), ("GB203", GB203), ("GB206", GB206)] {
         let die = DieScope::Die(DieId::from_name(name).unwrap());
         let own: Vec<_> = rows
             .iter()
@@ -164,7 +193,7 @@ fn every_measured_die_has_exactly_48_published_rows_and_the_measured_zero_count(
 
 #[test]
 fn physical_rows_are_scoped_to_the_measured_host_branch() {
-    for name in ["GB202", "GB206"] {
+    for name in ["GB202", "GB203", "GB206"] {
         for branch in [0, 580, 590, 596] {
             assert!(
                 consttab::lookup(&key(0x780), DieId::from_name(name).unwrap(), branch).is_err()
@@ -175,7 +204,7 @@ fn physical_rows_are_scoped_to_the_measured_host_branch() {
 
 #[test]
 fn the_generic_table_never_silently_borrows_a_measured_die() {
-    for implementation in [3, 5, 7, 8] {
+    for implementation in [5, 7, 8] {
         assert!(consttab::lookup(&key(0x780), DieId::new(0x1b0, implementation), 595).is_err());
     }
 }

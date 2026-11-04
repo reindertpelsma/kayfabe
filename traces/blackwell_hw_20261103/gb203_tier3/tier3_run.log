@@ -1,0 +1,11 @@
+TIER3_START 2026-11-03T11:49:24+00:00
+NVIDIA GeForce RTX 5070 Ti, 595.91.07, 0x2C0510DE
+Preparing worktree (detached HEAD a6456796e)
+Updating files:  91% (19837/21690)Updating files:  92% (19955/21690)Updating files:  93% (20172/21690)Updating files:  94% (20389/21690)Updating files:  95% (20606/21690)Updating files:  96% (20823/21690)Updating files:  97% (21040/21690)Updating files:  98% (21257/21690)Updating files:  99% (21474/21690)Updating files: 100% (21690/21690)Updating files: 100% (21690/21690), done.
+HEAD is now at a6456796e chore(bench): use repository license for PRECOMP sweep tool
+BUILD_RC=0
+PRECOMP_TIER3_BEGIN 2026-11-03T11:49:31+00:00
+PRECOMP_TIER3_EXIT rc=0 2026-11-03T11:49:31+00:00
+XID before=0 after=0
+WORDS=48 FIELDS=328
+TIER3_EXIT rc=0 2026-11-03T11:49:31+00:00

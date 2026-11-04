@@ -1,0 +1,10 @@
+date 2026-11-03T16:27:27Z
+kernel 6.8.0-136-generic
+NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  595.71.05  Release Build  (dvs-builder@U22-I3-G08-03-1)  Fri Apr 24 06:42:30 UTC 2026
+smi NVIDIA GeForce RTX 4060, 595.71.05, 00000000:84:00.0
+xid_before 0
+== bdf 0000:84:00.0 (the container's own GPU)
+BOOT_0 0x197000a1 BOOT_42 0x197a1000
+CHIPSET 0x197 ARCH 0x190 IMPL 0x7
+tool_rc=0
+xid_after 0

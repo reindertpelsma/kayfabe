@@ -250,20 +250,34 @@ fn every_word_names_its_tier() {
 #[test]
 fn an_unmeasured_die_gets_the_clean_page_and_the_notice_never_a_neighbours_row() {
     for (row, die) in [
-        (&ADA, AD106),
-        (&ADA, AD103),
-        (&AMPERE, GA104),
+        // the 2026-11-03 caps sweep measured GA104/GA106, TU102/TU104/TU116 and AD103/AD106 (and AD107 on a 595 host
+        // only): what is left unmeasured on branch 580 is AD107, GA107 and TU117
+        (
+            &ADA,
+            Die {
+                implementation: 7,
+                ..AD104
+            },
+        ),
+        (
+            &AMPERE,
+            Die {
+                implementation: 7,
+                ..GA104
+            },
+        ),
         (
             &TURING,
             Die {
                 architecture: 0x160,
-                implementation: 4,
+                implementation: 7,
             },
         ),
         (
             &BLACKWELL_GB20X,
             Die {
-                implementation: 3,
+                // GB207: still unmeasured (GB203, impl 3, has its own row since 2026-11-03)
+                implementation: 7,
                 ..GB206
             },
         ),
@@ -554,7 +568,7 @@ fn the_gb206_580_caps_word_requires_its_own_native_measurement() {
         assert_eq!(d.page.word(0x00c), 0);
         assert_eq!(d.unmeasured.len(), 1);
     }
-    // GB205 now has its own independently measured580 row; GB203 remains unmeasured.
+    // GB205 now has its own independently measured580 row.
     // ★ 2026-10-20 (bw-resume): GB202 (impl 2) has its OWN measured 580 row now; it is served
     // from that row, never from GB205/GB206.
     {
@@ -568,8 +582,21 @@ fn the_gb206_580_caps_word_requires_its_own_native_measurement() {
         let p = d.provenance.iter().find(|p| p.offset == 0x00c).unwrap();
         assert!(p.why.contains("GB202"), "{}", p.why);
     }
+    // ★ 2026-11-03 (lease 58957600): GB203 (impl 3) has its OWN measured 580 row now, served from
+    // that row; GB207 (impl 7) stays unmeasured and cannot borrow a neighbour's.
     {
-        let implementation = 0x3;
+        let die = Die {
+            implementation: 0x3,
+            ..GB206
+        };
+        let d = go(&BLACKWELL_GB20X, die, true, true, "580");
+        assert_eq!(d.page.word(0x00c), 0x102);
+        assert!(d.unmeasured.is_empty());
+        let p = d.provenance.iter().find(|p| p.offset == 0x00c).unwrap();
+        assert!(p.why.contains("GB203"), "{}", p.why);
+    }
+    {
+        let implementation = 0x7;
         let die = Die {
             implementation,
             ..GB206

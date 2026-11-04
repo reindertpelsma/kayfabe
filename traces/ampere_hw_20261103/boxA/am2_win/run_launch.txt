@@ -1,0 +1,1 @@
+[2026-11-03T15:44:30Z] detached: tag=gate_am2, log logs/gate_am2_run.log (stdout logs/gate_am2_run.out)

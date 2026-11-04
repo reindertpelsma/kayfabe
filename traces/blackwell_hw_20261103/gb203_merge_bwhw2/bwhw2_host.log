@@ -1,0 +1,66 @@
+BARE_SUITE_STARTED=2026-11-03T13:01:54+00:00 arms=30 budget=180s
+bin=/workspace/bench/kf-verify-target/release/kayfabe-rm-ladder  rev=a042c8633
+gpu=NVIDIA GeForce RTX 5070 Ti  driver=595.91.07(open)  pci_dev=0x2C0510DE  cc=12.0
+ARM                          VERDICT    secs  why
+--timer                      PASS         0s  0s
+BARE_CELL_ARM arm=timer verdict=PASS secs=0 ms=48 rc=0 pci_dev=0x2C0510DE drv=595.91.07 kmod=open cc=12.0 rev=a042c8633
+--engines                    PASS         1s  1s
+BARE_CELL_ARM arm=engines verdict=PASS secs=1 ms=150 rc=0 pci_dev=0x2C0510DE drv=595.91.07 kmod=open cc=12.0 rev=a042c8633
+--doorbell-census            PASS         0s  0s
+BARE_CELL_ARM arm=doorbell-census verdict=PASS secs=0 ms=156 rc=0 pci_dev=0x2C0510DE drv=595.91.07 kmod=open cc=12.0 rev=a042c8633
+--gpu-info-sweep             PASS         0s  0s
+BARE_CELL_ARM arm=gpu-info-sweep verdict=PASS secs=0 ms=18 rc=0 pci_dev=0x2C0510DE drv=595.91.07 kmod=open cc=12.0 rev=a042c8633
+--bus-info-sweep             PASS         3s  3s
+BARE_CELL_ARM arm=bus-info-sweep verdict=PASS secs=3 ms=3228 rc=0 pci_dev=0x2C0510DE drv=595.91.07 kmod=open cc=12.0 rev=a042c8633
+--concurrency                PASS         5s  5s
+BARE_CELL_ARM arm=concurrency verdict=PASS secs=5 ms=4507 rc=0 pci_dev=0x2C0510DE drv=595.91.07 kmod=open cc=12.0 rev=a042c8633
+--defer-liveness             PASS        12s  12s
+BARE_CELL_ARM arm=defer-liveness verdict=PASS secs=12 ms=12144 rc=0 pci_dev=0x2C0510DE drv=595.91.07 kmod=open cc=12.0 rev=a042c8633
+--blockage-coverage          PASS         0s  0s
+BARE_CELL_ARM arm=blockage-coverage verdict=PASS secs=0 ms=443 rc=0 pci_dev=0x2C0510DE drv=595.91.07 kmod=open cc=12.0 rev=a042c8633
+--alias-two-vas              PASS         0s  0s
+BARE_CELL_ARM arm=alias-two-vas verdict=PASS secs=0 ms=19 rc=0 pci_dev=0x2C0510DE drv=595.91.07 kmod=open cc=12.0 rev=a042c8633
+--alias-unmap-observe        PASS         0s  0s
+BARE_CELL_ARM arm=alias-unmap-observe verdict=PASS secs=0 ms=19 rc=0 pci_dev=0x2C0510DE drv=595.91.07 kmod=open cc=12.0 rev=a042c8633
+--map-propagation            PASS         0s  0s
+BARE_CELL_ARM arm=map-propagation verdict=PASS secs=0 ms=10 rc=0 pci_dev=0x2C0510DE drv=595.91.07 kmod=open cc=12.0 rev=a042c8633
+--late-map-race              PASS         1s  1s
+BARE_CELL_ARM arm=late-map-race verdict=PASS secs=1 ms=434 rc=0 pci_dev=0x2C0510DE drv=595.91.07 kmod=open cc=12.0 rev=a042c8633
+--missing-page-fault         PASS         3s  3s
+BARE_CELL_ARM arm=missing-page-fault verdict=PASS secs=3 ms=3045 rc=0 pci_dev=0x2C0510DE drv=595.91.07 kmod=open cc=12.0 rev=a042c8633
+--uvm-invalidate             PASS         0s  0s
+BARE_CELL_ARM arm=uvm-invalidate verdict=PASS secs=0 ms=135 rc=0 pci_dev=0x2C0510DE drv=595.91.07 kmod=open cc=12.0 rev=a042c8633
+--uvm-mean                   PASS         0s  0s
+BARE_CELL_ARM arm=uvm-mean verdict=PASS secs=0 ms=209 rc=0 pci_dev=0x2C0510DE drv=595.91.07 kmod=open cc=12.0 rev=a042c8633
+--executor-vas               PASS         0s  0s
+BARE_CELL_ARM arm=executor-vas verdict=PASS secs=0 ms=23 rc=0 pci_dev=0x2C0510DE drv=595.91.07 kmod=open cc=12.0 rev=a042c8633
+--guest-ring-channel         PASS         0s  0s
+BARE_CELL_ARM arm=guest-ring-channel verdict=PASS secs=0 ms=22 rc=0 pci_dev=0x2C0510DE drv=595.91.07 kmod=open cc=12.0 rev=a042c8633
+--dictated-ring              PASS         0s  0s
+BARE_CELL_ARM arm=dictated-ring verdict=PASS secs=0 ms=16 rc=0 pci_dev=0x2C0510DE drv=595.91.07 kmod=open cc=12.0 rev=a042c8633
+--dictated-ring-negative     PASS         0s  0s
+BARE_CELL_ARM arm=dictated-ring-negative verdict=PASS secs=0 ms=12 rc=0 pci_dev=0x2C0510DE drv=595.91.07 kmod=open cc=12.0 rev=a042c8633
+--ce-client                  PASS         0s  0s
+BARE_CELL_ARM arm=ce-client verdict=PASS secs=0 ms=22 rc=0 pci_dev=0x2C0510DE drv=595.91.07 kmod=open cc=12.0 rev=a042c8633
+--ce-client-guest-ram        PASS         2s  2s
+BARE_CELL_ARM arm=ce-client-guest-ram verdict=PASS secs=2 ms=1654 rc=0 pci_dev=0x2C0510DE drv=595.91.07 kmod=open cc=12.0 rev=a042c8633
+--guest-ram-pin              PASS         0s  0s
+BARE_CELL_ARM arm=guest-ram-pin verdict=PASS secs=0 ms=12 rc=0 pci_dev=0x2C0510DE drv=595.91.07 kmod=open cc=12.0 rev=a042c8633
+--bar1-crossing              PASS         0s  0s
+BARE_CELL_ARM arm=bar1-crossing verdict=PASS secs=0 ms=22 rc=0 pci_dev=0x2C0510DE drv=595.91.07 kmod=open cc=12.0 rev=a042c8633
+--atomics-probe              PASS         0s  0s
+BARE_CELL_ARM arm=atomics-probe verdict=PASS secs=0 ms=8 rc=0 pci_dev=0x2C0510DE drv=595.91.07 kmod=open cc=12.0 rev=a042c8633
+--pce-mask-probe             PASS         0s  0s
+BARE_CELL_ARM arm=pce-mask-probe verdict=PASS secs=0 ms=6 rc=0 pci_dev=0x2C0510DE drv=595.91.07 kmod=open cc=12.0 rev=a042c8633
+--gpga-reserve-probe         PASS        43s  43s
+BARE_CELL_ARM arm=gpga-reserve-probe verdict=PASS secs=43 ms=43539 rc=0 pci_dev=0x2C0510DE drv=595.91.07 kmod=open cc=12.0 rev=a042c8633
+--map-stress                 PASS         0s  0s
+BARE_CELL_ARM arm=map-stress verdict=PASS secs=0 ms=23 rc=0 pci_dev=0x2C0510DE drv=595.91.07 kmod=open cc=12.0 rev=a042c8633
+--concurrent-fuzz            PASS         1s  1s
+BARE_CELL_ARM arm=concurrent-fuzz verdict=PASS secs=1 ms=216 rc=0 pci_dev=0x2C0510DE drv=595.91.07 kmod=open cc=12.0 rev=a042c8633
+--cross-client-leak          PASS         0s  0s
+BARE_CELL_ARM arm=cross-client-leak verdict=PASS secs=0 ms=22 rc=0 pci_dev=0x2C0510DE drv=595.91.07 kmod=open cc=12.0 rev=a042c8633
+--rpc-mixed-allocs           PASS         0s  0s
+BARE_CELL_ARM arm=rpc-mixed-allocs verdict=PASS secs=0 ms=818 rc=0 pci_dev=0x2C0510DE drv=595.91.07 kmod=open cc=12.0 rev=a042c8633
+BARE_SUITE_PASS=30 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0 ARMS=30
+BARE_CELL pci_dev=0x2C0510DE gpu="NVIDIA GeForce RTX 5070 Ti" drv=595.91.07 kmod=open cc=12.0 rev=a042c8633 pass=30 fail=0 crash=0 arms=30 uuid=GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001

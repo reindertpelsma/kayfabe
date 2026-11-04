@@ -523,6 +523,33 @@ pub fn page(
             set(off, fa("SYS_CAPC_TILE_EXISTS", h)?, 1);
         }
     }
+    // ★ 2026-11-03 (Blackwell Windows display, `traces/blackwell_win_20261103/`): CA73 names two more
+    // existence registers no earlier caps class has, and the page left both 0 (the Ada shape: "no virtual
+    // window, no output link"). They state the virtual engine's own topology, never the die's word:
+    // - `SYS_CAPE.VIRWIN_EXISTS(i)`: one virtual window per presented window. Public NVKMS for GB20X:
+    //   "the number of physical windows is same as the number of windows" (ogkm 595.84 `nvkms-evo4.c`
+    //   EvoGetCapabilitiesCA, `numHwPhywins = numWindows`), so the virtual set is SYS_CAPB's set.
+    // - `LINK_CAP.PHYCTRL_EXISTS(i)`: one output link per presented SOR (connector `i` is TMDS on SOR `i`,
+    //   `model.rs`; a SOR drives one link). [INFERRED] the index pairing: no public source maps a SOR to a
+    //   PHY controller; the GB203's own page has five (`0x1f`) for its four SORs.
+    if t.fa(caps, "SYS_CAPE_VIRWIN_EXISTS", 0).is_some() {
+        let off = v("SYS_CAPE")?;
+        if windows > v("SYS_CAPE_VIRWIN_EXISTS__SIZE_1")? {
+            return Err(m("SYS_CAPE virtual windows outside layout".into()));
+        }
+        for i in 0..windows {
+            set(off, fa("SYS_CAPE_VIRWIN_EXISTS", i)?, 1);
+        }
+    }
+    if t.fa(caps, "LINK_CAP_PHYCTRL_EXISTS", 0).is_some() {
+        let off = v("LINK_CAP")?;
+        if heads > v("LINK_CAP_PHYCTRL_EXISTS__SIZE_1")? {
+            return Err(m("LINK_CAP output links outside layout".into()));
+        }
+        for s in 0..heads {
+            set(off, fa("LINK_CAP_PHYCTRL_EXISTS", s)?, 1);
+        }
+    }
     // Public NVKMS EvoParseCapabilityNotifierC5C6Common asserts UNIT_WIDTH=16
     // for every usable output (ogkm 580.159.04, nvkms-evo3.c:5858-5863).
     // EvoParseCapabilityNotifierCA calls that parser through C6 as well; only
@@ -536,6 +563,15 @@ pub fn page(
     for h in 0..heads {
         set(a(postcomp, h)?, unit_width, 16);
     }
+    // ⊘ CORRECTED 2026-11-03 (Blackwell Windows display, `traces/blackwell_win_20261103/`), above the
+    // text it corrects ("SCLR and VFILTER stay absent", type 1): each virtual tile is TYPE 0 — SCLR_PRESENT
+    // and VFILTER_PRESENT are stated, their limits (CAPD VSCLR_MAX_PIXELS, CAPF VFILTER_MAX_PIXELS) stay
+    // 0, as the main layer's precomp scaler row does (`data/caps_rows.tsv`). [MEASURED GB203, Windows
+    // 580.88, boots diagJ/diagK] with type-1 tiles the driver never routes a head (no
+    // GET_HEAD_ROUTING_MAP, no DFP_ASSIGN_SOR, no core UPDATE; LiveKernelEvent 0x1A8/0x1B8); the two bits
+    // laid over the derived page light head 0, the die's widths without them do not. [INFERRED] the
+    // driver drives a head only from a tile with a post-composition scaler (NVKMS's own name for it:
+    // `NV_EVO_HW_TILE_TYPE_0`, `nvkms-evo4.c` EvoGetHwTileType).
     // ★ 2026-10-20 (bw-resume): the per-TILE post-composition pipe of a class that names it
     // `POSTCOMP_HDR_CAPA(i)` (CA73; Turing..Ada name a per-head `POSTCOMP_HEAD_HDR_*` and are untouched).
     // Public NVKMS reads it for every usable tile and asserts OCSC0/OCSC1/HCLPF/OSCAN/DTH/DSC present
@@ -556,6 +592,8 @@ pub fn page(
                 "POSTCOMP_HDR_CAPA_OSCAN_PRESENT",
                 "POSTCOMP_HDR_CAPA_DTH_PRESENT",
                 "POSTCOMP_HDR_CAPA_DSC_PRESENT",
+                "POSTCOMP_HDR_CAPA_SCLR_PRESENT",
+                "POSTCOMP_HDR_CAPA_VFILTER_PRESENT",
             ] {
                 set(off, f(fld)?, v(&format!("{fld}_TRUE"))?);
             }

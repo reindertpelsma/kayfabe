@@ -1,0 +1,6 @@
+# AUTHORED diagnostic (not a read): POSTCOMP_HDR_CAPA(0..3) = derived 0x007b0200 | SCLR_PRESENT(18) | VFILTER_PRESENT(23)
+# pci 0000:00:07.0 vendor 0x10de device 0x2c05 bar0 0x640000+0x1000 (PROT_READ, 32-bit loads)
+WORD 0x680 0x00ff0200
+WORD 0x6a0 0x00ff0200
+WORD 0x6c0 0x00ff0200
+WORD 0x6e0 0x00ff0200

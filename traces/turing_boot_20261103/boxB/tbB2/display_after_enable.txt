@@ -1,0 +1,2 @@
+GATE_DISPLAY name='NVIDIA GeForce RTX 2060 SUPER' driver=32.0.15.8088 code=0 status=OK pnp=OK
+GATE_STATE_DONE mode=display
