@@ -191,6 +191,5 @@ Total about 2.1 USD (budget 3.5). All four destroyed by id (`vastai destroy inst
 
 Evidence hygiene: GPU UUIDs (host board and the gate's per-VM UUID) are replaced by `fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001`
 at the branch head (`scripts/ci/no_gpu_uuids.py`: new=0); screenshots, dxdiag, setupapi and PnP dumps were not committed.
-⚠ Two intermediate commits of this branch (`AD102 Windows gate PASS ... (run ada102a)` and the next evidence commits up
-to `02baed140`) still carry the AD102 host's board UUID in `win_a/` files; collect by squash (or filter those paths) to
+⚠ The intermediate commits `3579197e0` .. `02baed140` of this branch still carry the AD102 host's board UUID in `win_a/` files; collect by squash (or filter those paths) to
 keep it out of `next`'s history. The same commits (from `40a439a7c`) also carried two desktop screenshots (2.4 MB) and the guest's dxdiag/setupapi/PnP dumps, re-extracted by a late copy after the trim; they are removed at the head.
