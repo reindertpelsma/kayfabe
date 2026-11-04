@@ -129,7 +129,7 @@ bar1_refusal() {
 collect_evidence() {
     local f lastq
     for f in "$VM/logs/${TAG}_run.log" "$VM/logs/install.log" "$VM/logs/nv_install.log" "$VM/logs/desktop_prep.log" "$VM/logs/checks.log" \
-        "$VM"/logs/${TAG}_b*_qmp_events.jsonl "$VM"/logs/${TAG}_b*_cmdline.txt "$VM"/logs/${TAG}_b*_host_dmesg.txt \
+        "$VM"/logs/${TAG}_b*_qmp_events.jsonl "$VM"/logs/${TAG}_b*_qmp_events.err "$VM"/logs/${TAG}_b*_cmdline.txt "$VM"/logs/${TAG}_b*_host_dmesg.txt \
         "$VM"/logs/${TAG}_b*_host_smi_before.txt "$VM"/logs/${TAG}_b*_host_smi_after.txt "$VM"/logs/nv_install_*.txt \
         "$VM"/logs/desktop_prep_*.txt "$VM/logs/stop.log" "$VM/logs/tpm_ek_history.txt"; do
         [ -f "$f" ] && cp "$f" "$EV/" 2> /dev/null
