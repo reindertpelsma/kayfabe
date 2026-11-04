@@ -236,3 +236,30 @@ host 595.91.07.
 - **0x2080852b** stays refused everywhere: the tables give 2836 B up to GSP 580.105.07 and 3324 B from 595.71.01
   (`changed=yes`), which matches what our 595.91.07 host refused. A row asking 2836 B on 580.x hosts only would be the
   next candidate; not proposed (no host measurement).
+
+### Follow-up RESULTS (MEASURED 2026-11-04, revision `54ab38567`, files under `followup_54ab3856/ad102/`)
+
+- **(a) not falsified, on AD102 only** (Vast 59048176, RTX 4090, Mexico, host 595.91.07, `ada102g.log`):
+  `V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS`, `KF3_BUILT .../kf3-bins/54ab3856/`, `BARE_SUITE_PASS=30`,
+  `FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30`, `BIRTH_CENSUS_OK arms=30 suite_births=161
+  gate_births=12`; the same 10 admitted host Xid 31 lines as at `0c515b3b3`; the realize-time GSS lines of a Linux arm
+  are the same set as at `0c515b3b3` (no new refusal; `realize_gss_lines_timer_arm.txt`). Suite client time 101,228 ms
+  (`0c515b3b3` on the other AD102 box: 100,864 ms; different box, not an A/B).
+- **(b) on AD104: NOT RUN.** Three AD104 rentals in the time-box: 59048174 (the Nevada machine of 59031342) refused by
+  `provision_box.sh` twice (`NO USABLE APT MIRROR`, best 128 and 145 kB/s, < 200 kB/s; `box_try1` at 03:06Z and again at
+  03:17Z), destroyed 03:24Z; 59050380 (RTX 4070 Ti, the same public IP) ended `GPU error, unable to start instance`,
+  destroyed 03:42Z. A Windows gate takes about 85 min on the available 16-18-vCPU AD104 offers (run ada104w: 5065 s),
+  so no AD104 run could finish by 04:30Z. **The (b) criteria were read on AD102 instead** (the merge check's Windows
+  stage on the same box): `WINDOWS_GATE_PASS rev=54ab3856 gpu="NVIDIA GeForce RTX 4090" ... hostref=green/green
+  secs=2142 ... resets=0 known_live_dumps_193=3` (`ada102g_windows.log`); in the kf3 log (`win_g/gss_lines.txt`)
+  `0x20809064` 1 call `result=0x0`, `0x2080852c` 6 calls `result=0x0`, both `answered from the host's realize-time
+  reply`, no `host facts: GSS 0x20809064|0x2080852c ... refused`; `0x2080852b` 3 calls still `result=none` (expected,
+  above). Every reset counter 0, `running_to_suspending=1`, `host_xid_in_boots=0`.
+- **(c) not falsified (MEASURED, not inferred):** `54ab38567` carries no diagnostic, and its rows behave as `12063d4f8`'s
+  did in run ada102r (the same served counts for 9064 and 852c). The diagnostic is the separate commit `3c88261e8` on
+  branch `claude/gss-rows-diag-ada-20261104` (= `54ab38567` + `W343GSSREQ`; its `crates/` equals `12063d4f8`), droppable.
+- Not shown: the rows on any die other than AD102, on a 580.x host, or with a 595-branch guest.
+
+Follow-up cost (INFERRED from rates): 59048176 ~0.54 USD (03:02-04:00Z), 59048174 ~0.08 (03:02-03:24Z), 59050380 ~0.05
+(03:24-03:42Z, never started): about 0.67 of 1.3 USD. All three destroyed by id; `vastai show instances-v1 --raw` at
+04:00Z lists none of my seven ids (it lists two ids of other sessions).
