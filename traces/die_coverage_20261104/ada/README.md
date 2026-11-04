@@ -193,3 +193,22 @@ Evidence hygiene: GPU UUIDs (host board and the gate's per-VM UUID) are replaced
 at the branch head (`scripts/ci/no_gpu_uuids.py`: new=0); screenshots, dxdiag, setupapi and PnP dumps were not committed.
 ⚠ The intermediate commits `3579197e0` .. `02baed140` of this branch still carry the AD102 host's board UUID in `win_a/` files; collect by squash (or filter those paths) to
 keep it out of `next`'s history. The same commits (from `40a439a7c`) also carried two desktop screenshots (2.4 MB) and the guest's dxdiag/setupapi/PnP dumps, re-extracted by a late copy after the trim; they are removed at the head.
+
+## Follow-up: validating the GSS rows beyond AD102 (pre-registered 2026-11-04T03:05Z, before any result)
+
+Revision under test: `54ab38567` = `0c515b3b3` + the two `gssreplay` rows and the 852c host-ABI row of `12063d4f8`,
+**without** the `W343GSSREQ` diagnostic (branch `claude/gss-rows-ada-20261104`; `git diff 12063d4f8 54ab38567 -- crates`
+is exactly the diagnostic's 34 lines in `kf-rm/src/inittables.rs`). The diagnostic goes on top as its own droppable commit.
+Boxes: 59048174 (AD104, RTX 4070 SUPER, Nevada, the same machine as 59031342) and 59048176 (AD102, RTX 4090, Mexico), both
+host 595.91.07.
+
+- **(a) no Linux change**: `merge_check.sh claude/gss-rows-ada-20261104` on the AD102 box: `V3_GATES_SUMMARY pass=9
+  fail=0 gate10=PASS`, `FAST_SUITE_PASS=30 ... ARMS=30`, `BIRTH_CENSUS_OK`. FALSIFIER: any line missing or different.
+- **(b) Windows on AD104**: `WINDOWS_GATE_PASS ... resets=0` at `54ab3856`, and in the kf3 log no `result=0x56` for
+  `0x20809064` and no `result=none` for `0x2080852c` (`GSS 0x20809064|0x2080852c answered from the host's realize-time
+  reply` instead), and no `host facts: GSS 0x2080852c|0x20809064 ... refused` at realize. FALSIFIER: any of these absent,
+  or a reset. The same on the AD102 box (its merge check runs the Windows stage) is a second reading.
+- **(c) the diagnostic is droppable**: measured by (b) itself, because `54ab38567` has no diagnostic. FALSIFIER: the rows
+  behave differently without it (a refusal that `12063d4f8` did not have).
+- Time-box: report by 04:30Z. The AD104 Windows lane took 5065 s at the gate on this machine (run ada104w); whatever has
+  not finished at the time-box is reported as not finished, and both boxes are destroyed before the report.
