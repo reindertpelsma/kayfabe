@@ -11,8 +11,8 @@ Labels: MEASURED = a line in a file of this directory, named; INFERRED = reasoni
 | die | SKU (PCI id) | v3 gates | bare / fast suite | census | Windows gate | Vast id | teardown |
 |---|---|---|---|---|---|---|---|
 | GB202 | RTX 5090 (`10de:2b85`) | 9/9 gate10=PASS | 30/30 / 30/30 | OK | **r1 FAIL**, r2 PASS, r3 PASS (same box) | 59031351 | destroyed 01:35:45Z |
-| GB205 | RTX 5070 (`10de:2f04`) | 9/9 gate10=PASS | 30/30 / 30/30 | OK | PASS (r2: see below) | 59031353 | see *Leases* |
-| GB206 | RTX 5060 Ti (`10de:2d04`) | 9/9 gate10=PASS | 30/30 / 30/30 | OK | PASS (r2: see below) | 59031356 | see *Leases* |
+| GB205 | RTX 5070 (`10de:2f04`) | 9/9 gate10=PASS | 30/30 / 30/30 | OK | PASS, r2 PASS (same box) | 59031353 | destroyed 02:20:10Z |
+| GB206 | RTX 5060 Ti (`10de:2d04`) | 9/9 gate10=PASS | 30/30 / 30/30 | OK | PASS, r2 PASS (same box) | 59031356 | destroyed 02:04:12Z |
 | GB207 | RTX 5050 | not run | not run | - | not run | - | no offer (00:07Z and 01:52Z: zero RTX 5050 offers, with or without `vms_enabled`) |
 | GB203 | RTX 5070 Ti | not repeated (passed on the earlier tree, `traces/blackwell_win_20261103/`) | | | | | |
 
@@ -31,7 +31,9 @@ are scrubbed.
 - GB202 r2 (`gb202/windows_dcgb202r2/`): `WINDOWS_GATE_PASS rev=0c515b3b ... resets=0 known_live_dumps_193=0`
 - GB202 r3 (`gb202/windows_dcgb202r3/`): `WINDOWS_GATE_PASS rev=0c515b3b ... resets=0 known_live_dumps_193=0`
 - GB205 r1 (`gb205/windows_dcgb205/`): `WINDOWS_GATE_PASS rev=0c515b3b gpu="NVIDIA GeForce RTX 5070" ... resets=0 known_live_dumps_193=3`
+- GB205 r2 (`gb205/windows_dcgb205r2/`): `WINDOWS_GATE_PASS rev=0c515b3b gpu="NVIDIA GeForce RTX 5070" ... resets=0 known_live_dumps_193=3`
 - GB206 r1 (`gb206/windows_dcgb206/`): `WINDOWS_GATE_PASS rev=0c515b3b gpu="NVIDIA GeForce RTX 5060 Ti" ... resets=0 known_live_dumps_193=3`
+- GB206 r2 (`gb206/windows_dcgb206r2/`): `WINDOWS_GATE_PASS rev=0c515b3b gpu="NVIDIA GeForce RTX 5060 Ti" ... resets=0 known_live_dumps_193=3`
 
 r2/r3 are `windows_gate.sh` re-runs by hand on the same box, from the same verify worktree (`0c515b3b`), each on a
 fresh overlay of the same installed base image. They measure how often the failure recurs. They do not replace r1:
@@ -46,7 +48,9 @@ MEASURED, run r1, `gb202/windows_dcgb202/`:
 - `dcgb202_windows.log`: the device was enabled at 01:03:18Z (guest clock), a 1.59 GB `WATCHDOG-20261104-0103.dmp`
   was written at 01:03:33Z (`dump_minus_enable=15s`), then Kernel-Power 41, EventLog 6008 and BugCheck 1001 (one each);
   `livekernelevent_other=0 livekernelevent193=0`, `display4101=0`, `nvlddmkm153=0`. The guest rebooted on a fresh
-  QEMU (boot 3), and the probes then passed (`cup8`, `d3d11`, `cup3`, `d3d12` rc=0). The gate fails it at its idle check.
+  QEMU (boot 3), and the probes then passed (`cup8`, `d3d11`, `cup3`, `d3d12` rc=0). The gate fails it at its idle check;
+  its label `stage=idle` names where the panic was detected, not where it happened (during `enable`, boot 2): a small
+  harness wording point, the verdict itself is right.
 - `gate_dcgb202_b2_qemu.log.gz` (kf3, boot 2): the driver came up and armed head 0 (`the guest armed its first head at
   +46032 ms`, `head 0 ACTIVE`, 7 display updates completed), then at +57197 ms `the guest's display life ENDED (its RM
   unloaded)`, the guest freed its channels, re-initialised and armed the head again at +60600 ms (12 updates), and the
@@ -60,8 +64,8 @@ MEASURED, run r1, `gb202/windows_dcgb202/`:
 - INFERRED (not measured): the order dump -> RM unload -> RM re-init -> 0x113 reads as a dxgkrnl timeout detection and
   recovery whose recovery path ended in the bugcheck; what the watchdog fired on is not in any host-side log (the dump
   stays in the guest image).
-- Not shown: whether this is GB202-specific. GB205 and GB206 passed their runs (see table), and GB203 passed on
-  2026-11-03, but one failure in three is too rare for n=1 or n=2 per die to exclude it elsewhere.
+- Not shown: whether this is GB202-specific. GB205 and GB206 passed 2 of 2 runs each, and GB203 passed on
+  2026-11-03, but one failure in three is too rare for n=2 per die to exclude it elsewhere.
 - Next decisive experiment (not run: lane time box): repeat the GB202 gate n>=5 on a fresh box. Falsifier of
   "GB202-specific": a 0x113 on another die in an equal number of runs.
 
@@ -114,5 +118,10 @@ these dies.
 | id | die | offer | rate (all-in, from `vastai show instances-v1`) | created -> destroyed (UTC) |
 |---|---|---|---|---|
 | 59031351 | GB202 | 53366467 (Brazil) | 0.711 USD/h | 00:08:44 -> 01:35:45 |
-| 59031353 | GB205 | 58781487 (Quebec) | 0.217 USD/h | 00:08:47 -> see report |
-| 59031356 | GB206 | 49733338 (UK) | 0.216 USD/h | 00:08:49 -> see report |
+| 59031353 | GB205 | 58781487 (Quebec) | 0.217 USD/h | 00:08:47 -> 02:20:10 |
+| 59031356 | GB206 | 49733338 (UK) | 0.216 USD/h | 00:08:49 -> 02:04:12 |
+
+About 1.92 USD in all (GB202 87 min = 1.03, GB205 131 min = 0.48, GB206 115 min = 0.42; INFERRED from the
+listed rates and the times above; the account credit is shared with other lanes, so it cannot attribute the spend). Each
+id was destroyed by id; `vastai show instances-v1 --raw` at 02:20Z lists none of the three (it lists other sessions'
+instances, which were left alone). Safety destroy timers (10500 s) were armed at creation and cancelled after teardown.
