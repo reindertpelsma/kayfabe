@@ -44,10 +44,11 @@ from the PR**, so a PR cannot shrink what it is tested against.
 | middle (master PR) | the `next` -> master batch PR | 1 box, about 70 apps in about 10 minutes, no SPECviewperf, Windows required |
 | small | driver patches, host/guest driver mismatch matrix | about 1 minute per run |
 
-The tier is a column on every run row (`tier`). **Inferred, not measured:** the "about 70 apps in
-about 10 minutes" budget is below the measured 65-app Linux guest pass (1759-2460 s, see
-`traces/v3_app_matrix/`, 2026-09) so the middle tier needs a defined subset; that subset is an open
-question (§13).
+The tier is a column on every run row (`tier`). The 65-app Linux guest pass recorded in
+`traces/v3_app_matrix/va1_rtx3060/r1/guest.res` and `va2_rtx3070/r1/guest.res` (committed in
+`b6b936c47`, 2026-09-26) sums to 2460 s and 1759 s of `secs=` (re-summed 2026-11-04; the kayfabe
+revision of those runs is not restated here). **Inferred:** "about 70 apps in about 10 minutes" is
+below that, so the middle tier needs a defined subset; that subset is an open question (§13).
 
 ## 3. Components
 
@@ -135,7 +136,7 @@ cell history (die, suite, time), run list (time, with filters) and commit requir
 
 | Path | Query parameters | Returns |
 |---|---|---|
-| `/v1/matrix` | `commit`, `family`, `driver`, `cpu`, `nested` | dies by family x suites; per cell the latest run, its verdict and tier, the last PASS commit and the number of test-relevant changes since it |
+| `/v1/matrix` | `commit`, `family`, `driver`, `cpu`, `nested`, `branch` | dies by family x suites; per cell the latest run, its verdict and tier, the last PASS commit and the number of test-relevant changes since it |
 | `/v1/cells/<die>/<suite>` | `before` (cursor), `limit` | the cell's run history, newest first, paginated |
 | `/v1/runs` | `commit`, `die`, `suite`, `verdict`, `tier`, `source`, `cursor`, `limit` | run list, newest first, paginated |
 | `/v1/runs/<id>` | none | one run with platform facts, stages, logs, provenance |
@@ -148,6 +149,11 @@ cell history (die, suite, time), run list (time, with filters) and commit requir
 
 **Proposal (lane 1), implemented:**
 
+- `branch` (`next` default, or `master`) selects the first-parent order used for "last passed at
+  commit X, N test-relevant changes ago": N counts the distinct boundary hashes on that branch
+  after X, up to the branch head or up to `commit` when given. With `commit`, cells show only runs
+  whose boundary hash equals that commit's.
+- A run in flight has `verdict: null` and `state: "running"`; `verdict` never changes once set.
 - Every parameter has a strict regular expression; unknown or repeated parameters are `400`; an
   unknown path is `404`; any method other than GET is `405` with `Allow: GET` and no CORS header.
 - `limit` is 1-100 (default 50). Cursors are base64url of a small JSON object whose fields are
@@ -225,9 +231,13 @@ no GitHub API call.
 
 - The pages are written by the master build tooling (`build.py`), not by the root landing's Zola
   templates, so a release-tag landing without status templates still gets the current status pages.
-- The API base is passed only to the deployment-candidate build (`master` push or `v*` tag in this
-  repository); PR builds never receive it. `build.py` re-validates it. An invalid value is a build
-  warning and yields the "not configured" page, mirroring the analytics behaviour.
+- The variables are bound once, as workflow-level `env` in `.github/workflows/site.yml`, because
+  the existing workflow guard (`ci/vast-broker/test/site-analytics.test.js`) forbids any `vars.`
+  reference inside the build job. The build step passes `--status-api-base` only to the
+  deployment-candidate build (`master` push or `v*` tag in this repository) and only after a bash
+  check for an https origin on kayfabe.dev; `build.py` checks it again and ignores it in any
+  non-candidate build. An invalid value is a warning and yields the "not configured" page,
+  mirroring the analytics behaviour. PR, fork and portable builds never receive it.
 - The base is written into one `<meta name="kf-status-api">` per page; `status.js` contains no URL.
 - Fixture mode copies `site/status/fixture.json` (synthetic, generated from the seed through the
   real API handler by `ci/platform-api/scripts/make-fixture.mjs`) and shows a visible
@@ -266,7 +276,8 @@ the hub says.
 | D1 schema and indexes (`ci/platform-api/migrations/0001_init.sql`) | Built, tested against `node:sqlite` |
 | Public Worker (`ci/platform-api/src/`), `wrangler.toml` with the D1 binding and custom domain | Built, tested with a D1-shaped fake over `node:sqlite`; **not deployed** |
 | Synthetic seed and fixture generator | Built; every seeded row is labelled synthetic |
-| Mutants for read-only, fixed SQL and parameter validation | Built (`npm run mutate` in `ci/platform-api/`) |
+| Mutants for read-only, fixed SQL and parameter validation | Built (`npm run mutate` in `ci/platform-api/`; 23 mutants, each killed by a named test in a local run on 2026-11-04; `ci/platform-api` tree as of `2ce1dfdf6`) |
+| CI | `ci.yml` job `platform` (Node 22: format check, tests, mutants), required by the `CI` gate; the site workflow runs `test_status.py` and `test_status_dom.mjs` |
 | Row-tag reference (`shared/row-tag.js`) | Built and tested; nothing calls it yet |
 | Status pages, fixture mode, "not configured" page, workflow validation | Built, tested with the site's own checks |
 | CI Worker ingest, lazy satisfaction, redaction stream, log lint, R2 writes, HMAC writing | Design only |
