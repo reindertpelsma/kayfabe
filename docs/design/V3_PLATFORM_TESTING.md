@@ -75,8 +75,7 @@ statement is a frozen constant in `ci/platform-api/src/queries.js`; the database
 statement *name*, never SQL text. (b) A test parses each statement and refuses anything but a single
 `SELECT`/`WITH ... SELECT`. (c) The tests run every statement against a seeded SQLite file opened
 **read-only** (`node:sqlite`, `readOnly: true`), so a write would fail at the engine. A D1
-read-replica or read-only binding does not exist for Workers as far as this branch knows (not
-verified); if Cloudflare adds one, use it.
+read-replica or read-only binding does not exist for Workers as far as the D1 Worker API docs page read on 2026-11-04 states (it mentions none); if Cloudflare adds one, use it.
 
 ## 4. Questions, keys and lazy satisfaction (CI Worker, design only)
 
