@@ -12,7 +12,7 @@ into the hypotheses. Labels: MEASURED = a line in a committed file, named; INFER
   reply before the divergence is identical, including `SYSTEM_GET_CAPS_V2` (`000c`: HDMI 2.0 + crossbar),
   `GET_CONNECT_STATE` (display `0x100`), `GET_INTERNAL_DISPLAYS` (0) and `GET_CONNECTOR_DATA` (DVI-D); 0x730285 is
   refused on both. So the previous lane's planned experiment has its answer: these replies are NOT where GB203
-  differs (MEASURED).
+  differs (MEASURED, runs of 2026-11-03).
 - **The divergence does not depend on caps word `0x00c`.** bwhw1 (no `0x00c` row) and bwhw2 (with it) issue the same
   control order: `GET_CONNECT_STATE`, then `GET_HOTPLUG_CONFIG`/`GET_EDID_V2`, never `GET_CONNECTOR_TABLE` or
   `GET_HEAD_ROUTING_MAP`, and both allocate the core channel (`ca7d`) (MEASURED, `gate_bwhw1_b2_qemu.log.gz`,

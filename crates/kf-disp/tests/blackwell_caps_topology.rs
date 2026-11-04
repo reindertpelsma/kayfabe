@@ -122,7 +122,7 @@ fn gb20x_page_states_one_output_link_per_presented_sor() {
     }
 }
 
-/// The production derivation (tiers T1 + T3) keeps the two rules for a measured Blackwell die.
+/// The production derivation (tiers T1 + T3) keeps the two rules for the Blackwell die measured on 2026-11-03 (GB203, RTX 5070 Ti).
 #[test]
 fn the_derived_gb203_page_keeps_the_topology_words() {
     let row = &BLACKWELL_GB20X;
