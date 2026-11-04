@@ -5,9 +5,9 @@ ProviderName     : Microsoft-Windows-DistributedCOM
 Id               : 10016
 LevelDisplayName : Warning
 Message          : The machine-default permission settings do not grant Local Activation permission for the COM Server application with CLSID 
-                   {F87B28F1-DA9A-4F35-8EC0-800EFCF26B83}
+                   {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
                     and APPID 
-                   {0868DC9B-D9A2-4F64-9362-133CEA201299}
+                   {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
                     to the user NT AUTHORITY\NETWORK SERVICE SID (S-1-5-20) from address LocalHost (Using LRPC) running in the application container Unavailable SID (Unavailable). This security permission can be modified using the Component Services administrative tool.
 
 TimeCreated      : 11/4/2026 12:56:49 AM
@@ -25,9 +25,9 @@ ProviderName     : Microsoft-Windows-DistributedCOM
 Id               : 10016
 LevelDisplayName : Warning
 Message          : The machine-default permission settings do not grant Local Activation permission for the COM Server application with CLSID 
-                   {F87B28F1-DA9A-4F35-8EC0-800EFCF26B83}
+                   {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
                     and APPID 
-                   {0868DC9B-D9A2-4F64-9362-133CEA201299}
+                   {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
                     to the user NT AUTHORITY\NETWORK SERVICE SID (S-1-5-20) from address LocalHost (Using LRPC) running in the application container Unavailable SID (Unavailable). This security permission can be modified using the Component Services administrative tool.
 
 TimeCreated      : 11/4/2026 12:55:01 AM
@@ -41,9 +41,9 @@ ProviderName     : Microsoft-Windows-DistributedCOM
 Id               : 10016
 LevelDisplayName : Warning
 Message          : The machine-default permission settings do not grant Local Activation permission for the COM Server application with CLSID 
-                   {F87B28F1-DA9A-4F35-8EC0-800EFCF26B83}
+                   {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
                     and APPID 
-                   {0868DC9B-D9A2-4F64-9362-133CEA201299}
+                   {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
                     to the user NT AUTHORITY\NETWORK SERVICE SID (S-1-5-20) from address LocalHost (Using LRPC) running in the application container Unavailable SID (Unavailable). This security permission can be modified using the Component Services administrative tool.
 
 TimeCreated      : 11/4/2026 12:54:41 AM
@@ -157,19 +157,19 @@ TimeCreated      : 11/4/2026 12:47:23 AM
 ProviderName     : Microsoft-Windows-DistributedCOM
 Id               : 10010
 LevelDisplayName : Error
-Message          : The server {F9717507-6651-4EDB-BFF7-AE615179BCCF} did not register with DCOM within the required timeout.
+Message          : The server {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001} did not register with DCOM within the required timeout.
 
 TimeCreated      : 11/4/2026 12:47:23 AM
 ProviderName     : Microsoft-Windows-DistributedCOM
 Id               : 10010
 LevelDisplayName : Error
-Message          : The server {F9717507-6651-4EDB-BFF7-AE615179BCCF} did not register with DCOM within the required timeout.
+Message          : The server {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001} did not register with DCOM within the required timeout.
 
 TimeCreated      : 11/4/2026 12:47:23 AM
 ProviderName     : Microsoft-Windows-DistributedCOM
 Id               : 10010
 LevelDisplayName : Error
-Message          : The server {F9717507-6651-4EDB-BFF7-AE615179BCCF} did not register with DCOM within the required timeout.
+Message          : The server {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001} did not register with DCOM within the required timeout.
 
 TimeCreated      : 11/4/2026 12:46:27 AM
 ProviderName     : Service Control Manager
@@ -182,9 +182,9 @@ ProviderName     : Microsoft-Windows-DistributedCOM
 Id               : 10016
 LevelDisplayName : Warning
 Message          : The machine-default permission settings do not grant Local Activation permission for the COM Server application with CLSID 
-                   {F87B28F1-DA9A-4F35-8EC0-800EFCF26B83}
+                   {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
                     and APPID 
-                   {0868DC9B-D9A2-4F64-9362-133CEA201299}
+                   {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
                     to the user NT AUTHORITY\NETWORK SERVICE SID (S-1-5-20) from address LocalHost (Using LRPC) running in the application container Unavailable SID (Unavailable). This security permission can be modified using the Component Services administrative tool.
 
 TimeCreated      : 11/4/2026 12:46:01 AM
@@ -215,7 +215,7 @@ TimeCreated      : 11/4/2026 12:44:49 AM
 ProviderName     : Microsoft-Windows-DistributedCOM
 Id               : 10010
 LevelDisplayName : Error
-Message          : The server {A47979D2-C419-11D9-A5B4-001185AD2B89} did not register with DCOM within the required timeout.
+Message          : The server {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001} did not register with DCOM within the required timeout.
 
 TimeCreated      : 11/4/2026 8:44:22 AM
 ProviderName     : Microsoft-Windows-DNS-Client

@@ -19,9 +19,9 @@ HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\nvlddmkm\Parameters
 HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\nvlddmkm\State
 HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\nvlddmkm\Video
 HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\nvlddmkm\Enum
-== class key {4d36e968-e325-11ce-bfc1-08002be10318}\0001
+== class key {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}\0001
 
-HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0001
+HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Class\{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}\0001
     EnableGpuFirmware    REG_DWORD    0x1
 
 

@@ -98,7 +98,7 @@ on our AD104 at 595.91.07, 00:54Z, host Xid count 10 before and 10 after (`ad104
 | control | sizes the host accepts (zero request) | what the Windows 580.88 guest sends (AD102, `W343GSSCENSUS`) | at `0c515b3b3` |
 |---|---|---|---|
 | `0x2080852a` | every size from 1784 up; 1716 -> INVALID_ARGUMENT | 1784 | served from the host's realize-time reply (4 calls) |
-| `0x2080852b` | only 3324 | 2836 | refused (3-4 calls) |
+| `0x2080852b` | only 3324 | 2836, words 0..9 `{0,0,0x1f,0,...}` | refused (3-4 calls) |
 | `0x2080852c` | only 1440 | 1440, words 0..9 `{0,0,0x1f,0,...}` | refused (6 calls) |
 | `0x20809064` | none (a zero request is never accepted); cudart's and the encoder's authored requests NV_OK at 520 | 520, words 0..9 `{0,3,1,0,0,0,4,0,0,0}` | 137-138 of 138-139 calls refused (`W349REFUSE ... consttab cudart.0x20809064: unmeasured on AD102 branch 580`) |
 
@@ -107,8 +107,11 @@ on our AD104 at 595.91.07, 00:54Z, host Xid count 10 before and 10 after (`ad104
   (AD103, AD106 `realize_gss_lines_timer_arm.txt`). The host refuses 1716 anyway, so no answer is lost. The cosmetic
   defect is the follow-up line `host facts: GSS 0x2080852a [] refused by the host (status: None ...)`, which says "by
   the host" for a question that never reached it. No change proposed.
-- `0x2080852b`: the guest's 580-branch size (2836) is not a size this host accepts for a zero request: no fix is
-  derivable at 595.91.07. A 580.x host was not scanned (the 580 boxes were gone by then): unmeasured.
+- `0x2080852b`: the guest's 580-branch size (2836) is not a size this host accepts for a zero request, and the guest's
+  own question (2836 B, word 2 = 0x1f) is refused too: `GSSROW cmd=0x2080852b size=2836 ... status=0x1f INVALID_ARGUMENT`
+  for both probes (`ad102/gss595/gss_rows_probe_f08c861ea.txt`, kf-ctl-probe built from the tentative row `f08c861ea`,
+  unprivileged, our AD102, 02:13Z, host Xid 10 -> 10). No fix is derivable at 595.91.07; the tentative row is reverted
+  (`66beba5fe`). A 580.x host was not asked (the 580 boxes were gone by then): unmeasured.
 - Not asked here, seen in the same probe: 595.91.07 answers `0x2080852e` from 596 up, `0x2080853a` from 15352 up,
   `0x2080a618` only at 8632, `0x2080853b` at 14320 with word 1 = 1, but kf3's host ABI refuses all four at that host
   (`NoHeader`/`UnlistedControl`, `realize_gss_lines_timer_arm.txt` of AD104). That matters only for a 595-branch guest;
@@ -119,11 +122,16 @@ on our AD104 at 595.91.07, 00:54Z, host Xid count 10 before and 10 after (`ad104
 | run | revision | change | result |
 |---|---|---|---|
 | ada102p | `053d5cab5` | exact all-zero `0x2080852c` row at 1440 + `W343GSSREQ` (first ten request words of 9064) | **852c falsifier fired**: realize asked the row without a refusal, the guest's 6 calls stayed refused, so its request is not all-zero. 9064 request words recorded |
-| ada102q | `ec9f8681c` | 852c zero row removed; **9064 row with the guest's own inputs** `{(0,0),(4,3),(8,1),(0x18,4)}`; 852c words logged | **9064 falsifier did not fire**: no realize refusal, the guest asked 9064 **once** and was answered (`result=0x0`, `GSS 0x20809064 answered from the host's realize-time reply`) where `0c515b3b3` refused 137 of 138 calls. 852c words `{0,0,0x1f,0,...}` |
-| ada102r | `12063d4f8` | 852c row with the guest's own inputs `{(0,0),(4,0),(8,0x1f)}`; 852b words logged | see below |
+| ada102q | `ec9f8681c` | 852c zero row removed; **9064 row with the guest's own inputs** `{(0,0),(4,3),(8,1),(0x18,4)}`; 852c words logged | **9064 falsifier did not fire**: no realize refusal, the guest asked 9064 **once** and was answered (`result=0x0`, `GSS 0x20809064 answered from the host's realize-time reply`) where `0c515b3b3` refused 137 of 138 calls (ada102a; the commit message of `1c24a2562` says 52 of 53, a count read while that boot was still running). 852c words `{0,0,0x1f,0,...}` |
+| ada102r | `12063d4f8` | 852c row with the guest's own inputs `{(0,0),(4,0),(8,0x1f)}`; 852b words logged | **852c falsifier did not fire**: no realize refusal, all 6 guest calls answered (`result=0x0`, `GSS 0x2080852c answered from the host's realize-time reply` x6); 9064 again 1 call, answered. 852b words `{0,0,0x1f,0,...}` at 2836, still refused |
 
-The 9064 row is the derived fix: the host's own answer to the guest's own question, asked once at realize with the zero
-and background probes (`kf_abi::gssreplay`), no captured bytes. Tests: `cargo test -p kf-abi -p kf-rm` green; the new
+**The proposal is `12063d4f8`** (its `crates/` tree equals the branch head `66beba5fe`): two `gssreplay` rows (9064 and
+852c with the Windows guest's own request words) plus one host-ABI row (852c at 1440 B, 595.91.07), and the bounded
+read-only `W343GSSREQ` diagnostic (which can be dropped before a merge). Each row is the host's own answer to the
+guest's own question, asked once at realize with the zero and background probes (`kf_abi::gssreplay`); no captured
+bytes. The same rows were asked by kf-ctl-probe on our AD102 at 595.91.07: 9064 `(4,3)` and 852c `(8,0x1f)` NV_OK for
+both probes (`ad102/gss595/gss_rows_probe_f08c861ea.txt`). Not shown: the rows on a 580.x host or on any other die
+(the 595 row of 852c is scoped to 595.91.07; 9064's host row already covers 595.91.07 and the 580 interval). Tests: `cargo test -p kf-abi -p kf-rm` green; the new
 `gssreplay` tests were red before their rows. INFERRED, not measured: why the guest re-asks 9064 ~138 times when refused
 and also ~129 times on the old tree that served the GA106 capture (g4), but once when given the host's answer.
 

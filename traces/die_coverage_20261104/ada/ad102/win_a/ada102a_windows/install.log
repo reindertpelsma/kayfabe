@@ -1,6 +1,6 @@
 [2026-11-04T00:25:43Z] WINVM_INSTALL_START name=kfwin repo=0c515b3b qemu=/workspace/bench/kf3-bins/0c515b3b/qemu-system-x86_64 host_driver=595.91.07 install_wait_s=4200
 [2026-11-04T00:25:43Z] VM_IDENTITY_CREATED /workspace/winvm/kfwin/identity.env
-[2026-11-04T00:25:43Z] VM_IDENTITY uuid=e43db52d-db37-4268-84a5-dd58c4b95707 serial=KF969A282CB2 mac=52:54:00:22:80:20
+[2026-11-04T00:25:43Z] VM_IDENTITY uuid=fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001 serial=KF969A282CB2 mac=52:54:00:22:80:20
 [2026-11-04T00:25:43Z] START prereqs
 [2026-11-04T00:25:43Z] EXIT prereqs rc=0
 [2026-11-04T00:25:43Z] START fetch

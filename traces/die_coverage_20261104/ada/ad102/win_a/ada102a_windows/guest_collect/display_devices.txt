@@ -24,7 +24,7 @@ PowerManagementSupported    :
 StatusInfo                  : 
 SystemCreationClassName     : Win32_ComputerSystem
 SystemName                  : KFWIN
-ClassGuid                   : {4d36e968-e325-11ce-bfc1-08002be10318}
+ClassGuid                   : {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
 CompatibleID                : {PCI\VEN_10DE&DEV_2684&REV_A1, PCI\VEN_10DE&DEV_2684, PCI\VEN_10DE&CC_030000, PCI\VEN_10DE&CC_0300...}
 HardwareID                  : {PCI\VEN_10DE&DEV_2684&SUBSYS_40DA1458&REV_A1, PCI\VEN_10DE&DEV_2684&SUBSYS_40DA1458, PCI\VEN_10DE&DEV_2684&CC_030000, PCI\VEN_10DE&DEV_2684&CC_0300}
 Manufacturer                : NVIDIA
@@ -60,7 +60,7 @@ PowerManagementSupported    :
 StatusInfo                  : 
 SystemCreationClassName     : Win32_ComputerSystem
 SystemName                  : KFWIN
-ClassGuid                   : {4d36e968-e325-11ce-bfc1-08002be10318}
+ClassGuid                   : {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
 CompatibleID                : {PCI\VEN_1234&DEV_1111&REV_02, PCI\VEN_1234&DEV_1111, PCI\VEN_1234&CC_030000, PCI\VEN_1234&CC_0300...}
 HardwareID                  : {PCI\VEN_1234&DEV_1111&SUBSYS_11001AF4&REV_02, PCI\VEN_1234&DEV_1111&SUBSYS_11001AF4, PCI\VEN_1234&DEV_1111&CC_030000, PCI\VEN_1234&DEV_1111&CC_0300}
 Manufacturer                : (Standard display types)

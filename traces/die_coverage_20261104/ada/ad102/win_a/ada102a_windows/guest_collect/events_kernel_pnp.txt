@@ -5,7 +5,7 @@ Id          : 410
 Message     : Device DISPLAY\KFB0001\4&d8473f4&0&UID5243136 was started.
               
               Driver Name: monitor.inf
-              Class GUID: {4d36e96e-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: monitor
               Lower Filters: 
               Upper Filters: 
@@ -16,7 +16,7 @@ Message     : Device DISPLAY\KFB0001\4&d8473f4&0&UID5243136 was configured.
               
               Driver Name: monitor.inf
               Driver Package ID: monitor.inf_amd64_cf1e3aee79246903
-              Class GUID: {4d36e96e-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 06/21/2006
               Driver Version: 10.0.26100.1150
               Driver Provider: Microsoft
@@ -32,7 +32,7 @@ Id          : 410
 Message     : Device DISPLAY\KFB0001\1&8713bca&0&UID0 was started.
               
               Driver Name: monitor.inf
-              Class GUID: {4d36e96e-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: monitor
               Lower Filters: 
               Upper Filters: 
@@ -43,7 +43,7 @@ Message     : Device DISPLAY\KFB0001\1&8713bca&0&UID0 was configured.
               
               Driver Name: monitor.inf
               Driver Package ID: monitor.inf_amd64_cf1e3aee79246903
-              Class GUID: {4d36e96e-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 06/21/2006
               Driver Version: 10.0.26100.1150
               Driver Provider: Microsoft
@@ -59,7 +59,7 @@ Id          : 410
 Message     : Device DISPLAY\Default_Monitor\1&8713bca&0&UID0 was started.
               
               Driver Name: monitor.inf
-              Class GUID: {4d36e96e-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: monitor
               Lower Filters: 
               Upper Filters: 
@@ -70,7 +70,7 @@ Message     : Device DISPLAY\Default_Monitor\1&8713bca&0&UID0 was configured.
               
               Driver Name: monitor.inf
               Driver Package ID: monitor.inf_amd64_cf1e3aee79246903
-              Class GUID: {4d36e96e-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 06/21/2006
               Driver Version: 10.0.26100.1150
               Driver Provider: Microsoft
@@ -86,7 +86,7 @@ Id          : 410
 Message     : Device PCI\VEN_1AF4&DEV_1000&SUBSYS_00011AF4&REV_00\3&11583659&0&08 was started.
               
               Driver Name: oem1.inf
-              Class GUID: {4d36e972-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: netkvm
               Lower Filters: 
               Upper Filters: 
@@ -96,7 +96,7 @@ Id          : 410
 Message     : Device DISPLAY\KFB0001\4&d8473f4&0&UID0 was started.
               
               Driver Name: monitor.inf
-              Class GUID: {4d36e96e-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: monitor
               Lower Filters: 
               Upper Filters: 
@@ -107,7 +107,7 @@ Message     : Device DISPLAY\KFB0001\4&d8473f4&0&UID0 was configured.
               
               Driver Name: monitor.inf
               Driver Package ID: monitor.inf_amd64_cf1e3aee79246903
-              Class GUID: {4d36e96e-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 06/21/2006
               Driver Version: 10.0.26100.1150
               Driver Provider: Microsoft
@@ -123,7 +123,7 @@ Id          : 410
 Message     : Device PCI\VEN_10DE&DEV_2684&SUBSYS_40DA1458&REV_A1\3&11583659&0&28 was started.
               
               Driver Name: display.inf
-              Class GUID: {4d36e968-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: BasicDisplay
               Lower Filters: 
               Upper Filters: 
@@ -134,7 +134,7 @@ Message     : Device PCI\VEN_10DE&DEV_2684&SUBSYS_40DA1458&REV_A1\3&11583659&0&2
               
               Driver Name: display.inf
               Driver Package ID: display.inf_amd64_34a28de3c87d810f
-              Class GUID: {4d36e968-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 06/21/2006
               Driver Version: 10.0.26100.1
               Driver Provider: Microsoft
@@ -151,7 +151,7 @@ Message     : Device PCI\VEN_1AF4&DEV_1000&SUBSYS_00011AF4&REV_00\3&11583659&0&0
               
               Driver Name: oem1.inf
               Driver Package ID: netkvm.inf_amd64_27809b5556f0001c
-              Class GUID: {4d36e972-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 07/22/2026
               Driver Version: 100.103.104.30200
               Driver Provider: Red Hat, Inc.
@@ -164,10 +164,10 @@ Message     : Device PCI\VEN_1AF4&DEV_1000&SUBSYS_00011AF4&REV_00\3&11583659&0&0
 
 TimeCreated : 11/4/2026 12:50:02 AM
 Id          : 410
-Message     : Device {6FDE7547-1B65-48ae-B628-80BE62016026}\VIOSerialPort\4&1603b63b&0&01 was started.
+Message     : Device {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}\VIOSerialPort\4&1603b63b&0&01 was started.
               
               Driver Name: null
-              Class GUID: {00000000-0000-0000-0000-000000000000}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: 
               Lower Filters: 
               Upper Filters: 
@@ -177,18 +177,18 @@ Id          : 410
 Message     : Device PCI\VEN_1AF4&DEV_1005&SUBSYS_00041AF4&REV_00\3&11583659&0&18 was started.
               
               Driver Name: oem0.inf
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: VirtRng
               Lower Filters: 
               Upper Filters: 
 
 TimeCreated : 11/4/2026 12:50:02 AM
 Id          : 400
-Message     : Device {6FDE7547-1B65-48ae-B628-80BE62016026}\VIOSerialPort\4&1603b63b&0&01 was configured.
+Message     : Device {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}\VIOSerialPort\4&1603b63b&0&01 was configured.
               
               Driver Name: null
               Driver Package ID: null
-              Class GUID: {00000000-0000-0000-0000-000000000000}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 
               Driver Version: 
               Driver Provider: 
@@ -204,58 +204,58 @@ Id          : 410
 Message     : Device PCI\VEN_1AF4&DEV_1003&SUBSYS_00031AF4&REV_00\3&11583659&0&10 was started.
               
               Driver Name: oem5.inf
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: VirtioSerial
               Lower Filters: 
               Upper Filters: 
 
 TimeCreated : 11/4/2026 12:49:53 AM
 Id          : 410
-Message     : Device STORAGE\Volume\{a4d023f9-d7e9-11f1-8c7f-806e6f6e6963}#00000013D7500000 was started.
+Message     : Device STORAGE\Volume\{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}#00000013D7500000 was started.
               
               Driver Name: volume.inf
-              Class GUID: {71a27cdd-812a-11d0-bec7-08002be2092f}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: volume
               Lower Filters: 
               Upper Filters: 
 
 TimeCreated : 11/4/2026 12:49:53 AM
 Id          : 410
-Message     : Device STORAGE\Volume\{a4d023f9-d7e9-11f1-8c7f-806e6f6e6963}#0000000013D00000 was started.
+Message     : Device STORAGE\Volume\{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}#0000000013D00000 was started.
               
               Driver Name: volume.inf
-              Class GUID: {71a27cdd-812a-11d0-bec7-08002be2092f}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: volume
               Lower Filters: 
               Upper Filters: 
 
 TimeCreated : 11/4/2026 12:49:53 AM
 Id          : 410
-Message     : Device STORAGE\Volume\{a4d023f9-d7e9-11f1-8c7f-806e6f6e6963}#0000000012D00000 was started.
+Message     : Device STORAGE\Volume\{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}#0000000012D00000 was started.
               
               Driver Name: volume.inf
-              Class GUID: {71a27cdd-812a-11d0-bec7-08002be2092f}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: volume
               Lower Filters: 
               Upper Filters: 
 
 TimeCreated : 11/4/2026 12:49:53 AM
 Id          : 410
-Message     : Device STORAGE\Volume\{a4d023f9-d7e9-11f1-8c7f-806e6f6e6963}#0000000000100000 was started.
+Message     : Device STORAGE\Volume\{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}#0000000000100000 was started.
               
               Driver Name: volume.inf
-              Class GUID: {71a27cdd-812a-11d0-bec7-08002be2092f}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: volume
               Lower Filters: 
               Upper Filters: 
 
 TimeCreated : 11/4/2026 12:49:53 AM
 Id          : 400
-Message     : Device STORAGE\Volume\{a4d023f9-d7e9-11f1-8c7f-806e6f6e6963}#00000013D7500000 was configured.
+Message     : Device STORAGE\Volume\{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}#00000013D7500000 was configured.
               
               Driver Name: volume.inf
               Driver Package ID: volume.inf_amd64_d1ed34e6626fb1bb
-              Class GUID: {71a27cdd-812a-11d0-bec7-08002be2092f}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 06/21/2006
               Driver Version: 10.0.26100.1
               Driver Provider: Microsoft
@@ -268,11 +268,11 @@ Message     : Device STORAGE\Volume\{a4d023f9-d7e9-11f1-8c7f-806e6f6e6963}#00000
 
 TimeCreated : 11/4/2026 12:49:53 AM
 Id          : 400
-Message     : Device STORAGE\Volume\{a4d023f9-d7e9-11f1-8c7f-806e6f6e6963}#0000000013D00000 was configured.
+Message     : Device STORAGE\Volume\{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}#0000000013D00000 was configured.
               
               Driver Name: volume.inf
               Driver Package ID: volume.inf_amd64_d1ed34e6626fb1bb
-              Class GUID: {71a27cdd-812a-11d0-bec7-08002be2092f}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 06/21/2006
               Driver Version: 10.0.26100.1
               Driver Provider: Microsoft
@@ -285,11 +285,11 @@ Message     : Device STORAGE\Volume\{a4d023f9-d7e9-11f1-8c7f-806e6f6e6963}#00000
 
 TimeCreated : 11/4/2026 12:49:53 AM
 Id          : 400
-Message     : Device STORAGE\Volume\{a4d023f9-d7e9-11f1-8c7f-806e6f6e6963}#0000000012D00000 was configured.
+Message     : Device STORAGE\Volume\{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}#0000000012D00000 was configured.
               
               Driver Name: volume.inf
               Driver Package ID: volume.inf_amd64_d1ed34e6626fb1bb
-              Class GUID: {71a27cdd-812a-11d0-bec7-08002be2092f}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 06/21/2006
               Driver Version: 10.0.26100.1
               Driver Provider: Microsoft
@@ -302,11 +302,11 @@ Message     : Device STORAGE\Volume\{a4d023f9-d7e9-11f1-8c7f-806e6f6e6963}#00000
 
 TimeCreated : 11/4/2026 12:49:53 AM
 Id          : 400
-Message     : Device STORAGE\Volume\{a4d023f9-d7e9-11f1-8c7f-806e6f6e6963}#0000000000100000 was configured.
+Message     : Device STORAGE\Volume\{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}#0000000000100000 was configured.
               
               Driver Name: volume.inf
               Driver Package ID: volume.inf_amd64_d1ed34e6626fb1bb
-              Class GUID: {71a27cdd-812a-11d0-bec7-08002be2092f}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 06/21/2006
               Driver Version: 10.0.26100.1
               Driver Provider: Microsoft
@@ -322,7 +322,7 @@ Id          : 410
 Message     : Device SCSI\Disk&Ven_Red_Hat&Prod_VirtIO\4&33df6241&0&000000 was started.
               
               Driver Name: disk.inf
-              Class GUID: {4d36e967-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: disk
               Lower Filters: 
               Upper Filters: 
@@ -333,7 +333,7 @@ Message     : Device SCSI\Disk&Ven_Red_Hat&Prod_VirtIO\4&33df6241&0&000000 was c
               
               Driver Name: disk.inf
               Driver Package ID: disk.inf_amd64_5fb855b6817525a2
-              Class GUID: {4d36e967-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 06/21/2006
               Driver Version: 10.0.26100.1150
               Driver Provider: Microsoft
@@ -349,7 +349,7 @@ Id          : 410
 Message     : Device PCI\VEN_1AF4&DEV_1001&SUBSYS_00021AF4&REV_00\3&11583659&0&20 was started.
               
               Driver Name: oem6.inf
-              Class GUID: {4d36e97b-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: viostor
               Lower Filters: 
               Upper Filters: 
@@ -364,7 +364,7 @@ Message     : Device PCI\VEN_1AF4&DEV_1001&SUBSYS_00021AF4&REV_00\3&11583659&0&2
               
               Driver Name: oem6.inf
               Driver Package ID: viostor.inf_amd64_2fc8a27a8c1b757c
-              Class GUID: {4d36e97b-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 07/22/2026
               Driver Version: 100.103.104.30200
               Driver Provider: Red Hat, Inc.
@@ -381,7 +381,7 @@ Message     : Device PCI\VEN_1AF4&DEV_1005&SUBSYS_00041AF4&REV_00\3&11583659&0&1
               
               Driver Name: oem0.inf
               Driver Package ID: viorng.inf_amd64_7d9d44898d90e8bd
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 07/22/2026
               Driver Version: 100.103.104.30200
               Driver Provider: Red Hat, Inc.
@@ -398,7 +398,7 @@ Message     : Device PCI\VEN_1AF4&DEV_1003&SUBSYS_00031AF4&REV_00\3&11583659&0&1
               
               Driver Name: oem5.inf
               Driver Package ID: vioser.inf_amd64_08573a4e4a751b1e
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 07/22/2026
               Driver Version: 100.103.104.30200
               Driver Provider: Red Hat, Inc.
@@ -414,7 +414,7 @@ Id          : 410
 Message     : Device SWD\PRINTENUM\PrintQueues was started.
               
               Driver Name: printqueue.inf
-              Class GUID: {1ed2bbf9-11f0-4084-b21f-ad83a8e6dcdc}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: 
               Lower Filters: 
               Upper Filters: 
@@ -425,7 +425,7 @@ Message     : Device SWD\PRINTENUM\PrintQueues was configured.
               
               Driver Name: printqueue.inf
               Driver Package ID: printqueue.inf_amd64_044b5f13f940e7c8
-              Class GUID: {1ed2bbf9-11f0-4084-b21f-ad83a8e6dcdc}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 06/21/2006
               Driver Version: 10.0.26100.1
               Driver Provider: Microsoft
@@ -438,21 +438,21 @@ Message     : Device SWD\PRINTENUM\PrintQueues was configured.
 
 TimeCreated : 11/4/2026 12:44:49 AM
 Id          : 410
-Message     : Device SWD\RADIO\{3DB5895D-CC28-44B3-AD3D-6F01A782B8D2} was started.
+Message     : Device SWD\RADIO\{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001} was started.
               
               Driver Name: c_swdevice.inf
-              Class GUID: {62f9c741-b25a-46ce-b54c-9bccce08b6f2}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: 
               Lower Filters: 
               Upper Filters: 
 
 TimeCreated : 11/4/2026 12:44:49 AM
 Id          : 400
-Message     : Device SWD\RADIO\{3DB5895D-CC28-44B3-AD3D-6F01A782B8D2} was configured.
+Message     : Device SWD\RADIO\{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001} was configured.
               
               Driver Name: c_swdevice.inf
               Driver Package ID: c_swdevice.inf_amd64_845d51425d14f98b
-              Class GUID: {62f9c741-b25a-46ce-b54c-9bccce08b6f2}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 06/21/2006
               Driver Version: 10.0.26100.1
               Driver Provider: Microsoft
@@ -468,7 +468,7 @@ Id          : 410
 Message     : Device ROOT\KDNIC\0000 was started.
               
               Driver Name: kdnic.inf
-              Class GUID: {4d36e972-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: kdnic
               Lower Filters: 
               Upper Filters: 
@@ -479,7 +479,7 @@ Message     : Device ROOT\KDNIC\0000 was configured.
               
               Driver Name: kdnic.inf
               Driver Package ID: kdnic.inf_amd64_a9d04a55194853d2
-              Class GUID: {4d36e972-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 06/21/2006
               Driver Version: 10.0.26100.1150
               Driver Provider: Microsoft
@@ -496,7 +496,7 @@ Message     : Device PCI\VEN_8086&DEV_2930&SUBSYS_11001AF4&REV_02\3&11583659&0&F
               
               Driver Name: machine.inf
               Driver Package ID: machine.inf_amd64_d807fc8146278f4c
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 06/21/2006
               Driver Version: 10.0.26100.1150
               Driver Provider: Microsoft
@@ -512,7 +512,7 @@ Id          : 410
 Message     : Device PCI\VEN_1AF4&DEV_1000&SUBSYS_00011AF4&REV_00\3&11583659&0&10 was started.
               
               Driver Name: oem1.inf
-              Class GUID: {4d36e972-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: netkvm
               Lower Filters: 
               Upper Filters: 
@@ -523,7 +523,7 @@ Message     : Device PCI\VEN_1AF4&DEV_1000&SUBSYS_00011AF4&REV_00\3&11583659&0&1
               
               Driver Name: oem1.inf
               Driver Package ID: netkvm.inf_amd64_27809b5556f0001c
-              Class GUID: {4d36e972-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 07/22/2026
               Driver Version: 100.103.104.30200
               Driver Provider: Red Hat, Inc.
@@ -539,7 +539,7 @@ Id          : 410
 Message     : Device LPTENUM\MicrosoftRawPort\5&1d62032d&0&LPT1 was started.
               
               Driver Name: machine.inf
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: 
               Lower Filters: 
               Upper Filters: 
@@ -550,7 +550,7 @@ Message     : Device LPTENUM\MicrosoftRawPort\5&1d62032d&0&LPT1 was configured.
               
               Driver Name: machine.inf
               Driver Package ID: machine.inf_amd64_d807fc8146278f4c
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 06/21/2006
               Driver Version: 10.0.26100.1150
               Driver Provider: Microsoft
@@ -566,7 +566,7 @@ Id          : 410
 Message     : Device SWD\MMDEVAPI\MicrosoftGSWavetableSynth was started.
               
               Driver Name: c_swdevice.inf
-              Class GUID: {62f9c741-b25a-46ce-b54c-9bccce08b6f2}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: 
               Lower Filters: 
               Upper Filters: 
@@ -577,7 +577,7 @@ Message     : Device SWD\MMDEVAPI\MicrosoftGSWavetableSynth was configured.
               
               Driver Name: c_swdevice.inf
               Driver Package ID: c_swdevice.inf_amd64_845d51425d14f98b
-              Class GUID: {62f9c741-b25a-46ce-b54c-9bccce08b6f2}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 06/21/2006
               Driver Version: 10.0.26100.1
               Driver Provider: Microsoft
@@ -590,21 +590,21 @@ Message     : Device SWD\MMDEVAPI\MicrosoftGSWavetableSynth was configured.
 
 TimeCreated : 11/4/2026 8:43:43 AM
 Id          : 410
-Message     : Device STORAGE\Volume\{b509cf21-d82b-11f1-8c7c-806e6f6e6963}#00000013D7500000 was started.
+Message     : Device STORAGE\Volume\{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}#00000013D7500000 was started.
               
               Driver Name: volume.inf
-              Class GUID: {71a27cdd-812a-11d0-bec7-08002be2092f}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: volume
               Lower Filters: 
               Upper Filters: 
 
 TimeCreated : 11/4/2026 8:43:43 AM
 Id          : 400
-Message     : Device STORAGE\Volume\{b509cf21-d82b-11f1-8c7c-806e6f6e6963}#00000013D7500000 was configured.
+Message     : Device STORAGE\Volume\{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}#00000013D7500000 was configured.
               
               Driver Name: volume.inf
               Driver Package ID: volume.inf_amd64_d1ed34e6626fb1bb
-              Class GUID: {71a27cdd-812a-11d0-bec7-08002be2092f}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 06/21/2006
               Driver Version: 10.0.26100.1
               Driver Provider: Microsoft
@@ -620,7 +620,7 @@ Id          : 410
 Message     : Device DISPLAY\Default_Monitor\4&27b1e55b&0&UID0 was started.
               
               Driver Name: monitor.inf
-              Class GUID: {4d36e96e-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: monitor
               Lower Filters: 
               Upper Filters: 
@@ -631,7 +631,7 @@ Message     : Device DISPLAY\Default_Monitor\4&27b1e55b&0&UID0 was configured.
               
               Driver Name: monitor.inf
               Driver Package ID: monitor.inf_amd64_cf1e3aee79246903
-              Class GUID: {4d36e96e-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 06/21/2006
               Driver Version: 10.0.26100.1150
               Driver Provider: Microsoft
@@ -647,7 +647,7 @@ Id          : 410
 Message     : Device PCI\VEN_1234&DEV_1111&SUBSYS_11001AF4&REV_02\3&11583659&0&08 was started.
               
               Driver Name: display.inf
-              Class GUID: {4d36e968-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: BasicDisplay
               Lower Filters: 
               Upper Filters: 
@@ -658,7 +658,7 @@ Message     : Device PCI\VEN_1234&DEV_1111&SUBSYS_11001AF4&REV_02\3&11583659&0&0
               
               Driver Name: display.inf
               Driver Package ID: display.inf_amd64_34a28de3c87d810f
-              Class GUID: {4d36e968-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 06/21/2006
               Driver Version: 10.0.26100.1
               Driver Provider: Microsoft
@@ -671,10 +671,10 @@ Message     : Device PCI\VEN_1234&DEV_1111&SUBSYS_11001AF4&REV_02\3&11583659&0&0
 
 TimeCreated : 11/4/2026 8:42:49 AM
 Id          : 410
-Message     : Device {6FDE7547-1B65-48ae-B628-80BE62016026}\VIOSerialPort\4&1893fa96&0&01 was started.
+Message     : Device {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}\VIOSerialPort\4&1893fa96&0&01 was started.
               
               Driver Name: null
-              Class GUID: {00000000-0000-0000-0000-000000000000}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: 
               Lower Filters: 
               Upper Filters: 
@@ -684,7 +684,7 @@ Id          : 410
 Message     : Device ACPI\AuthenticAMD_-_AMD64_Family_25_Model_97_-_AMD_Ryzen_9_7950X_16-Core_Processor____________\_7 was started.
               
               Driver Name: cpu.inf
-              Class GUID: {50127dc3-0f36-415e-a6cc-4cb3be910b65}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: AmdPPM
               Lower Filters: 
               Upper Filters: 
@@ -694,7 +694,7 @@ Id          : 410
 Message     : Device ACPI\AuthenticAMD_-_AMD64_Family_25_Model_97_-_AMD_Ryzen_9_7950X_16-Core_Processor____________\_6 was started.
               
               Driver Name: cpu.inf
-              Class GUID: {50127dc3-0f36-415e-a6cc-4cb3be910b65}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: AmdPPM
               Lower Filters: 
               Upper Filters: 
@@ -704,7 +704,7 @@ Id          : 410
 Message     : Device ACPI\AuthenticAMD_-_AMD64_Family_25_Model_97_-_AMD_Ryzen_9_7950X_16-Core_Processor____________\_5 was started.
               
               Driver Name: cpu.inf
-              Class GUID: {50127dc3-0f36-415e-a6cc-4cb3be910b65}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: AmdPPM
               Lower Filters: 
               Upper Filters: 
@@ -714,7 +714,7 @@ Id          : 410
 Message     : Device ACPI\AuthenticAMD_-_AMD64_Family_25_Model_97_-_AMD_Ryzen_9_7950X_16-Core_Processor____________\_4 was started.
               
               Driver Name: cpu.inf
-              Class GUID: {50127dc3-0f36-415e-a6cc-4cb3be910b65}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: AmdPPM
               Lower Filters: 
               Upper Filters: 
@@ -724,7 +724,7 @@ Id          : 410
 Message     : Device ACPI\AuthenticAMD_-_AMD64_Family_25_Model_97_-_AMD_Ryzen_9_7950X_16-Core_Processor____________\_3 was started.
               
               Driver Name: cpu.inf
-              Class GUID: {50127dc3-0f36-415e-a6cc-4cb3be910b65}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: AmdPPM
               Lower Filters: 
               Upper Filters: 
@@ -734,7 +734,7 @@ Id          : 410
 Message     : Device ACPI\AuthenticAMD_-_AMD64_Family_25_Model_97_-_AMD_Ryzen_9_7950X_16-Core_Processor____________\_2 was started.
               
               Driver Name: cpu.inf
-              Class GUID: {50127dc3-0f36-415e-a6cc-4cb3be910b65}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: AmdPPM
               Lower Filters: 
               Upper Filters: 
@@ -744,7 +744,7 @@ Id          : 410
 Message     : Device ACPI\AuthenticAMD_-_AMD64_Family_25_Model_97_-_AMD_Ryzen_9_7950X_16-Core_Processor____________\_1 was started.
               
               Driver Name: cpu.inf
-              Class GUID: {50127dc3-0f36-415e-a6cc-4cb3be910b65}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: AmdPPM
               Lower Filters: 
               Upper Filters: 
@@ -754,7 +754,7 @@ Id          : 410
 Message     : Device ACPI\AuthenticAMD_-_AMD64_Family_25_Model_97_-_AMD_Ryzen_9_7950X_16-Core_Processor____________\_0 was started.
               
               Driver Name: cpu.inf
-              Class GUID: {50127dc3-0f36-415e-a6cc-4cb3be910b65}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: AmdPPM
               Lower Filters: 
               Upper Filters: 
@@ -764,7 +764,7 @@ Id          : 410
 Message     : Device ACPI\QEMU0002\3&11583659&0 was started.
               
               Driver Name: oem3.inf
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: FwCfg
               Lower Filters: 
               Upper Filters: 
@@ -774,7 +774,7 @@ Id          : 410
 Message     : Device SCSI\CdRom&Ven_QEMU&Prod_QEMU_DVD-ROM\4&35424867&0&020000 was started.
               
               Driver Name: cdrom.inf
-              Class GUID: {4d36e965-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: cdrom
               Lower Filters: 
               Upper Filters: 
@@ -784,7 +784,7 @@ Id          : 410
 Message     : Device SCSI\CdRom&Ven_QEMU&Prod_QEMU_DVD-ROM\4&35424867&0&010000 was started.
               
               Driver Name: cdrom.inf
-              Class GUID: {4d36e965-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: cdrom
               Lower Filters: 
               Upper Filters: 
@@ -794,7 +794,7 @@ Id          : 410
 Message     : Device SCSI\CdRom&Ven_QEMU&Prod_QEMU_DVD-ROM\4&35424867&0&000000 was started.
               
               Driver Name: cdrom.inf
-              Class GUID: {4d36e965-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: cdrom
               Lower Filters: 
               Upper Filters: 
@@ -804,7 +804,7 @@ Id          : 410
 Message     : Device ACPI\PNP0F13\4&22f5829e&0 was started.
               
               Driver Name: msmouse.inf
-              Class GUID: {4d36e96f-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: i8042prt
               Lower Filters: 
               Upper Filters: 
@@ -814,7 +814,7 @@ Id          : 410
 Message     : Device ACPI\PNP0303\4&22f5829e&0 was started.
               
               Driver Name: keyboard.inf
-              Class GUID: {4d36e96b-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: i8042prt
               Lower Filters: 
               Upper Filters: 
@@ -824,7 +824,7 @@ Id          : 410
 Message     : Device ACPI\QEMU0001\4&22f5829e&0 was started.
               
               Driver Name: oem2.inf
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: PVPanic
               Lower Filters: 
               Upper Filters: 
@@ -834,18 +834,18 @@ Id          : 410
 Message     : Device PCI\VEN_1AF4&DEV_1005&SUBSYS_00041AF4&REV_00\3&11583659&0&20 was started.
               
               Driver Name: oem0.inf
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: VirtRng
               Lower Filters: 
               Upper Filters: 
 
 TimeCreated : 11/4/2026 8:42:49 AM
 Id          : 400
-Message     : Device {6FDE7547-1B65-48ae-B628-80BE62016026}\VIOSerialPort\4&1893fa96&0&01 was configured.
+Message     : Device {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}\VIOSerialPort\4&1893fa96&0&01 was configured.
               
               Driver Name: null
               Driver Package ID: null
-              Class GUID: {00000000-0000-0000-0000-000000000000}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 
               Driver Version: 
               Driver Provider: 
@@ -861,7 +861,7 @@ Id          : 410
 Message     : Device PCI\VEN_1AF4&DEV_1003&SUBSYS_00031AF4&REV_00\3&11583659&0&18 was started.
               
               Driver Name: oem5.inf
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: VirtioSerial
               Lower Filters: 
               Upper Filters: 
@@ -871,7 +871,7 @@ Id          : 410
 Message     : Device ACPI\PNP0501\1 was started.
               
               Driver Name: msports.inf
-              Class GUID: {4d36e978-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: Serial
               Lower Filters: 
               Upper Filters: serenum
@@ -881,7 +881,7 @@ Id          : 411
 Message     : Device ACPI\PNP0400\1 had a problem starting.
               
               Driver Name: msports.inf
-              Class GUID: {4d36e978-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: Parport
               Lower Filters: 
               Upper Filters: 
@@ -893,7 +893,7 @@ Id          : 410
 Message     : Device ROOT\mssmbios\0000 was started.
               
               Driver Name: mssmbios.inf
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: mssmbios
               Lower Filters: 
               Upper Filters: 
@@ -904,7 +904,7 @@ Message     : Device ROOT\mssmbios\0000 was configured.
               
               Driver Name: mssmbios.inf
               Driver Package ID: mssmbios.inf_amd64_3b543e16c86a5331
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 06/21/2006
               Driver Version: 10.0.26100.1
               Driver Provider: Microsoft
@@ -920,7 +920,7 @@ Id          : 410
 Message     : Device ROOT\BasicRender\0000 was started.
               
               Driver Name: basicrender.inf
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: BasicRender
               Lower Filters: 
               Upper Filters: 
@@ -931,7 +931,7 @@ Message     : Device ROOT\BasicRender\0000 was configured.
               
               Driver Name: basicrender.inf
               Driver Package ID: basicrender.inf_amd64_5a35c75db01c44c7
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 06/21/2006
               Driver Version: 10.0.26100.1150
               Driver Provider: Microsoft
@@ -947,7 +947,7 @@ Id          : 410
 Message     : Device ROOT\NdisVirtualBus\0000 was started.
               
               Driver Name: ndisvirtualbus.inf
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: NdisVirtualBus
               Lower Filters: 
               Upper Filters: 
@@ -957,7 +957,7 @@ Id          : 410
 Message     : Device ROOT\UMBUS\0000 was started.
               
               Driver Name: umbus.inf
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: umbus
               Lower Filters: 
               Upper Filters: 
@@ -967,7 +967,7 @@ Id          : 410
 Message     : Device ROOT\CompositeBus\0000 was started.
               
               Driver Name: compositebus.inf
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: CompositeBus
               Lower Filters: 
               Upper Filters: 
@@ -977,7 +977,7 @@ Id          : 410
 Message     : Device ROOT\VID\0000 was started.
               
               Driver Name: wvid.inf
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: Vid
               Lower Filters: 
               Upper Filters: 
@@ -987,7 +987,7 @@ Id          : 410
 Message     : Device ROOT\BasicDisplay\0000 was started.
               
               Driver Name: basicdisplay.inf
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: BasicDisplay
               Lower Filters: 
               Upper Filters: 
@@ -997,7 +997,7 @@ Id          : 410
 Message     : Device ROOT\RDPBUS\0000 was started.
               
               Driver Name: rdpbus.inf
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: rdpbus
               Lower Filters: 
               Upper Filters: 
@@ -1007,7 +1007,7 @@ Id          : 410
 Message     : Device ROOT\SYSTEM\0000 was started.
               
               Driver Name: swenum.inf
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: swenum
               Lower Filters: 
               Upper Filters: 
@@ -1018,7 +1018,7 @@ Message     : Device ROOT\BasicDisplay\0000 was configured.
               
               Driver Name: basicdisplay.inf
               Driver Package ID: basicdisplay.inf_amd64_a0afd1c1603bc477
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 06/21/2006
               Driver Version: 10.0.26100.1150
               Driver Provider: Microsoft
@@ -1031,41 +1031,41 @@ Message     : Device ROOT\BasicDisplay\0000 was configured.
 
 TimeCreated : 11/4/2026 8:42:47 AM
 Id          : 410
-Message     : Device STORAGE\Volume\{b509cf21-d82b-11f1-8c7c-806e6f6e6963}#0000000013D00000 was started.
+Message     : Device STORAGE\Volume\{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}#0000000013D00000 was started.
               
               Driver Name: volume.inf
-              Class GUID: {71a27cdd-812a-11d0-bec7-08002be2092f}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: volume
               Lower Filters: 
               Upper Filters: 
 
 TimeCreated : 11/4/2026 8:42:47 AM
 Id          : 410
-Message     : Device STORAGE\Volume\{b509cf21-d82b-11f1-8c7c-806e6f6e6963}#0000000012D00000 was started.
+Message     : Device STORAGE\Volume\{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}#0000000012D00000 was started.
               
               Driver Name: volume.inf
-              Class GUID: {71a27cdd-812a-11d0-bec7-08002be2092f}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: volume
               Lower Filters: 
               Upper Filters: 
 
 TimeCreated : 11/4/2026 8:42:47 AM
 Id          : 410
-Message     : Device STORAGE\Volume\{b509cf21-d82b-11f1-8c7c-806e6f6e6963}#0000000000100000 was started.
+Message     : Device STORAGE\Volume\{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}#0000000000100000 was started.
               
               Driver Name: volume.inf
-              Class GUID: {71a27cdd-812a-11d0-bec7-08002be2092f}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: volume
               Lower Filters: 
               Upper Filters: 
 
 TimeCreated : 11/4/2026 8:42:47 AM
 Id          : 400
-Message     : Device STORAGE\Volume\{b509cf21-d82b-11f1-8c7c-806e6f6e6963}#0000000013D00000 was configured.
+Message     : Device STORAGE\Volume\{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}#0000000013D00000 was configured.
               
               Driver Name: volume.inf
               Driver Package ID: volume.inf_amd64_d1ed34e6626fb1bb
-              Class GUID: {71a27cdd-812a-11d0-bec7-08002be2092f}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 06/21/2006
               Driver Version: 10.0.26100.1
               Driver Provider: Microsoft
@@ -1078,11 +1078,11 @@ Message     : Device STORAGE\Volume\{b509cf21-d82b-11f1-8c7c-806e6f6e6963}#00000
 
 TimeCreated : 11/4/2026 8:42:47 AM
 Id          : 400
-Message     : Device STORAGE\Volume\{b509cf21-d82b-11f1-8c7c-806e6f6e6963}#0000000012D00000 was configured.
+Message     : Device STORAGE\Volume\{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}#0000000012D00000 was configured.
               
               Driver Name: volume.inf
               Driver Package ID: volume.inf_amd64_d1ed34e6626fb1bb
-              Class GUID: {71a27cdd-812a-11d0-bec7-08002be2092f}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 06/21/2006
               Driver Version: 10.0.26100.1
               Driver Provider: Microsoft
@@ -1095,11 +1095,11 @@ Message     : Device STORAGE\Volume\{b509cf21-d82b-11f1-8c7c-806e6f6e6963}#00000
 
 TimeCreated : 11/4/2026 8:42:47 AM
 Id          : 400
-Message     : Device STORAGE\Volume\{b509cf21-d82b-11f1-8c7c-806e6f6e6963}#0000000000100000 was configured.
+Message     : Device STORAGE\Volume\{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}#0000000000100000 was configured.
               
               Driver Name: volume.inf
               Driver Package ID: volume.inf_amd64_d1ed34e6626fb1bb
-              Class GUID: {71a27cdd-812a-11d0-bec7-08002be2092f}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 06/21/2006
               Driver Version: 10.0.26100.1
               Driver Provider: Microsoft
@@ -1115,7 +1115,7 @@ Id          : 410
 Message     : Device SCSI\Disk&Ven_Red_Hat&Prod_VirtIO\4&36531897&0&000000 was started.
               
               Driver Name: disk.inf
-              Class GUID: {4d36e967-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: disk
               Lower Filters: 
               Upper Filters: 
@@ -1126,7 +1126,7 @@ Message     : Device SCSI\Disk&Ven_Red_Hat&Prod_VirtIO\4&36531897&0&000000 was c
               
               Driver Name: disk.inf
               Driver Package ID: disk.inf_amd64_5fb855b6817525a2
-              Class GUID: {4d36e967-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 06/21/2006
               Driver Version: 10.0.26100.1150
               Driver Provider: Microsoft
@@ -1142,7 +1142,7 @@ Id          : 410
 Message     : Device PCI\VEN_1AF4&DEV_1001&SUBSYS_00021AF4&REV_00\3&11583659&0&28 was started.
               
               Driver Name: oem6.inf
-              Class GUID: {4d36e97b-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: viostor
               Lower Filters: 
               Upper Filters: 
@@ -1153,7 +1153,7 @@ Message     : Device SCSI\CdRom&Ven_QEMU&Prod_QEMU_DVD-ROM\4&35424867&0&020000 w
               
               Driver Name: cdrom.inf
               Driver Package ID: cdrom.inf_amd64_dc7b0d8271e8847c
-              Class GUID: {4d36e965-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 06/21/2006
               Driver Version: 10.0.26100.1150
               Driver Provider: Microsoft
@@ -1170,7 +1170,7 @@ Message     : Device SCSI\CdRom&Ven_QEMU&Prod_QEMU_DVD-ROM\4&35424867&0&010000 w
               
               Driver Name: cdrom.inf
               Driver Package ID: cdrom.inf_amd64_dc7b0d8271e8847c
-              Class GUID: {4d36e965-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 06/21/2006
               Driver Version: 10.0.26100.1150
               Driver Provider: Microsoft
@@ -1187,7 +1187,7 @@ Message     : Device SCSI\CdRom&Ven_QEMU&Prod_QEMU_DVD-ROM\4&35424867&0&000000 w
               
               Driver Name: cdrom.inf
               Driver Package ID: cdrom.inf_amd64_dc7b0d8271e8847c
-              Class GUID: {4d36e965-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 06/21/2006
               Driver Version: 10.0.26100.1150
               Driver Provider: Microsoft
@@ -1203,7 +1203,7 @@ Id          : 410
 Message     : Device PCI\VEN_8086&DEV_2922&SUBSYS_11001AF4&REV_02\3&11583659&0&FA was started.
               
               Driver Name: mshdc.inf
-              Class GUID: {4d36e96a-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: storahci
               Lower Filters: 
               Upper Filters: 
@@ -1213,7 +1213,7 @@ Id          : 410
 Message     : Device ROOT\VOLMGR\0000 was started.
               
               Driver Name: volmgr.inf
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: volmgr
               Lower Filters: 
               Upper Filters: 
@@ -1223,7 +1223,7 @@ Id          : 410
 Message     : Device ROOT\SPACEPORT\0000 was started.
               
               Driver Name: spaceport.inf
-              Class GUID: {4d36e97b-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: spaceport
               Lower Filters: 
               Upper Filters: 
@@ -1234,7 +1234,7 @@ Message     : Device ROOT\SPACEPORT\0000 was configured.
               
               Driver Name: spaceport.inf
               Driver Package ID: spaceport.inf_amd64_568a4d8ac6b99147
-              Class GUID: {4d36e97b-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 06/21/2006
               Driver Version: 10.0.26100.1591
               Driver Provider: Microsoft
@@ -1250,7 +1250,7 @@ Id          : 410
 Message     : Device ROOT\vdrvroot\0000 was started.
               
               Driver Name: vdrvroot.inf
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: vdrvroot
               Lower Filters: 
               Upper Filters: 
@@ -1261,7 +1261,7 @@ Message     : Device ROOT\vdrvroot\0000 was configured.
               
               Driver Name: vdrvroot.inf
               Driver Package ID: vdrvroot.inf_amd64_f1a4bd2901856b58
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 06/21/2006
               Driver Version: 10.0.26100.1591
               Driver Provider: Microsoft
@@ -1277,7 +1277,7 @@ Id          : 410
 Message     : Device ACPI\MSFT0101\1 was started.
               
               Driver Name: tpm.inf
-              Class GUID: {d94ee5d8-d189-4994-83d2-f68d7d41b0e6}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: TPM
               Lower Filters: 
               Upper Filters: 
@@ -1287,7 +1287,7 @@ Id          : 410
 Message     : Device ACPI\PNP0A06\PCI_Hotplug_resources was started.
               
               Driver Name: machine.inf
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: 
               Lower Filters: 
               Upper Filters: 
@@ -1297,7 +1297,7 @@ Id          : 410
 Message     : Device ACPI\PNP0A06\GPE0_resources was started.
               
               Driver Name: machine.inf
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: 
               Lower Filters: 
               Upper Filters: 
@@ -1307,7 +1307,7 @@ Id          : 410
 Message     : Device ACPI\PNP0A06\CPU_Hotplug_resources was started.
               
               Driver Name: machine.inf
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: 
               Lower Filters: 
               Upper Filters: 
@@ -1317,7 +1317,7 @@ Id          : 410
 Message     : Device ACPI\PNP0A06\SMI_resources was started.
               
               Driver Name: machine.inf
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: 
               Lower Filters: 
               Upper Filters: 
@@ -1327,7 +1327,7 @@ Id          : 410
 Message     : Device ACPI\PNP0B00\4&22f5829e&0 was started.
               
               Driver Name: machine.inf
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: 
               Lower Filters: 
               Upper Filters: 
@@ -1338,7 +1338,7 @@ Message     : Device ACPI\PNP0B00\4&22f5829e&0 was configured.
               
               Driver Name: machine.inf
               Driver Package ID: machine.inf_amd64_d807fc8146278f4c
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 06/21/2006
               Driver Version: 10.0.26100.1150
               Driver Provider: Microsoft
@@ -1355,7 +1355,7 @@ Message     : Device ACPI\PNP0501\1 was configured.
               
               Driver Name: msports.inf
               Driver Package ID: msports.inf_amd64_bebdc4f4e2cf2459
-              Class GUID: {4d36e978-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 06/21/2006
               Driver Version: 10.0.26100.1150
               Driver Provider: Microsoft
@@ -1372,7 +1372,7 @@ Message     : Device ACPI\PNP0400\1 was configured.
               
               Driver Name: msports.inf
               Driver Package ID: msports.inf_amd64_bebdc4f4e2cf2459
-              Class GUID: {4d36e978-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 06/21/2006
               Driver Version: 10.0.26100.1150
               Driver Provider: Microsoft
@@ -1389,7 +1389,7 @@ Message     : Device ACPI\PNP0F13\4&22f5829e&0 was configured.
               
               Driver Name: msmouse.inf
               Driver Package ID: msmouse.inf_amd64_097bbd709f0c4972
-              Class GUID: {4d36e96f-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 06/21/2006
               Driver Version: 10.0.26100.1150
               Driver Provider: Microsoft
@@ -1406,7 +1406,7 @@ Message     : Device ACPI\PNP0303\4&22f5829e&0 was configured.
               
               Driver Name: keyboard.inf
               Driver Package ID: keyboard.inf_amd64_a1fe82a86eaecabd
-              Class GUID: {4d36e96b-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 06/21/2006
               Driver Version: 10.0.26100.1150
               Driver Provider: Microsoft
@@ -1423,7 +1423,7 @@ Message     : Device ACPI\QEMU0001\4&22f5829e&0 was configured.
               
               Driver Name: oem2.inf
               Driver Package ID: pvpanic.inf_amd64_cc83d17a40c8c9bc
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 07/22/2026
               Driver Version: 100.103.104.30200
               Driver Provider: Red Hat, Inc.
@@ -1439,7 +1439,7 @@ Id          : 410
 Message     : Device PCI\VEN_8086&DEV_2918&SUBSYS_11001AF4&REV_02\3&11583659&0&F8 was started.
               
               Driver Name: machine.inf
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: msisadrv
               Lower Filters: 
               Upper Filters: 
@@ -1449,7 +1449,7 @@ Id          : 410
 Message     : Device PCI\VEN_8086&DEV_29C0&SUBSYS_11001AF4&REV_00\3&11583659&0&00 was started.
               
               Driver Name: machine.inf
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: 
               Lower Filters: 
               Upper Filters: 
@@ -1460,7 +1460,7 @@ Message     : Device ACPI\QEMU0002\3&11583659&0 was configured.
               
               Driver Name: oem3.inf
               Driver Package ID: fwcfg.inf_amd64_eae304e484876166
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 07/22/2026
               Driver Version: 100.103.104.30200
               Driver Provider: Red Hat, Inc.
@@ -1477,7 +1477,7 @@ Message     : Device ACPI\PNP0A06\PCI_Hotplug_resources was configured.
               
               Driver Name: machine.inf
               Driver Package ID: machine.inf_amd64_d807fc8146278f4c
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 06/21/2006
               Driver Version: 10.0.26100.1150
               Driver Provider: Microsoft
@@ -1494,7 +1494,7 @@ Message     : Device ACPI\PNP0A06\GPE0_resources was configured.
               
               Driver Name: machine.inf
               Driver Package ID: machine.inf_amd64_d807fc8146278f4c
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 06/21/2006
               Driver Version: 10.0.26100.1150
               Driver Provider: Microsoft
@@ -1511,7 +1511,7 @@ Message     : Device ACPI\PNP0A06\CPU_Hotplug_resources was configured.
               
               Driver Name: machine.inf
               Driver Package ID: machine.inf_amd64_d807fc8146278f4c
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 06/21/2006
               Driver Version: 10.0.26100.1150
               Driver Provider: Microsoft
@@ -1528,7 +1528,7 @@ Message     : Device ACPI\PNP0A06\SMI_resources was configured.
               
               Driver Name: machine.inf
               Driver Package ID: machine.inf_amd64_d807fc8146278f4c
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 06/21/2006
               Driver Version: 10.0.26100.1150
               Driver Provider: Microsoft
@@ -1545,7 +1545,7 @@ Message     : Device PCI\VEN_8086&DEV_2930&SUBSYS_11001AF4&REV_02\3&11583659&0&F
               
               Driver Name: oem4.inf
               Driver Package ID: smbus.inf_amd64_5f03787cbdf7a56d
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 04/27/2017
               Driver Version: 100.0.0.0
               Driver Provider: Red Hat, Inc.
@@ -1562,7 +1562,7 @@ Message     : Device PCI\VEN_8086&DEV_2922&SUBSYS_11001AF4&REV_02\3&11583659&0&F
               
               Driver Name: mshdc.inf
               Driver Package ID: mshdc.inf_amd64_f46cfa9aaf1c025c
-              Class GUID: {4d36e96a-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 06/21/2006
               Driver Version: 10.0.26100.1150
               Driver Provider: Microsoft
@@ -1579,7 +1579,7 @@ Message     : Device PCI\VEN_8086&DEV_2918&SUBSYS_11001AF4&REV_02\3&11583659&0&F
               
               Driver Name: machine.inf
               Driver Package ID: machine.inf_amd64_d807fc8146278f4c
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 06/21/2006
               Driver Version: 10.0.26100.1150
               Driver Provider: Microsoft
@@ -1596,7 +1596,7 @@ Message     : Device PCI\VEN_1AF4&DEV_1001&SUBSYS_00021AF4&REV_00\3&11583659&0&2
               
               Driver Name: oem6.inf
               Driver Package ID: viostor.inf_amd64_2fc8a27a8c1b757c
-              Class GUID: {4d36e97b-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 07/22/2026
               Driver Version: 100.103.104.30200
               Driver Provider: Red Hat, Inc.
@@ -1613,7 +1613,7 @@ Message     : Device PCI\VEN_1AF4&DEV_1005&SUBSYS_00041AF4&REV_00\3&11583659&0&2
               
               Driver Name: oem0.inf
               Driver Package ID: viorng.inf_amd64_7d9d44898d90e8bd
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 07/22/2026
               Driver Version: 100.103.104.30200
               Driver Provider: Red Hat, Inc.
@@ -1630,7 +1630,7 @@ Message     : Device PCI\VEN_1AF4&DEV_1003&SUBSYS_00031AF4&REV_00\3&11583659&0&1
               
               Driver Name: oem5.inf
               Driver Package ID: vioser.inf_amd64_08573a4e4a751b1e
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 07/22/2026
               Driver Version: 100.103.104.30200
               Driver Provider: Red Hat, Inc.
@@ -1647,7 +1647,7 @@ Message     : Device PCI\VEN_8086&DEV_29C0&SUBSYS_11001AF4&REV_00\3&11583659&0&0
               
               Driver Name: machine.inf
               Driver Package ID: machine.inf_amd64_d807fc8146278f4c
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 06/21/2006
               Driver Version: 10.0.26100.1150
               Driver Provider: Microsoft
@@ -1663,7 +1663,7 @@ Id          : 410
 Message     : Device ACPI\PNP0A08\0 was started.
               
               Driver Name: pci.inf
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: pci
               Lower Filters: 
               Upper Filters: 
@@ -1674,7 +1674,7 @@ Message     : Device ACPI\AuthenticAMD_-_AMD64_Family_25_Model_97_-_AMD_Ryzen_9_
               
               Driver Name: cpu.inf
               Driver Package ID: cpu.inf_amd64_b0f89d78f7d4eadd
-              Class GUID: {50127dc3-0f36-415e-a6cc-4cb3be910b65}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 04/21/2009
               Driver Version: 10.0.26100.1150
               Driver Provider: Microsoft
@@ -1691,7 +1691,7 @@ Message     : Device ACPI\AuthenticAMD_-_AMD64_Family_25_Model_97_-_AMD_Ryzen_9_
               
               Driver Name: cpu.inf
               Driver Package ID: cpu.inf_amd64_b0f89d78f7d4eadd
-              Class GUID: {50127dc3-0f36-415e-a6cc-4cb3be910b65}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 04/21/2009
               Driver Version: 10.0.26100.1150
               Driver Provider: Microsoft
@@ -1708,7 +1708,7 @@ Message     : Device ACPI\AuthenticAMD_-_AMD64_Family_25_Model_97_-_AMD_Ryzen_9_
               
               Driver Name: cpu.inf
               Driver Package ID: cpu.inf_amd64_b0f89d78f7d4eadd
-              Class GUID: {50127dc3-0f36-415e-a6cc-4cb3be910b65}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 04/21/2009
               Driver Version: 10.0.26100.1150
               Driver Provider: Microsoft
@@ -1725,7 +1725,7 @@ Message     : Device ACPI\AuthenticAMD_-_AMD64_Family_25_Model_97_-_AMD_Ryzen_9_
               
               Driver Name: cpu.inf
               Driver Package ID: cpu.inf_amd64_b0f89d78f7d4eadd
-              Class GUID: {50127dc3-0f36-415e-a6cc-4cb3be910b65}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 04/21/2009
               Driver Version: 10.0.26100.1150
               Driver Provider: Microsoft
@@ -1742,7 +1742,7 @@ Message     : Device ACPI\AuthenticAMD_-_AMD64_Family_25_Model_97_-_AMD_Ryzen_9_
               
               Driver Name: cpu.inf
               Driver Package ID: cpu.inf_amd64_b0f89d78f7d4eadd
-              Class GUID: {50127dc3-0f36-415e-a6cc-4cb3be910b65}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 04/21/2009
               Driver Version: 10.0.26100.1150
               Driver Provider: Microsoft
@@ -1759,7 +1759,7 @@ Message     : Device ACPI\AuthenticAMD_-_AMD64_Family_25_Model_97_-_AMD_Ryzen_9_
               
               Driver Name: cpu.inf
               Driver Package ID: cpu.inf_amd64_b0f89d78f7d4eadd
-              Class GUID: {50127dc3-0f36-415e-a6cc-4cb3be910b65}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 04/21/2009
               Driver Version: 10.0.26100.1150
               Driver Provider: Microsoft
@@ -1776,7 +1776,7 @@ Message     : Device ACPI\AuthenticAMD_-_AMD64_Family_25_Model_97_-_AMD_Ryzen_9_
               
               Driver Name: cpu.inf
               Driver Package ID: cpu.inf_amd64_b0f89d78f7d4eadd
-              Class GUID: {50127dc3-0f36-415e-a6cc-4cb3be910b65}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 04/21/2009
               Driver Version: 10.0.26100.1150
               Driver Provider: Microsoft
@@ -1793,7 +1793,7 @@ Message     : Device ACPI\AuthenticAMD_-_AMD64_Family_25_Model_97_-_AMD_Ryzen_9_
               
               Driver Name: cpu.inf
               Driver Package ID: cpu.inf_amd64_b0f89d78f7d4eadd
-              Class GUID: {50127dc3-0f36-415e-a6cc-4cb3be910b65}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 04/21/2009
               Driver Version: 10.0.26100.1150
               Driver Provider: Microsoft
@@ -1809,7 +1809,7 @@ Id          : 410
 Message     : Device ACPI\ACPI0010\2&daba3ff&0 was started.
               
               Driver Name: machine.inf
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: 
               Lower Filters: 
               Upper Filters: 
@@ -1819,7 +1819,7 @@ Id          : 410
 Message     : Device ACPI\FixedButton\2&daba3ff&0 was started.
               
               Driver Name: machine.inf
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: 
               Lower Filters: 
               Upper Filters: 
@@ -1830,7 +1830,7 @@ Message     : Device ACPI\FixedButton\2&daba3ff&0 was configured.
               
               Driver Name: machine.inf
               Driver Package ID: machine.inf_amd64_d807fc8146278f4c
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 06/21/2006
               Driver Version: 10.0.26100.1150
               Driver Provider: Microsoft
@@ -1847,7 +1847,7 @@ Message     : Device ACPI\MSFT0101\1 was configured.
               
               Driver Name: tpm.inf
               Driver Package ID: tpm.inf_amd64_781799b99d4537ce
-              Class GUID: {d94ee5d8-d189-4994-83d2-f68d7d41b0e6}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 06/21/2006
               Driver Version: 10.0.26100.1591
               Driver Provider: Microsoft
@@ -1864,7 +1864,7 @@ Message     : Device ACPI\ACPI0010\2&daba3ff&0 was configured.
               
               Driver Name: machine.inf
               Driver Package ID: machine.inf_amd64_d807fc8146278f4c
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 06/21/2006
               Driver Version: 10.0.26100.1150
               Driver Provider: Microsoft
@@ -1881,7 +1881,7 @@ Message     : Device ACPI\PNP0103\0 was configured.
               
               Driver Name: machine.inf
               Driver Package ID: machine.inf_amd64_d807fc8146278f4c
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 06/21/2006
               Driver Version: 10.0.26100.1150
               Driver Provider: Microsoft
@@ -1898,7 +1898,7 @@ Message     : Device ACPI\PNP0C01\2&daba3ff&0 was configured.
               
               Driver Name: machine.inf
               Driver Package ID: machine.inf_amd64_d807fc8146278f4c
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 06/21/2006
               Driver Version: 10.0.26100.1150
               Driver Provider: Microsoft
@@ -1915,7 +1915,7 @@ Message     : Device ACPI\PNP0A08\0 was configured.
               
               Driver Name: pci.inf
               Driver Package ID: pci.inf_amd64_2efa62b081af28ac
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 06/21/2006
               Driver Version: 10.0.26100.1150
               Driver Provider: Microsoft
@@ -1931,7 +1931,7 @@ Id          : 410
 Message     : Device ACPI_HAL\PNP0C08\0 was started.
               
               Driver Name: acpi.inf
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: ACPI
               Lower Filters: 
               Upper Filters: 
@@ -1941,7 +1941,7 @@ Id          : 410
 Message     : Device SWD\COMPUTER\MFG_QEMU&PROD_Standard_PC_(Q35_+_ICH9__2009) was started.
               
               Driver Name: compdev.inf
-              Class GUID: {4d36e966-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: 
               Lower Filters: 
               Upper Filters: 
@@ -1952,7 +1952,7 @@ Message     : Device SWD\COMPUTER\MFG_QEMU&PROD_Standard_PC_(Q35_+_ICH9__2009) w
               
               Driver Name: compdev.inf
               Driver Package ID: compdev.inf_amd64_bea70980d0aa2315
-              Class GUID: {4d36e966-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 06/21/2006
               Driver Version: 10.0.26100.1
               Driver Provider: Microsoft
@@ -1969,7 +1969,7 @@ Message     : Device ACPI_HAL\PNP0C08\0 was configured.
               
               Driver Name: acpi.inf
               Driver Package ID: acpi.inf_amd64_01ba755f30d016a7
-              Class GUID: {4d36e97d-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Driver Date: 06/21/2006
               Driver Version: 10.0.26100.1150
               Driver Provider: Microsoft
@@ -1985,7 +1985,7 @@ Id          : 410
 Message     : Device ROOT\ACPI_HAL\0000 was started.
               
               Driver Name: hal.inf
-              Class GUID: {4d36e966-e325-11ce-bfc1-08002be10318}
+              Class GUID: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
               Service: \Driver\ACPI_HAL
               Lower Filters: 
               Upper Filters: 

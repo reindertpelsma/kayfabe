@@ -16,7 +16,7 @@ WSManStackVersion: 3.0
 PSRemotingProtocolVersion: 2.3
 SerializationVersion: 1.1.0.1
 **********************
-GSP_ON device PCI\VEN_10DE&DEV_2684&SUBSYS_40DA1458&REV_A1\3&11583659&0&28 name='Microsoft Basic Display Adapter' status=OK problem=CM_PROB_NONE inf=display.inf driverkey={4d36e968-e325-11ce-bfc1-08002be10318}\0001
+GSP_ON device PCI\VEN_10DE&DEV_2684&SUBSYS_40DA1458&REV_A1\3&11583659&0&28 name='Microsoft Basic Display Adapter' status=OK problem=CM_PROB_NONE inf=display.inf driverkey={fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}\0001
 GSP_ON nvlddmkm.sys signature status=Valid signer='CN=NVIDIA Corporation, OU=1-F, O=NVIDIA Corporation, L=Santa Clara, S=California, C=US'
 GSP_ON disable: Microsoft PnP Utility
 GSP_ON disable:
@@ -33,8 +33,8 @@ GSP_ON add-driver:
 GSP_ON add-driver: Total driver packages:  1
 GSP_ON add-driver: Added driver packages:  1
 GSP_ON add-driver rc=0
-GSP_ON after install: inf=oem7.inf driverkey={4d36e968-e325-11ce-bfc1-08002be10318}\0001 version=32.0.15.8088
-GSP_ON readback HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0001 EnableGpuFirmware=1
+GSP_ON after install: inf=oem7.inf driverkey={fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}\0001 version=32.0.15.8088
+GSP_ON readback HKLM:\SYSTEM\CurrentControlSet\Control\Class\{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}\0001 EnableGpuFirmware=1
 GSP_ON readback HKLM:\SYSTEM\CurrentControlSet\Services\nvlddmkm EnableGpuFirmware=1
 **********************
 Windows PowerShell transcript end

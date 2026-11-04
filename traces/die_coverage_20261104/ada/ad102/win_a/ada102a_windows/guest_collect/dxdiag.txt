@@ -3,7 +3,7 @@ System Information
 ------------------
       Time of this report: 11/4/2026, 01:03:54
              Machine name: KFWIN
-               Machine Id: {FC9CDCFE-30CD-4929-B472-41F210814D17}
+               Machine Id: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
          Operating System: Windows 11 Enterprise LTSC Evaluation 64-bit (10.0, Build 26100) (26100.ge_release.240331-1435)
                  Language: English (Regional Setting: English)
       System Manufacturer: QEMU
@@ -97,7 +97,7 @@ Display Devices
   Driver Strong Name: oem7.inf:0f066de37724018d:Section072:32.0.15.8088:pci\ven_10de&dev_2684
       Rank Of Driver: 00CF2001
          Video Accel: Unknown
-         DXVA2 Modes: {86695F12-340E-4F04-9FD3-9253DD327460}  DXVA2_ModeMPEG2_VLD  {6F3EC719-3735-42CC-8063-65CC3CB36616}  DXVA2_ModeVC1_D2010  DXVA2_ModeVC1_VLD  {32FCFE3F-DE46-4A49-861B-AC71110649D5}  DXVA2_ModeH264_VLD_Stereo_Progressive_NoFGT  DXVA2_ModeH264_VLD_Stereo_NoFGT  DXVA2_ModeH264_VLD_NoFGT  DXVA2_ModeHEVC_VLD_Main  DXVA2_ModeHEVC_VLD_Main10  {1A72925F-0C2C-4F15-96FB-B17D1473603F}  {15DF9B21-06C4-47F1-841E-A67C97D7F312}  {4008018F-F537-4B36-98CF-61AF8A2C1A33}  {0DABEFFA-4458-4602-BC03-0795659D617C}  {9798634D-FE9D-48E5-B4DA-DBEC45B3DF01}  DXVA2_ModeMPEG4pt2_VLD_Simple  DXVA2_ModeMPEG4pt2_VLD_AdvSimple_NoGMC  {9947EC6F-689B-11DC-A320-0019DBBC4184}  {33FCFE41-DE46-4A49-861B-AC71110649D5}  DXVA2_ModeVP9_VLD_Profile0  DXVA2_ModeVP9_VLD_10bit_Profile2  {DDA19DC7-93B5-49F5-A9B3-2BDA28A2CE6E}  {B8BE4CCB-CF53-46BA-8D59-D6B8A6DA5D2A}  {6AFFD11E-1D96-42B1-A215-93A31F09A53D}  {8A1A1031-29BC-46D0-A007-E9B092CA6767}  
+         DXVA2 Modes: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}  DXVA2_ModeMPEG2_VLD  {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}  DXVA2_ModeVC1_D2010  DXVA2_ModeVC1_VLD  {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}  DXVA2_ModeH264_VLD_Stereo_Progressive_NoFGT  DXVA2_ModeH264_VLD_Stereo_NoFGT  DXVA2_ModeH264_VLD_NoFGT  DXVA2_ModeHEVC_VLD_Main  DXVA2_ModeHEVC_VLD_Main10  {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}  {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}  {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}  {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}  {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}  DXVA2_ModeMPEG4pt2_VLD_Simple  DXVA2_ModeMPEG4pt2_VLD_AdvSimple_NoGMC  {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}  {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}  DXVA2_ModeVP9_VLD_Profile0  DXVA2_ModeVP9_VLD_10bit_Profile2  {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}  {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}  {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}  {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}  
          D3D12 Encode Modes: { D3D12_VIDEO_ENCODER_PROFILE_H264_MAIN } { D3D12_VIDEO_ENCODER_PROFILE_H264_HIGH } { D3D12_VIDEO_ENCODER_PROFILE_HEVC_MAIN }{ D3D12_VIDEO_ENCODER_PROFILE_HEVC_MAIN10 }{ D3D12_VIDEO_ENCODER_AV1_PROFILE_MAIN }
       Deinterlace Caps: n/a
         D3D9 Overlay: Unknown
@@ -592,16 +592,16 @@ Preferred DirectShow Filters
 MEDIASUBTYPE_DVD_LPCM_AUDIO, Microsoft DTV-DVD Audio Decoder, CLSID_CMPEG2AudDecoderDS
 MEDIASUBTYPE_MPEG2_AUDIO, Microsoft DTV-DVD Audio Decoder, CLSID_CMPEG2AudDecoderDS
 MEDIASUBTYPE_MPEG2_VIDEO, Microsoft DTV-DVD Video Decoder, CLSID_CMPEG2VidDecoderDS
-{78766964-0000-0010-8000-00AA00389B71}, Mpeg4s Decoder DMO, CLSID_CMpeg4sDecMediaObject
-{7634706D-0000-0010-8000-00AA00389B71}, Mpeg4s Decoder DMO, CLSID_CMpeg4sDecMediaObject
+{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, Mpeg4s Decoder DMO, CLSID_CMpeg4sDecMediaObject
+{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, Mpeg4s Decoder DMO, CLSID_CMpeg4sDecMediaObject
 MEDIASUBTYPE_mp4s, Mpeg4s Decoder DMO, CLSID_CMpeg4sDecMediaObject
-{64697678-0000-0010-8000-00AA00389B71}, Mpeg4s Decoder DMO, CLSID_CMpeg4sDecMediaObject
-{58564944-0000-0010-8000-00AA00389B71}, Mpeg4s Decoder DMO, CLSID_CMpeg4sDecMediaObject
-{5634504D-0000-0010-8000-00AA00389B71}, Mpeg4s Decoder DMO, CLSID_CMpeg4sDecMediaObject
+{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, Mpeg4s Decoder DMO, CLSID_CMpeg4sDecMediaObject
+{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, Mpeg4s Decoder DMO, CLSID_CMpeg4sDecMediaObject
+{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, Mpeg4s Decoder DMO, CLSID_CMpeg4sDecMediaObject
 MEDIASUBTYPE_MP4S, Mpeg4s Decoder DMO, CLSID_CMpeg4sDecMediaObject
 MEDIASUBTYPE_WMVR, WMVideo Decoder DMO, CLSID_CWMVDecMediaObject
 MEDIASUBTYPE_WMVP, WMVideo Decoder DMO, CLSID_CWMVDecMediaObject
-{44495658-0000-0010-8000-00AA00389B71}, Mpeg4s Decoder DMO, CLSID_CMpeg4sDecMediaObject
+{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, Mpeg4s Decoder DMO, CLSID_CMpeg4sDecMediaObject
 MEDIASUBTYPE_WMVA, WMVideo Decoder DMO, CLSID_CWMVDecMediaObject
 MEDIASUBTYPE_mpg4, Mpeg4 Decoder DMO, CLSID_CMpeg4DecMediaObject
 MEDIASUBTYPE_MPG4, Mpeg4 Decoder DMO, CLSID_CMpeg4DecMediaObject
@@ -631,11 +631,11 @@ MEDIASUBTYPE_RAW_AAC1, Microsoft DTV-DVD Audio Decoder, CLSID_CMPEG2AudDecoderDS
 WMMEDIASUBTYPE_MP3, MP3 Decoder DMO, CLSID_CMP3DecMediaObject
 MEDIASUBTYPE_MPEG1Payload, MPEG Video Decoder, CLSID_CMpegVideoCodec
 MEDIASUBTYPE_MPEG1Packet, MPEG Video Decoder, CLSID_CMpegVideoCodec
-{6C737664-0000-0010-8000-00AA00389B71}, DV Video Decoder, CLSID_DVVideoCodec
-{64737664-0000-0010-8000-00AA00389B71}, DV Video Decoder, CLSID_DVVideoCodec
-{64687664-0000-0010-8000-00AA00389B71}, DV Video Decoder, CLSID_DVVideoCodec
+{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, DV Video Decoder, CLSID_DVVideoCodec
+{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, DV Video Decoder, CLSID_DVVideoCodec
+{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, DV Video Decoder, CLSID_DVVideoCodec
 MEDIASUBTYPE_MJPG, MJPEG Decompressor, CLSID_MjpegDec
-{20637664-0000-0010-8000-00AA00389B71}, DV Video Decoder, CLSID_DVVideoCodec
+{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, DV Video Decoder, CLSID_DVVideoCodec
 MEDIASUBTYPE_MPEG1AudioPayload, MPEG Audio Decoder, CLSID_CMpegAudioCodec
 WMMEDIASUBTYPE_WMSP2, WMSpeech Decoder DMO, CLSID_CWMSPDecMediaObject
 WMMEDIASUBTYPE_WMSP1, WMSpeech Decoder DMO, CLSID_CWMSPDecMediaObject
@@ -664,70 +664,70 @@ Media Foundation Transforms
   <transform friendly name>, <transform CLSID>, <flags>, [<merit>, ]<file name>, <file version>
 
 Video Decoders:
-  NVIDIA MJPEG Video Decoder MFT, {70F36578-2741-454F-B494-E8563DDD1CB4}, 0x4, 8, nvDecMFTMjpegx.dll, 32.00.0015.8088
-  Microsoft MPEG Video Decoder MFT, {2D709E52-123F-49B5-9CBC-9AF5CDE28FB9}, 0x1, msmpeg2vdec.dll, 10.00.26100.1742
-  DV Decoder MFT, {404A6DE5-D4D6-4260-9BC7-5A6CBD882432}, 0x1, mfdvdec.dll, 10.00.26100.0001
+  NVIDIA MJPEG Video Decoder MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, 0x4, 8, nvDecMFTMjpegx.dll, 32.00.0015.8088
+  Microsoft MPEG Video Decoder MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, 0x1, msmpeg2vdec.dll, 10.00.26100.1742
+  DV Decoder MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, 0x1, mfdvdec.dll, 10.00.26100.0001
   Mpeg4s Decoder MFT, CLSID_CMpeg4sDecMFT, 0x1, mp4sdecd.dll, 10.00.26100.1150
   Microsoft H264 Video Decoder MFT, CLSID_CMSH264DecoderMFT, 0x1, msmpeg2vdec.dll, 10.00.26100.1742
   WMV Screen decoder MFT, CLSID_CMSSCDecMediaObject, 0x1, wmvsdecd.dll, 10.00.26100.1150
   WMVideo Decoder MFT, CLSID_CWMVDecMediaObject, 0x1, wmvdecod.dll, 10.00.26100.1742
-  MJPEG Decoder MFT, {CB17E772-E1CC-4633-8450-5617AF577905}, 0x1, mfmjpegdec.dll, 10.00.26100.1301
+  MJPEG Decoder MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, 0x1, mfmjpegdec.dll, 10.00.26100.1301
   Mpeg43 Decoder MFT, CLSID_CMpeg43DecMediaObject, 0x1, mp43decd.dll, 10.00.26100.1150
   Mpeg4 Decoder MFT, CLSID_CMpeg4DecMediaObject, 0x1, mpg4decd.dll, 10.00.26100.1150
 Video Encoders:
-  NVIDIA H.264 Encoder MFT, {60F44560-5A20-4857-BFEF-D29773CB8040}, 0x4, 8, nvEncMFTH264x.dll, 32.00.0015.8088
-  NVIDIA AV1 Encoder MFT, {80B80715-8C5A-420D-B346-1A9DC40A5880}, 0x4, 8, nvEncMFTav1x.dll, 32.00.0015.8088
-  NVIDIA HEVC Encoder MFT, {966F107C-8EA2-425D-B822-E4A71BEF01D7}, 0x4, 8, nvEncMFThevcx.dll, 32.00.0015.8088
-  H264 Encoder MFT, {6CA50344-051A-4DED-9779-A43305165E35}, 0x1, mfh264enc.dll, 10.00.26100.1150
+  NVIDIA H.264 Encoder MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, 0x4, 8, nvEncMFTH264x.dll, 32.00.0015.8088
+  NVIDIA AV1 Encoder MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, 0x4, 8, nvEncMFTav1x.dll, 32.00.0015.8088
+  NVIDIA HEVC Encoder MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, 0x4, 8, nvEncMFThevcx.dll, 32.00.0015.8088
+  H264 Encoder MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, 0x1, mfh264enc.dll, 10.00.26100.1150
   WMVideo8 Encoder MFT, CLSID_CWMVXEncMediaObject, 0x1, wmvxencd.dll, 10.00.26100.0001
-  H263 Encoder MFT, {BC47FCFE-98A0-4F27-BB07-698AF24F2B38}, 0x1, mfh263enc.dll, 10.00.26100.1150
+  H263 Encoder MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, 0x1, mfh263enc.dll, 10.00.26100.1150
   WMVideo9 Encoder MFT, CLSID_CWMV9EncMediaObject, 0x1, wmvencod.dll, 10.00.26100.1150
-  Microsoft MPEG-2 Video Encoder MFT, {E6335F02-80B7-4DC4-ADFA-DFE7210D20D5}, 0x2, msmpeg2enc.dll, 10.00.26100.1150
+  Microsoft MPEG-2 Video Encoder MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, 0x2, msmpeg2enc.dll, 10.00.26100.1150
 Video Effects:
   Frame Rate Converter, CLSID_CFrameRateConvertDmo, 0x1, mfvdsp.dll, 10.00.26100.1150
   Resizer MFT, CLSID_CResizerDMO, 0x1, vidreszr.dll, 10.00.26100.0001
-  VideoStabilization MFT, {51571744-7FE4-4FF2-A498-2DC34FF74F1B}, 0x1, MSVideoDSP.dll, 10.00.26100.0001
+  VideoStabilization MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, 0x1, MSVideoDSP.dll, 10.00.26100.0001
   Color Control, CLSID_CColorControlDmo, 0x1, mfvdsp.dll, 10.00.26100.1150
   Color Converter MFT, CLSID_CColorConvertDMO, 0x1, colorcnv.dll, 10.00.26100.1150
 Video Processor:
-  Microsoft Video Processor MFT, {88753B26-5B24-49BD-B2E7-0C445C78C982}, 0x1, msvproc.dll, 10.00.26100.1150
+  Microsoft Video Processor MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, 0x1, msvproc.dll, 10.00.26100.1150
 Audio Decoders:
-  Microsoft MpegH Decoder MFT, {134DEA6F-C2EB-4FA8-8281-356600A9814E}, 0x1, mfaudiocnv.dll, 10.00.26100.1150
-  MS AMRNB Decoder MFT, {265011AE-5481-4F77-A295-ABB6FFE8D63E}, 0x1, MSAMRNBDecoder.dll, 10.00.26100.1150
+  Microsoft MpegH Decoder MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, 0x1, mfaudiocnv.dll, 10.00.26100.1150
+  MS AMRNB Decoder MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, 0x1, MSAMRNBDecoder.dll, 10.00.26100.1150
   WMAudio Decoder MFT, CLSID_CWMADecMediaObject, 0x1, WMADMOD.DLL, 10.00.26100.1150
   Microsoft AAC Audio Decoder MFT, CLSID_CMSAACDecMFT, 0x1, MSAudDecMFT.dll, 10.00.26100.1150
-  A-law Wrapper MFT, {36CB6E0C-78C1-42B2-9943-846262F31786}, 0x1, mfcore.dll, 10.00.26100.1742
-  GSM ACM Wrapper MFT, {4A76B469-7B66-4DD4-BA2D-DDF244C766DC}, 0x1, mfcore.dll, 10.00.26100.1742
+  A-law Wrapper MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, 0x1, mfcore.dll, 10.00.26100.1742
+  GSM ACM Wrapper MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, 0x1, mfcore.dll, 10.00.26100.1742
   WMAPro over S/PDIF MFT, CLSID_CWMAudioSpdTxDMO, 0x1, WMADMOD.DLL, 10.00.26100.1150
-  Microsoft Opus Audio Decoder MFT, {63E17C10-2D43-4C42-8FE3-8D8B63E46A6A}, 0x1, MSOpusDecoder.dll, 10.00.26100.1150
-  Microsoft FLAC Audio Decoder MFT, {6B0B3E6B-A2C5-4514-8055-AFE8A95242D9}, 0x1, MSFlacDecoder.dll, 10.00.26100.1150
-  Microsoft MPEG Audio Decoder MFT, {70707B39-B2CA-4015-ABEA-F8447D22D88B}, 0x1, MSAudDecMFT.dll, 10.00.26100.1150
+  Microsoft Opus Audio Decoder MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, 0x1, MSOpusDecoder.dll, 10.00.26100.1150
+  Microsoft FLAC Audio Decoder MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, 0x1, MSFlacDecoder.dll, 10.00.26100.1150
+  Microsoft MPEG Audio Decoder MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, 0x1, MSAudDecMFT.dll, 10.00.26100.1150
   WMSpeech Decoder DMO, CLSID_CWMSPDecMediaObject, 0x1, WMSPDMOD.DLL, 10.00.26100.1150
-  G711 Wrapper MFT, {92B66080-5E2D-449E-90C4-C41F268E5514}, 0x1, mfcore.dll, 10.00.26100.1742
-  IMA ADPCM ACM Wrapper MFT, {A16E1BFF-A80D-48AD-AECD-A35C005685FE}, 0x1, mfcore.dll, 10.00.26100.1742
-  Dolby AC-3 and E-AC-3 IEC-61937 converter MFT, {A7E6022F-F78F-4AA9-A49A-567A60332635}, 0x1, mfaudiocnv.dll, 10.00.26100.1150
+  G711 Wrapper MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, 0x1, mfcore.dll, 10.00.26100.1742
+  IMA ADPCM ACM Wrapper MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, 0x1, mfcore.dll, 10.00.26100.1742
+  Dolby AC-3 and E-AC-3 IEC-61937 converter MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, 0x1, mfaudiocnv.dll, 10.00.26100.1150
   MP3 Decoder MFT, CLSID_CMP3DecMediaObject, 0x1, mp3dmod.dll, 10.00.26100.1150
-  Microsoft ALAC Audio Decoder MFT, {C0CD7D12-31FC-4BBC-B363-7322EE3E1879}, 0x1, MSAlacDecoder.dll, 10.00.26100.1150
-  ADPCM ACM Wrapper MFT, {CA34FE0A-5722-43AD-AF23-05F7650257DD}, 0x1, mfcore.dll, 10.00.26100.1742
-  Dolby TrueHD IEC-61937 converter MFT, {CF5EEEDF-0E92-4B3B-A161-BD0FFE545E4B}, 0x1, mfaudiocnv.dll, 10.00.26100.1150
-  DTS IEC-61937 converter MFT, {D035E24C-C877-42D7-A795-2A8A339B472F}, 0x1, mfaudiocnv.dll, 10.00.26100.1150
+  Microsoft ALAC Audio Decoder MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, 0x1, MSAlacDecoder.dll, 10.00.26100.1150
+  ADPCM ACM Wrapper MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, 0x1, mfcore.dll, 10.00.26100.1742
+  Dolby TrueHD IEC-61937 converter MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, 0x1, mfaudiocnv.dll, 10.00.26100.1150
+  DTS IEC-61937 converter MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, 0x1, mfaudiocnv.dll, 10.00.26100.1150
 Audio Encoders:
-  LPCM DVD-Audio MFT, {068A8476-9229-4CC0-9D49-2FC699DCD30A}, 0x1, mfaudiocnv.dll, 10.00.26100.1150
-  MP3 Encoder ACM Wrapper MFT, {11103421-354C-4CCA-A7A3-1AFF9A5B6701}, 0x1, mfcore.dll, 10.00.26100.1742
-  Microsoft FLAC Audio Encoder MFT, {128509E9-C44E-45DC-95E9-C255B8F466A6}, 0x1, MSFlacEncoder.dll, 10.00.26100.1150
+  LPCM DVD-Audio MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, 0x1, mfaudiocnv.dll, 10.00.26100.1150
+  MP3 Encoder ACM Wrapper MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, 0x1, mfcore.dll, 10.00.26100.1742
+  Microsoft FLAC Audio Encoder MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, 0x1, MSFlacEncoder.dll, 10.00.26100.1150
   WM Speech Encoder DMO, CLSID_CWMSPEncMediaObject2, 0x1, WMSPDMOE.DLL, 10.00.26100.1150
-  MS AMRNB Encoder MFT, {2FAE8AFE-04A3-423A-A814-85DB454712B0}, 0x1, MSAMRNBEncoder.dll, 10.00.26100.1150
-  Microsoft MPEG-2 Audio Encoder MFT, {46A4DD5C-73F8-4304-94DF-308F760974F4}, 0x1, msmpeg2enc.dll, 10.00.26100.1150
+  MS AMRNB Encoder MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, 0x1, MSAMRNBEncoder.dll, 10.00.26100.1150
+  Microsoft MPEG-2 Audio Encoder MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, 0x1, msmpeg2enc.dll, 10.00.26100.1150
   WMAudio Encoder MFT, CLSID_CWMAEncMediaObject, 0x1, WMADMOE.DLL, 10.00.26100.1150
-  Microsoft AAC Audio Encoder MFT, {93AF0C51-2275-45D2-A35B-F2BA21CAED00}, 0x1, mfAACEnc.dll, 10.00.26100.1591
-  Microsoft ALAC Audio Encoder MFT, {9AB6A28C-748E-4B6A-BFFF-CC443B8E8FB4}, 0x1, MSAlacEncoder.dll, 10.00.26100.1150
+  Microsoft AAC Audio Encoder MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, 0x1, mfAACEnc.dll, 10.00.26100.1591
+  Microsoft ALAC Audio Encoder MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, 0x1, MSAlacEncoder.dll, 10.00.26100.1150
 Audio Effects:
   AEC, CLSID_CWMAudioAEC, 0x1, mfwmaaec.dll, 10.00.26100.0001
   Resampler MFT, CLSID_CResamplerMediaObject, 0x1, resampledmo.dll, 10.00.26100.1150
 Multiplexers:
-  Microsoft MPEG2 Multiplexer MFT, {AB300F71-01AB-46D2-AB6C-64906CB03258}, 0x2, mfmpeg2srcsnk.dll, 10.00.26100.1742
+  Microsoft MPEG2 Multiplexer MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, 0x2, mfmpeg2srcsnk.dll, 10.00.26100.1742
 Others:
-  Microsoft H264 Video Remux (MPEG2TSToMP4) MFT, {05A47EBB-8BF0-4CBF-AD2F-3B71D75866F5}, 0x1, msmpeg2vdec.dll, 10.00.26100.1742
+  Microsoft H264 Video Remux (MPEG2TSToMP4) MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, 0x1, msmpeg2vdec.dll, 10.00.26100.1742
 
 
 --------------------------------------------
@@ -749,95 +749,95 @@ Media Foundation Byte Stream Handlers
 
 <file ext. or MIME type>, <handler CLSID>, <brief description>[, Preferred]
 
-.3g2, {271C3902-6095-4C45-A22F-20091816EE9E}, MPEG4 Byte Stream Handler, Preferred
-.3gp, {271C3902-6095-4C45-A22F-20091816EE9E}, MPEG4 Byte Stream Handler, Preferred
-.3gp2, {271C3902-6095-4C45-A22F-20091816EE9E}, MPEG4 Byte Stream Handler, Preferred
-.3gpp, {271C3902-6095-4C45-A22F-20091816EE9E}, MPEG4 Byte Stream Handler, Preferred
-.aac, {926F41F7-003E-4382-9E84-9E953BE10562}, ADTS Byte Stream Handler, Preferred
-.ac3, {46031BA1-083F-47D9-8369-23C92BDAB2FF}, AC-3 Byte Stream Handler, Preferred
-.adt, {926F41F7-003E-4382-9E84-9E953BE10562}, ADTS Byte Stream Handler, Preferred
-.adts, {926F41F7-003E-4382-9E84-9E953BE10562}, ADTS Byte Stream Handler, Preferred
-.am?, {EFE6208A-0A2C-49FA-8A01-3768B559B6DA}, MF AMRNB Media Source ByteStreamHandler
-.amr, {EFE6208A-0A2C-49FA-8A01-3768B559B6DA}, MF AMRNB Media Source ByteStreamHandler, Preferred
-.asf, {41457294-644C-4298-A28A-BD69F2C0CF3B}, ASF Byte Stream Handler, Preferred
-.avi, {7AFA253E-F823-42F6-A5D9-714BDE467412}, AVI Byte Stream Handler, Preferred
-.dvr-ms, {A8721937-E2FB-4D7A-A9EE-4EB08C890B6E}, MF SBE Source ByteStreamHandler
-.dvr-ms, {65964407-A5D8-4060-85B0-1CCD63F768E2}, dvr-ms Byte Stream Handler, Preferred
-.ec3, {46031BA1-083F-47D9-8369-23C92BDAB2FF}, AC-3 Byte Stream Handler, Preferred
-.flac, {0E41CFB8-0506-40F4-A516-77CC23642D91}, MF FLAC Media Source ByteStreamHandler, Preferred
-.m2t, {40871C59-AB40-471F-8DC3-1F259D862479}, MPEG2 Byte Stream Handler, Preferred
-.m2ts, {40871C59-AB40-471F-8DC3-1F259D862479}, MPEG2 Byte Stream Handler, Preferred
-.m4a, {271C3902-6095-4C45-A22F-20091816EE9E}, MPEG4 Byte Stream Handler, Preferred
-.m4v, {271C3902-6095-4C45-A22F-20091816EE9E}, MPEG4 Byte Stream Handler, Preferred
-.mk3d, {1F9A2C18-D89E-463E-B4F4-BB90152ACC64}, MKV Byte Stream Handler, Preferred
-.mka, {1F9A2C18-D89E-463E-B4F4-BB90152ACC64}, MKV Byte Stream Handler, Preferred
-.mks, {1F9A2C18-D89E-463E-B4F4-BB90152ACC64}, MKV Byte Stream Handler, Preferred
-.mkv, {1F9A2C18-D89E-463E-B4F4-BB90152ACC64}, MKV Byte Stream Handler, Preferred
-.mod, {40871C59-AB40-471F-8DC3-1F259D862479}, MPEG2 Byte Stream Handler, Preferred
-.mov, {271C3902-6095-4C45-A22F-20091816EE9E}, MPEG4 Byte Stream Handler, Preferred
-.mp2v, {40871C59-AB40-471F-8DC3-1F259D862479}, MPEG2 Byte Stream Handler, Preferred
-.mp3, {A82E50BA-8E92-41EB-9DF2-433F50EC2993}, MP3 Byte Stream Handler, Preferred
-.mp4, {271C3902-6095-4C45-A22F-20091816EE9E}, MPEG4 Byte Stream Handler, Preferred
-.mp4v, {271C3902-6095-4C45-A22F-20091816EE9E}, MPEG4 Byte Stream Handler, Preferred
-.mpa, {A82E50BA-8E92-41EB-9DF2-433F50EC2993}, MP3 Byte Stream Handler, Preferred
-.mpeg, {40871C59-AB40-471F-8DC3-1F259D862479}, MPEG2 Byte Stream Handler, Preferred
-.mpg, {40871C59-AB40-471F-8DC3-1F259D862479}, MPEG2 Byte Stream Handler, Preferred
-.mts, {40871C59-AB40-471F-8DC3-1F259D862479}, MPEG2 Byte Stream Handler, Preferred
-.nsc, {B084785C-DDE0-4D30-8CA8-05A373E185BE}, NSC Byte Stream Handler, Preferred
-.sami, {7A56C4CB-D678-4188-85A8-BA2EF68FA10D}, SAMI Byte Stream Handler, Preferred
-.smi, {7A56C4CB-D678-4188-85A8-BA2EF68FA10D}, SAMI Byte Stream Handler, Preferred
-.tod, {40871C59-AB40-471F-8DC3-1F259D862479}, MPEG2 Byte Stream Handler, Preferred
-.ts, {40871C59-AB40-471F-8DC3-1F259D862479}, MPEG2 Byte Stream Handler, Preferred
-.tts, {40871C59-AB40-471F-8DC3-1F259D862479}, MPEG2 Byte Stream Handler, Preferred
-.uvu, {271C3902-6095-4C45-A22F-20091816EE9E}, MPEG4 Byte Stream Handler, Preferred
-.vob, {40871C59-AB40-471F-8DC3-1F259D862479}, MPEG2 Byte Stream Handler, Preferred
-.wav, {42C9B9F5-16FC-47EF-AF22-DA05F7C842E3}, WAV Byte Stream Handler, Preferred
-.weba, {1F9A2C18-D89E-463E-B4F4-BB90152ACC64}, WEBM Byte Stream Handler, Preferred
-.webm, {1F9A2C18-D89E-463E-B4F4-BB90152ACC64}, WEBM Byte Stream Handler, Preferred
-.wm, {41457294-644C-4298-A28A-BD69F2C0CF3B}, ASF Byte Stream Handler, Preferred
-.wma, {41457294-644C-4298-A28A-BD69F2C0CF3B}, ASF Byte Stream Handler, Preferred
-.wmv, {41457294-644C-4298-A28A-BD69F2C0CF3B}, ASF Byte Stream Handler, Preferred
-.wtv, {65964407-A5D8-4060-85B0-1CCD63F768E2}, WTV Byte Stream Handler, Preferred
-audio/3gpp, {271C3902-6095-4C45-A22F-20091816EE9E}, MPEG4 Byte Stream Handler, Preferred
-audio/3gpp2, {271C3902-6095-4C45-A22F-20091816EE9E}, MPEG4 Byte Stream Handler, Preferred
-audio/aac, {926F41F7-003E-4382-9E84-9E953BE10562}, ADTS Byte Stream Handler, Preferred
-audio/aacp, {926F41F7-003E-4382-9E84-9E953BE10562}, ADTS Byte Stream Handler, Preferred
-audio/eac3, {46031BA1-083F-47D9-8369-23C92BDAB2FF}, AC-3 Byte Stream Handler, Preferred
-audio/flac, {0E41CFB8-0506-40F4-A516-77CC23642D91}, MF FLAC Media Source ByteStreamHandler, Preferred
-audio/L16, {3FFB3B8C-EB99-472B-8902-E1C1B05F07CF}, LPCM Byte Stream Handler, Preferred
-audio/mp3, {A82E50BA-8E92-41EB-9DF2-433F50EC2993}, MP3 Byte Stream Handler, Preferred
-audio/mp4, {271C3902-6095-4C45-A22F-20091816EE9E}, MPEG4 Byte Stream Handler, Preferred
-audio/MP4A-LATM, {271C3902-6095-4C45-A22F-20091816EE9E}, MPEG4 Byte Stream Handler, Preferred
-audio/mpa, {A82E50BA-8E92-41EB-9DF2-433F50EC2993}, MP3 Byte Stream Handler, Preferred
-audio/mpeg, {A82E50BA-8E92-41EB-9DF2-433F50EC2993}, MP3 Byte Stream Handler, Preferred
-audio/mpeg3, {A82E50BA-8E92-41EB-9DF2-433F50EC2993}, MP3 Byte Stream Handler, Preferred
-audio/vnd.dlna.adts, {926F41F7-003E-4382-9E84-9E953BE10562}, ADTS Byte Stream Handler, Preferred
-audio/vnd.dolby.dd-raw, {46031BA1-083F-47D9-8369-23C92BDAB2FF}, AC-3 Byte Stream Handler, Preferred
-audio/wav, {42C9B9F5-16FC-47EF-AF22-DA05F7C842E3}, WAV Byte Stream Handler, Preferred
-audio/webm, {1F9A2C18-D89E-463E-B4F4-BB90152ACC64}, WEBM Byte Stream Handler, Preferred
-audio/x-aac, {926F41F7-003E-4382-9E84-9E953BE10562}, ADTS Byte Stream Handler, Preferred
-audio/x-flac, {0E41CFB8-0506-40F4-A516-77CC23642D91}, MF FLAC Media Source ByteStreamHandler, Preferred
-audio/x-m4a, {271C3902-6095-4C45-A22F-20091816EE9E}, MPEG4 Byte Stream Handler, Preferred
-audio/x-matroska, {1F9A2C18-D89E-463E-B4F4-BB90152ACC64}, MKV Byte Stream Handler, Preferred
-audio/x-mp3, {A82E50BA-8E92-41EB-9DF2-433F50EC2993}, MP3 Byte Stream Handler, Preferred
-audio/x-mpeg, {A82E50BA-8E92-41EB-9DF2-433F50EC2993}, MP3 Byte Stream Handler, Preferred
-audio/x-ms-wma, {41457294-644C-4298-A28A-BD69F2C0CF3B}, ASF Byte Stream Handler, Preferred
-audio/x-wav, {42C9B9F5-16FC-47EF-AF22-DA05F7C842E3}, WAV Byte Stream Handler, Preferred
-video/3gpp, {271C3902-6095-4C45-A22F-20091816EE9E}, MPEG4 Byte Stream Handler, Preferred
-video/3gpp2, {271C3902-6095-4C45-A22F-20091816EE9E}, MPEG4 Byte Stream Handler, Preferred
-video/avi, {7AFA253E-F823-42F6-A5D9-714BDE467412}, AVI Byte Stream Handler, Preferred
-video/mp4, {271C3902-6095-4C45-A22F-20091816EE9E}, MPEG4 Byte Stream Handler, Preferred
-video/mpeg, {40871C59-AB40-471F-8DC3-1F259D862479}, MPEG2 Byte Stream Handler, Preferred
-video/msvideo, {7AFA253E-F823-42F6-A5D9-714BDE467412}, AVI Byte Stream Handler, Preferred
-video/vnd.dece.mp4, {271C3902-6095-4C45-A22F-20091816EE9E}, MPEG4 Byte Stream Handler, Preferred
-video/vnd.dlna.mpeg-tts, {40871C59-AB40-471F-8DC3-1F259D862479}, MPEG2 Byte Stream Handler, Preferred
-video/webm, {1F9A2C18-D89E-463E-B4F4-BB90152ACC64}, WEBM Byte Stream Handler, Preferred
-video/x-m4v, {271C3902-6095-4C45-A22F-20091816EE9E}, MPEG4 Byte Stream Handler, Preferred
-video/x-matroska, {1F9A2C18-D89E-463E-B4F4-BB90152ACC64}, MKV Byte Stream Handler, Preferred
-video/x-ms-asf, {41457294-644C-4298-A28A-BD69F2C0CF3B}, ASF Byte Stream Handler, Preferred
-video/x-ms-wm, {41457294-644C-4298-A28A-BD69F2C0CF3B}, ASF Byte Stream Handler, Preferred
-video/x-ms-wmv, {41457294-644C-4298-A28A-BD69F2C0CF3B}, ASF Byte Stream Handler, Preferred
-video/x-msvideo, {7AFA253E-F823-42F6-A5D9-714BDE467412}, AVI Byte Stream Handler, Preferred
+.3g2, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MPEG4 Byte Stream Handler, Preferred
+.3gp, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MPEG4 Byte Stream Handler, Preferred
+.3gp2, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MPEG4 Byte Stream Handler, Preferred
+.3gpp, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MPEG4 Byte Stream Handler, Preferred
+.aac, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, ADTS Byte Stream Handler, Preferred
+.ac3, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, AC-3 Byte Stream Handler, Preferred
+.adt, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, ADTS Byte Stream Handler, Preferred
+.adts, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, ADTS Byte Stream Handler, Preferred
+.am?, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MF AMRNB Media Source ByteStreamHandler
+.amr, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MF AMRNB Media Source ByteStreamHandler, Preferred
+.asf, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, ASF Byte Stream Handler, Preferred
+.avi, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, AVI Byte Stream Handler, Preferred
+.dvr-ms, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MF SBE Source ByteStreamHandler
+.dvr-ms, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, dvr-ms Byte Stream Handler, Preferred
+.ec3, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, AC-3 Byte Stream Handler, Preferred
+.flac, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MF FLAC Media Source ByteStreamHandler, Preferred
+.m2t, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MPEG2 Byte Stream Handler, Preferred
+.m2ts, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MPEG2 Byte Stream Handler, Preferred
+.m4a, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MPEG4 Byte Stream Handler, Preferred
+.m4v, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MPEG4 Byte Stream Handler, Preferred
+.mk3d, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MKV Byte Stream Handler, Preferred
+.mka, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MKV Byte Stream Handler, Preferred
+.mks, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MKV Byte Stream Handler, Preferred
+.mkv, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MKV Byte Stream Handler, Preferred
+.mod, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MPEG2 Byte Stream Handler, Preferred
+.mov, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MPEG4 Byte Stream Handler, Preferred
+.mp2v, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MPEG2 Byte Stream Handler, Preferred
+.mp3, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MP3 Byte Stream Handler, Preferred
+.mp4, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MPEG4 Byte Stream Handler, Preferred
+.mp4v, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MPEG4 Byte Stream Handler, Preferred
+.mpa, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MP3 Byte Stream Handler, Preferred
+.mpeg, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MPEG2 Byte Stream Handler, Preferred
+.mpg, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MPEG2 Byte Stream Handler, Preferred
+.mts, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MPEG2 Byte Stream Handler, Preferred
+.nsc, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, NSC Byte Stream Handler, Preferred
+.sami, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, SAMI Byte Stream Handler, Preferred
+.smi, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, SAMI Byte Stream Handler, Preferred
+.tod, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MPEG2 Byte Stream Handler, Preferred
+.ts, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MPEG2 Byte Stream Handler, Preferred
+.tts, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MPEG2 Byte Stream Handler, Preferred
+.uvu, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MPEG4 Byte Stream Handler, Preferred
+.vob, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MPEG2 Byte Stream Handler, Preferred
+.wav, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, WAV Byte Stream Handler, Preferred
+.weba, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, WEBM Byte Stream Handler, Preferred
+.webm, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, WEBM Byte Stream Handler, Preferred
+.wm, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, ASF Byte Stream Handler, Preferred
+.wma, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, ASF Byte Stream Handler, Preferred
+.wmv, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, ASF Byte Stream Handler, Preferred
+.wtv, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, WTV Byte Stream Handler, Preferred
+audio/3gpp, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MPEG4 Byte Stream Handler, Preferred
+audio/3gpp2, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MPEG4 Byte Stream Handler, Preferred
+audio/aac, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, ADTS Byte Stream Handler, Preferred
+audio/aacp, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, ADTS Byte Stream Handler, Preferred
+audio/eac3, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, AC-3 Byte Stream Handler, Preferred
+audio/flac, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MF FLAC Media Source ByteStreamHandler, Preferred
+audio/L16, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, LPCM Byte Stream Handler, Preferred
+audio/mp3, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MP3 Byte Stream Handler, Preferred
+audio/mp4, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MPEG4 Byte Stream Handler, Preferred
+audio/MP4A-LATM, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MPEG4 Byte Stream Handler, Preferred
+audio/mpa, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MP3 Byte Stream Handler, Preferred
+audio/mpeg, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MP3 Byte Stream Handler, Preferred
+audio/mpeg3, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MP3 Byte Stream Handler, Preferred
+audio/vnd.dlna.adts, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, ADTS Byte Stream Handler, Preferred
+audio/vnd.dolby.dd-raw, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, AC-3 Byte Stream Handler, Preferred
+audio/wav, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, WAV Byte Stream Handler, Preferred
+audio/webm, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, WEBM Byte Stream Handler, Preferred
+audio/x-aac, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, ADTS Byte Stream Handler, Preferred
+audio/x-flac, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MF FLAC Media Source ByteStreamHandler, Preferred
+audio/x-m4a, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MPEG4 Byte Stream Handler, Preferred
+audio/x-matroska, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MKV Byte Stream Handler, Preferred
+audio/x-mp3, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MP3 Byte Stream Handler, Preferred
+audio/x-mpeg, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MP3 Byte Stream Handler, Preferred
+audio/x-ms-wma, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, ASF Byte Stream Handler, Preferred
+audio/x-wav, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, WAV Byte Stream Handler, Preferred
+video/3gpp, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MPEG4 Byte Stream Handler, Preferred
+video/3gpp2, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MPEG4 Byte Stream Handler, Preferred
+video/avi, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, AVI Byte Stream Handler, Preferred
+video/mp4, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MPEG4 Byte Stream Handler, Preferred
+video/mpeg, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MPEG2 Byte Stream Handler, Preferred
+video/msvideo, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, AVI Byte Stream Handler, Preferred
+video/vnd.dece.mp4, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MPEG4 Byte Stream Handler, Preferred
+video/vnd.dlna.mpeg-tts, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MPEG2 Byte Stream Handler, Preferred
+video/webm, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, WEBM Byte Stream Handler, Preferred
+video/x-m4v, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MPEG4 Byte Stream Handler, Preferred
+video/x-matroska, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MKV Byte Stream Handler, Preferred
+video/x-ms-asf, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, ASF Byte Stream Handler, Preferred
+video/x-ms-wm, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, ASF Byte Stream Handler, Preferred
+video/x-ms-wmv, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, ASF Byte Stream Handler, Preferred
+video/x-msvideo, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, AVI Byte Stream Handler, Preferred
 
 
 --------------------------------
@@ -849,27 +849,27 @@ Media Foundation Scheme Handlers
 
 <URL type>, <handler CLSID>, <brief description>[, Preferred]
 
-file:, {477EC299-1421-4BDD-971F-7CCB933F21AD}, File Scheme Handler, Preferred
-http:, {44CB442B-9DA9-49DF-B3FD-023777B16E50}, Http Scheme Handler
-http:, {9EC4B4F9-3029-45AD-947B-344DE2A249E2}, Urlmon Scheme Handler
-http:, {E9F4EBAB-D97B-463E-A2B1-C54EE3F9414D}, Net Scheme Handler, Preferred
-httpd:, {44CB442B-9DA9-49DF-B3FD-023777B16E50}, Http Scheme Handler, Preferred
-https:, {37A61C8B-7F8E-4D08-B12B-248D73E9AB4F}, Secure Http Scheme Handler, Preferred
-httpsd:, {37A61C8B-7F8E-4D08-B12B-248D73E9AB4F}, Secure Http Scheme Handler, Preferred
-httpt:, {E9F4EBAB-D97B-463E-A2B1-C54EE3F9414D}, Net Scheme Handler, Preferred
-httpu:, {E9F4EBAB-D97B-463E-A2B1-C54EE3F9414D}, Net Scheme Handler, Preferred
-mcast:, {E9F4EBAB-D97B-463E-A2B1-C54EE3F9414D}, Net Scheme Handler, Preferred
-mcrecv:, {FA6D33D4-9405-4BA5-9983-12604AC8E77A}, Miracast Sink Scheme Handler, Preferred
-mms:, {E9F4EBAB-D97B-463E-A2B1-C54EE3F9414D}, Net Scheme Handler, Preferred
-ms-appdata:, {CFC81939-3886-4ACF-9692-DA58037AE716}, MsAppData Scheme Handler, Preferred
-ms-appx-web:, {8DB0224B-3D65-4F6F-8E12-BEB4B78B8974}, MsAppxWeb Scheme Handler, Preferred
-ms-appx:, {8DB0224B-3D65-4F6F-8E12-BEB4B78B8974}, MsAppx Scheme Handler, Preferred
-ms-winsoundevent:, {F79A6BF9-7415-4CF3-AE10-4559509ABC3C}, Sound Event Scheme Handler, Preferred
-rtsp:, {E9F4EBAB-D97B-463E-A2B1-C54EE3F9414D}, Net Scheme Handler, Preferred
-rtsps:, {E9F4EBAB-D97B-463E-A2B1-C54EE3F9414D}, Net Scheme Handler, Preferred
-rtspt:, {E9F4EBAB-D97B-463E-A2B1-C54EE3F9414D}, Net Scheme Handler, Preferred
-rtspu:, {E9F4EBAB-D97B-463E-A2B1-C54EE3F9414D}, Net Scheme Handler, Preferred
-sdp:, {E9F4EBAB-D97B-463E-A2B1-C54EE3F9414D}, Net Scheme Handler, Preferred
+file:, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, File Scheme Handler, Preferred
+http:, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, Http Scheme Handler
+http:, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, Urlmon Scheme Handler
+http:, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, Net Scheme Handler, Preferred
+httpd:, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, Http Scheme Handler, Preferred
+https:, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, Secure Http Scheme Handler, Preferred
+httpsd:, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, Secure Http Scheme Handler, Preferred
+httpt:, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, Net Scheme Handler, Preferred
+httpu:, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, Net Scheme Handler, Preferred
+mcast:, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, Net Scheme Handler, Preferred
+mcrecv:, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, Miracast Sink Scheme Handler, Preferred
+mms:, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, Net Scheme Handler, Preferred
+ms-appdata:, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MsAppData Scheme Handler, Preferred
+ms-appx-web:, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MsAppxWeb Scheme Handler, Preferred
+ms-appx:, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MsAppx Scheme Handler, Preferred
+ms-winsoundevent:, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, Sound Event Scheme Handler, Preferred
+rtsp:, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, Net Scheme Handler, Preferred
+rtsps:, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, Net Scheme Handler, Preferred
+rtspt:, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, Net Scheme Handler, Preferred
+rtspu:, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, Net Scheme Handler, Preferred
+sdp:, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, Net Scheme Handler, Preferred
 
 
 -------------------------------------
@@ -880,33 +880,33 @@ Preferred Media Foundation Transforms
 
 <media subtype GUID>, [<transform friendly name>, ]<transform CLSID>
 
-{EB27CEC4-163E-4CA3-8B74-8E25F91B517E}, Dolby TrueHD IEC-61937 converter MFT, {CF5EEEDF-0E92-4B3B-A161-BD0FFE545E4B}
-{E06D8033-DB46-11CF-B4D1-00805F6CBBEA}, DTS IEC-61937 converter MFT, {D035E24C-C877-42D7-A795-2A8A339B472F}
-MFVideoFormat_MPEG2, Microsoft MPEG Video Decoder MFT, {2D709E52-123F-49B5-9CBC-9AF5CDE28FB9}
-{C2FE6F0A-4E3C-4DF1-9B60-50863091E4B9}, DTS IEC-61937 converter MFT, {D035E24C-C877-42D7-A795-2A8A339B472F}
-{A61AC364-AD0E-4744-89FF-213CE0DF8804}, DTS IEC-61937 converter MFT, {D035E24C-C877-42D7-A795-2A8A339B472F}
-{A2E58EB7-0FA9-48BB-A40C-FA0E156D0645}, DTS IEC-61937 converter MFT, {D035E24C-C877-42D7-A795-2A8A339B472F}
-{7C13C441-EBF8-4931-B678-800B19242236}, Microsoft MpegH Decoder MFT, {134DEA6F-C2EB-4FA8-8281-356600A9814E}
-{7634706D-0000-0010-8000-00AA00389B71}, Mpeg4s Decoder MFT, CLSID_CMpeg4sDecMFT
-{73616D72-767A-494D-B478-F29D25DC9037}, MS AMRNB Decoder MFT, {265011AE-5481-4F77-A295-ABB6FFE8D63E}
+{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, Dolby TrueHD IEC-61937 converter MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
+{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, DTS IEC-61937 converter MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
+MFVideoFormat_MPEG2, Microsoft MPEG Video Decoder MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
+{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, DTS IEC-61937 converter MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
+{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, DTS IEC-61937 converter MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
+{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, DTS IEC-61937 converter MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
+{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, Microsoft MpegH Decoder MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
+{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, Mpeg4s Decoder MFT, CLSID_CMpeg4sDecMFT
+{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MS AMRNB Decoder MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
 MEDIASUBTYPE_mp4s, Mpeg4s Decoder MFT, CLSID_CMpeg4sDecMFT
-MFVideoFormat_DVSL, DV Decoder MFT, {404A6DE5-D4D6-4260-9BC7-5A6CBD882432}
-MFVideoFormat_DVSD, DV Decoder MFT, {404A6DE5-D4D6-4260-9BC7-5A6CBD882432}
-MFVideoFormat_DVHD, DV Decoder MFT, {404A6DE5-D4D6-4260-9BC7-5A6CBD882432}
-{63616C61-0000-0010-8000-00AA00389B71}, Microsoft ALAC Audio Decoder MFT, {C0CD7D12-31FC-4BBC-B363-7322EE3E1879}
+MFVideoFormat_DVSL, DV Decoder MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
+MFVideoFormat_DVSD, DV Decoder MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
+MFVideoFormat_DVHD, DV Decoder MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
+{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, Microsoft ALAC Audio Decoder MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
 MFVideoFormat_MP4V, Mpeg4s Decoder MFT, CLSID_CMpeg4sDecMFT
 MFVideoFormat_MP4S, Mpeg4s Decoder MFT, CLSID_CMpeg4sDecMFT
-{53314356-0000-0010-8000-00AA00389B71}, WMVideo Decoder MFT, CLSID_CWMVDecMediaObject
+{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, WMVideo Decoder MFT, CLSID_CWMVDecMediaObject
 MEDIASUBTYPE_WMVR, WMVideo Decoder MFT, CLSID_CWMVDecMediaObject
 MEDIASUBTYPE_WMVP, WMVideo Decoder MFT, CLSID_CWMVDecMediaObject
-MFVideoFormat_MJPG, MJPEG Decoder MFT, {CB17E772-E1CC-4633-8450-5617AF577905}
+MFVideoFormat_MJPG, MJPEG Decoder MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
 MEDIASUBTYPE_WMVA, WMVideo Decoder MFT, CLSID_CWMVDecMediaObject
-{3F40F4F0-5622-4FF8-B6D8-A17A584BEE5E}, Microsoft H264 Video Decoder MFT, CLSID_CMSH264DecoderMFT
+{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, Microsoft H264 Video Decoder MFT, CLSID_CMSH264DecoderMFT
 MEDIASUBTYPE_mpg4, Mpeg4 Decoder MFT, CLSID_CMpeg4DecMediaObject
 MEDIASUBTYPE_MPG4, Mpeg4 Decoder MFT, CLSID_CMpeg4DecMediaObject
 MFVideoFormat_H264, Microsoft H264 Video Decoder MFT, CLSID_CMSH264DecoderMFT
 MFVideoFormat_WMV3, WMVideo Decoder MFT, CLSID_CWMVDecMediaObject
-{33363248-0000-0010-8000-00AA00389B71}, Mpeg4s Decoder MFT, CLSID_CMpeg4sDecMFT
+{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, Mpeg4s Decoder MFT, CLSID_CMpeg4sDecMFT
 MEDIASUBTYPE_mp43, Mpeg43 Decoder MFT, CLSID_CMpeg43DecMediaObject
 MFVideoFormat_MP43, Mpeg43 Decoder MFT, CLSID_CMpeg43DecMediaObject
 MEDIASUBTYPE_m4s2, Mpeg4s Decoder MFT, CLSID_CMpeg4sDecMFT
@@ -918,15 +918,15 @@ MEDIASUBTYPE_mp42, Mpeg4 Decoder MFT, CLSID_CMpeg4DecMediaObject
 MEDIASUBTYPE_MP42, Mpeg4 Decoder MFT, CLSID_CMpeg4DecMediaObject
 MFVideoFormat_WMV1, WMVideo Decoder MFT, CLSID_CWMVDecMediaObject
 MFVideoFormat_MSS1, WMV Screen decoder MFT, CLSID_CMSSCDecMediaObject
-MFVideoFormat_MPG1, Microsoft MPEG Video Decoder MFT, {2D709E52-123F-49B5-9CBC-9AF5CDE28FB9}
+MFVideoFormat_MPG1, Microsoft MPEG Video Decoder MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
 MFVideoFormat_WVC1, WMVideo Decoder MFT, CLSID_CWMVDecMediaObject
-MFVideoFormat_DVC, DV Decoder MFT, {404A6DE5-D4D6-4260-9BC7-5A6CBD882432}
-{19EE97FE-1BE0-4255-A876-E99F53A42AE3}, Microsoft MpegH Decoder MFT, {134DEA6F-C2EB-4FA8-8281-356600A9814E}
-{0000F1AC-0000-0010-8000-00AA00389B71}, Microsoft FLAC Audio Decoder MFT, {6B0B3E6B-A2C5-4514-8055-AFE8A95242D9}
-{00007361-0000-0010-8000-00AA00389B71}, MS AMRNB Decoder MFT, {265011AE-5481-4F77-A295-ABB6FFE8D63E}
-{0000704F-0000-0010-8000-00AA00389B71}, Microsoft Opus Audio Decoder MFT, {63E17C10-2D43-4C42-8FE3-8D8B63E46A6A}
-{00006C61-0000-0010-8000-00AA00389B71}, Microsoft ALAC Audio Decoder MFT, {C0CD7D12-31FC-4BBC-B363-7322EE3E1879}
-{00002001-0000-0010-8000-00AA00389B71}, DTS IEC-61937 converter MFT, {D035E24C-C877-42D7-A795-2A8A339B472F}
+MFVideoFormat_DVC, DV Decoder MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
+{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, Microsoft MpegH Decoder MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
+{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, Microsoft FLAC Audio Decoder MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
+{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, MS AMRNB Decoder MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
+{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, Microsoft Opus Audio Decoder MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
+{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, Microsoft ALAC Audio Decoder MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
+{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, DTS IEC-61937 converter MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
 MFAudioFormat_AAC, Microsoft AAC Audio Decoder MFT, CLSID_CMSAACDecMFT
 MFAudioFormat_ADTS, Microsoft AAC Audio Decoder MFT, CLSID_CMSAACDecMFT
 MFAudioFormat_WMAudio_Lossless, WMAudio Decoder MFT, CLSID_CWMADecMediaObject
@@ -935,12 +935,12 @@ MFAudioFormat_WMAudioV8, WMAudio Decoder MFT, CLSID_CWMADecMediaObject
 MEDIASUBTYPE_MSAUDIO1, WMAudio Decoder MFT, CLSID_CWMADecMediaObject
 MEDIASUBTYPE_RAW_AAC1, Microsoft AAC Audio Decoder MFT, CLSID_CMSAACDecMFT
 MFAudioFormat_MP3, MP3 Decoder MFT, CLSID_CMP3DecMediaObject
-MFAudioFormat_MPEG, Microsoft MPEG Audio Decoder MFT, {70707B39-B2CA-4015-ABEA-F8447D22D88B}
-{00000031-0000-0010-8000-00AA00389B71}, GSM ACM Wrapper MFT, {4A76B469-7B66-4DD4-BA2D-DDF244C766DC}
-{00000011-0000-0010-8000-00AA00389B71}, IMA ADPCM ACM Wrapper MFT, {A16E1BFF-A80D-48AD-AECD-A35C005685FE}
-KSDATAFORMAT_SUBTYPE_MULAW, G711 Wrapper MFT, {92B66080-5E2D-449E-90C4-C41F268E5514}
-{00000006-0000-0010-8000-00AA00389B71}, A-law Wrapper MFT, {36CB6E0C-78C1-42B2-9943-846262F31786}
-KSDATAFORMAT_SUBTYPE_ADPCM, ADPCM ACM Wrapper MFT, {CA34FE0A-5722-43AD-AF23-05F7650257DD}
+MFAudioFormat_MPEG, Microsoft MPEG Audio Decoder MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
+{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, GSM ACM Wrapper MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
+{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, IMA ADPCM ACM Wrapper MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
+KSDATAFORMAT_SUBTYPE_MULAW, G711 Wrapper MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
+{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}, A-law Wrapper MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
+KSDATAFORMAT_SUBTYPE_ADPCM, ADPCM ACM Wrapper MFT, {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}
 WMMEDIASUBTYPE_WMSP2, WMSpeech Decoder DMO, CLSID_CWMSPDecMediaObject
 MFAudioFormat_MSP1, WMSpeech Decoder DMO, CLSID_CWMSPDecMediaObject
 
@@ -967,7 +967,7 @@ Disabled Media Sources
 ---------------
 EVR Power Information
 ---------------
-Current Setting: {5C67A112-A4C9-483F-B4A7-1D473BECAFDC} (Quality) 
+Current Setting: {fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001} (Quality) 
   Quality Flags: 2576
     Enabled:
     Force throttling
