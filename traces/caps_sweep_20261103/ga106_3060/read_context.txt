@@ -1,0 +1,10 @@
+date 2026-11-03T16:26:21Z
+kernel 6.8.0-111-generic
+NVRM version: NVIDIA UNIX x86_64 Kernel Module  580.126.20  Wed Feb 18 05:56:34 UTC 2026
+smi NVIDIA GeForce RTX 3060, 580.126.20, 00000000:81:00.0
+xid_before 0
+== bdf 0000:81:00.0 (the container's own GPU)
+BOOT_0 0xb76000a1 BOOT_42 0x176a1000
+CHIPSET 0x176 ARCH 0x170 IMPL 0x6
+tool_rc=0
+xid_after 0

@@ -1,0 +1,10 @@
+date 2026-11-03T16:23:31Z
+kernel 6.8.0-138-generic
+NVRM version: NVIDIA UNIX x86_64 Kernel Module  580.178.04  Tue Jul  7 12:38:21 UTC 2026
+smi NVIDIA GeForce RTX 4060 Ti, 580.178.04, 00000000:08:00.0
+xid_before 0
+== bdf 0000:08:00.0 (the container's own GPU)
+BOOT_0 0x196000a1 BOOT_42 0x196a1000
+CHIPSET 0x196 ARCH 0x190 IMPL 0x6
+tool_rc=0
+xid_after 0

@@ -1,0 +1,10 @@
+date 2026-11-03T16:23:28Z
+kernel 6.8.0-147-generic
+NVRM version: NVIDIA UNIX x86_64 Kernel Module  580.173.02  Tue Jun 23 08:38:17 UTC 2026
+smi NVIDIA GeForce RTX 4080, 580.173.02, 00000000:01:00.0
+xid_before 0
+== bdf 0000:01:00.0 (the container's own GPU)
+BOOT_0 0x193000a1 BOOT_42 0x193a1000
+CHIPSET 0x193 ARCH 0x190 IMPL 0x3
+tool_rc=0
+xid_after 0
