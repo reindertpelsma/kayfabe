@@ -1,0 +1,2 @@
+﻿GPU 0: NVIDIA GeForce RTX 2060 SUPER (UUID: GPU-<stripped>)
+

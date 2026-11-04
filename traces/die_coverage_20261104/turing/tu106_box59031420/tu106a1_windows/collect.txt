@@ -1,0 +1,8 @@
+
+
+
+KF_COLLECT_DONE C:\kf\evidence\gate_tu106a1_final
+[2026-11-04T01:31:34Z] EXIT collect rc=0
+[2026-11-04T01:31:34Z] START pull
+[2026-11-04T01:31:36Z] EXIT pull rc=0
+[2026-11-04T01:31:36Z] EVIDENCE /workspace/winvm/kfwin/logs/evidence/gate_tu106a1_final (23 files)
