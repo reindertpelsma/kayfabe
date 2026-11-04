@@ -1,0 +1,4 @@
+CHAIN_START dcgb205 2026-11-04T00:47:32+00:00
+WINLANE_TIMING total=2946s box=345s guest_run=2s driver=253s tree=366s kf3=16s prereqs=19s install_windows=1945s
+WINLANE_EXIT rc=0 2026-11-04T01:00:34+00:00
+CHAIN_EXIT rc=0 2026-11-04T01:47:15+00:00

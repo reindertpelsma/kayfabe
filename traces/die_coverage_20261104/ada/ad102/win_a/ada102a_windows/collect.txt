@@ -1,0 +1,8 @@
+
+
+
+KF_COLLECT_DONE C:\kf\evidence\gate_ada102a_final
+[2026-11-04T01:04:32Z] EXIT collect rc=0
+[2026-11-04T01:04:32Z] START pull
+[2026-11-04T01:04:34Z] EXIT pull rc=0
+[2026-11-04T01:04:34Z] EVIDENCE /workspace/winvm/kfwin/logs/evidence/gate_ada102a_final (23 files)

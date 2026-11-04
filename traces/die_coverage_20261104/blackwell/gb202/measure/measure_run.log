@@ -1,0 +1,18 @@
+# trimmed: cargo warnings removed; full log stayed on the box
+MEASURE_START gb202 2026-11-04T00:14:00+00:00
+STAGE driver EXIT rc=0 2026-11-04T00:20:20+00:00
+NVIDIA GeForce RTX 5090, 595.91.07, 0x2B8510DE
+XID before=0
+BDF=0000:00:07.0
+CAPSREAD rc=0
+DECISIVE 0x00c 0x00000102
+127
+FETCH_OK
+HEAD is now at a6456796e chore(bench): use repository license for PRECOMP sweep tool
+BUILD_RC=0
+PRECOMP_TIER3_BEGIN 2026-11-04T00:20:36+00:00
+kf-host: host tier: stock
+PRECOMP_TIER3_EXIT rc=0 2026-11-04T00:20:36+00:00
+XID after=0
+WORDS=48 FIELDS=328
+MEASURE_EXIT rc=0 2026-11-04T00:20:36+00:00

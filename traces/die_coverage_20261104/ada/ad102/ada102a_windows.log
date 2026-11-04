@@ -1,0 +1,99 @@
+WINDOWS_GATE_START tag=ada102a rev=0c515b3b source=/workspace/bench/verify-worktrees/ada102a.KfqzVK 2026-11-04T00:25:32+00:00 idle_s=300 flags=kf3_flags.sample.env guest_driver=580.65.06 arm=B
+WINDOWS_GATE_REQUESTED=1
+GATE_STAGE preflight START 2026-11-04T00:25:32+00:00
+GATE_NOTE host: gpu="NVIDIA GeForce RTX 4090" driver=595.91.07 cpus=30 ram_gb=48 disk_free_gb=131
+GATE_STAGE preflight EXIT ok 0s
+GATE_STAGE hostref_before START 2026-11-04T00:25:32+00:00
+GATE_HOSTREF before green cup8=PASS xid_count=10 xid_delta=0 gpu="NVIDIA GeForce RTX 4090, 595.91.07, 24564 MiB, P0"
+GATE_STAGE hostref_before EXIT ok 1s
+GATE_STAGE prereqs START 2026-11-04T00:25:33+00:00
+GATE_STAGE prereqs EXIT ok 10s
+GATE_STAGE kf3_binary START 2026-11-04T00:25:43+00:00
+GATE_NOTE kf3 qemu=/workspace/bench/kf3-bins/0c515b3b/qemu-system-x86_64 sha256=de572ee144772e84 rev=0c515b3b
+GATE_STAGE kf3_binary EXIT ok 0s
+GATE_STAGE install START 2026-11-04T00:25:43+00:00
+GATE_STAGE install EXIT ok 1436s
+GATE_STAGE probes_build START 2026-11-04T00:49:39+00:00
+GATE_NOTE probes built: c3637a1dade1 92c160d31895 692217f78894 f834ed52ffeb 
+GATE_STAGE probes_build EXIT ok 1s
+GATE_STAGE boot1 START 2026-11-04T00:49:40+00:00
+GATE_NOTE ssh up after 0s
+GATE_STAGE boot1 EXIT ok 60s
+GATE_STAGE check_kf3 START 2026-11-04T00:50:40+00:00
+GATE_NOTE check --kf3 (before the driver): 13 PASS lines, WIN_CHECK_DONE fail=0
+GATE_STAGE check_kf3 EXIT ok 18s
+GATE_STAGE nv_install START 2026-11-04T00:50:58+00:00
+  GSP_ON device PCI\VEN_10DE&DEV_2684&SUBSYS_40DA1458&REV_A1\3&11583659&0&28 name='Microsoft Basic Display Adapter' status=OK problem=CM_PROB_NONE inf=display.inf driverkey={fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}\0001
+  GSP_ON nvlddmkm.sys signature status=Valid signer='CN=NVIDIA Corporation, OU=1-F, O=NVIDIA Corporation, L=Santa Clara, S=California, C=US'
+  GSP_ON disable: Microsoft PnP Utility
+  GSP_ON disable:
+  GSP_ON disable: Disabling device:          PCI\VEN_10DE&DEV_2684&SUBSYS_40DA1458&REV_A1\3&11583659&0&28
+  GSP_ON disable: Device disabled successfully.
+  GSP_ON disable:
+  GSP_ON add-driver: Microsoft PnP Utility
+  GSP_ON add-driver:
+  GSP_ON add-driver: Adding driver package:  nv_dispi.inf
+  GSP_ON add-driver: Driver package added successfully.
+  GSP_ON add-driver: Published Name:         oem7.inf
+  GSP_ON add-driver: Driver package installed on device: PCI\VEN_10DE&DEV_2684&SUBSYS_40DA1458&REV_A1\3&11583659&0&28
+  GSP_ON add-driver:
+  GSP_ON add-driver: Total driver packages:  1
+  GSP_ON add-driver: Added driver packages:  1
+  GSP_ON add-driver rc=0
+  GSP_ON after install: inf=oem7.inf driverkey={fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}\0001 version=32.0.15.8088
+  GSP_ON readback HKLM:\SYSTEM\CurrentControlSet\Control\Class\{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001}\0001 EnableGpuFirmware=1
+  GSP_ON readback HKLM:\SYSTEM\CurrentControlSet\Services\nvlddmkm EnableGpuFirmware=1
+GATE_STAGE nv_install EXIT ok 176s
+GATE_STAGE desktop_prep START 2026-11-04T00:53:54+00:00
+  DESKTOP_PREP AutoAdminLogon=1 want=1 OK
+  DESKTOP_PREP DefaultUserName=kf want=kf OK
+  DESKTOP_PREP DefaultDomainName=. want=. OK
+  DESKTOP_PREP DefaultPassword_matches=True want=True OK
+  DESKTOP_PREP AutoLogonCount_absent=True want=True OK
+  DESKTOP_PREP DevicePasswordLessBuildVersion=0 want=0 OK
+  DESKTOP_PREP OverlayTestMode=5 want=5 OK
+  DESKTOP_PREP_DONE fail=0
+  [2026-11-04T00:54:03Z] DESKTOP_PREP_OK user=kf (autologon and OverlayTestMode apply at the next boot of this disk)
+GATE_STAGE desktop_prep EXIT ok 9s
+GATE_STAGE reboot START 2026-11-04T00:54:03+00:00
+GATE_NOTE second QEMU started after 15s
+GATE_NOTE ssh up after 0s
+GATE_STAGE reboot EXIT ok 54s
+GATE_STAGE desktop START 2026-11-04T00:54:57+00:00
+  GATE_BOOT utc=2026-11-04T00:54:24Z os='Microsoft Windows 11 Enterprise LTSC Evaluation' build=26100
+  GATE_DESKTOP user='KFWIN\kf' dwm=1 explorer=1
+  GATE_SESSIONS USERNAME SESSIONNAME ID STATE IDLE TIME LOGON TIME kf console 1 Active none 11/4/2026 12:54 AM
+  GATE_DISPLAY name='NVIDIA GeForce RTX 4090' driver=32.0.15.8088 code=22 status=Error pnp=Error
+  GATE_STATE_DONE mode=desktop
+GATE_STAGE desktop EXIT ok 18s
+GATE_STAGE enable START 2026-11-04T00:55:15+00:00
+GATE_NOTE device enabled once at 2026-11-04T00:55:24Z (guest clock)
+  GATE_DISPLAY name='NVIDIA GeForce RTX 4090' driver=32.0.15.8088 code=0 status=OK pnp=OK
+GATE_STAGE enable EXIT ok 22s
+GATE_STAGE smi_probes START 2026-11-04T00:55:37+00:00
+GATE_NOTE guest nvidia-smi: GPU 0: NVIDIA GeForce RTX 4090 (UUID: GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001)
+GATE_PROBE_RESULT cup8 GATE_PROBE exe=cup8.exe arg= rc=0 secs=2 timeout=0
+GATE_PROBE_RESULT d3d11 GATE_PROBE exe=kf_dxprobe.exe arg=d3d11 rc=0 secs=1 timeout=0
+GATE_PROBE_RESULT cup3 GATE_PROBE exe=cup3.exe arg= rc=0 secs=1 timeout=0
+GATE_PROBE_RESULT d3d12 GATE_PROBE exe=kf_dxprobe.exe arg=d3d12 rc=0 secs=3 timeout=0
+GATE_STAGE smi_probes EXIT ok 55s
+GATE_STAGE idle START 2026-11-04T00:56:32+00:00
+GATE_NOTE idle window observed 300s of 300s
+GATE_STAGE idle EXIT ok 312s
+GATE_STAGE post_idle START 2026-11-04T01:01:44+00:00
+GATE_PROBE_RESULT cup8 GATE_PROBE exe=cup8.exe arg= rc=0 secs=1 timeout=0
+GATE_PROBE_RESULT d3d11 GATE_PROBE exe=kf_dxprobe.exe arg=d3d11 rc=0 secs=1 timeout=0
+GATE_PROBE_RESULT cup3 GATE_PROBE exe=cup3.exe arg= rc=0 secs=1 timeout=0
+GATE_PROBE_RESULT d3d12 GATE_PROBE exe=kf_dxprobe.exe arg=d3d12 rc=0 secs=3 timeout=0
+  GATE_TDR since=2026-11-04T00:55:24Z display4101=0 nvlddmkm153=0 kernelpower41=0 eventlog6008=0 bugcheck1001=0 livekernelevent_other=0 livekernelevent193=0 livekernelevent_stale=0 strict=0 total=0
+GATE_TIMELINE enable=2026-11-04T00:55:24Z first_probe=2026-11-04T00:56:11Z first_dump=none dump_minus_enable=36276s dump_minus_first_probe=36229s
+GATE_NOTE check --kf3 (after the driver): 0 FAIL line(s),   WIN_CHECK_DONE fail=0
+GATE_STAGE post_idle EXIT ok 56s
+GATE_STAGE collect_stop START 2026-11-04T01:02:40+00:00
+GATE_STAGE collect_stop EXIT ok 114s
+GATE_NOTE graceful stop of the guest (gate_ada102a)
+GATE_HOSTREF after green cup8=PASS xid_count=10 xid_delta=0 gpu="NVIDIA GeForce RTX 4090, 595.91.07, 24564 MiB, P0"
+WINDOWS_GATE_PASS rev=0c515b3b gpu="NVIDIA GeForce RTX 4090" idle_s=300 hostref=green/green secs=2359 install=once driver=580.88 gsp=forced code=0 probes=cup8,d3d11,x2 resets=0 known_live_dumps_193=0 stale_lke_resubmits=0 strict=0 enable_utc=2026-11-04T00:55:24Z
+GATE_NOTE evidence: /root/prov/ada102a_windows (90 files), /root/prov/ada102a_windows.tgz sha256=662fffc2eebd4847
+WINDOWS_GATE_TIMING total=2359s preflight=0s hostref_before=1s prereqs=10s kf3_binary=0s install=1436s probes_build=1s boot1=60s check_kf3=18s nv_install=176s desktop_prep=9s reboot=54s desktop=18s enable=22s smi_probes=55s idle=312s post_idle=56s collect_stop=114s
+WINDOWS_GATE_EXIT rc=0 2026-11-04T01:04:51+00:00

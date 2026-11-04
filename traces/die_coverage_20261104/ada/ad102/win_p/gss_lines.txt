@@ -1,0 +1,22 @@
+      4 W343GSSCENSUS cmd=0x2080852a params_size=1784 params_at=40 payload_len=1824
+      3 W343GSSCENSUS cmd=0x2080852b params_size=2836 params_at=40 payload_len=2876
+      6 W343GSSCENSUS cmd=0x2080852c params_size=1440 params_at=40 payload_len=1480
+      8 W343GSSREQ cmd=0x20809064 params_size=520 words0_9=[0x0,0x3,0x1,0x0,0x0,0x0,0x4,0x0,0x0,0x0]
+      4 kf-rm: rpc-trace fn=76 RmControl cmd=0x2080852a result=0x0
+      3 kf-rm: rpc-trace fn=76 RmControl cmd=0x2080852b result=none
+      6 kf-rm: rpc-trace fn=76 RmControl cmd=0x2080852c result=none
+      1 kf-rm: rpc-trace fn=76 RmControl cmd=0x20809064 result=0x0
+    138 kf-rm: rpc-trace fn=76 RmControl cmd=0x20809064 result=0x56
+      1 kf3: GSS 0x20808524 answered from the host's realize-time reply
+      4 kf3: GSS 0x2080852a answered from the host's realize-time reply
+      1 kf3: GSS 0x20809009 answered from the host's realize-time reply
+      1 kf3: GSS 0x20809064 answered from the host's realize-time reply
+      3 kf3: GSS 0x2080a084 answered from the host's realize-time reply
+      1 kf3: GSS 0x2080a70a answered from the host's realize-time reply
+      1 kf3: host facts: GSS 0x2080852a [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+      3 kf3: host facts: GSS 0x2080852e [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+      2 kf3: host facts: GSS 0x2080853a [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+      1 kf3: host facts: GSS 0x2080853b [(4, 1)] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+      1 kf3: host facts: GSS 0x2080a028 [(0, 1), (8, 1), (c, 1), (20c, 1)]: the background probe was refused or changed the answer — zero-probe bytes only
+      1 kf3: host facts: GSS 0x2080a028 [(0, 1), (8, 1), (c, 100000), (20c, 100000)]: the background probe was refused or changed the answer — zero-probe bytes only
+      4 kf3: host facts: GSS 0x2080a618 [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
