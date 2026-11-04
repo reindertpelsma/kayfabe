@@ -19452,7 +19452,7 @@ mod w385_control_seed_tests {
 
     #[test]
     fn an_engine_positive_seed_is_kept_unchanged() {
-        let base = 0x385_u64 ^ 0x385 ^ 1;
+        let base = 1_u64;
         if w385_control_reaches_engine(base, 64) {
             assert_eq!(w385_control_seed(base, 64), base);
         }
