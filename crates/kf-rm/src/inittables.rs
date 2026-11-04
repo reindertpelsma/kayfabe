@@ -1905,6 +1905,40 @@ impl CommandPolicy for InitTablePolicy {
             );
         }
 
+        // ★ 2026-11-04 (die coverage, Ada): the Windows 580.88 guest's `0x20809064` and `0x2080852c` requests were
+        // refused (no gssreplay row matched them), and `0x2080852b` is. Diagnostic: print the first ten request words, bounded to 8 lines a
+        // process for each. Read-only: it changes no reply.
+        if matches!(req.cmd, 0x2080_9064 | 0x2080_852c | 0x2080_852b) {
+            static SAID: [std::sync::atomic::AtomicUsize; 3] = [
+                std::sync::atomic::AtomicUsize::new(0),
+                std::sync::atomic::AtomicUsize::new(0),
+                std::sync::atomic::AtomicUsize::new(0),
+            ];
+            let ps = req.params_size as usize;
+            let slot = match req.cmd {
+                0x2080_852c => 1,
+                0x2080_852b => 2,
+                _ => 0,
+            };
+            if SAID[slot].fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 8
+                && cmd.payload.len() >= req.params_at + ps
+            {
+                let words: Vec<String> = cmd.payload[req.params_at..req.params_at + ps.min(40)]
+                    .chunks(4)
+                    .map(|w| {
+                        let mut b = [0u8; 4];
+                        b[..w.len()].copy_from_slice(w);
+                        format!("{:#x}", u32::from_le_bytes(b))
+                    })
+                    .collect();
+                eprintln!(
+                    "W343GSSREQ cmd={:#010x} params_size={ps} words0_9=[{}]",
+                    req.cmd,
+                    words.join(",")
+                );
+            }
+        }
+
         if std::env::var("KAYFABE_CUDART_GATE").as_deref() == Ok("replay")
             && matches!(req.cmd, 0x2080_9009 | 0x2080_9001 | 0x2080_9064)
         {
