@@ -57,7 +57,7 @@ page = {
 calls = []
 json_header = {"content-type": "application/json"}
 answer = lambda status, data: m.Reply(status, json_header, json.dumps(data).encode())
-need = m.ADMISSION_NEED_SECONDS
+need = m.ADMISSION_NEED["check"]
 ambiguity = {"done": False}
 
 

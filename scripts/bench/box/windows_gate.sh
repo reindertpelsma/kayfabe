@@ -129,7 +129,7 @@ bar1_refusal() {
 collect_evidence() {
     local f lastq
     for f in "$VM/logs/${TAG}_run.log" "$VM/logs/install.log" "$VM/logs/nv_install.log" "$VM/logs/desktop_prep.log" "$VM/logs/checks.log" \
-        "$VM"/logs/${TAG}_b*_qmp_events.jsonl "$VM"/logs/${TAG}_b*_cmdline.txt "$VM"/logs/${TAG}_b*_host_dmesg.txt \
+        "$VM"/logs/${TAG}_b*_qmp_events.jsonl "$VM"/logs/${TAG}_b*_qmp_events.err "$VM"/logs/${TAG}_b*_cmdline.txt "$VM"/logs/${TAG}_b*_host_dmesg.txt \
         "$VM"/logs/${TAG}_b*_host_smi_before.txt "$VM"/logs/${TAG}_b*_host_smi_after.txt "$VM"/logs/nv_install_*.txt \
         "$VM"/logs/desktop_prep_*.txt "$VM/logs/stop.log" "$VM/logs/tpm_ek_history.txt"; do
         [ -f "$f" ] && cp "$f" "$EV/" 2> /dev/null
@@ -593,7 +593,12 @@ for c in swtpm swtpm_setup sbsign xorriso pnmtopng 7z virt-fw-vars x86_64-w64-mi
     command -v "$c" > /dev/null || missing=1
 done
 if [ "$missing" = 1 ]; then
-    if ! DEBIAN_FRONTEND=noninteractive timeout 900 apt-get -o DPkg::Lock::Timeout=300 install -y -qq \
+    # Inside the Vast payload apt-get is the cache-only shim (a bash function from
+    # scripts/ci/vast_payload_hooks.sh; the packages are its `windows` policy, provision_box.sh).
+    # `timeout` would exec the real binary past the shim, so the shim runs unwrapped.
+    apt_run=(timeout 900 apt-get)
+    if [ -n "${KF_APT_CACHE_ROOT:-}" ] && [ "$(type -t apt-get)" = function ]; then apt_run=(apt-get); fi
+    if ! DEBIAN_FRONTEND=noninteractive "${apt_run[@]}" -o DPkg::Lock::Timeout=300 install -y -qq \
         ovmf swtpm swtpm-tools sbsigntool python3-virt-firmware xorriso netpbm p7zip-full \
         gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64 > "$EV/apt.txt" 2>&1; then
         verdict RETRY PROVIDER "apt could not install the Windows prerequisites: $(tail -2 "$EV/apt.txt" | tr '\n' ' ')"
@@ -707,6 +712,12 @@ stage_begin reboot
 g 60 'shutdown /r /t 0' > /dev/null 2>&1
 w=0
 until grep -q "QEMU_START tag=$TAG boot=2" "$VM/logs/${TAG}_run.log" 2> /dev/null; do
+    # ⊘ [2026-11-04, GA106 gate run dca106a] The run loop restarts only on a recorded guest-reset; when
+    # its QMP event logger never attached it ends with reason=no-events-file. That is the harness
+    # failing to observe the reboot, not the guest failing to reboot: OPERATOR (RETRY), not FAIL.
+    if grep -q "WINVM_RUN_END tag=$TAG .*reason=no-events-file" "$VM/logs/${TAG}_run.log" 2> /dev/null; then
+        fail_op "the run loop ended with reason=no-events-file after shutdown /r (its QMP event logger never attached; the guest's reboot was not observed)"
+    fi
     sleep 5
     w=$((w + 5))
     [ "$w" -lt "$(cap 420)" ] || fail_guest "the guest did not restart within 420 s of shutdown /r (no second QEMU)"

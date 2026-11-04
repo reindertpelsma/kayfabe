@@ -1,0 +1,9 @@
+# The Windows stage of the gpu-vast check
+
+CODE READ (`ci/vast-broker/src/tier.js`, `scripts/ci/vast_payload.py`): the `gpu-vast` check on a pull request to `master` (Worker profile `check`) runs the Linux merge bar and then, last, the Windows gate (`scripts/bench/box/windows_gate.sh`) on the same rented box. The Worker sets `KF_MERGE_WINDOWS=1` for this profile and `0` for the owner-dispatched die sweep; no request field changes it. A box from a Worker that sends no value runs the Windows stage.
+
+CODE READ (`scripts/ci/vast_payload.py`, `.github/workflows/gpu-vast.yml`): only one `WINDOWS_GATE_PASS` line for the tested revision, with exit 0, passes the stage. `WINDOWS_GATE_FAIL` fails the check as a guest failure (suite `windows_gate`). `WINDOWS_GATE_RETRY`, a refused precondition, a missing or doubled verdict, or less than 75 minutes left before the box's soft deadline all fail the check as well. The status then reads "GPU gate RETRY: not a verdict; re-run on a fresh box", and the job log names the suite `windows_retry_<class>`. A RETRY is never a pass: re-run the check, which rents a fresh box.
+
+CODE READ (`ci/vast-broker/defaults.json`, `runner.py`, `gpu-vast.yml`): the check's hard limit is 300 minutes (`HARD_RUNTIME_MINUTES`). The runner waits up to 330 minutes, and the job allows 345. The sweep keeps 180 minutes. A run at the $1/h price cap reserves up to 5.02 USD (300 minutes plus one cron minute), so the default $6 day admits one such reservation at a time. See [budget settings](vast-budget-settings.md).
+
+Windows media come from the vendors' public URLs, pinned by sha256 and size in `scripts/bench/windows/win_vm.sh`: the Windows 11 LTSC 2024 evaluation ISO, virtio-win 0.1.302, OpenSSH for Windows and NVIDIA 580.88. The box needs no credential for them.

@@ -1,3 +1,4 @@
+import { applyProfile, tierEnvironment } from './tier.js';
 // prettier-ignore
 import {DEFAULTS} from './defaults.js';
 import {
@@ -311,7 +312,7 @@ export function createService({
     }
   }
   async function update(record, vast, github, cfg) {
-    cfg.profile = record.profile ?? 'check';
+    applyProfile(cfg, record.profile ?? 'check');
     if (record.ended !== null) return;
     clocks(record, cfg);
     await ledger.save(record);
@@ -803,7 +804,7 @@ export function createService({
       refuse('BAD_REQUEST', 400);
     if (!allowedWorkflowRef(c, cfg, profile))
       refuse('UNAUTHORIZED', 401, undefined, 'identity:profile_workflow');
-    cfg.profile = profile;
+    applyProfile(cfg, profile);
     if (path === '/availability') {
       await github.authorize(c);
       return json((await offers.evaluate(vast, cfg, ledger, profile)).view);
@@ -1038,6 +1039,8 @@ export function createService({
         KF_HEARTBEAT_SECONDS: cfg.heartbeat / 1000,
         KF_GRACE_PASS: cfg.passGrace / 1000,
         KF_GRACE_FAIL: cfg.failGrace / 1000,
+        // The tier: a pure function of the profile (src/tier.js), never a request field.
+        ...tierEnvironment(profile),
         // Pass-through for the hostname-wide Access policy; the Worker never verifies Access.
         ...(env.BOX_ACCESS_ID && env.BOX_ACCESS_SECRET
           ? { KF_ACCESS_ID: env.BOX_ACCESS_ID, KF_ACCESS_SECRET: env.BOX_ACCESS_SECRET }

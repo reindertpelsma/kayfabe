@@ -39,7 +39,11 @@ ZERO = "0" * 64
 # Review B1: the runner's budget is 200 minutes (Runner.until). A run needs the hard limit
 # (defaults.json hardMinutes) plus the Worker's admission margin (admissionMarginMinutes);
 # after a definite BUSY the runner stops asking once less than that is left.
-ADMISSION_NEED_SECONDS = (180 + 5) * 60
+# Per profile (src/tier.js): the Worker's hard limit plus its 5-minute admission margin, and the
+# runner's whole wait budget, which stays below the gpu-vast step timeout (340 / 205 min).
+HARD_MINUTES = {"check": 300, "sweep": 180}
+ADMISSION_NEED = {p: (m + 5) * 60 for p, m in HARD_MINUTES.items()}
+WAIT_BUDGET = {"check": 330 * 60, "sweep": 200 * 60}
 
 
 class Invalid(Exception):
@@ -815,7 +819,8 @@ class Runner:
         # Edits4 F1: sticky for the whole /rent sequence. Once any /rent reply was ambiguous
         # (5xx, timeout, connection error, garbled page) a box may exist for this run.
         self.rent_ambiguous = False
-        self.until = time.monotonic() + 600 * 20
+        self.until = time.monotonic() + WAIT_BUDGET[ctx.get("profile", "check")]
+        self.retry = 0
         # The newest unrecovered failure of a Worker call, as one trusted line (see Diagnosed).
         self.diagnostic = None
         self.phase = "setup"
@@ -857,7 +862,7 @@ class Runner:
                     self.rent_busy
                     and not self.rent_ambiguous
                     and not self.provider_retry
-                    and remaining < ADMISSION_NEED_SECONDS
+                    and remaining < ADMISSION_NEED[self.ctx.get("profile", "check")]
                 ):
                     raise WaitBudget()
                 body["remaining_seconds"] = remaining
@@ -1187,6 +1192,16 @@ class Runner:
                     self.metadata = data
                     terminal = True
                     result = {"state": data["state"], "verdict": data["verdict"], "verified": 1}
+                    # Lane 2: a failing windows_retry_<class> row is a host, harness or rental
+                    # fault (re-run on a fresh box), never a pass. Box data: it can only relabel
+                    # a FAIL so the workflow says RETRY; it never changes the verdict.
+                    self.retry = int(
+                        data["verdict"] == "FAIL"
+                        and any(
+                            r["fail"] and r["name"].startswith("windows_retry_")
+                            for r in data.get("suites") or []
+                        )
+                    )
                     self.show(data["gpu_model"])
                     break
                 if data["state"] not in {"CREATING", "BOOTING", "TESTING"}:
@@ -1578,6 +1593,9 @@ def main():
         with open(output, "a", encoding="ascii") as outputs:
             for key in ["state", "verdict", "verified"]:
                 outputs.write(key + "=" + str(result[key]) + "\n")
+            # Written only when set (an absent output reads as empty, i.e. not RETRY).
+            if getattr(controller, "retry", 0) == 1 and result["verdict"] == "FAIL":
+                outputs.write("retry=1\n")
     except Exception:
         diagnostic = diagnostic or "runner: Actions output could not be written"
         if not diagnosed:

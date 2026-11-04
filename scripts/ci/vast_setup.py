@@ -27,6 +27,10 @@ GITHUB_HOSTS = {
 }
 
 
+# The restore step that was running, from a fixed vocabulary; printed on refusal, never details.
+PHASE = ["start"]
+
+
 class CacheRefused(ValueError):
     """Generic refusal; signed locators and remote contents never reach the error text."""
 
@@ -46,7 +50,7 @@ def digest(path):
 
 def package_names(root):
     names = set()
-    for profile in ["ci", "bench"]:
+    for profile in ["ci", "bench", "windows"]:
         text = subprocess.check_output(
             ["bash", str(root / "scripts/bench/provision_box.sh"), "--packages", profile], text=True
         )
@@ -264,11 +268,14 @@ def restore(root, cache=CACHE_ROOT):
             facts["os" if key == "ID" else "version"] = value.strip('"')
     facts["arch"] = platform.machine()
     lock = json.loads((root / "scripts/ci/setup-cache.lock.json").read_text())
+    PHASE[0] = "lock"
     validate_lock(lock, root, facts, policy_digest(root))
+    PHASE[0] = "ready"
     wait_for_ready()
     cache.mkdir(parents=True, exist_ok=False)
     for asset in lock["assets"]:
         at = time.time()
+        PHASE[0] = "locator_" + asset["kind"]
         raw = subprocess.check_output(
             ["/usr/local/bin/kf-box-blob-url", lock["tag"], asset["name"]],
             stderr=subprocess.DEVNULL,
@@ -277,7 +284,9 @@ def restore(root, cache=CACHE_ROOT):
             raise CacheRefused("invalid blob locator")
         locator = json.loads(raw)
         archive = cache / asset["name"]
+        PHASE[0] = "download_" + asset["kind"]
         download_asset(locator, asset, archive)
+        PHASE[0] = "unpack_" + asset["kind"]
         staging = cache / ("staging-" + asset["kind"])
         unpack_checked(archive, staging, asset["kind"])
         (staging / asset["kind"]).replace(cache / asset["kind"])
@@ -294,6 +303,7 @@ def restore(root, cache=CACHE_ROOT):
             + str(round(time.time() - at, 3)),
             flush=True,
         )
+    PHASE[0] = "probe"
     subprocess.run(
         ["python3", str(root / "scripts/ci/setup_cache_build.py"), "probe", str(cache)], check=True
     )
@@ -302,6 +312,7 @@ def restore(root, cache=CACHE_ROOT):
     (cache / "sources.list").write_text("deb [trusted=yes] file:" + str(cache / "debs") + " ./\n")
     # Existing provision scripts mask unattended-upgrade timers and guard the dpkg lock.
     # They install through the cache-only apt shim; restoration never bypasses that order.
+    PHASE[0] = "vendor"
     configure_vendor(cache / "vendor", Path.home() / ".cargo")
     metrics = {
         "seconds": round(time.time() - started, 3),
@@ -330,7 +341,8 @@ def main():
         workspace = Path(os.environ.get("KF_CI_WORKSPACE", "/workspace"))
         workspace.mkdir(parents=True, exist_ok=True)
         (workspace / "kf-result.json").write_text(json.dumps(result) + "\n")
-        print("KF_SETUP_CACHE_REFUSED", flush=True)
+        # A fixed phase token only (lane 2, 2026-11-04: a stale lock looked like a blob-route fault).
+        print("KF_SETUP_CACHE_REFUSED phase=" + PHASE[0], flush=True)
         return 2
 
 
