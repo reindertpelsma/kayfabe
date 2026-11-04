@@ -212,3 +212,27 @@ host 595.91.07.
   behave differently without it (a refusal that `12063d4f8` did not have).
 - Time-box: report by 04:30Z. The AD104 Windows lane took 5065 s at the gate on this machine (run ada104w); whatever has
   not finished at the time-box is reported as not finished, and both boxes are destroyed before the report.
+
+### What a 580.x host sees with these rows (from the committed code and tables only; no hardware)
+
+- **No row stores an answer.** A `gssreplay` row is a question (cmd, size, request words). kf3 asks it of the host it
+  runs on, once at realize, and serves only the bytes THAT host wrote (`query_gss_replay`, `Answer::from_probes`). There
+  is no table of 595 replies, so a 580 host cannot hand a guest a 595-shaped answer. COMPUTED from the code.
+- **Whether a host is asked at all** is decided by `kf_abi::hostabi::HOST_CONTROLS` (`control_carry`): a
+  `MeasuredOpaque` row is asked when the host is exactly a listed version (here 595.91.07) or inside the encoded
+  interval `[580.65.06, 581)`; any other host (575.x, 590.x, 595.84, 610.x) gets `NoHeader` and the row is not asked, so
+  the guest is refused as at `0c515b3b3`. COMPUTED.
+- **0x20809064** (520 B, words `{0,3,1,..,4}`): asked on 580.x hosts and on 595.91.07. The committed Windows captures
+  give 520 B for this control under every GSP firmware from 570.133.07 to 610.57.01
+  (`traces/constants_measure_20261014b/ga106_sizes_by_windows_driver.tsv`), and the 580.88 capture answers it `0x0`
+  (`ga106_580.88/C/ga106_C.controls.tsv`). Whether a 580.x HOST answers this exact request is not measured here (the
+  committed tier-2 runs asked only cudart's and the encoder's requests, all NV_OK on every host listed in
+  `tier2/raw_*.txt`). If it refuses, realize logs the refusal and the guest is refused as today.
+- **0x2080852c** (1440 B, word 2 = 0x1f): asked on 580.x hosts too (the host-ABI row is `MeasuredOpaque`, so the encoded
+  interval also carries it at 1440). The committed captures give 1440 B under GSP firmware 580.65.05 to 610.57.01 (1420
+  under 570/575), the 580.88 capture answered `0x0` at 1440 (`ga106_sizes_by_windows_driver.tsv`,
+  `ga106_580.88/C/ga106_C.controls.tsv`, `branch_sizes_580_vs_595.tsv`: "1440 1440 no" change). INFERRED: a 580.x host
+  accepts 1440; not measured on a host.
+- **0x2080852b** stays refused everywhere: the tables give 2836 B up to GSP 580.105.07 and 3324 B from 595.71.01
+  (`changed=yes`), which matches what our 595.91.07 host refused. A row asking 2836 B on 580.x hosts only would be the
+  next candidate; not proposed (no host measurement).
