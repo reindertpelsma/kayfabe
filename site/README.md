@@ -153,6 +153,26 @@ The frontpage and the README must not contain the phrases listed in `claims_guar
 "anti-cheat compatible", "multi-tenant ready", "works with any GPU", hype words). `test_build.py` checks the sources and
 `test_output.py` the rendered landing; a new banned phrase goes in that list with its reason.
 
+## Platform status pages (`/status/`)
+
+DESIGN-ONLY, 2026-11-04 (docs/design/V3_PLATFORM_TESTING.md section 9). `build.py` writes
+`/status/` from master tooling (`status_pages.py`, `status/status.js`, `status/status.css`),
+whatever ref supplies the root landing. Three modes:
+
+- **not configured** (default: local, fork, PR and portable builds): one short page and no
+  Worker URL anywhere in the output;
+- **live**: only a deployment-candidate build gets `--status-api-base`, from repository
+  variable `STATUS_API_BASE` (optional `STATUS_LOGS_BASE`). The workflow and `build.py` both
+  accept only an https origin on kayfabe.dev; anything else is a warning and the
+  not-configured page. The origin is written into one `<meta>` per page; `status.js` holds no URL;
+- **fixture**: `python3 site/build.py --tools-dir "$TOOLS_DIR" --status-fixture site/status/fixture.json`
+  serves the pages from the committed **synthetic** fixture, with a visible banner. It cannot be
+  combined with `--deploy-candidate`. Regenerate the fixture with
+  `npm run fixture -- --write` in `ci/platform-api/`.
+
+Tests: `python3 -m unittest discover -s site -p test_status.py` and, after
+`npm ci --prefix site --ignore-scripts`, `node --test site/test_status_dom.mjs` (jsdom).
+
 ## Proposed always-reported Site status
 
 CODE READ 2026-10-27 (`.github/workflows/site.yml`, `site-status.yml`, `ci/vast-broker/site_policy.py`): PRs always get the custom `site` status. A read-only API decision skips an unrelated change; needed/uncertain changes build the exact PR head. The separate API-only reporter supports fork PRs without giving their code a status-writing token. Master deployment requires confirmed Site/docs/workflow changes, while existing publication events keep master tooling. See [status behavior](../docs/howto/site-status.md).

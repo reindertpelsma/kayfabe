@@ -1,0 +1,180 @@
+/* /status/ pages, layered on /style.css. Verdicts are words first; colour only repeats them. */
+:root {
+  --kf-pass-bg: #e3f3e9;
+  --kf-pass-fg: #124d2a;
+  --kf-fail-bg: #fde7e9;
+  --kf-fail-fg: #8a1022;
+  --kf-retry-bg: #fff1c2;
+  --kf-retry-fg: #5c3b00;
+  --kf-unavailable-bg: #eceff2;
+  --kf-unavailable-fg: #3b4652;
+  --kf-running-bg: #e4eefc;
+  --kf-running-fg: #0a3f7d;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --kf-pass-bg: #12301f;
+    --kf-pass-fg: #9ee0b5;
+    --kf-fail-bg: #3a1218;
+    --kf-fail-fg: #ffb3bd;
+    --kf-retry-bg: #3a2e0c;
+    --kf-retry-fg: #ffd98a;
+    --kf-unavailable-bg: #20262d;
+    --kf-unavailable-fg: #c2cad2;
+    --kf-running-bg: #13243b;
+    --kf-running-fg: #a9cdff;
+  }
+}
+.kf-status {
+  padding-top: 1rem;
+  padding-bottom: 2rem;
+}
+.kf-synthetic {
+  border-left: 4px solid var(--warn-line);
+  background: var(--warn-bg);
+  padding: 0.5rem 0.75rem;
+}
+.kf-error {
+  color: var(--kf-fail-fg);
+}
+.kf-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.kf-scroll:focus-visible {
+  outline: 2px solid var(--accent);
+}
+.kf-matrix,
+.kf-runs {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.875rem;
+}
+.kf-matrix caption,
+.kf-runs caption {
+  text-align: left;
+  padding: 0.5rem;
+  color: var(--muted);
+}
+.kf-matrix th,
+.kf-matrix td,
+.kf-runs th,
+.kf-runs td {
+  border-top: 1px solid var(--line);
+  padding: 0.4rem 0.5rem;
+  text-align: left;
+  vertical-align: top;
+}
+.kf-matrix thead th,
+.kf-runs thead th {
+  background: var(--surface);
+  white-space: nowrap;
+}
+.kf-family th {
+  background: var(--surface);
+  font-weight: 600;
+}
+.kf-cell {
+  min-width: 8.5rem;
+}
+.kf-cell > * {
+  display: block;
+}
+.kf-cell a {
+  text-decoration: none;
+}
+.kf-tier,
+.kf-pass,
+.kf-small {
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+.kf-pass a {
+  display: inline;
+}
+.kf-v {
+  display: inline-block;
+  border-radius: 4px;
+  padding: 0 0.35rem;
+  font-weight: 600;
+  font-size: 0.8125rem;
+  background: var(--kf-unavailable-bg);
+  color: var(--kf-unavailable-fg);
+}
+.kf-v-pass {
+  background: var(--kf-pass-bg);
+  color: var(--kf-pass-fg);
+}
+.kf-v-fail {
+  background: var(--kf-fail-bg);
+  color: var(--kf-fail-fg);
+}
+.kf-v-retry,
+.kf-v-pending {
+  background: var(--kf-retry-bg);
+  color: var(--kf-retry-fg);
+}
+.kf-v-running {
+  background: var(--kf-running-bg);
+  color: var(--kf-running-fg);
+}
+.kf-v-none {
+  background: transparent;
+  color: var(--muted);
+  font-weight: 400;
+}
+.kf-sha {
+  font-family: var(--mono);
+  font-size: 0.8125rem;
+}
+.kf-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  align-items: end;
+  margin: 1rem 0;
+}
+.kf-filters label {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.875rem;
+}
+.kf-filters input,
+.kf-filters select,
+.kf-filters button {
+  font: inherit;
+  min-height: 2.25rem;
+}
+.kf-facts {
+  display: grid;
+  grid-template-columns: minmax(7rem, max-content) 1fr;
+  gap: 0.25rem 1rem;
+}
+.kf-facts dt {
+  color: var(--muted);
+}
+.kf-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.kf-checklist {
+  list-style: none;
+  padding-left: 0;
+}
+.kf-req {
+  padding: 0.25rem 0;
+}
+.kf-legend {
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+@media (max-width: 40rem) {
+  .kf-facts {
+    grid-template-columns: 1fr;
+  }
+  .kf-facts dd {
+    margin-bottom: 0.5rem;
+  }
+}
