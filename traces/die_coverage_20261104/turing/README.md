@@ -1,6 +1,6 @@
 # Die coverage, Turing, on the integration revision (2026-11-04)
 
-STATUS: RESEARCH, 2026-11-04. Lane 3 (owner, 2026-11-04), family Turing. The pre-registration below was written and
+STATUS: ANSWERED, 2026-11-04 (verdict under RESULTS). Lane 3 (owner, 2026-11-04), family Turing. The pre-registration below was written and
 pushed BEFORE any run on the boxes; results are appended under "RESULTS". MEASURED = a line in a committed file in
 this directory, named with its file; INFERRED = reasoning.
 
@@ -62,7 +62,7 @@ containers, which cannot run a kf3 guest.
 | die | SKU, PCI id | box (own id) | host driver as found -> run | v3 gates | bare metal | thin guest 30 arms @180 s | census | Windows gate |
 |---|---|---|---|---|---|---|---|---|
 | TU106 | RTX 2060 SUPER, `10de:1f06` | 59031420, Sweden, 11 vCPU, 24 GB, 146 GB root | 575.51.03 -> 580.159.04 | 9/9, gate10=PASS | 30/30 | **30/30** | OK | **PASS** (`tu106a1`) |
-| TU116 | GTX 1660 Ti, `10de:2182` | 59031423, UK, 7 vCPU, 24 GB, 146 GB root | 575.51.03 -> 580.159.04 | 9/9, gate10=PASS | 30/30 | **30/30** | OK | **PASS** (`tu116b1`) |
+| TU116 | GTX 1660 Ti, `10de:2182` | 59031423, UK, 7 vCPU, 24 GB, 146 GB root | 575.51.03 -> 580.159.04 | 9/9, gate10=PASS | 30/30 | **30/30** | OK | **PASS x2** (`tu116b1`, `tu116b2`) |
 | TU104, TU102, TU117 | - | - | - | not run: no VM offer (see *Offers seen* and *Scans*) | | | | |
 
 - **H-walkwake-TU106: not falsified.** MEASURED (`tu106_box59031420/tu106a1.log`, run `tu106a1`, 2026-11-04, rev
@@ -91,7 +91,11 @@ containers, which cannot run a kf3 guest.
   hostref=green/green secs=1926 ... code=0 probes=cup8,d3d11,x2 resets=0 known_live_dumps_193=2`. kf3: `caps page
   derived — 56 words: 55 T1 rule, 0 T2 host, 1 T3 measured (0 unmeasured)`, window 0 scanned at +250.4 s,
   `running_to_suspending=1` (the stop only), `host_xid_in_boots=0`, every reset counter 0. The storm shape of
-  2026-11-01 (no window PUT after the modeset, an RM unload every ~25 s) is absent. INFERRED: the TU116 T3 `0x00c` row
+  2026-11-01 (no window PUT after the modeset, an RM unload every ~25 s) is absent. Second run on a fresh overlay of
+  the same image (`tu116b2_windows.log`, `bash scripts/bench/box/windows_gate.sh tu116b2` from the box checkout at
+  `0c515b3b3`): `WINDOWS_GATE_PASS rev=0c515b3b ... secs=1795 ... code=0 probes=cup8,d3d11,x2 resets=0
+  known_live_dumps_193=2`, the same `caps page derived` line, window 0 at +254.2 s, `running_to_suspending=1`,
+  `host_xid_in_boots=0`, every reset counter 0 (n=2 on one box). INFERRED: the TU116 T3 `0x00c` row
   (measured on a GTX 1660 SUPER, `10de:21c4`) serves this GTX 1660 Ti (`10de:2182`) because rows are keyed by
   arch/impl (0x160/0x8), not by PCI id; the log's `1 T3 measured (0 unmeasured)` shows the row was used.
 - Host Xids: 10 per box, all from the two Linux suites (bare metal + thin guest), 2 x the 5 admitted shapes
@@ -108,3 +112,19 @@ containers, which cannot run a kf3 guest.
   (nested KVM exits), walk latency is in the fixed range on both (TU116 173-256 us, `tu116b1_armstats.txt`).
 - Unmeasured on this lane: TU104, TU102, TU117 (no Vast VM offer during the lane); no PRECOMP or GSS-size question
   arises for Turing in these runs (kf3 logged no `NO MEASURED` line in either gate boot).
+
+## Scans, cost, teardown
+
+- Offer scans (`offer_scans.txt`, `vms_enabled=true num_gpus=1`, per Turing name, 00:16Z to 02:28Z, 9 scans): never a
+  TU104 (RTX 2070 SUPER, 2080, 2080 SUPER, Quadro RTX 4000/5000), TU102 (RTX 2080 Ti, Titan RTX, Quadro RTX
+  6000/8000) or TU117 (GTX 1650) offer. A search without `num_gpus=1` found no multi-GPU Turing VM offer either
+  (00:17Z). Seen besides the two rented: RTX 2060 (Quebec CA, 0.534 USD/h, 96 vCPU; gone by 01:12Z, not rented), and
+  the two rented offers relisted after their leases ended.
+- Cost (INFERRED from the per-hour prices and lifetimes; the account credit is shared with other lanes): box A
+  59031420 00:09:38Z -> 01:32:40Z at 0.175 USD/h = 0.24 USD; box B 59031423 00:09:41Z -> 02:27:42Z at 0.150 USD/h =
+  0.35 USD; **about 0.59 USD in all** (budget 3.5). Negative boots: 0.
+- Teardown: `vastai destroy instance 59031420 -y` (01:32Z) and `vastai destroy instance 59031423 -y` (02:27Z); at 02:28Z
+  `vastai show instances-v1 --raw` listed 5 instances, none of them ours (the others belong to other lanes and were
+  left alone).
+- Not shown by this lane: TU104, TU102, TU117 (no offer); TU106 Windows on a second machine at this revision; any
+  host driver other than 580.159.04; anything beyond the gate's scope (`docs/design/V3_WINDOWS_GATE.md` §1).
