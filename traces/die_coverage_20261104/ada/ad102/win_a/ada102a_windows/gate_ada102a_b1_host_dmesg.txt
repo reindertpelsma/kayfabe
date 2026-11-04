@@ -1,0 +1,2 @@
+[ 2390.765431] NVRM:unknown NVRM ioctl command: 0xf0
+[ 2390.947981] NVRM: GPU0 gpuValidateRegOffset_IMPL: User does not have permission to access register offset 0x640780

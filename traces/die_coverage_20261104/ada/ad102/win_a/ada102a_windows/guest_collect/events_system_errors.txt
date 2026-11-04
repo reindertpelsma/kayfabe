@@ -1,0 +1,235 @@
+﻿
+
+TimeCreated      : 11/4/2026 1:00:00 AM
+ProviderName     : Microsoft-Windows-DistributedCOM
+Id               : 10016
+LevelDisplayName : Warning
+Message          : The machine-default permission settings do not grant Local Activation permission for the COM Server application with CLSID 
+                   {UUID-SCRUBBED}
+                    and APPID 
+                   {UUID-SCRUBBED}
+                    to the user NT AUTHORITY\NETWORK SERVICE SID (S-1-5-20) from address LocalHost (Using LRPC) running in the application container Unavailable SID (Unavailable). This security permission can be modified using the Component Services administrative tool.
+
+TimeCreated      : 11/4/2026 12:56:49 AM
+ProviderName     : Microsoft-Windows-DistributedCOM
+Id               : 10016
+LevelDisplayName : Warning
+Message          : The application-specific permission settings do not grant Local Launch permission for the COM Server application with CLSID 
+                   Windows.SecurityCenter.WscDataProtection
+                    and APPID 
+                   Unavailable
+                    to the user NT AUTHORITY\SYSTEM SID (S-1-5-18) from address LocalHost (Using LRPC) running in the application container Unavailable SID (Unavailable). This security permission can be modified using the Component Services administrative tool.
+
+TimeCreated      : 11/4/2026 12:55:16 AM
+ProviderName     : Microsoft-Windows-DistributedCOM
+Id               : 10016
+LevelDisplayName : Warning
+Message          : The machine-default permission settings do not grant Local Activation permission for the COM Server application with CLSID 
+                   {UUID-SCRUBBED}
+                    and APPID 
+                   {UUID-SCRUBBED}
+                    to the user NT AUTHORITY\NETWORK SERVICE SID (S-1-5-20) from address LocalHost (Using LRPC) running in the application container Unavailable SID (Unavailable). This security permission can be modified using the Component Services administrative tool.
+
+TimeCreated      : 11/4/2026 12:55:01 AM
+ProviderName     : Microsoft-Windows-DNS-Client
+Id               : 1014
+LevelDisplayName : Warning
+Message          : Name resolution for the name ctldl.windowsupdate.com timed out after none of the configured DNS servers responded. Client PID 2612.
+
+TimeCreated      : 11/4/2026 12:54:52 AM
+ProviderName     : Microsoft-Windows-DistributedCOM
+Id               : 10016
+LevelDisplayName : Warning
+Message          : The machine-default permission settings do not grant Local Activation permission for the COM Server application with CLSID 
+                   {UUID-SCRUBBED}
+                    and APPID 
+                   {UUID-SCRUBBED}
+                    to the user NT AUTHORITY\NETWORK SERVICE SID (S-1-5-20) from address LocalHost (Using LRPC) running in the application container Unavailable SID (Unavailable). This security permission can be modified using the Component Services administrative tool.
+
+TimeCreated      : 11/4/2026 12:54:41 AM
+ProviderName     : Microsoft-Windows-Wininit
+Id               : 15
+LevelDisplayName : Warning
+Message          : Credential Guard and/or VBS Key Isolation are configured but the secure kernel is not running; continuing without them.
+
+TimeCreated      : 11/4/2026 12:54:11 AM
+ProviderName     : Service Control Manager
+Id               : 7000
+LevelDisplayName : Error
+Message          : The OpenSSH SSH Server service failed to start due to the following error: 
+                   A system shutdown is in progress.
+
+TimeCreated      : 11/4/2026 12:54:11 AM
+ProviderName     : Service Control Manager
+Id               : 7031
+LevelDisplayName : Error
+Message          : The OpenSSH SSH Server service terminated unexpectedly.  It has done this 2 time(s).  The following corrective action will be taken in 0 milliseconds: Restart the service.
+
+TimeCreated      : 11/4/2026 12:54:06 AM
+ProviderName     : Service Control Manager
+Id               : 7031
+LevelDisplayName : Error
+Message          : The OpenSSH SSH Server service terminated unexpectedly.  It has done this 1 time(s).  The following corrective action will be taken in 0 milliseconds: Restart the service.
+
+TimeCreated      : 11/4/2026 12:52:31 AM
+ProviderName     : Microsoft-Windows-DistributedCOM
+Id               : 10016
+LevelDisplayName : Warning
+Message          : The application-specific permission settings do not grant Local Launch permission for the COM Server application with CLSID 
+                   Windows.SecurityCenter.WscDataProtection
+                    and APPID 
+                   Unavailable
+                    to the user NT AUTHORITY\SYSTEM SID (S-1-5-18) from address LocalHost (Using LRPC) running in the application container Unavailable SID (Unavailable). This security permission can be modified using the Component Services administrative tool.
+
+TimeCreated      : 11/4/2026 12:50:42 AM
+ProviderName     : Microsoft-Windows-DNS-Client
+Id               : 1014
+LevelDisplayName : Warning
+Message          : Name resolution for the name ctldl.windowsupdate.com timed out after none of the configured DNS servers responded. Client PID 2444.
+
+TimeCreated      : 11/4/2026 12:50:21 AM
+ProviderName     : Microsoft-Windows-Wininit
+Id               : 15
+LevelDisplayName : Warning
+Message          : Credential Guard and/or VBS Key Isolation are configured but the secure kernel is not running; continuing without them.
+
+TimeCreated      : 11/4/2026 12:49:34 AM
+ProviderName     : Service Control Manager
+Id               : 7000
+LevelDisplayName : Error
+Message          : The OpenSSH SSH Server service failed to start due to the following error: 
+                   The service did not respond to the start or control request in a timely fashion.
+
+TimeCreated      : 11/4/2026 12:49:34 AM
+ProviderName     : Service Control Manager
+Id               : 7031
+LevelDisplayName : Error
+Message          : The OpenSSH SSH Server service terminated unexpectedly.  It has done this 2 time(s).  The following corrective action will be taken in 0 milliseconds: Restart the service.
+
+TimeCreated      : 11/4/2026 12:49:29 AM
+ProviderName     : Service Control Manager
+Id               : 7031
+LevelDisplayName : Error
+Message          : The OpenSSH SSH Server service terminated unexpectedly.  It has done this 1 time(s).  The following corrective action will be taken in 0 milliseconds: Restart the service.
+
+TimeCreated      : 11/4/2026 12:49:07 AM
+ProviderName     : Microsoft-Windows-DNS-Client
+Id               : 1014
+LevelDisplayName : Warning
+Message          : Name resolution for the name ctldl.windowsupdate.com timed out after none of the configured DNS servers responded. Client PID 3472.
+
+TimeCreated      : 11/4/2026 12:48:46 AM
+ProviderName     : Microsoft-Windows-Wininit
+Id               : 15
+LevelDisplayName : Warning
+Message          : Credential Guard and/or VBS Key Isolation are configured but the secure kernel is not running; continuing without them.
+
+TimeCreated      : 11/4/2026 12:48:06 AM
+ProviderName     : Service Control Manager
+Id               : 7000
+LevelDisplayName : Error
+Message          : The OpenSSH SSH Server service failed to start due to the following error: 
+                   The service did not respond to the start or control request in a timely fashion.
+
+TimeCreated      : 11/4/2026 12:48:05 AM
+ProviderName     : Service Control Manager
+Id               : 7031
+LevelDisplayName : Error
+Message          : The OpenSSH SSH Server service terminated unexpectedly.  It has done this 2 time(s).  The following corrective action will be taken in 0 milliseconds: Restart the service.
+
+TimeCreated      : 11/4/2026 12:48:00 AM
+ProviderName     : Service Control Manager
+Id               : 7031
+LevelDisplayName : Error
+Message          : The OpenSSH SSH Server service terminated unexpectedly.  It has done this 1 time(s).  The following corrective action will be taken in 0 milliseconds: Restart the service.
+
+TimeCreated      : 11/4/2026 12:47:39 AM
+ProviderName     : Microsoft-Windows-DistributedCOM
+Id               : 10016
+LevelDisplayName : Warning
+Message          : The application-specific permission settings do not grant Local Launch permission for the COM Server application with CLSID 
+                   Windows.SecurityCenter.WscDataProtection
+                    and APPID 
+                   Unavailable
+                    to the user NT AUTHORITY\SYSTEM SID (S-1-5-18) from address LocalHost (Using LRPC) running in the application container Unavailable SID (Unavailable). This security permission can be modified using the Component Services administrative tool.
+
+TimeCreated      : 11/4/2026 12:47:23 AM
+ProviderName     : Microsoft-Windows-DistributedCOM
+Id               : 10010
+LevelDisplayName : Error
+Message          : The server {UUID-SCRUBBED} did not register with DCOM within the required timeout.
+
+TimeCreated      : 11/4/2026 12:47:23 AM
+ProviderName     : Microsoft-Windows-DistributedCOM
+Id               : 10010
+LevelDisplayName : Error
+Message          : The server {UUID-SCRUBBED} did not register with DCOM within the required timeout.
+
+TimeCreated      : 11/4/2026 12:47:23 AM
+ProviderName     : Microsoft-Windows-DistributedCOM
+Id               : 10010
+LevelDisplayName : Error
+Message          : The server {UUID-SCRUBBED} did not register with DCOM within the required timeout.
+
+TimeCreated      : 11/4/2026 12:46:27 AM
+ProviderName     : Service Control Manager
+Id               : 7030
+LevelDisplayName : Error
+Message          : The Printer Extensions and Notifications service is marked as an interactive service.  However, the system is configured to not allow interactive services.  This service may not function properly.
+
+TimeCreated      : 11/4/2026 12:46:27 AM
+ProviderName     : Microsoft-Windows-DistributedCOM
+Id               : 10016
+LevelDisplayName : Warning
+Message          : The machine-default permission settings do not grant Local Activation permission for the COM Server application with CLSID 
+                   {UUID-SCRUBBED}
+                    and APPID 
+                   {UUID-SCRUBBED}
+                    to the user NT AUTHORITY\NETWORK SERVICE SID (S-1-5-20) from address LocalHost (Using LRPC) running in the application container Unavailable SID (Unavailable). This security permission can be modified using the Component Services administrative tool.
+
+TimeCreated      : 11/4/2026 12:46:01 AM
+ProviderName     : Microsoft-Windows-Time-Service
+Id               : 134
+LevelDisplayName : Warning
+Message          : NtpClient was unable to set a manual peer to use as a time source because of DNS resolution error on 'time.windows.com,0x9'. NtpClient will try again in 15 minutes and double the reattempt interval thereafter. The error was: No such host is known. (0x80072AF9)
+
+TimeCreated      : 11/4/2026 12:45:49 AM
+ProviderName     : Microsoft-Windows-Time-Service
+Id               : 134
+LevelDisplayName : Warning
+Message          : NtpClient was unable to set a manual peer to use as a time source because of DNS resolution error on 'time.windows.com,0x9'. NtpClient will try again in 15 minutes and double the reattempt interval thereafter. The error was: No such host is known. (0x80072AF9)
+
+TimeCreated      : 11/4/2026 12:45:49 AM
+ProviderName     : Microsoft-Windows-DNS-Client
+Id               : 1014
+LevelDisplayName : Warning
+Message          : Name resolution for the name time.windows.com timed out after none of the configured DNS servers responded. Client PID 1372.
+
+TimeCreated      : 11/4/2026 12:45:15 AM
+ProviderName     : Microsoft-Windows-Wininit
+Id               : 15
+LevelDisplayName : Warning
+Message          : Credential Guard and/or VBS Key Isolation are configured but the secure kernel is not running; continuing without them.
+
+TimeCreated      : 11/4/2026 12:44:49 AM
+ProviderName     : Microsoft-Windows-DistributedCOM
+Id               : 10010
+LevelDisplayName : Error
+Message          : The server {UUID-SCRUBBED} did not register with DCOM within the required timeout.
+
+TimeCreated      : 11/4/2026 8:44:22 AM
+ProviderName     : Microsoft-Windows-DNS-Client
+Id               : 1014
+LevelDisplayName : Warning
+Message          : Name resolution for the name ctldl.windowsupdate.com timed out after none of the configured DNS servers responded. Client PID 4700.
+
+TimeCreated      : 11/4/2026 8:43:49 AM
+ProviderName     : Service Control Manager
+Id               : 7023
+LevelDisplayName : Error
+Message          : The netprofm service terminated with the following error: 
+                   The device is not ready.
+
+
+
+
