@@ -50,4 +50,97 @@ COMPUTED (`crates/kf-disp/data/caps_measured.tsv` at `0c515b3b3`): Ada (arch 0x1
 
 ## RESULTS
 
-(appended after the runs)
+Every line below is MEASURED on 2026-11-04 at revision `0c515b3b3` unless another revision is named, in the file
+named with it. Host Xids: each merge check left 10 host Xid 31 lines (`ad10x/ev_*_xid.txt`), the suites' intentional
+CE/PBDMA fault controls (5 from the bare suite, 5 from the fast suite; the shapes of `traces/walk_wake_20261103/`).
+
+### Per die
+
+| die | SKU, PCI id | box (Vast id) | host driver (found -> run) | v3 gates | fast suite (180 s) | census | Windows gate |
+|---|---|---|---|---|---|---|---|
+| AD102 | RTX 4090, `10de:2684` | 59031339, 30 vCPU, 48 GB, 155 GB | 575.51.03 -> 595.91.07 | 9/9 gate10=PASS | 30/30 (bare 30/30) | OK | **PASS x2** (ada102a, ada102b), resets=0, `known_live_dumps_193=0` |
+| AD103 | RTX 4080 SUPER, `10de:2702` | 59031595, 24 vCPU, 39 GB, 117 GB | 575.51.03 -> 580.159.04 | 9/9 gate10=PASS | 30/30 (bare 30/30) | OK | not run (Linux-only die) |
+| AD104 | RTX 4070 SUPER, `10de:2783` | 59031342, 17 vCPU, 24 GB, 155 GB | 575.51.03 -> 595.91.07 | 9/9 gate10=PASS | 30/30 (bare 30/30) | OK | see *AD104 Windows* below |
+| AD106 | RTX 4060 Ti, `10de:2803` | 59031599, 15 vCPU, 49 GB, 117 GB | 575.51.03 -> 580.159.04 | 9/9 gate10=PASS | 30/30 (bare 30/30) | OK | not run (Linux-only die) |
+| AD107 | RTX 4060 | - | - | - | - | - | **no `vms_enabled` offer** at 2026-11-04T00:11Z (searched with disk>=80, RAM>=12) |
+
+Files: `ad10x/ada10xa.log` (merge-check summary: `V3_GATES_SUMMARY`, `KF3_BUILT .../kf3-bins/0c515b3b/`, `BARE_SUITE_PASS`,
+`FAST_SUITE_PASS`, `BIRTH_CENSUS_OK arms=30 suite_births=161 gate_births=12`), `ada10xa_suite.out`, `ada10xa_gates.log`,
+`ada10xa_births.log`, `prov.log`. H-linux not falsified on any of the four dies.
+
+- **AD103 provisioning flake (rental/box, not the guest):** the first `provision_full.sh` ended `NOT_READY ... FG_RC=1`:
+  `build_fast_guest: /dev/nbd0p1 never appeared after 5s` (`ad103/provision_fg_failed.log`); the image passed
+  `qemu-img check`. `merge_check.sh` rebuilds the fast guest itself and got `FG_RC=0` on the same box minutes later; the
+  bar above is that merge check. INFERRED: a slow udev partition scan on that box. Not fixed here (the 5 s wait in
+  `build_fast_guest.sh` is the candidate if it recurs).
+
+### AD102 Windows gate (H-win not falsified, n=2, one box, host 595.91.07)
+
+`ad102/ada102a_windows.log`, `ad102/ada102b_windows.log`:
+
+```
+WINDOWS_GATE_PASS rev=0c515b3b gpu="NVIDIA GeForce RTX 4090" idle_s=300 hostref=green/green secs=2359 install=once driver=580.88 gsp=forced code=0 probes=cup8,d3d11,x2 resets=0 known_live_dumps_193=0 stale_lke_resubmits=0 strict=0 enable_utc=2026-11-04T00:55:24Z
+WINDOWS_GATE_PASS rev=0c515b3b gpu="NVIDIA GeForce RTX 4090" idle_s=300 hostref=green/green secs=906 install=once driver=580.88 gsp=forced code=0 probes=cup8,d3d11,x2 resets=0 known_live_dumps_193=0 stale_lke_resubmits=0 strict=0 enable_utc=2026-11-04T01:10:59Z
+```
+
+`caps page derived — 56 words: 55 T1 rule, 0 T2 host, 1 T3 measured (0 unmeasured)`; head 0 lit 1920x1080 with a window
+PUT (`+88288 ms the console shows head 0 1920x1080: [window 0 ...]`); 0 `USER_RING_SCAN`; `running_to_suspending=1`,
+`host_xid_in_boots=0` (`win_a/.../gsp_signals.txt`, `win_b/gsp_signals.txt`); every reset counter 0 including
+LiveKernelEvent 193 (`tdr_counts.txt`), where the earlier AD102 PASS g4 (`a5071c24`) had two 193 reports. Install 1436 s;
+the second run on a fresh overlay of the same image 906 s.
+
+### The GSS controls on host 595.91.07 (own GPU only; H-gss595 not falsified)
+
+Measured with the repo's kit, `kf-ctl-probe` built from `0c515b3b3`, run as an unprivileged user (`Uid 1002`, `CapEff 0`)
+on our AD104 at 595.91.07, 00:54Z, host Xid count 10 before and 10 after (`ad104/gss595/tier2_probe_trimmed.txt`,
+`scan_852abc_9064_trimmed.txt`; zero requests, sizes 4..16384 step 4):
+
+| control | sizes the host accepts (zero request) | what the Windows 580.88 guest sends (AD102, `W343GSSCENSUS`) | at `0c515b3b3` |
+|---|---|---|---|
+| `0x2080852a` | every size from 1784 up; 1716 -> INVALID_ARGUMENT | 1784 | served from the host's realize-time reply (4 calls) |
+| `0x2080852b` | only 3324 | 2836 | refused (3-4 calls) |
+| `0x2080852c` | only 1440 | 1440, words 0..9 `{0,0,0x1f,0,...}` | refused (6 calls) |
+| `0x20809064` | none (a zero request is never accepted); cudart's and the encoder's authored requests NV_OK at 520 | 520, words 0..9 `{0,3,1,0,0,0,4,0,0,0}` | 137-138 of 138-139 calls refused (`W349REFUSE ... consttab cudart.0x20809064: unmeasured on AD102 branch 580`) |
+
+- The startup line `HOST-ABI REFUSED control 0x2080852a: : body is 1716 bytes, its layout is 1784` is kayfabe's own
+  size check on the 570-branch row (`kf_abi::gssreplay`, size 1716), raised before any ioctl, on 580.159.04 hosts too
+  (AD103, AD106 `realize_gss_lines_timer_arm.txt`). The host refuses 1716 anyway, so no answer is lost. The cosmetic
+  defect is the follow-up line `host facts: GSS 0x2080852a [] refused by the host (status: None ...)`, which says "by
+  the host" for a question that never reached it. No change proposed.
+- `0x2080852b`: the guest's 580-branch size (2836) is not a size this host accepts for a zero request: no fix is
+  derivable at 595.91.07. A 580.x host was not scanned (the 580 boxes were gone by then): unmeasured.
+- Not asked here, seen in the same probe: 595.91.07 answers `0x2080852e` from 596 up, `0x2080853a` from 15352 up,
+  `0x2080a618` only at 8632, `0x2080853b` at 14320 with word 1 = 1, but kf3's host ABI refuses all four at that host
+  (`NoHeader`/`UnlistedControl`, `realize_gss_lines_timer_arm.txt` of AD104). That matters only for a 595-branch guest;
+  the 580.88 guest sends 528/1456/8620/1832, which this host refuses. Recorded, not changed.
+
+**Proposed fix (on this branch, not in `0c515b3b3`; three patched gate boots on AD102, all `WINDOWS_GATE_PASS ... resets=0`):**
+
+| run | revision | change | result |
+|---|---|---|---|
+| ada102p | `053d5cab5` | exact all-zero `0x2080852c` row at 1440 + `W343GSSREQ` (first ten request words of 9064) | **852c falsifier fired**: realize asked the row without a refusal, the guest's 6 calls stayed refused, so its request is not all-zero. 9064 request words recorded |
+| ada102q | `ec9f8681c` | 852c zero row removed; **9064 row with the guest's own inputs** `{(0,0),(4,3),(8,1),(0x18,4)}`; 852c words logged | **9064 falsifier did not fire**: no realize refusal, the guest asked 9064 **once** and was answered (`result=0x0`, `GSS 0x20809064 answered from the host's realize-time reply`) where `0c515b3b3` refused 137 of 138 calls. 852c words `{0,0,0x1f,0,...}` |
+| ada102r | `12063d4f8` | 852c row with the guest's own inputs `{(0,0),(4,0),(8,0x1f)}`; 852b words logged | see below |
+
+The 9064 row is the derived fix: the host's own answer to the guest's own question, asked once at realize with the zero
+and background probes (`kf_abi::gssreplay`), no captured bytes. Tests: `cargo test -p kf-abi -p kf-rm` green; the new
+`gssreplay` tests were red before their rows. INFERRED, not measured: why the guest re-asks 9064 ~138 times when refused
+and also ~129 times on the old tree that served the GA106 capture (g4), but once when given the host's answer.
+
+### Perf: the extra cost of no-walk arms and the uvm arms (H-perf)
+
+Same box (AD104, 17 vCPU nested), same harness and fast guest (the `0c515b3b3` checkout), `QEMU_BIN` swapped to
+pre-#239 `9297ffdd9`'s kf3 (`kf3-bins/9297ffdd/`), two runs each, all four 30/30 (`ad104/ab/ab_summary.txt`, the per-arm
+tables `ab_int*_vs_*.txt` made with the Ada lane's `ab_compare.py`):
+
+- the 21 no-walk arms: integration minus pre, median **+131, +171, +259, +221 ms** over the four cross pairs (mean of two
+  vs mean of two: +190 ms), against same-revision pairs of -159 ms (int vs int) and +11 ms (pre vs pre);
+- `uvm-invalidate` + `uvm-mean`: integration/pre **1.07, 1.17, 0.99, 1.08** (1.08 mean of two);
+- whole suite client time: integration/pre 0.92-0.95; per-walk latency about 125-140 us at `0c515b3b3` against about
+  210-365 us at `9297ffdd9` on this box (vat columns of the same tables).
+
+Against the pre-registered rule this is UNCLEAR (the no-walk condition holds, the uvm condition does not). In plain terms:
+the extra per-arm cost of arms with no walks is still there on this revision (+130..+260 ms median on a nested box whose
+arms take ~1.8-2.2 s); the 1.6-1.9x `uvm-invalidate`/`uvm-mean` slowdown of the Ada PC is not reproduced here
+(<= 1.17x). Not tuned. INFERRED: the nested box's 10-40x exit cost may hide or inflate both effects; the PC remains the
+place to bisect them.
