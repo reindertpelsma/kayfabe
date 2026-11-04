@@ -1,0 +1,9 @@
+qemu_log=gate_dca106a_b1_qemu.log
+gsp_lines=267
+refused_0x2080121f=0
+served_0x2080121f=0
+gsp_refused_lines=0
+unloading_guest_driver=0
+running_to_suspending=0
+host_xid_in_boots=0
+kf-host: HOST-ABI REFUSED control 0x2080852a: : body is 1716 bytes, its layout is 1784

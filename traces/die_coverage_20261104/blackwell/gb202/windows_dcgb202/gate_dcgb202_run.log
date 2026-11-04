@@ -1,0 +1,17 @@
+[2026-11-04T00:58:45Z] OVERLAY_CREATED disk/gate_dcgb202.qcow2 over base.qcow2
+[2026-11-04T00:58:45Z] waiting for the GPU lock /tmp/kayfabe-fastguest.lock (GPU work is strictly serial; up to 120s)
+[2026-11-04T00:58:45Z] WINVM_RUN_START tag=gate_dcgb202 repo_rev=0c515b3b kf3=on qemu=/workspace/bench/kf3-bins/0c515b3b/qemu-system-x86_64 host_driver=595.91.07 overlay=gate_dcgb202 arm=B guest_driver=580.65.06 gop_efi=/workspace/winvm/secureboot/kf-gop.0c515b3b.signed.efi sha256(gop_efi)=439a83f68bae05ac
+[2026-11-04T00:58:45Z] kf3 device: kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=/workspace/winvm/secureboot/kf-gop.0c515b3b.signed.efi,id=kf0,guest-driver=580.65.06,gpu-uuid=GPU-<uuid>
+[2026-11-04T00:58:45Z] VM_IDENTITY uuid=<uuid> serial=<serial> mac=<mac>
+[2026-11-04T00:58:45Z] ENV_FILE /workspace/bench/verify-worktrees/dcgb202.4GWg7E/scripts/bench/windows/kf3_flags.sample.env sha256=e5c254c811c6b3ac flags=19
+[2026-11-04T00:58:45Z] KF3_ENV KF3_ASYNC_PREEMPT=1 KF3_DEFERRED_API=1 KF3_DISPLAY_CAPS_PROBE=1 KF3_DISPLAY_CTRL_PROBE=1 KF3_DISPLAY_ILUT_OFFSET_256=1 KF3_DISPLAY_IMP_ENABLE=1 KF3_DISPLAY_LUT_MIRROR=1 KF3_DISPLAY_SDR_COLOR=1 KF3_GFX_POOL_PROBE=1 KF3_KERNEL_GR_CE=1 KF3_KERNEL_GR_WORK=1 KF3_MEMORY_LIST_PROBE=1 KF3_PREEMPT_BIND_PROBE=1 KF3_RPC_TRACE=1 KF3_SW_RUNLIST_HOST_OWNED=1 KF3_SW_RUNLIST_PROBE=1 KF3_TRANSLATED_CE_RELAY=1 KF3_WIN_TWIN_DEFAPI_OBJECT=1 KF3_WIN_USER_CHANNELS_PASSTHROUGH=1 KF3_ZCULL_BIND_PROBE=1 
+[2026-11-04T00:58:45Z] QEMU_START tag=gate_dcgb202 boot=1 pid=86195 log=logs/gate_dcgb202_b1_qemu.log
+[2026-11-04T01:02:37Z] WINVM_BOOT_END boot=1 rc=0 reason=guest-reset kf3_lines=239 host_xid=0
+[2026-11-04T01:02:37Z] guest rebooted: kf3 has no reset path, so a FRESH QEMU (same vars, same TPM state)
+[2026-11-04T01:02:37Z] QEMU_START tag=gate_dcgb202 boot=2 pid=86766 log=logs/gate_dcgb202_b2_qemu.log
+[2026-11-04T01:03:49Z] WINVM_BOOT_END boot=2 rc=0 reason=guest-reset kf3_lines=12999 host_xid=0
+[2026-11-04T01:03:49Z]   GUEST_PANICKED in boot 2: {"timestamp": {"seconds": 1793754218, "microseconds": 355771}, "event": "GUEST_PANICKED", "data": {"action": "run", "info": {"arg5": 0, "arg4": 18446647877111488512, "arg3": 18446603901857576864, "arg2": 43, "arg1": 275, "type": "hyper-v"}}}
+[2026-11-04T01:03:49Z] guest rebooted: kf3 has no reset path, so a FRESH QEMU (same vars, same TPM state)
+[2026-11-04T01:03:49Z] QEMU_START tag=gate_dcgb202 boot=3 pid=87079 log=logs/gate_dcgb202_b3_qemu.log
+[2026-11-04T01:06:02Z] WINVM_BOOT_END boot=3 rc=0 reason=guest-shutdown kf3_lines=10602 host_xid=0
+[2026-11-04T01:06:02Z] WINVM_RUN_END tag=gate_dcgb202 boots=3 reason=guest-shutdown

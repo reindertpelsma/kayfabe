@@ -1,0 +1,29 @@
+START 2026-11-04T00:17:30+00:00
+Preparing worktree (detached HEAD 0c515b3b3)
+HEAD=0c515b3b322157dfa0dbe8dd611459839c3534b6 CHECKOUT=/workspace/bench/verify-worktrees/ada102a.KfqzVK
+GATES_RC=0
+V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS
+KF3_RC=0
+KF3_BUILT /workspace/bench/kf3-bins/0c515b3b/qemu-system-x86_64 rev=0c515b3b mtime=2026-11-04 00:18:12.766569733 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+BARE_SUITE_PASS=30 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0 ARMS=30
+FG_RC=0
+SUITE_RC=0
+FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+BIRTH_CENSUS_SELFTEST cases=11 wrong=0
+BIRTH_CENSUS_SUITE arms=30 births=161 user=161 cuda_threads=90
+BIRTH_CENSUS_GATES births=12 user=12 refused=0
+BIRTH_CENSUS_OK arms=30 suite_births=161 gate_births=12 all PRIVILEGED_CHANNEL=0 privilege=USER
+WINDOWS_GATE_START tag=ada102a rev=0c515b3b source=/workspace/bench/verify-worktrees/ada102a.KfqzVK 2026-11-04T00:25:32+00:00 idle_s=300 flags=kf3_flags.sample.env guest_driver=580.65.06 arm=B
+WINDOWS_GATE_REQUESTED=1
+GATE_STAGE preflight START 2026-11-04T00:25:32+00:00
+GATE_NOTE host: gpu="NVIDIA GeForce RTX 4090" driver=595.91.07 cpus=30 ram_gb=48 disk_free_gb=131
+GATE_STAGE preflight EXIT ok 0s
+GATE_STAGE hostref_before START 2026-11-04T00:25:32+00:00
+GATE_HOSTREF before green cup8=PASS xid_count=10 xid_delta=0 gpu="NVIDIA GeForce RTX 4090, 595.91.07, 24564 MiB, P0"
+GATE_STAGE hostref_before EXIT ok 1s
+GATE_STAGE prereqs START 2026-11-04T00:25:33+00:00
+GATE_STAGE prereqs EXIT ok 10s
+GATE_STAGE kf3_binary START 2026-11-04T00:25:43+00:00
+GATE_NOTE kf3 qemu=/workspace/bench/kf3-bins/0c515b3b/qemu-system-x86_64 sha256=de572ee144772e84 rev=0c515b3b
+GATE_STAGE kf3_binary EXIT ok 0s
+GATE_STAGE install START 2026-11-04T00:25:43+00:00
