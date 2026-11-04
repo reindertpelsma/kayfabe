@@ -1,0 +1,19 @@
+STAGE box START 2026-11-04T00:16:16+00:00
+STAGE box EXIT rc=0 2026-11-04T00:18:43+00:00
+STAGE guest_run START 2026-11-04T00:18:43+00:00
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0 12  378M   12 47.3M    0     0  40.3M      0  0:00:09  0:00:01  0:00:08 40.2M 23  378M   23 88.2M    0     0  40.5M      0  0:00:09  0:00:02  0:00:07 40.5M 36  378M   36  136M    0     0  43.1M      0  0:00:08  0:00:03  0:00:05 43.1M 49  378M   49  186M    0     0  44.5M      0  0:00:08  0:00:04  0:00:04 44.5M 58  378M   58  219M    0     0  42.4M      0  0:00:08  0:00:05  0:00:03 44.1M 65  378M   65  248M    0     0  40.2M      0  0:00:09  0:00:06  0:00:03 40.2M 73  378M   73  277M    0     0  38.6M      0  0:00:09  0:00:07  0:00:02 37.8M 83  378M   83  316M    0     0  38.7M      0  0:00:09  0:00:08  0:00:01 36.0M 93  378M   93  353M    0     0  38.5M      0  0:00:09  0:00:09 --:--:-- 33.4M100  378M  100  378M    0     0  38.3M      0  0:00:09  0:00:09 --:--:-- 33.8M
+STAGE guest_run EXIT rc=0 2026-11-04T00:18:53+00:00
+STAGE driver START 2026-11-04T00:18:53+00:00
+STAGE driver EXIT rc=0 2026-11-04T00:21:02+00:00
+STAGE tree START 2026-11-04T00:21:02+00:00
+STAGE tree EXIT rc=0 2026-11-04T00:25:17+00:00
+STAGE kf3 START 2026-11-04T00:25:17+00:00
+STAGE kf3 EXIT rc=0 2026-11-04T00:25:27+00:00
+STAGE prereqs START 2026-11-04T00:25:27+00:00
+STAGE prereqs EXIT rc=0 2026-11-04T00:25:41+00:00
+STAGE install_windows START 2026-11-04T00:25:41+00:00
+STAGE install_windows EXIT rc=0 2026-11-04T00:46:38+00:00
+WINLANE_TIMING total=1822s box=147s guest_run=10s driver=129s tree=255s kf3=10s prereqs=14s install_windows=1257s
+WINLANE_EXIT rc=0 2026-11-04T00:46:38+00:00

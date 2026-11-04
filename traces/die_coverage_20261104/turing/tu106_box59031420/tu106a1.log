@@ -1,0 +1,36 @@
+START 2026-11-04T00:54:58+00:00
+Preparing worktree (detached HEAD 0c515b3b3)
+HEAD=0c515b3b322157dfa0dbe8dd611459839c3534b6 CHECKOUT=/workspace/bench/verify-worktrees/tu106a1.0TkX4q
+GATES_RC=0
+V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS
+KF3_RC=0
+KF3_BUILT /workspace/bench/kf3-bins/0c515b3b/qemu-system-x86_64 rev=0c515b3b mtime=2026-11-04 00:56:15.311377728 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+BARE_SUITE_PASS=30 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0 ARMS=30
+FG_RC=0
+SUITE_RC=0
+FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+BIRTH_CENSUS_SELFTEST cases=11 wrong=0
+BIRTH_CENSUS_SUITE arms=30 births=165 user=165 cuda_threads=90
+BIRTH_CENSUS_GATES births=12 user=12 refused=0
+BIRTH_CENSUS_OK arms=30 suite_births=165 gate_births=12 all PRIVILEGED_CHANNEL=0 privilege=USER
+WINDOWS_GATE_START tag=tu106a1 rev=0c515b3b source=/workspace/bench/verify-worktrees/tu106a1.0TkX4q 2026-11-04T01:10:42+00:00 idle_s=300 flags=kf3_flags.sample.env guest_driver=580.65.06 arm=B
+WINDOWS_GATE_REQUESTED=1
+GATE_STAGE preflight START 2026-11-04T01:10:42+00:00
+GATE_NOTE host VRAM 8192 MiB: WINVM_KF3_FB_MB=6144
+GATE_NOTE host: gpu="NVIDIA GeForce RTX 2060 SUPER" driver=580.159.04 cpus=11 ram_gb=24 disk_free_gb=109
+GATE_STAGE preflight EXIT ok 5s
+GATE_STAGE hostref_before START 2026-11-04T01:10:47+00:00
+GATE_HOSTREF before green cup8=PASS xid_count=10 xid_delta=0 gpu="NVIDIA GeForce RTX 2060 SUPER, 580.159.04, 8192 MiB, P0"
+GATE_STAGE hostref_before EXIT ok 5s
+GATE_STAGE prereqs START 2026-11-04T01:10:52+00:00
+GATE_STAGE prereqs EXIT ok 14s
+GATE_STAGE kf3_binary START 2026-11-04T01:11:06+00:00
+GATE_NOTE kf3 qemu=/workspace/bench/kf3-bins/0c515b3b/qemu-system-x86_64 sha256=de572ee144772e84 rev=0c515b3b
+GATE_STAGE kf3_binary EXIT ok 0s
+GATE_STAGE install START 2026-11-04T01:11:06+00:00
+GATE_NOTE Windows already installed on this box (2026-11-04T00:46:38Z repo=0c515b3b): install once per lease
+GATE_STAGE install EXIT ok 0s
+GATE_STAGE probes_build START 2026-11-04T01:11:06+00:00
+GATE_NOTE probes built: 7715901c9912 03770b29b3ed d00e11837783 4084c82558dc 
+GATE_STAGE probes_build EXIT ok 4s
+GATE_STAGE boot1 START 2026-11-04T01:11:10+00:00
