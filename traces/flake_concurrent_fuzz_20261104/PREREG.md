@@ -100,3 +100,32 @@ in the other integration-revision runs that day. The job log holds only the trim
   for n=40 and 3.75 % for n=80.
 - No production code changes. A root-cause patch, if one is evident, goes in a separate commit
   marked UNTESTED.
+
+## Amendment 2 (2026-11-04 ~05:20 CET, coordinator's new data): widened to `--bus-info-sweep` and the whole suite
+
+Registered after phase A's first 25 iterations had run (all PASS) and before any of the runs
+below.
+
+- **New observation (by the coordinator, measured in CI):** Worker CI run 41768641016, rev
+  e7d6a3fa, the same machine 22775, failed `--bus-info-sweep` in the thin guest. Its kf3 log ends
+  with `REFUSED walk: cuEventQuery refused: 700 (CUDA_ERROR_ILLEGAL_ADDRESS)`. On 22775, two of
+  three thin-suite runs have failed (run 4: concurrent-fuzz, run 5: bus-info-sweep). Manual lanes on
+  other machines passed every arm about 12 times.
+- **H-machine.** The failures are specific to machine 22775 or its host.
+  *Falsifier:* a second GA106 machine (here 30524, UK, Vast lease 59055125) fails in the same
+  number of iterations (any `REFUSED walk`/CUDA 700, or a non-PASS arm that is not an H1b control
+  seed).
+- **H-kayfabe.** The failures are a kayfabe defect that reproduces on any machine.
+  *Falsifier:* the same loops on 22775 reproduce a failure while 30524 shows none (that supports
+  H-machine), or neither machine fails in the iterations below. In the second case only an upper
+  bound is stated.
+- **A CUDA 700 in a `REFUSED walk`** (the kf3 walk kernel faulted on an illegal address) is never a
+  harness failure. It is recorded with the host's NVRM/Xid lines from the same window.
+- **Runs on 22775 (lease 59051876):** phase A finishes (40 × concurrent-fuzz). Phase B
+  (map-stress + fuzz pairs) is replaced by **S: the whole 30-arm suite × 3** (`suite_loop.sh S 3`;
+  it contains map-stress → concurrent-fuzz and bus-info-sweep in suite order), then
+  **BI: 15 × `--bus-info-sweep`** alone.
+- **Runs on 30524 (lease 59055125), once provisioned:** the whole suite × 1, then concurrent-fuzz
+  and bus-info-sweep loops, as many as the 06:30 CET report deadline allows.
+- Every arm's kf3 log is grepped for `REFUSED walk|CUDA_ERROR`. The full logs of every non-PASS
+  arm, and of every arm with such a line, are kept.
