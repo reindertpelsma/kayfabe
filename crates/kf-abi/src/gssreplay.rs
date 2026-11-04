@@ -189,6 +189,16 @@ pub const ROWS: &[Row] = &[
         exact: false,
         inputs: &[(0, 0), (4, 3), (8, 1), (0x18, 4)],
     },
+    // ★ 2026-11-04 (die coverage, Ada): `0x2080852c`, the Windows 580.88 guest's own question. MEASURED (AD102, host 595.91.07,
+    // gate run ada102q, `W343GSSREQ`, 6 of 6 lines identical): 1440 B, words 0..9 `{0, 0, 0x1f, 0, 0, 0, 0, 0, 0, 0}`; bytes past
+    // word 9 not printed. (An all-zero exact row at this size was tried in run ada102p and never matched.) Asked of the host at
+    // realize with both probes; only the bytes the host wrote are served.
+    Row {
+        cmd: 0x2080_852c,
+        size: 1440,
+        exact: false,
+        inputs: &[(0, 0), (4, 0), (8, 0x1f)],
+    },
     // cudart's fallback, reached only when `a084`/`a026` fail; the guest's request is `{0,0,0,0}`
     // (`[measured GA106 / 580.159.04, 2026-08-20]`, `crate::cudartinit::CUDART_INIT_0XA001`).
     Row {
@@ -455,6 +465,23 @@ mod tests {
         let mut cudart = win.clone();
         cudart[4..8].copy_from_slice(&2u32.to_le_bytes());
         assert!(!hits[0].matches(GSS_CLOCK_DOMAINS, &cudart));
+    }
+
+    /// ★ 2026-11-04: the Windows 580.88 guest's `0x2080852c` request (word 2 = 0x1f) is asked; an all-zero one is not.
+    #[test]
+    fn the_windows_852c_request_is_its_own_row() {
+        let mut win = vec![0u8; 1440];
+        win[8..12].copy_from_slice(&0x1fu32.to_le_bytes());
+        assert_eq!(
+            ROWS.iter().filter(|r| r.matches(0x2080_852c, &win)).count(),
+            1
+        );
+        assert_eq!(
+            ROWS.iter()
+                .filter(|r| r.matches(0x2080_852c, &[0u8; 1440]))
+                .count(),
+            0
+        );
     }
 
     /// The measured host pair for the NVD query, reproduced through the rule.
