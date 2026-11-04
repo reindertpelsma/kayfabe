@@ -200,7 +200,9 @@ function endpointBoundary(filename, text, jobs) {
     if (
       output &&
       output.trim() !==
-        'state: ${{ steps.broker.outputs.state }}\n      verdict: ${{ steps.broker.outputs.verdict }}\n      verified: ${{ steps.broker.outputs.verified }}'
+        'state: ${{ steps.broker.outputs.state }}\n      verdict: ${{ steps.broker.outputs.verdict }}\n      verified: ${{ steps.broker.outputs.verified }}' +
+          // Lane 2, 2026-11-04: a fixed 0/1 written by runner.py (a FAIL with a windows_retry_ row).
+          (filename === 'gpu-vast.yml' ? '\n      retry: ${{ steps.broker.outputs.retry }}' : '')
     )
       fail('job outputs must be fixed state and verdict');
     let sanitised = header;

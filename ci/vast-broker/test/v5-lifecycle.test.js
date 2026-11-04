@@ -55,7 +55,8 @@ for (const label of ['money', 'clock'])
           c.passGrace,
           c.failGrace,
         ].map((x) => x / minute),
-        [75, 180, 10, 10, 15, 5, 10],
+        // Lane 2, 2026-11-04: the check hard limit is 300 min (Linux bar + Windows stage).
+        [75, 300, 10, 10, 15, 5, 10],
       );
   });
 for (const restart of [false, true])
@@ -173,15 +174,23 @@ test('V5 default price admits approved sub-cap production offer', async () => {
   h.cloud.price = 0.7;
   assert.equal((await h.call()).status, 200);
 });
-test('V5 default daily allowance admits existing five-dollar liability', async () => {
+// Lane 2, 2026-11-04: with the 300-minute check default a 0.2 USD/h rental reserves
+// 0.2 x 301/60 = 1.003 USD, so the $6 day admits it next to 4.9 USD (was 5 USD at 180 minutes).
+test('V5 default daily allowance admits existing 4.9-dollar liability', async () => {
   const h = await unbound();
   await h.storage.put('cost:old', {
     started: clock - 3600000,
     ended: clock,
-    price: 5,
+    price: 4.9,
     ttl: 3600000,
   });
   assert.equal((await h.call()).status, 200);
+});
+test('V5 default daily allowance refuses a full check reservation next to 5.1 dollars', async () => {
+  const h = await unbound();
+  await h.storage.put('cost:old', { started: clock - 3600000, ended: clock, price: 5.1, ttl: 3600000 });
+  assert.equal((await h.call()).status, 409);
+  assert.equal(h.cloud.creates, 0);
 });
 test('V5 default reserve refuses insufficient prepaid credit', async () => {
   const h = await unbound();
@@ -203,8 +212,8 @@ test('V5 default reservation binds owner clock plan into the lease', async () =>
   await rent(h);
   const r = await record(h);
   assert.equal(r.bootDeadline, clock + 75 * minute);
-  assert.equal(r.hardDeadline, clock + 180 * minute);
-  assert.equal(r.softDeadline, clock + 170 * minute);
+  assert.equal(r.hardDeadline, clock + 300 * minute);
+  assert.equal(r.softDeadline, clock + 290 * minute);
 });
 for (const verdict of ['PASS', 'FAIL'])
   test('V5 unbound default grace reaches the stored deadline ' + verdict, async () => {

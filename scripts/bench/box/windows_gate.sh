@@ -593,7 +593,12 @@ for c in swtpm swtpm_setup sbsign xorriso pnmtopng 7z virt-fw-vars x86_64-w64-mi
     command -v "$c" > /dev/null || missing=1
 done
 if [ "$missing" = 1 ]; then
-    if ! DEBIAN_FRONTEND=noninteractive timeout 900 apt-get -o DPkg::Lock::Timeout=300 install -y -qq \
+    # Inside the Vast payload apt-get is the cache-only shim (a bash function from
+    # scripts/ci/vast_payload_hooks.sh; the packages are its `windows` policy, provision_box.sh).
+    # `timeout` would exec the real binary past the shim, so the shim runs unwrapped.
+    apt_run=(timeout 900 apt-get)
+    if [ -n "${KF_APT_CACHE_ROOT:-}" ] && [ "$(type -t apt-get)" = function ]; then apt_run=(apt-get); fi
+    if ! DEBIAN_FRONTEND=noninteractive "${apt_run[@]}" -o DPkg::Lock::Timeout=300 install -y -qq \
         ovmf swtpm swtpm-tools sbsigntool python3-virt-firmware xorriso netpbm p7zip-full \
         gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64 > "$EV/apt.txt" 2>&1; then
         verdict RETRY PROVIDER "apt could not install the Windows prerequisites: $(tail -2 "$EV/apt.txt" | tr '\n' ' ')"

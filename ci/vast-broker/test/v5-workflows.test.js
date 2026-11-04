@@ -4,13 +4,18 @@ import { readFile } from 'node:fs/promises';
 import { checkWorkflows } from '../workflow-guard.js';
 const main = new URL('../../../.github/workflows/gpu-vast.yml', import.meta.url),
   sweep = new URL('../../../.github/workflows/gpu-vast-sweep.yml', import.meta.url);
-// FALSIFIER: default three-hour work is killed by the legacy short workflow,
-// or the optional sweep posts a merge status / consumes code or wider secrets.
-for (const part of ['job', 'step'])
-  test('V5 check workflow accommodates three-hour lifecycle ' + part, async () => {
-    const s = await readFile(main, 'utf8');
-    assert.match(s, new RegExp('timeout-minutes: ' + (part === 'job' ? '210' : '205')));
-  });
+// FALSIFIER: default work is killed by a short workflow (check: the 300-minute master gate with
+// the Windows stage, lane 2 2026-11-04; sweep: three hours), or the optional sweep posts a merge
+// status / consumes code or wider secrets.
+for (const [file, job, step] of [
+  [main, '345', '340'],
+  [sweep, '210', '205'],
+])
+  for (const part of ['job', 'step'])
+    test('V5 ' + (file === main ? 'check' : 'sweep') + ' workflow accommodates its lifecycle ' + part, async () => {
+      const s = await readFile(file, 'utf8');
+      assert.match(s, new RegExp('timeout-minutes: ' + (part === 'job' ? job : step) + '\\n'));
+    });
 for (const kind of ['separate', 'guard'])
   test('V5 sweep workflow is owner-dispatch finding ' + kind, async () => {
     const a = await readFile(main, 'utf8'),

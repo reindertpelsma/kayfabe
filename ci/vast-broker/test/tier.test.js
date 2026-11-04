@@ -113,6 +113,15 @@ test('a request cannot choose the tier', async () => {
   assert.equal(h.cloud.creates, 0);
 });
 
+// The independent reaper deletes kf-ci boxes older than its own hard limit plus margin; below the
+// main Worker's check limit it would delete a live Windows master gate (DEPLOY.md: raise it first).
+test('the reaper hard limit covers the longest profile hard limit', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const toml = await readFile(new URL('../../vast-reaper/wrangler.toml', import.meta.url), 'utf8');
+  const reaper = Number(/^REAPER_HARD_MINUTES = "(\d+)"$/m.exec(toml)[1]);
+  assert.ok(reaper >= DEFAULTS.hardMinutes && reaper >= DEFAULTS.sweepHardMinutes, String(reaper));
+});
+
 test('the check profile refuses a runner whose wait budget cannot hold its hard limit', async () => {
   const h = await setup({ HARD_RUNTIME_MINUTES: '300' });
   market(h);
