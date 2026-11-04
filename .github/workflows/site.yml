@@ -19,6 +19,11 @@ on:
     - cron: '23 5 * * 1'
 
 permissions: {}
+# Public status API origin (repository variables; docs/design/V3_PLATFORM_TESTING.md section 9).
+# Only deployment-candidate builds use it, after validation in the build step and in build.py.
+env:
+  STATUS_API_BASE: ${{ vars.STATUS_API_BASE }}
+  STATUS_LOGS_BASE: ${{ vars.STATUS_LOGS_BASE }}
 concurrency:
   group: pages
   cancel-in-progress: false
@@ -98,6 +103,8 @@ jobs:
           python3 -m unittest discover -s site -p 'test_deploy*.py'
           npm ci --prefix site --ignore-scripts --no-audit --no-fund
           node --test site/test_slots_dom.mjs
+          node --test site/test_status_dom.mjs
+          python3 -m unittest discover -s site -p 'test_status.py'
           python3 -m unittest discover -s site -p 'test_modes.py'
           python3 site/build.py --tools-dir "$RUNNER_TEMP/site-tools" --portable \
             --releases-json "$RUNNER_TEMP/site-releases.json" --root-ref "$ROOT_REF"
@@ -108,6 +115,21 @@ jobs:
           # Rebuild Pages last: portable output must never be the deployment artifact.
           candidate=()
           if [[ "$DEPLOY_CANDIDATE" == true ]]; then candidate=(--deploy-candidate); fi
+          # The status API origin reaches deployment candidates only; PR, fork and portable
+          # builds get the "not configured" page. Accept only an https origin on kayfabe.dev.
+          origin='^https://([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)*kayfabe\.dev/?$'
+          if [[ "$DEPLOY_CANDIDATE" == true && -n "${STATUS_API_BASE:-}" ]]; then
+            if [[ "$STATUS_API_BASE" =~ $origin ]]; then
+              candidate+=(--status-api-base "$STATUS_API_BASE")
+              if [[ "${STATUS_LOGS_BASE:-}" =~ $origin ]]; then
+                candidate+=(--status-logs-base "$STATUS_LOGS_BASE")
+              elif [[ -n "${STATUS_LOGS_BASE:-}" ]]; then
+                echo "::warning::STATUS_LOGS_BASE is not an https origin on kayfabe.dev; ignored"
+              fi
+            else
+              echo "::warning::STATUS_API_BASE is not an https origin on kayfabe.dev; status off"
+            fi
+          fi
           python3 site/build.py --tools-dir "$RUNNER_TEMP/site-tools" \
             --releases-json "$RUNNER_TEMP/site-releases.json" \
             --root-ref "$ROOT_REF" "${candidate[@]}"

@@ -11,6 +11,7 @@ import io
 import json
 import os
 from deployment_slots import candidate_context, prepare_output
+import status_pages
 from pathlib import Path
 import re
 import posixpath
@@ -653,9 +654,32 @@ def metadata(output, plan):
     return copy_reviews
 
 
-def build(repo, binaries, releases, root_ref="latest", portable=False, deploy_candidate=False):
+def status_inputs(deploy_candidate, api_base, logs_base, fixture):
+    """Local, fork and PR builds never carry a Worker URL (V3_PLATFORM_TESTING.md section 9)."""
+    if fixture is not None and deploy_candidate:
+        raise ValueError("a status fixture cannot be a deploy candidate")
+    if api_base and not deploy_candidate:
+        print("status API base ignored: not a deployment candidate")
+        return None, None
+    return api_base, logs_base
+
+
+def build(
+    repo,
+    binaries,
+    releases,
+    root_ref="latest",
+    portable=False,
+    deploy_candidate=False,
+    status_api_base=None,
+    status_logs_base=None,
+    status_fixture=None,
+):
     if portable and deploy_candidate:
         raise ValueError("portable output cannot be a deploy candidate")
+    status_api_base, status_logs_base = status_inputs(
+        deploy_candidate, status_api_base, status_logs_base, status_fixture
+    )
     plan = version_plan(repo, releases, root_ref)
     output = repo / "site/public"
     if output.exists():
@@ -692,6 +716,13 @@ def build(repo, binaries, releases, root_ref="latest", portable=False, deploy_ca
                     data,
                 )
         shutil.copytree(landings[plan["root"]], output, dirs_exist_ok=True)
+        status_mode = status_pages.write_status(
+            output,
+            api_base=status_api_base,
+            logs_base=status_logs_base,
+            fixture=status_fixture,
+            docs_url=version_url(plan["latest"]),
+        )
         docs = output / "docs"
         docs.mkdir(exist_ok=True)
         target = version_url(plan["latest"])
@@ -734,6 +765,7 @@ def build(repo, binaries, releases, root_ref="latest", portable=False, deploy_ca
         **plan,
         "counts": counts,
         "portable": portable,
+        "status": status_mode,
         "broken_links": broken_links(output),
         "copy_review": copy_reviews,
     }
@@ -763,15 +795,30 @@ def main():
         "--portable", action="store_true",
         help="Relative URLs and explicit index.html for HTTP prefixes and file browsing",
     )
+    parser.add_argument(
+        "--status-fixture", type=Path,
+        help="Serve /status/ from a local synthetic JSON fixture (development only)",
+    )
+    parser.add_argument(
+        "--status-api-base",
+        help="https origin of the status API on kayfabe.dev; used by deployment candidates only",
+    )
+    parser.add_argument("--status-logs-base", help="https origin of the public log bucket")
     args = parser.parse_args()
     releases = json.loads(args.releases_json.read_text()) if args.releases_json else []
+    candidate = args.deploy_candidate and candidate_context(os.environ)
+    if args.status_fixture is not None and candidate:
+        raise ValueError("a status fixture cannot be a deploy candidate")
     build(
         SITE.parent,
         tools(args.tools_dir.resolve()),
         releases,
         args.root_ref,
-        deploy_candidate=args.deploy_candidate and candidate_context(os.environ),
+        deploy_candidate=candidate,
         portable=args.portable,
+        status_api_base=args.status_api_base,
+        status_logs_base=args.status_logs_base,
+        status_fixture=args.status_fixture.resolve() if args.status_fixture else None,
     )
 
 

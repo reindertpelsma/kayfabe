@@ -3,6 +3,16 @@
 **STATUS: LIVE, 2026-10-22.** The newest UPDATE below is the resume point; the sections after
 it are dated checkpoints, kept as history.
 
+## UPDATE 2026-11-04 — platform testing and the public status site (lane 1, design + code, not deployed)
+
+DESIGN-ONLY: [V3_PLATFORM_TESTING.md](design/V3_PLATFORM_TESTING.md) records the owner's
+2026-11-04 design: the Worker as platform testing infrastructure decoupled from CI, the three
+tiers, a read-only public API at `api.kayfabe.dev` over one shared D1 database, public redacted
+logs, and the status pages at `kayfabe.dev/status/`. Branch `claude/platform-status-20261104`
+builds the public API, the schema and the pages against synthetic data only; deployment steps are
+in that document's §12. This entry is scoped to that lane; it is not a resume point for the
+product.
+
 ## UPDATE 2026-10-22 — Vast broker callbacks, mock validation only
 
 [CODE READ: 2026-10-21 provider docs] BLOCKED: the documented Vast VM/onstart
