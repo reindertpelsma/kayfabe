@@ -27,10 +27,16 @@ kf_packages() {
                libpixman-1-dev flex bison qemu-utils cloud-image-utils genisoimage
                qemu-system-x86 ovmf musl-tools libslirp-dev
                libzstd-dev iptables)
+  # The Windows stage of the master gate (windows_gate.sh prereqs, win_vm.sh check_prereqs, the
+  # mingw probe build). Lane 2, 2026-11-04: inside the Vast payload apt-get is the cache-only shim
+  # (vast_payload_hooks.sh), so a package the gate installs must be in the setup cache's policy.
+  local windows=(swtpm swtpm-tools sbsigntool python3-virt-firmware xorriso netpbm p7zip-full
+                 gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64 openssl)
   case "$profile" in
     ci) printf '%s\n' "${required[@]}" ;;
     full) printf '%s\n' "${required[@]}" "${optional[@]}" ;;
     bench) printf '%s\n' "${bench[@]}" ;;
+    windows) printf '%s\n' "${windows[@]}" ;;
     *) echo "unknown provisioning profile" >&2; return 2 ;;
   esac
 }

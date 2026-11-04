@@ -153,7 +153,9 @@ changes config, not emitted JavaScript: `deployment.json.bundle_sha256` changes 
 emitted module changes. See the WK1 domain trace for the local dry-run hashes.
 
 [CODE READ: defaults.json, src/policy.js, src/offers.js, src/index.js] Check policy remains
-$1/hour, $6 daily, $30 rolling, $8 reserve, 75-minute boot and 180-minute hard limit.
+$1/hour, $6 daily, $30 rolling, $8 reserve, 75-minute boot and a 300-minute hard limit for the
+check profile (lane 2, 2026-11-04: Windows required on the master gate; the sweep keeps 180,
+`src/tier.js`; deploy the reaper with `REAPER_HARD_MINUTES` 300 first).
 MAX_INET_USD_PER_GB defaults to 0.005 in each direction; the offer query, admission and contract
 recheck enforce it. DENIED_COUNTRIES defaults to CU, IR, KP, SY, CN, HK, MO (owner ruling
 2026-10-24: CN, HK and MO boxes repeatedly had broken or very slow CDN/Ubuntu-mirror access) and
@@ -208,9 +210,10 @@ closed run whose destroy is still pending). Public vars, each refused as
   caps; a value above the account cap is refused, so they can only lower it.
 
 A rent over either cap gets `409 BUSY` (no Vast call); the runner retries BUSY, so at the default
-of 1 a second run waits instead of failing at once. [CODE READ: runner.py; edits3 B1] It stops
-waiting once its remaining budget (200 minutes from its start) is below `ADMISSION_NEED_SECONDS`
-(the 180-minute default hard limit plus the 5-minute margin, so at most about 15 minutes of BUSY):
+of 1 a second run waits instead of failing at once. [CODE READ: runner.py; edits3 B1; lane 2
+2026-11-04: per profile] It stops waiting once its remaining budget (check 330 / sweep 200 minutes
+from its start, `WAIT_BUDGET`) is below `ADMISSION_NEED[profile]` (the profile's default hard
+limit, 300 / 180 minutes, plus the 5-minute margin, so at most about 25 / 15 minutes of BUSY):
 state BUSY, nothing rented. If you raise `HARD_RUNTIME_MINUTES`, the Worker refuses every run
 whose budget cannot hold it (`RUNNER_TIME`); the runner constant only bounds the wait.
 The daily count, daily and rolling spend caps sum every cost row, the active runs included, and the
@@ -406,7 +409,7 @@ Its key needs list and delete only: `instance_read: ["api.instances"]` (the list
 `GET /api/v1/instances/`) and `instance_write: ["api.instance"]` (`DELETE
 /api/v0/instances/<id>/`); no `api.ask`, `api.bundles` or user permission (INFERRED from the
 console permission names; a leaked reaper key can delete instances but cannot rent). Keep the
-reaper's `REAPER_HARD_MINUTES` (180) at or above the main Worker's `HARD_RUNTIME_MINUTES`; raise
+reaper's `REAPER_HARD_MINUTES` (300 since 2026-11-04, was 180) at or above the main Worker's `HARD_RUNTIME_MINUTES`; raise
 the reaper first, or it deletes live CI boxes. It has no public controls, rental
 path, broker imports or LEDGER binding, and takes no main-Worker var. Deploy first, then put the
 secret (a `secret put` before the first deploy would prompt to create the Worker):

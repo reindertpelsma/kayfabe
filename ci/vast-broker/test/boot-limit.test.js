@@ -13,7 +13,7 @@ test('default boot limit leaves slow KVM hosts room and stays below the hard lim
   assert.equal(DEFAULTS.bootMinutes, 75);
   assert.ok(DEFAULTS.bootMinutes >= 60);
   assert.ok(DEFAULTS.bootMinutes < DEFAULTS.hardMinutes);
-  assert.equal(DEFAULTS.hardMinutes, 180);
+  assert.equal(DEFAULTS.hardMinutes, 300);
   // A box that boots at the limit must still have the soft margin and a heartbeat before the hard stop.
   assert.ok(
     DEFAULTS.bootMinutes + DEFAULTS.heartbeatTimeoutMinutes + DEFAULTS.softMarginMinutes <

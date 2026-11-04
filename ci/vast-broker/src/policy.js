@@ -188,6 +188,16 @@ export function configuration(env) {
     if (n > cfg.maxConcurrent) refuse('CONFIG_VAR:' + name, 503);
     cfg.maxConcurrentProfile[profile] = n;
   }
+  // Lane 2, 2026-11-04: per-profile hard limits (src/tier.js). HARD_RUNTIME_MINUTES is the master
+  // gate's (default 300: Linux bar plus the Windows stage); the sweep keeps at most 180 by default.
+  cfg.hardCheck = cfg.hard;
+  cfg.hardSweep =
+    number(
+      'SWEEP_HARD_RUNTIME_MINUTES',
+      Math.min(cfg.hard / 60000, DEFAULTS.sweepHardMinutes),
+      DEFAULTS.maxMinutes,
+    ) * 60000;
+  if (!Number.isInteger(cfg.hardSweep / 60000) || cfg.hardSweep <= cfg.softMargin) refuse();
   cfg.ttl = cfg.hard;
   cfg.provision = cfg.boot;
   cfg.grace = cfg.passGrace;

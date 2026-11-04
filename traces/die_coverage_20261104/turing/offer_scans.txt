@@ -1,0 +1,21 @@
+SCAN 2026-11-04T00:16:36Z
+  vm_offers_total 45
+SCAN 2026-11-04T00:16:45Z vms_enabled=true num_gpus=1
+SCAN 2026-11-04T00:35:06Z vms_enabled=true num_gpus=1
+  58628211 RTX 2060 dph=0.534 cpu=96.0 ram=67 disk=3300 Quebec, CA rel=0.998 mach=39230
+SCAN 2026-11-04T00:54:24Z vms_enabled=true num_gpus=1
+  58628211 RTX 2060 dph=0.534 cpu=96.0 ram=67 disk=3300 Quebec, CA rel=0.998 mach=39230
+SCAN 2026-11-04T01:12:12Z vms_enabled=true num_gpus=1
+SCAN 2026-11-04T01:32:49Z vms_enabled=true num_gpus=1
+  58972867 RTX 2060S dph=0.135 cpu=12.0 ram=31 disk=213 Sweden, SE rel=0.989 mach=154169
+SCAN 2026-11-04T01:57:32Z vms_enabled=true num_gpus=1
+  58972867 RTX 2060S dph=0.135 cpu=12.0 ram=31 disk=213 Sweden, SE rel=0.989 mach=154169
+SCAN 2026-11-04T01:58:54Z vms_enabled=true num_gpus=1
+  58972867 RTX 2060S dph=0.135 cpu=12.0 ram=31 disk=213 Sweden, SE rel=0.989 mach=154169
+SCAN 2026-11-04T02:08:53Z vms_enabled=true num_gpus=1
+  58972867 RTX 2060S dph=0.135 cpu=12.0 ram=31 disk=213 Sweden, SE rel=0.989 mach=154169
+SCAN 2026-11-04T02:18:52Z vms_enabled=true num_gpus=1
+  58972867 RTX 2060S dph=0.135 cpu=12.0 ram=31 disk=213 Sweden, SE rel=0.989 mach=154169
+SCAN 2026-11-04T02:27:50Z vms_enabled=true num_gpus=1
+  58972867 RTX 2060S dph=0.135 cpu=12.0 ram=31 disk=213 Sweden, SE rel=0.989 mach=154169
+  50291703 GTX 1660 Ti dph=0.069 cpu=8.0 ram=31 disk=270 United Kingdom, GB rel=0.999 mach=142260

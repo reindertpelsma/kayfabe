@@ -80,6 +80,11 @@ ssh <alias> 'cat /root/prov/<tag>.log'           # V3_GATES_SUMMARY / KF3_RC / F
 - *[2026-10-26]* `merge_check.sh` runs no crate tests: the GPU-free `cargo test` of every kf-* crate is CI's `stable` job
   on every commit (a repeat on the box cost 31 min and ended rc=101 in gate run 40263112941). The /dev/kvm-gated
   tests, which CI skips, are opt-in: `KF_MERGE_KVM_TESTS=1` (`kvm_tests.sh`, `KVM_TESTS passed N failed 0 kvm_ran=R kvm_skipped=0`).
+- *[2026-11-04, lane 2]* In the Vast GPU CI the Windows stage is **required on the master gate**: the Worker
+  sends `KF_MERGE_WINDOWS=1` for profile `check` and `0` for the die sweep (`ci/vast-broker/src/tier.js`).
+  The payload runs `windows_gate.sh` as its own last stage, `windows_gate`, after `cuda_guest`, and never inside
+  `merge_check.sh` (`scripts/ci/vast_payload.py`). Only `WINDOWS_GATE_PASS` of the tested revision passes. RETRY
+  is a failing `windows_retry_<class>` row. By hand, below, the stage stays opt-in.
 - *[2026-11-01]* The Windows stage is opt-in too: `KF_MERGE_WINDOWS=1` runs `windows_gate.sh` last (after the
   census). It installs Windows 11 LTSC once per box (`win_vm.sh install`, 20-45 min on a nested box), boots it on
   kf3 with the stock 580.88 driver and GSP forced, and needs a signed-in desktop, `nvidia-smi`, a CUDA matmul and

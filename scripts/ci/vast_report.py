@@ -81,6 +81,9 @@ SPEC = [
     ("KF_HEARTBEAT_SECONDS", True, _int(1, 900)),
     ("KF_GRACE_PASS", False, _int(1, 3600)),
     ("KF_GRACE_FAIL", True, _int(1, 3600)),
+    # The tier, a pure function of the Worker profile (ci/vast-broker/src/tier.js): 1 = master
+    # gate with the Windows stage, 0 = die sweep. Absent (an older Worker): the payload's default.
+    ("KF_MERGE_WINDOWS", False, _match(r"[01]")),
 ]
 
 

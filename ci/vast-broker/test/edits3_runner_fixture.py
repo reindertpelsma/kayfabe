@@ -84,14 +84,18 @@ def run():
 
 
 rents = lambda: [c for c in calls if c[0] == "/rent"]
-need = getattr(m, "ADMISSION_NEED_SECONDS", None)
+need = m.ADMISSION_NEED[ctx.get("profile", "check")]
 
 if case == "need-constant":
-    # The runner needs the default hard limit plus the Worker's admission margin, and its own
-    # budget must leave room for a short wait.
+    # Per profile (lane 2, src/tier.js): the runner needs the Worker's default hard limit plus
+    # its admission margin, and its own budget must leave room for a short wait and stay below
+    # the gpu-vast step timeout (340 min check, 205 min sweep).
     defaults = json.loads((broker / "defaults.json").read_text())
-    assert need == (defaults["hardMinutes"] + defaults["admissionMarginMinutes"]) * 60, need
-    assert need < 600 * 20, need
+    margin = defaults["admissionMarginMinutes"]
+    assert m.ADMISSION_NEED["check"] == (defaults["hardMinutes"] + margin) * 60, m.ADMISSION_NEED
+    assert m.ADMISSION_NEED["sweep"] == (defaults["sweepHardMinutes"] + margin) * 60
+    for profile, step in [("check", 340), ("sweep", 205)]:
+        assert m.ADMISSION_NEED[profile] < m.WAIT_BUDGET[profile] < step * 60, profile
 elif case == "busy-wait-ends":
     # A BUSY run stops asking once its remaining budget is below what a run needs. No rental,
     # no stop, a clean BUSY outcome; it does not burn the whole budget.

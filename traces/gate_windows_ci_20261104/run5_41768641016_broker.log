@@ -1,0 +1,312 @@
+Isolated BASE runner validates untrusted Worker	Set up job	﻿2026-11-04T03:41:57.4206237Z Current runner version: '2.338.2'
+Isolated BASE runner validates untrusted Worker	Set up job	2026-11-04T03:41:57.4231782Z ##[group]Runner Image Provisioner
+Isolated BASE runner validates untrusted Worker	Set up job	2026-11-04T03:41:57.4232800Z Hosted Compute Agent
+Isolated BASE runner validates untrusted Worker	Set up job	2026-11-04T03:41:57.4233431Z Version: 20261021.618
+Isolated BASE runner validates untrusted Worker	Set up job	2026-11-04T03:41:57.4234120Z Commit: 21505ad2541d5be6135ed84fc33697146cf75b8e
+Isolated BASE runner validates untrusted Worker	Set up job	2026-11-04T03:41:57.4234938Z Build Date: 2026-10-21T00:45:21Z
+Isolated BASE runner validates untrusted Worker	Set up job	2026-11-04T03:41:57.4235689Z Worker ID: {24012b04-9826-4b20-a30b-29f1c369c0d5}
+Isolated BASE runner validates untrusted Worker	Set up job	2026-11-04T03:41:57.4236467Z Region: westus
+Isolated BASE runner validates untrusted Worker	Set up job	2026-11-04T03:41:57.4237048Z Cloud: Azure
+Isolated BASE runner validates untrusted Worker	Set up job	2026-11-04T03:41:57.4237680Z ##[endgroup]
+Isolated BASE runner validates untrusted Worker	Set up job	2026-11-04T03:41:57.4239233Z ##[group]Operating System
+Isolated BASE runner validates untrusted Worker	Set up job	2026-11-04T03:41:57.4239909Z Ubuntu
+Isolated BASE runner validates untrusted Worker	Set up job	2026-11-04T03:41:57.4240514Z 26.04.1
+Isolated BASE runner validates untrusted Worker	Set up job	2026-11-04T03:41:57.4241134Z LTS
+Isolated BASE runner validates untrusted Worker	Set up job	2026-11-04T03:41:57.4242032Z ##[endgroup]
+Isolated BASE runner validates untrusted Worker	Set up job	2026-11-04T03:41:57.4242730Z ##[group]Runner Image
+Isolated BASE runner validates untrusted Worker	Set up job	2026-11-04T03:41:57.4243390Z Image: ubuntu-26.04
+Isolated BASE runner validates untrusted Worker	Set up job	2026-11-04T03:41:57.4244029Z Version: 20261025.179.1
+Isolated BASE runner validates untrusted Worker	Set up job	2026-11-04T03:41:57.4245201Z Included Software: https://github.com/actions/runner-images/blob/ubuntu26/20261025.179/images/ubuntu/Ubuntu2604-Readme.md
+Isolated BASE runner validates untrusted Worker	Set up job	2026-11-04T03:41:57.4247068Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20261025.179
+Isolated BASE runner validates untrusted Worker	Set up job	2026-11-04T03:41:57.4248063Z ##[endgroup]
+Isolated BASE runner validates untrusted Worker	Set up job	2026-11-04T03:41:57.4249187Z ##[group]GITHUB_TOKEN Permissions
+Isolated BASE runner validates untrusted Worker	Set up job	2026-11-04T03:41:57.4251078Z Metadata: read
+Isolated BASE runner validates untrusted Worker	Set up job	2026-11-04T03:41:57.4252169Z ##[endgroup]
+Isolated BASE runner validates untrusted Worker	Set up job	2026-11-04T03:41:57.4254268Z Secret source: Actions
+Isolated BASE runner validates untrusted Worker	Set up job	2026-11-04T03:41:57.4255347Z Cache mode: read
+Isolated BASE runner validates untrusted Worker	Set up job	2026-11-04T03:41:57.4256382Z Prepare workflow directory
+Isolated BASE runner validates untrusted Worker	Set up job	2026-11-04T03:41:57.4812219Z Prepare all required actions
+Isolated BASE runner validates untrusted Worker	Set up job	2026-11-04T03:41:57.4878302Z Complete job name: Isolated BASE runner validates untrusted Worker
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	﻿2026-11-04T03:41:58.1911776Z ##[group]Run set +x
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:41:58.1912445Z [36;1mset +x[0m
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:41:58.1912956Z [36;1mset -euo pipefail[0m
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:41:58.1913562Z [36;1m[[ "$GITHUB_REF" = refs/heads/master ]][0m
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:41:58.1914247Z [36;1m[[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]][0m
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:41:58.1914971Z [36;1m[[ "$GITHUB_REPOSITORY" = reindertpelsma/kayfabe ]][0m
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:41:58.1915694Z [36;1mtemporary=$(mktemp -d)[0m
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:41:58.1916344Z [36;1mtrap 'find "$temporary" -depth -delete' EXIT[0m
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:41:58.1917083Z [36;1mfor file in runner.py deployment.json; do[0m
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:41:58.1917965Z [36;1m  curl --silent --fail --proto '=https' --max-time 20 --max-filesize 131072 \[0m
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:41:58.1918822Z [36;1m    -o "$temporary/$file" \[0m
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:41:58.1919842Z [36;1m    "https://raw.githubusercontent.com/reindertpelsma/kayfabe/$GITHUB_SHA/ci/vast-broker/$file" 2>/dev/null[0m
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:41:58.1920873Z [36;1mdone[0m
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:41:58.1921568Z [36;1menv -i PATH=/usr/bin:/bin HOME="$temporary" \[0m
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:41:58.1922432Z [36;1m  WORKER_URL="$WORKER_URL" WORKER_PATH="${WORKER_PATH:-}" \[0m
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:41:58.1923255Z [36;1m  CF_ACCESS_CLIENT_ID="${CF_ACCESS_CLIENT_ID:-}" \[0m
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:41:58.1924062Z [36;1m  CF_ACCESS_CLIENT_SECRET="${CF_ACCESS_CLIENT_SECRET:-}" \[0m
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:41:58.1925027Z [36;1m  GITHUB_OUTPUT="$GITHUB_OUTPUT" GITHUB_STEP_SUMMARY="$GITHUB_STEP_SUMMARY" \[0m
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:41:58.1926049Z [36;1m  GITHUB_EVENT_PATH="$GITHUB_EVENT_PATH" GITHUB_SHA="$GITHUB_SHA" \[0m
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:41:58.1927005Z [36;1m  GITHUB_EVENT_NAME="$GITHUB_EVENT_NAME" GITHUB_REF="$GITHUB_REF" \[0m
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:41:58.1927996Z [36;1m  GITHUB_REPOSITORY="$GITHUB_REPOSITORY" GITHUB_RUN_ID="$GITHUB_RUN_ID" \[0m
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:41:58.1928876Z [36;1m  GITHUB_RUN_ATTEMPT="$GITHUB_RUN_ATTEMPT" \[0m
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:41:58.1929729Z [36;1m  ACTIONS_ID_TOKEN_REQUEST_TOKEN="$ACTIONS_ID_TOKEN_REQUEST_TOKEN" \[0m
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:41:58.1930680Z [36;1m  ACTIONS_ID_TOKEN_REQUEST_URL="$ACTIONS_ID_TOKEN_REQUEST_URL" \[0m
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:41:58.1931737Z [36;1m  python3 -I "$temporary/runner.py" "$temporary/deployment.json"[0m
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:41:58.2602713Z shell: /usr/bin/bash --noprofile --norc -eo pipefail {0}
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:41:58.2603840Z env:
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:41:58.2604415Z   TARGET_SHA: e7d6a3fa59446c8df77fae58e180eee49ec9ecdb
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:41:58.2605789Z   WORKER_URL: https://ci.kayfabe.dev
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:41:58.2606836Z   WORKER_PATH: ***
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:41:58.2607482Z   CF_ACCESS_CLIENT_ID: ***
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:41:58.2608333Z   CF_ACCESS_CLIENT_SECRET: ***
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:41:58.2608900Z ##[endgroup]
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:41:58.6496091Z Trusted BASE db796290b945857c7a95b1a7442e447f5f2cc3ce; runner nonce generated before rent; Worker v5 expected bundle SHA256 2828bf41ed2574b638a7b6fb535e16b6dba9467c997972917050aa58d0bb0460
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:41:59.9009612Z ::stop-commands::***
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:41:59.9011798Z UNTRUSTED Worker/box output
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:41:59.9013774Z [untrusted] Availability: check
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:41:59.9015861Z [untrusted] die gpu compute_cap count effective_hourly estimated_total kvm machine_id host_id
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:41:59.9017602Z [untrusted] AD102 RTX_4090 890 3 0.462292 1.394319 1 144442 554895
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:41:59.9018961Z [untrusted] GA106 RTX_3060 860 1 0.187691 0.565832 1 22775 79466
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:41:59.9021757Z [untrusted] Thresholds: bandwidth_down_gb=15 bandwidth_up_gb=2 cores=8 cpuGhz=2 diskMbps=100 downMbps=200 medianRatio=0.5 price=1 ramMb=34360 reliability=0.98 upMbps=50 verified=1
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:41:59.9025895Z [untrusted] Rejected counts: BAD_HOST=1 COUNTRY=6 CPU_RAM=30 DIE=58 MACHINE=1 NETWORK=10 PERFORMANCE=11 PRICE=7 RELIABILITY=24 VERIFICATION=40
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:41:59.9040447Z [untrusted] Rejected offers (machine_id/host_id:reasons): 16630/79466:DIE 23868/79466:DIE 39235/79466:DIE,CPU_RAM 13058/79466:DIE,RELIABILITY 56231/79466:DIE 155201/682859:VERIFICATION 56506/79466:DIE 156315/845092:VERIFICATION,DIE,RELIABILITY,CPU_RAM 154007/125418:VERIFICATION,CPU_RAM,NETWORK,COUNTRY 153424/554895:RELIABILITY 155876/838611:VERIFICATION,DIE,RELIABILITY,CPU_RAM 155249/764331:VERIFICATION,DIE,RELIABILITY 154169/138577:DIE,CPU_RAM 154325/359696:VERIFICATION,DIE,COUNTRY 44696/54814:VERIFICATION,DIE,CPU_RAM,PERFORMANCE 78466/155385:VERIFICATION,RELIABILITY,COUNTRY 45871/296571:DIE,CPU_RAM 151632/204259:VERIFICATION,NETWORK 155988/531317:VERIFICATION,RELIABILITY 14732/79466:DIE 151140/392559:DIE,RELIABILITY,CPU_RAM 151631/204259:VERIFICATION,NETWORK 37540/79466:DIE,CPU_RAM 39248/79466:DIE 47025/296571:CPU_RAM 134814/205610:CPU_RAM
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:41:59.9072506Z [untrusted] Rejected offers (machine_id/host_id:reasons): 58911/155385:VERIFICATION,DIE,CPU_RAM,COUNTRY 30686/105356:DIE,CPU_RAM 138344/555054:DIE,CPU_RAM 99239/508965:DIE,CPU_RAM 147729/531317:DIE 153771/149408:CPU_RAM 154279/605686:VERIFICATION,DIE,NETWORK 152285/149408:CPU_RAM 155061/755026:VERIFICATION,DIE,CPU_RAM 155628/773553:VERIFICATION,DIE,RELIABILITY,PERFORMANCE 153272/727933:VERIFICATION,DIE,CPU_RAM,PERFORMANCE 55875/283684:DIE 154415/555054:DIE,CPU_RAM 152291/716539:DIE,CPU_RAM 156085/841115:VERIFICATION,DIE,RELIABILITY,PERFORMANCE 25419/56186:VERIFICATION 151624/204259:VERIFICATION,RELIABILITY,NETWORK 97081/47263:DIE,CPU_RAM,PERFORMANCE 69146/155385:VERIFICATION,DIE,COUNTRY 14626/1647:VERIFICATION,CPU_RAM,PERFORMANCE 144805/224600:MACHINE,BAD_HOST 49171/54814:DIE,RELIABILITY,CPU_RAM 150083/683035:VERIFICATION,DIE,NETWORK
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:41:59.9098587Z [untrusted] Rejected offers (machine_id/host_id:reasons): 9929/45381:VERIFICATION,RELIABILITY,NETWORK 154935/756858:VERIFICATION,DIE,PERFORMANCE 150984/574465:RELIABILITY,CPU_RAM 153904/149408:RELIABILITY,CPU_RAM 156073/714890:VERIFICATION,DIE,RELIABILITY 63/39:DIE,NETWORK 39230/79466:DIE 41012/255824:VERIFICATION,DIE 155191/687675:VERIFICATION,DIE,NETWORK 43132/255824:CPU_RAM 43459/120872:VERIFICATION,DIE 53086/47263:DIE,RELIABILITY,CPU_RAM 58657/155385:VERIFICATION,COUNTRY 148609/646616:RELIABILITY 147971/54814:VERIFICATION,DIE 137465/54814:DIE,RELIABILITY,CPU_RAM 150242/669400:DIE,CPU_RAM 153730/150140:VERIFICATION,DIE 38795/20317:VERIFICATION,DIE 28581/109053:VERIFICATION,DIE,RELIABILITY,PERFORMANCE 55541/109053:VERIFICATION,DIE 142720/365487:DIE 26804/109053:VERIFICATION,DIE 153856/739877:VERIFICATION,DIE,PERFORMANCE,PRICE
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:41:59.9117075Z [untrusted] Rejected offers (machine_id/host_id:reasons): 156005/605686:VERIFICATION,DIE,RELIABILITY,PERFORMANCE,PRICE 154407/687675:VERIFICATION,DIE,PERFORMANCE,PRICE 155243/763770:VERIFICATION,DIE,RELIABILITY,PRICE 156000/605686:VERIFICATION,DIE,RELIABILITY,NETWORK,PRICE 35127/55067:DIE,RELIABILITY,PRICE 144714/399895:DIE,PRICE
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:41:59.9125015Z [untrusted] Verified counts: AD102=6/11 AD104=1/2 AD106=1/2 CC_120=2/6 CC_86=0/1 CC_89=2/5 GA102=6/10 GA104=1/1 GA106=1/2 GB202=4/13 GB203=4/7 GB205=5/5 GB206=1/4 TU102=1/1 TU106=4/4 TU116=3/3
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:41:59.9129039Z ::***::
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:42:04.0553671Z RENTAL machine=22775 host=79466 instance=59051912 gpu=RTX_3060 price=0.165556
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:42:04.4488560Z ::stop-commands::***
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:42:04.4489123Z UNTRUSTED Worker/box output
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:42:04.4489728Z [untrusted] [Worker] selection profile=check die=GA106 reason=DEFAULT_ORDER ignored=0
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:42:04.4490685Z ::***::
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:42:25.3889264Z ::stop-commands::***
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:42:25.3889900Z UNTRUSTED Worker/box output
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:42:25.3890645Z [untrusted] [Worker] provider=loading phase=BOOTING
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:42:25.3901880Z ::***::
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:42:47.0833715Z ::stop-commands::***
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:42:47.0834411Z UNTRUSTED Worker/box output
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:42:47.0835643Z [untrusted] [Worker] provider=created phase=BOOTING
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:42:47.0836855Z ::***::
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:44:10.5988490Z ::stop-commands::***
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:44:10.5988946Z UNTRUSTED Worker/box output
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:44:10.5989370Z [untrusted] [Worker] provider=running phase=BOOTING
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:44:10.5990170Z ::***::
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:44:32.2507273Z ::stop-commands::***
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:44:32.2508059Z UNTRUSTED Worker/box output
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:44:32.2508682Z [untrusted] [box] Box ready; payload starting
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:44:32.2509705Z [untrusted] [box] KF_SETUP_CACHE_START utc=1793763861
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:44:32.2510329Z [untrusted] [box] KF_SETUP_ASSET kind=debs bytes=284540501 sha256=[redacted] seconds=9.024
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:44:32.2511529Z ::***::
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:44:53.1642439Z ::stop-commands::***
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:44:53.1643172Z UNTRUSTED Worker/box output
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:44:53.1644090Z [untrusted] [box] KF_SETUP_ASSET kind=vendor bytes=7888026 sha256=[redacted] seconds=2.095
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:44:53.1647122Z [untrusted] [box] KF_SETUP_MIRRORS {"fallback_mirror":"archive.ubuntu.com","probes":[{"host":"archive.ubuntu.com","status":206,"bytes":8388608,"seconds":1.837193,"curl_rc":0},{"host":"azure.archive.ubuntu.com","status":0,"bytes":0,"seconds":10.001733,"curl_rc":28},{"host":"mirrors.edge.kernel.org","status":206,"bytes":8388608,"seconds":7.925526,"curl_rc":0}],"actual_apt_source":"local-cache"}
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:44:53.1650586Z [untrusted] [box] KF_SETUP_CACHE_END {"seconds":21.502,"package_policy_sha256":"[redacted]","asset_bytes":292428527}
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:44:53.1652291Z [untrusted] [box] KF_PAYLOAD_TIER windows=1 source=default
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:44:53.1653384Z [untrusted] [box] Filesystem      Size  Used Avail Use% Mounted on
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:44:53.1654528Z [untrusted] [box] /[redacted]/root       117G  8.4G  108G   8% /
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:44:53.1655537Z [untrusted] [box] KF_PREFLIGHT_FREE_BYTES=115663929344
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:44:53.1656450Z [untrusted] [box] KF_PAYLOAD_STAGE_START name=provision
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:44:53.1657820Z [untrusted] [box] [xid-watch] tag=[redacted]7fe6af282e923c27_provision  host=ubuntu  utc=2026-11-04T03:44:43Z
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:44:53.1659557Z [untrusted] [box] [xid-watch] command: bash /workspace/kf-[redacted]-src/scripts/bench/box/provision_full.sh
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:44:53.1661096Z [untrusted] [box] [xid-watch] host_dmesg_lines=705  (readable  the clean/unwatched ambiguity is closed)
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:44:53.1662590Z [untrusted] [box] [xid-watch] host_gpu=NVIDIA GeForce RTX 3060, 575.51.03
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:44:53.1663463Z [untrusted] [box] [xid-watch] xid_before=0
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:44:53.1664267Z [untrusted] [box] [xid-watch] --- command output begins ---
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:44:53.1665077Z [untrusted] [box] START 2026-11-04T03:44:43+00:00
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:44:53.1665766Z [3 bytes dropped by runner]
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:44:53.1666921Z ::***::
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:46:37.2986392Z ::stop-commands::***
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:46:37.2987333Z UNTRUSTED Worker/box output
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:46:37.2988171Z [untrusted] [box] BOX_RC=0
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:46:37.2989410Z [untrusted] [box] e7d6a3fa evidence: run 4 (harness fix; Linux concurrent-fuzz FAIL, Windows not reached)
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:46:37.2991802Z ::***::
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:51:49.9060654Z ::stop-commands::***
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:51:49.9061686Z UNTRUSTED Worker/box output
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:51:49.9062151Z [untrusted] [box] DRIVER_RC=0
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:51:49.9062641Z [untrusted] [box] NVIDIA GeForce RTX 3060, 580.159.04
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:51:49.9063251Z [untrusted] [box] /[redacted]/root       117G   13G  104G  12% /
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:51:49.9064191Z ::***::
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:58:02.9579291Z ::stop-commands::***
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:58:02.9580090Z UNTRUSTED Worker/box output
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:58:02.9580865Z [untrusted] [box] TREE_RC=0
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:58:02.9582208Z [untrusted] [box] [2026-11-04T03:57:45+00:00] B4: guest ladder built: 5056744 bytes
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:58:02.9583485Z [untrusted] [box] [2026-11-04T03:57:45+00:00] BENCH_TREE_DONE
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:58:02.9585244Z ::***::
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:58:24.2093702Z ::stop-commands::***
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:58:24.2094312Z UNTRUSTED Worker/box output
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:58:24.2094831Z [untrusted] [box] LADDER_RC=0
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:58:24.2095631Z ::***::
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:06.2643893Z ::stop-commands::***
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:06.2644520Z UNTRUSTED Worker/box output
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:06.2645064Z [untrusted] [box] FG_RC=0
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:06.2645744Z [untrusted] [box] == built: /workspace/bench/fastguest/initrd.cpio.gz  112M
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:06.2646542Z [untrusted] [box] == kernel release: 6.8.0-147-generic
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:06.2647560Z ::***::
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:27.2030499Z ::stop-commands::***
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:27.2031703Z UNTRUSTED Worker/box output
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:27.2032338Z [untrusted] [box] KF3_RC=0
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:27.2033653Z [untrusted] [box] KF3_BUILT /workspace/bench/kf3-bins/e7d6a3fa/qemu-system-x86_64 rev=e7d6a3fa mtime=2026-11-04 [address].149509826 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:27.2035290Z [untrusted] [box] [xid-watch] --- command output ends (rc=0) ---
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:27.2036076Z [untrusted] [box] READY driver=580.159.04
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:27.2036773Z [untrusted] [box] EXIT 2026-11-04T03:59:17+00:00
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:27.2037466Z [untrusted] [box] [xid-watch] xid_after=0
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:27.2038341Z [untrusted] [box] [xid-watch]  HOST Xid CLEAN across the command  0 before, 0 after, read from a
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:27.2039501Z [untrusted] [box] [xid-watch]   ring buffer PROVED READABLE in phase 0 (705 lines).  That proof is what
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:27.2040697Z [untrusted] [box] [xid-watch]   separates this line from the same line printed by a blind instrument.
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:27.2042138Z [untrusted] [box] [xid-watch] evidence: /workspace/bench/[redacted].log
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:27.2043097Z [untrusted] [box] KF_PAYLOAD_STAGE_END name=provision rc=0 duration_ms=876131
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:27.2044091Z [untrusted] [box] KF_PAYLOAD_STAGE_START name=cuda_host
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:27.2045147Z [untrusted] [box] [xid-watch] tag=[redacted]7fe6af282e923c27_cuda_host  host=ubuntu  utc=2026-11-04T03:59:22Z
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:27.2046498Z [untrusted] [box] [xid-watch] command: bash /workspace/kf-[redacted]-src/scripts/bench/cuda_ladder.sh host [redacted]7fe6af282e923c27 1 cup2,cup3,cup8,cup8bench
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:27.2047613Z [untrusted] [box] [xid-watch] host_dmesg_lines=736  (readable  the clean/unwatched ambiguity is closed)
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:27.2048415Z [untrusted] [box] [xid-watch] host_gpu=NVIDIA GeForce RTX 3060, 580.159.04
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:27.2049035Z [untrusted] [box] [xid-watch] xid_before=0
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:27.2049613Z [untrusted] [box] [xid-watch] --- command output begins ---
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:27.2050464Z [untrusted] [box] CUDA_LADDER_STARTED=2026-11-04T03:59:24+00:00 mode=host reps=1 rungs=cup2,cup3,cup8,cup8bench rev=e7d6a3fa
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:27.2051493Z [untrusted] [box] bench sizes=16,2048 iters=20 batch=10
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:27.2052083Z [12 bytes dropped by runner]
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:27.2053396Z ::***::
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:48.3511635Z ::stop-commands::***
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:48.3512549Z UNTRUSTED Worker/box output
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:48.3513477Z [untrusted] [box] host libcuda=/usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:48.3514406Z [untrusted] [box] src cup2.c md5 [redacted]
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:48.3515050Z [untrusted] [box] src cup3.c md5 [redacted]
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:48.3515675Z [untrusted] [box] src cup8.c md5 [redacted]
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:48.3516331Z [untrusted] [box] src cup8bench.c md5 [redacted]
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:48.3517380Z [untrusted] [box] CL_ROW mode=host rung=cup2 rep=1 verdict=PASS rc=0 wall_ms=3000 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:48.3519121Z [untrusted] [box] CL_ROW mode=host rung=cup2 rep=1 verdict=PASS rc=0 wall_ms=3000 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:48.3520320Z [untrusted] [box] CL_ROW mode=host rung=cup3 rep=1 verdict=PASS rc=0 wall_ms=2740 graded=[CUP3_VAL=43]
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:48.3521763Z [untrusted] [box] CL_ROW mode=host rung=cup3 rep=1 verdict=PASS rc=0 wall_ms=2740 graded=[CUP3_VAL=43]
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:48.3522778Z [untrusted] [box] CL_ROW mode=host rung=cup8 rep=1 verdict=PASS rc=0 wall_ms=3029 graded=[CUP8_BAD=0 CUP8_MAXERR=0]
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:48.3523749Z [untrusted] [box] CL_ROW mode=host rung=cup8 rep=1 verdict=PASS rc=0 wall_ms=3029 graded=[CUP8_BAD=0 CUP8_MAXERR=0]
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:48.3524860Z ::***::
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:49.0197471Z ::stop-commands::***
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:49.0198394Z UNTRUSTED Worker/box output
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:49.0200707Z [untrusted] [box] CL_BENCH mode=host rep=1 BSUM N=2048 iters=20 first_ms=22.899 med_ms=22.455 p90_ms=22.901 min_ms=22.227 max_ms=22.908 gflops=765.066 batch_per_launch_ms=22.809 batch_gflops=753.211 h2d_ms=6.586 d2h_med_ms=3.285 submit_med_ms=0.014 sync_med_ms=22.442 sync_cpu_med_ms=22.443 sync_offcpu_med_ms=-0.001 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.018 bad=0 maxerr=0
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:49.0203647Z [untrusted] [box] CUDA_LADDER_STARTED=2026-11-04T03:59:24+00:00 mode=host reps=1 rungs=cup2,cup3,cup8,cup8bench rev=e7d6a3fa
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:49.0204692Z [untrusted] [box] bench sizes=16,2048 iters=20 batch=10
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:49.0205515Z [untrusted] [box] host libcuda=/usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:49.0206311Z [untrusted] [box] src cup2.c md5 [redacted]
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:49.0206957Z [untrusted] [box] src cup3.c md5 [redacted]
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:49.0207592Z [untrusted] [box] src cup8.c md5 [redacted]
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:49.0208255Z [untrusted] [box] src cup8bench.c md5 [redacted]
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:49.0209269Z [untrusted] [box] CL_ROW mode=host rung=cup2 rep=1 verdict=PASS rc=0 wall_ms=3000 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:49.0210491Z [untrusted] [box] CL_ROW mode=host rung=cup3 rep=1 verdict=PASS rc=0 wall_ms=2740 graded=[CUP3_VAL=43]
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:49.0211874Z [untrusted] [box] CL_ROW mode=host rung=cup8 rep=1 verdict=PASS rc=0 wall_ms=3029 graded=[CUP8_BAD=0 CUP8_MAXERR=0]
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:49.0213310Z [untrusted] [box] CL_ROW mode=host rung=cup8bench rep=1 verdict=PASS rc=0 wall_ms=3989 graded=[BENCH_TOTAL_BAD=0 BENCH_VERDICT: PASS (every timed iteration verified)]
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:49.0214550Z [untrusted] [box] CL_BENCH mode=host rep=1 BENCH_INIT_MS=2318.37
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:49.0215278Z [untrusted] [box] CL_BENCH mode=host rep=1 BENCH_CTX_MS=259.78
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:49.0215944Z [untrusted] [box] CL_BENCH mode=host rep=1 BENCH_MODULE_MS=26.90
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:49.0217486Z [untrusted] [box] CL_BENCH mode=host rep=1 BSUM N=16 iters=20 first_ms=0.036 med_ms=0.009 p90_ms=0.010 min_ms=0.008 max_ms=0.010 gflops=0.922 batch_per_launch_ms=0.006 batch_gflops=1.278 h2d_ms=0.045 d2h_med_ms=0.008 submit_med_ms=0.005 sync_med_ms=0.004 sync_cpu_med_ms=0.004 sync_offcpu_med_ms=0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.007 bad=0 maxerr=0
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:49.0219968Z [untrusted] [box] CL_BENCH mode=host rep=1 BSUM N=2048 iters=20 first_ms=22.899 med_ms=22.455 p90_ms=22.901 min_ms=22.227 max_ms=22.908 gflops=765.066 batch_per_launch_ms=22.809 batch_gflops=753.211 h2d_ms=6.586 d2h_med_ms=3.285 submit_med_ms=0.014 sync_med_ms=22.442 sync_cpu_med_ms=22.443 sync_offcpu_med_ms=-0.001 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.018 bad=0 maxerr=0
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:49.0222043Z [untrusted] [box] CUDA_LADDER_DONE=2026-11-04T03:59:38+00:00
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:49.0222703Z [untrusted] [box] [xid-watch] --- command output ends (rc=0) ---
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:49.0223691Z [untrusted] [box] CL_ROW mode=host rung=cup8bench rep=1 verdict=PASS rc=0 wall_ms=3989 graded=[BENCH_TOTAL_BAD=0 BENCH_VERDICT: PASS (every timed iteration verified)]
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:49.0224688Z [untrusted] [box] CL_BENCH mode=host rep=1 BENCH_INIT_MS=2318.37
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:49.0225353Z [untrusted] [box] CL_BENCH mode=host rep=1 BENCH_CTX_MS=259.78
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:49.0226010Z [untrusted] [box] CL_BENCH mode=host rep=1 BENCH_MODULE_MS=26.90
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:49.0227523Z [untrusted] [box] CL_BENCH mode=host rep=1 BSUM N=16 iters=20 first_ms=0.036 med_ms=0.009 p90_ms=0.010 min_ms=0.008 max_ms=0.010 gflops=0.922 batch_per_launch_ms=0.006 batch_gflops=1.278 h2d_ms=0.045 d2h_med_ms=0.008 submit_med_ms=0.005 sync_med_ms=0.004 sync_cpu_med_ms=0.004 sync_offcpu_med_ms=0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.007 bad=0 maxerr=0
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:49.0229957Z [untrusted] [box] CL_BENCH mode=host rep=1 BSUM N=2048 iters=20 first_ms=22.899 med_ms=22.455 p90_ms=22.901 min_ms=22.227 max_ms=22.908 gflops=765.066 batch_per_launch_ms=22.809 batch_gflops=753.211 h2d_ms=6.586 d2h_med_ms=3.285 submit_med_ms=0.014 sync_med_ms=22.442 sync_cpu_med_ms=22.443 sync_offcpu_med_ms=-0.001 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.018 bad=0 maxerr=0
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:49.0231974Z [untrusted] [box] CUDA_LADDER_DONE=2026-11-04T03:59:38+00:00
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:49.0232573Z [untrusted] [box] [xid-watch] xid_after=0
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:49.0233259Z [untrusted] [box] [xid-watch]  HOST Xid CLEAN across the command  0 before, 0 after, read from a
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:49.0234145Z [untrusted] [box] [xid-watch]   ring buffer PROVED READABLE in phase 0 (736 lines).  That proof is what
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:49.0235057Z [untrusted] [box] [xid-watch]   separates this line from the same line printed by a blind instrument.
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:49.0235872Z [untrusted] [box] [xid-watch] evidence: /workspace/bench/[redacted].log
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:49.0236734Z [untrusted] [box] KF_PAYLOAD_STAGE_END name=cuda_host rc=0 duration_ms=18584
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:49.0237505Z [untrusted] [box] KF_PAYLOAD_STAGE_START name=merge_bar
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:49.0238277Z [untrusted] [box] [xid-watch] tag=[redacted]7fe6af282e923c27_merge_bar  host=ubuntu  utc=2026-11-04T03:59:40Z
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:49.0239359Z [untrusted] [box] [xid-watch] command: bash /workspace/kf-[redacted]-src/scripts/bench/box/merge_check.sh [redacted] [redacted]7fe6af282e923c27
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:49.0240229Z [9 bytes dropped by runner]
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T03:59:49.0241170Z ::***::
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:00.5023038Z ::stop-commands::***
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:00.5024365Z UNTRUSTED Worker/box output
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:00.5025651Z [untrusted] NVIDIA GeForce RTX 3060
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:00.5027895Z ::***::
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:00.5029506Z runner: Worker run did not pass phase=result state=GRACE http=2xx status=200
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7620618Z ##[group]Final bounded log: UNTRUSTED Worker/box output
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7631972Z [393977 bytes dropped from the middle]
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7652784Z ::stop-commands::***
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7653706Z UNTRUSTED Worker/box output
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7654654Z [untrusted] [box] kf3: GSP rpc RmAlloc seq=71
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7656247Z [untrusted] [box] kf-host: channel birth h=0xcafe0025 engine=0xb reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7660050Z [untrusted] [box] kf3: act birth translated: chan 0xc1e00006:0x2 BORN Translated: token 0x801 -> host 0x10018 in VasKey(13970166069873082380) gpfifo=0x120064000x4096 userd=Some(Framebuffer { base: 8254128128, size: 512 }) engine=0xb tsg=None kernel_by=PRIVILEGE=KERNEL rm-internal ring_va=0xff00000000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B gr_tier=false gp_get_by_engine=false sw_subch_inert=false scheduled_at_birth=false fast=off (4912 us, off the GSP lock)
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7663797Z [untrusted] [box] [redacted]: HELD-REPLY-POSTED n=1  their rows are on the host now
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7665184Z [untrusted] [box] kf3: mem t=17.023s walk recon[redacted]led [0xffffffff00000001:+0-0r0] completed=[(30, Cleared)] unrecon[redacted]led=[]
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7666766Z [untrusted] [box] kf3: mem t=17.025s walk recon[redacted]led [0xffffffff00000002:+1-0r0] completed=[(31, Cleared)] unrecon[redacted]led=[]
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7668340Z [untrusted] [box] kf3: mem t=17.027s walk recon[redacted]led [0xffffffff00000001:+1-0r0] completed=[(32, Cleared)] unrecon[redacted]led=[]
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7669571Z [untrusted] [box] kf3: GSP rpc RmAlloc seq=72
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7670629Z [untrusted] [box] kf3: chan 0xc1e00006:0x2 GPFIFO_SCHEDULE enable=true (token 0x801, host 0x10018)
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7671844Z [untrusted] [box] kf3: GSP rpc RmControl seq=73
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7672600Z [untrusted] [box] kf3: GSP rpc RmAlloc seq=74
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7673357Z [untrusted] [box] kf3: GSP rpc RmControl seq=75
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7674218Z [untrusted] [box] kf-rm: chanlink: client 0xc1e00007 root: kernel=true internal=true
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7675073Z [untrusted] [box] kf3: GSP rpc RmAlloc seq=76
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7676000Z [untrusted] [box] kf3: chan token 0x801: GP_PUT=0 at USERD+0x0+0x8c; non-zero words in its page: []
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7676893Z [untrusted] [box] kf3: GSP rpc RmAlloc seq=77
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7677616Z [untrusted] [box] kf3: GSP rpc RmAlloc seq=78
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7679123Z [untrusted] [box] kf-rm: chanlink: FERMI_VASPACE_A 0xc1e00007:0xa under 0xb ([redacted]ice default for it: 0xa) VAS-FACTS index=Some(0) flags=Some(2d00) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(4006c008)
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7680684Z [untrusted] [box] kf-rm: chanlink: VAS-DECL 0xc1e00007:0xa vaBase=0x0 vaSize=0x34006c008 end=Some(34006c008) shared_management=false
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7681878Z [untrusted] [box] kf3: GSP rpc RmAlloc seq=79
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7682901Z [untrusted] [box] kf3: mem t=17.030s walk recon[redacted]led [0xffffffff00000002:+1-0r0] completed=[(33, Cleared)] unrecon[redacted]led=[]
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7684196Z [untrusted] [box] kf3: mem t=17.032s walk recon[redacted]led [0xffffffff00000002:+1-0r0] completed=[(34, Cleared)] unrecon[redacted]led=[]
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7685487Z [untrusted] [box] kf3: mem t=17.034s walk recon[redacted]led [0xffffffff00000002:+1-0r0] completed=[(35, Cleared)] unrecon[redacted]led=[]
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7686775Z [untrusted] [box] kf3: mem t=17.036s walk recon[redacted]led [0xffffffff00000002:+1-0r0] completed=[(36, Cleared)] unrecon[redacted]led=[]
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7687937Z [untrusted] [box] [redacted]: HELD-REPLY fn=RmControl depth=1  this map reply WAITS for its rows
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7688830Z [untrusted] [box] kf3: GSP rpc RmControl seq=80
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7689771Z [untrusted] [box] kf3: VasKey(13970166074168049674) mirror space=0xcafe0019: windows=none rings=none (recycled)
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7690839Z [untrusted] [box] kf3: mem t=17.036s pagedir VasKey(13970166074168049674) root=0x1efa8c000 First
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7692086Z [untrusted] [box] kf3: mem t=17.038s walk recon[redacted]led [0xc1e000070000000a:+0-0r0] completed=[] unrecon[redacted]led=[]
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7693174Z [untrusted] [box] [redacted]: HELD-REPLY-POSTED n=1  their rows are on the host now
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7694299Z [untrusted] [box] kf3: mem t=17.040s walk recon[redacted]led [0xffffffff00000002:+1-0r0] completed=[(37, Cleared)] unrecon[redacted]led=[]
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7695596Z [untrusted] [box] kf3: mem t=17.041s walk recon[redacted]led [0xffffffff00000002:+1-0r0] completed=[(38, Cleared)] unrecon[redacted]led=[]
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7696907Z [untrusted] [box] kf3: mem t=17.043s walk recon[redacted]led [0xffffffff00000002:+1-0r0] completed=[(39, Cleared)] unrecon[redacted]led=[]
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7698370Z [untrusted] [box] kf3: mem t=17.045s walk recon[redacted]led [0xffffffff00000002:+1-0r0] completed=[(40, Cleared)] unrecon[redacted]led=[]
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7699649Z [untrusted] [box] kf3: mem t=17.047s walk recon[redacted]led [0xffffffff00000002:+1-0r0] completed=[(41, Cleared)] unrecon[redacted]led=[]
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7700942Z [untrusted] [box] kf3: mem t=17.049s walk recon[redacted]led [0xffffffff00000002:+1-0r0] completed=[(42, Cleared)] unrecon[redacted]led=[]
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7702407Z [untrusted] [box] kf3: mem t=17.051s walk recon[redacted]led [0xffffffff00000002:+1-0r0] completed=[(43, Cleared)] unrecon[redacted]led=[]
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7703705Z [untrusted] [box] kf3: mem t=17.053s walk recon[redacted]led [0xffffffff00000002:+1-0r0] completed=[(44, Cleared)] unrecon[redacted]led=[]
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7704978Z [untrusted] [box] kf3: mem t=17.055s walk recon[redacted]led [0xffffffff00000002:+1-0r0] completed=[(45, Cleared)] unrecon[redacted]led=[]
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7706262Z [untrusted] [box] kf3: mem t=17.057s walk recon[redacted]led [0xffffffff00000002:+1-0r0] completed=[(46, Cleared)] unrecon[redacted]led=[]
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7707537Z [untrusted] [box] kf3: mem t=17.058s walk recon[redacted]led [0xffffffff00000002:+1-0r0] completed=[(47, Cleared)] unrecon[redacted]led=[]
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7708804Z [untrusted] [box] kf3: mem t=17.062s walk recon[redacted]led [0xffffffff00000002:+1-0r0] completed=[(48, Cleared)] unrecon[redacted]led=[]
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7710081Z [untrusted] [box] kf3: mem t=17.063s walk recon[redacted]led [0xffffffff00000002:+1-0r0] completed=[(49, Cleared)] unrecon[redacted]led=[]
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7711662Z [untrusted] [box] kf3: mem t=17.065s walk recon[redacted]led [0xffffffff00000002:+1-0r0] completed=[(50, Cleared)] unrecon[redacted]led=[]
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7712951Z [untrusted] [box] kf3: mem t=17.067s walk recon[redacted]led [0xffffffff00000002:+1-0r0] completed=[(51, Cleared)] unrecon[redacted]led=[]
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7714260Z [untrusted] [box] kf3: mem t=17.069s walk recon[redacted]led [0xffffffff00000002:+1-0r0] completed=[(52, Cleared)] unrecon[redacted]led=[]
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7715459Z [untrusted] [box] kf3: mem t=17.099s walk recon[redacted]led [] completed=[] unrecon[redacted]led=[53]
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7716791Z [untrusted] [box] kf3: mem t=17.099s REFUSED walk: cuEventQuery refused: 700 (CUDA_ERROR_ILLEGAL_ADDRESS) [walked 1: 0xc1e000070000000a=s3@0x1efa8c000; table 4 objects, 4 rooted,
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7717939Z [untrusted] [box]  124 free slots]
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7718872Z [untrusted] [box] 2026-11-04T04:09:48.519934Z qemu-system-x86_64: terminating on signal 15 from pid 62974 (python3)
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7719800Z [untrusted] [box] 
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7720479Z [untrusted] [box] KF_ARM_DIAG_END arm=--bus-info-sweep
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7721492Z [untrusted] [box] KF_PAYLOAD_STAGE_END name=merge_bar rc=1 duration_ms=608949
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7722352Z [untrusted] [box] KF_PAYLOAD_FAIL suite=thin_suite
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7723153Z [untrusted] [box] KF_FINAL_SUMMARY_BEGIN verdict=FAIL stages=5
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7724115Z [untrusted] [box] stage name=provision rc=0 duration_ms=876131 result=PASS
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7725038Z [untrusted] [box] stage name=cuda_host rc=0 duration_ms=18584 result=PASS
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7725981Z [untrusted] [box] stage name=merge_bar rc=1 duration_ms=608949 result=FAIL reason=thin_suite
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7726890Z [untrusted] [box] stage name=cuda_guest result=NOT_RUN
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7727671Z [untrusted] [box] stage name=windows_gate result=NOT_RUN
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7728482Z [untrusted] [box] suite name=provision pass=1 fail=0 skip=0
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7729343Z [untrusted] [box] suite name=cuda_host pass=4 fail=0 skip=0
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7730146Z [untrusted] [box] suite name=gates pass=9 fail=0 skip=0
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7730930Z [untrusted] [box] suite name=kf3_build pass=1 fail=0 skip=0
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7731864Z [untrusted] [box] suite name=raw_suite pass=30 fail=0 skip=0
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7732840Z [untrusted] [box] suite name=thin_suite pass=0 fail=1 skip=0
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7733711Z [untrusted] [box] suite name=guest_bus_info_sweep pass=0 fail=1 skip=0
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7734743Z [untrusted] [box] first_fail stage=merge_bar line=no red line found; last line: EXIT rc=0 2026-11-04T04:09:49+00:00
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7735669Z [untrusted] [box] KF_FINAL_SUMMARY_END
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7736379Z [untrusted] [box] Suite complete.
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7737130Z [9 bytes dropped by runner]
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7738313Z ::***::
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7738958Z [33 bytes dropped by runner display budget]
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7740581Z ##[endgroup]
+Isolated BASE runner validates untrusted Worker	Fetch BASE controller and request bounded test	2026-11-04T04:10:01.7821980Z ##[error]Process completed with exit code 1.
+Isolated BASE runner validates untrusted Worker	Complete job	﻿2026-11-04T04:10:01.8138605Z Evaluate and set job outputs
+Isolated BASE runner validates untrusted Worker	Complete job	2026-11-04T04:10:01.8147703Z Set output 'state'
+Isolated BASE runner validates untrusted Worker	Complete job	2026-11-04T04:10:01.8150091Z Set output 'verdict'
+Isolated BASE runner validates untrusted Worker	Complete job	2026-11-04T04:10:01.8151593Z Set output 'verified'
+Isolated BASE runner validates untrusted Worker	Complete job	2026-11-04T04:10:01.8153056Z Cleaning up orphan processes

@@ -1,0 +1,2 @@
+[2026-11-04T01:21:13Z] stopping kfwin (pid 89025)
+[2026-11-04T01:21:34Z] stopped

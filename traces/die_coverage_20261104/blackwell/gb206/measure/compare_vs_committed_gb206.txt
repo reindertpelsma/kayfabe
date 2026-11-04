@@ -1,0 +1,5 @@
+NEW ['measured:GB206,595.91.07,2026-11-04'] words 48 fields 328
+TABLE die=GB206 rows 48
+PRECOMP_VS_TABLE die=GB206 words_differ=0 rows_table=48 words_new=48
+REF ['measured:GB206,595.91.07,2026-10-23'] words 48 fields 328
+PRECOMP_COMPARE words_differ=0 fields_differ=0 fields_ref=328 fields_new=328

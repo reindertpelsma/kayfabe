@@ -1,0 +1,24 @@
+START 2026-11-04T00:13:48+00:00
+BOX_RC=0
+0c515b3b3 Merge next into integration
+DRIVER_RC=0
+NVIDIA GeForce RTX 4080 SUPER, 580.159.04
+/dev/root       117G   15G  102G  13% /
+TREE_RC=0
+[2026-11-04T00:25:58+00:00] B4: guest ladder built: 5056744 bytes
+[2026-11-04T00:25:58+00:00] BENCH_TREE_DONE
+LADDER_RC=0
+FG_RC=1
+mount: /tmp/tmp.XJcn9Sk9lS/mnt: wrong fs type, bad option, bad superblock on /dev/nbd0, missing codepage or helper program, or other error.
+build_fast_guest: cannot mount the guest root (no nbd0p1, and nbd0 is not a filesystem either — is /workspace/bench/guest.qcow2 a partitioned image?)
+KF3_RC=0
+KF3_BUILT /workspace/bench/kf3-bins/0c515b3b/qemu-system-x86_64 rev=0c515b3b mtime=2026-11-04 00:26:33.116643911 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+NOT_READY driver=580.159.04 KF3_RC=0 FG_RC=1
+NVIDIA_SMI_RC=0
+NVIDIA_SMI: NVIDIA GeForce RTX 4080 SUPER, 580.159.04
+NVRM_TAIL_BEGIN (the last 20 NVRM kernel lines)
+[    4.612676] NVRM: loading NVIDIA UNIX x86_64 Kernel Module  575.51.03  Wed Apr 16 14:22:51 UTC 2025
+[  502.241208] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+[  517.309985] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+NVRM_TAIL_END
+EXIT 2026-11-04T00:26:36+00:00

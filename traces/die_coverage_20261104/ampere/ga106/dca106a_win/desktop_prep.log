@@ -1,0 +1,3 @@
+[2026-11-04T01:45:37Z] START desktop-prep
+[2026-11-04T01:45:52Z] EXIT desktop-prep rc=0
+[2026-11-04T01:45:53Z] DESKTOP_PREP_OK user=kf (autologon and OverlayTestMode apply at the next boot of this disk)

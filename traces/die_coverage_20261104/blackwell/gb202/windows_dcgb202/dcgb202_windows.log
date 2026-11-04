@@ -1,0 +1,97 @@
+WINDOWS_GATE_START tag=dcgb202 rev=0c515b3b source=/workspace/bench/verify-worktrees/dcgb202.4GWg7E 2026-11-04T00:58:33+00:00 idle_s=300 flags=kf3_flags.sample.env guest_driver=580.65.06 arm=B
+WINDOWS_GATE_REQUESTED=1
+GATE_STAGE preflight START 2026-11-04T00:58:33+00:00
+GATE_NOTE host: gpu="NVIDIA GeForce RTX 5090" driver=595.91.07 cpus=23 ram_gb=23 disk_free_gb=107
+GATE_STAGE preflight EXIT ok 0s
+GATE_STAGE hostref_before START 2026-11-04T00:58:33+00:00
+GATE_HOSTREF before green cup8=PASS xid_count=10 xid_delta=0 gpu="NVIDIA GeForce RTX 5090, 595.91.07, 32607 MiB, P0"
+GATE_STAGE hostref_before EXIT ok 1s
+GATE_STAGE prereqs START 2026-11-04T00:58:34+00:00
+GATE_STAGE prereqs EXIT ok 9s
+GATE_STAGE kf3_binary START 2026-11-04T00:58:43+00:00
+GATE_NOTE kf3 qemu=/workspace/bench/kf3-bins/0c515b3b/qemu-system-x86_64 sha256=de572ee144772e84 rev=0c515b3b
+GATE_STAGE kf3_binary EXIT ok 0s
+GATE_STAGE install START 2026-11-04T00:58:43+00:00
+GATE_NOTE Windows already installed on this box (2026-11-04T00:53:21Z repo=0c515b3b): install once per lease
+GATE_STAGE install EXIT ok 0s
+GATE_STAGE probes_build START 2026-11-04T00:58:43+00:00
+GATE_NOTE probes built: dcfaf968a592 e95f3d005d24 28ca0d2602ee e62180744699 
+GATE_STAGE probes_build EXIT ok 2s
+GATE_STAGE boot1 START 2026-11-04T00:58:45+00:00
+GATE_NOTE ssh up after 0s
+GATE_STAGE boot1 EXIT ok 28s
+GATE_STAGE check_kf3 START 2026-11-04T00:59:13+00:00
+GATE_NOTE check --kf3 (before the driver): 13 PASS lines, WIN_CHECK_DONE fail=0
+GATE_STAGE check_kf3 EXIT ok 11s
+GATE_STAGE nv_install START 2026-11-04T00:59:24+00:00
+  GSP_ON device PCI\VEN_10DE&DEV_2B85&SUBSYS_53031462&REV_A1\3&11583659&0&28 name='Microsoft Basic Display Adapter' status=OK problem=CM_PROB_NONE inf=display.inf driverkey={<uuid>}\0001
+  GSP_ON nvlddmkm.sys signature status=Valid signer='CN=NVIDIA Corporation, OU=1-F, O=NVIDIA Corporation, L=Santa Clara, S=California, C=US'
+  GSP_ON disable: Microsoft PnP Utility
+  GSP_ON disable:
+  GSP_ON disable: Disabling device:          PCI\VEN_10DE&DEV_2B85&SUBSYS_53031462&REV_A1\3&11583659&0&28
+  GSP_ON disable: Device disabled successfully.
+  GSP_ON disable:
+  GSP_ON add-driver: Microsoft PnP Utility
+  GSP_ON add-driver:
+  GSP_ON add-driver: Adding driver package:  nv_dispi.inf
+  GSP_ON add-driver: Driver package added successfully.
+  GSP_ON add-driver: Published Name:         oem7.inf
+  GSP_ON add-driver: Driver package installed on device: PCI\VEN_10DE&DEV_2B85&SUBSYS_53031462&REV_A1\3&11583659&0&28
+  GSP_ON add-driver:
+  GSP_ON add-driver: Total driver packages:  1
+  GSP_ON add-driver: Added driver packages:  1
+  GSP_ON add-driver rc=0
+  GSP_ON after install: inf=oem7.inf driverkey={<uuid>}\0001 version=32.0.15.8088
+  GSP_ON readback HKLM:\SYSTEM\CurrentControlSet\Control\Class\{<uuid>}\0001 EnableGpuFirmware=1
+  GSP_ON readback HKLM:\SYSTEM\CurrentControlSet\Services\nvlddmkm EnableGpuFirmware=1
+GATE_STAGE nv_install EXIT ok 175s
+GATE_STAGE desktop_prep START 2026-11-04T01:02:19+00:00
+  DESKTOP_PREP AutoAdminLogon=1 want=1 OK
+  DESKTOP_PREP DefaultUserName=kf want=kf OK
+  DESKTOP_PREP DefaultDomainName=. want=. OK
+  DESKTOP_PREP DefaultPassword_matches=True want=True OK
+  DESKTOP_PREP AutoLogonCount_absent=True want=True OK
+  DESKTOP_PREP DevicePasswordLessBuildVersion=0 want=0 OK
+  DESKTOP_PREP OverlayTestMode=5 want=5 OK
+  DESKTOP_PREP_DONE fail=0
+  [2026-11-04T01:02:26Z] DESKTOP_PREP_OK user=kf (autologon and OverlayTestMode apply at the next boot of this disk)
+GATE_STAGE desktop_prep EXIT ok 7s
+GATE_STAGE reboot START 2026-11-04T01:02:26+00:00
+GATE_NOTE second QEMU started after 10s
+GATE_NOTE ssh up after 0s
+GATE_STAGE reboot EXIT ok 36s
+GATE_STAGE desktop START 2026-11-04T01:03:02+00:00
+  GATE_BOOT utc=2026-11-04T01:02:44Z os='Microsoft Windows 11 Enterprise LTSC Evaluation' build=26100
+  GATE_DESKTOP user='KFWIN\kf' dwm=1 explorer=1
+  GATE_SESSIONS USERNAME SESSIONNAME ID STATE IDLE TIME LOGON TIME kf console 1 Active none 11/4/2026 1:02 AM
+  GATE_DISPLAY name='NVIDIA GeForce RTX 5090' driver=32.0.15.8088 code=22 status=Error pnp=Error
+  GATE_STATE_DONE mode=desktop
+GATE_STAGE desktop EXIT ok 11s
+GATE_STAGE enable START 2026-11-04T01:03:13+00:00
+GATE_NOTE device enabled once at 2026-11-04T01:03:18Z (guest clock)
+  GATE_DISPLAY name='NVIDIA GeForce RTX 5090' driver=32.0.15.8088 code=0 status=OK pnp=OK
+GATE_STAGE enable EXIT ok 89s
+GATE_STAGE smi_probes START 2026-11-04T01:04:42+00:00
+GATE_NOTE guest nvidia-smi: GPU 0: NVIDIA GeForce RTX 5090 (UUID: GPU-<uuid>)
+GATE_PROBE_RESULT cup8 GATE_PROBE exe=cup8.exe arg= rc=0 secs=2 timeout=0
+GATE_PROBE_RESULT d3d11 GATE_PROBE exe=kf_dxprobe.exe arg=d3d11 rc=0 secs=1 timeout=0
+GATE_PROBE_RESULT cup3 GATE_PROBE exe=cup3.exe arg= rc=0 secs=1 timeout=0
+GATE_PROBE_RESULT d3d12 GATE_PROBE exe=kf_dxprobe.exe arg=d3d12 rc=0 secs=2 timeout=0
+GATE_STAGE smi_probes EXIT ok 30s
+GATE_STAGE idle START 2026-11-04T01:05:12+00:00
+  GATE_WER_DUMP 2026-11-04T01:03:33Z WATCHDOG-20261104-0103.dmp bytes=1592820941
+GATE_TIMELINE enable=2026-11-04T01:03:18Z first_probe=2026-11-04T01:04:56Z first_dump=2026-11-04T01:03:33Z dump_minus_enable=15s dump_minus_first_probe=-83s
+  GATE_WER_NEAR report=WATCHDOG-20261104-0103.dmp dt=27 2026-11-04T01:04:00Z Microsoft-Windows-Kernel-Power 172
+  GATE_WER_NEAR report=WATCHDOG-20261104-0103.dmp dt=27 2026-11-04T01:04:00Z Microsoft-Windows-Kernel-Power 41
+  GATE_WER_NEAR report=WATCHDOG-20261104-0103.dmp dt=-46 2026-11-04T01:02:47Z Microsoft-Windows-Kernel-Power 172
+  GATE_WER_NEAR report=WATCHDOG-20261104-0103.dmp dt=-58 2026-11-04T01:02:34Z Microsoft-Windows-Kernel-Power 577
+  GATE_WER_NEAR report=WATCHDOG-20261104-0103.dmp dt=-59 2026-11-04T01:02:34Z Microsoft-Windows-Kernel-Power 109
+  AT_FAILURE GATE_TDR since=2026-11-04T01:03:18Z display4101=0 nvlddmkm153=0 kernelpower41=1 eventlog6008=1 bugcheck1001=1 livekernelevent_other=0 livekernelevent193=0 livekernelevent_stale=0 strict=0 total=3
+  AT_FAILURE GATE_LIVEDUMP 2026-11-04T01:03:33Z WATCHDOG-20261104-0103.dmp bytes=1592820941
+  AT_FAILURE GATE_DISPLAY name='NVIDIA GeForce RTX 5090' driver=32.0.15.8088 code=0 status=OK pnp=OK
+GATE_NOTE graceful stop of the guest (gate_dcgb202)
+GATE_HOSTREF after green cup8=PASS xid_count=10 xid_delta=0 gpu="NVIDIA GeForce RTX 5090, 595.91.07, 32607 MiB, P3"
+WINDOWS_GATE_FAIL diag=KAYFABE stage=idle why="GUEST_PANICKED during the idle window after 15s" rev=0c515b3b gpu="NVIDIA GeForce RTX 5090" hostref=green/green secs=452
+GATE_NOTE evidence: /root/prov/dcgb202_windows (63 files), /root/prov/dcgb202_windows.tgz sha256=a923f8a2ff3d08b9
+WINDOWS_GATE_TIMING total=452s preflight=0s hostref_before=1s prereqs=9s kf3_binary=0s install=0s probes_build=2s boot1=28s check_kf3=11s nv_install=175s desktop_prep=7s reboot=36s desktop=11s enable=89s smi_probes=30s
+WINDOWS_GATE_EXIT rc=1 2026-11-04T01:06:05+00:00

@@ -26,6 +26,7 @@ configured `scripts/ci/vast_onstart.sh`. Transport and payload logic live in the
 | KF_GRACE_FAIL | Required grace ceiling in seconds |
 | KF_GRACE_PASS | Optional grace ceiling in seconds |
 | KF_ACCESS_ID / KF_ACCESS_SECRET | Optional Cloudflare Access service-token pair; both or none |
+| KF_MERGE_WINDOWS | Optional `0` or `1` (2026-11-04): the tier, a pure function of the profile (`src/tier.js`); absent means the master gate |
 
 [SUPERSEDED 2026-10-24, edits2 C: status protocol 5 below is now 6; the status object gained
 `machine_id` and `host_id` and lost `pr`; the runner sends `X-KF-Protocol: 6`.]

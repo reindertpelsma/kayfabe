@@ -944,6 +944,20 @@ pub static HOST_CONTROLS: &[HostControl] = &[
             size: 12,
         },
     },
+    // ★ 2026-11-04 (die coverage, Ada, `traces/die_coverage_20261104/ada/README.md`): `0x2080852c`, asked by the
+    // Windows 580.88 guest at 1440 B (AD102 gate runs ada102a/p/q, `W343GSSCENSUS`) and refused as an unlisted control
+    // at 595.91.07. MEASURED on our own AD104 at 595.91.07 (kf-ctl-probe `KF_PROBE_SCAN`, unprivileged, zero requests of
+    // 4..16384 B): the host answers exactly one size, 1440, NV_OK; kf3 asked it again at realize in run ada102p, NV_OK.
+    HostControl {
+        name: "",
+        cmd: 0x2080_852c,
+        params: HostParams::MeasuredOpaque {
+            source: "measured:AD104,595.91.07,2026-11-04; kf-ctl-probe KF_PROBE_SCAN unprivileged (CapEff 0), zero request, \
+                     only 1440 of 4..16384 accepted, traces/die_coverage_20261104/ada/ad104/gss595/",
+            versions: &[HOST_595_91_07],
+            size: 1440,
+        },
+    },
     HostControl {
         name: "",
         cmd: 0x2080_8162,
@@ -1274,6 +1288,7 @@ mod tests {
             (0x2080_a026, 532),
             (0x2080_9009, 8),
             (0x2080_9001, 8),
+            (0x2080_852c, 1440),
         ] {
             assert_eq!(
                 host("595.91.07")

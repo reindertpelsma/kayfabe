@@ -1,0 +1,17 @@
+START 2026-11-04T00:20:55+00:00
+BOX_RC=0
+0c515b3b3 Merge next into integration
+DRIVER_RC=0
+NVIDIA GeForce RTX 4070 SUPER, 595.91.07
+/dev/root       155G   15G  141G  10% /
+TREE_RC=0
+[2026-11-04T00:36:59+00:00] B4: guest ladder built: 5056744 bytes
+[2026-11-04T00:36:59+00:00] BENCH_TREE_DONE
+LADDER_RC=0
+FG_RC=0
+== built: /workspace/bench/fastguest/initrd.cpio.gz  112M
+== kernel release: 6.8.0-147-generic
+KF3_RC=0
+KF3_BUILT /workspace/bench/kf3-bins/0c515b3b/qemu-system-x86_64 rev=0c515b3b mtime=2026-11-04 00:38:27.122924144 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+READY driver=595.91.07
+EXIT 2026-11-04T00:38:27+00:00
