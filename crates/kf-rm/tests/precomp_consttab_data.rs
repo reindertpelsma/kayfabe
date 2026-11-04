@@ -12,6 +12,11 @@ const GB203: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../traces/blackwell_hw_20261103/gb203_tier3/precomp_tier3.txt"
 ));
+// 2026-11-04: GB205 measured on its own die, own Vast lease 59031353 (equal to GB202 on every word).
+const GB205: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../traces/die_coverage_20261104/blackwell/gb205/measure/precomp_tier3.txt"
+));
 const GB206: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../traces/blackwell_provider_validation_20261023/lease_metadata/precomp_tier3.txt"
@@ -109,6 +114,26 @@ fn gb203_independent_public_field_decode_matches_all_measurements() {
 }
 
 #[test]
+fn gb205_every_word_matches_its_measurement() {
+    values("GB205", GB205);
+}
+
+#[test]
+fn gb205_every_word_retains_its_measured_source_and_evidence() {
+    provenance_dated(
+        "GB205",
+        GB205,
+        "traces/die_coverage_20261104/blackwell/gb205/measure/precomp_tier3.txt",
+        "2026-11-04",
+    );
+}
+
+#[test]
+fn gb205_independent_public_field_decode_matches_all_measurements() {
+    decoded_fields("GB205", GB205);
+}
+
+#[test]
 fn gb206_every_word_matches_its_measurement() {
     values("GB206", GB206);
 }
@@ -173,7 +198,12 @@ fn gb206_independent_public_field_decode_matches_all_measurements() {
 #[test]
 fn every_measured_die_has_exactly_48_published_rows_and_the_measured_zero_count() {
     let rows = consttab::table().unwrap();
-    for (name, evidence) in [("GB202", GB202), ("GB203", GB203), ("GB206", GB206)] {
+    for (name, evidence) in [
+        ("GB202", GB202),
+        ("GB203", GB203),
+        ("GB205", GB205),
+        ("GB206", GB206),
+    ] {
         let die = DieScope::Die(DieId::from_name(name).unwrap());
         let own: Vec<_> = rows
             .iter()
@@ -193,7 +223,7 @@ fn every_measured_die_has_exactly_48_published_rows_and_the_measured_zero_count(
 
 #[test]
 fn physical_rows_are_scoped_to_the_measured_host_branch() {
-    for name in ["GB202", "GB203", "GB206"] {
+    for name in ["GB202", "GB203", "GB205", "GB206"] {
         for branch in [0, 580, 590, 596] {
             assert!(
                 consttab::lookup(&key(0x780), DieId::from_name(name).unwrap(), branch).is_err()
@@ -204,7 +234,7 @@ fn physical_rows_are_scoped_to_the_measured_host_branch() {
 
 #[test]
 fn the_generic_table_never_silently_borrows_a_measured_die() {
-    for implementation in [5, 7, 8] {
+    for implementation in [7, 8] {
         assert!(consttab::lookup(&key(0x780), DieId::new(0x1b0, implementation), 595).is_err());
     }
 }

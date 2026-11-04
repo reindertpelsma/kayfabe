@@ -242,14 +242,66 @@ macro_rules! cases {
     };
 }
 cases!(measured_words; gb202_real_display_page => "GB202", gb203_real_display_page => "GB203",
-    gb206_real_display_page => "GB206");
-cases!(provenance; gb202_provenance => "GB202", gb203_provenance => "GB203", gb206_provenance => "GB206");
-cases!(inherited; gb205_explicit_inheritance => "GB205", gb207_explicit_inheritance => "GB207");
-cases!(exact_wins; gb205_exact_precedes_inherited => "GB205", gb207_exact_precedes_inherited => "GB207");
+    gb205_real_display_page => "GB205", gb206_real_display_page => "GB206");
+cases!(provenance; gb202_provenance => "GB202", gb203_provenance => "GB203", gb205_provenance => "GB205",
+    gb206_provenance => "GB206");
+cases!(inherited; gb207_explicit_inheritance => "GB207");
+cases!(exact_wins; gb207_exact_precedes_inherited => "GB207");
 cases!(partial_own_never_borrows; gb205_partial_is_not_patched => "GB205",
     gb207_partial_is_not_patched => "GB207");
 cases!(zero_stays_explicit; gb202_zero_is_complete => "GB202", gb203_zero_is_complete => "GB203",
-    gb206_zero_is_complete => "GB206");
+    gb205_zero_is_complete => "GB205", gb206_zero_is_complete => "GB206");
+
+/// Every published row of `name` minus its own exact PRECOMP rows: the die as it was before it was
+/// measured, so the inheritance rules can still be exercised for it.
+fn without_own(name: &str) -> Vec<Row> {
+    let mut all = rows();
+    all.retain(|r| !(r.key.starts_with("display.precomp.") && r.die == DieScope::Die(die(name))));
+    all
+}
+
+/// The measured die's 48 rows equal its former donor's word for word, carry its own measurement tag,
+/// take precedence (nothing labelled inherited), and without them it falls back to the labelled
+/// inheritance.
+fn measured_equals_former_donor(name: &str, date: &str) {
+    let all = rows();
+    let own: Vec<_> = all
+        .iter()
+        .filter(|r| r.key.starts_with("display.precomp.") && r.die == DieScope::Die(die(name)))
+        .collect();
+    assert_eq!(own.len(), 48);
+    for row in own {
+        let donor = all
+            .iter()
+            .find(|r| r.key == row.key && r.die == DieScope::Die(die("GB202")))
+            .unwrap();
+        assert_eq!(
+            row.words, donor.words,
+            "{name} {} differs from GB202",
+            row.key
+        );
+        assert!(
+            matches!(&row.source, SourceTag::Measured { die, date: d, .. }
+            if die == name && d == date)
+        );
+    }
+    let d = run(name, &all).unwrap();
+    assert!(
+        !d.provenance
+            .iter()
+            .any(|p| p.why.contains("inherited-with-reason"))
+    );
+    inherited_in(name, &without_own(name));
+}
+
+/// 2026-11-04, lease 59031353 (RTX 5070, 10de:2f04): GB205 measured on its own die with the same
+/// read-only kit; the falsifier of its inheritance (a differing word or field) did not fire, all 48
+/// words and 328 fields equal GB202's
+/// (traces/die_coverage_20261104/blackwell/gb205/measure/compare_vs_gb202.txt).
+#[test]
+fn gb205_measurement_equals_its_former_donor() {
+    measured_equals_former_donor("GB205", "2026-11-04");
+}
 
 /// 2026-11-03, lease 58957600: GB203 was measured on its own die and its exact rows serve it. The
 /// owner's falsifier for the inheritance ("it holds iff every decoded field equals GB202's") did not
@@ -365,7 +417,7 @@ fn gb205_empty_inheritance_reason_refuses() {
         branch: 595,
         reason: "",
     }];
-    assert!(run_with(die("GB205"), "595.91.07", &rows(), &rules).is_err());
+    assert!(run_with(die("GB205"), "595.91.07", &without_own("GB205"), &rules).is_err());
 }
 #[test]
 fn gb207_ada_donor_refuses_even_with_fabricated_rows() {
@@ -381,7 +433,7 @@ fn gb207_ada_donor_refuses_even_with_fabricated_rows() {
 }
 #[test]
 fn gb205_ampere_donor_refuses_even_with_fabricated_rows() {
-    let mut all = rows();
+    let mut all = without_own("GB205");
     all.extend(prospective("GA106"));
     let rules = [Inheritance {
         die: "GB205",
