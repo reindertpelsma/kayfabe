@@ -4,7 +4,7 @@ STATUS: LIVE, 2026-11-03. The GB203 Windows gate passes on `claude/blackwell-win
 (n=1). Hypotheses and falsifiers were written before the lease (`PREREG.md`, commit `6763a35a`). Labels: MEASURED =
 a line in a file of this directory, named; INFERRED = reasoning.
 
-## Verdicts (MEASURED)
+## Verdicts (MEASURED, runs of 2026-11-03)
 
 | run | revision | result |
 |---|---|---|

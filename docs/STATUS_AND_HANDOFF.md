@@ -5,7 +5,7 @@ it are dated checkpoints, kept as history.
 
 ## UPDATE 2026-11-04 — Windows is required on the gpu-vast master gate (lane 2)
 
-Branch `claude/gate-windows-required-20261104`, PR against `next`. It merges #242, #243, #247 and #246 (with #245).
+Branch `claude/gate-windows-required-20261104`, PR #250 against `next` (its parents #242-#247 are in next via #248).
 Design: `docs/design/V3_CI_VAST_GPU_20261021.md` (lane 2 section), `docs/design/V3_WINDOWS_GATE.md` §0.
 Evidence: `traces/gate_windows_ci_20261104/README.md`.
 - CODE READ: the Worker profile `check` sends `KF_MERGE_WINDOWS=1` (`ci/vast-broker/src/tier.js`). The payload runs
@@ -23,6 +23,16 @@ Evidence: `traces/gate_windows_ci_20261104/README.md`.
   `d6bd6b363fc04592dc18d7f607178c981bb97983ce36b5c4037bafda1a337b0a`. master's runner must carry the matching pin,
   and the 330-minute budget must be on master before the 300-minute Worker goes live, or master PRs get
   `NOT_ELIGIBLE RUNNER_TIME`.
+
+## UPDATE 2026-11-04 — platform testing and the public status site (lane 1, design + code, not deployed)
+
+DESIGN-ONLY: [V3_PLATFORM_TESTING.md](design/V3_PLATFORM_TESTING.md) records the owner's
+2026-11-04 design: the Worker as platform testing infrastructure decoupled from CI, the three
+tiers, a read-only public API at `api.kayfabe.dev` over one shared D1 database, public redacted
+logs, and the status pages at `kayfabe.dev/status/`. Branch `claude/platform-status-20261104`
+builds the public API, the schema and the pages against synthetic data only; deployment steps are
+in that document's §12. This entry is scoped to that lane; it is not a resume point for the
+product.
 
 ## UPDATE 2026-10-22 — Vast broker callbacks, mock validation only
 

@@ -1790,7 +1790,15 @@ jobs:
           #   refused for DontNeed. The arm needs both to BUILD scattered memory it can then census:
           #   without NOHUGEPAGE a 2 MiB-contiguous run is invisible, without DONTNEED the free lists
           #   hold no holes. The pagemap/smaps readers beside it (`pagemap.rs`) are safe `std::fs`.
-          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:98 kf-cuda:78 kf-qemu:86 firmware/kf-gop:78 kf-chan:0"
+          # ★★ kf-linux-raw 98 -> 101 (2026-11-03, `claude/walk-wake-20261103`, traces/walk_wake_20261103/):
+          #   epoll_unsafe.rs (+1): `Poller::wait` with `PollTimeout::Micros` — ONE `epoll_pwait2`
+          #   syscall block over the same frame-owned events array and count as the `epoll_wait` beside
+          #   it, a frame-owned read-only `timespec`, and a NULL signal mask. The VA worker looks at a
+          #   pending GPU walk every 50 us..1 ms; `epoll_wait` cannot express less than 1 ms, which put
+          #   ~0.9 ms on every walk (Ada lane). ENOSYS/EPERM falls back to `epoll_wait`, rounded up.
+          #   timerslack_unsafe.rs (+2): `prctl(PR_SET_TIMERSLACK)` and `prctl(PR_GET_TIMERSLACK)` for
+          #   the CALLING thread, by value, no pointer; the default 50 us slack equals the wait itself.
+          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:101 kf-cuda:78 kf-qemu:86 firmware/kf-gop:78 kf-chan:0"
           audited_dir() { case "${1%%:*}" in */*) echo "${1%%:*}" ;; *) echo "crates/${1%%:*}" ;; esac; }
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.
@@ -2383,6 +2391,25 @@ jobs:
           NB_REQUIRE_FUSE: "1"
         run: make -C broker check
 
+  platform:
+    name: platform — public status API and status pages (ci/platform-api, site/status)
+    # Read-only public Worker for api.kayfabe.dev: node:sqlite tests against a read-only seeded
+    # file, mutants for the read-only / fixed-SQL / validation rules, and the committed synthetic
+    # fixture. No install, no network, no Cloudflare. docs/design/V3_PLATFORM_TESTING.md.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+      - name: Format, tests and mutants
+        run: |
+          npx --yes prettier@3.6.2 --config ci/platform-api/.prettierrc.json --check \
+            'ci/platform-api/**/*.js' 'ci/platform-api/**/*.mjs'
+          cd ci/platform-api
+          node --test test/*.test.js
+          node scripts/mutate.mjs
+
   slow:
     name: slow — full suite with the soaks (KAYFABE_SLOW=1)
     # Nightly cron + manual dispatch only — never the push path (the push gate's
@@ -2413,7 +2440,7 @@ jobs:
   gate:
     name: CI
     if: always()
-    needs: [stable, aarch64, firmware, broker]
+    needs: [stable, aarch64, firmware, broker, platform]
     runs-on: ubuntu-latest
     steps:
       - name: Require every needed job to have passed

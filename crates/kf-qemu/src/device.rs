@@ -25,6 +25,10 @@ use kf_trap::{Action, Class, Route, WriteSemantics};
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
 
+/// ★ 2026-11-03: the VA-manager thread's timer slack — small against its 50 us pending-walk
+/// wait (`Device::va_loop`); the kernel's default is 50 us.
+const VA_TIMER_SLACK_NS: u64 = 5_000;
+
 /// `NV_PROM_DATA(i) = 0x300000 + i`, 1 MiB — where RM streams the VBIOS from.
 pub const PROM_BASE: u64 = 0x0030_0000;
 /// The PROM window's size.
@@ -1972,6 +1976,9 @@ impl Device {
         }
     }
 
+    /// ★ Correction 2026-11-03: since `fc5c83379` no callback writes the walker's completion fd;
+    /// a pending walk is found by querying its GPU event after a 50 us..1 ms wait (below).
+    ///
     /// ★★★ **The VA-manager thread** (`V3_P4_PORT_MAP.md` §2.1(c), Q6): the ONE thread that
     /// owns the GPU walker. It waits in `epoll` on two fds only — the inbox wake (statements from
     /// the drainer, invalidates from a vCPU) and the walker's completion eventfd — and never
@@ -1987,6 +1994,21 @@ impl Device {
         const WAKE: u64 = 1;
         const WALK: u64 = 2;
         let Ok(poller) = Poller::create() else { return };
+        // ★ 2026-11-03 (walk wake, `traces/walk_wake_20261103/`): no host callback signals a
+        // finished walk (R34, one nonstall interrupt per walk), so this thread LOOKS, waiting
+        // tens of microseconds while a walk is pending. The kernel's default 50 us timer slack
+        // would be as long as the wait; this thread's own slack is cut to 5 us. One line says
+        // whether the microsecond wait is in effect (else it rounds up to 1 ms).
+        let slack = kf_linux_raw::set_current_thread_timer_slack_ns(VA_TIMER_SLACK_NS);
+        eprintln!(
+            "kf3: VA manager: pending-walk wait {} (timer slack {})",
+            if kf_linux_raw::micro_timeouts_available() {
+                "50us..1ms (epoll_pwait2)"
+            } else {
+                "1ms (no epoll_pwait2: rounded up)"
+            },
+            if slack { "5us" } else { "default, refused" }
+        );
         if poller
             .watch(self.mem.inbox.wake.as_source_fd(), WAKE)
             .is_err()
@@ -2062,9 +2084,11 @@ impl Device {
             if prof {
                 self.prof.vamgr.busy(tw.saturating_sub(va_busy_from));
             }
+            // ★ 2026-11-03: a pending walk is looked at on its own time scale (50 us..1 ms,
+            // `WalkKernel::completion_poll_us`); only its GPU event proves it finished.
             let got = poller.wait(
                 &mut ready,
-                PollTimeout::Millis(m.walker().kernel.completion_poll_ms()),
+                PollTimeout::Micros(m.walker().kernel.completion_poll_us()),
             );
             if prof {
                 va_busy_from = crate::prof::now_ns();

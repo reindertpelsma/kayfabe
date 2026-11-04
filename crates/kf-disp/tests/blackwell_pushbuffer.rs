@@ -59,7 +59,7 @@ fn every_dma_class_resolves_its_own_format() {
     }
 }
 
-/// The measured GB203 wall: a core ring of 64 KiB whose PUT is past 4 KiB decodes; a method at
+/// The GB203 wall measured on 2026-11-03 (RTX 5070 Ti): a core ring of 64 KiB whose PUT is past 4 KiB decodes; a method at
 /// `0x6000` (`NVCA7D_TILE_SET_TILE_SIZE(0)`) is that method, not `0x2000`; a JUMP reaches `0x8000`.
 #[test]
 fn a_gb20x_core_ring_decodes_past_4k_with_its_own_offsets() {

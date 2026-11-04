@@ -45,7 +45,7 @@ GA107, GA103; TU102, TU104, TU116, TU117; AD103, AD106, AD107; GB207. AD104 is n
 
 ## RESULTS
 
-### Method as run (MEASURED)
+### Method as run (MEASURED, 2026-11-03)
 
 Plain CUDA container leases (image `nvidia/cuda:12.4.1-base-ubuntu22.04`, `--ssh --direct`, 16 GB disk, no KVM, no
 kernel module, no kayfabe build) on hosts whose own NVIDIA driver is up. H-measurable-in-container: NOT falsified on
@@ -64,7 +64,7 @@ read only the GPU `nvidia-smi` shows the container, and later leases read exactl
 proprietary NVIDIA kernel module, not the open one (the `NVRM version` line in each context says which); the page is
 read from BAR0 by the tool itself, not through the driver.
 
-### Table (MEASURED; `0x00c` is the tool's `DECISIVE` word)
+### Table (MEASURED 2026-11-03; `0x00c` is the tool's `DECISIVE` word)
 
 | die (arch/impl) | board, PCI id | host driver (kernel module) | `0x00c` | folder |
 |---|---|---|---|---|

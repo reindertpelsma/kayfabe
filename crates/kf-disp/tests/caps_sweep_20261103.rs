@@ -100,7 +100,7 @@ fn each_swept_row_is_scoped_to_the_branch_it_was_read_on_and_names_its_die() {
 
 #[test]
 fn the_sweep_adds_no_family_wildcard() {
-    // a family rule needs every measured die to agree plus a mechanism, and the owner's call (OWNER_RULINGS §AH)
+    // a family rule needs every die measured in the 2026-11-03 sweep to agree plus a mechanism, and the owner's call (OWNER_RULINGS §AH)
     for m in shipped_measured() {
         assert_ne!(m.branch, "*", "{:?}", m.die);
     }
