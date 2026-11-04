@@ -46,7 +46,14 @@ async function rentAs(h, n, profile, extra = {}) {
 const market = (h) => {
   h.cloud.offer.host_id = 3001;
   h.cloud.extraOffers = [
-    { ...h.cloud.offer, id: 12, gpu_name: 'RTX_3080', compute_cap: 860, machine_id: 200012, host_id: 3012 },
+    {
+      ...h.cloud.offer,
+      id: 12,
+      gpu_name: 'RTX_3080',
+      compute_cap: 860,
+      machine_id: 200012,
+      host_id: 3012,
+    },
   ];
   h.cloud.contracts = [901, 902];
 };
@@ -71,12 +78,19 @@ test('per-profile hard limits: check 300 min by default, sweep min(180, check) u
   // An owner who lowers the check limit lowers the default sweep limit with it.
   const low = configuration({ ...env, HARD_RUNTIME_MINUTES: '20' });
   assert.equal(hardLimit(low, 'sweep'), 20 * 60000);
-  const own = configuration({ ...env, HARD_RUNTIME_MINUTES: undefined, SWEEP_HARD_RUNTIME_MINUTES: '200' });
+  const own = configuration({
+    ...env,
+    HARD_RUNTIME_MINUTES: undefined,
+    SWEEP_HARD_RUNTIME_MINUTES: '200',
+  });
   assert.equal(hardLimit(own, 'sweep'), 200 * 60000);
   for (const bad of ['0', '5', '1441', 'x', '1.5'])
     assert.throws(() => configuration({ ...env, SWEEP_HARD_RUNTIME_MINUTES: bad }), String(bad));
   const applied = applyProfile(configuration({ ...env, HARD_RUNTIME_MINUTES: undefined }), 'sweep');
-  assert.deepEqual([applied.profile, applied.hard, applied.ttl], ['sweep', 180 * 60000, 180 * 60000]);
+  assert.deepEqual(
+    [applied.profile, applied.hard, applied.ttl],
+    ['sweep', 180 * 60000, 180 * 60000],
+  );
 });
 
 test('the Worker writes the tier of the profile into the box environment, and only it', async () => {
@@ -127,7 +141,11 @@ test('the check profile refuses a runner whose wait budget cannot hold its hard 
   market(h);
   // 12000 s (200 min) < 300 + 5 min: the master runner of before this change cannot rent.
   const reply = await rentAs(h, 41, 'check');
-  assert.deepEqual([reply.status, reply.data.state], [409, 'NOT_ELIGIBLE'], JSON.stringify(reply.data));
+  assert.deepEqual(
+    [reply.status, reply.data.state],
+    [409, 'NOT_ELIGIBLE'],
+    JSON.stringify(reply.data),
+  );
   assert.equal(h.cloud.creates, 0);
   const ok = await rentAs(h, 42, 'check', { remaining_seconds: 330 * 60 });
   assert.equal(ok.status, 200);

@@ -188,7 +188,12 @@ test('V5 default daily allowance admits existing 4.9-dollar liability', async ()
 });
 test('V5 default daily allowance refuses a full check reservation next to 5.1 dollars', async () => {
   const h = await unbound();
-  await h.storage.put('cost:old', { started: clock - 3600000, ended: clock, price: 5.1, ttl: 3600000 });
+  await h.storage.put('cost:old', {
+    started: clock - 3600000,
+    ended: clock,
+    price: 5.1,
+    ttl: 3600000,
+  });
   assert.equal((await h.call()).status, 409);
   assert.equal(h.cloud.creates, 0);
 });

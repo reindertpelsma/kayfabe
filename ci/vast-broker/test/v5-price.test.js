@@ -75,7 +75,12 @@ for (const [prior, ok] of [
     assert.equal(cfg.hard / 60000, 300);
     assert.ok(Math.abs(cost - 5.0167) < 0.001, cost);
     if (prior)
-      await storage.put('cost:first', { started: now - 2 * 3600000, ended: now - 3600000, price: prior });
+      await storage.put('cost:first', {
+        started: now - 2 * 3600000,
+        ended: now - 3600000,
+        price: prior,
+      });
     if (ok) await ledger.budgets(cfg, now, cost);
-    else await assert.rejects(ledger.budgets(cfg, now, cost), (e) => e.state === 'UNAVAILABLE_BUDGET');
+    else
+      await assert.rejects(ledger.budgets(cfg, now, cost), (e) => e.state === 'UNAVAILABLE_BUDGET');
   });

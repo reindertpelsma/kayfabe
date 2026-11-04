@@ -12,10 +12,13 @@ for (const [file, job, step] of [
   [sweep, '210', '205'],
 ])
   for (const part of ['job', 'step'])
-    test('V5 ' + (file === main ? 'check' : 'sweep') + ' workflow accommodates its lifecycle ' + part, async () => {
-      const s = await readFile(file, 'utf8');
-      assert.match(s, new RegExp('timeout-minutes: ' + (part === 'job' ? job : step) + '\\n'));
-    });
+    test(
+      'V5 ' + (file === main ? 'check' : 'sweep') + ' workflow accommodates its lifecycle ' + part,
+      async () => {
+        const s = await readFile(file, 'utf8');
+        assert.match(s, new RegExp('timeout-minutes: ' + (part === 'job' ? job : step) + '\\n'));
+      },
+    );
 for (const kind of ['separate', 'guard'])
   test('V5 sweep workflow is owner-dispatch finding ' + kind, async () => {
     const a = await readFile(main, 'utf8'),
