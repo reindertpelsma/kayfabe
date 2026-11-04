@@ -60,7 +60,7 @@ CE/PBDMA fault controls (5 from the bare suite, 5 from the fast suite; the shape
 |---|---|---|---|---|---|---|---|
 | AD102 | RTX 4090, `10de:2684` | 59031339, 30 vCPU, 48 GB, 155 GB | 575.51.03 -> 595.91.07 | 9/9 gate10=PASS | 30/30 (bare 30/30) | OK | **PASS x2** (ada102a, ada102b), resets=0, `known_live_dumps_193=0` |
 | AD103 | RTX 4080 SUPER, `10de:2702` | 59031595, 24 vCPU, 39 GB, 117 GB | 575.51.03 -> 580.159.04 | 9/9 gate10=PASS | 30/30 (bare 30/30) | OK | not run (Linux-only die) |
-| AD104 | RTX 4070 SUPER, `10de:2783` | 59031342, 17 vCPU, 24 GB, 155 GB | 575.51.03 -> 595.91.07 | 9/9 gate10=PASS | 30/30 (bare 30/30) | OK | see *AD104 Windows* below |
+| AD104 | RTX 4070 SUPER, `10de:2783` | 59031342, 17 vCPU, 24 GB, 155 GB | 575.51.03 -> 595.91.07 | 9/9 gate10=PASS | 30/30 (bare 30/30) | OK | **PASS** (ada104w), resets=0, `known_live_dumps_193=3` |
 | AD106 | RTX 4060 Ti, `10de:2803` | 59031599, 15 vCPU, 49 GB, 117 GB | 575.51.03 -> 580.159.04 | 9/9 gate10=PASS | 30/30 (bare 30/30) | OK | not run (Linux-only die) |
 | AD107 | RTX 4060 | - | - | - | - | - | **no `vms_enabled` offer** at 2026-11-04T00:11Z (searched with disk>=80, RAM>=12) |
 
@@ -88,6 +88,20 @@ PUT (`+88288 ms the console shows head 0 1920x1080: [window 0 ...]`); 0 `USER_RI
 `host_xid_in_boots=0` (`win_a/.../gsp_signals.txt`, `win_b/gsp_signals.txt`); every reset counter 0 including
 LiveKernelEvent 193 (`tdr_counts.txt`), where the earlier AD102 PASS g4 (`a5071c24`) had two 193 reports. Install 1436 s;
 the second run on a fresh overlay of the same image 906 s.
+
+### AD104 Windows gate (H-win not falsified, n=1, host 595.91.07)
+
+`ad104/ada104w_windows.log` (run by hand from the merge check's checkout after the A/B, fresh install on this box):
+
+```
+WINDOWS_GATE_PASS rev=0c515b3b gpu="NVIDIA GeForce RTX 4070 SUPER" idle_s=300 hostref=green/green secs=5065 install=once driver=580.88 gsp=forced code=0 probes=cup8,d3d11,x2 resets=0 known_live_dumps_193=3 stale_lke_resubmits=0 strict=0 enable_utc=2026-11-04T02:40:13Z
+```
+
+`caps page derived — 56 words: 55 T1 rule, 0 T2 host, 1 T3 measured (0 unmeasured)`, head 0 lit with a window PUT,
+`running_to_suspending=1`, `host_xid_in_boots=0`, every reset counter 0, LiveKernelEvent 193 = 3 (reported, not gated,
+as on AD102 g4, TU106 and GA102) (`ad104/win_w/`). Install 2918 s, `nv_install` 728 s on this 17-vCPU box. The same GSS
+pattern as AD102 (`ad104/win_w/gss_lines.txt`): 9064 135 of 136 calls refused (`unmeasured on AD104 branch 580`; the
+AD104 row in the table is branch 595), 852c 6 refused, 852a 4 served; 852b not asked on this die.
 
 ### The GSS controls on host 595.91.07 (own GPU only; H-gss595 not falsified)
 
@@ -152,3 +166,31 @@ the extra per-arm cost of arms with no walks is still there on this revision (+1
 arms take ~1.8-2.2 s); the 1.6-1.9x `uvm-invalidate`/`uvm-mean` slowdown of the Ada PC is not reproduced here
 (<= 1.17x). Not tuned. INFERRED: the nested box's 10-40x exit cost may hide or inflate both effects; the PC remains the
 place to bisect them.
+
+## Not measured / open
+
+- AD107 (RTX 4060): no rentable `vms_enabled` offer at 2026-11-04T00:11Z.
+- AD103, AD106: Windows not run (Linux-only dies in this lane); AD104 and AD102 Windows on host 595.91.07 only.
+- The GSS proposal (`12063d4f8`) is validated on AD102 only (three patched boots, all PASS); not on AD104, not on a 580.x
+  host, not by the Linux suites (the Linux fast guest asks none of 852b/852c/9064-with-word-1=3; GPU-free tests only).
+- `0x2080852b` on a 580.x host; the 595-branch-guest sizes of 852e/853a/a618/853b at the host ABI (recorded above).
+- The cause of the no-walk-arm extra cost (A/B above): not bisected.
+
+## Cost and teardown
+
+| id | die | rate (Vast, USD/h) | lease (UTC) | cost (INFERRED from rate x time) |
+|---|---|---|---|---|
+| 59031339 | AD102 | 0.578 | 00:08:43 - 02:14:48 | ~1.21 |
+| 59031342 | AD104 | 0.207 | 00:08:43 - 02:58:45 | ~0.59 |
+| 59031595 | AD103 | ~0.28 (offer 0.269 before disk) | 00:11:38 - 00:49:26 | ~0.18 |
+| 59031599 | AD106 | ~0.30 (offer 0.292 before disk) | 00:11:38 - 00:41:41 | ~0.15 |
+
+Total about 2.1 USD (budget 3.5). All four destroyed by id (`vastai destroy instance <id> -y`); `vastai show instances-v1
+--raw` at 02:58:45Z lists none of them (it lists two ids of other sessions, left alone). The account credit moved
+35.86 -> 27.97 USD over the same window, which includes other lanes' leases.
+
+Evidence hygiene: GPU UUIDs (host board and the gate's per-VM UUID) are replaced by `fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001`
+at the branch head (`scripts/ci/no_gpu_uuids.py`: new=0); screenshots, dxdiag, setupapi and PnP dumps were not committed.
+⚠ Two intermediate commits of this branch (`AD102 Windows gate PASS ... (run ada102a)` and the next evidence commits up
+to `02baed140`) still carry the AD102 host's board UUID in `win_a/` files; collect by squash (or filter those paths) to
+keep it out of `next`'s history. The same commits (from `40a439a7c`) also carried two desktop screenshots (2.4 MB) and the guest's dxdiag/setupapi/PnP dumps, re-extracted by a late copy after the trim; they are removed at the head.
