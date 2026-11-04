@@ -1,0 +1,53 @@
+[2026-11-04T00:51:18Z] WINVM_INSTALL_START name=kfwin repo=0c515b3b qemu=/workspace/bench/kf3-bins/0c515b3b/qemu-system-x86_64 host_driver=580.159.04 install_wait_s=4200
+[2026-11-04T00:51:18Z] VM_IDENTITY_CREATED /workspace/winvm/kfwin/identity.env
+[2026-11-04T00:51:18Z] VM_IDENTITY uuid=fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0101 serial=<scrubbed> mac=<scrubbed>
+[2026-11-04T00:51:18Z] START prereqs
+[2026-11-04T00:51:18Z] EXIT prereqs rc=0
+[2026-11-04T00:51:18Z] START fetch
+[2026-11-04T00:51:18Z] fetch win11_ltsc_2024_eval_x64_en-us.iso from https://go.microsoft.com/fwlink/?linkid=2289029&clcid=0x409&culture=en-us&country=us
+[2026-11-04T00:58:59Z] MEDIUM_OK win11_ltsc_2024_eval_x64_en-us.iso sha256=67cec5865eaa037a72ddc633a717a10a2bed50778862267223ddb9c60ef5da68 bytes=5112850432
+[2026-11-04T00:58:59Z] fetch virtio-win-0.1.302.iso from https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/archive-virtio/virtio-win-0.1.302-1/virtio-win-0.1.302.iso
+[2026-11-04T01:01:52Z] MEDIUM_OK virtio-win-0.1.302.iso sha256=303f7ae40dad495d6ae474fdc571df58958a4dbc5c37a522d80f9a203867949d bytes=877373440
+[2026-11-04T01:01:52Z] fetch OpenSSH-Win64-v10.0.0.0.msi from https://github.com/PowerShell/Win32-OpenSSH/releases/download/10.0.0.0p2-Preview/OpenSSH-Win64-v10.0.0.0.msi
+[2026-11-04T01:01:53Z] MEDIUM_OK OpenSSH-Win64-v10.0.0.0.msi sha256=ddec9c53864280759cf9f74791cefd387100e3946aa849a1c138a4ed1b96b7d9 bytes=6586368
+[2026-11-04T01:01:53Z] fetch 580.88-desktop-win10-win11-64bit-international-dch-whql.exe from https://us.download.nvidia.com/Windows/580.88/580.88-desktop-win10-win11-64bit-international-dch-whql.exe
+[2026-11-04T01:02:55Z] MEDIUM_OK 580.88-desktop-win10-win11-64bit-international-dch-whql.exe sha256=90c49f925b41ee062e02cc8094a16b6d057abfde4e85235a76d63ffe267f63a9 bytes=890807536
+[2026-11-04T01:02:55Z] EXIT fetch rc=0
+[2026-11-04T01:02:55Z] START apparmor
+[2026-11-04T01:02:55Z] AppArmor: swtpm may use /workspace/winvm
+[2026-11-04T01:02:55Z] EXIT apparmor rc=0
+[2026-11-04T01:02:55Z] START secrets
+[2026-11-04T01:02:55Z] generated the Windows password (secrets/win_password, 0600)
+[2026-11-04T01:02:55Z] generated the harness ssh key (secrets/ssh_ed25519)
+[2026-11-04T01:02:55Z] EXIT secrets rc=0
+[2026-11-04T01:02:55Z] START secureboot-key
+[2026-11-04T01:02:56Z] generated this host's kayfabe Secure Boot db key (/workspace/winvm/secureboot/db.key, never leaves the host)
+[2026-11-04T01:02:56Z] SB_DB_CERT subject=CN = kayfabe GOP db key (ubuntu 2026-11-04) sha256 Fingerprint=3F:8A:09:05:61:F8:18:C6:0D:BE:1E:B3:3E:FE:D0:A0:69:C3:1A:40:3D:87:71:BE:EB:CC:1A:90:E8:66:5D:7B 
+[2026-11-04T01:02:56Z] EXIT secureboot-key rc=0
+[2026-11-04T01:02:56Z] START ovmf-vars
+[2026-11-04T01:03:01Z] VARS_CREATED /workspace/winvm/kfwin/firmware/OVMF_VARS.fd
+[2026-11-04T01:03:01Z] VARS_DB CN=Microsoft Windows Production PCA 2011; CN=Microsoft Corporation UEFI CA 2011; CN=kayfabe GOP db key (ubuntu 2026-11-04); 
+[2026-11-04T01:03:01Z] EXIT ovmf-vars rc=0
+[2026-11-04T01:03:01Z] START tpm-manufacture
+[2026-11-04T01:03:03Z] TPM_MANUFACTURED /workspace/winvm/kfwin/tpm (5993 bytes of state)
+[2026-11-04T01:03:03Z] EXIT tpm-manufacture rc=0
+[2026-11-04T01:03:03Z] START disk
+[2026-11-04T01:03:03Z] DISK_CREATED base.qcow2 80G
+[2026-11-04T01:03:03Z] EXIT disk rc=0
+[2026-11-04T01:03:03Z] START unattend
+[2026-11-04T01:03:03Z] UNATTEND_ISO secrets/unattend.iso (6985728 bytes; 1 authorized key(s))
+[2026-11-04T01:03:03Z] EXIT unattend rc=0
+[2026-11-04T01:03:03Z] START install-boot
+[2026-11-04T01:03:03Z] QEMU_START tag=install boot=1 pid=85746 log=logs/install_b1_qemu.log
+[2026-11-04T01:34:14Z] INSTALL_BOOT_END rc=0 reason=guest-shutdown
+[2026-11-04T01:34:15Z] EXIT install-boot rc=0
+[2026-11-04T01:34:15Z] START check-boot
+[2026-11-04T01:34:15Z] QEMU_START tag=installcheck boot=1 pid=89327 log=logs/installcheck_b1_qemu.log
+[2026-11-04T01:35:12Z] SSH_UP after 10s
+[2026-11-04T01:35:28Z] first logon said: KF_FIRSTLOGON OK 2026-11-04T01:33:11.2239367+00:00
+[2026-11-04T01:37:03Z] CHECK_BOOT_END rc=0 reason=guest-shutdown check_rc=0
+[2026-11-04T01:37:03Z] EXIT check-boot rc=0
+[2026-11-04T01:37:03Z] START seal
+[2026-11-04T01:37:03Z] SEALED disk/base.qcow2 (0400); unattend.iso (it held the password) deleted; every run uses an overlay
+[2026-11-04T01:37:03Z] EXIT seal rc=0
+[2026-11-04T01:37:03Z] WINVM_INSTALL_DONE name=kfwin

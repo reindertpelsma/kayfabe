@@ -1,0 +1,7 @@
+[ 2664.931789] NVRM:unknown NVRM ioctl command: 0xf0
+[ 2665.088148] NVRM: GPU0 gpuValidateRegOffset_IMPL: User does not have permission to access register offset 0x640780
+[ 2740.955020] x86/PAT: kf3-vamgr:86252 freeing invalid memtype [mem 0x1000610000-0x100080ffff]
+[ 2740.955427] x86/PAT: kf3-vamgr:86252 freeing invalid memtype [mem 0x1000810000-0x1000a0ffff]
+[ 2740.955679] x86/PAT: kf3-vamgr:86252 freeing invalid memtype [mem 0x1000a10000-0x1000c0ffff]
+[ 2752.669778] x86/PAT: kf3-vamgr:86252 freeing invalid memtype [mem 0x1002cc0000-0x1002d3ffff]
+[ 2802.001298] x86/PAT: kf3-vamgr:86252 freeing invalid memtype [mem 0x10031d0000-0x100324ffff]

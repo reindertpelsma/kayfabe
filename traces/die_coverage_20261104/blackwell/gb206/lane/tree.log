@@ -1,0 +1,58 @@
+# last 120 lines (trimmed)
+== repo: /root/kayfabe  rev: 0c515b3b3 Merge next into integration
+[2026-11-04T00:18:16+00:00] BENCH_TREE_START
+[2026-11-04T00:18:16+00:00] phase 3: host deps
+[2026-11-04T00:19:00+00:00] apt rc=0  (ninja=/usr/bin/ninja meson=/usr/bin/meson cloud-localds=/usr/bin/cloud-localds)
+[2026-11-04T00:19:00+00:00] phase 3: downloads
+[2026-11-04T00:19:02+00:00] qemu tarball rc=0  141137724
+[2026-11-04T00:19:05+00:00] cloudimg rc=0  621284352
+[2026-11-04T00:19:05+00:00] phase 3: tap
+[2026-11-04T00:19:05+00:00] nvktap0: nvktap0          DOWN           <ip>/24    (DOWN/NO-CARRIER with no QEMU attached is NORMAL)
+[2026-11-04T00:19:05+00:00] guest_key: 399 bytes
+[2026-11-04T00:20:24+00:00] TRACK_A done
+[2026-11-04T00:22:14+00:00] TRACK_B done
+----- TRACK A -----
+[2026-11-04T00:19:05+00:00] A: untar qemu
+[2026-11-04T00:19:14+00:00] A: build_kf3 (the v3 device; this is the long pole)
+A_RC=0
+[2026-11-04T00:20:24+00:00] A: KF3_BUILT /workspace/bench/kf3-bins/0c515b3b/qemu-system-x86_64 rev=0c515b3b mtime=2026-11-04 00:20:24.697064666 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+[2026-11-04T00:20:24+00:00] A: binary = 96409520
+[1681/1684] Compiling C object libqemu-x86_64-softmmu.a.p/target_i386_tcg_fpu_helper.c.o
+[1682/1684] Compiling C object libcommon.a.p/fpu_softfloat.c.o
+[1683/1684] Compiling C object libqemu-x86_64-softmmu.a.p/target_i386_tcg_translate.c.o
+[1684/1684] Linking target qemu-system-x86_64
+KF3_BUILT /workspace/bench/kf3-bins/0c515b3b/qemu-system-x86_64 rev=0c515b3b mtime=2026-11-04 00:20:24.697064666 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+----- TRACK B -----
+[2026-11-04T00:19:05+00:00] B1: guest disk
+Image resized.
+[2026-11-04T00:19:11+00:00] B1: seed.iso = 374784 bytes
+[2026-11-04T00:19:11+00:00] B2: booting guest on stock qemu (slirp hostfwd 2222)
+[2026-11-04T00:19:11+00:00] B2: qemu pid=63967
+[2026-11-04T00:19:41+00:00] B2: guest ssh up after 30s
+[2026-11-04T00:19:41+00:00] B2: waiting for cloud-init to finish (it will bounce the network)
+[2026-11-04T00:19:42+00:00] B2: cloud-init done after 10s
+[2026-11-04T00:19:42+00:00] B2: seed marker present
+[2026-11-04T00:19:42+00:00] B2: picking the guest's apt mirror (the host's fix, applied one layer down)
+    MIRROR archive.ubuntu.com/ubuntu 497996
+    MIRROR azure.archive.ubuntu.com/ubuntu 1673567
+    MIRROR mirrors.edge.kernel.org/ubuntu 2049038
+[2026-11-04T00:19:43+00:00] B2: guest apt mirror = mirrors.edge.kernel.org/ubuntu
+[2026-11-04T00:19:44+00:00] B2: installing guest driver (kernel-open)
+No user sessions are running outdated binaries.
+
+No VM guests are running outdated hypervisor (qemu) binaries on this host.
+[2026-11-04T00:20:27+00:00] B2: guest compiler = CC_PRESENT
+
+
+WARNING: This NVIDIA driver package includes Vulkan components, but no Vulkan ICD loader was detected on this system. The NVIDIA Vulkan ICD will not function without the loader. Most distributions package the Vulkan loader; try installing the "vulkan-loader", "vulkan-icd-loader", or "libvulkan1" package.
+
+NVRUN_RC=0
+[2026-11-04T00:21:54+00:00] B2: guest cuda.h CUresult x601  ⇒ MUST be >= 500
+[2026-11-04T00:21:54+00:00] B2: guest modinfo = version:        580.159.04 license:        Dual MIT/GPL vermagic:       6.8.0-147-generic SMP preempt mod_unload modversions  
+[2026-11-04T00:21:54+00:00] B2: guest driver VERIFIED on content
+[2026-11-04T00:22:14+00:00] B2: guest powered off (qemu alive? no)
+[2026-11-04T00:22:14+00:00] B4: building the guest-side mean client (musl)
+warning: `kayfabe-rm-ladder` (bin "kayfabe-rm-ladder") generated 7 warnings (run `cargo fix --bin "kayfabe-rm-ladder" -p kayfabe-rm-ladder` to apply 2 suggestions)
+    Finished `release` profile [optimized] target(s) in 19.99s
+[2026-11-04T00:22:35+00:00] B4: guest ladder built: 5056744 bytes
+[2026-11-04T00:22:35+00:00] BENCH_TREE_DONE

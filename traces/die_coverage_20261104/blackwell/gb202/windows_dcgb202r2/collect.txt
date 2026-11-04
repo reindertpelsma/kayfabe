@@ -1,0 +1,8 @@
+
+
+
+KF_COLLECT_DONE C:\kf\evidence\gate_dcgb202r2_final
+[2026-11-04T01:21:11Z] EXIT collect rc=0
+[2026-11-04T01:21:11Z] START pull
+[2026-11-04T01:21:13Z] EXIT pull rc=0
+[2026-11-04T01:21:13Z] EVIDENCE /workspace/winvm/kfwin/logs/evidence/gate_dcgb202r2_final (23 files)

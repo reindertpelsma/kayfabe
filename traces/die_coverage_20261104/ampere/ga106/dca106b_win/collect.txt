@@ -1,0 +1,8 @@
+
+
+
+KF_COLLECT_DONE C:\kf\evidence\gate_dca106b_final
+[2026-11-04T02:33:04Z] EXIT collect rc=0
+[2026-11-04T02:33:04Z] START pull
+[2026-11-04T02:33:12Z] EXIT pull rc=0
+[2026-11-04T02:33:12Z] EVIDENCE /workspace/winvm/kfwin/logs/evidence/gate_dca106b_final (23 files)

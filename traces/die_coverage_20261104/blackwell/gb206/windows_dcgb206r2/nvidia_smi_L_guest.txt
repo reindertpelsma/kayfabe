@@ -1,0 +1,1 @@
+GPU 0: NVIDIA GeForce RTX 5060 Ti (UUID: GPU-<uuid>)

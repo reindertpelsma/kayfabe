@@ -1,0 +1,14 @@
+﻿
+
+Name                        : NVIDIA GeForce RTX 3060
+PNPDeviceID                 : PCI\VEN_10DE&DEV_2504&SUBSYS_88101043&REV_A1\3&11583659&0&28
+DriverVersion               : 32.0.15.8088
+Status                      : OK
+ConfigManagerErrorCode      : 0
+CurrentHorizontalResolution : 1920
+CurrentVerticalResolution   : 1080
+AdapterRAM                  : 4293918720
+
+
+
+

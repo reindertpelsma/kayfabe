@@ -1,0 +1,14 @@
+      3 W343GSSREQ cmd=0x2080852b params_size=2836 words0_9=[0x0,0x0,0x1f,0x0,0x0,0x0,0x0,0x0,0x0,0x0]
+      6 W343GSSREQ cmd=0x2080852c params_size=1440 words0_9=[0x0,0x0,0x1f,0x0,0x0,0x0,0x0,0x0,0x0,0x0]
+      1 W343GSSREQ cmd=0x20809064 params_size=520 words0_9=[0x0,0x3,0x1,0x0,0x0,0x0,0x4,0x0,0x0,0x0]
+      3 kf-rm: rpc-trace fn=76 RmControl cmd=0x2080852b result=none
+      6 kf-rm: rpc-trace fn=76 RmControl cmd=0x2080852c result=0x0
+      1 kf-rm: rpc-trace fn=76 RmControl cmd=0x20809064 result=0x0
+      1 kf3: GSS 0x20808524 answered from the host's realize-time reply
+      4 kf3: GSS 0x2080852a answered from the host's realize-time reply
+      6 kf3: GSS 0x2080852c answered from the host's realize-time reply
+      1 kf3: GSS 0x20809001 answered from the host's realize-time reply
+      1 kf3: GSS 0x20809009 answered from the host's realize-time reply
+      1 kf3: GSS 0x20809064 answered from the host's realize-time reply
+      3 kf3: GSS 0x2080a084 answered from the host's realize-time reply
+      1 kf3: GSS 0x2080a70a answered from the host's realize-time reply

@@ -1,0 +1,1 @@
+GPU 0: NVIDIA GeForce RTX 5090 (UUID: GPU-<uuid>)
