@@ -16,11 +16,11 @@ STATUS: LIVE, 2026-11-04. These are the runs of the `gpu-vast` check (profile `c
 
 ## Instances and teardown
 
-The Worker created all three rentals for these runs; this lane created no instance directly. Teardown is by the Worker or runner. Each was verified absent afterwards: `vastai show instances-v1 --raw` listed no `kf-ci-<run>-1` label, and the instance id lookup failed. 59033123 was absent at 00:30Z, and 59035303 was absent at 02:54Z. The 11 other instances in the shared account were other sessions' and were not touched.
+The Worker created all three rentals for these runs; this lane created no instance directly. Teardown is by the Worker or runner. Each was checked absent afterwards (runs 41746194587, 41746861215 and 41749680326, 2026-11-04): `vastai show instances-v1 --raw` listed no `kf-ci-<run>-1` label, and the instance id lookup failed. 59033123 was absent at 00:30Z, and 59035303 was absent at 02:54Z. The 11 other instances in the shared account were other sessions' and were not touched.
 
 ## Cost
 
-INFERRED from the offer rate (0.166 USD/h) and the timestamps; the account credit is shared with other sessions, so no clean MEASURED delta exists. Run 3: rental at 00:50:53Z, result at 02:52:42Z, absent by 02:54Z, so about 2.05 h, about 0.34 USD plus at most about 0.04 USD for about 7 GB of downloads. Run 2: about 3 min, about 0.01 USD. Run 1: seconds. Total about 0.4 USD.
+INFERRED from the offer rate (0.166 USD/h) and the timestamps; the account credit is shared with other sessions, so its change is not this lane's cost alone (runs 41746861215 and 41749680326, 2026-11-04). Run 3: rental at 00:50:53Z, result at 02:52:42Z, absent by 02:54Z, so about 2.05 h, about 0.34 USD plus at most about 0.04 USD for about 7 GB of downloads. Run 2: about 3 min, about 0.01 USD. Run 1: seconds. Total about 0.4 USD.
 
 ## What this shows and what it does not
 
