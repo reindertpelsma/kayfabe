@@ -1,0 +1,16 @@
+production properties: QOM parsed; expected KVM guard reached, no guest boot/no GPU open
+omit fb-mb: QOM parsed; expected KVM guard reached, no guest boot/no GPU open
+omit bar1-size: QOM parsed; expected KVM guard reached, no guest boot/no GPU open
+omit bar2-size: QOM parsed; expected KVM guard reached, no guest boot/no GPU open
+omit guest-driver: QOM parsed; expected KVM guard reached, no guest boot/no GPU open
+omit display: QOM parsed; expected KVM guard reached, no guest boot/no GPU open
+omit gop: QOM parsed; expected KVM guard reached, no guest boot/no GPU open
+omit gpu-uuid: QOM parsed; expected KVM guard reached, no guest boot/no GPU open
+omit display-broker: QOM parsed; expected KVM guard reached, no guest boot/no GPU open
+omit display-broker-uid: QOM parsed; expected KVM guard reached, no guest boot/no GPU open
+omit bus: QOM parsed; expected KVM guard reached, no guest boot/no GPU open
+omit addr: QOM parsed; expected KVM guard reached, no guest boot/no GPU open
+omit id: QOM parsed; expected KVM guard reached, no guest boot/no GPU open
+bare kf3-gpu: QOM parsed; expected KVM guard reached, no guest boot/no GPU open
+Linux documented device: QOM parsed; expected KVM guard reached, no guest boot/no GPU open
+Windows documented device: QOM parsed; expected KVM guard reached, no guest boot/no GPU open

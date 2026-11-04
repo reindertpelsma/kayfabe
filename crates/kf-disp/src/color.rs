@@ -52,8 +52,11 @@ impl Binding {
     }
 }
 
-/// ⚠ Default-off experiments on the decoder (2026-10-09, `traces/windows_reset_20261009/`). Each is
-/// a fix the Windows KMD's own colour program needs; off, the decoder is exactly the shipped one.
+/// CODE READ (2026-10-22): explicit decoder selections. `Experiments::default()` remains all-off
+/// for pure-decoder fixtures. kf-qemu defaults both selections on inside its opt-in SDR path;
+/// `KF3_DISPLAY_LUT_MIRROR=0` / `KF3_DISPLAY_ILUT_OFFSET_256=0` retain the original decoder arms.
+/// These were default-off experiments in the 2026-10-09 `traces/windows_reset_20261009/` record;
+/// SDR processing itself still requires `KF3_DISPLAY_SDR_COLOR=1`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Experiments {
     /// `KF3_DISPLAY_LUT_MIRROR`: accept `*_LUT_CONTROL_MIRROR_ENABLE` on a DIRECT8/DIRECT10 table.

@@ -1,5 +1,12 @@
 # Bounded pre-composition tone mapping
 
+**Update, 2026-10-22 (CODE READ):** SDR/TMO processing still requires exact
+`KF3_DISPLAY_SDR_COLOR=1`; PR #72 review withdrew the SDR default-on proposal.
+The decoder's MIRROR and 256-byte ILUT selections default on within that opt-in
+path, each retaining its exact `=0` arm. `Experiments::default()` stays all-off
+for explicit pure-decoder fixtures. [Current inventory](V3_FLAG_INVENTORY_20261022.md)
+records the distinction and the open authored-page/G05 hardware gap.
+
 **STATUS: RESEARCH, 2026-10-06 — direct Linux zero-intensity fixture qualified at `74cd590c`; broader work incomplete.**
 Owner-directed continuation on `codex/sdr-lut-20261006`, within the existing
 opt-in `KF3_DISPLAY_SDR_COLOR=1`; default remains off. No Windows success,

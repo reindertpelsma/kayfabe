@@ -1,0 +1,2 @@
+Linux: documented full argv accepted with TCG/max CPU, 64 MiB RAM and temporary disk/UEFI fixtures; expected KVM guard; no guest boot/GPU access
+Windows: documented full argv accepted with TCG/max CPU, 64 MiB RAM and temporary disk/UEFI fixtures; expected KVM guard; no guest boot/GPU access

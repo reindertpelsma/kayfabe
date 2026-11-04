@@ -1,5 +1,13 @@
 # Bounded SDR colour scanout
 
+**Update, 2026-10-22 (CODE READ):** on `codex/install-flags-20261022`,
+SDR remains opt-in (`KF3_DISPLAY_SDR_COLOR=1`) after PR #72 review B2.
+Within that path MIRROR admission and 256-byte ILUT units now default on;
+`KF3_DISPLAY_LUT_MIRROR=0` and `KF3_DISPLAY_ILUT_OFFSET_256=0` retain the old
+research arms. The byte-unit/unmirrored description below belongs to product
+`2aa8b92d`, not the current decoder. See [current inventory](V3_FLAG_INVENTORY_20261022.md)
+and [G05](V3_FEATURE_GAPS.md): the authored SDR page is not a qualified default.
+
 **STATUS: RESEARCH, 2026-10-06.** Implemented on branch
 `codex/sdr-lut-20261006`, opt-in `KF3_DISPLAY_SDR_COLOR=1`; not promoted to master.
 The Linux result below is a real GPU transform, not a constructor capability probe.
@@ -27,7 +35,9 @@ and GB20x. GB20x's physical LUT addressing is decoded and bounded; its existing
 surface scanout backend remains unavailable, so this is not a GB20x graphics claim.
 
 OGKM `nvkms-evo3.c` and `nv-softfloat.h` specify the distinct formats and units:
-ILUT offsets are **bytes**, OLUT context-DMA offsets are **256-byte units**;
+At that historical revision ILUT offsets were **bytes**, OLUT context-DMA offsets **256-byte units**;
+the current product default reads context-DMA ILUT offsets in 256-byte units, with
+`KF3_DISPLAY_ILUT_OFFSET_256=0` preserving the byte-offset research arm;
 default ILUT entries are FP16 `i / 1024`, default OLUT entries are `i << 6`.
 `GetLUTIndex` shifts 8-bit inputs left two bits. The OCSC0 rounding adjustment is
 `1 / 2048`, encoded as 32 in the signed coefficient word. The GPU kernel retains

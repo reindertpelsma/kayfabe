@@ -26,7 +26,8 @@ G=$(basename "$(readlink /sys/bus/pci/devices/0000:01:00.0/iommu_group)")
 T=$(cat /sys/kernel/iommu_groups/$G/type)
 if [ "$T" != identity ]; then L "REFUSED: group $G is $T"; bash $W/pti-iommu_nogdm.sh DMA-FQ; exit 3; fi
 export KF3_REV=$REV
-export WIN_FLAGS="KF3_PREEMPT_BIND_PROBE KF3_DISPLAY_IMP_ENABLE KF3_DISPLAY_CTRL_PROBE KF3_ZCULL_BIND_PROBE KF3_SW_RUNLIST_HOST_OWNED KF3_WIN_USER_CHANNELS_PASSTHROUGH KF3_TCENSUS KF3_RELAY_PB_PEEK KF3_WIN_TWIN_DEFAPI_OBJECT KF3_RELAY_GET_REFRESH KF3_ASYNC_PREEMPT KF3_USERD_RELAY_OFF $EXTRA"
+# This diagnostic harness consumes RPC markers; request them explicitly.
+export WIN_FLAGS="KF3_RPC_TRACE=1 KF3_PREEMPT_BIND_PROBE KF3_DISPLAY_IMP_ENABLE KF3_DISPLAY_CTRL_PROBE KF3_ZCULL_BIND_PROBE KF3_SW_RUNLIST_HOST_OWNED KF3_WIN_USER_CHANNELS_PASSTHROUGH KF3_TCENSUS KF3_RELAY_PB_PEEK KF3_WIN_TWIN_DEFAPI_OBJECT KF3_RELAY_GET_REFRESH KF3_ASYNC_PREEMPT KF3_USERD_RELAY_OFF $EXTRA"
 if [ "${WR_TRACE:-1}" = 1 ]; then
   export WIN_TRACE=1 WIN_GSP_OBSERVER=1 WIN_GSP_OBSERVER_SECONDS=1800
   export KF3_BAR0_READ_TRACE=1 KF3_READ_TRACE_RANGES=0x110000-0x110fff,0xb81000-0xb81fff KF3_READ_TRACE_MAX_BYTES=2G
@@ -64,7 +65,7 @@ for i in $(seq 1 480); do
   sleep 0.5
 done
 L "marker after ${i}x0.5s stall=$stall $(ST)"
-L "experiments: $(grep -c 'EXPERIMENT KF3_DISPLAY_LUT_MIRROR=1' $LOG) mirror, $(grep -c 'EXPERIMENT KF3_DISPLAY_ILUT_OFFSET_256=1' $LOG) ilut-unit, $(grep -c 'CAPS_PROBE' $LOG) caps; refused: $(grep -m1 'scanout REFUSED' $LOG | cut -c1-200)"
+L "experiments: $(grep -c 'KF3_DISPLAY_LUT_MIRROR=[01]' $LOG) mirror, $(grep -c 'KF3_DISPLAY_ILUT_OFFSET_256=[01]' $LOG) ilut-unit, $(grep -c 'CAPS_PROBE' $LOG) caps; refused: $(grep -m1 'scanout REFUSED' $LOG | cut -c1-200)"
 if [ "${WR_STALL_ETW:-0}" = 1 ]; then
   # the stall: window-0 PUTs seen, then none for 4 s (TdrLevel=0 holds it)
   last=-1; same=0
