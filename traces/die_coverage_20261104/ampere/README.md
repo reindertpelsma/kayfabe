@@ -1,6 +1,6 @@
 # Die coverage, Ampere family, on the integration revision (2026-11-04)
 
-STATUS: LIVE, 2026-11-04. Lane 3 (owner, 2026-11-04), family Ampere. Pre-registration first (written and pushed
+STATUS: ANSWERED, 2026-11-04 (GA104 and GA106 PASS; verdicts under RESULTS). Lane 3 (owner, 2026-11-04), family Ampere. Pre-registration first (written and pushed
 BEFORE any gate result was read); results are appended under RESULTS. MEASURED = a line in a committed file in this
 directory, named with its file, run tag, revision and date; INFERRED = reasoning; COMPUTED = GPU-free, from the
 committed tree.
@@ -139,3 +139,77 @@ WINDOWS_GATE_FAIL diag=KAYFABE stage=reboot why="the guest did not restart withi
   a half-open client; `windows_gate.sh` classifies a run loop that ended with `no-events-file` as OPERATOR, i.e.
   RETRY), `def5114d4` (the logger's stderr kept per boot and collected). `windows_gate.sh --selftest` 18/18 and
   `scripts/ci/test_vast_windows_gate.py` 27 OK (1 skipped) after both.
+
+### GA106 re-run dca106b (MEASURED 2026-11-04, product rev `0c515b3b`, harness `0c515b3b` + `7c6586cd4`, same lease 59031382, same installed image, a fresh overlay)
+
+Launched 02:03Z by hand (`WINVM_QEMU=/workspace/bench/kf3-bins/0c515b3b/qemu-system-x86_64 bash
+scripts/bench/box/windows_gate.sh dca106b /root/prov` in the `0c515b3b` merge-check worktree). The worktree's only
+changes were the two harness files; their diff hashes equal `git diff 0c515b3b3 7c6586cd4` of the same files
+(`ga106/dca106b_harness_state.txt`; both `3ec0ee1e899394a5`). `ga106/dca106b_windows.log`:
+
+```
+WINDOWS_GATE_PASS rev=0c515b3b gpu="NVIDIA GeForce RTX 3060" idle_s=300 hostref=green/green secs=1824 install=once driver=580.88 gsp=forced code=0 probes=cup8,d3d11,x2 resets=0 known_live_dumps_193=2 stale_lke_resubmits=0 strict=0 enable_utc=2026-11-04T02:14:52Z
+WINDOWS_GATE_EXIT rc=0 2026-11-04T02:34:02+00:00
+```
+
+- **H-harness-106 not falsified.** The boot-1 logger attached (`dca106b_win/gate_dca106b_b1_qmp_events.jsonl` first
+  line `KF_LOGGER_ATTACHED`, 3 s after `QEMU_START`), recorded `SHUTDOWN ... "guest": true, "reason": "guest-reset"`
+  for the `shutdown /r`, and `GATE_NOTE second QEMU started after 25s`. In this boot the attach needed no retry, so
+  the run does not show which mechanism lost the logger in dca106a (still INFERRED, above); it shows the guest
+  reboots normally on this die and revision.
+- **H-windows-GA106 not falsified (n=1, dca106b).** kf3 log `gate_dca106b_b2_qemu.log.gz`: `caps page derived — 56
+  words: 55 T1 rule, 0 T2 host, 1 T3 measured (0 unmeasured)` (the caps-sweep GA106 row served); `+194481 ms the
+  console shows head 0 1920x1080: [window 0 ...]`; 0 `USER_RING_SCAN`; `tdr_counts.txt` all 0 except
+  `livekernelevent193=2` (one WATCHDOG dump 02:15:47Z, +55 s after the enable); `running_to_suspending=1`,
+  `host_xid_in_boots=0`; host reference green before and after.
+- **Unmeasured / fallback on GA106 / branch 580 (MEASURED, same log):** `PRECOMP source=T1 fallback` (own-subdevice
+  control `Other(31)`); `0x20800102` refused 3x (`encoder UnmeasuredForwardedIndex { index: 35 }`, as on GA104).
+  `cudart.0x20809064` HAS a GA106/580 row, but was refused 130x with `the guest's request (520 B) is not the measured
+  question` — the Windows guest asks a different question than the one measured (finding F2, not investigated). No
+  `W349AUTHORED` line on GA106 (its `rm.0x20802a08` / `rm.0x20800a59` rows exist).
+- Gate timing (reused install): total 1825 s. The first run's install on this 21-vCPU box took 2748 s (dca106a).
+
+### GA102 Windows re-run: not made
+
+- Lease 59039638 (RTX 3080, India): `GPU error, unable to start instance`, destroyed 01:57:55Z, never reached.
+- Lease 59042591 (RTX 3090, offer 42023443, Alberta, 0.282 USD/h, created 02:08:35Z): listed `running`, but ssh
+  timed out in the banner exchange for 28 min (serial log ends `[INFO] VM created, guest name: C.59042591`);
+  destroyed by id 02:37:08Z. A third attempt would have ended after the 05:30 CEST report deadline, so none was made.
+  GA102's standing Windows evidence stays `traces/ampere_hw_20261103/` (rev `006d845a`, not this revision).
+
+### GA103 / GA107
+
+No KVM offer with an RTX 3050, RTX A2000 or any GA103/GA107-only board name was listed in the searches of
+2026-11-04 00:05Z and 02:08Z (the only Ampere single-GPU KVM offers: RTX 3060, 3060 Ti, 3070 (one, Quebec, appeared
+at 02:08Z), 3080, 3080 Ti, 3090). Nothing measured; both dies have no caps `0x00c` row and would get the clean page
+with the realize notice.
+
+## Findings
+
+- **F1 (gate defect, fixed on this branch):** the Windows gate reported `WINDOWS_GATE_FAIL diag=KAYFABE stage=reboot`
+  for a reboot the harness failed to observe (QMP event logger never attached -> `reason=no-events-file` -> no
+  second QEMU). Fix `7c6586cd4` + `def5114d4`. Not merged anywhere; the coordinator decides.
+- **F2:** on GA106 the guest's `0x20809064` (520 B) is not the measured question, refused 130x per boot; on GA104 the
+  same control has no 580 row at all (140 refusals). Neither stopped the gate.
+- **F3:** GA104 has no branch-580 rows for `rm.0x20802a08` / `rm.0x20800a59` (only 595); the AUTHORED values were
+  served, labelled. PRECOMP is the T1 fallback on both GA104 and GA106 (host refuses the own-subdevice control with
+  `Other(31)`).
+- The lane prompt's "GA104 (RTX 3080)" is a GA102 board; GA104 was taken from the PCI id (`10de:2489`).
+
+## Cost and teardown
+
+| lease | die / SKU | lifetime (UTC) | rate | compute cost (INFERRED from rate x lifetime) |
+|---|---|---|---|---|
+| 59031379 | GA104 RTX 3060 Ti | 00:09:07 - 01:46:52 (1.63 h) | 1.22 | 1.99 USD |
+| 59031382 | GA106 RTX 3060 | 00:09:10 - 02:38:29 (2.49 h) | 0.166 | 0.41 USD |
+| 59039638 | (GA102 RTX 3080, never started) | 01:37:53 - 01:57:55 | 0.153 | 0.05 USD |
+| 59042591 | (GA102 RTX 3090, no ssh) | 02:08:35 - 02:37:08 | 0.282 | 0.13 USD |
+
+Compute about 2.59 USD; with download traffic (Windows media, driver, toolchains; INFERRED ~15 GB per working box at
+0.013 and 0.004 USD/GB) about 2.85 USD. The account credit is shared with other lanes (35.86 -> 28.42 USD over the
+same window), so it does not isolate this lane. All four ids destroyed by id; `vastai show instances-v1 --raw` at
+02:38:34Z lists none of them (three other sessions' instances are listed and were not touched).
+
+Evidence hygiene: GPU/VM UUIDs are replaced by `fa4efa4e-...` placeholders per scrub pass (placeholder equality
+across different runs' files means nothing), IPs, SMBIOS serials and MACs scrubbed; `MANIFEST.sha256` files no longer
+match; no screenshots or large guest files committed.
