@@ -1,0 +1,8 @@
+[Workload:energy-04] Starting
+[workload: energy-04 / subtest: 01_BlakeRidgeVolume] Completed
+[workload: energy-04 / subtest: 02_F3NetherlandsVolume] Completed
+[workload: energy-04 / subtest: 03_OpunakeVolume] Completed
+[workload: energy-04 / subtest: 04_BlakeRidgeAnimated] Completed
+[workload: energy-04 / subtest: 05_F3NetherlandsAnimated] Completed
+[workload: energy-04 / subtest: 06_OpunakeAnimated] Completed
+[Workload: energy-04] Completed

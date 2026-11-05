@@ -1,0 +1,6 @@
+GATE_LKE_STALE event=2026-11-05T13:02:46Z report_event_time=2026-11-05T12:35:45Z
+GATE_LKE_STALE event=2026-11-05T13:02:46Z report_event_time=2026-11-05T12:35:38Z
+GATE_LKE_STALE event=2026-11-05T13:02:46Z report_event_time=2026-11-05T12:34:25Z
+GATE_LKE_STALE event=2026-11-05T13:02:45Z report_event_time=2026-11-05T12:34:13Z
+GATE_TDR since=2026-11-05T12:58:42Z display4101=0 nvlddmkm153=0 kernelpower41=0 eventlog6008=0 bugcheck1001=0 livekernelevent_other=0 livekernelevent193=0 livekernelevent_stale=4 strict=0 total=0
+GATE_STATE_DONE mode=tdr
