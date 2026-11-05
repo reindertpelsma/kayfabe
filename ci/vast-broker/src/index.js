@@ -1,4 +1,4 @@
-import { applyProfile, tierEnvironment, tierForEvent, familyOf, profileCaps } from './tier.js';
+import { applyProfile, tierEnvironment, tierForClaims, familyOf, profileCaps } from './tier.js';
 // prettier-ignore
 import {planRelease,classifyLeg,releaseVerdict,wantsRerun} from './release.js';
 // prettier-ignore
@@ -914,7 +914,7 @@ export function createService({
       key,
       target,
       profile,
-      tierName: tierForEvent({ event: c.event_name, profile }),
+      tierName: tierForClaims(c, profile),
       cfg,
       vast,
       github,

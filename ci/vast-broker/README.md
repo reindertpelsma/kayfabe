@@ -181,7 +181,7 @@ CODE READ (`src/tier.js`, `src/release.js`, `src/index.js`, branch `claude/worke
 2026-11-05; not deployed, no rental made). Design: `docs/design/V3_CI_TIERS_AND_IGNORE_LADDER.md`
 (PR #256, DESIGN-ONLY). Every number here is a configuration default, not a measurement.
 
-**Which tier a run is.** The event decides; no request field can. A PR to master is **middle**: one
+**Which tier a run is.** The event decides (the verified OIDC claims `event_name`, `ref` and `base_ref`, through `tierForClaims` in `src/tier.js`; review of PR #269, R4); no request field can. A PR to master is **middle**: one
 box, Windows required, the check profile's caps and its 300-minute limit, and the die comes from a
 **family rotation** (Turing, Ampere, Ada, Blackwell; the next family after the last one that ran,
 falling through to the next family that has an eligible offer; the run records its family). A master

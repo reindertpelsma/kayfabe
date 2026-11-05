@@ -49,6 +49,23 @@ export function tierForEvent({ event, ref, baseRef, profile } = {}) {
     return 'large';
   return 'small';
 }
+// Review of PR #269, R4: the event, ref and base branch from the VERIFIED GitHub OIDC claims
+// (signed by GitHub; admission has checked them). `base_ref` is the PR's base branch name; when a
+// pull_request(_target) token lacks it, the event's `ref` (refs/heads/<base> for
+// pull_request_target) names the base. A missing or malformed value leaves `baseRef` undefined.
+export function tierForClaims(c, profile) {
+  const branch = (v) =>
+    typeof v === 'string' && /^[A-Za-z0-9._/-]{1,200}$/.test(v) ? v : undefined;
+  const ref = typeof c?.ref === 'string' && c.ref.length <= 255 ? c.ref : undefined;
+  const pr = c?.event_name === 'pull_request_target' || c?.event_name === 'pull_request';
+  const fromRef = pr && ref?.startsWith('refs/heads/') ? branch(ref.slice(11)) : undefined;
+  return tierForEvent({
+    event: c?.event_name,
+    ref,
+    baseRef: branch(c?.base_ref) ?? fromRef,
+    profile,
+  });
+}
 // The family of a die class, from its compute capability in the die rules (one source of truth).
 export function familyOf(die, cfg) {
   const rule = (cfg.dieRules ?? DEFAULTS.dieRules).find((r) => r.die === die);

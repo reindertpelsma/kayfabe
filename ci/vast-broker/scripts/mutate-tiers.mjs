@@ -21,6 +21,7 @@ const repo = fileURLToPath(new URL('../../..', import.meta.url));
 const PURE = ['tiers-release'];
 const BATCH = ['batch'];
 const CONFIG = ['config-booleans'];
+const CLAIMS = ['tier-claims'];
 const MUTANTS = [
   // the event, not a request, picks the tier
   ['PR is small', 'src/tier.js', "? 'middle' : 'small';", "? 'small' : 'small';", PURE],
@@ -379,6 +380,37 @@ MUTANTS.push(
     "    if (vars.has(key) && !['true', 'false'].includes(vars.get(key)))",
     '    if (false)',
     CONFIG,
+  ],
+);
+// Review of PR #269, R4 (2026-11-05): the tier from the verified ref and base branch.
+MUTANTS.push(
+  [
+    'base branch ignored',
+    'src/tier.js',
+    '    baseRef: branch(c?.base_ref) ?? fromRef,',
+    '    baseRef: fromRef,',
+    CLAIMS,
+  ],
+  [
+    'base from ref ignored',
+    'src/tier.js',
+    '    baseRef: branch(c?.base_ref) ?? fromRef,',
+    '    baseRef: branch(c?.base_ref),',
+    CLAIMS,
+  ],
+  [
+    'tag ref dropped',
+    'src/tier.js',
+    '    ref,\n    baseRef',
+    '    ref: undefined,\n    baseRef',
+    CLAIMS,
+  ],
+  [
+    'admission passes only the event',
+    'src/index.js',
+    '      tierName: tierForClaims(c, profile),',
+    '      tierName: tierForClaims({ event_name: c.event_name }, profile),',
+    CLAIMS,
   ],
 );
 const selected = process.argv.slice(2);
