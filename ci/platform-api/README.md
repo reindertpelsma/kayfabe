@@ -25,8 +25,8 @@ wrapper takes statement names, not SQL.
 Rows written by the CI Worker (`ci/vast-broker/src/results.js`; one row per rental leg, keyed by
 the tree hash of the commit after its `.workerignore`). Same rules as the rest of the API: GET
 only, fixed statements, CORS `*`, 405 elsewhere; never the row tag, machine id, price, cost or
-requirement snapshots; no SPECviewperf score exists in these tables. The status pages do not use
-them yet (no existing field changed, so `site/status` is unchanged).
+requirement snapshots; no SPECviewperf score exists in these tables. The status pages (`site/status`)
+read them (2026-11-05); `scripts/make-fixture.mjs` also records them in the synthetic fixture.
 
 | Path | Query parameters | Returns |
 |---|---|---|

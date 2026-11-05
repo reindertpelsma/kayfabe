@@ -2412,6 +2412,13 @@ jobs:
           cd ci/platform-api
           node --test test/*.test.js
           node scripts/mutate.mjs
+      - name: Status coverage file (scripts/site, site/status/coverage.json)
+        # coverage.json is built from the committed traces; the tests parse the real logs and check
+        # every count against the trace READMEs. The page tests (jsdom) run in the Site workflow.
+        run: |
+          python3 scripts/site/coverage_from_traces.py --check
+          python3 -m unittest discover -s scripts/site -p 'test_coverage_from_traces.py'
+          python3 scripts/site/coverage_mutants.py
       - name: CI Worker result store, tree key and requirements check (ci/vast-broker)
         # Node 22 here guarantees node:sqlite, so the D1 tests run instead of skipping. Runtime
         # dependency only (jose, from the committed lockfile, no install scripts). The tree-key

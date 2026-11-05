@@ -10,6 +10,7 @@ import { api } from '../test/helpers.js';
 import { syntheticRows } from './seed-data.mjs';
 import { SUITES } from '../src/validate.js';
 
+const CI_TIERS = ['largest', 'middle', 'small', 'adhoc'];
 export const FIXTURE_PATH = new URL('../../../site/status/fixture.json', import.meta.url);
 
 export async function buildFixture() {
@@ -32,6 +33,19 @@ export async function buildFixture() {
     for (const suite of SUITES) await get('/v1/cells/' + die.id + '/' + suite.id);
   for (const run of rows.runs) await get('/v1/runs/' + run.id);
   for (const commit of rows.commits) await get('/v1/commits/' + commit.sha + '/requirements');
+  // CI Worker result store (migration 0002): the paths site/status/status.js asks for, with the
+  // exact query strings it builds (tier tabs, per-family die pages, the tree list).
+  for (const tier of CI_TIERS) {
+    await get('/v1/ci/matrix?tier=' + tier);
+    await get('/v1/ci/trees?tier=' + tier + '&limit=10');
+  }
+  for (const family of [...new Set(rows.ci_runs.map((r) => r.family))].sort())
+    await get('/v1/ci/matrix?family=' + family);
+  for (const run of rows.ci_runs) await get('/v1/ci/runs/' + run.run_id);
+  for (const tree of [...new Set(rows.ci_runs.map((r) => r.tree_hash))].sort())
+    await get('/v1/ci/trees/' + tree);
+  for (const sha of [...new Set(rows.ci_runs.map((r) => r.commit_sha))].sort())
+    await get('/v1/ci/commits/' + sha);
   return {
     synthetic: true,
     note:
