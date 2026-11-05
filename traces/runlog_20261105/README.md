@@ -9,11 +9,13 @@ Falsifier stated before the run: a mutant of one new behaviour (key-line selecti
 Reproducer: `nice -n 19 python3 traces/runlog_20261105/mutants.py`. It copies `ci/vast-broker` and `.github/workflows` to a private directory, checks that the unmutated tests pass, applies one mutant at a time and requires at least one failing named test. Result file: `mutations.json` (mutant name, number of failing tests, their names).
 
 
-MEASURED 2026-11-05 at code revision 670f74e4b (node 22.22.1, `npm ci --ignore-scripts`): `node --test ci/vast-broker/test/*.test.js` 2785 pass, 0 fail; the unmutated runner tests pass and all 35 mutants below fail at least one named test (`mutations.json` lists the names). Not killed, and removed from the script as equivalent in effect: `census-line-uncut` (the `line[:400]` slice before normalising only bounds the work per line; the key is cut at 60 characters afterwards).
+MEASURED 2026-11-05 at code revision 647093990 (node 22.22.1, `npm ci --ignore-scripts`): `node --test ci/vast-broker/test/*.test.js` 2788 pass, 0 fail; the unmutated runner tests pass and all 37 mutants below fail at least one named test (`mutations.json` lists the names), including `key-tag-removed` and `key-tag-box-prefix`, which make `gate_reuse.summary_lines` reject the runner's own PASS output. Not killed, and removed from the script as equivalent in effect: `census-line-uncut` (the `line[:400]` slice before normalising only bounds the work per line; the key is cut at 60 characters afterwards).
 
 | Mutant | Failing named tests |
 | --- | ---: |
-| key-lines-unframed | 7 |
+| key-tag-removed | 3 |
+| key-tag-box-prefix | 2 |
+| key-lines-unframed | 8 |
 | key-lines-no-cell-pattern | 4 |
 | key-lines-no-gate-fail | 2 |
 | key-lines-byte-budget-ignored | 1 |
@@ -32,7 +34,7 @@ MEASURED 2026-11-05 at code revision 670f74e4b (node 22.22.1, `npm ci --ignore-s
 | census-unframed | 6 |
 | census-not-sanitised | 1 |
 | census-others-uncounted | 2 |
-| census-not-before-tail | 5 |
+| census-not-before-tail | 6 |
 | census-digits-in-names-collapsed | 1 |
 | marker-sanitisation-wording | 3 |
 | marker-cap-uncounted | 2 |
