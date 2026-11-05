@@ -1,5 +1,5 @@
-"""Run-log work of the gpu-vast runner (2026-11-05): KEY LINES, the census of the dropped middle,
-the honest drop markers and the sanitised full-log file (the artifact).
+"""Display work of the gpu-vast runner (2026-11-05): KEY LINES, the census of the dropped middle,
+the honest drop markers, the failure-path DIAGNOSTICS block, and the redaction order.
 
 usage: runner_runlog_fixture.py <case>      (KF_RUNNER_PATH overrides the runner under test)
 Every case drives the real Runner.execute() against a fake Worker that serves the log in pages
@@ -138,8 +138,9 @@ def case_key_lines_cover_the_middle():
     # before the middle marker, in the same final group, after the live head
     assert out.index("KEY LINES: ") < out.index("dropped from the middle")
     assert out.index("::group::Final bounded log") < out.index("KEY LINES: ")
-    # every key line is untrusted text: prefixed, and carries its line number in the full log
-    assert all(x.startswith(PREFIX + "L") for x in keys), keys[:3]
+    # every key line is untrusted text: prefixed, and cut at KEY_LINE_BYTES
+    assert all(x.startswith(PREFIX) and len(x) <= len(PREFIX) + m.KEY_LINE_BYTES for x in keys)
+    assert not any(re.match(r"\[untrusted\] L\d+: ", x) for x in keys)  # no artifact to point to
     assert_only_runner_commands(out)
 
 
@@ -166,7 +167,7 @@ def case_key_lines_red_first():
     # Non-PASS lines win over routine ones when the budget is tight (300-byte lines, 12000 bytes).
     pad = " pad" * 70
     cells = "".join("FAST_CELL_ARM arm=a%03d verdict=PASS%s\n" % (i, pad) for i in range(100))
-    bad = "FAST_CELL_ARM arm=zzz_bad verdict=FAIL secs=9\n"
+    bad = "FAST_CELL_ARM arm=zzz_bad verdict=FAIL secs=9" + pad + "\n"  # as long as a routine cell
     gate = "WINDOWS_GATE_FAIL rev=1 why=boom\nWINDOWS_GATE_RETRY why=host\n"
     middle = box(cells[: len(cells) // 2] + bad + gate + cells[len(cells) // 2 :])
     out, _ = drive(stage_log(middle))
@@ -203,7 +204,7 @@ def case_key_lines_imitation_stays_untrusted():
     out, result = drive(stage_log(middle))
     keys = key_frame(out)
     forged = [x for x in keys if "verdict=PASS stages=9" in x or "rev=forged" in x]
-    assert len(forged) == 2 and all(x.startswith(PREFIX + "L") for x in forged), forged
+    assert len(forged) == 2 and all(x.startswith(PREFIX) for x in forged), forged
     assert (
         result["verdict"] == "FAIL" and result["verified"] == 1
     )  # the Worker's status, not the text
@@ -234,21 +235,59 @@ def case_key_lines_hostile_commands():
 
 
 def case_key_lines_use_the_sanitised_text():
-    # Selection and numbering run on the sanitised log: an escape inside a key word does not hide the
-    # line, and raw line separators (VT, FF, NEL, U+2028) that the sanitiser removes do not shift the
-    # L<n> numbers away from the lines of the artifact.
+    # Selection runs on the sanitised log: an escape inside a key word does not hide the line, and
+    # raw line separators (VT, FF, NEL, U+2028) that the sanitiser removes do not split lines.
     middle = (
         "[box] one\x0btwo\x0cthree\u2028four\u0085five\n" * 3
         + "[box] KF_PAYLOAD_\x1b[0mSTAGE_START name=esc\n"
         + "[box] FAIL\r\n"
     )
-    out, _, data = run_with_dir(stage_log(middle))
+    out, _ = drive(stage_log(middle))
     keys = key_frame(out)
     assert any("STAGE_START name=esc" in x for x in keys), keys
-    lines = data.decode().splitlines()
-    for line in keys:
-        number, body = re.match(r"\[untrusted\] L(\d+): (.*)", line).groups()
-        assert lines[int(number) - 1] == PREFIX + body, (number, body)
+    assert PREFIX + "[box] FAIL" in keys
+    assert not any("one" in x for x in keys)
+
+
+def case_key_lines_work_is_bounded():
+    # The red patterns scan to the end of a line; a long line must be cut before they run.
+    import time as _time
+
+    # one start position per repeat, each scanning to the end of the line: quadratic when uncut
+    for unit in ("FAST_CELL_ARM x ", "GATE_HOSTREF x ", "stage name=x "):
+        text = unit * 20000 + "\n"
+        started = _time.monotonic()
+        block, shown, matching = m.key_lines(text)
+        elapsed = _time.monotonic() - started
+        assert elapsed < 1.0, (unit, elapsed)  # uncut: several seconds
+        assert shown == 1 and matching == 1
+        assert all(len(x.encode()) <= m.KEY_LINE_BYTES for x in block.splitlines())
+    # and the same through the runner: one 600 KB box line does not stall the final log
+    started = _time.monotonic()
+    out, _ = drive(stage_log("[box] " + "FAST_CELL_ARM x " * 20000 + "\n"))
+    assert _time.monotonic() - started < 15
+    assert "KEY LINES: " in out
+
+
+def case_redaction_survives_a_split_value():
+    # A value split by a control or non-ASCII character is whole after the strip: it is redacted.
+    secret = "kfbroker.example"
+    for split in ("\x01", "\u200b", "\u202e", "\x1b[0m", "\x00"):
+        text, _ = m.sanitise("a kfbro" + split + "ker.exa" + split + "mple b", (secret,))
+        assert secret not in text and "[redacted]" in text, (split, text)
+    # and a value that itself holds a character the strip removes is still caught on the raw text
+    text, _ = m.sanitise("a kf\u200bx b", ("kf\u200bx",))
+    assert "kf" not in text.replace("[redacted]", ""), text
+    # through the whole display: head, key lines, census, diagnostics
+    hostile = "[box] FAIL kfbro\x01ker.exa\u200bmple\n" * 3
+    out, _ = drive(stage_log(hostile + hostile.replace("FAIL", "zzz")), redactions=[secret])
+    assert secret not in out and "kfbro" + "ker" not in out
+    out, _, runner = run_vanished(
+        filler(10) + "[box] KF_PAYLOAD_STAGE_START name=merge_bar\n", redactions=["merge_bar"]
+    )
+    assert (
+        "merge_bar" not in out.split("DIAGNOSTICS", 1)[1]
+    ), "diagnostics skipped the redaction list"
 
 
 def case_key_lines_absent_when_log_is_small():
@@ -462,177 +501,10 @@ def case_display_marker_split():
     assert re.search(r"^\[[1-9]\d* bytes removed by sanitisation\]$", out, re.M), out[-400:]
 
 
-# ---- the full-log file ---------------------------------------------------------------------
-
-
-def run_with_dir(text, **extra):
-    with tempfile.TemporaryDirectory() as tmp:
-        path = os.path.join(tmp, "gpu-vast-runlog")
-        os.mkdir(path)
-        out, result = drive(text, runlog_dir=path, **extra)
-        file = os.path.join(path, m.RUNLOG_NAME)
-        data = Path(file).read_bytes() if os.path.exists(file) else None
-        return out, result, data
-
-
-def case_runlog_has_the_whole_log():
-    middle = box("a distinctive middle line\n")
-    out, result, data = run_with_dir(stage_log(middle))
-    assert data is not None
-    text = data.decode()
-    assert "a distinctive middle line" in text
-    assert PREFIX + "[box] a distinctive middle line" not in out  # not displayed, only in the file
-    assert text.count("\n") >= 3400
-    assert all(line.startswith(PREFIX) for line in text.splitlines()), [
-        x for x in text.splitlines() if not x.startswith(PREFIX)
-    ][:3]
-    assert len(data) <= m.MAX_LOG
-    assert re.search(r"Full sanitised log: \d+ bytes written", out)
-    # the L<n> numbers in the key lines are line numbers of this file
-    lines = text.splitlines()
-    for line in key_frame(out):
-        number, body = re.match(r"\[untrusted\] L(\d+): (.*)", line).groups()
-        assert lines[int(number) - 1] == PREFIX + body, (number, body)
-
-
-def case_runlog_redaction_matches_the_display():
-    token = "eyJhbGciOiJSUzI1NiJ9.payloadpayloadpayload.signaturesignature"
-    secret = "super-secret-worker-path-value-0123456789"
-    log = box(
-        "Authorization: Bearer %s\n" % token
-        + "origin https://broker.example/%s/status?sig=abc\n" % secret
-        + "gh token ghp_%s\n" % ("a1" * 20)
-        + "hex %s\n" % ("0123456789abcdef" * 4)
-        + "worker %s\n" % secret
-        + "oidc %s\n" % token
-    )
-    out, result, data = run_with_dir(filler(300) + log + filler(300), redactions=[secret, token])
-    text = data.decode()
-    for leaked in (
-        token,
-        secret,
-        "ghp_a1",
-        "0123456789abcdef",
-        "broker.example",
-        "sig=abc",
-        "Bearer eyJ",
-    ):
-        assert leaked not in text, leaked
-        assert leaked not in out, leaked
-    assert "[redacted]" in text and "[url redacted]" in text
-
-
-def case_runlog_hostile_commands():
-    log = box(
-        "::stop-commands::x\n::set-output name=a::b\n##[error]boom\n::add-mask::q\n"
-        "\x1b]0;t\x07::warning::w\n"
-        "‮RTL ​ zero-width \x00 nul \x9b31m\n"
-    )
-    out, result, data = run_with_dir(filler(300) + log + filler(300))
-    text = data.decode()
-    assert "::" not in text and "##[" not in text and "\x1b" not in text
-    assert "‮" not in text and "​" not in text and "\x00" not in text and "\x9b" not in text
-    assert all(ch in "\t\n" or 32 <= ord(ch) <= 126 or 192 <= ord(ch) <= 255 for ch in text)
-    assert all(line.startswith(PREFIX) for line in text.splitlines())
-
-
-def case_runlog_cap():
-    # Sanitised text can be longer than the input (`##[` -> `# [`): the file still stops at the cap.
-    with tempfile.TemporaryDirectory() as tmp:
-        raw = "##[x]\n" * (m.MAX_LOG // 6)  # 4 MiB in; 18 bytes per line out
-        n = m.write_runlog(tmp, raw)
-        data = Path(tmp, m.RUNLOG_NAME).read_bytes()
-        assert n == len(data) <= m.MAX_LOG, (n, len(data))
-        assert data.decode().startswith(PREFIX) and all(
-            l.startswith(PREFIX) for l in data.decode().splitlines()
-        )
-        assert b"bytes dropped by size cap]" in data[-100:]
-    with tempfile.TemporaryDirectory() as tmp:
-        # many short lines: each costs the 12-byte prefix, so the cap binds well before the raw size
-        raw = "a\n" * (m.MAX_LOG // 2)
-        n = m.write_runlog(tmp, raw)
-        assert n <= m.MAX_LOG
-        data = Path(tmp, m.RUNLOG_NAME).read_bytes()
-        assert data.endswith(b"bytes dropped by size cap]\n")
-    with tempfile.TemporaryDirectory() as tmp:
-        # exactly-hostile: one 4 MiB line is cut at 1000 bytes and counted as sanitisation
-        n = m.write_runlog(tmp, "B" * m.MAX_LOG)
-        assert n < 1200, n
-        assert b"bytes removed by sanitisation]" in Path(tmp, m.RUNLOG_NAME).read_bytes()
-
-
-def case_runlog_never_follows_or_overwrites():
-    with tempfile.TemporaryDirectory() as tmp:
-        target = Path(tmp, "victim.txt")
-        target.write_text("keep")
-        os.mkdir(Path(tmp, "d"))
-        link = Path(tmp, "d", m.RUNLOG_NAME)
-        os.symlink(target, link)
-        try:
-            m.write_runlog(str(Path(tmp, "d")), "x\n")
-            raise AssertionError("followed a symlink")
-        except OSError:
-            pass
-        assert target.read_text() == "keep"
-        link.unlink()
-        link.write_text("old")
-        try:
-            m.write_runlog(str(Path(tmp, "d")), "x\n")
-            raise AssertionError("overwrote a file")
-        except OSError:
-            pass
-        assert link.read_text() == "old"
-
-
-def case_runlog_failure_changes_nothing():
-    base_out, base_result = drive(stage_log(box("FAIL x\n")))
-    with tempfile.TemporaryDirectory() as tmp:
-        missing = os.path.join(tmp, "nope", "gpu-vast-runlog")
-        out, result = drive(stage_log(box("FAIL x\n")), runlog_dir=missing)
-    assert result == base_result
-    assert "Full sanitised log: not written" in out
-    base_lines = [
-        x for x in base_out.splitlines() if not x.startswith("::") and "Full sanitised" not in x
-    ]
-    new_lines = [
-        x for x in out.splitlines() if not x.startswith("::") and "Full sanitised" not in x
-    ]
-    assert len(base_lines) == len(new_lines)
-
-
-def case_runlog_off_without_a_directory():
-    out, _ = drive(stage_log(box("x\n")))
-    assert "Full sanitised log" not in out
-
-
-def case_runlog_dir_setting():
-    with tempfile.TemporaryDirectory() as tmp:
-        good = os.path.join(tmp, "gpu-vast-runlog")
-        assert m.runlog_dir({"KF_RUNLOG_DIR": good}) == good and os.path.isdir(good)
-        assert m.runlog_dir({"KF_RUNLOG_DIR": good}) == good  # exists already
-        os.mkdir(os.path.join(tmp, "x"))  # the traversal target exists, so only the rule refuses it
-        for bad in (
-            "",
-            "relative/gpu-vast-runlog",
-            good + "/../x/gpu-vast-runlog",
-            tmp + "/other",
-            tmp + "/a b/gpu-vast-runlog",
-            "/gpu-vast-runlog",
-        ):
-            assert m.runlog_dir({"KF_RUNLOG_DIR": bad}) == "", bad
-        assert m.runlog_dir({}) == ""
-        link = os.path.join(tmp, "x", "gpu-vast-runlog")
-        os.symlink(tmp, link)
-        assert m.runlog_dir({"KF_RUNLOG_DIR": link}) == ""
-        assert (
-            m.runlog_dir({"KF_RUNLOG_DIR": os.path.join(tmp, "missing", "gpu-vast-runlog")}) == ""
-        )
-
-
 # ---- the failure path: a box that vanished ---------------------------------------------------
 
 
-def run_vanished(text, final_state="NONE", runlog_dir=None, stage_chunks=True):
+def run_vanished(text, final_state="NONE", redactions=()):
     """Drive Runner.execute() against a Worker whose run ends with no result (state NONE or
     UNAVAILABLE, verdict UNAVAILABLE). Returns (job log, result, runner)."""
     chunks = [text[i : i + 4000] for i in range(0, len(text), 4000)]
@@ -702,8 +574,7 @@ def run_vanished(text, final_state="NONE", runlog_dir=None, stage_chunks=True):
 
     printed, summary = [], __import__("io").StringIO()
     saved_ctx = dict(h.ctx)
-    if runlog_dir:
-        h.ctx["runlog_dir"] = runlog_dir
+    h.ctx["redactions"] = list(redactions)
     try:
         runner = m.Runner(h.ctx, h.manifest, client, emit=printed.append, summary=summary)
         result = runner.execute()
@@ -727,7 +598,7 @@ def case_diagnostics_for_a_vanished_box():
     log += "".join("[box] silence approaches line %04d\n" % i for i in range(40))
     out, result, runner = run_vanished(log)
     assert result["verified"] == 0 and result["verdict"] == "UNAVAILABLE", result
-    assert "DIAGNOSTICS: the run ended without a verified result" in out
+    assert "DIAGNOSTICS: no PASS or FAIL result that passed the runner's checks" in out
     block = out.split("DIAGNOSTICS:", 1)[1].split("::group::", 1)[0]
     for needle in (
         "state=NONE verdict=UNAVAILABLE",
@@ -752,37 +623,32 @@ def case_diagnostics_for_a_vanished_box():
     expected = [PREFIX + "[box] silence approaches line %04d" % i for i in range(10, 40)]
     assert tail == expected, (tail[:2], tail[-2:])
     assert_only_runner_commands(out)
+    # it claims no cause and says "shown below" only where a log is
+    assert "shown below" in block and "cause" in block.split("\n")[0] and "because" not in block
 
 
-def case_diagnostics_in_the_artifact():
-    log = filler(500, "boot") + box("KF_PAYLOAD_STAGE_START name=merge_bar\n") + filler(100, "late")
-    with tempfile.TemporaryDirectory() as tmp:
-        path = os.path.join(tmp, "gpu-vast-runlog")
-        os.mkdir(path)
-        out, result, runner = run_vanished(log, runlog_dir=path)
-        text = Path(path, m.RUNLOG_NAME).read_text()
-    assert all(line.startswith(PREFIX) for line in text.splitlines())
-    tail = text[text.index("DIAGNOSTICS:") - len(PREFIX) :]
-    assert tail.startswith(PREFIX + "DIAGNOSTICS: ")
-    assert "last KF_PAYLOAD_STAGE_START in the log: name=merge_bar" in tail
-    assert "Not returned by the Worker protocol" in tail
-    assert len(text.encode()) <= m.MAX_LOG
+def case_diagnostics_claims_only_what_is_true():
+    out, result, runner = run_vanished(filler(5))
+    assert "the last lines of the log text the Worker returned are shown below" in out
+    runner.raw.clear()
+    trusted, _ = runner.diagnostics()
+    text = "\n".join(trusted)
+    assert "the Worker returned no log text" in text and "shown below" not in text, text
+    assert "ended without a verified result" not in text
+    assert all(
+        w not in text.lower() for w in ("crash", "oom", "preempt", "evict", "died", "killed")
+    )
 
 
-def case_diagnostics_in_the_artifact_are_sanitised():
-    # write_runlog never trusts the block it is given: it takes the same sanitiser and prefix.
-    with tempfile.TemporaryDirectory() as tmp:
-        hostile = (
-            ["::stop-commands::x \x1b[31mred\x1b[0m", "##[error]y ::set-output name=a::b"],
-            "\u202eRTL",
-        )
-        m.write_runlog(tmp, "[box] line\n", diagnostics=hostile)
-        text = Path(tmp, m.RUNLOG_NAME).read_text()
-    assert (
-        "::" not in text and "##[" not in text and "\x1b" not in text and "\u202e" not in text
-    ), text
-    assert all(line.startswith(PREFIX) for line in text.splitlines()), text
-    assert PREFIX + ": stop-commands: x red" in text
+def case_runner_writes_no_log_file():
+    # 2026-11-05 owner ruling: the full log is the Worker's job (R2), not the runner's.
+    source = Path(m.__file__).read_text()
+    for gone in ("write_runlog", "runlog_dir", "KF_RUNLOG_DIR", "RUNLOG_NAME", "O_NOFOLLOW"):
+        assert gone not in source, gone
+    assert not hasattr(m, "write_runlog")
+    workflow = (HERE.parents[2] / ".github/workflows/gpu-vast.yml").read_text()
+    gpu = workflow.split("  gpu:\n")[1].split("  report:\n")[0]
+    assert "uses:" not in gpu and "upload-artifact" not in gpu and "RUNLOG" not in gpu
 
 
 def case_diagnostics_absent_for_a_clean_result():

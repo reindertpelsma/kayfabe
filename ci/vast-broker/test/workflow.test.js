@@ -22,8 +22,7 @@ test('poll job permits exactly OIDC', async () => {
   const text = await readFile(workflow, 'utf8');
   assert.deepEqual(checkWorkflows({ 'gpu-vast.yml': text }), []);
   assert.match(text, /statuses: write/);
-  const { runlogUploadStep } = await import('../workflow-bootstrap.js');
-  assert.doesNotMatch(text.replace(runlogUploadStep, ''), /merge_group:|upload-artifact|ssh /);
+  assert.doesNotMatch(text, /merge_group:|upload-artifact|ssh /);
 });
 for (const permission of [
   'attestations: write',

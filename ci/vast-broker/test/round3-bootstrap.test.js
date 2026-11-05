@@ -19,7 +19,6 @@ for (const path of ['', 'unit-path-only-' + 'p'.repeat(32)])
         .split('  report:\n')[0]
         .split('        id: broker\n')[1]
         .split('        run: |\n')[1]
-        .split('      - name: Upload sanitised full box log')[0]
         .split('\n')
         .map((x) => (x.startsWith('          ') ? x.slice(10) : x))
         .join('\n');
@@ -34,7 +33,7 @@ with open(args[args.index('-o')+1],'w') as f:f.write(os.environ['STUB_CONTROLLER
 `,
         { mode: 0o700 },
       );
-      const stub = `import os,sys\nassert sys.flags.isolated==1\nassert not any(x in os.environ for x in ['GH_TOKEN','GITHUB_TOKEN','BASH_ENV','PYTHONPATH','LD_PRELOAD','INHERITED_SECRET'])\nassert os.environ['PATH']=='/usr/bin:/bin'\nassert os.environ['GITHUB_SHA']=='d'*40\nassert len(os.environ)<=20\nassert os.environ['KF_RUNLOG_DIR']=='/runner-temp/gpu-vast-runlog'\nwith open(os.environ['GITHUB_OUTPUT'],'w') as f:f.write('state=COMPLETE\\nverdict=PASS\\nverified=1\\n')\n`;
+      const stub = `import os,sys\nassert sys.flags.isolated==1\nassert not any(x in os.environ for x in ['GH_TOKEN','GITHUB_TOKEN','BASH_ENV','PYTHONPATH','LD_PRELOAD','INHERITED_SECRET'])\nassert os.environ['PATH']=='/usr/bin:/bin'\nassert os.environ['GITHUB_SHA']=='d'*40\nassert len(os.environ)<=20\nwith open(os.environ['GITHUB_OUTPUT'],'w') as f:f.write('state=COMPLETE\\nverdict=PASS\\nverified=1\\n')\n`;
       const origin = 'https://quiet-tenant.workers.example';
       const r = spawnSync(
         'bash',
@@ -50,7 +49,6 @@ with open(args[args.index('-o')+1],'w') as f:f.write(os.environ['STUB_CONTROLLER
             GITHUB_REPOSITORY: 'reindertpelsma/kayfabe',
             GITHUB_EVENT_PATH: join(d, 'event'),
             GITHUB_EVENT_NAME: 'pull_request_target',
-            RUNNER_TEMP: '/runner-temp',
             GITHUB_RUN_ID: '123',
             GITHUB_RUN_ATTEMPT: '1',
             GITHUB_OUTPUT: join(d, 'out'),

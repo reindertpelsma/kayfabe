@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 """Trusted BASE-branch controller. Run with python3 -I; stdlib only.
-Worker text is display-only. No checkout, cache or binary/artifact input. The one output file is
-the FULL box log after the same sanitiser as the display (write_runlog): every line prefixed
-`[untrusted] `, at most MAX_LOG bytes, written to a fixed name inside a directory the workflow names;
-gpu-vast.yml uploads it as a pinned first-party artifact. Nothing reads it back.
+Worker text is display-only. No checkout, cache, binary/artifact input or upload.
 """
 
 import contextlib, dataclasses, hashlib, http.client, io, json, math, os, re, secrets, signal, sys, time, traceback, urllib.parse
@@ -22,10 +19,9 @@ TAIL_BYTES, TAIL_LINES = 16000, 70
 # the census of the dropped middle (<= CENSUS_LINES + 1); bytes are unchanged.
 DISPLAY_BYTES, DISPLAY_LINES = 65000, 270
 # KEY LINES: chosen on the sanitised text by the fixed table KEY_PATTERNS below (never by the box).
-KEY_LINES, KEY_BYTES, KEY_LINE_BYTES = 60, 12000, 400
+KEY_LINES, KEY_BYTES, KEY_LINE_BYTES, KEY_SCAN = 60, 12000, 400, 1000
 # Census of the middle that the display drops: at most CENSUS_LINES groups, each prefix <= CENSUS_PREFIX.
 CENSUS_LINES, CENSUS_PREFIX, CENSUS_KEYS = 12, 60, 5000
-RUNLOG_NAME = "runlog.txt"
 STATES = {
     "NONE",
     "CREATING",
@@ -226,9 +222,11 @@ def sanitise(raw, redactions=()):
         raw = raw.encode("utf-8", errors="replace")
     original = len(raw)
     text = raw.decode("utf-8", errors="replace")
-    for secret in sorted(set(redactions), key=len, reverse=True):
-        if secret:
-            text = text.replace(secret, "[redacted]")
+    secrets_by_length = sorted((x for x in set(redactions) if x), key=len, reverse=True)
+    # Twice: on the raw text, and again once the stripping below has run. A value split by a control
+    # or non-ASCII character (`kf\x01broker`) becomes whole only after the strip.
+    for secret in secrets_by_length:
+        text = text.replace(secret, "[redacted]")
     text = re.sub(r"(?:\x1b\]|\x9d)[\s\S]*?(?:\x07|\x1b\\|\x9c|$)", "", text)
     text = re.sub(r"(?:\x1b[P^_]|[\x90\x98\x9e\x9f])[\s\S]*?(?:\x1b\\|\x9c|$)", "", text)
     text = re.sub(r"(?:\x1b\[|\x9b)[0-?]*[ -/]*[@-~]", "", text)
@@ -238,6 +236,8 @@ def sanitise(raw, redactions=()):
         for c in text
         if c in "\t\n" or 32 <= ord(c) <= 126 or 192 <= ord(c) <= 255 and ord(c) not in {215, 247}
     )
+    for secret in secrets_by_length:
+        text = text.replace(secret, "[redacted]")
     text = re.sub(r"\bBearer\s+[^\s]+", "Bearer [redacted]", text, flags=re.I)
     text = re.sub(
         r"\b(?:gh[pousr]_[A-Za-z0-9]{20,255}|github_pat_[A-Za-z0-9_]{20,255})\b", "[redacted]", text
@@ -250,14 +250,14 @@ def sanitise(raw, redactions=()):
     return text, original
 
 
-def marker_lines(removed, capped, prefix=""):
+def marker_lines(removed, capped):
     """The honest drop markers: sanitisation and the size cap are different things."""
-    return (
-        prefix + "[" + str(removed) + " bytes removed by sanitisation]\n" if removed else ""
-    ) + (prefix + "[" + str(capped) + " bytes dropped by size cap]\n" if capped else "")
+    return ("[" + str(removed) + " bytes removed by sanitisation]\n" if removed else "") + (
+        "[" + str(capped) + " bytes dropped by size cap]\n" if capped else ""
+    )
 
 
-def render(text, original, max_bytes, max_lines, max_line=1000, marker=""):
+def render(text, original, max_bytes, max_lines, max_line=1000):
     """Prefix every line `[untrusted] ` inside the caps: (rendered, dropped, capped).
 
     dropped = original bytes not shown (the historical figure); capped = the part of that which
@@ -282,7 +282,7 @@ def render(text, original, max_bytes, max_lines, max_line=1000, marker=""):
         kept += cost
     dropped = max(0, original - kept)
     capped = max(0, min(dropped, total - kept))
-    return "".join(rows) + marker_lines(max(0, dropped - capped), capped, marker), dropped, capped
+    return "".join(rows) + marker_lines(max(0, dropped - capped), capped), dropped, capped
 
 
 def scrub(raw, max_bytes=65536, max_lines=200, max_line=1000, redactions=()):
@@ -352,13 +352,15 @@ KEY_RED = re.compile(
 
 
 def key_lines(text, max_lines=KEY_LINES, max_bytes=KEY_BYTES):
-    """Pick the key lines of the SANITISED `text`: (rendered "L<n>: line" block, shown, matching).
+    """Pick the key lines of the SANITISED `text`: (block of lines, shown, matching).
 
     Order of preference: the first and last red line of each category, the first and last line of
     each category, the other red lines, then the other matching lines in log order. The block is
     in log order, every line cut at KEY_LINE_BYTES, within max_lines and max_bytes as displayed.
+    Every line is cut to KEY_SCAN characters before any pattern runs, so the work per line is bounded
+    (the red patterns scan to the end of a line and would be quadratic on a long one).
     """
-    lines = text.splitlines()
+    lines = [line[:KEY_SCAN] for line in text.splitlines()]
     seen, red, firsts, reds, matching = {}, {}, [], [], 0
     for i, line in enumerate(lines):
         for name, pattern in KEY_COMPILED:
@@ -382,22 +384,13 @@ def key_lines(text, max_lines=KEY_LINES, max_bytes=KEY_BYTES):
         if i in done:
             continue
         done.add(i)
-        cost = (
-            len("[untrusted] L: ")
-            + len(str(i + 1))
-            + min(len(lines[i].encode()), KEY_LINE_BYTES)
-            + 1
-        )
+        cost = len("[untrusted] ") + min(len(lines[i].encode()), KEY_LINE_BYTES) + 1
         if len(chosen) >= max_lines or used + cost > max_bytes:
             continue
         chosen.append(i)
         used += cost
     block = "".join(
-        "L"
-        + str(i + 1)
-        + ": "
-        + lines[i].encode()[:KEY_LINE_BYTES].decode("utf-8", errors="ignore")
-        + "\n"
+        lines[i].encode()[:KEY_LINE_BYTES].decode("utf-8", errors="ignore") + "\n"
         for i in sorted(chosen)
     )
     return block, len(chosen), matching
@@ -444,48 +437,6 @@ def census(text):
     others = [overflow[0] + sum(g[0] for _, g in ranked[CENSUS_LINES:]), 0]
     others[1] = overflow[1] + sum(g[1] for _, g in ranked[CENSUS_LINES:])
     return top, others
-
-
-def runlog_dir(environ):
-    """The directory for the sanitised full-log file, or "" (no file). Optional and local: it is
-    named by the workflow (KF_RUNLOG_DIR), never by the Worker or the box, and has a fixed shape."""
-    path = environ.get("KF_RUNLOG_DIR", "")
-    if not re.fullmatch(r"/[A-Za-z0-9_./-]{1,200}/gpu-vast-runlog", path) or "/../" in path:
-        return ""
-    try:
-        os.mkdir(path, 0o700)
-    except FileExistsError:
-        pass
-    except OSError:
-        return ""
-    return path if os.path.isdir(path) and not os.path.islink(path) else ""
-
-
-def write_runlog(directory, raw, redactions=(), cleaned=None, diagnostics=None):
-    """Write the FULL box log, sanitised like the display, to <directory>/runlog.txt.
-
-    Every line is prefixed `[untrusted] ` (so are the two honest drop markers and the failure-path
-    DIAGNOSTICS block that follows the log, from Runner.diagnostics()); the file never
-    exceeds MAX_LOG bytes; an existing file or a symlink is never followed or replaced.
-    Returns the byte count written. Raises OSError; the caller must not let that change a verdict.
-    """
-    text, original = cleaned if cleaned is not None else sanitise(raw, redactions)
-    out, _, _ = render(text, original, MAX_LOG - 512 - 8192, 1 << 30, marker="[untrusted] ")
-    if diagnostics:
-        # The failure-path block goes last, through the same sanitiser and prefix as every line.
-        lines = [*diagnostics[0], *([diagnostics[1]] if diagnostics[1] else [])]
-        block, _ = sanitise("\n".join(lines) + "\n")
-        out += render(block, 0, 8192, 100)[0]
-    data = out.encode("utf-8")
-    assert len(data) <= MAX_LOG
-    fd = os.open(
-        os.path.join(directory, RUNLOG_NAME),
-        os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
-        0o600,
-    )
-    with os.fdopen(fd, "wb") as handle:
-        handle.write(data)
-    return len(data)
 
 
 def integer(v, lo=0, hi=MAX_LOG):
@@ -1203,8 +1154,8 @@ class Runner:
             + str(shown)
             + " of "
             + str(matching)
-            + " matching lines, picked by fixed patterns in runner.py (L<n> = line n of the full"
-            + " sanitised log); the text after each prefix is untrusted box output\n"
+            + " matching lines, picked by fixed patterns in runner.py from the whole sanitised log;"
+            + " all text below is untrusted box output\n"
         )
         self.show(block)
 
@@ -1270,7 +1221,8 @@ class Runner:
             return str((b - a) // 1000) + "s" if ok else "n/a"
 
         trusted = [
-            "DIAGNOSTICS: the run ended without a verified result (all times are seconds)",
+            "DIAGNOSTICS: no PASS or FAIL result that passed the runner's checks for this run; the lines"
+            " below are what the Worker and this runner observed, not a cause (times in seconds)",
             "  Worker status last polled: state="
             + str(d.get("state", "none"))
             + " verdict="
@@ -1299,7 +1251,11 @@ class Runner:
             + ago(self.rent_at)
             + ", since the last log text arrived "
             + ago(self.last_chunk_at)
-            + " (the box's last words are the final lines of the log below)",
+            + (
+                "; the last lines of the log text the Worker returned are shown below"
+                if self.raw
+                else "; the Worker returned no log text"
+            ),
             "  Worker states seen by this runner's polling (seconds after the rent request): "
             + (
                 " -> ".join(state + "@" + str(at) for at, state in self.transitions[-12:]) or "none"
@@ -1608,17 +1564,6 @@ class Runner:
             + str(self.display_dropped)
             + " bytes dropped by runner display budget]\n::endgroup::\n"
         )
-        runlog = self.ctx.get("runlog_dir")
-        if runlog and self.raw:
-            # The artifact is an extra copy: a failure here never changes the result.
-            try:
-                self.emit(
-                    "Full sanitised log: "
-                    + str(write_runlog(runlog, None, cleaned=(text, original), diagnostics=diag))
-                    + " bytes written for the gpu-vast-runlog artifact\n"
-                )
-            except Exception:
-                self.emit("Full sanitised log: not written\n")
         if self.summary is not None:
             self.phase = "summary"
             # Every interpolated Worker text passed the local allow-list. All
@@ -1876,10 +1821,6 @@ def main():
                 *urllib.parse.urlsplit(origin).hostname.split("."),
             ],
         }
-
-        log_dir = runlog_dir(os.environ)
-        if log_dir:
-            ctx["runlog_dir"] = log_dir
 
         phase = "access"
         access = access_headers(os.environ)

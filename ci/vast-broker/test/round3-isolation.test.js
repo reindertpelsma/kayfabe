@@ -13,13 +13,7 @@ test('R3 workflow executes only base code via pull_request_target', async () => 
   assert.match(text, /raw\.githubusercontent\.com/);
   assert.match(text, /ci\/vast-broker\/\$file/);
   assert.match(text, /for file in runner.py deployment.json/);
-  // 2026-11-05: the one artifact action is the exact log-upload step (workflow-guard.js pins its text).
-  const { runlogUploadStep } = await import('../workflow-bootstrap.js');
-  assert.ok(text.includes(runlogUploadStep));
-  assert.doesNotMatch(
-    text.replace(runlogUploadStep, ''),
-    /actions\/checkout|upload-artifact|download-artifact|cache@/,
-  );
+  assert.doesNotMatch(text, /actions\/checkout|upload-artifact|download-artifact|cache@/);
 });
 test('R3 Worker job is OIDC-only with empty inherited environment', async () => {
   const text = await readFile(workflow, 'utf8');

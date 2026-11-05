@@ -163,7 +163,6 @@ test('V4 workflow now fetches the exact BASE controller bootstrap', async () => 
     .split('  report:\n')[0]
     .split('        id: broker\n')[1]
     .split('        run: |\n')[1]
-    .split('      - name: Upload sanitised full box log')[0]
     .split('\n')
     .map((x) => (x.startsWith('          ') ? x.slice(10) : x))
     .join('\n');

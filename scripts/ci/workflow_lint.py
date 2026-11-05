@@ -12,8 +12,7 @@ Rules (each finding is printed as `file:line: rule: message`; exit 1 if there is
               `id-token: write` and nothing else; a later edit cannot widen any of them silently.
   secrets     a job that touches the Worker secrets (`VAST_BROKER_*`, `secrets: inherit`, or the
               `gpu-vast` environment) has no `uses:` step at all: no checkout, cache, artifact or
-              third-party action runs in the same job as the Worker credentials. The one exception
-              is SECRET_JOB_USES: the pinned first-party log upload in gpu-vast.yml's `gpu` job.
+              third-party action runs in the same job as the Worker credentials.
 
 The parser is deliberately small: it understands the indentation shape these files use (top-level
 keys at column 0, job names one level in, `permissions:` as a block or an inline `{}`/`{a: b}`),
@@ -49,16 +48,6 @@ ALLOWLIST: dict[str, dict[str, dict[str, str]]] = {
         "report": {"statuses": "write"},
     },
     "gpu-vast-sweep.yml": {"gpu": {"id-token": "write"}},
-}
-
-# (file, job) -> the only `uses:` values a job that touches the Worker secrets may hold. 2026-11-05:
-# the gpu job uploads the runner's sanitised full box log with the first-party artifact action, pinned
-# to a commit. The step has no env and no secret (ci/vast-broker/workflow-guard.js compares its exact
-# text), so the action never sees a Worker credential. Any other `uses:` in that job is still a finding.
-SECRET_JOB_USES: dict[tuple[str, str], frozenset[str]] = {
-    ("gpu-vast.yml", "gpu"): frozenset(
-        {"actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02"}
-    ),
 }
 
 SHA = re.compile(r"[0-9a-f]{40}")
@@ -265,8 +254,6 @@ def lint_workflow(path: Path, rel: str) -> list[str]:
     for job in wf.jobs:
         if header_touches or touches_secrets(job.lines):
             for n, value in uses_in(job.lines):
-                if value in SECRET_JOB_USES.get((path.name, job.name), ()):
-                    continue
                 out.append(
                     f"{rel}:{n}: secrets: job `{job.name}` touches the Worker secrets "
                     f"and also runs `uses: {value}`"
