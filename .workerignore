@@ -1,0 +1,87 @@
+# .workerignore -- STATUS: PROPOSAL, 2026-11-05 (design: docs/design/V3_CI_TIERS_AND_IGNORE_LADDER.md section 4;
+# evidence in traces/ignore_ladder_20261105/). Not read by anything yet.
+#
+# The ladder:  .gitignore  is a subset of  .workerignore  is a subset of  .dockerignore.
+# Line based and checked by scripts/ci/ignore_ladder.py. Every line of the group below is
+# copied from .gitignore; the checker fails if a line is missing.
+#
+# Meaning: the Vast box clones the repository and removes everything that matches this file, so a
+# box test cannot depend on an ignored path. A test result is keyed by the hash of the sorted
+# UNIGNORED tracked files (path, mode, blob id), so a change confined to ignored paths shares the
+# result of its parent.
+#
+# Syntax (asserted by the checker): every line starts with / or **/, no negation, no trailing /,
+# `**` only as a whole segment. git, docker and the checker's matcher then read it the same way.
+
+# --- everything .gitignore ignores (kept line for line) ---
+/target
+/target-*
+/crates/kayfabe-abi/gen/target
+/firmware/*/target
+/firmware/**/*.efi
+**/Cargo.lock.orig
+/mutants.out
+/mutants.out.old
+/mutants_fwdmmu
+/mutants_triage
+/docs/design/*.pdf
+/docs/design/*.png
+**/__pycache__
+/docs/whitepaper/*.aux
+/docs/whitepaper/*.log
+/docs/whitepaper/*.out
+/docs/whitepaper/*.toc
+/.deadman/beat
+**/.w753
+
+# --- repository metadata: the box needs a git directory, but it is not part of a result key ---
+/.git
+**/.gitignore
+/.workerignore
+
+# --- trees a box never reads ---
+/archive
+/traces
+/site
+/.github
+/.deadman
+
+# --- prose (an exception, if one is found, is listed in the evidence README) ---
+**/*.md
+
+# --- Cloudflare Worker code and its tests: run by CI on the runner, never on a box ---
+/ci/platform-api
+/ci/vast-admin
+/ci/vast-broker
+/ci/vast-reaper
+
+# --- local test and gate scripts the box payload does not run ---
+/scripts/ci/test_*.py
+/scripts/ci/*_mutants.py
+/scripts/ci/clippy.sh
+/scripts/ci/*-debt.json
+/scripts/ci/gpu-uuids-baseline.json
+/scripts/ci/cloud_init_replay.py
+/scripts/ci/debt.py
+/scripts/ci/dependencies.py
+/scripts/ci/doc_freshness.py
+/scripts/ci/doc_status_check.py
+/scripts/ci/no_gpu_uuids.py
+/scripts/ci/no_private_refs.py
+/scripts/ci/runner_namespaces.py
+/scripts/ci/workflow_lint.py
+/scripts/bench/tests
+/scripts/mutate
+/scripts/ci_gates.sh
+/scripts/claim_ledger.py
+/scripts/check_archive_citations.sh
+/scripts/check_v3_isolation.sh
+/scripts/build_arch_pdf.sh
+/scripts/build_arch_pdf_v3.sh
+/scripts/fair_mutation_check.py
+/scripts/lazy_mutation_check.py
+/scripts/lifecycle_mutation_check.sh
+/scripts/v2_mutation_check.py
+
+# --- documentation, design notes and reference material (one test reads docs/: evidence README, R5) ---
+/docs
