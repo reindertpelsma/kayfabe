@@ -1,0 +1,130 @@
+TRIO_START tag=trio2 gate_tag=trio_g rev=3aa2a75a source=/root/kayfabe overlay=gate_trio_g 2026-11-05T11:47:07+00:00
+TRIO_STAGE preflight START 2026-11-05T11:47:07+00:00
+TRIO_NOTE host gpu="NVIDIA GeForce RTX 4090" driver=580.159.04 cpus=30 ram_gib=48 qemu_sha256=73a2c184eb6b1902
+TRIO_STAGE preflight EXIT 11s
+TRIO_STAGE host_solo START 2026-11-05T11:47:18+00:00
+TRIO_NOTE host solo: 69 correct units, 0 wrong
+TRIO_STAGE host_solo EXIT 121s
+TRIO_STAGE win_boot START 2026-11-05T11:49:19+00:00
+TRIO_NOTE windows nvidia-smi -L: uuid=own (own=GPU-<VM_UUID>, never the host's), boot_since=2026-11-05T11:49:33Z
+TRIO_STAGE win_boot EXIT 110s
+TRIO_STAGE win_solo START 2026-11-05T11:51:09+00:00
+TRIO_WIN_ITER phase=solo i=1 probe=cup8 ok=1 secs=6 guest_secs=1 utc=2026-11-05T11:51:15+00:00
+TRIO_WIN_ITER phase=solo i=1 probe=d3d11 ok=1 secs=6 guest_secs=1 utc=2026-11-05T11:51:21+00:00
+TRIO_WIN_ITER phase=solo i=2 probe=cup8 ok=1 secs=6 guest_secs=1 utc=2026-11-05T11:51:27+00:00
+TRIO_WIN_ITER phase=solo i=2 probe=d3d11 ok=1 secs=7 guest_secs=1 utc=2026-11-05T11:51:34+00:00
+TRIO_WIN_ITER phase=solo i=3 probe=cup8 ok=1 secs=6 guest_secs=1 utc=2026-11-05T11:51:40+00:00
+TRIO_WIN_ITER phase=solo i=3 probe=d3d11 ok=1 secs=6 guest_secs=1 utc=2026-11-05T11:51:46+00:00
+TRIO_STAGE win_solo EXIT 37s
+TRIO_STAGE phase_A START 2026-11-05T11:51:46+00:00
+TRIO_WIN_ITER phase=A_after i=0 probe=cup8 ok=1 secs=6 guest_secs=1 utc=2026-11-05T11:58:28+00:00
+TRIO_WIN_ITER phase=A_after i=0 probe=d3d11 ok=1 secs=6 guest_secs=1 utc=2026-11-05T11:58:34+00:00
+TRIO_NOTE phase A: FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30 secs=382 beats=7 xid_new=5
+TRIO_STAGE phase_A EXIT 408s
+TRIO_STAGE phase_B START 2026-11-05T11:58:34+00:00
+TRIO_NOTE phase B host load: smallest free VRAM in A 6272 MiB -> cup8 N=16384 (3072 MiB) + cup8bench 1024,2048
+TRIO_WIN_ITER phase=B i=0 probe=cup8 ok=1 secs=7 guest_secs=1 utc=2026-11-05T11:58:41+00:00
+TRIO_WIN_ITER phase=B i=0 probe=d3d11 ok=1 secs=7 guest_secs=2 utc=2026-11-05T11:58:48+00:00
+TRIO_WIN_ITER phase=B i=1 probe=cup8 ok=1 secs=6 guest_secs=2 utc=2026-11-05T11:58:54+00:00
+TRIO_WIN_ITER phase=B i=1 probe=d3d11 ok=1 secs=7 guest_secs=2 utc=2026-11-05T11:59:01+00:00
+TRIO_WIN_ITER phase=B i=2 probe=cup8 ok=1 secs=6 guest_secs=1 utc=2026-11-05T11:59:07+00:00
+TRIO_WIN_ITER phase=B i=2 probe=d3d11 ok=1 secs=6 guest_secs=1 utc=2026-11-05T11:59:13+00:00
+TRIO_WIN_ITER phase=B i=3 probe=cup8 ok=1 secs=7 guest_secs=2 utc=2026-11-05T11:59:20+00:00
+TRIO_WIN_ITER phase=B i=3 probe=d3d11 ok=1 secs=6 guest_secs=1 utc=2026-11-05T11:59:26+00:00
+TRIO_WIN_ITER phase=B i=4 probe=cup8 ok=1 secs=6 guest_secs=1 utc=2026-11-05T11:59:32+00:00
+TRIO_WIN_ITER phase=B i=4 probe=d3d11 ok=1 secs=7 guest_secs=2 utc=2026-11-05T11:59:39+00:00
+TRIO_WIN_ITER phase=B i=5 probe=cup8 ok=1 secs=7 guest_secs=2 utc=2026-11-05T11:59:46+00:00
+TRIO_WIN_ITER phase=B i=5 probe=d3d11 ok=1 secs=6 guest_secs=2 utc=2026-11-05T11:59:52+00:00
+TRIO_WIN_ITER phase=B i=6 probe=cup8 ok=1 secs=7 guest_secs=2 utc=2026-11-05T11:59:59+00:00
+TRIO_WIN_ITER phase=B i=6 probe=d3d11 ok=1 secs=6 guest_secs=1 utc=2026-11-05T12:00:05+00:00
+TRIO_WIN_ITER phase=B i=7 probe=cup8 ok=1 secs=6 guest_secs=1 utc=2026-11-05T12:00:11+00:00
+TRIO_WIN_ITER phase=B i=7 probe=d3d11 ok=1 secs=6 guest_secs=1 utc=2026-11-05T12:00:17+00:00
+TRIO_WIN_ITER phase=B i=8 probe=cup8 ok=1 secs=7 guest_secs=2 utc=2026-11-05T12:00:24+00:00
+TRIO_WIN_ITER phase=B i=8 probe=d3d11 ok=1 secs=7 guest_secs=2 utc=2026-11-05T12:00:31+00:00
+TRIO_WIN_ITER phase=B i=9 probe=cup8 ok=1 secs=6 guest_secs=2 utc=2026-11-05T12:00:37+00:00
+TRIO_WIN_ITER phase=B i=9 probe=d3d11 ok=1 secs=6 guest_secs=1 utc=2026-11-05T12:00:43+00:00
+TRIO_WIN_ITER phase=B i=10 probe=cup8 ok=1 secs=8 guest_secs=2 utc=2026-11-05T12:00:51+00:00
+TRIO_WIN_ITER phase=B i=10 probe=d3d11 ok=1 secs=5 guest_secs=1 utc=2026-11-05T12:00:56+00:00
+TRIO_WIN_ITER phase=B i=11 probe=cup8 ok=1 secs=5 guest_secs=2 utc=2026-11-05T12:01:01+00:00
+TRIO_WIN_ITER phase=B i=11 probe=d3d11 ok=1 secs=5 guest_secs=1 utc=2026-11-05T12:01:06+00:00
+TRIO_WIN_ITER phase=B i=12 probe=cup8 ok=1 secs=5 guest_secs=2 utc=2026-11-05T12:01:11+00:00
+TRIO_WIN_ITER phase=B i=12 probe=d3d11 ok=1 secs=5 guest_secs=2 utc=2026-11-05T12:01:16+00:00
+TRIO_WIN_ITER phase=B i=13 probe=cup8 ok=1 secs=5 guest_secs=2 utc=2026-11-05T12:01:21+00:00
+TRIO_WIN_ITER phase=B i=13 probe=d3d11 ok=1 secs=4 guest_secs=1 utc=2026-11-05T12:01:25+00:00
+TRIO_WIN_ITER phase=B i=14 probe=cup8 ok=1 secs=5 guest_secs=2 utc=2026-11-05T12:01:30+00:00
+TRIO_WIN_ITER phase=B i=14 probe=d3d11 ok=1 secs=4 guest_secs=1 utc=2026-11-05T12:01:34+00:00
+TRIO_WIN_ITER phase=B i=15 probe=cup8 ok=1 secs=6 guest_secs=2 utc=2026-11-05T12:01:40+00:00
+TRIO_WIN_ITER phase=B i=15 probe=d3d11 ok=1 secs=5 guest_secs=2 utc=2026-11-05T12:01:45+00:00
+TRIO_WIN_ITER phase=B i=16 probe=cup8 ok=1 secs=4 guest_secs=2 utc=2026-11-05T12:01:49+00:00
+TRIO_WIN_ITER phase=B i=16 probe=d3d11 ok=1 secs=4 guest_secs=1 utc=2026-11-05T12:01:54+00:00
+TRIO_WIN_ITER phase=B i=17 probe=cup8 ok=1 secs=5 guest_secs=2 utc=2026-11-05T12:01:59+00:00
+TRIO_WIN_ITER phase=B i=17 probe=d3d11 ok=1 secs=4 guest_secs=1 utc=2026-11-05T12:02:03+00:00
+TRIO_WIN_ITER phase=B i=18 probe=cup8 ok=1 secs=5 guest_secs=2 utc=2026-11-05T12:02:08+00:00
+TRIO_WIN_ITER phase=B i=18 probe=d3d11 ok=1 secs=5 guest_secs=2 utc=2026-11-05T12:02:13+00:00
+TRIO_WIN_ITER phase=B i=19 probe=cup8 ok=1 secs=4 guest_secs=1 utc=2026-11-05T12:02:17+00:00
+TRIO_WIN_ITER phase=B i=19 probe=d3d11 ok=1 secs=4 guest_secs=1 utc=2026-11-05T12:02:21+00:00
+TRIO_WIN_ITER phase=B i=20 probe=cup8 ok=1 secs=5 guest_secs=1 utc=2026-11-05T12:02:26+00:00
+TRIO_WIN_ITER phase=B i=20 probe=d3d11 ok=1 secs=5 guest_secs=2 utc=2026-11-05T12:02:31+00:00
+TRIO_WIN_ITER phase=B i=21 probe=cup8 ok=1 secs=4 guest_secs=2 utc=2026-11-05T12:02:35+00:00
+TRIO_WIN_ITER phase=B i=21 probe=d3d11 ok=1 secs=4 guest_secs=1 utc=2026-11-05T12:02:39+00:00
+TRIO_WIN_ITER phase=B i=22 probe=cup8 ok=1 secs=5 guest_secs=1 utc=2026-11-05T12:02:44+00:00
+TRIO_WIN_ITER phase=B i=22 probe=d3d11 ok=1 secs=4 guest_secs=1 utc=2026-11-05T12:02:48+00:00
+TRIO_WIN_ITER phase=B i=23 probe=cup8 ok=1 secs=5 guest_secs=2 utc=2026-11-05T12:02:53+00:00
+TRIO_WIN_ITER phase=B i=23 probe=d3d11 ok=1 secs=4 guest_secs=1 utc=2026-11-05T12:02:57+00:00
+TRIO_WIN_ITER phase=B i=24 probe=cup8 ok=1 secs=5 guest_secs=2 utc=2026-11-05T12:03:02+00:00
+TRIO_WIN_ITER phase=B i=24 probe=d3d11 ok=1 secs=4 guest_secs=1 utc=2026-11-05T12:03:06+00:00
+TRIO_WIN_ITER phase=B i=25 probe=cup8 ok=1 secs=5 guest_secs=2 utc=2026-11-05T12:03:11+00:00
+TRIO_WIN_ITER phase=B i=25 probe=d3d11 ok=1 secs=4 guest_secs=2 utc=2026-11-05T12:03:15+00:00
+TRIO_WIN_ITER phase=B i=26 probe=cup8 ok=1 secs=5 guest_secs=1 utc=2026-11-05T12:03:20+00:00
+TRIO_WIN_ITER phase=B i=26 probe=d3d11 ok=1 secs=4 guest_secs=2 utc=2026-11-05T12:03:24+00:00
+TRIO_WIN_ITER phase=B i=27 probe=cup8 ok=1 secs=5 guest_secs=2 utc=2026-11-05T12:03:29+00:00
+TRIO_WIN_ITER phase=B i=27 probe=d3d11 ok=1 secs=4 guest_secs=1 utc=2026-11-05T12:03:33+00:00
+TRIO_WIN_ITER phase=B i=28 probe=cup8 ok=1 secs=4 guest_secs=1 utc=2026-11-05T12:03:37+00:00
+TRIO_WIN_ITER phase=B i=28 probe=d3d11 ok=1 secs=5 guest_secs=2 utc=2026-11-05T12:03:42+00:00
+TRIO_WIN_ITER phase=B i=29 probe=cup8 ok=1 secs=5 guest_secs=2 utc=2026-11-05T12:03:47+00:00
+TRIO_WIN_ITER phase=B i=29 probe=d3d11 ok=1 secs=4 guest_secs=1 utc=2026-11-05T12:03:51+00:00
+TRIO_WIN_ITER phase=B i=30 probe=cup8 ok=1 secs=4 guest_secs=2 utc=2026-11-05T12:03:55+00:00
+TRIO_WIN_ITER phase=B i=30 probe=d3d11 ok=1 secs=5 guest_secs=2 utc=2026-11-05T12:04:00+00:00
+TRIO_WIN_ITER phase=B i=31 probe=cup8 ok=1 secs=5 guest_secs=2 utc=2026-11-05T12:04:05+00:00
+TRIO_WIN_ITER phase=B i=31 probe=d3d11 ok=1 secs=4 guest_secs=1 utc=2026-11-05T12:04:09+00:00
+TRIO_WIN_ITER phase=B i=32 probe=cup8 ok=1 secs=5 guest_secs=2 utc=2026-11-05T12:04:14+00:00
+TRIO_WIN_ITER phase=B i=32 probe=d3d11 ok=1 secs=4 guest_secs=2 utc=2026-11-05T12:04:18+00:00
+TRIO_WIN_ITER phase=B i=33 probe=cup8 ok=1 secs=5 guest_secs=1 utc=2026-11-05T12:04:23+00:00
+TRIO_WIN_ITER phase=B i=33 probe=d3d11 ok=1 secs=4 guest_secs=1 utc=2026-11-05T12:04:27+00:00
+TRIO_WIN_ITER phase=B i=34 probe=cup8 ok=1 secs=4 guest_secs=1 utc=2026-11-05T12:04:31+00:00
+TRIO_WIN_ITER phase=B i=34 probe=d3d11 ok=1 secs=5 guest_secs=2 utc=2026-11-05T12:04:36+00:00
+TRIO_WIN_ITER phase=B i=35 probe=cup8 ok=1 secs=5 guest_secs=2 utc=2026-11-05T12:04:41+00:00
+TRIO_WIN_ITER phase=B i=35 probe=d3d11 ok=1 secs=4 guest_secs=1 utc=2026-11-05T12:04:45+00:00
+TRIO_WIN_ITER phase=B i=36 probe=cup8 ok=1 secs=5 guest_secs=1 utc=2026-11-05T12:04:50+00:00
+TRIO_WIN_ITER phase=B i=36 probe=d3d11 ok=1 secs=4 guest_secs=1 utc=2026-11-05T12:04:54+00:00
+TRIO_WIN_ITER phase=B i=37 probe=cup8 ok=1 secs=5 guest_secs=2 utc=2026-11-05T12:04:59+00:00
+TRIO_WIN_ITER phase=B i=37 probe=d3d11 ok=1 secs=5 guest_secs=2 utc=2026-11-05T12:05:04+00:00
+TRIO_WIN_ITER phase=B i=38 probe=cup8 ok=1 secs=4 guest_secs=1 utc=2026-11-05T12:05:08+00:00
+TRIO_WIN_ITER phase=B i=38 probe=d3d11 ok=1 secs=4 guest_secs=1 utc=2026-11-05T12:05:12+00:00
+TRIO_WIN_ITER phase=B i=39 probe=cup8 ok=1 secs=5 guest_secs=2 utc=2026-11-05T12:05:17+00:00
+TRIO_WIN_ITER phase=B i=39 probe=d3d11 ok=1 secs=5 guest_secs=2 utc=2026-11-05T12:05:22+00:00
+TRIO_WIN_ITER phase=B i=40 probe=cup8 ok=1 secs=5 guest_secs=2 utc=2026-11-05T12:05:27+00:00
+TRIO_WIN_ITER phase=B i=40 probe=d3d11 ok=1 secs=4 guest_secs=2 utc=2026-11-05T12:05:31+00:00
+TRIO_WIN_ITER phase=B i=41 probe=cup8 ok=1 secs=5 guest_secs=2 utc=2026-11-05T12:05:36+00:00
+TRIO_WIN_ITER phase=B i=41 probe=d3d11 ok=1 secs=4 guest_secs=1 utc=2026-11-05T12:05:40+00:00
+TRIO_WIN_ITER phase=B i=42 probe=cup8 ok=1 secs=5 guest_secs=2 utc=2026-11-05T12:05:45+00:00
+TRIO_WIN_ITER phase=B i=42 probe=d3d11 ok=1 secs=5 guest_secs=2 utc=2026-11-05T12:05:50+00:00
+TRIO_WIN_ITER phase=B i=43 probe=cup8 ok=1 secs=4 guest_secs=2 utc=2026-11-05T12:05:54+00:00
+TRIO_WIN_ITER phase=B i=43 probe=d3d11 ok=1 secs=5 guest_secs=1 utc=2026-11-05T12:05:59+00:00
+TRIO_WIN_ITER phase=B i=44 probe=cup8 ok=1 secs=4 guest_secs=1 utc=2026-11-05T12:06:03+00:00
+TRIO_WIN_ITER phase=B i=44 probe=d3d11 ok=1 secs=5 guest_secs=2 utc=2026-11-05T12:06:08+00:00
+TRIO_WIN_ITER phase=B i=45 probe=cup8 ok=1 secs=5 guest_secs=2 utc=2026-11-05T12:06:13+00:00
+TRIO_WIN_ITER phase=B i=45 probe=d3d11 ok=1 secs=3 guest_secs=1 utc=2026-11-05T12:06:16+00:00
+TRIO_NOTE phase B: FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30 secs=458 host_units=159 win_probes_ok=92 xid_new=5
+TRIO_STAGE phase_B EXIT 463s
+TRIO_STAGE end START 2026-11-05T12:06:17+00:00
+  GATE_TDR since=2026-11-05T11:49:33Z display4101=0 nvlddmkm153=0 kernelpower41=0 eventlog6008=0 bugcheck1001=0 livekernelevent_other=0 livekernelevent193=0 livekernelevent_stale=0 strict=0 total=0
+  GATE_DISPLAY name='NVIDIA GeForce RTX 4090' driver=32.0.15.8088 code=0 status=OK pnp=OK
+TRIO_NOTE host Xid lines: before=15 after=25
+TRIO_UUID windows_values=1 linux_values=60 shared=0 host_in_any=0
+TRIO_STAGE end EXIT 22s
+TRIO_FOOTPRINT idle: vram_used_mib=0 vram_total_mib=24564 bar1_used_mib=1 bar1_total_mib=256 mem_avail_mib=47899 win_pss_mib=0 fast_pss_mib=0 compute_apps="" | win_up: vram_used_mib=9415 vram_total_mib=24564 bar1_used_mib=51 bar1_total_mib=256 mem_avail_mib=38751 win_pss_mib=8537 fast_pss_mib=0 compute_apps="109550,9312;"
+TRIO_PHASE_A PASS rev=3aa2a75a gpu="NVIDIA GeForce RTX 4090"
+TRIO_PHASE_B PASS rev=3aa2a75a gpu="NVIDIA GeForce RTX 4090"
+TRIO_TIMING total=1178s preflight=11s host_solo=121s win_boot=110s win_solo=37s phase_A=408s phase_B=463s end=22s
+TRIO_EXIT rc=0 2026-11-05T12:06:45+00:00
