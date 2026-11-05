@@ -465,27 +465,63 @@ start a release: [README](README.md), "Tiers, the admin start and the release ru
 
 What changes on deploy without any new var: a master PR (middle tier) rotates its die across the
 four families instead of taking the cheapest `CHECK_DIES` class; boxes carry `KF_TIER`; the admin
-page gains Plan and Start; the cron advances batches. The account cap stays 1, so a release started
-with the defaults runs its legs one at a time (about 12 legs x up to 300 minutes).
+page gains Plan and Start (small and middle starts work at once; a large Start is refused until
+`RELEASE_ENABLED=true`); the cron advances batches; the account-wide daily cap
+`ACCOUNT_DAILY_USD` (default 50) bounds check, sweep and release spend together.
 
 Vars for running a release (public, in the vars file outside the checkout; `deploy.mjs` accepts
-them): `MAX_CONCURRENT_RENTALS=8` together with `MAX_CONCURRENT_CHECK=1` and
-`MAX_CONCURRENT_SWEEP=1` (raising the account cap alone also raises check and sweep), optionally
-`MAX_CONCURRENT_RELEASE` (default min(8, account cap)), `RELEASE_COST_CAP_USD` (default 40, at most
-`RELEASE_DAILY_USD`), `RELEASE_MAX_PRICE_USD_HOUR` (2), `RELEASE_DAILY_USD` (40),
+them): `RELEASE_ENABLED=true` (the kill switch; default false), `MAX_CONCURRENT_RENTALS=9` together
+with `MAX_CONCURRENT_CHECK=1` and `MAX_CONCURRENT_SWEEP=1` (raising the account cap alone also raises
+check and sweep). A release gets at most the account cap minus 1 boxes (`MAX_CONCURRENT_RELEASE`,
+default exactly that, at most 8), so one slot always stays free for the master gate; with the
+committed account cap of 1 the plan says `NO_SLOTS`. Optional: `RELEASE_COST_CAP_USD` (default 40,
+at most `RELEASE_DAILY_USD`), `RELEASE_MAX_PRICE_USD_HOUR` (2), `RELEASE_DAILY_USD` (40),
 `RELEASE_DAILY_RENTALS` (24), `RELEASE_HARD_RUNTIME_MINUTES` (300, may only be lowered),
 `RELEASE_RERUNS_PER_LEG` (1, 0 to 2), `RELEASE_STAGES` (`[]`; `["specviewperf"]` only once its
-lane exists), `RELEASE_DIES`, `MIDDLE_ROTATION` (JSON family lists, no spaces), and
-`MIDDLE_VRAM_FLOOR_MB` (0 = off; TBD from the trio footprints). The shared
+lane exists), `RELEASE_DIES`, `MIDDLE_ROTATION` (JSON family lists, no spaces),
+`MIDDLE_VRAM_FLOOR_MB` (0 = off; TBD from the trio footprints) and `ACCOUNT_DAILY_USD`. The shared
 `ROLLING_SPEND_USD` (default 30) also bounds a release: the offline plan of the synthetic market
-estimates 18.63 USD from SYNTHETIC prices, so a release in a month with other
-spend needs it raised. INFERRED (admin README storage note): 8 concurrent boxes write 8 log streams
-into the same Durable Object; keep `LOG_RETENTION_HOURS=6` and check storage after the first
-release.
+estimates 18.63 USD from SYNTHETIC prices, so a release in a month with other spend needs it raised.
+INFERRED (admin README storage note): 8 concurrent boxes write 8 log streams into the same Durable
+Object; keep `LOG_RETENTION_HOURS=6` and check storage after the first release.
 
-Rollback caveat (CODE READ, `src/ledger.js` budgetSummary): spend rows of profile `release` make an
-older Worker refuse every admission (it knows only check and sweep) until those rows age out after
-30 days; roll back only before the first release rental, or keep this Worker.
+Money bounds (CODE READ): every release box is admitted only while the release's spend (settled
+legs at cost, open legs at their reserved liability) plus its own worst case stays under the cost
+cap, and its contract price as the provider reports it is re-checked against the same cap (a box above it is closed
+as `CONTRACT_BUDGET`). A release leg reserves its hard limit plus one cron period (301 minutes); the
+independent reaper deletes a box only after 300 + 15 minutes plus up to one 5-minute reaper tick, so
+a box whose teardown failed can bill about 19 minutes beyond its reservation (INFERRED: about 5 USD
+for 8 boxes at the 2 USD/hour cap). Turning `RENTING_ENABLED` or `RELEASE_ENABLED` off stops every
+running release at the next cron tick: `admit()` refuses, so no pending leg or re-run is rented
+(those legs end MISSING); boxes already running finish to their result or deadline unless stopped.
+
+Time budget of one box (300 minutes): the trio agent reported on 2026-11-05 (relayed by the
+coordinator; its run and revision are in that agent's report, not re-checked here) a Windows gate
+of 968 s warm on an RTX 4090 and 89.5 minutes for the whole Worker check run. INFERRED: a second Windows run on the same box
+(`KF_WINDOWS_RUNS=2`, image reused) adds one more gate, about 16 minutes warm, so about 106 minutes in
+all. The slowest gate recorded on 2026-11-04 (AD104, 5065 s, traces/die_coverage_20261104/) would
+give about 3 hours, still inside 300; the payload refuses a second run with less than 45 minutes left
+(`windows_retry_time`, a RETRY, never a pass).
+
+Rollback (CODE READ, review F4): release records and spend rows are stored with `profile: 'check'`
+plus `budgetClass: 'release'`, so an older Worker can read, count and prune them: it counts release
+spend under the check profile's daily cap (conservative; it can refuse check rentals until the UTC
+day ends) and prunes rows after 30 days like any other. An older Worker ignores `batch:` rows, so no
+new release leg starts; for an open release box its cron asks GitHub for the box's run (a batch id,
+not a GitHub run), which is absent, so it closes the box as `RUN_GONE` (INFERRED from the predecessor's
+`update()`). Procedure: set `RELEASE_ENABLED=false` (redeploy vars) first, then press Stop all (or
+`POST /stop-all` with the owner token), confirm in the Vast console that no `kf-ci-8...` box remains
+(the reaper also ends any box older than 315 minutes), and only then deploy the older bundle.
+Correction to the first version of this section (2026-11-05): it said the old Worker recovers once
+release rows age out after 30 days; that was wrong (it refused before reaching its prune line and
+never recovered). That row shape no longer exists.
+
+Commit gap (review F6): release legs do not write the one-rental-per-commit marker, so a release of
+a commit never refuses that commit's own master gate with `BUDGET:sha-gap`.
+
+`/bench-data` scope (unchanged, noted by review F10): any live box can ask for a presigned
+SPECviewperf URL; restricting it to boxes whose run lists the `specviewperf` stage is left for the
+SPECviewperf lane.
 
 The reaper limit does not change: the release hard limit is at most 300 minutes, equal to
 `REAPER_HARD_MINUTES`, so no reaper deploy is needed first.

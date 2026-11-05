@@ -220,5 +220,6 @@
       "tiers": ["middle", "large"],
       "state": "DESIGN_ONLY"
     }
-  }
+  },
+  "accountDaily": 50
 }

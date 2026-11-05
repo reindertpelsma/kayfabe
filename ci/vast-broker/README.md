@@ -72,27 +72,35 @@ inside the release cost cap. A FAIL is never re-rented. An owner stop is not a v
 re-run. Release cells count only this release's own boxes of the same commit: no result is carried
 over from another commit or tree, and one FAIL in a cell fails it whatever passed before or after.
 
-**Limits of the release profile (explicit, per tier).** Price at most 2 USD/hour per box, hard
-limit 300 minutes per box (the check rule: one box runs the Linux bar, the Windows install and up
-to two Windows gate runs; installs took 1436 s and 1825 s and gates 906 s to 3454 s on 2026-11-04 at
-rev `0c515b3b`, `traces/die_coverage_20261104/`; `RELEASE_HARD_RUNTIME_MINUTES` may lower it but not raise
-it, because the reaper deletes `kf-ci-*` boxes after 300 + 15 minutes), at most 8 boxes at once
-(`MAX_CONCURRENT_RELEASE`, never above the account cap `MAX_CONCURRENT_RENTALS`, which stays 1 by
-default), 40 USD and 24 rentals per day for the release profile, and a **release cost cap of 40 USD**
-(`RELEASE_COST_CAP_USD`). The shared 30-day rolling cap and the credit reserve still apply to every
-box. A release whose plan exceeds any of these is refused before the first rental, and every later
-box (pending legs, re-runs) is admitted only while spent plus reserved plus its own worst case
-stays under the cap.
+**Limits of the release profile (explicit, per tier).** A release runs only with the kill switch
+`RELEASE_ENABLED=true` (default false). Price at most 2 USD/hour per box, hard limit 300 minutes per
+box (the check rule: one box runs the Linux bar, the Windows install and up to two Windows gate runs;
+installs took 1436 s and 1825 s and gates 906 s to 3454 s on 2026-11-04 at rev `0c515b3b`,
+`traces/die_coverage_20261104/`; `RELEASE_HARD_RUNTIME_MINUTES` may lower it but not raise it,
+because the reaper deletes `kf-ci-*` boxes after 300 + 15 minutes), at most the account cap minus 1
+boxes at once (`MAX_CONCURRENT_RELEASE`, at most 8; one slot always stays for the master gate, so 8
+release boxes need `MAX_CONCURRENT_RENTALS=9`; the committed account cap of 1 gives a release no
+slot), 40 USD and 24 rentals per day for the release profile, a **release cost cap of 40 USD**
+(`RELEASE_COST_CAP_USD`) and an account-wide cap of 50 USD per UTC day over all profiles
+(`ACCOUNT_DAILY_USD`). The shared 30-day rolling cap and the credit reserve still apply to every
+box. A release whose plan exceeds any of these is refused before the first rental; every later box
+(pending legs, re-runs) is admitted only while spent plus reserved plus its own worst case stays
+under the cap, and a box whose contract price (as the provider reports it) breaks the cap is closed. Turning
+`RENTING_ENABLED` or `RELEASE_ENABLED` off stops a running release at the next cron tick. A release
+writes no commit-gap marker, so the master gate of the same commit still rents. A PASS counts only
+when the box itself reports the planned die (its GPU name and compute capability) and a known
+driver; anything else is a RETRY.
 
 **Plan first (rents nothing).** On the admin page (`kayfabe-vast-admin`, owner Access identity),
 enter the commit, choose the tier and press **Plan**: the Worker evaluates the live market with the
 release rules and prints the dies, machines, legs, the estimate per family and any refusal
-(`INCOMPLETE`, `COST_CAP`, `DAILY_USD`, `DAILY_COUNT`, `ROLLING_USD`, `CREDIT_RESERVE`). Offline,
+(`INCOMPLETE`, `COST_CAP`, `NO_SLOTS`, `RELEASE_DISABLED`, `DAILY_USD`, `ACCOUNT_DAILY_USD`,
+`DAILY_COUNT`, `ROLLING_USD`, `CREDIT_RESERVE`). Offline,
 the same planner runs on an offer list:
 
 ```sh
 node ci/vast-broker/release-plan.mjs --market ci/vast-broker/test/fixtures/release-market-synthetic.json \
-  --var MAX_CONCURRENT_RENTALS=8
+  --var MAX_CONCURRENT_RENTALS=9 --var RELEASE_ENABLED=true
 ```
 
 **Start.** Press **Start** (it asks for confirmation). The commit must be on this repository's
@@ -103,6 +111,12 @@ lists the batch with its state, verdict, estimate and spend; **Stop** on a row s
 batch stop (`{"batch": "<id>"}` to `/api/stop`) or **Stop all** ends the release without
 re-runs. A small or middle start is one box and, like a PR rental, is not rented for a commit that
 already rented within `SHA_GAP_HOURS` (the leg stays pending and shows `BUDGET:sha-gap`).
+
+**Die lists, caveat (review F10).** The fallbacks GB202 (Windows gate 1 FAIL in 3 runs at
+`0c515b3b`, `traces/die_coverage_20261104/blackwell/`) and AD103/AD106 (Windows not run there) are in
+`releaseDies`, and GA102 and GB203 in `middleRotation` have no Windows PASS at that revision (GA102
+passed once through the Worker path: gpu-vast run 41936606326, rev `d74f6063`, 2026-11-05); a
+plan that falls back to them can fail on the die, not on the change.
 
 **Stages.** `specviewperf` (release only) is plumbing: enabled by `RELEASE_STAGES=["specviewperf"]`,
 off by default, and until the SPECviewperf lane exists its row is `specviewperf_retry_not_built`,

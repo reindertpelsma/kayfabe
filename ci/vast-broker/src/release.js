@@ -15,6 +15,7 @@
 // - the estimated cost (offer price for the full hard limit, plus the transfer allowance) must
 //   not exceed the release cost cap, and every per-profile cap must admit it, before any rental.
 import { familyOf } from './tier.js';
+import { gpuClass } from './policy.js';
 export const LINUX_LAST_ROW = 'cuda_fat';
 export const VERDICTS = Object.freeze(['PASS', 'FAIL', 'RETRY', 'UNATTRIBUTED']);
 const round = (x) => Math.round(x * 10000) / 10000;
@@ -93,9 +94,14 @@ export function planRelease(allowed, cfg, { budget, credit } = {}) {
   const refusals = [];
   if (!families.every((f) => f.complete)) refusals.push('INCOMPLETE');
   if (estimate > cfg.releaseCostCap) refusals.push('COST_CAP');
+  // Review F5: a release runs at most account cap - 1 boxes; with the default account cap of 1 it
+  // has no slot until the owner raises MAX_CONCURRENT_RENTALS.
+  if (parallel < 1) refusals.push('NO_SLOTS');
+  if (!cfg.releaseEnabled) refusals.push('RELEASE_DISABLED');
   if (budget) {
     const today = budget.profiles.release;
     if (today.daily_usd + estimate > cfg.releaseDaily) refusals.push('DAILY_USD');
+    if (budget.daily_usd + estimate > cfg.accountDaily) refusals.push('ACCOUNT_DAILY_USD');
     if (today.count_today + legs > cfg.releaseDailyCount) refusals.push('DAILY_COUNT');
     if (budget.rolling_usd + estimate > cfg.rolling) refusals.push('ROLLING_USD');
     if (credit !== undefined && !(credit >= cfg.reserve + estimate + budget.outstanding_usd))
@@ -107,6 +113,8 @@ export function planRelease(allowed, cfg, { budget, credit } = {}) {
     hard_minutes: cfg.hardRelease / 60000,
     price_cap_usd_hour: cfg.releasePrice,
     cost_cap_usd: cfg.releaseCostCap,
+    account_daily_cap_usd: cfg.accountDaily,
+    release_enabled: cfg.releaseEnabled,
     daily_cap_usd: cfg.releaseDaily,
     daily_rentals_cap: cfg.releaseDailyCount,
     rolling_cap_usd: cfg.rolling,
@@ -137,7 +145,28 @@ export function retryRow(name) {
 // One leg's outcome per platform, from the Worker's own record (verdict, closing reason and the
 // box's checked result rows). Box data can only make a leg worse: a PASS needs the Worker's PASS
 // verdict and every expected row passing.
-export function classifyLeg(record, { windowsRuns = 1, stages = [] } = {}) {
+// Review F3: the box's own report must be the planned die. MATCH needs a known driver, the
+// family's compute capability and the die class of the reported GPU name (the same die rules as
+// the offers); UNKNOWN = the box reported no usable hardware; anything else is MISMATCH.
+export function hardwareMatch(record, { die, family, cfg } = {}) {
+  const h = record?.hardware ?? record?.result?.hardware;
+  if (
+    !h ||
+    typeof h.gpu_name !== 'string' ||
+    !Number.isSafeInteger(h.compute_cap) ||
+    typeof h.driver_version !== 'string' ||
+    h.driver_version === 'unknown' ||
+    h.gpu_name === 'unknown'
+  )
+    return 'UNKNOWN';
+  if (!cfg || !die || !family || !Object.hasOwn(cfg.families, family)) return 'MISMATCH';
+  const boxDie = gpuClass(
+    { gpu_arch: 'nvidia', compute_cap: h.compute_cap, gpu_name: h.gpu_name },
+    cfg,
+  );
+  return h.compute_cap === cfg.families[family] && boxDie === die ? 'MATCH' : 'MISMATCH';
+}
+export function classifyLeg(record, { windowsRuns = 1, stages = [], die, family, cfg } = {}) {
   const windowsNames =
     windowsRuns === 0
       ? []
@@ -173,6 +202,13 @@ export function classifyLeg(record, { windowsRuns = 1, stages = [] } = {}) {
   const passing = (name) => rows.some((r) => r.name === name && r.pass > 0 && r.fail === 0);
   if (record.closed === 'STOPPED' && record.verdict !== 'PASS')
     return finish(all('UNATTRIBUTED'), 'STOPPED');
+  const hardware = hardwareMatch(record, { die, family, cfg });
+  // A box that reports another GPU (or none) can neither pass nor fail this die's cell.
+  if (
+    (record.verdict === 'PASS' && hardware !== 'MATCH') ||
+    (record.verdict === 'FAIL' && result && hardware === 'MISMATCH')
+  )
+    return finish(all('RETRY'), 'HARDWARE_MISMATCH');
   if (record.verdict === 'PASS' && result?.verdict === 'PASS') {
     const parts = {
       linux: passing(LINUX_LAST_ROW) ? 'PASS' : 'RETRY',

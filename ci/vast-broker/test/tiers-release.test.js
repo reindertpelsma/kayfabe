@@ -18,7 +18,9 @@ import { env } from './helpers.js';
 // a second Windows leg lands on the same machine while another machine offers the die; a plan over
 // the cost cap or a cap is admitted; a RETRY, UNATTRIBUTED, provider fault or owner stop counts as
 // a PASS; a FAIL is re-rented; a DESIGN_ONLY stage (two_guests, trio) can be enabled.
-const cfgOf = (extra = {}) => configuration({ ...env, ...extra });
+// Release-ready defaults for these tests: the kill switch on and an account cap of 9 (release 8).
+const cfgOf = (extra = {}) =>
+  configuration({ ...env, RELEASE_ENABLED: 'true', MAX_CONCURRENT_RENTALS: '9', ...extra });
 const hours = (cfg) => (cfg.hardRelease + cfg.cronPeriod) / 3600000;
 // One allowed offer as src/offers.js evaluates it (die, country and pricing filled in).
 function allowed(cfg, die, { id, machine, host, price = 0.2, country = 'US' }) {
@@ -157,7 +159,7 @@ test('box environment: only the release profile may ask for a second Windows run
   assert.throws(() => tierEnvironment('release', { stages: ['Bad-Name'] }), /stages/);
 });
 test('plan: two dies per family, two Windows runs per die, a second machine when offered', () => {
-  const cfg = cfgOf({ MAX_CONCURRENT_RENTALS: '8' });
+  const cfg = cfgOf();
   const plan = planRelease(market(cfg), cfg);
   assert.deepEqual(plan.refusals, []);
   assert.equal(plan.admitted, true);
@@ -250,9 +252,17 @@ const rows = (spec) =>
     skip: 0,
   }));
 const LINUX = { provision: 1, gates: 9, thin_suite: 30, cuda_host: 4, cuda_fat: 4 };
+// The leg under test is an AD104 leg; its box reports an RTX 4070 (review F3).
+const AD104 = {
+  gpu_name: 'NVIDIA GeForce RTX 4070',
+  compute_cap: 890,
+  driver_version: '580.159.04',
+};
+const classify = (r, o = {}) => classifyLeg(r, { die: 'AD104', family: 'ada', cfg: cfgOf(), ...o });
 const rec = (verdict, spec, { green = true, closed = 'RESULT', resultVerdict = verdict } = {}) => ({
   key: '8-1',
   ended: 1,
+  hardware: AD104,
   closed,
   verdict,
   result: {
@@ -262,49 +272,49 @@ const rec = (verdict, spec, { green = true, closed = 'RESULT', resultVerdict = v
   },
 });
 test('classify: PASS only from the Worker PASS with every expected row passing', () => {
-  const ok = classifyLeg(rec('PASS', { ...LINUX, windows_gate: 1 }));
+  const ok = classify(rec('PASS', { ...LINUX, windows_gate: 1 }));
   assert.deepEqual([ok.verdict, ok.linux, ok.windows], ['PASS', 'PASS', ['PASS']]);
-  const two = classifyLeg(rec('PASS', { ...LINUX, windows_gate: 1, windows_gate_2: 1 }), {
+  const two = classify(rec('PASS', { ...LINUX, windows_gate: 1, windows_gate_2: 1 }), {
     windowsRuns: 2,
   });
   assert.deepEqual([two.verdict, two.windows], ['PASS', ['PASS', 'PASS']]);
   // A PASS whose second Windows row is missing is not two passes.
-  const short = classifyLeg(rec('PASS', { ...LINUX, windows_gate: 1 }), { windowsRuns: 2 });
+  const short = classify(rec('PASS', { ...LINUX, windows_gate: 1 }), { windowsRuns: 2 });
   assert.deepEqual([short.verdict, short.windows], ['RETRY', ['PASS', 'RETRY']]);
   // Box rows cannot turn a Worker FAIL or a provider fault into a pass.
-  assert.equal(classifyLeg(rec('FAIL', { ...LINUX, windows_gate: 1 })).verdict, 'RETRY');
-  assert.equal(classifyLeg(rec('PROVIDER_FAULT', { ...LINUX, windows_gate: 1 })).verdict, 'RETRY');
-  assert.equal(classifyLeg({ ...rec('PASS', LINUX), ended: null }).verdict, 'RETRY');
-  assert.equal(classifyLeg(undefined).verdict, 'RETRY');
+  assert.equal(classify(rec('FAIL', { ...LINUX, windows_gate: 1 })).verdict, 'RETRY');
+  assert.equal(classify(rec('PROVIDER_FAULT', { ...LINUX, windows_gate: 1 })).verdict, 'RETRY');
+  assert.equal(classify({ ...rec('PASS', LINUX), ended: null }).verdict, 'RETRY');
+  assert.equal(classify(undefined).verdict, 'RETRY');
 });
 test('classify: FAIL is the guest; no host reference is UNATTRIBUTED; harness rows are RETRY', () => {
-  const linux = classifyLeg(rec('FAIL', { provision: 1, gates: 9, thin_suite: -1 }));
+  const linux = classify(rec('FAIL', { provision: 1, gates: 9, thin_suite: -1 }));
   assert.deepEqual([linux.verdict, linux.linux, linux.windows], ['FAIL', 'FAIL', ['NOT_RUN']]);
-  const blind = classifyLeg(rec('FAIL', { provision: -1 }, { green: false }));
+  const blind = classify(rec('FAIL', { provision: -1 }, { green: false }));
   assert.deepEqual([blind.verdict, blind.linux], ['UNATTRIBUTED', 'UNATTRIBUTED']);
-  const winRetry = classifyLeg(rec('FAIL', { ...LINUX, windows_retry_media: -1 }));
+  const winRetry = classify(rec('FAIL', { ...LINUX, windows_retry_media: -1 }));
   assert.deepEqual(
     [winRetry.verdict, winRetry.linux, winRetry.windows],
     ['RETRY', 'PASS', ['RETRY']],
   );
-  const win = classifyLeg(rec('FAIL', { ...LINUX, windows_gate: -1 }));
+  const win = classify(rec('FAIL', { ...LINUX, windows_gate: -1 }));
   assert.deepEqual([win.verdict, win.linux, win.windows], ['FAIL', 'PASS', ['FAIL']]);
-  const second = classifyLeg(rec('FAIL', { ...LINUX, windows_gate: 1, windows_gate_2: -1 }), {
+  const second = classify(rec('FAIL', { ...LINUX, windows_gate: 1, windows_gate_2: -1 }), {
     windowsRuns: 2,
   });
   assert.deepEqual([second.verdict, second.windows], ['FAIL', ['PASS', 'FAIL']]);
-  const infra = classifyLeg(rec('FAIL', { provision: 1, infrastructure: -1 }));
+  const infra = classify(rec('FAIL', { provision: 1, infrastructure: -1 }));
   assert.deepEqual([infra.verdict, infra.linux], ['RETRY', 'RETRY']);
-  const stopped = classifyLeg(rec('FAIL', LINUX, { closed: 'STOPPED' }));
+  const stopped = classify(rec('FAIL', LINUX, { closed: 'STOPPED' }));
   assert.deepEqual([stopped.verdict, stopped.reason], ['UNATTRIBUTED', 'STOPPED']);
   assert.ok(retryRow('windows_retry_hostref') && retryRow('specviewperf_retry_not_built'));
   assert.ok(!retryRow('windows_gate') && !retryRow('timeout') && !retryRow('host_xid'));
 });
 test('classify: an enabled stage is its own part; its retry row is not a pass', () => {
   const stages = ['specviewperf'];
-  const ok = classifyLeg(rec('PASS', { ...LINUX, windows_gate: 1, specviewperf: 1 }), { stages });
+  const ok = classify(rec('PASS', { ...LINUX, windows_gate: 1, specviewperf: 1 }), { stages });
   assert.deepEqual([ok.verdict, ok.stages], ['PASS', { specviewperf: 'PASS' }]);
-  const stub = classifyLeg(
+  const stub = classify(
     rec('FAIL', { ...LINUX, windows_gate: 1, specviewperf_retry_not_built: -1 }),
     { stages },
   );
@@ -387,25 +397,34 @@ test('offline plan CLI: the synthetic market plans 12 legs; parallelism follows 
     await readFile(new URL('./fixtures/release-market-synthetic.json', import.meta.url), 'utf8'),
   );
   assert.match(doc.STATUS, /^SYNTHETIC/);
-  const plan = await offlinePlan(doc.offers);
+  // Committed defaults: account cap 1 leaves the release no slot, and the kill switch is off.
+  const off = await offlinePlan(doc.offers);
+  assert.deepEqual([off.parallel, off.admitted], [0, false]);
+  assert.deepEqual(off.refusals, ['NO_SLOTS', 'RELEASE_DISABLED']);
+  const on = { RELEASE_ENABLED: 'true', MAX_CONCURRENT_RENTALS: '2' };
+  const plan = await offlinePlan(doc.offers, on);
   assert.deepEqual([plan.legs, plan.parallel, plan.admitted], [12, 1, true]);
   const sum = plan.families.reduce((s, f) => s + f.est_usd, 0);
   assert.ok(Math.abs(sum - plan.estimate_usd) < 1e-3);
-  const eight = await offlinePlan(doc.offers, { MAX_CONCURRENT_RENTALS: '8' });
+  const eight = await offlinePlan(doc.offers, { ...on, MAX_CONCURRENT_RENTALS: '9' });
   assert.equal(eight.parallel, 8);
-  const capped = await offlinePlan(doc.offers, { RELEASE_COST_CAP_USD: '10' });
+  const capped = await offlinePlan(doc.offers, { ...on, RELEASE_COST_CAP_USD: '10' });
   assert.deepEqual(capped.refusals, ['COST_CAP']);
-  const poor = await offlinePlan(doc.offers, {}, { credit: 20 });
+  const poor = await offlinePlan(doc.offers, on, { credit: 20 });
+  const account = await offlinePlan(doc.offers, { ...on, ACCOUNT_DAILY_USD: '10' });
+  assert.deepEqual(account.refusals, ['ACCOUNT_DAILY_USD']);
   assert.deepEqual(poor.refusals, ['CREDIT_RESERVE']);
 });
 test('the deploy helper accepts the tier variables and the configuration reads them', async () => {
   const { parseVars } = await import('../deploy.mjs');
   const text = [
     'OWNER_GITHUB_ID=' + env.OWNER_GITHUB_ID,
-    'MAX_CONCURRENT_RENTALS=8',
+    'MAX_CONCURRENT_RENTALS=9',
     'MAX_CONCURRENT_CHECK=1',
     'MAX_CONCURRENT_SWEEP=1',
     'MAX_CONCURRENT_RELEASE=8',
+    'RELEASE_ENABLED=true',
+    'ACCOUNT_DAILY_USD=50',
     'RELEASE_MAX_PRICE_USD_HOUR=1.5',
     'RELEASE_DAILY_USD=40',
     'RELEASE_DAILY_RENTALS=24',
@@ -421,4 +440,34 @@ test('the deploy helper accepts the tier variables and the configuration reads t
   const cfg = cfgOf(vars);
   assert.deepEqual(cfg.maxConcurrentProfile, { check: 1, sweep: 1, release: 8 });
   assert.deepEqual([cfg.releasePrice, cfg.releaseCostCap], [1.5, 30]);
+});
+
+test('classify (review F3): the box must report the planned die and a known driver', () => {
+  const pass = { ...LINUX, windows_gate: 1 };
+  assert.equal(classify(rec('PASS', pass)).verdict, 'PASS');
+  for (const [hardware, why] of [
+    [{ ...AD104, gpu_name: 'NVIDIA GeForce RTX 4090' }, 'another die of the family'],
+    [{ ...AD104, gpu_name: 'NVIDIA GeForce RTX 3060', compute_cap: 860 }, 'another family'],
+    [{ ...AD104, compute_cap: 860 }, 'compute capability of another family'],
+    [{ ...AD104, driver_version: 'unknown' }, 'unknown driver'],
+    [undefined, 'no hardware'],
+  ]) {
+    const out = classify({ ...rec('PASS', pass), hardware });
+    assert.deepEqual([out.verdict, out.reason], ['RETRY', 'HARDWARE_MISMATCH'], why);
+  }
+  // Without the planned die no box can pass.
+  assert.equal(classify(rec('PASS', pass), { die: undefined }).verdict, 'RETRY');
+  assert.equal(classify(rec('PASS', pass), { family: 'turing' }).verdict, 'RETRY');
+  // A failing box of another GPU is not this die's FAIL; a failing box without hardware keeps
+  // the ordinary attribution (a provisioning failure reports no hardware).
+  const wrong = classify({
+    ...rec('FAIL', { ...LINUX, windows_gate: -1 }),
+    hardware: { ...AD104, gpu_name: 'NVIDIA GeForce RTX 4090' },
+  });
+  assert.deepEqual([wrong.verdict, wrong.reason], ['RETRY', 'HARDWARE_MISMATCH']);
+  const blind = classify({
+    ...rec('FAIL', { provision: -1 }, { green: false }),
+    hardware: undefined,
+  });
+  assert.equal(blind.verdict, 'UNATTRIBUTED');
 });

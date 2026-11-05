@@ -50,13 +50,27 @@ function releaseMarket(h, { drop = [], twice = TWICE, price = 0.2, sameHost = []
   h.cloud.credit = 500;
   return rows;
 }
+// Account cap 9: the release takes at most cap - 1 = 8 boxes (review F5); the kill switch is on.
 const release = (extra = {}) =>
-  setup({ MAX_CONCURRENT_RENTALS: '8', ROLLING_SPEND_USD: '200', ...extra });
+  setup({
+    MAX_CONCURRENT_RENTALS: '9',
+    ROLLING_SPEND_USD: '200',
+    RELEASE_ENABLED: 'true',
+    ...extra,
+  });
 const creates = (h) =>
   h.cloud.calls.filter((c) => /\/api\/v0\/asks\/\d+\/$/.test(c.url)).map((c) => c.body);
 const LINUX = { provision: 1, gates: 9, thin_suite: 30, cuda_host: 4, cuda_fat: 4 };
-const hardware = { gpu_name: 'RTX_4070', compute_cap: 890, driver_version: '580.159.04' };
-async function finish(h, key, verdict, spec) {
+// The box reports its own GPU (review F3): the planned die's board, as nvidia-smi names it.
+const boxHardware = (die) => {
+  const [, gpu, cc] = DIES.find(([d]) => d === die);
+  return {
+    gpu_name: 'NVIDIA GeForce ' + gpu.replace('_', ' '),
+    compute_cap: cc,
+    driver_version: '580.159.04',
+  };
+};
+async function finish(h, key, verdict, spec, hardware) {
   const suites = Object.entries(spec).map(([name, v]) => ({
     name,
     pass: v > 0 ? v : 0,
@@ -71,7 +85,7 @@ async function finish(h, key, verdict, spec) {
         nonce: (await h.storage.get('record:' + key)).nonce,
         verdict,
         suites,
-        hardware,
+        hardware: hardware ?? boxHardware((await h.storage.get('record:' + key)).die),
         host_reference: 'GREEN',
       },
     },
@@ -123,7 +137,10 @@ test('start: a release fans out up to the cap; each leg is a normal rental', asy
     const r = await h.storage.get('record:' + l.key);
     assert.equal(r.die, l.die);
     assert.equal(r.tier, 'large');
-    assert.equal(r.profile, 'release');
+    // Review F4: stored as profile check (an older Worker can read and prune it) + budgetClass.
+    assert.deepEqual([r.profile, r.budgetClass], ['check', 'release']);
+    const spend = await h.storage.get('cost:' + l.key);
+    assert.deepEqual([spend.profile, spend.budgetClass], ['check', 'release']);
     assert.equal(r.source, 'admin');
     assert.equal(r.batch, batch.id);
     const body = bodies.find((b) => b.label === r.label);
@@ -134,10 +151,11 @@ test('start: a release fans out up to the cap; each leg is a normal rental', asy
     const machines = batch.legs.filter((l) => l.die === die && l.machineId).map((l) => l.machineId);
     assert.equal(new Set(machines).size, machines.length, die);
   }
-  // The release holds the commit gap: a PR rental of the same commit is refused.
+  // Review F5/F6: the release leaves one slot free and writes no commit-gap marker, so the master
+  // gate of the same commit still rents while the release runs.
+  assert.equal(await h.storage.get('sha:' + sha), undefined);
   const pr = await h.call();
-  assert.equal(pr.status, 409);
-  assert.equal((await pr.json()).reason, 'BUDGET:sha-gap');
+  assert.equal(pr.status, 200, await pr.clone().text());
   // Only one running release per commit and tier.
   await assert.rejects(
     h.service.adminStart({ commit_sha: sha, tier: 'large' }),
@@ -176,8 +194,12 @@ test('release: RETRY re-runs on a different machine; FAIL is never re-rented; FA
   const h = await release();
   releaseMarket(h, { twice: [...TWICE, 'TU106'] });
   const { batch: id } = await h.service.adminStart({ commit_sha: sha, tier: 'large' });
+  // A third TU106 machine, offered after the plan: the only fresh box for a TU106 re-run.
+  const tu = h.cloud.extraOffers.find((o) => o.gpu_name === 'RTX_2060');
+  h.cloud.extraOffers.push({ ...tu, id: 99, machine_id: 299099, host_id: 3999 });
   let batch = await batchOf(h, id);
   const [retry, fail] = batch.legs.filter((l) => l.state === 'STARTED');
+  const sibling = (await h.storage.get('record:' + fail.key)).machineId;
   const retried = await h.storage.get('record:' + retry.key);
   await finish(h, retry.key, 'FAIL', { ...LINUX, windows_retry_media: -1 });
   await finish(h, fail.key, 'FAIL', { ...LINUX, windows_gate: -1 });
@@ -197,6 +219,9 @@ test('release: RETRY re-runs on a different machine; FAIL is never re-rented; FA
   const rerun = await h.storage.get('record:' + reruns[0].key);
   assert.ok(rerun, 'the re-run started');
   assert.notEqual(rerun.machineId, retried.machineId);
+  // Review F10: nor the machine of the die's other leg.
+  assert.equal(rerun.machineId, 299099);
+  assert.ok(reruns[0].avoidMachines.includes(sibling));
   assert.equal(batch.verdict, 'FAIL');
 });
 test('release: an owner stop-all ends the release; no leg starts afterwards', async () => {
@@ -426,7 +451,7 @@ test('an admin leg has no GitHub run to outlive: the cron does not close it as R
   assert.equal(h.cloud.deletes.length, 0);
 });
 test('serial legs: the second Windows leg of a die avoids the first leg machine after it ends', async () => {
-  const h = await release({ MAX_CONCURRENT_RENTALS: '1' });
+  const h = await release({ MAX_CONCURRENT_RENTALS: '2' });
   releaseMarket(h, { sameHost: TWICE });
   const { batch: id } = await h.service.adminStart({ commit_sha: sha, tier: 'large' });
   for (let round = 0; round < 14; round++) {
@@ -481,4 +506,151 @@ test('a release cell counts only its own run of the same commit', async () => {
   const leg = (await batchOf(h, id)).legs.find((l) => l.key === first.key);
   assert.equal(leg.outcome.verdict, 'RETRY');
   assert.equal(leg.outcome.reason, 'NOT_ENDED');
+});
+// Review fixes (rev259, 2026-11-05). FALSIFIERS: a release keeps renting after RENTING_ENABLED or
+// RELEASE_ENABLED is turned off, or after a batch stop whose provider call failed; a contract
+// price above the release cost cap keeps its box; the account-wide daily cap does not bound a
+// release; the commit-gap exemption holds for a stopped release or a started leg; a pending leg
+// outlives its start window; finished batches are never pruned.
+async function passStarted(h, id) {
+  for (const l of (await batchOf(h, id)).legs.filter((x) => x.state === 'STARTED')) {
+    const r = await h.storage.get('record:' + l.key);
+    if (r.resultAt === undefined)
+      await finish(h, l.key, 'PASS', { ...LINUX, ...win(l.windowsRuns) });
+  }
+}
+for (const [name, value] of [
+  ['RENTING_ENABLED', 'false'],
+  ['RELEASE_ENABLED', 'false'],
+])
+  test(
+    'F1/F4: turning ' + name + ' off stops pending legs and re-runs at the next tick',
+    async () => {
+      const h = await release();
+      releaseMarket(h);
+      const { batch: id } = await h.service.adminStart({ commit_sha: sha, tier: 'large' });
+      assert.equal(h.cloud.creates, 8);
+      h.bindings[name] = value;
+      await passStarted(h, id);
+      await tick(h);
+      await tick(h);
+      const batch = await batchOf(h, id);
+      assert.equal(h.cloud.creates, 8);
+      assert.equal(batch.legs.filter((l) => l.state === 'MISSING').length, 4);
+      assert.equal(batch.state, 'DONE');
+      assert.equal(batch.verdict, 'INCOMPLETE');
+    },
+  );
+test('F4: a release Start needs RELEASE_ENABLED=true; the plan says so', async () => {
+  const h = await release({ RELEASE_ENABLED: 'false' });
+  releaseMarket(h);
+  const { plan } = await h.service.adminPlan({ commit_sha: sha, tier: 'large' });
+  assert.deepEqual(plan.refusals, ['RELEASE_DISABLED']);
+  await assert.rejects(
+    h.service.adminStart({ commit_sha: sha, tier: 'large' }),
+    (e) => e.state === 'RELEASE_DISABLED',
+  );
+  assert.equal(h.cloud.creates, 0);
+});
+test('F2: a batch stop whose provider calls fail still leaves the release STOPPED', async () => {
+  const h = await release();
+  releaseMarket(h);
+  const { batch: id } = await h.service.adminStart({ commit_sha: sha, tier: 'large' });
+  // The stop is stored before the first provider call of the stop (read at that call).
+  const seen = [];
+  Object.defineProperty(h.cloud, 'vastError', {
+    configurable: true,
+    get: () => (seen.push(h.storage.data.get('batch:' + id).state), 500),
+  });
+  await assert.rejects(h.service.adminStopBatch(id));
+  assert.equal(seen[0], 'STOPPED');
+  Object.defineProperty(h.cloud, 'vastError', { configurable: true, writable: true, value: 0 });
+  assert.equal((await batchOf(h, id)).state, 'STOPPED');
+  for (let i = 0; i < 3; i++) await tick(h);
+  const batch = await batchOf(h, id);
+  assert.equal(batch.state, 'STOPPED');
+  assert.equal(h.cloud.creates, 8);
+  assert.equal(h.cloud.deletes.length, 8, 'the cron finishes the stop by exact id');
+});
+test('F8: a verified contract price that breaks the release cost cap closes the box', async () => {
+  const h = await release({ RELEASE_COST_CAP_USD: '14' });
+  releaseMarket(h);
+  const { batch: id } = await h.service.adminStart({ commit_sha: sha, tier: 'large' });
+  const [leg] = (await batchOf(h, id)).legs.filter((l) => l.state === 'STARTED');
+  const r = await h.storage.get('record:' + leg.key);
+  const instance = h.cloud.instances.get(String(r.id));
+  instance.dph_total = 1.9;
+  instance.dph_base = 1.9 - (instance.storage_cost * 120) / 720;
+  await tick(h, 1);
+  const after = await h.storage.get('record:' + leg.key);
+  assert.equal(after.closed, 'CONTRACT_BUDGET');
+  assert.ok(h.cloud.deletes.includes(String(r.id)));
+});
+test('F8: the account-wide daily cap bounds every profile together', async () => {
+  const h = await release({ ACCOUNT_DAILY_USD: '3' });
+  releaseMarket(h);
+  const started = await h.service.adminStart({ commit_sha: sha, tier: 'large' }).catch((e) => e);
+  assert.deepEqual(started.plan?.refusals, ['ACCOUNT_DAILY_USD']);
+  assert.equal(h.cloud.creates, 0);
+});
+test('F9: the gap exemption needs a RUNNING large batch and a PENDING leg of it', async () => {
+  const { Ledger } = await import('../src/ledger.js');
+  const ledger = new Ledger(new MemoryStorage());
+  const batch = {
+    id: '8' + '1'.repeat(18),
+    sha,
+    tier: 'large',
+    state: 'RUNNING',
+    legs: [
+      { key: '8' + '1'.repeat(18) + '-1', state: 'PENDING' },
+      { key: '8' + '1'.repeat(18) + '-2', state: 'STARTED' },
+    ],
+  };
+  const check = async (patch, key = batch.legs[0].key) => {
+    await ledger.put('batch:' + batch.id, { ...batch, ...patch });
+    return ledger.batchLeg(batch.id, key, sha);
+  };
+  assert.equal(await check({}), true);
+  assert.equal(await check({ state: 'STOPPED' }), false);
+  assert.equal(await check({ state: 'DONE' }), false);
+  assert.equal(await check({}, batch.legs[1].key), false);
+  assert.equal(await check({ tier: 'middle' }), false);
+  assert.equal(await check({ sha: 'b'.repeat(40) }), false);
+});
+test('F9: a pending leg past its start window is MISSING, not rented later', async () => {
+  const h = await release();
+  releaseMarket(h);
+  const { batch: id } = await h.service.adminStart({ commit_sha: sha, tier: 'large' });
+  // The last pending leg's die (GB206) leaves the market after the plan.
+  h.cloud.extraOffers = h.cloud.extraOffers.filter((o) => o.gpu_name !== 'RTX_5060');
+  await passStarted(h, id);
+  await tick(h);
+  let gb = (await batchOf(h, id)).legs.find((l) => l.die === 'GB206');
+  assert.equal(gb.state, 'PENDING');
+  await passStarted(h, id);
+  await tick(h, 361);
+  gb = (await batchOf(h, id)).legs.find((l) => l.die === 'GB206');
+  assert.equal(gb.state, 'MISSING');
+});
+test('F10: finished batches are pruned after 30 days; legs use a non-git branch name', async () => {
+  const h = await release();
+  releaseMarket(h);
+  const { batch: id } = await h.service.adminStart({ commit_sha: sha, tier: 'large' });
+  const leg = (await batchOf(h, id)).legs.find((l) => l.state === 'STARTED');
+  assert.equal((await h.storage.get('record:' + leg.key)).branch, 'batch:' + id);
+  await h.service.adminStopBatch(id);
+  await tick(h);
+  assert.ok(await batchOf(h, id));
+  await tick(h, 31 * 24 * 60);
+  assert.equal(await batchOf(h, id), undefined);
+});
+test('F8: the account-wide daily cap also refuses a single PR rental (closed reason vocabulary)', async () => {
+  const h = await release({ ACCOUNT_DAILY_USD: '0.05' });
+  releaseMarket(h);
+  const pr = await h.call();
+  assert.equal(pr.status, 409);
+  const body = await pr.json();
+  assert.equal(body.reason, 'BUDGET:daily-usd');
+  assert.equal(body.budget.daily_cap_usd, 0.05);
+  assert.equal(h.cloud.creates, 0);
 });

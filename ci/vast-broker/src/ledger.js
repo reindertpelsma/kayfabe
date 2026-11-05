@@ -2,7 +2,7 @@
 import {refuse,numericId,budgetRefuse} from './policy.js';
 // prettier-ignore
 import {logChain} from './tokens.js';
-import { profileCaps } from './policy.js';
+import { profileCaps, budgetClass } from './policy.js';
 // One leg's estimated provider spend; previous legs remain separate durable cost receipts.
 export function rentalCost(record, at) {
   return (
@@ -12,6 +12,12 @@ export function rentalCost(record, at) {
 }
 export function costAttempt(record) {
   return { attemptKey: record.key, attemptStarted: record.originalStarted ?? record.started };
+}
+// Spend-row and record fields of a budget class (review F4): the stored `profile` is always one an
+// older Worker knows (check or sweep); a release row adds `budgetClass: 'release'`.
+export function spendClass(record) {
+  const c = budgetClass(record);
+  return c === 'release' ? { profile: 'check', budgetClass: 'release' } : { profile: c };
 }
 export class Ledger {
   constructor(storage) {
@@ -208,8 +214,8 @@ export class Ledger {
       if (branch.length) refuse('BUSY', 409);
       if (
         open.length >= cfg.maxConcurrent ||
-        open.filter((o) => (o.profile ?? 'check') === (record.profile ?? 'check')).length >=
-          cfg.maxConcurrentProfile[record.profile ?? 'check']
+        open.filter((o) => budgetClass(o) === budgetClass(record)).length >=
+          cfg.maxConcurrentProfile[budgetClass(record)]
       )
         refuse('BUSY', 409);
       const bad = await storage.list({ prefix: 'bad-machine:', limit: 257 });
@@ -233,10 +239,13 @@ export class Ledger {
     // Owner ruling 2026-10-24 item 8: the open: index is the set of active runs.
     await this.put('open:' + record.key, true);
     await this.grant(record.key, record);
-    await this.put('sha:' + record.sha, { key: record.key, started: record.started });
+    // Review F6: a release leg never writes the one-rental-per-commit marker, so a release of a
+    // commit never refuses that commit's own master gate with BUDGET:sha-gap.
+    if (budgetClass(record) !== 'release')
+      await this.put('sha:' + record.sha, { key: record.key, started: record.started });
     await this.put('cost:' + record.key, {
       ...costAttempt(record),
-      profile: record.profile ?? 'check',
+      ...spendClass(record),
       started: record.started,
       ended: null,
       created: record.id ? true : null,
@@ -254,7 +263,7 @@ export class Ledger {
       const created = record.id ? true : record.closed === 'GONE' ? false : null;
       await ledger.put('cost:' + record.key, {
         ...costAttempt(record),
-        profile: record.profile ?? 'check',
+        ...spendClass(record),
         started: record.started,
         ended: now,
         created,
@@ -392,7 +401,7 @@ export class Ledger {
       const bandwidth = v.bandwidthCost ?? 0,
         remaining =
           v.ended === null ? (Math.max(0, v.started + v.ttl - now) * v.price) / 3600000 : 0,
-        profile = v.profile ?? 'check';
+        profile = budgetClass(v);
       if (!Object.hasOwn(profiles, profile)) refuse();
       // New receipts distinguish confirmed no-instance failures from actual/free rentals.
       // Legacy zero rows need the still-retained durable record as evidence; unknowns count.
@@ -472,6 +481,13 @@ export class Ledger {
     if (!options.sameAttempt && values.count_today >= caps.dailyCount)
       budgetRefuse('daily-count', values);
     if (values.daily_usd + cost > values.daily_cap_usd) budgetRefuse('daily-usd', values);
+    // Review F8: the account-wide daily cap across profiles (same closed reason vocabulary).
+    if (summary.daily_usd + cost > cfg.accountDaily)
+      budgetRefuse('daily-usd', {
+        ...values,
+        daily_usd: summary.daily_usd,
+        daily_cap_usd: cfg.accountDaily,
+      });
     if (values.rolling_usd + cost > cfg.rolling) budgetRefuse('rolling-usd', values);
     if (Object.hasOwn(options, 'credit') && options.credit < values.credit_required_usd)
       budgetRefuse('credit-reserve', values);

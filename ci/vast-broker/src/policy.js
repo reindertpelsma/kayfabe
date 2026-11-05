@@ -175,25 +175,25 @@ export function configuration(env) {
   cfg.logRetention = Number(retention) * 3600000;
   // Owner ruling 2026-10-24 item 8: concurrent rentals. The account cap (default 1) and optional
   // per-profile caps, which may only lower it. Each refusal names its variable. 2026-11-05
-  // (wtier): the account cap may be 1 to 8 (the release tier runs up to 8 boxes at once, owner
-  // decision); the release profile's own cap defaults to min(8, account cap), so raising
-  // MAX_CONCURRENT_RENTALS alone also raises check and sweep unless MAX_CONCURRENT_CHECK and
-  // MAX_CONCURRENT_SWEEP are set (DEPLOY.md, "Release tier").
-  const slots = (name, fallback) => {
+  // (wtier, review F5): the account cap may be 1 to 9; the release profile's cap is at most the
+  // account cap minus 1 (default: exactly that, at most 8), so a running release always leaves a
+  // slot for the master gate. Raising MAX_CONCURRENT_RENTALS alone also raises check and sweep
+  // unless MAX_CONCURRENT_CHECK and MAX_CONCURRENT_SWEEP are set (DEPLOY.md, "Tiers").
+  const slots = (name, fallback, low = 1) => {
     const raw = env[name] ?? fallback;
-    if (typeof raw !== 'string' || !/^[1-8]$/.test(raw)) refuse('CONFIG_VAR:' + name, 503);
+    if (typeof raw !== 'string' || !/^[0-9]$/.test(raw) || Number(raw) < low)
+      refuse('CONFIG_VAR:' + name, 503);
     return Number(raw);
   };
   cfg.maxConcurrent = slots('MAX_CONCURRENT_RENTALS', String(DEFAULTS.maxConcurrentRentals));
   cfg.maxConcurrentProfile = {};
   for (const profile of ['check', 'sweep', 'release']) {
     const name = 'MAX_CONCURRENT_' + profile.toUpperCase(),
-      fallback =
-        profile === 'release'
-          ? Math.min(DEFAULTS.maxConcurrentRelease, cfg.maxConcurrent)
-          : cfg.maxConcurrent,
-      n = slots(name, String(fallback));
-    if (n > cfg.maxConcurrent) refuse('CONFIG_VAR:' + name, 503);
+      release = profile === 'release',
+      ceiling = release ? cfg.maxConcurrent - 1 : cfg.maxConcurrent,
+      fallback = release ? Math.min(DEFAULTS.maxConcurrentRelease, ceiling) : ceiling,
+      n = slots(name, String(fallback), release ? 0 : 1);
+    if (n > ceiling) refuse('CONFIG_VAR:' + name, 503);
     cfg.maxConcurrentProfile[profile] = n;
   }
   // Lane 2, 2026-11-04: per-profile hard limits (src/tier.js). HARD_RUNTIME_MINUTES is the master
@@ -225,6 +225,14 @@ export function configuration(env) {
   if (!Number.isInteger(cfg.hardRelease / 60000) || cfg.hardRelease <= cfg.softMargin)
     refuse('CONFIG_VAR:RELEASE_HARD_RUNTIME_MINUTES', 503);
   if (cfg.releaseCostCap > cfg.releaseDaily) refuse('CONFIG_VAR:RELEASE_COST_CAP_USD', 503);
+  // Review F4: the release kill switch. Only 'true' lets an admin Start a release or a release
+  // leg rent; turning it off ends every running release at the next cron tick (pending legs and
+  // re-runs are not rented; open boxes run to their result or deadline unless stopped).
+  if (!['true', 'false'].includes(env.RELEASE_ENABLED ?? 'false'))
+    refuse('CONFIG_VAR:RELEASE_ENABLED', 503);
+  cfg.releaseEnabled = env.RELEASE_ENABLED === 'true';
+  // Review F8: one daily cap across every profile (check + sweep + release, UTC day).
+  cfg.accountDaily = number('ACCOUNT_DAILY_USD', DEFAULTS.accountDaily);
   const reruns = env.RELEASE_RERUNS_PER_LEG ?? String(DEFAULTS.releaseRerunsPerLeg);
   if (typeof reruns !== 'string' || !/^[0-2]$/.test(reruns))
     refuse('CONFIG_VAR:RELEASE_RERUNS_PER_LEG', 503);
@@ -516,6 +524,10 @@ export function offerPrice(offer, cfg) {
 // The explicit per-profile caps: price per hour, daily USD, daily rental count, concurrent rentals,
 // hard runtime and the die set offers are admitted from. Every admission, contract and budget
 // check reads its numbers here, so a tier cannot borrow another tier's cap.
+// The budget class of a stored record or spend row (review F4): release rows are written as
+// profile `check` (so an older Worker can still read, count and prune them, and run check
+// deadlines on them) with `budgetClass: 'release'`, which this Worker reads first.
+export const budgetClass = (row) => row?.budgetClass ?? row?.profile ?? 'check';
 export function profileCaps(cfg, profile) {
   if (!['check', 'sweep', 'release'].includes(profile)) throw Error('unknown profile');
   if (profile === 'check')

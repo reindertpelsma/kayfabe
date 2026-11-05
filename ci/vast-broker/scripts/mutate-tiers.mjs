@@ -177,13 +177,6 @@ const MUTANTS = [
     BATCH,
   ],
   [
-    're-run on the failed machine',
-    'src/index.js',
-    'avoidMachines: [...l.avoidMachines, ...(r?.machineId ? [r.machineId] : [])],',
-    'avoidMachines: [...l.avoidMachines],',
-    BATCH,
-  ],
-  [
     'another commit answers a cell',
     'src/index.js',
     'r?.sha === batch.sha && r?.batch === batch.id ? r : undefined',
@@ -234,33 +227,181 @@ const MUTANTS = [
   ],
 ];
 
+// Review fixes (rev259, 2026-11-05).
+MUTANTS.push(
+  [
+    'renting switch not in admit',
+    'src/index.js',
+    "    if (env.RENTING_ENABLED !== 'true') refuse('RENTING_DISABLED', 503);\n    if (profile",
+    '    if (profile',
+    BATCH,
+  ],
+  [
+    'release kill switch ignored',
+    'src/index.js',
+    "if (profile === 'release' && !cfg.releaseEnabled) refuse('RELEASE_DISABLED', 503);",
+    ';',
+    BATCH,
+  ],
+  [
+    'start ignores the release kill switch',
+    'src/index.js',
+    "if (request.tier === 'large' && !cfg.releaseEnabled) refuse('RELEASE_DISABLED', 503);",
+    ';',
+    BATCH,
+  ],
+  [
+    'batch stop not durable first',
+    'src/index.js',
+    "      for (const l of batch.legs) if (l.state === 'PENDING') l.state = 'MISSING';\n      await ledger.put('batch:' + id, batch);\n      let failed = false;",
+    '      let failed = false;',
+    BATCH,
+  ],
+  [
+    'hardware not checked',
+    'src/release.js',
+    "(record.verdict === 'PASS' && hardware !== 'MATCH') ||",
+    'false ||',
+    PURE,
+  ],
+  [
+    'release rows stored as release',
+    'src/ledger.js',
+    "return c === 'release' ? { profile: 'check', budgetClass: 'release' } : { profile: c };",
+    'return { profile: c };',
+    BATCH,
+  ],
+  [
+    'release takes every slot',
+    'src/policy.js',
+    'ceiling = release ? cfg.maxConcurrent - 1 : cfg.maxConcurrent,',
+    'ceiling = cfg.maxConcurrent,',
+    ['edits2-concurrency'],
+  ],
+  [
+    'release writes the commit gap',
+    'src/ledger.js',
+    "    if (budgetClass(record) !== 'release')\n",
+    '',
+    BATCH,
+  ],
+  [
+    'contract price skips the cost cap',
+    'src/index.js',
+    "if (budgetClass(record) === 'release' && typeof record.batch === 'string') {",
+    'if (false) {',
+    BATCH,
+  ],
+  [
+    'no account daily cap',
+    'src/release.js',
+    "if (budget.daily_usd + estimate > cfg.accountDaily) refusals.push('ACCOUNT_DAILY_USD');",
+    ';',
+    PURE,
+  ],
+  [
+    'gap exemption without RUNNING',
+    'src/ledger.js',
+    "      batch.state === 'RUNNING' &&\n",
+    '',
+    BATCH,
+  ],
+  [
+    'gap exemption for any leg state',
+    'src/ledger.js',
+    "batch.legs.some((l) => l.key === key && l.state === 'PENDING')",
+    'batch.legs.some((l) => l.key === key)',
+    BATCH,
+  ],
+  [
+    'no start window',
+    'src/index.js',
+    '        now() - (l.queued ?? batch.created) > cfg.releaseStartWindow\n',
+    '        false\n',
+    BATCH,
+  ],
+  [
+    're-run on the sibling machine',
+    'src/index.js',
+    '              ...batch.legs.filter((x) => x.die === l.die && x.machineId).map((x) => x.machineId),\n',
+    '',
+    BATCH,
+  ],
+  [
+    'no account cap in admission',
+    'src/ledger.js',
+    'if (summary.daily_usd + cost > cfg.accountDaily)',
+    'if (false)',
+    BATCH,
+  ],
+  [
+    'batches never pruned',
+    'src/index.js',
+    '        await ledger.storage.delete(key);\n        pruned++;',
+    '        pruned++;',
+    BATCH,
+  ],
+);
 const selected = process.argv.slice(2);
 let failed = false;
-for (const [name, file, before, after, tests] of MUTANTS) {
-  if (selected.length && !selected.includes(name)) continue;
+// TAP explicitly: the default reporter differs between a terminal and CI. A kill is a `not ok` line
+// that names a test, never a test file that failed to load (review F9).
+const run = (copy, tests) => {
+  const result = spawnSync(
+    process.execPath,
+    [
+      '--no-warnings',
+      '--test',
+      '--test-reporter=tap',
+      ...tests.map((t) => join(copy, 'test', t + '.test.js')),
+    ],
+    { cwd: copy, encoding: 'utf8', timeout: 300000, maxBuffer: 32 * 1024 * 1024 },
+  );
+  const kills = [...(result.stdout ?? '').matchAll(/^not ok \d+ - (.+)$/gm)]
+    .map((m) => m[1])
+    .filter((t) => !/\.test\.js$/.test(t) && !t.startsWith('/'));
+  return { result, kills };
+};
+const prepare = () => {
   const root = mkdtempSync(join(tmpdir(), 'kf-tier-mutant-'));
   const copy = join(root, 'ci/vast-broker');
+  cpSync(broker, copy, { recursive: true, filter: (p) => !p.includes('node_modules') });
+  symlinkSync(join(broker, 'node_modules'), join(copy, 'node_modules'));
+  for (const extra of ['scripts/ci/vast_report.py', 'ci/vast-reaper']) {
+    mkdirSync(join(root, extra, '..'), { recursive: true });
+    cpSync(join(repo, extra), join(root, extra), { recursive: true });
+  }
+  return { root, copy };
+};
+// Baseline: the unmutated copy must pass every test file the mutants use, so a harness that cannot
+// load or run the tests can never report kills.
+{
+  const { root, copy } = prepare();
   try {
-    cpSync(broker, copy, { recursive: true, filter: (p) => !p.includes('node_modules') });
-    symlinkSync(join(broker, 'node_modules'), join(copy, 'node_modules'));
-    // Files the tests read outside the broker directory.
-    for (const extra of ['scripts/ci/vast_report.py', 'ci/vast-reaper/wrangler.toml']) {
-      mkdirSync(join(root, extra, '..'), { recursive: true });
-      cpSync(join(repo, extra), join(root, extra));
+    const files = [...new Set(MUTANTS.flatMap((m) => m[4]))];
+    const { result, kills } = run(copy, files);
+    const ok = result.status === 0 && !result.error && kills.length === 0;
+    console.log(JSON.stringify({ baseline: files, status: result.status, ok }));
+    if (!ok) {
+      console.log('BASELINE FAILED: no mutant result is meaningful');
+      process.exit(1);
     }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+for (const [name, file, before, after, tests] of MUTANTS) {
+  if (selected.length && !selected.includes(name)) continue;
+  const { root, copy } = prepare();
+  try {
     const target = join(copy, file);
     const original = readFileSync(target, 'utf8');
     if (original.split(before).length !== 2) throw Error('ambiguous or missing mutation: ' + name);
     writeFileSync(target, original.replace(before, after));
-    const run = spawnSync(
-      process.execPath,
-      ['--no-warnings', '--test', ...tests.map((t) => join(copy, 'test', t + '.test.js'))],
-      { cwd: copy, encoding: 'utf8', timeout: 300000, maxBuffer: 32 * 1024 * 1024 },
-    );
-    const kills = [...(run.stdout ?? '').matchAll(/^not ok \d+ - (.+)$/gm)].map((m) => m[1]);
-    const ok = run.status !== 0 && kills.length >= 1 && !run.error;
+    const { result, kills } = run(copy, tests);
+    const ok = result.status !== 0 && kills.length >= 1 && !result.error;
     failed ||= !ok;
-    console.log(JSON.stringify({ mutant: name, status: run.status, kills, ok }));
+    console.log(JSON.stringify({ mutant: name, status: result.status, kills, ok }));
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

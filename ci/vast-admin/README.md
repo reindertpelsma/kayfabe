@@ -17,7 +17,9 @@ page gains a form (commit, tier small/middle/large, optional die) with **Plan** 
 Access check, and forward once to the DO's internal `/admin/plan` or `/admin/start`; the DO's
 answer (a plan, a batch view, or a refusal code with the plan) is relayed as is and carries no log,
 token or capability. The start enters the broker's ordinary admission path; plan rents nothing.
-`POST /api/stop` also accepts `{"batch": "<19-digit id>"}` to end one batch. No new secret, binding
+`POST /api/stop` also accepts `{"batch": "<19-digit id>"}` to end one batch (the batch is stored as
+STOPPED before any box is closed, so a failed provider call cannot let it start more boxes). A
+`large` Start is refused until the broker var `RELEASE_ENABLED=true`. No new secret, binding
 or Access app. How a release works: [broker README](../vast-broker/README.md).
 
 ## Retained log viewer and Stop check (v2)

@@ -5,6 +5,7 @@ import {planRelease,classifyLeg,releaseVerdict,wantsRerun} from './release.js';
 import {DEFAULTS} from './defaults.js';
 import {
   BrokerError,
+  budgetClass,
   refuse,
   budgetRefuse,
   configuration,
@@ -36,7 +37,7 @@ import {Vast} from './vast.js';
 // prettier-ignore
 import {OfferBook} from './offers.js';
 // prettier-ignore
-import {Ledger,rentalCost,costAttempt} from './ledger.js';
+import {Ledger,rentalCost,costAttempt,spendClass} from './ledger.js';
 // prettier-ignore
 import {onstart} from './onstart.js';
 // prettier-ignore
@@ -263,7 +264,7 @@ export function createService({
   }
   async function checkContract(record, instance, vast, cfg) {
     const price = instance && offerPrice(instance, cfg);
-    const cap = profileCaps(cfg, record.profile ?? 'check').price;
+    const cap = profileCaps(cfg, budgetClass(record)).price;
     if (
       !price ||
       instance.inet_up_cost > cfg.maxInet ||
@@ -289,6 +290,22 @@ export function createService({
           run_cap_usd: record.runBudgetUsd,
         });
       }
+      // Review F8: a release leg's verified contract price is re-checked against its release's cost
+      // cap (the other legs' spend and reservations plus this leg's full liability).
+      if (budgetClass(record) === 'release' && typeof record.batch === 'string') {
+        const batch = await ledger.get('batch:' + record.batch),
+          others = batch ? await batchSpend(batch, record.key) : 0;
+        if (!batch || !(others + total <= batch.costCapUsd)) {
+          record.computeStoragePrice = computeStorage;
+          record.bandwidthCost = bandwidth;
+          await close(record, vast, 'CONTRACT_BUDGET', 'UNAVAILABLE');
+          budgetRefuse('run-usd', {
+            cost_usd: total,
+            prior_usd: others,
+            run_cap_usd: batch?.costCapUsd ?? 0,
+          });
+        }
+      }
       try {
         const credit = await vast.credit();
         await ledger.budgets(cfg, now(), total, record.key, { credit, sameAttempt: true });
@@ -303,7 +320,7 @@ export function createService({
       await ledger.save(record);
       await ledger.put('cost:' + record.key, {
         ...costAttempt(record),
-        profile: record.profile ?? 'check',
+        ...spendClass(record),
         started: record.started,
         ended: null,
         ttl,
@@ -314,7 +331,7 @@ export function createService({
     }
   }
   async function update(record, vast, github, cfg) {
-    applyProfile(cfg, record.profile ?? 'check');
+    applyProfile(cfg, budgetClass(record));
     if (record.ended !== null) return;
     clocks(record, cfg);
     await ledger.save(record);
@@ -900,6 +917,10 @@ export function createService({
     market,
     costGuard,
   }) {
+    // Review F1: the switches are checked here, on the one admission path, so turning renting (or
+    // the release kill switch) off also stops cron-started release legs and re-runs.
+    if (env.RENTING_ENABLED !== 'true') refuse('RENTING_DISABLED', 503);
+    if (profile === 'release' && !cfg.releaseEnabled) refuse('RELEASE_DISABLED', 503);
     // Review R1: one attempt per run key, also after retention removed the record. Guaranteed:
     // while the spend row exists the key is refused. The row is pruned once its run ended more
     // than 30 days ago (ledger.budgets), so after that a token minted for the same run attempt
@@ -938,8 +959,7 @@ export function createService({
     }
     if (
       open.length >= cfg.maxConcurrent ||
-      open.filter((o) => (o.profile ?? 'check') === profile).length >=
-        cfg.maxConcurrentProfile[profile]
+      open.filter((o) => budgetClass(o) === profile).length >= cfg.maxConcurrentProfile[profile]
     )
       refuse('BUSY', 409);
     if (!validSecret(env.RUN_TOKEN_SECRET) || !validSecret(env.OWNER_STOP_TOKEN)) refuse();
@@ -989,7 +1009,7 @@ export function createService({
     const started = now(),
       r = {
         ...target,
-        profile,
+        ...spendClass({ profile }),
         tier: tierName,
         family: chosen.family ?? familyOf(offer.die, cfg),
         ...(chosen.wanted !== undefined && chosen.wanted !== chosen.family
@@ -1253,6 +1273,7 @@ export function createService({
       token = env.GITHUB_API_TOKEN;
     if (request.die !== undefined && !tierDies(cfg, request.tier).includes(request.die))
       refuse('BAD_REQUEST', 400, 'DIE_NOT_IN_TIER');
+    if (request.tier === 'large' && !cfg.releaseEnabled) refuse('RELEASE_DISABLED', 503);
     if (token && (token.length > 1024 || !/^[\x21-\x7e]+$/.test(token))) refuse();
     const github = new Github(fetcher, cfg, token, { cache: githubCache, now });
     // Forks never trigger rentals: the commit must be on this repository's master or next.
@@ -1345,9 +1366,10 @@ export function createService({
     };
   }
   // Spend of a batch: settled legs at their cost, open legs at their reserved liability.
-  async function batchSpend(batch) {
+  async function batchSpend(batch, exclude) {
     let spent = 0;
     for (const l of batch.legs) {
+      if (l.key === exclude) continue;
       if (l.state === 'ENDED') spent += l.costUsd ?? 0;
       else if (l.state === 'STARTED') {
         const r = await ledger.get('record:' + l.key);
@@ -1372,6 +1394,9 @@ export function createService({
       l.outcome = classifyLeg(r?.sha === batch.sha && r?.batch === batch.id ? r : undefined, {
         windowsRuns: l.windowsRuns,
         stages: batch.stages,
+        die: batch.tier === 'large' ? l.die : (l.die ?? r?.die),
+        family: batch.tier === 'large' ? l.family : (l.family ?? r?.family),
+        cfg,
       });
       l.costUsd = r ? rentalCost(r, r.ended) : 0;
       l.machineId = r?.machineId ?? null;
@@ -1384,7 +1409,14 @@ export function createService({
           die: l.die,
           windowsRuns: l.windowsRuns,
           state: 'PENDING',
-          avoidMachines: [...l.avoidMachines, ...(r?.machineId ? [r.machineId] : [])],
+          // Review F10: a fresh box: not a machine any leg of this die used, the failed one
+          // included (its machineId is set above), so two Windows runs stay on two machines.
+          avoidMachines: [
+            ...new Set([
+              ...l.avoidMachines,
+              ...batch.legs.filter((x) => x.die === l.die && x.machineId).map((x) => x.machineId),
+            ]),
+          ],
           avoidHosts: [...l.avoidHosts, ...(r?.hostId ? [r.hostId] : [])],
           rerunDepth: (l.rerunDepth ?? 0) + 1,
           rerunOf: l.key,
@@ -1417,7 +1449,8 @@ export function createService({
           key: l.key,
           target: {
             sha: batch.sha,
-            branch: 'batch/' + batch.id,
+            // Review F10: ':' cannot occur in a git ref, so no GitHub head branch shares it.
+            branch: 'batch:' + batch.id,
             run: batch.id,
             attempt: String(l.seq),
           },
@@ -1461,10 +1494,19 @@ export function createService({
             if (started.hostId)
               sibling.avoidHosts = [...new Set([...sibling.avoidHosts, started.hostId])];
           }
+        // Durable at once (review F10): the next leg's contract check reads this leg's liability,
+        // and a crash cannot lose the siblings' machine avoidance.
+        await ledger.put('batch:' + batch.id, batch);
       } catch (e) {
         if (await ledger.get('record:' + l.key)) l.state = 'STARTED';
         const reason = e instanceof BrokerError ? (e.reason ?? e.state) : 'UNAVAILABLE';
         l.lastRefusal = reason;
+        // Review F1/F4: admit() refused because renting or releases are switched off: nothing of
+        // this batch is rented any more (its pending legs and re-runs end as MISSING).
+        if (['RENTING_DISABLED', 'RELEASE_DISABLED'].includes(reason)) {
+          for (const x of batch.legs) if (x.state === 'PENDING') x.state = 'MISSING';
+          break;
+        }
         // No offer for this die: try the next leg. Busy, a cap or anything else: next tick.
         if (reason !== 'NO_ALLOWED_OFFERS') break;
       }
@@ -1494,21 +1536,42 @@ export function createService({
         console.log(JSON.stringify({ event: 'batch_tick_unavailable' }));
       }
     }
+    // Review F10: finished batches are kept 30 days (the spend rows' horizon), then pruned.
+    let pruned = 0;
+    for (const [key, batch] of await ledger.storage.list({ prefix: 'batch:', limit: 1000 })) {
+      if (pruned >= 20) break;
+      if (
+        batch?.state !== 'RUNNING' &&
+        Number.isFinite(batch?.updated) &&
+        now() - batch.updated > 30 * 86400000
+      ) {
+        await ledger.storage.delete(key);
+        pruned++;
+      }
+    }
   }
   // Owner stop of a whole batch: no new legs, every open leg closed by the existing stop path.
   async function stopBatches(ids, vast) {
     for (const id of ids) {
       const batch = await ledger.get('batch:' + id);
       if (!batch || batch.state !== 'RUNNING') continue;
+      // Review F2: the stop is durable before any provider call, as in /stop-all; a failed close
+      // leaves a STOPPED batch (no new leg) whose box the cron, the owner stop or the reaper ends.
       batch.state = 'STOPPED';
+      for (const l of batch.legs) if (l.state === 'PENDING') l.state = 'MISSING';
+      await ledger.put('batch:' + id, batch);
+      let failed = false;
       for (const l of batch.legs) {
-        if (l.state === 'PENDING') l.state = 'MISSING';
         if (l.state !== 'STARTED') continue;
         const r = await ledger.get('record:' + l.key);
-        if (r && r.ended === null) await close(r, vast, 'STOPPED');
+        try {
+          if (r && r.ended === null) await close(r, vast, 'STOPPED');
+        } catch {
+          failed = true;
+        }
       }
-      await ledger.put('batch:' + id, batch);
       await tickBatch(batch, vast, null);
+      if (failed) refuse();
     }
   }
   const releaseUpload = async (request) => {
@@ -1766,7 +1829,7 @@ export class BrokerLedger {
                 run: text(r.key),
                 sha: text(r.sha),
                 branch: text(r.branch),
-                profile: text(r.profile ?? 'check'),
+                profile: text(budgetClass(r)),
                 tier: text(r.tier ?? null),
                 family: text(r.family ?? null),
                 batch: text(r.batch ?? null),

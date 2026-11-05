@@ -51,6 +51,8 @@ export const ALLOWED = new Set([
   // Tiers (wtier, 2026-11-05; src/tier.js, src/policy.js): the release (large) profile's explicit
   // caps and lists, and the middle tier's rotation and VRAM floor. Account cap is now 1-8.
   'MAX_CONCURRENT_RELEASE',
+  'RELEASE_ENABLED',
+  'ACCOUNT_DAILY_USD',
   'RELEASE_MAX_PRICE_USD_HOUR',
   'RELEASE_DAILY_USD',
   'RELEASE_DAILY_RENTALS',
