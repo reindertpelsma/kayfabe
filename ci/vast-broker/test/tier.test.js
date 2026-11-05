@@ -60,13 +60,15 @@ const market = (h) => {
 const createdEnv = (h) =>
   h.cloud.calls.filter((c) => /\/api\/v0\/asks\/\d+\/$/.test(c.url)).map((c) => c.body.env);
 
-test('tier table: check is the Windows master gate, sweep is Linux-only, nothing else exists', () => {
-  assert.deepEqual(Object.keys(TIERS).sort(), ['check', 'sweep']);
+test('profile table: check is the Windows master gate, sweep is Linux-only, release is Windows', () => {
+  // 2026-11-05 (wtier): profile `release` carries the large tier's legs (admin start only).
+  assert.deepEqual(Object.keys(TIERS).sort(), ['check', 'release', 'sweep']);
   assert.deepEqual(tierEnvironment('check'), { KF_MERGE_WINDOWS: '1' });
   assert.deepEqual(tierEnvironment('sweep'), { KF_MERGE_WINDOWS: '0' });
-  for (const bad of ['release', '', undefined, 'constructor', '__proto__', 'toString'])
+  assert.deepEqual(tierEnvironment('release'), { KF_MERGE_WINDOWS: '1' });
+  for (const bad of ['large', '', undefined, 'constructor', '__proto__', 'toString'])
     assert.throws(() => tier(bad), /unknown profile/, String(bad));
-  assert.ok(Object.isFrozen(TIERS) && Object.isFrozen(TIERS.check) && Object.isFrozen(TIERS.sweep));
+  assert.ok(Object.isFrozen(TIERS) && Object.values(TIERS).every(Object.isFrozen));
 });
 
 test('per-profile hard limits: check 300 min by default, sweep min(180, check) unless set', () => {
@@ -100,11 +102,16 @@ test('the Worker writes the tier of the profile into the box environment, and on
     SWEEP_HARD_RUNTIME_MINUTES: '20',
   });
   market(h);
-  assert.equal((await rentAs(h, 201, 'check')).status, 200);
+  // The sweep first: its preference (GA102) is also the middle rotation's Ampere choice.
   assert.equal((await rentAs(h, 202, 'sweep')).status, 200);
-  const [check, sweep] = createdEnv(h);
+  assert.equal((await rentAs(h, 201, 'check')).status, 200);
+  const [sweep, check] = createdEnv(h);
   assert.equal(check.KF_MERGE_WINDOWS, '1');
   assert.equal(sweep.KF_MERGE_WINDOWS, '0');
+  // The tier comes from the verified event: a master PR is middle, the dispatched sweep adhoc.
+  assert.equal(check.KF_TIER, 'middle');
+  assert.equal(sweep.KF_TIER, 'adhoc');
+  for (const e of [check, sweep]) assert.equal(e.KF_WINDOWS_RUNS ?? e.KF_STAGES, undefined);
   // Each profile's own hard limit sets the box deadlines.
   assert.equal(check.KF_HARD_DEADLINE - check.KF_BOOT_DEADLINE, (180 - 10) * 60);
   assert.equal(sweep.KF_HARD_DEADLINE - sweep.KF_BOOT_DEADLINE, (20 - 10) * 60);

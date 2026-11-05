@@ -41,3 +41,6 @@ docs/whitepaper/*.toc
 
 # w753 session scratch: logs, saved copies for the known-positive pass, box coordinates.
 .w753/
+
+# Wrangler dry-run cache (ci/vast-broker bundle hash check, test/bundle.test.js), written at the repo root.
+.wrangler/

@@ -78,17 +78,37 @@ const market = (h) => {
 const named = (fn, name) =>
   assert.throws(fn, (e) => e.state === 'CONFIG_VAR:' + name && e.status === 503, name);
 
-test('item 8: the cap defaults to 1 and is validated (1 to 4, per profile at most the cap)', () => {
+// 2026-11-05 (wtier, review F5): the account cap may be 1 to 9; the release profile's cap is at
+// most the account cap minus 1 (default exactly that, at most 8), so one slot stays for the gate.
+test('item 8: the cap defaults to 1 and is validated (1 to 9, release at most cap - 1)', () => {
   assert.equal(DEFAULTS.maxConcurrentRentals, 1);
   const cfg = configuration(env);
   assert.equal(cfg.maxConcurrent, 1);
-  assert.deepEqual(cfg.maxConcurrentProfile, { check: 1, sweep: 1 });
+  assert.deepEqual(cfg.maxConcurrentProfile, { check: 1, sweep: 1, release: 0 });
   const four = configuration({ ...env, MAX_CONCURRENT_RENTALS: '4', MAX_CONCURRENT_SWEEP: '2' });
   assert.equal(four.maxConcurrent, 4);
-  assert.deepEqual(four.maxConcurrentProfile, { check: 4, sweep: 2 });
-  for (const name of ['MAX_CONCURRENT_RENTALS', 'MAX_CONCURRENT_CHECK', 'MAX_CONCURRENT_SWEEP'])
-    for (const bad of ['0', '5', '1.5', 'x', '', ' 2', '02', '-1'])
+  assert.deepEqual(four.maxConcurrentProfile, { check: 4, sweep: 2, release: 3 });
+  const nine = configuration({ ...env, MAX_CONCURRENT_RENTALS: '9', MAX_CONCURRENT_CHECK: '1' });
+  assert.deepEqual(nine.maxConcurrentProfile, { check: 1, sweep: 9, release: 8 });
+  for (const name of [
+    'MAX_CONCURRENT_RENTALS',
+    'MAX_CONCURRENT_CHECK',
+    'MAX_CONCURRENT_SWEEP',
+    'MAX_CONCURRENT_RELEASE',
+  ])
+    for (const bad of ['10', '1.5', 'x', '', ' 2', '02', '-1'])
       named(() => configuration({ ...env, MAX_CONCURRENT_RENTALS: '4', [name]: bad }), name);
+  for (const name of ['MAX_CONCURRENT_RENTALS', 'MAX_CONCURRENT_CHECK', 'MAX_CONCURRENT_SWEEP'])
+    named(() => configuration({ ...env, MAX_CONCURRENT_RENTALS: '4', [name]: '0' }), name);
+  named(
+    () => configuration({ ...env, MAX_CONCURRENT_RENTALS: '4', MAX_CONCURRENT_RELEASE: '4' }),
+    'MAX_CONCURRENT_RELEASE',
+  );
+  assert.equal(
+    configuration({ ...env, MAX_CONCURRENT_RENTALS: '4', MAX_CONCURRENT_RELEASE: '0' })
+      .maxConcurrentProfile.release,
+    0,
+  );
   named(() => configuration({ ...env, MAX_CONCURRENT_CHECK: '2' }), 'MAX_CONCURRENT_CHECK');
   named(
     () => configuration({ ...env, MAX_CONCURRENT_RENTALS: '2', MAX_CONCURRENT_SWEEP: '3' }),

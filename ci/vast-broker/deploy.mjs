@@ -51,6 +51,21 @@ export const ALLOWED = new Set([
   // Result store (src/results.js): 'true' lets a Worker-verified tree key answer for another
   // commit. Keep it unset/'false' until boxes delete ignored files after cloning (review of #258).
   'TREE_KEY_CARRY_OVER',
+  // Tiers (wtier, 2026-11-05; src/tier.js, src/policy.js): the release (large) profile's explicit
+  // caps and lists, and the middle tier's rotation and VRAM floor. Account cap is now 1-8.
+  'MAX_CONCURRENT_RELEASE',
+  'RELEASE_ENABLED',
+  'ACCOUNT_DAILY_USD',
+  'RELEASE_MAX_PRICE_USD_HOUR',
+  'RELEASE_DAILY_USD',
+  'RELEASE_DAILY_RENTALS',
+  'RELEASE_COST_CAP_USD',
+  'RELEASE_HARD_RUNTIME_MINUTES',
+  'RELEASE_RERUNS_PER_LEG',
+  'RELEASE_STAGES',
+  'RELEASE_DIES',
+  'MIDDLE_ROTATION',
+  'MIDDLE_VRAM_FLOOR_MB',
 ]);
 const bareOrigin = (value) => {
   try {

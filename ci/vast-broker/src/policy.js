@@ -173,19 +173,27 @@ export function configuration(env) {
   if (!/^[1-9][0-9]?$/.test(retention) || Number(retention) > 48)
     refuse('CONFIG_VAR:LOG_RETENTION_HOURS', 503);
   cfg.logRetention = Number(retention) * 3600000;
-  // Owner ruling 2026-10-24 item 8: concurrent rentals. The account cap (default 1, at most 4)
-  // and optional per-profile caps, which may only lower it. Each refusal names its variable.
-  const slots = (name, fallback) => {
+  // Owner ruling 2026-10-24 item 8: concurrent rentals. The account cap (default 1) and optional
+  // per-profile caps, which may only lower it. Each refusal names its variable. 2026-11-05
+  // (wtier, review F5): the account cap may be 1 to 9; the release profile's cap is at most the
+  // account cap minus 1 (default: exactly that, at most 8), so a running release always leaves a
+  // slot for the master gate. Raising MAX_CONCURRENT_RENTALS alone also raises check and sweep
+  // unless MAX_CONCURRENT_CHECK and MAX_CONCURRENT_SWEEP are set (DEPLOY.md, "Tiers").
+  const slots = (name, fallback, low = 1) => {
     const raw = env[name] ?? fallback;
-    if (typeof raw !== 'string' || !/^[1-4]$/.test(raw)) refuse('CONFIG_VAR:' + name, 503);
+    if (typeof raw !== 'string' || !/^[0-9]$/.test(raw) || Number(raw) < low)
+      refuse('CONFIG_VAR:' + name, 503);
     return Number(raw);
   };
   cfg.maxConcurrent = slots('MAX_CONCURRENT_RENTALS', String(DEFAULTS.maxConcurrentRentals));
   cfg.maxConcurrentProfile = {};
-  for (const profile of ['check', 'sweep']) {
+  for (const profile of ['check', 'sweep', 'release']) {
     const name = 'MAX_CONCURRENT_' + profile.toUpperCase(),
-      n = slots(name, String(cfg.maxConcurrent));
-    if (n > cfg.maxConcurrent) refuse('CONFIG_VAR:' + name, 503);
+      release = profile === 'release',
+      ceiling = release ? cfg.maxConcurrent - 1 : cfg.maxConcurrent,
+      fallback = release ? Math.min(DEFAULTS.maxConcurrentRelease, ceiling) : ceiling,
+      n = slots(name, String(fallback), release ? 0 : 1);
+    if (n > ceiling) refuse('CONFIG_VAR:' + name, 503);
     cfg.maxConcurrentProfile[profile] = n;
   }
   // Lane 2, 2026-11-04: per-profile hard limits (src/tier.js). HARD_RUNTIME_MINUTES is the master
@@ -203,6 +211,41 @@ export function configuration(env) {
   cfg.grace = cfg.passGrace;
   cfg.sweepPrice = number('SWEEP_MAX_PRICE_USD_HOUR', DEFAULTS.sweepPrice, 10);
   cfg.sweepDaily = number('SWEEP_DAILY_USD', DEFAULTS.sweepDaily);
+  // 2026-11-05 (wtier): the release profile's explicit caps. The hard limit is the check rule
+  // (300 min: one leg runs the Linux bar, the Windows install and up to two Windows gate runs) and
+  // may not exceed it, because the independent reaper deletes kf-ci boxes after 300 + 15 minutes.
+  cfg.releasePrice = number('RELEASE_MAX_PRICE_USD_HOUR', DEFAULTS.releasePrice, 10);
+  cfg.releaseDaily = number('RELEASE_DAILY_USD', DEFAULTS.releaseDaily);
+  cfg.releaseDailyCount = number('RELEASE_DAILY_RENTALS', DEFAULTS.releaseDailyCount, 64);
+  cfg.releaseCostCap = number('RELEASE_COST_CAP_USD', DEFAULTS.releaseCostCap);
+  cfg.hardRelease =
+    number('RELEASE_HARD_RUNTIME_MINUTES', DEFAULTS.releaseHardMinutes, DEFAULTS.hardMinutes) *
+    60000;
+  if (!Number.isInteger(cfg.releaseDailyCount)) refuse('CONFIG_VAR:RELEASE_DAILY_RENTALS', 503);
+  if (!Number.isInteger(cfg.hardRelease / 60000) || cfg.hardRelease <= cfg.softMargin)
+    refuse('CONFIG_VAR:RELEASE_HARD_RUNTIME_MINUTES', 503);
+  if (cfg.releaseCostCap > cfg.releaseDaily) refuse('CONFIG_VAR:RELEASE_COST_CAP_USD', 503);
+  // Review F4: the release kill switch. Only 'true' lets an admin Start a release or a release
+  // leg rent; turning it off ends every running release at the next cron tick (pending legs and
+  // re-runs are not rented; open boxes run to their result or deadline unless stopped).
+  if (!['true', 'false'].includes(env.RELEASE_ENABLED ?? 'false'))
+    refuse('CONFIG_VAR:RELEASE_ENABLED', 503);
+  cfg.releaseEnabled = env.RELEASE_ENABLED === 'true';
+  // Review F8: one daily cap across every profile (check + sweep + release, UTC day).
+  cfg.accountDaily = number('ACCOUNT_DAILY_USD', DEFAULTS.accountDaily);
+  const reruns = env.RELEASE_RERUNS_PER_LEG ?? String(DEFAULTS.releaseRerunsPerLeg);
+  if (typeof reruns !== 'string' || !/^[0-2]$/.test(reruns))
+    refuse('CONFIG_VAR:RELEASE_RERUNS_PER_LEG', 503);
+  cfg.releaseReruns = Number(reruns);
+  cfg.releaseStartWindow = DEFAULTS.releaseStartWindowMinutes * 60000;
+  cfg.releaseDiesPerFamily = DEFAULTS.releaseDiesPerFamily;
+  cfg.releaseWindowsRuns = DEFAULTS.releaseWindowsRunsPerDie;
+  // The middle tier's VRAM floor (agreed 2026-11-05: middle only, from the first manual trio
+  // run's footprints). 0 = off, the default until those footprints are measured (TBD).
+  const vram = env.MIDDLE_VRAM_FLOOR_MB ?? String(DEFAULTS.middleVramFloorMb);
+  if (typeof vram !== 'string' || !/^(0|[1-9][0-9]{0,5})$/.test(vram))
+    refuse('CONFIG_VAR:MIDDLE_VRAM_FLOOR_MB', 503);
+  cfg.middleVramFloorMb = Number(vram);
   cfg.bandwidthDown = number('BANDWIDTH_DOWN_GB', DEFAULTS.bandwidthDownGb, 1000);
   cfg.bandwidthUp = number('BANDWIDTH_UP_GB', DEFAULTS.bandwidthUpGb, 1000);
   const data = (name, fallback) => {
@@ -279,8 +322,59 @@ export function configuration(env) {
     )
   )
     refuse();
+  // Families, the middle rotation and the release die lists (2026-11-05, wtier). Family -> die
+  // lists in the fixed family order; every die must belong to its family by the die rules'
+  // compute capability, so a list cannot move a die across families.
+  cfg.families = DEFAULTS.families;
+  const familyOrder = Object.keys(cfg.families);
+  const byFamily = (name, fallback) => {
+    const x = data(name, fallback);
+    if (
+      !x ||
+      typeof x !== 'object' ||
+      Array.isArray(x) ||
+      Object.keys(x).join(',') !== familyOrder.join(',') ||
+      !familyOrder.every(
+        (f) =>
+          Array.isArray(x[f]) &&
+          x[f].length > 0 &&
+          x[f].length <= 8 &&
+          new Set(x[f]).size === x[f].length &&
+          x[f].every(
+            (d) =>
+              typeof d === 'string' &&
+              /^[A-Z][A-Z0-9_]{1,23}$/.test(d) &&
+              cfg.dieRules.some((r) => r.die === d && r.cc === cfg.families[f]),
+          ),
+      )
+    )
+      refuse('CONFIG_VAR:' + name, 503);
+    return x;
+  };
+  cfg.middleRotation = byFamily('MIDDLE_ROTATION', DEFAULTS.middleRotation);
+  cfg.releaseDies = byFamily('RELEASE_DIES', DEFAULTS.releaseDies);
+  if (!familyOrder.every((f) => cfg.releaseDies[f].length >= cfg.releaseDiesPerFamily))
+    refuse('CONFIG_VAR:RELEASE_DIES', 503);
+  cfg.checkAdmitDies = [
+    ...new Set([...cfg.checkDies, ...Object.values(cfg.middleRotation).flat()]),
+  ];
+  cfg.releaseAdmitDies = Object.values(cfg.releaseDies).flat();
+  // Extra payload stages (release only). A DESIGN_ONLY slot (two_guests, trio) cannot be enabled.
+  cfg.releaseStages = data('RELEASE_STAGES', DEFAULTS.releaseStages);
+  if (
+    !Array.isArray(cfg.releaseStages) ||
+    new Set(cfg.releaseStages).size !== cfg.releaseStages.length ||
+    !cfg.releaseStages.every(
+      (s) =>
+        typeof s === 'string' &&
+        Object.hasOwn(DEFAULTS.stageSlots, s) &&
+        DEFAULTS.stageSlots[s].tiers.includes('large') &&
+        DEFAULTS.stageSlots[s].state !== 'DESIGN_ONLY',
+    )
+  )
+    refuse('CONFIG_VAR:RELEASE_STAGES', 503);
   cfg.quality = {};
-  for (const profile of ['check', 'sweep']) {
+  for (const profile of ['check', 'sweep', 'release']) {
     const q = data(profile.toUpperCase() + '_HOST_QUALITY', DEFAULTS.quality);
     if (
       !q ||
@@ -427,6 +521,42 @@ export function offerPrice(offer, cfg) {
     total: (computeStorage * (cfg.hard + cfg.cronPeriod)) / 3600000 + bandwidth,
   };
 }
+// The explicit per-profile caps: price per hour, daily USD, daily rental count, concurrent rentals,
+// hard runtime and the die set offers are admitted from. Every admission, contract and budget
+// check reads its numbers here, so a tier cannot borrow another tier's cap.
+// The budget class of a stored record or spend row (review F4): release rows are written as
+// profile `check` (so an older Worker can still read, count and prune them, and run check
+// deadlines on them) with `budgetClass: 'release'`, which this Worker reads first.
+export const budgetClass = (row) => row?.budgetClass ?? row?.profile ?? 'check';
+export function profileCaps(cfg, profile) {
+  if (!['check', 'sweep', 'release'].includes(profile)) throw Error('unknown profile');
+  if (profile === 'check')
+    return {
+      price: cfg.price,
+      dailyUsd: cfg.daily,
+      dailyCount: cfg.dailyCount,
+      concurrent: cfg.maxConcurrentProfile.check,
+      hard: cfg.hardCheck,
+      dies: cfg.checkAdmitDies ?? cfg.checkDies,
+    };
+  if (profile === 'sweep')
+    return {
+      price: cfg.sweepPrice,
+      dailyUsd: cfg.sweepDaily,
+      dailyCount: cfg.dailyCount,
+      concurrent: cfg.maxConcurrentProfile.sweep,
+      hard: cfg.hardSweep,
+      dies: cfg.sweepDies,
+    };
+  return {
+    price: cfg.releasePrice,
+    dailyUsd: cfg.releaseDaily,
+    dailyCount: cfg.releaseDailyCount,
+    concurrent: cfg.maxConcurrentProfile.release,
+    hard: cfg.hardRelease,
+    dies: cfg.releaseAdmitDies,
+  };
+}
 export function offerRejections(
   offer,
   cfg,
@@ -466,8 +596,8 @@ export function offerRejections(
     reasons.push('BAD_HOST');
   // Item 8: a machine is held from CREATING until its run has ended; no second run takes it.
   if (reserved.includes(offer.machine_id)) reasons.push('IN_USE');
-  if (!die || !(profile === 'check' ? cfg.checkDies : cfg.sweepDies).includes(die))
-    reasons.push('DIE');
+  const caps = profileCaps(cfg, profile);
+  if (!die || !caps.dies.includes(die)) reasons.push('DIE');
   if (!enough('reliability', q.reliability) || offer.reliability > 1) reasons.push('RELIABILITY');
   if (
     !enough('cpu_cores_effective', q.cores) ||
@@ -489,9 +619,8 @@ export function offerRejections(
   else if (
     offer.inet_up_cost > cfg.maxInet ||
     offer.inet_down_cost > cfg.maxInet ||
-    price.effective > (profile === 'check' ? cfg.price : cfg.sweepPrice) ||
-    price.total >
-      ((profile === 'check' ? cfg.price : cfg.sweepPrice) * (cfg.hard + cfg.cronPeriod)) / 3600000
+    price.effective > caps.price ||
+    price.total > (caps.price * (cfg.hard + cfg.cronPeriod)) / 3600000
   )
     reasons.push('PRICE');
   return reasons;
