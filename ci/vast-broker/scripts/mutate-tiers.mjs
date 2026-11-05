@@ -367,7 +367,13 @@ const prepare = () => {
   const copy = join(root, 'ci/vast-broker');
   cpSync(broker, copy, { recursive: true, filter: (p) => !p.includes('node_modules') });
   symlinkSync(join(broker, 'node_modules'), join(copy, 'node_modules'));
-  for (const extra of ['scripts/ci/vast_report.py', 'ci/vast-reaper']) {
+  // ci/platform-api/migrations: test/d1.js (FakeD1) applies them; batch.test.js's release + store
+  // test (integration of #258 with #259, 2026-11-05) needs them.
+  for (const extra of [
+    'scripts/ci/vast_report.py',
+    'ci/vast-reaper',
+    'ci/platform-api/migrations',
+  ]) {
     mkdirSync(join(root, extra, '..'), { recursive: true });
     cpSync(join(repo, extra), join(root, extra), { recursive: true });
   }
