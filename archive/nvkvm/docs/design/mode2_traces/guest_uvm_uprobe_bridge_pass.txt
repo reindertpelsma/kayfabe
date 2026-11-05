@@ -39,8 +39,8 @@ Guest dmesg bridge lines:
 
 ```text
 [   70.217075] nvkvm_uvm_bridge: mapped BAR0 debug aperture at 0000:00:07.0 start=0xfb000000
-[   70.226711] nvkvm_uvm_bridge: registered cuMemcpyHtoD at /usr/local/nvidia-guest/lib/libcuda.so.580.159.04+0x378af0
-[   70.226744] nvkvm_uvm_bridge: registered cuMemcpyHtoD_v2 at /usr/local/nvidia-guest/lib/libcuda.so.580.159.04+0x37aab0
+[   70.226711] nvkvm_uvm_bridge: registered cuMemcpyHtoD at /usr/local/nvidia-guest/lib/libcuda.so.580.159.04+<offset-redacted>
+[   70.226744] nvkvm_uvm_bridge: registered cuMemcpyHtoD_v2 at /usr/local/nvidia-guest/lib/libcuda.so.580.159.04+<offset-redacted>
 [   70.226749] nvkvm_uvm_bridge: loaded max_bytes=4096
 [  129.252353] nvkvm_uvm_bridge: HtoD dst=0x753d1e200000 bytes=0x4 gpa=0x13a989000 first=0xabcd1234 slot=1
 ```

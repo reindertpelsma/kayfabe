@@ -1,0 +1,17 @@
+START 2026-11-04T03:08:02+00:00
+BOX_RC=0
+54ab38567 fix(kf-abi): answer the Windows guest's own 0x20809064 and 0x2080852c questions from the host
+DRIVER_RC=0
+NVIDIA GeForce RTX 4090, 595.91.07
+/dev/root       155G   15G  141G  10% /
+TREE_RC=0
+[2026-11-04T03:15:07+00:00] B4: guest ladder built: 5056736 bytes
+[2026-11-04T03:15:07+00:00] BENCH_TREE_DONE
+LADDER_RC=0
+FG_RC=0
+== built: /workspace/bench/fastguest/initrd.cpio.gz  112M
+== kernel release: 6.8.0-147-generic
+KF3_RC=0
+KF3_BUILT /workspace/bench/kf3-bins/54ab3856/qemu-system-x86_64 rev=54ab3856 mtime=2026-11-04 03:15:41.159208310 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+READY driver=595.91.07
+EXIT 2026-11-04T03:15:41+00:00

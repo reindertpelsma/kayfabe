@@ -27,7 +27,9 @@ is frozen (see *Layout*).
   (the 30-arm raw client used by `scripts/fastguest/` and the bare-metal suite) and its
   dependency closure must keep building. Do not add features there, and never make a `kf-*`
   crate depend on it. Code *may* be copied from it when the code's shape fits v3
-  (`V3_BUILD.md`, *Rules*).
+  (`V3_BUILD.md`, *Rules*). 2026-10-31: the other pre-v3 crates (`core`, `fwd`, `rmrpc`, `rt`, `shell`,
+  `crec`, `qemu-raw`, `vmm-*`, and `device`) are under `archive/crates/` and do not build; a citation of
+  `crates/kayfabe-X` for one of them resolves to `archive/crates/kayfabe-X` (`archive/README.md`).
 - `qemu/hw/misc/kf3/` — the C QOM device. `cuda/walk/` — the walk kernel (`.cu` plus committed
   PTX). `scripts/bench/`, `scripts/fastguest/` — provisioning, gates, lanes. `traces/` —
   evidence. `third_party/` — pinned reference sources (submodules; not built). `archive/` — frozen.

@@ -1,0 +1,76 @@
+{
+  "classification": "MEASURED native595/guest595, no performance ratio",
+  "source": "24906bf334665c9000b16b271005593daa3586c7",
+  "host_driver": "595.91.07",
+  "guest_driver": "595.91.07",
+  "steps": "5/5",
+  "hashes": "10/10",
+  "logs": {
+    "dmesg_after.txt": {
+      "bytes": 67813,
+      "normalized_sha256": "a7d9fa835fcb6deee4e067f971b0decf16ec6d24f58098da18fde9eca35498a5"
+    },
+    "hostdmesg.txt": {
+      "bytes": 53,
+      "normalized_sha256": "36b77cea10c745440631632437a6eb1efe3f7f8181cca7b362c54ed7786e671c"
+    },
+    "lane_receipt.txt": {
+      "bytes": 494,
+      "normalized_sha256": "fb97413efc7c61c1ec0d74086d3b5f52ad39b306806445bc6c55e1847e777e7a"
+    },
+    "qemu.txt": {
+      "bytes": 703864,
+      "normalized_sha256": "6dc6ea923ea2c6da069b0f49c2a40db4f1f52c6399912b43b97362dd49d18ff7"
+    },
+    "suite.txt": {
+      "bytes": 716,
+      "normalized_sha256": "db14890c22d2268ca3888d23f6df5ec3def8b3f1feb8db312acb79dbfb66f2e3"
+    },
+    "guest_gfx.txt": {
+      "bytes": 5302,
+      "normalized_sha256": "81d4e192dc1830dd92bd4b73182bd55285dd372539a869b77d325cae02967ac3"
+    },
+    "dmesg.txt": {
+      "bytes": 31858,
+      "normalized_sha256": "d4047c8fa236d1e17adc182d8f8d11c7b68214adb43a158611483513c943dc56"
+    },
+    "native.txt": {
+      "bytes": 5650,
+      "normalized_sha256": "d3dbeba855043ac757c72fafaa21e1dd417fade05d9050e26c8ed8732736342d"
+    },
+    "controller.txt": {
+      "bytes": 1456,
+      "normalized_sha256": "79a3ef97de1b7cf1524e81274657000aceb7e87821a655b86ea3a0b2d9ce7d13"
+    },
+    "preparation.txt": {
+      "bytes": 1355,
+      "normalized_sha256": "d23d64fd37dbd25fc515f0e49082d9f72e0c9bd523a0d856993d171b3205c8bd"
+    },
+    "boot_controller.txt": {
+      "bytes": 10149,
+      "normalized_sha256": "770690ec2cf6dfdd546012e3a04da4ebfc8f3428cae7ba9043c3e3f6e879fe0f"
+    },
+    "probe.txt": {
+      "bytes": 10313,
+      "normalized_sha256": "4e5d70a6ca1dfded0fffa3f291d391f75aba6340d103206d7a10f7cac7891766"
+    }
+  },
+  "dmesg.txt": {
+    "heartbeat_records": 104,
+    "nonzero_heartbeat_records": 104,
+    "xid": 0,
+    "flip_timeout": 0
+  },
+  "dmesg_after.txt": {
+    "heartbeat_records": 214,
+    "nonzero_heartbeat_records": 214,
+    "xid": 0,
+    "flip_timeout": 0
+  },
+  "hostdmesg.txt": {
+    "heartbeat_records": 0,
+    "nonzero_heartbeat_records": 0,
+    "xid": 0,
+    "flip_timeout": 0
+  }
+}

@@ -1,0 +1,108 @@
+﻿2026-11-05T01:20:31.0757985Z Current runner version: '2.338.2'
+##[group]Runner Image Provisioner
+Hosted Compute Agent
+Version: 20261021.618
+Commit: 21505ad2541d5be6135ed84fc33697146cf75b8e
+Build Date: 2026-10-21T00:45:21Z
+Worker ID: {11fc46f0-d6f0-41dd-9b67-b5aa842b1270}
+Region: westus2
+Cloud: Azure
+##[endgroup]
+##[group]Operating System
+Ubuntu
+26.04.1
+LTS
+##[endgroup]
+##[group]Runner Image
+Image: ubuntu-26.04
+Version: 20261025.179.1
+Included Software: https://github.com/actions/runner-images/blob/ubuntu26/20261025.179/images/ubuntu/Ubuntu2604-Readme.md
+Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20261025.179
+##[endgroup]
+##[group]GITHUB_TOKEN Permissions
+Metadata: read
+Statuses: write
+##[endgroup]
+Secret source: Actions
+Cache mode: read
+Prepare workflow directory
+Prepare all required actions
+Complete job name: gpu-vast
+##[group]Run set -euo pipefail
+[36;1mset -euo pipefail[0m
+[36;1m[[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]][0m
+[36;1mstate=UNAVAILABLE[0m
+[36;1mcase "$BROKER_STATE" in[0m
+[36;1m  NONE|CREATING|BOOTING|TESTING|GRACE|NOT_ELIGIBLE|BUSY|UNAVAILABLE)[0m
+[36;1m    state=$BROKER_STATE ;;[0m
+[36;1m  UNAVAILABLE_BUDGET|RENTING_DISABLED|UNAUTHORIZED|BAD_REQUEST|NOT_FOUND)[0m
+[36;1m    state=$BROKER_STATE ;;[0m
+[36;1m  OWNERSHIP_MISMATCH|RATE_LIMIT|PROVIDER_FAULT)[0m
+[36;1m    state=$BROKER_STATE ;;[0m
+[36;1mesac[0m
+[36;1mresult=error[0m
+[36;1m# NOT_NEEDED needs two agreeing decisions; the action-free policy-check job is one.[0m
+[36;1m# The Worker never decides a skip: a GPU success needs a verified GRACE/NONE PASS.[0m
+[36;1mif [[ "${REUSED:-false}" = true && "$PENDING_RESULT" = success &&[0m
+[36;1m  "$POLICY_RESULT" = success && "${POLICY_CHECK_RESULT:-}" = success &&[0m
+[36;1m  "$GPU_RESULT" = success ]]; then[0m
+[36;1m  state=REUSED[0m
+[36;1m  result=success[0m
+[36;1melif [[ "$PENDING_RESULT" = success && "$POLICY_RESULT" = success &&[0m
+[36;1m  "$POLICY_RUN" = 0 && "${POLICY_CHECK_RESULT:-}" = success &&[0m
+[36;1m  "${POLICY_CHECK_RUN:-}" = 0 && "$GPU_RESULT" = skipped ]]; then[0m
+[36;1m  state=NOT_NEEDED[0m
+[36;1m  result=success[0m
+[36;1melif [[ "$PENDING_RESULT" = success && "$POLICY_RESULT" = success &&[0m
+[36;1m  "$POLICY_RUN" = 1 && "$GPU_RESULT" = success &&[0m
+[36;1m  "$BROKER_VERDICT" = PASS && "$BROKER_VERIFIED" = 1 &&[0m
+[36;1m  ( "$state" = GRACE || "$state" = NONE ) ]]; then[0m
+[36;1m  result=success[0m
+[36;1melif [[ "$BROKER_VERDICT" = FAIL ]]; then[0m
+[36;1m  result=failure[0m
+[36;1mfi[0m
+[36;1mdescription="GPU broker $state"[0m
+[36;1mtarget_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"[0m
+[36;1mif [[ "$state" = REUSED ]]; then[0m
+[36;1m  description=$(python3 -I -c '[0m
+[36;1mimport json, os, re[0m
+[36;1mproof = json.loads(os.environ["REUSE_PROOF"])[0m
+[36;1massert re.fullmatch("[0-9a-f]{40}", proof["parent"])[0m
+[36;1mprint("reused: same tree verified on " + proof["parent"][:7])')[0m
+[36;1m  target_url=$(python3 -I -c '[0m
+[36;1mimport json, os, re[0m
+[36;1mproof = json.loads(os.environ["REUSE_PROOF"])[0m
+[36;1massert re.fullmatch([0m
+[36;1m    r"https://github.com/reindertpelsma/kayfabe/actions/runs/[1-9][0-9]{0,19}",[0m
+[36;1m    proof["url"])[0m
+[36;1mprint(proof["url"])')[0m
+[36;1mfi[0m
+[36;1mif [[ "$state" = PROVIDER_FAULT && "$BROKER_VERDICT" = PROVIDER_FAULT ]]; then[0m
+[36;1m  description="GPU provider fault; no kayfabe verdict"[0m
+[36;1mfi[0m
+[36;1mtemporary=$(mktemp)[0m
+[36;1mjq -n --arg state "$result" --arg description "$description" \[0m
+[36;1m  --arg url "$target_url" \[0m
+[36;1m  '{state:$state,context:"gpu-vast",description:$description,target_url:$url}' > "$temporary"[0m
+[36;1mcurl --silent --show-error --fail --max-time 20 \[0m
+[36;1m  -H "Authorization: ***" -H 'Accept: application/vnd.github+json' \[0m
+[36;1m  -X POST --data-binary "@$temporary" \[0m
+[36;1m  "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$TARGET_SHA" >/dev/null[0m
+[36;1m[[ "$result" = success ]][0m
+shell: /usr/bin/bash --noprofile --norc -eo pipefail {0}
+env:
+  TARGET_SHA: d74f6063d2cadb303b1f4f374149e435f632d51c
+  PENDING_RESULT: success
+  POLICY_RESULT: success
+  POLICY_RUN: 1
+  POLICY_CHECK_RESULT: success
+  POLICY_CHECK_RUN: 1
+  GPU_RESULT: success
+  REUSED: 
+  REUSE_PROOF: 
+  BROKER_STATE: GRACE
+  BROKER_VERIFIED: 1
+  BROKER_VERDICT: PASS
+  GH_TOKEN: ***
+##[endgroup]
+Cleaning up orphan processes

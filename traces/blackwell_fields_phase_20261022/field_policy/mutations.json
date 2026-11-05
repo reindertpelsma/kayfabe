@@ -1,0 +1,91 @@
+{
+  "mutants": [
+    {
+      "mutant": "whole_host_overlay",
+      "killers": [
+        "csc00_precision_retains_its_inferred_label",
+        "csc01_precision_retains_its_inferred_label",
+        "every_family_uses_its_generated_address_and_keeps_inactive_windows_derived",
+        "every_virtual_head_keeps_distinct_main_and_overlay_scaler_roles",
+        "host_first_and_last_precomp_words_replace_only_their_t1_words",
+        "host_reply_can_remove_a_derived_feature_without_a_hybrid_page",
+        "main_layer_fields_reject_every_host_override",
+        "overlay_layer_fields_reject_every_host_override"
+      ],
+      "seconds": 6.33
+    },
+    {
+      "mutant": "every_field_supported",
+      "killers": [
+        "unresolved_main_fields_are_unclaimed_even_if_a_row_attempts_to_enable_them",
+        "unresolved_overlay_fields_are_unclaimed_even_if_a_row_attempts_to_enable_them",
+        "unsupported_main_features_stay_unclaimed",
+        "unsupported_overlay_features_stay_unclaimed"
+      ],
+      "seconds": 6.26
+    },
+    {
+      "mutant": "discard_supported_values",
+      "killers": [
+        "csc00_precision_retains_its_inferred_label",
+        "csc01_precision_retains_its_inferred_label",
+        "every_virtual_head_keeps_distinct_main_and_overlay_scaler_roles",
+        "main_layer_fields_reject_every_host_override",
+        "overlay_layer_fields_reject_every_host_override"
+      ],
+      "seconds": 7.73
+    },
+    {
+      "mutant": "enable_unresolved_features",
+      "killers": [
+        "every_family_uses_its_generated_address_and_keeps_inactive_windows_derived",
+        "host_caps_are_facts_and_do_not_force_a_fvlut_bit",
+        "main_layer_fields_reject_every_host_override",
+        "overlay_layer_fields_reject_every_host_override",
+        "unresolved_main_fields_are_unclaimed_even_if_a_row_attempts_to_enable_them",
+        "unresolved_overlay_fields_are_unclaimed_even_if_a_row_attempts_to_enable_them",
+        "unsupported_main_features_stay_unclaimed",
+        "unsupported_overlay_features_stay_unclaimed"
+      ],
+      "seconds": 8.05
+    },
+    {
+      "mutant": "flatten_layer_policy",
+      "killers": [
+        "every_virtual_head_keeps_distinct_main_and_overlay_scaler_roles",
+        "overlay_layer_fields_reject_every_host_override"
+      ],
+      "seconds": 7.14
+    },
+    {
+      "mutant": "query_without_membership",
+      "killers": [
+        "a_second_unknown_die_is_also_refused_before_io",
+        "an_unknown_future_die_cannot_borrow_the_blackwell_row"
+      ],
+      "seconds": 6.29
+    },
+    {
+      "mutant": "derive_without_membership",
+      "killers": [
+        "a_second_unknown_die_cannot_derive_a_named_family_page",
+        "an_unknown_die_cannot_derive_a_named_family_page"
+      ],
+      "seconds": 6.28
+    },
+    {
+      "mutant": "erase_inference_label",
+      "killers": [
+        "csc00_precision_retains_its_inferred_label",
+        "csc01_precision_retains_its_inferred_label"
+      ],
+      "seconds": 6.28
+    }
+  ],
+  "restored_sha256": {
+    "crates/kf-disp/src/precomp_fields.rs": "a18ecfe02895b92249c20f4a646250787842743934ae8c90e1ff807902ca009d",
+    "crates/kf-disp/src/hostcaps.rs": "7933c254be086ac670f7ea2cd19ff5ae8d4312cfccd65f1e76cd2a1b2d30ee90",
+    "crates/kf-disp/src/capsderive.rs": "3215fa08b25d0ae66f41412bb5b30103014778a2eac15cd9340a7481e3837613",
+    "crates/kf-disp/data/caps_rows.tsv": "0d01f710e92b2c60497be337e01c37c739639e7a467e121aebe79e8d381a0187"
+  }
+}

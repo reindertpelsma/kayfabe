@@ -7,13 +7,13 @@
 constructor in the recovered journal. [Experiment N](TMO_SURFACE.md) adds a separate default-off
 TMO surface-loading discriminator while preserving the same immutable all-method refusal.
 
-Windows580.88's pinned per-window constructor rejects a two-buffer descriptor
+Hypothesis (from a private diagnosis, to be confirmed or refuted by this experiment): the Windows 580.88 per-window constructor rejects a two-buffer descriptor
 when its ILUT surface-loading flag is clear. The caller derives that flag from
 public `PRECOMP_WIN_PIPE_HDR_CAPB_ILUT_SFCLOAD` and unconditionally requests two
-buffers. Kayfabe's ordinary CAPB remains zero. Exact public-source definitions,
-pinned driver hash/RVAs, other guards and operational limitations are in the
-[reviewed source/caller analysis](https://github.com/reindertpelsma/kayfabe/blob/667b3ae9/tools/windows-boundary-compare/CONSTRUCTOR.md).
-This is a source-derived hypothesis, not a native capability table copied into the product.
+buffers. Kayfabe's ordinary CAPB remains zero. (2026-10-31: the earlier link to a
+caller analysis of the retail driver was removed under `docs/design/V3_PROVENANCE.md`
+section 2; the public-source definitions are the compiler-derived tables.)
+This is a hypothesis, not a native capability table copied into the product.
 
 `KF3_DISPLAY_ILUT_CONSTRUCTOR_PROBE=1` at display-plane construction:
 

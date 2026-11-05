@@ -33,6 +33,7 @@
 use kayfabe_abi::bringup::{NV_ESC_CHECK_VERSION_STR, NV_ESC_RM_ALLOC_MEMORY, NV_IOCTL_MAGIC};
 use kayfabe_abi::generated::nvos::{NV_ESC_RM_ALLOC, NV_ESC_RM_CONTROL, NV_ESC_RM_FREE};
 use kayfabe_arch::ids::GpuId;
+use kayfabe_isolate::Prot;
 use kayfabe_isolate::{
     ExportRequest, ExportSource, HostHandle, Isolate as _, IsolateId, RmError, Worker,
 };
@@ -42,7 +43,6 @@ use kayfabe_linux_raw::{
     Backing, CharDevice, DescriptorKind, HostOffset, HostPageSize, HostProt, MappedRegion,
     RawError, ioctl,
 };
-use kayfabe_vmm::Prot;
 use std::collections::BTreeMap;
 use std::os::fd::{AsFd, OwnedFd};
 

@@ -1,0 +1,22 @@
+{
+  "test_first": [
+    "b22e1be62",
+    "59f07cff0"
+  ],
+  "guard_fix": "8f3a9bb3a",
+  "python_tests": 65,
+  "mutants": 12,
+  "minimum_killers_per_mutant": 2,
+  "native_release_passed": 19,
+  "native_clippy_added": 0,
+  "rustfmt": "PASS",
+  "hardware": "UNRUN before creation",
+  "detached_test_first": "b3d25ec19",
+  "detached_fix": "5cc2ce0b8",
+  "secondary_guard_source": "a634bdc194a111ef1f76bb88fcb4f93f3d543298",
+  "python_test_executions": 72,
+  "python_distinct_cases": 66,
+  "total_mutants": 14,
+  "detached_runtime_wiring": "two additional full-watcher cases; omission killed by both",
+  "deployment": "independent PID-fd guard before Windows arms; original guard still aborts controller"
+}

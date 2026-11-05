@@ -1,0 +1,13 @@
+{
+  "utc": "2026-10-22T02:05:34.678534+00:00",
+  "id": 57142142,
+  "hypothesis": "provider preparation request stalled after initially creating a stopped target",
+  "falsifier": "no ready console/SSH by original total15min cutoff02:10:35UTC",
+  "before": {
+    "actual_status": "created",
+    "intended_status": "stopped",
+    "status_msg": "Error: GPU error, unable to start instance.",
+    "cur_state": "stopped"
+  },
+  "action": "none if already running"
+}

@@ -1,0 +1,6 @@
+UNMUTATED kf-chan: built=True ok=271 failed=[]
+UNMUTATED kf-qemu+pins: built=True ok=408 failed=[]
+handoff_released_never_rings: KILLED by 2: ['lost_and_released_compose_the_micro_steps', 'real_threads_never_lose_a_wake']
+worker_ignores_unannounced: KILLED by 2: ['pin_the_loop_evaluates_after_every_pass_and_before_it_decides_to_block', 'pin_the_worker_spins_on_an_unannounced_obligation_before_it_may_park']
+userpump_loser_does_not_register: KILLED by 3: ['chan::userpump::tests::a_relay_that_loses_a_lock_registers_with_the_holder_before_giving_up', 'pin_a_contended_relay_registers_before_giving_up_and_no_look_rings_for_contention', 'pin_user_ring_serve_order_is_the_models']
+INTEGRATION_MUTATIONS_EXIT rc=0 2026-10-21T11:38:32+00:00

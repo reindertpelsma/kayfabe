@@ -1,0 +1,14 @@
+running 5 tests
+test each_swept_row_is_scoped_to_the_branch_it_was_read_on_and_names_its_die ... FAILED
+test the_sweep_adds_no_family_wildcard ... ok
+test every_swept_die_is_fully_derived_with_its_own_measured_word ... FAILED
+test dies_the_sweep_could_not_reach_still_get_the_clean_page_and_a_notice ... ok
+test a_swept_branch_is_not_served_to_another_branch ... ok
+---- each_swept_row_is_scoped_to_the_branch_it_was_read_on_and_names_its_die stdout ----
+thread 'each_swept_row_is_scoped_to_the_branch_it_was_read_on_and_names_its_die' (344630) panicked at crates/kf-disp/tests/caps_sweep_20261103.rs:83:9:
+assertion `left == right` failed: Die { architecture: 368, implementation: 4 }: one row, for the branch it was read on
+  left: 0
+---- every_swept_die_is_fully_derived_with_its_own_measured_word stdout ----
+thread 'every_swept_die_is_fully_derived_with_its_own_measured_word' (344631) panicked at crates/kf-disp/tests/caps_sweep_20261103.rs:58:13:
+Die { architecture: 368, implementation: 4 }/580 has a measured 0x00c row (ga104_3070): [(12, "no class header names it; needed by the Windows display driver together with the window-layer pipelines")]
+test result: FAILED. 3 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s

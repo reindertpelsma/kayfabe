@@ -1,0 +1,265 @@
+{
+  "case": "raw595",
+  "source": "e8553e6ce7ec557aef9ff96c3c876e3060a6b9f8",
+  "own_id": 56808180,
+  "utc": "2026-10-20T00:35:47.326226+00:00",
+  "normalization": "UTF8 replacement, universal newlines, trailing whitespace, GPU identifiers redacted; source/export hashes preserved",
+  "files": [
+    {
+      "source": "/root/prov/sweep_linux_raw595.log",
+      "export": "controller.txt",
+      "source_bytes": 8105,
+      "source_sha256": "2fd1a4108bcc90a495870d69e690a0eb8fd7d54a1168838519cd458e0540a48a",
+      "export_sha256": "2fd1a4108bcc90a495870d69e690a0eb8fd7d54a1168838519cd458e0540a48a",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/sweepe855_ga104_raw595_suite.out",
+      "export": "suite.txt",
+      "source_bytes": 3764,
+      "source_sha256": "ce13f0b0b507f5c56e56b4925873c9c741be85131799430883a53a2c279a6906",
+      "export_sha256": "ce13f0b0b507f5c56e56b4925873c9c741be85131799430883a53a2c279a6906",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/fast_sweepe855_ga104_raw595_alias-two-vas_serial.log",
+      "export": "serial/alias-two-vas.txt",
+      "source_bytes": 14076,
+      "source_sha256": "5533a21bcfe6a1d9676dbdd93f8209c7a95bdeff0e8279a2d8dc4016ce4cbbfe",
+      "export_sha256": "902c1ed88c667268e2c20b54e48b3f143afd5289c6bec2fe9ddf089c28224b98",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/fast_sweepe855_ga104_raw595_alias-unmap-observe_serial.log",
+      "export": "serial/alias-unmap-observe.txt",
+      "source_bytes": 13540,
+      "source_sha256": "63a025e35f62bd0571654f382f3980594829d6b7df5c9d2c134d6f2432eac835",
+      "export_sha256": "8ad3d78e603aa4fbd198b83aafc9828e127fe6ccb9b15c4f77fd5acc1056d49d",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/fast_sweepe855_ga104_raw595_atomics-probe_serial.log",
+      "export": "serial/atomics-probe.txt",
+      "source_bytes": 13210,
+      "source_sha256": "0e05cdcca303de925594ea49c79cc3a560d721175c0efa839efdfc78600e9bf4",
+      "export_sha256": "f634b15f11613b7f3e584252efcf90d6693810b53abd61b934734e25df88daba",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/fast_sweepe855_ga104_raw595_bar1-crossing_serial.log",
+      "export": "serial/bar1-crossing.txt",
+      "source_bytes": 11719,
+      "source_sha256": "1e50459c40d321ccd3d851e859de214932853bb71383302ed8d1f7e9a836526e",
+      "export_sha256": "3c1b92cb32c97d8052ff430c83ff3210d80ac9b41a83475dcbd42e90fb0610b0",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/fast_sweepe855_ga104_raw595_blockage-coverage_serial.log",
+      "export": "serial/blockage-coverage.txt",
+      "source_bytes": 11797,
+      "source_sha256": "46c7aae3a57ca425bec34108ce0e5410fcd206ea3ff2ce7ccf541114e55257b4",
+      "export_sha256": "24fd57f0786e03558f6e895cd77e699ab120802339517ba0dd3004968232a4aa",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/fast_sweepe855_ga104_raw595_bus-info-sweep_serial.log",
+      "export": "serial/bus-info-sweep.txt",
+      "source_bytes": 18177,
+      "source_sha256": "5d1817d65993cc07f0ceb740e682db13ee06068a025d6f039e506f3132de346a",
+      "export_sha256": "048d7bac1e7eb540e26fd1b303f48cee8935a049ea6980cadadf3acfe45f3a63",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/fast_sweepe855_ga104_raw595_ce-client-guest-ram_serial.log",
+      "export": "serial/ce-client-guest-ram.txt",
+      "source_bytes": 12942,
+      "source_sha256": "c8209fa565dfeac85d949d113699ce7be30d9343054ae3ea35360dee19a38819",
+      "export_sha256": "b6f5cbda859907500008c1faa4fe0a68f387821c2918336ca9169e248f0a1709",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/fast_sweepe855_ga104_raw595_ce-client_serial.log",
+      "export": "serial/ce-client.txt",
+      "source_bytes": 22952,
+      "source_sha256": "8c184baa13798672918308b6bc2a8ab4a3da8159fb441cc6e280d4b918a67d30",
+      "export_sha256": "7b970270aeb8fb0cd90216d0f83e61931e0f2a7c1c257de3fc7be1b1341efee3",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/fast_sweepe855_ga104_raw595_concurrency_serial.log",
+      "export": "serial/concurrency.txt",
+      "source_bytes": 12774,
+      "source_sha256": "121e84d543569afb90dc2c05a098a7766504475f66fd3dc3dc634cb310007c3f",
+      "export_sha256": "7be5dd15fbdc75ce04b86b772b72e1ab41e5e68b325a5de34d227ba59c1b38ef",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/fast_sweepe855_ga104_raw595_concurrent-fuzz_serial.log",
+      "export": "serial/concurrent-fuzz.txt",
+      "source_bytes": 166094,
+      "source_sha256": "33f680b2fa5a7091707d8f8ae83d4163774abbdb51588793e387a0af938427a0",
+      "export_sha256": "de14c85b52ec12271131da42cc4636b6fef61c5dd0386f9fa8144617791a6544",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/fast_sweepe855_ga104_raw595_cross-client-leak_serial.log",
+      "export": "serial/cross-client-leak.txt",
+      "source_bytes": 12678,
+      "source_sha256": "c7731b12e93532754b7d3e8bd937aec79ca3adc192d69fdcd12e9bf43dcbba92",
+      "export_sha256": "49c6171958fff566f29bbb6c300097d8a9dbff535a0cd0db4d0c739de552505f",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/fast_sweepe855_ga104_raw595_defer-liveness_serial.log",
+      "export": "serial/defer-liveness.txt",
+      "source_bytes": 25731,
+      "source_sha256": "84094c0845713e98e32a61cdb1b5c8a33dc25bcb5cf2cabd61a386aeaec3fb8d",
+      "export_sha256": "2c9cb247edef736b9a9cc56aa9815e2ca90983d77221db29bb152e87dace39cb",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/fast_sweepe855_ga104_raw595_dictated-ring-negative_serial.log",
+      "export": "serial/dictated-ring-negative.txt",
+      "source_bytes": 10767,
+      "source_sha256": "fa2f8606e3765e6f636519f5986d77c07334c6805ad170aff8aab9a189c2922b",
+      "export_sha256": "7e55215e8a31ec01faa588f1b3941aea00cae6bea144e3ca6ce49aa9b28cf61f",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/fast_sweepe855_ga104_raw595_dictated-ring_serial.log",
+      "export": "serial/dictated-ring.txt",
+      "source_bytes": 11092,
+      "source_sha256": "951c592c8a891ed4b83c6cc97cb9be7517ce287e48ac928171259ded2e7ef469",
+      "export_sha256": "f76ec4641961a3d454ceff3dde8362ab8b7e1dff2ea6d0c14b403e26a48c9f10",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/fast_sweepe855_ga104_raw595_doorbell-census_serial.log",
+      "export": "serial/doorbell-census.txt",
+      "source_bytes": 40794,
+      "source_sha256": "f3abfba85b1dd8b26d762259d97702e1526179105ac49f56bc19f49d6601dfc6",
+      "export_sha256": "97b3134933686d6605897e3a4bf087213ff67f030b364e3dc0c8e96b317fd5d4",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/fast_sweepe855_ga104_raw595_engines_serial.log",
+      "export": "serial/engines.txt",
+      "source_bytes": 18831,
+      "source_sha256": "313256047dde92f168d112497efd03e180f35753f69168609c82bf356bdf3525",
+      "export_sha256": "78cada4762273453a4b6d5a6bb40b3d8981108d09f4e921065cff7ee1b0da765",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/fast_sweepe855_ga104_raw595_executor-vas_serial.log",
+      "export": "serial/executor-vas.txt",
+      "source_bytes": 13490,
+      "source_sha256": "5da34e11ba137368b833de6ffed7e597dbac20a0adb2aab61553c1bae422455a",
+      "export_sha256": "4e907d1898d194b7544f9e2b7b045d0d7574439447f1df7124425c4de3f6e367",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/fast_sweepe855_ga104_raw595_gpga-reserve-probe_serial.log",
+      "export": "serial/gpga-reserve-probe.txt",
+      "source_bytes": 12594,
+      "source_sha256": "05cd406666eb85864a21eaa8ba485736b04dc0de78eb5f8470d86802f3233854",
+      "export_sha256": "7e8f418b9e086dcf4326147cc39cba8cdda0a3ff135753abe714f09ebedc08de",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/fast_sweepe855_ga104_raw595_gpu-info-sweep_serial.log",
+      "export": "serial/gpu-info-sweep.txt",
+      "source_bytes": 13602,
+      "source_sha256": "4900b57afc4468fb483999aba2d500371102cc99ee595ac92ad78962092d346b",
+      "export_sha256": "635111f5273f52c9b6f3523e015acea0b623f07991a9dfda16411165cd044f57",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/fast_sweepe855_ga104_raw595_guest-ram-pin_serial.log",
+      "export": "serial/guest-ram-pin.txt",
+      "source_bytes": 11224,
+      "source_sha256": "6cb1f88eefcec896d4b370866a5f6c7581ea9f95d4495b652b32e921ff9d26ab",
+      "export_sha256": "b07140585e6ff10839f343e009ee1fcb37c82ef29577df42e1cb66d80b522333",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/fast_sweepe855_ga104_raw595_guest-ring-channel_serial.log",
+      "export": "serial/guest-ring-channel.txt",
+      "source_bytes": 11761,
+      "source_sha256": "c7d4e791c76baef91c89e9353574523be8e3181755addd20a766db62fd5a3b92",
+      "export_sha256": "4fca40aa4c885aef86e2b9f111abdbf65bab557125d26fc0b7b6e50b561a7a0b",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/fast_sweepe855_ga104_raw595_late-map-race_serial.log",
+      "export": "serial/late-map-race.txt",
+      "source_bytes": 13095,
+      "source_sha256": "d627b55e6413d95b810fb7f5e8127c4e451af982e451e31b43c9c4fed183781c",
+      "export_sha256": "0581ce7aad838b4ac8f8d8a537775e46987ec3f37c4962840ca098a4e023e515",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/fast_sweepe855_ga104_raw595_map-propagation_serial.log",
+      "export": "serial/map-propagation.txt",
+      "source_bytes": 11669,
+      "source_sha256": "d341e1e98a4379beedb0853e5628286ca9c285243129b2655c24a6d6cf1cfbb8",
+      "export_sha256": "07d798186a7128094278bb286330982018283a4b99c9e5e88f45d7b16f3c4326",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/fast_sweepe855_ga104_raw595_map-stress_serial.log",
+      "export": "serial/map-stress.txt",
+      "source_bytes": 62323,
+      "source_sha256": "69cb9ff6780aa7e4279f572d6d7061d7d5fc3a10e327149bd933004388596d43",
+      "export_sha256": "e13bca46b60c71283f8a202e80dde1c345c0b79db93597f20fd728ad27f42748",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/fast_sweepe855_ga104_raw595_missing-page-fault_serial.log",
+      "export": "serial/missing-page-fault.txt",
+      "source_bytes": 12889,
+      "source_sha256": "65e6dc09e6bfa0cbb790a7dd18f1b12590cb2fab44b5e49a552be21fbe2187db",
+      "export_sha256": "b88f0b663c3b17a8799f283e4d6c8a9971f49c4289fc76d136867d0e18efc5ca",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/fast_sweepe855_ga104_raw595_pce-mask-probe_serial.log",
+      "export": "serial/pce-mask-probe.txt",
+      "source_bytes": 11373,
+      "source_sha256": "138fdd475a37b2f635021fa84480d671e126fdbe1b4cd77dca917262291a05c5",
+      "export_sha256": "013c3840aa1cf01479bb21982cd9d823f9420e963f5d8dbf1fe858b66af33405",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/fast_sweepe855_ga104_raw595_rpc-mixed-allocs_serial.log",
+      "export": "serial/rpc-mixed-allocs.txt",
+      "source_bytes": 21069,
+      "source_sha256": "2a00958d8acfca4a1f6bf47a1b9ac0489d5a68265b0744a48ac35daa900483fb",
+      "export_sha256": "b3e0091b32796518d54998df1ed18a892840e164a1799522fd5f49a177995c5f",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/fast_sweepe855_ga104_raw595_timer_serial.log",
+      "export": "serial/timer.txt",
+      "source_bytes": 11695,
+      "source_sha256": "3fa9aee39e16d9e45097c6ecf7de965b22c3dba82a1fef2ffcd66f291a7ced21",
+      "export_sha256": "c7a9e089f67872da9d3e5d6daf8ecfe526a0745c9900872f7edc3db60f11dbb9",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/fast_sweepe855_ga104_raw595_uvm-invalidate_serial.log",
+      "export": "serial/uvm-invalidate.txt",
+      "source_bytes": 12403,
+      "source_sha256": "abe56e3628d708bc3f0802613e9edfcbe73700118ab677f2f40332bbbb6e2a45",
+      "export_sha256": "ff5237335e20fc64a288144ff3d9a0bbd58ed9a49a1f387b4711a51a32f1efa1",
+      "gpu_identifier_redactions": 1
+    },
+    {
+      "source": "/workspace/bench/fast_sweepe855_ga104_raw595_uvm-mean_serial.log",
+      "export": "serial/uvm-mean.txt",
+      "source_bytes": 25861,
+      "source_sha256": "d95a9bdae8f80890ac4a4ccf826f3726037a0ab29833efa8f29f78db1f62ef85",
+      "export_sha256": "314b2dd56c5fcff9e6546922304b059518854e25d5d90722ec2c62e494dfc1e1",
+      "gpu_identifier_redactions": 0
+    }
+  ]
+}

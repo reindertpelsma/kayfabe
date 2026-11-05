@@ -31,10 +31,10 @@
 //! `mint_fabricated` — so what runs here is the production code path, on a box with no GPU.
 
 use kayfabe_arch::ids::GpuId;
+use kayfabe_isolate::Prot;
 use kayfabe_isolate::{GuestRamGrant, GuestRamMapped, Isolate as _, IsolateId, RmError, Worker};
 use kayfabe_isolate_host::{HostIsolate, HostIsolateFactory, ParkVerb, RmMode};
 use kayfabe_linux_raw::{HostOffset, HostPageSize, SharedRam};
-use kayfabe_vmm::Prot;
 use std::os::fd::OwnedFd;
 
 /// Two host pages of "guest RAM" — enough to grant a slice that is not the whole block, so

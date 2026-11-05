@@ -1,0 +1,15 @@
+=== kayfabe host preflight 2026-10-19T23:51:33+00:00 on ubuntu ===
+  ✔ /dev/kvm present
+  ✔ CPU virt extensions present
+  ✔ GPU: NVIDIA GeForce RTX 3070  driver: 575.51.03
+  ✔ /dev/nvidiactl present
+  ✔ /dev/nvidia0 present
+  ✔ /dev/nvidia-uvm present
+  ✔ disk free 167G
+  ✔ RAM 49G
+  ✔ cores 9
+  ✔ apt mirror 371182 B/s
+  ✔ https egress works
+=== PREFLIGHT DONE ===
+VERDICT=SOUND
+EXIT=0

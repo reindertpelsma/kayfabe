@@ -1,0 +1,12 @@
+# Host fault records from the raw negative controls
+
+STATUS: LIVE,2026-10-19. MEASURED15hostXid31records:5native,5guest595,5guest580.
+Samefaultaddresspatterns60_00010000/62_00010000(x2)/64_00010000and
+A_11000000 occur ineachsuite. SourceCODE READ: frozenrawclientdefer-liveness
+DL_VA_BASE/stride atmain.rs11295andprime-while-invalidstep5around11953;
+missing_page_fault explicitlydocumentsdeliberateXid31around7033andvictim
+addressat7045. Nativepid112558/112597,guest595pid131251/132191,
+guest580pid145349/147448; timestamps/addressesinthefull15linekernelreceipt.
+Thisismatchingintentionalnegativecontrolbehavior, notazero-host-Xidclaim.
+AllrawsuitesPASS30; allguestserials0guestXid. CUDAandgfxcapturesseparately
+have0newhostXid/0guestXid/0fliptimeouts. No unexplainedfaultisdiscarded.

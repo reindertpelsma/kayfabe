@@ -1,0 +1,4 @@
+KF_GOP_EXPORT target=x86_64-unknown-uefi bytes=9216 out=/workspace/winvm/secureboot/kf-gop.0c515b3b.efi
+Signing Unsigned original image
+Signature verification OK
+[2026-11-04T01:17:07Z] KF_GOP_SIGNED /workspace/winvm/secureboot/kf-gop.0c515b3b.signed.efi sha256=ee7bd90a77301fe531b90c3c3f1abbfebee508c7e67f61fb04849fe546963b45 unsigned_sha256=e2616ad8d4cb09da88399218144b6bdea9d2cb3148b701964f926604b7d6dff6

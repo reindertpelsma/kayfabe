@@ -105,7 +105,20 @@
 
 pub use kayfabe_arch::ids::ControlCmd;
 use kayfabe_arch::ids::{ClassId, EngineKind, GpuId, GpuVa};
-use kayfabe_vmm::Prot;
+
+/// Protection for a guest-RAM mapping, as granted across the isolate seam.
+///
+/// ★ **Moved here from `kayfabe-vmm` (archived 2026-10-31).** `kayfabe-vmm`'s only live
+/// contribution to the frozen grader was this two-variant enum; it is byte-for-byte the
+/// definition that crate carried (same variants, same order, same derives), so the wire code
+/// `kayfabe-isolate-host`'s `proto::prot_code` assigns is unchanged.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Prot {
+    /// Guest may read and write.
+    ReadWrite,
+    /// Guest may only read (writes fault to the trap dispatcher).
+    ReadOnly,
+}
 
 /// A host-side RM object handle — **a raw value plus the isolate whose RM client
 /// namespace it lives in** (`l1_concurrency.md` §12.26).
@@ -727,7 +740,7 @@ pub struct ExportRequest {
 /// own index for it, minted by the **parent** and never by the wire — the same discipline
 /// [`HostHandle`] uses, for the same reason.
 ///
-/// Deliberately the mirror image of [`kayfabe_vmm::RamHandle`], which carries the VMM →
+/// Deliberately the mirror image of `kayfabe_vmm::RamHandle` (archived), which carries the VMM →
 /// isolate direction (guest RAM, VMM-minted). This is isolate → VMM.
 ///
 /// [`kayfabe_isolate_host::CrossedFd`]: https://docs.rs/kayfabe-isolate-host
@@ -2193,7 +2206,7 @@ pub trait RmBackend: Send + Sync {
     /// it. `export_backing` runs isolate → VMM and hands up memory the *isolate* minted;
     /// this runs VMM → isolate and hands down memory the *guest* owns. The two directions
     /// have opposite threat models, which is why [`ExportedBacking`] and
-    /// [`kayfabe_vmm::RamHandle`] are separate types with separate token spaces.
+    /// `kayfabe_vmm::RamHandle` (archived) are separate types with separate token spaces.
     ///
     /// # Errors
     /// [`RmError::GuestRamUnavailable`] if the VM was not launched with a shared memory

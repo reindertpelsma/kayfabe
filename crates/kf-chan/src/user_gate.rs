@@ -558,4 +558,199 @@ mod tests {
         g.clear();
         assert!(!g.retrying());
     }
+
+    // ---- 2026-10-31: the retired `kayfabe-completion` fence-arm contracts, on the live structure ----
+    //
+    // `Marks` is where v3 reads a value the guest can influence as progress (`USERD.REFERENCE` of the
+    // relay's private channel; the guest's own forwarded `SET_REFERENCE` can write it, and a forged
+    // tag is accepted by ruling: `docs/design/V3_WINDOWS_USER_RING_RELAY.md` §9, pushbuffer integrity is
+    // not a security boundary for USER channels). It is the live home of the retired #12 jump guard
+    // (a stale or backwards write must never count as a completion) and of the 32-bit wrap
+    // arithmetic, with a window DERIVED from the issued markers instead of a typed `MAX_FENCE_JUMP`.
+
+    /// The naive model: absolute counts, a window scan, no modular arithmetic. A `REFERENCE` word
+    /// implies progress to the one absolute count in `[seen, issued]` whose low 16 bits it names.
+    fn naive_peek(seen: u64, issued: u64, word: u32) -> u64 {
+        if word & 0xFFFF_0000 != MARK_TAG {
+            return seen;
+        }
+        let n = u64::from(word & 0xFFFF);
+        (seen..=issued)
+            .rev()
+            .find(|c| c & 0xFFFF == n)
+            .unwrap_or(seen)
+    }
+
+    /// Marks with `seen == start` and `issued == start + outstanding`.
+    fn marks_at(start: u64, outstanding: u64) -> Marks {
+        let mut m = Marks::default();
+        while m.issued() < start {
+            let (_, v) = m.issue().unwrap();
+            m.observe(v);
+        }
+        assert_eq!(m.seen(), start);
+        for _ in 0..outstanding {
+            m.issue().unwrap();
+        }
+        m
+    }
+
+    fn splitmix(state: &mut u64) -> u64 {
+        *state = state.wrapping_add(0x9e37_79b9_7f4a_7c15);
+        let mut z = *state;
+        z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+        z ^ (z >> 31)
+    }
+
+    /// The #12 shape: under wrap arithmetic a BACKWARDS value is an absurdly large forward step. It
+    /// is not progress, it does not move `seen`, and the next honest word still lands.
+    #[test]
+    fn a_stale_or_backwards_reference_is_not_progress_and_never_lowers_seen() {
+        let mut m = marks_at(0, 100);
+        assert_eq!(m.observe(Marks::value(60)), 60);
+        for stale in [0u64, 1, 2, 30, 59] {
+            assert_eq!(
+                m.peek(Marks::value(stale)),
+                60,
+                "a word naming already-processed marker {stale} implies nothing"
+            );
+            assert_eq!(m.observe(Marks::value(stale)), 60);
+            assert_eq!(m.seen(), 60, "seen only ever rises");
+        }
+        // the same word again is idempotent
+        assert_eq!(m.observe(Marks::value(60)), 60);
+        // the refusals changed nothing: the arm still fires at its target
+        assert_eq!(m.observe(Marks::value(100)), 100);
+    }
+
+    /// The retired `fence_jump_guard_accepts_a_legitimate_large_step`: the bound is exact. A word
+    /// naming the newest issued marker is progress (a step of exactly the outstanding count); one
+    /// more is a marker nobody published and is not.
+    #[test]
+    fn the_window_is_exactly_the_markers_outstanding() {
+        for outstanding in [1u64, 2, 100, 2048, 0x7FFE, 0x7FFF] {
+            let mut m = marks_at(0, outstanding);
+            assert_eq!(
+                m.peek(Marks::value(outstanding + 1)),
+                0,
+                "one past the newest issued marker implies nothing (outstanding {outstanding})"
+            );
+            assert_eq!(
+                m.peek(Marks::value(outstanding)),
+                outstanding,
+                "exactly at the bound is accepted (outstanding {outstanding})"
+            );
+            assert_eq!(m.observe(Marks::value(outstanding)), outstanding);
+        }
+    }
+
+    /// Every 16-bit word against the naive absolute-count model, with the window straddling the
+    /// 16-bit wrap (`seen` and `issued` on opposite sides of a multiple of 65 536).
+    #[test]
+    fn peek_matches_the_absolute_count_model_around_the_sixteen_bit_wrap() {
+        let starts = [0u64, 1, 65_531, 65_535, 65_536, 65_537, 131_070, 131_072];
+        // small windows: every possible 16-bit word
+        for &start in &starts {
+            for outstanding in [0u64, 1, 2, 5] {
+                let m = marks_at(start, outstanding);
+                for n in 0..=0xFFFFu32 {
+                    let word = MARK_TAG | n;
+                    assert_eq!(
+                        m.peek(word),
+                        naive_peek(start, start + outstanding, word),
+                        "start {start} outstanding {outstanding} word {n:#x}"
+                    );
+                }
+                // and the untagged words never count, whatever they name
+                for word in [0u32, 1, 0xdead_beef, 0x4B47_0000, 0x4B45_FFFF] {
+                    assert_eq!(m.peek(word), start);
+                }
+            }
+        }
+        // the largest window: seeded words plus every boundary word
+        let mut rng = 0x6d61_726b_7331_u64;
+        for &start in &[0u64, 65_535, 65_536, 100_000] {
+            for outstanding in [100u64, 0x7FFE, 0x7FFF] {
+                let m = marks_at(start, outstanding);
+                let end = start + outstanding;
+                let mut words: Vec<u32> = Vec::new();
+                for c in [start, end] {
+                    for d in [-2i64, -1, 0, 1, 2] {
+                        words.push(MARK_TAG | ((c as i64 + d) as u32 & 0xFFFF));
+                    }
+                }
+                for _ in 0..40 {
+                    words.push(MARK_TAG | (splitmix(&mut rng) as u32 & 0xFFFF));
+                }
+                for word in words {
+                    assert_eq!(
+                        m.peek(word),
+                        naive_peek(start, end, word),
+                        "start {start} outstanding {outstanding} word {word:#x}"
+                    );
+                }
+            }
+        }
+    }
+
+    /// A seeded run of issues and observations, honest and hostile, against the model: `seen`
+    /// never falls, never passes `issued`, and equals the model's after every observation, across
+    /// the 16-bit wrap (the run issues past 65 536 markers).
+    #[test]
+    fn a_seeded_run_of_honest_and_forged_words_tracks_the_model_across_the_wrap() {
+        let mut rng = 0x6a75_6d70_3132_u64;
+        let mut m = Marks::default();
+        let (mut seen, mut issued) = (0u64, 0u64);
+        let mut crossed = false;
+        for step in 0..400_000u32 {
+            match splitmix(&mut rng) % 5 {
+                0 | 1 => {
+                    if issued - seen < 40 {
+                        let (c, v) = m.issue().unwrap();
+                        issued += 1;
+                        assert_eq!((c, v), (issued, Marks::value(issued)));
+                    }
+                }
+                2 => {
+                    // an honest word: the GPU processed up to some issued marker
+                    let upto = seen + splitmix(&mut rng) % (issued - seen + 1);
+                    let w = Marks::value(upto);
+                    assert_eq!(m.observe(w), naive_peek(seen, issued, w));
+                    seen = naive_peek(seen, issued, w);
+                }
+                _ => {
+                    // a forged or stale word: anything near the window, or anywhere
+                    let word = match splitmix(&mut rng) % 3 {
+                        0 => MARK_TAG | (splitmix(&mut rng) as u32 & 0xFFFF),
+                        1 => Marks::value(seen.saturating_sub(1 + splitmix(&mut rng) % 50)),
+                        _ => Marks::value(issued + 1 + splitmix(&mut rng) % 50),
+                    };
+                    let want = naive_peek(seen, issued, word);
+                    assert!(want >= seen && want <= issued);
+                    assert_eq!(m.peek(word), want, "step {step} word {word:#x}");
+                    assert_eq!(m.observe(word), want);
+                    seen = want;
+                }
+            }
+            assert_eq!((m.seen(), m.issued()), (seen, issued), "step {step}");
+            crossed |= seen > 70_000;
+        }
+        assert!(crossed, "the run must pass the 16-bit wrap");
+    }
+
+    /// The boundary-1 bound on state (the retired `MAX_ARMED_FENCES`): markers outstanding are
+    /// capped, the refusal changes nothing, and processing one frees one.
+    #[test]
+    fn markers_outstanding_are_bounded_and_processing_frees_room() {
+        let mut m = Marks::default();
+        for _ in 0..0x7FFF {
+            m.issue().unwrap();
+        }
+        assert_eq!(m.issue(), Err("USER_MARKS_OUTSTANDING"));
+        assert_eq!(m.issued(), 0x7FFF, "a refused issue reserves nothing");
+        m.observe(Marks::value(1));
+        assert!(m.issue().is_ok());
+        assert_eq!(m.issue(), Err("USER_MARKS_OUTSTANDING"));
+    }
 }

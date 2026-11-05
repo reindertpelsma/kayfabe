@@ -1,0 +1,35 @@
+{
+  "baseline": {
+    "passed": 312,
+    "failed": 0,
+    "ignored": 0,
+    "sha256": "89254d626d2b29db0ef8194a92636123ae68603c46ee9839e18b63f91332d664"
+  },
+  "red": {
+    "passed": 5,
+    "failed": 3,
+    "ignored": 0,
+    "sha256": "1e40833ee44a124b9befacea4e77af0366b99f0a8cfe792c05f6a39972d1ba06"
+  },
+  "fixed": {
+    "passed": 320,
+    "failed": 0,
+    "ignored": 0,
+    "sha256": "dfca892960c4421714600b22cacbabeb5788692f66963fc9a91a334c31f352f7"
+  },
+  "retention": {
+    "baseline_named": 312,
+    "after_named": 320,
+    "removed": [],
+    "added": [
+      "chan::userrelay::tests::user_ring_source_accepts_generated_non_ada_channels",
+      "chan::userrelay::tests::user_ring_source_ad104_ada_accepts_exactly_the_previous_c56f_set",
+      "chan::userrelay::tests::user_ring_source_ada_generated_predecessors_remain_refused",
+      "chan::userrelay::tests::user_ring_source_geometry_refuses_hostile_maximum_declarations",
+      "chan::userrelay::tests::user_ring_source_geometry_rejects_small_rings_alignment_and_overflow",
+      "chan::userrelay::tests::user_ring_source_rejects_generated_non_channel_objects",
+      "chan::userrelay::tests::user_ring_source_rejects_unknown_and_foreign_channel_ids",
+      "chan::userrelay::tests::user_ring_source_turing_accepts_both_ring_size_boundaries"
+    ]
+  }
+}

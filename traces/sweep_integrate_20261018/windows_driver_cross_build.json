@@ -1,0 +1,12 @@
+{
+  "cross_build_source": "7326d3184f41a4fdac55515598fb88e1cb4a9172",
+  "kit": "10.0.28000.2526",
+  "driver_pe_static_checks_passed": true,
+  "read_only_import_guard_passed": true,
+  "injected_bar0_store_compile_exit": 1,
+  "compiler_rejected_injected_const_store": true,
+  "compiler_source_path": "relative path, avoiding clang-cl absolute-path option parsing",
+  "windows_runtime_loaded": false,
+  "driver_sha256": "695d12b95b8f22a3dba51255c6b5641f8cda4816d8ef1ae3397061b1966c0af4",
+  "collector_sha256": "766dd94a088decfbd76db18b1ad4c18bd819bfa4461797e9dfbfaae755449afd"
+}

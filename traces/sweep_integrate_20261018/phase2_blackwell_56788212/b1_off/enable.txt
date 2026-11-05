@@ -1,0 +1,7 @@
+ENABLE580_START actual=32.0.15.8088 UTC=2026-10-19T23:21:28.5771933Z
+Microsoft PnP Utility
+
+Enabling device:          PCI\VEN_10DE&DEV_2B85&SUBSYS_41981458&REV_A1\3&11583659&0&28
+Device enabled successfully.
+
+ENABLE580_PNPUTIL_RC=0

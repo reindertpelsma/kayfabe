@@ -1,0 +1,39 @@
+running 4 tests
+test a_guests_own_post_stop_write_is_rebaselined_never_reported ... FAILED
+test a_half_written_record_is_not_an_event_until_its_status_lands ... FAILED
+test a_record_that_was_already_nonzero_at_arming_is_a_baseline_not_an_event ... ok
+test an_xid32_record_written_by_the_host_is_observed_exactly_once ... FAILED
+
+failures:
+
+---- a_guests_own_post_stop_write_is_rebaselined_never_reported stdout ----
+
+thread 'a_guests_own_post_stop_write_is_rebaselined_never_reported' (2629518) panicked at crates/kf-chan/tests/translated_ring_rc.rs:65:5:
+assertion `left == right` failed
+  left: None
+ right: Some(ObservedRc { except_type: 32 })
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- a_half_written_record_is_not_an_event_until_its_status_lands stdout ----
+
+thread 'a_half_written_record_is_not_an_event_until_its_status_lands' (2629519) panicked at crates/kf-chan/tests/translated_ring_rc.rs:50:5:
+assertion `left == right` failed
+  left: None
+ right: Some(ObservedRc { except_type: 32 })
+
+---- an_xid32_record_written_by_the_host_is_observed_exactly_once stdout ----
+
+thread 'an_xid32_record_written_by_the_host_is_observed_exactly_once' (2629521) panicked at crates/kf-chan/tests/translated_ring_rc.rs:33:5:
+assertion `left == right` failed
+  left: None
+ right: Some(ObservedRc { except_type: 32 })
+
+
+failures:
+    a_guests_own_post_stop_write_is_rebaselined_never_reported
+    a_half_written_record_is_not_an_event_until_its_status_lands
+    an_xid32_record_written_by_the_host_is_observed_exactly_once
+
+test result: FAILED. 1 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p kf-chan --test translated_ring_rc`

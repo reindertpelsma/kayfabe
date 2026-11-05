@@ -1,0 +1,11 @@
+/workspace/sweep-win-57046541/kfwin/disk/bw580_bind.qcow2: OK
+ARM_START run=bw_on_m1 source=af8bdcda4c700d8b40163ee3bf27feb7cfa6539c profile=on 2026-10-21T12:44:48+00:00
+[2026-10-21T12:44:48Z] detached: tag=bw_on_m1, log logs/bw_on_m1_run.log (stdout logs/bw_on_m1_run.out)
+KF_SSH_UP
+{"pid": 97183, "exe": "/workspace/bench/kf3-bins/af8bdcda/qemu-system-x86_64", "sha256": "c305c5ad0b993ce84cfb605c26a6de7d203edf0e4bf6183d23820863c8811c86", "kf3_device": "kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=/workspace/sweep-win-57046541/secureboot/kf-gop.af8bdcda.signed.efi,id=kf0,guest-driver=580.65.06"}
+STAGE580_READY=1 actual=32.0.15.8088 device_disabled=1 GSP_flags=1; fresh QEMU580.65.06 then one enable
+PRE_CLEANUP_START rc=255 2026-10-21T12:47:40+00:00
+{"rpcs": 276, "unload_ordinals": [], "teardown_start_ordinal": null, "last_nonfree_before_teardown": []}
+OWN_VM_ALREADY_EXITED
+/workspace/sweep-win-57046541/kfwin/disk/bw580_bind.qcow2: OK
+ARM_EXIT run=bw_on_m1 rc=255 2026-10-21T12:48:11+00:00

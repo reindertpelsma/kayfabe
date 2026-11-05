@@ -1,0 +1,231 @@
+[
+  {
+    "mutant": "F3_force_consumer_gate",
+    "path": "crates/kf-chip/src/lib.rs",
+    "exit": 101,
+    "killing_tests": [
+      "each_blackwell_architecture_claims_only_its_own_fsp_boot_gate",
+      "the_selected_model_answers_its_header_gate_and_declines_the_other_address"
+    ],
+    "kill_count": 2,
+    "passed": true,
+    "fixed_source_sha256": "c206d33bbdcf222aec409200526c0ac6d6665bdf70a30d7873f8b429ffdd43a0",
+    "log_sha256": "671ef3c51941112a29dbfb21aead96df3d0a6304da066b0efe7c566216ea84fb"
+  },
+  {
+    "mutant": "F3_force_datacenter_gate",
+    "path": "crates/kf-chip/src/lib.rs",
+    "exit": 101,
+    "killing_tests": [
+      "each_blackwell_architecture_claims_only_its_own_fsp_boot_gate",
+      "the_selected_model_answers_its_header_gate_and_declines_the_other_address"
+    ],
+    "kill_count": 2,
+    "passed": true,
+    "fixed_source_sha256": "c206d33bbdcf222aec409200526c0ac6d6665bdf70a30d7873f8b429ffdd43a0",
+    "log_sha256": "20d201edcb55d0af472e2e2fd0c99d8d8bd12d69dc59f67ff35fcd5dc68dd4c8"
+  },
+  {
+    "mutant": "C1_ignore_die",
+    "path": "crates/kf-rm/src/consttab.rs",
+    "exit": 101,
+    "killing_tests": [
+      "consttab::tests::a_neighbour_dies_row_is_never_served",
+      "consttab::tests::byte_rows_and_the_8162_difference"
+    ],
+    "kill_count": 2,
+    "passed": true,
+    "fixed_source_sha256": "92c4363df8903e9a5147b5db7cbc368ba07ce0a99a4d1fcf4b5f323d99471889",
+    "log_sha256": "eef293eb3c7788a3b34cd0c2283e357f815294828b945c7a1782d81616a6215f"
+  },
+  {
+    "mutant": "C2_ignore_branch",
+    "path": "crates/kf-rm/src/consttab.rs",
+    "exit": 101,
+    "killing_tests": [
+      "consttab::tests::a_neighbour_dies_row_is_never_served"
+    ],
+    "kill_count": 1,
+    "passed": false,
+    "fixed_source_sha256": "92c4363df8903e9a5147b5db7cbc368ba07ce0a99a4d1fcf4b5f323d99471889",
+    "log_sha256": "892c6026f08cfbbd9aab90452db680f015d413fdead702e026b4ee57b6529366"
+  },
+  {
+    "mutant": "C3_ignore_request",
+    "path": "crates/kf-rm/src/consttab.rs",
+    "exit": 101,
+    "killing_tests": [
+      "consttab::tests::a_different_request_is_a_different_question",
+      "consttab::tests::byte_rows_and_the_8162_difference"
+    ],
+    "kill_count": 2,
+    "passed": true,
+    "fixed_source_sha256": "92c4363df8903e9a5147b5db7cbc368ba07ce0a99a4d1fcf4b5f323d99471889",
+    "log_sha256": "3bd4eb44aa5cc614dfb40c48d00d45aaa03e83ebc1073b3ce038e542530e2831"
+  },
+  {
+    "mutant": "Z1_borrow_ga102_defaults",
+    "path": "crates/kf-rm/src/zbc.rs",
+    "exit": 101,
+    "killing_tests": [
+      "an_unmeasured_die_gets_an_empty_table_and_a_counted_refusal",
+      "no_die_is_served_another_dies_defaults",
+      "turing_gets_turings_defaults_not_the_ga102_capture"
+    ],
+    "kill_count": 3,
+    "passed": true,
+    "fixed_source_sha256": "789a42d6a2437782bac95b99ded703000d1191680b28db99adf65f52d3633e0e",
+    "log_sha256": "3276843d55b125836b1b6f2a4b5693b496a9a76e6252da2e6e6a2f3b8bab04b0"
+  },
+  {
+    "mutant": "D1_borrow_caps_die",
+    "path": "crates/kf-disp/src/capsderive.rs",
+    "exit": 101,
+    "killing_tests": [
+      "a_second_dies_row_is_served_to_that_die_only",
+      "an_unmeasured_die_gets_the_clean_page_and_the_notice_never_a_neighbours_row",
+      "the_ad102_580_caps_word_has_its_own_native_measurement",
+      "the_gb206_580_caps_word_requires_its_own_native_measurement"
+    ],
+    "kill_count": 4,
+    "passed": true,
+    "fixed_source_sha256": "611daa165111b9073d7b4348e31a345ad36e4428e576c03c3921d3bf5033e198",
+    "log_sha256": "58541ffd3a4b9a2b32ffdc0b8d7aaa6d34d8c6d19898603450156ed4c414521e"
+  },
+  {
+    "mutant": "T1_drop_shared_semaphore",
+    "path": "crates/kf-disp/src/engine.rs",
+    "exit": 101,
+    "killing_tests": [
+      "engine::tests::every_family_row_resolves_its_vocabulary",
+      "engine::tests::separate_semaphore_controls_take_precedence_over_retained_legacy_method_names",
+      "engine::tests::turing_shared_semaphore_waits_then_releases_the_outgoing_flip"
+    ],
+    "kill_count": 3,
+    "passed": true,
+    "fixed_source_sha256": "9a9a5cd3e58408bf60e032875279c4f8c2415e2bcc8b0bc53535c91e07126c83",
+    "log_sha256": "a6dcbc255c1f41d3e031ffbe3ba30bc8d907a2a353003a6ebf626e7eb419db8e"
+  },
+  {
+    "mutant": "I1_ignore_surface_enable",
+    "path": "crates/kf-disp/src/engine.rs",
+    "exit": 101,
+    "killing_tests": [
+      "engine::tests::gb20x_a_disabled_or_unrequested_notifier_writes_nothing",
+      "engine::tests::gb20x_scanout_latches_iso_address_aperture_kind_and_plane_one",
+      "engine::tests::gb20x_target_and_address_decoding",
+      "engine::tests::gb20x_window_flip_uses_surface_addresses_for_notifier_release_and_acquire"
+    ],
+    "kill_count": 4,
+    "passed": true,
+    "fixed_source_sha256": "9a9a5cd3e58408bf60e032875279c4f8c2415e2bcc8b0bc53535c91e07126c83",
+    "log_sha256": "543d1a6fabac651b041824fae9350ecde5034fcd0f3e6e19ad5b38783779a20b"
+  },
+  {
+    "mutant": "V1_drop_imp_assignments",
+    "path": "crates/kf-disp/src/model.rs",
+    "exit": 101,
+    "killing_tests": [
+      "model::tests::blackwell_imp_refuses_invalid_head_lists_and_dsc_in_every_layout",
+      "model::tests::blackwell_imp_returns_one_required_tile_for_each_active_head"
+    ],
+    "kill_count": 2,
+    "passed": true,
+    "fixed_source_sha256": "c11be2aa39be8c8bcf385012763b97f40f7b5774c67c820486848fae519c63dc",
+    "log_sha256": "1efd96ae042cdacf20744f2581ee923afe0736981a39c5164b65c395e5fd7226"
+  },
+  {
+    "mutant": "G1_unbound_reply_trace",
+    "path": "crates/kf-gsp/src/replytrace.rs",
+    "exit": 101,
+    "killing_tests": [
+      "boot::device_reset_from_every_phase::guest_reset_does_not_rearm_the_reply_record_budget",
+      "boot::device_reset_from_every_phase::large_reply_dumps_obey_both_per_record_and_total_byte_limits"
+    ],
+    "kill_count": 2,
+    "passed": true,
+    "fixed_source_sha256": "f5a1fe394e2a03b5c5ba8f18849a44dc88969b87debb1cc6ba5103e89c9b560a",
+    "log_sha256": "60a575f475e2da2b3c5665c31004e42f93fa90224fd5478415296d6e822b5f76"
+  },
+  {
+    "mutant": "W1_trust_stale_wake",
+    "path": "crates/kf-cuda/src/completion.rs",
+    "exit": 101,
+    "killing_tests": [
+      "completion::tests::a_signal_cannot_complete_a_pending_gpu_event",
+      "completion::tests::a_signal_cannot_hide_a_gpu_failure"
+    ],
+    "kill_count": 2,
+    "passed": true,
+    "fixed_source_sha256": "1751bd455b085b45bf899106c57305e50cd5c29b779399661b0399d53b414d8b",
+    "log_sha256": "0165e8fd4040d9aafec8f8575bd116884e8edf728abb5ac2a3f30b57ff0b26bd"
+  },
+  {
+    "mutant": "P46_wrong_host_die",
+    "path": "crates/kf-abi/src/sw_runlist.rs",
+    "exit": 101,
+    "killing_tests": [
+      "sw_runlist_probe::tests::windows_581_measured_binding_refuses_other_dies_and_builds",
+      "sw_runlist_probe::tests::windows_581_metadata_allocation_does_not_authorize_submission",
+      "sw_runlist_probe::tests::windows_581_preserves_identity_parameter_and_logging_guards"
+    ],
+    "kill_count": 3,
+    "passed": true,
+    "fixed_source_sha256": "1748ff2c753516ff1108041526a0430f1fd8c82e1ced16b69e3ab252dcbb2db4",
+    "log_sha256": "beee679e63bdc35200d3743d53c571e5ac40e8b8198c8cbf7f72e1e8ccca7778"
+  },
+  {
+    "mutant": "CMC_invert_exact_abi",
+    "path": "crates/kf-rm/src/cmc_log_probe.rs",
+    "exit": 101,
+    "killing_tests": [
+      "pure_in_bytes_and_padding_are_unchanged_both_statuses_are_ok",
+      "repeated_registration_and_extreme_guest_addresses_need_no_host_state",
+      "unverified_guest_abi_is_inert"
+    ],
+    "kill_count": 3,
+    "passed": true,
+    "fixed_source_sha256": "ca5f4fcdb7fb7805d58a475e819f10ff8da0bd04ccbab1181e2ada15a0cbddad",
+    "log_sha256": "a0cfc5219a5ad36197f99b86aa4cb74943c7a52913a0a2e42c309e8beb381e56"
+  },
+  {
+    "mutant": "S1_conflate_queue_instances",
+    "path": "crates/kf-census/src/sequence.rs",
+    "exit": 101,
+    "killing_tests": [
+      "queue_instances_and_sources_stay_distinct_without_exporting_addresses",
+      "returning_to_interleaved_queue_epochs_reuses_only_the_matching_instance"
+    ],
+    "kill_count": 2,
+    "passed": true,
+    "fixed_source_sha256": "55b66b86864d91f71de598b52210d05fc8d7320aeb269a24e059b2ba5521a682",
+    "log_sha256": "2262f584071e9ccea3ae565bd7b19b76960c4b5e43173654e75fdfdd44b27f44"
+  },
+  {
+    "mutant": "A1_align_function_only",
+    "path": "tools/align_metadata.py",
+    "exit": 1,
+    "killing_tests": [
+      "test_alignment_continues_after_native_selected_call_500 (__main__.AlignmentTests.test_alignment_continues_after_native_selected_call_500)",
+      "test_all_calls_and_both_unmatched_sides_remain_visible (__main__.AlignmentTests.test_all_calls_and_both_unmatched_sides_remain_visible)"
+    ],
+    "kill_count": 2,
+    "passed": true,
+    "fixed_source_sha256": "a1510203f84e9cbb938ff9023387af10e16e6de2d1e507114d617f85ae95eed8",
+    "log_sha256": "f78c1bd86f9a587fd03711fa2f3c97b852ff6389ba0b66eed4cec0be728f50a1"
+  },
+  {
+    "mutant": "K1_disable_early_window",
+    "path": "tools/windows-capture/lib/kfwc_engine.c",
+    "exit": 2,
+    "killing_tests": [
+      "recent_moved_table_early",
+      "recent_window_expires",
+      "recent_window_ram_edges"
+    ],
+    "kill_count": 3,
+    "passed": true,
+    "fixed_source_sha256": "69b2a9d93321a38890d9bf10b11b2826165e06517d12218a3cdc813b1de69693",
+    "log_sha256": "d6aa80f8e7a9d489c7c93c687b52c9d8cb3e9a765aae05b1d1825a3d4e7db70d"
+  }
+]

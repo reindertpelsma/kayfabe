@@ -1,0 +1,10 @@
+{
+  "mutant": "remove_windows_precision_normalization",
+  "runtime": "rentalPython3.10",
+  "runtime_killers": [
+    "test_windows_seven_digit_nonzero_fraction",
+    "test_windows_seven_digit_zero_fraction"
+  ],
+  "killers": 2,
+  "compilation_errors": 0
+}

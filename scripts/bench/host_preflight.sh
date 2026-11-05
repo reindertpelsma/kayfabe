@@ -16,15 +16,15 @@
 #   - Prints a terminator line and an explicit exit status, so "the file exists but has no
 #     terminator" is detectable — a truncated run must not read as a pass.
 #   - Exit 0 = host sound. Exit 2 = HOST FAULT (destroy it, rent another; do not nurse).
-#     Exit 3 = host sound but WRONG for this project (e.g. non-GA10x GPU).
+# Die support is checked from host-derived MC_GET_ARCH_INFO/classes by the v3 gates,
+# not guessed from a marketing name in this build-free health check.
 #
 # ⚠ Tier 1 only: no repo build required, so it can run on a box seconds after it boots.
 # Tier 2 (our raw RM client round-trip, `scripts/bench/` R33) needs a build and is separate.
 set -u
-FAIL=0; WRONG=0
+FAIL=0
 ok(){ printf '  ✔ %s\n' "$*"; }
 bad(){ printf '  ✘ HOST FAULT: %s\n' "$*"; FAIL=1; }
-wrong(){ printf '  ⊘ WRONG BOX: %s\n' "$*"; WRONG=1; }
 # ⊘ A WARNING is neither a fault nor a wrong box: it is a fact the reader needs and the
 # verdict does not change. The suite had no such level, so anything worth saying had to be
 # promoted to a failure or dropped — and 'dropped' is how a 13 kB/s mirror passed.
@@ -38,22 +38,29 @@ echo "=== kayfabe host preflight $(date -Is) on $(hostname) ==="
 [ -c /dev/kvm ] && ok "/dev/kvm present" || bad "/dev/kvm MISSING — this is a container, not a VM instance"
 grep -qE 'vmx|svm' /proc/cpuinfo && ok "CPU virt extensions present" || bad "no vmx/svm in /proc/cpuinfo"
 
-# 2. GPU present AND of the right family. Arch is a hard constraint: the register model is
-#    GA10x. A Turing or Ada card is the WRONG BOX however healthy it is.
+# 2. NVIDIA driver responds. All supported families proceed to the host-derived
+# chip/class checks in the v3 gates; a GPU name cannot establish that support.
 if command -v nvidia-smi >/dev/null 2>&1; then
-  GPU=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1)
-  DRV=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null | head -1)
-  if [ -z "$GPU" ]; then bad "nvidia-smi present but returned NO GPU (driver wedged?)"
+  # Preserve the query exit status: piping through head hides a failed query,
+  # and nvidia-smi can print "No devices were found" on stdout when it fails.
+  GPU=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null)
+  GPU_RC=$?
+  DRV=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null)
+  DRV_RC=$?
+  GPU=${GPU%%$'\n'*}
+  DRV=${DRV%%$'\n'*}
+  if [ "$GPU_RC" -ne 0 ] || [ "$DRV_RC" -ne 0 ]; then
+    bad "nvidia-smi identity query failed (name=$GPU_RC driver=$DRV_RC)"
+  elif [ -z "$GPU" ] || [ "$GPU" = 'No devices were found' ]; then
+    bad "nvidia-smi present but returned NO GPU (driver wedged?)"
+  elif [[ ! "$DRV" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+    bad "nvidia-smi returned no valid numeric driver version"
   else
     ok "GPU: $GPU  driver: $DRV"
-    case "$GPU" in
-      *"RTX 30"*|*"A4000"*|*"A5000"*|*"A10"*) ok "GA10x family — matches kayfabe-arch" ;;
-      *) wrong "$GPU is not GA10x; kayfabe-arch's only oracle-checked row is Ampere" ;;
-    esac
   fi
 else bad "nvidia-smi ABSENT"; fi
 
-# 3. The GPU must actually WORK, not merely enumerate. ⊘ nvidia-smi listing a device proves
+# 3. Driver device nodes. The native workload checks are Tier2: listing a device proves
 #    the driver loaded, NOT that a context can be created — the distinction that let a broken
 #    cuMemAllocManaged pass 28/28 in a sibling project because the only UVM coverage was
 #    checking that /dev/nvidia-uvm existed. A device node existing says nothing.
@@ -101,5 +108,4 @@ else bad "cannot reach github over https"; fi
 
 echo "=== PREFLIGHT DONE ==="
 if [ "$FAIL" -ne 0 ]; then echo "VERDICT=HOST_FAULT"; echo "EXIT=2"; exit 2; fi
-if [ "$WRONG" -ne 0 ]; then echo "VERDICT=WRONG_BOX"; echo "EXIT=3"; exit 3; fi
 echo "VERDICT=SOUND"; echo "EXIT=0"; exit 0

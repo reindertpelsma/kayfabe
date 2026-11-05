@@ -1,0 +1,4 @@
+2026-10-21T21:38:42.426843+0000 ubuntu kernel: NVRM:unknown NVRM ioctl command: 0xf0
+2026-10-21T21:41:13.759804+0000 ubuntu kernel: x86/PAT: kf3-vamgr:96223 freeing invalid memtype [mem 0x3800640000-0x380083ffff]
+2026-10-21T21:41:13.760288+0000 ubuntu kernel: x86/PAT: kf3-vamgr:96223 freeing invalid memtype [mem 0x3800840000-0x3800a3ffff]
+2026-10-21T21:41:13.760327+0000 ubuntu kernel: x86/PAT: kf3-vamgr:96223 freeing invalid memtype [mem 0x3800a40000-0x3800c3ffff]

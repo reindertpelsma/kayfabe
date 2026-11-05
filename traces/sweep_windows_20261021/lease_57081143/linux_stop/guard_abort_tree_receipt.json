@@ -1,0 +1,36 @@
+{
+  "reason": "new Xid outside native baseline; nested timeout survived parent PGID signal",
+  "owned_controller": 1590,
+  "owned_tree_terminated": [
+    {
+      "pid": 90698,
+      "parent": 1590,
+      "comm": "timeout"
+    },
+    {
+      "pid": 90699,
+      "parent": 90698,
+      "comm": "bash"
+    },
+    {
+      "pid": 93161,
+      "parent": 90699,
+      "comm": "bash"
+    },
+    {
+      "pid": 93163,
+      "parent": 93161,
+      "comm": "bash"
+    },
+    {
+      "pid": 93215,
+      "parent": 93163,
+      "comm": "timeout"
+    },
+    {
+      "pid": 93216,
+      "parent": 93215,
+      "comm": "qemu-system-x86"
+    }
+  ]
+}

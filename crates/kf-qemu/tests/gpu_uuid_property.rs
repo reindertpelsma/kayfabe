@@ -30,7 +30,7 @@ fn config(gpu_uuid: Option<&str>, vm_id: Option<&str>, devfn: u32) -> Config {
 }
 
 fn host() -> Option<GpuGid> {
-    GpuGid::parse("GPU-51b08678-7828-4015-1962-a65a7a488e3c").ok()
+    GpuGid::parse("GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004").ok()
 }
 
 const VM1: &str = "11111111-1111-1111-1111-111111111111";
@@ -76,7 +76,7 @@ fn good_properties_pass_check() {
         config(Some("auto"), Some(VM1), 0x18),
         config(Some("random"), None, 255),
         config(Some("host"), None, 0),
-        config(Some("GPU-51b08678-7828-4015-1962-a65a7a488e3c"), None, 0),
+        config(Some("GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004"), None, 0),
     ] {
         assert_eq!(c.check(), Ok(()), "{c:?}");
     }
@@ -121,7 +121,7 @@ fn random_differs_between_boots_with_the_real_entropy_source() {
 
 #[test]
 fn explicit_round_trips_and_host_warns() {
-    let text = "GPU-51b08678-7828-4015-1962-a65a7a488e3c";
+    let text = "GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004";
     let r = resolve_for(&config(Some(text), None, 0), None, &mut no_entropy).unwrap();
     assert_eq!(r.gid.to_string(), text);
     let r = resolve_for(&config(Some("host"), Some(VM1), 0), host(), &mut no_entropy).unwrap();

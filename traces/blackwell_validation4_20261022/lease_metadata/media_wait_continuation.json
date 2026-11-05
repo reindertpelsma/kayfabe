@@ -1,0 +1,17 @@
+{
+  "utc": "2026-10-22T03:16:50.236628+00:00",
+  "old_controller": 1838,
+  "cancelled_preparation_pid": [
+    90115
+  ],
+  "new_controller": 101779,
+  "independent_guard": 90110,
+  "n0_pushed_head": "5c11e5dff45f4c28e79c57a3862098a1b62eb8db",
+  "media_source": "535c78555",
+  "scope": "preparation-only tested media wait; unchanged product8f, binaries, checksums, nineteenflags, driver/guest timers and deadline",
+  "sha256": {
+    "media": "9a9e8732e704e53a163bc75f87e7a7374be795ac26e49e0de67b3c32b1094053",
+    "install": "b77bc7c48c06bd7467b89e76e268c70d759d9ecf01d60472ecbc0f737ce88552",
+    "controller": "329508b458ea11560e0efc6182353b221070911e4c7d42d16ef9b47902b04db2"
+  }
+}

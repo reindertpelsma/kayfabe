@@ -1,0 +1,9 @@
+{
+  "base": 61,
+  "after": 61,
+  "added": 0,
+  "removed": 0,
+  "normalization": "multiset(level,code,message,file names), source line offsets excluded",
+  "base_source": "6976a94fef48a6dc6530cd743a66910cba52a860",
+  "scope": "cargo clippy --release -j2 -p kf-abi -p kf-chip --all-targets --message-format=json"
+}

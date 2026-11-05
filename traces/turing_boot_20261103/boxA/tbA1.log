@@ -1,0 +1,10 @@
+START 2026-11-03T11:53:52+00:00
+Preparing worktree (detached HEAD 08dae8a37)
+HEAD=08dae8a378cc5db297497da3227db77b540f9058 CHECKOUT=/workspace/bench/verify-worktrees/tbA1.sB7EGV
+GATES_RC=0
+V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS
+KF3_RC=0
+KF3_BUILT /workspace/bench/kf3-bins/08dae8a3/qemu-system-x86_64 rev=08dae8a3 mtime=2026-11-03 11:56:00.013942836 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+BARE_SUITE_PASS=30 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0 ARMS=30
+FG_RC=0
+EXIT rc=1 2026-11-03T12:20:57+00:00

@@ -5,9 +5,19 @@
 > **`w268` binary unchanged**, `kayfabe-rev:70463ae…`, asserted before booting and **built by
 > nothing** — the only change was a guest-side `ptrace` probe. **Pass 2** (`w269b_refuse`,
 > `w269b_pass`) added the owner's doorbell-store witness and rebuilt at
-> `kayfabe-rev:4b23d0b…`. Graded against `docs/design/w269_the_spin_address_prereg.md`,
+> `kayfabe-rev:4b23d0b…`. Graded against the pre-registration (removed, see the correction below),
 > committed at **`92aa6da`, before `guest_spinprobe.c` existed**. Branch
 > `w269-the-spin-address`.
+>
+> **Correction, 2026-10-31 (public-tree hygiene).** The probe's source
+> (`scripts/bench/guest_spinprobe.c`) and its pre-registration (`docs/archive/w269_the_spin_address_prereg.md`,
+> committed at `92aa6da`) were removed from the tree, and the per-run probe output beyond the
+> process maps was redacted: they carried offsets into, and an object layout read out of, a closed
+> NVIDIA library, which `docs/design/V3_PROVENANCE.md` section 2 does not allow in this tree. The
+> probe logs under `traces/boots/w269..w280` keep their line numbers; the affected lines read
+> `[line redacted ...]`. What stays is the behaviour measured: which slots the guest polled, the values
+> read there, and how the wait changed between the two arms. The pre-registered predictions that
+> depended on the library layout (P3-P6) are summarised in section 3 only by their outcome.
 
 ---
 
@@ -33,14 +43,15 @@ launches=3` CE work is **inside `cuCtxCreate`** (context-buffer setup).
 ⇒ ⊘ **The brief's item 2 (pin `0x2_04420000`) never opened**, and the owner's conditional
 resolves to *no*.
 
-### 0.2 ★★★★ **"NOBODY KNOWS WHAT IT IS" WAS TOO STRONG — `w215` disassembled the loop on 2026-08-10**
+### 0.2 ★★★★ **"NOBODY KNOWS WHAT IT IS" WAS TOO STRONG — `w215` had already characterised the loop on 2026-08-10**
 
-`f5f55ad`. Re-verified independently today at the shipped `libcuda.so.580.159.04` (md5
-`10e2dd6c…`): the wait is `libcuda+0x22bdeb…+0x22c145`, the deadline constant at `0x1185a90` is
-`0x447a0000` = **1000.0f**, and the only non-completion exit is a **non-`NV_OK`** from
-`0x20801702` `MC_SERVICE_INTERRUPTS` — which we answer `NV_OK`, resetting the clock forever.
-⇒ ⊘ **No longer deadline can ever answer "does it terminate."** `w216` proved it constructively.
-What was genuinely unknown was the **predicate's operand**, and that is what this rung read.
+`f5f55ad`. The `cuCtxCreate` wait is a userspace spin loop. It re-arms a one-second clock each time
+`0x20801702` `MC_SERVICE_INTERRUPTS` (named in the open kernel modules) returns `NV_OK`, which we
+answer `NV_OK`, so no longer deadline can ever answer "does it terminate." `w216` showed that
+constructively: with `KAYFABE_MC_SERVICE_BUDGET=20`, `cuCtxCreate` returned. ⊘ How the loop was
+characterised is not restated here (see the correction above); the behavioural evidence is `w216`'s
+run and the repeated `0x20801702` calls in this boot's RPC census.
+What was genuinely unknown was **which memory the loop polls**, and that is what this rung read.
 
 ### 0.3 ⊘ **THE INSTRUMENT THE BRIEF NOMINATED CANNOT ANSWER A HANG**
 
@@ -52,19 +63,14 @@ and could not be installed** — the C probe stands alone; the cross-check does 
 
 ## 1. ★★★★★ THE ANSWER — the polled address, read out of the spinning process
 
-`[measured, w269b_refuse, `run_w269b_refuse_probe.log`]`, all eight items, verbatim:
+Seen in `run_w269b_refuse_probe.log`, eight polled addresses (the per-item
+decode lines are redacted, see the correction above):
 
 ```
-item[0] KIND=1 [0x08]=0x7f84706fe010 [0x10]=0x1
-    S[0x10] limit  = 0x1     (wanted is within the limit)
-    S[0x18] cached = 0x0     ★ wanted > cached ⇒ NOT satisfied; it reads
-    S[0x20] desc   = 0x5b62341a82c0
-    POLLED ADDRESS = 0x20440fff0   pageoff=0xff0   nvidiactl+0x400fff0  <rw-s /dev/nvidiactl>
-                     VALUE AT IT = 0x00000000 (0)
-                     SLOT-JOIN: ★★★ MATCHES a GR SET_REPORT_SEMAPHORE slot page-offset
-    chain          : item[0x08] +0x9410 -> S +0x20 -> 0x5b62341a82c0 +0x10 -> 0x20440fff0
-item[1] … 0x20440ffe0     item[2] … 0x20440ffd0     item[3] … 0x20440ffc0
-item[4] … 0x20440ffb0     … eight in all, descending at a 16-byte stride
+POLLED ADDRESS = 0x20440fff0   pageoff=0xff0   nvidiactl+0x400fff0  <rw-s /dev/nvidiactl>
+                 VALUE AT IT = 0x00000000 (0)
+                 SLOT-JOIN: MATCHES a GR SET_REPORT_SEMAPHORE slot page-offset
+… 0x20440ffe0 … 0x20440ffd0 … 0x20440ffc0 … 0x20440ffb0 … eight in all, descending at a 16-byte stride
 ```
 
 ⇒ ★★★★★ **The guest polls `0x2_0440fff0 … 0x2_0440ff80` — the eight GR
@@ -96,12 +102,10 @@ been shown to buy the guest anything at all.
 `[measured, w269b_pass, `run_w269b_pass_probe.log`]`:
 
 ```
-N items = 1     item[0] KIND=1  [0x10]=0x2
-    S[0x10] limit  = 0x2
-    S[0x18] cached = 0x1      ★ wanted > cached ⇒ NOT satisfied; it reads
-    POLLED ADDRESS = 0x20440ff70   pageoff=0xf70   nvidiactl+0x400ff70  <rw-s /dev/nvidiactl>
-                     VALUE AT IT = 0x00000001 (1)
-                     SLOT-JOIN: ★★ MATCHES a CE release-semaphore slot page-offset (0xf00..0xf70/16)
+one wait item, awaiting progress 2, holding 1
+POLLED ADDRESS = 0x20440ff70   pageoff=0xf70   nvidiactl+0x400ff70  <rw-s /dev/nvidiactl>
+                 VALUE AT IT = 0x00000001 (1)
+                 SLOT-JOIN: MATCHES a CE release-semaphore slot page-offset (0xf00..0xf70/16)
 ```
 
 ⇒ ★★★★★ **THE WALL, NAMED EXACTLY.** Arming the route satisfies all eight **GR** waits, and the
@@ -124,8 +128,8 @@ submission faulted"* is a coherent, same-channel, correctly-ordered chain.
 ⊘ **It is NOT proven.** I have not shown the faulting submission is the one that would have
 written `2` into `0x2_0440ff70`; the correlation is by channel and by ordering only.
 
-⊘ `rbx = 0` ⇒ the pause-only spin; `ctx[0x40]+0x72b8 = 0` ⇒ the 1-second
-`MC_SERVICE_INTERRUPTS` leg is live, exactly as `w215` disassembled.
+⊘ The spin was the pause-only flavour and the one-second `MC_SERVICE_INTERRUPTS` leg was live, as `w215`
+characterised (register and field values redacted, see the correction above).
 ⚠ **I cannot say WHICH of the eight channels the survivor object is** by address — different ASLR
 and heap layout across arms. The **slot** identifies it (`ff70` = chan 8's target); the pointer
 does not.
@@ -181,9 +185,9 @@ carries those.
 | **P1** | `CUP2_RC = 124` both arms; last print `totalMem=11959 MiB`; no `ok cuCtxCreate` | .93 | ★★★ **FIRED**, all four boots, and its **size** too |
 | **P2** | userspace spin, not a blocking syscall | .85 | ★★★ **FIRED** — `state=Rl`, `/proc/pid/syscall` = `running`, `orig_rax=228` (vDSO `clock_gettime`, the elapsed-ms leg) |
 | **P3** | histogram mass in the `w215` loop | .80 | ★★ **FIRED** |
-| **P4** | snapshot reaches `libcuda+0x22be1f`/`+0x22bedc` | .85 | ★★★ **FIRED** at `+0x22be1f`, every sample, both arms |
-| **P5** | `N` is 1 or 2 | .70 | ⊘ **HALF** — `pass` N=1; `refuse` N=**8**, outside the range |
-| **P6** | a `kind == 3` item is present | .60 | ⊘ **FAILED** — every item is `kind 1` |
+| **P4** | the one-shot snapshot fires inside the known wait loop | .85 | ★★★ **FIRED**, every sample, both arms |
+| **P5** | the wait list has 1 or 2 items | .70 | ⊘ **HALF** — `pass` N=1; `refuse` N=**8**, outside the range |
+| **P6** | an item of the semaphore-progression kind is present | .60 | ⊘ **FAILED** — every item is of the other kind |
 | **P7** | same address, same value, on both arms | .55 | ⊘⊘ **FAILED, and this is the rung's headline** — `refuse` polls eight **GR** slots reading `0`; `pass` polls one **CE** slot reading `1` |
 | **P8** | the address is **NOT** a GR or CE slot offset | .65 | ⊘⊘ **FAILED — it IS `0x20440fff0`** |
 | **P9** | mapping is anon or `/dev/nvidia-uvm` | .55 | ⊘ **FAILED** — `/dev/nvidiactl`, `rw-s` |
@@ -202,10 +206,9 @@ which is exactly what happened.
 
 ## 4. ⊘ THE INSTRUMENT'S OWN DEFECTS — three, all found by its own output
 
-1. ★★ **`resolve()` reported offsets against the containing MAP ROW, not the module base.** The
-   snapshot at file offset `0x22be1f` printed as `libcuda+0xc5e1f` (`.text` begins `0x166000`
-   into the file), so **every histogram offset in pass 1 is `0x166000` short of what `objdump`
-   uses**. An offset that cannot be joined to a disassembly is not an offset. Fixed for pass 2.
+1. ★★ **`resolve()` reported offsets against the containing MAP ROW, not the module base.** Every
+   histogram offset in pass 1 was therefore short of the file offset that an offline tool would use
+   (the `.text` segment does not start at file offset 0). Fixed for pass 2.
 2. ★ **`MAX_BUCKETS = 96` filled**: 5250 of 6000 hits fell outside, so pass 1's "top 24" was
    really *"the first 96 distinct RIPs, all at 24 hits"* — a biased sample presented as a
    ranking. ⊘ **The dropped-count line is what exposed it, which is the entire reason it
@@ -215,10 +218,10 @@ which is exactly what happened.
    demonstrably spinning in userspace — which would have voided the owner's item 4, the single
    reading that decides whether this is a memory poll at all.
 
-⊘ **And the probe's central discipline paid**: pass 1 met `KIND=1`, a handler it had not
-decoded, and printed *"⊘ NESTED WAIT … the polled address is NOT reported. A partial answer,
-said as one."* A probe that had guessed would have named `item[0x08]` and been wrong by two
-dereferences. `4029e0` was then disassembled and pass 2 answered.
+⊘ **And the probe's central discipline paid**: pass 1 met an item kind it had not decoded, and printed
+*"⊘ NESTED WAIT … the polled address is NOT reported. A partial answer, said as one."* A probe that
+had guessed would have named the wrong word, wrong by two dereferences. Pass 2 decoded that kind
+and answered.
 
 ⚠ **A trap that did NOT bite but would have**: `process_vm_readv` cannot read a `VM_PFNMAP`
 mapping (two runs elsewhere concluded a ring was not in the address space; it was). This probe
@@ -230,9 +233,9 @@ a statement about the probe, not about the page**, and the probe says so in thos
 
 ## 5. ⊘ WHAT THIS RUN CANNOT PROVE
 
-1. ⊘ **That the polled slot is the ONLY thing the wait needs.** `f9df90` walks every item and
-   the caller spins unless the composite status reaches 5; one unsatisfied item explains the
-   spin without being the only one.
+1. ⊘ **That the polled slot is the ONLY thing the wait needs.** The wait covers every item in the
+   list and the caller spins until all are satisfied; one unsatisfied item explains the spin
+   without being the only one.
 2. ⊘ **Which physical channel the `pass` arm's surviving item belongs to.** Different ASLR and
    heap layout across arms; not comparable.
 3. ⊘ **That the store had the intended effect.** §2 witnesses the instruction, not the outcome.

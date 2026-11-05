@@ -1,0 +1,73 @@
+{
+  "observed_utc": "2026-10-19T23:46:41.812654+00:00",
+  "scope": "Only this lane's three created instance IDs; charges are invoiced so far, not asserted final settlement.",
+  "own_ids": [
+    56765201,
+    56766467,
+    56788212
+  ],
+  "own_ids_present_at_closeout": [],
+  "charges": [
+    {
+      "amount": "2.046",
+      "description": "Instance 56788212 GPU  charge:    hours * $/hr",
+      "instance_id": 56788212,
+      "quantity": "2.790",
+      "rate": "0.7333",
+      "timestamp": 1792368000,
+      "type": "charge"
+    },
+    {
+      "amount": "0.144",
+      "description": "Instance 56788212 storage charge: hours * $/hr",
+      "instance_id": 56788212,
+      "quantity": "2.880",
+      "rate": "0.0500",
+      "timestamp": 1792368000,
+      "type": "charge"
+    },
+    {
+      "amount": "0.010",
+      "description": "Instance 56765201 GPU  charge:    hours * $/hr",
+      "instance_id": 56765201,
+      "quantity": "0.077",
+      "rate": "0.1333",
+      "timestamp": 1792368000,
+      "type": "charge"
+    },
+    {
+      "amount": "0.007",
+      "description": "Instance 56765201 storage charge: hours * $/hr",
+      "instance_id": 56765201,
+      "quantity": "0.161",
+      "rate": "0.0417",
+      "timestamp": 1792368000,
+      "type": "charge"
+    },
+    {
+      "amount": "1.247",
+      "description": "Instance 56766467 GPU  charge:    hours * $/hr",
+      "instance_id": 56766467,
+      "quantity": "2.835",
+      "rate": "0.4400",
+      "timestamp": 1792368000,
+      "type": "charge"
+    },
+    {
+      "amount": "0.144",
+      "description": "Instance 56766467 storage charge: hours * $/hr",
+      "instance_id": 56766467,
+      "quantity": "2.882",
+      "rate": "0.0500",
+      "timestamp": 1792368000,
+      "type": "charge"
+    }
+  ],
+  "invoiced_so_far_usd": 3.598,
+  "runtime_estimate_usd": 3.683125701483797,
+  "budget_guard_including_three_delay_reserves_usd": 6.683125701483797,
+  "spend_cap_usd": 25,
+  "stop_renting_usd": 20,
+  "last_credit_observation_usd": 39.96114900956297,
+  "invoice_retrieved_utc": "2026-10-19T23:44:08.203822+00:00"
+}

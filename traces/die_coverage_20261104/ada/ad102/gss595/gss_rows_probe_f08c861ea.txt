@@ -1,0 +1,47 @@
+PROBE_START pid=112875 uid=Uid: 1002 1002 1002 1002 CapEff=0x0 cap_sys_admin=false
+kf-host: host tier: stock
+PROBE_SESSION driver=595.91.07
+PROBE_DIE arch=0x190 impl=0x2 die=AD102
+GSSROW cmd=0x20809064 size=520 exact=false inputs=[(0, 0), (4, 1), (8, 8)] probe=zero status=0x0 OK changed_bytes=3
+GSSROW cmd=0x20809064 size=520 exact=false inputs=[(0, 0), (4, 1), (8, 8)] probe=bg status=0x0 OK changed_bytes=12
+GSSROW cmd=0x2080a028 size=2192 exact=false inputs=[(0, 1), (8, 1), (c, 100000), (20c, 100000)] probe=zero status=0x0 OK changed_bytes=11
+GSSROW cmd=0x2080a028 size=2192 exact=false inputs=[(0, 1), (8, 1), (c, 100000), (20c, 100000)] probe=bg status=0x1f INVALID_ARGUMENT changed_bytes=0
+GSSROW cmd=0x2080a028 size=2192 exact=false inputs=[(0, 1), (8, 1), (c, 1), (20c, 1)] probe=zero status=0x0 OK changed_bytes=11
+GSSROW cmd=0x2080a028 size=2192 exact=false inputs=[(0, 1), (8, 1), (c, 1), (20c, 1)] probe=bg status=0x1f INVALID_ARGUMENT changed_bytes=0
+GSSROW cmd=0x2080a084 size=4 exact=false inputs=[(0, 0)] probe=zero status=0x0 OK changed_bytes=0
+GSSROW cmd=0x2080a084 size=4 exact=false inputs=[(0, 0)] probe=bg status=0x0 OK changed_bytes=0
+GSSROW cmd=0x2080a026 size=532 exact=false inputs=[(0, 400), (8, 0), (10, 2), (14, 1), (18, 0), (1c, 0), (20, 0), (24, 10), (28, 0), (2c, 0), (30, 0)] probe=zero status=0x0 OK changed_bytes=9
+GSSROW cmd=0x2080a026 size=532 exact=false inputs=[(0, 400), (8, 0), (10, 2), (14, 1), (18, 0), (1c, 0), (20, 0), (24, 10), (28, 0), (2c, 0), (30, 0)] probe=bg status=0x0 OK changed_bytes=12
+GSSROW cmd=0x20809009 size=8 exact=false inputs=[(0, 0), (4, 0)] probe=zero status=0x0 OK changed_bytes=1
+GSSROW cmd=0x20809009 size=8 exact=false inputs=[(0, 0), (4, 0)] probe=bg status=0x0 OK changed_bytes=1
+GSSROW cmd=0x20809001 size=8 exact=false inputs=[(0, 0), (4, 0)] probe=zero status=0x0 OK changed_bytes=3
+GSSROW cmd=0x20809001 size=8 exact=false inputs=[(0, 0), (4, 0)] probe=bg status=0x0 OK changed_bytes=3
+GSSROW cmd=0x20809064 size=520 exact=false inputs=[(0, 0), (4, 2), (8, 1), (18, 4)] probe=zero status=0x0 OK changed_bytes=6
+GSSROW cmd=0x20809064 size=520 exact=false inputs=[(0, 0), (4, 2), (8, 1), (18, 4)] probe=bg status=0x0 OK changed_bytes=24
+GSSROW cmd=0x20809064 size=520 exact=false inputs=[(0, 0), (4, 3), (8, 1), (18, 4)] probe=zero status=0x0 OK changed_bytes=7
+GSSROW cmd=0x20809064 size=520 exact=false inputs=[(0, 0), (4, 3), (8, 1), (18, 4)] probe=bg status=0x0 OK changed_bytes=36
+GSSROW cmd=0x2080852c size=1440 exact=false inputs=[(0, 0), (4, 0), (8, 1f)] probe=zero status=0x0 OK changed_bytes=94
+GSSROW cmd=0x2080852c size=1440 exact=false inputs=[(0, 0), (4, 0), (8, 1f)] probe=bg status=0x0 OK changed_bytes=392
+GSSROW cmd=0x2080852b size=2836 exact=false inputs=[(0, 0), (4, 0), (8, 1f)] probe=zero status=0x1f INVALID_ARGUMENT changed_bytes=0
+GSSROW cmd=0x2080852b size=2836 exact=false inputs=[(0, 0), (4, 0), (8, 1f)] probe=bg status=0x1f INVALID_ARGUMENT changed_bytes=0
+GSSROW cmd=0x2080a001 size=16 exact=false inputs=[(0, 0), (4, 0), (8, 0), (c, 0)] probe=zero status=0x0 OK changed_bytes=4
+GSSROW cmd=0x2080a001 size=16 exact=false inputs=[(0, 0), (4, 0), (8, 0), (c, 0)] probe=bg status=0x0 OK changed_bytes=4
+GSSROW cmd=0x2080852a size=1784 exact=true inputs=[] probe=zero status=0x0 OK changed_bytes=101
+GSSROW cmd=0x20808524 size=4 exact=true inputs=[] probe=zero status=0x0 OK changed_bytes=0
+GSSROW cmd=0x2080a70a size=26 exact=true inputs=[] probe=zero status=0x0 OK changed_bytes=13
+GSSROW cmd=0x2080a088 size=12 exact=true inputs=[] probe=zero status=0x0 OK changed_bytes=0
+GSSROW cmd=0x2080852e size=528 exact=true inputs=[] probe=zero status=0x1f INVALID_ARGUMENT changed_bytes=0
+GSSROW cmd=0x2080853a size=1456 exact=true inputs=[] probe=zero status=0x1f INVALID_ARGUMENT changed_bytes=0
+GSSROW cmd=0x2080a618 size=8620 exact=true inputs=[] probe=zero status=0x1f INVALID_ARGUMENT changed_bytes=0
+GSSROW cmd=0x2080852e size=596 exact=true inputs=[] probe=zero status=0x0 OK changed_bytes=19
+GSSROW cmd=0x2080853a size=15352 exact=true inputs=[] probe=zero status=0x0 OK changed_bytes=83
+GSSROW cmd=0x2080a618 size=8632 exact=true inputs=[] probe=zero status=0x0 OK changed_bytes=510
+GSSROW cmd=0x2080853b size=14320 exact=true inputs=[(4, 1)] probe=zero status=0x0 OK changed_bytes=4
+GSSROW cmd=0x2080852a size=1716 exact=true inputs=[] probe=zero status=0x1f INVALID_ARGUMENT changed_bytes=0
+GSSROW cmd=0x2080a618 size=8236 exact=true inputs=[] probe=zero status=0x1f INVALID_ARGUMENT changed_bytes=0
+GSSROW cmd=0x2080a618 size=20000 exact=true inputs=[] probe=zero status=0x1f INVALID_ARGUMENT changed_bytes=0
+GSSROW cmd=0x2080852e size=1432 exact=true inputs=[] probe=zero status=0x0 OK changed_bytes=19
+GSSROW cmd=0x20808162 size=1 exact=true inputs=[] probe=zero status=0x0 OK changed_bytes=0
+PROBE_SUMMARY INVALID_ARGUMENT=10
+PROBE_SUMMARY OK=30
+PROBE_END admin_run=false mode=gss_rows

@@ -58,7 +58,16 @@ say "BENCH_TREE_START"
 # ---- 0. preconditions, checked on CONTENT ----------------------------------------------
 grep -q "Open Kernel Module" /proc/driver/nvidia/version 2>/dev/null \
   || { say "⊘ host driver is not the OPEN module -- run provision_host_driver.sh first"; exit 2; }
-[ -s "$RUN" ] || { say "⊘ missing $RUN (the guest needs the SAME .run)"; exit 2; }
+# The fat guest's pinned package is independent of the installed host driver.
+# A fresh host installed directly at595 will not already have the580 package.
+if [ ! -s "$RUN" ]; then
+  say "fetching the pinned guest580.159.04 package"
+  curl --fail --location --retry 3 --connect-timeout 20 \
+    -o "$RUN.part" \
+    https://us.download.nvidia.com/XFree86/Linux-x86_64/580.159.04/NVIDIA-Linux-x86_64-580.159.04.run \
+    && mv "$RUN.part" "$RUN" \
+    || { say "⊘ pinned guest package download failed"; exit 2; }
+fi
 mkdir -p "$BENCH"
 
 # ---- 1. host deps ----------------------------------------------------------------------
@@ -388,6 +397,15 @@ UD
     $GS "tail -3 /var/log/nvidia-installer.log" 2>&1 | sed 's/^/     installer-log-tail: /'
     return 5 ;;
   esac
+  # The guest always installs the package named by RUN, independently of HOST_DRIVER.
+  # Match stage_fat_guest.sh's receipt so every fat lane selects that guest's ABI profile.
+  GUEST_VERSION=$($GS 'modinfo -F version nvidia' | tr -d '\r')
+  if [[ "$GUEST_VERSION" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+    { echo "version=$GUEST_VERSION"; echo "image=$BENCH/guest.qcow2"; echo "staged=$(date -Is)"; } > "$BENCH/guest.qcow2.STAGED"
+  else
+    kf_fatal "B2: guest driver version is not a valid profile: $GUEST_VERSION"
+    return 5
+  fi
   $GS "sudo poweroff" >/dev/null 2>&1 &
   sleep 20
   say "B2: guest powered off (qemu alive? $(kill -0 $(cat $BENCH/prov.pid 2>/dev/null) 2>/dev/null && echo yes || echo no))"

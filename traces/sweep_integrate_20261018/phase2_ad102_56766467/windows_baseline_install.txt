@@ -1,0 +1,110 @@
+[2026-10-19T18:11:35Z] WINVM_INSTALL_START name=kfwin repo=24906bf3 qemu=/usr/bin/qemu-system-x86_64 host_driver=595.91.07
+[2026-10-19T18:11:35Z] START prereqs
+[2026-10-19T18:11:35Z] EXIT prereqs rc=0
+[2026-10-19T18:11:36Z] START fetch
+[2026-10-19T18:11:59Z] MEDIUM_OK win11_ltsc_2024_eval_x64_en-us.iso sha256=67cec5865eaa037a72ddc633a717a10a2bed50778862267223ddb9c60ef5da68 bytes=5112850432
+[2026-10-19T18:12:03Z] MEDIUM_OK virtio-win-0.1.302.iso sha256=303f7ae40dad495d6ae474fdc571df58958a4dbc5c37a522d80f9a203867949d bytes=877373440
+[2026-10-19T18:12:03Z] MEDIUM_OK OpenSSH-Win64-v10.0.0.0.msi sha256=ddec9c53864280759cf9f74791cefd387100e3946aa849a1c138a4ed1b96b7d9 bytes=6586368
+[2026-10-19T18:12:08Z] MEDIUM_OK 580.88-desktop-win10-win11-64bit-international-dch-whql.exe sha256=90c49f925b41ee062e02cc8094a16b6d057abfde4e85235a76d63ffe267f63a9 bytes=890807536
+[2026-10-19T18:12:08Z] EXIT fetch rc=0
+[2026-10-19T18:12:08Z] START apparmor
+[2026-10-19T18:12:08Z] AppArmor: swtpm may use /workspace/sweep-win-56766467
+[2026-10-19T18:12:08Z] EXIT apparmor rc=0
+[2026-10-19T18:12:08Z] START secrets
+[2026-10-19T18:12:08Z] generated the Windows password (secrets/win_password, 0600)
+[2026-10-19T18:12:08Z] generated the harness ssh key (secrets/ssh_ed25519)
+[2026-10-19T18:12:08Z] EXIT secrets rc=0
+[2026-10-19T18:12:08Z] START secureboot-key
+[2026-10-19T18:12:08Z] generated this host's kayfabe Secure Boot db key (/workspace/sweep-win-56766467/secureboot/db.key, never leaves the host)
+[2026-10-19T18:12:08Z] SB_DB_CERT subject=CN = kayfabe GOP db key (ubuntu 2026-10-19) sha256 Fingerprint=2C:FD:19:BB:16:60:0E:3E:41:41:C3:3C:31:73:24:AB:2B:8D:11:F3:FC:F6:73:0C:39:0C:DF:1D:46:E2:26:1A
+[2026-10-19T18:12:08Z] EXIT secureboot-key rc=0
+[2026-10-19T18:12:08Z] START ovmf-vars
+[2026-10-19T18:12:10Z] VARS_CREATED /workspace/sweep-win-56766467/kfwin/firmware/OVMF_VARS.fd
+[2026-10-19T18:12:10Z] VARS_DB CN=Microsoft Windows Production PCA 2011; CN=Microsoft Corporation UEFI CA 2011; CN=kayfabe GOP db key (ubuntu 2026-10-19);
+[2026-10-19T18:12:10Z] EXIT ovmf-vars rc=0
+[2026-10-19T18:12:10Z] START tpm-manufacture
+[2026-10-19T18:12:12Z] TPM_MANUFACTURED /workspace/sweep-win-56766467/kfwin/tpm (5993 bytes of state)
+[2026-10-19T18:12:12Z] EXIT tpm-manufacture rc=0
+[2026-10-19T18:12:12Z] START disk
+[2026-10-19T18:12:12Z] DISK_CREATED base.qcow2 80G
+[2026-10-19T18:12:12Z] EXIT disk rc=0
+[2026-10-19T18:12:12Z] START unattend
+[2026-10-19T18:12:12Z] UNATTEND_ISO secrets/unattend.iso (6985728 bytes; 1 authorized key(s))
+[2026-10-19T18:12:12Z] EXIT unattend rc=0
+[2026-10-19T18:12:12Z] START install-boot
+[2026-10-19T18:12:12Z] QEMU_START tag=install boot=1 pid=91629 log=logs/install_b1_qemu.log
+[2026-10-19T18:12:12Z] send-key failed (see the screenshots)
+[2026-10-19T18:12:12Z] INSTALL_BOOT_END rc=1 reason=no-events-file
+[2026-10-19T18:12:12Z] the install did not end in a guest shutdown
+[2026-10-19T18:12:12Z] EXIT install-boot rc=1
+[2026-10-19T18:16:36Z] WINVM_INSTALL_START name=kfwin repo=24906bf3 qemu=/workspace/bench/kf3-bins/24906bf3/qemu-system-x86_64 host_driver=595.91.07
+[2026-10-19T18:16:36Z] START prereqs
+[2026-10-19T18:16:37Z] EXIT prereqs rc=0
+[2026-10-19T18:16:37Z] START fetch
+[2026-10-19T18:17:01Z] MEDIUM_OK win11_ltsc_2024_eval_x64_en-us.iso sha256=67cec5865eaa037a72ddc633a717a10a2bed50778862267223ddb9c60ef5da68 bytes=5112850432
+[2026-10-19T18:17:05Z] MEDIUM_OK virtio-win-0.1.302.iso sha256=303f7ae40dad495d6ae474fdc571df58958a4dbc5c37a522d80f9a203867949d bytes=877373440
+[2026-10-19T18:17:05Z] MEDIUM_OK OpenSSH-Win64-v10.0.0.0.msi sha256=ddec9c53864280759cf9f74791cefd387100e3946aa849a1c138a4ed1b96b7d9 bytes=6586368
+[2026-10-19T18:17:09Z] MEDIUM_OK 580.88-desktop-win10-win11-64bit-international-dch-whql.exe sha256=90c49f925b41ee062e02cc8094a16b6d057abfde4e85235a76d63ffe267f63a9 bytes=890807536
+[2026-10-19T18:17:09Z] EXIT fetch rc=0
+[2026-10-19T18:17:09Z] START apparmor
+[2026-10-19T18:17:09Z] EXIT apparmor rc=0
+[2026-10-19T18:17:09Z] START secrets
+[2026-10-19T18:17:09Z] EXIT secrets rc=0
+[2026-10-19T18:17:09Z] START secureboot-key
+[2026-10-19T18:17:09Z] SB_DB_CERT subject=CN = kayfabe GOP db key (ubuntu 2026-10-19) sha256 Fingerprint=2C:FD:19:BB:16:60:0E:3E:41:41:C3:3C:31:73:24:AB:2B:8D:11:F3:FC:F6:73:0C:39:0C:DF:1D:46:E2:26:1A
+[2026-10-19T18:17:09Z] EXIT secureboot-key rc=0
+[2026-10-19T18:17:09Z] START ovmf-vars
+[2026-10-19T18:17:09Z] VARS_EXIST /workspace/sweep-win-56766467/kfwin/firmware/OVMF_VARS.fd — reused, never regenerated (it is per-VM Secure Boot state)
+[2026-10-19T18:17:10Z] VARS_DB CN=Microsoft Windows Production PCA 2011; CN=Microsoft Corporation UEFI CA 2011; CN=kayfabe GOP db key (ubuntu 2026-10-19);
+[2026-10-19T18:17:10Z] EXIT ovmf-vars rc=0
+[2026-10-19T18:17:10Z] TPM_EXISTS /workspace/sweep-win-56766467/kfwin/tpm — reused; the harness never re-manufactures a TPM
+[2026-10-19T18:17:10Z] START disk
+[2026-10-19T18:17:10Z] DISK_EXISTS base.qcow2
+[2026-10-19T18:17:10Z] EXIT disk rc=0
+[2026-10-19T18:17:10Z] START unattend
+[2026-10-19T18:17:10Z] UNATTEND_ISO secrets/unattend.iso (6985728 bytes; 1 authorized key(s))
+[2026-10-19T18:17:10Z] EXIT unattend rc=0
+[2026-10-19T18:17:10Z] START install-boot
+[2026-10-19T18:17:10Z] REFUSED: a swtpm (pid 91626) still serves /workspace/sweep-win-56766467/kfwin/tpm; never two on one state
+[2026-10-19T18:17:10Z] EXIT install-boot rc=2
+[2026-10-19T18:47:03Z] WINVM_INSTALL_START name=kfwin repo=24906bf3 qemu=/workspace/bench/kf3-bins/24906bf3/qemu-system-x86_64 host_driver=595.91.07
+[2026-10-19T18:47:03Z] START prereqs
+[2026-10-19T18:47:03Z] EXIT prereqs rc=0
+[2026-10-19T18:47:03Z] START fetch
+[2026-10-19T18:47:28Z] MEDIUM_OK win11_ltsc_2024_eval_x64_en-us.iso sha256=67cec5865eaa037a72ddc633a717a10a2bed50778862267223ddb9c60ef5da68 bytes=5112850432
+[2026-10-19T18:47:32Z] MEDIUM_OK virtio-win-0.1.302.iso sha256=303f7ae40dad495d6ae474fdc571df58958a4dbc5c37a522d80f9a203867949d bytes=877373440
+[2026-10-19T18:47:32Z] MEDIUM_OK OpenSSH-Win64-v10.0.0.0.msi sha256=ddec9c53864280759cf9f74791cefd387100e3946aa849a1c138a4ed1b96b7d9 bytes=6586368
+[2026-10-19T18:47:37Z] MEDIUM_OK 580.88-desktop-win10-win11-64bit-international-dch-whql.exe sha256=90c49f925b41ee062e02cc8094a16b6d057abfde4e85235a76d63ffe267f63a9 bytes=890807536
+[2026-10-19T18:47:37Z] EXIT fetch rc=0
+[2026-10-19T18:47:37Z] START apparmor
+[2026-10-19T18:47:37Z] EXIT apparmor rc=0
+[2026-10-19T18:47:37Z] START secrets
+[2026-10-19T18:47:37Z] EXIT secrets rc=0
+[2026-10-19T18:47:37Z] START secureboot-key
+[2026-10-19T18:47:37Z] SB_DB_CERT subject=CN = kayfabe GOP db key (ubuntu 2026-10-19) sha256 Fingerprint=2C:FD:19:BB:16:60:0E:3E:41:41:C3:3C:31:73:24:AB:2B:8D:11:F3:FC:F6:73:0C:39:0C:DF:1D:46:E2:26:1A
+[2026-10-19T18:47:37Z] EXIT secureboot-key rc=0
+[2026-10-19T18:47:37Z] START ovmf-vars
+[2026-10-19T18:47:37Z] VARS_EXIST /workspace/sweep-win-56766467/kfwin/firmware/OVMF_VARS.fd — reused, never regenerated (it is per-VM Secure Boot state)
+[2026-10-19T18:47:37Z] VARS_DB CN=Microsoft Windows Production PCA 2011; CN=Microsoft Corporation UEFI CA 2011; CN=kayfabe GOP db key (ubuntu 2026-10-19);
+[2026-10-19T18:47:37Z] EXIT ovmf-vars rc=0
+[2026-10-19T18:47:37Z] TPM_EXISTS /workspace/sweep-win-56766467/kfwin/tpm — reused; the harness never re-manufactures a TPM
+[2026-10-19T18:47:37Z] START disk
+[2026-10-19T18:47:37Z] DISK_EXISTS base.qcow2
+[2026-10-19T18:47:37Z] EXIT disk rc=0
+[2026-10-19T18:47:37Z] START unattend
+[2026-10-19T18:47:37Z] UNATTEND_ISO secrets/unattend.iso (6985728 bytes; 1 authorized key(s))
+[2026-10-19T18:47:37Z] EXIT unattend rc=0
+[2026-10-19T18:47:37Z] START install-boot
+[2026-10-19T18:47:37Z] QEMU_START tag=install boot=1 pid=106511 log=logs/install_b1_qemu.log
+[2026-10-19T19:19:19Z] INSTALL_BOOT_END rc=0 reason=guest-shutdown
+[2026-10-19T19:19:19Z] EXIT install-boot rc=0
+[2026-10-19T19:19:19Z] START check-boot
+[2026-10-19T19:19:19Z] QEMU_START tag=installcheck boot=1 pid=132545 log=logs/installcheck_b1_qemu.log
+[2026-10-19T19:21:44Z] SSH_UP after 70s
+[2026-10-19T19:22:04Z] first logon said: KF_FIRSTLOGON OK 2026-10-19T19:18:42.0818995+00:00
+[2026-10-19T19:23:25Z] CHECK_BOOT_END rc=0 reason=guest-shutdown check_rc=0
+[2026-10-19T19:23:25Z] EXIT check-boot rc=0
+[2026-10-19T19:23:25Z] START seal
+[2026-10-19T19:23:25Z] SEALED disk/base.qcow2 (0400); unattend.iso (it held the password) deleted; every run uses an overlay
+[2026-10-19T19:23:25Z] EXIT seal rc=0
+[2026-10-19T19:23:25Z] WINVM_INSTALL_DONE name=kfwin

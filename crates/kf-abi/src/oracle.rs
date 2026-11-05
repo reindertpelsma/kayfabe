@@ -24,7 +24,7 @@
 //! # ★★★ The class, MEASURED — all eleven, not a sample
 //!
 //! `[measured]` 2026-08-01 on an NVIDIA GeForce RTX 3060 (GA106),
-//! `GPU-e28d7776-e4f9-704b-d392-d46f187343f8`, vast instance `46494693`, host driver open
+//! `GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0002`, vast instance `46494693`, host driver open
 //! **580.159.04** — `research_clones/ogkm-580.159.04` (tag `b81d58e`) rebuilt with a chunked
 //! whole-body print at `rpcRmApiControl_GSP`'s reply, `RmInitAdapter` driven by opening
 //! `/dev/nvidia0`, and widened with `nvidia-smi -q`, which is what reaches `0x20800a4c`.
@@ -563,7 +563,7 @@ pub const CAPTURE_RELIANCE: &[CaptureReliance] = &[
         read_end: 4108,
         sites: &[
             "crates/kayfabe-abi/src/regaccessmap.rs",
-            "crates/kayfabe-device/tests/user_register_access_map.rs",
+            "archive/crates/kayfabe-device/tests/user_register_access_map.rs",
         ],
         why: "`profilingRangesSize` sits at 4104 and the module quotes its value; the \
               embedded `ORACLE_PREFIX` is the first 1277 bytes — the two size words plus \
@@ -574,7 +574,7 @@ pub const CAPTURE_RELIANCE: &[CaptureReliance] = &[
     CaptureReliance {
         cmd: 0x2080_1112,
         read_end: 1112,
-        sites: &["crates/kayfabe-device/tests/init_tables.rs"],
+        sites: &["archive/crates/kayfabe-device/tests/init_tables.rs"],
         why: "12-byte header plus all 11 entries the capture's own `numEntries` declares, \
               at 100 bytes each. `ORACLE_ENGINE_ENTRIES` embeds six of those eleven — \
               entries 0, 4, 5, 6, 7 and 10 — so its deepest byte is the end of entry 10. \
@@ -585,7 +585,7 @@ pub const CAPTURE_RELIANCE: &[CaptureReliance] = &[
         read_end: 580,
         sites: &[
             "crates/kayfabe-abi/src/deviceinfo.rs",
-            "crates/kayfabe-device/tests/internal_device_info_table.rs",
+            "archive/crates/kayfabe-device/tests/internal_device_info_table.rs",
         ],
         why: "4-byte header plus all 12 entries the capture's own `numEntries` declares, at \
               48 bytes each. `ORACLE_FIVE` embeds five of the twelve, ending at 388. ★ This \
@@ -597,7 +597,7 @@ pub const CAPTURE_RELIANCE: &[CaptureReliance] = &[
         read_end: 164,
         sites: &[
             "crates/kayfabe-abi/src/falconinfo.rs",
-            "crates/kayfabe-device/tests/constructed_falcon_info.rs",
+            "archive/crates/kayfabe-device/tests/constructed_falcon_info.rs",
         ],
         why: "4-byte count plus all 8 falcons the capture's own `numConstructedFalcons` \
               declares, at 20 bytes each; `ORACLE_PREFIX` embeds the 163 non-zero bytes of \
@@ -616,7 +616,7 @@ pub const CAPTURE_RELIANCE: &[CaptureReliance] = &[
     CaptureReliance {
         cmd: 0x2080_2a0f,
         read_end: 0,
-        sites: &["crates/kayfabe-device/src/sweep.rs"],
+        sites: &["archive/crates/kayfabe-device/src/sweep.rs"],
         why: "NOT A READ. `RefusalHalts`: the copy-engine topology triple is refused whole, \
               so no byte of this row is decoded. ⊘ If it is ever served, this row must be \
               re-decided — the five fields `kceGetPceConfigForLceType` copies out span 20 \

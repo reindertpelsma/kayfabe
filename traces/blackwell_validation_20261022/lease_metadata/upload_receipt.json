@@ -1,0 +1,13 @@
+{
+  "own_id": 57132969,
+  "bundle_sha256": "49c74f040ed627c1eca667aefe3a8984adcf47f12d2c7ac1e55c6ee05d3899ce",
+  "bytes": 544424,
+  "files": 44,
+  "stdout": "CONTROLLER_PID=1864\n",
+  "probe_sha256": {
+    "cup2.exe": "86039b888dc7d17b1bd92736c5a5589a4a67a897a5aa9859f7a7ed9d280d95b8",
+    "cup3.exe": "41681173e42c40ba94cafd33be22c90f419b64436b9be88993ba6bd286a19460",
+    "cup8.exe": "7401a67a58288e0789a8fa214be4696316715c5306b690781996847f5baffcf6",
+    "kf_dxprobe.exe": "8f049e04196db99275d901119e9c860058d423e2250920acb717062ed8303f3a"
+  }
+}

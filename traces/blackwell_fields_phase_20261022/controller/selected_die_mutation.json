@@ -1,0 +1,10 @@
+{
+  "mutant": "remove_selected_actual_die_binding",
+  "killers": [
+    "test_actual_probe_must_match_the_selected_die",
+    "test_selected_die_is_read_from_the_owned_lease"
+  ],
+  "before_full_bench": 133,
+  "after_full_bench": 135,
+  "no_old_cases_removed": true
+}

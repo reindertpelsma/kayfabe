@@ -53,8 +53,8 @@
 //!
 //! | source | part | what it says |
 //! |---|---|---|
-//! | `traces/real_ga106/rpc_bodies_real_ga106.txt:617-628` (4 calls) | `GPU-e28d7776-…` | reply body `00 00 00 00`, `psize=4`, `gspst=0x0` |
-//! | `traces/real_ga106/rmladder_r21_gpuinfo_sweep_real_ga106.txt` (R21 `0x2a`) | `GPU-d0913685-…` | `NV_OK data=0x00000000` |
+//! | `traces/real_ga106/rpc_bodies_real_ga106.txt:617-628` (4 calls) | `GPU-fa4e0002-…` | reply body `00 00 00 00`, `psize=4`, `gspst=0x0` |
+//! | `traces/real_ga106/rmladder_r21_gpuinfo_sweep_real_ga106.txt` (R21 `0x2a`) | `GPU-fa4e0001-…` | `NV_OK data=0x00000000` |
 //!
 //! The second reads the same number through the *whole* `getGpuInfos` arm — an unprivileged
 //! `GPU_GET_INFO_V2[0x2a]` on the host — so it is also the standing way to obtain this field

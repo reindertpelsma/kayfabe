@@ -1,6 +1,8 @@
 //! ★★★ **The published constant table** — the ONE place a measured per-die value may live
 //! CODE READ: extracted from codex/sweep-dies-20261022 at commit bc3a967e0.
-//! No consumer is wired; the published subset contains only observation rows.
+//! Consumers are wired (2026-11-03): `inittables` (cudart/GSS init controls), `rowserve`, `zbc` and
+//! `precomp` read this table; the published subset contains only observation rows (no software-state
+//! rule such as `0x20802209`, which `kf_abi::cudartinit` answers).
 //! (owner rulings §AF/§AH; `docs/design/V3_CONSTANT_STRATEGY.md` §1-§3; `V3_PROVENANCE.md` §1;
 //! matrix `docs/design/V3_CONSTANT_MATRIX_20261014.md`). Lane C, 2026-10-14.
 //!
@@ -35,6 +37,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 /// The table as published in the repository.
 pub const TABLE_TSV: &str = include_str!("../data/measured_constants.tsv");
+
+/// 2026-10-23: privileged PRECOMP rows; each carries its source and evidence path.
+pub const PRECOMP_TSV: &str = include_str!("../data/precomp_measured.tsv");
 
 /// Which die a row answers.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -271,7 +276,7 @@ pub fn validate_evidence(rows: &[Row], exists: impl Fn(&str) -> bool) -> Result<
     Ok(())
 }
 
-fn parse_source(s: &str) -> Result<SourceTag, String> {
+pub(crate) fn parse_source(s: &str) -> Result<SourceTag, String> {
     if let Some(m) = s.strip_prefix("measured:") {
         let parts: Vec<&str> = m.split(',').collect();
         let [die, driver, date] = parts.as_slice() else {
@@ -509,7 +514,11 @@ pub fn parse(tsv: &str) -> Result<Vec<Row>, String> {
 /// [`Refusal::TableInvalid`] if the published file breaks a rule (the tests make that a red build).
 pub fn table() -> Result<&'static [Row], Refusal> {
     static T: OnceLock<Result<Vec<Row>, String>> = OnceLock::new();
-    match T.get_or_init(|| parse(TABLE_TSV)) {
+    match T.get_or_init(|| {
+        let mut rows = parse(TABLE_TSV)?;
+        rows.extend(parse(PRECOMP_TSV)?);
+        Ok(rows)
+    }) {
         Ok(v) => Ok(v.as_slice()),
         Err(e) => Err(Refusal::TableInvalid(e.clone())),
     }
@@ -795,7 +804,7 @@ mod tests {
     #[test]
     fn board_data_is_refused() {
         let uuid = format!(
-            "{}k\tGA106\t580\t4\t-\t0x1\tmeasured:GA106,580.159.04,2026-08-20\tGPU-1234abcd\n",
+            "{}k\tGA106\t580\t4\t-\t0x1\tmeasured:GA106,580.159.04,2026-08-20\tGPU-fa4e0004\n",
             hdr()
         );
         assert!(parse(&uuid).unwrap_err().contains("board data"));

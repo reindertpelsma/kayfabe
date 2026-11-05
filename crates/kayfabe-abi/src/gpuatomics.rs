@@ -16,7 +16,7 @@
 //! which is none of `_CAPTYPE_SYSMEM(0)` / `_GPU(1)` / `_P2P(2)` (`:1226-1228`). libcuda
 //! hands RM a **zeroed** buffer, so it asks for `_CAPTYPE_SYSMEM`.
 //!
-//! `[measured 2026-08-08, real GA106 `GPU-d0913685`, driver 580.159.04 Open, `rmladder
+//! `[measured 2026-08-08, real GA106 `GPU-fa4e0001`, driver 580.159.04 Open, `rmladder
 //! --atomics-probe` (R23), rev `1d5704dd9`,
 //! `traces/real_ga106/rmladder_r23_atomics_real_ga106.txt`]` — eight arms on the **same bare
 //! Subdevice R18 used**, nothing else allocated:

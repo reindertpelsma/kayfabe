@@ -1,0 +1,17 @@
+{
+  "status": "PASS",
+  "own_id": 57148807,
+  "product": "8f3a9bb3a5d652b3f536ca015bf95735ec588924",
+  "die": "GB202",
+  "driver": "595.91.07 open",
+  "gates": "9/9 +10",
+  "raw": "30/30",
+  "cuda": "4/4",
+  "native_gr_ce": "PASS",
+  "intentional_source_verified_xid31": 5,
+  "unmatched_xids": 0,
+  "native32_recurred": false,
+  "sample_count_this_box": 1,
+  "cross_box_clean_N0_samples": 2,
+  "causality": "supports allocated CE class fixture hypothesis; no old-mutant hardware comparison"
+}

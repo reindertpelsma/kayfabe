@@ -1,0 +1,30 @@
+{
+  "source": "24906bf334665c9000b16b271005593daa3586c7",
+  "id": 56766467,
+  "install_boot_start_utc": "2026-10-19T18:47:37Z",
+  "install_boot_end_utc": "2026-10-19T19:19:19Z",
+  "check_and_seal_end_utc": "2026-10-19T19:23:25Z",
+  "check_failures": 0,
+  "status": "BASELINE_PREPARATION_PASS; NVIDIA kayfabe suite UNRUN",
+  "tpm": "original manufactured-once state reused, not copied back",
+  "secrets": "unattend.iso deleted by original seal step; no key/password copied back",
+  "ancestry_guard": "shallow history returned1; exact guard passes after fetch-deepen512; unchanged source and unchanged current candidate5f8f9d1a5f",
+  "artifacts": {
+    "windows_baseline_check.txt": {
+      "raw_sha256": "693780651bf39e1a7bcd221bfd5402cbe0850592cce54345696b59ee127151c3",
+      "bytes": 1645
+    },
+    "windows_baseline_install.txt": {
+      "raw_sha256": "213a8b5643201ea5e46eb5b3c319685489c55fdea399c2bf2e2764134b48bfa3",
+      "bytes": 8432
+    },
+    "windows_ancestry_repair.txt": {
+      "raw_sha256": "f39f18feaf720127f19e0635f52de7facf3995eebe60f870fc90e5696e7d0d99",
+      "bytes": 249
+    },
+    "windows_ancestry_refusal.txt": {
+      "raw_sha256": "dda2c208d44e97e833774fa0a4fb5599e5fbe9c4457789c1cc026f3800704eeb",
+      "bytes": 96
+    }
+  }
+}

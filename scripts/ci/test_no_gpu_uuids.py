@@ -64,6 +64,28 @@ class ScanTests(unittest.TestCase):
             with self.subTest(text=text[:12]):
                 self.assertEqual(sum(gate.scan(text.encode()).values()), 1)
 
+    def test_finds_the_vulkaninfo_device_uuid_line(self):
+        self.assertEqual(sum(gate.scan(f"\tdeviceUUID         = {A}".encode()).values()), 1)
+        self.assertEqual(gate.scan(f"\tdriverUUID         = {A}".encode()), Counter())
+
+    def test_synthetic_placeholders_are_not_hits(self):
+        for text in (
+            "GPU-00000000-0000-0000-0000-000000000000",
+            "GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001",
+            "GPU-FA4EFA4E-FA4E-4FA4-8FA4-FA4EFA4E00D3",
+            "\tdeviceUUID         = fa4efa4e-fa4e-4fa4-8fa4-fa4efa4ed001",
+        ):
+            with self.subTest(text=text[:20]):
+                self.assertEqual(gate.scan(text.encode()), Counter())
+        # only the documented prefix is a placeholder: a near miss is a board
+        near_miss = "GPU-" + "fa4efa4f" + "-fa4e-4fa4-8fa4-fa4efa4f0001"
+        self.assertEqual(sum(gate.scan(near_miss.encode()).values()), 1)
+
+    def test_scope_covers_the_source_trees_not_only_traces_and_docs(self):
+        for top in ("traces", "docs", "crates", "scripts", "tools", "archive"):
+            with self.subTest(top=top):
+                self.assertIn(top, gate.SCOPE)
+
     def test_a_bare_uuid_without_a_gpu_marker_is_not_a_hit(self):
         self.assertEqual(gate.scan(A.encode()), Counter())
         self.assertEqual(gate.scan(f"pci-{A}".encode()), Counter())
@@ -139,13 +161,17 @@ class CompareTests(unittest.TestCase):
 
 
 class ScopeTests(unittest.TestCase):
-    def test_only_traces_and_docs_are_scanned(self):
+    def test_the_listed_trees_are_scanned_and_top_level_files_are_not(self):
         t = Tree()
         t.write("traces/a.log", f"GPU-{A}")
         t.write("docs/design/b.md", f"GPU-{B}")
         t.write("crates/kf-x/src/c.rs", f"GPU-{C}")
         t.write("README.md", f"GPU-{C}")
-        self.assertEqual(sorted(gate.tracked(t.root)), ["docs/design/b.md", "traces/a.log"])
+        t.write("third_party/x.c", f"GPU-{C}")
+        self.assertEqual(
+            sorted(gate.tracked(t.root)),
+            ["crates/kf-x/src/c.rs", "docs/design/b.md", "traces/a.log"],
+        )
 
     def test_scan_tree_leaves_out_files_without_a_hit(self):
         t = Tree()
@@ -216,10 +242,19 @@ class EndToEndTests(unittest.TestCase):
         t.write("traces/old.log", f"new line\nGPU-{A}\nmore\nGPU-{A}\n")
         self.assertEqual(t.run()[0], 0)
 
-    def test_files_outside_traces_and_docs_are_not_the_gates_business(self):
+    def test_a_uuid_in_the_source_trees_fails_too(self):
+        for rel in ("crates/kf-x/tests/c.rs", "scripts/s.sh", "tools/t.py", "archive/a.log"):
+            with self.subTest(rel=rel):
+                t = self.seeded()
+                t.write(rel, f"GPU-{C}\n")
+                code, out = t.run()
+                self.assertEqual(code, 1)
+                self.assertIn(f"NEW   {rel}", out)
+
+    def test_files_outside_the_scanned_trees_are_not_the_gates_business(self):
         t = self.seeded()
-        t.write("crates/kf-x/tests/c.rs", f"GPU-{C}\n")
-        t.write("scripts/s.sh", f"gpu-uuid={C}\n")
+        t.write("README.md", f"GPU-{C}\n")
+        t.write("third_party/ogkm/x.c", f"gpu-uuid={C}\n")
         self.assertEqual(t.run()[0], 0)
 
     def test_a_known_uuid_in_other_letter_case_is_still_the_known_one(self):

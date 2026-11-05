@@ -43,8 +43,8 @@ for arm in refuse pass; do
 
   # --- P3/P4: the loop, and whether the snapshot fired -----------------------------------
   row P3 "steps actually taken" "$(grep -o 'steps actually taken = [0-9]*' "$P" | tail -1)"
-  say "  P3   RIP histogram, top rows (predicted: mass in libcuda+0x22bd80..0x22c150"
-  say "       and +0xf9df90..+0xf9e380 — the loop w215 named):"
+  say "  P3   RIP histogram, top rows (predicted: mass in the cuCtxCreate wait loop in libcuda (offsets removed 2026-10-31);"
+  say "       the loop w215 named):"
   grep -A12 'RIP HISTOGRAM' "$P" | grep -E '^ +[0-9]+ +0x' | head -10 | sed 's/^/     /'
   row P4 "SNAPSHOT fired? (predicted yes, p=.85)" \
       "$(grep -c 'SNAPSHOT at RIP' "$P" 2>/dev/null) fired / $(grep -c 'NO SNAPSHOT' "$P" 2>/dev/null) absent"

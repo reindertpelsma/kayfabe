@@ -1,0 +1,109 @@
+{
+  "source": "candidate4 product files with approved F2 dependency; before gpu-types import",
+  "crates": [
+    {
+      "crate": "kf-abi",
+      "exit_code": 0,
+      "passed": 592,
+      "failed": 0,
+      "ignored": 0,
+      "log_sha256": "990c2766e8550db6e9acf57cb6c110e9ebe5552d920595df7bc00d8af567513d"
+    },
+    {
+      "crate": "kf-arch",
+      "exit_code": 0,
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "log_sha256": "c08adec176b3c1114e3adbeeb5136203df559239e4111827520b2e2426679d86"
+    },
+    {
+      "crate": "kf-chip",
+      "exit_code": 0,
+      "passed": 72,
+      "failed": 0,
+      "ignored": 0,
+      "log_sha256": "73fc6ae5dbd8adf07c3ca8c22a4a009101a0560a3536ad4b18e506b4e3fb0c1f"
+    },
+    {
+      "crate": "kf-census",
+      "exit_code": 0,
+      "passed": 50,
+      "failed": 0,
+      "ignored": 1,
+      "log_sha256": "9a764010423465a8c4885825f2e8bea476218162b61bd265e30e4b78402aeaa4"
+    },
+    {
+      "crate": "kf-cuda",
+      "exit_code": 0,
+      "passed": 67,
+      "failed": 0,
+      "ignored": 0,
+      "log_sha256": "31592886291295cd5690cd9bdef50da13447ad2b3de157f28983a61328f79aa1"
+    },
+    {
+      "crate": "kf-disp",
+      "exit_code": 0,
+      "passed": 247,
+      "failed": 0,
+      "ignored": 3,
+      "log_sha256": "a8d2d1b245b87d904a93f9b8637e818c78267f333e642f580fb7ab1d1a757e67"
+    },
+    {
+      "crate": "kf-gsp",
+      "exit_code": 0,
+      "passed": 49,
+      "failed": 0,
+      "ignored": 0,
+      "log_sha256": "50153db57bc0e908b8407af80a89931b7e7369c337c9143a78b92c30ec71cd28"
+    },
+    {
+      "crate": "kf-host",
+      "exit_code": 0,
+      "passed": 66,
+      "failed": 0,
+      "ignored": 0,
+      "log_sha256": "22ca80f829d7e2522c47aca71cd0c3962c7d3307344c8135ee6fb6df8a552a78"
+    },
+    {
+      "crate": "kf-rm",
+      "exit_code": 0,
+      "passed": 750,
+      "failed": 0,
+      "ignored": 0,
+      "log_sha256": "fd2f1d7d918bedaa8a242dcd5bc73a2d9ef20cf73afaa02e7fd8a052735a7ded"
+    },
+    {
+      "crate": "kf-harness",
+      "exit_code": 0,
+      "passed": 12,
+      "failed": 0,
+      "ignored": 0,
+      "log_sha256": "3d000a562cd83c3842bfce4fe260e0d4bf5a5870eb0df9acd9de2e4253da045d"
+    },
+    {
+      "crate": "kf-broker",
+      "exit_code": 0,
+      "passed": 149,
+      "failed": 0,
+      "ignored": 9,
+      "log_sha256": "c037b142a34e36cbaf7c1053c8006a9365448e762c370fbd7805a9dfb5026f41"
+    },
+    {
+      "crate": "kf-mem",
+      "exit_code": 0,
+      "passed": 184,
+      "failed": 0,
+      "ignored": 3,
+      "log_sha256": "8dbaf0eb0bd063bcb2cd9286c67b7aeccbcbe697c812bbaf5584483c9b0f9175"
+    },
+    {
+      "crate": "kf-qemu",
+      "exit_code": 0,
+      "passed": 312,
+      "failed": 0,
+      "ignored": 0,
+      "log_sha256": "ce2b6d0cdc28f72150da7892057b4970223829765d679ce87c71823165e8819a"
+    }
+  ]
+}

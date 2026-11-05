@@ -13,7 +13,7 @@ usage:
                                        (or "none"); SOCK is ignored
   qga.py-style, on the guest-agent socket:
   qmp.py SOCK qga-ping                 guest-ping (exit 0 when the agent answers)
-  qmp.py SOCK qga-exec PATH [ARG...]   guest-exec with captured output; prints stdout/stderr and
+  qmp.py SOCK qga-exec [--timeout=SECONDS] PATH [ARG...]   guest-exec with captured output; prints stdout/stderr and
                                        exits with the program's exit code (124 on timeout)
 
 Box output is data: nothing printed here is interpreted by the caller beyond exit codes and the
@@ -22,6 +22,8 @@ one-word reason of `last-shutdown`.
 
 import base64
 import json
+import math
+import os
 import socket
 import sys
 import time
@@ -29,9 +31,13 @@ import time
 
 def connect(path, timeout=10.0):
     s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    s.settimeout(timeout)
-    s.connect(path)
-    return s, s.makefile("rwb", buffering=0)
+    try:
+        s.settimeout(timeout)
+        s.connect(path)
+        return s, s.makefile("rwb", buffering=0)
+    except BaseException:
+        s.close()
+        raise
 
 
 def send(f, obj):
@@ -47,16 +53,22 @@ def recv(f):
 
 def qmp_open(path, timeout=10.0):
     s, f = connect(path, timeout)
-    greeting = recv(f)
-    if "QMP" not in greeting:
-        raise RuntimeError(f"not a QMP greeting: {greeting}")
-    send(f, {"execute": "qmp_capabilities"})
-    while True:
-        r = recv(f)
-        if "return" in r:
-            return s, f
-        if "error" in r:
-            raise RuntimeError(f"qmp_capabilities: {r['error']}")
+    try:
+        greeting = recv(f)
+        if "QMP" not in greeting:
+            raise RuntimeError(f"not a QMP greeting: {greeting}")
+        send(f, {"execute": "qmp_capabilities"})
+        while True:
+            r = recv(f)
+            if "return" in r:
+                return s, f
+            if "error" in r:
+                raise RuntimeError(f"qmp_capabilities: {r['error']}")
+    except BaseException:
+        # a QMP server socket serves one client at a time: a half-open client left behind would
+        # keep every later attach from getting its greeting
+        s.close()
+        raise
 
 
 def qmp_cmd(f, name, args=None):
@@ -82,8 +94,27 @@ def cmd(sock, name, args_json=None):
     return 0
 
 
-def events(sock, out):
-    s, f = qmp_open(sock)
+def events(sock, out, attach_s=None):
+    # ⊘ [2026-11-04, GA106 gate run dca106a, traces/die_coverage_20261104/ampere/] One attempt with a
+    # 10 s greeting timeout lost the logger when QEMU's main loop was still busy in kf3's realize: no
+    # events file, so the run loop read the guest's reboot as reason=no-events-file and did not start
+    # the second QEMU. Attach is now retried until KF_QMP_EVENTS_ATTACH_S (default 120 s) has passed;
+    # the file is still created only once attached, so "no-events-file" keeps meaning "never attached".
+    if attach_s is None:
+        try:
+            attach_s = float(os.environ.get("KF_QMP_EVENTS_ATTACH_S", "120"))
+        except ValueError:
+            attach_s = 120.0
+    deadline = time.time() + attach_s
+    while True:
+        try:
+            s, f = qmp_open(sock, timeout=30.0)
+            break
+        except (OSError, EOFError, ValueError, RuntimeError) as e:
+            if time.time() >= deadline:
+                print(f"qmp events: not attached after {attach_s:.0f} s: {e}", file=sys.stderr)
+                return 1
+            time.sleep(0.5)
     s.settimeout(None)
     with open(out, "a", encoding="utf-8") as o:
         o.write(json.dumps({"event": "KF_LOGGER_ATTACHED", "timestamp": {"seconds": int(time.time())}}) + "\n")
@@ -136,11 +167,16 @@ def qga_open(path, timeout=10.0):
     s, f = connect(path, timeout)
     # guest-sync flushes any half-read state the agent may hold from an earlier client.
     token = int(time.time()) & 0x7FFFFFFF
-    send(f, {"execute": "guest-sync", "arguments": {"id": token}})
-    while True:
-        r = recv(f)
-        if r.get("return") == token:
-            return s, f
+    try:
+        send(f, {"execute": "guest-sync", "arguments": {"id": token}})
+        while True:
+            r = recv(f)
+            if r.get("return") == token:
+                return s, f
+    except BaseException:
+        f.close()
+        s.close()
+        raise
 
 
 def qga_ping(sock):
@@ -156,24 +192,53 @@ def qga_ping(sock):
 
 def qga_exec(sock, path, argv, timeout=300.0):
     s, f = qga_open(sock, timeout=30.0)
-    send(f, {"execute": "guest-exec", "arguments": {"path": path, "arg": argv, "capture-output": True}})
-    r = recv(f)
-    if "error" in r:
-        print(json.dumps(r["error"]), file=sys.stderr)
-        return 1
-    pid = r["return"]["pid"]
-    end = time.time() + timeout
-    while time.time() < end:
-        send(f, {"execute": "guest-exec-status", "arguments": {"pid": pid}})
-        st = recv(f).get("return", {})
-        if st.get("exited"):
-            for key, stream in (("out-data", sys.stdout), ("err-data", sys.stderr)):
-                if key in st:
-                    stream.write(base64.b64decode(st[key]).decode("utf-8", "replace"))
-            return int(st.get("exitcode", 1))
-        time.sleep(1.0)
-    print("qga-exec: timeout", file=sys.stderr)
-    return 124
+    try:
+        # Launch exactly once. If its reply is lost, the outcome is unknown; replaying
+        # could duplicate an installer, shutdown or probe with side effects.
+        send(f, {"execute": "guest-exec", "arguments": {"path": path, "arg": argv, "capture-output": True}})
+        r = recv(f)
+        if "error" in r:
+            print(json.dumps(r["error"]), file=sys.stderr)
+            return 1
+        pid = r["return"]["pid"]
+        end = time.monotonic() + timeout
+        while (remaining := end - time.monotonic()) > 0:
+            try:
+                if s is None:
+                    s, f = qga_open(sock, timeout=min(30.0, remaining))
+                    remaining = end - time.monotonic()
+                    if remaining <= 0:
+                        break
+                s.settimeout(min(30.0, remaining))
+                send(f, {"execute": "guest-exec-status", "arguments": {"pid": pid}})
+                r = recv(f)
+            except (OSError, EOFError):
+                # A timed-out socket's file object cannot safely read again. Re-sync
+                # a fresh connection, then ask only about the already launched PID.
+                if f is not None:
+                    f.close()
+                if s is not None:
+                    s.close()
+                s = f = None
+                time.sleep(min(1.0, max(0.0, end - time.monotonic())))
+                continue
+            if "error" in r:
+                print(json.dumps(r["error"]), file=sys.stderr)
+                return 1
+            st = r.get("return", {})
+            if st.get("exited"):
+                for key, stream in (("out-data", sys.stdout), ("err-data", sys.stderr)):
+                    if key in st:
+                        stream.write(base64.b64decode(st[key]).decode("utf-8", "replace"))
+                return int(st.get("exitcode", 1))
+            time.sleep(min(1.0, max(0.0, end - time.monotonic())))
+        print("qga-exec: timeout", file=sys.stderr)
+        return 124
+    finally:
+        if f is not None:
+            f.close()
+        if s is not None:
+            s.close()
 
 
 def main(argv):
@@ -192,7 +257,17 @@ def main(argv):
     if verb == "qga-ping":
         return qga_ping(sock)
     if verb == "qga-exec" and rest:
-        return qga_exec(sock, rest[0], rest[1:])
+        timeout = 300.0
+        if rest[0].startswith("--timeout="):
+            try:
+                timeout = float(rest.pop(0).split("=", 1)[1])
+                if not math.isfinite(timeout) or not 0 < timeout <= 3600:
+                    raise ValueError()
+            except ValueError:
+                print("qga-exec: timeout must be finite, positive and <= 3600 seconds", file=sys.stderr)
+                return 2
+        if rest:
+            return qga_exec(sock, rest[0], rest[1:], timeout=timeout)
     print(__doc__, file=sys.stderr)
     return 2
 

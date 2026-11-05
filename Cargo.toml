@@ -26,6 +26,7 @@ members = [
     "crates/kf-broker",
     "crates/kf-oprom",
     "crates/kf-census",
+    "crates/kf-rawclient",
     "crates/kf-gop-image",
     "crates/kayfabe-doorbell",
     "crates/kayfabe-rm-ladder",
@@ -33,16 +34,9 @@ members = [
     "crates/kayfabe-arch",
     "crates/kayfabe-chips",
     "crates/kayfabe-abi",
-    "crates/kayfabe-mmu",
-    "crates/kayfabe-vmm",
     "crates/kayfabe-cuda",
     "crates/kayfabe-isolate",
     "crates/kayfabe-isolate-host",
-    "crates/kayfabe-completion",
-    "crates/kayfabe-device",
-    "crates/kayfabe-gsp",
-    "crates/kayfabe-trace",
-    "crates/kayfabe-mocks",
     "crates/kayfabe-linux-raw",
 ]
 
@@ -67,6 +61,8 @@ kf-disp = { path = "crates/kf-disp" }
 kf-broker = { path = "crates/kf-broker" }
 kf-oprom = { path = "crates/kf-oprom" }
 kf-census = { path = "crates/kf-census" }
+kf-harness = { path = "crates/kf-harness" }
+kf-rawclient = { path = "crates/kf-rawclient" }
 kf-gop-image = { path = "crates/kf-gop-image" }
 kf-mem = { path = "crates/kf-mem" }
 kf-trap = { path = "crates/kf-trap" }
@@ -81,15 +77,8 @@ kayfabe-cuda = { path = "crates/kayfabe-cuda" }
 kayfabe-arch = { path = "crates/kayfabe-arch" }
 kayfabe-chips = { path = "crates/kayfabe-chips" }
 kayfabe-abi = { path = "crates/kayfabe-abi" }
-kayfabe-mmu = { path = "crates/kayfabe-mmu" }
-kayfabe-vmm = { path = "crates/kayfabe-vmm" }
 kayfabe-isolate = { path = "crates/kayfabe-isolate" }
 kayfabe-isolate-host = { path = "crates/kayfabe-isolate-host" }
-kayfabe-completion = { path = "crates/kayfabe-completion" }
-kayfabe-device = { path = "crates/kayfabe-device" }
-kayfabe-gsp = { path = "crates/kayfabe-gsp" }
-kayfabe-trace = { path = "crates/kayfabe-trace" }
-kayfabe-mocks = { path = "crates/kayfabe-mocks" }
 kayfabe-linux-raw = { path = "crates/kayfabe-linux-raw" }
 
 [workspace.lints.rust]

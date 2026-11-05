@@ -1,0 +1,50 @@
+[
+  {
+    "file": "native_raw595.txt",
+    "source": "/root/prov/sweep_bare595.log",
+    "raw_sha256": "6872432ceb1b88d43341fb07e49c33e0ed63bd19cb94b0e78c91be788053a894",
+    "bytes": 5871
+  },
+  {
+    "file": "native_cuda595.txt",
+    "source": "/workspace/bench/cl_sweep249_gb202_host.out",
+    "raw_sha256": "c4fb95702322350c95b26376e2f594139e9a9888fde2b3d6553e613e9b850ba1",
+    "bytes": 1716
+  },
+  {
+    "file": "b3_concurrency595.txt",
+    "source": "/workspace/bench/sweep249_gb202_b3_concurrency595_suite.out",
+    "raw_sha256": "eaf45dc369654210feb7f67338d10081e5aa3d8565df6dd0d1e884e43564aa19",
+    "bytes": 331
+  },
+  {
+    "file": "b3_concurrency595_serial.txt",
+    "source": "/workspace/bench/fast_sweep249_gb202_b3_concurrency595_concurrency_serial.log",
+    "raw_sha256": "58f4bb83d74827a83a26752e17f9d03e344242ca8d09f7d7c96895d2b5cc6cc2",
+    "bytes": 20083
+  },
+  {
+    "file": "b3_controller.txt",
+    "source": "/root/prov/sweep_b3.log",
+    "raw_sha256": "96369d756577dfa0561ae51d6060b932af1527aff08331b8251f4118ee5533ef",
+    "bytes": 2827
+  },
+  {
+    "file": "broker_host_ready.txt",
+    "source": "/root/prov/sweep_broker_host_prepare.log",
+    "raw_sha256": "5242d373d3d1af4c32b8638378788534d19e4a0c56c7f5dd6fa17edee76e818b",
+    "bytes": 720
+  },
+  {
+    "file": "fast595_driver_receipt.txt",
+    "source": "/workspace/bench/fastguest595/driver.STAGED",
+    "raw_sha256": "e9ee7d451b575c9a6d8c5acfddee3e713e93a92a71bf04e56715fea760ce502b",
+    "bytes": 42
+  },
+  {
+    "file": "fast580_driver_receipt.txt",
+    "source": "/workspace/bench/fastguest580/driver.STAGED",
+    "raw_sha256": "287a2a3f06b0b3e5ec6b5e7a43f3a043fd7c1fec06e67e450523da8829c6988f",
+    "bytes": 43
+  }
+]

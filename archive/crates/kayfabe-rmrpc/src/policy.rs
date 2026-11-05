@@ -2663,22 +2663,10 @@ impl ObjectPolicy {
     /// # ★★★★★ §16.78 — WHAT THE TRUTHFUL `NV_OK` COSTS, and it was never recorded
     ///
     /// Everything above is unchanged and still correct. What follows is a fact about the
-    /// **caller**, measured by disassembling the exact `libcuda` the bench runs
-    /// (`libcuda.so.580.159.04`, `md5 10e2dd6c89409898ba8c68533cde1432`, byte-identical in
-    /// guest and host — so this is a reading of the shipped binary, not of a doc):
-    ///
-    /// ```text
-    ///   22be17:  pause                      ; the spin
-    ///   22be1f:  call f9df90                ; the predicate — is the awaited work done?
-    ///   22be28:  je   22bdf8                ; 0 = NOT DONE -> keep going
-    ///   22be11:  je   22c0d0                ; -> the elapsed-time check
-    ///   22c0f7:  call 3185a0                ; elapsed, in ms, since a stored start
-    ///   22c0fc:  comiss 0x1185a90           ; the constant is 1000.0f
-    ///   22c103:  jbe  22bdeb                ; <= 1000 ms -> back to the pause loop
-    ///   22c124:  call *0x438(%rcx)          ; > 1000 ms -> NV2080_CTRL_CMD_MC_SERVICE_INTERRUPTS
-    ///   22c12c:  je   22bde3                ; NV_OK -> RESET THE CLOCK and loop again
-    ///            (non-zero -> fall through, exit the loop, return the status)
-    /// ```
+    /// **caller** (the loop's structure was read in a private diagnosis whose notes and
+    /// addresses are not kept in this tree, 2026-10-31): the `cuCtxCreate` wait spins with a
+    /// `pause`, re-arms a one-second clock each time this control returns `NV_OK`, and leaves
+    /// the loop only on a non-`NV_OK` status or when the awaited work completes.
     ///
     /// ⇒ **The wait has no overall timeout. Its ONLY exit, short of the work completing,
     /// is a non-`NV_OK` from this control.** `[measured 2026-08-10, boot `w215_79ed443_ctl`,

@@ -1,0 +1,7 @@
+{
+  "utc": "2026-10-22T21:29:07.057041+00:00",
+  "journal_sha256": "2bf43d6c57ca17f4a2bd257dd77751ee72d31f112bfb4587ddc089c12a8398c8",
+  "selected_lines": [
+    "2026-10-22T21:22:08.364650+0000 ubuntu kernel: NVRM: GPU0 gpuValidateRegOffset_IMPL: User does not have permission to access register offset 0x640780"
+  ]
+}

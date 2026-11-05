@@ -26,6 +26,7 @@ configured `scripts/ci/vast_onstart.sh`. Transport and payload logic live in the
 | KF_GRACE_FAIL | Required grace ceiling in seconds |
 | KF_GRACE_PASS | Optional grace ceiling in seconds |
 | KF_ACCESS_ID / KF_ACCESS_SECRET | Optional Cloudflare Access service-token pair; both or none |
+| KF_MERGE_WINDOWS | Optional `0` or `1` (2026-11-04): the tier, a pure function of the profile (`src/tier.js`); absent means the master gate |
 
 [SUPERSEDED 2026-10-24, edits2 C: status protocol 5 below is now 6; the status object gained
 `machine_id` and `host_id` and lost `pr`; the runner sends `X-KF-Protocol: 6`.]
@@ -50,6 +51,8 @@ closed. HTTPS only; no redirects. Capabilities expire with their own run. GPU re
 unattested tripwires; approved code precedes rental.
 
 CODE READ: `GET /blob-url/<run>/<tag>/<name>` uses the same run capability. Strict ASCII tag/name, no query string. It is available while the provider confirms this run is running and its next deadline has not expired, including unexpired result grace. Default limits are eight mint attempts/run and 64/day; failed upstream attempts count. BLOB_REPO, BLOB_GITHUB_TOKEN and optional JSON BLOB_ALLOWED_TAG_PREFIXES configure the private store. The GitHub credential stays in the Worker. Metadata is bounded to 64 KiB; the asset endpoint must return a single manual 302 to an exact allowed GitHub asset hostname. The Worker cancels its body without reading binary bytes and returns only `{url,size,name}`. URLs are secret, neither stored nor logged; both Worker and runner redact URL text independently. The payload's own hash lock is authoritative; downloads use HTTPS without a repository auth header or redirects. `kf-box-blob-url <tag> <name>` is installed repo-side.
+
+CODE READ 2026-10-31 (`src/benchdata.js`, `src/index.js`; not deployed by the change that added it): `GET /bench-data/<run>-<attempt>/<name>` uses the same run capability and the same live-run checks as `/blob-url`, no query string, `<name>` from a fixed four-name map. A permitted request gets `302` with `Cache-Control: no-store` to a presigned S3 GET URL for the private R2 benchmark bucket, valid at most 1200 s and not past the run's next deadline; limits are 4 URLs per object per run; there is no country gate (owner ruling 2026-11-01). Refusals: 401 (token/run state), 404 (name), 429 (URL limit), 503 (R2 settings missing). The box helper is `scripts/bench/box/fetch_bench_data.sh`; the details are in DEPLOY.md.
 
 [SUPERSEDED in part 2026-10-24, final review D1] The last sentence of the next paragraph names
 the protocol-6 Worker; the Worker is protocol 7 (it still supplies every optional deadline/grace

@@ -1,0 +1,1 @@
+/workspace/sweep-win-56788212/kfwin/disk/bw580_bind.qcow2: OK

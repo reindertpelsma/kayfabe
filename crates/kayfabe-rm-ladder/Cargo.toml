@@ -28,12 +28,13 @@ name = "kayfabe-rm-ladder"
 path = "src/main.rs"
 
 [dependencies]
+# 2026-10-31: `kayfabe-device`, `kayfabe-chips` and `kayfabe-mmu` were declared here and never named by
+# `main.rs` (comments only; `cargo check` passes without them). `kayfabe-device` moved to archive/;
+# `-chips` and `-mmu` stay in the closure through `kayfabe-isolate-host` and through `-chips` ->
+# `-gsp` -> `-trace` -> `-mmu`, so only the dead direct declarations are removed.
 kayfabe-util.workspace = true
 kayfabe-arch.workspace = true
 kayfabe-abi.workspace = true
-kayfabe-chips.workspace = true
-kayfabe-mmu.workspace = true
-kayfabe-device.workspace = true
 kayfabe-isolate.workspace = true
 kayfabe-isolate-host.workspace = true
 kayfabe-linux-raw.workspace = true

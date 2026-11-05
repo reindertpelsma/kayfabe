@@ -1,0 +1,34 @@
+{
+  "source": "24906bf334665c9000b16b271005593daa3586c7",
+  "own_id": 56766467,
+  "die": "AD102",
+  "host_driver": "595.91.07",
+  "guest_driver": "32.0.15.8088",
+  "public_wire": "580.65.06",
+  "p19_asserted": 19,
+  "qemu_pid": 136024,
+  "result": "PASS",
+  "code": 0,
+  "console": "KFWIN\\kf; DWM1/Explorer1/LogonUI0",
+  "cuda": [
+    "CE abcd1234 copied",
+    "kernel43",
+    "N2048 bad0 maxerr0"
+  ],
+  "d3d": [
+    "D3D11 NVIDIA hardware OK",
+    "D3D12 NVIDIA hardware OK"
+  ],
+  "hold_seconds": 420.9,
+  "hold_rounds": 11,
+  "hold_tdr4101": 0,
+  "since_boot_tdr4101": 0,
+  "final_check_failures": 0,
+  "nonblank_screenshots": [
+    "windows580_accept.png",
+    "windows580_hold.png"
+  ],
+  "n": 1,
+  "spread": "N/A; no performance claim",
+  "limit": "first sign-in helper verification failed; sameboot SSH satisfied full actual console/GPUguard, original failure retained. No timeout/input/installer/boot replay. Full family remains incomplete."
+}

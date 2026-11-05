@@ -1,0 +1,27 @@
+{
+  "utc": "2026-10-20T01:44:51.168546+00:00",
+  "commands": 357,
+  "critical": {
+    "0x0073": [],
+    "0x73": [],
+    "0xca70": [],
+    "0xca7a": [],
+    "0x20800a89": [
+      43
+    ],
+    "0x20800ab2": [
+      46
+    ],
+    "0x20800ab4": [
+      345
+    ],
+    "0xcbcb": [
+      141
+    ]
+  },
+  "NV0073_controls": [],
+  "unload_ordinals": [
+    356
+  ],
+  "scope": "ALL OBSERVED BEFORE ANY CLEANUP REQUEST"
+}

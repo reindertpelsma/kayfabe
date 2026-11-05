@@ -80,6 +80,25 @@ ssh <alias> 'cat /root/prov/<tag>.log'           # V3_GATES_SUMMARY / KF3_RC / F
 - *[2026-10-26]* `merge_check.sh` runs no crate tests: the GPU-free `cargo test` of every kf-* crate is CI's `stable` job
   on every commit (a repeat on the box cost 31 min and ended rc=101 in gate run 40263112941). The /dev/kvm-gated
   tests, which CI skips, are opt-in: `KF_MERGE_KVM_TESTS=1` (`kvm_tests.sh`, `KVM_TESTS passed N failed 0 kvm_ran=R kvm_skipped=0`).
+- *[2026-11-04, lane 2]* In the Vast GPU CI the Windows stage is **required on the master gate**: the Worker
+  sends `KF_MERGE_WINDOWS=1` for profile `check` and `0` for the die sweep (`ci/vast-broker/src/tier.js`).
+  The payload runs `windows_gate.sh` as its own last stage, `windows_gate`, after `cuda_guest`, and never inside
+  `merge_check.sh` (`scripts/ci/vast_payload.py`). Only `WINDOWS_GATE_PASS` of the tested revision passes. RETRY
+  is a failing `windows_retry_<class>` row. By hand, below, the stage stays opt-in.
+- *[2026-11-01]* The Windows stage is opt-in too: `KF_MERGE_WINDOWS=1` runs `windows_gate.sh` last (after the
+  census). It installs Windows 11 LTSC once per box (`win_vm.sh install`, 20-45 min on a nested box), boots it on
+  kf3 with the stock 580.88 driver and GSP forced, and needs a signed-in desktop, `nvidia-smi`, a CUDA matmul and
+  a D3D11 readback, a bounded idle (300 s) and zero resets. It ends in one of `WINDOWS_GATE_PASS` (exit 0),
+  `WINDOWS_GATE_FAIL` (1), `WINDOWS_GATE_RETRY class=...` (3: re-run on a fresh box; rental, media, our script, or a
+  host GPU reference that was not green) or `WINDOWS_GATE_REFUSED` (2), then `WINDOWS_GATE_EXIT rc=N`; the log is
+  `<prov>/<tag>_windows.log` and the evidence is `<prov>/<tag>_windows.tgz`. A Windows-only lease can run
+  `windows_lane.sh` (provision and install) and then `bash scripts/bench/box/windows_gate.sh <tag>` by hand.
+  Design and the attribution rule: `docs/design/V3_WINDOWS_GATE.md`; first real run (Vast lease 58592558, RTX 4090,
+  `WINDOWS_GATE_PASS rev=a5071c24`): `traces/windows_gate_20261101/`. A box with under 20 GB of RAM, or
+  under 45 GB of free disk before the install (20 GB after), is refused, not tried.
+  *[2026-11-03]* The gate leaves no QEMU or `win_vm.sh run` loop behind (the teardown writes `run/stop-requested` first),
+  reads a dead guest's reset counters from a post-mortem boot of the same overlay without kf3, and counts a WER
+  re-submission of an old report as `livekernelevent_stale` (never gating). First Turing PASS: `traces/turing_boot_20261103/`.
 - A merge to master needs `V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS` (2026-10-10: `gate10=FALLBACK` = host RM refused all small micro reservations by a refusal status AND the probe proved a per-2-MiB-leaf reservation works at the flat FB alias, accepted but loud; `gate10=FAIL` never), `KF3_RC=0`,
   `FAST_SUITE_PASS=30` and `BIRTH_CENSUS_OK` on the **exact revision** promoted (docs-only commits on
   top are fine; say so). *[2026-10-03, `v3-sec-nonpriv`]* `BIRTH_CENSUS_OK` (`birth_census.sh`,
@@ -179,6 +198,7 @@ vx 'grep -aE "^KVM_TESTS|RC=|SUMMARY|FAST_SUITE_PASS|^EXIT" /root/prov/<tag>.log
   written to `/root/jobs/NAME.{sh,log,rc}`. Both scripts write their own logs under `/root/prov/`.
   The verdict is in those log lines. `merge_check.sh` always exits 0, and `provision_full.sh` exits 0
   only when READY (since 2026-09-27).
+- **A lease whose subject is the Windows guest: `windows_lane.sh`** (2026-10-31, from draft PR #165, not yet run on hardware in this form). Use it instead of `provision_full.sh` plus a separate `win_vm.sh install`: `vput scripts/bench/box/windows_lane.sh /root/windows_lane.sh` (with `provision_box.sh`), then `vx -b winlane 'KAYFABE_BRANCH=<branch> HOST_DRIVER=595.91.07 bash /root/windows_lane.sh'`. The log is `/root/prov/winlane.log`: `STAGE <name> START|EXIT rc=N` lines, `WINLANE_TIMING`, and a last `WINLANE_EXIT rc=N`. It runs no Linux suites, installs Windows with `WINVM_INSTALL_CACHE=unsafe` (this VM's install-time disk cache mode only; `WINLANE_INSTALL_CACHE=` turns it off) and never restores another VM's image. Details: `scripts/bench/windows/README.md`.
 - ⊘ **`vwait NAME` cannot see a dead job.** It asks `pgrep -f 'jobs/NAME.sh'` on the box, and that
   pattern also matches the `bash -c` that execd runs the question in. A job that died without
   writing its `.rc` (killed, OOM, box rebooted) therefore reads "running" until `vwait`'s limit (24 h
@@ -204,3 +224,12 @@ config. The container it would run in also ends with the session. ⇒ **The sess
 owns it.** That session destroys the box when its work is done. If it stops while the box is still
 alive (a usage limit, a handoff), it writes the instance id, what is running there, and "reattach
 with `vast-url <id>`" into the handoff, so the next session takes ownership explicitly.
+
+## Licensed benchmark data (SPECviewperf private copy)
+
+`fetch_bench_data.sh <name> --sha256 <pin> --out <file>` (or `--extract <dir>` for the `.tar.zst`)
+runs ON a rented CI box and fetches one object of the private R2 copy through the Vast CI Worker
+with the run token from `/run/kf-ci/env`; the box never holds a Cloudflare credential, and neither
+the token nor the presigned URL is printed. `--dry-run` checks arguments and environment and makes
+no request. Test: `bash scripts/bench/box/test_fetch_bench_data.sh` (loopback only). Rules and
+object names: `docs/DOWNLOADS.md`; Worker side: `ci/vast-broker/DEPLOY.md`.

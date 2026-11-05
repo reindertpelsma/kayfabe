@@ -6,7 +6,7 @@ workers_dev = false
 [triggers]
 crons = ["*/5 * * * *"]
 [vars]
-REAPER_HARD_MINUTES = "180"
+REAPER_HARD_MINUTES = "300"
 REAPER_MARGIN_MINUTES = "15"
 [observability]
 enabled = true

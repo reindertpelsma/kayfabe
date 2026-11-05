@@ -237,7 +237,7 @@ already-shipped-once defect, not re-derived.
 
 ## 3. MEASURED — real GA106, bench `vh2`
 
-`[measured 2026-08-11, bench `vh2`, RTX 3060 GA106 (GPU-45cf77eb…), host driver 580.159.04,
+`[measured 2026-08-11, bench `vh2`, RTX 3060 GA106 (GPU-fa4e0003…), host driver 580.159.04,
 euid 0]`
 **Binary stamped `3437903bb422566f28d2228ba5c4b8e15c5746f0`** — printed by the binary itself
 as `REV_UNDER_TEST`, from `KAYFABE_BUILD_REV` set to `git rev-parse HEAD` at build time, not

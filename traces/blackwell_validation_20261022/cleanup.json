@@ -1,0 +1,11 @@
+{
+  "utc": "2026-10-22T01:39:43.066672+00:00",
+  "own_ids": [
+    57132969
+  ],
+  "api_own_present": [],
+  "local_cargo_exit": 0,
+  "own_target_deleted": "/workspace/bw-b1-validation-target",
+  "remote_jobs": "ended with destroyed lease",
+  "trusted_host_touched": false
+}

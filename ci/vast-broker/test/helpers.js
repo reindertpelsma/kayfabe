@@ -347,7 +347,7 @@ export const rentBody = (tested_sha, extra = {}) => ({
   runner_nonce: 'f'.repeat(64),
   tested_sha,
   profile: 'check',
-  remaining_seconds: 12000, // Review B1: the runner's whole budget, well above the need.
+  remaining_seconds: 19800, // Review B1: the check runner budget (330 min, lane 2), above the need.
   ...extra,
 });
 export async function setup(overrides = {}) {

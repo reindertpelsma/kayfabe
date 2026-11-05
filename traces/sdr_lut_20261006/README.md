@@ -40,17 +40,19 @@ zero display methods and zero scanout refusals. Their clean supervisor exits
 and healthy host are recorded. No Windows kernel-execution success is claimed.
 
 The [fresh run-12 dump summary](windows-12-watchdog-summary.json) records a
-changed fatal path: helper `0x169d836` before buffer allocation/map operations.
-Pinned static driver code strongly identifies a zero-size TMO descriptor when
-TMO_PRESENT is absent; the live descriptor size was not recovered. Complete
+changed fatal path: the display initialization fails earlier, before buffer
+allocation/map operations. The leading hypothesis (an inference from the
+advertised capabilities) is a zero-size TMO descriptor when TMO_PRESENT is
+absent; the live descriptor size was not recovered. Complete
 saved records are readable; the outer NVCD is one byte short and its checksum
 cannot be validated. Run 12 at revision `2aa8b92d` used read-only NBD/NTFS
 recovery; its receipt records verified cleanup. Raw dumps,
 Windows driver bytes and loaded pointers remain private.
 
-Reproduce the bounded static correspondence with the
-[pinned inspection script](https://github.com/reindertpelsma/kayfabe/blob/fba14de6/tools/windows-debug-capture/inspect-startdevice-j.py)
-and [dataflow](https://github.com/reindertpelsma/kayfabe/blob/fba14de6/tools/windows-debug-capture/evidence/2026-10-05-startdevice-j.md).
+(2026-10-31: the earlier pointer to a static-analysis script and dataflow note for the
+retail driver was removed with those files, under `docs/design/V3_PROVENANCE.md`
+section 2. The `stack_rvas` / `hint_rva` values in `windows-12-watchdog-summary.json`
+are now opaque site ids.)
 The result calls for real TMO behavior or a supported path avoiding it, not a
 capability-only workaround. Additional Windows blockers can remain afterwards.
 

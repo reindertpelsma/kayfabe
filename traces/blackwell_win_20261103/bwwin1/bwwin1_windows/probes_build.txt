@@ -1,0 +1,11 @@
+START build cup2
+EXIT build cup2 rc=0 504404 bytes
+START build cup3
+EXIT build cup3 rc=0 506908 bytes
+START build cup8
+EXIT build cup8 rc=0 509816 bytes
+/root/kayfabe/scripts/bench/windows/appmatrix/tools/src/kf_dxprobe.cpp: In function ‘int run_d3d12(IDXGIAdapter1*, int)’:
+/root/kayfabe/scripts/bench/windows/appmatrix/tools/src/kf_dxprobe.cpp:174:33: error: ‘D3D_FEATURE_LEVEL_12_2’ was not declared in this scope; did you mean ‘D3D_FEATURE_LEVEL_12_1’?
+  174 |   D3D_FEATURE_LEVEL levels[] = {D3D_FEATURE_LEVEL_12_2, D3D_FEATURE_LEVEL_12_1, D3D_FEATURE_LEVEL_12_0, D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0};
+      |                                 ^~~~~~~~~~~~~~~~~~~~~~
+      |                                 D3D_FEATURE_LEVEL_12_1

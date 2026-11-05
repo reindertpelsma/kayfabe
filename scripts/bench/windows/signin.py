@@ -5,10 +5,13 @@
 Usage: signin.py QMP_SOCKET QGA_SOCKET
 The existing account password comes from KF_GUEST_PW, never argv or output. The caller
 sets that password separately and holds the GPU lock. Assumes the guest's US keyboard.
+The account that must own the session comes from KF_GUEST_USER (default "vast", the baseline
+guest of the old host workflow, as in appmatrix/winapps.py); a win_vm.sh guest uses "kf".
 """
 import json
 import os
 from pathlib import Path
+import re
 import socket
 import subprocess
 import sys
@@ -36,6 +39,13 @@ def keycodes(password):
     return result
 
 
+def guest_user():
+    user = os.environ.get("KF_GUEST_USER", "vast")
+    if not re.fullmatch(r"[A-Za-z0-9_.-]{1,20}", user):
+        raise ValueError("KF_GUEST_USER must be a plain account name")
+    return user
+
+
 def main():
     if len(sys.argv) != 3:
         raise ValueError("usage: signin.py QMP_SOCKET QGA_SOCKET")
@@ -43,6 +53,7 @@ def main():
     if not password:
         raise ValueError("KF_GUEST_PW must be set")
     chords = keycodes(password)  # Validate everything before sending any input.
+    suffix = "\\" + guest_user().lower()
     helper = Path(__file__).with_name("qmp.py")
 
     def session():
@@ -52,7 +63,7 @@ def main():
              "if ($u -and -not (Get-Process LogonUI -ErrorAction SilentlyContinue)) { $u }"],
             capture_output=True, text=True, timeout=20, check=False,
         )
-        return r.returncode == 0 and r.stdout.strip().lower().endswith("\\vast")
+        return r.returncode == 0 and r.stdout.strip().lower().endswith(suffix)
 
     if session():
         print("SIGNIN_VERIFIED already signed in")

@@ -1,0 +1,156 @@
+diff --git a/scripts/bench/blackwell/phase_xid_guard.py b/scripts/bench/blackwell/phase_xid_guard.py
+index 9c60e8b89..4829efa84 100644
+--- a/scripts/bench/blackwell/phase_xid_guard.py
++++ b/scripts/bench/blackwell/phase_xid_guard.py
+@@ -2 +2,10 @@
+-"""Fail-closed campaign guard seam: source-proved native controls, then frozen snapshots."""
++"""Bench-only campaign guard. Native source controls, then immutable per-arm fault proof.
++
++Native permission is exactly code/channel/VA/fault/access/source plus recovery.
++Engine/client labels are recorded metadata: they vary with the actual host route.
++No native32 is accepted. Every later31 is fatal. QEMU32 needs this arm's PID,
++exact bounded shape, and initialization already observed before its timestamp.
++"""
++import argparse
++from collections import Counter
++from datetime import datetime
+@@ -3,0 +13,2 @@ import importlib.util
++import json
++import os
+@@ -4,0 +16,5 @@ from pathlib import Path
++import re
++import sys
++import time
++
++import xid_policy
+@@ -8,0 +25 @@ SPEC.loader.exec_module(N)
++MMU = re.compile(r'NVRM: Xid \(PCI:[^)]+\): ([0-9]+), pid=[0-9]+, name=([^,]+), channel (0x[0-9a-f]+),.*?MMU Fault: ENGINE (\S+) (\S+) faulted @ (0x[0-9a-f_]+)\. Fault is of type (\S+) (\S+)$')
+@@ -12 +29,18 @@ def native_baseline(journal, defer, missing):
+-    return N.approve_native(journal, defer, missing)
++    expected = [(x[0], x[1], x[2], x[3], x[4], x[7]) for x in N.expected_faults(defer, missing)]
++    actual = []
++    lines = N.xid_lines(journal)
++    for line in lines:
++        m = MMU.search(line)
++        if m is None:
++            raise N.GuardRefused('native Xid lacks source-controlled MMU shape')
++        actual.append((int(m[1]), int(m[3], 16), int(m[6].replace('_', ''), 16), m[7], m[8], m[2]))
++    if Counter(actual) != Counter(expected):
++        raise N.GuardRefused('native source/channel/address/type/recovery proof differs')
++    return lines
++
++
++def utc(value):
++    at = datetime.fromisoformat(value)
++    if at.tzinfo is None:
++        raise ValueError('timestamp lacks timezone')
++    return at
+@@ -16,2 +50,97 @@ def evaluate_snapshot(journal, accepted, phase_lines, arm, pid, init_utc):
+-    N.check_unchanged(journal, accepted)
+-    return N.xid_lines(journal)
++    lines = N.xid_lines(journal)
++    if lines[:len(accepted)] != tuple(accepted):
++        raise N.GuardRefused('frozen kernel history lost or replaced')
++    new = lines[len(accepted):]
++    if not new:
++        return lines
++    if arm is None or pid is None or init_utc is None:
++        raise N.GuardRefused('new fault without current arm/init proof')
++    current = tuple(phase_lines) + new
++    verdict = xid_policy.judge(current, arm, int(pid), True)
++    if verdict['verdict'] != 'EXPECTED':
++        raise N.GuardRefused('fault outside exact owned-QEMU exception')
++    try:
++        init = utc(init_utc)
++        if any(utc(line.split()[0]) < init for line in current):
++            raise N.GuardRefused('fault predates observed full-init prefix')
++    except (ValueError, IndexError) as error:
++        raise N.GuardRefused('unprovable fault/init timestamp') from error
++    return lines
++
++
++def init_time(path):
++    """Only a complete, consecutive1000-row observed prefix proves full init."""
++    if not path or not Path(path).exists():
++        return None
++    previous = None
++    try:
++        with Path(path).open() as f:
++            for ordinal in range(1000):
++                line = f.readline(4097)
++                if not line.endswith('\n') or len(line) > 4096:
++                    return None
++                row = json.loads(line)
++                if row['ordinal'] != ordinal:
++                    return None
++                at = utc(row['observed_utc'])
++                if previous is not None and at < previous:
++                    return None
++                previous = at
++        return previous.isoformat()
++    except (OSError, ValueError, KeyError, TypeError):
++        return None
++
++
++def atomic_json(path, data):
++    p = Path(path)
++    tmp = p.with_name(p.name + '.tmp')
++    tmp.write_text(json.dumps(data) + '\n')
++    tmp.replace(p)
++
++
++def main():
++    parser = argparse.ArgumentParser(description=__doc__)
++    sub = parser.add_subparsers(dest='mode', required=True)
++    n = sub.add_parser('native')
++    for arg in ('journal', 'defer', 'missing'): n.add_argument(arg)
++    w = sub.add_parser('watch')
++    for arg in ('receipt', 'pgid', 'phase', 'fatal'): w.add_argument(arg)
++    a = parser.parse_args()
++    try:
++        if a.mode == 'native':
++            lines = native_baseline(N.bounded(a.journal), N.bounded(a.defer), N.bounded(a.missing))
++            print(json.dumps({'approved_native_xid_lines': lines, 'rule': 'source controls only; route names recorded, not a die constant'}))
++            return 0
++        root = int(a.pgid)
++        if root <= 1 or os.getpgid(root) != root or os.getpgrp() != root:
++            raise N.GuardRefused('watcher is not in its owned controller group')
++        accepted = tuple(json.loads(N.bounded(a.receipt))['approved_native_xid_lines'])
++        phase_key = None
++        phase_lines = ()
++        while True:
++            try:
++                phase = json.loads(N.bounded(a.phase)) if Path(a.phase).exists() else {}
++                key = (phase.get('arm'), phase.get('pid'))
++                if key != phase_key:
++                    phase_lines = ()
++                    phase_key = key
++                proof = init_time(phase.get('rpc_path'))
++                journal = N.kernel_snapshot()
++                lines = evaluate_snapshot(journal, accepted, phase_lines, *key, proof)
++                phase_lines += lines[len(accepted):]
++                accepted = lines
++                atomic_json(a.receipt + '.accepted.json', {'approved_native_xid_lines': accepted, 'phase': phase_key, 'init_utc': proof})
++            except (N.GuardRefused, OSError, ValueError, KeyError, TypeError) as error:
++                try:
++                    atomic_json(a.fatal, {'STOP': str(error), 'phase': phase_key, 'owned_pgid': root})
++                finally:
++                    N.terminate_owned_tree(root)
++                raise
++            time.sleep(1)  # Bench observer; no product timer changes.
++    except (N.GuardRefused, OSError, ValueError) as error:
++        print('PHASE_XID_STOP: ' + str(error), file=sys.stderr)
++        return 7
++
++
++if __name__ == '__main__':
++    sys.exit(main())
+diff --git a/scripts/bench/blackwell/xid_policy.py b/scripts/bench/blackwell/xid_policy.py
+index 934ee929e..dc691394b 100644
+--- a/scripts/bench/blackwell/xid_policy.py
++++ b/scripts/bench/blackwell/xid_policy.py
+@@ -15 +15 @@ import sys
+-XID = re.compile(r"NVRM: Xid \(PCI:[^)]*\): (\d+), pid=(\d+), name=\S+, channel (0x[0-9a-fA-F]+) intr ([0-9a-fA-F]+)")
++XID = re.compile(r"NVRM: Xid \(PCI:[^)]*\): (\d+), pid=(\d+), name=\S+, channel (0x[0-9a-fA-F]+) intr ([0-9a-fA-F]{8})\s*$")
+@@ -41,0 +42 @@ def judge(lines, arm: str, qemu_pid: int, code0_seen: bool) -> dict:
++        and qemu_pid > 1

@@ -1,0 +1,15 @@
+{
+  "utc": "2026-10-22T22:51:23.654499+00:00",
+  "own_id": 57285340,
+  "read_only": true,
+  "console_sha256": "6b3e4f4386e153f9c00e48fd9c5e8965dca9bd434258a02fbb60bb2625db0104",
+  "scanned": [
+    {
+      "fingerprint": "SHA256:d4w2+trM5QF508VdWZocqr550l5cPsomEzW21UeZlSA",
+      "authenticated_console_contains_exact_key": true
+    }
+  ],
+  "all_scanned_pins_now_published": true,
+  "guard_unchanged": true,
+  "no_tofu": true
+}

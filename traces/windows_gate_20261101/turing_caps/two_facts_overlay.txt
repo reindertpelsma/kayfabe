@@ -1,0 +1,11 @@
+# KF3_DIAG_CAPS_PAGE_FILE overlay (arm d2): the two facts the AD104 bisection found sufficient
+# (V3_DISPLAY_CAPS_DERIVATION_20261014.md section 3 on claude/display-caps-derive-20261014, run f5),
+# OR-ed into kf3's authored caps page: the unnamed word 0x00c = 0x100 and SCLR_PRESENT (bit 19) of
+# PRECOMP_WIN_PIPE_HDR_CAPA on the main-layer windows 0/2/4/6 (0x780 + 0x20 * w).
+# The 0x00c value is the TU106 native Windows 580.88 read (tu106_native_windows580_caps_page.txt) and is
+# cross-checked against the rented box's own read before use.
+ORWORD 0x00c 0x00000100
+ORWORD 0x780 0x00080000
+ORWORD 0x7c0 0x00080000
+ORWORD 0x800 0x00080000
+ORWORD 0x840 0x00080000

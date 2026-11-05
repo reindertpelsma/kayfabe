@@ -1,0 +1,16 @@
+SWEEP_PROVISION_START own_instance=FROM_LEASE_RECEIPT 2026-10-22T02:59:35+00:00
+From https://github.com/reindertpelsma/kayfabe
+ * branch                8f3a9bb3a5d652b3f536ca015bf95735ec588924 -> FETCH_HEAD
+HEAD is now at 8f3a9bb3a fix(bench): enforce source ownership and fault-time campaign proof
+NVIDIA GeForce RTX 5090, 595.91.07, 32607 MiB
+VERDICT=SOUND
+PROBE_START pid=75999 uid=Uid: 65534 65534 65534 65534 CapEff=0x0 cap_sys_admin=false
+kf-host: host tier: stock
+PROBE_SESSION driver=595.91.07
+PROBE_DIE arch=0x1b0 impl=0x2 die=GB202
+PROBE_END admin_run=false
+V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS
+SWEEP_BUILD_READY source=8f3a9bb3a5d652b3f536ca015bf95735ec588924 2026-10-22T03:06:21+00:00
+GR_TIER_VERDICT=PASS
+Terminated
+SWEEP_PROVISION_EXIT rc=143 2026-10-22T03:16:49+00:00

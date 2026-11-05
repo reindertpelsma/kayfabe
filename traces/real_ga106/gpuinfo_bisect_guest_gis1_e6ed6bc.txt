@@ -1,6 +1,6 @@
 # §14.29 — the GPU_GET_INFO_V2 BISECT that named the wall, taken INSIDE THE GUEST.
 #
-# boot `gis1_e6ed6bc`, 2026-08-08, vast bench `vh`, real GA106 `GPU-d0913685-...`,
+# boot `gis1_e6ed6bc`, 2026-08-08, vast bench `vh`, real GA106 `GPU-fa4e0001-...`,
 # shipping config, `probe-arm set: EMPTY`, STOCK guest module, both stamps
 # kayfabe-rev:e6ed6bcf8647a0df459c80c9f11a922be3da1936.
 #

@@ -1,0 +1,30 @@
+[package]
+name = "kf-rawclient"
+description = "v3 raw client: the arm framework (registry, runner, output contract, native-versus-guest mode) that will replace the frozen kayfabe-rm-ladder grader, and its first arm, the refresh stress (docs/design/V3_RAW_CLIENT.md). Hardware sits behind one trait; all arm logic is tested GPU-free. No unsafe."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "kf_rawclient"
+path = "src/lib.rs"
+
+# ★ Its OWN binary name for now (S1/S2). The facade swap that renames it to `kayfabe-rm-ladder` and execs the
+# legacy program for unported arms is a later step (V3_RAW_CLIENT.md §5.2 S5+); nothing builds, copies or
+# runs this binary from a script yet.
+[[bin]]
+name = "kf-rawclient"
+path = "src/main.rs"
+
+[dependencies]
+kf-arch.workspace = true
+kf-chip.workspace = true
+kf-linux-raw.workspace = true
+kf-host.workspace = true
+# The copy-engine rig (`CeRig`) and the PUSH encoders the oracle drives. V3_RAW_CLIENT.md §5.1 keeps open
+# whether they move into this crate; until then the dependency is the cheap path, and it means this crate
+# is not yet a static-musl-minimal build (UNSURE, recorded there).
+kf-harness.workspace = true
+
+[lints]
+workspace = true

@@ -22,7 +22,6 @@ kf-abi.workspace = true
 # ⊘ A TOML `#` comment is NOT filtered by that gate the way a `//` line is, so this
 # comment may not name a generation either. That is the gate working, not a nuisance.
 kayfabe-chips.workspace = true
-kayfabe-vmm.workspace = true
 kayfabe-isolate.workspace = true
 kayfabe-linux-raw.workspace = true
 

@@ -1,0 +1,10 @@
+date 2026-11-03T16:23:45Z
+kernel 6.8.0-146-generic
+NVRM version: NVIDIA UNIX x86_64 Kernel Module  580.178.04  Tue Jul  7 12:38:21 UTC 2026
+smi NVIDIA GeForce RTX 2080 Ti, 580.178.04, 00000000:01:00.0
+xid_before 0
+== bdf 0000:01:00.0 (the container's own GPU)
+BOOT_0 0x162000a1 BOOT_42 0x162a1000
+CHIPSET 0x162 ARCH 0x160 IMPL 0x2
+tool_rc=0
+xid_after 0

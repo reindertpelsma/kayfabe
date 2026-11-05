@@ -1,0 +1,80 @@
+{
+  "utc": "2026-10-20T20:24:13.965788+00:00",
+  "source_base": "048c28b9c645190adf5bcaf859284adb8eb222ed",
+  "public_report_semaphore": [
+    {
+      "url": "https://raw.githubusercontent.com/NVIDIA/open-gpu-doc/9fdf5c4062007929d9f4e6cbad9c9771fe61b880/classes/3d/clcd97.h",
+      "pin": "9fdf5c4062007929d9f4e6cbad9c9771fe61b880",
+      "file": "clcd97.h",
+      "sha256": "07ffa8e80b70f8f5d47792d941450c13c306b0a491a6ac68318ffadceabd7802",
+      "license": "MIT",
+      "method_offsets_verified": {
+        "NVCD97_SET_REPORT_SEMAPHORE_A": "0x1b00",
+        "NVCD97_SET_REPORT_SEMAPHORE_B": "0x1b04",
+        "NVCD97_SET_REPORT_SEMAPHORE_C": "0x1b08",
+        "NVCD97_SET_REPORT_SEMAPHORE_D": "0x1b0c"
+      },
+      "upper_field": "24:0",
+      "D_macros_equal_pinned_ogkm_Ada": 89
+    },
+    {
+      "url": "https://raw.githubusercontent.com/NVIDIA/open-gpu-doc/9fdf5c4062007929d9f4e6cbad9c9771fe61b880/classes/3d/clce97.h",
+      "pin": "9fdf5c4062007929d9f4e6cbad9c9771fe61b880",
+      "file": "clce97.h",
+      "sha256": "da1cacfd44784adc34b07c5423b67b439ae87835bfe20c44cf010dfeaa11f933",
+      "license": "MIT",
+      "method_offsets_verified": {
+        "NVCE97_SET_REPORT_SEMAPHORE_A": "0x1b00",
+        "NVCE97_SET_REPORT_SEMAPHORE_B": "0x1b04",
+        "NVCE97_SET_REPORT_SEMAPHORE_C": "0x1b08",
+        "NVCE97_SET_REPORT_SEMAPHORE_D": "0x1b0c"
+      },
+      "upper_field": "24:0",
+      "D_macros_equal_pinned_ogkm_Ada": 89
+    }
+  ],
+  "display_generators": [
+    {
+      "version": "580.65.06",
+      "ogkm_commit": "307159f2623d3bf45feb9177bd2da52ffbc5ddf9",
+      "generated_sha256": "194a697a1a752522215aaac0483edaf5d0e4e3e6924807a51a9e8b0c2efe9582",
+      "exact_committed_match": true,
+      "added_CA73_POSTCOMP_rows": 101,
+      "removed_or_changed_old_rows": 0
+    },
+    {
+      "version": "580.94.02",
+      "ogkm_commit": "a86526f4e235ae3d9e2842a11a3bb11db77450d8",
+      "generated_sha256": "3c4543e191c069b214f93f1406605b89f8b734ba9418f47fe8b942e24a714cad",
+      "exact_committed_match": true,
+      "added_CA73_POSTCOMP_rows": 101,
+      "removed_or_changed_old_rows": 0
+    },
+    {
+      "version": "595.91.07",
+      "ogkm_commit": "9f087a6d4e86d85acc0ce1d354d6276fe5047b29",
+      "generated_sha256": "84a92e22a0108a77544d168f15c219b4c13a19a730451e313c2a1f6627245ae6",
+      "exact_committed_match": true,
+      "added_CA73_POSTCOMP_rows": 101,
+      "removed_or_changed_old_rows": 0
+    },
+    {
+      "version": "580.159.04",
+      "ogkm_commit": "b81d58ee0224d1d290bef1c080592b619e184042",
+      "generated_sha256": "eadcfdf392074b9f321df94bf2146d7b06be33725b7e029043969592df883505",
+      "exact_committed_match": true,
+      "added_CA73_POSTCOMP_rows": 101,
+      "removed_or_changed_old_rows": 0
+    },
+    {
+      "version": "590.48.01",
+      "ogkm_commit": "2ccbad25e1af6a6ee6f38cf569f89f8b65d658ab",
+      "generated_sha256": "e7d9e65d8ad625e6d373ff945cc5bf8964501b781b2bd96fa0a382539bf4414e",
+      "exact_committed_match": true,
+      "added_CA73_POSTCOMP_rows": 101,
+      "removed_or_changed_old_rows": 0
+    }
+  ],
+  "unverified_generated_versions": [],
+  "limits": "All five pinned OGKM trees regenerated exactly; only the 101 new CA73 POSTCOMP vocabulary rows were added per version. No closed binaries/captured page used; existing T3GB202 scalar retains its exact die/guest580 scope."
+}

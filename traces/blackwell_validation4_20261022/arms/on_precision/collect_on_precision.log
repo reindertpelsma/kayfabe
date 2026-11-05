@@ -1,0 +1,12 @@
+COLLECT_START run=on_precision (standard VGA, no kf3 device) 2026-10-22T03:43:10+00:00
+[2026-10-22T03:43:10Z] detached: tag=on_precision_collect, log logs/on_precision_collect_run.log (stdout logs/on_precision_collect_run.out)
+KF_SSH_UP
+CLOCK host=2026-10-22T03:43:49.523223230 guest=2026-10-22T03:43:50.5113274Z
+COLLECT_DONE
+COLLECT_METADATA_READY 2026-10-22T03:43:58+00:00
+WER_TIMES_DONE
+HDR_DONE
+COLLECT_ALL_DONE 2026-10-22T03:44:16+00:00
+[2026-10-22T03:44:16Z] stopping kfwin (pid 109802)
+[2026-10-22T03:44:28Z] stopped
+COLLECT_EXIT run=on_precision rc=0 2026-10-22T03:44:28+00:00

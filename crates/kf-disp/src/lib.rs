@@ -27,11 +27,14 @@
 //! - [`tick`] — the tick source: the free-running clock, the broker's events, the handoff rules.
 
 pub mod caps;
+pub mod capsderive;
+pub mod capsoverlay;
 pub mod class;
 pub mod color;
 pub mod dispcaps;
 pub mod edid;
 pub mod engine;
+pub mod hostcaps;
 pub mod inst;
 pub mod layout;
 pub mod lockstep;
@@ -43,3 +46,5 @@ pub mod regs;
 pub mod scanout;
 pub mod tick;
 pub mod vramslot;
+
+mod precomp_fields;

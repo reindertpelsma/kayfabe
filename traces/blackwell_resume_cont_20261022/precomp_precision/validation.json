@@ -1,0 +1,66 @@
+{
+  "baseline": {
+    "passed": 293,
+    "failed": 0,
+    "ignored": 5
+  },
+  "fixed": {
+    "passed": 296,
+    "failed": 0,
+    "ignored": 5
+  },
+  "rustfmt": "pass",
+  "clippy": {
+    "baseline": 77,
+    "fixed": 77,
+    "added": 0
+  },
+  "expected_red_commit": "7b8cdc550",
+  "expected_red_cases": {
+    "passed": 1,
+    "failed": 2
+  },
+  "mutants": {
+    "omit_csc00": {
+      "killing_tests": [
+        "declared_csc_stages_report_public_precision_in_every_display_cell",
+        "precision_uses_generated_addresses_and_fields_including_the_final_window"
+      ],
+      "count": 2
+    },
+    "omit_csc01": {
+      "killing_tests": [
+        "declared_csc_stages_report_public_precision_in_every_display_cell",
+        "precision_uses_generated_addresses_and_fields_including_the_final_window"
+      ],
+      "count": 2
+    },
+    "omit_overlay_precision": {
+      "killing_tests": [
+        "precision_uses_generated_addresses_and_fields_including_the_final_window",
+        "declared_csc_stages_report_public_precision_in_every_display_cell"
+      ],
+      "count": 2
+    }
+  },
+  "family_fixture_rows_before": 193,
+  "family_fixture_rows_after": 225,
+  "hardware": "UNRUN; no sufficient-fix claim",
+  "native_full_word_imported": false,
+  "function_lut_advertised": false,
+  "original_test_disposition": "AD104 historical f5 assertion renamed and preserved for every other word; explicit precision14 checks precede projection, all old fields remain covered",
+  "source": {
+    "project": "NVIDIA/open-gpu-kernel-modules",
+    "commit": "b81d58ee0224d1d290bef1c080592b619e184042",
+    "version": "580.159.04",
+    "license": "MIT",
+    "facts": [
+      "nvkms-evo3.c:374-432 documents existing CSC matrices as S5.14 in S5.16 method encoding",
+      "clca73.h public generated fields name CSC00_PRECISION and CSC01_PRECISION separately from FVLUT and clamp flags"
+    ],
+    "file_sha256": {
+      "src/nvidia-modeset/src/nvkms-evo3.c": "64014e164d6902bb9efd21be33901912135246fa1f37b7923cd2a634255de33b",
+      "src/common/sdk/nvidia/inc/class/clca73.h": "3ccf370358ac101e3f1d92320b69dbc51e8581314ce8fa3ddad88fdcb64bc4ed"
+    }
+  }
+}

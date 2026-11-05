@@ -1,0 +1,50 @@
+{
+  "utc": "2026-10-20T23:04:58.300975+00:00",
+  "source": "b77631096b0572b5be173e851ff1d7e50cd795c0",
+  "mutants": [
+    {
+      "name": "oracle_no_family_bindings",
+      "path": "crates/kf-harness/src/bin/kf-gr-tier.rs",
+      "args": [
+        "-p",
+        "kf-harness",
+        "--bin",
+        "kf-gr-tier"
+      ],
+      "required_killers": 2
+    },
+    {
+      "name": "oracle_legacy_i2m",
+      "path": "crates/kf-harness/src/bin/kf-gr-tier.rs",
+      "args": [
+        "-p",
+        "kf-harness",
+        "--bin",
+        "kf-gr-tier"
+      ],
+      "required_killers": 2
+    },
+    {
+      "name": "olut_skip_ca73",
+      "path": "crates/kf-disp/src/caps.rs",
+      "args": [
+        "-p",
+        "kf-disp",
+        "--test",
+        "ca73_olut_caps"
+      ],
+      "required_killers": 2
+    },
+    {
+      "name": "olut_includes_header_as_samples",
+      "path": "crates/kf-disp/src/caps.rs",
+      "args": [
+        "-p",
+        "kf-disp",
+        "--test",
+        "ca73_olut_caps"
+      ],
+      "required_killers": 2
+    }
+  ]
+}

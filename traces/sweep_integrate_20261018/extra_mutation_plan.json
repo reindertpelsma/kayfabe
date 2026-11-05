@@ -1,0 +1,62 @@
+[
+  {
+    "mutant": "C2_branch_recheck",
+    "path": "crates/kf-rm/src/consttab.rs",
+    "falsifier": "fewer than two distinct runtime killing tests; compiler failure does not count"
+  },
+  {
+    "mutant": "D2_ignore_caps_branch",
+    "path": "crates/kf-disp/src/capsderive.rs",
+    "falsifier": "fewer than two distinct runtime killing tests; compiler failure does not count"
+  },
+  {
+    "mutant": "RPC1_unbound_metadata",
+    "path": "crates/kf-rm/src/census.rs",
+    "falsifier": "fewer than two distinct runtime killing tests; compiler failure does not count"
+  },
+  {
+    "mutant": "RPC2_rearm_metadata",
+    "path": "crates/kf-rm/src/census.rs",
+    "falsifier": "fewer than two distinct runtime killing tests; compiler failure does not count"
+  },
+  {
+    "mutant": "GID1_drop_query",
+    "path": "crates/kf-abi/src/hostabi.rs",
+    "falsifier": "fewer than two distinct runtime killing tests; compiler failure does not count"
+  },
+  {
+    "mutant": "Q1_abandon_original_process",
+    "path": "scripts/bench/windows/qmp.py",
+    "falsifier": "fewer than two distinct runtime killing tests; compiler failure does not count"
+  },
+  {
+    "mutant": "Q2_drop_requested_deadline",
+    "path": "scripts/bench/windows/qmp.py",
+    "falsifier": "fewer than two distinct runtime killing tests; compiler failure does not count"
+  },
+  {
+    "mutant": "PROFILE1_force_fixed_driver",
+    "path": "scripts/bench/guest_profile.sh",
+    "falsifier": "fewer than two distinct runtime killing tests; compiler failure does not count"
+  },
+  {
+    "mutant": "HOST1_restore_name_whitelist",
+    "path": "scripts/bench/host_preflight.sh",
+    "falsifier": "fewer than two distinct runtime killing tests; compiler failure does not count"
+  },
+  {
+    "mutant": "IMAGE1_unbound_file_source",
+    "path": "scripts/bench/diesweep/stream_image_range.py",
+    "falsifier": "fewer than two distinct runtime killing tests; compiler failure does not count"
+  },
+  {
+    "mutant": "FILE1_skip_sync",
+    "path": "scripts/bench/diesweep/qga_file_put.py",
+    "falsifier": "fewer than two distinct runtime killing tests; compiler failure does not count"
+  },
+  {
+    "mutant": "FMC1_wrong_indirection",
+    "path": "tools/vfio-gsp-observer/core/observer.c",
+    "falsifier": "fewer than two distinct runtime killing tests; compiler failure does not count"
+  }
+]

@@ -1,0 +1,51 @@
+{
+  "utc": "2026-10-20T02:55:46.749100+00:00",
+  "mutants": [
+    {
+      "mutant": "delete_NVCFB0_VIDEO_DECODER",
+      "rc": 101,
+      "killing_tests": [
+        "capability::tests::nvdec_cfb0_570_constructor_is_admitted",
+        "capability::tests::nvdec_cfb0_580_inventory_has_public_name_once"
+      ],
+      "killers": 2
+    },
+    {
+      "mutant": "delete_NVCEB0_VIDEO_DECODER",
+      "rc": 101,
+      "killing_tests": [
+        "capability::tests::nvdec_ceb0_580_constructor_is_admitted",
+        "capability::tests::nvdec_ceb0_610_inventory_has_public_name_once"
+      ],
+      "killers": 2
+    },
+    {
+      "mutant": "delete_NVD1B0_VIDEO_DECODER",
+      "rc": 101,
+      "killing_tests": [
+        "capability::tests::nvdec_d1b0_580_constructor_is_admitted",
+        "capability::tests::nvdec_d1b0_610_inventory_has_public_name_once"
+      ],
+      "killers": 2
+    },
+    {
+      "mutant": "cfb0_into_shared",
+      "rc": 101,
+      "killing_tests": [
+        "capability::tests::nvdec_cfb0_does_not_leak_to_560",
+        "capability::tests::nvdec_cfb0_does_not_leak_to_550"
+      ],
+      "killers": 2
+    },
+    {
+      "mutant": "580_aliases_into_570_sorted",
+      "rc": 101,
+      "killing_tests": [
+        "capability::tests::nvdec_580_aliases_do_not_leak_to_570",
+        "capability::tests::nvdec_580_aliases_do_not_leak_to_575"
+      ],
+      "killers": 2
+    }
+  ],
+  "source_restored": true
+}

@@ -158,7 +158,7 @@ mapping loses compute, which is the owner's own sequencing concern.
 `--uvm-invalidate`, real GA106, open 580.159.04, source `7311e312`:
 
 ```
-ok W392C uuid          = GPU-b448b62a-2cac-58c2-46ff-4ecd1e67fc4b
+ok W392C uuid          = GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0007
 ok W392C INITIALIZE    = rmStatus 0x0
 ok W392C MM_INITIALIZE = rmStatus 0x0
 ok W392C REGISTER_GPU  = rmStatus 0x0
@@ -187,7 +187,7 @@ for that call, not the shared error-code table.
 `[measured, boot w392cguest, Mode-2 guest on our emulated GPU, source ca78bd5e]`
 
 ```
-ok W392C uuid          = GPU-78b352c7-1ccd-7a86-d282-49484c827f27
+ok W392C uuid          = GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008
 ok W392C INITIALIZE    = rmStatus 0x0
 ok W392C MM_INITIALIZE = rmStatus 0x0
 ok W392C REGISTER_GPU  = rmStatus 0x0
@@ -197,7 +197,7 @@ W392C_GUEST_OUTCOME=(P) THE FALSIFIER SURVIVES
 
 ★ **It passed.** The same client, byte-identical, that passes on bare metal completes the
 entire UVM registration path against **our emulated GPU**. ⊘ And the UUID differs from the
-host's (`GPU-b448b62a-…`), so this is our device answering, not a leak of the real one.
+host's (`GPU-<host uuid, elided>`), so this is our device answering, not a leak of the real one.
 
 ⇒ **On the registration path our coverage holds.** That is a real positive result and it is
 the first time point 2's precondition has been shown to exist inside the guest at all.

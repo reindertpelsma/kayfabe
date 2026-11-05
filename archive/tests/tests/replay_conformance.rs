@@ -1516,7 +1516,7 @@ fn the_recorded_demand_sequence_replays_and_every_answer_is_protocol_conformant(
     //      forward (`kernel_ce_shared.c:315-320`), so the RPC's size is the type's by source
     //      and not by inference — and the control carries `ROUTE_TO_PHYSICAL`, so the struct
     //      is RPC'd unchanged (`rmapi/control.c:898-910`);
-    //   3. `[measured 2026-08-09, real GA106 `GPU-d0913685`]` **two independent callers**
+    //   3. `[measured 2026-08-09, real GA106 `GPU-fa4e0001`]` **two independent callers**
     //      observe 136 bytes on the wire — libcuda's `cuInit`
     //      (`traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt:62`, `size=136`) and an
     //      `rmladder` bare `Subdevice` (`traces/real_ga106/rmladder_r18_cecaps_real_ga106.txt`).
@@ -1613,7 +1613,7 @@ fn the_recorded_demand_sequence_replays_and_every_answer_is_protocol_conformant(
         // rests on and is checked by `the_caps_v2_struct_layout_is_the_headers`.
         0x2080_2a07,
         // ★★★ §14.42's second, and it is the one entry on this list with **direct hardware
-        // evidence for its size**. `[measured 2026-08-09, real GA106 `GPU-d0913685`, R24,
+        // evidence for its size**. `[measured 2026-08-09, real GA106 `GPU-fa4e0001`, R24,
         // `traces/real_ga106/rmladder_r24_pcemask_real_ga106.txt`]` a real part was issued
         // this control with an **8-byte** buffer and answered `NV_OK`, writing the second
         // word (the `0xCD` seed came back changed for LCE0..3 and the buffer was not
@@ -1756,8 +1756,8 @@ const CLAIMED_BUT_REFUSED: [(u32, &str); 2] = [
          has a measured GSP-level answer for — the capture's own reply says 0, and two \
          further instruments on a second physical GA106 agree. The refused call (seq806) \
          forwards 0x23 and 0x24, and those are ★★★ PER-CHIP IDENTITY VALUES: this capture's \
-         GA106 (GPU-e28d7776) answered 0x19ece058 / 0xb91e2532, while a different physical \
-         GA106 (GPU-d0913685) answered 0x4324d4e9 / 0x8708a4a8 — stable across runs on each \
+         GA106 (GPU-fa4e0002) answered 0x19ece058 / 0xb91e2532, while a different physical \
+         GA106 (GPU-fa4e0001) answered 0x4324d4e9 / 0x8708a4a8 — stable across runs on each \
          part, different between parts. ⊘ No chip-FAMILY row can be right on both, so \
          `kayfabe_abi::gpuinfo` refuses them by name (`UnmeasuredForwardedIndex`) rather \
          than writing a plausible 32-bit identity into a reply the guest is free to cache \

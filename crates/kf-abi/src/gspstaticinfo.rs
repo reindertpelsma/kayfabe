@@ -1233,20 +1233,20 @@ mod tests {
     #[test]
     fn text_form_round_trips_and_accepts_every_spelling() {
         let bytes: [u8; RM_SHA1_GID_SIZE] = [
-            0x51, 0xb0, 0x86, 0x78, 0x78, 0x28, 0x40, 0x15, 0x19, 0x62, 0xa6, 0x5a, 0x7a, 0x48,
-            0x8e, 0x3c,
+            0xfa, 0x4e, 0xfa, 0x4e, 0xfa, 0x4e, 0x4f, 0xa4, 0x8f, 0xa4, 0xfa, 0x4e, 0xfa, 0x4e,
+            0x00, 0x04,
         ];
         let gid = GpuGid::from_bytes(bytes).expect("non-zero");
-        let text = "GPU-51b08678-7828-4015-1962-a65a7a488e3c";
+        let text = "GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004";
         assert_eq!(std::format!("{gid}"), text);
         assert_eq!(GpuGid::parse(text), Ok(gid));
         assert_eq!(
-            GpuGid::parse("51b08678-7828-4015-1962-a65a7a488e3c"),
+            GpuGid::parse("fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004"),
             Ok(gid)
         );
-        assert_eq!(GpuGid::parse("51b08678782840151962a65a7a488e3c"), Ok(gid));
+        assert_eq!(GpuGid::parse("fa4efa4efa4e4fa48fa4fa4efa4e0004"), Ok(gid));
         assert_eq!(
-            GpuGid::parse("GPU-51B08678-7828-4015-1962-A65A7A488E3C"),
+            GpuGid::parse("GPU-FA4EFA4E-FA4E-4FA4-8FA4-FA4EFA4E0004"),
             Ok(gid)
         );
         // Every byte value survives (nibble order, not just "some hex").
@@ -1262,7 +1262,7 @@ mod tests {
     /// Hostile property strings are refused by kind, and cheaply: the length gate is first.
     #[test]
     fn text_form_refuses_everything_else() {
-        let good = "GPU-51b08678-7828-4015-1962-a65a7a488e3c";
+        let good = "GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004";
         assert!(GpuGid::parse(good).is_ok());
         let cases: &[(&str, GpuGidTextError)] = &[
             ("", GpuGidTextError::BadLength { len: 0 }),
@@ -1270,51 +1270,51 @@ mod tests {
             ("auto", GpuGidTextError::BadLength { len: 4 }),
             // trailing newline / space / NUL: the shell-quoting accidents
             (
-                "GPU-51b08678-7828-4015-1962-a65a7a488e3c\n",
+                "GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004\n",
                 GpuGidTextError::TooLong { len: 41 },
             ),
             (
-                "51b08678-7828-4015-1962-a65a7a488e3c ",
+                "fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 ",
                 GpuGidTextError::BadLength { len: 37 },
             ),
             (
-                "51b08678-7828-4015-1962-a65a7a488e3\0",
+                "fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000\0",
                 GpuGidTextError::BadChar { at: 35 },
             ),
             // dashes in the wrong place
             (
-                "51b086787-828-4015-1962-a65a7a488e3c",
+                "fa4efa4ef-a4e-4fa4-8fa4-fa4efa4e0004",
                 GpuGidTextError::BadChar { at: 8 },
             ),
             (
-                "51b08678-7828-4015-1962a65a7a488e3c-",
+                "fa4efa4e-fa4e-4fa4-8fa4fa4efa4e0004-",
                 GpuGidTextError::BadChar { at: 23 },
             ),
             // not hex
             (
-                "GPU-51b08678-7828-4015-1962-a65a7a488e3g",
+                "GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000g",
                 GpuGidTextError::BadChar { at: 35 },
             ),
             (
-                "0x51b0867878284015 1962a65a7a488e3c",
+                "0xfa4efa4efa4e4fa4 8fa4fa4efa4e0004",
                 GpuGidTextError::BadLength { len: 35 },
             ),
             (
-                "+1b08678782840151962a65a7a488e3c",
+                "+a4efa4efa4e4fa48fa4fa4efa4e0004",
                 GpuGidTextError::BadChar { at: 0 },
             ),
             // other prefixes, and a lowercase one, are not spellings of this
             (
-                "gpu-51b08678-7828-4015-1962-a65a7a488e3c",
+                "gpu-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004",
                 GpuGidTextError::BadLength { len: 40 },
             ),
             (
-                "MIG-51b08678-7828-4015-1962-a65a7a488e3c",
+                "MIG-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004",
                 GpuGidTextError::BadLength { len: 40 },
             ),
             // non-ASCII must not panic on a char boundary
             (
-                "GPU-51b08678-7828-4015-1962-a65a7a488e\u{e9}",
+                "GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e00\u{e9}",
                 GpuGidTextError::BadChar { at: 34 },
             ),
         ];

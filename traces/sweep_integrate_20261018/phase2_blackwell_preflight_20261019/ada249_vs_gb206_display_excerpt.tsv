@@ -1,0 +1,87 @@
+relation	native_command_sequence	native_status_sequence	function	control_or_class	native_effective_result	virtual_ordinal	virtual_effective_result	effective_status_equal	matching_block_length	native_envelope	native_control_status	virtual_envelope	virtual_control_status	api_key_repeated	native_pair_basis	virtual_pair_basis	next_native_function	next_native_control_or_class
+match	200	-	0x4c	0x20808159	unknown	200	0x0	unknown	25	0x0	-	0x0	-	1	pretty trace; body unavailable	pretty trace; body unavailable	0x4c	0x730116
+match	201	-	0x4c	0x730116	unknown	201	0x0	unknown	25	0x0	-	0x0	-	0	pretty trace; body unavailable	pretty trace; body unavailable	0x4c	0x730285
+match	202	-	0x4c	0x730285	unknown	202	0x56	unknown	25	-	-	-	-	1	pretty trace; body unavailable	pretty trace; body unavailable	0x4c	0x730285
+match	203	-	0x4c	0x730285	unknown	203	0x56	unknown	25	-	-	-	-	1	pretty trace; body unavailable	pretty trace; body unavailable	0x4c	0x730285
+match	204	-	0x4c	0x730285	unknown	204	0x56	unknown	25	-	-	-	-	1	pretty trace; body unavailable	pretty trace; body unavailable	0x4c	0x730285
+match	205	-	0x4c	0x730285	unknown	205	0x56	unknown	25	-	-	-	-	1	pretty trace; body unavailable	pretty trace; body unavailable	0x4c	0x730108
+match	206	-	0x4c	0x730108	unknown	206	0x0	unknown	25	0x0	-	0x0	-	1	pretty trace; body unavailable	pretty trace; body unavailable	0x4c	0x73011d
+match	208	-	0x4c	0x730245	unknown	207	0x0	unknown	1	0x0	-	0x0	-	1	pretty trace; body unavailable	pretty trace; body unavailable	0x4c	0x73010b
+virtual_only	-	-	0x4c	0x730109	-	208	0x0	unknown	0	-	-	0x0	-	0	-	pretty trace; body unavailable	-	-
+match	210	-	0x4c	0x73012c	unknown	209	0x0	unknown	1	0x0	-	0x0	-	1	pretty trace; body unavailable	pretty trace; body unavailable	0x4c	0x73010b
+match	215	-	0x67	0xb297	unknown	210	0x0	unknown	22	0x0	-	0x0	-	1	pretty trace; body unavailable	pretty trace; body unavailable	0x67	0xb297
+match	216	-	0x67	0xb297	unknown	211	0x0	unknown	22	0x0	-	0x0	-	1	pretty trace; body unavailable	pretty trace; body unavailable	0x4	-
+match	217	-	0x4	-	unknown	212	0x0	unknown	22	0x0	-	0x0	-	1	pretty trace; body unavailable	pretty trace; body unavailable	0x4c	0x20800a38
+match	218	-	0x4c	0x20800a38	unknown	213	0x0	unknown	22	0x0	-	0x0	-	1	pretty trace; body unavailable	pretty trace; body unavailable	0x4c	0x20800a3a
+match	219	-	0x4c	0x20800a3a	unknown	214	0x56	unknown	22	-	-	-	-	1	pretty trace; body unavailable	pretty trace; body unavailable	0x4c	0x20801110
+match	220	-	0x4c	0x20801110	unknown	215	0x56	unknown	22	-	-	-	-	0	pretty trace; body unavailable	pretty trace; body unavailable	0x67	0xb297
+match	221	-	0x67	0xb297	unknown	216	0x0	unknown	22	0x0	-	0x0	-	1	pretty trace; body unavailable	pretty trace; body unavailable	0x67	0xb297
+match	222	-	0x67	0xb297	unknown	217	0x0	unknown	22	0x0	-	0x0	-	1	pretty trace; body unavailable	pretty trace; body unavailable	0x4	-
+match	223	-	0x4	-	unknown	218	0x0	unknown	22	0x0	-	0x0	-	1	pretty trace; body unavailable	pretty trace; body unavailable	0x67	0x4
+match	224	-	0x67	0x4	unknown	219	0x0	unknown	22	0x0	-	0x0	-	0	pretty trace; body unavailable	pretty trace; body unavailable	0x67	0x0
+match	225	-	0x67	0x0	unknown	220	0x0	unknown	22	0x0	-	0x0	-	1	pretty trace; body unavailable	pretty trace; body unavailable	0x67	0x80
+match	226	-	0x67	0x80	unknown	221	0x0	unknown	22	0x0	-	0x0	-	1	pretty trace; body unavailable	pretty trace; body unavailable	0x67	0x2080
+match	227	-	0x67	0x2080	unknown	222	0x0	unknown	22	0x0	-	0x0	-	1	pretty trace; body unavailable	pretty trace; body unavailable	0xa	-
+match	228	-	0xa	-	unknown	223	0x0	unknown	22	0x0	-	0x0	-	1	pretty trace; body unavailable	pretty trace; body unavailable	0xa	-
+match	229	-	0xa	-	unknown	224	0x0	unknown	22	0x0	-	0x0	-	1	pretty trace; body unavailable	pretty trace; body unavailable	0xa	-
+match	230	-	0xa	-	unknown	225	0x0	unknown	22	0x0	-	0x0	-	1	pretty trace; body unavailable	pretty trace; body unavailable	0x4c	0x2080080b
+match	231	-	0x4c	0x2080080b	unknown	226	0x56	unknown	22	-	-	-	-	0	pretty trace; body unavailable	pretty trace; body unavailable	0x67	0x70
+match	232	-	0x67	0x70	unknown	227	0x0	unknown	22	0x0	-	0x0	-	1	pretty trace; body unavailable	pretty trace; body unavailable	0x67	0x90f1
+match	233	-	0x67	0x90f1	unknown	228	0x0	unknown	22	0x0	-	0x0	-	1	pretty trace; body unavailable	pretty trace; body unavailable	0x4c	0x90f10106
+match	234	-	0x4c	0x90f10106	unknown	229	0x0	unknown	22	0x0	-	0x0	-	1	pretty trace; body unavailable	pretty trace; body unavailable	0xa	-
+match	235	-	0xa	-	unknown	230	0x0	unknown	22	0x0	-	0x0	-	1	pretty trace; body unavailable	pretty trace; body unavailable	0x67	0x70
+match	236	-	0x67	0x70	unknown	231	0x0	unknown	22	0x0	-	0x0	-	1	pretty trace; body unavailable	pretty trace; body unavailable	0x67	0xc770
+virtual_only	-	-	0x67	0xca70	-	232	0x0	unknown	0	-	-	0x0	-	0	-	pretty trace; body unavailable	-	-
+match	238	-	0x4c	0x50700709	unknown	233	0x0	unknown	3	0x0	-	0x0	-	0	pretty trace; body unavailable	pretty trace; body unavailable	0x4c	0x50700117
+match	239	-	0x4c	0x50700117	unknown	234	0x0	unknown	3	0x0	-	0x0	-	1	pretty trace; body unavailable	pretty trace; body unavailable	0x4c	0x20800a58
+match	240	-	0x4c	0x20800a58	unknown	235	0x0	unknown	3	0x0	-	0x0	-	1	pretty trace; body unavailable	pretty trace; body unavailable	0x67	0xc77d
+virtual_only	-	-	0x67	0xca7d	-	236	0x0	unknown	0	-	-	0x0	-	0	-	pretty trace; body unavailable	-	-
+match	242	-	0x4c	0x20800a58	unknown	237	0x0	unknown	1	0x0	-	0x0	-	1	pretty trace; body unavailable	pretty trace; body unavailable	0x67	0xc67e
+virtual_only	-	-	0x67	0xca7e	-	238	0x0	unknown	0	-	-	0x0	-	1	-	pretty trace; body unavailable	-	-
+match	244	-	0x4c	0x20800a58	unknown	239	0x0	unknown	1	0x0	-	0x0	-	1	pretty trace; body unavailable	pretty trace; body unavailable	0x67	0xc67e
+virtual_only	-	-	0x67	0xca7e	-	240	0x0	unknown	0	-	-	0x0	-	1	-	pretty trace; body unavailable	-	-
+match	246	-	0x4c	0x20800a58	unknown	241	0x0	unknown	1	0x0	-	0x0	-	1	pretty trace; body unavailable	pretty trace; body unavailable	0x67	0xc67e
+virtual_only	-	-	0x67	0xca7e	-	242	0x0	unknown	0	-	-	0x0	-	1	-	pretty trace; body unavailable	-	-
+match	248	-	0x4c	0x20800a58	unknown	243	0x0	unknown	1	0x0	-	0x0	-	1	pretty trace; body unavailable	pretty trace; body unavailable	0x67	0xc67e
+virtual_only	-	-	0x67	0xca7e	-	244	0x0	unknown	0	-	-	0x0	-	1	-	pretty trace; body unavailable	-	-
+match	250	-	0x4c	0x20800a58	unknown	245	0x0	unknown	1	0x0	-	0x0	-	1	pretty trace; body unavailable	pretty trace; body unavailable	0x67	0xc67e
+virtual_only	-	-	0x67	0xca7e	-	246	0x0	unknown	0	-	-	0x0	-	1	-	pretty trace; body unavailable	-	-
+match	252	-	0x4c	0x20800a58	unknown	247	0x0	unknown	1	0x0	-	0x0	-	1	pretty trace; body unavailable	pretty trace; body unavailable	0x67	0xc67e
+virtual_only	-	-	0x67	0xca7e	-	248	0x0	unknown	0	-	-	0x0	-	1	-	pretty trace; body unavailable	-	-
+match	254	-	0x4c	0x20800a58	unknown	249	0x0	unknown	1	0x0	-	0x0	-	1	pretty trace; body unavailable	pretty trace; body unavailable	0x67	0xc67e
+virtual_only	-	-	0x67	0xca7e	-	250	0x0	unknown	0	-	-	0x0	-	1	-	pretty trace; body unavailable	-	-
+match	256	-	0x4c	0x20800a58	unknown	251	0x0	unknown	1	0x0	-	0x0	-	1	pretty trace; body unavailable	pretty trace; body unavailable	0x67	0xc67e
+virtual_only	-	-	0x67	0xca7e	-	252	0x0	unknown	0	-	-	0x0	-	1	-	pretty trace; body unavailable	-	-
+match	258	-	0x4c	0x20800a58	unknown	253	0x0	unknown	1	0x0	-	0x0	-	1	pretty trace; body unavailable	pretty trace; body unavailable	0x67	0xc67b
+virtual_only	-	-	0x67	0xca7b	-	254	0x0	unknown	0	-	-	0x0	-	1	-	pretty trace; body unavailable	-	-
+match	260	-	0x4c	0x20800a58	unknown	255	0x0	unknown	1	0x0	-	0x0	-	1	pretty trace; body unavailable	pretty trace; body unavailable	0x67	0xc67b
+virtual_only	-	-	0x67	0xca7b	-	256	0x0	unknown	0	-	-	0x0	-	1	-	pretty trace; body unavailable	-	-
+match	262	-	0x4c	0x20800a58	unknown	257	0x0	unknown	1	0x0	-	0x0	-	1	pretty trace; body unavailable	pretty trace; body unavailable	0x67	0xc67b
+virtual_only	-	-	0x67	0xca7b	-	258	0x0	unknown	0	-	-	0x0	-	1	-	pretty trace; body unavailable	-	-
+match	264	-	0x4c	0x20800a58	unknown	259	0x0	unknown	1	0x0	-	0x0	-	1	pretty trace; body unavailable	pretty trace; body unavailable	0x67	0xc67b
+virtual_only	-	-	0x67	0xca7b	-	260	0x0	unknown	0	-	-	0x0	-	1	-	pretty trace; body unavailable	-	-
+match	266	-	0x4c	0x20800a58	unknown	261	0x0	unknown	1	0x0	-	0x0	-	1	pretty trace; body unavailable	pretty trace; body unavailable	0x67	0xc67b
+virtual_only	-	-	0x67	0xca7b	-	262	0x0	unknown	0	-	-	0x0	-	1	-	pretty trace; body unavailable	-	-
+match	268	-	0x4c	0x20800a58	unknown	263	0x0	unknown	1	0x0	-	0x0	-	1	pretty trace; body unavailable	pretty trace; body unavailable	0x67	0xc67b
+virtual_only	-	-	0x67	0xca7b	-	264	0x0	unknown	0	-	-	0x0	-	1	-	pretty trace; body unavailable	-	-
+match	270	-	0x4c	0x20800a58	unknown	265	0x0	unknown	1	0x0	-	0x0	-	1	pretty trace; body unavailable	pretty trace; body unavailable	0x67	0xc67b
+virtual_only	-	-	0x67	0xca7b	-	266	0x0	unknown	0	-	-	0x0	-	1	-	pretty trace; body unavailable	-	-
+match	272	-	0x4c	0x20800a58	unknown	267	0x0	unknown	1	0x0	-	0x0	-	1	pretty trace; body unavailable	pretty trace; body unavailable	0x67	0xc67b
+virtual_only	-	-	0x67	0xca7b	-	268	0x0	unknown	0	-	-	0x0	-	1	-	pretty trace; body unavailable	-	-
+match	274	-	0x4c	0x20800a58	unknown	269	0x0	unknown	1	0x0	-	0x0	-	1	pretty trace; body unavailable	pretty trace; body unavailable	0x67	0xc67a
+virtual_only	-	-	0x67	0xca7a	-	270	0x0	unknown	0	-	-	0x0	-	1	-	pretty trace; body unavailable	-	-
+match	276	-	0x4c	0x20800a58	unknown	271	0x0	unknown	1	0x0	-	0x0	-	1	pretty trace; body unavailable	pretty trace; body unavailable	0x67	0xc67a
+virtual_only	-	-	0x67	0xca7a	-	272	0x0	unknown	0	-	-	0x0	-	1	-	pretty trace; body unavailable	-	-
+match	278	-	0x4c	0x20800a58	unknown	273	0x0	unknown	1	0x0	-	0x0	-	1	pretty trace; body unavailable	pretty trace; body unavailable	0x67	0xc67a
+virtual_only	-	-	0x67	0xca7a	-	274	0x0	unknown	0	-	-	0x0	-	1	-	pretty trace; body unavailable	-	-
+match	280	-	0x4c	0x20800a58	unknown	275	0x0	unknown	1	0x0	-	0x0	-	1	pretty trace; body unavailable	pretty trace; body unavailable	0x67	0xc67a
+virtual_only	-	-	0x67	0xca7a	-	276	0x0	unknown	0	-	-	0x0	-	1	-	pretty trace; body unavailable	-	-
+virtual_only	-	-	0x4c	0x50700117	-	277	0x0	unknown	0	-	-	0x0	-	1	-	pretty trace; body unavailable	-	-
+match	326	-	0xa	-	unknown	278	0x0	unknown	1	0x0	-	0x0	-	1	pretty trace; body unavailable	pretty trace; body unavailable	0x67	0x0
+virtual_only	-	-	0x4c	0x50700117	-	279	0x0	unknown	0	-	-	0x0	-	1	-	pretty trace; body unavailable	-	-
+match	376	-	0xa	-	unknown	280	0x0	unknown	1	0x0	-	0x0	-	1	pretty trace; body unavailable	pretty trace; body unavailable	0x67	0x90f1
+virtual_only	-	-	0x4c	0x50700117	-	281	0x0	unknown	0	-	-	0x0	-	1	-	pretty trace; body unavailable	-	-
+match	379	-	0xa	-	unknown	282	0x0	unknown	1	0x0	-	0x0	-	1	pretty trace; body unavailable	pretty trace; body unavailable	0x67	0x90f1
+virtual_only	-	-	0x4c	0x50700117	-	283	0x0	unknown	0	-	-	0x0	-	1	-	pretty trace; body unavailable	-	-
+match	382	-	0xa	-	unknown	284	0x0	unknown	1	0x0	-	0x0	-	1	pretty trace; body unavailable	pretty trace; body unavailable	0x67	0x0
+virtual_only	-	-	0x4c	0x50700117	-	285	0x0	unknown	0	-	-	0x0	-	1	-	pretty trace; body unavailable	-	-

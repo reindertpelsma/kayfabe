@@ -1,0 +1,97 @@
+WINDOWS_GATE_START tag=t2 rev=0860f249 source=/root/kayfabe 2026-11-01T13:56:35+00:00 idle_s=300 flags=kf3_flags.sample.env guest_driver=580.65.06 arm=B
+WINDOWS_GATE_REQUESTED=1
+GATE_STAGE preflight START 2026-11-01T13:56:35+00:00
+GATE_NOTE host VRAM 8192 MiB: WINVM_KF3_FB_MB=6144
+GATE_NOTE host: gpu="NVIDIA GeForce RTX 2060 SUPER" driver=595.91.07 cpus=21 ram_gb=24 disk_free_gb=97
+GATE_STAGE preflight EXIT ok 1s
+GATE_STAGE hostref_before START 2026-11-01T13:56:36+00:00
+GATE_HOSTREF before green cup8=PASS xid_count=0 xid_delta=0 gpu="NVIDIA GeForce RTX 2060 SUPER, 595.91.07, 8192 MiB, P8"
+GATE_STAGE hostref_before EXIT ok 1s
+GATE_STAGE prereqs START 2026-11-01T13:56:37+00:00
+GATE_STAGE prereqs EXIT ok 0s
+GATE_STAGE kf3_binary START 2026-11-01T13:56:37+00:00
+GATE_NOTE no kf3 QEMU at /workspace/bench/kf3-bins/0860f249/qemu-system-x86_64: building this revision
+GATE_NOTE kf3 qemu=/workspace/bench/kf3-bins/0860f249/qemu-system-x86_64 sha256=211e882783f62eda rev=0860f249
+GATE_STAGE kf3_binary EXIT ok 24s
+GATE_STAGE install START 2026-11-01T13:57:01+00:00
+GATE_NOTE Windows already installed on this box (2026-11-01T13:19:39Z repo=8597d90e): install once per lease
+GATE_STAGE install EXIT ok 0s
+GATE_STAGE probes_build START 2026-11-01T13:57:01+00:00
+GATE_NOTE probes built: 316b71a17090 911185367af7 65953d4b4ffc f275b50d7455 
+GATE_STAGE probes_build EXIT ok 8s
+GATE_STAGE boot1 START 2026-11-01T13:57:09+00:00
+GATE_NOTE ssh up after 10s
+GATE_STAGE boot1 EXIT ok 97s
+GATE_STAGE check_kf3 START 2026-11-01T13:58:46+00:00
+GATE_NOTE check --kf3 (before the driver): 13 PASS lines, WIN_CHECK_DONE fail=0
+GATE_STAGE check_kf3 EXIT ok 63s
+GATE_STAGE nv_install START 2026-11-01T13:59:49+00:00
+  GSP_ON device PCI\VEN_10DE&DEV_1F06&SUBSYS_652019DA&REV_A1\3&11583659&0&28 name='Microsoft Basic Display Adapter' status=OK problem=CM_PROB_NONE inf=display.inf driverkey={4d36e968-e325-11ce-bfc1-08002be10318}\0001
+  GSP_ON nvlddmkm.sys signature status=Valid signer='CN=NVIDIA Corporation, OU=1-F, O=NVIDIA Corporation, L=Santa Clara, S=California, C=US'
+  GSP_ON disable: Microsoft PnP Utility
+  GSP_ON disable:
+  GSP_ON disable: Disabling device:          PCI\VEN_10DE&DEV_1F06&SUBSYS_652019DA&REV_A1\3&11583659&0&28
+  GSP_ON disable: Device disabled successfully.
+  GSP_ON disable:
+  GSP_ON add-driver: Microsoft PnP Utility
+  GSP_ON add-driver:
+  GSP_ON add-driver: Adding driver package:  nv_dispi.inf
+  GSP_ON add-driver: Driver package added successfully.
+  GSP_ON add-driver: Published Name:         oem7.inf
+  GSP_ON add-driver: Driver package installed on device: PCI\VEN_10DE&DEV_1F06&SUBSYS_652019DA&REV_A1\3&11583659&0&28
+  GSP_ON add-driver:
+  GSP_ON add-driver: Total driver packages:  1
+  GSP_ON add-driver: Added driver packages:  1
+  GSP_ON add-driver rc=0
+  GSP_ON after install: inf=oem7.inf driverkey={4d36e968-e325-11ce-bfc1-08002be10318}\0001 version=32.0.15.8088
+  GSP_ON readback HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0001 EnableGpuFirmware=1
+  GSP_ON readback HKLM:\SYSTEM\CurrentControlSet\Services\nvlddmkm EnableGpuFirmware=1
+GATE_STAGE nv_install EXIT ok 489s
+GATE_STAGE desktop_prep START 2026-11-01T14:07:58+00:00
+  DESKTOP_PREP AutoAdminLogon=1 want=1 OK
+  DESKTOP_PREP DefaultUserName=kf want=kf OK
+  DESKTOP_PREP DefaultDomainName=. want=. OK
+  DESKTOP_PREP DefaultPassword_matches=True want=True OK
+  DESKTOP_PREP AutoLogonCount_absent=True want=True OK
+  DESKTOP_PREP DevicePasswordLessBuildVersion=0 want=0 OK
+  DESKTOP_PREP OverlayTestMode=5 want=5 OK
+  DESKTOP_PREP_DONE fail=0
+  [2026-11-01T14:08:35Z] DESKTOP_PREP_OK user=kf (autologon and OverlayTestMode apply at the next boot of this disk)
+GATE_STAGE desktop_prep EXIT ok 37s
+GATE_STAGE reboot START 2026-11-01T14:08:35+00:00
+GATE_NOTE second QEMU started after 20s
+GATE_NOTE ssh up after 0s
+GATE_STAGE reboot EXIT ok 111s
+GATE_STAGE desktop START 2026-11-01T14:10:27+00:00
+  GATE_BOOT utc=2026-11-01T14:09:26Z os='Microsoft Windows 11 Enterprise LTSC Evaluation' build=26100
+  GATE_DESKTOP user='KFWIN\kf' dwm=1 explorer=1
+  GATE_SESSIONS USERNAME SESSIONNAME ID STATE IDLE TIME LOGON TIME kf console 1 Active none 11/1/2026 2:09 PM
+  GATE_DISPLAY name='NVIDIA GeForce RTX 2060 SUPER' driver=32.0.15.8088 code=22 status=Error pnp=Error
+  GATE_STATE_DONE mode=desktop
+GATE_STAGE desktop EXIT ok 42s
+GATE_STAGE enable START 2026-11-01T14:11:09+00:00
+GATE_NOTE device enabled once at 2026-11-01T14:11:43Z (guest clock)
+  GATE_DISPLAY name='NVIDIA GeForce RTX 2060 SUPER' driver=32.0.15.8088 code=0 status=OK pnp=OK
+GATE_STAGE enable EXIT ok 142s
+GATE_STAGE smi_probes START 2026-11-01T14:13:31+00:00
+GATE_NOTE guest nvidia-smi: GPU 0: NVIDIA GeForce RTX 2060 SUPER (UUID: GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001)
+GATE_PROBE_RESULT cup8 GATE_PROBE exe=cup8.exe arg= rc=0 secs=56 timeout=0
+GATE_PROBE_RESULT d3d11 GATE_PROBE exe=kf_dxprobe.exe arg=d3d11 rc=0 secs=4 timeout=0
+GATE_PROBE_RESULT cup3 GATE_PROBE exe=cup3.exe arg= rc=0 secs=6 timeout=0
+GATE_PROBE_RESULT d3d12 GATE_PROBE exe=kf_dxprobe.exe arg=d3d12 rc=0 secs=106 timeout=0
+GATE_STAGE smi_probes EXIT ok 646s
+GATE_STAGE idle START 2026-11-01T14:24:17+00:00
+GATE_NOTE ssh miss 1 at 180s of the idle window
+GATE_NOTE idle window observed 300s of 300s
+GATE_STAGE idle EXIT ok 605s
+GATE_STAGE post_idle START 2026-11-01T14:34:22+00:00
+GATE_PROBE_RESULT cup8 GATE_PROBE exe=cup8.exe arg= rc=1 secs=25 timeout=0
+GATE_PROBE_RESULT d3d11 GATE_PROBE exe=kf_dxprobe.exe arg=d3d11 rc=0 secs=13 timeout=0
+GATE_PROBE_RESULT cup3 GATE_PROBE exe=cup3.exe arg= rc=0 secs=16 timeout=0
+GATE_PROBE_RESULT d3d12 
+GATE_NOTE graceful stop of the guest
+GATE_HOSTREF after green cup8=PASS xid_count=0 xid_delta=0 gpu="NVIDIA GeForce RTX 2060 SUPER, 595.91.07, 8192 MiB, P2"
+WINDOWS_GATE_FAIL diag=KAYFABE stage=post_idle why="graded probes failed AFTER the idle window: cup8 (probe_*_post.txt)" rev=0860f249 gpu="NVIDIA GeForce RTX 2060 SUPER" hostref=green/green secs=3549
+GATE_NOTE evidence: /root/prov/t2_windows (61 files), /root/prov/t2_windows.tgz sha256=355f04d3fa31dcce
+WINDOWS_GATE_TIMING total=3549s preflight=1s hostref_before=1s prereqs=0s kf3_binary=24s install=0s probes_build=8s boot1=97s check_kf3=63s nv_install=489s desktop_prep=37s reboot=111s desktop=42s enable=142s smi_probes=646s idle=605s
+WINDOWS_GATE_EXIT rc=1 2026-11-01T14:55:44+00:00

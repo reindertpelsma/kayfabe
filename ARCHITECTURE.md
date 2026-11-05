@@ -96,13 +96,22 @@ The v3 crates (`crates/kf-*`, descriptions condensed from their own `Cargo.toml`
 | `kf-broker` | the display-broker relay (connection machine, shared frame ring, input handed to the VMM); VMM-agnostic, safe code |
 | `kf-oprom`, `kf-gop-image` | the boot-display option ROM container, and the build script that compiles and embeds the boot-display GOP driver (`firmware/kf-gop`; no compiled binary is committed) |
 | `kf-harness` | the GPU gates `kf-gate1`…`9`: play the guest against the real planes, with no QEMU |
+| `kf-rawclient` | the raw client that will replace the frozen `kayfabe-rm-ladder` grader (`docs/design/V3_RAW_CLIENT.md`): an arm registry, the exit-code and `RUNG_`/`CHECK` output contract, a native-versus-guest mode flag, and its first arm `--refresh-stress` (fragmented memory pinned and mapped in batches, one invalidate, a correctness oracle that can fail). All hardware behind one trait; not yet wired into any script or CI lane, and not yet run on a GPU |
 | `kf-census` | offline tool, never linked into the product: decodes driver-GSP queue captures (the VFIO observer's `gsp.jsonl` and the `KFGSPCAP` capture format of a Windows capture module) with `kf-gsp`/`kf-abi`, checks them with a completeness oracle, and writes the per-control census; `kf-census scrub` rewrites a capture default-deny (message bodies replaced unless the control id is allow-listed) so a capture can be kept without board data (`V3_GSP_CAPTURE_FORMAT.md`) |
 | `kf-crec`, `kf-trace` | C-trace differential (the `cap1`/`cap1b` replays). Oracle only, never linked into the product |
 | `kf-arch`, `kf-linux-raw`, `kf-util` | vocabulary and the `Arch` traits; the audited raw-OS adapter; generic utilities |
 
+⊘ Correction, 2026-10-31 (folded above the text it corrects): the frozen tree is now ten crates, not
+sixteen. `kayfabe-chips` was cut to its `host_classes` module (the only part the grader uses) and its
+`ga10x`/`ad10x`/`gb20x`/`gh100` modules went to `archive/crates/kayfabe-chips-modules/`; with them went
+the crates only they reached (`kayfabe-mmu`, `-gsp`, `-mocks`, `-trace`, `-completion`), and
+`kayfabe-vmm`, whose one live item (the two-variant `Prot`) now lives in `kayfabe-isolate`. All are in
+`archive/crates/` and do not build (`archive/README.md`).
+
 `crates/kayfabe-*` is the **frozen pre-v3 tree**. It is kept because `kayfabe-rm-ladder`, the
 30-arm raw-client grader behind the thin-guest suite and the bare-metal baseline, depends on it.
-No `kf-*` crate depends on a `kayfabe-*` crate.
+No `kf-*` crate depends on a `kayfabe-*` crate. The pre-v3 crates the grader does not reach (including
+`kayfabe-device`, since 2026-10-31) are in `archive/crates/` and do not build (`archive/README.md`).
 
 ## Rules that shape the code
 

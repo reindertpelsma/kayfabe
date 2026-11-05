@@ -19,7 +19,7 @@
 //!
 //! ### 2. ★★★ It is LINK STATE, and that is MEASURED — not inferred from a field name
 //!
-//! `[measured 2026-08-08, vh, RTX 3060 `GPU-d0913685`, driver 580.159.04]` The **same
+//! `[measured 2026-08-08, vh, RTX 3060 `GPU-fa4e0001`, driver 580.159.04]` The **same
 //! part**, minutes apart, answered two different words:
 //!
 //! | link | `current_link_speed` | `nvidia-smi gen.current` | `0x2d` |
@@ -470,7 +470,7 @@ impl core::error::Error for BusInfoError {}
 ///
 /// Every entry the request declares is filled from `answers`; the tail past
 /// `busInfoListSize` is left exactly as it arrived, because real RM returns it untouched:
-/// `[measured 2026-08-08, real GA106 `GPU-d0913685`, `rmladder --bus-info-sweep` R22,
+/// `[measured 2026-08-08, real GA106 `GPU-fa4e0001`, `rmladder --bus-info-sweep` R22,
 /// `traces/real_ga106/rmladder_r22_businfo_sweep_real_ga106.txt`]` all 52 indices come back
 /// `tail=untouched` with the 408 bytes past the declared entry seeded `0xCD`.
 ///
@@ -573,7 +573,7 @@ pub fn build_request(entries: &[(u32, u32)]) -> Vec<u8> {
 mod tests {
     use super::*;
 
-    /// `[measured 2026-08-08, real GA106 `GPU-d0913685`, driver 580.159.04]` — the idle
+    /// `[measured 2026-08-08, real GA106 `GPU-fa4e0001`, driver 580.159.04]` — the idle
     /// reading, from `traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt:46` AND from
     /// `rmladder --bus-info-sweep` replaying that request, which agree byte for byte.
     const MEASURED_IDLE: u32 = 0x0030_2000;

@@ -9,8 +9,8 @@ class `0x81`, flags `0x48002000`, `length=0x7000`, `pageCount=1`,
 of an existing contiguous 28 KiB system-memory span. It is not a request to
 allocate one 4 KiB page. The subsequent `0x20801111` request had a null memory
 handle and zero count; it is consistent with cleanup after registration failed,
-not evidence that an empty scheduling request should succeed. See the separate
-[scheduling audit](https://github.com/reindertpelsma/kayfabe/blob/4dfa6895/tools/windows-debug-capture/evidence/runlist-20261005/scheduling-control.md).
+not evidence that an empty scheduling request should succeed. (2026-10-31: a linked
+scheduling audit of the retail driver was removed under `docs/design/V3_PROVENANCE.md` section 2.)
 
 ## Evidence and limits
 

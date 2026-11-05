@@ -1,0 +1,54 @@
+{
+  "date_utc": "2026-10-22",
+  "die": "GB206",
+  "offer_class": "verified RTX5060Ti KVM",
+  "offer_id": 56550364,
+  "instance_id": 57273215,
+  "host_driver": "595.91.07",
+  "product": "6e3fd3fd6d809ae2c2a3504cd8be1ecd29b2b31b",
+  "guard": "1ac2b51d56ca5fc20bcc08b30c496e20d920635b",
+  "flags": "run_kit/p19.flags plus RPC/body trace and progress1000, Windows flags frozen but not exercised",
+  "rows": [
+    {
+      "os": "Linux host",
+      "cell": "PRECOMP CAP_SYS_ADMIN clear",
+      "status": "REFUSED",
+      "actual": "NV_ERR_INVALID_ARGUMENT0x1f; kernel permission denial at0x640780; no page"
+    },
+    {
+      "os": "Linux host",
+      "cell": "gates",
+      "status": "PASS",
+      "actual": "9/9+gate10;USERbirths12/12"
+    },
+    {
+      "os": "Linux host",
+      "cell": "bare/CUDA",
+      "status": "PASS",
+      "actual": "raw30/30,CUDA4/4,source-matched five intentional31/recovery; no other Xid"
+    },
+    {
+      "os": "Linux host",
+      "cell": "GR native completion fixture",
+      "status": "FAIL",
+      "actual": "14/15 checks; ce_completion_wakes_worker_fds false; CE payload/GP_GET passed"
+    },
+    {
+      "os": "Windows LTSC",
+      "driver": "580.88",
+      "cell": "field ON",
+      "status": "UNRUN",
+      "reason": "native fixture gate failed before install/bind"
+    },
+    {
+      "os": "Windows LTSC",
+      "driver": "580.88",
+      "source": "c130aa98ac2b922202282cd793f2a6d64be1f091",
+      "cell": "conditional B1 ON",
+      "status": "UNRUN",
+      "reason": "no Windows Code0; native gate stopped preparation"
+    }
+  ],
+  "new_windows_ordinals": null,
+  "GB202_claim": "none: no new measurement on GB202"
+}

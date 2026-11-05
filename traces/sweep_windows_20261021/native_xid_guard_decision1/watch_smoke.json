@@ -1,0 +1,20 @@
+[
+  {
+    "case": "xid32",
+    "owned_child_pid": 2102531,
+    "returncode": -15,
+    "fatal_receipt_exists": true
+  },
+  {
+    "case": "address31",
+    "owned_child_pid": 2102532,
+    "returncode": -15,
+    "fatal_receipt_exists": true
+  },
+  {
+    "case": "fatal_receipt_write_failure",
+    "owned_child_pid": 2102533,
+    "returncode": -15,
+    "fatal_receipt_exists": false
+  }
+]

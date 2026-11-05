@@ -1,0 +1,8 @@
+{
+  "origin/integration/prod-candidate-4-20261017": "0452613b5c71cb175271230b3e14c8e3c3eef2db",
+  "origin/integration/prod-candidate-5-20261018": "f8f9d1a5f0aae58fc8ccf0da740cf12682cd284e",
+  "origin/claude/gpu-types-20261015": "1cb0486100a0c9b434ae56880ca6f23971e9a34a",
+  "origin/codex/sweep-blackwell-20261015": "24b6a4256ebdd4d806854696d417b93eddf34df4",
+  "origin/codex/gb205-followup-hw-20261016": "9d6f210ba1dc6ab0edbc49ff265101091e8b08f1",
+  "origin/codex/runlist-581-allocation-20261017": "90364d9d86a634f6319352f42549cacaa77ed9e7"
+}

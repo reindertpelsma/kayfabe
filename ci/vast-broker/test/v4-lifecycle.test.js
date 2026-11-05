@@ -129,7 +129,9 @@ test('V4 default bounds and cron liability', () => {
     HARD_RUNTIME_MINUTES: undefined,
     BOOT_LIMIT_MINUTES: undefined,
   });
-  assert.equal(cfg.ttl, 180 * 60000);
+  // Lane 2, 2026-11-04: the check (master gate) default is 300 min, the sweep's 180 (src/tier.js).
+  assert.equal(cfg.ttl, 300 * 60000);
+  assert.equal(cfg.hardSweep, 180 * 60000);
   assert.equal(cfg.provision, 75 * 60000);
   assert.equal(cfg.grace, 5 * 60000);
   assert.equal(cfg.cronPeriod, 60000);

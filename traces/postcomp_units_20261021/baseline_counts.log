@@ -1,0 +1,23 @@
+     Running unittests src/lib.rs (/workspace/sweep-units-target/release/deps/kf_disp-2166b735185da115)
+test result: ok. 245 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 11.42s
+     Running tests/abi_5809402.rs (/workspace/sweep-units-target/release/deps/abi_5809402-17aa5e1a213176c8)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/bl_pack_kernel.rs (/workspace/sweep-units-target/release/deps/bl_pack_kernel-f5c30d8bdec502fa)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+     Running tests/ca73_olut_caps.rs (/workspace/sweep-units-target/release/deps/ca73_olut_caps-30fd145b496961aa)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/ca73_postcomp_caps.rs (/workspace/sweep-units-target/release/deps/ca73_postcomp_caps-6bf6c8b54749da47)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/caps_derive.rs (/workspace/sweep-units-target/release/deps/caps_derive-d32d9486929c8ca9)
+test result: ok. 16 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/compose_kernel.rs (/workspace/sweep-units-target/release/deps/compose_kernel-cbedf9e2d47d4daa)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.59s
+     Running tests/gb202_caps_word.rs (/workspace/sweep-units-target/release/deps/gb202_caps_word-d9c6f8768b7e75e7)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/gb205_caps_word.rs (/workspace/sweep-units-target/release/deps/gb205_caps_word-3e46ee122882750d)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/lockstep_threads.rs (/workspace/sweep-units-target/release/deps/lockstep_threads-6f18373b6b15b5d7)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.10s
+     Running tests/yuv_kernel.rs (/workspace/sweep-units-target/release/deps/yuv_kernel-6033c6a10f9de452)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.33s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

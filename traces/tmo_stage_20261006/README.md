@@ -128,7 +128,8 @@ Windows run13 uses product `74cd590c`, constructor probes off, same pinned
 [labelled watchdog comparison](windows-13-watchdog-comparison.json) are retained.
 Code43 and nvidia-smi exit9 persist. It reaches 8,330 display methods, zero
 UPDATEs/scanouts, and changes after the same first17 assertions compared with
-SDR run12: first changed hint `0x169d836` becomes `0x1a103e6`. The fresh dump
+SDR run12: the first changed failure site moves to a later one (opaque site ids in the comparison file;
+the driver's own addresses were removed 2026-10-31 under `docs/design/V3_PROVENANCE.md` section 2). The fresh dump
 mtime is after this run's start; the linked receipt records NBD cleanup. Its NVCD
 outer payload is one byte short, so only complete saved records are compared;
 no checksum-valid claim or live-local inference. This establishes a changed

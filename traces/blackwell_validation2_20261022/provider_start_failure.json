@@ -1,0 +1,11 @@
+{
+  "id": 57142142,
+  "actual_status": "created",
+  "intended_status": "stopped",
+  "status_msg": "Error: GPU error, unable to start instance.",
+  "cur_state": "stopped",
+  "dph_total": 0.7599999999999999,
+  "utc": "2026-10-22T02:07:16.170620+00:00",
+  "classification": "provider GPU startup failure before console/SSH/N0; not product result",
+  "hardware_arms": "UNRUN"
+}

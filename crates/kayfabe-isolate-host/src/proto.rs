@@ -449,7 +449,7 @@ pub enum Request {
         memory: u64,
         /// Bytes wanted.
         len: u64,
-        /// `0` = [`kayfabe_vmm::Prot::ReadWrite`], `1` = [`kayfabe_vmm::Prot::ReadOnly`].
+        /// `0` = [`kayfabe_isolate::Prot::ReadWrite`], `1` = [`kayfabe_isolate::Prot::ReadOnly`].
         prot: u8,
     },
     /// ★★★★★ **w629 — the VMM asking the isolate for a READ-ONLY view of the usermode page.**
@@ -517,7 +517,7 @@ pub enum Request {
         offset: u64,
         /// Length in bytes. VMM-derived.
         len: u64,
-        /// `0` = [`kayfabe_vmm::Prot::ReadWrite`], `1` = [`kayfabe_vmm::Prot::ReadOnly`].
+        /// `0` = [`kayfabe_isolate::Prot::ReadWrite`], `1` = [`kayfabe_isolate::Prot::ReadOnly`].
         prot: u8,
     },
     /// [`kayfabe_isolate::RmBackend::unmap_guest_ram`].
@@ -563,7 +563,7 @@ pub enum Request {
         /// The emulated device's framebuffer-physical address for this leaf, so the child
         /// can answer for the range by framebuffer address afterwards.
         phys: u64,
-        /// `0` = [`kayfabe_vmm::Prot::ReadWrite`], `1` = [`kayfabe_vmm::Prot::ReadOnly`].
+        /// `0` = [`kayfabe_isolate::Prot::ReadWrite`], `1` = [`kayfabe_isolate::Prot::ReadOnly`].
         prot: u8,
     },
     /// ★★★★★ **w380** — [`kayfabe_isolate::RmBackend::alias_fb_leaf`], *"map an
@@ -956,30 +956,30 @@ pub const EXPORT_SOURCE_FABRICATED: u8 = 0;
 /// The wire code for [`kayfabe_isolate::ExportSource::HostDeviceMemory`].
 pub const EXPORT_SOURCE_HOST_DEVICE: u8 = 1;
 
-/// The wire code for [`kayfabe_vmm::Prot::ReadWrite`].
+/// The wire code for [`kayfabe_isolate::Prot::ReadWrite`].
 pub const PROT_READ_WRITE: u8 = 0;
-/// The wire code for [`kayfabe_vmm::Prot::ReadOnly`].
+/// The wire code for [`kayfabe_isolate::Prot::ReadOnly`].
 pub const PROT_READ_ONLY: u8 = 1;
 
-/// [`kayfabe_vmm::Prot`]'s wire code. A dedicated mapping rather than a discriminant
+/// [`kayfabe_isolate::Prot`]'s wire code. A dedicated mapping rather than a discriminant
 /// cast, for [`engine_code`]'s reason: a reordered enum must not silently re-route a
 /// protection, and the direction that fails open here is the dangerous one — a
 /// read-only run installed read-write.
 #[must_use]
-pub fn prot_code(prot: kayfabe_vmm::Prot) -> u8 {
+pub fn prot_code(prot: kayfabe_isolate::Prot) -> u8 {
     match prot {
-        kayfabe_vmm::Prot::ReadWrite => PROT_READ_WRITE,
-        kayfabe_vmm::Prot::ReadOnly => PROT_READ_ONLY,
+        kayfabe_isolate::Prot::ReadWrite => PROT_READ_WRITE,
+        kayfabe_isolate::Prot::ReadOnly => PROT_READ_ONLY,
     }
 }
 
 /// The inverse of [`prot_code`]. `None` for an unknown code — **never** a default, and
 /// specifically never a default of read-write.
 #[must_use]
-pub fn prot_from_code(code: u8) -> Option<kayfabe_vmm::Prot> {
+pub fn prot_from_code(code: u8) -> Option<kayfabe_isolate::Prot> {
     match code {
-        PROT_READ_WRITE => Some(kayfabe_vmm::Prot::ReadWrite),
-        PROT_READ_ONLY => Some(kayfabe_vmm::Prot::ReadOnly),
+        PROT_READ_WRITE => Some(kayfabe_isolate::Prot::ReadWrite),
+        PROT_READ_ONLY => Some(kayfabe_isolate::Prot::ReadOnly),
         _ => None,
     }
 }
@@ -2909,16 +2909,19 @@ mod tests {
     fn an_unknown_protection_code_is_refused_rather_than_defaulted_to_writable() {
         assert_eq!(
             prot_from_code(PROT_READ_WRITE),
-            Some(kayfabe_vmm::Prot::ReadWrite)
+            Some(kayfabe_isolate::Prot::ReadWrite)
         );
         assert_eq!(
             prot_from_code(PROT_READ_ONLY),
-            Some(kayfabe_vmm::Prot::ReadOnly)
+            Some(kayfabe_isolate::Prot::ReadOnly)
         );
         for bad in [2u8, 3, 0xFF] {
             assert_eq!(prot_from_code(bad), None, "code {bad} must not decode");
         }
-        for p in [kayfabe_vmm::Prot::ReadWrite, kayfabe_vmm::Prot::ReadOnly] {
+        for p in [
+            kayfabe_isolate::Prot::ReadWrite,
+            kayfabe_isolate::Prot::ReadOnly,
+        ] {
             assert_eq!(prot_from_code(prot_code(p)), Some(p));
         }
     }

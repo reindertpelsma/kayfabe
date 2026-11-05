@@ -671,12 +671,11 @@ RM_CONTROL/RM_ALLOC in+out. Findings:
    tail all zeros. So the ioctl writeback is NOT the bug.
 3. NO ioctl occurs between the 0xc7c0 alloc and the SIGSEGV (verified by the tracer) —
    libcuda crashes processing IN-MEMORY state.
-4. gdb: crash is a STACK SMASH — in 0x4664c0 -> 0x47acc0 -> 0x497b50 (the chain that
-   issues the 0xc7c0 RM_ALLOC), the saved rbp of 0x47acc0's frame is overwritten, so
-   on return rbp=0 and the next deref (mov -0x38(%rbp)) faults at 0x466560. The HAL
-   dispatch target (*(global+0x48))->[0x560] = 0x47acc0 is a VALID, well-behaved function.
-   Full bt: cuCtxCreate_v2 -> 0x2578390 -> 0x25931c5 -> 0x246f533/164/cd32 ->
-   0x24299f4 -> 0x2426fbd -> 0x266d49f -> 0x4664c0 -> 0x47acc0 -> 0x497b50.
+4. gdb: crash is a STACK SMASH — in the libcuda call chain that issues the 0xc7c0
+   RM_ALLOC, the saved rbp of one frame is overwritten, so on return rbp=0 and the next
+   deref faults. The HAL dispatch target is a VALID, well-behaved function.
+   (Function offsets and the full backtrace addresses were removed 2026-10-31: they are
+   offsets into a closed library.)
 
 CONCLUSION (proven): cuCtxCreate-on-Mode-2 crashes because libcuda reads the channel/GR
 compute context's MAPPED GPU memory (instance block / USERD / GR "golden" context buffer
@@ -775,13 +774,12 @@ NEXT (aligned with the docs, two tracks):
 ### M5.3 CONCLUSIVE DIAGNOSIS (2026-06-04): guest-specific corruption in the alloc path
 
 Definitive host-vs-guest comparison of the SAME libcuda function under gdb:
-- HOST (bare metal, cup2 PASSES): the compute-context fn (cuVDPAUCtxCreate+0xc0e60) runs
-  8x; at the `call *0x560(%rax)` (-> 0x47acc0 -> 0x497b50, issues the 0xc7c0 RM_ALLOC)
-  rbp is PRESERVED across every call (AT-CALL rbp == AFTER-CALL rbp == 0x7fffffffd330, eax=0).
-- GUEST (crashes): SAME fn, SAME callee 0x47acc0, SAME halobj 0x7ffff7ca1fc0; AT-CALL
-  rbp=0x...d660 -> AFTER-CALL rbp=0 (eax=0). Crash at the next deref (0x466560).
-=> The corruption is GUEST-SPECIFIC and lives INSIDE the 0x47acc0->0x497b50 RM_ALLOC path,
-   NOT a libcuda bug. Mechanism (best supported): RSP corruption (the saved-rbp stack SLOT
+- HOST (bare metal, cup2 PASSES): the compute-context function runs 8x; at the call that
+  issues the 0xc7c0 RM_ALLOC rbp is PRESERVED across every call (AT-CALL rbp == AFTER-CALL
+  rbp, eax=0).
+- GUEST (crashes): SAME function, SAME callee; AT-CALL rbp is a stack address -> AFTER-CALL
+  rbp=0 (eax=0). Crash at the next deref.
+=> The corruption is GUEST-SPECIFIC and lives INSIDE the RM_ALLOC path, NOT a libcuda bug. Mechanism (best supported): RSP corruption (the saved-rbp stack SLOT
    is never zeroed per the ==0 watchpoint, the callee 0x47acc0 has a clean push/leave, yet
    rbp returns 0 -> a stack-pointer imbalance, e.g. a variable-length stack alloc sized from
    guest-divergent GPU-read data). Driven by un-backed GR-context GPU state.

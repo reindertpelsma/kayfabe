@@ -7,8 +7,13 @@
 //! (`traces/windows_code43_walls_20261007/README.md`, "Run41 result") measured that answering
 //! `0x2081010d` alone moves Windows' StartDevice past VFIO 2861, and that neither of the other two
 //! late controls alone does, nor do the ten early ones. The control has no public name, layout or
-//! body; its retail export row declares `paramSize 0`, so a zero-filled answer carries no invented
-//! value — only the status. That status is the stub.
+//! body; the guest declares zero params bytes for it (measured, `kf_abi::hoststub`), so a
+//! zero-filled answer carries no invented value — only the status. That status is the stub.
+//!
+//! ★ 2026-10-31 (provenance fix): the answer line no longer prints the control's export flags
+//! (a value that came from a closed binary and that nothing branched on); the cell no longer
+//! carries it. The answer rule is unchanged: `NV_OK` only for the cell's id at exactly its
+//! declared params size, never for a serialized envelope.
 //!
 //! ⊘ What it never does: forward anything to the host, touch GPU state, answer a control outside
 //! the generated cell, answer before the guest declared the cell's identity, answer a serialized
@@ -82,14 +87,8 @@ impl CommandPolicy for HostStubPolicy {
         self.answered += 1;
         if self.answered <= LOG_CAP {
             eprintln!(
-                "kf-rm: HOST-STUB {:#010x} ({} msg {:#x}, retail flags {:#x}) client={:#x}: NV_OK, {} params byte(s) zeroed — host-owned stub, §S assumed #{}",
-                req.cmd,
-                stub.interface,
-                stub.message,
-                stub.export_flags,
-                req.client,
-                stub.param_size,
-                self.answered
+                "kf-rm: HOST-STUB {:#010x} ({} msg {:#x}) client={:#x}: NV_OK, {} params byte(s) zeroed — host-owned stub, §S assumed #{}",
+                req.cmd, stub.interface, stub.message, req.client, stub.param_size, self.answered
             );
         }
         Some(Reply {
@@ -183,6 +182,46 @@ mod tests {
         assert!(p.respond(&control(&w, 0x2081_010d, &[], 0)).is_some());
         p.respond(&identity(&w, "999.99"));
         assert!(p.respond(&control(&w, 0x2081_010d, &[], 0)).is_none());
+    }
+
+    /// ★ 2026-10-31 (provenance fix): the Windows-cell source tags are the published constant
+    /// table's own grammar (`consttab`): the same parser accepts every one of them.
+    #[test]
+    fn the_windows_cell_tags_parse_under_the_constant_table_grammar() {
+        let w = windows_abi().expect("580.65.06 has a wire table");
+        let v = w.driver_version();
+        let stub = kf_abi::hoststub::cell(v).expect("stub cell");
+        let rl = kf_abi::sw_runlist::cell(v).expect("runlist cell");
+        let mut n = 0;
+        for row in stub
+            .controls
+            .iter()
+            .flat_map(|c| c.rows.iter())
+            .chain(rl.rows.iter())
+        {
+            crate::consttab::parse_source(row.source)
+                .unwrap_or_else(|e| panic!("{}: {e}", row.item));
+            n += 1;
+        }
+        assert!(n >= 8, "only {n} rows");
+    }
+
+    /// ★ 2026-10-31: the answer rule is exactly the one the generated table gave - the declared
+    /// size must equal the cell's `param_size`, the id must be the cell's, and the reply is
+    /// `NV_OK` with the params zeroed; nothing reads the dropped export fields.
+    #[test]
+    fn the_answer_rule_is_the_cells_id_and_exact_declared_size() {
+        let w = windows_abi().expect("580.65.06 has a wire table");
+        let cell = kf_abi::hoststub::cell(w.driver_version()).expect("stub cell");
+        assert_eq!(cell.controls.len(), 1);
+        let s = &cell.controls[0];
+        let mut p = HostStubPolicy::new(w);
+        p.identity = true;
+        for size in 0..=8usize {
+            let params = vec![0xa5u8; size];
+            let r = p.respond(&control(&w, s.cmd, &params, 0));
+            assert_eq!(r.is_some(), size == s.param_size, "declared size {size}");
+        }
     }
 
     #[test]

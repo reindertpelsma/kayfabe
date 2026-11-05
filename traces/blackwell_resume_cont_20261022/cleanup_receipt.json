@@ -1,0 +1,19 @@
+{
+  "utc": "2026-10-21T23:40:48.872880+00:00",
+  "transferred_lease": 57117614,
+  "api_absent_ids": [
+    57099244,
+    57107585,
+    57108853,
+    57117614
+  ],
+  "original_auto_destroy_pid_absent": true,
+  "own_build_target_removed": true,
+  "own_build_processes": [],
+  "lane_acquired_host_locks": false,
+  "trusted_host_accessed": false,
+  "closed_code_inspected": false,
+  "new_rental_created_by_continuation": false,
+  "code_candidate": "e80903277",
+  "hardware_candidate_validation": "UNRUN; native Xid32 STOP, no second lease"
+}

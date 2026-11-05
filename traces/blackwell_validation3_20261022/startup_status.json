@@ -1,0 +1,9 @@
+{
+  "utc": "2026-10-22T02:22:41.121480+00:00",
+  "id": 57143789,
+  "actual_status": "created",
+  "intended_status": "running",
+  "status_msg": "success, running docker.io/vastai/kvm:ubuntu_cli_22.04-2025-05-16",
+  "cur_state": "running",
+  "dph_total": 0.7166666666666667
+}

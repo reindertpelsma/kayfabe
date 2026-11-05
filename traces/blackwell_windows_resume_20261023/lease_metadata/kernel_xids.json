@@ -1,0 +1,10 @@
+{
+  "utc": "2026-10-23T03:22:27.807298+00:00",
+  "xid_lines": [
+    "2026-10-23T03:04:59.634407+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=92537, name=kayfabe-rm-ladd, channel 0x00000002, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE2 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-10-23T03:05:02.668339+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=92537, name=kayfabe-rm-ladd, channel 0x00000002, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE3 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-10-23T03:05:05.680339+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=92537, name=kayfabe-rm-ladd, channel 0x00000003, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE2 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-10-23T03:05:08.735334+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=92537, name=kayfabe-rm-ladd, channel 0x00000002, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE2 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-10-23T03:05:12.843322+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=92594, name=kayfabe-rm-ladd, channel 0x00000003, intr 00000000. MMU Fault: ENGINE GR_HOST0 HUBCLIENT_ESC0 faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE"
+  ]
+}

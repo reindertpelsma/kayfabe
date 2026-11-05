@@ -153,7 +153,9 @@ changes config, not emitted JavaScript: `deployment.json.bundle_sha256` changes 
 emitted module changes. See the WK1 domain trace for the local dry-run hashes.
 
 [CODE READ: defaults.json, src/policy.js, src/offers.js, src/index.js] Check policy remains
-$1/hour, $6 daily, $30 rolling, $8 reserve, 75-minute boot and 180-minute hard limit.
+$1/hour, $6 daily, $30 rolling, $8 reserve, 75-minute boot and a 300-minute hard limit for the
+check profile (lane 2, 2026-11-04: Windows required on the master gate; the sweep keeps 180,
+`src/tier.js`; deploy the reaper with `REAPER_HARD_MINUTES` 300 first).
 MAX_INET_USD_PER_GB defaults to 0.005 in each direction; the offer query, admission and contract
 recheck enforce it. DENIED_COUNTRIES defaults to CU, IR, KP, SY, CN, HK, MO (owner ruling
 2026-10-24: CN, HK and MO boxes repeatedly had broken or very slow CDN/Ubuntu-mirror access) and
@@ -208,9 +210,10 @@ closed run whose destroy is still pending). Public vars, each refused as
   caps; a value above the account cap is refused, so they can only lower it.
 
 A rent over either cap gets `409 BUSY` (no Vast call); the runner retries BUSY, so at the default
-of 1 a second run waits instead of failing at once. [CODE READ: runner.py; edits3 B1] It stops
-waiting once its remaining budget (200 minutes from its start) is below `ADMISSION_NEED_SECONDS`
-(the 180-minute default hard limit plus the 5-minute margin, so at most about 15 minutes of BUSY):
+of 1 a second run waits instead of failing at once. [CODE READ: runner.py; edits3 B1; lane 2
+2026-11-04: per profile] It stops waiting once its remaining budget (check 330 / sweep 200 minutes
+from its start, `WAIT_BUDGET`) is below `ADMISSION_NEED[profile]` (the profile's default hard
+limit, 300 / 180 minutes, plus the 5-minute margin, so at most about 25 / 15 minutes of BUSY):
 state BUSY, nothing rented. If you raise `HARD_RUNTIME_MINUTES`, the Worker refuses every run
 whose budget cannot hold it (`RUNNER_TIME`); the runner constant only bounds the wait.
 The daily count, daily and rolling spend caps sum every cost row, the active runs included, and the
@@ -283,6 +286,61 @@ storage or public responses/logs. Do not put a Worker GitHub token in GitHub Act
 BLOB_ALLOWED_TAG_PREFIXES JSON array such as ["ci-image-"]. Missing/empty prefixes deny all mints.
 The Worker returns only an approved short-lived release-asset redirect URL, size and asset name.
 
+### Benchmark copy in R2 (`GET /bench-data/<run>-<attempt>/<name>`)
+
+[CODE READ: src/benchdata.js, src/sigv4.js, src/index.js; owner-approved 2026-10-31; NOT deployed
+by the code change: the coordinator deploys after review] A rented box can fetch the licensed
+SPECviewperf copy (`docs/DOWNLOADS.md`, "SPECviewperf private copy: handling rules") from the
+private R2 bucket `kayfabe-bench-enam` (ENAM, no public access, no custom domain, no `r2.dev`
+URL) with its run token and nothing else. The route is a box route: same run token, same
+live-run, hard-deadline and provider-running checks as `/blob-url`, no query string. The Worker
+answers `302` with `Cache-Control: no-store` to a presigned S3 GET URL (AWS SigV4 query signing,
+region `auto`, service `s3`, signed header `host` only) for ONE object. The names are a fixed map
+in `src/benchdata.js`; any other name is 404, and nothing lists the bucket:
+
+| Name (box asks) | R2 key |
+| --- | --- |
+| `specviewperf-15.0.0.tar.zst` | `specviewperf-15.0.0/specviewperf-15.0.0.tar.zst` |
+| `specviewperf-15.0.0.CHECKSUMS.txt` | `specviewperf-15.0.0/CHECKSUMS.txt` |
+| `specviewperf-15.0.0.SPEC_General_License.pdf` | `specviewperf-15.0.0/SPEC_General_License.pdf` |
+| `specviewperf-15.0.0.SPECviewperf-Setup.exe` | `specviewperf-15.0.0/original/SPECviewperf-Setup-15.0.0.exe` |
+
+Limits (defaults in `defaults.json`): the URL lives at most 1200 s and never past the run's next
+deadline (under 30 s left is a 401); at most 4 URLs per object per run, counted in the run
+record (the fifth is 429); there is no country gate (owner ruling 2026-11-01: the run token is the gate; a box's country is a
+rental preference only).
+A presigned URL cannot be revoked, so the run-state check happens before signing and the lifetime
+is short. Each mint logs one event `bench_data_url` with `run`, `object` and the expiry
+epoch seconds; no URL, key or signature is logged or stored.
+
+Worker secrets (never in `wrangler.toml`, never in GitHub Actions, never in a box):
+
+- `R2_READ_ACCESS_KEY_ID`, `R2_READ_SECRET_ACCESS_KEY`: a READ-ONLY S3 key pair for that one bucket.
+
+Public vars (in the deploy vars file; `deploy.mjs` allows them):
+
+- `R2_ACCOUNT_ID`: the 32-hex Cloudflare account id (the S3 endpoint is
+  `https://<R2_ACCOUNT_ID>.r2.cloudflarestorage.com`).
+- `R2_BUCKET`: `kayfabe-bench-enam`.
+
+Create the read-only token in the Cloudflare dashboard (Account > API Tokens > Create Custom
+Token, or R2 > Manage API tokens > Object Read only): permission group "Workers R2 Storage Bucket
+Item Read", resource scoped to the single bucket `kayfabe-bench-enam` (not "all buckets"), no write
+group, an expiry you can renew. The S3 pair derives from the token: the Access Key ID is the token
+id, the Secret Access Key is the SHA-256 hex digest of the token value. Compute it without
+printing the token into a shared log, then store both with the pinned CLI:
+
+```sh
+printf %s "$TOKEN_VALUE" | sha256sum | cut -d' ' -f1   # the Secret Access Key
+wrangler secret put R2_READ_ACCESS_KEY_ID
+wrangler secret put R2_READ_SECRET_ACCESS_KEY
+```
+
+The Worker uses no R2 binding and has no write capability to the bucket. The box side is
+`scripts/bench/box/fetch_bench_data.sh` (token via `curl --config` on stdin, the 302 target
+captured with `-w '%{redirect_url}'` and handed to the download on stdin, so neither the token
+nor the presigned URL reaches a command line or a log).
+
 [CODE READ: gpu-vast.yml, gpu-vast-sweep.yml, workflow-guard.js] GitHub environment gpu-vast holds
 public variable VAST_BROKER_URL=https://ci.kayfabe.dev, secret VAST_BROKER_PATH, and optional
 runner token A secrets (VAST_BROKER_ACCESS_ID and
@@ -351,7 +409,7 @@ Its key needs list and delete only: `instance_read: ["api.instances"]` (the list
 `GET /api/v1/instances/`) and `instance_write: ["api.instance"]` (`DELETE
 /api/v0/instances/<id>/`); no `api.ask`, `api.bundles` or user permission (INFERRED from the
 console permission names; a leaked reaper key can delete instances but cannot rent). Keep the
-reaper's `REAPER_HARD_MINUTES` (180) at or above the main Worker's `HARD_RUNTIME_MINUTES`; raise
+reaper's `REAPER_HARD_MINUTES` (300 since 2026-11-04, was 180) at or above the main Worker's `HARD_RUNTIME_MINUTES`; raise
 the reaper first, or it deletes live CI boxes. It has no public controls, rental
 path, broker imports or LEDGER binding, and takes no main-Worker var. Deploy first, then put the
 secret (a `secret put` before the first deploy would prompt to create the Worker):

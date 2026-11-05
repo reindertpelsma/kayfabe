@@ -1,0 +1,13 @@
+id	axis	driver	os	die	family	tag_key	how	tier	evidence
+H1	host	575.51.03	linux	AD103	Ada	575.51.03	exact	T2 unprivileged probes	traces/real_hw_20261013/
+H2	host	575.57.08	linux	GA102	Ampere	575.57.08	exact	layout+run (driver matrix)	docs/design/V3_DRIVER_MATRIX.md
+H3	host	580.65.06	linux	GA102	Ampere	580.65.06	exact	layout+run (driver matrix)	docs/design/V3_DRIVER_MATRIX.md
+H4	host	580.95.05	linux	GA102	Ampere	580.95.05	exact	layout+run (driver matrix)	docs/design/V3_DRIVER_MATRIX.md
+H5	host	580.159.04	linux	GA102	Ampere	580.159.04	exact	reference pair	docs/design/V3_DRIVER_MATRIX.md
+H6	host	580.159.04	linux	GA106	Ampere	580.159.04	exact	merge bar, constants (GA106/580 rows)	traces/merge_bar_20261008/
+H7	host	595.91.07	linux	AD104	Ada	595.91.07	exact	T2 + Linux bar (home host)	traces/constants_night_20261014/
+H8	host	595.91.07	linux	AD106	Ada	595.91.07	exact	probe (task statement)	task statement 2026-10-14
+W1	winguest	580.88	windows	AD104	Ada	580.65.06	twin-assumed	all Windows-guest runs + 5 observer captures	traces/windows_*; docs/design/V3_CONSTANT_INVENTORY_20261011.md
+W2	winguest	580.88	windows	AD103	Ada	580.65.06	twin-assumed	kfwc under stock Windows (stock driver has no GSP: mailbox pair only)	traces/real_windows_20261014/
+W3	winguest	580.88	windows	GA106	Ampere	580.65.06	twin-assumed	kfwc, GSP 580.65.05 expected	traces/constants_measure_20261014b/ga106_580.88/
+W4	winguest	596.51	windows	GA104	Ampere	595.84	decode-tag-assumed	kfwc, decoded with 595.84 tables	traces/constants_measure_20261014b/ga104_596.51/

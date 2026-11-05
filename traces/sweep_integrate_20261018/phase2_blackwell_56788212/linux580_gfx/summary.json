@@ -1,0 +1,73 @@
+{
+  "classification": "MEASURED headless graphics, native595 andguest580 are separate driveraxes",
+  "source": "24906bf334665c9000b16b271005593daa3586c7",
+  "host_driver": "595.91.07",
+  "guest_driver": "580.159.04",
+  "steps": "5/5",
+  "hashes": "10/10",
+  "logs": {
+    "dmesg_after.txt": {
+      "bytes": 9185,
+      "normalized_sha256": "6c958059251f8ef95f72f3600cb2fd34734f0797fee578bb367b0c9fa43daaf6"
+    },
+    "hostdmesg.txt": {
+      "bytes": 53,
+      "normalized_sha256": "ebeed71c5cc44ab7b9c55583db2269a982876c0fe918437afc49a38f72f9be8b"
+    },
+    "lane_receipt.txt": {
+      "bytes": 494,
+      "normalized_sha256": "2f90f9373bab4c193e2a8c7a4a6cc0c630c3cb788998a5ae40f7dc879ccaec32"
+    },
+    "qemu.txt": {
+      "bytes": 658503,
+      "normalized_sha256": "d40384965effabd32a7205b99768a20c5400ab1b85e13c359a83c7750665c202"
+    },
+    "suite.txt": {
+      "bytes": 716,
+      "normalized_sha256": "68c0046a2f3ebf60ec2a59a4a2820cf5b1ffbabae76f2ac1b8c05d35f2307864"
+    },
+    "guest_gfx.txt": {
+      "bytes": 5255,
+      "normalized_sha256": "cfd28e4aed13998711fade5dd4a07b1e792515d9b9697b201220a74ceaabb2d1"
+    },
+    "dmesg.txt": {
+      "bytes": 4929,
+      "normalized_sha256": "066d2c96141afe9178c578724003e7023bf325c2d0ba16f7c81573f3a0f9ee10"
+    },
+    "native.txt": {
+      "bytes": 5650,
+      "normalized_sha256": "a6e69b7ba1cd088a3b6609fe5f0c9fc0911120b38725981ffab108ea207cf00e"
+    },
+    "controller.txt": {
+      "bytes": 1576,
+      "normalized_sha256": "27914952f189b0be9c28ecbba2d11a740e0cca0fca8667bac66c369a07b48b33"
+    },
+    "preparation.txt": {
+      "bytes": 1355,
+      "normalized_sha256": "4b4249b7f0063e197e800f509b05998cb296a62fa61c6f92fa484846280bd7b9"
+    },
+    "boot_controller.txt": {
+      "bytes": 9947,
+      "normalized_sha256": "212b76a7d0a61e02ea46c730cbae2622d36dc9a8f8fbedb5d35487372e33b9d8"
+    },
+    "probe.txt": {
+      "bytes": 10253,
+      "normalized_sha256": "ccb9aa0300ebed0975931b92b45f14a05afba5b77ef79aea2820c6f1cc3f4aa4"
+    }
+  },
+  "dmesg.txt": {
+    "heartbeat_records": 0,
+    "xid": 0,
+    "flip_timeout": 0
+  },
+  "dmesg_after.txt": {
+    "heartbeat_records": 0,
+    "xid": 0,
+    "flip_timeout": 0
+  },
+  "hostdmesg.txt": {
+    "heartbeat_records": 0,
+    "xid": 0,
+    "flip_timeout": 0
+  }
+}

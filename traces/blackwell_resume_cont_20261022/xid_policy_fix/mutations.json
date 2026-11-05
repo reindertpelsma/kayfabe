@@ -1,0 +1,16 @@
+{
+  "ignore_unparsed_xids": {
+    "killers": [
+      "FAIL: test_malformed_xid_cannot_be_ignored_as_clean_noise (test_blackwell_capture.XidFailClosed.test_malformed_xid_cannot_be_ignored_as_clean_noise)",
+      "FAIL: test_unparsed_mmu_fault_is_fatal_even_in_exception_arm (test_blackwell_capture.XidFailClosed.test_unparsed_mmu_fault_is_fatal_even_in_exception_arm)"
+    ],
+    "count": 2
+  },
+  "accept_whole_high_prefix": {
+    "killers": [
+      "FAIL: test_arbitrary_channel_under_the_high_prefix_is_fatal (test_blackwell_capture.XidFailClosed.test_arbitrary_channel_under_the_high_prefix_is_fatal)",
+      "FAIL: test_high_channel_must_have_only_an_eight_bit_suffix (test_blackwell_capture.XidFailClosed.test_high_channel_must_have_only_an_eight_bit_suffix)"
+    ],
+    "count": 2
+  }
+}

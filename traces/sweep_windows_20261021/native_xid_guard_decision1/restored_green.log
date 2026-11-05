@@ -1,0 +1,23 @@
+test_changed_defer_address_is_fatal (test_native_xid_guard.NativeXidGuardTests.test_changed_defer_address_is_fatal) ... ok
+test_changed_defer_channel_is_fatal (test_native_xid_guard.NativeXidGuardTests.test_changed_defer_channel_is_fatal) ... ok
+test_changed_fault_type_is_fatal (test_native_xid_guard.NativeXidGuardTests.test_changed_fault_type_is_fatal) ... ok
+test_changed_missing_page_address_is_fatal (test_native_xid_guard.NativeXidGuardTests.test_changed_missing_page_address_is_fatal) ... ok
+test_changed_missing_page_channel_is_fatal (test_native_xid_guard.NativeXidGuardTests.test_changed_missing_page_channel_is_fatal) ... ok
+test_channels_are_derived_from_this_runs_doorbell_records (test_native_xid_guard.NativeXidGuardTests.test_channels_are_derived_from_this_runs_doorbell_records) ... ok
+test_duplicate_matching_native_fault_is_fatal (test_native_xid_guard.NativeXidGuardTests.test_duplicate_matching_native_fault_is_fatal) ... ok
+test_identical_frozen_snapshot_is_accepted (test_native_xid_guard.NativeXidGuardTests.test_identical_frozen_snapshot_is_accepted) ... ok
+test_later_matching_native_fault_is_still_new_and_fatal (test_native_xid_guard.NativeXidGuardTests.test_later_matching_native_fault_is_still_new_and_fatal) ... ok
+test_missing_fault_marker_is_fatal (test_native_xid_guard.NativeXidGuardTests.test_missing_fault_marker_is_fatal) ... ok
+test_missing_kernel_fault_records_cannot_look_clean (test_native_xid_guard.NativeXidGuardTests.test_missing_kernel_fault_records_cannot_look_clean) ... ok
+test_missing_positive_recovery_is_fatal (test_native_xid_guard.NativeXidGuardTests.test_missing_positive_recovery_is_fatal) ... ok
+test_qemu_fault_cannot_use_native_exemption (test_native_xid_guard.NativeXidGuardTests.test_qemu_fault_cannot_use_native_exemption) ... ok
+test_same_count_replacement_with_other_address_is_fatal (test_native_xid_guard.NativeXidGuardTests.test_same_count_replacement_with_other_address_is_fatal) ... ok
+test_same_count_replacement_with_xid32_is_fatal (test_native_xid_guard.NativeXidGuardTests.test_same_count_replacement_with_xid32_is_fatal) ... ok
+test_source_matched_five_faults_are_accepted (test_native_xid_guard.NativeXidGuardTests.test_source_matched_five_faults_are_accepted) ... ok
+test_unmatched_xid32_in_defer_still_stops (test_native_xid_guard.NativeXidGuardTests.test_unmatched_xid32_in_defer_still_stops) ... ok
+test_unmatched_xid32_in_missing_page_still_stops (test_native_xid_guard.NativeXidGuardTests.test_unmatched_xid32_in_missing_page_still_stops) ... ok
+
+----------------------------------------------------------------------
+Ran 18 tests in 0.007s
+
+OK

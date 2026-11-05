@@ -1,0 +1,108 @@
+{
+  "utc": "2026-10-20T20:40:19.138571+00:00",
+  "source": "772c7b81b167fa7fbe7e7f53e4ad0263de80e01b",
+  "mutants": [
+    {
+      "name": "remove_public_CFFA",
+      "returncode": 101,
+      "compiled": true,
+      "killing_tests": [
+        "capability::tests::nvofa_cffa_570_constructor_is_admitted",
+        "capability::tests::nvofa_cffa_580_constructor_is_admitted",
+        "capability::tests::nvofa_cffa_580_inventory_has_public_name_once"
+      ],
+      "killers": 3,
+      "log_sha256": "3e56abc2e18d90ef00a831a9ee19a3053824bc28e1e9bd46363e564eb639a231"
+    },
+    {
+      "name": "remove_notifier196_stub",
+      "returncode": 101,
+      "compiled": true,
+      "killing_tests": [
+        "blackwell_windows_gc6_reduced_threshold_arming_is_a_ruled_stub",
+        "the_ruled_list_is_pinned_cited_disjoint_and_served"
+      ],
+      "killers": 2,
+      "log_sha256": "a75aaf6868194cb9a52c1f24f8ecaac5a34070264b8deec6eefdd1617627466b"
+    },
+    {
+      "name": "remove_exact_GB202_measurement",
+      "returncode": 101,
+      "compiled": true,
+      "killing_tests": [
+        "the_gb206_580_caps_word_requires_its_own_native_measurement",
+        "gb202_branch580_has_its_own_measured_caps_word"
+      ],
+      "killers": 2,
+      "log_sha256": "7dce13563fea5e29579af02933ad2ee87a75bef9236003af1037fa81085b6b8c"
+    },
+    {
+      "name": "misassign_GB202_measurement_to_GB203",
+      "returncode": 101,
+      "compiled": true,
+      "killing_tests": [
+        "an_unmeasured_die_gets_the_clean_page_and_the_notice_never_a_neighbours_row",
+        "the_gb206_580_caps_word_requires_its_own_native_measurement",
+        "gb202_branch580_has_its_own_measured_caps_word"
+      ],
+      "killers": 3,
+      "log_sha256": "7bdd3d7be2202f1d57375774a3af24b980f0d0c6bd3054a93f171a26567fcf22"
+    },
+    {
+      "name": "remove_Blackwell_report_family",
+      "returncode": 101,
+      "compiled": true,
+      "killing_tests": [
+        "grtables::tests::blackwell_a_release_shape_and_wide_upper_are_carried",
+        "grtables::tests::blackwell_3d_report_semaphore_rows_are_admitted_from_the_vendor_public_header"
+      ],
+      "killers": 2,
+      "log_sha256": "1f2cdf4a79a502030b9c6009981ed0423348be27110caf069762f23ceefb4d41"
+    },
+    {
+      "name": "narrow_Blackwell_report_upper",
+      "returncode": 101,
+      "compiled": true,
+      "killing_tests": [
+        "grtables::tests::blackwell_a_release_shape_and_wide_upper_are_carried",
+        "grtables::tests::blackwell_3d_report_semaphore_rows_are_admitted_from_the_vendor_public_header"
+      ],
+      "killers": 2,
+      "log_sha256": "1d11f4b307e9fb3ac496a72add58f36b9b037103fc2865a03fce65ebd925e70b"
+    },
+    {
+      "name": "remove_POSTCOMP_derivation",
+      "returncode": 101,
+      "compiled": true,
+      "killing_tests": [
+        "every_virtual_tile_has_the_postcomp_pipe_nvkms_asserts",
+        "the_committed_family_rows_are_the_derivation"
+      ],
+      "killers": 2,
+      "log_sha256": "f38bf41221e72e044b46609854788ec468df978ac08e0b12b8b8e3ecc8fca240"
+    },
+    {
+      "name": "omit_POSTCOMP_DSC",
+      "returncode": 101,
+      "compiled": true,
+      "killing_tests": [
+        "every_virtual_tile_has_the_postcomp_pipe_nvkms_asserts",
+        "the_committed_family_rows_are_the_derivation"
+      ],
+      "killers": 2,
+      "log_sha256": "0cf33e9008b5c2e74789dd00e626f77c773f812d6fca7cb289a163a487608275"
+    },
+    {
+      "name": "claim_POSTCOMP_scaler",
+      "returncode": 101,
+      "compiled": true,
+      "killing_tests": [
+        "every_virtual_tile_has_the_postcomp_pipe_nvkms_asserts",
+        "the_committed_family_rows_are_the_derivation"
+      ],
+      "killers": 2,
+      "log_sha256": "1bbe91be6b8679c43678b1b1637b5f164d96593325a86ee9bc98be778455aee2"
+    }
+  ],
+  "source_restored": true
+}

@@ -39,4 +39,8 @@ the **source rule** (§1: data comes only from listed sources, and the tag prove
 
 - Before a public release the whole git history (not only the tree) is searched for analysis material and closed-binary offsets.
 - The control table is checked by CI for source tags (no `blob`, every entry tagged).
+- Added 2026-10-31: the Windows-cell tables (`crates/kf-abi/src/hoststub.rs`, `sw_runlist.rs`) carry a source tag per item and
+  `crates/kf-abi/tests/windows_cell_provenance.rs` fails the build on a missing tag, on a tag that is not `ogkm-<version>:<ref>`,
+  `measured:<DIE>,<driver>,<date>` or `host-derived:<ref>` (a binary, `re` or `blob` origin is refused), and on a cited trace line that
+  does not exist or does not show the value.
 - This page is reviewed by a lawyer before it is published.

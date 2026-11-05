@@ -1,0 +1,121 @@
+# last 120 lines (trimmed)
+Setting up libgcc-12-dev:amd64 (12.3.0-1ubuntu1~22.04.3) ...
+Setting up libllvm14:amd64 (1:14.0.0-1ubuntu1.1) ...
+Setting up libgcc-11-dev:amd64 (11.4.0-1ubuntu1~22.04.3) ...
+Setting up gcc-11 (11.4.0-1ubuntu1~22.04.3) ...
+Setting up libc6-dev:amd64 (2.35-0ubuntu3.15) ...
+Setting up llvm-14-linker-tools (1:14.0.0-1ubuntu1.1) ...
+Setting up libicu-dev:amd64 (70.1-2) ...
+Setting up llvm-14-tools (1:14.0.0-1ubuntu1.1) ...
+Setting up libncurses-dev:amd64 (6.3-2ubuntu0.3) ...
+Setting up libobjc-11-dev:amd64 (11.4.0-1ubuntu1~22.04.3) ...
+Setting up libclang1-14 (1:14.0.0-1ubuntu1.1) ...
+Setting up libxml2-dev:amd64 (2.9.13+dfsg-1ubuntu0.14) ...
+Setting up llvm-14-runtime (1:14.0.0-1ubuntu1.1) ...
+Setting up gcc-12 (12.3.0-1ubuntu1~22.04.3) ...
+Setting up libclang-common-14-dev (1:14.0.0-1ubuntu1.1) ...
+Setting up libclang-cpp14 (1:14.0.0-1ubuntu1.1) ...
+Setting up lld-14 (1:14.0.0-1ubuntu1.1) ...
+Setting up libstdc++-11-dev:amd64 (11.4.0-1ubuntu1~22.04.3) ...
+Setting up llvm-14 (1:14.0.0-1ubuntu1.1) ...
+Setting up libtinfo-dev:amd64 (6.3-2ubuntu0.3) ...
+Setting up clang-14 (1:14.0.0-1ubuntu1.1) ...
+Setting up g++-11 (11.4.0-1ubuntu1~22.04.3) ...
+Setting up lld:amd64 (1:14.0-55~exp2) ...
+Setting up clang (1:14.0-55~exp2) ...
+Setting up llvm-14-dev (1:14.0.0-1ubuntu1.1) ...
+Processing triggers for libc-bin (2.35-0ubuntu3.9) ...
+Processing triggers for ufw (0.36.1-4ubuntu0.1) ...
+Processing triggers for man-db (2.10.2-1) ...
+Processing triggers for install-info (6.8-4build1) ...
+Processing triggers for initramfs-tools (0.140ubuntu13.4) ...
+update-initramfs: Generating /boot/initrd.img-6.8.0-59-generic
+NEEDRESTART-VER: 3.5
+NEEDRESTART-KCUR: 6.8.0-59-generic
+NEEDRESTART-KEXP: 6.8.0-59-generic
+NEEDRESTART-KSTA: 1
+NEEDRESTART-SVC: containerd.service
+NEEDRESTART-SVC: cron.service
+NEEDRESTART-SVC: dbus.service
+NEEDRESTART-SVC: docker.service
+NEEDRESTART-SVC: getty@tty1.service
+NEEDRESTART-SVC: irqbalance.service
+NEEDRESTART-SVC: multipathd.service
+NEEDRESTART-SVC: networkd-dispatcher.service
+NEEDRESTART-SVC: packagekit.service
+NEEDRESTART-SVC: polkit.service
+NEEDRESTART-SVC: qemu-guest-agent.service
+NEEDRESTART-SVC: rsyslog.service
+NEEDRESTART-SVC: serial-getty@ttyS0.service
+NEEDRESTART-SVC: switcheroo-control.service
+NEEDRESTART-SVC: systemd-journald.service
+NEEDRESTART-SVC: systemd-logind.service
+NEEDRESTART-SVC: systemd-manager
+NEEDRESTART-SVC: systemd-networkd.service
+NEEDRESTART-SVC: systemd-resolved.service
+NEEDRESTART-SVC: systemd-timesyncd.service
+NEEDRESTART-SVC: systemd-udevd.service
+NEEDRESTART-SVC: user@0.service
+info: downloading installer
+info: profile set to minimal
+info: default host tuple is x86_64-unknown-linux-gnu
+info: syncing channel updates for stable-x86_64-unknown-linux-gnu
+info: latest update on 2026-10-15 for version 1.99.1 (58cf8f9c3 2026-10-13)
+info: downloading 3 components
+info: default toolchain set to stable-x86_64-unknown-linux-gnu
+
+  stable-x86_64-unknown-linux-gnu installed - rustc 1.99.1 (58cf8f9c3 2026-10-13)
+
+
+Rust is installed now. Great!
+
+To get started you may need to restart your current shell.
+This would reload your PATH environment variable to include
+Cargo's bin directory ($HOME/.cargo/bin).
+
+To configure your current shell, you need to source the
+corresponding env file under $HOME/.cargo.
+
+Consider running the right command for your shell (note the leading DOT):
+. "$HOME/.cargo/env" # For sh/ash/dash/pdksh/bash
+cargo:rerun-if-env-changed=CC_x86_64-unknown-linux-gnu
+CC_x86_64-unknown-linux-gnu = None
+cargo:rerun-if-env-changed=CC_x86_64_unknown_linux_gnu
+CC_x86_64_unknown_linux_gnu = None
+cargo:rerun-if-env-changed=HOST_CC
+HOST_CC = None
+cargo:rerun-if-env-changed=CC
+CC = None
+cargo:rerun-if-env-changed=CC_ENABLE_DEBUG_OUTPUT
+cargo:rerun-if-env-changed=CPATH
+cargo:rerun-if-env-changed=C_INCLUDE_PATH
+cargo:rerun-if-env-changed=CPLUS_INCLUDE_PATH
+cargo:rerun-if-env-changed=OBJC_INCLUDE_PATH
+cargo:rerun-if-env-changed=OBJCPLUS_INCLUDE_PATH
+cargo:rerun-if-env-changed=COMPILER_PATH
+cargo:rerun-if-env-changed=SOURCE_DATE_EPOCH
+cargo:rerun-if-env-changed=GCC_EXEC_PREFIX
+cargo:rerun-if-env-changed=CRATE_CC_NO_DEFAULTS
+CRATE_CC_NO_DEFAULTS = None
+cargo:rerun-if-env-changed=CFLAGS
+CFLAGS = None
+cargo:rerun-if-env-changed=HOST_CFLAGS
+HOST_CFLAGS = None
+cargo:rerun-if-env-changed=CFLAGS_x86_64_unknown_linux_gnu
+CFLAGS_x86_64_unknown_linux_gnu = None
+cargo:rerun-if-env-changed=CFLAGS_x86_64-unknown-linux-gnu
+CFLAGS_x86_64-unknown-linux-gnu = None
+PROVISION_REPO=/root/kayfabe branch=claude/die-coverage-blackwell-pin-20261104 rev=0c515b3b3
+HEAD=0c515b3b3 branch=claude/die-coverage-blackwell-pin-20261104
+KF_SETUP_TIMING phase=rust_toolchain event=start utc=1793751230
+KF_SETUP_TIMING phase=rust_toolchain event=end utc=1793751244
+KF_SETUP_TIMING phase=rust_targets event=start utc=1793751244
+info: downloading component rust-std
+x86_64-unknown-linux-musl ADDED for 1.99.0
+info: downloading component rust-std
+x86_64-unknown-uefi ADDED for 1.99.0
+KF_SETUP_TIMING phase=rust_targets event=end utc=1793751256
+KF_SETUP_TIMING phase=workspace_build event=start utc=1793751256
+KF_SETUP_TIMING phase=workspace_build event=end utc=1793751280
+CARGO_RC=0
+PROVISION_DONE rc=0 2026-11-04T00:14:40+00:00

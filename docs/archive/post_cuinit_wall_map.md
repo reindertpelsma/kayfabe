@@ -558,7 +558,7 @@ them in `DriverAbiTable::control_params` (`rs: crates/kayfabe-abi/src/versions.r
 four shapes only: `SET_PAGE_DIRECTORY`, `GPU_PROMOTE_CTX`, `VASPACE_COPY_SERVER_RESERVED_PDES`,
 `UNSET_PAGE_DIRECTORY`). ⇒ all three refused today.
 
-★ **The values need not be derived.** `[measured 2026-08-01, real GA106 GPU-d0913685, driver
+★ **The values need not be derived.** `[measured 2026-08-01, real GA106 GPU-fa4e0001, driver
 580.159.04]` `rs: traces/real_ga106/rmladder_r18_cecaps_real_ga106.txt` records `0x20802a0a`
 answering `NV_OK` with 136 bytes beginning `e3 03 e3 03 e2 03 e2 03` — `{0x3e3, 0x3e3, 0x3e2, 0x3e2}`,
 byte-identical to the C's Wall-B values from an independent measurement. The same file records the

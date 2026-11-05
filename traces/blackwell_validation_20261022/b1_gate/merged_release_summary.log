@@ -1,0 +1,120 @@
+     Running unittests src/lib.rs (TARGET/release/deps/kf_chan-f6cc2223d93f2309)
+test result: ok. 211 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+     Running tests/channel_formats_vs_ogkm.rs (TARGET/release/deps/channel_formats_vs_ogkm-82a3b41b31e5c7af)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/dbfast_bench.rs (TARGET/release/deps/dbfast_bench-6c0a8470f2f71d4b)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/dbfast_exhaust.rs (TARGET/release/deps/dbfast_exhaust-99610073d5db3613)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+     Running tests/dbfast_kvm.rs (TARGET/release/deps/dbfast_kvm-f0a8b5a1f79b3344)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.06s
+     Running tests/handoff_protocol.rs (TARGET/release/deps/handoff_protocol-16754a569c9413e3)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.55s
+     Running tests/notifiers_vs_ogkm.rs (TARGET/release/deps/notifiers_vs_ogkm-e67e63356ec30a9c)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/relay_fairness.rs (TARGET/release/deps/relay_fairness-9d8cff83ed0b97bb)
+test result: ok. 35 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 73.23s
+     Running tests/ring.rs (TARGET/release/deps/ring-cc2263bb66b3fd81)
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/tmode.rs (TARGET/release/deps/tmode-bdc2d57d7c4e0329)
+test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+     Running tests/translated_rewrite.rs (TARGET/release/deps/translated_rewrite-9981015a2c3469ed)
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/translated_ring_rc.rs (TARGET/release/deps/translated_ring_rc-3590d72ff0260c27)
+test result: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/user_consumption_model.rs (TARGET/release/deps/user_consumption_model-4ef398aac07acae9)
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/user_gate_rules.rs (TARGET/release/deps/user_gate_rules-a06175a706a59a56)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+     Running tests/user_lazy_model.rs (TARGET/release/deps/user_lazy_model-2238cdf3f3075c4c)
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/user_lazy_turn.rs (TARGET/release/deps/user_lazy_turn-1163226883d83775)
+test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/user_lifecycle_model.rs (TARGET/release/deps/user_lifecycle_model-f94d8315736e0d2a)
+test result: ok. 63 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 540.68s
+     Running tests/user_lifecycle_props.rs (TARGET/release/deps/user_lifecycle_props-0a61ce9804dc9f68)
+test result: ok. 38 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.03s
+     Running tests/user_lifecycle_stress.rs (TARGET/release/deps/user_lifecycle_stress-a22e3fa825a9e7f7)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.03s
+     Running tests/user_loop_model.rs (TARGET/release/deps/user_loop_model-94bc4abc81a6a04d)
+test result: ok. 38 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 101.07s
+     Running tests/user_loop_model_v2.rs (TARGET/release/deps/user_loop_model_v2-d218fc0ddf4afa13)
+test result: ok. 53 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 231.74s
+     Running tests/user_loop_model_v3_pointer.rs (TARGET/release/deps/user_loop_model_v3_pointer-a76665b9fa34d873)
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.77s
+     Running tests/user_progress_model.rs (TARGET/release/deps/user_progress_model-b389ed3206f87bd0)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/user_ring_model.rs (TARGET/release/deps/user_ring_model-a7febc8b8c69c227)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/user_stream_model.rs (TARGET/release/deps/user_stream_model-e21836a68ebca563)
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/user_turn_unit.rs (TARGET/release/deps/user_turn_unit-39c7701894dec1d6)
+test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/lib.rs (TARGET/release/deps/kf_harness-2e6fda49dd5b91f4)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-ctl-probe.rs (TARGET/release/deps/kf_ctl_probe-0e65df3552da4718)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-deferred-update-probe.rs (TARGET/release/deps/kf_deferred_update_probe-fe243fbf24574e5c)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-encoder-session-probe.rs (TARGET/release/deps/kf_encoder_session_probe-987f4d33048608c6)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-gate1.rs (TARGET/release/deps/kf_gate1-2c2765085037daa7)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-gate2.rs (TARGET/release/deps/kf_gate2-3ec94f8db474f0d1)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-gate3.rs (TARGET/release/deps/kf_gate3-97153649f19d6445)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-gate4.rs (TARGET/release/deps/kf_gate4-0c194c15eef3d866)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-gate5.rs (TARGET/release/deps/kf_gate5-e2e3473c1abcb025)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-gate6.rs (TARGET/release/deps/kf_gate6-6184fbabc1f5f724)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-gate7.rs (TARGET/release/deps/kf_gate7-73c96ad7dcde10d4)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-gate8.rs (TARGET/release/deps/kf_gate8-5c2aeceac67454df)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-gate9.rs (TARGET/release/deps/kf_gate9-3b126481e57082e3)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-gr-tier.rs (TARGET/release/deps/kf_gr_tier-90c5179479ea0a26)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-micro-reserve-probe.rs (TARGET/release/deps/kf_micro_reserve_probe-9e46a11e4830a5d5)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-nvdec-context.rs (TARGET/release/deps/kf_nvdec_context-384cb83c70f3e31e)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-phys-oracle.rs (TARGET/release/deps/kf_phys_oracle-f777d7988104f4b1)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-rc-journal-probe.rs (TARGET/release/deps/kf_rc_journal_probe-e349ca50685d8876)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-syncwait-stress.rs (TARGET/release/deps/kf_syncwait_stress-d12a48240c4bc03c)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-timer-probe.rs (TARGET/release/deps/kf_timer_probe-0b8120aea17b79a7)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-user-ring-probe.rs (TARGET/release/deps/kf_user_ring_probe-b64e62a2a60124ae)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-video-semaphore-probe.rs (TARGET/release/deps/kf_video_semaphore_probe-41ac0b75c56c2eea)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/lib.rs (TARGET/release/deps/kf_qemu-377a752895ad55b0)
+test result: ok. 415 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.29s
+     Running tests/bar0_trace_gate.rs (TARGET/release/deps/bar0_trace_gate-e3d471b4661a0e40)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/channel_budget_lazy.rs (TARGET/release/deps/channel_budget_lazy-ec5fa56db5cc9893)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running tests/doorbell_no_put_poll.rs (TARGET/release/deps/doorbell_no_put_poll-5f86002b9ff83782)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/gop_rom_knobs.rs (TARGET/release/deps/gop_rom_knobs-57bcaeeaf6355467)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+     Running tests/gpu_uuid_property.rs (TARGET/release/deps/gpu_uuid_property-1e0ed5ffe30b65e0)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/kf3_realize_discard.rs (TARGET/release/deps/kf3_realize_discard-fcc50f41c20ae44e)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/max_fps_property.rs (TARGET/release/deps/max_fps_property-afaee3d4601929b8)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/wire_mirror.rs (TARGET/release/deps/wire_mirror-57e3b715fa58248a)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+   Doc-tests kf_chan
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests kf_harness
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests kf_qemu
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

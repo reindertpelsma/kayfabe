@@ -1,0 +1,4 @@
+CHAIN_START dcgb206 2026-11-04T00:47:35+00:00
+WINLANE_TIMING total=2469s box=188s guest_run=5s driver=211s tree=259s kf3=12s prereqs=18s install_windows=1776s
+WINLANE_EXIT rc=0 2026-11-04T00:52:41+00:00
+CHAIN_EXIT rc=0 2026-11-04T01:35:52+00:00

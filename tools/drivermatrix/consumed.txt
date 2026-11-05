@@ -393,3 +393,6 @@ ctrl_cmds:NV906F_CTRL_CMD_GET_MMU_FAULT_INFO
 # ── 2026-10-08 (x11-dispsw at host 595.91.07): kf-host's display-SW twin readback ──
 NV906F_CTRL_GET_CLASS_ENGINEID_PARAMS.*
 host_chan_cmds:NV906F_CTRL_GET_CLASS_ENGINEID
+# Production per-VM identity query (all 30 measured tags compiled, 2026-10-15).
+NV2080_CTRL_GPU_GET_GID_INFO_PARAMS.*
+ctrl_cmds:NV2080_CTRL_CMD_GPU_GET_GID_INFO

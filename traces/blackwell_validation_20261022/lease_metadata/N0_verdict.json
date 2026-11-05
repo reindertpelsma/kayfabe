@@ -1,0 +1,15 @@
+{
+  "status": "PASS",
+  "product": "8f3a9bb3a5d652b3f536ca015bf95735ec588924",
+  "die": "GB202",
+  "driver": "595.91.07 open",
+  "gates": "9/9 +10",
+  "raw": "30/30",
+  "cuda": "4/4",
+  "native_gr_ce": "PASS",
+  "intentional_source_verified_xid31": 5,
+  "unmatched_xids": 0,
+  "native32_recurred": false,
+  "sample_count": 1,
+  "causality": "supports allocated-class fixture hypothesis; not proof across runs"
+}

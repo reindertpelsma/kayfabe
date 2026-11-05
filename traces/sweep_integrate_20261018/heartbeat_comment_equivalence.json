@@ -1,0 +1,7 @@
+{
+  "path": "crates/kf-gsp/src/boot.rs",
+  "tested_source": "7e9145ff8d5ea8a238e34064b7636024ed0d62c8",
+  "non_comment_code_sha256_before": "8f77fffff2eef36f75ba0390688717430774bb6a50cdc1e907a13be139e61483",
+  "non_comment_code_sha256_after": "8f77fffff2eef36f75ba0390688717430774bb6a50cdc1e907a13be139e61483",
+  "non_comment_code_identical": true
+}

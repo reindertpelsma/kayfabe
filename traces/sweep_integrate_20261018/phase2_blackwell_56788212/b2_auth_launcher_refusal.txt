@@ -1,0 +1,5 @@
+INTERACTIVE_START kf3=24906bf3 checkout=24906bf3 2026-10-19T21:22:57+00:00
+[interactive] session: kfbench (uid 1002) session c1 type=x11 wayland=none x=:0; locked=no
+Authorization required, but no authorization protocol specified
+nvkvm-broker: ERROR: xcb_connect failed (DISPLAY=:0)
+[interactive] ★ the broker did not create /run/user/1002/nvkvm/display.sock (log: /workspace/sweep-b2-56788212/baseline/broker.log)

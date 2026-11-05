@@ -1,7 +1,38 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
-**STATUS: LIVE, 2026-10-22.** The newest UPDATE below is the resume point; the sections after
+**STATUS: LIVE, 2026-11-04.** The newest UPDATE below is the resume point; the sections after
 it are dated checkpoints, kept as history.
+
+## UPDATE 2026-11-04 — Windows is required on the gpu-vast master gate (lane 2)
+
+Branch `claude/gate-windows-required-20261104`, PR #250 against `next` (its parents #242-#247 are in next via #248).
+Design: `docs/design/V3_CI_VAST_GPU_20261021.md` (lane 2 section), `docs/design/V3_WINDOWS_GATE.md` §0.
+Evidence: `traces/gate_windows_ci_20261104/README.md`.
+- CODE READ: the Worker profile `check` sends `KF_MERGE_WINDOWS=1` (`ci/vast-broker/src/tier.js`). The payload runs
+  `windows_gate` as the last stage, and only `WINDOWS_GATE_PASS` passes. RETRY is a failing `windows_retry_<class>` row,
+  and the check fails with "GPU gate RETRY". Check hard limit 300 min, sweep 180, runner 330/200, job 345/step 340,
+  reaper 300.
+- MEASURED (runs 41746194587 and 41746861215, 2026-11-04): two deployment-state blockers, both outside this change.
+  (1) The deployed Worker (07a0d4eb) differed from master's pin (2828bf41), so every master-PR run was rejected by
+  runner.py line 644 after the Worker had rented. The coordinator redeployed 2828bf41.
+  (2) Next's `Cargo.lock` and package policy had drifted from `scripts/ci/setup-cache.lock.json` since
+  2026-10-31, so every next tree failed `KF_SETUP_CACHE_REFUSED` on a Worker box. A new cache
+  (`setup-cache-jammy-amd64-20261104-v1`, now with the Windows packages) is published, and
+  `scripts/ci/test_vast_setup_lock_fresh.py` now catches the drift in GPU-free CI.
+- Owed by the coordinator after the merge: deploy the reaper (300) first, then Worker bundle
+  `d6bd6b363fc04592dc18d7f607178c981bb97983ce36b5c4037bafda1a337b0a`. master's runner must carry the matching pin,
+  and the 330-minute budget must be on master before the 300-minute Worker goes live, or master PRs get
+  `NOT_ELIGIBLE RUNNER_TIME`.
+
+## UPDATE 2026-11-04 — platform testing and the public status site (lane 1, design + code, not deployed)
+
+DESIGN-ONLY: [V3_PLATFORM_TESTING.md](design/V3_PLATFORM_TESTING.md) records the owner's
+2026-11-04 design: the Worker as platform testing infrastructure decoupled from CI, the three
+tiers, a read-only public API at `api.kayfabe.dev` over one shared D1 database, public redacted
+logs, and the status pages at `kayfabe.dev/status/`. Branch `claude/platform-status-20261104`
+builds the public API, the schema and the pages against synthetic data only; deployment steps are
+in that document's §12. This entry is scoped to that lane; it is not a resume point for the
+product.
 
 ## UPDATE 2026-10-22 — Vast broker callbacks, mock validation only
 
@@ -1676,6 +1707,8 @@ answered, Windows takes a further path and a third GR channel dies on an unbound
 earlier. **Stopped for two owner decisions** (the inert-subchannel software method `0x200`; B).
 [Runs 44-46 and the stop](../traces/windows_code43_walls_20261007/README.md#stop-owner-decisions-are-needed-2026-10-07-after-run46).
 
+> **Correction, 2026-10-31 (provenance fix).** The paragraph below says the `0x2081010d` id is "confirmed by the pinned retail driver's export row" via `tools/windows-ctrl-export/derive.py` and that "the retail flags say the control is NON_PRIVILEGED". Both are withdrawn: the tool is deleted, `crates/kf-abi/src/hoststub.rs` is a hand-maintained table whose message `0xd` and params size `0` are `measured:` rows citing `traces/windows_code43_walls_20261007/run41-requests.log:95` and `run53-requests.log:526`, and the control's per-control privilege is unknown from public sources (`docs/OWNER_RULINGS.md` §S, correction above that entry). Behaviour is unchanged; the Windows path is UNVERIFIED on hardware after this change and rests on unit tests until a Windows run (owner ruling 2026-10-31: no merge to master before that).
+
 **Runs 38-43, 2026-10-07 (branch `claude/code43-stubs-20261007`; answers the next paragraph's
 "stopped for an owner decision" on the 13 queries, under the coordinator's relay of the owner's §S
 statement).** A bisect (runs 38-41) found the minimal set: `0x2081010d` alone moves StartDevice past
@@ -1818,7 +1851,7 @@ the handler only resolves passthrough group members. Next: apply the authored
 host control to Translated members off the GSP lock. This handler change is now
 implemented;101 kf-qemu tests pass, zero new Clippy debt. Run19 at f6aa9d2e
 applies4000us on the actual owned host group; a06c0103 returns0 and watchdog
-hint e38498 disappears. Code43/smi9 persist. Next: kernel GR channels are
+hint site-053 disappears. Code43/smi9 persist. Next: kernel GR channels are
 acknowledged without birth, then GPU_PROMOTE_CTX refuses. Capture exact inline
 promotion entries before implementing a real owned unprivileged GR context.
 The default-off observer is implemented with16 records of at most16 entries;
@@ -1863,7 +1896,7 @@ drops that relation and returns INVALID_STATE before any host channel creation.
 The adjacent 0080170e query is FIFO latency-buffer sizing, also unsupported.
 Code43 persists; run14 retains the same24 saved assertions as run13. This is
 source-backed diagnosis, not a functional repair or proof tying either RPC to
-assertion1a103e6. [Exact decodings/evidence](../traces/windows_exact_decode_20261007/README.md).
+assertion site-018. [Exact decodings/evidence](../traces/windows_exact_decode_20261007/README.md).
 
 **Latest checkpoint, 2026-10-06:** product `74cd590c` implements GPU TMO and
 indexed CSC tables under the existing opt-in colour flag. The strict Linux
@@ -1875,8 +1908,8 @@ The owner clarified that broader table formats and chroma-correction controls
 must also gain real processing; this checkpoint is not the intended endpoint.
 Windows run13 at `74cd590c` still reports Code43, but reaches 8,330 display
 methods (zero UPDATEs/scanouts) rather than zero methods. Its fresh watchdog
-changes after the same first 17 assertions: `0x169d836` is replaced by
-`0x1a103e6`; no interpretation as an NV_STATUS or completed initialization.
+changes after the same first 17 assertions: `site-044` is replaced by
+`site-018`; no interpretation as an NV_STATUS or completed initialization.
 Product `8dde9b51` additionally executes variable tone segments and 65..1025
 sample tables; GPU fixtures pass, including exact compact extents and hostile
 header rejection. Product `00220cc6` adds real DIRECT8 input/output lookup; all eight SDR GPU
@@ -1917,8 +1950,8 @@ SDR rendering and working gamma do not establish a TMO buffer.
 
 Windows run 12 with implemented DIRECT10 surface-loading declarations still
 has Code 43 / smi exit 9 and zero display methods. Its fresh dump reaches
-`0x169d836`: the display-buffer precondition path, statically pointing to a
-zero-sized TMO descriptor with TMO absent (no live size captured). Do not
+`site-044`: the display-buffer precondition path; the leading hypothesis (an inference)
+is a zero-sized TMO descriptor with TMO absent (no live size captured). Do not
 reintroduce a fake TMO capability. Next Windows work needs a supported path
 avoiding TMO or real bounded TMO processing, with further walls possible.
 Complete dump records remain usable; outer NVCD is one byte short.
@@ -1964,7 +1997,7 @@ See [review and evidence](../traces/antigravity_review_20261006/README.md).
 The controlled O Windows run `boundary-kayfabe-10` completed: Code 43 /
 `nvidia-smi` exit 9 remains, but 455 RPCs (N: 365) now reach the probe's explicit
 display-method refusals. The fresh dump's first changed assertion moved from
-`0x16e9967` to `0x1a103e6`; the first 17 of 24 complete saved assertions match N.
+`site-011` to `site-018`; the first 17 of 24 complete saved assertions match N.
 Outer NVCD remains one byte short, so its checksum cannot be validated. The guest
 shut down cleanly, supervisor exit zero, RTX 4070 healthy, no VM or NBD attachment
 remains. Sanitized evidence is in the review directory; raw private controller

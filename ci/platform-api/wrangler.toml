@@ -1,0 +1,23 @@
+# Public, read-only platform API. Design: docs/design/V3_PLATFORM_TESTING.md (DESIGN-ONLY).
+# This Worker has NO secrets and makes no outbound request. Deployment is the coordinator's job
+# (design section 12); nothing in this repository deploys it.
+name = "kayfabe-platform-api"
+main = "src/index.js"
+compatibility_date = "2026-10-26"
+workers_dev = false
+preview_urls = false
+
+routes = [{ pattern = "api.kayfabe.dev", custom_domain = true }]
+
+# One database shared with the CI Worker, which is its only writer (owner ruling 2026-11-04).
+# The id is not a secret.
+[[d1_databases]]
+binding = "DB"
+database_name = "kayfabe-platform"
+database_id = "c6292be2-742d-4a05-95fd-749705ab30bc"
+migrations_dir = "migrations"
+
+[vars]
+# https origin of the public log bucket (for example https://logs.kayfabe.dev); empty = the
+# /v1/logs redirect answers 404. Must be on kayfabe.dev, without a path (src/validate.js).
+LOGS_BASE = ""

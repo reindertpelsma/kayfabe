@@ -1,0 +1,14 @@
+﻿
+
+Name                        : NVIDIA GeForce GTX 1660 Ti
+PNPDeviceID                 : PCI\VEN_10DE&DEV_2182&SUBSYS_88551043&REV_A1\3&11583659&0&28
+DriverVersion               : 32.0.15.8088
+Status                      : OK
+ConfigManagerErrorCode      : 0
+CurrentHorizontalResolution : 1920
+CurrentVerticalResolution   : 1080
+AdapterRAM                  : 4293918720
+
+
+
+

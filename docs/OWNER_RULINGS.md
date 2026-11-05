@@ -769,6 +769,25 @@ Implemented as `crates/kf-qemu/src/bar0trace.rs` (ABI 21's `kf3_set_read_trap`).
 closes at the next RPC's queue-head write, so each window lies inside the approved interval.
 
 
+> **Correction, 2026-10-31 (provenance fix; applies to the whole of "§S applied to `0x2081010d`"
+> below).** Three statements below rest on a closed-binary reading and are **withdrawn**: that
+> `paramSize 0` and the export flags come from "the control's export row in the pinned retail
+> driver", that the flags say the control is non-privileged, and that
+> its id is "generated" from that driver by `tools/windows-ctrl-export/derive.py` (the tool is
+> deleted; `crates/kf-abi/src/hoststub.rs` is now a hand-maintained, source-tagged table, and the
+> flags and row position are no longer carried; nothing branched on them, they were only logged).
+> What stands, publicly: the interface `0x208101` is OGKM 580.65.06 (`g_finn_rm_api.h:425`); the
+> message `0xd` and the declared params size `0` are measured (`run41-requests.log:95` and `run53-requests.log:526` in
+> `traces/windows_code43_walls_20261007/`; 5 of 5 real-GPU captures show request and reply
+> of 0 bytes, `docs/design/tier_checks/tier2_compute_host.md` item 8). The control's *per-control*
+> privilege is therefore **not known from any public source**; what OGKM shows is only the class
+> level (`NV2081_BINAPI` is allocated non-privileged under a Subdevice and forwards its controls to
+> the physical RM, `resource_list.h:460-470`, `binary_api.c:60-110`, per `tier2_compute_host.tsv`
+> row `ctl-2081010d`). The owner's decision (a)/(b)/(c) in the "For the owner" bullet below is still
+> open, but its premise "the retail flags say it is non-privileged" no longer holds: option (b)
+> should be judged on the class-level fact and a measurement of the host's answer (a Linux client
+> issuing it on an `NV2081_BINAPI` object), not on the flags. Behaviour is unchanged by this fix.
+
 **§S applied to `0x2081010d` (2026-10-07) — ASSUMED from the owner's 2026-10-07 statement that
 privileged non-compute actions can be stubbed; owner to confirm.** Owner, 2026-10-07 (relayed by the
 coordinator): *"Most actions that are not compute, privileged actions can be stubbed."* and *"All about
@@ -925,22 +944,19 @@ its reason still holds before relying on it (see the top of this file).
 - No Linux guest run allocated the class: 250 trace files carry `AllocClassNotPermitted` lines
   (class 5080 was not on the allowlist before 2026-10-07); class 20608 (`0x5080`) appears only in
   Windows runs 16 and 17.
-- A byte scan of the NVIDIA userspace (595.91.07 on the host; 610.43.02 CUDA compat) finds none of
-  the four control ids `0x50800101..104` in libcuda, OpenCL, NVENC, NVML, NVCUVID, the GL/EGL/GLX
-  cores, Vulkan SC, `nvidia-smi` or the MPS server; positive controls (`GPU_GET_GID_INFO`,
-  `GR_GET_INFO`, `BUS_GET_INFO_V2`) hit. 580.x Linux libraries were not scanned.
-- The same scan on the Windows 580.88 driver package (`DriverVer 32.0.15.8088`, `nv_dispi.inf_amd64_fe5f369669db2f36`
-  in the baseline Windows image, 103 files; read-only, static presence only): `nvcuda64.dll`,
-  `nvcuda32.dll`, `nvopencl*.dll`, `nvml.dll`, `nvcuvid*.dll` contain **none** of the four ids, so the
-  Windows CUDA user-mode path does not register deferred entries. **But the Windows graphics user-mode
-  driver does contain them:** `nvwgf2umx.dll` has `DEFERRED_API_V2` (`0x50800103`) x10 and
-  `nvdxdlkernels.dll` has all four plus `DMA_INVALIDATE_TLB` and `GPU_PROMOTE_CTX`. `nvlddmkm.sys`
-  (the positive control for this scan) has all four, `DMA_INVALIDATE_TLB` x7, `GPU_PROMOTE_CTX` x9
-  and `GR_CTXSW_ZCULL_BIND` x6. `REMOVE_API` (`0x50800102`) alone also appears in `NvPresent64.dll` x26,
-  `nvoglv64.dll`, `nvcudadebugger.dll` and others with no registration id beside it; that is not
-  taken as use of the class (inferred: an unrelated constant). The earlier statement that Windows
-  uses the class only from its kernel driver is therefore wrong for D3D; how the UMD's ids reach the
-  RM (through the kernel driver) and on which channel kind is not measured.
+- A byte scan of the NVIDIA userspace libraries (595.91.07 on the host; 610.43.02 CUDA compat) found none
+  of the four control ids `0x50800101..104` in the CUDA, compute, video, GL/EGL/GLX, Vulkan SC,
+  `nvidia-smi` or MPS components; positive controls (`GPU_GET_GID_INFO`, `GR_GET_INFO`,
+  `BUS_GET_INFO_V2`) hit. 580.x Linux libraries were not scanned. (Diagnosis only; per-file results
+  were removed from this ruling 2026-10-31 under `docs/design/V3_PROVENANCE.md` section 2.)
+- The same kind of scan on the Windows 580.88 driver package (`DriverVer 32.0.15.8088`, in the baseline
+  Windows image; read-only, static presence only) found none of the four ids in the Windows CUDA, OpenCL,
+  NVML and NVCUVID user-mode libraries, so the Windows CUDA user-mode path does not register deferred
+  entries. **But the Windows graphics user-mode components do contain them** (inferred from the scan, not
+  measured on the wire), as does the kernel driver. The earlier statement that Windows uses the class
+  only from its kernel driver is therefore wrong for D3D; how the user-mode ids reach the RM (through the
+  kernel driver) and on which channel kind is not measured. Occurrences of `REMOVE_API` (`0x50800102`)
+  alone in unrelated components are not taken as use of the class (inferred: an unrelated constant).
 - Of the eight commands the trigger can run, `DMA_INVALIDATE_TLB`, `GR_CTXSW_ZCULL_BIND`,
   `GR_CTXSW_PM_BIND`, `GR_CTXSW_PREEMPTION_BIND` are `NON_PRIVILEGED`; `GPU_PROMOTE_CTX`,
   `GPU_INITIALIZE_CTX`, `FIFO_UPDATE_CHANNEL_INFO` are `PRIVILEGED`; `GPU_EVICT_CTX` is kernel-only

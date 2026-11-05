@@ -87,7 +87,7 @@ At product `8dde9b51d`, the real-GPU oracle passes nonuniform segments, compact
 65-sample tone tables, malicious extent mismatch and existing SDR/TMO fixtures.
 [Evidence](../../traces/tmo_stage_20261006/README.md) includes the Windows run13
 result at `74cd590c`: Code43 persists with 8,330 methods but no UPDATE/scanout;
-the first changed saved assertion moves from `0x169d836` to `0x1a103e6`.
+the first changed saved assertion moves from `site-044` to `site-018`.
 Chroma policies beyond OGKM's no-correction program remain unresolved: the
 public class fields provide bit widths, while this OGKM version only programs
 the no-correction constant. No transfer equation for SAT_MODE and the weighted

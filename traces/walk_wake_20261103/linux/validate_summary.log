@@ -1,0 +1,13 @@
+VALIDATE_START rev=4f420b37 2026-11-03T13:40:56+01:00 host_driver=595.91.07 gpu="NVIDIA GeForce RTX 4070" xid=10
+BUILD_KF3 rc=0 [1686/1686] Linking target qemu-system-x86_64 KF3_BUILT /var/lib/kf-windows-20261005/kf3-bins/4f420b37/qemu-system-x86_64 rev=4f420b37 mtime=2026-11-03 13:41:35.605262749 +0100 (shared build dir /var/lib/kf-windows-20261005/qemu-build-kf3)  secs=39
+total 95180
+drwxr-xr-x   2 root root     4096 Nov  3 13:41 .
+drwxr-xr-x 253 root root    12288 Nov  3 13:41 ..
+lrwxrwxrwx   1 root root       51 Nov  3 13:41 pc-bios -> /var/lib/kf-windows-20261005/qemu-build-kf3/pc-bios
+lrwxrwxrwx   1 root root       55 Nov  3 13:41 qemu-bundle -> /var/lib/kf-windows-20261005/qemu-build-kf3/qemu-bundle
+-rwxr-xr-x   1 root root 97446352 Nov  3 13:41 qemu-system-x86_64
+GATES rc=0 V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS V3_GATES_BIRTHS births=12 user=12 refused=0 ok=1 V3_GATES_EXIT pass=9 fail=0 births_ok=1 gate10=PASS 2026-11-03T13:41:56+01:00  secs=21
+CLIENT rc=0
+FG rc=0 == GUEST DRIVER 595.91.07 (verified from the packed module; /data/claude-walkwake-20261103/validate-4f420b37/fastguest/driver.STAGED) == kernel release: 7.0.0-34-generic
+FAST rc=0 FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30 FAST_SUITE_RC=0  secs=183
+VALIDATE_EXIT rev=4f420b37 2026-11-03T13:45:28+01:00 xid=15

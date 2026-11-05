@@ -21,13 +21,22 @@ kf_packages() {
   local required=(build-essential pkg-config git curl python3 kmod pciutils cpio zstd
                   psmisc busybox-static openssh-client)
   local optional=(clang lld libssl-dev)
+  # libzstd-dev (QEMU zstd image decoding) and iptables: ported from the Blackwell branch's
+  # provision_bench_tree.sh list (c3924ce8c) when the package list moved here (2026-11-01 merge).
   local bench=(ninja-build meson python3-venv python3-pip python3-tomli libglib2.0-dev
                libpixman-1-dev flex bison qemu-utils cloud-image-utils genisoimage
-               qemu-system-x86 ovmf musl-tools libslirp-dev)
+               qemu-system-x86 ovmf musl-tools libslirp-dev
+               libzstd-dev iptables)
+  # The Windows stage of the master gate (windows_gate.sh prereqs, win_vm.sh check_prereqs, the
+  # mingw probe build). Lane 2, 2026-11-04: inside the Vast payload apt-get is the cache-only shim
+  # (vast_payload_hooks.sh), so a package the gate installs must be in the setup cache's policy.
+  local windows=(swtpm swtpm-tools sbsigntool python3-virt-firmware xorriso netpbm p7zip-full
+                 gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64 openssl)
   case "$profile" in
     ci) printf '%s\n' "${required[@]}" ;;
     full) printf '%s\n' "${required[@]}" "${optional[@]}" ;;
     bench) printf '%s\n' "${bench[@]}" ;;
+    windows) printf '%s\n' "${windows[@]}" ;;
     *) echo "unknown provisioning profile" >&2; return 2 ;;
   esac
 }

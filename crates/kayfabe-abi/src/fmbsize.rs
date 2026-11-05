@@ -39,7 +39,7 @@
 //! # The measurement
 //!
 //! ★★★ `[measured]` **on a real GA106** — vast instance `46494693`, NVIDIA GeForce RTX 3060,
-//! `GPU-e28d7776-e4f9-704b-d392-d46f187343f8`, host driver **NVIDIA open 580.159.04**, the
+//! `GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0002`, host driver **NVIDIA open 580.159.04**, the
 //! same version the guest runs. The method: the matching open-driver source
 //! (`research_clones/ogkm-580.159.04`, tag `b81d58e`) rebuilt with a print at the two points
 //! that see the value, loaded in place of the stock module, and `RmInitAdapter` driven by

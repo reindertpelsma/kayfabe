@@ -1,0 +1,11 @@
+{
+  "draft_pr": 85,
+  "url": "https://github.com/reindertpelsma/kayfabe/pull/85",
+  "base_branch": "codex/bw-resume-cont-20261022",
+  "base_commit": "4460f3433",
+  "head_branch": "codex/bw-host-precomp-20261022",
+  "reviewed_code_commit": "ab91b4acc9ab80d0755fe3542299858406dcfd30",
+  "is_draft": true,
+  "b1_not_in_primary_pr": true,
+  "current_task_new_rentals": 0
+}

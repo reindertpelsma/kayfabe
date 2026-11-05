@@ -1,0 +1,26 @@
+{
+  "crates": {
+    "frozen": "fb9029d1f3ea9ca09fbd1dd8a95730ccbc2f9a81",
+    "current": "fb9029d1f3ea9ca09fbd1dd8a95730ccbc2f9a81"
+  },
+  "qemu": {
+    "frozen": "fa8938d9c1a4b2caeaeb6f15a7daf96ed1e2f190",
+    "current": "fa8938d9c1a4b2caeaeb6f15a7daf96ed1e2f190"
+  },
+  "tools": {
+    "frozen": "22b5600afa56a3745b7214499c349fd09caf774a",
+    "current": "22b5600afa56a3745b7214499c349fd09caf774a"
+  },
+  "Cargo.toml": {
+    "frozen": "5cd514833548ba051d99072853b2aa655e4c5097",
+    "current": "5cd514833548ba051d99072853b2aa655e4c5097"
+  },
+  "Cargo.lock": {
+    "frozen": "5d87da2ec29f9bb1e422addf02dd697d5d40bf5f",
+    "current": "5d87da2ec29f9bb1e422addf02dd697d5d40bf5f"
+  },
+  "rust-toolchain.toml": {
+    "frozen": "fd75b70c6fec4e8975fd3c63636107084e575173",
+    "current": "fd75b70c6fec4e8975fd3c63636107084e575173"
+  }
+}

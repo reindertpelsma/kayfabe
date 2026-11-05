@@ -1,0 +1,10 @@
+{
+  "utc": "2026-10-23T00:46:20.609095+00:00",
+  "id": 57296911,
+  "actual_status": "created",
+  "intended_status": "running",
+  "status_msg": "Error: timed out waiting for memory to free",
+  "cur_state": "running",
+  "dph_total": 0.35,
+  "duration": 646.7804651260376
+}

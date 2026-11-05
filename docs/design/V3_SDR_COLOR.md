@@ -115,16 +115,18 @@ capability fields. Constructor probes cannot be combined with this real path.
 
 Windows controls 11 (before these declarations) and 12 (after) both stop with
 Code 43, nvidia-smi exit 9, 363 RPC records and **zero display methods**. Thus
-neither exercises these kernels. Run 12's fresh WATCHDOG dump reaches helper
-`0x169d836`, followed by the display initialization failure chain, rather than
-probe O's later `0x1a103e6` method-refusal path. Pinned static code strongly
-identifies a zero-sized TMO descriptor when TMO_PRESENT is absent; no live size
-was captured. The two-buffer ILUT constructor guard is not the current fatal
-saved assertion. The complete saved assertions are readable, but the outer NVCD
-is one byte short and its checksum cannot be validated.
+neither exercises these kernels. Run 12's fresh WATCHDOG dump records a different
+display-initialization failure site than probe O's later method-refusal path, and the
+complete failure chain is again a display setup failure. The leading hypothesis (an
+inference from the advertised capabilities, not a captured value) is a zero-sized TMO
+descriptor when TMO_PRESENT is absent; no live size was captured. The two-buffer ILUT
+constructor guard is not the current fatal saved assertion. The complete saved
+assertions are readable, but the outer NVCD is one byte short and its checksum cannot be
+validated.
 [Windows run 12](../../traces/sdr_lut_20261006/windows-12-summary.json),
-[fresh dump summary](../../traces/sdr_lut_20261006/windows-12-watchdog-summary.json),
-[source dataflow](https://github.com/reindertpelsma/kayfabe/blob/fba14de6/tools/windows-debug-capture/evidence/2026-10-05-startdevice-j.md).
+[fresh dump summary](../../traces/sdr_lut_20261006/windows-12-watchdog-summary.json).
+(2026-10-31: the earlier "source dataflow" link pointed at offline analysis of the retail
+driver, which was removed from the tree under `V3_PROVENANCE.md` section 2.)
 A next implementation would need real bounded TMO behavior or a supported
 initialization path avoiding it; advertising TMO alone is not a fix.
 

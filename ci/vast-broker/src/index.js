@@ -1,3 +1,4 @@
+import { applyProfile, tierEnvironment } from './tier.js';
 // prettier-ignore
 import {DEFAULTS} from './defaults.js';
 import {
@@ -24,6 +25,8 @@ import {Github} from './github.js';
 import {allowedWorkflowRef} from './workflow-authority.js';
 // prettier-ignore
 import {mintBlob,checkBlobBudget} from './blobs.js';
+// prettier-ignore
+import {benchObject,benchBudget,benchCount,benchExpiry,benchUrl,benchRedirect} from './benchdata.js';
 import { offerPrice, providerId } from './policy.js';
 import { reportedProviderFault } from './provider-fault.js';
 // prettier-ignore
@@ -100,6 +103,8 @@ export function createService({
     env.OWNER_STOP_TOKEN,
     env.BOX_ACCESS_ID,
     env.BOX_ACCESS_SECRET,
+    env.R2_READ_ACCESS_KEY_ID,
+    env.R2_READ_SECRET_ACCESS_KEY,
     ...endpointSecrets(env),
   ].filter(Boolean);
   // Newly created real provider rows can omit/null actual_status. This grants
@@ -307,7 +312,7 @@ export function createService({
     }
   }
   async function update(record, vast, github, cfg) {
-    cfg.profile = record.profile ?? 'check';
+    applyProfile(cfg, record.profile ?? 'check');
     if (record.ended !== null) return;
     clocks(record, cfg);
     await ledger.save(record);
@@ -612,11 +617,14 @@ export function createService({
       /^\/blob-url\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})\/([A-Za-z0-9._-]{1,64})\/([A-Za-z0-9._-]{1,100})$/.exec(
         path,
       );
+    const bench =
+      /^\/bench-data\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})\/([A-Za-z0-9._-]{1,100})$/.exec(path);
     const match = /^\/(report|kill|status|stop|logs)\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.exec(
       path,
     );
     if (
       !(blob && request.method === 'GET') &&
+      !(bench && request.method === 'GET') &&
       !(path === '/availability' && request.method === 'GET') &&
       !(path === '/rent' && request.method === 'POST') &&
       !(path === '/stop-all' && request.method === 'POST') &&
@@ -627,6 +635,40 @@ export function createService({
     if (!authorization?.startsWith('Bearer ')) refuse('UNAUTHORIZED', 401);
     const bearer = authorization.slice(7),
       vast = new Vast(fetcher, cfg, env.VAST_API_KEY);
+    if (bench) {
+      const r = await ledger.get('record:' + bench[1]);
+      if (
+        !r ||
+        r.key !== bench[1] ||
+        !(await tokens.verify(bearer, r)) ||
+        r.ended !== null ||
+        r.closed ||
+        now() >= r.reportExpiry * 1000
+      )
+        refuse('UNAUTHORIZED', 401);
+      clocks(r, cfg);
+      await rejectExpiredCallback(r, cfg, vast);
+      await readBounded(request, 0);
+      const objectKey = benchObject(bench[2]),
+        used = benchBudget(r, bench[2]);
+      await rate(r, cfg);
+      const instance = await vast.inspect(r);
+      if (!instance || instance.actual_status !== 'running') refuse('UNAUTHORIZED', 401);
+      const at = now(),
+        expires = benchExpiry(at, nextDeadline(r)),
+        location = await benchUrl(env, objectKey, expires, at);
+      benchCount(r, bench[2], used);
+      await ledger.save(r);
+      console.log(
+        JSON.stringify({
+          event: 'bench_data_url',
+          run: bench[1],
+          object: bench[2],
+          expires: Math.floor(at / 1000) + expires,
+        }),
+      );
+      return benchRedirect(location);
+    }
     if (blob) {
       const r = await ledger.get('record:' + blob[1]);
       if (
@@ -762,7 +804,7 @@ export function createService({
       refuse('BAD_REQUEST', 400);
     if (!allowedWorkflowRef(c, cfg, profile))
       refuse('UNAUTHORIZED', 401, undefined, 'identity:profile_workflow');
-    cfg.profile = profile;
+    applyProfile(cfg, profile);
     if (path === '/availability') {
       await github.authorize(c);
       return json((await offers.evaluate(vast, cfg, ledger, profile)).view);
@@ -997,6 +1039,8 @@ export function createService({
         KF_HEARTBEAT_SECONDS: cfg.heartbeat / 1000,
         KF_GRACE_PASS: cfg.passGrace / 1000,
         KF_GRACE_FAIL: cfg.failGrace / 1000,
+        // The tier: a pure function of the profile (src/tier.js), never a request field.
+        ...tierEnvironment(profile),
         // Pass-through for the hostname-wide Access policy; the Worker never verifies Access.
         ...(env.BOX_ACCESS_ID && env.BOX_ACCESS_SECRET
           ? { KF_ACCESS_ID: env.BOX_ACCESS_ID, KF_ACCESS_SECRET: env.BOX_ACCESS_SECRET }
@@ -1084,7 +1128,8 @@ export function createService({
       /^\/(report|kill)\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.exec(path) ??
       /^\/(blob-url)\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})\/[A-Za-z0-9._-]{1,64}\/[A-Za-z0-9._-]{1,100}$/.exec(
         path,
-      );
+      ) ??
+      /^\/(bench-data)\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})\/[A-Za-z0-9._-]{1,100}$/.exec(path);
     if (box) {
       const record = await ledger.get('record:' + box[2]);
       if (!record || !(await tokens.verify(bearer, record))) refuse('UNAUTHORIZED', 401);
@@ -1429,7 +1474,7 @@ export function createGateway({ authorize, fetcher = fetch, now = Date.now } = {
       (await constantTimeEqual(env.OWNER_STOP_TOKEN, bearer))
     )
       return;
-    if (/^\/(?:report|kill|blob-url)\//.test(path)) {
+    if (/^\/(?:report|kill|blob-url|bench-data)\//.test(path)) {
       if (boxSecret !== env.RUN_TOKEN_SECRET) {
         boxSecret = env.RUN_TOKEN_SECRET;
         boxVerifier = new RunTokens(boxSecret, now);

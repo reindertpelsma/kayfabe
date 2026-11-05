@@ -1,0 +1,17 @@
+{
+  "instance_id": 56765201,
+  "result": "HOST_PREFLIGHT_FAIL_NOT_PRODUCT_RESULT",
+  "physical_gpu_offer": "RTX5060",
+  "cpu_reported_nproc": 5,
+  "minimum_nproc": 8,
+  "disk_free_gb": 167,
+  "ram_gb": 49,
+  "kvm_present": true,
+  "nvidia_device_nodes_present": false,
+  "nvidia_smi_responding": false,
+  "provision_started": false,
+  "product_build_or_guest_runs": 0,
+  "preflight_exit": 2,
+  "teardown": "API absence verified2026-10-19T17:49:06Z; own auto-destroy cancelled only after absence",
+  "note": "The preflight GPU string check misleadingly prints a success marker around nvidia-smi error text; independent device-node checks and CPU minimum correctly fail the overall check. No healthy GPU or hardware defect claim."
+}

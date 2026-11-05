@@ -47,6 +47,22 @@ static int bootstrap(VG_OBSERVER *v,uint64_t libos) {
     memset(v->cursor,0,sizeof(v->cursor));v->generation++;v->active=1;v->stats.attached++;
     return 1;
 }
+static int bootstrap_mailbox(VG_OBSERVER *v,uint64_t pa) {
+    unsigned char rm_params[16];uint32_t target;uint64_t libos;
+    /* OGKM580.65.06 gspifpub.h: GSP_FMC_BOOT_PARAMS.gspRmParams is
+       at 40; target is a 32-bit GSP_DMA_TARGET, bootArgsOffset at 48.
+       kgspBootstrapGspFmc_GH100 publishes this structure in MAILBOX0/1.
+       Try the original direct LibOS route first, then exactly one FMC
+       indirection. Both routes retain the complete region/queue validator. */
+    if(bootstrap(v,pa)) return 1;
+    if(!pa || (pa&4095) || pa>UINT64_MAX-56 ||
+       !read_ram(v,pa+40,rm_params,sizeof(rm_params))) return 0;
+    target=kf_u32(rm_params);libos=kf_u64(rm_params+8);
+    /* COHERENT_SYSTEM=1 / NONCOHERENT_SYSTEM=2, compiler checked.
+       No local-FB dereference, recursive chain, RAM scan or guest write. */
+    if((target!=1 && target!=2) || libos==pa) return 0;
+    return bootstrap(v,libos);
+}
 static int mapping(VG_OBSERVER *v) {
     unsigned i;
     if(!read_ram(v,v->table,v->table_copy,v->pages*8)) return 0;
@@ -89,7 +105,7 @@ void vg_mmio(VG_OBSERVER *v,uint64_t off,uint64_t data,unsigned size,int write,u
     }
     if(write && size==4 && off==0x110044 && v->mailbox_seen) {
         v->mailbox_seen=0;
-        if(!bootstrap(v,((uint64_t)(uint32_t)data<<32)|v->mailbox_low)) v->stats.invalid_bootstrap++;
+        if(!bootstrap_mailbox(v,((uint64_t)(uint32_t)data<<32)|v->mailbox_low)) v->stats.invalid_bootstrap++;
         vg_poll(v,ns);return;
     }
     if((write && size==4 && off>=0x110c00 && off<0x110c40 && !(off&7)) ||

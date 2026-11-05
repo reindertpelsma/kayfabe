@@ -1,0 +1,139 @@
+{
+  "utc": "2026-10-21T11:33:09.072129+00:00",
+  "source": "982f962a6dfe3bc8a0623cafc237c35e75ed7574",
+  "candidate_M": "89fc8a22291dd7bda69c3077ba829b1e934b11db",
+  "candidate_crate_tree_projection_exact": true,
+  "source_restored": true,
+  "release": {
+    "candidate_M_release": {
+      "rc": 0,
+      "counts_pass_fail_ignore": {
+        "kf-abi": [
+          592,
+          0,
+          0
+        ],
+        "kf-chan": [
+          636,
+          0,
+          4
+        ],
+        "kf-chip": [
+          72,
+          0,
+          0
+        ],
+        "kf-disp": [
+          247,
+          0,
+          3
+        ],
+        "kf-harness": [
+          12,
+          0,
+          0
+        ],
+        "kf-qemu": [
+          387,
+          0,
+          0
+        ],
+        "kf-rm": [
+          750,
+          0,
+          0
+        ]
+      },
+      "total": [
+        2696,
+        0,
+        7
+      ],
+      "log_sha256": "a2d612556c8972cf72d02e04a6f32bf12fdcd760b9a331b7cfc72ee4d028331b"
+    },
+    "merged_release": {
+      "rc": 0,
+      "counts_pass_fail_ignore": {
+        "kf-abi": [
+          608,
+          0,
+          0
+        ],
+        "kf-chan": [
+          647,
+          0,
+          4
+        ],
+        "kf-chip": [
+          86,
+          0,
+          0
+        ],
+        "kf-disp": [
+          290,
+          0,
+          5
+        ],
+        "kf-harness": [
+          15,
+          0,
+          0
+        ],
+        "kf-qemu": [
+          417,
+          0,
+          0
+        ],
+        "kf-rm": [
+          812,
+          0,
+          0
+        ]
+      },
+      "total": [
+        2875,
+        0,
+        9
+      ],
+      "log_sha256": "10c1d1e23a125edd8b4e4826d8da78336f069c1407f1eff9633a8ca259a3b361"
+    }
+  },
+  "clippy_base_head": [
+    583,
+    585
+  ],
+  "clippy_added": [
+    {
+      "code": "unused_imports",
+      "message": "unused import: `self`",
+      "path": "crates/kf-rm/src/inittables.rs",
+      "snippet": "self, GMMU_STATIC_INFO_PARAMS_SIZE, NV2080_CTRL_CMD_INTERNAL_GMMU_GET_STATIC_INFO,"
+    },
+    {
+      "code": "unused_imports",
+      "message": "unused import: `self`",
+      "path": "crates/kf-rm/src/inittables.rs",
+      "snippet": "self, GMMU_STATIC_INFO_PARAMS_SIZE, NV2080_CTRL_CMD_INTERNAL_GMMU_GET_STATIC_INFO,"
+    }
+  ],
+  "clippy_added_count": 0,
+  "inherited_lints": "same --cap-lints=warn on both to collect inherited denies; no lint disabled",
+  "no_count_drop_vs_both_parents": true,
+  "clippy_added_vs_M": 2,
+  "clippy_added_vs_both_parents": 0,
+  "clippy_classification": "The2M-only delta records are duplicated inherited unused-self diagnostics in unchanged kf-rm/inittables.rs; exact message/path/snippet found in the already accepted sweep-parent raw clippy output. No source change or lint suppression.",
+  "sweep_parent_inherited_diagnostics": [
+    {
+      "code": "unused_imports",
+      "message": "unused import: `self`",
+      "path": "crates/kf-rm/src/inittables.rs",
+      "snippet": "self, GMMU_STATIC_INFO_PARAMS_SIZE, NV2080_CTRL_CMD_INTERNAL_GMMU_GET_STATIC_INFO,"
+    },
+    {
+      "code": "unused_imports",
+      "message": "unused import: `self`",
+      "path": "crates/kf-rm/src/inittables.rs",
+      "snippet": "self, GMMU_STATIC_INFO_PARAMS_SIZE, NV2080_CTRL_CMD_INTERNAL_GMMU_GET_STATIC_INFO,"
+    }
+  ]
+}

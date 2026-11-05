@@ -1,16 +1,6 @@
 {
  "note": "Existing hits, fingerprinted. Shrink-only: no_gpu_uuids.py --shrink.",
  "files": {
-  "docs/archive/w392_the_memop_transport_is_unreached.md": {
-   "49349e6b828a24d1": 1,
-   "e6c7d41edc27ce39": 1
-  },
-  "docs/reference/gsp_demand_list_cap1.json": {
-   "2e39e34f38e2a5c5": 1
-  },
-  "traces/README.md": {
-   "01b016c4ef090afb": 1
-  },
   "traces/ad102_boot1_restore_smi.txt": {
    "08aff2c20b80b4fe": 1
   },

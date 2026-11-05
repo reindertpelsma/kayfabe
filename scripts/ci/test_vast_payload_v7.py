@@ -13,6 +13,13 @@ from unittest.mock import patch
 from test_vast_payload import MERGE, MARK, PROVISION, SHA, XID, watch
 
 
+WINDOWS_PASS = (
+    "GATE_NOTE x\n"
+    "WINDOWS_GATE_PASS rev=" + SHA[:8] + ' gpu="RTX 3060" idle_s=300 hostref=green/green secs=1 x\n'
+    "WINDOWS_GATE_EXIT rc=0 2026-11-04T00:00:00+00:00\n"
+)
+
+
 class V7Tests(unittest.TestCase):
     def setUp(self):
         spec = importlib.util.spec_from_file_location(
@@ -281,6 +288,9 @@ class V7Tests(unittest.TestCase):
         initial_hardware=None,
         required_profile=None,
         probe=None,
+        windows="0",
+        windows_log=None,
+        soft_ms=10000,
     ):
         from types import SimpleNamespace
 
@@ -335,7 +345,14 @@ class V7Tests(unittest.TestCase):
                         # Existing bench/fastguest consumers resolve this exact checkout path.
                         if not (repo / "target" / relative).is_file():
                             return 7
+                elif name == "windows_gate":
+                    self.assertNotIn("KF_MERGE_WINDOWS", os.environ)
+                    self.assertEqual(command[-2:], [tag.rsplit("_", 2)[0], "/root/prov"])
+                    native_path(mapped(output)).parent.mkdir(parents=True, exist_ok=True)
+                    native_path(mapped(output)).write_text(windows_log or WINDOWS_PASS)
+                    return 124 if name == failure else (0 if "GATE_PASS" in (windows_log or WINDOWS_PASS) else 1)
                 elif name == "merge_bar":
+                    self.assertNotIn("KF_MERGE_WINDOWS", os.environ)
                     value = MERGE
                     if failure == "merge_bar":
                         value = MERGE.split("BARE_SUITE_PASS=")[0]
@@ -368,8 +385,9 @@ class V7Tests(unittest.TestCase):
                 patch.dict(
                     os.environ,
                     {
-                        "KF_SOFT_DEADLINE_MS": str(int(time.time() * 1000) + 10000),
+                        "KF_SOFT_DEADLINE_MS": str(int(time.time() * 1000) + soft_ms),
                         "KF_PROVISION_PROFILE": "full",
+                        **({} if windows is None else {"KF_MERGE_WINDOWS": windows}),
                     },
                 ),
                 patch("sys.argv", ["vast_payload.py", SHA, "a" * 32]),
@@ -386,6 +404,81 @@ class V7Tests(unittest.TestCase):
         self.assertEqual(len(result["suites"]), 8)
         self.assertEqual(set(result), {"verdict", "suites", "hardware", "host_reference"})
         self.assertEqual(result["host_reference"], "GREEN")
+
+    # Lane 2, 2026-11-04: the master gate (Worker profile check) carries the Windows stage.
+    # Falsifier written first: a RETRY, a refused gate, a missing or doubled verdict, a PASS of
+    # another revision, a time shortfall or KF_MERGE_WINDOWS=0 yields a passing windows row.
+    def test_windows_stage_runs_last_when_the_worker_asks(self):
+        rc, result, calls = self._main_fixture(windows="1", soft_ms=200 * 60000)
+        self.assertEqual(rc, 0)
+        self.assertEqual(calls, ["provision", "cuda_host", "merge_bar", "cuda_guest", "windows_gate"])
+        self.assertEqual(result["verdict"], "PASS")
+        self.assertIn({"name": "windows_gate", "pass": 1, "fail": 0, "skip": 0}, result["suites"])
+
+    def test_windows_stage_is_the_default_when_the_worker_states_no_tier(self):
+        rc, result, calls = self._main_fixture(windows=None, soft_ms=200 * 60000)
+        self.assertEqual(rc, 0)
+        self.assertEqual(calls[-1], "windows_gate")
+
+    def test_the_sweep_tier_has_no_windows_stage(self):
+        rc, result, calls = self._main_fixture(windows="0", soft_ms=200 * 60000)
+        self.assertEqual(rc, 0)
+        self.assertNotIn("windows_gate", calls)
+        self.assertNotIn("windows_gate", [r["name"] for r in result["suites"]])
+
+    def test_a_malformed_tier_is_refused_before_any_stage(self):
+        rc, result, calls = self._main_fixture(windows="yes", soft_ms=200 * 60000)
+        self.assertEqual(rc, 1)
+        self.assertEqual(calls, [])
+        self.assertEqual(result["verdict"], "FAIL")
+
+    def test_windows_retry_is_a_failing_retry_row(self):
+        log = (
+            "WINDOWS_GATE_RETRY action=rerun-on-a-fresh-box class=HOSTREF stage=probes why=x rev="
+            + SHA[:8]
+            + ' gpu="g" hostref=RED/green\nWINDOWS_GATE_EXIT rc=3 now\n'
+        )
+        rc, result, calls = self._main_fixture(windows="1", windows_log=log, soft_ms=200 * 60000)
+        self.assertEqual(rc, 1)
+        self.assertEqual(result["verdict"], "FAIL")
+        self.assertIn({"name": "windows_retry_hostref", "pass": 0, "fail": 1, "skip": 0}, result["suites"])
+
+    def test_windows_stage_does_not_start_without_an_hour_left(self):
+        rc, result, calls = self._main_fixture(windows="1", soft_ms=30 * 60000)
+        self.assertEqual(rc, 1)
+        self.assertNotIn("windows_gate", calls)
+        self.assertEqual(result["verdict"], "FAIL")
+        self.assertIn({"name": "windows_retry_time", "pass": 0, "fail": 1, "skip": 0}, result["suites"])
+
+    def test_windows_grading_only_passes_one_pass_of_this_revision(self):
+        ok = WINDOWS_PASS
+        self.assertEqual(self.m.windows_rows(ok, 0, SHA), [self.m.row("windows_gate", 1)])
+        bad = {
+            "nonzero": (ok, 1, "windows_retry_operator"),
+            "other_rev": (ok.replace(SHA[:8], "bbbbbbbb"), 0, "windows_retry_operator"),
+            "no_exit": (ok.split("WINDOWS_GATE_EXIT")[0], 0, "windows_retry_operator"),
+            "two": (ok + ok, 0, "windows_retry_operator"),
+            "exit_rc": (ok.replace("EXIT rc=0", "EXIT rc=1"), 0, "windows_retry_operator"),
+            "fail": (
+                'WINDOWS_GATE_FAIL diag=KAYFABE stage=post_idle why="x"\nWINDOWS_GATE_EXIT rc=1 t\n',
+                1,
+                "windows_gate",
+            ),
+            "fail_and_pass": (ok + "WINDOWS_GATE_FAIL diag=KAYFABE\n", 0, "windows_gate"),
+            "refused": ("WINDOWS_GATE_REFUSED why=disk\nWINDOWS_GATE_EXIT rc=2 t\n", 2, "windows_retry_refused"),
+            "retry_unknown_class": (
+                "WINDOWS_GATE_RETRY action=rerun-on-a-fresh-box class=WHATEVER stage=s\n"
+                "WINDOWS_GATE_EXIT rc=3 t\n",
+                3,
+                "windows_retry_operator",
+            ),
+            "empty": ("", 0, "windows_retry_operator"),
+        }
+        for case, (text, rc, name) in bad.items():
+            with self.subTest(case):
+                with self.assertRaises(self.m.EvidenceError) as caught:
+                    self.m.windows_rows(text, rc, SHA)
+                self.assertEqual(caught.exception.name, name)
 
     def test_provisioned_musl_binary_is_found_by_existing_guest_helper(self):
         rc, result, calls = self._main_fixture(legacy_client="musl")

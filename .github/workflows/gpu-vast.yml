@@ -148,13 +148,17 @@ jobs:
           (needs.policy.outputs.run == '1' && !github.event.pull_request.draft) }}
     runs-on: ubuntu-latest
     environment: gpu-vast
-    timeout-minutes: 210
+    # Lane 2, 2026-11-04: the master gate carries the Windows stage. Worker hard limit 300 min
+    # (src/tier.js) + 5 min admission margin < runner wait budget 330 min < step 340 < job 345 <
+    # GitHub's 360-minute job limit.
+    timeout-minutes: 345
     permissions:
       id-token: write
     outputs:
       state: ${{ steps.broker.outputs.state }}
       verdict: ${{ steps.broker.outputs.verdict }}
       verified: ${{ steps.broker.outputs.verified }}
+      retry: ${{ steps.broker.outputs.retry }}
     steps:
       - name: Replay verified parent result
         if: needs.pending.outputs.reused == 'true'
@@ -177,7 +181,7 @@ jobs:
         if: needs.pending.outputs.reused != 'true'
         id: broker
         shell: bash --noprofile --norc -eo pipefail {0}
-        timeout-minutes: 205
+        timeout-minutes: 340
         env:
           WORKER_URL: ${{ vars.VAST_BROKER_URL }}
           WORKER_PATH: ${{ secrets.VAST_BROKER_PATH }}
@@ -227,6 +231,7 @@ jobs:
       BROKER_STATE: ${{ needs.gpu.outputs.state }}
       BROKER_VERIFIED: ${{ needs.gpu.outputs.verified }}
       BROKER_VERDICT: ${{ needs.gpu.outputs.verdict }}
+      BROKER_RETRY: ${{ needs.gpu.outputs.retry }}
     steps:
       - name: Post final status and fail every unsuccessful dependency
         shell: bash --noprofile --norc -eo pipefail {0}
@@ -283,6 +288,12 @@ jobs:
           fi
           if [[ "$state" = PROVIDER_FAULT && "$BROKER_VERDICT" = PROVIDER_FAULT ]]; then
             description="GPU provider fault; no kayfabe verdict"
+          fi
+          # Only WINDOWS_GATE_PASS passes. RETRY (host, harness or rental fault) fails the check
+          # like FAIL and says so; the remedy is a re-run on a fresh box, never a merge.
+          if [[ "$result" != success && "$BROKER_VERDICT" = FAIL && "${BROKER_RETRY:-0}" = 1 ]]; then
+            description="GPU gate RETRY: not a verdict; re-run on a fresh box"
+            echo "::error title=gpu-vast RETRY::The Windows stage ended RETRY (host, harness or rental fault). This is not a pass: re-run the check on a fresh box."
           fi
           temporary=$(mktemp)
           jq -n --arg state "$result" --arg description "$description" \

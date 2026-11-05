@@ -1,0 +1,5 @@
+[1683/1686] Compiling C object libqemu-x86_64-softmmu.a.p/target_i386_tcg_fpu_helper.c.o
+[1684/1686] Compiling C object libcommon.a.p/fpu_softfloat.c.o
+[1685/1686] Compiling C object libqemu-x86_64-softmmu.a.p/target_i386_tcg_translate.c.o
+[1686/1686] Linking target qemu-system-x86_64
+KF3_BUILT /var/lib/kf-windows-20261005/kf3-bins/4f420b37/qemu-system-x86_64 rev=4f420b37 mtime=2026-11-03 13:41:35.605262749 +0100 (shared build dir /var/lib/kf-windows-20261005/qemu-build-kf3)

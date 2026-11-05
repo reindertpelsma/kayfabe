@@ -25,6 +25,8 @@ pub const RING_BYTES: u64 = 1 << 20;
 /// Blackwell), and the fence's `SEM_ADDR_HI` is 8 bits.
 pub const RING_VA_LIMIT: u64 = 1 << 40;
 const GPFIFO_ENTRIES: u32 = 512;
+/// Private RC record in the unused USERD tail; outside every T-space GPU mapping.
+pub const ERROR_NOTIFIER_OFF: u64 = RING_BYTES - kf_abi::notifier::NOTIFICATION_SIZE as u64;
 
 /// ★ P1+P2 inc D (`docs/design/V3_P1P2_TSPACE.md` §2.4) — **where a ring's regions sit in its one
 /// 1 MiB device-local object, and how each is mapped on the GPU.** One object and one CPU view in
@@ -90,6 +92,47 @@ impl RingLayout {
         }
     }
 }
+/// Authored native ring parameters: a live private error context is mandatory.
+///
+/// # Errors
+/// A missing context, an out-of-range host VA, or USERD overlapping the private record.
+pub fn private_ring_spec(
+    va: u64,
+    layout: RingLayout,
+    memory: u32,
+    error_ctx: u32,
+) -> Result<kf_host::RingSpec, String> {
+    if error_ctx == 0
+        || layout.pb_bytes == 0
+        || layout.pb_bytes > layout.gpfifo_off
+        || layout
+            .gpfifo_off
+            .checked_add(u64::from(GPFIFO_ENTRIES).saturating_mul(8))
+            .is_none_or(|end| end > layout.fence_off)
+        || layout
+            .fence_off
+            .checked_add(GATE_OFF)
+            .and_then(|end| end.checked_add(4))
+            .is_none_or(|end| end > layout.userd_off)
+        || va
+            .checked_add(RING_BYTES)
+            .is_none_or(|end| end > RING_VA_LIMIT)
+        || layout
+            .userd_off
+            .checked_add(kf_abi::submit::USERD_SIZE)
+            .is_none_or(|end| end > ERROR_NOTIFIER_OFF)
+    {
+        return Err("private ring requires a bounded layout and nonzero RC context".into());
+    }
+    Ok(kf_host::RingSpec {
+        gp_fifo_va: va.saturating_add(layout.gpfifo_off),
+        gp_fifo_entries: GPFIFO_ENTRIES,
+        userd_memory: memory,
+        userd_offset: layout.userd_off,
+        err_notifier: error_ctx,
+    })
+}
+
 /// ★ Unmap every map in `maps` — all of them, whatever any one answers — and report the first
 /// refusal (review fix 2026-10-04: a short-circuit left the later maps live).
 ///
@@ -137,6 +180,7 @@ struct Region {
 /// The host resources one [`HostRing`] holds besides its channel.
 #[derive(Debug, Clone)]
 struct RingOwned {
+    error_ctx: u32,
     mem: u32,
     cookie: u64,
     space: kf_host::VaSpace,
@@ -161,6 +205,7 @@ pub struct HostRing {
     /// ~4.5 MiB of host BAR1 per guest CUDA process with persistence mode, the 256 MiB aperture
     /// exhausted at ~55 processes: `NV_ESC_RM_MAP_MEMORY … NoMemory`, V3_APP_MATRIX §3 J).
     owned: Option<RingOwned>,
+    rc_event_armed: bool,
     va: u64,
     /// ★ P1+P2 inc D: where the regions sit and how they are mapped.
     layout: RingLayout,
@@ -415,25 +460,47 @@ impl HostRing {
                 return Err(format!("cpu ring mmap: {e:?}"));
             }
         };
+        // Clear the PRIVATE notifier before native birth, never a guest-controlled baseline.
+        for off in [0, 4, 8, 12] {
+            if let Err(e) = cpu.store_u32(At::new(ERROR_NOTIFIER_OFF + off), 0) {
+                drop(cpu);
+                undo(Some(cookie));
+                return Err(format!("RC record zero: {e:?}"));
+            }
+        }
+        kf_linux_raw::release_fence();
+        let error_ctx = match rm.alloc_context_dma(
+            mem,
+            ERROR_NOTIFIER_OFF,
+            kf_abi::notifier::NOTIFICATION_SIZE as u64,
+        ) {
+            Ok(ctx) => ctx,
+            Err(e) => {
+                drop(cpu);
+                undo(Some(cookie));
+                return Err(format!("RC context: {e:?}"));
+            }
+        };
         let owned = RingOwned {
+            error_ctx,
             mem,
             cookie,
             space,
             maps: maps.clone(),
         };
-        let chan = match rm.birth_channel(
-            space,
-            engine,
-            kf_host::RingSpec {
-                gp_fifo_va: va + layout.gpfifo_off,
-                gp_fifo_entries: GPFIFO_ENTRIES,
-                userd_memory: mem,
-                userd_offset: layout.userd_off,
-                err_notifier: 0,
-            },
-        ) {
+        let spec = match private_ring_spec(va, layout, mem, error_ctx) {
+            Ok(spec) => spec,
+            Err(e) => {
+                let _ = rm.free(error_ctx);
+                drop(cpu);
+                undo(Some(cookie));
+                return Err(e);
+            }
+        };
+        let chan = match rm.birth_channel(space, engine, spec) {
             Ok(c) => c,
             Err(e) => {
+                let _ = rm.free(error_ctx);
                 drop(cpu);
                 undo(Some(cookie));
                 return Err(format!("birth: {e:?}"));
@@ -446,6 +513,7 @@ impl HostRing {
             gate,
             _node: node,
             owned: Some(owned),
+            rc_event_armed: false,
             va,
             layout,
             chan,
@@ -519,6 +587,33 @@ impl HostRing {
         Ok(ring)
     }
 
+    /// Subscribe the private error context to a session RC fd, before publishing the ring.
+    /// Repeated calls do not allocate more listeners.
+    ///
+    /// # Errors
+    /// A released ring or the host's refusal of its unprivileged OS event.
+    pub fn arm_rc_event(
+        &mut self,
+        rm: &kf_host::HostRm,
+        ev: &kf_host::EventFd,
+    ) -> Result<(), String> {
+        if self.rc_event_armed {
+            return Ok(());
+        }
+        let owned = self.owned.as_ref().ok_or("RC event on a released ring")?;
+        rm.alloc_os_event(owned.error_ctx, 0, false, ev)
+            .map_err(|e| format!("RC OS event: {e:?}"))?;
+        self.rc_event_armed = true;
+        Ok(())
+    }
+
+    /// Read only the private host record. Status is sampled before metadata, never after it.
+    #[must_use]
+    pub fn rc_words(&self) -> Option<[u32; 4]> {
+        let cpu = self.cpu.as_ref()?;
+        crate::rc::snapshot(|off| cpu.load_u32(At::new(ERROR_NOTIFIER_OFF + off)).ok())
+    }
+
     fn cpu(&self) -> Result<&kf_linux_raw::VolatileRegion, String> {
         self.cpu
             .as_deref()
@@ -534,6 +629,14 @@ impl HostRing {
     /// is used after this refuses every store/load by name (no mapping).
     pub fn release(&mut self, rm: &kf_host::HostRm) -> Option<String> {
         let o = self.owned.take()?;
+        // Its OS-event children go with the context. Do not return backing still named by it.
+        if let Err(e) = rm.free(o.error_ctx) {
+            self.owned = Some(o);
+            return Some(format!(
+                "ring {:#x} RC context release REFUSED: {e:?}",
+                self.va
+            ));
+        }
         // ★ §U: the gate's share of the mapping goes first (no VA-thread store after this), so
         // dropping ours below is the munmap.
         self.gate.revoke();
@@ -1909,5 +2012,89 @@ mod graphics_route_tests {
             )
             .is_err()
         );
+    }
+}
+
+/// 2026-10-31 — the wrap contract of the host fence compare, ported from the retired
+/// `kayfabe-completion` `fence_arm_is_wrap_correct` / `fence_arm_fires_at_or_after_target_exactly_once`.
+///
+/// The fence every compare below reads is the HOST ring's own (`HostRing::completed`: a word in an
+/// object this ring owns and the engine writes; the guest has no mapping of it), and every `seq`
+/// is one this crate assigned. So the retired "a backwards write is a loud refusal" guard has no
+/// input to guard here: a stale or foreign value cannot arrive. What must hold is the arithmetic:
+/// an absolute count is reached exactly when the 32-bit wire value is at or past it, across the
+/// wrap, for every distance below half the space.
+#[cfg(test)]
+mod fence_order {
+    use super::{MAX_IN_FLIGHT, reached};
+
+    /// The window inside which a wire compare is unambiguous.
+    const HALF: i64 = 1 << 31;
+
+    // The in-flight bound is the reason the compare is sound: it is nowhere near half the space.
+    const _: () = assert!((MAX_IN_FLIGHT as u64) < (1u64 << 31));
+
+    fn splitmix(state: &mut u64) -> u64 {
+        *state = state.wrapping_add(0x9e37_79b9_7f4a_7c15);
+        let mut z = *state;
+        z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+        z ^ (z >> 31)
+    }
+
+    /// The model: counts are absolute (`i64`, no wrap), and "reached" is plain `>=`.
+    fn model(a_abs: i64, b_abs: i64) -> bool {
+        a_abs >= b_abs
+    }
+
+    #[test]
+    fn reached_is_greater_or_equal_on_absolute_counts_across_the_wrap() {
+        // bases on and around every boundary of the 32-bit space, plus seeded ones
+        let mut bases: Vec<i64> = Vec::new();
+        for edge in [0i64, 1 << 16, 1 << 31, 1 << 32] {
+            for off in -4i64..=4 {
+                bases.push(edge + off);
+            }
+        }
+        let mut rng = 0x6b61_7966_6162_6531_u64;
+        for _ in 0..2000 {
+            bases.push((splitmix(&mut rng) % (3u64 << 32)) as i64 + 8);
+        }
+        // distances: every one near zero and near the half window, plus seeded ones
+        let mut deltas: Vec<i64> = (-70..=70).collect();
+        for off in 0..=70 {
+            deltas.push(HALF - 1 - off);
+            deltas.push(-(HALF - 1 - off));
+        }
+        for _ in 0..200 {
+            deltas.push((splitmix(&mut rng) % (2 * HALF as u64 - 1)) as i64 - (HALF - 1));
+        }
+        for &b in &bases {
+            for &d in &deltas {
+                let a = b + d;
+                assert_eq!(
+                    reached(a as u32, b as u32),
+                    model(a, b),
+                    "a={a:#x} b={b:#x} (distance {d})"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn at_the_target_is_reached_one_short_is_not_and_the_wrap_does_not_confuse_either() {
+        assert!(reached(14, 14));
+        assert!(!reached(13, 14));
+        assert!(reached(15, 14), "the engine may skip past the exact value");
+        assert!(reached(3, u32::MAX - 2), "wrapped past the target");
+        assert!(
+            !reached(u32::MAX, 3),
+            "before the wrap is behind a wrapped target"
+        );
+        assert!(reached(u32::MAX, u32::MAX));
+        assert!(!reached(u32::MAX - 1, u32::MAX));
+        // half the space ahead is indistinguishable from half behind, and is called behind
+        assert!(!reached(1 << 31, 0));
+        assert!(reached((1 << 31) - 1, 0));
     }
 }

@@ -1,0 +1,30 @@
+{
+  "mutants": [
+    {
+      "mutant": "restore_campaign_wide_baseline",
+      "killers": [
+        "test_a_clean_b1_arm_after_the_prior_off_pair_may_run_apps",
+        "test_a_clean_sibling_after_one_prior_diagnostic_fault_may_run_apps",
+        "test_a_lost_prior_record_cannot_turn_this_arm_green"
+      ]
+    },
+    {
+      "mutant": "allow_new_faults",
+      "killers": [
+        "test_a_corrupt_native_prefix_is_not_a_clean_snapshot",
+        "test_a_lost_prior_record_cannot_turn_this_arm_green",
+        "test_a_replaced_record_of_equal_length_is_not_clean",
+        "test_one_new_fault_in_this_arm_refuses_workloads",
+        "test_two_new_faults_in_this_arm_refuse_workloads"
+      ]
+    },
+    {
+      "mutant": "compare_only_lengths",
+      "killers": [
+        "test_a_corrupt_native_prefix_is_not_a_clean_snapshot",
+        "test_a_replaced_record_of_equal_length_is_not_clean"
+      ]
+    }
+  ],
+  "restored_sha256": "73ae5d56ae54639dbdb0a76203a66f1507393dfb7cce97cd892332764989fa08"
+}

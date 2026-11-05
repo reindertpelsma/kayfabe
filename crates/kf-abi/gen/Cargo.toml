@@ -10,8 +10,8 @@
 #
 # Run it by hand against a vendored open-gpu-kernel-modules checkout:
 #
-#   cargo run --manifest-path crates/kayfabe-abi/gen/Cargo.toml -- \
-#       <ogkm-root> crates/kayfabe-abi/src/generated
+#   cargo run --manifest-path crates/kf-abi/gen/Cargo.toml -- \
+#       <ogkm-root> crates/kf-abi/src/generated
 #
 # Zero third-party dependencies on purpose: the C subset NVIDIA's FINN generator
 # emits is small and rigidly regular, so a hand-rolled scanner is both smaller and

@@ -383,7 +383,6 @@ const DEPENDENCY_CRATES: &[&str] = &[
     "kayfabe-util",
     "kayfabe-arch",
     "kayfabe-abi",
-    "kayfabe-vmm",
     // ★ 2026-10-08 — the measured host-driver axis (`src/hostabi.rs`): the image links `kf-abi`
     // (its generated driver matrix) and through it `kf-util` and `kf-arch`, so a regenerated
     // matrix must invalidate the embedded image like any other source.

@@ -1,0 +1,15 @@
+{
+  "observed_utc": "2026-10-20T01:05:15.789183+00:00",
+  "credit_usd": 39.77734076546267,
+  "reserve_usd": 5,
+  "spend_cap_usd": 30,
+  "stop_renting_usd": 25,
+  "parallel_boxes": 2,
+  "allowed_parallel_roles": [
+    "Ada Windows580.88",
+    "Blackwell Windows580.88"
+  ],
+  "final_teardown_utc": "2026-10-20T04:30:00+00:00",
+  "max_box_minutes": 180,
+  "qualification": "Credit>=35USD conservatively covers full30USD cap plus5USD reserve"
+}

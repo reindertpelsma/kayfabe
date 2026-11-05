@@ -46,7 +46,7 @@
 //!
 //! ## The measurement
 //!
-//! `[measured 2026-08-09, real GA106 `GPU-d0913685` (RTX 3060), host driver 580.159.04,
+//! `[measured 2026-08-09, real GA106 `GPU-fa4e0001` (RTX 3060), host driver 580.159.04,
 //! `traces/real_ga106/rmladder_r24_pcemask_real_ga106.txt`]`:
 //!
 //! ```text
@@ -159,7 +159,7 @@ pub const CE_COMPLETION_UNBOUGHT: &str = "CE COMPLETION is UNBUILT: serving 0x20
 /// ★★★ The measured PCE mask of each logical copy engine on a **GA106**, indexed by LCE
 /// instance.
 ///
-/// `[measured 2026-08-09, real GA106 `GPU-d0913685`, driver 580.159.04,
+/// `[measured 2026-08-09, real GA106 `GPU-fa4e0001`, driver 580.159.04,
 /// `traces/real_ga106/rmladder_r24_pcemask_real_ga106.txt`]` — see the module header for the
 /// verbatim rung output and for why LCE4 is absent rather than zero.
 ///
@@ -464,7 +464,7 @@ mod tests {
     /// ★★ The structural cross-check the module header claims: four LCEs, **two** distinct
     /// PCEs, so every advertised engine shares its physical engine with another — which is
     /// what `cecaps` sets `SHARED` on every present LCE for `[measured 2026-08-09, real GA106
-    /// `GPU-d0913685`, `traces/real_ga106/rmladder_r18_cecaps_real_ga106.txt`]`, i.e. from a
+    /// `GPU-fa4e0001`, `traces/real_ga106/rmladder_r18_cecaps_real_ga106.txt`]`, i.e. from a
     /// different control than the one this table came from.
     ///
     /// ⊘ Guards the claim, not the numbers: if a future part's table makes every LCE

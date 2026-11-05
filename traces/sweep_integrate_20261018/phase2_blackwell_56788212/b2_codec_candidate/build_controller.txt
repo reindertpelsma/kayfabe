@@ -1,0 +1,44 @@
+CODEC_BUILD_START source=45a4d91b56b6819fa4e67687d7f3f348647a325e 2026-10-19T22:04:13+00:00
+Preparing worktree (detached HEAD 45a4d91b5)
+Updating files:  66% (13533/20427)
+Updating files:  67% (13687/20427)
+Updating files:  68% (13891/20427)
+Updating files:  69% (14095/20427)
+Updating files:  70% (14299/20427)
+Updating files:  71% (14504/20427)
+Updating files:  72% (14708/20427)
+Updating files:  73% (14912/20427)
+Updating files:  74% (15116/20427)
+Updating files:  75% (15321/20427)
+Updating files:  76% (15525/20427)
+Updating files:  77% (15729/20427)
+Updating files:  78% (15934/20427)
+Updating files:  79% (16138/20427)
+Updating files:  80% (16342/20427)
+Updating files:  81% (16546/20427)
+Updating files:  82% (16751/20427)
+Updating files:  83% (16955/20427)
+Updating files:  84% (17159/20427)
+Updating files:  85% (17363/20427)
+Updating files:  86% (17568/20427)
+Updating files:  87% (17772/20427)
+Updating files:  88% (17976/20427)
+Updating files:  89% (18181/20427)
+Updating files:  90% (18385/20427)
+Updating files:  91% (18589/20427)
+Updating files:  92% (18793/20427)
+Updating files:  93% (18998/20427)
+Updating files:  94% (19202/20427)
+Updating files:  95% (19406/20427)
+Updating files:  96% (19610/20427)
+Updating files:  97% (19815/20427)
+Updating files:  98% (20019/20427)
+Updating files:  99% (20223/20427)
+Updating files: 100% (20427/20427)
+Updating files: 100% (20427/20427), done.
+HEAD is now at 45a4d91b5 disp: derive DMA ring bounds and address masks from public classes
+H_CODEC_NATIVE falsifier any native gate failure; no guest attribution unless native passes.
+V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS
+4e57223b50c474718c90b7939110a7e064ce74aad207a9a0b901235182b2590d  /workspace/bench/kf3-bins/45a4d91b/qemu-system-x86_64
+CODEC_BUILD_READY source=45a4d91b56b6819fa4e67687d7f3f348647a325e 2026-10-19T22:06:15+00:00
+CODEC_BUILD_EXIT rc=0 2026-10-19T22:06:15+00:00

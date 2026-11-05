@@ -1,0 +1,13 @@
+{
+  "classifier_commit": "cc593e3be",
+  "scope": "CPU-only review of committed classifier; not deployed",
+  "verdicts": {
+    "exact_owned_post_init": "EXPECTED",
+    "exact_before_init": "FATAL",
+    "unexpected_native_intr1": "FATAL",
+    "garbage_after_shape": "EXPECTED",
+    "zero_pid": "EXPECTED",
+    "pid_one": "EXPECTED",
+    "first_unparsed_marker_hidden_by_second": "EXPECTED"
+  }
+}

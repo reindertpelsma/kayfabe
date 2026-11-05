@@ -90,6 +90,9 @@ Step 'defender-exclusion' {
     Add-MpPreference -ExclusionPath 'C:\kf'
 }
 
+# The installed image stays password-less on purpose (this step is unchanged). A guest that must reach a
+# signed-in desktop by itself gets autologon later, on request, from `win_vm.sh desktop-prep`
+# (desktop_prep.ps1: password on stdin, read-back, DevicePasswordLessBuildVersion=0, OverlayTestMode=5).
 Step 'autologon-cleanup' {
     Remove-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon' -Name DefaultPassword -ErrorAction SilentlyContinue
     Set-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon' -Name AutoAdminLogon -Value '0'

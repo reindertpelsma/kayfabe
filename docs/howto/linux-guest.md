@@ -16,6 +16,8 @@ All of these are the repository's claims, with the revision or box where it stat
 
 Not done: demand-paged managed memory (4 applications), a rootless boot record on master (one exists on the branch `claude/rootless-audit-20261016`, see [Security model](security.md)), and any statement about sharing performance between two VMs on one GPU (two VMs have booted together; see the [FAQ](../FAQ.md)). <!-- src: README.md, docs/PRODUCT_POSITIONING.md -->
 
+*(2026-10-31: if you already have a Linux VM, skip the image preparation below and read [Attach your GPU to a VM you already have](attach-to-existing-vm.md). This section is how the bench builds its own throwaway image, not an install guide.)*
+
 ## Prepare a guest image
 
 The bench builds its guest image once, from an Ubuntu 24.04 (noble) cloud image, on **stock QEMU** (no kayfabe), then reuses it. These are the steps `scripts/bench/provision_bench_tree.sh` performs. The bench scripts assume the host-mode driver: the same `.run` as the host. <!-- src: scripts/bench/provision_bench_tree.sh -->

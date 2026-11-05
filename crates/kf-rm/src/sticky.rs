@@ -516,12 +516,12 @@ pub const POLICY_DISPOSITIONS: [PolicyDisposition; 16] = [
     // entire point of the echo — is untouched by it.
     PolicyDisposition {
         name: "SetPageDirPolicy",
-        path: "crates/kayfabe-device/src/setpagedir.rs",
+        path: "archive/crates/kayfabe-device/src/setpagedir.rs",
         disposition: StickyDisposition::Guarded,
     },
     PolicyDisposition {
         name: "InitTablePolicy",
-        path: "crates/kayfabe-device/src/inittables.rs",
+        path: "archive/crates/kayfabe-device/src/inittables.rs",
         disposition: StickyDisposition::Guarded,
     },
     // ★ The control census (`#`03a5c31). `Delegates` is the unconditional statement: it
@@ -534,22 +534,22 @@ pub const POLICY_DISPOSITIONS: [PolicyDisposition; 16] = [
     // this array.
     PolicyDisposition {
         name: "ControlCensus<P>",
-        path: "crates/kayfabe-device/src/census.rs",
+        path: "archive/crates/kayfabe-device/src/census.rs",
         disposition: StickyDisposition::Delegates,
     },
     PolicyDisposition {
         name: "StaticInfoPolicy",
-        path: "crates/kayfabe-device/src/staticinfo.rs",
+        path: "archive/crates/kayfabe-device/src/staticinfo.rs",
         disposition: StickyDisposition::NotAControl,
     },
     PolicyDisposition {
         name: "GuestSystemInfoPolicy",
-        path: "crates/kayfabe-device/src/guestsysinfo.rs",
+        path: "archive/crates/kayfabe-device/src/guestsysinfo.rs",
         disposition: StickyDisposition::NotAControl,
     },
     PolicyDisposition {
         name: "InertPolicy",
-        path: "crates/kayfabe-device/src/inert.rs",
+        path: "archive/crates/kayfabe-device/src/inert.rs",
         disposition: StickyDisposition::NotAControl,
     },
     // ⊘ **`FaultBufferRecorder` is NOT here, and its absence is the correct kind.** It held a
@@ -570,27 +570,27 @@ pub const POLICY_DISPOSITIONS: [PolicyDisposition; 16] = [
     // than leaving it to `gvas_publication.rs` alone.
     PolicyDisposition {
         name: "GvasPubRecorder",
-        path: "crates/kayfabe-device/src/gvaspub.rs",
+        path: "archive/crates/kayfabe-device/src/gvaspub.rs",
         disposition: StickyDisposition::NeverAnswers,
     },
     PolicyDisposition {
         name: "UnservicedLedger",
-        path: "crates/kayfabe-device/src/unserviced.rs",
+        path: "archive/crates/kayfabe-device/src/unserviced.rs",
         disposition: StickyDisposition::NeverAnswers,
     },
     PolicyDisposition {
         name: "StickyAnswerGuard",
-        path: "crates/kayfabe-device/src/sticky.rs",
+        path: "archive/crates/kayfabe-device/src/sticky.rs",
         disposition: StickyDisposition::Delegates,
     },
     PolicyDisposition {
         name: "PolicyChain",
-        path: "crates/kayfabe-gsp/src/boot.rs",
+        path: "archive/crates/kayfabe-gsp/src/boot.rs",
         disposition: StickyDisposition::Delegates,
     },
     PolicyDisposition {
         name: "EchoOk",
-        path: "crates/kayfabe-gsp/src/boot.rs",
+        path: "archive/crates/kayfabe-gsp/src/boot.rs",
         disposition: StickyDisposition::FixtureOnly,
     },
     PolicyDisposition {
@@ -642,7 +642,7 @@ pub const POLICY_DISPOSITIONS: [PolicyDisposition; 16] = [
     // `CommandObserver` rather than a `CommandPolicy` for that reason.
     PolicyDisposition {
         name: "Observing",
-        path: "crates/kayfabe-gsp/src/boot.rs",
+        path: "archive/crates/kayfabe-gsp/src/boot.rs",
         disposition: StickyDisposition::NeverAnswers,
     },
     // ★★ `#149`. `BarPdePolicy` answers exactly `UPDATE_BAR_PDE` (fn 70) and declines

@@ -1,0 +1,128 @@
+[
+  {
+    "crate": "kf-abi",
+    "exit": 0,
+    "passed": 594,
+    "failed": 0,
+    "ignored": 0,
+    "log": "/workspace/codex/sweep-phase1-accepted-kf-abi.log",
+    "source": "7e9145ff8d5ea8a238e34064b7636024ed0d62c8"
+  },
+  {
+    "crate": "kf-arch",
+    "exit": 0,
+    "passed": 4,
+    "failed": 0,
+    "ignored": 0,
+    "log": "/workspace/codex/sweep-phase1-accepted-kf-arch.log",
+    "source": "7e9145ff8d5ea8a238e34064b7636024ed0d62c8"
+  },
+  {
+    "crate": "kf-broker",
+    "exit": 0,
+    "passed": 162,
+    "failed": 0,
+    "ignored": 9,
+    "log": "/workspace/codex/sweep-phase1-accepted-kf-broker.log",
+    "source": "7e9145ff8d5ea8a238e34064b7636024ed0d62c8"
+  },
+  {
+    "crate": "kf-census",
+    "exit": 0,
+    "passed": 57,
+    "failed": 0,
+    "ignored": 1,
+    "log": "/workspace/codex/sweep-phase1-accepted-kf-census.log",
+    "source": "7e9145ff8d5ea8a238e34064b7636024ed0d62c8"
+  },
+  {
+    "crate": "kf-chan",
+    "exit": 0,
+    "passed": 530,
+    "failed": 0,
+    "ignored": 3,
+    "log": "/workspace/codex/sweep-phase1-accepted-kf-chan.log",
+    "source": "7e9145ff8d5ea8a238e34064b7636024ed0d62c8"
+  },
+  {
+    "crate": "kf-chip",
+    "exit": 0,
+    "passed": 84,
+    "failed": 0,
+    "ignored": 0,
+    "log": "/workspace/codex/sweep-phase1-accepted-kf-chip.log",
+    "source": "7e9145ff8d5ea8a238e34064b7636024ed0d62c8"
+  },
+  {
+    "crate": "kf-cuda",
+    "exit": 0,
+    "passed": 80,
+    "failed": 0,
+    "ignored": 0,
+    "log": "/workspace/codex/sweep-phase1-accepted-kf-cuda.log",
+    "source": "7e9145ff8d5ea8a238e34064b7636024ed0d62c8"
+  },
+  {
+    "crate": "kf-disp",
+    "exit": 0,
+    "passed": 284,
+    "failed": 0,
+    "ignored": 5,
+    "log": "/workspace/codex/sweep-phase1-accepted-kf-disp.log",
+    "source": "7e9145ff8d5ea8a238e34064b7636024ed0d62c8"
+  },
+  {
+    "crate": "kf-gsp",
+    "exit": 0,
+    "passed": 61,
+    "failed": 0,
+    "ignored": 0,
+    "log": "/workspace/codex/sweep-phase1-accepted-kf-gsp.log",
+    "source": "7e9145ff8d5ea8a238e34064b7636024ed0d62c8"
+  },
+  {
+    "crate": "kf-harness",
+    "exit": 0,
+    "passed": 12,
+    "failed": 0,
+    "ignored": 0,
+    "log": "/workspace/codex/sweep-phase1-accepted-kf-harness.log",
+    "source": "7e9145ff8d5ea8a238e34064b7636024ed0d62c8"
+  },
+  {
+    "crate": "kf-host",
+    "exit": 0,
+    "passed": 66,
+    "failed": 0,
+    "ignored": 0,
+    "log": "/workspace/codex/sweep-phase1-accepted-kf-host.log",
+    "source": "7e9145ff8d5ea8a238e34064b7636024ed0d62c8"
+  },
+  {
+    "crate": "kf-mem",
+    "exit": 0,
+    "passed": 186,
+    "failed": 0,
+    "ignored": 3,
+    "log": "/workspace/codex/sweep-phase1-accepted-kf-mem.log",
+    "source": "7e9145ff8d5ea8a238e34064b7636024ed0d62c8"
+  },
+  {
+    "crate": "kf-qemu",
+    "exit": 0,
+    "passed": 407,
+    "failed": 0,
+    "ignored": 0,
+    "log": "/workspace/codex/sweep-phase1-accepted-kf-qemu.log",
+    "source": "7e9145ff8d5ea8a238e34064b7636024ed0d62c8"
+  },
+  {
+    "crate": "kf-rm",
+    "exit": 0,
+    "passed": 811,
+    "failed": 0,
+    "ignored": 0,
+    "log": "/workspace/codex/sweep-phase1-accepted-kf-rm.log",
+    "source": "7e9145ff8d5ea8a238e34064b7636024ed0d62c8"
+  }
+]

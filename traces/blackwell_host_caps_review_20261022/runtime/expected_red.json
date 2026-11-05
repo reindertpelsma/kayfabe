@@ -1,0 +1,44 @@
+{
+  "expected_red_commit": "1e07966d0",
+  "seams_commit": "aae3457f4",
+  "fix_commit": "4110024dc",
+  "strengthening_commit": "5d96a832a",
+  "probe_commit": "ab91b4acc",
+  "results": {
+    "kf-disp": {
+      "summaries": [
+        "test result: FAILED. 0 passed; 11 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ],
+      "failed_tests": [
+        "a_changed_guest_layout_keeps_the_entire_derived_fallback",
+        "a_snapshot_from_another_class_cannot_override_this_family",
+        "a_snapshot_from_another_die_cannot_override_this_die",
+        "an_all_ones_host_page_is_not_published",
+        "an_all_zero_host_page_is_not_a_claim_of_no_capabilities",
+        "every_family_uses_its_generated_address_and_keeps_inactive_windows_derived",
+        "host_caps_are_facts_and_do_not_force_a_fvlut_bit",
+        "host_first_and_last_precomp_words_replace_only_their_t1_words",
+        "host_reply_can_remove_a_derived_feature_without_a_hybrid_page",
+        "long_reply_abandons_the_whole_snapshot",
+        "short_reply_abandons_the_whole_snapshot"
+      ]
+    },
+    "kf-host": {
+      "summaries": [
+        "test result: FAILED. 8 passed; 10 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ],
+      "failed_tests": [
+        "a_later_failed_batch_does_not_return_a_partial_page",
+        "absent_control_is_a_named_fallback",
+        "all_five_compiled_host_abis_use_the_same_read_only_contract",
+        "changed_first_register_is_a_malformed_reply",
+        "changed_last_register_is_a_malformed_reply",
+        "final_bounded_word_is_read_in_fixed_size_batches",
+        "final_denied_register_abandons_the_whole_snapshot",
+        "first_denied_register_abandons_the_whole_snapshot",
+        "first_precomp_values_are_read_without_write_or_channel_target",
+        "permission_refusal_is_a_named_fallback"
+      ]
+    }
+  }
+}

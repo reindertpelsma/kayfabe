@@ -2,7 +2,7 @@
 # session_prep.sh -- host side of the 2026-10-11 VFIO GL reference. Usage: session_prep.sh (run under `flock -o /tmp/kayfabe-fastguest.lock`)
 # detach 4070, boot a fresh overlay of the baseline with the observer, set the vast password, sign in with keys, attach the exFAT app disk.
 set -u
-W=/var/lib/kf-windows-20261005; D=$W/vfio-gl-20261011; T=$D/tools; N=${BOOT:-1}; R=$D/boot$N; PW=kfsign7   # BOOT=2 REUSE=1: another boot on the same disk (4070 stays bound to vfio-pci)
+W=/var/lib/kf-windows-20261005; D=$W/vfio-gl-20261011; T=$D/tools; N=${BOOT:-1}; R=$D/boot$N; PW=${KF_GUEST_PW:?set KF_GUEST_PW to your own throwaway guest password}   # BOOT=2 REUSE=1: another boot on the same disk (4070 stays bound to vfio-pci)
 export VDR_DIR=$D VDR_TRACE_BAR0=0
 Q(){ timeout 15 python3 $W/boundary-tools/qmp.py $R/qmp.sock "$@"; }
 G(){ timeout ${GT:-60} python3 $W/boundary-tools/qmp.py $R/qga.sock "$@"; }

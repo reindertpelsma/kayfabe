@@ -1,0 +1,68 @@
+qemu_log=gate_g4_b2_qemu.log
+gsp_lines=12252
+refused_0x2080121f=0
+served_0x2080121f=1
+gsp_refused_lines=90
+unloading_guest_driver=1
+running_to_suspending=1
+host_xid_in_boots=0
+kf-host: HOST-ABI REFUSED control 0x2080014a: host control 0x2080014a has no row in kf_abi::hostabi::HOST_CONTROLS, and host driver 595.91.07 is outside the interval the host encoders were written for — its layout is unknown
+kf-host: HOST-ABI REFUSED control 0x20809064: host control 0x20809064 has no public header (kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)); its layout at host driver 595.91.07 was never measured
+kf-host: HOST-ABI REFUSED control 0x2080a028: host control 0x2080a028 has no public header (kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)); its layout at host driver 595.91.07 was never measured
+kf-host: HOST-ABI REFUSED control 0x2080a028: host control 0x2080a028 has no public header (kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)); its layout at host driver 595.91.07 was never measured
+kf-host: HOST-ABI REFUSED control 0x2080a084: host control 0x2080a084 has no public header (kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)); its layout at host driver 595.91.07 was never measured
+kf-host: HOST-ABI REFUSED control 0x2080a026: host control 0x2080a026 has no public header (kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)); its layout at host driver 595.91.07 was never measured
+kf3: GSP phase Cold -> ProtectedRegionUp
+kf3: w#118 bar0 @0x1103c0 = 0x1 phase=ProtectedRegionUp
+kf3: w#119 bar0 @0x1103c0 = 0x0 phase=ProtectedRegionUp
+kf3: w#120 bar0 @0x111668 = 0x111 phase=ProtectedRegionUp
+kf3: w#121 bar0 @0x110040 = 0x798c1000 phase=ProtectedRegionUp
+kf3: w#122 bar0 @0x110044 = 0x2 phase=ProtectedRegionUp
+kf-gsp: fn 72 GSP_SET_SYSTEM_INFO seq=0 936 bytes: bGspNocatEnabled=1 at +929 (driver 580.65.06's layout; 1 = a Windows-built RM, THE_WINDOWS_AXIS §7)
+kf3: w#123 bar0 @0x8403c0 = 0x1 phase=ProtectedRegionUp
+kf3: w#124 bar0 @0x8403c0 = 0x0 phase=ProtectedRegionUp
+kf3: w#125 bar0 @0x840084 = 0x192000a1 phase=ProtectedRegionUp
+kf3: w#126 bar0 @0x840624 = 0x80 phase=ProtectedRegionUp
+kf3: w#127 bar0 @0x84010c = 0x0 phase=ProtectedRegionUp
+kf3: w#128 bar0 @0x840600 = 0x5 phase=ProtectedRegionUp
+kf3: w#129 bar0 @0x840110 = 0x2798b00 phase=ProtectedRegionUp
+kf3: w#130 bar0 @0x840128 = 0x0 phase=ProtectedRegionUp
+kf3: w#131 bar0 @0x840114 = 0x0 phase=ProtectedRegionUp
+kf3: w#132 bar0 @0x84011c = 0x100 phase=ProtectedRegionUp
+kf3: w#133 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#134 bar0 @0x840114 = 0x100 phase=ProtectedRegionUp
+kf3: w#135 bar0 @0x84011c = 0x200 phase=ProtectedRegionUp
+kf3: w#136 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#137 bar0 @0x840114 = 0x200 phase=ProtectedRegionUp
+kf3: w#138 bar0 @0x84011c = 0x300 phase=ProtectedRegionUp
+kf3: w#139 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#140 bar0 @0x840114 = 0x300 phase=ProtectedRegionUp
+kf3: w#141 bar0 @0x84011c = 0x400 phase=ProtectedRegionUp
+kf3: w#142 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#143 bar0 @0x840114 = 0x400 phase=ProtectedRegionUp
+kf3: w#144 bar0 @0x84011c = 0x500 phase=ProtectedRegionUp
+kf3: w#145 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#146 bar0 @0x840114 = 0x500 phase=ProtectedRegionUp
+kf3: w#147 bar0 @0x84011c = 0x600 phase=ProtectedRegionUp
+kf3: w#148 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#149 bar0 @0x840114 = 0x600 phase=ProtectedRegionUp
+kf3: w#150 bar0 @0x84011c = 0x700 phase=ProtectedRegionUp
+kf3: w#151 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#152 bar0 @0x840114 = 0x700 phase=ProtectedRegionUp
+kf3: w#153 bar0 @0x84011c = 0x800 phase=ProtectedRegionUp
+kf3: w#154 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#155 bar0 @0x840114 = 0x800 phase=ProtectedRegionUp
+kf3: w#156 bar0 @0x84011c = 0x900 phase=ProtectedRegionUp
+kf3: w#157 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#158 bar0 @0x840114 = 0x900 phase=ProtectedRegionUp
+kf3: w#159 bar0 @0x84011c = 0xa00 phase=ProtectedRegionUp
+kf3: w#160 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#161 bar0 @0x840114 = 0xa00 phase=ProtectedRegionUp
+kf3: w#162 bar0 @0x84011c = 0xb00 phase=ProtectedRegionUp
+kf3: w#163 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#164 bar0 @0x840114 = 0xb00 phase=ProtectedRegionUp
+kf3: w#165 bar0 @0x84011c = 0xc00 phase=ProtectedRegionUp
+kf3: w#166 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#167 bar0 @0x840114 = 0xc00 phase=ProtectedRegionUp
+kf3: w#168 bar0 @0x84011c = 0xd00 phase=ProtectedRegionUp
+kf3: w#169 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp

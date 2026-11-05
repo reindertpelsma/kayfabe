@@ -1,0 +1,35 @@
+COLLECT now=2026-10-21T12:52:37.2965857Z boot=2026-10-21T12:49:57.5000000Z
+FILE C:\Windows\Minidump\102126-75031-01.dmp 2432605 2026-10-21T12:50:58.2876215Z
+NODIR C:\Windows\LiveKernelReports\WATCHDOG
+EVT log=System t=2026-10-21T12:51:09.8446188Z prov=Microsoft-Windows-WER-SystemErrorReporting id=1001 msg=The computer has rebooted from a bugcheck. The bugcheck was: 0x00000050 (0xffffdb047809fcc7, 0x0000000000000002, 0xfffff80735efa1b0, 0x0000000000000002). A dump was saved in: C:\WINDOWS\Minidump\102126-75031-01.dmp. Report Id: 55eb3b3a-55df-4803-81de-dd18c9ebc999.
+EVT log=System t=2026-10-21T12:50:29.2937106Z prov=Microsoft-Windows-Kernel-Power id=41 msg=The system has rebooted without cleanly shutting down first. This error could be caused if the system stopped responding, crashed, or lost power unexpectedly.
+EVT log=System t=2026-10-21T12:51:22.6479562Z prov=EventLog id=6008 msg=The previous system shutdown at 12:45:58 PM on ?10/?21/?2026 was unexpected.
+EVTQ_NONE log=System id=4101 prov=
+EVTQ_NONE log=System id=4117 prov=
+EVTQ_NONE log=System id=4119 prov=
+EVTQ_NONE log=System id= prov=nvlddmkm
+EVTQ_NONE log=System id= prov=Display
+EVT log=Application t=2026-10-21T12:51:50.9840865Z prov=Windows Error Reporting id=1001 msg=Fault bucket , type 0 Event Name: BlueScreen Response: Not available Cab Id: 0 Problem signature: P1: 50 P2: ffffdb047809fcc7 P3: 2 P4: fffff80735efa1b0 P5: 2 P6: 10_0_26100 P7: 0_0 P8: 256_1 P9: P10: Attached files: \\?\C:\WINDOWS\Minidump\102126-75031-01.dmp \\?\C:\WINDOWS\SystemTemp\WER-75125-0.sysdata.xml \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.906921d5-09f8-4677-bd90-d2ec9d96cdc1.tm
+EVT log=Application t=2026-10-21T12:51:51.4703791Z prov=Windows Error Reporting id=1001 msg=Fault bucket , type 0 Event Name: BlueScreen Response: Not available Cab Id: 0 Problem signature: P1: 50 P2: ffffdb047809fcc7 P3: 2 P4: fffff80735efa1b0 P5: 2 P6: 10_0_26100 P7: 0_0 P8: 256_1 P9: P10: Attached files: \\?\C:\WINDOWS\Minidump\102126-75031-01.dmp \\?\C:\WINDOWS\SystemTemp\WER-75125-0.sysdata.xml \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.906921d5-09f8-4677-bd90-d2ec9d96cdc1.tm
+EVTQ_NONE log=Application id=1000 prov=
+WER C:\ProgramData\Microsoft\Windows\WER\ReportQueue\Kernel_50_76bef02040a5de72b2b53e6a55c6ab2c5e229a1e_00000000_2e4767dd-4c42-4d18-b962-90cb747827b1\Report.wer
+  EventType=BlueScreen
+  Sig[0].Name=Code
+  Sig[0].Value=50
+  Sig[1].Name=Parameter 1
+  Sig[1].Value=ffffdb047809fcc7
+  Sig[2].Name=Parameter 2
+  Sig[2].Value=2
+  Sig[3].Name=Parameter 3
+  Sig[3].Value=fffff80735efa1b0
+  Sig[4].Name=Parameter 4
+  Sig[4].Value=2
+  Sig[5].Name=OS version
+  Sig[5].Value=10_0_26100
+  Sig[6].Name=Service Pack
+  Sig[6].Value=0_0
+  Sig[7].Name=Product
+  Sig[7].Value=256_1
+  FriendlyEventName=Shut down unexpectedly
+  AppName=Windows
+COLLECT_DONE

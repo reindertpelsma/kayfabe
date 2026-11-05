@@ -1,0 +1,11 @@
+{
+  "utc": "2026-10-20T01:42:05.280514+00:00",
+  "actual_QOM_properties": {
+    "display": false,
+    "gop": false,
+    "gop-efi": "",
+    "guest-driver": "580.65.06"
+  },
+  "source": "0c87acda802b18a610739e75f2b50049a9247067",
+  "limit": "No Code43/TDR/deviceinit verdict inferred from these properties"
+}

@@ -206,7 +206,7 @@ pub const FB_INFO_INDEX_MAX: u32 = 0x3b;
 
 /// `sizeof(NV2080_CTRL_FB_GET_INFO_V2_PARAMS)` = `4 + 8 * 128` = 1028.
 ///
-/// `[measured 2026-08-08, real GA106 `GPU-d0913685`, driver 580.159.04 Open]` on the wire as
+/// `[measured 2026-08-08, real GA106 `GPU-fa4e0001`, driver 580.159.04 Open]` on the wire as
 /// `size=1028` on all five `FB_GET_INFO_V2` calls of
 /// `traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt` (lines 36, 37, 41, 50, 66), and
 /// `[measured 2026-08-08, boot `gt1432_20e319b`]` on all four of our own guest's
@@ -251,7 +251,7 @@ pub const FB_INFO_INDEX_LTC_COUNT: u32 = 0x22;
 
 /// `NV2080_CTRL_FB_INFO_INDEX_LTS_COUNT` — ⊘ forwarded, not answered by this rung, and the
 /// one whose obvious derivation is contradicted by hardware:
-/// `[measured 2026-08-08, real GA106 `GPU-d0913685`, driver 580.159.04 Open,
+/// `[measured 2026-08-08, real GA106 `GPU-fa4e0001`, driver 580.159.04 Open,
 /// `traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt:66`]` this index answers **18**
 /// while `ltcCount × ltsPerLtcCount` from this port's own `0x20800a1c` row is **24**. See
 /// this module's header, and `kayfabe-device/tests/fb_get_info_v2.rs`, which fails if the

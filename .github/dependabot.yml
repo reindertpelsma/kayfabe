@@ -1,0 +1,21 @@
+# Refreshes the commit-SHA pins of third-party actions through reviewed PRs
+# (scripts/ci/workflow_lint.py fails on a `uses:` that is not a full SHA). Dependabot keeps the
+# trailing `# vX.Y.Z` comment in step with the SHA. PRs target `next`, like every other PR.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: next
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - github-actions
+    commit-message:
+      prefix: "ci(deps)"
+    groups:
+      github-actions:
+        patterns:
+          - "*"

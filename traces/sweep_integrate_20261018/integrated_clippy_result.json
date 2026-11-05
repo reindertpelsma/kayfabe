@@ -1,0 +1,11 @@
+{
+  "source": "7fb36324ab42a7c27d65aae4cc5aadcf6225ff20",
+  "all_targets": true,
+  "keep_going": true,
+  "total_diagnostics": 676,
+  "new_diagnostics_on_changed_lines": 0,
+  "inherited_kf_qemu_denied_diagnostics": 89,
+  "exit": 101,
+  "baseline": "sweep-integrated-clippy-final.jsonl; original inherited-error ruling remains binding",
+  "note": "All-target keep-going exposes inherited diagnostics outside changed lines; raw totals differ from the earlier partial traversal. No blanket clean-clippy claim."
+}

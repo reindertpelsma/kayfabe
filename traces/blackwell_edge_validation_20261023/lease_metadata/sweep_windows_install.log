@@ -1,0 +1,10 @@
+WIN_BASE_INSTALL_START pinned-QEMU/std-VGA baseline preparation 2026-10-22T22:19:10+00:00
+Traceback (most recent call last):
+  File "/root/sweep2/guard/blackwell/media_wait.py", line 31, in <module>
+    if __name__=='__main__':main()
+  File "/root/sweep2/guard/blackwell/media_wait.py", line 28, in main
+    await_media(ready,alive,time.monotonic,time.sleep,deadline)
+  File "/root/sweep2/guard/blackwell/media_wait.py", line 7, in await_media
+    if not alive():raise MediaRefused('media job exited without success')
+__main__.MediaRefused: media job exited without success
+WIN_BASE_INSTALL_EXIT rc=1 2026-10-22T22:19:17+00:00

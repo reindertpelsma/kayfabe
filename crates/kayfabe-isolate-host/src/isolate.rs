@@ -1476,7 +1476,7 @@ impl RmBackend for ProxyRmBackend {
             len,
             at: at.0,
             phys,
-            prot: prot_code(kayfabe_vmm::Prot::ReadWrite),
+            prot: prot_code(kayfabe_isolate::Prot::ReadWrite),
         })
     }
 

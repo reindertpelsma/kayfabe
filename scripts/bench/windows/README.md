@@ -42,6 +42,7 @@ $S ssh 'Get-PnpDevice -Class Display'       # or: ssh -i /workspace/winvm/kfwin/
 $S shot                                     # PNG of the kf3 console under logs/shots/
 $S check --kf3                              # WIN_* lines: Secure Boot, db, TPM + EK hash, BitLocker, virtio …
 $S nv-install                               # NVIDIA 580.88, GSP forced on before nvlddmkm's first start
+$S desktop-prep                             # autologon + DWM OverlayTestMode=5 for a signed-in desktop at the next boot
 $S collect nv1                              # Windows-side evidence → logs/evidence/nv1/
 $S stop                                     # guest shutdown → QMP powerdown → QMP quit (never SIGKILL)
 $S status
@@ -61,6 +62,32 @@ $S status
 | `--ssh-bind ADDR` | Bind the ssh port wider than `127.0.0.1`. **Explicit only.** |
 | `--detach` | Run in the background. |
 | `--no-rpc-trace` | Do not set `KF3_RPC_TRACE=1` (on by default for kf3 runs: one log line per command kf3 answers). |
+| `--env-file FILE` | Export the `KF3_*` flags in FILE for this run (added 2026-10-31). Only blank lines, `#` comments and `KF3_NAME=digits` lines are accepted; any other line refuses the file. The run log records the file's name, sha256 prefix and flag count (`ENV_FILE`) and the resulting `KF3_*` environment (`KF3_ENV`). A sample is [`kf3_flags.sample.env`](kf3_flags.sample.env): the 19 flags of the recorded Windows Code 0 holds, **not confirmed as the current production list** (its header says what to check against `next`). |
+| `--dry-run` | Print the QEMU command line (`DRYRUN_QEMU`) and the `KF3_*` environment (`DRYRUN_ENV`) and exit; nothing is started, locked, signed or created (same as `WINVM_DRY_RUN=1`; `install --dry-run` prints the install boot). |
+
+**Options for a rented Vast box (added 2026-10-31, from [`V3_WINDOWS_ON_VAST.md`](../../../docs/design/V3_WINDOWS_ON_VAST.md) section 3).**
+All are opt-in. The default column is today's behaviour for the old host workflow; the last column is what the Vast lane
+sets. **None of this has run on hardware yet.**
+
+| setting | default (unchanged) | Vast lane | what it does |
+|---|---|---|---|
+| `WINVM_LOCK_WAIT_S` | 7200 | 120 | How long `run` waits for the GPU lock before refusing (the refusal names the holder when `fuser` can). |
+| `WINVM_INSTALL_WAIT_S` | 14400 | 4200 | How long `install` waits for the install boot. On timeout it screendumps, quits QEMU and the step fails. |
+| `WINVM_SSH_CONNECT_TIMEOUT` | 8 | 100 | ssh/scp `ConnectTimeout`. `wait_ssh` lets one attempt last this long plus 12 s (it was a fixed 20 s). |
+| `WINVM_VM_IDENTITY=1` | off | on | A random SMBIOS UUID, serial and MAC per VM, stored once in `$WINVM_ROOT/<name>/identity.env` (0600) and passed as `-uuid`, `-smbios type=1,serial=` and `mac=` on every boot of that VM. It makes kf3's `gpu-uuid=auto` (which hashes `-uuid`) the same on every boot of one VM and different between VMs. An `identity.env` that exists is always used. Turn it on **before `install`**: adding it to an installed VM changes the hardware identity Windows sees. |
+| `WINVM_INSTALL_CACHE` | unset (QEMU's default) | `unsafe` through `windows_lane.sh` | A QEMU `cache=` mode (`none`, `off`, `writeback`, `writethrough`, `directsync`, `unsafe`; anything else is refused) for the **base disk of the two install-time boots only** (the install boot and its check boot); `run` never reads it. **It is not an image cache**: it is the write-cache mode of this VM's own disk, and nothing is saved, shared or restored between VMs (the swtpm state, the ssh key, the Windows password and the Secure Boot variables stay per VM). With `unsafe` a host crash during the install can leave a corrupt qcow2, so after one delete the VM directory and install again instead of resuming. `windows_lane.sh` sets `unsafe`; `WINLANE_INSTALL_CACHE=` (set, empty) turns it off. Added 2026-10-31 (from draft PR #165), not yet run on hardware. |
+| `WINVM_KF3_DISPLAY=off` | `on` | not used (the Vast bar needs a console screenshot) | `run` builds a headless `kf3-gpu` (no display plane, no boot GOP, so no GOP is built or signed). Anything but `on` or `off` is refused by name. Added 2026-10-31 (from draft PR #163), not yet run on hardware. |
+| `KF_GUEST_USER` | `kf` (`desktop-prep`); `vast` (`signin.py`) | `kf` | The account `desktop-prep` sets up for autologon, and the account `signin.py` expects to own the session. |
+| `desktop-prep` | not run | run once in the bind boot | Sets Winlogon autologon for `KF_GUEST_USER` (the password is read from `secrets/win_password` and goes to the guest on ssh's stdin, never in an argument), `DevicePasswordLessBuildVersion=0` and `OverlayTestMode=5`, and reads each back (`desktop_prep.txt`-style output in `logs/desktop_prep_*.txt`, last line `DESKTOP_PREP_DONE fail=0`). They apply at the next boot of that disk. The password then sits in the guest registry: use it on a throwaway guest on an untrusted box only. The installed image itself still ends first logon password-less (`firstlogon.ps1` is unchanged). |
+
+**Fresh Vast box to a sealed Windows image: `scripts/bench/box/windows_lane.sh`** (added 2026-10-31 from draft PR #165; not yet run on hardware in this form). It provisions the box, fetches the pinned media in parallel with the host driver and the kf3 build, and runs `win_vm.sh install` with every core (at most 16) and `WINVM_INSTALL_CACHE=unsafe`. It prints `STAGE <name> START|EXIT rc=N`, a `WINLANE_TIMING` line and a last `WINLANE_EXIT rc=N` line to `/root/prov/winlane.log`; a log without `WINLANE_EXIT` belongs to a dead run. It does not run the Linux suites and does not restore a prebuilt image.
+
+**The merge-bar Windows gate: `scripts/bench/box/windows_gate.sh`** (added 2026-11-01; `KF_MERGE_WINDOWS=1` in
+`merge_check.sh`). It drives this script through install, `run`, `check --kf3`, `nv-install --no-enable`,
+`desktop-prep`, a guest reboot, a one-time device enable (`gate_enable.ps1`), `nvidia-smi`, two probes
+(`cup8`, `kf_dxprobe d3d11`), a 300 s idle and the reset counters (`gate_state.ps1`, `gate_run.ps1`), and ends in one
+`WINDOWS_GATE_*` verdict line; the same-box host GPU reference decides whether a failure is kayfabe's. Design
+and the first real run: [`docs/design/V3_WINDOWS_GATE.md`](../../../docs/design/V3_WINDOWS_GATE.md).
 
 **Remote access.** Use `ssh -J <gpu-host> -p 2224 kf@127.0.0.1` with a key you passed to
 `install --authorized-key`. No public port is opened.
@@ -83,7 +110,8 @@ kfwin/logs/         install.log, <tag>_run.log, per boot: _qemu.log _qmp_events.
 - Every step logs `START` and `EXIT rc=`. A log with no `WINVM_RUN_END` belongs to a dead run, not a
   running one.
 - The kf3 revision and the host driver are stamped on every run (`WINVM_RUN_START`).
-- GPU work takes `/tmp/kayfabe-fastguest.lock`, the same lock as the Linux lanes.
+- GPU work takes `/tmp/kayfabe-fastguest.lock`, the same lock as the Linux lanes. `run` waits for it up to
+  `WINVM_LOCK_WAIT_S` seconds (default 7200).
 - Nothing secret is in this directory or the repo. A VM is never restored from another VM's state: if
   the box is lost, run `install` again.
 

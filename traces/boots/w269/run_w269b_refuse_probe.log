@@ -83,8 +83,8 @@ pid=1758 state=Rl
     1759: 7 0x5b623419a950 0x3 0xffffffff 0x5b62341cd580 0x0 0x7 0x7f8472bfed40 0x7f8472d1b5fd
     1978: 7 0x5b62343104f0 0x5 0x64 0x0 0x0 0x0 0x7f8470f49d40 0x7f8472d1b5fd
 === guest_spinprobe pid=1758 maps=92 budget=6000 steps ===
---- libcuda mapping: 0x7f8473000000-0x7f8478bd4000 (RIP offsets below are relative to this)
---- want offsets: libcuda+0x22be1f libcuda+0x22bedc
+[line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+[line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
 --- 3 thread(s); ★ orig_rax >= 0 with state S/D means a BLOCKING SYSCALL, and the whole memory-poll reading below would be VOID ---
     tid 1758   state=R  orig_rax=228    RIP=0x7fffd75b0bb2  [vdso]+0xbb2  <r-xp [vdso]>
     tid 1758   RSP=0x7fffd74ec3a0 r12=0x7fffd74ec42c r13=0x5b62341a2160 r15=0x7fffd74ec4c0
@@ -92,113 +92,113 @@ pid=1758 state=Rl
     tid 1759   RSP=0x7f8472bfed40 r12=0x0 r13=0x4 r15=0x5b62341989c0
     tid 1978   state=S  orig_rax=7      RIP=0x7f8472d1b5fd  libc.so.6+0x11b5fd  <r-xp /usr/lib/x86_64-linux-gnu/libc.so.6>
     tid 1978   RSP=0x7f8470f49d40 r12=0x0 r13=0xc r15=0x5b62341bf510
-★★ NO THREAD'S RIP WAS INSIDE libcuda. ⊘ Do not read that as 'not spinning' — it may be in the vDSO leg of the same loop. Falling back to tid 1758.
+[line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
 --- single-stepping tid 1758, budget 6000 ---
 --- steps actually taken = 6000 (of a 6000 budget) ---
 --- RIP HISTOGRAM: 512 distinct buckets stored (cap 512); ★ 316 hits fell OUTSIDE the cap and are NOT represented below ---
-        36  0x7f847321f6a0  libcuda.so.580.159.04+0x21f6a0  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        36  0x7f847321f6a3  libcuda.so.580.159.04+0x21f6a3  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        36  0x7f847321f6a6  libcuda.so.580.159.04+0x21f6a6  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        36  0x7f847321f6aa  libcuda.so.580.159.04+0x21f6aa  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        36  0x7f847321f6ae  libcuda.so.580.159.04+0x21f6ae  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        36  0x7f847321f6b2  libcuda.so.580.159.04+0x21f6b2  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        36  0x7f847321f6ba  libcuda.so.580.159.04+0x21f6ba  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        36  0x7f847321f6bd  libcuda.so.580.159.04+0x21f6bd  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        36  0x7f8473460820  libcuda.so.580.159.04+0x460820  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        36  0x7f8473460821  libcuda.so.580.159.04+0x460821  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        36  0x7f8473460824  libcuda.so.580.159.04+0x460824  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        36  0x7f8473460826  libcuda.so.580.159.04+0x460826  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        36  0x7f8473460828  libcuda.so.580.159.04+0x460828  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        36  0x7f847346082c  libcuda.so.580.159.04+0x46082c  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        36  0x7f847346082e  libcuda.so.580.159.04+0x46082e  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        36  0x7f8473460831  libcuda.so.580.159.04+0x460831  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        36  0x7f8473460833  libcuda.so.580.159.04+0x460833  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        36  0x7f8473460834  libcuda.so.580.159.04+0x460834  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        36  0x7f8473460838  libcuda.so.580.159.04+0x460838  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        35  0x7f847346083b  libcuda.so.580.159.04+0x46083b  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        35  0x7f847346083e  libcuda.so.580.159.04+0x46083e  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        35  0x7f8473460844  libcuda.so.580.159.04+0x460844  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        35  0x7f8473460848  libcuda.so.580.159.04+0x460848  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        35  0x7f847346084b  libcuda.so.580.159.04+0x46084b  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
     ⊘ 488 further distinct buckets NOT shown (they are stored, just not printed)
-=== ★★★★★ SNAPSHOT at RIP=0x7f847322be1f (libcuda.so.580.159.04+0x22be1f  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>) ===
+[line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
     rdi=0x7fffd74ec42c rsi=0x7fffd74ec4c0 r12=0x7fffd74ec42c r13=0x5b62341a2160 r15=0x7fffd74ec4c0 rbx=0x0
-    ⊘ rbx==0 selects the pause-only spin; non-zero selects sched_yield+pause.
-    --- WAIT OBJECT 0x7fffd74ec4c0 ---
-    N items = 8   array = 0x5b6234310540   (stride 40)
-    item[0] @0x5b6234310540  KIND=1  [0x08]=0x7f84706fe010 [0x10]=0x1 [0x18]=0x7fffd74ec540 [0x20]=0x7f8472cad7f4
-      handler f9e320 — nested wait 4029e0(S=0x7f8470707420, wanted=0x1)
-        S[0x10] limit    = 0x1   (wanted is within the limit)
-        S[0x18] cached   = 0x0   ★ wanted > cached ⇒ this item is NOT satisfied; it reads
-        S[0x20] desc     = 0x5b62341a82c0
+    [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+    [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+    [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+    [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+      [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
         POLLED ADDRESS     = 0x20440fff0   pageoff=0xff0   nvidiactl+0x400fff0  <rw-s /dev/nvidiactl>
                              VALUE AT IT = 0x00000000 (0)
                              SLOT-JOIN: ★★★ MATCHES a GR SET_REPORT_SEMAPHORE slot page-offset (0xf80..0xff0/16)
-        chain            : item[0x08]=0x7f84706fe010 +0x9410 -> S +0x20 -> 0x5b62341a82c0 +0x10 -> 0x20440fff0
-    item[1] @0x5b6234310568  KIND=1  [0x08]=0x7f8470707628 [0x10]=0x1 [0x18]=0x5b6234310490 [0x20]=0x7f8472e23878
-      handler f9e320 — nested wait 4029e0(S=0x7f8470710a38, wanted=0x1)
-        S[0x10] limit    = 0x1   (wanted is within the limit)
-        S[0x18] cached   = 0x0   ★ wanted > cached ⇒ this item is NOT satisfied; it reads
-        S[0x20] desc     = 0x5b62341b8fc0
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+    [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+      [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
         POLLED ADDRESS     = 0x20440ffe0   pageoff=0xfe0   nvidiactl+0x400ffe0  <rw-s /dev/nvidiactl>
                              VALUE AT IT = 0x00000000 (0)
                              SLOT-JOIN: ★★★ MATCHES a GR SET_REPORT_SEMAPHORE slot page-offset (0xf80..0xff0/16)
-        chain            : item[0x08]=0x7f8470707628 +0x9410 -> S +0x20 -> 0x5b62341b8fc0 +0x10 -> 0x20440ffe0
-    item[2] @0x5b6234310590  KIND=1  [0x08]=0x7f8470710c40 [0x10]=0x1 [0x18]=0x7f8472e3b910 [0x20]=0x7f847320cb70
-      handler f9e320 — nested wait 4029e0(S=0x7f847071a050, wanted=0x1)
-        S[0x10] limit    = 0x1   (wanted is within the limit)
-        S[0x18] cached   = 0x0   ★ wanted > cached ⇒ this item is NOT satisfied; it reads
-        S[0x20] desc     = 0x5b62341ba5c0
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+    [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+      [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
         POLLED ADDRESS     = 0x20440ffd0   pageoff=0xfd0   nvidiactl+0x400ffd0  <rw-s /dev/nvidiactl>
                              VALUE AT IT = 0x00000000 (0)
                              SLOT-JOIN: ★★★ MATCHES a GR SET_REPORT_SEMAPHORE slot page-offset (0xf80..0xff0/16)
-        chain            : item[0x08]=0x7f8470710c40 +0x9410 -> S +0x20 -> 0x5b62341ba5c0 +0x10 -> 0x20440ffd0
-    item[3] @0x5b62343105b8  KIND=1  [0x08]=0x7f847071a258 [0x10]=0x1 [0x18]=0x8 [0x20]=0x7f8472e1a010
-      handler f9e320 — nested wait 4029e0(S=0x7f8470723668, wanted=0x1)
-        S[0x10] limit    = 0x1   (wanted is within the limit)
-        S[0x18] cached   = 0x0   ★ wanted > cached ⇒ this item is NOT satisfied; it reads
-        S[0x20] desc     = 0x5b62341ce280
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+    [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+      [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
         POLLED ADDRESS     = 0x20440ffc0   pageoff=0xfc0   nvidiactl+0x400ffc0  <rw-s /dev/nvidiactl>
                              VALUE AT IT = 0x00000000 (0)
                              SLOT-JOIN: ★★★ MATCHES a GR SET_REPORT_SEMAPHORE slot page-offset (0xf80..0xff0/16)
-        chain            : item[0x08]=0x7f847071a258 +0x9410 -> S +0x20 -> 0x5b62341ce280 +0x10 -> 0x20440ffc0
-    item[4] @0x5b62343105e0  KIND=1  [0x08]=0x7f8470723870 [0x10]=0x1 [0x18]=0x0 [0x20]=0x0
-      handler f9e320 — nested wait 4029e0(S=0x7f847072cc80, wanted=0x1)
-        S[0x10] limit    = 0x1   (wanted is within the limit)
-        S[0x18] cached   = 0x0   ★ wanted > cached ⇒ this item is NOT satisfied; it reads
-        S[0x20] desc     = 0x5b62341cf880
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+    [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+      [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
         POLLED ADDRESS     = 0x20440ffb0   pageoff=0xfb0   nvidiactl+0x400ffb0  <rw-s /dev/nvidiactl>
                              VALUE AT IT = 0x00000000 (0)
                              SLOT-JOIN: ★★★ MATCHES a GR SET_REPORT_SEMAPHORE slot page-offset (0xf80..0xff0/16)
-        chain            : item[0x08]=0x7f8470723870 +0x9410 -> S +0x20 -> 0x5b62341cf880 +0x10 -> 0x20440ffb0
-    item[5] @0x5b6234310608  KIND=1  [0x08]=0x7f847072ce88 [0x10]=0x1 [0x18]=0x0 [0x20]=0x0
-      handler f9e320 — nested wait 4029e0(S=0x7f8470736298, wanted=0x1)
-        S[0x10] limit    = 0x1   (wanted is within the limit)
-        S[0x18] cached   = 0x0   ★ wanted > cached ⇒ this item is NOT satisfied; it reads
-        S[0x20] desc     = 0x5b62341d0e80
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+    [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+      [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
         POLLED ADDRESS     = 0x20440ffa0   pageoff=0xfa0   nvidiactl+0x400ffa0  <rw-s /dev/nvidiactl>
                              VALUE AT IT = 0x00000000 (0)
                              SLOT-JOIN: ★★★ MATCHES a GR SET_REPORT_SEMAPHORE slot page-offset (0xf80..0xff0/16)
-        chain            : item[0x08]=0x7f847072ce88 +0x9410 -> S +0x20 -> 0x5b62341d0e80 +0x10 -> 0x20440ffa0
-    item[6] @0x5b6234310630  KIND=1  [0x08]=0x7f84707364a0 [0x10]=0x1 [0x18]=0x0 [0x20]=0x0
-      handler f9e320 — nested wait 4029e0(S=0x7f847073f8b0, wanted=0x1)
-        S[0x10] limit    = 0x1   (wanted is within the limit)
-        S[0x18] cached   = 0x0   ★ wanted > cached ⇒ this item is NOT satisfied; it reads
-        S[0x20] desc     = 0x5b62341d2060
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+    [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+      [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
         POLLED ADDRESS     = 0x20440ff90   pageoff=0xf90   nvidiactl+0x400ff90  <rw-s /dev/nvidiactl>
                              VALUE AT IT = 0x00000000 (0)
                              SLOT-JOIN: ★★★ MATCHES a GR SET_REPORT_SEMAPHORE slot page-offset (0xf80..0xff0/16)
-        chain            : item[0x08]=0x7f84707364a0 +0x9410 -> S +0x20 -> 0x5b62341d2060 +0x10 -> 0x20440ff90
-    item[7] @0x5b6234310658  KIND=1  [0x08]=0x7f847073fab8 [0x10]=0x1 [0x18]=0x0 [0x20]=0x0
-      handler f9e320 — nested wait 4029e0(S=0x7f8470748ec8, wanted=0x1)
-        S[0x10] limit    = 0x1   (wanted is within the limit)
-        S[0x18] cached   = 0x0   ★ wanted > cached ⇒ this item is NOT satisfied; it reads
-        S[0x20] desc     = 0x5b62341d3df0
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+    [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+      [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
         POLLED ADDRESS     = 0x20440ff80   pageoff=0xf80   nvidiactl+0x400ff80  <rw-s /dev/nvidiactl>
                              VALUE AT IT = 0x00000000 (0)
                              SLOT-JOIN: ★★★ MATCHES a GR SET_REPORT_SEMAPHORE slot page-offset (0xf80..0xff0/16)
-        chain            : item[0x08]=0x7f847073fab8 +0x9410 -> S +0x20 -> 0x5b62341d3df0 +0x10 -> 0x20440ff80
-    ctx[0x40]+0x72b8 = 0x00000000  (non-zero => spin WITHOUT even the 1 s deadline check)
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+    [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
 === guest_spinprobe DONE (detached; the target continues) ===
 SPINPROBE_RC=0
 === the mappings the polled address must be joined against ===
@@ -256,8 +256,8 @@ pid=1758 state=Rl
     1759: 219 0x5b623419a950 0x3 0xffffffff 0x5b62341cd580 0x0 0x7 0x7f8472bfed40 0x7f8472d1b5fd
     1978: 7 0x5b62343104f0 0x5 0x64 0x0 0x0 0x0 0x7f8470f49d40 0x7f8472d1b5fd
 === guest_spinprobe pid=1758 maps=92 budget=6000 steps ===
---- libcuda mapping: 0x7f8473000000-0x7f8478bd4000 (RIP offsets below are relative to this)
---- want offsets: libcuda+0x22be1f libcuda+0x22bedc
+[line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+[line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
 --- 3 thread(s); ★ orig_rax >= 0 with state S/D means a BLOCKING SYSCALL, and the whole memory-poll reading below would be VOID ---
     tid 1758   state=R  orig_rax=228    RIP=0x7fffd75b0bb2  [vdso]+0xbb2  <r-xp [vdso]>
     tid 1758   RSP=0x7fffd74ec3a0 r12=0x7fffd74ec42c r13=0x5b62341a2160 r15=0x7fffd74ec4c0
@@ -265,113 +265,113 @@ pid=1758 state=Rl
     tid 1759   RSP=0x7f8472bfed40 r12=0x0 r13=0x4 r15=0x5b62341989c0
     tid 1978   state=S  orig_rax=7      RIP=0x7f8472d1b5fd  libc.so.6+0x11b5fd  <r-xp /usr/lib/x86_64-linux-gnu/libc.so.6>
     tid 1978   RSP=0x7f8470f49d40 r12=0x0 r13=0xc r15=0x5b62341bf510
-★★ NO THREAD'S RIP WAS INSIDE libcuda. ⊘ Do not read that as 'not spinning' — it may be in the vDSO leg of the same loop. Falling back to tid 1758.
+[line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
 --- single-stepping tid 1758, budget 6000 ---
 --- steps actually taken = 6000 (of a 6000 budget) ---
 --- RIP HISTOGRAM: 480 distinct buckets stored (cap 512) ---
-        41  0x7f847321f6a0  libcuda.so.580.159.04+0x21f6a0  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        41  0x7f847321f6a3  libcuda.so.580.159.04+0x21f6a3  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        41  0x7f847321f6a6  libcuda.so.580.159.04+0x21f6a6  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        41  0x7f847321f6aa  libcuda.so.580.159.04+0x21f6aa  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        41  0x7f847321f6ae  libcuda.so.580.159.04+0x21f6ae  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        41  0x7f847321f6b2  libcuda.so.580.159.04+0x21f6b2  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        41  0x7f847321f6ba  libcuda.so.580.159.04+0x21f6ba  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        41  0x7f847321f6bd  libcuda.so.580.159.04+0x21f6bd  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        41  0x7f8473460820  libcuda.so.580.159.04+0x460820  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        41  0x7f8473460821  libcuda.so.580.159.04+0x460821  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        41  0x7f8473460824  libcuda.so.580.159.04+0x460824  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        41  0x7f8473460826  libcuda.so.580.159.04+0x460826  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        41  0x7f8473460828  libcuda.so.580.159.04+0x460828  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        41  0x7f847346082c  libcuda.so.580.159.04+0x46082c  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        41  0x7f847346082e  libcuda.so.580.159.04+0x46082e  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        41  0x7f8473460831  libcuda.so.580.159.04+0x460831  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        41  0x7f8473460833  libcuda.so.580.159.04+0x460833  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        41  0x7f8473460834  libcuda.so.580.159.04+0x460834  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        41  0x7f8473460838  libcuda.so.580.159.04+0x460838  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        41  0x7f847346083b  libcuda.so.580.159.04+0x46083b  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        41  0x7f847346083e  libcuda.so.580.159.04+0x46083e  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        41  0x7f8473460844  libcuda.so.580.159.04+0x460844  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        41  0x7f8473460848  libcuda.so.580.159.04+0x460848  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        41  0x7f847346084b  libcuda.so.580.159.04+0x46084b  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
     ⊘ 456 further distinct buckets NOT shown (they are stored, just not printed)
-=== ★★★★★ SNAPSHOT at RIP=0x7f847322be1f (libcuda.so.580.159.04+0x22be1f  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>) ===
+[line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
     rdi=0x7fffd74ec42c rsi=0x7fffd74ec4c0 r12=0x7fffd74ec42c r13=0x5b62341a2160 r15=0x7fffd74ec4c0 rbx=0x0
-    ⊘ rbx==0 selects the pause-only spin; non-zero selects sched_yield+pause.
-    --- WAIT OBJECT 0x7fffd74ec4c0 ---
-    N items = 8   array = 0x5b6234310540   (stride 40)
-    item[0] @0x5b6234310540  KIND=1  [0x08]=0x7f84706fe010 [0x10]=0x1 [0x18]=0x7fffd74ec540 [0x20]=0x7f8472cad7f4
-      handler f9e320 — nested wait 4029e0(S=0x7f8470707420, wanted=0x1)
-        S[0x10] limit    = 0x1   (wanted is within the limit)
-        S[0x18] cached   = 0x0   ★ wanted > cached ⇒ this item is NOT satisfied; it reads
-        S[0x20] desc     = 0x5b62341a82c0
+    [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+    [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+    [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+    [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+      [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
         POLLED ADDRESS     = 0x20440fff0   pageoff=0xff0   nvidiactl+0x400fff0  <rw-s /dev/nvidiactl>
                              VALUE AT IT = 0x00000000 (0)
                              SLOT-JOIN: ★★★ MATCHES a GR SET_REPORT_SEMAPHORE slot page-offset (0xf80..0xff0/16)
-        chain            : item[0x08]=0x7f84706fe010 +0x9410 -> S +0x20 -> 0x5b62341a82c0 +0x10 -> 0x20440fff0
-    item[1] @0x5b6234310568  KIND=1  [0x08]=0x7f8470707628 [0x10]=0x1 [0x18]=0x5b6234310490 [0x20]=0x7f8472e23878
-      handler f9e320 — nested wait 4029e0(S=0x7f8470710a38, wanted=0x1)
-        S[0x10] limit    = 0x1   (wanted is within the limit)
-        S[0x18] cached   = 0x0   ★ wanted > cached ⇒ this item is NOT satisfied; it reads
-        S[0x20] desc     = 0x5b62341b8fc0
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+    [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+      [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
         POLLED ADDRESS     = 0x20440ffe0   pageoff=0xfe0   nvidiactl+0x400ffe0  <rw-s /dev/nvidiactl>
                              VALUE AT IT = 0x00000000 (0)
                              SLOT-JOIN: ★★★ MATCHES a GR SET_REPORT_SEMAPHORE slot page-offset (0xf80..0xff0/16)
-        chain            : item[0x08]=0x7f8470707628 +0x9410 -> S +0x20 -> 0x5b62341b8fc0 +0x10 -> 0x20440ffe0
-    item[2] @0x5b6234310590  KIND=1  [0x08]=0x7f8470710c40 [0x10]=0x1 [0x18]=0x7f8472e3b910 [0x20]=0x7f847320cb70
-      handler f9e320 — nested wait 4029e0(S=0x7f847071a050, wanted=0x1)
-        S[0x10] limit    = 0x1   (wanted is within the limit)
-        S[0x18] cached   = 0x0   ★ wanted > cached ⇒ this item is NOT satisfied; it reads
-        S[0x20] desc     = 0x5b62341ba5c0
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+    [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+      [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
         POLLED ADDRESS     = 0x20440ffd0   pageoff=0xfd0   nvidiactl+0x400ffd0  <rw-s /dev/nvidiactl>
                              VALUE AT IT = 0x00000000 (0)
                              SLOT-JOIN: ★★★ MATCHES a GR SET_REPORT_SEMAPHORE slot page-offset (0xf80..0xff0/16)
-        chain            : item[0x08]=0x7f8470710c40 +0x9410 -> S +0x20 -> 0x5b62341ba5c0 +0x10 -> 0x20440ffd0
-    item[3] @0x5b62343105b8  KIND=1  [0x08]=0x7f847071a258 [0x10]=0x1 [0x18]=0x8 [0x20]=0x7f8472e1a010
-      handler f9e320 — nested wait 4029e0(S=0x7f8470723668, wanted=0x1)
-        S[0x10] limit    = 0x1   (wanted is within the limit)
-        S[0x18] cached   = 0x0   ★ wanted > cached ⇒ this item is NOT satisfied; it reads
-        S[0x20] desc     = 0x5b62341ce280
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+    [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+      [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
         POLLED ADDRESS     = 0x20440ffc0   pageoff=0xfc0   nvidiactl+0x400ffc0  <rw-s /dev/nvidiactl>
                              VALUE AT IT = 0x00000000 (0)
                              SLOT-JOIN: ★★★ MATCHES a GR SET_REPORT_SEMAPHORE slot page-offset (0xf80..0xff0/16)
-        chain            : item[0x08]=0x7f847071a258 +0x9410 -> S +0x20 -> 0x5b62341ce280 +0x10 -> 0x20440ffc0
-    item[4] @0x5b62343105e0  KIND=1  [0x08]=0x7f8470723870 [0x10]=0x1 [0x18]=0x0 [0x20]=0x0
-      handler f9e320 — nested wait 4029e0(S=0x7f847072cc80, wanted=0x1)
-        S[0x10] limit    = 0x1   (wanted is within the limit)
-        S[0x18] cached   = 0x0   ★ wanted > cached ⇒ this item is NOT satisfied; it reads
-        S[0x20] desc     = 0x5b62341cf880
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+    [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+      [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
         POLLED ADDRESS     = 0x20440ffb0   pageoff=0xfb0   nvidiactl+0x400ffb0  <rw-s /dev/nvidiactl>
                              VALUE AT IT = 0x00000000 (0)
                              SLOT-JOIN: ★★★ MATCHES a GR SET_REPORT_SEMAPHORE slot page-offset (0xf80..0xff0/16)
-        chain            : item[0x08]=0x7f8470723870 +0x9410 -> S +0x20 -> 0x5b62341cf880 +0x10 -> 0x20440ffb0
-    item[5] @0x5b6234310608  KIND=1  [0x08]=0x7f847072ce88 [0x10]=0x1 [0x18]=0x0 [0x20]=0x0
-      handler f9e320 — nested wait 4029e0(S=0x7f8470736298, wanted=0x1)
-        S[0x10] limit    = 0x1   (wanted is within the limit)
-        S[0x18] cached   = 0x0   ★ wanted > cached ⇒ this item is NOT satisfied; it reads
-        S[0x20] desc     = 0x5b62341d0e80
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+    [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+      [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
         POLLED ADDRESS     = 0x20440ffa0   pageoff=0xfa0   nvidiactl+0x400ffa0  <rw-s /dev/nvidiactl>
                              VALUE AT IT = 0x00000000 (0)
                              SLOT-JOIN: ★★★ MATCHES a GR SET_REPORT_SEMAPHORE slot page-offset (0xf80..0xff0/16)
-        chain            : item[0x08]=0x7f847072ce88 +0x9410 -> S +0x20 -> 0x5b62341d0e80 +0x10 -> 0x20440ffa0
-    item[6] @0x5b6234310630  KIND=1  [0x08]=0x7f84707364a0 [0x10]=0x1 [0x18]=0x0 [0x20]=0x0
-      handler f9e320 — nested wait 4029e0(S=0x7f847073f8b0, wanted=0x1)
-        S[0x10] limit    = 0x1   (wanted is within the limit)
-        S[0x18] cached   = 0x0   ★ wanted > cached ⇒ this item is NOT satisfied; it reads
-        S[0x20] desc     = 0x5b62341d2060
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+    [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+      [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
         POLLED ADDRESS     = 0x20440ff90   pageoff=0xf90   nvidiactl+0x400ff90  <rw-s /dev/nvidiactl>
                              VALUE AT IT = 0x00000000 (0)
                              SLOT-JOIN: ★★★ MATCHES a GR SET_REPORT_SEMAPHORE slot page-offset (0xf80..0xff0/16)
-        chain            : item[0x08]=0x7f84707364a0 +0x9410 -> S +0x20 -> 0x5b62341d2060 +0x10 -> 0x20440ff90
-    item[7] @0x5b6234310658  KIND=1  [0x08]=0x7f847073fab8 [0x10]=0x1 [0x18]=0x0 [0x20]=0x0
-      handler f9e320 — nested wait 4029e0(S=0x7f8470748ec8, wanted=0x1)
-        S[0x10] limit    = 0x1   (wanted is within the limit)
-        S[0x18] cached   = 0x0   ★ wanted > cached ⇒ this item is NOT satisfied; it reads
-        S[0x20] desc     = 0x5b62341d3df0
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+    [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+      [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
         POLLED ADDRESS     = 0x20440ff80   pageoff=0xf80   nvidiactl+0x400ff80  <rw-s /dev/nvidiactl>
                              VALUE AT IT = 0x00000000 (0)
                              SLOT-JOIN: ★★★ MATCHES a GR SET_REPORT_SEMAPHORE slot page-offset (0xf80..0xff0/16)
-        chain            : item[0x08]=0x7f847073fab8 +0x9410 -> S +0x20 -> 0x5b62341d3df0 +0x10 -> 0x20440ff80
-    ctx[0x40]+0x72b8 = 0x00000000  (non-zero => spin WITHOUT even the 1 s deadline check)
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+    [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
 === guest_spinprobe DONE (detached; the target continues) ===
 SPINPROBE_RC=0
 === waiting for cup2's own timeout so CUP2_RC stays comparable to w232..w268 ===

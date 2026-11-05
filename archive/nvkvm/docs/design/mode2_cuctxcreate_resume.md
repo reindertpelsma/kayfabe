@@ -118,7 +118,7 @@ fresh-boot runs of the clean base (no uprobe bridge) on the RTX 3060 host:
   APPENDS the SET_PAGE_DIRECTORY root as an extra resolver candidate (non-destructive).
 
 - **cuCtxCreate blocker PINNED (corrects §4 and the kickoff-doc "unbacked UVM" premise):** the
-  clean base reaches cuCtxCreate and dies with `rbp=0` SIGSEGV at libcuda+0x300560 — but that is
+  clean base reaches cuCtxCreate and dies with `rbp=0` SIGSEGV at libcuda+<offset-redacted> — but that is
   *downstream*. CRASHWIN (auto-armed at 0xc7c0) shows the guest RM busy-looping a GR-VAS page-table
   walk via BAR2 (`0x2f3392000→0x2efbc3000→4000→5000`, dual-PDE big→`0x2efbc6000`, PTE 0x2efbc61a0
   = 0x...2efa6201) to **FB 0x2efa62000** and polling it (100k-capped same-chain reads). This is the
@@ -236,7 +236,7 @@ numeric correctness + host GR util. Instrumentation committed: M5.31 (GRPT-WR + 
 Verifying the Fable subagent's RPC-poll theory against the trace overturned BOTH it and the
 long-standing "Poll #2 / GR-VAS page-table population" diagnosis (§0.2/0.4 and dataplane-doc §X):
 
-- cup2 **segfaults DURING cuCtxCreate** (never prints CTX OK; rbp=0 at libcuda+0x300560).
+- cup2 **segfaults DURING cuCtxCreate** (never prints CTX OK; rbp=0 at libcuda+<offset-redacted>).
 - Immediately after the 0xc7c0 alloc echo (crashwin arm), the trace shows: `0x801814`
   **UNSET_PAGE_DIRECTORY** → a **storm of fn=10 RPCs** (fn=10 = NV_VGPU_MSG_FUNCTION_FREE; the clean
   base forwards it as RM_FREE @ gpu_emul.c:3565) → 100k GR-VAS page-table reads.
@@ -270,7 +270,7 @@ branch. Method that found it (no slop, all hardware-grounded):
   (cup2 under nvioctl_trace) — `apre`/`areply`/`outer` dumps.
 - Fable-5 byte-diff: the guest's `0xc7c0` (AMPERE_COMPUTE_B) alloc reply zeroes pAllocParms bytes
   8-15; the host preserves them. Those bytes held libcuda's saved rbp → `pop %rbp`=0 → SIGSEGV at
-  libcuda+0x300560. Exact match to the gdb signature.
+  libcuda+<offset-redacted>. Exact match to the gdb signature.
 - Root mechanism: M8.1 set reply `paramsSize=0` but left the rpc element SHORT, so the guest
   GSP-client deserialize zero-padded its local params buffer and the guest RM's class-size (16B)
   copy_to_user wrote those zeros over libcuda's stack.
@@ -385,8 +385,8 @@ Guest kernel bridge proof:
 
 ```text
 [   70.217075] nvkvm_uvm_bridge: mapped BAR0 debug aperture at 0000:00:07.0 start=0xfb000000
-[   70.226711] nvkvm_uvm_bridge: registered cuMemcpyHtoD at /usr/local/nvidia-guest/lib/libcuda.so.580.159.04+0x378af0
-[   70.226744] nvkvm_uvm_bridge: registered cuMemcpyHtoD_v2 at /usr/local/nvidia-guest/lib/libcuda.so.580.159.04+0x37aab0
+[   70.226711] nvkvm_uvm_bridge: registered cuMemcpyHtoD at /usr/local/nvidia-guest/lib/libcuda.so.580.159.04+<offset-redacted>
+[   70.226744] nvkvm_uvm_bridge: registered cuMemcpyHtoD_v2 at /usr/local/nvidia-guest/lib/libcuda.so.580.159.04+<offset-redacted>
 [   70.226749] nvkvm_uvm_bridge: loaded max_bytes=4096
 [  129.252353] nvkvm_uvm_bridge: HtoD dst=0x753d1e200000 bytes=0x4 gpa=0x13a989000 first=0xabcd1234 slot=1
 ```

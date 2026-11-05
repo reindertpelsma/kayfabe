@@ -138,6 +138,7 @@ pub mod hostabi;
 pub mod hoststub;
 pub mod inittables;
 pub mod memory_list;
+pub mod provenance;
 pub mod sw_runlist;
 pub mod videocaps;
 // ★ #156 — the ⊘ half of the host-class seam: the three classes that do NOT vary,
