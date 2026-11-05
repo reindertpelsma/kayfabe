@@ -1,11 +1,20 @@
 # Platform testing: a coverage service behind CI, and a public status site
 
-**STATUS: DESIGN-ONLY, 2026-11-04.** Owner-approved design of 2026-11-04 (lane 1 brief), recorded
-here; nothing in this document is deployed. Branch `claude/platform-status-20261104` builds the
+**STATUS: DESIGN-ONLY, 2026-11-05.** Owner-approved design of 2026-11-04 (lane 1 brief), recorded
+here, corrected on 2026-11-05 by the owner's later decisions (box below); nothing in this document is deployed. Branch `claude/platform-status-20261104` builds the
 public read-only API (`ci/platform-api/`), its D1 schema and the static status pages
 (`site/status/`) against **synthetic** fixture data only. The CI Worker side (ingest, lazy
 satisfaction, HMAC tags, redaction, HostHub) is design only. Nothing here has been measured: there
 is no run, revision or date behind any number below except where a source is cited.
+
+**Correction, 2026-11-05 (folded above the text it corrects).** The owner's decisions of 2026-11-04/05
+are in [V3_CI_TIERS_AND_IGNORE_LADDER.md](V3_CI_TIERS_AND_IGNORE_LADDER.md) (DESIGN-ONLY, nothing
+built) and they change three things below. (1) The fall-through key is the **tree hash** of the files
+left after the commit's own `.workerignore`, not a hash over a BASE-branch `ci/test_boundary.toml`
+(§1, §4, §11, §13). (2) The tier table gains an admin start route, a die rotation in the middle tier,
+a small tier that rides on the middle box, no retries, no scheduled runs, and the event-to-tier rule
+(§2). (3) The tiers' stages gain the two-guest and TRIO stages (that document, §5). Where a section
+below still shows the older text, it is marked SUPERSEDED in place.
 
 Labels used below: **Owner ruling (2026-11-04)** is binding text from the owner's brief.
 **Proposal (lane 1)** is this branch's addition and needs owner review. **Built** names what this
@@ -29,12 +38,24 @@ for commit X?* The Worker answers it lazily:
 - it applies the existing caps (budget, concurrency, daily counts);
 - **forks never trigger rentals**; a fork PR can only read answers that already exist.
 
-**Docs-only commits fall through** by a hash of a declared, fail-closed, test-relevant path set
-(`ci/test_boundary.toml`). Two commits with the same boundary hash share every result. The
-requirement sets live in `ci/requirements.toml`. Both files are **read from the BASE branch, never
-from the PR**, so a PR cannot shrink what it is tested against.
+**Docs-only commits fall through** by the **tree hash** (2026-11-05, see
+[V3_CI_TIERS_AND_IGNORE_LADDER.md](V3_CI_TIERS_AND_IGNORE_LADDER.md) §3): commits whose tree is
+identical after applying the commit's own `.workerignore` share every result. The requirement sets
+live in `ci/requirements.toml`, **read from the BASE branch, never from the PR**, so a PR cannot
+shrink what it is tested against; a PR cannot hide code by ignoring it either, because ignoring it
+changes the filtered tree.
+
+SUPERSEDED (2026-11-05, by the tree hash): the 2026-11-04 text here said the fall-through used a
+hash of a declared, fail-closed path set in `ci/test_boundary.toml`, also read from the BASE branch.
 
 ## 2. Tiers
+
+**Correction (2026-11-05).** The tier table of the owner's 2026-11-05 decisions, with the release tier
+at up to 8 boxes, the middle tier's die rotation, no retries (RETRY never passes) and the rule that
+the event picks the tier (PR to master = middle, release tag = largest, push or schedule = small), is
+in [V3_CI_TIERS_AND_IGNORE_LADDER.md](V3_CI_TIERS_AND_IGNORE_LADDER.md) §1. The small tier rides on
+the box the middle run rented. Scheduled runs were dropped for now. The table below is the
+2026-11-04 text and is SUPERSEDED where it differs: "8 boxes in parallel" is **up to 8**.
 
 **Owner ruling (2026-11-04).**
 
@@ -86,7 +107,13 @@ read-replica or read-only binding does not exist for Workers as far as the D1 Wo
   order: die, host driver, CPU vendor, CPU model, nested (0/1), host kernel, QEMU build, IOMMU mode,
   guest OS and guest driver. **Proposal (lane 1):** the key is `p-` plus the first 24 hex digits of
   SHA-256 over the `|`-joined canonical fields; the fields themselves are stored in `platforms`.
-- **Boundary hash** (`boundary_hash`): SHA-256 over the sorted `path NUL mode NUL blob-id LF` lines
+- **SUPERSEDED (2026-11-05) by the tree hash** (the ladder document, §3): the key is a hash of the
+  sorted (path, mode, blob sha) list of files that survive the commit's own `.workerignore`, and the
+  column keeps the name `boundary_hash` for the schema's sake. Truncated listings, unknown patterns
+  or a matcher that disagrees with `git check-ignore` mean run (fail closed). Do not implement it as
+  "all changed paths match the new ignore". The 2026-11-04 proposal follows and is retained as the
+  superseded text.
+- **Boundary hash** (`boundary_hash`, 2026-11-04 proposal, SUPERSEDED): SHA-256 over the sorted `path NUL mode NUL blob-id LF` lines
   of every tracked file that `ci/test_boundary.toml` (BASE copy) does not exclude.
   **Proposal (lane 1)**, fail-closed shape:
 
@@ -280,7 +307,9 @@ the hub says.
 | Row-tag reference (`shared/row-tag.js`) | Built and tested; nothing calls it yet |
 | Status pages, fixture mode, "not configured" page, workflow validation | Built, tested with the site's own checks |
 | CI Worker ingest, lazy satisfaction, redaction stream, log lint, R2 writes, HMAC writing | Design only |
-| `ci/test_boundary.toml`, `ci/requirements.toml` | Design only (§4 shows a proposal) |
+| `ci/requirements.toml` | Design only (§4 shows a proposal) |
+| `ci/test_boundary.toml` | Superseded 2026-11-05 by `.workerignore` and the tree hash; neither exists yet (design only) |
+| Admin start route, die rotation, TRIO stage, SPECviewperf from private R2 | Design only (ladder document) |
 | HostHub, enrolled hosts, WireGuard hub | Design only (§10) |
 | Wanted list page | Not started |
 
@@ -300,7 +329,8 @@ the hub says.
 ## 13. Open questions
 
 1. The middle tier's "about 70 apps in about 10 minutes": which subset? The measured full Linux
-   pass is longer (§2).
+   pass is longer (§2). Still open on 2026-11-05; the other open items of the new tier design are in
+   the ladder document (rotation order, TRIO floor and N, VRAM numbers).
 2. Should a FAIL cached for a boundary hash expire (flaky boxes), or only be replaced by an owner
    re-run? Proposal: never expire; an owner dispatch may add a newer run that answers instead.
 3. RETRY versus UNAVAILABLE: which provider faults are RETRY (re-rent) and which UNAVAILABLE?
