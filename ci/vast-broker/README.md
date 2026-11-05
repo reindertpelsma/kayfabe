@@ -94,8 +94,16 @@ the review of PR #258 (2026-11-05) are marked "review".
   closed as UNATTRIBUTED (review). Store verdicts: PASS only for a verified box PASS; FAIL for a box
   FAIL or a box that reported and then hit a test-side limit (hard or heartbeat timeout, report
   limits); RETRY for a provider fault; UNATTRIBUTED for everything else (no box report, owner
-  stop, supersede, provider absent). RETRY and UNATTRIBUTED never meet a requirement. Profile
-  `check` is stored as tier `middle` (platform `both`), `sweep` as `adhoc` (`linux`).
+  stop, supersede, provider absent). RETRY and UNATTRIBUTED never meet a requirement. The stored
+  tier is the record's own `tier` (set at admission: a master push `small`, a PR to master
+  `middle`, a release leg `large`, stored as `largest`; the sweep `adhoc`); a record without that
+  field falls back to its budget class (`check` -> `middle`, `release` -> `largest`, `sweep` ->
+  `adhoc`). The stored profile is the budget class (`release` for release legs, which the ledger
+  keeps as profile `check` plus `budgetClass: 'release'`); `sweep` is platform `linux`, the others
+  `both`. A box PASS counts as PASS only when the box reported the record's die (GPU name and
+  compute capability through the die rules) and a known driver; otherwise the row is UNATTRIBUTED
+  (integration of #258 with #259, review rev259 F7, 2026-11-05). Release legs go through the same
+  `admit()` as every rental, so each leg is one row; nothing else calls `recordRun`.
 - **Tree key** ([`src/treekey.js`](src/treekey.js)). SHA-256 over `kf-tree-v2`, the SHA-256 of the
   ignore set's effective lines (non-blank, not `#`; review: two different ignore sets never share a
   key) and, for every file not ignored, `path NUL mode NUL object-id LF` in UTF-8 byte order of the
@@ -247,7 +255,7 @@ never a pass; scores stay on the box (`scripts/ci/vast_stage_specviewperf.sh`). 
 `trio` are reserved names, DESIGN-ONLY, refused if requested, and part of no required check.
 
 **Results.** Every box of a batch is an ordinary ledger rental (`kf-ci-<batch>-<leg>`), so the
-results store (PR #258, `src/ingest.js`, not merged here) records it like any other rental; each
+results store (`src/ingest.js`, section above) records it like any other rental, as tier `largest`; each
 record carries `tier`, `family`, `source` (`github` or `admin`) and `batch`. The release verdict
 itself lives in the batch (`batch:<id>` in the ledger, shown on the admin page): per (family, die,
 platform) cells with their runs, passes and machines.

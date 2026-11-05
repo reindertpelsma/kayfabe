@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { BrokerLedger } from '../src/index.js';
 import { BrokerError } from '../src/policy.js';
 import { setup, sha, env, MemoryStorage } from './helpers.js';
+import { FakeD1, d1Skip } from './d1.js';
 // wtier, 2026-11-05: admin starts and the release (large) orchestration through the real service
 // with the mock provider. FALSIFIERS (written before the code): the plan rents; a start skips an
 // admission check a PR rental has (box protocol, caps, concurrency, sha gap for small/middle,
@@ -654,3 +655,39 @@ test('F8: the account-wide daily cap also refuses a single PR rental (closed rea
   assert.equal(body.budget.daily_cap_usd, 0.05);
   assert.equal(h.cloud.creates, 0);
 });
+
+// Integration of #258 (result store) with this tier work (review rev259 F7, 2026-11-05).
+// FALSIFIER: a release leg reaches D1 as tier middle/adhoc or profile check, a leg is recorded
+// twice, or a leg whose box reported another die is stored as PASS.
+test(
+  'release + store: every leg is one D1 row, tier largest; a wrong-die PASS is UNATTRIBUTED',
+  { skip: d1Skip },
+  async () => {
+    const db = new FakeD1();
+    const h = await release({ DB: db, ROW_TAG_KEY: 't'.repeat(48) });
+    releaseMarket(h);
+    await h.storage.put('treekey:' + sha, { key: 'f'.repeat(64), kind: 'tree', at: h.time.value });
+    const { batch: id } = await h.service.adminStart({ commit_sha: sha, tier: 'large' });
+    const started = (await batchOf(h, id)).legs.filter((l) => l.state === 'STARTED');
+    assert.equal(started.length, 8);
+    const [wrong, ...rest] = started;
+    const other = (await h.storage.get('record:' + wrong.key)).die === 'AD102' ? 'AD104' : 'AD102';
+    await finish(h, wrong.key, 'PASS', { ...LINUX, ...win(wrong.windowsRuns) }, boxHardware(other));
+    for (const l of rest) await finish(h, l.key, 'PASS', { ...LINUX, ...win(l.windowsRuns) });
+    for (let i = 0; i < 4; i++) await tick(h);
+    const rows = db.rows(
+      'SELECT run_id, tier, profile, platform, verdict FROM ci_runs ORDER BY run_id',
+    );
+    const finals = rows.filter((r) => started.some((l) => r.run_id === 'vast-' + l.key + '-0'));
+    assert.equal(finals.length, 8, JSON.stringify(rows));
+    assert.equal(new Set(rows.map((r) => r.run_id)).size, rows.length, 'one row per leg');
+    for (const r of finals) {
+      assert.deepEqual([r.tier, r.profile, r.platform], ['largest', 'release', 'both']);
+      assert.equal(
+        r.verdict,
+        r.run_id === 'vast-' + wrong.key + '-0' ? 'UNATTRIBUTED' : 'PASS',
+        r.run_id,
+      );
+    }
+  },
+);

@@ -1,12 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { setup, nonce, sha, jwt, clock, MemoryStorage } from './helpers.js';
+import { readFileSync, readdirSync } from 'node:fs';
+import { setup, nonce, sha, jwt, clock, env as baseEnv, MemoryStorage } from './helpers.js';
+import { configuration } from '../src/policy.js';
 import { Ledger } from '../src/ledger.js';
 import { FakeD1, d1Skip } from './d1.js';
 import { treeKeyOf, patternsFor, commitKey } from '../src/treekey.js';
 import {
   storeVerdict,
   storeTierOf,
+  storeTierOfRecord,
   rowFromRecord,
   treeKeyFor,
   storeTick,
@@ -453,4 +456,89 @@ test('ingest: a dropped queue entry closes its in-flight row', { skip: d1Skip },
   await ledger.storage.delete('record:5-1'); // e.g. expired
   await storeTick({ ledger, env, now: clock + 60000 });
   assert.deepEqual(db.rows('SELECT verdict FROM ci_runs'), [{ verdict: 'UNATTRIBUTED' }]);
+});
+
+// --- integration of #258 with #259 (review rev259 F7, 2026-11-05) ---
+// FALSIFIER: a release leg (profile check + budgetClass release, tier large) is stored as middle or
+// adhoc, or under profile check; a record's own tier is ignored; a PASS from a box that reported
+// another die (or no known GPU/driver) is stored as PASS; a /rent leg is recorded twice.
+const f7Record = (extra = {}) => ({
+  key: '8000000000000000001-1',
+  sha,
+  profile: 'check',
+  die: 'AD104',
+  family: 'ada',
+  id: 900,
+  started: clock,
+  ended: clock + 600000,
+  resultAt: clock + 500000,
+  price: 0.2,
+  verdict: 'PASS',
+  result: { verdict: 'PASS', suites: passSuites() },
+  hardware: { gpu_name: 'NVIDIA GeForce RTX 4070', compute_cap: 890, driver_version: '580.159.04' },
+  ...extra,
+});
+const f7Tree = { key: 'f'.repeat(64), kind: 'tree' };
+const f7Row = (extra, cfg = configuration(baseEnv)) =>
+  rowFromRecord(f7Record(extra), 0, f7Tree, clock + 700000, cfg);
+
+test('F7: a release leg is stored as tier largest, profile release, platform both', () => {
+  const row = f7Row({ budgetClass: 'release', tier: 'large' });
+  assert.deepEqual(
+    [row.tier, row.profile, row.platform, row.verdict, row.run_id],
+    ['largest', 'release', 'both', 'PASS', 'vast-8000000000000000001-1-0'],
+  );
+  // Without the tier field the budget class still says release.
+  assert.equal(f7Row({ budgetClass: 'release' }).tier, 'largest');
+  assert.equal(storeTierOf('release'), 'largest');
+});
+
+test('F7: the record tier wins over the profile; old records keep the old mapping', () => {
+  assert.equal(f7Row({ tier: 'small' }).tier, 'small');
+  assert.equal(f7Row({ tier: 'middle' }).tier, 'middle');
+  assert.equal(f7Row({ tier: 'adhoc' }).tier, 'adhoc');
+  assert.equal(f7Row({}).tier, 'middle', 'no tier field: profile check -> middle');
+  assert.equal(f7Row({ tier: 'bogus' }).tier, 'middle', 'unknown tier: the profile decides');
+  const sweep = f7Row({ profile: 'sweep' });
+  assert.deepEqual([sweep.tier, sweep.profile, sweep.platform], ['adhoc', 'sweep', 'linux']);
+  assert.equal(storeTierOfRecord({ profile: 'sweep', tier: 'large' }), 'largest');
+});
+
+test('F7: a PASS on hardware that is not the record die is UNATTRIBUTED', () => {
+  const gpu = (gpu_name, compute_cap = 890, driver_version = '580.159.04') => ({
+    hardware: { gpu_name, compute_cap, driver_version },
+  });
+  assert.equal(f7Row({ tier: 'large', ...gpu('NVIDIA GeForce RTX 4090') }).verdict, 'UNATTRIBUTED');
+  assert.equal(f7Row(gpu('NVIDIA GeForce RTX 3070', 860)).verdict, 'UNATTRIBUTED');
+  assert.equal(f7Row(gpu('unknown', 0, 'unknown')).verdict, 'UNATTRIBUTED');
+  assert.equal(f7Row(gpu('NVIDIA GeForce RTX 4070', 890, 'unknown')).verdict, 'UNATTRIBUTED');
+  assert.equal(f7Row({ hardware: undefined }).verdict, 'UNATTRIBUTED', 'no hardware report');
+  assert.equal(f7Row({ family: 'ampere' }).verdict, 'UNATTRIBUTED', 'family of another die');
+  assert.equal(f7Row({}, null).verdict, 'UNATTRIBUTED', 'no configuration: fail closed');
+  // A record written before the family field: the die's family is derived, the die still checked.
+  assert.equal(f7Row({ family: undefined }).verdict, 'PASS');
+  assert.equal(
+    f7Row({
+      hardware: undefined,
+      result: { verdict: 'PASS', suites: passSuites(), hardware: gpu('RTX_4070').hardware },
+    }).verdict,
+    'PASS',
+  );
+  // Only a PASS is demoted; a FAIL stays a FAIL.
+  const fail = f7Row({
+    verdict: 'FAIL',
+    result: { verdict: 'FAIL', suites: [{ name: 'gates', pass: 0, fail: 1, skip: 0 }] },
+    ...gpu('NVIDIA GeForce RTX 4090'),
+  });
+  assert.equal(fail.verdict, 'FAIL');
+});
+
+test('F7: only the ingest records runs (no second recordRun path for /rent legs)', () => {
+  const src = new URL('../src/', import.meta.url);
+  const callers = readdirSync(src)
+    .filter((f) => f.endsWith('.js') && f !== 'results.js')
+    .filter((f) => /\brecordRun\(/.test(readFileSync(new URL(f, src), 'utf8')));
+  assert.deepEqual(callers, ['ingest.js']);
+  const ingest = readFileSync(new URL('ingest.js', src), 'utf8');
+  assert.equal(ingest.match(/\brecordRun\(/g).length, 1);
 });

@@ -13,10 +13,11 @@
 // TICK_BUDGET_MS.
 import { recordRun, requirementsMet, recordRequirementSnapshot, closeStale } from './results.js';
 import { computeTreeKey, commitKey, treeSource } from './treekey.js';
-import { tier as profileShape } from './tier.js';
+import { tier as profileShape, familyOf as cfgFamilyOf } from './tier.js';
 import { normalTier, INFLIGHT_MAX_MS } from './requirements.js';
 import { rentalCost } from './ledger.js';
-import { refuse } from './policy.js';
+import { refuse, budgetClass, configuration } from './policy.js';
+import { hardwareMatch } from './release.js';
 
 export const STORE_PREFIX = 'store:';
 export const MAX_ATTEMPTS = 60; // about an hour of cron ticks
@@ -39,7 +40,16 @@ export const storeEnabled = (env) =>
 export function storeTierOf(profile) {
   if (profile === 'check') return 'middle';
   if (profile === 'sweep') return 'adhoc';
+  if (profile === 'release') return 'largest';
   return normalTier(profile) ?? 'adhoc';
+}
+
+// Review rev259 F7 (integration of #258 with #259): the record's own tier (set by admit() from
+// the event or the admin start: small | middle | large | adhoc) wins; the budget class is the
+// fallback for records written before the tier field existed. A release leg is stored as
+// profile 'check' plus budgetClass 'release', so the profile alone would make it middle/adhoc.
+export function storeTierOfRecord(r) {
+  return normalTier(r.tier) ?? storeTierOf(budgetClass(r)); // normalTier keeps 'adhoc'
 }
 
 // Attribution for the store only; the ledger's verdict is untouched.
@@ -76,9 +86,20 @@ const version = (v) =>
   typeof v === 'string' && /^(?:unknown|[0-9]{1,4}(?:\.[0-9]{1,5}){1,3})$/.test(v) ? v : null;
 
 // The contract row of one leg of a ledger record.
-export function rowFromRecord(r, leg, tree, now) {
-  const verdict = storeVerdict(r);
-  const profile = r.profile ?? 'check';
+// `cfg` (the Worker configuration) supplies the die rules for the hardware check.
+export function rowFromRecord(r, leg, tree, now, cfg) {
+  // Review rev259 F7/F3: a PASS from a box that reported another GPU than the record's die (or
+  // no known GPU and driver) is not a PASS. The family falls back to the die's family for records
+  // written before the family field existed; hardwareMatch still requires the die itself.
+  let verdict = storeVerdict(r);
+  if (
+    verdict === 'PASS' &&
+    (!cfg ||
+      hardwareMatch(r, { die: r.die, family: r.family ?? cfgFamilyOf(r.die, cfg), cfg }) !==
+        'MATCH')
+  )
+    verdict = 'UNATTRIBUTED';
+  const profile = budgetClass(r); // 'release' for release legs (stored as check + budgetClass)
   const drivers = {};
   if (version(r.hostDriverVersion)) drivers.host = r.hostDriverVersion;
   if (version(r.hardware?.driver_version)) drivers.guest = r.hardware.driver_version;
@@ -89,7 +110,7 @@ export function rowFromRecord(r, leg, tree, now) {
     commit_sha: r.sha,
     tree_hash: tree.key,
     tree_kind: tree.kind,
-    tier: storeTierOf(profile),
+    tier: storeTierOfRecord(r),
     profile,
     die: r.die,
     platform: profileShape(profile).windows ? 'both' : 'linux',
@@ -198,7 +219,14 @@ async function drop(ledger, env, key, runId, now, why) {
 
 // Inside the serial sweep, after ledger.expire: record rows for queue entries whose tree key is
 // cached, within TICK_BUDGET_MS, then close rows left in flight for longer than INFLIGHT_MAX_MS.
-export async function storeTick({ ledger, env, now, clock = Date.now, budgetMs = TICK_BUDGET_MS }) {
+export async function storeTick({
+  ledger,
+  env,
+  now,
+  cfg,
+  clock = Date.now,
+  budgetMs = TICK_BUDGET_MS,
+}) {
   const deadline = clock() + budgetMs;
   const entries = await ledger.storage.list({ prefix: STORE_PREFIX, limit: 64 });
   let worked = 0;
@@ -229,10 +257,21 @@ export async function storeTick({ ledger, env, now, clock = Date.now, budgetMs =
     }
     await ledger.put(key, entry);
     try {
-      const result = await recordRun(env, rowFromRecord(record, Number(m[2]), tree, now), {
-        now: () => now,
-        verifiedTree: tree.kind === 'tree',
-      });
+      const result = await recordRun(
+        env,
+        rowFromRecord(
+          record,
+          Number(m[2]),
+          tree,
+          now,
+          // Only a PASS needs the die rules (a configuration error throws: retried later).
+          cfg ?? (storeVerdict(record) === 'PASS' ? configuration(env) : null),
+        ),
+        {
+          now: () => now,
+          verifiedTree: tree.kind === 'tree',
+        },
+      );
       if (!result.stored && !['DUPLICATE', 'CONFLICT'].includes(result.state))
         throw Error(result.state);
       event({ state: result.state, final: ended, kind: tree.kind });

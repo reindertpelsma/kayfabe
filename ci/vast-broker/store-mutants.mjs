@@ -308,6 +308,32 @@ const MUTANTS = [
     '    if (path === CHECK_PATH) {\n      await github.authorize(c);',
     '    if (path === CHECK_PATH) {',
   ],
+  // Integration of #258 with #259 (review rev259 F7, 2026-11-05): tier and hardware of a row.
+  ['release tier ignored', 'src/ingest.js', "  if (profile === 'release') return 'largest';\n", ''],
+  [
+    'record tier ignored',
+    'src/ingest.js',
+    '    tier: storeTierOfRecord(r),',
+    '    tier: storeTierOf(budgetClass(r)),',
+  ],
+  [
+    'profile instead of budget class',
+    'src/ingest.js',
+    '  const profile = budgetClass(r);',
+    "  const profile = r.profile ?? 'check';",
+  ],
+  [
+    'wrong die passes',
+    'src/ingest.js',
+    "        'MATCH')\n  )\n    verdict = 'UNATTRIBUTED';",
+    "        'UNKNOWN')\n  )\n    verdict = 'UNATTRIBUTED';",
+  ],
+  [
+    'family not derived',
+    'src/ingest.js',
+    'family: r.family ?? cfgFamilyOf(r.die, cfg)',
+    'family: r.family',
+  ],
 ];
 
 const selected = process.argv.slice(2);
