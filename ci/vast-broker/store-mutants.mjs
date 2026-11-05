@@ -24,23 +24,53 @@ const MUTANTS = [
     'const ALLOWED = /^[A-Za-z0-9._+@/*?-]+$/;',
     'const ALLOWED = /^[A-Za-z0-9._+@/*?!-]+$/;',
   ],
-  [
-    'directory-only ignored',
-    'src/treekey.js',
-    'if ((!p.dirOnly || isDir) && matches(p, candidate))',
-    'if (matches(p, candidate))',
-  ],
+  ['directory-only ignored', 'src/treekey.js', '      if (p.dirOnly && !isDir) continue;\n', ''],
   [
     'basename anchoring',
     'src/treekey.js',
-    "return p.regex.test(p.anchored ? path : path.slice(path.lastIndexOf('/') + 1));",
-    'return p.regex.test(path);',
+    'p.anchored ? matchSegments(p.segments, parts, n) : globSegment(p.segments[0], parts[n - 1])',
+    'matchSegments(p.segments, parts, n)',
   ],
   [
     'parent directories',
     'src/treekey.js',
-    'for (let i = 1; i <= parts.length; i++) {',
-    'for (let i = parts.length; i <= parts.length; i++) {',
+    'for (let n = 1; n <= parts.length; n++) {',
+    'for (let n = parts.length; n <= parts.length; n++) {',
+  ],
+  [
+    'trailing ** matches nothing below',
+    'src/treekey.js',
+    'row[j] = i === P - 1 ? j < n : next[j] || (j < n && row[j + 1]);',
+    'row[j] = next[j] || (j < n && row[j + 1]);',
+  ],
+  // H1: a backtracking matcher (the RegExp of the first version) must be caught by the timing test.
+  [
+    'backtracking glob',
+    'src/treekey.js',
+    'export function globSegment(pattern, text) {',
+    "export function globSegment(pattern, text) {\n  const d = (b) => new TextDecoder().decode(b);\n  const source = d(pattern).replace(/[.+]/g, '\\\\$&').replaceAll('*', '[^/]*').replaceAll('?', '[^/]');\n  return new RegExp('^' + source + '$').test(d(text));",
+  ],
+  // H2: protected roots, the ignore set in the key, empty listings and empty trees.
+  [
+    'code roots ignorable',
+    'src/treekey.js',
+    '  for (const [path, dir] of PROTECTED) if (ignored(patterns, path, dir)) return null;\n',
+    '',
+  ],
+  [
+    'ignore set not in key',
+    'src/treekey.js',
+    "let text = TREE_KEY_VERSION + '\\nignore ' + ignoreDigest + '\\n';",
+    "let text = TREE_KEY_VERSION + '\\n';",
+  ],
+  ['empty tree keyed', 'src/treekey.js', '  if (!kept.length) return null;\n', ''],
+  // (No mutant for the empty root-listing check: an empty listing also yields no kept file, so
+  // treeKeyOf returns null either way; the check stays as defence in depth.)
+  [
+    'replacement character',
+    'src/treekey.js',
+    '!/[\\0\\n\\ufffd]/.test(path)',
+    '!/[\\0\\n]/.test(path)',
   ],
   [
     'truncated listing',
@@ -82,6 +112,18 @@ const MUTANTS = [
   ],
   ['stages untagged', 'src/results.js', '  parts.push(await hex(lines));\n', ''],
   [
+    'carry-over on by default',
+    'src/results.js',
+    "const carry = env.TREE_KEY_CARRY_OVER === 'true';",
+    "const carry = env.TREE_KEY_CARRY_OVER !== 'false';",
+  ],
+  [
+    'claimed tree trusted',
+    'src/results.js',
+    "  if (treeKind === 'tree' && !verifiedTree) treeKind = 'claimed';\n",
+    '',
+  ],
+  [
     'no tag key needed',
     'src/results.js',
     "if (!validTagKey(env.ROW_TAG_KEY)) return result(false, 'NO_TAG_KEY');",
@@ -105,6 +147,24 @@ const MUTANTS = [
     'src/requirements.js',
     "        if (answers[0].verdict === 'FAIL') return 'FAIL';\n",
     '',
+  ],
+  [
+    'tampered row skipped',
+    'src/requirements.js',
+    "      missing.push({ family: r.family, die: r.die, platform: r.platform, reason: 'TAMPERED' });",
+    '      void r;',
+  ],
+  [
+    'untagged order',
+    'src/requirements.js',
+    'a.ended_at < b.ended_at ? 1 : a.ended_at > b.ended_at ? -1',
+    'a.sort_at < b.sort_at ? 1 : a.sort_at > b.sort_at ? -1',
+  ],
+  [
+    'passes not a streak',
+    'src/requirements.js',
+    "          answers[streak].verdict === 'PASS' &&",
+    "          answers.slice(streak).some((x) => x.verdict === 'PASS') &&",
   ],
   ['tier rank', 'src/requirements.js', 'TIER_RANK[r.tier] >= TIER_RANK[block.tier] &&', ''],
   [
@@ -152,10 +212,53 @@ const MUTANTS = [
     'true',
   ],
   [
-    'any base branch',
+    'caller picks the base',
     'src/ingest.js',
-    "!['master', 'next'].includes(body.base) ||",
-    "typeof body.base !== 'string' ||",
+    "Object.keys(body).sort().join(',') !== 'commit_sha,tier' ||",
+    "!['commit_sha,tier', 'base,commit_sha,tier'].includes(Object.keys(body).sort().join(',')) ||",
+  ],
+  [
+    'base not from tier',
+    'src/ingest.js',
+    "(normalTier(tier) === 'small' ? 'next' : 'master')",
+    "'next'",
+  ],
+  [
+    'tree attempt saved late',
+    'src/ingest.js',
+    "  await ledger.put(TREE_PREFIX + sha, { kind: 'pending', attempts, at: now });\n",
+    '',
+  ],
+  ['store attempt saved late', 'src/ingest.js', '    await ledger.put(key, entry);\n', ''],
+  [
+    'no tick budget',
+    'src/ingest.js',
+    'if (worked >= PER_TICK || clock() >= deadline) break;',
+    'if (worked >= PER_TICK) break;',
+  ],
+  [
+    'no stale closing',
+    'src/ingest.js',
+    '    if (runId) await closeStale(env, { now, runId, olderThanMs: 0, limit: 1 });\n',
+    '',
+  ],
+  [
+    'store before expiry',
+    'src/index.js',
+    "          await ledger.expire(now(), cfg);\n          // After cleanup and expiry, bounded in time (src/ingest.js); tree keys come from the\n          // cache that storeTrees fills outside this queue.\n          if (storeEnabled(env))\n            try {\n              await storeTick({ ledger, env, now: now() });\n            } catch {\n              console.log(JSON.stringify({ event: 'store', state: 'TICK_FAILED' }));\n            }\n",
+    "          if (storeEnabled(env))\n            try {\n              await storeTick({ ledger, env, now: now() });\n            } catch {\n              console.log(JSON.stringify({ event: 'store', state: 'TICK_FAILED' }));\n            }\n          await ledger.expire(now(), cfg);\n",
+  ],
+  [
+    'check inside the queue',
+    'src/index.js',
+    '        if (path === CHECK_PATH) return await perform(request);\n',
+    '',
+  ],
+  [
+    'shared admission counter',
+    'src/index.js',
+    'if (++checkCount > DEFAULTS.admissionPerMinute)',
+    'if (++admissionCount > DEFAULTS.admissionPerMinute)',
   ],
   [
     'replacement not frozen',
@@ -183,7 +286,7 @@ for (const [name, file, before, after] of MUTANTS) {
     continue;
   }
   try {
-    writeFileSync(path, original.replace(before, after));
+    writeFileSync(path, original.split(before).join(after));
     const run = spawnSync(process.execPath, ['--no-warnings', '--test', ...TESTS], {
       cwd: here,
       encoding: 'utf8',

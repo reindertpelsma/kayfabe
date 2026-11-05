@@ -19,10 +19,11 @@ CREATE TABLE ci_runs (
     length(run_id) BETWEEN 6 AND 64 AND run_id NOT GLOB '*[^a-z0-9-]*'
     AND substr(run_id, 1, 1) <> '-'),
   commit_sha TEXT NOT NULL CHECK (length(commit_sha) = 40 AND commit_sha NOT GLOB '*[^0-9a-f]*'),
-  -- The result key (column name kept from the design): the .workerignore-filtered tree hash, or,
-  -- when none could be computed (fail closed), a per-commit hash that nothing else shares.
+  -- The result key: 'tree' = the .workerignore-filtered tree hash computed by the CI Worker
+  -- itself; 'claimed' = a tree hash a caller supplied (never answers for another commit);
+  -- 'commit' = no tree key could be computed (fail closed), a per-commit hash nothing shares.
   tree_hash TEXT NOT NULL CHECK (length(tree_hash) = 64 AND tree_hash NOT GLOB '*[^0-9a-f]*'),
-  tree_kind TEXT NOT NULL CHECK (tree_kind IN ('tree', 'commit')),
+  tree_kind TEXT NOT NULL CHECK (tree_kind IN ('tree', 'commit', 'claimed')),
   tier TEXT NOT NULL CHECK (tier IN ('largest', 'middle', 'small', 'adhoc')),
   profile TEXT NOT NULL CHECK (length(profile) BETWEEN 1 AND 32),
   family TEXT NOT NULL CHECK (length(family) BETWEEN 3 AND 16 AND family NOT GLOB '*[^a-z0-9]*'),

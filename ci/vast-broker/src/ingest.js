@@ -7,10 +7,14 @@
 // the old record when a provider-fault replacement reuses the run key. The sweep records an
 // in-flight row once (so callers can join it) and the final row after settlement, then deletes
 // the entry. With no D1 binding or no ROW_TAG_KEY nothing is queued or written.
-import { recordRun, requirementsMet, recordRequirementSnapshot } from './results.js';
+// Review of #258 (M1/H1): tree keys are computed OUTSIDE the ledger's serial queue
+// (storeTrees, from the cron entry point) and cached per commit as treekey:<sha>; the serialized
+// storeTick only reads that cache, saves its attempt counter before any work, and stops after
+// TICK_BUDGET_MS.
+import { recordRun, requirementsMet, recordRequirementSnapshot, closeStale } from './results.js';
 import { computeTreeKey, commitKey, treeSource } from './treekey.js';
 import { tier as profileShape } from './tier.js';
-import { normalTier } from './requirements.js';
+import { normalTier, INFLIGHT_MAX_MS } from './requirements.js';
 import { rentalCost } from './ledger.js';
 import { refuse } from './policy.js';
 
@@ -18,6 +22,10 @@ export const STORE_PREFIX = 'store:';
 export const MAX_ATTEMPTS = 60; // about an hour of cron ticks
 export const TREE_ATTEMPTS = 3; // then the per-commit key (no fall-through)
 export const PER_TICK = 4;
+export const TICK_BUDGET_MS = 10000; // wall time of the store work inside one serial sweep
+export const TREE_BUDGET_MS = 25000; // one tree-key computation, outside the serial queue
+export const TREE_PREFIX = 'treekey:'; // treekey:<sha> {key, kind, at} | {kind:'pending', attempts, at}
+export const TREE_RETENTION_MS = 7 * 86400000;
 export const CHECK_PATH = '/v1/requirements/check';
 
 export const storeEnabled = (env) =>
@@ -112,19 +120,96 @@ export async function freeze(ledger, prior) {
 }
 
 const event = (fields) => console.log(JSON.stringify({ event: 'store', ...fields }));
+const finalTree = (t) =>
+  t && (t.kind === 'tree' || t.kind === 'commit') && typeof t.key === 'string';
 
-// Drain a few queue entries. `treeKey(sha)` -> {key, kind} | null (GitHub trees API).
-export async function storeTick({ ledger, env, now, treeKey }) {
+// Queue entries -> the commits whose tree key is still missing.
+async function pendingShas(ledger) {
+  const shas = [];
+  for (const [key, stored] of await ledger.storage.list({ prefix: STORE_PREFIX, limit: 64 })) {
+    const m = /^store:([1-9][0-9]{0,19}-[1-9][0-9]{0,19}):[0-9]$/.exec(key);
+    const record = m ? (stored?.record ?? (await ledger.get('record:' + m[1]))) : null;
+    if (record && /^[0-9a-f]{40}$/.test(record.sha ?? '') && !shas.includes(record.sha))
+      shas.push(record.sha);
+  }
+  return shas;
+}
+
+async function withBudget(promise, ms) {
+  let timer;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((resolve) => (timer = setTimeout(() => resolve(null), ms))),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// The cached result key of a commit, computing it (bounded in time) when it is missing. The
+// attempt is recorded before the computation, so a computation that never returns still counts.
+// After TREE_ATTEMPTS failures the per-commit key is stored (no fall-through).
+export async function treeKeyFor({ ledger, sha, now, treeKey, budgetMs = TREE_BUDGET_MS }) {
+  const cached = await ledger.get(TREE_PREFIX + sha);
+  if (finalTree(cached)) return cached;
+  const attempts = (cached?.attempts ?? 0) + 1;
+  if (attempts > TREE_ATTEMPTS) {
+    const fallback = { key: await commitKey(sha), kind: 'commit', at: now };
+    await ledger.put(TREE_PREFIX + sha, fallback);
+    return fallback;
+  }
+  await ledger.put(TREE_PREFIX + sha, { kind: 'pending', attempts, at: now });
+  let tree = null;
+  try {
+    tree = await withBudget(treeKey(sha), budgetMs);
+  } catch {}
+  if (!tree) return null;
+  const value = { key: tree.key, kind: tree.kind, at: now };
+  await ledger.put(TREE_PREFIX + sha, value);
+  return value;
+}
+
+// Outside the serial queue (cron entry point): compute at most one missing tree key, and prune
+// old cache entries. Touches only treekey:<sha> entries, which nothing else writes.
+export async function storeTrees({ ledger, env, now, treeKey }) {
+  if (!storeEnabled(env)) return;
+  for (const sha of await pendingShas(ledger)) {
+    const cached = await ledger.get(TREE_PREFIX + sha);
+    if (finalTree(cached)) continue;
+    await treeKeyFor({ ledger, sha, now, treeKey });
+    break;
+  }
+  let pruned = 0;
+  for (const [key, value] of await ledger.storage.list({ prefix: TREE_PREFIX, limit: 256 }))
+    if (pruned < 16 && !(now - value?.at < TREE_RETENTION_MS)) {
+      await ledger.storage.delete(key);
+      pruned++;
+    }
+}
+
+async function drop(ledger, env, key, runId, now, why) {
+  await ledger.storage.delete(key);
+  event({ state: 'DROPPED', why });
+  try {
+    if (runId) await closeStale(env, { now, runId, olderThanMs: 0, limit: 1 });
+  } catch {}
+}
+
+// Inside the serial sweep, after ledger.expire: record rows for queue entries whose tree key is
+// cached, within TICK_BUDGET_MS, then close rows left in flight for longer than INFLIGHT_MAX_MS.
+export async function storeTick({ ledger, env, now, clock = Date.now, budgetMs = TICK_BUDGET_MS }) {
+  const deadline = clock() + budgetMs;
   const entries = await ledger.storage.list({ prefix: STORE_PREFIX, limit: 64 });
   let worked = 0;
   for (const [key, stored] of entries) {
-    if (worked >= PER_TICK) break;
+    if (worked >= PER_TICK || clock() >= deadline) break;
     const m = /^store:([1-9][0-9]{0,19}-[1-9][0-9]{0,19}):([0-9])$/.exec(key);
     const entry = { attempts: 0, inflight: false, ...stored };
+    const runId = m ? 'vast-' + m[1] + '-' + m[2] : null;
     const record = m ? (entry.record ?? (await ledger.get('record:' + m[1]))) : null;
     if (!m || !record || (record.providerRetries ?? 0) !== Number(m[2])) {
-      await ledger.storage.delete(key);
-      event({ state: 'DROPPED', why: 'record' });
+      await drop(ledger, env, key, runId, now, 'record');
       continue;
     }
     const ended = record.ended !== null && record.ended !== undefined;
@@ -133,34 +218,34 @@ export async function storeTick({ ledger, env, now, treeKey }) {
       await ledger.storage.delete(key); // never created: no rental to record
       continue;
     }
+    const tree = await ledger.get(TREE_PREFIX + record.sha);
+    if (!finalTree(tree)) continue; // storeTrees computes it outside the queue
     worked++;
+    // Count the attempt before any work: a call that never returns still counts.
+    entry.attempts++;
+    if (entry.attempts > MAX_ATTEMPTS) {
+      await drop(ledger, env, key, runId, now, 'attempts');
+      continue;
+    }
+    await ledger.put(key, entry);
     try {
-      if (!entry.tree) {
-        const tree = await treeKey(record.sha);
-        if (tree) entry.tree = tree;
-        else if ((entry.treeAttempts = (entry.treeAttempts ?? 0) + 1) >= TREE_ATTEMPTS)
-          entry.tree = { key: await commitKey(record.sha), kind: 'commit' };
-        else {
-          await ledger.put(key, entry);
-          continue;
-        }
-      }
-      const result = await recordRun(env, rowFromRecord(record, Number(m[2]), entry.tree, now), {
+      const result = await recordRun(env, rowFromRecord(record, Number(m[2]), tree, now), {
         now: () => now,
+        verifiedTree: tree.kind === 'tree',
       });
       if (!result.stored && !['DUPLICATE', 'CONFLICT'].includes(result.state))
         throw Error(result.state);
-      event({ state: result.state, final: ended, kind: entry.tree.kind });
+      event({ state: result.state, final: ended, kind: tree.kind });
       if (ended) await ledger.storage.delete(key);
-      else await ledger.put(key, { ...entry, inflight: true });
+      else await ledger.put(key, { ...entry, attempts: 0, inflight: true });
     } catch {
-      entry.attempts++;
-      if (entry.attempts >= MAX_ATTEMPTS) {
-        await ledger.storage.delete(key);
-        event({ state: 'DROPPED', why: 'attempts' });
-      } else await ledger.put(key, entry);
+      event({ state: 'RETRY_LATER' });
     }
   }
+  if (clock() < deadline)
+    try {
+      await closeStale(env, { now, olderThanMs: INFLIGHT_MAX_MS });
+    } catch {}
 }
 
 // The tree key through the GitHub trees API, or null (fail closed).
@@ -178,10 +263,13 @@ function decodeContent(file) {
   }
 }
 
-// POST /v1/requirements/check {commit_sha, base: master|next, tier: small|middle|large}.
-// Read-only towards rentals: it never reserves, rents or queues anything. The requirement text
-// comes from the BASE branch named in the request (a protected branch), never from the commit.
-export async function checkRequirements({ bytes, env, github, treeKey, cache, now }) {
+// The BASE branch whose requirements apply, decided by the Worker, never by the caller (review of
+// #258, L3): the default branch (master) for the middle and release tiers, next for small.
+export const baseFor = (tier) => (normalTier(tier) === 'small' ? 'next' : 'master');
+
+// POST /v1/requirements/check {commit_sha, tier: small|middle|large}. Runs outside the ledger's
+// serial queue and is read-only towards rentals: it never reserves, rents or queues anything.
+export async function checkRequirements({ bytes, env, github, ledger, treeKey, now }) {
   let body;
   try {
     body = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
@@ -192,24 +280,20 @@ export async function checkRequirements({ bytes, env, github, treeKey, cache, no
     body === null ||
     typeof body !== 'object' ||
     Array.isArray(body) ||
-    Object.keys(body).sort().join(',') !== 'base,commit_sha,tier' ||
+    Object.keys(body).sort().join(',') !== 'commit_sha,tier' ||
     typeof body.commit_sha !== 'string' ||
     !/^[0-9a-f]{40}$/.test(body.commit_sha) ||
-    !['master', 'next'].includes(body.base) ||
     !['small', 'middle', 'large', 'largest'].includes(body.tier)
   )
     refuse('BAD_REQUEST', 400);
   if (!storeEnabled(env)) refuse('STORE_UNAVAILABLE', 503);
-  const file = await github.get('contents/ci/requirements.toml?ref=' + body.base, true, true);
+  const base = baseFor(body.tier);
+  const file = await github.get('contents/ci/requirements.toml?ref=' + base, true, true);
   const text = file === null ? '' : decodeContent(file);
-  let tree = cache.get(body.commit_sha);
-  if (!tree) {
-    tree = await treeKey(body.commit_sha);
-    if (tree) {
-      if (cache.size >= 32) cache.delete(cache.keys().next().value);
-      cache.set(body.commit_sha, tree);
-    } else tree = { key: await commitKey(body.commit_sha), kind: 'commit' };
-  }
+  const tree = (await treeKeyFor({ ledger, sha: body.commit_sha, now, treeKey })) ?? {
+    key: await commitKey(body.commit_sha),
+    kind: 'commit',
+  };
   const answer = await requirementsMet(env, {
     commit_sha: body.commit_sha,
     tree_hash: tree.key,
@@ -220,11 +304,12 @@ export async function checkRequirements({ bytes, env, github, treeKey, cache, no
   let snapshot = null;
   if (typeof text === 'string' && text !== '')
     try {
-      snapshot = await recordRequirementSnapshot(env, { base_ref: body.base, content: text, now });
+      snapshot = await recordRequirementSnapshot(env, { base_ref: base, content: text, now });
     } catch {}
   return {
     ...answer,
     tier: normalTier(body.tier),
+    base,
     tree_hash: tree.key,
     tree_kind: tree.kind,
     requirements_sha256: snapshot,

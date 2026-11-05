@@ -21,7 +21,7 @@ import subprocess
 import sys
 import tempfile
 
-VERSION = b"kf-tree-v1\n"
+VERSION = b"kf-tree-v2\n"
 
 
 def ls_files(repo):
@@ -73,9 +73,16 @@ def ignored_paths(entries, patterns):
         return {p for p in result.stdout.split(b"\0") if p}
 
 
-def tree_key(entries, ignored):
+def ignore_digest(patterns):
+    """SHA-256 of the effective pattern lines (non-blank, not starting with '#')."""
+    with open(patterns, "rb") as source:
+        lines = [line for line in source.read().split(b"\n") if line and not line.startswith(b"#")]
+    return hashlib.sha256(b"\n".join(lines)).hexdigest().encode()
+
+
+def tree_key(entries, ignored, patterns):
     kept = sorted((e for e in entries if e[0] not in ignored), key=lambda e: e[0])
-    digest = hashlib.sha256(VERSION)
+    digest = hashlib.sha256(VERSION + b"ignore " + ignore_digest(patterns) + b"\n")
     for path, mode, sha in kept:
         digest.update(path + b"\0" + mode + b"\0" + sha + b"\n")
     return digest.hexdigest()
@@ -93,7 +100,7 @@ def main():
         for path, _, _ in entries:
             state = b"ignored" if path in ignored else b"kept"
             sys.stdout.buffer.write(state + b"\t" + path + b"\n")
-    print(tree_key(entries, ignored))
+    print(tree_key(entries, ignored, args.patterns))
 
 
 if __name__ == "__main__":

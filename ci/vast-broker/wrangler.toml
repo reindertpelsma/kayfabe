@@ -39,7 +39,7 @@ WORKER_URL = "https://ci.kayfabe.dev"
 # Numeric owner policy defaults are defined once in defaults.json.
 RENTING_ENABLED = "false"
 # SHA-256 of wrangler's emitted module (equals deployment.json; deploy.mjs refuses otherwise).
-DEPLOYED_BUNDLE_SHA256 = "54e68d4824f5d72526327fbb6f56115ad970ed0a30c0d58ee3356e1b8faa6b80"
+DEPLOYED_BUNDLE_SHA256 = "589ac78a4d49b63c14febdde19cbead3dfb0874925aa382106843585c8542fa4"
 # Public GitHub account id of the owner (also in every commit author email); never a secret.
 OWNER_GITHUB_ID = "229738317"
 REPOSITORY = "reindertpelsma/kayfabe"
@@ -54,6 +54,8 @@ SWEEP_JOB_WORKFLOW_REF = "reindertpelsma/kayfabe/.github/workflows/gpu-vast-swee
 # Optional ROW_TAG_KEY: random base64url string, >=32 chars; HMAC key of result-store rows
 # (src/results.js). Without it (or without the DB binding) nothing is queued or written to D1 and
 # POST /v1/requirements/check answers 503 STORE_UNAVAILABLE.
+# Optional public var TREE_KEY_CARRY_OVER (default off): 'true' lets a Worker-verified tree key
+# answer requirements for another commit; keep it off until boxes delete ignored files after clone.
 # Optional GITHUB_API_TOKEN: read-only GitHub checks and release metadata.
 # BLOB_GITHUB_TOKEN: deprecated asset-only fallback.
 # Optional secrets R2_READ_ACCESS_KEY_ID, R2_READ_SECRET_ACCESS_KEY: READ-ONLY S3 key pair of the private

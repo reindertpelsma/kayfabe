@@ -609,6 +609,7 @@ ci/platform-api/migrations] NOT DEPLOYED. What the CI Worker needs for the resul
 | `DB` | D1 binding | `wrangler.toml` (committed) | database `kayfabe-platform`, id `c6292be2-742d-4a05-95fd-749705ab30bc` (not a secret), shared with `ci/platform-api` |
 | `ROW_TAG_KEY` | Worker secret | `wrangler secret put` | random base64url, 32-512 characters; HMAC key of result rows; never on a box, never in GitHub |
 | `GITHUB_API_TOKEN` | Worker secret (existing, optional) | unchanged | the tree key reads the git data API; INFERRED from GitHub's documented limits: unauthenticated reads are limited to 60 per hour, and one tree key costs 2 requests (commit, root tree), 1 for a `.workerignore`, and 1 per top-level directory that is not wholly ignored: 15 for this repository with the default list (16 top-level directories in `git ls-tree` of `d74f6063d`, 3 ignored) |
+| `TREE_KEY_CARRY_OVER` | public var (optional) | vars file (`deploy.mjs` allows `true`/`false`) | default off: requirements count only the same commit's rows. Set `true` only after boxes delete ignored files after cloning (review of #258, H2) |
 
 Without `DB` or `ROW_TAG_KEY` the Worker behaves as before: nothing is queued, nothing is written,
 and the check answers 503 `STORE_UNAVAILABLE`.

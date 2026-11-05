@@ -139,7 +139,10 @@ const money = (value, field) => {
 };
 
 // Validate and normalise a contract row. Throws TypeError('BAD_ROW:<field>').
-export async function normaliseRow(row) {
+// options.verifiedTree: only the Worker's own ingest, with a key from computeTreeKey, may store a
+// tree hash as kind 'tree'; any other caller-supplied hash is stored as 'claimed' (review of #258,
+// L4) and never answers for another commit.
+export async function normaliseRow(row, { verifiedTree = false } = {}) {
   if (row === null || typeof row !== 'object' || Array.isArray(row)) bad('row');
   let size;
   try {
@@ -154,7 +157,8 @@ export async function normaliseRow(row) {
   if (typeof row.commit_sha !== 'string' || !HEX40.test(row.commit_sha)) bad('commit_sha');
   let treeHash = row.tree_hash ?? null,
     treeKind = row.tree_kind ?? (treeHash === null ? 'commit' : 'tree');
-  if (!['tree', 'commit'].includes(treeKind)) bad('tree_kind');
+  if (!['tree', 'commit', 'claimed'].includes(treeKind)) bad('tree_kind');
+  if (treeKind === 'tree' && !verifiedTree) treeKind = 'claimed';
   if (treeHash === null) {
     if (treeKind !== 'commit') bad('tree_hash');
     treeHash = await commitKey(row.commit_sha);
@@ -361,12 +365,25 @@ export const SQL = Object.freeze({
       AND ((?5 IS NULL AND verdict IS NULL) OR tag = ?5))
     ON CONFLICT (run_id) DO UPDATE SET machine_id = excluded.machine_id,
       price_usd_h = excluded.price_usd_h, cost_usd = excluded.cost_usd`,
+  // Rows of one result key (?1) or of one commit (?2). Ordering in requirements.js uses the
+  // tagged ended_at; this order only bounds the scan.
   keyRuns: `SELECT run_id, commit_sha, tree_hash, tree_kind, tier, profile, family, die, platform,
       verdict, source, started_at, ended_at, sort_at, tag
-    FROM ci_runs WHERE tree_hash = ?1 ORDER BY sort_at DESC, run_id DESC LIMIT ?2`,
+    FROM ci_runs WHERE (?1 IS NOT NULL AND tree_hash = ?1) OR (?2 IS NOT NULL AND commit_sha = ?2)
+    ORDER BY started_at DESC, run_id DESC LIMIT ?3`,
   keyStages: `SELECT s.run_id, s.ord, s.name, s.rc, s.duration_ms, s.result
     FROM ci_run_stages s JOIN ci_runs r ON r.run_id = s.run_id
-    WHERE r.tree_hash = ?1 ORDER BY s.run_id, s.ord`,
+    WHERE (?1 IS NOT NULL AND r.tree_hash = ?1) OR (?2 IS NOT NULL AND r.commit_sha = ?2)
+    ORDER BY s.run_id, s.ord`,
+  // In-flight rows to close as UNATTRIBUTED: one run (?1), or every row started before ?2.
+  staleRuns: `SELECT r.run_id, r.commit_sha, r.tree_hash, r.tree_kind, r.tier, r.profile, r.family,
+      r.die, r.platform, r.started_at, r.source, f.gpu_name, f.driver_versions_json,
+      p.machine_id, p.price_usd_h, p.cost_usd
+    FROM ci_runs r LEFT JOIN ci_host_facts f ON f.run_id = r.run_id
+      LEFT JOIN ci_runs_private p ON p.run_id = r.run_id
+    WHERE r.verdict IS NULL
+      AND ((?1 IS NOT NULL AND r.run_id = ?1) OR (?1 IS NULL AND r.started_at < ?2))
+    ORDER BY r.started_at LIMIT ?3`,
   snapshot: `INSERT OR IGNORE INTO ci_requirement_snapshots (sha256, base_ref, content, first_seen_at)
     VALUES (?1, ?2, ?3, ?4)`,
 });
@@ -387,8 +404,8 @@ const IDENTITY = [
 // Record one run (idempotent on run_id). A row without a verdict is in flight; a final row
 // (verdict + ended_at) finalises it once. A repeated identical final call is DUPLICATE; a final
 // call that differs from a stored final row is CONFLICT and changes nothing.
-export async function recordRun(env, row, { now = Date.now } = {}) {
-  const r = await normaliseRow(row);
+export async function recordRun(env, row, { now = Date.now, verifiedTree = false } = {}) {
+  const r = await normaliseRow(row, { verifiedTree });
   const result = (stored, state) => ({
     stored,
     state,
@@ -485,8 +502,28 @@ export async function requirementsMet(env, { commit_sha, tree_hash, tier, requir
   }
   const db = env?.DB;
   if (!db || typeof db.prepare !== 'function') throw new TypeError('NO_DB');
-  const rows = (await db.prepare(SQL.keyRuns).bind(key, LIMITS.scanRows).all()).results ?? [];
-  const stageRows = (await db.prepare(SQL.keyStages).bind(key).all()).results ?? [];
+  // Review of #258, H2: until the box deletes ignored files after cloning, a tree key does not
+  // prove what a run tested, so only rows of this very commit count. TREE_KEY_CARRY_OVER='true'
+  // (off by default) also counts other commits' rows under a Worker-verified tree key.
+  const carry = env.TREE_KEY_CARRY_OVER === 'true';
+  const scan = carry ? [key, commit_sha] : [null, commit_sha];
+  const rows = (
+    (
+      await db
+        .prepare(SQL.keyRuns)
+        .bind(...scan, LIMITS.scanRows)
+        .all()
+    ).results ?? []
+  ).filter(
+    (r) => r.commit_sha === commit_sha || (carry && r.tree_hash === key && r.tree_kind === 'tree'),
+  );
+  const stageRows =
+    (
+      await db
+        .prepare(SQL.keyStages)
+        .bind(...scan)
+        .all()
+    ).results ?? [];
   const stages = new Map();
   for (const s of stageRows) {
     if (!stages.has(s.run_id)) stages.set(s.run_id, []);
@@ -495,13 +532,53 @@ export async function requirementsMet(env, { commit_sha, tree_hash, tier, requir
   const checked = [];
   for (const row of rows) {
     const own = stages.get(row.run_id) ?? [];
-    const valid =
-      row.verdict !== null &&
-      row.source === 'reproduced' &&
-      (await verifyRunTag(env.ROW_TAG_KEY, row, own, row.tag));
+    // A final row whose tag does not verify is TAMPERED (requirements.js), never skipped.
+    const valid = row.verdict !== null && (await verifyRunTag(env.ROW_TAG_KEY, row, own, row.tag));
     checked.push({ ...row, stages: own, valid });
   }
   return evaluate(blocks, wanted, checked, at);
+}
+
+// Close in-flight rows as UNATTRIBUTED (review of #258, L1): one run (`runId`, when its queue
+// entry is dropped) or every row in flight for longer than `olderThanMs`. Returns the count.
+export async function closeStale(env, { now, runId = null, olderThanMs, limit = 4 }) {
+  if (!env?.DB || !validTagKey(env.ROW_TAG_KEY)) return 0;
+  const cutoff = new Date(now - olderThanMs).toISOString().replace(/\.[0-9]{3}Z$/, 'Z');
+  const rows = (await env.DB.prepare(SQL.staleRuns).bind(runId, cutoff, limit).all()).results ?? [];
+  let closed = 0;
+  for (const r of rows) {
+    let drivers = {};
+    try {
+      drivers = JSON.parse(r.driver_versions_json ?? '{}');
+    } catch {}
+    const result = await recordRun(
+      env,
+      {
+        run_id: r.run_id,
+        commit_sha: r.commit_sha,
+        tree_hash: r.tree_hash,
+        tree_kind: r.tree_kind,
+        tier: r.tier,
+        profile: r.profile,
+        family: r.family,
+        die: r.die,
+        platform: r.platform,
+        verdict: 'UNATTRIBUTED',
+        stages: [],
+        gpu_name: r.gpu_name ?? null,
+        driver_versions: drivers,
+        machine_id: r.machine_id ?? null,
+        price_usd_h: r.price_usd_h ?? null,
+        cost_usd: r.cost_usd ?? null,
+        started_at: r.started_at,
+        ended_at: Math.max(now, Date.parse(r.started_at)),
+        source: r.source,
+      },
+      { now: () => now, verifiedTree: r.tree_kind === 'tree' },
+    );
+    if (result.stored) closed++;
+  }
+  return closed;
 }
 
 // Content-addressed copy of the BASE requirements text a check used (INSERT OR IGNORE).

@@ -175,8 +175,9 @@ export function parseRequirements(text) {
 }
 
 const covers = (row, platform) => row.platform === platform || row.platform === 'both';
+// Newest first by the TAGGED end time (review of #258, M3: sort_at is not covered by the tag).
 const newestFirst = (a, b) =>
-  a.sort_at < b.sort_at ? 1 : a.sort_at > b.sort_at ? -1 : a.run_id < b.run_id ? 1 : -1;
+  a.ended_at < b.ended_at ? 1 : a.ended_at > b.ended_at ? -1 : a.run_id < b.run_id ? 1 : -1;
 
 // rows: ci_runs rows of ONE result key, each with `valid` (its HMAC tag verified) and `stages`
 // ([{name, result}]). Returns {met, missing, inflight} for the blocks of `tier`.
@@ -190,6 +191,12 @@ export function evaluate(blocks, tier, rows, now) {
     };
   const missing = [],
     inflight = new Set();
+  // Review of #258, M3: a final row whose HMAC tag does not verify means the store was written
+  // by someone without the key. Not met, and never skipped (a garbled FAIL must not let an older
+  // PASS answer). Deleting a row cannot be detected this way.
+  for (const r of rows)
+    if (r.verdict !== null && r.valid !== true)
+      missing.push({ family: r.family, die: r.die, platform: r.platform, reason: 'TAMPERED' });
   for (const block of wanted) {
     const eligible = rows.filter(
       (r) =>
@@ -211,8 +218,17 @@ export function evaluate(blocks, tier, rows, now) {
       if (answers.length) {
         if (answers[0].verdict === 'FAIL') return 'FAIL';
         if (!stagesPass(answers[0])) return 'STAGE';
-        const passes = answers.filter((r) => r.verdict === 'PASS' && stagesPass(r)).length;
-        return passes >= block.min_passes ? 'OK' : 'TOO_FEW_PASSES';
+        // Owner rule (coordinator, 2026-11-05): the newest answer wins (a re-run that passes after
+        // a FAIL counts), but min_passes counts only the trailing streak of PASSes, newest first,
+        // stopped by the first non-PASS: PASS, FAIL, PASS does not satisfy 2.
+        let streak = 0;
+        while (
+          streak < answers.length &&
+          answers[streak].verdict === 'PASS' &&
+          stagesPass(answers[streak])
+        )
+          streak++;
+        return streak >= block.min_passes ? 'OK' : 'TOO_FEW_PASSES';
       }
       return running.some((r) => r.die === die && covers(r, platform)) ? 'INFLIGHT' : 'NO_RESULT';
     };

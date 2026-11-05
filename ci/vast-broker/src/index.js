@@ -40,7 +40,7 @@ import {onstart} from './onstart.js';
 // prettier-ignore
 import {appendBoxText,appendWorkerText,sanitizeBoxText} from './sanitize.js';
 // prettier-ignore
-import {CHECK_PATH,storeEnabled,enqueue,freeze,storeTick,githubTreeKey,checkRequirements} from './ingest.js';
+import {CHECK_PATH,storeEnabled,enqueue,freeze,storeTick,storeTrees,githubTreeKey,checkRequirements} from './ingest.js';
 // Signed facts only: repository, environment subject, master ref, run identity and a pinned
 // master workflow. Who triggered the run and which commit it tests come from one run lookup.
 // Log-only trace of a 401: the route word and the fixed check code, never a value.
@@ -86,12 +86,13 @@ export function createService({
     verifier = new OidcVerifier(fetcher, now),
     tokens = new RunTokens(env.RUN_TOKEN_SECRET, now),
     githubCache = new Map(),
-    treeCache = new Map(),
     offers = new OfferBook(now);
   let busy = false,
     localVerifier,
     admissionWindow = -1,
-    admissionCount = 0;
+    admissionCount = 0,
+    checkWindow = -1,
+    checkCount = 0;
   const runKey = (c) => c.run_id + '-' + c.run_attempt;
   const json = (data, status = 200) =>
     Response.json(data, {
@@ -739,7 +740,16 @@ export function createService({
     // Runner and Worker must speak the same status protocol; each side refuses the other.
     if (request.headers.get('X-KF-Protocol') !== String(DEFAULTS.statusProtocol))
       refuse('PROTOCOL_MISMATCH', 409);
-    if (path === '/availability' || path === '/rent' || path === CHECK_PATH) {
+    // The result check has its own admission counter: a polling gate never starves /rent.
+    if (path === CHECK_PATH) {
+      const window = Math.floor(now() / 60000);
+      if (checkWindow !== window) {
+        checkWindow = window;
+        checkCount = 0;
+      }
+      if (++checkCount > DEFAULTS.admissionPerMinute) refuse('RATE_LIMIT', 429);
+    }
+    if (path === '/availability' || path === '/rent') {
       const window = Math.floor(now() / 60000);
       if (admissionWindow !== window) {
         admissionWindow = window;
@@ -790,7 +800,8 @@ export function createService({
     const token = env.GITHUB_API_TOKEN;
     if (token && (token.length > 1024 || !/^[\x21-\x7e]+$/.test(token))) refuse();
     const github = new Github(fetcher, cfg, token, { cache: githubCache, now });
-    // Read-only result check (src/ingest.js): never reserves, rents or queues.
+    // Read-only result check (src/ingest.js): never reserves, rents or queues. It runs outside
+    // the serial queue (fetch below), so its GitHub reads never hold up box reports.
     if (path === CHECK_PATH) {
       await github.authorize(c);
       return json(
@@ -798,8 +809,8 @@ export function createService({
           bytes: checkBody,
           env,
           github,
+          ledger,
           treeKey: githubTreeKey(github),
-          cache: treeCache,
           now: now(),
         }),
       );
@@ -1187,6 +1198,8 @@ export function createService({
         const receipt = await preauthenticate(request);
         if (receipt instanceof Response) return receipt;
         path = await routePath(request, env);
+        // Outside the serial queue: it reads no ledger record and writes only treekey:<sha>.
+        if (path === CHECK_PATH) return await perform(request);
         const renting = path === '/rent';
         if (renting && busy) refuse('BUSY', 409);
         if (renting) busy = true;
@@ -1220,6 +1233,19 @@ export function createService({
         await releaseUpload(request);
       }
     },
+    // Tree keys for the store queue, OUTSIDE the serial queue (GitHub reads, bounded in time).
+    async storeTrees() {
+      if (!storeEnabled(env)) return;
+      try {
+        const github = new Github(fetcher, configuration(env), env.GITHUB_API_TOKEN, {
+          cache: githubCache,
+          now,
+        });
+        await storeTrees({ ledger, env, now: now(), treeKey: githubTreeKey(github) });
+      } catch {
+        console.log(JSON.stringify({ event: 'store', state: 'TREES_FAILED' }));
+      }
+    },
     async sweep() {
       return serial(0, async () => {
         try {
@@ -1237,17 +1263,15 @@ export function createService({
               console.log(JSON.stringify({ event: 'cleanup_unavailable' }));
             }
           }
+          await ledger.expire(now(), cfg);
+          // After cleanup and expiry, bounded in time (src/ingest.js); tree keys come from the
+          // cache that storeTrees fills outside this queue.
           if (storeEnabled(env))
             try {
-              const github = new Github(fetcher, cfg, env.GITHUB_API_TOKEN, {
-                cache: githubCache,
-                now,
-              });
-              await storeTick({ ledger, env, now: now(), treeKey: githubTreeKey(github) });
+              await storeTick({ ledger, env, now: now() });
             } catch {
               console.log(JSON.stringify({ event: 'store', state: 'TICK_FAILED' }));
             }
-          await ledger.expire(now(), cfg);
         } catch (e) {
           // A configuration refusal names only the variable; operators must not read silence.
           console.log(
@@ -1419,6 +1443,7 @@ export class BrokerLedger {
       new URL(request.url).pathname === '/cron'
     ) {
       await this.service.sweep();
+      await this.service.storeTrees?.();
       return new Response('ok');
     }
     return this.service.fetch(request);

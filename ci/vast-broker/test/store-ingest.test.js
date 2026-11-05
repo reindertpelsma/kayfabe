@@ -1,9 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { setup, nonce, sha, jwt, clock } from './helpers.js';
+import { setup, nonce, sha, jwt, clock, MemoryStorage } from './helpers.js';
+import { Ledger } from '../src/ledger.js';
 import { FakeD1, d1Skip } from './d1.js';
 import { treeKeyOf, patternsFor, commitKey } from '../src/treekey.js';
-import { storeVerdict, storeTierOf, rowFromRecord } from '../src/ingest.js';
+import {
+  storeVerdict,
+  storeTierOf,
+  rowFromRecord,
+  treeKeyFor,
+  storeTick,
+  TREE_ATTEMPTS,
+} from '../src/ingest.js';
 // Ledger -> D1 ingest and the read-only requirements check, through the real service.
 // FALSIFIER: the store changes a ledger verdict or rental; a PASS row appears without a verified
 // box PASS; a final row is missing after settlement; a FAIL is not recorded; the check rents,
@@ -70,8 +78,15 @@ async function harness({ store = true, treeFails = false, requirements = REQ } =
   h.restart();
   return { h, db, gh };
 }
+// One cron tick: the serial sweep, then the tree keys outside the queue (BrokerLedger /cron).
+const cron = async (h, n = 1) => {
+  for (let i = 0; i < n; i++) {
+    await h.service.sweep();
+    await h.service.storeTrees();
+  }
+};
 const storeKeys = (h) => [...h.storage.data.keys()].filter((k) => k.startsWith('store:'));
-const check = (h, body = { commit_sha: sha, base: 'master', tier: 'middle' }, opts = {}) =>
+const check = (h, body = { commit_sha: sha, tier: 'middle' }, opts = {}) =>
   h.call('/v1/requirements/check', { body, ...opts });
 const passSuites = (extra = []) =>
   ['provision', 'gates', 'raw_suite', ...extra].map((name) => ({
@@ -100,7 +115,7 @@ test(
     const { h, db } = await harness();
     assert.equal((await h.call()).status, 200);
     assert.deepEqual(storeKeys(h), ['store:123-1:0']);
-    await h.service.sweep();
+    await cron(h, 2); // the first tick computes the tree key, the second records the row
     const key = await treeKeyOf(FILES, patternsFor(undefined));
     const inflight = db.rows(
       'SELECT run_id, verdict, tree_hash, tree_kind, tier, die, family, platform FROM ci_runs',
@@ -133,11 +148,11 @@ test(
     });
     assert.equal(r.status, 200);
     h.time.value += 6 * 60000;
-    await h.service.sweep();
+    await cron(h);
     const record = await h.storage.get('record:123-1');
     assert.equal(record.verdict, 'PASS', 'the ledger verdict is untouched');
     assert.notEqual(record.ended, null);
-    if (storeKeys(h).length) await h.service.sweep();
+    if (storeKeys(h).length) await cron(h);
     assert.deepEqual(storeKeys(h), []);
     assert.deepEqual(db.rows('SELECT verdict, tier FROM ci_runs'), [
       { verdict: 'PASS', tier: 'middle' },
@@ -172,8 +187,7 @@ test('ingest: a box FAIL is recorded (cached) as FAIL', { skip: d1Skip }, async 
     },
   });
   h.time.value += 11 * 60000;
-  await h.service.sweep();
-  await h.service.sweep();
+  await cron(h, 2);
   assert.deepEqual(db.rows('SELECT verdict FROM ci_runs'), [{ verdict: 'FAIL' }]);
   const answer = await (await check(h)).json();
   assert.equal(answer.met, false);
@@ -184,8 +198,7 @@ test('ingest: a box that never reports is UNATTRIBUTED, never PASS', { skip: d1S
   const { h, db } = await harness();
   await h.call();
   h.time.value += 11 * 60000; // past BOOT_LIMIT_MINUTES=10
-  await h.service.sweep();
-  await h.service.sweep();
+  await cron(h, 2);
   const record = await h.storage.get('record:123-1');
   assert.notEqual(record.ended, null);
   assert.deepEqual(db.rows('SELECT verdict FROM ci_runs'), [{ verdict: 'UNATTRIBUTED' }]);
@@ -198,7 +211,7 @@ test(
   async () => {
     const { h, db } = await harness({ treeFails: true });
     await h.call();
-    for (let i = 0; i < 3; i++) await h.service.sweep();
+    await cron(h, 5); // 3 failed attempts, the per-commit key, then the row
     assert.deepEqual(db.rows('SELECT tree_hash, tree_kind FROM ci_runs'), [
       { tree_hash: await commitKey(sha), tree_kind: 'commit' },
     ]);
@@ -209,14 +222,15 @@ test(
 
 test('check: OIDC, body and store are required; it never rents', { skip: d1Skip }, async () => {
   const { h } = await harness();
-  const before = [...h.storage.data.keys()].sort();
+  const ledgerKeys = () => [...h.storage.data.keys()].filter((k) => !k.startsWith('treekey:'));
+  const before = ledgerKeys().sort();
   assert.equal((await check(h, undefined, { token: 'not-a-jwt' })).status, 401);
   assert.equal((await check(h, undefined, { protocol: null })).status, 409);
   for (const body of [
-    { commit_sha: sha, base: 'feature', tier: 'middle' },
-    { commit_sha: sha, base: 'master', tier: 'adhoc' },
-    { commit_sha: 'x', base: 'master', tier: 'middle' },
-    { commit_sha: sha, base: 'master', tier: 'middle', extra: 1 },
+    { commit_sha: sha, base: 'next', tier: 'middle' }, // the Worker picks the base, not the caller
+    { commit_sha: sha, tier: 'adhoc' },
+    { commit_sha: 'x', tier: 'middle' },
+    { commit_sha: sha, tier: 'middle', extra: 1 },
   ])
     assert.equal((await check(h, body)).status, 400, JSON.stringify(body));
   // The run must be triggered by the owner, as for /availability and /rent.
@@ -228,7 +242,10 @@ test('check: OIDC, body and store are required; it never rents', { skip: d1Skip 
   assert.equal(bad.status, 404);
   const ok = await check(h);
   assert.equal(ok.status, 200);
-  assert.deepEqual([...h.storage.data.keys()].sort(), before, 'no ledger write');
+  assert.equal((await ok.json()).base, 'master');
+  assert.deepEqual(ledgerKeys().sort(), before, 'no ledger write besides the tree-key cache');
+  const small = await (await check(h, { commit_sha: sha, tier: 'small' })).json();
+  assert.equal(small.base, 'next');
   assert.equal(h.cloud.creates, 0);
   // A missing requirements file is not met.
   const none = await harness({ requirements: null });
@@ -274,7 +291,7 @@ test(
     Object.assign(h.cloud.offer, { host_id: 100 });
     h.cloud.contracts = [900, 901];
     assert.equal((await h.call()).status, 200);
-    await h.service.sweep(); // in-flight row of leg 0
+    await cron(h, 2); // in-flight row of leg 0
     h.cloud.extraOffers = [
       { ...h.cloud.offer, id: 6, machine_id: 100002, host_id: 200, price: 0.1 },
     ];
@@ -295,7 +312,7 @@ test(
     assert.equal((await h.call()).status, 200);
     assert.equal((await h.storage.get('record:123-1')).providerRetries, 1);
     assert.deepEqual(storeKeys(h).sort(), ['store:123-1:0', 'store:123-1:1']);
-    await h.service.sweep();
+    await cron(h);
     assert.deepEqual(db.rows('SELECT run_id, verdict FROM ci_runs ORDER BY run_id'), [
       { run_id: 'vast-123-1-0', verdict: 'RETRY' },
       { run_id: 'vast-123-1-1', verdict: null },
@@ -303,3 +320,137 @@ test(
     assert.deepEqual(storeKeys(h), ['store:123-1:1']);
   },
 );
+
+// --- review of #258: H1 (attempt first, budgets, expiry first), M1 (outside the queue), L1, L2 ---
+
+const never = () => new Promise(() => {});
+const hungDb = () => ({
+  prepare: () => {
+    const statement = {
+      bind: () => statement,
+      first: never,
+      all: never,
+      run: never,
+    };
+    return statement;
+  },
+  batch: never,
+});
+const settle = () => new Promise((resolve) => setTimeout(resolve, 30));
+
+test('ingest: a tree key that never returns counts its attempt and gives up', async () => {
+  const ledger = new Ledger(new MemoryStorage());
+  for (let i = 1; i <= TREE_ATTEMPTS; i++) {
+    assert.equal(await treeKeyFor({ ledger, sha, now: clock, treeKey: never, budgetMs: 10 }), null);
+    assert.deepEqual(await ledger.get('treekey:' + sha), {
+      kind: 'pending',
+      attempts: i,
+      at: clock,
+    });
+  }
+  const fallback = await treeKeyFor({ ledger, sha, now: clock, treeKey: never, budgetMs: 10 });
+  assert.deepEqual(fallback, { key: await commitKey(sha), kind: 'commit', at: clock });
+  // The attempt is saved before the computation starts.
+  const other = 'e'.repeat(40);
+  treeKeyFor({ ledger, sha: other, now: clock, treeKey: never, budgetMs: 300 });
+  await settle();
+  assert.equal((await ledger.get('treekey:' + other)).attempts, 1);
+});
+
+async function queued(db) {
+  const ledger = new Ledger(new MemoryStorage());
+  await ledger.put('record:5-1', {
+    key: '5-1',
+    sha,
+    profile: 'check',
+    die: 'AD104',
+    id: 900,
+    started: clock,
+    ended: null,
+    price: 0.2,
+  });
+  await ledger.put('store:5-1:0', { attempts: 0, inflight: false });
+  await ledger.put('treekey:' + sha, { key: 'f'.repeat(64), kind: 'tree', at: clock });
+  return { ledger, env: { DB: db, ROW_TAG_KEY: TAG_KEY } };
+}
+
+test('ingest: the store tick counts its attempt before any D1 call', async () => {
+  const { ledger, env } = await queued(hungDb());
+  storeTick({ ledger, env, now: clock });
+  await settle();
+  assert.equal((await ledger.get('store:5-1:0')).attempts, 1);
+});
+
+test('ingest: the store tick stops at its time budget', { skip: d1Skip }, async () => {
+  const db = new FakeD1();
+  const { ledger, env } = await queued(db);
+  let t = 0;
+  await storeTick({ ledger, env, now: clock, clock: () => (t += 1000), budgetMs: 500 });
+  assert.equal(db.rows('SELECT * FROM ci_runs').length, 0);
+  assert.equal((await ledger.get('store:5-1:0')).attempts, 0);
+  await storeTick({ ledger, env, now: clock });
+  assert.equal(db.rows('SELECT * FROM ci_runs').length, 1);
+});
+
+test('ingest: a hung store never blocks cleanup expiry', async () => {
+  const h = await setup({ DB: hungDb(), ROW_TAG_KEY: TAG_KEY });
+  const old = clock - 7 * 3600000; // past LOG_RETENTION_HOURS (6)
+  await h.storage.put('record:999-1', {
+    key: '999-1',
+    sha,
+    profile: 'check',
+    die: 'AD104',
+    id: 5,
+    started: old - 60000,
+    ended: old,
+    price: 0.2,
+    verdict: 'PASS',
+  });
+  await h.storage.put('ended:999-1', old);
+  await h.storage.put('store:999-1:0', { attempts: 0, inflight: true });
+  await h.storage.put('treekey:' + sha, { key: 'f'.repeat(64), kind: 'tree', at: clock });
+  h.service.sweep();
+  await settle();
+  assert.equal(await h.storage.get('ended:999-1'), undefined, 'expired before the store work');
+});
+
+test(
+  'ingest: the check and tree keys run outside the serial queue',
+  { skip: d1Skip, timeout: 10000 },
+  async () => {
+    const { h } = await harness();
+    const inner = h.cloud.fetch;
+    let hang = false;
+    h.cloud.fetch = (input, init) =>
+      hang && new URL(String(input)).hostname === 'console.vast.ai' ? never() : inner(input, init);
+    h.restart();
+    assert.equal((await h.call()).status, 200);
+    hang = true;
+    h.service.sweep(); // holds the serial queue on a provider call that never returns
+    await settle();
+    const answer = await check(h);
+    assert.equal(answer.status, 200);
+    await h.service.storeTrees();
+    assert.equal((await h.storage.get('treekey:' + sha)).kind, 'tree');
+  },
+);
+
+test('check: its own admission counter never starves /availability', { skip: d1Skip }, async () => {
+  const { h } = await harness();
+  // /availability first, so the shared window is open when the checks run.
+  assert.equal((await h.call('/availability?profile=check', { method: 'GET' })).status, 200);
+  let limited = 0;
+  for (let i = 0; i < 31; i++) if ((await check(h)).status === 429) limited++;
+  assert.equal(limited, 1);
+  assert.equal((await h.call('/availability?profile=check', { method: 'GET' })).status, 200);
+});
+
+test('ingest: a dropped queue entry closes its in-flight row', { skip: d1Skip }, async () => {
+  const db = new FakeD1();
+  const { ledger, env } = await queued(db);
+  await storeTick({ ledger, env, now: clock });
+  assert.deepEqual(db.rows('SELECT verdict FROM ci_runs'), [{ verdict: null }]);
+  await ledger.storage.delete('record:5-1'); // e.g. expired
+  await storeTick({ ledger, env, now: clock + 60000 });
+  assert.deepEqual(db.rows('SELECT verdict FROM ci_runs'), [{ verdict: 'UNATTRIBUTED' }]);
+});

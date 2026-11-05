@@ -36,12 +36,15 @@ test('treekey: newly ignoring an existing file changes the key', async () => {
   assert.notEqual(before, after);
 });
 
-test('treekey: a new file added together with its exclusion keeps the key', async () => {
+test('treekey: a new file under an existing exclusion keeps the key', async () => {
   const before = await treeKeyOf(base, P('/docs/\n'));
-  const added = [...base, { path: 'notes/new.txt', mode: '100644', sha: sha(9) }];
-  assert.equal(await treeKeyOf(added, P('/docs/\n/notes/\n')), before);
-  // ...and without the exclusion it changes.
-  assert.notEqual(await treeKeyOf(added, P('/docs/\n')), before);
+  const added = [...base, { path: 'docs/new.md', mode: '100644', sha: sha(9) }];
+  assert.equal(await treeKeyOf(added, P('/docs/\n')), before);
+  // A new exclusion changes the ignore set, so the key changes (review of #258, H2: the ignore
+  // set is part of the key), and so does a new file outside every exclusion.
+  const notes = [...base, { path: 'notes/new.txt', mode: '100644', sha: sha(9) }];
+  assert.notEqual(await treeKeyOf(notes, P('/docs/\n/notes/\n')), before);
+  assert.notEqual(await treeKeyOf(notes, P('/docs/\n')), before);
 });
 
 test('treekey: edits to ignored files and listing order never change the key', async () => {
@@ -65,16 +68,34 @@ test('treekey: the key is the documented hash', async () => {
     { path: 'a', mode: '100755', sha: sha(1) },
   ];
   const expected = createHash('sha256')
-    .update('kf-tree-v1\na\x00' + '100755\x00' + sha(1) + '\nb\x00100644\x00' + sha(2) + '\n')
+    .update(
+      'kf-tree-v2\nignore ' +
+        createHash('sha256').update('/docs/').digest('hex') +
+        '\na\x00' +
+        '100755\x00' +
+        sha(1) +
+        '\nb\x00100644\x00' +
+        sha(2) +
+        '\n',
+    )
     .digest('hex');
-  assert.equal(await treeKeyOf(entries, []), expected);
+  assert.equal(await treeKeyOf(entries, P('# comment\n/docs/\n\n')), expected);
+  const empty = createHash('sha256').update('').digest('hex');
   // Byte order, not UTF-16 order: U+FF5E sorts before U+10000 in UTF-16, after it in UTF-8.
   const wide = [
     { path: '\u{10000}', mode: '100644', sha: sha(1) },
     { path: '～', mode: '100644', sha: sha(2) },
   ];
   const bytes = createHash('sha256')
-    .update('kf-tree-v1\n～\x00100644\x00' + sha(2) + '\n\u{10000}\x00100644\x00' + sha(1) + '\n')
+    .update(
+      'kf-tree-v2\nignore ' +
+        empty +
+        '\n～\x00100644\x00' +
+        sha(2) +
+        '\n\u{10000}\x00100644\x00' +
+        sha(1) +
+        '\n',
+    )
     .digest('hex');
   assert.equal(await treeKeyOf(wide, []), bytes);
 });
@@ -82,7 +103,8 @@ test('treekey: the key is the documented hash', async () => {
 test('treekey: commit keys are domain-separated from tree keys', async () => {
   const c = await commitKey(sha(7));
   assert.match(c, /^[0-9a-f]{64}$/);
-  assert.notEqual(c, await treeKeyOf([], []));
+  assert.notEqual(c, await treeKeyOf(base, []));
+  assert.equal(await treeKeyOf([], []), null, 'an empty tree has no key');
   assert.notEqual(c, await commitKey(sha(8)));
   await assert.rejects(() => commitKey('x'));
 });
@@ -96,6 +118,7 @@ test('treekey: malformed entries give null', async () => {
     { path: 'a', mode: '040000', sha: sha(1) },
     { path: 'a', mode: '100644', sha: 'z'.repeat(40) },
     { path: 'a\nb', mode: '100644', sha: sha(1) },
+    { path: 'a\ufffdb', mode: '100644', sha: sha(1) },
   ])
     assert.equal(await treeKeyOf([bad], []), null, JSON.stringify(bad));
   const dup = { path: 'a', mode: '100644', sha: sha(1) };
@@ -129,7 +152,7 @@ test('treekey: patterns outside the subset are refused (fail closed)', () => {
   assert.equal(parseIgnore('a\n'.repeat(LIMITS.patterns + 1)), null, 'too many patterns');
   assert.equal(parseIgnore('#'.repeat(LIMITS.ignoreBytes + 1)), null, 'too large');
   assert.equal(parseIgnore(undefined), null);
-  assert.deepEqual(parseIgnore('# only a comment\n\n'), []);
+  assert.equal(parseIgnore('# only a comment\n\n').length, 0);
 });
 
 test('treekey: anchoring, directory-only and wildcard rules read like git', () => {
@@ -248,11 +271,11 @@ function fakeRepo({ ignore, truncated = false, files = base, ignoreMode = '10064
 }
 
 test('treekey: wholly ignored top-level directories are never listed', async () => {
-  const repo = fakeRepo({ ignore: '/docs/\n/crates/\n' });
+  const repo = fakeRepo({ ignore: '/docs/\n/third_party/\n' });
   const tree = await computeTreeKey(repo.get, repo.commit);
   assert.equal(tree.kind, 'tree');
   const listed = repo.calls.filter((c) => c.endsWith('?recursive=1'));
-  // Top-level directories: crates, docs, scripts, third_party -> only scripts and third_party.
+  // Top-level directories: crates, docs, scripts, third_party -> only crates and scripts.
   assert.equal(listed.length, 2);
 });
 
@@ -303,4 +326,60 @@ test('treekey: treeSource bounds paths and requests', async () => {
   await assert.rejects(() => get('git/trees/' + sha(1) + '/../x'));
   for (let i = 1; i < LIMITS.requests; i++) await get('git/blobs/' + sha(i));
   await assert.rejects(() => get('git/blobs/' + sha(2)), /tree requests/);
+});
+
+// Review of #258, H1: the matcher must be linear, not a backtracking RegExp.
+test('treekey: a pathological pattern finishes in milliseconds', () => {
+  const name = 'a'.repeat(100);
+  // The cheaper pattern first: a backtracking matcher fails here in ~150 ms instead of hanging.
+  for (const pattern of [
+    '*a*a*a*a*b',
+    '*a*a*a*a*a*b',
+    '*a*a*a*a*a*a*a*a*a*a*b',
+    '/x/**/**/**/*a*a*a*a*b',
+  ]) {
+    const start = process.hrtime.bigint();
+    assert.equal(ignored(P(pattern), 'x/' + name + '/' + name), false, pattern);
+    const ms = Number(process.hrtime.bigint() - start) / 1e6;
+    assert.ok(ms < 50, pattern + ' took ' + ms + ' ms');
+  }
+  assert.ok(ignored(P('*a*a*a*a*a*b'), name + 'b'));
+});
+
+// Review of #258, H2: the ignore set is part of the key; code roots cannot be ignored.
+test('treekey: different ignore sets never share a key', async () => {
+  const one = await treeKeyOf(base, P('/docs/\n.workerignore\n'));
+  const two = await treeKeyOf(base, P('/docs/\n.workerignore\nhelper.rs\n'));
+  assert.notEqual(one, two, 'same kept files, different ignore set');
+  assert.equal(await treeKeyOf(base, P('# c\n/docs/\n\n.workerignore\n')), one, 'comments only');
+});
+
+test('treekey: an ignore set covering a code root is refused', () => {
+  for (const text of [
+    '*\n',
+    'crates/\n',
+    '/crates/\n',
+    'scripts\n',
+    'ci/\n',
+    '/ci/vast-broker/\n',
+    'Cargo.*\n',
+    '*.toml\n',
+    '*.lock\n',
+    'qemu/\n',
+    '/cuda/\n',
+    '.cargo/\n',
+  ])
+    assert.equal(patternsFor(text), null, JSON.stringify(text));
+  for (const text of ['/docs/\n', 'crates/*/tests/\n', 'ci/vast-broker/*.md\n', '.workerignore\n'])
+    assert.ok(patternsFor(text), JSON.stringify(text));
+});
+
+test('treekey: an empty root listing or an all-ignored tree fails closed', async () => {
+  const empty = async (path) =>
+    path.startsWith('git/commits/') ? { tree: { sha: sha(500) } } : { tree: [], truncated: false };
+  assert.equal(await computeTreeKey(empty, sha(1)), null);
+  assert.equal(
+    await treeKeyOf([{ path: 'docs/a.md', mode: '100644', sha: sha(1) }], P('/docs/\n')),
+    null,
+  );
 });

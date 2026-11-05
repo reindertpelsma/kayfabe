@@ -48,6 +48,9 @@ export const ALLOWED = new Set([
   'MAX_CONCURRENT_RENTALS',
   'MAX_CONCURRENT_CHECK',
   'MAX_CONCURRENT_SWEEP',
+  // Result store (src/results.js): 'true' lets a Worker-verified tree key answer for another
+  // commit. Keep it unset/'false' until boxes delete ignored files after cloning (review of #258).
+  'TREE_KEY_CARRY_OVER',
 ]);
 const bareOrigin = (value) => {
   try {
@@ -82,6 +85,11 @@ export function parseVars(text) {
     fail('OWNER_GITHUB_ID must be present and numeric');
   if (vars.has('RENTING_ENABLED') && !['true', 'false'].includes(vars.get('RENTING_ENABLED')))
     fail('RENTING_ENABLED must be true or false');
+  if (
+    vars.has('TREE_KEY_CARRY_OVER') &&
+    !['true', 'false'].includes(vars.get('TREE_KEY_CARRY_OVER'))
+  )
+    fail('TREE_KEY_CARRY_OVER must be true or false');
   if (vars.has('WORKER_URL') && !bareOrigin(vars.get('WORKER_URL')))
     fail('WORKER_URL must be the bare https origin (no trailing slash, path, query or user)');
   return vars;

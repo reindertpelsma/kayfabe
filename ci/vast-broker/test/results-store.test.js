@@ -9,6 +9,7 @@ import {
   canonicalRun,
   recordRequirementSnapshot,
   TokenRedactor,
+  closeStale,
 } from '../src/results.js';
 import { commitKey } from '../src/treekey.js';
 import { FakeD1, d1Skip } from './d1.js';
@@ -239,7 +240,9 @@ test('requirements: an untagged or forged row never counts', { skip: d1Skip }, a
   const db2 = new FakeD1();
   await recordRun(env(db2), row({ verdict: 'FAIL', stages: [] }));
   db2.database.exec("UPDATE ci_runs SET verdict = 'PASS'"); // forged in the database
-  assert.equal((await check(db2)).met, false);
+  const forged = await check(db2);
+  assert.equal(forged.met, false);
+  assert.equal(forged.missing[0].reason, 'TAMPERED');
   const db3 = new FakeD1();
   await recordRun(env(db3), row());
   db3.database.exec("UPDATE ci_run_stages SET result = 'PASS' WHERE name = 'gates'");
@@ -271,9 +274,9 @@ test(
     assert.equal(r.met, false);
     assert.deepEqual(r.inflight, ['vast-100-1-0']);
     assert.equal(r.missing[0].reason, 'INFLIGHT');
-    // Another tree does not see it; a stale in-flight row is not offered.
+    // Another commit does not see it (no carry-over); a stale in-flight row is not offered.
     assert.deepEqual(
-      (await check(db, { tree_hash: 'b'.repeat(64), now: T0 + 60000 })).inflight,
+      (await check(db, { commit_sha: 'b'.repeat(40), now: T0 + 60000 })).inflight,
       [],
     );
     assert.deepEqual((await check(db, { now: T0 + 9 * 3600000 })).inflight, []);
@@ -330,4 +333,93 @@ test('redaction: a run token split across chunks is still removed', () => {
   out += bytewise.end();
   assert.ok(!out.includes(token.slice(0, 20)));
   assert.equal(new TokenRedactor([]).push('abc'), 'abc');
+});
+
+// Review of #258, H2 and L4: until the box strips ignored files, only the commit's own rows count.
+test(
+  'requirements: rows of another commit with the same tree never count by default',
+  { skip: d1Skip },
+  async () => {
+    const other = 'd'.repeat(40);
+    const db = new FakeD1();
+    await recordRun(env(db), row({ commit_sha: other }), { verifiedTree: true });
+    assert.equal((await check(db)).met, false, 'carry-over is off by default');
+    const carry = { DB: db, ROW_TAG_KEY: KEY, TREE_KEY_CARRY_OVER: 'true' };
+    const args = {
+      commit_sha: SHA,
+      tree_hash: TREE,
+      tier: 'middle',
+      requirements: REQ,
+      now: T0 + 4 * 3600000,
+    };
+    assert.equal(
+      (await requirementsMet(carry, args)).met,
+      true,
+      'with the flag, a verified tree carries',
+    );
+    // A caller-supplied (unverified) tree hash is 'claimed' and never carries over.
+    const db2 = new FakeD1();
+    const claimed = await recordRun(env(db2), row({ commit_sha: other, tree_kind: 'tree' }));
+    assert.equal(claimed.tree_kind, 'claimed');
+    assert.equal((await requirementsMet({ ...carry, DB: db2 }, args)).met, false);
+    // The commit's own rows count whatever key they were stored under.
+    const db3 = new FakeD1();
+    await recordRun(env(db3), row({ tree_hash: null }));
+    assert.equal((await check(db3)).met, true);
+  },
+);
+
+// Review of #258, L1: a run left in flight is closed as UNATTRIBUTED after a bounded time.
+test(
+  'store: closeStale finalises old in-flight rows as UNATTRIBUTED',
+  { skip: d1Skip },
+  async () => {
+    const db = new FakeD1();
+    await recordRun(env(db), row({ verdict: null, ended_at: null, stages: [] }));
+    await recordRun(
+      env(db),
+      row({
+        run_id: 'vast-200-1-0',
+        verdict: null,
+        ended_at: null,
+        stages: [],
+        started_at: T0 + 7 * 3600000,
+      }),
+    );
+    assert.equal(
+      await closeStale(env(db), { now: T0 + 8 * 3600000 + 60000, olderThanMs: 8 * 3600000 }),
+      1,
+    );
+    assert.deepEqual(db.rows('SELECT run_id, verdict FROM ci_runs ORDER BY run_id'), [
+      { run_id: 'vast-100-1-0', verdict: 'UNATTRIBUTED' },
+      { run_id: 'vast-200-1-0', verdict: null },
+    ]);
+    assert.deepEqual(db.rows("SELECT gpu_name FROM ci_host_facts WHERE run_id = 'vast-100-1-0'"), [
+      { gpu_name: 'RTX_3090' },
+    ]);
+    assert.equal(
+      db.rows("SELECT machine_id FROM ci_runs_private WHERE run_id = 'vast-100-1-0'")[0].machine_id,
+      12345,
+    );
+    // One named run, regardless of age; the result is a tagged final row.
+    assert.equal(
+      await closeStale(env(db), { now: T0 + 8 * 3600000, runId: 'vast-200-1-0', olderThanMs: 0 }),
+      1,
+    );
+    const r = await check(db, { now: T0 + 9 * 3600000 });
+    assert.deepEqual(r.inflight, []);
+    assert.ok(!r.missing.some((m) => m.reason === 'TAMPERED'), 'closed rows carry a valid tag');
+  },
+);
+
+test('deploy: TREE_KEY_CARRY_OVER is a validated public var', async () => {
+  const { parseVars } = await import('../deploy.mjs');
+  assert.equal(
+    parseVars('OWNER_GITHUB_ID=1\nTREE_KEY_CARRY_OVER=false\n').get('TREE_KEY_CARRY_OVER'),
+    'false',
+  );
+  assert.throws(
+    () => parseVars('OWNER_GITHUB_ID=1\nTREE_KEY_CARRY_OVER=yes\n'),
+    /TREE_KEY_CARRY_OVER/,
+  );
 });

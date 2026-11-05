@@ -104,23 +104,28 @@ test('requirements: families of dies and compute classes', () => {
 
 const NOW = Date.UTC(2026, 10, 5, 12);
 let n = 0;
-const r = (patch) => ({
-  run_id: 'run-' + String(++n).padStart(4, '0'),
-  tier: 'largest',
-  family: 'ada',
-  die: 'AD104',
-  platform: 'both',
-  verdict: 'PASS',
-  source: 'reproduced',
-  started_at: '2026-11-05T10:00:00Z',
-  sort_at: '2026-11-05T11:00:00Z',
-  valid: true,
-  stages: [
-    { name: 'gates', result: 'PASS' },
-    { name: 'windows_gate', result: 'PASS' },
-  ],
-  ...patch,
-});
+const r = (patch) => {
+  const row = {
+    run_id: 'run-' + String(++n).padStart(4, '0'),
+    tier: 'largest',
+    family: 'ada',
+    die: 'AD104',
+    platform: 'both',
+    verdict: 'PASS',
+    source: 'reproduced',
+    started_at: '2026-11-05T10:00:00Z',
+    sort_at: '2026-11-05T11:00:00Z',
+    valid: true,
+    stages: [
+      { name: 'gates', result: 'PASS' },
+      { name: 'windows_gate', result: 'PASS' },
+    ],
+    ...patch,
+  };
+  // The tagged end time orders answers; sort_at is ignored by evaluate.
+  row.ended_at = patch.ended_at ?? (row.verdict === null ? null : row.sort_at);
+  return row;
+};
 const blocks = parseRequirements(text).blocks;
 const large = (rows) =>
   evaluate(
@@ -157,6 +162,38 @@ test('requirements: the release tier needs 2 dies per family with 2 passes each'
   assert.equal(res.missing[0].reason, 'FAIL');
   assert.equal(res.missing[0].need, 2);
   assert.equal(res.missing[0].have, 1);
+  // min_passes counts the trailing PASS streak: PASS, FAIL, PASS (newest last) is a streak of 1.
+  const broken = [
+    r({ die: 'AD102', sort_at: '2026-11-05T11:00:00Z' }),
+    r({ die: 'AD102', verdict: 'FAIL', sort_at: '2026-11-05T11:10:00Z' }),
+    r({ die: 'AD102', sort_at: '2026-11-05T11:20:00Z' }),
+  ];
+  assert.equal(large([...two('AD104'), ...broken]).missing[0].reason, 'TOO_FEW_PASSES');
+  // ...and a newer PASS after the FAIL makes a streak of 2 (re-run, never bypass).
+  const rerun = [...broken, r({ die: 'AD102', sort_at: '2026-11-05T11:30:00Z' })];
+  assert.equal(large([...two('AD104'), ...rerun]).met, true);
+  // Ordering is by the tagged ended_at, not sort_at.
+  const moved = [
+    r({
+      die: 'AD102',
+      verdict: 'FAIL',
+      ended_at: '2026-11-05T12:00:00Z',
+      sort_at: '2026-11-05T09:00:00Z',
+    }),
+    ...two('AD102'),
+  ];
+  assert.equal(large([...two('AD104'), ...moved]).missing[0].reason, 'FAIL');
+  // A tampered row is never skipped: an older valid PASS cannot answer past it.
+  const garbled = [
+    ...two('AD102'),
+    r({ die: 'AD102', verdict: 'FAIL', valid: false, sort_at: '2026-11-05T12:00:00Z' }),
+  ];
+  const tampered = large([...two('AD104'), ...two('AD103'), ...garbled]);
+  assert.equal(tampered.met, false);
+  assert.deepEqual(
+    tampered.missing.map((m) => m.reason),
+    ['TAMPERED'],
+  );
   // A middle-tier row does not satisfy the release tier.
   assert.equal(
     large([...two('AD104'), ...two('AD102').map((x) => ({ ...x, tier: 'middle' }))]).met,
