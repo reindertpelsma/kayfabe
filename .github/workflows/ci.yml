@@ -51,7 +51,7 @@ jobs:
     name: stable — build, test, clippy, fmt, boundary
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Vast broker mocks and workflow boundary
         run: |
           npx --yes prettier@3.6.2 --check 'ci/vast-broker/**/*.js' 'ci/vast-broker/**/*.mjs'
@@ -2177,7 +2177,7 @@ jobs:
     name: aarch64 — core cross-checks (no x86 assumptions)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1 (tip of master on 2026-10-31; toolchain: input is explicit)
         with:
           toolchain: 1.99.0   # pinned with rust-toolchain.toml; bump both together
@@ -2237,7 +2237,7 @@ jobs:
     name: firmware — kf-gop (x86_64-unknown-uefi), kf3's PE check, size, local stand-in
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1 (tip of master on 2026-10-31; toolchain: input is explicit)
         with:
           toolchain: 1.99.0   # pinned with rust-toolchain.toml; bump both together
@@ -2373,7 +2373,7 @@ jobs:
     # skip, as the Makefile documents. Added 2026-10-21 (owner: "the broker is something CI can test well").
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Vast Worker admission in workerd (Wrangler dependencies)
         env:
           MINIFLARE_ASSERT_BODIES_CONSUMED: "true"
@@ -2398,8 +2398,8 @@ jobs:
     # fixture. No install, no network, no Cloudflare. docs/design/V3_PLATFORM_TESTING.md.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '22'
       - name: Format, tests and mutants
@@ -2418,7 +2418,7 @@ jobs:
     if: github.event.schedule == '43 2 * * *' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1 (tip of master on 2026-10-31; toolchain: input is explicit)
         with:
           toolchain: 1.99.0   # pinned with rust-toolchain.toml; bump both together
