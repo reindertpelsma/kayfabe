@@ -63,7 +63,9 @@ if case.startswith("framing-"):
     if case == "framing-bytes":
         assert len(output.encode()) < 70000
     else:
-        assert sum(line.startswith("[untrusted]") for line in output.splitlines()) <= 200
+        # 2026-11-05: the display line budget is m.DISPLAY_LINES (200 -> 270 for KEY LINES + census).
+        assert m.DISPLAY_LINES <= 280
+        assert sum(line.startswith("[untrusted]") for line in output.splitlines()) <= m.DISPLAY_LINES
     raise SystemExit(0)
 m.time.sleep = lambda _: None
 text = {

@@ -215,12 +215,39 @@ class Secrets(unittest.TestCase):
         text = mutate(GOOD, "      - run: echo hi", "      # VAST_BROKER_URL is not used here\n      - run: echo hi")
         self.assertEqual(lint_one(text), [])
 
-    def test_real_gpu_job_has_no_actions(self):
+    def test_real_gpu_job_has_no_actions_except_the_pinned_log_upload(self):
         for name in ("gpu-vast.yml", "gpu-vast-sweep.yml"):
             wf = wl.parse(REPO / ".github" / "workflows" / name, real(name))
             gpu = [j for j in wf.jobs if j.name == "gpu"][0]
             self.assertTrue(wl.touches_secrets(gpu.lines))
-            self.assertEqual(wl.uses_in(gpu.lines), [])
+            found = [v for _, v in wl.uses_in(gpu.lines)]
+            expected = (
+                ["actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02"]
+                if name == "gpu-vast.yml"
+                else []
+            )
+            self.assertEqual(found, expected)
+
+    def test_log_upload_exception_is_only_for_the_gpu_job_of_gpu_vast(self):
+        # The exception is keyed by file and job: the same step elsewhere, or any other action in
+        # the gpu job, is still a finding.
+        pin = "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02"
+        self.assertEqual(set(wl.SECRET_JOB_USES), {("gpu-vast.yml", "gpu")})
+        text = real("gpu-vast.yml")
+        other = mutate(text, pin, "actions/cache@" + SHA)
+        self.assertTrue(any("secrets:" in x and "actions/cache" in x for x in lint_one(other, "gpu-vast.yml")))
+        moved = lint_one(text, "other.yml")
+        self.assertTrue(any("secrets:" in x and "upload-artifact" in x for x in moved), moved)
+        # a different pinned commit of the same action is not the approved one
+        repinned = mutate(text, "upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02", "upload-artifact@" + SHA)
+        self.assertTrue(any("secrets:" in x for x in lint_one(repinned, "gpu-vast.yml")))
+        # a second action step in the gpu job is a finding
+        extra = mutate(
+            text,
+            "      - name: Upload sanitised full box log",
+            f"      - uses: actions/checkout@{SHA}\n      - name: Upload sanitised full box log",
+        )
+        self.assertTrue(any("checkout" in x for x in lint_one(extra, "gpu-vast.yml")))
 
 
 class Cli(unittest.TestCase):

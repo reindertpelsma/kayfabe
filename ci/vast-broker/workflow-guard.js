@@ -1,5 +1,5 @@
 import { reuseReplayStep } from './reuse-bootstrap.js';
-import { runnerBootstrap, sweepBootstrap } from './workflow-bootstrap.js';
+import { runnerBootstrap, runlogUploadStep, sweepBootstrap } from './workflow-bootstrap.js';
 // Security-focused reader for the repository's indentation-based workflow subset.
 // Unsupported dynamic permissions/dependencies fail closed; this is not a YAML evaluator.
 import { readdir, readFile } from 'node:fs/promises';
@@ -186,13 +186,22 @@ function endpointBoundary(filename, text, jobs) {
     const parts = primary.body.split(/(?=^      - )/m),
       allSteps = parts.slice(1),
       steps = allSteps.filter((step) => /^        id: broker\s*$/m.test(step)),
-      replay = allSteps.length === 2 && allSteps[0].trim() === reuseReplayStep.trim();
+      // 2026-11-05: gpu-vast.yml may end with the one exact artifact step (runlogUploadStep). It has
+      // no env and reads one fixed file; nothing else (no other uses:) may share this job.
+      upload =
+        filename === 'gpu-vast.yml' &&
+        allSteps.length >= 2 &&
+        allSteps[allSteps.length - 1].trim() === runlogUploadStep.trim(),
+      body = upload ? allSteps.slice(0, -1) : allSteps,
+      replay = body.length === 2 && body[0].trim() === reuseReplayStep.trim();
     if (
       steps.length !== 1 ||
-      !(allSteps.length === 1 || replay) ||
+      !(body.length === 1 || replay) ||
       (replay && !/^        if: needs.pending.outputs.reused != 'true'$/m.test(steps[0]))
     )
-      fail('secrets require the sole broker step and an exact read-only replay');
+      fail(
+        'secrets require the sole broker step, an exact read-only replay and at most the exact log upload',
+      );
     const header = parts[0];
     if (/\b(?:WORKER_URL|WORKER_PATH|BROKER_BASE)\b/.test(header))
       fail('secrets cannot enter job env or outputs');
@@ -287,7 +296,9 @@ export function checkWorkflows(workflows) {
     !workflows[gpuName].includes('concurrency:')
   )
     errors.push('GPU runner must use trusted base trigger, fixed shell and head concurrency');
-  if (/actions\/checkout|cache@|upload-artifact|download-artifact/.test(workflows[gpuName]))
+  // 2026-11-05: the only artifact action is the exact log upload step (workflow-bootstrap.js).
+  const gpuText = workflows[gpuName].replace(runlogUploadStep, '');
+  if (/actions\/checkout|cache@|upload-artifact|download-artifact/.test(gpuText))
     errors.push('GPU runner cannot consume source/artifact/cache actions');
 
   if (!gpu.some((x) => x.id === 'pending') || !gpu.some((x) => x.id === 'report'))
@@ -391,7 +402,7 @@ export function checkWorkflows(workflows) {
     )
       errors.push(filename + ': downstream workflow_run GPU consumer');
   }
-  if (/merge_group:|upload-artifact|download-artifact/.test(workflows[gpuName]))
+  if (/merge_group:|upload-artifact|download-artifact/.test(gpuText))
     errors.push('GPU workflow has forbidden trigger/artifact channel');
   return errors;
 }

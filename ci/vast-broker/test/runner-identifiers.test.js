@@ -23,7 +23,7 @@ function scrub(cases) {
   assert.equal(p.status, 0, p.stderr);
   return JSON.parse(p.stdout);
 }
-// scrub() appends a "[N bytes dropped by runner]" line when redaction shortened the text.
+// scrub() appends a "[N bytes removed by sanitisation]" line when redaction shortened the text.
 const first = (out) => out.split('\n')[0];
 const identifier = (line) => line.match(/[a-z0-9_]{32,}/)[0];
 

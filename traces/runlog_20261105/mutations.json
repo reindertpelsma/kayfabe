@@ -1,0 +1,516 @@
+{
+  "baseline": "PASS",
+  "mutants": [
+    {
+      "mutant": "key-lines-unframed",
+      "kills": 8,
+      "tests": [
+        "runner run-log: key-lines-cover-the-middle",
+        "runner run-log: key-lines-budget",
+        "runner run-log: key-lines-red-first",
+        "runner run-log: key-lines-first-and-last",
+        "runner run-log: key-lines-imitation-stays-untrusted",
+        "runner run-log: key-lines-hostile-commands",
+        "runner run-log: key-lines-use-the-sanitised-text",
+        "runner run-log: runlog-has-the-whole-log"
+      ]
+    },
+    {
+      "mutant": "key-lines-no-cell-pattern",
+      "kills": 3,
+      "tests": [
+        "runner run-log: key-lines-cover-the-middle",
+        "runner run-log: key-lines-budget",
+        "runner run-log: key-lines-are-data"
+      ]
+    },
+    {
+      "mutant": "key-lines-no-gate-fail",
+      "kills": 2,
+      "tests": [
+        "runner run-log: key-lines-red-first",
+        "runner run-log: key-lines-are-data"
+      ]
+    },
+    {
+      "mutant": "key-lines-no-xid",
+      "kills": 2,
+      "tests": [
+        "runner run-log: key-lines-cover-the-middle",
+        "runner run-log: key-lines-are-data"
+      ]
+    },
+    {
+      "mutant": "key-lines-byte-budget-ignored",
+      "kills": 1,
+      "tests": [
+        "runner run-log: key-lines-red-first"
+      ]
+    },
+    {
+      "mutant": "key-lines-line-budget-ignored",
+      "kills": 3,
+      "tests": [
+        "runner run-log: key-lines-budget",
+        "runner run-log: key-lines-first-and-last",
+        "runner run-log: census-budget-holds"
+      ]
+    },
+    {
+      "mutant": "key-lines-no-red-priority",
+      "kills": 1,
+      "tests": [
+        "runner run-log: key-lines-red-first"
+      ]
+    },
+    {
+      "mutant": "key-lines-no-first-last",
+      "kills": 1,
+      "tests": [
+        "runner run-log: key-lines-budget"
+      ]
+    },
+    {
+      "mutant": "key-lines-raw-not-sanitised",
+      "kills": 1,
+      "tests": [
+        "runner run-log: key-lines-use-the-sanitised-text"
+      ]
+    },
+    {
+      "mutant": "key-lines-line-uncut",
+      "kills": 1,
+      "tests": [
+        "runner run-log: key-lines-hostile-commands"
+      ]
+    },
+    {
+      "mutant": "key-lines-shown-when-small",
+      "kills": 1,
+      "tests": [
+        "runner run-log: key-lines-absent-when-log-is-small"
+      ]
+    },
+    {
+      "mutant": "key-lines-before-group",
+      "kills": 1,
+      "tests": [
+        "runner run-log: key-lines-cover-the-middle"
+      ]
+    },
+    {
+      "mutant": "display-lines-raised-far",
+      "kills": 2,
+      "tests": [
+        "R3 hostile Worker: framing-lines",
+        "runner run-log: key-lines-are-data"
+      ]
+    },
+    {
+      "mutant": "display-bytes-raised",
+      "kills": 1,
+      "tests": [
+        "runner run-log: key-lines-are-data"
+      ]
+    },
+    {
+      "mutant": "census-prefix-uncapped",
+      "kills": 1,
+      "tests": [
+        "runner run-log: census-hostile-prefix"
+      ]
+    },
+    {
+      "mutant": "census-all-groups-named",
+      "kills": 3,
+      "tests": [
+        "runner run-log: census-only-twelve-groups",
+        "runner run-log: census-many-keys-are-only-counted",
+        "runner run-log: census-budget-holds"
+      ]
+    },
+    {
+      "mutant": "census-keys-unbounded",
+      "kills": 1,
+      "tests": [
+        "runner run-log: census-many-keys-are-only-counted"
+      ]
+    },
+    {
+      "mutant": "census-unframed",
+      "kills": 6,
+      "tests": [
+        "runner run-log: key-lines-imitation-stays-untrusted",
+        "runner run-log: census-groups-the-middle",
+        "runner run-log: census-counts-are-exact",
+        "runner run-log: census-only-twelve-groups",
+        "runner run-log: census-hostile-prefix",
+        "runner run-log: census-many-keys-are-only-counted"
+      ]
+    },
+    {
+      "mutant": "census-not-sanitised",
+      "kills": 1,
+      "tests": [
+        "runner run-log: census-groups-the-middle"
+      ]
+    },
+    {
+      "mutant": "census-others-uncounted",
+      "kills": 2,
+      "tests": [
+        "runner run-log: census-only-twelve-groups",
+        "runner run-log: census-many-keys-are-only-counted"
+      ]
+    },
+    {
+      "mutant": "census-not-before-tail",
+      "kills": 5,
+      "tests": [
+        "runner run-log: census-groups-the-middle",
+        "runner run-log: census-counts-are-exact",
+        "runner run-log: census-only-twelve-groups",
+        "runner run-log: census-hostile-prefix",
+        "runner run-log: census-many-keys-are-only-counted"
+      ]
+    },
+    {
+      "mutant": "census-digits-in-names-collapsed",
+      "kills": 1,
+      "tests": [
+        "runner run-log: census-groups-the-middle"
+      ]
+    },
+    {
+      "mutant": "marker-sanitisation-wording",
+      "kills": 4,
+      "tests": [
+        "R3 sanitisation marker (2026-11-05: honest wording) excludes synthetic newline 1",
+        "R3 sanitisation marker (2026-11-05: honest wording) excludes synthetic newline 40",
+        "runner run-log: markers-are-honest",
+        "runner run-log: runlog-cap"
+      ]
+    },
+    {
+      "mutant": "marker-cap-uncounted",
+      "kills": 3,
+      "tests": [
+        "R3 hostile Worker: caps",
+        "runner run-log: markers-are-honest",
+        "runner run-log: runlog-cap"
+      ]
+    },
+    {
+      "mutant": "runlog-follows-symlinks",
+      "kills": 1,
+      "tests": [
+        "runner run-log: runlog-never-follows-or-overwrites"
+      ]
+    },
+    {
+      "mutant": "runlog-cap-removed",
+      "kills": 1,
+      "tests": [
+        "runner run-log: runlog-cap"
+      ]
+    },
+    {
+      "mutant": "runlog-marker-unprefixed",
+      "kills": 2,
+      "tests": [
+        "runner run-log: runlog-hostile-commands",
+        "runner run-log: runlog-cap"
+      ]
+    },
+    {
+      "mutant": "runlog-unsanitised",
+      "kills": 3,
+      "tests": [
+        "runner run-log: key-lines-use-the-sanitised-text",
+        "runner run-log: runlog-redaction-matches-the-display",
+        "runner run-log: runlog-hostile-commands"
+      ]
+    },
+    {
+      "mutant": "runlog-line-prefix-missing",
+      "kills": 28,
+      "tests": [
+        "runner head+tail display: markers",
+        "runner head+tail display: count",
+        "runner head+tail display: head-size",
+        "runner head+tail display: tail-size",
+        "runner head+tail display: wide-budget",
+        "runner head+tail display: wide-sizes",
+        "runner head+tail display: ragged",
+        "runner head+tail display: ragged-again",
+        "runner head+tail display: ragged-ramp",
+        "runner head+tail display: flood-lines",
+        "runner head+tail display: scrub",
+        "runner head+tail display: small-log",
+        "runner head+tail display: exact-head",
+        "runner run-log: key-lines-cover-the-middle",
+        "runner run-log: key-lines-imitation-stays-untrusted",
+        "runner run-log: key-lines-use-the-sanitised-text",
+        "runner run-log: census-groups-the-middle",
+        "runner run-log: census-counts-are-exact",
+        "runner run-log: census-only-twelve-groups",
+        "runner run-log: census-hostile-prefix",
+        "runner run-log: census-many-keys-are-only-counted",
+        "runner run-log: markers-are-honest",
+        "runner run-log: runlog-has-the-whole-log",
+        "runner run-log: runlog-hostile-commands",
+        "runner run-log: runlog-cap",
+        "runner run-log: diagnostics-for-a-vanished-box",
+        "runner run-log: diagnostics-in-the-artifact",
+        "runner run-log: diagnostics-in-the-artifact-are-sanitised"
+      ]
+    },
+    {
+      "mutant": "runlog-failure-escapes",
+      "kills": 1,
+      "tests": [
+        "runner run-log: runlog-failure-changes-nothing"
+      ]
+    },
+    {
+      "mutant": "runlog-dir-traversal",
+      "kills": 1,
+      "tests": [
+        "runner run-log: runlog-dir-setting"
+      ]
+    },
+    {
+      "mutant": "runlog-dir-symlink",
+      "kills": 1,
+      "tests": [
+        "runner run-log: runlog-dir-setting"
+      ]
+    },
+    {
+      "mutant": "runlog-dir-from-anywhere",
+      "kills": 1,
+      "tests": [
+        "runner run-log: runlog-dir-setting"
+      ]
+    },
+    {
+      "mutant": "diag-always",
+      "kills": 1,
+      "tests": [
+        "runner run-log: diagnostics-absent-for-a-clean-result"
+      ]
+    },
+    {
+      "mutant": "diag-never",
+      "kills": 2,
+      "tests": [
+        "runner run-log: diagnostics-for-a-vanished-box",
+        "runner run-log: diagnostics-in-the-artifact"
+      ]
+    },
+    {
+      "mutant": "diag-not-in-artifact",
+      "kills": 1,
+      "tests": [
+        "runner run-log: diagnostics-in-the-artifact"
+      ]
+    },
+    {
+      "mutant": "diag-missing-fields-unlisted",
+      "kills": 2,
+      "tests": [
+        "runner run-log: diagnostics-for-a-vanished-box",
+        "runner run-log: diagnostics-in-the-artifact"
+      ]
+    },
+    {
+      "mutant": "diag-stage-name-unbounded",
+      "kills": 1,
+      "tests": [
+        "runner run-log: diagnostics-hostile-stage-name"
+      ]
+    },
+    {
+      "mutant": "diag-box-line-unframed",
+      "kills": 82,
+      "tests": [
+        "R3 sanitisation marker (2026-11-05: honest wording) excludes synthetic newline 1",
+        "R3 sanitisation marker (2026-11-05: honest wording) excludes synthetic newline 40",
+        "R3 hostile Worker: valid",
+        "R3 hostile Worker: controls",
+        "R3 hostile Worker: commands",
+        "R3 hostile Worker: caps",
+        "R3 hostile Worker: invalid-utf8",
+        "R3 hostile Worker: extra",
+        "R3 hostile Worker: extra-object",
+        "R3 hostile Worker: duplicate",
+        "R3 hostile Worker: duplicate-sha",
+        "R3 hostile Worker: wrong-sha",
+        "R3 hostile Worker: wrong-nonce",
+        "R3 hostile Worker: bad-state",
+        "R3 hostile Worker: bad-verdict",
+        "R3 hostile Worker: wrong-hash",
+        "R3 hostile Worker: wrong-page-hash",
+        "R3 hostile Worker: redirect",
+        "R3 hostile Worker: redirect-307",
+        "R3 hostile Worker: timeout",
+        "R3 hostile Worker: html",
+        "R3 hostile Worker: huge",
+        "R3 hostile Worker: wrong-run",
+        "R3 hostile Worker: wrong-version",
+        "R3 hostile Worker: wrong-worker-version",
+        "R3 hostile Worker: display-only",
+        "R3 hostile Worker: framing-bytes",
+        "R3 hostile Worker: framing-lines",
+        "R3 hostile Worker: transport-header-timeout",
+        "R3 hostile Worker: transport-body-timeout",
+        "R3 hostile Worker: cursor-race-pass",
+        "R3 hostile Worker: cursor-race-fail",
+        "runner head+tail display: markers",
+        "runner head+tail display: count",
+        "runner head+tail display: head-size",
+        "runner head+tail display: tail-size",
+        "runner head+tail display: wide-budget",
+        "runner head+tail display: wide-sizes",
+        "runner head+tail display: ragged",
+        "runner head+tail display: ragged-again",
+        "runner head+tail display: ragged-ramp",
+        "runner head+tail display: flood-lines",
+        "runner head+tail display: scrub",
+        "runner head+tail display: summary-tail",
+        "runner head+tail display: small-log",
+        "runner head+tail display: exact-head",
+        "runner head+tail display: budget-line-kept",
+        "runner head+tail display: constants",
+        "runner head+tail display: direct-show-budget-unchanged",
+        "runner run-log: key-lines-cover-the-middle",
+        "runner run-log: key-lines-budget",
+        "runner run-log: key-lines-red-first",
+        "runner run-log: key-lines-first-and-last",
+        "runner run-log: key-lines-imitation-stays-untrusted",
+        "runner run-log: key-lines-hostile-commands",
+        "runner run-log: key-lines-use-the-sanitised-text",
+        "runner run-log: key-lines-absent-when-log-is-small",
+        "runner run-log: key-lines-are-data",
+        "runner run-log: census-groups-the-middle",
+        "runner run-log: census-counts-are-exact",
+        "runner run-log: census-only-twelve-groups",
+        "runner run-log: census-hostile-prefix",
+        "runner run-log: census-many-keys-are-only-counted",
+        "runner run-log: census-absent-when-nothing-dropped",
+        "runner run-log: census-budget-holds",
+        "runner run-log: markers-are-honest",
+        "runner run-log: display-marker-split",
+        "runner run-log: runlog-has-the-whole-log",
+        "runner run-log: runlog-redaction-matches-the-display",
+        "runner run-log: runlog-hostile-commands",
+        "runner run-log: runlog-cap",
+        "runner run-log: runlog-never-follows-or-overwrites",
+        "runner run-log: runlog-failure-changes-nothing",
+        "runner run-log: runlog-off-without-a-directory",
+        "runner run-log: runlog-dir-setting",
+        "runner run-log: diagnostics-for-a-vanished-box",
+        "runner run-log: diagnostics-in-the-artifact",
+        "runner run-log: diagnostics-in-the-artifact-are-sanitised",
+        "runner run-log: diagnostics-absent-for-a-clean-result",
+        "runner run-log: diagnostics-hostile-stage-name",
+        "runner run-log: diagnostics-no-protocol-change",
+        "runner run-log: protocol-requests-unchanged"
+      ]
+    },
+    {
+      "mutant": "diag-no-transitions",
+      "kills": 1,
+      "tests": [
+        "runner run-log: diagnostics-for-a-vanished-box"
+      ]
+    },
+    {
+      "mutant": "diag-artifact-unsanitised",
+      "kills": 1,
+      "tests": [
+        "runner run-log: diagnostics-in-the-artifact-are-sanitised"
+      ]
+    },
+    {
+      "mutant": "protocol-rent-body-changed",
+      "kills": 1,
+      "tests": [
+        "runner run-log: protocol-requests-unchanged"
+      ]
+    },
+    {
+      "mutant": "protocol-version",
+      "kills": 1,
+      "tests": [
+        "runner run-log: protocol-requests-unchanged"
+      ]
+    },
+    {
+      "mutant": "guard-upload-step-any",
+      "kills": 1,
+      "tests": [
+        "runlog: guard rejects a changed upload step: token input"
+      ]
+    },
+    {
+      "mutant": "guard-upload-text-anywhere",
+      "kills": 1,
+      "tests": [
+        "runlog: guard rejects a second action or a second upload in the gpu job"
+      ]
+    },
+    {
+      "mutant": "bootstrap-no-log-dir",
+      "kills": 2,
+      "tests": [
+        "runlog: the repository workflow passes and holds exactly the pinned upload",
+        "runlog: the runner gets the directory, the sweep does not"
+      ]
+    },
+    {
+      "mutant": "bootstrap-sweep-gets-dir",
+      "kills": 1,
+      "tests": [
+        "runlog: the runner gets the directory, the sweep does not"
+      ]
+    },
+    {
+      "mutant": "upload-retention",
+      "kills": 4,
+      "tests": [
+        "R3 workflow executes only base code via pull_request_target",
+        "runlog: the repository workflow passes and holds exactly the pinned upload",
+        "runlog: the runner gets the directory, the sweep does not",
+        "runlog: guard rejects a changed upload step: retention 90"
+      ]
+    },
+    {
+      "mutant": "upload-pin",
+      "kills": 3,
+      "tests": [
+        "R3 workflow executes only base code via pull_request_target",
+        "runlog: the repository workflow passes and holds exactly the pinned upload",
+        "runlog: the runner gets the directory, the sweep does not"
+      ]
+    },
+    {
+      "mutant": "lint-exception-any-action",
+      "kills": 5,
+      "tests": [
+        "test_gpu_vast_environment_counts_as_touching",
+        "test_log_upload_exception_is_only_for_the_gpu_job_of_gpu_vast",
+        "test_secret_job_with_any_third_party_action_fails",
+        "test_secret_job_with_checkout_fails",
+        "test_workflow_level_secret_taints_every_job"
+      ]
+    },
+    {
+      "mutant": "lint-exception-any-job",
+      "kills": 1,
+      "tests": [
+        "test_log_upload_exception_is_only_for_the_gpu_job_of_gpu_vast"
+      ]
+    }
+  ]
+}
