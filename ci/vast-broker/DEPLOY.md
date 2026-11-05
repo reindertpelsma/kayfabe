@@ -1,5 +1,8 @@
 # Owner deployment and independent cleanup
 
+STATUS: LIVE, 2026-11-05. The section "Result store (D1)" (added 2026-11-05) describes a deployment
+that has not been run.
+
 [CODE READ: wrangler.toml, deployment.json, deploy.mjs] The owner/controller deploys; no round
 performs a deployment or a provider call. Keep `RENTING_ENABLED=false` until acceptance.
 `main = "src/index.js"`: wrangler bundles the source with the lockfile-pinned dependencies (there
@@ -594,3 +597,49 @@ script `scripts/ci/vast_payload.sh` is still absent (F14), so a real rental toda
 ## Same-tree gate reuse
 
 CODE READ 2026-10-27 (`gate_reuse.py`, `release_gate.py`): master pushes may reuse a direct original hardware PASS from an identical parent/associated-PR tree, with GitHub Actions creator and CI/run checks. The existing named GPU job replays bounded original result lines and summary; missing evidence uses the existing gate. Release validation independently rechecks the original metadata. This is a workflow-only change with no Worker deployment. See [operator guidance](../../docs/howto/gpu-gate-reuse.md).
+
+## Result store (D1)
+
+[CODE READ 2026-11-05: wrangler.toml, src/ingest.js, src/results.js,
+ci/platform-api/migrations] NOT DEPLOYED. What the CI Worker needs for the result store and
+`POST /v1/requirements/check` ([README](README.md), "Result store"):
+
+| Name | Kind | Where | Notes |
+|---|---|---|---|
+| `DB` | D1 binding | `wrangler.toml` (committed) | database `kayfabe-platform`, id `c6292be2-742d-4a05-95fd-749705ab30bc` (not a secret), shared with `ci/platform-api` |
+| `ROW_TAG_KEY` | Worker secret | `wrangler secret put` | random base64url, 32-512 characters; HMAC key of result rows; never on a box, never in GitHub |
+| `GITHUB_API_TOKEN` | Worker secret (existing, optional) | unchanged | the tree key reads the git data API; INFERRED from GitHub's documented limits: unauthenticated reads are limited to 60 per hour, and one tree key costs 2 requests (commit, root tree), 1 for a `.workerignore`, and 1 per top-level directory that is not wholly ignored: 15 for this repository with the default list (16 top-level directories in `git ls-tree` of `d74f6063d`, 3 ignored) |
+
+Without `DB` or `ROW_TAG_KEY` the Worker behaves as before: nothing is queued, nothing is written,
+and the check answers 503 `STORE_UNAVAILABLE`.
+
+Order (coordinator only; a coding lane never runs these):
+
+1. Merge the PR to `next`, then the `next` -> master batch. Master's `runner.py` pins the deployed
+   bundle, so the Worker is deployed only after master carries the new `deployment.json` hash.
+2. Apply the migrations from the public API's directory (the only migrations directory; the
+   broker's `migrations_dir` points to the same files):
+   ```sh
+   cd ci/platform-api
+   npx wrangler d1 migrations list kayfabe-platform --remote
+   npx wrangler d1 migrations apply kayfabe-platform --remote
+   ```
+   `list` shows whether `0001_init.sql` was applied already; `apply` applies what is missing
+   (`0002_ci_results.sql` only adds tables and indexes).
+3. Create the row-tag key without printing it, and store it as a Worker secret:
+   ```sh
+   cd ci/vast-broker
+   openssl rand -base64 48 | tr '+/' '-_' | tr -d '=\n' | npx wrangler secret put ROW_TAG_KEY
+   ```
+   Keep no other copy: losing it only means existing rows stop counting for gates (open question
+   6 of the design: rotation).
+4. Deploy the CI Worker as above (`node ci/vast-broker/deploy.mjs <vars-file> --dry-run`, then
+   without `--dry-run`); the helper refuses unless the bundle hashes to `deployment.json`.
+5. Deploy the public API (`cd ci/platform-api && npx wrangler deploy`); it needs no secret.
+6. Check: `npx wrangler d1 execute kayfabe-platform --remote --command "SELECT COUNT(*) AS n FROM ci_runs"`
+   from `ci/platform-api` (0 before the first rental), and `GET https://api.kayfabe.dev/v1/ci/trees`
+   (an empty list before the first rental).
+
+Rollback: deleting the `ROW_TAG_KEY` secret (`npx wrangler secret delete ROW_TAG_KEY`) stops all
+queueing and writes on the next request; the tables can stay.
+

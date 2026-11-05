@@ -42,6 +42,11 @@ test('no statement reads the row tag or a private table', () => {
   for (const [name, sql] of Object.entries(QUERIES)) {
     assert.doesNotMatch(sql, /\btag\b/i, name);
     assert.doesNotMatch(sql, /hosts_private|\baudit\b|address|box_token|provider_machine/i, name);
+    assert.doesNotMatch(
+      sql,
+      /ci_runs_private|ci_requirement_snapshots|machine_id|price_usd|cost_usd|\.\*/i,
+      name,
+    );
   }
 });
 
@@ -110,4 +115,12 @@ test('the schema keeps private data in separate tables', () => {
   assert.doesNotMatch(table('hosts'), /address|token|machine/);
   assert.match(table('hosts_private'), /address/);
   assert.doesNotMatch(table('runs'), /address|token/);
+  const ci = readFileSync(new URL('../migrations/0002_ci_results.sql', import.meta.url), 'utf8');
+  const ciTable = (name) =>
+    new RegExp('CREATE TABLE ' + name + ' \\(([\\s\\S]*?)\\n\\);').exec(ci)[1];
+  for (const name of ['ci_runs', 'ci_run_stages', 'ci_host_facts'])
+    assert.doesNotMatch(ciTable(name), /machine|price|cost|token|address/, name);
+  assert.match(ciTable('ci_runs_private'), /machine_id[\s\S]*price_usd_h[\s\S]*cost_usd/);
+  // 0002 only adds: it never alters or drops what 0001 created.
+  assert.doesNotMatch(ci.replace(/--[^\n]*/g, ''), /\b(?:ALTER|DROP|DELETE|UPDATE|INSERT)\b/i);
 });

@@ -15,6 +15,8 @@ export const PARAMS = Object.freeze({
     branch: 'branch',
   }),
   cell: Object.freeze({ before: 'cursor', limit: 'limit' }),
+  ciTrees: Object.freeze({ tier: 'tier', limit: 'limit' }),
+  ciMatrix: Object.freeze({ tier: 'tier', tree: 'hash', family: 'family' }),
   runs: Object.freeze({
     commit: 'sha',
     die: 'die',
@@ -34,6 +36,23 @@ export const ENDPOINTS = Object.freeze([
   { path: '/v1/runs/{id}', params: 'none', about: 'one run: platform, stages, logs' },
   { path: '/v1/commits/{sha}/requirements', params: 'none', about: 'requirement checklist' },
   { path: '/v1/dies', params: 'none', about: 'families and dies' },
+  {
+    path: '/v1/ci/matrix',
+    params: 'ciMatrix',
+    about: 'CI Worker results: latest run per tier, family, die and platform',
+  },
+  {
+    path: '/v1/ci/trees',
+    params: 'ciTrees',
+    about: 'CI Worker result keys (tree hashes), newest first',
+  },
+  { path: '/v1/ci/trees/{hash}', params: 'none', about: 'one result key: its commits and runs' },
+  { path: '/v1/ci/runs/{id}', params: 'none', about: 'one CI Worker run: stages and host facts' },
+  {
+    path: '/v1/ci/commits/{sha}',
+    params: 'none',
+    about: 'a commit: its result keys and their runs',
+  },
   { path: '/v1/hosts', params: 'none', about: 'host counts by die, class and status' },
   { path: '/v1/logs/{run}/{name}', params: 'none', about: '302 to the public log bucket' },
   { path: '/v1/schema', params: 'none', about: 'this description' },
@@ -56,16 +75,19 @@ export function describe() {
     path_patterns: {
       die: PATTERNS.die.source,
       sha: PATTERNS.sha.source,
+      tree: PATTERNS.hash.source,
       run: PATTERNS.runId.source,
       log_name: PATTERNS.logName.source,
     },
     suites: SUITES,
     limit: { default: DEFAULT_LIMIT, max: MAX_LIMIT },
     verdicts: ['PASS', 'FAIL', 'RETRY', 'UNAVAILABLE'],
+    ci_verdicts: ['PASS', 'FAIL', 'RETRY', 'UNATTRIBUTED'],
     notes: [
       'verdict null and state "running" while a run is in flight',
       'scores are ratios to a same-box reference and never gate',
       'SPECviewperf scores are not published by this API (docs/SPEC_RESULTS.md)',
+      'CI rows: RETRY and UNATTRIBUTED never pass; runs sharing a tree hash share every result',
     ],
   };
 }

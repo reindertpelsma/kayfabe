@@ -1,7 +1,8 @@
 // Every SQL statement the public Worker can run: read-only, fixed text, numbered parameters.
 // The database wrapper (db.js) accepts a statement NAME from this table, never SQL text.
 // test/static.test.js refuses a statement that is not a single SELECT, any `${` or string
-// concatenation in this file, and any reference to runs.tag, hosts_private or audit.
+// concatenation in this file, and any reference to a row tag, hosts_private, audit, or the CI
+// store's private tables (ci_runs_private, ci_requirement_snapshots).
 // Optional filters use `(?N IS NULL OR column = ?N)` so the text never depends on the request.
 
 export const QUERIES = Object.freeze({
@@ -115,6 +116,90 @@ export const QUERIES = Object.freeze({
     FROM requirement_results q LEFT JOIN runs r ON r.id = q.run_id
     WHERE q.commit_sha = ?1
     ORDER BY q.requirement_key`,
+
+  // CI Worker result store (migrations/0002_ci_results.sql). Never ci_runs.tag, never the
+  // private tables. ?1 tier, ?2 page size.
+  ciTrees: `
+    SELECT r.tree_hash, r.tree_kind, MAX(r.sort_at) AS last_at, MIN(r.started_at) AS first_at,
+           COUNT(*) AS runs,
+           SUM(CASE WHEN r.verdict = 'PASS' THEN 1 ELSE 0 END) AS passed,
+           SUM(CASE WHEN r.verdict = 'FAIL' THEN 1 ELSE 0 END) AS failed,
+           SUM(CASE WHEN r.verdict IS NULL THEN 1 ELSE 0 END) AS running
+    FROM ci_runs r
+    WHERE (?1 IS NULL OR r.tier = ?1)
+    GROUP BY r.tree_hash, r.tree_kind
+    ORDER BY last_at DESC, r.tree_hash DESC
+    LIMIT ?2`,
+
+  // Latest run per (tier, family, die, platform); filters ?1 tier, ?2 tree hash, ?3 family.
+  ciMatrixLatest: `
+    SELECT x.run_id, x.tier, x.family, x.die, x.platform, x.verdict, x.commit_sha, x.tree_hash,
+           x.tree_kind, x.started_at, x.ended_at
+    FROM (
+      SELECT r.run_id, r.tier, r.family, r.die, r.platform, r.verdict, r.commit_sha, r.tree_hash,
+             r.tree_kind, r.started_at, r.ended_at,
+             ROW_NUMBER() OVER (
+               PARTITION BY r.tier, r.family, r.die, r.platform
+               ORDER BY r.sort_at DESC, r.run_id DESC
+             ) AS rn
+      FROM ci_runs r
+      WHERE (?1 IS NULL OR r.tier = ?1)
+        AND (?2 IS NULL OR r.tree_hash = ?2)
+        AND (?3 IS NULL OR r.family = ?3)
+    ) x
+    WHERE x.rn = 1
+    ORDER BY x.tier, x.family, x.die, x.platform`,
+
+  // Last PASS per (tier, family, die, platform) under the same filters.
+  ciMatrixLastPass: `
+    SELECT x.run_id, x.tier, x.family, x.die, x.platform, x.commit_sha, x.tree_hash, x.ended_at
+    FROM (
+      SELECT r.run_id, r.tier, r.family, r.die, r.platform, r.commit_sha, r.tree_hash,
+             r.ended_at,
+             ROW_NUMBER() OVER (
+               PARTITION BY r.tier, r.family, r.die, r.platform
+               ORDER BY r.sort_at DESC, r.run_id DESC
+             ) AS rn
+      FROM ci_runs r
+      WHERE r.verdict = 'PASS'
+        AND (?1 IS NULL OR r.tier = ?1)
+        AND (?2 IS NULL OR r.tree_hash = ?2)
+        AND (?3 IS NULL OR r.family = ?3)
+    ) x
+    WHERE x.rn = 1`,
+
+  ciRunById: `
+    SELECT r.run_id, r.commit_sha, r.tree_hash, r.tree_kind, r.tier, r.profile, r.family, r.die,
+           r.platform, r.verdict, r.started_at, r.ended_at, r.log_key, r.source,
+           f.gpu_name, f.driver_versions_json
+    FROM ci_runs r LEFT JOIN ci_host_facts f ON f.run_id = r.run_id
+    WHERE r.run_id = ?1`,
+
+  ciRunStages: `
+    SELECT s.ord, s.name, s.rc, s.duration_ms, s.result
+    FROM ci_run_stages s WHERE s.run_id = ?1 ORDER BY s.ord`,
+
+  // Runs of one result key (?1), or of one commit (?2), newest first; ?3 page size.
+  ciRunList: `
+    SELECT r.run_id, r.commit_sha, r.tree_hash, r.tree_kind, r.tier, r.profile, r.family, r.die,
+           r.platform, r.verdict, r.started_at, r.ended_at
+    FROM ci_runs r
+    WHERE (?1 IS NULL OR r.tree_hash = ?1)
+      AND (?2 IS NULL OR r.commit_sha = ?2)
+    ORDER BY r.sort_at DESC, r.run_id DESC
+    LIMIT ?3`,
+
+  // Result keys a commit was recorded under.
+  ciCommitTrees: `
+    SELECT r.tree_hash, r.tree_kind, COUNT(*) AS runs, MAX(r.sort_at) AS last_at
+    FROM ci_runs r WHERE r.commit_sha = ?1
+    GROUP BY r.tree_hash, r.tree_kind ORDER BY last_at DESC`,
+
+  // Commits recorded under one result key (they share every result).
+  ciTreeCommits: `
+    SELECT r.commit_sha, COUNT(*) AS runs, MAX(r.sort_at) AS last_at
+    FROM ci_runs r WHERE r.tree_hash = ?1
+    GROUP BY r.commit_sha ORDER BY last_at DESC LIMIT 100`,
 
   hostCounts: `
     SELECT h.die, h.class, h.status, COUNT(*) AS hosts
