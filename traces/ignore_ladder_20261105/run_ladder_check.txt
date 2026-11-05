@@ -1,0 +1,8 @@
+rev d74f6063d, 2026-11-05, git git version 2.53.0
+IGNORE_LADDER_COUNT .gitignore tracked=25539 ignored(ours)=0 ignored(git)=0 ignored(docker-semantics)=0
+IGNORE_LADDER_COUNT .workerignore tracked=25539 ignored(ours)=23348 ignored(git)=23348 ignored(docker-semantics)=23348
+IGNORE_LADDER_COUNT .dockerignore tracked=25539 ignored(ours)=24564 ignored(git)=24564 ignored(docker-semantics)=24564
+IGNORE_LADDER OK
+3eb34ee46bd5818f288e3740b67c5f60b114710096976c1d7775bc3809ab5abe 2191 d74f6063d
+4ade688cbc8c743397cd75d3b15040b99c21b212b886e8b90eb982c399d150fa 2191 d74f6063d^1
+3eb34ee46bd5818f288e3740b67c5f60b114710096976c1d7775bc3809ab5abe 2191 07bd3d718

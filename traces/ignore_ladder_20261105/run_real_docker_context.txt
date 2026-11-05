@@ -1,0 +1,7 @@
+rev d74f6063d, 2026-11-05, docker Docker version 29.4.2, git git version 2.53.0
+# .workerignore used as .dockerignore
+DOCKER_CONTEXT tracked=25539 expected_copied=2187 docker_copied=2187
+DOCKER_CONTEXT OK
+# .dockerignore
+DOCKER_CONTEXT tracked=25539 expected_copied=971 docker_copied=971
+DOCKER_CONTEXT OK

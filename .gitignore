@@ -16,7 +16,7 @@
 # OWNER_RULINGS §K: no compiled binary is committed — the GOP driver is built by
 # crates/kf-gop-image/build.rs. CI's `firmware` job also fails on any tracked .efi or MZ file.
 /firmware/**/*.efi
-Cargo.lock.orig
+**/Cargo.lock.orig
 # cargo-mutants run artifacts (the mutation-testing gate, decision #28)
 /mutants.out
 /mutants.out.old
@@ -24,23 +24,23 @@ Cargo.lock.orig
 /mutants_triage
 
 # Generated review artifacts (regenerable from their .md/.py sources)
-docs/design/*.pdf
-docs/design/*.png
-__pycache__/
+/docs/design/*.pdf
+/docs/design/*.png
+**/__pycache__
 
 # LaTeX build artifacts for docs/whitepaper. build.sh deletes these on every run,
 # so a tracked copy churns on every build. They were added accidentally in w353.
-docs/whitepaper/*.aux
-docs/whitepaper/*.log
-docs/whitepaper/*.out
-docs/whitepaper/*.toc
+/docs/whitepaper/*.aux
+/docs/whitepaper/*.log
+/docs/whitepaper/*.out
+/docs/whitepaper/*.toc
 
 # The deadman heartbeat is wall-clock state, not source. Committing it makes every
 # `git add -A` carry a timestamp and turns a rebase into a conflict over a number.
-.deadman/beat
+/.deadman/beat
 
 # w753 session scratch: logs, saved copies for the known-positive pass, box coordinates.
-.w753/
+**/.w753
 
 # Wrangler dry-run cache (ci/vast-broker bundle hash check, test/bundle.test.js), written at the repo root.
-.wrangler/
+**/.wrangler

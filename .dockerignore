@@ -1,0 +1,86 @@
+# .dockerignore -- STATUS: PROPOSAL, 2026-11-05 (see .workerignore and
+# traces/ignore_ladder_20261105/). Not read by any build yet.
+#
+# Everything .workerignore ignores (line for line, checked by scripts/ci/ignore_ladder.py), plus what
+# a Docker image of the product does not need. Same restricted syntax as .workerignore.
+
+# --- everything .workerignore ignores (kept line for line) ---
+/target
+/target-*
+/crates/kayfabe-abi/gen/target
+/firmware/*/target
+/firmware/**/*.efi
+**/Cargo.lock.orig
+/mutants.out
+/mutants.out.old
+/mutants_fwdmmu
+/mutants_triage
+/docs/design/*.pdf
+/docs/design/*.png
+**/__pycache__
+/docs/whitepaper/*.aux
+/docs/whitepaper/*.log
+/docs/whitepaper/*.out
+/docs/whitepaper/*.toc
+/.deadman/beat
+**/.w753
+/.git
+**/.gitignore
+/.workerignore
+/archive
+/traces
+/site
+/.github
+/.deadman
+**/*.md
+/ci/platform-api
+/ci/vast-admin
+/ci/vast-broker
+/ci/vast-reaper
+/scripts/ci/test_*.py
+/scripts/ci/*_mutants.py
+/scripts/ci/clippy.sh
+/scripts/ci/*-debt.json
+/scripts/ci/gpu-uuids-baseline.json
+/scripts/ci/cloud_init_replay.py
+/scripts/ci/debt.py
+/scripts/ci/dependencies.py
+/scripts/ci/doc_freshness.py
+/scripts/ci/doc_status_check.py
+/scripts/ci/no_gpu_uuids.py
+/scripts/ci/no_private_refs.py
+/scripts/ci/runner_namespaces.py
+/scripts/ci/workflow_lint.py
+/scripts/bench/tests
+/scripts/mutate
+/scripts/ci_gates.sh
+/scripts/claim_ledger.py
+/scripts/check_archive_citations.sh
+/scripts/check_v3_isolation.sh
+/scripts/build_arch_pdf.sh
+/scripts/build_arch_pdf_v3.sh
+/scripts/fair_mutation_check.py
+/scripts/lazy_mutation_check.py
+/scripts/lifecycle_mutation_check.sh
+/scripts/v2_mutation_check.py
+/docs
+
+# --- Docker's own files ---
+/.dockerignore
+/docker-compose.yml
+
+# --- Vast box and bench scripts: they provision rented machines, an image has no use for them ---
+/scripts/bench
+/scripts/fastguest
+/scripts/ci
+/scripts/drivermatrix
+/scripts/rpctrace
+/scripts/cdp
+/scripts/apps
+/scripts/p1p2
+
+# --- all test files ---
+**/tests
+**/test
+**/test_*.py
+**/*_test.rs

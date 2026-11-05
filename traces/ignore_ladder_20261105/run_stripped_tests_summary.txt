@@ -1,0 +1,26 @@
+START 2026-11-05T12:47:03+01:00 rev d74f6063d2cadb303b1f4f374149e435f632d51c ignore=docs-added
+result lines: 325  passed: 5482  failed: 87  ignored: 22
+FAILED test lines: 87
+error: 20 targets failed:
+`-p kayfabe-abi --test initctrl_census`
+`-p kayfabe-abi --test real_ga106_bodies`
+`-p kayfabe-abi --test truncated_row_reads`
+`-p kayfabe-isolate-host --test guest_ring_census`
+`-p kf-abi --test initctrl_census`
+`-p kf-abi --test real_ga106_bodies`
+`-p kf-abi --test truncated_row_reads`
+`-p kf-abi --test windows_cell_provenance`
+`-p kf-census --test scrub`
+`-p kf-chan --test user_lifecycle_props`
+`-p kf-crec --test cap1_differential`
+`-p kf-crec --test cap1b_differential`
+`-p kf-mem --lib`
+`-p kf-rm --test ce_get_all_physical_caps`
+`-p kf-rm --test consttab_data`
+`-p kf-rm --test consttab_loader`
+`-p kf-rm --test gr_static_floorswept`
+`-p kf-rm --test grmgr_get_gr_fs_info`
+`-p kf-rm --test gsp_get_features`
+`-p kf-rm --test host_facts_query_ga106`
+EXIT rc=101 2026-11-05T13:41:36+01:00
+# note: kf-mem --lib batch::tests::the_act_thread_waits_for_a_chunk_not_for_the_operation (wall-clock test) is the one failure that is not a missing file; see README R5

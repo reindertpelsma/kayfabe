@@ -1,0 +1,88 @@
+# stripped tree (final .workerignore): box-side unit tests, test files restored into scripts/ci
+test_vast_box rc=0 OK  Ran 103 tests in 85.924s
+test_vast_diagnostic_logs rc=0 OK  Ran 26 tests in 0.184s
+test_vast_gpu_swap rc=0 OK  Ran 55 tests in 14.600s
+test_vast_host_reference rc=0 OK  Ran 7 tests in 0.070s
+test_vast_merge_bar rc=0 OK  Ran 28 tests in 0.831s
+test_vast_payload rc=0 OK  Ran 33 tests in 0.188s
+test_vast_payload_admission rc=1 FAILED (errors=23)  Ran 17 tests in 0.018s
+test_vast_payload_diagnostics rc=0 OK  Ran 13 tests in 0.243s
+test_vast_payload_failures rc=1 FAILED (errors=1)  Ran 1 test in 0.000s
+test_vast_payload_guest_guard rc=1 FAILED (errors=4)  Ran 6 tests in 0.208s
+test_vast_payload_result_logs rc=0 OK  Ran 19 tests in 2.859s
+test_vast_payload_summary rc=0 OK  Ran 23 tests in 0.657s
+test_vast_payload_v7 rc=0 OK  Ran 59 tests in 3.516s
+test_vast_provider_env rc=0 OK  Ran 17 tests in 0.021s
+test_vast_provider_fault rc=1 FAILED (errors=10)  Ran 27 tests in 0.031s
+test_vast_quiet_cargo rc=0 OK  Ran 7 tests in 0.166s
+test_vast_report_user_agent rc=0 OK  Ran 3 tests in 0.034s
+test_vast_s4_import rc=1 FAILED (errors=1)  Ran 1 test in 0.001s
+test_vast_setup_apt_hook rc=0 OK  Ran 2 tests in 0.107s
+test_vast_setup_base_env rc=0 OK  Ran 4 tests in 2.389s
+test_vast_setup_blob rc=0 OK  Ran 6 tests in 1.873s
+test_vast_setup_blob_retry rc=0 OK  Ran 5 tests in 9.447s
+test_vast_setup_build rc=0 OK  Ran 19 tests in 0.005s
+test_vast_setup_cache rc=0 OK  Ran 43 tests in 0.025s
+test_vast_setup_entry rc=0 OK  Ran 4 tests in 0.174s
+test_vast_setup_guard_order rc=0 OK  Ran 2 tests in 0.006s
+test_vast_setup_lock_fresh rc=0 OK  Ran 4 tests in 0.028s
+test_vast_setup_mutation_output rc=1 FAILED (errors=1)  Ran 1 test in 0.000s
+test_vast_setup_packages rc=0 OK  Ran 12 tests in 0.060s
+test_vast_setup_readiness rc=0 OK  Ran 15 tests in 5.334s
+test_vast_windows_gate rc=0 OK (skipped=1)  Ran 27 tests in 22.674s
+test_win_vm_vast rc=0 OK  Ran 29 tests in 11.775s
+test_gpu_gate_runner rc=0 OK  Ran 6 tests in 27.848s
+test_runner_namespaces rc=1 FAILED (errors=1)  Ran 1 test in 0.000s
+
+# full tree: same test files
+test_vast_box rc=0 OK  Ran 103 tests in 71.599s
+test_vast_diagnostic_logs rc=0 OK  Ran 26 tests in 0.011s
+test_vast_gpu_swap rc=0 OK  Ran 55 tests in 5.850s
+test_vast_host_reference rc=0 OK  Ran 7 tests in 0.048s
+test_vast_merge_bar rc=0 OK  Ran 28 tests in 0.761s
+test_vast_payload rc=0 OK  Ran 33 tests in 0.157s
+test_vast_payload_admission rc=0 OK  Ran 17 tests in 0.051s
+test_vast_payload_diagnostics rc=0 OK  Ran 13 tests in 0.223s
+test_vast_payload_failures rc=0 OK  Ran 45 tests in 0.133s
+test_vast_payload_guest_guard rc=0 OK  Ran 6 tests in 0.206s
+test_vast_payload_result_logs rc=0 OK  Ran 19 tests in 1.373s
+test_vast_payload_summary rc=0 OK  Ran 23 tests in 0.255s
+test_vast_payload_v7 rc=0 OK  Ran 59 tests in 2.284s
+test_vast_provider_env rc=0 OK  Ran 17 tests in 0.015s
+test_vast_provider_fault rc=0 OK  Ran 27 tests in 8.863s
+test_vast_quiet_cargo rc=0 OK  Ran 7 tests in 0.207s
+test_vast_report_user_agent rc=0 OK  Ran 3 tests in 0.026s
+test_vast_s4_import rc=0 OK  Ran 100 tests in 0.232s
+test_vast_setup_apt_hook rc=0 OK  Ran 2 tests in 0.124s
+test_vast_setup_base_env rc=0 OK  Ran 4 tests in 2.028s
+test_vast_setup_blob rc=0 OK  Ran 6 tests in 1.291s
+test_vast_setup_blob_retry rc=0 OK  Ran 5 tests in 9.415s
+test_vast_setup_build rc=0 OK  Ran 19 tests in 0.006s
+test_vast_setup_cache rc=0 OK  Ran 43 tests in 0.028s
+test_vast_setup_entry rc=0 OK  Ran 4 tests in 0.198s
+test_vast_setup_guard_order rc=0 OK  Ran 2 tests in 0.009s
+test_vast_setup_lock_fresh rc=0 OK  Ran 4 tests in 0.041s
+test_vast_setup_mutation_output rc=0 OK  Ran 11 tests in 0.002s
+test_vast_setup_packages rc=0 OK  Ran 12 tests in 0.103s
+test_vast_setup_readiness rc=0 OK  Ran 15 tests in 4.060s
+test_vast_windows_gate rc=0 OK (skipped=1)  Ran 27 tests in 21.305s
+test_win_vm_vast rc=0 OK  Ran 29 tests in 6.877s
+test_gpu_gate_runner rc=0 OK  Ran 6 tests in 38.418s
+test_runner_namespaces rc=0 OK  Ran 2 tests in 0.000s
+
+# first FileNotFoundError / ModuleNotFoundError of each failing file
+== test_vast_payload_admission
+     12 FileNotFoundError: [Errno 2] No such file or directory: 'traces/sweep_ada_20261018/lease_57144505/native
+     11 FileNotFoundError: [Errno 2] No such file or directory: 'traces/sweep_dies_20261018/lease_57209908/safet
+== test_vast_payload_failures
+      1 FileNotFoundError: [Errno 2] No such file or directory: 'ci/vast-broker/test/fixtures/scrub-vectors.json
+== test_vast_payload_guest_guard
+      4 FileNotFoundError: [Errno 2] No such file or directory: 'traces/sweep_windows_20261021/lease_57081143/na
+== test_vast_provider_fault
+     10 FileNotFoundError: [Errno 2] No such file or directory: 'ci/vast-broker/test/fixtures/provider-57890737.
+== test_vast_s4_import
+      1 FileNotFoundError: [Errno 2] No such file or directory: 'scripts/bench/tests/test_native_xid_guard.py'
+== test_vast_setup_mutation_output
+      1 ModuleNotFoundError: No module named 'vast_box_mutants'
+== test_runner_namespaces
+      1 ModuleNotFoundError: No module named 'runner_namespaces'

@@ -1,0 +1,41 @@
+START 2026-11-05T12:37:04+01:00
+##### kayfabe-abi initctrl_census
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+##### kayfabe-abi real_ga106_bodies
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+##### kayfabe-abi truncated_row_reads
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 13.36s
+##### kayfabe-isolate-host guest_ring_census
+603 |         ABI_DECODE_FAILED, ABI_ENCODE_FAILED, CharDevice, IMPOSSIBLE_CONVERSION,
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+##### kf-abi initctrl_census
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+##### kf-abi real_ga106_bodies
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+##### kf-abi truncated_row_reads
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 13.73s
+##### kf-abi windows_cell_provenance
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+##### kf-census scrub
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s
+##### kf-chan user_lifecycle_props
+test result: ok. 46 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 52.82s
+##### kf-crec cap1_differential
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.55s
+##### kf-crec cap1b_differential
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.64s
+##### kf-rm ce_get_all_physical_caps
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+##### kf-rm consttab_data
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+##### kf-rm consttab_loader
+test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+##### kf-rm gr_static_floorswept
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+##### kf-rm grmgr_get_gr_fs_info
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+##### kf-rm gsp_get_features
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+##### kf-rm host_facts_query_ga106
+test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+EXIT 2026-11-05T12:38:39+01:00
