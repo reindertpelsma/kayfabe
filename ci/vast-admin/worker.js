@@ -97,8 +97,66 @@ export const createAdmin = ({ fetcher = fetch, now = Date.now } = {}) => ({
       });
     const list = url.pathname === '/api/list' && request.method === 'GET';
     const stop = url.pathname === '/api/stop' && request.method === 'POST';
-    if (!list && !stop) return json({ error: 'Not found' }, 404);
+    // 2026-11-05 (wtier): plan (rents nothing) and start (the same admission path as a
+    // PR-triggered rental) of a small, middle or large (release) run, owner only like stop.
+    const start = url.pathname === '/api/start' && request.method === 'POST';
+    const plan = url.pathname === '/api/plan' && request.method === 'POST';
+    if (!list && !stop && !start && !plan) return json({ error: 'Not found' }, 404);
     let body;
+    if (start || plan) {
+      if (request.headers.has('Origin') && request.headers.get('Origin') !== url.origin)
+        return json({ error: 'Forbidden' }, 403);
+      if (request.headers.get('Content-Type')?.split(';')[0].trim() !== 'application/json')
+        return json({ error: 'Invalid request' }, 400);
+      try {
+        const reader = request.body?.getReader();
+        if (!reader) throw Error();
+        const chunks = [];
+        let size = 0;
+        try {
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            size += value.byteLength;
+            if (size > 512) throw Error();
+            chunks.push(value);
+          }
+        } finally {
+          await reader.cancel().catch(() => {});
+        }
+        const run = JSON.parse(await new Blob(chunks).text());
+        if (
+          !run ||
+          typeof run !== 'object' ||
+          Array.isArray(run) ||
+          !Object.keys(run).every((k) => ['commit_sha', 'tier', 'die'].includes(k)) ||
+          typeof run.commit_sha !== 'string' ||
+          !/^[0-9a-f]{40}$/.test(run.commit_sha) ||
+          !['small', 'middle', 'large'].includes(run.tier) ||
+          (run.die !== undefined &&
+            (typeof run.die !== 'string' || !/^[A-Z][A-Z0-9_]{1,23}$/.test(run.die)))
+        )
+          throw Error();
+        body = JSON.stringify(run);
+      } catch {
+        return json({ error: 'Invalid request' }, 400);
+      }
+      try {
+        const stub = env.LEDGER.get(env.LEDGER.idFromName('owner-shared-vast-account-enam-v1'));
+        const response = await stub.fetch(
+          new Request('https://internal.invalid/admin/' + (start ? 'start' : 'plan'), {
+            method: 'POST',
+            body,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        );
+        // The DO answers with a closed shape (plan, batch view or a refusal code); relay it.
+        const answer = await response.json();
+        return json(answer, response.status);
+      } catch {
+        return json({ error: 'Broker unavailable' }, 503);
+      }
+    }
     if (stop) {
       if (request.headers.has('Origin') && request.headers.get('Origin') !== url.origin)
         return json({ error: 'Forbidden' }, 403);
@@ -127,7 +185,8 @@ export const createAdmin = ({ fetcher = fetch, now = Date.now } = {}) => ({
           !(
             selection.all === true ||
             (typeof selection.run === 'string' &&
-              /^[1-9][0-9]{0,19}-[1-9][0-9]{0,19}$/.test(selection.run))
+              /^[1-9][0-9]{0,19}-[1-9][0-9]{0,19}$/.test(selection.run)) ||
+            (typeof selection.batch === 'string' && /^8[0-9]{18}$/.test(selection.batch))
           )
         )
           throw Error();
@@ -158,13 +217,27 @@ const PAGE = `<!doctype html>
 <title>Vast CI runs</title>
 <button id="stop-all" type="button">Stop all</button>
 <p id="status" role="status"></p>
+<fieldset>
+  <legend>Start a run (plan first; a release is tier large)</legend>
+  <label>Commit <input id="start-sha" size="42" maxlength="40" pattern="[0-9a-f]{40}"></label>
+  <label>Tier <select id="start-tier">
+    <option value="middle">middle</option>
+    <option value="small">small</option>
+    <option value="large">large (release)</option>
+  </select></label>
+  <label>Die (optional, not for large) <input id="start-die" size="8" maxlength="24"></label>
+  <button id="plan" type="button">Plan</button>
+  <button id="start" type="button">Start</button>
+</fieldset>
+<pre id="start-out"></pre>
+<pre id="batches"></pre>
 <table>
   <thead><tr id="columns"></tr></thead>
   <tbody id="runs"></tbody>
 </table>
 <script>
 const fields = [
-  'run', 'sha', 'branch', 'profile', 'die', 'gpu_model', 'machine_id', 'host_id',
+  'run', 'sha', 'branch', 'profile', 'tier', 'family', 'die', 'gpu_model', 'machine_id', 'host_id',
   'instance_id', 'state', 'phase', 'verdict', 'cost_estimate_usd',
   'started_at', 'ended_at', 'boot_seconds'
 ];
@@ -185,11 +258,44 @@ async function stop(selection) {
     await refresh();
   } catch (error) { status.textContent = error.message; }
 }
+function runRequest() {
+  const body = {
+    commit_sha: document.getElementById('start-sha').value.trim(),
+    tier: document.getElementById('start-tier').value
+  };
+  const die = document.getElementById('start-die').value.trim();
+  if (die) body.die = die;
+  return body;
+}
+async function post(path, body) {
+  const out = document.getElementById('start-out');
+  try {
+    const response = await fetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    out.textContent = JSON.stringify(await response.json(), null, 2);
+  } catch (error) { out.textContent = error.message; }
+}
+const planButton = document.getElementById('plan');
+if (planButton) planButton.onclick = () => post('/api/plan', runRequest());
+const startButton = document.getElementById('start');
+if (startButton) startButton.onclick = async () => {
+  const body = runRequest();
+  if (!confirm('Start a ' + body.tier + ' run of ' + body.commit_sha + '? It rents boxes.')) return;
+  await post('/api/start', body);
+  await refresh();
+};
 async function refresh() {
   try {
     const response = await fetch('/api/list');
     if (!response.ok) throw Error('Refresh failed (' + response.status + ')');
     const data = await response.json();
+    const batches = document.getElementById('batches');
+    if (batches) batches.textContent = (data.batches || []).map((b) =>
+      [b.batch, b.tier, b.sha, b.state, 'verdict=' + b.verdict, 'legs=' + b.legs.length,
+       'est=' + b.estimate_usd, 'spent=' + b.spent_usd].join(' ')).join('\\n');
     const rows = document.createDocumentFragment();
     for (const run of data.runs) {
       const tr = document.createElement('tr');

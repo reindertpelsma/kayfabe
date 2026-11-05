@@ -203,6 +203,9 @@ export class MockCloud {
     // Edits3 C: an unknown location is rejected by default, so the base offer has Vast's form.
     geolocation: 'Texas, US',
   };
+  // Admin starts (wtier): branch heads and the commits on their history.
+  branches = { master: 'd'.repeat(40), next: 'e'.repeat(40) };
+  ancestors = [sha];
   // Concurrency harness: further offers, the contract ids handed out in order (default 900)
   // and per-run-id GitHub run rows (default `run`).
   extraOffers = [];
@@ -244,6 +247,19 @@ export class MockCloud {
         );
       }
       if (/\/commits\/[a-f0-9]+\/pulls$/.test(u.pathname)) return Response.json(this.prs);
+      // Admin starts (wtier): branch heads and the ancestry comparison of src/github.js reachable().
+      const head = u.pathname.match(/\/branches\/(master|next)$/);
+      if (head)
+        return this.branches[head[1]]
+          ? Response.json({ name: head[1], commit: { sha: this.branches[head[1]] } })
+          : new Response('{}', { status: 404 });
+      const compare = u.pathname.match(/\/compare\/([0-9a-f]{40})\.\.\.([0-9a-f]{40})$/);
+      if (compare)
+        return Response.json(
+          this.ancestors.includes(compare[2])
+            ? { status: 'behind', behind_by: 3, ahead_by: 0 }
+            : { status: 'diverged', behind_by: 2, ahead_by: 1 },
+        );
       if (/\/pulls\/[0-9]+$/.test(u.pathname))
         return Response.json(
           this.prs.find((p) => String(p.number) === u.pathname.split('/').at(-1)),
@@ -374,6 +390,11 @@ export async function setup(overrides = {}) {
       return service.fetch(request);
     },
     sweep: (...args) => service.sweep(...args),
+    storeTrees: (...args) => service.storeTrees(...args),
+    adminPlan: (...args) => service.adminPlan(...args),
+    adminStart: (...args) => service.adminStart(...args),
+    adminStopBatch: (...args) => service.adminStopBatch(...args),
+    adminBatches: (...args) => service.adminBatches(...args),
   };
   const harness = {
     cloud,

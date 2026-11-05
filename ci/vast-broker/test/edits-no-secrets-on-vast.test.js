@@ -48,6 +48,8 @@ const ENV_KEYS = [
   'KF_RUN_TOKEN',
   'KF_SHA',
   'KF_SOFT_DEADLINE',
+  // 2026-11-05 (wtier): the run's tier (informational on the box, src/tier.js).
+  'KF_TIER',
 ];
 for (const withPair of [true, false])
   test('item 7: the Vast create request is the exact allow-list, pair B ' + withPair, async () => {

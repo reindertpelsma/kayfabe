@@ -1,5 +1,8 @@
 # Owner deployment and independent cleanup
 
+STATUS: LIVE, 2026-11-05. The sections "Result store (D1)" and "Tiers and the release run" (both
+added 2026-11-05) describe deployments that have not been run.
+
 [CODE READ: wrangler.toml, deployment.json, deploy.mjs] The owner/controller deploys; no round
 performs a deployment or a provider call. Keep `RENTING_ENABLED=false` until acceptance.
 `main = "src/index.js"`: wrangler bundles the source with the lockfile-pinned dependencies (there
@@ -138,6 +141,16 @@ vars with the toml plus `--var` values, so every public var must be in `wrangler
 file. `OWNER_GITHUB_ID=229738317` is committed in `wrangler.toml` (a public account id, V1); a
 deploy without it refuses rentals with `CONFIG_VAR:OWNER_GITHUB_ID` and the cron logs
 `cleanup_config_error` instead of silently cleaning nothing.
+
+Boolean vars (review of PR #269, R3, CODE READ and tested GPU-free 2026-11-05): `RENTING_ENABLED`,
+`RELEASE_ENABLED`, `ALLOW_UNKNOWN_COUNTRY` and `TREE_KEY_CARRY_OVER` must be exactly `true` or
+`false`. `deploy.mjs` refuses any other value, and the Worker refuses one as
+`CONFIG_VAR:<name>` on every route. A malformed policy var (any var except the identity vars
+`OWNER_GITHUB_ID`, `REPOSITORY`, `REPOSITORY_GITHUB_ID`, `WORKER_URL`, `OIDC_SUB` and the workflow
+refs) does not stop teardown: the cron logs `cleanup_config_error` with `teardown: "defaults"`,
+closes and cleans up open rentals with the identity vars and the committed defaults, and skips
+batch ticks, expiry and the result store until the var is fixed. `/stop-all` still answers 503 in
+that state; the cron's deadlines and the reaper end the boxes.
 
 Main Worker cron schedule: `* * * * *`
 
@@ -454,6 +467,97 @@ other branches and a path-policy `NOT_NEEDED` status refuse, so a docs-only mast
 be released on its own. TODO (owner): the planned tag-only release CI will replace this
 dispatch workflow; the gate then needs its trigger rule restated.
 
+## Tiers and the release run (wtier, 2026-11-05)
+
+CODE READ (`src/tier.js`, `src/policy.js`, `src/release.js`, `deploy.mjs`, branch
+`claude/worker-tier-20261105`); nothing here was deployed or run against Vast. How to plan and
+start a release: [README](README.md), "Tiers, the admin start and the release run".
+
+What changes on deploy without any new var: a master PR (middle tier) rotates its die across the
+four families instead of taking the cheapest `CHECK_DIES` class; boxes carry `KF_TIER`; the admin
+page gains Plan and Start (small and middle starts work at once; a large Start is refused until
+`RELEASE_ENABLED=true`); the cron advances batches; the account-wide daily cap
+`ACCOUNT_DAILY_USD` (default 50) bounds check, sweep and release spend together.
+
+Vars for running a release (public, in the vars file outside the checkout; `deploy.mjs` accepts
+them): `RELEASE_ENABLED=true` (the kill switch; default false), `MAX_CONCURRENT_RENTALS=9` together
+with `MAX_CONCURRENT_CHECK=1` and `MAX_CONCURRENT_SWEEP=1` (raising the account cap alone also raises
+check and sweep). A release gets at most the account cap minus 1 boxes (`MAX_CONCURRENT_RELEASE`,
+default exactly that, at most 8), so one slot always stays free for the master gate; with the
+committed account cap of 1 the plan says `NO_SLOTS`. Optional: `RELEASE_COST_CAP_USD` (default 40,
+at most `RELEASE_DAILY_USD`), `RELEASE_MAX_PRICE_USD_HOUR` (2), `RELEASE_DAILY_USD` (40),
+`RELEASE_DAILY_RENTALS` (24), `RELEASE_HARD_RUNTIME_MINUTES` (300, may only be lowered),
+`RELEASE_RERUNS_PER_LEG` (1, 0 to 2), `RELEASE_STAGES` (`[]`; `["specviewperf"]` only once its
+lane exists), `RELEASE_DIES`, `MIDDLE_ROTATION` (JSON family lists, no spaces),
+`MIDDLE_VRAM_FLOOR_MB` (0 = off; TBD from the trio footprints) and `ACCOUNT_DAILY_USD`. The shared
+`ROLLING_SPEND_USD` (default 30) also bounds a release: the offline plan of the synthetic market
+estimates 18.63 USD from SYNTHETIC prices, so a release in a month with other spend needs it raised.
+INFERRED (admin README storage note): 8 concurrent boxes write 8 log streams into the same Durable
+Object; keep `LOG_RETENTION_HOURS=6` and check storage after the first release.
+
+Money bounds (CODE READ): every release box is admitted only while the release's spend (settled
+legs at cost, open legs at their reserved liability) plus its own worst case stays under the cost
+cap, and its contract price as the provider reports it is re-checked against the same cap (a box above it is closed
+as `CONTRACT_BUDGET`). A release leg reserves its hard limit plus one cron period (301 minutes); the
+independent reaper deletes a box only after 300 + 15 minutes plus up to one 5-minute reaper tick, so
+a box whose teardown failed can bill about 19 minutes beyond its reservation (INFERRED: about 5 USD
+for 8 boxes at the 2 USD/hour cap). Turning `RENTING_ENABLED` or `RELEASE_ENABLED` off stops every
+running release at the next cron tick: `admit()` refuses, so no pending leg or re-run is rented
+(those legs end MISSING); boxes already running finish to their result or deadline unless stopped.
+
+Time budget of one box (300 minutes): the trio agent reported on 2026-11-05 (relayed by the
+coordinator; its run and revision are in that agent's report, not re-checked here) a Windows gate
+of 968 s warm on an RTX 4090 and 89.5 minutes for the whole Worker check run. INFERRED: a second Windows run on the same box
+(`KF_WINDOWS_RUNS=2`, image reused) adds one more gate, about 16 minutes warm, so about 106 minutes in
+all. The slowest gate recorded on 2026-11-04 (AD104, 5065 s, traces/die_coverage_20261104/) would
+give about 3 hours, still inside 300; the payload refuses a second run with less than 45 minutes left
+(`windows_retry_time`, a RETRY, never a pass).
+
+Rollback (CODE READ, review F4): release records and spend rows are stored with `profile: 'check'`
+plus `budgetClass: 'release'`, so an older Worker can read, count and prune them: it counts release
+spend under the check profile's daily cap (conservative; it can refuse check rentals until the UTC
+day ends) and prunes rows after 30 days like any other. An older Worker ignores `batch:` rows, so no
+new release leg starts; for an open release box its cron asks GitHub for the box's run (a batch id,
+not a GitHub run), which is absent, so it closes the box as `RUN_GONE` (INFERRED from the predecessor's
+`update()`). Procedure: set `RELEASE_ENABLED=false` (redeploy vars) first, then press Stop all (or
+`POST /stop-all` with the owner token), confirm in the Vast console that no `kf-ci-8...` box remains
+(the reaper also ends any box older than 315 minutes), and only then deploy the older bundle.
+Correction to the first version of this section (2026-11-05): it said the old Worker recovers once
+release rows age out after 30 days; that was wrong (it refused before reaching its prune line and
+never recovered). That row shape no longer exists.
+
+Commit gap (review F6): release legs do not write the one-rental-per-commit marker, so a release of
+a commit never refuses that commit's own master gate with `BUDGET:sha-gap`.
+
+`/bench-data` scope (unchanged, noted by review F10): any live box can ask for a presigned
+SPECviewperf URL; restricting it to boxes whose run lists the `specviewperf` stage is left for the
+SPECviewperf lane.
+
+The reaper limit does not change: the release hard limit is at most 300 minutes, equal to
+`REAPER_HARD_MINUTES`, so no reaper deploy is needed first.
+
+Coordinator order (after the PR is merged AND master carries the new `deployment.json` pin, because
+master's runner validates the deployed bundle hash):
+
+```sh
+cd /path/to/checkout && git checkout <master commit that carries the pin>
+npm ci --prefix ci/vast-broker --ignore-scripts --no-audit --no-fund
+npm ci --prefix ci/vast-admin --ignore-scripts --no-audit --no-fund
+node --test ci/vast-broker/test
+node --test ci/vast-admin/test/*.test.mjs
+node ci/vast-broker/scripts/mutate-tiers.mjs
+# 1. (no reaper change) 2. the broker, with the release vars if a release is planned:
+node ci/vast-broker/deploy.mjs /path/outside/checkout/broker.vars --dry-run
+node ci/vast-broker/deploy.mjs /path/outside/checkout/broker.vars
+# 3. the admin Worker (same Access vars as before; see ../vast-admin/README.md):
+ci/vast-broker/node_modules/.bin/wrangler deploy --config ci/vast-admin/wrangler.toml --dry-run
+ci/vast-broker/node_modules/.bin/wrangler deploy --config ci/vast-admin/wrangler.toml
+```
+
+Acceptance without renting: on the admin page press Plan for a master commit with tier `large`; the
+answer lists the planned dies and the estimate and `renting: false`, and the Vast account shows no
+new instance. The first Start is a watched run (budget decided by the owner).
+
 ## First watched rental (checklist)
 
 ### Current checklist — correction 2026-10-25
@@ -594,3 +698,54 @@ script `scripts/ci/vast_payload.sh` is still absent (F14), so a real rental toda
 ## Same-tree gate reuse
 
 CODE READ 2026-10-27 (`gate_reuse.py`, `release_gate.py`): master pushes may reuse a direct original hardware PASS from an identical parent/associated-PR tree, with GitHub Actions creator and CI/run checks. The existing named GPU job replays bounded original result lines and summary; missing evidence uses the existing gate. Release validation independently rechecks the original metadata. This is a workflow-only change with no Worker deployment. See [operator guidance](../../docs/howto/gpu-gate-reuse.md).
+
+## Result store (D1)
+
+[CODE READ 2026-11-05: wrangler.toml, src/ingest.js, src/results.js,
+ci/platform-api/migrations] NOT DEPLOYED. What the CI Worker needs for the result store and
+`POST /v1/requirements/check` ([README](README.md), "Result store"):
+
+| Name | Kind | Where | Notes |
+|---|---|---|---|
+| `DB` | D1 binding | `wrangler.toml` (committed) | database `kayfabe-platform`, id `c6292be2-742d-4a05-95fd-749705ab30bc` (not a secret), shared with `ci/platform-api` |
+| `ROW_TAG_KEY` | Worker secret | `wrangler secret put` | random base64url, 32-512 characters; HMAC key of result rows; never on a box, never in GitHub |
+| `GITHUB_API_TOKEN` | Worker secret (existing, optional) | unchanged | the tree key reads the git data API; INFERRED from GitHub's documented limits: unauthenticated reads are limited to 60 per hour, and one tree key costs 2 requests (commit, root tree), 1 for a `.workerignore`, and 1 per top-level directory that is not wholly ignored: 15 for this repository with the default list (16 top-level directories in `git ls-tree` of `d74f6063d`, 3 ignored) |
+| `TREE_KEY_CARRY_OVER` | public var (optional) | vars file (`deploy.mjs` allows `true`/`false`) | default off: requirements count only the same commit's rows. Set `true` only after boxes delete ignored files after cloning (review of #258, H2) |
+
+Without `DB` or `ROW_TAG_KEY` the Worker behaves as before: nothing is queued, nothing is written,
+and the check answers 503 `STORE_UNAVAILABLE`.
+
+Order (coordinator only; a coding lane never runs these):
+
+1. Merge the PR to `next`, then the `next` -> master batch. Master's `runner.py` pins the deployed
+   bundle, so the Worker is deployed only after master carries the new `deployment.json` hash.
+2. Apply the migrations from the public API's directory (the only migrations directory; the
+   broker's `migrations_dir` points to the same files):
+   ```sh
+   cd ci/platform-api
+   npx wrangler d1 migrations list kayfabe-platform --remote
+   npx wrangler d1 migrations apply kayfabe-platform --remote
+   ```
+   `list` shows whether `0001_init.sql` was applied already; `apply` applies what is missing
+   (`0002_ci_results.sql` only adds tables and indexes). **Run `list` before `apply`:**
+   `0002_ci_results.sql` was edited during review (the `tree_kind` CHECK gained `claimed`), which is
+   safe only because it has never been applied anywhere. If `list` reports 0002 as already applied
+   to the remote database, stop: the remote table has the old CHECK, and the fix is a new migration,
+   not a re-apply.
+3. Create the row-tag key without printing it, and store it as a Worker secret:
+   ```sh
+   cd ci/vast-broker
+   openssl rand -base64 48 | tr '+/' '-_' | tr -d '=\n' | npx wrangler secret put ROW_TAG_KEY
+   ```
+   Keep no other copy: losing it only means existing rows stop counting for gates (open question
+   6 of the design: rotation).
+4. Deploy the CI Worker as above (`node ci/vast-broker/deploy.mjs <vars-file> --dry-run`, then
+   without `--dry-run`); the helper refuses unless the bundle hashes to `deployment.json`.
+5. Deploy the public API (`cd ci/platform-api && npx wrangler deploy`); it needs no secret.
+6. Check: `npx wrangler d1 execute kayfabe-platform --remote --command "SELECT COUNT(*) AS n FROM ci_runs"`
+   from `ci/platform-api` (0 before the first rental), and `GET https://api.kayfabe.dev/v1/ci/trees`
+   (an empty list before the first rental).
+
+Rollback: deleting the `ROW_TAG_KEY` secret (`npx wrangler secret delete ROW_TAG_KEY`) stops all
+queueing and writes on the next request; the tables can stay.
+

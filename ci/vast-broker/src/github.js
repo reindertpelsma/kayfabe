@@ -70,6 +70,24 @@ export class Github {
     const declared = /^BOX_PROTOCOL = "([0-9]{1,4})"$/m.exec(text)?.[1];
     if (declared !== String(DEFAULTS.boxProtocol)) refuse('NOT_ELIGIBLE', 409);
   }
+  // Admin starts (2026-11-05, wtier): the commit must be on this repository's own `master` or
+  // `next` history (an ancestor of, or equal to, the branch head), so a fork commit that GitHub
+  // also serves through the parent repository can never be rented. Any doubt refuses.
+  async reachable(sha) {
+    if (!hexSha(sha)) refuse('BAD_REQUEST', 400);
+    for (const branch of ['master', 'next']) {
+      const head = await this.get('branches/' + branch, true);
+      const tip = head?.commit?.sha;
+      if (!hexSha(tip)) continue;
+      if (tip === sha) return branch;
+      const comparison = await this.get(
+        'compare/' + tip + '...' + sha + '?per_page=1&page=1',
+        true,
+      );
+      if (comparison?.status === 'behind' && comparison?.behind_by > 0) return branch;
+    }
+    refuse('NOT_ELIGIBLE', 409, 'NOT_ON_BRANCH');
+  }
   async run(id, missing = false, lifecycle = false) {
     return this.get('actions/runs/' + id, missing, lifecycle);
   }

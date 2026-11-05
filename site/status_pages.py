@@ -3,7 +3,9 @@
 Written by the master build tooling, not by a ref's Zola templates. Three modes:
 - live: an API base (repository variable STATUS_API_BASE, deployment candidates only) that
   passes validate_origin(); the base goes into one <meta> per page, status.js holds no URL;
-- fixture: --status-fixture serves the pages from a local synthetic JSON file;
+  coverage.json (evidence imported from traces, scripts/site/coverage_from_traces.py) is a static
+  file next to the pages and holds no URL either;
+- fixture: --status-fixture serves the live part of the pages from a local synthetic JSON file;
 - otherwise one short "not configured" page and nothing else: local, fork and PR builds
   contain no Worker URL.
 """
@@ -19,10 +21,10 @@ REPO_URL = "https://github.com/reindertpelsma/kayfabe"
 ORIGIN = re.compile(r"https://(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*kayfabe\.dev/?")
 
 PAGES = {
-    "matrix": ("status/index.html", "Platform coverage", "Which GPU dies, drivers and guests pass kayfabe's tests."),
-    "cell": ("status/cell/index.html", "Coverage cell", "Run history of one die and test suite."),
-    "run": ("status/run/index.html", "Test run", "One platform test run: host facts, stages and logs."),
-    "commit": ("status/commit/index.html", "Commit requirements", "Which test requirements a commit has met."),
+    "matrix": ("status/index.html", "Platform coverage", "Which GPU dies and guests kayfabe's code has been run on, with run, revision and date."),
+    "die": ("status/die/index.html", "Die coverage", "Every run recorded for one GPU die: live results and evidence in the repository."),
+    "run": ("status/run/index.html", "Test run", "One CI Worker run: host facts, stages and log."),
+    "commit": ("status/commit/index.html", "Commit results", "The CI Worker runs recorded for one commit or result key."),
 }
 
 NAV = [
@@ -105,15 +107,16 @@ def shell(page, title, description, body, docs_url, meta, assets=True):
 def page_body(page, title, fixture):
     banner = (
         '      <p class="kf-synthetic" role="note"><strong>Synthetic data.</strong> '
-        "These pages show a development fixture. No row was measured.</p>\n"
+        "The live results on these pages come from a development fixture; no run in it was measured. "
+        "The imported evidence comes from the repository.</p>\n"
         if fixture
         else ""
     )
     intro = {
-        "matrix": "Each cell shows the latest run of one test suite on one GPU die.",
-        "cell": "All runs of one suite on one die, newest first.",
-        "run": "One run, with the platform it ran on.",
-        "commit": "The test requirements of one commit.",
+        "matrix": "What kayfabe's code has been run on: GPU family, die and guest platform, with run, revision and date on every entry.",
+        "die": "Every result recorded for one GPU die, by tier and platform, and every imported run.",
+        "run": "One run of the CI Worker.",
+        "commit": "The CI Worker runs recorded for one commit or result key.",
     }[page]
     return (
         f"      <h1>{escape(title)}</h1>\n{banner}"
@@ -177,7 +180,7 @@ def write_status(output, api_base=None, logs_base=None, fixture=None, docs_url="
         target.parent.mkdir(parents=True, exist_ok=True)
         body = page_body(page, title, fixture is not None)
         target.write_text(shell(page, title, description, body, docs_url, meta))
-    for name in ["status.js", "status.css"]:
+    for name in ["status.js", "status.css", "coverage.json"]:
         shutil.copy2(SOURCE / name, output / "status" / name)
     if fixture is not None:
         shutil.copy2(fixture, output / "status/fixture.json")

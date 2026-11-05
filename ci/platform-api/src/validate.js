@@ -25,6 +25,7 @@ export const HIDDEN_SCORE_SUITES = Object.freeze(new Set(['windows-specviewperf'
 
 export const PATTERNS = Object.freeze({
   sha: /^[0-9a-f]{40}$/,
+  hash: /^[0-9a-f]{64}$/,
   die: /^[A-Z]{2}[0-9]{3}[A-Z]?$/,
   family: /^[a-z][a-z0-9]{2,15}$/,
   driver: /^[0-9]{3}\.[0-9]{1,3}(?:\.[0-9]{1,3})?$/,

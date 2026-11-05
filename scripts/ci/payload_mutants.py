@@ -291,6 +291,25 @@ CASES += [
     ),
 ]
 
+# wtier, 2026-11-05: the release tier's payload extras (KF_WINDOWS_RUNS, KF_STAGES).
+CASES += [
+    (
+        "second-windows-run-reuses-row-name",
+        replace("            return [row(name, 1)]", '            return [row("windows_gate", 1)]'),
+    ),
+    (
+        "design-only-stage-runs",
+        replace('        or any(STAGE_SLOTS[n] == "DESIGN_ONLY" for n in names)\n', ""),
+    ),
+    (
+        "specviewperf-retry-passes",
+        replace(
+            '    if kind == "PASS" and rc == 0:\n        return [row("specviewperf", 1)]',
+            '    if kind in ("PASS", "RETRY"):\n        return [row("specviewperf", 1)]',
+        ),
+    ),
+]
+
 CASES += [
     ("structured-arm-logs-omitted", replace('snapshot["diagnostics"] = events', "pass")),
     (

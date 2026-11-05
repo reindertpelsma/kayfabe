@@ -15,6 +15,14 @@ MAX_LOG = 4194304
 # with an explicit marker for the middle. The tail is where a payload's FINAL SUMMARY lives.
 HEAD_BYTES, HEAD_LINES = 24000, 100
 TAIL_BYTES, TAIL_LINES = 16000, 70
+# The whole display budget. 2026-11-05: lines 200 -> 270 for the KEY LINES section (<= KEY_LINES) and
+# the census of the dropped middle (<= CENSUS_LINES + 1); bytes are unchanged.
+DISPLAY_BYTES, DISPLAY_LINES = 65000, 270
+# KEY LINES: chosen on the sanitised text by the fixed table KEY_PATTERNS below (never by the box).
+KEY_LINES, KEY_BYTES, KEY_LINE_BYTES, KEY_SCAN = 60, 12000, 400, 1000
+KEY_TAG = "[key] "
+# Census of the middle that the display drops: at most CENSUS_LINES groups, each prefix <= CENSUS_PREFIX.
+CENSUS_LINES, CENSUS_PREFIX, CENSUS_KEYS = 12, 60, 5000
 STATES = {
     "NONE",
     "CREATING",
@@ -202,19 +210,24 @@ def blank_run(match):
     return run if keep else "[redacted]"
 
 
-def scrub(raw, max_bytes=65536, max_lines=200, max_line=1000, redactions=()):
-    """Allow TAB/LF, printable ASCII and precomposed Latin letters U+00C0..FF
+def sanitise(raw, redactions=()):
+    """The whole sanitiser, without any size cap: returns (text, original byte count).
+
+    Allow TAB/LF, printable ASCII and precomposed Latin letters U+00C0..FF
     excluding multiplication/division signs. No other Unicode is displayed.
     Remove complete terminal control sequences before the character allow-list.
-    Caps include runner prefixes; the fixed drop marker is additional <=48 bytes.
+    Every output of this runner that carries box text (display, step summary, key lines, census,
+    artifact file) goes through this function first; there is no other path for box bytes.
     """
     if isinstance(raw, str):
         raw = raw.encode("utf-8", errors="replace")
     original = len(raw)
     text = raw.decode("utf-8", errors="replace")
-    for secret in sorted(set(redactions), key=len, reverse=True):
-        if secret:
-            text = text.replace(secret, "[redacted]")
+    secrets_by_length = sorted((x for x in set(redactions) if x), key=len, reverse=True)
+    # Twice: on the raw text, and again once the stripping below has run. A value split by a control
+    # or non-ASCII character (`kf\x01broker`) becomes whole only after the strip.
+    for secret in secrets_by_length:
+        text = text.replace(secret, "[redacted]")
     text = re.sub(r"(?:\x1b\]|\x9d)[\s\S]*?(?:\x07|\x1b\\|\x9c|$)", "", text)
     text = re.sub(r"(?:\x1b[P^_]|[\x90\x98\x9e\x9f])[\s\S]*?(?:\x1b\\|\x9c|$)", "", text)
     text = re.sub(r"(?:\x1b\[|\x9b)[0-?]*[ -/]*[@-~]", "", text)
@@ -224,6 +237,8 @@ def scrub(raw, max_bytes=65536, max_lines=200, max_line=1000, redactions=()):
         for c in text
         if c in "\t\n" or 32 <= ord(c) <= 126 or 192 <= ord(c) <= 255 and ord(c) not in {215, 247}
     )
+    for secret in secrets_by_length:
+        text = text.replace(secret, "[redacted]")
     text = re.sub(r"\bBearer\s+[^\s]+", "Bearer [redacted]", text, flags=re.I)
     text = re.sub(
         r"\b(?:gh[pousr]_[A-Za-z0-9]{20,255}|github_pat_[A-Za-z0-9_]{20,255})\b", "[redacted]", text
@@ -233,27 +248,50 @@ def scrub(raw, max_bytes=65536, max_lines=200, max_line=1000, redactions=()):
         r":{2,}", lambda x: (": " * (len(x[0]) // 2) + (":" if len(x[0]) % 2 else "")), text
     ).replace("##[", "# [")
     text = re.sub(r"""https?://[^\s<>"']+""", "[url redacted]", text, flags=re.I)  # signed-url
+    return text, original
+
+
+def marker_lines(removed, capped):
+    """The honest drop markers: sanitisation and the size cap are different things."""
+    return ("[" + str(removed) + " bytes removed by sanitisation]\n" if removed else "") + (
+        "[" + str(capped) + " bytes dropped by size cap]\n" if capped else ""
+    )
+
+
+def render(text, original, max_bytes, max_lines, max_line=1000):
+    """Prefix every line `[untrusted] ` inside the caps: (rendered, dropped, capped).
+
+    dropped = original bytes not shown (the historical figure); capped = the part of that which
+    the line/byte caps cut after sanitisation (whole lines not shown); dropped - capped is what the
+    sanitiser removed or shortened (control sequences, non-ASCII, redactions, > max_line lines).
+    """
     rows = []
-    size = 0
-    kept = 0
+    size = kept = total = 0  # total: bytes of every sanitised line (<= max_line) and its LF
+    full = False
     for line in text.splitlines(keepends=True):
         had_lf = line.endswith("\n")
         line = line[:-1] if had_lf else line
-        if len(rows) >= max_lines:
-            break
         safe = line.encode()[:max_line].decode("utf-8", errors="ignore")
+        cost = len(safe.encode()) + int(had_lf)
+        total += cost
         rendered = "[untrusted] " + safe + "\n"
-        length = len(rendered.encode())
-        if size + length > max_bytes:
-            break
+        if full or len(rows) >= max_lines or size + len(rendered.encode()) > max_bytes:
+            full = True  # the first line that does not fit ends the output
+            continue
         rows.append(rendered)
-        size += length
-        kept += len(safe.encode()) + int(had_lf)
+        size += len(rendered.encode())
+        kept += cost
     dropped = max(0, original - kept)
-    return (
-        "".join(rows) + ("[" + str(dropped) + " bytes dropped by runner]\n" if dropped else ""),
-        dropped,
-    )
+    capped = max(0, min(dropped, total - kept))
+    return "".join(rows) + marker_lines(max(0, dropped - capped), capped), dropped, capped
+
+
+def scrub(raw, max_bytes=65536, max_lines=200, max_line=1000, redactions=()):
+    """Sanitise and render `raw` inside the caps. Caps include runner prefixes; the fixed drop
+    markers are additional (<= 2 x 48 bytes). Returns (text, dropped bytes)."""
+    text, original = sanitise(raw, redactions)
+    out, dropped, _ = render(text, original, max_bytes, max_lines, max_line)
+    return out, dropped
 
 
 def line_cost(line, max_line=1000):
@@ -283,6 +321,125 @@ def take_tail(text, max_bytes, max_lines):
             break
         used, count, cut = used + cost, count + 1, cut - len(line)
     return text[:cut], text[cut:]
+
+
+# KEY LINES (2026-11-05). The table below is DATA in the runner: a box line is selected only because
+# it matches a pattern here, and it is displayed (and written to the artifact) like every other box
+# line: sanitised and prefixed `[untrusted] `. A box line that imitates a key line is therefore
+# still untrusted text; nothing here is read back as a verdict (the verdict is the Worker's
+# validated result). Patterns run on the sanitised line, with an optional leading `[box] `.
+_BOX = r"^(?:\[box\] )?"
+KEY_PATTERNS = (
+    ("stage_start", _BOX + r"KF_PAYLOAD_STAGE_START\b"),
+    ("stage_end", _BOX + r"KF_PAYLOAD_STAGE_END\b"),
+    ("summary", _BOX + r"KF_FINAL_SUMMARY"),
+    ("stage", _BOX + r"stage name="),
+    ("cell", _BOX + r"(?:FAST|BARE)_CELL_ARM\b"),
+    ("gate_pass", _BOX + r"WINDOWS_GATE_PASS\b"),
+    ("gate_fail", _BOX + r"WINDOWS_GATE_FAIL\b"),
+    ("gate_retry", _BOX + r"WINDOWS_GATE_RETRY\b"),
+    ("gate_timing", _BOX + r"WINDOWS_GATE_TIMING\b"),
+    ("xid", r"^(?:\[box\] )?\[xid-watch\] xid_(?:before|after|delta)\b|NEW HOST Xid"),
+    ("hostref", _BOX + r"GATE_HOSTREF\b"),
+    ("fail", r"\bFAIL(?:ED)?\b|\bREFUSED\b|\bKF_[A-Z_]*(?:REFUSED|FAIL)\b"),
+)
+KEY_COMPILED = tuple((name, re.compile(pattern)) for name, pattern in KEY_PATTERNS)
+# A "red" line is shown before the routine ones when the budget is tight.
+KEY_RED = re.compile(
+    r"(?:FAST|BARE)_CELL_ARM\b.* verdict=(?!PASS\b)|WINDOWS_GATE_(?:FAIL|RETRY)\b|NEW HOST Xid|"
+    r"GATE_HOSTREF\b.*(?: xid_delta=-?[1-9]| cup8=(?!PASS\b))|\bxid_delta=-?[1-9]|"
+    r"\bFAIL(?:ED)?\b|\bREFUSED\b|\bKF_[A-Z_]*(?:REFUSED|FAIL)\b|stage name=.* result=(?!PASS\b)"
+)
+
+
+def key_lines(text, max_lines=KEY_LINES, max_bytes=KEY_BYTES):
+    """Pick the key lines of the SANITISED `text`: (block of lines, shown, matching).
+
+    Order of preference: the first and last red line of each category, the first and last line of
+    each category, the other red lines, then the other matching lines in log order. The block is
+    in log order, every line cut at KEY_LINE_BYTES, within max_lines and max_bytes as displayed.
+    Every line is cut to KEY_SCAN characters before any pattern runs, so the work per line is bounded
+    (the red patterns scan to the end of a line and would be quadratic on a long one).
+    """
+    lines = [line[:KEY_SCAN] for line in text.splitlines()]
+    seen, red, firsts, reds, matching = {}, {}, [], [], 0
+    for i, line in enumerate(lines):
+        for name, pattern in KEY_COMPILED:
+            if pattern.search(line):
+                matching += 1
+                rec = seen.setdefault(name, [i, i])
+                rec[1] = i
+                is_red = KEY_RED.search(line) is not None
+                if is_red:
+                    red.setdefault(name, [i, i])[1] = i
+                if len(firsts) < 400:
+                    firsts.append(i)
+                if is_red and len(reds) < 200:
+                    reds.append(i)
+                break
+    order = [i for name, _ in KEY_PATTERNS for i in red.get(name, ())]
+    order += [i for name, _ in KEY_PATTERNS for i in seen.get(name, ())]
+    order += reds + firsts
+    chosen, used, done = [], 0, set()
+    for i in order:
+        if i in done:
+            continue
+        done.add(i)
+        cost = len("[untrusted] [key] ") + min(len(lines[i].encode()), KEY_LINE_BYTES) + 1
+        if len(chosen) >= max_lines or used + cost > max_bytes:
+            continue
+        chosen.append(i)
+        used += cost
+    # Every key line starts `[key] `: it is a copy, and must never read as the box line it copies
+    # (scripts that parse the job log, ci/vast-broker/gate_reuse.py, count and match the originals).
+    block = "".join(
+        KEY_TAG + lines[i].encode()[:KEY_LINE_BYTES].decode("utf-8", errors="ignore") + "\n"
+        for i in sorted(chosen)
+    )
+    return block, len(chosen), matching
+
+
+def census_key(line):
+    """Group key of a dropped line: its first tokens up to and including the first one that holds a
+    number (`#`) or a field (`=`); numbers and hex become `#`; at most CENSUS_PREFIX characters."""
+    t = line.rstrip("\n")[:400]
+    t = re.sub(r"^(?:\[box\]\s*)?(?:\[\s*\d+\.\d+\]\s*)?", "", t)
+    t = re.sub(r"^\d{4}-\d\d-\d\d[T ][\d:.]+Z?\s*", "", t)
+    # Hex and numbers become `#`, but not the digits inside a name (kf3, sm_86).
+    t = re.sub(r"(?<![A-Za-z_])\d+", "#", re.sub(r"(?<![A-Za-z_])0[xX][0-9a-fA-F]+", "#", t))
+    out = []
+    for token in t.split()[:6]:
+        out.append(token)
+        if "#" in token or "=" in token:
+            break
+    return " ".join(out)[:CENSUS_PREFIX] or "(blank)"
+
+
+def census(text):
+    """What a dropped span held, from its SANITISED text: ([(lines, bytes, prefix)], others).
+
+    At most CENSUS_LINES groups by `census_key`, largest bytes first; everything else, and every
+    group beyond CENSUS_KEYS distinct keys, is only counted: (lines, bytes) in `others`.
+    """
+    groups = {}
+    overflow = [0, 0]
+    for line in text.splitlines(keepends=True):
+        size = len(line.encode()) + (0 if line.endswith("\n") else 1)
+        key = census_key(line)
+        group = groups.get(key)
+        if group is None:
+            if len(groups) >= CENSUS_KEYS:
+                overflow[0] += 1
+                overflow[1] += size
+                continue
+            group = groups[key] = [0, 0]
+        group[0] += 1
+        group[1] += size
+    ranked = sorted(groups.items(), key=lambda kv: (-kv[1][1], kv[0]))
+    top = [(g[0], g[1], key) for key, g in ranked[:CENSUS_LINES]]
+    others = [overflow[0] + sum(g[0] for _, g in ranked[CENSUS_LINES:]), 0]
+    others[1] = overflow[1] + sum(g[1] for _, g in ranked[CENSUS_LINES:])
+    return top, others
 
 
 def integer(v, lo=0, hi=MAX_LOG):
@@ -805,7 +962,14 @@ class Runner:
         self.raw_size = 0
         self.displayed = 0
         self.display_lines = 0
-        self.display_dropped = 0
+        self._sanitised = None
+        # What this runner itself observed (monotonic clock), for the DIAGNOSTICS block.
+        self.rent_at = None
+        self.last_chunk_at = None
+        self.stage_seen = None  # (name, observed at): the newest KF_PAYLOAD_STAGE_START in the log
+        self.transitions = []  # (seconds since rent, Worker state) when the polled state changed
+        self.display_dropped = 0  # bytes of box text the display budget cut (a size cap)
+        self.display_removed = 0  # bytes the sanitiser removed or shortened in what was shown
         # Head of the box log: shown live until it is full; the rest is kept in self.raw only.
         self.head_bytes = 0
         self.head_lines = 0
@@ -937,16 +1101,18 @@ class Runner:
         raise Invalid()
 
     def show(self, text):
-        if self.displayed >= 65000 or self.display_lines >= 200:
+        if self.displayed >= DISPLAY_BYTES or self.display_lines >= DISPLAY_LINES:
             self.display_dropped += len(text.encode())
             return
-        safe, dropped = scrub(
-            text,
-            max_bytes=max(0, 65000 - self.displayed - 256),
-            max_lines=max(0, 199 - self.display_lines),
-            redactions=self.ctx.get("redactions", ()),
+        clean_text, original = sanitise(text, self.ctx.get("redactions", ()))
+        safe, dropped, capped = render(
+            clean_text,
+            original,
+            max_bytes=max(0, DISPLAY_BYTES - self.displayed - 256),
+            max_lines=max(0, DISPLAY_LINES - 1 - self.display_lines),
         )
-        self.display_dropped += dropped
+        self.display_dropped += capped
+        self.display_removed += max(0, dropped - capped)
         self.display_lines += len(safe.splitlines())
         # Tokens originate here; they never come from Worker/box strings.
         token = secrets.token_hex(24)
@@ -975,6 +1141,27 @@ class Runner:
         if rest:
             self.head_full = True
 
+    def sanitised(self):
+        """The whole box log after the sanitiser (computed once): (text, original bytes)."""
+        if self._sanitised is None:
+            self._sanitised = sanitise("".join(self.raw), self.ctx.get("redactions", ()))
+        return self._sanitised
+
+    def show_keys(self):
+        """KEY LINES, computed on the sanitised log: the verdict-relevant lines of the whole run."""
+        block, shown, matching = key_lines(self.sanitised()[0])
+        if not shown:
+            return
+        self.emit(
+            "KEY LINES: "
+            + str(shown)
+            + " of "
+            + str(matching)
+            + " matching lines, picked by fixed patterns in runner.py from the whole sanitised log;"
+            + " each is a copy tagged [key], all text below is untrusted box output\n"
+        )
+        self.show(block)
+
     def show_tail(self):
         """The end of the box log, after the head, with the size of the gap in between."""
         raw = "".join(self.raw).encode()
@@ -983,13 +1170,112 @@ class Runner:
             self.show("".join(self.raw))
             return
         rest = raw[self.head_end :].decode("utf-8", errors="ignore")
-        room_bytes = max(0, min(TAIL_BYTES, 65000 - self.displayed - 512))
-        room_lines = max(0, min(TAIL_LINES, 199 - self.display_lines))
+        # Keep room for the census of the middle (<= CENSUS_LINES + 1 lines, ~2 KB) before the tail.
+        room_bytes = max(0, min(TAIL_BYTES, DISPLAY_BYTES - self.displayed - 512 - 2048))
+        room_lines = max(
+            0, min(TAIL_LINES, DISPLAY_LINES - 1 - self.display_lines - CENSUS_LINES - 1)
+        )
         skipped, tail = take_tail(rest, room_bytes, room_lines)
         middle = len(raw) - self.head_end - len(tail.encode())
         if middle > 0:
             self.emit("[" + str(middle) + " bytes dropped from the middle]\n")
+            self.show_census(skipped)
         self.show(tail)
+
+    def show_census(self, middle):
+        """What the dropped middle held, from its sanitised text; box prefixes stay [untrusted]."""
+        text, _ = sanitise(middle, self.ctx.get("redactions", ()))
+        top, others = census(text)
+        if not top:
+            return
+        rows = "".join(
+            "[dropped " + str(n) + " lines / " + str(b) + " bytes: " + key + "]\n"
+            for n, b, key in top
+        )
+        if others[0]:
+            rows += (
+                "[dropped others: " + str(others[0]) + " lines / " + str(others[1]) + " bytes]\n"
+            )
+        self.show(rows)
+
+    def note_chunks(self, chunks):
+        """Remember when log text last arrived and when the newest stage START line was seen."""
+        now = time.monotonic()
+        self.last_chunk_at = now
+        before = "".join(self.raw[: -len(chunks)] if chunks else self.raw)[-200:]
+        found = re.findall(
+            r"KF_PAYLOAD_STAGE_START name=([A-Za-z0-9_.-]{1,40})", before + "".join(chunks)
+        )
+        if found:
+            self.stage_seen = (found[-1], now)
+
+    def diagnostics(self):
+        """The failure-path block, from data the Worker protocol already returns plus this runner's
+        own clock: (trusted lines, one box-derived line). Numbers and enums only in the trusted lines.
+        """
+        now = time.monotonic()
+        d = self.metadata or {}
+
+        def ago(since):
+            return "none" if since is None else str(int(now - since)) + "s"
+
+        def seconds(a, b):
+            ok = isinstance(a, int) and isinstance(b, int) and b >= a
+            return str((b - a) // 1000) + "s" if ok else "n/a"
+
+        trusted = [
+            "DIAGNOSTICS: no PASS or FAIL result that passed the runner's checks for this run; the lines"
+            " below are what the Worker and this runner observed, not a cause (times in seconds)",
+            "  Worker status last polled: state="
+            + str(d.get("state", "none"))
+            + " verdict="
+            + str(d.get("verdict", "none"))
+            + " cleanup_pending="
+            + str(d.get("cleanup_pending", "n/a"))
+            + " provider_retries="
+            + str(d.get("provider_retries", 0))
+            + " log_cursor="
+            + str(self.cursor)
+            + " log_bytes="
+            + str(self.raw_size),
+            "  Worker clock: started_at="
+            + str(d.get("started_at"))
+            + " last_post_at="
+            + str(d.get("last_post_at"))
+            + " result_at="
+            + str(d.get("result_at"))
+            + " ended_at="
+            + str(d.get("ended_at"))
+            + " (ms since epoch); rent to last box POST "
+            + seconds(d.get("started_at"), d.get("last_post_at"))
+            + ", rent to end "
+            + seconds(d.get("started_at"), d.get("ended_at")),
+            "  Runner clock: since the rent request "
+            + ago(self.rent_at)
+            + ", since the last log text arrived "
+            + ago(self.last_chunk_at)
+            + (
+                "; the last lines of the log text the Worker returned are shown below"
+                if self.raw
+                else "; the Worker returned no log text"
+            ),
+            "  Worker states seen by this runner's polling (seconds after the rent request): "
+            + (
+                " -> ".join(state + "@" + str(at) for at, state in self.transitions[-12:]) or "none"
+            ),
+            "  Not returned by the Worker protocol (Worker-side follow-up): the provider's instance"
+            " status and its transitions, the reason the Worker closed the run, per-state entry times",
+        ]
+        box = None
+        if self.stage_seen:
+            box = (
+                "last KF_PAYLOAD_STAGE_START in the log: name="
+                + self.stage_seen[0]
+                + ", seen "
+                + ago(self.stage_seen[1])
+                + " ago by the runner clock"
+            )
+        return trusted, box
 
     def pages(self, target):
         while self.cursor < target:
@@ -1029,6 +1315,7 @@ class Runner:
             if data["log_sha256"] != self.hash:
                 raise Invalid()
             self.cursor = data["next_cursor"]
+            self.note_chunks(chunks)
             self.show_head("".join(chunks))
 
     def execute(self):
@@ -1102,6 +1389,7 @@ class Runner:
             }
             if "preferences" in self.ctx:
                 request["preferences"] = self.ctx["preferences"]
+            self.rent_at = time.monotonic()
             code, data = self.retry_read("/rent", "POST", request)
             for attempt in range(600):
                 try:
@@ -1153,6 +1441,8 @@ class Runner:
                     break
                 admitted = True
                 self.metadata = data
+                if not self.transitions or self.transitions[-1][1] != data["state"]:
+                    self.transitions.append((int(time.monotonic() - self.rent_at), data["state"]))
                 if self.rental_shown != data["id"] and data["id"] is not None:
                     self.emit(rental_line(data) + "\n")
                     self.rental_shown = data["id"]
@@ -1255,11 +1545,23 @@ class Runner:
                     self.read("/stop/" + self.ctx["run"], "POST")
                 except Exception:
                     pass
-        safe, dropped = scrub(
-            "".join(self.raw), max_bytes=65536, redactions=self.ctx.get("redactions", ())
+        text, original = self.sanitised()
+        safe, dropped, capped = render(text, original, max_bytes=65536, max_lines=200)
+        vanished = admitted and not (
+            terminal and result["verified"] == 1 and result["verdict"] in {"PASS", "FAIL"}
         )
+        diag = self.diagnostics() if vanished else None
+        if diag:
+            for line in diag[0]:
+                self.emit(line + "\n")
+            if diag[1]:
+                self.show(diag[1])
         self.emit("::group::Final bounded log: UNTRUSTED Worker/box output\n")
+        if self.head_full:
+            self.show_keys()
         self.show_tail()
+        if self.display_removed:
+            self.emit("[" + str(self.display_removed) + " bytes removed by sanitisation]\n")
         self.emit(
             "["
             + str(self.display_dropped)
@@ -1281,6 +1583,8 @@ class Runner:
                 ("Received log hash", self.hash),
                 ("Displayed log SHA256", hashlib.sha256(safe.encode()).hexdigest()),
                 ("Runner dropped bytes", str(dropped)),
+                ("Removed by sanitisation (bytes)", str(max(0, dropped - capped))),
+                ("Dropped by size cap (bytes)", str(capped)),
             ]:
                 self.summary.write("| " + key + " | " + summary_cell(value) + " |\n")
             if self.metadata is not None:

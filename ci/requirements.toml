@@ -1,0 +1,68 @@
+# STATUS: DESIGN-ONLY, 2026-11-05. Requirement sets per CI tier, read by the CI Worker from the
+# BASE branch only (ci/vast-broker/src/requirements.js; format: ci/vast-broker/README.md,
+# "Requirements file"). Tier shapes: docs/design/V3_CI_TIERS_AND_IGNORE_LADDER.md §1. No gate reads
+# this file yet: POST /v1/requirements/check answers from it, nothing rents from it.
+# Stage names are the box's suite rows (scripts/ci/vast_payload.py). A run's verdict PASS already
+# requires every suite row to pass; `stages` additionally names rows that must be present.
+version = 1
+
+# MIDDLE (PR to master): one Vast run, Windows required, any die (the die rotation picks it).
+[[require]]
+tier = "middle"
+family = "any"
+dies = ["any"]
+min_dies = 1
+platforms = ["linux", "windows"]
+stages = ["gates", "windows_gate"]
+
+# SMALL (push, manual): rides on the middle box; any die, Linux.
+[[require]]
+tier = "small"
+family = "any"
+dies = ["any"]
+platforms = ["linux"]
+
+# LARGEST (release tag): at least 2 dies per family; Linux and Windows on Turing, Ampere, Ada and
+# Blackwell. As in the release verdict (ci/vast-broker/src/release.js): per die at least 1 Linux
+# PASS and at least 2 passing Windows gate runs, counted in the trailing PASS streak of the die's
+# rows of this commit: two rows of one run each (two machines), or one row whose box ran the gate
+# twice (windows_gate + windows_gate_2, one machine). min_passes = 1 row (review of PR #269, R2).
+[[require]]
+tier = "large"
+family = "turing"
+dies = ["any"]
+min_dies = 2
+platforms = ["linux", "windows"]
+stages = ["gates", "windows_gate"]
+min_passes = 1
+min_windows_runs = 2
+
+[[require]]
+tier = "large"
+family = "ampere"
+dies = ["any"]
+min_dies = 2
+platforms = ["linux", "windows"]
+stages = ["gates", "windows_gate"]
+min_passes = 1
+min_windows_runs = 2
+
+[[require]]
+tier = "large"
+family = "ada"
+dies = ["any"]
+min_dies = 2
+platforms = ["linux", "windows"]
+stages = ["gates", "windows_gate"]
+min_passes = 1
+min_windows_runs = 2
+
+[[require]]
+tier = "large"
+family = "blackwell"
+dies = ["any"]
+min_dies = 2
+platforms = ["linux", "windows"]
+stages = ["gates", "windows_gate"]
+min_passes = 1
+min_windows_runs = 2

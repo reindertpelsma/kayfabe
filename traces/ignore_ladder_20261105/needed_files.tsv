@@ -1,0 +1,53 @@
+path	bytes	files	source
+archive/crates/kayfabe-device/	2448914	84	failing test or compile blocker
+archive/crates/kayfabe-device/tests/user_register_access_map.rs	26701	1	failing test or compile blocker
+archive/crates/kayfabe-fwd/src/lib.rs	490418	1	failing test or compile blocker
+docs/design/V3_CONSTANT_STRATEGY.md	16602	1	consttab evidence (crates/kf-rm/data/*.tsv)
+docs/design/V3_WINDOWS_ONLY_CONSTANTS_20261013.md	20613	1	failing test or compile blocker
+docs/design/tier_checks/tier1_ogkm.tsv	143964	1	failing test or compile blocker
+traces/blackwell_consttab_20261023/generate_rows.py	3040	1	consttab evidence (crates/kf-rm/data/*.tsv)
+traces/blackwell_host_caps_review_20261022/tier_audit/precomp_fields.tsv	9226	1	failing test or compile blocker
+traces/blackwell_hw_20261103/gb203_tier3/precomp_tier3.txt	42596	1	failing test or compile blocker
+traces/blackwell_provider_validation_20261023/lease_metadata/precomp_tier3.txt	42596	1	failing test or compile blocker
+traces/blackwell_windows_resume_20261023/lease_metadata/precomp_tier3.txt	42596	1	failing test or compile blocker
+traces/c_oracle_census/initctrl_ga106_census.tsv	3444	1	failing test or compile blocker
+traces/cap1_coldboot_hermetic.rec	13056192	1	failing test or compile blocker
+traces/cap1b_coldboot_hermetic_d6.rec	14061984	1	failing test or compile blocker
+traces/constants_measure_20261014b/ga104_596.51/C	0	0	consttab evidence (crates/kf-rm/data/*.tsv)
+traces/constants_measure_20261014b/ga106_572.83/C	0	0	consttab evidence (crates/kf-rm/data/*.tsv)
+traces/constants_measure_20261014b/ga106_576.80/C	0	0	consttab evidence (crates/kf-rm/data/*.tsv)
+traces/constants_measure_20261014b/ga106_580.88/C	0	0	consttab evidence (crates/kf-rm/data/*.tsv)
+traces/constants_measure_20261014b/ga106_581.80/C	0	0	consttab evidence (crates/kf-rm/data/*.tsv)
+traces/constants_measure_20261014b/ga106_591.74/C	0	0	consttab evidence (crates/kf-rm/data/*.tsv)
+traces/constants_measure_20261014b/ga106_596.36/C	0	0	consttab evidence (crates/kf-rm/data/*.tsv)
+traces/constants_measure_20261014b/ga106_610.88/C	0	0	consttab evidence (crates/kf-rm/data/*.tsv)
+traces/constants_measure_20261014b/tier2/raw_18990232.txt	23820	1	consttab evidence (crates/kf-rm/data/*.tsv)
+traces/constants_measure_20261014b/tier2/raw_36762817.txt	24944	1	consttab evidence (crates/kf-rm/data/*.tsv)
+traces/constants_measure_20261014b/tier2/raw_38751926.txt	24731	1	consttab evidence (crates/kf-rm/data/*.tsv)
+traces/constants_measure_20261014b/tier2/raw_46485962.txt	24709	1	consttab evidence (crates/kf-rm/data/*.tsv)
+traces/constants_measure_20261014b/tier2/raw_48219165.txt	24654	1	consttab evidence (crates/kf-rm/data/*.tsv)
+traces/constants_measure_20261014b/tier2/raw_48529478.txt	24985	1	consttab evidence (crates/kf-rm/data/*.tsv)
+traces/constants_measure_20261014b/tier2/raw_49886923.txt	22933	1	consttab evidence (crates/kf-rm/data/*.tsv)
+traces/constants_measure_20261014b/tier2/raw_50710714.txt	24871	1	consttab evidence (crates/kf-rm/data/*.tsv)
+traces/constants_measure_20261014b/tier2/raw_51352327.txt	24909	1	consttab evidence (crates/kf-rm/data/*.tsv)
+traces/constants_measure_20261014b/tier2/raw_53783014.txt	22942	1	consttab evidence (crates/kf-rm/data/*.tsv)
+traces/constants_measure_20261014b/tier2/raw_54285092.txt	21871	1	consttab evidence (crates/kf-rm/data/*.tsv)
+traces/constants_measure_20261014b/tier2/raw_55027878.txt	24753	1	consttab evidence (crates/kf-rm/data/*.tsv)
+traces/constants_measure_20261014b/tier2/raw_55845469.txt	22703	1	consttab evidence (crates/kf-rm/data/*.tsv)
+traces/constants_measure_20261014b/tier2_summary.tsv	6261	1	consttab evidence (crates/kf-rm/data/*.tsv)
+traces/constants_night_20261014/host_cudart_probe_595.txt	3180	1	consttab evidence (crates/kf-rm/data/*.tsv)
+traces/constants_night_20261014/probe_8162_595.txt	1309	1	consttab evidence (crates/kf-rm/data/*.tsv)
+traces/die_driver_sweep_20261015/ad102_4090/native-small-caps-gsp580.txt	431	1	consttab evidence (crates/kf-rm/data/*.tsv)
+traces/die_driver_sweep_20261015/turing_2060super/native-small-caps-gsp580.txt	431	1	consttab evidence (crates/kf-rm/data/*.tsv)
+traces/driver_matrix/drmnv.tsv	70182	1	failing test or compile blocker
+traces/driver_matrix/ranges.tsv	615563	1	failing test or compile blocker
+traces/rawclient_ce_interrupt_20261008/nvos_event_flags_by_tag.txt	2187	1	failing test or compile blocker
+traces/real_ad104/grfs_probe_real_ad104_4070.txt	95440	1	failing test or compile blocker
+traces/real_ga104/grfs_probe_real_ga104_3060ti.txt	96049	1	failing test or compile blocker
+traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt	127534	1	failing test or compile blocker
+traces/real_ga106/rmladder_r18_cecaps_real_ga106.txt	1312	1	failing test or compile blocker
+traces/real_ga106/rpc_bodies_real_ga106.txt	47806	1	failing test or compile blocker
+traces/real_hw_20261013/probe_unpriv.txt	11297	1	failing test or compile blocker
+traces/real_tu116/grfs_probe_real_tu116_1660s.txt	94928	1	failing test or compile blocker
+traces/user_ring_scan_20261014/	598470	23	failing test or compile blocker
+traces/windows_code43_walls_20261007/run40-requests.log	17106	1	failing test or compile blocker

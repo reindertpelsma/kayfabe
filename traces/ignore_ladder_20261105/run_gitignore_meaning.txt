@@ -1,0 +1,4 @@
+# .gitignore old (origin/next) vs new (this branch): untracked ignored files in the owner's main checkout, git ls-files -o -i -X <file>, 2026-11-05
+  1601 ign_old.txt
+  1601 ign_new.txt
+IDENTICAL lists

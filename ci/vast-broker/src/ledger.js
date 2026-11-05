@@ -2,6 +2,7 @@
 import {refuse,numericId,budgetRefuse} from './policy.js';
 // prettier-ignore
 import {logChain} from './tokens.js';
+import { profileCaps, budgetClass } from './policy.js';
 // One leg's estimated provider spend; previous legs remain separate durable cost receipts.
 export function rentalCost(record, at) {
   return (
@@ -11,6 +12,12 @@ export function rentalCost(record, at) {
 }
 export function costAttempt(record) {
   return { attemptKey: record.key, attemptStarted: record.originalStarted ?? record.started };
+}
+// Spend-row and record fields of a budget class (review F4): the stored `profile` is always one an
+// older Worker knows (check or sweep); a release row adds `budgetClass: 'release'`.
+export function spendClass(record) {
+  const c = budgetClass(record);
+  return c === 'release' ? { profile: 'check', budgetClass: 'release' } : { profile: c };
 }
 export class Ledger {
   constructor(storage) {
@@ -93,6 +100,21 @@ export class Ledger {
       log_sha256: hash,
       bytes_dropped: record.fullBytesDropped ?? record.bytesDropped ?? 0,
     };
+  }
+  // A release (large-tier batch) holds the one-rental-per-commit gap for its legs: a leg is exempt
+  // only while its release is RUNNING, tests the same commit and lists this key as PENDING. A
+  // small or middle admin start is never exempt (no weaker than a PR-triggered rental).
+  async batchLeg(id, key, sha) {
+    if (typeof id !== 'string') return false;
+    const batch = await this.get('batch:' + id);
+    return (
+      !!batch &&
+      batch.id === id &&
+      batch.state === 'RUNNING' &&
+      batch.tier === 'large' &&
+      batch.sha === sha &&
+      batch.legs.some((l) => l.key === key && l.state === 'PENDING')
+    );
   }
   async granted(run) {
     const key = await this.get('run:' + run);
@@ -178,8 +200,11 @@ export class Ledger {
       } else if (previous)
         budgetRefuse('cost-key', { started_at: previous.started, ended_at: previous.ended });
       const cached = await ledger.get('sha:' + record.sha),
-        force = Number(record.attempt ?? record.key.split('-').at(-1)) > 1;
-      if (retryNonce === undefined && cached && (!force || now - cached.started < cfg.gap))
+        force = Number(record.attempt ?? record.key.split('-').at(-1)) > 1,
+        leg =
+          record.batch !== undefined &&
+          (await ledger.batchLeg(record.batch, record.key, record.sha));
+      if (retryNonce === undefined && !leg && cached && (!force || now - cached.started < cfg.gap))
         budgetRefuse('sha-gap', { gap_ms: cfg.gap, elapsed_ms: Math.max(0, now - cached.started) });
       const open = await ledger.openRecords(),
         branch = open.filter((o) => o.branch === record.branch && o.sha !== record.sha);
@@ -189,8 +214,8 @@ export class Ledger {
       if (branch.length) refuse('BUSY', 409);
       if (
         open.length >= cfg.maxConcurrent ||
-        open.filter((o) => (o.profile ?? 'check') === (record.profile ?? 'check')).length >=
-          cfg.maxConcurrentProfile[record.profile ?? 'check']
+        open.filter((o) => budgetClass(o) === budgetClass(record)).length >=
+          cfg.maxConcurrentProfile[budgetClass(record)]
       )
         refuse('BUSY', 409);
       const bad = await storage.list({ prefix: 'bad-machine:', limit: 257 });
@@ -214,10 +239,13 @@ export class Ledger {
     // Owner ruling 2026-10-24 item 8: the open: index is the set of active runs.
     await this.put('open:' + record.key, true);
     await this.grant(record.key, record);
-    await this.put('sha:' + record.sha, { key: record.key, started: record.started });
+    // Review F6: a release leg never writes the one-rental-per-commit marker, so a release of a
+    // commit never refuses that commit's own master gate with BUDGET:sha-gap.
+    if (budgetClass(record) !== 'release')
+      await this.put('sha:' + record.sha, { key: record.key, started: record.started });
     await this.put('cost:' + record.key, {
       ...costAttempt(record),
-      profile: record.profile ?? 'check',
+      ...spendClass(record),
       started: record.started,
       ended: null,
       created: record.id ? true : null,
@@ -235,7 +263,7 @@ export class Ledger {
       const created = record.id ? true : record.closed === 'GONE' ? false : null;
       await ledger.put('cost:' + record.key, {
         ...costAttempt(record),
-        profile: record.profile ?? 'check',
+        ...spendClass(record),
         started: record.started,
         ended: now,
         created,
@@ -304,9 +332,10 @@ export class Ledger {
       profiles = {
         check: { daily_usd: 0, count_today: 0 },
         sweep: { daily_usd: 0, count_today: 0 },
+        release: { daily_usd: 0, count_today: 0 },
       },
       rows = [],
-      counted = { check: new Set(), sweep: new Set() };
+      counted = { check: new Set(), sweep: new Set(), release: new Set() };
     let monthly = 0,
       outstanding = 0;
     for (const [key, stored] of entries) {
@@ -372,7 +401,7 @@ export class Ledger {
       const bandwidth = v.bandwidthCost ?? 0,
         remaining =
           v.ended === null ? (Math.max(0, v.started + v.ttl - now) * v.price) / 3600000 : 0,
-        profile = v.profile ?? 'check';
+        profile = budgetClass(v);
       if (!Object.hasOwn(profiles, profile)) refuse();
       // New receipts distinguish confirmed no-instance failures from actual/free rentals.
       // Legacy zero rows need the still-retained durable record as evidence; unknowns count.
@@ -415,8 +444,9 @@ export class Ledger {
     }
     rows.sort((a, b) => b.started - a.started || b.key.localeCompare(a.key));
     return {
-      daily_usd: profiles.check.daily_usd + profiles.sweep.daily_usd,
-      count_today: profiles.check.count_today + profiles.sweep.count_today,
+      daily_usd: profiles.check.daily_usd + profiles.sweep.daily_usd + profiles.release.daily_usd,
+      count_today:
+        profiles.check.count_today + profiles.sweep.count_today + profiles.release.count_today,
       profiles,
       rolling_usd: monthly,
       outstanding_usd: outstanding,
@@ -429,13 +459,14 @@ export class Ledger {
     if (!Number.isFinite(cost) || cost < 0) budgetRefuse('invalid-cost', { cost_usd: cost });
     const summary = await this.budgetSummary(cfg, now, excludeKey, true),
       profile = cfg.profile ?? 'check',
+      caps = profileCaps(cfg, profile),
       values = {
         ...summary.profiles[profile],
         rolling_usd: summary.rolling_usd,
         outstanding_usd: summary.outstanding_usd,
         cost_usd: cost,
-        daily_cap_usd: profile === 'sweep' ? cfg.sweepDaily : cfg.daily,
-        count_cap: cfg.dailyCount,
+        daily_cap_usd: caps.dailyUsd,
+        count_cap: caps.dailyCount,
         rolling_cap_usd: cfg.rolling,
         reserve_usd: cfg.reserve,
         ...(Object.hasOwn(options, 'credit')
@@ -447,9 +478,16 @@ export class Ledger {
       };
     if (Object.hasOwn(options, 'credit') && !Number.isFinite(options.credit))
       budgetRefuse('no-credit', values);
-    if (!options.sameAttempt && values.count_today >= cfg.dailyCount)
+    if (!options.sameAttempt && values.count_today >= caps.dailyCount)
       budgetRefuse('daily-count', values);
     if (values.daily_usd + cost > values.daily_cap_usd) budgetRefuse('daily-usd', values);
+    // Review F8: the account-wide daily cap across profiles (same closed reason vocabulary).
+    if (summary.daily_usd + cost > cfg.accountDaily)
+      budgetRefuse('daily-usd', {
+        ...values,
+        daily_usd: summary.daily_usd,
+        daily_cap_usd: cfg.accountDaily,
+      });
     if (values.rolling_usd + cost > cfg.rolling) budgetRefuse('rolling-usd', values);
     if (Object.hasOwn(options, 'credit') && options.credit < values.credit_required_usd)
       budgetRefuse('credit-reserve', values);

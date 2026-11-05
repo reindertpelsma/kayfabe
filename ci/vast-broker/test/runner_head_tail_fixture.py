@@ -248,7 +248,9 @@ def case_summary_tail():
     out, _ = run("".join(row(i) for i in range(2000)) + summary)
     assert out.rindex("KF_FINAL_SUMMARY_END") > out.rindex("stage name=s29")
     assert "KF_FINAL_SUMMARY_BEGIN verdict=FAIL" in out and "stage name=s00" in out
-    assert out.index("dropped from the middle") < out.index("KF_FINAL_SUMMARY_BEGIN")
+    # The KEY LINES section (2026-11-05) repeats the summary lines before the middle marker; the
+    # tail still holds them after it.
+    assert out.index("dropped from the middle") < out.rindex("KF_FINAL_SUMMARY_BEGIN")
 
 
 def case_small_log():

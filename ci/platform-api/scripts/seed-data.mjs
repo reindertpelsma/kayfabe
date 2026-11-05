@@ -62,6 +62,11 @@ export function syntheticRows() {
     hosts: [],
     hosts_private: [],
     audit: [],
+    ci_runs: [],
+    ci_run_stages: [],
+    ci_host_facts: [],
+    ci_runs_private: [],
+    ci_requirement_snapshots: [],
   };
   const dies = [];
   FAMILIES.forEach(([id, name, list], f) => {
@@ -278,7 +283,94 @@ export function syntheticRows() {
     action: 'seed',
     detail: 'synthetic private audit row',
   });
+  ciRows(rows, dies, commits);
   return rows;
+}
+
+// CI Worker result store (migration 0002), SYNTHETIC. Run ids start with "syn-ci-"; every tree
+// hash is derived from "synthetic-tree-"; a separate PRNG keeps the 0001 rows (and the status
+// fixture built from them) unchanged. Two commits share one tree hash (a docs-only change).
+function ciRows(rows, dies, commits) {
+  const random = prng(20261105);
+  const pick = (list) => list[Math.floor(random() * list.length)];
+  const consumer = dies.filter((d) => d.family !== 'hopper');
+  let tree = null;
+  commits.slice(-12).forEach((commit, i) => {
+    if (!commit.docsOnly || tree === null) tree = hex('synthetic-tree-' + commit.seq);
+    const last = i === 11;
+    const cells = [['middle', 'both']];
+    if (i % 4 === 0) cells.push(['small', 'linux']);
+    if (i === 6) cells.push(['largest', 'both'], ['largest', 'both']);
+    cells.forEach(([tier, platform], j) => {
+      const { die, family } = pick(consumer);
+      const id = 'syn-ci-' + commit.seq + '-' + j;
+      const started = commit.at + 2 * HOUR + j * 20 * 60000;
+      const inFlight = last && j === 0;
+      const roll = random();
+      const verdict = inFlight
+        ? null
+        : i === 3 && j === 0
+          ? 'FAIL'
+          : roll < 0.75
+            ? 'PASS'
+            : roll < 0.88
+              ? 'FAIL'
+              : roll < 0.94
+                ? 'RETRY'
+                : 'UNATTRIBUTED';
+      const ended = inFlight ? null : time(started + (30 + Math.floor(random() * 60)) * 60000);
+      rows.ci_runs.push({
+        run_id: id,
+        commit_sha: commit.sha,
+        tree_hash: tree,
+        tree_kind: 'tree',
+        tier,
+        profile: tier === 'middle' ? 'check' : 'synthetic',
+        family,
+        die,
+        platform,
+        verdict,
+        started_at: time(started),
+        ended_at: ended,
+        sort_at: ended ?? time(started),
+        log_key: null,
+        source: 'reproduced',
+        tag: verdict === null ? null : 'synthetic-tag-' + hex(id).slice(0, 16),
+        recorded_at: ended ?? time(started),
+      });
+      if (verdict === 'PASS' || verdict === 'FAIL') {
+        const names =
+          platform === 'both' ? ['provision', 'gates', 'windows_gate'] : ['provision', 'gates'];
+        names.forEach((name, ord) =>
+          rows.ci_run_stages.push({
+            run_id: id,
+            ord,
+            name,
+            rc: verdict === 'FAIL' && ord === names.length - 1 ? 1 : 0,
+            duration_ms: 60000 * (ord + 1),
+            result: verdict === 'FAIL' && ord === names.length - 1 ? 'FAIL' : 'PASS',
+          }),
+        );
+      }
+      rows.ci_host_facts.push({
+        run_id: id,
+        gpu_name: 'synthetic ' + die,
+        driver_versions_json: JSON.stringify({ guest: '580.159.04', host: '580.95.05' }),
+      });
+      rows.ci_runs_private.push({
+        run_id: id,
+        machine_id: 900000 + rows.ci_runs.length,
+        price_usd_h: 0.123,
+        cost_usd: 0.456,
+      });
+    });
+  });
+  rows.ci_requirement_snapshots.push({
+    sha256: hex('synthetic requirements'),
+    base_ref: 'next',
+    content: '# synthetic requirements snapshot\nversion = 1\n',
+    first_seen_at: time(BASE),
+  });
 }
 
 function round(value) {

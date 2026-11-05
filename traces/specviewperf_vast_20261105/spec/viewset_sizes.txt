@@ -1,0 +1,12 @@
+# tar member sizes by directory, from tar -tv of the whole stream (sum=94184449637 bytes); entries include directories
+26352084647	126 entries	blender-01-1.0.1
+21532730817	218 entries	unreal_engine-01-1.0.4
+19667000374	97 entries	creo-04-1.0.1
+7462671040	62 entries	solidworks-08-1.0.1
+7347262051	50 entries	catia-07-1.0.6
+6322769267	64 entries	maya-07-1.0.2
+2201474538	1907 entries	enscape-01-1.0.5
+1559513473	2917 entries	energy-04-1.0.2
+1262862531	153 entries	medical-04-1.0.2
+476080899	264 entries	(base: everything outside viewsets/)
+0	1 entries	

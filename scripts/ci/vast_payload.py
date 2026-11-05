@@ -126,8 +126,10 @@ WINDOWS_VERDICT = re.compile(r"^WINDOWS_GATE_(PASS|FAIL|RETRY|REFUSED)\b([^\n]*)
 WINDOWS_RETRY_CLASSES = {"PROVIDER", "MEDIA", "OPERATOR", "HOSTREF", "BAR1_EXCEPTION"}
 
 
-def windows_rows(text, rc, sha):
-    """Grade scripts/bench/box/windows_gate.sh. THE GATE IS THE GUEST PASSING (owner, 2026-11-01):
+def windows_rows(text, rc, sha, name="windows_gate"):
+    """Grade scripts/bench/box/windows_gate.sh. `name` is the row of this run: windows_gate, or
+    windows_gate_2 for the release tier's second run on the same box (KF_WINDOWS_RUNS=2).
+    THE GATE IS THE GUEST PASSING (owner, 2026-11-01):
     only one WINDOWS_GATE_PASS for this revision with exit 0 is a row that passes. RETRY (and a
     refused precondition) is a host, harness or rental fault: never a pass, never a verdict on the
     guest; its row is named windows_retry_<class> so the runner can say "re-run on a fresh box"."""
@@ -142,9 +144,9 @@ def windows_rows(text, rc, sha):
             and exits[0] == "0"
             and re.match(r" rev=" + re.escape(sha[:8]) + r"[0-9a-f]* ", rest)
         ):
-            return [row("windows_gate", 1)]
+            return [row(name, 1)]
         if kind == "FAIL" and rc not in (0, 3):
-            raise EvidenceError("windows_gate")
+            raise EvidenceError(name)
     if kinds == {"RETRY"} and len(verdicts) == 1:
         found = re.search(r" class=([A-Z0-9_]+)\b", verdicts[0][1])
         cls = found[1] if found and found[1] in WINDOWS_RETRY_CLASSES else "OPERATOR"
@@ -152,7 +154,7 @@ def windows_rows(text, rc, sha):
     if kinds == {"REFUSED"}:
         raise EvidenceError("windows_retry_refused")
     if "FAIL" in kinds:
-        raise EvidenceError("windows_gate")
+        raise EvidenceError(name)
     # No verdict, two verdicts, a PASS of another revision or with a non-zero exit: the
     # harness did not end cleanly. Not a pass; a fresh box decides.
     raise EvidenceError("windows_retry_operator")
@@ -168,10 +170,61 @@ def windows_requested(environ):
     return value != "0", "worker" if value is not None else "default"
 
 
+def tier_requested(environ, windows):
+    """The release tier's extras (ci/vast-broker/src/tier.js, 2026-11-05): KF_TIER is informational;
+    KF_WINDOWS_RUNS=2 runs the Windows gate a second time on the same box (only with the Windows
+    stage); KF_STAGES names extra stages. Only `specviewperf` is a stage slot that can run (its lane
+    is plumbing until the SPECviewperf lane lands); `two_guests` and `trio` are reserved names,
+    DESIGN-ONLY and refused. Anything malformed is refused before any stage runs."""
+    tier = environ.pop("KF_TIER", None)
+    runs = environ.pop("KF_WINDOWS_RUNS", None)
+    stages = environ.pop("KF_STAGES", None)
+    if tier not in (None, "small", "middle", "large", "adhoc") or runs not in (None, "1", "2"):
+        raise EvidenceError("preflight")
+    if runs == "2" and not windows:
+        raise EvidenceError("preflight")
+    names = [] if stages is None else stages.split(":")
+    if (
+        len(names) != len(set(names))
+        or any(n not in STAGE_SLOTS for n in names)
+        or any(STAGE_SLOTS[n] == "DESIGN_ONLY" for n in names)
+        or (names and tier != "large")
+    ):
+        raise EvidenceError("preflight")
+    return tier or "unknown", 2 if runs == "2" else 1, names
+
+
+# Stage slots (names reserved in ci/vast-broker/defaults.json stageSlots). PLUMBING = the stage
+# runs through scripts/ci/vast_stage_specviewperf.sh; DESIGN_ONLY = refused if requested.
+STAGE_SLOTS = {"specviewperf": "PLUMBING", "two_guests": "DESIGN_ONLY", "trio": "DESIGN_ONLY"}
+SPEC_VERDICT = re.compile(r"^SPECVIEWPERF_STAGE_(PASS|FAIL|RETRY)(?: class=([A-Z_]{1,32}))?$", re.M)
+
+
+def specviewperf_rows(text, rc):
+    """Grade the SPECviewperf stage wrapper. Only its verdict word leaves the box: the wrapper keeps
+    the lane's own output (scores included) in a private file and prints one verdict line. RETRY
+    (and a missing lane: class NOT_BUILT) is never a pass."""
+    verdicts = SPEC_VERDICT.findall(text)
+    if len(verdicts) != 1:
+        raise EvidenceError("specviewperf_retry_operator")
+    kind, cls = verdicts[0]
+    if kind == "PASS" and rc == 0:
+        return [row("specviewperf", 1)]
+    if kind == "FAIL":
+        raise EvidenceError("specviewperf")
+    raise EvidenceError(
+        "specviewperf_retry_" + (cls.lower() if kind == "RETRY" and cls else "operator")
+    )
+
+
 # The Windows stage needs about an hour on a fresh box (install 19-31 min, gate 27 min, MEASURED
 # traces/windows_gate_20261101/, traces/blackwell_hw_20261103/); it does not start with less than
 # this left before the soft deadline, and that shortfall is a RETRY, not a verdict.
 WINDOWS_MIN_REMAINING_MS = 75 * 60000
+# The second Windows run reuses the installed image (install=once). MEASURED second runs on
+# 2026-11-04 at rev 0c515b3b: 906 s (AD102 ada102b) and 1795 s (TU116 tu116b2),
+# traces/die_coverage_20261104/; 45 minutes is that plus margin (INFERRED, not measured).
+WINDOWS_REPEAT_MIN_REMAINING_MS = 45 * 60000
 
 
 def ladder_rows(text, rc, mode, sha):
@@ -949,8 +1002,18 @@ def main():
         soft = int(os.environ["KF_SOFT_DEADLINE_MS"])
         # Popped before any stage runs: merge_check.sh must not run the gate inside merge_bar.
         windows, windows_source = windows_requested(os.environ)
+        tier, windows_runs, extra_stages = tier_requested(os.environ, windows)
         print(
-            "KF_PAYLOAD_TIER windows=" + str(int(windows)) + " source=" + windows_source,
+            "KF_PAYLOAD_TIER windows="
+            + str(int(windows))
+            + " source="
+            + windows_source
+            + " tier="
+            + tier
+            + " windows_runs="
+            + str(windows_runs)
+            + " stages="
+            + (":".join(extra_stages) or "none"),
             flush=True,
         )
         subprocess.run(["df", "-h", "/"], check=True)
@@ -1110,6 +1173,35 @@ def main():
             )
             stage.update(min_remaining_ms=WINDOWS_MIN_REMAINING_MS, short_row="windows_retry_time")
             stages.append(stage)
+        if windows and windows_runs == 2:
+            # The release tier's second Windows run when no second machine offers the die.
+            output2 = evidence / "windows_2.run"
+            stage = make_stage(
+                "windows_gate_2",
+                ["bash", str(root / "scripts/bench/box/windows_gate.sh"), tag + "w2", PROV_DIR],
+                output2,
+                [],
+                lambda rc: windows_rows(bounded_text(output2), rc, sha, "windows_gate_2"),
+                [Path(PROV_DIR) / (tag + "w2_windows.log")],
+            )
+            stage.update(
+                min_remaining_ms=WINDOWS_REPEAT_MIN_REMAINING_MS, short_row="windows_retry_time"
+            )
+            stages.append(stage)
+        if "specviewperf" in extra_stages:
+            # PLUMBING (2026-11-05): the wrapper runs scripts/bench/box/specviewperf_stage.sh when
+            # it exists (the SPECviewperf lane), fetching media through the Worker's presigned
+            # /bench-data route; without it the stage is specviewperf_retry_not_built, never a pass.
+            output3 = evidence / "specviewperf.run"
+            stages.append(
+                make_stage(
+                    "specviewperf",
+                    ["bash", str(root / "scripts/ci/vast_stage_specviewperf.sh"), tag, PROV_DIR],
+                    output3,
+                    [],
+                    lambda rc: specviewperf_rows(bounded_text(output3), rc),
+                )
+            )
         return execute_stages(stages, soft, result, destination)
     except EvidenceError as error:
         if isinstance(error, ProviderFault):

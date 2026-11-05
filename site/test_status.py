@@ -86,7 +86,7 @@ class Modes(unittest.TestCase):
             self.out, api_base="https://api.kayfabe.dev", logs_base="https://logs.kayfabe.dev"
         )
         self.assertEqual(mode, "live")
-        for page in ["status/index.html", "status/cell/index.html", "status/run/index.html",
+        for page in ["status/index.html", "status/die/index.html", "status/run/index.html",
                      "status/commit/index.html"]:
             text = (self.out / page).read_text()
             self.assertEqual(text.count("https://api.kayfabe.dev"), 1, page)
@@ -94,7 +94,13 @@ class Modes(unittest.TestCase):
             self.assertIn('<meta name="kf-status-logs" content="https://logs.kayfabe.dev" />', text)
             self.assertNotIn("Synthetic", text)
         self.assertFalse((self.out / "status/fixture.json").exists())
+        self.assertFalse((self.out / "status/cell").exists())
+        self.assertEqual(self.files(), sorted([
+            "status/index.html", "status/die/index.html", "status/run/index.html",
+            "status/commit/index.html", "status/status.js", "status/status.css",
+            "status/coverage.json"]))
         self.assertNotRegex((self.out / "status/status.js").read_text(), r"https?://")
+        self.assertNotRegex((self.out / "status/coverage.json").read_text(), WORKER_URL)
 
     def test_invalid_logs_base_is_dropped(self):
         status_pages.write_status(
@@ -105,11 +111,13 @@ class Modes(unittest.TestCase):
     def test_fixture_pages_are_labelled_synthetic_and_hold_no_worker_url(self):
         self.assertEqual(status_pages.write_status(self.out, fixture=FIXTURE), "fixture")
         self.assertIn("status/fixture.json", self.files())
+        self.assertIn("status/coverage.json", self.files())
         for page in self.out.rglob("*.html"):
             text = page.read_text()
             self.assertIn("Synthetic data.", text)
             self.assertNotRegex(text, WORKER_URL)
         self.assertNotRegex((self.out / "status/fixture.json").read_text(), WORKER_URL)
+        self.assertNotRegex((self.out / "status/coverage.json").read_text(), WORKER_URL)
 
     def test_fixture_and_api_are_exclusive_and_fixture_must_be_synthetic(self):
         with self.assertRaises(ValueError):
@@ -123,6 +131,45 @@ class Modes(unittest.TestCase):
         status_pages.write_status(self.out, api_base="https://api.kayfabe.dev")
         status_pages.write_status(self.out)
         self.assertEqual(self.files(), ["status/index.html"])
+
+
+class Coverage(unittest.TestCase):
+    """The committed evidence file (scripts/site/coverage_from_traces.py builds it from traces/; its
+    own tests need the traces and run in the platform CI job)."""
+
+    def setUp(self):
+        self.data = json.loads((SITE / "status/coverage.json").read_text())
+
+    def test_shape(self):
+        self.assertEqual(self.data["schema"], 1)
+        self.assertEqual(set(self.data["sources"]), {"worker_reproduced", "imported_vast"})
+        self.assertEqual(self.data["sources"]["worker_reproduced"], "CI Worker run (reproduced)")
+        self.assertEqual(self.data["sources"]["imported_vast"],
+                         "Direct Vast run, evidence in repo (imported)")
+        self.assertIn("Imported evidence never does", self.data["gate_rule"])
+        dies = 0
+        for family in self.data["families"]:
+            for die in family["dies"]:
+                dies += 1
+                self.assertEqual(set(die["cells"]), {"linux", "windows"}, die["id"])
+                for cell in die["cells"].values():
+                    if cell["state"] == "covered":
+                        self.assertTrue(cell["groups"], die["id"])
+                        for g in cell["groups"]:
+                            for key in ("source", "revision", "date", "n", "pass", "fail", "evidence"):
+                                self.assertIn(key, g, die["id"])
+                            self.assertTrue(g["evidence"].startswith("traces/"))
+                    else:
+                        self.assertEqual(cell["state"], "not_covered")
+                        self.assertTrue(cell["reason"], die["id"])
+                        self.assertEqual(cell["groups"], [])
+        self.assertGreaterEqual(dies, 20)
+
+    def test_holds_no_worker_url_and_no_secret_shape(self):
+        text = (SITE / "status/coverage.json").read_text()
+        self.assertNotRegex(text, WORKER_URL)
+        self.assertNotRegex(text, r"https?://")
+        self.assertNotRegex(text, r"(?i)specviewperf|instance_api_key|token")
 
 
 class BuildPolicy(unittest.TestCase):

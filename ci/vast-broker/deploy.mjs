@@ -19,6 +19,14 @@ export const WRANGLER_VERSION = '4.152.0';
 // Public, non-secret vars a deploy may set. Everything else is refused: secrets belong in
 // `wrangler secret put`, and Cloudflare Access is dashboard-only (the Worker reads no ACCESS_*;
 // the box pair BOX_ACCESS_ID/BOX_ACCESS_SECRET is a secret it only passes through).
+// Boolean-valued public vars (exactly 'true' or 'false'); equal to src/policy.js BOOLEAN_VARS
+// (test/round-deploy-helper.test.js compares them). deploy.mjs imports nothing from src/.
+export const BOOLEAN_VARS = Object.freeze([
+  'RENTING_ENABLED',
+  'RELEASE_ENABLED',
+  'ALLOW_UNKNOWN_COUNTRY',
+  'TREE_KEY_CARRY_OVER',
+]);
 export const ALLOWED = new Set([
   'WORKER_URL',
   'OWNER_GITHUB_ID',
@@ -48,6 +56,24 @@ export const ALLOWED = new Set([
   'MAX_CONCURRENT_RENTALS',
   'MAX_CONCURRENT_CHECK',
   'MAX_CONCURRENT_SWEEP',
+  // Result store (src/results.js): 'true' lets a Worker-verified tree key answer for another
+  // commit. Keep it unset/'false' until boxes delete ignored files after cloning (review of #258).
+  'TREE_KEY_CARRY_OVER',
+  // Tiers (wtier, 2026-11-05; src/tier.js, src/policy.js): the release (large) profile's explicit
+  // caps and lists, and the middle tier's rotation and VRAM floor. Account cap is now 1-8.
+  'MAX_CONCURRENT_RELEASE',
+  'RELEASE_ENABLED',
+  'ACCOUNT_DAILY_USD',
+  'RELEASE_MAX_PRICE_USD_HOUR',
+  'RELEASE_DAILY_USD',
+  'RELEASE_DAILY_RENTALS',
+  'RELEASE_COST_CAP_USD',
+  'RELEASE_HARD_RUNTIME_MINUTES',
+  'RELEASE_RERUNS_PER_LEG',
+  'RELEASE_STAGES',
+  'RELEASE_DIES',
+  'MIDDLE_ROTATION',
+  'MIDDLE_VRAM_FLOOR_MB',
 ]);
 const bareOrigin = (value) => {
   try {
@@ -80,8 +106,11 @@ export function parseVars(text) {
   });
   if (!/^[1-9][0-9]{0,19}$/.test(vars.get('OWNER_GITHUB_ID') ?? ''))
     fail('OWNER_GITHUB_ID must be present and numeric');
-  if (vars.has('RENTING_ENABLED') && !['true', 'false'].includes(vars.get('RENTING_ENABLED')))
-    fail('RENTING_ENABLED must be true or false');
+  // Review of PR #269, R3: every boolean-valued var is exactly true or false (the Worker refuses
+  // any other value as CONFIG_VAR:<name>; src/policy.js BOOLEAN_VARS lists the same names).
+  for (const key of BOOLEAN_VARS)
+    if (vars.has(key) && !['true', 'false'].includes(vars.get(key)))
+      fail(key + ' must be true or false');
   if (vars.has('WORKER_URL') && !bareOrigin(vars.get('WORKER_URL')))
     fail('WORKER_URL must be the bare https origin (no trailing slash, path, query or user)');
   return vars;
