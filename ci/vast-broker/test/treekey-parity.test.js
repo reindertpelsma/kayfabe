@@ -5,7 +5,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { DEFAULT_IGNORE, ignored, parseIgnore, treeKeyOf } from '../src/treekey.js';
+import { DEFAULT_IGNORE, ignored, parseIgnore, patternsFor, treeKeyOf } from '../src/treekey.js';
 // Parity of the Worker's matcher with git on this repository's real paths: the reference
 // (treekey_ref.py) uses `git ls-files -s` and `git check-ignore --no-index`.
 // FALSIFIER: any path on which the two disagree, or a different key, for the built-in default,
@@ -106,5 +106,21 @@ test(
   { skip: skip || (existsSync(own) ? false : 'no .workerignore in this checkout') },
   async () => {
     await parity('.workerignore', readFileSync(own, 'utf8'));
+  },
+);
+
+// Review of PR #269, R1 (2026-11-05): the committed .workerignore says that it is read by this
+// Worker and that it yields no tree key today (it covers the PROTECTED root ci/vast-broker). If the
+// file changes so that a key is produced, this fails: update the header (and decide on carry-over).
+test(
+  "treekey: the checkout's own .workerignore yields no tree key, as its header says",
+  { skip: existsSync(own) ? false : 'no .workerignore in this checkout' },
+  () => {
+    const text = readFileSync(own, 'utf8');
+    assert.ok(parseIgnore(text), 'inside the subset');
+    assert.equal(patternsFor(text), null, 'refused: covers a protected code root');
+    assert.ok(ignored(parseIgnore(text), 'ci/vast-broker', true));
+    assert.match(text, /produces NO tree key today/);
+    assert.doesNotMatch(text, /Not read by anything/);
   },
 );
