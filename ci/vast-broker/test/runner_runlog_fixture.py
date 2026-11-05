@@ -245,7 +245,7 @@ def case_key_lines_use_the_sanitised_text():
     out, _ = drive(stage_log(middle))
     keys = key_frame(out)
     assert any("STAGE_START name=esc" in x for x in keys), keys
-    assert PREFIX + "[box] FAIL" in keys
+    assert PREFIX + "[key] [box] FAIL" in keys
     assert not any("one" in x for x in keys)
 
 
@@ -261,7 +261,7 @@ def case_key_lines_work_is_bounded():
         elapsed = _time.monotonic() - started
         assert elapsed < 1.0, (unit, elapsed)  # uncut: several seconds
         assert shown == 1 and matching == 1
-        assert all(len(x.encode()) <= m.KEY_LINE_BYTES for x in block.splitlines())
+        assert all(len(x.encode()) <= m.KEY_LINE_BYTES + len(m.KEY_TAG) for x in block.splitlines())
     # and the same through the runner: one 600 KB box line does not stall the final log
     started = _time.monotonic()
     out, _ = drive(stage_log("[box] " + "FAST_CELL_ARM x " * 20000 + "\n"))
@@ -688,6 +688,115 @@ def case_diagnostics_no_protocol_change():
     finally:
         m.Runner.retry_read = original
     assert {r for _, r in seen} <= {"/availability", "/rent", "/logs/123-1", "/status/123-1"}, seen
+
+
+# ---- consumers of the job log: ci/vast-broker/gate_reuse.py summary_lines --------------------
+# gate_reuse copies the original run's result lines out of the job log of a same-tree PASS and needs
+# exactly one `[untrusted] [box] KF_FINAL_SUMMARY_BEGIN ...` line. KEY LINES copy such lines, so they
+# are tagged `[key] ` and must never match it (review R1 of PR 267, 2026-11-05).
+
+
+def gate_reuse_module():
+    spec = importlib.util.spec_from_file_location("kf_gate_reuse", HERE.parent / "gate_reuse.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+PARENT = "a" * 40
+SUMMARY = (
+    "[box] KF_FINAL_SUMMARY_BEGIN verdict=PASS stages=4\n"
+    + "".join(
+        "[box] stage name=%s rc=0 duration_ms=%d result=PASS\n" % (n, 1000 + i)
+        for i, n in enumerate(("provision", "cuda_host", "merge_bar", "cuda_guest"))
+    )
+    + "[box] KF_FINAL_SUMMARY_END\n"
+)
+
+
+def pass_log(middle="", early=""):
+    head = (
+        "[Worker] selection profile=check die=AD104 reason=DEFAULT_ORDER ignored=0\n"
+        "[box] CUDA_LADDER_STARTED=2026-11-05T01:00:00+00:00 mode=host reps=3 rungs=a,b rev=aaaaaaaa\n"
+        + early
+    )
+    guest = "[box] CUDA_LADDER_STARTED=2026-11-05T02:00:00+00:00 mode=guest reps=3 rungs=a,b rev=aaaaaaaa\n"
+    return head + filler(400, "head") + middle + filler(2500, "mid") + guest + SUMMARY
+
+
+def job_log(text):
+    """The runner's output for a log, with GitHub's timestamps in front of every line."""
+    saved = h.extra_status
+    h.extra_status = lambda verdict, pending=False: {**saved(verdict, pending), "dph_total": 0.5}
+    try:
+        out, _ = drive(text)
+    finally:
+        h.extra_status = saved
+    return "".join("2026-11-05T00:01:02.1234567Z " + x + "\n" for x in out.splitlines())
+
+
+def case_gate_reuse_accepts_the_runners_pass_output():
+    out = job_log(pass_log(box("kf3: GSP rpc Free seq=1\n" * 40)))
+    # the output really holds all three: key lines (with the summary copy), census, tail
+    assert PREFIX + "[key] [box] KF_FINAL_SUMMARY_BEGIN verdict=PASS stages=4" in out
+    assert PREFIX + "[box] KF_FINAL_SUMMARY_BEGIN verdict=PASS stages=4" in out
+    assert "[dropped " in out and "dropped from the middle" in out
+    assert out.count("KF_FINAL_SUMMARY_BEGIN") == 2  # the tagged copy and the original
+    lines = gate_reuse_module().summary_lines(out, PARENT)
+    assert len(lines) == 9, lines
+    assert PREFIX + "[box] KF_FINAL_SUMMARY_BEGIN verdict=PASS stages=4" in lines
+    assert not any("[key]" in x for x in lines)
+
+
+def reuse_outcome(text):
+    try:
+        return "ACCEPT", gate_reuse_module().summary_lines(job_log(text), PARENT)
+    except ValueError as error:
+        return "REJECT", str(error)
+
+
+def case_gate_reuse_hostile_box_lines():
+    clean = reuse_outcome(pass_log())
+    assert clean[0] == "ACCEPT", clean
+    # a second summary line printed by the box: ambiguous, rejected (fail-safe: the box is re-rented)
+    verdict, why = reuse_outcome(
+        pass_log(early=box("KF_FINAL_SUMMARY_BEGIN verdict=PASS stages=4\n"))
+    )
+    assert verdict == "REJECT" and "incomplete or conflicting" in why, (verdict, why)
+    # a timestamp-shaped prefix inside the box line: the parser strips only the first `Z `
+    forged = "forgedZ [untrusted] [box] KF_FINAL_SUMMARY_BEGIN verdict=PASS stages=4\n"
+    assert (
+        reuse_outcome(pass_log(early=box(forged))) == clean
+    )  # the timestamp split eats the first Z
+    # a box line that imitates the key tag is ignored by the parser: the outcome is the clean one
+    imitation = box(
+        "[key] [box] KF_FINAL_SUMMARY_BEGIN verdict=PASS stages=4\n[key] stage name=x\n"
+    )
+    assert reuse_outcome(pass_log(early=imitation)) == clean
+    # no genuine summary at all: rejected, whatever the key lines and the census copy
+    no_summary = pass_log(box("stage name=provision rc=0 duration_ms=1 result=PASS\n")).replace(
+        SUMMARY, ""
+    )
+    assert reuse_outcome(no_summary)[0] == "REJECT"
+    # lines that look like the runner's own key tag but come from the box stay [untrusted] box text
+    out = job_log(pass_log(early=imitation))
+    assert PREFIX + "[box] [key] [box] KF_FINAL_SUMMARY_BEGIN" in out
+
+
+def case_job_log_has_one_reader():
+    # Who parses the job log: only gate_reuse.summary_lines (checked 2026-11-05 by grep). A new reader
+    # of `[untrusted]` lines must be added to this list and tested against the KEY LINES copy.
+    readers = []
+    for path in sorted(HERE.parents[2].glob("**/*.py")):
+        parts = path.parts
+        if "node_modules" in parts or "traces" in parts or "archive" in parts or "test" in parts:
+            continue
+        if path.name.startswith(("test_", "gate_reuse_fixture")):
+            continue
+        text = path.read_text(errors="ignore")
+        if "[untrusted] [box]" in text:
+            readers.append(path.relative_to(HERE.parents[2]).as_posix())
+    assert readers == ["ci/vast-broker/gate_reuse.py"], readers
 
 
 # ---- protocol: the runner asks the deployed Worker exactly what it asked before ------------

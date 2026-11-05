@@ -20,6 +20,7 @@ TAIL_BYTES, TAIL_LINES = 16000, 70
 DISPLAY_BYTES, DISPLAY_LINES = 65000, 270
 # KEY LINES: chosen on the sanitised text by the fixed table KEY_PATTERNS below (never by the box).
 KEY_LINES, KEY_BYTES, KEY_LINE_BYTES, KEY_SCAN = 60, 12000, 400, 1000
+KEY_TAG = "[key] "
 # Census of the middle that the display drops: at most CENSUS_LINES groups, each prefix <= CENSUS_PREFIX.
 CENSUS_LINES, CENSUS_PREFIX, CENSUS_KEYS = 12, 60, 5000
 STATES = {
@@ -384,13 +385,15 @@ def key_lines(text, max_lines=KEY_LINES, max_bytes=KEY_BYTES):
         if i in done:
             continue
         done.add(i)
-        cost = len("[untrusted] ") + min(len(lines[i].encode()), KEY_LINE_BYTES) + 1
+        cost = len("[untrusted] [key] ") + min(len(lines[i].encode()), KEY_LINE_BYTES) + 1
         if len(chosen) >= max_lines or used + cost > max_bytes:
             continue
         chosen.append(i)
         used += cost
+    # Every key line starts `[key] `: it is a copy, and must never read as the box line it copies
+    # (scripts that parse the job log, ci/vast-broker/gate_reuse.py, count and match the originals).
     block = "".join(
-        lines[i].encode()[:KEY_LINE_BYTES].decode("utf-8", errors="ignore") + "\n"
+        KEY_TAG + lines[i].encode()[:KEY_LINE_BYTES].decode("utf-8", errors="ignore") + "\n"
         for i in sorted(chosen)
     )
     return block, len(chosen), matching
@@ -1155,7 +1158,7 @@ class Runner:
             + " of "
             + str(matching)
             + " matching lines, picked by fixed patterns in runner.py from the whole sanitised log;"
-            + " all text below is untrusted box output\n"
+            + " each is a copy tagged [key], all text below is untrusted box output\n"
         )
         self.show(block)
 

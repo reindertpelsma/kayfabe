@@ -35,6 +35,9 @@ const CASES = [
   'diagnostics-absent-for-a-clean-result',
   'diagnostics-hostile-stage-name',
   'diagnostics-no-protocol-change',
+  'gate-reuse-accepts-the-runners-pass-output',
+  'gate-reuse-hostile-box-lines',
+  'job-log-has-one-reader',
   'protocol-requests-unchanged',
 ];
 for (const name of CASES)

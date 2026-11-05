@@ -35,6 +35,8 @@ R = "runner.py"
 SAN2 = '    for secret in secrets_by_length:\n        text = text.replace(secret, "[redacted]")\n    text = re.sub(r"\\bBearer'
 M = [
     # --- KEY LINES
+    ("key-tag-removed", 'KEY_TAG = "[key] "', 'KEY_TAG = ""'),
+    ("key-tag-box-prefix", 'KEY_TAG = "[key] "', 'KEY_TAG = "[box] "'),
     ("key-lines-unframed", "        self.show(block)", "        self.emit(block)"),
     ("key-lines-no-cell-pattern", '    ("cell", _BOX + r"(?:FAST|BARE)_CELL_ARM\\b"),\n', ""),
     ("key-lines-no-gate-fail", '    ("gate_fail", _BOX + r"WINDOWS_GATE_FAIL\\b"),\n', ""),

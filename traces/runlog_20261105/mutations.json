@@ -2,8 +2,25 @@
   "baseline": "PASS",
   "mutants": [
     {
+      "mutant": "key-tag-removed",
+      "kills": 3,
+      "tests": [
+        "runner run-log: key-lines-use-the-sanitised-text",
+        "runner run-log: gate-reuse-accepts-the-runners-pass-output",
+        "runner run-log: gate-reuse-hostile-box-lines"
+      ]
+    },
+    {
+      "mutant": "key-tag-box-prefix",
+      "kills": 2,
+      "tests": [
+        "runner run-log: key-lines-use-the-sanitised-text",
+        "runner run-log: gate-reuse-accepts-the-runners-pass-output"
+      ]
+    },
+    {
       "mutant": "key-lines-unframed",
-      "kills": 7,
+      "kills": 8,
       "tests": [
         "runner run-log: key-lines-cover-the-middle",
         "runner run-log: key-lines-budget",
@@ -11,7 +28,8 @@
         "runner run-log: key-lines-first-and-last",
         "runner run-log: key-lines-imitation-stays-untrusted",
         "runner run-log: key-lines-hostile-commands",
-        "runner run-log: key-lines-use-the-sanitised-text"
+        "runner run-log: key-lines-use-the-sanitised-text",
+        "runner run-log: gate-reuse-accepts-the-runners-pass-output"
       ]
     },
     {
@@ -158,13 +176,14 @@
     },
     {
       "mutant": "census-not-before-tail",
-      "kills": 5,
+      "kills": 6,
       "tests": [
         "runner run-log: census-groups-the-middle",
         "runner run-log: census-counts-are-exact",
         "runner run-log: census-only-twelve-groups",
         "runner run-log: census-hostile-prefix",
-        "runner run-log: census-many-keys-are-only-counted"
+        "runner run-log: census-many-keys-are-only-counted",
+        "runner run-log: gate-reuse-accepts-the-runners-pass-output"
       ]
     },
     {
