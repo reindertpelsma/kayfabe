@@ -159,7 +159,11 @@ D. **`auto` needs the host UUID.** If the host RM does not answer `GET_GID_INFO`
 ## 8. To verify on hardware (not run)
 
 1. `scripts/bench/v3_gates.sh` and `build_kf3.sh` at this revision.
-2. Two guests on one chip row, each with its own `-uuid` and default `gpu-uuid`: `nvidia-smi -L`
+2. ⊘ *2026-11-05, partly run (`traces/trio_vast_20261105/`, runs trio2/trio3, AD102): two QEMUs at once on one GPU,
+   Windows with `gpu-uuid=GPU-<VM_UUID>` (its `nvidia-smi -L` printed that value, not the host's) and the fast guest
+   with no `-uuid` (`auto`, random per QEMU start: 60 distinct values per run, none equal to Windows' or the
+   host's). Not run: two guests with `-uuid` and `auto`, and the same value after a reboot.*
+   Two guests on one chip row, each with its own `-uuid` and default `gpu-uuid`: `nvidia-smi -L`
    prints two different `GPU-...`; each is the same after a reboot of that VM. The realize log
    shows `basis Auto` and the guest UUID, and never the host's.
 3. `gpu-uuid=GPU-...` explicit: `nvidia-smi -L` prints exactly that value.

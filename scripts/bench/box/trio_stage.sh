@@ -286,7 +286,7 @@ selftest() {
     progress_ok "$d/p1" "$a" $((a + 180)) > /dev/null && { bad=$((bad + 1)); echo "TRIO_SELFTEST_FAIL progress with an empty window"; }
     progress_ok "$d/none" "$a" $((a + 60)) > /dev/null && { bad=$((bad + 1)); echo "TRIO_SELFTEST_FAIL progress with no file"; }
     mkdir -p "$d/ev"
-    printf 'kf3: guest GPU UUID GPU-0123abcd-0000-4000-8000-00000000000a\nhost GPU-0123ABCD-0000-4000-8000-00000000000A x GPU-ffffffff-0000-4000-8000-00000000000b\n' > "$d/ev/a.txt"
+    printf 'a 0123abcd-0000-4000-8000-00000000000a\nb 0123ABCD-0000-4000-8000-00000000000A x ffffffff-0000-4000-8000-00000000000b\n' > "$d/ev/a.txt"
     scrub_uuids "$d/ev"
     if grep -qiE '0123abcd|ffffffff' "$d/ev/a.txt" || [ "$(grep -o 'fa4efa4e[0-9a-f-]*' "$d/ev/a.txt" | sort -u | wc -l)" != 2 ]; then
         bad=$((bad + 1))
@@ -365,8 +365,12 @@ for f in gate_state.ps1 gate_run.ps1; do timeout 300 bash "$WV" scp-to "$WIN/$f"
 PROBES=$EV/probes
 mkdir -p "$PROBES"
 bash "$WIN/cuda/build_cup_win.sh" "$PROBES" > "$EV/probes_build.txt" 2>&1 || { WHY_A="build_cup_win.sh failed"; exit 1; }
-x86_64-w64-mingw32-g++ -O2 -std=gnu++17 -static -static-libgcc -static-libstdc++ "$WIN/appmatrix/tools/src/kf_dxprobe.cpp" \
-    -o "$PROBES/kf_dxprobe.exe" -ld3d11 -ld3d12 -ldxgi -ldxguid >> "$EV/probes_build.txt" 2>&1 || { WHY_A="kf_dxprobe did not build"; exit 1; }
+# the same two tries as windows_gate.sh: an older mingw lacks D3D_FEATURE_LEVEL_12_2 (trio run 1 stopped here)
+DXB=(x86_64-w64-mingw32-g++ -O2 -std=gnu++17 -static -static-libgcc -static-libstdc++)
+DXL=(-o "$PROBES/kf_dxprobe.exe" -ld3d11 -ld3d12 -ldxgi -ldxguid)
+"${DXB[@]}" "$WIN/appmatrix/tools/src/kf_dxprobe.cpp" "${DXL[@]}" >> "$EV/probes_build.txt" 2>&1 \
+    || "${DXB[@]}" -D'D3D_FEATURE_LEVEL_12_2=((D3D_FEATURE_LEVEL)0xc200)' "$WIN/appmatrix/tools/src/kf_dxprobe.cpp" "${DXL[@]}" >> "$EV/probes_build.txt" 2>&1 \
+    || { WHY_A="kf_dxprobe did not build"; exit 1; }
 g 60 'New-Item -ItemType Directory -Force -Path C:\kf\probes | Out-Null' > /dev/null 2>&1
 for f in "$PROBES/cup8.exe" "$PROBES/kf_dxprobe.exe"; do timeout 600 bash "$WV" scp-to "$f" 'C:/kf/probes/' < /dev/null > /dev/null 2>&1 || { WHY_A="scp of $(basename "$f") failed"; exit 1; }; done
 snapshot win_up
