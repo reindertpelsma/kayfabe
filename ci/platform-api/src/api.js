@@ -13,6 +13,7 @@ import {
   encodeCursor,
   decodeCursor,
   logsBase,
+  MAX_LIMIT,
 } from './validate.js';
 import { API_VERSION, PARAMS, describe } from './schema.js';
 
@@ -137,6 +138,41 @@ async function familiesWithDies(db, only = null) {
   }
   return families;
 }
+
+// --- CI Worker result store (migrations/0002_ci_results.sql) ---------------------------------
+
+const CI_LOG_KEY = /^runs\/[a-z0-9][a-z0-9-]{5,63}\/[a-z0-9][a-z0-9._-]{0,63}\.(?:log|txt)$/;
+const MAX_CI_TREES = 5;
+
+function ciSummary(row) {
+  return {
+    id: row.run_id,
+    commit: row.commit_sha,
+    tree: { hash: row.tree_hash, kind: row.tree_kind },
+    tier: row.tier,
+    family: row.family,
+    die: row.die,
+    platform: row.platform,
+    state: row.verdict === null ? 'running' : 'final',
+    verdict: row.verdict,
+    started_at: row.started_at,
+    ended_at: row.ended_at,
+  };
+}
+
+function drivers(text) {
+  const value = plainObject(text);
+  if (!value) return {};
+  const out = {};
+  for (const [key, version] of Object.entries(value).slice(0, 8))
+    if (/^[a-z][a-z0-9_]{0,31}$/.test(key) && typeof version === 'string')
+      out[key] = version.slice(0, 32);
+  return out;
+}
+
+const newestCi = (a, b) =>
+  (b.ended_at ?? b.started_at).localeCompare(a.ended_at ?? a.started_at) ||
+  b.run_id.localeCompare(a.run_id);
 
 const handlers = {
   async health(db) {
@@ -325,6 +361,123 @@ const handlers = {
     return json({ api: API_VERSION, commit, branches, requirements });
   },
 
+  async ciTrees(db, q) {
+    const limit = pageLimit(q.limit);
+    const trees = (await db.all('ciTrees', [q.tier, limit])).map((t) => ({
+      hash: t.tree_hash,
+      kind: t.tree_kind,
+      first_at: t.first_at,
+      last_at: t.last_at,
+      runs: t.runs,
+      passed: t.passed,
+      failed: t.failed,
+      running: t.running,
+    }));
+    return json({ api: API_VERSION, filters: { tier: q.tier }, trees });
+  },
+
+  async ciMatrix(db, q) {
+    const params = [q.tier, q.tree, q.family];
+    const cells = new Map();
+    const key = (r) => [r.tier, r.family, r.die, r.platform].join('|');
+    for (const r of await db.all('ciMatrixLatest', params))
+      cells.set(key(r), {
+        tier: r.tier,
+        family: r.family,
+        die: r.die,
+        platform: r.platform,
+        latest: ciSummary(r),
+        last_pass: null,
+      });
+    for (const r of await db.all('ciMatrixLastPass', params)) {
+      const cell = cells.get(key(r));
+      if (cell)
+        cell.last_pass = {
+          id: r.run_id,
+          commit: r.commit_sha,
+          tree: r.tree_hash,
+          ended_at: r.ended_at,
+        };
+    }
+    return json({
+      api: API_VERSION,
+      filters: { tier: q.tier, tree: q.tree, family: q.family },
+      cells: [...cells.values()],
+    });
+  },
+
+  async ciRun(db, q, [id], env) {
+    if (!PATTERNS.runId.test(id)) throw new ApiError(400, 'bad_request', 'invalid run id');
+    const row = await db.first('ciRunById', [id]);
+    if (!row) throw new ApiError(404, 'not_found', 'unknown run');
+    const stages = (await db.all('ciRunStages', [id])).map((s) => ({
+      name: s.name,
+      result: s.result,
+      rc: s.rc,
+      duration_ms: s.duration_ms,
+    }));
+    const base = logsBase(env.LOGS_BASE);
+    const log =
+      typeof row.log_key === 'string' && CI_LOG_KEY.test(row.log_key)
+        ? { key: row.log_key, ...(base ? { direct: base + '/' + row.log_key } : {}) }
+        : null;
+    const final = row.verdict !== null && row.ended_at !== null;
+    return json(
+      {
+        api: API_VERSION,
+        run: {
+          ...ciSummary(row),
+          profile: row.profile,
+          source: row.source,
+          stages,
+          host: { gpu_name: row.gpu_name ?? null, drivers: drivers(row.driver_versions_json) },
+          log,
+        },
+      },
+      { cache: final ? CACHE.immutable : CACHE.short },
+    );
+  },
+
+  async ciTree(db, q, [hash]) {
+    if (!PATTERNS.hash.test(hash)) throw new ApiError(400, 'bad_request', 'invalid tree hash');
+    const runs = await db.all('ciRunList', [hash, null, MAX_LIMIT]);
+    if (!runs.length) throw new ApiError(404, 'not_found', 'unknown tree hash');
+    const commits = (await db.all('ciTreeCommits', [hash])).map((c) => ({
+      sha: c.commit_sha,
+      runs: c.runs,
+      last_at: c.last_at,
+    }));
+    return json({
+      api: API_VERSION,
+      tree: { hash, kind: runs[0].tree_kind },
+      commits,
+      runs: runs.map(ciSummary),
+    });
+  },
+
+  async ciCommit(db, q, [sha]) {
+    if (!PATTERNS.sha.test(sha)) throw new ApiError(400, 'bad_request', 'invalid sha');
+    const trees = (await db.all('ciCommitTrees', [sha])).slice(0, MAX_CI_TREES);
+    if (!trees.length) throw new ApiError(404, 'not_found', 'unknown commit');
+    const runs = [];
+    for (const t of trees)
+      runs.push(...(await db.all('ciRunList', [t.tree_hash, null, MAX_LIMIT])));
+    runs.sort(newestCi);
+    return json({
+      api: API_VERSION,
+      commit: sha,
+      trees: trees.map((t) => ({
+        hash: t.tree_hash,
+        kind: t.tree_kind,
+        runs: t.runs,
+        last_at: t.last_at,
+      })),
+      // Runs of other commits with the same tree hash, for information only: the CI Worker counts
+      // them for this commit only with TREE_KEY_CARRY_OVER on and a Worker-computed key.
+      runs: runs.map((r) => ({ ...ciSummary(r), other_commit: r.commit_sha !== sha })),
+    });
+  },
+
   async logRedirect(db, q, [id, name], env) {
     if (!PATTERNS.runId.test(id)) throw new ApiError(400, 'bad_request', 'invalid run id');
     if (!PATTERNS.logName.test(name)) throw new ApiError(400, 'bad_request', 'invalid log name');
@@ -347,6 +500,11 @@ const ROUTES = [
   [/^\/v1\/runs$/, 'runs', 'runs'],
   [/^\/v1\/runs\/([^/]{1,64})$/, 'run', 'none'],
   [/^\/v1\/commits\/([^/]{1,40})\/requirements$/, 'commitRequirements', 'none'],
+  [/^\/v1\/ci\/matrix$/, 'ciMatrix', 'ciMatrix'],
+  [/^\/v1\/ci\/trees$/, 'ciTrees', 'ciTrees'],
+  [/^\/v1\/ci\/trees\/([^/]{1,64})$/, 'ciTree', 'none'],
+  [/^\/v1\/ci\/runs\/([^/]{1,64})$/, 'ciRun', 'none'],
+  [/^\/v1\/ci\/commits\/([^/]{1,40})$/, 'ciCommit', 'none'],
   [/^\/v1\/logs\/([^/]{1,64})\/([^/]{1,68})$/, 'logRedirect', 'none'],
 ];
 

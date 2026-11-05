@@ -374,6 +374,7 @@ export async function setup(overrides = {}) {
       return service.fetch(request);
     },
     sweep: (...args) => service.sweep(...args),
+    storeTrees: (...args) => service.storeTrees(...args),
   };
   const harness = {
     cloud,

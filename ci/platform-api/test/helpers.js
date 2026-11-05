@@ -1,16 +1,19 @@
 // Test helpers: a D1-shaped fake over node:sqlite and a seeded database file that the Worker
 // side opens READ-ONLY, so any write statement fails in the engine itself.
 import { DatabaseSync } from 'node:sqlite';
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { syntheticRows, applyRows } from '../scripts/seed-data.mjs';
 import { handle } from '../src/api.js';
 
-export const MIGRATION = readFileSync(
-  new URL('../migrations/0001_init.sql', import.meta.url),
-  'utf8',
-);
+// Every migration in order, as `wrangler d1 migrations apply` would apply them.
+const MIGRATIONS = new URL('../migrations/', import.meta.url);
+export const MIGRATION = readdirSync(MIGRATIONS)
+  .filter((name) => /^[0-9]{4}_[a-z0-9_]+\.sql$/.test(name))
+  .sort()
+  .map((name) => readFileSync(new URL(name, MIGRATIONS), 'utf8'))
+  .join('\n');
 
 const plain = (row) => (row ? { ...row } : row);
 

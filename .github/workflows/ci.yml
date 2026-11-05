@@ -2395,7 +2395,8 @@ jobs:
     name: platform — public status API and status pages (ci/platform-api, site/status)
     # Read-only public Worker for api.kayfabe.dev: node:sqlite tests against a read-only seeded
     # file, mutants for the read-only / fixed-SQL / validation rules, and the committed synthetic
-    # fixture. No install, no network, no Cloudflare. docs/design/V3_PLATFORM_TESTING.md.
+    # fixture (no install). Second step: the CI Worker's result store (installs jose from the
+    # broker lockfile). No Cloudflare. docs/design/V3_PLATFORM_TESTING.md.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -2409,6 +2410,16 @@ jobs:
           cd ci/platform-api
           node --test test/*.test.js
           node scripts/mutate.mjs
+      - name: CI Worker result store, tree key and requirements check (ci/vast-broker)
+        # Node 22 here guarantees node:sqlite, so the D1 tests run instead of skipping. Runtime
+        # dependency only (jose, from the committed lockfile, no install scripts). The tree-key
+        # parity test compares the matcher with `git check-ignore` on this checkout's paths.
+        run: |
+          npm ci --prefix ci/vast-broker --omit=dev --ignore-scripts --no-audit --no-fund
+          node --test ci/vast-broker/test/treekey.test.js ci/vast-broker/test/treekey-parity.test.js \
+            ci/vast-broker/test/requirements.test.js ci/vast-broker/test/results-store.test.js \
+            ci/vast-broker/test/store-ingest.test.js
+          node ci/vast-broker/store-mutants.mjs
 
   slow:
     name: slow — full suite with the soaks (KAYFABE_SLOW=1)

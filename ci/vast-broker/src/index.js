@@ -39,6 +39,8 @@ import {Ledger,rentalCost,costAttempt} from './ledger.js';
 import {onstart} from './onstart.js';
 // prettier-ignore
 import {appendBoxText,appendWorkerText,sanitizeBoxText} from './sanitize.js';
+// prettier-ignore
+import {CHECK_PATH,storeEnabled,enqueue,freeze,storeTick,storeTrees,githubTreeKey,checkRequirements} from './ingest.js';
 // Signed facts only: repository, environment subject, master ref, run identity and a pinned
 // master workflow. Who triggered the run and which commit it tests come from one run lookup.
 // Log-only trace of a 401: the route word and the fixed check code, never a value.
@@ -88,7 +90,9 @@ export function createService({
   let busy = false,
     localVerifier,
     admissionWindow = -1,
-    admissionCount = 0;
+    admissionCount = 0,
+    checkWindow = -1,
+    checkCount = 0;
   const runKey = (c) => c.run_id + '-' + c.run_attempt;
   const json = (data, status = 200) =>
     Response.json(data, {
@@ -105,6 +109,7 @@ export function createService({
     env.BOX_ACCESS_SECRET,
     env.R2_READ_ACCESS_KEY_ID,
     env.R2_READ_SECRET_ACCESS_KEY,
+    env.ROW_TAG_KEY,
     ...endpointSecrets(env),
   ].filter(Boolean);
   // Newly created real provider rows can omit/null actual_status. This grants
@@ -628,6 +633,7 @@ export function createService({
       !(path === '/availability' && request.method === 'GET') &&
       !(path === '/rent' && request.method === 'POST') &&
       !(path === '/stop-all' && request.method === 'POST') &&
+      !(path === CHECK_PATH && request.method === 'POST') &&
       !(match && request.method === (['status', 'logs'].includes(match[1]) ? 'GET' : 'POST'))
     )
       return notFound();
@@ -692,7 +698,9 @@ export function createService({
     if (match?.[1] === 'report') return report(request, match[2], bearer, cfg, vast);
     if (match?.[1] === 'kill') return kill(request, match[2], bearer, cfg, vast);
     let rentRequest;
-    if (path !== '/rent' && request.body !== null) {
+    let checkBody;
+    if (path === CHECK_PATH) checkBody = await readBounded(request, 1024);
+    else if (path !== '/rent' && request.body !== null) {
       try {
         await readBounded(request, 0);
       } catch {
@@ -732,6 +740,15 @@ export function createService({
     // Runner and Worker must speak the same status protocol; each side refuses the other.
     if (request.headers.get('X-KF-Protocol') !== String(DEFAULTS.statusProtocol))
       refuse('PROTOCOL_MISMATCH', 409);
+    // The result check has its own admission counter: a polling gate never starves /rent.
+    if (path === CHECK_PATH) {
+      const window = Math.floor(now() / 60000);
+      if (checkWindow !== window) {
+        checkWindow = window;
+        checkCount = 0;
+      }
+      if (++checkCount > DEFAULTS.admissionPerMinute) refuse('RATE_LIMIT', 429);
+    }
     if (path === '/availability' || path === '/rent') {
       const window = Math.floor(now() / 60000);
       if (admissionWindow !== window) {
@@ -783,6 +800,21 @@ export function createService({
     const token = env.GITHUB_API_TOKEN;
     if (token && (token.length > 1024 || !/^[\x21-\x7e]+$/.test(token))) refuse();
     const github = new Github(fetcher, cfg, token, { cache: githubCache, now });
+    // Read-only result check (src/ingest.js): never reserves, rents or queues. It runs outside
+    // the serial queue (fetch below), so its GitHub reads never hold up box reports.
+    if (path === CHECK_PATH) {
+      await github.authorize(c);
+      return json(
+        await checkRequirements({
+          bytes: checkBody,
+          env,
+          github,
+          ledger,
+          treeKey: githubTreeKey(github),
+          now: now(),
+        }),
+      );
+    }
     if (match) {
       if (match[2] !== key) refuse('UNAUTHORIZED', 401);
       const r = await ledger.granted(key);
@@ -1010,6 +1042,14 @@ export function createService({
         e.selection = { die: offer.die, ignored: chosen.ignored, reason: chosen.reason };
       throw e;
     }
+    // Result store queue (src/ingest.js); never affects admission or the rental.
+    if (storeEnabled(env))
+      try {
+        if (retrySource) await freeze(ledger, retrySource);
+        await enqueue(ledger, r);
+      } catch {
+        console.log(JSON.stringify({ event: 'store', state: 'QUEUE_FAILED' }));
+      }
     await workerLine(
       r,
       'selection profile=' +
@@ -1145,7 +1185,8 @@ export function createService({
     if (
       !/^\/(?:rent|availability|stop-all|(?:status|logs|stop)\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.test(
         path,
-      )
+      ) &&
+      path !== CHECK_PATH
     )
       return;
     await oidc(bearer, cfg);
@@ -1157,6 +1198,8 @@ export function createService({
         const receipt = await preauthenticate(request);
         if (receipt instanceof Response) return receipt;
         path = await routePath(request, env);
+        // Outside the serial queue: it reads no ledger record and writes only treekey:<sha>.
+        if (path === CHECK_PATH) return await perform(request);
         const renting = path === '/rent';
         if (renting && busy) refuse('BUSY', 409);
         if (renting) busy = true;
@@ -1190,6 +1233,19 @@ export function createService({
         await releaseUpload(request);
       }
     },
+    // Tree keys for the store queue, OUTSIDE the serial queue (GitHub reads, bounded in time).
+    async storeTrees() {
+      if (!storeEnabled(env)) return;
+      try {
+        const github = new Github(fetcher, configuration(env), env.GITHUB_API_TOKEN, {
+          cache: githubCache,
+          now,
+        });
+        await storeTrees({ ledger, env, now: now(), treeKey: githubTreeKey(github) });
+      } catch {
+        console.log(JSON.stringify({ event: 'store', state: 'TREES_FAILED' }));
+      }
+    },
     async sweep() {
       return serial(0, async () => {
         try {
@@ -1208,6 +1264,14 @@ export function createService({
             }
           }
           await ledger.expire(now(), cfg);
+          // After cleanup and expiry, bounded in time (src/ingest.js); tree keys come from the
+          // cache that storeTrees fills outside this queue.
+          if (storeEnabled(env))
+            try {
+              await storeTick({ ledger, env, now: now() });
+            } catch {
+              console.log(JSON.stringify({ event: 'store', state: 'TICK_FAILED' }));
+            }
         } catch (e) {
           // A configuration refusal names only the variable; operators must not read silence.
           console.log(
@@ -1379,6 +1443,7 @@ export class BrokerLedger {
       new URL(request.url).pathname === '/cron'
     ) {
       await this.service.sweep();
+      await this.service.storeTrees?.();
       return new Response('ok');
     }
     return this.service.fetch(request);
@@ -1395,7 +1460,9 @@ async function detachedUpload(request, path) {
         ? 256
         : path === '/rent'
           ? 2048
-          : 0) + 1;
+          : path === CHECK_PATH
+            ? 1024
+            : 0) + 1;
   const reader = request.body.getReader(),
     chunks = [];
   let length = 0;
