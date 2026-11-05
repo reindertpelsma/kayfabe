@@ -1,0 +1,303 @@
+﻿2026-11-04T23:49:02.7656459Z Current runner version: '2.338.2'
+##[group]Runner Image Provisioner
+Hosted Compute Agent
+Version: 20261028.624
+Commit: 54898b74c23fde5556c9b3c3a2290865feef0dfe
+Build Date: 2026-10-28T21:51:42Z
+Worker ID: {1c849b23-00cb-40af-afe7-e34d0affc355}
+Region: westus
+Cloud: Azure
+##[endgroup]
+##[group]Operating System
+Ubuntu
+26.04.1
+LTS
+##[endgroup]
+##[group]Runner Image
+Image: ubuntu-26.04
+Version: 20261101.186.1
+Included Software: https://github.com/actions/runner-images/blob/ubuntu26/20261101.186/images/ubuntu/Ubuntu2604-Readme.md
+Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20261101.186
+##[endgroup]
+##[group]GITHUB_TOKEN Permissions
+Metadata: read
+##[endgroup]
+Secret source: Actions
+Cache mode: read
+Prepare workflow directory
+Prepare all required actions
+Complete job name: Isolated BASE runner validates untrusted Worker
+##[group]Run set +x
+[36;1mset +x[0m
+[36;1mset -euo pipefail[0m
+[36;1m[[ "$GITHUB_REF" = refs/heads/master ]][0m
+[36;1m[[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]][0m
+[36;1m[[ "$GITHUB_REPOSITORY" = reindertpelsma/kayfabe ]][0m
+[36;1mtemporary=$(mktemp -d)[0m
+[36;1mtrap 'find "$temporary" -depth -delete' EXIT[0m
+[36;1mfor file in runner.py deployment.json; do[0m
+[36;1m  curl --silent --fail --proto '=https' --max-time 20 --max-filesize 131072 \[0m
+[36;1m    -o "$temporary/$file" \[0m
+[36;1m    "https://raw.githubusercontent.com/reindertpelsma/kayfabe/$GITHUB_SHA/ci/vast-broker/$file" 2>/dev/null[0m
+[36;1mdone[0m
+[36;1menv -i PATH=/usr/bin:/bin HOME="$temporary" \[0m
+[36;1m  WORKER_URL="$WORKER_URL" WORKER_PATH="${WORKER_PATH:-}" \[0m
+[36;1m  CF_ACCESS_CLIENT_ID="${CF_ACCESS_CLIENT_ID:-}" \[0m
+[36;1m  CF_ACCESS_CLIENT_SECRET="${CF_ACCESS_CLIENT_SECRET:-}" \[0m
+[36;1m  GITHUB_OUTPUT="$GITHUB_OUTPUT" GITHUB_STEP_SUMMARY="$GITHUB_STEP_SUMMARY" \[0m
+[36;1m  GITHUB_EVENT_PATH="$GITHUB_EVENT_PATH" GITHUB_SHA="$GITHUB_SHA" \[0m
+[36;1m  GITHUB_EVENT_NAME="$GITHUB_EVENT_NAME" GITHUB_REF="$GITHUB_REF" \[0m
+[36;1m  GITHUB_REPOSITORY="$GITHUB_REPOSITORY" GITHUB_RUN_ID="$GITHUB_RUN_ID" \[0m
+[36;1m  GITHUB_RUN_ATTEMPT="$GITHUB_RUN_ATTEMPT" \[0m
+[36;1m  ACTIONS_ID_TOKEN_REQUEST_TOKEN="$ACTIONS_ID_TOKEN_REQUEST_TOKEN" \[0m
+[36;1m  ACTIONS_ID_TOKEN_REQUEST_URL="$ACTIONS_ID_TOKEN_REQUEST_URL" \[0m
+[36;1m  python3 -I "$temporary/runner.py" "$temporary/deployment.json"[0m
+shell: /usr/bin/bash --noprofile --norc -eo pipefail {0}
+env:
+  TARGET_SHA: d74f6063d2cadb303b1f4f374149e435f632d51c
+  WORKER_URL: https://ci.kayfabe.dev
+  WORKER_PATH: ***
+  CF_ACCESS_CLIENT_ID: ***
+  CF_ACCESS_CLIENT_SECRET: ***
+##[endgroup]
+Trusted BASE db796290b945857c7a95b1a7442e447f5f2cc3ce; runner nonce generated before rent; Worker v5 expected bundle SHA256 2828bf41ed2574b638a7b6fb535e16b6dba9467c997972917050aa58d0bb0460
+::stop-commands::***
+UNTRUSTED Worker/box output
+[untrusted] Availability: check
+[untrusted] die gpu compute_cap count effective_hourly estimated_total kvm machine_id host_id
+[untrusted] AD102 RTX_4090 890 3 0.533247 1.608258 1 103782 392559
+[untrusted] GA102 RTX_3090 860 1 0.482292 1.454653 1 17545 63709
+[untrusted] Thresholds: bandwidth_down_gb=15 bandwidth_up_gb=2 cores=8 cpuGhz=2 diskMbps=100 downMbps=200 medianRatio=0.5 price=1 ramMb=34360 reliability=0.98 upMbps=50 verified=1
+[untrusted] Rejected counts: BAD_HOST=2 COUNTRY=6 CPU_RAM=29 DIE=42 DISK_BW=2 MACHINE=1 NETWORK=8 PERFORMANCE=7 PRICE=3 RELIABILITY=22 VERIFICATION=31
+[untrusted] Rejected offers (machine_id/host_id:reasons): 13058/79466:DIE,RELIABILITY 156128/765734:VERIFICATION,DIE,RELIABILITY,CPU_RAM 156403/765734:VERIFICATION,RELIABILITY,CPU_RAM 56506/79466:DIE 154007/125418:VERIFICATION,CPU_RAM,NETWORK,COUNTRY 151630/204259:VERIFICATION,NETWORK 155876/838611:VERIFICATION,DIE,RELIABILITY,CPU_RAM 155249/764331:VERIFICATION,DIE,RELIABILITY 13313/79466:DIE 103939/79466:CPU_RAM 154169/138577:DIE,CPU_RAM 46454/79466:DIE,CPU_RAM 44696/54814:VERIFICATION,DIE,CPU_RAM,PERFORMANCE 78466/155385:VERIFICATION,RELIABILITY,COUNTRY 15205/79466:DIE 47026/296571:RELIABILITY,CPU_RAM 155988/531317:VERIFICATION,RELIABILITY 14732/79466:DIE 151140/392559:DIE,CPU_RAM 151631/204259:VERIFICATION,NETWORK 156084/700771:VERIFICATION,RELIABILITY 58911/155385:VERIFICATION,DIE,CPU_RAM,COUNTRY 54516/24300:VERIFICATION,CPU_RAM
+[untrusted] Rejected offers (machine_id/host_id:reasons): 134814/205610:CPU_RAM,DISK_BW 126868/551554:DIE,CPU_RAM 30686/105356:DIE,CPU_RAM 140359/555054:DIE,CPU_RAM 99239/508965:DIE,CPU_RAM 152291/716539:DIE,CPU_RAM 153771/149408:CPU_RAM 154279/605686:VERIFICATION,DIE,NETWORK 152285/149408:CPU_RAM 152699/120936:DIE,CPU_RAM,COUNTRY 155628/773553:VERIFICATION,DIE,RELIABILITY,PERFORMANCE 153272/727933:VERIFICATION,DIE,CPU_RAM,PERFORMANCE 117733/543503:CPU_RAM 25419/56186:VERIFICATION 97081/47263:DIE,CPU_RAM,PERFORMANCE 69146/155385:VERIFICATION,DIE,COUNTRY 14626/1647:VERIFICATION,CPU_RAM,PERFORMANCE 144805/224600:MACHINE,BAD_HOST 49171/54814:DIE,RELIABILITY,CPU_RAM 155335/767249:VERIFICATION,RELIABILITY,CPU_RAM 150083/683035:VERIFICATION,DIE,NETWORK 9929/45381:VERIFICATION,NETWORK 150426/683035:VERIFICATION,DIE,NETWORK 51533/255824:RELIABILITY
+[untrusted] Rejected offers (machine_id/host_id:reasons): 63/39:DIE,NETWORK 13047/79466:DIE 41012/255824:VERIFICATION,DIE 43459/120872:VERIFICATION,DIE 153904/149408:RELIABILITY,CPU_RAM,DISK_BW 54458/388164:DIE 58657/155385:VERIFICATION,COUNTRY 148609/646616:RELIABILITY 145814/550251:DIE,RELIABILITY 147971/54814:VERIFICATION,DIE 137465/54814:DIE,RELIABILITY,CPU_RAM 141273/263340:RELIABILITY 57215/224600:BAD_HOST 28581/109053:VERIFICATION,DIE,RELIABILITY,PERFORMANCE 55541/109053:VERIFICATION,DIE 26804/109053:VERIFICATION,DIE 141929/365487:DIE 156061/51010:DIE,RELIABILITY,PRICE 155243/763770:DIE,RELIABILITY,PRICE 156104/643733:VERIFICATION,DIE,RELIABILITY,PERFORMANCE,PRICE
+[untrusted] Verified counts: AD102=7/12 AD104=1/2 AD106=4/4 CC_120=0/3 CC_86=0/1 CC_89=1/5 GA102=7/13 GA104=1/1 GA106=1/2 GB202=6/10 GB203=3/5 GB205=2/2 GB206=2/4 TU102=1/1 TU104=1/1 TU106=2/3
+::***::
+RENTAL machine=17545 host=63709 instance=59178654 gpu=RTX_3090 price=0.466667
+::stop-commands::***
+UNTRUSTED Worker/box output
+[untrusted] [Worker] selection profile=check die=GA102 reason=DEFAULT_ORDER ignored=0
+::***::
+::stop-commands::***
+UNTRUSTED Worker/box output
+[untrusted] [Worker] provider=created phase=BOOTING
+::***::
+::stop-commands::***
+UNTRUSTED Worker/box output
+[untrusted] [box] Box ready; payload starting
+[untrusted] [box] KF_SETUP_CACHE_START utc=1793836206
+[untrusted] [Worker] provider=running phase=TESTING
+::***::
+::stop-commands::***
+UNTRUSTED Worker/box output
+[untrusted] [box] KF_SETUP_ASSET kind=debs bytes=284540501 sha256=[redacted] seconds=24.284
+::***::
+::stop-commands::***
+UNTRUSTED Worker/box output
+[untrusted] [box] KF_SETUP_ASSET kind=vendor bytes=7888026 sha256=[redacted] seconds=2.256
+[untrusted] [box] KF_SETUP_MIRRORS {"fallback_mirror":"azure.archive.ubuntu.com","probes":[{"host":"archive.ubuntu.com","status":206,"bytes":8388608,"seconds":3.758463,"curl_rc":0},{"host":"azure.archive.ubuntu.com","status":206,"bytes":8388608,"seconds":0.81856,"curl_rc":0},{"host":"mirrors.edge.kernel.org","status":206,"bytes":8388608,"seconds":4.257166,"curl_rc":0}],"actual_apt_source":"local-cache"}
+[untrusted] [box] KF_SETUP_CACHE_END {"seconds":31.437,"package_policy_sha256":"[redacted]","asset_bytes":292428527}
+[untrusted] [box] KF_PAYLOAD_TIER windows=1 source=default
+[untrusted] [box] Filesystem      Size  Used Avail Use% Mounted on
+[untrusted] [box] /[redacted]/root       117G  8.4G  108G   8% /
+[untrusted] [box] KF_PREFLIGHT_FREE_BYTES=115662856192
+[untrusted] [box] KF_PAYLOAD_STAGE_START name=provision
+[untrusted] [box] [xid-watch] tag=[redacted]6ceae5df88e92a28_provision  host=ubuntu  utc=2026-11-04T23:50:37Z
+[untrusted] [box] [xid-watch] command: bash /workspace/kf-[redacted]-src/scripts/bench/box/provision_full.sh
+[untrusted] [box] [xid-watch] host_dmesg_lines=682  (readable  the clean/unwatched ambiguity is closed)
+[untrusted] [box] [xid-watch] host_gpu=NVIDIA GeForce RTX 3090, 575.51.03
+[untrusted] [box] [xid-watch] xid_before=0
+[untrusted] [box] [xid-watch] --- command output begins ---
+[untrusted] [box] START 2026-11-04T23:50:37+00:00
+[3 bytes dropped by runner]
+::***::
+::stop-commands::***
+UNTRUSTED Worker/box output
+[untrusted] [box] BOX_RC=0
+[untrusted] [box] d74f6063 Merge pull request #254 from reindertpelsma/claude/[redacted]
+::***::
+::stop-commands::***
+UNTRUSTED Worker/box output
+[untrusted] [box] DRIVER_RC=0
+[untrusted] [box] NVIDIA GeForce RTX 3090, 580.159.04
+[untrusted] [box] /[redacted]/root       117G   13G  104G  12% /
+::***::
+::stop-commands::***
+UNTRUSTED Worker/box output
+[untrusted] [box] TREE_RC=0
+[untrusted] [box] [2026-11-04T23:57:06+00:00] B4: guest ladder built: 5061232 bytes
+[untrusted] [box] [2026-11-04T23:57:06+00:00] BENCH_TREE_DONE
+::***::
+::stop-commands::***
+UNTRUSTED Worker/box output
+[untrusted] [box] LADDER_RC=0
+::***::
+::stop-commands::***
+UNTRUSTED Worker/box output
+[untrusted] [box] FG_RC=0
+[untrusted] [box] == built: /workspace/bench/fastguest/initrd.cpio.gz  112M
+[untrusted] [box] == kernel release: 6.8.0-147-generic
+::***::
+::stop-commands::***
+UNTRUSTED Worker/box output
+[untrusted] [box] KF3_RC=0
+[untrusted] [box] KF3_BUILT /workspace/bench/kf3-bins/d74f6063/qemu-system-x86_64 rev=d74f6063 mtime=2026-11-04 [address].619106122 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+[untrusted] [box] [xid-watch] --- command output ends (rc=0) ---
+[untrusted] [box] READY driver=580.159.04
+[untrusted] [box] EXIT 2026-11-04T23:57:51+00:00
+[untrusted] [box] [xid-watch] xid_after=0
+[untrusted] [box] [xid-watch]  HOST Xid CLEAN across the command  0 before, 0 after, read from a
+[untrusted] [box] [xid-watch]   ring buffer PROVED READABLE in phase 0 (682 lines).  That proof is what
+[untrusted] [box] [xid-watch]   separates this line from the same line printed by a blind instrument.
+[untrusted] [box] [xid-watch] evidence: /workspace/bench/[redacted].log
+[untrusted] [box] KF_PAYLOAD_STAGE_END name=provision rc=0 duration_ms=435715
+[untrusted] [box] KF_PAYLOAD_STAGE_START name=cuda_host
+[untrusted] [box] [xid-watch] tag=[redacted]6ceae5df88e92a28_cuda_host  host=ubuntu  utc=2026-11-04T23:57:55Z
+[untrusted] [box] [xid-watch] command: bash /workspace/kf-[redacted]-src/scripts/bench/cuda_ladder.sh host [redacted]6ceae5df88e92a28 1 cup2,cup3,cup8,cup8bench
+[untrusted] [box] [xid-watch] host_dmesg_lines=724  (readable  the clean/unwatched ambiguity is closed)
+[untrusted] [box] [xid-watch] host_gpu=NVIDIA GeForce RTX 3090, 580.159.04
+[untrusted] [box] [xid-watch] xid_before=0
+[untrusted] [box] [xid-watch] --- command output begins ---
+[untrusted] [box] CUDA_LADDER_STARTED=2026-11-04T23:57:57+00:00 mode=host reps=1 rungs=cup2,cup3,cup8,cup8bench rev=d74f6063
+[untrusted] [box] bench sizes=16,2048 iters=20 batch=10
+[untrusted] [box] host libcuda=/usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04
+[untrusted] [box] src cup2.c md5 [redacted]
+[untrusted] [box] src cup3.c md5 [redacted]
+[untrusted] [box] src cup8.c md5 [redacted]
+[untrusted] [box] src cup8bench.c md5 [redacted]
+[12 bytes dropped by runner]
+::***::
+::stop-commands::***
+UNTRUSTED Worker/box output
+[untrusted] [box] CL_ROW mode=host rung=cup2 rep=1 verdict=PASS rc=0 wall_ms=2134 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]
+[untrusted] [box] CL_ROW mode=host rung=cup2 rep=1 verdict=PASS rc=0 wall_ms=2134 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]
+[untrusted] [box] CL_ROW mode=host rung=cup3 rep=1 verdict=PASS rc=0 wall_ms=2085 graded=[CUP3_VAL=43]
+[untrusted] [box] CL_ROW mode=host rung=cup3 rep=1 verdict=PASS rc=0 wall_ms=2085 graded=[CUP3_VAL=43]
+[untrusted] [box] CL_ROW mode=host rung=cup8 rep=1 verdict=PASS rc=0 wall_ms=2123 graded=[CUP8_BAD=0 CUP8_MAXERR=0]
+[untrusted] [box] CL_ROW mode=host rung=cup8 rep=1 verdict=PASS rc=0 wall_ms=2123 graded=[CUP8_BAD=0 CUP8_MAXERR=0]
+[untrusted] [box] CL_BENCH mode=host rep=1 BSUM N=2048 iters=20 first_ms=8.051 med_ms=8.007 p90_ms=8.035 min_ms=7.576 max_ms=8.040 gflops=2145.531 batch_per_launch_ms=7.934 batch_gflops=2165.298 h2d_ms=3.260 d2h_med_ms=1.366 submit_med_ms=0.002 sync_med_ms=8.005 sync_cpu_med_ms=8.005 sync_offcpu_med_ms=-0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.004 bad=0 maxerr=0
+[untrusted] [box] CUDA_LADDER_STARTED=2026-11-04T23:57:57+00:00 mode=host reps=1 rungs=cup2,cup3,cup8,cup8bench rev=d74f6063
+[untrusted] [box] bench sizes=16,2048 iters=20 batch=10
+[untrusted] [box] host libcuda=/usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04
+[untrusted] [box] src cup2.c md5 [redacted]
+[untrusted] [box] src cup3.c md5 [redacted]
+[untrusted] [box] src cup8.c md5 [redacted]
+[untrusted] [box] src cup8bench.c md5 [redacted]
+[untrusted] [box] CL_ROW mode=host rung=cup2 rep=1 verdict=PASS rc=0 wall_ms=2134 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]
+[untrusted] [box] CL_ROW mode=host rung=cup3 rep=1 verdict=PASS rc=0 wall_ms=2085 graded=[CUP3_VAL=43]
+[untrusted] [box] CL_ROW mode=host rung=cup8 rep=1 verdict=PASS rc=0 wall_ms=2123 graded=[CUP8_BAD=0 CUP8_MAXERR=0]
+[untrusted] [box] CL_ROW mode=host rung=cup8bench rep=1 verdict=PASS rc=0 wall_ms=2450 graded=[BENCH_TOTAL_BAD=0 BENCH_VERDICT: PASS (every timed iteration verified)]
+[untrusted] [box] CL_BENCH mode=host rep=1 BENCH_INIT_MS=1641.86
+[untrusted] [box] CL_BENCH mode=host rep=1 BENCH_CTX_MS=86.73
+[untrusted] [box] CL_BENCH mode=host rep=1 BENCH_MODULE_MS=12.40
+[untrusted] [box] CL_BENCH mode=host rep=1 BSUM N=16 iters=20 first_ms=0.018 med_ms=0.006 p90_ms=0.007 min_ms=0.006 max_ms=0.007 gflops=1.286 batch_per_launch_ms=0.003 batch_gflops=2.860 h2d_ms=0.021 d2h_med_ms=0.006 submit_med_ms=0.002 sync_med_ms=0.004 sync_cpu_med_ms=0.004 sync_offcpu_med_ms=0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.003 bad=0 maxerr=0
+[untrusted] [box] CL_BENCH mode=host rep=1 BSUM N=2048 iters=20 first_ms=8.051 med_ms=8.007 p90_ms=8.035 min_ms=7.576 max_ms=8.040 gflops=2145.531 batch_per_launch_ms=7.934 batch_gflops=2165.298 h2d_ms=3.260 d2h_med_ms=1.366 submit_med_ms=0.002 sync_med_ms=8.005 sync_cpu_med_ms=8.005 sync_offcpu_med_ms=-0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.004 bad=0 maxerr=0
+[untrusted] [box] CUDA_LADDER_DONE=2026-11-04T23:58:06+00:00
+[untrusted] [box] [xid-watch] --- command output ends (rc=0) ---
+[untrusted] [box] CL_ROW mode=host rung=cup8bench rep=1 verdict=PASS rc=0 wall_ms=2450 graded=[BENCH_TOTAL_BAD=0 BENCH_VERDICT: PASS (every timed iteration verified)]
+[untrusted] [box] CL_BENCH mode=host rep=1 BENCH_INIT_MS=1641.86
+[untrusted] [box] CL_BENCH mode=host rep=1 BENCH_CTX_MS=86.73
+[untrusted] [box] CL_BENCH mode=host rep=1 BENCH_MODULE_MS=12.40
+[untrusted] [box] CL_BENCH mode=host rep=1 BSUM N=16 iters=20 first_ms=0.018 med_ms=0.006 p90_ms=0.007 min_ms=0.006 max_ms=0.007 gflops=1.286 batch_per_launch_ms=0.003 batch_gflops=2.860 h2d_ms=0.021 d2h_med_ms=0.006 submit_med_ms=0.002 sync_med_ms=0.004 sync_cpu_med_ms=0.004 sync_offcpu_med_ms=0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.003 bad=0 maxerr=0
+[untrusted] [box] CL_BENCH mode=host rep=1 BSUM N=2048 iters=20 first_ms=8.051 med_ms=8.007 p90_ms=8.035 min_ms=7.576 max_ms=8.040 gflops=2145.531 batch_per_launch_ms=7.934 batch_gflops=2165.298 h2d_ms=3.260 d2h_med_ms=1.366 submit_med_ms=0.002 sync_med_ms=8.005 sync_cpu_med_ms=8.005 sync_offcpu_med_ms=-0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.004 bad=0 maxerr=0
+[untrusted] [box] CUDA_LADDER_DONE=2026-11-04T23:58:06+00:00
+[untrusted] [box] [xid-watch] xid_after=0
+[untrusted] [box] [xid-watch]  HOST Xid CLEAN across the command  0 before, 0 after, read from a
+[untrusted] [box] [xid-watch]   ring buffer PROVED READABLE in phase 0 (724 lines).  That proof is what
+[untrusted] [box] [xid-watch]   separates this line from the same line printed by a blind instrument.
+[untrusted] [box] [xid-watch] evidence: /workspace/bench/[redacted].log
+[untrusted] [box] KF_PAYLOAD_STAGE_END name=cuda_host rc=0 duration_ms=13302
+[untrusted] [box] KF_PAYLOAD_STAGE_START name=merge_bar
+[untrusted] [box] [xid-watch] tag=[redacted]6ceae5df88e92a28_merge_bar  host=ubuntu  utc=2026-11-04T23:58:08Z
+[untrusted] [box] [xid-watch] command: bash /workspace/kf-[redacted]-src/scripts/bench/box/merge_check.sh [redacted] [redacted]6ceae5df88e92a28
+[untrusted] [box] [xid-watch] host_dmesg_lines=729  (readable  the clean/unwatched ambiguity is closed)
+[12 bytes dropped by runner]
+::***::
+::stop-commands::***
+UNTRUSTED Worker/box output
+[untrusted] NVIDIA GeForce RTX 3090
+::***::
+##[group]Final bounded log: UNTRUSTED Worker/box output
+[1056298 bytes dropped from the middle]
+::stop-commands::***
+UNTRUSTED Worker/box output
+[untrusted] [box]   DESKTOP_PREP OverlayTestMode=5 want=5 OK
+[untrusted] [box]   DESKTOP_PREP_DONE fail=0
+[untrusted] [box]   [2026-11-05T01:07:26Z] DESKTOP_PREP_OK user=kf (autologon and OverlayTestMode apply at the next boot of this disk)
+[untrusted] [box] GATE_STAGE desktop_prep EXIT ok 12s
+[untrusted] [box] GATE_STAGE reboot START 2026-11-05T01:07:26+00:00
+[untrusted] [box] GATE_NOTE second QEMU started after 20s
+[untrusted] [box] GATE_NOTE ssh up after 10s
+[untrusted] [box] GATE_STAGE reboot EXIT ok 91s
+[untrusted] [box] GATE_STAGE desktop START 2026-11-05T01:08:57+00:00
+[untrusted] [box]   GATE_BOOT utc=2026-11-05T01:07:57Z os='Microsoft Windows 11 Enterprise LTSC Evaluation' build=26100
+[untrusted] [box]   GATE_DESKTOP user='KFWIN\kf' dwm=1 explorer=1
+[untrusted] [box]   GATE_SESSIONS USERNAME SESSIONNAME ID STATE IDLE TIME LOGON TIME kf console 1 Active none 11/5/2026 1:08 AM
+[untrusted] [box]   GATE_DISPLAY name='NVIDIA GeForce RTX 3090' driver=32.0.15.8088 code=22 status=Error pnp=Error
+[untrusted] [box]   GATE_STATE_DONE mode=desktop
+[untrusted] [box] GATE_STAGE desktop EXIT ok 18s
+[untrusted] [box] GATE_STAGE enable START 2026-11-05T01:09:15+00:00
+[untrusted] [box] GATE_NOTE [redacted]ice enabled once at 2026-11-05T01:09:23Z (guest clock)
+[untrusted] [box]   GATE_DISPLAY name='NVIDIA GeForce RTX 3090' driver=32.0.15.8088 code=0 status=OK pnp=OK
+[untrusted] [box] GATE_STAGE enable EXIT ok 23s
+[untrusted] [box] GATE_STAGE smi_probes START 2026-11-05T01:09:38+00:00
+[untrusted] [box] GATE_NOTE guest nvidia-smi: GPU 0: NVIDIA GeForce RTX 3090 (UUID: [redacted])
+[untrusted] [box] GATE_PROBE_RESULT cup8 GATE_PROBE exe=cup8.exe arg= rc=0 secs=3 timeout=0
+[untrusted] [box] GATE_PROBE_RESULT d3d11 GATE_PROBE exe=kf_dxprobe.exe arg=d3d11 rc=0 secs=1 timeout=0
+[untrusted] [box] GATE_PROBE_RESULT cup3 GATE_PROBE exe=cup3.exe arg= rc=0 secs=1 timeout=0
+[untrusted] [box] GATE_PROBE_RESULT d3d12 GATE_PROBE exe=kf_dxprobe.exe arg=d3d12 rc=0 secs=3 timeout=0
+[untrusted] [box] GATE_STAGE smi_probes EXIT ok 59s
+[untrusted] [box] GATE_STAGE idle START 2026-11-05T01:10:37+00:00
+[untrusted] [box] GATE_NOTE idle window observed 300s of 300s
+[untrusted] [box] GATE_STAGE idle EXIT ok 315s
+[untrusted] [box] GATE_STAGE post_idle START 2026-11-05T01:15:52+00:00
+[untrusted] [box] GATE_PROBE_RESULT cup8 GATE_PROBE exe=cup8.exe arg= rc=0 secs=1 timeout=0
+[untrusted] [box] GATE_PROBE_RESULT d3d11 GATE_PROBE exe=kf_dxprobe.exe arg=d3d11 rc=0 secs=1 timeout=0
+[untrusted] [box] GATE_PROBE_RESULT cup3 GATE_PROBE exe=cup3.exe arg= rc=0 secs=1 timeout=0
+[untrusted] [box] GATE_PROBE_RESULT d3d12 GATE_PROBE exe=kf_dxprobe.exe arg=d3d12 rc=0 secs=3 timeout=0
+[untrusted] [box]   GATE_TDR since=2026-11-05T01:09:23Z display4101=0 nvlddmkm153=0 kernelpower41=0 eventlog6008=0 bugcheck1001=0 livekernelevent_other=0 livekernelevent193=0 livekernelevent_stale=0 strict=0 total=0
+[untrusted] [box] GATE_TIMELINE enable=2026-11-05T01:09:23Z first_probe=2026-11-05T01:10:10Z first_dump=none dump_minus_enable=35437s dump_minus_first_probe=35390s
+[untrusted] [box] GATE_NOTE check --kf3 (after the driver): 0 FAIL line(s),   WIN_CHECK_DONE fail=0
+[untrusted] [box] GATE_STAGE post_idle EXIT ok 72s
+[untrusted] [box] GATE_STAGE collect_stop START 2026-11-05T01:17:04+00:00
+[untrusted] [box] GATE_STAGE collect_stop EXIT ok 156s
+[untrusted] [box] GATE_NOTE graceful stop of the guest (gate_[redacted]6ceae5df88e92a28)
+[untrusted] [box] GATE_HOSTREF after green cup8=PASS xid_count=10 xid_delta=0 gpu="NVIDIA GeForce RTX 3090, 580.159.04, 24576 MiB, P0"
+[untrusted] [box] WINDOWS_GATE_PASS rev=d74f6063 gpu="NVIDIA GeForce RTX 3090" idle_s=300 hostref=green/green secs=3688 install=once driver=580.88 gsp=forced code=0 probes=cup8,d3d11,x2 resets=0 known_live_dumps_193=0 stale_lke_resubmits=0 strict=0 enable_utc=2026-11-05T01:09:23Z
+[untrusted] [box] GATE_NOTE evidence: /root/prov/[redacted]6ceae5df88e92a28_windows (92 files), /root/prov/[redacted]6ceae5df88e92a28_windows.tgz sha256=154b577caa862b1a
+[untrusted] [box] WINDOWS_GATE_TIMING total=3688s preflight=8s hostref_before=6s prereqs=9s kf3_binary=0s install=2627s probes_build=3s boot1=76s check_kf3=28s nv_install=159s desktop_prep=12s reboot=91s desktop=18s enable=23s smi_probes=59s idle=315s post_idle=72s collect_stop=156s
+[untrusted] [box] WINDOWS_GATE_EXIT rc=0 2026-11-05T01:20:06+00:00
+[untrusted] [box] [xid-watch] --- command output ends (rc=0) ---
+[untrusted] [box] [xid-watch] xid_after=10
+[untrusted] [box] [xid-watch]  HOST Xid CLEAN across the command  10 before, 10 after, read from a
+[untrusted] [box] [xid-watch]   ring buffer PROVED READABLE in phase 0 (1344 lines).  That proof is what
+[untrusted] [box] [xid-watch]   separates this line from the same line printed by a blind instrument.
+[untrusted] [box] [xid-watch] evidence: /workspace/bench/[redacted].log
+[untrusted] [box] KF_PAYLOAD_STAGE_END name=windows_gate rc=0 duration_ms=3692199
+[untrusted] [box] KF_FINAL_SUMMARY_BEGIN verdict=PASS stages=5
+[untrusted] [box] stage name=provision rc=0 duration_ms=435715 result=PASS
+[untrusted] [box] stage name=cuda_host rc=0 duration_ms=13302 result=PASS
+[untrusted] [box] stage name=merge_bar rc=6 duration_ms=988795 result=PASS
+[untrusted] [box] stage name=cuda_guest rc=0 duration_ms=239021 result=PASS
+[untrusted] [box] stage name=windows_gate rc=0 duration_ms=3692199 result=PASS
+[untrusted] [box] suite name=provision pass=1 fail=0 skip=0
+[untrusted] [box] suite name=cuda_host pass=4 fail=0 skip=0
+[untrusted] [box] suite name=gates pass=9 fail=0 skip=0
+[untrusted] [box] suite name=kf3_build pass=1 fail=0 skip=0
+[untrusted] [box] suite name=raw_suite pass=30 fail=0 skip=0
+[untrusted] [box] suite name=thin_suite pass=30 fail=0 skip=0
+[untrusted] [box] suite name=birth_census pass=1 fail=0 skip=0
+[untrusted] [box] suite name=cuda_fat pass=4 fail=0 skip=0
+[untrusted] [box] suite name=windows_gate pass=1 fail=0 skip=0
+[untrusted] [box] KF_FINAL_SUMMARY_END
+[untrusted] [box] Suite complete.
+[9 bytes dropped by runner]
+::***::
+[36 bytes dropped by runner display budget]
+##[endgroup]
+Evaluate and set job outputs
+Set output 'state'
+Set output 'verdict'
+Set output 'verified'
+Cleaning up orphan processes
