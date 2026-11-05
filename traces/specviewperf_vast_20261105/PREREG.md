@@ -48,7 +48,7 @@ sessions, so the cost is computed from the offer rate and timestamps, not from t
 
 ## Rules applied (from the lane brief and `docs/SPEC_RESULTS.md`)
 
-- A presigned URL is the only secret on a box, only for this download. `grep X-Amz` over the evidence must be empty before a commit.
+- A presigned URL is the only secret on a box, only for this download. a grep of the evidence for the URL signature parameter prefix (the string "X" + "-Amz") must be empty before a commit.
 - SPEC scores and per-subtest FPS stay OUT of this repository (only completion status, durations, reset counts are
   committed); they are reported to the coordinator in the final message. If anything numeric is later published, every
   number carries `(nc)` with the disclaimer, through `scripts/bench/specviewperf/spec_stamp.py`.

@@ -1,0 +1,10 @@
+[Workload:solidworks-08] Starting
+[workload: solidworks-08 / subtest: 01_Excavator4ViewportsShaded] Completed
+[workload: solidworks-08 / subtest: 02_Excavator4ViewportsShadedEdges] Completed
+[workload: solidworks-08 / subtest: 03_ExcavatorRealViewShaded] Completed
+[workload: solidworks-08 / subtest: 04_JetEnginesShaded] Completed
+[workload: solidworks-08 / subtest: 05_JetEnginesShadedEdges] Completed
+[workload: solidworks-08 / subtest: 06_JetEnginesRealViewShaded] Completed
+[workload: solidworks-08 / subtest: 07_NASACrawlerShaded] Completed
+[workload: solidworks-08 / subtest: 08_NASACrawlerShadedEdges] Completed
+[Workload: solidworks-08] Completed

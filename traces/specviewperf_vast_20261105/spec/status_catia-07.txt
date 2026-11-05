@@ -1,0 +1,8 @@
+[Workload:catia-07] Starting
+[workload: catia-07 / subtest: 01_FourICDCarsWhite] Completed
+[workload: catia-07 / subtest: 02_MultiJetEngines] Completed
+[workload: catia-07 / subtest: 03_ThreeLoftJetsDarkMirror] Failed -- check logs for errors
+[workload: catia-07 / subtest: 04_ThreeLoftJetsWhite] Completed
+[workload: catia-07 / subtest: 05_ConceptCars] Completed
+[workload: catia-07 / subtest: 06_LoftJets] Failed -- check logs for errors
+[Workload: catia-07] Failed -- check logs for errors
