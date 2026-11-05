@@ -148,7 +148,15 @@ PASS in the answering run) and optional `min_passes` (default 1). Strings are `"
 escapes; any other key, value or table is refused. The newest verified PASS or FAIL of a die and
 platform answers (a re-run that passes after a FAIL counts: re-run, never bypass); `min_passes`
 counts only the trailing streak of PASSes, newest first, stopped by the first FAIL, so PASS, FAIL,
-PASS does not satisfy 2 (owner rule as decided by the coordinator, 2026-11-05). A run of a larger
+PASS does not satisfy 2 (owner rule as decided by the coordinator, 2026-11-05). Optional
+`min_windows_runs` (1-8, only with platform `windows`; review of PR #269, R2) counts, on the
+Windows cell, the passing Windows gate runs (`windows_gate`, `windows_gate_2`) of that same streak,
+as the release verdict does. The committed `large` blocks use `min_passes = 1` and
+`min_windows_runs = 2`, so one passing release with one row per die (a box that ran the gate twice)
+or two rows per die (two machines) is met (tested GPU-free 2026-11-05: `test/requirements.test.js`
+and the release + store test in `test/batch.test.js`). Not checked by the store (the release verdict
+checks them): that the two runs were on two machines, and that the rows come from one release
+batch; rows of the same commit count, newest first. A run of a larger
 tier also answers a smaller tier (`large` > `middle` > `small`; `adhoc` answers none). A tier
 without blocks, a missing file or a refused file is never met.
 

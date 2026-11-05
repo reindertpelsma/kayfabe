@@ -48,6 +48,7 @@ test('requirements: the committed file parses and reads the same in Python tomll
     assert.deepEqual(raw.stages ?? [], b.stages);
     assert.equal(raw.min_dies ?? 1, b.min_dies);
     assert.equal(raw.min_passes ?? 1, b.min_passes);
+    assert.equal(raw.min_windows_runs ?? null, b.min_windows_runs);
   });
 });
 
@@ -199,6 +200,79 @@ test('requirements: the release tier needs 2 dies per family with 2 passes each'
     large([...two('AD104'), ...two('AD102').map((x) => ({ ...x, tier: 'middle' }))]).met,
     false,
   );
+});
+
+// Review of PR #269, R2 (2026-11-05). FALSIFIER: one fully passing release with one row per die
+// (each box ran the Windows gate twice) is not met; one Windows run per die is met; a Linux-only
+// streak or a FAIL in the streak counts Windows runs; min_windows_runs parses without windows.
+test('requirements: largest counts Windows gate runs like the release verdict', () => {
+  const twice = [
+    { name: 'gates', result: 'PASS' },
+    { name: 'windows_gate', result: 'PASS' },
+    { name: 'windows_gate_2', result: 'PASS' },
+  ];
+  const all = blocks.filter((b) => b.tier === 'largest');
+  assert.ok(all.length === 4 && all.every((b) => b.min_passes === 1 && b.min_windows_runs === 2));
+  const DIES = { turing: ['TU106', 'TU116'], ampere: ['GA106', 'GA104'], ada: ['AD104', 'AD102'] };
+  DIES.blackwell = ['GB205', 'GB206'];
+  const release = Object.entries(DIES).flatMap(([family, dies]) =>
+    dies.map((die) => r({ family, die, stages: twice })),
+  );
+  assert.deepEqual(evaluate(blocks, 'largest', release, NOW).missing, []);
+  assert.equal(evaluate(blocks, 'largest', release, NOW).met, true, 'one row per die');
+  // Mixed: one die on two machines (two rows, one run each), the other on one box run twice.
+  assert.equal(
+    large([r({ die: 'AD104' }), r({ die: 'AD104' }), r({ die: 'AD102', stages: twice })]).met,
+    true,
+  );
+  // One Windows run on a die is not enough.
+  const one = large([r({ die: 'AD104', stages: twice }), r({ die: 'AD102' })]);
+  assert.deepEqual([one.met, one.missing[0].reason], [false, 'TOO_FEW_PASSES']);
+  // A failed second run is not a pass: the row is FAIL (the box verdict) and answers FAIL.
+  const failedSecond = [
+    { name: 'gates', result: 'PASS' },
+    { name: 'windows_gate', result: 'PASS' },
+    { name: 'windows_gate_2', result: 'FAIL' },
+  ];
+  const second = large([
+    r({ die: 'AD104', stages: twice }),
+    r({ die: 'AD102', verdict: 'FAIL', stages: failedSecond }),
+  ]);
+  assert.deepEqual([second.met, second.missing[0].reason], [false, 'FAIL']);
+  // A PASS row whose windows_gate_2 row did not pass contributes one run only.
+  assert.equal(
+    large([r({ die: 'AD104', stages: twice }), r({ die: 'AD102', stages: failedSecond })]).met,
+    false,
+  );
+  // Runs before a FAIL do not count: PASS(x2), FAIL, PASS(x1) newest last is one run.
+  const broken = [
+    r({ die: 'AD102', stages: twice, sort_at: '2026-11-05T11:00:00Z' }),
+    r({ die: 'AD102', verdict: 'FAIL', sort_at: '2026-11-05T11:10:00Z' }),
+    r({ die: 'AD102', sort_at: '2026-11-05T11:20:00Z' }),
+  ];
+  assert.equal(large([r({ die: 'AD104', stages: twice }), ...broken]).met, false);
+  // Linux is unaffected: the Linux cell needs one PASS row.
+  const linuxOnly = parseRequirements(
+    'version = 1\n[[require]]\ntier = "large"\nfamily = "ada"\ndies = ["AD104"]\n' +
+      'platforms = ["linux"]\n',
+  ).blocks;
+  assert.equal(evaluate(linuxOnly, 'largest', [r({ die: 'AD104' })], NOW).met, true);
+  // Parsing: only with Windows, 1..8.
+  const block = (extra, platforms = '["linux", "windows"]') =>
+    'version = 1\n[[require]]\ntier = "large"\nfamily = "ada"\ndies = ["any"]\n' +
+    'platforms = ' +
+    platforms +
+    '\n' +
+    extra +
+    '\n';
+  assert.equal(parseRequirements(block('min_windows_runs = 3')).blocks[0].min_windows_runs, 3);
+  assert.equal(parseRequirements(block('')).blocks[0].min_windows_runs, null);
+  for (const bad of [
+    block('min_windows_runs = 2', '["linux"]'),
+    block('min_windows_runs = 0'),
+    block('min_windows_runs = 9'),
+  ])
+    assert.throws(() => parseRequirements(bad), RequirementsError);
 });
 
 test('requirements: explicit dies report each missing die and platform', () => {

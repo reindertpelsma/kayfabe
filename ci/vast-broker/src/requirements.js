@@ -89,7 +89,21 @@ function stripComment(text) {
   return text;
 }
 
-const KEYS = new Set(['tier', 'family', 'dies', 'min_dies', 'platforms', 'stages', 'min_passes']);
+const KEYS = new Set([
+  'tier',
+  'family',
+  'dies',
+  'min_dies',
+  'platforms',
+  'stages',
+  'min_passes',
+  'min_windows_runs',
+]);
+// Review of PR #269, R2: the Windows gate runs one row can hold. A release leg on a die with one
+// machine runs the gate twice on its one box (KF_WINDOWS_RUNS=2: windows_gate, windows_gate_2);
+// two machines give two rows of one run each. min_windows_runs counts these, as the release
+// verdict does (src/release.js classifyLeg: 'windows_gate' and 'windows_gate_2').
+export const WINDOWS_RUN_STAGES = Object.freeze(['windows_gate', 'windows_gate_2']);
 
 function checkBlock(raw, line) {
   const fail = (why) => {
@@ -121,6 +135,8 @@ function checkBlock(raw, line) {
     return v;
   };
   if (raw.min_dies !== undefined && !anyDie) fail('min_dies needs dies = ["any"]');
+  if (raw.min_windows_runs !== undefined && !raw.platforms.includes('windows'))
+    fail('min_windows_runs needs platform windows');
   return {
     tier,
     family: raw.family,
@@ -129,6 +145,8 @@ function checkBlock(raw, line) {
     platforms: [...raw.platforms],
     stages: [...stages],
     min_passes: count(raw.min_passes, 1, 8),
+    // null: no Windows run count beyond min_passes (the default).
+    min_windows_runs: raw.min_windows_runs === undefined ? null : count(raw.min_windows_runs, 1, 8),
   };
 }
 
@@ -233,7 +251,18 @@ export function evaluate(blocks, tier, rows, now) {
           stagesPass(answers[streak])
         )
           streak++;
-        return streak >= block.min_passes ? 'OK' : 'TOO_FEW_PASSES';
+        if (streak < block.min_passes) return 'TOO_FEW_PASSES';
+        // Review of PR #269, R2: on Windows, `min_windows_runs` counts the passing Windows gate
+        // runs of that same streak (a row of a one-machine release leg holds two).
+        if (platform === 'windows' && block.min_windows_runs !== null) {
+          let runs = 0;
+          for (const r of answers.slice(0, streak))
+            runs += WINDOWS_RUN_STAGES.filter((name) =>
+              r.stages.some((x) => x.name === name && x.result === 'PASS'),
+            ).length;
+          if (runs < block.min_windows_runs) return 'TOO_FEW_PASSES';
+        }
+        return 'OK';
       }
       return running.some((r) => r.die === die && covers(r, platform)) ? 'INFLIGHT' : 'NO_RESULT';
     };

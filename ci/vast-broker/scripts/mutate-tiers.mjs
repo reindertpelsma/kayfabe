@@ -439,11 +439,13 @@ const prepare = () => {
   cpSync(broker, copy, { recursive: true, filter: (p) => !p.includes('node_modules') });
   symlinkSync(join(broker, 'node_modules'), join(copy, 'node_modules'));
   // ci/platform-api/migrations: test/d1.js (FakeD1) applies them; batch.test.js's release + store
-  // test (integration of #258 with #259, 2026-11-05) needs them.
+  // test (integration of #258 with #259, 2026-11-05) needs them; ci/requirements.toml: its
+  // release + requirements test (review of PR #269, R2).
   for (const extra of [
     'scripts/ci/vast_report.py',
     'ci/vast-reaper',
     'ci/platform-api/migrations',
+    'ci/requirements.toml',
   ]) {
     mkdirSync(join(root, extra, '..'), { recursive: true });
     cpSync(join(repo, extra), join(root, extra), { recursive: true });

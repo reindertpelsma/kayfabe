@@ -23,7 +23,10 @@ dies = ["any"]
 platforms = ["linux"]
 
 # LARGEST (release tag): at least 2 dies per family; Linux and Windows on Turing, Ampere, Ada and
-# Blackwell; at least 2 passing runs per die (a 'both' run counts for each platform).
+# Blackwell. As in the release verdict (ci/vast-broker/src/release.js): per die at least 1 Linux
+# PASS and at least 2 passing Windows gate runs, counted in the trailing PASS streak of the die's
+# rows of this commit: two rows of one run each (two machines), or one row whose box ran the gate
+# twice (windows_gate + windows_gate_2, one machine). min_passes = 1 row (review of PR #269, R2).
 [[require]]
 tier = "large"
 family = "turing"
@@ -31,7 +34,8 @@ dies = ["any"]
 min_dies = 2
 platforms = ["linux", "windows"]
 stages = ["gates", "windows_gate"]
-min_passes = 2
+min_passes = 1
+min_windows_runs = 2
 
 [[require]]
 tier = "large"
@@ -40,7 +44,8 @@ dies = ["any"]
 min_dies = 2
 platforms = ["linux", "windows"]
 stages = ["gates", "windows_gate"]
-min_passes = 2
+min_passes = 1
+min_windows_runs = 2
 
 [[require]]
 tier = "large"
@@ -49,7 +54,8 @@ dies = ["any"]
 min_dies = 2
 platforms = ["linux", "windows"]
 stages = ["gates", "windows_gate"]
-min_passes = 2
+min_passes = 1
+min_windows_runs = 2
 
 [[require]]
 tier = "large"
@@ -58,4 +64,5 @@ dies = ["any"]
 min_dies = 2
 platforms = ["linux", "windows"]
 stages = ["gates", "windows_gate"]
-min_passes = 2
+min_passes = 1
+min_windows_runs = 2

@@ -4,6 +4,8 @@ import { BrokerLedger } from '../src/index.js';
 import { BrokerError } from '../src/policy.js';
 import { setup, sha, env, MemoryStorage } from './helpers.js';
 import { FakeD1, d1Skip } from './d1.js';
+import { readFileSync } from 'node:fs';
+import { requirementsMet } from '../src/results.js';
 // wtier, 2026-11-05: admin starts and the release (large) orchestration through the real service
 // with the mock provider. FALSIFIERS (written before the code): the plan rents; a start skips an
 // admission check a PR rental has (box protocol, caps, concurrency, sha gap for small/middle,
@@ -689,5 +691,50 @@ test(
         r.run_id,
       );
     }
+  },
+);
+
+// Review of PR #269, R2 (2026-11-05). FALSIFIER: one fully passing release (two dies per family,
+// some dies on one machine with two Windows runs, others on two machines) does not meet the
+// committed `large` requirements in the store.
+test(
+  'release + store: one passing release meets the committed large requirements',
+  { skip: d1Skip },
+  async () => {
+    const db = new FakeD1();
+    const tagKey = 't'.repeat(48);
+    const h = await release({ DB: db, ROW_TAG_KEY: tagKey });
+    releaseMarket(h);
+    await h.storage.put('treekey:' + sha, { key: 'f'.repeat(64), kind: 'tree', at: h.time.value });
+    const requirements = readFileSync(new URL('../../requirements.toml', import.meta.url), 'utf8');
+    const { batch: id } = await h.service.adminStart({ commit_sha: sha, tier: 'large' });
+    for (let round = 0; round < 3; round++) {
+      const batch = await batchOf(h, id);
+      for (const l of batch.legs.filter((x) => x.state === 'STARTED')) {
+        const r = await h.storage.get('record:' + l.key);
+        if (r.resultAt === undefined)
+          await finish(h, l.key, 'PASS', { ...LINUX, ...win(l.windowsRuns) });
+      }
+      await tick(h);
+    }
+    for (let i = 0; i < 3; i++) await tick(h);
+    const batch = await batchOf(h, id);
+    assert.equal(batch.verdict, 'PASS');
+    assert.ok(
+      batch.legs.some((l) => l.windowsRuns === 2),
+      'a one-machine die ran Windows twice',
+    );
+    const env = { DB: db, ROW_TAG_KEY: tagKey };
+    assert.equal(db.rows('SELECT run_id FROM ci_runs WHERE verdict = ?', 'PASS').length, 12);
+    const answer = await requirementsMet(env, {
+      commit_sha: sha,
+      tree_hash: null,
+      tier: 'large',
+      requirements,
+      now: h.time.value,
+    });
+    assert.deepEqual(answer, { met: true, missing: [], inflight: [] });
+    // (One Windows run too few per die is covered in requirements.test.js: a stage row deleted
+    // here would break the row's HMAC tag and answer TAMPERED instead.)
   },
 );

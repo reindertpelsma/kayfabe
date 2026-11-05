@@ -334,6 +334,26 @@ const MUTANTS = [
     'family: r.family ?? cfgFamilyOf(r.die, cfg)',
     'family: r.family',
   ],
+  // Review of PR #269, R2 (2026-11-05): Windows gate runs of the largest tier.
+  [
+    'windows runs not counted',
+    'src/requirements.js',
+    "if (platform === 'windows' && block.min_windows_runs !== null)",
+    'if (false)',
+  ],
+  ['windows runs across a FAIL', 'src/requirements.js', 'answers.slice(0, streak)', 'answers'],
+  [
+    'second windows run not counted',
+    'src/requirements.js',
+    "Object.freeze(['windows_gate', 'windows_gate_2'])",
+    "Object.freeze(['windows_gate'])",
+  ],
+  [
+    'min_windows_runs without windows',
+    'src/requirements.js',
+    "    fail('min_windows_runs needs platform windows');\n",
+    '    ;\n',
+  ],
 ];
 
 const selected = process.argv.slice(2);
