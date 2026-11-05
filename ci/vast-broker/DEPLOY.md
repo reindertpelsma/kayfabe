@@ -626,7 +626,11 @@ Order (coordinator only; a coding lane never runs these):
    npx wrangler d1 migrations apply kayfabe-platform --remote
    ```
    `list` shows whether `0001_init.sql` was applied already; `apply` applies what is missing
-   (`0002_ci_results.sql` only adds tables and indexes).
+   (`0002_ci_results.sql` only adds tables and indexes). **Run `list` before `apply`:**
+   `0002_ci_results.sql` was edited during review (the `tree_kind` CHECK gained `claimed`), which is
+   safe only because it has never been applied anywhere. If `list` reports 0002 as already applied
+   to the remote database, stop: the remote table has the old CHECK, and the fix is a new migration,
+   not a re-apply.
 3. Create the row-tag key without printing it, and store it as a Worker secret:
    ```sh
    cd ci/vast-broker

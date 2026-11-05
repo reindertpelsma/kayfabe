@@ -34,7 +34,7 @@ them yet (no existing field changed, so `site/status` is unchanged).
 | `/v1/ci/trees` | `tier`, `limit` | result keys, newest first, with run, PASS, FAIL and running counts |
 | `/v1/ci/trees/<hash>` | none | one result key: the commits recorded under it and its runs |
 | `/v1/ci/runs/<id>` | none | one run: stages, GPU name, driver versions, log key (immutable once final) |
-| `/v1/ci/commits/<sha>` | none | a commit's result keys and every run under them; `shared: true` marks runs of other commits with the same tree |
+| `/v1/ci/commits/<sha>` | none | a commit's result keys and every run under them; `other_commit: true` marks runs of other commits with the same tree hash, shown for information: they count for this commit only when the CI Worker's `TREE_KEY_CARRY_OVER` is on (off by default) and `tree.kind` is `tree` |
 
 ## Tests (GPU-free, no network, no install)
 

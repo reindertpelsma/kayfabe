@@ -423,3 +423,39 @@ test('deploy: TREE_KEY_CARRY_OVER is a validated public var', async () => {
     /TREE_KEY_CARRY_OVER/,
   );
 });
+
+// Review of #258 (re-verification): a final row set back to "in flight" keeps its tag.
+test(
+  'requirements: a tagged in-flight row is TAMPERED and never re-signed',
+  { skip: d1Skip },
+  async () => {
+    const db = new FakeD1();
+    await recordRun(env(db), row({ run_id: 'vast-1-1-0' }));
+    await recordRun(
+      env(db),
+      row({
+        run_id: 'vast-2-1-0',
+        verdict: 'FAIL',
+        stages: [],
+        started_at: T0 + 3600000,
+        ended_at: T0 + 7200000,
+      }),
+    );
+    assert.equal((await check(db, { now: T0 + 3 * 3600000 })).missing[0].reason, 'FAIL');
+    db.database.exec(
+      "UPDATE ci_runs SET verdict = NULL, ended_at = NULL WHERE run_id = 'vast-2-1-0'",
+    );
+    const r = await check(db, { now: T0 + 3 * 3600000 });
+    assert.equal(r.met, false);
+    assert.deepEqual(
+      r.missing.map((m) => m.reason),
+      ['TAMPERED'],
+    );
+    assert.deepEqual(r.inflight, []);
+    assert.equal(await closeStale(env(db), { now: T0 + 20 * 3600000, olderThanMs: 0 }), 0);
+    assert.equal(
+      db.rows("SELECT verdict FROM ci_runs WHERE run_id = 'vast-2-1-0'")[0].verdict,
+      null,
+    );
+  },
+);

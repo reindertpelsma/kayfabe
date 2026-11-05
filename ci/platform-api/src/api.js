@@ -472,8 +472,9 @@ const handlers = {
         runs: t.runs,
         last_at: t.last_at,
       })),
-      // Runs of other commits with the same tree hash answer for this commit too.
-      runs: runs.map((r) => ({ ...ciSummary(r), shared: r.commit_sha !== sha })),
+      // Runs of other commits with the same tree hash, for information only: the CI Worker counts
+      // them for this commit only with TREE_KEY_CARRY_OVER on and a Worker-computed key.
+      runs: runs.map((r) => ({ ...ciSummary(r), other_commit: r.commit_sha !== sha })),
     });
   },
 

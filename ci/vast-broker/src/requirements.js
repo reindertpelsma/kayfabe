@@ -194,8 +194,10 @@ export function evaluate(blocks, tier, rows, now) {
   // Review of #258, M3: a final row whose HMAC tag does not verify means the store was written
   // by someone without the key. Not met, and never skipped (a garbled FAIL must not let an older
   // PASS answer). Deleting a row cannot be detected this way.
+  // An in-flight row that still carries a tag (`tampered`, set by requirementsMet) is the same
+  // attack: a final row set back to "in flight".
   for (const r of rows)
-    if (r.verdict !== null && r.valid !== true)
+    if (r.tampered === true || (r.verdict !== null && r.valid !== true))
       missing.push({ family: r.family, die: r.die, platform: r.platform, reason: 'TAMPERED' });
   for (const block of wanted) {
     const eligible = rows.filter(
@@ -205,7 +207,10 @@ export function evaluate(blocks, tier, rows, now) {
         (block.family === 'any' || r.family === block.family),
     );
     const running = eligible.filter(
-      (r) => r.verdict === null && Date.parse(r.started_at) > now - INFLIGHT_MAX_MS,
+      (r) =>
+        r.verdict === null &&
+        r.tampered !== true &&
+        Date.parse(r.started_at) > now - INFLIGHT_MAX_MS,
     );
     const finals = eligible
       .filter((r) => r.valid === true && (r.verdict === 'PASS' || r.verdict === 'FAIL'))

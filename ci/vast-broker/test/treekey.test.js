@@ -12,6 +12,8 @@ import {
   treeSource,
   DEFAULT_IGNORE,
   LIMITS,
+  MatchBudget,
+  LimitError,
 } from '../src/treekey.js';
 // The tree key (docs/design/V3_CI_TIERS_AND_IGNORE_LADDER.md §3).
 // FALSIFIER: a newly ignored existing file keeps the key; a new file added with its exclusion
@@ -336,7 +338,7 @@ test('treekey: a pathological pattern finishes in milliseconds', () => {
     '*a*a*a*a*b',
     '*a*a*a*a*a*b',
     '*a*a*a*a*a*a*a*a*a*a*b',
-    '/x/**/**/**/*a*a*a*a*b',
+    '/x/**/**/*a*a*a*a*b',
   ]) {
     const start = process.hrtime.bigint();
     assert.equal(ignored(P(pattern), 'x/' + name + '/' + name), false, pattern);
@@ -382,4 +384,48 @@ test('treekey: an empty root listing or an all-ignored tree fails closed', async
     await treeKeyOf([{ path: 'docs/a.md', mode: '100644', sha: sha(1) }], P('/docs/\n')),
     null,
   );
+});
+
+// Review of #258, N1: the matcher's cost is bounded by depth, '**' count and a step budget.
+test('treekey: a 2040-segment path gives no key in milliseconds', async () => {
+  const deep = Array(2040).fill('a').join('/');
+  const patterns = P(
+    Array(10)
+      .fill('**/' + Array(39).fill('b').join('/') + '/c')
+      .join('\n'),
+  );
+  assert.ok(patterns, 'one ** per pattern is allowed');
+  const start = process.hrtime.bigint();
+  assert.throws(() => ignored(patterns, deep), LimitError);
+  const entries = [...base, { path: deep, mode: '100644', sha: sha(9) }];
+  assert.equal(await treeKeyOf(entries, patterns), null);
+  assert.ok(Number(process.hrtime.bigint() - start) / 1e6 < 50);
+  // At the depth limit the same patterns finish in milliseconds and give a key.
+  const limit = Array(LIMITS.depth).fill('a').join('/');
+  const t0 = process.hrtime.bigint();
+  assert.equal(ignored(patterns, limit), false);
+  assert.ok(await treeKeyOf([...base, { path: limit, mode: '100644', sha: sha(9) }], patterns));
+  assert.ok(Number(process.hrtime.bigint() - t0) / 1e6 < 50);
+});
+
+test('treekey: at most two ** per pattern', () => {
+  assert.ok(compilePattern('/a/**/b/**/c'));
+  assert.equal(compilePattern('/a/**/b/**/c/**'), null);
+  assert.equal(compilePattern('**/**/**/x'), null);
+});
+
+test('treekey: the step budget is deterministic and fails closed', async () => {
+  const patterns = P('/docs/\n*.md\n');
+  assert.equal(await treeKeyOf(base, patterns, new MatchBudget(10)), null);
+  assert.ok(await treeKeyOf(base, patterns, new MatchBudget(10000)));
+  // 20k paths x 512 patterns exceeds the default budget: no key, in bounded time.
+  const many = Array.from({ length: 20000 }, (_, i) => ({
+    path: 'crates/k' + (i % 50) + '/src/f' + i + '.rs',
+    mode: '100644',
+    sha: sha(i + 1),
+  }));
+  const wide = P(Array.from({ length: 512 }, (_, i) => '/x' + i + '/**/*.zz').join('\n'));
+  const t0 = process.hrtime.bigint();
+  assert.equal(await treeKeyOf(many, wide), null);
+  assert.ok(Number(process.hrtime.bigint() - t0) / 1e9 < 5);
 });

@@ -108,7 +108,7 @@ test('ci: tree and commit pages show the runs every commit of a tree shares', as
     const page = (await call('/v1/ci/commits/' + sha)).body;
     assert.equal(page.trees[0].hash, hash);
     assert.deepEqual(new Set(page.runs.map((r) => r.id)), new Set(all));
-    for (const r of page.runs) assert.equal(r.shared, r.commit !== sha);
+    for (const r of page.runs) assert.equal(r.other_commit, r.commit !== sha);
   }
   const trees = (await call('/v1/ci/trees?limit=3')).body.trees;
   assert.equal(trees.length, 3);

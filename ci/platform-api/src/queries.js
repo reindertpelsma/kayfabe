@@ -195,7 +195,7 @@ export const QUERIES = Object.freeze({
     FROM ci_runs r WHERE r.commit_sha = ?1
     GROUP BY r.tree_hash, r.tree_kind ORDER BY last_at DESC`,
 
-  // Commits recorded under one result key (they share every result).
+  // Commits recorded under one result key (shown for information; see schema.js notes).
   ciTreeCommits: `
     SELECT r.commit_sha, COUNT(*) AS runs, MAX(r.sort_at) AS last_at
     FROM ci_runs r WHERE r.tree_hash = ?1

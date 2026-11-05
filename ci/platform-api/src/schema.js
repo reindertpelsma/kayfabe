@@ -87,7 +87,7 @@ export function describe() {
       'verdict null and state "running" while a run is in flight',
       'scores are ratios to a same-box reference and never gate',
       'SPECviewperf scores are not published by this API (docs/SPEC_RESULTS.md)',
-      'CI rows: RETRY and UNATTRIBUTED never pass; runs sharing a tree hash share every result',
+      'CI rows: RETRY and UNATTRIBUTED never pass; runs of other commits with the same tree hash are shown for information only: the CI Worker counts them for a commit only when its tree-key carry-over is enabled (off by default) and the key is Worker-computed (tree.kind "tree")',
     ],
   };
 }

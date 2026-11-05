@@ -66,7 +66,11 @@ the review of PR #258 (2026-11-05) are marked "review".
   `TREE_KEY_CARRY_OVER=true` (default off) also counts other commits' rows under a Worker-verified
   (`tree`) key; turn it on only together with the strip step. A final row whose tag does not
   verify makes the answer `TAMPERED` (not met); it is never skipped (review). Answers are ordered
-  by the tagged `ended_at`. Deleting a row cannot be detected.
+  by the tagged `ended_at`. An in-flight row that still carries a tag (a final row set back to "in
+  flight") is also `TAMPERED`, and `closeStale` never re-signs it. Residual (not detectable):
+  deleting a row; or setting the newest FAIL back to "in flight" AND erasing its tag, which lets an
+  older PASS answer until `closeStale` re-signs that row as UNATTRIBUTED after 8 h (and an
+  UNATTRIBUTED row does not block the older PASS either).
 - **Ingest** ([`src/ingest.js`](src/ingest.js)). The ledger's verdict is not changed. A queue entry
   `store:<run>-<attempt>:<leg>` is written when a rental is reserved. Tree keys are computed
   OUTSIDE the ledger's serial queue (cron entry point, one commit per tick, 25 s budget, the
@@ -102,8 +106,12 @@ the review of PR #258 (2026-11-05) are marked "review".
   `/docs/` only the top-level one); `*` stays within one path segment and `?` matches one byte;
   `**` only as a whole segment of an anchored pattern (`**/x`, `a/**/b`, `a/**`); a path is ignored
   when it or any parent directory matches. The matcher uses no regular expression (review: a
-  backtracking RegExp took 10 s for `*a*a*a*a*a*b` on a 100-character name); its cost is bounded by
-  pattern length times path length. Docker reads unanchored patterns differently; the ladder lint
+  backtracking RegExp took 10 s for `*a*a*a*a*a*b` on a 100-character name). Its cost is bounded
+  deterministically, not by a timer (review N1: a timer cannot interrupt a synchronous loop): one
+  table pass per path and pattern, at most 2 `**` per pattern, at most 64 path segments, and a step
+  counter of 20,000,000 matcher steps per tree key; a deeper path or an exhausted counter means no
+  key. MEASURED 2026-11-05 (node 22.22.1, this repository's 25,539 paths): the default list costs
+  557,648 steps, a 12-pattern set using every rule 6,692,930 steps (234 ms). Docker reads unanchored patterns differently; the ladder lint
   of the design is not built.
 
 ### Requirements file

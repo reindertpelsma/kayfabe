@@ -24,31 +24,55 @@ const MUTANTS = [
     'const ALLOWED = /^[A-Za-z0-9._+@/*?-]+$/;',
     'const ALLOWED = /^[A-Za-z0-9._+@/*?!-]+$/;',
   ],
-  ['directory-only ignored', 'src/treekey.js', '      if (p.dirOnly && !isDir) continue;\n', ''],
+  [
+    'directory-only ignored',
+    'src/treekey.js',
+    'const counts = (p, n) => !p.dirOnly || n < depth || directory;',
+    'const counts = () => true;',
+  ],
   [
     'basename anchoring',
     'src/treekey.js',
-    'p.anchored ? matchSegments(p.segments, parts, n) : globSegment(p.segments[0], parts[n - 1])',
-    'matchSegments(p.segments, parts, n)',
+    '    if (p.anchored) {\n      const reach',
+    '    if (true) {\n      const reach',
   ],
   [
     'parent directories',
     'src/treekey.js',
-    'for (let n = 1; n <= parts.length; n++) {',
-    'for (let n = parts.length; n <= parts.length; n++) {',
+    'for (let n = 1; n <= depth; n++) if (reach[n] && counts(p, n)) return true;',
+    'if (reach[depth] && counts(p, depth)) return true;',
   ],
   [
     'trailing ** matches nothing below',
     'src/treekey.js',
-    'row[j] = i === P - 1 ? j < n : next[j] || (j < n && row[j + 1]);',
-    'row[j] = next[j] || (j < n && row[j + 1]);',
+    '        if (last) {\n          if (seen) next[j] = 1;',
+    '        if (false) {\n          if (seen) next[j] = 1;',
+  ],
+  // N1: deterministic bounds (depth, '**' count, step counter).
+  [
+    'no depth cap',
+    'src/treekey.js',
+    "  if (depth > LIMITS.depth) throw new LimitError('path depth');\n",
+    '',
+  ],
+  [
+    'no ** cap',
+    'src/treekey.js',
+    "  if (parts.filter((s) => s === '**').length > LIMITS.anyPerPattern) return null;\n",
+    '',
+  ],
+  [
+    'no step budget',
+    'src/treekey.js',
+    "    if (this.left < 0) throw new LimitError('matcher steps');\n",
+    '',
   ],
   // H1: a backtracking matcher (the RegExp of the first version) must be caught by the timing test.
   [
     'backtracking glob',
     'src/treekey.js',
-    'export function globSegment(pattern, text) {',
-    "export function globSegment(pattern, text) {\n  const d = (b) => new TextDecoder().decode(b);\n  const source = d(pattern).replace(/[.+]/g, '\\\\$&').replaceAll('*', '[^/]*').replaceAll('?', '[^/]');\n  return new RegExp('^' + source + '$').test(d(text));",
+    'export function globSegment(pattern, text, budget = null) {',
+    "export function globSegment(pattern, text, budget = null) {\n  const d = (b) => new TextDecoder().decode(b);\n  const source = d(pattern).replace(/[.+]/g, '\\\\$&').replaceAll('*', '[^/]*').replaceAll('?', '[^/]');\n  return new RegExp('^' + source + '$').test(d(text));",
   ],
   // H2: protected roots, the ignore set in the key, empty listings and empty trees.
   [
@@ -153,6 +177,18 @@ const MUTANTS = [
     'src/requirements.js',
     "      missing.push({ family: r.family, die: r.die, platform: r.platform, reason: 'TAMPERED' });",
     '      void r;',
+  ],
+  [
+    'tagged in-flight row trusted',
+    'src/requirements.js',
+    'if (r.tampered === true || (r.verdict !== null && r.valid !== true))',
+    'if (r.verdict !== null && r.valid !== true)',
+  ],
+  [
+    'tagged in-flight row re-signed',
+    'src/results.js',
+    'WHERE r.verdict IS NULL AND r.tag IS NULL',
+    'WHERE r.verdict IS NULL',
   ],
   [
     'untagged order',

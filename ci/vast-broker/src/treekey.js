@@ -64,7 +64,24 @@ export const LIMITS = Object.freeze({
   entries: 200000,
   requests: 48,
   pathBytes: 4096,
+  // Review of #258, N1: the matcher's CPU is bounded deterministically, not by a timer.
+  depth: 64, // path segments; a deeper path means no key
+  anyPerPattern: 2, // '**' segments per pattern
+  steps: 20000000, // matcher steps per tree key; more means no key
 });
+
+// A deterministic CPU bound for the matcher: every glob character step and table cell costs one
+// step; running out throws LimitError, which treeKeyOf turns into "no key" (fail closed).
+export class LimitError extends Error {}
+export class MatchBudget {
+  constructor(max = LIMITS.steps) {
+    this.left = max;
+  }
+  spend(n) {
+    this.left -= n;
+    if (this.left < 0) throw new LimitError('matcher steps');
+  }
+}
 
 const ALLOWED = /^[A-Za-z0-9._+@/*?-]+$/;
 const encoder = new TextEncoder();
@@ -73,43 +90,63 @@ const STAR = 42,
 const ANY = Symbol('**');
 
 // One segment against one glob segment, on UTF-8 bytes. Two pointers with a single backtrack
-// point: at most len(pattern) x len(text) steps, never exponential.
-export function globSegment(pattern, text) {
+// point: at most len(pattern) x len(text) steps, never exponential; the steps are charged to
+// `budget` when one is given.
+export function globSegment(pattern, text, budget = null) {
   let i = 0,
     j = 0,
     star = -1,
-    mark = 0;
-  while (j < text.length) {
-    if (i < pattern.length && pattern[i] === STAR) {
-      star = i++;
-      mark = j;
-    } else if (i < pattern.length && (pattern[i] === QUESTION || pattern[i] === text[j])) {
-      i++;
-      j++;
-    } else if (star >= 0) {
-      i = star + 1;
-      j = ++mark;
-    } else return false;
+    mark = 0,
+    steps = 0;
+  try {
+    while (j < text.length) {
+      steps++;
+      if (i < pattern.length && pattern[i] === STAR) {
+        star = i++;
+        mark = j;
+      } else if (i < pattern.length && (pattern[i] === QUESTION || pattern[i] === text[j])) {
+        i++;
+        j++;
+      } else if (star >= 0) {
+        i = star + 1;
+        j = ++mark;
+      } else return false;
+    }
+    while (i < pattern.length && pattern[i] === STAR) i++;
+    return i === pattern.length;
+  } finally {
+    budget?.spend(steps + 1);
   }
-  while (i < pattern.length && pattern[i] === STAR) i++;
-  return i === pattern.length;
 }
 
-// Pattern segments against the first n path segments. '**' (ANY) matches zero or more segments,
-// a trailing '**' one or more. A table over (pattern segment, path segment).
-function matchSegments(segments, parts, n) {
-  const P = segments.length;
-  let next = new Array(n + 1).fill(false);
-  next[n] = true;
-  for (let i = P - 1; i >= 0; i--) {
-    const row = new Array(n + 1).fill(false);
-    for (let j = n; j >= 0; j--) {
-      if (segments[i] === ANY) row[j] = i === P - 1 ? j < n : next[j] || (j < n && row[j + 1]);
-      else row[j] = j < n && next[j + 1] && globSegment(segments[i], parts[j]);
-    }
-    next = row;
+// ONE pass over the path for an anchored pattern (review of #258, N1: the first version rebuilt
+// the table for every prefix). Returns reach[n] = 1 when the pattern matches the first n path
+// segments. '**' (ANY) matches zero or more segments, a trailing '**' one or more.
+function anchoredPrefixes(segments, parts, budget) {
+  const n = parts.length;
+  let cur = new Uint8Array(n + 1);
+  cur[0] = 1;
+  for (let i = 0; i < segments.length; i++) {
+    const next = new Uint8Array(n + 1);
+    budget?.spend(n + 1);
+    if (segments[i] === ANY) {
+      const last = i === segments.length - 1;
+      let seen = false;
+      for (let j = 0; j <= n; j++) {
+        if (last) {
+          if (seen) next[j] = 1;
+          if (cur[j]) seen = true;
+        } else {
+          if (cur[j]) seen = true;
+          if (seen) next[j] = 1;
+        }
+      }
+    } else
+      for (let j = 0; j < n; j++)
+        if (cur[j] && globSegment(segments[i], parts[j], budget)) next[j + 1] = 1;
+    cur = next;
   }
-  return next[0];
+  return cur;
 }
 
 // One pattern line -> {segments, anchored, dirOnly, line} | 'skip' | null (outside the subset).
@@ -136,6 +173,7 @@ export function compilePattern(line) {
     if (s === '**' && !anchored) return null;
   }
   if (parts.length === 1 && parts[0] === '**') return null;
+  if (parts.filter((s) => s === '**').length > LIMITS.anyPerPattern) return null;
   const segments = parts.map((s) => (s === '**' ? ANY : encoder.encode(s)));
   return { segments, anchored, dirOnly, line };
 }
@@ -156,18 +194,20 @@ export function parseIgnore(text) {
   return patterns;
 }
 
-// Is the entry at `path` ignored? `directory` is true for submodules (mode 160000).
-export function ignored(patterns, path, directory = false) {
+// Is the entry at `path` ignored? `directory` is true for submodules (mode 160000). A path deeper
+// than LIMITS.depth, or a `budget` that runs out, throws LimitError.
+export function ignored(patterns, path, directory = false, budget = null) {
   const parts = path.split('/').map((s) => encoder.encode(s));
-  for (let n = 1; n <= parts.length; n++) {
-    const isDir = n < parts.length || directory;
-    for (const p of patterns) {
-      if (p.dirOnly && !isDir) continue;
-      if (
-        p.anchored ? matchSegments(p.segments, parts, n) : globSegment(p.segments[0], parts[n - 1])
-      )
-        return true;
-    }
+  const depth = parts.length;
+  if (depth > LIMITS.depth) throw new LimitError('path depth');
+  const counts = (p, n) => !p.dirOnly || n < depth || directory;
+  for (const p of patterns) {
+    if (p.anchored) {
+      const reach = anchoredPrefixes(p.segments, parts, budget);
+      for (let n = 1; n <= depth; n++) if (reach[n] && counts(p, n)) return true;
+    } else
+      for (let n = 1; n <= depth; n++)
+        if (counts(p, n) && globSegment(p.segments[0], parts[n - 1], budget)) return true;
   }
   return false;
 }
@@ -206,17 +246,23 @@ const validPath = (path) =>
   !path.split('/').some((s) => s === '.' || s === '..' || s === '.git');
 
 // entries: [{path, mode, sha}] (files only). Returns the hex key, or null on malformed input or
-// when no file survives the ignore set.
-export async function treeKeyOf(entries, patterns) {
+// when no file survives the ignore set, a path is deeper than LIMITS.depth or the matcher needs
+// more than LIMITS.steps steps.
+export async function treeKeyOf(entries, patterns, budget = new MatchBudget()) {
   if (!Array.isArray(patterns)) return null;
   const kept = [],
     seen = new Set();
-  for (const e of entries) {
-    if (!e || !validPath(e.path) || !MODES.has(e.mode) || !/^[0-9a-f]{40}$/.test(e.sha))
-      return null;
-    if (seen.has(e.path)) return null;
-    seen.add(e.path);
-    if (!ignored(patterns, e.path, e.mode === '160000')) kept.push(e);
+  try {
+    for (const e of entries) {
+      if (!e || !validPath(e.path) || !MODES.has(e.mode) || !/^[0-9a-f]{40}$/.test(e.sha))
+        return null;
+      if (seen.has(e.path)) return null;
+      seen.add(e.path);
+      if (!ignored(patterns, e.path, e.mode === '160000', budget)) kept.push(e);
+    }
+  } catch (error) {
+    if (error instanceof LimitError) return null; // too deep or too costly: no key
+    throw error;
   }
   if (!kept.length) return null;
   kept.sort((a, b) => compareBytes(a.path, b.path));

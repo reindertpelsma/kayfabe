@@ -381,7 +381,7 @@ export const SQL = Object.freeze({
       p.machine_id, p.price_usd_h, p.cost_usd
     FROM ci_runs r LEFT JOIN ci_host_facts f ON f.run_id = r.run_id
       LEFT JOIN ci_runs_private p ON p.run_id = r.run_id
-    WHERE r.verdict IS NULL
+    WHERE r.verdict IS NULL AND r.tag IS NULL
       AND ((?1 IS NOT NULL AND r.run_id = ?1) OR (?1 IS NULL AND r.started_at < ?2))
     ORDER BY r.started_at LIMIT ?3`,
   snapshot: `INSERT OR IGNORE INTO ci_requirement_snapshots (sha256, base_ref, content, first_seen_at)
@@ -534,7 +534,10 @@ export async function requirementsMet(env, { commit_sha, tree_hash, tier, requir
     const own = stages.get(row.run_id) ?? [];
     // A final row whose tag does not verify is TAMPERED (requirements.js), never skipped.
     const valid = row.verdict !== null && (await verifyRunTag(env.ROW_TAG_KEY, row, own, row.tag));
-    checked.push({ ...row, stages: own, valid });
+    // An in-flight row never carries a tag: one that does is a final row set back to "in flight"
+    // (review of #258, re-verification), so it is TAMPERED, not joinable, and closeStale skips it.
+    const tampered = (row.verdict !== null && !valid) || (row.verdict === null && row.tag !== null);
+    checked.push({ ...row, stages: own, valid, tampered });
   }
   return evaluate(blocks, wanted, checked, at);
 }
