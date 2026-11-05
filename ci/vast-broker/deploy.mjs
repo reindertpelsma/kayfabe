@@ -48,6 +48,19 @@ export const ALLOWED = new Set([
   'MAX_CONCURRENT_RENTALS',
   'MAX_CONCURRENT_CHECK',
   'MAX_CONCURRENT_SWEEP',
+  // Tiers (wtier, 2026-11-05; src/tier.js, src/policy.js): the release (large) profile's explicit
+  // caps and lists, and the middle tier's rotation and VRAM floor. Account cap is now 1-8.
+  'MAX_CONCURRENT_RELEASE',
+  'RELEASE_MAX_PRICE_USD_HOUR',
+  'RELEASE_DAILY_USD',
+  'RELEASE_DAILY_RENTALS',
+  'RELEASE_COST_CAP_USD',
+  'RELEASE_HARD_RUNTIME_MINUTES',
+  'RELEASE_RERUNS_PER_LEG',
+  'RELEASE_STAGES',
+  'RELEASE_DIES',
+  'MIDDLE_ROTATION',
+  'MIDDLE_VRAM_FLOOR_MB',
 ]);
 const bareOrigin = (value) => {
   try {

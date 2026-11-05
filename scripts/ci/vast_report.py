@@ -84,6 +84,11 @@ SPEC = [
     # The tier, a pure function of the Worker profile (ci/vast-broker/src/tier.js): 1 = master
     # gate with the Windows stage, 0 = die sweep. Absent (an older Worker): the payload's default.
     ("KF_MERGE_WINDOWS", False, _match(r"[01]")),
+    # 2026-11-05 (wtier): the run's tier (informational), the release tier's second Windows run on
+    # the same box (2) and its extra stages (colon-separated slot names). Absent: today's run.
+    ("KF_TIER", False, _match(r"small|middle|large|adhoc")),
+    ("KF_WINDOWS_RUNS", False, _match(r"[12]")),
+    ("KF_STAGES", False, _match(r"[a-z][a-z0-9_]{0,31}(?::[a-z][a-z0-9_]{0,31}){0,3}")),
 ]
 
 

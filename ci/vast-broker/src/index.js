@@ -1,4 +1,6 @@
-import { applyProfile, tierEnvironment } from './tier.js';
+import { applyProfile, tierEnvironment, tierForEvent, familyOf, profileCaps } from './tier.js';
+// prettier-ignore
+import {planRelease,classifyLeg,releaseVerdict,wantsRerun} from './release.js';
 // prettier-ignore
 import {DEFAULTS} from './defaults.js';
 import {
@@ -261,7 +263,7 @@ export function createService({
   }
   async function checkContract(record, instance, vast, cfg) {
     const price = instance && offerPrice(instance, cfg);
-    const cap = record.profile === 'sweep' ? cfg.sweepPrice : cfg.price;
+    const cap = profileCaps(cfg, record.profile ?? 'check').price;
     if (
       !price ||
       instance.inet_up_cost > cfg.maxInet ||
@@ -427,6 +429,8 @@ export function createService({
     await ledger.save(record);
     // Post-result inspection outlives the workflow job; before it, the run must be live.
     if (record.resultAt !== undefined) return;
+    // An admin or release leg has no GitHub run: its hard, boot and heartbeat deadlines bound it.
+    if (record.source === 'admin') return;
     const run = await github.run(record.run, true, true);
     if (run === null || run.status === 'completed') await close(record, vast, 'RUN_GONE');
   }
@@ -703,6 +707,14 @@ export function createService({
       validSecret(env.OWNER_STOP_TOKEN) && (await constantTimeEqual(env.OWNER_STOP_TOKEN, bearer));
     if (path === '/stop-all') {
       if (!owner) refuse('UNAUTHORIZED', 401);
+      // No batch may start another leg after an owner stop-all.
+      for (const [, id] of await ledger.storage.list({ prefix: 'batch-open:', limit: 257 })) {
+        const batch = await ledger.get('batch:' + id);
+        if (batch?.state !== 'RUNNING') continue;
+        batch.state = 'STOPPED';
+        for (const l of batch.legs) if (l.state === 'PENDING') l.state = 'MISSING';
+        await ledger.put('batch:' + id, batch);
+      }
       const records = await ledger.openRecords();
       for (const r of records) {
         r.closed = 'STOPPED';
@@ -847,6 +859,47 @@ export function createService({
         return json(expose(prior, key));
       }
     }
+    // The tier comes from the verified event (src/tier.js), never from the request body.
+    const admitted = await admit({
+      key,
+      target,
+      profile,
+      tierName: tierForEvent({ event: c.event_name, profile }),
+      cfg,
+      vast,
+      github,
+      preferences: rentRequest.preferences,
+      runnerNonce: rentRequest.runner_nonce,
+      runnerSeconds: rentRequest.remaining_seconds,
+      force: Number(c.run_attempt) > 1, // An owner re-run; the SHA gap below still applies.
+      retrySource,
+    });
+    return json(expose(admitted ?? retrySource, key));
+  }
+  // One admission path for every rental: the GitHub-triggered check and sweep, the owner's admin
+  // start and each leg of a release. Every check below applies to all of them; the only
+  // differences are inputs: a GitHub run brings its runner's remaining wait budget and may carry a
+  // provider-fault replacement; a batch leg (admin start or release) never names a GitHub run, and
+  // only a release leg is exempt from the one-rental-per-commit gap inside its own release (the
+  // release holds that gap, and the release cost cap bounds its legs). The results store records
+  // every rental admitted here from the ledger; records carry `tier`, `family`, `source`, `batch`.
+  async function admit({
+    key,
+    target,
+    profile,
+    tierName,
+    cfg,
+    vast,
+    github,
+    preferences,
+    runnerNonce,
+    runnerSeconds,
+    force = false,
+    retrySource,
+    leg,
+    market,
+    costGuard,
+  }) {
     // Review R1: one attempt per run key, also after retention removed the record. Guaranteed:
     // while the spend row exists the key is refused. The row is pruned once its run ended more
     // than 30 days ago (ledger.budgets), so after that a token minted for the same run attempt
@@ -856,14 +909,21 @@ export function createService({
       budgetRefuse('cost-key', { started_at: previousCost.started, ended_at: previousCost.ended });
     // Review B2: the commit gap before the cap, so a repeated commit is refused at once instead
     // of waiting BUSY, and before the supersede, so it closes nobody.
-    const cached = await ledger.get('sha:' + target.sha),
-      force = Number(c.run_attempt) > 1; // An owner re-run; the SHA gap below still applies.
+    const cached = await ledger.get('sha:' + target.sha);
     // A fresh runner nonce may not inherit another run's result.
-    if (!retrySource && cached && (!force || now() - cached.started < cfg.gap))
+    if (
+      !retrySource &&
+      !(leg && (await ledger.batchLeg(leg.batch, key, target.sha))) &&
+      cached &&
+      (!force || now() - cached.started < cfg.gap)
+    )
       budgetRefuse('sha-gap', { gap_ms: cfg.gap, elapsed_ms: Math.max(0, now() - cached.started) });
     // Review B1: a run whose remaining budget cannot hold the hard limit plus the margin is not
     // admitted (it would time out with a paid box) and supersedes nothing.
-    if (rentRequest.remaining_seconds * 1000 < cfg.hard + DEFAULTS.admissionMarginMinutes * 60000)
+    if (
+      runnerSeconds !== undefined &&
+      runnerSeconds * 1000 < cfg.hard + DEFAULTS.admissionMarginMinutes * 60000
+    )
       refuse('NOT_ELIGIBLE', 409, 'RUNNER_TIME');
     // Owner ruling 2026-10-24 item 8: a set of active runs (every record not yet ended). A newer
     // run supersedes only the older runs of its own branch; an older run's late request never
@@ -884,8 +944,11 @@ export function createService({
       refuse('BUSY', 409);
     if (!validSecret(env.RUN_TOKEN_SECRET) || !validSecret(env.OWNER_STOP_TOKEN)) refuse();
     await github.boxProtocol(target.sha);
-    const market = retrySource ? new OfferBook(now) : offers;
-    const evaluation = await market.evaluate(vast, cfg, ledger, profile);
+    const book = retrySource || market !== undefined ? new OfferBook(now) : offers;
+    const evaluation = await book.evaluate(vast, cfg, ledger, profile, {
+      market,
+      vramFloorMb: tierName === 'middle' ? cfg.middleVramFloorMb : 0,
+    });
     if (retrySource) {
       const remaining = retrySource.runBudgetUsd - rentalCost(retrySource, retrySource.ended);
       evaluation.allowed = evaluation.allowed.filter(
@@ -896,13 +959,19 @@ export function createService({
           offer.host_id !== retrySource.hostId &&
           offer.pricing.total <= remaining,
       );
-      if (!evaluation.allowed.length) return json(expose(retrySource, key));
+      if (!evaluation.allowed.length) return null;
     }
-    const chosen = await offers.select(evaluation, cfg, ledger, profile, rentRequest.preferences),
+    const chosen = await offers.select(evaluation, cfg, ledger, profile, preferences, {
+        tierName,
+        ...(leg?.die ? { die: leg.die } : {}),
+        avoidMachines: leg?.avoidMachines ?? [],
+        avoidHosts: leg?.avoidHosts ?? [],
+      }),
       offer = chosen.offer,
       cost = offer.pricing.total,
       credit = await vast.credit();
     try {
+      if (costGuard) costGuard(cost);
       await ledger.budgets(cfg, now(), cost, null, {
         credit,
         sameAttempt: retrySource !== undefined,
@@ -921,6 +990,19 @@ export function createService({
       r = {
         ...target,
         profile,
+        tier: tierName,
+        family: chosen.family ?? familyOf(offer.die, cfg),
+        ...(chosen.wanted !== undefined && chosen.wanted !== chosen.family
+          ? { familyWanted: chosen.wanted }
+          : {}),
+        ...(leg
+          ? {
+              batch: leg.batch,
+              source: 'admin',
+              windowsRuns: leg.windowsRuns,
+              stages: leg.stages,
+            }
+          : { source: 'github' }),
         die: offer.die,
         country: offer.country,
         geolocation:
@@ -943,7 +1025,7 @@ export function createService({
         key,
         label: 'kf-ci-' + key,
         nonce: n,
-        runnerNonce: rentRequest.runner_nonce,
+        runnerNonce,
         logHash: '0'.repeat(64),
         phase: 'CREATING',
         bootDeadline: started + cfg.boot,
@@ -974,8 +1056,7 @@ export function createService({
         rateCount: 0,
         liveCheckedAt: null,
       };
-    r.runBudgetUsd =
-      retrySource?.runBudgetUsd ?? (profile === 'sweep' ? cfg.sweepDaily : cfg.daily);
+    r.runBudgetUsd = retrySource?.runBudgetUsd ?? profileCaps(cfg, profile).dailyUsd;
     r.providerRetries = retrySource ? 1 : 0;
     if (retrySource) {
       r.originalStarted = retrySource.started;
@@ -1019,10 +1100,17 @@ export function createService({
         ' reason=' +
         r.selectionReason +
         ' ignored=' +
-        r.preferencesIgnored,
+        r.preferencesIgnored +
+        ' tier=' +
+        tierName +
+        ' family=' +
+        r.family +
+        (r.familyWanted ? ' fallback_from=' + r.familyWanted : ''),
       cfg,
     );
     if (profile === 'sweep') await ledger.put('rotation:lastDie', r.die);
+    if (chosen.reason === 'ROTATE' && tierName === 'middle')
+      await ledger.put('rotation:middleFamily', chosen.family);
     try {
       const environment = {
         KF_PROTOCOL: DEFAULTS.boxProtocol,
@@ -1039,8 +1127,13 @@ export function createService({
         KF_HEARTBEAT_SECONDS: cfg.heartbeat / 1000,
         KF_GRACE_PASS: cfg.passGrace / 1000,
         KF_GRACE_FAIL: cfg.failGrace / 1000,
-        // The tier: a pure function of the profile (src/tier.js), never a request field.
-        ...tierEnvironment(profile),
+        // The tier: a pure function of the profile and the verified event or admin batch
+        // (src/tier.js), never a request field.
+        ...tierEnvironment(profile, {
+          tierName,
+          windowsRuns: leg?.windowsRuns ?? 1,
+          stages: leg?.stages ?? [],
+        }),
         // Pass-through for the hostname-wide Access policy; the Worker never verifies Access.
         ...(env.BOX_ACCESS_ID && env.BOX_ACCESS_SECRET
           ? { KF_ACCESS_ID: env.BOX_ACCESS_ID, KF_ACCESS_SECRET: env.BOX_ACCESS_SECRET }
@@ -1066,7 +1159,357 @@ export function createService({
     r.phase = 'BOOTING';
     await ledger.save(r);
     console.log(JSON.stringify({ event: 'rented' }));
-    return json(expose(r));
+    return r;
+  }
+  // ---- Admin starts and the release (large) tier: batches (2026-11-05, wtier) ----------------
+  // A batch is one owner start: a single leg for small or middle, the planned legs of a release.
+  // Its legs are ordinary rentals through admit(); the cron tick classifies ended legs, schedules
+  // a fresh-box re-run for RETRY/UNATTRIBUTED within the release cost cap, starts pending legs as
+  // slots and caps allow, and finishes with a verdict over (family, die, platform) cells.
+  const BATCH_KEYS = ['commit_sha', 'die', 'tier'];
+  function batchRequest(body) {
+    if (
+      !body ||
+      typeof body !== 'object' ||
+      Array.isArray(body) ||
+      !Object.keys(body).every((k) => BATCH_KEYS.includes(k)) ||
+      !hexSha(body.commit_sha) ||
+      !['small', 'middle', 'large'].includes(body.tier) ||
+      (body.die !== undefined &&
+        (body.tier === 'large' ||
+          typeof body.die !== 'string' ||
+          !/^[A-Z][A-Z0-9_]{1,23}$/.test(body.die)))
+    )
+      refuse('BAD_REQUEST', 400);
+    return body;
+  }
+  function batchConfig(tierName) {
+    const cfg = configuration(env);
+    applyProfile(cfg, tierName === 'large' ? 'release' : 'check');
+    return cfg;
+  }
+  const tierDies = (cfg, tierName) =>
+    tierName === 'middle' ? Object.values(cfg.middleRotation).flat() : cfg.checkDies;
+  async function releaseMarket(vast, cfg) {
+    const seen = new Map();
+    for (const cc of Object.values(cfg.families))
+      for (const offer of await vast.offers({ computeCap: cc, maxPrice: cfg.releasePrice }))
+        if (!seen.has(offer.id)) seen.set(offer.id, offer);
+    return [...seen.values()];
+  }
+  async function planFor(request, cfg, vast) {
+    if (request.tier === 'large') {
+      const market = await releaseMarket(vast, cfg);
+      const evaluation = await new OfferBook(now).evaluate(vast, cfg, ledger, 'release', {
+        market,
+      });
+      return planRelease(evaluation.allowed, cfg, {
+        budget: await ledger.budgetSummary(cfg, now()),
+        credit: await vast.credit(),
+      });
+    }
+    if (request.die !== undefined && !tierDies(cfg, request.tier).includes(request.die))
+      refuse('BAD_REQUEST', 400, 'DIE_NOT_IN_TIER');
+    const evaluation = await new OfferBook(now).evaluate(vast, cfg, ledger, 'check', {
+      market: await vast.offers(),
+      vramFloorMb: request.tier === 'middle' ? cfg.middleVramFloorMb : 0,
+    });
+    let chosen = null,
+      refusal = null;
+    try {
+      chosen = await offers.select(evaluation, cfg, ledger, 'check', undefined, {
+        tierName: request.tier,
+        ...(request.die ? { die: request.die } : {}),
+      });
+    } catch (e) {
+      refusal = e instanceof BrokerError ? (e.reason ?? e.state) : 'UNAVAILABLE';
+    }
+    return {
+      tier: request.tier,
+      profile: 'check',
+      hard_minutes: cfg.hard / 60000,
+      price_cap_usd_hour: cfg.price,
+      vram_floor_mb: request.tier === 'middle' ? cfg.middleVramFloorMb : 0,
+      legs: chosen ? 1 : 0,
+      die: chosen?.offer.die ?? null,
+      family: chosen ? (chosen.family ?? familyOf(chosen.offer.die, cfg)) : null,
+      machine_id: chosen ? providerId(chosen.offer.machine_id) : null,
+      estimate_usd: chosen ? Math.round(chosen.offer.pricing.total * 10000) / 10000 : 0,
+      admitted: chosen !== null,
+      refusals: refusal ? [refusal] : [],
+    };
+  }
+  async function adminPlan(body) {
+    const request = batchRequest(body),
+      cfg = batchConfig(request.tier),
+      vast = new Vast(fetcher, cfg, env.VAST_API_KEY);
+    return { plan: await planFor(request, cfg, vast), renting: false };
+  }
+  async function adminStart(body) {
+    if (env.RENTING_ENABLED !== 'true') refuse('RENTING_DISABLED', 503);
+    const request = batchRequest(body),
+      cfg = batchConfig(request.tier),
+      vast = new Vast(fetcher, cfg, env.VAST_API_KEY),
+      token = env.GITHUB_API_TOKEN;
+    if (request.die !== undefined && !tierDies(cfg, request.tier).includes(request.die))
+      refuse('BAD_REQUEST', 400, 'DIE_NOT_IN_TIER');
+    if (token && (token.length > 1024 || !/^[\x21-\x7e]+$/.test(token))) refuse();
+    const github = new Github(fetcher, cfg, token, { cache: githubCache, now });
+    // Forks never trigger rentals: the commit must be on this repository's master or next.
+    await github.reachable(request.commit_sha);
+    await github.boxProtocol(request.commit_sha);
+    for (const [, open] of await ledger.storage.list({ prefix: 'batch-open:', limit: 257 })) {
+      const other = await ledger.get('batch:' + open);
+      if (
+        other?.state === 'RUNNING' &&
+        other.sha === request.commit_sha &&
+        other.tier === request.tier
+      )
+        refuse('BUSY', 409, 'BATCH_RUNNING');
+    }
+    const plan = await planFor(request, cfg, vast);
+    if (!plan.admitted) {
+      const error = new BrokerError('NOT_ELIGIBLE', 409, 'PLAN_REFUSED');
+      error.plan = plan;
+      throw error;
+    }
+    const seq = ((await ledger.get('batch-seq')) ?? 0) + 1;
+    await ledger.put('batch-seq', seq);
+    const id = '8' + String(now()).padStart(15, '0') + String(seq % 1000).padStart(3, '0');
+    const legs = [];
+    const leg = (family, die, windowsRuns) => {
+      const n = legs.length + 1;
+      legs.push({
+        seq: n,
+        key: id + '-' + n,
+        family,
+        die,
+        windowsRuns,
+        state: 'PENDING',
+        avoidMachines: [],
+        avoidHosts: [],
+        rerunDepth: 0,
+      });
+    };
+    if (request.tier === 'large') {
+      for (const f of plan.families)
+        for (const c of f.cells) for (const l of c.legs) leg(f.family, c.die, l.windows_runs);
+    } else leg(request.die ? familyOf(request.die, cfg) : null, request.die ?? null, 1);
+    const batch = {
+      id,
+      sha: request.commit_sha,
+      tier: request.tier,
+      profile: request.tier === 'large' ? 'release' : 'check',
+      state: 'RUNNING',
+      created: now(),
+      updated: now(),
+      runnerNonce: await sha256Hex(
+        'kf-batch:' + id + ':' + (random ? random() : crypto.randomUUID()),
+      ),
+      costCapUsd: request.tier === 'large' ? cfg.releaseCostCap : null,
+      estimateUsd: plan.estimate_usd,
+      windowsRunsPerDie: request.tier === 'large' ? cfg.releaseWindowsRuns : 1,
+      diesPerFamily: cfg.releaseDiesPerFamily,
+      releaseDies: request.tier === 'large' ? cfg.releaseDies : {},
+      stages: request.tier === 'large' ? cfg.releaseStages : [],
+      reruns: request.tier === 'large' ? cfg.releaseReruns : 0,
+      legs,
+      verdict: null,
+    };
+    await ledger.put('batch:' + id, batch);
+    await ledger.put('batch-open:' + id, id);
+    console.log(JSON.stringify({ event: 'batch_started', tier: batch.tier, legs: legs.length }));
+    await tickBatch(batch, vast, github);
+    return batchView(batch, plan);
+  }
+  function batchView(batch, plan) {
+    return {
+      batch: batch.id,
+      sha: batch.sha,
+      tier: batch.tier,
+      state: batch.state,
+      cost_cap_usd: batch.costCapUsd,
+      estimate_usd: batch.estimateUsd,
+      spent_usd: batch.spentUsd ?? 0,
+      verdict: batch.verdict,
+      legs: batch.legs.map((l) => ({
+        key: l.key,
+        family: l.family,
+        die: l.die,
+        windows_runs: l.windowsRuns,
+        state: l.state,
+        verdict: l.outcome?.verdict ?? null,
+        rerun_of: l.rerunOf ?? null,
+      })),
+      ...(plan ? { plan } : {}),
+    };
+  }
+  // Spend of a batch: settled legs at their cost, open legs at their reserved liability.
+  async function batchSpend(batch) {
+    let spent = 0;
+    for (const l of batch.legs) {
+      if (l.state === 'ENDED') spent += l.costUsd ?? 0;
+      else if (l.state === 'STARTED') {
+        const r = await ledger.get('record:' + l.key);
+        if (r)
+          spent +=
+            ((r.computeStoragePrice ?? r.price) * (r.billingTtl ?? r.ttl)) / 3600000 +
+            (r.bandwidthCost ?? 0);
+      }
+    }
+    return spent;
+  }
+  async function tickBatch(batch, vast, github) {
+    const cfg = batchConfig(batch.tier);
+    // 1. Ended legs: classify once, then a fresh-box re-run for RETRY/UNATTRIBUTED if allowed.
+    for (const l of [...batch.legs]) {
+      if (l.state !== 'STARTED') continue;
+      const r = await ledger.get('record:' + l.key);
+      if (r && r.ended === null) continue;
+      l.state = 'ENDED';
+      // Only this batch's own run of the SAME commit counts (no tree-key carry-over, coordinator
+      // ruling 2026-11-05): a record of another commit can never answer a release cell.
+      l.outcome = classifyLeg(r?.sha === batch.sha && r?.batch === batch.id ? r : undefined, {
+        windowsRuns: l.windowsRuns,
+        stages: batch.stages,
+      });
+      l.costUsd = r ? rentalCost(r, r.ended) : 0;
+      l.machineId = r?.machineId ?? null;
+      if (batch.state === 'RUNNING' && wantsRerun(l, batch.reruns)) {
+        const n = Math.max(...batch.legs.map((x) => x.seq)) + 1;
+        batch.legs.push({
+          seq: n,
+          key: batch.id + '-' + n,
+          family: l.family,
+          die: l.die,
+          windowsRuns: l.windowsRuns,
+          state: 'PENDING',
+          avoidMachines: [...l.avoidMachines, ...(r?.machineId ? [r.machineId] : [])],
+          avoidHosts: [...l.avoidHosts, ...(r?.hostId ? [r.hostId] : [])],
+          rerunDepth: (l.rerunDepth ?? 0) + 1,
+          rerunOf: l.key,
+          queued: now(),
+        });
+      }
+    }
+    // The ledger's batch-leg exemption reads the stored batch: store new re-run legs first.
+    await ledger.put('batch:' + batch.id, batch);
+    // 2. Pending legs: start while slots and caps allow; give up after the start window.
+    let market;
+    for (const l of batch.legs) {
+      if (l.state !== 'PENDING') continue;
+      if (
+        batch.state !== 'RUNNING' ||
+        now() - (l.queued ?? batch.created) > cfg.releaseStartWindow
+      ) {
+        l.state = 'MISSING';
+        l.outcome = null;
+        continue;
+      }
+      if (await ledger.get('record:' + l.key)) {
+        l.state = 'STARTED';
+        continue;
+      }
+      try {
+        if (batch.tier === 'large') market ??= await releaseMarket(vast, cfg);
+        const spent = await batchSpend(batch);
+        const started = await admit({
+          key: l.key,
+          target: {
+            sha: batch.sha,
+            branch: 'batch/' + batch.id,
+            run: batch.id,
+            attempt: String(l.seq),
+          },
+          profile: batch.profile,
+          tierName: batch.tier,
+          cfg,
+          vast,
+          github,
+          preferences: undefined,
+          runnerNonce: batch.runnerNonce,
+          leg: {
+            batch: batch.id,
+            die: l.die ?? undefined,
+            windowsRuns: l.windowsRuns,
+            stages: batch.stages,
+            avoidMachines: l.avoidMachines,
+            avoidHosts: l.avoidHosts,
+          },
+          market,
+          costGuard:
+            batch.costCapUsd === null
+              ? undefined
+              : (cost) => {
+                  if (spent + cost > batch.costCapUsd)
+                    budgetRefuse('release-cost-cap', {
+                      cost_usd: cost,
+                      spent_usd: spent,
+                      cap_usd: batch.costCapUsd,
+                    });
+                },
+        });
+        l.state = 'STARTED';
+        delete l.lastRefusal;
+        l.machineId = started.machineId;
+        l.family ??= started.family;
+        l.die ??= started.die;
+        // A later leg of the same die (the second Windows run) belongs on another machine.
+        for (const sibling of batch.legs)
+          if (sibling.state === 'PENDING' && sibling.die === l.die && sibling !== l) {
+            sibling.avoidMachines = [...new Set([...sibling.avoidMachines, started.machineId])];
+            if (started.hostId)
+              sibling.avoidHosts = [...new Set([...sibling.avoidHosts, started.hostId])];
+          }
+      } catch (e) {
+        if (await ledger.get('record:' + l.key)) l.state = 'STARTED';
+        const reason = e instanceof BrokerError ? (e.reason ?? e.state) : 'UNAVAILABLE';
+        l.lastRefusal = reason;
+        // No offer for this die: try the next leg. Busy, a cap or anything else: next tick.
+        if (reason !== 'NO_ALLOWED_OFFERS') break;
+      }
+    }
+    // 3. The verdict; a batch with nothing pending or running is finished.
+    batch.spentUsd = Math.round((await batchSpend(batch)) * 10000) / 10000;
+    const view = releaseVerdict(batch);
+    batch.verdict = view.verdict;
+    batch.cells = view.cells;
+    batch.updated = now();
+    if (!batch.legs.some((l) => l.state === 'PENDING' || l.state === 'STARTED')) {
+      if (batch.state === 'RUNNING') batch.state = 'DONE';
+      await ledger.storage.delete('batch-open:' + batch.id);
+    }
+    await ledger.put('batch:' + batch.id, batch);
+  }
+  async function batchTicks() {
+    const cfg = configuration(env);
+    const vast = new Vast(fetcher, cfg, env.VAST_API_KEY),
+      github = new Github(fetcher, cfg, env.GITHUB_API_TOKEN, { cache: githubCache, now });
+    for (const [, id] of await ledger.storage.list({ prefix: 'batch-open:', limit: 64 })) {
+      const batch = await ledger.get('batch:' + id);
+      if (!batch) continue;
+      try {
+        await tickBatch(batch, vast, github);
+      } catch {
+        console.log(JSON.stringify({ event: 'batch_tick_unavailable' }));
+      }
+    }
+  }
+  // Owner stop of a whole batch: no new legs, every open leg closed by the existing stop path.
+  async function stopBatches(ids, vast) {
+    for (const id of ids) {
+      const batch = await ledger.get('batch:' + id);
+      if (!batch || batch.state !== 'RUNNING') continue;
+      batch.state = 'STOPPED';
+      for (const l of batch.legs) {
+        if (l.state === 'PENDING') l.state = 'MISSING';
+        if (l.state !== 'STARTED') continue;
+        const r = await ledger.get('record:' + l.key);
+        if (r && r.ended === null) await close(r, vast, 'STOPPED');
+      }
+      await ledger.put('batch:' + id, batch);
+      await tickBatch(batch, vast, null);
+    }
   }
   const releaseUpload = async (request) => {
     if (request.body && !request.body.locked) await request.body.cancel().catch(() => {});
@@ -1207,6 +1650,7 @@ export function createService({
               console.log(JSON.stringify({ event: 'cleanup_unavailable' }));
             }
           }
+          await batchTicks();
           await ledger.expire(now(), cfg);
         } catch (e) {
           // A configuration refusal names only the variable; operators must not read silence.
@@ -1219,6 +1663,18 @@ export function createService({
           );
         }
       });
+    },
+    // Owner admin routes (BrokerLedger, internal origin only): the same serialized ledger queue.
+    adminPlan: (body) => serial(2, () => adminPlan(body), '@admin-plan'),
+    adminStart: (body) => serial(2, () => adminStart(body), '@admin-start'),
+    adminStopBatch: (id) =>
+      serial(0, () => stopBatches([id], new Vast(fetcher, configuration(env), env.VAST_API_KEY))),
+    adminBatches: async () => {
+      const entries = await ledger.storage.list({ prefix: 'batch:', limit: 1000 });
+      return [...entries.values()]
+        .sort((a, b) => b.created - a.created)
+        .slice(0, 50)
+        .map((b) => batchView(b));
     },
   };
 }
@@ -1311,6 +1767,9 @@ export class BrokerLedger {
                 sha: text(r.sha),
                 branch: text(r.branch),
                 profile: text(r.profile ?? 'check'),
+                tier: text(r.tier ?? null),
+                family: text(r.family ?? null),
+                batch: text(r.batch ?? null),
                 die: text(r.die),
                 gpu_model: text(r.hardware?.gpu_name ?? r.gpu),
                 machine_id: providerId(r.machineId),
@@ -1334,9 +1793,42 @@ export class BrokerLedger {
             configuration(this.env),
             Date.now(),
           );
-          return json({ runs, budget });
+          return json({ runs, budget, batches: await this.service.adminBatches() });
         } catch {
           return json({ error: 'List unavailable' }, 503);
+        }
+      }
+      // Owner admin start and plan (2026-11-05, wtier). Reachable only through the admin Worker's
+      // DO binding (internal origin), which checks the owner's Cloudflare Access identity. The
+      // plan rents nothing; the start enters the same admission path as a PR-triggered rental.
+      if (
+        (url.pathname === '/admin/start' || url.pathname === '/admin/plan') &&
+        request.method === 'POST'
+      ) {
+        let body;
+        try {
+          body = JSON.parse(
+            new TextDecoder('utf-8', { fatal: true }).decode(await readBounded(request, 512)),
+          );
+        } catch {
+          return json({ error: 'Invalid request' }, 400);
+        }
+        try {
+          const answer =
+            url.pathname === '/admin/plan'
+              ? await this.service.adminPlan(body)
+              : await this.service.adminStart(body);
+          return json(answer);
+        } catch (e) {
+          return json(
+            {
+              error: e instanceof BrokerError ? e.state : 'UNAVAILABLE',
+              ...(e instanceof BrokerError && e.reason ? { reason: e.reason } : {}),
+              ...(e instanceof BrokerError && e.budget ? { budget: e.budget } : {}),
+              ...(e instanceof BrokerError && e.plan ? { plan: e.plan } : {}),
+            },
+            e instanceof BrokerError ? e.status : 503,
+          );
         }
       }
       if (url.pathname === '/admin/stop' && request.method === 'POST') {
@@ -1349,7 +1841,8 @@ export class BrokerLedger {
             !(
               selection.all === true ||
               (typeof selection.run === 'string' &&
-                /^[1-9][0-9]{0,19}-[1-9][0-9]{0,19}$/.test(selection.run))
+                /^[1-9][0-9]{0,19}-[1-9][0-9]{0,19}$/.test(selection.run)) ||
+              (typeof selection.batch === 'string' && /^8[0-9]{18}$/.test(selection.batch))
             )
           )
             throw Error();
@@ -1358,6 +1851,14 @@ export class BrokerLedger {
         }
         if (!validSecret(this.env.OWNER_STOP_TOKEN))
           return json({ error: 'Stop unavailable' }, 503);
+        if (selection.batch !== undefined) {
+          try {
+            await this.service.adminStopBatch(selection.batch);
+            return json({ state: 'NONE' });
+          } catch {
+            return json({ error: 'Stop unavailable' }, 503);
+          }
+        }
         // Enter exactly the existing owner stop path, including its queue and cleanup checks.
         const path = selection.all ? '/stop-all' : '/stop/' + selection.run;
         const prefix = this.env.BROKER_PATH_PREFIX ? '/' + this.env.BROKER_PATH_PREFIX : '';

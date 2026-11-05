@@ -78,17 +78,30 @@ const market = (h) => {
 const named = (fn, name) =>
   assert.throws(fn, (e) => e.state === 'CONFIG_VAR:' + name && e.status === 503, name);
 
-test('item 8: the cap defaults to 1 and is validated (1 to 4, per profile at most the cap)', () => {
+// 2026-11-05 (wtier): the account cap may be 1 to 8 (the release tier's up to 8 boxes); the
+// release profile's cap defaults to min(8, account cap). Everything else is unchanged.
+test('item 8: the cap defaults to 1 and is validated (1 to 8, per profile at most the cap)', () => {
   assert.equal(DEFAULTS.maxConcurrentRentals, 1);
   const cfg = configuration(env);
   assert.equal(cfg.maxConcurrent, 1);
-  assert.deepEqual(cfg.maxConcurrentProfile, { check: 1, sweep: 1 });
+  assert.deepEqual(cfg.maxConcurrentProfile, { check: 1, sweep: 1, release: 1 });
   const four = configuration({ ...env, MAX_CONCURRENT_RENTALS: '4', MAX_CONCURRENT_SWEEP: '2' });
   assert.equal(four.maxConcurrent, 4);
-  assert.deepEqual(four.maxConcurrentProfile, { check: 4, sweep: 2 });
-  for (const name of ['MAX_CONCURRENT_RENTALS', 'MAX_CONCURRENT_CHECK', 'MAX_CONCURRENT_SWEEP'])
-    for (const bad of ['0', '5', '1.5', 'x', '', ' 2', '02', '-1'])
+  assert.deepEqual(four.maxConcurrentProfile, { check: 4, sweep: 2, release: 4 });
+  const eight = configuration({ ...env, MAX_CONCURRENT_RENTALS: '8', MAX_CONCURRENT_CHECK: '1' });
+  assert.deepEqual(eight.maxConcurrentProfile, { check: 1, sweep: 8, release: 8 });
+  for (const name of [
+    'MAX_CONCURRENT_RENTALS',
+    'MAX_CONCURRENT_CHECK',
+    'MAX_CONCURRENT_SWEEP',
+    'MAX_CONCURRENT_RELEASE',
+  ])
+    for (const bad of ['0', '9', '1.5', 'x', '', ' 2', '02', '-1'])
       named(() => configuration({ ...env, MAX_CONCURRENT_RENTALS: '4', [name]: bad }), name);
+  named(
+    () => configuration({ ...env, MAX_CONCURRENT_RENTALS: '4', MAX_CONCURRENT_RELEASE: '5' }),
+    'MAX_CONCURRENT_RELEASE',
+  );
   named(() => configuration({ ...env, MAX_CONCURRENT_CHECK: '2' }), 'MAX_CONCURRENT_CHECK');
   named(
     () => configuration({ ...env, MAX_CONCURRENT_RENTALS: '2', MAX_CONCURRENT_SWEEP: '3' }),

@@ -176,5 +176,49 @@
   "preferredCountries": ["US", "CA"],
   "maxInetUsdPerGb": 0.005,
   "lifecycleCacheMs": 60000,
-  "deniedCountries": ["CU", "IR", "KP", "SY", "CN", "HK", "MO"]
+  "deniedCountries": ["CU", "IR", "KP", "SY", "CN", "HK", "MO"],
+  "releasePrice": 2,
+  "releaseDaily": 40,
+  "releaseDailyCount": 24,
+  "releaseCostCap": 40,
+  "releaseHardMinutes": 300,
+  "maxConcurrentRelease": 8,
+  "releaseRerunsPerLeg": 1,
+  "releaseStartWindowMinutes": 360,
+  "middleVramFloorMb": 0,
+  "families": {
+    "turing": 750,
+    "ampere": 860,
+    "ada": 890,
+    "blackwell": 1200
+  },
+  "middleRotation": {
+    "turing": ["TU106", "TU116"],
+    "ampere": ["GA106", "GA104", "GA102"],
+    "ada": ["AD104", "AD102"],
+    "blackwell": ["GB205", "GB206", "GB203"]
+  },
+  "releaseDies": {
+    "turing": ["TU106", "TU116"],
+    "ampere": ["GA106", "GA104", "GA102"],
+    "ada": ["AD104", "AD102", "AD103", "AD106"],
+    "blackwell": ["GB205", "GB206", "GB202", "GB203"]
+  },
+  "releaseDiesPerFamily": 2,
+  "releaseWindowsRunsPerDie": 2,
+  "releaseStages": [],
+  "stageSlots": {
+    "specviewperf": {
+      "tiers": ["large"],
+      "state": "PLUMBING"
+    },
+    "two_guests": {
+      "tiers": ["middle", "large"],
+      "state": "DESIGN_ONLY"
+    },
+    "trio": {
+      "tiers": ["middle", "large"],
+      "state": "DESIGN_ONLY"
+    }
+  }
 }

@@ -1,12 +1,24 @@
 # Owner Vast CI admin
 
-STATUS: LIVE v2 source, 2026-10-26; deployment and Access setup remain coordinator work.
+STATUS: LIVE v3 source, 2026-11-05 (plan and start added by branch `claude/worker-tier-20261105`, not deployed); deployment and Access setup remain coordinator work.
 
 CODE READ (`worker.js`, `wrangler.toml`): this is owner-only test infrastructure. Its own `kayfabe-vast-admin.<account-subdomain>.workers.dev` hostname serves one plain table, refreshes every ten seconds, and offers Stop per active run and Stop all with a confirmation prompt. Every page and API request verifies `Cf-Access-Jwt-Assertion` with RS256, the team's JWKS, the application's audience and issuer, expiry, and the exact configured owner email. Missing configuration refuses requests.
 
 CODE READ (`worker.js`, broker `src/index.js`): the `LEDGER` binding targets `BrokerLedger` in `kayfabe-vast-broker`, using the existing `owner-shared-vast-account-enam-v1` object name. The admin Worker calls only its `fetch()` with `https://internal.invalid/admin/list` or `/admin/stop`; it never reads storage. The DO executes stops through its existing owner routes, with the main Worker's environment. Keep all Vast credentials and the existing owner stop token in the main Worker; the admin Worker needs neither.
 
 CODE READ (broker `src/index.js`, `src/ledger.js`): listing returns at most 100 retained runs, newest first, with only scalar summary fields: run, sha, branch, profile, die, GPU, machine/host/instance IDs, state, phase, verdict, estimated USD cost, start/end timestamps and boot seconds derived from the first report when recorded. Logs and capabilities are excluded, including from stop responses. Main broker retention still removes old records. The bounded storage read refuses with 503 at 1,000 retained records rather than silently returning the wrong newest page. Cost is an estimate using the broker's recorded rate and bandwidth allowance, not a provider invoice.
+
+## Plan and start a run (v3, 2026-11-05)
+
+CODE READ (`worker.js`, broker `BrokerLedger.fetch` and `src/index.js` adminPlan/adminStart): the
+page gains a form (commit, tier small/middle/large, optional die) with **Plan** and a confirmed
+**Start**, and a batch list. `POST /api/plan` and `POST /api/start` take only
+`{commit_sha, tier, die?}` (at most 512 bytes, `application/json`, same-origin), behind the same
+Access check, and forward once to the DO's internal `/admin/plan` or `/admin/start`; the DO's
+answer (a plan, a batch view, or a refusal code with the plan) is relayed as is and carries no log,
+token or capability. The start enters the broker's ordinary admission path; plan rents nothing.
+`POST /api/stop` also accepts `{"batch": "<19-digit id>"}` to end one batch. No new secret, binding
+or Access app. How a release works: [broker README](../vast-broker/README.md).
 
 ## Retained log viewer and Stop check (v2)
 

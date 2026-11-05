@@ -1,5 +1,8 @@
 # Owner deployment and independent cleanup
 
+STATUS: LIVE, 2026-11-05 (section "Tiers and the release run" added by branch
+`claude/worker-tier-20261105`; not deployed).
+
 [CODE READ: wrangler.toml, deployment.json, deploy.mjs] The owner/controller deploys; no round
 performs a deployment or a provider call. Keep `RENTING_ENABLED=false` until acceptance.
 `main = "src/index.js"`: wrangler bundles the source with the lockfile-pinned dependencies (there
@@ -453,6 +456,61 @@ status of that exact master sha is `success` from `github-actions[bot]` with des
 other branches and a path-policy `NOT_NEEDED` status refuse, so a docs-only master commit cannot
 be released on its own. TODO (owner): the planned tag-only release CI will replace this
 dispatch workflow; the gate then needs its trigger rule restated.
+
+## Tiers and the release run (wtier, 2026-11-05)
+
+CODE READ (`src/tier.js`, `src/policy.js`, `src/release.js`, `deploy.mjs`, branch
+`claude/worker-tier-20261105`); nothing here was deployed or run against Vast. How to plan and
+start a release: [README](README.md), "Tiers, the admin start and the release run".
+
+What changes on deploy without any new var: a master PR (middle tier) rotates its die across the
+four families instead of taking the cheapest `CHECK_DIES` class; boxes carry `KF_TIER`; the admin
+page gains Plan and Start; the cron advances batches. The account cap stays 1, so a release started
+with the defaults runs its legs one at a time (about 12 legs x up to 300 minutes).
+
+Vars for running a release (public, in the vars file outside the checkout; `deploy.mjs` accepts
+them): `MAX_CONCURRENT_RENTALS=8` together with `MAX_CONCURRENT_CHECK=1` and
+`MAX_CONCURRENT_SWEEP=1` (raising the account cap alone also raises check and sweep), optionally
+`MAX_CONCURRENT_RELEASE` (default min(8, account cap)), `RELEASE_COST_CAP_USD` (default 40, at most
+`RELEASE_DAILY_USD`), `RELEASE_MAX_PRICE_USD_HOUR` (2), `RELEASE_DAILY_USD` (40),
+`RELEASE_DAILY_RENTALS` (24), `RELEASE_HARD_RUNTIME_MINUTES` (300, may only be lowered),
+`RELEASE_RERUNS_PER_LEG` (1, 0 to 2), `RELEASE_STAGES` (`[]`; `["specviewperf"]` only once its
+lane exists), `RELEASE_DIES`, `MIDDLE_ROTATION` (JSON family lists, no spaces), and
+`MIDDLE_VRAM_FLOOR_MB` (0 = off; TBD from the trio footprints). The shared
+`ROLLING_SPEND_USD` (default 30) also bounds a release: the offline plan of the synthetic market
+estimates 18.63 USD from SYNTHETIC prices, so a release in a month with other
+spend needs it raised. INFERRED (admin README storage note): 8 concurrent boxes write 8 log streams
+into the same Durable Object; keep `LOG_RETENTION_HOURS=6` and check storage after the first
+release.
+
+Rollback caveat (CODE READ, `src/ledger.js` budgetSummary): spend rows of profile `release` make an
+older Worker refuse every admission (it knows only check and sweep) until those rows age out after
+30 days; roll back only before the first release rental, or keep this Worker.
+
+The reaper limit does not change: the release hard limit is at most 300 minutes, equal to
+`REAPER_HARD_MINUTES`, so no reaper deploy is needed first.
+
+Coordinator order (after the PR is merged AND master carries the new `deployment.json` pin, because
+master's runner validates the deployed bundle hash):
+
+```sh
+cd /path/to/checkout && git checkout <master commit that carries the pin>
+npm ci --prefix ci/vast-broker --ignore-scripts --no-audit --no-fund
+npm ci --prefix ci/vast-admin --ignore-scripts --no-audit --no-fund
+node --test ci/vast-broker/test
+node --test ci/vast-admin/test/*.test.mjs
+node ci/vast-broker/scripts/mutate-tiers.mjs
+# 1. (no reaper change) 2. the broker, with the release vars if a release is planned:
+node ci/vast-broker/deploy.mjs /path/outside/checkout/broker.vars --dry-run
+node ci/vast-broker/deploy.mjs /path/outside/checkout/broker.vars
+# 3. the admin Worker (same Access vars as before; see ../vast-admin/README.md):
+ci/vast-broker/node_modules/.bin/wrangler deploy --config ci/vast-admin/wrangler.toml --dry-run
+ci/vast-broker/node_modules/.bin/wrangler deploy --config ci/vast-admin/wrangler.toml
+```
+
+Acceptance without renting: on the admin page press Plan for a master commit with tier `large`; the
+answer lists the planned dies and the estimate and `renting: false`, and the Vast account shows no
+new instance. The first Start is a watched run (budget decided by the owner).
 
 ## First watched rental (checklist)
 

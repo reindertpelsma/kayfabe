@@ -1,5 +1,8 @@
 # Vast GPU CI broker
 
+STATUS: LIVE, 2026-11-05 (tiers, admin start and the release run added by branch
+`claude/worker-tier-20261105`, not deployed; everything below that section is unchanged).
+
 The broker connects GitHub Actions to rented NVIDIA GPU machines on Vast.ai so kayfabe can run GPU checks beyond the hardware available to hosted runners. It is a Cloudflare Worker backed by a Durable Object ledger that tracks rentals, deadlines and spending. GitHub asks for a check; the Worker handles the provider account and relays the box's result and bounded logs back to the runner.
 
 ## How a GPU check uses it
@@ -40,3 +43,74 @@ CODE READ (`src/provider-fault.js`, `src/ledger.js`, `runner.py`): provider fail
 CODE READ 2026-10-27 (`src/github.js`): attempt3 and later have no special authorization ceiling. Admission reads the signed attempt's REST resource and retains strict actor, repository, status and SHA bindings. For a 401, use the fixed field-only observability code; see [rerun authorization](../../docs/howto/vast-rerun-auth.md).
 
 CODE READ 2026-10-27 (`gate_reuse.py`): proposed master-push reuse preserves the existing GPU job with readable original result logs and summary. It requires identical trees and complete GitHub status/CI/run evidence; uncertainty uses the existing gate. See [reuse behavior](../../docs/howto/gpu-gate-reuse.md).
+
+## Tiers, the admin start and the release run (how to)
+
+CODE READ (`src/tier.js`, `src/release.js`, `src/index.js`, branch `claude/worker-tier-20261105`,
+2026-11-05; not deployed, no rental made). Design: `docs/design/V3_CI_TIERS_AND_IGNORE_LADDER.md`
+(PR #256, DESIGN-ONLY). Every number here is a configuration default, not a measurement.
+
+**Which tier a run is.** The event decides; no request field can. A PR to master is **middle**: one
+box, Windows required, the check profile's caps and its 300-minute limit, and the die comes from a
+**family rotation** (Turing, Ampere, Ada, Blackwell; the next family after the last one that ran,
+falling through to the next family that has an eligible offer; the run records its family). A master
+push is **small**: today's check run (the cheapest of `CHECK_DIES`), until the small tier's own
+driver-patch matrix exists. The die sweep stays outside the tiers (`adhoc`). **large** is the
+release; a release tag cannot reach the Worker by itself (GitHub admission accepts master workflows
+only), so the owner starts it from the admin page. The middle tier's VRAM floor
+(`MIDDLE_VRAM_FLOOR_MB`) is off (0) until the footprints of the first trio run exist (TBD).
+
+**What a release rents.** Two measured dies per family from `releaseDies` in `defaults.json`
+(TU106, TU116; GA106, GA104, then GA102; AD104, AD102, then AD103, AD106; GB205, GB206, then GB202,
+GB203), falling to the next listed die when one has no eligible offer. Every box runs Linux and
+Windows. Each die gets two Windows runs: two boxes on different machines (different hosts when
+offered), or one box that runs the Windows gate twice when only one machine offers the die. A
+PASS needs every family, two dies each, a Linux pass and two Windows passes per die and no FAIL
+anywhere. RETRY and UNATTRIBUTED (a failure without a green same-box host reference) are never a
+pass: each schedules one fresh-box re-run on another machine (`RELEASE_RERUNS_PER_LEG`, default 1)
+inside the release cost cap. A FAIL is never re-rented. An owner stop is not a verdict and is not
+re-run. Release cells count only this release's own boxes of the same commit: no result is carried
+over from another commit or tree, and one FAIL in a cell fails it whatever passed before or after.
+
+**Limits of the release profile (explicit, per tier).** Price at most 2 USD/hour per box, hard
+limit 300 minutes per box (the check rule: one box runs the Linux bar, the Windows install and up
+to two Windows gate runs; installs took 1436 s and 1825 s and gates 906 s to 3454 s on 2026-11-04 at
+rev `0c515b3b`, `traces/die_coverage_20261104/`; `RELEASE_HARD_RUNTIME_MINUTES` may lower it but not raise
+it, because the reaper deletes `kf-ci-*` boxes after 300 + 15 minutes), at most 8 boxes at once
+(`MAX_CONCURRENT_RELEASE`, never above the account cap `MAX_CONCURRENT_RENTALS`, which stays 1 by
+default), 40 USD and 24 rentals per day for the release profile, and a **release cost cap of 40 USD**
+(`RELEASE_COST_CAP_USD`). The shared 30-day rolling cap and the credit reserve still apply to every
+box. A release whose plan exceeds any of these is refused before the first rental, and every later
+box (pending legs, re-runs) is admitted only while spent plus reserved plus its own worst case
+stays under the cap.
+
+**Plan first (rents nothing).** On the admin page (`kayfabe-vast-admin`, owner Access identity),
+enter the commit, choose the tier and press **Plan**: the Worker evaluates the live market with the
+release rules and prints the dies, machines, legs, the estimate per family and any refusal
+(`INCOMPLETE`, `COST_CAP`, `DAILY_USD`, `DAILY_COUNT`, `ROLLING_USD`, `CREDIT_RESERVE`). Offline,
+the same planner runs on an offer list:
+
+```sh
+node ci/vast-broker/release-plan.mjs --market ci/vast-broker/test/fixtures/release-market-synthetic.json \
+  --var MAX_CONCURRENT_RENTALS=8
+```
+
+**Start.** Press **Start** (it asks for confirmation). The commit must be on this repository's
+`master` or `next` history (a fork commit is refused) and must declare the Worker's box protocol.
+Each box goes through the same admission as a PR-triggered rental: offer rules, caps, concurrency,
+own-instance labels (`kf-ci-<batch>-<leg>`), teardown by exact id, the cron's deadlines. The page
+lists the batch with its state, verdict, estimate and spend; **Stop** on a row stops one box, the
+batch stop (`{"batch": "<id>"}` to `/api/stop`) or **Stop all** ends the release without
+re-runs. A small or middle start is one box and, like a PR rental, is not rented for a commit that
+already rented within `SHA_GAP_HOURS` (the leg stays pending and shows `BUDGET:sha-gap`).
+
+**Stages.** `specviewperf` (release only) is plumbing: enabled by `RELEASE_STAGES=["specviewperf"]`,
+off by default, and until the SPECviewperf lane exists its row is `specviewperf_retry_not_built`,
+never a pass; scores stay on the box (`scripts/ci/vast_stage_specviewperf.sh`). `two_guests` and
+`trio` are reserved names, DESIGN-ONLY, refused if requested, and part of no required check.
+
+**Results.** Every box of a batch is an ordinary ledger rental (`kf-ci-<batch>-<leg>`), so the
+results store (PR #258, `src/ingest.js`, not merged here) records it like any other rental; each
+record carries `tier`, `family`, `source` (`github` or `admin`) and `batch`. The release verdict
+itself lives in the batch (`batch:<id>` in the ledger, shown on the admin page): per (family, die,
+platform) cells with their runs, passes and machines.

@@ -73,7 +73,7 @@ const fixture = async (patch = {}) => {
   };
 };
 
-for (const path of ['/', '/api/list', '/api/stop'])
+for (const path of ['/', '/api/list', '/api/stop', '/api/start', '/api/plan'])
   test('admin UI no JWT fails closed ' + path, async () => {
     const h = await fixture();
     const response = await h.call(path);
@@ -82,7 +82,7 @@ for (const path of ['/', '/api/list', '/api/stop'])
     assert.equal(h.keyCalls.length, 0);
   });
 
-for (const path of ['/', '/api/list', '/api/stop'])
+for (const path of ['/', '/api/list', '/api/stop', '/api/start', '/api/plan'])
   test('admin UI valid signature with wrong email is forbidden ' + path, async () => {
     const h = await fixture();
     const response = await h.call(path, { bearer: await token({ email: 'other@example.com' }) });
@@ -90,7 +90,7 @@ for (const path of ['/', '/api/list', '/api/stop'])
     assert.equal(h.calls.length, 0);
   });
 
-for (const path of ['/api/list', '/api/stop'])
+for (const path of ['/api/list', '/api/stop', '/api/start', '/api/plan'])
   for (const patch of [
     { email: undefined },
     { aud: 'other' },
@@ -333,4 +333,99 @@ test('admin UI Stop all cancels without request and confirms one stop', async ()
   assert.equal(stops.length, 1);
   assert.deepEqual(JSON.parse(stops[0].init.body), { all: true });
   assert.equal(button.disabled, false);
+});
+
+// 2026-11-05 (wtier): plan and start. FALSIFIER: a start or plan reaches the DO without the owner's
+// Access identity, with a malformed or oversized body, from a foreign origin, or more than once;
+// a DO refusal (with its plan) is hidden; a batch stop selection is refused or widened.
+const sha = 'a'.repeat(40);
+for (const [path, target] of [
+  ['/api/start', 'https://internal.invalid/admin/start'],
+  ['/api/plan', 'https://internal.invalid/admin/plan'],
+])
+  for (const body of [
+    { commit_sha: sha, tier: 'large' },
+    { commit_sha: sha, tier: 'small', die: 'GA106' },
+  ])
+    test('admin UI ' + path + ' forwards once ' + JSON.stringify(body), async () => {
+      const h = await fixture();
+      const response = await h.call(path, { bearer: await token(), body });
+      assert.equal(response.status, 200);
+      assert.equal(h.calls.length, 1);
+      assert.equal(h.calls[0].url, target);
+      assert.equal(h.calls[0].method, 'POST');
+      assert.deepEqual(await h.calls[0].json(), body);
+    });
+for (const body of [
+  {},
+  { commit_sha: sha },
+  { commit_sha: sha, tier: 'release' },
+  { commit_sha: sha.toUpperCase(), tier: 'large' },
+  { commit_sha: sha, tier: 'large', profile: 'check' },
+  { commit_sha: sha, tier: 'small', die: '../x' },
+  { commit_sha: sha, tier: 'small', die: 'GA106', pad: 'x'.repeat(600) },
+  null,
+  [],
+])
+  for (const path of ['/api/start', '/api/plan'])
+    test(
+      'admin UI rejects invalid ' + path + ' payload ' + JSON.stringify(body).slice(0, 60),
+      async () => {
+        const h = await fixture();
+        assert.equal((await h.call(path, { bearer: await token(), body })).status, 400);
+        assert.equal(h.calls.length, 0);
+      },
+    );
+test('admin UI start refuses foreign origin and wrong media type, and relays DO refusals', async () => {
+  const h = await fixture();
+  for (const headers of [{ Origin: 'https://foreign.example' }, { 'Content-Type': 'text/plain' }]) {
+    const response = await h.call('/api/start', {
+      bearer: await token(),
+      body: { commit_sha: sha, tier: 'large' },
+      headers,
+    });
+    assert.equal(response.status, headers.Origin ? 403 : 400);
+  }
+  assert.equal(h.calls.length, 0);
+  const refusal = {
+    error: 'NOT_ELIGIBLE',
+    reason: 'PLAN_REFUSED',
+    plan: { refusals: ['COST_CAP'] },
+  };
+  const r = await fixture({
+    LEDGER: {
+      idFromName: (name) => name,
+      get: () => ({ fetch: async () => Response.json(refusal, { status: 409 }) }),
+    },
+  });
+  const response = await r.call('/api/start', {
+    bearer: await token(),
+    body: { commit_sha: sha, tier: 'large' },
+  });
+  assert.equal(response.status, 409);
+  assert.deepEqual(await response.json(), refusal);
+});
+test('admin UI stop accepts a batch selection, and nothing wider', async () => {
+  const h = await fixture();
+  const ok = await h.call('/api/stop', {
+    bearer: await token(),
+    body: { batch: '8' + '1'.repeat(18) },
+  });
+  assert.equal(ok.status, 200);
+  assert.deepEqual(await h.calls[0].json(), { batch: '8' + '1'.repeat(18) });
+  for (const batch of ['1'.repeat(19), '8' + '1'.repeat(17), 8111111111111111111])
+    assert.equal(
+      (await h.call('/api/stop', { bearer: await token(), body: { batch } })).status,
+      400,
+    );
+  assert.equal(h.calls.length, 1);
+});
+test('admin UI page offers Plan and a confirmed Start', async () => {
+  const h = await fixture();
+  const html = await (await h.call('/', { bearer: await token() })).text();
+  assert.match(html, /id="plan"/);
+  assert.match(html, /id="start"/);
+  assert.match(html, /confirm\('Start a '/);
+  assert.match(html, /'\/api\/plan'/);
+  assert.match(html, /'\/api\/start'/);
 });

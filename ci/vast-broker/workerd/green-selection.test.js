@@ -5,6 +5,8 @@ import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import { env, jwt, MockCloud } from '../test/helpers.js';
 
 // FALSIFIER: default /rent already selects the cheapest eligible die in real workerd.
+// 2026-11-05 (wtier): that default is the small tier (a master push); a master PR is the middle
+// tier's family rotation (test/batch.test.js), so these runs are pushes.
 // Every outbound call is intercepted: these tests cannot rent or reach the provider.
 const prefix = 'workerd-green-' + 'p'.repeat(32);
 const bundle = await build({
@@ -17,6 +19,7 @@ const bundle = await build({
 for (const gpu of ['RTX_4090', 'RTX_4070']) {
   test('workerd default check chooses cheaper die ' + gpu, async (t) => {
     const cloud = new MockCloud();
+    cloud.run = { ...cloud.run, event: 'push', head_branch: 'master', pull_requests: [] };
     cloud.offer.gpu_name = 'RTX_3060';
     cloud.offer.compute_cap = 860;
     cloud.price = 0.4;
@@ -42,7 +45,7 @@ for (const gpu of ['RTX_4090', 'RTX_4070']) {
     const ns = await mf.getDurableObjectNamespace('TEST_LEDGER');
     const stub = ns.get(ns.idFromName(t.name));
     const now = Math.floor(Date.now() / 1000);
-    const token = await jwt({ iat: now, nbf: now - 1, exp: now + 300 });
+    const token = await jwt({ iat: now, nbf: now - 1, exp: now + 300, event_name: 'push' });
     const response = await stub.fetch(env.WORKER_URL + '/' + prefix + '/rent', {
       method: 'POST',
       headers: { Authorization: 'Bearer ' + token, 'X-KF-Protocol': '6' },
