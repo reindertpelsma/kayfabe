@@ -9,6 +9,7 @@ import {
   refuse,
   budgetRefuse,
   configuration,
+  teardownConfiguration,
   numericId,
   hexSha,
   localIdentity,
@@ -1755,8 +1756,31 @@ export function createService({
     async sweep() {
       return serial(0, async () => {
         try {
-          const cfg = configuration(env),
-            records = await ledger.openRecords();
+          // Review of PR #269, R3: a malformed policy var refuses every route, but never stops
+          // teardown. The cron then closes and cleans up open rentals on the identity vars and the
+          // committed defaults only, and skips everything that could start work (batch ticks) or
+          // delete data on a default retention (expiry, the store).
+          let cfg,
+            teardownOnly = false;
+          try {
+            cfg = configuration(env);
+          } catch (e) {
+            if (!(e instanceof BrokerError)) throw e;
+            try {
+              cfg = teardownConfiguration(env);
+            } catch {
+              throw e;
+            }
+            teardownOnly = true;
+            console.log(
+              JSON.stringify({
+                event: 'cleanup_config_error',
+                state: /^CONFIG_[A-Z_]+:[A-Z_]+$/.test(e.state) ? e.state : 'CONFIG_UNNAMED',
+                teardown: 'defaults',
+              }),
+            );
+          }
+          const records = await ledger.openRecords();
           for (const r of records) {
             try {
               await update(
@@ -1769,6 +1793,7 @@ export function createService({
               console.log(JSON.stringify({ event: 'cleanup_unavailable' }));
             }
           }
+          if (teardownOnly) return;
           await batchTicks();
           await ledger.expire(now(), cfg);
           // After cleanup and expiry, bounded in time (src/ingest.js); tree keys come from the

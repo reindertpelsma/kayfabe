@@ -28,6 +28,31 @@ export const hexSha = (v) => typeof v === 'string' && /^[0-9a-f]{40}$/.test(v);
 export const providerId = (v) => (Number.isSafeInteger(v) && v > 0 ? v : null);
 export const IMAGE = 'docker.io/vastai/kvm:ubuntu_cli_22.04-2025-05-16';
 export const MODELS = []; // Historical local-smoke import only; production has no SKU query whitelist.
+// Review of PR #269, R3: the public vars that hold a boolean. Each is exactly 'true' or 'false'
+// (or unset); any other value is a named configuration error (deploy.mjs refuses it as well).
+export const BOOLEAN_VARS = Object.freeze([
+  'RENTING_ENABLED',
+  'RELEASE_ENABLED',
+  'ALLOW_UNKNOWN_COUNTRY',
+  'TREE_KEY_CARRY_OVER',
+]);
+// The deployment's identity: without these no request can be authorized. A configuration error in
+// any other (policy) var must not stop the cron's teardown, which then runs on these vars and the
+// committed defaults only (teardownConfiguration, review of PR #269 R3).
+export const IDENTITY_VARS = Object.freeze([
+  'OWNER_GITHUB_ID',
+  'REPOSITORY',
+  'REPOSITORY_GITHUB_ID',
+  'WORKER_URL',
+  'OIDC_SUB',
+  'CHECK_JOB_WORKFLOW_REFS',
+  'SWEEP_JOB_WORKFLOW_REF',
+]);
+export function teardownConfiguration(env) {
+  const identity = {};
+  for (const name of IDENTITY_VARS) if (env[name] !== undefined) identity[name] = env[name];
+  return configuration(identity);
+}
 export function configuration(env) {
   const number = (name, fallback, max = 1000) => {
     const raw = env[name] ?? String(fallback);
@@ -48,6 +73,9 @@ export function configuration(env) {
     refuse('CONFIG_VAR:WORKER_URL', 503);
   }
   if (u.protocol !== 'https:' || env.WORKER_URL !== u.origin) refuse('CONFIG_VAR:WORKER_URL', 503);
+  for (const name of BOOLEAN_VARS)
+    if (env[name] !== undefined && env[name] !== 'true' && env[name] !== 'false')
+      refuse('CONFIG_VAR:' + name, 503);
   const list = (name, fallback) => {
     let value;
     try {

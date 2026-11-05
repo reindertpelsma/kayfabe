@@ -142,6 +142,16 @@ file. `OWNER_GITHUB_ID=229738317` is committed in `wrangler.toml` (a public acco
 deploy without it refuses rentals with `CONFIG_VAR:OWNER_GITHUB_ID` and the cron logs
 `cleanup_config_error` instead of silently cleaning nothing.
 
+Boolean vars (review of PR #269, R3, CODE READ and tested GPU-free 2026-11-05): `RENTING_ENABLED`,
+`RELEASE_ENABLED`, `ALLOW_UNKNOWN_COUNTRY` and `TREE_KEY_CARRY_OVER` must be exactly `true` or
+`false`. `deploy.mjs` refuses any other value, and the Worker refuses one as
+`CONFIG_VAR:<name>` on every route. A malformed policy var (any var except the identity vars
+`OWNER_GITHUB_ID`, `REPOSITORY`, `REPOSITORY_GITHUB_ID`, `WORKER_URL`, `OIDC_SUB` and the workflow
+refs) does not stop teardown: the cron logs `cleanup_config_error` with `teardown: "defaults"`,
+closes and cleans up open rentals with the identity vars and the committed defaults, and skips
+batch ticks, expiry and the result store until the var is fixed. `/stop-all` still answers 503 in
+that state; the cron's deadlines and the reaper end the boxes.
+
 Main Worker cron schedule: `* * * * *`
 
 `preview_urls = false` (supported by the wrangler 4.152.0 schema) keeps version preview hostnames

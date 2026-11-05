@@ -20,6 +20,7 @@ const broker = fileURLToPath(new URL('..', import.meta.url));
 const repo = fileURLToPath(new URL('../../..', import.meta.url));
 const PURE = ['tiers-release'];
 const BATCH = ['batch'];
+const CONFIG = ['config-booleans'];
 const MUTANTS = [
   // the event, not a request, picks the tier
   ['PR is small', 'src/tier.js', "? 'middle' : 'small';", "? 'small' : 'small';", PURE],
@@ -340,6 +341,44 @@ MUTANTS.push(
     '        await ledger.storage.delete(key);\n        pruned++;',
     '        pruned++;',
     BATCH,
+  ],
+);
+// Review of PR #269, R3 (2026-11-05): boolean vars and teardown under a malformed configuration.
+MUTANTS.push(
+  [
+    'config error stops teardown',
+    'src/index.js',
+    '            try {\n              cfg = teardownConfiguration(env);\n            } catch {\n              throw e;\n            }',
+    '            throw e;',
+    CONFIG,
+  ],
+  [
+    'teardown-only runs batch ticks',
+    'src/index.js',
+    '          if (teardownOnly) return;\n',
+    '',
+    CONFIG,
+  ],
+  [
+    'teardown keeps policy vars',
+    'src/policy.js',
+    'return configuration(identity);',
+    'return configuration(env);',
+    CONFIG,
+  ],
+  [
+    'Worker boolean unchecked',
+    'src/policy.js',
+    "    if (env[name] !== undefined && env[name] !== 'true' && env[name] !== 'false')",
+    '    if (false)',
+    CONFIG,
+  ],
+  [
+    'deploy boolean unchecked',
+    'deploy.mjs',
+    "    if (vars.has(key) && !['true', 'false'].includes(vars.get(key)))",
+    '    if (false)',
+    CONFIG,
   ],
 );
 const selected = process.argv.slice(2);
