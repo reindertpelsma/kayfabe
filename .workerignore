@@ -33,6 +33,7 @@
 /docs/whitepaper/*.toc
 /.deadman/beat
 **/.w753
+**/.wrangler
 
 # --- repository metadata: the box needs a git directory, but it is not part of a result key ---
 /.git
