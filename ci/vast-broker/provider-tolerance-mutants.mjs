@@ -13,16 +13,32 @@ const here = fileURLToPath(new URL('.', import.meta.url));
 const TESTS = [here + 'test/provider-tolerance.test.js'];
 const I = 'src/index.js',
   D = 'defaults.json';
-const COUNT =
-  'bad.count >= DEFAULTS.providerGoneReadings &&\n        t - bad.first >= DEFAULTS.providerGoneWindowSeconds * 1000';
+const WIN = 't - bad.first < DEFAULTS.providerGoneWindowSeconds * 1000';
+const CNT = 'bad.count < DEFAULTS.providerGoneReadings ||';
+const QUIET =
+  '!ambiguous ||\n      t - (record.lastPostAt ?? record.started) >= DEFAULTS.providerQuietSeconds * 1000';
+const PENDING =
+  'if (pendingBoot) {\n        delete record.providerBad;\n        await ledger.save(record);\n        return;\n      }';
+const OWN_REPORT =
+  "if (error instanceof BrokerError && error.state === 'OWNERSHIP_MISMATCH') throw error;";
+const OWN_UPDATE =
+  "if (error instanceof BrokerError && error.state === 'OWNERSHIP_MISMATCH') {\n        record.closed";
+const SAN =
+  'let text = sanitizeBoxText(\n      new TextEncoder().encode(m.slice(0, MESSAGE_INPUT_CHARS)),';
+const WORD = "return typeof a === 'string' && /^[a-z_]{1,16}$/.test(a) ? a : 'unknown';";
+const LINE_ENDED = 'if (record.ended !== null || record.closeLogged) return;';
 // [name, [[file, before, after], ...]]
 const MUTANTS = [
-  ['old behaviour: one non-running reading closes', [[I, COUNT, 'true']]],
   [
-    'readings counted, no time window',
-    [[I, 't - bad.first >= DEFAULTS.providerGoneWindowSeconds * 1000', 'true']],
+    'old behaviour: one non-running reading closes',
+    [
+      [I, WIN, 'false'],
+      [I, CNT, ''],
+      [I, QUIET, 'true'],
+    ],
   ],
-  ['time window, no reading count', [[I, 'bad.count >= DEFAULTS.providerGoneReadings &&', '']]],
+  ['readings counted, no time window', [[I, WIN, 'false']]],
+  ['time window, no reading count', [[I, CNT, '']]],
   ['no spacing between counted readings', [[I, 'else if (t - bad.last >= spacing) {', 'else {']]],
   [
     'window default shortened to 60 s',
@@ -31,6 +47,34 @@ const MUTANTS = [
   [
     'reading count default lowered to 2',
     [[D, '"providerGoneReadings": 3', '"providerGoneReadings": 2']],
+  ],
+  ['ambiguous words need no quiet box (F2)', [[I, QUIET, 'true']]],
+  [
+    'quiet period shortened to 60 s (F2)',
+    [[D, '"providerQuietSeconds": 660', '"providerQuietSeconds": 60']],
+  ],
+  [
+    'every word is ambiguous (F2)',
+    [[I, "const DEFINITE = ['exited', 'stopped'];", 'const DEFINITE = [];']],
+  ],
+  ['no word is ambiguous (F2)', [[I, '!DEFINITE.includes(instance.actual_status)', 'false']]],
+  [
+    'RUN_GONE skipped while Vast reads non-running (F1)',
+    [
+      [
+        I,
+        "if (!pendingBoot && record.resultAt === undefined && record.source !== 'admin') {",
+        "if (!pendingBoot && instance.actual_status === 'running' && record.resultAt === undefined && record.source !== 'admin') {",
+      ],
+    ],
+  ],
+  [
+    'a GitHub failure blocks the window (F1)',
+    [[I, "if (instance.actual_status === 'running') throw error;", 'throw error;']],
+  ],
+  [
+    'a GitHub failure is swallowed while running (F1)',
+    [[I, "if (instance.actual_status === 'running') throw error;", '']],
   ],
   [
     'update() ignores a box POST newer than the window',
@@ -57,18 +101,44 @@ const MUTANTS = [
     ],
   ],
   [
+    'a pending booting reading does not clear the window (F6)',
+    [
+      [
+        I,
+        PENDING,
+        'if (pendingBoot) {\n        await ledger.save(record);\n        return;\n      }',
+      ],
+    ],
+  ],
+  [
+    'the counter is not saved (F6)',
+    [
+      [
+        I,
+        '      await ledger.save(record);\n      return;\n    }\n    delete record.providerBad;',
+        '      return;\n    }\n    delete record.providerBad;',
+      ],
+    ],
+  ],
+  [
     'report() closes on a non-running status (old behaviour)',
     [
       [
         I,
-        "if (instance.actual_status !== 'running') {\n            r.providerAnomalies",
-        "if (instance.actual_status !== 'running') {\n            throw Error('NOT_LIVE');\n            r.providerAnomalies",
+        "if (instance !== undefined && instance.actual_status !== 'running') {\n            r.providerAnomalies",
+        "if (instance !== undefined && instance.actual_status !== 'running') {\n            throw Error('NOT_LIVE');\n            r.providerAnomalies",
       ],
     ],
   ],
   [
     'report() does not count the anomaly',
-    [[I, 'r.providerAnomalies = (r.providerAnomalies ?? 0) + 1;', '']],
+    [
+      [
+        I,
+        "if (instance !== undefined && instance.actual_status !== 'running') {\n            r.providerAnomalies = (r.providerAnomalies ?? 0) + 1;",
+        "if (instance !== undefined && instance.actual_status !== 'running') {\n            ",
+      ],
+    ],
   ],
   [
     'booting offline is not pending',
@@ -85,8 +155,9 @@ const MUTANTS = [
     [
       [
         I,
-        'if (record.firstReportAt === undefined && pendingInstance(instance)) {\n        delete record.providerBad;\n        await ledger.save(record);\n        return;\n      }',
-        "if (record.firstReportAt === undefined && pendingInstance(instance)) {\n        delete record.providerBad;\n        await ledger.save(record);\n        return;\n      }\n      if (record.firstReportAt === undefined) {\n        await close(record, vast, 'ENDED');\n        return;\n      }",
+        PENDING,
+        PENDING +
+          "\n      if (record.firstReportAt === undefined) {\n        await close(record, vast, 'ENDED');\n        return;\n      }",
       ],
     ],
   ],
@@ -105,11 +176,24 @@ const MUTANTS = [
     [
       [
         I,
-        "          if (instance === null) {\n            r.providerRaw = 'absent';\n            r.providerMsg = '-';\n            throw Error('NOT_LIVE');\n          }",
-        "          if (instance === null) {\n            r.providerRaw = 'absent';\n            r.providerMsg = '-';\n            return await ledger.save(r);\n          }",
+        "            r.providerMsg = '-';\n            throw Error('NOT_LIVE');",
+        "            r.providerMsg = '-';\n            return await ledger.save(r);",
       ],
     ],
   ],
+  [
+    'a provider API error closes at once in update() (F3)',
+    [[I, 'if (badReading(record, true)) {', 'if (true) {']],
+  ],
+  [
+    'a provider API error closes at once in report() (F3)',
+    [[I, '            instance = undefined;\n', '            throw error;\n']],
+  ],
+  [
+    'an ownership mismatch is tolerated in update() (F3)',
+    [[I, OWN_UPDATE, 'if (false) {\n        record.closed']],
+  ],
+  ['an ownership mismatch is tolerated in report() (F3)', [[I, OWN_REPORT, '']]],
   [
     'close() writes no line',
     [
@@ -120,26 +204,8 @@ const MUTANTS = [
       ],
     ],
   ],
-  [
-    'closeLine repeats',
-    [
-      [
-        I,
-        'if (record.ended !== null || record.closeLogged) return;',
-        'if (record.ended !== null) return;',
-      ],
-    ],
-  ],
-  [
-    'closeLine writes on ended records',
-    [
-      [
-        I,
-        'if (record.ended !== null || record.closeLogged) return;',
-        'if (record.closeLogged) return;',
-      ],
-    ],
-  ],
+  ['closeLine repeats', [[I, LINE_ENDED, 'if (record.ended !== null) return;']]],
+  ['closeLine writes on ended records', [[I, LINE_ENDED, 'if (record.closeLogged) return;']]],
   [
     'stop-all writes no close line',
     [
@@ -151,12 +217,12 @@ const MUTANTS = [
     ],
   ],
   [
-    'provider_error writes no close line',
+    'the persistent API error close writes no line',
     [
       [
         I,
-        "      await closeLine(record, 'UNAVAILABLE');\n      throw Error('UNAVAILABLE');",
-        "      throw Error('UNAVAILABLE');",
+        "        await closeLine(record, 'UNAVAILABLE');\n        throw Error('UNAVAILABLE');\n      }\n      await ledger.save(record);",
+        "        throw Error('UNAVAILABLE');\n      }\n      await ledger.save(record);",
       ],
     ],
   ],
@@ -170,33 +236,27 @@ const MUTANTS = [
       ],
     ],
   ],
-  [
-    'raw status printed as unknown',
-    [
-      [
-        I,
-        "return typeof a === 'string' && /^[a-z_]{1,16}$/.test(a) ? a : 'unknown';",
-        "return 'unknown';",
-      ],
-    ],
-  ],
-  [
-    'raw status not restricted',
-    [
-      [
-        I,
-        "return typeof a === 'string' && /^[a-z_]{1,16}$/.test(a) ? a : 'unknown';",
-        'return String(a);',
-      ],
-    ],
-  ],
+  ['raw status printed as unknown', [[I, WORD, "return 'unknown';"]]],
+  ['raw status not restricted', [[I, WORD, 'return String(a);']]],
   [
     'status_msg not sanitised',
+    [[I, SAN, "let text = String(m) + sanitizeBoxText(\n      new TextEncoder().encode(''),"]],
+  ],
+  [
+    'status_msg cut before it is sanitised (F5)',
+    [[I, 'm.slice(0, MESSAGE_INPUT_CHARS)', 'm.slice(0, 1024)']],
+  ],
+  [
+    'a token cut by the input bound is kept (F5)',
+    [[I, "if (cut) text = text.replace(/[A-Za-z0-9_-]+$/, '');", '']],
+  ],
+  [
+    'status_msg keeps the instance id and label (F6)',
     [
       [
         I,
-        '    const text = sanitizeBoxText(\n      new TextEncoder().encode(m.slice(0, 1024)),',
-        "    const text = String(m) + sanitizeBoxText(\n      new TextEncoder().encode(''),",
+        '[...secrets, record.id, record.label, record.nonce],\n      { tail: false },',
+        '[...secrets, record.nonce],\n      { tail: false },',
       ],
     ],
   ],

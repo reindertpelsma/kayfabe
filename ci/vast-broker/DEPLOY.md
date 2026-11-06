@@ -106,9 +106,9 @@ the SQLite LEDGER namespace and migration when updating.
 
 STATUS: LIVE as code, 2026-11-06, on branch `claude/vast-tolerance-20261106`; nothing deployed. The rule,
 its constants (`defaults.json`: `providerGoneReadings` 3, `providerGoneWindowSeconds` 120,
-`providerGoneSpacingSeconds` 20, `providerMessageChars` 120), the worst-case billing exposure (the
-close of a really gone instance moves from one reading to 120-180 s, about +4 min at worst, at most
-$0.125 at the sweep price cap) and the close-line format are in [README.md](README.md), section
+`providerGoneSpacingSeconds` 20, `providerQuietSeconds` 660, `providerMessageChars` 120), the worst-case billing exposure (the
+close of a really gone instance moves from one reading to 120-180 s for `exited`/`stopped`, and to 11
+quiet minutes for ambiguous words and API errors: table in the README) and the close-line format are in [README.md](README.md), section
 "Provider status tolerance and close lines". Deploy notes (CODE READ, not run):
 
 - The constants are policy in `defaults.json`, not environment variables, so a deploy cannot disable the

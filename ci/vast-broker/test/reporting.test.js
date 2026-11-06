@@ -70,14 +70,14 @@ test('unknown run and bad tag return identical generic 401', async () => {
   assert.equal(await a.text(), await b.text());
 });
 // A provider status other than running is no longer a close on a box POST (test/provider-tolerance.test.js);
-// absence, API errors, expiry and a foreign label still are.
-for (const changed of ['expired', 'gone', 'api-error', 'label'])
+// absence, expiry and a foreign label still are. A provider API error is counted, not closed on
+// (test/provider-tolerance.test.js).
+for (const changed of ['expired', 'gone', 'label'])
   test('report closes and rejects non-live rental ' + changed, async () => {
     const h = await rent();
     const token = callbackToken(await record(h));
     if (changed === 'expired') h.time.value += 151 * 60000;
     if (changed === 'gone') h.cloud.instances.delete('900');
-    if (changed === 'api-error') h.cloud.vastError = 500;
     if (changed === 'label') {
       const r = await record(h);
       r.idSource = 'reconcile';
@@ -91,7 +91,7 @@ for (const changed of ['expired', 'gone', 'api-error', 'label'])
     assert.ok(h.cloud.instances.has('777'));
     assert.ok(h.cloud.instances.has('888'));
   });
-for (const failure of ['gone', 'api-error'])
+for (const failure of ['gone'])
   test('positive liveness cache expires in seconds and fails closed ' + failure, async () => {
     const h = await rent();
     await h.report(log());

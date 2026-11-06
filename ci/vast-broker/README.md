@@ -44,48 +44,67 @@ no Worker, rental or box has run it. Whether it removes the losses is OPEN until
 survives a flapping host (falsifier: `provider=offline` lines appear while POSTs continue and the run
 survives; a box that stops POSTing first and then reads non-running points back at the host or box).
 
-**Rule (src/index.js `update()` and `report()`, constants in `defaults.json`).** Applies to an existing
-instance whose `actual_status` is not `running`:
+**Rule (src/index.js `update()`, `report()`, `badReading()`; constants in `defaults.json`).** Applies to
+an existing instance whose `actual_status` is not `running`, and to a Vast API error:
 
 - **BOOTING** (before the first box POST): `offline` is treated like `created`, `loading`, `starting` and
-  a missing status: still booting, nothing counted, bounded by the existing boot timeout. A first POST
-  while the status is one of these gets `NOT_READY` (409) as before.
-- **Any other non-running status** (`exited`, `stopped`, `created` after the first POST, any other word):
-  the Worker counts readings. A reading counts if at least `providerGoneSpacingSeconds` (20) after the
-  previous counted one, so a burst of runner polls is one reading. The rental is closed as `ENDED` only
-  when `providerGoneReadings` (3) readings are counted, the first is at least
-  `providerGoneWindowSeconds` (120) old, and no box POST arrived since the first. Any `running` reading,
-  or any accepted box POST, clears the count.
-- **A box POST while the provider says non-running** is accepted (it was a 401 plus destroy). The Worker
-  counts the anomaly (`providerAnomalies` on the record) and prints the status line with
-  `(box post accepted)`. A box that holds a valid run token and posts is alive whatever one reading says.
+  a missing status: still booting, nothing counted, bounded by the existing boot timeout (75 minutes by
+  default). A first POST while the status is one of these gets `NOT_READY` (409) as before. A pending
+  reading clears a count made by an earlier non-pending one.
+- **Definite words** (`exited`, `stopped`): counting readings. A reading counts if at least
+  `providerGoneSpacingSeconds` (20) after the previous counted one, so a burst of runner polls is one
+  reading. The rental closes as `ENDED` when `providerGoneReadings` (3) are counted, the first is at least
+  `providerGoneWindowSeconds` (120) old, and no box POST arrived since the first.
+- **Ambiguous words** (`offline`, `created` after the first POST, `loading`, `unknown`, a missing status,
+  anything unrecognised) **and Vast API errors** (HTTP 5xx, timeout, unreadable body): the same window, and
+  in addition the box must have posted nothing for `providerQuietSeconds` (660, the 600 s heartbeat plus a
+  cron period). The box sends a heartbeat every 600 s and otherwise posts whenever it has output, so a
+  live box does not stay quiet that long. A persistent API error closes as `UNAVAILABLE` on the same
+  terms (the destroy then retries every cron tick until the API answers). A foreign instance (ownership
+  mismatch) closes at once.
+- Any `running` reading, any good inspection or any accepted box POST clears the count.
+- **A box POST while the provider says non-running, or while the API errors,** is accepted (it was a 401
+  plus destroy). The Worker counts the anomaly (`providerAnomalies`) and prints the status line with
+  `(box post accepted)`. `/blob-url` and `/bench-data` still answer 401 while the provider does not read
+  `running` (no close), so a box retries them.
 - **Absence closes at once**, as before: Vast answering that the instance does not exist
-  (`instances: null`, 404) closes as `GONE` on the first reading, in `update()` and `report()`. A Vast
-  API error on a report is still `UNAVAILABLE`, unchanged.
+  (`instances: null`, 404) closes as `GONE` on the first reading, in `update()` and `report()`.
+- **`RUN_GONE` is evaluated whatever Vast reads** (the GitHub lifecycle read now runs before the status
+  branch): a box that keeps posting through a stuck status cannot outlive its workflow. Not while a
+  booting instance is still pending, not after the result, not for an admin or release leg. A GitHub
+  failure does not stop the window for a non-running status; with `running` it throws as before.
 - **Unchanged and checked before the status:** hard deadline, result deadline, boot timeout, heartbeat
-  timeout (15 min without a POST), the cost contract recheck (`CONTRACT_PRICE`, `CONTRACT_BUDGET`),
-  `STOPPED` (`/stop`, `/stop-all`, the kill route), `SUPERSEDED`, `TTL`, `LIMIT`, `RUN_GONE`, the daily,
-  rolling and concurrency caps, settlement and the destroy-by-exact-id teardown with absence check.
+  timeout (15 min without a POST), the cost contract recheck (`CONTRACT_PRICE`, `CONTRACT_BUDGET`);
+  `STOPPED` (`/stop`, `/stop-all`, the kill route), `SUPERSEDED`, `TTL`, `LIMIT`, the daily, rolling and
+  concurrency caps, settlement and the destroy-by-exact-id teardown with absence check.
 
-**Worst case.** A really gone instance (Vast keeps listing it as `exited`, `offline` or similar) is
-closed on the first cron tick (every 60 s) that has 3 counted readings spanning 120 s: 120 s to 180 s
-after the first non-running reading, plus up to one cron period if a tick is late, so at most about 4
-minutes later than before (INFERRED from the code and the 60 s cron; the tests move the clock, nothing
-ran on Cloudflare). Billing exposure of that delay at the profile price caps: 3 min at $1/h (check) is
-$0.05, at $2/h (release) $0.10, at $2.5/h (sweep) $0.125; an `exited` instance bills storage only. A
-dead box whose instance Vast still reports `running` is not affected: the heartbeat timeout ends it as
-before. A box that keeps posting while Vast says non-running can be kept alive only until the hard
-deadline, which is checked first.
+**Worst case (INFERRED from the code and the 60 s cron; tests move a clock, nothing ran on Cloudflare).**
+Delay of the close of a really gone instance, against the old close on the first reading, and the
+billing of that delay at the profile price caps (check $1/h, release $2/h, sweep $2.5/h; default
+boot limit 75 min, `defaults.json` `bootMinutes`):
+
+| case | closes after | extra per box: check / release / sweep |
+|---|---|---|
+| `exited` or `stopped` | 120 to 180 s after the first non-running reading (up to one more cron period if a tick is late), about +4 min at most | $0.07 / $0.13 / $0.17 |
+| ambiguous word or API error, box silent | 11 minutes after the box's last POST (not after the first reading); the heartbeat timeout (15 min) is the outer bound and is unchanged | $0.18 / $0.37 / $0.46 per 11 min |
+| BOOTING `offline` / `created`, instance never boots | the boot timeout, up to 75 min (before: closed on the first `offline`; `created` already waited) | $1.25 / $2.50 / $3.13 |
+| a token holder that keeps posting while Vast reads non-running | the hard deadline (checked first), or `RUN_GONE` at the next tick after the workflow ends | up to the pre-existing bound |
+
+A dead box that Vast still reports `running` is not affected: the heartbeat timeout ends it as before.
+The host `96607` (machine 17049; vanish hunt: never booted, `offline` flaps) is not in
+`defaults.json` `badHosts` or `badMachines`; it should stay excluded by the owner's list when the other
+exclusions are lifted, because the 75-minute boot wait above is its cost. That list is an owner decision
+and this change does not edit it.
 
 **Close lines.** Every close writes exactly one Worker line before the destroy:
 
     [Worker] close reason=<REASON> provider=<last raw actual_status> msg=<status_msg>
 
 `provider` is the last status word the Worker read (`[a-z_]{1,16}` as Vast sent it; `unknown` for any
-other string; `null` when Vast sent none; `absent` when Vast said the instance does not exist; `none`
+other string; `null` when Vast sent none; `absent` when Vast said the instance does not exist; `error` when the provider API failed; `none`
 when it never read one), and `msg` is Vast's `status_msg` with box-text sanitising (control and escape
 sequences, addresses, bearer and token-like runs, URLs, known secrets, the instance id and label),
-joined to one line and cut to 120 characters (`-` when empty). The reading is the last one stored, not a
+sanitised first (on the first 8192 characters; a trailing identifier-like run is dropped when the input was cut), then joined to one line and cut to 120 characters (`-` when empty). The reading is the last one stored, not a
 fresh call. The reasons that were silent before: `RUN_GONE`, `CONTRACT_PRICE`, `CONTRACT_BUDGET`, the
 report-path liveness close (`UNAVAILABLE`), `TTL`, `LIMIT`, `STOPPED`, `SUPERSEDED`; the others
 (`ENDED`, `GONE`, `DEADLINE`, `HARD_TIMEOUT`, `RESULT`, `BOOT_TIMEOUT`, `HEARTBEAT_TIMEOUT`,

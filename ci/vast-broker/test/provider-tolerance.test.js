@@ -53,7 +53,7 @@ for (const status of ['offline', 'created', 'exited', 'stopped', 'loading', 'wei
 }
 test('TESTING: two non-running readings (cron cadence, 60 s apart) do not close', async () => {
   const h = await testing();
-  instance(h).actual_status = 'offline';
+  instance(h).actual_status = 'exited';
   await at(h, 60, (x) => x.service.sweep());
   await at(h, 60, (x) => x.service.sweep());
   assert.equal((await record(h)).providerBad.count, 2);
@@ -66,7 +66,7 @@ test('TESTING: two non-running readings (cron cadence, 60 s apart) do not close'
 });
 test('TESTING: three readings 60 s apart (120 s) with no box post close the rental as ENDED', async () => {
   const h = await testing();
-  instance(h).actual_status = 'offline';
+  instance(h).actual_status = 'exited';
   instance(h).status_msg = 'Required resources are currently unavailable';
   await at(h, 60, (x) => x.service.sweep());
   await at(h, 60, (x) => x.service.sweep());
@@ -79,7 +79,7 @@ test('TESTING: three readings 60 s apart (120 s) with no box post close the rent
   assert.equal(close.length, 1);
   assert.match(
     close[0],
-    /^\[Worker\] close reason=ENDED provider=offline msg=Required resources are currently unavailable$/,
+    /^\[Worker\] close reason=ENDED provider=exited msg=Required resources are currently unavailable$/,
   );
   assert.ok(
     (await lines(h)).some((l) => /provider gone: 3 readings over 120 s, no box post/.test(l)),
@@ -87,7 +87,7 @@ test('TESTING: three readings 60 s apart (120 s) with no box post close the rent
 });
 test('TESTING: readings every second count once per 20 s and never close before 120 s', async () => {
   const h = await testing();
-  instance(h).actual_status = 'offline';
+  instance(h).actual_status = 'exited';
   // First reading at +1 s, counted readings at 1, 21, ..., 101 s: 120 s are not yet spanned.
   for (let s = 0; s < 120; s++) await at(h, 1);
   assert.equal((await record(h)).closed, null);
@@ -98,7 +98,7 @@ test('TESTING: readings every second count once per 20 s and never close before 
 });
 test('TESTING: readings 25 s apart (four readings over 75 s) do not close; the 120 s mark does', async () => {
   const h = await testing();
-  instance(h).actual_status = 'offline';
+  instance(h).actual_status = 'exited';
   for (let i = 0; i < 4; i++) await at(h, 25);
   assert.equal((await record(h)).providerBad.count, 4);
   assert.equal((await record(h)).closed, null);
@@ -109,7 +109,7 @@ test('TESTING: readings 25 s apart (four readings over 75 s) do not close; the 1
 });
 test('TESTING: two readings are never enough, however far apart', async () => {
   const h = await testing();
-  instance(h).actual_status = 'offline';
+  instance(h).actual_status = 'exited';
   await at(h, 5);
   await at(h, 300);
   assert.equal((await record(h)).providerBad.count, 2);
@@ -118,7 +118,7 @@ test('TESTING: two readings are never enough, however far apart', async () => {
 });
 test('TESTING: three readings 5 s apart, then one 130 s later, count as two', async () => {
   const h = await testing();
-  instance(h).actual_status = 'offline';
+  instance(h).actual_status = 'exited';
   for (let i = 0; i < 3; i++) await at(h, 5);
   await at(h, 130);
   assert.equal((await record(h)).providerBad.count, 2);
@@ -126,7 +126,7 @@ test('TESTING: three readings 5 s apart, then one 130 s later, count as two', as
 });
 test('TESTING: a burst of readings inside 20 s counts as one reading', async () => {
   const h = await testing();
-  instance(h).actual_status = 'offline';
+  instance(h).actual_status = 'exited';
   for (let s = 0; s < 10; s++) await at(h, 1);
   assert.equal((await record(h)).providerBad.count, 1);
   // Two more readings far later: only 2 counted so far (first burst + this one), then the third.
@@ -138,7 +138,7 @@ test('TESTING: a burst of readings inside 20 s counts as one reading', async () 
 });
 test('TESTING: a box POST resets the window; the box is then closed only 3 readings and 120 s after it', async () => {
   const h = await testing();
-  instance(h).actual_status = 'offline';
+  instance(h).actual_status = 'exited';
   await at(h, 60, (x) => x.service.sweep());
   await at(h, 60, (x) => x.service.sweep());
   assert.equal((await record(h)).providerBad.count, 2);
@@ -301,12 +301,12 @@ const nasty =
   'a'.repeat(40) +
   ' 900 ' +
   env.VAST_API_KEY;
-const offlineWith = async (msg) => {
+const offlineWith = async (msg, word = 'offline') => {
   const h = await testing();
-  instance(h).actual_status = 'offline';
+  instance(h).actual_status = word;
   instance(h).status_msg = msg;
   await at(h, 60);
-  const line = (await lines(h)).find((l) => l.startsWith('[Worker] provider=offline'));
+  const line = (await lines(h)).find((l) => l.startsWith('[Worker] provider=' + word));
   assert.ok(line, 'a raw status line');
   return { h, line };
 };
@@ -342,10 +342,11 @@ test('status line: the stored message is bounded to 120 characters', async () =>
   assert.ok(Array.from((await record(h)).providerMsg).length <= 120);
 });
 test('close line: the message is bounded to 120 characters', async () => {
-  const { h } = await offlineWith('word '.repeat(500));
+  const { h } = await offlineWith('word '.repeat(500), 'exited');
   for (let i = 0; i < 2; i++) await at(h, 60, (x) => x.service.sweep());
   const close = (await closeLines(h))[0];
-  assert.ok(close.length <= '[Worker] close reason=ENDED provider=offline msg='.length + 120);
+  assert.ok(close, 'closed');
+  assert.ok(close.length <= '[Worker] close reason=ENDED provider=exited msg='.length + 120);
 });
 test('a status word outside [a-z_]{1,16} is printed as unknown, a missing one as null', async () => {
   const h = await testing();
@@ -520,23 +521,30 @@ test('close line: HEARTBEAT_TIMEOUT keeps its destroy line and adds the close li
   assert.ok((await lines(h)).includes('[Worker] destroy reason=HEARTBEAT_TIMEOUT'));
   await only(h, 'HEARTBEAT_TIMEOUT');
 });
-test('close line: UNAVAILABLE on a provider API error in update()', async () => {
+test('close line: UNAVAILABLE on a persistent provider API error in update()', async () => {
   const h = await testing();
   h.cloud.vastError = 500;
-  assert.equal((await h.call('/status/123-1')).status >= 400, true);
+  // Silent box: the outage counts like an ambiguous reading, so 11 quiet minutes are needed.
+  for (let i = 0; i < 10; i++) await at(h, 60, (x) => x.service.sweep());
   h.cloud.vastError = 0;
+  assert.equal((await record(h)).closed, null);
+  h.cloud.vastError = 500;
+  await at(h, 120, (x) => x.service.sweep());
+  h.cloud.vastError = 0;
+  assert.equal((await record(h)).closed, 'UNAVAILABLE');
   const close = await closeLines(h);
   assert.equal(close.length, 1);
-  assert.match(close[0], /^\[Worker\] close reason=UNAVAILABLE provider=running msg=-$/);
+  assert.match(close[0], /^\[Worker\] close reason=UNAVAILABLE provider=error msg=-$/);
+  assert.ok((await lines(h)).some((l) => /provider api error persists/.test(l)));
 });
-test('close line: UNAVAILABLE on a provider API error during BOOTING', async () => {
+test('a provider API outage during BOOTING is bounded by the boot timeout', async () => {
   const h = await rent();
   h.cloud.vastError = 500;
-  await h.call('/status/123-1');
+  for (let i = 0; i < 12; i++) await at(h, 60, (x) => x.service.sweep());
   h.cloud.vastError = 0;
   const close = await closeLines(h);
   assert.equal(close.length, 1);
-  assert.match(close[0], /^\[Worker\] close reason=UNAVAILABLE provider=\S+ msg=-$/);
+  assert.match(close[0], /^\[Worker\] close reason=BOOT_TIMEOUT provider=error msg=-$/);
 });
 test('close line: SUPERSEDED (a newer run of the same branch)', async () => {
   const h = await setup({ MAX_CONCURRENT_RENTALS: '2' });
@@ -590,7 +598,7 @@ test('close line is never added to an ended record (stop twice, owner stop after
 // Cost and teardown are unchanged.
 test('after the tolerance close the rental is destroyed by exact id, settled, and the slot released', async () => {
   const h = await testing();
-  instance(h).actual_status = 'offline';
+  instance(h).actual_status = 'exited';
   for (let i = 0; i < 3; i++) await at(h, 60, (x) => x.service.sweep());
   const r = await record(h);
   assert.equal(r.closed, 'ENDED');
@@ -616,7 +624,7 @@ test('tolerance never extends the heartbeat timeout: a silent box with a flappin
   const h = await testing();
   for (let i = 0; i < 16; i++) {
     if ((await record(h)).closed) break;
-    instance(h).actual_status = i % 2 ? 'running' : 'offline';
+    instance(h).actual_status = i % 2 ? 'running' : 'exited';
     await at(h, 60, (x) => x.service.sweep());
   }
   assert.equal((await record(h)).closed, 'HEARTBEAT_TIMEOUT');
@@ -624,7 +632,7 @@ test('tolerance never extends the heartbeat timeout: a silent box with a flappin
 });
 test('tolerance never extends the hard deadline: a box that posts through an offline status closes at the limit', async () => {
   const h = await testing(); // HARD_RUNTIME_MINUTES=20
-  instance(h).actual_status = 'offline';
+  instance(h).actual_status = 'exited';
   for (let i = 0; i < 3; i++)
     assert.equal((await at(h, 5 * 60, (x) => x.report(log(2 + i, 'beat')))).status, 200);
   assert.deepEqual(h.cloud.deletes, []);
@@ -638,11 +646,284 @@ test('result grace: a non-running status after the result is tolerated only for 
     (await h.report({ seq: 2, kind: 'result', result: { nonce, verdict: 'PASS' } })).status,
     200,
   );
-  instance(h).actual_status = 'offline';
+  instance(h).actual_status = 'exited';
   await at(h, 60, (x) => x.service.sweep());
   assert.equal((await record(h)).closed, null);
   await at(h, 60, (x) => x.service.sweep());
   await at(h, 60, (x) => x.service.sweep());
   assert.equal((await record(h)).closed, 'ENDED');
   assert.equal((await record(h)).verdict, 'PASS');
+});
+
+// ---- Review fixes (Opus review of PR #278, 2026-11-06) ----
+const hex40 = (n) => n.toString(16).padStart(2, '0').repeat(20);
+
+// F1: RUN_GONE is evaluated whatever Vast reads.
+test('F1: the runner dies without /stop, Vast is stuck offline, the box keeps posting: RUN_GONE promptly', async () => {
+  const h = await testing(); // hard deadline 20 min in this env
+  h.cloud.run.status = 'completed';
+  instance(h).actual_status = 'offline';
+  for (let i = 0; i < 4; i++) {
+    await at(h, 30, (x) => x.report(log(2 + i, 'beat')));
+    await at(h, 30, (x) => x.service.sweep());
+    if ((await record(h)).closed) break;
+  }
+  const r = await record(h);
+  assert.equal(r.closed, 'RUN_GONE');
+  assert.ok(
+    h.time.value - 1800000000000 < 5 * 60000,
+    'closed in minutes, not at the hard deadline',
+  );
+  assert.deepEqual(h.cloud.deletes, ['900']);
+});
+test('F1b: control, Vast running, same scenario: RUN_GONE', async () => {
+  const h = await testing();
+  h.cloud.run.status = 'completed';
+  await at(h, 120, (x) => x.service.sweep());
+  assert.equal((await record(h)).closed, 'RUN_GONE');
+});
+for (const word of ['exited', 'stopped'])
+  test(
+    'F1c: a GitHub failure does not stop the window for a non-running status (' + word + ')',
+    async () => {
+      const h = await testing();
+      instance(h).actual_status = word;
+      h.cloud.githubError = 500;
+      for (let i = 0; i < 3; i++) await at(h, 60, (x) => x.service.sweep());
+      assert.equal((await record(h)).closed, 'ENDED');
+    },
+  );
+test('F1c: with Vast running a GitHub failure still throws (no close on it)', async () => {
+  const h = await testing();
+  h.cloud.githubError = 500;
+  await at(h, 120, (x) => x.service.sweep());
+  assert.equal((await record(h)).closed, null);
+  assert.deepEqual(h.cloud.deletes, []);
+});
+test('F1d: a result in grace and an admin leg are not RUN_GONE-checked', async () => {
+  const h = await testing();
+  assert.equal(
+    (await h.report({ seq: 2, kind: 'result', result: { nonce, verdict: 'PASS' } })).status,
+    200,
+  );
+  h.cloud.run.status = 'completed';
+  await at(h, 120, (x) => x.service.sweep());
+  assert.equal((await record(h)).closed, null);
+});
+
+// F2: ambiguous words need a quiet box for providerQuietSeconds (11 min) as well.
+for (const word of ['offline', 'created', 'loading', 'rebooting', 'WEIRD', null]) {
+  test(
+    'F2: ' +
+      word +
+      ' (ambiguous) does not close after the 120 s window while the box posted less than 11 min ago',
+    async () => {
+      const h = await testing();
+      instance(h).actual_status = word;
+      for (let i = 0; i < 10; i++) await at(h, 60, (x) => x.service.sweep());
+      assert.equal((await record(h)).closed, null);
+      assert.deepEqual(h.cloud.deletes, []);
+    },
+  );
+}
+test('F2: an ambiguous word closes ENDED once the box has been silent for 11 min (heartbeat not yet due)', async () => {
+  const h = await testing();
+  instance(h).actual_status = 'offline';
+  for (let i = 0; i < 11; i++) await at(h, 60, (x) => x.service.sweep());
+  assert.equal((await record(h)).closed, 'ENDED');
+  assert.ok(h.time.value - 1800000000000 <= 12 * 60000);
+  assert.match(
+    (await lines(h)).find((l) => /provider gone/.test(l)),
+    /no box post for 660 s/,
+  );
+});
+test('F2: exited and stopped close on the 120 s window alone', async () => {
+  for (const word of ['exited', 'stopped']) {
+    const h = await testing();
+    instance(h).actual_status = word;
+    for (let i = 0; i < 3; i++) await at(h, 60, (x) => x.service.sweep());
+    assert.equal((await record(h)).closed, 'ENDED', word);
+  }
+});
+
+// F3: a Vast API error is a reading, not a close.
+test('F3: one and two API errors in update() do not close, a good reading clears them', async () => {
+  const h = await testing();
+  h.cloud.vastError = 500;
+  await at(h, 60, (x) => x.service.sweep());
+  await at(h, 60, (x) => x.service.sweep());
+  assert.equal((await record(h)).closed, null);
+  assert.equal((await record(h)).providerBad.count, 2);
+  h.cloud.vastError = 0;
+  await at(h, 60, (x) => x.service.sweep());
+  assert.equal((await record(h)).providerBad, undefined);
+  assert.equal((await record(h)).closed, null);
+  assert.deepEqual(h.cloud.deletes, []);
+});
+test('F3: a /status poll during an API error returns the state instead of an error', async () => {
+  const h = await testing();
+  h.cloud.vastError = 500;
+  const r = await at(h, 5, (x) => x.call('/status/123-1'));
+  assert.equal(r.status, 200);
+  assert.equal((await record(h)).closed, null);
+});
+test('F3: a POST during an API error is accepted and clears the window', async () => {
+  const h = await testing();
+  h.cloud.vastError = 500;
+  await at(h, 60, (x) => x.service.sweep());
+  const r = await at(h, 10, (x) => x.report(log(2, 'x')));
+  assert.equal(r.status, 200);
+  assert.equal((await record(h)).providerBad, undefined);
+  assert.equal((await record(h)).closed, null);
+  assert.ok((await lines(h)).some((l) => /provider_error \(box post accepted\)/.test(l)));
+});
+test('F3: a foreign instance (ownership mismatch) still closes at once', async () => {
+  const h = await testing();
+  const r = await record(h);
+  r.idSource = 'reconcile';
+  await h.storage.put('record:123-1', r);
+  instance(h).label = 'owner-dev';
+  await at(h, 5);
+  assert.equal((await record(h)).closed, 'UNAVAILABLE');
+});
+
+// F5: sanitise first, cut afterwards.
+const TOKEN43 = 'Zq9xW2kLm7Pp4Rt8Vb3Nc6HdFg1Js5Ya0UeQwErTyUi';
+test('F5: zero-width padding before a token does not leave a fragment', async () => {
+  const { line } = await offlineWith('\u200b'.repeat(1000) + TOKEN43);
+  assert.ok(!line.includes('Zq9xW2kLm'), line);
+});
+test('F5: zero-width padding before a hyphenated token does not leave a fragment', async () => {
+  const { line } = await offlineWith(
+    '\u200b'.repeat(1000) + 'Zq9xW2kLm7-Pp4Rt8Vb3-Nc6HdFg1Js5Ya0UeQw',
+  );
+  assert.ok(!line.includes('Zq9xW2kLm') && !line.includes('Nc6Hd'), line);
+});
+test('F5: a token cut by the input bound leaves no fragment', async () => {
+  const { line, h } = await offlineWith('\u200b'.repeat(8192 - 10) + TOKEN43);
+  assert.ok(!line.includes('Zq9xW2kLm') && !line.includes('Zq9xW2k'), line);
+  assert.ok(!(await record(h)).providerMsg.includes('Zq9'));
+});
+test('F5: a hyphenated token cut by the input bound leaves no fragment either', async () => {
+  const { line } = await offlineWith(
+    '\u200b'.repeat(8192 - 12) + 'Zq9xW2kLm7-Pp4Rt8Vb3-Nc6HdFg1Js5Ya0UeQw',
+  );
+  assert.ok(!line.includes('Zq9xW2kLm'), line);
+});
+test('F5: a token at the 120-character cut of the output is whole-redacted or absent', async () => {
+  const { line } = await offlineWith('word '.repeat(22) + TOKEN43 + ' tail');
+  assert.ok(!line.includes('Zq9xW2kLm'), line);
+});
+
+// F6: survivors of the first review.
+test('F6: a pending (booting) reading clears a counted one and restarts the window', async () => {
+  const h = await rent();
+  instance(h).actual_status = 'exited';
+  await at(h, 5);
+  assert.equal((await record(h)).providerBad.count, 1);
+  instance(h).actual_status = 'created';
+  await at(h, 60, (x) => x.service.sweep());
+  assert.equal((await record(h)).providerBad, undefined);
+});
+test('F6: exited, created, exited, exited over 180 s does not close in BOOTING', async () => {
+  const h = await rent();
+  for (const word of ['exited', 'created', 'exited', 'exited']) {
+    instance(h).actual_status = word;
+    await at(h, 60, (x) => x.service.sweep());
+  }
+  assert.equal((await record(h)).closed, null);
+  assert.equal((await record(h)).providerBad.count, 2);
+});
+test('F6: the message drops the instance id', async () => {
+  const { line } = await offlineWith('instance 900 gone');
+  assert.ok(!/\b900\b/.test(line) && /instance \[redacted\] gone/.test(line), line);
+});
+test('F6: the message drops the label', async () => {
+  const { line } = await offlineWith('label kf-ci-123-1 gone');
+  assert.ok(!line.includes('kf-ci-123-1') && /label \[redacted\] gone/.test(line), line);
+});
+test('F6: a restart mid-window keeps the counter (Durable Object storage) and the third reading closes', async () => {
+  const h = await testing();
+  instance(h).actual_status = 'exited';
+  await at(h, 60, (x) => x.service.sweep());
+  await at(h, 60, (x) => x.service.sweep());
+  assert.equal((await record(h)).providerBad.count, 2);
+  h.restart();
+  await at(h, 60, (x) => x.service.sweep());
+  assert.equal((await record(h)).closed, 'ENDED');
+});
+test('F6: a lost counter fails toward closing: the heartbeat timeout still ends a silent box', async () => {
+  const h = await testing();
+  for (let i = 0; i < 16; i++) {
+    if ((await record(h)).closed) break;
+    const r = await record(h);
+    delete r.providerBad; // the counter is lost on every tick
+    await h.storage.put('record:123-1', r);
+    instance(h).actual_status = 'offline';
+    await at(h, 60, (x) => x.service.sweep());
+  }
+  assert.equal((await record(h)).closed, 'HEARTBEAT_TIMEOUT');
+  assert.deepEqual(h.cloud.deletes, ['900']);
+});
+
+// More killers (each mutant of the review fixes must fail at least two tests).
+test('F1e: Vast offline, a silent box, the run completed: RUN_GONE wins over the quiet window', async () => {
+  const h = await testing();
+  h.cloud.run.status = 'completed';
+  instance(h).actual_status = 'offline';
+  for (let i = 0; i < 3; i++) await at(h, 60, (x) => x.service.sweep());
+  assert.equal((await record(h)).closed, 'RUN_GONE');
+  assert.match((await closeLines(h))[0], /close reason=RUN_GONE provider=offline/);
+});
+for (const elapsed of [120, 300])
+  test(
+    'F1c: with Vast running a GitHub failure throws before liveCheckedAt moves (' + elapsed + ' s)',
+    async () => {
+      const h = await testing();
+      const before = (await record(h)).liveCheckedAt;
+      h.cloud.githubError = 500;
+      await at(h, elapsed, (x) => x.service.sweep());
+      assert.equal((await record(h)).liveCheckedAt, before);
+    },
+  );
+test('F3: a first POST during a provider API error (BOOTING) is accepted', async () => {
+  const h = await rent();
+  h.cloud.vastError = 500;
+  assert.equal((await at(h, 5, (x) => x.report(log(1)))).status, 200);
+  assert.notEqual((await record(h)).firstReportAt, undefined);
+  assert.equal((await record(h)).closed, null);
+});
+test('F3: the POST during an API error is stored (seq) and does not set liveCheckedAt', async () => {
+  const h = await testing();
+  h.cloud.vastError = 500;
+  await at(h, 10, (x) => x.report(log(2, 'y')));
+  assert.equal((await record(h)).lastSeq, 2);
+  assert.equal((await record(h)).providerAnomalies, 1);
+  assert.equal((await record(h)).liveCheckedAt, null);
+});
+for (const phase of ['TESTING', 'BOOTING'])
+  test('F3: a foreign instance on a report (' + phase + ') closes at once', async () => {
+    const h = phase === 'TESTING' ? await testing() : await rent();
+    const r = await record(h);
+    r.idSource = 'reconcile';
+    await h.storage.put('record:123-1', r);
+    instance(h).label = 'owner-dev';
+    assert.equal((await at(h, 5, (x) => x.report(log(9)))).status, 401);
+    assert.equal((await record(h)).closed, 'UNAVAILABLE');
+  });
+test('F3: a foreign instance seen by update() in BOOTING closes at once', async () => {
+  const h = await rent();
+  const r = await record(h);
+  r.idSource = 'reconcile';
+  await h.storage.put('record:123-1', r);
+  instance(h).label = 'owner-dev';
+  await at(h, 5);
+  assert.equal((await record(h)).closed, 'UNAVAILABLE');
+});
+test('F3: the persistent API error close is one line and a UNAVAILABLE verdict', async () => {
+  const h = await testing();
+  h.cloud.vastError = 500;
+  for (let i = 0; i < 12; i++) await at(h, 60, (x) => x.service.sweep());
+  assert.equal((await record(h)).verdict, 'UNAVAILABLE');
+  assert.equal((await closeLines(h)).length, 1);
 });

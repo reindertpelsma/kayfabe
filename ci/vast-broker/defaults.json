@@ -23,6 +23,7 @@
   "providerGoneReadings": 3,
   "providerGoneWindowSeconds": 120,
   "providerGoneSpacingSeconds": 20,
+  "providerQuietSeconds": 660,
   "providerMessageChars": 120,
   "maxMinutes": 1440,
   "diskGb": 120,
