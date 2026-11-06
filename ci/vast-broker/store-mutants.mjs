@@ -14,6 +14,8 @@ const TESTS = [
   'test/requirements.test.js',
   'test/results-store.test.js',
   'test/store-ingest.test.js',
+  'test/host-claims.test.js',
+  'test/edits-no-secrets-on-vast.test.js',
 ].map((t) => here + t);
 
 const MUTANTS = [
@@ -354,6 +356,80 @@ const MUTANTS = [
     "    fail('min_windows_runs needs platform windows');\n",
     '    ;\n',
   ],
+  // Setup picker claims (2026-11-06): bounded, unverified, never a verdict.
+  [
+    'claims refuse the report',
+    'src/results.js',
+    'if (result.host_claims !== undefined) result.host_claims = cleanClaims(result.host_claims);',
+    "if (result.host_claims !== undefined && !object(result.host_claims)) refuse('BAD_REPORT', 400);",
+  ],
+  [
+    'claims kept raw',
+    'src/results.js',
+    'if (result.host_claims !== undefined) result.host_claims = cleanClaims(result.host_claims);',
+    '',
+  ],
+  [
+    'claims key refused',
+    'src/results.js',
+    "k !== 'host_reference' && k !== 'host_claims'",
+    "k !== 'host_reference'",
+  ],
+  [
+    'claims identifier check removed',
+    'src/results.js',
+    '  pattern.test(value) &&\n  !IDENTIFIER_SHAPED.test(value) &&\n',
+    '  pattern.test(value) &&\n',
+  ],
+  [
+    'claims token check removed',
+    'src/results.js',
+    '  !IDENTIFIER_SHAPED.test(value) &&\n  !TOKEN_SHAPED.test(value)\n',
+    '  !IDENTIFIER_SHAPED.test(value)\n',
+  ],
+  [
+    'claims driver pattern loose',
+    'src/results.js',
+    'const CLAIM_DRIVER = /^[0-9]{3,4}\\.[0-9]{1,5}(?:\\.[0-9]{1,5})?$/;',
+    'const CLAIM_DRIVER = /^.{1,16}$/;',
+  ],
+  [
+    'claims vendor unchecked',
+    'src/results.js',
+    "out.cpu_vendor = CPU_VENDORS.includes(get('cpu_vendor')) ? get('cpu_vendor') : null;",
+    "out.cpu_vendor = get('cpu_vendor');",
+  ],
+  [
+    'claims model unbounded',
+    'src/results.js',
+    'const CLAIM_MODEL = /^[A-Za-z0-9][A-Za-z0-9 ().@+/_-]{0,63}$/;',
+    'const CLAIM_MODEL = /^[A-Za-z0-9][A-Za-z0-9 ().@+/_-]*$/;',
+  ],
+  [
+    'claims one OS only',
+    'src/results.js',
+    'for (const os of guestsOf(r.platform))',
+    "for (const os of ['linux'])",
+  ],
+  [
+    'claims marked verified',
+    'src/results.js',
+    'SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 1 WHERE EXISTS (SELECT 1 FROM ci_runs',
+    'SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 0 WHERE EXISTS (SELECT 1 FROM ci_runs',
+  ],
+  [
+    'claims host driver from the offer label',
+    'src/ingest.js',
+    'host_driver: version(r.hardware?.driver_version),',
+    'host_driver: version(r.hostDriverVersion) ?? version(r.hardware?.driver_version),',
+  ],
+  [
+    'claims rescue a PASS',
+    'src/ingest.js',
+    "    verdict = 'UNATTRIBUTED';\n  const profile = budgetClass(r);",
+    "    verdict = r.result?.host_claims ? verdict : 'UNATTRIBUTED';\n  const profile = budgetClass(r);",
+  ],
+  ['claims env not offered', 'src/index.js', "        KF_HOST_CLAIMS: '1',\n", ''],
 ];
 
 const selected = process.argv.slice(2);

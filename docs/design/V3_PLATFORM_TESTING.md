@@ -1,6 +1,6 @@
 # Platform testing: a coverage service behind CI, and a public status site
 
-**STATUS: DESIGN-ONLY, 2026-11-05.** Owner-approved design of 2026-11-04 (lane 1 brief), recorded
+**STATUS: DESIGN-ONLY, 2026-11-06.** Owner-approved design of 2026-11-04 (lane 1 brief), recorded
 here, corrected on 2026-11-05 by the owner's later decisions (box below); nothing in this document is deployed. Branch `claude/platform-status-20261104` builds the
 public read-only API (`ci/platform-api/`), its D1 schema and the static status pages
 (`site/status/`) against **synthetic** fixture data only. The CI Worker side (ingest, lazy
@@ -15,6 +15,20 @@ left after the commit's own `.workerignore`, not a hash over a BASE-branch `ci/t
 a small tier that rides on the middle box, no retries, no scheduled runs, and the event-to-tier rule
 (§2). (3) The tiers' stages gain the two-guest and TRIO stages (that document, §5). Where a section
 below still shows the older text, it is marked SUPERSEDED in place.
+
+**Addition, 2026-11-06 (owner request): the setup picker.** A visitor enters a guest OS, a GPU (a
+marketing name or a die) and optionally a CPU vendor, and the status site shows the runs across
+driver versions with result, counts, latest date and run. Built (GPU-free tests only, nothing
+deployed, no box ran it): migration `0003_ci_run_claims.sql`; `GET /v1/ci/setups` and
+`GET /v1/ci/facets` (§6a); an optional `host_claims` block in the box result, accepted by the CI
+Worker only when it asked for it with `KF_HOST_CLAIMS=1`; the static name table
+`site/status/gpu_names.json`; the page `/status/find/` (§9a). The CPU vendor, the CPU model, the guest
+OS versions and the host and guest drivers are **claims by the test box** (`claimed = 1`): the Worker
+checks their shape, they group and filter public rows, and none decides a verdict, a die or a
+requirement (the die and the PASS cross-check of the box's GPU name are the Worker's, unchanged).
+The public API will later also serve rows of a separate community store, read-only; every row
+therefore carries a `source` field now, and the `source` and `report_tier` filters exist (community
+rows are not populated, accepted, and return nothing; **DESIGN-ONLY**).
 
 Labels used below: **Owner ruling (2026-11-04)** is binding text from the owner's brief.
 **Proposal (lane 1)** is this branch's addition and needs owner review. **Built** names what this
@@ -194,6 +208,16 @@ cell history (die, suite, time), run list (time, with filters) and commit requir
   links on the site are plain hyperlinks built by the frontend.
 - SPECviewperf scores are **never** returned in v1 (§8); the run carries `scores_hidden` instead.
 
+## 6a. Setup picker endpoints (Built: `ci/platform-api/src/`, 2026-11-06)
+
+`GET /v1/ci/setups?os=&gpu=&cpu=&driver=&tier=&source=&report_tier=&limit=` and
+`GET /v1/ci/facets`; the parameters, the row shape, the attribution of a run over both guest OSes and
+the meaning of `source` are in [`ci/platform-api/README.md`](../../ci/platform-api/README.md), "Setup
+picker endpoints". Rules kept: fixed statements, anchored patterns, GET only, CORS `*`, no row tag,
+machine id, price, cost, CPU model or SPECviewperf datum in a response. The host driver is the
+box's own `nvidia-smi` driver, never the provider's offer label (owner ruling 2026-10-24: the offer's
+driver label says nothing about a KVM rental).
+
 ## 7. Logs
 
 **Owner ruling (2026-11-04).** Redacted logs go to the **public** R2 bucket served at
@@ -287,6 +311,30 @@ no GitHub API call.
 - Routes are query-string pages: `/status/`, `/status/cell/?die=&suite=`, `/status/run/?id=`,
   `/status/commit/?sha=`.
 
+## 9a. Find my setup (Built: `site/status/status.js`, `site/status/gpu_names.json`, 2026-11-06)
+
+Route `/status/find/`, every control a URL parameter so a view can be shared: `os`, `gpu` (a name or a
+die), `cpu` (`any`, `amd`, `intel`; Arm is listed as not tested yet and cannot be chosen), `show`
+(repeated: `reproduced`, `imported` on by default, `community` opt-in), `tier`, `driver`. A name is
+looked up in `gpu_names.json`, a hand-written table of desktop names (GTX 16, RTX 20, 30, 40, 50
+lines) to dies, with one name allowed to map to several dies (RTX 3060 is GA106 and GA104; the page
+lists each); a laptop name is answered with "laptops are not covered", an unlisted name asks for the
+die. The table states only dies that are public product knowledge; a test checks it against the
+Worker's die rules and the boards named in the evidence file. **Finding while building it
+(INFERRED from public product data, not measured):** the Worker's die rules label the GTX 1650 and
+GTX 1630 as TU116 (they are TU117) and the RTX 2070 as TU104 (it is TU106; the RTX 2070 SUPER is
+TU104), so a run on one of those boards is stored under the wrong die; the test lists these three as
+known disagreements and the rules are not changed here.
+The page asks `/v1/ci/setups` once per die; the CPU and driver filters are applied in the page, the
+tier and community opt-in in the request. Rows from the result store and the repository's imported
+evidence (`coverage.json`) are separate blocks; imported evidence is drawn as counts with its source,
+revision and date, never as a gate verdict. An empty result says "not tested" and "No runs for this
+combination", with the reason `coverage.json` states for that die and OS when it states one. The page
+says in words that the CPU vendor and both drivers are reported by the box and not verified. Fixture
+mode serves every die of the name table for both OSes and the tier and community variants of each
+(a tier together with community is not in the fixture); live mode asks only the configured API
+origin and the same-origin static files, without credentials.
+
 ## 10. Enrolled hosts (post-v1; design only, nothing built)
 
 **Owner ruling (2026-11-04).**
@@ -321,6 +369,8 @@ the hub says.
 | CI | `ci.yml` job `platform` (Node 22: format check, tests, mutants), required by the `CI` gate; the site workflow runs `test_status.py` and `test_status_dom.mjs` |
 | Row-tag reference (`shared/row-tag.js`) | Built and tested; nothing calls it yet |
 | Status pages, fixture mode, "not configured" page, workflow validation | Built, tested with the site's own checks |
+| Setup picker: migration 0003, `/v1/ci/setups`, `/v1/ci/facets`, `host_claims` in the box result, `gpu_names.json`, `/status/find/` | Built, GPU-free tests and mutants; **not deployed**, no box has sent a claim |
+| Community rows (`source` community, `report_tier`) | Filters and the per-row `source` field only; no store, no writer (design only) |
 | CI Worker ingest, lazy satisfaction, redaction stream, log lint, R2 writes, HMAC writing | Design only |
 | `ci/requirements.toml` | Design only (§4 shows a proposal) |
 | `ci/test_boundary.toml` | Superseded 2026-11-05 by `.workerignore` and the tree hash; neither exists yet (design only) |

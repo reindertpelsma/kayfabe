@@ -542,3 +542,147 @@ test('F7: only the ingest records runs (no second recordRun path for /rent legs)
   const ingest = readFileSync(new URL('ingest.js', src), 'utf8');
   assert.equal(ingest.match(/\brecordRun\(/g).length, 1);
 });
+
+// --- setup picker claims (2026-11-06) ---
+// FALSIFIER: the provider's offer label becomes the host driver; a claim rescues a PASS that the
+// hardware check demoted; a box's host_claims are lost on the way to D1 or reach it unchecked.
+const claimsBlock = {
+  cpu_vendor: 'intel',
+  cpu_model: 'Intel(R) Xeon(R) Gold 6338 CPU @ 2.00GHz',
+  cpu_arch: 'x86_64',
+  linux_os_version: 'ubuntu-24.04',
+  linux_driver: '580.159.04',
+  windows_os_version: '11-ltsc-2024-26100',
+  windows_driver: '580.88',
+};
+
+test('claims: the host driver is the box nvidia-smi driver, never the offer label', () => {
+  const row = f7Row({
+    hostDriverVersion: '535.54.03',
+    hardware: {
+      gpu_name: 'NVIDIA GeForce RTX 4070',
+      compute_cap: 890,
+      driver_version: '580.95.05',
+    },
+    result: { verdict: 'PASS', suites: passSuites(), host_claims: claimsBlock },
+  });
+  assert.equal(row.claims.host_driver, '580.95.05');
+  assert.equal(row.claims.cpu_vendor, 'intel');
+  assert.equal(row.claims.windows_driver, '580.88');
+  assert.equal(
+    row.driver_versions.host,
+    '535.54.03',
+    'the old driver_versions facts are unchanged',
+  );
+  // No usable box driver: not reported, the offer label is not a substitute.
+  const unknown = f7Row({
+    hostDriverVersion: '535.54.03',
+    hardware: { gpu_name: 'NVIDIA GeForce RTX 4070', compute_cap: 890, driver_version: 'unknown' },
+  });
+  assert.equal(unknown.claims.host_driver, null);
+  // An old box: no claims block, the host driver alone.
+  assert.equal(f7Row({}).claims.cpu_vendor, null);
+  assert.equal(f7Row({}).claims.host_driver, '580.159.04');
+});
+
+test('claims: a claim never upgrades or changes a verdict', () => {
+  const wrong = {
+    gpu_name: 'NVIDIA GeForce RTX 4090',
+    compute_cap: 890,
+    driver_version: '580.159.04',
+  };
+  const claims = { ...claimsBlock, host_driver: '580.159.04' };
+  assert.equal(
+    f7Row({
+      hardware: wrong,
+      result: { verdict: 'PASS', suites: passSuites(), host_claims: claims },
+    }).verdict,
+    'UNATTRIBUTED',
+  );
+  assert.equal(
+    f7Row({ result: { verdict: 'PASS', suites: passSuites(), host_claims: claims } }).verdict,
+    'PASS',
+  );
+  // A hostile claims block neither throws nor changes the verdict.
+  const hostile = { cpu_vendor: {}, cpu_model: 5, host_driver: [], linux_driver: null };
+  assert.equal(
+    f7Row({ result: { verdict: 'PASS', suites: passSuites(), host_claims: hostile } }).verdict,
+    'PASS',
+  );
+});
+
+test('claims: a box result with host_claims reaches ci_run_claims', { skip: d1Skip }, async () => {
+  const { h, db } = await harness();
+  assert.equal((await h.call()).status, 200);
+  await cron(h, 2);
+  await h.report({ seq: 1, kind: 'progress', text: 'started' });
+  const r = await h.report({
+    seq: 2,
+    kind: 'result',
+    result: {
+      nonce,
+      verdict: 'PASS',
+      suites: passSuites(),
+      hardware,
+      host_claims: { ...claimsBlock, machine_id: '99999', cpu_arch: 'riscv64' },
+    },
+  });
+  assert.equal(r.status, 200);
+  h.time.value += 6 * 60000;
+  await cron(h);
+  if (storeKeys(h).length) await cron(h);
+  assert.deepEqual(db.rows('SELECT verdict FROM ci_runs'), [{ verdict: 'PASS' }]);
+  assert.deepEqual(
+    db.rows(
+      'SELECT guest_os, guest_driver, host_driver, cpu_vendor, cpu_arch, claimed FROM ci_run_claims ORDER BY guest_os',
+    ),
+    [
+      {
+        guest_os: 'linux',
+        guest_driver: '580.159.04',
+        host_driver: '580.159.04',
+        cpu_vendor: 'intel',
+        cpu_arch: null,
+        claimed: 1,
+      },
+      {
+        guest_os: 'windows',
+        guest_driver: '580.88',
+        host_driver: '580.159.04',
+        cpu_vendor: 'intel',
+        cpu_arch: null,
+        claimed: 1,
+      },
+    ],
+  );
+  assert.ok(!JSON.stringify(db.rows('SELECT * FROM ci_run_claims')).includes('99999'));
+});
+
+test(
+  'claims: a box result without host_claims still records, with the host driver only',
+  { skip: d1Skip },
+  async () => {
+    const { h, db } = await harness();
+    await h.call();
+    await cron(h, 2);
+    await h.report({ seq: 1, kind: 'progress', text: 'started' });
+    await h.report({
+      seq: 2,
+      kind: 'result',
+      result: { nonce, verdict: 'PASS', suites: passSuites(), hardware },
+    });
+    h.time.value += 6 * 60000;
+    await cron(h);
+    if (storeKeys(h).length) await cron(h);
+    assert.deepEqual(db.rows('SELECT verdict FROM ci_runs'), [{ verdict: 'PASS' }]);
+    assert.deepEqual(
+      db.rows(
+        'SELECT guest_os, guest_driver, host_driver, cpu_vendor FROM ci_run_claims ORDER BY guest_os',
+      ),
+      [
+        { guest_os: 'linux', guest_driver: null, host_driver: '580.159.04', cpu_vendor: null },
+        { guest_os: 'windows', guest_driver: null, host_driver: '580.159.04', cpu_vendor: null },
+      ],
+    );
+  },
+);

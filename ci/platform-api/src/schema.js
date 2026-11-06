@@ -17,6 +17,16 @@ export const PARAMS = Object.freeze({
   cell: Object.freeze({ before: 'cursor', limit: 'limit' }),
   ciTrees: Object.freeze({ tier: 'tier', limit: 'limit' }),
   ciMatrix: Object.freeze({ tier: 'tier', tree: 'hash', family: 'family' }),
+  ciSetups: Object.freeze({
+    os: 'os',
+    gpu: 'gpuList',
+    cpu: 'cpuVendor',
+    driver: 'driver',
+    tier: 'tier',
+    source: 'sourceList',
+    report_tier: 'reportTier',
+    limit: 'limit',
+  }),
   runs: Object.freeze({
     commit: 'sha',
     die: 'die',
@@ -53,6 +63,18 @@ export const ENDPOINTS = Object.freeze([
     params: 'none',
     about: 'a commit: its result keys and their runs',
   },
+  {
+    path: '/v1/ci/setups',
+    params: 'ciSetups',
+    about:
+      'CI Worker results grouped by guest OS, GPU die, CPU vendor, host driver and guest driver (CPU and driver facts are reported by the test box, not verified)',
+  },
+  {
+    path: '/v1/ci/facets',
+    params: 'none',
+    about:
+      'the values that exist for the setups filters: dies and reported GPU names, CPU vendors, drivers',
+  },
   { path: '/v1/hosts', params: 'none', about: 'host counts by die, class and status' },
   { path: '/v1/logs/{run}/{name}', params: 'none', about: '302 to the public log bucket' },
   { path: '/v1/schema', params: 'none', about: 'this description' },
@@ -87,6 +109,8 @@ export function describe() {
       'verdict null and state "running" while a run is in flight',
       'scores are ratios to a same-box reference and never gate',
       'SPECviewperf scores are not published by this API (docs/SPEC_RESULTS.md)',
+      'setups: source filters rows by origin (comma list of reproduced, imported, community; default reproduced; imported evidence is a static site file, so it returns no rows here; community rows are not populated yet) and report_tier by the review state of a community row; every row carries its source and report_tier; rows of different sources are never merged',
+      'setups: one row per (guest OS, die, CPU vendor, host driver, guest driver, source); a run over both guest OSes counts once in each OS and a FAIL is attributed to the OS whose stage failed (the other OS gets UNATTRIBUTED); CPU vendor, host driver and guest driver are claims by the test box (null: not reported) and never change a verdict',
       'CI rows: RETRY and UNATTRIBUTED never pass; runs of other commits with the same tree hash are shown for information only: the CI Worker counts them for a commit only when its tree-key carry-over is enabled (off by default) and the key is Worker-computed (tree.kind "tree")',
     ],
   };

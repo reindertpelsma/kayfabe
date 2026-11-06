@@ -201,6 +201,125 @@ export const QUERIES = Object.freeze({
     FROM ci_runs r WHERE r.tree_hash = ?1
     GROUP BY r.commit_sha ORDER BY last_at DESC LIMIT 100`,
 
+  // Setup picker (migration 0003). One row per (guest OS, die, CPU vendor, host driver, guest
+  // driver) over FINAL runs. A run with platform 'both' counts once in each OS. Its FAIL is
+  // attributed to the OS whose stage failed (stage names starting with 'windows' belong to
+  // Windows); the other OS gets UNATTRIBUTED, which is neither a pass nor a fail of that setup.
+  // CPU vendor and drivers are claims (ci_run_claims.claimed = 1); they only group and filter.
+  // Filters: ?1 guest OS, ?2-?5 up to four dies, ?6 CPU vendor, ?7 driver (host or guest),
+  // ?8 tier, ?9 reproduced rows wanted (1/0), ?10 community rows wanted (1/0; ci_runs.source
+  // 'reported' or 'reviewed', reserved: none exist yet), ?11 report tier of a community row
+  // ('unverified' = reported, 'reviewed'); ?12 = page size + 1.
+  ciSetups: `
+    WITH per_os AS (
+      SELECT r.run_id, r.die, r.family, r.tier, r.verdict, r.commit_sha, r.tree_hash, r.ended_at,
+             r.sort_at, o.os AS os, r.source AS source,
+             CASE
+               WHEN r.verdict = 'PASS' THEN 'PASS'
+               WHEN r.verdict = 'FAIL' THEN
+                 CASE
+                   WHEN r.platform <> 'both' THEN 'FAIL'
+                   WHEN NOT EXISTS (SELECT 1 FROM ci_run_stages s
+                                    WHERE s.run_id = r.run_id AND s.result = 'FAIL') THEN 'FAIL'
+                   WHEN EXISTS (SELECT 1 FROM ci_run_stages s
+                                WHERE s.run_id = r.run_id AND s.result = 'FAIL'
+                                  AND ((o.os = 'windows') = (s.name LIKE 'windows%'))) THEN 'FAIL'
+                   ELSE 'UNATTRIBUTED'
+                 END
+               ELSE r.verdict
+             END AS res,
+             c.cpu_vendor, c.host_driver, c.guest_driver, f.gpu_name
+      FROM ci_runs r
+      JOIN (SELECT 'linux' AS os UNION ALL SELECT 'windows') o
+        ON r.platform = o.os OR r.platform = 'both'
+      LEFT JOIN ci_run_claims c ON c.run_id = r.run_id AND c.guest_os = o.os
+      LEFT JOIN ci_host_facts f ON f.run_id = r.run_id
+      WHERE r.verdict IS NOT NULL
+        AND (?1 IS NULL OR o.os = ?1)
+        AND (?2 IS NULL OR r.die IN (?2, ?3, ?4, ?5))
+        AND (?6 IS NULL OR c.cpu_vendor = ?6)
+        AND (?7 IS NULL OR c.host_driver = ?7 OR c.guest_driver = ?7)
+        AND (?8 IS NULL OR r.tier = ?8)
+        AND ((?9 = 1 AND r.source = 'reproduced')
+             OR (?10 = 1 AND r.source IN ('reported', 'reviewed')))
+        AND (?11 IS NULL OR (?11 = 'unverified' AND r.source = 'reported')
+             OR (?11 = 'reviewed' AND r.source = 'reviewed'))
+    ),
+    ranked AS (
+      SELECT p.run_id, p.die, p.family, p.tier, p.verdict, p.commit_sha, p.tree_hash, p.ended_at,
+             p.sort_at, p.os, p.source, p.res, p.cpu_vendor, p.host_driver, p.guest_driver,
+             p.gpu_name,
+             ROW_NUMBER() OVER (
+               PARTITION BY p.os, p.die, p.source, p.cpu_vendor, p.host_driver, p.guest_driver
+               ORDER BY p.sort_at DESC, p.run_id DESC
+             ) AS rn_latest,
+             ROW_NUMBER() OVER (
+               PARTITION BY p.os, p.die, p.source, p.cpu_vendor, p.host_driver, p.guest_driver,
+                            p.res
+               ORDER BY p.sort_at DESC, p.run_id DESC
+             ) AS rn_result
+      FROM per_os p
+    )
+    SELECT x.os, x.die, x.source, MAX(x.family) AS family, x.cpu_vendor, x.host_driver, x.guest_driver,
+           COUNT(*) AS runs,
+           SUM(CASE WHEN x.res = 'PASS' THEN 1 ELSE 0 END) AS passed,
+           SUM(CASE WHEN x.res = 'FAIL' THEN 1 ELSE 0 END) AS failed,
+           MAX(x.sort_at) AS last_at,
+           MAX(CASE WHEN x.rn_latest = 1 THEN x.run_id END) AS latest_id,
+           MAX(CASE WHEN x.rn_latest = 1 THEN x.res END) AS latest_result,
+           MAX(CASE WHEN x.rn_latest = 1 THEN x.verdict END) AS latest_verdict,
+           MAX(CASE WHEN x.rn_latest = 1 THEN x.commit_sha END) AS latest_commit,
+           MAX(CASE WHEN x.rn_latest = 1 THEN x.tree_hash END) AS latest_tree,
+           MAX(CASE WHEN x.rn_latest = 1 THEN x.tier END) AS latest_tier,
+           MAX(CASE WHEN x.rn_latest = 1 THEN x.ended_at END) AS latest_ended_at,
+           MAX(CASE WHEN x.rn_latest = 1 THEN x.gpu_name END) AS gpu_name,
+           MAX(CASE WHEN x.res = 'PASS' AND x.rn_result = 1 THEN x.run_id END) AS pass_id,
+           MAX(CASE WHEN x.res = 'PASS' AND x.rn_result = 1 THEN x.commit_sha END) AS pass_commit,
+           MAX(CASE WHEN x.res = 'PASS' AND x.rn_result = 1 THEN x.ended_at END) AS pass_ended_at
+    FROM ranked x
+    GROUP BY x.os, x.die, x.source, x.cpu_vendor, x.host_driver, x.guest_driver
+    ORDER BY last_at DESC, x.os, x.die, x.host_driver DESC, x.guest_driver DESC, x.cpu_vendor,
+             x.source
+    LIMIT ?12`,
+
+  // Facets: the values that exist among final runs.
+  ciFacetDies: `
+    SELECT r.die, MAX(r.family) AS family, COUNT(*) AS runs, MAX(r.sort_at) AS last_at
+    FROM ci_runs r WHERE r.verdict IS NOT NULL
+    GROUP BY r.die ORDER BY family, r.die LIMIT 100`,
+
+  ciFacetNames: `
+    SELECT r.die, f.gpu_name, COUNT(*) AS runs
+    FROM ci_runs r JOIN ci_host_facts f ON f.run_id = r.run_id
+    WHERE r.verdict IS NOT NULL AND f.gpu_name IS NOT NULL
+    GROUP BY r.die, f.gpu_name ORDER BY r.die, runs DESC, f.gpu_name LIMIT 300`,
+
+  ciFacetSources: `
+    SELECT r.source, COUNT(*) AS runs FROM ci_runs r
+    WHERE r.verdict IS NOT NULL GROUP BY r.source ORDER BY r.source`,
+
+  ciFacetPlatforms: `
+    SELECT r.platform, COUNT(*) AS runs FROM ci_runs r
+    WHERE r.verdict IS NOT NULL GROUP BY r.platform ORDER BY r.platform`,
+
+  ciFacetTiers: `
+    SELECT r.tier, COUNT(*) AS runs FROM ci_runs r
+    WHERE r.verdict IS NOT NULL GROUP BY r.tier ORDER BY r.tier`,
+
+  // ?1 names the claim column (an allow-listed constant chosen by the handler, never request text).
+  ciFacetClaim: `
+    SELECT CASE ?1
+             WHEN 'cpu_vendor' THEN c.cpu_vendor
+             WHEN 'cpu_arch' THEN c.cpu_arch
+             WHEN 'host_driver' THEN c.host_driver
+             WHEN 'guest_driver' THEN c.guest_driver
+           END AS value,
+           COUNT(DISTINCT c.run_id) AS runs
+    FROM ci_run_claims c JOIN ci_runs r ON r.run_id = c.run_id
+    WHERE r.verdict IS NOT NULL
+    GROUP BY value HAVING value IS NOT NULL
+    ORDER BY runs DESC, value DESC LIMIT 64`,
+
   hostCounts: `
     SELECT h.die, h.class, h.status, COUNT(*) AS hosts
     FROM hosts h

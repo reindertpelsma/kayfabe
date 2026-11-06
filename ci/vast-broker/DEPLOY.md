@@ -727,7 +727,10 @@ Order (coordinator only; a coding lane never runs these):
    npx wrangler d1 migrations apply kayfabe-platform --remote
    ```
    `list` shows whether `0001_init.sql` was applied already; `apply` applies what is missing
-   (`0002_ci_results.sql` only adds tables and indexes). **Run `list` before `apply`:**
+   (`0002_ci_results.sql` and `0003_ci_run_claims.sql` only add tables and indexes; 0003 holds the
+   setup picker's claimed host facts). Apply 0003 **before** deploying the Worker bundle that writes
+   it: that Worker's batch inserts into `ci_run_claims`, and a missing table would fail the whole
+   batch of a run's final row (the queue then retries up to its attempt limit and drops the entry). **Run `list` before `apply`:**
    `0002_ci_results.sql` was edited during review (the `tree_kind` CHECK gained `claimed`), which is
    safe only because it has never been applied anywhere. If `list` reports 0002 as already applied
    to the remote database, stop: the remote table has the old CHECK, and the fix is a new migration,

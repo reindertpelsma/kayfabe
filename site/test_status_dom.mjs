@@ -17,6 +17,7 @@ const site = fileURLToPath(new URL('.', import.meta.url));
 const code = readFileSync(join(site, 'status/status.js'), 'utf8');
 const fixture = JSON.parse(readFileSync(join(site, 'status/fixture.json'), 'utf8'));
 const coverage = JSON.parse(readFileSync(join(site, 'status/coverage.json'), 'utf8'));
+const gpuNames = JSON.parse(readFileSync(join(site, 'status/gpu_names.json'), 'utf8'));
 const API = 'https://api.kayfabe.dev';
 const REPO = 'https://github.com/reindertpelsma/kayfabe';
 
@@ -58,6 +59,9 @@ async function render(mode, path, search = '', opts = {}) {
     else if (href === 'https://kayfabe.dev/status/coverage.json') {
       if (evidence === null) return { ok: false, status: 404, json: async () => ({}) };
       body = evidence;
+    } else if (href === 'https://kayfabe.dev/status/gpu_names.json') {
+      if (opts.names === null) return { ok: false, status: 404, json: async () => ({}) };
+      body = opts.names ?? gpuNames;
     } else if (href.startsWith(API + '/')) {
       const key = href.slice(API.length);
       if (!Object.hasOwn(responses, key)) return { ok: false, status: 404, json: async () => ({}) };
@@ -378,4 +382,338 @@ test('no SPECviewperf score, GPU identifier or address can be drawn from the com
   assert.doesNotMatch(all, /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/);
   assert.doesNotMatch(all, /\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/);
   assert.doesNotMatch(code, /scores|specviewperf/i);
+});
+
+// --- Find my setup (site/status/find) ---------------------------------------------------------
+// FALSIFIER: a filter is not a URL parameter (a view cannot be shared); an invalid parameter reaches
+// a request; a laptop or unknown name gets results; a CPU, driver or source claim is drawn as
+// verified or as a verdict; imported evidence is drawn as a gate pass or merged with live rows; an
+// untested combination is blank instead of saying "not tested" with the repository's reason;
+// community rows are shown or requested without the opt-in.
+const setupsOf = (os, die) => fixture.responses['/v1/ci/setups?os=' + os + '&gpu=' + die].setups;
+const setupRequests = (page) => page.requests.filter((r) => r.href.includes('/v1/ci/setups'));
+const norm = (node) => node.textContent.replace(/\s+/g, ' ').trim();
+const find = (search, opts) => render('fixture', 'find', search, opts);
+// The fixture mode reads one file; request counting needs the live mode, which asks per die.
+const findLive = (search, opts) => render('live', 'find', search, opts);
+
+test('find: the form has labelled controls, Arm as not tested yet, and the claims note', async () => {
+  const { document } = await find('');
+  assert.match(norm(document.querySelector('.kf-synthetic')), /Synthetic data\./);
+  assert.equal(norm(document.querySelector('h1')), 'Find my setup');
+  const form = document.querySelector('form.kf-find');
+  assert.equal(form.method, 'get');
+  assert.deepEqual(
+    [...form.querySelectorAll('legend')].map(norm),
+    ['Operating system in the guest', 'CPU vendor of the host', 'Show'],
+  );
+  for (const input of form.querySelectorAll('input:not([type=radio]):not([type=checkbox]), select')) {
+    const label = form.querySelector('label[for="' + input.id + '"]');
+    assert.ok(label, input.name + ' has a label');
+  }
+  for (const input of form.querySelectorAll('input[type=radio], input[type=checkbox]'))
+    assert.ok(input.closest('label'), input.name + '=' + input.value + ' has a label');
+  const checked = (name) =>
+    [...form.querySelectorAll('input[name=' + name + ']:checked')].map((i) => i.value);
+  assert.deepEqual(checked('os'), ['linux']);
+  assert.deepEqual(checked('cpu'), ['any']);
+  assert.deepEqual(checked('show'), ['reproduced', 'imported'], 'community is opt-in');
+  const arm = form.querySelector('input[value=arm]');
+  assert.equal(arm.disabled, true);
+  assert.match(norm(arm.closest('label')), /Arm \(arm64\): not tested yet/);
+  assert.deepEqual(
+    [...form.querySelectorAll('input[name=os]')].map((i) => i.value),
+    ['linux', 'windows'],
+  );
+  assert.match(norm(document.querySelector('.kf-rule')), /reported by the test box and are not verified/);
+  assert.equal(setupRequests(await findLive('')).length, 0, 'nothing is asked before a GPU is entered');
+  assert.match(document.getElementById('kf-status-state').textContent, /Enter a GPU/);
+});
+
+test('find: a die shows its setups by driver with result, counts, date and run link', async () => {
+  const { document } = await find('?os=linux&gpu=GA106');
+  const rows = [...document.querySelectorAll('table.kf-setups tbody tr')];
+  const want = setupsOf('linux', 'GA106');
+  assert.equal(rows.length, want.length);
+  assert.deepEqual(
+    [...document.querySelectorAll('table.kf-setups thead th')].map(norm),
+    ['Guest driver', 'Host driver', 'CPU vendor (reported)', 'Latest result', 'Runs', 'Latest date', 'Run', 'Last pass'],
+  );
+  rows.forEach((row, i) => {
+    const s = want[i];
+    const cells = [...row.querySelectorAll('td')].map(norm);
+    assert.equal(cells[0], s.guest_driver ?? 'not reported');
+    assert.equal(cells[1], s.host_driver ?? 'not reported');
+    assert.equal(cells[2], s.cpu_vendor ? { amd: 'AMD', intel: 'Intel' }[s.cpu_vendor] : 'not reported');
+    assert.match(cells[3], new RegExp('^' + s.latest.result));
+    assert.match(cells[3], /CI Worker run \(reproduced\)/);
+    assert.equal(cells[4], `${s.passed} pass, ${s.failed} fail, ${s.other} other of ${s.runs}`);
+    assert.equal(cells[5], s.latest.ended_at.slice(0, 10));
+    assert.ok(cells[6].startsWith(s.latest.id));
+    const link = row.querySelector('a[href*="/status/run/"]');
+    assert.equal(link.href, 'https://kayfabe.dev/status/run/?id=' + s.latest.id);
+  });
+  assert.match(norm(document.querySelector('h2')), /^GA106 \(Ampere\)$/);
+  assert.match(document.getElementById('kf-status-state').textContent, /GA106 on Linux: \d+ setups? with results/);
+  // The newest-first order of the API is kept and the claims note is on the page.
+  assert.match(norm(document.querySelector('.kf-rule')), /host driver .* guest driver/);
+});
+
+test('find: a FAIL in the other guest OS is a word, not a fail of this setup', async () => {
+  const { document } = await find('?os=windows&gpu=GA106');
+  const row = [...document.querySelectorAll('table.kf-setups tbody tr')].find((r) =>
+    norm(r).includes('the run failed in the other guest OS'),
+  );
+  assert.ok(row, 'the fixture has a Linux-stage FAIL over both guests');
+  assert.equal(row.querySelector('.kf-v-fail'), null);
+  assert.ok(row.querySelector('.kf-v-unavailable, .kf-v-none') || /UNATTRIBUTED/.test(norm(row)));
+});
+
+test('find: a name with several dies lists each die and says so', async () => {
+  for (const typed of ['RTX 3060', 'rtx3060', 'GeForce RTX 3060 12GB', '3060']) {
+    const { document } = await find('?os=linux&gpu=' + encodeURIComponent(typed));
+    const heads = [...document.querySelectorAll('section.kf-die-result h2')].map(norm);
+    assert.deepEqual(heads, ['GA106 (Ampere)', 'GA104 (Ampere)'], typed);
+    assert.match(norm(document.querySelector('#kf-status-content')), /boards use these dies: GA106, GA104/);
+    assert.match(norm(document.querySelector('#kf-status-content')), /12 GB board uses GA106 and the 8 GB board uses GA104/);
+    assert.equal(setupRequests(await findLive('?os=linux&gpu=' + encodeURIComponent(typed))).length, 2);
+    assert.equal(norm(document.querySelector('h1')), 'Find my setup: RTX 3060');
+  }
+});
+
+test('find: Ti, SUPER and spacing are fuzzy; an exact name beats longer names', async () => {
+  const dies = async (typed) =>
+    [...(await find('?gpu=' + encodeURIComponent(typed))).document.querySelectorAll('section.kf-die-result h2')].map(
+      (h) => norm(h).split(' ')[0],
+    );
+  assert.deepEqual(await dies('rtx 3060 ti'), ['GA104']);
+  assert.deepEqual(await dies('RTX3060TI'), ['GA104']);
+  assert.deepEqual(await dies('GeForce RTX 4070 Ti Super'), ['AD103']);
+  assert.deepEqual(await dies('rtx 4070 super'), ['AD104']);
+  assert.deepEqual(await dies('RTX 4070'), ['AD104'], 'RTX 4070 is not RTX 4070 Ti');
+  assert.deepEqual(await dies('gtx 1660 ti'), ['TU116']);
+  assert.deepEqual(await dies('RTX 5090'), ['GB202']);
+  assert.deepEqual(await dies('ga106'), ['GA106'], 'a die id in any case');
+});
+
+test('find: several matches ask which card, and the links keep every filter', async () => {
+  const query = '?os=windows&gpu=RTX+40&cpu=amd&tier=middle&show=community&show=imported&driver=580.95.05';
+  const { document } = await find(query);
+  assert.equal(setupRequests(await findLive(query)).length, 0);
+  assert.match(norm(document.querySelector('#kf-status-content')), /Several cards match/);
+  const links = [...document.querySelectorAll('#kf-status-content li a')];
+  assert.ok(links.length >= 8);
+  for (const a of links) {
+    const url = new URL(a.href);
+    assert.equal(url.pathname, '/status/find/');
+    assert.equal(url.searchParams.get('os'), 'windows');
+    assert.equal(url.searchParams.get('cpu'), 'amd');
+    assert.equal(url.searchParams.get('tier'), 'middle');
+    assert.equal(url.searchParams.get('driver'), '580.95.05');
+    assert.deepEqual(url.searchParams.getAll('show'), ['community', 'imported']);
+    assert.match(url.searchParams.get('gpu'), /^RTX 40/);
+  }
+});
+
+test('find: laptops are not covered and unknown names ask for the die', async () => {
+  for (const typed of ['RTX 3060 Laptop', 'rtx 4070 mobile', 'RTX 3080 Max-Q', 'notebook 3060']) {
+    const page = await find('?gpu=' + encodeURIComponent(typed));
+    assert.match(norm(page.document.querySelector('#kf-status-content')), /laptops are not covered/, typed);
+    assert.equal(setupRequests(await findLive('?gpu=' + encodeURIComponent(typed))).length, 0, typed);
+    assert.equal(page.document.querySelector('table.kf-setups'), null);
+  }
+  const unknown = await find('?gpu=RTX+9999');
+  assert.match(norm(unknown.document.querySelector('#kf-status-content')), /No card named “RTX 9999” is in the table/);
+  assert.match(norm(unknown.document.querySelector('#kf-status-content')), /Enter the die/);
+  assert.equal(setupRequests(await findLive('?gpu=RTX+9999')).length, 0);
+  // Without the name table the page still takes a die id.
+  const bare = await find('?gpu=GA106', { names: null });
+  assert.match(norm(bare.document.querySelector('#kf-status-content')), /name table could not be loaded/);
+  assert.ok(bare.document.querySelector('table.kf-setups'));
+});
+
+test('find: the CPU filter is a URL parameter and hides what it should', async () => {
+  const all = setupsOf('linux', 'GA106');
+  for (const vendor of ['amd', 'intel']) {
+    const { document } = await find('?os=linux&gpu=GA106&cpu=' + vendor);
+    const rows = [...document.querySelectorAll('table.kf-setups tbody tr')];
+    const want = all.filter((s) => s.cpu_vendor === vendor);
+    assert.equal(rows.length, want.length, vendor);
+    for (const row of rows) assert.match(norm(row.querySelectorAll('td')[2]), vendor === 'amd' ? /^AMD$/ : /^Intel$/);
+    assert.match(norm(document.querySelector('section.kf-die-result')), /setups? (?:is|are) hidden by the CPU vendor or driver filter/);
+    assert.equal(document.querySelector('input[name=cpu]:checked').value, vendor);
+  }
+  // Rows from a box that reported no CPU are shown under Any, as "not reported", never as a vendor.
+  const any = await find('?os=linux&gpu=GA106');
+  assert.ok(norm(any.document.querySelector('table.kf-setups')).includes('not reported'));
+  // A vendor with no run says not tested, and that runs exist but not for that vendor.
+  const none = await find('?os=linux&gpu=GA104&cpu=amd&driver=575.64.05&tier=');
+  const text = norm(none.document.querySelector('#kf-status-content'));
+  assert.match(text, /not tested/);
+  assert.match(text, /No runs for this combination\./);
+  assert.equal(none.document.querySelector('table.kf-setups'), null);
+  assert.equal(none.document.querySelector('.kf-v-pass'), null);
+});
+
+test('find: the driver filter matches the host or the guest driver exactly', async () => {
+  const { document } = await find('?os=windows&gpu=GA106&driver=580.88');
+  const want = setupsOf('windows', 'GA106').filter((s) => s.guest_driver === '580.88' || s.host_driver === '580.88');
+  assert.equal(document.querySelectorAll('table.kf-setups tbody tr').length, want.length);
+  const host = await find('?os=windows&gpu=GA106&driver=575.64.05');
+  assert.equal(
+    host.document.querySelectorAll('table.kf-setups tbody tr').length,
+    setupsOf('windows', 'GA106').filter((s) => s.host_driver === '575.64.05').length,
+  );
+  assert.equal(host.document.querySelector('input[name=driver]').value, '575.64.05');
+});
+
+test('find: an untested die says not tested with the reason the repository states', async () => {
+  const { document } = await find('?os=linux&gpu=RTX+2080+Ti');
+  const text = norm(document.querySelector('#kf-status-content'));
+  assert.match(text, /TU102 \(Turing\)/);
+  assert.match(text, /not tested/);
+  assert.match(text, /No runs for this combination\./);
+  assert.match(text, /No Vast VM offer during the lane/);
+  assert.equal(document.querySelector('table.kf-setups'), null);
+  assert.equal(document.querySelector('.kf-v-pass'), null);
+  // Without a reason in the evidence file the page says that none is stated.
+  const bare = await find('?os=linux&gpu=TU102', { coverage: { schema: 1, families: [] } });
+  assert.match(norm(bare.document.querySelector('#kf-status-content')), /the repository states no reason/);
+  const missing = await find('?os=linux&gpu=TU102', { coverage: null });
+  assert.match(norm(missing.document.querySelector('#kf-status-content')), /not tested/);
+});
+
+test('find: imported evidence is shown apart, labelled, and never as a gate pass', async () => {
+  const { document } = await find('?os=windows&gpu=RTX+3060');
+  const sections = [...document.querySelectorAll('section.kf-die-result')];
+  const ga106 = sections.find((s) => norm(s.querySelector('h2')).startsWith('GA106'));
+  const heading = [...ga106.querySelectorAll('h3')].map(norm);
+  assert.deepEqual(heading, ['Evidence in the repository, not CI gate results']);
+  const blocks = [...ga106.querySelectorAll('.kf-block-imported')];
+  assert.ok(blocks.length > 0);
+  for (const block of blocks) {
+    assert.match(norm(block), /Direct Vast run, evidence in repo \(imported\)/);
+    assert.equal(block.querySelector('.kf-v-pass, .kf-v-fail, .kf-v-retry'), null);
+    assert.doesNotMatch(norm(block), /\bPASS\b/);
+    assert.match(norm(block), /revision [0-9a-f]{8}/);
+  }
+  // The live table and the evidence are different elements.
+  assert.equal(ga106.querySelector('table.kf-setups').querySelector('.kf-block-imported'), null);
+  // Imported evidence alone: no result request at all, and the live table is absent.
+  const only = await find('?os=windows&gpu=GA106&show=imported');
+  assert.equal(setupRequests(await findLive('?os=windows&gpu=GA106&show=imported')).length, 0);
+  assert.equal(only.document.querySelector('table.kf-setups'), null);
+  assert.ok(only.document.querySelector('.kf-block-imported'));
+  assert.match(norm(only.document.querySelector('#kf-status-content')), /No runs for this combination\./);
+});
+
+test('find: Show defaults to reproduced and imported; community is opt-in and asked for explicitly', async () => {
+  const base = await find('?os=linux&gpu=GA106');
+  assert.ok(base.document.querySelector('.kf-block-imported'));
+  assert.ok(base.document.querySelector('table.kf-setups'));
+  const reproduced = await find('?os=linux&gpu=GA106&show=reproduced');
+  assert.equal(reproduced.document.querySelector('.kf-block-imported, .kf-block-worker'), null, 'imported is off');
+  assert.ok(reproduced.document.querySelector('table.kf-setups'));
+  const community = await find('?os=linux&gpu=GA106&show=reproduced&show=community');
+  assert.deepEqual(
+    [...community.document.querySelectorAll('input[name=show]:checked')].map((i) => i.value),
+    ['reproduced', 'community'],
+  );
+  assert.match(norm(community.document.querySelector('#kf-status-state')), /GA106 on Linux/);
+  const communityOnly = await find('?os=linux&gpu=GA106&show=community');
+  assert.match(norm(communityOnly.document.querySelector('#kf-status-content')), /not tested/);
+  assert.match(norm(communityOnly.document.querySelector('#kf-status-content')), /No runs for this combination\./);
+  assert.equal(communityOnly.document.querySelector('table.kf-setups'), null);
+  assert.equal(communityOnly.document.querySelector('.kf-block-imported'), null);
+  // Nothing ticked is the default, never an empty page.
+  const none = await find('?os=linux&gpu=GA106&show=bogus');
+  assert.deepEqual(
+    [...none.document.querySelectorAll('input[name=show]:checked')].map((i) => i.value),
+    ['reproduced', 'imported'],
+  );
+});
+
+test('find: live mode asks /v1/ci/setups with exactly the validated filters', async () => {
+  const asked = async (search) =>
+    setupRequests(await render('live', 'find', search)).map((r) => r.href.slice(API.length));
+  assert.deepEqual(await asked('?os=linux&gpu=GA106'), ['/v1/ci/setups?os=linux&gpu=GA106']);
+  assert.deepEqual(await asked('?os=windows&gpu=GA104&tier=middle'), [
+    '/v1/ci/setups?os=windows&gpu=GA104&tier=middle',
+  ]);
+  assert.deepEqual(await asked('?gpu=GA106&show=reproduced&show=community'), [
+    '/v1/ci/setups?os=linux&gpu=GA106&source=reproduced,community',
+  ]);
+  // The order of the show parameters in the address never changes the request.
+  assert.deepEqual(await asked('?gpu=GA106&show=community&show=reproduced'), [
+    '/v1/ci/setups?os=linux&gpu=GA106&source=reproduced,community',
+  ]);
+  assert.deepEqual(await asked('?gpu=GA106&show=community'), [
+    '/v1/ci/setups?os=linux&gpu=GA106&source=community',
+  ]);
+  // Invalid values are ignored, not sent.
+  assert.deepEqual(
+    await asked('?os=macos&gpu=GA106&cpu=via&tier=huge&driver=1%27&show=all'),
+    ['/v1/ci/setups?os=linux&gpu=GA106'],
+  );
+  const live = await render('live', 'find', '?gpu=RTX+3060');
+  for (const { href, init } of live.requests) {
+    assert.ok(
+      href.startsWith(API + '/v1/ci/') ||
+        ['coverage.json', 'gpu_names.json'].some((f) => href === 'https://kayfabe.dev/status/' + f),
+      href,
+    );
+    assert.equal(init.credentials, 'omit');
+  }
+  assert.equal(live.document.querySelector('.kf-synthetic'), null);
+});
+
+test('find: a hostile query or API value never becomes markup', async () => {
+  const hostile = await find('?gpu=%3Cimg%20src%3Dx%20onerror%3Dalert(1)%3E&os=%3Cb%3E');
+  assert.equal(hostile.document.querySelector('#kf-status-content img, #kf-status-content b'), null);
+  assert.equal(hostile.document.querySelector('input[name=gpu]').value, '');
+  const odd = await find('?os=linux&gpu=GA106&driver=1%27%3Cb%3E');
+  assert.equal(odd.document.querySelector('input[name=driver]').value, '', 'an invalid driver is ignored');
+  assert.equal(
+    odd.document.querySelectorAll('table.kf-setups tbody tr').length,
+    setupsOf('linux', 'GA106').length,
+  );
+  const evil = structuredClone(fixture.responses);
+  const key = '/v1/ci/setups?os=linux&gpu=GA106';
+  evil[key].setups[0].host_driver = '<img src=x onerror=alert(1)>';
+  evil[key].setups[0].cpu_vendor = '<b>amd</b>';
+  evil[key].setups[0].latest.result = '<script>1</script>';
+  const page = await find('?os=linux&gpu=GA106', { responses: evil });
+  assert.equal(page.document.querySelector('#kf-status-content img, #kf-status-content b, #kf-status-content script'), null);
+  assert.match(norm(page.document.querySelector('table.kf-setups')), /<img src=x/);
+  assert.match(norm(page.document.querySelector('table.kf-setups tbody tr')), /no data|<b>amd<\/b>/);
+});
+
+test('find: typing offers matching cards as buttons that fill the field', async () => {
+  const { document, window } = await find('');
+  const input = document.getElementById('kf-gpu');
+  input.value = 'rtx 3060';
+  input.dispatchEvent(new window.Event('input'));
+  const buttons = [...document.querySelectorAll('#kf-suggest button')];
+  assert.deepEqual(buttons.map((b) => b.type), buttons.map(() => 'button'));
+  assert.deepEqual(buttons.map((b) => norm(b)), ['RTX 3060 GA106, GA104']);
+  input.value = 'rtx 30';
+  input.dispatchEvent(new window.Event('input'));
+  assert.ok(document.querySelectorAll('#kf-suggest button').length >= 5);
+  assert.ok(document.querySelectorAll('#kf-suggest button').length <= 8);
+  input.value = '';
+  input.dispatchEvent(new window.Event('input'));
+  assert.equal(document.getElementById('kf-suggest').hidden, true);
+  assert.equal(document.getElementById('kf-suggest').getAttribute('aria-label'), 'Matching cards');
+});
+
+test('find: the overview links to it, and its stylesheet uses only theme tokens', async () => {
+  const { document } = await render('fixture', '');
+  const link = [...document.querySelectorAll('#kf-status-content a')].find((a) => norm(a) === 'Find my setup');
+  assert.equal(link.href, 'https://kayfabe.dev/status/find/');
+  const css = readFileSync(join(site, 'status/status.css'), 'utf8');
+  const block = css.slice(css.indexOf('/* Find my setup */'), css.indexOf('@media (max-width: 40rem)'));
+  assert.ok(block.length > 500);
+  assert.doesNotMatch(block, /#[0-9a-fA-F]{3,8}\b|rgb\(|hsl\(/, 'colours come from tokens, so dark mode follows');
+  assert.match(css, /prefers-color-scheme: dark/);
+  assert.match(css, /\.kf-setups td::before/, 'a stacked layout at phone width');
 });

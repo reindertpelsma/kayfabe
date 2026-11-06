@@ -5,7 +5,7 @@ export function checkedResult(result) {
   if (
     !object(result) ||
     Object.keys(result)
-      .filter((k) => k !== 'host_reference')
+      .filter((k) => k !== 'host_reference' && k !== 'host_claims')
       .sort()
       .join(',') !== 'hardware,nonce,runner_nonce,sha,suites,verdict' ||
     (result.host_reference !== undefined &&
@@ -42,6 +42,11 @@ export function checkedResult(result) {
     )
   )
     refuse('BAD_REPORT', 400);
+  // Optional host claims (setup picker, 2026-11-06): sent only by a box whose Worker asked for them
+  // (KF_HOST_CLAIMS). They are claims, never evidence: bounded, pattern-checked, and a malformed or
+  // oversized one is dropped field by field instead of failing the report, so a claim can neither
+  // upgrade nor block a verdict.
+  if (result.host_claims !== undefined) result.host_claims = cleanClaims(result.host_claims);
   const h = result.hardware;
   if (
     !object(h) ||
@@ -66,6 +71,67 @@ export function checkedResult(result) {
   } else if (!rows.some((r) => r.fail > 0)) refuse('BAD_REPORT', 400);
   return result;
 }
+
+// ---------------------------------------------------------------------------------------------
+// Host claims: what the box says about its CPU, OS versions and drivers. Public (the picker on the
+// status site) but only ever CLAIMS: the box read them from its own /proc and nvidia-smi, the
+// Worker checks their shape and nothing else, and no verdict, die or requirement reads them.
+// cleanClaims is TOTAL: any input gives a clean object, every invalid field becomes null, so a bad
+// claim can never refuse a report or a row (which would lose the run's result).
+// ---------------------------------------------------------------------------------------------
+export const CLAIM_KEYS = Object.freeze([
+  'cpu_vendor',
+  'cpu_model',
+  'cpu_arch',
+  'host_driver',
+  'linux_os_version',
+  'linux_driver',
+  'windows_os_version',
+  'windows_driver',
+]);
+export const CPU_VENDORS = Object.freeze(['amd', 'intel', 'arm', 'other']);
+export const CPU_ARCHS = Object.freeze(['x86_64', 'aarch64']);
+const CLAIM_MODEL = /^[A-Za-z0-9][A-Za-z0-9 ().@+/_-]{0,63}$/;
+const CLAIM_OS_VERSION = /^[a-z0-9][a-z0-9 ._()+-]{0,31}$/;
+// 3-4 digit major, then one or two dotted parts: 580.95.05, 580.88 (5 to 16 characters).
+const CLAIM_DRIVER = /^[0-9]{3,4}\.[0-9]{1,5}(?:\.[0-9]{1,5})?$/;
+// Text that could carry an identifier: a UUID, a long hex run (serial, machine id, hash), an
+// IPv4-shaped number, a URL or an address with a host part. No CPU model or OS version needs any.
+const IDENTIFIER_SHAPED =
+  /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}|[0-9a-f]{12,}|[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}|:\/\/|@[a-z0-9-]+\./i;
+const claimText = (value, pattern) =>
+  typeof value === 'string' &&
+  pattern.test(value) &&
+  !IDENTIFIER_SHAPED.test(value) &&
+  !TOKEN_SHAPED.test(value)
+    ? value
+    : null;
+
+export function cleanClaims(raw) {
+  const out = Object.fromEntries(CLAIM_KEYS.map((k) => [k, null]));
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return out;
+  const get = (key) => (Object.hasOwn(raw, key) ? raw[key] : null);
+  out.cpu_vendor = CPU_VENDORS.includes(get('cpu_vendor')) ? get('cpu_vendor') : null;
+  out.cpu_arch = CPU_ARCHS.includes(get('cpu_arch')) ? get('cpu_arch') : null;
+  const model = get('cpu_model');
+  out.cpu_model = claimText(
+    typeof model === 'string' ? model.replace(/\s+/g, ' ').trim() : null,
+    CLAIM_MODEL,
+  );
+  for (const key of ['host_driver', 'linux_driver', 'windows_driver'])
+    out[key] = claimText(get(key), CLAIM_DRIVER);
+  for (const key of ['linux_os_version', 'windows_os_version'])
+    out[key] = claimText(get(key), CLAIM_OS_VERSION);
+  return out;
+}
+
+// The guest OSes a run covered, in the order of ci_runs.platform.
+export const guestsOf = (platform) =>
+  platform === 'both'
+    ? ['linux', 'windows']
+    : platform === 'linux' || platform === 'windows'
+      ? [platform]
+      : [];
 
 // ---------------------------------------------------------------------------------------------
 // The result store (D1 `kayfabe-platform`, migration ci/platform-api/migrations/0002_ci_results.sql).
@@ -205,6 +271,7 @@ export async function normaliseRow(row, { verifiedTree = false } = {}) {
     !driverEntries.every(([k, v]) => DRIVER_KEY.test(k) && typeof v === 'string' && DRIVER.test(v))
   )
     bad('driver_versions');
+  const claims = cleanClaims(row.claims);
   const machine = row.machine_id ?? null;
   if (machine !== null && (!Number.isSafeInteger(machine) || machine <= 0)) bad('machine_id');
   const started = isoTime(row.started_at, 'started_at');
@@ -239,12 +306,14 @@ export async function normaliseRow(row, { verifiedTree = false } = {}) {
     stages: cleanStages,
     gpu_name: gpuName,
     driver_versions_json: JSON.stringify(Object.fromEntries(driverEntries.sort())),
+    claims,
     machine_id: machine,
     price_usd_h: money(row.price_usd_h, 'price_usd_h'),
     cost_usd: money(row.cost_usd, 'cost_usd'),
   };
   for (const v of Object.values(out))
     if (typeof v === 'string' && TOKEN_SHAPED.test(v)) bad('token-shaped');
+  // (claims were cleaned above: token-shaped text is already null there)
   return out;
 }
 
@@ -360,6 +429,16 @@ export const SQL = Object.freeze({
       AND ((?4 IS NULL AND verdict IS NULL) OR tag = ?4))
     ON CONFLICT (run_id) DO UPDATE SET gpu_name = excluded.gpu_name,
       driver_versions_json = excluded.driver_versions_json`,
+  // One row per guest OS the run covered; only for the row this call tagged (a final call), and
+  // only when the box reported at least one value. claimed = 1: reported by the box, not verified.
+  upsertClaims: `INSERT INTO ci_run_claims (run_id, guest_os, guest_os_version, guest_driver,
+      host_driver, cpu_vendor, cpu_model, cpu_arch, claimed)
+    SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 1 WHERE EXISTS (SELECT 1 FROM ci_runs
+      WHERE run_id = ?1 AND tag = ?9)
+    ON CONFLICT (run_id, guest_os) DO UPDATE SET guest_os_version = excluded.guest_os_version,
+      guest_driver = excluded.guest_driver, host_driver = excluded.host_driver,
+      cpu_vendor = excluded.cpu_vendor, cpu_model = excluded.cpu_model,
+      cpu_arch = excluded.cpu_arch`,
   upsertPrivate: `INSERT INTO ci_runs_private (run_id, machine_id, price_usd_h, cost_usd)
     SELECT ?1, ?2, ?3, ?4 WHERE EXISTS (SELECT 1 FROM ci_runs WHERE run_id = ?1
       AND ((?5 IS NULL AND verdict IS NULL) OR tag = ?5))
@@ -467,6 +546,22 @@ export async function recordRun(env, row, { now = Date.now, verifiedTree = false
       ),
     );
   }
+  if (final && CLAIM_KEYS.some((k) => r.claims[k] !== null))
+    for (const os of guestsOf(r.platform))
+      statements.push(
+        bind(
+          SQL.upsertClaims,
+          r.run_id,
+          os,
+          r.claims[os + '_os_version'],
+          r.claims[os + '_driver'],
+          r.claims.host_driver,
+          r.claims.cpu_vendor,
+          r.claims.cpu_model,
+          r.claims.cpu_arch,
+          tag,
+        ),
+      );
   statements.push(
     bind(SQL.upsertFacts, r.run_id, r.gpu_name, r.driver_versions_json, tag),
     bind(SQL.upsertPrivate, r.run_id, r.machine_id, r.price_usd_h, r.cost_usd, tag),

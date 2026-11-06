@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 const here = fileURLToPath(new URL('..', import.meta.url));
 const fixture = fileURLToPath(new URL('../../../site/status/fixture.json', import.meta.url));
+const names = fileURLToPath(new URL('../../../site/status/gpu_names.json', import.meta.url));
 
 const MUTANTS = [
   // read-only / method boundary
@@ -123,6 +124,155 @@ const MUTANTS = [
     'PARTITION BY r.tier, r.family, r.die, r.platform\n               ORDER BY r.sort_at DESC, r.run_id DESC\n             ) AS rn\n      FROM ci_runs r\n      WHERE (?1',
     'PARTITION BY r.tier, r.family, r.die, r.platform\n               ORDER BY r.sort_at ASC, r.run_id DESC\n             ) AS rn\n      FROM ci_runs r\n      WHERE (?1',
   ],
+  // Setup picker (migration 0003): /v1/ci/setups and /v1/ci/facets
+  [
+    'setups windows stage charged to both',
+    'src/queries.js',
+    "AND ((o.os = 'windows') = (s.name LIKE 'windows%'))) THEN 'FAIL'",
+    "AND 1) THEN 'FAIL'",
+  ],
+  [
+    'setups running run counted',
+    'src/queries.js',
+    '      WHERE r.verdict IS NOT NULL\n        AND (?1 IS NULL OR o.os = ?1)',
+    '      WHERE 1\n        AND (?1 IS NULL OR o.os = ?1)',
+  ],
+  [
+    'setups both-run counted once',
+    'src/queries.js',
+    "ON r.platform = o.os OR r.platform = 'both'",
+    'ON r.platform = o.os',
+  ],
+  [
+    'setups last pass of any result',
+    'src/queries.js',
+    "MAX(CASE WHEN x.res = 'PASS' AND x.rn_result = 1 THEN x.run_id END) AS pass_id",
+    'MAX(CASE WHEN x.rn_result = 1 THEN x.run_id END) AS pass_id',
+  ],
+  [
+    'setups cpu filter matches unreported',
+    'src/queries.js',
+    'AND (?6 IS NULL OR c.cpu_vendor = ?6)',
+    'AND (?6 IS NULL OR c.cpu_vendor = ?6 OR c.cpu_vendor IS NULL)',
+  ],
+  [
+    'setups driver filter host only',
+    'src/queries.js',
+    'AND (?7 IS NULL OR c.host_driver = ?7 OR c.guest_driver = ?7)',
+    'AND (?7 IS NULL OR c.host_driver = ?7)',
+  ],
+  [
+    'setups tier filter ignored',
+    'src/queries.js',
+    'AND (?8 IS NULL OR r.tier = ?8)\n        AND ((?9',
+    'AND (?8 IS NULL OR 1)\n        AND ((?9',
+  ],
+  [
+    'setups private table joined',
+    'src/queries.js',
+    'LEFT JOIN ci_host_facts f ON f.run_id = r.run_id\n      WHERE r.verdict IS NOT NULL\n        AND (?1',
+    'LEFT JOIN ci_host_facts f ON f.run_id = r.run_id\n      LEFT JOIN ci_runs_private pr ON pr.run_id = r.run_id\n      WHERE r.verdict IS NOT NULL\n        AND (?1',
+  ],
+  [
+    'setups row tag selected',
+    'src/queries.js',
+    '             r.sort_at, o.os AS os, r.source AS source,\n             CASE',
+    '             r.sort_at, o.os AS os, r.source AS source, r.tag AS tag,\n             CASE',
+  ],
+  [
+    'setups truncation not reported',
+    'src/api.js',
+    "limit + 1,\n    ];\n    const rows = await db.all('ciSetups'",
+    "limit,\n    ];\n    const rows = await db.all('ciSetups'",
+  ],
+  [
+    'setups claims unmarked',
+    'src/api.js',
+    "['cpu_vendor', 'host_driver', 'guest_driver']);",
+    '[]);',
+  ],
+  ['setups other count', 'src/api.js', 'other: r.runs - r.passed - r.failed,', 'other: 0,'],
+  [
+    'setups gpu list pattern',
+    'src/validate.js',
+    'gpuList: /^[A-Z]{2}[0-9]{3}[A-Z]?(?:,[A-Z]{2}[0-9]{3}[A-Z]?){0,3}$/,',
+    "gpuList: /^[A-Za-z0-9%' ,=-]+$/,",
+  ],
+  ['setups os pattern', 'src/validate.js', 'os: /^(?:linux|windows)$/,', 'os: /./,'],
+  [
+    'setups cpu pattern',
+    'src/validate.js',
+    'cpuVendor: /^(?:amd|intel|arm|other)$/,',
+    'cpuVendor: /./,',
+  ],
+  [
+    'setups community always shown',
+    'src/queries.js',
+    "OR (?10 = 1 AND r.source IN ('reported', 'reviewed')))",
+    "OR (r.source IN ('reported', 'reviewed')))",
+  ],
+  [
+    'setups source flag ignored',
+    'src/queries.js',
+    "AND ((?9 = 1 AND r.source = 'reproduced')",
+    "AND ((r.source = 'reproduced')",
+  ],
+  ['setups report tier ignored', 'src/queries.js', 'AND (?11 IS NULL OR (?11', 'AND (1 OR (?11'],
+  [
+    'setups report tier swapped',
+    'src/queries.js',
+    "(?11 = 'unverified' AND r.source = 'reported')",
+    "(?11 = 'unverified' AND r.source = 'reviewed')",
+  ],
+  [
+    'setups sources merged in ranking',
+    'src/queries.js',
+    'PARTITION BY p.os, p.die, p.source, p.cpu_vendor, p.host_driver, p.guest_driver\n               ORDER BY',
+    'PARTITION BY p.os, p.die, p.cpu_vendor, p.host_driver, p.guest_driver\n               ORDER BY',
+  ],
+  ['setups community default on', 'src/api.js', "sources.has('community') ? 1 : 0,", '1,'],
+  [
+    'setups raw source vocabulary',
+    'src/api.js',
+    "v === 'reproduced' ? 'reproduced' : v === 'reported' || v === 'reviewed' ? 'community' : null;",
+    'v;',
+  ],
+  [
+    'setups source pattern',
+    'src/validate.js',
+    '  sourceList: /^(?:reproduced|imported|community)(?:,(?:reproduced|imported|community)){0,2}$/,',
+    '  sourceList: /./,',
+  ],
+  [
+    'setups report tier pattern',
+    'src/validate.js',
+    'reportTier: /^(?:unverified|reviewed)$/,',
+    'reportTier: /./,',
+  ],
+  [
+    'facets source always available',
+    'src/api.js',
+    "available: count(['reproduced']) > 0 },",
+    'available: true },',
+  ],
+  [
+    'facets running run counted',
+    'src/queries.js',
+    'FROM ci_runs r WHERE r.verdict IS NOT NULL\n    GROUP BY r.die ORDER BY family, r.die LIMIT 100',
+    'FROM ci_runs r\n    GROUP BY r.die ORDER BY family, r.die LIMIT 100',
+  ],
+  [
+    'facets claim of unfinished run',
+    'src/queries.js',
+    'FROM ci_run_claims c JOIN ci_runs r ON r.run_id = c.run_id\n    WHERE r.verdict IS NOT NULL\n    GROUP BY value',
+    'FROM ci_run_claims c JOIN ci_runs r ON r.run_id = c.run_id\n    GROUP BY value',
+  ],
+  [
+    'facets unchecked driver output',
+    'src/api.js',
+    "const driverOut = (v) => (typeof v === 'string' && DRIVER_OUT.test(v) ? v : null);",
+    'const driverOut = (v) => v ?? null;',
+  ],
   [
     'outbound fetch',
     'src/index.js',
@@ -147,11 +297,12 @@ for (const [name, file, before, after] of MUTANTS) {
     cpSync(here, copy, { recursive: true, filter: (p) => !p.includes('node_modules') });
     mkdirSync(join(root, 'site/status'), { recursive: true });
     cpSync(fixture, join(root, 'site/status/fixture.json'));
+    cpSync(names, join(root, 'site/status/gpu_names.json'));
     const target = join(copy, file);
     const original = readFileSync(target, 'utf8');
     if (original.split(before).length !== 2) throw Error('ambiguous or missing mutation: ' + name);
     writeFileSync(target, original.replace(before, after));
-    const tests = ['api', 'static', 'row-tag', 'fixture', 'ci'].map((t) =>
+    const tests = ['api', 'static', 'row-tag', 'fixture', 'ci', 'setups'].map((t) =>
       join(copy, 'test', t + '.test.js'),
     );
     const run = spawnSync(process.execPath, ['--no-warnings', '--test', ...tests], {

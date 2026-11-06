@@ -87,7 +87,7 @@ class Modes(unittest.TestCase):
         )
         self.assertEqual(mode, "live")
         for page in ["status/index.html", "status/die/index.html", "status/run/index.html",
-                     "status/commit/index.html"]:
+                     "status/commit/index.html", "status/find/index.html"]:
             text = (self.out / page).read_text()
             self.assertEqual(text.count("https://api.kayfabe.dev"), 1, page)
             self.assertIn('<meta name="kf-status-api" content="https://api.kayfabe.dev" />', text)
@@ -97,10 +97,11 @@ class Modes(unittest.TestCase):
         self.assertFalse((self.out / "status/cell").exists())
         self.assertEqual(self.files(), sorted([
             "status/index.html", "status/die/index.html", "status/run/index.html",
-            "status/commit/index.html", "status/status.js", "status/status.css",
-            "status/coverage.json"]))
+            "status/commit/index.html", "status/find/index.html", "status/status.js",
+            "status/status.css", "status/coverage.json", "status/gpu_names.json"]))
         self.assertNotRegex((self.out / "status/status.js").read_text(), r"https?://")
         self.assertNotRegex((self.out / "status/coverage.json").read_text(), WORKER_URL)
+        self.assertNotRegex((self.out / "status/gpu_names.json").read_text(), r"https?://")
 
     def test_invalid_logs_base_is_dropped(self):
         status_pages.write_status(
@@ -112,12 +113,15 @@ class Modes(unittest.TestCase):
         self.assertEqual(status_pages.write_status(self.out, fixture=FIXTURE), "fixture")
         self.assertIn("status/fixture.json", self.files())
         self.assertIn("status/coverage.json", self.files())
+        self.assertIn("status/gpu_names.json", self.files())
+        self.assertIn("status/find/index.html", self.files())
         for page in self.out.rglob("*.html"):
             text = page.read_text()
             self.assertIn("Synthetic data.", text)
             self.assertNotRegex(text, WORKER_URL)
         self.assertNotRegex((self.out / "status/fixture.json").read_text(), WORKER_URL)
         self.assertNotRegex((self.out / "status/coverage.json").read_text(), WORKER_URL)
+        self.assertNotRegex((self.out / "status/gpu_names.json").read_text(), WORKER_URL)
 
     def test_fixture_and_api_are_exclusive_and_fixture_must_be_synthetic(self):
         with self.assertRaises(ValueError):
@@ -131,6 +135,82 @@ class Modes(unittest.TestCase):
         status_pages.write_status(self.out, api_base="https://api.kayfabe.dev")
         status_pages.write_status(self.out)
         self.assertEqual(self.files(), ["status/index.html"])
+
+
+class GpuNames(unittest.TestCase):
+    """site/status/gpu_names.json: the hand-written marketing-name to die table of the picker."""
+
+    PREFIX_FAMILY = {"TU": "turing", "GA": "ampere", "AD": "ada", "GB": "blackwell"}
+    # Where the Worker's die rules (ci/vast-broker/defaults.json dieRules) label a board with a
+    # different die than the public product knowledge in the table: GTX 1650 and GTX 1630 are
+    # TU117 (the rule GTX_16* says TU116), and the RTX 2070 is TU106 (the rule RTX_2070* says
+    # TU104; only the RTX 2070 SUPER is TU104). INFERRED from public product data, not measured on
+    # hardware; shrink this set when the rules are corrected (the test then asks for it).
+    WORKER_RULE_DISAGREES = {"GTX 1630", "GTX 1650", "RTX 2070"}
+
+    def setUp(self):
+        self.data = json.loads((SITE / "status/gpu_names.json").read_text())
+        self.rules = json.loads(
+            (SITE.parent / "ci/vast-broker/defaults.json").read_text())["dieRules"]
+
+    @staticmethod
+    def key(name):
+        return re.sub(r"[^a-z0-9]+", " ", name.lower()).strip()
+
+    def test_shape(self):
+        self.assertEqual(self.data["schema"], 1)
+        for field in ("note", "variants", "laptops", "unmapped"):
+            self.assertTrue(self.data[field], field)
+        self.assertIn("Laptop", self.data["laptops"])
+        names = set()
+        for entry in self.data["entries"]:
+            self.assertEqual(set(entry) - {"note"}, {"name", "dies"}, entry)
+            self.assertRegex(entry["name"], r"^(?:RTX \d{4}|GTX \d{4}|TITAN RTX)(?: (?:Ti|SUPER|D))*$")
+            self.assertNotIn(self.key(entry["name"]), names, "duplicate " + entry["name"])
+            names.add(self.key(entry["name"]))
+            dies = entry["dies"]
+            self.assertTrue(1 <= len(dies) <= 4, entry)  # the API takes up to four dies
+            self.assertEqual(len(set(dies)), len(dies))
+            for die in dies:
+                self.assertRegex(die, r"^(?:TU|GA|AD|GB)[0-9]{3}$")
+        # The consumer lines the owner named are all present.
+        for line in ("GTX 16", "RTX 20", "RTX 30", "RTX 40", "RTX 50"):
+            self.assertTrue(any(e["name"].startswith(line) for e in self.data["entries"]), line)
+        self.assertNotRegex(json.dumps(self.data), r"(?i)laptop \w*[0-9]{4}|https?://")
+
+    def test_a_multi_die_name_says_why(self):
+        by = {e["name"]: e for e in self.data["entries"]}
+        self.assertEqual(by["RTX 3060"]["dies"], ["GA106", "GA104"])
+        for entry in self.data["entries"]:
+            if len(entry["dies"]) > 1:
+                self.assertTrue(entry.get("note"), entry["name"] + " lists several dies without saying so")
+
+    def test_dies_agree_with_the_workers_die_rules_except_the_known_cases(self):
+        def matches(pattern, name):
+            return re.fullmatch(".*".join(re.escape(p) for p in pattern.split("*")), name) is not None
+
+        disagree = set()
+        for entry in self.data["entries"]:
+            worker = entry["name"].upper().replace(" ", "_")
+            for rule in self.rules:
+                if any(matches(p, worker) for p in rule["names"]) and rule["die"] not in entry["dies"]:
+                    disagree.add(entry["name"])
+        self.assertEqual(disagree, self.WORKER_RULE_DISAGREES)
+
+    def test_dies_agree_with_the_boards_named_in_the_evidence_file(self):
+        coverage = json.loads((SITE / "status/coverage.json").read_text())
+        by = {self.key(e["name"]): e for e in self.data["entries"]}
+        checked = 0
+        for family in coverage["families"]:
+            for die in family["dies"]:
+                if not die["board"]:
+                    continue
+                entry = by.get(self.key(die["board"]))
+                self.assertIsNotNone(entry, die["board"])
+                self.assertIn(die["id"], entry["dies"], die["board"])
+                self.assertEqual(self.PREFIX_FAMILY[die["id"][:2]], family["id"])
+                checked += 1
+        self.assertGreaterEqual(checked, 9)
 
 
 class Coverage(unittest.TestCase):

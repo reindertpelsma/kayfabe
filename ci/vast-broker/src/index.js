@@ -1175,6 +1175,10 @@ export function createService({
     try {
       const environment = {
         KF_PROTOCOL: DEFAULTS.boxProtocol,
+        // 2026-11-06 (setup picker): this Worker accepts the optional host_claims block of a
+        // result (src/results.js). A box forwards it only when it sees this variable, so a box
+        // from a newer commit never sends a field an older Worker would refuse.
+        KF_HOST_CLAIMS: '1',
         KF_BROKER_URL: cfg.audience + '/' + env.BROKER_PATH_PREFIX,
         KF_RUN_ID: key,
         KF_RUN_TOKEN: runToken,

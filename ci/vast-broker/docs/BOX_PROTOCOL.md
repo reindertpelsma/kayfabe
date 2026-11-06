@@ -72,3 +72,17 @@ field" reads status protocol 6 (`country` is still the one optional status key; 
 object has no `pr` and has `machine_id` / `host_id` since 2026-10-24) and "the environment is
 protocol 6" reads box protocol 7.
 [CODE READ: src/index.js, runner.py] Structured Worker status includes the selected provider `country` (two uppercase letters or `UNKNOWN`), separate from payload hardware. The runner accepts it as an explicitly optional protocol-4 metadata field, validates it independently, and labels it untrusted. The repo-side result-file contract is unchanged; the environment is protocol 6.
+
+## Optional host claims (2026-11-06)
+
+[CODE READ: scripts/ci/vast_report.py, ci/vast-broker/src/results.js, src/index.js] The box protocol
+stays 7. The Worker adds the optional environment variable `KF_HOST_CLAIMS=1` to the box environment;
+a reporter that sees it may add one optional key to the structured result, `host_claims`, a flat
+object of at most eight bounded strings (`cpu_vendor` amd, intel, arm or other; `cpu_model`;
+`cpu_arch`; `host_driver`; `linux_os_version`, `linux_driver`; `windows_os_version`,
+`windows_driver`). They are claims: the Worker checks each with the same patterns as the box
+(`cleanClaims`, shared vectors in `scripts/ci/host_claims_vectors.json`), drops an invalid field
+instead of refusing the report, and no verdict reads them. Without the variable (an older Worker) the
+reporter sends none, because an older Worker refuses any other top-level key of a result; a newer
+Worker accepts a result without the key (an older box). `host_driver` and the GPU name already travel
+in `hardware`; the Worker takes the host driver from `hardware.driver_version`.
