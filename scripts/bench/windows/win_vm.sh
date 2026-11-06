@@ -207,7 +207,20 @@ cmd_fetch() {
     IFS='|' read -r f url sum bytes <<<"$row"
     if [ ! -s "$CACHE/$f" ]; then
       log "fetch $f from $url"
-      curl -fL --retry 3 -o "$CACHE/$f.part" "$url"
+      # 2026-11-06: a 5 GB medium restarted from zero on every curl failure (rc=56 lost a gate run,
+      # gpu-vast run 42111518119 attempt 3). Resume the .part file, retry every error class, abort a
+      # stalled transfer, and start over only when the server cannot resume (rc 33) or the file is bad.
+      local try=0 rc=1
+      while [ "$try" -lt 8 ]; do
+        try=$((try + 1))
+        curl -fL --connect-timeout 30 --speed-limit 200000 --speed-time 60 --retry 3 --retry-delay 5 \
+          --retry-all-errors -C - -o "$CACHE/$f.part" "$url" && { rc=0; break; }
+        rc=$?
+        log "fetch $f: curl rc=$rc (attempt $try/8)"
+        [ "$rc" = 33 ] && rm -f "$CACHE/$f.part"
+        sleep 10
+      done
+      [ "$rc" = 0 ] || die "$f: download failed after $try attempts (last curl rc=$rc)"
       mv "$CACHE/$f.part" "$CACHE/$f"
     fi
     have=$(sha256sum "$CACHE/$f" | cut -d' ' -f1)
