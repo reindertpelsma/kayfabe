@@ -1,0 +1,9 @@
+# SHAPE 6f: late member with no BIND at all after the TSG schedule
+tsg engine=gr vas=0
+ctx S flags=sync vas=0
+chan g ctx=S engine=gr objs=cmp
+bindtsg
+schedtsg
+work g
+chan l ctx=S engine=gr objs=cmp
+work l wait=2000

@@ -1,0 +1,10 @@
+# SHAPE 4d: TSG with hVASpace=0 and ctxshares naming VA space 0 / 1
+vas 1
+tsg engine=gr vas=none
+ctx S flags=sync vas=0
+ctx A flags=async vas=1
+chan g ctx=S engine=gr objs=3d+cmp
+chan c ctx=A engine=gr ringvas=1 objs=cmp
+bindtsg
+schedtsg
+work g,c

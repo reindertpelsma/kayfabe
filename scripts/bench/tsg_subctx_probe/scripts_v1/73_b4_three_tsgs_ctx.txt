@@ -1,0 +1,18 @@
+# LATENCY b4 (kayfabe today with explicit shape): three TSGs, each with its own SYNC ctxshare (the per-ctxshare-group hack)
+tsg engine=gr vas=0
+ctx S0 flags=sync vas=0
+tsg engine=gr vas=0
+ctx S1 flags=sync vas=0
+tsg engine=gr vas=0
+ctx S2 flags=sync vas=0
+chan a tsg=0 ctx=S0 engine=gr objs=cmp
+chan b tsg=1 ctx=S1 engine=gr objs=cmp
+chan c tsg=2 ctx=S2 engine=gr objs=cmp
+bindtsg tsg=0
+bindtsg tsg=1
+bindtsg tsg=2
+schedtsg tsg=0
+schedtsg tsg=1
+schedtsg tsg=2
+work a,b,c
+bench a,b,c iters=500

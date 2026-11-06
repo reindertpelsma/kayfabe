@@ -1,0 +1,12 @@
+# SHAPE 4b: SYNC ctxshare in VA space 0, ASYNC ctxshare in VA space 1 (the channel's ring is mapped in its own VA space)
+vas 1
+tsg engine=gr vas=0
+ctx S flags=sync vas=0
+ctx A flags=async vas=1
+chan g ctx=S engine=gr vas=none ringvas=0 objs=3d+cmp
+chan c ctx=A engine=gr vas=none ringvas=1 objs=cmp rawflags=0x10
+bindtsg
+schedtsg
+work g
+work c
+work g,c

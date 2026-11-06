@@ -1,0 +1,9 @@
+# SHAPE 6e: late member in LEGACY mode (the CUDA / single-ctxshare case), no schedule
+tsg engine=gr vas=0
+chan g engine=gr thread=0 objs=3d+cmp
+bindtsg
+schedtsg
+work g
+chan l engine=gr thread=0 objs=cmp
+work l wait=2000
+work g,l wait=2000

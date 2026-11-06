@@ -1,0 +1,11 @@
+# SHAPE 5a (the OLD failing shape): graphics (3D+compute) and a compute channel BOTH on the legacy SYNC subcontext of one TSG
+tsg engine=gr vas=0
+chan g engine=gr thread=0 objs=3d+cmp
+chan c engine=gr thread=0 objs=cmp
+bindtsg
+schedtsg
+work g
+work c
+work g,c
+work g,c
+bench g,c iters=300

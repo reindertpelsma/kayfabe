@@ -1,0 +1,13 @@
+# SHAPE 1: one TSG, SYNC ctxshare (3D+compute channel) + ASYNC ctxshare (compute channel)
+tsg engine=gr vas=0
+ctx S flags=sync vas=0
+ctx A flags=async vas=0
+chan g ctx=S engine=gr objs=3d+cmp
+chan c ctx=A engine=gr objs=cmp rawflags=0x10
+bindtsg
+schedtsg
+work g
+work c
+work g,c
+work g,c
+bench g,c iters=300

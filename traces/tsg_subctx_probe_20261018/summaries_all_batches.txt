@@ -1,0 +1,1282 @@
+1.1M	raw
+b1
+b2
+b3
+b4
+b5
+b6
+b7
+b8
+b9
+######## batch b1 (3 runs)
+=== 00_veid_rules  [VEID assignment rules (no channel needed)]
+ctx s0 flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+ctx s0dup flags=sync vas=0 status=0x51 h=0x0 returned_subctxId=0x0
+line 5 returned 1
+ctx a1 flags=async vas=0 status=0x0 h=0xb00b0009 returned_subctxId=0x3f
+ctx a2 flags=async vas=0 status=0x0 h=0xb00b000a returned_subctxId=0x3e
+ctx p1 flags=prefer vas=0 status=0x0 h=0xb00b000b returned_subctxId=0x80000001
+ctx sp3 flags=spec:3 vas=0 status=0x0 h=0xb00b000c returned_subctxId=0x3
+ctx sp3dup flags=spec:3 vas=0 status=0x51 h=0x0 returned_subctxId=0x3
+line 10 returned 1
+ctx sp0 flags=spec:0 vas=0 status=0x51 h=0x0 returned_subctxId=0x0
+line 11 returned 1
+ctx vnone flags=async status=0x0 h=0xb00b000f returned_subctxId=0x3d
+   [meta] rc=0 pid=3485103 xid_delta=0 xid_lines_for_pid=0
+NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Out of memory [NV_ERR_NO_MEMORY] (0x00000051) returned from kctxshareInitCommon(dynamicCast(pShared, KernelCtxShare), pKernelCtxShareApi, pGpu, pVAS, pUserParams->flags
+NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Out of memory [NV_ERR_NO_MEMORY] (0x00000051) returned from kctxshareInitCommon(dynamicCast(pShared, KernelCtxShare), pKernelCtxShareApi, pGpu, pVAS, pUserParams->flags
+NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Out of memory [NV_ERR_NO_MEMORY] (0x00000051) returned from kctxshareInitCommon(dynamicCast(pShared, KernelCtxShare), pKernelCtxShareApi, pGpu, pVAS, pUserParams->flags
+=== 01_base_legacy_gr  [baseline: ONE TSG(GR), legacy subcontext (no hContextShare), one GR channel with 3D+compute+copy classes]
+chan g ctx=none(0) engine=0x1 status=0x0 h=0xb00b0009
+obj g.3d class=0xc997 status=0x0
+obj g.cmp class=0xc9c0 status=0x0
+obj g.ce class=0xc7b5 status=0x0
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+work g host_sem=MISS t=-1000000us engine_sems: 3d=MISS(0x0) cmp=MISS(0x0) ce=MISS(0x0) notifier_error=0 
+work g host_sem=MISS t=-1000000us engine_sems: 3d=MISS(0x0) cmp=MISS(0x0) ce=MISS(0x0) notifier_error=0 
+   [meta] rc=0 pid=3485133 xid_delta=0 xid_lines_for_pid=0
+NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Generic Error: Invalid state [NV_ERR_INVALID_STATE] (0x00000040) returned from kfifoGenerateWorkSubmitTokenHal_HAL(pGpu, pKernelFifo, pKernelChannel, pGeneratedToken, b
+=== 02_base_explicit_sync  [baseline: ONE TSG(GR), one explicit SYNC ctxshare, one GR channel with 3D+compute+copy]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+chan g ctx=S engine=0x1 status=0x0 h=0xb00b000a
+obj g.3d class=0xc997 status=0x0
+obj g.cmp class=0xc9c0 status=0x0
+obj g.ce class=0xc7b5 status=0x0
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+work g host_sem=MISS t=-1000000us engine_sems: 3d=MISS(0x0) cmp=MISS(0x0) ce=MISS(0x0) notifier_error=0 
+work g host_sem=MISS t=-1000000us engine_sems: 3d=MISS(0x0) cmp=MISS(0x0) ce=MISS(0x0) notifier_error=0 
+   [meta] rc=0 pid=3485217 xid_delta=0 xid_lines_for_pid=0
+NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Generic Error: Invalid state [NV_ERR_INVALID_STATE] (0x00000040) returned from kfifoGenerateWorkSubmitTokenHal_HAL(pGpu, pKernelFifo, pKernelChannel, pGeneratedToken, b
+######## batch b2 (2 runs)
+=== 01_base_legacy_gr  [baseline: ONE TSG(GR), legacy subcontext (no hContextShare), one GR channel with 3D+compute+copy classes]
+chan g ctx=none(0) engine=0x1 status=0x0 h=0xb00b0009
+obj g.3d class=0xc997 status=0x0
+obj g.cmp class=0xc9c0 status=0x0
+obj g.ce class=0xc7b5 status=0x0
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+work g host_sem=OK t=775us engine_sems: 3d=OK(0xc0de0001) cmp=OK(0xc0de0102) ce=OK(0xc0de0203) notifier_error=0 
+work g host_sem=OK t=513us engine_sems: 3d=OK(0xc0de0005) cmp=OK(0xc0de0106) ce=OK(0xc0de0207) notifier_error=0 
+   [meta] rc=0 pid=3485504 xid_delta=0 xid_lines_for_pid=0
+=== 02_base_explicit_sync  [baseline: ONE TSG(GR), one explicit SYNC ctxshare, one GR channel with 3D+compute+copy]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+chan g ctx=S engine=0x1 status=0x0 h=0xb00b000a
+obj g.3d class=0xc997 status=0x0
+obj g.cmp class=0xc9c0 status=0x0
+obj g.ce class=0xc7b5 status=0x0
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+work g host_sem=OK t=773us engine_sems: 3d=OK(0xc0de0001) cmp=OK(0xc0de0102) ce=OK(0xc0de0203) notifier_error=0 
+work g host_sem=OK t=516us engine_sems: 3d=OK(0xc0de0005) cmp=OK(0xc0de0106) ce=OK(0xc0de0207) notifier_error=0 
+   [meta] rc=0 pid=3485535 xid_delta=0 xid_lines_for_pid=0
+######## batch b3 (9 runs)
+=== 10_s1_sync_async  [SHAPE 1: one TSG, SYNC ctxshare (3D+compute channel) + ASYNC ctxshare (compute channel)]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+ctx A flags=async vas=0 status=0x0 h=0xb00b0008 returned_subctxId=0x3f
+chan g ctx=S engine=0x1 status=0x0 h=0xb00b000b
+obj g.3d class=0xc997 status=0x0
+obj g.cmp class=0xc9c0 status=0x0
+chan c ctx=A engine=0x1 status=0x0 h=0xb00b0010
+obj c.cmp class=0xc9c0 status=0x31
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+work g host_sem=OK t=774us engine_sems: 3d=OK(0xc0de0001) cmp=OK(0xc0de0102) notifier_error=0 
+work c host_sem=OK t=258us engine_sems: notifier_error=0 
+work g host_sem=OK t=515us engine_sems: 3d=OK(0xc0de0004) cmp=OK(0xc0de0105) notifier_error=0 
+work c host_sem=OK t=523us engine_sems: notifier_error=0 
+work g host_sem=OK t=261us engine_sems: 3d=OK(0xc0de0007) cmp=OK(0xc0de0108) notifier_error=0 
+work c host_sem=OK t=269us engine_sems: notifier_error=0 
+bench: channel c has no object
+line 13 returned 1
+   [meta] rc=0 pid=3485673 xid_delta=0 xid_lines_for_pid=0
+NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00049; hParent=0xb00b0010; hObject=0xb00b0011; hClass=0x0000c9c0; paramsSize=0x00000000; paramsStatus=0x00000031; status=0x00000031
+=== 11_s1b_order_sched_before_obj  [SHAPE 1 variant: engine objects allocated AFTER bind+schedule]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+ctx A flags=async vas=0 status=0x0 h=0xb00b0008 returned_subctxId=0x3f
+chan g ctx=S engine=0x1 status=0x0 h=0xb00b000b
+chan c ctx=A engine=0x1 status=0x0 h=0xb00b000e
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+obj g.3d class=0xc997 status=0x0
+obj g.cmp class=0xc9c0 status=0x0
+obj c.cmp class=0xc9c0 status=0x31
+work g host_sem=OK t=795us engine_sems: 3d=OK(0xc0de0001) cmp=OK(0xc0de0102) notifier_error=0 
+work c host_sem=OK t=785us engine_sems: notifier_error=0 
+   [meta] rc=0 pid=3485713 xid_delta=0 xid_lines_for_pid=0
+NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0004b; hParent=0xb00b000e; hObject=0xb00b0011; hClass=0x0000c9c0; paramsSize=0x00000000; paramsStatus=0x00000031; status=0x00000031
+=== 12_s1c_chan_bind_sched  [SHAPE 1 variant: channel-level BIND and SCHEDULE (the in-tree driver style), no group verbs]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+ctx A flags=async vas=0 status=0x0 h=0xb00b0008 returned_subctxId=0x3f
+chan g ctx=S engine=0x1 status=0x0 h=0xb00b000b
+obj g.3d class=0xc997 status=0x0
+obj g.cmp class=0xc9c0 status=0x0
+chan c ctx=A engine=0x1 status=0x0 h=0xb00b0010
+obj c.cmp class=0xc9c0 status=0x31
+bindchan g engine=0x1 status=0x0
+bindchan c engine=0x1 status=0x0
+schedchan g status=0x0
+schedchan c status=0x0
+work g host_sem=OK t=541us engine_sems: 3d=OK(0xc0de0001) cmp=OK(0xc0de0102) notifier_error=0 
+work c host_sem=OK t=531us engine_sems: notifier_error=0 
+   [meta] rc=0 pid=3485743 xid_delta=0 xid_lines_for_pid=0
+NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0004d; hParent=0xb00b0010; hObject=0xb00b0011; hClass=0x0000c9c0; paramsSize=0x00000000; paramsStatus=0x00000031; status=0x00000031
+=== 20_s2a_copy_on_async  [SHAPE 2a: SYNC(3D+compute) + ASYNC(compute) + ASYNC(copy class on a GR-engine channel = GRCE)]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+ctx A flags=async vas=0 status=0x0 h=0xb00b0008 returned_subctxId=0x3f
+ctx C flags=async vas=0 status=0x0 h=0xb00b0009 returned_subctxId=0x3e
+chan g ctx=S engine=0x1 status=0x0 h=0xb00b000c
+obj g.3d class=0xc997 status=0x0
+obj g.cmp class=0xc9c0 status=0x0
+chan c ctx=A engine=0x1 status=0x0 h=0xb00b0011
+obj c.cmp class=0xc9c0 status=0x31
+chan k ctx=C engine=0x1 status=0x0 h=0xb00b0015
+obj k.ce class=0xc7b5 status=0x0
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+work g host_sem=OK t=775us engine_sems: 3d=OK(0xc0de0001) cmp=OK(0xc0de0102) notifier_error=0 
+work c host_sem=OK t=258us engine_sems: notifier_error=0 
+work k host_sem=OK t=258us engine_sems: ce=OK(0xc0de0201) notifier_error=0 
+work g host_sem=OK t=522us engine_sems: 3d=OK(0xc0de0004) cmp=OK(0xc0de0105) notifier_error=0 
+work c host_sem=OK t=530us engine_sems: notifier_error=0 
+work k host_sem=OK t=537us engine_sems: ce=OK(0xc0de0203) notifier_error=0 
+   [meta] rc=0 pid=3485782 xid_delta=0 xid_lines_for_pid=0
+NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0004f; hParent=0xb00b0011; hObject=0xb00b0012; hClass=0x0000c9c0; paramsSize=0x00000000; paramsStatus=0x00000031; status=0x00000031
+=== 21_s2b_copy_on_sync  [SHAPE 2b: copy class on the SYNC subcontext of a GR channel together with compute on an ASYNC one]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+ctx A flags=async vas=0 status=0x0 h=0xb00b0008 returned_subctxId=0x3f
+chan k ctx=S engine=0x1 status=0x0 h=0xb00b000b
+obj k.ce class=0xc7b5 status=0x0
+chan c ctx=A engine=0x1 status=0x0 h=0xb00b000f
+obj c.cmp class=0xc9c0 status=0x0
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+work k host_sem=OK t=266us engine_sems: ce=OK(0xc0de0201) notifier_error=0 
+work c host_sem=OK t=513us engine_sems: cmp=OK(0xc0de0101) notifier_error=0 
+work k host_sem=OK t=261us engine_sems: ce=OK(0xc0de0203) notifier_error=0 
+work c host_sem=OK t=523us engine_sems: cmp=OK(0xc0de0103) notifier_error=0 
+   [meta] rc=0 pid=3485818 xid_delta=0 xid_lines_for_pid=0
+=== 22_s2c_lce_channel_in_gr_tsg  [SHAPE 2c: a channel with a COPY0 engineType in a GR-engine TSG (source says: refused, engine mismatch)]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+chan k ctx=S engine=0x9 status=0x1f h=0x0
+line 4 returned 1
+   [meta] rc=0 pid=3485888 xid_delta=0 xid_lines_for_pid=0
+=== 23_s2d_ce_tsg  [SHAPE 2d: a TSG of its own with engineType COPY0 and a COPY0 channel (control)]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+chan k ctx=S engine=0x9 status=0x0 h=0xb00b000a
+obj k.ce class=0xc7b5 status=0x0
+bindtsg engine=0x9 status=0x0
+schedtsg enable=1 status=0x0
+work k host_sem=OK t=265us engine_sems: ce=OK(0xc0de0201) notifier_error=0 
+work k host_sem=OK t=4us engine_sems: ce=OK(0xc0de0203) notifier_error=0 
+   [meta] rc=0 pid=3485918 xid_delta=0 xid_lines_for_pid=0
+=== 24_s2e_ce_on_async_lce_tsg  [SHAPE 2e: COPY0 TSG with an ASYNC ctxshare (source says: ASYNC only for GR/GRCE/SW -> object alloc refused)]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+ctx A flags=async vas=0 status=0x0 h=0xb00b0008 returned_subctxId=0x3f
+chan k ctx=A engine=0x9 status=0x0 h=0xb00b000b
+obj k.ce class=0xc7b5 status=0x0
+   [meta] rc=0 pid=3485960 xid_delta=0 xid_lines_for_pid=0
+=== 25_s2f_legacy_copy_and_gr  [SHAPE 2f (legacy subcontext): GR channel (thread 0) + GR channel with copy class (thread 0) + compute on legacy ASYNC (thread 1)]
+chan g ctx=none(0) engine=0x1 status=0x0 h=0xb00b0009
+obj g.3d class=0xc997 status=0x0
+obj g.cmp class=0xc9c0 status=0x0
+chan k ctx=none(0) engine=0x1 status=0x0 h=0xb00b000e
+obj k.ce class=0xc7b5 status=0x0
+chan c ctx=none(0) engine=0x1 status=0x1f h=0x0
+line 5 returned 1
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+work g host_sem=OK t=774us engine_sems: 3d=OK(0xc0de0001) cmp=OK(0xc0de0102) notifier_error=0 
+work k host_sem=OK t=258us engine_sems: ce=OK(0xc0de0201) notifier_error=0 
+work: unknown channel c
+work: unknown channel c
+work g host_sem=OK t=516us engine_sems: 3d=OK(0xc0de0004) cmp=OK(0xc0de0105) notifier_error=0 
+work k host_sem=OK t=524us engine_sems: ce=OK(0xc0de0203) notifier_error=0 
+   [meta] rc=0 pid=3485994 xid_delta=0 xid_lines_for_pid=0
+NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Invalid argument to call [NV_ERR_INVALID_ARGUMENT] (0x0000001F) returned from kchannelAllocMem_HAL(pGpu, pKernelChannel, pChannelGpfifoParams->flags, _kchannelgetVerifF
+NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Invalid argument to call [NV_ERR_INVALID_ARGUMENT] (0x0000001F) returned from _kchannelAllocOrDescribeInstMem(pKernelChannel, pChannelGpfifoParams) @ kernel_channel.c:8
+######## batch b4 (12 runs)
+=== 30_e1_sync_cmp_async_cmp  [ISOLATE: SYNC channel has compute only; ASYNC channel compute]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+ctx A flags=async vas=0 status=0x0 h=0xb00b0008 returned_subctxId=0x3f
+chan g ctx=S engine=0x1 status=0x0 h=0xb00b000b
+obj g.cmp class=0xc9c0 status=0x0
+chan c ctx=A engine=0x1 status=0x0 h=0xb00b000f
+obj c.cmp class=0xc9c0 status=0x0
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+work g host_sem=OK t=542us engine_sems: cmp=OK(0xc0de0101) notifier_error=0 
+work c host_sem=OK t=530us engine_sems: cmp=OK(0xc0de0101) notifier_error=0 
+   [meta] rc=0 pid=3486459 xid_delta=0 xid_lines_for_pid=0
+=== 31_e2_sync_3d_async_cmp  [ISOLATE: SYNC channel has 3D only; ASYNC channel compute]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+ctx A flags=async vas=0 status=0x0 h=0xb00b0008 returned_subctxId=0x3f
+chan g ctx=S engine=0x1 status=0x0 h=0xb00b000b
+obj g.3d class=0xc997 status=0x0
+chan c ctx=A engine=0x1 status=0x0 h=0xb00b000f
+obj c.cmp class=0xc9c0 status=0x31
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+work g host_sem=OK t=542us engine_sems: 3d=OK(0xc0de0001) notifier_error=0 
+work c host_sem=OK t=530us engine_sems: notifier_error=0 
+   [meta] rc=0 pid=3486502 xid_delta=0 xid_lines_for_pid=0
+NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0005d; hParent=0xb00b000f; hObject=0xb00b0010; hClass=0x0000c9c0; paramsSize=0x00000000; paramsStatus=0x00000031; status=0x00000031
+=== 32_e3_sync_empty_async_cmp  [ISOLATE: SYNC channel has no object; ASYNC channel compute]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+ctx A flags=async vas=0 status=0x0 h=0xb00b0008 returned_subctxId=0x3f
+chan g ctx=S engine=0x1 status=0x0 h=0xb00b000b
+chan c ctx=A engine=0x1 status=0x0 h=0xb00b000e
+obj c.cmp class=0xc9c0 status=0x0
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+work c host_sem=OK t=745us engine_sems: cmp=OK(0xc0de0101) notifier_error=0 
+   [meta] rc=0 pid=3486536 xid_delta=0 xid_lines_for_pid=0
+=== 33_e4_async_only  [ISOLATE: only an ASYNC ctxshare (no SYNC ctxshare used by any channel), compute]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+ctx A flags=async vas=0 status=0x0 h=0xb00b0008 returned_subctxId=0x3f
+chan c ctx=A engine=0x1 status=0x0 h=0xb00b000b
+obj c.cmp class=0xc9c0 status=0x0
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+work c host_sem=OK t=774us engine_sems: cmp=OK(0xc0de0101) notifier_error=0 
+   [meta] rc=0 pid=3486570 xid_delta=0 xid_lines_for_pid=0
+=== 34_e5_windows_order  [ISOLATE: SYNC 3D+cmp; ASYNC channel objects in the Windows order 5080, c7b5, c9c0]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+ctx A flags=async vas=0 status=0x0 h=0xb00b0008 returned_subctxId=0x3f
+chan g ctx=S engine=0x1 status=0x0 h=0xb00b000b
+obj g.sw class=0x5080 status=0x0
+obj g.ce class=0xc7b5 status=0x0
+obj g.3d class=0xc997 status=0x0
+obj g.cmp class=0xc9c0 status=0x0
+chan c ctx=A engine=0x1 status=0x0 h=0xb00b0012
+obj c.sw class=0x5080 status=0x0
+obj c.ce class=0xc7b5 status=0x0
+obj c.cmp class=0xc9c0 status=0x31
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+work g host_sem=OK t=796us engine_sems: 3d=OK(0xc0de0001) cmp=OK(0xc0de0102) ce=OK(0xc0de0203) notifier_error=0 
+work c host_sem=OK t=787us engine_sems: ce=OK(0xc0de0201) notifier_error=0 
+   [meta] rc=0 pid=3486608 xid_delta=0 xid_lines_for_pid=0
+NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00063; hParent=0xb00b0012; hObject=0xb00b0015; hClass=0x0000c9c0; paramsSize=0x00000000; paramsStatus=0x00000031; status=0x00000031
+=== 35_e6_async_first  [ISOLATE: the ASYNC channel gets its compute object BEFORE the SYNC channel gets 3D+cmp]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+ctx A flags=async vas=0 status=0x0 h=0xb00b0008 returned_subctxId=0x3f
+chan c ctx=A engine=0x1 status=0x0 h=0xb00b000b
+obj c.cmp class=0xc9c0 status=0x0
+chan g ctx=S engine=0x1 status=0x0 h=0xb00b000f
+obj g.3d class=0xc997 status=0x31
+obj g.cmp class=0xc9c0 status=0x0
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+work g host_sem=OK t=543us engine_sems: cmp=OK(0xc0de0101) notifier_error=0 
+work c host_sem=OK t=531us engine_sems: cmp=OK(0xc0de0101) notifier_error=0 
+   [meta] rc=0 pid=3486677 xid_delta=0 xid_lines_for_pid=0
+NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00065; hParent=0xb00b000f; hObject=0xb00b0010; hClass=0x0000c997; paramsSize=0x00000000; paramsStatus=0x00000031; status=0x00000031
+=== 36_e7_prefer_lower  [ISOLATE: ASYNC_PREFER_LOWER instead of ASYNC]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+ctx A flags=prefer vas=0 status=0x0 h=0xb00b0008 returned_subctxId=0x80000001
+chan g ctx=S engine=0x1 status=0x0 h=0xb00b000b
+obj g.3d class=0xc997 status=0x0
+obj g.cmp class=0xc9c0 status=0x0
+chan c ctx=A engine=0x1 status=0x0 h=0xb00b0010
+obj c.cmp class=0xc9c0 status=0x31
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+work g host_sem=OK t=557us engine_sems: 3d=OK(0xc0de0001) cmp=OK(0xc0de0102) notifier_error=0 
+work c host_sem=OK t=531us engine_sems: notifier_error=0 
+   [meta] rc=0 pid=3486713 xid_delta=0 xid_lines_for_pid=0
+NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00067; hParent=0xb00b0010; hObject=0xb00b0011; hClass=0x0000c9c0; paramsSize=0x00000000; paramsStatus=0x00000031; status=0x00000031
+=== 37_e8_async_3d  [ISOLATE: 3D class on the ASYNC channel (SYNC channel has 3D+cmp)]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+ctx A flags=async vas=0 status=0x0 h=0xb00b0008 returned_subctxId=0x3f
+chan g ctx=S engine=0x1 status=0x0 h=0xb00b000b
+obj g.3d class=0xc997 status=0x0
+obj g.cmp class=0xc9c0 status=0x0
+chan c ctx=A engine=0x1 status=0x0 h=0xb00b0010
+obj c.3d class=0xc997 status=0x31
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+work g host_sem=OK t=560us engine_sems: 3d=OK(0xc0de0001) cmp=OK(0xc0de0102) notifier_error=0 
+work c host_sem=OK t=554us engine_sems: notifier_error=0 
+   [meta] rc=0 pid=3486751 xid_delta=0 xid_lines_for_pid=0
+NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00069; hParent=0xb00b0010; hObject=0xb00b0011; hClass=0x0000c997; paramsSize=0x00000000; paramsStatus=0x00000031; status=0x00000031
+=== 38_e9_cmp_first_then_3d  [ISOLATE: SYNC channel gets compute first then 3D; ASYNC compute]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+ctx A flags=async vas=0 status=0x0 h=0xb00b0008 returned_subctxId=0x3f
+chan g ctx=S engine=0x1 status=0x0 h=0xb00b000b
+obj g.cmp class=0xc9c0 status=0x0
+obj g.3d class=0xc997 status=0x0
+chan c ctx=A engine=0x1 status=0x0 h=0xb00b0010
+obj c.cmp class=0xc9c0 status=0x31
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+work g host_sem=OK t=540us engine_sems: 3d=OK(0xc0de0001) cmp=OK(0xc0de0102) notifier_error=0 
+work c host_sem=OK t=531us engine_sems: notifier_error=0 
+   [meta] rc=0 pid=3486781 xid_delta=0 xid_lines_for_pid=0
+NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0006b; hParent=0xb00b0010; hObject=0xb00b0011; hClass=0x0000c9c0; paramsSize=0x00000000; paramsStatus=0x00000031; status=0x00000031
+=== 39_e10_after_work  [ISOLATE: SYNC channel runs work (3D+cmp) first; then ASYNC channel allocated with compute]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+ctx A flags=async vas=0 status=0x0 h=0xb00b0008 returned_subctxId=0x3f
+chan g ctx=S engine=0x1 status=0x0 h=0xb00b000b
+obj g.3d class=0xc997 status=0x0
+obj g.cmp class=0xc9c0 status=0x0
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+work g host_sem=OK t=774us engine_sems: 3d=OK(0xc0de0001) cmp=OK(0xc0de0102) notifier_error=0 
+chan c ctx=A engine=0x1 status=0x0 h=0xb00b0010
+obj c.cmp class=0xc9c0 status=0x31
+work c host_sem=OK t=260us engine_sems: notifier_error=0 
+   [meta] rc=0 pid=3486813 xid_delta=0 xid_lines_for_pid=0
+NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0006d; hParent=0xb00b0010; hObject=0xb00b0011; hClass=0x0000c9c0; paramsSize=0x00000000; paramsStatus=0x00000031; status=0x00000031
+=== 3a_e11_two_async_cmp  [ISOLATE: no 3D anywhere: SYNC cmp, two ASYNC cmp]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+ctx A flags=async vas=0 status=0x0 h=0xb00b0008 returned_subctxId=0x3f
+ctx A2 flags=async vas=0 status=0x0 h=0xb00b0009 returned_subctxId=0x3e
+chan g ctx=S engine=0x1 status=0x0 h=0xb00b000c
+obj g.cmp class=0xc9c0 status=0x0
+chan c ctx=A engine=0x1 status=0x0 h=0xb00b0010
+obj c.cmp class=0xc9c0 status=0x0
+chan d ctx=A2 engine=0x1 status=0x0 h=0xb00b0014
+obj d.cmp class=0xc9c0 status=0x0
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+work g host_sem=OK t=565us engine_sems: cmp=OK(0xc0de0101) notifier_error=0 
+work c host_sem=OK t=554us engine_sems: cmp=OK(0xc0de0101) notifier_error=0 
+work d host_sem=OK t=542us engine_sems: cmp=OK(0xc0de0101) notifier_error=0 
+   [meta] rc=0 pid=3486854 xid_delta=0 xid_lines_for_pid=0
+=== 3b_e12_async_cmp_3d_other_async  [ISOLATE: 3D on SYNC VEID0 is absent; 3D on an ASYNC ctxshare, compute on the SYNC one]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+ctx A flags=async vas=0 status=0x0 h=0xb00b0008 returned_subctxId=0x3f
+chan g ctx=S engine=0x1 status=0x0 h=0xb00b000b
+obj g.cmp class=0xc9c0 status=0x0
+chan c ctx=A engine=0x1 status=0x0 h=0xb00b000f
+obj c.3d class=0xc997 status=0x31
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+work g host_sem=OK t=550us engine_sems: cmp=OK(0xc0de0101) notifier_error=0 
+work c host_sem=OK t=536us engine_sems: notifier_error=0 
+   [meta] rc=0 pid=3486930 xid_delta=0 xid_lines_for_pid=0
+NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00071; hParent=0xb00b000f; hObject=0xb00b0010; hClass=0x0000c997; paramsSize=0x00000000; paramsStatus=0x00000031; status=0x00000031
+######## batch b5 (5 runs)
+=== 80_r1_async_runq1  [RUNQUEUE: SYNC 3D+cmp (runqueue 0); ASYNC compute channel on runqueue 1 (NVOS04_FLAGS_GROUP_CHANNEL_RUNQUEUE_ONE, flag bit 4)]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+ctx A flags=async vas=0 status=0x0 h=0xb00b0008 returned_subctxId=0x3f
+chan g ctx=S engine=0x1 status=0x0 h=0xb00b000b
+obj g.3d class=0xc997 status=0x0
+obj g.cmp class=0xc9c0 status=0x0
+chan c ctx=A engine=0x1 status=0x0 h=0xb00b0010
+obj c.cmp class=0xc9c0 status=0x0
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+work g host_sem=OK t=542us engine_sems: 3d=OK(0xc0de0001) cmp=OK(0xc0de0102) notifier_error=0 
+work c host_sem=OK t=531us engine_sems: cmp=OK(0xc0de0101) notifier_error=0 
+work g host_sem=OK t=271us engine_sems: 3d=OK(0xc0de0004) cmp=OK(0xc0de0105) notifier_error=0 
+work c host_sem=OK t=280us engine_sems: cmp=OK(0xc0de0103) notifier_error=0 
+bench all-done n=300 min=4 p10=4 med=4 p90=4 max=344 us
+bench g n=300 min=4 p10=4 med=4 p90=4 max=342 us
+bench c n=300 min=3 p10=3 med=3 p90=3 max=338 us
+   [meta] rc=0 pid=3487526 xid_delta=0 xid_lines_for_pid=0
+=== 81_r2_legacy_thread1_runq1  [RUNQUEUE: legacy mode; g thread 0 (3D+cmp); c thread 1 + runqueue 1 (cmp)]
+chan g ctx=none(0) engine=0x1 status=0x0 h=0xb00b0009
+obj g.3d class=0xc997 status=0x0
+obj g.cmp class=0xc9c0 status=0x0
+chan c ctx=none(0) engine=0x1 status=0x0 h=0xb00b000e
+obj c.cmp class=0xc9c0 status=0x0
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+work g host_sem=OK t=802us engine_sems: 3d=OK(0xc0de0001) cmp=OK(0xc0de0102) notifier_error=0 
+work c host_sem=OK t=787us engine_sems: cmp=OK(0xc0de0101) notifier_error=0 
+   [meta] rc=0 pid=3487562 xid_delta=0 xid_lines_for_pid=0
+=== 82_r3_runq1_sync_cmp  [RUNQUEUE: both channels in the SAME SYNC ctxshare, compute channel on runqueue 1]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+ctx A flags=async vas=0 status=0x0 h=0xb00b0008 returned_subctxId=0x3f
+chan g ctx=S engine=0x1 status=0x0 h=0xb00b000b
+obj g.3d class=0xc997 status=0x0
+obj g.cmp class=0xc9c0 status=0x0
+chan c ctx=S engine=0x1 status=0x0 h=0xb00b0010
+obj c.cmp class=0xc9c0 status=0x31
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+work g host_sem=OK t=542us engine_sems: 3d=OK(0xc0de0001) cmp=OK(0xc0de0102) notifier_error=0 
+work c host_sem=OK t=531us engine_sems: notifier_error=0 
+work g host_sem=OK t=261us engine_sems: 3d=OK(0xc0de0004) cmp=OK(0xc0de0105) notifier_error=0 
+work c host_sem=OK t=269us engine_sems: notifier_error=0 
+bench: channel c has no object
+line 11 returned 1
+   [meta] rc=0 pid=3487631 xid_delta=0 xid_lines_for_pid=0
+NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00077; hParent=0xb00b0010; hObject=0xb00b0011; hClass=0x0000c9c0; paramsSize=0x00000000; paramsStatus=0x00000031; status=0x00000031
+=== 83_r4_async_runq0_vasnone  [VA: ASYNC ctxshare with hVASpace 0 (vas=none) and SYNC with hVASpace 0; 3D on SYNC; compute on ASYNC rq0]
+ctx S flags=sync status=0x0 h=0xb00b0007 returned_subctxId=0x0
+ctx A flags=async status=0x0 h=0xb00b0008 returned_subctxId=0x3f
+chan g ctx=S engine=0x1 status=0x0 h=0xb00b000b
+obj g.3d class=0xc997 status=0x0
+obj g.cmp class=0xc9c0 status=0x0
+chan c ctx=A engine=0x1 status=0x0 h=0xb00b0010
+obj c.cmp class=0xc9c0 status=0x31
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+work g host_sem=MISS t=-1000000us engine_sems: 3d=MISS(0x0) cmp=MISS(0x0) notifier_error=0 
+work c host_sem=MISS t=-1000000us engine_sems: notifier_error=0 
+   [meta] rc=0 pid=3487669 xid_delta=0 xid_lines_for_pid=0
+NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00079; hParent=0xb00b0010; hObject=0xb00b0011; hClass=0x0000c9c0; paramsSize=0x00000000; paramsStatus=0x00000031; status=0x00000031
+=== 84_r5_runq1_both_async_first  [RUNQUEUE: ASYNC compute channel (runqueue 1) allocated first, then SYNC 3D+cmp]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+ctx A flags=async vas=0 status=0x0 h=0xb00b0008 returned_subctxId=0x3f
+chan c ctx=A engine=0x1 status=0x0 h=0xb00b000b
+obj c.cmp class=0xc9c0 status=0x0
+chan g ctx=S engine=0x1 status=0x0 h=0xb00b000f
+obj g.3d class=0xc997 status=0x0
+obj g.cmp class=0xc9c0 status=0x0
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+work g host_sem=OK t=542us engine_sems: 3d=OK(0xc0de0001) cmp=OK(0xc0de0102) notifier_error=0 
+work c host_sem=OK t=532us engine_sems: cmp=OK(0xc0de0101) notifier_error=0 
+   [meta] rc=0 pid=3487712 xid_delta=0 xid_lines_for_pid=0
+######## batch b6 (9 runs)
+=== 70_b1_three_tsgs  [LATENCY b1 (kayfabe today): three channels in THREE TSGs (one per queue), all compute]
+chan a ctx=none(0) engine=0x1 status=0x0 h=0xb00b000b
+obj a.cmp class=0xc9c0 status=0x0
+chan b ctx=none(0) engine=0x1 status=0x0 h=0xb00b000f
+obj b.cmp class=0xc9c0 status=0x0
+chan c ctx=none(0) engine=0x1 status=0x0 h=0xb00b0013
+obj c.cmp class=0xc9c0 status=0x0
+bindtsg engine=0x1 status=0x0
+bindtsg engine=0x1 status=0x0
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+schedtsg enable=1 status=0x0
+schedtsg enable=1 status=0x0
+work a host_sem=OK t=543us engine_sems: cmp=OK(0xc0de0101) notifier_error=0 
+work b host_sem=OK t=1041us engine_sems: cmp=OK(0xc0de0101) notifier_error=0 
+work c host_sem=OK t=1754us engine_sems: cmp=OK(0xc0de0101) notifier_error=0 
+bench all-done n=500 min=179 p10=180 med=180 p90=1288 max=1292 us
+bench a n=500 min=60 p10=62 med=62 p90=431 max=434 us
+bench b n=500 min=120 p10=121 med=121 p90=860 max=862 us
+bench c n=500 min=179 p10=180 med=180 p90=1288 max=1292 us
+bench all-done n=500 min=2 p10=2 med=2 p90=2 max=61 us
+bench a n=500 min=2 p10=2 med=2 p90=2 max=61 us
+   [meta] rc=0 pid=3488379 xid_delta=0 xid_lines_for_pid=0
+=== 71_b2_one_tsg_three_subctx  [LATENCY b2 (the mirror): ONE TSG with SYNC + 2 ASYNC ctxshares, one compute channel each]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+ctx A1 flags=async vas=0 status=0x0 h=0xb00b0008 returned_subctxId=0x3f
+ctx A2 flags=async vas=0 status=0x0 h=0xb00b0009 returned_subctxId=0x3e
+chan a ctx=S engine=0x1 status=0x0 h=0xb00b000c
+obj a.cmp class=0xc9c0 status=0x0
+chan b ctx=A1 engine=0x1 status=0x0 h=0xb00b0010
+obj b.cmp class=0xc9c0 status=0x0
+chan c ctx=A2 engine=0x1 status=0x0 h=0xb00b0014
+obj c.cmp class=0xc9c0 status=0x0
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+work a host_sem=OK t=563us engine_sems: cmp=OK(0xc0de0101) notifier_error=0 
+work b host_sem=OK t=552us engine_sems: cmp=OK(0xc0de0101) notifier_error=0 
+work c host_sem=OK t=549us engine_sems: cmp=OK(0xc0de0101) notifier_error=0 
+bench all-done n=500 min=5 p10=6 med=6 p90=6 max=296 us
+bench a n=500 min=3 p10=6 med=6 p90=6 max=289 us
+bench b n=500 min=3 p10=4 med=4 p90=4 max=292 us
+bench c n=500 min=5 p10=5 med=5 p90=5 max=295 us
+bench all-done n=500 min=3 p10=3 med=3 p90=3 max=10 us
+bench a n=500 min=3 p10=3 med=3 p90=3 max=10 us
+   [meta] rc=0 pid=3488415 xid_delta=0 xid_lines_for_pid=0
+=== 72_b3_one_tsg_one_subctx  [LATENCY b3 (CUDA-like): ONE TSG, one (SYNC) ctxshare, three compute channels]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+chan a ctx=S engine=0x1 status=0x0 h=0xb00b000a
+obj a.cmp class=0xc9c0 status=0x0
+chan b ctx=S engine=0x1 status=0x0 h=0xb00b000e
+obj b.cmp class=0xc9c0 status=0x0
+chan c ctx=S engine=0x1 status=0x0 h=0xb00b0012
+obj c.cmp class=0xc9c0 status=0x0
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+work a host_sem=OK t=546us engine_sems: cmp=OK(0xc0de0101) notifier_error=0 
+work b host_sem=OK t=536us engine_sems: cmp=OK(0xc0de0101) notifier_error=0 
+work c host_sem=OK t=524us engine_sems: cmp=OK(0xc0de0101) notifier_error=0 
+bench all-done n=500 min=5 p10=6 med=6 p90=6 max=12 us
+bench a n=500 min=2 p10=6 med=6 p90=6 max=12 us
+bench b n=500 min=4 p10=4 med=4 p90=4 max=9 us
+bench c n=500 min=5 p10=5 med=5 p90=5 max=10 us
+bench all-done n=500 min=3 p10=3 med=3 p90=3 max=7 us
+bench a n=500 min=3 p10=3 med=3 p90=3 max=7 us
+   [meta] rc=0 pid=3488445 xid_delta=0 xid_lines_for_pid=0
+=== 73_b4_three_tsgs_ctx  [LATENCY b4 (kayfabe today with explicit shape): three TSGs, each with its own SYNC ctxshare (the per-ctxshare-group hack)]
+ctx S0 flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+ctx S1 flags=sync vas=0 status=0x0 h=0xb00b0009 returned_subctxId=0x0
+ctx S2 flags=sync vas=0 status=0x0 h=0xb00b000b returned_subctxId=0x0
+chan a ctx=S0 engine=0x1 status=0x0 h=0xb00b000e
+obj a.cmp class=0xc9c0 status=0x0
+chan b ctx=S1 engine=0x1 status=0x0 h=0xb00b0012
+obj b.cmp class=0xc9c0 status=0x0
+chan c ctx=S2 engine=0x1 status=0x0 h=0xb00b0016
+obj c.cmp class=0xc9c0 status=0x0
+bindtsg engine=0x1 status=0x0
+bindtsg engine=0x1 status=0x0
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+schedtsg enable=1 status=0x0
+schedtsg enable=1 status=0x0
+work a host_sem=OK t=580us engine_sems: cmp=OK(0xc0de0101) notifier_error=0 
+work b host_sem=OK t=1099us engine_sems: cmp=OK(0xc0de0101) notifier_error=0 
+work c host_sem=OK t=1599us engine_sems: cmp=OK(0xc0de0101) notifier_error=0 
+bench all-done n=500 min=178 p10=179 med=180 p90=1287 max=1295 us
+bench a n=500 min=60 p10=61 med=61 p90=432 max=447 us
+bench b n=500 min=119 p10=120 med=120 p90=860 max=865 us
+bench c n=500 min=178 p10=179 med=180 p90=1287 max=1295 us
+   [meta] rc=0 pid=3488516 xid_delta=0 xid_lines_for_pid=0
+=== 74_b5_mixed_three_tsgs  [LATENCY b5 (kayfabe today, D3D12-like): DIRECT(3D) / COPY / COMPUTE queues as THREE TSGs (SYNC ctxshare each)]
+ctx S0 flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+ctx S1 flags=sync vas=0 status=0x0 h=0xb00b0009 returned_subctxId=0x0
+ctx S2 flags=sync vas=0 status=0x0 h=0xb00b000b returned_subctxId=0x0
+chan d ctx=S0 engine=0x1 status=0x0 h=0xb00b000e
+obj d.ce class=0xc7b5 status=0x0
+obj d.3d class=0xc997 status=0x0
+obj d.cmp class=0xc9c0 status=0x0
+chan k ctx=S1 engine=0x1 status=0x0 h=0xb00b0014
+obj k.ce class=0xc7b5 status=0x0
+chan c ctx=S2 engine=0x1 status=0x0 h=0xb00b0018
+obj c.cmp class=0xc9c0 status=0x0
+bindtsg engine=0x1 status=0x0
+bindtsg engine=0x1 status=0x0
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+schedtsg enable=1 status=0x0
+schedtsg enable=1 status=0x0
+work d host_sem=OK t=313us engine_sems: 3d=OK(0xc0de0001) cmp=OK(0xc0de0102) ce=OK(0xc0de0203) notifier_error=0 
+work k host_sem=OK t=304us engine_sems: ce=OK(0xc0de0201) notifier_error=0 
+work c host_sem=OK t=796us engine_sems: cmp=OK(0xc0de0101) notifier_error=0 
+bench all-done n=500 min=123 p10=124 med=578 p90=579 max=581 us
+bench d n=500 min=61 p10=61 med=287 p90=287 max=291 us
+bench k n=500 min=61 p10=62 med=288 p90=288 max=291 us
+bench c n=500 min=123 p10=124 med=578 p90=579 max=581 us
+bench all-done n=500 min=2 p10=2 med=2 p90=2 max=61 us
+bench d n=500 min=2 p10=2 med=2 p90=2 max=61 us
+bench all-done n=500 min=2 p10=2 med=2 p90=2 max=5 us
+bench k n=500 min=2 p10=2 med=2 p90=2 max=5 us
+bench all-done n=500 min=2 p10=2 med=2 p90=2 max=61 us
+bench c n=500 min=2 p10=2 med=2 p90=2 max=61 us
+   [meta] rc=0 pid=3488556 xid_delta=0 xid_lines_for_pid=0
+=== 75_b6_mixed_one_tsg  [LATENCY b6 (the mirror, D3D12-like): ONE TSG, SYNC ctxshare (3D+cmp+ce) + two ASYNC ctxshares on runqueue 1 (copy, compute)]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+ctx A1 flags=async vas=0 status=0x0 h=0xb00b0008 returned_subctxId=0x3f
+ctx A2 flags=async vas=0 status=0x0 h=0xb00b0009 returned_subctxId=0x3e
+chan d ctx=S engine=0x1 status=0x0 h=0xb00b000c
+obj d.ce class=0xc7b5 status=0x0
+obj d.3d class=0xc997 status=0x0
+obj d.cmp class=0xc9c0 status=0x0
+chan k ctx=A1 engine=0x1 status=0x0 h=0xb00b0012
+obj k.ce class=0xc7b5 status=0x0
+chan c ctx=A2 engine=0x1 status=0x0 h=0xb00b0016
+obj c.cmp class=0xc9c0 status=0x0
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+work d host_sem=OK t=312us engine_sems: 3d=OK(0xc0de0001) cmp=OK(0xc0de0102) ce=OK(0xc0de0203) notifier_error=0 
+work k host_sem=OK t=305us engine_sems: ce=OK(0xc0de0201) notifier_error=0 
+work c host_sem=OK t=297us engine_sems: cmp=OK(0xc0de0101) notifier_error=0 
+bench all-done n=500 min=6 p10=6 med=6 p90=6 max=11 us
+bench d n=500 min=5 p10=6 med=6 p90=6 max=10 us
+bench k n=500 min=4 p10=4 med=4 p90=4 max=9 us
+bench c n=500 min=5 p10=5 med=5 p90=5 max=10 us
+bench all-done n=500 min=4 p10=4 med=4 p90=4 max=21 us
+bench d n=500 min=4 p10=4 med=4 p90=4 max=21 us
+bench all-done n=500 min=3 p10=4 med=4 p90=4 max=8 us
+bench k n=500 min=3 p10=4 med=4 p90=4 max=8 us
+bench all-done n=500 min=3 p10=3 med=3 p90=3 max=6 us
+bench c n=500 min=3 p10=3 med=3 p90=3 max=6 us
+   [meta] rc=0 pid=3488595 xid_delta=0 xid_lines_for_pid=0
+=== 90_w1_d3d12_exact_order  [D3D12 shape in the Windows order and verbs (no BIND, timeslice then schedule bSkipSubmit=1, joiners with NO schedule): ctx0 SYNC 5080,c7b5,c997,c9c0; ]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+chan d ctx=S engine=0x1 status=0x0 h=0xb00b000a
+obj d.sw class=0x5080 status=0x0
+obj d.ce class=0xc7b5 status=0x0
+obj d.3d class=0xc997 status=0x0
+obj d.cmp class=0xc9c0 status=0x0
+timeslice us=1000 status=0x0
+schedtsg enable=1 status=0x0
+ctx A1 flags=async vas=0 status=0x0 h=0xb00b000f returned_subctxId=0x3f
+chan k1 ctx=A1 engine=0x1 status=0x0 h=0xb00b0012
+obj k1.sw class=0x5080 status=0x0
+obj k1.ce class=0xc7b5 status=0x0
+obj k1.cmp class=0xc9c0 status=0x0
+chan k2 ctx=A1 engine=0x1 status=0x0 h=0xb00b0018
+obj k2.sw class=0x5080 status=0x0
+obj k2.ce class=0xc7b5 status=0x0
+obj k2.cmp class=0xc9c0 status=0x0
+ctx A2 flags=async vas=0 status=0x0 h=0xb00b001c returned_subctxId=0x3e
+chan k3 ctx=A2 engine=0x1 status=0x0 h=0xb00b001f
+obj k3.sw class=0x5080 status=0x0
+obj k3.ce class=0xc7b5 status=0x0
+obj k3.cmp class=0xc9c0 status=0x0
+work d host_sem=OK t=778us engine_sems: 3d=OK(0xc0de0001) cmp=OK(0xc0de0102) ce=OK(0xc0de0203) notifier_error=0 
+work k1 host_sem=OK t=259us engine_sems: cmp=OK(0xc0de0101) ce=OK(0xc0de0202) notifier_error=0 
+work k2 host_sem=OK t=513us engine_sems: cmp=OK(0xc0de0101) ce=OK(0xc0de0202) notifier_error=0 
+work k3 host_sem=OK t=513us engine_sems: cmp=OK(0xc0de0101) ce=OK(0xc0de0202) notifier_error=0 
+work d host_sem=OK t=526us engine_sems: 3d=OK(0xc0de0005) cmp=OK(0xc0de0106) ce=OK(0xc0de0207) notifier_error=0 
+work k1 host_sem=OK t=534us engine_sems: cmp=OK(0xc0de0104) ce=OK(0xc0de0205) notifier_error=0 
+work k2 host_sem=OK t=549us engine_sems: cmp=OK(0xc0de0104) ce=OK(0xc0de0205) notifier_error=0 
+work k3 host_sem=OK t=557us engine_sems: cmp=OK(0xc0de0104) ce=OK(0xc0de0205) notifier_error=0 
+bench all-done n=300 min=7 p10=7 med=7 p90=8 max=422 us
+bench d n=300 min=6 p10=7 med=7 p90=7 max=413 us
+bench k1 n=300 min=4 p10=4 med=4 p90=4 max=416 us
+bench k2 n=300 min=5 p10=5 med=5 p90=5 max=418 us
+bench k3 n=300 min=6 p10=6 med=6 p90=6 max=421 us
+   [meta] rc=0 pid=3488630 xid_delta=0 xid_lines_for_pid=0
+=== 91_w2_d3d12_with_bind_and_joiner_sched  [same as 90 but the TSG is bound first and every joiner gets a channel-level schedule]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+chan d ctx=S engine=0x1 status=0x0 h=0xb00b000a
+obj d.sw class=0x5080 status=0x0
+obj d.ce class=0xc7b5 status=0x0
+obj d.3d class=0xc997 status=0x0
+obj d.cmp class=0xc9c0 status=0x0
+bindtsg engine=0x1 status=0x0
+timeslice us=1000 status=0x0
+schedtsg enable=1 status=0x0
+ctx A1 flags=async vas=0 status=0x0 h=0xb00b000f returned_subctxId=0x3f
+chan k1 ctx=A1 engine=0x1 status=0x0 h=0xb00b0012
+obj k1.sw class=0x5080 status=0x0
+obj k1.ce class=0xc7b5 status=0x0
+obj k1.cmp class=0xc9c0 status=0x0
+schedchan k1 status=0x0
+chan k2 ctx=A1 engine=0x1 status=0x0 h=0xb00b0018
+obj k2.sw class=0x5080 status=0x0
+obj k2.ce class=0xc7b5 status=0x0
+obj k2.cmp class=0xc9c0 status=0x0
+schedchan k2 status=0x0
+ctx A2 flags=async vas=0 status=0x0 h=0xb00b001c returned_subctxId=0x3e
+chan k3 ctx=A2 engine=0x1 status=0x0 h=0xb00b001f
+obj k3.sw class=0x5080 status=0x0
+obj k3.ce class=0xc7b5 status=0x0
+obj k3.cmp class=0xc9c0 status=0x0
+schedchan k3 status=0x0
+work d host_sem=OK t=604us engine_sems: 3d=OK(0xc0de0001) cmp=OK(0xc0de0102) ce=OK(0xc0de0203) notifier_error=0 
+work k1 host_sem=OK t=598us engine_sems: cmp=OK(0xc0de0101) ce=OK(0xc0de0202) notifier_error=0 
+work k2 host_sem=OK t=588us engine_sems: cmp=OK(0xc0de0101) ce=OK(0xc0de0202) notifier_error=0 
+work k3 host_sem=OK t=577us engine_sems: cmp=OK(0xc0de0101) ce=OK(0xc0de0202) notifier_error=0 
+bench all-done n=300 min=7 p10=7 med=7 p90=7 max=31 us
+bench d n=300 min=4 p10=7 med=7 p90=7 max=31 us
+bench k1 n=300 min=4 p10=4 med=4 p90=4 max=8 us
+bench k2 n=300 min=5 p10=5 med=5 p90=5 max=9 us
+bench k3 n=300 min=6 p10=6 med=6 p90=6 max=29 us
+   [meta] rc=0 pid=3488664 xid_delta=0 xid_lines_for_pid=0
+=== 92_w3_vulkan_like  [Vulkan-like: SYNC ctxshare graphics channel (3D+cmp+ce) + ASYNC compute channel (rq1) in ONE TSG, graphics and compute run concurrently]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+ctx A flags=async vas=0 status=0x0 h=0xb00b0008 returned_subctxId=0x3f
+chan g ctx=S engine=0x1 status=0x0 h=0xb00b000b
+obj g.ce class=0xc7b5 status=0x0
+obj g.3d class=0xc997 status=0x0
+obj g.cmp class=0xc9c0 status=0x0
+chan c ctx=A engine=0x1 status=0x0 h=0xb00b0011
+obj c.cmp class=0xc9c0 status=0x0
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+work g host_sem=OK t=543us engine_sems: 3d=OK(0xc0de0001) cmp=OK(0xc0de0102) ce=OK(0xc0de0203) notifier_error=0 
+work c host_sem=OK t=532us engine_sems: cmp=OK(0xc0de0101) notifier_error=0 
+bench all-done n=500 min=4 p10=4 med=4 p90=4 max=14 us
+bench g n=500 min=4 p10=4 med=4 p90=4 max=14 us
+bench c n=500 min=3 p10=3 med=3 p90=3 max=8 us
+   [meta] rc=0 pid=3488739 xid_delta=0 xid_lines_for_pid=0
+######## batch b7 (25 runs)
+=== 00_info_ctxcount  []
+ctx s0 flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+ctx a1 flags=async vas=0 status=0x0 h=0xb00b0008 returned_subctxId=0x3f
+ctx a2 flags=async vas=0 status=0x0 h=0xb00b0009 returned_subctxId=0x3e
+ctx a3 flags=async vas=0 status=0x0 h=0xb00b000a returned_subctxId=0x3d
+ctx a4 flags=async vas=0 status=0x0 h=0xb00b000b returned_subctxId=0x3c
+ctx a5 flags=async vas=0 status=0x0 h=0xb00b000c returned_subctxId=0x3b
+ctx a6 flags=async vas=0 status=0x0 h=0xb00b000d returned_subctxId=0x3a
+ctx a7 flags=async vas=0 status=0x0 h=0xb00b000e returned_subctxId=0x39
+ctx a8 flags=async vas=0 status=0x0 h=0xb00b000f returned_subctxId=0x38
+ctx a9 flags=async vas=0 status=0x0 h=0xb00b0010 returned_subctxId=0x37
+ctx a10 flags=async vas=0 status=0x0 h=0xb00b0011 returned_subctxId=0x36
+ctx a11 flags=async vas=0 status=0x0 h=0xb00b0012 returned_subctxId=0x35
+ctx a12 flags=async vas=0 status=0x0 h=0xb00b0013 returned_subctxId=0x34
+ctx a13 flags=async vas=0 status=0x0 h=0xb00b0014 returned_subctxId=0x33
+ctx a14 flags=async vas=0 status=0x0 h=0xb00b0015 returned_subctxId=0x32
+ctx a15 flags=async vas=0 status=0x0 h=0xb00b0016 returned_subctxId=0x31
+ctx a16 flags=async vas=0 status=0x0 h=0xb00b0017 returned_subctxId=0x30
+ctx a17 flags=async vas=0 status=0x0 h=0xb00b0018 returned_subctxId=0x2f
+ctx a18 flags=async vas=0 status=0x0 h=0xb00b0019 returned_subctxId=0x2e
+ctx a19 flags=async vas=0 status=0x0 h=0xb00b001a returned_subctxId=0x2d
+ctx a20 flags=async vas=0 status=0x0 h=0xb00b001b returned_subctxId=0x2c
+ctx a21 flags=async vas=0 status=0x0 h=0xb00b001c returned_subctxId=0x2b
+ctx a22 flags=async vas=0 status=0x0 h=0xb00b001d returned_subctxId=0x2a
+ctx a23 flags=async vas=0 status=0x0 h=0xb00b001e returned_subctxId=0x29
+ctx a24 flags=async vas=0 status=0x0 h=0xb00b001f returned_subctxId=0x28
+ctx a25 flags=async vas=0 status=0x0 h=0xb00b0020 returned_subctxId=0x27
+ctx a26 flags=async vas=0 status=0x0 h=0xb00b0021 returned_subctxId=0x26
+ctx a27 flags=async vas=0 status=0x0 h=0xb00b0022 returned_subctxId=0x25
+ctx a28 flags=async vas=0 status=0x0 h=0xb00b0023 returned_subctxId=0x24
+ctx a29 flags=async vas=0 status=0x0 h=0xb00b0024 returned_subctxId=0x23
+ctx a30 flags=async vas=0 status=0x0 h=0xb00b0025 returned_subctxId=0x22
+ctx a31 flags=async vas=0 status=0x0 h=0xb00b0026 returned_subctxId=0x21
+ctx a32 flags=async vas=0 status=0x0 h=0xb00b0027 returned_subctxId=0x20
+ctx a33 flags=async vas=0 status=0x0 h=0xb00b0028 returned_subctxId=0x1f
+ctx a34 flags=async vas=0 status=0x0 h=0xb00b0029 returned_subctxId=0x1e
+ctx a35 flags=async vas=0 status=0x0 h=0xb00b002a returned_subctxId=0x1d
+ctx a36 flags=async vas=0 status=0x0 h=0xb00b002b returned_subctxId=0x1c
+ctx a37 flags=async vas=0 status=0x0 h=0xb00b002c returned_subctxId=0x1b
+ctx a38 flags=async vas=0 status=0x0 h=0xb00b002d returned_subctxId=0x1a
+ctx a39 flags=async vas=0 status=0x0 h=0xb00b002e returned_subctxId=0x19
+ctx a40 flags=async vas=0 status=0x0 h=0xb00b002f returned_subctxId=0x18
+ctx a41 flags=async vas=0 status=0x0 h=0xb00b0030 returned_subctxId=0x17
+ctx a42 flags=async vas=0 status=0x0 h=0xb00b0031 returned_subctxId=0x16
+ctx a43 flags=async vas=0 status=0x0 h=0xb00b0032 returned_subctxId=0x15
+ctx a44 flags=async vas=0 status=0x0 h=0xb00b0033 returned_subctxId=0x14
+ctx a45 flags=async vas=0 status=0x0 h=0xb00b0034 returned_subctxId=0x13
+ctx a46 flags=async vas=0 status=0x0 h=0xb00b0035 returned_subctxId=0x12
+ctx a47 flags=async vas=0 status=0x0 h=0xb00b0036 returned_subctxId=0x11
+ctx a48 flags=async vas=0 status=0x0 h=0xb00b0037 returned_subctxId=0x10
+ctx a49 flags=async vas=0 status=0x0 h=0xb00b0038 returned_subctxId=0xf
+ctx a50 flags=async vas=0 status=0x0 h=0xb00b0039 returned_subctxId=0xe
+ctx a51 flags=async vas=0 status=0x0 h=0xb00b003a returned_subctxId=0xd
+ctx a52 flags=async vas=0 status=0x0 h=0xb00b003b returned_subctxId=0xc
+ctx a53 flags=async vas=0 status=0x0 h=0xb00b003c returned_subctxId=0xb
+ctx a54 flags=async vas=0 status=0x0 h=0xb00b003d returned_subctxId=0xa
+ctx a55 flags=async vas=0 status=0x0 h=0xb00b003e returned_subctxId=0x9
+ctx a56 flags=async vas=0 status=0x0 h=0xb00b003f returned_subctxId=0x8
+ctx a57 flags=async vas=0 status=0x0 h=0xb00b0040 returned_subctxId=0x7
+ctx a58 flags=async vas=0 status=0x0 h=0xb00b0041 returned_subctxId=0x6
+ctx a59 flags=async vas=0 status=0x0 h=0xb00b0042 returned_subctxId=0x5
+ctx a60 flags=async vas=0 status=0x0 h=0xb00b0043 returned_subctxId=0x4
+ctx a61 flags=async vas=0 status=0x0 h=0xb00b0044 returned_subctxId=0x3
+ctx a62 flags=async vas=0 status=0x0 h=0xb00b0045 returned_subctxId=0x2
+ctx a63 flags=async vas=0 status=0x0 h=0xb00b0046 returned_subctxId=0x1
+ctx a64 flags=async vas=0 status=0x51 h=0x0 returned_subctxId=0x0
+line 67 returned 1
+ctx a65 flags=async vas=0 status=0x51 h=0x0 returned_subctxId=0x0
+line 68 returned 1
+ctx a66 flags=async vas=0 status=0x51 h=0x0 returned_subctxId=0x0
+line 69 returned 1
+ctx a67 flags=async vas=0 status=0x51 h=0x0 returned_subctxId=0x0
+line 70 returned 1
+ctx a68 flags=async vas=0 status=0x51 h=0x0 returned_subctxId=0x0
+line 71 returned 1
+ctx a69 flags=async vas=0 status=0x51 h=0x0 returned_subctxId=0x0
+line 72 returned 1
+ctx a70 flags=async vas=0 status=0x51 h=0x0 returned_subctxId=0x0
+line 73 returned 1
+   [meta] rc=0 pid=3488976 xid_delta=0 xid_lines_for_pid=0
+NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Out of memory [NV_ERR_NO_MEMORY] (0x00000051) returned from kctxshareInitCommon(dynamicCast(pShared, KernelCtxShare), pKernelCtxShareApi, pGpu, pVAS, pUserParams->flags
+NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Out of memory [NV_ERR_NO_MEMORY] (0x00000051) returned from kctxshareInitCommon(dynamicCast(pShared, KernelCtxShare), pKernelCtxShareApi, pGpu, pVAS, pUserParams->flags
+NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Out of memory [NV_ERR_NO_MEMORY] (0x00000051) returned from kctxshareInitCommon(dynamicCast(pShared, KernelCtxShare), pKernelCtxShareApi, pGpu, pVAS, pUserParams->flags
+NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Out of memory [NV_ERR_NO_MEMORY] (0x00000051) returned from kctxshareInitCommon(dynamicCast(pShared, KernelCtxShare), pKernelCtxShareApi, pGpu, pVAS, pUserParams->flags
+NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Out of memory [NV_ERR_NO_MEMORY] (0x00000051) returned from kctxshareInitCommon(dynamicCast(pShared, KernelCtxShare), pKernelCtxShareApi, pGpu, pVAS, pUserParams->flags
+=== 10_s1_sync_async  [SHAPE 1: one TSG, SYNC ctxshare (3D+compute channel) + ASYNC ctxshare (compute channel)]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+ctx A flags=async vas=0 status=0x0 h=0xb00b0008 returned_subctxId=0x3f
+chan g ctx=S engine=0x1 status=0x0 h=0xb00b000b
+obj g.3d class=0xc997 status=0x0
+obj g.cmp class=0xc9c0 status=0x0
+chan c ctx=A engine=0x1 status=0x0 h=0xb00b0010
+obj c.cmp class=0xc9c0 status=0x0
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+work g host_sem=OK t=775us engine_sems: 3d=OK(0xc0de0001) cmp=OK(0xc0de0102) notifier_error=0 
+work c host_sem=OK t=511us engine_sems: cmp=OK(0xc0de0101) notifier_error=0 
+work g host_sem=OK t=516us engine_sems: 3d=OK(0xc0de0004) cmp=OK(0xc0de0105) notifier_error=0 
+work c host_sem=OK t=533us engine_sems: cmp=OK(0xc0de0103) notifier_error=0 
+work g host_sem=OK t=516us engine_sems: 3d=OK(0xc0de0007) cmp=OK(0xc0de0108) notifier_error=0 
+work c host_sem=OK t=525us engine_sems: cmp=OK(0xc0de0105) notifier_error=0 
+bench all-done n=300 min=4 p10=4 med=4 p90=4 max=18 us
+bench g n=300 min=4 p10=4 med=4 p90=4 max=17 us
+bench c n=300 min=3 p10=3 med=3 p90=3 max=18 us
+   [meta] rc=0 pid=3489012 xid_delta=0 xid_lines_for_pid=0
+=== 11_s1b_order_sched_before_obj  [SHAPE 1 variant: engine objects allocated AFTER bind+schedule]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+ctx A flags=async vas=0 status=0x0 h=0xb00b0008 returned_subctxId=0x3f
+chan g ctx=S engine=0x1 status=0x0 h=0xb00b000b
+chan c ctx=A engine=0x1 status=0x0 h=0xb00b000e
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+obj g.3d class=0xc997 status=0x0
+obj g.cmp class=0xc9c0 status=0x0
+obj c.cmp class=0xc9c0 status=0x0
+work g host_sem=OK t=784us engine_sems: 3d=OK(0xc0de0001) cmp=OK(0xc0de0102) notifier_error=0 
+work c host_sem=OK t=774us engine_sems: cmp=OK(0xc0de0101) notifier_error=0 
+   [meta] rc=0 pid=3489088 xid_delta=0 xid_lines_for_pid=0
+=== 12_s1c_chan_bind_sched  [SHAPE 1 variant: channel-level BIND and SCHEDULE (the in-tree driver style), no group verbs]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+ctx A flags=async vas=0 status=0x0 h=0xb00b0008 returned_subctxId=0x3f
+chan g ctx=S engine=0x1 status=0x0 h=0xb00b000b
+obj g.3d class=0xc997 status=0x0
+obj g.cmp class=0xc9c0 status=0x0
+chan c ctx=A engine=0x1 status=0x0 h=0xb00b0010
+obj c.cmp class=0xc9c0 status=0x0
+bindchan g engine=0x1 status=0x0
+bindchan c engine=0x1 status=0x0
+schedchan g status=0x0
+schedchan c status=0x0
+work g host_sem=OK t=542us engine_sems: 3d=OK(0xc0de0001) cmp=OK(0xc0de0102) notifier_error=0 
+work c host_sem=OK t=532us engine_sems: cmp=OK(0xc0de0101) notifier_error=0 
+   [meta] rc=0 pid=3489122 xid_delta=0 xid_lines_for_pid=0
+=== 20_s2a_copy_on_async  [SHAPE 2a: SYNC(3D+compute) + ASYNC(compute) + ASYNC(copy class on a GR-engine channel = GRCE)]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+ctx A flags=async vas=0 status=0x0 h=0xb00b0008 returned_subctxId=0x3f
+ctx C flags=async vas=0 status=0x0 h=0xb00b0009 returned_subctxId=0x3e
+chan g ctx=S engine=0x1 status=0x0 h=0xb00b000c
+obj g.3d class=0xc997 status=0x0
+obj g.cmp class=0xc9c0 status=0x0
+chan c ctx=A engine=0x1 status=0x0 h=0xb00b0011
+obj c.cmp class=0xc9c0 status=0x0
+chan k ctx=C engine=0x1 status=0x0 h=0xb00b0015
+obj k.ce class=0xc7b5 status=0x0
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+work g host_sem=OK t=537us engine_sems: 3d=OK(0xc0de0001) cmp=OK(0xc0de0102) notifier_error=0 
+work c host_sem=OK t=5us engine_sems: cmp=OK(0xc0de0101) notifier_error=0 
+work k host_sem=OK t=4us engine_sems: ce=OK(0xc0de0201) notifier_error=0 
+work g host_sem=OK t=15us engine_sems: 3d=OK(0xc0de0004) cmp=OK(0xc0de0105) notifier_error=0 
+work c host_sem=OK t=23us engine_sems: cmp=OK(0xc0de0103) notifier_error=0 
+work k host_sem=OK t=26us engine_sems: ce=OK(0xc0de0203) notifier_error=0 
+   [meta] rc=0 pid=3489158 xid_delta=0 xid_lines_for_pid=0
+=== 21_s2b_copy_on_sync  [SHAPE 2b: copy class on the SYNC subcontext of a GR channel together with compute on an ASYNC one]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+ctx A flags=async vas=0 status=0x0 h=0xb00b0008 returned_subctxId=0x3f
+chan k ctx=S engine=0x1 status=0x0 h=0xb00b000b
+obj k.ce class=0xc7b5 status=0x0
+chan c ctx=A engine=0x1 status=0x0 h=0xb00b000f
+obj c.cmp class=0xc9c0 status=0x0
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+work k host_sem=OK t=265us engine_sems: ce=OK(0xc0de0201) notifier_error=0 
+work c host_sem=OK t=517us engine_sems: cmp=OK(0xc0de0101) notifier_error=0 
+work k host_sem=OK t=261us engine_sems: ce=OK(0xc0de0203) notifier_error=0 
+work c host_sem=OK t=522us engine_sems: cmp=OK(0xc0de0103) notifier_error=0 
+   [meta] rc=0 pid=3489190 xid_delta=0 xid_lines_for_pid=0
+=== 22_s2c_lce_channel_in_gr_tsg  [SHAPE 2c: a channel with a COPY0 engineType in a GR-engine TSG (source says: refused, engine mismatch)]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+chan k ctx=S engine=0x9 status=0x1f h=0x0
+line 4 returned 1
+   [meta] rc=0 pid=3489226 xid_delta=0 xid_lines_for_pid=0
+=== 23_s2d_ce_tsg  [SHAPE 2d: a TSG of its own with engineType COPY0 and a COPY0 channel (control)]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+chan k ctx=S engine=0x9 status=0x0 h=0xb00b000a
+obj k.ce class=0xc7b5 status=0x0
+bindtsg engine=0x9 status=0x0
+schedtsg enable=1 status=0x0
+work k host_sem=OK t=231us engine_sems: ce=OK(0xc0de0201) notifier_error=0 
+work k host_sem=OK t=5us engine_sems: ce=OK(0xc0de0203) notifier_error=0 
+   [meta] rc=0 pid=3489256 xid_delta=0 xid_lines_for_pid=0
+=== 24_s2e_ce_on_async_lce_tsg  [SHAPE 2e: COPY0 TSG with an ASYNC ctxshare (source says: ASYNC only for GR/GRCE/SW -> object alloc refused)]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+ctx A flags=async vas=0 status=0x0 h=0xb00b0008 returned_subctxId=0x3f
+chan k ctx=A engine=0x9 status=0x0 h=0xb00b000b
+obj k.ce class=0xc7b5 status=0x0
+   [meta] rc=0 pid=3489327 xid_delta=0 xid_lines_for_pid=0
+=== 25_s2f_legacy_copy_and_gr  [SHAPE 2f (legacy subcontext): GR channel (thread 0) + GR channel with copy class (thread 0) + compute on legacy ASYNC (thread 1)]
+chan g ctx=none(0) engine=0x1 status=0x0 h=0xb00b0009
+obj g.3d class=0xc997 status=0x0
+obj g.cmp class=0xc9c0 status=0x0
+chan k ctx=none(0) engine=0x1 status=0x0 h=0xb00b000e
+obj k.ce class=0xc7b5 status=0x0
+chan c ctx=none(0) engine=0x1 status=0x1f h=0x0
+line 5 returned 1
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+work g host_sem=OK t=792us engine_sems: 3d=OK(0xc0de0001) cmp=OK(0xc0de0102) notifier_error=0 
+work k host_sem=OK t=260us engine_sems: ce=OK(0xc0de0201) notifier_error=0 
+work: unknown channel c
+work: unknown channel c
+work g host_sem=OK t=516us engine_sems: 3d=OK(0xc0de0004) cmp=OK(0xc0de0105) notifier_error=0 
+work k host_sem=OK t=525us engine_sems: ce=OK(0xc0de0203) notifier_error=0 
+   [meta] rc=0 pid=3489367 xid_delta=0 xid_lines_for_pid=0
+NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Invalid argument to call [NV_ERR_INVALID_ARGUMENT] (0x0000001F) returned from kchannelAllocMem_HAL(pGpu, pKernelChannel, pChannelGpfifoParams->flags, _kchannelgetVerifF
+NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Invalid argument to call [NV_ERR_INVALID_ARGUMENT] (0x0000001F) returned from _kchannelAllocOrDescribeInstMem(pKernelChannel, pChannelGpfifoParams) @ kernel_channel.c:8
+=== 40_s4a_same_vas_explicit  [SHAPE 4a: two ctxshares, both with the TSG's VA space handle given explicitly]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+ctx A flags=async vas=0 status=0x0 h=0xb00b0008 returned_subctxId=0x3f
+chan g ctx=S engine=0x1 status=0x0 h=0xb00b000b
+obj g.3d class=0xc997 status=0x0
+obj g.cmp class=0xc9c0 status=0x0
+chan c ctx=A engine=0x1 status=0x0 h=0xb00b0010
+obj c.cmp class=0xc9c0 status=0x0
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+work g host_sem=OK t=542us engine_sems: 3d=OK(0xc0de0001) cmp=OK(0xc0de0102) notifier_error=0 
+work c host_sem=OK t=531us engine_sems: cmp=OK(0xc0de0101) notifier_error=0 
+   [meta] rc=0 pid=3489405 xid_delta=0 xid_lines_for_pid=0
+=== 41_s4b_diff_vas  [SHAPE 4b: SYNC ctxshare in VA space 0, ASYNC ctxshare in VA space 1 (the channel's ring is mapped in its own VA space)]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0009 returned_subctxId=0x0
+ctx A flags=async vas=1 status=0x0 h=0xb00b000a returned_subctxId=0x3f
+chan g ctx=S engine=0x1 status=0x0 h=0xb00b000d
+obj g.3d class=0xc997 status=0x0
+obj g.cmp class=0xc9c0 status=0x0
+chan c ctx=A engine=0x1 status=0x0 h=0xb00b0012
+obj c.cmp class=0xc9c0 status=0x0
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+work g host_sem=OK t=774us engine_sems: 3d=OK(0xc0de0001) cmp=OK(0xc0de0102) notifier_error=0 
+work c host_sem=OK t=513us engine_sems: cmp=OK(0xc0de0101) notifier_error=0 
+work g host_sem=OK t=262us engine_sems: 3d=OK(0xc0de0004) cmp=OK(0xc0de0105) notifier_error=0 
+work c host_sem=OK t=270us engine_sems: cmp=OK(0xc0de0103) notifier_error=0 
+   [meta] rc=0 pid=3489439 xid_delta=0 xid_lines_for_pid=0
+=== 42_s4c_vas_none  [SHAPE 4c: ctxshares with hVASpace=0 (device default VAS or refused when the device has several VA spaces)]
+ctx S flags=sync status=0x0 h=0xb00b0007 returned_subctxId=0x0
+ctx A flags=async status=0x0 h=0xb00b0008 returned_subctxId=0x3f
+chan g ctx=S engine=0x1 status=0x0 h=0xb00b000b
+obj g.3d class=0xc997 status=0x0
+obj g.cmp class=0xc9c0 status=0x0
+chan c ctx=A engine=0x1 status=0x0 h=0xb00b0010
+obj c.cmp class=0xc9c0 status=0x0
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+work g host_sem=MISS t=-1000000us engine_sems: 3d=MISS(0x0) cmp=MISS(0x0) notifier_error=0 
+work c host_sem=MISS t=-1000000us engine_sems: cmp=MISS(0x0) notifier_error=0 
+   [meta] rc=0 pid=3489473 xid_delta=0 xid_lines_for_pid=0
+=== 43_s4d_tsg_vas_none  [SHAPE 4d: TSG with hVASpace=0 and ctxshares naming VA space 0 / 1]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0009 returned_subctxId=0x0
+ctx A flags=async vas=1 status=0x0 h=0xb00b000a returned_subctxId=0x3f
+chan g ctx=S engine=0x1 status=0x0 h=0xb00b000d
+obj g.3d class=0xc997 status=0x0
+obj g.cmp class=0xc9c0 status=0x0
+chan c ctx=A engine=0x1 status=0x0 h=0xb00b0012
+obj c.cmp class=0xc9c0 status=0x0
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+work g host_sem=OK t=543us engine_sems: 3d=OK(0xc0de0001) cmp=OK(0xc0de0102) notifier_error=0 
+work c host_sem=OK t=532us engine_sems: cmp=OK(0xc0de0101) notifier_error=0 
+   [meta] rc=0 pid=3489550 xid_delta=0 xid_lines_for_pid=0
+=== 50_s5a_old_failing_legacy_same_sub  [SHAPE 5a (the OLD failing shape): graphics (3D+compute) and a compute channel BOTH on the legacy SYNC subcontext of one TSG]
+chan g ctx=none(0) engine=0x1 status=0x0 h=0xb00b0009
+obj g.3d class=0xc997 status=0x0
+obj g.cmp class=0xc9c0 status=0x0
+chan c ctx=none(0) engine=0x1 status=0x0 h=0xb00b000e
+obj c.cmp class=0xc9c0 status=0x0
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+work g host_sem=OK t=757us engine_sems: 3d=OK(0xc0de0001) cmp=OK(0xc0de0102) notifier_error=0 
+work c host_sem=OK t=512us engine_sems: cmp=OK(0xc0de0101) notifier_error=0 
+work g host_sem=OK t=516us engine_sems: 3d=OK(0xc0de0004) cmp=OK(0xc0de0105) notifier_error=0 
+work c host_sem=OK t=524us engine_sems: cmp=OK(0xc0de0103) notifier_error=0 
+work g host_sem=OK t=261us engine_sems: 3d=OK(0xc0de0007) cmp=OK(0xc0de0108) notifier_error=0 
+work c host_sem=OK t=279us engine_sems: cmp=OK(0xc0de0105) notifier_error=0 
+bench all-done n=300 min=7 p10=7 med=8 p90=8 max=422 us
+bench g n=300 min=4 p10=4 med=4 p90=4 max=417 us
+bench c n=300 min=7 p10=7 med=7 p90=8 max=421 us
+   [meta] rc=0 pid=3489586 xid_delta=0 xid_lines_for_pid=0
+=== 51_s5b_old_with_3d_on_both  [SHAPE 5b: both channels carry 3D+compute, both on the legacy SYNC subcontext]
+chan g ctx=none(0) engine=0x1 status=0x0 h=0xb00b0009
+obj g.3d class=0xc997 status=0x0
+obj g.cmp class=0xc9c0 status=0x0
+chan c ctx=none(0) engine=0x1 status=0x0 h=0xb00b000e
+obj c.3d class=0xc997 status=0x0
+obj c.cmp class=0xc9c0 status=0x0
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+work g host_sem=OK t=547us engine_sems: 3d=OK(0xc0de0001) cmp=OK(0xc0de0102) notifier_error=0 
+work c host_sem=OK t=532us engine_sems: 3d=OK(0xc0de0001) cmp=OK(0xc0de0102) notifier_error=0 
+work g host_sem=OK t=262us engine_sems: 3d=OK(0xc0de0004) cmp=OK(0xc0de0105) notifier_error=0 
+work c host_sem=OK t=270us engine_sems: 3d=OK(0xc0de0004) cmp=OK(0xc0de0105) notifier_error=0 
+bench all-done n=300 min=5 p10=5 med=5 p90=5 max=406 us
+bench g n=300 min=4 p10=4 med=4 p90=4 max=401 us
+bench c n=300 min=5 p10=5 med=5 p90=5 max=404 us
+   [meta] rc=0 pid=3489619 xid_delta=0 xid_lines_for_pid=0
+=== 52_s5c_legacy_thread1  [SHAPE 5c: legacy mode, the compute channel on the legacy ASYNC subcontext (thread=1)]
+chan g ctx=none(0) engine=0x1 status=0x0 h=0xb00b0009
+obj g.3d class=0xc997 status=0x0
+obj g.cmp class=0xc9c0 status=0x0
+chan c ctx=none(0) engine=0x1 status=0x1f h=0x0
+line 4 returned 1
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+work: unknown channel c
+work g host_sem=OK t=544us engine_sems: 3d=OK(0xc0de0001) cmp=OK(0xc0de0102) notifier_error=0 
+work: unknown channel c
+work g host_sem=OK t=222us engine_sems: 3d=OK(0xc0de0004) cmp=OK(0xc0de0105) notifier_error=0 
+bench all-done n=300 min=3 p10=4 med=4 p90=4 max=361 us
+bench g n=300 min=3 p10=4 med=4 p90=4 max=357 us
+   [meta] rc=0 pid=3489653 xid_delta=0 xid_lines_for_pid=0
+NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Invalid argument to call [NV_ERR_INVALID_ARGUMENT] (0x0000001F) returned from kchannelAllocMem_HAL(pGpu, pKernelChannel, pChannelGpfifoParams->flags, _kchannelgetVerifF
+NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Invalid argument to call [NV_ERR_INVALID_ARGUMENT] (0x0000001F) returned from _kchannelAllocOrDescribeInstMem(pKernelChannel, pChannelGpfifoParams) @ kernel_channel.c:8
+=== 53_s5d_mix_legacy_explicit  [SHAPE 5d: mixing a legacy channel and an explicit-ctxshare channel in one TSG (source says: refused)]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+chan g ctx=S engine=0x1 status=0x0 h=0xb00b000a
+obj g.cmp class=0xc9c0 status=0x0
+chan c ctx=none(0) engine=0x1 status=0x1f h=0x0
+line 5 returned 1
+   [meta] rc=0 pid=3489694 xid_delta=0 xid_lines_for_pid=0
+=== 60_s6a_late_same_ctx  [SHAPE 6a: late member in the SAME ctxshare, allocated after the TSG schedule; NO schedule for it]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+chan g ctx=S engine=0x1 status=0x0 h=0xb00b000a
+obj g.3d class=0xc997 status=0x0
+obj g.cmp class=0xc9c0 status=0x0
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+work g host_sem=OK t=737us engine_sems: 3d=OK(0xc0de0001) cmp=OK(0xc0de0102) notifier_error=0 
+chan l ctx=S engine=0x1 status=0x0 h=0xb00b000f
+obj l.cmp class=0xc9c0 status=0x0
+work l host_sem=OK t=768us engine_sems: cmp=OK(0xc0de0101) notifier_error=0 
+work g host_sem=OK t=516us engine_sems: 3d=OK(0xc0de0004) cmp=OK(0xc0de0105) notifier_error=0 
+work l host_sem=OK t=523us engine_sems: cmp=OK(0xc0de0103) notifier_error=0 
+   [meta] rc=0 pid=3489730 xid_delta=0 xid_lines_for_pid=0
+=== 61_s6b_late_new_async_ctx  [SHAPE 6b: late member in a NEW ASYNC ctxshare, allocated after the TSG schedule; NO schedule for it]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+chan g ctx=S engine=0x1 status=0x0 h=0xb00b000a
+obj g.3d class=0xc997 status=0x0
+obj g.cmp class=0xc9c0 status=0x0
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+work g host_sem=OK t=773us engine_sems: 3d=OK(0xc0de0001) cmp=OK(0xc0de0102) notifier_error=0 
+ctx A flags=async vas=0 status=0x0 h=0xb00b000d returned_subctxId=0x3f
+chan l ctx=A engine=0x1 status=0x0 h=0xb00b0010
+obj l.cmp class=0xc9c0 status=0x0
+work l host_sem=OK t=768us engine_sems: cmp=OK(0xc0de0101) notifier_error=0 
+work g host_sem=OK t=515us engine_sems: 3d=OK(0xc0de0004) cmp=OK(0xc0de0105) notifier_error=0 
+work l host_sem=OK t=524us engine_sems: cmp=OK(0xc0de0103) notifier_error=0 
+   [meta] rc=0 pid=3489807 xid_delta=0 xid_lines_for_pid=0
+=== 62_s6c_late_then_bindchan  [SHAPE 6c: late member, channel-level BIND but no schedule]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+chan g ctx=S engine=0x1 status=0x0 h=0xb00b000a
+obj g.3d class=0xc997 status=0x0
+obj g.cmp class=0xc9c0 status=0x0
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+work g host_sem=OK t=774us engine_sems: 3d=OK(0xc0de0001) cmp=OK(0xc0de0102) notifier_error=0 
+ctx A flags=async vas=0 status=0x0 h=0xb00b000d returned_subctxId=0x3f
+chan l ctx=A engine=0x1 status=0x0 h=0xb00b0010
+obj l.cmp class=0xc9c0 status=0x0
+bindchan l engine=0x1 status=0x0
+work l host_sem=OK t=768us engine_sems: cmp=OK(0xc0de0101) notifier_error=0 
+   [meta] rc=0 pid=3489841 xid_delta=0 xid_lines_for_pid=0
+=== 63_s6d_late_delay_then_sched  [SHAPE 6d: late member allocated with DELAY_CHANNEL_SCHEDULING: expect no run until its own channel schedule]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+chan g ctx=S engine=0x1 status=0x0 h=0xb00b000a
+obj g.3d class=0xc997 status=0x0
+obj g.cmp class=0xc9c0 status=0x0
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+work g host_sem=OK t=778us engine_sems: 3d=OK(0xc0de0001) cmp=OK(0xc0de0102) notifier_error=0 
+ctx A flags=async vas=0 status=0x0 h=0xb00b000d returned_subctxId=0x3f
+chan l ctx=A engine=0x1 status=0x0 h=0xb00b0010
+obj l.cmp class=0xc9c0 status=0x0
+work l host_sem=MISS t=-1000000us engine_sems: cmp=MISS(0x0) notifier_error=0 
+schedchan l status=0x0
+work l host_sem=OK t=537us engine_sems: cmp=OK(0xc0de0103) notifier_error=0 
+   [meta] rc=0 pid=3489879 xid_delta=0 xid_lines_for_pid=0
+=== 64_s6e_late_legacy  [SHAPE 6e: late member in LEGACY mode (the CUDA / single-ctxshare case), no schedule]
+chan g ctx=none(0) engine=0x1 status=0x0 h=0xb00b0009
+obj g.3d class=0xc997 status=0x0
+obj g.cmp class=0xc9c0 status=0x0
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+work g host_sem=OK t=774us engine_sems: 3d=OK(0xc0de0001) cmp=OK(0xc0de0102) notifier_error=0 
+chan l ctx=none(0) engine=0x1 status=0x0 h=0xb00b000e
+obj l.cmp class=0xc9c0 status=0x0
+work l host_sem=OK t=767us engine_sems: cmp=OK(0xc0de0101) notifier_error=0 
+work g host_sem=OK t=516us engine_sems: 3d=OK(0xc0de0004) cmp=OK(0xc0de0105) notifier_error=0 
+work l host_sem=OK t=525us engine_sems: cmp=OK(0xc0de0103) notifier_error=0 
+   [meta] rc=0 pid=3489915 xid_delta=0 xid_lines_for_pid=0
+=== 65_s6f_late_after_schedule_no_bind  [SHAPE 6f: late member with no BIND at all after the TSG schedule]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+chan g ctx=S engine=0x1 status=0x0 h=0xb00b000a
+obj g.cmp class=0xc9c0 status=0x0
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+work g host_sem=OK t=773us engine_sems: cmp=OK(0xc0de0101) notifier_error=0 
+chan l ctx=S engine=0x1 status=0x0 h=0xb00b000e
+obj l.cmp class=0xc9c0 status=0x0
+work l host_sem=OK t=768us engine_sems: cmp=OK(0xc0de0101) notifier_error=0 
+   [meta] rc=0 pid=3489945 xid_delta=0 xid_lines_for_pid=0
+=== 66_s6g_late_copy  [SHAPE 6g: late copy-class (GRCE) member on a new ASYNC ctxshare]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+chan g ctx=S engine=0x1 status=0x0 h=0xb00b000a
+obj g.3d class=0xc997 status=0x0
+obj g.cmp class=0xc9c0 status=0x0
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+work g host_sem=OK t=772us engine_sems: 3d=OK(0xc0de0001) cmp=OK(0xc0de0102) notifier_error=0 
+ctx A flags=async vas=0 status=0x0 h=0xb00b000d returned_subctxId=0x3f
+chan l ctx=A engine=0x1 status=0x0 h=0xb00b0010
+obj l.ce class=0xc7b5 status=0x0
+work l host_sem=OK t=229us engine_sems: ce=OK(0xc0de0201) notifier_error=0 
+   [meta] rc=0 pid=3489981 xid_delta=0 xid_lines_for_pid=0
+######## batch b8 (3 runs)
+=== 95_f1_free_order  [FREE ORDER: free a ctxshare while a channel still uses it; then free channel then ctxshare; VEID reuse; TSG keeps running]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+ctx A flags=async vas=0 status=0x0 h=0xb00b0008 returned_subctxId=0x3f
+chan g ctx=S engine=0x1 status=0x0 h=0xb00b000b
+obj g.3d class=0xc997 status=0x0
+obj g.cmp class=0xc9c0 status=0x0
+chan c ctx=A engine=0x1 status=0x0 h=0xb00b0010
+obj c.cmp class=0xc9c0 status=0x0
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+work g host_sem=OK t=542us engine_sems: 3d=OK(0xc0de0001) cmp=OK(0xc0de0102) notifier_error=0 
+work c host_sem=OK t=533us engine_sems: cmp=OK(0xc0de0101) notifier_error=0 
+freectx A status=0x0
+work g host_sem=OK t=516us engine_sems: 3d=OK(0xc0de0004) cmp=OK(0xc0de0105) notifier_error=0 
+work c host_sem=MISS t=-1000000us engine_sems: cmp=MISS(0x0) notifier_error=0 
+freech c status=0x0
+freectx A status=0x0
+ctx A2 flags=async vas=0 status=0x0 h=0xb00b0012 returned_subctxId=0x3f
+chan c2 ctx=A2 engine=0x1 status=0x0 h=0xb00b0015
+obj c2.cmp class=0xc9c0 status=0x0
+work g host_sem=OK t=539us engine_sems: 3d=OK(0xc0de0007) cmp=OK(0xc0de0108) notifier_error=0 
+work c2 host_sem=OK t=526us engine_sems: cmp=OK(0xc0de0101) notifier_error=0 
+freech c2 status=0x0
+freectx A2 status=0x0
+ctx A3 flags=async vas=0 status=0x0 h=0xb00b0017 returned_subctxId=0x3f
+work g host_sem=OK t=513us engine_sems: 3d=OK(0xc0de000a) cmp=OK(0xc0de010b) notifier_error=0 
+   [meta] rc=0 pid=3490661 xid_delta=0 xid_lines_for_pid=0
+=== 96_f2_cuda8  [CUDA-like: ONE TSG, one ctxshare, EIGHT channels with compute+copy, one TSG schedule; all eight run together]
+ctx S flags=async vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x3f
+chan c1 ctx=S engine=0x1 status=0x0 h=0xb00b000a
+obj c1.cmp class=0xc9c0 status=0x0
+obj c1.ce class=0xc7b5 status=0x0
+chan c2 ctx=S engine=0x1 status=0x0 h=0xb00b000f
+obj c2.cmp class=0xc9c0 status=0x0
+obj c2.ce class=0xc7b5 status=0x0
+chan c3 ctx=S engine=0x1 status=0x0 h=0xb00b0014
+obj c3.cmp class=0xc9c0 status=0x0
+obj c3.ce class=0xc7b5 status=0x0
+chan c4 ctx=S engine=0x1 status=0x0 h=0xb00b0019
+obj c4.cmp class=0xc9c0 status=0x0
+obj c4.ce class=0xc7b5 status=0x0
+chan c5 ctx=S engine=0x1 status=0x0 h=0xb00b001e
+obj c5.cmp class=0xc9c0 status=0x0
+obj c5.ce class=0xc7b5 status=0x0
+chan c6 ctx=S engine=0x1 status=0x0 h=0xb00b0023
+obj c6.cmp class=0xc9c0 status=0x0
+obj c6.ce class=0xc7b5 status=0x0
+chan c7 ctx=S engine=0x1 status=0x0 h=0xb00b0028
+obj c7.cmp class=0xc9c0 status=0x0
+obj c7.ce class=0xc7b5 status=0x0
+chan c8 ctx=S engine=0x1 status=0x0 h=0xb00b002d
+obj c8.cmp class=0xc9c0 status=0x0
+obj c8.ce class=0xc7b5 status=0x0
+schedtsg enable=1 status=0x0
+work c1 host_sem=OK t=680us engine_sems: cmp=OK(0xc0de0101) ce=OK(0xc0de0202) notifier_error=0 
+work c2 host_sem=OK t=670us engine_sems: cmp=OK(0xc0de0101) ce=OK(0xc0de0202) notifier_error=0 
+work c3 host_sem=OK t=669us engine_sems: cmp=OK(0xc0de0101) ce=OK(0xc0de0202) notifier_error=0 
+work c4 host_sem=OK t=658us engine_sems: cmp=OK(0xc0de0101) ce=OK(0xc0de0202) notifier_error=0 
+work c5 host_sem=OK t=644us engine_sems: cmp=OK(0xc0de0101) ce=OK(0xc0de0202) notifier_error=0 
+work c6 host_sem=OK t=632us engine_sems: cmp=OK(0xc0de0101) ce=OK(0xc0de0202) notifier_error=0 
+work c7 host_sem=OK t=621us engine_sems: cmp=OK(0xc0de0101) ce=OK(0xc0de0202) notifier_error=0 
+work c8 host_sem=OK t=610us engine_sems: cmp=OK(0xc0de0101) ce=OK(0xc0de0202) notifier_error=0 
+bench all-done n=300 min=13 p10=13 med=13 p90=13 max=382 us
+bench c1 n=300 min=5 p10=5 med=5 p90=5 max=365 us
+bench c2 n=300 min=6 p10=6 med=6 p90=6 max=368 us
+bench c3 n=300 min=7 p10=7 med=7 p90=7 max=370 us
+bench c4 n=300 min=8 p10=8 med=8 p90=8 max=373 us
+bench c5 n=300 min=9 p10=9 med=9 p90=9 max=375 us
+bench c6 n=300 min=10 p10=10 med=10 p90=10 max=377 us
+bench c7 n=300 min=11 p10=11 med=11 p90=11 max=379 us
+bench c8 n=300 min=13 p10=13 med=13 p90=13 max=381 us
+   [meta] rc=0 pid=3490706 xid_delta=0 xid_lines_for_pid=0
+=== 97_f3_timeslice_mixed  [TSG-level controls on a multi-subctx TSG: SET_TIMESLICE twice, schedule enable=0 then enable=1 around work]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+ctx A flags=async vas=0 status=0x0 h=0xb00b0008 returned_subctxId=0x3f
+chan g ctx=S engine=0x1 status=0x0 h=0xb00b000b
+obj g.3d class=0xc997 status=0x0
+obj g.cmp class=0xc9c0 status=0x0
+chan c ctx=A engine=0x1 status=0x0 h=0xb00b0010
+obj c.cmp class=0xc9c0 status=0x0
+bindtsg engine=0x1 status=0x0
+timeslice us=500 status=0x0
+schedtsg enable=1 status=0x0
+work g host_sem=OK t=542us engine_sems: 3d=OK(0xc0de0001) cmp=OK(0xc0de0102) notifier_error=0 
+work c host_sem=OK t=532us engine_sems: cmp=OK(0xc0de0101) notifier_error=0 
+timeslice us=2000 status=0x0
+work g host_sem=OK t=516us engine_sems: 3d=OK(0xc0de0004) cmp=OK(0xc0de0105) notifier_error=0 
+work c host_sem=OK t=524us engine_sems: cmp=OK(0xc0de0103) notifier_error=0 
+schedtsg enable=0 status=0x0
+work g host_sem=OK t=730us engine_sems: 3d=OK(0xc0de0007) cmp=OK(0xc0de0108) notifier_error=0 
+work c host_sem=OK t=739us engine_sems: cmp=OK(0xc0de0105) notifier_error=0 
+schedtsg enable=1 status=0x0
+work g host_sem=OK t=528us engine_sems: 3d=OK(0xc0de000a) cmp=OK(0xc0de010b) notifier_error=0 
+work c host_sem=OK t=536us engine_sems: cmp=OK(0xc0de0107) notifier_error=0 
+   [meta] rc=0 pid=3490745 xid_delta=0 xid_lines_for_pid=0
+######## batch b9 (4 runs)
+=== 98_c1_chan_sched_off  [CONTROL SCOPE: channel-level GPFIFO_SCHEDULE(bEnable=0) on ONE channel of a 3-subcontext TSG: do the others keep running; does it come back]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+ctx A flags=async vas=0 status=0x0 h=0xb00b0008 returned_subctxId=0x3f
+ctx B flags=async vas=0 status=0x0 h=0xb00b0009 returned_subctxId=0x3e
+chan g ctx=S engine=0x1 status=0x0 h=0xb00b000c
+obj g.3d class=0xc997 status=0x0
+obj g.cmp class=0xc9c0 status=0x0
+chan c ctx=A engine=0x1 status=0x0 h=0xb00b0011
+obj c.cmp class=0xc9c0 status=0x0
+chan k ctx=B engine=0x1 status=0x0 h=0xb00b0015
+obj k.ce class=0xc7b5 status=0x0
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+work g host_sem=OK t=564us engine_sems: 3d=OK(0xc0de0001) cmp=OK(0xc0de0102) notifier_error=0 
+work c host_sem=OK t=553us engine_sems: cmp=OK(0xc0de0101) notifier_error=0 
+work k host_sem=OK t=552us engine_sems: ce=OK(0xc0de0201) notifier_error=0 
+schedchan c status=0x0
+work g host_sem=OK t=519us engine_sems: 3d=OK(0xc0de0004) cmp=OK(0xc0de0105) notifier_error=0 
+work k host_sem=OK t=528us engine_sems: ce=OK(0xc0de0203) notifier_error=0 
+work c host_sem=MISS t=-1000000us engine_sems: cmp=MISS(0x0) notifier_error=0 
+schedchan c status=0x0
+work g host_sem=OK t=519us engine_sems: 3d=OK(0xc0de0007) cmp=OK(0xc0de0108) notifier_error=0 
+work c host_sem=OK t=528us engine_sems: cmp=OK(0xc0de0105) notifier_error=0 
+work k host_sem=OK t=546us engine_sems: ce=OK(0xc0de0205) notifier_error=0 
+   [meta] rc=0 pid=3493314 xid_delta=0 xid_lines_for_pid=0
+=== 99_c2_disable_channels  [CONTROL SCOPE: DISABLE_CHANNELS (bOnlyDisableScheduling=0) on ONE channel of a 3-subcontext TSG, then enable]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+ctx A flags=async vas=0 status=0x0 h=0xb00b0008 returned_subctxId=0x3f
+ctx B flags=async vas=0 status=0x0 h=0xb00b0009 returned_subctxId=0x3e
+chan g ctx=S engine=0x1 status=0x0 h=0xb00b000c
+obj g.3d class=0xc997 status=0x0
+obj g.cmp class=0xc9c0 status=0x0
+chan c ctx=A engine=0x1 status=0x0 h=0xb00b0011
+obj c.cmp class=0xc9c0 status=0x0
+chan k ctx=B engine=0x1 status=0x0 h=0xb00b0015
+obj k.ce class=0xc7b5 status=0x0
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+work g host_sem=OK t=562us engine_sems: 3d=OK(0xc0de0001) cmp=OK(0xc0de0102) notifier_error=0 
+work c host_sem=OK t=551us engine_sems: cmp=OK(0xc0de0101) notifier_error=0 
+work k host_sem=OK t=539us engine_sems: ce=OK(0xc0de0201) notifier_error=0 
+disable c only_sched=0 status=0x0
+work g host_sem=OK t=517us engine_sems: 3d=OK(0xc0de0004) cmp=OK(0xc0de0105) notifier_error=0 
+work k host_sem=OK t=526us engine_sems: ce=OK(0xc0de0203) notifier_error=0 
+work c host_sem=MISS t=-1000000us engine_sems: cmp=MISS(0x0) notifier_error=0 
+enable c only_sched=0 status=0x0
+work g host_sem=OK t=472us engine_sems: 3d=OK(0xc0de0007) cmp=OK(0xc0de0108) notifier_error=0 
+work c host_sem=OK t=480us engine_sems: cmp=OK(0xc0de0105) notifier_error=0 
+work k host_sem=OK t=488us engine_sems: ce=OK(0xc0de0205) notifier_error=0 
+   [meta] rc=0 pid=3493352 xid_delta=0 xid_lines_for_pid=0
+=== 9a_c3_group_off  [CONTROL SCOPE: TSG-level schedule(bEnable=0) with longer waits, then enable; and DISABLE_CHANNELS naming every channel]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+ctx A flags=async vas=0 status=0x0 h=0xb00b0008 returned_subctxId=0x3f
+chan g ctx=S engine=0x1 status=0x0 h=0xb00b000b
+obj g.3d class=0xc997 status=0x0
+obj g.cmp class=0xc9c0 status=0x0
+chan c ctx=A engine=0x1 status=0x0 h=0xb00b0010
+obj c.cmp class=0xc9c0 status=0x0
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+work g host_sem=OK t=559us engine_sems: 3d=OK(0xc0de0001) cmp=OK(0xc0de0102) notifier_error=0 
+work c host_sem=OK t=553us engine_sems: cmp=OK(0xc0de0101) notifier_error=0 
+schedtsg enable=0 status=0x0
+settle notifier g error=0 
+settle notifier c error=0 
+work g host_sem=OK t=606us engine_sems: 3d=OK(0xc0de0004) cmp=OK(0xc0de0105) notifier_error=0 
+work c host_sem=OK t=641us engine_sems: cmp=OK(0xc0de0103) notifier_error=0 
+schedtsg enable=1 status=0x0
+work g host_sem=OK t=534us engine_sems: 3d=OK(0xc0de0007) cmp=OK(0xc0de0108) notifier_error=0 
+work c host_sem=OK t=547us engine_sems: cmp=OK(0xc0de0105) notifier_error=0 
+disable g,c only_sched=0 status=0x0
+work g host_sem=MISS t=-1000000us engine_sems: 3d=MISS(0x0) cmp=MISS(0x0) notifier_error=0 
+work c host_sem=MISS t=-1000000us engine_sems: cmp=MISS(0x0) notifier_error=0 
+enable g,c only_sched=0 status=0x0
+work g host_sem=OK t=546us engine_sems: 3d=OK(0xc0de000d) cmp=OK(0xc0de010e) notifier_error=0 
+work c host_sem=OK t=558us engine_sems: cmp=OK(0xc0de0109) notifier_error=0 
+   [meta] rc=0 pid=3493392 xid_delta=0 xid_lines_for_pid=0
+=== 9b_c4_preempt  [CONTROL SCOPE: TSG PREEMPT (bWait=1, manual timeout) on a multi-subcontext TSG; work before and after]
+ctx S flags=sync vas=0 status=0x0 h=0xb00b0007 returned_subctxId=0x0
+ctx A flags=async vas=0 status=0x0 h=0xb00b0008 returned_subctxId=0x3f
+chan g ctx=S engine=0x1 status=0x0 h=0xb00b000b
+obj g.3d class=0xc997 status=0x0
+obj g.cmp class=0xc9c0 status=0x0
+chan c ctx=A engine=0x1 status=0x0 h=0xb00b0010
+obj c.cmp class=0xc9c0 status=0x0
+bindtsg engine=0x1 status=0x0
+schedtsg enable=1 status=0x0
+work g host_sem=OK t=542us engine_sems: 3d=OK(0xc0de0001) cmp=OK(0xc0de0102) notifier_error=0 
+work c host_sem=OK t=532us engine_sems: cmp=OK(0xc0de0101) notifier_error=0 
+work g host_sem=OK t=516us engine_sems: 3d=OK(0xc0de0004) cmp=OK(0xc0de0105) notifier_error=0 
+work c host_sem=OK t=525us engine_sems: cmp=OK(0xc0de0103) notifier_error=0 
+work g host_sem=OK t=516us engine_sems: 3d=OK(0xc0de0007) cmp=OK(0xc0de0108) notifier_error=0 
+work c host_sem=OK t=527us engine_sems: cmp=OK(0xc0de0105) notifier_error=0 
+   [meta] rc=0 pid=3493469 xid_delta=0 xid_lines_for_pid=0

@@ -1,0 +1,14 @@
+# CUDA-like: ONE TSG, one ctxshare, EIGHT channels with compute+copy, one TSG schedule; all eight run together
+tsg engine=gr vas=0
+ctx S flags=async vas=0
+chan c1 ctx=S engine=gr objs=cmp+ce
+chan c2 ctx=S engine=gr objs=cmp+ce
+chan c3 ctx=S engine=gr objs=cmp+ce
+chan c4 ctx=S engine=gr objs=cmp+ce
+chan c5 ctx=S engine=gr objs=cmp+ce
+chan c6 ctx=S engine=gr objs=cmp+ce
+chan c7 ctx=S engine=gr objs=cmp+ce
+chan c8 ctx=S engine=gr objs=cmp+ce
+schedtsg
+work c1,c2,c3,c4,c5,c6,c7,c8
+bench c1,c2,c3,c4,c5,c6,c7,c8 iters=300

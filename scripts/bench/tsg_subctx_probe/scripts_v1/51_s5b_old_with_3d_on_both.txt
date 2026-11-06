@@ -1,0 +1,9 @@
+# SHAPE 5b: both channels carry 3D+compute, both on the legacy SYNC subcontext
+tsg engine=gr vas=0
+chan g engine=gr thread=0 objs=3d+cmp
+chan c engine=gr thread=0 objs=3d+cmp
+bindtsg
+schedtsg
+work g,c
+work g,c
+bench g,c iters=300
