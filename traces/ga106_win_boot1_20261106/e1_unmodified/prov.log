@@ -1,0 +1,17 @@
+START 2026-11-06T00:36:22+00:00
+BOX_RC=0
+9269a3a16 Merge pull request #269 from reindertpelsma/claude/integration-20261105b
+DRIVER_RC=0
+NVIDIA GeForce RTX 3060, 580.159.04
+/dev/root       117G   15G  102G  13% /
+TREE_RC=0
+[2026-11-06T00:54:56+00:00] B4: guest ladder built: 5061232 bytes
+[2026-11-06T00:54:56+00:00] BENCH_TREE_DONE
+LADDER_RC=0
+FG_RC=0
+== built: /workspace/bench/fastguest/initrd.cpio.gz  112M
+== kernel release: 6.8.0-147-generic
+KF3_RC=0
+KF3_BUILT /workspace/bench/kf3-bins/9269a3a1/qemu-system-x86_64 rev=9269a3a1 mtime=2026-11-06 00:56:58.283328326 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+READY driver=580.159.04
+EXIT 2026-11-06T00:57:01+00:00
