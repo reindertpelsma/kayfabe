@@ -103,7 +103,9 @@ class ReadinessIntegration(unittest.TestCase):
                 reply = original(path, headers, body, method)
                 if permanent_status is not None and reply[0] == 400:
                     reply = permanent_status, reply[1], reply[2]
-                if reply[0] == 200 and json.loads(body).get("kind") == "progress":
+                # The evidence upload (2026-11-06) posts a gzip body, not a JSON report.
+                is_report = "/evidence/" not in path
+                if reply[0] == 200 and is_report and json.loads(body).get("kind") == "progress":
                     (case.tmp / "dump.ack").write_text("acknowledged")
                 return reply
 
