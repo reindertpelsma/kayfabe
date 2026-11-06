@@ -33,8 +33,11 @@ migrations_dir = "../platform-api/migrations"
 # Failed-run evidence (src/evidence.js, DEPLOY.md "Evidence bucket"): a PRIVATE R2 bucket that only
 # the box upload route POST /evidence/<run>-<attempt> writes, through this binding. Nothing reads
 # it except the coordinator, with its own credentials (scripts/ci/fetch_evidence.py). Create the
-# bucket BEFORE the first deploy that carries this block (wrangler refuses an unknown bucket);
-# remove the block to switch the route off (it then answers 404 EVIDENCE_DISABLED).
+# bucket (with its location hint and its 30-day lifecycle rule) BEFORE the first deploy that carries
+# this block: wrangler 4.152.0 CREATES a missing bucket named here during a plain deploy, without
+# either; deploy.mjs therefore passes --x-provision=false, so that a missing bucket fails the deploy
+# instead (DEPLOY.md, "Evidence bucket"). Remove the block to switch the route off (it then
+# answers 404 EVIDENCE_DISABLED).
 [[r2_buckets]]
 binding = "EVIDENCE_BUCKET"
 bucket_name = "kayfabe-ci-evidence"
@@ -48,7 +51,7 @@ WORKER_URL = "https://ci.kayfabe.dev"
 # Numeric owner policy defaults are defined once in defaults.json.
 RENTING_ENABLED = "false"
 # SHA-256 of wrangler's emitted module (equals deployment.json; deploy.mjs refuses otherwise).
-DEPLOYED_BUNDLE_SHA256 = "e2871bb87aa41c8a890f27fe69e1c18c450c051c8eb50c2538151c2849e0f976"
+DEPLOYED_BUNDLE_SHA256 = "0fac9ca08fa02308a6335ed19713e277cf010a32cd0dd8699aa6cfa592ffd714"
 # Public GitHub account id of the owner (also in every commit author email); never a secret.
 OWNER_GITHUB_ID = "229738317"
 REPOSITORY = "reindertpelsma/kayfabe"

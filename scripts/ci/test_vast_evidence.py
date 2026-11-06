@@ -211,6 +211,9 @@ class Content(Fixture):
         (self.t.vm / "logs" / "secrets").mkdir()
         (self.t.vm / "logs" / "secrets" / "x.log").write_text("SECRETS-SUBDIR")
         built = self.t.build()
+        manifest = json.loads(members(built["path"])["MANIFEST.json"])
+        for listed in ("prov/link.log", "evidence/link.txt", "evidence/linkdir"):
+            self.assertNotIn(listed, manifest["skipped"], "lstat skips a symlink without a trace")
         blob = b"".join(members(built["path"]).values())
         for text in (
             PASSWORD,
@@ -270,7 +273,10 @@ class Symlinks(Fixture):
         outside = self.t.root / "o.txt"
         outside.write_text("OUTSIDE")
         (self.t.prov / "x.log").symlink_to(outside)
-        self.assertNotIn("prov/x.log", self.names())
+        built = self.t.build()
+        self.assertNotIn("prov/x.log", members(built["path"]))
+        manifest = json.loads(members(built["path"])["MANIFEST.json"])
+        self.assertNotIn("prov/x.log", manifest["skipped"], "not even listed: lstat skips it")
 
     def test_a_symlinked_file_or_directory_in_the_payload_evidence_is_skipped(self):
         outside = self.t.root / "o.txt"
@@ -279,7 +285,10 @@ class Symlinks(Fixture):
         evidence.mkdir()
         (evidence / "a.run").symlink_to(outside)
         (evidence / "d").symlink_to(self.t.root)
-        self.assertFalse(any(n.startswith("evidence/") for n in self.names()))
+        built = self.t.build()
+        self.assertFalse(any(n.startswith("evidence/") for n in members(built["path"])))
+        manifest = json.loads(members(built["path"])["MANIFEST.json"])
+        self.assertFalse(any(x.startswith("evidence/") for x in manifest["skipped"]))
 
     def test_a_symlinked_prov_subdirectory_is_skipped(self):
         (self.t.prov / "d").symlink_to(self.t.root)
@@ -329,6 +338,15 @@ class MoreSymlinks(Fixture):
         (self.t.ws / "kf-ci-evidence").symlink_to(other)
         names = set(members(self.t.build()["path"]))
         self.assertFalse(any(n.startswith("evidence/") for n in names))
+
+    def test_a_symlinked_payload_evidence_root_with_subdirectories_is_skipped(self):
+        other = self.t.root / "other2"
+        (other / "deep" / "er").mkdir(parents=True)
+        (other / "deep" / "er" / "a.run").write_text("OUTSIDE")
+        (other / "top.run").write_text("OUTSIDE")
+        (self.t.ws / "kf-ci-evidence").symlink_to(other)
+        built = self.t.build()
+        self.assertNotIn(b"OUTSIDE", b"".join(members(built["path"]).values()))
 
     def test_a_symlinked_prov_directory_with_files_is_skipped(self):
         other = self.t.root / "other"
@@ -499,7 +517,7 @@ class Scanning(Fixture):
 
     def test_every_pattern_class_refuses(self):
         cases = {
-            "jwt": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dBjftJeZ4CVPmB92K27uhbUJU1p1r_w",
+            "jwt": "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dBjftJeZ4CVPmB92K27uhbUJU1p1r_w",
             "bearer": "Authorization: Bearer abcdefghijklmnopqrstuvwxyz0123",
             "presigned_url": "https://x.r2.cloudflarestorage.com/b/k?X-Amz-Signature=" + "0" * 64,
             "private_key": "-----BEGIN OPENSSH PRIVATE KEY-----",
@@ -540,7 +558,7 @@ class Scanning(Fixture):
 
     def test_patterns_are_found_in_vm_logs_and_gate_members_too(self):
         samples = {
-            "jwt": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dBjftJeZ4CVPmB92K27uhbUJU1p1r_w",
+            "jwt": "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dBjftJeZ4CVPmB92K27uhbUJU1p1r_w",
             "bearer": "Authorization: Bearer abcdefghijklmnopqrstuvwxyz0123",
             "presigned_url": "?X-Amz-Credential=AKIA%2F20261106",
             "private_key": "-----BEGIN RSA PRIVATE KEY-----",
@@ -739,6 +757,345 @@ class Caps(Fixture):
         self.assertFalse((self.t.root / "out" / "evidence.tgz").exists())
 
 
+class CutsAndFragments(Fixture):
+    def straddle(self, total_cap, offset_in_token=40, fill=b"A"):
+        """A file whose `total_cap` tail cut falls `offset_in_token` bytes into the token."""
+        token = TOKEN.encode()
+        before = 5000
+        size = before + offset_in_token + total_cap
+        body = fill * before + token + fill * (size - before - len(token))
+        assert len(body) == size
+        return body
+
+    def test_a_token_crossing_the_log_tail_cut_is_refused(self):
+        self.t.log.write_bytes(self.straddle(ev.LOG_CAP))
+        with self.assertRaises(ev.ScanHit) as caught:
+            self.t.build()
+        self.assertEqual(caught.exception.label, "run_token")
+
+    def test_a_token_crossing_the_tgz_member_cut_is_refused(self):
+        self.t.tgz(
+            self.t.prov / "g_windows.tgz", {"g_windows/a.txt": self.straddle(2 * ev.FILE_CAP)}
+        )
+        with self.assertRaises(ev.ScanHit) as caught:
+            self.t.build()
+        self.assertEqual(caught.exception.label, "run_token")
+
+    def test_a_token_crossing_the_gz_log_cut_is_refused(self):
+        with gzip.open(self.t.vm / "logs" / "a.log.gz", "wb") as handle:
+            handle.write(self.straddle(1024 * 1024))
+        with self.assertRaises(ev.ScanHit) as caught:
+            self.t.build()
+        self.assertEqual(caught.exception.label, "run_token")
+
+    def test_a_token_at_the_size_halving_cut_is_refused(self):
+        # incompressible filler, so that the cap halves the log; the token sits on the first cut
+        noise = random.Random(3).randbytes(100_000).hex().encode()
+        half = len(noise) // 2
+        self.t.log.write_bytes(noise[: half - 20] + TOKEN.encode() + noise[half:])
+        with self.assertRaises(ev.ScanHit):
+            self.t.build(cap=60_000)
+
+    def test_a_prefix_or_a_suffix_of_a_secret_is_a_hit(self):
+        for label, secret in (
+            ("run_token", TOKEN),
+            ("guest_password", PASSWORD),
+            ("access_secret", ACCESS_SECRET),
+            ("runner_nonce", RNONCE),
+            ("broker_path", PREFIX),
+        ):
+            for name, fragment in (("prefix", secret[:20]), ("suffix", secret[-20:])):
+                with self.subTest((label, name)):
+                    self.t.log.write_text("cut line " + fragment)
+                    with self.assertRaises(ev.ScanHit) as caught:
+                        self.t.build()
+                    self.assertEqual(caught.exception.label, label + "_fragment")
+
+    def test_a_secret_cut_before_the_file_starts_is_caught_in_every_kind_of_source(self):
+        tail = TOKEN[20:]
+        self.t.tgz(self.t.prov / "g_windows.tgz", {"g_windows/a.txt": "..." + tail})
+        with self.assertRaises(ev.ScanHit) as caught:
+            self.t.build()
+        self.assertEqual(caught.exception.label, "run_token_fragment")
+        (self.t.prov / "g_windows.tgz").unlink()
+        with gzip.open(self.t.vm / "logs" / "a.log.gz", "wb") as handle:
+            handle.write(("..." + tail).encode())
+        with self.assertRaises(ev.ScanHit) as caught:
+            self.t.build()
+        self.assertEqual(caught.exception.label, "run_token_fragment")
+        (self.t.vm / "logs" / "a.log.gz").unlink()
+        (self.t.vm / "logs" / "b.log").write_text("..." + tail)
+        with self.assertRaises(ev.ScanHit):
+            self.t.build()
+
+    def test_a_short_piece_and_ordinary_text_of_the_urls_are_not_fragments(self):
+        self.t.log.write_text(
+            "https://broker.example/ and " + TOKEN[:10] + " and " + ACCESS_ID[:12] + "\n"
+        )
+        self.t.build()
+
+    def test_the_final_bytes_are_checked_again_for_exact_secrets(self):
+        scanner = ev.Scanner([("run_token", TOKEN)])
+        with self.assertRaises(ev.ScanHit):
+            scanner.scan_exact("x", b"..." + TOKEN.encode())
+        scanner.scan_exact("x", b"nothing here")
+
+
+class NamesAndManifest(Fixture):
+    GHP = "ghp_" + "A1b2C3d4" * 4
+
+    def test_a_secret_in_a_file_name_is_refused_without_printing_the_name(self):
+        (self.t.prov / (self.GHP + ".log")).write_text("fine")
+        with self.assertRaises(ev.ScanHit) as caught:
+            self.t.build()
+        self.assertEqual(caught.exception.label, "github_token")
+        self.assertRegex(caught.exception.member, r"^name-[0-9a-f]{10}$")
+        self.assertNotIn("A1b2C3d4", caught.exception.member)
+
+    def test_the_step_prints_a_hash_for_a_name_hit_and_nothing_of_the_name(self):
+        (self.t.prov / (self.GHP + ".log")).write_text("fine")
+        out = io.StringIO()
+        import contextlib
+
+        with contextlib.redirect_stdout(out):
+            Step.run_with(self, Fake())
+        self.assertIn(
+            "KF_EVIDENCE_REFUSED reason=scan_hit class=github_token member=name-", out.getvalue()
+        )
+        self.assertNotIn(self.GHP, out.getvalue())
+        self.assertNotIn("A1b2C3d4", out.getvalue())
+
+    def test_a_content_hit_prints_the_member_name_only(self):
+        (self.t.prov / "notes.log").write_text("x " + TOKEN)
+        with self.assertRaises(ev.ScanHit) as caught:
+            self.t.build()
+        self.assertEqual(caught.exception.member, "prov/notes.log")
+
+    def test_skipped_names_in_the_manifest_are_sanitised(self):
+        (self.t.prov / "weird name$(x).log").write_bytes(b"\0binary")
+        names = members(self.t.build()["path"])
+        manifest = json.loads(names["MANIFEST.json"])
+        self.assertIn("prov/weird_name__x_.log", manifest["skipped"])
+        self.assertTrue(all(n == ev.safe_name(n) for n in manifest["skipped"]))
+
+    def test_the_manifest_holds_ascii_path_characters_only(self):
+        (self.t.prov / "caf\u00e9\x07 x.log").write_bytes(b"\0binary")
+        manifest = json.loads(members(self.t.build()["path"])["MANIFEST.json"])
+        self.assertTrue(manifest["skipped"])
+        for name in manifest["skipped"]:
+            self.assertRegex(name, r"^[A-Za-z0-9._/-]+$")
+
+    def test_the_manifest_is_scanned_too(self):
+        # a binary file named like a token is skipped, and its (sanitised) name lands in the manifest
+        (self.t.prov / (self.GHP + ".log")).write_bytes(b"\0binary")
+        with self.assertRaises(ev.ScanHit) as caught:
+            self.t.build()
+        self.assertEqual(caught.exception.member, "MANIFEST.json")
+        self.assertEqual(caught.exception.label, "github_token")
+
+    def test_a_dropped_name_with_a_secret_shape_is_caught_in_the_manifest(self):
+        self.t.shot("a.png", size=20_000)
+        (self.t.vm / "logs" / "shots" / (self.GHP + ".png")).write_bytes(
+            b"\x89PNG\0" + bytes(20_000)
+        )
+        with self.assertRaises(ev.ScanHit):
+            self.t.build(cap=30_000)
+
+
+class Hostile(Fixture):
+    def test_scanning_and_scrubbing_are_linear_on_hostile_input(self):
+        scanner, scrubber = ev.Scanner([("run_token", TOKEN)]), ev.Scrubber()
+        big = 1 << 20
+        cases = {
+            "jwt-prefix": b"eyJ-" * (big // 4),
+            "jwt-dots": b"eyJ." * (big // 4),
+            "github-pat": b"github_pat_" * (big // 11),
+            "ghp": b"ghp_" * (big // 4),
+            "words": b"a " * (big // 2),
+            "serial-spaces": b"Serial Number:" + b" " * big + b"x\n",
+            "serial-words": b"Product " * (big // 8) + b"\n",
+            "zeros": b"0" * big,
+            "colons": b":" * big,
+            "hex-colons": b"0:" * (big // 2),
+            "bearer": b"Bearer " * (big // 7),
+            "amz": b"X-Amz-" * (big // 6),
+            "dots": b"1." * (big // 2),
+            "url-creds": b"http://a:" * (big // 9),
+            "newlines": b"\n" * big,
+        }
+        for name, data in cases.items():
+            with self.subTest(name):
+                started = time.monotonic()
+                try:
+                    scanner.scan("x", data)
+                except ev.ScanHit:
+                    pass
+                scrubber.text(data)
+                self.assertLess(time.monotonic() - started, 5.0, name)
+
+    def test_the_jwt_matcher_agrees_with_the_old_pattern_on_real_shapes(self):
+        good = [
+            b"eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dBjftJeZ4CVPmB92K27uhbUJU1p1r_w",
+            b"tok=eyJabcdefg.abcdef.abcdefghijklmnopqrst&x",
+            b"xxeyJabcdefg.abcdef.abcdefghijklmnopqrst",
+            b"a.b.c eyJabcdefgh.abcdefg.abcdefghijklmnopqrstuv",
+            b"eyJ12345.eyJ1234567.abcdef.abcdefghijklmnopqrstuvwx",
+        ]
+        bad = [
+            b"eyJabc.abcdef.abcdefghijklmnopqrst",
+            b"eyJabcdefg.abc.abcdefghijklmnopqrst",
+            b"eyJabcdefg.abcdef.abcdefghij",
+            b"eyJabcdefg abcdef abcdefghijklmnopqrst",
+            b"plain text",
+        ]
+        for data in good:
+            self.assertTrue(ev._jwt(data), data)
+        for data in bad:
+            self.assertFalse(ev._jwt(data), data)
+
+
+class NoFollow(Fixture):
+    def test_roots_that_are_symlinks_are_not_followed(self):
+        other = self.t.root / "elsewhere"
+        (other / "logs").mkdir(parents=True)
+        (other / "logs" / "x.log").write_text("OUTSIDE")
+        (other / "stray.log").write_text("OUTSIDE")
+        shutil.rmtree(self.t.prov)
+        self.t.prov.symlink_to(other)
+        shutil.rmtree(self.t.winvm)
+        self.t.winvm.symlink_to(other)
+        blob = b"".join(members(self.t.build()["path"]).values())
+        self.assertNotIn(b"OUTSIDE", blob)
+
+    def test_a_symlinked_vm_directory_a_symlinked_log_and_result_are_not_followed(self):
+        other = self.t.root / "elsewhere"
+        (other / "logs").mkdir(parents=True)
+        (other / "logs" / "x.log").write_text("OUTSIDE")
+        (self.t.winvm / "linked").symlink_to(other)
+        outside = self.t.root / "o.txt"
+        outside.write_text("OUTSIDE")
+        self.t.log.unlink()
+        self.t.log.symlink_to(outside)
+        (self.t.ws / "kf-result.json").unlink()
+        (self.t.ws / "kf-result.json").symlink_to(outside)
+        (self.t.ws / "bench").symlink_to(other)
+        blob = b"".join(members(self.t.build()["path"]).values())
+        self.assertNotIn(b"OUTSIDE", blob)
+
+    def test_open_plain_refuses_symlinks_fifos_and_directories(self):
+        target = self.t.root / "t.txt"
+        target.write_text("x")
+        link = self.t.root / "l.txt"
+        link.symlink_to(target)
+        fifo = self.t.root / "f"
+        os.mkfifo(fifo)
+        for path in (link, fifo, self.t.root):
+            with self.assertRaises(OSError):
+                ev.open_plain(path)
+        with ev.open_plain(target) as handle:
+            self.assertEqual(handle.read(), b"x")
+
+    def test_read_tail_refuses_a_fifo_and_a_directory(self):
+        fifo = self.t.root / "f2"
+        os.mkfifo(fifo)
+        with self.assertRaises(OSError):
+            ev.read_tail(fifo, 10)
+        with self.assertRaises(OSError):
+            ev.read_tail(self.t.root, 10)
+        with self.assertRaises(OSError):
+            ev.gz_tail(fifo, 10)
+
+    def test_a_swap_between_check_and_open_is_refused_by_o_nofollow(self):
+        victim = self.t.root / "victim.txt"
+        victim.write_text("OUTSIDE")
+        plain = self.t.prov / "swap.log"
+        plain.write_text("inside")
+        self.assertTrue(ev.is_plain_file(plain))
+        plain.unlink()
+        plain.symlink_to(victim)
+        with self.assertRaises(OSError):
+            ev.read_tail(plain, 100)
+
+    def test_a_fifo_in_a_walked_tree_does_not_block(self):
+        evidence = self.t.ws / "kf-ci-evidence"
+        evidence.mkdir()
+        os.mkfifo(evidence / "pipe.run")
+        started = time.monotonic()
+        self.t.build()
+        self.assertLess(time.monotonic() - started, 10)
+
+
+class Commands(Fixture):
+    def test_a_hung_command_and_its_children_are_killed_within_a_bound(self):
+        pids = self.t.root / "pids"
+        script = "echo $$ > %s; sleep 60 & echo $! >> %s; wait" % (pids, pids)
+        started = time.monotonic()
+        out = ev.run_command(["sh", "-c", script], timeout=1.0)
+        self.assertLess(time.monotonic() - started, 6)
+        self.assertIn(b"timed out, killed", out)
+        time.sleep(0.3)
+        for pid in pids.read_text().split():
+            try:
+                state = Path("/proc/%s/stat" % pid).read_text().rsplit(")", 1)[1].split()[0]
+            except OSError:
+                continue
+            self.assertEqual(state, "Z", "process %s still runs" % pid)
+
+    def test_a_command_that_ignores_term_is_killed_too(self):
+        started = time.monotonic()
+        out = ev.run_command(["sh", "-c", "trap '' TERM HUP INT; sleep 60"], timeout=1.0)
+        self.assertLess(time.monotonic() - started, 6)
+        self.assertIn(b"timed out, killed", out)
+
+    def test_a_missing_command_and_big_output_are_bounded(self):
+        self.assertIn(b"command failed", ev.run_command(["/nonexistent/kf-evidence-cmd"]))
+        out = ev.run_command(["sh", "-c", "yes x | head -c 5000000"], limit=1000)
+        self.assertLessEqual(len(out), 1000)
+
+    def test_normal_output_and_stderr_are_returned(self):
+        self.assertEqual(ev.run_command(["sh", "-c", "echo out; echo err >&2"]), b"out\nerr\n")
+
+    def test_the_files_are_collected_before_any_command_runs(self):
+        order = []
+
+        def runner(argv):
+            if not order:
+                self.t.log.unlink()  # a hung GPU would block here: the log must already be read
+            order.append(argv[0])
+            return b"[%s]\n" % argv[0].encode()
+
+        built = self.t.build(runner=runner)
+        names = members(built["path"])
+        self.assertIn("log/output.log", names)
+
+    def test_the_host_items_come_after_every_file_item(self):
+        items, _ = ev.collect(self.t.roots(), self.t.log, no_commands, lambda: False, NOW)
+        files = [i for i, x in enumerate(items) if not x.name.startswith("host/")]
+        hosts = [i for i, x in enumerate(items) if x.name.startswith("host/")]
+        self.assertTrue(files and hosts and max(files) < min(hosts))
+
+    def test_the_commands_have_a_phase_budget_and_the_files_still_ship(self):
+        calls = []
+        with mock.patch.object(ev, "COMMAND_PHASE", -1):
+            built = self.t.build(runner=lambda argv: calls.append(argv) or b"x")
+        names = members(built["path"])
+        self.assertEqual(calls, [])
+        self.assertIn("log/output.log", names)
+        self.assertIn(b"skipped, out of time", names["host/free.txt"])
+        manifest = json.loads(names["MANIFEST.json"])
+        self.assertTrue(any("(time)" in x for x in manifest["skipped"]))
+
+    def test_every_command_hung_still_yields_a_bundle_in_bounded_time(self):
+        def hung(argv):
+            return ev.run_command(["sleep", "60"], timeout=2.0)
+
+        with mock.patch.object(ev, "COMMAND_PHASE", 3):
+            started = time.monotonic()
+            built = self.t.build(runner=hung)
+        self.assertLess(time.monotonic() - started, 12)
+        self.assertIn("log/output.log", members(built["path"]))
+
+
 class Fake:
     """Transport double: records requests, answers from a script."""
 
@@ -874,6 +1231,20 @@ class Upload(Fixture):
         self.assertEqual(result, (False, "time"))
         self.assertEqual(len(fake.requests), 1)
 
+    def test_a_busy_409_is_retried_and_only_evidence_exists_counts_as_stored(self):
+        fake = Fake((409, {"state": "BUSY"}), (409, None), (200, {"state": "STORED"}))
+        _, result, sleeps = self.go(fake)
+        self.assertEqual(result, (True, "stored"))
+        self.assertEqual(len(fake.requests), 3)
+        self.assertEqual(len(sleeps), 2)
+        fake = Fake((409, {"state": "BUSY"}), (409, {"state": "BUSY"}), (409, {"state": "BUSY"}))
+        _, result, _ = self.go(fake)
+        self.assertEqual(result, (False, "upload_http_409"))
+        self.assertEqual(len(fake.requests), 3)
+        fake = Fake((409, {"state": "EVIDENCE_EXISTS"}))
+        self.assertEqual(self.go(fake)[1], (True, "already_stored"))
+        self.assertEqual(len(fake.requests), 1)
+
     def test_409_counts_as_stored(self):
         _, result, _ = self.go(Fake((409, {"state": "EVIDENCE_EXISTS"})))
         self.assertEqual(result, (True, "already_stored"))
@@ -904,6 +1275,23 @@ class Upload(Fixture):
 
 class Step(Fixture):
     """The whole step as vast_onstart.sh calls it."""
+
+    @staticmethod
+    def run_with(case, transport):
+        args = ev.parser().parse_args(
+            [
+                "run",
+                "--log",
+                str(case.t.log),
+                "--out",
+                str(case.t.root / "out"),
+                "--workspace",
+                str(case.t.ws),
+                "--prov",
+                str(case.t.prov),
+            ]
+        )
+        return ev.run(args, env(), runner=no_commands, transport=transport)
 
     def run_step(self, transport, environment=None, extra=(), **kw):
         args = ev.parser().parse_args(
@@ -970,6 +1358,12 @@ class Step(Fixture):
         out = self.run_step(fake)
         self.assertEqual(fake.requests, [])
         self.assertIn("KF_EVIDENCE_REFUSED reason=scan_hit class=run_token", out)
+
+    def test_a_busy_ledger_is_retried_and_not_reported_as_already_stored(self):
+        with mock.patch.object(time, "sleep", lambda s: None):
+            out = self.run_step(Fake((409, {"state": "BUSY"}), (200, {"state": "STORED"})))
+        self.assertRegex(out, r"evidence uploaded: 4242/7 [0-9]+ sha256 [0-9a-f]{12}$")
+        self.assertNotIn("already_stored", out)
 
     def test_an_already_stored_bundle_is_still_reported_as_uploaded(self):
         out = self.run_step(Fake((409, {"state": "EVIDENCE_EXISTS"})))

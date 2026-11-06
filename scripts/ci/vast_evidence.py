@@ -36,6 +36,13 @@ the broker URL and its secret path, the Access pair, the runner nonce, the guest
 harness ssh key (read from $WINVM_ROOT/*/secrets, the same files windows_gate.sh scans for), a Vast
 API key, JWT-shaped strings, `Bearer <token>`, presigned-URL parameters, private-key blocks, GitHub
 tokens and URLs with credentials. Never collected: secrets/, tpm/, firmware/, disk/, ssh keys.
+
+Work order and limits (review of PR #274): the files are collected first, the host commands last,
+each in its own process group with a hard timeout (a hung GPU costs only its command); no symlink is
+followed (lstat, O_NOFOLLOW); every member is scanned at full length, with the bytes before any cut,
+before it is cut, and so are the file names and MANIFEST.json (a secret-shaped NAME is printed as a
+hash); a 16-character prefix or suffix of a long secret is a hit; the scan is linear in the input.
+Details: scripts/ci/VAST_PAYLOAD.md, "Evidence bundle".
 """
 
 import argparse
@@ -47,10 +54,13 @@ import json
 import os
 import posixpath
 import re
+import signal
 import ssl
+import stat
 import subprocess
 import sys
 import tarfile
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -72,6 +82,10 @@ MEMBER_READ_CAP = 16 * 1024 * 1024
 ARCHIVE_UNPACK_CAP = 128 * 1024 * 1024
 ARCHIVE_INPUT_CAP = 256 * 1024 * 1024  # compressed bytes read from one evidence tgz
 MAX_FILES = 600
+LEAD = 8192  # bytes read before a cut, scanned too (a secret that crosses a cut)
+COMMAND_TIMEOUT = 6.0  # seconds per host command, then its whole process group is killed
+COMMAND_PHASE = 25.0  # seconds for all host commands together
+FRAGMENT = 16  # a prefix or suffix of a secret this long is a hit too
 META_MAX = 4096  # bytes of the X-KF-Evidence-Meta header (the Worker's cap)
 USER_AGENT = contract.USER_AGENT
 FORBIDDEN_PARTS = {"secrets", "tpm", "firmware", "disk", ".ssh", "unattend.d"}
@@ -86,6 +100,36 @@ class ScanHit(Exception):
     def __init__(self, label, member):
         super().__init__(label)
         self.label, self.member = label, member
+
+
+def lstat(path):
+    try:
+        return os.lstat(path)
+    except OSError:
+        return None
+
+
+def is_plain_file(path):
+    """A regular file that is not a symlink (lstat: nothing is followed)."""
+    st = lstat(path)
+    return st is not None and stat.S_ISREG(st.st_mode)
+
+
+def is_plain_dir(path):
+    st = lstat(path)
+    return st is not None and stat.S_ISDIR(st.st_mode)
+
+
+def open_plain(path):
+    """Open a regular file without following a symlink at the last component; never block."""
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            raise OSError("not a regular file")
+    except OSError:
+        os.close(fd)
+        raise
+    return os.fdopen(fd, "rb")
 
 
 def safe_name(name, limit=120):
@@ -189,34 +233,76 @@ class Scrubber:
 
 # --- scanning --------------------------------------------------------------------------------
 
+_JWT_RUN = re.compile(rb"eyJ[A-Za-z0-9_.-]*")
+
+
+def _jwt(data):
+    """A JWT-shaped string: eyJ + 6 characters, a dot, 6 characters, a dot, 20 characters.
+
+    Linear: one regex match per run of token characters (a match consumes its whole run, so
+    `eyJ-eyJ-eyJ-...` is one match), then a split on dots; never a backtracking quantifier.
+    """
+    for run in _JWT_RUN.finditer(data):
+        parts = run.group().split(b".")
+        for i in range(len(parts) - 2):
+            start = parts[i].find(b"eyJ")
+            if (
+                start >= 0
+                and len(parts[i]) - start >= 9
+                and len(parts[i + 1]) >= 6
+                and len(parts[i + 2]) >= 20
+            ):
+                return True
+    return False
+
+
+# (label, compiled regex or a function of the bytes). Every regex is anchored on a literal and has
+# a bounded quantifier, so the time is linear in the input (test_scanning_is_linear_on_hostile_input).
 PATTERNS = (
-    ("jwt", re.compile(rb"\beyJ[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{20,}")),
-    ("bearer", re.compile(rb"(?i)\bBearer[ \t]+[A-Za-z0-9._~+/=-]{20,}")),
+    ("jwt", _jwt),
+    ("bearer", re.compile(rb"(?i)\bBearer[ \t]+[A-Za-z0-9._~+/=-]{20,256}")),
     (
         "presigned_url",
         re.compile(
-            rb"(?i)X-Amz-(?:Signature|Credential|Security-Token)=|[?&]Signature=[0-9a-f]{32,}|AWSAccessKeyId="
+            rb"(?i)X-Amz-(?:Signature|Credential|Security-Token)=|[?&]Signature=[0-9a-f]{32,256}|AWSAccessKeyId="
         ),
     ),
     ("private_key", re.compile(rb"-----BEGIN [A-Z0-9 ]{0,30}PRIVATE KEY-----")),
     (
         "access_header",
-        re.compile(rb"(?i)CF-Access-Client-(?:Id|Secret)[ \t]*[:=][ \t]*[A-Za-z0-9._-]{8,}"),
+        re.compile(rb"(?i)CF-Access-Client-(?:Id|Secret)[ \t]*[:=][ \t]*[A-Za-z0-9._-]{8,256}"),
     ),
     (
         "vast_key",
         re.compile(
-            rb"(?i)(?:instance_api_key|vast[_-]?api[_-]?key)[\"']?[ \t]*[:=][ \t]*[\"']?[A-Za-z0-9]{24,}"
+            rb"(?i)(?:instance_api_key|vast[_-]?api[_-]?key)[\"']?[ \t]*[:=][ \t]*[\"']?[A-Za-z0-9]{24,256}"
         ),
     ),
-    ("github_token", re.compile(rb"\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})")),
+    (
+        "github_token",
+        re.compile(rb"\b(?:gh[pousr]_[A-Za-z0-9]{20,255}|github_pat_[A-Za-z0-9_]{20,255})"),
+    ),
     ("url_credentials", re.compile(rb"(?i)\bhttps?://[^\s/:@]{1,64}:[^\s/@]{1,128}@")),
 )
 EXACT_MIN = 6
 
 
+# Labels whose value is long and secret by itself: a 16-character prefix or suffix of it is a hit
+# too (a cut through a secret leaves such a fragment). Not the broker URL or the Access id, whose
+# first characters are ordinary text.
+FRAGMENT_LABELS = {
+    "run_token",
+    "access_secret",
+    "runner_nonce",
+    "guest_password",
+    "ssh_key",
+    "vast_key",
+    "broker_path",
+}
+
+
 class Scanner:
-    """`exact` maps a label to the secret VALUES that must never appear in a bundle."""
+    """`exact` is (label, value) pairs: the secret VALUES that must never appear in a bundle."""
 
     def __init__(self, exact):
         self.exact = []
@@ -224,13 +310,20 @@ class Scanner:
             value = value.encode() if isinstance(value, str) else value
             if len(value) >= EXACT_MIN:
                 self.exact.append((label, value))
+            if label in FRAGMENT_LABELS and len(value) >= 2 * FRAGMENT:
+                self.exact.append((label + "_fragment", value[:FRAGMENT]))
+                self.exact.append((label + "_fragment", value[-FRAGMENT:]))
 
-    def scan(self, member, data):
+    def scan_exact(self, member, data):
         for label, value in self.exact:
             if value in data:
                 raise ScanHit(label, member)
+
+    def scan(self, member, data):
+        self.scan_exact(member, data)
         for label, pattern in PATTERNS:
-            if pattern.search(data):
+            hit = pattern(data) if callable(pattern) else pattern.search(data) is not None
+            if hit:
                 raise ScanHit(label, member)
 
 
@@ -286,9 +379,10 @@ def secret_values(env, winvm_root, home):
 
 
 class Item:
-    def __init__(self, name, data, tier, section, order=0.0, shrink=False, note=""):
+    def __init__(self, name, data, tier, section, order=0.0, shrink=False, lead=b""):
         self.name, self.data, self.tier, self.section = name, data, tier, section
-        self.order, self.shrink, self.note = order, shrink, note
+        self.order, self.shrink = order, shrink
+        self.lead = lead  # up to LEAD bytes that came just before `data` (scanned, never packed)
         self.cut = 0  # bytes removed from the start
         self.estimate = None
 
@@ -297,11 +391,14 @@ class Item:
 
 
 def read_tail(path, cap):
-    """The last `cap` bytes of a file and how many bytes came before them."""
-    with open(path, "rb") as handle:
+    """(the last `cap` bytes of a plain file, the bytes before them, up to LEAD of those)."""
+    with open_plain(path) as handle:
         size = os.fstat(handle.fileno()).st_size
-        handle.seek(max(0, size - cap))
-        return handle.read(cap), max(0, size - cap)
+        start = max(0, size - cap)
+        first = max(0, start - LEAD)
+        handle.seek(first)
+        lead = handle.read(start - first)
+        return handle.read(cap), start, lead
 
 
 def is_text(data):
@@ -316,31 +413,58 @@ class Roots:
         self.home = Path(home or os.path.expanduser("~"))
 
 
-def run_command(argv, limit=2 * 1024 * 1024, timeout=10):
+def run_command(argv, limit=2 * 1024 * 1024, timeout=COMMAND_TIMEOUT):
+    """Run a host command; at the timeout kill its whole process group and wait at most 2 s more.
+
+    Output goes to a temporary file, not a pipe, so a grandchild that holds the pipe open cannot
+    block the reader; a process stuck in the kernel (a hung GPU) is abandoned after the kill.
+    """
+    note = b""
     try:
-        done = subprocess.run(
-            argv,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            timeout=timeout,
-            check=False,
-        )
-        return done.stdout[-limit:]
+        with tempfile.TemporaryFile() as out:
+            proc = subprocess.Popen(
+                argv,
+                stdin=subprocess.DEVNULL,
+                stdout=out,
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
+            )
+            try:
+                proc.wait(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                note = b"[kf-evidence: command timed out, killed]\n"
+                try:
+                    os.killpg(proc.pid, signal.SIGKILL)
+                except OSError:
+                    pass
+                try:
+                    proc.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    note = b"[kf-evidence: command timed out, not reaped]\n"
+            size = out.seek(0, os.SEEK_END)
+            out.seek(max(0, size - limit))
+            return out.read(limit) + note
     except (OSError, subprocess.SubprocessError) as error:
         return ("[kf-evidence: command failed: %s]\n" % type(error).__name__).encode()
 
 
-def host_items(runner):
+def host_items(runner, expired, skipped):
+    """The host state. Run LAST (after every file is collected), within COMMAND_PHASE seconds."""
     items = []
+    until = time.monotonic() + COMMAND_PHASE
+
+    def output(argv):
+        if expired() or time.monotonic() > until:
+            skipped.append("host/" + argv[0] + " (time)")
+            return b"[kf-evidence: skipped, out of time]\n"
+        return runner(argv)
 
     def add(name, argv, tier, cap=64 * 1024, head=None):
-        data = runner(argv)
+        data = output(argv)
         if head is not None:
             data = b"".join(data.splitlines(keepends=True)[:head])
-        cut = max(0, len(data) - cap)
-        item = Item("host/" + name, data[-cap:], tier, "host", shrink=False)
-        item.cut = cut
+        item = Item("host/" + name, data[-cap:], tier, "host")
+        item.cut = max(0, len(data) - cap)
         items.append(item)
 
     add("free.txt", ["free", "-m"], 0)
@@ -348,7 +472,7 @@ def host_items(runner):
     add("uname.txt", ["uname", "-a"], 0)
     add("date.txt", ["date", "-u", "+%Y-%m-%dT%H:%M:%SZ"], 0)
     add("uptime.txt", ["uptime"], 0)
-    ps = runner(["ps", "-eo", "pid,ppid,etime,stat,args", "--width", "2000"])
+    ps = output(["ps", "-eo", "pid,ppid,etime,stat,args", "--width", "2000"])
     lines = ps.splitlines(keepends=True)
     keep = [x for x in lines[:1] if x] + [
         x[:2000] + (b"\n" if len(x) > 2000 else b"")
@@ -362,9 +486,9 @@ def host_items(runner):
 
 
 def walk_files(root, depth=3):
-    """Regular files under root, no symlinks, never into a forbidden directory."""
+    """Plain files under root; no symlink is followed, never into a forbidden directory."""
     root = Path(root)
-    if not root.is_dir() or root.is_symlink():
+    if not is_plain_dir(root):
         return
     stack = [(root, 0)]
     while stack:
@@ -374,25 +498,28 @@ def walk_files(root, depth=3):
         except OSError:
             continue
         for entry in entries:
-            if entry.is_symlink() or not allowed_path(entry.relative_to(root)):
+            if not allowed_path(entry.relative_to(root)):
                 continue
-            if entry.is_dir() and level < depth:
-                stack.append((entry, level + 1))
-            elif entry.is_file():
+            if is_plain_dir(entry):
+                if level < depth:
+                    stack.append((entry, level + 1))
+            elif is_plain_file(entry):
                 yield entry
 
 
 def gz_tail(path, cap, read_cap=64 * 1024 * 1024):
-    """Last `cap` bytes of a gzip file's content (the first `read_cap` bytes are read)."""
-    with gzip.open(path, "rb") as handle:
-        data = handle.read(read_cap)
-    return data[-cap:], max(0, len(data) - cap)
+    """(last `cap` bytes of a gzip file's content, the bytes before them, up to LEAD of those)."""
+    with open_plain(path) as raw:
+        with gzip.GzipFile(fileobj=raw) as handle:
+            data = handle.read(read_cap)
+    start = max(0, len(data) - cap)
+    return data[start:], start, data[max(0, start - LEAD) : start]
 
 
 def tgz_members(path, budget):
-    """Yield (name, bytes, cut) for regular members of a tar.gz; bounded, never extracts."""
+    """Yield (name, bytes, cut, lead) for regular members of a tar.gz; bounded, never extracts."""
     unpacked = 0
-    with open(path, "rb") as raw:
+    with open_plain(path) as raw:
         with tarfile.open(fileobj=gzip.GzipFile(fileobj=raw), mode="r|") as archive:
             for member in archive:
                 if raw.tell() > ARCHIVE_INPUT_CAP:
@@ -405,62 +532,62 @@ def tgz_members(path, budget):
                 handle = archive.extractfile(member)
                 data = handle.read(min(member.size, MEMBER_READ_CAP)) if handle else b""
                 unpacked += len(data)
-                yield name, data[-FILE_CAP * 2 :], max(0, len(data) - FILE_CAP * 2)
+                start = max(0, len(data) - FILE_CAP * 2)
+                yield name, data[start:], start, data[max(0, start - LEAD) : start]
 
 
 def collect(roots, log, runner, expired, now):
-    """All candidate items, unscrubbed. `expired()` stops the slow sections (time budget)."""
-    items = host_items(runner)
-    skipped = []
+    """All candidate items, unscrubbed: the files first, the host commands last."""
+    items, skipped = [], []
 
     def mtime(path):
-        try:
-            return path.stat().st_mtime
-        except OSError:
-            return 0.0
+        st = lstat(path)
+        return st.st_mtime if st else 0.0
 
     def add_file(prefix, path, tier, section, cap=FILE_CAP, shrink=False, base=None):
         try:
             if path.suffix == ".gz":
-                data, cut = gz_tail(path, cap)
+                data, cut, lead = gz_tail(path, cap)
                 name = path.name[:-3]
             else:
-                data, cut = read_tail(path, cap)
+                data, cut, lead = read_tail(path, cap)
                 name = path.name if base is None else str(path.relative_to(base))
             age = now - mtime(path)
         except (OSError, EOFError, zlib.error):
-            skipped.append(prefix + "/" + path.name)
+            skipped.append(safe_name(prefix + "/" + path.name))
             return
         if not is_text(data) and path.suffix != ".png":
-            skipped.append(prefix + "/" + name)
+            skipped.append(safe_name(prefix + "/" + name))
             return
-        item = Item(prefix + "/" + safe_name(name), data, tier, section, order=age, shrink=shrink)
+        item = Item(
+            prefix + "/" + safe_name(name), data, tier, section, order=age, shrink=shrink, lead=lead
+        )
         item.cut = cut
         items.append(item)
 
     # the payload log and the result
     try:
-        data, cut = read_tail(log, LOG_CAP)
-        item = Item("log/output.log", data, 1, "log", shrink=True)
+        data, cut, lead = read_tail(log, LOG_CAP)
+        item = Item("log/output.log", data, 1, "log", shrink=True, lead=lead)
         item.cut = cut
         items.append(item)
     except OSError:
         pass
     result = roots.workspace / "kf-result.json"
-    if result.is_file():
+    if is_plain_file(result):
         add_file("log", result, 0, "log", cap=64 * 1024)
     # the payload's own evidence directory
     for path in list(walk_files(roots.workspace / "kf-ci-evidence"))[:MAX_FILES]:
         if not expired():
             add_file("evidence", path, 2, "evidence", base=roots.workspace / "kf-ci-evidence")
     # the gate / provision evidence: /root/prov
-    if roots.prov.is_dir() and not expired():
-        top = sorted(p for p in roots.prov.iterdir() if p.is_file() and not p.is_symlink())
+    if is_plain_dir(roots.prov) and not expired():
+        top = sorted(p for p in roots.prov.iterdir() if is_plain_file(p))
         packed = {p.name[: -len(".tgz")] for p in top if p.name.endswith(".tgz")}
         for path in top:
             if path.name.endswith((".tgz", ".tar.gz")):
                 try:
-                    for name, data, cut in tgz_members(path, expired):
+                    for name, data, cut, lead in tgz_members(path, expired):
                         if is_text(data) or name.endswith(".png"):
                             item = Item(
                                 "prov/"
@@ -471,60 +598,64 @@ def collect(roots, log, runner, expired, now):
                                 3,
                                 "prov",
                                 order=now - mtime(path),
+                                lead=lead,
                             )
                             item.cut = cut
                             items.append(item)
                 except (OSError, tarfile.TarError, EOFError, zlib.error):
-                    skipped.append("prov/" + path.name)
+                    skipped.append(safe_name("prov/" + path.name))
             elif path.suffix in (".log", ".txt", ".out", ".err", ".run", ".gz") and allowed_path(
                 path.name
             ):
                 verdict_log = path.name.endswith("_windows.log") or path.name in ("prov.log",)
                 add_file("prov", path, 1 if verdict_log else 2, "prov", shrink=verdict_log)
-        for path in sorted(p for p in roots.prov.iterdir() if p.is_dir()):
+        for path in sorted(p for p in roots.prov.iterdir() if is_plain_dir(p)):
             if path.name in packed or not allowed_path(path.name) or expired():
                 continue
             for entry in list(walk_files(path))[:MAX_FILES]:
                 add_file("prov/" + safe_name(path.name), entry, 3, "prov", base=path)
     # bench stage logs
     bench = roots.workspace / "bench"
-    if bench.is_dir() and not expired():
+    if is_plain_dir(bench) and not expired():
         logs = [
             p
             for p in bench.iterdir()
-            if p.is_file() and (p.suffix == ".out" or p.name.startswith("xid_"))
+            if is_plain_file(p) and (p.suffix == ".out" or p.name.startswith("xid_"))
         ]
         for path in sorted(logs, key=mtime, reverse=True)[:30]:
             add_file("bench", path, 4, "bench", cap=256 * 1024)
     # the Windows VM: logs and screenshots only (never secrets/, tpm/, firmware/, disk/)
-    for vm in sorted(roots.winvm.glob("*/")) if roots.winvm.is_dir() else []:
+    vms = sorted(roots.winvm.iterdir()) if is_plain_dir(roots.winvm) else []
+    for vm in vms:
         logs = vm / "logs"
-        if expired() or not logs.is_dir() or logs.is_symlink():
+        if expired() or not is_plain_dir(vm) or not is_plain_dir(logs):
             continue
-        names = [
-            p
-            for p in logs.iterdir()
-            if p.is_file() and not p.is_symlink() and allowed_path(p.relative_to(vm))
-        ]
+        names = [p for p in logs.iterdir() if is_plain_file(p) and allowed_path(p.relative_to(vm))]
         text = [p for p in names if p.suffix in TEXT_SUFFIX]
         for path in sorted(text, key=mtime, reverse=True)[:40]:
             add_file("vm/" + safe_name(vm.name), path, 3, "vm", cap=VM_LOG_CAP)
-        zipped = [p for p in names if p.suffix == ".gz" and p.stat().st_size <= 8 * 1024 * 1024]
+        zipped = [p for p in names if p.suffix == ".gz" and lstat(p).st_size <= 8 * 1024 * 1024]
         for path in sorted(zipped, key=mtime, reverse=True)[:10]:
             add_file("vm/" + safe_name(vm.name), path, 5, "vm", cap=1024 * 1024)
         shots = logs / "shots"
-        pngs = sorted(
-            (p for p in shots.glob("*.png") if p.is_file() and not p.is_symlink()),
-            key=mtime,
-            reverse=True,
-        )
-        pngs = [p for p in pngs if p.stat().st_size <= SHOT_MAX] if shots.is_dir() else []
+        pngs = []
+        if is_plain_dir(shots):
+            pngs = sorted(
+                (
+                    p
+                    for p in shots.glob("*.png")
+                    if is_plain_file(p) and lstat(p).st_size <= SHOT_MAX
+                ),
+                key=mtime,
+                reverse=True,
+            )
         timeouts = [p for p in pngs if p.name.startswith("timeout_")][:1]
         chosen = timeouts + [p for p in pngs if p not in timeouts]
         for index, path in enumerate(chosen[:SHOT_COUNT]):
             tier = 2 if path in timeouts else (3 if index < 3 else 5)
             try:
-                data = path.read_bytes()
+                with open_plain(path) as handle:
+                    data = handle.read(SHOT_MAX + 1)
             except OSError:
                 continue
             items.append(
@@ -536,6 +667,8 @@ def collect(roots, log, runner, expired, now):
                     order=now - mtime(path),
                 )
             )
+    # the host commands, last: a hung GPU or a stale mount costs only these
+    items += host_items(runner, expired, skipped)
     return items, skipped
 
 
@@ -554,8 +687,12 @@ def fits(items, cap):
     return raw <= RAW_CAP and sum(estimate(i) for i in items) + 8192 <= cap * FIT
 
 
-def select(items, cap=BUNDLE_CAP):
-    """Keep the highest tiers; drop the lowest first, then halve the shrinkable tier-1 logs."""
+def select(items, cap=BUNDLE_CAP, shrink=True):
+    """Keep the highest tiers; drop the lowest first, then halve the shrinkable tier-1 logs.
+
+    With shrink=False it only drops (tiers 2 to 5) and stops there, whatever is still too big:
+    build() scans the tier-0/1 data at full length before any of it is cut.
+    """
     kept = sorted(items, key=Item.key)
     dropped = []
     while not fits(kept, cap):
@@ -564,6 +701,8 @@ def select(items, cap=BUNDLE_CAP):
             kept.remove(low)
             dropped.append(low)
             continue
+        if not shrink:
+            break
         shrinkable = [i for i in kept if i.shrink and len(i.data) > 4096]
         if not shrinkable:
             return None, dropped
@@ -574,7 +713,7 @@ def select(items, cap=BUNDLE_CAP):
     return kept, dropped
 
 
-def pack(items, dropped, scrub_counts, meta, path, now, cap=BUNDLE_CAP):
+def pack(items, dropped, scrub_counts, meta, path, now, cap=BUNDLE_CAP, scanner=None):
     """Write the .tgz; returns (size, sha256) or None when it still exceeds the cap."""
     sections = {}
     for item in items:
@@ -606,6 +745,8 @@ def pack(items, dropped, scrub_counts, meta, path, now, cap=BUNDLE_CAP):
         "tiers": "0 never dropped; 1 log tails shrink; 2-5 dropped from 5 down (see vast_evidence.py)",
     }
     body = json.dumps(manifest, indent=1, sort_keys=True).encode()
+    if scanner is not None:
+        scanner.scan("MANIFEST.json", body)  # dropped and skipped names are in it
     with tarfile.open(path, "w:gz", compresslevel=9) as archive:
         for name, data in [("MANIFEST.json", body)] + [(i.name, i.data) for i in items]:
             info = tarfile.TarInfo(name)
@@ -637,28 +778,37 @@ def build(roots, log, env, out, runner, expired, now, cap=BUNDLE_CAP):
     scanner = Scanner(secret_values(env, roots.winvm, roots.home))
     scrubber = Scrubber()
     candidates, skipped = collect(roots, log, runner, expired, now)
-    # Select first (on the raw sizes), so that what the cap drops is never scanned or scrubbed;
-    # then scan and scrub everything that stays, and select again on the scrubbed sizes.
-    chosen, dropped = select(candidates, cap)
-    if chosen is None:
-        raise Refused("too_large")
+    # 1. Drop what the cap cannot hold (on the raw sizes, so that dropped items are never scanned
+    #    or scrubbed), but cut nothing yet.
+    chosen, dropped = select(candidates, cap, shrink=False)
+    # 2. Scan every kept item at FULL length, with the bytes before its cut (a secret that crosses
+    #    a cut must be seen whole), then scrub it.
     for item in chosen:
         if expired():
             raise Refused("time")
-        scanner.scan(item.name, item.name.encode())
-        scanner.scan(item.name, item.data)
+        try:
+            scanner.scan(item.name, item.name.encode())
+        except ScanHit as hit:  # never print a name that holds a secret: a hash and nothing else
+            digest = hashlib.sha256(item.name.encode()).hexdigest()[:10]
+            raise ScanHit(hit.label, "name-" + digest) from None
+        scanner.scan(item.name, item.lead + item.data)
+        item.lead = b""
         if is_text(item.data) and not item.name.endswith(".png"):
             item.data = scrubber.text(item.data)
         item.estimate = None
+    # 3. Now the size cut (logs are halved, newest bytes kept), and a last exact check of the
+    #    final bytes (a secret or a fragment of one must not survive any cut).
     chosen, more = select(chosen, cap)
     if chosen is None:
         raise Refused("too_large")
     dropped += more
+    for item in chosen:
+        scanner.scan_exact(item.name, item.data)
     out.mkdir(parents=True, exist_ok=True)
     path = out / "evidence.tgz"
     meta = {"run": env.get("KF_RUN_ID"), "skipped": skipped}
     for _ in range(12):
-        packed = pack(chosen, dropped, scrubber.counts, meta, path, now, cap)
+        packed = pack(chosen, dropped, scrubber.counts, meta, path, now, cap, scanner)
         if packed is not None:
             size, digest, header = packed
             break
@@ -734,7 +884,11 @@ class Transport:
 
 
 def upload(env, built, transport, deadline, sleep=time.sleep, clock=time.monotonic):
-    """POST the bundle. Returns (ok, reason). 409 counts as stored (an earlier try arrived)."""
+    """POST the bundle. Returns (ok, reason).
+
+    Only the Worker's own `EVIDENCE_EXISTS` counts as stored (an earlier try of ours arrived). Any
+    other 409 (the ledger queue's BUSY) and 429, 5xx and network errors are retried, at most 3 tries.
+    """
     url = "%s/evidence/%s" % (env["KF_BROKER_URL"], env["KF_RUN_ID"])
     with open(built["path"], "rb") as handle:
         body = handle.read()
@@ -744,13 +898,14 @@ def upload(env, built, transport, deadline, sleep=time.sleep, clock=time.monoton
         left = deadline - clock()
         if left < 3:
             return False, "time"
-        status, _ = transport.post(url, body, extra, timeout=min(60.0, left))
+        status, doc = transport.post(url, body, extra, timeout=min(60.0, left))
+        state = doc.get("state") if isinstance(doc, dict) else None
         if status == 200:
             return True, "stored"
-        if status == 409:
+        if status == 409 and state == "EVIDENCE_EXISTS":
             return True, "already_stored"
         reason = "upload_http_%s" % (status if status is not None else "none")
-        if status not in (None, 429, 500, 502, 503, 504):
+        if status not in (None, 409, 429, 500, 502, 503, 504):
             return False, reason
         sleep(min(2.0 * (attempt + 1), max(0.0, deadline - clock() - 3)))
     return False, reason
@@ -784,7 +939,7 @@ def run(args, env, runner=run_command, transport=None, clock=time.monotonic, now
     except ScanHit as hit:
         say(
             "KF_EVIDENCE_REFUSED reason=scan_hit class=%s member=%s"
-            % (hit.label, safe_name(hit.member))
+            % (hit.label, hit.member if hit.member.startswith("name-") else safe_name(hit.member))
         )
         return 0
     except Refused as error:

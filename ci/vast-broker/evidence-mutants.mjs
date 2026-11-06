@@ -15,6 +15,98 @@ const E = 'src/evidence.js',
 // [name, [[file, before, after], ...]]
 const MUTANTS = [
   [
+    'failed write keeps the flag',
+    [
+      [
+        I,
+        "          if (ask.state === 'FAILED') delete r.evidence;\n",
+        "          if (ask.state === 'FAILED') r.evidence.at = r.evidence.at;\n",
+      ],
+    ],
+  ],
+  [
+    'stored flag never set',
+    [
+      [
+        I,
+        "          else r.evidence = { state: 'STORED', at: now(), sha256: ask.sha256 ?? null };",
+        '          else r.evidence.at = r.evidence.at;',
+      ],
+    ],
+  ],
+  [
+    'flag conflict answers 200',
+    [
+      [
+        I,
+        "          refuse('EVIDENCE_EXISTS', 409);\n        for (const [k, t]",
+        "          refuse('EVIDENCE_EXISTS', 200);\n        for (const [k, t]",
+      ],
+    ],
+  ],
+  [
+    'ledger does not verify the run token',
+    [
+      [
+        I,
+        "          !(await tokens.verify(bearer, r)) ||\n          r.ended !== null ||\n          r.closed ||\n          now() >= r.reportExpiry * 1000\n        )\n          refuse('UNAUTHORIZED', 401);\n        if (!evidenceEnabled",
+        "          false ||\n          r.ended !== null ||\n          r.closed ||\n          now() >= r.reportExpiry * 1000\n        )\n          refuse('UNAUTHORIZED', 401);\n        if (!evidenceEnabled",
+      ],
+    ],
+  ],
+  [
+    'ledger accepts a closed rental',
+    [
+      [
+        I,
+        "          r.closed ||\n          now() >= r.reportExpiry * 1000\n        )\n          refuse('UNAUTHORIZED', 401);\n        if (!evidenceEnabled",
+        "          false ||\n          now() >= r.reportExpiry * 1000\n        )\n          refuse('UNAUTHORIZED', 401);\n        if (!evidenceEnabled",
+      ],
+    ],
+  ],
+  [
+    'gateway reads without a length check',
+    [[I, 'const length = evidenceLength(request);', 'const length = 1000;']],
+  ],
+  [
+    'gateway holds any number of uploads',
+    [[I, "if (evidenceHeld >= 2) refuse('EVIDENCE_BUSY', 503);", '']],
+  ],
+  ['gateway never releases its held count', [[I, '      evidenceHeld--;\n', '']]],
+  [
+    'ledger open reservations unbounded',
+    [[I, "if (evidenceOpen.size >= EVIDENCE_MAX_INFLIGHT) refuse('EVIDENCE_BUSY', 503);", '']],
+  ],
+  [
+    'ledger never purges stale reservations',
+    [[I, 'if (now() - t >= EVIDENCE_PENDING_MS) evidenceOpen.delete(k);', '']],
+  ],
+  [
+    'settle keeps the reservation open',
+    [[I, '    evidenceOpen.delete(key);\n    try {', '    try {']],
+  ],
+  [
+    'request count not limited',
+    [
+      [
+        I,
+        '        await rate(r, cfg);\n        const prior = r.evidence;',
+        '        const prior = r.evidence;',
+      ],
+    ],
+  ],
+  [
+    'key is not per attempt',
+    [
+      [
+        E,
+        "const base = profile + '/' + m[1] + '/' + m[2] + (retries ? '-r' + retries : '');",
+        "const base = profile + '/' + m[1] + (retries ? '-r' + retries : '');",
+      ],
+    ],
+  ],
+  ['replacement rental shares the key', [[E, " + (retries ? '-r' + retries : '');", ';']]],
+  [
     'ledger flag not checked',
     [
       [
@@ -35,31 +127,7 @@ const MUTANTS = [
       ],
     ],
   ],
-  [
-    'failed write keeps the flag',
-    [[I, '          else delete r.evidence;\n', '          else r.evidence.at = r.evidence.at;\n']],
-  ],
-  [
-    'stored flag never set',
-    [
-      [
-        I,
-        "if (stored) r.evidence = { state: 'STORED', at: now(), sha256 };",
-        "if (false) r.evidence = { state: 'STORED', at: now(), sha256 };",
-      ],
-    ],
-  ],
   ['head check removed', [[E, "typeof bucket.head === 'function' &&", 'false &&']]],
-  [
-    'flag conflict answers 200',
-    [
-      [
-        I,
-        "          refuse('EVIDENCE_EXISTS', 409);\n        at = now();",
-        "          refuse('EVIDENCE_EXISTS', 200);\n        at = now();",
-      ],
-    ],
-  ],
   [
     'gateway evidence limit removed',
     [
@@ -142,21 +210,6 @@ const MUTANTS = [
     [[E, "typeof env.EVIDENCE_BUCKET.put === 'function'", 'true']],
   ],
   [
-    'no run authentication in the ledger step',
-    [
-      [
-        I,
-        "          !(await tokens.verify(bearer, r)) ||\n          r.ended !== null ||\n          r.closed ||\n          now() >= r.reportExpiry * 1000\n        )\n          refuse('UNAUTHORIZED', 401);\n        if (!evidenceEnabled",
-        "          false\n        )\n          refuse('UNAUTHORIZED', 401);\n        if (!evidenceEnabled",
-      ],
-      [
-        I,
-        '/^\\/(report|kill|evidence)\\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.exec(path) ??',
-        '/^\\/(report|kill)\\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.exec(path) ??',
-      ],
-    ],
-  ],
-  [
     'gateway does not authenticate the route',
     [
       [
@@ -167,55 +220,12 @@ const MUTANTS = [
     ],
   ],
   [
-    'gateway buffers without a length check',
-    [[I, '  if (/^\\/evidence\\//.test(path)) evidenceLength(request);\n', '']],
-  ],
-  [
-    'gateway buffer limit is the report limit',
-    [
-      [
-        I,
-        '(/^\\/evidence\\//.test(path)\n      ? EVIDENCE_MAX_BYTES',
-        '(/^\\/evidence\\//.test(path)\n      ? 65536',
-      ],
-    ],
-  ],
-  [
     'route not recognised as a box route',
     [[R, '/^\\/(?:report|kill|evidence)\\/', '/^\\/(?:report|kill)\\/']],
   ],
   [
-    'evidence also accepted without the live check on the record',
-    [
-      [
-        I,
-        "          r.closed ||\n          now() >= r.reportExpiry * 1000\n        )\n          refuse('UNAUTHORIZED', 401);\n        if (!evidenceEnabled",
-        "          false ||\n          false\n        )\n          refuse('UNAUTHORIZED', 401);\n        if (!evidenceEnabled",
-      ],
-      [
-        I,
-        '/^\\/(report|kill|evidence)\\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.exec(path) ??',
-        '/^\\/(report|kill)\\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.exec(path) ??',
-      ],
-    ],
-  ],
-  [
-    'request count not limited',
-    [
-      [
-        I,
-        '        await rate(r, cfg);\n        const prior = r.evidence;',
-        '        const prior = r.evidence;',
-      ],
-    ],
-  ],
-  [
     'profile ignored in the key',
     [[E, 'const profile = budgetClass(record);', "const profile = 'check';"]],
-  ],
-  [
-    'key is not per attempt',
-    [[E, "const base = profile + '/' + m[1] + '/' + m[2];", "const base = profile + '/' + m[1];"]],
   ],
   ['scan field not required clean', [[E, "meta.scan !== 'clean' ||", '']]],
   [

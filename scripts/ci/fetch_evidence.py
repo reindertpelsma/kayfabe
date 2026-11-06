@@ -11,7 +11,7 @@ write binding is not an S3 key). Bucket: kayfabe-ci-evidence (override with --bu
 
     fetch_evidence.py list [--run RUN]            keys, sizes and times (run = the numeric run id)
     fetch_evidence.py get KEY|RUN-ATTEMPT... --out DIR
-                                                  download <profile>/<run>/<attempt>.tgz and .json
+                                                  download <profile>/<run>/<attempt>[-r1].tgz and .json
                                                   into DIR (new or empty), verify SHA-256 against
                                                   the manifest, never extract
     fetch_evidence.py members FILE.tgz            list the member names of a downloaded bundle
@@ -43,7 +43,8 @@ from pathlib import Path
 BUCKET = "kayfabe-ci-evidence"
 MAX_OBJECT = 16 * 1024 * 1024
 MAX_LIST_PAGES = 20
-KEY = re.compile(r"^(check|sweep|release)/([1-9][0-9]{0,19})/([1-9][0-9]{0,19})\.(tgz|json)$")
+# <profile>/<run>/<attempt>[-r1].tgz|json (-r1: the replacement rental after a provider fault)
+KEY = re.compile(r"^(check|sweep|release)/([1-9][0-9]{0,19})/([1-9][0-9]{0,19})(-r1)?\.(tgz|json)$")
 RUN_ATTEMPT = re.compile(r"^([1-9][0-9]{0,19})-([1-9][0-9]{0,19})$")
 EMPTY_SHA = hashlib.sha256(b"").hexdigest()
 
@@ -169,20 +170,24 @@ class R2:
 def keys_for(spec, rows):
     """A KEY or RUN-ATTEMPT (profile found by listing) -> the bundle key; refuses anything else."""
     match = KEY.match(spec)
-    if match and match.group(4) == "tgz":
-        return spec
+    if match and match.group(5) == "tgz":
+        return [spec]
     pair = RUN_ATTEMPT.match(spec)
     if not pair:
         raise Refused("not a key or run-attempt: %r" % spec[:60])
-    hits = [k for k, _, _ in rows if k.endswith("/%s/%s.tgz" % pair.groups())]
-    if len(hits) != 1:
-        raise Refused("%s: %d bundles match" % (spec, len(hits)))
-    return hits[0]
+    hits = [
+        k
+        for k, _, _ in rows
+        if re.search(r"/%s/%s(-r1)?\.tgz$" % pair.groups(), k) and k.endswith(".tgz")
+    ]
+    if not hits:
+        raise Refused("%s: no bundle matches" % spec)
+    return hits
 
 
 def download(r2, key, out):
     """Fetch <key> and its manifest into `out`; verify the SHA-256; never extract."""
-    run, attempt = KEY.match(key).group(2, 3)
+    run, attempt, retry = KEY.match(key).group(2, 3, 4)
     bundle = r2.get(key)
     sha = hashlib.sha256(bundle).hexdigest()
     try:
@@ -190,7 +195,7 @@ def download(r2, key, out):
     except (Refused, ValueError):
         manifest = None
     out.mkdir(parents=True, exist_ok=True)
-    stem = "%s-%s" % (run, attempt)
+    stem = "%s-%s%s" % (run, attempt, retry or "")
     (out / (stem + ".tgz")).write_bytes(bundle)
     status = "no manifest"
     if manifest is not None:
@@ -234,7 +239,7 @@ def main(argv=None, env=None, r2=None):
         if out.exists() and (not out.is_dir() or any(out.iterdir())):
             raise Refused("--out must be a new or empty directory")
         rows = r2.list() if any(not KEY.match(s) for s in args.specs) else []
-        ok = all(download(r2, keys_for(s, rows), out) for s in args.specs)
+        ok = all([download(r2, key, out) for s in args.specs for key in keys_for(s, rows)])
         return 0 if ok else 1
     except Refused as error:
         print("fetch_evidence: %s" % error, file=sys.stderr)

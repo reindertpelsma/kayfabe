@@ -13,6 +13,8 @@ import {sha256Hex} from './tokens.js';
 // Hard cap of the compressed bundle; scripts/ci/vast_evidence.py builds to the same number.
 export const EVIDENCE_MAX_BYTES = 8 * 1024 * 1024;
 export const EVIDENCE_META_MAX_BYTES = 4096;
+// Reservations open at once across the whole ledger (each is a body held in a gateway isolate).
+export const EVIDENCE_MAX_INFLIGHT = 4;
 // How long one R2 call may take; a variable only so that tests can shorten it.
 export const evidenceTimeouts = { r2: 20000 };
 export const evidenceEnabled = (env) =>
@@ -63,14 +65,31 @@ export function parseEvidenceMeta(header) {
       refuse('BAD_REQUEST', 400, 'EVIDENCE_META');
   return meta;
 }
-// <profile>/<run id>/<attempt>.tgz and .json. The rental is its own leg: a release or admin leg is
-// an ordinary rental with its own run key, so the key already names run, attempt and profile.
+// <profile>/<run id>/<attempt>.tgz and .json, and <attempt>-r1 for the replacement rental after a
+// provider fault (it reuses the run key, so without the suffix its bundle would meet the faulted
+// box's object). A release or admin leg is an ordinary rental with its own run key.
 export function evidenceKeys(record) {
   const m = /^([1-9][0-9]{0,19})-([1-9][0-9]{0,19})$/.exec(String(record.key));
   const profile = budgetClass(record);
-  if (!m || !/^[a-z]{3,16}$/.test(profile)) refuse('UNAVAILABLE', 503, undefined, 'evidence_key');
-  const base = profile + '/' + m[1] + '/' + m[2];
+  const retries = record.providerRetries ?? 0;
+  if (!m || !/^[a-z]{3,16}$/.test(profile) || !(retries === 0 || retries === 1))
+    refuse('UNAVAILABLE', 503, undefined, 'evidence_key');
+  const base = profile + '/' + m[1] + '/' + m[2] + (retries ? '-r' + retries : '');
   return { run: m[1], attempt: m[2], profile, object: base + '.tgz', manifest: base + '.json' };
+}
+// What the ledger tells the gateway at reservation: the object keys, and the facts of the rental
+// that the manifest records (all small; nothing the box sent).
+export function evidenceReservation(record) {
+  return {
+    keys: evidenceKeys(record),
+    facts: {
+      tier: record.tier ?? null,
+      family: record.family ?? null,
+      die: record.die ?? null,
+      batch: record.batch ?? null,
+      verdict: record.verdict ?? null,
+    },
+  };
 }
 // Before a byte is read: a length the box declared, within the cap. (The gateway repeats this check
 // before it buffers; the ledger repeats it before it reads.)
@@ -91,13 +110,22 @@ async function withTimeout(promise, ms) {
     clearTimeout(timer);
   }
 }
-// Reads the body, verifies it and stores it once. `record` is the live, authenticated rental.
-export async function storeEvidence(env, record, request, now) {
+// Reads the body, verifies it and writes it to the bucket. Runs in the gateway (never in the
+// ledger Durable Object): `reservation` comes from the ledger's reserve step, which has already
+// authenticated the rental and set its once-only flag.
+export async function storeEvidence(env, reservation, request, now) {
   const length = evidenceLength(request);
   const meta = parseEvidenceMeta(request.headers.get('X-KF-Evidence-Meta'));
   const claimed = request.headers.get('X-KF-Evidence-SHA256');
-  const keys = evidenceKeys(record);
-  const body = await readBounded(request, EVIDENCE_MAX_BYTES);
+  const { keys, facts } = reservation;
+  let body;
+  try {
+    body = await readBounded(request, EVIDENCE_MAX_BYTES);
+  } catch (error) {
+    // readBounded refuses a body above the cap; anything else is a body that broke off.
+    if (error instanceof BrokerError) refuse('PAYLOAD_TOO_LARGE', 413);
+    refuse('BAD_REQUEST', 400, 'EVIDENCE_BODY');
+  }
   if (body.length !== length || body.length < 20) refuse('BAD_REQUEST', 400, 'EVIDENCE_LENGTH');
   // A gzip stream; the Worker does not open it.
   if (body[0] !== 0x1f || body[1] !== 0x8b) refuse('BAD_REQUEST', 400, 'EVIDENCE_FORMAT');
@@ -142,11 +170,7 @@ export async function storeEvidence(env, record, request, now) {
     scrub: meta.scrub,
     scan: meta.scan,
     // Facts of the rental the Worker knows itself.
-    tier: record.tier ?? null,
-    family: record.family ?? null,
-    die: record.die ?? null,
-    batch: record.batch ?? null,
-    verdict: record.verdict ?? null,
+    ...facts,
   };
   let manifestStored = true;
   try {

@@ -84,9 +84,14 @@ shape is `400`). It is accepted while the rental is not closed or ended, so also
 and it is sent BEFORE the result report. Answers: `200 {"state":"STORED","run","size","sha256"}`; `400`
 (not gzip, digest or length mismatch, bad metadata); `401` (token or rental state); `404
 EVIDENCE_DISABLED` (the Worker has no bucket binding) or an unknown route (an older Worker); `409
-EVIDENCE_EXISTS` (one upload per rental; a retry whose first try did arrive sees it); `411`; `413`;
-`429` (20 requests per 10 s per rental, and 6 uploads a minute at the gateway); `503` (bucket error).
-The box treats every answer other than 200/409 as a skipped upload and goes on: the upload never changes
+EVIDENCE_EXISTS` (one upload per rental; a retry whose first try did arrive sees it; the box counts
+ONLY this state as stored, and a `409 BUSY` from the ledger queue is retried); `411`; `413`; `429` (20
+requests per 10 s per rental, and 6 uploads a minute at the gateway); `503` (bucket error, or
+`EVIDENCE_BUSY`: too many uploads in flight, retry). The box tries at most 3 times (network error, 409
+BUSY, 429, 5xx) and treats every other answer as a skipped upload: the upload never changes
 a result, a verdict, a deadline or the exit status. The Worker keeps the bundle in a private bucket and
-never serves it. The box protocol version stays 7: an old box never calls the route, and a box that calls
+never serves it. The object key is `<profile>/<run>/<attempt>.tgz`, and `<attempt>-r1.tgz` for the
+replacement rental after a provider fault (same run key, so a distinct object). The body is read and
+written by the gateway Worker; the ledger Durable Object only reserves and settles a flag (DEPLOY.md,
+"Evidence bucket"). The box protocol version stays 7: an old box never calls the route, and a box that calls
 a Worker without it gets 404. The Worker's check of `vast_report.py` (`BOX_PROTOCOL = "7"`) is unchanged.

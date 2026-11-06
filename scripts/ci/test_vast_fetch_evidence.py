@@ -180,6 +180,26 @@ class Tool(unittest.TestCase):
         rc, _, err = self.run_tool(["get", "99-1", "--out", str(self.tmp() / "p")], Opener(objects))
         self.assertEqual(rc, 2)
 
+    def test_a_replacement_rental_has_its_own_bundle_and_run_attempt_fetches_both(self):
+        data = bundle()
+        objects = {
+            "LIST": listing(
+                [("check/42/1.tgz", 1), ("check/42/1-r1.tgz", 1), ("check/42/1-r1.json", 1)]
+            ),
+            "check/42/1.tgz": data,
+            "check/42/1-r1.tgz": data,
+        }
+        out = self.tmp() / "o"
+        rc, text, _ = self.run_tool(["get", "42-1", "--out", str(out)], Opener(objects))
+        self.assertEqual(rc, 0, text)
+        self.assertEqual(sorted(p.name for p in out.iterdir()), ["42-1-r1.tgz", "42-1.tgz"])
+        rc, text, _ = self.run_tool(
+            ["get", "check/42/1-r1.tgz", "--out", str(self.tmp() / "p")], Opener(objects)
+        )
+        self.assertEqual(rc, 0)
+        rc, _, _ = self.run_tool(["list"], Opener(objects))
+        self.assertEqual(rc, 0)
+
     def test_only_evidence_keys_are_ever_requested(self):
         for bad in (
             "../etc/passwd",

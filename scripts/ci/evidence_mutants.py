@@ -24,7 +24,124 @@ SOURCE = (HERE / "vast_evidence.py").read_text()
 
 # (name, old text (exactly once), new text)
 MUTANTS = [
-    ("scan-of-data-skipped", "        scanner.scan(item.name, item.data)\n", "        pass\n"),
+    (
+        "scan-of-data-skipped",
+        "        scanner.scan(item.name, item.lead + item.data)\n",
+        "        pass\n",
+    ),
+    (
+        "lead-not-scanned",
+        "        scanner.scan(item.name, item.lead + item.data)\n",
+        "        scanner.scan(item.name, item.data)\n",
+    ),
+    (
+        "size-cut-before-the-scan",
+        "chosen, dropped = select(candidates, cap, shrink=False)",
+        "chosen, dropped = select(candidates, cap, shrink=True)",
+    ),
+    ("fragments-off", "if label in FRAGMENT_LABELS and len(value) >= 2 * FRAGMENT:", "if False:"),
+    (
+        "name-hit-printed",
+        '            raise ScanHit(hit.label, "name-" + digest) from None',
+        "            raise",
+    ),
+    ("manifest-not-scanned", '        scanner.scan("MANIFEST.json", body)', "        pass"),
+    (
+        "skipped-names-raw",
+        '            skipped.append(safe_name(prefix + "/" + name))',
+        '            skipped.append(prefix + "/" + name)',
+    ),
+    ("jwt-pattern-gone", '    ("jwt", _jwt),', '    ("jwt", lambda data: False),'),
+    (
+        "bearer-needs-forty",
+        'rb"(?i)\\bBearer[ \\t]+[A-Za-z0-9._~+/=-]{20,256}"',
+        'rb"(?i)\\bBearer[ \\t]+[A-Za-z0-9._~+/=-]{40,256}"',
+    ),
+    (
+        "github-token-pattern-gone",
+        'rb"\\b(?:gh[pousr]_[A-Za-z0-9]{20,255}|github_pat_[A-Za-z0-9_]{20,255})"',
+        'rb"\\bNEVER_GH_TOKEN"',
+    ),
+    (
+        "prov-symlink-file-followed",
+        "top = sorted(p for p in roots.prov.iterdir() if is_plain_file(p))",
+        "top = sorted(p for p in roots.prov.iterdir() if p.is_file())",
+    ),
+    (
+        "walk-follows-symlinked-files",
+        "            elif is_plain_file(entry):",
+        "            elif entry.is_file():",
+    ),
+    (
+        "walk-follows-symlinked-dirs",
+        "            if is_plain_dir(entry):\n                if level < depth:",
+        "            if entry.is_dir():\n                if level < depth:",
+    ),
+    (
+        "walk-root-symlink-followed",
+        "    if not is_plain_dir(root):\n        return\n    stack",
+        "    if not root.is_dir():\n        return\n    stack",
+    ),
+    (
+        "vm-logs-symlink-followed",
+        "if expired() or not is_plain_dir(vm) or not is_plain_dir(logs):",
+        "if expired() or not logs.is_dir():",
+    ),
+    (
+        "open-follows-symlinks",
+        "os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC",
+        "os.O_RDONLY | os.O_NONBLOCK | os.O_CLOEXEC",
+    ),
+    (
+        "open-accepts-any-file-type",
+        '        if not stat.S_ISREG(os.fstat(fd).st_mode):\n            raise OSError("not a regular file")',
+        "        pass",
+    ),
+    (
+        "log-tail-takes-the-head",
+        "        start = max(0, size - cap)\n        first",
+        "        start = 0\n        first",
+    ),
+    (
+        "tar-member-unbounded",
+        "                yield name, data[start:], start, data[max(0, start - LEAD) : start]",
+        '                yield name, data, 0, b""',
+    ),
+    (
+        "command-not-in-its-own-group",
+        "                start_new_session=True,\n",
+        "",
+    ),
+    (
+        "command-phase-ignored",
+        "        if expired() or time.monotonic() > until:",
+        "        if expired():",
+    ),
+    (
+        "commands-before-files",
+        "    items, skipped = [], []\n\n    def mtime(path):",
+        "    skipped = []\n    items = host_items(runner, expired, skipped)\n\n    def mtime(path):",
+    ),
+    (
+        "busy-409-not-retried",
+        "        if status not in (None, 409, 429, 500, 502, 503, 504):",
+        "        if status not in (None, 429, 500, 502, 503, 504):",
+    ),
+    (
+        "any-409-is-stored",
+        '        if status == 409 and state == "EVIDENCE_EXISTS":',
+        "        if status == 409:",
+    ),
+    (
+        "client-errors-retried",
+        "        if status not in (None, 409, 429, 500, 502, 503, 504):",
+        "        if False:",
+    ),
+    (
+        "refusal-changes-exit-status",
+        '            % (hit.label, hit.member if hit.member.startswith("name-") else safe_name(hit.member))\n        )\n        return 0',
+        '            % (hit.label, hit.member if hit.member.startswith("name-") else safe_name(hit.member))\n        )\n        return 1',
+    ),
     ("exact-minimum-too-long", "EXACT_MIN = 6", "EXACT_MIN = 60"),
     (
         "guest-secrets-not-read",
@@ -35,16 +152,6 @@ MUTANTS = [
         "broker-path-not-a-secret",
         '            found.append(("broker_path", part))\n',
         "            pass\n",
-    ),
-    (
-        "jwt-pattern-gone",
-        '    ("jwt", re.compile(',
-        '    ("jwt", re.compile(rb"NEVER-MATCHES-JWT")), ("jwt2", re.compile(',
-    ),
-    (
-        "bearer-needs-forty",
-        'rb"(?i)\\bBearer[ \\t]+[A-Za-z0-9._~+/=-]{20,}"',
-        'rb"(?i)\\bBearer[ \\t]+[A-Za-z0-9._~+/=-]{40,}"',
     ),
     (
         "presigned-pattern-gone",
@@ -60,11 +167,6 @@ MUTANTS = [
         "vast-key-pattern-gone",
         'rb"(?i)(?:instance_api_key|vast[_-]?api[_-]?key)',
         'rb"(?i)(?:never_instance_api_key)',
-    ),
-    (
-        "github-token-pattern-gone",
-        'rb"\\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})"',
-        'rb"\\bNEVER_GH_TOKEN"',
     ),
     ("uuid-scrub-off", "        data = _UUID.sub(self._uuid, data)\n", ""),
     (
@@ -96,26 +198,6 @@ MUTANTS = [
         "    return True",
     ),
     (
-        "prov-symlink-file-followed",
-        "if p.is_file() and not p.is_symlink())\n        packed",
-        "if p.is_file())\n        packed",
-    ),
-    (
-        "walk-follows-symlinks",
-        "if entry.is_symlink() or not allowed_path(entry.relative_to(root)):",
-        "if not allowed_path(entry.relative_to(root)):",
-    ),
-    (
-        "walk-root-symlink-followed",
-        "if not root.is_dir() or root.is_symlink():",
-        "if not root.is_dir():",
-    ),
-    (
-        "vm-logs-symlink-followed",
-        "if expired() or not logs.is_dir() or logs.is_symlink():",
-        "if expired() or not logs.is_dir():",
-    ),
-    (
         "cap-never-binds",
         "    return raw <= RAW_CAP and sum(estimate(i) for i in items) + 8192 <= cap * FIT",
         "    return True",
@@ -132,11 +214,6 @@ MUTANTS = [
         "        if low.tier >= 0:\n            kept.remove(low)",
     ),
     (
-        "log-tail-takes-the-head",
-        "        handle.seek(max(0, size - cap))\n        return handle.read(cap), max(0, size - cap)",
-        "        return handle.read(cap), max(0, size - cap)",
-    ),
-    (
         "log-never-halved",
         "        shrinkable = [i for i in kept if i.shrink and len(i.data) > 4096]",
         "        shrinkable = []",
@@ -148,29 +225,9 @@ MUTANTS = [
     ),
     ("screenshot-count-unbounded", "SHOT_COUNT, SHOT_MAX = 6,", "SHOT_COUNT, SHOT_MAX = 600,"),
     (
-        "tar-member-unbounded",
-        "                yield name, data[-FILE_CAP * 2 :], max(0, len(data) - FILE_CAP * 2)",
-        "                yield name, data, 0",
-    ),
-    (
-        "client-errors-retried",
-        "        if status not in (None, 429, 500, 502, 503, 504):",
-        "        if False:",
-    ),
-    (
-        "conflict-is-failure",
-        '        if status == 409:\n            return True, "already_stored"\n',
-        "",
-    ),
-    (
         "deadline-ignored",
         '        if left < 3:\n            return False, "time"',
         '        if False:\n            return False, "time"',
-    ),
-    (
-        "refusal-changes-exit-status",
-        "            % (hit.label, safe_name(hit.member))\n        )\n        return 0",
-        "            % (hit.label, safe_name(hit.member))\n        )\n        return 1",
     ),
     ("environment-not-checked", "        if problems and not args.no_upload:", "        if False:"),
     ("budget-not-enforced", "    if budget < 10:", "    if False:"),

@@ -45,6 +45,8 @@ const META = {
   scan: 'clean',
 };
 const bundle = (text = 'evidence text\n') => gzipSync(Buffer.from(text));
+// The whole path: the stateless gateway reads and writes the bucket; the ledger service (the
+// Durable Object's logic) only reserves and settles. `h.service` is the service transport.
 async function harness(extra = {}, { bucket = new Bucket() } = {}) {
   const h = await setup(extra.noBucket ? {} : { EVIDENCE_BUCKET: bucket, ...extra });
   await h.call();
@@ -53,10 +55,46 @@ async function harness(extra = {}, { bucket = new Bucket() } = {}) {
   live.hardDeadline = h.time.value + 7200000;
   await h.storage.put('record:' + run, live);
   const token = callbackToken(live);
+  const internal = [],
+    sizes = [],
+    forwarded = [],
+    hold = {};
+  const ledger = {
+    idFromName: () => 1,
+    get: () => ({
+      fetch: async (request) => {
+        const url = new URL(request.url);
+        if (url.origin === 'https://internal.invalid') {
+          internal.push(url.pathname);
+          sizes.push((await request.clone().text()).length);
+          if (hold.reserve && url.pathname === '/evidence/reserve') await hold.reserve;
+          const call = url.pathname === '/evidence/reserve' ? 'evidenceReserve' : 'evidenceSettle';
+          try {
+            return Response.json(await h.service[call](request));
+          } catch (e) {
+            return Response.json({ state: e.state ?? 'UNAVAILABLE' }, { status: e.status ?? 503 });
+          }
+        }
+        forwarded.push(url.pathname);
+        return h.service.fetch(request);
+      },
+    }),
+  };
+  const gateway = createGateway({ now: () => h.time.value });
+  const gatewayEnv = { ...h.bindings, LEDGER: ledger };
+  const prefix = '/' + h.bindings.BROKER_PATH_PREFIX;
+  const raw = (path, init) =>
+    gateway.fetch(new Request(h.bindings.WORKER_URL + prefix + path, init), gatewayEnv);
   return {
     h,
     bucket,
     token,
+    internal,
+    sizes,
+    forwarded,
+    hold,
+    raw,
+    gateway,
     async post(
       body = bundle(),
       {
@@ -77,8 +115,24 @@ async function harness(extra = {}, { bucket = new Bucket() } = {}) {
         ...(length === undefined ? {} : { 'Content-Length': String(length) }),
         ...headers,
       };
-      return h.service.fetch(
-        new Request(h.bindings.WORKER_URL + path, { method, headers: h2, body }),
+      return raw(path, { method, headers: h2, body });
+    },
+    // The ledger step alone, as the gateway calls it.
+    reserve(body = { key: run, length: 100 }, t = token) {
+      return h.service.evidenceReserve(
+        new Request('https://internal.invalid/evidence/reserve', {
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + t },
+          body: JSON.stringify(body),
+        }),
+      );
+    },
+    settle(body) {
+      return h.service.evidenceSettle(
+        new Request('https://internal.invalid/evidence/settle', {
+          method: 'POST',
+          body: JSON.stringify(body),
+        }),
       );
     },
   };
@@ -212,18 +266,16 @@ test('evidence: a declared length is required and capped before the body is read
   assert.equal((await x.post(big)).status, 413);
   assert.equal((await x.post(bundle(), { length: EVIDENCE_MAX_BYTES + 1 })).status, 413);
   // no declared length: Request(body: bytes) would add one, so the header is removed explicitly
-  const noLength = await x.h.service.fetch(
-    new Request(x.h.bindings.WORKER_URL + '/evidence/' + run, {
-      method: 'POST',
-      headers: {
-        Authorization: 'Bearer ' + x.token,
-        'X-KF-Evidence-SHA256': sha(bundle()),
-        'X-KF-Evidence-Meta': JSON.stringify(META),
-        'Content-Length': 'abc',
-      },
-      body: bundle(),
-    }),
-  );
+  const noLength = await x.raw('/evidence/' + run, {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + x.token,
+      'X-KF-Evidence-SHA256': sha(bundle()),
+      'X-KF-Evidence-Meta': JSON.stringify(META),
+      'Content-Length': 'abc',
+    },
+    body: bundle(),
+  });
   assert.equal(noLength.status, 411);
   assert.equal((await x.post(bundle(), { length: 0 })).status, 411);
   assert.equal(x.bucket.puts, 0);
@@ -386,13 +438,35 @@ test('evidence: 9 MiB declared is refused before anything is read', async () => 
   assert.equal((await x.post(bundle(), { length: 9 * 1024 * 1024 })).status, 413);
   assert.equal((await x.post(bundle(), { length: 8388609 })).status, 413);
   assert.equal(x.bucket.puts, 0);
+  assert.deepEqual(x.internal, [], 'refused by the gateway, the ledger is not asked');
 });
-test('evidence: disabled mode answers 404 before it reads or checks anything about the body', async () => {
+test('evidence: disabled mode answers 404 after authentication and before the body is read', async () => {
   const x = await harness({ noBucket: true });
-  const r = await x.post(bundle(), { length: 9 * 1024 * 1024 });
+  let pulled = 0;
+  const stream = new ReadableStream(
+    {
+      pull(controller) {
+        pulled++;
+        controller.enqueue(new Uint8Array(1024));
+      },
+    },
+    { highWaterMark: 0 },
+  );
+  const r = await x.raw('/evidence/' + run, {
+    method: 'POST',
+    duplex: 'half',
+    headers: {
+      Authorization: 'Bearer ' + x.token,
+      'Content-Length': '1000000',
+      'X-KF-Evidence-SHA256': 'zz',
+      'X-KF-Evidence-Meta': 'not json',
+    },
+    body: stream,
+  });
   assert.equal(r.status, 404);
   assert.equal((await r.json()).state, 'EVIDENCE_DISABLED');
-  assert.equal((await x.post(Buffer.from('plain'), { digest: 'zz', meta: null })).status, 404);
+  assert.equal(pulled, 0);
+  assert.deepEqual(x.internal, ['/evidence/reserve'], 'no settle: nothing was reserved');
 });
 test('evidence: a binding without put() is the same as no binding', async () => {
   const x = await harness({ EVIDENCE_BUCKET: {}, noBucket: false }, { bucket: {} });
@@ -410,12 +484,22 @@ test('evidence: a closed rental is refused after the result too', async () => {
   assert.equal((await x.post()).status, 401);
   assert.equal(x.bucket.puts, 0);
 });
-test('evidence: the request limit answers 429 and the window reopens', async () => {
+test('evidence: the ledger counts requests per rental: 429 after 20 in a window, then it reopens', async () => {
   const x = await harness();
-  for (let i = 0; i < 20; i++) await x.post();
-  assert.equal((await x.post()).status, 429);
+  const status = async () => {
+    try {
+      await x.reserve();
+      return 200;
+    } catch (e) {
+      return e.status;
+    }
+  };
+  const answers = [];
+  for (let i = 0; i < 21; i++) answers.push(await status());
+  assert.deepEqual(answers.slice(0, 2), [200, 409]);
+  assert.equal(answers[20], 429);
   x.h.time.value += 10000;
-  assert.equal((await x.post()).status, 409);
+  assert.equal(await status(), 409);
 });
 test('evidence: the manifest holds exactly these fields and the object these options', async () => {
   const x = await harness();
@@ -575,156 +659,295 @@ test('evidence: a failing head check is a 503 and clears the flag', async () => 
   assert.equal(x.bucket.puts, 0);
   assert.equal((await x.h.storage.get('record:' + run)).evidence, undefined);
 });
-// --- gateway (the stateless front, before the Durable Object) ---------------------------------
-function gatewayHarness() {
-  let entered = 0,
-    seen = null;
-  const clock = { value: 1800000000000 };
-  const gateway = createGateway({ now: () => clock.value });
-  const bindings = {
-    ...env,
-    BROKER_PATH_PREFIX: 'g'.repeat(32),
-    LEDGER: {
-      idFromName: () => 1,
-      get: () => ({
-        fetch: async (request) => {
-          entered++;
-          seen = {
-            length: request.headers.get('Content-Length'),
-            bytes: request.body ? (await request.arrayBuffer()).byteLength : 0,
-          };
-          return Response.json({ state: 'STORED' });
-        },
-      }),
-    },
-  };
-  const live = {
-    run: '123',
-    attempt: '1',
-    sha: 'a'.repeat(40),
-    nonce: 'b'.repeat(32),
-    reportExpiry: 1800000000 + 3600,
-  };
-  const token = callbackToken(live);
-  return {
-    clock,
-    get entered() {
-      return entered;
-    },
-    get seen() {
-      return seen;
-    },
-    post(body, { t = token, headers = {}, path = '/evidence/123-1' } = {}) {
-      return gateway.fetch(
-        new Request(env.WORKER_URL + '/' + 'g'.repeat(32) + path, {
-          method: 'POST',
-          headers: { ...(t ? { Authorization: 'Bearer ' + t } : {}), ...headers },
-          body,
-          ...(body instanceof ReadableStream ? { duplex: 'half' } : {}),
-        }),
-        bindings,
-      );
-    },
-  };
-}
-test('evidence gateway: a bad token never reaches the Durable Object or buffers a byte', async () => {
-  const g = gatewayHarness();
-  let pulled = 0;
-  const stream = new ReadableStream(
+// --- the gateway holds the body; the ledger only reserves and settles ---------------------------
+const stream = (counter, chunk = 1024) =>
+  new ReadableStream(
     {
       pull(controller) {
-        pulled++;
-        controller.enqueue(new Uint8Array(1024));
+        counter.pulled++;
+        controller.enqueue(new Uint8Array(chunk));
       },
     },
     { highWaterMark: 0 },
   );
-  const r = await g.post(stream, { t: 'bad', headers: { 'Content-Length': '1000' } });
-  assert.equal(r.status, 401);
-  assert.equal(g.entered, 0);
-  assert.equal(pulled, 0);
+const streamed = (x, length, headers = {}, t = x.token) => {
+  const counter = { pulled: 0 };
+  return {
+    counter,
+    response: x.raw('/evidence/' + run, {
+      method: 'POST',
+      duplex: 'half',
+      headers: { ...(t ? { Authorization: 'Bearer ' + t } : {}), ...headers },
+      body: stream(counter),
+    }),
+  };
+};
+test('evidence gateway: a bad token never reaches the ledger or reads a byte', async () => {
+  const x = await harness();
+  const s = streamed(x, 1000, { 'Content-Length': '1000' }, 'bad');
+  assert.equal((await s.response).status, 401);
+  assert.deepEqual(x.internal, []);
+  assert.equal(s.counter.pulled, 0);
 });
 test('evidence gateway: a length above the cap is 413 and the body is not read', async () => {
-  const g = gatewayHarness();
-  let pulled = 0;
-  const stream = new ReadableStream(
-    {
-      pull(controller) {
-        pulled++;
-        controller.enqueue(new Uint8Array(1024));
-      },
-    },
-    { highWaterMark: 0 },
-  );
-  const r = await g.post(stream, {
-    headers: { 'Content-Length': String(EVIDENCE_MAX_BYTES + 1) },
-  });
-  assert.equal(r.status, 413);
-  assert.equal(g.entered, 0);
-  assert.equal(pulled, 0);
+  const x = await harness();
+  const s = streamed(x, 0, { 'Content-Length': String(EVIDENCE_MAX_BYTES + 1) });
+  assert.equal((await s.response).status, 413);
+  assert.deepEqual(x.internal, []);
+  assert.equal(s.counter.pulled, 0);
 });
 test('evidence gateway: no declared length is 411 before the body is read', async () => {
-  const g = gatewayHarness();
-  let pulled = 0;
-  const stream = new ReadableStream(
-    {
-      pull(controller) {
-        pulled++;
-        controller.enqueue(new Uint8Array(1024));
-      },
-    },
-    { highWaterMark: 0 },
-  );
-  const r = await g.post(stream, { headers: {} });
-  assert.equal(r.status, 411);
-  assert.equal(g.entered, 0);
-  assert.equal(pulled, 0);
+  const x = await harness();
+  const s = streamed(x, 0, {});
+  assert.equal((await s.response).status, 411);
+  assert.deepEqual(x.internal, []);
+  assert.equal(s.counter.pulled, 0);
 });
-test('evidence gateway: a body longer than it declared is cut at the cap plus one byte', async () => {
-  const g = gatewayHarness();
-  const r = await g.post(new Uint8Array(EVIDENCE_MAX_BYTES + 4096), {
-    headers: { 'Content-Length': '100' },
-  });
-  assert.equal(r.status, 200);
-  assert.equal(g.seen.bytes, EVIDENCE_MAX_BYTES + 1);
-  assert.equal(g.seen.length, String(EVIDENCE_MAX_BYTES + 1));
+test('evidence gateway: a refused reservation (409, 404, 401) never reads the body', async () => {
+  const x = await harness();
+  assert.equal((await x.post()).status, 200);
+  const again = streamed(x, 1000, { 'Content-Length': '1000' });
+  assert.equal((await again.response).status, 409);
+  assert.equal(again.counter.pulled, 0);
 });
-test('evidence gateway: a valid token and length reaches the Durable Object with the whole body', async () => {
-  const g = gatewayHarness();
-  const body = bundle('x'.repeat(5000));
-  const r = await g.post(body, { headers: { 'Content-Length': String(body.length) } });
-  assert.equal(r.status, 200);
-  assert.equal(g.entered, 1);
-  assert.equal(g.seen.bytes, body.length);
-});
-test('evidence gateway: a valid body far above the report limit arrives whole', async () => {
-  const g = gatewayHarness();
+test('evidence gateway: a valid body far above the report limit is stored whole, and the ledger never sees it', async () => {
+  const x = await harness();
   const body = new Uint8Array(3 * 1024 * 1024);
   body.set(bundle());
-  const r = await g.post(body, { headers: { 'Content-Length': String(body.length) } });
+  const r = await x.post(body);
   assert.equal(r.status, 200);
-  assert.equal(g.seen.bytes, body.length);
-  assert.equal(g.seen.length, String(body.length));
+  assert.equal(Buffer.from(x.bucket.objects.get('check/123/1.tgz').bytes).length, body.length);
+  assert.deepEqual(x.internal, ['/evidence/reserve', '/evidence/settle']);
+  assert.ok(
+    x.sizes.every((n) => n < 1024),
+    'only a few bytes go to the ledger: ' + x.sizes,
+  );
+  assert.deepEqual(x.forwarded, [], 'no external request is forwarded to the ledger');
 });
-test('evidence gateway: at most six uploads a minute per rental, then 429 before the Durable Object', async () => {
-  const g = gatewayHarness();
-  const body = bundle('x');
+test('evidence gateway: a body longer than it declared is 413 and the flag is released', async () => {
+  const x = await harness();
+  const r = await x.post(new Uint8Array(EVIDENCE_MAX_BYTES + 4096), {
+    headers: { 'Content-Length': '100' },
+    digest: 'a'.repeat(64),
+  });
+  assert.equal(r.status, 413);
+  assert.equal(x.bucket.puts, 0);
+  assert.equal((await x.h.storage.get('record:' + run)).evidence, undefined);
+  assert.equal((await x.post()).status, 200);
+});
+test('evidence gateway: at most six uploads a minute per rental, then 429 before the ledger', async () => {
+  const x = await harness();
   const answers = [];
-  for (let i = 0; i < 8; i++)
-    answers.push(
-      (await g.post(body, { headers: { 'Content-Length': String(body.length) } })).status,
-    );
-  assert.deepEqual(answers, [200, 200, 200, 200, 200, 200, 429, 429]);
-  assert.equal(g.entered, 6);
+  for (let i = 0; i < 8; i++) answers.push((await x.post()).status);
+  assert.deepEqual(answers, [200, 409, 409, 409, 409, 409, 429, 429]);
+  const calls = x.internal.length;
+  assert.equal((await x.post()).status, 429);
+  assert.equal(x.internal.length, calls);
 });
 test('evidence gateway: the six-a-minute window reopens after a minute', async () => {
-  const g = gatewayHarness();
-  const body = bundle('x');
-  const send = async () =>
-    (await g.post(body, { headers: { 'Content-Length': String(body.length) } })).status;
-  for (let i = 0; i < 6; i++) assert.equal(await send(), 200);
-  assert.equal(await send(), 429);
-  g.clock.value += 61000;
-  assert.equal(await send(), 200);
-  assert.equal(g.entered, 7);
+  const x = await harness();
+  for (let i = 0; i < 7; i++) await x.post();
+  assert.equal((await x.post()).status, 429);
+  x.h.time.value += 61000;
+  assert.equal((await x.post()).status, 409);
+});
+test('evidence gateway: at most two uploads are held in one isolate, the third is 503', async () => {
+  const x = await harness();
+  let release;
+  x.hold.reserve = new Promise((resolve) => (release = resolve));
+  const first = x.post();
+  const second = x.post();
+  await new Promise((resolve) => setImmediate(resolve));
+  const third = await x.post();
+  assert.equal(third.status, 503);
+  assert.equal((await third.json()).state, 'EVIDENCE_BUSY');
+  release();
+  const done = [(await first).status, (await second).status].sort();
+  assert.deepEqual(done, [200, 409]);
+  assert.equal((await x.post()).status, 409, 'the count is released');
+});
+test('evidence gateway: the held count is released when the write fails', async () => {
+  const x = await harness();
+  x.bucket.fail = true;
+  for (let i = 0; i < 3; i++) assert.equal((await x.post()).status, 503);
+  x.bucket.fail = false;
+  assert.equal((await x.post()).status, 200);
+});
+// --- the ledger steps ----------------------------------------------------------------------------
+async function more(x, n) {
+  const base = await x.h.storage.get('record:' + run);
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const key = String(200 + i) + '-1';
+    const rec = { ...base, key, run: String(200 + i), label: 'kf-ci-' + key };
+    await x.h.storage.put('record:' + key, rec);
+    out.push({ key, token: callbackToken(rec) });
+  }
+  return out;
+}
+test('evidence ledger: at most four reservations are open across all rentals', async () => {
+  const x = await harness();
+  const rentals = await more(x, 5);
+  const ok = [];
+  for (const r of rentals.slice(0, 4))
+    ok.push(await x.reserve({ key: r.key, length: 10 }, r.token));
+  assert.equal(ok.length, 4);
+  await assert.rejects(x.reserve({ key: rentals[4].key, length: 10 }, rentals[4].token), (e) => {
+    assert.equal(e.status, 503);
+    assert.equal(e.state, 'EVIDENCE_BUSY');
+    return true;
+  });
+  await x.settle({ key: rentals[0].key, at: ok[0].at, state: 'FAILED' });
+  assert.equal(
+    (await x.reserve({ key: rentals[4].key, length: 10 }, rentals[4].token)).state,
+    'RESERVED',
+  );
+});
+const viaGateway = (x, r) =>
+  x.post(bundle('from ' + r.key), { t: r.token, path: '/evidence/' + r.key });
+test('evidence: the fifth rental to upload at once is told to retry (503), through the gateway', async () => {
+  const x = await harness();
+  const rentals = await more(x, 5);
+  const open = [];
+  for (const r of rentals.slice(0, 4))
+    open.push(await x.reserve({ key: r.key, length: 10 }, r.token));
+  const busy = await viaGateway(x, rentals[4]);
+  assert.equal(busy.status, 503);
+  assert.equal((await busy.json()).state, 'EVIDENCE_BUSY');
+  assert.equal(x.bucket.puts, 0);
+  await x.settle({ key: rentals[0].key, at: open[0].at, state: 'FAILED' });
+  assert.equal((await viaGateway(x, rentals[4])).status, 200);
+});
+test('evidence: stale reservations never block a later upload, through the gateway', async () => {
+  const x = await harness();
+  const rentals = await more(x, 5);
+  for (const r of rentals.slice(0, 4)) await x.reserve({ key: r.key, length: 10 }, r.token);
+  x.h.time.value += 60000;
+  assert.equal((await viaGateway(x, rentals[4])).status, 200);
+});
+test('evidence: finished uploads release their reservation, so any number can follow', async () => {
+  const x = await harness();
+  const rentals = await more(x, 6);
+  for (const r of rentals) assert.equal((await viaGateway(x, r)).status, 200);
+  assert.equal(x.bucket.objects.size, 12);
+});
+test('evidence ledger: a reservation that was never settled stops counting after a minute', async () => {
+  const x = await harness();
+  const rentals = await more(x, 5);
+  for (const r of rentals.slice(0, 4)) await x.reserve({ key: r.key, length: 10 }, r.token);
+  x.h.time.value += 60000;
+  assert.equal(
+    (await x.reserve({ key: rentals[4].key, length: 10 }, rentals[4].token)).state,
+    'RESERVED',
+  );
+});
+test('evidence ledger: reserve answers keys and rental facts, never the token or the box text', async () => {
+  const x = await harness();
+  const got = await x.reserve();
+  assert.equal(got.state, 'RESERVED');
+  assert.equal(got.keys.object, 'check/123/1.tgz');
+  assert.deepEqual(Object.keys(got.facts).sort(), ['batch', 'die', 'family', 'tier', 'verdict']);
+  assert.ok(!JSON.stringify(got).includes(x.token));
+});
+test('evidence ledger: reserve checks the token, the length and the request shape', async () => {
+  const x = await harness();
+  const status = async (body, t) => {
+    try {
+      await x.reserve(body, t);
+      return 200;
+    } catch (e) {
+      return e.status;
+    }
+  };
+  assert.equal(await status({ key: run, length: 10 }, 'bad'), 401);
+  assert.equal(await status({ key: '124-1', length: 10 }), 401);
+  assert.equal(await status({ key: run, length: EVIDENCE_MAX_BYTES + 1 }), 413);
+  assert.equal(await status({ key: run, length: 0 }), 413);
+  assert.equal(await status({ key: '../x', length: 10 }), 400);
+  assert.equal(await status({ key: run }), 413);
+  assert.equal(await status({ key: run, length: 10 }), 200);
+});
+test('evidence ledger: a token with the right secret but another nonce is refused', async () => {
+  const x = await harness();
+  const live = await x.h.storage.get('record:' + run);
+  await assert.rejects(
+    x.reserve({ key: run, length: 10 }, callbackToken(live, undefined, { nonce: 'c'.repeat(32) })),
+    (e) => e.status === 401,
+  );
+  await assert.rejects(
+    x.reserve({ key: run, length: 10 }, callbackToken(live, undefined, { sha: 'd'.repeat(40) })),
+    (e) => e.status === 401,
+  );
+});
+test('evidence ledger: settling does not give a rental a fresh request budget', async () => {
+  const x = await harness();
+  let last = 0;
+  for (let i = 0; i < 21; i++) {
+    try {
+      const got = await x.reserve();
+      await x.settle({ key: run, at: got.at, state: 'FAILED' });
+      last = 200;
+    } catch (e) {
+      last = e.status;
+    }
+  }
+  assert.equal(last, 429);
+});
+test('evidence ledger: settle ignores another attempt, validates its input and clears or stores', async () => {
+  const x = await harness();
+  const got = await x.reserve();
+  await x.settle({ key: run, at: got.at + 1, state: 'FAILED' });
+  assert.equal((await x.h.storage.get('record:' + run)).evidence.state, 'PENDING');
+  for (const bad of [
+    { key: run, at: got.at, state: 'NOPE' },
+    { key: run, at: 'x', state: 'FAILED' },
+    { key: run, at: got.at, state: 'STORED' },
+    { key: run, at: got.at, state: 'STORED', sha256: 'zz' },
+    { key: '../x', at: got.at, state: 'FAILED' },
+  ])
+    await assert.rejects(x.settle(bad));
+  await x.settle({ key: run, at: got.at, state: 'FAILED' });
+  assert.equal((await x.h.storage.get('record:' + run)).evidence, undefined);
+  const again = await x.reserve();
+  await x.settle({ key: run, at: again.at, state: 'STORED', sha256: 'a'.repeat(64) });
+  assert.equal((await x.h.storage.get('record:' + run)).evidence.state, 'STORED');
+});
+test('evidence: a replacement rental after a provider fault has its own object key', async () => {
+  const x = await harness();
+  assert.equal((await x.post(bundle('faulted box'))).status, 200);
+  const r = await x.h.storage.get('record:' + run);
+  delete r.evidence;
+  r.providerRetries = 1;
+  await x.h.storage.put('record:' + run, r);
+  const second = await x.post(bundle('replacement box'));
+  assert.equal(second.status, 200);
+  assert.deepEqual([...x.bucket.objects.keys()].sort(), [
+    'check/123/1-r1.json',
+    'check/123/1-r1.tgz',
+    'check/123/1.json',
+    'check/123/1.tgz',
+  ]);
+});
+test('evidence: the replacement key has the -r1 suffix and no other leg exists', () => {
+  assert.equal(
+    evidenceKeys({ key: '7-3', profile: 'sweep', providerRetries: 1 }).object,
+    'sweep/7/3-r1.tgz',
+  );
+  assert.equal(
+    evidenceKeys({ key: '7-3', profile: 'sweep', providerRetries: 1 }).manifest,
+    'sweep/7/3-r1.json',
+  );
+  assert.equal(evidenceKeys({ key: '7-3', profile: 'sweep' }).object, 'sweep/7/3.tgz');
+  assert.throws(() => evidenceKeys({ key: '7-3', profile: 'sweep', providerRetries: 2 }));
+});
+test('evidence: a busy ledger queue answers 409 BUSY, which is not an EVIDENCE_EXISTS', async () => {
+  const x = await harness();
+  const answers = await Promise.all(Array.from({ length: 6 }, () => x.reserve().catch((e) => e)));
+  const states = answers.map((a) => a.state ?? a.status);
+  assert.ok(states.includes('RESERVED'));
+  assert.ok(states.includes('BUSY'), String(states));
+  assert.ok(
+    states.every((s) => ['RESERVED', 'EVIDENCE_EXISTS', 'BUSY'].includes(s)),
+    String(states),
+  );
 });

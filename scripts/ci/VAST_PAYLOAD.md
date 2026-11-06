@@ -133,8 +133,19 @@ item first):
 | 5 | screenshots 4 to 6 (at most 6 PNGs in all, each at most 2 MiB); gzip'd VM logs | dropped first |
 
 Never collected: `secrets/`, `tpm/`, `firmware/`, `disk/` and `.ssh` directories; ssh keys and other
-names matching the forbidden-name list; disk images; symlinks (files, directories and roots); anything
-outside the roots above. Names inside the bundle are reduced to `[A-Za-z0-9._/-]`.
+names matching the forbidden-name list; disk images; anything outside the roots above. No symlink is
+followed at any level, roots included: every path is checked with `lstat` and every file is opened
+with `O_NOFOLLOW | O_NONBLOCK` and checked to be a regular file after the open (so a FIFO cannot block
+the helper). A directory swapped for a symlink between the check and the open of a file below it is
+a race that remains. Names inside the bundle, and the skipped names in the manifest, are reduced to
+`[A-Za-z0-9._/-]`.
+
+Order of work (review of PR #274, finding F2): every FILE is collected first and the host commands
+(`free`, `df`, `uname`, `date`, `uptime`, `ps`, `nvidia-smi -q`, `dmesg -T`) last, so a hung GPU or a
+stale mount costs only the commands. Each command runs in its own process group with its output in a
+temporary file, gets 6 s, is then killed with SIGKILL (the whole group) and waited for at most 2 s more,
+and a process stuck in the kernel is abandoned. All commands together get 25 s; a command that does not
+fit is replaced by a marker file `[kf-evidence: skipped, out of time]` and listed in the manifest.
 
 Scrubbed in text members, counted in the manifest: GPU and board UUIDs (a distinct synthetic
 `fa4efa4e-...` per value, as `trio_stage.sh` does), serial numbers (`Serial Number :` lines and
@@ -145,12 +156,24 @@ also replaced, an accepted loss). Not scrubbed: PNG pixels. The repository's dis
 addresses, so they are not used here: the bundle is private, not displayed.
 
 Scanned on the RAW bytes of every member before it is packed (a hit refuses the whole upload, prints
-`KF_EVIDENCE_REFUSED reason=scan_hit class=<class> member=<name>`, never a value): the run token, the
+`KF_EVIDENCE_REFUSED reason=scan_hit class=<class> member=<name>`, never a value; when the hit is in
+a file NAME the member is printed as `name-<10 hex of its SHA-256>`, so a secret-shaped name never
+reaches the log): the run token, the
 broker URL and its secret path, the Access pair, the runner nonce (all from the box environment), the
 guest password and the harness ssh key (every file under `$WINVM_ROOT/*/secrets/`, the files
 `windows_gate.sh` scans for), `~/.ssh/id_*`, a Vast key file or variable, JWT-shaped strings, `Bearer
 <20+ characters>`, presigned-URL parameters, private-key blocks, GitHub tokens, `CF-Access-Client-*`
-headers and URLs with credentials. Values shorter than 6 characters are not scanned. Not covered: a
+headers and URLs with credentials. Values shorter than 6 characters are not scanned. Cuts (review of
+PR #274, finding F3): each member is scanned at its full length with the 8 KiB that precede the size
+cut (a log tail, a gz tail, a tgz member cut to its last 2 MiB) before it is cut, the tier 0/1 logs
+are scanned before the size-halving cut, `MANIFEST.json` is scanned before it is packed, and the
+final bytes are checked once more for exact values; a 16-character prefix or suffix of the run token,
+the Access secret, the runner nonce, the guest password, the ssh key lines, a Vast key or the secret
+broker path is a hit too (`<class>_fragment`: a file that starts or ends in the middle of a secret).
+Every pattern is anchored on a literal and bounded; the JWT test is a linear scan, not a regex with a
+nested quantifier (F4: the reviewer timed the first version at 1.30 s for 64 KiB of `eyJ-`, rev
+f345f6aad, 2026-11-06, scratch harness, Python 3.14.4, growing with the square; `test_scanning_and_scrubbing_are_linear_on_hostile_input` now feeds 1 MiB
+of each hostile shape). Not covered: a
 secret that is encoded (base64, URL-encoded) or split across lines, and anything inside a PNG.
 A hostile guest can plant a secret-shaped string in a file it controls to make the scan refuse the
 upload: the evidence is best effort, the refusal line still names the class and member, and nothing is
@@ -158,8 +181,9 @@ uploaded in that case.
 
 Upload: `POST <KF_BROKER_URL>/evidence/<run>-<attempt>` ([box protocol](../../ci/vast-broker/docs/BOX_PROTOCOL.md),
 "Evidence upload"), HTTPS only, no redirect, no proxy, the token and the Access pair only as headers,
-at most 3 tries on a network error, 429 or 5xx. The log line is `evidence uploaded: <run>/<attempt>
-<bytes> sha256 <first 12 hex>` (with ` (already_stored)` after a 409), `KF_EVIDENCE_REFUSED reason=...`
+at most 3 tries on a network error, `409 BUSY`, 429 or 5xx. Only the Worker's `409 EVIDENCE_EXISTS`
+counts as stored. The log line is `evidence uploaded: <run>/<attempt>
+<bytes> sha256 <first 12 hex>` (with ` (already_stored)` after an `EVIDENCE_EXISTS`), `KF_EVIDENCE_REFUSED reason=...`
 (scan hit or too large), or `KF_EVIDENCE_SKIPPED reason=...` (`upload_http_<status>`, `time`,
 `environment_contract`, `build_error:<Class>`, `helper_exit_<rc>`). The runner is not changed: the line
 is at the end of the log, in the tail the runner shows, and a refusal matches its existing `REFUSED` key

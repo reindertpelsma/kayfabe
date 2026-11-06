@@ -56,11 +56,15 @@ and run 42152626663 attempt 1, whose timeout screendump was lost).
 - **Worker side.** `POST /evidence/<run>-<attempt>`, a box route with the same run-token
   authentication as `/report`, `/kill`, `/blob-url` and `/bench-data`, accepted until the rental is
   closed or ended (so also during the result grace). `Content-Length` is required and at most 8 MiB,
-  checked in the gateway before a byte is buffered; the body must be gzip, must match the declared
+  checked in the gateway before a byte is read; the body must be gzip, must match the declared
   SHA-256, and must come with a metadata header of a fixed shape (`X-KF-Evidence-Meta`, at most 4 KiB).
-  One upload per rental: the ledger record holds a PENDING/STORED flag, so the second is `409`. At most
-  6 uploads a minute per rental reach the gateway buffer. The Worker never opens the archive. It writes
-  `<profile>/<run>/<attempt>.tgz` and `.json` (manifest) to the PRIVATE bucket `kayfabe-ci-evidence`
+  The gateway reads and writes the body itself; the ledger Durable Object only reserves and settles a
+  once-per-rental PENDING/STORED flag (a few bytes each way), so the second upload is `409
+  EVIDENCE_EXISTS`, at most 4 reservations are open across all rentals and at most 2 bodies are held
+  per gateway isolate (the rest get `503`, retried by the box), and at most 6 uploads a minute per
+  rental reach the gateway. The Worker never opens the archive. It writes
+  `<profile>/<run>/<attempt>.tgz` (`<attempt>-r1` for a provider-fault replacement) and `.json`
+  (manifest) to the PRIVATE bucket `kayfabe-ci-evidence`
   through the `EVIDENCE_BUCKET` write binding. Without the binding the route answers `404
   EVIDENCE_DISABLED`. The status object, the public API, the site and the runner never mention the
   bundle; no route lists or serves it. A verdict, a deadline or the budget never depends on it.
@@ -68,7 +72,8 @@ and run 42152626663 attempt 1, whose timeout screendump was lost).
   coordinator's job only ([DEPLOY](DEPLOY.md), "Evidence bucket"; `scripts/ci/fetch_evidence.py`).
 - **Tests.** `node --test test/evidence.test.js` (route, auth, size, idempotency, concurrency, disabled
   mode, gateway buffering) and `node evidence-mutants.mjs` (every mutant must fail at least two tests).
-  Not exercised: real R2, the deployed gateway and Durable Object, a real box.
+  Not exercised: real R2, the deployed gateway and Durable Object (the tests call the ledger service
+  in-process), a real box.
 
 ## Current setup and further reading
 
