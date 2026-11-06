@@ -1249,6 +1249,17 @@ class Upload(Fixture):
         _, result, _ = self.go(Fake((409, {"state": "EVIDENCE_EXISTS"})))
         self.assertEqual(result, (True, "already_stored"))
 
+    def test_409_pending_is_retried_never_stored(self):
+        # Review of #274, R1 (2026-11-06): the Worker answers a fresh PENDING flag with its own
+        # state; the box retries it and never reports it as stored.
+        pending = (409, {"state": "EVIDENCE_PENDING"})
+        fake = Fake(pending, pending, (200, {}))
+        self.assertEqual(self.go(fake)[1], (True, "stored"))
+        self.assertEqual(len(fake.requests), 3)
+        fake = Fake(pending, pending, pending)
+        self.assertEqual(self.go(fake)[1], (False, "upload_http_409"))
+        self.assertEqual(len(fake.requests), 3)
+
     def test_client_errors_are_not_retried(self):
         for status in (400, 401, 403, 404, 411, 413, 422):
             fake = Fake((status, None))

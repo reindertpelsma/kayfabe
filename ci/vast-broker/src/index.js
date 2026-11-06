@@ -1751,8 +1751,11 @@ export function createService({
         await rejectExpiredCallback(r, cfg, vast);
         await rate(r, cfg);
         const prior = r.evidence;
-        if (prior && (prior.state === 'STORED' || now() - prior.at < EVIDENCE_PENDING_MS))
-          refuse('EVIDENCE_EXISTS', 409);
+        // Review of #274, R1: only STORED is EVIDENCE_EXISTS (the box counts that as stored). A
+        // fresh PENDING flag (an upload still being written, or one whose isolate died) answers
+        // its own state, EVIDENCE_PENDING, which the box retries and never reports as stored.
+        if (prior?.state === 'STORED') refuse('EVIDENCE_EXISTS', 409);
+        if (prior && now() - prior.at < EVIDENCE_PENDING_MS) refuse('EVIDENCE_PENDING', 409);
         for (const [k, t] of evidenceOpen)
           if (now() - t >= EVIDENCE_PENDING_MS) evidenceOpen.delete(k);
         if (evidenceOpen.size >= EVIDENCE_MAX_INFLIGHT) refuse('EVIDENCE_BUSY', 503);

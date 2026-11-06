@@ -619,7 +619,9 @@ test('evidence: a PENDING flag blocks for a minute and not a second more', async
   const r = await x.h.storage.get('record:' + run);
   r.evidence = { state: 'PENDING', at: x.h.time.value - 59999 };
   await x.h.storage.put('record:' + run, r);
-  assert.equal((await x.post()).status, 409);
+  const pending = await x.post();
+  assert.equal(pending.status, 409);
+  assert.equal((await pending.json()).state, 'EVIDENCE_PENDING');
   r.evidence = { state: 'PENDING', at: x.h.time.value - 60000 };
   await x.h.storage.put('record:' + run, r);
   assert.equal((await x.post()).status, 200);
@@ -947,7 +949,24 @@ test('evidence: a busy ledger queue answers 409 BUSY, which is not an EVIDENCE_E
   assert.ok(states.includes('RESERVED'));
   assert.ok(states.includes('BUSY'), String(states));
   assert.ok(
-    states.every((s) => ['RESERVED', 'EVIDENCE_EXISTS', 'BUSY'].includes(s)),
+    // Review R1: the others see the first one's PENDING flag, never EVIDENCE_EXISTS.
+    states.every((s) => ['RESERVED', 'EVIDENCE_PENDING', 'BUSY'].includes(s)),
     String(states),
   );
+});
+
+// Review of #274, R1 (integration 2026-11-06). FALSIFIER: a box whose first upload is still being
+// written (PENDING) hears EVIDENCE_EXISTS, which it reports as stored although nothing may arrive.
+test('evidence: PENDING answers EVIDENCE_PENDING; only STORED answers EVIDENCE_EXISTS', async () => {
+  const x = await harness();
+  const r = await x.h.storage.get('record:' + run);
+  r.evidence = { state: 'PENDING', at: x.h.time.value };
+  await x.h.storage.put('record:' + run, r);
+  const pending = await x.post();
+  assert.deepEqual([pending.status, (await pending.json()).state], [409, 'EVIDENCE_PENDING']);
+  assert.equal(x.bucket.objects.size, 0, 'nothing written while another upload is pending');
+  r.evidence = { state: 'STORED', at: x.h.time.value, sha256: 'a'.repeat(64) };
+  await x.h.storage.put('record:' + run, r);
+  const stored = await x.post();
+  assert.deepEqual([stored.status, (await stored.json()).state], [409, 'EVIDENCE_EXISTS']);
 });

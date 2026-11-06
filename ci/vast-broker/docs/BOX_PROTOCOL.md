@@ -85,7 +85,8 @@ and it is sent BEFORE the result report. Answers: `200 {"state":"STORED","run","
 (not gzip, digest or length mismatch, bad metadata); `401` (token or rental state); `404
 EVIDENCE_DISABLED` (the Worker has no bucket binding) or an unknown route (an older Worker); `409
 EVIDENCE_EXISTS` (one upload per rental; a retry whose first try did arrive sees it; the box counts
-ONLY this state as stored, and a `409 BUSY` from the ledger queue is retried); `411`; `413`; `429` (20
+ONLY this state as stored, and a `409 BUSY` from the ledger queue is retried); `409 EVIDENCE_PENDING`
+(an earlier upload of this rental is still being written, at most 60 s; retried, never counted as stored); `411`; `413`; `429` (20
 requests per 10 s per rental, and 6 uploads a minute at the gateway); `503` (bucket error, or
 `EVIDENCE_BUSY`: too many uploads in flight, retry). The box tries at most 3 times (network error, 409
 BUSY, 429, 5xx) and treats every other answer as a skipped upload: the upload never changes

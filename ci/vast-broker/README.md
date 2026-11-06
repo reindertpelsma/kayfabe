@@ -60,7 +60,8 @@ and run 42152626663 attempt 1, whose timeout screendump was lost).
   SHA-256, and must come with a metadata header of a fixed shape (`X-KF-Evidence-Meta`, at most 4 KiB).
   The gateway reads and writes the body itself; the ledger Durable Object only reserves and settles a
   once-per-rental PENDING/STORED flag (a few bytes each way), so the second upload is `409
-  EVIDENCE_EXISTS`, at most 4 reservations are open across all rentals and at most 2 bodies are held
+  EVIDENCE_EXISTS` once stored and `409 EVIDENCE_PENDING` while the first is still being written
+  (retried by the box, never counted as stored), at most 4 reservations are open across all rentals and at most 2 bodies are held
   per gateway isolate (the rest get `503`, retried by the box), and at most 6 uploads a minute per
   rental reach the gateway. The Worker never opens the archive. It writes
   `<profile>/<run>/<attempt>.tgz` (`<attempt>-r1` for a provider-fault replacement) and `.json`

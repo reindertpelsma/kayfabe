@@ -39,8 +39,8 @@ const MUTANTS = [
     [
       [
         I,
-        "          refuse('EVIDENCE_EXISTS', 409);\n        for (const [k, t]",
-        "          refuse('EVIDENCE_EXISTS', 200);\n        for (const [k, t]",
+        "if (prior?.state === 'STORED') refuse('EVIDENCE_EXISTS', 409);",
+        "if (prior?.state === 'STORED') refuse('EVIDENCE_EXISTS', 200);",
       ],
     ],
   ],
@@ -111,10 +111,15 @@ const MUTANTS = [
     [
       [
         I,
-        "        if (prior && (prior.state === 'STORED' || now() - prior.at < EVIDENCE_PENDING_MS))\n          refuse('EVIDENCE_EXISTS', 409);\n",
+        "        if (prior?.state === 'STORED') refuse('EVIDENCE_EXISTS', 409);\n        if (prior && now() - prior.at < EVIDENCE_PENDING_MS) refuse('EVIDENCE_PENDING', 409);\n",
         '',
       ],
     ],
+  ],
+  // Review of #274, R1 (integration 2026-11-06): PENDING is not reported as stored.
+  [
+    'pending answered as stored',
+    [[I, "refuse('EVIDENCE_PENDING', 409)", "refuse('EVIDENCE_EXISTS', 409)"]],
   ],
   ['pending flag never expires', [[I, 'now() - prior.at < EVIDENCE_PENDING_MS', 'true']]],
   [
@@ -122,8 +127,8 @@ const MUTANTS = [
     [
       [
         I,
-        "prior.state === 'STORED' || now() - prior.at < EVIDENCE_PENDING_MS",
-        "prior.state === 'STORED'",
+        "        if (prior && now() - prior.at < EVIDENCE_PENDING_MS) refuse('EVIDENCE_PENDING', 409);\n",
+        '',
       ],
     ],
   ],

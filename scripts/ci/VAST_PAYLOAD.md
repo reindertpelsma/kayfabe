@@ -200,7 +200,7 @@ uploaded in that case.
 
 Upload: `POST <KF_BROKER_URL>/evidence/<run>-<attempt>` ([box protocol](../../ci/vast-broker/docs/BOX_PROTOCOL.md),
 "Evidence upload"), HTTPS only, no redirect, no proxy, the token and the Access pair only as headers,
-at most 3 tries on a network error, `409 BUSY`, 429 or 5xx. Only the Worker's `409 EVIDENCE_EXISTS`
+at most 3 tries on a network error, `409 BUSY`, `409 EVIDENCE_PENDING` (an earlier try still being written), 429 or 5xx. Only the Worker's `409 EVIDENCE_EXISTS`
 counts as stored. The log line is `evidence uploaded: <run>/<attempt>
 <bytes> sha256 <first 12 hex>` (with ` (already_stored)` after an `EVIDENCE_EXISTS`), `KF_EVIDENCE_REFUSED reason=...`
 (scan hit or too large), or `KF_EVIDENCE_SKIPPED reason=...` (`upload_http_<status>`, `time`,
