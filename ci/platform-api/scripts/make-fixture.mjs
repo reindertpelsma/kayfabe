@@ -4,13 +4,14 @@
 // must equal a fresh run (test/fixture.test.js).
 //   node scripts/make-fixture.mjs            # print
 //   node scripts/make-fixture.mjs --write    # update site/status/fixture.json
-import { writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { api } from '../test/helpers.js';
 import { syntheticRows } from './seed-data.mjs';
 import { SUITES } from '../src/validate.js';
 
 const CI_TIERS = ['largest', 'middle', 'small', 'adhoc'];
+const NAMES_PATH = new URL('../../../site/status/gpu_names.json', import.meta.url);
 export const FIXTURE_PATH = new URL('../../../site/status/fixture.json', import.meta.url);
 
 export async function buildFixture() {
@@ -46,6 +47,23 @@ export async function buildFixture() {
     await get('/v1/ci/trees/' + tree);
   for (const sha of [...new Set(rows.ci_runs.map((r) => r.commit_sha))].sort())
     await get('/v1/ci/commits/' + sha);
+  // Setup picker (migration 0003, site/status "Find my setup"): the paths the page builds, one die
+  // per request, for every die the name table can send a visitor to and every die in the seed. The
+  // page asks for exactly: os, gpu, then tier, then source (community opt-in). A tier together
+  // with community is not recorded: the fixture view reports it as not in the fixture.
+  const names = JSON.parse(readFileSync(NAMES_PATH, 'utf8'));
+  const dies = [
+    ...new Set([...names.entries.flatMap((e) => e.dies), ...rows.ci_runs.map((r) => r.die)]),
+  ].sort();
+  await get('/v1/ci/facets');
+  for (const os of ['linux', 'windows'])
+    for (const die of dies) {
+      const base = '/v1/ci/setups?os=' + os + '&gpu=' + die;
+      await get(base);
+      for (const tier of CI_TIERS) await get(base + '&tier=' + tier);
+      await get(base + '&source=reproduced,community');
+      await get(base + '&source=community');
+    }
   return {
     synthetic: true,
     note:

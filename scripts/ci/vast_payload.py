@@ -697,6 +697,78 @@ def hardware():
         return {"gpu_name": "unknown", "compute_cap": 0, "driver_version": "unknown"}
 
 
+# Host claims for the public setup picker (2026-11-06). CLAIMS: read from this box's own /proc and
+# from receipts of its own provisioning; the Worker checks their shape (vast_report.clean_claims,
+# results.js cleanClaims) and no verdict reads them. The guest OS versions are the harness's own
+# images: the fat Linux guest is the Ubuntu noble cloud image (provision_bench_tree.sh) and the
+# Windows guest is Windows 11 Enterprise LTSC 2024, build 26100, with the 580.88 driver
+# (win_vm.sh, windows_gate.sh); test_vast_payload_claims.py checks each against those files.
+LINUX_GUEST_OS = "ubuntu-24.04"
+WINDOWS_GUEST_OS = "11-ltsc-2024-26100"
+WINDOWS_GUEST_DRIVER = "580.88"
+CPU_VENDORS = {"GenuineIntel": "intel", "AuthenticAMD": "amd"}
+
+
+def cpu_claims(cpuinfo="/proc/cpuinfo", machine=None):
+    """cpu_vendor (amd|intel|arm|other), cpu_model (sanitised, bounded) and cpu_arch of this box.
+    Nothing here is a serial, id or address: only the vendor string and the model name line."""
+    import platform
+
+    arch = (machine or platform.machine() or "").lower()
+    arch = {"amd64": "x86_64", "arm64": "aarch64"}.get(arch, arch)
+    vendor = model = None
+    try:
+        text = Path(cpuinfo).read_bytes()[:262144].decode("utf-8", "replace")
+    except OSError:
+        text = ""
+    for line in text.splitlines():
+        key, _, value = line.partition(":")
+        key, value = key.strip().lower(), value.strip()
+        if key == "vendor_id" and vendor is None and value:
+            vendor = CPU_VENDORS.get(value, "other")
+        elif key == "model name" and model is None and value:
+            model = re.sub(r"[^A-Za-z0-9 ().@+/_-]", " ", value)
+            model = " ".join(model.split())[:64].strip()
+    if arch == "aarch64":
+        vendor = "arm"
+    return {"cpu_vendor": vendor, "cpu_model": model or None, "cpu_arch": arch or None}
+
+
+def guest_driver_receipt(bench):
+    """The guest driver the fat guest was provisioned with (provision_bench_tree.sh writes
+    guest.qcow2.STAGED with version=<modinfo version of the guest's nvidia module>)."""
+    try:
+        text = bounded_text(Path(bench) / "guest.qcow2.STAGED", 4096)
+    except (OSError, EvidenceError, UnicodeError):
+        return None
+    for line in text.splitlines():
+        if line.startswith("version="):
+            return line[len("version="):].strip()
+    return None
+
+
+def host_claims(windows, bench=Path("/workspace/bench"), cpuinfo="/proc/cpuinfo", machine=None):
+    """The claims block of the result: only the fields that have a value."""
+    raw = dict(cpu_claims(cpuinfo, machine))
+    raw["linux_os_version"] = LINUX_GUEST_OS
+    raw["linux_driver"] = guest_driver_receipt(bench)
+    if windows:
+        raw["windows_os_version"] = WINDOWS_GUEST_OS
+        raw["windows_driver"] = WINDOWS_GUEST_DRIVER
+    return {k: v for k, v in local_result_contract.clean_claims(raw).items() if v is not None}
+
+
+def refresh_claims(result, windows):
+    """Record the host claims in the result. A claim is never worth a failed run: any error leaves
+    the result as it was."""
+    try:
+        claims = host_claims(windows)
+    except (OSError, ValueError, UnicodeError, EvidenceError):
+        return
+    if claims:
+        result["host_claims"] = claims
+
+
 def persist_result(destination, result):
     destination = Path(destination)
     temporary = destination.with_suffix(".tmp")
@@ -1003,6 +1075,7 @@ def main():
         # Popped before any stage runs: merge_check.sh must not run the gate inside merge_bar.
         windows, windows_source = windows_requested(os.environ)
         tier, windows_runs, extra_stages = tier_requested(os.environ, windows)
+        refresh_claims(result, windows)
         print(
             "KF_PAYLOAD_TIER windows="
             + str(int(windows))
@@ -1078,6 +1151,7 @@ def main():
             fault = provider_fault(log)
             if fault:
                 raise ProviderFault(fault)
+            refresh_claims(result, windows)  # the guest receipt exists once provisioning ran
             result["hardware"] = hardware()
             rows = provision_rows(log, rc)
             tags = {

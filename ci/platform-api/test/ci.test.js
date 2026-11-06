@@ -90,7 +90,27 @@ test('ci: run page carries stages and host facts; final runs are immutable', asy
     run.stages.map((s) => s.name),
     rows.ci_run_stages.filter((s) => s.run_id === finalRun.run_id).map((s) => s.name),
   );
-  assert.deepEqual(run.host.drivers, { guest: '580.159.04', host: '580.95.05' });
+  // The host driver is the box's own driver and each guest has its own: all claims, none of them
+  // the provider's offer label (which is not stored or served).
+  const claimed = rows.ci_runs.find(
+    (r) => r.verdict === 'PASS' && rows.ci_run_claims.some((c) => c.run_id === r.run_id),
+  );
+  const claims = rows.ci_run_claims.filter((c) => c.run_id === claimed.run_id);
+  const host = (await call('/v1/ci/runs/' + claimed.run_id)).body.run.host;
+  assert.equal(host.host_driver, claims[0].host_driver);
+  assert.deepEqual(
+    host.guests.map((g) => [g.os, g.os_version, g.driver]),
+    claims.map((c) => [c.guest_os, c.guest_os_version, c.guest_driver]),
+  );
+  assert.deepEqual(host.claimed, ['cpu_vendor', 'host_driver', 'guest_driver']);
+  assert.equal(host.drivers, undefined);
+  assert.doesNotMatch(JSON.stringify(host), /"guest":|cpu_model|SECRET/);
+  // A run without claims says nothing instead of inventing a driver.
+  const bare = rows.ci_runs.find(
+    (r) => r.verdict !== null && !rows.ci_run_claims.some((c) => c.run_id === r.run_id),
+  );
+  const none = (await call('/v1/ci/runs/' + bare.run_id)).body.run.host;
+  assert.deepEqual([none.host_driver, none.guests], [null, []]);
   assert.equal(run.log, null);
   const live = await call('/v1/ci/runs/' + running.run_id);
   assert.equal(live.headers.get('cache-control'), 'public, max-age=30');

@@ -33,6 +33,12 @@
     rev: /^[0-9a-f]{7,40}$/,
     day: /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/,
     path: /^[A-Za-z0-9_][A-Za-z0-9_./-]{0,200}$/,
+    os: /^(?:linux|windows)$/,
+    cpu: /^(?:any|amd|intel)$/,
+    gpu: /^[A-Za-z0-9 .+\-]{1,40}$/,
+    dieId: /^[A-Z]{2}[0-9]{3}[A-Z]?$/,
+    showOne: /^(?:reproduced|imported|community)$/,
+    driver: /^[0-9]{3}\.[0-9]{1,3}(?:\.[0-9]{1,3})?$/,
     logKey: /^runs\/[a-z0-9][a-z0-9-]{5,63}\/[a-z0-9][a-z0-9._-]{0,63}\.(?:log|txt)$/,
   };
   const TIERS = [
@@ -107,7 +113,8 @@
       root,
     );
     for (const [key, value] of Object.entries(params ?? {}))
-      if (value !== null && value !== undefined && value !== '') url.searchParams.set(key, value);
+      if (Array.isArray(value)) for (const v of value) url.searchParams.append(key, v);
+      else if (value !== null && value !== undefined && value !== '') url.searchParams.set(key, value);
     return url.href;
   };
   const short = (sha) => (typeof sha === 'string' ? sha.slice(0, 10) : '');
@@ -426,7 +433,10 @@
         ),
       ),
     );
-    const parts = [ruleNote(coverage)];
+    const parts = [
+      el('p', {}, 'Looking for your own GPU? ', el('a', { href: page('find', {}) }, 'Find my setup'), '.'),
+      ruleNote(coverage),
+    ];
     if (!coverage)
       parts.push(
         el(
@@ -678,7 +688,6 @@
     if (!data) throw new Error('Not found.');
     main.querySelector('h1').textContent = 'Run ' + text(data.id);
     const running = data.state === 'running';
-    const drivers = Object.entries(data.host?.drivers ?? {});
     const facts = [
       ['Verdict', verdict(data.verdict, running)],
       ['Source', sourceText(data.source)],
@@ -722,7 +731,17 @@
       ['Started', when(data.started_at)],
       ['Finished', when(data.ended_at) || 'in flight'],
     ];
-    for (const [name, version] of drivers) facts.push([name + ' driver', String(version)]);
+    // The driver on the machine that runs kayfabe, and the OS version and driver of each guest: all
+    // reported by the test box, not verified. The provider's offer label is never shown.
+    if (text(data.host?.host_driver)) facts.push(['Host driver (reported)', text(data.host.host_driver)]);
+    for (const guest of arr(data.host?.guests)) {
+      const os = guest.os === 'windows' ? 'Windows' : guest.os === 'linux' ? 'Linux' : null;
+      if (!os) continue;
+      facts.push([
+        os + ' guest (reported)',
+        [text(guest.os_version) || 'OS version not reported', ', driver ', text(guest.driver) || 'not reported'].join(''),
+      ]);
+    }
     const stages = arr(data.stages);
     content.replaceChildren(
       el('p', {}, el('a', { href: page('', {}) }, 'Back to the matrix')),
@@ -909,7 +928,549 @@
     done(runs.length + ' runs under this result key.');
   }
 
-  const views = { matrix, die, run, commit };
+  // --- find my setup ----------------------------------------------------------------------------
+  // A visitor names an OS, a GPU (marketing name or die id) and optionally a CPU vendor. The name
+  // is looked up in gpu_names.json (a hand-written static table, one name may map to several dies);
+  // the results come from GET /v1/ci/setups, one request per die, and the CPU filter is applied
+  // here. CPU vendor and both drivers are claims by the test box, never verified, and the page
+  // says so. The evidence file (coverage.json) is shown apart and is never a gate result.
+  const FAMILY_OF = { TU: ['turing', 'Turing'], GA: ['ampere', 'Ampere'], AD: ['ada', 'Ada Lovelace'], GB: ['blackwell', 'Blackwell'] };
+  const OS_CHOICES = [
+    ['linux', 'Linux'],
+    ['windows', 'Windows'],
+  ];
+  const CPU_CHOICES = [
+    ['any', 'Any'],
+    ['amd', 'AMD'],
+    ['intel', 'Intel'],
+  ];
+  // What the 'Show' control offers. Reproduced (CI Worker runs) and imported (evidence in the
+  // repository) are on by default; community reports are opt-in and not populated yet.
+  const SHOW_CHOICES = [
+    ['reproduced', 'CI Worker runs (reproduced)'],
+    ['imported', 'Evidence in the repository (imported)'],
+    ['community', 'Community reports (opt-in, none yet)'],
+  ];
+  const SHOW_DEFAULT = ['reproduced', 'imported'];
+  const TIER_CHOICES = [['', 'Any tier'], ...TIERS];
+  const SOURCE_LABEL = {
+    reproduced: 'CI Worker run (reproduced)',
+    community: 'Community report',
+  };
+  const CPU_LABEL = { amd: 'AMD', intel: 'Intel', arm: 'Arm', other: 'other' };
+  const NOISE = new Set(['nvidia', 'geforce', 'graphics', 'card', 'gpu', 'desktop', 'founders', 'edition', 'fe']);
+  const familyOfDie = (die) => FAMILY_OF[die.slice(0, 2)]?.[1] ?? 'unknown family';
+  async function loadGpuNames() {
+    try {
+      const response = await fetch(new URL('gpu_names.json', script.src), {
+        credentials: 'omit',
+        referrerPolicy: 'no-referrer',
+      });
+      if (!response.ok) return null;
+      const data = await response.json();
+      return data && Array.isArray(data.entries) ? data : null;
+    } catch {
+      return null;
+    }
+  }
+  // 'RTX3060ti', 'GeForce RTX 3060 Ti 12GB' and 'rtx 3060 TI' all become [rtx, 3060, ti].
+  function tokens(value) {
+    return String(value)
+      .toLowerCase()
+      .replace(/\b\d{1,2}\s*gb\b/g, ' ')
+      .replace(/([a-z])(\d)/g, '$1 $2')
+      .replace(/(\d)([a-z])/g, '$1 $2')
+      .split(/[^a-z0-9]+/)
+      .filter((t) => t && !NOISE.has(t));
+  }
+  const startsWith = (list, prefix) => prefix.every((t, i) => list[i] === t);
+  const sameTokens = (a, b) => a.length === b.length && startsWith(a, b);
+  function suggestions(value, names, limit = 8) {
+    const query = tokens(value);
+    if (!query.length) return [];
+    const variants = /^[0-9]/.test(query[0]) ? [['rtx', ...query], ['gtx', ...query]] : [query];
+    const rows = arr(names?.entries).map((entry) => ({ entry, words: tokens(entry.name) }));
+    const exact = rows.filter((r) => variants.some((v) => sameTokens(r.words, v)));
+    if (exact.length) return exact.map((r) => r.entry).slice(0, limit);
+    const prefix = rows.filter((r) => variants.some((v) => startsWith(r.words, v)));
+    if (prefix.length) return prefix.map((r) => r.entry).slice(0, limit);
+    // Any word order or a missing leading word: every typed word occurs in the name.
+    return rows
+      .filter((r) => query.every((t) => r.words.some((w) => w.startsWith(t))))
+      .map((r) => r.entry)
+      .slice(0, limit);
+  }
+  // -> {kind: 'laptop' | 'die' | 'card' | 'choose' | 'none', ...}
+  function resolveGpu(value, names) {
+    const typed = value.trim();
+    if (/\b(?:laptop|mobile|notebook|max-?q)\b/i.test(typed)) return { kind: 'laptop' };
+    if (PATTERN.dieId.test(typed.toUpperCase()) && !/\s/.test(typed))
+      return { kind: 'die', dies: [typed.toUpperCase()], label: typed.toUpperCase() };
+    const found = suggestions(typed, names, 20);
+    const query = tokens(typed);
+    const variants = /^[0-9]/.test(query[0] ?? '') ? [['rtx', ...query], ['gtx', ...query]] : [query];
+    const exact = found.filter((e) => variants.some((v) => sameTokens(tokens(e.name), v)));
+    if (exact.length === 1) return { kind: 'card', entry: exact[0] };
+    if (found.length === 1) return { kind: 'card', entry: found[0] };
+    if (found.length) return { kind: 'choose', entries: found };
+    return { kind: 'none' };
+  }
+  function radios(name, choices, selected, disabled) {
+    return choices.map(([id, label]) =>
+      el(
+        'label',
+        { class: 'kf-radio' },
+        el('input', { type: 'radio', name, value: id, checked: id === selected }),
+        ' ',
+        label,
+      ),
+    ).concat(
+      (disabled ?? []).map(([id, label]) =>
+        el(
+          'label',
+          { class: 'kf-radio kf-disabled' },
+          el('input', { type: 'radio', name, value: id, disabled: true }),
+          ' ',
+          label,
+        ),
+      ),
+    );
+  }
+  function checkboxes(name, choices, selected) {
+    return choices.map(([id, label]) =>
+      el(
+        'label',
+        { class: 'kf-radio' },
+        el('input', { type: 'checkbox', name, value: id, checked: selected.includes(id) }),
+        ' ',
+        label,
+      ),
+    );
+  }
+  function findForm(f, names) {
+    const list = el('ul', { id: 'kf-suggest', class: 'kf-suggest', 'aria-label': 'Matching cards' });
+    const input = el('input', {
+      id: 'kf-gpu',
+      name: 'gpu',
+      type: 'search',
+      maxlength: 40,
+      autocomplete: 'off',
+      spellcheck: 'false',
+      value: f.typed ?? '',
+      'aria-describedby': 'kf-gpu-help',
+      'aria-controls': 'kf-suggest',
+    });
+    const form = el(
+      'form',
+      { class: 'kf-find', method: 'get', action: page('find', {}) },
+      el(
+        'fieldset',
+        {},
+        el('legend', {}, 'Operating system in the guest'),
+        radios('os', OS_CHOICES, f.os),
+      ),
+      el(
+        'div',
+        { class: 'kf-field' },
+        el('label', { for: 'kf-gpu' }, 'GPU'),
+        input,
+        el(
+          'p',
+          { id: 'kf-gpu-help', class: 'kf-small' },
+          'A name such as RTX 3060 or a die such as GA106. Desktop cards only: laptop GPUs are not covered.',
+        ),
+        list,
+      ),
+      el(
+        'fieldset',
+        {},
+        el('legend', {}, 'CPU vendor of the host'),
+        radios('cpu', CPU_CHOICES, f.cpu, [['arm', 'Arm (arm64): not tested yet']]),
+      ),
+      el(
+        'fieldset',
+        {},
+        el('legend', {}, 'Show'),
+        checkboxes('show', SHOW_CHOICES, f.show),
+      ),
+      el(
+        'div',
+        { class: 'kf-field' },
+        el('label', { for: 'kf-tier' }, 'Tier'),
+        el(
+          'select',
+          { id: 'kf-tier', name: 'tier' },
+          TIER_CHOICES.map(([id, label]) =>
+            el('option', { value: id, selected: id === (f.tier ?? '') }, label),
+          ),
+        ),
+      ),
+      el(
+        'div',
+        { class: 'kf-field' },
+        el('label', { for: 'kf-driver' }, 'Driver version (host or guest, optional)'),
+        el('input', {
+          id: 'kf-driver',
+          name: 'driver',
+          type: 'text',
+          maxlength: 16,
+          inputmode: 'decimal',
+          placeholder: '580.95.05',
+          pattern: '[0-9]{3}\\.[0-9]{1,3}(\\.[0-9]{1,3})?',
+          value: f.driver ?? '',
+        }),
+      ),
+      el('button', { type: 'submit', class: 'kf-button' }, 'Show results'),
+    );
+    const refresh = () => {
+      const found = input.value.trim() ? suggestions(input.value, names) : [];
+      list.replaceChildren(
+        ...found.map((entry) =>
+          el(
+            'li',
+            {},
+            el(
+              'button',
+              { type: 'button', class: 'kf-suggestion' },
+              entry.name,
+              el('span', { class: 'kf-small' }, ' ' + arr(entry.dies).join(', ')),
+            ),
+          ),
+        ),
+      );
+      list.hidden = found.length === 0;
+      for (const [i, button] of [...list.querySelectorAll('button')].entries())
+        button.addEventListener('click', () => {
+          input.value = found[i].name;
+          form.requestSubmit ? form.requestSubmit() : form.submit();
+        });
+    };
+    input.addEventListener('input', refresh);
+    refresh();
+    return form;
+  }
+  const resultWord = (setup) => {
+    const latest = setup.latest ?? {};
+    const chip = verdict(latest.result, false);
+    const link = PATTERN.id.test(latest.id ?? '')
+      ? el('a', { href: page('run', { id: latest.id }) }, chip)
+      : chip;
+    // A FAIL in the other guest OS of a run over both is this setup's UNATTRIBUTED, said in words.
+    const note =
+      latest.result === 'UNATTRIBUTED' && latest.verdict === 'FAIL'
+        ? el('span', { class: 'kf-small kf-block' }, 'the run failed in the other guest OS')
+        : latest.result === 'UNATTRIBUTED' || latest.result === 'RETRY'
+          ? el('span', { class: 'kf-small kf-block' }, 'no verdict on this setup')
+          : null;
+    const origin = el(
+      'span',
+      { class: 'kf-small kf-block' },
+      setup.source === 'community'
+        ? SOURCE_LABEL.community + ', ' + (setup.report_tier === 'reviewed' ? 'reviewed' : 'unverified') + ' (not a gate result)'
+        : SOURCE_LABEL.reproduced,
+    );
+    return [link, note, origin];
+  };
+  const reported = (value) => (typeof value === 'string' && value ? value : null);
+  const notReported = () => el('span', { class: 'kf-small' }, 'not reported');
+  function setupRow(setup) {
+    const latest = setup.latest ?? {};
+    const pass = setup.last_pass;
+    const counts = [
+      (setup.passed ?? 0) + ' pass',
+      (setup.failed ?? 0) + ' fail',
+      (setup.other ?? 0) + ' other',
+    ].join(', ');
+    return el(
+      'tr',
+      {},
+      el('td', { 'data-label': 'Guest driver' }, reported(setup.guest_driver) ?? notReported()),
+      el('td', { 'data-label': 'Host driver' }, reported(setup.host_driver) ?? notReported()),
+      el(
+        'td',
+        { 'data-label': 'CPU vendor (reported)' },
+        setup.cpu_vendor ? (CPU_LABEL[setup.cpu_vendor] ?? setup.cpu_vendor) : notReported(),
+      ),
+      el('td', { 'data-label': 'Latest result' }, resultWord(setup)),
+      el('td', { 'data-label': 'Runs' }, counts + ' of ' + (setup.runs ?? 0)),
+      el('td', { 'data-label': 'Latest date' }, day(latest.ended_at) || 'unknown'),
+      el(
+        'td',
+        { 'data-label': 'Run' },
+        PATTERN.id.test(latest.id ?? '')
+          ? el('a', { href: page('run', { id: latest.id }) }, latest.id)
+          : 'unknown',
+        el('span', { class: 'kf-small kf-block' }, 'commit ', commitLink(latest.commit)),
+      ),
+      el(
+        'td',
+        { 'data-label': 'Last pass' },
+        pass && PATTERN.id.test(pass.id ?? '')
+          ? [el('a', { href: page('run', { id: pass.id }) }, pass.id), ' ', day(pass.ended_at)]
+          : 'none',
+      ),
+    );
+  }
+  function setupTable(rows, label) {
+    return el(
+      'div',
+      { class: 'kf-scroll', tabindex: 0, role: 'region', 'aria-label': label },
+      el(
+        'table',
+        { class: 'kf-runs kf-setups' },
+        el('caption', {}, label),
+        el(
+          'thead',
+          {},
+          el(
+            'tr',
+            {},
+            ['Guest driver', 'Host driver', 'CPU vendor (reported)', 'Latest result', 'Runs', 'Latest date', 'Run', 'Last pass'].map(
+              (h) => el('th', { scope: 'col' }, h),
+            ),
+          ),
+        ),
+        el('tbody', {}, rows.map(setupRow)),
+      ),
+    );
+  }
+  // The reason the repository gives for an untested die and OS, or the plain absence of one.
+  function notTested(die, os, family, coverage, cpuHidden, cpu, f) {
+    const cell = arr(coverage?.families)
+      .find((f) => f.id === family)
+      ?.dies?.find((d) => d.id === die)?.cells?.[os];
+    const parts = [
+      el('span', { class: 'kf-v kf-v-none' }, 'not tested'),
+      el('span', { class: 'kf-small' }, 'No runs for this combination.'),
+    ];
+    if (f && !f.show.some((x) => x === 'reproduced' || x === 'community') && !f.show.includes('imported'))
+      parts.push(el('span', { class: 'kf-small' }, 'No source is selected under Show.'));
+    else if (cpu !== 'any' || f?.driver)
+      parts.push(
+        el(
+          'span',
+          { class: 'kf-small' },
+          'No run matches the CPU vendor or driver filter for this die and guest OS. Remove the filter to see the other runs, if there are any.',
+        ),
+      );
+    else if (cell?.state === 'not_covered' && text(cell.reason))
+      parts.push(el('span', { class: 'kf-small' }, text(cell.reason)));
+    else if (cell?.state === 'covered')
+      parts.push(
+        el(
+          'span',
+          { class: 'kf-small' },
+          'No CI Worker run of this die and guest OS is recorded yet. The repository holds evidence from direct runs (below); it is not a gate result.',
+        ),
+      );
+    else
+      parts.push(
+        el(
+          'span',
+          { class: 'kf-small' },
+          'No run of this die and guest OS is recorded, and the repository states no reason.',
+        ),
+      );
+    return el('div', { class: 'kf-block kf-block-none' }, parts);
+  }
+  // The request for one die. The API's default is the reproduced rows; community rows are asked for
+  // only when the visitor opts in, and a view that shows only imported evidence asks for nothing.
+  // The CPU vendor and driver filters go to the API in live mode, so the page limit of one request
+  // can never hide a matching setup; the fixture holds one file per die, so the page filters there.
+  function setupsPath(die, f) {
+    const wanted = ['reproduced', 'community'].filter((x) => f.show.includes(x));
+    if (!wanted.length) return null;
+    return (
+      '/v1/ci/setups?os=' +
+      f.os +
+      '&gpu=' +
+      die +
+      (mode === 'live' && f.cpu !== 'any' ? '&cpu=' + f.cpu : '') +
+      (mode === 'live' && f.driver ? '&driver=' + f.driver : '') +
+      (f.tier ? '&tier=' + f.tier : '') +
+      (wanted.includes('community') ? '&source=' + wanted.join(',') : '')
+    );
+  }
+  async function dieSection(die, f, coverage, entryNote) {
+    const os = f.os;
+    const family = FAMILY_OF[die.slice(0, 2)]?.[0] ?? null;
+    const heading = el('h2', {}, die + ' (' + familyOfDie(die) + ')');
+    const section = el('section', { class: 'kf-die-result', 'aria-label': die }, heading);
+    let rows = [];
+    let failed = null;
+    const path = setupsPath(die, f);
+    if (path)
+      try {
+        const data = await load(path);
+        rows = arr(data.setups).filter(
+          (s) => s.os === os && s.die === die && PATTERN.id.test(s.latest?.id ?? ''),
+        );
+        if (data.truncated) failed = 'More setups exist than this list shows.';
+      } catch (error) {
+        failed = error instanceof Error ? error.message : 'Loading failed.';
+        section.append(el('p', { class: 'kf-error' }, 'Results for ' + die + ' could not be loaded: ' + failed));
+        return { section, shown: 0 };
+      }
+    const byCpu = f.cpu === 'any' ? rows : rows.filter((s) => s.cpu_vendor === f.cpu);
+    const shown = f.driver ? byCpu.filter((s) => s.host_driver === f.driver || s.guest_driver === f.driver) : byCpu;
+    const hidden = rows.length - shown.length;
+    if (entryNote) section.append(el('p', { class: 'kf-small' }, entryNote));
+    const cell = arr(coverage?.families)
+      .find((x) => x.id === family)
+      ?.dies?.find((d) => d.id === die)?.cells?.[os];
+    const evidence = f.show.includes('imported') && cell && cell.state === 'covered';
+    if (shown.length)
+      section.append(
+        setupTable(shown, die + ' on ' + (OS_CHOICES.find(([id]) => id === os)?.[1] ?? os) + ': results by driver'),
+      );
+    else if (!evidence) section.append(notTested(die, os, family, coverage, rows.length > 0, f.cpu, f));
+    else
+      section.append(
+        el(
+          'div',
+          { class: 'kf-block kf-block-none' },
+          el('span', { class: 'kf-v kf-v-none' }, 'not tested'),
+          el(
+            'span',
+            { class: 'kf-small' },
+            'No runs for this combination. The evidence below comes from direct runs and is not a gate result.',
+          ),
+        ),
+      );
+    if (shown.length && hidden)
+      section.append(
+        el(
+          'p',
+          { class: 'kf-small' },
+          hidden + (hidden === 1 ? ' setup is' : ' setups are') + ' hidden by the CPU vendor or driver filter.',
+        ),
+      );
+    if (failed) section.append(el('p', { class: 'kf-note' }, failed));
+    if (evidence)
+      section.append(
+        el('h3', {}, 'Evidence in the repository, not CI gate results'),
+        ...coverageBlocks(cell, true),
+      );
+    return { section, shown: shown.length };
+  }
+  async function find() {
+    // Every filter is a URL parameter, so a filtered view can be bookmarked and shared. An invalid
+    // value is ignored (the default applies); 'show' repeats once per ticked source.
+    const picked = query.getAll('show').filter((v) => PATTERN.showOne.test(v));
+    const f = {
+      os: param('os') ?? 'linux',
+      cpu: param('cpu') ?? 'any',
+      typed: param('gpu'),
+      show: picked.length ? [...new Set(picked)] : SHOW_DEFAULT,
+      tier: param('tier'),
+      driver: param('driver'),
+    };
+    const { os, cpu, typed } = f;
+    const sameShow = f.show.length === SHOW_DEFAULT.length && SHOW_DEFAULT.every((x) => f.show.includes(x));
+    const keep = (gpu) => ({
+      os,
+      cpu: cpu === 'any' ? null : cpu,
+      gpu,
+      show: sameShow ? null : f.show,
+      tier: f.tier,
+      driver: f.driver,
+    });
+    const [names, coverage] = await Promise.all([loadGpuNames(), loadCoverage()]);
+    filters.replaceChildren(findForm(f, names));
+    const claims = el(
+      'p',
+      { class: 'kf-rule', role: 'note' },
+      el('strong', {}, 'What is verified. '),
+      'A result is the CI Worker’s verdict for a run. The CPU vendor, the host driver (the NVIDIA driver on the machine that runs kayfabe) and the guest driver (the driver inside the guest) are reported by the test box and are not verified: they sort the runs and never decide a result. The Windows guest’s OS version and driver are the test harness’s configured values, not read from the guest. A run over both guest OSes counts once under each.',
+    );
+    const lead = [claims];
+    if (!names)
+      lead.push(
+        el(
+          'p',
+          { class: 'kf-note' },
+          'The GPU name table could not be loaded; enter a die id such as GA106.',
+        ),
+      );
+    if (!typed) {
+      content.replaceChildren(
+        ...lead,
+        el('p', {}, 'Choose the guest OS and a GPU above to see which driver versions have been tested and how the runs ended.'),
+      );
+      done('Enter a GPU to see results.');
+      return;
+    }
+    const match = resolveGpu(typed, names);
+    if (match.kind === 'laptop') {
+      content.replaceChildren(
+        ...lead,
+        el('p', { class: 'kf-block kf-block-none' }, el('span', { class: 'kf-v kf-v-none' }, 'laptops are not covered'), el('span', { class: 'kf-small' }, text(names?.laptops) || 'Laptop GPUs use other dies than the desktop cards of the same name, and nothing here is a result for them.')),
+      );
+      done('Laptop GPUs are not covered.');
+      return;
+    }
+    if (match.kind === 'none') {
+      content.replaceChildren(
+        ...lead,
+        el('p', {}, 'No card named “' + typed + '” is in the table.'),
+        el('p', { class: 'kf-small' }, text(names?.unmapped) || 'Enter the die (for example GA106) to look it up.'),
+      );
+      done('Unknown name. Enter the die, for example GA106.');
+      return;
+    }
+    if (match.kind === 'choose') {
+      content.replaceChildren(
+        ...lead,
+        el('p', {}, 'Several cards match “' + typed + '”. Pick one:'),
+        el(
+          'ul',
+          {},
+          match.entries.map((e) =>
+            el(
+              'li',
+              {},
+              el('a', { href: page('find', keep(e.name)) }, e.name),
+              el('span', { class: 'kf-small' }, ' ' + arr(e.dies).join(', ')),
+            ),
+          ),
+        ),
+      );
+      done(match.entries.length + ' cards match.');
+      return;
+    }
+    const dies = match.kind === 'die' ? match.dies : arr(match.entry.dies).filter((d) => PATTERN.dieId.test(d));
+    const label = match.kind === 'die' ? match.label : 'RTX/GTX ' + match.entry.name;
+    main.querySelector('h1').textContent = 'Find my setup: ' + (match.kind === 'die' ? match.label : match.entry.name);
+    const parts = [...lead];
+    if (match.kind === 'card') {
+      parts.push(
+        el(
+          'p',
+          {},
+          match.entry.name + ' boards use ' + (dies.length === 1 ? 'the die ' : 'these dies: ') + dies.join(', ') + '.' + (dies.length > 1 ? ' Results are listed for each; check which die your card has (GPU-Z names it).' : ''),
+        ),
+        el('p', { class: 'kf-small' }, text(names?.variants)),
+      );
+    } else if (!arr(names?.entries).some((e) => arr(e.dies).includes(match.label)))
+      parts.push(el('p', { class: 'kf-small' }, 'No card name in the table lists this die; showing the die as typed.'));
+    const sections = await Promise.all(
+      dies.map((die) => dieSection(die, f, coverage, match.kind === 'card' ? text(match.entry.note) : '')),
+    );
+    for (const s of sections) parts.push(s.section);
+    content.replaceChildren(...parts);
+    const rows = sections.reduce((n, s) => n + s.shown, 0);
+    done(
+      label.replace('RTX/GTX ', '') +
+        ' on ' +
+        (OS_CHOICES.find(([id]) => id === os)?.[1] ?? os) +
+        ': ' +
+        rows +
+        (rows === 1 ? ' setup' : ' setups') +
+        ' with results.',
+    );
+  }
+
+  const views = { matrix, die, run, commit, find };
   const view = views[main.dataset.page];
   if (view) view().catch(fail);
 })();

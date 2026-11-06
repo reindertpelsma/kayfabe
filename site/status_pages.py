@@ -25,6 +25,7 @@ PAGES = {
     "die": ("status/die/index.html", "Die coverage", "Every run recorded for one GPU die: live results and evidence in the repository."),
     "run": ("status/run/index.html", "Test run", "One CI Worker run: host facts, stages and log."),
     "commit": ("status/commit/index.html", "Commit results", "The CI Worker runs recorded for one commit or result key."),
+    "find": ("status/find/index.html", "Find my setup", "Pick a guest OS, a GPU and a CPU vendor and see which driver versions kayfabe has been run on, with result, date and run."),
 }
 
 NAV = [
@@ -117,6 +118,7 @@ def page_body(page, title, fixture):
         "die": "Every result recorded for one GPU die, by tier and platform, and every imported run.",
         "run": "One run of the CI Worker.",
         "commit": "The CI Worker runs recorded for one commit or result key.",
+        "find": "Choose your guest OS and GPU to see which driver versions have been run, how the runs ended and when. Every choice is in the address, so a filtered view can be shared.",
     }[page]
     return (
         f"      <h1>{escape(title)}</h1>\n{banner}"
@@ -180,7 +182,7 @@ def write_status(output, api_base=None, logs_base=None, fixture=None, docs_url="
         target.parent.mkdir(parents=True, exist_ok=True)
         body = page_body(page, title, fixture is not None)
         target.write_text(shell(page, title, description, body, docs_url, meta))
-    for name in ["status.js", "status.css", "coverage.json"]:
+    for name in ["status.js", "status.css", "coverage.json", "gpu_names.json"]:
         shutil.copy2(SOURCE / name, output / "status" / name)
     if fixture is not None:
         shutil.copy2(fixture, output / "status/fixture.json")

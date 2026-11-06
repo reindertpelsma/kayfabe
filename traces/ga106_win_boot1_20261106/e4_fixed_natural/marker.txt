@@ -1,0 +1,2 @@
+RUN_GATE_START tag=e4fix src=/root/kf-fix 2026-11-06T02:39:45+00:00 rev=04b7eccac WINVM_QEMU=/workspace/bench/kf3-bins/9269a3a1/qemu-system-x86_64
+RUN_GATE_EXIT tag=e4fix rc=0 2026-11-06T03:23:17+00:00

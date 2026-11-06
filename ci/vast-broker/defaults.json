@@ -70,19 +70,24 @@
   },
   "dieRules": [
     {
+      "die": "TU117",
+      "cc": 750,
+      "names": ["GTX_1650", "GTX_1630"]
+    },
+    {
       "die": "TU116",
       "cc": 750,
-      "names": ["GTX_16*"]
+      "names": ["GTX_1660*", "GTX_1650_SUPER", "GTX_1650_S"]
     },
     {
       "die": "TU106",
       "cc": 750,
-      "names": ["RTX_2060*"]
+      "names": ["RTX_2060*", "RTX_2070"]
     },
     {
       "die": "TU104",
       "cc": 750,
-      "names": ["RTX_2070*", "RTX_2080", "RTX_2080_SUPER"]
+      "names": ["RTX_2070_S*", "RTX_2070S*", "RTX_2080", "RTX_2080_SUPER", "RTX_2080_S", "RTX_2080S"]
     },
     {
       "die": "TU102",

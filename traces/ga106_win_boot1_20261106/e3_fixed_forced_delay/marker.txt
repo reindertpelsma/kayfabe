@@ -1,0 +1,2 @@
+RUN_GATE_START tag=e3fix src=/root/kf-fix 2026-11-06T01:59:30+00:00 rev=04b7eccac WINVM_QEMU=/workspace/bench/kf3-bins/9269a3a1/qemu-system-x86_64
+RUN_GATE_EXIT tag=e3fix rc=0 2026-11-06T02:39:33+00:00

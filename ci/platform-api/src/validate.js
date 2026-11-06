@@ -30,6 +30,18 @@ export const PATTERNS = Object.freeze({
   family: /^[a-z][a-z0-9]{2,15}$/,
   driver: /^[0-9]{3}\.[0-9]{1,3}(?:\.[0-9]{1,3})?$/,
   cpu: /^(?:intel|amd)$/,
+  // /v1/ci/setups and /v1/ci/facets (migration 0003): the CPU vendor the box reported, the guest OS
+  // and one to four GPU dies, comma separated (a marketing name can map to several dies).
+  cpuVendor: /^(?:amd|intel|arm|other)$/,
+  os: /^(?:linux|windows)$/,
+  // Where a row comes from. 'reproduced' = a run of the CI Worker (the only rows the stores hold
+  // today). 'imported' = evidence imported from the repository: a static file on the site, not a
+  // database row, so asking for it here returns nothing. 'community' = reported or reviewed rows
+  // of a later, separate store (ci_runs.source 'reported' / 'reviewed': reserved, none exist).
+  sourceList: /^(?:reproduced|imported|community)(?:,(?:reproduced|imported|community)){0,2}$/,
+  // Of a community row: 'unverified' (reported) or 'reviewed'. Never set on a reproduced row.
+  reportTier: /^(?:unverified|reviewed)$/,
+  gpuList: /^[A-Z]{2}[0-9]{3}[A-Z]?(?:,[A-Z]{2}[0-9]{3}[A-Z]?){0,3}$/,
   nested: /^[01]$/,
   branch: /^(?:master|next)$/,
   verdict: /^(?:PASS|FAIL|RETRY|UNAVAILABLE|RUNNING)$/,

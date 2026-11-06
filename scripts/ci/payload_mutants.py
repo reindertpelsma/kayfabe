@@ -310,6 +310,66 @@ CASES += [
     ),
 ]
 
+# 2026-11-06: the setup picker's host claims (optional, bounded, never a verdict).
+CASES += [
+    (
+        "claims-sent-to-a-worker-that-did-not-ask",
+        report_replace(
+            '**({"host_claims": claims} if claims and env.get("KF_HOST_CLAIMS") == "1" else {}),',
+            '**({"host_claims": claims} if claims else {}),',
+        ),
+        "vast_report.py",
+    ),
+    (
+        "claims-forwarded-uncleaned",
+        report_replace(
+            'claims = {k: v for k, v in clean_claims(doc["host_claims"]).items() if v is not None}',
+            'claims = dict(doc["host_claims"]) if isinstance(doc["host_claims"], dict) else {}',
+        ),
+        "vast_report.py",
+    ),
+    (
+        "claims-variable-not-in-the-env-contract",
+        report_replace('    ("KF_HOST_CLAIMS", False, _match(r"1")),\n', ""),
+        "vast_report.py",
+    ),
+    (
+        "claims-driver-pattern-loose",
+        report_replace(
+            'CLAIM_DRIVER = re.compile(r"[0-9]{3,4}\\.[0-9]{1,5}(?:\\.[0-9]{1,5})?")',
+            'CLAIM_DRIVER = re.compile(r".{1,16}")',
+        ),
+        "vast_report.py",
+    ),
+    (
+        "claims-identifier-check-removed",
+        report_replace(
+            "    return None if CLAIM_IDENTIFIER.search(value) or CLAIM_TOKEN.search(value) else value",
+            "    return value",
+        ),
+        "vast_report.py",
+    ),
+    (
+        "claims-windows-guest-without-the-stage",
+        replace('    if windows:\n        raw["windows_os_version"]', '    if True:\n        raw["windows_os_version"]'),
+    ),
+    (
+        "claims-model-not-sanitised",
+        replace('            model = re.sub(r"[^A-Za-z0-9 ().@+/_-]", " ", value)', "            model = value"),
+    ),
+    (
+        "claims-error-fails-the-run",
+        replace(
+            "    except (OSError, ValueError, UnicodeError, EvidenceError):\n        return\n    if claims:",
+            "    except ZeroDivisionError:\n        return\n    if claims:",
+        ),
+    ),
+    (
+        "claims-numeric-model-line-is-the-model",
+        replace('        elif key == "model name" and model is None and value:', '        elif key in ("model name", "model") and model is None and value:'),
+    ),
+]
+
 CASES += [
     ("structured-arm-logs-omitted", replace('snapshot["diagnostics"] = events', "pass")),
     (
@@ -582,12 +642,22 @@ def main():
             "test_vast_payload_guest_guard.py",
             "test_vast_payload_result_logs.py",
             "test_vast_payload_summary.py",
+            "test_vast_payload_claims.py",
+            "host_claims_vectors.json",
             "test_vast_box.py",
             "vast_report.py",
         ]:
             shutil.copyfile(HERE / name, ci / name)
         bench = root / "scripts/bench"
         bench.mkdir()
+        # The claims test checks its guest constants against the scripts that install the guests.
+        for relative in (
+            "provision_bench_tree.sh",
+            "windows/win_vm.sh",
+            "box/windows_gate.sh",
+        ):
+            (bench / relative).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(HERE.parent / "bench" / relative, bench / relative)
         shutil.copyfile(HERE.parent / "bench/host_xid_watch.sh", bench / "host_xid_watch.sh")
         shutil.copyfile(HERE.parent / "bench/native_xid_guard.py", bench / "native_xid_guard.py")
         (bench / "tests").mkdir()

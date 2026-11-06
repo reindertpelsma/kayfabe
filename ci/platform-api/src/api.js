@@ -143,6 +143,22 @@ async function familiesWithDies(db, only = null) {
 
 const CI_LOG_KEY = /^runs\/[a-z0-9][a-z0-9-]{5,63}\/[a-z0-9][a-z0-9._-]{0,63}\.(?:log|txt)$/;
 const MAX_CI_TREES = 5;
+const CI_RESULTS = new Set(['PASS', 'FAIL', 'RETRY', 'UNATTRIBUTED']);
+const CPU_VENDORS = new Set(['amd', 'intel', 'arm', 'other']);
+const CPU_ARCHS = new Set(['x86_64', 'aarch64']);
+const DRIVER_OUT = /^[0-9]{1,4}(?:\.[0-9]{1,5}){1,3}$/;
+const driverOut = (v) => (typeof v === 'string' && DRIVER_OUT.test(v) ? v : null);
+// ci_runs.source -> the public vocabulary: reproduced stays; the reserved community values
+// ('reported' = unverified, 'reviewed') become source 'community' with a report_tier.
+const sourceOut = (v) =>
+  v === 'reproduced' ? 'reproduced' : v === 'reported' || v === 'reviewed' ? 'community' : null;
+const reportTierOut = (v) =>
+  v === 'reported' ? 'unverified' : v === 'reviewed' ? 'reviewed' : null;
+const osVersionOut = (v) =>
+  typeof v === 'string' && /^[a-z0-9][a-z0-9 ._()+-]{0,31}$/.test(v) ? v : null;
+const vendorOut = (v) => (CPU_VENDORS.has(v) ? v : null);
+// The setups response says which of its fields are claims by the test box, not verified facts.
+const CLAIMED_FIELDS = Object.freeze(['cpu_vendor', 'host_driver', 'guest_driver']);
 
 function ciSummary(row) {
   return {
@@ -158,16 +174,6 @@ function ciSummary(row) {
     started_at: row.started_at,
     ended_at: row.ended_at,
   };
-}
-
-function drivers(text) {
-  const value = plainObject(text);
-  if (!value) return {};
-  const out = {};
-  for (const [key, version] of Object.entries(value).slice(0, 8))
-    if (/^[a-z][a-z0-9_]{0,31}$/.test(key) && typeof version === 'string')
-      out[key] = version.slice(0, 32);
-  return out;
 }
 
 const newestCi = (a, b) =>
@@ -406,6 +412,130 @@ const handlers = {
     });
   },
 
+  // Setup picker: one row per (guest OS, die, CPU vendor, host driver, guest driver). The CPU
+  // vendor and both drivers are claims by the test box (null: not reported) and never a verdict.
+  async ciSetups(db, q) {
+    const limit = pageLimit(q.limit);
+    const dies = q.gpu === null ? [] : [...new Set(q.gpu.split(','))];
+    // No source filter = the reproduced rows (community rows are opt-in); imported evidence is a
+    // static file on the site, never a database row, so it adds nothing here.
+    const sources = new Set(q.source === null ? ['reproduced'] : q.source.split(','));
+    const params = [
+      q.os,
+      dies[0] ?? null,
+      dies[1] ?? null,
+      dies[2] ?? null,
+      dies[3] ?? null,
+      q.cpu,
+      q.driver,
+      q.tier,
+      sources.has('reproduced') ? 1 : 0,
+      sources.has('community') ? 1 : 0,
+      q.report_tier,
+      limit + 1,
+    ];
+    const rows = await db.all('ciSetups', params);
+    const result = (value) => (CI_RESULTS.has(value) ? value : null);
+    const setups = rows.slice(0, limit).map((r) => ({
+      os: r.os,
+      die: r.die,
+      family: r.family,
+      source: sourceOut(r.source),
+      report_tier: reportTierOut(r.source),
+      cpu_vendor: vendorOut(r.cpu_vendor),
+      host_driver: driverOut(r.host_driver),
+      guest_driver: driverOut(r.guest_driver),
+      gpu_name: typeof r.gpu_name === 'string' ? r.gpu_name.slice(0, 100) : null,
+      runs: r.runs,
+      passed: r.passed,
+      failed: r.failed,
+      other: r.runs - r.passed - r.failed,
+      last_at: r.last_at,
+      latest: {
+        id: r.latest_id,
+        result: result(r.latest_result),
+        verdict: result(r.latest_verdict),
+        tier: r.latest_tier,
+        commit: r.latest_commit,
+        tree: r.latest_tree,
+        ended_at: r.latest_ended_at,
+      },
+      last_pass:
+        r.pass_id === null || r.pass_id === undefined
+          ? null
+          : { id: r.pass_id, commit: r.pass_commit, ended_at: r.pass_ended_at },
+    }));
+    return json({
+      api: API_VERSION,
+      filters: {
+        os: q.os,
+        gpu: dies,
+        cpu: q.cpu,
+        driver: q.driver,
+        tier: q.tier,
+        source: [...sources],
+        report_tier: q.report_tier,
+      },
+      claimed: CLAIMED_FIELDS,
+      truncated: rows.length > limit,
+      setups,
+    });
+  },
+
+  async ciFacets(db) {
+    const named = new Map();
+    for (const r of await db.all('ciFacetNames')) {
+      if (!named.has(r.die)) named.set(r.die, []);
+      named.get(r.die).push({ name: r.gpu_name, runs: r.runs });
+    }
+    const values = async (column, ok) =>
+      (await db.all('ciFacetClaim', [column]))
+        .filter((r) => ok(r.value))
+        .map((r) => ({ value: r.value, runs: r.runs }));
+    const isDriver = (v) => driverOut(v) !== null;
+    const platforms = await db.all('ciFacetPlatforms');
+    const bySource = await db.all('ciFacetSources');
+    const count = (names) =>
+      bySource.filter((r) => names.includes(r.source)).reduce((n, r) => n + r.runs, 0);
+    const tierRuns = (name) => bySource.find((r) => r.source === name)?.runs ?? 0;
+    const osRuns = (os) =>
+      platforms
+        .filter((p) => p.platform === os || p.platform === 'both')
+        .reduce((n, p) => n + p.runs, 0);
+    return json({
+      api: API_VERSION,
+      claimed: CLAIMED_FIELDS,
+      os: ['linux', 'windows'].map((os) => ({ value: os, runs: osRuns(os) })).filter((o) => o.runs),
+      dies: (await db.all('ciFacetDies')).map((d) => ({
+        id: d.die,
+        family: d.family,
+        runs: d.runs,
+        last_at: d.last_at,
+        gpu_names: (named.get(d.die) ?? []).slice(0, 8),
+      })),
+      cpu_vendors: await values('cpu_vendor', (v) => CPU_VENDORS.has(v)),
+      cpu_archs: await values('cpu_arch', (v) => CPU_ARCHS.has(v)),
+      host_drivers: await values('host_driver', isDriver),
+      guest_drivers: await values('guest_driver', isDriver),
+      // Every value the source and report_tier filters accept, with what exists behind it. imported
+      // is the static evidence file on the site, which this API does not serve.
+      sources: [
+        { value: 'reproduced', runs: count(['reproduced']), available: count(['reproduced']) > 0 },
+        { value: 'imported', runs: 0, available: false, served_by: 'site evidence file' },
+        {
+          value: 'community',
+          runs: count(['reported', 'reviewed']),
+          available: count(['reported', 'reviewed']) > 0,
+        },
+      ],
+      report_tiers: [
+        { value: 'unverified', runs: tierRuns('reported') },
+        { value: 'reviewed', runs: tierRuns('reviewed') },
+      ].filter((t) => t.runs > 0),
+      tiers: (await db.all('ciFacetTiers')).map((t) => ({ value: t.tier, runs: t.runs })),
+    });
+  },
+
   async ciRun(db, q, [id], env) {
     if (!PATTERNS.runId.test(id)) throw new ApiError(400, 'bad_request', 'invalid run id');
     const row = await db.first('ciRunById', [id]);
@@ -421,6 +551,7 @@ const handlers = {
       typeof row.log_key === 'string' && CI_LOG_KEY.test(row.log_key)
         ? { key: row.log_key, ...(base ? { direct: base + '/' + row.log_key } : {}) }
         : null;
+    const claims = await db.all('ciRunClaims', [id]);
     const final = row.verdict !== null && row.ended_at !== null;
     return json(
       {
@@ -430,7 +561,19 @@ const handlers = {
           profile: row.profile,
           source: row.source,
           stages,
-          host: { gpu_name: row.gpu_name ?? null, drivers: drivers(row.driver_versions_json) },
+          // host_driver: the NVIDIA driver on the machine that runs kayfabe; guests: the OS version
+          // and the driver inside each guest. All claims by the test box (never the provider's
+          // offer label, which is not stored).
+          host: {
+            gpu_name: row.gpu_name ?? null,
+            host_driver: driverOut(claims[0]?.host_driver),
+            guests: claims.map((c) => ({
+              os: c.guest_os === 'linux' || c.guest_os === 'windows' ? c.guest_os : null,
+              os_version: osVersionOut(c.guest_os_version),
+              driver: driverOut(c.guest_driver),
+            })),
+            claimed: CLAIMED_FIELDS,
+          },
           log,
         },
       },
@@ -501,6 +644,8 @@ const ROUTES = [
   [/^\/v1\/runs\/([^/]{1,64})$/, 'run', 'none'],
   [/^\/v1\/commits\/([^/]{1,40})\/requirements$/, 'commitRequirements', 'none'],
   [/^\/v1\/ci\/matrix$/, 'ciMatrix', 'ciMatrix'],
+  [/^\/v1\/ci\/setups$/, 'ciSetups', 'ciSetups'],
+  [/^\/v1\/ci\/facets$/, 'ciFacets', 'none'],
   [/^\/v1\/ci\/trees$/, 'ciTrees', 'ciTrees'],
   [/^\/v1\/ci\/trees\/([^/]{1,64})$/, 'ciTree', 'none'],
   [/^\/v1\/ci\/runs\/([^/]{1,64})$/, 'ciRun', 'none'],

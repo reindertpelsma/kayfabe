@@ -1,0 +1,51 @@
+2026-11-06T00:57:15+00:00
+               total        used        free      shared  buff/cache   available
+Mem:           50538         742       29423           1       20371       49184
+Swap:              0           0           0
+21
+Architecture:                         x86_64
+CPU op-mode(s):                       32-bit, 64-bit
+Address sizes:                        46 bits physical, 48 bits virtual
+Byte Order:                           Little Endian
+CPU(s):                               21
+On-line CPU(s) list:                  0-20
+Vendor ID:                            GenuineIntel
+Model name:                           Intel(R) Xeon(R) CPU E5-2699 v4 @ 2.20GHz
+CPU family:                           6
+Model:                                79
+Thread(s) per core:                   1
+Core(s) per socket:                   1
+Socket(s):                            21
+Stepping:                             1
+BogoMIPS:                             4394.90
+Flags:                                fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ss syscall nx pdpe1gb rdtscp lm constant_tsc arch_perfmon rep_good nopl xtopology cpuid tsc_known_freq pni pclmulqdq vmx ssse3 fma cx16 pdcm pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm abm 3dnowprefetch cpuid_fault pti ssbd ibrs ibpb stibp tpr_shadow flexpriority ept vpid ept_ad fsgsbase tsc_adjust bmi1 hle avx2 smep bmi2 erms invpcid rtm rdseed adx smap xsaveopt arat vnmi umip md_clear arch_capabilities
+Virtualization:                       VT-x
+Hypervisor vendor:                    KVM
+Virtualization type:                  full
+L1d cache:                            672 KiB (21 instances)
+some avg10=0.00 avg60=0.00 avg300=0.00 total=867
+full avg10=0.00 avg60=0.00 avg300=0.00 total=867
+/workspace/cores/core.%e.%p.%s.%t
+real-time non-blocking time  (microseconds, -R) unlimited
+core file size              (blocks, -c) unlimited
+data seg size               (kbytes, -d) unlimited
+scheduling priority                 (-e) 0
+file size                   (blocks, -f) unlimited
+pending signals                     (-i) 202123
+max locked memory           (kbytes, -l) 6468868
+max memory size             (kbytes, -m) unlimited
+open files                          (-n) 1024
+pipe size                (512 bytes, -p) 8
+POSIX message queues         (bytes, -q) 819200
+real-time priority                  (-r) 0
+stack size                  (kbytes, -s) 8192
+cpu time                   (seconds, -t) unlimited
+max user processes                  (-u) 202123
+virtual memory              (kbytes, -v) unlimited
+file locks                          (-x) unlimited
+0
+MemoryHigh=infinity
+MemoryMax=infinity
+
+MemoryHigh=infinity
+MemoryMax=infinity
