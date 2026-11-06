@@ -1,0 +1,31 @@
+2
+Nov 06 19:06:15 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 19:06:57 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 19:07:15 ubuntu kernel: NVRM: GPU at PCI:0000:00:07: GPU-<uuid>
+Nov 06 19:07:15 ubuntu kernel: NVRM: GPU Board Serial Number: <serial>
+Nov 06 19:07:36 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 19:08:00 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 19:08:26 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 19:08:52 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 19:09:11 ubuntu kernel: workqueue: vmstat_update hogged CPU for >10000us 4 times, consider switching to WQ_UNBOUND
+Nov 06 19:09:16 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 19:09:43 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 19:10:01 ubuntu kernel: NVRM: GPU at PCI:0000:00:07: GPU-<uuid>
+Nov 06 19:10:01 ubuntu kernel: NVRM: GPU Board Serial Number: <serial>
+Nov 06 19:10:11 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 19:10:35 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 19:11:03 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 19:11:29 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 19:11:56 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 19:12:22 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 19:12:48 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 19:13:14 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 19:15:38 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 19:16:05 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 19:16:32 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 19:16:58 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 19:17:24 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 19:18:17 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 19:18:45 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 19:19:16 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 19:19:41 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0

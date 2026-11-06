@@ -102,6 +102,30 @@ deploy helper at deploy time, not by CI (final review C1). After any
 change under `src/`, `defaults.json` or the lockfile, record the new hash in both files. Preserve
 the SQLite LEDGER namespace and migration when updating.
 
+## Provider status tolerance (built 2026-11-06, NOT DEPLOYED)
+
+STATUS: LIVE as code, 2026-11-06, on branch `claude/vast-tolerance-20261106`; nothing deployed. The rule,
+its constants (`defaults.json`: `providerGoneReadings` 3, `providerGoneWindowSeconds` 120,
+`providerGoneSpacingSeconds` 20, `providerQuietSeconds` 660, `providerMessageChars` 120), the worst-case billing exposure (the
+close of a really gone instance moves from one reading to 120-180 s for `exited`/`stopped`, and to 11
+quiet minutes for ambiguous words and API errors: table in the README) and the close-line format are in [README.md](README.md), section
+"Provider status tolerance and close lines". Deploy notes (CODE READ, not run):
+
+- The constants are policy in `defaults.json`, not environment variables, so a deploy cannot disable the
+  tolerance by a var; changing them changes the bundle hash.
+- The Worker change alters the bundle (`deployment.json`, `DEPLOYED_BUNDLE_SHA256`). master's `runner.py`
+  pins the deployed bundle, so the coordinator deploys this Worker only after master carries the new pin.
+  Until then the deployed Worker still destroys a box on one non-running reading.
+- No ledger migration: new record fields (`providerBad`, `providerFlaps`, `providerAnomalies`,
+  `providerRaw`, `providerMsg`, `closeLogged`) are optional, so records written by the old Worker are read
+  as "no episode" and a rollback ignores them. A record already ended gets no close line.
+- Reading a run after a loss: `grep '\[Worker\] close reason='` in the run log names the reason and the
+  provider's last status word; `provider gone:` precedes an `ENDED` close from the tolerance;
+  `provider=offline ... (box post accepted)` followed by a surviving run is the flap this change
+  tolerates. `close reason=ENDED provider=running` cannot occur (a running status never closes as ENDED).
+- The independent reaper and the cron cleanup are unchanged: a record that is `closed` is still destroyed
+  by `cleanup()` on every tick, and `/stop-all` and the owner stop do not wait for any window.
+
 ## Deploy the main Worker
 
 [CODE READ: package-lock.json; deploy.mjs] Install Node 22+ and run `npm ci --ignore-scripts` in
