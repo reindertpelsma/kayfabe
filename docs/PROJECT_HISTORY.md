@@ -1,6 +1,9 @@
 # Project history — where kayfabe came from, and what Mode 1 / Mode 2 mean
 
-> ### STATUS — 2026-09-06 / **LIVE**
+> ### STATUS — 2026-11-06 / **SUPERSEDED** by [`STATUS_DETAIL.md`](STATUS_DETAIL.md) and [`../ARCHITECTURE.md`](../ARCHITECTURE.md)
+>
+> Kept for lineage only: the crates and scripts it names are the pre-v3 tree, now under `archive/` or gone
+> (2026-10-31, `archive/README.md`); read the v3 documents for the current state.
 >
 > Lineage and vocabulary. Moved out of `README.md` on 2026-09-06 as part of the front-page
 > rewrite; the text is preserved verbatim from `04860c81` except for added headings and the
