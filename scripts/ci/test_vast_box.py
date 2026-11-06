@@ -24,7 +24,7 @@ import unittest
 from pathlib import Path
 
 SCRIPTS = Path(os.environ.get("KF_CI_SCRIPTS_DIR") or Path(__file__).resolve().parent)
-FILES = ["vast_onstart.sh", "vast_report.py", "kf-box-kill", "kf-box-blob-url"]
+FILES = ["vast_onstart.sh", "vast_report.py", "vast_evidence.py", "kf-box-kill", "kf-box-blob-url"]
 RUN = "4242-7"
 # A run token is a compact HS256 JWT (box protocol 7); the box never verifies it.
 TOKEN = ".".join(
@@ -143,7 +143,7 @@ class Broker:
         base = self.prefix.split("/")
         ok = parts[: len(base)] == base and parts[len(base) + 1 :] == [self.run]
         kind = parts[len(base)] if len(parts) > len(base) else ""
-        if not ok or kind not in ("report", "kill"):
+        if not ok or kind not in ("report", "kill", "evidence"):
             return 404, {"state": "NOT_FOUND"}, {}
         if auth != "Bearer " + self.token:
             return 401, {"state": "UNAUTHORIZED"}, {}
@@ -155,8 +155,10 @@ class Broker:
                 fault = queue.pop(0)
         if fault == "redirect":
             return 302, {}, {"Location": self.redirect_to + "/stolen"}
-        if fault in ("401", "429", "400", "500"):
+        if fault in ("401", "429", "400", "404", "500"):
             return int(fault), {"state": "FAULT"}, {}
+        if kind == "evidence":
+            return 200, {"state": "STORED"}, {}
         if kind != "report":
             return 200, {"state": "OK"}, {}
         if fault == "not_ready":
@@ -1149,6 +1151,7 @@ class Onstart(Tmp):
             KF_CI_PROFILE_DIR=str(self.profile),
             KF_CI_REPORTER_ARGS=" ".join(FAST),
             KF_TEST_DUMP=str(self.tmp / "dump"),
+            KF_PROV_DIR=str(self.tmp / "prov"),
         )
         env.update(env_extra or {})
         full = base_env(env)
@@ -1187,6 +1190,87 @@ class Onstart(Tmp):
         self.assertEqual((self.tmp / "dump.args").read_text().split(), [SHA, NONCE])
         self.assertIn("payload args", (self.ws / "kf-ci-output.log").read_text())
         self.assertRegex(proc.stdout, r"kf-box-kill.*Worker reports 5 minutes remaining")
+
+    # --- evidence bundle (2026-11-06): uploaded after the payload, before the result, never fatal ---
+
+    def test_evidence_is_uploaded_before_the_result_and_named_in_the_log(self):
+        b = self.broker()
+        root = self.tree('echo "stage failed"\nexit 3\n')
+        proc = self.onstart(root, b, env_extra=ACCESS)
+        self.assertEqual(proc.returncode, 3)
+        uploads = b.hits("evidence")
+        self.assertEqual(len(uploads), 1)
+        self.assertEqual(uploads[0]["path"], PREFIX + "/evidence/" + RUN)
+        self.assertEqual(uploads[0]["auth"], "Bearer " + TOKEN)
+        self.assertEqual(uploads[0]["body"][:2], b"\x1f\x8b")
+        self.assertEqual(uploads[0]["access"], (ACCESS["KF_ACCESS_ID"], ACCESS["KF_ACCESS_SECRET"]))
+        result_at = [r["t"] for r in b.reports() if b'"kind":"result"' in r["body"]]
+        self.assertTrue(result_at and uploads[0]["t"] < result_at[0])
+        self.assertRegex(b.texts(), r"evidence uploaded: 4242/7 [0-9]+ sha256 [0-9a-f]{12}")
+        self.assertEqual(b.results()[0]["verdict"], "FAIL")
+        self.assertNotIn(TOKEN, b.texts())
+
+    def test_evidence_is_uploaded_for_a_passing_run_too(self):
+        b = self.broker()
+        proc = self.onstart(self.tree(self.OK_PAYLOAD), b)
+        self.assertEqual(proc.returncode, 0)
+        self.assertEqual(len(b.hits("evidence")), 1)
+        self.assertEqual(b.results()[0]["verdict"], "PASS")
+
+    def test_evidence_survives_a_payload_killed_at_the_soft_deadline(self):
+        b = self.broker()
+        root = self.tree('echo "suite one done"\nsleep 120\n')
+        self.onstart(root, b, env_extra={"KF_SOFT_DEADLINE": str(int(time.time()) + 4)})
+        self.assertEqual(len(b.hits("evidence")), 1)
+        self.assertIn("timeout", [r["name"] for r in b.results()[0]["suites"]])
+
+    def test_a_scan_hit_refuses_the_upload_and_changes_nothing_else(self):
+        b = self.broker()
+        leak = (
+            'mkdir -p "$KF_CI_WORKSPACE/kf-ci-evidence"\n'
+            'cp "$KF_CI_RUN_DIR/env" "$KF_CI_WORKSPACE/kf-ci-evidence/leak.txt"\n'
+        )
+        proc = self.onstart(self.tree(leak + self.OK_PAYLOAD), b)
+        self.assertEqual(proc.returncode, 0)
+        self.assertEqual(b.hits("evidence"), [])
+        self.assertIn("KF_EVIDENCE_REFUSED reason=scan_hit class=", b.texts())
+        self.assertNotIn(TOKEN, b.texts())
+        self.assertEqual(b.results()[0]["verdict"], "PASS")
+
+    def test_a_refused_or_failing_upload_never_changes_the_verdict(self):
+        for fault, reason in (("404", "upload_http_404"), ("401", "upload_http_401")):
+            b = self.broker()
+            b.faults["evidence"] = [fault]
+            proc = self.onstart(self.tree(self.OK_PAYLOAD), b)
+            self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+            self.assertEqual(b.results()[0]["verdict"], "PASS")
+            self.assertIn("KF_EVIDENCE_SKIPPED reason=" + reason, b.texts())
+        b = self.broker()
+        b.faults["evidence"] = ["500", "500", "500"]
+        proc = self.onstart(self.tree(self.OK_PAYLOAD), b)
+        self.assertEqual(proc.returncode, 0)
+        self.assertEqual(b.results()[0]["verdict"], "PASS")
+        self.assertIn("KF_EVIDENCE_SKIPPED reason=upload_http_500", b.texts())
+        self.assertEqual(len(b.hits("evidence")), 3)
+
+    def test_an_old_checkout_without_the_helper_runs_unchanged(self):
+        b = self.broker()
+        root = self.tree(self.OK_PAYLOAD)
+        (root / "scripts" / "ci" / "vast_evidence.py").unlink()
+        proc = self.onstart(root, b)
+        self.assertEqual(proc.returncode, 0)
+        self.assertEqual(b.hits("evidence"), [])
+        self.assertEqual(b.results()[0]["verdict"], "PASS")
+
+    def test_a_hung_helper_is_killed_within_its_bound_and_the_result_still_goes(self):
+        b = self.broker()
+        root = self.tree(self.OK_PAYLOAD)
+        (root / "scripts" / "ci" / "vast_evidence.py").write_text("import time\ntime.sleep(600)\n")
+        proc = self.onstart(root, b, env_extra={"KF_CI_EVIDENCE_MAX": "21"})
+        self.assertEqual(proc.returncode, 0)
+        self.assertLess(self.took, 45)
+        self.assertEqual(b.results()[0]["verdict"], "PASS")
+        self.assertIn("KF_EVIDENCE_SKIPPED reason=helper_exit_124", b.texts())
 
     def test_failing_payload_exit_code_demotes_and_is_propagated(self):
         b = self.broker()

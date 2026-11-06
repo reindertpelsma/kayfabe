@@ -1,0 +1,308 @@
+// Mutation check for the evidence route (src/evidence.js, and its wiring in src/index.js and
+// src/routes.js), GPU-free. Each mutant is applied in place (one or more exact-once replacements),
+// test/evidence.test.js runs, and every file is restored before the next mutant (also on error).
+// Every mutant must make at least TWO named tests fail. Run with no other test running here:
+//   node ci/vast-broker/evidence-mutants.mjs [name ...]
+import { readFileSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+
+const here = fileURLToPath(new URL('.', import.meta.url));
+const TESTS = [here + 'test/evidence.test.js'];
+const E = 'src/evidence.js',
+  I = 'src/index.js',
+  R = 'src/routes.js';
+// [name, [[file, before, after], ...]]
+const MUTANTS = [
+  [
+    'ledger flag not checked',
+    [
+      [
+        I,
+        "        if (prior && (prior.state === 'STORED' || now() - prior.at < EVIDENCE_PENDING_MS))\n          refuse('EVIDENCE_EXISTS', 409);\n",
+        '',
+      ],
+    ],
+  ],
+  ['pending flag never expires', [[I, 'now() - prior.at < EVIDENCE_PENDING_MS', 'true']]],
+  [
+    'pending flag blocks nobody',
+    [
+      [
+        I,
+        "prior.state === 'STORED' || now() - prior.at < EVIDENCE_PENDING_MS",
+        "prior.state === 'STORED'",
+      ],
+    ],
+  ],
+  [
+    'failed write keeps the flag',
+    [[I, '          else delete r.evidence;\n', '          else r.evidence.at = r.evidence.at;\n']],
+  ],
+  [
+    'stored flag never set',
+    [
+      [
+        I,
+        "if (stored) r.evidence = { state: 'STORED', at: now(), sha256 };",
+        "if (false) r.evidence = { state: 'STORED', at: now(), sha256 };",
+      ],
+    ],
+  ],
+  ['head check removed', [[E, "typeof bucket.head === 'function' &&", 'false &&']]],
+  [
+    'flag conflict answers 200',
+    [
+      [
+        I,
+        "          refuse('EVIDENCE_EXISTS', 409);\n        at = now();",
+        "          refuse('EVIDENCE_EXISTS', 200);\n        at = now();",
+      ],
+    ],
+  ],
+  [
+    'gateway evidence limit removed',
+    [
+      [
+        I,
+        'if (sent >= 6 || (!evidenceCounts.has(key) && evidenceCounts.size >= 1024))',
+        'if (false)',
+      ],
+    ],
+  ],
+  ['gateway evidence limit too high', [[I, 'if (sent >= 6 ||', 'if (sent >= 600 ||']]],
+  [
+    'conflict answers 200',
+    [[E, "refuse('EVIDENCE_EXISTS', 409)", "refuse('EVIDENCE_EXISTS', 200)"]],
+  ],
+  [
+    'gzip magic unchecked',
+    [
+      [
+        E,
+        "if (body[0] !== 0x1f || body[1] !== 0x8b) refuse('BAD_REQUEST', 400, 'EVIDENCE_FORMAT');",
+        '',
+      ],
+    ],
+  ],
+  [
+    'declared sha not compared',
+    [[E, "if (sha256 !== claimed) refuse('BAD_REQUEST', 400, 'EVIDENCE_SHA256');", '']],
+  ],
+  [
+    'body length vs declared unchecked',
+    [
+      [
+        E,
+        "if (body.length !== length || body.length < 20) refuse('BAD_REQUEST', 400, 'EVIDENCE_LENGTH');",
+        '',
+      ],
+    ],
+  ],
+  [
+    'cap raised',
+    [
+      [
+        E,
+        'export const EVIDENCE_MAX_BYTES = 8 * 1024 * 1024;',
+        'export const EVIDENCE_MAX_BYTES = 64 * 1024 * 1024;',
+      ],
+    ],
+  ],
+  [
+    'cap not enforced before reading',
+    [[E, "if (Number(raw) > EVIDENCE_MAX_BYTES) refuse('PAYLOAD_TOO_LARGE', 413);", '']],
+  ],
+  [
+    'declared length not required',
+    [
+      [
+        E,
+        "if (raw === null || !/^[1-9][0-9]{0,9}$/.test(raw)) refuse('LENGTH_REQUIRED', 411);",
+        '',
+      ],
+    ],
+  ],
+  [
+    'disabled bucket answers 503',
+    [
+      [
+        I,
+        "if (!evidenceEnabled(env)) refuse('EVIDENCE_DISABLED', 404);",
+        "if (!evidenceEnabled(env)) refuse('EVIDENCE_DISABLED', 503);",
+      ],
+    ],
+  ],
+  [
+    'disabled check removed',
+    [[I, "if (!evidenceEnabled(env)) refuse('EVIDENCE_DISABLED', 404);", '']],
+  ],
+  [
+    'binding check accepts anything',
+    [[E, "typeof env.EVIDENCE_BUCKET.put === 'function'", 'true']],
+  ],
+  [
+    'no run authentication in the ledger step',
+    [
+      [
+        I,
+        "          !(await tokens.verify(bearer, r)) ||\n          r.ended !== null ||\n          r.closed ||\n          now() >= r.reportExpiry * 1000\n        )\n          refuse('UNAUTHORIZED', 401);\n        if (!evidenceEnabled",
+        "          false\n        )\n          refuse('UNAUTHORIZED', 401);\n        if (!evidenceEnabled",
+      ],
+      [
+        I,
+        '/^\\/(report|kill|evidence)\\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.exec(path) ??',
+        '/^\\/(report|kill)\\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.exec(path) ??',
+      ],
+    ],
+  ],
+  [
+    'gateway does not authenticate the route',
+    [
+      [
+        I,
+        'if (/^\\/(?:report|kill|blob-url|bench-data|evidence)\\//.test(path)) {',
+        'if (/^\\/(?:report|kill|blob-url|bench-data)\\//.test(path)) {',
+      ],
+    ],
+  ],
+  [
+    'gateway buffers without a length check',
+    [[I, '  if (/^\\/evidence\\//.test(path)) evidenceLength(request);\n', '']],
+  ],
+  [
+    'gateway buffer limit is the report limit',
+    [
+      [
+        I,
+        '(/^\\/evidence\\//.test(path)\n      ? EVIDENCE_MAX_BYTES',
+        '(/^\\/evidence\\//.test(path)\n      ? 65536',
+      ],
+    ],
+  ],
+  [
+    'route not recognised as a box route',
+    [[R, '/^\\/(?:report|kill|evidence)\\/', '/^\\/(?:report|kill)\\/']],
+  ],
+  [
+    'evidence also accepted without the live check on the record',
+    [
+      [
+        I,
+        "          r.closed ||\n          now() >= r.reportExpiry * 1000\n        )\n          refuse('UNAUTHORIZED', 401);\n        if (!evidenceEnabled",
+        "          false ||\n          false\n        )\n          refuse('UNAUTHORIZED', 401);\n        if (!evidenceEnabled",
+      ],
+      [
+        I,
+        '/^\\/(report|kill|evidence)\\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.exec(path) ??',
+        '/^\\/(report|kill)\\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.exec(path) ??',
+      ],
+    ],
+  ],
+  [
+    'request count not limited',
+    [
+      [
+        I,
+        '        await rate(r, cfg);\n        const prior = r.evidence;',
+        '        const prior = r.evidence;',
+      ],
+    ],
+  ],
+  [
+    'profile ignored in the key',
+    [[E, 'const profile = budgetClass(record);', "const profile = 'check';"]],
+  ],
+  [
+    'key is not per attempt',
+    [[E, "const base = profile + '/' + m[1] + '/' + m[2];", "const base = profile + '/' + m[1];"]],
+  ],
+  ['scan field not required clean', [[E, "meta.scan !== 'clean' ||", '']]],
+  [
+    'meta accepts extra keys',
+    [
+      [
+        E,
+        "const own = (object, keys) =>\n  object !== null &&\n  typeof object === 'object' &&\n  !Array.isArray(object) &&\n  Object.keys(object).every((k) => keys.includes(k));",
+        'const own = () => true;',
+      ],
+    ],
+  ],
+  ['section names unchecked', [[E, '!SECTION.test(s.name) ||', '']]],
+  [
+    'manifest holds the box token header',
+    [
+      [
+        E,
+        'scrub: meta.scrub,',
+        "scrub: meta.scrub, authorization: request.headers.get('Authorization'),",
+      ],
+    ],
+  ],
+  [
+    'bucket failure is a success',
+    [[E, "refuse('UNAVAILABLE', 503, undefined, 'evidence_put');", '']],
+  ],
+  [
+    'manifest failure is fatal',
+    [[E, '    manifestStored = false;', "    refuse('UNAVAILABLE', 503);"]],
+  ],
+  ['content type not gzip', [[E, "httpMetadata: { contentType: 'application/gzip' },", '']]],
+  [
+    'stored size from the header',
+    [[E, 'size: body.length,\n    uploaded_at', 'size: length + 1,\n    uploaded_at']],
+  ],
+];
+
+const selected = process.argv.slice(2);
+let failed = false;
+for (const [name, edits] of MUTANTS) {
+  if (selected.length && !selected.includes(name)) continue;
+  const originals = new Map();
+  let ambiguous = false;
+  for (const [file, before] of edits) {
+    const path = here + file;
+    const text = originals.get(path) ?? readFileSync(path, 'utf8');
+    originals.set(path, text);
+    if (text.split(before).length !== 2) ambiguous = true;
+  }
+  if (ambiguous) {
+    console.log(JSON.stringify({ mutant: name, ok: false, why: 'ambiguous or missing' }));
+    failed = true;
+    continue;
+  }
+  try {
+    const current = new Map(originals);
+    for (const [file, before, after] of edits) {
+      const path = here + file;
+      current.set(path, current.get(path).split(before).join(after));
+    }
+    for (const [path, text] of current) writeFileSync(path, text);
+    const run = spawnSync(process.execPath, ['--no-warnings', '--test', ...TESTS], {
+      cwd: here,
+      encoding: 'utf8',
+      timeout: 300000,
+      maxBuffer: 64 * 1024 * 1024,
+    });
+    const kills = [...(run.stdout ?? '').matchAll(/^not ok \d+ - (.+)$/gm)]
+      .map((m) => m[1])
+      .filter((t) => !t.endsWith('.test.js'));
+    const ok = run.status !== 0 && kills.length >= 2 && !run.error;
+    failed ||= !ok;
+    console.log(
+      JSON.stringify({
+        mutant: name,
+        status: run.status,
+        kills: kills.length,
+        ok,
+        first: kills.slice(0, 3),
+      }),
+    );
+  } finally {
+    for (const [path, text] of originals) writeFileSync(path, text);
+  }
+}
+if (failed) {
+  console.log('SURVIVING OR UNDER-KILLED MUTANT(S): see ok=false above');
+  process.exitCode = 1;
+}

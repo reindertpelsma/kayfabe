@@ -97,6 +97,28 @@ fi
 
 exec {ready_fd}>&-
 
+# Evidence bundle (2026-11-06): after the payload has ended, whatever its status, and BEFORE the
+# result is reported (the Worker takes uploads until the result grace ends, and the runner stops
+# the box right after it has read the final log). scripts/ci/vast_evidence.py builds one bounded,
+# scrubbed bundle and POSTs it with the run capability. It prints its outcome into the log, always
+# exits 0, never touches the result file, and is bounded in time: 110 s at most, and never past
+# KF_SOFT_DEADLINE + 150 s (the reporter gives up waiting for the payload at + 180 s).
+if [ -f "$here/vast_evidence.py" ]; then
+    ev_left=$((KF_SOFT_DEADLINE + 150 - $(date +%s)))
+    ev_max=${KF_CI_EVIDENCE_MAX:-110}
+    [ "$ev_left" -le "$ev_max" ] || ev_left=$ev_max
+    if [ "$ev_left" -ge 20 ]; then
+        # shellcheck disable=SC2094  # the helper reads the log and its own lines are appended to it
+        timeout --signal=TERM --kill-after=5s "${ev_left}s" \
+            python3 -I "$here/vast_evidence.py" run --log "$log" --out "$workspace/kf-evidence" \
+            --budget "$((ev_left - 10))" --until "$((KF_SOFT_DEADLINE + 150))" \
+            --workspace "$workspace" >>"$log" 2>&1 </dev/null \
+            || echo "KF_EVIDENCE_SKIPPED reason=helper_exit_$?" >>"$log"
+    else
+        echo "KF_EVIDENCE_SKIPPED reason=time" >>"$log"
+    fi
+fi
+
 {
     printf 'rc=%d\ntimeout=%d\n' "$rc" "$timed_out"
     [ -z "$reason" ] || printf 'reason=%s\n' "$reason"

@@ -1,7 +1,7 @@
 # Thin Vast payload
 
-STATUS: LIVE, 2026-11-05 (release-tier extras added by branch `claude/worker-tier-20261105`; not
-run on a box).
+STATUS: LIVE, 2026-11-06 (release-tier extras added by branch `claude/worker-tier-20261105`, and the
+evidence bundle added by branch `claude/ci-evidence-bundle-20261106`; neither has run on a box).
 
 [CODE READ: vast_payload.sh, vast_payload.py] The generic onstart invokes
 `bash scripts/ci/vast_payload.sh <sha> <nonce>` from the exact approved checkout.
@@ -108,3 +108,62 @@ the lane the row is `specviewperf_retry_not_built`, never a pass. Slots `two_gue
 are reserved and DESIGN-ONLY: requesting them is a preflight failure. A malformed value, a stage
 outside the large tier or a duplicate is refused before the first stage.
 
+## Evidence bundle (2026-11-06)
+
+CODE READ (`vast_evidence.py`, `vast_onstart.sh`, `ci/vast-broker/src/evidence.js`); GPU-free tests
+only (`test_vast_evidence.py`, `evidence_mutants.py`, the Onstart cases of `test_vast_box.py`); no box
+ran this. After the payload ends, whatever its exit status or timeout, and before the result is
+reported, `vast_onstart.sh` runs `python3 -I vast_evidence.py run` (skipped when the checkout has no
+such file). It is bounded by `min(110 s, KF_SOFT_DEADLINE + 150 s - now)` and by `timeout`; it always
+exits 0, prints its outcome into the log and writes neither the result file nor the log. It lives in
+onstart, not in the payload, so a payload killed at the soft deadline still gets its evidence, and the
+payload still gets no run capability.
+
+Bundle `.tgz`, at most 8 MiB compressed and 48 MiB unpacked, `MANIFEST.json` first. Sources and keep
+order (tier 0 is kept longest; when a cap binds the LAST tier goes first, and within a tier the oldest
+item first):
+
+| Tier | Holds | When the cap binds |
+|---|---|---|
+| 0 | `MANIFEST.json`; `host/` state: `free -m`, `df -h`, `uname -a`, `date`, `uptime`, `ps` lines of qemu and swtpm, the first 60 lines of `nvidia-smi -q`; `/workspace/kf-result.json` | never dropped |
+| 1 | `log/output.log` (the last 3 MiB of the payload log); the gate and provision verdict logs `/root/prov/*_windows.log` and `prov.log` | never dropped; the larger one is halved (newest bytes kept) until the bundle fits, and the manifest records the cut |
+| 2 | `host/dmesg_tail.txt` (the last 256 KiB of `dmesg -T`); the payload's own `/workspace/kf-ci-evidence/*` (stage `*.run`, diagnostics); the newest `timeout_*.png` screendump of the Windows VM; other `/root/prov/*.log` | dropped after tiers 5, 4, 3 |
+| 3 | the gate evidence tgz `/root/prov/*_windows.tgz` (expanded member by member, each cut to its last 2 MiB; a directory is read only when no tgz of the same name exists) and other `/root/prov/<dir>/` text; the Windows VM `logs/*.log|txt|jsonl|err|out` (newest 40, last 512 KiB each); the 3 newest screenshots | dropped after tiers 5 and 4 |
+| 4 | `/workspace/bench/*.out` and `xid_*.log` (newest 30, last 256 KiB each) | dropped after tier 5 |
+| 5 | screenshots 4 to 6 (at most 6 PNGs in all, each at most 2 MiB); gzip'd VM logs | dropped first |
+
+Never collected: `secrets/`, `tpm/`, `firmware/`, `disk/` and `.ssh` directories; ssh keys and other
+names matching the forbidden-name list; disk images; symlinks (files, directories and roots); anything
+outside the roots above. Names inside the bundle are reduced to `[A-Za-z0-9._/-]`.
+
+Scrubbed in text members, counted in the manifest: GPU and board UUIDs (a distinct synthetic
+`fa4efa4e-...` per value, as `trio_stage.sh` does), serial numbers (`Serial Number :` lines and
+`serial=` values), MAC addresses (QEMU's own `52:54:00:*` kept), public IPv4 and IPv6 addresses
+(private, loopback and link-local kept; a dotted four-number version string such as `5.15.0.91` is
+also replaced, an accepted loss). Not scrubbed: PNG pixels. The repository's display scrubbers
+(`sanitise()`, `sanitize.js`) blank every run of 32 characters and would destroy hashes and
+addresses, so they are not used here: the bundle is private, not displayed.
+
+Scanned on the RAW bytes of every member before it is packed (a hit refuses the whole upload, prints
+`KF_EVIDENCE_REFUSED reason=scan_hit class=<class> member=<name>`, never a value): the run token, the
+broker URL and its secret path, the Access pair, the runner nonce (all from the box environment), the
+guest password and the harness ssh key (every file under `$WINVM_ROOT/*/secrets/`, the files
+`windows_gate.sh` scans for), `~/.ssh/id_*`, a Vast key file or variable, JWT-shaped strings, `Bearer
+<20+ characters>`, presigned-URL parameters, private-key blocks, GitHub tokens, `CF-Access-Client-*`
+headers and URLs with credentials. Values shorter than 6 characters are not scanned. Not covered: a
+secret that is encoded (base64, URL-encoded) or split across lines, and anything inside a PNG.
+A hostile guest can plant a secret-shaped string in a file it controls to make the scan refuse the
+upload: the evidence is best effort, the refusal line still names the class and member, and nothing is
+uploaded in that case.
+
+Upload: `POST <KF_BROKER_URL>/evidence/<run>-<attempt>` ([box protocol](../../ci/vast-broker/docs/BOX_PROTOCOL.md),
+"Evidence upload"), HTTPS only, no redirect, no proxy, the token and the Access pair only as headers,
+at most 3 tries on a network error, 429 or 5xx. The log line is `evidence uploaded: <run>/<attempt>
+<bytes> sha256 <first 12 hex>` (with ` (already_stored)` after a 409), `KF_EVIDENCE_REFUSED reason=...`
+(scan hit or too large), or `KF_EVIDENCE_SKIPPED reason=...` (`upload_http_<status>`, `time`,
+`environment_contract`, `build_error:<Class>`, `helper_exit_<rc>`). The runner is not changed: the line
+is at the end of the log, in the tail the runner shows, and a refusal matches its existing `REFUSED` key
+line. Retention (30 days) and reading are in [DEPLOY](../../ci/vast-broker/DEPLOY.md), "Evidence bucket".
+
+GPU-free checks: `python3 -m unittest discover -s scripts/ci -p 'test_vast*.py'` and `python3
+scripts/ci/evidence_mutants.py` (every mutant must fail two tests).

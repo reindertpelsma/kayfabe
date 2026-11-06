@@ -34,6 +34,8 @@ import {benchObject,benchBudget,benchCount,benchExpiry,benchUrl,benchRedirect} f
 import { offerPrice, providerId } from './policy.js';
 import { reportedProviderFault } from './provider-fault.js';
 // prettier-ignore
+import {EVIDENCE_MAX_BYTES,evidenceEnabled,evidenceLength,storeEvidence} from './evidence.js';
+// prettier-ignore
 import {Vast} from './vast.js';
 // prettier-ignore
 import {OfferBook} from './offers.js';
@@ -1672,7 +1674,7 @@ export function createService({
         return;
     }
     const box =
-      /^\/(report|kill)\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.exec(path) ??
+      /^\/(report|kill|evidence)\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.exec(path) ??
       /^\/(blob-url)\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})\/[A-Za-z0-9._-]{1,64}\/[A-Za-z0-9._-]{1,100}$/.exec(
         path,
       ) ??
@@ -1698,6 +1700,74 @@ export function createService({
       return;
     await oidc(bearer, cfg);
   }
+  // POST /evidence/<run>-<attempt> (src/evidence.js). One upload per rental: the ledger record
+  // carries the state (PENDING while a body is being written, STORED after), checked and set in
+  // the serial queue, so two uploads cannot both write. The queue is held only for those checks;
+  // the body is read and written to R2 outside it. A failed write clears PENDING, so the box may
+  // retry; a PENDING flag older than a minute (a crashed attempt) no longer blocks.
+  const EVIDENCE_PENDING_MS = 60000;
+  async function settleEvidence(key, at, stored, sha256 = null) {
+    try {
+      await serial(
+        1,
+        async () => {
+          const r = await ledger.get('record:' + key);
+          if (!r || r.evidence?.at !== at) return;
+          if (stored) r.evidence = { state: 'STORED', at: now(), sha256 };
+          else delete r.evidence;
+          await ledger.save(r);
+        },
+        key,
+      );
+    } catch {
+      // Best effort: a PENDING flag expires by itself.
+    }
+  }
+  async function evidenceUpload(request, key) {
+    if (request.method !== 'POST' || new URL(request.url).search) refuse('NOT_FOUND', 404);
+    const bearer = request.headers.get('Authorization')?.replace(/^Bearer /, '');
+    const cfg = configuration(env),
+      vast = new Vast(fetcher, cfg, env.VAST_API_KEY);
+    let at;
+    const record = await serial(
+      1,
+      async () => {
+        const r = await ledger.get('record:' + key);
+        if (
+          !r ||
+          r.key !== key ||
+          !(await tokens.verify(bearer, r)) ||
+          r.ended !== null ||
+          r.closed ||
+          now() >= r.reportExpiry * 1000
+        )
+          refuse('UNAUTHORIZED', 401);
+        if (!evidenceEnabled(env)) refuse('EVIDENCE_DISABLED', 404);
+        clocks(r, cfg);
+        await rejectExpiredCallback(r, cfg, vast);
+        evidenceLength(request);
+        await rate(r, cfg);
+        const prior = r.evidence;
+        if (prior && (prior.state === 'STORED' || now() - prior.at < EVIDENCE_PENDING_MS))
+          refuse('EVIDENCE_EXISTS', 409);
+        at = now();
+        r.evidence = { state: 'PENDING', at };
+        await ledger.save(r);
+        return r;
+      },
+      key,
+    );
+    let answer;
+    try {
+      answer = await storeEvidence(env, record, request, now());
+    } catch (error) {
+      // An object that is already there (the head check) means stored, whoever put it.
+      await settleEvidence(key, at, error instanceof BrokerError && error.status === 409);
+      throw error;
+    }
+    await settleEvidence(key, at, true, answer.sha256);
+    return answer;
+  }
   return {
     async fetch(request) {
       let path;
@@ -1707,6 +1777,8 @@ export function createService({
         path = await routePath(request, env);
         // Outside the serial queue: it reads no ledger record and writes only treekey:<sha>.
         if (path === CHECK_PATH) return await perform(request);
+        const evidence = /^\/evidence\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.exec(path);
+        if (evidence) return json(await evidenceUpload(request, evidence[1]));
         const renting = path === '/rent';
         if (renting && busy) refuse('BUSY', 409);
         if (renting) busy = true;
@@ -2042,16 +2114,20 @@ export class BrokerLedger {
 // unfinished network upload must never hold its busy flag or block cron.
 async function detachedUpload(request, path) {
   if (!request.body) return request;
+  // Evidence: the declared length is checked before a byte is read; the buffer never exceeds the cap.
+  if (/^\/evidence\//.test(path)) evidenceLength(request);
   const limit =
-    (/^\/report\//.test(path)
-      ? 65536
-      : /^\/kill\//.test(path)
-        ? 256
-        : path === '/rent'
-          ? 2048
-          : path === CHECK_PATH
-            ? 1024
-            : 0) + 1;
+    (/^\/evidence\//.test(path)
+      ? EVIDENCE_MAX_BYTES
+      : /^\/report\//.test(path)
+        ? 65536
+        : /^\/kill\//.test(path)
+          ? 256
+          : path === '/rent'
+            ? 2048
+            : path === CHECK_PATH
+              ? 1024
+              : 0) + 1;
   const reader = request.body.getReader(),
     chunks = [];
   let length = 0;
@@ -2089,6 +2165,7 @@ export function createGateway({ authorize, fetcher = fetch, now = Date.now } = {
   let boxVerifier, boxSecret;
   let boxWindow = -1;
   const boxCounts = new Map();
+  const evidenceCounts = new Map();
   let controlWindow = -1,
     controlCount = 0;
   const controlIps = new Map();
@@ -2130,7 +2207,7 @@ export function createGateway({ authorize, fetcher = fetch, now = Date.now } = {
       (await constantTimeEqual(env.OWNER_STOP_TOKEN, bearer))
     )
       return;
-    if (/^\/(?:report|kill|blob-url|bench-data)\//.test(path)) {
+    if (/^\/(?:report|kill|blob-url|bench-data|evidence)\//.test(path)) {
       if (boxSecret !== env.RUN_TOKEN_SECRET) {
         boxSecret = env.RUN_TOKEN_SECRET;
         boxVerifier = new RunTokens(boxSecret, now);
@@ -2142,11 +2219,19 @@ export function createGateway({ authorize, fetcher = fetch, now = Date.now } = {
       if (boxWindow !== window) {
         boxWindow = window;
         boxCounts.clear();
+        evidenceCounts.clear();
       }
       const used = boxCounts.get(key) ?? 0;
       if (used >= 300 || (!boxCounts.has(key) && boxCounts.size >= 1024))
         refuse('RATE_LIMITED', 429);
       boxCounts.set(key, used + 1);
+      // An upload carries up to 8 MiB that the gateway buffers: at most 6 per minute per rental.
+      if (path.startsWith('/evidence/')) {
+        const sent = evidenceCounts.get(key) ?? 0;
+        if (sent >= 6 || (!evidenceCounts.has(key) && evidenceCounts.size >= 1024))
+          refuse('RATE_LIMITED', 429);
+        evidenceCounts.set(key, sent + 1);
+      }
       return;
     }
     const identity = localIdentity(env, request.url);

@@ -1,9 +1,10 @@
 # Vast GPU CI broker
 
-STATUS: LIVE, 2026-11-05, for the deployed rental path. The result store, tree key and
-requirements check, and the tiers, admin start and release run (sections below; branches
+STATUS: LIVE, 2026-11-06, for the deployed rental path. The result store, tree key and
+requirements check, the tiers, admin start and release run (sections below; branches
 `claude/worker-store-20261105` and `claude/worker-tier-20261105`, merged in
-`claude/integration-20261105b`) are built and tested GPU-free only; NOT DEPLOYED.
+`claude/integration-20261105b`) and the failed-run evidence upload (section "Failed-run evidence",
+branch `claude/ci-evidence-bundle-20261106`) are built and tested GPU-free only; NOT DEPLOYED.
 
 The broker connects GitHub Actions to rented NVIDIA GPU machines on Vast.ai so kayfabe can run GPU checks beyond the hardware available to hosted runners. It is a Cloudflare Worker backed by a Durable Object ledger that tracks rentals, deadlines and spending. GitHub asks for a check; the Worker handles the provider account and relays the box's result and bounded logs back to the runner.
 
@@ -29,6 +30,45 @@ STATUS: LIVE as code on branch `claude/runlog-20261105`, 2026-11-05; not yet on 
 - **Census of the dropped middle**: next to `[N bytes dropped from the middle]`, up to 12 lines `[dropped N lines / B bytes: <prefix>]`, largest bytes first, then one `[dropped others: N lines / B bytes]`. The prefix is the line's first tokens (after `[box] ` and a dmesg timestamp) up to and including the first token holding a number or `=`, numbers and hex shown as `#`, at most 60 characters, sanitised and displayed `[untrusted]`. Beyond 12 groups, and beyond 5,000 distinct prefixes, lines are only counted. Bytes are sanitised bytes; the middle marker keeps the raw count.
 - **Honest markers**: `[N bytes removed by sanitisation]` (redaction, control sequences, characters outside the allow-list, lines cut at 1000 bytes) and `[N bytes dropped by size cap]` (whole lines that the line or byte cap did not show) are separate; the closing `[N bytes dropped by runner display budget]` counts only the second kind. The old single marker `[N bytes dropped by runner]` no longer exists.
 - **DIAGNOSTICS**: when a run was admitted but ended without a PASS or FAIL result that passed the runner's checks, the runner prints, before the final group, the Worker's last polled state, the Worker-clock timestamps it returned (`started_at`, `last_post_at`, `result_at`, `ended_at`), the runner's own clock since the rent request, the last log text and the newest `KF_PAYLOAD_STAGE_START` line (name cut to `[A-Za-z0-9_.-]{1,40}`, displayed `[untrusted]`), and the Worker states its polling saw. It states no cause. "The last lines ... are shown below" is printed only when the Worker returned log text. It uses only fields the protocol already returns. The Worker does not return the provider's instance status, the reason it closed a run (for example `RUN_GONE`) or per-state entry times; those need a Worker-side addition.
+
+## Failed-run evidence (built 2026-11-06, NOT DEPLOYED)
+
+CODE READ (`src/evidence.js`, `src/index.js`, `scripts/ci/vast_evidence.py`,
+`scripts/ci/fetch_evidence.py`); GPU-free tests only (`test/evidence.test.js`, `evidence-mutants.mjs`,
+`scripts/ci/test_vast_evidence.py`, `evidence_mutants.py`, `test_vast_fetch_evidence.py`); no real R2
+bucket, Worker or box has run it. Why: a box is destroyed after its grace period and the runner's
+display drops the middle of the log, so the evidence of a failed run was lost with the box (examples:
+gpu-vast run 42111518119 attempt 2, whose cause was found only by reproducing it on a direct rental,
+and run 42152626663 attempt 1, whose timeout screendump was lost).
+
+- **Box side.** After the payload ends (any status, any timeout) and before the result is reported,
+  `vast_onstart.sh` runs `vast_evidence.py`: one bounded bundle (at most 8 MiB compressed, 48 MiB
+  unpacked), scrubbed (GPU UUIDs, serials, MACs, public IPs) and scanned (run token, broker URL and
+  secret path, Access pair, runner nonce, guest password, harness ssh key, Vast key, presigned URLs,
+  JWTs, bearer headers, private keys: any hit REFUSES the upload and says which class and member),
+  uploaded once with the run token. What it holds, and what is dropped first when the cap binds, is in
+  [scripts/ci/VAST_PAYLOAD.md](../../scripts/ci/VAST_PAYLOAD.md), "Evidence bundle". It prints one line
+  into the box log: `evidence uploaded: <run>/<attempt> <bytes> sha256 <12 hex>`, or
+  `KF_EVIDENCE_REFUSED reason=...` (matches the runner's existing `REFUSED` key line) or
+  `KF_EVIDENCE_SKIPPED reason=...`. Any failure is non-fatal: the exit status is always 0, the result
+  file is never written, and the step is bounded to 110 s and to `KF_SOFT_DEADLINE + 150 s`. The runner
+  is not changed: the line sits at the end of the log, inside the tail the runner shows.
+- **Worker side.** `POST /evidence/<run>-<attempt>`, a box route with the same run-token
+  authentication as `/report`, `/kill`, `/blob-url` and `/bench-data`, accepted until the rental is
+  closed or ended (so also during the result grace). `Content-Length` is required and at most 8 MiB,
+  checked in the gateway before a byte is buffered; the body must be gzip, must match the declared
+  SHA-256, and must come with a metadata header of a fixed shape (`X-KF-Evidence-Meta`, at most 4 KiB).
+  One upload per rental: the ledger record holds a PENDING/STORED flag, so the second is `409`. At most
+  6 uploads a minute per rental reach the gateway buffer. The Worker never opens the archive. It writes
+  `<profile>/<run>/<attempt>.tgz` and `.json` (manifest) to the PRIVATE bucket `kayfabe-ci-evidence`
+  through the `EVIDENCE_BUCKET` write binding. Without the binding the route answers `404
+  EVIDENCE_DISABLED`. The status object, the public API, the site and the runner never mention the
+  bundle; no route lists or serves it. A verdict, a deadline or the budget never depends on it.
+- **Retention and reading.** 30 days, by an R2 lifecycle rule the coordinator sets; reading is the
+  coordinator's job only ([DEPLOY](DEPLOY.md), "Evidence bucket"; `scripts/ci/fetch_evidence.py`).
+- **Tests.** `node --test test/evidence.test.js` (route, auth, size, idempotency, concurrency, disabled
+  mode, gateway buffering) and `node evidence-mutants.mjs` (every mutant must fail at least two tests).
+  Not exercised: real R2, the deployed gateway and Durable Object, a real box.
 
 ## Current setup and further reading
 
