@@ -71,6 +71,9 @@ const MUTANTS = [
   [
     'gateway holds any number of uploads',
     [[I, "if (evidenceHeld >= 2) refuse('EVIDENCE_BUSY', 503);", '']],
+    // Regression (integration 2026-11-06): the cap test itself must fail cleanly on this mutant;
+    // under Node 24 it used to wait forever, so the file never finished and no kill was counted.
+    'evidence gateway: at most two uploads are held in one isolate, the third is 503',
   ],
   ['gateway never releases its held count', [[I, '      evidenceHeld--;\n', '']]],
   [
@@ -271,7 +274,7 @@ const MUTANTS = [
 
 const selected = process.argv.slice(2);
 let failed = false;
-for (const [name, edits] of MUTANTS) {
+for (const [name, edits, mustKill] of MUTANTS) {
   if (selected.length && !selected.includes(name)) continue;
   const originals = new Map();
   let ambiguous = false;
@@ -295,7 +298,9 @@ for (const [name, edits] of MUTANTS) {
     for (const [path, text] of current) writeFileSync(path, text);
     const run = spawnSync(
       process.execPath,
-      ['--no-warnings', '--test', '--test-reporter=tap', ...TESTS],
+      // A per-test timeout turns a hang into a `not ok` line instead of a dead file (integration
+      // 2026-11-06: a hung test under Node 24 left no TAP result at all).
+      ['--no-warnings', '--test', '--test-reporter=tap', '--test-timeout=60000', ...TESTS],
       {
         cwd: here,
         encoding: 'utf8',
@@ -306,13 +311,23 @@ for (const [name, edits] of MUTANTS) {
     const kills = [...(run.stdout ?? '').matchAll(/^not ok \d+ - (.+)$/gm)]
       .map((m) => m[1])
       .filter((t) => !t.endsWith('.test.js'));
-    const ok = run.status !== 0 && kills.length >= 2 && !run.error;
+    // The run must have finished (the TAP summary is printed last): a crash or a hang with no
+    // result lines is never a kill. A named killer, when given, must be among the kills.
+    const complete =
+      /^# tests \d+$/m.test(run.stdout ?? '') && /^# fail \d+$/m.test(run.stdout ?? '');
+    const ok =
+      run.status !== 0 &&
+      kills.length >= 2 &&
+      !run.error &&
+      complete &&
+      (mustKill === undefined || kills.includes(mustKill));
     failed ||= !ok;
     console.log(
       JSON.stringify({
         mutant: name,
         status: run.status,
         kills: kills.length,
+        complete,
         ok,
         first: kills.slice(0, 3),
       }),

@@ -760,13 +760,44 @@ test('evidence gateway: at most two uploads are held in one isolate, the third i
   const first = x.post();
   const second = x.post();
   await new Promise((resolve) => setImmediate(resolve));
-  const third = await x.post();
-  assert.equal(third.status, 503);
-  assert.equal((await third.json()).state, 'EVIDENCE_BUSY');
+  // Integration 2026-11-06: never await an answer that a missing cap would hold forever (it waits
+  // on the held reservation). Race it against a short timer, release the hold BEFORE asserting,
+  // and settle everything, so a mutant fails this test cleanly instead of hanging the file.
+  const pending = Symbol('pending');
+  let timer;
+  const third = await Promise.race([
+    x.post(),
+    new Promise((resolve) => (timer = setTimeout(() => resolve(pending), 2000))),
+  ]);
+  clearTimeout(timer);
   release();
   const done = [(await first).status, (await second).status].sort();
+  assert.notEqual(third, pending, 'the third upload waited for the held ones instead of a 503');
+  assert.equal(third.status, 503);
+  assert.equal((await third.json()).state, 'EVIDENCE_BUSY');
   assert.deepEqual(done, [200, 409]);
   assert.equal((await x.post()).status, 409, 'the count is released');
+});
+// Integration 2026-11-06: a second, counter-based check of the in-isolate cap that cannot hang.
+test('evidence gateway: a third upload while two are held never reaches the ledger', async () => {
+  const x = await harness();
+  let release;
+  x.hold.reserve = new Promise((resolve) => (release = resolve));
+  const reserves = () => x.internal.filter((p) => p === '/evidence/reserve').length;
+  const settle = async (ms) => {
+    for (const end = Date.now() + ms; Date.now() < end && reserves() < 3; )
+      await new Promise((resolve) => setTimeout(resolve, 5));
+  };
+  const uploads = [x.post(), x.post()];
+  await settle(1000); // both reach the held reservation (stops early at 3 calls)
+  const before = reserves();
+  uploads.push(x.post());
+  await settle(300);
+  const after = reserves();
+  release();
+  await Promise.allSettled(uploads);
+  assert.equal(before, 2, 'the two held uploads reserved');
+  assert.equal(after, 2, 'the third was refused before any ledger call');
 });
 test('evidence gateway: the held count is released when the write fails', async () => {
   const x = await harness();
