@@ -1,0 +1,53 @@
+VANISH_START 2026-11-06T18:18:38Z up=96.53
+VANISH_PAYLOAD_START 2026-11-06T18:18:51Z soft_ms=1793998131000
+KF_PAYLOAD_TIER windows=0 source=worker tier=unknown windows_runs=1 stages=none
+KF_PREFLIGHT_FREE_BYTES=116008734720
+KF_PAYLOAD_STAGE_START name=provision
+[xid-watch] host_gpu=NVIDIA GeForce RTX 4090, 575.51.03
+[xid-watch] xid_before=0
+BOX_RC=0
+DRIVER_RC=0
+TREE_RC=0
+LADDER_RC=0
+FG_RC=0
+KF3_RC=0
+READY driver=580.159.04
+[xid-watch] xid_after=0
+KF_PAYLOAD_STAGE_END name=provision rc=0 duration_ms=772156
+KF_PAYLOAD_STAGE_START name=cuda_host
+[xid-watch] host_gpu=NVIDIA GeForce RTX 4090, 580.159.04
+CL_ROW mode=host rung=cup2 rep=1 verdict=PASS rc=0 wall_ms=1466 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]
+CL_ROW mode=host rung=cup3 rep=1 verdict=PASS rc=0 wall_ms=1770 graded=[CUP3_VAL=43]
+CL_ROW mode=host rung=cup8 rep=1 verdict=PASS rc=0 wall_ms=1837 graded=[CUP8_BAD=0 CUP8_MAXERR=0]
+CL_ROW mode=host rung=cup8bench rep=1 verdict=PASS rc=0 wall_ms=2054 graded=[BENCH_TOTAL_BAD=0 BENCH_VERDICT: PASS (every timed iteration verified)]
+KF_PAYLOAD_STAGE_END name=cuda_host rc=0 duration_ms=11678
+KF_PAYLOAD_STAGE_START name=merge_bar
+GATES_RC=0
+V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS
+BARE_SUITE_STARTED=2026-11-06T18:33:42+00:00 arms=30 budget=180s
+[xid-watch] xid_after=4
+[xid-watch] xid_before=4
+[xid-watch] xid_after=5
+[xid-watch] xid_before=5
+BARE_SUITE_PASS=30 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0 ARMS=30
+SUITE_RC=0
+FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+FAST_SUITE_RC=0
+BIRTH_CENSUS_OK arms=30 suite_births=161 gate_births=12 all PRIVILEGED_CHANNEL=0 privilege=USER
+EXIT rc=0 2026-11-06T18:50:28+00:00
+[xid-watch] xid_after=10
+KF_PAYLOAD_STAGE_END name=merge_bar rc=6 duration_ms=1114239
+KF_PAYLOAD_STAGE_START name=cuda_guest
+[xid-watch] xid_before=10
+CL_ROW mode=guest rung=cup2 rep=1 verdict=PASS boot_rc=0 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]  trapped=10586 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f204 0x0000000e:e
+CL_ROW mode=guest rung=cup3 rep=1 verdict=PASS boot_rc=0 graded=[CUP3_VAL=43]  trapped=10699 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f204 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000
+CL_ROW mode=guest rung=cup8 rep=1 verdict=PASS boot_rc=0 graded=[CUP8_BAD=0 CUP8_MAXERR=0] CUP8_WALL_S=5 trapped=10850 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f208 0x0000000e:e0f1
+CL_ROW mode=guest rung=cup8bench rep=1 verdict=PASS boot_rc=0 graded=[GUEST_BENCH_TOTAL_BAD=0 GUEST_BENCH_VERDICT=PASS (every timed iteration verified)] BENCH_measure_WALL_S=4 trapped=11402 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006
+KF_PAYLOAD_STAGE_END name=cuda_guest rc=0 duration_ms=287586
+KF_FINAL_SUMMARY_BEGIN verdict=PASS stages=4
+stage name=provision rc=0 duration_ms=772156 result=PASS
+stage name=cuda_host rc=0 duration_ms=11678 result=PASS
+stage name=merge_bar rc=6 duration_ms=1114239 result=PASS
+stage name=cuda_guest rc=0 duration_ms=287586 result=PASS
+KF_FINAL_SUMMARY_END
+VANISH_EXIT rc=0 2026-11-06T18:55:18Z
