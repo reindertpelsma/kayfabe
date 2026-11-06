@@ -63,7 +63,8 @@ destroy line). Attempt 4's 4 s gap between the last POST and the end also fits i
   `running` throughout.
 - **H-WORKER (transient status)** — Vast's per-instance API reports a transient non-`running` `actual_status`
   (null/`created`/other) while the box is alive, and the Worker's zero-tolerance close destroys a live box. *Supported
-  (MEASURED) if* our poller of the same endpoint (`GET /api/v0/instances/<id>/`, every 10 s) records any non-running
+  (MEASURED on this hunt's rentals, 2026-11-06 [addendum after the run: date added for the claims gate, no change of
+  meaning]) if* our poller of the same endpoint (`GET /api/v0/instances/<id>/`, every 10 s) records any non-running
   `actual_status` while ssh answers and the payload keeps progressing. *Falsified (for this rental) if* every
   poll reads `running` while the box is alive. A direct rental cannot falsify the Worker's other paths; the table above
   does that from the code.
