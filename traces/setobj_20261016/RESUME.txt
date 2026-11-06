@@ -1,0 +1,18 @@
+RESUME HERE — setobj experiment, owner pause 2026-10-17 ~02:50 CEST. Written when the host was released (no process of mine, lock free).
+What RAN (raw logs in raw/): a_1, a_2 (first binary, smoke), a_3 (10 cases, 1 rep), b_1 (controls), b_2 (S1), b_3 (S2b/c/d), b_4 (S2e, enc, S2e-hw).
+What did NOT run (queue b group 5 was cancelled before it started; the pause arrived while b_4 was executing, b_4 was allowed to finish):
+ 1. S3 repetitions: s3_6, s3_5, s3_7, s3_6_3d x3 each, and s3_5_3d, s3_7_3d (only s3_5, s3_6, s3_7, s3_6_3d x1 exist, from a_3).
+ 2. S2e TRIGGER REACH (the "method on the second subchannel reaches A" reading): cases s2e5r / s2e7r in b_4 and a_3 did NOT measure it.
+    They fell into the S2 branch of case_run (dispatch bug: the S2 condition matched "s2e5r"); they just repeated S2r. Fixed in
+    setobj_probe.c (condition now excludes "s2e*"), NOT RUN. Rerun: s2e5r s2e7r x3.
+ 3. New cases added after the runs, NOT RUN: s2f (SO(6, stale classID of a freed A)), s2g (SO(6, 99): a classID no object ever had).
+ 4. Repetitions beyond 1 of: c_hwsub0..4, s2e_hw{0..4}{n,e}.
+ 5. Not planned yet: a case with TWO bound subchannels where the 0x200 trigger is sent on the first-bound one after the second bind
+    (S2e trigger on sub 6 after SO(7,A)); the s2e5r/s2e7r rerun should send it on both subchannels (the code does: reach sub2, then sub6).
+How to resume (one GPU job at a time, < 5 min, under the shared lock; the host is shared with the benchmark agent):
+  - copy the 595.91.07 headers: tar -C <ogkm-595.91.07>/src/common/sdk/nvidia/inc -> host /data/claude-setobj/inc and <..>/src/common/inc -> inc2
+  - scp scripts/bench/setobj/{setobj_probe.c,run_setobj.sh,queue.sh} to host /data/claude-setobj/src/
+  - build: cd src; H=/data/claude-setobj/inc; gcc -O1 -Wall -I$H -I$H/class -I$H/ctrl -I$H/alloc -I/data/claude-setobj/inc2 setobj_probe.c -o ../bin/setobj_probe
+  - run: flock -o /tmp/kayfabe-fastguest.lock bash run_setobj.sh ../out/<tag> case:rep ...   (queue.sh/mkq_b.sh show the group lists used)
+  - collect: python3 -I scripts/bench/setobj/table.py <dirs>  /  summarize.py
+Host state at release: /data/claude-setobj holds only out/ (raw results); inc, inc2, bin, src were deleted.

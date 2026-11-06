@@ -1,0 +1,4 @@
+2026-10-17T02:47:53+02:00 claude kernel: NVRM: Xid (PCI:0000:01:00): 13, Graphics Exception: Class 0x1 Subchannel 0x1 Mismatch
+2026-10-17T02:47:53+02:00 claude kernel: NVRM: Xid (PCI:0000:01:00): 13, Graphics Exception: ESR 0x4041b0=0x10001
+2026-10-17T02:47:53+02:00 claude kernel: NVRM: Xid (PCI:0000:01:00): 13, Graphics Exception: ESR 0x404000=0x80000002
+2026-10-17T02:47:53+02:00 claude kernel: NVRM: Xid (PCI:0000:01:00): 13, pid=2582215, name=setobj_probe, Graphics Exception: channel 0x00000004, Class 0000c997, Offset 00000000, Data 00000000

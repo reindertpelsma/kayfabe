@@ -1,0 +1,14 @@
+JOB_START 2026-10-17T02:43:18+02:00 pid=2579549 n=12 bin_md5=8b0cd0d0c9fd
+DONE case=s1 rep=1 pid=2579557 rc=0 xid_lines_for_pid=0
+DONE case=s1 rep=2 pid=2579628 rc=0 xid_lines_for_pid=0
+DONE case=s1 rep=3 pid=2579662 rc=0 xid_lines_for_pid=0
+DONE case=s1r rep=1 pid=2579690 rc=0 xid_lines_for_pid=0
+DONE case=s1r rep=2 pid=2579714 rc=0 xid_lines_for_pid=0
+DONE case=s1r rep=3 pid=2579786 rc=0 xid_lines_for_pid=0
+DONE case=s2 rep=1 pid=2579810 rc=0 xid_lines_for_pid=0
+DONE case=s2 rep=2 pid=2579842 rc=0 xid_lines_for_pid=0
+DONE case=s2 rep=3 pid=2579870 rc=0 xid_lines_for_pid=0
+DONE case=s2r rep=1 pid=2579902 rc=0 xid_lines_for_pid=0
+DONE case=s2r rep=2 pid=2579966 rc=0 xid_lines_for_pid=0
+DONE case=s2r rep=3 pid=2579994 rc=0 xid_lines_for_pid=0
+JOB_END 2026-10-17T02:44:13+02:00
