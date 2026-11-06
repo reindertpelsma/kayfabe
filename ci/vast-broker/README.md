@@ -29,7 +29,96 @@ STATUS: LIVE as code on branch `claude/runlog-20261105`, 2026-11-05; not yet on 
 - **KEY LINES**: up to 60 lines and 12,000 bytes, each cut at 400 bytes, picked from the whole sanitised log by the fixed table `KEY_PATTERNS` in runner.py, never by the box: stage start/end, `KF_FINAL_SUMMARY`, `stage name=`, `FAST_CELL_ARM`/`BARE_CELL_ARM`, `WINDOWS_GATE_PASS|FAIL|RETRY|TIMING`, xid-watch before/after/delta and `NEW HOST Xid`, `GATE_HOSTREF`, and any `FAIL`/`FAILED`/`REFUSED`. Non-PASS lines come first, then the first and last line of each category, then the rest in log order. Each line is cut to 1000 characters before any pattern runs, so the work per line is bounded. A box line that imitates a key line is displayed like any other: `[untrusted]`. The verdict is the Worker's validated status, not any line. Each key line is a copy and is tagged `[key] ` (`[untrusted] [key] [box] ...`), so it never reads as the box line it copies: `gate_reuse.py` `summary_lines`, the only reader of the job log (a test asserts that), requires exactly one `[untrusted] [box] KF_FINAL_SUMMARY_BEGIN` line, and a regression test feeds it the runner's complete PASS output (key lines, census, tail). Shown only when the head did not already show the whole log.
 - **Census of the dropped middle**: next to `[N bytes dropped from the middle]`, up to 12 lines `[dropped N lines / B bytes: <prefix>]`, largest bytes first, then one `[dropped others: N lines / B bytes]`. The prefix is the line's first tokens (after `[box] ` and a dmesg timestamp) up to and including the first token holding a number or `=`, numbers and hex shown as `#`, at most 60 characters, sanitised and displayed `[untrusted]`. Beyond 12 groups, and beyond 5,000 distinct prefixes, lines are only counted. Bytes are sanitised bytes; the middle marker keeps the raw count.
 - **Honest markers**: `[N bytes removed by sanitisation]` (redaction, control sequences, characters outside the allow-list, lines cut at 1000 bytes) and `[N bytes dropped by size cap]` (whole lines that the line or byte cap did not show) are separate; the closing `[N bytes dropped by runner display budget]` counts only the second kind. The old single marker `[N bytes dropped by runner]` no longer exists.
-- **DIAGNOSTICS**: when a run was admitted but ended without a PASS or FAIL result that passed the runner's checks, the runner prints, before the final group, the Worker's last polled state, the Worker-clock timestamps it returned (`started_at`, `last_post_at`, `result_at`, `ended_at`), the runner's own clock since the rent request, the last log text and the newest `KF_PAYLOAD_STAGE_START` line (name cut to `[A-Za-z0-9_.-]{1,40}`, displayed `[untrusted]`), and the Worker states its polling saw. It states no cause. "The last lines ... are shown below" is printed only when the Worker returned log text. It uses only fields the protocol already returns. The Worker does not return the provider's instance status, the reason it closed a run (for example `RUN_GONE`) or per-state entry times; those need a Worker-side addition.
+- **DIAGNOSTICS**: when a run was admitted but ended without a PASS or FAIL result that passed the runner's checks, the runner prints, before the final group, the Worker's last polled state, the Worker-clock timestamps it returned (`started_at`, `last_post_at`, `result_at`, `ended_at`), the runner's own clock since the rent request, the last log text and the newest `KF_PAYLOAD_STAGE_START` line (name cut to `[A-Za-z0-9_.-]{1,40}`, displayed `[untrusted]`), and the Worker states its polling saw. It states no cause. "The last lines ... are shown below" is printed only when the Worker returned log text. It uses only fields the protocol already returns. The runner itself still returns neither the provider's instance status nor the close reason as fields; both now appear as Worker log lines (section "Provider status tolerance and close lines"), which the runner shows as `[untrusted]` text like any other log line.
+
+## Provider status tolerance and close lines (built 2026-11-06, NOT DEPLOYED)
+
+STATUS: LIVE as code on branch `claude/vast-tolerance-20261106`, 2026-11-06; not on master, not deployed.
+Why: the vanish hunt (`traces/vanish_hunt_20261106/README.md`) found that the Worker destroyed a live
+box on ONE Vast reading that was not `running`. MEASURED there (direct rentals, no Worker, 2026-11-06):
+on machine 17049 the instance endpoint the Worker reads returned `actual_status: "offline"` in 16 of
+174 polls (10 s apart) while `intended_status` stayed `running`. INFERRED there: the same flaps hit the
+Worker's boxes in TESTING and caused the seven spurious UNATTRIBUTED gpu-vast attempts of that day. This
+change is GPU-free tested only (`test/provider-tolerance.test.js`, `provider-tolerance-mutants.mjs`);
+no Worker, rental or box has run it. Whether it removes the losses is OPEN until a deployed Worker
+survives a flapping host (falsifier: `provider=offline` lines appear while POSTs continue and the run
+survives; a box that stops POSTing first and then reads non-running points back at the host or box).
+
+**Rule (src/index.js `update()`, `report()`, `badReading()`; constants in `defaults.json`).** Applies to
+an existing instance whose `actual_status` is not `running`, and to a Vast API error:
+
+- **BOOTING** (before the first box POST): `offline` is treated like `created`, `loading`, `starting` and
+  a missing status: still booting, nothing counted, bounded by the existing boot timeout (75 minutes by
+  default). A first POST while the status is one of these gets `NOT_READY` (409) as before. A pending
+  reading clears a count made by an earlier non-pending one.
+- **Definite words** (`exited`, `stopped`): counting readings. A reading counts if at least
+  `providerGoneSpacingSeconds` (20) after the previous counted one, so a burst of runner polls is one
+  reading. The rental closes as `ENDED` when `providerGoneReadings` (3) are counted, the first is at least
+  `providerGoneWindowSeconds` (120) old, and no box POST arrived since the first.
+- **Ambiguous words** (`offline`, `created` after the first POST, `loading`, `unknown`, a missing status,
+  anything unrecognised) **and Vast API errors** (HTTP 5xx, timeout, unreadable body): the same window, and
+  in addition the box must have posted nothing for `providerQuietSeconds` (660, the 600 s heartbeat plus a
+  cron period). The box sends a heartbeat every 600 s and otherwise posts whenever it has output, so a
+  live box does not stay quiet that long. A persistent API error closes as `UNAVAILABLE` on the same
+  terms (the destroy then retries every cron tick until the API answers). A foreign instance (ownership
+  mismatch) closes at once.
+- Any `running` reading, any good inspection or any accepted box POST clears the count.
+- **A box POST while the provider says non-running, or while the API errors,** is accepted (it was a 401
+  plus destroy). The Worker counts the anomaly (`providerAnomalies`) and prints the status line with
+  `(box post accepted)`. `/blob-url` and `/bench-data` still answer 401 while the provider does not read
+  `running` (no close), so a box retries them.
+- **Absence closes at once**, as before: Vast answering that the instance does not exist
+  (`instances: null`, 404) closes as `GONE` on the first reading, in `update()` and `report()`.
+- **`RUN_GONE` is evaluated whatever Vast reads** (the GitHub lifecycle read now runs before the status
+  branch): a box that keeps posting through a stuck status cannot outlive its workflow. Not while a
+  booting instance is still pending, not after the result, not for an admin or release leg. A GitHub
+  failure does not stop the window for a non-running status; with `running` it throws as before.
+- **Unchanged and checked before the status:** hard deadline, result deadline, boot timeout, heartbeat
+  timeout (15 min without a POST), the cost contract recheck (`CONTRACT_PRICE`, `CONTRACT_BUDGET`);
+  `STOPPED` (`/stop`, `/stop-all`, the kill route), `SUPERSEDED`, `TTL`, `LIMIT`, the daily, rolling and
+  concurrency caps, settlement and the destroy-by-exact-id teardown with absence check.
+
+**Worst case (INFERRED from the code and the 60 s cron; tests move a clock, nothing ran on Cloudflare).**
+Delay of the close of a really gone instance, against the old close on the first reading, and the
+billing of that delay at the profile price caps (check $1/h, release $2/h, sweep $2.5/h; default
+boot limit 75 min, `defaults.json` `bootMinutes`):
+
+| case | closes after | extra per box: check / release / sweep |
+|---|---|---|
+| `exited` or `stopped` | 120 to 180 s after the first non-running reading (up to one more cron period if a tick is late), about +4 min at most | $0.07 / $0.13 / $0.17 |
+| ambiguous word or API error, box silent | 11 minutes after the box's last POST (not after the first reading); the heartbeat timeout (15 min) is the outer bound and is unchanged | $0.18 / $0.37 / $0.46 per 11 min |
+| BOOTING `offline` / `created`, instance never boots | the boot timeout, up to 75 min (before: closed on the first `offline`; `created` already waited) | $1.25 / $2.50 / $3.13 |
+| a token holder that keeps posting while Vast reads non-running | the hard deadline (checked first), or `RUN_GONE` at the next tick after the workflow ends | up to the pre-existing bound |
+
+A dead box that Vast still reports `running` is not affected: the heartbeat timeout ends it as before.
+The host `96607` (machine 17049; vanish hunt: never booted, `offline` flaps) is not in
+`defaults.json` `badHosts` or `badMachines`; it should stay excluded by the owner's list when the other
+exclusions are lifted, because the 75-minute boot wait above is its cost. That list is an owner decision
+and this change does not edit it.
+
+**Close lines.** Every close writes exactly one Worker line before the destroy:
+
+    [Worker] close reason=<REASON> provider=<last raw actual_status> msg=<status_msg>
+
+`provider` is the last status word the Worker read (`[a-z_]{1,16}` as Vast sent it; `unknown` for any
+other string; `null` when Vast sent none; `absent` when Vast said the instance does not exist; `error` when the provider API failed; `none`
+when it never read one), and `msg` is Vast's `status_msg` with box-text sanitising (control and escape
+sequences, addresses, bearer and token-like runs, URLs, known secrets, the instance id and label),
+sanitised first (on the first 8192 characters; a trailing identifier-like run is dropped when the input was cut), then joined to one line and cut to 120 characters (`-` when empty). The reading is the last one stored, not a
+fresh call. The reasons that were silent before: `RUN_GONE`, `CONTRACT_PRICE`, `CONTRACT_BUDGET`, the
+report-path liveness close (`UNAVAILABLE`), `TTL`, `LIMIT`, `STOPPED`, `SUPERSEDED`; the others
+(`ENDED`, `GONE`, `DEADLINE`, `HARD_TIMEOUT`, `RESULT`, `BOOT_TIMEOUT`, `HEARTBEAT_TIMEOUT`,
+`PROVIDER_FAULT`) keep their earlier `destroy reason=` or `provider_absent` line and gain this one. The
+`TTL` close of `report()` cannot be reached with a valid token (the token expires at the same instant,
+jose refuses it first); its line comes from the shared `close()`. The status reading line now prints the
+raw word and message on each change: `provider=<word> phase=<PHASE> msg=<status_msg>`, with
+`flaps=<n>` once a run has had a non-running episode. A closing tolerance adds
+`provider gone: <n> readings over <s> s, no box post machine=<id> host=<id>`.
+
+**Host policy.** Flaps are counted per run only (`providerFlaps`, shown as `flaps=` and in the run log
+with the machine and host ids). No per-host ledger counter and no automatic bad-listing: a host is
+bad-listed only by the existing provider-fault rules. Aggregating `flaps=` lines across runs is a
+follow-up that needs a retention design.
 
 ## Failed-run evidence (built 2026-11-06, NOT DEPLOYED)
 

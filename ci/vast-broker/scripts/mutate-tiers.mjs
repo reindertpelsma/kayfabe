@@ -188,8 +188,8 @@ const MUTANTS = [
   [
     'admin leg closed as RUN_GONE',
     'src/index.js',
-    "if (record.source === 'admin') return;",
-    '',
+    "record.resultAt === undefined && record.source !== 'admin') {",
+    'record.resultAt === undefined) {',
     BATCH,
   ],
   [

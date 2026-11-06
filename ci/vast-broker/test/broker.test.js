@@ -347,7 +347,12 @@ test('cron checks terminated instance without provider logs', async () => {
   const h = await setup();
   await rent(h);
   h.cloud.instances.get('900').actual_status = 'exited';
-  await h.service.sweep();
+  // One reading never closes (test/provider-tolerance.test.js); three over 120 s do.
+  for (const step of [0, 60000, 60000]) {
+    assert.deepEqual(h.cloud.deletes, []);
+    h.time.value += step;
+    await h.service.sweep();
+  }
   assert.deepEqual(h.cloud.deletes, ['900']);
   assert.equal(
     h.cloud.calls.some((c) => c.url.includes('request_logs')),
