@@ -483,12 +483,16 @@ for (const [name, file, before, after] of MUTANTS) {
   }
   try {
     writeFileSync(path, original.split(before).join(after));
-    const run = spawnSync(process.execPath, ['--no-warnings', '--test', ...TESTS], {
-      cwd: here,
-      encoding: 'utf8',
-      timeout: 300000,
-      maxBuffer: 64 * 1024 * 1024,
-    });
+    const run = spawnSync(
+      process.execPath,
+      ['--no-warnings', '--test', '--test-reporter=tap', ...TESTS],
+      {
+        cwd: here,
+        encoding: 'utf8',
+        timeout: 300000,
+        maxBuffer: 64 * 1024 * 1024,
+      },
+    );
     const kills = [...(run.stdout ?? '').matchAll(/^not ok \d+ - (.+)$/gm)]
       .map((m) => m[1])
       .filter((t) => !t.endsWith('.test.js'));

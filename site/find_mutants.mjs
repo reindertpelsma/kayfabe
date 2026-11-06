@@ -46,7 +46,7 @@ try {
       continue;
     }
     writeFileSync(target, original.replace(before, () => after));
-    const run = spawnSync(process.execPath, ['--test', TEST], {
+    const run = spawnSync(process.execPath, ['--test', '--test-reporter=tap', TEST], {
       cwd: here,
       encoding: 'utf8',
       timeout: 300000,
