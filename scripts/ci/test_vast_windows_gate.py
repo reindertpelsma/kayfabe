@@ -80,7 +80,7 @@ class GateVerdicts(unittest.TestCase):
     def test_the_selftest_classifies_every_case(self):
         p = run_gate("--selftest")
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
-        self.assertRegex(p.stdout, r"^WINDOWS_GATE_SELFTEST_OK cases=18$")
+        self.assertRegex(p.stdout, r"^WINDOWS_GATE_SELFTEST_OK cases=24$")
 
     def test_a_guest_failure_is_kayfabes_only_with_both_references_green(self):
         text = code(GATE)
@@ -159,6 +159,10 @@ class GateTeardownAndStateAtFailure(unittest.TestCase):
         "always-live": ("if qemu_alive && guest_answers; then", "if true; then"),
         # a dead guest yields nothing
         "no-postmortem": ("            postmortem_state\n", "            :\n"),
+        # 2026-11-06 (GA106, run 42111518119): a run loop that has not started QEMU yet is read as "QEMU is gone"
+        "no-start-wait": ("        sleep 1\n        w=$((w + 1))\n    done\n    say \"GATE_NOTE QEMU boot", "        return 1\n        w=$((w + 1))\n    done\n    say \"GATE_NOTE QEMU boot"),
+        # a loop that ended or refused is waited for until the timeout
+        "no-run-end-check": ('grep -q "WINVM_RUN_END tag=$tag \\|REFUSED: " "$rl"', "false"),
     }
 
     def test_each_mutant_fails_the_selftest(self):
@@ -184,6 +188,18 @@ class GateTeardownAndStateAtFailure(unittest.TestCase):
         self.assertNotIn("-Mode display", body)  # no adapter in that boot
         self.assertIn('teardown_guest "$pm"', body)
         self.assertIn("cap 900", body)  # bounded by the gate's budget
+
+    def test_boot_1_and_the_postmortem_wait_for_the_run_loops_qemu_start(self):
+        # 2026-11-06 (traces/ga106_win_boot1_20261106/): `run --detach` returns before the loop writes qemu.pid, so a
+        # fixed sleep before wait_ssh read a slow loop as "QEMU is gone"
+        text = code(GATE)
+        boot1 = text[text.index("stage_begin boot1") : text.index("stage_begin check_kf3")]
+        self.assertLess(boot1.index('wait_qemu_start "$TAG" 1'), boot1.index("wait_ssh"))
+        self.assertNotIn("sleep 5", boot1)
+        body = text[text.index("postmortem_state() {") :]
+        body = body[: body.index("\n}\n")]
+        self.assertLess(body.index('wait_qemu_start "$pm" 1'), body.index("wait_ssh"))
+        self.assertNotIn("sleep 5", body)
 
     def test_the_exit_trap_tears_down_between_boots_too(self):
         trap = code(GATE)

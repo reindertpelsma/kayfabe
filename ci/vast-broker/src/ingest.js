@@ -11,7 +11,13 @@
 // (storeTrees, from the cron entry point) and cached per commit as treekey:<sha>; the serialized
 // storeTick only reads that cache, saves its attempt counter before any work, and stops after
 // TICK_BUDGET_MS.
-import { recordRun, requirementsMet, recordRequirementSnapshot, closeStale } from './results.js';
+import {
+  recordRun,
+  requirementsMet,
+  recordRequirementSnapshot,
+  closeStale,
+  cleanClaims,
+} from './results.js';
 import { computeTreeKey, commitKey, treeSource } from './treekey.js';
 import { tier as profileShape, familyOf as cfgFamilyOf } from './tier.js';
 import { normalTier, INFLIGHT_MAX_MS } from './requirements.js';
@@ -100,10 +106,20 @@ export function rowFromRecord(r, leg, tree, now, cfg) {
   )
     verdict = 'UNATTRIBUTED';
   const profile = budgetClass(r); // 'release' for release legs (stored as check + budgetClass)
+  // driver_versions.host = the driver the box's nvidia-smi reported: the machine that runs kayfabe.
+  // The provider's offer label (hostDriverVersion) says nothing about a KVM rental and is never
+  // stored or shown (owner ruling 2026-10-24; review of #271, L1). The guest drivers are claims.
   const drivers = {};
-  if (version(r.hostDriverVersion)) drivers.host = r.hostDriverVersion;
-  if (version(r.hardware?.driver_version)) drivers.guest = r.hardware.driver_version;
+  if (version(r.hardware?.driver_version)) drivers.host = r.hardware.driver_version;
   const gpu = r.hardware?.gpu_name ?? r.gpu ?? null;
+  // Setup picker claims. The host driver is the driver the box's nvidia-smi reported (the machine
+  // that runs kayfabe), never the provider's offer label (a KVM host's label is not a fact about
+  // this setup). Everything else is the box's optional host_claims block. All are claims: they
+  // group and filter public rows and decide nothing (the PASS cross-check above never reads them).
+  const claims = cleanClaims({
+    ...(r.result?.host_claims ?? {}),
+    host_driver: version(r.hardware?.driver_version),
+  });
   const cost = rentalCost(r, r.ended ?? now);
   return {
     run_id: 'vast-' + r.key + '-' + leg,
@@ -118,6 +134,7 @@ export function rowFromRecord(r, leg, tree, now, cfg) {
     stages: verdict === null ? [] : verdict === 'PASS' || verdict === 'FAIL' ? stagesOf(r) : [],
     gpu_name: typeof gpu === 'string' && /^[A-Za-z0-9_. -]{1,100}$/.test(gpu) ? gpu : null,
     driver_versions: drivers,
+    claims,
     machine_id: Number.isSafeInteger(r.machineId) && r.machineId > 0 ? r.machineId : null,
     price_usd_h: Number.isFinite(r.price) && r.price >= 0 ? r.price : null,
     cost_usd: Number.isFinite(cost) && cost >= 0 ? cost : null,

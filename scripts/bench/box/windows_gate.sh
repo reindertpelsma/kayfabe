@@ -296,10 +296,13 @@ qemu_alive() {
     pid=$(cat "$VM/run/qemu.pid" 2> /dev/null || true)
     [ -n "$pid" ] && [ -d "/proc/$pid" ] && [ "$(awk '{print $3}' "/proc/$pid/stat" 2> /dev/null)" != Z ]
 }
+SSH_WAITED=0                    # seconds the last wait_ssh waited (for the failure text)
 wait_ssh() { # SECONDS
     local t=$1 w=0 per=$((WINVM_SSH_CONNECT_TIMEOUT + 12))
+    SSH_WAITED=0
     while [ "$w" -lt "$t" ]; do
-        qemu_alive || { say "GATE_NOTE QEMU is gone while waiting for ssh"; return 1; }
+        SSH_WAITED=$w
+        qemu_alive || { say "GATE_NOTE QEMU is gone while waiting for ssh (after ${w}s)"; return 1; }
         if g "$per" 'echo KF_SSH_UP' 2> /dev/null | grep -q KF_SSH_UP; then
             echo "SSH_UP after ${w}s" >> "$EV/ssh_seen"
             say "GATE_NOTE ssh up after ${w}s"
@@ -308,7 +311,34 @@ wait_ssh() { # SECONDS
         sleep 10
         w=$((w + 10))
     done
+    SSH_WAITED=$w
     return 1
+}
+# ⊘ [2026-11-06, gpu-vast run 42111518119 attempt 2, GA106, traces/ga106_win_boot1_20261106/README.md] `win_vm.sh run
+# --detach` returns before its loop has started QEMU: the loop first takes the GPU lock (up to WINVM_LOCK_WAIT_S), reads
+# `nvidia-smi -q` and starts swtpm, and only then writes run/qemu.pid. The gate slept 5 s and read the missing pid file
+# as "QEMU is gone", so a slow box failed boot 1 before any QEMU existed. Wait for the loop's own QEMU_START line of the
+# boot instead (as the reboot stage does). No QEMU_START means the run loop never started one: a harness fault.
+QSTART_GRACE_S=10               # how long a run loop may take to appear in the process list after --detach
+wait_qemu_start() { # RUN_TAG BOOT SECONDS
+    local tag=$1 n=$2 t=$3 w=0 rl=$VM/logs/${1}_run.log
+    while ! grep -q "QEMU_START tag=$tag boot=$n " "$rl" 2> /dev/null; do
+        if grep -q "WINVM_RUN_END tag=$tag \|REFUSED: " "$rl" 2> /dev/null; then
+            say "GATE_NOTE the run loop of $tag ended before QEMU boot $n started: $(tail -1 "$rl" 2> /dev/null)"
+            return 1
+        fi
+        if [ "$w" -ge "$QSTART_GRACE_S" ] && ! run_loop_alive "$tag"; then
+            say "GATE_NOTE the run loop of $tag is gone and never started QEMU boot $n: $(tail -1 "$rl" 2> /dev/null)"
+            return 1
+        fi
+        if [ "$w" -ge "$t" ]; then
+            say "GATE_NOTE no QEMU_START of boot $n of $tag within ${t}s: $(tail -1 "$rl" 2> /dev/null)"
+            return 1
+        fi
+        sleep 1
+        w=$((w + 1))
+    done
+    say "GATE_NOTE QEMU boot $n of $tag started after ${w}s"
 }
 guest_scp() { timeout 900 bash "$WV" scp-to "$1" "$2" < /dev/null; }
 gps() { # SECONDS FILE-ON-GUEST ARGS... -> run a staged ps1, CRs stripped
@@ -372,7 +402,11 @@ postmortem_state() {
         say "GATE_NOTE the post-mortem boot did not start: $(tail -2 "$EV/postmortem_launch.txt" | tr '\n' ' ')"
         return 0
     fi
-    sleep 5
+    if ! wait_qemu_start "$pm" 1 180; then
+        say "GATE_NOTE the post-mortem boot never started a QEMU"
+        teardown_guest "$pm"
+        return 0
+    fi
     if wait_ssh $((t - 180)); then
         gps 150 'C:\kf\gate_state.ps1' -Mode tdr -Since "$ENABLE_UTC" > "$EV/state_at_failure_tdr.txt" 2>&1
         wer_timeline "state_at_failure_wer.txt"
@@ -514,6 +548,33 @@ selftest() {
     dg state-dead-guest 'STATE_POSTMORTEM' 0 0
     dg state-silent-guest 'STATE_POSTMORTEM' 1 0
     dg state-live-guest 'STATE_LIVE' 1 1
+    # boot start (2026-11-06, GA106 run 42111518119): a run loop that is slow to start QEMU is waited for, not read
+    # as "QEMU is gone"; a loop that ended, refused, vanished or never started this boot is not waited for forever
+    qs() { # NAME WANT_RC SECONDS LOOP_ALIVE SETUP
+        local name=$1 wrc=$2 t=$3 alive=$4 setup=$5
+        n=$((n + 1))
+        out=$(
+            S=$(mktemp -d)
+            VM=$S EV=$S LOG=$S/log QSTART_GRACE_S=0
+            mkdir -p "$VM/logs"
+            run_loop_alive() { [ "$alive" = 1 ]; }
+            eval "$setup"
+            s0=$SECONDS
+            wait_qemu_start gate_t 1 "$t"
+            echo "RC=$? FAST=$([ $((SECONDS - s0)) -lt 10 ] && echo 1 || echo 0)"
+            rm -rf "$S"
+        )
+        # an ended, refused or vanished loop must be seen at once, not after the whole wait
+        [[ "$out" == *"RC=$wrc"* ]] && { [ "$wrc" = 0 ] || [ "$t" -lt 10 ] || [[ "$out" == *"FAST=1"* ]]; } && return 0
+        bad=$((bad + 1))
+        echo "WINDOWS_GATE_SELFTEST_FAIL case=$name want_rc=$wrc got: $out"
+    }
+    qs qstart-late 0 20 1 '(sleep 2; echo "[t] QEMU_START tag=gate_t boot=1 pid=1 log=x" >> "$VM/logs/gate_t_run.log") > /dev/null 2>&1 &'
+    qs qstart-run-ended 1 20 1 'echo "[t] WINVM_RUN_END tag=gate_t boots=0 reason=" > "$VM/logs/gate_t_run.log"'
+    qs qstart-refused 1 20 1 'echo "[t] REFUSED: the GPU lock was not free in 120s" > "$VM/logs/gate_t_run.log"'
+    qs qstart-loop-gone 1 20 0 ':'
+    qs qstart-timeout 1 2 1 ':'
+    qs qstart-other-boot 1 2 1 'echo "[t] QEMU_START tag=gate_t boot=2 pid=1 log=x" > "$VM/logs/gate_t_run.log"'
     # no budget left: no post-mortem boot is started
     n=$((n + 1))
     out=$(
@@ -677,8 +738,8 @@ if ! bash "$WV" run --detach --overlay "$TAG" --arm "$ARM" --guest-driver "$GDRV
     --env-file "$FLAGS" --tag "$TAG" > "$EV/run_launch.txt" 2>&1 < /dev/null; then
     fail_op "win_vm.sh run did not start: $(tail -2 "$EV/run_launch.txt" | tr '\n' ' ')"
 fi
-sleep 5
-wait_ssh "$(cap 900)" || fail_guest "the guest never answered ssh after boot 1 (900 s); run log: $(tail -2 "$VM/logs/${TAG}_run.log" 2> /dev/null | tr '\n' ' ')"
+wait_qemu_start "$TAG" 1 "$(cap 300)" || fail_op "the run loop never started QEMU for boot 1; run log: $(tail -2 "$VM/logs/${TAG}_run.log" 2> /dev/null | tr '\n' ' ')"
+wait_ssh "$(cap 900)" || fail_guest "the guest never answered ssh after boot 1 (waited ${SSH_WAITED}s of at most 900 s); run log: $(tail -2 "$VM/logs/${TAG}_run.log" 2> /dev/null | tr '\n' ' ')"
 stage_end
 
 stage_begin check_kf3

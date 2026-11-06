@@ -39,6 +39,8 @@ const ENV_KEYS = [
   'KF_GRACE_PASS',
   'KF_HARD_DEADLINE',
   'KF_HEARTBEAT_SECONDS',
+  // 2026-11-06 (setup picker): the Worker accepts the optional host_claims block.
+  'KF_HOST_CLAIMS',
   'KF_MERGE_WINDOWS',
   'KF_NONCE',
   'KF_PROTOCOL',

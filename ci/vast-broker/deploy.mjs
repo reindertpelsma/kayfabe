@@ -199,8 +199,12 @@ function main(argv) {
         'wrangler secret delete WORKER_URL\n',
     );
     // Upload exactly the verified bytes; wrangler does not bundle a second time.
+    // --x-provision=false (hidden flag, default true in the pinned wrangler 4.152.0): without it
+    // wrangler CREATES any bucket or database that a binding names and that does not exist, with
+    // no location hint and no lifecycle rule (the evidence bucket must be created first, DEPLOY.md).
     const run = wrangle([
       ...(dryRun ? ['--dry-run'] : []),
+      '--x-provision=false',
       '--no-bundle',
       join(out, 'index.js'),
       ...upload.flatMap(([key, value]) => ['--var', key + ':' + value]),

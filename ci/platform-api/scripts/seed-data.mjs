@@ -65,6 +65,7 @@ export function syntheticRows() {
     ci_runs: [],
     ci_run_stages: [],
     ci_host_facts: [],
+    ci_run_claims: [],
     ci_runs_private: [],
     ci_requirement_snapshots: [],
   };
@@ -355,7 +356,7 @@ function ciRows(rows, dies, commits) {
       rows.ci_host_facts.push({
         run_id: id,
         gpu_name: 'synthetic ' + die,
-        driver_versions_json: JSON.stringify({ guest: '580.159.04', host: '580.95.05' }),
+        driver_versions_json: JSON.stringify({ host: '580.95.05' }),
       });
       rows.ci_runs_private.push({
         run_id: id,
@@ -365,11 +366,128 @@ function ciRows(rows, dies, commits) {
       });
     });
   });
+  claimRows(rows);
+  pickerRows(rows, commits);
   rows.ci_requirement_snapshots.push({
     sha256: hex('synthetic requirements'),
     base_ref: 'next',
     content: '# synthetic requirements snapshot\nversion = 1\n',
     first_seen_at: time(BASE),
+  });
+}
+
+// Host facts a synthetic box "claimed" (migration 0003). A separate PRNG keeps every other row
+// unchanged. About one run in seven has no claims at all (an older box).
+const SYN_HOST_DRIVERS = ['580.95.05', '575.64.05', '570.172.08'];
+const SYN_WINDOWS_DRIVER = '580.88';
+const GUEST_OS = { linux: 'ubuntu-24.04', windows: '11-ltsc-2024-26100' };
+function claim(runId, os, { cpu, host, model = null }) {
+  const vendor = cpu ?? null;
+  return {
+    run_id: runId,
+    guest_os: os,
+    guest_os_version: GUEST_OS[os],
+    guest_driver: os === 'windows' ? SYN_WINDOWS_DRIVER : host,
+    host_driver: host,
+    cpu_vendor: vendor,
+    cpu_model:
+      model ??
+      (vendor === 'amd'
+        ? 'synthetic AMD EPYC'
+        : vendor === 'intel'
+          ? 'synthetic Intel Xeon'
+          : null),
+    cpu_arch: vendor === null ? null : 'x86_64',
+    claimed: 1,
+  };
+}
+const osesOf = (platform) => (platform === 'both' ? ['linux', 'windows'] : [platform]);
+
+function claimRows(rows) {
+  const random = prng(20261106);
+  for (const run of rows.ci_runs) {
+    if (run.verdict === null) continue;
+    const roll = random();
+    const host = SYN_HOST_DRIVERS[Math.floor(random() * SYN_HOST_DRIVERS.length)];
+    if (roll < 0.14) continue;
+    const cpu = roll < 0.57 ? 'amd' : 'intel';
+    for (const os of osesOf(run.platform))
+      rows.ci_run_claims.push(claim(run.run_id, os, { cpu, host }));
+  }
+}
+
+// Extra runs of two dies so the setup picker has several groups to show: two CPU vendors, two
+// host drivers, a FAIL in the Windows stage, a FAIL in a Linux stage, a RETRY and a run from a box
+// that reported no claims. Hand-written (no PRNG), ids "syn-ci-p-<n>".
+function pickerRows(rows, commits) {
+  const recent = commits.slice(-12);
+  const specs = [
+    // [commit index, die, family, platform, tier, verdict, failing stage, host driver, cpu]
+    [0, 'GA106', 'ampere', 'both', 'middle', 'PASS', null, '580.95.05', 'amd'],
+    [2, 'GA106', 'ampere', 'both', 'middle', 'PASS', null, '580.95.05', 'intel'],
+    [4, 'GA106', 'ampere', 'both', 'middle', 'FAIL', 'windows_gate', '580.95.05', 'amd'],
+    [5, 'GA106', 'ampere', 'linux', 'small', 'PASS', null, '575.64.05', 'amd'],
+    [7, 'GA106', 'ampere', 'both', 'middle', 'FAIL', 'gates', '575.64.05', 'intel'],
+    [9, 'GA106', 'ampere', 'both', 'middle', 'RETRY', null, '580.95.05', 'amd'],
+    [1, 'GA104', 'ampere', 'both', 'middle', 'PASS', null, '580.95.05', 'intel'],
+    [3, 'GA104', 'ampere', 'linux', 'small', 'PASS', null, '575.64.05', null],
+    [8, 'GA104', 'ampere', 'both', 'largest', 'PASS', null, '580.95.05', 'amd'],
+    [6, 'GA106', 'ampere', 'linux', 'small', 'PASS', null, null, 'none'],
+  ];
+  specs.forEach(([ci, die, family, platform, tier, verdict, failing, host, cpu], n) => {
+    const commit = recent[ci];
+    const id = 'syn-ci-p-' + n;
+    const started = commit.at + 3 * HOUR + n * 7 * 60000;
+    const ended = time(started + 45 * 60000);
+    rows.ci_runs.push({
+      run_id: id,
+      commit_sha: commit.sha,
+      // The tree the commit's other synthetic runs already use (a docs-only commit shares it).
+      tree_hash: rows.ci_runs.find((r) => r.commit_sha === commit.sha).tree_hash,
+      tree_kind: 'tree',
+      tier,
+      profile: tier === 'middle' ? 'check' : 'synthetic',
+      family,
+      die,
+      platform,
+      verdict,
+      started_at: time(started),
+      ended_at: ended,
+      sort_at: ended,
+      log_key: null,
+      source: 'reproduced',
+      tag: 'synthetic-tag-' + hex(id).slice(0, 16),
+      recorded_at: ended,
+    });
+    if (verdict === 'PASS' || verdict === 'FAIL') {
+      const names =
+        platform === 'both' ? ['provision', 'gates', 'windows_gate'] : ['provision', 'gates'];
+      const cut = failing === null ? names.length : names.indexOf(failing) + 1;
+      names.slice(0, cut).forEach((name, ord) =>
+        rows.ci_run_stages.push({
+          run_id: id,
+          ord,
+          name,
+          rc: name === failing ? 1 : 0,
+          duration_ms: 60000 * (ord + 1),
+          result: name === failing ? 'FAIL' : 'PASS',
+        }),
+      );
+    }
+    rows.ci_host_facts.push({
+      run_id: id,
+      gpu_name: 'synthetic ' + die,
+      driver_versions_json: JSON.stringify(host ? { host } : {}),
+    });
+    rows.ci_runs_private.push({
+      run_id: id,
+      machine_id: 910000 + n,
+      price_usd_h: 0.123,
+      cost_usd: 0.456,
+    });
+    if (host !== null)
+      for (const os of osesOf(platform))
+        rows.ci_run_claims.push(claim(id, os, { cpu: cpu === 'none' ? null : cpu, host }));
   });
 }
 
