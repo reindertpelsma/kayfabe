@@ -1,7 +1,7 @@
 # Box interface
 
-STATUS: LIVE, 2026-10-24. Box protocol 7 (since 2026-10-23); runner status protocol 6 (was 5
-until the edits2 round of 2026-10-24). Owner
+STATUS: LIVE, 2026-11-06. Box protocol 7 (since 2026-10-23; unchanged by the evidence upload below,
+which is additive); runner status protocol 6 (was 5 until the edits2 round of 2026-10-24). Owner
 rulings 2026-10-24: right after the runner's verified final log fetch it sends `POST /stop/<run>`
 and the Worker destroys the box at once, so the result grace below is only the fallback; box
 log text is relayed, not kept: the Worker deletes it `LOG_RETENTION_HOURS` (default 6) after the
@@ -72,3 +72,26 @@ field" reads status protocol 6 (`country` is still the one optional status key; 
 object has no `pr` and has `machine_id` / `host_id` since 2026-10-24) and "the environment is
 protocol 6" reads box protocol 7.
 [CODE READ: src/index.js, runner.py] Structured Worker status includes the selected provider `country` (two uppercase letters or `UNKNOWN`), separate from payload hardware. The runner accepts it as an explicitly optional protocol-4 metadata field, validates it independently, and labels it untrusted. The repo-side result-file contract is unchanged; the environment is protocol 6.
+
+CODE READ 2026-11-06 (`src/evidence.js`, `src/index.js`, `scripts/ci/vast_evidence.py`; NOT deployed;
+GPU-free tests only), "Evidence upload": `POST /evidence/<run>-<attempt>` uses the same run capability
+as `/report`; no query string; the body is one gzip bundle (`Content-Type: application/gzip`), at most
+8 MiB, with a required `Content-Length` (`411` without one, `413` above the cap, checked before the body
+is read). Headers: `X-KF-Evidence-SHA256` (64 lowercase hex of the exact bytes) and `X-KF-Evidence-Meta`
+(compact ASCII JSON, at most 4096 bytes: `{"v":1,"sections":[{"name","files","raw_bytes","dropped"}],
+"dropped","raw_bytes","scrub":{"uuid","serial","mac","ipv4","ipv6"},"scan":"clean"}`; any other key or
+shape is `400`). It is accepted while the rental is not closed or ended, so also during the result grace,
+and it is sent BEFORE the result report. Answers: `200 {"state":"STORED","run","size","sha256"}`; `400`
+(not gzip, digest or length mismatch, bad metadata); `401` (token or rental state); `404
+EVIDENCE_DISABLED` (the Worker has no bucket binding) or an unknown route (an older Worker); `409
+EVIDENCE_EXISTS` (one upload per rental; a retry whose first try did arrive sees it; the box counts
+ONLY this state as stored, and a `409 BUSY` from the ledger queue is retried); `411`; `413`; `429` (20
+requests per 10 s per rental, and 6 uploads a minute at the gateway); `503` (bucket error, or
+`EVIDENCE_BUSY`: too many uploads in flight, retry). The box tries at most 3 times (network error, 409
+BUSY, 429, 5xx) and treats every other answer as a skipped upload: the upload never changes
+a result, a verdict, a deadline or the exit status. The Worker keeps the bundle in a private bucket and
+never serves it. The object key is `<profile>/<run>/<attempt>.tgz`, and `<attempt>-r1.tgz` for the
+replacement rental after a provider fault (same run key, so a distinct object). The body is read and
+written by the gateway Worker; the ledger Durable Object only reserves and settles a flag (DEPLOY.md,
+"Evidence bucket"). The box protocol version stays 7: an old box never calls the route, and a box that calls
+a Worker without it gets 404. The Worker's check of `vast_report.py` (`BOX_PROTOCOL = "7"`) is unchanged.

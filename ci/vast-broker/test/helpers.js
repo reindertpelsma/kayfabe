@@ -395,6 +395,8 @@ export async function setup(overrides = {}) {
     adminStart: (...args) => service.adminStart(...args),
     adminStopBatch: (...args) => service.adminStopBatch(...args),
     adminBatches: (...args) => service.adminBatches(...args),
+    evidenceReserve: (...args) => service.evidenceReserve(...args),
+    evidenceSettle: (...args) => service.evidenceSettle(...args),
   };
   const harness = {
     cloud,

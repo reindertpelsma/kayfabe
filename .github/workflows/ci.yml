@@ -64,6 +64,8 @@ jobs:
           node --test ci/vast-broker/test
           # Tier, release and admin-start mutants (wtier, 2026-11-05): each must be killed.
           node ci/vast-broker/scripts/mutate-tiers.mjs
+          # Evidence upload route mutants (2026-11-06): each must fail at least two tests.
+          node ci/vast-broker/evidence-mutants.mjs
           npm ci --prefix ci/vast-admin --ignore-scripts --no-audit --no-fund
           node --test ci/vast-admin/test/*.test.mjs
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1 (tip of master on 2026-10-31; toolchain: input is explicit)

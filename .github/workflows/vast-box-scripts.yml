@@ -61,3 +61,5 @@ jobs:
         run: python3 scripts/ci/gpu_swap_mutants.py
       - name: Merge-bar mutations (scrubber test names, light bar, KVM stage) require two killers each
         run: python3 scripts/ci/merge_bar_mutants.py
+      - name: Evidence-bundle mutations (scrubbing, scanning, caps, upload) require two killers each
+        run: python3 scripts/ci/evidence_mutants.py

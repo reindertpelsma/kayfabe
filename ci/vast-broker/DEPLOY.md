@@ -1,7 +1,7 @@
 # Owner deployment and independent cleanup
 
-STATUS: LIVE, 2026-11-05. The sections "Result store (D1)" and "Tiers and the release run" (both
-added 2026-11-05) describe deployments that have not been run.
+STATUS: LIVE, 2026-11-06. The sections "Result store (D1)", "Tiers and the release run" (both added
+2026-11-05) and "Evidence bucket" (added 2026-11-06) describe deployments that have not been run.
 
 [CODE READ: wrangler.toml, deployment.json, deploy.mjs] The owner/controller deploys; no round
 performs a deployment or a provider call. Keep `RENTING_ENABLED=false` until acceptance.
@@ -749,3 +749,108 @@ Order (coordinator only; a coding lane never runs these):
 Rollback: deleting the `ROW_TAG_KEY` secret (`npx wrangler secret delete ROW_TAG_KEY`) stops all
 queueing and writes on the next request; the tables can stay.
 
+## Evidence bucket (failed-run bundles)
+
+[CODE READ 2026-11-06: wrangler.toml, src/evidence.js, src/index.js, scripts/ci/vast_evidence.py,
+scripts/ci/fetch_evidence.py; GPU-free node and python tests only. NOT DEPLOYED. No real R2 bucket,
+no real Worker and no box has run any of it.] A rented box is destroyed after its grace period and
+the runner shows a bounded part of the log, so a failed run used to lose its evidence. At the end
+of every run (pass or fail) the box builds one bounded, scrubbed bundle (the gate and provision
+evidence, host dmesg, `free`/`df`/`ps`/`nvidia-smi -q` header, log tails and the newest
+screenshots; what it holds and what it drops first is in
+[scripts/ci/VAST_PAYLOAD.md](../../scripts/ci/VAST_PAYLOAD.md), "Evidence bundle") and uploads it
+once to `POST /evidence/<run>-<attempt>` with its run token ([box protocol](docs/BOX_PROTOCOL.md),
+"Evidence upload"). The Worker stores it through an R2 WRITE binding in a PRIVATE bucket. Nothing in
+the public API, the status object, the runner display or the site links to it, and no Worker route
+lists or serves it: only the coordinator reads it.
+
+| Name | Kind | Where | Notes |
+|---|---|---|---|
+| `EVIDENCE_BUCKET` | R2 binding | `wrangler.toml` (committed, `[[r2_buckets]]`) | bucket `kayfabe-ci-evidence`; write-only use (`put`, and `head` to refuse an overwrite) |
+| (none) | secret / var | | the binding needs no secret and no var; `deploy.mjs` is unchanged |
+
+Object keys: `<profile>/<run id>/<attempt>.tgz` (the bundle, `Content-Type: application/gzip`) and
+`<profile>/<run id>/<attempt>.json`; the replacement rental after a provider fault reuses the run key,
+so its objects are `<attempt>-r1.tgz` and `<attempt>-r1.json` and the faulted box's bundle is kept (a small manifest: sha256, size, upload time, the sections the
+box said it kept and dropped, the scrub counts, `scan: clean`, and the rental's tier, family, die,
+batch and verdict as the Worker knows them). `profile` is `check`, `sweep` or `release`. One
+rental is one leg: a release or admin leg is an ordinary rental with its own run key, so the key
+already names run, attempt and leg. A second upload for the same rental is `409 EVIDENCE_EXISTS`
+(the queue's own `409 BUSY` is a different answer: retry). The cap is 8 MiB of compressed bundle,
+enforced from the declared `Content-Length` before the body is read (`411` without one, `413` above
+it).
+
+Where the bytes go (review of PR #274, finding F1): the 8 MiB body is read, checked and written to
+the bucket by the stateless gateway Worker; it never enters the one ledger Durable Object, whose
+128 MB isolate also serves `/report`, `/rent` and the cron. The gateway asks the ledger for a few
+bytes of reservation (`https://internal.invalid/evidence/reserve`: authenticates the run token against
+the record, checks the rental is live, sets the PENDING flag, answers the object keys), writes the
+bucket, and tells the ledger the outcome (`/evidence/settle`: STORED, EXISTS or FAILED; FAILED clears
+the flag so the box can retry). Bounds: at most 2 bodies held per gateway isolate and at most 4
+reservations open across the whole ledger (the rest get `503 EVIDENCE_BUSY`, which the box retries),
+at most 6 uploads a minute per rental at the gateway, and a PENDING flag older than a minute no
+longer blocks.
+
+Order (coordinator only; a coding lane never runs these):
+
+1. Merge the PR to `next`, then the `next` -> master batch. Master's `runner.py` pins the deployed
+   bundle, so the Worker is deployed only after master carries the new `deployment.json` hash.
+2. Create the bucket BEFORE the deploy, then the lifecycle rule (step 3), then deploy. CODE READ of
+   `node_modules/wrangler/wrangler-dist/cli.js` (4.152.0; review of PR #274, finding F9): a plain
+   `wrangler deploy` whose config names a bucket that does not exist CREATES it (`provisionBindings`;
+   the hidden flags `--experimental-provision` / `--x-provision` and `--experimental-auto-create`
+   both default to true), with no location hint and no lifecycle rule, so its objects would never
+   expire. `deploy.mjs` therefore passes `--x-provision=false` (the flag is accepted by `wrangler
+   deploy --dry-run`; run 2026-11-06, bundle unchanged): with it a missing bucket fails the deploy
+   instead of being created. Do not deploy this Worker with a bare `wrangler deploy`. Placement hint
+   `enam` (the ledger's Durable Object is placed in ENAM); no public access, no custom domain, no
+   `r2.dev` URL:
+   ```sh
+   cd ci/vast-broker
+   npx wrangler r2 bucket create kayfabe-ci-evidence --location enam
+   ```
+3. Set the retention rule, 30 days from upload, every key:
+   ```sh
+   npx wrangler r2 bucket lifecycle add kayfabe-ci-evidence expire-evidence-30d "" --expire-days 30 -y
+   npx wrangler r2 bucket lifecycle list kayfabe-ci-evidence
+   ```
+   The argument order (`<bucket> [name] [prefix]`, `--expire-days`) is from `wrangler r2 bucket
+   lifecycle add --help` of the pinned wrangler 4.152.0 (read 2026-11-06, not run; `-y` skips its
+   confirmation prompt). The rule is the only retention: the Worker never deletes an object.
+4. Deploy the CI Worker as above (`node ci/vast-broker/deploy.mjs <vars-file> --dry-run`, then
+   without `--dry-run`). The binding comes from the committed `wrangler.toml`; the helper still
+   refuses unless the bundle hashes to `deployment.json`.
+5. Check without a rental: `POST /evidence/<any run>` with a bad token answers `401` from a
+   deployed Worker (the same answer as without the binding; a live token is needed to see
+   `404 EVIDENCE_DISABLED` or `200`). The first real check is the first failed gate run after the
+   deploy: the box log ends with `evidence uploaded: <run>/<attempt> <bytes> sha256 <12 hex>`, and
+   `python3 scripts/ci/fetch_evidence.py list --run <run>` shows the keys.
+
+To read a bundle, with the coordinator's own credentials (never a box's, never GitHub's):
+
+```sh
+# one known key, with the Cloudflare login wrangler already has:
+npx wrangler r2 object get kayfabe-ci-evidence/check/42111518119/2.tgz --file ev.tgz --remote
+# listing and verified download (S3 key pair of an Object Read token on this bucket, in the environment):
+CF_ACCOUNT_ID=... R2_ACCESS_KEY_ID=... R2_SECRET_ACCESS_KEY=... \
+  python3 scripts/ci/fetch_evidence.py list --run 42111518119
+python3 scripts/ci/fetch_evidence.py get 42111518119-2 --out /data/evidence/42111518119-2
+python3 scripts/ci/fetch_evidence.py members /data/evidence/42111518119-2/42111518119-2.tgz
+```
+
+(`wrangler r2 object get` takes `{bucket}/{key}` and `--file`/`--remote`; read from `--help` of the
+pinned wrangler, not run.) A bundle is DATA from a box that ran untrusted code: read it, never run
+anything from it, extract only into an empty scratch directory.
+
+Without the binding (never created, or the block removed), the route answers `404 EVIDENCE_DISABLED`
+to an authenticated box; the box prints one `KF_EVIDENCE_SKIPPED reason=upload_http_404` line and
+carries on. An old Worker answers 404 for the unknown route, and an old box never calls it, so both
+directions keep working. Rollback: remove the `[[r2_buckets]]` block and redeploy (or delete the
+bucket after removing the binding); nothing else depends on it.
+
+INFERRED, not measured (what a first real run must confirm): that the R2 binding's `put` accepts a
+`Uint8Array` body with `customMetadata`, and that `head` returns `null` for a missing key; that a
+Worker request body of 8 MiB is delivered in full to the gateway Worker; the memory of a gateway
+isolate holding two such bodies (two copies each while they are joined, about 32 MiB); and that the
+lifecycle rule applies to keys written by the binding. The local tests use a fake bucket and call the
+ledger service in-process, not a Durable Object.
