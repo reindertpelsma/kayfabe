@@ -1,7 +1,7 @@
 # Box interface
 
-STATUS: LIVE, 2026-11-06. Box protocol 7 (since 2026-10-23; unchanged by the evidence upload below,
-which is additive); runner status protocol 6 (was 5 until the edits2 round of 2026-10-24). Owner
+STATUS: LIVE, 2026-11-06. Box protocol 7 (since 2026-10-23; unchanged by the evidence upload and the optional host claims below,
+which are additive); runner status protocol 6 (was 5 until the edits2 round of 2026-10-24). Owner
 rulings 2026-10-24: right after the runner's verified final log fetch it sends `POST /stop/<run>`
 and the Worker destroys the box at once, so the result grace below is only the fallback; box
 log text is relayed, not kept: the Worker deletes it `LOG_RETENTION_HOURS` (default 6) after the
@@ -95,3 +95,17 @@ replacement rental after a provider fault (same run key, so a distinct object). 
 written by the gateway Worker; the ledger Durable Object only reserves and settles a flag (DEPLOY.md,
 "Evidence bucket"). The box protocol version stays 7: an old box never calls the route, and a box that calls
 a Worker without it gets 404. The Worker's check of `vast_report.py` (`BOX_PROTOCOL = "7"`) is unchanged.
+
+## Optional host claims (2026-11-06)
+
+[CODE READ: scripts/ci/vast_report.py, ci/vast-broker/src/results.js, src/index.js] The box protocol
+stays 7. The Worker adds the optional environment variable `KF_HOST_CLAIMS=1` to the box environment;
+a reporter that sees it may add one optional key to the structured result, `host_claims`, a flat
+object of at most eight bounded strings (`cpu_vendor` amd, intel, arm or other; `cpu_model`;
+`cpu_arch`; `host_driver`; `linux_os_version`, `linux_driver`; `windows_os_version`,
+`windows_driver`). They are claims: the Worker checks each with the same patterns as the box
+(`cleanClaims`, shared vectors in `scripts/ci/host_claims_vectors.json`), drops an invalid field
+instead of refusing the report, and no verdict reads them. Without the variable (an older Worker) the
+reporter sends none, because an older Worker refuses any other top-level key of a result; a newer
+Worker accepts a result without the key (an older box). `host_driver` and the GPU name already travel
+in `hardware`; the Worker takes the host driver from `hardware.driver_version`.

@@ -413,7 +413,13 @@ class V7Tests(unittest.TestCase):
         self.assertEqual(calls, ["provision", "cuda_host", "merge_bar", "cuda_guest"])
         self.assertEqual(result["verdict"], "PASS")
         self.assertEqual(len(result["suites"]), 8)
-        self.assertEqual(set(result), {"verdict", "suites", "hardware", "host_reference"})
+        # host_claims (2026-11-06): the optional setup-picker facts, always at least the harness
+        # guest OS; no Windows claim without the Windows stage.
+        self.assertEqual(
+            set(result), {"verdict", "suites", "hardware", "host_reference", "host_claims"}
+        )
+        self.assertEqual(result["host_claims"]["linux_os_version"], "ubuntu-24.04")
+        self.assertNotIn("windows_os_version", result["host_claims"])
         self.assertEqual(result["host_reference"], "GREEN")
 
     # Lane 2, 2026-11-04: the master gate (Worker profile check) carries the Windows stage.
@@ -425,6 +431,9 @@ class V7Tests(unittest.TestCase):
         self.assertEqual(calls, ["provision", "cuda_host", "merge_bar", "cuda_guest", "windows_gate"])
         self.assertEqual(result["verdict"], "PASS")
         self.assertIn({"name": "windows_gate", "pass": 1, "fail": 0, "skip": 0}, result["suites"])
+        # The Windows guest is claimed only when the Windows stage is part of the run.
+        self.assertEqual(result["host_claims"]["windows_driver"], "580.88")
+        self.assertEqual(result["host_claims"]["windows_os_version"], "11-ltsc-2024-26100")
 
     def test_windows_stage_is_the_default_when_the_worker_states_no_tier(self):
         rc, result, calls = self._main_fixture(windows=None, soft_ms=200 * 60000)

@@ -1,7 +1,8 @@
 # Thin Vast payload
 
-STATUS: LIVE, 2026-11-06 (release-tier extras added by branch `claude/worker-tier-20261105`, and the
-evidence bundle added by branch `claude/ci-evidence-bundle-20261106`; neither has run on a box).
+STATUS: LIVE, 2026-11-06 (host claims added by branch `claude/setup-picker-20261106`; release-tier
+extras added by branch `claude/worker-tier-20261105`; the evidence bundle added by branch
+`claude/ci-evidence-bundle-20261106`; none has run on a box).
 
 [CODE READ: vast_payload.sh, vast_payload.py] The generic onstart invokes
 `bash scripts/ci/vast_payload.sh <sha> <nonce>` from the exact approved checkout.
@@ -90,6 +91,24 @@ runner-identifiers.test.js; mutants: merge_bar_mutants.py, payload_mutants.py):
   configured secrets are still redacted (ci/vast-broker/test/fixtures/scrub-vectors.json pins the
   three copies of the grammar). sanitize.js runs in the deployed Worker: it needs a deploy; runner.py
   is the base runner and takes effect after merge.
+
+## Host claims for the setup picker (2026-11-06)
+
+CODE READ (`vast_payload.py` `host_claims`, `cpu_claims`, `refresh_claims`; `vast_report.py`
+`clean_claims`, `final_result`); GPU-free tests only (`test_vast_payload_claims.py`, nine new cases in
+`payload_mutants.py`); no box ran this. The payload records, as `host_claims` in
+`/workspace/kf-result.json`: the CPU vendor (`vendor_id` of `/proc/cpuinfo`: GenuineIntel is `intel`,
+AuthenticAMD is `amd`, an arm64 machine is `arm`, anything else `other`), the sanitised CPU model name
+(at most 64 characters), the architecture, the guest OS versions of the harness images
+(`ubuntu-24.04`, `11-ltsc-2024-26100`; a test pins them to the scripts that install those guests),
+the Linux guest driver from the receipt `guest.qcow2.STAGED` that `provision_bench_tree.sh` writes,
+and, only when the Windows stage is part of the run, the Windows guest OS version and driver `580.88`.
+The Windows values are the harness's configured constants, sent even if the stage fails before the driver
+is installed: they say what the harness installs, not what it read from the guest. The reporter
+forwards the block only when the Worker set `KF_HOST_CLAIMS=1`; the fields are checked again by the
+Worker. They are claims, not evidence, and never change a verdict. No serial, UUID, address, hostname
+or machine id is read: a value shaped like one is dropped. See
+`ci/vast-broker/docs/BOX_PROTOCOL.md`, "Optional host claims".
 
 ## Release-tier extras (wtier, 2026-11-05)
 
