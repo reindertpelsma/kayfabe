@@ -91,6 +91,38 @@ const MUTANTS = [
     'const final = row.verdict !== null && row.finished_at !== null;',
     'const final = true;',
   ],
+  // CI Worker result store (migration 0002)
+  [
+    'ci tag selected',
+    'src/queries.js',
+    'r.platform, r.verdict, r.started_at, r.ended_at, r.log_key, r.source,',
+    'r.platform, r.verdict, r.started_at, r.ended_at, r.log_key, r.source, r.tag,',
+  ],
+  [
+    'ci private joined',
+    'src/queries.js',
+    'FROM ci_runs r LEFT JOIN ci_host_facts f ON f.run_id = r.run_id',
+    'FROM ci_runs r LEFT JOIN ci_host_facts f ON f.run_id = r.run_id LEFT JOIN ci_runs_private p ON p.run_id = r.run_id',
+  ],
+  ['ci tree pattern', 'src/validate.js', 'hash: /^[0-9a-f]{64}$/,', 'hash: /^[0-9A-Za-z]{1,64}$/,'],
+  [
+    'ci run id path',
+    'src/api.js',
+    "if (!PATTERNS.runId.test(id)) throw new ApiError(400, 'bad_request', 'invalid run id');\n    const row = await db.first('ciRunById'",
+    "const row = await db.first('ciRunById'",
+  ],
+  [
+    'ci running immutable',
+    'src/api.js',
+    'const final = row.verdict !== null && row.ended_at !== null;',
+    'const final = true;',
+  ],
+  [
+    'ci newest cell',
+    'src/queries.js',
+    'PARTITION BY r.tier, r.family, r.die, r.platform\n               ORDER BY r.sort_at DESC, r.run_id DESC\n             ) AS rn\n      FROM ci_runs r\n      WHERE (?1',
+    'PARTITION BY r.tier, r.family, r.die, r.platform\n               ORDER BY r.sort_at ASC, r.run_id DESC\n             ) AS rn\n      FROM ci_runs r\n      WHERE (?1',
+  ],
   [
     'outbound fetch',
     'src/index.js',
@@ -119,7 +151,7 @@ for (const [name, file, before, after] of MUTANTS) {
     const original = readFileSync(target, 'utf8');
     if (original.split(before).length !== 2) throw Error('ambiguous or missing mutation: ' + name);
     writeFileSync(target, original.replace(before, after));
-    const tests = ['api', 'static', 'row-tag', 'fixture'].map((t) =>
+    const tests = ['api', 'static', 'row-tag', 'fixture', 'ci'].map((t) =>
       join(copy, 'test', t + '.test.js'),
     );
     const run = spawnSync(process.execPath, ['--no-warnings', '--test', ...tests], {

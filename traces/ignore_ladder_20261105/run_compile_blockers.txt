@@ -1,0 +1,16 @@
+# final .workerignore; rev d74f6063d; 2026-11-05
+# A. worker-stripped tree (final .workerignore, 23348 files removed), nothing restored: cargo check --workspace --lib --bins --keep-going
+error: couldn't read `crates/kf-abi/src/../../../traces/driver_matrix/drmnv.tsv`: No such file or directory (os error 2)
+error: could not compile `kf-abi` (lib) due to 1 previous error
+# B. drmnv.tsv restored: cargo build --workspace --tests --keep-going (every remaining compile error)
+error: couldn't read `crates/kf-abi/src/../../../traces/rawclient_ce_interrupt_20261008/nvos_event_flags_by_tag.txt`: No such file or directory (os error 2)
+error: could not compile `kf-abi` (lib test) due to 1 previous error
+error: couldn't read `/workspace/wt-ignore-strip/crates/kf-rm/../../traces/blackwell_windows_resume_20261023/lease_metadata/precomp_tier3.txt`: No such file or directory (os error 2)
+error: couldn't read `/workspace/wt-ignore-strip/crates/kf-rm/../../traces/blackwell_hw_20261103/gb203_tier3/precomp_tier3.txt`: No such file or directory (os error 2)
+error: couldn't read `/workspace/wt-ignore-strip/crates/kf-rm/../../traces/blackwell_provider_validation_20261023/lease_metadata/precomp_tier3.txt`: No such file or directory (os error 2)
+error: could not compile `kf-rm` (test "precomp_consttab_data") due to 3 previous errors
+error: couldn't read `crates/kf-disp/tests/../../../traces/blackwell_host_caps_review_20261022/tier_audit/precomp_fields.tsv`: No such file or directory (os error 2)
+error: couldn't read `crates/kf-disp/tests/../../../traces/blackwell_host_caps_review_20261022/tier_audit/precomp_fields.tsv`: No such file or directory (os error 2)
+error: could not compile `kf-disp` (test "host_precomp") due to 2 previous errors
+error: couldn't read `crates/kf-abi/tests/../../../traces/driver_matrix/ranges.tsv`: No such file or directory (os error 2)
+error: could not compile `kf-abi` (test "driver_matrix") due to 1 previous error

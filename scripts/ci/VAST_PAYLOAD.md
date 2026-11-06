@@ -1,5 +1,8 @@
 # Thin Vast payload
 
+STATUS: LIVE, 2026-11-05 (release-tier extras added by branch `claude/worker-tier-20261105`; not
+run on a box).
+
 [CODE READ: vast_payload.sh, vast_payload.py] The generic onstart invokes
 `bash scripts/ci/vast_payload.sh <sha> <nonce>` from the exact approved checkout.
 The payload uses the existing disposable-box flows, rather than another provisioning path:
@@ -87,3 +90,21 @@ runner-identifiers.test.js; mutants: merge_bar_mutants.py, payload_mutants.py):
   configured secrets are still redacted (ci/vast-broker/test/fixtures/scrub-vectors.json pins the
   three copies of the grammar). sanitize.js runs in the deployed Worker: it needs a deploy; runner.py
   is the base runner and takes effect after merge.
+
+## Release-tier extras (wtier, 2026-11-05)
+
+CODE READ (`vast_payload.py` `tier_requested`, `specviewperf_rows`, `vast_stage_specviewperf.sh`,
+`vast_report.py` SPEC); GPU-free tests only (`test_vast_payload_v7.py` ReleaseTierPayloadTests,
+`test_vast_payload_tiers.py`, three new cases in `payload_mutants.py`); no box ran this. The Worker
+may send three optional variables, each validated by the reporter and popped before any stage:
+`KF_TIER` (small, middle, large, adhoc; informational), `KF_WINDOWS_RUNS=2` (release only: a second
+`windows_gate.sh` run on the same box, row `windows_gate_2`, when no second machine offers the die;
+refused without the Windows stage; it needs 45 minutes left, an INFERRED margin over the second
+runs of 906 s and 1795 s on 2026-11-04 at rev `0c515b3b`) and `KF_STAGES` (release only,
+colon-separated slot names). Slot `specviewperf` runs `vast_stage_specviewperf.sh` last: it calls
+`scripts/bench/box/specviewperf_stage.sh` when that lane exists, keeps the lane's whole output in a
+0600 file under `/workspace/kf-ci-private/` (never streamed), and prints only the verdict line; without
+the lane the row is `specviewperf_retry_not_built`, never a pass. Slots `two_guests` and `trio`
+are reserved and DESIGN-ONLY: requesting them is a preflight failure. A malformed value, a stage
+outside the large tier or a duplicate is refused before the first stage.
+

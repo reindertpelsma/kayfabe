@@ -1,0 +1,9 @@
+[2026-11-05T12:09:28Z] waiting for the GPU lock /tmp/kf-trio-windows.lock (GPU work is strictly serial; up to 7200s)
+[2026-11-05T12:09:30Z] WINVM_RUN_START tag=trio_trio3 repo_rev=3aa2a75a kf3=on qemu=/workspace/bench/kf3-bins/3aa2a75a/qemu-system-x86_64 host_driver=580.159.04 overlay=gate_trio_g arm=B guest_driver=580.65.06 gop_efi=/workspace/winvm/secureboot/kf-gop.3aa2a75a.signed.efi sha256(gop_efi)=c04ba1f097fccb82
+[2026-11-05T12:09:30Z] kf3 device: kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=/workspace/winvm/secureboot/kf-gop.3aa2a75a.signed.efi,id=kf0,guest-driver=580.65.06,gpu-uuid=GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e002a
+[2026-11-05T12:09:30Z] VM_IDENTITY uuid=fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e002a serial=KFA338CD86AD mac=52:54:00:89:cd:d6
+[2026-11-05T12:09:30Z] ENV_FILE /root/kayfabe/scripts/bench/windows/kf3_flags.sample.env sha256=e5c254c811c6b3ac flags=19
+[2026-11-05T12:09:30Z] KF3_ENV KF3_ASYNC_PREEMPT=1 KF3_DEFERRED_API=1 KF3_DISPLAY_CAPS_PROBE=1 KF3_DISPLAY_CTRL_PROBE=1 KF3_DISPLAY_ILUT_OFFSET_256=1 KF3_DISPLAY_IMP_ENABLE=1 KF3_DISPLAY_LUT_MIRROR=1 KF3_DISPLAY_SDR_COLOR=1 KF3_GFX_POOL_PROBE=1 KF3_KERNEL_GR_CE=1 KF3_KERNEL_GR_WORK=1 KF3_MEMORY_LIST_PROBE=1 KF3_PREEMPT_BIND_PROBE=1 KF3_RPC_TRACE=1 KF3_SW_RUNLIST_HOST_OWNED=1 KF3_SW_RUNLIST_PROBE=1 KF3_TRANSLATED_CE_RELAY=1 KF3_WIN_TWIN_DEFAPI_OBJECT=1 KF3_WIN_USER_CHANNELS_PASSTHROUGH=1 KF3_ZCULL_BIND_PROBE=1 
+[2026-11-05T12:09:31Z] QEMU_START tag=trio_trio3 boot=1 pid=128524 log=logs/trio_trio3_b1_qemu.log
+[2026-11-05T12:26:16Z] WINVM_BOOT_END boot=1 rc=0 reason=guest-shutdown kf3_lines=53589 host_xid=10
+[2026-11-05T12:26:16Z] WINVM_RUN_END tag=trio_trio3 boots=1 reason=guest-shutdown

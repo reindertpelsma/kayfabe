@@ -1,0 +1,129 @@
+2026-11-05T11:29:19Z COPY_START overlay=gate_specvp1
+2026-11-05T11:30:17Z ssh up after 0s
+EXCL: C:\kf;C:\Program Files\SPECviewperf 15
+192.944244384766
+2026-11-05T11:32:25Z COPY_TAR_RC rc=1 secs=121 streamsha=40428db00f5ac16921b171183b3c35e39392b04c4d2912b6bdb2335e76f73561
+FILES 261 BYTES 4736002053
+188.546417236328
+True
+2026-11-05T11:32:46Z COPY_END
+2026-11-05T11:33:01Z COPY_START overlay=gate_specvp1
+2026-11-05T11:34:11Z ssh up after 10s
+EXCL: C:\kf;C:\Program Files\SPECviewperf 15
+188.542362213135
+2026-11-05T11:37:13Z COPY_TAR_RC rc=1 secs=177 streamsha=0324a6b6df378fbd53aac865ca3a05c3e8a514cda5f092c0dd2a8b812a39c66b
+FILES 269 BYTES 7859729282
+185.635662078857
+True
+2026-11-05T11:37:36Z COPY_END
+2026-11-05T11:37:55Z COPY_START overlay=gate_specvp1 viewsets=medical-04 energy-04 enscape-01
+2026-11-05T11:39:05Z ssh up after 0s
+2026-11-05T11:42:58Z COPY_TAR_RC rc=0 secs=233 filteredstreamsha=1a8900f324266ed1a6733451b2df60c1a3c055fde22c56a622d7ee9f03e67b98 TARFILTER_DONE members=5242 bytes=5499931441
+VIEWSET blender-01-1.0.1 files=24 bytes=7388976361
+VIEWSET energy-04-1.0.2 files=2911 bytes=1559513473
+VIEWSET enscape-01-1.0.5 files=1818 bytes=2201474538
+VIEWSET medical-04-1.0.2 files=144 bytes=1262862531
+FREE_GB 180.94019317627
+True
+2026-11-05T11:43:17Z COPY_END
+2026-11-05T11:43:27Z BOOT_START tag=specrun1
+2026-11-05T11:44:53Z ssh up after 0s
+SPEC_RUN_REQ medical-04 2026-11-05T11:49:38Z
+SPEC_RUN_REQ medical-04 try2 2026-11-05T11:53:05Z
+SPEC_RUN_REQ energy-04,enscape-01 2026-11-05T11:58:48Z
+SPEC_RUN_REQ energy-04 2026-11-05T12:00:57Z
+2026-11-05T12:03:49Z COPY_START overlay=gate_specvp1 viewsets=catia-07 creo-04 maya-07 solidworks-08
+2026-11-05T12:04:43Z ssh up after 0s
+2026-11-05T12:22:00Z COPY_TAR_RC rc=0 secs=1037 filteredstreamsha=99fdea860ce3f1f7aaf056a067027f4cbd0e381d52e825dc680b8d9ecebd83ca TARFILTER_DONE members=538 bytes=41275783631
+VIEWSET catia-07-1.0.6 files=29 bytes=7347262051
+VIEWSET creo-04-1.0.1 files=55 bytes=19667000374
+VIEWSET energy-04-1.0.2 files=2911 bytes=1559513473
+VIEWSET enscape-01-1.0.5 files=1814 bytes=2201476155
+VIEWSET maya-07-1.0.2 files=40 bytes=6322769267
+VIEWSET medical-04-1.0.2 files=144 bytes=1262862531
+VIEWSET solidworks-08-1.0.1 files=35 bytes=7462671040
+FREE_GB 149.745140075684
+True
+2026-11-05T12:22:21Z COPY_END
+2026-11-05T12:22:35Z BOOT_START tag=specrun2
+2026-11-05T12:24:01Z ssh up after 0s
+2026-11-05T12:24:11Z desktop up
+GATE_BOOT utc=2026-11-05T12:22:59Z os='Microsoft Windows 11 Enterprise LTSC Evaluation' build=26100
+GATE_DESKTOP user='KFWIN\kf' dwm=1 explorer=1
+GATE_SESSIONS USERNAME SESSIONNAME ID STATE IDLE TIME LOGON TIME kf console 1 Active none 11/5/2026 12:23 PM
+GATE_DISPLAY name='NVIDIA GeForce RTX 4090' driver=32.0.15.8088 code=0 status=OK pnp=OK
+GATE_STATE_DONE mode=desktop
+GATE_DISPLAY name='NVIDIA GeForce RTX 4090' driver=32.0.15.8088 code=0 status=OK pnp=OK
+GATE_STATE_DONE mode=display
+2026-11-05T12:24:16Z BOOT_END
+2026-11-05T12:24:27Z SERIES_START energy-04
+TASK_STARTED kf-specvp-spec 2026-11-05T12:24:36.5240788+00:00
+2026-11-05T12:25:21Z SERIES_END energy-04 secs=54
+GATE_TDR since=2026-11-05T12:22:59Z display4101=0 nvlddmkm153=0 kernelpower41=0 eventlog6008=0 bugcheck1001=0 livekernelevent_other=0 livekernelevent193=0 livekernelevent_stale=0 strict=0 total=0
+2026-11-05T12:25:30Z SERIES_START catia-07
+TASK_STARTED kf-specvp-spec 2026-11-05T12:25:34.7352232+00:00
+2026-11-05T12:31:35Z SERIES_START catia-07
+2026-11-05T12:35:58Z SERIES_END catia-07 secs=263
+GATE_TDR since=2026-11-05T12:22:59Z display4101=0 nvlddmkm153=6 kernelpower41=0 eventlog6008=0 bugcheck1001=0 livekernelevent_other=14 livekernelevent193=0 livekernelevent_stale=0 strict=0 total=20
+2026-11-05T12:36:06Z SERIES_STOP reset after catia-07
+2026-11-05T12:37:13Z BOOT_START tag=specrun3
+2026-11-05T12:37:18Z QEMU gone while waiting for ssh
+2026-11-05T12:37:18Z BOOT_FAIL no ssh
+2026-11-05T12:37:18Z CHAIN_BOOT_FAIL maya-07
+2026-11-05T12:37:18Z BOOT_START tag=specrun4
+2026-11-05T12:38:45Z ssh up after 0s
+2026-11-05T12:38:54Z desktop up
+GATE_BOOT utc=2026-11-05T12:37:46Z os='Microsoft Windows 11 Enterprise LTSC Evaluation' build=26100
+GATE_DESKTOP user='KFWIN\kf' dwm=1 explorer=1
+GATE_SESSIONS USERNAME SESSIONNAME ID STATE IDLE TIME LOGON TIME kf console 1 Active none 11/5/2026 12:38 PM
+GATE_DISPLAY name='NVIDIA GeForce RTX 4090' driver=32.0.15.8088 code=0 status=OK pnp=OK
+GATE_STATE_DONE mode=desktop
+GATE_DISPLAY name='NVIDIA GeForce RTX 4090' driver=32.0.15.8088 code=0 status=OK pnp=OK
+GATE_STATE_DONE mode=display
+2026-11-05T12:38:59Z BOOT_END
+2026-11-05T12:39:00Z SERIES_START solidworks-08
+TASK_STARTED kf-specvp-spec 2026-11-05T12:39:10.4093002+00:00
+2026-11-05T12:53:27Z SERIES_START solidworks-08
+2026-11-05T12:57:38Z SERIES_END solidworks-08 secs=251
+GATE_TDR since=2026-11-05T12:37:46Z display4101=0 nvlddmkm153=0 kernelpower41=0 eventlog6008=0 bugcheck1001=0 livekernelevent_other=0 livekernelevent193=0 livekernelevent_stale=4 strict=0 total=0
+2026-11-05T12:57:54Z SERIES_DONE
+2026-11-05T12:58:10Z BOOT_START tag=specrun5
+2026-11-05T12:58:15Z QEMU gone while waiting for ssh
+2026-11-05T12:58:15Z BOOT_FAIL no ssh
+2026-11-05T12:58:15Z CHAIN_BOOT_FAIL energy-04
+2026-11-05T12:58:15Z BOOT_START tag=specrun6
+2026-11-05T13:00:03Z ssh up after 10s
+2026-11-05T13:00:13Z desktop up
+GATE_BOOT utc=2026-11-05T12:58:42Z os='Microsoft Windows 11 Enterprise LTSC Evaluation' build=26100
+GATE_DESKTOP user='KFWIN\kf' dwm=1 explorer=1
+GATE_SESSIONS USERNAME SESSIONNAME ID STATE IDLE TIME LOGON TIME kf console 1 Active none 11/5/2026 12:59 PM
+GATE_DISPLAY name='NVIDIA GeForce RTX 4090' driver=32.0.15.8088 code=0 status=OK pnp=OK
+GATE_STATE_DONE mode=desktop
+GATE_DISPLAY name='NVIDIA GeForce RTX 4090' driver=32.0.15.8088 code=0 status=OK pnp=OK
+GATE_STATE_DONE mode=display
+2026-11-05T13:00:18Z BOOT_END
+2026-11-05T13:00:20Z SERIES_START maya-07
+TASK_STARTED kf-specvp-spec 2026-11-05T13:00:30.5003218+00:00
+2026-11-05T13:09:21Z SERIES_END maya-07 secs=541
+GATE_TDR since=2026-11-05T12:58:42Z display4101=0 nvlddmkm153=0 kernelpower41=0 eventlog6008=0 bugcheck1001=0 livekernelevent_other=0 livekernelevent193=0 livekernelevent_stale=4 strict=0 total=0
+2026-11-05T13:09:59Z SERIES_DONE
+2026-11-05T13:09:59Z CHAIN_RESULT maya-07 rc=0 boot=specrun6 since=2026-11-05T12:58:42Z
+2026-11-05T13:10:30Z CHAIN_DONE
+2026-11-05T13:10:59Z BOOT_START tag=specrun7
+2026-11-05T13:12:44Z ssh up after 10s
+2026-11-05T13:12:53Z desktop up
+GATE_BOOT utc=2026-11-05T13:11:26Z os='Microsoft Windows 11 Enterprise LTSC Evaluation' build=26100
+GATE_DESKTOP user='KFWIN\kf' dwm=1 explorer=1
+GATE_SESSIONS USERNAME SESSIONNAME ID STATE IDLE TIME LOGON TIME kf console 1 Active none 11/5/2026 1:12 PM
+GATE_DISPLAY name='NVIDIA GeForce RTX 4090' driver=32.0.15.8088 code=0 status=OK pnp=OK
+GATE_STATE_DONE mode=desktop
+GATE_DISPLAY name='NVIDIA GeForce RTX 4090' driver=32.0.15.8088 code=0 status=OK pnp=OK
+GATE_STATE_DONE mode=display
+2026-11-05T13:12:58Z BOOT_END
+2026-11-05T13:13:00Z SERIES_START energy-04
+TASK_STARTED kf-specvp-spec 2026-11-05T13:13:09.8577247+00:00
+2026-11-05T13:17:44Z SERIES_END energy-04 secs=284
+GATE_TDR since=2026-11-05T13:11:26Z display4101=0 nvlddmkm153=0 kernelpower41=0 eventlog6008=0 bugcheck1001=0 livekernelevent_other=0 livekernelevent193=0 livekernelevent_stale=4 strict=0 total=0
+2026-11-05T13:18:30Z SERIES_DONE
+2026-11-05T13:18:30Z CHAIN_RESULT energy-04 rc=0 boot=specrun7 since=2026-11-05T13:11:26Z
+2026-11-05T13:18:46Z CHAIN_DONE

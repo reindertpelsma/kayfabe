@@ -1,0 +1,13 @@
+# sparse-checkout built from the final .workerignore (python3 scripts/ci/ignore_ladder.py sparse), git 2.53.0, worktree of d74f6063d, 2026-11-05
+files on disk (excluding .git): 2187
+tracked entries unignored: 2191 (the 4 differences are third_party gitlinks, which are directories)
+skip-worktree entries: 23348 (= ignored count)
+git status --porcelain --untracked-files=no lines: 0
+a worktree added from that repo: sparse too, 2187 files
+first 6 lines of the list:
+/*
+!/target
+!/target-*
+!/crates/kayfabe-abi/gen/target
+!/firmware/*/target
+!/firmware/**/*.efi

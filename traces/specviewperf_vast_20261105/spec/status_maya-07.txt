@@ -1,0 +1,9 @@
+[Workload:maya-07] Starting
+[workload: maya-07 / subtest: 01_SolShadedAmbientOcclusion] Completed
+[workload: maya-07 / subtest: 02_SolShadedTexturedAmbientOcclusion] Completed
+[workload: maya-07 / subtest: 03_SolWireframeShadedTextured] Completed
+[workload: maya-07 / subtest: 04_ApolloShaded] Completed
+[workload: maya-07 / subtest: 05_ApolloShadedTextured] Completed
+[workload: maya-07 / subtest: 06_ApolloWireframeShadedTextured] Completed
+[workload: maya-07 / subtest: 07_ToyStoreWireframeShaded] Completed
+[Workload: maya-07] Completed

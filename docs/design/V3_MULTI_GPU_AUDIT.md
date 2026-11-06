@@ -28,7 +28,7 @@ are still open design questions, as the design already records.
 | building/testing multi-GPU as a v3 phase | ⊘ **DEFERRED** (2026-09-20 plan); the 09-26 ruling moves it to *"its own test before the module"* | `THE_V3_PLAN.md:385`; `V3_GUEST_DOORBELL_MODULE.md:102-103` (*"(distinct host GPUs, and later the same GPU twice)"*) |
 | the same host GPU in several VMs | ◐ **assumed, not specified**. The only mentions: a *"shared host GPU"* error policy, and cross-tenant BAR1 reuse | `THE_V3_PLAN.md:305-309` (P5.5); `THE_CONSTRAINTS.md:2206`, `:2284-2291`, `:2465-2470` |
 | **peer access between guest GPUs** | ⚠ **OPEN**. *"decide it explicitly, even if the decision is a named refusal"* | `THE_CONSTRAINTS.md:2071-2079` |
-| shared-pool BAR1 headroom (second GPU / second VM) | ⚠ **OPEN** | `THE_CONSTRAINTS.md:2166-2168` |
+| shared-pool BAR1 headroom (second GPU / second VM) | ⚠ **OPEN** (⊘ *2026-11-05: second VM MEASURED on one AD102, 256 MiB host BAR1: two kf3 VMs + a host CUDA job peaked at 126 MiB, no refusal, runs trio2/trio3 in `traces/trio_vast_20261105/`; a second GPU and a BAR1-heavy workload remain open*) | `THE_CONSTRAINTS.md:2166-2168` |
 | hot-added second GPU | ⊘ treat CUDA re-init with a guest live as a **refusal** | `THE_CONSTRAINTS.md:2027-2032` |
 | `deviceId` routing | stated as *"decoded for multi-GPU routing"* | `THE_SURFACE_v3.md:157`. See §3 note: on the GSP wire the value is always 0 |
 | chip tables derivable per die | ✔ ruled R11 | `THE_ARCHITECTURE_v3.md:1228` |
