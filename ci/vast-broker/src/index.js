@@ -120,8 +120,51 @@ export function createService({
   ].filter(Boolean);
   // Newly created real provider rows can omit/null actual_status. This grants
   // only the existing provisioning window, never callback/liveness authority.
+  // `offline` flaps on a booting instance (measured 2026-11-06, vanish hunt) and is treated like `created`.
   const pendingInstance = (i) =>
-    i.actual_status == null || ['created', 'loading', 'starting'].includes(i.actual_status);
+    i.actual_status == null ||
+    ['created', 'loading', 'starting', 'offline'].includes(i.actual_status);
+  // The provider's raw status word, restricted to [a-z_]{1,16}; anything else is `unknown`.
+  const providerWord = (i) => {
+    const a = i?.actual_status;
+    if (a == null) return 'null';
+    return typeof a === 'string' && /^[a-z_]{1,16}$/.test(a) ? a : 'unknown';
+  };
+  // The provider's status_msg is third-party text: sanitised like box text, one line, bounded.
+  const providerMessage = (record, i) => {
+    const m = i?.status_msg;
+    if (typeof m !== 'string' || m === '') return '-';
+    const text = sanitizeBoxText(
+      new TextEncoder().encode(m.slice(0, 1024)),
+      2048,
+      [...secrets, record.id, record.label, record.nonce],
+      { tail: false },
+    )
+      .text.replace(/^\[box\] /gm, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return Array.from(text).slice(0, DEFAULTS.providerMessageChars).join('') || '-';
+  };
+  // The byte cap of the last configuration seen: close() runs in places that hold no cfg.
+  let lastReportBytes = DEFAULTS.reportBytes;
+  // One Worker line per close, before any destroy: reason, the provider's last raw status, its
+  // bounded message. Never throws (a failed line must not stop the teardown) and never repeats.
+  async function closeLine(record, reason) {
+    if (record.ended !== null || record.closeLogged) return;
+    record.closeLogged = true;
+    try {
+      await workerLine(
+        record,
+        'close reason=' +
+          reason +
+          ' provider=' +
+          (record.providerRaw ?? 'none') +
+          ' msg=' +
+          (record.providerMsg ?? '-'),
+        { reportBytes: lastReportBytes },
+      );
+    } catch {}
+  }
   const phase = (r) =>
     r.ended !== null
       ? 'NONE'
@@ -244,6 +287,7 @@ export function createService({
           record.computeStoragePrice = 0;
           record.price = 0;
           record.bandwidthCost = 0;
+          await closeLine(record, 'GONE');
           await ledger.settle(record, now());
           await clearFailedSha(record);
           return record;
@@ -268,6 +312,7 @@ export function createService({
     record.verdict ||= verdict;
     record.liveCheckedAt = null;
     await ledger.save(record);
+    await closeLine(record, reason);
     if (record.ended === null) await cleanup(record, vast);
   }
   async function checkContract(record, instance, vast, cfg) {
@@ -340,6 +385,7 @@ export function createService({
   }
   async function update(record, vast, github, cfg) {
     applyProfile(cfg, budgetClass(record));
+    lastReportBytes = cfg.reportBytes;
     if (record.ended !== null) return;
     clocks(record, cfg);
     await ledger.save(record);
@@ -389,29 +435,38 @@ export function createService({
       record.closed = 'UNAVAILABLE';
       record.verdict ||= 'UNAVAILABLE';
       await ledger.save(record);
+      await closeLine(record, 'UNAVAILABLE');
       throw Error('UNAVAILABLE');
     }
     if (instance === null) {
+      // Verified absence (Vast: the instance does not exist) closes at once; only a transient
+      // non-running status of an instance that exists is tolerated below.
       record.closed = 'GONE';
       record.verdict ||= 'UNAVAILABLE';
+      record.providerRaw = 'absent';
+      record.providerMsg = '-';
       await workerLine(record, 'provider_absent', cfg);
+      await closeLine(record, 'GONE');
       await ledger.settle(record, now());
       return;
     }
     await checkContract(record, instance, vast, cfg);
-    const providerState = [
-      'running',
-      'created',
-      'loading',
-      'starting',
-      'stopped',
-      'exited',
-    ].includes(instance.actual_status)
-      ? instance.actual_status
-      : 'unknown';
+    const providerState = providerWord(instance);
+    record.providerRaw = providerState;
+    record.providerMsg = providerMessage(record, instance);
     if (record.providerState !== providerState) {
       record.providerState = providerState;
-      await workerLine(record, 'provider=' + providerState + ' phase=' + record.phase, cfg);
+      await workerLine(
+        record,
+        'provider=' +
+          providerState +
+          ' phase=' +
+          record.phase +
+          ' msg=' +
+          record.providerMsg +
+          (record.providerFlaps ? ' flaps=' + record.providerFlaps : ''),
+        cfg,
+      );
     }
     if (
       ['created', 'running'].includes(instance.actual_status) &&
@@ -446,10 +501,49 @@ export function createService({
       await ledger.save(record);
     }
     if (instance.actual_status !== 'running') {
-      if (record.firstReportAt === undefined && pendingInstance(instance)) return;
-      await close(record, vast, 'ENDED');
+      // Still booting (null, created, loading, starting, offline): bounded by the boot deadline.
+      if (record.firstReportAt === undefined && pendingInstance(instance)) {
+        delete record.providerBad;
+        await ledger.save(record);
+        return;
+      }
+      // Tolerance (vanish hunt 2026-11-06): one reading proves nothing, Vast's per-instance status
+      // flaps while the instance and the box stay up. ENDED needs providerGoneReadings readings,
+      // at least providerGoneSpacingSeconds apart, spanning at least providerGoneWindowSeconds, and no
+      // box POST since the first of them. Every hard limit, deadline and the heartbeat timeout
+      // run before this point and are unchanged.
+      const t = now(),
+        spacing = DEFAULTS.providerGoneSpacingSeconds * 1000;
+      let bad = record.providerBad;
+      if (!bad || (record.lastPostAt !== null && record.lastPostAt > bad.first)) {
+        bad = record.providerBad = { first: t, last: t, count: 1 };
+        record.providerFlaps = (record.providerFlaps ?? 0) + 1;
+      } else if (t - bad.last >= spacing) {
+        bad.last = t;
+        bad.count++;
+      }
+      if (
+        bad.count >= DEFAULTS.providerGoneReadings &&
+        t - bad.first >= DEFAULTS.providerGoneWindowSeconds * 1000
+      ) {
+        await workerLine(
+          record,
+          'provider gone: ' +
+            bad.count +
+            ' readings over ' +
+            Math.floor((t - bad.first) / 1000) +
+            ' s, no box post' +
+            (record.machineId ? ' machine=' + providerId(record.machineId) : '') +
+            (record.hostId ? ' host=' + providerId(record.hostId) : ''),
+          cfg,
+        );
+        await close(record, vast, 'ENDED');
+        return;
+      }
+      await ledger.save(record);
       return;
     }
+    delete record.providerBad;
     record.liveCheckedAt = now();
     await ledger.save(record);
     // Post-result inspection outlives the workflow job; before it, the run must be live.
@@ -503,6 +597,7 @@ export function createService({
     )
       refuse('UNAUTHORIZED', 401);
     clocks(r, cfg);
+    lastReportBytes = cfg.reportBytes;
     await rejectExpiredCallback(r, cfg, vast);
     if (now() >= r.reportExpiry * 1000 || (r.hardDeadline !== null && now() >= r.hardDeadline)) {
       try {
@@ -529,7 +624,33 @@ export function createService({
           const instance = await vast.inspect(r);
           if (instance && r.firstReportAt === undefined && pendingInstance(instance))
             refuse('NOT_READY', 409);
-          if (instance === null || instance.actual_status !== 'running') throw Error('NOT_LIVE');
+          // Verified absence closes the rental. A box that POSTs with a valid run token is alive
+          // whatever one provider reading says: the POST is accepted, the anomaly is counted and
+          // shown, and update() decides on the provider's status only over its tolerance window.
+          if (instance === null) {
+            r.providerRaw = 'absent';
+            r.providerMsg = '-';
+            throw Error('NOT_LIVE');
+          }
+          r.providerRaw = providerWord(instance);
+          r.providerMsg = providerMessage(r, instance);
+          if (instance.actual_status !== 'running') {
+            r.providerAnomalies = (r.providerAnomalies ?? 0) + 1;
+            if (r.providerState !== r.providerRaw) {
+              r.providerState = r.providerRaw;
+              await workerLine(
+                r,
+                'provider=' +
+                  r.providerRaw +
+                  ' phase=' +
+                  r.phase +
+                  ' msg=' +
+                  r.providerMsg +
+                  ' (box post accepted)',
+                cfg,
+              );
+            }
+          }
           r.liveCheckedAt = now();
         } catch (error) {
           if (error instanceof BrokerError && error.state === 'NOT_READY') throw error;
@@ -571,6 +692,7 @@ export function createService({
       r.lastDigest = digest;
       r.firstReportAt ??= now();
       r.lastPostAt = now();
+      delete r.providerBad;
       if (r.phase !== 'GRACE') r.phase = 'TESTING';
       if (payload.kind === 'result') {
         r.result = {
@@ -749,6 +871,7 @@ export function createService({
         r.verdict ||= 'FAIL';
         r.liveCheckedAt = null;
         await ledger.save(r);
+        await closeLine(r, 'STOPPED');
       }
       let failed = false;
       for (const r of records) {
@@ -1217,6 +1340,7 @@ export function createService({
         r.computeStoragePrice = 0;
         r.price = 0;
         r.bandwidthCost = 0;
+        await closeLine(r, 'GONE');
         await ledger.settle(r, now());
         await clearFailedSha(r);
       }

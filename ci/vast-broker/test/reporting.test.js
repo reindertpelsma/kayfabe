@@ -69,13 +69,13 @@ test('unknown run and bad tag return identical generic 401', async () => {
   assert.equal(b.status, 401);
   assert.equal(await a.text(), await b.text());
 });
-for (const changed of ['expired', 'stopped', 'gone', 'exited', 'api-error', 'label'])
+// A provider status other than running is no longer a close on a box POST (test/provider-tolerance.test.js);
+// absence, API errors, expiry and a foreign label still are.
+for (const changed of ['expired', 'gone', 'api-error', 'label'])
   test('report closes and rejects non-live rental ' + changed, async () => {
     const h = await rent();
     const token = callbackToken(await record(h));
     if (changed === 'expired') h.time.value += 151 * 60000;
-    if (changed === 'stopped' || changed === 'exited')
-      h.cloud.instances.get('900').actual_status = changed;
     if (changed === 'gone') h.cloud.instances.delete('900');
     if (changed === 'api-error') h.cloud.vastError = 500;
     if (changed === 'label') {
@@ -91,7 +91,7 @@ for (const changed of ['expired', 'stopped', 'gone', 'exited', 'api-error', 'lab
     assert.ok(h.cloud.instances.has('777'));
     assert.ok(h.cloud.instances.has('888'));
   });
-for (const failure of ['exited', 'api-error'])
+for (const failure of ['gone', 'api-error'])
   test('positive liveness cache expires in seconds and fails closed ' + failure, async () => {
     const h = await rent();
     await h.report(log());
@@ -99,7 +99,7 @@ for (const failure of ['exited', 'api-error'])
     await h.report(log(2));
     assert.equal(h.cloud.inspected.length, count);
     h.time.value += 4000;
-    if (failure === 'exited') h.cloud.instances.get('900').actual_status = 'exited';
+    if (failure === 'gone') h.cloud.instances.delete('900');
     else h.cloud.vastError = 500;
     assert.equal((await h.report(log(3))).status, 401);
   });
