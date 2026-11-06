@@ -546,9 +546,12 @@ export async function recordRun(env, row, { now = Date.now, verifiedTree = false
       ),
     );
   }
+  // Claims go in a second batch, after the run's row is stored (fail-open: a claim can never cost
+  // a result; review of #271, M1).
+  const claimStatements = [];
   if (final && CLAIM_KEYS.some((k) => r.claims[k] !== null))
     for (const os of guestsOf(r.platform))
-      statements.push(
+      claimStatements.push(
         bind(
           SQL.upsertClaims,
           r.run_id,
@@ -570,6 +573,22 @@ export async function recordRun(env, row, { now = Date.now, verifiedTree = false
   const after = await db.prepare(SQL.existing).bind(r.run_id).first();
   if (!after || (final ? after.tag !== tag : after.verdict !== null))
     return result(false, 'CONFLICT');
+  if (claimStatements.length)
+    try {
+      await db.batch(claimStatements);
+    } catch (error) {
+      // The row is stored; only the picker's claims are missing. A missing table is a deployment
+      // order error (migration 0003 not applied before this Worker), said in one clear line.
+      console.log(
+        JSON.stringify({
+          event: 'store',
+          state: 'CLAIMS_FAILED',
+          why: /no such table.*ci_run_claims/i.test(String(error?.message))
+            ? 'CONFIG: table ci_run_claims is missing; apply ci/platform-api migration 0003_ci_run_claims.sql'
+            : 'error',
+        }),
+      );
+    }
   return result(true, before ? 'FINALIZED' : 'INSERTED');
 }
 

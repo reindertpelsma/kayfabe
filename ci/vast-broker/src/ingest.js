@@ -106,9 +106,11 @@ export function rowFromRecord(r, leg, tree, now, cfg) {
   )
     verdict = 'UNATTRIBUTED';
   const profile = budgetClass(r); // 'release' for release legs (stored as check + budgetClass)
+  // driver_versions.host = the driver the box's nvidia-smi reported: the machine that runs kayfabe.
+  // The provider's offer label (hostDriverVersion) says nothing about a KVM rental and is never
+  // stored or shown (owner ruling 2026-10-24; review of #271, L1). The guest drivers are claims.
   const drivers = {};
-  if (version(r.hostDriverVersion)) drivers.host = r.hostDriverVersion;
-  if (version(r.hardware?.driver_version)) drivers.guest = r.hardware.driver_version;
+  if (version(r.hardware?.driver_version)) drivers.host = r.hardware.driver_version;
   const gpu = r.hardware?.gpu_name ?? r.gpu ?? null;
   // Setup picker claims. The host driver is the driver the box's nvidia-smi reported (the machine
   // that runs kayfabe), never the provider's offer label (a KVM host's label is not a fact about

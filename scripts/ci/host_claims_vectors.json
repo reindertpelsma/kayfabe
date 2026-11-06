@@ -13,7 +13,7 @@
      "expect": {"host_driver": "570.172.08", "linux_driver": "580.159.04", "windows_driver": "580.88"}},
     {"name": "drivers: invalid shapes", "input": {"host_driver": "unknown", "linux_driver": "58.1", "windows_driver": "580.88.1.2"}, "expect": {}},
     {"name": "driver with trailing newline", "input": {"linux_driver": "580.88\n"}, "expect": {}},
-    {"name": "uuid in model", "input": {"cpu_model": "GPU-3b1c9d2e-1111-2222-3333-444455556666"}, "expect": {}},
+    {"name": "uuid in model", "input": {"cpu_model": "GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001"}, "expect": {}},
     {"name": "long hex run in model (serial)", "input": {"cpu_model": "Xeon 0123456789abcdef"}, "expect": {}},
     {"name": "ipv4 in model", "input": {"cpu_model": "Xeon 10.1.2.3"}, "expect": {}},
     {"name": "url in model", "input": {"cpu_model": "Xeon http://x.example/a"}, "expect": {}},

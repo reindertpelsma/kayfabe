@@ -110,7 +110,7 @@ export function describe() {
       'scores are ratios to a same-box reference and never gate',
       'SPECviewperf scores are not published by this API (docs/SPEC_RESULTS.md)',
       'setups: source filters rows by origin (comma list of reproduced, imported, community; default reproduced; imported evidence is a static site file, so it returns no rows here; community rows are not populated yet) and report_tier by the review state of a community row; every row carries its source and report_tier; rows of different sources are never merged',
-      'setups: one row per (guest OS, die, CPU vendor, host driver, guest driver, source); a run over both guest OSes counts once in each OS and a FAIL is attributed to the OS whose stage failed (the other OS gets UNATTRIBUTED); CPU vendor, host driver and guest driver are claims by the test box (null: not reported) and never change a verdict',
+      'setups: one row per (guest OS, die, CPU vendor, host driver, guest driver, source); a run over both guest OSes counts once in each OS and a FAIL is charged to an OS unless every failed stage is known to belong to the other OS (windows* and specviewperf belong to Windows, the payload Linux stage names to Linux; any other failed stage counts against both), the spared OS gets UNATTRIBUTED; CPU vendor, host driver and guest driver are claims by the test box (null: not reported) and never change a verdict',
       'CI rows: RETRY and UNATTRIBUTED never pass; runs of other commits with the same tree hash are shown for information only: the CI Worker counts them for a commit only when its tree-key carry-over is enabled (off by default) and the key is Worker-computed (tree.kind "tree")',
     ],
   };

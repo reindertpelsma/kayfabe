@@ -688,7 +688,6 @@
     if (!data) throw new Error('Not found.');
     main.querySelector('h1').textContent = 'Run ' + text(data.id);
     const running = data.state === 'running';
-    const drivers = Object.entries(data.host?.drivers ?? {});
     const facts = [
       ['Verdict', verdict(data.verdict, running)],
       ['Source', sourceText(data.source)],
@@ -732,7 +731,17 @@
       ['Started', when(data.started_at)],
       ['Finished', when(data.ended_at) || 'in flight'],
     ];
-    for (const [name, version] of drivers) facts.push([name + ' driver', String(version)]);
+    // The driver on the machine that runs kayfabe, and the OS version and driver of each guest: all
+    // reported by the test box, not verified. The provider's offer label is never shown.
+    if (text(data.host?.host_driver)) facts.push(['Host driver (reported)', text(data.host.host_driver)]);
+    for (const guest of arr(data.host?.guests)) {
+      const os = guest.os === 'windows' ? 'Windows' : guest.os === 'linux' ? 'Linux' : null;
+      if (!os) continue;
+      facts.push([
+        os + ' guest (reported)',
+        [text(guest.os_version) || 'OS version not reported', ', driver ', text(guest.driver) || 'not reported'].join(''),
+      ]);
+    }
     const stages = arr(data.stages);
     content.replaceChildren(
       el('p', {}, el('a', { href: page('', {}) }, 'Back to the matrix')),
@@ -1236,14 +1245,12 @@
     ];
     if (f && !f.show.some((x) => x === 'reproduced' || x === 'community') && !f.show.includes('imported'))
       parts.push(el('span', { class: 'kf-small' }, 'No source is selected under Show.'));
-    else if (cpuHidden)
+    else if (cpu !== 'any' || f?.driver)
       parts.push(
         el(
           'span',
           { class: 'kf-small' },
-          'The store holds runs for this die, but none that match the filters, for example none from a box that reported ' +
-            (CPU_LABEL[cpu] ?? cpu) +
-            ' as its CPU vendor.',
+          'No run matches the CPU vendor or driver filter for this die and guest OS. Remove the filter to see the other runs, if there are any.',
         ),
       );
     else if (cell?.state === 'not_covered' && text(cell.reason))
@@ -1268,6 +1275,8 @@
   }
   // The request for one die. The API's default is the reproduced rows; community rows are asked for
   // only when the visitor opts in, and a view that shows only imported evidence asks for nothing.
+  // The CPU vendor and driver filters go to the API in live mode, so the page limit of one request
+  // can never hide a matching setup; the fixture holds one file per die, so the page filters there.
   function setupsPath(die, f) {
     const wanted = ['reproduced', 'community'].filter((x) => f.show.includes(x));
     if (!wanted.length) return null;
@@ -1276,6 +1285,8 @@
       f.os +
       '&gpu=' +
       die +
+      (mode === 'live' && f.cpu !== 'any' ? '&cpu=' + f.cpu : '') +
+      (mode === 'live' && f.driver ? '&driver=' + f.driver : '') +
       (f.tier ? '&tier=' + f.tier : '') +
       (wanted.includes('community') ? '&source=' + wanted.join(',') : '')
     );
@@ -1370,7 +1381,7 @@
       'p',
       { class: 'kf-rule', role: 'note' },
       el('strong', {}, 'What is verified. '),
-      'A result is the CI Worker’s verdict for a run. The CPU vendor, the host driver (the NVIDIA driver on the machine that runs kayfabe) and the guest driver (the driver inside the guest) are reported by the test box and are not verified: they sort the runs and never decide a result. A run over both guest OSes counts once under each.',
+      'A result is the CI Worker’s verdict for a run. The CPU vendor, the host driver (the NVIDIA driver on the machine that runs kayfabe) and the guest driver (the driver inside the guest) are reported by the test box and are not verified: they sort the runs and never decide a result. The Windows guest’s OS version and driver are the test harness’s configured values, not read from the guest. A run over both guest OSes counts once under each.',
     );
     const lead = [claims];
     if (!names)

@@ -141,7 +141,7 @@ ids.linFail = build(
     claims: { cpu: 'amd', host: H1, guests: g(H1, '580.88') },
     stages: [
       ['provision', 'PASS'],
-      ['cuda_guest', 'FAIL'],
+      ['raw_suite', 'FAIL'],
     ],
   },
   rows,
@@ -335,6 +335,32 @@ ids.repro107 = build(
   rows,
 );
 
+// Which OS a failed stage is charged to (review of #271, M2): only a stage known to belong to the
+// other OS spares a setup; everything else (a timeout, the reporter's rows) counts against both.
+const both = (stage) => ({
+  platform: 'both',
+  verdict: 'FAIL',
+  die: 'GB205',
+  family: 'blackwell',
+  claims: { cpu: 'amd', host: H1, guests: g(H1, '580.88') },
+  stages: [
+    ['provision', 'PASS'],
+    ['raw_suite', 'PASS'],
+    ['thin_suite', 'PASS'],
+    [stage, 'FAIL'],
+  ],
+});
+ids.gbTimeout = build({ ...both('timeout'), day: 1, commit: 1 }, rows);
+ids.gbApp = build({ ...both('app_exit'), day: 2, commit: 2 }, rows);
+ids.gbSpec = build({ ...both('specviewperf'), day: 3, commit: 3 }, rows);
+ids.gbWinRetry = build({ ...both('windows_retry_time'), day: 4, commit: 4 }, rows);
+ids.gbKvm = build({ ...both('kvm_tests'), day: 5, commit: 5 }, rows);
+ids.gbProvision = build({ ...both('provision'), day: 14, commit: 6 }, rows);
+// Every Linux stage name the payload reports spares the Windows setup (one run each).
+['gates', 'kf3_build', 'birth_census', 'cuda_fat'].forEach((stage, i) => {
+  ids['gbLinux' + stage] = build({ ...both(stage), day: 7 + i, commit: 7 }, rows);
+});
+
 const { call } = api({ database: seededDatabase({ rows }).reader });
 const setups = async (query = '') => (await call('/v1/ci/setups' + query)).body;
 const find = (list, os, die, cpu, host, guest) =>
@@ -428,6 +454,7 @@ test('setups: filters', async () => {
     'GA104',
     'GA106',
     'GB202',
+    'GB205',
   ]);
   const none = await setups('?gpu=GB207');
   assert.deepEqual(none.setups, []);
@@ -513,7 +540,7 @@ test('facets: the values that exist among final runs', async () => {
   ]);
   assert.deepEqual(
     body.dies.map((d) => d.id),
-    ['AD104', 'AD107', 'GA104', 'GA106', 'GB202'],
+    ['AD104', 'AD107', 'GA104', 'GA106', 'GB202', 'GB205'],
   );
   const ga104 = body.dies.find((d) => d.id === 'GA104');
   assert.deepEqual(ga104.gpu_names.map((n) => n.name).sort(), [
@@ -647,4 +674,29 @@ test('facets: every filter lists the values that exist, including sources and re
   assert.deepEqual(empty.report_tiers, []);
   assert.equal(empty.sources.find((x) => x.value === 'community').available, false);
   assert.equal(empty.sources.find((x) => x.value === 'reproduced').available, false);
+});
+
+test('setups: a failed stage is charged to one OS only when it is known to belong to it', async () => {
+  const linux = (await setups('?gpu=GB205&os=linux')).setups;
+  const windows = (await setups('?gpu=GB205&os=windows')).setups;
+  assert.equal(linux.length, 1);
+  assert.equal(windows.length, 1);
+  // Ten failed runs over both OSes, each with one failed stage after passing Linux stages.
+  // Linux is charged for: timeout, app_exit, provision (generic rows count against both) and
+  // kvm_tests (Linux's); it is spared specviewperf and windows_retry_time (Windows').
+  assert.deepEqual([linux[0].runs, linux[0].failed, linux[0].other], [10, 8, 2]);
+  // Windows is charged for: timeout, app_exit, provision, specviewperf and windows_retry_time; it
+  // is spared kvm_tests (Linux's).
+  assert.deepEqual([windows[0].runs, windows[0].failed, windows[0].other], [10, 5, 5]);
+  assert.equal(linux[0].passed + windows[0].passed, 0);
+});
+
+test('setups: a timeout of a run over both OSes is a FAIL of both, never only of Linux', async () => {
+  const only = async (os, tier) => (await setups('?gpu=GB205&os=' + os + '&limit=1')).setups[0];
+  // Latest run of the group is the provision FAIL (a generic row): FAIL for both OSes.
+  for (const os of ['linux', 'windows']) {
+    const s = await only(os);
+    assert.equal(s.latest.id, ids.gbProvision);
+    assert.equal(s.latest.result, 'FAIL', os);
+  }
 });

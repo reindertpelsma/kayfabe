@@ -20,7 +20,7 @@
   {"name": "RTX 2080 Ti", "dies": ["TU102"]},
   {"name": "TITAN RTX", "dies": ["TU102"]},
   {"name": "RTX 3050", "dies": ["GA106", "GA107"], "note": "The 8 GB and 6 GB boards do not all use the same die."},
-  {"name": "RTX 3060", "dies": ["GA106", "GA104"], "note": "The 12 GB board uses GA106 and the 8 GB board uses GA104, so both dies are listed."},
+  {"name": "RTX 3060", "dies": ["GA106", "GA104"], "note": "Boards sold as RTX 3060 use GA106 or GA104, so both dies are listed."},
   {"name": "RTX 3060 Ti", "dies": ["GA104"]},
   {"name": "RTX 3070", "dies": ["GA104"]},
   {"name": "RTX 3070 Ti", "dies": ["GA104"]},

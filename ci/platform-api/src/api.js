@@ -154,6 +154,8 @@ const sourceOut = (v) =>
   v === 'reproduced' ? 'reproduced' : v === 'reported' || v === 'reviewed' ? 'community' : null;
 const reportTierOut = (v) =>
   v === 'reported' ? 'unverified' : v === 'reviewed' ? 'reviewed' : null;
+const osVersionOut = (v) =>
+  typeof v === 'string' && /^[a-z0-9][a-z0-9 ._()+-]{0,31}$/.test(v) ? v : null;
 const vendorOut = (v) => (CPU_VENDORS.has(v) ? v : null);
 // The setups response says which of its fields are claims by the test box, not verified facts.
 const CLAIMED_FIELDS = Object.freeze(['cpu_vendor', 'host_driver', 'guest_driver']);
@@ -172,16 +174,6 @@ function ciSummary(row) {
     started_at: row.started_at,
     ended_at: row.ended_at,
   };
-}
-
-function drivers(text) {
-  const value = plainObject(text);
-  if (!value) return {};
-  const out = {};
-  for (const [key, version] of Object.entries(value).slice(0, 8))
-    if (/^[a-z][a-z0-9_]{0,31}$/.test(key) && typeof version === 'string')
-      out[key] = version.slice(0, 32);
-  return out;
 }
 
 const newestCi = (a, b) =>
@@ -559,6 +551,7 @@ const handlers = {
       typeof row.log_key === 'string' && CI_LOG_KEY.test(row.log_key)
         ? { key: row.log_key, ...(base ? { direct: base + '/' + row.log_key } : {}) }
         : null;
+    const claims = await db.all('ciRunClaims', [id]);
     const final = row.verdict !== null && row.ended_at !== null;
     return json(
       {
@@ -568,7 +561,19 @@ const handlers = {
           profile: row.profile,
           source: row.source,
           stages,
-          host: { gpu_name: row.gpu_name ?? null, drivers: drivers(row.driver_versions_json) },
+          // host_driver: the NVIDIA driver on the machine that runs kayfabe; guests: the OS version
+          // and the driver inside each guest. All claims by the test box (never the provider's
+          // offer label, which is not stored).
+          host: {
+            gpu_name: row.gpu_name ?? null,
+            host_driver: driverOut(claims[0]?.host_driver),
+            guests: claims.map((c) => ({
+              os: c.guest_os === 'linux' || c.guest_os === 'windows' ? c.guest_os : null,
+              os_version: osVersionOut(c.guest_os_version),
+              driver: driverOut(c.guest_driver),
+            })),
+            claimed: CLAIMED_FIELDS,
+          },
           log,
         },
       },

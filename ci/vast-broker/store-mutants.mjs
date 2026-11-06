@@ -15,6 +15,7 @@ const TESTS = [
   'test/results-store.test.js',
   'test/store-ingest.test.js',
   'test/host-claims.test.js',
+  'test/die-rules-turing.test.js',
   'test/edits-no-secrets-on-vast.test.js',
 ].map((t) => here + t);
 
@@ -430,6 +431,43 @@ const MUTANTS = [
     "    verdict = r.result?.host_claims ? verdict : 'UNATTRIBUTED';\n  const profile = budgetClass(r);",
   ],
   ['claims env not offered', 'src/index.js', "        KF_HOST_CLAIMS: '1',\n", ''],
+  // Review of #271 (2026-11-06): claims fail open; the Turing die rules.
+  [
+    'claims failure costs the row',
+    'src/results.js',
+    '      // The row is stored; only the picker',
+    '      throw error;\n      // The row is stored; only the picker',
+  ],
+  [
+    'claims config error unnamed',
+    'src/results.js',
+    "'CONFIG: table ci_run_claims is missing; apply ci/platform-api migration 0003_ci_run_claims.sql'",
+    "'error'",
+  ],
+  [
+    'claims back in the main batch',
+    'src/results.js',
+    '      await db.batch(claimStatements);',
+    '      await db.batch([]);\n      statements.push(...claimStatements);',
+  ],
+  [
+    'gtx 1650 labelled TU116',
+    'defaults.json',
+    '"names": ["GTX_1660*", "GTX_1650_SUPER", "GTX_1650_S"]',
+    '"names": ["GTX_16*"]',
+  ],
+  [
+    'rtx 2070 labelled TU104',
+    'defaults.json',
+    '"names": ["RTX_2070_S*", "RTX_2070S*",',
+    '"names": ["RTX_2070*", "RTX_2070S*",',
+  ],
+  [
+    'offer label shown as host driver',
+    'src/ingest.js',
+    '  if (version(r.hardware?.driver_version)) drivers.host = r.hardware.driver_version;',
+    '  if (version(r.hostDriverVersion)) drivers.host = r.hostDriverVersion;',
+  ],
 ];
 
 const selected = process.argv.slice(2);

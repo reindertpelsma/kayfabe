@@ -171,9 +171,15 @@ export const QUERIES = Object.freeze({
   ciRunById: `
     SELECT r.run_id, r.commit_sha, r.tree_hash, r.tree_kind, r.tier, r.profile, r.family, r.die,
            r.platform, r.verdict, r.started_at, r.ended_at, r.log_key, r.source,
-           f.gpu_name, f.driver_versions_json
+           f.gpu_name
     FROM ci_runs r LEFT JOIN ci_host_facts f ON f.run_id = r.run_id
     WHERE r.run_id = ?1`,
+
+  // The claimed host facts of one run (migration 0003): the driver on the machine that runs kayfabe
+  // and, per guest OS, the guest OS version and the driver inside the guest. Never the CPU model.
+  ciRunClaims: `
+    SELECT c.guest_os, c.guest_os_version, c.guest_driver, c.host_driver
+    FROM ci_run_claims c WHERE c.run_id = ?1 ORDER BY c.guest_os`,
 
   ciRunStages: `
     SELECT s.ord, s.name, s.rc, s.duration_ms, s.result
@@ -203,8 +209,11 @@ export const QUERIES = Object.freeze({
 
   // Setup picker (migration 0003). One row per (guest OS, die, CPU vendor, host driver, guest
   // driver) over FINAL runs. A run with platform 'both' counts once in each OS. Its FAIL is
-  // attributed to the OS whose stage failed (stage names starting with 'windows' belong to
-  // Windows); the other OS gets UNATTRIBUTED, which is neither a pass nor a fail of that setup.
+  // charged to an OS unless every failed stage is known to belong to the other OS: stages starting
+  // with 'windows' and 'specviewperf' are Windows', 'kvm_tests', 'gates', 'kf3_build', 'raw_suite',
+  // 'thin_suite', 'birth_census' and 'cuda_fat' are Linux'. Any other failed stage (timeout,
+  // app_exit, incomplete, result_*, provision, reporter rows) counts against BOTH OSes, so a
+  // failure is never hidden. The other OS otherwise gets UNATTRIBUTED, neither a pass nor a fail.
   // CPU vendor and drivers are claims (ci_run_claims.claimed = 1); they only group and filter.
   // Filters: ?1 guest OS, ?2-?5 up to four dies, ?6 CPU vendor, ?7 driver (host or guest),
   // ?8 tier, ?9 reproduced rows wanted (1/0), ?10 community rows wanted (1/0; ci_runs.source
@@ -223,7 +232,12 @@ export const QUERIES = Object.freeze({
                                     WHERE s.run_id = r.run_id AND s.result = 'FAIL') THEN 'FAIL'
                    WHEN EXISTS (SELECT 1 FROM ci_run_stages s
                                 WHERE s.run_id = r.run_id AND s.result = 'FAIL'
-                                  AND ((o.os = 'windows') = (s.name LIKE 'windows%'))) THEN 'FAIL'
+                                  AND CASE o.os
+                                        WHEN 'windows' THEN s.name NOT IN ('kvm_tests', 'gates',
+                                          'kf3_build', 'raw_suite', 'thin_suite', 'birth_census',
+                                          'cuda_fat')
+                                        ELSE s.name NOT LIKE 'windows%' AND s.name <> 'specviewperf'
+                                      END) THEN 'FAIL'
                    ELSE 'UNATTRIBUTED'
                  END
                ELSE r.verdict

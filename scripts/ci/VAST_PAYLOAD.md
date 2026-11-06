@@ -101,7 +101,9 @@ AuthenticAMD is `amd`, an arm64 machine is `arm`, anything else `other`), the sa
 (at most 64 characters), the architecture, the guest OS versions of the harness images
 (`ubuntu-24.04`, `11-ltsc-2024-26100`; a test pins them to the scripts that install those guests),
 the Linux guest driver from the receipt `guest.qcow2.STAGED` that `provision_bench_tree.sh` writes,
-and, only when the Windows stage is part of the run, the Windows guest driver `580.88`. The reporter
+and, only when the Windows stage is part of the run, the Windows guest OS version and driver `580.88`.
+The Windows values are the harness's configured constants, sent even if the stage fails before the driver
+is installed: they say what the harness installs, not what it read from the guest. The reporter
 forwards the block only when the Worker set `KF_HOST_CLAIMS=1`; the fields are checked again by the
 Worker. They are claims, not evidence, and never change a verdict. No serial, UUID, address, hostname
 or machine id is read: a value shaped like one is dropped. See

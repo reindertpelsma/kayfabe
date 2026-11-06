@@ -91,7 +91,7 @@ test('report: a bad claim is dropped, it never refuses the report or a PASS', ()
     7,
     null,
     { cpu_vendor: 'via', cpu_model: 'x'.repeat(500), linux_driver: '<script>', machine_id: 'm1' },
-    { cpu_model: 'GPU-3b1c9d2e-1111-2222-3333-444455556666' },
+    { cpu_model: 'GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001' },
   ]) {
     const result = checkedResult(report({ host_claims: bad }));
     assert.equal(result.verdict, 'PASS');
@@ -274,4 +274,77 @@ test('store: the claims table was added by 0003 and 0001/0002 are untouched', ()
   const sql = readFileSync(new URL('0003_ci_run_claims.sql', dir), 'utf8').replace(/--[^\n]*/g, '');
   assert.doesNotMatch(sql, /\b(?:ALTER|DROP|DELETE|UPDATE|INSERT)\b/i);
   assert.match(sql, /CREATE TABLE ci_run_claims/);
+});
+
+// --- fail-open claims (review of #271, M1) ---------------------------------------------------
+// FALSIFIER: a missing or failing ci_run_claims costs a run its row, its verdict or its finalisation.
+
+async function captured(work) {
+  const lines = [];
+  const original = console.log;
+  console.log = (...args) => lines.push(args.join(' '));
+  try {
+    return { value: await work(), lines };
+  } finally {
+    console.log = original;
+  }
+}
+
+test(
+  'store: without migration 0003 the run is still stored and one line names the config error',
+  { skip: d1Skip },
+  async () => {
+    const db = new FakeD1({ upTo: 2 }); // 0001 and 0002 only: no ci_run_claims
+    const { value, lines } = await captured(() => recordRun(env(db), row()));
+    assert.equal(value.state, 'INSERTED');
+    assert.equal(value.stored, true);
+    assert.deepEqual(db.rows('SELECT verdict FROM ci_runs'), [{ verdict: 'PASS' }]);
+    assert.equal(db.rows('SELECT * FROM ci_run_stages').length, 2);
+    assert.equal(db.rows('SELECT * FROM ci_host_facts').length, 1);
+    const says = lines.filter((l) => l.includes('CLAIMS_FAILED'));
+    assert.equal(says.length, 1);
+    assert.match(says[0], /table ci_run_claims is missing; apply ci\/platform-api migration 0003/);
+    // An in-flight row is finalised the same way.
+    const inflight = await recordRun(
+      env(db),
+      row({ run_id: 'vast-300-9-0', verdict: null, ended_at: null, stages: [] }),
+    );
+    assert.equal(inflight.state, 'INSERTED');
+    const final = await captured(() => recordRun(env(db), row({ run_id: 'vast-300-9-0' })));
+    assert.equal(final.value.state, 'FINALIZED');
+    assert.deepEqual(db.rows("SELECT verdict FROM ci_runs WHERE run_id = 'vast-300-9-0'"), [
+      { verdict: 'PASS' },
+    ]);
+  },
+);
+
+test(
+  'store: any other failure of the claims batch also leaves the row stored',
+  { skip: d1Skip },
+  async () => {
+    class Flaky extends FakeD1 {
+      async batch(statements) {
+        if (statements.some((s) => s.sql.includes('ci_run_claims')))
+          throw new Error('D1_ERROR: boom');
+        return super.batch(statements);
+      }
+    }
+    const db = new Flaky();
+    const { value, lines } = await captured(() => recordRun(env(db), row()));
+    assert.equal(value.state, 'INSERTED');
+    assert.deepEqual(db.rows('SELECT verdict FROM ci_runs'), [{ verdict: 'PASS' }]);
+    assert.deepEqual(db.rows('SELECT * FROM ci_run_claims'), []);
+    assert.ok(lines.some((l) => l.includes('CLAIMS_FAILED')));
+    assert.ok(!lines.join('\n').includes('boom'), 'the error text is not logged');
+  },
+);
+
+test('store: a run without claims never touches the claims table', { skip: d1Skip }, async () => {
+  const db = new FakeD1({ upTo: 2 });
+  const { value, lines } = await captured(() => recordRun(env(db), row({ claims: undefined })));
+  assert.equal(value.state, 'INSERTED');
+  assert.deepEqual(
+    lines.filter((l) => l.includes('CLAIMS')),
+    [],
+  );
 });

@@ -126,10 +126,22 @@ const MUTANTS = [
   ],
   // Setup picker (migration 0003): /v1/ci/setups and /v1/ci/facets
   [
-    'setups windows stage charged to both',
+    'setups windows hang charged to Linux only',
     'src/queries.js',
-    "AND ((o.os = 'windows') = (s.name LIKE 'windows%'))) THEN 'FAIL'",
-    "AND 1) THEN 'FAIL'",
+    "WHEN 'windows' THEN s.name NOT IN ('kvm_tests', 'gates',",
+    "WHEN 'windows' THEN s.name IN ('windows_gate', 'windows_retry_time', 'specviewperf') AND s.name NOT IN ('kvm_tests', 'gates',",
+  ],
+  [
+    'setups windows stage rows charged to Linux',
+    'src/queries.js',
+    "ELSE s.name NOT LIKE 'windows%' AND s.name <> 'specviewperf'",
+    "ELSE s.name NOT LIKE 'windows%'",
+  ],
+  [
+    'setups linux stage rows charged to Windows',
+    'src/queries.js',
+    "'thin_suite', 'birth_census',",
+    "'thin_suite',",
   ],
   [
     'setups running run counted',

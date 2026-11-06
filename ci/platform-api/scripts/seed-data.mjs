@@ -356,7 +356,7 @@ function ciRows(rows, dies, commits) {
       rows.ci_host_facts.push({
         run_id: id,
         gpu_name: 'synthetic ' + die,
-        driver_versions_json: JSON.stringify({ guest: '580.159.04', host: '580.95.05' }),
+        driver_versions_json: JSON.stringify({ host: '580.95.05' }),
       });
       rows.ci_runs_private.push({
         run_id: id,
@@ -477,7 +477,7 @@ function pickerRows(rows, commits) {
     rows.ci_host_facts.push({
       run_id: id,
       gpu_name: 'synthetic ' + die,
-      driver_versions_json: JSON.stringify({ guest: host ?? '580.159.04', host: '580.95.05' }),
+      driver_versions_json: JSON.stringify(host ? { host } : {}),
     });
     rows.ci_runs_private.push({
       run_id: id,

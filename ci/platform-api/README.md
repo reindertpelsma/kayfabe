@@ -36,7 +36,7 @@ read them (2026-11-05); `scripts/make-fixture.mjs` also records them in the synt
 | `/v1/ci/matrix` | `tier`, `tree` (64 hex), `family` | per tier, family, die and platform: the newest run and the newest PASS |
 | `/v1/ci/trees` | `tier`, `limit` | result keys, newest first, with run, PASS, FAIL and running counts |
 | `/v1/ci/trees/<hash>` | none | one result key: the commits recorded under it and its runs |
-| `/v1/ci/runs/<id>` | none | one run: stages, GPU name, driver versions, log key (immutable once final) |
+| `/v1/ci/runs/<id>` | none | one run: stages, GPU name, the host driver and each guest's OS version and driver (claims by the test box; never the provider's offer label), log key (immutable once final) |
 | `/v1/ci/commits/<sha>` | none | a commit's result keys and every run under them; `other_commit: true` marks runs of other commits with the same tree hash, shown for information: they count for this commit only when the CI Worker's `TREE_KEY_CARRY_OVER` is on (off by default) and `tree.kind` is `tree` |
 
 ## Setup picker endpoints (2026-11-06)
@@ -68,15 +68,22 @@ A row: `os`, `die`, `family`, `source`, `report_tier`, `cpu_vendor`, `host_drive
 What the numbers mean:
 
 - A run over both guest OSes (`ci_runs.platform = 'both'`: one rental, one verdict) counts once under
-  each OS. A PASS is a PASS of both. A FAIL is charged to the OS whose stage failed (stage names that
-  start with `windows` belong to Windows); the other OS gets `UNATTRIBUTED`, which is neither a pass
-  nor a fail of that setup (`latest.verdict` still says `FAIL`). A FAIL with no stage rows is charged
-  to both. `RETRY` and `UNATTRIBUTED` runs never pass. A run in flight is not counted.
+  each OS. A PASS is a PASS of both. A FAIL is charged to an OS unless every failed stage is known to
+  belong to the other OS: stage names starting with `windows`, and `specviewperf`, are Windows'; `kvm_tests`,
+  `gates`, `kf3_build`, `raw_suite`, `thin_suite`, `birth_census` and `cuda_fat` are Linux'. Any other
+  failed stage (`timeout`, `app_exit`, `incomplete`, `provision`, the reporter's `result_*` and `payload_fail`
+  rows) counts against BOTH OSes, so a failure is never hidden by a guess. The spared OS gets
+  `UNATTRIBUTED`, which is neither a pass nor a fail of that setup (`latest.verdict` still says `FAIL`).
+  A FAIL with no stage rows is charged to both. `RETRY` and `UNATTRIBUTED` runs never pass. A run in
+  flight is not counted.
 - `cpu_vendor`, `host_driver` and `guest_driver` are claims: the box read them from its own `/proc`
   and `nvidia-smi` and the CI Worker checked only their shape (`ci_run_claims.claimed = 1`; the
   response lists them under `claimed`). They group and filter rows and never decide a verdict, a die or
   a requirement. The host driver is the NVIDIA driver on the machine that runs kayfabe (the box's
-  `nvidia-smi`, never the provider's offer label); the guest driver is the driver inside the guest.
+  `nvidia-smi`, never the provider's offer label); the guest driver is the driver inside the guest. The
+  Windows guest's OS version and driver are the test harness's configured values (the gate checks the
+  driver, but the box sends the constant even when the stage fails first), not values read from the
+  guest; the Linux guest driver is read from the receipt of the guest's provisioning.
 - `source`: `reproduced` rows are CI Worker runs (`ci_runs.source = 'reproduced'`). `community` is the
   reserved `reported` (report tier `unverified`) and `reviewed` rows of a later, separate store; none
   are written today, the filter is accepted and returns nothing. `imported` is the evidence file

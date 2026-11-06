@@ -320,13 +320,15 @@ looked up in `gpu_names.json`, a hand-written table of desktop names (GTX 16, RT
 lines) to dies, with one name allowed to map to several dies (RTX 3060 is GA106 and GA104; the page
 lists each); a laptop name is answered with "laptops are not covered", an unlisted name asks for the
 die. The table states only dies that are public product knowledge; a test checks it against the
-Worker's die rules and the boards named in the evidence file. **Finding while building it
-(INFERRED from public product data, not measured):** the Worker's die rules label the GTX 1650 and
-GTX 1630 as TU116 (they are TU117) and the RTX 2070 as TU104 (it is TU106; the RTX 2070 SUPER is
-TU104), so a run on one of those boards is stored under the wrong die; the test lists these three as
-known disagreements and the rules are not changed here.
-The page asks `/v1/ci/setups` once per die; the CPU and driver filters are applied in the page, the
-tier and community opt-in in the request. Rows from the result store and the repository's imported
+Worker's die rules and the boards named in the evidence file. The Worker's die rules for Turing were corrected in the same PR after review (INFERRED from public
+product data, not measured on hardware): the GTX 1650 and GTX 1630 are TU117 (the rule `GTX_16*` said
+TU116), the RTX 2070 is TU106 (the rule `RTX_2070*` said TU104; only the RTX 2070 SUPER is TU104).
+A test maps 18 Turing names and checks the PASS hardware check against the same rules; the table and
+the rules now agree without exception. Name rules cannot see board variants (for example an RTX 2060
+on another die); a PCI device id from the box would (follow-up, not built).
+The page asks `/v1/ci/setups` once per die; in live mode the CPU vendor, driver, tier and community
+opt-in all go to the API (so a page limit cannot hide a matching setup); fixture mode filters the CPU
+vendor and driver in the page, because the fixture holds one file per die. Rows from the result store and the repository's imported
 evidence (`coverage.json`) are separate blocks; imported evidence is drawn as counts with its source,
 revision and date, never as a gate verdict. An empty result says "not tested" and "No runs for this
 combination", with the reason `coverage.json` states for that die and OS when it states one. The page

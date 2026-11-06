@@ -165,7 +165,7 @@ test(
       ['provision', 'gates', 'raw_suite'],
     );
     assert.deepEqual(db.rows('SELECT gpu_name, driver_versions_json FROM ci_host_facts'), [
-      { gpu_name: 'RTX_4070', driver_versions_json: '{"guest":"580.159.04","host":"580.95.05"}' },
+      { gpu_name: 'RTX_4070', driver_versions_json: '{"host":"580.159.04"}' },
     ]);
     assert.equal(db.rows('SELECT machine_id FROM ci_runs_private')[0].machine_id, 100001);
     const met = await (await check(h)).json();
@@ -569,10 +569,10 @@ test('claims: the host driver is the box nvidia-smi driver, never the offer labe
   assert.equal(row.claims.host_driver, '580.95.05');
   assert.equal(row.claims.cpu_vendor, 'intel');
   assert.equal(row.claims.windows_driver, '580.88');
-  assert.equal(
-    row.driver_versions.host,
-    '535.54.03',
-    'the old driver_versions facts are unchanged',
+  assert.deepEqual(
+    row.driver_versions,
+    { host: '580.95.05' },
+    'the offer label is not stored; the host driver is the box driver',
   );
   // No usable box driver: not reported, the offer label is not a substitute.
   const unknown = f7Row({

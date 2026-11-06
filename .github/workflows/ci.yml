@@ -2428,7 +2428,7 @@ jobs:
           node --test ci/vast-broker/test/treekey.test.js ci/vast-broker/test/treekey-parity.test.js \
             ci/vast-broker/test/requirements.test.js ci/vast-broker/test/results-store.test.js \
             ci/vast-broker/test/store-ingest.test.js ci/vast-broker/test/host-claims.test.js \
-            ci/vast-broker/test/edits-no-secrets-on-vast.test.js
+            ci/vast-broker/test/edits-no-secrets-on-vast.test.js ci/vast-broker/test/die-rules-turing.test.js
           node ci/vast-broker/store-mutants.mjs
 
   slow:

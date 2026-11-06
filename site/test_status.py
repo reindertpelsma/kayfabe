@@ -141,12 +141,10 @@ class GpuNames(unittest.TestCase):
     """site/status/gpu_names.json: the hand-written marketing-name to die table of the picker."""
 
     PREFIX_FAMILY = {"TU": "turing", "GA": "ampere", "AD": "ada", "GB": "blackwell"}
-    # Where the Worker's die rules (ci/vast-broker/defaults.json dieRules) label a board with a
-    # different die than the public product knowledge in the table: GTX 1650 and GTX 1630 are
-    # TU117 (the rule GTX_16* says TU116), and the RTX 2070 is TU106 (the rule RTX_2070* says
-    # TU104; only the RTX 2070 SUPER is TU104). INFERRED from public product data, not measured on
-    # hardware; shrink this set when the rules are corrected (the test then asks for it).
-    WORKER_RULE_DISAGREES = {"GTX 1630", "GTX 1650", "RTX 2070"}
+    # Names whose die the Worker's rules (ci/vast-broker/defaults.json dieRules) label differently from
+    # the table. Empty since 2026-11-06, when the Turing rules were corrected (GTX 1650 and 1630 are
+    # TU117, the RTX 2070 is TU106; INFERRED from public product data, not measured on hardware).
+    WORKER_RULE_DISAGREES = set()
 
     def setUp(self):
         self.data = json.loads((SITE / "status/gpu_names.json").read_text())

@@ -267,7 +267,8 @@ test('API and evidence text is rendered as text, never as markup', async () => {
   const evil = '<img src=x onerror="window.pwned=1">';
   const key = '/v1/ci/runs/' + passRun.id;
   hostile[key].run.host.gpu_name = evil;
-  hostile[key].run.host.drivers = { guest: evil };
+  hostile[key].run.host.host_driver = evil;
+  hostile[key].run.host.guests = [{ os: 'linux', os_version: evil, driver: evil }];
   hostile[key].run.stages[0].name = evil;
   hostile[key].run.profile = evil;
   const run = await render('fixture', 'run', '?id=' + passRun.id, { responses: hostile });
@@ -425,7 +426,7 @@ test('find: the form has labelled controls, Arm as not tested yet, and the claim
     [...form.querySelectorAll('input[name=os]')].map((i) => i.value),
     ['linux', 'windows'],
   );
-  assert.match(norm(document.querySelector('.kf-rule')), /reported by the test box and are not verified/);
+  assert.match(norm(document.querySelector('.kf-rule')), /reported by the test box and are not verified.*configured values/);
   assert.equal(setupRequests(await findLive('')).length, 0, 'nothing is asked before a GPU is entered');
   assert.match(document.getElementById('kf-status-state').textContent, /Enter a GPU/);
 });
@@ -475,7 +476,7 @@ test('find: a name with several dies lists each die and says so', async () => {
     const heads = [...document.querySelectorAll('section.kf-die-result h2')].map(norm);
     assert.deepEqual(heads, ['GA106 (Ampere)', 'GA104 (Ampere)'], typed);
     assert.match(norm(document.querySelector('#kf-status-content')), /boards use these dies: GA106, GA104/);
-    assert.match(norm(document.querySelector('#kf-status-content')), /12 GB board uses GA106 and the 8 GB board uses GA104/);
+    assert.match(norm(document.querySelector('#kf-status-content')), /Boards sold as RTX 3060 use GA106 or GA104/);
     assert.equal(setupRequests(await findLive('?os=linux&gpu=' + encodeURIComponent(typed))).length, 2);
     assert.equal(norm(document.querySelector('h1')), 'Find my setup: RTX 3060');
   }
@@ -650,6 +651,15 @@ test('find: live mode asks /v1/ci/setups with exactly the validated filters', as
   assert.deepEqual(await asked('?gpu=GA106&show=community'), [
     '/v1/ci/setups?os=linux&gpu=GA106&source=community',
   ]);
+  // The CPU vendor and driver filters are sent to the API in live mode (a page limit can never
+  // hide a matching setup), in the order os, gpu, cpu, driver, tier, source.
+  assert.deepEqual(
+    await asked('?os=windows&gpu=GA106&cpu=amd&driver=580.95.05&tier=middle&show=reproduced&show=community'),
+    [
+      '/v1/ci/setups?os=windows&gpu=GA106&cpu=amd&driver=580.95.05&tier=middle&source=reproduced,community',
+    ],
+  );
+  assert.deepEqual(await asked('?gpu=GA106&cpu=any'), ['/v1/ci/setups?os=linux&gpu=GA106']);
   // Invalid values are ignored, not sent.
   assert.deepEqual(
     await asked('?os=macos&gpu=GA106&cpu=via&tier=huge&driver=1%27&show=all'),
@@ -716,4 +726,38 @@ test('find: the overview links to it, and its stylesheet uses only theme tokens'
   assert.doesNotMatch(block, /#[0-9a-fA-F]{3,8}\b|rgb\(|hsl\(/, 'colours come from tokens, so dark mode follows');
   assert.match(css, /prefers-color-scheme: dark/);
   assert.match(css, /\.kf-setups td::before/, 'a stacked layout at phone width');
+});
+
+test('find: in live mode a setup the unfiltered page limit would cut is found through the filter', async () => {
+  const responses = structuredClone(fixture.responses);
+  const base = '/v1/ci/setups?os=linux&gpu=GA106';
+  const row = structuredClone(responses[base].setups[0]);
+  row.cpu_vendor = 'amd';
+  row.host_driver = '590.12.34';
+  row.guest_driver = '590.12.34';
+  responses[base].truncated = true;
+  responses[base].setups = responses[base].setups.filter((s) => s.cpu_vendor !== 'amd');
+  responses[base + '&cpu=amd&driver=590.12.34'] = { ...responses[base], truncated: false, setups: [row] };
+  const page = await render('live', 'find', '?os=linux&gpu=GA106&cpu=amd&driver=590.12.34', { responses });
+  const rows = [...page.document.querySelectorAll('table.kf-setups tbody tr')];
+  assert.equal(rows.length, 1);
+  assert.match(norm(rows[0]), /590\.12\.34/);
+  assert.equal(page.document.querySelector('.kf-block-none .kf-v-none'), null);
+});
+
+test('run page: shows the box driver and each guest as reported, and no provider label', async () => {
+  const withClaims = Object.entries(fixture.responses).find(
+    ([k, v]) => k.startsWith('/v1/ci/runs/') && v.run.host.host_driver && v.run.host.guests.length,
+  )[1].run;
+  const { document } = await render('fixture', 'run', '?id=' + withClaims.id);
+  const t = norm(document.querySelector('#kf-status-content'));
+  assert.match(t, new RegExp('Host driver \\(reported\\)' + withClaims.host.host_driver.replaceAll('.', '\\.')));
+  for (const g of withClaims.host.guests)
+    assert.match(t, new RegExp((g.os === 'windows' ? 'Windows' : 'Linux') + ' guest \\(reported\\)'));
+  assert.doesNotMatch(t, /offer|provider|Host driver label|guest driver 580\.159/i);
+  const none = Object.entries(fixture.responses).find(
+    ([k, v]) => k.startsWith('/v1/ci/runs/') && !v.run.host.host_driver,
+  )[1].run;
+  const bare = await render('fixture', 'run', '?id=' + none.id);
+  assert.doesNotMatch(norm(bare.document.querySelector('#kf-status-content')), /Host driver \(reported\)/);
 });
