@@ -1,9 +1,37 @@
 # V3 P4 PORT MAP — memory, VA and the BARs
 
-**STATUS: PROPOSAL, 2026-09-24 (w826).** A read-only survey (agent) of the P4 design, the v3 crates
+**STATUS: RESEARCH, 2026-09-24 (w826); the opening state word was PROPOSAL until 2026-10-31, when the doc
+checker's allowed set was applied.** A read-only survey (agent) of the P4 design, the v3 crates
 at `v3` HEAD `2df4dfc3` (plus `v3-hostfacts` `28638efa` where noted), and the old tree, in the
 format of `V3_P2_PORT_MAP.md`. Nothing in `/workspace/kf-master` was edited. Line numbers are as of
-`2df4dfc3`. ogkm citations are `research_clones/ogkm-580.159.04` (the target driver).
+`2df4dfc3`. ogkm citations are `research_clones/ogkm-580.159.04` (the target driver). The correction
+below and the status updates after it supersede the survey text where they conflict.
+
+**CORRECTION, 2026-10-31 (owner direction; branch `claude/guestram-step2-bar-sysmem-20261031`): a walked BAR1
+or BAR2 leaf whose aperture is system memory is REFUSED BY NAME and never placed.** Every sentence below
+that has a BAR1/BAR2 window (`kf_mem::cpuwin::CpuWindow`) show "the guest-RAM memfd at a file offset" or place
+a "guest-RAM leaf" is withdrawn for BAR1 and BAR2. The window shows scratch, the row is answered `HeldByHost`
+(satisfied, never ours: the guest's invalidate clears, nothing wedges), and it is COUNTED
+(`WindowStats::sysmem_leaf_refused`; process-wide `kf_mem::cpuwin::SYSMEM_LEAF_REFUSED`, printed as
+`sysmem_leaf_refused=` next to `window_advice_refused=` in the device's `mem[...]` line). The worst a guest can
+do remains corrupting itself. `ViewOps::place_ram` is gone from the BAR path: the only remaining placement of
+guest RAM into a window is **PRAMIN's** system-memory target (§2.4, `ViewOps::place_pramin_ram`; the BAR0
+window register has its own `_TARGET` field, so PRAMIN is not covered by this correction).
+- **Why (owner's position, with the ogkm 580.65.06 evidence):** a BAR is MMIO to the GPU, and a CPU access to guest
+  RAM does not go through it. `src/nvidia/src/kernel/gpu/mem_mgr/mem_desc.c:1826-1830` maps `ADDR_SYSMEM`/`ADDR_EGM`
+  with `osMapSystemMemory` (a direct CPU mapping, no BAR); only `ADDR_FBMEM` takes the BAR1 path
+  (`:1838-1899`, `kbusMapFbApertureSingle`). `src/nvidia/src/kernel/gpu/bus/arch/maxwell/kern_bus_gm107.c:2549`
+  ("Plain old memmap" for sysmem).
+- **Caveats, kept on purpose.** (1) Not every BAR1 caller was audited; `context_dma.c:612` and `virtual_mem.c:1094`
+  were only skimmed. (2) **A deprecated path exists:** `kbusGetEffectiveAddressSpace_GM107`
+  (`kern_bus_gm107.c:6380-6440`) lets an `ADDR_SYSMEM` descriptor be CPU-mapped through BAR1 ("reflected
+  mapping", bug 1482818) when `bAllowReflectedMappingAccess` is set; its generated default is `NV_FALSE`
+  (`src/nvidia/generated/g_kern_bus_nvoc.c:260`) and no setter was found in the open tree. (3)
+  `MEMDESC_FLAGS_MAP_SYSCOH_OVER_BAR1` (Hopper usermode pages, `kernel_fifo_gh100.c:118`) labels a BAR1
+  descriptor `ADDR_SYSMEM` although it is a register page; kayfabe handles those as `UsermodeRow`s
+  (`V3_BAR1_DOORBELL.md`), never as guest-RAM rows. (4) The Windows driver is closed: nothing here is evidence
+  about it, and no reverse engineering was used. (5) Whether the hardware accepts a sysmem aperture in a BAR1
+  PTE is UNKNOWN. If a guest writes such a PTE it sees scratch, and `sysmem_leaf_refused` says so.
 
 **STATUS UPDATE, 2026-09-24 (w826, branch `v3-p4a`): build-order steps 2 and 3 are BUILT, UNRUN on
 hardware.** §2.1(d): `WalkKernel::submit`/`try_collect` (own stream, pinned read-back,

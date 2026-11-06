@@ -1039,17 +1039,21 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
                     placed[i].push((d.va, d.len));
                 }
                 Ok(Mapped::HeldByHost) => {
-                    // Rare (a host-RM placement in the twin's VAS at the guest's VA): named per leaf.
-                    eprintln!(
-                        "kf3: mem leaf {:#x}+{:#x} HELD BY HOST (host RM placed its own buffer there)",
-                        d.va, d.len
-                    );
                     out.held = out.held.saturating_add(1);
                     held_any[i] = true;
                     // ★ v3-gfx: name WHERE (bounded) — a held row is a guest VA host RM already owns.
+                    // ★ 2026-10-31: BOTH lines are bounded now. The first was one line per leaf, and a
+                    // guest chooses how many held leaves it writes (a BAR sysmem leaf is held:
+                    // `CpuWindow::map`), so it was a guest-reachable unbounded emit.
                     static HELD_LOGGED: std::sync::atomic::AtomicU32 =
                         std::sync::atomic::AtomicU32::new(0);
                     if HELD_LOGGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 64 {
+                        // Rare (a host-RM placement in the twin's VAS at the guest's VA, or a CPU
+                        // window declining a sysmem leaf): named per leaf.
+                        eprintln!(
+                            "kf3: mem leaf {:#x}+{:#x} HELD BY HOST (host RM placed its own buffer there, or a BAR window declined a sysmem leaf)",
+                            d.va, d.len
+                        );
                         eprintln!(
                             "kf-mem: HELD-BY-HOST guest row {:#x}+{:#x} (ram={}) — host RM already maps that VA",
                             d.va, d.len, d.ram

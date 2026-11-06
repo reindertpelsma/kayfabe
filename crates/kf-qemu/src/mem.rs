@@ -699,7 +699,7 @@ impl ViewOps for WindowOps {
         Ok(())
     }
 
-    fn place_ram(&self, at: u64, len: u64, file_off: u64) -> Result<(), String> {
+    fn place_pramin_ram(&self, at: u64, len: u64, file_off: u64) -> Result<(), String> {
         let fd = self
             .ram
             .blocks
@@ -4639,9 +4639,6 @@ mod tests {
                     },
                 )
                 .map_err(|e| format!("{e:?}"))
-        }
-        fn place_ram(&self, _: u64, _: u64, _: u64) -> Result<(), String> {
-            Err("no guest RAM in this test".into())
         }
         fn sink(&self, at: u64, len: u64) -> Result<(), String> {
             sink_with(&self.w, &self.s, Some(refused_advice), at, len).map(|_| ())

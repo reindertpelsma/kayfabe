@@ -26,9 +26,6 @@ impl ViewOps for Fake {
     fn place_view(&self, _at: u64, _len: u64, _v: &u64) -> Result<(), String> {
         Ok(())
     }
-    fn place_ram(&self, _at: u64, _len: u64, _off: u64) -> Result<(), String> {
-        Ok(())
-    }
     fn sink(&self, _at: u64, _len: u64) -> Result<(), String> {
         Ok(())
     }

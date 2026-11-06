@@ -2,14 +2,13 @@
 //! perform a host operation after refusal, or lose capacity after a successful unmap.
 use kf_host::MapPerm;
 use kf_mem::cpuwin::{CpuWindow, ViewOps};
-use kf_mem::ledger::{Desired, MapTarget};
+use kf_mem::ledger::{Desired, MapTarget, Mapped};
 use std::cell::Cell;
 
 const BUDGET: usize = 8192;
 #[derive(Default)]
 struct Ops {
     arms: Cell<usize>,
-    ram: Cell<usize>,
     views: Cell<usize>,
     releases: Cell<usize>,
 }
@@ -21,10 +20,6 @@ impl ViewOps for Ops {
     }
     fn place_view(&self, _: u64, _: u64, _: &u64) -> Result<(), String> {
         self.views.set(self.views.get() + 1);
-        Ok(())
-    }
-    fn place_ram(&self, _: u64, _: u64, _: u64) -> Result<(), String> {
-        self.ram.set(self.ram.get() + 1);
         Ok(())
     }
     fn sink(&self, _: u64, _: u64) -> Result<(), String> {
@@ -66,12 +61,15 @@ fn store_views_refuse_before_arming_a_host_view_past_the_budget() {
     assert_eq!(w.ops().views.get(), BUDGET);
 }
 #[test]
-fn guest_ram_placements_cannot_bypass_the_vma_budget() {
+fn sysmem_leaves_never_place_anything_so_they_cannot_touch_the_vma_budget() {
+    // 2026-10-31: a BAR never shows system memory. Every such row is satisfied (`HeldByHost`)
+    // without a host verb, and holds no placement.
     let w = fill(true);
-    assert!(w.map(&row(BUDGET, true), false).is_err());
-    assert_eq!(w.placements(), BUDGET);
-    assert_eq!(w.ops().ram.get(), BUDGET);
+    assert_eq!(w.placements(), 0);
+    assert_eq!(w.map(&row(BUDGET, true), false), Ok(Mapped::HeldByHost));
     assert_eq!(w.ops().arms.get(), 0);
+    assert_eq!(w.ops().views.get(), 0);
+    assert_eq!(w.stats().sysmem_leaf_refused, BUDGET as u64 + 1);
 }
 #[test]
 fn unmapping_releases_capacity_without_eviction_or_a_global_reset() {
@@ -84,12 +82,30 @@ fn unmapping_releases_capacity_without_eviction_or_a_global_reset() {
     assert_eq!(w.ops().arms.get(), BUDGET + 1);
 }
 #[test]
-fn ram_and_store_share_one_placement_budget() {
+fn sysmem_leaves_neither_use_nor_bypass_the_store_placement_budget() {
     let w = CpuWindow::new(Ops::default(), 1 << 30);
     for i in 0..BUDGET {
-        w.map(&row(i, i % 2 == 0), false).unwrap();
+        // Odd rows are sysmem leaves (refused, no placement); even rows are store views.
+        let r = w.map(&row(i, i % 2 == 1), false).unwrap();
+        assert_eq!(
+            r,
+            if i % 2 == 1 {
+                Mapped::HeldByHost
+            } else {
+                Mapped::Placed
+            }
+        );
     }
-    assert!(w.map(&row(BUDGET, false), false).is_err());
-    assert!(w.map(&row(BUDGET, true), false).is_err());
+    assert_eq!(w.placements(), BUDGET / 2);
+    for i in BUDGET..BUDGET + BUDGET / 2 {
+        w.map(&row(i, false), false).unwrap();
+    }
+    assert_eq!(w.placements(), BUDGET);
+    assert!(w.map(&row(2 * BUDGET, false), false).is_err());
+    // Full: a sysmem leaf is still satisfied, and still places nothing.
+    assert_eq!(
+        w.map(&row(2 * BUDGET + 1, true), false),
+        Ok(Mapped::HeldByHost)
+    );
     assert_eq!(w.placements(), BUDGET);
 }
