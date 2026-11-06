@@ -1,0 +1,87 @@
+VANISH_START 2026-11-06T17:29:40Z up=85.92
+VANISH_PAYLOAD_START 2026-11-06T17:29:51Z soft_ms=1793995191000
+KF_PAYLOAD_TIER windows=0 source=worker tier=unknown windows_runs=1 stages=none
+KF_PREFLIGHT_FREE_BYTES=116008730624
+KF_PAYLOAD_STAGE_START name=provision
+[xid-watch] tag=cid7f8d46cdd5e230b_provision  host=ubuntu  utc=2026-11-06T17:29:51Z
+[xid-watch] host_gpu=NVIDIA GeForce RTX 3070, 575.51.03
+[xid-watch] xid_before=0
+BOX_RC=0
+DRIVER_RC=0
+TREE_RC=0
+LADDER_RC=0
+FG_RC=0
+KF3_RC=0
+READY driver=580.159.04
+[xid-watch] xid_after=0
+KF_PAYLOAD_STAGE_END name=provision rc=0 duration_ms=823283
+KF_PAYLOAD_STAGE_START name=cuda_host
+[xid-watch] tag=cid7f8d46cdd5e230b_cuda_host  host=ubuntu  utc=2026-11-06T17:43:37Z
+[xid-watch] host_gpu=NVIDIA GeForce RTX 3070, 580.159.04
+CL_ROW mode=host rung=cup2 rep=1 verdict=PASS rc=0 wall_ms=2844 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]
+CL_ROW mode=host rung=cup3 rep=1 verdict=PASS rc=0 wall_ms=2761 graded=[CUP3_VAL=43]
+CL_ROW mode=host rung=cup8 rep=1 verdict=PASS rc=0 wall_ms=3217 graded=[CUP8_BAD=0 CUP8_MAXERR=0]
+CL_ROW mode=host rung=cup8bench rep=1 verdict=PASS rc=0 wall_ms=3363 graded=[BENCH_TOTAL_BAD=0 BENCH_VERDICT: PASS (every timed iteration verified)]
+KF_PAYLOAD_STAGE_END name=cuda_host rc=0 duration_ms=17835
+KF_PAYLOAD_STAGE_START name=merge_bar
+[xid-watch] tag=cid7f8d46cdd5e230b_merge_bar  host=ubuntu  utc=2026-11-06T17:43:55Z
+GATES_RC=0
+V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS
+BARE_SUITE_STARTED=2026-11-06T17:46:33+00:00 arms=30 budget=180s
+[xid-watch] tag=ci-arm-69074-15692  host=ubuntu  utc=2026-11-06T17:46:33Z
+[xid-watch] tag=ci-arm-69074-14975  host=ubuntu  utc=2026-11-06T17:46:40Z
+[xid-watch] tag=ci-arm-69074-32133  host=ubuntu  utc=2026-11-06T17:46:46Z
+[xid-watch] tag=ci-arm-69074-29857  host=ubuntu  utc=2026-11-06T17:46:53Z
+[xid-watch] tag=ci-arm-69074-489  host=ubuntu  utc=2026-11-06T17:47:00Z
+[xid-watch] tag=ci-arm-69074-27870  host=ubuntu  utc=2026-11-06T17:47:09Z
+[xid-watch] tag=ci-arm-69074-24088  host=ubuntu  utc=2026-11-06T17:47:20Z
+[xid-watch] xid_after=4
+[xid-watch] tag=ci-arm-69074-8304  host=ubuntu  utc=2026-11-06T17:47:38Z
+[xid-watch] xid_before=4
+[xid-watch] tag=ci-arm-69074-4242  host=ubuntu  utc=2026-11-06T17:47:44Z
+[xid-watch] tag=ci-arm-69074-20774  host=ubuntu  utc=2026-11-06T17:47:50Z
+[xid-watch] tag=ci-arm-69074-14804  host=ubuntu  utc=2026-11-06T17:47:54Z
+[xid-watch] tag=ci-arm-69074-10100  host=ubuntu  utc=2026-11-06T17:48:00Z
+[xid-watch] tag=ci-arm-69074-26214  host=ubuntu  utc=2026-11-06T17:48:08Z
+[xid-watch] xid_after=5
+[xid-watch] tag=ci-arm-69074-7484  host=ubuntu  utc=2026-11-06T17:48:17Z
+[xid-watch] xid_before=5
+[xid-watch] tag=ci-arm-69074-3795  host=ubuntu  utc=2026-11-06T17:48:24Z
+[xid-watch] tag=ci-arm-69074-16634  host=ubuntu  utc=2026-11-06T17:48:31Z
+[xid-watch] tag=ci-arm-69074-27226  host=ubuntu  utc=2026-11-06T17:48:37Z
+[xid-watch] tag=ci-arm-69074-5698  host=ubuntu  utc=2026-11-06T17:48:44Z
+[xid-watch] tag=ci-arm-69074-46  host=ubuntu  utc=2026-11-06T17:48:51Z
+[xid-watch] tag=ci-arm-69074-13972  host=ubuntu  utc=2026-11-06T17:48:57Z
+[xid-watch] tag=ci-arm-69074-16685  host=ubuntu  utc=2026-11-06T17:49:04Z
+[xid-watch] tag=ci-arm-69074-1508  host=ubuntu  utc=2026-11-06T17:49:17Z
+[xid-watch] tag=ci-arm-69074-29269  host=ubuntu  utc=2026-11-06T17:49:23Z
+[xid-watch] tag=ci-arm-69074-31748  host=ubuntu  utc=2026-11-06T17:49:29Z
+[xid-watch] tag=ci-arm-69074-9368  host=ubuntu  utc=2026-11-06T17:49:36Z
+[xid-watch] tag=ci-arm-69074-30398  host=ubuntu  utc=2026-11-06T17:49:42Z
+[xid-watch] tag=ci-arm-69074-6284  host=ubuntu  utc=2026-11-06T17:50:20Z
+[xid-watch] tag=ci-arm-69074-9550  host=ubuntu  utc=2026-11-06T17:50:26Z
+[xid-watch] tag=ci-arm-69074-30260  host=ubuntu  utc=2026-11-06T17:50:33Z
+[xid-watch] tag=ci-arm-69074-23487  host=ubuntu  utc=2026-11-06T17:50:40Z
+BARE_SUITE_PASS=30 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0 ARMS=30
+SUITE_RC=0
+FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+FAST_SUITE_RC=0
+BIRTH_CENSUS_OK arms=30 suite_births=161 gate_births=12 all PRIVILEGED_CHANNEL=0 privilege=USER
+EXIT rc=0 2026-11-06T18:08:09+00:00
+[xid-watch] xid_after=10
+KF_PAYLOAD_STAGE_END name=merge_bar rc=6 duration_ms=1456629
+KF_PAYLOAD_STAGE_START name=cuda_guest
+[xid-watch] tag=cid7f8d46cdd5e230b_cuda_guest  host=ubuntu  utc=2026-11-06T18:08:11Z
+[xid-watch] xid_before=10
+CL_ROW mode=guest rung=cup2 rep=1 verdict=PASS boot_rc=0 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]  trapped=10499 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f195 0x0000000e:e
+CL_ROW mode=guest rung=cup3 rep=1 verdict=PASS boot_rc=0 graded=[CUP3_VAL=43]  trapped=10657 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f198 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000
+CL_ROW mode=guest rung=cup8 rep=1 verdict=PASS boot_rc=0 graded=[CUP8_BAD=0 CUP8_MAXERR=0] CUP8_WALL_S=5 trapped=10757 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f199 0x0000000e:e0f1
+CL_ROW mode=guest rung=cup8bench rep=1 verdict=PASS boot_rc=0 graded=[GUEST_BENCH_TOTAL_BAD=0 GUEST_BENCH_VERDICT=PASS (every timed iteration verified)] BENCH_measure_WALL_S=6 trapped=11318 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006
+VANISH_EXIT rc=0 2026-11-06T18:15:08Z
+KF_PAYLOAD_STAGE_END name=cuda_guest rc=0 duration_ms=417007
+KF_FINAL_SUMMARY_BEGIN verdict=PASS stages=4
+stage name=provision rc=0 duration_ms=823283 result=PASS
+stage name=cuda_host rc=0 duration_ms=17835 result=PASS
+stage name=merge_bar rc=6 duration_ms=1456629 result=PASS
+stage name=cuda_guest rc=0 duration_ms=417007 result=PASS
+KF_FINAL_SUMMARY_END

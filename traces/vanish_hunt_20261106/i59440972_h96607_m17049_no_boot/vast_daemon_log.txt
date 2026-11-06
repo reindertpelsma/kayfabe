@@ -1,0 +1,10 @@
+2026-11-06 16:57:36 UTC: Error response from daemon: Head "https://registry-1.docker.io/v2/vastai/kvm/manifests/ubuntu_cli_22.04-2025-05-16": EOF
+2026-11-06 16:59:31 UTC: Error response from daemon: Head "https://registry-1.docker.io/v2/vastai/kvm/manifests/ubuntu_cli_22.04-2025-05-16": EOF
+2026-11-06 17:00:26 UTC: ubuntu_cli_22.04-2025-05-16: Pulling from vastai/kvm
+2026-11-06 17:00:26 UTC: Digest: sha256:<hex64>
+Status: Image is up to date for vastai/kvm:ubuntu_cli_22.04-2025-05-16
+2026-11-06 17:00:26 UTC: docker.io/vastai/kvm:ubuntu_cli_22.04-2025-05-16
+2026-11-06 17:00:26 UTC: docker.io/vastai/kvm:ubuntu_cli_22.04-2025-05-16
+2026-11-06 17:00:27 UTC: <hex64>
+2026-11-06 17:00:27 UTC: Successfully loaded docker.io/vastai/kvm:ubuntu_cli_22.04-2025-05-162026-11-06 17:00:27 UTC: Waiting for SSH pubkey from server. If message persists, check that SSH pubkey is set on instance.
+
