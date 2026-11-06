@@ -1,0 +1,26 @@
+{
+  "id": 57581047,
+  "machine_id": 45428,
+  "host_id": 70221,
+  "created_utc": "2026-10-24T23:46:13.629813+00:00",
+  "ssh_ready_utc": "2026-10-24T23:54:30.094437+00:00",
+  "watch_pid": 3506194,
+  "watch_starttime": 255116120,
+  "deadline_utc": "2026-10-25T01:31:36.381318+00:00",
+  "observed_dph_total": 0.32066666666666666,
+  "controller_pid": 1997,
+  "capture_verified": true,
+  "capture_sha256": "011188e22b9124bd35ae6265fcb769e7b4810464d99f97ffca0f1217c3778f6e",
+  "destroyed": true,
+  "api_absent": true,
+  "absence_verified_utc": "2026-10-24T23:55:12.090988+00:00",
+  "watch_cancelled_after_absence": true,
+  "watch_armed_utc": "2026-10-24T23:46:12.381318+00:00",
+  "identity": {
+    "state": "match",
+    "polls": 1,
+    "console_sha256": "755cf6122dcee60ee65a18ab19f8c27b05387809eec2d883eed90f459035c0e5",
+    "elapsed_since_create": 493.87516561197117,
+    "deadline_since_create": 730.873515999876
+  }
+}

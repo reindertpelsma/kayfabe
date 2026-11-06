@@ -1,0 +1,12 @@
+{
+  "run_box.sh": "f21295a83414ae143aafa5b2ec413f9f5c7562a408b4320e741ad8a07d530304",
+  "instruments.tar": "a407b56a168b014dced50c52163962d3f843df15bdc557daae352d6d3b73cf66",
+  "guard_hooks.sh": "b6cae91dca82f08e38d8e15b05730a539d8dcd58e373a0dcd35bbab02e20ef3c",
+  "die_binding.py": "7eb700025a30ff8efb2c56153820836f8d62c2c3a08147c2fd3af73e266a93cc",
+  "prepare_binding.py": "0fccebc1659bc2085418d925d6ce738c3fa6a00078a42d21773e915f0afbb018",
+  "final_xids.py": "ef4fa5e6be69d75aaf221827f44d26fcfd2ede98df66c2c9b7013c5fd1aab1cf",
+  "collect_capture.py": "49bf46ee676c94ba182076db0840ba784950540dcf0f18791b9c1f8919e8f05b",
+  "derived.tar": "4ccd4d9c92b07de773c4f5b6063ccd3e579a5a33dd6f6586de2b435784832af5",
+  "network_guard.py": "75e6f37ff9ea64f3e6440e34d389533670279d253fffdd05af427978db3d6660",
+  "sshproof.json": "8f2e10b763adc1f0c1c716a03f0cd0f4f26a73ac632dfcd9deaf3a7f5877acbf"
+}

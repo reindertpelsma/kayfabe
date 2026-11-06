@@ -1,0 +1,166 @@
+[
+  {
+    "mutant": "network_observer_error_ignored",
+    "run": 65,
+    "killers": [
+      "test_cost_watch.CostWatch.test_counter_io_failure_stops_owned_controller",
+      "test_cost_watch.CostWatch.test_interface_failure_stops_owned_controller"
+    ]
+  },
+  {
+    "mutant": "old_die_scope",
+    "run": 65,
+    "killers": [
+      "test_sw4.Sw4Scope.test_only_authorized_blackwell_dies",
+      "test_sw4.Sw4Scope.test_previous_scope_not_inherited"
+    ]
+  },
+  {
+    "mutant": "host_blacklist_removed",
+    "run": 65,
+    "killers": [
+      "test_sw4.Sw4Scope.test_host_blacklist",
+      "test_sw4.Sw4Scope.test_host_blacklist_second_offer"
+    ]
+  },
+  {
+    "mutant": "candidate_pin_removed",
+    "run": 65,
+    "killers": [
+      "test_sw4.Sw4Scope.test_ungranted_machine_refused",
+      "test_sw4.Sw4Scope.test_wrong_host_refused"
+    ]
+  },
+  {
+    "mutant": "country_removed",
+    "run": 65,
+    "killers": [
+      "test_sw4.Sw4Scope.test_country_cn_refused",
+      "test_sw4.Sw4Scope.test_country_missing_refused"
+    ]
+  },
+  {
+    "mutant": "requested_storage_rate_limit_removed",
+    "run": 65,
+    "killers": [
+      "test_sw4.Sw4Scope.test_expensive_requested_disk_rate_refused",
+      "test_sw4.Sw4Scope.test_nonfinite_requested_rate_refused"
+    ]
+  },
+  {
+    "mutant": "budget_hourly_limit_raised",
+    "run": 65,
+    "killers": [
+      "test_sw4.Sw4Budget.test_rate_limit",
+      "test_sw4.Sw4Budget.test_rate_limit_another_price"
+    ]
+  },
+  {
+    "mutant": "budget_time_ceiling_raised",
+    "run": 65,
+    "killers": [
+      "test_sw4.Sw4Budget.test_cheap_deadline_never_exceeds_two_hours",
+      "test_sw4.Sw4Budget.test_fixed_two_hour_ceiling"
+    ]
+  },
+  {
+    "mutant": "budget_cap_raised",
+    "run": 65,
+    "killers": [
+      "test_sw4.Sw4Budget.test_hard_cap_independent_of_stop",
+      "test_sw4.Sw4Budget.test_lower_stop_and_cap"
+    ]
+  },
+  {
+    "mutant": "transfer_runtime_unbudgeted",
+    "run": 65,
+    "killers": [
+      "test_sw4.Sw4Budget.test_retained_margin_separate_from_transfer",
+      "test_sw4.Sw4Budget.test_transfer_explicit",
+      "test_sw4.Sw4Budget.test_transfer_shortens_deadline"
+    ]
+  },
+  {
+    "mutant": "retained_margin_removed",
+    "run": 65,
+    "killers": [
+      "test_cost_watch.CostWatch.test_credit_delta_plus_margin_stops",
+      "test_precreate_watchdog.PrecreateWatchdog.test_long_readiness_still_uses_the_original_deadline",
+      "test_precreate_watchdog.PrecreateWatchdog.test_provider_response_crossing_deadline_triggers_immediate_teardown",
+      "test_precreate_watchdog.PrecreateWatchdog.test_readiness_delay_does_not_extend_the_precreate_deadline",
+      "test_precreate_watchdog.PrecreateWatchdog.test_slow_query_at_last_poll_does_not_add_another_poll_interval",
+      "test_sw4.Sw4Budget.test_nonruntime_margin_cannot_disappear",
+      "test_sw4.Sw4Budget.test_retained_margin_separate_from_transfer",
+      "test_sw4.Sw4Budget.test_transfer_can_refuse_before_create"
+    ]
+  },
+  {
+    "mutant": "billed_allocation_stop_removed",
+    "run": 65,
+    "killers": [
+      "test_cost_watch.CostWatch.test_credit_delta_another_stop",
+      "test_cost_watch.CostWatch.test_credit_delta_plus_margin_stops"
+    ]
+  },
+  {
+    "mutant": "source_lock_removed",
+    "run": 65,
+    "killers": [
+      "test_sw4.Sw4Lifecycle.test_source_lock_changed",
+      "test_sw4.Sw4Lifecycle.test_source_lock_changed_second_fixture",
+      "test_sw4.Sw4Lifecycle.test_source_lock_missing"
+    ]
+  },
+  {
+    "mutant": "create_before_arm",
+    "run": 65,
+    "killers": [
+      "test_sw4.Sw4Lifecycle.test_arm_precedes_create",
+      "test_sw4.Sw4Lifecycle.test_complete_fake_lifecycle",
+      "test_sw4.Sw4Lifecycle.test_native_refusal_no_guest_retry"
+    ]
+  },
+  {
+    "mutant": "capture_hash_removed",
+    "run": 65,
+    "killers": [
+      "test_sw4.Sw4Lifecycle.test_another_capture_hash_failure_tears_down_without_success",
+      "test_sw4.Sw4Lifecycle.test_capture_hash_failure_still_tears_down"
+    ]
+  },
+  {
+    "mutant": "cancel_before_absence",
+    "run": 65,
+    "killers": [
+      "test_sw4.Sw4Lifecycle.test_absence_unknown_keeps_timer",
+      "test_sw4.Sw4Lifecycle.test_another_capture_hash_failure_tears_down_without_success",
+      "test_sw4.Sw4Lifecycle.test_cancel_after_api_absence",
+      "test_sw4.Sw4Lifecycle.test_capture_hash_failure_still_tears_down",
+      "test_sw4.Sw4Lifecycle.test_complete_fake_lifecycle"
+    ]
+  },
+  {
+    "mutant": "download_stop_removed",
+    "run": 65,
+    "killers": [
+      "test_cost_watch.CostWatch.test_network_download_boundary",
+      "test_cost_watch.CostWatch.test_network_download_stop"
+    ]
+  },
+  {
+    "mutant": "upload_stop_removed",
+    "run": 65,
+    "killers": [
+      "test_cost_watch.CostWatch.test_network_upload_boundary",
+      "test_cost_watch.CostWatch.test_network_upload_stop"
+    ]
+  },
+  {
+    "mutant": "network_invalid_counter_accepted",
+    "run": 65,
+    "killers": [
+      "test_cost_watch.CostWatch.test_counter_reset_refused",
+      "test_cost_watch.CostWatch.test_other_counter_reset_refused"
+    ]
+  }
+]
