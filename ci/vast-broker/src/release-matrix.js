@@ -15,6 +15,90 @@ const compare = (a, b) => {
   }
   return 0;
 };
+const NVIDIA_INSTALLER_HOSTS = new Set([
+  'download.nvidia.com',
+  'us.download.nvidia.com',
+  'international.download.nvidia.com',
+]);
+const MICROSOFT_CATALOG_HOSTS = new Set([
+  'catalog.s.download.windowsupdate.com',
+  'download.windowsupdate.com',
+]);
+export function officialInstallerURL(pin) {
+  if (typeof pin.url !== 'string' || pin.url.length > 2048 || /[\s\\]/.test(pin.url)) return false;
+  try {
+    const u = new URL(pin.url);
+    if (u.protocol !== 'https:' || u.username || u.password || u.port || u.search || u.hash)
+      return false;
+    if (NVIDIA_INSTALLER_HOSTS.has(u.hostname))
+      return (
+        pin.catalog_url === null &&
+        u.pathname.includes('/' + pin.version + '/') &&
+        u.pathname.split('/').at(-1).includes(pin.version) &&
+        u.pathname.endsWith(pin.os === 'linux' ? '.run' : '.exe')
+      );
+    if (!MICROSOFT_CATALOG_HOSTS.has(u.hostname) || pin.os !== 'windows') return false;
+    return (
+      typeof pin.catalog_url === 'string' &&
+      /^https:\/\/www\.catalog\.update\.microsoft\.com\/ScopedViewInline\.aspx\?updateid=[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(
+        pin.catalog_url,
+      )
+    );
+  } catch {
+    return false;
+  }
+}
+export function validInstallerPin(pin) {
+  return (
+    keys(pin, [
+      'os',
+      'version',
+      'status',
+      'url',
+      'sha256',
+      'size',
+      'checked',
+      'source',
+      'catalog_url',
+    ]) &&
+    ['linux', 'windows'].includes(pin.os) &&
+    driverVersion(pin.version) &&
+    ['PINNED', 'UNPINNED'].includes(pin.status) &&
+    typeof pin.checked === 'string' &&
+    /^\d{4}-\d{2}-\d{2}$/.test(pin.checked) &&
+    typeof pin.source === 'string' &&
+    pin.source.length > 0 &&
+    pin.source.length <= 512 &&
+    (pin.url === null
+      ? pin.status === 'UNPINNED' && pin.catalog_url === null
+      : officialInstallerURL(pin)) &&
+    (pin.status === 'PINNED'
+      ? typeof pin.sha256 === 'string' &&
+        /^[a-f0-9]{64}$/.test(pin.sha256) &&
+        Number.isSafeInteger(pin.size) &&
+        pin.size > 0 &&
+        pin.size <= 8 * 1024 ** 3
+      : pin.sha256 === null && pin.size === null)
+  );
+}
+export function driverInstallerKeys(row) {
+  const out = new Set();
+  for (const drivers of [row?.drivers, row?.cross_subrun?.drivers])
+    if (object(drivers))
+      for (const axis of AXES)
+        if (driverVersion(drivers[axis]))
+          out.add((axis === 'windows_guest_driver' ? 'windows' : 'linux') + '/' + drivers[axis]);
+  for (const run of Array.isArray(row?.subruns) ? row.subruns : [])
+    if (['linux', 'windows'].includes(run?.os) && Array.isArray(run.drivers))
+      for (const version of run.drivers)
+        if (driverVersion(version)) out.add(run.os + '/' + version);
+  return out;
+}
+export function driverPinsFor(row, value = RELEASE_MATRIX) {
+  const required = driverInstallerKeys(row);
+  const pins = Array.isArray(value.driver_installers) ? value.driver_installers : [];
+  return pins.filter((p) => object(p) && required.has(p.os + '/' + p.version));
+}
 export function validateReleaseMatrix(value, cfg) {
   const errors = [];
   const bad = (ok, reason) => {
@@ -30,6 +114,7 @@ export function validateReleaseMatrix(value, cfg) {
         'policy',
         'host_capabilities',
         'sources',
+        'driver_installers',
         'dies',
       ]),
       'matrix schema',
@@ -45,6 +130,26 @@ export function validateReleaseMatrix(value, cfg) {
     )
   )
     return errors;
+  if (
+    !bad(
+      Array.isArray(value.driver_installers) &&
+        value.driver_installers.length > 0 &&
+        value.driver_installers.length <= 128,
+      'installer catalog schema',
+    )
+  )
+    return errors;
+  const installerKeys = new Set();
+  for (const pin of value.driver_installers) {
+    if (!bad(validInstallerPin(pin), 'installer pin schema/official URL/hash/size')) continue;
+    const id = pin.os + '/' + pin.version;
+    bad(!installerKeys.has(id), 'duplicate installer pin');
+    installerKeys.add(id);
+  }
+  bad(
+    value.status !== 'executable' || value.driver_installers.every((p) => p?.status === 'PINNED'),
+    'executable installer UNPINNED',
+  );
   const p = value.policy;
   if (
     !bad(
@@ -127,6 +232,14 @@ export function validateReleaseMatrix(value, cfg) {
     )
       continue;
     const label = row.die;
+    bad(
+      [...driverInstallerKeys(row)].every((id) => installerKeys.has(id)),
+      label + ' missing installer pin',
+    );
+    bad(
+      new TextEncoder().encode(JSON.stringify(driverPinsFor(row, value))).byteLength <= 12288,
+      label + ' installer transport size',
+    );
     bad(typeof label === 'string' && !seen.has(label), 'unique die');
     seen.add(label);
     bad(
@@ -347,6 +460,12 @@ export function releaseEnvironment(row) {
     KF_HOST_DRIVER: row.drivers.host_driver,
     KF_LINUX_GUEST_DRIVER: row.drivers.linux_guest_driver,
     KF_WINDOWS_GUEST_DRIVER: row.drivers.windows_guest_driver,
+    KF_RELEASE_DRIVER_PINS: btoa(
+      String.fromCharCode(...new TextEncoder().encode(JSON.stringify(driverPinsFor(row)))),
+    )
+      .replaceAll('+', '-')
+      .replaceAll('/', '_')
+      .replace(/=+$/, ''),
     KF_RELEASE_SUBRUNS: btoa(
       JSON.stringify({ subruns: row.subruns, cross_subrun: row.cross_subrun, status: row.status }),
     )

@@ -17,6 +17,7 @@ import {
   matrixReceiptDefinitions,
   checkedMatrixReceipts,
   sameMatrixRow,
+  driverPinsFor,
 } from './release-matrix.js';
 import { DEFAULTS } from './defaults.js';
 import { gpuClass, resourceCaps } from './policy.js';
@@ -58,6 +59,7 @@ export function dieLegs(offers, cfg, matrixRow) {
       ? {
           release_matrix: structuredClone(matrixRow),
           drivers: structuredClone(matrixRow.drivers),
+          driver_pins: structuredClone(driverPinsFor(matrixRow, releaseMatrix)),
           subruns: structuredClone(matrixRow.subruns),
           cross_subrun: structuredClone(matrixRow.cross_subrun),
           profile: matrixRow.profile,
@@ -286,6 +288,8 @@ export function classifyLeg(
     return finish(all('RETRY'), 'NOT_ENDED');
   const result = record.result,
     rows = Array.isArray(result?.suites) ? result.suites : [];
+  if (rows.some((r) => r.fail > 0 && /^(?:[a-z0-9]+_)*driver_media_drift$/.test(r.name)))
+    return finish(all('RETRY'), 'MEDIA_DRIFT');
   const passing = (name) => rows.some((r) => r.name === name && r.pass > 0 && r.fail === 0);
   const green = result?.host_reference === 'GREEN';
   const rowVerdict = (name) => {

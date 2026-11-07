@@ -59,6 +59,8 @@ def only(pattern, text, name, rows=()):
 
 
 def provision_rows(text, rc):
+    if re.search(r"^DRIVER_MEDIA_DRIFT reason=[A-Z0-9_]{1,32}$", text, re.M):
+        raise EvidenceError("driver_media_drift", [row("driver_media_drift", failed=1)])
     if (
         rc
         or red_line(text)
@@ -184,14 +186,14 @@ def release_driver_environment(environ):
     HOST_DRIVER is the existing host installer's selector; KF_HOST_DRIVER is the readiness
     check's selector. Linux guest staging and new Windows media still need an executor.
     """
-    names = (*RELEASE_DRIVER_FIELDS, "KF_WINGATE_GUEST_DRIVER", "KF_RELEASE_SUBRUNS")
+    names = (*RELEASE_DRIVER_FIELDS, "KF_WINGATE_GUEST_DRIVER", "KF_RELEASE_SUBRUNS", "KF_RELEASE_DRIVER_PINS")
     if not any(name in environ for name in names):
         return {}
-    if any(name not in environ for name in (*RELEASE_DRIVER_FIELDS, "KF_RELEASE_SUBRUNS")):
+    if any(name not in environ for name in (*RELEASE_DRIVER_FIELDS, "KF_RELEASE_SUBRUNS", "KF_RELEASE_DRIVER_PINS")):
         raise EvidenceError("release_retry_matrix_invalid")
     selected = {name: environ[name] for name in names if name in environ}
     for name, value in selected.items():
-        if name != "KF_RELEASE_SUBRUNS" and not re.fullmatch(r"[0-9]{3}\.[0-9]{2,3}(?:\.[0-9]{2})?", value):
+        if name not in ("KF_RELEASE_SUBRUNS", "KF_RELEASE_DRIVER_PINS") and not re.fullmatch(r"[0-9]{3}\.[0-9]{2,3}(?:\.[0-9]{2})?", value):
             raise EvidenceError("release_retry_matrix_invalid")
     # Same bounded JSON contract as the bootstrap, also checked at the payload boundary.
     try:
@@ -205,6 +207,30 @@ def release_driver_environment(environ):
     except (ValueError, TypeError):
         valid = False
     if not valid:
+        raise EvidenceError("release_retry_matrix_invalid")
+    pins = local_result_contract.decode_driver_pins(selected["KF_RELEASE_DRIVER_PINS"])
+    if pins is None:
+        raise EvidenceError("release_retry_matrix_invalid")
+    required = {("windows" if name == "KF_WINDOWS_GUEST_DRIVER" else "linux", selected[name]) for name in RELEASE_DRIVER_FIELDS}
+    try:
+        for run in plan["subruns"]:
+            if not isinstance(run, dict) or run.get("os") not in ("linux", "windows") or not isinstance(run.get("drivers"), list):
+                raise ValueError()
+            for version in run["drivers"]:
+                if not isinstance(version, str) or not re.fullmatch(r"[0-9]{3}\.[0-9]{2,3}(?:\.[0-9]{2})?", version):
+                    raise ValueError()
+                required.add((run["os"], version))
+        cross = plan["cross_subrun"]
+        if cross is not None:
+            if not isinstance(cross, dict) or not isinstance(cross.get("drivers"), dict) or set(cross["drivers"]) != {"host_driver", "linux_guest_driver", "windows_guest_driver"}:
+                raise ValueError()
+            for axis, version in cross["drivers"].items():
+                if not isinstance(version, str) or not re.fullmatch(r"[0-9]{3}\.[0-9]{2,3}(?:\.[0-9]{2})?", version):
+                    raise ValueError()
+                required.add(("windows" if axis == "windows_guest_driver" else "linux", version))
+    except (ValueError, TypeError):
+        raise EvidenceError("release_retry_matrix_invalid") from None
+    if not required.issubset({(p["os"], p["version"]) for p in pins}):
         raise EvidenceError("release_retry_matrix_invalid")
     selected["HOST_DRIVER"] = selected["KF_HOST_DRIVER"]
     return selected
@@ -1458,6 +1484,8 @@ def main():
 
         def provision_grade(rc):
             log = bounded_text("/root/prov/prov.log")
+            if re.search(r"^DRIVER_MEDIA_DRIFT reason=[A-Z0-9_]{1,32}$", log, re.M):
+                provision_rows(log, rc)
             fault = provider_fault(log)
             if fault:
                 raise ProviderFault(fault)

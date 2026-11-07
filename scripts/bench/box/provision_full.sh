@@ -31,6 +31,12 @@ not_ready_diag() {
 # KF_NOT_READY_DIAG_END
 bash scripts/bench/provision_host_driver.sh > /root/prov/driver.log 2>&1
 DRIVER_RC=$?; echo "DRIVER_RC=$DRIVER_RC"
+# KF_DRIVER_MEDIA_GATE_BEGIN
+# A media drift cannot be hidden by an already working stock driver.
+if LC_ALL=C grep -a -m 1 -E '^DRIVER_MEDIA_DRIFT reason=[A-Z0-9_]{1,32}$' /root/prov/driver.log; then
+  exit 3
+fi
+# KF_DRIVER_MEDIA_GATE_END
 # ⊘ [2026-10-26] rc 8 = the driver swap left no usable GPU even after the reset-and-reload recovery
 # (provision_host_driver.sh, gpu_settle). The tree, ladder, fast-guest and kf3 builds need ~15
 # minutes and nothing downstream can pass on a dead GPU, so stop here with the evidence. Other

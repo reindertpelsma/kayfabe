@@ -41,3 +41,18 @@ keeps a 120 GB disk, 2 GB outbound and a $0.005/GB cap. Effective hourly prices
 include those transfer allowances amortised over the lease. Cheaper compute can
 therefore lose to a host with cheaper inbound. A higher per-GB price is rejected
 even when the effective hourly price would otherwise fit.
+
+
+## Release driver media
+
+Update driver selections and their `driver_installers` catalog in
+`ci/vast-broker/release-matrix.json` together. Record the official HTTPS installer
+URL, exact SHA-256, byte count, check date and source; use NVIDIA's official
+checksum file or hash the official byte stream. Do not upload NVIDIA installers
+to repository or object storage. If a pin is unavailable, retain `UNPINNED` with
+null hash and size; an executable matrix cannot contain it.
+
+Validate with `node ci/vast-broker/validate-release-matrix.mjs`. A runtime 404 or
+changed installer is reported as `MEDIA_DRIFT`, never PASS. Refresh the official
+pin only after investigating the drift; no automatic alternate URL or version is
+selected. The proposed matrix and payload executor remain disabled.

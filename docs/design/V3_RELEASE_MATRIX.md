@@ -302,3 +302,69 @@ headroom while its payload does not enable Windows apps. The 6–7 GB source is 
 planning estimate in `docs/DOWNLOADS.md`, not a measured artifact; the empty
 `bundle.pin` confirms packaging is still unverified. Re-measure the packaged
 bundle and revise this split if necessary before enabling the stage.
+
+## Official driver installer pins (2026-11-07)
+
+OWNER DECISION / CODE READ: `driver_installers` in the matrix is the catalog for
+**every** full-run, cross-run and subrun host/Linux/Windows driver selection.
+Entries are keyed by operating system and driver version, so version and installer
+changes are reviewed data changes. NVIDIA installers are not mirrored in this
+repository, R2 or evidence storage. Only disposable-box installation caches may
+contain their bytes.
+
+MEASURED metadata audit on 2026-11-07: eight Linux pins below came from NVIDIA's
+version-specific `.run.sha256sum` files plus each installer's HTTP Content-Length.
+These are official published digests, not an independent local hash of Linux
+installer bytes. Both Windows installers were streamed directly from NVIDIA,
+hashed and counted, then discarded without a file. Windows 580.88 agrees with
+the existing pin in `scripts/bench/windows/win_vm.sh`. Full URLs, digests, byte
+counts, check date and provenance are data in `release-matrix.json`.
+
+| OS | Driver | Status | Installer bytes | SHA-256 / official source |
+|---|---|---|---:|---|
+| linux | 580.105.08 | PINNED | 396635119 | [`d9c6e8188672f3eb74dd04cfa69dd58479fa1d0162c8c28c8d17625763293475`](https://download.nvidia.com/XFree86/Linux-x86_64/580.105.08/NVIDIA-Linux-x86_64-580.105.08.run.sha256sum) |
+| linux | 580.126.09 | PINNED | 396807358 | [`4cac53e48f8adff661d47c8788ed24059a248c9fd8098ceafd088a498986ec26`](https://download.nvidia.com/XFree86/Linux-x86_64/580.126.09/NVIDIA-Linux-x86_64-580.126.09.run.sha256sum) |
+| linux | 580.159.04 | PINNED | 397162548 | [`c1e66761b088d17b3adf6cb6979de9af38be2684d102b001a176dcfafabdca1e`](https://download.nvidia.com/XFree86/Linux-x86_64/580.159.04/NVIDIA-Linux-x86_64-580.159.04.run.sha256sum) |
+| linux | 580.173.02 | PINNED | 398312209 | [`8d8eb9001e05a9a8a663d3d5d304feb64ef2844ee185ccdfd952786820f46e1b`](https://download.nvidia.com/XFree86/Linux-x86_64/580.173.02/NVIDIA-Linux-x86_64-580.173.02.run.sha256sum) |
+| linux | 580.178.04 | PINNED | 397214534 | [`5975a86ee45bffcb626f51ae33d1169b108186a2ea47ad651e72f13fa4b6d6f9`](https://download.nvidia.com/XFree86/Linux-x86_64/580.178.04/NVIDIA-Linux-x86_64-580.178.04.run.sha256sum) |
+| linux | 580.65.06 | PINNED | 393832804 | [`04b10867af585e765cfbfdcf39ed5f4bd112375bebab0172eaa187c6aa5024ff`](https://download.nvidia.com/XFree86/Linux-x86_64/580.65.06/NVIDIA-Linux-x86_64-580.65.06.run.sha256sum) |
+| linux | 580.82.07 | PINNED | 396359634 | [`061e48e11fe552232095811d0b1cea9b718ba2540d605074ff227fce0628798c`](https://download.nvidia.com/XFree86/Linux-x86_64/580.82.07/NVIDIA-Linux-x86_64-580.82.07.run.sha256sum) |
+| linux | 580.94.02 | UNPINNED | UNKNOWN | [official candidate returned 404](https://download.nvidia.com/XFree86/Linux-x86_64/580.94.02/NVIDIA-Linux-x86_64-580.94.02.run) |
+| linux | 590.48.01 | PINNED | 416273526 | [`b9e2f80693781431cc87f4cd29109e133dcecb50a50d6b68d4b3bf2d696bd689`](https://download.nvidia.com/XFree86/Linux-x86_64/590.48.01/NVIDIA-Linux-x86_64-590.48.01.run.sha256sum) |
+| windows | 580.88 | PINNED | 890807536 | [`90c49f925b41ee062e02cc8094a16b6d057abfde4e85235a76d63ffe267f63a9`](https://us.download.nvidia.com/Windows/580.88/580.88-desktop-win10-win11-64bit-international-dch-whql.exe) |
+| windows | 580.97 | PINNED | 890779664 | [`081878a323fc24b8ec4f7c9b0e72e22ad6f9ae73219a6fac324b59cd6258d076`](https://us.download.nvidia.com/Windows/580.97/580.97-desktop-win10-win11-64bit-international-dch-whql.exe) |
+
+MEASURED on 2026-11-07: Linux 580.94.02 returned HTTP 404 from both the XFree86
+candidate above and NVIDIA's `us.download.nvidia.com/tesla/580.94.02/` candidate.
+It remains **UNPINNED**, with null hash/size and an explicit AD104 blocker. No hash,
+size, alternate point version or approval was invented. The owner must verify
+its official media or choose another reviewed driver before executable status.
+
+CODE READ: the existing validator requires a bounded, unique catalog and complete
+coverage of all selected versions, including subruns and cross runs. Binary URLs
+must use HTTPS and exactly `download.nvidia.com`, `us.download.nvidia.com` or
+`international.download.nvidia.com`, with no credentials, query, fragment or
+non-default port. NVIDIA paths must name the selected version and installer type.
+A Windows Catalog binary may instead use `catalog.s.download.windowsupdate.com`
+or `download.windowsupdate.com` only with a separate official
+`www.catalog.update.microsoft.com/ScopedViewInline.aspx?updateid=...` evidence URL
+for that Windows driver. There are no Microsoft-hosted pins in the current data.
+An executable matrix containing **any UNPINNED entry** is invalid, even if that
+entry is unused. Pinning does not approve driver compatibility or build an executor.
+
+CODE READ: plan legs expose their selected pins and `KF_RELEASE_DRIVER_PINS`
+transports that exact subset to the payload. The reporter and payload check its
+closed schema, official URLs, hashes, sizes and selected-version coverage. The
+matrix host-driver path uses the common `release_driver_media.py` verifier before
+hardware changes; it verifies existing cached bytes too. There is no mirror,
+version, URL or checksum fallback in this path. A 404, redirect, hash mismatch or
+size mismatch emits `DRIVER_MEDIA_DRIFT`, exits unsuccessfully and cannot become
+READY through a previously working stock driver. The payload reports a failing
+`driver_media_drift` row, and the Worker classifies it as RETRY / MEDIA_DRIFT,
+including when ordinary summary rows claim PASS.
+
+CODE READ / DESIGN-ONLY: the verifier supports Linux and Windows installer pins,
+but the matrix payload executor still declares capability 0 and refuses all
+matrix execution. New guest media staging/dispatch still needs the reviewed
+executor; this change does not claim to execute Windows or Linux guest sweeps.
+No driver was installed and no hardware/VM/rental/Worker request or deploy was made.
