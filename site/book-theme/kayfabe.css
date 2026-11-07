@@ -16,36 +16,36 @@ body {
 /* Palette: light, and the dark one that mdBook's "Auto" picks from the OS setting (coal). */
 .light,
 html:not(.js) {
-  --fg: #1b1f24;
-  --links: #0a58ad;
-  --sidebar-bg: #f5f7f9;
-  --sidebar-fg: #1b1f24;
-  --sidebar-active: #0a58ad;
+  --fg: #17202a;
+  --links: #0b5cad;
+  --sidebar-bg: #f6f8fa;
+  --sidebar-fg: #17202a;
+  --sidebar-active: #0b5cad;
   --sidebar-non-existant: #5c6670;
   --inline-code-color: #5a2a00;
   --quote-bg: #fff8e1;
   --quote-border: #8a5a00;
-  --table-header-bg: #e8edf2;
+  --table-header-bg: #edf1f5;
   --table-alternate-bg: #f6f8fa;
-  --table-border-color: #d0d7de;
-  --icons: #4a5560;
-  --kf-focus: #0a58ad;
+  --table-border-color: #d8dee6;
+  --icons: #475467;
+  --kf-focus: #0b5cad;
 }
 .coal {
-  --bg: #111418;
-  --fg: #e6e8ea;
-  --links: #7ab8ff;
-  --sidebar-bg: #181d23;
+  --bg: #0f1317;
+  --fg: #e8ebef;
+  --links: #8cc2ff;
+  --sidebar-bg: #161b21;
   --sidebar-fg: #d6dadf;
-  --sidebar-active: #7ab8ff;
+  --sidebar-active: #8cc2ff;
   --sidebar-non-existant: #8c96a0;
   --inline-code-color: #ffcf99;
   --quote-bg: #2b2410;
   --quote-border: #d9a441;
-  --table-header-bg: #232a32;
-  --table-alternate-bg: #151a1f;
-  --table-border-color: #2b323a;
-  --icons: #a3acb5;
+  --table-header-bg: #1d242c;
+  --table-alternate-bg: #13181d;
+  --table-border-color: #2a323b;
+  --icons: #a8b2bd;
 }
 
 /* Evidence-label colours: light by default, dark under every dark mdBook theme. */
@@ -56,21 +56,21 @@ html:not(.js) {
   --kf-inferred-fg: #3f2f85;
   --kf-gap-bg: #fff1c2;
   --kf-gap-fg: #5c3b00;
-  --kf-muted: #4a5560;
-  --kf-line: #d0d7de;
+  --kf-muted: #475467;
+  --kf-line: #d8dee6;
 }
 .coal,
 .navy,
 .ayu {
-  --kf-focus: #7ab8ff;
+  --kf-focus: #8cc2ff;
   --kf-measured-bg: #12301f;
   --kf-measured-fg: #9ee0b5;
   --kf-inferred-bg: #25203f;
   --kf-inferred-fg: #c9bdf5;
   --kf-gap-bg: #3a2e0c;
   --kf-gap-fg: #ffd98a;
-  --kf-muted: #a3acb5;
-  --kf-line: #2b323a;
+  --kf-muted: #a8b2bd;
+  --kf-line: #2a323b;
 }
 
 /* Focus is always visible. */
@@ -104,24 +104,38 @@ label:focus-visible {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.25rem 1.2rem;
+  gap: 0.2rem 0.4rem;
   padding: 0.6rem 0;
   font-size: 1.5rem;
   border-bottom: 1px solid var(--kf-line);
 }
 .kf-topbar a {
   color: var(--links);
+  display: inline-block;
+  padding: 0.5rem 0.9rem;
+  border-radius: 999px;
+  text-decoration: none;
+}
+.kf-topbar a:hover {
+  background: var(--table-header-bg);
 }
 .kf-brand {
   font-weight: 700;
   font-size: 1.8rem;
+  letter-spacing: -0.02em;
   color: var(--fg) !important;
-  text-decoration: none;
+  padding-left: 0 !important;
 }
 .kf-spacer {
   flex: 1;
 }
+.kf-topbar label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
 .kf-topbar select {
+  min-height: 3.2rem;
   font: inherit;
   color: var(--fg);
   background: var(--bg);
@@ -130,9 +144,39 @@ label:focus-visible {
   padding: 0.2rem 0.4rem;
 }
 
+/* Phone: large tap targets in the top bar, tables and code scroll inside themselves. */
+@media (max-width: 600px) {
+  .kf-topbar {
+    font-size: 1.6rem;
+  }
+  .kf-topbar a {
+    min-height: 4.4rem;
+    padding: 1rem 1.1rem;
+  }
+  .kf-spacer {
+    flex-basis: 100%;
+    height: 0;
+  }
+  .kf-pager a {
+    flex-basis: 100%;
+  }
+}
+
 /* Reading column. */
 .content main {
-  line-height: 1.6;
+  line-height: 1.65;
+}
+.content h1 {
+  letter-spacing: -0.01em;
+}
+.content h2 {
+  margin-block-start: 2em;
+  padding-bottom: 0.25em;
+  border-bottom: 1px solid var(--kf-line);
+}
+.content img {
+  max-width: 100%;
+  height: auto;
 }
 .content p,
 .content ul,
@@ -175,7 +219,13 @@ label:focus-visible {
 /* Code blocks: bordered, scrollable, copy button always reachable by keyboard and touch. */
 pre {
   border: 1px solid var(--table-border-color);
-  border-radius: 6px;
+  border-radius: 8px;
+}
+.content table {
+  border: 1px solid var(--table-border-color);
+  border-radius: 8px;
+  border-collapse: separate;
+  border-spacing: 0;
 }
 pre > code {
   overflow-x: auto;
