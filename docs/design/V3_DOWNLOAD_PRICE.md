@@ -85,8 +85,10 @@ at least its origin-limited minimum (30 minutes recommended). A shortened
 infeasibilities are tested and never bypassed by a faster advertisement.
 
 CODE READ: unrelated admission/authentication/cleanup tests explicitly simulate a
-separately configured 1 Gbps origin. The pricing tests restore the shipped profile
-data and prove the 445 Mbps ceiling and default middle refusals. Passing synthetic
+separately configured 1 Gbps origin, including the independently bundled local
+workerd fixture. Pricing tests restore shipped data within each case, then return
+the fixture data, so the shared CI entry point cannot leak a policy override
+into other tests. They prove the 445 Mbps ceiling and default middle refusals. Passing synthetic
 protocol tests is not evidence that a default middle rental can be admitted.
 
 INFERRED arithmetic: the existing 200 Mbps floor alone is insufficient: 100 GB

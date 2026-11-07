@@ -1,4 +1,4 @@
-import test from 'node:test';
+import nodeTest from 'node:test';
 import assert from 'node:assert/strict';
 import { configuration, downloadTiming, offerPrice, offerRejections } from '../src/policy.js';
 import { DEFAULTS } from '../src/defaults.js';
@@ -7,10 +7,21 @@ import { OfferBook } from '../src/offers.js';
 import { Ledger } from '../src/ledger.js';
 import { dieLegs } from '../src/release.js';
 import { env, MockCloud, MemoryStorage, setup, shippedPayloadProfiles } from './helpers.js';
-// These model/admission tests use shipped profile data, independently of the
-// faster origin explicitly simulated by the unrelated protocol fixtures.
-for (const [name, profile] of Object.entries(shippedPayloadProfiles))
-  Object.assign(DEFAULTS.payloadProfiles[name], profile);
+// The CI directory entry imports every test file into one process. Restore the
+// shipped model only within each pricing case, then return the protocol fixture
+// data; importing this module must not change other files' admission policy.
+const test = (name, body) =>
+  nodeTest(name, async () => {
+    const previous = structuredClone(DEFAULTS.payloadProfiles);
+    for (const [tier, profile] of Object.entries(shippedPayloadProfiles))
+      Object.assign(DEFAULTS.payloadProfiles[tier], profile);
+    try {
+      await body();
+    } finally {
+      for (const [tier, profile] of Object.entries(previous))
+        Object.assign(DEFAULTS.payloadProfiles[tier], profile);
+    }
+  });
 const cfgFor = (tier = 'small', extra = {}) =>
   applyProfile(
     configuration({
