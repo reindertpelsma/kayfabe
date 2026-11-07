@@ -55,7 +55,7 @@ NOT run, and the 12 apps that had not run are `NOT_RUN`, not failures.
    produce a pass; the verdict was FAIL because of guest failures, and the grade line lists the NOT_RUN apps separately.
 4. *The same-box host reference stays green around the run.* **Held**: before and after both `green cup8=PASS`, Xid count 0/0.
 
-## Measured costs of the harness (the budget problem)
+## Measured costs of the harness — 2026-11-07 run `wa1f` (the budget problem)
 
 - A guest takes about 3.5 minutes from `win_vm.sh run` to `READY` (ssh up 83-95 s, 26 scripts pushed by scp about 60 s, setup 12 s).
 - Sum of the apps' own runtimes in the full run: 900 s. Wall clock for the 67 apps that ran: about 94 minutes. The rest is harness overhead:
