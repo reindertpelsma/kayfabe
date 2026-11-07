@@ -1944,7 +1944,7 @@
         el(
           'li',
           { class: 'kf-chip kf-chip-diff' },
-          'different ' + relaxLabel(r.dim),
+          'same ' + relaxLabel(r.dim),
           text(r.wanted) || text(r.found) ? el('span', { class: 'kf-small' }, ' (wanted ' + (text(r.wanted) || 'any') + ', found ' + (text(r.found) || 'unknown') + ')') : null,
         ),
       ),
