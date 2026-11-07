@@ -32,9 +32,12 @@ sys.path.insert(0, HERE)
 import appdisk  # noqa: E402
 import qga as qgamod  # noqa: E402
 import verdict as V  # noqa: E402
+import prestart as P  # noqa: E402
 
 REPO = os.path.abspath(os.path.join(HERE, "..", "..", "..", ".."))
 PS_PUSH = {  # guest path -> repo path (relative to HERE unless absolute)
+    r"C:\kf\app_prestart.ps1": "../app_prestart.ps1",
+    r"C:\kf\app_autostart_common.ps1": "../app_autostart_common.ps1",
     r"C:\kf\kf_common.ps1": "guest/kf_common.ps1", r"C:\kf\kf_apphelpers.ps1": "guest/kf_apphelpers.ps1",
     r"C:\kf\kf_guest_setup.ps1": "guest/kf_guest_setup.ps1", r"C:\kf\kf_stage.ps1": "guest/kf_stage.ps1",
     r"C:\kf\kf_run_app.ps1": "guest/kf_run_app.ps1", r"C:\kf\kf_launch.ps1": "guest/kf_launch.ps1",
@@ -624,6 +627,48 @@ class GuestSession:
 
     # ---- one app
     def run_app(self, app, tag=None):
+        spec = P.config(app)
+        if spec is None:
+            return self._run_app(app, tag)
+        result = None
+        try:
+            try:
+                response = self.q.powershell(P.SCRIPT, P.arguments(app, spec, "Start"), timeout=spec["timeout_s"] + 45)
+                ready = P.succeeded(response, app, "Start")
+            except qgamod.QgaError:
+                ready = False
+            if ready:
+                result = self._run_app(app, tag)
+            else:
+                result = self._prestart_failure(app, "prestart-failed")
+        finally:
+            reset_ok = False
+            try:
+                if self.vm.alive():
+                    response = self.q.powershell(P.SCRIPT, P.arguments(app, spec, "Reset"), timeout=spec["timeout_s"] + 45)
+                    reset_ok = P.succeeded(response, app, "Reset")
+            except (qgamod.QgaError, OSError):
+                pass
+            if not reset_ok:
+                self.log(f"APP_LAB_RESET_FAIL app={app['id']} fresh_guest=required")
+                if result is not None:
+                    result["restart"] = result.get("restart") or "lab-reset-failed"
+                    if getattr(self, "run_dir", None):
+                        path = os.path.join(self.run_dir, "apps", app["id"] + ".verdict.json")
+                        if os.path.isfile(path):
+                            with open(path) as f:
+                                verdict = json.load(f)
+                            verdict["restart"] = result["restart"]
+                            with open(path, "w") as f:
+                                json.dump(verdict, f, indent=1)
+        return result
+
+    def _prestart_failure(self, app, reason):
+        os.makedirs(os.path.join(self.run_dir, "apps"), exist_ok=True)
+        d = V.decide(app, {"notrun": reason}, "")
+        return self._finish(app, d, "", {"notrun": reason}, self.vm.gsp_cycles(), need_restart=reason)
+
+    def _run_app(self, app, tag=None):
         c = self.cfg
         aid = app["id"]
         token = f"{self.tag}-{aid}-{int(self.now())}"

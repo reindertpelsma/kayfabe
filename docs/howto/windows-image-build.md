@@ -70,7 +70,8 @@ Check the session with:
 scripts/bench/windows/image_session.sh status
 ```
 
-Close applications and background writers. Create a JSON file selecting actual
+Complete the experimental [autostart preparation](#application-footprints-and-lab-preparation)
+before final capture. Close applications and background writers. Create a JSON file selecting actual
 application roots and mutable file exclusions; an empty root list produces
 package/driver inventory only:
 
@@ -126,3 +127,63 @@ Uploads use single PUT with retries and support artifacts up to 5 GiB. Larger
 images need caller-managed multipart upload; `verify` can still check their
 presigned download. Retain the manifest/checksum independently. Never publish
 the disk, its inventory or signed URLs. No storage is deployed by these helpers.
+
+## Application footprints and lab preparation
+
+This procedure is DESIGN-ONLY and needs the coordinator's Windows dry run.
+It also applies to the native build. Stage `app_footprint.ps1`, `lab_prep.ps1`,
+`app_prestart.ps1` and `app_autostart_common.ps1` together in a temporary guest
+tools directory. Run elevated with the fixed disposable account's profile
+loaded. Keep records private under `C:\ProgramData\KayfabeLab`.
+
+Before each official installer, take a new snapshot. After installation, take
+another and produce the app's footprint, supplying its actual pinned SHA-256:
+
+```powershell
+.\app_footprint.ps1 snapshot -OutputPath C:\BuildRecords\app_a-before.json
+# Install the official application by hand, then:
+.\app_footprint.ps1 snapshot -OutputPath C:\BuildRecords\app_a-after.json
+.\app_footprint.ps1 diff -BeforePath C:\BuildRecords\app_a-before.json `
+  -AfterPath C:\BuildRecords\app_a-after.json -App app_a `
+  -InstallerSha256 $InstallerSha256 `
+  -OutputPath C:\ProgramData\KayfabeLab\footprints\app_a.json
+```
+
+Review the new entries and `changed_existing` rows for every app. Create
+`C:\BuildRecords\updater-policy.json` with exact updater/telemetry service IDs
+and task paths copied from those records (empty vendor arrays are allowed):
+
+```json
+{"schema_version": 1, "kind": "autostart_policy", "services": [], "tasks": []}
+```
+
+Ordinary Automatic/Delayed-Automatic services become Manual demand-start services;
+ordinary tasks retain their settings. Only explicitly listed updater/telemetry
+services and tasks are disabled. Run/RunOnce and startup-folder entries are
+removed, except protected infrastructure. After all installers and manual
+first-run steps, close applications and run:
+
+```powershell
+.\lab_prep.ps1 -PolicyPath C:\BuildRecords\updater-policy.json
+```
+
+Require exit zero, `LAB_PREP_DONE` and `complete: true` in
+`C:\ProgramData\KayfabeLab\lab_prep.json`. Preserve that original report and
+the footprints. If it fails, stop the capture procedure and inspect the policy
+code; do not bypass permissions or overwrite the report by blindly retrying.
+The report retains every affected service's original start type and delayed-auto
+flag, task settings and removed startup data for rollback. Prestart does not
+perform rollback. Reports from the earlier blanket Disabled proposal are not
+accepted by the corrected tooling; start from a pristine build or review the
+original rollback records.
+
+Reboot and test each app in a fresh guest **without prestart** first. The harness
+runs as an administrator, so an ordinary Manual service can be requested by the
+app. Opt into `"prestart": {"timeout_s": 30}` only if the app's acceptance test
+shows a required helper did not start on demand. It starts the selected app's
+services without changing their startup types or tasks. Demand-start helpers may
+outlive an app; use a fresh guest per app. Require app-specific cleanup acceptance
+evidence before guest reuse.
+Preserve the footprints and version-2 report at the default ProgramData paths.
+Scripts are delivered at run time. Real Windows demand-start behavior and reboot
+persistence still require the coordinator's dry run.
