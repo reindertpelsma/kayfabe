@@ -63,3 +63,5 @@ jobs:
         run: python3 scripts/ci/merge_bar_mutants.py
       - name: Evidence-bundle mutations (scrubbing, scanning, caps, upload) require two killers each
         run: python3 scripts/ci/evidence_mutants.py
+      - name: Run-report mutations (rows, subruns, bounds, upload) require two killers each
+        run: python3 scripts/ci/run_report_mutants.py

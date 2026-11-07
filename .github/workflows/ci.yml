@@ -66,6 +66,8 @@ jobs:
           node ci/vast-broker/scripts/mutate-tiers.mjs
           # Evidence upload route mutants (2026-11-06): each must fail at least two tests.
           node ci/vast-broker/evidence-mutants.mjs
+          # Public log, run report and publisher mutants (2026-11-07): each must fail at least two tests.
+          node ci/vast-broker/report-mutants.mjs
           # Provider-status tolerance and close-line mutants (2026-11-06): each must fail at least two tests.
           node ci/vast-broker/provider-tolerance-mutants.mjs
           npm ci --prefix ci/vast-admin --ignore-scripts --no-audit --no-fund
@@ -2433,7 +2435,8 @@ jobs:
           node --test ci/vast-broker/test/treekey.test.js ci/vast-broker/test/treekey-parity.test.js \
             ci/vast-broker/test/requirements.test.js ci/vast-broker/test/results-store.test.js \
             ci/vast-broker/test/store-ingest.test.js ci/vast-broker/test/host-claims.test.js \
-            ci/vast-broker/test/edits-no-secrets-on-vast.test.js ci/vast-broker/test/die-rules-turing.test.js
+            ci/vast-broker/test/edits-no-secrets-on-vast.test.js ci/vast-broker/test/die-rules-turing.test.js \
+            ci/vast-broker/test/run-report.test.js ci/vast-broker/test/run-report-extra.test.js
           node ci/vast-broker/store-mutants.mjs
 
   slow:

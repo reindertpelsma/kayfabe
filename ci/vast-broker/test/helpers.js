@@ -391,6 +391,7 @@ export async function setup(overrides = {}) {
     },
     sweep: (...args) => service.sweep(...args),
     storeTrees: (...args) => service.storeTrees(...args),
+    publishRuns: (...args) => service.publishRuns(...args),
     adminPlan: (...args) => service.adminPlan(...args),
     adminStart: (...args) => service.adminStart(...args),
     adminStopBatch: (...args) => service.adminStopBatch(...args),
