@@ -986,7 +986,7 @@ and the D1 tables can stay.
 
 Known follow-ups (review of #282, not done in this change): the guest password is never known to the
 Worker (a box-side stream redaction in `vast_report.py`, mirroring the evidence scanner, would close it);
-the key-block scan is quadratic on 16 MiB of BEGIN lines with no END (about 5 s measured by the reviewer,
+the key-block scan is quadratic on 16 MiB of BEGIN lines with no END (about 5 s in the reviewer's probe,
 bounded to about 4 MiB by the box channel); R2 `put` does not refuse to overwrite; `nosniff` and a
 sandbox CSP belong in a Cloudflare Transform Rule on `logs.kayfabe.dev`; D1 calls in the publisher have no
 timeout; the 0004 tables have no retention.
