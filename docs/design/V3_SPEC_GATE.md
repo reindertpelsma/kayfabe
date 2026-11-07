@@ -10,7 +10,7 @@ only; **no box, no rental and no Windows guest has run any of it**, and the stag
 [`../SPEC_RESULTS.md`](../SPEC_RESULTS.md) (what may be published). Measurements it rests on:
 `traces/specviewperf_native_20261107/README.md` (the native reference, branch of PR #289; **not on `next` yet**, so not linked) and [`traces/specviewperf_vast_20261105/`](../../traces/specviewperf_vast_20261105/README.md) (kayfabe, PR #265).
 
-Marking: **MEASURED** = a line in a file of those traces (revision, box and die in them), **CODE READ** = read in this repository,
+Marking: **MEASURED** = a line in a file of those traces (revision, box and die in them, e.g. kayfabe rev `6a0683af` on Vast box 59248850, 2026-11-05), **CODE READ** = read in this repository,
 **INFERRED** = reasoned from those numbers, not seen, **DESIGN** = intent, **OPEN** = an owner decision. An unmarked sentence is a
 claim of fact about the code in this PR.
 
@@ -205,7 +205,7 @@ deployed.
 **OPEN, a hole to close before enabling:** `releaseVerdict` passes an enabled extra stage "on at least one PASS" per cell. With two
 lanes a PASS of lane A alone would certify the stage. The payload therefore also writes `specviewperf_lanea` / `specviewperf_laneb` pass
 rows next to `specviewperf`; the Worker must require both lanes on a die before it counts the stage as passed (a Worker change, not in
-this PR). Likewise the Worker's rental must ask for the disk (300 GB requested, 220 GB floor, **MEASURED** by the native run; the
+this PR). Likewise the Worker's rental must ask for the disk (300 GB requested, 220 GB floor, **MEASURED** by the native run of 2026-11-07, boxes A and B in `traces/specviewperf_native_20261107/README.md`; the
 Worker rents 120 GB today, `ci/vast-broker/src/vast.js` `disk: 120`, `defaults.json` `diskGb`).
 
 ## 10. Tests and mutants
