@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { matrixTest, capablePayload } from './release-fixture.js';
 import assert from 'node:assert/strict';
 import { configuration, offerPrice, offerRejections, resourceCaps } from '../src/policy.js';
 import { applyProfile } from '../src/tier.js';
@@ -214,6 +215,7 @@ async function largeService() {
     ROLLING_SPEND_USD: '200',
     ACCOUNT_DAILY_USD: '50',
   });
+  capablePayload(h);
   h.cloud.credit = 500;
   const market = JSON.parse(
     readFileSync(new URL('./fixtures/release-market-synthetic.json', import.meta.url)),
@@ -227,13 +229,13 @@ async function largeService() {
   return { h, first };
 }
 for (const field of ['inet_down_cost', 'inet_up_cost'])
-  test('large live-instance cap remains independently enforced ' + field, async () => {
+  matrixTest('large live-instance cap remains independently enforced ' + field, async () => {
     const { h, first } = await largeService();
     h.cloud.instances.get(String(first.id))[field] = 0.02001;
     await h.service.sweep();
     assert.equal((await h.storage.get('record:' + first.key)).closed, 'CONTRACT_PRICE');
   });
-test('large live-instance recheck permits rates above the small cap', async () => {
+matrixTest('large live-instance recheck permits rates above the small cap', async () => {
   const { h, first } = await largeService();
   h.cloud.instances.get(String(first.id)).inet_down_cost = 0.0075;
   await h.service.sweep();

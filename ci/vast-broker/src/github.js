@@ -57,9 +57,9 @@ export class Github {
   }
   // Box code runs from the tested commit. Before any paid call, its reporter must declare the
   // Worker's box protocol (an older reporter rejects the run token and bills until boot timeout).
-  async boxProtocol(sha) {
+  async sourceText(path, sha) {
     if (!hexSha(sha)) refuse('BAD_REQUEST', 400);
-    const file = await this.get('contents/' + DEFAULTS.reporterPath + '?ref=' + sha, true);
+    const file = await this.get('contents/' + path + '?ref=' + sha, true);
     let text = '';
     try {
       if (file?.type === 'file' && file.encoding === 'base64' && typeof file.content === 'string')
@@ -67,8 +67,19 @@ export class Github {
           Uint8Array.from(atob(file.content.replace(/\n/g, '')), (c) => c.charCodeAt(0)),
         );
     } catch {}
+    return text;
+  }
+  async boxProtocol(sha, { matrix = false } = {}) {
+    const text = await this.sourceText(DEFAULTS.reporterPath, sha);
     const declared = /^BOX_PROTOCOL = "([0-9]{1,4})"$/m.exec(text)?.[1];
     if (declared !== String(DEFAULTS.boxProtocol)) refuse('NOT_ELIGIBLE', 409);
+    if (!matrix) return;
+    const reporter = text;
+    if (!/^BOX_RELEASE_MATRIX_RECEIPTS = 1$/m.test(reporter))
+      refuse('NOT_ELIGIBLE', 409, 'MATRIX_REPORTER_CAPABILITY');
+    const payload = await this.sourceText('scripts/ci/vast_payload.py', sha);
+    if (!/^PAYLOAD_RELEASE_MATRIX_EXECUTOR = 1$/m.test(payload))
+      refuse('NOT_ELIGIBLE', 409, 'MATRIX_PAYLOAD_CAPABILITY');
   }
   // Admin starts (2026-11-05, wtier): the commit must be on this repository's own `master` or
   // `next` history (an ancestor of, or equal to, the branch head), so a fork commit that GitHub

@@ -83,9 +83,13 @@ export { profileCaps };
 // box when no second machine of the die is offered) and KF_STAGES (extra stages, release only) are
 // sent only when they differ from the default, so a check or sweep box sees today's environment
 // plus KF_TIER.
+// 2026-11-07 (SPECviewperf stage, PROPOSED, docs/design/V3_SPEC_GATE.md): `spec` (lanea, laneb, both) is sent as KF_SPEC
+// only when the caller passes it, only for the release profile and only together with the specviewperf stage slot (the box
+// refuses either alone). Nothing passes it today, so no box sees the field and no run changes; which box of a die gets which
+// lane is the owner's decision (and a Worker deploy), not part of this change.
 export function tierEnvironment(
   profile,
-  { tierName, windowsRuns = 1, stages = [], releaseMatrix } = {},
+  { tierName, windowsRuns = 1, stages = [], releaseMatrix, spec } = {},
 ) {
   const env = { KF_MERGE_WINDOWS: tier(profile).windows ? '1' : '0' };
   if (tierName !== undefined) env.KF_TIER = tierName;
@@ -101,6 +105,15 @@ export function tierEnvironment(
   if (releaseMatrix !== undefined) {
     if (profile !== 'release') throw Error('release matrix profile');
     Object.assign(env, releaseEnvironment(releaseMatrix));
+  }
+  if (spec !== undefined) {
+    if (
+      profile !== 'release' ||
+      !stages.includes('specviewperf') ||
+      !['lanea', 'laneb', 'both'].includes(spec)
+    )
+      throw Error('spec');
+    env.KF_SPEC = spec;
   }
   return env;
 }

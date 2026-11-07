@@ -236,6 +236,16 @@ export class MockCloud {
           content: content.replace(/(.{60})/g, '$1\n'),
         });
       }
+      if (u.pathname.endsWith('/contents/scripts/ci/vast_payload.py')) {
+        const value =
+          this.payloadText ??
+          readFileSync(new URL('../../../scripts/ci/vast_payload.py', import.meta.url), 'utf8');
+        return Response.json({
+          type: 'file',
+          encoding: 'base64',
+          content: Buffer.from(value).toString('base64'),
+        });
+      }
       const run = u.pathname.match(/\/actions\/runs\/(\d+)(?:\/attempts\/\d+)?$/);
       if (run) return Response.json(this.runs.get(run[1]) ?? this.run);
       if (/\/commits\/[a-f0-9]+$/.test(u.pathname))

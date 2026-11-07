@@ -377,7 +377,10 @@
   "stageSlots": {
     "specviewperf": {
       "tiers": ["large"],
-      "state": "PLUMBING"
+      "state": "PLUMBING",
+      "requiredRowsPerDie": ["specviewperf_lanea", "specviewperf_laneb"],
+      "lanes": ["lanea", "laneb"],
+      "requiresSeparateRentals": true
     },
     "two_guests": {
       "tiers": ["middle", "large"],
