@@ -29,7 +29,10 @@ def pin(data=b"installer stays intact", name="7zr.exe"):
 def manifest():
     return dict(schema=1, packages=[dict(id="sevenzip", title="7-Zip", version="1",
         license="public domain", redistribution="Redistributable",
-        stage=dict(mode="copy", dest="tools"), files=[pin()])])
+        stage=dict(mode="copy", dest="tools"), files=[pin()],
+        compliance=dict(license_id="MIT", upstream="https://vendor.invalid/project", distribution="public-ok",
+            conditions=[], sources=[], license_inputs=[pin(b"fixture licence", "LICENSE.txt")],
+            license_rules={"7zr.exe":dict(kind="upstream", input="LICENSE.txt")}))])
 
 
 class Policy(unittest.TestCase):
@@ -58,6 +61,14 @@ class Policy(unittest.TestCase):
         chosen = B.select_packages(m, p)
         self.assertEqual({x["id"] for x in chosen}, set(p["open_packages"]))
         self.assertNotIn("ffmpeg", {x["id"] for x in chosen})
+
+    def test_pin_itself_refuses_parent_path_before_coverage(self):
+        fl = pin(); fl["name"] = "../escape"
+        with self.assertRaises(ValueError): B.validate_pin("sevenzip", fl)
+
+    def test_pin_itself_refuses_windows_path_before_coverage(self):
+        fl = pin(); fl["name"] = "C:\\escape"
+        with self.assertRaises(ValueError): B.validate_pin("sevenzip", fl)
 
     def test_forbidden_requested(self):
         with self.assertRaisesRegex(ValueError, "ffmpeg"):
@@ -449,6 +460,8 @@ class Bundle(unittest.TestCase):
         (self.downloads / "sevenzip").mkdir(parents=True)
         (self.downloads / "sevenzip" / "7zr.exe").write_bytes(b"installer stays intact")
         self.packages = manifest()["packages"]
+        lp = self.downloads / "_compliance/sevenzip/LICENSE.txt"
+        lp.parent.mkdir(parents=True); lp.write_bytes(b"fixture licence")
         self.out = self.root / "out"
 
     def build(self):
@@ -471,14 +484,14 @@ class Bundle(unittest.TestCase):
     def test_repository_licences_are_on_image(self):
         receipt = self.build()
         for name in ("LICENSE", "LICENSE-APACHE", "LICENSE-GPL", "THIRD_PARTY_NOTICES.md"):
-            self.assertIn("licenses/kayfabe/" + name, receipt["files"])
+            self.assertIn("LICENSES/kayfabe/" + name, receipt["files"])
 
     def test_repository_licence_bytes_read_back(self):
         self.build()
         with I.Reader(self.out / "winapps-open.iso") as r:
             for name in ("LICENSE", "LICENSE-APACHE", "LICENSE-GPL", "THIRD_PARTY_NOTICES.md"):
                 original = (Path(H.REPO) / name).read_bytes().replace(b"\r\n", b"\n")
-                self.assertEqual(b"".join(r.chunks("licenses/kayfabe/" + name)), original)
+                self.assertEqual(b"".join(r.chunks("LICENSES/kayfabe/" + name)), original)
 
     def test_legacy_tree_hint_does_not_extract(self):
         self.packages[0].update(image_form="tree", tree_dest="legacy")

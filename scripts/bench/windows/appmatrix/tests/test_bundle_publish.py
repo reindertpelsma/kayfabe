@@ -106,7 +106,7 @@ class Inputs(unittest.TestCase):
     def test_license_change_invalidates(self):
         before = B.input_hash(self.man, self.prof); original = B.repo_files
         def altered(*args):
-            data = original(*args); data["licenses/kayfabe/LICENSE"] += b"changed"; return data
+            data = original(*args); data["LICENSES/kayfabe/LICENSE"] += b"changed"; return data
         with patch.object(B, "repo_files", side_effect=altered): self.assertNotEqual(before, B.input_hash(self.man, self.prof))
 
     def test_host_receipt_metadata_does_not_invalidate(self):
@@ -447,7 +447,9 @@ class ReceiptPublishing(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup); self.root = Path(self.tmp.name)
         downloads = self.root / "downloads"; p = downloads / "sevenzip/7zr.exe"; p.parent.mkdir(parents=True); p.write_bytes(b"fixture")
-        packages = [dict(id="sevenzip", stage=dict(mode="copy", dest="tools"), files=[dict(name="7zr.exe", sha256=B.sha256(p), size=7)])]
+        from test_package_bundle import manifest
+        packages = manifest()["packages"]; packages[0]["files"][0].update(sha256=B.sha256(p), size=7)
+        lp = downloads / "_compliance/sevenzip/LICENSE.txt"; lp.parent.mkdir(parents=True); lp.write_bytes(b"fixture licence")
         self.receipt = B.build_image(packages, downloads, {}, self.root / "out", {})
         self.iso = self.root / "out/winapps-open.iso"; self.state = self.root / "state.json"; self.store = MemoryStore()
 

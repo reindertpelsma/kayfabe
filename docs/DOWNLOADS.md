@@ -156,7 +156,8 @@ limits: [`Windows apps gate, section 3`](design/V3_WINDOWS_APPS_GATE.md#3-inputs
 
 **CODE READ:** the builder is `scripts/bench/windows/appmatrix/package_bundle.py`, Python 3.11+ standard library
 only. Official Zig 0.13.0 host archives are pinned (URL, SHA-256, size, retrieval date) under `bundle_toolchain`
-in `manifest.json`; no distro mingw package is used. Only the compiler archive is unpacked on the host.
+in `manifest.json`; no distro mingw package is used. Only the compiler's executable files are unpacked on the host;
+legal-text members of verified archives are read separately into the licence inventory.
 Every app archive/installer stays unmodified on the `KFAPPS` ISO and is staged inside Windows with its existing
 tools. The guest remains offline. No command uploads, logs in or contacts the Worker/Cloudflare.
 
@@ -174,9 +175,10 @@ python3 -I scripts/bench/windows/appmatrix/package_bundle.py verify-image --out 
 **CODE READ:** `fetch` resumes and verifies each original against the manifest without changing its pins.
 `verify` checks manually supplied originals too. `build` verifies the inputs again, cross-compiles the seven
 repository probes using direct Zig argument lists, writes the deterministic ISO and reads every file back.
-The sidecar `out/winapps-open.manifest.json` records every file hash/size, image identity/hash/size, compiler
-pins, probe source hashes, packaging date and Python version. Repository and compiler/runtime licence notices
-are included on the ISO. `out/bundle.pin.line` is proposed pin content,
+The sidecar `out/winapps-open.manifest.json` records every file hash/size and `licenses` metadata, image
+identity/hash/size, compiler pins, source mirrors, probe source hashes, packaging date and Python version.
+`LICENSES/`, its provenance index, `THIRD_PARTY_NOTICES.txt` and exact pinned `SOURCE/` archives are always
+included on the ISO, whether it is distributed publicly or privately. `out/bundle.pin.line` is proposed pin content,
 not authorization to upload or change the committed pin. Default local commands refuse `CI`; the owner-authorized workflow uses explicit `--ci-build` with no upload
 credentials, while `input-hash` is CI-readable. `KF_RUN_TOKEN` and upload credentials always refuse builder
 commands. Allow ample disk for original downloads, the ISO and compiler scratch; the owner-authorized GitHub workflow remains dispatch-only and publication is disabled by default. Full
@@ -199,6 +201,10 @@ manager/Git GUI; do not use a moving checkout while packaging. Then:
 3. Select your host in `bundle_toolchain.hosts` (`AMD64` = `x86_64`, `arm64` = `aarch64`, Darwin = `macos`).
    Save that exact official Zig archive under `Downloads/_toolchain/<name>`, also unmodified. All host pins
    come from the recorded official Zig index. No compiler needs to be installed through a package manager.
+   Also download every selected package's `compliance.license_inputs` and `compliance.sources` URL,
+   saving each original under `Downloads/_compliance/<package id>/<name>` in the file manager. These are
+   independently hash/size pinned; do not substitute a newer licence or source release. If two packages
+   share a source pin, place the same original in both package directories. No source needs to be compiled.
 4. Choose **Verify**. It compares the size and SHA-256 of every original, including Zig, with the committed
    manifest, naming any mismatch. `VERIFY_OK` means these bytes match; file names or digital signatures alone
    are insufficient. Alternatively **Fetch** saves the same pinned files automatically using urllib.
@@ -207,7 +213,8 @@ manager/Git GUI; do not use a moving checkout while packaging. Then:
    reproduce into a second empty output directory, then choose **Compare receipt**: select the first sidecar and the second ISO.
    A successful check verifies the second image against the first receipt. The ISO SHA-256 values in both receipts
    must match exactly; receipt date and Python-version fields need not match. Compare individual `files` entries
-   to locate any difference. Keep both receipts as operator evidence.
+   to locate any difference. Inspect `LICENSES/index.json` for every package's original legal-text paths/hashes
+   and `sources` for exact source versions and mirror keys. Keep both receipts as operator evidence.
 
 **CODE READ / limitation:** manually clicking each application's own installer inside Windows can reproduce an
 installation, but cannot by itself reproduce the ISO's filesystem metadata or the repository-built probes.
@@ -216,6 +223,24 @@ perform extraction/installation at run time; WB1 changes only their choice of th
 GPU-free fixtures establish determinism for their inputs, not full cross-host binary equality or GPU behavior.
 Before upload the coordinator must compare two full builds and run the Zig and mingw probe sets through the
 same unchanged native Windows app-matrix checks. No hardware or full bundle build ran in WB1.
+
+**CODE READ / distribution policy, 2026-11-07:** the default full bundle includes `private-only` NVIDIA
+CUDA EULA components (including CUDA libraries inside torch wheels) and `conditions` packages (Vulkan
+Runtime and Visual C++ Redistributable terms; hf_wheels also needs its MPL source review). It must not be
+published as a public bundle without qualified review. `--public-only` refuses any selected package or
+dependency outside `public-ok`, including during image verification; it never silently drops packages.
+For a limited public-policy subset, use `--only blender,sevenzip,clpeak_ocl --public-only` with check,
+fetch, verify and build. That subset is not the full app gate or the canonical CI publication selection.
+See the [complete distribution table and source obligations](design/V3_WINDOWS_APPS_GATE.md#32-licence-inventory-distribution-classes-and-source-availability).
+This is engineering support, not legal advice.
+
+**OWNER OBLIGATION / DESIGN:** unmodified Blender, 7-Zip and clpeak source archives are carried on the ISO
+and must be mirrored alongside its object code, with equivalent access at no extra charge. The notices
+give the exact upstream location, source digest, ISO path and immutable mirror key, plus our written source
+offer valid for at least three years after our last distribution and while covered support/spare parts
+remain offered. It is **OUR obligation to keep the mirrored source available as long as we distribute the
+binary**, and to honor that offer for its full term. The full legal-text inventory and transitive source
+completeness still need operator review; a main-project source archive alone is not proof of completeness.
 
 **DESIGN:** the Windows apps stage gets one `winapps-open.iso` (volume label `KFAPPS`) through the Worker's
 proposed presigned `/bench-data` route. Only `open_packages` are included: CUDA demo/runtime components,
@@ -252,14 +277,17 @@ credentials. Logs contain redistributable input names and digests; no credential
 The uploader uses Python stdlib SigV4 and resumable S3 multipart for files above 5 GiB, with conditional
 create-only completion. Live R2 compatibility remains unverified and must be checked before enabling.
 
-Object names are `winapps-open/kfapps-<iso sha256>.iso` and `winapps-open/manifest-<iso sha256>.json`. They are
+Object names are `winapps-open/kfapps-<iso sha256>.iso`, `winapps-open/manifest-<iso sha256>.json`, and
+`winapps-open/source-<source sha256>.archive` in the same dedicated bucket/prefix. Exact source archives
+are uploaded first; a source failure prevents ISO publication. Caller-presigned plans must include them. They are
 immutable: publication reuses a verified matching object or fails on a conflict. A subsequent automated
 **draft PR against next** should update `appmatrix/bundle.pin` with the digest, `inputs`, and keys only after
 checking that current master still has those inputs. Token handling and the Worker's future digest-to-key
 read mapping are separate work; no Worker code or current consumer is enabled here. The older proposed
 fixed keys in the table above are superseded by these names for new publication.
 
-The computed two-build disk admission budget is 22,378,011,791 bytes. The workflow measures actual free space,
+The computed two-build disk admission budget is 25,294,602,843 bytes (23.56 GiB), including compliance/source
+inputs, both images and legal-text caps. The workflow measures actual free space,
 frees unused hosted-runner toolchains and fails before downloading if it cannot meet that budget. Runner
 cleanup capacity has not been measured in WB1; use a larger runner if needed. Full design, future OIDC route
 and exact input path filters: [Windows apps gate, section 3.1](design/V3_WINDOWS_APPS_GATE.md#31-owner-refinement-build-in-github-publish-immutable-objects).

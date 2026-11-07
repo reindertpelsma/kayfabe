@@ -12,10 +12,10 @@ import bundle_mutants as M
 
 CASES = [
     ("builder-credentials", "package_bundle.py", 'if key in env:', 'if False:'),
-    ("recipe-files-hashed", "package_bundle.py", 'for name in ("package_bundle.py", "bundle_iso.py", "bundle_tools.py"):', 'for name in ():'),
+    ("recipe-files-hashed", "package_bundle.py", 'for name in ("package_bundle.py", "bundle_iso.py", "bundle_tools.py", "bundle_compliance.py"):', 'for name in ():'),
     ("probe-sources-hashed", "package_bundle.py", 'for name in bundle_tools.SOURCES:', 'for name in ():'),
     ("guest-and-notices-hashed", "package_bundle.py", 'contents = repo_files(root)', 'contents = {}'),
-    ("receipt-input-binding", "package_bundle.py", 'if receipt.get("inputs") != json.loads(b"".join(r.chunks("bundle.inputs.json"))).get("inputs"):', 'if False:'),
+    ("receipt-input-binding", "package_bundle.py", 'if receipt.get("inputs") != embedded.get("inputs"):', 'if False:'),
     ("changed-input-plan", "bundle_ci.py", 'published.get("inputs") != inputs', 'False'),
     ("equal-input-plan", "bundle_ci.py", 'published.get("inputs") != inputs', 'True'),
     ("disk-admission", "bundle_ci.py", 'if free < required:', 'if False:'),

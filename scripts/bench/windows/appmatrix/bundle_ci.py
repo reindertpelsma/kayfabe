@@ -12,6 +12,7 @@ import sys
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import package_bundle as B
+import bundle_compliance as C
 
 
 def read_pin(text):
@@ -40,8 +41,13 @@ def plan(inputs, pin, verify=False):
 
 def disk_budget(man, profile):
     # Cache + two images + compiler/unpacked runtime/caches/metadata and margin.
-    payload = sum(f["size"] for p in B.select_packages(man, profile) for f in p["files"])
-    return 3 * payload + 2 * 1024**3
+    packages = B.select_packages(man, profile)
+    payload = sum(f["size"] for p in packages for f in p["files"])
+    compliance = sum(pin["size"] for _, pin, _ in C.inputs(packages))
+    # Compliance input cache + two ISO copies + one ephemeral source upload file;
+    # Reserve the legal-text cap for each package in BOTH images, in addition
+    # to compiler/build scratch. The full pinned payload is not staged locally.
+    return 3 * payload + 4 * compliance + 2 * len(packages) * C.MAX_TOTAL + 2 * 1024**3
 
 
 def check_disk(root, required):

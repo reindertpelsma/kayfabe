@@ -106,8 +106,8 @@ is normalized to LF, covering CRLF checkouts. Individual files over 4 GiB minus 
 writing; the selected pins fit, including the 2.9 GB torch wheel. Data is streamed, including the readback check.
 The image excludes wall-clock/Python-version metadata; the external receipt includes these audit fields.
 
-**CODE READ:** outputs are `out/winapps-open.iso`, `out/winapps-open.manifest.json` (every ISO file's SHA-256
-and size, payload identity, image hash/size, pins, build source hashes, date and Python version) and
+**CODE READ:** outputs are `out/winapps-open.iso`, `out/winapps-open.manifest.json` (every ISO file's SHA-256,
+size and `licenses` records, payload identity, image hash/size, pins, source mirrors, build source hashes, date and Python version) and
 `out/bundle.pin.line`. The identity hashes sorted payload records excluding `KFAPPS.ID` to avoid a circular
 hash; that file is itself included in the receipt. `verify-image` hashes the entire ISO and independently reads
 its Joliet directory records to check exact file membership, bytes and the identity marker. No mount is needed.
@@ -149,8 +149,8 @@ answers `RETRY class=MEDIA`. `docs/DOWNLOADS.md` gives the manual file-manager r
 
 ### 3.1 Owner refinement: build in GitHub, publish immutable objects
 
-**CODE READ:** the earlier fixture hash above describes builder v1. The new embedded `inputs` field changes
-the v2 image identity; it is not a new release-media pin.
+**CODE READ:** the earlier fixture hash above describes builder v1. The embedded `inputs` field and v3
+compliance payload change the image identity; that earlier fixture hash is not a new release-media pin.
 
 **CODE READ / DESIGN, 2026-11-07:** the owner changed the packaging location to GitHub CI and permits a final
 master-only upload. `.github/workflows/bundle-publish.yml` implements the structure but remains **disabled for
@@ -160,7 +160,7 @@ manual `mode=build` run uses the job with no environment or secret references. P
 requires `vars.BUNDLE_PUBLISH_ENABLED == 'true'`, default absent/false.
 
 **CODE READ:** `package_bundle.py input-hash` prints exactly `inputs=<sha256>`. The hash covers the builder
-version and normalized builder/ISO/compiler recipe source, the selected open-package records and pins, sorted
+version and normalized builder/ISO/compiler/compliance recipe source, the selected open-package records and pins, sorted
 `open_packages`, every ISO-carried guest/app/licence text, all probe/ladder/header/import-library sources,
 and all official toolchain pins. Compiler-provided notices are covered by their archive pins. Host paths,
 Python version, packaging dates, historical image receipts, publisher/CI helper code and research/lint-only
@@ -184,9 +184,11 @@ canonical repository, `refs/heads/master`, push/dispatch, the enable flag and pr
 `bundle-publish-master`. **Deployment branches must be restricted to master and reviewers configured there
 before enabling.** Fork PRs and every PR event are refused again by the publisher's own entry point.
 
-**COMPUTED from committed pins, not measured on GitHub:** originals total 6,743,509,381 bytes. The conservative
-admission budget is `3 * originals + 2 GiB` = 22,378,011,791 bytes (20.84 GiB), for downloads, both images and
-compiler scratch. The workflow measures `df` before/after removing unused preinstalled Android, .NET, GHC,
+**COMPUTED from committed pins, not measured on GitHub:** originals total 6,743,509,381 bytes and additional
+licence/source inputs total 91,613,555 bytes (shared pins are counted conservatively per package). The admission
+budget is `3 * originals + 4 * compliance inputs + 2 * package count * 64 MiB + 2 GiB` =
+25,294,602,843 bytes (23.56 GiB), including both images, legal-text caps, source upload staging and compiler
+scratch. The workflow measures `df` before/after removing unused preinstalled Android, .NET, GHC,
 Boost and hosted tool caches, then checks actual free bytes **before any vendor download**. It uses system
 `/usr/bin/python3` so deleting the hosted cache cannot remove its interpreter. Default free space around 14 GB
 (the coordinator's sizing premise) is insufficient; whether cleanup frees enough is **unverified until a manual
@@ -213,7 +215,7 @@ local state for up to three uploader invocations in the same final step; a fresh
 **DESIGN: enabling automatic triggers after review.** Add input-filtered `pull_request` for the no-environment
 build job, and `push` restricted to `master` for planning, using only these determinant paths: root `LICENSE`,
 `LICENSE-APACHE`, `LICENSE-GPL`, `THIRD_PARTY_NOTICES.md`; appmatrix `manifest.json`, `gate_profiles.json`,
-`apps.json`, `package_bundle.py`, `bundle_iso.py`, `bundle_tools.py`, `guest/**`, `tools/src/**`;
+`apps.json`, `package_bundle.py`, `bundle_iso.py`, `bundle_tools.py`, `bundle_compliance.py`, `guest/**`, `tools/src/**`;
 `scripts/bench/windows/cuda/nvcuda.def`, `scripts/bench/cuda_min/cuda.h`, `scripts/bench/cup3.c`,
 `scripts/bench/cup8.c`, `archive/nvkvm/tests/mode2/cup2.c`. Pin/output/docs-only commits do not trigger a build.
 The explicit event guards already distinguish the jobs. Do not add `pull_request_target`. This PR does not
@@ -221,7 +223,8 @@ turn these triggers on or provision secrets.
 
 **DESIGN: optional OIDC presigner route, no Worker code change.** A future upload broker would validate GitHub's
 JWT issuer/audience, canonical repository, master ref, reviewed workflow identity and protected-environment
-subject, run identity and expiry. It would authorize only the two digest-derived keys, expected input hash,
+subject, run identity and expiry. It would authorize only the two ISO-derived keys and source-digest keys
+listed in the reviewed receipt, expected input hash,
 size and bounded multipart plan; sign the create-only condition; and return short-lived method-specific URLs
 for HEAD/GET, parts, completion and abort. Static R2 credentials stay at the broker. It must reject fork/PR/run
 credentials and arbitrary keys, expire unused uploads and bind retries to the same run. Current workflow
@@ -241,6 +244,92 @@ use, a separate reviewed read-route/helper change must map the committed digest 
 **DESIGN / migration:** this replaces the old GitHub-Releases bundle store
 `reindertpelsma/win-gpu-image-private-store`. That repository's other contents, including the setup cache and
 WinPE image, are a separate migration. No contents are moved or deleted by WB1.
+
+### 3.2 Licence inventory, distribution classes and source availability
+
+STATUS: CODE + DESIGN, 2026-11-07 (WB1 owner addition). Engineering checks and small fixtures exist;
+the full archive inventory and complete transitive Corresponding Source have not been audited here.
+Publication remains disabled. This section does not establish legal clearance for a public release.
+
+**CODE READ:** every build, including private builds, carries `LICENSES/<package>/<text sha256>`,
+`LICENSES/index.json` and generated `THIRD_PARTY_NOTICES.txt`. The index preserves original legal-text
+paths, upstream URLs, parent archive SHA-256, covered input and each text's SHA-256. Legal members of pinned
+ZIPs/wheels are read into memory using `zipfile`; application payloads are never extracted on the host.
+7-Zip legal texts are read from its exact pinned source tar using `tarfile`. Neither path executes vendor
+code. Whole-archive hashes transitively pin the contained texts; separate upstream licence downloads have
+their own URL/hash/size pins. Missing coverage for any binary input, an archive with no legal text and no
+pinned fallback, an invalid source pin or a source/binary version mismatch fails the build.
+
+**CODE READ:** notices list package, exact version, licence identifier, upstream project, conditions,
+exact wheel versions/identifiers, and source locations. Every ISO file in the external manifest has a
+machine-readable `licenses` list with package/component, version, identifier, upstream, `distribution`,
+conditions and mirrored source pins. Its metadata participates in the payload identity. Repository licence
+texts are in `LICENSES/kayfabe`; exact Zig/runtime notices are in `LICENSES/zig`.
+
+**CODE READ, engineering policy:** `compliance.distribution` in `manifest.json` controls this table.
+This is engineering support, not legal advice.
+
+| Packages | Class | Required handling |
+|---|---|---|
+| python_embed, llama_vulkan, qwen_gguf, vkpeak, hashcat, hf_model | `public-ok` | Retain pinned upstream/as-shipped licences and notices; inspect bundled dependency inventory before release. |
+| Blender 4.5.0, 7-Zip 26.04, clpeak_ocl 3.0.1 | `public-ok` | Unmodified upstream object code; exact source archives on ISO and mirrored beside it; retain notices and honor the source offer. Complete transitive source coverage still needs operator review. |
+| vulkan_rt | `conditions` | Retain VulkanRT-License.txt and copyrights; comply with the pinned LunarG Runtime redistribution terms. |
+| vc_redist | `conditions` | Comply with Microsoft terms for permitted redistribution, unmodified distributable code, notices and end-user restrictions; confirm applicability to the exact installer. |
+| hf_wheels | `conditions` | Includes MPL-2.0 certifi; source is not mirrored yet. Review its exact source/retention requirements and bundled notices before public distribution. |
+| cuda_demo_suite, cuda_cudart, cuda_nvrtc, pywheels | `private-only` | NVIDIA CUDA EULA components, including CUDA libraries inside torch wheels, require qualified licence review before public distribution. |
+| llama_cuda, clpeak_cuda, cuda_cccl | `private-only` | Conservatively apply the same rule to their CUDA runtime/EULA material; an open-source wrapper does not clear it. |
+
+**CODE READ:** `--public-only` refuses the entire requested selection if any selected package or dependency
+is outside `public-ok`; it never silently omits one. Consequently the default complete open selection is
+refused in this mode. For a limited reproduction, for example:
+
+```text
+python3 -I scripts/bench/windows/appmatrix/package_bundle.py check --only blender,sevenzip,clpeak_ocl --public-only
+```
+
+Use the same flags for fetch, verify and build. This subset is diagnostic media and cannot pass the full
+open-app gate or the canonical full-selection publisher. `verify-image --public-only` also checks receipt
+classes. A class records engineering policy, not a conclusion that every embedded component has been reviewed.
+
+**MEASURED, 2026-11-07:** the existing 7zr.exe SHA-256 matches the official 26.04 release byte-for-byte;
+its mutable download URL is replaced by that release's immutable URL. The original Visual C++ installer hash
+still matches; its PE FileVersion and ProductVersion are `14.44.35211.0` (read without execution). The pinned
+clpeak 3.0.1 upstream LICENSE contains GPLv3, contradicting the earlier Apache-2.0 label; both backend records
+are corrected and share its pinned source archive. No app definition or verdict rule changes.
+
+**MEASURED source downloads, 2026-11-07:** official Blender 4.5.0 source (85,059,376 bytes), official 7-Zip
+26.04 source (1,560,440 bytes), and upstream clpeak 3.0.1 source (2,335,991 bytes) were downloaded and SHA-256
+pinned in `compliance.sources`. Their URL, exact version, size, digest and retrieval date are in the manifest.
+They are copied unmodified into `SOURCE/<package>/<archive name>` on the ISO. This measures archive identity,
+not completeness of third-party dependency source or GPU functionality.
+
+**CODE READ / DESIGN:** the final uploader streams each source archive from the verified ISO and publishes
+it **before** the ISO/manifest under `winapps-open/source-<source sha256>.archive`, in the same dedicated
+bucket and prefix. Original archive names/format and keys are in the notices and receipt. Shared exact
+source is reused by digest across builds; conditional multipart completion never overwrites an existing key.
+Source failure stops object-code publication. Caller-presigned plans must include these exact source keys,
+not just the ISO and manifest. All multipart plans use the same bounded part size (at most 64 MiB). For source
+objects, both `x-amz-meta-image-sha256` and `x-amz-meta-inputs` contain the source digest, so recipes can reuse
+the same source object; the caller must set that metadata when pre-initiating a presigned upload.
+The future download route must provide equivalent source access at no extra
+charge alongside binary access, including for private recipients; a private bucket alone is not that route.
+
+**OWNER OBLIGATION / DESIGN:** the notices contain our written offer of Corresponding Source, valid for at
+least three years after our last distribution and as long as covered product support/spare parts are offered.
+It offers network access at no charge, or physical media at no more than the reasonable cost of conveying it;
+requests go to the distributor through the repository's issues page. It is **OUR obligation to keep the
+mirrored source available as long as we distribute the binary**, and to honor the offer for its full term.
+Do not expire these objects with binary cleanup, rely only on upstream URLs, or modify GPL object code.
+For designated-place downloads the intended mechanism is equivalent source access under
+[GPLv3 section 6(d)](https://www.gnu.org/licenses/gpl-3.0.html#section6), with this additional written offer;
+the source offer alone is not a substitute for operating the source download route. Read the exact
+[7-Zip distribution terms](https://github.com/ip7z/7zip/blob/26.04/DOC/License.txt) and shipped licences.
+
+**UNVERIFIED / release prerequisite:** a coordinator must run the full build, inspect its legal-text inventory
+(including native dependencies embedded in wheels and Blender), ensure all required Corresponding Source,
+build scripts, exceptions and notices are represented, and complete qualified review of restricted packages
+before public distribution. Merely pinning the main project's source does not establish transitive source
+completeness. No full bundle or live source/binary upload was performed in this lane.
 
 ## 4. Verdict rules (guest passes only)
 

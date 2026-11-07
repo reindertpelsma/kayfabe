@@ -17,6 +17,7 @@ import os
 from pathlib import Path
 import re
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.parse
@@ -26,6 +27,7 @@ import xml.etree.ElementTree as ET
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import package_bundle as B
+import bundle_compliance as C
 
 MIN_PART = 5 * 1024**2
 DEFAULT_PART = 64 * 1024**2
@@ -283,6 +285,7 @@ def publish(store, iso, receipt, state_path, part_size=DEFAULT_PART):
     iso_key, manifest_key = keys(digest)
     if Path(iso).stat().st_size != receipt["image"]["size"] or B.sha256(iso) != digest:
         raise PublishError("local ISO does not match receipt")
+    publish_sources(store, iso, receipt, state_path, part_size)
     multipart(store, iso, iso_key, digest, inputs, state_path, part_size)
     head = existing(store, manifest_key)
     if head is None:
@@ -301,6 +304,33 @@ def publish(store, iso, receipt, state_path, part_size=DEFAULT_PART):
     return iso_key, manifest_key
 
 
+def publish_sources(store, iso, receipt, state_path, part_size):
+    """Mirror exact sources BEFORE making object code available. Never overwrite.
+
+    Sources are streamed from the verified ISO into one ephemeral local file at
+    a time. Identical source hashes are shared across package/build versions;
+    their upload identity is the source hash, independent of an ISO's input hash.
+    Only resume IDs/hashes are persisted. The existing multipart code handles
+    arbitrarily large source archives with the same bounded memory as the ISO.
+    """
+    expected = [dict(package=p["id"], path=f"SOURCE/{p['id']}/{s['name']}", key=C.source_key(s), **s)
+                for p in sorted(receipt["packages"], key=lambda p: p["id"]) for s in p["compliance"]["sources"]]
+    if receipt.get("sources") != expected: raise PublishError("source mirror coverage mismatch")
+    done = set()
+    with B.bundle_iso.Reader(iso) as image, tempfile.TemporaryDirectory(prefix="source-mirror-", dir=Path(iso).parent) as tmp:
+        for source in expected:
+            key = source["key"]
+            if key in done: continue
+            path = Path(tmp) / "source.archive"
+            with path.open("wb") as out:
+                for block in image.chunks(source["path"]): out.write(block)
+            if path.stat().st_size != source["size"] or B.sha256(path) != source["sha256"]:
+                raise PublishError("source archive does not match pin")
+            state = Path(state_path).with_name("source-" + source["sha256"] + ".multipart.json")
+            multipart(store, path, key, source["sha256"], source["sha256"], state, part_size)
+            path.unlink(); done.add(key)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--out", type=Path, required=True)
@@ -315,7 +345,8 @@ def main(argv=None):
         B.verify_image(a.out / "winapps-open.iso", receipt)
         if os.environ.get("BUNDLE_UPLOAD_URLS"):
             plans = json.loads(os.environ["BUNDLE_UPLOAD_URLS"])
-            if set(plans) != set(keys(receipt["image"]["sha256"])): raise PublishError("presigned plan key mismatch")
+            allowed_keys = set(keys(receipt["image"]["sha256"])) | {s["key"] for s in receipt["sources"]}
+            if set(plans) != allowed_keys: raise PublishError("presigned plan key mismatch")
             store = PresignedStore(plans)
             part_size = plans[keys(receipt["image"]["sha256"])[0]]["part_size"]
         else:

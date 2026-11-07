@@ -3,7 +3,8 @@
 """Shell-free open Windows bundle. Run with python3 -I package_bundle.py --help.
 
 Only urllib downloads and the pinned Zig executable are used on the packaging
-host. App archives/installers are NEVER extracted here. No upload capability.
+host. App payloads are NEVER extracted here; only licence texts are read from
+verified archives into LICENSES/. No upload capability.
 The compiler release itself is unpacked by Python (bundle_tools.py).
 """
 import argparse
@@ -23,11 +24,12 @@ import urllib.request
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))  # sibling modules also work under python -I
 import bundle_iso
+import bundle_compliance
 
 OPEN_PACKAGES = frozenset("cuda_demo_suite python_embed pywheels llama_cuda llama_vulkan qwen_gguf vulkan_rt vkpeak blender clpeak_ocl clpeak_cuda hashcat sevenzip cuda_cudart cuda_cccl vc_redist hf_wheels hf_model cuda_nvrtc".split())
 STAGE_MODES = frozenset(("unzip", "python_embed", "wheels", "copy", "7z", "msi_admin", "installer"))
 UA = "kayfabe-bundle/1 (+https://github.com/reindertpelsma/kayfabe)"
-BUILDER_VERSION = 2
+BUILDER_VERSION = 3
 
 
 def guard(env=None, allow_ci=False):
@@ -72,7 +74,7 @@ def validate_pin(package, fl):
         raise ValueError(f"package {package}: {e}") from e
 
 
-def select_packages(man, profile, only=None):
+def select_packages(man, profile, only=None, public_only=False):
     allowed = profile.get("open_packages", [])
     if not allowed or len(set(allowed)) != len(allowed):
         raise ValueError("open_packages must be nonempty and unique")
@@ -115,6 +117,7 @@ def select_packages(man, profile, only=None):
         raise ValueError("unsupported manifest schema")
     for pid in sorted(want):
         visit(pid)
+    bundle_compliance.validate(selected, validate_pin, public_only)
     return selected
 
 
@@ -218,7 +221,7 @@ def repo_files(root=HERE):
         files[p.relative_to(root).as_posix()] = p.read_bytes().replace(b"\r\n", b"\n")
     files["apps.json"] = canonical(load(root / "apps.json"))
     for name in ("LICENSE", "LICENSE-APACHE", "LICENSE-GPL", "THIRD_PARTY_NOTICES.md"):
-        files["licenses/kayfabe/" + name] = (root.parents[3] / name).read_bytes().replace(b"\r\n", b"\n")
+        files["LICENSES/kayfabe/" + name] = (root.parents[3] / name).read_bytes().replace(b"\r\n", b"\n")
     return files
 
 
@@ -233,7 +236,7 @@ def iso_input_hash(packages, toolchain, open_packages, root=HERE):
     import bundle_tools
     root = Path(root)
     contents = repo_files(root)
-    for name in ("package_bundle.py", "bundle_iso.py", "bundle_tools.py"):
+    for name in ("package_bundle.py", "bundle_iso.py", "bundle_tools.py", "bundle_compliance.py"):
         contents["recipe/" + name] = (root / name).read_bytes().replace(b"\r\n", b"\n")
     for name in bundle_tools.SOURCES:
         contents["source/" + name] = (root.parents[3] / name).read_bytes().replace(b"\r\n", b"\n")
@@ -269,8 +272,11 @@ def build_image(packages, downloads, tools, output, toolchain, root=HERE, probe_
             path = f"pkg/{p['id']}/{fl['name']}"
             verify_file(p["id"], fl, files[path])
             expected[path] = {k: fl[k] for k in ("sha256", "size")}
+    compliance_files, license_records, sources = bundle_compliance.stage(packages, downloads)
+    files.update(compliance_files)
     files.update(repo_files(root))
-    files.update({"tools/" + name: Path(path) for name, path in sorted(tools.items())})
+    files.update({("LICENSES/zig/" + name[len("licenses/zig/"):] if name.startswith("licenses/zig/") else "tools/" + name):
+                  Path(path) for name, path in sorted(tools.items())})
     files["stage.json"] = canonical(stage_table(packages))
     # No wall clock, host paths, Python version or host-specific toolchain selection in ISO.
     inputs = iso_input_hash(packages, toolchain, open_packages if open_packages is not None else [p["id"] for p in packages], root)
@@ -278,23 +284,26 @@ def build_image(packages, downloads, tools, output, toolchain, root=HERE, probe_
     for name, source in files.items():
         if name not in expected:
             expected[name] = dict(sha256=hashlib.sha256(source).hexdigest(), size=len(source)) if isinstance(source, bytes) else dict(sha256=sha256(source), size=source.stat().st_size)
+        own_licenses = bundle_compliance.TOOL_LICENSE if name.startswith(("tools/", "LICENSES/zig/")) else bundle_compliance.REPO_LICENSE
+        expected[name]["licenses"] = license_records.get(name, own_licenses)
     ident = identity(expected)
     files["KFAPPS.ID"] = (ident + "\n").encode("ascii")
     expected["KFAPPS.ID"] = dict(sha256=hashlib.sha256(files["KFAPPS.ID"]).hexdigest(), size=len(files["KFAPPS.ID"]))
+    expected["KFAPPS.ID"]["licenses"] = bundle_compliance.REPO_LICENSE
     iso = output / "winapps-open.iso"
     temp = output / "winapps-open.pending.iso"
     try:
         actual = bundle_iso.write_image(files, temp)
         # Compare hashes of bytes actually copied, catching source races/corruption.
-        if any(actual[k] != v for k, v in expected.items()):
+        if any(actual[k] != {field: v[field] for field in ("sha256", "size")} for k, v in expected.items()):
             raise ValueError("input changed during image assembly")
-        receipt = dict(schema=1, inputs=inputs, packages=packages, files=expected,
+        receipt = dict(schema=1, inputs=inputs, packages=packages, files=expected, sources=sources,
             image=dict(file=iso.name, label="KFAPPS", format="iso9660+joliet", identity=ident,
                        size=temp.stat().st_size, sha256=sha256(temp)),
             toolchain=toolchain, packaging_utc=datetime.datetime.now(datetime.timezone.utc).isoformat(),
             python_version=sys.version, writer="bundle_iso.py/v1", guest_root="C:\\kfapps")
         receipt["recipe_sha256"] = {name: hashlib.sha256((HERE / name).read_bytes().replace(b"\r\n", b"\n")).hexdigest()
-                                     for name in ("package_bundle.py", "bundle_iso.py", "bundle_tools.py")}
+                                     for name in ("package_bundle.py", "bundle_iso.py", "bundle_tools.py", "bundle_compliance.py")}
         if probe_receipt is not None:
             receipt["probe_build"] = probe_receipt
         verify_image(temp, receipt)
@@ -306,7 +315,7 @@ def build_image(packages, downloads, tools, output, toolchain, root=HERE, probe_
     return receipt
 
 
-def verify_image(iso, receipt):
+def verify_image(iso, receipt, public_only=False):
     if Path(iso).stat().st_size != receipt["image"]["size"] or sha256(iso) != receipt["image"]["sha256"]:
         raise ValueError("image size/sha256 mismatch")
     expected = receipt["files"]
@@ -316,13 +325,28 @@ def verify_image(iso, receipt):
         if "KFAPPS.ID" not in expected or set(r.files) != set(expected):
             raise ValueError("image file list mismatch")
         got = r.records()
-        for name, pin in expected.items():
+        for name, record in expected.items():
+            pin = {field: record[field] for field in ("sha256", "size")}
             if got[name] != pin:
                 raise ValueError("image file size/sha256 mismatch: " + name)
+            if not record.get("licenses"):
+                raise ValueError("missing per-file licence record: " + name)
         if b"".join(r.chunks("KFAPPS.ID")) != (identity(expected) + "\n").encode("ascii"):
             raise ValueError("KFAPPS.ID mismatch")
-        if receipt.get("inputs") != json.loads(b"".join(r.chunks("bundle.inputs.json"))).get("inputs"):
+        embedded = json.loads(b"".join(r.chunks("bundle.inputs.json")))
+        if receipt.get("inputs") != embedded.get("inputs"):
             raise ValueError("ISO input hash mismatch")
+        if receipt["packages"] != embedded["packages"] or receipt["toolchain"] != embedded["toolchain"]:
+            raise ValueError("ISO package/toolchain record mismatch")
+        bundle_compliance.validate(receipt["packages"], validate_pin, public_only)
+        source_records = [dict(package=p["id"], path=f"SOURCE/{p['id']}/{s['name']}", key=bundle_compliance.source_key(s), **s)
+                          for p in sorted(embedded["packages"], key=lambda p: p["id"]) for s in p["compliance"]["sources"]]
+        if receipt.get("sources") != source_records:
+            raise ValueError("source mirror coverage mismatch")
+        for source in receipt.get("sources", []):
+            if (source["path"] not in expected or source["sha256"] != expected[source["path"]]["sha256"] or
+                    source["size"] != expected[source["path"]]["size"] or source["key"] != bundle_compliance.source_key(source)):
+                raise ValueError("source mirror receipt mismatch")
 
 
 def main(argv=None):
@@ -334,28 +358,36 @@ def main(argv=None):
     ap.add_argument("--dl", type=Path, default=Path("out/downloads"))
     ap.add_argument("--out", type=Path, default=Path("out"))
     ap.add_argument("--only", help="comma-separated open package IDs (dependencies included)")
+    ap.add_argument("--public-only", action="store_true", help="refuse every selected package outside public-ok (never silently drop packages)")
     ap.add_argument("--iso", type=Path, help="image for verify-image")
     ap.add_argument("--receipt", type=Path, help="build receipt for verify-image")
     args = ap.parse_args(argv)
     try:
         guard(allow_ci=args.ci_build or args.command == "input-hash")
         if args.command == "input-hash":
-            print("inputs=" + input_hash(load(args.manifest), load(args.profiles)))
+            man, profile = load(args.manifest), load(args.profiles)
+            packages = select_packages(man, profile, args.only.split(",") if args.only is not None else None, args.public_only)
+            import bundle_tools
+            print("inputs=" + iso_input_hash(packages, bundle_tools.check_toolchain(man.get("bundle_toolchain", {})), profile["open_packages"]))
             return 0
         # A single HTTPS-only opener prevents redirect downgrade, while keeping
         # the urllib call easy to fake in offline tests.
         urllib.request.install_opener(urllib.request.build_opener(_HTTPSRedirect()))
         if args.command == "verify-image":
-            verify_image(args.iso or args.out / "winapps-open.iso", load(args.receipt or args.out / "winapps-open.manifest.json"))
+            verify_image(args.iso or args.out / "winapps-open.iso", load(args.receipt or args.out / "winapps-open.manifest.json"), args.public_only)
         else:
             man, profile = load(args.manifest), load(args.profiles)
-            packages = select_packages(man, profile, args.only.split(",") if args.only is not None else None)
+            packages = select_packages(man, profile, args.only.split(",") if args.only is not None else None, args.public_only)
             import bundle_tools
             toolchain = bundle_tools.check_toolchain(man.get("bundle_toolchain", {}))
             if args.command == "layout":
                 paths = set(package_files(packages, args.dl)) | set(repo_files()) | {"KFAPPS.ID", "stage.json", "bundle.inputs.json"}
-                paths |= {"tools/" + n for n in bundle_tools.TOOL_NAMES + bundle_tools.NOTICE_NAMES}
+                paths |= {"tools/" + n for n in bundle_tools.TOOL_NAMES}
+                paths |= {"LICENSES/zig/" + n[len("licenses/zig/"):] for n in bundle_tools.NOTICE_NAMES}
                 print("\n".join(sorted(paths)))
+                print("COMPLIANCE LICENSES/<package>/<text-sha256>, LICENSES/index.json, THIRD_PARTY_NOTICES.txt")
+                for pid, pin, relative in bundle_compliance.inputs(packages):
+                    print(f"COMPLIANCE_INPUT {pid}/{pin['name']} bytes={pin['size']}")
                 host, pin = bundle_tools.host_pin(toolchain)
                 print(f"DOWNLOAD_ONLY _toolchain/{pin['name']} host={host} (compiler; not on ISO)")
             elif args.command in ("fetch", "verify", "build"):
@@ -366,6 +398,11 @@ def main(argv=None):
                             fetch_file(p["id"], fl, dest)
                         else:
                             verify_file(p["id"], fl, dest)
+                for pid, fl, relative in bundle_compliance.inputs(packages):
+                    if args.command == "fetch":
+                        fetch_file(pid, fl, args.dl / relative)
+                    else:
+                        verify_file(pid, fl, args.dl / relative)
                 host, pin = bundle_tools.host_pin(toolchain)
                 archive = args.dl / "_toolchain" / pin["name"]
                 if args.command == "fetch":
