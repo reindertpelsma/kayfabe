@@ -156,8 +156,8 @@ CODE READ: `python3 scripts/ci/no_patch_check.py` prints every patch artifact's 
 and explicit opt-in or historical-record pointer from `scripts/ci/no-patch-inventory.json`.
 New artifacts, unreviewed application/reference scripts, changed review hashes, missing scope
 pointers, missing stock entrypoints, and stock paths reaching a reviewed applicator fail.
-The public manual must qualify the stock-driver statement with “by default” and disclose
-“opt-in” exceptions. The absolute README wording remains an owner edit; the ledger retains
+The public manual must affirm that stock host and guest NVIDIA drivers are unmodified
+“by default” and disclose “opt-in” exceptions. The absolute README wording remains an owner edit; the ledger retains
 that wording issue. Custom QEMU device integration is documented separately from optional
 diagnostic QEMU patching in `docs/howto/installing.md`.
 

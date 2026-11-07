@@ -148,7 +148,11 @@ def cases():
         ),
         (
             "patch-default-qualification-ignored",
-            changed("no_patch_check.py", 'if "by default" not in text:', "if False:"),
+            changed(
+                "no_patch_check.py",
+                "if EXPECTED_DEFAULT not in qualified:",
+                "if False:",
+            ),
         ),
         (
             "patch-exceptions-omitted",

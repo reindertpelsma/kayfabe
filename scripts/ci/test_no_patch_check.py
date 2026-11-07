@@ -221,7 +221,10 @@ class Policy(unittest.TestCase):
         self.assertIn("by default", self.errors())
 
     def test_opt_in_wording_must_be_present(self):
-        self.write("docs/howto/installing.md", "Stock drivers by default.\n")
+        self.write(
+            "docs/howto/installing.md",
+            "Stock host and guest NVIDIA drivers are unmodified by default.\n",
+        )
         self.assertIn("opt-in", self.errors())
 
     def test_unqualified_stock_claim_fails(self):
@@ -234,9 +237,23 @@ class Policy(unittest.TestCase):
     def test_exceptions_cannot_be_omitted(self):
         self.write(
             "docs/howto/installing.md",
-            "Drivers are unmodified by default; there are no exceptions.\n",
+            "Stock host and guest NVIDIA drivers are unmodified by default; there are no exceptions.\n",
         )
         self.assertIn("opt-in", self.errors())
+
+    def test_explicit_default_patching_is_rejected(self):
+        self.write(
+            "docs/howto/installing.md",
+            "Stock host and guest NVIDIA drivers are patched by default. Other patches are opt-in.\n",
+        )
+        self.assertIn("by default", self.errors())
+
+    def test_opt_in_word_does_not_excuse_required_host_patch(self):
+        self.write(
+            "docs/howto/installing.md",
+            "Host drivers require a patch by default; the guest patch is opt-in.\n",
+        )
+        self.assertIn("by default", self.errors())
 
     def test_missing_policy_doc_fails(self):
         (self.root / "docs/howto/installing.md").unlink()

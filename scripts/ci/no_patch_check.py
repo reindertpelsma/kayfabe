@@ -18,6 +18,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[2]
 INVENTORY = Path("scripts/ci/no-patch-inventory.json")
+EXPECTED_DEFAULT = "stock host and guest nvidia drivers are unmodified by default"
 # Mutation/test programs edit their own scratch sources, not installed drivers.
 SELF = {"scripts/ci/no_patch_check.py", "scripts/ci/release_checks_mutants.py"}
 APPLICATION = re.compile(
@@ -90,8 +91,11 @@ def validate(root: Path, inventory: dict) -> list[str]:
         errors.append("missing policy document")
     else:
         text = doc.read_text().lower()
-        if "by default" not in text:
-            errors.append("policy must qualify stock drivers with 'by default'")
+        qualified = " ".join(re.sub(r"[`*_]", "", text).split())
+        if EXPECTED_DEFAULT not in qualified:
+            errors.append(
+                "policy must state stock host and guest NVIDIA drivers are unmodified by default"
+            )
         if "opt-in" not in text:
             errors.append("policy must disclose opt-in patches")
     sources = script_sources(root)
