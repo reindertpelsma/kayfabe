@@ -26,6 +26,36 @@
       "maxInetUsdPerGb": 0.005
     }
   },
+  "preferredHostQuality": {
+    "small": {
+      "status": "PROPOSED",
+      "preferredMedianRatio": 1.0,
+      "preferredCpuCores": 12,
+      "preferredDiskMbps": 150,
+      "preferredDownMbps": 300
+    },
+    "middle": {
+      "status": "PROPOSED",
+      "preferredMedianRatio": 1.0,
+      "preferredCpuCores": 12,
+      "preferredDiskMbps": 150,
+      "preferredDownMbps": 300
+    },
+    "large": {
+      "status": "PROPOSED",
+      "preferredMedianRatio": 1.0,
+      "preferredCpuCores": 12,
+      "preferredDiskMbps": 150,
+      "preferredDownMbps": 300
+    },
+    "adhoc": {
+      "status": "PROPOSED",
+      "preferredMedianRatio": 1.0,
+      "preferredCpuCores": 12,
+      "preferredDiskMbps": 150,
+      "preferredDownMbps": 300
+    }
+  },
   "payloadStageResources": {
     "setup_cache": {
       "profiles": [

@@ -11,6 +11,7 @@ import {
   budgetRefuse,
   configuration,
   teardownConfiguration,
+  spendingHeadroom,
   numericId,
   hexSha,
   localIdentity,
@@ -1282,6 +1283,24 @@ export function createService({
           leg.releaseMatrix,
         ),
       );
+    const credit = await vast.credit();
+    const headroom = spendingHeadroom(cfg, {
+      budget: await ledger.budgetSummary(cfg, now()),
+      credit,
+      profile,
+    });
+    const affordable = evaluation.allowed.filter((candidate) => {
+      if (!(candidate.pricing.total <= headroom)) return false;
+      try {
+        costGuard?.(candidate.pricing.total);
+        return true;
+      } catch (error) {
+        if (error instanceof BrokerError && error.state === 'UNAVAILABLE_BUDGET') return false;
+        throw error;
+      }
+    });
+    // Preserve the established budget diagnostic when no candidate can fit.
+    if (affordable.length) evaluation.allowed = affordable;
     const chosen = await offers.select(evaluation, cfg, ledger, profile, preferences, {
         tierName,
         ...(leg?.die ? { die: leg.die } : {}),
@@ -1289,8 +1308,7 @@ export function createService({
         avoidHosts: leg?.avoidHosts ?? [],
       }),
       offer = chosen.offer,
-      cost = offer.pricing.total,
-      credit = await vast.credit();
+      cost = offer.pricing.total;
     try {
       if (costGuard) costGuard(cost);
       await ledger.budgets(cfg, now(), cost, null, {
@@ -1324,6 +1342,7 @@ export function createService({
               stages: leg.stages,
             }
           : { source: 'github' }),
+        offerFacts: structuredClone(offer.offer_facts ?? null),
         die: offer.die,
         country: offer.country,
         geolocation:
@@ -1627,7 +1646,7 @@ export function createService({
     await ledger.put('batch-seq', seq);
     const id = '8' + String(now()).padStart(15, '0') + String(seq % 1000).padStart(3, '0');
     const legs = [];
-    const leg = (family, die, windowsRuns, releaseMatrix) => {
+    const leg = (family, die, windowsRuns, releaseMatrix, plannedCostUsd) => {
       const n = legs.length + 1;
       legs.push({
         seq: n,
@@ -1635,6 +1654,7 @@ export function createService({
         family,
         die,
         windowsRuns,
+        plannedCostUsd: plannedCostUsd ?? 0,
         ...(releaseMatrix ? { releaseMatrix } : {}),
         state: 'PENDING',
         avoidMachines: [],
@@ -1645,7 +1665,7 @@ export function createService({
     if (request.tier === 'large') {
       for (const f of plan.families)
         for (const c of f.cells)
-          for (const l of c.legs) leg(f.family, c.die, l.windows_runs, l.release_matrix);
+          for (const l of c.legs) leg(f.family, c.die, l.windows_runs, l.release_matrix, l.est_usd);
     } else leg(request.die ? familyOf(request.die, cfg) : null, request.die ?? null, 1);
     const batch = {
       id,
@@ -1780,6 +1800,9 @@ export function createService({
       try {
         if (batch.tier === 'large') market ??= await releaseMarket(vast, cfg);
         const spent = await batchSpend(batch);
+        const pendingReservation = batch.legs
+          .filter((other) => other.key !== l.key && other.state === 'PENDING')
+          .reduce((sum, other) => sum + (other.plannedCostUsd ?? 0), 0);
         const started = await admit({
           key: l.key,
           target: {
@@ -1810,7 +1833,7 @@ export function createService({
             batch.costCapUsd === null
               ? undefined
               : (cost) => {
-                  if (spent + cost > batch.costCapUsd)
+                  if (spent + pendingReservation + cost > batch.costCapUsd)
                     budgetRefuse('release-cost-cap', {
                       cost_usd: cost,
                       spent_usd: spent,

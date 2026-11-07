@@ -53,13 +53,14 @@ class Bucket {
   }
 }
 
-async function harness({ store = true, logs = true, bucket = new Bucket() } = {}) {
+async function harness({ store = true, logs = true, bucket = new Bucket(), offerPatch = {} } = {}) {
   const db = store ? new FakeD1() : null;
   const extra = {
     ...(store ? { DB: db, ROW_TAG_KEY: TAG_KEY } : {}),
     ...(logs ? { LOGS_BUCKET: bucket } : {}),
   };
   const h = await setup(extra);
+  Object.assign(h.cloud.offer, offerPatch);
   const base = h.cloud.fetch;
   h.cloud.fetch = async (input, init = {}) => {
     const u = new URL(String(input));
@@ -1136,3 +1137,26 @@ test('the payload tier file and the docs name the same box variable', () => {
   );
   assert.match(readme, /KF_RUN_REPORT/);
 });
+
+// FALSIFIER: the publisher loses the admission snapshot, or guest report fields
+// replace provider performance facts before R2/D1 publication.
+for (const quality of ['preferred', 'floor'])
+  test(
+    'preferred offer facts publish authoritative snapshot ' + quality,
+    { skip: d1Skip },
+    async () => {
+      const { h, db, bucket, record } = await finishedRun(
+        { offerPatch: quality === 'floor' ? { disk_bw: 100 } : {} },
+        { report: goodReport({ offer_facts: { performance_tier: 'guest-forged' } }) },
+      );
+      assert.equal(record.offerFacts.performance_tier, quality);
+      const current = await h.storage.get('record:123-1');
+      current.offerFacts = { performance_tier: 'changed-after-settlement' };
+      await h.storage.put('record:123-1', current);
+      await h.service.publishRuns();
+      const doc = JSON.parse(bucket.text('vast-123-1-0/report.json'));
+      assert.deepEqual(doc.offer_facts, record.offerFacts);
+      const stored = JSON.parse(db.rows('SELECT report_json FROM ci_run_reports')[0].report_json);
+      assert.deepEqual(stored.offer_facts, record.offerFacts);
+    },
+  );

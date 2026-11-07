@@ -306,6 +306,7 @@ export class Ledger {
           chunks: record.plogChunks ?? 0,
           dropped: record.plogDropped ?? 0,
           rchunks: record.runReport?.chunks ?? 0,
+          offerFacts: structuredClone(record.offerFacts ?? null),
           leg: record.providerRetries ?? 0,
           key: record.key,
           run: record.run,

@@ -68,6 +68,8 @@ jobs:
           node ci/vast-broker/release-matrix-mutants.mjs
           python3 scripts/ci/profile_resources.py
           node ci/vast-broker/profile-resources-mutants.mjs
+          # Preferred host quality, affordable fallback and offer-facts snapshots.
+          node ci/vast-broker/preferred-hosts-mutants.mjs
           # Evidence upload route mutants (2026-11-06): each must fail at least two tests.
           node ci/vast-broker/evidence-mutants.mjs
           # Public log, run report and publisher mutants (2026-11-07): each must fail at least two tests.

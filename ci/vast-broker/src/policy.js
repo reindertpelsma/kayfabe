@@ -405,6 +405,24 @@ export function configuration(env) {
     )
   )
     refuse('CONFIG_VAR:RELEASE_STAGES', 503);
+  for (const name of ['small', 'middle', 'large', 'adhoc']) {
+    const preferred = DEFAULTS.preferredHostQuality[name];
+    if (
+      !preferred ||
+      !['PROPOSED', 'APPROVED', 'MEASURED'].includes(preferred.status) ||
+      Object.keys(preferred).sort().join(',') !==
+        'preferredCpuCores,preferredDiskMbps,preferredDownMbps,preferredMedianRatio,status' ||
+      ![
+        'preferredMedianRatio',
+        'preferredCpuCores',
+        'preferredDiskMbps',
+        'preferredDownMbps',
+      ].every(
+        (key) => Number.isFinite(preferred[key]) && preferred[key] > 0 && preferred[key] <= 1e6,
+      )
+    )
+      refuse('CONFIG_VAR:PREFERRED_HOST_QUALITY', 503);
+  }
   cfg.quality = {};
   for (const profile of ['check', 'sweep', 'release']) {
     const q = data(profile.toUpperCase() + '_HOST_QUALITY', DEFAULTS.quality);
@@ -531,15 +549,16 @@ export function gpuClass(offer, cfg) {
   return rules[0]?.die ?? 'CC_' + offer.compute_cap / 10;
 }
 // Resource profiles are execution tiers; check/sweep/release remain budget classes.
+export const resourceProfileName = (profile, tierName) =>
+  profile === 'release'
+    ? 'large'
+    : profile === 'sweep'
+      ? 'adhoc'
+      : tierName === 'middle'
+        ? 'middle'
+        : 'small';
 export function resourceCaps(cfg, profile = cfg.profile ?? 'check', tierName = cfg.tierName) {
-  const name =
-    profile === 'release'
-      ? 'large'
-      : profile === 'sweep'
-        ? 'adhoc'
-        : tierName === 'middle'
-          ? 'middle'
-          : 'small';
+  const name = resourceProfileName(profile, tierName);
   const base = DEFAULTS.payloadProfiles[name];
   return {
     ...base,
@@ -559,6 +578,35 @@ export function applyResourceProfile(cfg, profile, tierName) {
   cfg.maxInet = r.maxInetUsdPerGb;
   return cfg;
 }
+// Provider offer facts, not benchmark evidence. Thresholds remain proposed data.
+export function offerPerformanceFacts(offer, cfg, profile, median) {
+  const resourceProfile = resourceProfileName(profile, cfg.tierName);
+  const preferred = DEFAULTS.preferredHostQuality[resourceProfile];
+  const floor = cfg.quality[profile];
+  const ratio = offer.dlperf / median;
+  const enough = (key, value) => Number.isFinite(offer[key]) && offer[key] >= value;
+  const isPreferred =
+    Number.isFinite(ratio) &&
+    ratio >= Math.max(floor.medianRatio, preferred.preferredMedianRatio) &&
+    enough('cpu_cores_effective', Math.max(floor.cores, preferred.preferredCpuCores)) &&
+    enough('disk_bw', Math.max(floor.diskMbps, preferred.preferredDiskMbps)) &&
+    enough('inet_down', Math.max(floor.downMbps, preferred.preferredDownMbps));
+  const finite = (v) => (Number.isFinite(v) && v >= 0 && v <= 1e15 ? v : null);
+  return {
+    source: 'provider_offer',
+    resource_profile: resourceProfile,
+    dlperf: finite(offer.dlperf),
+    die_median_dlperf: finite(median),
+    median_ratio: finite(ratio),
+    cpu_cores_effective: finite(offer.cpu_cores_effective),
+    disk_bw: finite(offer.disk_bw),
+    inet_down: finite(offer.inet_down),
+    performance_tier: isPreferred ? 'preferred' : 'floor',
+    thresholds: { ...preferred },
+  };
+}
+export const performanceRank = (offer) =>
+  offer.offer_facts?.performance_tier === 'preferred' ? 0 : 1;
 export function offerPrice(offer, cfg, profile = cfg.profile ?? 'check') {
   const resources = resourceCaps(cfg, profile);
   for (const key of ['dph_base', 'dph_total', 'storage_cost', 'inet_down_cost', 'inet_up_cost'])
@@ -619,6 +667,16 @@ export function profileCaps(cfg, profile) {
     hard: cfg.hardRelease,
     dies: cfg.releaseAdmitDies,
   };
+}
+// Candidate ordering uses the same spending bounds; ledger admission rechecks them.
+export function spendingHeadroom(cfg, { budget, credit, profile = cfg.profile ?? 'check' } = {}) {
+  const caps = profileCaps(cfg, profile);
+  return Math.min(
+    caps.dailyUsd - (budget?.profiles?.[profile]?.daily_usd ?? 0),
+    cfg.accountDaily - (budget?.daily_usd ?? 0),
+    cfg.rolling - (budget?.rolling_usd ?? 0),
+    ...(credit === undefined ? [] : [credit - cfg.reserve - (budget?.outstanding_usd ?? 0)]),
+  );
 }
 export function offerRejections(
   offer,
