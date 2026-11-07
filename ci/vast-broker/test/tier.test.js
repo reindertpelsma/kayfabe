@@ -71,6 +71,19 @@ test('profile table: check is the Windows master gate, sweep is Linux-only, rele
   assert.ok(Object.isFrozen(TIERS) && Object.values(TIERS).every(Object.isFrozen));
 });
 
+test('KF_WINAPPS is sent only when asked for, only with the Windows stage, only for a named profile', () => {
+  // today's callers pass nothing: no box sees the field
+  for (const p of ['check', 'sweep', 'release']) assert.ok(!('KF_WINAPPS' in tierEnvironment(p)), p);
+  assert.deepEqual(tierEnvironment('check', { winApps: 'small' }), {
+    KF_MERGE_WINDOWS: '1',
+    KF_WINAPPS: 'small',
+  });
+  assert.equal(tierEnvironment('release', { winApps: 'full' }).KF_WINAPPS, 'full');
+  assert.throws(() => tierEnvironment('sweep', { winApps: 'small' }), /winapps/);
+  for (const bad of ['', 'huge', 'SMALL', 'small:mid', null, 1])
+    assert.throws(() => tierEnvironment('check', { winApps: bad }), /winapps/, String(bad));
+});
+
 test('per-profile hard limits: check 300 min by default, sweep min(180, check) unless set', () => {
   assert.equal(DEFAULTS.hardMinutes, 300);
   assert.equal(DEFAULTS.sweepHardMinutes, 180);

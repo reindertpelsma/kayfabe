@@ -99,6 +99,13 @@ ssh <alias> 'cat /root/prov/<tag>.log'           # V3_GATES_SUMMARY / KF3_RC / F
   *[2026-11-03]* The gate leaves no QEMU or `win_vm.sh run` loop behind (the teardown writes `run/stop-requested` first),
   reads a dead guest's reset counters from a post-mortem boot of the same overlay without kf3, and counts a WER
   re-submission of an old report as `livekernelevent_stale` (never gating). First Turing PASS: `traces/turing_boot_20261103/`.
+- *[2026-11-07, DESIGN + CODE; first run `traces/winapps_20261107/`]* The Windows apps stage: `bash scripts/bench/box/windows_apps.sh <tag>`
+  after a `WINDOWS_GATE_PASS` of the same tag (`KF_WINAPPS_PROFILE=small|mid|full|ids:a,b`, `KF_WINAPPS_ISO=<file>` for an app disk
+  that is already on the box). It boots fresh guests that are overlays of the gate's overlay, with the app disk on AHCI and the guest
+  offline, runs the profile's apps (`appmatrix/winapps.py --vm winvm`), grades them (`appmatrix/grade.py`) and ends in one of
+  `WINAPPS_PASS` (0), `WINAPPS_FAIL diag=KAYFABE` (1), `WINAPPS_RETRY class=...` (3, never a pass) or `WINAPPS_REFUSED` (2), then
+  `WINAPPS_EXIT rc=N`. Log `<prov>/<tag>_winapps.log`, evidence `<prov>/<tag>_winapps.tgz`. A box never fetches an app from a vendor:
+  the disk comes from the R2 copy (`docs/DOWNLOADS.md`, "Windows app bundle") or by hand. Design: `docs/design/V3_WINDOWS_APPS_GATE.md`.
 - A merge to master needs `V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS` (2026-10-10: `gate10=FALLBACK` = host RM refused all small micro reservations by a refusal status AND the probe proved a per-2-MiB-leaf reservation works at the flat FB alias, accepted but loud; `gate10=FAIL` never), `KF3_RC=0`,
   `FAST_SUITE_PASS=30` and `BIRTH_CENSUS_OK` on the **exact revision** promoted (docs-only commits on
   top are fine; say so). *[2026-10-03, `v3-sec-nonpriv`]* `BIRTH_CENSUS_OK` (`birth_census.sh`,

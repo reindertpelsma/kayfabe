@@ -1,0 +1,139 @@
+{
+ "schema": 1,
+ "status": "LIVE, 2026-11-07. Read by gate_profiles.py (box script windows_apps.sh); tests/test_gate_profiles.py checks it against apps.json and manifest.json.",
+ "open_packages": [
+  "cuda_demo_suite",
+  "python_embed",
+  "pywheels",
+  "llama_cuda",
+  "llama_vulkan",
+  "qwen_gguf",
+  "vulkan_rt",
+  "vkpeak",
+  "blender",
+  "clpeak_ocl",
+  "clpeak_cuda",
+  "hashcat",
+  "sevenzip",
+  "cuda_cudart",
+  "cuda_cccl",
+  "vc_redist",
+  "hf_wheels",
+  "hf_model",
+  "cuda_nvrtc"
+ ],
+ "owner_decision": {
+  "packages": {
+   "ffmpeg": "GPL-3.0 build kept out of our storage (docs/DOWNLOADS.md); the pinned BtbN URL answers 404 (checked 2026-11-07): needs a new pin",
+   "gravitymark": "Tellusim freeware EULA: free to download, redistribution not granted",
+   "furmark2": "Geeks3D freeware licence: EULA unread, redistribution not granted",
+   "gputest": "Geeks3D freeware licence: redistribution not granted",
+   "vulkan_sdk": "LunarG SDK installer: used locally only, not redistributed"
+  },
+  "apps": [
+   "d3d11va_h264",
+   "dxva2_h264",
+   "edge_video_h264",
+   "edge_video_vp9",
+   "furmark_gl_bench",
+   "furmark_gl_stress",
+   "furmark_glinfo",
+   "furmark_knot_gl",
+   "furmark_vk_bench",
+   "furmark_vkinfo",
+   "gputest_fur",
+   "gputest_gi",
+   "gputest_pixmark_piano",
+   "gputest_plot3d",
+   "gputest_tess",
+   "gputest_triangle",
+   "gravitymark_d3d11",
+   "gravitymark_d3d12",
+   "gravitymark_d3d12_raster",
+   "gravitymark_d3d12_rt",
+   "gravitymark_gl",
+   "gravitymark_vk",
+   "nvdec_h264",
+   "nvenc_av1",
+   "nvenc_h264",
+   "nvenc_hevc",
+   "scale_cuda_nvenc",
+   "vkcube",
+   "vulkan_video_decode"
+  ]
+ },
+ "manual": {
+  "apps": [
+   "heaven_d3d11",
+   "heaven_opengl",
+   "valley_d3d11",
+   "valley_opengl"
+  ],
+  "items": [
+   {
+    "id": "heaven_d3d11",
+    "reason": "Unigine Heaven/Valley Basic EULA: evaluation use, command-line automation is the paid edition; redistribution not granted"
+   },
+   {
+    "id": "3dmark",
+    "reason": "licensed (paid) software, personal licence, one computer, no distribution (docs/DOWNLOADS.md)"
+   },
+   {
+    "id": "geekbench6",
+    "reason": "scripts need the Pro licence and the run uploads results (internet)"
+   },
+   {
+    "id": "tensorrt",
+    "reason": "download needs an NVIDIA developer login"
+   },
+   {
+    "id": "superposition",
+    "reason": "Unigine EULA; 1.3 GB; not in the first wave"
+   },
+   {
+    "id": "xonotic",
+    "reason": "1.2 GB; the benchmark mode needs a timedemo and a work area"
+   },
+   {
+    "id": "q2rtx",
+    "reason": "installer and a ray-tracing path that is not first wave"
+   }
+  ],
+  "evidence_template": "traces/winapps_manual_<yyyymmdd>/<app>.md: kayfabe revision, die, host driver, guest driver 580.88, app + version + sha256 of what was installed, the owner's licence/account note (never the key), command run, start and end time, screenshot path, verdict word (PASS only with the app's own result and the NVIDIA adapter named), guest event counts (nvlddmkm 153, Display 4101, WER) and the same-box host reference result."
+ },
+ "excluded": {},
+ "profiles": {
+  "small": {
+   "apps": [
+    "nvidia_smi",
+    "deviceQuery_demo",
+    "matmul_t",
+    "cup8_ladder",
+    "dxprobe_d3d11",
+    "glgears_wgl",
+    "vulkaninfo",
+    "torch_correct"
+   ],
+   "budget_s": 2400
+  },
+  "mid": {
+   "apps": [
+    "nvidia_smi",
+    "deviceQuery_demo",
+    "matmul_t",
+    "cup8_ladder",
+    "dxprobe_d3d11",
+    "glgears_wgl",
+    "vulkaninfo",
+    "torch_correct",
+    "edge_webgl",
+    "dxprobe_d3d12"
+   ],
+   "budget_s": 3600
+  },
+  "full": {
+   "apps": "every open app minus excluded",
+   "budget_s": 18000
+  }
+ }
+}

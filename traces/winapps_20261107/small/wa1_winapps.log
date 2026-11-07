@@ -1,0 +1,28 @@
+WINAPPS_START tag=wa1 rev=b11655b7 source=/root/kayfabe 2026-11-07T04:04:44+00:00 profile=small gate_tag=gate_wa1 per_guest=8
+WINAPPS_REQUESTED=1
+APPS_STAGE preflight 2026-11-07T04:04:44+00:00
+APPS_NOTE host: gpu="NVIDIA GeForce RTX 4090" cpus=30 ram_gb=48 disk_free_gb=142 apps=8 budget_s=2400
+APPS_NOTE app ids: nvidia_smi,deviceQuery_demo,matmul_t,cup8_ladder,dxprobe_d3d11,glgears_wgl,vulkaninfo,torch_correct
+APPS_STAGE app_disk 2026-11-07T04:04:44+00:00
+APPS_NOTE app disk /workspace/winapps-in/kfapps.iso sha256=99cee299466eba87bcea245f1f2d39c861c2c7246061b1446f5983fb86e29219 bytes=7006195712
+APPS_STAGE hostref_before 2026-11-07T04:04:58+00:00
+APPS_HOSTREF before green cup8=PASS xid_count=0 xid_delta=0
+APPS_STAGE seal_parent 2026-11-07T04:04:59+00:00
+APPS_STAGE run_matrix 2026-11-07T04:04:59+00:00
+APPS_NOTE winapps.py rc=0 (0 done, 3 repeated guest boot failures, 4 guest limit, 6 time budget ended)
+APPS_STAGE hostref_after 2026-11-07T04:16:59+00:00
+APPS_HOSTREF after green cup8=PASS xid_count=0 xid_delta=0
+APPS_STAGE grade 2026-11-07T04:16:59+00:00
+WINAPPS_APP app=nvidia_smi class=pass verdict=PASS batched=PASS alone=- secs=5 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=deviceQuery_demo class=pass verdict=PASS batched=PASS alone=- secs=5 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=matmul_t class=pass verdict=PASS batched=PASS alone=- secs=16 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=cup8_ladder class=pass verdict=PASS batched=PASS alone=- secs=5 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=dxprobe_d3d11 class=pass verdict=PASS batched=PASS alone=- secs=5 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=glgears_wgl class=pass verdict=PASS batched=PASS alone=- secs=15 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=vulkaninfo class=pass verdict=PASS batched=PASS alone=- secs=6 tdr=0 wer=0 gsp=0 note=warn:WARNING: [Loader Message] Code 0 : windows_read_data_files_in_registry: Registry lookup failed
+WINAPPS_APP app=torch_correct class=pass verdict=PASS batched=PASS alone=- secs=19 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_GRADE kind=PASS expected=8 pass=8 guest_fail=0 boot_fail=0 harness=0 not_run=0 extra=0
+APPS_STAGE collect 2026-11-07T04:16:59+00:00
+APPS_NOTE evidence: /root/prov/wa1_winapps (55 files), /root/prov/wa1_winapps.tgz sha256=7a26aea4fecc4319
+WINAPPS_PASS rev=b11655b7 gpu="NVIDIA GeForce RTX 4090" profile=small apps=8 hostref=green/green secs=735 grade: kind=PASS expected=8 pass=8 guest_fail=0 boot_fail=0 harness=0 not_run=0 extra=0
+WINAPPS_EXIT rc=0 2026-11-07T04:16:59+00:00
