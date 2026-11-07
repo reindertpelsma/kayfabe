@@ -191,6 +191,19 @@ class Qga:
         finally:
             self.call("guest-file-close", {"handle": h})
 
+    def _file_read_at(self, handle, offset, count):
+        """Reconnect retry is a seek+read operation: replaying read alone consumes bytes twice."""
+        for attempt in range(2):
+            # An absolute seek is idempotent even if its reply was lost.
+            self.call("guest-file-seek", {"handle": handle, "offset": offset, "whence": 0})
+            try:
+                return self.call("guest-file-read", {"handle": handle, "count": count}, retry=False)
+            except (QgaTimeout, QgaCommandError):
+                raise  # preserve the existing timeout/refusal budget
+            except QgaError:
+                if attempt == 1:
+                    raise
+
     def file_read(self, gpath, head=1 << 20, tail=3 << 20):
         """Whole file if it is at most head+tail bytes, else its first `head` and last `tail` bytes joined by a marker."""
         h = self.call("guest-file-open", {"path": gpath, "mode": "rb"})
@@ -199,7 +212,7 @@ class Qga:
             buf = bytearray()
             eof = False
             while len(buf) <= head + tail and not eof:
-                r = self.call("guest-file-read", {"handle": h, "count": 1 << 20})
+                r = self._file_read_at(h, len(buf), 1 << 20)
                 buf += base64.b64decode(r.get("buf-b64", "") or "")
                 eof = bool(r.get("eof") or not r.get("count"))
             if eof:
@@ -207,10 +220,10 @@ class Qga:
                 return data if len(data) <= head + tail else data[:head] + marker + data[-tail:]
             first = bytes(buf[:head])
             try:
-                self.call("guest-file-seek", {"handle": h, "offset": -tail, "whence": 2})
+                offset = self.call("guest-file-seek", {"handle": h, "offset": -tail, "whence": 2})["position"]
                 t = bytearray()
                 while True:
-                    r = self.call("guest-file-read", {"handle": h, "count": 1 << 20})
+                    r = self._file_read_at(h, offset + len(t), 1 << 20)
                     t += base64.b64decode(r.get("buf-b64", "") or "")
                     if r.get("eof") or not r.get("count"):
                         break

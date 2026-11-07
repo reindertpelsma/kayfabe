@@ -1,0 +1,55 @@
+{
+ "quiet": 1,
+ "end_utc": "2026-11-07T04:48:58.5619849Z",
+ "start_utc": "2026-11-07T04:48:52.1905888Z",
+ "rc": 0,
+ "secs": 6,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4090 status=OK code=0"
+ ],
+ "digests": [],
+ "session": 0,
+ "out_files": [],
+ "boot_utc_start": "2026-11-07T04:36:45.5000000Z",
+ "log_tail": [
+  "=== memcpy2d_t start=2026-11-07T04:48:52.1905888+00:00 host=KFWIN session=0 boot=2026-11-07T04:36:45.5000000Z timeout=120",
+  "KFDEV NVIDIA GeForce RTX 4090",
+  "[eq] device NVIDIA GeForce RTX 4090 torch 2.8.0+cu126",
+  "CHECK strided_h2d_d2h ok",
+  "CHECK strided_scatter ok",
+  "WINEQ_DONE memcpy2d",
+  "=== end rc=0 secs=6 2026-11-07T04:48:58.5619849+00:00"
+ ],
+ "pdh": {
+  "pids": [
+   "6160",
+   "4924",
+   "3944"
+  ],
+  "nv": {},
+  "samples": 3,
+  "other": {},
+  "nvidia_luids": "0_5dbe"
+ },
+ "timed_out": false,
+ "token": "g2-memcpy2d_t-1794026917",
+ "boot_utc_end": "2026-11-07T04:36:45.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 0,
+  "other_nvlddmkm": 0,
+  "lines": [],
+  "live_kernel": 0
+ },
+ "app": "memcpy2d_t",
+ "smi": {
+  "samples": 0,
+  "mem_used_base_mb": null,
+  "util_max": 0,
+  "mem_used_max_mb": 0
+ }
+}

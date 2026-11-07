@@ -1,0 +1,14 @@
+{
+ "verdict": "FAIL",
+ "rc": 5,
+ "secs": 4,
+ "quiet": 1,
+ "note": "rc=5,success-string-missing | KFOVL JSON {\"program\":\"kf_overlayprobe\",\"version\":1,\"scenario\":\"move\",\"verdict\":\"FAIL\",\"result\":\"SETUP\",\"code\":5,\"reason\":\"CheckOverlaySupport reports no DXGI_O",
+ "proof": "out",
+ "tdr": 0,
+ "wer": 0,
+ "rebooted": false,
+ "gsp_cycles": 0,
+ "restart": "",
+ "guest": "g4"
+}

@@ -11,6 +11,26 @@ import { setup, env } from './helpers.js';
 // profile keeps a hard limit too short for the Linux bar plus the Windows install and gate while
 // the sweep's grows beyond 180 minutes by default.
 const hex = (n) => n.toString(16).padStart(2, '0').repeat(20);
+test('Windows apps and SPEC options coexist without selecting either by default', () => {
+  const both = tierEnvironment('release', {
+    stages: ['specviewperf'],
+    spec: 'laneb',
+    winApps: 'mid',
+  });
+  assert.equal(both.KF_WINAPPS, 'mid');
+  assert.equal(both.KF_SPEC, 'laneb');
+  assert.equal(both.KF_STAGES, 'specviewperf');
+  const defaults = tierEnvironment('release');
+  assert.equal(defaults.KF_WINAPPS, undefined);
+  assert.equal(defaults.KF_SPEC, undefined);
+});
+test('asking for one optional stage does not ask for its sibling', () => {
+  assert.equal(tierEnvironment('release', { winApps: 'full' }).KF_SPEC, undefined);
+  assert.equal(
+    tierEnvironment('release', { stages: ['specviewperf'], spec: 'lanea' }).KF_WINAPPS,
+    undefined,
+  );
+});
 const sweepClaims = (sha) => ({
   event_name: 'workflow_dispatch',
   sha,
@@ -69,6 +89,40 @@ test('profile table: check is the Windows master gate, sweep is Linux-only, rele
   for (const bad of ['large', '', undefined, 'constructor', '__proto__', 'toString'])
     assert.throws(() => tier(bad), /unknown profile/, String(bad));
   assert.ok(Object.isFrozen(TIERS) && Object.values(TIERS).every(Object.isFrozen));
+});
+
+test('KF_WINAPPS is sent only when asked for, only with the Windows stage, only for a named profile', () => {
+  // today's callers pass nothing: no box sees the field
+  for (const p of ['check', 'sweep', 'release'])
+    assert.ok(!('KF_WINAPPS' in tierEnvironment(p)), p);
+  assert.deepEqual(tierEnvironment('check', { winApps: 'small' }), {
+    KF_MERGE_WINDOWS: '1',
+    KF_WINAPPS: 'small',
+  });
+  assert.equal(tierEnvironment('release', { winApps: 'full' }).KF_WINAPPS, 'full');
+  assert.throws(() => tierEnvironment('sweep', { winApps: 'small' }), /winapps/);
+  for (const bad of ['', 'huge', 'SMALL', 'small:mid', null, 1])
+    assert.throws(() => tierEnvironment('check', { winApps: bad }), /winapps/, String(bad));
+});
+
+test('Windows apps remain absent from every default Worker profile', () => {
+  for (const profile of ['check', 'sweep', 'release'])
+    assert.ok(!Object.hasOwn(tierEnvironment(profile), 'KF_WINAPPS'));
+});
+
+test('each explicit Windows apps profile is carried unchanged', () => {
+  for (const winApps of ['small', 'mid', 'full'])
+    assert.equal(tierEnvironment('release', { winApps }).KF_WINAPPS, winApps);
+});
+
+test('the Linux-only sweep cannot request Windows apps', () => {
+  for (const winApps of ['small', 'mid', 'full'])
+    assert.throws(() => tierEnvironment('sweep', { winApps }), /winapps/);
+});
+
+test('Windows apps reject unknown names and composite profile strings', () => {
+  for (const winApps of ['', 'large', 'release', 'small:full', 'MID', null, 1])
+    assert.throws(() => tierEnvironment('check', { winApps }), /winapps/);
 });
 
 test('per-profile hard limits: check 300 min by default, sweep min(180, check) unless set', () => {
