@@ -35,6 +35,18 @@ class Bucket {
     return { key };
   }
 }
+// Wait for a condition that the code under test reaches on its own schedule; never assume that a
+// fixed number of event-loop ticks or milliseconds is enough on a loaded CI runner (#279, run
+// 42303700591). A bounded, generous deadline turns a missing condition into a clear failure.
+async function until(condition, what, ms = 20000) {
+  const end = Date.now() + ms;
+  for (;;) {
+    if (await condition()) return;
+    if (Date.now() > end) throw new Error('timed out waiting for ' + what);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+}
+const reserveCalls = (x) => x.internal.filter((p) => p === '/evidence/reserve').length;
 const sha = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const META = {
   v: 1,
@@ -587,13 +599,15 @@ test('evidence: two uploads at once store one', async () => {
   let release;
   const gate = new Promise((resolve) => (release = resolve));
   const put = x.bucket.put.bind(x.bucket);
+  let entered = false;
   x.bucket.put = async (key, ...rest) => {
+    entered = true;
     await gate;
     return put(key, ...rest);
   };
   const first = x.post(bundle('first'));
-  await new Promise((resolve) => setImmediate(resolve));
-  await new Promise((resolve) => setImmediate(resolve));
+  // the first upload holds the flag once it is inside its bucket write
+  await until(() => entered, 'the first upload to reach its bucket write');
   const second = await x.post(bundle('second'));
   assert.equal(second.status, 409);
   release();
@@ -759,7 +773,9 @@ test('evidence gateway: at most two uploads are held in one isolate, the third i
   x.hold.reserve = new Promise((resolve) => (release = resolve));
   const first = x.post();
   const second = x.post();
-  await new Promise((resolve) => setImmediate(resolve));
+  // Both uploads are held once each has reached its reserve call (the in-isolate count is raised
+  // before that call); a fixed number of ticks is not enough on a loaded runner.
+  await until(() => reserveCalls(x) === 2, 'both held uploads to reach their reserve call');
   // Integration 2026-11-06: never await an answer that a missing cap would hold forever (it waits
   // on the held reservation). Race it against a short timer, release the hold BEFORE asserting,
   // and settle everything, so a mutant fails this test cleanly instead of hanging the file.
@@ -767,7 +783,7 @@ test('evidence gateway: at most two uploads are held in one isolate, the third i
   let timer;
   const third = await Promise.race([
     x.post(),
-    new Promise((resolve) => (timer = setTimeout(() => resolve(pending), 2000))),
+    new Promise((resolve) => (timer = setTimeout(() => resolve(pending), 8000))),
   ]);
   clearTimeout(timer);
   release();
@@ -783,20 +799,21 @@ test('evidence gateway: a third upload while two are held never reaches the ledg
   const x = await harness();
   let release;
   x.hold.reserve = new Promise((resolve) => (release = resolve));
-  const reserves = () => x.internal.filter((p) => p === '/evidence/reserve').length;
-  const settle = async (ms) => {
-    for (const end = Date.now() + ms; Date.now() < end && reserves() < 3; )
-      await new Promise((resolve) => setTimeout(resolve, 5));
-  };
+  const reserves = () => reserveCalls(x);
   const uploads = [x.post(), x.post()];
-  await settle(1000); // both reach the held reservation (stops early at 3 calls)
-  const before = reserves();
-  uploads.push(x.post());
-  await settle(300);
+  await until(() => reserves() === 2, 'both held uploads to reach their reserve call');
+  const third = x.post();
+  uploads.push(third);
+  // the third answers 503 on its own (it never waits for the hold); a missing cap would leave it
+  // waiting on the hold, and the deadline then fails the test instead of hanging it
+  const answered = await Promise.race([
+    third.then((r) => r.status),
+    new Promise((resolve) => setTimeout(() => resolve('waiting'), 8000)),
+  ]);
   const after = reserves();
   release();
   await Promise.allSettled(uploads);
-  assert.equal(before, 2, 'the two held uploads reserved');
+  assert.equal(answered, 503, 'the third was refused without waiting for the held uploads');
   assert.equal(after, 2, 'the third was refused before any ledger call');
 });
 test('evidence gateway: the held count is released when the write fails', async () => {
