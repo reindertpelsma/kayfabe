@@ -1,0 +1,18 @@
+{
+  "run": "PE1-build-20261027",
+  "kayfabe_revision": "858ca1e8ad4a2b264656b8e499d820856bcc7310",
+  "tracked_source_clean": true,
+  "qemu_version": "10.2.4",
+  "build_exit": 0,
+  "build_jobs": 2,
+  "nice": 19,
+  "qemu_sha256": "b635ca756260ad9cdc6341af3e4ee9efd5358445211e29b8762cb2281b64e857",
+  "gop_export_target": "x86_64-unknown-uefi",
+  "gop_unsigned_bytes": 9216,
+  "gop_signature_verification_exit": 0,
+  "secure_boot_enrollment": [
+    "Microsoft boot and UEFI authorities",
+    "Fresh lane-owned GOP certificate"
+  ],
+  "gpu_or_vm_started_by_preflight": false
+}
