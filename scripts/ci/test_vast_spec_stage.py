@@ -676,6 +676,18 @@ class TimeGuard(StageCase):
         self.assertEqual(self.results()["creo-04"], ("NOT_RUN", "TIME"))
         self.assertNotIn("launch creo-04", self.sb.calls())
 
+    def test_a_viewset_that_cannot_fit_is_not_worth_a_boot_after_a_dead_guest(self):
+        # energy-04 takes the guest down; creo-04 needs 2,153 s and 2,000 are left: no second kf3 boot for nothing
+        self.go("lanea", budget=300 + 2000, **{"viewset__energy-04": "dead"})
+        self.assertEqual(len([r for r in self.sb.runs() if "nokf3=0" in r]), 1)
+        self.assertEqual(self.results()["creo-04"], ("NOT_RUN", "TIME"))
+
+    def test_a_viewset_that_cannot_fit_is_not_worth_a_fresh_boot_after_a_reset(self):
+        self.go("lanea", budget=300 + 2000, **{"viewset__energy-04": "reset"})
+        self.assertEqual(len([r for r in self.sb.runs() if "nokf3=0" in r]), 1)
+        self.assertEqual(self.results()["creo-04"], ("NOT_RUN", "TIME"))
+        self.assertEqual(self.verdict, "SPECVIEWPERF_STAGE_FAIL")
+
     def test_the_stage_reserves_the_tail_for_the_graceful_stop(self):
         # exactly the need of energy-04 and no tail: not started
         self.go("lanea", budget=300 + 404 + 100)

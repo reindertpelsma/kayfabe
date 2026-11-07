@@ -354,6 +354,9 @@ on_exit() {
         exit 3
     fi
 }
+# TERM, INT and HUP become a normal exit, so that the EXIT trap (stop the guest, delete the copy, print the verdict) runs and the
+# status is 3. The payload stops this stage with a signal to its whole process group, so a command the stage is waiting for ends
+# with it and the trap runs at once.
 trap on_exit EXIT
 trap 'exit 143' TERM INT HUP
 
