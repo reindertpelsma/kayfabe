@@ -8,6 +8,8 @@ test_invalid_values (test_image_size_estimate.CatalogTests.test_invalid_values) 
 test_missing_column (test_image_size_estimate.CatalogTests.test_missing_column) ... ok
 test_nan_installed (test_image_size_estimate.CatalogTests.test_nan_installed) ... ok
 test_negative_installed (test_image_size_estimate.CatalogTests.test_negative_installed) ... ok
+test_owner_can_fill_notes (test_image_size_estimate.CatalogTests.test_owner_can_fill_notes) ... ok
+test_owner_can_fill_status (test_image_size_estimate.CatalogTests.test_owner_can_fill_status) ... ok
 test_partial_source_pair (test_image_size_estimate.CatalogTests.test_partial_source_pair) ... ok
 test_partial_triplet (test_image_size_estimate.CatalogTests.test_partial_triplet) ... ok
 test_partial_triplet_missing_low (test_image_size_estimate.CatalogTests.test_partial_triplet_missing_low) ... ok
@@ -72,6 +74,6 @@ test_workspace_headroom_overflow_refused (test_image_size_estimate.EstimateTests
 test_zero_asset_ratio_refused (test_image_size_estimate.EstimateTests.test_zero_asset_ratio_refused) ... ok
 
 ----------------------------------------------------------------------
-Ran 72 tests in 0.412s
+Ran 74 tests in 0.435s
 
 OK

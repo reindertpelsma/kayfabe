@@ -1,4 +1,4 @@
-SZ1 CPU validation, 2026-11-07; source revision 66090fc417dbabee17cb45e049e0243d11eeb4f3 plus documentation/evidence only.
+SZ1 CPU validation, 2026-11-07; source base b5d65add509d4057035d673dd388b27c30db22a3 plus the owner-field test correction and documentation/evidence updates; exact source hashes are in README.md.
 
 COMMAND python3 scripts/ci/doc_freshness.py
 doc freshness: checked=208 existing-debt=0 new=0

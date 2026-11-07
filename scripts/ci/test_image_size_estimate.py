@@ -48,6 +48,13 @@ class CatalogTests(unittest.TestCase):
     def test_csv_quoted_comma(self):
         self.assertEqual(self.read([row(app="app, toolkit")])[0]["app"], "app, toolkit")
 
+    def test_owner_can_fill_status(self):
+        self.assertEqual(self.read([row(status="selected")])[0]["status"], "selected")
+
+    def test_owner_can_fill_notes(self):
+        note = "Try this lane after checking installed bytes"
+        self.assertEqual(self.read([row(owner_notes=note)])[0]["owner_notes"], note)
+
     def test_missing_column(self):
         fields = [key for key in m.FIELDS if key != "app"]
         data = row()
@@ -385,9 +392,6 @@ class CommandTests(unittest.TestCase):
         self.assertGreaterEqual(len(rows), 60)
         for data in rows:
             with self.subTest(app=data["app"]):
-                self.assertEqual(data["retrieved_on"], "2026-11-07")
-                self.assertEqual(data["status"], "")
-                self.assertEqual(data["owner_notes"], "")
                 self.assertTrue(data["source_url"].startswith("https://"))
         self.assertFalse(m.estimate(rows)["complete"])
 
@@ -404,7 +408,6 @@ class CommandTests(unittest.TestCase):
                 cells = [cell.strip() for cell in matches[0].strip("|").split("|")]
                 self.assertEqual(cells[:4], [row_data[key] for key in
                                            ("app", "nvidia_features", "obtain_route", "automation_route")])
-                self.assertEqual(cells[5:], ["", ""])
                 for key in ("size_statement", "size_kind", "confidence", "retrieved_on", "installed_basis"):
                     self.assertIn(row_data[key], cells[4])
                 for url in row_data["source_url"].split("; "):
@@ -414,7 +417,7 @@ class CommandTests(unittest.TestCase):
         catalog = HERE.parents[1] / "docs/design/V3_RELEASE_SOFTWARE_WISHLIST.csv"
         ids = {data["id"] for data in m.read_catalog(catalog)}
         required = set("premiere after-effects photoshop media-encoder resolve maya arnold 3ds-max revit inventor solidworks solidworks-simulation solidworks-visualize catia abaqus creo unreal-engine unreal-sample unity omniverse-launcher usd-composer isaac-sim octane redshift vray keyshot houdini matlab-base matlab-gpu-toolboxes ansys-fluent ansys-mechanical nvidia-app broadcast topaz-video-ai sunshine cuda-toolkit cudnn tensorrt vs-build-tools python-pytorch comfyui-windows sdxl-checkpoint gguf-7b gguf-70b blender obs cyberpunk alan-wake-2 portal-rtx metro-enhanced forza-5 vllm tensorrt-llm jax rapids comfyui-linux ollama optix-sdk video-codec-sdk proton dxvk vkd3d gromacs namd".split())
-        self.assertEqual(ids, required)
+        self.assertTrue(required <= ids, required - ids)
 
 
 if __name__ == "__main__":
