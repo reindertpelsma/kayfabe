@@ -33,16 +33,19 @@ case $SB in
 esac
 for f in "$IMG" "$CODE" "$VARS_T" "$QMPPY"; do [ -e "$f" ] || { echo "missing $f" >&2; exit 2; }; done
 for t in qemu-system-x86_64 qemu-img swtpm swtpm_setup pnmtopng; do command -v $t >/dev/null || { echo "missing tool $t" >&2; exit 2; }; done
-rm -rf "$W"; mkdir -p "$W/shots" "$W/tpm" "$W/run"; chmod 700 "$W/tpm"
+rm -rf "$W"; mkdir -p "$W/shots" "$W/run"
+# swtpm is confined by AppArmor on Ubuntu: it may write under /tmp, not under /data (MEASURED: DENIED mknod on /data/...). Its state,
+# socket and logs live in a private /tmp directory, copied back into WORKDIR/tpm_logs at the end.
+TD=$(mktemp -d /tmp/kf-bootest-tpm.XXXXXX); chmod 700 "$TD"
 LOG=$W/boot_test.log
 say() { echo "$(date +%T) $*" | tee -a "$LOG"; }
 say "BOOT_TEST_START image=$IMG sb=$SB ram=$RAM smp=$SMP port=$PORT nic=$NIC disk=$DISKBUS pid=$$"
 
 qemu-img create -q -f qcow2 -b "$(readlink -f "$IMG")" -F qcow2 "$W/overlay.qcow2" || exit 1
 cp "$VARS_T" "$W/OVMF_VARS.fd"
-swtpm_setup --tpm2 --tpmstate "$W/tpm" --create-ek-cert --create-platform-cert --lock-nvram --pcr-banks sha256 --logfile "$W/swtpm_setup.log" >/dev/null 2>&1 || { say "swtpm_setup failed"; exit 1; }
-swtpm socket --tpm2 --tpmstate "dir=$W/tpm,mode=0600" --ctrl "type=unixio,path=$W/run/swtpm.sock,mode=0600" --pid "file=$W/run/swtpm.pid" --terminate --daemon --log "file=$W/swtpm.log,level=20"
-for _ in $(seq 1 50); do [ -S "$W/run/swtpm.sock" ] && break; sleep 0.2; done
+swtpm_setup --tpm2 --tpmstate "$TD" --create-ek-cert --create-platform-cert --lock-nvram --pcr-banks sha256 --runas "$(id -un)" --logfile "$TD/swtpm_setup.log" >/dev/null 2>&1 || { say "swtpm_setup failed"; exit 1; }
+swtpm socket --tpm2 --tpmstate "dir=$TD,mode=0600" --ctrl "type=unixio,path=$TD/swtpm.sock,mode=0600" --pid "file=$TD/swtpm.pid" --terminate --daemon --log "file=$TD/swtpm.log,level=20"
+for _ in $(seq 1 50); do [ -S "$TD/swtpm.sock" ] && break; sleep 0.2; done
 
 case $NIC in virtio) NICDEV=virtio-net-pci;; e1000) NICDEV=e1000e;; *) echo "bad --nic" >&2; exit 2;; esac
 case $DISKBUS in
@@ -58,7 +61,7 @@ QEMU=(qemu-system-x86_64 -name kf-bootest,debug-threads=on
   -drive "if=pflash,format=raw,unit=0,readonly=on,file=$CODE" -drive "if=pflash,format=raw,unit=1,file=$W/OVMF_VARS.fd"
   -global ICH9-LPC.disable_s3=1 -global ICH9-LPC.disable_s4=1
   -rtc base=utc,driftfix=slew -global kvm-pit.lost_tick_policy=discard
-  -chardev "socket,id=chrtpm,path=$W/run/swtpm.sock" -tpmdev emulator,id=tpm0,chardev=chrtpm -device tpm-crb,tpmdev=tpm0
+  -chardev "socket,id=chrtpm,path=$TD/swtpm.sock" -tpmdev emulator,id=tpm0,chardev=chrtpm -device tpm-crb,tpmdev=tpm0
   -drive "file=$W/overlay.qcow2,if=none,id=sys,format=qcow2,discard=unmap" "${DISKDEV[@]}"
   -netdev "user,id=n0,restrict=off,hostfwd=tcp:127.0.0.1:$PORT-:22" -device "$NICDEV,netdev=n0,mac=52:54:00:4b:46:58"
   -uuid 5d9d8f0e-8b5f-4c1d-9a39-6a7b1c2d3e4f -smbios type=1,serial=KFBOOTEST01
@@ -96,4 +99,5 @@ if [ "$KEEP" = 0 ] && [ -d "/proc/$QPID" ]; then
   [ -d "/proc/$QPID" ] && python3 "$QMPPY" "$W/run/qmp.sock" cmd quit >/dev/null 2>&1
 fi
 verdict=no_boot_progress; [ -n "$first_change" ] && verdict=booted_no_ssh; [ -n "$ssh_up" ] && verdict=ssh_up
+mkdir -p "$W/tpm_logs"; cp "$TD"/*.log "$W/tpm_logs/" 2>/dev/null; rm -rf "$TD"
 say "BOOT_TEST_RESULT sb=$SB disk=$DISKBUS nic=$NIC first_change_s=${first_change:-never} ssh_up_s=${ssh_up:-never} screens=$(ls "$W/shots" | wc -l) last_screen=${last:-none} verdict=$verdict"

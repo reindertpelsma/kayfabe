@@ -1,0 +1,1 @@
+dd-qcow2 parallel run stopped by the agent at 2026-11-07T16:37:20+01:00: 36 chunks ok, qcow2 on disk 32287752192 bytes; density samples in density_samples.txt

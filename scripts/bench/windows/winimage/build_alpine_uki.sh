@@ -41,6 +41,7 @@ export PATH=/usr/sbin:/usr/bin:/sbin:/bin
 say() { echo "KFUKI $*"; }
 mount -t proc proc /proc; mount -t sysfs sys /sys
 mount -t devtmpfs dev /dev 2>/dev/null || mount -t tmpfs dev /dev
+ln -sf /proc/self/fd /dev/fd; ln -sf /proc/self/fd/0 /dev/stdin; ln -sf /proc/self/fd/1 /dev/stdout; ln -sf /proc/self/fd/2 /dev/stderr   # bash process substitution needs /dev/fd
 mkdir -p /dev/pts /run /tmp /mnt/esp; mount -t devpts devpts /dev/pts; mount -t tmpfs tmpfs /run; mount -t tmpfs tmpfs /tmp
 say "boot kernel=$(uname -r) cmdline=$(cat /proc/cmdline)"
 AUTORESTORE_S=900
@@ -70,7 +71,7 @@ find_esp() {
     d=/dev/$p; [ -b "$d" ] || continue
     t=$(blkid -o value -s TYPE "$d" 2>/dev/null)
     [ "$t" = vfat ] || continue
-    mount -t vfat -o ro "$d" /mnt/esp 2>/dev/null || continue
+    mount -t vfat -o ro,iocharset=iso8859-1 "$d" /mnt/esp 2>/dev/null || continue
     if [ -d /mnt/esp/EFI ]; then ESP_DEV=$d; return 0; fi
     umount /mnt/esp
   done; return 1
@@ -104,7 +105,7 @@ say "READY ip=$(ip -4 -o addr show scope global | tr -s ' ' | cut -d' ' -f4 | he
 (
   t=0
   while [ "$t" -lt "$AUTORESTORE_S" ]; do
-    if netstat -tn 2>/dev/null | grep -q ':22 .*ESTABLISHED'; then touch /run/kf-login-seen; say "ssh login seen; recovery timer disarmed"; exit 0; fi
+    if ps 2>/dev/null | grep -q '[s]shd: root@'; then touch /run/kf-login-seen; say "ssh login seen; recovery timer disarmed"; exit 0; fi
     sleep 5; t=$((t + 5))
   done
   say "NO LOGIN in ${AUTORESTORE_S}s: automatic restore of the Windows boot files, then reboot"
@@ -128,13 +129,13 @@ mkdir -p /mnt/esp
 if [ -z "$ESP" ]; then
   for p in $(ls /sys/class/block | grep -v '^loop'); do
     [ "$(blkid -o value -s TYPE /dev/$p 2>/dev/null)" = vfat ] || continue
-    mount -t vfat -o ro "/dev/$p" /mnt/esp 2>/dev/null || continue
+    mount -t vfat -o ro,iocharset=iso8859-1 "/dev/$p" /mnt/esp 2>/dev/null || continue
     [ -d /mnt/esp/EFI/kf-backup ] && { ESP=/dev/$p; umount /mnt/esp; break; }
     umount /mnt/esp
   done
 fi
 [ -n "$ESP" ] || { echo "no ESP with EFI/kf-backup found"; exit 2; }
-mount -t vfat -o rw "$ESP" /mnt/esp || exit 3
+mount -t vfat -o rw,iocharset=iso8859-1 "$ESP" /mnt/esp || exit 3
 B=/mnt/esp/EFI/kf-backup; rc=0
 restore() {  # backup-name target
   if [ ! -f "$B/$1" ]; then echo "no backup $1 (the original had no such file): leaving $2 as is"; return 0; fi
@@ -176,6 +177,7 @@ selfcheck() {  # TEST_ONLY=1: syntax-check every generated script with busybox/s
 }
 
 if [ "${TEST_ONLY:-0}" = 1 ]; then selfcheck; exit 0; fi
+case "${EMIT:-}" in restore) emit_restore_esp; exit 0;; init) emit_init; exit 0;; esac
 
 # ------------------------------------------------------------------------------------------------
 : "${AUTH_KEY_PUB:?set AUTH_KEY_PUB to the public key file to authorize}"

@@ -91,6 +91,22 @@ class Kit(unittest.TestCase):
         self.assertIn("zstd", s)
         self.assertIn("sha256", s)
 
+    def test_capture_modes_use_zero_detection_and_never_write_the_source(self):
+        s = (D / "capture_raw.sh").read_text()
+        self.assertEqual(s.count("--detect-zeroes=unmap"), 2)   # ntfsclone writes zeros for free clusters: they must not be allocated
+        self.assertNotIn("of=$DISK", s)
+        self.assertNotIn('of="$DISK"', s)
+        for mode in ("dd)", "dd-qcow2)", "ntfsclone-qcow2)", "ntfsclone-probe)"):
+            self.assertIn("  " + mode, s)
+
+    def test_uki_init_mounts_the_esp_case_insensitively_and_arms_on_auth_only(self):
+        s = (D / "build_alpine_uki.sh").read_text()
+        self.assertNotRegex(s, r"mount -t vfat -o (ro|rw) ")   # every vfat mount names iocharset
+        self.assertIn("iocharset=iso8859-1", s)
+        self.assertIn("[s]shd: root@", s)
+        self.assertIn("af_packet", s)                        # udhcpc needs AF_PACKET
+        self.assertIn("/dev/fd", s)
+
     def test_capture_usage_error(self):
         r = run(["bash", str(D / "capture_raw.sh")])
         self.assertNotEqual(r.returncode, 0)

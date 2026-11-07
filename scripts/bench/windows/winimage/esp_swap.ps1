@@ -25,7 +25,7 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 function Say($m) { Write-Output ("ESP_" + $m) }
-function Sha($p) { (Get-FileHash -Algorithm SHA256 -LiteralPath $p).Hash.ToLower() }
+function Sha($p) { try { (Get-FileHash -Algorithm SHA256 -LiteralPath $p -ErrorAction Stop).Hash.ToLower() } catch { 'unreadable(in-use)' } }
 
 function Get-SecureBootState {
   try { if (Confirm-SecureBootUEFI) { 'on' } else { 'off' } }
@@ -47,6 +47,8 @@ function Mount-Esp {
 }
 
 function Dismount-Esp($d) { & mountvol $d /D | Out-Null }
+function Esp-Free($d) { (New-Object IO.DriveInfo($d.Substring(0, 1))).AvailableFreeSpace }
+function Esp-Size($d) { (New-Object IO.DriveInfo($d.Substring(0, 1))).TotalSize }
 
 if ($Mode -eq 'Facts') {
   Say ("SECUREBOOT " + (Get-SecureBootState))
@@ -68,8 +70,7 @@ if ($Mode -eq 'Facts') {
     Say ("ESP disk=$($esp.DiskNumber) part=$($esp.PartitionNumber) size=$($esp.Size)")
     $d = Mount-Esp
     try {
-      $v = Get-Volume -DriveLetter $d.Substring(0, 1)
-      Say ("ESP_FS fs=$($v.FileSystem) size=$($v.Size) free=$($v.SizeRemaining)")
+      Say ("ESP_FS fs=$((New-Object IO.DriveInfo($d.Substring(0, 1))).DriveFormat) size=$(Esp-Size $d) free=$(Esp-Free $d)")
       Get-ChildItem "$d\EFI" -Recurse -File | ForEach-Object { Say ("ESPFILE " + $_.FullName.Substring(2) + " bytes=" + $_.Length + " sha256=" + (Sha $_.FullName)) }
     } finally { Dismount-Esp $d }
   } else { Say 'ESP not found' }
@@ -97,16 +98,21 @@ try {
     if ($ExpectSha256 -and $us -ne $ExpectSha256.ToLower()) { Say "REFUSED UKI sha256 $us is not the expected $ExpectSha256"; exit 2 }
     if (-not (Test-Path -LiteralPath $boot)) { Say "REFUSED $boot does not exist (not a Windows ESP)"; exit 2 }
     $uk = (Get-Item -LiteralPath $Uki).Length
-    $free = (Get-Volume -DriveLetter $d.Substring(0, 1)).SizeRemaining
-    # two copies of the UKI must fit next to the backups (the backups are small; the old files are freed by the overwrite)
-    if ($free -lt ($uk * 2 + 20MB)) { Say "REFUSED ESP free space $free is too small for two UKI copies of $uk bytes"; exit 2 }
+    $free = Esp-Free $d
+    $oldBoot = (Get-Item -LiteralPath $boot).Length
+    $hasFb = Test-Path -LiteralPath $fallback
+    $oldFb = if ($hasFb) { (Get-Item -LiteralPath $fallback).Length } else { 0 }
+    # new data = UKI at the NVRAM path (replacing the old file) + UKI at the fallback path + the backups (the two old files and BCD)
+    $need = ($uk - $oldBoot) + ($uk - $oldFb) + $oldBoot + $oldFb + 2MB + 4MB
+    if ($free -lt $need) { Say "REFUSED ESP free space $free is below the $need bytes needed for two UKI copies of $uk bytes plus backups"; exit 2 }
     New-Item -ItemType Directory -Force -Path $bk | Out-Null
     if (-not (Test-Path "$bk\bootmgfw.efi")) {   # never overwrite a backup with the UKI on a second run
       if ((Sha $boot) -eq $us) { Say 'REFUSED bootmgfw.efi already is the UKI and no backup exists'; exit 2 }
       Copy-Item -LiteralPath $boot -Destination "$bk\bootmgfw.efi"
       if (Test-Path -LiteralPath $fallback) { Copy-Item -LiteralPath $fallback -Destination "$bk\BOOTX64.EFI" }
       else { Set-Content -Path "$bk\BOOTX64.EFI.absent" -Value 'EFI\BOOT\BOOTX64.EFI did not exist before the swap' }
-      & robocopy "$d\EFI\Microsoft\Boot" "$bk\Boot-full" /E /R:1 /W:1 /NFL /NDL /NJH /NJS | Out-Null   # BCD and all boot files
+      New-Item -ItemType Directory -Force -Path "$bk\Boot" | Out-Null   # the BCD store: this script never edits it, the copy is a belt
+      & bcdedit /export "$bk\Boot\BCD.export" | Out-Null   # the live BCD file is locked by the system: export it
     }
     # network settings for the UKI when DHCP fails there (it reads this file from the ESP)
     $c = Get-NetIPConfiguration | Where-Object { $_.IPv4DefaultGateway } | Select-Object -First 1
@@ -123,7 +129,7 @@ try {
     $ok = ((Sha $boot) -eq $us) -and ((Sha $fallback) -eq $us)
     $names = (Get-ChildItem $bk -File | ForEach-Object { $_.Name }) -join ','
     Say "SWAP backup_files=$names"
-    $fa = (Get-Volume -DriveLetter $d.Substring(0, 1)).SizeRemaining
+    $fa = Esp-Free $d
     Say "SWAP_DONE ok=$ok uki_sha256=$us bytes=$uk esp_free_after=$fa"
     if (-not $ok) { exit 1 }
   } else {

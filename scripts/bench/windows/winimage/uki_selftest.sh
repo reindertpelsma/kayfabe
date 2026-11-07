@@ -24,12 +24,12 @@ mkdisk() {  # GPT disk with a 200 MiB ESP at 1 MiB holding stand-in Windows boot
   mkfs.vfat -F 32 -s 1 --offset 2048 -S 512 "$img" $((200 * 1024)) >/dev/null || fail mkfs.vfat
   local m="mtools_skip_check=1"; export MTOOLS_SKIP_CHECK=1
   local t="$img@@1048576"
-  mmd -i "$t" ::/EFI ::/EFI/Microsoft ::/EFI/Microsoft/Boot ::/EFI/BOOT ::/EFI/kf-backup
+  mmd -i "$t" ::/EFI ::/EFI/Microsoft ::/EFI/Microsoft/Boot ::/EFI/Boot ::/EFI/kf-backup   # \EFI\Boot, as on a Windows ESP (not BOOT)
   echo "ORIGINAL-BOOTMGFW" > "$D/bootmgfw.orig"; echo "ORIGINAL-FALLBACK" > "$D/fallback.orig"
   mcopy -i "$t" "$D/bootmgfw.orig" ::/EFI/kf-backup/bootmgfw.efi
   mcopy -i "$t" "$D/fallback.orig" ::/EFI/kf-backup/BOOTX64.EFI
   mcopy -i "$t" "$UKI" ::/EFI/Microsoft/Boot/bootmgfw.efi     # the swapped state
-  mcopy -i "$t" "$UKI" ::/EFI/BOOT/BOOTX64.EFI
+  mcopy -i "$t" "$UKI" ::/EFI/Boot/bootx64.efi
 }
 boot() {  # extra QEMU args after the standard ones
   cp "$OVMF_VARS" "$D/vars.fd"
@@ -55,7 +55,7 @@ echo "$out"
 echo "$out" | grep -q MISSING && fail "tool missing"
 echo "$out" | grep -q 'RESTORE_RC=0' || fail "kf-restore-esp rc"
 [ "$(esp_file EFI/Microsoft/Boot/bootmgfw.efi)" = ORIGINAL-BOOTMGFW ] || fail "bootmgfw.efi not restored"
-[ "$(esp_file EFI/BOOT/BOOTX64.EFI)" = ORIGINAL-FALLBACK ] || fail "BOOTX64.EFI not restored"
+[ "$(esp_file EFI/Boot/bootx64.efi)" = ORIGINAL-FALLBACK ] || fail "BOOTX64.EFI not restored"
 # password login must be refused
 sshpass -p x ssh -o PubkeyAuthentication=no -o PreferredAuthentications=password -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 -p "$PORT" root@127.0.0.1 true 2>/dev/null && fail "password login accepted"
 stop
@@ -68,7 +68,10 @@ objcopy -O binary --only-section=.linux "$UKI" "$D/vmlinuz" 2>/dev/null; objcopy
 if [ -s "$D/vmlinuz" ] && [ -s "$D/initrd" ]; then
   boot -kernel "$D/vmlinuz" -initrd "$D/initrd" -append "console=ttyS0 rdinit=/init net.ifnames=0 kf.autorestore=20"
   # the QEMU above has the disk already; wait for the timer to fire (20 s) plus the reboot (which re-runs the ESP's UKI)
-  sleep 45
+  # a TCP connection that fails to authenticate (wrong key) must NOT disarm the timer
+  sleep 8; ssh -i "$KEY.nokey" -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p "$PORT" root@127.0.0.1 true >/dev/null 2>&1
+  sleep 40
+  grep -q 'recovery timer disarmed' "$D/serial.log" && fail "a failed login disarmed the recovery timer"
   grep -q 'NO LOGIN in 20s' "$D/serial.log" || fail "the recovery timer never fired (serial.log in $D)"
   stop
   [ "$(esp_file EFI/Microsoft/Boot/bootmgfw.efi)" = ORIGINAL-BOOTMGFW ] || fail "timer did not restore bootmgfw.efi"
