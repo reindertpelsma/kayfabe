@@ -36,8 +36,10 @@ def validate(root: Path) -> list[str]:
         if not path.is_file():
             errors.append(f"documented steps missing: {rel}")
             continue
-        text = " ".join(path.read_text().split())
-        if "cargo build --workspace --release" not in text:
+        text = path.read_text()
+        build = re.search(r"cargo build[^`\n]*", text)
+        command = " ".join(build[0].split()) if build else ""
+        if command != "cargo build --workspace --release":
             errors.append(
                 f"{rel}: documented build changed/missing; review clean_clone_check.sh commands"
             )

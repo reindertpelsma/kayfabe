@@ -19,7 +19,7 @@ The complete cold run exceeded 25 minutes during GPU-free test compilation, so
 The full test result is pending while this record is assembled.
 
 MEASURED, 2026-11-07, R2 worktree based on `fe0cd47e3`: focused Python tests: 57 before this lane (the ledger validator),
-122 after (57 ledger + 24 clone + 36 patch-policy + 5 advisory-command tests),
+124 after (57 ledger + 26 clone + 36 patch-policy + 5 advisory-command tests),
 all passing. `python-tests.txt` is the captured unittest result.
 
 MEASURED, 2026-11-07, R2 worktree based on `fe0cd47e3`: 22 new mutants and 16 existing ledger mutants are each killed by at

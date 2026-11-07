@@ -55,6 +55,26 @@ class Fixture(Tree):
         p.write_text(p.read_text().replace("cargo build", "cargo check"))
         self.assertIn("documented build", self.errors())
 
+    def test_readme_added_required_build_flag_fails(self):
+        p = self.root / "README.md"
+        p.write_text(
+            p.read_text().replace(
+                "cargo build --workspace --release",
+                "cargo build --workspace --release --features required",
+            )
+        )
+        self.assertIn("documented build", self.errors())
+
+    def test_manual_added_required_build_flag_fails(self):
+        p = self.root / "docs/howto/building.md"
+        p.write_text(
+            p.read_text().replace(
+                "cargo build --workspace --release",
+                "cargo build --workspace --release --features required",
+            )
+        )
+        self.assertIn("documented build", self.errors())
+
     def test_readme_missing_test_fails(self):
         p = self.root / "README.md"
         p.write_text(p.read_text().replace("cargo test", "cargo check"))

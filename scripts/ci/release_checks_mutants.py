@@ -50,7 +50,7 @@ def cases():
             "clone-build-doc-drift-ignored",
             changed(
                 "clean_clone_inputs.py",
-                'if "cargo build --workspace --release" not in text:',
+                'if command != "cargo build --workspace --release":',
                 "if False:",
             ),
         ),

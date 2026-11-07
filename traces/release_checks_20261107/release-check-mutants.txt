@@ -2,7 +2,7 @@ ok patch-cli-failure-hidden: 2 killers: test_cli_new_patch_failure_is_not_hidden
 ok clone-disk-safety-bypassed: 2 killers: test_space_just_below_threshold_stops_before_build, test_zero_free_space_stops_before_clone_and_cargo
 ok advisory-validator-failure-hidden: 2 killers: test_missing_pointer_is_visible_from_job_command, test_readme_drift_is_visible_from_job_command
 ok advisory-validates-summary-only: 3 killers: test_missing_pointer_is_visible_from_job_command, test_readme_drift_is_visible_from_job_command, test_valid_fixture_passes_actual_workflow_command
-ok clone-build-doc-drift-ignored: 3 killers: test_changed_documented_command_stops_before_cargo, test_manual_changed_to_check_fails, test_readme_missing_build_fails
+ok clone-build-doc-drift-ignored: 5 killers: test_changed_documented_command_stops_before_cargo, test_manual_added_required_build_flag_fails, test_manual_changed_to_check_fails, test_readme_added_required_build_flag_fails, test_readme_missing_build_fails
 ok clone-test-doc-drift-ignored: 2 killers: test_manual_missing_test_fails, test_readme_missing_test_fails
 ok clone-required-inputs-ignored: 3 killers: test_missing_committed_firmware_input_stops_before_cargo, test_missing_firmware_lock_fails, test_missing_workspace_lock_fails
 ok clone-literal-includes-ignored: 2 killers: test_missing_include_bytes_fails, test_missing_include_str_fails
