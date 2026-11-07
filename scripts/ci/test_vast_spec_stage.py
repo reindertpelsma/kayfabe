@@ -50,6 +50,37 @@ def _drop_cached_sandboxes():
         shutil.rmtree(sb.root, ignore_errors=True)
 
 
+class FakeClock(unittest.TestCase):
+    """Falsifier: real wall time advances the supposedly sleep-only scenario clock."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(prefix="j1-spec-clock-")
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.wall = self.root / "wall"
+        self.wall.write_text("1700000000\n")
+        source = self.root / "wall-date"
+        source.write_text('#!/bin/sh\ncat "$FAKE_ROOT/wall"\n')
+        source.chmod(0o755)
+        self.date = self.root / "date"
+        self.date.write_text(fk.FAKES["date"].replace(fk.REAL_DATE, str(source)))
+        self.date.chmod(0o755)
+
+    def now(self):
+        return int(subprocess.check_output([str(self.date), "+%s"], env={**os.environ, "FAKE_ROOT": str(self.root)}))
+
+    def test_wall_time_without_a_simulated_sleep_does_not_advance_the_clock(self):
+        before = self.now()
+        self.wall.write_text("1700000011\n")
+        self.assertEqual(self.now(), before)
+
+    def test_simulated_sleep_advances_only_by_its_explicit_offset(self):
+        before = self.now()
+        self.wall.write_text("1700000011\n")
+        (self.root / "clock_offset").write_text("60\n")
+        self.assertEqual(self.now(), before + 60)
+
+
 class StageCase(unittest.TestCase):
     def setUp(self):
         self._owned = True
@@ -279,7 +310,8 @@ class Preflight(StageCase):
         self.assertNotIn("launch ", self.sb.calls())
 
     def test_the_stage_does_not_start_with_a_deadline_already_past(self):
-        p = subprocess.run(self.sb.command(), env=self.sb.env(budget=None, KF_SPEC_DEADLINE_EPOCH=int(time.time()) - 5),
+        now = int(subprocess.check_output([str(self.sb.fakebin / "date"), "+%s"], env=self.sb.env()))
+        p = subprocess.run(self.sb.command(), env=self.sb.env(budget=None, KF_SPEC_DEADLINE_EPOCH=now - 5),
                            capture_output=True, text=True, timeout=60, stdin=subprocess.DEVNULL)
         self.assertEqual((p.returncode, p.stdout.strip()), (3, "SPECVIEWPERF_STAGE_RETRY class=TIME"))
         self.assertEqual(self.sb.runs(), [])
