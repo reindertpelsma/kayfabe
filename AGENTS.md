@@ -49,7 +49,9 @@ is frozen (see *Layout*).
   revision and the date. **Files that tests or the Vast box payload read live under `traces/`** (the
   list is the SPARSE set in `ci/vast-broker/src/onstart.js` and the paths in `crates/*/data`); never
   move or rename one without updating its reader. A claim that cites `traces/<dir>/<file>` must name a
-  file that exists in the tree.
+  file that exists in the tree or in its directory's `MANIFEST.tsv`: since 2026-11-07 the bulk files (PNG,
+  large logs, tarballs) of 61 directories live in per-directory archives, not in git
+  (`traces/EVIDENCE_ARCHIVE.md`: public URL, sha256, `scripts/evidence/fetch_evidence_archive.py`).
 - `third_party/` — pinned reference sources (submodules; not built). `archive/` — frozen.
 
 ## Rules

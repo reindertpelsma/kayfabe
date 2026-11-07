@@ -1,0 +1,5 @@
+path	bytes	sha256
+traces/linux_planes_oracle_20261014/run1-bf510bdf/kf3-display-lines.txt.gz	5829	168e6d4fb1513407b2ce70a5d9691514b6be6be4af1bd3b6c6fb1fa788bc208a
+traces/linux_planes_oracle_20261014/run2-a34d3003/kf3-display-lines.txt.gz	5347	cb7f347c612ecd6540838e8bf6a35cd28a15f092661e9ad7f09130e4d69aa0a7
+traces/linux_planes_oracle_20261014/run3-113a7535/kf3-display-lines.txt.gz	6674	2b6f863980a7bcb80058147a7d47989e7662edc1702bf2a5e29ea0c25eb4fc52
+traces/linux_planes_oracle_20261014/run4-41acc6ac/kf3-display-lines.txt.gz	4489	110a0eb467dce8f953e1d3426246b243ba35224b6645a878bb81d9229314b3f9
