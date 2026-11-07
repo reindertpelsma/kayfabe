@@ -38,7 +38,12 @@
     gpu: /^[A-Za-z0-9 .+\-]{1,40}$/,
     dieId: /^[A-Z]{2}[0-9]{3}[A-Z]?$/,
     showOne: /^(?:reproduced|imported|community)$/,
+    commit: /^[0-9a-f]{7,40}$/,
+    host_driver: /^[0-9]{3}\.[0-9]{1,3}(?:\.[0-9]{1,3})?$/,
+    guest_driver: /^[0-9]{3}\.[0-9]{1,3}(?:\.[0-9]{1,3})?$/,
+    relax: /^(?:none|[a-z_]{3,12}(?:,[a-z_]{3,12}){0,6})$/,
     driver: /^[0-9]{3}\.[0-9]{1,3}(?:\.[0-9]{1,3})?$/,
+    sub: /^[a-z0-9][a-z0-9._-]{0,63}$/,
     logKey: /^runs\/[a-z0-9][a-z0-9-]{5,63}\/[a-z0-9][a-z0-9._-]{0,63}\.(?:log|txt)$/,
   };
   const TIERS = [
@@ -325,6 +330,8 @@
         day(running ? latest.started_at : latest.ended_at) || 'date unknown',
         running ? ' (started)' : '',
         latest.platform === 'both' ? ', one run over Linux and Windows' : '',
+        ', ',
+        sessionLink(latest.id) ?? '',
       ),
       pass && pass.id !== latest.id
         ? el(
@@ -391,7 +398,7 @@
         el('h2', { id: 'fam-' + fam.id }, fam.name),
         el(
           'div',
-          { class: 'kf-scroll', tabindex: 0, role: 'region', 'aria-label': fam.name + ' coverage' },
+          { class: 'kf-scroll kf-scroll-matrix', tabindex: 0, role: 'region', 'aria-label': fam.name + ' coverage' },
           el(
             'table',
             { class: 'kf-matrix' },
@@ -416,7 +423,7 @@
                     'th',
                     { scope: 'row' },
                     el('a', { href: page('die', { family: fam.id, die: die.id }) }, die.id),
-                    die.board ? el('span', { class: 'kf-small kf-block' }, die.board) : null,
+                    die.board ? el('span', { class: 'kf-small kf-board' }, die.board) : null,
                   ),
                   PLATFORMS.map(([platform]) =>
                     el(
@@ -658,28 +665,388 @@
     if (!run) return 'none';
     const chip = verdict(run.verdict, run.state === 'running');
     return PATTERN.id.test(run.id ?? '')
-      ? el('a', { href: page('run', { id: run.id }) }, chip, ' ', run.id)
+      ? [el('a', { href: page('run', { id: run.id }) }, chip, ' ', run.id), el('span', { class: 'kf-small kf-board' }, sessionLink(run.id))]
       : chip;
   }
 
   // --- run ------------------------------------------------------------------------------------
+  // The run page follows docs/design/V3_PLATFORM_TESTING.md and the report contract: the API row
+  // may carry `report` (schema 1: suites, tests, apps, perf, windows, log) and `log`. Everything in
+  // a report is a claim by the test box (it never decides the verdict): the page shows it as
+  // reported, shows an honest empty state for what is absent, and never computes or invents a
+  // number. Viewport-benchmark results are never shown, even if a report carried one.
+  const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+  const finite = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+  function fmtNum(n) {
+    if (n === null) return '';
+    const a = Math.abs(n);
+    if (a >= 1000) return String(Math.round(n));
+    if (a >= 100) return n.toFixed(1);
+    if (a >= 1) return n.toFixed(2);
+    return n === 0 ? '0' : n.toPrecision(3);
+  }
+  function fmtDuration(ms) {
+    if (!Number.isFinite(ms) || ms < 0) return '';
+    if (ms < 1000) return Math.round(ms) + ' ms';
+    if (ms < 90000) return (ms / 1000).toFixed(1) + ' s';
+    return (ms / 60000).toFixed(1) + ' min';
+  }
+  function fmtBytes(n) {
+    if (!Number.isFinite(n) || n < 0) return '';
+    if (n < 1024) return n + ' B';
+    if (n < 1048576) return (n / 1024).toFixed(1) + ' KiB';
+    return (n / 1048576).toFixed(1) + ' MiB';
+  }
+  const RESULT_RANK = { FAIL: 0, REFUSED: 1, NOT_RUN: 2, SKIP: 3, PASS: 4 };
+  const rank = (r) => RESULT_RANK[r] ?? 2;
+  function resultChip(result) {
+    if (VERDICTS.has(result)) return verdict(result, false);
+    if (result === 'REFUSED') return el('span', { class: 'kf-v kf-v-refused' }, 'refused');
+    if (result === 'SKIP') return el('span', { class: 'kf-v kf-v-none' }, 'skipped');
+    if (result === 'NOT_RUN') return el('span', { class: 'kf-v kf-v-none' }, 'not run');
+    return verdict(null, false);
+  }
   function sourceText(source) {
     return source === 'reproduced' ? WORKER_LABEL : text(source) || 'unknown';
   }
   function stageChip(result) {
-    if (result === 'SKIP') return el('span', { class: 'kf-v kf-v-none' }, 'skipped');
-    if (result === 'NOT_RUN') return el('span', { class: 'kf-v kf-v-none' }, 'not run');
-    return verdict(result, false);
+    return resultChip(result);
   }
-  function logLink(log) {
-    if (!log || !PATTERN.logKey.test(log.key ?? '')) return el('p', {}, 'No public log.');
-    // Only the configured log origin is linked; the API's own `direct` field is accepted only when
-    // it is that origin plus the key.
+  // Where a run's log lives. Accepted: the report contract's `log.url` (only when it is exactly the
+  // configured log origin + <run id>/log.txt) or the earlier `log.key`/`log.direct` pair (the origin
+  // plus a key). Nothing else is ever linked.
+  function logHref(data) {
+    const log = isObj(data.log) ? data.log : isObj(data.report?.log) ? data.report.log : null;
+    if (!log) return { present: false, href: '' };
+    if (typeof log.url === 'string' && log.url) {
+      const want = logs && PATTERN.id.test(data.id ?? '') ? logs + '/' + data.id + '/log.txt' : '';
+      return { present: true, href: want && log.url === want ? want : '', log };
+    }
+    if (!PATTERN.logKey.test(log.key ?? '')) return { present: false, href: '' };
     const direct = typeof log.direct === 'string' ? log.direct : '';
     const href = logs ? logs + '/' + log.key : '';
-    if (href && (!direct || direct === href))
-      return el('p', {}, el('a', { href, type: 'text/plain' }, log.key));
-    return el('p', {}, 'Log object ', el('code', {}, log.key), ' (no log origin is configured).');
+    return { present: true, href: href && (!direct || direct === href) ? href : '', log, key: log.key };
+  }
+  function logLink(found) {
+    if (!found.present) return el('p', {}, 'No public log.');
+    if (found.href) return el('p', {}, el('a', { href: found.href, type: 'text/plain' }, found.key ?? found.href));
+    return el('p', {}, 'Log object ', el('code', {}, found.key ?? 'log.txt'), ' (no log origin is configured).');
+  }
+  function runButtons(data, found, asSession) {
+    const buttons = [];
+    if (found.present) {
+      const size = finite(found.log?.bytes);
+      buttons.push(
+        found.href
+          ? el(
+              'a',
+              { class: 'kf-btn', href: found.href, type: 'text/plain', target: '_blank', rel: 'noopener noreferrer' },
+              'Full log' + (size !== null ? ' (' + fmtBytes(size) + ')' : ''),
+            )
+          : el('span', { class: 'kf-btn', 'aria-disabled': 'true' }, 'Full log: no log origin in this build'),
+      );
+    } else if (data.state !== 'running') {
+      buttons.push(el('span', { class: 'kf-btn', 'aria-disabled': 'true' }, 'Full log: none stored for this run'));
+    }
+    if (isObj(data.report)) {
+      const href = logs && PATTERN.id.test(data.id ?? '') ? logs + '/' + data.id + '/report.json' : '';
+      buttons.push(
+        href
+          ? el('a', { class: 'kf-btn kf-btn-2', href, type: 'application/json', target: '_blank', rel: 'noopener noreferrer' }, 'Download report.json')
+          : el('span', { class: 'kf-btn kf-btn-2', 'aria-disabled': 'true' }, 'report.json: no log origin in this build'),
+      );
+    }
+    if (!asSession)
+      buttons.push(el('a', { class: 'kf-btn kf-btn-2', href: page('session', { id: data.id }) }, 'Open the host session'));
+    buttons.push(
+      el('a', { class: 'kf-btn kf-btn-2', href: page('commit', { sha: data.commit }) }, 'Results for this commit'),
+    );
+    return el('div', { class: 'kf-actions' }, buttons);
+  }
+  function runSummary(data, running, found, asSession) {
+    const started = Date.parse(data.started_at ?? '');
+    const ended = Date.parse(data.ended_at ?? '');
+    const span = Number.isFinite(started) && Number.isFinite(ended) ? fmtDuration(ended - started) : '';
+    const dieLink =
+      PATTERN.die.test(data.die ?? '') && PATTERN.family.test(data.family ?? '')
+        ? el('a', { href: page('die', { family: data.family, die: data.die }) }, data.die)
+        : '';
+    const cell = (label, value) => (value === '' || value === null ? null : el('div', {}, el('dt', {}, label), el('dd', {}, value)));
+    return el(
+      'section',
+      { class: 'kf-summary', 'aria-label': 'Summary' },
+      el(
+        'div',
+        { class: 'kf-summary-head' },
+        verdict(data.verdict, running),
+        el('span', { class: 'kf-small' }, sourceText(data.source)),
+        running ? el('span', { class: 'kf-small' }, 'This run is still in flight.') : null,
+      ),
+      el(
+        'dl',
+        { class: 'kf-summary-grid' },
+        cell('Tier', tierLabel(text(data.tier))),
+        cell('Revision', PATTERN.sha.test(data.commit ?? '') ? commitLink(data.commit) : ''),
+        cell('Date', running ? when(data.started_at) + ' (started)' : when(data.ended_at)),
+        cell('Duration', running ? '' : span),
+        cell('Die', dieLink ? [dieLink, text(data.family) ? ' (' + data.family + ')' : ''] : ''),
+        cell('GPU', text(data.host?.gpu_name)),
+        cell('Platform', platformLabel(text(data.platform))),
+        cell('Profile', text(data.profile)),
+        asSession ? cell('Host driver (reported)', text(data.host?.host_driver) || text(data.report?.host_driver)) : null,
+        asSession ? cell('CPU vendor (reported)', text(data.host?.cpu_vendor) || text(data.report?.cpu_vendor)) : null,
+      ),
+      runButtons(data, found, asSession),
+    );
+  }
+  let headingLevel = 'h2';
+  function section(title, id, ...children) {
+    return el('section', { 'aria-labelledby': id }, el(headingLevel, { id }, title), ...children);
+  }
+  function emptyNote(message) {
+    return el('p', { class: 'kf-empty' }, message);
+  }
+  // Performance: value, unit, ratio to the same-box reference when the box measured one; the
+  // direction is said in words, so no number leans on colour.
+  function perfSection(report, scope) {
+    const rows = arr(report?.perf).filter(
+      (r) => isObj(r) && text(r.name) && finite(r.value) !== null && !/spec\s*view/i.test(text(r.name) + ' ' + text(r.suite)),
+    );
+    const head = 'Performance numbers';
+    if (!isObj(report))
+      return section(head, scope + '-perf', emptyNote('Not measured yet: this run has no stored report, so there are no numbers to show.'));
+    if (!rows.length)
+      return section(head, scope + '-perf', emptyNote('Not measured yet: this report holds no performance numbers. Nothing is estimated here.'));
+    return section(
+      head,
+      scope + '-perf',
+      el('p', { class: 'kf-small' }, 'Measured by the test box and reported as is. They never decide a verdict.'),
+      perfTable(rows),
+    );
+  }
+  const manySubs = (rows) => new Set(rows.map((r) => text(r.sub))).size > 1;
+  function perfTable(rows) {
+    const multi = manySubs(rows);
+    return el(
+      'div',
+      { class: 'kf-scroll', tabindex: 0, role: 'region', 'aria-label': 'Performance numbers' },
+      el(
+        'table',
+        { class: 'kf-runs kf-cards kf-perf' },
+        el('thead', {}, el('tr', {}, [...(multi ? ['Subrun'] : []), 'Metric', 'Suite', 'Value', 'Unit', 'Better when', 'Same-box reference'].map((h) => el('th', { scope: 'col', class: h === 'Value' ? 'kf-num' : null }, h)))),
+        el(
+          'tbody',
+          {},
+          rows.map((r) => {
+            const ratio = finite(r.ref_ratio);
+            const ref = finite(r.ref_value);
+            return el(
+              'tr',
+              {},
+              multi ? el('td', { 'data-label': 'Subrun' }, text(r.sub)) : null,
+              el('td', { 'data-label': 'Metric' }, text(r.name)),
+              el('td', { 'data-label': 'Suite' }, text(r.suite)),
+              el('td', { 'data-label': 'Value', class: 'kf-num' }, fmtNum(finite(r.value))),
+              el('td', { 'data-label': 'Unit' }, text(r.unit)),
+              el('td', { 'data-label': 'Better when' }, r.higher_is_better === true ? 'higher' : r.higher_is_better === false ? 'lower' : 'not stated'),
+              el(
+                'td',
+                { 'data-label': 'Same-box reference' },
+                ratio !== null
+                  ? fmtNum(ratio) + '× the reference' + (ref !== null ? ' (' + fmtNum(ref) + ' ' + text(r.unit) + ')' : '')
+                  : el('span', { class: 'kf-small' }, 'no reference measured'),
+              ),
+            );
+          }),
+        ),
+      ),
+    );
+  }
+  function suiteCounts(report) {
+    const listed = arr(report?.suites).filter((s) => isObj(s) && text(s.name));
+    if (listed.length)
+      return listed.map((s) => ({ name: text(s.name), pass: finite(s.pass) ?? 0, fail: finite(s.fail) ?? 0, skip: finite(s.skip) ?? 0 }));
+    const by = new Map();
+    for (const t of arr(report?.tests)) {
+      if (!isObj(t)) continue;
+      const entry = by.get(text(t.suite)) ?? { name: text(t.suite) || 'tests', pass: 0, fail: 0, skip: 0 };
+      if (t.result === 'PASS') entry.pass++;
+      else if (t.result === 'FAIL') entry.fail++;
+      else entry.skip++;
+      by.set(text(t.suite), entry);
+    }
+    return [...by.values()];
+  }
+  // Tests: counts per suite, FAIL first, and a result filter that hides rows without removing them.
+  function testsSection(report, scope) {
+    const head = 'Tests';
+    if (!isObj(report))
+      return section(head, scope + '-tests', emptyNote('Not measured yet: this run has no stored report.'));
+    const tests = arr(report.tests).filter((t) => isObj(t) && text(t.name));
+    if (!tests.length)
+      return section(head, scope + '-tests', emptyNote('This report lists no individual tests.'));
+    const sorted = tests
+      .map((t, i) => ({ t, i }))
+      .sort((a, b) => rank(a.t.result) - rank(b.t.result) || a.i - b.i)
+      .map((x) => x.t);
+    const counts = el(
+      'ul',
+      { class: 'kf-counts', 'aria-label': 'Counts per suite' },
+      suiteCounts(report).map((s) => el('li', {}, el('strong', {}, s.name), ': ' + s.pass + ' pass, ' + s.fail + ' fail, ' + s.skip + ' skipped')),
+    );
+    const multi = manySubs(sorted);
+    const body = el(
+      'tbody',
+      {},
+      sorted.map((t) => {
+        const r = ['PASS', 'FAIL', 'SKIP', 'REFUSED', 'NOT_RUN'].includes(t.result) ? t.result : 'NOT_RUN';
+        return el(
+          'tr',
+          { 'data-result': r },
+          multi ? el('td', { 'data-label': 'Subrun' }, text(t.sub)) : null,
+          el('td', { 'data-label': 'Suite' }, text(t.suite)),
+          el('td', { 'data-label': 'Test' }, text(t.name)),
+          el('td', { 'data-label': 'Result' }, resultChip(r)),
+          el('td', { 'data-label': 'Time', class: 'kf-num' }, finite(t.ms) !== null ? fmtDuration(t.ms) : ''),
+        );
+      }),
+    );
+    const status = el('p', { class: 'kf-small', role: 'status' }, 'Showing all ' + sorted.length + ' tests.');
+    const FILTERS = [
+      ['all', 'All'],
+      ['bad', 'Failed or refused'],
+      ['PASS', 'Passed'],
+      ['skip', 'Skipped or not run'],
+    ];
+    const match = (r, key) =>
+      key === 'all' || (key === 'bad' ? r === 'FAIL' || r === 'REFUSED' : key === 'skip' ? r === 'SKIP' || r === 'NOT_RUN' : r === key);
+    const buttons = FILTERS.map(([key, label]) =>
+      el('button', { type: 'button', 'aria-pressed': key === 'all' ? 'true' : 'false', 'data-filter': key }, label),
+    );
+    for (const button of buttons)
+      button.addEventListener('click', () => {
+        const key = button.dataset.filter;
+        let shown = 0;
+        for (const row of body.children) {
+          const visible = match(row.dataset.result, key);
+          row.hidden = !visible;
+          if (visible) shown++;
+        }
+        for (const other of buttons) other.setAttribute('aria-pressed', other === button ? 'true' : 'false');
+        status.textContent = key === 'all' ? 'Showing all ' + shown + ' tests.' : 'Showing ' + shown + ' of ' + sorted.length + ' tests.';
+      });
+    return section(
+      head,
+      scope + '-tests',
+      counts,
+      el('div', { class: 'kf-seg', role: 'group', 'aria-label': 'Filter tests by result' }, buttons),
+      status,
+      el(
+        'div',
+        { class: 'kf-scroll kf-scroll-tall', tabindex: 0, role: 'region', 'aria-label': 'Tests' },
+        el(
+          'table',
+          { class: 'kf-runs kf-cards kf-tests' },
+          el('thead', {}, el('tr', {}, [...(multi ? ['Subrun'] : []), 'Suite', 'Test', 'Result', 'Time'].map((h) => el('th', { scope: 'col', class: h === 'Time' ? 'kf-num' : null }, h)))),
+          body,
+        ),
+      ),
+    );
+  }
+  function appsSection(report, scope) {
+    const head = 'Applications';
+    const reason = 'Not measured yet: the application matrix stage does not exist in CI yet.';
+    if (!isObj(report)) return section(head, scope + '-apps', emptyNote(reason));
+    const apps = arr(report.apps).filter((a) => isObj(a) && text(a.name));
+    if (!apps.length) return section(head, scope + '-apps', emptyNote(reason));
+    const sorted = apps
+      .map((a, i) => ({ a, i }))
+      .sort((x, y) => rank(x.a.result) - rank(y.a.result) || x.i - y.i)
+      .map((x) => x.a);
+    const tally = (r) => apps.filter((a) => a.result === r).length;
+    return section(
+      head,
+      scope + '-apps',
+      el('ul', { class: 'kf-counts', 'aria-label': 'Application counts' }, [
+        el('li', {}, tally('PASS') + ' passed'),
+        el('li', {}, tally('FAIL') + ' failed'),
+        el('li', {}, apps.length - tally('PASS') - tally('FAIL') + ' not run'),
+      ]),
+      el(
+        'div',
+        { class: 'kf-scroll', tabindex: 0, role: 'region', 'aria-label': 'Applications' },
+        el(
+          'table',
+          { class: 'kf-runs kf-cards kf-apps' },
+          el('thead', {}, el('tr', {}, [...(manySubs(sorted) ? ['Subrun'] : []), 'Application', 'Guest OS', 'Result', 'Note'].map((h) => el('th', { scope: 'col' }, h)))),
+          el(
+            'tbody',
+            {},
+            sorted.map((a) =>
+              el(
+                'tr',
+                {},
+                manySubs(sorted) ? el('td', { 'data-label': 'Subrun' }, text(a.sub)) : null,
+                el('td', { 'data-label': 'Application' }, text(a.name)),
+                el('td', { 'data-label': 'Guest OS' }, a.os === 'windows' ? 'Windows' : a.os === 'linux' ? 'Linux' : ''),
+                el('td', { 'data-label': 'Result' }, resultChip(a.result)),
+                el('td', { 'data-label': 'Note' }, text(a.note)),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+  function windowsSection(data, scope) {
+    if (data.platform !== 'windows' && data.platform !== 'both') return null;
+    const w = isObj(data.report?.windows) ? data.report.windows : null;
+    const head = 'Windows gate';
+    if (!w) return section(head, scope + '-win', emptyNote('Not measured yet: this report has no Windows block.'));
+    const install = finite(w.install_s);
+    const rows = [
+      ['Gate', w.gate ? verdict(w.gate, false) : ''],
+      ['Install time', install !== null ? fmtDuration(install * 1000) : ''],
+      ['Probes', arr(w.probes).map(text).filter(Boolean).join(', ')],
+      ['Driver resets', finite(w.resets) !== null ? String(w.resets) : ''],
+      ['Live dumps (code 193)', finite(w.live_dumps_193) !== null ? String(w.live_dumps_193) : ''],
+    ].filter(([, v]) => v !== '');
+    return section(head, scope + '-win', el('dl', { class: 'kf-facts' }, rows.map(([k, v]) => [el('dt', {}, k), el('dd', {}, v)])));
+  }
+  function stagesSection(stages, scope) {
+    const total = stages.reduce((n, s) => n + (Number.isFinite(s.duration_ms) ? s.duration_ms : 0), 0);
+    return section(
+      'Stages',
+      scope + '-stages',
+      stages.length
+        ? [
+            el(
+              'div',
+              { class: 'kf-scroll', tabindex: 0, role: 'region', 'aria-label': 'Stages' },
+              el(
+                'table',
+                { class: 'kf-runs kf-cards' },
+                el('thead', {}, el('tr', {}, ['Stage', 'Result', 'Exit code', 'Duration'].map((h, i) => el('th', { scope: 'col', class: i === 3 ? 'kf-num' : null }, h)))),
+                el(
+                  'tbody',
+                  {},
+                  stages.map((s) =>
+                    el(
+                      'tr',
+                      {},
+                      el('td', { 'data-label': 'Stage' }, text(s.name)),
+                      el('td', { 'data-label': 'Result' }, stageChip(s.result)),
+                      el('td', { 'data-label': 'Exit code' }, s.rc === null || s.rc === undefined ? '' : String(s.rc)),
+                      el('td', { 'data-label': 'Duration', class: 'kf-num' }, Number.isFinite(s.duration_ms) ? fmtDuration(s.duration_ms) : ''),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            total > 0 ? el('p', { class: 'kf-small' }, 'Stages add up to ' + fmtDuration(total) + '.') : null,
+          ]
+        : emptyNote('No stages recorded.'),
+    );
   }
   async function run() {
     const id = param('id');
@@ -688,6 +1055,8 @@
     if (!data) throw new Error('Not found.');
     main.querySelector('h1').textContent = 'Run ' + text(data.id);
     const running = data.state === 'running';
+    const found = logHref(data);
+    const report = isObj(data.report) ? data.report : null;
     const facts = [
       ['Verdict', verdict(data.verdict, running)],
       ['Source', sourceText(data.source)],
@@ -742,60 +1111,212 @@
         [text(guest.os_version) || 'OS version not reported', ', driver ', text(guest.driver) || 'not reported'].join(''),
       ]);
     }
+    if (found.present && finite(found.log?.bytes) !== null) facts.push(['Log size', fmtBytes(found.log.bytes)]);
+    if (found.present && /^[0-9a-f]{64}$/.test(text(found.log?.sha256))) facts.push(['Log SHA-256', el('code', {}, found.log.sha256)]);
     const stages = arr(data.stages);
     content.replaceChildren(
       el('p', {}, el('a', { href: page('', {}) }, 'Back to the matrix')),
+      runSummary(data, running, found),
+      perfSection(report, 'run'),
+      testsSection(report, 'run'),
+      appsSection(report, 'run'),
+      windowsSection(data, 'run'),
+      stagesSection(stages, 'run'),
       el(
-        'dl',
-        { class: 'kf-facts' },
-        facts.map(([k, v]) => [el('dt', {}, k), el('dd', {}, v)]),
+        'details',
+        { class: 'kf-details' },
+        el('summary', {}, 'Raw details: host, guests, result key'),
+        el('dl', { class: 'kf-facts' }, facts.map(([k, v]) => [el('dt', {}, k), el('dd', {}, v)])),
+        el('h3', {}, 'Log'),
+        logLink(found),
       ),
-      el('h2', {}, 'Stages'),
-      stages.length
-        ? el(
-            'div',
-            { class: 'kf-scroll', tabindex: 0, role: 'region', 'aria-label': 'Stages' },
-            el(
-              'table',
-              { class: 'kf-runs' },
+    );
+    done(running ? 'This run is still in flight.' : 'This run is final.');
+  }
+
+  // --- host session -----------------------------------------------------------------------------
+  // A run is a host session; every result row of its report belongs to a subrun (`sub`). The session
+  // page shows what the box tested: the header, a table of the subruns, then one section per subrun.
+  // The route is /status/session/?id=<run id>: the site is static, so a path segment cannot carry an id.
+  const KINDS = { host_bare: 'Host, bare metal', linux_guest: 'Linux guest', windows_guest: 'Windows guest' };
+  const subs = (data) =>
+    (arr(data.subruns).length ? arr(data.subruns) : arr(data.report?.subruns)).filter(
+      (s) => isObj(s) && PATTERN.sub.test(s.sub ?? ''),
+    );
+  const anchorOf = (s) => 'sub-' + s.sub.replace(/[^a-z0-9-]/gi, '-');
+  const sessionLink = (id, label) =>
+    PATTERN.id.test(id ?? '') ? el('a', { href: page('session', { id }) }, label ?? 'host session') : null;
+  const countsText = (c) =>
+    isObj(c) ? (finite(c.pass) ?? 0) + ' pass, ' + (finite(c.fail) ?? 0) + ' fail, ' + (finite(c.skip) ?? 0) + ' skipped' : '';
+  function rangeText(s) {
+    const r = isObj(s.log_range) ? s.log_range : null;
+    const a = finite(r?.start_byte);
+    const b = finite(r?.end_byte);
+    return a !== null && b !== null && b >= a ? 'bytes ' + a + '–' + b + ' of the log' : '';
+  }
+  function subTable(data, list, found) {
+    return el(
+      'div',
+      { class: 'kf-scroll', tabindex: 0, role: 'region', 'aria-label': 'Subruns' },
+      el(
+        'table',
+        { class: 'kf-runs kf-cards kf-subruns' },
+        el('thead', {}, el('tr', {}, ['Subrun', 'Kind', 'Guest driver', 'Result', 'Tests', 'Duration', 'In the log'].map((h) => el('th', { scope: 'col' }, h)))),
+        el(
+          'tbody',
+          {},
+          list.map((s) => {
+            const a = Date.parse(s.started_at ?? '');
+            const b = Date.parse(s.ended_at ?? '');
+            return el(
+              'tr',
+              {},
+              el('td', { 'data-label': 'Subrun' }, el('a', { href: '#' + anchorOf(s) }, s.sub)),
+              el('td', { 'data-label': 'Kind' }, (KINDS[s.kind] ?? text(s.kind)) + (s.os === 'host' || !s.os ? '' : '')),
+              el('td', { 'data-label': 'Guest driver' }, text(s.guest_driver) || el('span', { class: 'kf-small' }, s.kind === 'host_bare' ? 'none (host)' : 'not reported')),
+              el('td', { 'data-label': 'Result' }, resultChip(s.verdict)),
+              el('td', { 'data-label': 'Tests' }, countsText(s.counts) || el('span', { class: 'kf-small' }, 'no counts')),
+              el('td', { 'data-label': 'Duration' }, Number.isFinite(a) && Number.isFinite(b) && b >= a ? fmtDuration(b - a) : ''),
               el(
-                'thead',
-                {},
-                el(
-                  'tr',
-                  {},
-                  ['Stage', 'Result', 'Exit code', 'Duration'].map((h) =>
-                    el('th', { scope: 'col' }, h),
-                  ),
-                ),
+                'td',
+                { 'data-label': 'In the log' },
+                rangeText(s) || el('span', { class: 'kf-small' }, 'no range'),
+                found.href && rangeText(s) ? el('span', { class: 'kf-small kf-board' }, el('a', { href: found.href, type: 'text/plain', target: '_blank', rel: 'noopener noreferrer' }, 'open log.txt')) : null,
               ),
+            );
+          }),
+        ),
+      ),
+    );
+  }
+  // One subrun: its numbers, tests, applications and stages, filtered by `sub`.
+  function subSection(data, report, s, i) {
+    headingLevel = 'h3';
+    try {
+      return subSectionBody(data, report, s, i);
+    } finally {
+      headingLevel = 'h2';
+    }
+  }
+  function subSectionBody(data, report, s, i) {
+    const own = (rows) => arr(rows).filter((r) => isObj(r) && r.sub === s.sub);
+    const slice = {
+      perf: own(report?.perf),
+      tests: own(report?.tests),
+      apps: own(report?.apps),
+      suites: own(report?.suites),
+    };
+    const scope = 'sub' + i;
+    const byName = new Map(arr(data.stages).map((st) => [text(st.name), st]));
+    const stageNames = arr(s.stages).map(text).filter(Boolean);
+    const reason = text(s.reason) || text(s.note);
+    return el(
+      'section',
+      { class: 'kf-sub', id: anchorOf(s), 'aria-labelledby': scope + '-h' },
+      el(
+        'h2',
+        { id: scope + '-h' },
+        s.sub + ' ',
+        resultChip(s.verdict),
+      ),
+      el(
+        'p',
+        { class: 'kf-small' },
+        [KINDS[s.kind] ?? text(s.kind), text(s.guest_driver) ? 'guest driver ' + s.guest_driver : '', text(s.host_driver) ? 'host driver ' + s.host_driver : '', countsText(s.counts), rangeText(s)]
+          .filter(Boolean)
+          .join(', '),
+      ),
+      s.verdict === 'NOT_RUN' ? emptyNote('Not run' + (reason ? ': ' + reason : '. No reason was reported.')) : reason ? el('p', { class: 'kf-note' }, reason) : null,
+      s.verdict === 'NOT_RUN' ? null : [
+        perfSection(slice, scope),
+        testsSection(slice, scope),
+        appsSection(slice, scope),
+        stageNames.length
+          ? section(
+              'Stages',
+              scope + '-stages',
               el(
-                'tbody',
-                {},
-                stages.map((s) =>
+                'div',
+                { class: 'kf-scroll', tabindex: 0, role: 'region', 'aria-label': 'Stages of ' + s.sub },
+                el(
+                  'table',
+                  { class: 'kf-runs kf-cards' },
+                  el('thead', {}, el('tr', {}, ['Stage', 'Result', 'Duration'].map((h, k) => el('th', { scope: 'col', class: k === 2 ? 'kf-num' : null }, h)))),
                   el(
-                    'tr',
+                    'tbody',
                     {},
-                    el('td', {}, text(s.name)),
-                    el('td', {}, stageChip(s.result)),
-                    el('td', {}, s.rc === null || s.rc === undefined ? '' : String(s.rc)),
-                    el(
-                      'td',
-                      {},
-                      Number.isFinite(s.duration_ms)
-                        ? (s.duration_ms / 60000).toFixed(1) + ' min'
-                        : '',
+                    stageNames.map((n) =>
+                      el(
+                        'tr',
+                        {},
+                        el('td', { 'data-label': 'Stage' }, n),
+                        el('td', { 'data-label': 'Result' }, byName.has(n) ? resultChip(byName.get(n).result) : el('span', { class: 'kf-small' }, 'no stage record')),
+                        el('td', { 'data-label': 'Duration', class: 'kf-num' }, Number.isFinite(byName.get(n)?.duration_ms) ? fmtDuration(byName.get(n).duration_ms) : ''),
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-          )
-        : el('p', {}, 'No stages recorded.'),
-      el('h2', {}, 'Log'),
-      logLink(data.log),
+            )
+          : null,
+      ],
     );
-    done(running ? 'This run is still in flight.' : 'This run is final.');
+  }
+  async function session() {
+    const id = param('id');
+    if (!id) throw new Error('This page needs a run id.');
+    const data = (await load('/v1/ci/runs/' + id)).run;
+    if (!data) throw new Error('Not found.');
+    main.querySelector('h1').textContent = 'Host session ' + text(data.id);
+    const running = data.state === 'running';
+    const found = logHref(data);
+    const report = isObj(data.report) ? data.report : null;
+    const list = subs(data);
+    const parts = [
+      el('p', {}, el('a', { href: page('run', { id }) }, 'Run page'), ' · ', el('a', { href: page('', {}) }, 'Back to the matrix')),
+      runSummary(data, running, found, true),
+    ];
+    if (!list.length) {
+      parts.push(
+        section(
+          'Subruns',
+          'sub-none',
+          emptyNote('Not measured yet: this session has no subrun breakdown. Runs recorded before the report existed list their stages only.'),
+        ),
+        perfSection(report, 'run'),
+        testsSection(report, 'run'),
+        appsSection(report, 'run'),
+        stagesSection(arr(data.stages), 'run'),
+      );
+    } else {
+      parts.push(
+        section(
+          'Subruns',
+          'sub-list',
+          el('p', { class: 'kf-small' }, 'Everything this box tested: one row per host, Linux guest and Windows guest run. The results are the box’s report; the session verdict is the worst of them.'),
+          subTable(data, list, found),
+        ),
+        ...list.map((s, i) => subSection(data, report, s, i)),
+        stagesSection(arr(data.stages), 'run'),
+      );
+    }
+    parts.push(
+      el(
+        'details',
+        { class: 'kf-details' },
+        el('summary', {}, 'Raw details: host, result key, log'),
+        el('dl', { class: 'kf-facts' }, [
+          ['Result key', PATTERN.hash.test(data.tree?.hash ?? '') ? data.tree.hash.slice(0, 16) + ' (' + text(data.tree.kind) + ')' : ''],
+          ['Started', when(data.started_at)],
+          ['Finished', when(data.ended_at) || 'in flight'],
+          ['Host driver (reported)', text(data.host?.host_driver) || text(data.report?.host_driver)],
+        ].filter(([, v]) => v !== '').map(([k, v]) => [el('dt', {}, k), el('dd', {}, v)])),
+        el('h3', {}, 'Log'),
+        logLink(found),
+      ),
+    );
+    content.replaceChildren(...parts);
+    done(running ? 'This session is still in flight.' : list.length + (list.length === 1 ? ' subrun.' : ' subruns.'));
   }
 
   // --- commit and result key ------------------------------------------------------------------
@@ -830,6 +1351,7 @@
                 PATTERN.id.test(r.id ?? '')
                   ? el('a', { href: page('run', { id: r.id }) }, r.id)
                   : 'unknown',
+                sessionLink(r.id) ? el('span', { class: 'kf-small kf-board' }, sessionLink(r.id)) : null,
               ),
               el('td', {}, verdict(r.verdict, r.state === 'running')),
               el(
@@ -846,7 +1368,7 @@
                 {},
                 commitLink(r.commit),
                 r.other_commit || (current && r.commit !== current)
-                  ? el('span', { class: 'kf-small kf-block' }, 'another commit, same result key')
+                  ? el('span', { class: 'kf-small kf-board' }, 'another commit, same result key')
                   : null,
               ),
               el('td', {}, when(r.ended_at) || 'in flight'),
@@ -1047,6 +1569,87 @@
       ),
     );
   }
+  // Closeness: which differences may be accepted when no subrun matches exactly, and in which order
+  // they are tried (the report contract's default ladder). `relax` carries the ordered list in the
+  // address; `none` means exact matches only.
+  const RELAX_DIMS = [
+    ['commit', 'commit revision'],
+    ['cpu', 'CPU type'],
+    ['host_driver', 'host driver'],
+    ['guest_driver', 'guest driver'],
+    ['die_family', 'die within the same family'],
+    ['os', 'guest OS'],
+    ['die_any', 'die in another family'],
+  ];
+  const RELAX_DEFAULT = RELAX_DIMS.map(([id]) => id);
+  const relaxLabel = (id) => RELAX_DIMS.find(([k]) => k === id)?.[1] ?? id;
+  function parseRelax(value) {
+    if (value === null || !PATTERN.relax.test(value)) return RELAX_DEFAULT;
+    if (value === 'none') return [];
+    const list = value.split(',');
+    return list.every((d) => RELAX_DEFAULT.includes(d)) && new Set(list).size === list.length ? list : RELAX_DEFAULT;
+  }
+  function relaxFromControl(form) {
+    const rows = [...form.querySelectorAll('.kf-relax li')];
+    const list = rows.filter((li) => li.querySelector('input').checked).map((li) => li.dataset.dim);
+    return list.length ? list.join(',') : 'none';
+  }
+  function closenessControl(f) {
+    const order = [...f.relax, ...RELAX_DEFAULT.filter((d) => !f.relax.includes(d))];
+    const list = el('ol', { class: 'kf-relax' });
+    const rebuild = () => {
+      [...list.children].forEach((li, i) => {
+        li.querySelector('[data-move=up]').disabled = i === 0;
+        li.querySelector('[data-move=down]').disabled = i === list.children.length - 1;
+      });
+    };
+    for (const dim of order) {
+      const label = relaxLabel(dim);
+      const check = el('input', { type: 'checkbox', id: 'kf-relax-' + dim, checked: f.relax.includes(dim) });
+      const move = (dir) =>
+        el('button', { type: 'button', 'data-move': dir, 'aria-label': 'Try ' + label + (dir === 'up' ? ' earlier' : ' later') }, dir === 'up' ? '\u2191' : '\u2193');
+      const up = move('up');
+      const down = move('down');
+      const li = el('li', { 'data-dim': dim }, el('label', { for: 'kf-relax-' + dim }, check, ' ', label), up, down);
+      up.addEventListener('click', () => {
+        if (li.previousElementSibling) li.previousElementSibling.before(li);
+        rebuild();
+        up.disabled ? down.focus() : up.focus();
+      });
+      down.addEventListener('click', () => {
+        if (li.nextElementSibling) li.nextElementSibling.after(li);
+        rebuild();
+        down.disabled ? up.focus() : down.focus();
+      });
+      list.append(li);
+    }
+    rebuild();
+    return el(
+      'details',
+      { class: 'kf-field kf-field-wide kf-closeness', open: f.relaxGiven },
+      el('summary', {}, 'Closeness: what may differ when nothing matches exactly'),
+      el('p', { class: 'kf-small' }, 'If no subrun matches every choice above, the nearest ones are listed. Ticked differences may be accepted, tried from the top; untick one to never accept it.'),
+      list,
+      el('input', { type: 'hidden', name: 'relax', value: f.relax.join(','), disabled: !f.relaxGiven }),
+    );
+  }
+  function driverField(id, name, label, value) {
+    return el(
+      'div',
+      { class: 'kf-field' },
+      el('label', { for: id }, label),
+      el('input', {
+        id,
+        name,
+        type: 'text',
+        maxlength: 16,
+        inputmode: 'decimal',
+        placeholder: '580.95.05',
+        pattern: '[0-9]{3}\\.[0-9]{1,3}(\\.[0-9]{1,3})?',
+        value: value ?? '',
+      }),
+    );
+  }
   function findForm(f, names) {
     const list = el('ul', { id: 'kf-suggest', class: 'kf-suggest', 'aria-label': 'Matching cards' });
     const input = el('input', {
@@ -1105,23 +1708,36 @@
           ),
         ),
       ),
+      driverField('kf-host-driver', 'host_driver', 'Host driver (optional)', f.host_driver),
+      driverField('kf-guest-driver', 'guest_driver', 'Guest driver (optional)', f.guest_driver),
       el(
         'div',
         { class: 'kf-field' },
-        el('label', { for: 'kf-driver' }, 'Driver version (host or guest, optional)'),
+        el('label', { for: 'kf-commit' }, 'Commit (optional)'),
         el('input', {
-          id: 'kf-driver',
-          name: 'driver',
+          id: 'kf-commit',
+          name: 'commit',
           type: 'text',
-          maxlength: 16,
-          inputmode: 'decimal',
-          placeholder: '580.95.05',
-          pattern: '[0-9]{3}\\.[0-9]{1,3}(\\.[0-9]{1,3})?',
-          value: f.driver ?? '',
+          maxlength: 40,
+          spellcheck: 'false',
+          placeholder: 'a1b2c3d4',
+          pattern: '[0-9a-f]{7,40}',
+          value: f.commit ?? '',
         }),
       ),
+      closenessControl(f),
       el('button', { type: 'submit', class: 'kf-button' }, 'Show results'),
     );
+    form.addEventListener('submit', () => {
+      const hidden = form.querySelector('input[name=relax]');
+      if (!hidden) return;
+      const value = relaxFromControl(form);
+      if (value === RELAX_DEFAULT.join(',')) hidden.disabled = true;
+      else {
+        hidden.disabled = false;
+        hidden.value = value;
+      }
+    });
     const refresh = () => {
       const found = input.value.trim() ? suggestions(input.value, names) : [];
       list.replaceChildren(
@@ -1158,13 +1774,13 @@
     // A FAIL in the other guest OS of a run over both is this setup's UNATTRIBUTED, said in words.
     const note =
       latest.result === 'UNATTRIBUTED' && latest.verdict === 'FAIL'
-        ? el('span', { class: 'kf-small kf-block' }, 'the run failed in the other guest OS')
+        ? el('span', { class: 'kf-small kf-board' }, 'the run failed in the other guest OS')
         : latest.result === 'UNATTRIBUTED' || latest.result === 'RETRY'
-          ? el('span', { class: 'kf-small kf-block' }, 'no verdict on this setup')
+          ? el('span', { class: 'kf-small kf-board' }, 'no verdict on this setup')
           : null;
     const origin = el(
       'span',
-      { class: 'kf-small kf-block' },
+      { class: 'kf-small kf-board' },
       setup.source === 'community'
         ? SOURCE_LABEL.community + ', ' + (setup.report_tier === 'reviewed' ? 'reviewed' : 'unverified') + ' (not a gate result)'
         : SOURCE_LABEL.reproduced,
@@ -1200,7 +1816,8 @@
         PATTERN.id.test(latest.id ?? '')
           ? el('a', { href: page('run', { id: latest.id }) }, latest.id)
           : 'unknown',
-        el('span', { class: 'kf-small kf-block' }, 'commit ', commitLink(latest.commit)),
+        el('span', { class: 'kf-small kf-board' }, 'commit ', commitLink(latest.commit)),
+        sessionLink(latest.id) ? el('span', { class: 'kf-small kf-board' }, sessionLink(latest.id)) : null,
       ),
       el(
         'td',
@@ -1291,6 +1908,100 @@
       (wanted.includes('community') ? '&source=' + wanted.join(',') : '')
     );
   }
+  // The closest subruns, from GET /v1/ci/subruns (report contract, addendum of 2026-11-07). Each row
+  // carries match: {exact: [dims], relaxed: [{dim, wanted, found}]}; the chips repeat that in words, so
+  // a subrun is never presented as an exact match when it is not. Shown when nothing matches exactly,
+  // or when a commit was asked for (the aggregated table above ignores the commit).
+  const EXACT_WORDS = {
+    die: 'die',
+    os: 'guest OS',
+    cpu: 'CPU type',
+    commit: 'commit',
+    tree: 'result key',
+    host_driver: 'host driver',
+    guest_driver: 'guest driver',
+  };
+  function subrunsPath(die, f) {
+    const q = new URLSearchParams();
+    if (f.commit) q.set('commit', f.commit);
+    q.set('die', die);
+    q.set('os', f.os);
+    if (f.host_driver) q.set('host_driver', f.host_driver);
+    if (f.guest_driver) q.set('guest_driver', f.guest_driver);
+    if (f.cpu !== 'any') q.set('cpu', f.cpu);
+    if (f.relaxGiven) q.set('relax', f.relax.length ? f.relax.join(',') : 'none');
+    q.set('limit', '10');
+    return '/v1/ci/subruns?' + q.toString().replace(/%2C/g, ',');
+  }
+  function matchChips(match) {
+    const exact = arr(match?.exact).filter((d) => typeof d === 'string' && EXACT_WORDS[d]);
+    const relaxed = arr(match?.relaxed).filter((r) => isObj(r) && typeof r.dim === 'string');
+    return el(
+      'ul',
+      { class: 'kf-chips', 'aria-label': 'How this subrun differs from your setup' },
+      exact.map((d) => el('li', { class: 'kf-chip kf-chip-same' }, 'same ' + EXACT_WORDS[d])),
+      relaxed.map((r) =>
+        el(
+          'li',
+          { class: 'kf-chip kf-chip-diff' },
+          'different ' + relaxLabel(r.dim),
+          text(r.wanted) || text(r.found) ? el('span', { class: 'kf-small' }, ' (wanted ' + (text(r.wanted) || 'any') + ', found ' + (text(r.found) || 'unknown') + ')') : null,
+        ),
+      ),
+    );
+  }
+  async function nearestSection(die, f, none) {
+    let data;
+    try {
+      data = await load(subrunsPath(die, f));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '';
+      if (/synthetic fixture/.test(message)) return null;
+      return el('p', { class: 'kf-note' }, 'The closest-subrun search could not be loaded: ' + message);
+    }
+    const rows = arr(data?.subruns).filter((r) => isObj(r) && PATTERN.id.test(r.run_id ?? ''));
+    if (!rows.length)
+      return el('div', { class: 'kf-block kf-block-none' }, el('span', { class: 'kf-v kf-v-none' }, 'no near match'), el('span', { class: 'kf-small' }, 'No subrun of ' + die + ' is close to this setup, even with the differences you allow under Closeness.'));
+    const exactFirst = rows.some((r) => arr(r.match?.relaxed).length === 0);
+    return el(
+      'div',
+      { class: 'kf-nearest' },
+      el('h3', {}, none && !exactFirst ? 'No exact match: the nearest subruns' : 'Closest subruns, best first'),
+      none && !exactFirst ? el('p', {}, 'No subrun matches this setup exactly. These are the nearest ones, each with what differs.') : null,
+      el(
+        'div',
+        { class: 'kf-scroll', tabindex: 0, role: 'region', 'aria-label': 'Nearest subruns for ' + die },
+        el(
+          'table',
+          { class: 'kf-runs kf-cards kf-nearest-table' },
+          el('thead', {}, el('tr', {}, ['How it matches', 'Result', 'Guest driver', 'Host driver', 'CPU vendor (reported)', 'Commit', 'Date', 'Session'].map((h) => el('th', { scope: 'col' }, h)))),
+          el(
+            'tbody',
+            {},
+            rows.map((r) =>
+              el(
+                'tr',
+                {},
+                el('td', { 'data-label': 'How it matches' }, matchChips(r.match)),
+                el('td', { 'data-label': 'Result' }, resultChip(r.verdict)),
+                el('td', { 'data-label': 'Guest driver' }, reported(r.guest_driver) ?? notReported()),
+                el('td', { 'data-label': 'Host driver' }, reported(r.host_driver) ?? notReported()),
+                el('td', { 'data-label': 'CPU vendor (reported)' }, r.cpu_vendor ? (CPU_LABEL[r.cpu_vendor] ?? text(r.cpu_vendor)) : notReported()),
+                el('td', { 'data-label': 'Commit' }, PATTERN.sha.test(r.commit ?? '') ? commitLink(r.commit) : notReported()),
+                el('td', { 'data-label': 'Date' }, day(r.ended_at) || 'unknown'),
+                el(
+                  'td',
+                  { 'data-label': 'Session' },
+                  el('a', { href: page('session', { id: r.run_id }) + (PATTERN.sub.test(r.sub ?? '') ? '#sub-' + r.sub.replace(/[^a-z0-9-]/gi, '-') : '') }, r.run_id),
+                  PATTERN.sub.test(r.sub ?? '') ? el('span', { class: 'kf-small kf-board' }, 'subrun ' + r.sub) : null,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
   async function dieSection(die, f, coverage, entryNote) {
     const os = f.os;
     const family = FAMILY_OF[die.slice(0, 2)]?.[0] ?? null;
@@ -1312,7 +2023,9 @@
         return { section, shown: 0 };
       }
     const byCpu = f.cpu === 'any' ? rows : rows.filter((s) => s.cpu_vendor === f.cpu);
-    const shown = f.driver ? byCpu.filter((s) => s.host_driver === f.driver || s.guest_driver === f.driver) : byCpu;
+    const byDriver = f.driver ? byCpu.filter((s) => s.host_driver === f.driver || s.guest_driver === f.driver) : byCpu;
+    const byHost = f.host_driver ? byDriver.filter((s) => s.host_driver === f.host_driver) : byDriver;
+    const shown = f.guest_driver ? byHost.filter((s) => s.guest_driver === f.guest_driver) : byHost;
     const hidden = rows.length - shown.length;
     if (entryNote) section.append(el('p', { class: 'kf-small' }, entryNote));
     const cell = arr(coverage?.families)
@@ -1346,6 +2059,10 @@
         ),
       );
     if (failed) section.append(el('p', { class: 'kf-note' }, failed));
+    if (!shown.length || f.commit) {
+      const near = await nearestSection(die, f, shown.length === 0);
+      if (near) section.append(near);
+    }
     if (evidence)
       section.append(
         el('h3', {}, 'Evidence in the repository, not CI gate results'),
@@ -1364,6 +2081,11 @@
       show: picked.length ? [...new Set(picked)] : SHOW_DEFAULT,
       tier: param('tier'),
       driver: param('driver'),
+      host_driver: param('host_driver'),
+      guest_driver: param('guest_driver'),
+      commit: param('commit'),
+      relax: parseRelax(query.get('relax')),
+      relaxGiven: query.has('relax'),
     };
     const { os, cpu, typed } = f;
     const sameShow = f.show.length === SHOW_DEFAULT.length && SHOW_DEFAULT.every((x) => f.show.includes(x));
@@ -1374,6 +2096,10 @@
       show: sameShow ? null : f.show,
       tier: f.tier,
       driver: f.driver,
+      host_driver: f.host_driver,
+      guest_driver: f.guest_driver,
+      commit: f.commit,
+      relax: f.relaxGiven ? query.get('relax') : null,
     });
     const [names, coverage] = await Promise.all([loadGpuNames(), loadCoverage()]);
     filters.replaceChildren(findForm(f, names));
@@ -1470,7 +2196,182 @@
     );
   }
 
-  const views = { matrix, die, run, commit, find };
+  // --- results by die and driver ------------------------------------------------------------------
+  // GET /v1/ci/stats?die=&tier=&driver= (report contract): one row per die and host driver with the
+  // newest stored report's pass counts and performance rows. Filters are URL parameters, so a view can
+  // be shared; in live mode they also go to the API, and the page applies them again (the synthetic
+  // fixture holds one unfiltered answer). Sorting is in the page. Numbers are the test box's claims,
+  // never a gate result, and an absent number stays absent.
+  const SORTS = {
+    die: (r) => r.die,
+    driver: (r) => r.driver,
+    tier: (r) => r.tier,
+    result: (r) => r.verdict,
+    pass: (r) => r.pass,
+    fail: (r) => r.fail,
+    date: (r) => r.ended_at,
+  };
+  const STAT_COLUMNS = [
+    ['die', 'Die'],
+    ['driver', 'Host driver (reported)'],
+    ['tier', 'Tier'],
+    ['result', 'Run result'],
+    ['pass', 'Tests passed'],
+    ['fail', 'Tests failed'],
+    ['date', 'Date'],
+  ];
+  function statRow(raw) {
+    if (!isObj(raw) || !PATTERN.die.test(raw.die ?? '')) return null;
+    return {
+      die: raw.die,
+      family: PATTERN.family.test(raw.family ?? '') ? raw.family : '',
+      driver: text(raw.host_driver) || text(raw.driver),
+      tier: text(raw.tier),
+      verdict: VERDICTS.has(raw.verdict) ? raw.verdict : '',
+      pass: finite(raw.pass),
+      fail: finite(raw.fail),
+      skip: finite(raw.skip),
+      run_id: PATTERN.id.test(raw.run_id ?? '') ? raw.run_id : '',
+      commit: text(raw.commit),
+      ended_at: text(raw.ended_at),
+      perf: arr(raw.perf).filter(
+        (r) => isObj(r) && text(r.name) && finite(r.value) !== null && !/spec\s*view/i.test(text(r.name) + ' ' + text(r.suite)),
+      ),
+    };
+  }
+  function statsFilters(f) {
+    const field = (label, control, id) => el('label', { for: id }, label, control);
+    return el(
+      'form',
+      { class: 'kf-filters', method: 'get', action: page('stats', {}) },
+      field('Die', el('input', { id: 'kf-s-die', name: 'die', type: 'text', maxlength: 6, placeholder: 'AD102', value: f.die ?? '', pattern: '[A-Za-z]{2}[0-9]{3}[A-Za-z]?' }), 'kf-s-die'),
+      field('Tier', el('select', { id: 'kf-s-tier', name: 'tier' }, TIER_CHOICES.map(([id, label]) => el('option', { value: id, selected: id === (f.tier ?? '') }, label))), 'kf-s-tier'),
+      field('Driver version', el('input', { id: 'kf-s-driver', name: 'driver', type: 'text', maxlength: 16, inputmode: 'decimal', placeholder: '580.95.05', pattern: '[0-9]{3}\\.[0-9]{1,3}(\\.[0-9]{1,3})?', value: f.driver ?? '' }), 'kf-s-driver'),
+      f.sort ? el('input', { type: 'hidden', name: 'sort', value: f.sort }) : null,
+      f.dir === 'desc' ? el('input', { type: 'hidden', name: 'dir', value: 'desc' }) : null,
+      el('button', { type: 'submit', class: 'kf-button' }, 'Apply'),
+    );
+  }
+  async function stats() {
+    const f = {
+      tier: param('tier'),
+      driver: param('driver'),
+      sort: SORTS[query.get('sort')] ? query.get('sort') : null,
+      dir: query.get('dir') === 'desc' ? 'desc' : 'asc',
+    };
+    const typedDie = (query.get('die') ?? '').toUpperCase();
+    f.die = PATTERN.dieId.test(typedDie) ? typedDie : null;
+    filters.replaceChildren(statsFilters(f));
+    const asked = new URLSearchParams();
+    if (mode === 'live') {
+      if (f.die) asked.set('die', f.die);
+      if (f.tier) asked.set('tier', f.tier);
+      if (f.driver) asked.set('driver', f.driver);
+    }
+    let data = null;
+    let unavailable = null;
+    try {
+      data = await load('/v1/ci/stats' + (asked.size ? '?' + asked : ''));
+    } catch (error) {
+      unavailable = error instanceof Error ? error.message : 'Loading failed.';
+    }
+    const all = arr(data?.stats).map(statRow).filter(Boolean);
+    let rows = all.filter(
+      (r) => (!f.die || r.die === f.die) && (!f.tier || r.tier === f.tier) && (!f.driver || r.driver === f.driver),
+    );
+    const sort = f.sort ?? 'die';
+    const key = SORTS[sort];
+    const sign = f.dir === 'desc' ? -1 : 1;
+    // A missing value sorts last in either direction.
+    rows = rows
+      .map((r, i) => ({ r, i }))
+      .sort((a, b) => {
+        const x = key(a.r);
+        const y = key(b.r);
+        const xn = x === null || x === '';
+        const yn = y === null || y === '';
+        if (xn || yn) return xn === yn ? a.i - b.i : xn ? 1 : -1;
+        const c = typeof x === 'number' ? x - y : String(x).localeCompare(String(y));
+        return c ? sign * c : a.i - b.i;
+      })
+      .map((x) => x.r);
+    const head = el(
+      'tr',
+      {},
+      STAT_COLUMNS.map(([id, label]) => {
+        const active = sort === id;
+        const next = active && f.dir === 'asc' ? 'desc' : 'asc';
+        return el(
+          'th',
+          { scope: 'col', 'aria-sort': active ? (f.dir === 'desc' ? 'descending' : 'ascending') : 'none', class: id === 'pass' || id === 'fail' ? 'kf-num' : null },
+          el('a', { class: 'kf-sort', href: page('stats', { die: f.die, tier: f.tier, driver: f.driver, sort: id, dir: next === 'desc' ? 'desc' : null }) }, label),
+        );
+      }),
+      el('th', { scope: 'col' }, 'Performance'),
+      el('th', { scope: 'col' }, 'Run'),
+    );
+    let body;
+    if (unavailable || !all.length)
+      body = emptyNote(
+        'Not measured yet: no stored report has pass counts or performance numbers to list' +
+          (unavailable ? ' (the stats view said: ' + unavailable + ')' : '') +
+          '. Nothing is estimated here.',
+      );
+    else if (!rows.length)
+      body = emptyNote('No die and driver matches these filters. Clear a filter to see the other rows.');
+    else
+      body = el(
+        'div',
+        { class: 'kf-scroll', tabindex: 0, role: 'region', 'aria-label': 'Results by die and driver' },
+        el(
+          'table',
+          { class: 'kf-runs kf-cards kf-stats' },
+          el('thead', {}, head),
+          el(
+            'tbody',
+            {},
+            rows.map((r) =>
+              el(
+                'tr',
+                {},
+                el('td', { 'data-label': 'Die' }, r.family ? el('a', { href: page('die', { family: r.family, die: r.die }) }, r.die) : r.die),
+                el('td', { 'data-label': 'Host driver' }, r.driver || el('span', { class: 'kf-small' }, 'not reported')),
+                el('td', { 'data-label': 'Tier' }, tierLabel(r.tier)),
+                el('td', { 'data-label': 'Run result' }, verdict(r.verdict, false)),
+                el('td', { 'data-label': 'Tests passed', class: 'kf-num' }, r.pass === null ? '' : String(r.pass)),
+                el('td', { 'data-label': 'Tests failed', class: 'kf-num' }, r.fail === null ? '' : String(r.fail)),
+                el('td', { 'data-label': 'Date' }, day(r.ended_at) || 'unknown'),
+                el(
+                  'td',
+                  { 'data-label': 'Performance' },
+                  r.perf.length
+                    ? el('details', {}, el('summary', {}, r.perf.length + (r.perf.length === 1 ? ' number' : ' numbers')), perfTable(r.perf))
+                    : el('span', { class: 'kf-small' }, 'not measured yet'),
+                ),
+                el(
+                  'td',
+                  { 'data-label': 'Run' },
+                  r.run_id ? el('a', { href: page('run', { id: r.run_id }) }, r.run_id) : '',
+                  r.run_id ? el('span', { class: 'kf-small kf-board' }, sessionLink(r.run_id)) : null,
+                  r.commit && PATTERN.sha.test(r.commit) ? el('span', { class: 'kf-small kf-board' }, 'commit ', commitLink(r.commit)) : null,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    content.replaceChildren(
+      el('p', { class: 'kf-rule', role: 'note' }, el('strong', {}, 'What this is. '), 'The newest stored report for each die and host driver. Counts and numbers are what the test box reported for that one run; they never decide a result, and a number is shown only when the box measured it. Viewport-benchmark results are not shown here, by policy.'),
+      body,
+    );
+    done(
+      unavailable || !all.length
+        ? 'No reports to list yet.'
+        : rows.length + (rows.length === 1 ? ' row' : ' rows') + ' of ' + all.length + ', sorted by ' + (STAT_COLUMNS.find(([id]) => id === sort)?.[1] ?? sort) + (f.dir === 'desc' ? ', descending.' : '.'),
+    );
+  }
+
+  const views = { matrix, die, run, session, commit, stats, find };
   const view = views[main.dataset.page];
   if (view) view().catch(fail);
 })();
