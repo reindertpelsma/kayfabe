@@ -11,6 +11,7 @@
 // never taken from the box: the Worker sets it from its own row when it publishes. The verdict of
 // the run never depends on any of this, and a report never gates anything.
 import { cleanClaims } from './results.js';
+import { redactPublic } from './publiclog.js';
 
 export const REPORT_MAX_BYTES = 262144;
 export const LIMITS = Object.freeze({
@@ -237,6 +238,18 @@ export function cleanClaimsReport(raw) {
       live_dumps_193: int(w.live_dumps_193, 0, 100000),
     },
   };
+}
+
+// The report goes through the same redaction as the log (review of #282, F1): every string VALUE of
+// the document (keys are fixed words) is run over the Worker's exact values and the secret shapes,
+// so a payload error string naming the secret path, the Access pair, a nonce or a password-like
+// assignment never reaches report.json, D1 or the public API.
+export function redactDoc(value, exact) {
+  if (typeof value === 'string') return redactPublic(value, exact);
+  if (Array.isArray(value)) return value.map((v) => redactDoc(v, exact));
+  if (value !== null && typeof value === 'object')
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, redactDoc(v, exact)]));
+  return value;
 }
 
 // Serialises a claim document so that it stays within the limit: the largest arrays shrink first,

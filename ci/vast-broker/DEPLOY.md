@@ -897,13 +897,13 @@ and no box has run any of it. Contract: `/root/night/REPORT_CONTRACT.md` (coordi
 What it does. When a run is settled (any reason: result, timeout, stop, provider fault), the cron
 publishes, OFF the serialized teardown queue and with bounded waits, two objects to the PUBLIC R2
 bucket `kayfabe-logs-public` (served at `https://logs.kayfabe.dev`): `<run id>/log.txt` (the whole
-log, secrets redacted, nothing else changed; see the bounds below) and `<run id>/report.json` (the
+log, secrets redacted, and nothing else changed but one prefix on forged lines; see the bounds below) and `<run id>/report.json` (the
 box's structured report, bounded and re-validated by the Worker, with the Worker's own identity
 fields). The run id is `vast-<github run>-<attempt>-<leg>`. The same report goes to D1 (`ci_run_reports`,
 `ci_subruns`, `ci_run_tests`, `ci_run_perf`, `ci_run_apps`, migration 0004). The public API serves it
 ([ci/platform-api/README.md](../platform-api/README.md)). The verdict, the teardown and the budget never
 depend on any of it: the publisher runs after the sweep, a failure is one log line (fixed word, never
-a message), and the next cron tick retries for about an hour (60 attempts), then drops the entry.
+a message). An entry that cannot finish backs off (1, 2, 4 minutes, then 5) so that a few stuck runs never keep the others from being published; it is tried at most 60 times (about 4.5 hours, inside the 6 hours the pieces are kept), then dropped.
 
 | Name | Kind | Where | Notes |
 |---|---|---|---|
@@ -969,10 +969,24 @@ and the D1 tables can stay.
   the same change.
 - It CANNOT contain text the box never sent (output after the grace period, a box that was lost before
   it reported), nor text from reports the Worker refused (a closed rental answers 401).
-- Redaction: exact values (run token and its 16-character prefix and suffix, nonces, the secret path, the
-  Access pair, every Worker secret of at least 8 characters) and shapes (JWT, `Bearer`, presigned-URL
+- Redaction: exact values (the run token of every leg and its 16-character prefix and suffix, the nonces
+  of every leg, the secret path, the Access pair, every Worker secret of at least 8 characters, and the
+  Access pair and path the box was given at rent time, kept in the rent record so that a rotation while
+  the run waits for publication does not leave the old values unredacted) and shapes (JWT, `Bearer`, presigned-URL
   parameters, private-key blocks, Cloudflare Access headers, Vast API keys, GitHub tokens, URLs with
   credentials, `password=`-style assignments of 8 or more characters). A secret that the Worker does not
   hold and that has none of these shapes (for example a bare random password, which the guest password is)
   is NOT recognised: the box-side evidence scanner covers the evidence bundle, not this log. This is the
-  main residual risk of publishing the log whole; an Opus security review follows this change.
+  main residual risk of publishing the log whole. The same redaction runs over every string of
+  report.json before it is written to the bucket or D1 (review of #282, F1).
+- Forged lines: box text is stored apart from the Worker's own lines, and at publication a box line that
+  starts with `[Worker] ` or `[kayfabe-log] ` is prefixed `[box] `, so the Worker's lines and the cap marker
+  cannot be forged. Stage markers (`KF_PAYLOAD_STAGE_START/END`) can still be forged by a box and only steer
+  that run's own `log_range`.
+
+Known follow-ups (review of #282, not done in this change): the guest password is never known to the
+Worker (a box-side stream redaction in `vast_report.py`, mirroring the evidence scanner, would close it);
+the key-block scan is quadratic on 16 MiB of BEGIN lines with no END (about 5 s measured by the reviewer,
+bounded to about 4 MiB by the box channel); R2 `put` does not refuse to overwrite; `nosniff` and a
+sandbox CSP belong in a Cloudflare Transform Rule on `logs.kayfabe.dev`; D1 calls in the publisher have no
+timeout; the 0004 tables have no retention.

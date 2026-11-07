@@ -114,12 +114,6 @@ const MUTANTS = [
     "const row = await db.first('ciRunById'",
   ],
   [
-    'ci running immutable',
-    'src/api.js',
-    'const final = row.verdict !== null && row.ended_at !== null;',
-    'const final = true;',
-  ],
-  [
     'ci newest cell',
     'src/queries.js',
     'PARTITION BY r.tier, r.family, r.die, r.platform\n               ORDER BY r.sort_at DESC, r.run_id DESC\n             ) AS rn\n      FROM ci_runs r\n      WHERE (?1',
@@ -573,6 +567,31 @@ const MUTANTS = [
     'src/validate.js',
     'subSort: /^(?:closeness|recent|duration)$/,',
     'subSort: /./,',
+  ],
+  [
+    'run page immutable before its report row',
+    'src/api.js',
+    '      (stored !== null && stored !== undefined\n        ? true\n        : Date.now() - Date.parse(row.ended_at) > PUBLISH_HORIZON_MS);',
+    '      true;',
+  ],
+  [
+    'run page never immutable after the horizon',
+    'src/api.js',
+    'Date.now() - Date.parse(row.ended_at) > PUBLISH_HORIZON_MS);',
+    'false);',
+  ],
+  ['subruns probes unbounded', 'src/subruns.js', '    if (done.size >= MAX_PROBES) break;\n', ''],
+  [
+    'subruns no shared cache',
+    'src/api.js',
+    'return json({ api: API_VERSION, ...(await ciSubruns(db, q)) }, { cache: CACHE.edge });',
+    'return json({ api: API_VERSION, ...(await ciSubruns(db, q)) });',
+  ],
+  [
+    'stats no shared cache',
+    'src/api.js',
+    'return json({ api: API_VERSION, ...(await ciStats(db, q)) }, { cache: CACHE.edge });',
+    'return json({ api: API_VERSION, ...(await ciStats(db, q)) });',
   ],
   [
     'outbound fetch',

@@ -468,3 +468,58 @@ test('the report text must be schema 1 to be shown', async () => {
   assert.equal(run.report, null);
   assert.ok(run.subruns.length > 0);
 });
+
+// ---- the cost of one anonymous request (review of #282, F8) ------------------------------------
+
+import { QUERIES } from '../src/queries.js';
+import { MAX_PROBES } from '../src/subruns.js';
+
+test('a request naming every dimension reads at most MAX_PROBES candidate sets', async () => {
+  const log = [];
+  const { call } = api({ log });
+  const anyRun = rows.ci_runs.find((x) => x.run_id === 'syn-ci-p-0');
+  const query =
+    near +
+    '&commit=' +
+    anyRun.commit_sha +
+    '&tree=' +
+    anyRun.tree_hash +
+    '&include=counts,stages,tests,perf,apps';
+  assert.equal((await call(Q + query)).status, 200);
+  const reads = log.filter((e) => e.sql === QUERIES.ciSubrunCandidates);
+  assert.ok(reads.length >= 5 && reads.length <= MAX_PROBES, 'candidate reads: ' + reads.length);
+  assert.equal(MAX_PROBES, 9);
+  assert.ok(log.length <= MAX_PROBES + 1 + 4, 'all statements: ' + log.length);
+  // The all-dimensions reads come first, so the exact match is found even at the cap.
+  assert.ok(reads[0].params.slice(0, 8).filter((v) => v !== null).length >= 4);
+});
+
+test('with a required commit given as a tree and a commit, both exact reads happen before any near read', async () => {
+  const log = [];
+  const { call } = api({ log });
+  const anyRun = rows.ci_runs.find((x) => x.run_id === 'syn-ci-p-0');
+  await call(
+    Q + near + '&commit=' + anyRun.commit_sha + '&tree=' + anyRun.tree_hash + '&require=commit',
+  );
+  const reads = log.filter((e) => e.sql === QUERIES.ciSubrunCandidates);
+  assert.ok(reads.length <= MAX_PROBES);
+  const trees = reads.slice(0, 2).map((e) => [e.params[5], e.params[6]]);
+  assert.deepEqual(
+    trees.map((t) => t[0] !== null || t[1] !== null),
+    [true, true],
+  );
+});
+
+test('/v1/ci/subruns carries a shared-cache lifetime', async () => {
+  assert.equal(
+    (await call(Q + '?limit=1')).headers.get('cache-control'),
+    'public, max-age=30, s-maxage=60',
+  );
+});
+
+test('/v1/ci/stats carries a shared-cache lifetime', async () => {
+  assert.equal(
+    (await call('/v1/ci/stats?limit=1')).headers.get('cache-control'),
+    'public, max-age=30, s-maxage=60',
+  );
+});

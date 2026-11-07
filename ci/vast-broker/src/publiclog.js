@@ -30,6 +30,25 @@ export const KEY_BLOCK_MAX = 16384;
 // How long one R2 call may take (a variable only so that tests can shorten it).
 export const publishTimeouts = { r2: 20000 };
 
+// Who wrote a piece of the log. The Worker's own lines are stored between two private-use
+// characters; the box's text is stored with those characters removed, so a box can neither write
+// them nor pass off its own line as the Worker's. At publication every line that does not start
+// with the Worker's mark and that starts like one of the Worker's own line kinds (`[Worker] `, or
+// the `[kayfabe-log] ` cap markers) gets the prefix `[box] `. That is the one change to box text
+// beyond redaction, and it exists only to keep the Worker's voice unforgeable (review of #282, F7).
+export const WORKER_OPEN = '\ue000';
+export const WORKER_CLOSE = '\ue001';
+export const workerPiece = (text) => WORKER_OPEN + text + WORKER_CLOSE;
+export const boxPiece = (text) => text.replace(/[\ue000\ue001]/g, '');
+export function attribute(joined) {
+  const text = joined
+    .replace(/([^\n\ue001])\ue000/g, '$1\n\ue000') // a Worker line always starts a line
+    .replace(/([^\n])\ue001/g, '$1\n') // and ends one
+    .replace(/\ue001/g, '')
+    .replace(/^(?!\ue000)(?=\[Worker\]|\[kayfabe-log\])/gm, '[box] ');
+  return text.replace(/\ue000/g, '');
+}
+
 export const logsEnabled = (env) =>
   env?.LOGS_BUCKET !== undefined &&
   env.LOGS_BUCKET !== null &&
@@ -134,7 +153,7 @@ function redactKeyBlocks(text) {
 
 const NAMED =
   '(?:api[_-]?key|api[_-]?token|access[_-]?key|access[_-]?token|auth[_-]?token|secret[_-]?key|' +
-  'client[_-]?secret|private[_-]?key|passwd|password|(?:github|gh|cloudflare|cf|vast)[_-]?(?:api[_-]?)?(?:token|key))';
+  'client[_-]?secret|access[_-]?secret|private[_-]?key|passwd|password|(?:github|gh|cloudflare|cf|vast)[_-]?(?:api[_-]?)?(?:token|key))';
 
 // Shapes, in this order. Each is (regex, replacement); the key words stay readable.
 const SHAPES = [
@@ -194,7 +213,7 @@ function suffixBytes(text, bytes) {
 // redacted, then capped. `omitted` = bytes the ledger could not store (its own cap) and said so.
 // Over the cap, the head and the tail stay and a marker line says how much is gone.
 export async function buildPublicLog(parts, exact, { omitted = 0, max = LOG_MAX_BYTES } = {}) {
-  let text = redactPublic(parts.join(''), exact);
+  let text = redactPublic(attribute(parts.join('')), exact);
   let bytes = encoder.encode(text).length;
   let cut = 0;
   if (omitted > 0) {

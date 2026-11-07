@@ -136,7 +136,7 @@ order), then by recency (`ended_at`), then run id and subrun id: a total order, 
 cursor is stable. Each hit says what it matched and what it did not:
 `match: {exact: ["die", "os"], relaxed: [{dim: "host_driver", wanted: "580.95.05", found: "575.64.05"}]}` (a
 `note` such as `older`, `newer`, `same_day_older` or `reference_unknown` explains a commit step). Candidates
-are chosen by at most nine fixed statements of at most 60 rows (every wanted dimension, each wanted dimension
+are chosen by at most nine fixed statements of at most 60 rows (the all-dimensions reads first, then every wanted dimension
 left out, and the newest rows) and ranked in JavaScript; a subrun that did not run (`NOT_RUN`) or belongs to a run
 still in flight is never a candidate.
 
@@ -166,6 +166,12 @@ a guest row carries the host row of the same benchmark as `ref_value` and `ref_r
 anything, and no SPECviewperf score is ever in them. Where the box recorded nothing (an older box, a failed
 stage, the application matrix, which is not a payload stage yet) there is no row: the answer is empty, never
 invented.
+
+Caching: a final run page is `immutable` (a year) only once its report row exists, or when the run ended
+more than six hours ago (the CI Worker's publisher has given up by then); in between it is cached for 30
+seconds, because the run row becomes final a little before the report is written. `/v1/ci/subruns` and
+`/v1/ci/stats` carry `s-maxage=60` (they are the expensive reads; a shared cache or a rate-limit rule on
+the host is the coordinator's to set).
 
 A database without migration 0004: the run page still answers (no `report`, no `subruns`); `/v1/ci/subruns` and
 `/v1/ci/stats` answer a fixed 500 until it is applied.

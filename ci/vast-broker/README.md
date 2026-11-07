@@ -176,13 +176,13 @@ real R2, D1, Worker or box has run any of it. Contract: `/root/night/REPORT_CONT
 
 - **Full public log.** When a run is settled the cron writes `<run id>/log.txt` to the public R2 bucket
   `kayfabe-logs-public` (`https://logs.kayfabe.dev`, binding `LOGS_BUCKET`): the text the box streamed, whole,
-  with secrets replaced by `[redacted]` and nothing else changed (no character allow-list, no display budget;
+  with secrets replaced by `[redacted]` and nothing else changed (one exception: a box line that starts like the Worker's own, `[Worker] ` or `[kayfabe-log] `, gets the prefix `[box] ` so that box text cannot forge the Worker's voice; no character allow-list, no display budget;
   a log that holds a secret is redacted, never refused), at most 16 MiB with a visible cut marker. What it can and
   cannot contain, exactly: [DEPLOY.md](DEPLOY.md), "What the full log can and cannot contain". The runner's
   display scrub (`runner.py`, `src/sanitize.js`) is a separate path and unchanged.
 - **Off the teardown path.** `publishRuns` runs from the cron AFTER the serialized sweep, outside its queue,
-  with a bounded wait per R2 call (20 s) and at most two runs and 40 s per tick; a failure is one log line with
-  a fixed word, the entry is retried for about an hour and then dropped. The verdict, the teardown and the budget
+  with a bounded wait per R2 call (20 s) and at most four entries and 40 s per tick; a failure is one log line with
+  a fixed word, the entry backs off (1, 2, 4 minutes, then 5) and is retried up to 60 times, then dropped. The verdict, the teardown and the budget
   never depend on it.
 - **Run report (box protocol 7, additive).** A box posts one bounded JSON claim to `POST /run-report/<run>-<attempt>`
   ([box protocol](docs/BOX_PROTOCOL.md), "Optional run report") only when the Worker sets `KF_RUN_REPORT=1`

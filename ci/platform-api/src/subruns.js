@@ -8,6 +8,7 @@ import { DIMS, parseCpu, rank } from './rank.js';
 import { familyOfDie } from './dies.js';
 
 export const PROBE_ROWS = 60;
+export const MAX_PROBES = 9;
 export const DEFAULT_SUBRUN_LIMIT = 20;
 export const MAX_SUBRUN_LIMIT = 100;
 export const DEFAULT_STATS_LIMIT = 20;
@@ -271,7 +272,6 @@ async function candidates(db, w, active, required) {
     else for (const o of options) Object.assign(base, o);
   }
   const wanted = DIMS.filter((d) => active.has(d) && hasWanted(d, w));
-  const sets = [];
   const withDims = (dims) => {
     const variants = [{}];
     for (const dim of dims) {
@@ -285,20 +285,30 @@ async function candidates(db, w, active, required) {
     return variants;
   };
   const roots = alternatives.length ? alternatives : [{}];
+  // Order matters (only the first MAX_PROBES are read): every all-dimensions read, then the
+  // leave-one-out reads, then the newest-rows reads.
+  const exact = [];
+  const nearest = [];
+  const newest = [];
   for (const root of roots) {
-    sets.push(...withDims(wanted).map((v) => ({ ...base, ...root, ...v })));
+    exact.push(...withDims(wanted).map((v) => ({ ...base, ...root, ...v })));
     for (const dim of wanted)
       if (!required.includes(dim))
-        sets.push(
+        nearest.push(
           ...withDims(wanted.filter((d) => d !== dim)).map((v) => ({ ...base, ...root, ...v })),
         );
-    sets.push({ ...base, ...root });
+    newest.push({ ...base, ...root });
   }
+  const sets = [...exact, ...nearest, ...newest];
   const seen = new Map();
   const done = new Set();
+  // At most MAX_PROBES reads per request (the wanted dimensions can multiply the sets, for example a
+  // tree and a commit both given): the all-dimensions read comes first, so the exact matches and the
+  // nearest ones are always read (review of #282, F8).
   for (const set of sets) {
     const key = JSON.stringify(Object.entries(set).sort());
     if (done.has(key)) continue;
+    if (done.size >= MAX_PROBES) break;
     done.add(key);
     for (const row of await read(db, set)) seen.set(row.run_id + '|' + row.sub, row);
   }

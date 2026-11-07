@@ -3,7 +3,7 @@ import {refuse,numericId,budgetRefuse} from './policy.js';
 // prettier-ignore
 import {logChain} from './tokens.js';
 import { profileCaps, budgetClass } from './policy.js';
-import { LOG_MAX_BYTES } from './publiclog.js';
+import { LOG_MAX_BYTES, workerPiece, boxPiece } from './publiclog.js';
 // Queue of the public log and report of a settled leg (src/publish.js): plogq:<run key>:<leg>.
 export const PUBLISH_PREFIX = 'plogq:';
 export const publishEntryKey = (record) =>
@@ -90,8 +90,9 @@ export class Ledger {
   // this is not display text: nothing is stripped here, the redaction happens when the log is
   // published. One storage value per post (a post carries at most 60000 bytes). The only limit is
   // the public log's own cap; what does not fit is counted (plogDropped) and said in the log.
-  async appendPublicLog(record, text, cap = LOG_MAX_BYTES) {
+  async appendPublicLog(record, text, cap = LOG_MAX_BYTES, worker = false) {
     if (typeof text !== 'string' || text === '') return;
+    text = worker ? workerPiece(text) : boxPiece(text);
     const bytes = new TextEncoder().encode(text).length;
     record.plogChunks ??= 0;
     record.plogBytes ??= 0;
@@ -311,6 +312,9 @@ export class Ledger {
           attempt: record.attempt,
           sha: record.sha,
           nonce: record.nonce,
+          // The values the box held in earlier legs of this run or at rent time (review of #282, F4/F5).
+          priorNonces: record.priorNonces ?? [],
+          known: record.known ?? [],
           runnerNonce: record.runnerNonce ?? null,
           reportExpiry: record.reportExpiry,
           at: now,

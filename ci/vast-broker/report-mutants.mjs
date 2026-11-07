@@ -127,8 +127,8 @@ const MUTANTS = [
     [
       [
         L,
-        "let text = redactPublic(parts.join(''), exact);",
-        "let text = parts.map((p) => redactPublic(p, exact)).join('');",
+        "let text = redactPublic(attribute(parts.join('')), exact);",
+        "let text = parts.map((p) => redactPublic(attribute(p), exact)).join('');",
       ],
     ],
   ],
@@ -408,7 +408,7 @@ const MUTANTS = [
   ],
   [
     'public log without the Worker lines',
-    [[I, 'if (logsEnabled(env)) await ledger.appendPublicLog(r, text);', '']],
+    [[I, 'if (logsEnabled(env)) await ledger.appendPublicLog(r, text, undefined, true);', '']],
   ],
   [
     'public log stored without a bucket',
@@ -492,10 +492,7 @@ const MUTANTS = [
     'log identity recorded without a published log',
     [[P, 'log: built && entry.logPut ? built : null,\n      now,', 'log: built,\n      now,']],
   ],
-  [
-    'secrets of the run not redacted',
-    [[P, '    entry.nonce,\n    entry.runnerNonce,\n  ];', '  ];']],
-  ],
+  ['secrets of the run not redacted', [[P, '    entry.nonce,\n    entry.runnerNonce,\n', '']]],
   [
     'worker secrets not redacted',
     [[P, '    env.RUN_TOKEN_SECRET,\n    env.OWNER_STOP_TOKEN,', '    env.OWNER_STOP_TOKEN,']],
@@ -527,6 +524,152 @@ const MUTANTS = [
   [
     'report object written without the log url base check',
     [[P, "u.hostname === 'kayfabe.dev' || u.hostname.endsWith('.kayfabe.dev')", 'true']],
+  ],
+  // ---- review of #282 ----
+  [
+    'report strings not redacted',
+    [[P, 'doc = fitReport(redactDoc(full, exact));', 'doc = fitReport(full);']],
+  ],
+  [
+    'report redaction skips arrays',
+    [
+      [
+        R,
+        'if (Array.isArray(value)) return value.map((v) => redactDoc(v, exact));',
+        'if (Array.isArray(value)) return value;',
+      ],
+    ],
+  ],
+  [
+    'report redaction skips objects',
+    [
+      [
+        R,
+        '    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, redactDoc(v, exact)]));',
+        '    return value;',
+      ],
+    ],
+  ],
+  [
+    'queue without backoff',
+    [
+      [
+        P,
+        'else await ledger.put(key, { ...entry, nextAt: now + backoffMs(entry.attempts) });',
+        'else await ledger.put(key, entry);',
+      ],
+    ],
+  ],
+  [
+    'queue ignores the backoff',
+    [
+      [
+        P,
+        'if (Number.isFinite(stored?.nextAt) && stored.nextAt > now) continue; // backing off',
+        '',
+      ],
+    ],
+  ],
+  [
+    'queue backoff is zero',
+    [[P, 'Math.min(60000 * 2 ** Math.max(0, attempts - 1), 300000);', '0;']],
+  ],
+  [
+    'prior nonces not redacted',
+    [
+      [
+        P,
+        '    ...(entry.priorNonces ?? []),\n    ...(entry.known ?? []),',
+        '    ...(entry.known ?? []),',
+      ],
+    ],
+  ],
+  [
+    'prior tokens not redacted',
+    [
+      [
+        P,
+        'for (const nonce of [entry.nonce, ...(entry.priorNonces ?? [])])',
+        'for (const nonce of [entry.nonce])',
+      ],
+    ],
+  ],
+  [
+    'rent-time values not redacted',
+    [
+      [
+        P,
+        '    ...(entry.priorNonces ?? []),\n    ...(entry.known ?? []),',
+        '    ...(entry.priorNonces ?? []),',
+      ],
+    ],
+  ],
+  [
+    'rent-time values not recorded',
+    [
+      [
+        I,
+        'known: [env.BOX_ACCESS_ID, env.BOX_ACCESS_SECRET, env.BROKER_PATH_PREFIX].filter(',
+        'known: [].filter(',
+      ],
+    ],
+  ],
+  [
+    'prior nonces not carried to the replacement leg',
+    [
+      [
+        I,
+        'r.priorNonces = [...(retrySource.priorNonces ?? []), retrySource.nonce];',
+        'r.priorNonces = [];',
+      ],
+    ],
+  ],
+  [
+    'settle entry without prior nonces',
+    [[G, 'priorNonces: record.priorNonces ?? [],', 'priorNonces: [],']],
+  ],
+  ['settle entry without rent-time values', [[G, 'known: record.known ?? [],', 'known: [],']]],
+  [
+    'access secret shape missing',
+    [
+      [
+        L,
+        'client[_-]?secret|access[_-]?secret|private[_-]?key',
+        'client[_-]?secret|private[_-]?key',
+      ],
+    ],
+  ],
+  [
+    'box lines never attributed',
+    [[L, "    .replace(/^(?!\\ue000)(?=\\[Worker\\]|\\[kayfabe-log\\])/gm, '[box] ');", ';']],
+  ],
+  [
+    'worker lines not marked',
+    [[G, 'text = worker ? workerPiece(text) : boxPiece(text);', 'text = boxPiece(text);']],
+  ],
+  [
+    'box text may carry the mark',
+    [
+      [
+        L,
+        "export const boxPiece = (text) => text.replace(/[\\ue000\\ue001]/g, '');",
+        'export const boxPiece = (text) => text;',
+      ],
+    ],
+  ],
+  [
+    'worker line glued to a box line',
+    [
+      [
+        L,
+        "    .replace(/([^\\n\\ue001])\\ue000/g, '$1\\n\\ue000') // a Worker line always starts a line\n",
+        '',
+      ],
+    ],
+  ],
+  [
+    'box line glued to a worker line',
+    [[L, "    .replace(/([^\\n])\\ue001/g, '$1\\n') // and ends one\n", '']],
   ],
 ];
 

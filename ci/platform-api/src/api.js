@@ -19,6 +19,7 @@ import { API_VERSION, PARAMS, describe } from './schema.js';
 import { subrunOut, reportOut, ciSubruns, ciStats } from './subruns.js';
 
 const MAX_FACTS = 64;
+const PUBLISH_HORIZON_MS = 6 * 3600 * 1000;
 const MAX_LOGS = 32;
 
 function plainObject(text) {
@@ -553,7 +554,6 @@ const handlers = {
         ? { key: row.log_key, ...(base ? { direct: base + '/' + row.log_key } : {}) }
         : null;
     const claims = await db.all('ciRunClaims', [id]);
-    const final = row.verdict !== null && row.ended_at !== null;
     // Migration 0004 (run reports): the subruns of this session, the stored report and the identity
     // of the published full log. A run without any of them (an older box, a Worker without the
     // bucket) answers null / [] and the page says "not measured yet".
@@ -578,6 +578,16 @@ const handlers = {
           }
         : null;
     const subruns = (await soft(() => db.all('ciRunSubruns', [id]), [])).map(subrunOut);
+    // A final run page is immutable only once the report row exists (the CI Worker writes it a
+    // little after the run row becomes final), or after the publisher has given up (about 5 hours,
+    // see ci/vast-broker/src/publish.js): in between, a page without report, subruns and log must
+    // not be cached for a year (review of #282, F2).
+    const final =
+      row.verdict !== null &&
+      row.ended_at !== null &&
+      (stored !== null && stored !== undefined
+        ? true
+        : Date.now() - Date.parse(row.ended_at) > PUBLISH_HORIZON_MS);
     return json(
       {
         api: API_VERSION,
@@ -609,11 +619,11 @@ const handlers = {
   },
 
   async ciSubruns(db, q) {
-    return json({ api: API_VERSION, ...(await ciSubruns(db, q)) });
+    return json({ api: API_VERSION, ...(await ciSubruns(db, q)) }, { cache: CACHE.edge });
   },
 
   async ciStats(db, q) {
-    return json({ api: API_VERSION, ...(await ciStats(db, q)) });
+    return json({ api: API_VERSION, ...(await ciStats(db, q)) }, { cache: CACHE.edge });
   },
 
   async ciTree(db, q, [hash]) {

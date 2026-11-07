@@ -334,3 +334,61 @@ test('stats cap the perf rows of a group at 50 and say truncated', async () => {
   const small = (await call('/v1/ci/stats?die=GA106')).body.groups[0];
   assert.equal(small.perf.truncated, false);
 });
+
+// ---- cache of a finished run's page (review of #282, F2) ---------------------------------------
+
+const minutesAgo = (n) => new Date(Date.now() - n * 60000).toISOString().replace(/\.\d{3}Z$/, 'Z');
+function recentRun(minutes) {
+  const rows2 = syntheticRows();
+  const target = rows2.ci_runs.find(
+    (x) => x.verdict === 'PASS' && !rows2.ci_run_reports.some((p) => p.run_id === x.run_id),
+  );
+  Object.assign(target, {
+    started_at: minutesAgo(minutes + 30),
+    ended_at: minutesAgo(minutes),
+    sort_at: minutesAgo(minutes),
+  });
+  return { rows2, id: target.run_id };
+}
+const cacheOf = async (rows2, id) =>
+  (
+    await api({ database: seededDatabase({ rows: rows2 }).reader }).call('/v1/ci/runs/' + id)
+  ).headers.get('cache-control');
+
+test('a run that ended minutes ago and has no report row yet is cached for seconds, not a year', async () => {
+  const { rows2, id } = recentRun(10);
+  assert.equal(await cacheOf(rows2, id), 'public, max-age=30');
+});
+
+test('the same window: a run that ended an hour ago is still short-cached', async () => {
+  const { rows2, id } = recentRun(60);
+  assert.equal(await cacheOf(rows2, id), 'public, max-age=30');
+});
+
+test('a final run with its report row is immutable at once', async () => {
+  const { rows2, id } = recentRun(10);
+  rows2.ci_run_reports.push({
+    run_id: id,
+    schema_version: 1,
+    report_json: null,
+    host_driver: null,
+    log_bytes: 10,
+    log_sha256: 'a'.repeat(64),
+    recorded_at: minutesAgo(5),
+  });
+  assert.equal(await cacheOf(rows2, id), 'public, max-age=31536000, immutable');
+});
+
+test('a final run the publisher has given up on (ended long ago, no report row) is immutable too', async () => {
+  const { rows2, id } = recentRun(7 * 60);
+  assert.equal(await cacheOf(rows2, id), 'public, max-age=31536000, immutable');
+});
+
+test('a run still in flight is never immutable, report or not', async () => {
+  const running = rows.ci_runs.find((x) => x.verdict === null);
+  const { call } = withBase();
+  assert.equal(
+    (await call('/v1/ci/runs/' + running.run_id)).headers.get('cache-control'),
+    'public, max-age=30',
+  );
+});

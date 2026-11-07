@@ -1114,7 +1114,7 @@ test(
       MAX_ATTEMPTS,
       'still there after the last allowed attempt',
     );
-    await publishTick({ ledger, env, now: Date.now() });
+    await publishTick({ ledger, env, now: Date.now() + 3600000 });
     assert.equal(await h.storage.get('plogq:123-1:0'), undefined);
   },
 );
@@ -1190,6 +1190,7 @@ test(
     };
     await h.service.publishRuns();
     failReport = false;
+    h.time.value += 10 * 60000;
     await h.service.publishRuns();
     assert.equal(
       bucket.puts.filter((k) => k.endsWith('log.txt')).length,
@@ -1492,3 +1493,459 @@ test(
     ]);
   },
 );
+
+// ---- review of #282: F1 (report redaction), F3 (queue), F4, F5, F7 -----------------------------
+
+import { redactDoc } from '../src/runreport.js';
+import { attribute, boxPiece, workerPiece } from '../src/publiclog.js';
+import { backoffMs } from '../src/publish.js';
+
+const ACCESS_ID = 'a1b2c3d4'.repeat(4) + '.access';
+const PREFIX = 'unit-fixture-' + 'p'.repeat(32);
+
+test('redactDoc: strings are redacted at any depth, keys and numbers are not touched', () => {
+  const exact = exactValues(['secret-value-123456']);
+  const doc = {
+    'secret-value-123456': 1,
+    a: ['x secret-value-123456', { b: 'password=correcthorse', c: [['secret-value-123456']] }],
+    n: 5,
+    z: null,
+  };
+  assert.deepEqual(redactDoc(doc, exact), {
+    'secret-value-123456': 1,
+    a: ['x [redacted]', { b: 'password=[redacted]', c: [['[redacted]']] }],
+    n: 5,
+    z: null,
+  });
+});
+
+const secretsReport = (record, pieces) =>
+  base({
+    subruns: [
+      {
+        sub: 'host',
+        kind: 'host_bare',
+        os: 'host',
+        host_driver: '580.159.04',
+        verdict: 'FAIL',
+        reason: 'urllib failed for ' + pieces.reason,
+        stages: ['gates'],
+        log_stages: ['cuda_host'],
+        counts: { pass: 0, fail: 1, skip: 0 },
+      },
+    ],
+    tests: [{ sub: 'host', suite: 'raw_suite', name: 'arm-' + pieces.test, result: 'FAIL', ms: 1 }],
+    apps: [{ sub: 'host', name: 'app', os: 'linux', result: 'FAIL', note: 'note ' + pieces.note }],
+    perf: [
+      {
+        sub: 'host',
+        name: 'perf-' + pieces.perf,
+        value: 1,
+        unit: 'ms',
+        higher_is_better: false,
+        suite: 'cuda_host',
+      },
+    ],
+  });
+
+async function publishedReport(pieces, overrides = {}) {
+  const x = await runWith(['x\n'], {
+    overrides: {
+      BOX_ACCESS_ID: ACCESS_ID,
+      BOX_ACCESS_SECRET: 'accessSecret_' + 'Qw8'.repeat(10),
+      ...overrides,
+    },
+    report: null,
+    mutate: async (h) => {
+      const record = await h.storage.get('record:123-1');
+      assert.equal((await post(h, secretsReport(record, pieces(record)))).status, 200);
+    },
+  });
+  const doc = JSON.parse(x.bucket.objects.get('vast-123-1-0/report.json'));
+  const stored = x.db.rows('SELECT report_json FROM ci_run_reports')[0].report_json;
+  return { ...x, doc, stored, text: JSON.stringify(doc) };
+}
+
+test(
+  'report.json and D1 hide the secret path and the Access client id like the log does',
+  { skip: d1Skip },
+  async () => {
+    const { text, stored } = await publishedReport(() => ({
+      reason: PREFIX,
+      test: ACCESS_ID,
+      note: PREFIX,
+      perf: ACCESS_ID,
+    }));
+    for (const t of [text, stored]) {
+      assert.ok(!t.includes(PREFIX), 'secret path');
+      assert.ok(!t.includes(ACCESS_ID), 'Access client id');
+      assert.ok(t.includes('[redacted]'));
+    }
+  },
+);
+
+test('report.json and D1 hide the nonces and the Access secret', { skip: d1Skip }, async () => {
+  const secret = 'accessSecret_' + 'Qw8'.repeat(10);
+  const { text, stored, record } = await publishedReport((record) => ({
+    reason: record.nonce,
+    test: record.runnerNonce,
+    note: secret,
+    perf: record.nonce,
+  }));
+  for (const t of [text, stored]) {
+    assert.ok(!t.includes(record.nonce) && !t.includes(record.runnerNonce) && !t.includes(secret));
+  }
+});
+
+test(
+  'report.json and D1 hide a password assignment and a token shape',
+  { skip: d1Skip },
+  async () => {
+    const { text, stored } = await publishedReport(() => ({
+      reason: 'password=correcthorsebattery',
+      test: 'x',
+      note: 'KF_ACCESS_SECRET=abcdefgh12345678',
+      perf: 'x',
+    }));
+    for (const t of [text, stored]) assert.ok(!/correcthorse|abcdefgh12345678/.test(t));
+  },
+);
+
+test('report: an ordinary report is not changed by the redaction', { skip: d1Skip }, async () => {
+  const { doc } = await publishedReport(() => ({
+    reason: 'plain words',
+    test: 'timer',
+    note: 'ok',
+    perf: 'x',
+  }));
+  assert.equal(doc.subruns[0].reason, 'urllib failed for plain words');
+  assert.equal(doc.tests[0].name, 'arm-timer');
+});
+
+// F3 -----------------------------------------------------------------------------------------
+
+const stuckEntry = (n) => ({
+  attempts: 0,
+  chunks: 1,
+  dropped: 0,
+  rchunks: 0,
+  leg: 0,
+  key: n + '-1',
+  run: String(n),
+  attempt: '1',
+  sha,
+  nonce,
+  runnerNonce: null,
+  reportExpiry: 2000000000,
+  at: 0,
+});
+
+test(
+  'stuck entries back off: an ordinary run behind six of them is published by the second tick',
+  { skip: d1Skip },
+  async () => {
+    const { h, bucket } = await runWith(['ordinary\n'], {
+      mutate: async (hh) => {
+        for (let n = 100; n <= 105; n++) {
+          await hh.storage.put('plogq:' + n + '-1:0', stuckEntry(n)); // sorts before 123-1
+          await hh.storage.put('plog:' + n + '-1:0', 'text of ' + n);
+        }
+      },
+    });
+    // The tick inside runWith worked the first four stuck entries (no D1 row exists for them).
+    assert.ok(!bucket.objects.has('vast-123-1-0/log.txt'), 'blocked in the first tick');
+    const first = await h.storage.get('plogq:100-1:0');
+    assert.equal(first.attempts, 1);
+    assert.ok(first.nextAt > h.time.value, 'backing off');
+    h.time.value += 30000;
+    await h.service.publishRuns();
+    assert.ok(bucket.objects.has('vast-123-1-0/log.txt'), 'published in the second tick');
+    assert.equal(
+      (await h.storage.get('plogq:100-1:0')).attempts,
+      1,
+      'a backing-off entry is not retried',
+    );
+  },
+);
+
+test(
+  'a backing-off entry is skipped until it is due, then tried again',
+  { skip: d1Skip },
+  async () => {
+    const { h } = await runWith(['x\n'], {
+      mutate: async (hh) => {
+        await hh.storage.put('plogq:1-1:0', stuckEntry(1));
+        await hh.storage.put('plog:1-1:0', 'text');
+      },
+    });
+    const at = (await h.storage.get('plogq:1-1:0')).nextAt;
+    h.time.value = at - 1000;
+    await h.service.publishRuns();
+    assert.equal((await h.storage.get('plogq:1-1:0')).attempts, 1);
+    h.time.value = at + 1;
+    await h.service.publishRuns();
+    assert.equal((await h.storage.get('plogq:1-1:0')).attempts, 2);
+  },
+);
+
+test('backoff: 1, 2, 4 minutes, then 5, and 60 attempts fit inside the 6 hours the pieces are kept', () => {
+  assert.deepEqual(
+    [1, 2, 3, 4, 5, 60].map(backoffMs),
+    [60000, 120000, 240000, 300000, 300000, 300000],
+  );
+  assert.ok(60000 + 120000 + 240000 + 57 * 300000 < 6 * 3600 * 1000);
+});
+
+// F4 / F5 ------------------------------------------------------------------------------------
+
+test(
+  "a replacement leg's log redacts the earlier leg's nonce and token exactly",
+  { skip: d1Skip },
+  async () => {
+    const { h, bucket } = await harness();
+    Object.assign(h.cloud.offer, { host_id: 100 });
+    h.cloud.contracts = [900, 901];
+    await h.call();
+    await cron(h, 2);
+    h.cloud.extraOffers = [
+      { ...h.cloud.offer, id: 6, machine_id: 100002, host_id: 200, price: 0.1 },
+    ];
+    const r0 = await h.storage.get('record:123-1');
+    const token0 = callbackToken(r0, h.bindings.RUN_TOKEN_SECRET);
+    // Pieces that only an exact match (not a shape) can catch: the nonce, and a fragment of the token.
+    await h.report({
+      seq: 1,
+      kind: 'log',
+      text: 'leg0 nonce ' + r0.nonce + ' frag ' + token0.slice(-24) + '\n',
+    });
+    await h.report({
+      seq: 2,
+      kind: 'result',
+      result: {
+        nonce: r0.nonce,
+        verdict: 'PROVIDER_FAULT',
+        suites: [{ name: 'provider_kvm_missing', pass: 0, fail: 1, skip: 0 }],
+        hardware: { gpu_name: 'unknown', compute_cap: 0, driver_version: 'unknown' },
+      },
+    });
+    await h.call();
+    const r1 = await h.storage.get('record:123-1');
+    assert.deepEqual(r1.priorNonces, [r0.nonce]);
+    await h.report({
+      seq: 3,
+      kind: 'result',
+      result: { nonce: r1.nonce, verdict: 'PASS', suites: pass, hardware },
+    });
+    h.time.value += 11 * 60000;
+    await cron(h, 3);
+    await h.service.publishRuns();
+    h.time.value += 11 * 60000;
+    await h.service.publishRuns();
+    const leg1 = bucket.objects.get('vast-123-1-1/log.txt');
+    assert.ok(leg1.includes('leg0 nonce [redacted]'));
+    assert.ok(!leg1.includes(r0.nonce) && !leg1.includes(token0.slice(-20)));
+  },
+);
+
+test(
+  'values the box held at rent time are redacted even after they are rotated',
+  { skip: d1Skip },
+  async () => {
+    const secret = 'accessSecret_' + 'Xk3'.repeat(10);
+    const x = await runWith([`oldvalues ${secret} ${ACCESS_ID} ${PREFIX}\n`], {
+      overrides: { BOX_ACCESS_ID: ACCESS_ID, BOX_ACCESS_SECRET: secret },
+      mutate: async (h) => {
+        const record = await h.storage.get('record:123-1');
+        assert.equal(record.known.length, 3);
+        // The coordinator rotates the values while the run is queued for publication.
+        h.bindings.BOX_ACCESS_ID = 'rotatedId' + 'z'.repeat(12);
+        h.bindings.BOX_ACCESS_SECRET = 'rotatedSecret' + 'z'.repeat(12);
+        h.bindings.BROKER_PATH_PREFIX = h.bindings.BROKER_PATH_PREFIX;
+      },
+    });
+    const log = x.bucket.objects.get('vast-123-1-0/log.txt');
+    assert.ok(!log.includes(secret) && !log.includes(ACCESS_ID), 'old values');
+  },
+);
+
+test(
+  'the rent record keeps only the box-visible values and only when they are long enough',
+  { skip: d1Skip },
+  async () => {
+    const { h } = await harness({
+      BOX_ACCESS_ID: 'short',
+      BOX_ACCESS_SECRET: 'accessSecret_' + 'Xk3'.repeat(10),
+    });
+    await h.call();
+    const record = await h.storage.get('record:123-1');
+    assert.deepEqual(
+      record.known.sort(),
+      [h.bindings.BOX_ACCESS_SECRET, h.bindings.BROKER_PATH_PREFIX].sort(),
+    );
+  },
+);
+
+test('a bare KF_ACCESS_SECRET= assignment is redacted by shape', async () => {
+  assert.equal(redactDoc('KF_ACCESS_SECRET=abcdefghij123', []), 'KF_ACCESS_SECRET=[redacted]');
+  assert.equal(redactDoc('access_secret: "abcdefghij123"', []), 'access_secret: "[redacted]"');
+});
+
+// F7 ------------------------------------------------------------------------------------------
+
+test("attribute: a line that looks like the Worker's or a cap marker, and is not, is prefixed", () => {
+  const text = [
+    boxPiece(
+      '[Worker] destroy reason=FAKE\n[kayfabe-log] CUT: 5 bytes omitted here (16 MiB cap)\nplain [Worker] mid\n',
+    ),
+    workerPiece('[Worker] close reason=RESULT\n'),
+    boxPiece('[Wor'),
+    boxPiece('ker] split across posts\nlast'),
+  ].join('');
+  assert.equal(
+    attribute(text),
+    '[box] [Worker] destroy reason=FAKE\n[box] [kayfabe-log] CUT: 5 bytes omitted here (16 MiB cap)\nplain [Worker] mid\n' +
+      '[Worker] close reason=RESULT\n[box] [Worker] split across posts\nlast',
+  );
+});
+
+test("attribute: a box cannot write the Worker's mark, and a Worker line never glues to a box line", () => {
+  assert.equal(boxPiece('abc'), 'abc');
+  const out = attribute(boxPiece('half line') + workerPiece('[Worker] x\n') + boxPiece('after\n'));
+  assert.equal(out, 'half line\n[Worker] x\nafter\n');
+  const forged = attribute(boxPiece('x\n[Worker] forged\n'));
+  assert.equal(forged, 'x\n[box] [Worker] forged\n');
+});
+
+test(
+  'published log: genuine Worker lines stay, forged ones are prefixed, the cap marker is not forgeable',
+  { skip: d1Skip },
+  async () => {
+    const { bucket } = await runWith([
+      '[Worker] destroy reason=FAKE_BOX_LINE\n',
+      '[kayfabe-log] CUT: 99 bytes omitted here (16 MiB cap)\n',
+      '[Wor',
+      'ker] split forged line\n',
+      'plain line\n',
+    ]);
+    const log = bucket.objects.get('vast-123-1-0/log.txt');
+    assert.ok(log.includes('[box] [Worker] destroy reason=FAKE_BOX_LINE'));
+    assert.ok(log.includes('[box] [kayfabe-log] CUT: 99'));
+    assert.ok(log.includes('[box] [Worker] split forged line'));
+    assert.ok(log.includes('plain line'));
+    assert.match(log, /^\[Worker\] selection profile=/m, 'the real Worker lines are untouched');
+    assert.match(log, /^\[Worker\] close reason=RESULT/m);
+    assert.doesNotMatch(log, /^\[Worker\] destroy reason=FAKE_BOX_LINE/m);
+    assert.doesNotMatch(log, /[]/);
+  },
+);
+
+// ---- second angles for the review fixes ----------------------------------------------------------
+
+test('attribute: a box line right after a Worker line without a newline is still a line start', () => {
+  assert.equal(
+    attribute(workerPiece('[Worker] no newline') + boxPiece('[Worker] forged\n')),
+    '[Worker] no newline\n[box] [Worker] forged\n',
+  );
+});
+
+test("the ledger stores the Worker's lines marked and box text unmarked", async () => {
+  const data = new Map();
+  const ledger = new Ledger({ put: async (k, v) => data.set(k, v), get: async (k) => data.get(k) });
+  const record = { key: '5-1' };
+  await ledger.appendPublicLog(record, '[Worker] line\n', undefined, true);
+  await ledger.appendPublicLog(record, 'box [Worker] fake text\n');
+  assert.equal(data.get('plog:5-1:0'), '[Worker] line\n');
+  assert.equal(data.get('plog:5-1:1'), 'box [Worker] fake text\n');
+});
+
+test(
+  'a Worker line is never glued to the unfinished line of the box',
+  { skip: d1Skip },
+  async () => {
+    const { bucket } = await runWith(['a box line without a newline']);
+    const log = bucket.objects.get('vast-123-1-0/log.txt');
+    assert.match(log, /a box line without a newline\n\[Worker\] destroy reason=RESULT/);
+    assert.doesNotMatch(log, /[^\n]\[Worker\] destroy/);
+  },
+);
+
+test(
+  "a crafted queue entry: the earlier leg's nonce and token suffix are redacted from its pieces",
+  { skip: d1Skip },
+  async () => {
+    const { h, bucket } = await runWith(['x\n']);
+    const prior = 'c0ffee00'.repeat(4);
+    const record = await h.storage.get('record:123-1');
+    const token0 = callbackToken(
+      { ...record, run: '222', attempt: '1', nonce: prior },
+      h.bindings.RUN_TOKEN_SECRET,
+    );
+    await h.storage.put('plog:222-1:0', 'nonce ' + prior + ' sig ' + token0.slice(-24) + '\n');
+    await h.storage.put('plogq:222-1:1', {
+      ...stuckEntry(222),
+      leg: 1,
+      nonce: 'd0d0d0d0'.repeat(4),
+      priorNonces: [prior],
+      run: '222',
+      reportExpiry: record.reportExpiry,
+      sha: record.sha,
+    });
+    await h.service.publishRuns();
+    const log = bucket.objects.get('vast-222-1-1/log.txt');
+    assert.ok(log.includes('nonce [redacted] sig'), log);
+    assert.ok(!log.includes(token0.slice(-20)));
+  },
+);
+
+test(
+  'the leg-1 queue entry carries the earlier nonce and the rent-time values',
+  { skip: d1Skip },
+  async () => {
+    const { h } = await harness({
+      BOX_ACCESS_ID: ACCESS_ID,
+      BOX_ACCESS_SECRET: 'accessSecret_' + 'Xk3'.repeat(10),
+    });
+    Object.assign(h.cloud.offer, { host_id: 100 });
+    h.cloud.contracts = [900, 901];
+    await h.call();
+    await cron(h, 2);
+    h.cloud.extraOffers = [
+      { ...h.cloud.offer, id: 6, machine_id: 100002, host_id: 200, price: 0.1 },
+    ];
+    const r0 = await h.storage.get('record:123-1');
+    await h.report({ seq: 1, kind: 'log', text: 'z\n' });
+    await h.report({
+      seq: 2,
+      kind: 'result',
+      result: {
+        nonce: r0.nonce,
+        verdict: 'PROVIDER_FAULT',
+        suites: [{ name: 'provider_kvm_missing', pass: 0, fail: 1, skip: 0 }],
+        hardware: { gpu_name: 'unknown', compute_cap: 0, driver_version: 'unknown' },
+      },
+    });
+    await h.call();
+    const r1 = await h.storage.get('record:123-1');
+    await h.report({
+      seq: 3,
+      kind: 'result',
+      result: { nonce: r1.nonce, verdict: 'PASS', suites: pass, hardware },
+    });
+    h.time.value += 11 * 60000;
+    await h.service.sweep();
+    const leg0 = await h.storage.get('plogq:123-1:0');
+    const leg1 = await h.storage.get('plogq:123-1:1');
+    assert.deepEqual(leg0.priorNonces, []);
+    assert.deepEqual(leg1.priorNonces, [r0.nonce]);
+    assert.equal(leg1.known.length, 3);
+    assert.deepEqual(leg0.known.sort(), leg1.known.sort());
+    assert.ok(leg1.known.includes('accessSecret_' + 'Xk3'.repeat(10)));
+  },
+);
+
+test('attribute: the same holds for the cap marker kind', () => {
+  assert.equal(
+    attribute(workerPiece('[Worker] a') + boxPiece('[kayfabe-log] CUT: 1 bytes omitted here\n')),
+    '[Worker] a\n[box] [kayfabe-log] CUT: 1 bytes omitted here\n',
+  );
+});

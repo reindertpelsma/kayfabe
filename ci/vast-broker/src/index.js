@@ -290,7 +290,7 @@ export function createService({
     }
     await ledger.appendLog(r, text);
     // The public log holds the Worker's own lines too (src/publiclog.js).
-    if (logsEnabled(env)) await ledger.appendPublicLog(r, text);
+    if (logsEnabled(env)) await ledger.appendPublicLog(r, text, undefined, true);
     r.fullBytes = (r.fullBytes ?? 0) + bytes;
     appendWorkerText(r, text);
     await ledger.save(r);
@@ -1337,6 +1337,11 @@ export function createService({
         key,
         label: 'kf-ci-' + key,
         nonce: n,
+        // Values the box holds, kept for the public log's redaction even if they are rotated
+        // before it is published (src/publish.js).
+        known: [env.BOX_ACCESS_ID, env.BOX_ACCESS_SECRET, env.BROKER_PATH_PREFIX].filter(
+          (v) => typeof v === 'string' && v.length >= 8,
+        ),
         runnerNonce,
         logHash: '0'.repeat(64),
         phase: 'CREATING',
@@ -1380,6 +1385,8 @@ export function createService({
       r.reportExpiry = Math.floor(r.hardDeadline / 1000);
       r.retryCostUsd = rentalCost(retrySource, retrySource.ended);
       r.nonce = (await sha256Hex(retrySource.nonce + n + ':provider:1')).slice(0, 32);
+      r.priorNonces = [...(retrySource.priorNonces ?? []), retrySource.nonce];
+      r.known = [...new Set([...(retrySource.known ?? []), ...(r.known ?? [])])];
       // Keep one authenticated log chain and the run-wide byte/report limits across legs.
       for (const field of [
         'log',

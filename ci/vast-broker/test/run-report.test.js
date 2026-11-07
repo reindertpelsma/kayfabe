@@ -918,6 +918,7 @@ test(
     assert.equal((await h.storage.get('plogq:123-1:0')).attempts, 1);
     // The bucket recovers: the next tick publishes everything.
     bucket.fail = false;
+    h.time.value += 10 * 60000; // the entry backs off after a failure
     await h.service.publishRuns();
     assert.deepEqual([...bucket.objects.keys()].sort(), [
       'vast-123-1-0/log.txt',
@@ -985,6 +986,7 @@ test(
     assert.equal(entry.reportPut, true);
     assert.notEqual(entry.d1, true);
     db.failOn = null;
+    h.time.value += 10 * 60000;
     await h.service.publishRuns();
     assert.equal(bucket.puts.length, 2, 'no object is written twice');
     assert.equal(db.rows('SELECT * FROM ci_run_reports').length, 1);

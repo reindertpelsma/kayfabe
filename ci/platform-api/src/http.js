@@ -3,6 +3,8 @@
 export const CACHE = Object.freeze({
   immutable: 'public, max-age=31536000, immutable',
   short: 'public, max-age=30',
+  // The expensive read endpoints (/v1/ci/subruns, /v1/ci/stats): a shared cache may hold them a minute.
+  edge: 'public, max-age=30, s-maxage=60',
   static: 'public, max-age=300',
   none: 'no-store',
 });
