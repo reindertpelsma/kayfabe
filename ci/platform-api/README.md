@@ -164,7 +164,7 @@ run, commit, `ended_at`, the Worker's verdict, summed and per-subrun counts, and
 (`truncated` says when more exist). The perf rows are numbers the box recorded (cup8bench GFLOPS and timings;
 a guest row carries the host row of the same benchmark as `ref_value` and `ref_ratio`); they never gate
 anything, and no SPECviewperf score is ever in them. Where the box recorded nothing (an older box, a failed
-stage, the application matrix, which is not a payload stage yet) there is no row: the answer is empty, never
+stage, the applications of the apps stage, which is disabled by default) there is no row: the answer is empty, never
 invented.
 
 Caching: a final run page is `immutable` (a year) only once its report row exists, or when the run ended

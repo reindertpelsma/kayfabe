@@ -25,8 +25,8 @@ SOURCE = (HERE / "vast_run_report.py").read_text()
 MUTANTS = [
     (
         "apps-invented",
-        '        "apps": [],  # the application matrix is not a payload stage yet',
-        '        "apps": [{"sub": "host", "name": "x", "os": "linux", "result": "PASS", "note": ""}],',
+        "            for name, (res, _secs, note) in c.apps.items()",
+        '            for name, (res, _secs, note) in list(c.apps.items()) + [("invented", ("PASS", None, ""))]',
     ),
     (
         "not-run-without-reason",
@@ -64,6 +64,20 @@ MUTANTS = [
     ("timeout-stage-is-pass", '"TIMEOUT": "FAIL"', '"TIMEOUT": "PASS"'),
     ("provider-fault-is-fail", '"PROVIDER_FAULT": "RETRY"', '"PROVIDER_FAULT": "FAIL"'),
     ("document-unbounded", "        while size() > limit and doc[key]:", "        while False:"),
+    ("apps-rows-of-another-os", 'os=linux result=(PASS|FAIL|NOT_RUN)"', 'os=\\S+ result=(PASS|FAIL|NOT_RUN)"'),
+    ("app-note-unbounded", 'note": note[:200]}', 'note": note}'),
+    ("app-not-run-is-a-pass-test", '"SKIP" if m[2] == "NOT_RUN" else m[2]', "m[2]"),
+    (
+        "apps-suite-outside-the-linux-subrun",
+        '    linux_group = LINUX_SUITES + tuple(r["name"] for r in rows if r["name"].startswith("apps"))',
+        "    linux_group = LINUX_SUITES",
+    ),
+    ("apps-uncapped", '][: LIMITS["apps"]],', "],"),
+    (
+        "partial-hidden-by-count",
+        'all(r["pass"] > 0 for r in mine) and set(stages_hint) <= {r["name"] for r in mine}',
+        'all(r["pass"] > 0 for r in mine) and len(mine) >= len(stages_hint)',
+    ),
     ("tests-uncapped", '        "tests": tests[: LIMITS["tests"]],', '        "tests": tests,'),
     ("perf-uncapped", '        "perf": perf[: LIMITS["perf"]],', '        "perf": perf,'),
     (

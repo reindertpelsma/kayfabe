@@ -241,6 +241,70 @@ class Build(unittest.TestCase):
         res["hardware"]["driver_version"] = "580; rm -rf /"
         self.assertTrue(all(s["host_driver"] is None for s in self.build(log_lines(), res)["subruns"]))
 
+    APPS = [
+        "APP_ROW name=blender os=linux result=PASS secs=41 guest_xid=0 note=ok",
+        "APP_ROW name=ollama os=linux result=FAIL secs=90 guest_xid=- note=FAIL exit 1 with spaces in the note",
+        "APP_ROW name=vlc os=linux result=NOT_RUN secs=- guest_xid=- note=no result row (budget or boot)",
+    ]
+
+    def test_apps_stage_rows_become_apps_and_tests_of_the_linux_subrun(self):
+        doc = self.build(log_lines() + self.APPS, result())
+        sub = "linux-580.159.03"
+        self.assertEqual(
+            doc["apps"],
+            [
+                {"sub": sub, "name": "blender", "os": "linux", "result": "PASS", "note": "ok"},
+                {"sub": sub, "name": "ollama", "os": "linux", "result": "FAIL", "note": "FAIL exit 1 with spaces in the note"},
+                {"sub": sub, "name": "vlc", "os": "linux", "result": "NOT_RUN", "note": "no result row (budget or boot)"},
+            ],
+        )
+        rows = {t["name"]: t for t in doc["tests"] if t["suite"] == "apps_linux"}
+        self.assertEqual({k: (v["result"], v["ms"], v["sub"]) for k, v in rows.items()}, {
+            "blender": ("PASS", 41000, sub), "ollama": ("FAIL", 90000, sub), "vlc": ("SKIP", None, sub)})
+
+    def test_no_apps_stage_means_no_apps_rows(self):
+        doc = self.build(log_lines(), result())
+        self.assertEqual(doc["apps"], [])
+        self.assertFalse([t for t in doc["tests"] if t["suite"] == "apps_linux"])
+
+    def test_a_failed_apps_stage_fails_the_linux_subrun_and_a_retry_does_too(self):
+        base = [("provision", 1, 0, 0), ("gates", 9, 0, 0), ("kf3_build", 1, 0, 0), ("raw_suite", 30, 0, 0),
+                ("thin_suite", 30, 0, 0), ("birth_census", 1, 0, 0), ("cuda_host", 4, 0, 0), ("cuda_fat", 4, 0, 0)]
+        for name in ("apps", "apps_retry_time"):
+            doc = self.build(log_lines(windows=False), result(windows=False, verdict="FAIL", rows=base + [(name, 0, 1, 0)]))
+            linux = {s["os"]: s for s in doc["subruns"]}["linux"]
+            self.assertEqual(linux["verdict"], "FAIL", name)
+            self.assertIn(name, linux["stages"])
+            self.assertEqual(linux["counts"]["fail"], 1)
+        ok = self.build(log_lines(windows=False), result(windows=False, rows=base + [("apps", 12, 0, 0)]))
+        linux = {s["os"]: s for s in ok["subruns"]}["linux"]
+        self.assertEqual((linux["verdict"], linux["counts"]["pass"]), ("PASS", 47))
+        self.assertIn("apps", linux["log_stages"])
+
+    def test_hostile_or_foreign_app_rows_are_ignored_and_notes_are_bounded(self):
+        lines = [
+            "APP_ROW name=ok os=linux result=PASS secs=1 guest_xid=0 note=" + "n" * 500,
+            "APP_ROW name=win os=windows result=PASS secs=1 guest_xid=0 note=x",
+            "APP_ROW name=bad-name! os=linux result=PASS secs=1",
+            "APP_ROW name=weird os=linux result=MAYBE secs=1",
+            "APP_ROW name=" + "a" * 60 + " os=linux result=PASS",
+        ]
+        doc = self.build(lines, result())
+        self.assertEqual([a["name"] for a in doc["apps"]], ["ok"])
+        self.assertEqual(len(doc["apps"][0]["note"]), 200)
+
+    def test_the_apps_array_is_capped(self):
+        lines = ["APP_ROW name=a%d os=linux result=PASS secs=1" % i for i in range(650)]
+        doc = self.build(lines, result())
+        self.assertEqual(len(doc["apps"]), 500)
+
+    def test_a_missing_thin_suite_is_not_hidden_by_an_apps_row(self):
+        rows = [("provision", 1, 0, 0), ("birth_census", 1, 0, 0), ("cuda_fat", 4, 0, 0), ("apps", 3, 0, 0)]
+        doc = self.build(log_lines(windows=False), result(windows=False, verdict="FAIL", rows=rows))
+        linux = {s["os"]: s for s in doc["subruns"]}["linux"]
+        self.assertEqual(linux["verdict"], "UNATTRIBUTED")
+        self.assertIn("thin_suite", linux["reason"])
+
     def test_an_unknown_linux_driver_gets_an_honest_id(self):
         doc = self.build(log_lines(), result(claims={}))
         self.assertEqual([s["sub"] for s in doc["subruns"]], ["host", "linux-unknown", "windows"])

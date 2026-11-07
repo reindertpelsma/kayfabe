@@ -232,7 +232,7 @@ and nothing is invented: a field without a source stays empty.
 | `perf` | the `CL_BENCH` lines of `cuda_ladder.sh` (the lines `scripts/bench/perf_summarize.py` reads): `BSUM N= ... gflops= batch_gflops= med_ms= h2d_ms= d2h_med_ms= ...`, `BENCH_INIT_MS/CTX_MS/MODULE_MS`, and for N of 1024 or more the derived `h2d_GBps` / `d2h_GBps` by the formula of `perf_summarize.py`; a guest row carries the host row of the same name as `ref_value` and their ratio as `ref_ratio` (a same-box reference the box recorded itself) |
 | `windows` | `WINDOWS_GATE_PASS/FAIL/RETRY` (`probes=`, `resets=`, `known_live_dumps_193=`) and `WINDOWS_GATE_TIMING ... install=<n>s` |
 | `guest_drivers`, `subruns[].host_driver` / `guest_driver` | `hardware.driver_version` (the box's `nvidia-smi`), and the host claims of the result file: the Linux guest driver from the `guest.qcow2.STAGED` receipt (as `guest_driver_receipt` does), the Windows driver constant of the harness |
-| `apps` | none: the application matrix is not a payload stage yet, so the list is empty |
+| `apps`, and `tests` of suite `apps_linux` | the `APP_ROW name= os=linux result= secs= note=` lines of the apps stage (`scripts/bench/box/apps_gate.sh`; the stage is disabled by default, so the list is empty until the owner enables it). The suite rows `apps` and `apps_retry_<class>` belong to the Linux subrun (a failed apps stage fails it) |
 
 Subruns of a host session (one rental): `host` (suites `cuda_host`, `kvm_tests`, `gates`, `kf3_build`,
 `raw_suite`), `linux-<guest driver>` (`thin_suite`, `birth_census`, `cuda_fat`) and `windows-<driver>`

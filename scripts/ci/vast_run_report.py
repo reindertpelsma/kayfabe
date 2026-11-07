@@ -47,10 +47,14 @@ LINE_MAX = 8192  # longer lines are not parsed
 LOG_MAX = 32 * 1024 * 1024
 HOST_SUITES = ("cuda_host", "kvm_tests", "gates", "kf3_build", "raw_suite")
 LINUX_SUITES = ("thin_suite", "birth_census", "cuda_fat")
+APP_ROW = re.compile(
+    r"^APP_ROW name=([A-Za-z0-9_]{1,48}) os=linux result=(PASS|FAIL|NOT_RUN)"
+    r"(?: secs=(\S+))?(?: guest_xid=\S+)?(?: note=(.*))?$"
+)
 # The stage markers whose position in the published log delimits a subrun (the Worker finds them).
 LOG_STAGES = {
     "host": ["cuda_host", "merge_bar"],
-    "linux": ["merge_bar", "cuda_guest"],
+    "linux": ["merge_bar", "cuda_guest", "apps"],
     "windows": ["windows_gate", "windows_gate_2"],
 }
 DRIVER = re.compile(r"[0-9]{3,4}\.[0-9]{1,5}(?:\.[0-9]{1,5})?")
@@ -123,6 +127,7 @@ def arm_result(verdict):
 class Collector:
     def __init__(self):
         self.tests = {}  # (sub key, suite, name) -> row, last one wins
+        self.apps = {}  # app name -> (result, secs text, note), last one wins
         self.bench = {"host": {}, "guest": {}}
         self.stage_rows = {}
         self.stage_end = {}
@@ -155,6 +160,12 @@ class Collector:
                 self.test("linux", "cuda_fat", rung, arm_result(d.get("verdict", "")), seconds_ms(wall))
         elif head == "CL_BENCH":
             self.bench_line(line)
+        elif head == "APP_ROW":
+            # The apps stage (scripts/bench/box/apps_gate.sh): one row per gate app, in the Linux guest.
+            m = APP_ROW.match(line)
+            if m:
+                self.apps[m[1]] = (m[2], m[3], (m[4] or "").strip())
+                self.test("linux", "apps_linux", m[1], "SKIP" if m[2] == "NOT_RUN" else m[2], seconds_ms(m[3]))
         elif head == "GATE_PROBE_RESULT":
             parts = line.split(" ", 2)
             if len(parts) == 3 and re.fullmatch(r"[a-z][a-z0-9_]{0,23}", parts[1]):
@@ -251,7 +262,9 @@ def subrun(sub, kind, os_name, group, rows, host_driver, guest_driver, tests, ov
         verdict, reason = "FAIL", None
     elif not mine:
         verdict, reason = "NOT_RUN", reason_idle
-    elif overall == "PASS" or all(r["pass"] > 0 for r in mine) and len(mine) >= len(stages_hint):
+    elif overall == "PASS" or (
+        all(r["pass"] > 0 for r in mine) and set(stages_hint) <= {r["name"] for r in mine}
+    ):
         verdict, reason = "PASS", None
     else:
         verdict, reason = "UNATTRIBUTED", "incomplete: " + ",".join(sorted(set(stages_hint) - {r["name"] for r in mine}))[:150]
@@ -295,10 +308,11 @@ def build_report(lines, result, run_id=None):
     sub_windows = "windows-" + windows_driver if windows_driver else "windows"
     keys = {"host": "host", "linux": sub_linux, "windows": sub_windows}
     mine = {k: [t for t in c.tests.values() if t["_key"] == k] for k in keys}
+    linux_group = LINUX_SUITES + tuple(r["name"] for r in rows if r["name"].startswith("apps"))
     subruns = [
         subrun("host", "host_bare", "host", HOST_SUITES, rows, host_driver, None, mine["host"], overall,
                ("cuda_host", "gates", "kf3_build", "raw_suite"), idle),
-        subrun(sub_linux, "linux_guest", "linux", LINUX_SUITES, rows, host_driver, linux_driver, mine["linux"],
+        subrun(sub_linux, "linux_guest", "linux", linux_group, rows, host_driver, linux_driver, mine["linux"],
                overall, ("thin_suite", "birth_census", "cuda_fat"), idle),
         subrun(sub_windows, "windows_guest", "windows",
                [r["name"] for r in rows if r["name"].startswith("windows")] or ["windows_gate"], rows,
@@ -337,7 +351,10 @@ def build_report(lines, result, run_id=None):
         "suites": rows,
         "subruns": subruns,
         "tests": tests[: LIMITS["tests"]],
-        "apps": [],  # the application matrix is not a payload stage yet
+        "apps": [
+            {"sub": sub_linux, "name": name, "os": "linux", "result": res, "note": note[:200]}
+            for name, (res, _secs, note) in c.apps.items()
+        ][: LIMITS["apps"]],  # empty unless the apps stage ran (it is disabled by default)
         "perf": perf[: LIMITS["perf"]],
         "windows": c.windows,
     }

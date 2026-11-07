@@ -142,7 +142,7 @@ SKIP, NOT_RUN, RETRY or UNATTRIBUTED, rc, duration_ms}]; `suites` [{name, pass, 
 the result file); `subruns` [{sub, kind, os, guest_driver, host_driver, verdict (PASS, FAIL, RETRY,
 UNATTRIBUTED or NOT_RUN), reason (always present for NOT_RUN), stages, log_stages, started_at, ended_at,
 duration_ms, counts {pass, fail, skip}}]; `tests` [{sub, suite, name, result PASS, FAIL, SKIP or REFUSED, ms}];
-`apps` (always `[]` today: the application matrix is not a payload stage); `perf` [{sub, name, value, unit,
+`apps` (the `APP_ROW` lines of the apps stage; `[]` while that stage is disabled, which is the default); `perf` [{sub, name, value, unit,
 higher_is_better, suite, ref_value, ref_ratio}]; `windows` {gate, install_s, probes, resets,
 live_dumps_193}. A host session (one rental) holds several subruns: `host` (bare-metal arms and the host CUDA
 ladder, host driver), `linux-<guest driver>` (thin suite, birth census and the guest CUDA ladder),
