@@ -37,6 +37,22 @@ def ps(name, old, new, *tests, count=1):
 
 
 CASES = [
+    py("std-vga-default-stage", '["--no-kf3"] if args.display_mode == "std-vga"', '[] if args.display_mode == "std-vga"',
+       "test_install_app_stage_uses_std_vga", "test_start_reuses_run_overlay_and_fixed_identity"),
+    py("broker-attachment", 'f"display-broker={broker},display-broker-uid={os.getuid()}"', '"display=on"',
+       "test_gpu_stage_attaches_broker_and_never_live_vnc", "test_gpu_status_keeps_broker_plan_and_qmp_fallback"),
+    py("no-live-kf3-vnc", 'state.get("display_mode") != "std-vga"', 'False',
+       "test_gpu_stage_attaches_broker_and_never_live_vnc", "test_gpu_status_keeps_broker_plan_and_qmp_fallback"),
+    py("broker-needs-display", 'os.environ.get("WINVM_KF3_DISPLAY", "on") == "on"', 'True',
+       "test_gpu_display_off_is_refused", "test_gpu_install_display_off_is_refused"),
+    py("broker-caller-socket", 'broker.is_socket() and broker.stat().st_uid == os.getuid()', 'True',
+       "test_gpu_requires_live_caller_broker_socket", "test_gpu_install_refuses_missing_broker_before_install"),
+    py("broker-socket-no-injection", 'broker.is_absolute() and not re.search(r"[,\\s]", str(broker))', 'True',
+       "test_gpu_socket_property_injection_refused", "test_gpu_socket_whitespace_injection_refused"),
+    py("resume-clean-receipt", 'args.verb == "start" and previous.get("phase") == "clean" and receipt.get("tag") == previous["tag"]', 'True',
+       "test_resume_rejects_nonclean_phase_with_receipt", "test_resume_rejects_wrong_receipt_tag"),
+    py("resume-unchanged-disks", 'disk_fingerprints(vm, previous) == receipt.get("disks")', 'True',
+       "test_resume_rejects_changed_source", "test_resume_rejects_changed_base"),
     ("launcher-network-default", "win_vm.sh", changed(LAUNCHER, '${WINVM_NET_RESTRICT:-on}', '${WINVM_NET_RESTRICT:-off}'),
      ["LauncherNetworkDefaults.test_network_default_is_byte_identical_to_explicit_on",
       "LauncherNetworkDefaults.test_unset_default_retains_exact_old_netdev"]),

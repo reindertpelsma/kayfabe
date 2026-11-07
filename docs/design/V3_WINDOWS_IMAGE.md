@@ -2,15 +2,22 @@ STATUS: DESIGN-ONLY, 2026-11-07. Owner/coordinator design; host tooling is cover
 by GPU-free fixtures. No Windows boot, installed application, hardware, bucket,
 upload, activation, compression ratio or performance is verified by this lane.
 
-# Prebuilt private Windows image
+# Private Windows image: QEMU alternative path
 
-## Layers and claim boundaries
+## Owner choice and layers
 
-DESIGN INTENT (owner, 2026-11-07): build a fresh Windows installation **inside our
-own QEMU guest on a Linux Vast box**. The owner installs the stock NVIDIA driver
-and licensed applications by hand through official installers. The owner says
-"done", and tooling prepares and packages the resulting disk. This is an owner's
-private image, never a redistributable project release.
+DESIGN INTENT (coordinator update, 2026-11-07): the owner chose **native Windows
+on Vast (windows-on-vast)** for the real image build, with an Alpine UEFI ESP
+swap for offline raw-disk capture. A separate Claude lane is validating that
+capture design; its V3_WINDOWS_IMAGE_CAPTURE document is pending merge. This
+page and image_session.sh describe an **alternative QEMU path**, not the chosen
+native capture implementation. Packaging, manifests and presigned-transfer
+helpers remain available; create currently consumes a clean QEMU-session qcow2,
+not an arbitrary native raw capture. Native capture integration is outside Y1.
+
+DESIGN INTENT: the owner installs the stock NVIDIA driver and licensed software
+manually through official installers using throwaway accounts. The base image,
+run-time scripts and fresh-install claim lane remain separate:
 
 | Layer | Intended contents | Verification obligation |
 |---|---|---|
@@ -26,11 +33,11 @@ driver and the tested driver.
 
 CODE READ: `scripts/bench/windows/win_vm.sh` supplies `install`, `run`, `ssh`,
 `scp-to`, `scp-from`, `status` and `stop`; the new wrapper uses those verbs. The
-launcher adds only the opt-in network knob described below. `run` uses a writable overlay above `disk/base.qcow2`;
+launcher has the opt-in network knob described below. `run` uses a writable overlay above `disk/base.qcow2`;
 packaging flattens `disk/image-build.qcow2` into one compressed qcow2. Nothing
 commits an overlay back into the sealed parent.
 
-## Why build in this QEMU shape
+## Why retain the QEMU alternative
 
 CODE READ: the launcher attaches the system disk on virtio-blk, exposes VNC at
 `run/vnc.sock`, and uses `-rtc base=utc,driftfix=slew`. The wrapper opts into
@@ -38,10 +45,20 @@ CODE READ: the launcher attaches the system disk on virtio-blk, exposes VNC at
 restarts for `-uuid`, SMBIOS serial and MAC. The ordinary launcher's defaults
 remain unchanged.
 
-INFERRED: installing in the same virtual boot/storage shape as CI reduces the
-risk of a native Windows-on-Vast disk failing to boot under virtio-blk. A native
-disk capture and WinRE/WinRM transfer are outside this design. No boot migration
-has been measured here.
+INFERRED: the QEMU alternative can avoid an extra native-to-virtio storage
+migration step by installing directly on the same virtual disk controller as CI.
+This does not override the owner's native-build choice or establish that native
+capture will fail. UNTESTED: importing either image into fresh firmware/TPM state
+and booting it on the target configuration remain coordinator experiments.
+
+CODE READ: win_vm.sh install/check boots use `-vga std`. A run with `--no-kf3`
+uses the same plain std-VGA display for the installed overlay. Ordinary kf3 run
+mode instead uses `-vga none -device kf3-gpu,...`; `WINVM_KF3_DISPLAY=off` removes
+the guest display, not just the QEMU console. Thus the presence of vnc.sock does
+not establish a usable live Windows console in kf3 mode. Coordinator/owner
+report (2026-11-07): the QEMU console copy path is low performance, lacks a live
+Windows qualification and may remain only for screenshots; the broker is the
+product viewing path. No live kf3 VNC session is part of this alternative.
 
 DESIGN INTENT: export only the qcow2 disk and manifest. Never clone swtpm state,
 SSH private keys, Secure Boot signing keys or the host `secrets/` directory.
@@ -103,34 +120,89 @@ used for the owner's later manual app/driver installations.
 ## Session and preparation contract
 
 CODE READ: `scripts/bench/windows/image_session.sh` supports `install`, `start`,
-`status` and `stop`. `install` completes the existing unattended OS install and
-then starts the interactive build overlay. `start` uses an already installed
-VM. Both require `--env-file`, `--ssh-host` and optionally `--host-ssh-port` for
-the Linux builder. They wait for guest SSH and set the existing local `kf`
-account password through SSH stdin. `--allow-internet` opts into outbound guest
-networking for official installer/activation steps via `WINVM_NET_RESTRICT=off`;
-the default remains `on` (restricted). The launcher's VM configuration change is
-this validated on/off substitution; adjacent diagnostic/log handling also gets
-ShellCheck cleanup. Dry-run tests compare the full default QEMU argv against an
-`origin/next` fixture, compare it with explicit `on`, and confirm that `off`
-changes only the network restriction. Passwords are neither exported nor put in
-argv. The env file is data, never sourced: one `WIN_IMAGE_PASSWORD=literal value`
-line, with optional blank/comment lines; shell quoting is not interpreted.
+`status` and `stop`. Both startup verbs require `--env-file`, `--ssh-host` and
+optionally `--host-ssh-port` for the Linux builder. `install` first completes the
+existing unattended OS installation. Both then start an overlay, wait for guest
+SSH and set local `kf`'s password through stdin. Passwords are not exported or
+put in argv. The env file is data, never sourced: one
+`WIN_IMAGE_PASSWORD=literal value` line, with optional blank/comment lines.
+Shell quoting is not interpreted. `--allow-internet` explicitly opts into
+outbound installer/activation traffic; the default remains restricted.
 
-CODE READ: the env file must be outside the checkout, owned by the caller and
-unreadable by group/other users. It is not copied into logs or a manifest. Guest
-command output is suppressed, including failures. The guest account policy can
-reject a password; the wrapper then refuses readiness. The builder's original
-`secrets/win_password` is not changed; do not use `desktop-prep` with that stale
-value after setting the image account password.
+CODE READ: `--display-mode std-vga` is the default **mode A**. It runs the
+installed overlay with `win_vm.sh run --no-kf3` (`-vga std`), keeping the same
+non-GPU display as the install/check boots. Use A for Windows setup and app
+installers that need no GPU. It prints websockify's Unix target command on builder
+loopback port 6080 and the workstation's exact SSH forward. noVNC assets are
+expected at `/usr/share/novnc`. It does not start or install websockify.
 
-CODE READ: the printed console commands start websockify/noVNC on the builder's
-loopback TCP port 6080 with `--unix-target <VM>/run/vnc.sock`; the workstation
-uses `ssh -N -p <port> -L 127.0.0.1:6080:127.0.0.1:6080 <builder>` and opens
-`http://127.0.0.1:6080/vnc.html?autoconnect=1`. The wrapper does not install or
-start websockify, open firewall ports or forward an SSH agent. noVNC assets are
-expected at `/usr/share/novnc`. Change that path manually if the package uses a
-different location. See the [websockify Unix target implementation](https://github.com/novnc/websockify/blob/master/websockify/websocketproxy.py).
+CODE READ: `--display-mode broker --broker-socket <path>` selects **mode B** and
+passes `display-broker=<path>,display-broker-uid=<caller uid>` using the existing
+`--kf3-extra` option. It requires an existing caller-owned Unix socket and rejects
+QEMU separators/whitespace in its path. It refuses `WINVM_KF3_DISPLAY=off` before
+install/boot, since a broker needs the display plane. It does not print a live
+VNC command for B. No default QEMU argv change is introduced by these wrapper
+options; the original launcher fixture remains the default-shape check.
+
+UNTESTED DESIGN — **all of mode B**, including its prerequisites, broker attach,
+GPU/driver presentation, remote input, compositor, browser capture, encoding and
+fallback, requires the coordinator's dry run. The wrapper prints commands; it
+does not manage these display services. The coordinator supplies the broker
+binary/socket and reserves a headless display before selecting B. A proposed
+X11 route is browser-screencast's Xvfb + Openbox display, Picom's XRender
+compositor, the broker's X11 window, and browser-screencast's x11grab capture:
+
+```bash
+# UNTESTED DESIGN: separate builder terminals, same reserved display and user.
+browser-screencast --headless --headless-display :99 --headless-wm openbox \
+  --listen 127.0.0.1 --port 6081 --capture x11grab --generate-token --no-audio
+DISPLAY=:99 picom --backend xrender
+DISPLAY=:99 /opt/nvkvm-broker/nvkvm-display-broker \
+  --socket /workspace/winvm/owner-image-build/run/display-broker.sock \
+  --backend x11 --persist --title 'Windows image build'
+# Workstation: substitute the builder host/port, then use its private token URL.
+ssh -N -p 22 -L 127.0.0.1:6081:127.0.0.1:6081 root@builder.example.invalid
+```
+
+CODE READ: [browser-screencast server.py at a7bde9fc](https://github.com/reindertpelsma/browser-screencast/blob/a7bde9fc4525fddab5ffe13d5d7561537f16a5c7/server.py)
+parses these flags; its headless helper creates Xvfb/window-manager processes.
+This source reading supplies no end-to-end Windows result. The coordinator must
+pin/review the version installed on the box, install dependencies separately,
+keep the generated token private, and select a free display/port. A blank broker
+window, failed capture, lost input or stalled refresh falsifies this proposed B
+route; do not substitute a live kf3 noVNC console as if it had a qualification.
+
+UNTESTED DESIGN — B fallback: request QMP `screendump` to a host-local PPM every
+2 seconds and transfer/view each completed screenshot over the existing SSH
+connection; inject keyboard events with QMP `send-key`, or relative pointer
+movement/buttons with `input-send-event`. This is polling, not a live video path.
+It depends on the console screenshot hook and is unavailable if that hook is
+removed; stop the B experiment if neither broker nor screenshot/input works.
+The wrapper prints a single screenshot request and a Return-key example. For
+example (not executed in Y1):
+
+```bash
+python3 scripts/bench/windows/qmp.py /workspace/winvm/owner-image-build/run/qmp.sock \
+  cmd screendump '{"filename":"/workspace/winvm/owner-image-build/logs/console.ppm"}'
+python3 scripts/bench/windows/qmp.py /workspace/winvm/owner-image-build/run/qmp.sock \
+  cmd send-key '{"keys":[{"type":"qcode","data":"ret"}]}'
+python3 scripts/bench/windows/qmp.py /workspace/winvm/owner-image-build/run/qmp.sock \
+  cmd input-send-event '{"events":[{"type":"rel","data":{"axis":"x","value":20}}]}'
+```
+
+CODE READ: after a clean `stop`, `start --resume` reopens the same image-build
+overlay with a new session tag and chosen display mode. It checks the previous
+clean phase/receipt and unchanged disk fingerprints, clears the old clean
+receipt, and retains the existing VM identity. This permits A -> B -> A while
+keeping packaging tied to the last completed preparation/shutdown. A running
+session cannot be resumed. Real Windows switching between std VGA and kf3 is
+UNTESTED, including display-adapter rebind and first GPU use.
+
+CODE READ: the env file must be outside the checkout, caller-owned and unreadable
+by group/other users. Guest command output is suppressed, including failures.
+The original host secrets/win_password is not updated; do not use desktop-prep
+with that stale password afterward. `status` prints the selected mode's viewing
+instructions again. The wrapper never logs a browser token.
 
 CODE READ: `stop` stages `scripts/bench/windows/image_prepare_guest.ps1` and a
 JSON configuration, executes the script over the existing SSH channel, pulls
@@ -139,7 +211,7 @@ the install check script (`C:\kf\check.ps1`),
 then calls `win_vm.sh stop`. A preparation failure leaves the session available
 for inspection and produces no clean receipt. `status` prints the console
 commands again. Use a fresh `WINVM_NAME` per new build; the wrapper refuses a
-second session or an existing image-build overlay.
+second session or an existing image-build overlay unless an explicit clean resume is requested.
 
 CODE READ: guest preparation disables hibernation with `powercfg.exe /h off`,
 sets fast-startup `HiberbootEnabled=0`, stops/disables W32Time and reads these
@@ -247,13 +319,14 @@ DESIGN INTENT: the coordinator will test on one authorized Linux Vast box, keep
 all steps/evidence at the exact host revision and destroy only that session's
 resources at the end.
 
-1. Falsifier for the boot-shape hypothesis: the installed disk cannot boot on
+1. UNTESTED QEMU alternative, mode A: falsifier for the boot-shape hypothesis: the installed disk cannot boot on
    the launcher with fresh per-VM firmware/TPM state. Install via the wrapper;
    check Secure Boot, virtio-blk, identity stability across restarts and the
    printed loopback noVNC/SSH commands. Record the QEMU argv and Windows build.
-2. Falsifier for the session contract: the supplied local password fails console
-   sign-in or appears in logs/argv. Use a disposable password, verify sign-in,
+2. UNTESTED mode B: first start the headless compositor, broker and browser-screencast, then resume in broker mode. Falsifier for the session contract: the supplied local password fails console
+   sign-in, broker/browser rendering or input fails, or the password appears in logs/argv. Use a disposable password, verify sign-in,
    inspect logs locally without committing secrets, and complete the manual rows.
+   Test QMP screenshot polling/input separately; record its limitations and any absent hook.
 3. Falsifier for preparation: any read-back condition is false, inventory misses
    a chosen test file or its exclusion, hashes disagree, or the zero-file cleanup
    fails. Test both a staged sdelete (EULA accepted by owner) and the documented

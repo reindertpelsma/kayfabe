@@ -14,6 +14,7 @@ import re
 from pathlib import Path
 import shutil
 import shlex
+import socket
 import subprocess
 import tempfile
 import unittest
@@ -91,22 +92,35 @@ elif name == 'curl':
 
 
 class Images(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # Each test still gets an independent writable repo. Build its identical
+        # Git history once, so the shared dev box need not run git init/add/commit
+        # for every case. The mutation harness rebuilds this template per mutant.
+        cls.repo_tmp = tempfile.TemporaryDirectory(prefix="y1-image-repo-")
+        cls.addClassCleanup(cls.repo_tmp.cleanup)
+        cls.repo_template = Path(cls.repo_tmp.name) / "repo"
+        win = cls.repo_template / "scripts/bench/windows"
+        win.mkdir(parents=True)
+        for name in ("image_session.sh", "image_package.sh", "image_tools.py", "image_prepare_guest.ps1"):
+            shutil.copy(WIN / name, win / name)
+        shutil.copy(WIN / "win_vm.sh", win / "media-pins.txt")
+        (win / "win_vm.sh").write_text(FAKE)
+        (win / "win_vm.sh").chmod(0o700)
+        for args in (["init", "-q"], ["add", "."],
+                     ["-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "fixture"]):
+            subprocess.run(["git", *args], cwd=cls.repo_template, check=True, stdout=subprocess.DEVNULL)
+
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp(prefix="y1-image-test-"))
         self.addCleanup(shutil.rmtree, self.tmp)
         self.win = self.tmp / "repo/scripts/bench/windows"
-        self.win.mkdir(parents=True)
-        for name in ("image_session.sh", "image_package.sh", "image_tools.py",
-                     "image_prepare_guest.ps1"):
-            shutil.copy(WIN / name, self.win / name)
-        shutil.copy(WIN / "win_vm.sh", self.win / "media-pins.txt")
+        shutil.copytree(self.repo_template, self.tmp / "repo")
         self.bin = self.tmp / "bin"
         self.bin.mkdir()
         for name in ("qemu-img", "curl"):
             (self.bin / name).write_text(FAKE)
             (self.bin / name).chmod(0o700)
-        (self.win / "win_vm.sh").write_text(FAKE)
-        (self.win / "win_vm.sh").chmod(0o700)
         # Pins must come from the checked-in launcher, never a supplied manifest.
         self.pins = (self.win / "media-pins.txt").read_text()
         self.vm = self.tmp / "vms/build"
@@ -128,12 +142,6 @@ class Images(unittest.TestCase):
                         INVENTORY=json.dumps(inventory()))
         for key in ("WINVM_DRY_RUN", "WINVM_VM_IDENTITY"):
             self.env.pop(key, None)
-        # A tiny local repo gives the implementation a real revision and tracked pins.
-        for args in (["init", "-q"], ["add", "."],
-                     ["-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
-                      "commit", "-qm", "fixture"]):
-            subprocess.run(["git", *args], cwd=self.win.parents[2], check=True,
-                           stdout=subprocess.DEVNULL)
         self.out = self.tmp / "package"
 
     def run_tool(self, tool, *args, **extra):
@@ -179,7 +187,7 @@ class Images(unittest.TestCase):
         run = next(x for x in self.calls("win_vm.sh") if x[0] == "run")
         self.assertIn("--detach", run)
         self.assertEqual(run[run.index("--overlay")+1], "image-build")
-        self.assertNotIn("--no-kf3", run)
+        self.assertIn("--no-kf3", run)
         self.assertEqual(json.loads((self.vm / "network.json").read_text()), {"restrict":"on", "identity":"1"})
         self.assertIn("--unix-target", self.start_output_after_status())
 
@@ -194,6 +202,141 @@ class Images(unittest.TestCase):
         self.assertIn("websockify --web /usr/share/novnc --unix-target", r.stdout)
         self.assertIn(str(self.vm / "run/vnc.sock"), r.stdout)
         self.assertIn("127.0.0.1:6080", r.stdout)
+
+    def broker_socket(self):
+        path = self.tmp / "broker.sock"
+        sock = socket.socket(socket.AF_UNIX)
+        sock.bind(str(path))
+        self.addCleanup(sock.close)
+        return path
+
+    def gpu(self, verb="start", **extra):
+        path = self.broker_socket()
+        return self.run_tool("session", verb, "--env-file", self.secret,
+                             "--ssh-host", "host", "--display-mode", "broker",
+                             "--broker-socket", path, **extra)
+
+    def test_install_app_stage_uses_std_vga(self):
+        r = self.run_tool("session", "install", "--env-file", self.secret, "--ssh-host", "host")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        run = next(x for x in self.calls("win_vm.sh") if x[0] == "run")
+        self.assertIn("--no-kf3", run)
+
+    def test_gpu_stage_attaches_broker_and_never_live_vnc(self):
+        r = self.gpu()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        run = next(x for x in self.calls("win_vm.sh") if x[0] == "run")
+        self.assertNotIn("--no-kf3", run)
+        props = run[run.index("--kf3-extra") + 1]
+        self.assertIn("display-broker=" + str(self.tmp / "broker.sock"), props)
+        self.assertIn("display-broker-uid=" + str(os.getuid()), props)
+        self.assertIn("UNTESTED", r.stdout)
+        self.assertIn("browser-screencast", r.stdout)
+        self.assertIn("picom", r.stdout)
+        self.assertNotIn("websockify", r.stdout)
+        self.assertNotIn("vnc.html", r.stdout)
+
+    def test_gpu_status_keeps_broker_plan_and_qmp_fallback(self):
+        r = self.gpu()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        text = self.start_output_after_status()
+        self.assertIn("UNTESTED", text)
+        self.assertIn("screendump", text)
+        self.assertIn("send-key", text)
+        self.assertNotIn("websockify", text)
+        run = next(x for x in self.calls("win_vm.sh") if x[0] == "run")
+        self.assertNotIn("--no-kf3", run)
+        self.assertIn("display-broker=" + str(self.tmp / "broker.sock"), run[run.index("--kf3-extra") + 1])
+
+    def test_gpu_requires_live_caller_broker_socket(self):
+        r = self.run_tool("session", "start", "--env-file", self.secret, "--ssh-host", "host",
+                          "--display-mode", "broker", "--broker-socket", self.tmp / "missing.sock")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertFalse(self.calls())
+
+    def test_gpu_install_refuses_missing_broker_before_install(self):
+        r = self.run_tool("session", "install", "--env-file", self.secret, "--ssh-host", "host",
+                          "--display-mode", "broker", "--broker-socket", self.tmp / "missing.sock")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertFalse(self.calls())
+
+    def test_gpu_display_off_is_refused(self):
+        r = self.gpu(WINVM_KF3_DISPLAY="off")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertFalse(self.calls())
+
+    def test_gpu_install_display_off_is_refused(self):
+        r = self.gpu("install", WINVM_KF3_DISPLAY="off")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertFalse(self.calls())
+
+    def test_gpu_socket_property_injection_refused(self):
+        path = self.tmp / "broker,display=off.sock"
+        sock = socket.socket(socket.AF_UNIX)
+        sock.bind(str(path))
+        self.addCleanup(sock.close)
+        r = self.run_tool("session", "start", "--env-file", self.secret, "--ssh-host", "host",
+                          "--display-mode", "broker", "--broker-socket", path)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertFalse(self.calls())
+
+    def test_gpu_socket_whitespace_injection_refused(self):
+        path = self.tmp / "broker space.sock"
+        sock = socket.socket(socket.AF_UNIX)
+        sock.bind(str(path))
+        self.addCleanup(sock.close)
+        r = self.run_tool("session", "install", "--env-file", self.secret, "--ssh-host", "host",
+                          "--display-mode", "broker", "--broker-socket", path)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertFalse(self.calls())
+
+    def test_resume_changes_view_after_clean_stop(self):
+        self.ready()
+        r = self.run_tool("session", "start", "--resume", "--env-file", self.secret,
+                          "--ssh-host", "host", "--display-mode", "broker", "--broker-socket", self.broker_socket())
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertFalse((self.vm / "image-clean.json").exists())
+        self.assertEqual(json.loads((self.vm / "image-session.json").read_text())["display_mode"], "broker")
+
+    def test_resume_requires_clean_phase(self):
+        self.start()
+        r = self.run_tool("session", "start", "--resume", "--env-file", self.secret, "--ssh-host", "host")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertEqual(sum(x[0] == "run" for x in self.calls("win_vm.sh")), 1)
+
+    def test_resume_rejects_changed_source(self):
+        self.ready()
+        (self.vm / "disk/image-build.qcow2").write_bytes(b"changed")
+        r = self.run_tool("session", "start", "--resume", "--env-file", self.secret, "--ssh-host", "host")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertEqual(sum(x[0] == "run" for x in self.calls("win_vm.sh")), 1)
+
+    def test_resume_rejects_changed_base(self):
+        self.ready()
+        (self.vm / "disk/base.qcow2").write_bytes(b"changed base")
+        r = self.run_tool("session", "start", "--resume", "--env-file", self.secret, "--ssh-host", "host")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertEqual(sum(x[0] == "run" for x in self.calls("win_vm.sh")), 1)
+
+    def test_resume_rejects_nonclean_phase_with_receipt(self):
+        self.ready()
+        path = self.vm / "image-session.json"
+        data = json.loads(path.read_text())
+        data["phase"] = "interactive"
+        path.write_text(json.dumps(data))
+        r = self.run_tool("session", "start", "--resume", "--env-file", self.secret, "--ssh-host", "host")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertEqual(sum(x[0] == "run" for x in self.calls("win_vm.sh")), 1)
+
+    def test_resume_rejects_wrong_receipt_tag(self):
+        self.ready()
+        path = self.vm / "image-clean.json"
+        data = json.loads(path.read_text())
+        data["tag"] = "other-session"
+        path.write_text(json.dumps(data))
+        r = self.run_tool("session", "start", "--resume", "--env-file", self.secret, "--ssh-host", "host")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertEqual(sum(x[0] == "run" for x in self.calls("win_vm.sh")), 1)
 
     def test_session_network_is_restricted_by_default(self):
         self.start()

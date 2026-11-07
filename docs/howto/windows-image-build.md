@@ -1,6 +1,8 @@
-# Build a private Windows image
+# Alternative: build a private Windows image in QEMU
 
-The image-build helpers are experimental and have only been checked with mocks.
+The owner chose native Windows-on-Vast with an Alpine UEFI ESP swap for the real
+image capture. These helpers describe the alternative QEMU path; native capture
+is maintained separately. The image-build helpers are experimental and have only been checked with mocks.
 Use them on an authorized Linux builder with the existing Windows VM prerequisites,
 noVNC and websockify installed. A real Windows capture and reuse still need testing.
 
@@ -27,7 +29,9 @@ For an already installed VM, use `start` in place of `install`. The wrapper star
 an `image-build` overlay, sets the local Windows `kf` account password over SSH
 stdin and prints the builder's websockify command and the workstation's SSH
 forwarding command. Run those commands, open the printed local noVNC URL, and
-install the stock NVIDIA driver and licensed software through official installers.
+install applications that need no GPU through official installers. This mode uses
+plain std VGA with no kf3 device; driver/GPU-dependent steps belong to the
+UNTESTED broker mode below.
 Use throwaway accounts only and record each installer's version, official URL,
 full SHA-256, exact steps and licence notes. Keep SPEC, scripted open-app bundles
 and the harness for run time.
@@ -36,6 +40,29 @@ If an official installer or activation needs outbound guest networking, add
 `--allow-internet` to `install` or `start`. The default keeps the guest network
 restricted. This changes only the launcher's `WINVM_NET_RESTRICT` knob; keep
 offline and online first-run observations separate in your records.
+
+For GPU-dependent steps, the broker/headless-compositor/browser-screencast route
+is **UNTESTED DESIGN**. Prepare a reserved Xvfb/Openbox display with the owner's
+browser-screencast, a Picom XRender compositor and the broker's X11 window, all
+under the same user/display. The coordinator must test these services and remote
+input before using them. The wrapper prints a proposed command sequence but
+starts none of those services. It never offers live noVNC for a kf3 run.
+
+After a clean stop of mode A, start the same overlay in mode B using the live
+caller-owned broker socket:
+
+```bash
+scripts/bench/windows/image_session.sh start --resume --display-mode broker \
+  --broker-socket /workspace/winvm/owner-image-build/run/display-broker.sock \
+  --env-file /workspace/image-password.env --ssh-host root@builder.example.invalid
+```
+
+Keep WINVM_KF3_DISPLAY on: off removes the display. Use the printed port-6081
+SSH tunnel and browser-screencast's private token URL. The UNTESTED fallback is
+QMP screendump polling plus QMP keyboard/relative-pointer input, not a live video
+console. If both viewing paths fail, stop and report the failed dry run. A later
+clean stop can be followed by `start --resume --display-mode std-vga` to return to
+A. Adapter switching and real Windows behavior still need testing.
 
 Check the session with:
 

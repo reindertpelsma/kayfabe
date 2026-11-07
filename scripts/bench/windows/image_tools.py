@@ -135,6 +135,24 @@ def password(path):
 
 
 def console(state, vm):
+    if state.get("display_mode") != "std-vga":
+        print("UNTESTED DESIGN: kf3 viewing uses broker + headless X11 compositor + browser-screencast; no live kf3 VNC")
+        print("Start these prerequisites in separate builder terminals; reserve display :99 first:")
+        print("browser-screencast --headless --headless-display :99 --headless-wm openbox --listen 127.0.0.1 --port 6081 --capture x11grab --generate-token --no-audio")
+        print("env DISPLAY=:99 picom --backend xrender")
+        print(shlex.join(["env", "DISPLAY=:99", state.get("broker_bin", "/opt/nvkvm-broker/nvkvm-display-broker"),
+                          "--socket", state.get("broker_socket", "<owned-broker.sock>"), "--backend", "x11", "--persist",
+                          "--title", "Windows image build"]))
+        print(shlex.join(["ssh", "-N", "-p", str(state["host_ssh_port"]), "-L",
+                          "127.0.0.1:6081:127.0.0.1:6081", state["ssh_host"]]))
+        print("Open the browser-screencast token URL privately; do not copy the token to logs or manifests.")
+        print("UNTESTED fallback: poll this QMP screendump command, then use QMP input; no live-console dependency:")
+        print(shlex.join(["python3", str(HERE / "qmp.py"), str(vm / "run/qmp.sock"), "cmd", "screendump",
+                          json.dumps({"filename": str(vm / "logs/console.ppm")})]))
+        print(shlex.join(["python3", str(HERE / "qmp.py"), str(vm / "run/qmp.sock"), "cmd", "send-key",
+                          json.dumps({"keys": [{"type": "qcode", "data": "ret"}]})]))
+        return
+    print("STD VGA install/app stage: no kf3 device; GPU-dependent steps belong to the UNTESTED broker stage.")
     forward = "127.0.0.1:6080:127.0.0.1:6080"
     print("On the Linux builder:")
     print(shlex.join(["websockify", "--web", "/usr/share/novnc", "--unix-target",
@@ -173,10 +191,23 @@ def session_start(args, vm):
     require(re.fullmatch(r"[A-Za-z0-9_.@:-]+", args.ssh_host) and not args.ssh_host.startswith("-"),
             "--ssh-host must be a plain SSH destination")
     require(1 <= args.host_ssh_port <= 65535, "invalid Linux SSH port")
-    require(not (vm / "image-session.json").exists(), "session already exists; stop and package it first")
+    require(not (vm / "image-session.json").exists() or args.resume, "session already exists; stop and package it first")
+    broker = None
+    if args.display_mode == "broker":
+        require(os.environ.get("WINVM_KF3_DISPLAY", "on") == "on", "broker mode needs WINVM_KF3_DISPLAY=on; off has no display")
+        require(args.broker_socket is not None, "broker mode needs --broker-socket from the caller's running broker")
+        broker = args.broker_socket.absolute()
+        require(broker.is_absolute() and not re.search(r"[,\s]", str(broker)), "broker socket path cannot contain QEMU separators or whitespace")
+        require(broker.is_socket() and broker.stat().st_uid == os.getuid(), "broker mode needs a live caller-owned Unix socket")
     with lock(vm / "run/vm.lock"):
-        require(not (vm / f"disk/{OVERLAY}.qcow2").exists(),
+        require(not (vm / f"disk/{OVERLAY}.qcow2").exists() or args.resume,
                 "image-build overlay already exists; use a fresh WINVM_NAME")
+        if args.resume:
+            previous = read_json(vm / "image-session.json")
+            receipt = read_json(vm / "image-clean.json")
+            require(args.verb == "start" and previous.get("phase") == "clean" and receipt.get("tag") == previous["tag"],
+                    "resume requires a cleanly stopped session")
+            require(disk_fingerprints(vm, previous) == receipt.get("disks"), "resume source changed after shutdown")
     if args.verb == "install":
         win("install", env=dict(os.environ, WINVM_VM_IDENTITY="1",
             WINVM_NET_RESTRICT="off" if args.allow_internet else "on"), timeout=18000)
@@ -185,11 +216,15 @@ def session_start(args, vm):
     tag = "image_" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
     state = dict(tag=tag, disk=str(vm / f"disk/{OVERLAY}.qcow2"),
                  ssh_host=args.ssh_host, host_ssh_port=args.host_ssh_port, phase="starting",
-                 network_restrict="off" if args.allow_internet else "on")
+                 network_restrict="off" if args.allow_internet else "on",
+                 display_mode=args.display_mode, broker_socket=str(broker) if broker else None,
+                 broker_bin=str(args.broker_bin))
     write_json(vm / "image-session.json", state)
     (vm / "image-clean.json").unlink(missing_ok=True)
     # win_vm takes its own vm.lock before launching. We must release ours first.
-    win("run", "--overlay", OVERLAY, "--tag", tag, "--detach",
+    display_args = ["--no-kf3"] if args.display_mode == "std-vga" else [
+        "--kf3-extra", f"display-broker={broker},display-broker-uid={os.getuid()}"]
+    win("run", "--overlay", OVERLAY, "--tag", tag, "--detach", *display_args,
         env=dict(os.environ, WINVM_VM_IDENTITY="1", WINVM_NET_RESTRICT=state["network_restrict"]), timeout=30)
     console(state, vm)
     deadline = time.monotonic() + args.wait_seconds
@@ -378,6 +413,11 @@ def parser():
         sub.add_argument("--host-ssh-port", type=int, default=22)
         sub.add_argument("--allow-internet", action="store_true", help="opt in to outbound guest networking for official installs/activation")
         sub.add_argument("--wait-seconds", type=int, default=600)
+        sub.add_argument("--display-mode", choices=("std-vga", "broker"), default="std-vga",
+                         help="std VGA for setup/installers; broker is an UNTESTED GPU stage")
+        sub.add_argument("--broker-socket", type=Path, help="caller-owned running broker socket; broker stage only")
+        sub.add_argument("--broker-bin", type=Path, default=Path("/opt/nvkvm-broker/nvkvm-display-broker"))
+        sub.add_argument("--resume", action="store_true", help="start the same overlay again after a clean session stop")
     subs.add_parser("status")
     stop = subs.add_parser("stop", help="prepare guest, pull inventory, clean shutdown; no forced-stop receipt")
     stop.add_argument("--guest-config", type=Path, help="JSON: app_roots and exclude arrays")

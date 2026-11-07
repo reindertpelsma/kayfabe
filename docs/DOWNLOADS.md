@@ -150,10 +150,12 @@ owner-hosted cache is excluded from it.
 
 DESIGN-ONLY: no image bucket/object, upload, Worker route or deployment is
 established by this proposal. The owner's 2026-11-07 design is a private Windows
-disk built inside our QEMU guest, containing a fresh OS, stock NVIDIA driver and
+disk built natively with windows-on-vast (owner choice, 2026-11-07), containing a fresh OS, stock NVIDIA driver and
 licensed software installed manually through official installers. SPEC, the
 harness and scripted open-app bundles remain separate run-time layers.
-See [V3_WINDOWS_IMAGE.md](design/V3_WINDOWS_IMAGE.md) for the manual checklist,
+The QEMU session wrapper is an alternative; the separate native capture design
+uses an Alpine UEFI ESP swap and is pending merge.
+See [V3_WINDOWS_IMAGE.md](design/V3_WINDOWS_IMAGE.md) for the alternative, manual checklist,
 inventory contract, risks and unexecuted coordinator dry-run plan.
 
 | Proposed private object key | Intended contents |
