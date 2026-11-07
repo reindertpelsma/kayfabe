@@ -36,6 +36,9 @@ import urllib.request
 # The Worker reads this exact line at the tested commit before renting (V6); bump it, and
 # DEFAULTS.boxProtocol, together whenever the box-facing contract changes.
 BOX_PROTOCOL = "7"
+# Receipt transport only. The payload separately declares executor support;
+# this does not advertise that driver staging or subruns have been implemented.
+BOX_RELEASE_MATRIX_RECEIPTS = 1
 PROTOCOLS = {BOX_PROTOCOL}
 RESULT_PATH = "/workspace/kf-result.json"
 LINE_MARK = b"...[line truncated, %d bytes dropped]"
@@ -126,7 +129,7 @@ def release_subruns_json(value):
     return (
         isinstance(parsed, dict)
         and set(parsed) == {"status", "subruns", "cross_subrun"}
-        and parsed["status"] == "proposed"
+        and parsed["status"] in ("proposed", "executable")
         and isinstance(parsed["subruns"], list)
         and len(parsed["subruns"]) <= 32
         and (parsed["cross_subrun"] is None or isinstance(parsed["cross_subrun"], dict))
@@ -165,6 +168,9 @@ SPEC = [
     # the same box (2) and its extra stages (colon-separated slot names). Absent: today's run.
     ("KF_TIER", False, _match(r"small|middle|large|adhoc")),
     ("KF_WINDOWS_RUNS", False, _match(r"[12]")),
+    # 2026-11-07 (windows apps): the Windows apps stage and its profile (docs/design/V3_WINDOWS_APPS_GATE.md).
+    # Absent (today's Worker, or a Worker that has not been told to send it): the stage does not run.
+    ("KF_WINAPPS", False, _match(r"small|mid|full")),
     # 2026-11-06 (setup picker): present only when the Worker accepts the optional host_claims block
     # in a result (ci/vast-broker/src/results.js). Absent (an older Worker): the block is not sent.
     ("KF_HOST_CLAIMS", False, _match(r"1")),
@@ -172,6 +178,9 @@ SPEC = [
     # (ci/vast-broker/src/index.js). Absent (an older Worker): the box sends no report.
     ("KF_RUN_REPORT", False, _match(r"1")),
     ("KF_STAGES", False, _match(r"[a-z][a-z0-9_]{0,31}(?::[a-z][a-z0-9_]{0,31}){0,3}")),
+    # 2026-11-07 (SPECviewperf stage, docs/design/V3_SPEC_GATE.md): the lane of the specviewperf stage slot. It goes with
+    # KF_STAGES=specviewperf (release tier only; the payload refuses either alone). Absent: today's run.
+    ("KF_SPEC", False, _match(r"lanea|laneb|both")),
 ]
 
 
@@ -298,6 +307,28 @@ def compact_diagnostics(records):
     return result
 
 
+def validate_matrix_receipts(value):
+    """Bounded evidence claims; selected drivers/required rows are checked by the Worker."""
+    axes = {"host_driver", "linux_guest_driver", "windows_guest_driver"}
+    if (type(value) is not dict or set(value) != {"schema_version", "die", "rows"}
+            or type(value["schema_version"]) is not int or value["schema_version"] != 1
+            or type(value["die"]) is not str or re.fullmatch(r"[A-Z][A-Z0-9_]{1,23}", value["die"]) is None
+            or type(value["rows"]) is not list or not 1 <= len(value["rows"]) <= 64):
+        raise ValueError("matrix receipts")
+    seen = set()
+    for row in value["rows"]:
+        if (type(row) is not dict or set(row) != {"id", "drivers", "windows_guest_abi", "verdict"}
+                or type(row["id"]) is not str or re.fullmatch(r"[a-z][a-z0-9_]{0,63}", row["id"]) is None
+                or row["id"] in seen or row["verdict"] not in ("PASS", "FAIL", "RETRY", "UNATTRIBUTED")
+                or type(row["windows_guest_abi"]) is not str
+                or re.fullmatch(r"[0-9]{3}\.[0-9]{2,3}(?:\.[0-9]{2})?", row["windows_guest_abi"]) is None
+                or type(row["drivers"]) is not dict or set(row["drivers"]) != axes
+                or any(type(v) is not str or re.fullmatch(r"[0-9]{3}\.[0-9]{2,3}(?:\.[0-9]{2})?", v) is None
+                       for v in row["drivers"].values())):
+            raise ValueError("matrix receipt row")
+        seen.add(row["id"])
+
+
 def read_result_file(path):
     """Strictly parse local results, including optional bounded arm diagnostics."""
     with open(path, "rb") as source:
@@ -316,11 +347,16 @@ def read_result_file(path):
             "diagnostics",
             "host_reference",
             "host_claims",
+            "matrix_receipts",
         }
         if type(doc) is not dict or not {"verdict", "suites"} <= set(doc) <= allowed:
             raise ValueError("shape")
         if doc["verdict"] not in ("PASS", "FAIL", "UNAVAILABLE", "PROVIDER_FAULT"):
             raise ValueError("verdict")
+        if "matrix_receipts" in doc:
+            validate_matrix_receipts(doc["matrix_receipts"])
+            if doc["verdict"] == "PASS" and any(r["verdict"] != "PASS" for r in doc["matrix_receipts"]["rows"]):
+                raise ValueError("matrix receipt verdict")
         if "host_reference" in doc and doc["host_reference"] not in (
             "GREEN",
             "NOT_GREEN",
@@ -370,6 +406,7 @@ def final_result(env, rc, timed_out, reason, path):
     rows, hardware, verdict = [], dict(UNKNOWN_HW), "FAIL"
     reference = {}
     claims = {}
+    matrix_receipts = None
     if reason in REASONS:
         _ensure_fail(rows, reason)
     else:
@@ -385,6 +422,7 @@ def final_result(env, rc, timed_out, reason, path):
                 reference["host_reference"] = doc["host_reference"]
             if "host_claims" in doc:
                 claims = {k: v for k, v in clean_claims(doc["host_claims"]).items() if v is not None}
+            matrix_receipts = doc.get("matrix_receipts")
         except FileNotFoundError:
             if not timed_out:
                 _ensure_fail(rows, "result_missing")
@@ -412,6 +450,7 @@ def final_result(env, rc, timed_out, reason, path):
         "hardware": hardware,
         # Only to a Worker that asked for it (KF_HOST_CLAIMS=1): an older Worker refuses the key.
         **({"host_claims": claims} if claims and env.get("KF_HOST_CLAIMS") == "1" else {}),
+        **({"matrix_receipts": matrix_receipts} if matrix_receipts is not None and env.get("KF_RELEASE_SUBRUNS") else {}),
         **reference,
     }
 

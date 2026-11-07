@@ -1,4 +1,9 @@
-import { RELEASE_MATRIX, hostProvidesDrivers } from './release-matrix.js';
+import {
+  RELEASE_MATRIX,
+  hostProvidesDrivers,
+  matrixExecutionProblem,
+  sameMatrixRow,
+} from './release-matrix.js';
 import { captureDownloadMetrics } from './download-metrics.js';
 import { applyProfile, tierEnvironment, tierForClaims, familyOf, profileCaps } from './tier.js';
 // prettier-ignore
@@ -1206,6 +1211,15 @@ export function createService({
   // only a release leg is exempt from the one-rental-per-commit gap inside its own release (the
   // release holds that gap, and the release cost cap bounds its legs). The results store records
   // every rental admitted here from the ledger; records carry `tier`, `family`, `source`, `batch`.
+  function requireMatrixExecution(cfg, selected, requireSelection = false) {
+    const problem = matrixExecutionProblem(RELEASE_MATRIX, cfg);
+    if (problem) refuse('NOT_ELIGIBLE', 409, problem);
+    if (requireSelection) {
+      const expected = RELEASE_MATRIX.dies.find((row) => row.die === selected?.die);
+      if (!expected || !sameMatrixRow(selected, expected))
+        refuse('NOT_ELIGIBLE', 409, 'MATRIX_PLAN_CHANGED');
+    }
+  }
   async function admit({
     key,
     target,
@@ -1227,6 +1241,16 @@ export function createService({
     // the release kill switch) off also stops cron-started release legs and re-runs.
     if (env.RENTING_ENABLED !== 'true') refuse('RENTING_DISABLED', 503);
     if (profile === 'release' && !cfg.releaseEnabled) refuse('RELEASE_DISABLED', 503);
+    if (profile === 'release' || tierName === 'large' || leg?.releaseMatrix !== undefined) {
+      requireMatrixExecution(cfg, leg?.releaseMatrix, true);
+      if (profile !== 'release' || tierName !== 'large')
+        refuse('NOT_ELIGIBLE', 409, 'MATRIX_PLAN_CHANGED');
+      if (JSON.stringify(leg?.stages) !== JSON.stringify(cfg.releaseStages))
+        refuse('NOT_ELIGIBLE', 409, 'MATRIX_PLAN_CHANGED');
+      if (cfg.releaseStages.includes('specviewperf') && !['lanea', 'laneb'].includes(leg?.spec))
+        refuse('NOT_ELIGIBLE', 409, 'MATRIX_PLAN_CHANGED');
+      await github.boxProtocol(target.sha, { matrix: true });
+    }
     // Review R1: one attempt per run key, also after retention removed the record. Guaranteed:
     // while the spend row exists the key is refused. The row is pruned once its run ended more
     // than 30 days ago (ledger.budgets), so after that a token minted for the same run attempt
@@ -1351,6 +1375,8 @@ export function createService({
               source: 'admin',
               windowsRuns: leg.windowsRuns,
               stages: leg.stages,
+              ...(leg.releaseMatrix ? { releaseMatrix: structuredClone(leg.releaseMatrix) } : {}),
+              ...(leg.spec ? { spec: leg.spec } : {}),
             }
           : { source: 'github' }),
         offerFacts: structuredClone(offer.offer_facts ?? null),
@@ -1511,6 +1537,7 @@ export function createService({
           windowsRuns: leg?.windowsRuns ?? 1,
           stages: leg?.stages ?? [],
           releaseMatrix: leg?.releaseMatrix,
+          spec: leg?.spec,
         }),
         // Pass-through for the hostname-wide Access policy; the Worker never verifies Access.
         ...(env.BOX_ACCESS_ID && env.BOX_ACCESS_SECRET
@@ -1637,6 +1664,10 @@ export function createService({
     const github = new Github(fetcher, cfg, token, { cache: githubCache, now });
     // Forks never trigger rentals: the commit must be on this repository's master or next.
     await github.reachable(request.commit_sha);
+    if (request.tier === 'large') {
+      requireMatrixExecution(cfg);
+      await github.boxProtocol(request.commit_sha, { matrix: true });
+    }
     await github.boxProtocol(request.commit_sha);
     for (const [, open] of await ledger.storage.list({ prefix: 'batch-open:', limit: 257 })) {
       const other = await ledger.get('batch:' + open);
@@ -1657,7 +1688,7 @@ export function createService({
     await ledger.put('batch-seq', seq);
     const id = '8' + String(now()).padStart(15, '0') + String(seq % 1000).padStart(3, '0');
     const legs = [];
-    const leg = (family, die, windowsRuns, releaseMatrix, plannedCostUsd) => {
+    const leg = (family, die, windowsRuns, releaseMatrix, selected = {}) => {
       const n = legs.length + 1;
       legs.push({
         seq: n,
@@ -1665,8 +1696,22 @@ export function createService({
         family,
         die,
         windowsRuns,
-        plannedCostUsd: plannedCostUsd ?? 0,
+        plannedCostUsd: selected.est_usd ?? 0,
         ...(releaseMatrix ? { releaseMatrix } : {}),
+        ...(selected.spec
+          ? {
+              spec: selected.spec,
+              phase: selected.phase,
+              reuseMachine: selected.reuse_machine ?? false,
+              ...(selected.after_lane
+                ? {
+                    waitForLeg: legs.find((l) => l.die === die && l.spec === selected.after_lane)
+                      ?.key,
+                    queued: null,
+                  }
+                : {}),
+            }
+          : {}),
         state: 'PENDING',
         avoidMachines: [],
         avoidHosts: [],
@@ -1676,7 +1721,7 @@ export function createService({
     if (request.tier === 'large') {
       for (const f of plan.families)
         for (const c of f.cells)
-          for (const l of c.legs) leg(f.family, c.die, l.windows_runs, l.release_matrix, l.est_usd);
+          for (const l of c.legs) leg(f.family, c.die, l.windows_runs, l.release_matrix, l);
     } else leg(request.die ? familyOf(request.die, cfg) : null, request.die ?? null, 1);
     const batch = {
       id,
@@ -1695,6 +1740,7 @@ export function createService({
       diesPerFamily: cfg.releaseDiesPerFamily,
       releaseDies: request.tier === 'large' ? cfg.releaseDies : {},
       stages: request.tier === 'large' ? cfg.releaseStages : [],
+      requiredStageRowsPerDie: request.tier === 'large' ? plan.required_stage_rows_per_die : {},
       reruns: request.tier === 'large' ? cfg.releaseReruns : 0,
       legs,
       verdict: null,
@@ -1706,6 +1752,9 @@ export function createService({
     return batchView(batch, plan);
   }
   function batchView(batch, plan) {
+    // Recompute the release summary under current trusted receipt policy rather
+    // than displaying a pre-fix cached PASS from a completed, unticked batch.
+    const verdict = batch.tier === 'large' ? releaseVerdict(batch).verdict : batch.verdict;
     return {
       batch: batch.id,
       sha: batch.sha,
@@ -1714,7 +1763,7 @@ export function createService({
       cost_cap_usd: batch.costCapUsd,
       estimate_usd: batch.estimateUsd,
       spent_usd: batch.spentUsd ?? 0,
-      verdict: batch.verdict,
+      verdict,
       legs: batch.legs.map((l) => ({
         key: l.key,
         family: l.family,
@@ -1748,23 +1797,34 @@ export function createService({
     const cfg = batchConfig(batch.tier);
     // The cron service starts with default settings; each batch must query/create with its own resources.
     vast = new Vast(fetcher, cfg, env.VAST_API_KEY);
-    // 1. Ended legs: classify once, then a fresh-box re-run for RETRY/UNATTRIBUTED if allowed.
+    // 1. Regrade settled legs from checked reports; only newly ended RETRY/UNATTRIBUTED legs can create a fresh-box retry.
     for (const l of [...batch.legs]) {
-      if (l.state !== 'STARTED') continue;
+      if (!['STARTED', 'ENDED'].includes(l.state)) continue;
+      const wasEnded = l.state === 'ENDED';
       const r = await ledger.get('record:' + l.key);
       if (r && r.ended === null) continue;
+      if (wasEnded && !r) continue;
       l.state = 'ENDED';
       // Only this batch's own run of the SAME commit counts (no tree-key carry-over, coordinator
       // ruling 2026-11-05): a record of another commit can never answer a release cell.
-      l.outcome = classifyLeg(r?.sha === batch.sha && r?.batch === batch.id ? r : undefined, {
-        windowsRuns: l.windowsRuns,
-        stages: batch.stages,
-        die: batch.tier === 'large' ? l.die : (l.die ?? r?.die),
-        family: batch.tier === 'large' ? l.family : (l.family ?? r?.family),
-        cfg,
-      });
+      const classified = classifyLeg(
+        r?.sha === batch.sha && r?.batch === batch.id ? r : undefined,
+        {
+          windowsRuns: l.windowsRuns,
+          stages: batch.stages,
+          die: batch.tier === 'large' ? l.die : (l.die ?? r?.die),
+          family: batch.tier === 'large' ? l.family : (l.family ?? r?.family),
+          cfg,
+          releaseMatrix: l.releaseMatrix,
+          spec: l.spec,
+        },
+      );
+      // Regrade old persisted outcomes from accepted rows, while keeping a FAIL
+      // sticky even if a record has subsequently disappeared or changed shape.
+      if (l.outcome?.verdict !== 'FAIL') l.outcome = classified;
       l.costUsd = r ? rentalCost(r, r.ended) : 0;
       l.machineId = r?.machineId ?? null;
+      if (wasEnded) continue;
       if (batch.state === 'RUNNING' && wantsRerun(l, batch.reruns)) {
         const n = Math.max(...batch.legs.map((x) => x.seq)) + 1;
         batch.legs.push({
@@ -1774,6 +1834,7 @@ export function createService({
           die: l.die,
           windowsRuns: l.windowsRuns,
           ...(l.releaseMatrix ? { releaseMatrix: l.releaseMatrix } : {}),
+          ...(l.spec ? { spec: l.spec, phase: l.phase } : {}),
           state: 'PENDING',
           // Review F10: a fresh box: not a machine any leg of this die used, the failed one
           // included (its machineId is set above), so two Windows runs stay on two machines.
@@ -1794,8 +1855,21 @@ export function createService({
     await ledger.put('batch:' + batch.id, batch);
     // 2. Pending legs: start while slots and caps allow; give up after the start window.
     let market;
-    for (const l of batch.legs) {
+    for (const l of [...batch.legs].sort(
+      (a, b) => (a.phase ?? 0) - (b.phase ?? 0) || a.seq - b.seq,
+    )) {
       if (l.state !== 'PENDING') continue;
+      if (l.waitForLeg) {
+        const dependency = batch.legs.find((x) => x.key === l.waitForLeg);
+        if (!dependency || ['MISSING'].includes(dependency.state)) {
+          l.state = 'MISSING';
+          continue;
+        }
+        if (dependency.state !== 'ENDED') continue;
+        const previous = await ledger.get('record:' + dependency.key);
+        if (!previous || previous.ended === null || previous.ended === undefined) continue;
+        if (l.queued === null) l.queued = now();
+      }
       if (
         batch.state !== 'RUNNING' ||
         now() - (l.queued ?? batch.created) > cfg.releaseStartWindow
@@ -1835,6 +1909,7 @@ export function createService({
             die: l.die ?? undefined,
             windowsRuns: l.windowsRuns,
             releaseMatrix: l.releaseMatrix,
+            spec: l.spec,
             stages: batch.stages,
             avoidMachines: l.avoidMachines,
             avoidHosts: l.avoidHosts,
@@ -1859,7 +1934,12 @@ export function createService({
         l.die ??= started.die;
         // A later leg of the same die (the second Windows run) belongs on another machine.
         for (const sibling of batch.legs)
-          if (sibling.state === 'PENDING' && sibling.die === l.die && sibling !== l) {
+          if (
+            sibling.state === 'PENDING' &&
+            sibling.die === l.die &&
+            sibling !== l &&
+            !(sibling.reuseMachine && sibling.waitForLeg === l.key)
+          ) {
             sibling.avoidMachines = [...new Set([...sibling.avoidMachines, started.machineId])];
             if (started.hostId)
               sibling.avoidHosts = [...new Set([...sibling.avoidHosts, started.hostId])];
@@ -1873,7 +1953,17 @@ export function createService({
         l.lastRefusal = reason;
         // Review F1/F4: admit() refused because renting or releases are switched off: nothing of
         // this batch is rented any more (its pending legs and re-runs end as MISSING).
-        if (['RENTING_DISABLED', 'RELEASE_DISABLED'].includes(reason)) {
+        if (
+          [
+            'RENTING_DISABLED',
+            'RELEASE_DISABLED',
+            'MATRIX_INVALID',
+            'MATRIX_NOT_EXECUTABLE',
+            'MATRIX_PLAN_CHANGED',
+            'MATRIX_REPORTER_CAPABILITY',
+            'MATRIX_PAYLOAD_CAPABILITY',
+          ].includes(reason)
+        ) {
           for (const x of batch.legs) if (x.state === 'PENDING') x.state = 'MISSING';
           break;
         }

@@ -21,6 +21,25 @@ const P = 'src/policy.js',
   L = 'src/release.js';
 const cases = [
   [
+    'SPEC second lease not reserved',
+    L,
+    'first.pricing.total + (second?.pricing.total ?? 0)',
+    'first.pricing.total',
+  ],
+  [
+    'SPEC whole-pair price cap ignored',
+    L,
+    'if (primary.pricing.total + secondary.pricing.total > maximumCost + 1e-7) continue;',
+    '',
+  ],
+  [
+    'SPEC pending quotes omitted',
+    I,
+    'plannedCostUsd: selected.est_usd ?? 0,',
+    'plannedCostUsd: selected.spec ? 0 : (selected.est_usd ?? 0),',
+  ],
+
+  [
     'preferred boundary made exclusive',
     P,
     'const enough = (key, value) => Number.isFinite(offer[key]) && offer[key] >= value;',

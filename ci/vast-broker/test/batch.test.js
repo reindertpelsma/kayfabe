@@ -1,4 +1,5 @@
-import test from 'node:test';
+import { matrixTest as test, capablePayload, receipts, subrunSuites } from './release-fixture.js';
+import { RELEASE_MATRIX } from '../src/release-matrix.js';
 import assert from 'node:assert/strict';
 import { BrokerLedger } from '../src/index.js';
 import { BrokerError, configuration } from '../src/policy.js';
@@ -58,13 +59,15 @@ function releaseMarket(h, { drop = [], twice = TWICE, price = 0.2, sameHost = []
   return rows;
 }
 // Account cap 9: the release takes at most cap - 1 = 8 boxes (review F5); the kill switch is on.
-const release = (extra = {}) =>
-  setup({
-    MAX_CONCURRENT_RENTALS: '9',
-    ROLLING_SPEND_USD: '200',
-    RELEASE_ENABLED: 'true',
-    ...extra,
-  });
+const release = async (extra = {}) =>
+  capablePayload(
+    await setup({
+      MAX_CONCURRENT_RENTALS: '9',
+      ROLLING_SPEND_USD: '200',
+      RELEASE_ENABLED: 'true',
+      ...extra,
+    }),
+  );
 const creates = (h) =>
   h.cloud.calls.filter((c) => /\/api\/v0\/asks\/\d+\/$/.test(c.url)).map((c) => c.body);
 const LINUX = { provision: 1, gates: 9, thin_suite: 30, cuda_host: 4, cuda_fat: 4 };
@@ -74,7 +77,8 @@ const boxHardware = (die) => {
   return {
     gpu_name: 'NVIDIA GeForce ' + gpu.replace('_', ' '),
     compute_cap: cc,
-    driver_version: '580.159.04',
+    driver_version:
+      RELEASE_MATRIX.dies.find((r) => r.die === die)?.drivers.host_driver ?? '580.159.04',
   };
 };
 async function finish(h, key, verdict, spec, hardware) {
@@ -84,6 +88,9 @@ async function finish(h, key, verdict, spec, hardware) {
     fail: v < 0 ? 1 : 0,
     skip: 0,
   }));
+  const record = await h.storage.get('record:' + key);
+  const matrixRow = record.releaseMatrix;
+  if (matrixRow) suites.push(...subrunSuites(matrixRow));
   const r = await h.report(
     {
       seq: 1,
@@ -94,6 +101,7 @@ async function finish(h, key, verdict, spec, hardware) {
         suites,
         hardware: hardware ?? boxHardware((await h.storage.get('record:' + key)).die),
         host_reference: 'GREEN',
+        ...(matrixRow ? { matrix_receipts: receipts(matrixRow) } : {}),
       },
     },
     { run: key },
@@ -186,7 +194,7 @@ test('start: a release fans out up to the cap; each leg is a normal rental', asy
     assert.match(body.env.KF_WINDOWS_GUEST_DRIVER, /^[0-9.]+$/);
     assert.equal(
       JSON.parse(Buffer.from(body.env.KF_RELEASE_SUBRUNS, 'base64url')).status,
-      'proposed',
+      'executable',
     );
   }
   const batch = await batchOf(h, started.batch);

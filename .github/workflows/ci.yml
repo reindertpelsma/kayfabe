@@ -68,6 +68,8 @@ jobs:
           node ci/vast-broker/scripts/mutate-tiers.mjs
           # Proposed release matrix and payload contract: two named killers per mutant.
           node ci/vast-broker/release-matrix-mutants.mjs
+          # RV1 admission/receipt grading and both SPEC lanes: two named killers each.
+          node ci/vast-broker/release-safety-mutants.mjs
           python3 scripts/ci/profile_resources.py
           node ci/vast-broker/profile-resources-mutants.mjs
           # Preferred host quality, affordable fallback and offer-facts snapshots.

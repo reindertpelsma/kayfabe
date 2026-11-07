@@ -1,0 +1,5 @@
+=== managed_t start=2026-11-07T05:31:58.0175716+00:00 host=KFWIN session=0 boot=2026-11-07T05:14:01.5000000Z timeout=180
+KFDEV NVIDIA GeForce RTX 4090
+[eq] device NVIDIA GeForce RTX 4090 torch 2.8.0+cu126
+MANAGED_STAGE allocating
+=== end rc=124 secs=181 2026-11-07T05:34:58.5818188+00:00

@@ -9,7 +9,16 @@
 // The matrix is proposed, not an executable coverage claim: the payload refuses it.
 // Existing verdict, retry, cost and admission rules remain in force.
 import { familyOf } from './tier.js';
-import { RELEASE_MATRIX, validateReleaseMatrix, hostProvidesDrivers } from './release-matrix.js';
+import {
+  RELEASE_MATRIX,
+  validateReleaseMatrix,
+  hostProvidesDrivers,
+  matrixExecutionProblem,
+  matrixReceiptDefinitions,
+  checkedMatrixReceipts,
+  sameMatrixRow,
+} from './release-matrix.js';
+import { DEFAULTS } from './defaults.js';
 import { gpuClass, resourceCaps, performanceRank, spendingHeadroom } from './policy.js';
 export const LINUX_LAST_ROW = 'cuda_fat';
 export const VERDICTS = Object.freeze(['PASS', 'FAIL', 'RETRY', 'UNATTRIBUTED']);
@@ -23,8 +32,12 @@ const byPreference = (cfg) => (a, b) =>
   a.pricing.effective - b.pricing.effective ||
   countryRank(a, cfg) - countryRank(b, cfg) ||
   a.id - b.id;
+export const requiredStageRows = (stages) =>
+  Object.fromEntries(
+    stages.map((stage) => [stage, DEFAULTS.stageSlots[stage]?.requiredRowsPerDie ?? [stage]]),
+  );
 // One full leg per matrix die; the compatibility path for other callers retains the old split.
-export function dieLegs(offers, cfg, matrixRow) {
+export function dieLegs(offers, cfg, matrixRow, { maximumCost = Infinity } = {}) {
   const releaseMatrix = cfg.releaseMatrix ?? RELEASE_MATRIX;
   matrixRow ??= releaseMatrix.dies.find((d) => d.die === offers[0]?.die);
   if (matrixRow)
@@ -39,7 +52,8 @@ export function dieLegs(offers, cfg, matrixRow) {
   const first = sorted[0];
   const others = sorted.filter((o) => o.machine_id !== first.machine_id);
   const second = others.find((o) => o.host_id !== first.host_id) ?? others[0];
-  const leg = (o, windowsRuns) => ({
+  const leg = (o, windowsRuns, extra = {}) => ({
+    ...extra,
     windows_runs: windowsRuns,
     ...(matrixRow
       ? {
@@ -60,6 +74,27 @@ export function dieLegs(offers, cfg, matrixRow) {
     offer_facts: o.offer_facts ?? null,
   });
   const want = cfg.releaseWindowsRuns;
+  if (cfg.releaseStages.includes('specviewperf')) {
+    const lanes = DEFAULTS.stageSlots.specviewperf.lanes;
+    // Prefer performance, then effective price, within the whole two-lease cap.
+    // The same physical machine is reused only when no other machine is offered.
+    for (const primary of sorted) {
+      const alternatives = sorted.filter((o) => o.machine_id !== primary.machine_id);
+      for (const secondary of alternatives.length ? alternatives : [primary]) {
+        if (primary.pricing.total + secondary.pricing.total > maximumCost + 1e-7) continue;
+        return lanes.map((spec, index) =>
+          leg(index === 0 ? primary : secondary, 1, {
+            spec,
+            phase: index,
+            ...(index > 0
+              ? { after_lane: lanes[0], reuse_machine: primary.machine_id === secondary.machine_id }
+              : {}),
+          }),
+        );
+      }
+    }
+    return [];
+  }
   if (second && want >= 2 && (!matrixRow || releaseMatrix.policy.boxes_per_die > 1))
     return [leg(first, 1), leg(second, 1)];
   return [leg(first, want)];
@@ -86,7 +121,13 @@ export function planRelease(allowed, cfg, { budget, credit } = {}) {
           o.die === row.die &&
           hostProvidesDrivers(o.host_capabilities ?? releaseMatrix.host_capabilities.vast_kvm, row),
       );
-      return [row.die, candidates.length ? Math.min(...candidates.map((o) => o.pricing.total)) : 0];
+      if (!candidates.length) return [row.die, 0];
+      const cheapest = [...candidates].sort((a, b) => a.pricing.total - b.pricing.total);
+      const first = cheapest[0];
+      const second = cfg.releaseStages.includes('specviewperf')
+        ? (cheapest.find((o) => o.machine_id !== first.machine_id) ?? first)
+        : undefined;
+      return [row.die, first.pricing.total + (second?.pricing.total ?? 0)];
     }),
   );
   for (const family of Object.keys(cfg.releaseDies)) {
@@ -101,7 +142,12 @@ export function planRelease(allowed, cfg, { budget, credit } = {}) {
       const affordable = offers.filter(
         (o) => o.pricing.total + estimate + reserved <= spendingLimit + 1e-7,
       );
-      const planned = dieLegs(affordable.length ? affordable : offers, cfg, matrixRow);
+      const spec = cfg.releaseStages.includes('specviewperf');
+      let planned = spec
+        ? dieLegs(offers, cfg, matrixRow, { maximumCost: spendingLimit - estimate - reserved })
+        : dieLegs(affordable.length ? affordable : offers, cfg, matrixRow);
+      // Retain an over-cap estimate/refusal when no affordable pair exists.
+      if (spec && !planned.length) planned = dieLegs(offers, cfg, matrixRow);
       if (!planned.length) {
         missing.push({ die, reason: 'NO_OFFER' });
         continue;
@@ -110,7 +156,7 @@ export function planRelease(allowed, cfg, { budget, credit } = {}) {
       cells.push({
         die,
         offers: offers.length,
-        same_machine: planned.length === 1,
+        same_machine: new Set(planned.map((l) => l.machine_id)).size === 1,
         legs: planned,
         est_usd: round(cost),
       });
@@ -130,6 +176,8 @@ export function planRelease(allowed, cfg, { budget, credit } = {}) {
   }
   const parallel = Math.min(cfg.maxConcurrentProfile.release, cfg.maxConcurrent);
   const refusals = [];
+  const executionProblem = matrixExecutionProblem(releaseMatrix, cfg);
+  if (executionProblem) refusals.push(executionProblem);
   if (!families.every((f) => f.complete)) refusals.push('INCOMPLETE');
   if (estimate > cfg.releaseCostCap) refusals.push('COST_CAP');
   // Review F5: a release runs at most account cap - 1 boxes; with the default account cap of 1 it
@@ -152,7 +200,7 @@ export function planRelease(allowed, cfg, { budget, credit } = {}) {
     matrix_blockers: releaseMatrix.dies.flatMap((d) =>
       d.blockers.map((reason) => ({ die: d.die, reason })),
     ),
-    execution_ready: false,
+    execution_ready: executionProblem === null,
     tier: 'large',
     profile: 'release',
     hard_minutes: cfg.hardRelease / 60000,
@@ -168,6 +216,7 @@ export function planRelease(allowed, cfg, { budget, credit } = {}) {
     windows_runs_per_die: cfg.releaseWindowsRuns,
     reruns_per_leg: cfg.releaseReruns,
     stages: cfg.releaseStages,
+    required_stage_rows_per_die: requiredStageRows(cfg.releaseStages),
     families,
     legs,
     estimate_usd: round(estimate),
@@ -211,22 +260,58 @@ export function hardwareMatch(record, { die, family, cfg } = {}) {
   );
   return h.compute_cap === cfg.families[family] && boxDie === die ? 'MATCH' : 'MISMATCH';
 }
-export function classifyLeg(record, { windowsRuns = 1, stages = [], die, family, cfg } = {}) {
+export function classifyLeg(
+  record,
+  { windowsRuns = 1, stages = [], die, family, cfg, releaseMatrix, spec } = {},
+) {
   const windowsNames =
     windowsRuns === 0
       ? []
       : windowsRuns === 2
         ? ['windows_gate', 'windows_gate_2']
         : ['windows_gate'];
+  const matrixRequired = releaseMatrix !== undefined || cfg?.profile === 'release';
+  const matrixRow =
+    releaseMatrix ?? (cfg?.releaseMatrix ?? RELEASE_MATRIX).dies?.find((r) => r.die === die);
+  const definitions = matrixRequired ? matrixReceiptDefinitions(matrixRow) : [];
+  const stageRequirements = requiredStageRows(stages);
+  const ownStageRows = Object.fromEntries(
+    stages.map((stage) => [
+      stage,
+      stage === 'specviewperf' && spec ? ['specviewperf_' + spec] : stageRequirements[stage],
+    ]),
+  );
   const all = (v) => ({
     linux: v,
     windows: windowsNames.map(() => v),
     stages: Object.fromEntries(stages.map((s) => [s, v])),
+    ...(matrixRequired
+      ? {
+          matrix: Object.fromEntries(
+            (definitions.length ? definitions : [{ id: 'missing' }]).map((r) => [r.id, v]),
+          ),
+        }
+      : {}),
+    ...(stages.length
+      ? {
+          stageRows: Object.fromEntries(
+            Object.values(ownStageRows)
+              .flat()
+              .map((n) => [n, v]),
+          ),
+        }
+      : {}),
   });
   // Only the Worker's own PASS verdict can make a PASS leg; any other record whose rows all pass
   // is inconsistent and is a RETRY, never a pass.
   const finish = (parts, reason, passAllowed = false) => {
-    const values = [parts.linux, ...parts.windows, ...Object.values(parts.stages)];
+    const values = [
+      parts.linux,
+      ...parts.windows,
+      ...Object.values(parts.stages),
+      ...Object.values(parts.matrix ?? {}),
+      ...Object.values(parts.stageRows ?? {}),
+    ];
     if (!passAllowed && values.every((v) => v === 'PASS'))
       return { verdict: 'RETRY', reason: 'INCONSISTENT', ...all('RETRY') };
     const verdict = values.includes('FAIL')
@@ -245,6 +330,66 @@ export function classifyLeg(record, { windowsRuns = 1, stages = [], die, family,
   const result = record.result,
     rows = Array.isArray(result?.suites) ? result.suites : [];
   const passing = (name) => rows.some((r) => r.name === name && r.pass > 0 && r.fail === 0);
+  const green = result?.host_reference === 'GREEN';
+  const rowVerdict = (name) => {
+    const failures = rows.filter(
+      (r) => r.fail > 0 && (r.name === name || r.name.startsWith(name + '_')),
+    );
+    if (failures.some((r) => !retryRow(r.name))) return green ? 'FAIL' : 'UNATTRIBUTED';
+    return passing(name) ? 'PASS' : 'RETRY';
+  };
+  const stageRows = Object.fromEntries(
+    Object.values(ownStageRows)
+      .flat()
+      .map((name) => [name, rowVerdict(name)]),
+  );
+  const stageParts = Object.fromEntries(
+    stages.map((stage) => {
+      const values = ownStageRows[stage].map((name) => stageRows[name]);
+      return [
+        stage,
+        values.includes('FAIL')
+          ? 'FAIL'
+          : values.includes('UNATTRIBUTED')
+            ? 'UNATTRIBUTED'
+            : values.every((v) => v === 'PASS')
+              ? 'PASS'
+              : 'RETRY',
+      ];
+    }),
+  );
+  const proof = result?.matrix_receipts;
+  const matrixParts = Object.fromEntries(
+    definitions.map((definition) => {
+      const names =
+        definition.kind === 'full' ? [LINUX_LAST_ROW, ...windowsNames] : [definition.suite];
+      const rowValues = names.map(rowVerdict);
+      if (rowValues.includes('FAIL')) return [definition.id, 'FAIL'];
+      if (rowValues.includes('UNATTRIBUTED')) return [definition.id, 'UNATTRIBUTED'];
+      if (!checkedMatrixReceipts(proof)) return [definition.id, 'RETRY'];
+      const receipt = proof.rows.find((r) => r.id === definition.id);
+      if (!receipt) return [definition.id, 'RETRY'];
+      if (
+        proof.die !== die ||
+        receipt.windows_guest_abi !== definition.windows_guest_abi ||
+        !Object.keys(definition.drivers).every(
+          (axis) => receipt.drivers[axis] === definition.drivers[axis],
+        ) ||
+        (definition.kind === 'full' &&
+          (record.hardware ?? result.hardware)?.driver_version !== matrixRow.drivers.host_driver)
+      )
+        return [definition.id, 'UNATTRIBUTED'];
+      if (receipt.verdict === 'FAIL') return [definition.id, green ? 'FAIL' : 'UNATTRIBUTED'];
+      return [
+        definition.id,
+        receipt.verdict === 'PASS' && rowValues.every((v) => v === 'PASS') ? 'PASS' : 'RETRY',
+      ];
+    }),
+  );
+  const coverage = {
+    ...(matrixRequired ? { matrix: definitions.length ? matrixParts : { missing: 'RETRY' } } : {}),
+    ...(stages.length ? { stageRows } : {}),
+  };
   if (record.closed === 'STOPPED' && record.verdict !== 'PASS')
     return finish(all('UNATTRIBUTED'), 'STOPPED');
   const hardware = hardwareMatch(record, { die, family, cfg });
@@ -258,21 +403,26 @@ export function classifyLeg(record, { windowsRuns = 1, stages = [], die, family,
     const parts = {
       linux: passing(LINUX_LAST_ROW) ? 'PASS' : 'RETRY',
       windows: windowsNames.map((n) => (passing(n) ? 'PASS' : 'RETRY')),
-      stages: Object.fromEntries(stages.map((s) => [s, passing(s) ? 'PASS' : 'RETRY'])),
+      stages: stageParts,
+      ...coverage,
     };
     return finish(parts, 'RESULT', true);
   }
   if (record.verdict !== 'FAIL' || !result) return finish(all('RETRY'), record.verdict ?? 'NONE');
   // A FAIL: the payload stops at the first failing stage, so the rows say how far it got.
   const failed = rows.filter((r) => r.fail > 0).map((r) => r.name);
-  const green = result.host_reference === 'GREEN';
   const real = failed.filter((n) => !retryRow(n));
   const kind = (names) =>
     names.some((n) => !retryRow(n)) ? (green ? 'FAIL' : 'UNATTRIBUTED') : 'RETRY';
   const linuxFailed = failed.filter(
     (n) => !n.startsWith('windows_') && !stages.some((s) => n === s || n.startsWith(s + '_')),
   );
-  const parts = { linux: 'NOT_RUN', windows: windowsNames.map(() => 'NOT_RUN'), stages: {} };
+  const parts = {
+    linux: 'NOT_RUN',
+    windows: windowsNames.map(() => 'NOT_RUN'),
+    stages: {},
+    ...coverage,
+  };
   for (const s of stages) parts.stages[s] = 'NOT_RUN';
   if (linuxFailed.length || !passing(LINUX_LAST_ROW)) {
     parts.linux = linuxFailed.length ? kind(linuxFailed) : green ? 'FAIL' : 'UNATTRIBUTED';
@@ -292,10 +442,16 @@ export function classifyLeg(record, { windowsRuns = 1, stages = [], die, family,
     stopped = true;
     break;
   }
+  // A planned or additional failing Windows subrun cannot disappear merely
+  // because both ordinary gate rows passed (RV1's exact accepted FAIL shape).
+  if (!stopped && windowsFailed.some((name) => !retryRow(name))) {
+    parts.windows[Math.max(0, parts.windows.length - 1)] = kind(windowsFailed);
+    stopped = true;
+  }
   if (!stopped)
     for (const s of stages) {
       const mine = failed.filter((n) => n === s || n.startsWith(s + '_'));
-      if (passing(s)) parts.stages[s] = 'PASS';
+      if (stageParts[s] === 'PASS') parts.stages[s] = 'PASS';
       else {
         parts.stages[s] = mine.length ? kind(mine) : 'RETRY';
         break;
@@ -305,11 +461,13 @@ export function classifyLeg(record, { windowsRuns = 1, stages = [], die, family,
 }
 // The release verdict over (family, die, platform) cells. A cell FAILs on any FAIL; linux passes
 // on at least one PASS; windows on at least `windowsRuns` passing Windows runs; an enabled extra
-// stage on at least one PASS. The release PASSes only when every family has its full number of
+// stage on every required lane row, and matrix coverage on every planned driver receipt.
+// The release PASSes only when every die family has its full number of
 // dies with every cell passing; RUNNING while a leg is pending or started; otherwise INCOMPLETE.
-export function releaseVerdict(batch) {
+export function releaseVerdict(batch, { releaseMatrix = RELEASE_MATRIX } = {}) {
   const need = batch.windowsRunsPerDie ?? 2,
-    stages = batch.stages ?? [];
+    stages = batch.stages ?? [],
+    stageRequirements = requiredStageRows(stages);
   const cells = [];
   const active = batch.legs.some((l) => l.state === 'PENDING' || l.state === 'STARTED');
   const keyed = new Map();
@@ -358,14 +516,38 @@ export function releaseVerdict(batch) {
       legs,
     );
     for (const s of stages)
-      cell(
-        family,
-        die,
-        'stage:' + s,
-        ended.map((l) => l.outcome.stages?.[s]),
-        1,
-        legs,
-      );
+      for (const name of stageRequirements[s])
+        cell(
+          family,
+          die,
+          'stage:' + name,
+          ended.map(
+            (l) => l.outcome.stageRows?.[name] ?? (name === s ? l.outcome.stages?.[s] : undefined),
+          ),
+          1,
+          legs,
+        );
+    if (batch.tier === 'large') {
+      const row = releaseMatrix?.dies?.find((r) => r.die === die);
+      const definitions = matrixReceiptDefinitions(row);
+      for (const definition of definitions.length ? definitions : [{ id: 'missing' }])
+        cell(
+          family,
+          die,
+          'matrix:' + definition.id,
+          ended.map((l) =>
+            l.outcome.matrix?.[definition.id] === 'FAIL'
+              ? 'FAIL'
+              : sameMatrixRow(l.releaseMatrix, row)
+                ? l.outcome.matrix?.[definition.id]
+                : 'UNATTRIBUTED',
+          ),
+          1,
+          legs,
+        );
+      if (matrixExecutionProblem(releaseMatrix, DEFAULTS))
+        cell(family, die, 'matrix:execution', ['UNATTRIBUTED'], 1, legs);
+    }
   }
   const families = {};
   for (const c of cells) {

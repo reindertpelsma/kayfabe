@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { matrixTest, capablePayload } from './release-fixture.js';
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import { configuration } from '../src/policy.js';
@@ -227,7 +228,7 @@ for (const cap of ['0.1', '0.15'])
   });
 
 for (const cap of ['9', '9.25'])
-  test('preferred release plan reserves remaining dies within total cap ' + cap, async () => {
+  matrixTest('preferred release plan reserves remaining dies within total cap ' + cap, async () => {
     const cfg = cfgFor('large', { RELEASE_COST_CAP_USD: cap });
     const rows = JSON.parse(
       readFileSync(new URL('./fixtures/release-market-synthetic.json', import.meta.url)),
@@ -260,7 +261,7 @@ for (const cap of ['9', '9.25'])
   });
 
 for (const cap of ['9', '9.25'])
-  test('preferred release admission preserves pending leg budgets ' + cap, async () => {
+  matrixTest('preferred release admission preserves pending leg budgets ' + cap, async () => {
     const h = await setup({
       MAX_CONCURRENT_RENTALS: '9',
       RELEASE_ENABLED: 'true',
@@ -287,6 +288,7 @@ for (const cap of ['9', '9.25'])
       cpu_cores_effective: 16,
     });
     h.cloud.extraOffers = rows;
+    capablePayload(h);
     h.cloud.credit = 500;
     h.cloud.contracts = Array.from({ length: 20 }, (_, i) => 900 + i);
     const result = await h.service.adminStart({ commit_sha: sha, tier: 'large' });
@@ -342,4 +344,91 @@ for (const mode of ['select', 'release'])
     } finally {
       DEFAULTS.preferredHostQuality.large.preferredDownMbps = old;
     }
+  });
+
+// FALSIFIER: enabling SPEC's second lease makes an affordable floor plan fail
+// its cap because a preferred A consumes money needed by B or another die.
+function specBudgetRows() {
+  const rows = JSON.parse(
+    readFileSync(new URL('./fixtures/release-market-synthetic.json', import.meta.url)),
+  ).offers.map((o) => ({
+    ...o,
+    dph_base: 0.15,
+    storage_cost: 0.12,
+    dph_total: 0.2,
+    inet_down_cost: 0,
+    inet_up_cost: 0,
+    cpu_cores_effective: 8,
+    inet_down: 10000,
+  }));
+  const first = rows.find((o) => o.gpu_name.includes('2060'));
+  rows.push({ ...first, id: 50001, machine_id: 850001, host_id: 950001 });
+  rows.push({
+    ...first,
+    id: 50000,
+    machine_id: 850000,
+    host_id: 950000,
+    dph_base: 0.45,
+    dph_total: 0.5,
+    cpu_cores_effective: 16,
+  });
+  return rows;
+}
+const specCap = (fraction) => {
+  const cfg = cfgFor('large');
+  const hours = (cfg.hardRelease + cfg.cronPeriod) / 3600000;
+  return ((16 * 0.2 + fraction * (0.5 - 0.2)) * hours).toFixed(2);
+};
+for (const cap of [specCap(0.25), specCap(0.5)])
+  matrixTest('SPEC preferred plan reserves both leases before floor fallback ' + cap, async () => {
+    const cfg = cfgFor('large', { RELEASE_STAGES: '["specviewperf"]', RELEASE_COST_CAP_USD: cap });
+    const evaluated = await evaluate(specBudgetRows(), cfg);
+    const plan = planRelease(evaluated.evaluation.allowed, cfg);
+    assert.equal(plan.admitted, true, JSON.stringify(plan.refusals));
+    assert.equal(plan.legs, 16);
+    assert.ok(plan.estimate_usd <= Number(cap));
+    const pair = plan.families[0].cells.find((c) => c.die === 'TU106').legs;
+    assert.equal(pair.length, 2);
+    assert.ok(pair.every((l) => l.offer_facts.performance_tier === 'floor'));
+    assert.equal(new Set(pair.map((l) => l.machine_id)).size, 2);
+  });
+for (const cap of [specCap(1.25), specCap(1.5)])
+  matrixTest('SPEC preferred A with affordable B keeps the preferred tier ' + cap, async () => {
+    const cfg = cfgFor('large', { RELEASE_STAGES: '["specviewperf"]', RELEASE_COST_CAP_USD: cap });
+    const evaluated = await evaluate(specBudgetRows(), cfg);
+    const plan = planRelease(evaluated.evaluation.allowed, cfg);
+    assert.equal(plan.admitted, true, JSON.stringify(plan.refusals));
+    assert.equal(plan.legs, 16);
+    assert.ok(plan.estimate_usd <= Number(cap));
+    const pair = plan.families[0].cells.find((c) => c.die === 'TU106').legs;
+    assert.equal(pair[0].offer_id, 50000);
+    assert.equal(pair[0].offer_facts.performance_tier, 'preferred');
+    assert.equal(new Set(pair.map((l) => l.machine_id)).size, 2);
+  });
+for (const cap of [specCap(0.25), specCap(0.5)])
+  matrixTest('paid SPEC A keeps the reservation for all other leases ' + cap, async () => {
+    const h = await setup({
+      MAX_CONCURRENT_RENTALS: '9',
+      RELEASE_ENABLED: 'true',
+      RELEASE_STAGES: '["specviewperf"]',
+      RELEASE_COST_CAP_USD: cap,
+      ROLLING_SPEND_USD: '200',
+    });
+    capablePayload(h);
+    const rows = specBudgetRows(),
+      [first, ...rest] = rows;
+    const { dph_base, dph_total, ...base } = first;
+    h.cloud.offer = base;
+    h.cloud.price = dph_total;
+    h.cloud.extraOffers = rest.map(({ dph_base, dph_total, ...o }) => ({ ...o, price: dph_total }));
+    h.cloud.credit = 500;
+    h.cloud.contracts = Array.from({ length: 40 }, (_, i) => 900 + i);
+    const { batch: id } = await h.service.adminStart({ commit_sha: sha, tier: 'large' });
+    assert.equal(h.cloud.creates, 8);
+    const batch = await h.storage.get('batch:' + id),
+      leg = batch.legs.find((l) => l.die === 'TU106' && l.spec === 'lanea');
+    const record = await h.storage.get('record:' + leg.key);
+    assert.equal(record.offerFacts.performance_tier, 'floor');
+    assert.notEqual(record.machineId, 850000);
+    assert.ok(batch.legs.every((l) => l.plannedCostUsd > 0));
   });

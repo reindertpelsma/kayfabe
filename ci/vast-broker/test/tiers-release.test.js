@@ -1,4 +1,5 @@
-import test from 'node:test';
+import { matrixTest as test, receiptParts } from './release-fixture.js';
+import { RELEASE_MATRIX } from '../src/release-matrix.js';
 import assert from 'node:assert/strict';
 import { configuration, profileCaps } from '../src/policy.js';
 import { DEFAULTS } from '../src/defaults.js';
@@ -158,6 +159,42 @@ test('box environment: only the release profile may ask for a second Windows run
   assert.throws(() => tierEnvironment('sweep', { stages: ['specviewperf'] }), /stages/);
   assert.throws(() => tierEnvironment('release', { stages: ['Bad-Name'] }), /stages/);
 });
+test('KF_SPEC (the SPECviewperf lane) is sent only when asked for, only for release, only with the stage slot, only for a named lane', () => {
+  // today's callers pass nothing: no box sees the field
+  for (const p of ['check', 'sweep', 'release']) assert.ok(!('KF_SPEC' in tierEnvironment(p)), p);
+  assert.ok(
+    !('KF_SPEC' in tierEnvironment('release', { tierName: 'large', stages: ['specviewperf'] })),
+  );
+  for (const lane of ['lanea', 'laneb', 'both'])
+    assert.deepEqual(
+      tierEnvironment('release', { tierName: 'large', stages: ['specviewperf'], spec: lane }),
+      {
+        KF_MERGE_WINDOWS: '1',
+        KF_TIER: 'large',
+        KF_STAGES: 'specviewperf',
+        KF_SPEC: lane,
+      },
+    );
+  // a lane without the slot, on another profile, or with a name that is not a lane
+  assert.throws(() => tierEnvironment('release', { spec: 'lanea' }), /spec/);
+  assert.throws(() => tierEnvironment('release', { stages: ['trio'], spec: 'lanea' }), /spec/);
+  assert.throws(
+    () => tierEnvironment('check', { stages: ['specviewperf'], spec: 'lanea' }),
+    /stages/,
+  );
+  assert.throws(() => tierEnvironment('sweep', { spec: 'lanea' }), /spec/);
+  for (const bad of ['', 'lanec', 'LANEA', 'lanea:laneb', 'all', null, 1])
+    assert.throws(
+      () => tierEnvironment('release', { stages: ['specviewperf'], spec: bad }),
+      /spec/,
+      String(bad),
+    );
+});
+test('the Worker sends no SPECviewperf stage and no lane by default', () => {
+  assert.deepEqual(DEFAULTS.releaseStages, []);
+  assert.equal(DEFAULTS.stageSlots.specviewperf.state, 'PLUMBING');
+  assert.deepEqual(planRelease(market(cfgOf()), cfgOf()).required_stage_rows_per_die, {});
+});
 test('plan: two dies per family, two Windows runs per die, one box per die', () => {
   const cfg = cfgOf();
   const plan = planRelease(market(cfg), cfg);
@@ -310,7 +347,10 @@ test('classify: FAIL is the guest; no host reference is UNATTRIBUTED; harness ro
 });
 test('classify: an enabled stage is its own part; its retry row is not a pass', () => {
   const stages = ['specviewperf'];
-  const ok = classify(rec('PASS', { ...LINUX, windows_gate: 1, specviewperf: 1 }), { stages });
+  const ok = classify(
+    rec('PASS', { ...LINUX, windows_gate: 1, specviewperf_lanea: 1, specviewperf_laneb: 1 }),
+    { stages },
+  );
   assert.deepEqual([ok.verdict, ok.stages], ['PASS', { specviewperf: 'PASS' }]);
   const stub = classify(
     rec('FAIL', { ...LINUX, windows_gate: 1, specviewperf_retry_not_built: -1 }),
@@ -327,7 +367,10 @@ const leg = (key, family, die, outcome, state = 'ENDED', machineId = 1) => ({
   die,
   state,
   machineId,
-  outcome,
+  releaseMatrix: RELEASE_MATRIX.dies.find((r) => r.die === die),
+  outcome: outcome
+    ? { matrix: receiptParts(RELEASE_MATRIX.dies.find((r) => r.die === die)), ...outcome }
+    : outcome,
 });
 const out = (linux, windows) => ({ verdict: 'X', linux, windows, stages: {} });
 const fullBatch = (legs) => ({
@@ -349,11 +392,12 @@ function passingLegs() {
 test('verdict: PASS needs every family, two dies each, linux and two Windows passes', () => {
   const view = releaseVerdict(fullBatch(passingLegs()));
   assert.equal(view.verdict, 'PASS');
-  assert.equal(view.cells.length, 16);
+  assert.equal(view.cells.filter((c) => ['linux', 'windows'].includes(c.platform)).length, 16);
+  assert.ok(view.cells.some((c) => c.platform.startsWith('matrix:')));
   assert.ok(view.cells.every((c) => c.verdict === 'PASS'));
   // One Windows pass on a die is not enough.
   const legs = passingLegs();
-  legs[0].outcome = out('PASS', ['PASS', 'RETRY']);
+  legs[0].outcome = { ...legs[0].outcome, ...out('PASS', ['PASS', 'RETRY']) };
   assert.equal(releaseVerdict(fullBatch(legs)).verdict, 'INCOMPLETE');
   // ... until a fresh-box re-run passes; the RETRY itself never counts.
   legs.push(leg('8-99', legs[0].family, legs[0].die, out('PASS', ['PASS']), 'ENDED', 77));
@@ -364,7 +408,7 @@ test('verdict: PASS needs every family, two dies each, linux and two Windows pas
 });
 test('verdict: any FAIL fails the release; a missing family or die is INCOMPLETE', () => {
   const legs = passingLegs();
-  legs[5].outcome = out('PASS', ['FAIL', 'PASS']);
+  legs[5].outcome = { ...legs[5].outcome, ...out('PASS', ['FAIL', 'PASS']) };
   assert.equal(releaseVerdict(fullBatch(legs)).verdict, 'FAIL');
   const missing = passingLegs().filter((l) => l.family !== 'blackwell');
   assert.equal(releaseVerdict(fullBatch(missing)).verdict, 'INCOMPLETE');

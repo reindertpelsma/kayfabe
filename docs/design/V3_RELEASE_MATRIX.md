@@ -16,8 +16,10 @@ silently replace a selected die. `planRelease` validates the matrix and emits on
 full leg per selected die. Windows runs twice on that box, preserving the existing
 two-run verdict requirement. Fewer than eight configured parallel slots refuses
 the plan. Existing cost, daily count, credit reserve, rolling spend and kill
-switches still apply. An admitted cost/availability plan is not execution approval:
-`execution_ready` is false and the payload refuses every proposed matrix.
+switches still apply. CODE READ (RV1 fix, 2026-11-07): a proposed matrix is now
+inadmissible in the trusted Worker (`MATRIX_NOT_EXECUTABLE`), before any provider
+create. The offline cost/availability estimate remains visible, but `admitted`
+and `execution_ready` are false. The payload refusal remains a second boundary.
 
 ## Proposed drivers
 
@@ -109,8 +111,9 @@ DESIGN-ONLY first-run requirements: implement selected Linux fat/thin guest stag
 (the existing `KF_GUEST_DRIVER_DIR` selects a staged thin-guest driver); obtain and
 pin the selected Windows media and ABI; build the MIDDLE/SMALL dispatcher and cross
 host swap/restoration; record observed drivers and a verdict for every planned
-subrun; make missing subrun evidence prevent PASS. The present classifier does not
-grade that matrix coverage. Recheck `docs/RELEASE_CLAIMS.md` for every claimed stage.
+subrun. CODE READ: the updated classifier and release reducer now require that
+coverage; missing rows are RETRY/INCOMPLETE, mismatched driver facts are
+UNATTRIBUTED, and attributed planned failures are sticky FAILs. Recheck `docs/RELEASE_CLAIMS.md` for every claimed stage.
 Then review the exact Worker bundle, separately authorize deployment, enable the
 release switch, provide eight eligible VM hosts, set the account concurrency to at
 least nine (one slot stays reserved), and authorize sufficient cost/daily/rolling
@@ -128,10 +131,11 @@ without renting. `node ci/vast-broker/release-matrix-mutants.mjs` checks isolate
 mutants with two named test killers each. Node fixtures exercise real planning and
 mocked batch transport; Python tests exercise bootstrap/payload validation and the
 proposed-execution refusal. These checks supply no GPU or driver compatibility evidence.
-CODE READ: the proposed-execution refusal is in the updated payload. Older
-tested commits do not gain that check from the Worker; the first real executor
-must also require an explicit payload capability/version contract before enabling
-matrix execution or accepting driver/subrun coverage.
+CODE READ: `release-safety-mutants.mjs` additionally checks the RV1 admission,
+receipt grading and SPEC scheduling rules, each with at least two named killers.
+Tests use an explicitly synthetic executable matrix and future-capable payload;
+production remains proposed and the current payload advertises no executor.
+No mock success is evidence that the executor exists.
 
 ## Profile resources and capped network pricing
 
@@ -161,7 +165,8 @@ INFERRED allowances, in decimal GB; every row has its source in the JSON data:
 | windows_gate | small, middle, large | 35 | 0 | 120 | INFERRED upper endpoint of owner's 15–35 GB planning range; compressed image not measured in `V3_WINDOWS_ON_VAST.md` |
 | windows_gate_2 | large | 0 | 0 | 0 | INFERRED reuse of the first install and media |
 | specviewperf | large | 43 | 0 | 220 | INFERRED ceiling of MEASURED 42,002,015,727 bytes, `traces/specviewperf_vast_20261105/README.md`; 220 GB floor is owner's planning rule |
-| media_and_margin | all | 17 | 2 | 0 | INFERRED extra apps/bundles/media, retry headroom and output; apps trace lists additional vendor/model assets |
+| windows_apps | all (adhoc reserves headroom only) | 8 | 0 | 0 | INFERRED ceiling above the 6–7 GB bundle estimate in `docs/DOWNLOADS.md`; bundle pin remains empty |
+| media_and_margin | all | 9 | 2 | 0 | INFERRED remaining media, retry headroom and output; split from the prior 17 GB shared apps/bundles allocation |
 
 CODE READ: the resulting profile reservations are:
 
@@ -205,8 +210,8 @@ USD 0.12/GB/month storage: A has compute USD 0.10/h and inbound USD 0.005/GB; B 
 compute USD 0.20/h and free inbound. Small's 120 GB disk and 73 GB inbound make
 A USD 0.193/h versus B USD 0.220/h, so A wins. Large's 300 GB disk and 130 GB
 inbound make A USD 0.280/h versus B USD 0.250/h, so B wins. Tests pin this reversal
-in both offer selection and release-leg sorting while preserving the release
-planner's country preference. Mutants must be killed by at least two named tests.
+in both offer selection and release-leg sorting; country preference is a tie-break
+within the preferred performance tier in this stacked change. Mutants must be killed by at least two named tests.
 
 
 ## Preferred host performance before price (stacked follow-up)
@@ -277,3 +282,108 @@ PROPOSED owner review: approve or adjust all four per-profile preferred threshol
 retain the hard floors and spend gates. Compare the recorded offer facts with
 measured run/stage durations before promoting a proposed value to an established
 performance claim. No hardware, provider query or deployment was performed here.
+
+## RV1 admission and receipt corrections (2026-11-07)
+
+MEASURED by RV1's GPU-free probes against PR #296's previous head: a proposed
+matrix admitted eight mock rentals, ordinary protocol-7 receipts could certify
+PASS, an accepted attributed `windows_subrun_580` FAIL became RETRY and a ninth
+clean rental produced PASS, and an invalid runtime matrix did not block that
+cron retry. Sources: the coordinator's RV1 review and the two review probes;
+J2 reproduced all three before changing these rules. These were mock provider
+creates, not paid rentals or hardware measurements.
+
+CODE READ: every release rental now validates the trusted bundled matrix, including
+persisted pending legs and retries. Both root and die statuses must be
+`executable`, blockers must be empty, minima and Windows ABI must be known, and
+the persisted selected die row must still match trusted data. A request, flag or
+persisted snapshot cannot approve a proposed or changed matrix. Cleanup still
+runs before batch admission, including when the matrix has become invalid.
+
+CODE READ: selected-commit protocol 7 is necessary but insufficient. Immutable
+GitHub source at the selected SHA must declare `BOX_RELEASE_MATRIX_RECEIPTS = 1`
+in the reporter and `PAYLOAD_RELEASE_MATRIX_EXECUTOR = 1` in the payload. The
+current reporter implements bounded receipt transport; the current payload
+explicitly declares executor capability **0**. Changing only matrix status or
+reusing an old protocol-7 commit cannot start a release. A future executor must
+be built and reviewed before declaring capability 1.
+
+CODE READ: `matrix_receipts` is a closed, size-limited result field (schema 1,
+selected die, up to 64 uniquely named receipts). Each receipt names the exact
+host/Linux/Windows driver triple, Windows guest ABI and verdict. Required ids are
+`full`, one `<os>_subrun_<version_with_underscores>` for every planned point
+version, and `linux_cross`/`windows_cross` for a cross run. Receipts must match the
+selected trusted drivers and ABI, reported full-run host driver, ordinary gate
+rows and each planned subrun suite row. Passing summary gates alone cannot
+certify coverage. These are bounded box-reported observations, not cryptographic
+hardware attestation. The existing hostile-guest and native-reference rules apply.
+
+CODE READ: every planned subrun is graded. Missing receipt or suite rows cannot
+PASS; an attributed suite FAIL with a GREEN host reference makes the leg FAIL
+and never earns a retry. Existing persisted ENDED outcomes are regraded from
+accepted reports on a running batch's next tick, without creating duplicate
+retries. A prior FAIL remains a release FAIL even if a later clean leg exists.
+Completed-batch summaries recompute the release verdict under current trusted
+policy rather than displaying a pre-fix cached PASS. The result-store path also
+requires complete matrix coverage for release PASS,
+so ordinary passing reports cannot bypass the batch rule through stored rows.
+
+## SPEC lane coverage and separate leases (disabled)
+
+OWNER DECISION / CODE READ: `releaseStages` remains empty. The active
+`required_stage_rows_per_die` map is therefore empty. If SPEC is enabled, data in
+`stageSlots.specviewperf` requires **both** `specviewperf_lanea` and
+`specviewperf_laneb` on every die. The aggregate `specviewperf` row and either
+single lane cannot certify both lanes.
+
+CODE READ: enabling that same stage flag plans two FULL rentals per selected die
+(16 leases), lane A first and lane B second, with one ordinary Windows gate per
+lease. Both lease quotes are included in the plan and the existing total cost,
+daily rental-count and spend caps still apply. The first eight lane-A rentals
+run in parallel; each lane B waits until its die's lane A is settled, then gets
+its own bounded start window. A second offered machine is preferred; with only
+one physical machine, lane B is a fresh paid lease of that machine after the
+first lease ends. No single `both` run is squeezed into a 300-minute box limit.
+The second lease is an additional cost, not an infrastructure retry. Large
+resources remain 300 GB disk with a 220 GB floor.
+
+INFERRED: serialization preserves the eight-box release concurrency policy while
+allowing a single offered machine to carry two separate leases. The plan does
+not reserve availability; a missing second lease leaves coverage incomplete.
+Real completion time, including matrix subruns and all downloads, remains
+unverified and must be reviewed before enabling the stage or executor.
+
+## Intended resource-price change recorded by RV1
+
+CODE READ: small, middle and adhoc inbound reservations deliberately change from
+15 GB to **73, 87 and 38 GB**, respectively. The additional transfer reservation
+is `(new_GB - 15) * inbound_USD_per_GB` per lease for the transfer term,
+amortised over hard lease hours in effective hourly price. The stacked timing
+model separately adds its nonnegative excess-download-time reservation. Their outbound reservation remains 2 GB and their
+unit-price guard stays USD 0.005/GB. Large uses its own 130 GB allowance.
+
+MEASURED by RV1 on its synthetic fixtures: these allowance changes raised quoted
+prices by that transfer delta but left the tested offer ranks unchanged. This
+is fixture evidence, not a claim that real-market ranks never change. CODE READ:
+actual traffic is **not metered**; reservation GB are conservative inferred
+budgets. A new download stage must enter the stage table and pass its guard.
+
+CODE READ / INFERRED integration note (2026-11-07): merging Windows apps adds a
+literal downloading stage, which the resource guard initially rejected as
+unbudgeted. Its explicit 8 GB inferred bundle row is allocated from the existing
+17 GB media/bundles reservation, leaving 9 GB for other margin. Totals therefore
+remain 73/87/130/38 GB. Adhoc retains the same conservative reserved bundle
+headroom while its payload does not enable Windows apps. The 6–7 GB source is a
+planning estimate in `docs/DOWNLOADS.md`, not a measured artifact; the empty
+`bundle.pin` confirms packaging is still unverified. Re-measure the packaged
+bundle and revise this split if necessary before enabling the stage.
+
+
+CODE READ (2026-11-07 stacked integration): preferred selection budgets both SPEC
+leases before choosing a die's pair. Remaining die reservations use the cheapest
+valid two-machine pair, or two leases of a sole machine. A and B preserve the
+preferred-tier/effective-price order within their combined cap; if no preferred
+pair fits, an affordable floor pair can be selected. Every persisted leg carries
+its own planned quote, including the deferred lane B. The total plan remains
+subject to the same run, daily, rolling and credit caps. GPU-free tests cover
+both floor fallback and a preferred A with affordable B; no extra stage is enabled.

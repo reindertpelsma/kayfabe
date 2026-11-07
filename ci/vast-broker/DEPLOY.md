@@ -103,6 +103,12 @@ deploy helper at deploy time, not by CI (final review C1). After any
 change under `src/`, `defaults.json` or the lockfile, record the new hash in both files. Preserve
 the SQLite LEDGER namespace and migration when updating.
 
+[MEASURED 2026-11-07, J1, local build only] After merging the Windows apps proposal with `next` and applying the required formatter,
+two lockfile-pinned wrangler dry-runs emitted the same module SHA-256:
+`2dc7308ac2fca1e4542690c71a690ce05bcbff01857065d74d5bdf0a1ca12fc2`.
+Both reviewed-source pins are updated under the rule above. This is not a deployment record:
+no Worker call, upload, setting change or bundle upload occurred. The Windows apps stage is still opt-in.
+
 ## Provider status tolerance (built 2026-11-06, NOT DEPLOYED)
 
 STATUS: LIVE as code, 2026-11-06, on branch `claude/vast-tolerance-20261106`; nothing deployed. The rule,
@@ -342,6 +348,12 @@ in `src/benchdata.js`; any other name is 404, and nothing lists the bucket:
 | `specviewperf-15.0.0.CHECKSUMS.txt` | `specviewperf-15.0.0/CHECKSUMS.txt` |
 | `specviewperf-15.0.0.SPEC_General_License.pdf` | `specviewperf-15.0.0/SPEC_General_License.pdf` |
 | `specviewperf-15.0.0.SPECviewperf-Setup.exe` | `specviewperf-15.0.0/original/SPECviewperf-Setup-15.0.0.exe` |
+| `winapps-open.iso` | `winapps-open/kfapps.iso` |
+| `winapps-open.manifest.json` | `winapps-open/manifest.json` |
+
+The last two rows are PROPOSED (2026-11-07, Windows apps stage, `docs/design/V3_WINDOWS_APPS_GATE.md`): the app disk of the Windows app matrix, packaged once by a person from
+redistributable packages only. They are not deployed and no object exists until the owner uploads it; until then the
+stage's answer is RETRY class MEDIA.
 
 Limits (defaults in `defaults.json`): the URL lives at most 1200 s and never past the run's next
 deadline (under 30 s left is a 401); at most 4 URLs per object per run, counted in the run
@@ -512,8 +524,9 @@ default exactly that, at most 8), so one slot always stays free for the master g
 committed account cap of 1 the plan says `NO_SLOTS`. Optional: `RELEASE_COST_CAP_USD` (default 40,
 at most `RELEASE_DAILY_USD`), `RELEASE_MAX_PRICE_USD_HOUR` (2), `RELEASE_DAILY_USD` (40),
 `RELEASE_DAILY_RENTALS` (24), `RELEASE_HARD_RUNTIME_MINUTES` (300, may only be lowered),
-`RELEASE_RERUNS_PER_LEG` (1, 0 to 2), `RELEASE_STAGES` (`[]`; `["specviewperf"]` only once its
-lane exists), `RELEASE_DIES`, `MIDDLE_ROTATION` (JSON family lists, no spaces),
+`RELEASE_RERUNS_PER_LEG` (1, 0 to 2), `RELEASE_STAGES` (`[]`; `["specviewperf"]` only once the lane
+plan below exists: the lane exists since 2026-11-07 as a DRAFT, `docs/design/V3_SPEC_GATE.md`, and a box that gets the slot without
+`KF_SPEC` refuses it before any stage), `RELEASE_DIES`, `MIDDLE_ROTATION` (JSON family lists, no spaces),
 `MIDDLE_VRAM_FLOOR_MB` (0 = off; TBD from the trio footprints) and `ACCOUNT_DAILY_USD`. The shared
 `ROLLING_SPEND_USD` (default 30) also bounds a release: the offline plan of the synthetic market
 estimates 18.63 USD from SYNTHETIC prices, so a release in a month with other spend needs it raised.
@@ -557,6 +570,16 @@ a commit never refuses that commit's own master gate with `BUDGET:sha-gap`.
 `/bench-data` scope (unchanged, noted by review F10): any live box can ask for a presigned
 SPECviewperf URL; restricting it to boxes whose run lists the `specviewperf` stage is left for the
 SPECviewperf lane.
+
+SPECviewperf stage, PROPOSED 2026-11-07 (`docs/design/V3_SPEC_GATE.md`; nothing here is deployed and nothing changes today): the box
+runs one lane per box, `KF_SPEC=lanea|laneb|both`, with `KF_STAGES=specviewperf` (large tier only). `src/tier.js` can send `KF_SPEC`
+(`tierEnvironment(profile, {stages, spec})`, tested) but no caller does. To turn the stage on the owner decides: (1) which leg of a die
+sends which lane (proposal: the first of two machines `lanea`, the second `laneb`; a die with one machine needs a second rental for
+lane B); (2) a release verdict that needs BOTH lane rows (`specviewperf_lanea`, `specviewperf_laneb`) before it counts the stage as
+passed, because `releaseVerdict` today counts the stage on one PASS; (3) the disk request for release legs: a lane needs about 130 GB
+free and the whole tree 190 GB, and the Worker asks for 120 GB (`diskGb`, `src/vast.js`); the native run requested 300 GB with a
+220 GB floor. The run report drops every string that names the benchmark (`runreport.js`), so the stage's rows reach the report as
+`spec_viewsets*`.
 
 The reaper limit does not change: the release hard limit is at most 300 minutes, equal to
 `REAPER_HARD_MINUTES`, so no reaper deploy is needed first.
@@ -990,3 +1013,15 @@ the key-block scan is quadratic on 16 MiB of BEGIN lines with no END (about 5 s 
 bounded to about 4 MiB by the box channel); R2 `put` does not refuse to overwrite; `nosniff` and a
 sandbox CSP belong in a Cloudflare Transform Rule on `logs.kayfabe.dev`; D1 calls in the publisher have no
 timeout; the 0004 tables have no retention.
+
+
+**CODE READ — J2 RV1 correction, 2026-11-07 (not deployed):** release plans remain
+visible but a proposed matrix is refused before every rental, including cron
+retries. A future executable matrix requires reviewed minima/ABI and no blockers,
+plus selected-commit reporter receipt capability 1 and payload executor capability
+1 in addition to box protocol 7. Today's payload declares executor capability 0.
+Do not enable it by editing only status or flags. Release PASS requires the exact
+matrix driver/subrun receipts; ordinary protocol-7 PASS rows cannot certify it.
+An attributed planned subrun FAIL is sticky and never earns a retry. SPEC stays
+disabled; enabling it plans and prices separate A/B leases and requires both lane
+rows per die. See [the design and review corrections](../../docs/design/V3_RELEASE_MATRIX.md).

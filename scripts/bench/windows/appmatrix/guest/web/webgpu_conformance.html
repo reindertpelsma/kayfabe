@@ -1,0 +1,57 @@
+<!doctype html><meta charset="utf-8"><title>kf offline WebGPU focused conformance</title>
+<canvas id="c" width="64" height="64"></canvas>
+<script>
+// A focused, local subset; this does not claim full WebGPU CTS coverage.
+function conformanceOK(checks, gpu, frames) {
+  return checks.length === 4 && checks.every(x => x === true) && gpu === true && frames >= 8;
+}
+function hardwareAdapter(info, adapter) {
+  const fallback = typeof info.isFallbackAdapter === 'boolean' ? info.isFallbackAdapter : adapter.isFallbackAdapter;
+  return String(info.vendor).toLowerCase() === 'nvidia' && fallback === false;
+}
+(async () => {
+  const r = {page: 'webgpu_conformance', ok: false, checks: [], frames: 0};
+  try {
+    if (!navigator.gpu) throw new Error('WebGPU unavailable');
+    const adapter = await navigator.gpu.requestAdapter({powerPreference: 'high-performance'});
+    if (!adapter) throw new Error('adapter unavailable');
+    const info = adapter.info || await adapter.requestAdapterInfo(); r.vendor = info.vendor;
+    const gpu = hardwareAdapter(info, adapter);
+    const dev = await adapter.requestDevice(); let lost = false;
+    dev.lost.then(() => { lost = true; });
+    const N = 256;
+    const mod = dev.createShaderModule({code: '@group(0) @binding(0) var<storage, read_write> o:array<u32>; @compute @workgroup_size(64) fn main(@builtin(global_invocation_id) id:vec3<u32>){o[id.x]=id.x*7u+3u;}'});
+    const compilation = await mod.getCompilationInfo();
+    r.checks.push(compilation.messages.every(x => x.type !== 'error'));
+    const pipeline = await dev.createComputePipelineAsync({layout: 'auto', compute: {module: mod, entryPoint: 'main'}});
+    const buf = dev.createBuffer({size: N * 4, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC});
+    const rb = dev.createBuffer({size: N * 4, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ});
+    const bg = dev.createBindGroup({layout: pipeline.getBindGroupLayout(0), entries: [{binding: 0, resource: {buffer: buf}}]});
+    let enc = dev.createCommandEncoder(); const cp = enc.beginComputePass();
+    cp.setPipeline(pipeline); cp.setBindGroup(0, bg); cp.dispatchWorkgroups(N / 64); cp.end();
+    enc.copyBufferToBuffer(buf, 0, rb, 0, N * 4); dev.queue.submit([enc.finish()]);
+    await rb.mapAsync(GPUMapMode.READ); const values = new Uint32Array(rb.getMappedRange().slice(0)); rb.unmap();
+    r.checks.push(values.length === N && values.every((x, i) => x === i * 7 + 3));
+    const tex = dev.createTexture({size: [1, 1], format: 'rgba8unorm', usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC});
+    const pixels = dev.createBuffer({size: 256, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ});
+    enc = dev.createCommandEncoder(); const rp = enc.beginRenderPass({colorAttachments: [{view: tex.createView(), clearValue: {r: .25, g: .5, b: .75, a: 1}, loadOp: 'clear', storeOp: 'store'}]}); rp.end();
+    enc.copyTextureToBuffer({texture: tex}, {buffer: pixels, bytesPerRow: 256}, [1, 1]); dev.queue.submit([enc.finish()]);
+    await pixels.mapAsync(GPUMapMode.READ); const px = new Uint8Array(pixels.getMappedRange().slice(0)); pixels.unmap();
+    r.checks.push([64, 128, 191, 255].every((x, i) => Math.abs(x - px[i]) <= 1));
+    dev.pushErrorScope('validation'); dev.createBuffer({size: 4, usage: 0});
+    r.checks.push((await dev.popErrorScope()) !== null);
+    const ctx = document.getElementById('c').getContext('webgpu');
+    ctx.configure({device: dev, format: navigator.gpu.getPreferredCanvasFormat(), alphaMode: 'opaque'});
+    const t0 = performance.now(), secs = +(new URLSearchParams(location.search).get('s') || 12);
+    do {
+      enc = dev.createCommandEncoder(); const pass = enc.beginRenderPass({colorAttachments: [{view: ctx.getCurrentTexture().createView(), clearValue: {r: .25, g: .5, b: .75, a: 1}, loadOp: 'clear', storeOp: 'store'}]}); pass.end();
+      dev.queue.submit([enc.finish()]); r.frames++;
+      await new Promise(resolve => requestAnimationFrame(resolve));
+    } while (performance.now() - t0 < secs * 1000);
+    await dev.queue.onSubmittedWorkDone();
+    r.ok = conformanceOK(r.checks, gpu && !lost, r.frames);
+    dev.destroy();
+  } catch (e) { r.why = String(e); }
+  await fetch('/result', {method: 'POST', body: JSON.stringify(r)});
+})();
+</script>

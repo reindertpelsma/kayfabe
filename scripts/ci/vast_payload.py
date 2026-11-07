@@ -11,6 +11,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import vast_report as local_result_contract
 
+# The current payload has no matrix driver/subrun executor. The trusted Worker
+# checks this exact declaration at the selected commit before creating a lease.
+PAYLOAD_RELEASE_MATRIX_EXECUTOR = 0
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "bench"))
 import native_xid_guard as xid_guard
 
@@ -216,12 +220,80 @@ def require_executable_release(environ):
     if selected:
         raise EvidenceError("release_retry_matrix_proposed")
 
+WINAPPS_PROFILES = ("small", "mid", "full")
+WINAPPS_VERDICT = re.compile(r"^WINAPPS_(PASS|FAIL|RETRY|REFUSED)\b([^\n]*)$", re.M)
+# the classes windows_apps.sh may print on a RETRY; anything else is OPERATOR
+WINAPPS_RETRY_CLASSES = {"PROVIDER", "MEDIA", "OPERATOR", "HOSTREF", "BAR1_EXCEPTION"}
+# Per-profile wall the stage needs after the gate (INFERRED from the apps' own timeouts and the guest restart
+# budget, docs/design/V3_WINDOWS_APPS_GATE.md section 6; replaced by measurements when a box has run the profile).
+WINAPPS_MIN_REMAINING_MS = {"small": 40 * 60000, "mid": 60 * 60000, "full": 200 * 60000}
+
+
+def winapps_requested(environ, windows):
+    """KF_WINAPPS (small, mid, full) asks for the Windows apps stage after the Windows gate. Opt-in: absent means
+    no stage, so a Worker that predates it (or has not been told to send it) changes nothing. It needs the
+    Windows stage; anything else is refused before any stage runs."""
+    value = environ.pop("KF_WINAPPS", None)
+    if value is None:
+        return None
+    if value not in WINAPPS_PROFILES or not windows:
+        raise EvidenceError("preflight")
+    return value
+
+
+def winapps_rows(text, rc, sha, profile):
+    """Grade scripts/bench/box/windows_apps.sh. THE GATE IS THE GUEST PASSING (owner, 2026-11-01): only one
+    WINAPPS_PASS for this revision and this profile with exit 0 is a passing row. RETRY (a host, harness, input or
+    rental fault) and a refused precondition are never a pass and never a verdict on the guest; their row is
+    named windows_apps_retry_<class> so the runner can say "re-run on a fresh box"."""
+    verdicts = WINAPPS_VERDICT.findall(text)
+    exits = re.findall(r"^WINAPPS_EXIT rc=([0-9]+)\b", text, re.M)
+    kinds = {kind for kind, _ in verdicts}
+    if len(verdicts) == 1 and len(exits) == 1:
+        kind, rest = verdicts[0]
+        if (
+            kind == "PASS"
+            and rc == 0
+            and exits[0] == "0"
+            and re.match(r" rev=" + re.escape(sha[:8]) + r"[0-9a-f]* ", rest)
+            and (" profile=" + profile + " ") in rest
+        ):
+            # Like Linux apps: count actual checked apps, not a stage marker. A truncated log,
+            # empty expectation, duplicate app or harness row must not become a successful suite.
+            grade = re.findall(
+                r"^WINAPPS_GRADE kind=PASS expected=([1-9][0-9]{0,3}) pass=([1-9][0-9]{0,3})"
+                r" guest_fail=0 boot_fail=0 harness=0 not_run=0 extra=0$", text, re.M
+            )
+            app_lines = re.findall(r"^WINAPPS_APP .*$", text, re.M)
+            passed = re.findall(
+                r"^WINAPPS_APP app=([A-Za-z0-9_]{1,48}) class=pass verdict=PASS\*? "
+                r"batched=\S+ alone=\S+ secs=\S+ tdr=\S+ wer=\S+ gsp=\S+ note=.*$", text, re.M
+            )
+            count = re.search(r" apps=([1-9][0-9]{0,3})\b", rest)
+            if (len(grade) == 1 and count and grade[0][0] == grade[0][1] == count[1]
+                    and len(app_lines) == len(passed) == len(set(passed)) == int(count[1])):
+                return [row("windows_apps", int(count[1]))]
+            raise EvidenceError("windows_apps_retry_operator")
+        if kind == "FAIL" and rc not in (0, 3):
+            raise EvidenceError("windows_apps")
+    if kinds == {"RETRY"} and len(verdicts) == 1:
+        found = re.search(r" class=([A-Z0-9_]+)\b", verdicts[0][1])
+        cls = found[1] if found and found[1] in WINAPPS_RETRY_CLASSES else "OPERATOR"
+        raise EvidenceError("windows_apps_retry_" + cls.lower())
+    if kinds == {"REFUSED"}:
+        raise EvidenceError("windows_apps_retry_refused")
+    if "FAIL" in kinds:
+        raise EvidenceError("windows_apps")
+    # No verdict, two verdicts, a PASS of another revision or profile, or a PASS with a non-zero exit: the
+    # harness did not end cleanly. Not a pass; a fresh box decides.
+    raise EvidenceError("windows_apps_retry_operator")
+
 
 def tier_requested(environ, windows):
     """The release tier's extras (ci/vast-broker/src/tier.js, 2026-11-05): KF_TIER is informational;
     KF_WINDOWS_RUNS=2 runs the Windows gate a second time on the same box (only with the Windows
-    stage); KF_STAGES names extra stages. Only `specviewperf` is a stage slot that can run (its lane
-    is plumbing until the SPECviewperf lane lands); `two_guests` and `trio` are reserved names,
+    stage); KF_STAGES names extra stages. Only `specviewperf` is a stage slot that can run (with
+    KF_SPEC naming its lane, spec_requested); `two_guests` and `trio` are reserved names,
     DESIGN-ONLY and refused. Anything malformed is refused before any stage runs."""
     tier = environ.pop("KF_TIER", None)
     runs = environ.pop("KF_WINDOWS_RUNS", None)
@@ -244,24 +316,118 @@ def tier_requested(environ, windows):
 # Stage slots (names reserved in ci/vast-broker/defaults.json stageSlots). PLUMBING = the stage
 # runs through scripts/ci/vast_stage_specviewperf.sh; DESIGN_ONLY = refused if requested.
 STAGE_SLOTS = {"specviewperf": "PLUMBING", "two_guests": "DESIGN_ONLY", "trio": "DESIGN_ONLY"}
-SPEC_VERDICT = re.compile(r"^SPECVIEWPERF_STAGE_(PASS|FAIL|RETRY)(?: class=([A-Z_]{1,32}))?$", re.M)
+SPEC_VERDICT = re.compile(r"^SPECVIEWPERF_STAGE_(PASS|FAIL|RETRY)(?: class=([A-Z0-9_]{1,32}))?$", re.M)
 
 
-def specviewperf_rows(text, rc):
-    """Grade the SPECviewperf stage wrapper. Only its verdict word leaves the box: the wrapper keeps
-    the lane's own output (scores included) in a private file and prints one verdict line. RETRY
-    (and a missing lane: class NOT_BUILT) is never a pass."""
+# The SPECviewperf stage (docs/design/V3_SPEC_GATE.md, DRAFT 2026-11-07, DISABLED BY DEFAULT: the Worker sends
+# KF_STAGES=specviewperf with KF_SPEC=lanea|laneb|both only when the owner has enabled `releaseStages` and a lane plan,
+# and nothing sends them today). It runs after the Windows gate(s), in the Windows guest the gate passed, on the same
+# box. Lane A (energy, creo, blender, enscape) and lane B (medical, maya, catia, solidworks, unreal_engine) are two
+# boxes of a die; `both` is one box with all nine and needs a lease longer than the 300-minute box limit allows on most
+# hosts (its time check below then fails closed). The lanes and every time constant are one file the lane script
+# reads too: scripts/bench/specviewperf/lanes.json.
+SPEC_LANES = ("lanea", "laneb", "both")
+SPEC_TABLE = "scripts/bench/specviewperf/lanes.json"
+SPEC_RETRY_CLASSES = {
+    "NOT_BUILT", "MEDIA", "PROVIDER", "TRANSPORT", "TIME", "HOSTREF", "BAR1_EXCEPTION", "OPERATOR", "USAGE",
+}
+SPEC_ROW = re.compile(
+    r"^SPEC_ROW name=([a-z][a-z_]*-[0-9]{2}) result=(PASS|FAIL|NOT_RUN) subtests=[0-9]{1,3}/[0-9]{1,3}"
+    r" reason=(?:[A-Z_]{1,16}|-) failed=(?:[A-Za-z0-9_,]{1,120}|-)$",
+    re.M,
+)
+SPEC_LIST = re.compile(r"^SPEC_STAGE_LIST lane=(lanea|laneb|both) n=([0-9]{1,2})$", re.M)
+SPEC_EXIT = re.compile(r"^SPECVIEWPERF_STAGE_EXIT rc=([0-9]+)$", re.M)
+# The Windows image is installed by the gate with a disk this size (a sparse file: it costs only what the guest
+# writes); win_vm.sh's default (80 GB) cannot hold a lane's tree (44 to 50 GB) next to Windows. MEASURED: the
+# 2026-11-05 run installed with 220 GB (traces/specviewperf_vast_20261105/README.md).
+SPEC_DISK_GB = "220"
+# The stage's own deadline is the soft deadline minus this margin (the verdict, the evidence and the deletion of the copy).
+SPEC_DEADLINE_MARGIN_S = 120
+
+
+def spec_requested(environ, windows, stages):
+    """KF_SPEC (lanea, laneb, both) names the lane of the SPECviewperf stage. It goes with the stage slot, and the stage
+    with it: a lane without the slot, the slot without a lane (it would silently run both) and the stage without the
+    Windows gate (it runs in the gate's guest) are refused before any stage runs. Absent and no slot: today's run."""
+    value = environ.pop("KF_SPEC", None)
+    wanted = "specviewperf" in stages
+    if wanted and not windows:
+        raise EvidenceError("preflight")
+    if value is None:
+        if wanted:
+            raise EvidenceError("preflight")
+        return None
+    if value not in SPEC_LANES or not wanted:
+        raise EvidenceError("preflight")
+    return value
+
+
+def spec_table(root):
+    """The lane table (lanes.json); a missing or malformed file is a preflight failure, before any stage."""
+    try:
+        table = json.loads(bounded_text(Path(root) / SPEC_TABLE, 65536))
+        lanes = table["lanes"]
+        assert sorted(lanes) == ["lanea", "laneb"] and all(isinstance(lanes[k], list) and lanes[k] for k in lanes)
+        assert set(sum(lanes.values(), [])) == set(table["viewsets"]) and len(sum(lanes.values(), [])) == len(table["viewsets"])
+        for key in ("setup_s", "factor", "tail_reserve_s"):
+            assert table[key] > 0
+        return table
+    except (OSError, ValueError, KeyError, TypeError, AssertionError, EvidenceError):
+        raise EvidenceError("preflight") from None
+
+
+def spec_names(table, lane):
+    """The viewsets of a lane in run order (`both`: lane A, then lane B)."""
+    if lane == "both":
+        return list(table["lanes"]["lanea"]) + list(table["lanes"]["laneb"])
+    return list(table["lanes"][lane])
+
+
+def spec_min_remaining_ms(table, lane):
+    """The stage does not start when the whole lane cannot plausibly finish: setup, the native walls with a margin and the
+    tail (INFERRED constants, lanes.json). A shortfall is `specviewperf_retry_time`, not a verdict on the guest."""
+    native = sum(table["viewsets"][n]["native_s"] for n in spec_names(table, lane))
+    return int(table["setup_s"] + table["factor"] * native + table["tail_reserve_s"]) * 1000
+
+
+def specviewperf_rows(text, rc, lane, table):
+    """Grade the SPECviewperf stage wrapper. THE GATE IS THE GUEST PASSING: one verdict PASS with exit 0, one exit line
+    rc=0, the lane named in the list line, and exactly one PASS row for every viewset of the lane, no more, no fewer.
+    Only status lines leave the box (the wrapper keeps the lane's own output, which it never reads for scores, in a
+    private file). FAIL is the row `specviewperf` (a viewset failed in the guest, with the passed count beside it).
+    RETRY (a missing lane, media, transport, time, a host or harness fault) is `specviewperf_retry_<class>`: never a
+    pass. A PASS that is not backed by every row is the harness not ending cleanly: retry, class operator."""
+    names = spec_names(table, lane)
     verdicts = SPEC_VERDICT.findall(text)
     if len(verdicts) != 1:
         raise EvidenceError("specviewperf_retry_operator")
     kind, cls = verdicts[0]
-    if kind == "PASS" and rc == 0:
-        return [row("specviewperf", 1)]
+    exits = SPEC_EXIT.findall(text)
+    rows = SPEC_ROW.findall(text)
+    seen = [name for name, _ in rows]
+    passed = sum(1 for _, result in rows if result == "PASS")
+    partial = [row("specviewperf_passed", passed)] if passed else []
+    if (
+        kind == "PASS"
+        and rc == 0
+        and exits == ["0"]
+        and SPEC_LIST.findall(text) == [(lane, str(len(names)))]
+        and sorted(seen) == sorted(names)
+        and passed == len(names)
+    ):
+        out = [row("specviewperf", len(names))]
+        if lane == "both":
+            out += [row("specviewperf_" + k, len(table["lanes"][k])) for k in ("lanea", "laneb")]
+        else:
+            out.append(row("specviewperf_" + lane, len(names)))
+        return out
     if kind == "FAIL":
-        raise EvidenceError("specviewperf")
-    raise EvidenceError(
-        "specviewperf_retry_" + (cls.lower() if kind == "RETRY" and cls else "operator")
-    )
+        raise EvidenceError("specviewperf", partial)
+    if kind == "RETRY":
+        name = "specviewperf_retry_" + (cls.lower() if cls in SPEC_RETRY_CLASSES else "operator")
+        raise EvidenceError(name, partial)
+    raise EvidenceError("specviewperf_retry_operator", partial)
 
 
 # The Linux apps stage (DRAFT 2026-11-07, lane appslinux; DISABLED BY DEFAULT). It runs the app matrix
@@ -1207,6 +1373,11 @@ def main():
         selected_drivers = release_driver_environment(os.environ)
         require_executable_release(os.environ)
         os.environ.update(selected_drivers)
+
+        winapps = winapps_requested(os.environ, windows)
+
+        spec = spec_requested(os.environ, windows, extra_stages)
+        spec_tbl = spec_table(root) if spec else None
         refresh_claims(result, windows)
         print(
             "KF_PAYLOAD_TIER windows="
@@ -1218,7 +1389,11 @@ def main():
             + " windows_runs="
             + str(windows_runs)
             + " stages="
-            + (":".join(extra_stages) or "none"),
+            + (":".join(extra_stages) or "none")
+            + " spec="
+            + (spec or "none")
+            + " winapps="
+            + (winapps or "none"),
             flush=True,
         )
         subprocess.run(["df", "-h", "/"], check=True)
@@ -1257,6 +1432,9 @@ def main():
             KF_PAYLOAD_CONTROL_DIR=str(evidence / "native-controls"),
             KF_PAYLOAD_NATIVE_RECEIPT=str(evidence / "native-receipt.json"),
         )
+        if spec:
+            # the gate installs Windows on a disk that can hold a lane's tree; an explicit WINVM_DISK_GB wins
+            os.environ.setdefault("WINVM_DISK_GB", SPEC_DISK_GB)
         Path(os.environ["KF_PAYLOAD_DIAGNOSTIC_STATE"]).write_text(
             json.dumps({"bytes": 0, "events": []}) + "\n"
         )
@@ -1401,6 +1579,30 @@ def main():
             )
             stage.update(min_remaining_ms=WINDOWS_MIN_REMAINING_MS, short_row="windows_retry_time")
             stages.append(stage)
+        if windows and winapps:
+            # The Windows apps stage (docs/design/V3_WINDOWS_APPS_GATE.md): the Windows app matrix, in a fresh guest
+            # that is a child of the gate's own overlay (same tag), on the same box. It runs only after a green
+            # gate (a first red cancels later work). Opt-in: the Worker sends KF_WINAPPS.
+            output_apps = evidence / "windows_apps.run"
+            stage = make_stage(
+                "windows_apps",
+                [
+                    "env",
+                    "KF_WINAPPS_PROFILE=" + winapps,
+                    "bash",
+                    str(root / "scripts/bench/box/windows_apps.sh"),
+                    tag,
+                    PROV_DIR,
+                ],
+                output_apps,
+                [],
+                lambda rc: winapps_rows(bounded_text(output_apps), rc, sha, winapps),
+                [Path(PROV_DIR) / (tag + "_winapps.log")],
+            )
+            stage.update(
+                min_remaining_ms=WINAPPS_MIN_REMAINING_MS[winapps], short_row="windows_apps_retry_time"
+            )
+            stages.append(stage)
         if windows and windows_runs == 2:
             # The release tier's second Windows run when no second machine offers the die.
             output2 = evidence / "windows_2.run"
@@ -1417,19 +1619,31 @@ def main():
             )
             stages.append(stage)
         if "specviewperf" in extra_stages:
-            # PLUMBING (2026-11-05): the wrapper runs scripts/bench/box/specviewperf_stage.sh when
-            # it exists (the SPECviewperf lane), fetching media through the Worker's presigned
-            # /bench-data route; without it the stage is specviewperf_retry_not_built, never a pass.
+            # DISABLED BY DEFAULT (docs/design/V3_SPEC_GATE.md): the wrapper runs scripts/bench/box/specviewperf_stage.sh,
+            # which fetches the private copy through the Worker's presigned /bench-data route and runs the lane's
+            # viewsets in the Windows guest the gate passed. Last, after every Windows run. Its own deadline is the soft
+            # deadline minus a margin; too little time for the whole lane is specviewperf_retry_time, never a start.
             output3 = evidence / "specviewperf.run"
-            stages.append(
-                make_stage(
-                    "specviewperf",
-                    ["bash", str(root / "scripts/ci/vast_stage_specviewperf.sh"), tag, PROV_DIR],
-                    output3,
-                    [],
-                    lambda rc: specviewperf_rows(bounded_text(output3), rc),
-                )
+            stage = make_stage(
+                "specviewperf",
+                [
+                    "env",
+                    "KF_SPEC_LANE=" + spec,
+                    "KF_SPEC_DEADLINE_EPOCH=" + str(soft // 1000 - SPEC_DEADLINE_MARGIN_S),
+                    "bash",
+                    str(root / "scripts/ci/vast_stage_specviewperf.sh"),
+                    tag,
+                    PROV_DIR,
+                ],
+                output3,
+                [],
+                lambda rc: specviewperf_rows(bounded_text(output3), rc, spec, spec_tbl),
+                [Path(PROV_DIR) / (tag + "_spec") / "stage.log"],
             )
+            stage.update(
+                min_remaining_ms=spec_min_remaining_ms(spec_tbl, spec), short_row="specviewperf_retry_time"
+            )
+            stages.append(stage)
         return execute_stages(stages, soft, result, destination)
     except EvidenceError as error:
         if isinstance(error, ProviderFault):

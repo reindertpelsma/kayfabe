@@ -119,6 +119,7 @@ const files = [
   'ci/vast-broker/validate-release-matrix.mjs',
   'ci/vast-broker/test/release-matrix.test.js',
   'ci/vast-broker/test/batch.test.js',
+  'ci/vast-broker/test/release-fixture.js',
   'ci/vast-broker/test/helpers.js',
   'ci/vast-broker/test/d1.js',
   'ci/requirements.toml',

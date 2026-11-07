@@ -39,7 +39,7 @@ export function validateReleaseMatrix(value, cfg) {
   if (
     !bad(
       value.schema_version === 1 &&
-        value.status === 'proposed' &&
+        ['proposed', 'executable'].includes(value.status) &&
         /^\d{4}-\d{2}-\d{2}$/.test(value.date),
       'matrix schema version/status/date',
     )
@@ -137,7 +137,7 @@ export function validateReleaseMatrix(value, cfg) {
     bad(cfg.releaseDies[row.die_family]?.includes(label), label + ' releaseDies');
     bad(
       ['flagship', 'second'].includes(row.role) &&
-        row.status === 'proposed' &&
+        ['proposed', 'executable'].includes(row.status) &&
         row.profile === p.full_profile,
       label + ' role/status/profile schema',
     );
@@ -258,6 +258,88 @@ export function hostProvidesDrivers(capabilities, row) {
   if (capabilities?.can_swap_host_driver !== false) return false;
   return [row.drivers, ...(row.cross_subrun ? [row.cross_subrun.drivers] : [])].every(
     (d) => d.host_driver === capabilities.host_driver,
+  );
+}
+// A valid proposal remains non-executable. Only reviewed trusted bundle data can
+// make this transition; no request or environment binding supplies these fields.
+export function matrixExecutionProblem(value, cfg) {
+  if (validateReleaseMatrix(value, cfg).length) return 'MATRIX_INVALID';
+  if (
+    value.status !== 'executable' ||
+    value.dies.some(
+      (row) =>
+        row.status !== 'executable' ||
+        row.blockers.length !== 0 ||
+        row.windows_guest_abi === 'UNKNOWN' ||
+        Object.values(row.minimum_drivers).some((v) => v === 'UNKNOWN') ||
+        matrixReceiptDefinitions(row).length > 64,
+    )
+  )
+    return 'MATRIX_NOT_EXECUTABLE';
+  return null;
+}
+export function sameMatrixRow(a, b) {
+  try {
+    const encoded = JSON.stringify(a);
+    return encoded.length <= 65536 && encoded === JSON.stringify(b);
+  } catch {
+    return false;
+  }
+}
+// Stable receipt identities bind every point release, not just its major branch.
+export function matrixReceiptDefinitions(row) {
+  if (!object(row) || !keys(row.drivers, AXES)) return [];
+  const out = [
+    {
+      id: 'full',
+      kind: 'full',
+      drivers: { ...row.drivers },
+      windows_guest_abi: row.windows_guest_abi,
+    },
+  ];
+  for (const run of Array.isArray(row.subruns) ? row.subruns : [])
+    for (const driver of Array.isArray(run.drivers) ? run.drivers : []) {
+      if (!driverVersion(driver) || !['linux', 'windows'].includes(run.os)) continue;
+      const axis = run.os === 'linux' ? 'linux_guest_driver' : 'windows_guest_driver';
+      out.push({
+        id: run.os + '_subrun_' + driver.replaceAll('.', '_'),
+        kind: 'subrun',
+        suite: run.os + '_subrun_' + run.driver_family,
+        drivers: { ...row.drivers, [axis]: driver },
+        windows_guest_abi: row.windows_guest_abi,
+      });
+    }
+  if (object(row.cross_subrun) && keys(row.cross_subrun.drivers, AXES))
+    for (const os of ['linux', 'windows'])
+      out.push({
+        id: os + '_cross',
+        kind: 'cross',
+        suite: os + '_cross',
+        drivers: { ...row.cross_subrun.drivers },
+        windows_guest_abi: row.cross_subrun.windows_guest_abi,
+      });
+  return out;
+}
+export function checkedMatrixReceipts(value) {
+  return (
+    keys(value, ['schema_version', 'die', 'rows']) &&
+    value.schema_version === 1 &&
+    typeof value.die === 'string' &&
+    /^[A-Z][A-Z0-9_]{1,23}$/.test(value.die) &&
+    Array.isArray(value.rows) &&
+    value.rows.length > 0 &&
+    value.rows.length <= 64 &&
+    new Set(value.rows.map((r) => r?.id)).size === value.rows.length &&
+    value.rows.every(
+      (r) =>
+        keys(r, ['id', 'drivers', 'windows_guest_abi', 'verdict']) &&
+        typeof r.id === 'string' &&
+        /^[a-z][a-z0-9_]{0,63}$/.test(r.id) &&
+        ['PASS', 'FAIL', 'RETRY', 'UNATTRIBUTED'].includes(r.verdict) &&
+        keys(r.drivers, AXES) &&
+        AXES.every((axis) => driverVersion(r.drivers[axis])) &&
+        driverVersion(r.windows_guest_abi),
+    )
   );
 }
 export function releaseEnvironment(row) {
