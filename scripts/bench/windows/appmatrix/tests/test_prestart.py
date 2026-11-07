@@ -61,11 +61,8 @@ class Prestart(unittest.TestCase):
         with self.assertRaises(ValueError):g.run_app(self.app({"command":"arbitrary"}))
         g._run_app.assert_not_called()
 
-    def test_task_payload_is_one_json_argument(self):
-        g=self.session([(0,"APP_PRESTART_DONE app=app_a action=Start"),(0,"APP_PRESTART_DONE app=app_a action=Reset")])
-        g.run_app(self.app({"tasks":["\\Vendor\\AppTask"],"timeout_s":15}))
-        args=g.q.powershell.call_args_list[0].args[1]
-        self.assertEqual(json.loads(args[args.index("-TaskIdsJson")+1]),["\\Vendor\\AppTask"])
+    def test_task_override_is_rejected(self):
+        with self.assertRaises(ValueError): self.session([]).run_app(self.app({'tasks':['\\Vendor\\AppTask']}))
 
     def test_generator_omits_prestart_by_default(self):
         self.assertTrue(all("prestart" not in a for a in gen_apps.build()["apps"]))

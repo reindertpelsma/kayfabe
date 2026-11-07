@@ -149,27 +149,41 @@ another and produce the app's footprint, supplying its actual pinned SHA-256:
   -OutputPath C:\ProgramData\KayfabeLab\footprints\app_a.json
 ```
 
-Review the new entries and `changed_existing` rows for every app. After all
-installers and manual first-run steps, close applications and run:
+Review the new entries and `changed_existing` rows for every app. Create
+`C:\BuildRecords\updater-policy.json` with exact updater/telemetry service IDs
+and task paths copied from those records (empty vendor arrays are allowed):
+
+```json
+{"schema_version": 1, "kind": "autostart_policy", "services": [], "tasks": []}
+```
+
+Ordinary Automatic/Delayed-Automatic services become Manual demand-start services;
+ordinary tasks retain their settings. Only explicitly listed updater/telemetry
+services and tasks are disabled. Run/RunOnce and startup-folder entries are
+removed, except protected infrastructure. After all installers and manual
+first-run steps, close applications and run:
 
 ```powershell
-.\lab_prep.ps1
+.\lab_prep.ps1 -PolicyPath C:\BuildRecords\updater-policy.json
 ```
 
 Require exit zero, `LAB_PREP_DONE` and `complete: true` in
 `C:\ProgramData\KayfabeLab\lab_prep.json`. Preserve that original report and
 the footprints. If it fails, stop the capture procedure and inspect the policy
 code; do not bypass permissions or overwrite the report by blindly retrying.
-Reboot and use an installed app ID to repeat the audit/reset without replacing
-the original service-mode record:
+The report retains every affected service's original start type and delayed-auto
+flag, task settings and removed startup data for rollback. Prestart does not
+perform rollback. Reports from the earlier blanket Disabled proposal are not
+accepted by the corrected tooling; start from a pristine build or review the
+original rollback records.
 
-```powershell
-.\app_prestart.ps1 --app app_a -Action Reset
-```
-
-Test app switching before capture. Opt an app into the app-matrix hook with
-`"prestart": {"timeout_s": 30, "tasks": []}` only after reviewing its footprint.
-Keep task IDs empty unless the app needs manual task invocation. Stage the
-private records at the default ProgramData paths; scripts are delivered at run
-time. The [design and Windows-only checks](../design/V3_WINDOWS_APP_AUTOSTART.md)
-describe protection exceptions, failure handling and coverage limits.
+Reboot and test each app in a fresh guest **without prestart** first. The harness
+runs as an administrator, so an ordinary Manual service can be requested by the
+app. Opt into `"prestart": {"timeout_s": 30}` only if the app's acceptance test
+shows a required helper did not start on demand. It starts the selected app's
+services without changing their startup types or tasks. Demand-start helpers may
+outlive an app; use a fresh guest per app. Require app-specific cleanup acceptance
+evidence before guest reuse.
+Preserve the footprints and version-2 report at the default ProgramData paths.
+Scripts are delivered at run time. Real Windows demand-start behavior and reboot
+persistence still require the coordinator's dry run.

@@ -12,7 +12,43 @@ $script:KfServiceFloor = @('NVDisplay.Container*','NvContainerLocalSystem','NvCo
     'StateRepository','Dhcp','Dnscache','NlaSvc','nsi','Netman','NetSetupSvc','BFE','MpsSvc',
     'WinDefend','WdNisSvc','SecurityHealthService','wscsvc','sppsvc','LicenseManager','ClipSVC','AppXSvc',
     'Audiosrv','AudioEndpointBuilder','Themes','DispBrokerDesktopSvc','DisplayEnhancementService')
-$script:KfAlwaysOff = @('wuauserv','UsoSvc','WaaSMedicSvc','BITS','DoSvc','DiagTrack','dmwappushservice','WSearch','W32Time')
+$script:KfAlwaysOff = @('wuauserv','UsoSvc','WaaSMedicSvc','BITS','DoSvc','DiagTrack','dmwappushservice','WSearch')
+
+$script:KfUpdaterTasks = @('\Microsoft\Windows\WindowsUpdate\Scheduled Start',
+    '\Microsoft\Windows\UpdateOrchestrator\Schedule Scan', '\Microsoft\Windows\UpdateOrchestrator\Schedule Scan Static Task',
+    '\Microsoft\Windows\UpdateOrchestrator\Reboot',
+    '\Microsoft\Windows\Application Experience\Microsoft Compatibility Appraiser',
+    '\Microsoft\Windows\Customer Experience Improvement Program\Consolidator',
+    '\Microsoft\Windows\Customer Experience Improvement Program\UsbCeip',
+    '\Microsoft\Windows\Shell\IndexerAutomaticMaintenance')
+$script:KfDisablePolicy = $null
+function Initialize-KfPolicy($Policy, $Entries) {
+    if ($null -ne $Policy) {
+        Assert-KfFields $Policy @('schema_version','kind','services','tasks')
+        Assert-KfVersion $Policy 'autostart_policy'
+        if ($Policy.services -isnot [Array] -or $Policy.tasks -isnot [Array]) { throw 'policy-arrays-required' }
+        foreach ($name in $Policy.services) {
+            if ($name -isnot [string] -or $name -notmatch '^[A-Za-z0-9_. -]{1,256}$') { throw 'invalid-policy-service' }
+        }
+        foreach ($id in $Policy.tasks) {
+            if ($id -isnot [string] -or $id -notmatch '^\\(?:[A-Za-z0-9_.{}() -]+\\)*[A-Za-z0-9_.{}() -]+$' -or
+                $id -match '\\\.\.?\\') { throw 'invalid-policy-task' }
+        }
+    }
+    $extraServices=@(); $extraTasks=@()
+    if ($null -ne $Policy) { $extraServices=@($Policy.services); $extraTasks=@($Policy.tasks) }
+    $script:KfDisablePolicy=[pscustomobject]@{ schema_version=1; kind='autostart_policy'
+        services=@(@($script:KfAlwaysOff)+$extraServices | Sort-Object -Unique)
+        tasks=@(@($script:KfUpdaterTasks)+$extraTasks | Sort-Object -Unique) }
+    foreach ($row in @($Entries.services)) {
+        if ((Test-KfDisabledService $row) -and (Test-KfProtectedEntry 'services' $row)) { throw 'protected-policy-service' }
+    }
+    foreach ($row in @($Entries.tasks)) {
+        if ((Test-KfDisabledTask $row) -and (Test-KfProtectedEntry 'tasks' $row)) { throw 'protected-policy-task' }
+    }
+}
+function Test-KfDisabledService($Row) { return $script:KfDisablePolicy.services -contains $Row.name }
+function Test-KfDisabledTask($Row) { return $script:KfDisablePolicy.tasks -contains (Get-KfEntryKey 'tasks' $Row) }
 
 function Assert-KfWindows {
     if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) { throw 'windows-provider-unavailable' }
@@ -34,9 +70,9 @@ function Assert-KfFields($Object, [string[]]$Required, [string[]]$Optional = @()
     foreach ($n in $Required) { if ($names -notcontains $n) { throw 'missing-field' } }
     foreach ($n in $names) { if (@($Required + $Optional) -notcontains $n) { throw 'unknown-field' } }
 }
-function Assert-KfVersion($Object, [string]$Kind) {
+function Assert-KfVersion($Object, [string]$Kind, [int]$Version=1) {
     if (($Object.schema_version -isnot [int] -and $Object.schema_version -isnot [long]) -or
-        $Object.schema_version -ne 1 -or $Object.kind -cne $Kind) { throw 'unsupported-schema' }
+        $Object.schema_version -ne $Version -or $Object.kind -cne $Kind) { throw 'unsupported-schema' }
 }
 function Assert-KfId([string]$Id) {
     if ($Id -cnotmatch '^[a-z][a-z0-9_]{0,63}$') { throw 'invalid-app-id' }
@@ -242,7 +278,10 @@ function Get-KfOrder($Rows) {
     return $order.ToArray()
 }
 function Set-KfServiceMode($Row, [string]$Mode) {
-    Assert-KfMutable 'services' $Row; Add-KfAction 'set_mode' $Row.name
+    Assert-KfMutable 'services' $Row
+    if ($Mode -eq 'Disabled' -and -not (Test-KfDisabledService $Row)) { throw 'non-updater-disable-refused' }
+    Add-KfAction 'set_mode' $Row.name
+    $script:KfActions[$script:KfActions.Count-1]['mode']=$Mode
     if ($Mode -notin @('Automatic','Manual','Disabled')) { throw 'unsupported-service-mode' }
     if ($null -ne $script:KfFixture) {
         if (@(Get-KfProp $script:KfFixture 'noop_on' @()) -notcontains ('set_mode:' + $Row.name)) { $Row.start_type=$Mode }
@@ -273,7 +312,9 @@ function Start-KfService($Row, $Clock, [int]$TimeoutSec) {
     Wait-KfService $Row 'Running' $Clock $TimeoutSec
 }
 function Disable-KfTask($Row) {
-    Assert-KfMutable 'tasks' $Row; Add-KfAction 'disable_task' (Get-KfEntryKey 'tasks' $Row)
+    Assert-KfMutable 'tasks' $Row
+    if (-not (Test-KfDisabledTask $Row)) { throw 'ordinary-task-disable-refused' }
+    Add-KfAction 'disable_task' (Get-KfEntryKey 'tasks' $Row)
     if ($null -ne $script:KfFixture) {
         if (@(Get-KfProp $script:KfFixture 'noop_on' @()) -notcontains ('disable_task:' + (Get-KfEntryKey 'tasks' $Row))) {
             $Row.enabled=$false; $Row.status='Ready'
@@ -314,14 +355,15 @@ function Assert-KfServiceIdentity($Current, $Recorded) {
     foreach ($k in @('name','binary_path','account','service_type')) { if ($Current.$k -cne $Recorded.$k) { throw 'service-identity-changed' } }
     if ((@($Current.dependencies | Sort-Object) -join '|') -cne (@($Recorded.dependencies | Sort-Object) -join '|')) { throw 'service-dependencies-changed' }
 }
-function Assert-KfQuiet($Catalog, [string[]]$AllowedServices=@(), [string[]]$AllowedTasks=@()) {
+function Assert-KfQuiet($Catalog) {
     foreach ($s in @($Catalog.entries.services)) {
-        if (-not (Test-KfProtectedEntry 'services' $s) -and $AllowedServices -notcontains $s.name) {
-            if ($s.start_type -ne 'Disabled' -or $s.status -ne 'Stopped') { throw 'service-not-quiescent' }
+        if (-not (Test-KfProtectedEntry 'services' $s)) {
+            $badMode=if (Test-KfDisabledService $s) { $s.start_type -ne 'Disabled' } else { $s.start_type -notin @('Manual','Disabled') }
+            if ($badMode -or $s.status -ne 'Stopped') { throw 'service-not-quiescent' }
         }
     }
     foreach ($t in @($Catalog.entries.tasks)) {
-        if (-not (Test-KfProtectedEntry 'tasks' $t) -and $AllowedTasks -notcontains (Get-KfEntryKey 'tasks' $t)) {
+        if (-not (Test-KfProtectedEntry 'tasks' $t) -and (Test-KfDisabledTask $t)) {
             if ($t.enabled -or $t.status -in @('Running','Queued')) { throw 'task-not-quiescent' }
         }
     }
@@ -329,40 +371,22 @@ function Assert-KfQuiet($Catalog, [string[]]$AllowedServices=@(), [string[]]$All
         if (-not (Test-KfProtectedEntry $kind $r)) { throw 'startup-not-quiescent' }
     } }
 }
-function Reset-KfLab($Catalog, [string]$QuarantineDir, $Clock, [int]$TimeoutSec) {
+function Prepare-KfLab($Catalog, [string]$QuarantineDir, $Clock, [int]$TimeoutSec) {
     $rows=@($Catalog.entries.services | Where-Object { -not (Test-KfProtectedEntry 'services' $_) })
     $order=@(Get-KfOrder $rows); $map=Get-KfServiceMap $rows
-    foreach ($s in $rows) { if ($s.start_type -ne 'Disabled') { Set-KfServiceMode $s 'Disabled' } }
+    foreach ($s in $rows) {
+        if (Test-KfDisabledService $s) {
+            if ($s.start_type -ne 'Disabled') { Set-KfServiceMode $s 'Disabled' }
+        } elseif ($s.start_type -eq 'Automatic') { Set-KfServiceMode $s 'Manual' }
+    }
     for ($i=$order.Count-1; $i -ge 0; $i--) {
         if ($map[$order[$i]].status -ne 'Stopped') { Stop-KfService $map[$order[$i]] $Clock $TimeoutSec }
     }
     foreach ($t in @($Catalog.entries.tasks)) {
-        if (-not (Test-KfProtectedEntry 'tasks' $t) -and ($t.enabled -or $t.status -in @('Running','Queued'))) { Disable-KfTask $t }
+        if (-not (Test-KfProtectedEntry 'tasks' $t) -and (Test-KfDisabledTask $t) -and
+            ($t.enabled -or $t.status -in @('Running','Queued'))) { Disable-KfTask $t }
     }
     foreach ($r in @($Catalog.entries.run)) { if (-not (Test-KfProtectedEntry 'run' $r)) { Remove-KfRun $r } }
     foreach ($s in @($Catalog.entries.startup)) { if (-not (Test-KfProtectedEntry 'startup' $s)) { Remove-KfStartup $s $QuarantineDir } }
     Assert-KfQuiet (Get-KfCatalog)
-}
-function Get-KfManualTaskXml([string]$Text) {
-    $settings=New-Object Xml.XmlReaderSettings
-    $settings.DtdProcessing=[Xml.DtdProcessing]::Prohibit; $settings.XmlResolver=$null
-    $reader=[Xml.XmlReader]::Create((New-Object IO.StringReader($Text)),$settings)
-    try { $doc=New-Object Xml.XmlDocument; $doc.XmlResolver=$null; $doc.Load($reader) } finally { $reader.Dispose() }
-    $ns=New-Object Xml.XmlNamespaceManager($doc.NameTable); $uri='http://schemas.microsoft.com/windows/2004/02/mit/task'; $ns.AddNamespace('t',$uri)
-    $logon=$doc.SelectSingleNode('/t:Task/t:Principals/t:Principal/t:LogonType',$ns)
-    if ($null -eq $logon -or $logon.InnerText -notin @('ServiceAccount','InteractiveToken','S4U')) { throw 'task-needs-credentials' }
-    $triggers=$doc.SelectSingleNode('/t:Task/t:Triggers',$ns)
-    if ($null -ne $triggers) { $triggers.RemoveAll() }
-    $enabled=$doc.SelectSingleNode('/t:Task/t:Settings/t:Enabled',$ns)
-    if ($null -eq $enabled) { throw 'unsupported-task-settings' }
-    $enabled.InnerText='true'
-    return $doc.OuterXml
-}
-function Import-KfManualTask($Current, $Original) {
-    Assert-KfMutable 'tasks' $Current
-    $xml=Get-KfManualTaskXml $Original.xml
-    Add-KfAction 'import_task' (Get-KfEntryKey 'tasks' $Original)
-    if ($null -ne $script:KfFixture) { $Current.xml=$xml; $Current.enabled=$true; $Current.status='Ready'; return }
-    Assert-KfWindows
-    Register-ScheduledTask -TaskPath $Original.path -TaskName $Original.name -Xml $xml -Force | Out-Null
 }

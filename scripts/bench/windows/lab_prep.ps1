@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 # Run elevated before capture. A failed report is never permission to capture.
 param(
+    [string]$PolicyPath,
     [string]$FootprintsDir='C:\ProgramData\KayfabeLab\footprints',
     [string]$ReportPath='C:\ProgramData\KayfabeLab\lab_prep.json',
     [string]$QuarantineDir='C:\ProgramData\KayfabeLab\startup-quarantine',
@@ -8,8 +9,8 @@ param(
     [string]$FixturePath, [string]$FixtureResultPath
 )
 . "$PSScriptRoot/app_autostart_common.ps1"
-$report=[ordered]@{ schema_version=1; kind='lab_prep'; machine_id=''; created_utc=[DateTime]::UtcNow.ToString('o')
-    complete=$false; footprints=@(); services=@(); tasks=@(); removed_run=@(); quarantined_startup=@()
+$report=[ordered]@{ schema_version=2; kind='lab_prep'; machine_id=''; created_utc=[DateTime]::UtcNow.ToString('o')
+    complete=$false; policy=$null; footprints=@(); services=@(); tasks=@(); removed_run=@(); quarantined_startup=@()
     protected_services=@(); actions=@(); errors=@() }
 $writeReport=$false
 try {
@@ -20,6 +21,9 @@ try {
     $report.machine_id=$catalog.machine_id
     $script:KfProtected=Get-KfProtectedNames $catalog.entries
     $report.protected_services=@($script:KfProtected.Keys | Sort-Object)
+    $policy=$null; if ($PolicyPath) { $policy=Read-KfJson $PolicyPath }
+    Initialize-KfPolicy $policy $catalog.entries
+    $report.policy=$script:KfDisablePolicy
     $pins=New-Object 'System.Collections.Generic.List[object]'; $ids=@{}
     foreach ($file in @(Get-ChildItem -LiteralPath $FootprintsDir -Filter '*.json' -File | Sort-Object Name)) {
         $f=Read-KfFootprint $file.FullName
@@ -36,7 +40,7 @@ try {
     $report.removed_run=@($original.run | Where-Object { -not (Test-KfProtectedEntry 'run' $_) })
     $report.quarantined_startup=@($original.startup | Where-Object { -not (Test-KfProtectedEntry 'startup' $_) })
     $clock=[Diagnostics.Stopwatch]::StartNew()
-    Reset-KfLab $catalog $QuarantineDir $clock $TimeoutSec
+    Prepare-KfLab $catalog $QuarantineDir $clock $TimeoutSec
     $report.complete=$true
     Write-Output 'LAB_PREP_DONE'
 } catch {

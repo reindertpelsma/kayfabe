@@ -1,172 +1,158 @@
-STATUS: DESIGN-ONLY, 2026-11-07. GPU-free tooling with a fake Windows provider;
-real Windows APIs, reboot persistence and application compatibility are UNTESTED.
+STATUS: DESIGN-ONLY, 2026-11-07. Owner correction: ordinary app services use
+Manual demand start. Windows behavior, reboot persistence and app acceptance are UNTESTED.
 
 # Offline image application autostart policy
 
-DESIGN INTENT (owner/coordinator, 2026-11-07): before final image capture,
-disable background autostart so another application's helpers cannot contaminate
-a test. The primary build is native Windows-on-Vast with Alpine ESP capture;
-the QEMU session tooling remains an alternative. Packaging, machine-state,
-manifest and upload contracts are unchanged. No hardware or storage operations
-are part of this change.
+DESIGN INTENT (owner/coordinator correction, 2026-11-07): this replaces the
+initial proposal to disable all app services/tasks. Convert Automatic and
+Delayed-Automatic ordinary services to **Manual**, so an administrator-launched
+app can request its helper with StartService. Do not write Disabled for an
+ordinary service. Disable only exact service/task IDs on the explicit
+updater/telemetry policy; preserve ordinary scheduled tasks. Remove unprotected
+Run/RunOnce values and startup-folder entries. Native Windows-on-Vast remains
+the primary capture path; QEMU remains an alternative. Packaging and machine
+state tooling are unchanged.
 
-DESIGN INTENT: take a footprint around each manual, official installer, including
-the stock driver installer. Keep these scripts as build/run-time tools rather
-than baking harness scripts into the image. Keep the resulting footprints and
-lab report under `C:\ProgramData\KayfabeLab` and retain private sidecar copies
-next to the image inventory. Commands, account names and task XML can reveal
-installer data: use throwaway accounts, inspect the documents, never commit them
-or publish them. The machine-state manifest's offline-material exception is not
-permission to collect personal account tokens in task arguments.
+## Installer footprint and rollback data
 
-## Footprint contract
+CODE READ (`app_footprint.ps1`, `app_autostart_common.ps1`): snapshot/diff remains
+version 1. Capture before/after every manual official installer. Each per-app
+JSON carries its app ID, installer SHA-256, both snapshot hashes, machine UUID,
+new services/tasks/Run/startup entries and changed-existing audit rows. Only new
+names/keys/paths establish ownership; changed-existing rows require review.
 
-CODE READ (`scripts/bench/windows/app_footprint.ps1` and
-`app_autostart_common.ps1`): `snapshot` writes a version-1
-`autostart_snapshot` with machine UUID, diagnostic UTC timestamp and four entry
-arrays. `diff` requires snapshots from the same machine and writes a version-1
-`app_footprint` with `app_id`, `installer_sha256`, both snapshot SHA-256 values,
-`created_utc`, `entries` and `changed_existing`. Both commands refuse to overwrite
-an output. IDs use lowercase letters, digits and underscores. Snapshot timestamps
-do not establish ordering because the offline RTC can move backward; the
-operator supplies before/after paths explicitly.
-
-| Entry array | Recorded values |
+| Surface | Rollback/inventory values |
 |---|---|
-| `services` | Name, display name, binary path, start type, account, driver/process type, dependencies, delayed-auto flag, current status |
-| `tasks` | Task path/name, exported XML, enabled flag, status, action executable paths |
-| `run` | Registry key, value name, original value and registry value kind |
-| `startup` | Full path, bytes, SHA-256 and shortcut target |
+| Services | Name, display name, binary path, previous start type, account, driver/process type, dependencies, delayed-auto flag and status |
+| Tasks | Path/name, XML, previous enabled flag, status and action executable paths |
+| Run/RunOnce | Literal key/value name, previous value and registry value kind |
+| Startup folders | Path, bytes, SHA-256 and shortcut target; quarantine destination in the prep action report |
 
-CODE READ: ownership includes only new names/keys/paths. Modifications of an
-existing entry appear in `changed_existing`, not as a new app-owned service.
-Shared prerequisites can be restored through the selected service's dependency
-closure recorded by lab prep. Installers that modify an existing service without
-a dependency edge need manual review; the tooling does not guess ownership.
-Removed entries are not resurrected. A driver or shared system component never
-becomes mutable merely because it appears in an app footprint.
+CODE READ: the prep report deep-copies every affected service's original mode
+before mutation, including Manual/Disabled modes and the delayed-auto flag.
+Task XML/enabled flags and removed startup data remain available for rollback.
+Prestart is not a rollback operation: it never restores Automatic startup or
+re-enables an updater. A general rollback command is not implemented; preserve
+the original report and use a reviewed rollback procedure or a pristine build.
+Do not overwrite an existing complete or failed report.
 
-CODE READ: collectors enumerate `Win32_Service`, `Win32_SystemDriver`, scheduled
-tasks, HKLM and loaded ordinary-user HKU Run/RunOnce keys in native/WOW6432Node
-locations, common Startup and those profiles' configured Startup folders. An
-unloaded ordinary profile refuses the operation before mutations. Startup
-directories/reparse items, unresolved/UNC Startup roots, unsupported service/task
-names and inaccessible APIs refuse the operation. No registry hive is loaded
-automatically. Default-profile templates, future accounts, browser extensions,
-WMI event consumers, shell extensions, arbitrary executable installers and
-interactive processes outside these autostart surfaces are outside this schema.
-Use the fixed disposable local account; additional accounts require a new review.
+DESIGN INTENT: keep these records private under
+`C:\ProgramData\KayfabeLab`, with sidecar copies next to the private image
+inventory. Records are data; build/harness scripts are staged at run time rather
+than baked into the image. Inspect task arguments, account names and registry
+values for personal data. Use disposable accounts. The offline machine-state
+exception does not authorize collecting personal credentials in these records.
 
-## Capture preparation and protection floor
+## Explicit updater/telemetry policy
 
-CODE READ (`lab_prep.ps1`): validate all footprint files and pin their hashes,
-then sweep the live catalog as well as app metadata. This includes services and
-tasks missing from every installer diff, such as pre-existing updaters. Disable
-all unprotected services with `Disabled` and stop them in reverse dependency
-order; `Manual` alone would allow trigger starts. Disable/stop unprotected tasks,
-remove literal Run/RunOnce values, and move startup files to a quarantine outside
-Startup. The report retains original modes, delayed-auto flags, task XML,
-registry values, startup hashes, quarantine destinations and attempted actions.
+CODE READ: `lab_prep.ps1 -PolicyPath FILE` accepts this version-1 schema. Lists
+contain exact IDs, not patterns, commands or inferred vendor ownership:
 
-CODE READ: the protected service floor includes NVIDIA display containers,
-all kernel/filesystem drivers (including NVIDIA and virtio), Windows Installer,
-sshd, QEMU guest agent, TPM and crypto/key services. It also keeps boot/RPC/PnP,
-event logging, scheduler infrastructure, WMI, user profiles, networking/firewall,
-Windows security, licensing, desktop and audio essentials. The exact list is
-`$script:KfServiceFloor`; live dependency closure is protected too. TPM/crypto,
-certificate, Defender, scheduler and PnP task paths, `KF_`/`KF-` harness tasks,
-and autostart actions directly naming sshd/QGA/NVIDIA container executables are
-protected. Primitive mutation functions check protection again. The report
-lists protected services so the coordinator can inspect exceptions explicitly.
+```json
+{
+  "schema_version": 1,
+  "kind": "autostart_policy",
+  "services": [],
+  "tasks": []
+}
+```
 
-DESIGN INTENT: protected infrastructure is an explicit exception to the owner's
-background-app policy. Do not expand the allow-list just to make a capture work.
-A protected dependency unexpectedly retaining an app updater falsifies the
-isolation hypothesis and blocks capture for owner review. Protection wins over
-the sweep; the tool does not stop required infrastructure to satisfy a count.
+DESIGN INTENT: populate vendor updater IDs by reviewing the actual footprint,
+installer documentation and acceptance behavior. Empty vendor lists do not
+classify a helper as an updater. An unfamiliar service with Update in its name
+still becomes Manual unless explicitly listed. Keep app-owned workload tasks
+enabled; classify vendor update tasks individually.
 
-CODE READ: Update/servicing helpers (`wuauserv`, `UsoSvc`, `WaaSMedicSvc`, BITS,
-DoSvc), telemetry (`DiagTrack`, `dmwappushservice`), Search (`WSearch`) and time
-sync (`W32Time`) are subject to the global sweep. They are additionally forbidden
-prestart dependencies. App updater services/tasks receive the same sweep without
-depending on vendor-name guesses. A selected app can restore its own ordinary
-services; after that test the reset disables them again.
+CODE READ: built-in exact service IDs are `wuauserv`, `UsoSvc`, `WaaSMedicSvc`,
+BITS, DoSvc, DiagTrack, dmwappushservice and WSearch. Built-in exact task IDs
+cover the authored Windows Update/UpdateOrchestrator scan/reboot entries,
+Compatibility Appraiser, CEIP Consolidator/UsbCeip and IndexerAutomaticMaintenance;
+the complete IDs are `$script:KfUpdaterTasks`. There are no folder wildcards.
+Vendor entries extend these defaults. The resolved policy is stored in the
+version-2 lab report and used by prestart. Version-1 prep reports from the earlier
+initial blanket Disabled proposal are refused; rebuild from pristine state or review
+the original rollback data before preparing again. Footprint schema stays at 1.
+Windows time-service shutdown remains the separate image-preparation contract.
 
-CODE READ: a final live audit requires every unprotected service to be Disabled
-and Stopped, every unprotected task disabled and neither Running nor Queued, and
-no remaining unprotected Run/startup entries. Only then is `complete: true`
-published. Failures produce a nonzero exit, `LAB_PREP_FAIL reason=<policy-code>`
-and an incomplete report. An attempted-action row is not a success receipt.
-Access denied, Medic/tamper-protection refusal or profile/Startup incompatibility
-must be investigated; the scripts do not take ownership, bypass protection or
-silently accept a partial cleanup. A failed cleanup does not authorize capture.
+CODE READ: prep converts ordinary Automatic (including delayed-auto) services to
+Manual, leaves existing Manual/Disabled types alone, and stops unprotected
+running services in reverse dependency order before capture. Only policy-listed
+services receive Disabled. Only policy-listed tasks are disabled/stopped.
+Unprotected Run/RunOnce entries are deleted literally and startup files are
+quarantined. A final live audit checks resulting modes, stopped services,
+listed tasks and startup removal before publishing `complete: true`. No-op or
+failed providers produce an incomplete report and a nonzero exit.
 
-## Per-app prestart and teardown
+## Protected infrastructure
 
-CODE READ (`app_prestart.ps1`): `--app ID` / `-App ID` selects a pinned footprint
-and complete same-machine lab report. It checks the footprint hash, installer
-hash and current service identity (including binary, account and dependencies)
-before changes. A global reset first removes any previous app's enabled state.
-The selected app's services and required unprotected dependencies regain their
-recorded modes/delayed-auto flags and start in dependency order. An originally
-Disabled service is refused rather than silently enabled. Protected services
-are untouched; a required protected dependency must already be running.
+CODE READ: the protection floor covers NVIDIA display containers, every
+kernel/filesystem driver (including NVIDIA/virtio), Windows Installer, SSH/QGA,
+TPM/crypto/key services and boot/RPC/profile/network/security/licensing/desktop
+infrastructure. Live dependencies are protected too. TPM/crypto/certificate,
+Defender, scheduler/PnP tasks, harness tasks and direct SSH/QGA/NVIDIA container
+autostart commands remain protected. An explicit policy naming a live protected
+entry is rejected before mutations. Primitive writes check protection again;
+the service primitive independently refuses Disabled for a non-updater.
 
-CODE READ: the shared service wait deadline is 1–120 seconds, using
-`ServiceController.WaitForStatus`; the host guest-channel call also has a finite
-timeout. A failure prints `APP_PRESTART_FAIL app=ID action=Start reason=CODE`.
-Only exit zero plus the exact `APP_PRESTART_DONE` line permits the workload.
-The deadline does not prove a helper has finished internal initialization;
-application-specific readiness remains a coordinator experiment.
+DESIGN INTENT: inspect the report's protected list. A protected dependency that
+unexpectedly retains an app updater falsifies the isolation design and blocks
+capture for owner review. Access denied or Medic/tamper-protection refusal is a
+failure, not permission to bypass protection. No ownership/ACL bypass is used.
 
-CODE READ: tasks stay disabled by default. Explicit task IDs must belong to the
-selected footprint; task XML is parsed with DTDs prohibited and no resolver.
-Credential-based logon modes are refused. An explicit task is re-registered
-enabled with all automatic triggers removed and remains ready for manual app
-invocation; it is not automatically started. Run/RunOnce and startup shortcuts
-are never restored by prestart. Apps relying on those mechanisms need an
-explicit supported test-time launch recipe rather than background autostart.
+CODE READ: collection includes services/drivers, scheduled tasks, HKLM and loaded
+ordinary-user HKU native/WOW6432Node Run/RunOnce keys, and common/profile Startup
+folders. An unloaded ordinary profile, inaccessible API, unsupported name,
+Startup directory/reparse item or unresolved/UNC root refuses the operation.
+Default-profile templates, future accounts, WMI consumers, shell extensions and
+arbitrary installer-created launch mechanisms are outside the schema. Timestamps
+are diagnostic because a fixed RTC can move backward across boots.
 
-CODE READ (`scripts/bench/windows/appmatrix/prestart.py`, `winapps.py`,
-`gen_apps.py`): an app may opt in using
-`"prestart": {"timeout_s": 30, "tasks": []}`. Unknown fields, invalid IDs,
-invalid/duplicate task paths and unbounded timeouts are refused. Apps without
-the field keep their existing execution path; no stock app is implicitly opted
-in. Guest scripts are pushed at run time. Private footprint/report data must be
-present in the image at the default ProgramData paths. The wrapper resets in a
-`finally` block after every opted-in app. A failed reset records
-`APP_LAB_RESET_FAIL ... fresh_guest=required` and requests a fresh guest before
-the next workload. A missing or changed footprint also blocks cleanup: retain
-these records immutably with the image.
+## Optional acceptance escape hatch
 
-## Coordinator falsifiers and Windows-only dry run
+DESIGN INTENT: first run an app's acceptance test with ordinary demand start and
+**without prestart**. Only an app whose acceptance test demonstrates that a
+required helper did not start on demand should opt in. The harness runs as an
+administrator; real StartService behavior still needs the Windows dry run.
 
-DESIGN INTENT: on a disposable Windows guest, take before/after snapshots around
-two official installers with distinct helpers. Inspect changed-existing rows,
-loaded profiles, 32/64-bit keys, task XML and all protected exceptions. Run prep
-elevated, require a complete report, reboot, and rerun the catalog audit before
-final shutdown/capture. Never rerun prep over a previous report: it would replace
-original service modes with Disabled. Preserve the first report; after reboot,
-use `app_prestart.ps1 -App ID -Action Reset` for a fresh audit/reset.
+CODE READ: `app_prestart.ps1 --app ID` validates the pinned footprint, same-machine
+version-2 report and current service identity. It starts only that app's recorded
+ordinary services and required unprotected dependencies, using a shared bounded
+wait. Services must already be Manual; it does not change startup types, import
+tasks, restore Run entries or reset unrelated apps. Policy-listed updater
+services cannot be selected, even through a dependency. `-Action Reset` stops
+only this selected service closure. Failures print an app/action/policy-code
+line and return nonzero.
 
-DESIGN INTENT: falsifier for isolation is any unprotected helper from app A
-starting during app B, including after reboot and after task triggering. Test
-both app orderings and inspect running processes and scheduled-task events.
-Falsifier for protection is any action against a driver, protected service/task
-or required dependency, or a lost SSH/guest-agent channel. Stop and report either
-condition. Close interactive apps and writers before capture; disabling future
-autostart does not terminate every existing interactive process.
+CODE READ: the app-matrix descriptor is optional
+`"prestart": {"timeout_s": 30}` (1–120 seconds). Task overrides and unknown fields
+are refused. No stock app opts in. The wrapper requires exit zero plus the exact
+success marker, and runs selected-service teardown in a finally block. Failed
+teardown requests a fresh guest. Scripts are pushed at run time; private records
+must already be at their fixed ProgramData paths.
 
-UNTESTED: real Windows PowerShell 5.1 compatibility; CIM service/driver values;
-registry/profile collection; localized task/service names; Windows Update/Medic
-permissions; task registration/trigger stripping; SCM wait behavior; delayed
-auto-start; protected dependency completeness; quarantine ACLs/paths; NVIDIA,
-virtio, TPM, SSH and QGA continuity; application readiness/licensing; reboot and
-capture persistence. Linux PowerShell fixtures exercise policy orchestration
-only. The Windows provider source contracts cannot establish these behaviors.
+DESIGN INTENT: demand-start services can outlive an app. For isolation acceptance,
+use a pristine guest per app. Guest reuse requires app-specific cleanup
+acceptance evidence for its helpers. The optional prestart hook is not a universal service-cleanup
+mechanism, and Manual does not suppress Windows service triggers. Do not claim
+cross-app isolation merely from the startup-type conversion.
 
-DESIGN INTENT: local checks are `python3 scripts/ci/test_app_autostart.py`,
-`python3 -m unittest discover -s scripts/bench/windows/appmatrix/tests` and
-`python3 scripts/ci/app_autostart_mutants.py`. The dedicated GPU-free workflow
-requires PowerShell rather than treating missing fixture execution as evidence.
-Mutations must have at least two independently named failing fixture tests.
+## Coordinator dry run and falsifiers
+
+DESIGN INTENT: on a disposable Windows guest, capture footprints around two
+installers, explicitly classify update tasks/services, prepare elevated, inspect
+all previous modes/protected exceptions, reboot and inspect actual startup.
+Test ordinary demand start without prestart; only then justify an escape hatch.
+Use a fresh guest per app for the first acceptance experiments. Falsifiers are
+any Disabled write to an ordinary service, any ordinary task changed by prep,
+any protected mutation, a missing previous mode, an updater starting, or a
+required helper failing demand start. Stop capture and report the finding.
+
+UNTESTED: Windows PowerShell 5.1, CIM/SCM/registry/task APIs, Update/Medic
+permissions, delayed-auto behavior, startup triggers, protected dependencies,
+NVIDIA/virtio/TPM/SSH/QGA continuity, quarantine ACLs, reboot persistence,
+application readiness/licensing and demand-start acceptance. Linux PowerShell
+fixtures exercise policy only; source contracts do not establish Windows behavior.
+
+DESIGN INTENT: run `python3 scripts/ci/test_app_autostart.py`, the app-matrix
+fixtures, and `python3 scripts/ci/app_autostart_mutants.py`. Each mutant must have
+two independently named killers. The GPU-free workflow requires PowerShell.

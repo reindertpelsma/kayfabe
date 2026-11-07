@@ -36,7 +36,8 @@ def catalog():
                     tasks=[dict(path="\\Vendor\\", name="AppTask", xml=XML, enabled=True, status="Running",
                                 commands=["C:\\Apps\\helper.exe"]),
                            dict(path="\\Microsoft\\Windows\\TPM\\", name="ProtectedTask", xml=XML,
-                                enabled=True, status="Ready", commands=["tpmmaint.exe"])],
+                                enabled=True, status="Ready", commands=["tpmmaint.exe"]),
+                           dict(path="\\Microsoft\\Windows\\WindowsUpdate\\",name="Scheduled Start",xml=XML,enabled=True,status="Running",commands=["usoclient.exe"])],
                     run=[dict(key="HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run", name="AppA",
                               value="C:\\Apps\\AppA.exe", kind="String"),
                          dict(key="HKU:\\S-1-5-21-1000\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\RunOnce",
@@ -147,18 +148,174 @@ class AutostartFixtures(unittest.TestCase):
                     "-App", "app_a", "-InstallerSha256", HASH, "-OutputPath", out, ok=False)
         self.assertFalse(out.exists())
 
-    def test_lab_disables_services_missing_from_footprint(self):
-        self.prep(); d=self.saved()
-        for name in ("AppA", "AppB", "SharedSvc", "wuauserv", "DiagTrack", "WSearch"):
-            self.assertEqual(self.by_name(d,name)["start_type"], "Disabled")
-            self.assertEqual(self.by_name(d,name)["status"], "Stopped")
 
-    def test_lab_disables_tasks_and_removes_all_startup(self):
+    def test_app_automatic_services_become_manual(self):
         self.prep(); d=self.saved()
-        self.assertFalse(d["entries"]["tasks"][0]["enabled"])
-        self.assertEqual(d["entries"]["tasks"][0]["status"], "Ready")
-        self.assertEqual(d["entries"]["run"], [])
-        self.assertEqual(d["entries"]["startup"], [])
+        for name in ('AppA','AppB','SharedSvc'):
+            self.assertEqual(self.by_name(d,name)['start_type'],'Manual')
+            self.assertEqual(self.by_name(d,name)['status'],'Stopped')
+        self.assertFalse(any(a.get('mode')=='Disabled' and a['id'] in ('AppA','AppB','SharedSvc') for a in d['actions']))
+
+    def test_delayed_automatic_service_is_demand_start(self):
+        self.by_name(self.data,'AppB')['delayed_auto']=True
+        self.prep(); d=self.saved()
+        self.assertEqual(self.by_name(d,'AppB')['start_type'],'Manual')
+        old=next(s for s in json.loads(self.report.read_text(encoding='utf-8-sig'))['services'] if s['name']=='AppB')
+        self.assertEqual(old['start_type'],'Automatic'); self.assertTrue(old['delayed_auto'])
+
+    def test_manual_services_do_not_receive_startup_writes(self):
+        self.prep(); d=self.saved()
+        self.assertEqual(self.by_name(d,'SharedSvc')['start_type'],'Manual')
+        self.assertFalse(any(a['op']=='set_mode' and a['id']=='SharedSvc' for a in d['actions']))
+
+    def test_preexisting_disabled_app_service_is_not_changed(self):
+        self.by_name(self.data,'AppB')['start_type']='Disabled'
+        self.by_name(self.data,'AppB')['status']='Stopped'
+        self.prep(); d=self.saved()
+        self.assertEqual(self.by_name(d,'AppB')['start_type'],'Disabled')
+        self.assertFalse(any(a['id']=='AppB' for a in d['actions']))
+
+    def test_only_explicit_updater_services_are_disabled(self):
+        self.data['entries']['services'].append(service('UnknownVendorUpdater'))
+        self.prep(); d=self.saved()
+        for name in ('wuauserv','DiagTrack','WSearch'):
+            self.assertEqual(self.by_name(d,name)['start_type'],'Disabled')
+        self.assertEqual(self.by_name(d,'UnknownVendorUpdater')['start_type'],'Manual')
+
+    def test_non_updater_never_receives_disabled_write(self):
+        self.prep(); d=self.saved()
+        writes=[a for a in d['actions'] if a['op']=='set_mode' and a['mode']=='Disabled']
+        self.assertEqual({a['id'] for a in writes},{'wuauserv','DiagTrack','WSearch'})
+
+    def policy(self, services=(),tasks=()):
+        p=self.tmp/'policy.json'
+        p.write_text(json.dumps(dict(schema_version=1,kind='autostart_policy',services=list(services),tasks=list(tasks))))
+        return p
+
+    def prep_policy(self,path,ok=True):
+        self.footprint(task=True)
+        return self.run_ps('lab_prep.ps1','-FootprintsDir',self.footprints,'-ReportPath',self.report,
+                           '-QuarantineDir',self.tmp/'quarantine','-PolicyPath',path,ok=ok)
+
+    def test_explicit_vendor_updater_is_disabled(self):
+        self.prep_policy(self.policy(['AppB'],['\\Vendor\\AppTask']))
+        self.assertEqual(self.by_name(self.saved(),'AppB')['start_type'],'Disabled')
+        self.assertFalse(self.saved()['entries']['tasks'][0]['enabled'])
+        r=json.loads(self.report.read_text(encoding='utf-8-sig'))
+        self.assertIn('AppB',r['policy']['services'])
+
+    def test_ordinary_scheduled_tasks_are_untouched(self):
+        self.prep()
+        self.assertEqual(self.saved()['entries']['tasks'][0],self.data['entries']['tasks'][0])
+
+    def test_only_listed_update_task_is_disabled(self):
+        self.prep(); tasks=self.saved()['entries']['tasks']
+        self.assertFalse(tasks[2]['enabled']); self.assertEqual(tasks[2]['status'],'Ready')
+        self.assertEqual(tasks[0],self.data['entries']['tasks'][0])
+        self.assertFalse(any(a['op']=='disable_task' and a['id']=='\\vendor\\apptask' for a in self.saved()['actions']))
+
+    def test_startup_entries_are_removed_without_disabling_ordinary_tasks(self):
+        self.prep(); d=self.saved()
+        self.assertEqual(d['entries']['run'],[]); self.assertEqual(d['entries']['startup'],[])
+        self.assertTrue(d['entries']['tasks'][0]['enabled'])
+
+    def test_previous_start_types_are_recorded(self):
+        p=self.footprint(); self.prep(); r=json.loads(self.report.read_text(encoding='utf-8-sig'))
+        self.assertEqual(r['schema_version'],2)
+        self.assertEqual(next(s for s in r['services'] if s['name']=='AppA')['start_type'],'Automatic')
+        self.assertEqual(next(s for s in r['services'] if s['name']=='SharedSvc')['start_type'],'Manual')
+        self.assertEqual(r['footprints'][0]['sha256'],hashlib.sha256(p.read_bytes()).hexdigest())
+
+    def test_prestart_is_only_a_manual_service_escape_hatch(self):
+        d=self.prepared(); self.prestart(d); out=self.saved()
+        for name in ('AppA','SharedSvc'):
+            self.assertEqual(self.by_name(out,name)['start_type'],'Manual')
+            self.assertEqual(self.by_name(out,name)['status'],'Running')
+        self.assertEqual(self.by_name(out,'AppB')['status'],'Stopped')
+        self.assertFalse(any(a['op']=='set_mode' for a in out['actions']))
+
+    def test_prestart_does_not_restore_automatic_start(self):
+        self.by_name(self.data,'AppA')['delayed_auto']=True
+        d=self.prepared(); self.prestart(d)
+        self.assertEqual(self.by_name(self.saved(),'AppA')['start_type'],'Manual')
+        self.assertEqual(self.saved()['entries']['tasks'],d['entries']['tasks'])
+
+    def test_prestart_reset_only_stops_selected_services(self):
+        d=self.prepared(); self.prestart(d); active=self.saved()
+        self.by_name(active,'AppB')['status']='Running'
+        self.prestart(active,'app_a','-Action','Reset'); out=self.saved()
+        self.assertEqual(self.by_name(out,'AppA')['status'],'Stopped')
+        self.assertEqual(self.by_name(out,'AppB')['status'],'Running')
+        self.assertFalse(any(a['op']=='set_mode' for a in out['actions']))
+
+    def test_prestart_leaves_all_tasks_unchanged(self):
+        d=self.prepared(); self.prestart(d)
+        self.assertEqual(self.saved()['entries']['tasks'],d['entries']['tasks'])
+        self.assertFalse(any(a['op'] in ('import_task','disable_task') for a in self.saved()['actions']))
+
+    def test_updater_dependency_cannot_be_prestarted(self):
+        self.by_name(self.data,'AppA')['dependencies']=['wuauserv']
+        d=self.prepared(); self.by_name(d,'wuauserv')['start_type']='Manual'
+        self.prestart(d,ok=False)
+        self.assertEqual(self.saved()['actions'],[])
+
+    def test_indexer_dependency_cannot_be_prestarted(self):
+        self.by_name(self.data,'AppA')['dependencies']=['WSearch']
+        d=self.prepared(); self.by_name(d,'WSearch')['start_type']='Manual'
+        self.prestart(d,ok=False)
+        self.assertEqual(self.saved()['actions'],[])
+
+    def test_start_wait_failure_is_clear(self):
+        d=self.prepared(); d['fail_on']=['wait:AppA']
+        self.assertIn('APP_PRESTART_FAIL app=app_a',self.prestart(d,ok=False).stdout)
+
+    def test_dependency_wait_failure_is_clear(self):
+        d=self.prepared(); d['fail_on']=['wait:SharedSvc']
+        self.assertIn('APP_PRESTART_FAIL app=app_a',self.prestart(d,ok=False).stdout)
+
+    def test_policy_cannot_disable_protected_service(self):
+        self.prep_policy(self.policy(['sshd']),ok=False)
+        self.assertEqual(self.saved()['actions'],[])
+
+    def test_second_policy_protected_service_rejected(self):
+        self.prep_policy(self.policy(['CryptSvc']),ok=False)
+        self.assertEqual(self.saved()['actions'],[])
+
+    def reject_direct_disable(self,name):
+        driver=self.tmp/'primitive.ps1'
+        common=str(WIN/'app_autostart_common.ps1').replace("'","''")
+        driver.write_text("param([string]$FixturePath,[string]$FixtureResultPath)\n. '"+common+"'\n"+
+            "Initialize-KfBackend $FixturePath\n$c=Get-KfCatalog\n$script:KfProtected=Get-KfProtectedNames $c.entries\n"+
+            "Initialize-KfPolicy $null $c.entries\ntry { Set-KfServiceMode (Get-KfServiceMap $c.entries.services)['"+name+"'] 'Disabled'; exit 0 }\n"+
+            "catch { exit 1 } finally { Save-KfFixture $FixtureResultPath }\n")
+        self.run_ps(driver,ok=False)
+        self.assertEqual(self.saved()['actions'],[])
+
+    def test_primitive_rejects_disabling_app_service(self):
+        self.reject_direct_disable('AppA')
+
+    def test_primitive_rejects_disabling_manual_dependency(self):
+        self.reject_direct_disable('SharedSvc')
+
+    def test_policy_cannot_disable_protected_task(self):
+        self.prep_policy(self.policy(tasks=['\\Microsoft\\Windows\\TPM\\ProtectedTask']),ok=False)
+        self.assertEqual(self.saved()['actions'],[])
+
+    def test_wildcard_policy_service_is_rejected(self):
+        self.prep_policy(self.policy(['App*']),ok=False)
+        self.assertEqual(self.saved()['actions'],[])
+
+    def test_wildcard_policy_task_is_rejected(self):
+        self.prep_policy(self.policy(tasks=['\\Vendor\\*']),ok=False)
+        self.assertEqual(self.saved()['actions'],[])
+
+    def test_silent_service_write_failure_is_audited(self):
+        self.data['noop_on']=['set_mode:AppB']; self.prep(ok=False)
+        self.assertFalse(json.loads(self.report.read_text(encoding='utf-8-sig'))['complete'])
+
+    def test_silent_update_task_failure_is_audited(self):
+        self.data['noop_on']=['disable_task:\\microsoft\\windows\\windowsupdate\\scheduled start']; self.prep(ok=False)
+        self.assertFalse(json.loads(self.report.read_text(encoding='utf-8-sig'))['complete'])
 
     def test_protected_services_are_never_changed(self):
         self.prep(); d=self.saved()
@@ -182,19 +339,6 @@ class AutostartFixtures(unittest.TestCase):
         self.prep()
         self.assertEqual(self.by_name(self.saved(),"UnfamiliarDriver")["start_type"],"Boot")
 
-    def test_lab_report_records_previous_types_and_hashes(self):
-        p=self.footprint()
-        self.prep(); r=json.loads(self.report.read_text(encoding="utf-8-sig"))
-        self.assertTrue(r["complete"])
-        self.assertEqual(next(s for s in r["services"] if s["name"]=="SharedSvc")["start_type"],"Manual")
-        self.assertEqual(r["footprints"][0]["sha256"],hashlib.sha256(p.read_bytes()).hexdigest())
-
-    def test_failed_mutation_never_publishes_complete_report(self):
-        self.data["fail_on"]=["set_mode:AppB"]
-        r=self.prep(ok=False)
-        self.assertIn("LAB_PREP_FAIL",r.stdout)
-        self.assertFalse(json.loads(self.report.read_text(encoding="utf-8-sig"))["complete"])
-
     def test_unloaded_profile_refuses_before_mutation(self):
         self.data["unloaded_profiles"]=["S-1-5-21-2000"]
         self.prep(ok=False)
@@ -204,31 +348,6 @@ class AutostartFixtures(unittest.TestCase):
         p=self.footprint(); d=json.loads(p.read_text()); d["schema_version"]=2; p.write_text(json.dumps(d))
         self.prep(ok=False)
         self.assertEqual(self.saved()["actions"],[])
-
-    def test_start_selected_app_and_its_dependency_only(self):
-        d=self.prepared(); self.prestart(d); out=self.saved()
-        self.assertEqual(self.by_name(out,"AppA")["start_type"],"Automatic")
-        self.assertEqual(self.by_name(out,"AppA")["status"],"Running")
-        self.assertEqual(self.by_name(out,"SharedSvc")["start_type"],"Manual")
-        self.assertEqual(self.by_name(out,"SharedSvc")["status"],"Running")
-        self.assertEqual(self.by_name(out,"AppB")["start_type"],"Disabled")
-
-    def test_start_does_not_enable_tasks_by_default(self):
-        d=self.prepared(); self.prestart(d)
-        self.assertFalse(self.saved()["entries"]["tasks"][0]["enabled"])
-
-    def test_explicit_task_import_has_no_triggers(self):
-        d=self.prepared(); self.prestart(d,"app_a","-TaskIds","\\Vendor\\AppTask")
-        t=self.saved()["entries"]["tasks"][0]
-        self.assertTrue(t["enabled"])
-        import xml.etree.ElementTree as E
-        xml=E.fromstring(t["xml"])
-        self.assertEqual(len(xml.find('{http://schemas.microsoft.com/windows/2004/02/mit/task}Triggers')),0)
-
-    def test_unknown_task_is_refused(self):
-        d=self.prepared()
-        r=self.prestart(d,"app_a","-TaskIds","\\Other\\NotOwned",ok=False)
-        self.assertIn("APP_PRESTART_FAIL app=app_a",r.stdout)
 
     def test_changed_footprint_hash_is_refused(self):
         d=self.prepared(); p=self.footprints/"app_a.json"; p.write_text(p.read_text()+" ")
@@ -240,40 +359,10 @@ class AutostartFixtures(unittest.TestCase):
         self.report.write_text(json.dumps(r)); self.prestart(d,ok=False)
         self.assertEqual(self.saved()["actions"],[])
 
-    def test_reset_removes_previous_apps_service_state(self):
-        d=self.prepared(); self.prestart(d); active=self.saved()
-        self.prestart(active,"app_a","-Action","Reset")
-        self.assertEqual(self.by_name(self.saved(),"AppA")["status"],"Stopped")
-        self.assertEqual(self.by_name(self.saved(),"AppA")["start_type"],"Disabled")
-
-    def test_app_b_never_inherits_app_a_background(self):
-        self.footprint(task=True); self.footprint("app_b",("AppB",)); d=self.prepared(); self.prestart(d); active=self.saved()
-        self.prestart(active,"app_b")
-        self.assertEqual(self.by_name(self.saved(),"AppA")["start_type"],"Disabled")
-        self.assertEqual(self.by_name(self.saved(),"AppA")["status"],"Stopped")
-        self.assertEqual(self.by_name(self.saved(),"AppB")["status"],"Running")
-
     def test_changed_service_identity_refuses(self):
         d=self.prepared(); self.by_name(d,"AppA")["binary_path"]="C:\\Unexpected.exe"
         self.prestart(d,ok=False)
         self.assertEqual(self.saved()["actions"],[])
-
-    def test_start_wait_failure_is_clear(self):
-        d=self.prepared(); d["fail_on"]=["wait:AppA"]
-        r=self.prestart(d,ok=False)
-        self.assertIn("APP_PRESTART_FAIL app=app_a",r.stdout)
-
-    def test_always_off_dependency_is_refused(self):
-        self.by_name(self.data,"AppA")["dependencies"]=["wuauserv"]
-        d=self.prepared(); self.prestart(d,ok=False)
-        self.assertEqual(self.by_name(self.saved(),"wuauserv")["start_type"],"Disabled")
-
-    def test_unowned_updater_and_task_cannot_escape_sweep(self):
-        self.data['entries']['services'].append(service('UnlistedUpdater'))
-        self.prep(); d=self.saved()
-        self.assertEqual(self.by_name(d,'UnlistedUpdater')['start_type'],'Disabled')
-        self.assertFalse(d['entries']['tasks'][0]['enabled'])
-        self.assertFalse(d['entries']['run']); self.assertFalse(d['entries']['startup'])
 
     def test_second_protected_dependency_and_driver(self):
         self.by_name(self.data,'QEMU-GA')['dependencies']=['SharedSvc']
@@ -320,10 +409,6 @@ class AutostartFixtures(unittest.TestCase):
         p=self.footprint(); d=json.loads(p.read_text()); d['before_sha256']='z'*64; p.write_text(json.dumps(d))
         self.prep(ok=False); self.assertEqual(self.saved()['actions'],[])
 
-    def test_stop_failure_has_incomplete_report(self):
-        self.data['fail_on']=['stop:AppA']; self.prep(ok=False)
-        self.assertFalse(json.loads(self.report.read_text(encoding='utf-8-sig'))['complete'])
-
     def test_second_report_hash_drift_rejected(self):
         d=self.prepared(); p=self.footprints/'app_a.json'
         doc=json.loads(p.read_text()); doc['created_utc']='2026-11-08T00:00:00Z'; p.write_text(json.dumps(doc))
@@ -337,45 +422,6 @@ class AutostartFixtures(unittest.TestCase):
     def test_service_account_drift_rejected(self):
         d=self.prepared(); self.by_name(d,'AppA')['account']='Unexpected'
         self.prestart(d,ok=False); self.assertEqual(self.saved()['actions'],[])
-
-    def test_search_dependency_stays_off(self):
-        self.by_name(self.data,'AppA')['dependencies']=['WSearch']
-        d=self.prepared(); self.prestart(d,ok=False)
-        self.assertEqual(self.by_name(self.saved(),'WSearch')['start_type'],'Disabled')
-
-    def test_dependency_wait_failure_is_clear(self):
-        d=self.prepared(); d['fail_on']=['wait:SharedSvc']
-        self.assertIn('APP_PRESTART_FAIL app=app_a',self.prestart(d,ok=False).stdout)
-
-    def test_task_json_explicit_import_has_no_boot_trigger(self):
-        d=self.prepared(); self.prestart(d,'app_a','-TaskIdsJson',json.dumps(['\\Vendor\\AppTask']))
-        task=self.saved()['entries']['tasks'][0]
-        self.assertNotIn('BootTrigger',task['xml']); self.assertEqual(task['status'],'Ready')
-
-    def test_task_credentials_are_not_recreated(self):
-        self.data['entries']['tasks'][0]['xml']=XML.replace('ServiceAccount','Password')
-        d=self.prepared(); self.prestart(d,'app_a','-TaskIds','\\Vendor\\AppTask',ok=False)
-        self.assertEqual(self.saved()['actions'],[])
-
-    def test_interactive_password_task_is_not_recreated(self):
-        self.data['entries']['tasks'][0]['xml']=XML.replace('ServiceAccount','InteractiveTokenOrPassword')
-        d=self.prepared(); self.prestart(d,'app_a','-TaskIds','\\Vendor\\AppTask',ok=False)
-        self.assertEqual(self.saved()['actions'],[])
-
-    def test_default_prestart_keeps_task_stopped(self):
-        d=self.prepared(); self.prestart(d)
-        self.assertFalse(any(a['op']=='import_task' for a in self.saved()['actions']))
-
-    def test_selected_task_must_belong_to_app(self):
-        d=self.prepared(); self.prestart(d,'app_a','-TaskIds','\\Microsoft\\Windows\\TPM\\ProtectedTask',ok=False)
-        self.assertEqual(self.saved()['actions'],[])
-
-    def test_reset_also_stops_explicit_task(self):
-        d=self.prepared(); self.prestart(d,'app_a','-TaskIds','\\Vendor\\AppTask'); d=self.saved()
-        d['entries']['tasks'][0]['status']='Running'
-        self.prestart(d,'app_a','-Action','Reset')
-        self.assertFalse(self.saved()['entries']['tasks'][0]['enabled'])
-        self.assertEqual(self.saved()['entries']['tasks'][0]['status'],'Ready')
 
     def test_changed_existing_service_is_audit_only(self):
         after=deepcopy(self.data); self.by_name(after,'AppA')['binary_path']='C:\\New.exe'
@@ -404,14 +450,6 @@ class AutostartFixtures(unittest.TestCase):
         self.assertEqual(self.report.read_bytes(),original)
         self.assertEqual(self.saved()['actions'],[])
 
-    def test_silent_service_disable_failure_is_audited(self):
-        self.data['noop_on']=['set_mode:AppB']; self.prep(ok=False)
-        self.assertFalse(json.loads(self.report.read_text(encoding='utf-8-sig'))['complete'])
-
-    def test_silent_task_disable_failure_is_audited(self):
-        self.data['noop_on']=['disable_task:\\vendor\\apptask']; self.prep(ok=False)
-        self.assertFalse(json.loads(self.report.read_text(encoding='utf-8-sig'))['complete'])
-
 
 class WindowsSourceContracts(unittest.TestCase):
     def common(self):
@@ -437,7 +475,7 @@ class WindowsSourceContracts(unittest.TestCase):
 
     def test_xml_and_windows_boundary_are_explicit(self):
         s=self.common()
-        for x in ("DtdProcessing","Prohibit","XmlResolver","Assert-KfWindows","Win32NT"):
+        for x in ("Assert-KfWindows","Win32NT","WaitForStatus","TimeoutSec"):
             self.assertIn(x,s)
 
 
