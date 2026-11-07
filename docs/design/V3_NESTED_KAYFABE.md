@@ -27,12 +27,13 @@ configuration. A successful CPU-accelerator dry check does not establish GPU fea
 
 **CODE READ:** both QEMU probe calls have a five-second limit. The KVM dry check initializes
 an accelerator with no CPU execution and no GPU device; it is not a tiny guest boot. TCG
-availability means advertised support, not a measured boot. The sysfs parameters and CPU flags
-are observations; the selected accelerator depends on the dry check. Missing sysfs files are
+availability reports the accelerator listing; neither probe boots a guest. The sysfs parameters
+and CPU flags are observations; the selected accelerator depends on the dry check. Missing sysfs files are
 `unknown`, not proof that nesting is disabled.
 
-**MEASURED with fakes only:** the tests substitute `KF_NESTED_DEV_ROOT`, `KF_NESTED_SYS_ROOT`,
-`KF_NESTED_CPUINFO` and `QEMU_BIN`. No real `/dev/kvm` or GPU is opened by those tests.
+**CODE READ (`scripts/ci/test_nested.py`, `Probe` and `StageIntegration`):** the fixtures substitute
+`KF_NESTED_DEV_ROOT`, `KF_NESTED_SYS_ROOT`, `KF_NESTED_CPUINFO` and `QEMU_BIN`. No real `/dev/kvm`
+or GPU is opened by those tests.
 
 ## Stage contract (CODE READ; hardware behavior NOT MEASURED)
 
@@ -141,7 +142,7 @@ inner driver's version equals the outer guest's recorded driver version. No perf
    and that only the stage's processes/directories were removed. Test timeout and lost-SSH
    cleanup deliberately before enabling the release opt-in. Keep it disabled until these pass.
 
-## GPU-free verification (MEASURED only with fakes)
+## GPU-free validation commands (CODE READ; fakes only)
 
 `python3 -m unittest discover -s scripts/ci -p test_nested.py` exercises fake roots, fake QEMU,
 fake SSH, the real artifact-transfer shell, the payload's fake stage runner and report parsing.

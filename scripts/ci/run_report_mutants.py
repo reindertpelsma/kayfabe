@@ -66,7 +66,12 @@ MUTANTS = [
     ("document-unbounded", "        while size() > limit and doc[key]:", "        while False:"),
     ("apps-rows-of-another-os", 'os=linux result=(PASS|FAIL|NOT_RUN)"', 'os=\\S+ result=(PASS|FAIL|NOT_RUN)"'),
     ("app-note-unbounded", 'note": note[:200]}', 'note": note}'),
-    ("app-not-run-is-a-pass-test", '"SKIP" if m[2] == "NOT_RUN" else m[2]', "m[2]"),
+    # Scope to apps: nested rows use the same NOT_RUN conversion.
+    (
+        "app-not-run-is-a-pass-test",
+        'self.test("linux", "apps_linux", m[1], "SKIP" if m[2] == "NOT_RUN" else m[2], seconds_ms(m[3]))',
+        'self.test("linux", "apps_linux", m[1], m[2], seconds_ms(m[3]))',
+    ),
     (
         "apps-suite-outside-the-linux-subrun",
         '    linux_group = LINUX_SUITES + tuple(r["name"] for r in rows if r["name"].startswith("apps"))',
