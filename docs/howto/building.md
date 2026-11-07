@@ -114,3 +114,13 @@ Build dependencies named in `broker/Makefile`: `libwayland-dev wayland-protocols
 - Windows-host builds.
 
 Verified on: `cargo test -p kf-oprom` was run for this page (Rust 1.99.0, no GPU; every test binary of that crate passed). `build_kf3.sh`, `cargo build --workspace --release`, the broker build and the thin-guest build were read from their scripts, not run for this page. Every hardware result in the repository was produced with binaries from `build_kf3.sh`. <!-- src: AGENTS.md "Verification" -->
+
+## Experimental nested probe
+
+The nested feasibility scripts are experimental and have only been tested with fakes. They do
+not establish nested GPU support. On a prepared test machine, `bash scripts/bench/box/nested_probe.sh`
+prints CPU/KVM observations and advertised TCG availability; set `QEMU_BIN` to the QEMU binary
+being assessed. Its KVM dry check initializes the accelerator without running a guest CPU.
+The optional CI payload flag `KF_NESTED=1` is disabled by default and accepted only for the
+large tier. It needs a prepared, running outer Linux guest and prebuilt guest artifacts; small
+and middle tiers reject it. A retry is never a passing nested result.

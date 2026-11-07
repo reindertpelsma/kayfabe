@@ -270,3 +270,17 @@ become `apps[]` and `tests[]` rows (suite `apps_linux`) in `report.json` through
 GPU-free checks: `test_vast_payload_apps.py`, `test_apps_matrix_table.py`, the `apps-*` cases of
 `payload_mutants.py` (two killers each).
 
+
+## Experimental nested feasibility stage (J3, disabled by default)
+
+[CODE READ; hardware NOT MEASURED] `KF_NESTED=1` requests the optional `nested` stage only for
+`KF_TIER=large`. Absent/0 leaves it disabled; small/middle/adhoc/unknown reject the opt-in at
+preflight, and `KF_STAGES` cannot select it. The stage needs an already running, exclusively
+assigned outer Linux guest over SSH, prebuilt revision-specific kf3 QEMU and fastguest artifacts,
+and at least 45 minutes before the payload's soft deadline (an INFERRED budget). It runs one
+raw CE selection inside one inner thin guest, with KVM or TCG, after Linux CUDA/apps and before
+Windows. PASS requires complete checked output and clean exits; missing artifacts, SSH faults
+and exhausted budgets become failing `nested_retry_<class>` rows. Run-report tests of suite
+`nested` and its suite rows belong to the Linux subrun. No Worker deployment or automatic
+outer-guest boot is included. The preparation contract, unmeasured assumptions and coordinator
+hardware checklist are in [the nested design](../../docs/design/V3_NESTED_KAYFABE.md).

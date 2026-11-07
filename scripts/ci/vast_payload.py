@@ -217,6 +217,44 @@ def specviewperf_rows(text, rc):
     )
 
 
+# Nested feasibility is an explicit large-tier opt-in, never a stage-slot override.
+NESTED_MIN_REMAINING_MS = 45 * 60000  # INFERRED: 2400s execution + cleanup margin
+NESTED_NAMES = ("install", "probe", "boot", "raw_ce", "cleanup")
+NESTED_RETRY_CLASSES = {"USAGE", "NOT_BUILT", "PROBE", "ACCEL", "TIME", "BOX", "SSH", "LOG", "OPERATOR"}
+
+
+def nested_requested(environ, tier):
+    flag = environ.pop("KF_NESTED", "0")
+    if flag not in ("0", "1") or (flag == "1" and tier != "large"):
+        raise EvidenceError("preflight")
+    return flag == "1"
+
+
+def nested_rows(text, rc):
+    """Only complete, ordered, clean evidence passes. Harness/host faults retry."""
+    lines = text.splitlines()
+    verdicts = [x for x in lines if re.match(r"^NESTED_(?:PASS|FAIL|RETRY)(?:\b|$)", x)]
+    exits = [x for x in lines if x.startswith("NESTED_EXIT")]
+    raw = [x for x in lines if x.startswith("NESTED_ROW")]
+    parsed = [re.fullmatch(r"NESTED_ROW name=([a-z_]+) result=(PASS|FAIL|NOT_RUN) secs=([0-9]+(?:\.[0-9]+)?)", x) for x in raw]
+    if len(verdicts) == 1 and len(exits) == 1:
+        v = verdicts[0]
+        rows_ok = (all(parsed) and [m[1] for m in parsed] == list(NESTED_NAMES))
+        ending = lines[-2:] == [v, exits[0]]
+        if (v == "NESTED_PASS" and rc == 0 and exits == ["NESTED_EXIT rc=0"]
+                and rows_ok and all(m[2] == "PASS" for m in parsed) and ending):
+            return [row("nested", 1)]
+        if (v == "NESTED_FAIL class=CHECK" and rc == 1 and exits == ["NESTED_EXIT rc=1"]
+                and rows_ok and parsed[3][2] == "FAIL"
+                and all(m[2] == "PASS" for i, m in enumerate(parsed) if i != 3) and ending):
+            raise EvidenceError("nested")
+        retry = re.fullmatch(r"NESTED_RETRY class=([A-Z_]+)", v)
+        if retry and rc == 3 and exits == ["NESTED_EXIT rc=3"] and ending:
+            cls = retry[1] if retry[1] in NESTED_RETRY_CLASSES else "OPERATOR"
+            raise EvidenceError("nested_retry_" + cls.lower())
+    raise EvidenceError("nested_retry_operator")
+
+
 # The Linux apps stage (DRAFT 2026-11-07, lane appslinux; DISABLED BY DEFAULT). It runs the app matrix
 # (scripts/apps/, ~70 CUDA, graphics, AI and video programs) in the fat guest over the GATE LIST
 # (scripts/apps/gate_list.txt: the apps that passed on bare metal AND in the guest on the measured box,
@@ -1157,6 +1195,7 @@ def main():
         # Popped before any stage runs: merge_check.sh must not run the gate inside merge_bar.
         windows, windows_source = windows_requested(os.environ)
         tier, windows_runs, extra_stages = tier_requested(os.environ, windows)
+        nested = nested_requested(os.environ, tier)
         refresh_claims(result, windows)
         print(
             "KF_PAYLOAD_TIER windows="
@@ -1165,6 +1204,8 @@ def main():
             + windows_source
             + " tier="
             + tier
+            + " nested="
+            + str(int(nested))
             + " windows_runs="
             + str(windows_runs)
             + " stages="
@@ -1337,6 +1378,21 @@ def main():
                 [matrix_log],
             )
             stage.update(min_remaining_ms=APPS_MIN_REMAINING_MS, short_row="apps_retry_time")
+            stages.append(stage)
+        if nested:
+            # The prepared outer Linux guest must answer SSH already. This stage installs
+            # prebuilt artifacts in it; it does not boot or build the outer guest.
+            output_nested = evidence / "nested.run"
+            nested_log = Path(PROV_DIR) / (tag + "_nested.log")
+            stage = make_stage(
+                "nested",
+                ["bash", str(root / "scripts/bench/box/nested_gate.sh"), tag, PROV_DIR, sha],
+                output_nested,
+                [nested_log],
+                lambda rc: nested_rows(bounded_text(output_nested), rc),
+                [nested_log],
+            )
+            stage.update(min_remaining_ms=NESTED_MIN_REMAINING_MS, short_row="nested_retry_time")
             stages.append(stage)
         if windows:
             # Last, after every Linux guest has stopped: windows_gate.sh owns the GPU from here.
