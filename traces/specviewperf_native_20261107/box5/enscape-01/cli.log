@@ -1,0 +1,35 @@
+[2026-11-07|00:18:59] Gathering System Details: Started
+[2026-11-07|00:20:24] Gathering System Details: Finished
+[2026-11-07|00:20:26] Workload initialization: Started
+[2026-11-07|00:20:32] Workload initialization: Finished
+
+Valid Workloads: 
+  5) enscape-01 [v1.0.5] 
+    ✓ <id=33> 01_BistroExtFullHigh 
+    ✓ <id=34> 02_BistroExtFullUltraHQ 
+    ✓ <id=35> 03_BistroIntFullHigh 
+    ✓ <id=36> 04_BistroIntFullUltraHQ 
+    ✓ <id=37> 05_SanMiguelFullHigh 
+    ✓ <id=38> 06_SanMiguelFullUltraHQ 
+    ✓ <id=39> 07_RevitVillaLightViewHigh 
+    ✓ <id=40> 08_RevitVillaAnimFullHigh 
+    ✓ <id=41> 09_RhinoIntWhiteOutlineHigh 
+    ✓ <id=42> 10_RhinoIntFullHigh 
+    
+[2026-11-07|00:20:32] Starting Workload 1 of 1, Iteration 1 of 1
+[2026-11-07|00:20:32] [Workload:enscape-01] Starting
+[2026-11-07|00:20:37] [workload: enscape-01 / subtest: 01_BistroExtFullHigh] Started
+[2026-11-07|00:26:56] [workload: enscape-01 / subtest: 01_BistroExtFullHigh] Completed
+[2026-11-07|00:26:56] [workload: enscape-01 / subtest: 02_BistroExtFullUltraHQ] Started
+[2026-11-07|00:38:12] [workload: enscape-01 / subtest: 02_BistroExtFullUltraHQ] Completed
+[2026-11-07|00:38:12] [workload: enscape-01 / subtest: 03_BistroIntFullHigh] Started
+[2026-11-07|00:40:16] [workload: enscape-01 / subtest: 03_BistroIntFullHigh] Completed
+[2026-11-07|00:40:16] [workload: enscape-01 / subtest: 04_BistroIntFullUltraHQ] Started
+[2026-11-07|00:43:33] [workload: enscape-01 / subtest: 04_BistroIntFullUltraHQ] Completed
+[2026-11-07|00:43:33] [workload: enscape-01 / subtest: 05_SanMiguelFullHigh] Started
+[2026-11-07|00:51:30] [workload: enscape-01 / subtest: 05_SanMiguelFullHigh] Completed
+[2026-11-07|00:51:30] [workload: enscape-01 / subtest: 06_SanMiguelFullUltraHQ] Started
+[2026-11-07|01:10:07] [workload: enscape-01 / subtest: 06_SanMiguelFullUltraHQ] Completed
+[2026-11-07|01:10:07] [workload: enscape-01 / subtest: 07_RevitVillaLightViewHigh] Started
+[2026-11-07|01:15:11] [workload: enscape-01 / subtest: 07_RevitVillaLightViewHigh] Completed
+[2026-11-07|01:15:11] [workload: enscape-01 / subtest: 08_RevitVillaAnimFullHigh] Started

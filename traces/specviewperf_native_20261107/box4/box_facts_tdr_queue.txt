@@ -1,0 +1,43 @@
+GATE_TDR since=2026-11-07T06:19:00Z display4101=0 nvlddmkm153=0 kernelpower41=0 eventlog6008=0 bugcheck1001=0 livekernelevent_other=0 livekernelevent193=0 livekernelevent_stale=0 strict=0 total=0
+GATE_STATE_DONE mode=tdr
+BOXFACT os='Microsoft Windows 11 Enterprise LTSC Evaluation' build=26100
+BOXFACT cpu='AMD EPYC 7B13 64-Core Processor                ' logical=4 ram_gb=50.4
+BOXFACT system='QEMU Ubuntu 24.10 PC (i440FX + PIIX, 1996)'
+BOXFACT video name='Virtual Display Driver' driver=8.35.11.365 code=0 res=1920x1080 vram=
+BOXFACT video name='NVIDIA GeForce RTX 4090' driver=32.0.15.8088 code=0 res=1024x768 vram=4293918720
+BOXFACT disk C free_gb=138.7 size_gb=299.9
+BOXFACT smi NVIDIA GeForce RTX 4090, 580.88, 24564 MiB, 1, 16, 95.02.3c.40.b9
+BOXFACT smiq 
+BOXFACT smiq ==============NVSMI LOG==============
+BOXFACT smiq 
+BOXFACT smiq Timestamp                                 : Fri Nov  6 23:18:33 2026
+BOXFACT smiq Driver Version                            : 580.88
+BOXFACT smiq CUDA Version                              : 13.0
+BOXFACT smiq 
+BOXFACT smiq Attached GPUs                             : 1
+BOXFACT smiq GPU 00000000:00:08.0
+BOXFACT smiq     FB Memory Usage
+BOXFACT smiq         Total                             : 24564 MiB
+BOXFACT smiq         Reserved                          : 422 MiB
+BOXFACT smiq         Used                              : 262 MiB
+BOXFACT smiq         Free                              : 23881 MiB
+BOXFACT smiq     BAR1 Memory Usage
+BOXFACT smiq         Total                             : 256 MiB
+BOXFACT smiq         Used                              : 228 MiB
+BOXFACT smiq         Free                              : 28 MiB
+BOXFACT smiq     Conf Compute Protected Memory Usage
+BOXFACT smiq         Total                             : N/A
+BOXFACT smiq         Used                              : N/A
+BOXFACT smiq         Free                              : N/A
+BOXFACT smiq 
+BOXFACT pnp Virtual Display Driver status=OK
+BOXFACT pnp NVIDIA GeForce RTX 4090 status=OK
+QUEUE_BEGIN creo-04 2026-11-07T06:25:11.1977386Z
+QUEUE_DONE creo-04 2026-11-07T06:46:04.1974682Z SPECRUN_END workload=creo-04 rc=0 start=2026-11-07T06:25:14Z end=2026-11-07T06:45:57Z secs=1243
+QUEUE_BEGIN energy-04 2026-11-07T06:46:04.2295809Z
+QUEUE_DONE energy-04 2026-11-07T06:51:34.9320320Z SPECRUN_END workload=energy-04 rc=0 start=2026-11-07T06:46:06Z end=2026-11-07T06:51:29Z secs=323
+QUEUE_BEGIN maya-07 2026-11-07T06:51:34.9339417Z
+QUEUE_DONE maya-07 2026-11-07T06:58:23.1185300Z SPECRUN_END workload=maya-07 rc=0 start=2026-11-07T06:51:36Z end=2026-11-07T06:58:17Z secs=400
+QUEUE_BEGIN solidworks-08 2026-11-07T06:58:23.1216815Z
+QUEUE_DONE solidworks-08 2026-11-07T07:15:00.3546169Z SPECRUN_END workload=solidworks-08 rc=0 start=2026-11-07T06:58:24Z end=2026-11-07T07:14:53Z secs=989
+QUEUE_ALL_DONE 2026-11-07T07:15:00.3895286Z

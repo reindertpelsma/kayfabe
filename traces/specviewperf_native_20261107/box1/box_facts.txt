@@ -1,0 +1,34 @@
+BOXFACT os='Microsoft Windows 11 Enterprise LTSC Evaluation' build=26100
+BOXFACT cpu='AMD EPYC 7C13 64-Core Processor                ' logical=4 ram_gb=57.6
+BOXFACT system='QEMU Ubuntu 24.10 PC (i440FX + PIIX, 1996)'
+BOXFACT video name='NVIDIA GeForce RTX 4090' driver=32.0.15.8088 code=0 res=1024x768 vram=4293918720
+BOXFACT video name='Virtual Display Driver' driver=8.35.11.365 code=0 res=1920x1080 vram=
+BOXFACT disk C free_gb=136.5 size_gb=299.9
+BOXFACT smi NVIDIA GeForce RTX 4090, 580.88, 24564 MiB, 1, 16, 95.02.3c.40.e8
+BOXFACT smiq 
+BOXFACT smiq ==============NVSMI LOG==============
+BOXFACT smiq 
+BOXFACT smiq Timestamp                                 : Fri Nov  6 20:51:45 2026
+BOXFACT smiq Driver Version                            : 580.88
+BOXFACT smiq CUDA Version                              : 13.0
+BOXFACT smiq 
+BOXFACT smiq Attached GPUs                             : 1
+BOXFACT smiq GPU 00000000:00:08.0
+BOXFACT smiq     FB Memory Usage
+BOXFACT smiq         Total                             : 24564 MiB
+BOXFACT smiq         Reserved                          : 422 MiB
+BOXFACT smiq         Used                              : 258 MiB
+BOXFACT smiq         Free                              : 23885 MiB
+BOXFACT smiq     BAR1 Memory Usage
+BOXFACT smiq         Total                             : 256 MiB
+BOXFACT smiq         Used                              : 228 MiB
+BOXFACT smiq         Free                              : 28 MiB
+BOXFACT smiq     Conf Compute Protected Memory Usage
+BOXFACT smiq         Total                             : N/A
+BOXFACT smiq         Used                              : N/A
+BOXFACT smiq         Free                              : N/A
+BOXFACT smiq 
+BOXFACT pnp Virtual Display Driver status=OK
+BOXFACT pnp NVIDIA GeForce RTX 4090 status=OK
+BOXFACT now NVIDIA GeForce RTX 4090 1024x768
+BOXFACT now Virtual Display Driver 1920x1080

@@ -1,0 +1,19 @@
+## box1
+blender-01         workload=Completed  subtests_listed= 7 {'Completed': 7} secs=1876 cli_rc=0 resets_total=0 peak_gpu_mem_MiB=6790 END 
+catia-07           workload=Completed  subtests_listed= 6 {'Completed': 6} secs=803 cli_rc=0 resets_total=0 peak_gpu_mem_MiB=4593 END 
+enscape-01         workload=Completed  subtests_listed=10 {'Completed': 10} secs=2042 cli_rc=0 resets_total=0 peak_gpu_mem_MiB=5157 END 
+medical-04         workload=Completed  subtests_listed=10 {'Completed': 10} secs=318 cli_rc=0 resets_total=0 peak_gpu_mem_MiB=5832 END 
+unreal_engine-01   workload=Completed  subtests_listed= 8 {'Completed': 8} secs=1236 cli_rc=0 resets_total=0 peak_gpu_mem_MiB=5754 END 
+## box4
+creo-04            workload=Completed  subtests_listed=13 {'Completed': 13} secs=1243 cli_rc=0 resets_total=0 peak_gpu_mem_MiB=2472 END 
+energy-04          workload=Completed  subtests_listed= 6 {'Completed': 6} secs=323 cli_rc=0 resets_total=0 peak_gpu_mem_MiB=3464 END 
+maya-07            workload=Completed  subtests_listed= 7 {'Completed': 7} secs=400 cli_rc=0 resets_total=0 peak_gpu_mem_MiB=1139 END 
+solidworks-08      workload=Completed  subtests_listed= 8 {'Completed': 8} secs=989 cli_rc=0 resets_total=0 peak_gpu_mem_MiB=2229 END 
+## box2
+catia-07           workload=Completed  subtests_listed= 6 {'Completed': 6} secs=1611 cli_rc=0 resets_total=0 peak_gpu_mem_MiB=5757 END 
+## box5
+enscape-01         workload=Starting   subtests_listed=10 {'Completed': 7, 'Started': 1} secs=None cli_rc=None resets_total=None peak_gpu_mem_MiB=4807 NO_END 
+unreal_engine-01   workload=Completed  subtests_listed= 8 {'Completed': 8} secs=1419 cli_rc=0 resets_total=0 peak_gpu_mem_MiB=5532 END 
+## box6
+catia-07           workload=Completed  subtests_listed= 6 {'Completed': 6} secs=1806 cli_rc=0 resets_total=0 peak_gpu_mem_MiB=4810 END 
+enscape-01         workload=Completed  subtests_listed=10 {'Completed': 10} secs=3298 cli_rc=0 resets_total=0 peak_gpu_mem_MiB=4675 END 

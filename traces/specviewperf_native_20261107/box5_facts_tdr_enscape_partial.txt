@@ -1,0 +1,54 @@
+GATE_TDR since=2026-11-07T07:49:00Z display4101=0 nvlddmkm153=0 kernelpower41=0 eventlog6008=0 bugcheck1001=0 livekernelevent_other=0 livekernelevent193=0 livekernelevent_stale=0 strict=0 total=0
+GATE_STATE_DONE mode=tdr
+
+BOXFACT os='Microsoft Windows 11 Enterprise LTSC Evaluation' build=26100
+BOXFACT cpu='Intel(R) Xeon(R) CPU E5-2699 v4 @ 2.20GHz' logical=4 ram_gb=50.3
+BOXFACT system='QEMU Standard PC (i440FX + PIIX, 1996)'
+BOXFACT video name='Virtual Display Driver' driver=8.35.11.365 code=0 res=1920x1080 vram=
+BOXFACT video name='NVIDIA GeForce RTX 3060' driver=32.0.15.8088 code=0 res=1024x768 vram=4293918720
+BOXFACT disk C free_gb=135 size_gb=299.9
+BOXFACT smi NVIDIA GeForce RTX 3060, 580.88, 12288 MiB, 3, 16, 94.06.2f.00.48
+BOXFACT smiq 
+BOXFACT smiq ==============NVSMI LOG==============
+BOXFACT smiq 
+BOXFACT smiq Timestamp                                 : Sat Nov  7 01:15:28 2026
+BOXFACT smiq Driver Version                            : 580.88
+BOXFACT smiq CUDA Version                              : 13.0
+BOXFACT smiq 
+BOXFACT smiq Attached GPUs                             : 1
+BOXFACT smiq GPU 00000000:00:07.0
+BOXFACT smiq     FB Memory Usage
+BOXFACT smiq         Total                             : 12288 MiB
+BOXFACT smiq         Reserved                          : 173 MiB
+BOXFACT smiq         Used                              : 2320 MiB
+BOXFACT smiq         Free                              : 9796 MiB
+BOXFACT smiq     BAR1 Memory Usage
+BOXFACT smiq         Total                             : 256 MiB
+BOXFACT smiq         Used                              : 228 MiB
+BOXFACT smiq         Free                              : 28 MiB
+BOXFACT smiq     Conf Compute Protected Memory Usage
+BOXFACT smiq         Total                             : N/A
+BOXFACT smiq         Used                              : N/A
+BOXFACT smiq         Free                              : N/A
+BOXFACT smiq 
+BOXFACT pnp Virtual Display Driver status=OK
+BOXFACT pnp NVIDIA GeForce RTX 3060 status=OK
+[2026-11-07|00:20:37] [workload: enscape-01 / subtest: 01_BistroExtFullHigh] Started
+[2026-11-07|00:26:56] [workload: enscape-01 / subtest: 01_BistroExtFullHigh] Completed
+[2026-11-07|00:26:56] [workload: enscape-01 / subtest: 02_BistroExtFullUltraHQ] Started
+[2026-11-07|00:38:12] [workload: enscape-01 / subtest: 02_BistroExtFullUltraHQ] Completed
+[2026-11-07|00:38:12] [workload: enscape-01 / subtest: 03_BistroIntFullHigh] Started
+[2026-11-07|00:40:16] [workload: enscape-01 / subtest: 03_BistroIntFullHigh] Completed
+[2026-11-07|00:40:16] [workload: enscape-01 / subtest: 04_BistroIntFullUltraHQ] Started
+[2026-11-07|00:43:33] [workload: enscape-01 / subtest: 04_BistroIntFullUltraHQ] Completed
+[2026-11-07|00:43:33] [workload: enscape-01 / subtest: 05_SanMiguelFullHigh] Started
+[2026-11-07|00:51:30] [workload: enscape-01 / subtest: 05_SanMiguelFullHigh] Completed
+[2026-11-07|00:51:30] [workload: enscape-01 / subtest: 06_SanMiguelFullUltraHQ] Started
+[2026-11-07|01:10:07] [workload: enscape-01 / subtest: 06_SanMiguelFullUltraHQ] Completed
+[2026-11-07|01:10:07] [workload: enscape-01 / subtest: 07_RevitVillaLightViewHigh] Started
+[2026-11-07|01:15:11] [workload: enscape-01 / subtest: 07_RevitVillaLightViewHigh] Completed
+[2026-11-07|01:15:11] [workload: enscape-01 / subtest: 08_RevitVillaAnimFullHigh] Started
+QUEUE_BEGIN enscape-01 2026-11-07T07:50:07.3430191Z
+QUEUE_DONE enscape-01 2026-11-07T07:52:39.8778787Z SPECRUN_END workload=enscape-01 rc=0 start=2026-11-07T07:50:13Z end=2026-11-07T07:52:20Z secs=128
+QUEUE_BEGIN unreal_engine-01 2026-11-07T07:52:39.9471428Z
+QUEUE_BEGIN enscape-01 2026-11-07T08:18:53.3245313Z

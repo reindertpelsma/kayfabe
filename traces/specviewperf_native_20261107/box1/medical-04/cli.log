@@ -1,0 +1,44 @@
+[2026-11-06|19:01:33] Gathering System Details: Started
+[2026-11-06|19:02:37] Gathering System Details: Finished
+[2026-11-06|19:02:37] Workload initialization: Started
+[2026-11-06|19:02:41] Workload initialization: Finished
+
+Valid Workloads: 
+  7) medical-04 [v1.0.2] 
+    ✓ <id=50> 01_BeatingHeartSliceRendering 
+    ✓ <id=51> 02_BeatingHeartRaycasting 
+    ✓ <id=52> 03_BeetleSliceRendering 
+    ✓ <id=53> 04_BeetleRaycasting 
+    ✓ <id=54> 05_BrainRaycasting 
+    ✓ <id=55> 06_BrainRaycastingClipping 
+    ✓ <id=56> 07_BrokenArmRaycasting 
+    ✓ <id=57> 08_BrokenArmRaycastingClipping 
+    ✓ <id=58> 09_AlligatorRaycasting 
+    ✓ <id=59> 10_AlligatorRaycastingClipping 
+    
+[2026-11-06|19:02:41] Starting Workload 1 of 1, Iteration 1 of 1
+[2026-11-06|19:02:41] [Workload:medical-04] Starting
+[2026-11-06|19:02:41] [workload: medical-04 / subtest: 01_BeatingHeartSliceRendering] Started
+[2026-11-06|19:03:01] [workload: medical-04 / subtest: 01_BeatingHeartSliceRendering] Completed
+[2026-11-06|19:03:01] [workload: medical-04 / subtest: 02_BeatingHeartRaycasting] Started
+[2026-11-06|19:03:19] [workload: medical-04 / subtest: 02_BeatingHeartRaycasting] Completed
+[2026-11-06|19:03:19] [workload: medical-04 / subtest: 03_BeetleSliceRendering] Started
+[2026-11-06|19:03:43] [workload: medical-04 / subtest: 03_BeetleSliceRendering] Completed
+[2026-11-06|19:03:43] [workload: medical-04 / subtest: 04_BeetleRaycasting] Started
+[2026-11-06|19:04:05] [workload: medical-04 / subtest: 04_BeetleRaycasting] Completed
+[2026-11-06|19:04:05] [workload: medical-04 / subtest: 05_BrainRaycasting] Started
+[2026-11-06|19:04:27] [workload: medical-04 / subtest: 05_BrainRaycasting] Completed
+[2026-11-06|19:04:27] [workload: medical-04 / subtest: 06_BrainRaycastingClipping] Started
+[2026-11-06|19:04:45] [workload: medical-04 / subtest: 06_BrainRaycastingClipping] Completed
+[2026-11-06|19:04:45] [workload: medical-04 / subtest: 07_BrokenArmRaycasting] Started
+[2026-11-06|19:05:05] [workload: medical-04 / subtest: 07_BrokenArmRaycasting] Completed
+[2026-11-06|19:05:05] [workload: medical-04 / subtest: 08_BrokenArmRaycastingClipping] Started
+[2026-11-06|19:05:23] [workload: medical-04 / subtest: 08_BrokenArmRaycastingClipping] Completed
+[2026-11-06|19:05:23] [workload: medical-04 / subtest: 09_AlligatorRaycasting] Started
+[2026-11-06|19:06:11] [workload: medical-04 / subtest: 09_AlligatorRaycasting] Completed
+[2026-11-06|19:06:11] [workload: medical-04 / subtest: 10_AlligatorRaycastingClipping] Started
+[2026-11-06|19:06:50] [workload: medical-04 / subtest: 10_AlligatorRaycastingClipping] Completed
+[2026-11-06|19:06:50] [Workload: medical-04] Completed
+
+Run complete -- results and logs available in: 
+[Iteration 1] C:\spec\results\medical-04\result_2026-11-06-19-02-41
