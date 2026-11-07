@@ -1,6 +1,29 @@
 # GPU family coverage and archived evidence
 
-STATUS: LIVE, 2026-10-27. GPU-free archival audit; no new hardware qualification.
+STATUS: LIVE, 2026-10-28. Historical audit plus one bounded stock-source Linux baseline.
+
+
+## Update 2026-10-28: bounded stock-master Linux baseline
+
+MEASURED (2026-10-28, [SW5 resume evidence](../../traces/family_resume_20261028/README.md)):
+GA106 on one Vast VM passed native gates9/9+gate10, bare30/30, then stock Linux fast30/30 at
+180s per arm. Source `7dcedefea093de078188efd5f712561bde746362` was clean, host/guest driver
+595.91.07 open/host-mode, kernel6.8.0-59-generic, framebuffer8192MiB and BAR1256MiB unchanged.
+All161 suite and12 gate channel births were USER; Xids0→5→10 were exactly approved controls.
+Hardware n=1. This adds a dated Linux thin baseline, not full-feature family qualification.
+
+CODE READ (2026-10-28, [source](../../traces/family_resume_20261028/source_inventory.json)):
+TSG mirror is absent from that approved stock revision. Full-feature correctness, Windows,
+fat-guest applications, display and performance remain UNRUN. No experimental source merged.
+
+MEASURED (2026-10-28, [outcomes](../../traces/family_resume_20261028/README.md)):
+the GB205 candidate's initial closed-module image failed before native RM binding; its box
+was excluded without a kayfabe verdict. GB206 create returned no contract receipt, and repeated
+API queries observed no third allocation; UNRUN. No Turing candidate appeared in the final
+filtered market. Both created IDs were captured, SHA-verified, destroyed and API-absent;
+all watchdogs were retired. Historical rows below retain their original labels and revisions.
+
+## Historical audit, 2026-10-27
 
 CODE READ (2026-10-27, L0 start): the pinned `origin/master` is `e54bab5550f09d740d222d667ad497dc8c640ebe`.
 The observed `origin/next` is `858ca1e8ad4a2b264656b8e499d820856bcc7310`.

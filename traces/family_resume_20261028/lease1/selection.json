@@ -1,0 +1,50 @@
+{
+  "utc": "2026-10-28T15:46:57.782425+00:00",
+  "offer": {
+    "id": 54571906,
+    "machine_id": 30498,
+    "host_id": 70221,
+    "gpu_name": "RTX 5070",
+    "gpu_ram": 12227,
+    "geolocation": "Quebec, CA",
+    "verification": "verified",
+    "is_vm_deverified": false,
+    "vms_enabled": true,
+    "dph_total": 0.502,
+    "cpu_cores_effective": 32.0,
+    "cpu_ram": 128899,
+    "inet_down_cost": 0.01953125,
+    "inet_up_cost": 0.01953125
+  },
+  "candidate_die": "GB205",
+  "production_source": "7dcedefea093de078188efd5f712561bde746362",
+  "feature_inventory": {
+    "TSG_mirror": "ABSENT; full-feature UNRUN",
+    "Windows": "UNRUN",
+    "Linux_stock_master": "RUN"
+  },
+  "round_authority": "SW5_RESUME_20261028",
+  "derived_die_source": "7dcedefea093de078188efd5f712561bde746362",
+  "one_die_per_lease": true,
+  "native_hypothesis": "Actual bound die passes native gates9/9+gate10 and bare30/30.",
+  "native_falsifier": "Any native gate/bare failure excludes the cell before guest work.",
+  "guest_hypothesis": "After native passes on this box, production passes fast30/30.",
+  "guest_falsifier": "Any failed/crashed/unrun arm or unmatched Xid; original180s oracle.",
+  "flags": {
+    "KF_DEVICE": "kf3",
+    "KF_FROM_HOST": "1",
+    "KF3_FB_MB": "8192",
+    "KF3_LIFECYCLE_MODE": "default",
+    "KF3_PUT_CACHE": "1",
+    "KF3_LAZY_OBSERVE": "1"
+  },
+  "bar1_policy": "Observe and mark256MiB Vast exception; no resizing.",
+  "die_policy": "Native RM tuple decides; marketing is advisory. No second die on a lease.",
+  "xid_policy": "Exact source-approved negative controls only; unmatched faults stop.",
+  "lane_stop_usd": 4,
+  "lane_cap_usd": 4,
+  "max_leases": 3,
+  "retained_prior_usd": 0.0,
+  "provider_retry": "At most one, different machine AND host, only pre-SSH provider failure.",
+  "identity_refusal": "No retry; record and park."
+}

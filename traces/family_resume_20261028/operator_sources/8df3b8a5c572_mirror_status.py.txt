@@ -1,0 +1,63 @@
+"""Read bounded text evidence for the round-two Linux mirror qualification."""
+
+import json
+from pathlib import Path
+import re
+import sys
+
+SUMMARY = "FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30"
+
+
+def read(path):
+    with path.open("rb") as stream:
+        data = stream.read(16 * 1024 * 1024 + 1)
+    if len(data) > 16 * 1024 * 1024:
+        raise ValueError("mirror evidence exceeds text bound")
+    return data.decode("utf-8", "strict")
+
+
+def inspect(root, tag):
+    root = Path(root)
+    if not re.fullmatch(r"[A-Za-z0-9_]+", tag):
+        raise ValueError("invalid suite tag")
+    board = read(root / (tag + "_suite.out"))
+    if board.splitlines().count(SUMMARY) != 1:
+        raise ValueError("mirror suite did not pass thirty arms")
+    arms = re.findall(r"^FAST_CELL_ARM arm=([a-z0-9-]+) verdict=([A-Z]+).*?$", board, re.M)
+    if len(arms) != 30 or len({arm for arm, _ in arms}) != 30:
+        raise ValueError("missing or duplicate mirror arm")
+    if any(verdict != "PASS" for _, verdict in arms):
+        raise ValueError("mirror arm failed")
+    rows = []
+    for arm, _ in arms:
+        path = root / f"fast_{tag}_{arm}_qemu.log"
+        if not path.is_file():
+            raise ValueError("missing mirror log")
+        states = re.findall(r"mirror=\[([^\]]*)\]", read(path))
+        if not states:
+            raise ValueError("mirror status absent")
+        observed = []
+        for state in states:
+            fields = state.split()
+            if not fields or fields[0] != "on":
+                raise ValueError("mirror is not on")
+            pairs = re.findall(r"([a-z_]+)=([0-9]+)", " ".join(fields[1:]))
+            counters = {key: int(value) for key, value in pairs}
+            if len(pairs) != len(counters):
+                raise ValueError("duplicate mirror counter")
+            if counters.get("groups") != 0 or counters.get("ctx_unknown") != 0:
+                raise ValueError("nonzero or missing Linux mirror counter")
+            observed.append(counters)
+        rows.append({"arm": arm, "status_lines": len(states), "last": observed[-1]})
+    return {
+        "arms_observed": len(rows),
+        "status_lines": sum(row["status_lines"] for row in rows),
+        "groups_max": 0,
+        "ctx_unknown_max": 0,
+        "mirror_on": True,
+        "arms": rows,
+    }
+
+
+if __name__ == "__main__":
+    print(json.dumps(inspect(sys.argv[1], sys.argv[2]), indent=2))

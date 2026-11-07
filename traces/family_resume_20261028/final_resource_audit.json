@@ -1,0 +1,30 @@
+{
+  "utc": "2026-10-28T16:57:39.080581+00:00",
+  "created_ids_api_absent": {
+    "58115039": true,
+    "58117397": true
+  },
+  "resume_label_instances_observed": 0,
+  "watchdogs": [
+    {
+      "pid": 3148505,
+      "starttime": 286800547,
+      "owned_process_alive": false
+    },
+    {
+      "pid": 3184668,
+      "starttime": 286930600,
+      "owned_process_alive": false
+    },
+    {
+      "pid": 3214541,
+      "starttime": 287158326,
+      "owned_process_alive": false
+    }
+  ],
+  "account_reserve_satisfied": true,
+  "reserve_usd": 8,
+  "third_contract_id": null,
+  "third_create_receipt": "missing; no allocation observed",
+  "owner_host_contacted": false
+}

@@ -1,0 +1,5 @@
+{
+  "raw_sha256": "c96895af7dae1eedb17f8ff7eed6061850b18b3eab192b884a945ae89a13a3fe",
+  "published_sha256": "607ae3ba1508ba946dcf2c3f82110fd19a6c7916b3825bca2a213f883283a4aa",
+  "rule": "Trim trailing whitespace only; verdict text unchanged"
+}

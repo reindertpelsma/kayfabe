@@ -1,0 +1,302 @@
+{
+  "scope": "LOCAL public synthetic fixtures with frozen reviewed private adapters; disposable mutated copies only",
+  "count": 26,
+  "all_have_two_assertion_killers": true,
+  "clean_baseline_tests": 91,
+  "clean_baseline_failures": 0,
+  "clean_baseline_errors": 0,
+  "errors_or_timeouts_credited_as_killers": false,
+  "initial_broken_path_pass_discarded": true,
+  "private_raw_proof_sha256": "0dae8bba014fbf0f55a03f0e1590a0f67e748a912c7dcfe716a5b587dd2861dc",
+  "mutants": [
+    {
+      "name": "nonempty guard head ignored",
+      "file": "gb202_profile.py",
+      "killed": true,
+      "assertion_killers": [
+        "test_gb202_profile_adapter.ProfileAdapter.test_arm_refuses_empty_head",
+        "test_gb202_profile_adapter.ProfileAdapter.test_create_refuses_empty_head"
+      ],
+      "semantic_error_count_not_credited": 0
+    },
+    {
+      "name": "full blacklist ignored",
+      "file": "gb202_profile.py",
+      "killed": true,
+      "assertion_killers": [
+        "test_gb202_profile_adapter.ProfileAdapter.test_arm_refuses_blacklist_host",
+        "test_gb202_profile_adapter.ProfileAdapter.test_arm_refuses_blacklist_machine",
+        "test_gb202_profile_adapter.ProfileAdapter.test_create_refuses_blacklist_host",
+        "test_gb202_profile_adapter.ProfileAdapter.test_create_refuses_blacklist_machine"
+      ],
+      "semantic_error_count_not_credited": 0
+    },
+    {
+      "name": "profile price widened",
+      "file": "gb202_profile.py",
+      "killed": true,
+      "assertion_killers": [
+        "test_gb202_profile.BudgetProfile.test_offer_refuses_rate_over",
+        "test_gb202_profile.BudgetProfile.test_offer_refuses_rate_over_second"
+      ],
+      "semantic_error_count_not_credited": 0
+    },
+    {
+      "name": "profile duration widened",
+      "file": "gb202_profile.py",
+      "killed": true,
+      "assertion_killers": [
+        "test_gb202_profile_adapter.ProfileAdapter.test_valid_full_proof_reaches_only_fake_arm",
+        "test_gb202_profile_adapter.ProfileAdapter.test_valid_full_proof_reaches_only_fake_create"
+      ],
+      "semantic_error_count_not_credited": 29
+    },
+    {
+      "name": "profile stop widened",
+      "file": "gb202_profile.py",
+      "killed": true,
+      "assertion_killers": [
+        "test_gb202_profile_adapter.ProfileAdapter.test_valid_full_proof_reaches_only_fake_arm",
+        "test_gb202_profile_adapter.ProfileAdapter.test_valid_full_proof_reaches_only_fake_create"
+      ],
+      "semantic_error_count_not_credited": 29
+    },
+    {
+      "name": "profile cap widened",
+      "file": "gb202_profile.py",
+      "killed": true,
+      "assertion_killers": [
+        "test_gb202_profile.BudgetProfile.test_profile_stop_and_cap_are_explicit",
+        "test_gb202_profile_adapter.ProfileAdapter.test_valid_full_proof_reaches_only_fake_arm",
+        "test_gb202_profile_adapter.ProfileAdapter.test_valid_full_proof_reaches_only_fake_create"
+      ],
+      "semantic_error_count_not_credited": 0
+    },
+    {
+      "name": "planner reserve removed",
+      "file": "gb202_profile.py",
+      "killed": true,
+      "assertion_killers": [
+        "test_gb202_profile.BudgetProfile.test_make_plan_preserves_reserve_at_credit_eleven",
+        "test_gb202_profile.BudgetProfile.test_make_plan_preserves_reserve_at_credit_ten"
+      ],
+      "semantic_error_count_not_credited": 0
+    },
+    {
+      "name": "shared cap ignored",
+      "file": "gb202_profile.py",
+      "killed": true,
+      "assertion_killers": [
+        "test_gb202_profile.BudgetProfile.test_shared_cap_rejects_higher_full_billing",
+        "test_gb202_profile.BudgetProfile.test_shared_cap_rejects_other_liability"
+      ],
+      "semantic_error_count_not_credited": 0
+    },
+    {
+      "name": "full liability reserve ignored",
+      "file": "gb202_profile.py",
+      "killed": true,
+      "assertion_killers": [
+        "test_gb202_profile.BudgetProfile.test_full_liability_preserves_reserve_credit_sixteen",
+        "test_gb202_profile.BudgetProfile.test_full_liability_preserves_reserve_credit_thirteen"
+      ],
+      "semantic_error_count_not_credited": 0
+    },
+    {
+      "name": "old holds reset allowed",
+      "file": "gb202_profile.py",
+      "killed": true,
+      "assertion_killers": [
+        "test_gb202_profile.BudgetProfile.test_budget_refuses_old_closed_ci_hold_usd",
+        "test_gb202_profile.BudgetProfile.test_budget_refuses_prior_sw5_stage_hold_usd",
+        "test_gb202_profile.BudgetProfile.test_budget_refuses_retry_closed_ci_hold_usd"
+      ],
+      "semantic_error_count_not_credited": 0
+    },
+    {
+      "name": "fixed work cutoff ignored",
+      "file": "gb202_profile.py",
+      "killed": true,
+      "assertion_killers": [
+        "test_gb202_profile.BudgetProfile.test_fixed_hard_deadline_expired",
+        "test_gb202_profile.BudgetProfile.test_fixed_work_cutoff_exactly_expired"
+      ],
+      "semantic_error_count_not_credited": 0
+    },
+    {
+      "name": "profile identity ignored",
+      "file": "gb202_profile.py",
+      "killed": true,
+      "assertion_killers": [
+        "test_gb202_profile_adapter.ProfileAdapter.test_arm_refuses_profile",
+        "test_gb202_profile_adapter.ProfileAdapter.test_create_refuses_profile"
+      ],
+      "semantic_error_count_not_credited": 0
+    },
+    {
+      "name": "manifest digest ignored",
+      "file": "gb202_profile.py",
+      "killed": true,
+      "assertion_killers": [
+        "test_gb202_profile_adapter.ProfileAdapter.test_arm_refuses_manifest",
+        "test_gb202_profile_adapter.ProfileAdapter.test_create_refuses_manifest"
+      ],
+      "semantic_error_count_not_credited": 0
+    },
+    {
+      "name": "plan digest ignored",
+      "file": "gb202_profile.py",
+      "killed": true,
+      "assertion_killers": [
+        "test_gb202_profile_adapter.ProfileAdapter.test_arm_refuses_plan",
+        "test_gb202_profile_adapter.ProfileAdapter.test_create_refuses_plan"
+      ],
+      "semantic_error_count_not_credited": 0
+    },
+    {
+      "name": "budget digest ignored",
+      "file": "gb202_profile.py",
+      "killed": true,
+      "assertion_killers": [
+        "test_gb202_profile_adapter.ProfileAdapter.test_arm_refuses_budget",
+        "test_gb202_profile_adapter.ProfileAdapter.test_create_refuses_budget"
+      ],
+      "semantic_error_count_not_credited": 0
+    },
+    {
+      "name": "backend plan ignored",
+      "file": "gb202_profile.py",
+      "killed": true,
+      "assertion_killers": [
+        "test_gb202_profile_adapter.ProfileAdapter.test_arm_refuses_backend_plan",
+        "test_gb202_profile_adapter.ProfileAdapter.test_create_refuses_backend_plan"
+      ],
+      "semantic_error_count_not_credited": 0
+    },
+    {
+      "name": "runtime dependency ignored",
+      "file": "gb202_profile.py",
+      "killed": true,
+      "assertion_killers": [
+        "test_gb202_profile_adapter.ProfileAdapter.test_arm_refuses_dependency",
+        "test_gb202_profile_adapter.ProfileAdapter.test_create_refuses_dependency"
+      ],
+      "semantic_error_count_not_credited": 0
+    },
+    {
+      "name": "source digest ignored",
+      "file": "gb202_profile.py",
+      "killed": true,
+      "assertion_killers": [
+        "test_gb202_profile_adapter.ProfileAdapter.test_arm_refuses_source",
+        "test_gb202_profile_adapter.ProfileAdapter.test_create_refuses_source"
+      ],
+      "semantic_error_count_not_credited": 0
+    },
+    {
+      "name": "guard head ignored",
+      "file": "gb202_profile.py",
+      "killed": true,
+      "assertion_killers": [
+        "test_gb202_profile_adapter.ProfileAdapter.test_arm_refuses_head",
+        "test_gb202_profile_adapter.ProfileAdapter.test_create_refuses_head"
+      ],
+      "semantic_error_count_not_credited": 0
+    },
+    {
+      "name": "GB202 scope widened",
+      "file": "die_binding.py",
+      "killed": true,
+      "assertion_killers": [
+        "test_gb202_profile.NativeScope.test_consistent_gb203_actual_rm_is_outside_profile",
+        "test_gb202_profile.NativeScope.test_consistent_gb206_actual_rm_is_outside_profile"
+      ],
+      "semantic_error_count_not_credited": 0
+    },
+    {
+      "name": "GB202 pending widened",
+      "file": "pending_die.py",
+      "killed": true,
+      "assertion_killers": [
+        "test_gb202_profile.NativeScope.test_gb203_pending_target_rejected",
+        "test_gb202_profile.NativeScope.test_gb206_pending_target_rejected"
+      ],
+      "semantic_error_count_not_credited": 0
+    },
+    {
+      "name": "actual arm approval removed",
+      "file": "operator_backend.py",
+      "killed": true,
+      "assertion_killers": [
+        "test_gb202_profile_adapter.ProfileAdapter.test_arm_refuses_backend_plan",
+        "test_gb202_profile_adapter.ProfileAdapter.test_arm_refuses_blacklist_host",
+        "test_gb202_profile_adapter.ProfileAdapter.test_arm_refuses_blacklist_machine",
+        "test_gb202_profile_adapter.ProfileAdapter.test_arm_refuses_budget",
+        "test_gb202_profile_adapter.ProfileAdapter.test_arm_refuses_dependency",
+        "test_gb202_profile_adapter.ProfileAdapter.test_arm_refuses_empty_head",
+        "test_gb202_profile_adapter.ProfileAdapter.test_arm_refuses_head",
+        "test_gb202_profile_adapter.ProfileAdapter.test_arm_refuses_manifest",
+        "test_gb202_profile_adapter.ProfileAdapter.test_arm_refuses_missing",
+        "test_gb202_profile_adapter.ProfileAdapter.test_arm_refuses_plan",
+        "test_gb202_profile_adapter.ProfileAdapter.test_arm_refuses_profile",
+        "test_gb202_profile_adapter.ProfileAdapter.test_arm_refuses_source"
+      ],
+      "semantic_error_count_not_credited": 0
+    },
+    {
+      "name": "actual create approval removed",
+      "file": "operator_backend.py",
+      "killed": true,
+      "assertion_killers": [
+        "test_gb202_profile_adapter.ProfileAdapter.test_create_refuses_backend_plan",
+        "test_gb202_profile_adapter.ProfileAdapter.test_create_refuses_blacklist_host",
+        "test_gb202_profile_adapter.ProfileAdapter.test_create_refuses_blacklist_machine",
+        "test_gb202_profile_adapter.ProfileAdapter.test_create_refuses_budget",
+        "test_gb202_profile_adapter.ProfileAdapter.test_create_refuses_dependency",
+        "test_gb202_profile_adapter.ProfileAdapter.test_create_refuses_empty_head",
+        "test_gb202_profile_adapter.ProfileAdapter.test_create_refuses_head",
+        "test_gb202_profile_adapter.ProfileAdapter.test_create_refuses_manifest",
+        "test_gb202_profile_adapter.ProfileAdapter.test_create_refuses_missing",
+        "test_gb202_profile_adapter.ProfileAdapter.test_create_refuses_plan",
+        "test_gb202_profile_adapter.ProfileAdapter.test_create_refuses_profile",
+        "test_gb202_profile_adapter.ProfileAdapter.test_create_refuses_source"
+      ],
+      "semantic_error_count_not_credited": 0
+    },
+    {
+      "name": "independent plan proof ignored",
+      "file": "precreate_watchdog.py",
+      "killed": true,
+      "assertion_killers": [
+        "test_gb202_watcher_plan.WatcherPlan.test_independent_watcher_rejects_other_capture_lead",
+        "test_gb202_watcher_plan.WatcherPlan.test_independent_watcher_rejects_other_duration"
+      ],
+      "semantic_error_count_not_credited": 0
+    },
+    {
+      "name": "shared stage marker made per-profile",
+      "file": "operator_backend.py",
+      "killed": true,
+      "assertion_killers": [
+        "test_gb202_profile_adapter.ProfileAdapter.test_gb206_empty_stage_marker_blocks_new_profile_create",
+        "test_gb202_profile_adapter.ProfileAdapter.test_gb206_timeout_stage_marker_blocks_new_profile_create"
+      ],
+      "semantic_error_count_not_credited": 0
+    },
+    {
+      "name": "legacy global ceilings widened",
+      "file": "legacy_budget_fixture",
+      "killed": true,
+      "assertion_killers": [
+        "test_gb202_profile.LegacyIsolation.test_legacy_cap_cannot_be_raised",
+        "test_gb202_profile.LegacyIsolation.test_legacy_rate_ceiling_still_point_six",
+        "test_gb202_profile.LegacyIsolation.test_legacy_selected_5090_still_refused",
+        "test_gb202_profile.LegacyIsolation.test_legacy_stop_cannot_be_raised"
+      ],
+      "semantic_error_count_not_credited": 0
+    }
+  ],
+  "public_source_head": "7b93e0521e65825883a860321865347216e53e74",
+  "private_execution_runtime_byte_equivalent": true,
+  "synthetic_fixture_replay": true
+}

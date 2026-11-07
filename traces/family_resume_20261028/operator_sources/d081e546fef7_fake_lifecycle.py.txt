@@ -1,0 +1,222 @@
+"""Run the real operator, readiness, capture pull and watchdog against fake transports."""
+
+import base64
+import datetime as dt
+import hashlib
+import io
+import json
+import os
+from pathlib import Path
+import shutil
+import struct
+import sys
+import tarfile
+import tempfile
+from unittest.mock import patch
+
+import lifecycle
+import operator_backend as O
+import round_budget as B
+
+# A public deterministic fixture key, never a private key or real provider host key.
+KEY = base64.b64encode(
+    struct.pack(">I", 11) + b"ssh-ed25519" + struct.pack(">I", 32) + b"x" * 32
+).decode()
+FAKE = r"""
+import hashlib,json,os,sys,shutil
+from pathlib import Path
+root=Path(os.environ['SW5_FAKE_ROOT'])
+name=Path(sys.argv[0]).name
+args=sys.argv[1:]
+with (root/'events.jsonl').open('a') as out:
+    out.write(json.dumps({'tool':name,'args':args})+'\n')
+state=json.loads((root/'state.json').read_text())
+key=state['key']
+if name=='vastai':
+    args=[x for x in args if x!='--raw']
+    if args[:2]==['show','user']:
+        print(json.dumps({'credit':23.0}))
+    elif args[:2]==['show','instances']:
+        rows=[] if not state.get('present') else [{
+            'id':123456,'machine_id':99805,'host_id':70221,
+            'actual_status':'running','intended_status':'running',
+            'public_ipaddr':'8.8.8.8','ports':{'22/tcp':[{'HostPort':'12345'}]},
+            'dph_total':0.34,'label':'codex-sw5-fixture'}]
+        print(json.dumps(rows))
+    elif args[:2]==['create','instance']:
+        state['present']=True
+        (root/'state.json').write_text(json.dumps(state))
+        print(json.dumps({'success':True,'new_contract':123456,
+                          'instance_api_key':'FAKE_SECRET_MUST_NOT_PERSIST'}))
+    elif args[:2]==['destroy','instance']:
+        assert args[2]=='123456'
+        state['present']=False
+        (root/'state.json').write_text(json.dumps(state))
+        print(json.dumps({'success':True}))
+    elif args[:2]==['attach','ssh']:
+        print(json.dumps({'success':True}))
+    elif args[0]=='logs':
+        print('ssh-ed25519 '+key)
+    else:
+        raise ValueError('unimplemented fake provider call')
+elif name=='ssh-keyscan':
+    print('[8.8.8.8]:12345 ssh-ed25519 '+key)
+elif name=='scp':
+    destination=args[-1]
+    source=args[-2]
+    if source=='sw5-own:/root/sw5/capture.tgz':
+        shutil.copyfile(root/'capture.tgz',destination)
+    # Uploads are modelled by the immutable fixture kit in root/kit.
+elif name=='ssh':
+    command=args[-1]
+    if command=='echo SW5_SSH_READY':
+        print('SW5_SSH_READY')
+    elif command.startswith("python3 - <<'PY'"):
+        import types
+        from unittest.mock import patch
+        code=command.split("\n",1)[1].rsplit("\nPY",1)[0]
+        with patch('os.cpu_count', return_value=state['cpus']), \
+             patch('shutil.disk_usage', return_value=types.SimpleNamespace(free=180*1024**3)):
+            exec(code, {})
+    elif command.startswith('sha256sum '):
+        for name in command.split()[1:]:
+            p=root/'kit'/Path(name).name
+            print(hashlib.sha256(p.read_bytes()).hexdigest(),name)
+    elif command.startswith('nohup setsid'):
+        print('98765')
+    elif command.startswith("awk '{print $22}'"):
+        print('987654')
+    elif command.startswith('python3 /root/sw5/quiesce.py '):
+        print(json.dumps({'quiesced':True,'controller_pid':98765,'controller_starttime':987654}))
+    elif command.startswith('journalctl -k'):
+        pass
+    elif command.startswith('if test -f'):
+        print('RC=1' if state.get('native_refusal') else 'RC=0')
+        phases=['native-binding','gates9+10-user','bare30']
+        if not state.get('native_refusal'):
+            phases+=['kf3-build','host-fastguest-build','guest30-180s','xid-user-census']
+        for phase in phases:
+            print('SW5_PHASE '+phase)
+    elif command=='python3 /root/sw5/collect_capture.py':
+        payload=(root/'capture.tgz').read_bytes()
+        digest=hashlib.sha256(payload).hexdigest()
+        print(json.dumps({'sha256':'wrong' if state.get('bad_capture') else digest,
+                          'bytes':len(payload),'files':1}))
+    elif command.startswith('mkdir -p ') or command.startswith('tar -xf '):
+        pass
+    else:
+        raise ValueError('unimplemented fake SSH command')
+else:
+    raise ValueError('unimplemented fake executable')
+"""
+
+
+def rehearse_adapter(
+    *, bad_source=False, missing_source=False, bad_capture=False, native_refusal=False, cpus=8
+):
+    with tempfile.TemporaryDirectory(prefix="sw5-full-rehearsal-") as tmp:
+        root = Path(tmp)
+        kit = root / "kit"
+        kit.mkdir()
+        files = [
+            "ready.py",
+            "pull.py",
+            "collect_capture.py",
+            "console_pin.py",
+            "provider_retry.py",
+            "readiness.py",
+            "round_budget.py",
+            "precreate_watchdog.py",
+            "run_box.sh",
+            "guard_hooks.sh",
+            "die_binding.py",
+            "prepare_binding.py",
+            "final_xids.py",
+            "quiesce.py",
+            "lease_guard.py",
+            "final_capture.py",
+            "network_guard.py",
+            "pending_die.py",
+            "completed.json",
+            "framebuffer.json",
+        ]
+        for filename in files:
+            shutil.copyfile(O.HERE / filename, kit / filename)
+        for filename in ("instruments.tar", "derived.tar"):
+            # Small source-locked text-only kit fixture, never a production payload.
+            (kit / filename).write_bytes(b"fake source kit fixture")
+        locks = {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in kit.iterdir()}
+        if bad_source:
+            (kit / "run_box.sh").write_text("changed")
+        if missing_source:
+            (kit / "run_box.sh").unlink()
+        try:
+            lifecycle.source_lock(locks)
+        except FileNotFoundError as error:
+            raise ValueError("missing source lock") from error
+        state = {
+            "key": KEY,
+            "present": False,
+            "bad_capture": bad_capture,
+            "native_refusal": native_refusal,
+            "cpus": cpus,
+        }
+        (root / "state.json").write_text(json.dumps(state))
+        with tarfile.open(root / "capture.tgz", "w:gz") as archive:
+            data = b"private text fixture evidence\n"
+            member = tarfile.TarInfo("evidence/controller.log")
+            member.size = len(data)
+            archive.addfile(member, io.BytesIO(data))
+        binary = root / "bin"
+        binary.mkdir()
+        for name in ("vastai", "ssh", "scp", "ssh-keyscan"):
+            path = binary / name
+            path.write_text("#!" + sys.executable + "\n" + FAKE)
+            path.chmod(0o700)
+        report = root / "report.md"
+        now = dt.datetime.now(dt.timezone.utc)
+        plan = B.plan(0.34, 23, now, transfer_usd=0.2)
+        env = {"PATH": str(binary) + ":" + os.environ["PATH"], "SW5_FAKE_ROOT": str(root)}
+        with patch.dict(os.environ, env):
+            backend = O.Backend(
+                {"id": 57427095, "machine_id": 99805, "host_id": 70221, "dph_total": 0.34},
+                plan,
+                23,
+                evidence=root / "lease",
+                report=report,
+                here=kit,
+            )
+            try:
+                result = lifecycle.execute(backend, plan)
+            except (ValueError, __import__("subprocess").CalledProcessError):
+                if native_refusal or cpus < 8:
+                    result = {"refused": True}
+                else:
+                    raise
+            finally:
+                # Every fake timer is an actual owned process; do not leak it on test errors.
+                if backend.watch is not None and backend.watch.poll() is None:
+                    backend.watch.terminate()
+                    backend.watch.wait(timeout=5)
+        text = "\n".join(
+            p.read_text(errors="replace")
+            for p in (root / "lease").iterdir()
+            if p.is_file() and p.suffix in (".json", ".log", ".md")
+        )
+        if "FAKE_SECRET_MUST_NOT_PERSIST" in text:
+            raise ValueError("raw create secret persisted")
+        calls = [json.loads(line) for line in (root / "events.jsonl").read_text().splitlines()]
+        events = ["source-lock", "arm"]
+        for call in calls:
+            args = call["args"]
+            if call["tool"] == "vastai" and args[:2] == ["create", "instance"]:
+                events.append("create")
+            if call["tool"] == "vastai" and args[:2] == ["destroy", "instance"]:
+                events.append("destroy")
+            if call["tool"] == "ssh" and args[-1].startswith("if test -f"):
+                events.extend(["native-binding", "gates9+10-user", "bare30"])
+                if not native_refusal:
+                    events.extend(
+                        ["kf3-build", "host-fastguest-build", "guest30-180s", "xid-user-census"]
+                    )
+        return result, events

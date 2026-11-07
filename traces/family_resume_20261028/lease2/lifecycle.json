@@ -1,0 +1,17 @@
+{
+  "id": 58117397,
+  "label": "codex-sw5-resume-2026-10-28T160838",
+  "machine_id": 23863,
+  "host_id": 79466,
+  "quote_dph": 0.14999999999999997,
+  "created_utc": "2026-10-28T16:08:38.429582+00:00",
+  "deadline_utc": "2026-10-28T18:08:38.317574+00:00",
+  "ssh_ready_utc": "2026-10-28T16:16:31.824491+00:00",
+  "work_started": true,
+  "destroyed": true,
+  "api_absent": true,
+  "absence_verified_utc": "2026-10-28T16:45:21.196922+00:00",
+  "capture_verified": true,
+  "capture_sha256": "cc5fd9e769ace085f2ca6686bd6f8154e14441cd8b4db0c847a3c1307698cf1c",
+  "watch_cancelled_after_absence": true
+}

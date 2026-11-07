@@ -1,0 +1,12 @@
+{
+  "utc": "2026-10-28T16:50:31.274155+00:00",
+  "pid": 3214541,
+  "starttime": 287158326,
+  "state": "cancelled after repeated no-allocation API reconciliation",
+  "owned_ledger_empty": true,
+  "no_own_instance_observed": true,
+  "watch_pid_absent": true,
+  "contract_id": null,
+  "destroy_calls": 0,
+  "allocation_receipt": "unavailable; original JSONDecodeError preserved"
+}

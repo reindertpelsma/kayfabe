@@ -1,0 +1,79 @@
+[
+  {
+    "path": "PREREG.md",
+    "raw_sha256": "333b22d7ac8a33e0177169b6e39cd7f8afcc53cc9259c2f5ef8885f98d0aede1",
+    "published_sha256": "a4045100a83700cc59358d9c2180b89c4d44e09ec1c32b962f772568614e97b7",
+    "replacements": 3,
+    "rule": "local operator, report, handoff and SSH-directory path redaction"
+  },
+  {
+    "path": "README.md",
+    "raw_sha256": "3c896bd559c8bf950c69493bb04e08deda701cf4253cb3d68f6fbf9a1be9b567",
+    "published_sha256": "a5be714624189427f65e6cd4ba53ce03f501380202fd591e4d63c8e816275a3b",
+    "replacements": 2,
+    "rule": "local operator, report, handoff and SSH-directory path redaction"
+  },
+  {
+    "path": "inventory_expected_red.log",
+    "raw_sha256": "73afca9fb24891eb2a0ac9490982edb4456f271ffaf03a12644127a6bacf236b",
+    "published_sha256": "c90a0f2d75382894770284dbbc0e51ba4a2eeaf7e77b0463f16687a0664cd52d",
+    "replacements": 6,
+    "rule": "local operator, report, handoff and SSH-directory path redaction"
+  },
+  {
+    "path": "operator3_tests_final.log",
+    "raw_sha256": "5cd08c95c7b35a62d314bed00dcca77cd784ad5fee862d0657bacc02da10d846",
+    "published_sha256": "696ade41b66bddbe73494bc66f29d9a25245a467842e5bdad8f51a242e7c984c",
+    "replacements": 1,
+    "rule": "local operator, report, handoff and SSH-directory path redaction"
+  },
+  {
+    "path": "operator_sources/089367d07994_test_profile.py.txt",
+    "raw_sha256": "089367d079941a0ceeb8bd761f6b64d310bce47ff59ce908bfc78164525ea31e",
+    "published_sha256": "581068d1b9ef6a5e0fb97767dd6c3ebd2fa6136cbf3833207d3582f1f1ea38da",
+    "replacements": 1,
+    "rule": "local operator, report, handoff and SSH-directory path redaction"
+  },
+  {
+    "path": "operator_sources/31dd0c566ab2_operate.py.txt",
+    "raw_sha256": "31dd0c566ab2eda8c9a991ff933878ea7cb01540361651b9bbb156b9d49e4c67",
+    "published_sha256": "90ba594e09571aacdd0fbccc551579269e259b6ac4d8701ef877c3999d1a9347",
+    "replacements": 2,
+    "rule": "local operator, report, handoff and SSH-directory path redaction"
+  },
+  {
+    "path": "operator_sources/7dc9226e8a2a_operator_backend.py.txt",
+    "raw_sha256": "7dc9226e8a2a72b614c28d5e5f1f4d7106cc373668bc6190e9f1e0039ec9f02c",
+    "published_sha256": "9d15553402b1d040b0c124ccef092efb356a614eaa81d7a1eb2b89218edbfccf",
+    "replacements": 2,
+    "rule": "local operator, report, handoff and SSH-directory path redaction"
+  },
+  {
+    "path": "operator_sources/b8cc2c3b5b59_operate.py.txt",
+    "raw_sha256": "b8cc2c3b5b5968c7024f5fac69e8be612c1a1263f9fbca337c111165ee777e1b",
+    "published_sha256": "65063ef831e2d8c7ea5b661bdd64af027a7b477a56b3e62d1b34fcfd237cac18",
+    "replacements": 2,
+    "rule": "local operator, report, handoff and SSH-directory path redaction"
+  },
+  {
+    "path": "operator_sources/bce29d6d7dec_operator_backend.py.txt",
+    "raw_sha256": "bce29d6d7decbbcff86ed69bcceff417a2af9a3a6da39eddbf1c7125d136af5c",
+    "published_sha256": "f4c662f2aace9bb2248722bf681a30bd8144d1860ecbebb96d8b1672815f1890",
+    "replacements": 2,
+    "rule": "local operator, report, handoff and SSH-directory path redaction"
+  },
+  {
+    "path": "operator_sources/c39728aac162_ready.py.txt",
+    "raw_sha256": "c39728aac16233f5d3e4e2206e5c0a4aa9032aaa88e79517478a043917ff4944",
+    "published_sha256": "87989092a2bbb67feb573e4086f82e391459f8ad5d7f1399404083fafc515780",
+    "replacements": 2,
+    "rule": "local operator, report, handoff and SSH-directory path redaction"
+  },
+  {
+    "path": "known_bad_machines_after_lease1.json",
+    "raw_sha256": "2ee4414fd6f8e54b7a15b6533efe7f5a838b57cc8b89e42e56adb2392372f195",
+    "published_sha256": "fe76b9c8f7c805e8a241b29f438a747222fee0e7030ac74b8fab5156761cc0f7",
+    "replacements": 1,
+    "rule": "Inherited already-published local audit path removed; machine/host exclusions and refusal reasons unchanged."
+  }
+]

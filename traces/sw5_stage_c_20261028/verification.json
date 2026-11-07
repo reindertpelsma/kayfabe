@@ -1,0 +1,26 @@
+{
+  "source_commit": "7b93e0521e65825883a860321865347216e53e74",
+  "hosted_ci_requested_by_final_batch": true,
+  "hosted_ci_has_not_run_for_this_local_head": true,
+  "final_commit_must_not_have_skip_ci": true,
+  "claims": {
+    "existing_debt": 3756,
+    "new": 0,
+    "resolved": 2
+  },
+  "freshness": {
+    "checked": 184,
+    "existing_debt": 50,
+    "new": 0
+  },
+  "private_baselines_changed": false,
+  "public_runtime_byte_equivalence": true,
+  "json_parse": "PASS",
+  "cost_arithmetic": "PASS",
+  "source_width_100": "PASS",
+  "format": "black line-length100, string spelling preserved to retain reviewed runtime bytes",
+  "diff_check": "PASS",
+  "privacy_scope": "no new private values/identity material/paths; inherited audit-path metadata redacted",
+  "test_counts": "See local_test_results.json; LOCAL overlapping suites, no hostedCI/hardware claim",
+  "history_audit": "Private source ancestry audit retained; final head and all commit trees reviewed before publication"
+}
