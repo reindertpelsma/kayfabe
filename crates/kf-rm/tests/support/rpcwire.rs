@@ -410,40 +410,6 @@ pub fn channel_params_with_ring(
     p
 }
 
-/// ★★★★★ A channel's params **with `engineType` declared** — the field that separates a
-/// GR channel from a CE channel, since both are `AMPERE_CHANNEL_GPFIFO_A`.
-///
-/// `[src]` `ogkm-580: src/common/sdk/nvidia/inc/alloc/alloc_channel.h:296-342`. Continuing
-/// the map above for the **580** tree only:
-///
-/// ```text
-/// NvHandle hUserdMemory[8];   // +32   8 x NvU32 = 32 bytes, ends at +64
-/// NvU64    userdOffset[8];    // +64   8 x NvU64 = 64 bytes, ends at +128
-/// NvU32    engineType;        // +128  ★
-/// ```
-///
-/// ★★ **The literal `128` is hand-transcribed here on purpose, and that is this file's
-/// whole job.** `kf_abi::notifier::ChannelEngineWire::V580` states the same offset;
-/// if this builder imported it, a test using both would assert only that the decoder can
-/// read what it wrote. Two independent transcriptions is the point (the same discipline
-/// the module header claims: *"a second pair of eyes"*).
-///
-/// ⊘ **580 only.** The 610 tree puts the field at +136, and a fixture that emitted one
-/// length while claiming to be version-neutral would be asserting one tree's opinion —
-/// exactly what [`channel_params_sized`]'s own note refuses. A 610 fixture needs its own
-/// builder, not a parameter on this one.
-#[must_use]
-pub fn channel_params_580_with_engine(
-    flags: u32,
-    h_ctx_share: u32,
-    h_vaspace: u32,
-    engine_type: u32,
-) -> Vec<u8> {
-    let mut p = channel_params_sized(flags, h_ctx_share, h_vaspace, 132);
-    put32(&mut p, 128, engine_type);
-    p
-}
-
 /// `rpc_gsp_rm_control_v03_00` — the `GSP_RM_CONTROL` body.
 ///
 /// `[src]` `ogkm-610: src/nvidia/generated/g_rpc-structures.h:1423-1435` and
@@ -708,73 +674,6 @@ pub struct PromoteEntryWire {
     pub b_initialize: u8,
     /// `bNonmapped` @ +31.
     pub b_nonmapped: u8,
-}
-
-/// `NV2080_CTRL_GPU_PROMOTE_CTX_PARAMS` — 560 bytes.
-///
-/// `[src]` `ogkm-610: ctrl2080gpu.h:959-971`, `ogkm-580: ctrl2080gpu.h:988-1000` — the
-/// same ten members at both:
-///
-/// ```text
-/// NvU32    engineType;    // +0
-/// NvHandle hClient;       // +4   (the LEGACY path's client, for hVirtMemory)
-/// NvU32    ChID;          // +8   (deprecated)
-/// NvHandle hChanClient;   // +12  ★ the namespace hObject lives in
-/// NvHandle hObject;       // +16  ★ a channel OR a channel group
-/// NvHandle hVirtMemory;   // +20  ┐
-/// NvU64    virtAddress;   // +24  ├ the LEGACY path
-/// NvU64    size;          // +32  ┘
-/// NvU32    entryCount;    // +40
-/// //                         +44  (padding; promoteEntry is 8-aligned)
-/// NV2080_CTRL_GPU_PROMOTE_CTX_BUFFER_ENTRY promoteEntry[16];  // +48
-/// ```
-///
-/// `entry_count` is written **verbatim**, so a test can declare a count that disagrees
-/// with `entries.len()` — which is the whole of C defect D1.
-#[must_use]
-pub fn promote_ctx_params(
-    engine_type: u32,
-    h_chan_client: u32,
-    h_object: u32,
-    entry_count: u32,
-    entries: &[PromoteEntryWire],
-) -> Vec<u8> {
-    let mut p = vec![0u8; PROMOTE_PARAMS_SIZE];
-    put32(&mut p, 0, engine_type);
-    put32(&mut p, 12, h_chan_client);
-    put32(&mut p, 16, h_object);
-    put32(&mut p, 40, entry_count);
-    for (i, e) in entries.iter().enumerate() {
-        let at = 48 + i * PROMOTE_ENTRY_SIZE;
-        put64(&mut p, at, e.gpu_phys_addr);
-        put64(&mut p, at + 8, e.gpu_virt_addr);
-        put64(&mut p, at + 16, e.size);
-        put32(&mut p, at + 24, e.phys_attr);
-        p[at + 28..at + 30].copy_from_slice(&e.buffer_id.to_le_bytes());
-        p[at + 30] = e.b_initialize;
-        p[at + 31] = e.b_nonmapped;
-    }
-    p
-}
-
-/// The **legacy** `PROMOTE_CTX` shape — `hVirtMemory` / `(virtAddress, size)` set, no
-/// entries. Neither real producer emits it; the decoder refuses it by name rather than
-/// guessing a reading for it.
-#[must_use]
-pub fn promote_ctx_legacy_params(
-    h_chan_client: u32,
-    h_object: u32,
-    h_virt_memory: u32,
-    virt_address: u64,
-    size: u64,
-) -> Vec<u8> {
-    let mut p = vec![0u8; PROMOTE_PARAMS_SIZE];
-    put32(&mut p, 12, h_chan_client);
-    put32(&mut p, 16, h_object);
-    put32(&mut p, 20, h_virt_memory);
-    put64(&mut p, 24, virt_address);
-    put64(&mut p, 32, size);
-    p
 }
 
 /// `NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES` (`ogkm-580: ctrl90f1.h:268`,
@@ -1113,28 +1012,6 @@ impl RpcScript {
                 gp_fifo_offset,
                 gp_fifo_entries,
             ),
-        )
-    }
-
-    /// An `AMPERE_CHANNEL_GPFIFO_A` alloc that **declares its engine** — 580 params, with
-    /// `engineType` at +128. See [`channel_params_580_with_engine`].
-    #[allow(clippy::too_many_arguments)]
-    pub fn channel_on_engine(
-        &mut self,
-        h_client: u32,
-        h_parent: u32,
-        h_object: u32,
-        flags: u32,
-        h_ctx_share: u32,
-        h_vaspace: u32,
-        engine_type: u32,
-    ) -> &mut RpcScript {
-        self.alloc(
-            h_client,
-            h_parent,
-            h_object,
-            AMPERE_CHANNEL_GPFIFO_A,
-            &channel_params_580_with_engine(flags, h_ctx_share, h_vaspace, engine_type),
         )
     }
 

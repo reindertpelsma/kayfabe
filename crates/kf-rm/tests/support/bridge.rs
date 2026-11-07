@@ -294,19 +294,6 @@ pub fn objects_from_script(script: &w::RpcScript) -> Objs {
     o
 }
 
-/// An `RpcCommand` for a message **without** the envelope sanity panic: the payload is
-/// taken as-is after 32 bytes (for fragment tests that build bodies directly).
-pub fn raw_command(function: u32, sequence: u32, payload: Vec<u8>) -> RpcCommand {
-    RpcCommand {
-        function: kf_rm::abi::FUNCTIONS.classify(function),
-        code: function,
-        sequence,
-        payload,
-        elements: 1,
-        delivered: Vec::new(),
-    }
-}
-
 /// What one scripted run through the policy produced.
 ///
 /// ⊘ v3 stand-in for the old `run_through_transport`, which booted a `gspworld::GspWorld`

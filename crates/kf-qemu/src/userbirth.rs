@@ -148,6 +148,7 @@ impl<V> Book<V> {
         Ok(birth)
     }
 
+    #[cfg(test)]
     pub(crate) fn is_current(&self, birth: &Arc<Birth<V>>) -> bool {
         self.pending
             .lock()
