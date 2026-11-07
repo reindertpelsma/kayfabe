@@ -405,6 +405,43 @@ export function configuration(env) {
     )
   )
     refuse('CONFIG_VAR:RELEASE_STAGES', 503);
+  const downloadModel = DEFAULTS.downloadModel;
+  if (
+    !downloadModel ||
+    !['INFERRED', 'MEASURED'].includes(downloadModel.status) ||
+    !(
+      Number.isFinite(downloadModel.derate) &&
+      downloadModel.derate > 0 &&
+      downloadModel.derate <= 1
+    ) ||
+    !(Number.isFinite(downloadModel.referenceDownMbps) && downloadModel.referenceDownMbps > 0)
+  )
+    refuse('CONFIG_VAR:DOWNLOAD_MODEL', 503);
+  for (const resource of Object.values(DEFAULTS.payloadProfiles))
+    if (
+      !Number.isSafeInteger(resource.maxDownloadSeconds) ||
+      resource.maxDownloadSeconds <= 0 ||
+      !['PROPOSED', 'APPROVED', 'MEASURED'].includes(resource.downloadLimitStatus)
+    )
+      refuse('CONFIG_VAR:DOWNLOAD_LIMIT', 503);
+  for (const name of ['small', 'middle', 'large', 'adhoc']) {
+    const preferred = DEFAULTS.preferredHostQuality[name];
+    if (
+      !preferred ||
+      !['PROPOSED', 'APPROVED', 'MEASURED'].includes(preferred.status) ||
+      Object.keys(preferred).sort().join(',') !==
+        'preferredCpuCores,preferredDiskMbps,preferredDownMbps,preferredMedianRatio,status' ||
+      ![
+        'preferredMedianRatio',
+        'preferredCpuCores',
+        'preferredDiskMbps',
+        'preferredDownMbps',
+      ].every(
+        (key) => Number.isFinite(preferred[key]) && preferred[key] > 0 && preferred[key] <= 1e6,
+      )
+    )
+      refuse('CONFIG_VAR:PREFERRED_HOST_QUALITY', 503);
+  }
   cfg.quality = {};
   for (const profile of ['check', 'sweep', 'release']) {
     const q = data(profile.toUpperCase() + '_HOST_QUALITY', DEFAULTS.quality);
@@ -531,15 +568,16 @@ export function gpuClass(offer, cfg) {
   return rules[0]?.die ?? 'CC_' + offer.compute_cap / 10;
 }
 // Resource profiles are execution tiers; check/sweep/release remain budget classes.
+export const resourceProfileName = (profile, tierName) =>
+  profile === 'release'
+    ? 'large'
+    : profile === 'sweep'
+      ? 'adhoc'
+      : tierName === 'middle'
+        ? 'middle'
+        : 'small';
 export function resourceCaps(cfg, profile = cfg.profile ?? 'check', tierName = cfg.tierName) {
-  const name =
-    profile === 'release'
-      ? 'large'
-      : profile === 'sweep'
-        ? 'adhoc'
-        : tierName === 'middle'
-          ? 'middle'
-          : 'small';
+  const name = resourceProfileName(profile, tierName);
   const base = DEFAULTS.payloadProfiles[name];
   return {
     ...base,
@@ -559,6 +597,58 @@ export function applyResourceProfile(cfg, profile, tierName) {
   cfg.maxInet = r.maxInetUsdPerGb;
   return cfg;
 }
+// Decimal GB and advertised Mbps; all policy choices live in defaults.json.
+export function downloadTiming(offer, cfg, profile = cfg.profile ?? 'check') {
+  if (!Number.isFinite(offer.inet_down) || offer.inet_down <= 0) return null;
+  const resource = resourceCaps(cfg, profile),
+    model = DEFAULTS.downloadModel;
+  const reference = (resource.bandwidthDownGb * 8000) / model.referenceDownMbps;
+  const expected = (resource.bandwidthDownGb * 8000) / (model.derate * offer.inet_down);
+  if (!Number.isFinite(expected)) return null;
+  return {
+    advertised_down_mbps: offer.inet_down,
+    allowance_gb: resource.bandwidthDownGb,
+    reference_down_mbps: model.referenceDownMbps,
+    derate: model.derate,
+    model_status: model.status,
+    reference_seconds: reference,
+    expected_seconds: expected,
+    extra_seconds: Math.max(0, expected - reference),
+    profile_max_seconds: resource.maxDownloadSeconds,
+    max_seconds: Math.min(resource.maxDownloadSeconds, cfg.hard / 1000),
+    limit_status: resource.downloadLimitStatus,
+  };
+}
+// Provider offer facts, not benchmark evidence. Thresholds remain proposed data.
+export function offerPerformanceFacts(offer, cfg, profile, median) {
+  const resourceProfile = resourceProfileName(profile, cfg.tierName);
+  const preferred = DEFAULTS.preferredHostQuality[resourceProfile];
+  const floor = cfg.quality[profile];
+  const ratio = offer.dlperf / median;
+  const enough = (key, value) => Number.isFinite(offer[key]) && offer[key] >= value;
+  const isPreferred =
+    Number.isFinite(ratio) &&
+    ratio >= Math.max(floor.medianRatio, preferred.preferredMedianRatio) &&
+    enough('cpu_cores_effective', Math.max(floor.cores, preferred.preferredCpuCores)) &&
+    enough('disk_bw', Math.max(floor.diskMbps, preferred.preferredDiskMbps)) &&
+    enough('inet_down', Math.max(floor.downMbps, preferred.preferredDownMbps));
+  const finite = (v) => (Number.isFinite(v) && v >= 0 && v <= 1e15 ? v : null);
+  return {
+    source: 'provider_offer',
+    download_estimate: downloadTiming(offer, cfg, profile),
+    resource_profile: resourceProfile,
+    dlperf: finite(offer.dlperf),
+    die_median_dlperf: finite(median),
+    median_ratio: finite(ratio),
+    cpu_cores_effective: finite(offer.cpu_cores_effective),
+    disk_bw: finite(offer.disk_bw),
+    inet_down: finite(offer.inet_down),
+    performance_tier: isPreferred ? 'preferred' : 'floor',
+    thresholds: { ...preferred },
+  };
+}
+export const performanceRank = (offer) =>
+  offer.offer_facts?.performance_tier === 'preferred' ? 0 : 1;
 export function offerPrice(offer, cfg, profile = cfg.profile ?? 'check') {
   const resources = resourceCaps(cfg, profile);
   for (const key of ['dph_base', 'dph_total', 'storage_cost', 'inet_down_cost', 'inet_up_cost'])
@@ -574,11 +664,18 @@ export function offerPrice(offer, cfg, profile = cfg.profile ?? 'check') {
   // The API total already includes the allocated storage requested for this resource profile.
   if (Math.abs(offer.dph_total - computeStorage) > Math.max(1e-7, computeStorage * 1e-6))
     return null;
-  const bandwidth =
+  const download = downloadTiming(offer, cfg, profile);
+  if (!download) return null;
+  const transferCost =
     resources.bandwidthDownGb * offer.inet_down_cost + resources.bandwidthUpGb * offer.inet_up_cost;
+  const downloadTimeCost = (download.extra_seconds / 3600) * computeStorage;
+  const bandwidth = transferCost + downloadTimeCost;
   const effective = computeStorage + bandwidth / (cfg.hard / 3600000);
   return {
     computeStorage,
+    transferCost,
+    downloadTimeCost,
+    download,
     bandwidth,
     effective,
     total: (computeStorage * (cfg.hard + cfg.cronPeriod)) / 3600000 + bandwidth,
@@ -619,6 +716,16 @@ export function profileCaps(cfg, profile) {
     hard: cfg.hardRelease,
     dies: cfg.releaseAdmitDies,
   };
+}
+// Candidate ordering uses the same spending bounds; ledger admission rechecks them.
+export function spendingHeadroom(cfg, { budget, credit, profile = cfg.profile ?? 'check' } = {}) {
+  const caps = profileCaps(cfg, profile);
+  return Math.min(
+    caps.dailyUsd - (budget?.profiles?.[profile]?.daily_usd ?? 0),
+    cfg.accountDaily - (budget?.daily_usd ?? 0),
+    cfg.rolling - (budget?.rolling_usd ?? 0),
+    ...(credit === undefined ? [] : [credit - cfg.reserve - (budget?.outstanding_usd ?? 0)]),
+  );
 }
 export function offerRejections(
   offer,
@@ -679,6 +786,8 @@ export function offerRejections(
     reasons.push('PERFORMANCE');
   if (!enough('inet_down', q.downMbps) || !enough('inet_up', q.upMbps)) reasons.push('NETWORK');
   if (!enough('disk_bw', q.diskMbps)) reasons.push('DISK_BW');
+  if (price && price.download.expected_seconds > price.download.max_seconds)
+    reasons.push('SLOW_NETWORK');
   if (!price) reasons.push('PRICE_FIELDS');
   else if (
     offer.inet_up_cost > resources.maxInetUsdPerGb ||

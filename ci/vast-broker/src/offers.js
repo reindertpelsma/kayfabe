@@ -1,7 +1,7 @@
 // prettier-ignore
 import {DEFAULTS} from './defaults.js';
 // prettier-ignore
-import {gpuClass,offerPrice,offerRejections,providerId,refuse} from './policy.js';
+import {gpuClass,offerPrice,offerRejections,providerId,refuse,offerPerformanceFacts,performanceRank} from './policy.js';
 import { familyOf, profileCaps } from './tier.js';
 // Edits3 C: NFKC folds full-width and compatibility forms; invisible joiners, zero-width
 // spaces, soft hyphens and the BOM are removed; every other space becomes a plain space.
@@ -225,10 +225,14 @@ export class OfferBook {
           die,
           country: offerCountry(offer),
           pricing: offerPrice(offer, cfg, profile),
+          offer_facts: offerPerformanceFacts(offer, cfg, profile, median),
         });
     }
     const grouped = new Map();
-    for (const offer of allowed) {
+    for (const offer of [...allowed].sort(
+      (a, b) =>
+        performanceRank(a) - performanceRank(b) || a.pricing.effective - b.pricing.effective,
+    )) {
       const prior = grouped.get(offer.die);
       if (!prior)
         grouped.set(offer.die, {
@@ -239,20 +243,12 @@ export class OfferBook {
           effective_hourly: offer.pricing.effective,
           estimated_total: offer.pricing.total,
           kvm: true,
-          // The row's representative: the cheapest allowed offer of this die.
+          // The first sorted row is the cheapest offer in the best available tier.
           machine_id: providerId(offer.machine_id),
           host_id: providerId(offer.host_id),
         });
       else {
         prior.count++;
-        if (offer.pricing.effective < prior.effective_hourly) {
-          prior.gpu_name = offer.gpu_name.toUpperCase().replaceAll(' ', '_');
-          prior.compute_cap = offer.compute_cap;
-          prior.effective_hourly = offer.pricing.effective;
-          prior.estimated_total = offer.pricing.total;
-          prior.machine_id = providerId(offer.machine_id);
-          prior.host_id = providerId(offer.host_id);
-        }
       }
     }
     const view = {
@@ -273,8 +269,8 @@ export class OfferBook {
     return { allowed, view, vramRejected };
   }
   // options.die: one die (an admin start or a release leg); options.avoidMachines /
-  // options.avoidHosts: machines and hosts an earlier leg of the same release cell used (a second
-  // Windows run belongs on a different machine, and a re-run on a fresh box). options.tierName
+  // options.avoidHosts: machines and hosts an earlier leg of the same release cell used;
+  // a re-run requires a fresh machine and prefers a fresh host. options.tierName
   // 'middle' (with no preferences): the family rotation with fallback.
   async select(evaluation, cfg, ledger, profile, preferences, options = {}) {
     if (options.die !== undefined) return this.#pinned(evaluation, cfg, options);
@@ -309,20 +305,26 @@ export class OfferBook {
       .sort(
         (a, b) =>
           order.indexOf(a.die) - order.indexOf(b.die) ||
-          countryRank(a, cfg) - countryRank(b, cfg) ||
+          performanceRank(a) - performanceRank(b) ||
           a.pricing.effective - b.pricing.effective ||
+          countryRank(a, cfg) - countryRank(b, cfg) ||
           a.id - b.id,
       );
     if (!candidates.length) refuse('UNAVAILABLE', 503, 'NO_ALLOWED_OFFERS');
     let selected = candidates[0];
     if (profile === 'check' && preferences === undefined) {
-      // Keep the existing country/price choice within each die. Default checks then pick
-      // the cheapest of those eligible representatives; explicit preferences/rotation stay ordered.
+      // Default checks choose the best tier, then effective price across die representatives.
+      // Explicit preferences and die-family rotation still determine their eligible pool.
       const representatives = new Map();
       for (const offer of candidates)
         if (!representatives.has(offer.die)) representatives.set(offer.die, offer);
       for (const offer of representatives.values())
-        if (offer.pricing.effective < selected.pricing.effective) selected = offer;
+        if (
+          performanceRank(offer) < performanceRank(selected) ||
+          (performanceRank(offer) === performanceRank(selected) &&
+            offer.pricing.effective < selected.pricing.effective)
+        )
+          selected = offer;
     }
     return {
       offer: selected,
@@ -333,9 +335,10 @@ export class OfferBook {
   #order(candidates, cfg, dies) {
     return candidates.sort(
       (a, b) =>
+        performanceRank(a) - performanceRank(b) ||
+        a.pricing.effective - b.pricing.effective ||
         dies.indexOf(a.die) - dies.indexOf(b.die) ||
         countryRank(a, cfg) - countryRank(b, cfg) ||
-        a.pricing.effective - b.pricing.effective ||
         a.id - b.id,
     );
   }
@@ -351,7 +354,7 @@ export class OfferBook {
   }
   // Middle tier (agreed 2026-11-05): each admitted run takes the family after the last one that
   // ran, in the fixed family order; a family with no allowed offer falls through to the next.
-  // Within a family the rotation list's die order applies, then country preference and price.
+  // Within a die family, performance tier and effective price precede die-order/country ties.
   async #rotateFamily(evaluation, cfg, ledger) {
     const families = Object.keys(cfg.middleRotation),
       previous = await ledger.get('rotation:middleFamily'),

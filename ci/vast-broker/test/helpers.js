@@ -192,7 +192,7 @@ export class MockCloud {
     cpu_cores_effective: 16,
     cpu_ghz: 3,
     cpu_ram: 65536,
-    inet_down: 1000,
+    inet_down: 10000,
     inet_up: 100,
     disk_bw: 500,
     storage_cost: 0.12,

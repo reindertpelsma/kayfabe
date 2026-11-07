@@ -157,6 +157,8 @@ async function publishOne({ ledger, env, entry, key, now, runId }) {
         const full = buildReport({
           claims,
           row,
+          offerFacts: entry.offerFacts ?? null,
+          downloadMeasurements: entry.downloadMeasurements ?? null,
           runId,
           log: built && entry.logPut ? built : null,
           offsets: built ? stageOffsets(built.text) : null,

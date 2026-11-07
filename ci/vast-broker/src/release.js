@@ -10,7 +10,7 @@
 // Existing verdict, retry, cost and admission rules remain in force.
 import { familyOf } from './tier.js';
 import { RELEASE_MATRIX, validateReleaseMatrix, hostProvidesDrivers } from './release-matrix.js';
-import { gpuClass, resourceCaps } from './policy.js';
+import { gpuClass, resourceCaps, performanceRank, spendingHeadroom } from './policy.js';
 export const LINUX_LAST_ROW = 'cuda_fat';
 export const VERDICTS = Object.freeze(['PASS', 'FAIL', 'RETRY', 'UNATTRIBUTED']);
 const round = (x) => Math.round(x * 10000) / 10000;
@@ -19,8 +19,9 @@ const countryRank = (offer, cfg) => {
   return i < 0 ? cfg.preferredCountries.length : i;
 };
 const byPreference = (cfg) => (a, b) =>
-  countryRank(a, cfg) - countryRank(b, cfg) ||
+  performanceRank(a) - performanceRank(b) ||
   a.pricing.effective - b.pricing.effective ||
+  countryRank(a, cfg) - countryRank(b, cfg) ||
   a.id - b.id;
 // One full leg per matrix die; the compatibility path for other callers retains the old split.
 export function dieLegs(offers, cfg, matrixRow) {
@@ -56,6 +57,7 @@ export function dieLegs(offers, cfg, matrixRow) {
     country: o.country,
     dph_total: round(o.dph_total),
     est_usd: round(o.pricing.total),
+    offer_facts: o.offer_facts ?? null,
   });
   const want = cfg.releaseWindowsRuns;
   if (second && want >= 2 && (!matrixRow || releaseMatrix.policy.boxes_per_die > 1))
@@ -73,6 +75,20 @@ export function planRelease(allowed, cfg, { budget, credit } = {}) {
   let estimate = 0,
     legs = 0;
   const perFamily = {};
+  const spendingLimit = Math.min(
+    cfg.releaseCostCap,
+    spendingHeadroom(cfg, { budget, credit, profile: 'release' }),
+  );
+  const minimumCosts = new Map(
+    releaseMatrix.dies.map((row) => {
+      const candidates = allowed.filter(
+        (o) =>
+          o.die === row.die &&
+          hostProvidesDrivers(o.host_capabilities ?? releaseMatrix.host_capabilities.vast_kvm, row),
+      );
+      return [row.die, candidates.length ? Math.min(...candidates.map((o) => o.pricing.total)) : 0];
+    }),
+  );
   for (const family of Object.keys(cfg.releaseDies)) {
     const cells = [],
       missing = [];
@@ -80,7 +96,12 @@ export function planRelease(allowed, cfg, { budget, credit } = {}) {
       const die = matrixRow.die;
       if (cells.length >= cfg.releaseDiesPerFamily) break;
       const offers = allowed.filter((o) => o.die === die && familyOf(o.die, cfg) === family);
-      const planned = dieLegs(offers, cfg, matrixRow);
+      minimumCosts.delete(die);
+      const reserved = [...minimumCosts.values()].reduce((sum, cost) => sum + cost, 0);
+      const affordable = offers.filter(
+        (o) => o.pricing.total + estimate + reserved <= spendingLimit + 1e-7,
+      );
+      const planned = dieLegs(affordable.length ? affordable : offers, cfg, matrixRow);
       if (!planned.length) {
         missing.push({ die, reason: 'NO_OFFER' });
         continue;

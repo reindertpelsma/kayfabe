@@ -186,8 +186,9 @@ host-stage loop and includes conditional stages. The CI job and Python tests run
 this guard; a future download stage must add and review its table row.
 
 CODE READ: effective hourly price is compute base plus profile-sized storage,
-plus `(inbound allowance * inbound unit price + outbound allowance * outbound
-unit price) / hard lease hours`. Worst-case reservation includes the compute and
+plus transfer fees and a download-time premium divided by hard lease hours.
+The premium is excess download seconds over a 1 Gbps reference, valued at the
+compute/storage hourly rate; see [the download model](V3_DOWNLOAD_PRICE.md). Worst-case reservation includes the compute and
 storage cron margin and the network allowance once. Search, disk allocation,
 offer rejection, ranking, live-instance rechecks and release estimates all use
 the selected resource profile. Cross-profile offer caches refresh when disk or
@@ -196,10 +197,81 @@ client from that batch's resource profile. Legacy volume overrides can increase
 allowances; legacy rate overrides can tighten caps. Neither can under-budget the
 stage table or relax its per-GB limit.
 
-INFERRED worked example, same country, five-hour lease, no outbound charge and
+INFERRED worked example, same country, advertised inbound at least 4000 Mbps
+(so no time premium with the current derate), five-hour lease, no outbound charge and
 USD 0.12/GB/month storage: A has compute USD 0.10/h and inbound USD 0.005/GB; B has
 compute USD 0.20/h and free inbound. Small's 120 GB disk and 73 GB inbound make
 A USD 0.193/h versus B USD 0.220/h, so A wins. Large's 300 GB disk and 130 GB
 inbound make A USD 0.280/h versus B USD 0.250/h, so B wins. Tests pin this reversal
 in both offer selection and release-leg sorting while preserving the release
 planner's country preference. Mutants must be killed by at least two named tests.
+
+
+## Preferred host performance before price (stacked follow-up)
+
+OWNER DECISION (2026-11-07 coordinator update): apply a preferred performance tier
+before price, then fall back to hosts meeting the existing hard floor when no
+preferred host fits the caps. All four preferred dimensions must pass together.
+The preferred tier supersedes country-first ranking: effective hourly price is
+next, with country preference only a price tie-break. Country exclusions remain.
+Explicit die preferences, die-family rotation and retry host/machine exclusions
+still determine the candidate pool; they do not grant permission to weaken a floor.
+
+PROPOSED data in `defaults.json`, under `preferredHostQuality`, independently
+recorded for small, middle, large and adhoc:
+
+| Execution profile | Status | dlperf / die median | Effective CPU cores | Disk bandwidth MB/s | Inbound Mbps |
+|---|---|---:|---:|---:|---:|
+| small | PROPOSED | 1.0 | 12 | 150 | 300 |
+| middle | PROPOSED | 1.0 | 12 | 150 | 300 |
+| large | PROPOSED | 1.0 | 12 | 150 | 300 |
+| adhoc | PROPOSED | 1.0 | 12 | 150 | 300 |
+
+PROPOSED: CPU, disk and inbound values are 1.5 times the committed default hard
+floors (8 cores, 100 MB/s, 200 Mbps). The preferred GPU ratio is 1.0 rather than the
+hard floor's 0.5. Reliability 0.98, CPU clock/RAM, outbound throughput and all other
+admission requirements remain hard floors. A configured higher floor still applies.
+These values are active candidate-ranking policy in this code, labeled PROPOSED
+because they have not been calibrated by J2 hardware runs.
+
+OWNER-REPORTED motivation, not independently measured in J2: SPEC took about
+200 minutes on a fast host versus 275–305 on slow hosts, whose CPU/disk behavior
+was slow despite their GPU score. The earlier [SPEC trace](../../traces/specviewperf_vast_20261105/README.md)
+records substantial copying costs and overlay growth. INFERRED: GPU score alone
+is insufficient to choose a fast full-run host; these thresholds are candidates,
+not a demonstrated predictor or a promise of those durations.
+
+CODE READ: verified positive dlperf samples produce the existing per-die median.
+Offers must pass the hard floor, price/unit-price rules and capability checks
+before ranking. The preferred test requires GPU ratio, effective cores, disk and
+inbound throughput together. Default selection and release planning choose the
+cheapest effective price within the best eligible performance tier. Expected
+network and profile-sized storage remain in that effective price; a dear-network
+host can win when its total effective price is lower within the same tier.
+
+CODE READ: affordability is considered before tier preference. Runtime admission
+filters against remaining profile/account daily, rolling and credit-reserve
+headroom and the existing release cost guard, then rechecks ledger budgets before
+allocation. If no offer fits, the original budget refusal is retained. Release
+planning walks the matrix's deterministic die order, reserving the cheapest
+possible remaining dies before preferring a host for the current die. It retains
+all final plan refusal gates if even the cheapest complete plan cannot fit.
+Runtime starts reserve the planned costs of other pending legs before consuming
+the batch's remaining cap. This is a conservative deterministic allocation, not
+a claim to optimize total benchmark duration or maximize preferred-host count.
+
+CODE READ: each admitted run stores `offerFacts` in its ledger record. The facts
+include `dlperf`, `die_median_dlperf`, `median_ratio`, `cpu_cores_effective`,
+`disk_bw`, `inet_down`, `performance_tier` (preferred/floor), `resource_profile`
+and the proposed threshold snapshot. `source: provider_offer` distinguishes this
+metadata from observed benchmark results. The settlement queue snapshots those
+facts for each provider leg; the publisher writes `offer_facts` into report.json
+in both R2 and D1. Guest report claims cannot set or replace this field. Existing
+reports without a snapshot publish null. The public API forwards the stored
+report, so calibration can join the facts to its timestamps/stage durations.
+Nonfinite or extreme numeric fact values become null rather than unbounded JSON.
+
+PROPOSED owner review: approve or adjust all four per-profile preferred thresholds;
+retain the hard floors and spend gates. Compare the recorded offer facts with
+measured run/stage durations before promoting a proposed value to an established
+performance claim. No hardware, provider query or deployment was performed here.

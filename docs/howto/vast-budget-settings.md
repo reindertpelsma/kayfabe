@@ -41,3 +41,28 @@ keeps a 120 GB disk, 2 GB outbound and a $0.005/GB cap. Effective hourly prices
 include those transfer allowances amortised over the lease. Cheaper compute can
 therefore lose to a host with cheaper inbound. A higher per-GB price is rejected
 even when the effective hourly price would otherwise fit.
+
+
+Host selection first tries offers meeting the preferred GPU ratio, CPU, disk and
+inbound throughput values for the run profile. Within that tier it chooses the
+lowest effective hourly price. If no preferred offer fits the spending limits,
+it falls back to offers meeting the hard floor. Country preference breaks price
+ties. Explicit die choices, rotation and retry exclusions still apply.
+
+The proposed defaults are a GPU score at least the die median, 12 effective CPU
+cores, 150 MB/s disk bandwidth and 300 Mbps inbound. Each run's published report
+includes the provider offer facts, median ratio, selected tier and threshold
+snapshot under `offer_facts`, alongside run and stage timings for calibration.
+These are provider metadata, not measurements of that run's actual host speed.
+
+
+Effective price also includes the value of expected download time beyond a 1 Gbps
+reference. The initial advertised-speed derate is inferred at 0.3. Offers exceeding
+the proposed download-time limit are rejected as `SLOW_NETWORK`: middle 20 minutes,
+large 60, small 60 and adhoc 30. This guard can reject a link that meets the advertised
+200 Mbps hard floor. These limits do not establish that every benchmark fits its lease.
+
+The report's `download_measurements` records bounded curl timing/byte claims from
+benchmark, provisioning and Windows media transfers beside advertised inbound speed.
+Coverage is partial, labeled `instrumented_curl_transfers_only`; the data supports manual calibration. The time premium
+is a modelled opportunity cost, not an extra provider billing rate.

@@ -6,6 +6,7 @@
 # (optionally) runs the script named in $1 if READY. ⊘ READY requires the kf3 binary built from THIS
 # checkout (KF3_RC=0), not merely "a binary exists" — a stale binary once passed that check.
 mkdir -p /root/prov; exec > /root/prov/prov.log 2>&1
+emit_download_metrics() { LC_ALL=C grep -a -m 32 -E '^KF_DOWNLOAD_METRIC seconds=[0-9]{1,6}([.][0-9]{1,6})? bytes=[0-9]{1,13}$' -- "$1" 2>/dev/null || true; }
 echo "START $(date -Is)"; rm -f /root/prov/READY
 KAYFABE_BRANCH=${KAYFABE_BRANCH:-master} bash /root/provision_box.sh > /root/prov/box.log 2>&1; echo "BOX_RC=$?"
 # ⚠ [2026-09-27] a kernel newer than the running one is installed: the driver built next will
@@ -45,7 +46,8 @@ fi
 # KF_DRIVER_GATE_END
 nvidia-smi --query-gpu=name,driver_version --format=csv,noheader
 df -h / | tail -1
-bash scripts/bench/provision_bench_tree.sh > /root/prov/tree.log 2>&1; TREE_RC=$?; echo "TREE_RC=$TREE_RC"; tail -2 /root/prov/tree.log
+bash scripts/bench/provision_bench_tree.sh > /root/prov/tree.log 2>&1; TREE_RC=$?; echo "TREE_RC=$TREE_RC"; tail -2 /root/prov/tree.log | grep -av '^KF_DOWNLOAD_METRIC ' || true
+emit_download_metrics /root/prov/tree.log
 # KF_LADDER_BUILD_BEGIN
 # ⊘ [2026-10-26] `-q` does NOT silence rustc warnings (checked: `cargo build -q` and CARGO_TERM_QUIET both
 # print them), and crates/kayfabe-linux-raw's `-W missing-docs` flooded the Vast job log, which can show
