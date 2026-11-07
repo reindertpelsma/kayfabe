@@ -99,7 +99,8 @@ export function tierEnvironment(profile, { tierName, windowsRuns = 1, stages = [
   }
   if (winApps !== undefined) {
     // needs the Windows stage, and only a named profile
-    if (!tier(profile).windows || !['small', 'mid', 'full'].includes(winApps)) throw Error('winapps');
+    if (!tier(profile).windows || !['small', 'mid', 'full'].includes(winApps))
+      throw Error('winapps');
     env.KF_WINAPPS = winApps;
   }
   return env;

@@ -73,7 +73,8 @@ test('profile table: check is the Windows master gate, sweep is Linux-only, rele
 
 test('KF_WINAPPS is sent only when asked for, only with the Windows stage, only for a named profile', () => {
   // today's callers pass nothing: no box sees the field
-  for (const p of ['check', 'sweep', 'release']) assert.ok(!('KF_WINAPPS' in tierEnvironment(p)), p);
+  for (const p of ['check', 'sweep', 'release'])
+    assert.ok(!('KF_WINAPPS' in tierEnvironment(p)), p);
   assert.deepEqual(tierEnvironment('check', { winApps: 'small' }), {
     KF_MERGE_WINDOWS: '1',
     KF_WINAPPS: 'small',
