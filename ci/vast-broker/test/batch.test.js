@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { BrokerLedger } from '../src/index.js';
-import { BrokerError } from '../src/policy.js';
+import { BrokerError, configuration } from '../src/policy.js';
+import { OfferBook } from '../src/offers.js';
 import { setup, sha, env, MemoryStorage } from './helpers.js';
 import { FakeD1, d1Skip } from './d1.js';
 import { readFileSync } from 'node:fs';
@@ -105,6 +106,46 @@ async function tick(h, minutes = 11) {
   await h.service.sweep();
 }
 const batchOf = async (h, id) => h.storage.get('batch:' + id);
+// FALSIFIER: host preference masks a missing machine exclusion, or a pinned
+// selection rents an excluded machine when no unused machine remains.
+test('pinned retry selects another machine even on the same host', async () => {
+  const book = new OfferBook(() => 0);
+  const rows = [1, 2].map((id) => ({
+    id,
+    die: 'TU116',
+    machine_id: 200000 + id,
+    host_id: 3000,
+    country: 'US',
+    pricing: { effective: id / 10 },
+  }));
+  const selected = await book.select(
+    { allowed: rows },
+    configuration(env),
+    null,
+    'release',
+    undefined,
+    { die: 'TU116', avoidMachines: [200001], avoidHosts: [3000] },
+  );
+  assert.equal(selected.offer.machine_id, 200002);
+});
+test('pinned retry refuses when every machine has already been used', async () => {
+  const book = new OfferBook(() => 0);
+  const rows = [1, 2].map((id) => ({
+    id,
+    die: 'TU116',
+    machine_id: 200000 + id,
+    host_id: 3000 + id,
+    country: 'US',
+    pricing: { effective: id / 10 },
+  }));
+  await assert.rejects(
+    book.select({ allowed: rows }, configuration(env), null, 'release', undefined, {
+      die: 'TU116',
+      avoidMachines: [200001, 200002],
+    }),
+    (error) => error.state === 'UNAVAILABLE' && error.reason === 'NO_ALLOWED_OFFERS',
+  );
+});
 test('plan: prints the release it WOULD rent, and rents nothing', async () => {
   const h = await release();
   releaseMarket(h);
