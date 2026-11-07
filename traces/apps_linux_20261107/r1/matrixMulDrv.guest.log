@@ -1,0 +1,13 @@
+=== matrixMulDrv side=guest start=2026-11-07T02:40:19+00:00 host=ubuntu cmd: cd /opt/apps/bundle/samples && ./matrixMulDrv
+[ matrixMulDrv (Driver API) ]
+> Using CUDA Device [0]: NVIDIA GeForce RTX 4090
+> GPU Device has SM 8.9 compute capability
+  Total amount of global memory:     8254128128 bytes
+> findModulePath found file at <./matrixMul_kernel64.fatbin>
+> initCUDA loading module: <./matrixMul_kernel64.fatbin>
+> 16 block size selected
+Processing time: 0.102000 (ms)
+Checking computed result for correctness: Result = PASS
+
+NOTE: The CUDA Samples are not meant for performance measurements. Results may vary when GPU Boost is enabled.
+=== end rc=0 secs=1 2026-11-07T02:40:21+00:00

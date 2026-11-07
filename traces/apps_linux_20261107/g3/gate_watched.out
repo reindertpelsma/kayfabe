@@ -1,0 +1,146 @@
+JOB_START gate_watched 2026-11-07T03:34:53+00:00
+[xid-watch] tag=cizz_apps  host=ubuntu  utc=2026-11-07T03:34:53Z
+[xid-watch] command: bash scripts/bench/box/apps_gate.sh g3 /root/prov middle
+[xid-watch] host_dmesg_lines=742  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 4090, 580.159.04
+[xid-watch] xid_before=8
+[xid-watch] --- command output begins ---
+APPS_STAGE_LIST n=63 budget_s=3000 per_boot=100
+APPS_STAGE_START 2026-11-07T03:34:55+00:00 tag=g3
+APP_TRY app=nvidia_smi verdict=PASS rc=0 secs=0 quiet=0 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=340 kf3_refusals=18
+APP_TRY app=deviceQuery verdict=PASS rc=0 secs=4 quiet=0 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=1238 kf3_refusals=29
+APP_TRY app=vectorAdd verdict=PASS rc=0 secs=2 quiet=1 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=1186 kf3_refusals=22
+APP_TRY app=vectorAddDrv verdict=PASS rc=0 secs=2 quiet=0 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=1168 kf3_refusals=20
+APP_TRY app=matrixMul verdict=PASS rc=0 secs=3 quiet=1 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=1182 kf3_refusals=19
+APP_TRY app=matrixMulDrv verdict=PASS rc=0 secs=1 quiet=0 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=1158 kf3_refusals=19
+APP_TRY app=bandwidthTest verdict=PASS rc=0 secs=3 quiet=1 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=1192 kf3_refusals=19
+APP_TRY app=simpleStreams verdict=PASS rc=0 secs=3 quiet=0 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=1205 kf3_refusals=19
+APP_TRY app=asyncAPI verdict=PASS rc=0 secs=2 quiet=0 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=1202 kf3_refusals=19
+APP_TRY app=simpleAtomicIntrinsics verdict=PASS rc=0 secs=1 quiet=0 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=1172 kf3_refusals=17
+APP_TRY app=simpleCallback verdict=PASS rc=0 secs=1 quiet=0 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=1184 kf3_refusals=17
+APP_TRY app=simpleOccupancy verdict=PASS rc=0 secs=1 quiet=0 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=1207 kf3_refusals=17
+APP_TRY app=simpleZeroCopy verdict=PASS rc=0 secs=2 quiet=1 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=1184 kf3_refusals=17
+APP_TRY app=simpleCooperativeGroups verdict=PASS rc=0 secs=2 quiet=1 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=1160 kf3_refusals=17
+APP_TRY app=concurrentKernels verdict=PASS rc=0 secs=1 quiet=0 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=1195 kf3_refusals=17
+APP_TRY app=simpleIPC verdict=PASS rc=0 secs=3 quiet=0 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=1955 kf3_refusals=17
+APP_TRY app=cudaTensorCoreGemm verdict=PASS rc=0 secs=4 quiet=0 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=1195 kf3_refusals=17
+APP_TRY app=bf16TensorCoreGemm verdict=PASS rc=0 secs=11 quiet=0 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=1199 kf3_refusals=17
+APP_TRY app=globalToShmemAsyncCopy verdict=PASS rc=0 secs=2 quiet=0 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=1170 kf3_refusals=17
+APP_TRY app=cdpSimpleQuicksort verdict=PASS rc=0 secs=1 quiet=0 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=1217 kf3_refusals=15
+APP_TRY app=graphMemoryNodes verdict=PASS rc=0 secs=3 quiet=0 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=1168 kf3_refusals=14
+APP_TRY app=simpleCudaGraphs verdict=PASS rc=0 secs=2 quiet=0 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=1168 kf3_refusals=14
+APP_TRY app=simpleCUBLAS verdict=PASS rc=0 secs=2 quiet=0 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=1240 kf3_refusals=14
+APP_TRY app=simpleCUFFT verdict=PASS rc=0 secs=1 quiet=0 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=1167 kf3_refusals=14
+APP_TRY app=conjugateGradient verdict=PASS rc=0 secs=2 quiet=1 note=warn:Test Summary: Error amount = 0.000000 boot=ap_g3_b1 guest_xid=0 kf3_lines=1240 kf3_refusals=14
+APP_TRY app=MersenneTwisterGP11213 verdict=PASS rc=0 secs=2 quiet=0 note=warn:Max absolute error: 0.000000E+00 boot=ap_g3_b1 guest_xid=0 kf3_lines=1168 kf3_refusals=14
+APP_TRY app=reduction verdict=PASS rc=0 secs=2 quiet=0 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=3000 kf3_refusals=12
+APP_TRY app=sortingNetworks verdict=PASS rc=0 secs=5 quiet=0 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=1170 kf3_refusals=14
+APP_TRY app=scan verdict=PASS rc=0 secs=3 quiet=0 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=1168 kf3_refusals=14
+APP_TRY app=histogram verdict=PASS rc=0 secs=2 quiet=0 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=1192 kf3_refusals=14
+APP_TRY app=BlackScholes verdict=PASS rc=0 secs=2 quiet=0 note=warn:Max absolute error: 1.192093E-05 boot=ap_g3_b1 guest_xid=0 kf3_lines=1168 kf3_refusals=14
+APP_TRY app=fastWalshTransform verdict=PASS rc=0 secs=6 quiet=0 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=1170 kf3_refusals=14
+APP_TRY app=transpose verdict=PASS rc=0 secs=1 quiet=0 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=1191 kf3_refusals=14
+APP_TRY app=stream_triad verdict=PASS rc=0 secs=2 quiet=1 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=1156 kf3_refusals=14
+APP_TRY app=reduce verdict=PASS rc=0 secs=4 quiet=0 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=1157 kf3_refusals=14
+APP_TRY app=nbody verdict=PASS rc=0 secs=1 quiet=0 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=1155 kf3_refusals=14
+APP_TRY app=blackscholes verdict=PASS rc=0 secs=2 quiet=1 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=1156 kf3_refusals=14
+APP_TRY app=mandelbrot verdict=PASS rc=0 secs=2 quiet=0 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=1155 kf3_refusals=14
+APP_TRY app=conv2d verdict=PASS rc=0 secs=2 quiet=0 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=1156 kf3_refusals=14
+APP_TRY app=sgemm_cublas verdict=PASS rc=0 secs=2 quiet=1 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=1228 kf3_refusals=14
+APP_TRY app=fft_cufft verdict=PASS rc=0 secs=2 quiet=0 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=1156 kf3_refusals=14
+APP_TRY app=sha256 verdict=PASS rc=0 secs=2 quiet=1 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=1155 kf3_refusals=14
+APP_TRY app=memcpy2d verdict=PASS rc=0 secs=2 quiet=0 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=1156 kf3_refusals=14
+APP_TRY app=stream_default verdict=PASS rc=0 secs=2 quiet=0 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=1157 kf3_refusals=14
+APP_TRY app=stream_created verdict=PASS rc=0 secs=2 quiet=1 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=1155 kf3_refusals=14
+APP_TRY app=stream_nonblocking verdict=PASS rc=0 secs=2 quiet=1 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=1156 kf3_refusals=14
+APP_TRY app=stream_perthread verdict=PASS rc=0 secs=2 quiet=1 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=1155 kf3_refusals=14
+APP_TRY app=stream_two verdict=PASS rc=0 secs=2 quiet=1 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=1156 kf3_refusals=14
+APP_TRY app=stream_created2nd verdict=PASS rc=0 secs=2 quiet=1 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=1155 kf3_refusals=14
+APP_TRY app=torch_correct verdict=PASS rc=0 secs=59 quiet=2 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=1431 kf3_refusals=14
+APP_TRY app=torch_ai_bench verdict=PASS rc=0 secs=23 quiet=1 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=1416 kf3_refusals=14
+APP_TRY app=hf_generate verdict=PASS rc=0 secs=15 quiet=2 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=1240 kf3_refusals=14
+APP_TRY app=cupy verdict=PASS rc=0 secs=3 quiet=0 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=1277 kf3_refusals=14
+APP_TRY app=llama_cpp_gen verdict=PASS rc=0 secs=5 quiet=0 note=warn:done_getting_tensors: tensor 'token_embd.weight' (q4_K) (and 0 others) cannot be used with preferred buffer type CUDA_Host, using CPU instead boot=ap_g3_b1 guest_xid=0 kf3_lines=1781 kf3_refusals=14
+APP_TRY app=llama_bench verdict=PASS rc=0 secs=3 quiet=0 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=1972 kf3_refusals=14
+APP_TRY app=vulkaninfo verdict=PASS rc=0 secs=2 quiet=0 note=warn:error: XDG_RUNTIME_DIR is invalid or not set in the environment. boot=ap_g3_b1 guest_xid=0 kf3_lines=1374 kf3_refusals=8
+APP_TRY app=egl_offscreen verdict=PASS rc=0 secs=7 quiet=1 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=588 kf3_refusals=6
+APP_TRY app=clinfo verdict=PASS rc=0 secs=3 quiet=1 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=1591 kf3_refusals=28
+APP_TRY app=nvenc_h264 verdict=PASS rc=0 secs=7 quiet=0 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=1312 kf3_refusals=15
+APP_TRY app=nvenc_hevc verdict=PASS rc=0 secs=7 quiet=0 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=1287 kf3_refusals=14
+APP_TRY app=nvdec_h264 verdict=PASS rc=0 secs=6 quiet=0 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=1274 kf3_refusals=14
+APP_TRY app=hashcat verdict=PASS rc=0 secs=27 quiet=0 note=warn:This means that hashcat cannot use the full parallel power of your device(s). boot=ap_g3_b1 guest_xid=0 kf3_lines=1929 kf3_refusals=18
+APP_TRY app=blender_cycles verdict=PASS rc=0 secs=9 quiet=1 note=- boot=ap_g3_b1 guest_xid=0 kf3_lines=2363 kf3_refusals=28
+APPS_STAGE_MATRIX_END rc=0 secs=456
+APP_ROW name=nvidia_smi os=linux result=PASS secs=0 guest_xid=0 note=-
+APP_ROW name=deviceQuery os=linux result=PASS secs=4 guest_xid=0 note=-
+APP_ROW name=vectorAdd os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=vectorAddDrv os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=matrixMul os=linux result=PASS secs=3 guest_xid=0 note=-
+APP_ROW name=matrixMulDrv os=linux result=PASS secs=1 guest_xid=0 note=-
+APP_ROW name=bandwidthTest os=linux result=PASS secs=3 guest_xid=0 note=-
+APP_ROW name=simpleStreams os=linux result=PASS secs=3 guest_xid=0 note=-
+APP_ROW name=asyncAPI os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=simpleAtomicIntrinsics os=linux result=PASS secs=1 guest_xid=0 note=-
+APP_ROW name=simpleCallback os=linux result=PASS secs=1 guest_xid=0 note=-
+APP_ROW name=simpleOccupancy os=linux result=PASS secs=1 guest_xid=0 note=-
+APP_ROW name=simpleZeroCopy os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=simpleCooperativeGroups os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=concurrentKernels os=linux result=PASS secs=1 guest_xid=0 note=-
+APP_ROW name=simpleIPC os=linux result=PASS secs=3 guest_xid=0 note=-
+APP_ROW name=cudaTensorCoreGemm os=linux result=PASS secs=4 guest_xid=0 note=-
+APP_ROW name=bf16TensorCoreGemm os=linux result=PASS secs=11 guest_xid=0 note=-
+APP_ROW name=globalToShmemAsyncCopy os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=cdpSimpleQuicksort os=linux result=PASS secs=1 guest_xid=0 note=-
+APP_ROW name=graphMemoryNodes os=linux result=PASS secs=3 guest_xid=0 note=-
+APP_ROW name=simpleCudaGraphs os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=simpleCUBLAS os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=simpleCUFFT os=linux result=PASS secs=1 guest_xid=0 note=-
+APP_ROW name=conjugateGradient os=linux result=PASS secs=2 guest_xid=0 note=warn:Test Summary: Error amount = 0.000000
+APP_ROW name=MersenneTwisterGP11213 os=linux result=PASS secs=2 guest_xid=0 note=warn:Max absolute error: 0.000000E+00
+APP_ROW name=reduction os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=sortingNetworks os=linux result=PASS secs=5 guest_xid=0 note=-
+APP_ROW name=scan os=linux result=PASS secs=3 guest_xid=0 note=-
+APP_ROW name=histogram os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=BlackScholes os=linux result=PASS secs=2 guest_xid=0 note=warn:Max absolute error: 1.192093E-05
+APP_ROW name=fastWalshTransform os=linux result=PASS secs=6 guest_xid=0 note=-
+APP_ROW name=transpose os=linux result=PASS secs=1 guest_xid=0 note=-
+APP_ROW name=stream_triad os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=reduce os=linux result=PASS secs=4 guest_xid=0 note=-
+APP_ROW name=nbody os=linux result=PASS secs=1 guest_xid=0 note=-
+APP_ROW name=blackscholes os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=mandelbrot os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=conv2d os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=sgemm_cublas os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=fft_cufft os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=sha256 os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=memcpy2d os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=stream_default os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=stream_created os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=stream_nonblocking os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=stream_perthread os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=stream_two os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=stream_created2nd os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=torch_correct os=linux result=PASS secs=59 guest_xid=0 note=-
+APP_ROW name=torch_ai_bench os=linux result=PASS secs=23 guest_xid=0 note=-
+APP_ROW name=hf_generate os=linux result=PASS secs=15 guest_xid=0 note=-
+APP_ROW name=cupy os=linux result=PASS secs=3 guest_xid=0 note=-
+APP_ROW name=llama_cpp_gen os=linux result=PASS secs=5 guest_xid=0 note=warn:done_getting_tensors: tensor 'token_embd.weight' (q4_K) (and 0 others) cannot be used with preferred buffer type CU
+APP_ROW name=llama_bench os=linux result=PASS secs=3 guest_xid=0 note=-
+APP_ROW name=vulkaninfo os=linux result=PASS secs=2 guest_xid=0 note=warn:error: XDG_RUNTIME_DIR is invalid or not set in the environment.
+APP_ROW name=egl_offscreen os=linux result=PASS secs=7 guest_xid=0 note=-
+APP_ROW name=clinfo os=linux result=PASS secs=3 guest_xid=0 note=-
+APP_ROW name=nvenc_h264 os=linux result=PASS secs=7 guest_xid=0 note=-
+APP_ROW name=nvenc_hevc os=linux result=PASS secs=7 guest_xid=0 note=-
+APP_ROW name=nvdec_h264 os=linux result=PASS secs=6 guest_xid=0 note=-
+APP_ROW name=hashcat os=linux result=PASS secs=27 guest_xid=0 note=warn:This means that hashcat cannot use the full parallel power of your device(s).
+APP_ROW name=blender_cycles os=linux result=PASS secs=9 guest_xid=0 note=-
+APPS_STAGE_COUNTS pass=63 fail=0 not_run=0 of=63 secs=456
+APPS_STAGE_PASS
+APPS_STAGE_EXIT rc=0
+[xid-watch] --- command output ends (rc=0) ---
+[xid-watch] xid_after=8
+[xid-watch] ★ HOST Xid CLEAN across the command — 8 before, 8 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (742 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_cizz_apps.log
+JOB_EXIT gate_watched rc=0 2026-11-07T03:42:34+00:00

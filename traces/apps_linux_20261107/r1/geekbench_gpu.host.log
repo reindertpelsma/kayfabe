@@ -1,0 +1,3 @@
+=== geekbench_gpu side=host start=2026-11-07T02:36:07+00:00 host=ubuntu cmd: cd /opt/apps/data/geekbench && ./geekbench6 --gpu OpenCL 2>&1 | tail -60
+bash: line 1: ./geekbench6: No such file or directory
+=== end rc=0 secs=0 2026-11-07T02:36:08+00:00
