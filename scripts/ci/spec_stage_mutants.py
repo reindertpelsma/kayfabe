@@ -2,7 +2,7 @@
 """Mutation checks of the SPECviewperf gate stage: every mutant needs two killers (stdlib only, GPU-free).
 
 Each mutant is one exact-once text replacement (a few use two) in a private copy of lane.py, tarfilter.py,
-specviewperf_stage.sh or vast_stage_specviewperf.sh; the tests of test_vast_spec_lane.py and test_vast_spec_stage.py
+specviewperf_stage.sh, vast_stage_specviewperf.sh or spec_stage_fakes.py; the tests of test_vast_spec_lane.py and test_vast_spec_stage.py
 that the mutant names run against the copy, and the failing test names are the killers. The first run is the
 baseline over every test of both files and must be green. The payload's own rules (grading, KF_SPEC, the time
 check) are in payload_mutants.py; the report's rows in run_report_mutants.py.
@@ -27,13 +27,13 @@ FILES = {
     "tarfilter": "scripts/bench/specviewperf/tarfilter.py",
     "stage": "scripts/bench/box/specviewperf_stage.sh",
     "wrapper": "scripts/ci/vast_stage_specviewperf.sh",
+    "fakes": "scripts/ci/spec_stage_fakes.py",
 }
 LANE = "test_vast_spec_lane"
 STG = "test_vast_spec_stage"
 COPY = [
     "scripts/ci/test_vast_spec_lane.py",
     "scripts/ci/test_vast_spec_stage.py",
-    "scripts/ci/spec_stage_fakes.py",
     "scripts/ci/vast_payload.py",
     "scripts/ci/vast_report.py",
     "scripts/bench/native_xid_guard.py",
@@ -66,6 +66,8 @@ HP, IN, PF, CP, TD, VD, GA, SE, TG, SC, WR, IR = (
 )
 
 MUTANTS = [
+    M("fake-clock-uses-wall-time", "fakes", "1794000000 + $(cat",
+      "$(' + REAL_DATE + ' +%s) + $(cat", STG + ".FakeClock"),
     # --- lane.py: one viewset's verdict ---------------------------------------------------------------
     M("grade-nonzero-exit-passes", "lane", "and total >= 1 and done == total and rc == 0 and resets == 0:",
       "and total >= 1 and done == total and resets == 0:", G),

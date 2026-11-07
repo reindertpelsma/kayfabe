@@ -1,0 +1,11 @@
+=== dxdiag_report start=2026-11-07T05:30:34.1793144+00:00 host=KFWIN session=0 boot=2026-11-07T05:14:01.5000000Z timeout=180
+DXDIAG Card name: NVIDIA GeForce RTX 4090
+DXDIAG Chip type: NVIDIA GeForce RTX 4090
+DXDIAG Display Memory: 11915 MB
+DXDIAG Driver Version: 32.0.15.8088
+DXDIAG DDI Version: 12
+DXDIAG Feature Levels: 12_2,12_1,12_0,11_1,11_0,10_1,10_0,9_3,9_2,9_1,1_0_CORE
+DXDIAG Driver Model: WDDM 3.2
+DXDIAG Driver Version:
+DXDIAG_OK
+=== end rc=0 secs=44 2026-11-07T05:31:17.7630542+00:00

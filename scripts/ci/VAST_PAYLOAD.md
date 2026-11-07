@@ -129,6 +129,19 @@ only the verdict line"); without the lane file the row is `specviewperf_retry_no
 are reserved and DESIGN-ONLY: requesting them is a preflight failure. A malformed value, a stage
 outside the large tier or a duplicate is refused before the first stage.
 
+## Windows apps stage (2026-11-07)
+
+CODE READ (`vast_payload.py` `winapps_requested`, `winapps_rows`; `scripts/bench/box/windows_apps.sh`;
+`vast_report.py` SPEC); GPU-free tests only (`test_vast_payload_winapps.py`, `test_vast_windows_apps.py`); the first
+hardware run is `traces/winapps_20261107/`. Design: [`V3_WINDOWS_APPS_GATE.md`](../../docs/design/V3_WINDOWS_APPS_GATE.md).
+The Worker may send one more optional variable, `KF_WINAPPS` (`small`, `mid`, `full`), validated by the reporter and popped before
+any stage; it needs the Windows stage. Absent means no stage: nothing sends it today. With it the payload runs
+`windows_apps.sh` as the stage `windows_apps` right after `windows_gate` (a first red cancels it), in a fresh guest that is a
+child of the gate's overlay, with the app disk from the private R2 copy (`winapps-open.iso`, proposed Worker name; without its
+sha256 pin the answer is RETRY class MEDIA). Rows: `windows_apps` (pass), `windows_apps_retry_<class>` (PROVIDER, MEDIA,
+OPERATOR, HOSTREF, BAR1_EXCEPTION, refused, time), `windows_apps` as a failing row for a guest failure. Only one `WINAPPS_PASS` of
+this revision and profile with exit 0 is a pass; a host, harness or input fault is never a pass and never an excuse.
+
 ## SPECviewperf stage (2026-11-07, DRAFT, disabled by default)
 
 CODE READ (`vast_payload.py` `spec_requested`, `spec_table`, `spec_names`, `spec_min_remaining_ms`,

@@ -856,13 +856,29 @@ cmd_run() {
     check_prereqs
   fi
   local disk=$VM/disk/$overlay.qcow2
+  # WINVM_OVERLAY_BACKING=NAME (opt-in, 2026-11-07, the Windows app matrix): a NEW overlay is created over
+  # disk/NAME.qcow2 (a sealed parent, for example the gate's overlay with the driver installed) instead of over
+  # base.qcow2. An existing overlay is never re-based; the parent must exist and is never written while children exist.
+  local backing=base.qcow2
+  if [ -n "${WINVM_OVERLAY_BACKING:-}" ]; then
+    [[ "$WINVM_OVERLAY_BACKING" =~ ^[A-Za-z0-9_.-]+$ ]] || die "WINVM_OVERLAY_BACKING must be a plain overlay name"
+    backing=$WINVM_OVERLAY_BACKING.qcow2
+    dry_run || [ -e "$VM/disk/$backing" ] || die "WINVM_OVERLAY_BACKING: no disk/$backing"
+  fi
   if [ ! -e "$disk" ] && ! dry_run; then
-    qemu-img create -q -f qcow2 -F qcow2 -b base.qcow2 "$disk"
-    log "OVERLAY_CREATED disk/$overlay.qcow2 over base.qcow2"
+    qemu-img create -q -f qcow2 -F qcow2 -b "$backing" "$disk"
+    log "OVERLAY_CREATED disk/$overlay.qcow2 over $backing"
   fi
   qemu_common
   QA+=(-cpu "$(cpu_flags "$arm")" -action reboot=shutdown,panic=none
        -drive "file=$disk,if=none,id=sys,format=qcow2,discard=unmap" -device virtio-blk-pci,drive=sys,bootindex=0)
+  # WINVM_APPS_ISO=FILE (opt-in, 2026-11-07, the Windows app matrix): the read-only app disk (kfapps.iso, label KFAPPS)
+  # on the machine's own AHCI bus (q35's ide.3; the install boots use ide.0-2), present from power-on: no hot-plug,
+  # and the guest needs no network to find its apps.
+  if [ -n "${WINVM_APPS_ISO:-}" ]; then
+    dry_run || [ -f "$WINVM_APPS_ISO" ] || die "WINVM_APPS_ISO: no such file $WINVM_APPS_ISO"
+    QA+=(-drive "file=$WINVM_APPS_ISO,if=none,id=kfapps,media=cdrom,readonly=on" -device ide-cd,drive=kfapps,bus=ide.3)
+  fi
   local gop="" dev=""
   if [ "$kf3" = 1 ]; then
     if [ "${WINVM_KF3_DISPLAY:-on}" = off ]; then gop=""

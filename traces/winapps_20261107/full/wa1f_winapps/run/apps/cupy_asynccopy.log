@@ -1,0 +1,6 @@
+=== cupy_asynccopy start=2026-11-07T05:26:53.4724737+00:00 host=KFWIN session=0 boot=2026-11-07T05:14:01.5000000Z timeout=180
+KFDEV NVIDIA GeForce RTX 4090
+[nvrtc] device NVIDIA GeForce RTX 4090 cupy 14.2.0 include ['C:\\kfapps\\cuda_cudart\\include', 'C:\\kfapps\\cuda_cccl\\include']
+CHECK async_copy_pipeline ok
+NVRTC_DONE asynccopy
+=== end rc=0 secs=17 2026-11-07T05:27:10.0712182+00:00

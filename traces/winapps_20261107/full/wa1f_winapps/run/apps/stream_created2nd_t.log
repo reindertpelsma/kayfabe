@@ -1,0 +1,6 @@
+=== stream_created2nd_t start=2026-11-07T05:02:32.1303362+00:00 host=KFWIN session=0 boot=2026-11-07T04:55:48.5000000Z timeout=120
+KFDEV NVIDIA GeForce RTX 4090
+[eq] device NVIDIA GeForce RTX 4090 torch 2.8.0+cu126
+CHECK stream_created2nd ok
+STREAM_PROBE_DONE created2nd rc=0
+=== end rc=0 secs=6 2026-11-07T05:02:38.4570471+00:00

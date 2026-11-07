@@ -98,9 +98,10 @@ def counts(man, doc):
     diff = collections.Counter(a["difficulty"] for a in doc["apps"])
     files = sum(len(p["files"]) for p in man["packages"])
     mapped = len(doc["linux_map"])
-    return (f"{len(doc['apps'])} apps in {len(c)} categories ({', '.join(f'{k} {v}' for k, v in sorted(c.items()))}); tier 1: {tiers[1]}, tier 2: {tiers[2]}, tier 3: {tiers[3]}; "
-            f"reasoned difficulty low {diff['low']} / medium {diff['medium']} / high {diff['high']}. {len(man['packages'])} packages, {files} files, all sha256-pinned and "
-            f"url-verified; {len(man['dropped'])} items dropped. Linux rows: {mapped} mapped to at least one Windows app, {len(doc['no_equivalent'])} without an equivalent.")
+    return (f"**CODE READ inventory:** {len(doc['apps'])} apps in {len(c)} categories ({', '.join(f'{k} {v}' for k, v in sorted(c.items()))}); tier 1: {tiers[1]}, tier 2: {tiers[2]}, tier 3: {tiers[3]}; "
+            f"reasoned difficulty low {diff['low']} / medium {diff['medium']} / high {diff['high']}. {len(man['packages'])} packages, {files} files, all sha256-pinned. "
+            f"`manifest.json` contains historical per-file URL-check records (`verified_utc`); this generator performs no download checks. "
+            f"{len(man['dropped'])} items dropped. Linux rows: {mapped} mapped to at least one Windows app, {len(doc['no_equivalent'])} without an equivalent.")
 
 
 def fill(text, man, doc):

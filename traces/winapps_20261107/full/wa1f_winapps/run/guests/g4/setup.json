@@ -1,0 +1,46 @@
+{
+ "os": "Microsoft Windows 11 Enterprise LTSC Evaluation build 26100",
+ "smi": "NVIDIA GeForce RTX 4090, 580.88, 8192 MiB",
+ "explorer": true,
+ "image_identity": "954f7d6ddf5a6d92a0f3610fcd736d17e729b94042728fecb316554bb80503ce",
+ "tools": [
+  "cup2.exe",
+  "cup3.exe",
+  "cup8.exe",
+  "kf_cuda_control.exe",
+  "kf_dxprobe.exe",
+  "kf_glgears.exe",
+  "kf_overlayprobe.exe"
+ ],
+ "notes": [],
+ "user": "KFWIN\\kf",
+ "boot_utc": "2026-11-07T05:14:01.5000000Z",
+ "adapters": [
+  {
+   "device": 9860,
+   "index": 0,
+   "luid_high": "00000000",
+   "name": "NVIDIA GeForce RTX 4090",
+   "luid_low": "00005dfe",
+   "flags": 0,
+   "vendor": 4318,
+   "dedicated_mb": 7853
+  },
+  {
+   "device": 140,
+   "index": 1,
+   "luid_high": "00000000",
+   "name": "Microsoft Basic Render Driver",
+   "luid_low": "0000681e",
+   "flags": 2,
+   "vendor": 5140,
+   "dedicated_mb": 0
+  }
+ ],
+ "cd": "D:",
+ "ok": true,
+ "nvidia_adapters": 1,
+ "video": [
+  "NVIDIA GeForce RTX 4090 | 32.0.15.8088 | OK | code 0"
+ ]
+}

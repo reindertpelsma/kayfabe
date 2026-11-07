@@ -82,11 +82,17 @@ export { profileCaps };
 // box when no second machine of the die is offered) and KF_STAGES (extra stages, release only) are
 // sent only when they differ from the default, so a check or sweep box sees today's environment
 // plus KF_TIER.
+// 2026-11-07 (Windows apps stage, PROPOSED, docs/design/V3_WINDOWS_APPS_GATE.md): `winApps` (small, mid, full) is
+// sent as KF_WINAPPS only when the caller passes it. Nothing passes it today, so no box sees the field and no run
+// changes; the Worker setting that turns it on per tier is the owner's decision (and a deploy), not part of this change.
 // 2026-11-07 (SPECviewperf stage, PROPOSED, docs/design/V3_SPEC_GATE.md): `spec` (lanea, laneb, both) is sent as KF_SPEC
 // only when the caller passes it, only for the release profile and only together with the specviewperf stage slot (the box
 // refuses either alone). Nothing passes it today, so no box sees the field and no run changes; which box of a die gets which
 // lane is the owner's decision (and a Worker deploy), not part of this change.
-export function tierEnvironment(profile, { tierName, windowsRuns = 1, stages = [], spec } = {}) {
+export function tierEnvironment(
+  profile,
+  { tierName, windowsRuns = 1, stages = [], spec, winApps } = {},
+) {
   const env = { KF_MERGE_WINDOWS: tier(profile).windows ? '1' : '0' };
   if (tierName !== undefined) env.KF_TIER = tierName;
   if (windowsRuns !== 1) {
@@ -97,6 +103,12 @@ export function tierEnvironment(profile, { tierName, windowsRuns = 1, stages = [
     if (profile !== 'release' || stages.some((s) => !/^[a-z][a-z0-9_]{0,31}$/.test(s)))
       throw Error('stages');
     env.KF_STAGES = stages.join(':');
+  }
+  if (winApps !== undefined) {
+    // needs the Windows stage, and only a named profile
+    if (!tier(profile).windows || !['small', 'mid', 'full'].includes(winApps))
+      throw Error('winapps');
+    env.KF_WINAPPS = winApps;
   }
   if (spec !== undefined) {
     if (
