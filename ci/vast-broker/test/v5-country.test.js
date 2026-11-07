@@ -49,18 +49,18 @@ for (const [preferred, other] of [
   ['US', 'CA'],
   ['CA', 'GB'],
 ])
-  test('country ranks qualifying ' + preferred + ' before ' + other, async () => {
+  test('effective price outranks country ' + preferred + ' versus ' + other, async () => {
     const selected = await choose([
       offer(1, other),
       offer(2, preferred, { dph_base: 0.11, dph_total: 0.13 }),
     ]);
-    assert.equal(selected.id, 2);
+    assert.equal(selected.id, 1);
   });
 for (const reversed of [false, true])
-  test('country order is configurable ' + reversed, async () => {
+  test('cheaper effective offer wins despite configured country order ' + reversed, async () => {
     const rows = [offer(1, 'US'), offer(2, 'CA', { dph_base: 0.11, dph_total: 0.13 })];
     if (reversed) rows.reverse();
-    assert.equal((await choose(rows, { PREFERRED_COUNTRIES: '["CA","US"]' })).id, 2);
+    assert.equal((await choose(rows, { PREFERRED_COUNTRIES: '["CA","US"]' })).id, 1);
   });
 for (const country of ['CA', 'GB'])
   test('qualifying non-US fallback ' + country, async () => {
@@ -135,3 +135,16 @@ for (const countries of ['["US","CA"]', '["CA","US"]'])
     assert.equal('geolocation' in request, false);
     assert.equal('country' in request, false);
   });
+
+// FALSIFIER: the new preferred/price ordering discards country preference even
+// when prices and performance tiers tie.
+for (const order of ['["US","CA"]', '["CA","US"]'])
+  for (const reversed of [false, true])
+    test('country remains an effective-price tie break ' + order + reversed, async () => {
+      const rows = [offer(1, 'US'), offer(2, 'CA')];
+      if (reversed) rows.reverse();
+      assert.equal(
+        (await choose(rows, { PREFERRED_COUNTRIES: order })).country,
+        JSON.parse(order)[0],
+      );
+    });

@@ -52,6 +52,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Benchmark download fixture dependency
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends zstd
       - name: Vast broker mocks and workflow boundary
         run: |
           npx --yes prettier@3.6.2 --check 'ci/vast-broker/**/*.js' 'ci/vast-broker/**/*.mjs'
@@ -74,6 +76,10 @@ jobs:
           node ci/vast-broker/simulation-mutants.mjs
           python3 scripts/ci/profile_resources.py
           node ci/vast-broker/profile-resources-mutants.mjs
+          # Preferred host quality, affordable fallback and offer-facts snapshots.
+          node ci/vast-broker/preferred-hosts-mutants.mjs
+          # Download-time pricing, feasibility and bounded calibration claims.
+          node ci/vast-broker/download-price-mutants.mjs
           # Evidence upload route mutants (2026-11-06): each must fail at least two tests.
           node ci/vast-broker/evidence-mutants.mjs
           # Public log, run report and publisher mutants (2026-11-07): each must fail at least two tests.

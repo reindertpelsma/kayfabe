@@ -20,7 +20,7 @@ import {
   driverPinsFor,
 } from './release-matrix.js';
 import { DEFAULTS } from './defaults.js';
-import { gpuClass, resourceCaps } from './policy.js';
+import { gpuClass, resourceCaps, performanceRank, spendingHeadroom } from './policy.js';
 export const LINUX_LAST_ROW = 'cuda_fat';
 export const VERDICTS = Object.freeze(['PASS', 'FAIL', 'RETRY', 'UNATTRIBUTED']);
 const round = (x) => Math.round(x * 10000) / 10000;
@@ -29,15 +29,16 @@ const countryRank = (offer, cfg) => {
   return i < 0 ? cfg.preferredCountries.length : i;
 };
 const byPreference = (cfg) => (a, b) =>
-  countryRank(a, cfg) - countryRank(b, cfg) ||
+  performanceRank(a) - performanceRank(b) ||
   a.pricing.effective - b.pricing.effective ||
+  countryRank(a, cfg) - countryRank(b, cfg) ||
   a.id - b.id;
 export const requiredStageRows = (stages) =>
   Object.fromEntries(
     stages.map((stage) => [stage, DEFAULTS.stageSlots[stage]?.requiredRowsPerDie ?? [stage]]),
   );
 // One full leg per matrix die; the compatibility path for other callers retains the old split.
-export function dieLegs(offers, cfg, matrixRow) {
+export function dieLegs(offers, cfg, matrixRow, { maximumCost = Infinity } = {}) {
   const releaseMatrix = cfg.releaseMatrix ?? RELEASE_MATRIX;
   matrixRow ??= releaseMatrix.dies.find((d) => d.die === offers[0]?.die);
   if (matrixRow)
@@ -72,17 +73,29 @@ export function dieLegs(offers, cfg, matrixRow) {
     country: o.country,
     dph_total: round(o.dph_total),
     est_usd: round(o.pricing.total),
+    offer_facts: o.offer_facts ?? null,
   });
   const want = cfg.releaseWindowsRuns;
   if (cfg.releaseStages.includes('specviewperf')) {
     const lanes = DEFAULTS.stageSlots.specviewperf.lanes;
-    return lanes.map((spec, index) =>
-      leg(index === 0 ? first : (second ?? first), 1, {
-        spec,
-        phase: index,
-        ...(index > 0 ? { after_lane: lanes[0], reuse_machine: !second } : {}),
-      }),
-    );
+    // Prefer performance, then effective price, within the whole two-lease cap.
+    // The same physical machine is reused only when no other machine is offered.
+    for (const primary of sorted) {
+      const alternatives = sorted.filter((o) => o.machine_id !== primary.machine_id);
+      for (const secondary of alternatives.length ? alternatives : [primary]) {
+        if (primary.pricing.total + secondary.pricing.total > maximumCost + 1e-7) continue;
+        return lanes.map((spec, index) =>
+          leg(index === 0 ? primary : secondary, 1, {
+            spec,
+            phase: index,
+            ...(index > 0
+              ? { after_lane: lanes[0], reuse_machine: primary.machine_id === secondary.machine_id }
+              : {}),
+          }),
+        );
+      }
+    }
+    return [];
   }
   if (second && want >= 2 && (!matrixRow || releaseMatrix.policy.boxes_per_die > 1))
     return [leg(first, 1), leg(second, 1)];
@@ -99,6 +112,26 @@ export function planRelease(allowed, cfg, { budget, credit } = {}) {
   let estimate = 0,
     legs = 0;
   const perFamily = {};
+  const spendingLimit = Math.min(
+    cfg.releaseCostCap,
+    spendingHeadroom(cfg, { budget, credit, profile: 'release' }),
+  );
+  const minimumCosts = new Map(
+    releaseMatrix.dies.map((row) => {
+      const candidates = allowed.filter(
+        (o) =>
+          o.die === row.die &&
+          hostProvidesDrivers(o.host_capabilities ?? releaseMatrix.host_capabilities.vast_kvm, row),
+      );
+      if (!candidates.length) return [row.die, 0];
+      const cheapest = [...candidates].sort((a, b) => a.pricing.total - b.pricing.total);
+      const first = cheapest[0];
+      const second = cfg.releaseStages.includes('specviewperf')
+        ? (cheapest.find((o) => o.machine_id !== first.machine_id) ?? first)
+        : undefined;
+      return [row.die, first.pricing.total + (second?.pricing.total ?? 0)];
+    }),
+  );
   for (const family of Object.keys(cfg.releaseDies)) {
     const cells = [],
       missing = [];
@@ -106,7 +139,17 @@ export function planRelease(allowed, cfg, { budget, credit } = {}) {
       const die = matrixRow.die;
       if (cells.length >= cfg.releaseDiesPerFamily) break;
       const offers = allowed.filter((o) => o.die === die && familyOf(o.die, cfg) === family);
-      const planned = dieLegs(offers, cfg, matrixRow);
+      minimumCosts.delete(die);
+      const reserved = [...minimumCosts.values()].reduce((sum, cost) => sum + cost, 0);
+      const affordable = offers.filter(
+        (o) => o.pricing.total + estimate + reserved <= spendingLimit + 1e-7,
+      );
+      const spec = cfg.releaseStages.includes('specviewperf');
+      let planned = spec
+        ? dieLegs(offers, cfg, matrixRow, { maximumCost: spendingLimit - estimate - reserved })
+        : dieLegs(affordable.length ? affordable : offers, cfg, matrixRow);
+      // Retain an over-cap estimate/refusal when no affordable pair exists.
+      if (spec && !planned.length) planned = dieLegs(offers, cfg, matrixRow);
       if (!planned.length) {
         missing.push({ die, reason: 'NO_OFFER' });
         continue;

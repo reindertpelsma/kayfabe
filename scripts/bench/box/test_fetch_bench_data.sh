@@ -151,6 +151,7 @@ check "http broker refused (2)" test "$?" -eq 2
 # --- file mode ----------------------------------------------------------------------------
 run f1 specviewperf-15.0.0.CHECKSUMS.txt --sha256 "$obj1_sha" --out "$T/out/obj1"
 check "file download exits 0" test "$rc" -eq 0
+check "file emits download timing" has "$T/f1.out" "KF_DOWNLOAD_METRIC seconds="
 check "file content matches" cmp -s "$T/out/obj1" "$T/data/obj1"
 check "no .part left" test ! -e "$T/out/obj1.part"
 check "output has no token, signature or URL" nosecrets f1
@@ -195,6 +196,7 @@ check "wrong token is not echoed" lacks "$T/f8.out" "wrong"
 # --- extract mode -------------------------------------------------------------------------
 run e1 specviewperf-15.0.0.tar.zst --sha256 "$tar_sha" --extract "$T/ex"
 check "extract exits 0" test "$rc" -eq 0
+check "stream emits download timing" has "$T/e1.out" "KF_DOWNLOAD_METRIC seconds="
 check "extracted file a.txt" has "$T/ex/inner/a.txt" hello
 check "extracted file b.bin" cmp -s "$T/ex/b.bin" "$T/src/b.bin"
 check "no staging dir left" test ! -e "$T/ex.part"

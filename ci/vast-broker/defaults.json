@@ -1,29 +1,100 @@
 {
   "price": 1,
+  "downloadModel": {
+    "status": "INFERRED",
+    "derate": 0.3,
+    "source": "traces/specviewperf_vast_20261105/README.md",
+    "note": "Owner-proposed initial derate; trace measured 418 Mbps against 613 advertised; separate owner live observation advertised 1562 Mbps",
+    "r2Measurements": {
+      "status": "MEASURED",
+      "date": "2026-11-07",
+      "source": "Owner/coordinator addition 4, 2026-11-07: dev box, private bench object, presigned GET range requests; supplied to J2, not rerun",
+      "singleStreamMBps": 55.6,
+      "singleStreamMbps": 445,
+      "eightStreamsMBps": 223,
+      "eightStreamsMbps": 1780,
+      "parallelTransferGiB": 2,
+      "note": "Rounded measured throughputs; the dev box link may itself cap the eight-stream aggregate. No universal R2 service limit is inferred."
+    }
+  },
   "payloadProfiles": {
     "small": {
+      "r2ReferenceMbps": 445,
+      "r2ReferenceStatus": "PROPOSED",
+      "streamsFactor": 1,
+      "streamsFactorStatus": "PROPOSED",
+      "maxDownloadSeconds": 3600,
+      "downloadLimitStatus": "PROPOSED",
       "diskGb": 120,
       "bandwidthDownGb": 73,
       "bandwidthUpGb": 2,
       "maxInetUsdPerGb": 0.005
     },
     "middle": {
+      "r2ReferenceMbps": 445,
+      "r2ReferenceStatus": "PROPOSED",
+      "streamsFactor": 1,
+      "streamsFactorStatus": "PROPOSED",
+      "maxDownloadSeconds": 1200,
+      "downloadLimitStatus": "PROPOSED",
       "diskGb": 120,
       "bandwidthDownGb": 87,
       "bandwidthUpGb": 2,
       "maxInetUsdPerGb": 0.005
     },
     "large": {
+      "r2ReferenceMbps": 445,
+      "r2ReferenceStatus": "PROPOSED",
+      "streamsFactor": 1,
+      "streamsFactorStatus": "PROPOSED",
+      "maxDownloadSeconds": 3600,
+      "downloadLimitStatus": "PROPOSED",
       "diskGb": 300,
       "bandwidthDownGb": 130,
       "bandwidthUpGb": 2,
       "maxInetUsdPerGb": 0.02
     },
     "adhoc": {
+      "r2ReferenceMbps": 445,
+      "r2ReferenceStatus": "PROPOSED",
+      "streamsFactor": 1,
+      "streamsFactorStatus": "PROPOSED",
+      "maxDownloadSeconds": 1800,
+      "downloadLimitStatus": "PROPOSED",
       "diskGb": 120,
       "bandwidthDownGb": 38,
       "bandwidthUpGb": 2,
       "maxInetUsdPerGb": 0.005
+    }
+  },
+  "preferredHostQuality": {
+    "small": {
+      "status": "PROPOSED",
+      "preferredMedianRatio": 1.0,
+      "preferredCpuCores": 12,
+      "preferredDiskMbps": 150,
+      "preferredDownMbps": 300
+    },
+    "middle": {
+      "status": "PROPOSED",
+      "preferredMedianRatio": 1.0,
+      "preferredCpuCores": 12,
+      "preferredDiskMbps": 150,
+      "preferredDownMbps": 300
+    },
+    "large": {
+      "status": "PROPOSED",
+      "preferredMedianRatio": 1.0,
+      "preferredCpuCores": 12,
+      "preferredDiskMbps": 150,
+      "preferredDownMbps": 300
+    },
+    "adhoc": {
+      "status": "PROPOSED",
+      "preferredMedianRatio": 1.0,
+      "preferredCpuCores": 12,
+      "preferredDiskMbps": 150,
+      "preferredDownMbps": 300
     }
   },
   "payloadStageResources": {

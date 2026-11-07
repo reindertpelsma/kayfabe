@@ -4,6 +4,7 @@ import {
   matrixExecutionProblem,
   sameMatrixRow,
 } from './release-matrix.js';
+import { captureDownloadMetrics } from './download-metrics.js';
 import { applyProfile, tierEnvironment, tierForClaims, familyOf, profileCaps } from './tier.js';
 // prettier-ignore
 import {planRelease,classifyLeg,releaseVerdict,wantsRerun} from './release.js';
@@ -16,6 +17,7 @@ import {
   budgetRefuse,
   configuration,
   teardownConfiguration,
+  spendingHeadroom,
   numericId,
   hexSha,
   localIdentity,
@@ -363,7 +365,15 @@ export function createService({
   }
   async function checkContract(record, instance, vast, cfg) {
     applyResourceProfile(cfg, budgetClass(record), record.tier);
-    const price = instance && offerPrice(instance, cfg, budgetClass(record));
+    const pricedInstance = instance && {
+      ...instance,
+      inet_down: instance.inet_down ?? record.offerFacts?.inet_down,
+    };
+    const price = pricedInstance && offerPrice(pricedInstance, cfg, budgetClass(record));
+    if (price && price.download.expected_seconds > price.download.max_seconds) {
+      await close(record, vast, 'CONTRACT_SLOW_NETWORK', 'UNAVAILABLE');
+      refuse('UNAVAILABLE', 503);
+    }
     const cap = profileCaps(cfg, budgetClass(record)).price;
     if (
       !price ||
@@ -820,6 +830,8 @@ export function createService({
           redactions,
           { tail: false },
         );
+        // Only bounded numeric claims are retained; never copy raw log strings.
+        captureDownloadMetrics(r, payload.text);
         await ledger.appendLog(r, safe.text);
         // The text as the box sent it, for the public log (redacted when it is published).
         if (logsEnabled(env)) await ledger.appendPublicLog(r, payload.text);
@@ -1306,6 +1318,24 @@ export function createService({
           leg.releaseMatrix,
         ),
       );
+    const credit = await vast.credit();
+    const headroom = spendingHeadroom(cfg, {
+      budget: await ledger.budgetSummary(cfg, now()),
+      credit,
+      profile,
+    });
+    const affordable = evaluation.allowed.filter((candidate) => {
+      if (!(candidate.pricing.total <= headroom)) return false;
+      try {
+        costGuard?.(candidate.pricing.total);
+        return true;
+      } catch (error) {
+        if (error instanceof BrokerError && error.state === 'UNAVAILABLE_BUDGET') return false;
+        throw error;
+      }
+    });
+    // Preserve the established budget diagnostic when no candidate can fit.
+    if (affordable.length) evaluation.allowed = affordable;
     const chosen = await offers.select(evaluation, cfg, ledger, profile, preferences, {
         tierName,
         ...(leg?.die ? { die: leg.die } : {}),
@@ -1313,8 +1343,7 @@ export function createService({
         avoidHosts: leg?.avoidHosts ?? [],
       }),
       offer = chosen.offer,
-      cost = offer.pricing.total,
-      credit = await vast.credit();
+      cost = offer.pricing.total;
     try {
       if (costGuard) costGuard(cost);
       await ledger.budgets(cfg, now(), cost, null, {
@@ -1350,6 +1379,7 @@ export function createService({
               ...(leg.spec ? { spec: leg.spec } : {}),
             }
           : { source: 'github' }),
+        offerFacts: structuredClone(offer.offer_facts ?? null),
         die: offer.die,
         country: offer.country,
         geolocation:
@@ -1666,6 +1696,7 @@ export function createService({
         family,
         die,
         windowsRuns,
+        plannedCostUsd: selected.est_usd ?? 0,
         ...(releaseMatrix ? { releaseMatrix } : {}),
         ...(selected.spec
           ? {
@@ -1854,6 +1885,9 @@ export function createService({
       try {
         if (batch.tier === 'large') market ??= await releaseMarket(vast, cfg);
         const spent = await batchSpend(batch);
+        const pendingReservation = batch.legs
+          .filter((other) => other.key !== l.key && other.state === 'PENDING')
+          .reduce((sum, other) => sum + (other.plannedCostUsd ?? 0), 0);
         const started = await admit({
           key: l.key,
           target: {
@@ -1885,7 +1919,7 @@ export function createService({
             batch.costCapUsd === null
               ? undefined
               : (cost) => {
-                  if (spent + cost > batch.costCapUsd)
+                  if (spent + pendingReservation + cost > batch.costCapUsd)
                     budgetRefuse('release-cost-cap', {
                       cost_usd: cost,
                       spent_usd: spent,

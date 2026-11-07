@@ -229,13 +229,15 @@ raise SystemExit(subprocess.run([sys.executable, *args], input=data).returncode)
         self.assertFalse((self.root / "argv.jsonl").exists(), "legacy mode must not invoke kf_fetch.py")
         calls = [json.loads(line) for line in (self.root / "curl.jsonl").read_text().splitlines()]
         downloads = [call for call in calls if "--retry" in call]
-        # Exact pre-fetcher download command from the merged helper, including retry,
-        # resume, timeouts, protocol, no-proxy and stdin URL configuration.
+        # Exact single-stream command, including retry, resume, timeouts, protocol,
+        # no-proxy, stdin URL configuration and J2's numeric timing output.
         expected = ["--config", "-", "--fail", "--silent", "--show-error",
                     "--proto", "=https", "--noproxy", "*", "--max-redirs", "0",
                     "--user-agent", "kayfabe-bench/1.0 (+https://github.com/reindertpelsma/kayfabe)",
                     "-C", "-", "--retry", "5", "--retry-delay", "5", "--connect-timeout", "30",
-                    "--speed-limit", "1024", "--speed-time", "120", "--output", str(self.out) + ".part"]
+                    "--speed-limit", "1024", "--speed-time", "120", "--write-out",
+                    r"%{stderr}\nKF_DOWNLOAD_METRIC seconds=%{time_total} bytes=%{size_download}\n",
+                    "--output", str(self.out) + ".part"]
         self.assertEqual(downloads, [expected])
         return calls
 

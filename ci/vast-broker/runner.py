@@ -509,6 +509,7 @@ REJECTION_CODES = frozenset(
         "CPU_RAM",
         "PERFORMANCE",
         "NETWORK",
+        "SLOW_NETWORK",
         "DISK_BW",
         "PRICE_FIELDS",
         "COUNTRY",

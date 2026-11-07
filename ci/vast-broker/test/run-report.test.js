@@ -53,13 +53,14 @@ class Bucket {
   }
 }
 
-async function harness({ store = true, logs = true, bucket = new Bucket() } = {}) {
+async function harness({ store = true, logs = true, bucket = new Bucket(), offerPatch = {} } = {}) {
   const db = store ? new FakeD1() : null;
   const extra = {
     ...(store ? { DB: db, ROW_TAG_KEY: TAG_KEY } : {}),
     ...(logs ? { LOGS_BUCKET: bucket } : {}),
   };
   const h = await setup(extra);
+  Object.assign(h.cloud.offer, offerPatch);
   const base = h.cloud.fetch;
   h.cloud.fetch = async (input, init = {}) => {
     const u = new URL(String(input));
@@ -712,7 +713,10 @@ const LOG_LINES = [
   'KF_PAYLOAD_STAGE_END name=merge_bar rc=0 duration_ms=9\n',
 ];
 
-async function finishedRun(options = {}, { report = goodReport(), secretLine = true } = {}) {
+async function finishedRun(
+  options = {},
+  { report = goodReport(), secretLine = true, downloadLine } = {},
+) {
   const x = await harness(options);
   const { h } = x;
   assert.equal((await h.call()).status, 200);
@@ -738,6 +742,7 @@ async function finishedRun(options = {}, { report = goodReport(), secretLine = t
         '&X-Amz-Credential=AK end\n',
     });
   for (const line of LOG_LINES.slice(3)) await h.report({ seq: seq++, kind: 'log', text: line });
+  if (downloadLine) await h.report({ seq: seq++, kind: 'log', text: downloadLine });
   if (report) assert.equal((await postReport(h, report)).status, 200);
   assert.equal(
     (
@@ -1136,3 +1141,49 @@ test('the payload tier file and the docs name the same box variable', () => {
   );
   assert.match(readme, /KF_RUN_REPORT/);
 });
+
+// FALSIFIER: the publisher loses the admission snapshot, or guest report fields
+// replace provider performance facts before R2/D1 publication.
+for (const quality of ['preferred', 'floor'])
+  test(
+    'preferred offer facts publish authoritative snapshot ' + quality,
+    { skip: d1Skip },
+    async () => {
+      const { h, db, bucket, record } = await finishedRun(
+        { offerPatch: quality === 'floor' ? { disk_bw: 100 } : {} },
+        { report: goodReport({ offer_facts: { performance_tier: 'guest-forged' } }) },
+      );
+      assert.equal(record.offerFacts.performance_tier, quality);
+      const current = await h.storage.get('record:123-1');
+      current.offerFacts = { performance_tier: 'changed-after-settlement' };
+      await h.storage.put('record:123-1', current);
+      await h.service.publishRuns();
+      const doc = JSON.parse(bucket.text('vast-123-1-0/report.json'));
+      assert.deepEqual(doc.offer_facts, record.offerFacts);
+      const stored = JSON.parse(db.rows('SELECT report_json FROM ci_run_reports')[0].report_json);
+      assert.deepEqual(stored.offer_facts, record.offerFacts);
+    },
+  );
+
+for (const seconds of [804, 840])
+  test(
+    'download measurements publish beside advertised speed ' + seconds,
+    { skip: d1Skip },
+    async () => {
+      const { h, db, bucket, record } = await finishedRun(
+        {},
+        {
+          report: goodReport({ download_measurements: { source: 'guest-forged' } }),
+          downloadLine: 'KF_DOWNLOAD_METRIC seconds=' + seconds + '.000000 bytes=42002015727\n',
+        },
+      );
+      const expected = (await h.storage.get('plogq:123-1:0')).downloadMeasurements;
+      assert.equal(expected.samples[0].seconds, seconds);
+      assert.equal(expected.advertised_inet_down, record.offerFacts.inet_down);
+      await h.service.publishRuns();
+      const doc = JSON.parse(bucket.text('vast-123-1-0/report.json'));
+      assert.deepEqual(doc.download_measurements, expected);
+      const stored = JSON.parse(db.rows('SELECT report_json FROM ci_run_reports')[0].report_json);
+      assert.deepEqual(stored.download_measurements, expected);
+    },
+  );

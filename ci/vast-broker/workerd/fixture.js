@@ -3,6 +3,13 @@ import worker, { BrokerLedger, createService } from '../src/index.js';
 import { Ledger } from '../src/ledger.js';
 import { configuration } from '../src/policy.js';
 
+// Independently bundled protocol fixture: model the same synthetic 1 Gbps
+// origin as test/helpers.js. Production's shipped 445 Mbps data and middle
+// infeasibility are covered by download-price.test.js; this entry is never
+// deployed or imported by the production Worker.
+import { DEFAULTS } from '../src/defaults.js';
+for (const profile of Object.values(DEFAULTS.payloadProfiles)) profile.r2ReferenceMbps = 1000;
+
 export default worker;
 export { BrokerLedger };
 

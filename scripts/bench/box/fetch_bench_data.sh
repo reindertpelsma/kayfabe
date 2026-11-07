@@ -157,6 +157,17 @@ ask_worker() {
     return 0
 }
 
+# Curl-reported transfer timing only; emit fixed numeric fields, never a URL/name/token.
+emit_download_metric() {
+    local metric
+    while IFS= read -r metric; do
+        if [[ $metric =~ ^KF_DOWNLOAD_METRIC\ seconds=[0-9]+([.][0-9]+)?\ bytes=[0-9]+$ ]]; then
+            printf '%s\n' "$metric"
+        fi
+    done <"$errs"
+    sed -i '/^KF_DOWNLOAD_METRIC /d' "$errs"
+}
+
 # Step 2 (file): resumable download into $1.
 download_file() {
     local rc=0
@@ -175,7 +186,9 @@ download_file() {
     printf 'url = "%s"\n' "$location" | curl --config - --fail --silent --show-error \
         --proto '=https' --noproxy '*' --max-redirs 0 --user-agent "$ua" \
         -C - --retry 5 --retry-delay 5 --connect-timeout 30 --speed-limit 1024 --speed-time 120 \
+        --write-out '%{stderr}\nKF_DOWNLOAD_METRIC seconds=%{time_total} bytes=%{size_download}\n' \
         --output "$1" 2>"$errs" || rc=$?
+    emit_download_metric
     [ "$rc" -eq 0 ] || { show_err; echo "fetch_bench_data: download failed (curl exit $rc)" >&2; }
     return "$rc"
 }
@@ -190,12 +203,14 @@ download_stream() {
     set +e
     printf 'url = "%s"\n' "$location" | curl --config - --fail --silent --show-error \
         --proto '=https' --noproxy '*' --max-redirs 0 --user-agent "$ua" \
-        --connect-timeout 30 --speed-limit 1024 --speed-time 120 --output - 2>"$errs" \
+        --connect-timeout 30 --speed-limit 1024 --speed-time 120 \
+        --write-out '%{stderr}\nKF_DOWNLOAD_METRIC seconds=%{time_total} bytes=%{size_download}\n' --output - 2>"$errs" \
         | tee "$fifo" | zstd -d -c --long=31 | tar -x -C "$stage" --no-same-owner
     status=("${PIPESTATUS[@]}")
     set -e
     wait "$shpid" || true
     streamhash=$(cat "$work/stream.sha256" 2>/dev/null || true)
+    emit_download_metric
     if [ "${status[0]}" -ne 0 ] || [ "${status[1]}" -ne 0 ] || [ "${status[2]}" -ne 0 ] || [ "${status[3]}" -ne 0 ]; then
         show_err
         echo "fetch_bench_data: stream failed (curl ${status[0]}, tee ${status[1]}, zstd ${status[2]}, tar ${status[3]})" >&2
