@@ -16,8 +16,10 @@ import {
   MAX_LIMIT,
 } from './validate.js';
 import { API_VERSION, PARAMS, describe } from './schema.js';
+import { subrunOut, reportOut, ciSubruns, ciStats } from './subruns.js';
 
 const MAX_FACTS = 64;
+const PUBLISH_HORIZON_MS = 6 * 3600 * 1000;
 const MAX_LOGS = 32;
 
 function plainObject(text) {
@@ -552,7 +554,40 @@ const handlers = {
         ? { key: row.log_key, ...(base ? { direct: base + '/' + row.log_key } : {}) }
         : null;
     const claims = await db.all('ciRunClaims', [id]);
-    const final = row.verdict !== null && row.ended_at !== null;
+    // Migration 0004 (run reports): the subruns of this session, the stored report and the identity
+    // of the published full log. A run without any of them (an older box, a Worker without the
+    // bucket) answers null / [] and the page says "not measured yet".
+    // A database that predates migration 0004 has no such tables: the run still answers, without
+    // them (deployment order is migrations first, but a late migration must not take the page down).
+    const soft = async (action, empty) => {
+      try {
+        return await action();
+      } catch {
+        return empty;
+      }
+    };
+    const stored = await soft(() => db.first('ciRunReport', [id]), null);
+    const logInfo =
+      stored &&
+      Number.isSafeInteger(stored.log_bytes) &&
+      /^[0-9a-f]{64}$/.test(stored.log_sha256 ?? '')
+        ? {
+            bytes: stored.log_bytes,
+            sha256: stored.log_sha256,
+            ...(base ? { url: base + '/' + id + '/log.txt' } : {}),
+          }
+        : null;
+    const subruns = (await soft(() => db.all('ciRunSubruns', [id]), [])).map(subrunOut);
+    // A final run page is immutable only once the report row exists (the CI Worker writes it a
+    // little after the run row becomes final), or after the publisher has given up (about 5 hours,
+    // see ci/vast-broker/src/publish.js): in between, a page without report, subruns and log must
+    // not be cached for a year (review of #282, F2).
+    const final =
+      row.verdict !== null &&
+      row.ended_at !== null &&
+      (stored !== null && stored !== undefined
+        ? true
+        : Date.now() - Date.parse(row.ended_at) > PUBLISH_HORIZON_MS);
     return json(
       {
         api: API_VERSION,
@@ -574,11 +609,21 @@ const handlers = {
             })),
             claimed: CLAIMED_FIELDS,
           },
-          log,
+          log: log ?? logInfo,
+          subruns,
+          report: stored ? reportOut(stored.report_json, id, logInfo) : null,
         },
       },
       { cache: final ? CACHE.immutable : CACHE.short },
     );
+  },
+
+  async ciSubruns(db, q) {
+    return json({ api: API_VERSION, ...(await ciSubruns(db, q)) }, { cache: CACHE.edge });
+  },
+
+  async ciStats(db, q) {
+    return json({ api: API_VERSION, ...(await ciStats(db, q)) }, { cache: CACHE.edge });
   },
 
   async ciTree(db, q, [hash]) {
@@ -623,6 +668,18 @@ const handlers = {
 
   async logRedirect(db, q, [id, name], env) {
     if (!PATTERNS.runId.test(id)) throw new ApiError(400, 'bad_request', 'invalid run id');
+    // Objects the CI Worker publishes for a run (<run>/log.txt and <run>/report.json in the public
+    // bucket); only for a final run that has them. Anything else is the legacy `runs` table.
+    if (name === 'log.txt' || name === 'report.json') {
+      const object = await db.first('ciRunObjects', [id]).catch(() => null);
+      const present =
+        object && (name === 'log.txt' ? object.log_bytes !== null : object.has_report === 1);
+      if (present) {
+        const home = logsBase(env.LOGS_BASE);
+        if (!home) throw new ApiError(404, 'not_found', 'logs not configured');
+        return redirect(home + '/' + id + '/' + name);
+      }
+    }
     if (!PATTERNS.logName.test(name)) throw new ApiError(400, 'bad_request', 'invalid log name');
     const row = await db.first('runLogs', [id]);
     if (!row || !logNames(row.logs_json).includes(name))
@@ -650,6 +707,8 @@ const ROUTES = [
   [/^\/v1\/ci\/trees\/([^/]{1,64})$/, 'ciTree', 'none'],
   [/^\/v1\/ci\/runs\/([^/]{1,64})$/, 'ciRun', 'none'],
   [/^\/v1\/ci\/commits\/([^/]{1,40})$/, 'ciCommit', 'none'],
+  [/^\/v1\/ci\/subruns$/, 'ciSubruns', 'ciSubruns'],
+  [/^\/v1\/ci\/stats$/, 'ciStats', 'ciStats'],
   [/^\/v1\/logs\/([^/]{1,64})\/([^/]{1,68})$/, 'logRedirect', 'none'],
 ];
 
@@ -665,7 +724,8 @@ export async function handle(request, env) {
     }
     throw new ApiError(404, 'not_found', 'no such resource');
   } catch (error) {
-    if (error instanceof ApiError) return errorResponse(error.status, error.code, error.detail);
+    if (error instanceof ApiError)
+      return errorResponse(error.status, error.code, error.detail, error.extra);
     return errorResponse(500, 'internal', 'internal error');
   }
 }

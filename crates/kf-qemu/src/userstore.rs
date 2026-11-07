@@ -172,7 +172,6 @@ impl<H: Host> Cache<H> {
 
     /// Bounded worker-only cleanup. On error Self still owns every unreleased
     /// native view. Never retry this under a guest-reachable metadata guard.
-    #[allow(dead_code)]
     pub(crate) fn release(&mut self) -> Result<(), Refusal> {
         while let Some(view) = self.views.last_mut() {
             // release can revoke the CPU mapping before an RM refusal, so the
@@ -378,7 +377,6 @@ struct NativeView {
 }
 
 impl Cache<Native> {
-    #[allow(dead_code)] // Runtime USER source adapter is the next caller.
     pub(crate) fn new(rm: &'static HostRm, store: u32, bound: u64) -> Result<Self, Refusal> {
         Self::create(Native { rm, store }, bound)
     }

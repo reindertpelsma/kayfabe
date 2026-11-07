@@ -10,6 +10,15 @@ vocabulary; unchanged), [`V3_WINDOWS_GATE.md`](V3_WINDOWS_GATE.md) (the gate thi
 Marking in this document: **CODE READ** = read in the repository, **MEASURED** = seen on a box (with revision, box, die),
 **INFERRED** = reasoned, not seen, **DESIGN** = intent.
 
+**CODE READ, J1 integration, 2026-11-07:** the successor to draft PR #286 merges `next` (including Linux apps,
+run-report support and evidence relocation). `vast_run_report.py` consumes the stage's `WINAPPS_APP` output as
+Windows `apps[]` and `apps_windows` test rows, using the Windows subrun. Its suite rows still come from the
+payload result, including `windows_apps_retry_*`; an apps failure cannot be hidden by a preceding gate PASS.
+Missing/harness rows map to NOT_RUN (test SKIP), never PASS. `KF_WINAPPS` absent still selects no Windows apps stage.
+The successful payload suite counts the checked apps (rather than one stage): it requires a nonzero matching
+`WINAPPS_PASS apps=N`, grade summary, and N distinct passing per-app rows. Truncated or inconsistent output
+is `windows_apps_retry_operator`.
+
 ## 1. The problem
 
 Owner requirement (2026-10-10, restated 2026-11-07): the release gate runs, in the Windows 11 LTSC guest, the Windows
@@ -144,11 +153,34 @@ Worker path (no run token, no R2 bundle), the `mid` profile, and the stage insid
    RETRY class MEDIA by design. The Worker names are proposed (not deployed).
 2. **Owner decision on the 29 apps** that need GravityMark, FurMark, GpuTest, the Vulkan SDK or ffmpeg GPL: private copy in R2 for our own
    boxes (as for SPECviewperf) or manual. The pinned ffmpeg URL is dead and needs a new pin either way.
-3. **Overlay probes and `nbody_demo_gl`:** are these kayfabe's? Needs a native Windows reference on the same kind of Vast box (the rule for the
-   BAR1 exception). Until then they fail the `full` profile; they are not excluded (an exclusion needs native-failure evidence).
+3. **Failure attribution (CODE READ, 2026-11-07):** `managed_t` has a native PASS in
+   `traces/windows_baseline_20261010/apps/managed_t.json` (verdict in `verdict/managed_t.json`), and
+   `nbody_demo_gl` has two native PASS records: `traces/windows_baseline_20261010/verdict/nbody_demo_gl.json`
+   and `traces/windows_matrix_20261011/reference-unigine-nbody/apps/nbody_demo_gl.verdict.json`.
+   These older, different-box references establish that both apps can pass natively; they do not establish
+   same-box attribution for the November run. The seven failing `overlay_yuv_*` probes have no native PASS
+   on a Vast box: their applicability remains an open owner decision. All nine failures remain in `full`;
+   none is excluded or moved to another class.
 4. **Harness overhead** (47 s per app, 3.5 min per guest) puts `full` near 2 h plus the slow apps: the release hard limit (300 min after the
    gate's 20-60 min) is tight. Candidates: batch the per-app scp writes into one, poll less, a bigger `--per-guest`, run the slow apps (clpeak,
    LLM, Blender) as their own leg. Not done.
 5. **Phase 2 and the budget:** the driver checks the budget only when it starts a guest, so one guest can overrun it (it did, by the stop).
    A per-guest deadline is not implemented.
 6. **Mapping tier to profile** (small, middle, large to small, mid, full) and turning on `KF_WINAPPS` in the Worker: owner decision plus a deploy.
+
+## 10. Guest grouping review (CODE READ and INFERRED, 2026-11-07; no hardware run)
+
+Falsifier stated before inspection: grouping requires a boot for every app, changes the verdict predicate,
+or removes isolated reruns. **CODE READ:** `winapps.py::run_matrix` already takes `todo[:cfg.per_guest]`,
+runs that batch in one `GuestSession`, moves remaining apps to a fresh guest on a health/restart condition,
+and reruns each phase-1 failure alone in phase 2. The stage exposes `KF_WINAPPS_PER_GUEST` (default 8);
+the recorded full run used 16. The falsifier did not hold for the current grouping mechanism.
+
+**DESIGN proposal:** evaluate `KF_WINAPPS_PER_GUEST=32` for phase 1, keeping restart conditions, per-app
+cleanup, health checks and phase-2 isolated verdicts unchanged. **INFERRED arithmetic**, assuming all
+79 apps finish phase 1 without a health restart: ceiling(79/8)=10 boots, ceiling(79/16)=5,
+ceiling(79/32)=3. Applied to the recorded approximate 210 seconds per boot, 16 to 32 could avoid
+about 420 seconds. This is a cost model, not a measured improvement; isolated failures add boots.
+It does not address the approximate 47-second per-app transport cost. A later implementation could
+combine script writes into one ssh operation, with the existing output and health checks retained.
+No grouping default, timeout, budget or verdict rule is changed here.

@@ -1,0 +1,25 @@
+=== simpleStreams side=host start=2026-11-07T02:22:18+00:00 host=ubuntu cmd: /opt/apps/bundle/samples/simpleStreams
+[ simpleStreams ]
+
+Device synchronization method set to = 0 (Automatic Blocking)
+Setting reps to 100 to demonstrate steady state
+
+> GPU Device 0: "Ada" with compute capability 8.9
+
+Device: <NVIDIA GeForce RTX 4090> canMapHostMemory: Yes
+> CUDA Capable: SM 8.9 hardware
+> 128 Multiprocessor(s) x 128 (Cores/Multiprocessor) = 16384 (Cores)
+> scale_factor = 1.0000
+> array_size   = 16777216
+
+> Using CPU/GPU Device Synchronization method (cudaDeviceScheduleAuto)
+> mmap() allocating 64.00 Mbytes (generic page-aligned system memory)
+> cudaHostRegister() registering 64.00 Mbytes of generic allocated system memory
+
+Starting Test
+memcopy:	3.04
+kernel:		0.25
+non-streamed:	4.36
+4 streams:	4.03
+-------------------------------
+=== end rc=0 secs=3 2026-11-07T02:22:21+00:00

@@ -205,13 +205,6 @@ impl CHeader {
     pub fn hermetic(&self) -> bool {
         self.props & P_NONHERMETIC == 0
     }
-
-    /// Were falcon register reads served from the rom-device overlay (and therefore
-    /// invisible as [`CKind::MmioRead`])?
-    #[must_use]
-    pub fn rom_overlay(&self) -> bool {
-        self.props & P_M2ROMREGS != 0
-    }
 }
 
 /// A refusal to decode. Every variant names the exact thing that was wrong; there is no

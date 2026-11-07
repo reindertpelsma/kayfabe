@@ -334,6 +334,146 @@ export const QUERIES = Object.freeze({
     GROUP BY value HAVING value IS NOT NULL
     ORDER BY runs DESC, value DESC LIMIT 64`,
 
+  // ---- Run reports, subruns and stats (migration 0004) ----------------------------------------
+
+  // The subruns of one session, in the order the box reported them.
+  ciRunSubruns: `
+    SELECT s.sub, s.ord, s.kind, s.os, s.guest_driver, s.host_driver, s.verdict, s.reason,
+           s.stages_json, s.pass_count, s.fail_count, s.skip_count, s.started_at, s.ended_at,
+           s.duration_ms, s.log_start, s.log_end
+    FROM ci_subruns s WHERE s.run_id = ?1 ORDER BY s.ord`,
+
+  // The stored report (sanitised by the CI Worker) and the identity of the published log.
+  ciRunReport: `
+    SELECT p.report_json, p.host_driver, p.log_bytes, p.log_sha256
+    FROM ci_run_reports p WHERE p.run_id = ?1`,
+
+  // Does a run have a published object of this kind (for the /v1/logs redirect)?
+  ciRunObjects: `
+    SELECT r.run_id, p.log_bytes, p.report_json IS NOT NULL AS has_report
+    FROM ci_runs r JOIN ci_run_reports p ON p.run_id = r.run_id
+    WHERE r.run_id = ?1 AND r.verdict IS NOT NULL`,
+
+  // Candidate subruns of FINAL sessions that ran (not NOT_RUN), newest first. Every filter is
+  // optional and exact: ?1 die, ?2 os, ?3 host driver, ?4 guest driver, ?5 family, ?6 tree,
+  // ?7 commit, ?8 CPU vendor; ?9 = the row cap (the handler asks for at most 100 per probe and
+  // ranks the union in JS, see src/rank.js).
+  ciSubrunCandidates: `
+    SELECT s.run_id, s.sub, s.kind, s.os, s.guest_driver, s.host_driver, s.verdict, s.reason,
+           s.stages_json, s.pass_count, s.fail_count, s.skip_count, s.duration_ms,
+           s.log_start, s.log_end,
+           r.die, r.family, r.tier, r.commit_sha, r.tree_hash, r.verdict AS session_verdict,
+           COALESCE(s.ended_at, r.sort_at) AS ended_at, f.gpu_name,
+           (SELECT c.cpu_vendor FROM ci_run_claims c WHERE c.run_id = r.run_id
+              ORDER BY c.guest_os LIMIT 1) AS cpu_vendor,
+           (SELECT c.cpu_arch FROM ci_run_claims c WHERE c.run_id = r.run_id
+              ORDER BY c.guest_os LIMIT 1) AS cpu_arch
+    FROM ci_subruns s
+    JOIN ci_runs r ON r.run_id = s.run_id
+    LEFT JOIN ci_host_facts f ON f.run_id = r.run_id
+    WHERE r.verdict IS NOT NULL AND s.verdict IN ('PASS', 'FAIL', 'RETRY')
+      AND (?1 IS NULL OR r.die = ?1)
+      AND (?2 IS NULL OR s.os = ?2)
+      AND (?3 IS NULL OR s.host_driver = ?3)
+      AND (?4 IS NULL OR s.guest_driver = ?4)
+      AND (?5 IS NULL OR r.family = ?5)
+      AND (?6 IS NULL OR r.tree_hash = ?6)
+      AND (?7 IS NULL OR r.commit_sha = ?7)
+      AND (?8 IS NULL OR EXISTS (SELECT 1 FROM ci_run_claims c
+                                 WHERE c.run_id = r.run_id AND c.cpu_vendor = ?8))
+    ORDER BY r.sort_at DESC, s.run_id, s.sub
+    LIMIT ?9`,
+
+  // When the wanted tree (?1) or commit (?2) was first tested: the reference time of the commit
+  // dimension. NULL when nothing is known about it.
+  ciCommitRef: `
+    SELECT MIN(r.sort_at) AS first_at FROM ci_runs r
+    WHERE r.verdict IS NOT NULL
+      AND ((?1 IS NOT NULL AND r.tree_hash = ?1) OR (?2 IS NOT NULL AND r.commit_sha = ?2))`,
+
+  // Expansion of subrun hits (?1: a JSON array of "run|sub" strings, ?2: rows kept per subrun).
+  ciSubrunTests: `
+    SELECT x.run_id, x.sub, x.ord, x.suite, x.name, x.result, x.ms FROM (
+      SELECT t.run_id, t.sub, t.ord, t.suite, t.name, t.result, t.ms,
+             ROW_NUMBER() OVER (PARTITION BY t.run_id, t.sub ORDER BY t.ord) AS rn
+      FROM ci_run_tests t
+      WHERE t.run_id IN (SELECT substr(j.value, 1, instr(j.value, '|') - 1) FROM json_each(?1) j)
+        AND (t.run_id || '|' || t.sub) IN (SELECT j.value FROM json_each(?1) j)
+    ) x WHERE x.rn <= ?2 ORDER BY x.run_id, x.sub, x.ord`,
+
+  ciSubrunPerf: `
+    SELECT x.run_id, x.sub, x.ord, x.name, x.value, x.unit, x.higher_is_better, x.suite,
+           x.ref_value, x.ref_ratio FROM (
+      SELECT t.run_id, t.sub, t.ord, t.name, t.value, t.unit, t.higher_is_better, t.suite,
+             t.ref_value, t.ref_ratio,
+             ROW_NUMBER() OVER (PARTITION BY t.run_id, t.sub ORDER BY t.ord) AS rn
+      FROM ci_run_perf t
+      WHERE t.run_id IN (SELECT substr(j.value, 1, instr(j.value, '|') - 1) FROM json_each(?1) j)
+        AND (t.run_id || '|' || t.sub) IN (SELECT j.value FROM json_each(?1) j)
+    ) x WHERE x.rn <= ?2 ORDER BY x.run_id, x.sub, x.ord`,
+
+  ciSubrunApps: `
+    SELECT x.run_id, x.sub, x.ord, x.name, x.os, x.result, x.note FROM (
+      SELECT t.run_id, t.sub, t.ord, t.name, t.os, t.result, t.note,
+             ROW_NUMBER() OVER (PARTITION BY t.run_id, t.sub ORDER BY t.ord) AS rn
+      FROM ci_run_apps t
+      WHERE t.run_id IN (SELECT substr(j.value, 1, instr(j.value, '|') - 1) FROM json_each(?1) j)
+        AND (t.run_id || '|' || t.sub) IN (SELECT j.value FROM json_each(?1) j)
+    ) x WHERE x.rn <= ?2 ORDER BY x.run_id, x.sub, x.ord`,
+
+  // The stage rows of up to 100 sessions (?1: a JSON array of run ids), for include=stages.
+  ciStagesOf: `
+    SELECT s.run_id, s.ord, s.name, s.rc, s.duration_ms, s.result
+    FROM ci_run_stages s WHERE s.run_id IN (SELECT j.value FROM json_each(?1) j)
+    ORDER BY s.run_id, s.ord`,
+
+  // Stats: the latest reported FINAL session per (die, host driver). ?1 die, ?2 tier, ?3 host
+  // driver, ?4 guest OS (the session must have a subrun of that OS that ran), ?5 sort word
+  // (die, driver; anything else = newest first), ?6 page size.
+  ciStats: `
+    WITH latest AS (
+      SELECT r.run_id, r.die, r.family, r.tier, r.commit_sha, r.sort_at, r.verdict,
+             p.host_driver, f.gpu_name,
+             ROW_NUMBER() OVER (
+               PARTITION BY r.die, p.host_driver ORDER BY r.sort_at DESC, r.run_id DESC
+             ) AS rn
+      FROM ci_runs r
+      JOIN ci_run_reports p ON p.run_id = r.run_id
+      LEFT JOIN ci_host_facts f ON f.run_id = r.run_id
+      WHERE r.verdict IS NOT NULL AND p.report_json IS NOT NULL
+        AND (?1 IS NULL OR r.die = ?1)
+        AND (?2 IS NULL OR r.tier = ?2)
+        AND (?3 IS NULL OR p.host_driver = ?3)
+        AND (?4 IS NULL OR EXISTS (SELECT 1 FROM ci_subruns s
+                                   WHERE s.run_id = r.run_id AND s.os = ?4
+                                     AND s.verdict <> 'NOT_RUN'))
+    )
+    SELECT l.run_id, l.die, l.family, l.tier, l.commit_sha, l.sort_at, l.verdict, l.host_driver,
+           l.gpu_name
+    FROM latest l WHERE l.rn = 1
+    ORDER BY CASE ?5 WHEN 'die' THEN l.die WHEN 'driver' THEN l.host_driver END,
+             l.sort_at DESC, l.run_id DESC
+    LIMIT ?6`,
+
+  // Subruns of up to 100 sessions (?1: JSON array of run ids; ?2: guest OS filter or NULL).
+  ciSubrunsOf: `
+    SELECT s.run_id, s.sub, s.ord, s.kind, s.os, s.guest_driver, s.host_driver, s.verdict,
+           s.pass_count, s.fail_count, s.skip_count
+    FROM ci_subruns s
+    WHERE s.run_id IN (SELECT j.value FROM json_each(?1) j) AND (?2 IS NULL OR s.os = ?2)
+    ORDER BY s.run_id, s.ord`,
+
+  // Perf rows of those sessions (?3: rows kept per session), through the same OS filter.
+  ciStatsPerf: `
+    SELECT x.run_id, x.sub, x.ord, x.name, x.value, x.unit, x.higher_is_better, x.suite,
+           x.ref_value, x.ref_ratio FROM (
+      SELECT t.run_id, t.sub, t.ord, t.name, t.value, t.unit, t.higher_is_better, t.suite,
+             t.ref_value, t.ref_ratio,
+             ROW_NUMBER() OVER (PARTITION BY t.run_id ORDER BY t.ord) AS rn
+      FROM ci_run_perf t JOIN ci_subruns s ON s.run_id = t.run_id AND s.sub = t.sub
+      WHERE t.run_id IN (SELECT j.value FROM json_each(?1) j) AND (?2 IS NULL OR s.os = ?2)
+    ) x WHERE x.rn <= ?3 ORDER BY x.run_id, x.ord`,
+
   hostCounts: `
     SELECT h.die, h.class, h.status, COUNT(*) AS hosts
     FROM hosts h

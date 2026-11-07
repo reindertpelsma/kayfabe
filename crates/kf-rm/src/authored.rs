@@ -449,7 +449,6 @@ fn fault_ids(family: Family) -> Result<(u32, u32, u32), LayoutRefusal> {
 /// spaces diverge for CE10+, NVENC and NVDEC). The SW pseudo-engine has no bit.
 #[must_use]
 pub fn engine_caps(engines: &[FifoDeviceEntry]) -> [u32; kf_abi::gspstaticinfo::ENGINE_CAPS_WORDS] {
-    use kf_abi::submit as s;
     let mut caps = [0u32; kf_abi::gspstaticinfo::ENGINE_CAPS_WORDS];
     for e in engines {
         if e.engine_data[slot::IS_HOST_DRIVEN_ENGINE] == 0 {

@@ -1,3 +1,5 @@
+> **STATUS: SUPERSEDED, 2026-09-21** (archived, w822). Successor: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) and [`THE_ARCHITECTURE_v3.md`](../design/THE_ARCHITECTURE_v3.md). Historical record: a `STATUS` line further down says what the document claimed when it was written; it is no longer a claim about the current tree.
+>
 > ⊘⊘⊘ **ARCHIVED — THIS DESCRIBES A SUPERSEDED ARCHITECTURE. IT IS REFERENCE, NOT CURRENT.**
 > The live design is `docs/design/THE_DESIGN.md`. This file is kept because its *measurements*,
 > its *ogkm findings* and its *reasoning* remain useful — its **architecture does not**. Do not
@@ -5,7 +7,7 @@
 
 # The road to v1, after cup2 — gates, threat model, audit order
 
-> **STATUS: LIVE — 2026-08-14.** Owner's plan, agreed in conversation, with three pushbacks the
+> **STATUS AT WRITING: LIVE — 2026-08-14.** Owner's plan, agreed in conversation, with three pushbacks the
 > owner accepted folded in. ⊘ This is a **gate order and a specification**, not a schedule. Supersede
 > it in place; do not write a successor beside it.
 >

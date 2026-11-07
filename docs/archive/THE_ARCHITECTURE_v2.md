@@ -8,7 +8,7 @@
 
 # The architecture, v2 — lazy everywhere, strict at recycle
 
-**STATUS: LIVE, written 2026-09-20 (w815). Supersedes `ARCHITECTURE_from_scratch.md` and
+**STATUS AT WRITING: LIVE, written 2026-09-20 (w815). Supersedes `ARCHITECTURE_from_scratch.md` and
 `l1_architecture_summary.md`, both of which describe the two-worlds framebuffer and the address
 table this document deletes.**
 

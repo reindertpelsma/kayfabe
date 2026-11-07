@@ -1,5 +1,7 @@
 # What a boot that SUCCEEDS actually demands — GA106, measured
 
+**STATUS: ANSWERED, 2026-08-03.** Answers how long the ladder from the failing `cap1` boot to a working `nvidia-smi` is (53 more controls, 13 of them refused by a real GSP), from the committed capture `traces/rpctrace_ga106_boot1.bin`. The result is recorded and the file is not updated; read on 2026-11-07, the capture is still in the tree.
+
 `[measured]` 2026-08-03 by decoding `traces/rpctrace_ga106_boot1.bin` (task #178's capture:
 RTX 3060 GA106, open 580.159.04, `nvidia-smi` working) with
 `scripts/rpctrace/decode_rpctrace.py --controls`.

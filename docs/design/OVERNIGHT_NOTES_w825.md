@@ -1,7 +1,6 @@
 # OVERNIGHT NOTES — w825 (2026-09-23/24)
 
-STATUS: LIVE — the running log of the overnight autonomy session. Box 52236011 (RTX 3060,
-GA106, 580.159.04). Baseline `w825base`: thin guest 17/30 (honest 15/30).
+**STATUS: ANSWERED, 2026-09-24.** The running log of one overnight autonomy session (last git change 2026-09-24), kept as a point-in-time record: box 52236011 (RTX 3060, GA106, 580.159.04), baseline `w825base`: thin guest 17/30 (honest 15/30). It is not updated; its numbers are that session's. It also names code that is gone from the current tree (read on 2026-11-07: `KAYFABE_SCRATCHPAD_START_MB` appears nowhere in crates/, scripts/ or qemu/, and `kayfabe-rt` is under `archive/crates/`), so cite it as history. Current results: [`docs/STATUS_DETAIL.md`](../STATUS_DETAIL.md).
 
 
 ## ★ MORNING SUMMARY (read this first) — 2026-09-24 ~01:50

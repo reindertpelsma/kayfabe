@@ -222,14 +222,14 @@ const MUTANTS = [
     [
       [
         I,
-        'if (/^\\/(?:report|kill|blob-url|bench-data|evidence)\\//.test(path)) {',
-        'if (/^\\/(?:report|kill|blob-url|bench-data)\\//.test(path)) {',
+        'if (/^\\/(?:report|run-report|kill|blob-url|bench-data|evidence)\\//.test(path)) {',
+        'if (/^\\/(?:report|run-report|kill|blob-url|bench-data)\\//.test(path)) {',
       ],
     ],
   ],
   [
     'route not recognised as a box route',
-    [[R, '/^\\/(?:report|kill|evidence)\\/', '/^\\/(?:report|kill)\\/']],
+    [[R, '/^\\/(?:report|run-report|kill|evidence)\\/', '/^\\/(?:report|run-report|kill)\\/']],
   ],
   [
     'profile ignored in the key',

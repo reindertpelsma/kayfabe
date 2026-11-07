@@ -103,46 +103,6 @@ pub struct Census {
     pub dropped: u64,
 }
 
-impl Census {
-    /// The distinct `(magic, nr)` pairs seen, each with how many times it occurred and how
-    /// many of those failed, in first-appearance order.
-    ///
-    /// ⊘ Derived from [`Census::log`], so it is only complete when the log was enabled and
-    /// [`Census::dropped`] is zero.
-    #[must_use]
-    pub fn by_request(&self) -> Vec<((u8, u8), u64, u64)> {
-        let mut out: Vec<((u8, u8), u64, u64)> = Vec::new();
-        for r in &self.log {
-            let key = (r.magic, r.nr);
-            if let Some(e) = out.iter_mut().find(|e| e.0 == key) {
-                e.1 += 1;
-                e.2 += u64::from(r.errno != 0);
-            } else {
-                out.push((key, 1, u64::from(r.errno != 0)));
-            }
-        }
-        out
-    }
-
-    /// Per-phase subtotals in first-appearance order.
-    ///
-    /// ★ Read these against [`Census::total`]. A shortfall is not an accounting error; it is
-    /// ioctls issued outside any phase, which is exactly what an uninstrumented call site
-    /// looks like.
-    #[must_use]
-    pub fn by_phase(&self) -> Vec<(&'static str, u64)> {
-        let mut out: Vec<(&'static str, u64)> = Vec::new();
-        for r in &self.log {
-            if let Some(e) = out.iter_mut().find(|e| e.0 == r.phase) {
-                e.1 += 1;
-            } else {
-                out.push((r.phase, 1));
-            }
-        }
-        out
-    }
-}
-
 static TOTAL: AtomicU64 = AtomicU64::new(0);
 static FAILED: AtomicU64 = AtomicU64::new(0);
 static DROPPED: AtomicU64 = AtomicU64::new(0);

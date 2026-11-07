@@ -525,11 +525,6 @@ impl Relay {
         self.core.need = Need::Idle;
     }
 
-    /// Whether the relay has any reason to run a turn without a new doorbell.
-    pub fn owes_turn(&self) -> bool {
-        !self.core.dead && self.core.again
-    }
-
     /// Whether the outstanding wait is over, from the visible hardware words (the worker's LOOK).
     pub fn wait_satisfied(&self, env: &mut impl Env) -> bool {
         let Some(w) = self.waiting() else {

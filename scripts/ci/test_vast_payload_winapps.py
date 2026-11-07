@@ -27,7 +27,11 @@ def apps_log(kind, profile="small", rev=SHA[:8], exit_rc=None, extra=""):
         "RETRY": f'WINAPPS_RETRY action=rerun-on-a-fresh-box class={extra or "OPERATOR"} profile={profile} stage=grade why="x" rev={rev} gpu="RTX 4090" hostref=green/green secs=1',
         "REFUSED": "WINAPPS_REFUSED why=no-WINDOWS_GATE_PASS",
     }[kind]
-    return f"APPS_NOTE x\n{line}\nWINAPPS_EXIT rc={rc} 2026-11-07T00:00:00+00:00\n", rc
+    details = ""
+    if kind == "PASS":
+        details = "".join(f"WINAPPS_APP app=a{i} class=pass verdict=PASS batched=PASS alone=- secs=1 tdr=0 wer=0 gsp=0 note=-\n" for i in range(8))
+        details += "WINAPPS_GRADE kind=PASS expected=8 pass=8 guest_fail=0 boot_fail=0 harness=0 not_run=0 extra=0\n"
+    return f"APPS_NOTE x\n{details}{line}\nWINAPPS_EXIT rc={rc} 2026-11-07T00:00:00+00:00\n", rc
 
 
 class GradeTests(unittest.TestCase):
@@ -44,7 +48,20 @@ class GradeTests(unittest.TestCase):
         rows, err = self.grade(text, rc)
         self.assertEqual(err, None)
         self.assertEqual([r["name"] for r in rows], ["windows_apps"])
-        self.assertEqual(rows[0]["pass"], 1)
+        self.assertEqual(rows[0]["pass"], 8)
+
+    def test_pass_requires_nonempty_complete_per_app_rows(self):
+        text, rc = apps_log("PASS")
+        for bad in (text.replace("WINAPPS_APP app=a0", "DISCARDED app=a0"),
+                    text.replace("app=a1", "app=a0"), text.replace("class=pass verdict=PASS", "class=harness verdict=NOTRUN", 1),
+                    text.replace("expected=8 pass=8", "expected=0 pass=0")):
+            self.assertEqual(self.grade(bad, rc)[1], "windows_apps_retry_operator")
+
+    def test_pass_requires_matching_summary_and_stage_counts(self):
+        text, rc = apps_log("PASS")
+        for bad in (text.replace(" apps=8 ", " apps=0 "), text.replace(" apps=8 ", " apps=7 "),
+                    text.replace("WINAPPS_GRADE", "DISCARDED"), text.replace("harness=0", "harness=1")):
+            self.assertEqual(self.grade(bad, rc)[1], "windows_apps_retry_operator")
 
     def test_a_pass_of_another_revision_or_profile_is_not_a_pass(self):
         for text, rc in (apps_log("PASS", rev="deadbeef"), apps_log("PASS", profile="mid")):

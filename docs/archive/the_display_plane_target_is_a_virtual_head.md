@@ -1,3 +1,5 @@
+> **STATUS: SUPERSEDED, 2026-09-21** (archived, w822). Successor: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) and [`THE_ARCHITECTURE_v3.md`](../design/THE_ARCHITECTURE_v3.md). Historical record: a `STATUS` line further down says what the document claimed when it was written; it is no longer a claim about the current tree.
+>
 > ⊘⊘⊘ **ARCHIVED — THIS DESCRIBES A SUPERSEDED ARCHITECTURE. IT IS REFERENCE, NOT CURRENT.**
 > The live design is `docs/design/THE_DESIGN.md`. This file is kept because its *measurements*,
 > its *ogkm findings* and its *reasoning* remain useful — its **architecture does not**. Do not
@@ -5,7 +7,7 @@
 
 # The Mode-2 display target is a virtual head, NOT displayless
 
-**STATUS: LIVE, 2026-09-18 (w760r). Written to correct a chain of my own errors, and to
+**STATUS AT WRITING: LIVE, 2026-09-18 (w760r). Written to correct a chain of my own errors, and to
 supersede a stale claim in the ARCHIVE that I propagated into this tree's reasoning.**
 
 ## ⊘⊘⊘ The stale claim, and where it is NOT

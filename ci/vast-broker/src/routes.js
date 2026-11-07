@@ -10,7 +10,7 @@ export function routeKind(path) {
   )
     return 'runner';
   if (
-    /^\/(?:report|kill|evidence)\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19}$/.test(path) ||
+    /^\/(?:report|run-report|kill|evidence)\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19}$/.test(path) ||
     new RegExp(
       '^/blob-url/[1-9][0-9]{0,19}-[1-9][0-9]{0,19}/' +
         '[A-Za-z0-9._-]{1,64}/[A-Za-z0-9._-]{1,100}$',

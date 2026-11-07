@@ -1,6 +1,6 @@
 # The single-store branch — plan of record
 
-**STATUS: ⊘⊘⊘ SUPERSEDED-BY `THE_DESIGN.md` (w821) — ARCHIVED 2026-09-21 (w823).**
+**STATUS: SUPERSEDED, 2026-09-21** (archived, w823) by `THE_DESIGN.md` (w821); the current architecture is [`ARCHITECTURE.md`](../../ARCHITECTURE.md) and [`THE_ARCHITECTURE_v3.md`](../design/THE_ARCHITECTURE_v3.md).
 
 > ⊘ **This describes the architecture v3 DELETES.** Its core mechanisms — the VM-lifetime
 > **scratchpad isolate**, `KAYFABE_SCRATCHPAD`, `KAYFABE_SCRATCHPAD_CUDA`, BAR1/BAR2 as **device

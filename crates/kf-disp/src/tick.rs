@@ -542,7 +542,7 @@ mod tests {
             for second in [0u64, 1, GUARD - 1, GUARD, P, 2 * P] {
                 let mut s = free();
                 let mut ticks: Vec<Emitted> = Vec::new();
-                let mut check = |e: Option<Emitted>, s: &TickSource, ticks: &mut Vec<Emitted>| {
+                let check = |e: Option<Emitted>, s: &TickSource, ticks: &mut Vec<Emitted>| {
                     if let Some(e) = e {
                         if let Some(prev) = ticks.last() {
                             assert_eq!(e.seq, prev.seq + 1);

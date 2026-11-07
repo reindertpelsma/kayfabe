@@ -24,6 +24,14 @@ video apps were not part of this disk. The 79 apps of the `full` profile need on
 
 ## Per-app table (full run `wa1f`; small run `wa1`)
 
+**CODE READ attribution correction, 2026-11-07 (no new hardware):** `managed_t` passed natively in
+`traces/windows_baseline_20261010/apps/managed_t.json` (`verdict/managed_t.json`); `nbody_demo_gl`
+passed natively twice, in `traces/windows_baseline_20261010/verdict/nbody_demo_gl.json` and
+`traces/windows_matrix_20261011/reference-unigine-nbody/apps/nbody_demo_gl.verdict.json`.
+These are older, different-box references, not same-box November measurements. The failing
+`overlay_yuv_*` probes have no native PASS on a Vast box; applicability is an open owner decision.
+All nine failing apps remain in `full`; no exclusion or class change is justified by this run.
+
 `RESULTS_TABLE.md` (79 rows). The batched verdict is the only one: the driver was stopped (SIGTERM at 05:52Z, driver rc 143) to
 respect the lease limit while its fifth guest was still working, so phase 2 (re-run of every non-PASS app alone in a fresh guest) did
 NOT run, and the 12 apps that had not run are `NOT_RUN`, not failures.

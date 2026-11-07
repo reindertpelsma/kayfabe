@@ -1,7 +1,7 @@
 # V3 — the doorbell fast path: one KVM ioeventfd per live token, serviced by the register drainer
 
-**STATUS: BUILT, GPU-FREE-TESTED AND HARDWARE-VERIFIED (nested), 2026-09-30. Branch `v3-ioeventfd`
-(off `v3-ci`).** Merge bar at `ca7a5006` (the final code revision): crate tests 1701/0, gates 9/9,
+**STATUS: LIVE, 2026-11-07.** Read on 2026-11-07 against the tree: the fast path exists (`crates/kf-chan/src/dbfast.rs`, the `doorbell-ioeventfd` property of `qemu/hw/misc/kf3/kf3.c`, default off, as this document says); §8b (the adaptive pump) is DESIGN-ONLY and no number here is a non-nested result. Original status line, written 2026-09-30, kept as is: BUILT, GPU-FREE-TESTED AND HARDWARE-VERIFIED (nested), 2026-09-30. Branch `v3-ioeventfd`
+(off `v3-ci`). Merge bar at `ca7a5006` (the final code revision): crate tests 1701/0, gates 9/9,
 KF3_RC=0, bare metal 30/30, thin suite 30/30 OFF **and** 30/30 ON (GA106); CUDA ladder 4/4 OFF = 4/4
 ON (GA106, GB206); the whole bar and the ON lane also on Blackwell GB206 (§7.6). Measured on nested
 Vast boxes: a doorbell store costs the vCPU ~4–5 µs less (§7.2); LLM decode **+9–10 %** (0.29× →

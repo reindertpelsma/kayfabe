@@ -27,6 +27,31 @@ export const PARAMS = Object.freeze({
     report_tier: 'reportTier',
     limit: 'limit',
   }),
+  ciSubruns: Object.freeze({
+    commit: 'sha',
+    tree: 'hash',
+    die: 'die',
+    os: 'osAny',
+    host_driver: 'driver',
+    guest_driver: 'driver',
+    cpu: 'cpuSpec',
+    relax: 'dimList',
+    require: 'dimList',
+    ignore: 'dimList',
+    limit: 'limit',
+    cursor: 'cursor',
+    sort: 'subSort',
+    include: 'includeList',
+    min_closeness: 'closeness',
+  }),
+  ciStats: Object.freeze({
+    die: 'die',
+    tier: 'tier',
+    driver: 'driver',
+    os: 'osAny',
+    limit: 'limit',
+    sort: 'statsSort',
+  }),
   runs: Object.freeze({
     commit: 'sha',
     die: 'die',
@@ -75,8 +100,24 @@ export const ENDPOINTS = Object.freeze([
     about:
       'the values that exist for the setups filters: dies and reported GPU names, CPU vendors, drivers',
   },
+  {
+    path: '/v1/ci/subruns',
+    params: 'ciSubruns',
+    about:
+      'host-session subruns ranked by similarity to the wanted commit, CPU, drivers, die and OS; every hit explains what was relaxed (match.exact, match.relaxed); relax, require, ignore, sort, include, limit, cursor and min_closeness shape the answer and effective states what was applied',
+  },
+  {
+    path: '/v1/ci/stats',
+    params: 'ciStats',
+    about:
+      'the latest reported session per die and host driver: subrun pass counts and the perf rows the test box measured (claims; never a gate)',
+  },
   { path: '/v1/hosts', params: 'none', about: 'host counts by die, class and status' },
-  { path: '/v1/logs/{run}/{name}', params: 'none', about: '302 to the public log bucket' },
+  {
+    path: '/v1/logs/{run}/{name}',
+    params: 'none',
+    about: '302 to the public log bucket; a CI run has log.txt and report.json',
+  },
   { path: '/v1/schema', params: 'none', about: 'this description' },
   { path: '/v1/health', params: 'none', about: 'liveness and one database read' },
 ]);

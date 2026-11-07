@@ -1,5 +1,7 @@
 # V3 — batched guest-RAM maps: N scattered runs, O(1) host calls
 
+**STATUS: RESEARCH, 2026-10-10.** Design and measurement record; the mechanism is in the tree (read on 2026-11-07 against `crates/kf-mem/src/batch.rs` (`BatchedVas`, `reserve_exact`, `reserve_cores`), `kf-mem/src/apply.rs` and `kf-qemu/src/mem.rs`, where the mechanism and the `KF3_NO_BATCHED_MAP` per-run fallback exist). The numbers in each section belong to the run and revision named there; the document's last change is 2026-10-10 and `batch.rs` changed after that (last merge 2026-11-01), so code details beyond those anchors were not re-checked, which is why this is RESEARCH and not LIVE. The corrections below (2026-10-09 and 2026-10-10) are dated, newest first, and sit above the text they correct.
+
 **★ CORRECTION (2026-10-10, branch `claude/held-hole-20261010`) — the HELD-hole of the D1-D3 code
 (Windows run 289: 14 leaves `HELD BY HOST`, 4 host Xid 31 `FAULT_PTE`) is a reservation-geometry defect;
 read this before §8.8.1/§8.8.3.** Host RM does not hold the range a micro reservation asks for: it
@@ -90,7 +92,7 @@ only touches what changed; outside any reservation one host mapping per guest le
 inside a VA-reserving `hDma` (guest reservation, or a micro reservation once §8.0 says so); range
 unmaps only over owned spans; no remap ever. Model-tested only; hardware verdict pending (§8.0).
 
-**STATUS: LIVE, 2026-09-26 — CODE + MEASURED on `vh` (RTX 3060 GA106, 580.159.04).** Branch
+**Original header, 2026-09-26 — CODE + MEASURED on `vh` (RTX 3060 GA106, 580.159.04).** Branch
 `v3-batchmap` (off master `ce2cb06d`). Verb choice read from ogkm-580.159.04 source; §7 holds the
 bench numbers and the revision they were measured at. Answers the follow-up `V3_BUILD.md` w829
 named (*"each scattered 4 KiB run is ONE host map call on the guest-RAM object … a batched verb is

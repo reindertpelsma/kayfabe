@@ -76,6 +76,18 @@ class GateProfiles(unittest.TestCase):
         self.assertEqual(b, sorted(b))
         self.assertEqual(G.budget("ids:nvidia_smi", self.prof), b[2])
 
+    def test_november_full_run_failures_stay_in_full(self):
+        failed = {"managed_t", "nbody_demo_gl", "overlay_yuv_probe"} | {
+            "overlay_yuv_" + x for x in ("hide", "occlude", "resize", "move", "recreate", "fullscreen")}
+        self.assertLessEqual(failed, set(G.resolve("full", self.apps, self.man, self.prof)))
+        self.assertFalse(failed & set(self.prof["excluded"]))
+
+    def test_overlay_applicability_is_not_resolved_by_reclassification(self):
+        opn, owner, manual = G.classes(self.apps, self.man, self.prof)
+        for name in ("managed_t", "nbody_demo_gl", "overlay_yuv_probe", "overlay_yuv_soak"):
+            self.assertIn(name, opn)
+            self.assertNotIn(name, owner | manual)
+
 
 if __name__ == "__main__":
     unittest.main()

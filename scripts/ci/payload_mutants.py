@@ -310,6 +310,62 @@ CASES += [
     ),
 ]
 
+# 2026-11-07, lane appslinux: the Linux apps stage (draft, disabled by default).
+CASES += [
+    ("apps-stage-enabled-by-default", replace("APPS_STAGE_ENABLED = False", "APPS_STAGE_ENABLED = True")),
+    (
+        "apps-run-for-small-tier",
+        replace("    return bool(APPS_STAGE_ENABLED) and tier in APPS_TIERS", "    return bool(APPS_STAGE_ENABLED)"),
+    ),
+    (
+        "apps-missing-app-passes",
+        replace("            and sorted(seen) == sorted(names)\n", ""),
+    ),
+    (
+        "apps-failing-app-passes",
+        replace("            and passed == len(names)\n", ""),
+    ),
+    (
+        "apps-nonzero-exit-passes",
+        replace('            and exits[0] == "0"\n            and listed', "            and listed"),
+    ),
+    (
+        "apps-list-size-unchecked",
+        replace("            and listed == [str(len(names))]\n", ""),
+    ),
+    (
+        "apps-retry-passes",
+        replace('        if kind == "RETRY":\n            name = "apps_retry_"', '        if kind == "RETRY":\n            return [row("apps", len(names))]\n            name = "apps_retry_"'),
+    ),
+    (
+        "apps-stage-without-time-guard",
+        replace("APPS_MIN_REMAINING_MS = 60 * 60000", "APPS_MIN_REMAINING_MS = 0"),
+    ),
+    (
+        "apps-stage-selected-by-kf-stages",
+        replace('STAGE_SLOTS = {"specviewperf": "PLUMBING",', 'STAGE_SLOTS = {"apps": "PLUMBING", "specviewperf": "PLUMBING",'),
+    ),
+    (
+        "apps-middle-reads-the-full-list",
+        replace('"middle": ("gate_list_middle.txt", "middle")', '"middle": ("gate_list.txt", "middle")'),
+    ),
+    (
+        "apps-middle-runs-the-full-lane-list",
+        replace('"middle": ("gate_list_middle.txt", "middle")', '"middle": ("gate_list_middle.txt", "full")'),
+    ),
+    (
+        "apps-tier-ignored-when-reading-the-list",
+        replace("            names = apps_gate_list(root, tier)", '            names = apps_gate_list(root, "large")'),
+    ),
+    (
+        "apps-stage-never-appended",
+        replace(
+            '        if apps_requested(tier):\n',
+            '        if False:\n',
+        ),
+    ),
+]
+
 # 2026-11-06: the setup picker's host claims (optional, bounded, never a verdict).
 CASES += [
     (
@@ -597,6 +653,14 @@ CASES += [
     ),
 ]
 
+CASES += [
+    ("winapps-all-output-is-pass", function("winapps_rows", '    return [row("windows_apps", 8)]')),
+    ("winapps-never-passes", function("winapps_rows", '    raise EvidenceError("windows_apps_retry_operator")')),
+    ("winapps-enabled-by-default", scoped("winapps_requested", '        return None', '        return "small"')),
+    ("winapps-request-ignored", function("winapps_requested", '    environ.pop("KF_WINAPPS", None)\n    return None')),
+    ("winapps-incomplete-output-is-pass", scoped("winapps_rows", 'if (len(grade) == 1 and count and grade[0][0] == grade[0][1] == count[1]\n                    and len(app_lines) == len(passed) == len(set(passed)) == int(count[1])):', 'if True:')),
+]
+
 COLLECT = """import io,json,unittest,importlib.util
 from pathlib import Path
 s=unittest.defaultTestLoader.discover('scripts/ci',pattern='test_vast_payload*.py')
@@ -617,7 +681,7 @@ print('KF_MUTATION_RESULT='+json.dumps({'tests':r.testsRun,
 
 def run(root):
     p = subprocess.run(
-        [sys.executable, "-c", COLLECT], cwd=root, text=True, capture_output=True, timeout=45
+        [sys.executable, "-c", COLLECT], cwd=root, text=True, capture_output=True, timeout=180
     )
     assert p.returncode == 0, p.stderr[-500:]
     line = next(s for s in p.stdout.splitlines() if s.startswith("KF_MUTATION_RESULT="))
@@ -643,6 +707,8 @@ def main():
             "test_vast_payload_result_logs.py",
             "test_vast_payload_summary.py",
             "test_vast_payload_claims.py",
+            "test_vast_payload_apps.py",
+            "test_vast_payload_winapps.py",
             "host_claims_vectors.json",
             "test_vast_box.py",
             "vast_report.py",
@@ -658,6 +724,16 @@ def main():
         ):
             (bench / relative).parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(HERE.parent / "bench" / relative, bench / relative)
+        # The apps stage tests run the lane script and ask run_apps.sh for the app names.
+        (bench / "box").mkdir(exist_ok=True)
+        shutil.copyfile(HERE.parent / "bench/box/apps_gate.sh", bench / "box/apps_gate.sh")
+        (root / "scripts/apps").mkdir()
+        for name in ("run_apps.sh", "gate_list.txt", "gate_list_middle.txt"):
+            shutil.copyfile(HERE.parent / "apps" / name, root / "scripts/apps" / name)
+        for relative in ("g1/gate_full.out", "g2/gate_mid.out", "g3/gate_watched.out", "g4/gate_fail.out"):  # real lane output, replayed by the tests
+            target = root / "traces/apps_linux_20261107" / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(HERE.parents[1] / "traces/apps_linux_20261107" / relative, target)
         shutil.copyfile(HERE.parent / "bench/host_xid_watch.sh", bench / "host_xid_watch.sh")
         shutil.copyfile(HERE.parent / "bench/native_xid_guard.py", bench / "native_xid_guard.py")
         (bench / "tests").mkdir()

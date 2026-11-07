@@ -1,7 +1,9 @@
 # Headless graphics in kayfabe v3: what it takes, and whether channels are sufficient
 
-**STATUS (2026-09-26, updated the same day): STEPS 1–5 PASS ON A KAYFABE v3 FAT GUEST — measured,
-branch `v3-gfx`.** Box vgfx (vast 52661950, RTX 3080 Ti GA102, host driver 580.159.04, nested KVM),
+**STATUS: ANSWERED, 2026-09-26 (updated the same day).** The question this document asks (can a v3 fat guest render headless
+through channels alone) is answered in §6; read on 2026-11-07, the later graphics coverage is tracked in
+[V3_GFX_TESTSET.md](V3_GFX_TESTSET.md) and `docs/STATUS_DETAIL.md`, and this text is not updated.
+Steps 1–5 pass on a kayfabe v3 fat guest — measured, branch `v3-gfx`. Box vgfx (vast 52661950, RTX 3080 Ti GA102, host driver 580.159.04, nested KVM),
 stock 580.159.04 guest, kf3 at `68fb3768`/`14ac1e5c`. Every render is **bit-identical to bare metal on
 the same box**: Vulkan compute, Vulkan colour + D32 depth + sampled pass, EGL colour + D24S8 depth +
 sampled pass, GLX (Xvfb + VirtualGL) colour + depth + sampled pass. §6 has the results, the eight

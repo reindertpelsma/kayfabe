@@ -9,7 +9,7 @@ security decisions) was added.*
 |---|---|---|---|
 | 1 | the sweep and install plan: go-ahead, and Q2–Q8 | the installable binary and every support claim | approve; answers below |
 | 2 | `GF100_DISP_SW` for X11 desktops | the stock Mint desktop (its default session is X11) | ⊘ ANSWERED: option A (§N) — box data and review fixes on `v3-dispsw-exp` below |
-| 3 | the archived traces that contain a full VBIOS | nothing technical; a legal liability | scrub the PROM values forward in both public repos |
+| 3 | the archived traces that contain a full VBIOS | nothing technical; a legal liability | ⊘ ANSWERED 2026-11-07: option (b) for kayfabe, PROM values scrubbed forward (below); the `nvkvm` research repository is not touched by that change |
 | 4 | renting a GPU box for display work | every display test, every merge bar | ⊘ ANSWERED: rent as needed |
 | 6 | three security decisions (§6 below) | merging `v3-scratch-bound`, `v3-sec-nonpriv`, and building P2 | 6c ⊘ ANSWERED (§Q); 6a, 6b open |
 
@@ -212,6 +212,13 @@ What it does, the rule change it embodies, and the exact A/B box test are in `de
 result at the top of this item. The item stays open for the owner's ruling.*
 
 ## 3. The archived traces that contain a full VBIOS
+
+⊘ **ANSWERED 2026-11-07 by the owner: option (b), removal in the normal phase** (history rewrite and branch deletion later, one go before
+release). Done in this repository by the pull request that adds `scripts/evidence/scrub_prom.py`: every PROM read value in
+`traces/cap1_coldboot_hermetic.rec`, `traces/cap1b_coldboot_hermetic_d6.rec` and the five `archive/nvkvm/traces/mode2_c_reference/*.rec.zst`
+is zero, every other record is byte-identical, `MD5SUMS` and both READMEs are updated, and the `kf-crec` differential tests pass on the
+scrubbed files (the pull request description has the runs). Git history still holds the original files; the research repository
+`reindertpelsma/nvkvm` (below) still holds its copies. The text below is the question as it was asked.
 
 **Found on 2026-10-03** by decoding the files with the repo's own record format
 (`archive/nvkvm/scripts/mode2_diag/rec_dump.py` layout; PROM = BAR0 `0x300000`–`0x3fffff`):

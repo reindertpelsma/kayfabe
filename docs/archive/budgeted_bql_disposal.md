@@ -1,3 +1,5 @@
+> **STATUS: SUPERSEDED, 2026-09-21** (archived, w822). Successor: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) and [`THE_ARCHITECTURE_v3.md`](../design/THE_ARCHITECTURE_v3.md). Historical record: a `STATUS` line further down says what the document claimed when it was written; it is no longer a claim about the current tree.
+>
 > ⊘⊘⊘ **ARCHIVED — THIS DESCRIBES A SUPERSEDED ARCHITECTURE. IT IS REFERENCE, NOT CURRENT.**
 > The live design is `docs/design/THE_DESIGN.md`. This file is kept because its *measurements*,
 > its *ogkm findings* and its *reasoning* remain useful — its **architecture does not**. Do not
@@ -5,7 +7,7 @@
 
 # The budgeted BQL disposal — bounding what one guest MMIO trap may do
 
-> **STATUS: LIVE — 2026-08-14 (w317).** Branch `w317-budgeted-drain`, off master `73dc2246`.
+> **STATUS AT WRITING: LIVE — 2026-08-14 (w317).** Branch `w317-budgeted-drain`, off master `73dc2246`.
 > Parent findings, both folded in place: `guest_ram_pin_release.md` §5 (the exposure and its
 > measurement) and `blocking_and_completion_model.md` §1 (the `INLINE-SAFE` predicate whose
 > clause (b) this is about).

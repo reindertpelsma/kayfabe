@@ -1,0 +1,13 @@
+=== globalToShmemAsyncCopy side=host start=2026-11-07T02:23:01+00:00 host=ubuntu cmd: /opt/apps/bundle/samples/globalToShmemAsyncCopy
+[globalToShmemAsyncCopy] - Starting...
+GPU Device 0: "Ada" with compute capability 8.9
+
+MatrixA(1280,1280), MatrixB(1280,1280)
+Running kernel = 0 - AsyncCopyMultiStageLargeChunk
+Computing result using CUDA Kernel...
+done
+Performance= 5860.47 GFlop/s, Time= 0.716 msec, Size= 4194304000 Ops, WorkgroupSize= 256 threads/block
+Checking computed result for correctness: Result = PASS
+
+NOTE: The CUDA Samples are not meant for performance measurements. Results may vary when GPU Boost is enabled.
+=== end rc=0 secs=2 2026-11-07T02:23:03+00:00

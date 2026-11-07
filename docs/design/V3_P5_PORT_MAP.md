@@ -1,6 +1,6 @@
 # V3 P5 PORT MAP — the guest kernel's channels, born as host channels, run on the host GPU
 
-**STATUS: PROPOSAL, 2026-09-25 (w827), branch `v3-p5` off `v3` `5dd01b48`.** A survey (two
+**STATUS: RESEARCH, 2026-10-07.** Porting survey and build record for the P5/P6 channel step; last git change 2026-10-07. It began as a proposal on 2026-09-25 (w827), the STATUS UPDATE paragraphs below record what was built, and the code it describes now lives in `kf-chan`, `kf-mem`, `kf-qemu` and `kf-rm` (read on 2026-11-07: `crates/kf-qemu/src/chan.rs`, `crates/kf-rm/src/chanlink.rs` and `crates/kf-harness/src/bin/kf-gate9.rs` exist). The current design is [THE_ARCHITECTURE_v3.md](THE_ARCHITECTURE_v3.md); this map is kept as history and is not updated. Original header: branch `v3-p5` off `v3` `5dd01b48`. A survey (two
 read-only agents + direct reads) of what `RmInitAdapter` drives after P4, the v3 crates at
 `5dd01b48`, the old tree, the C reference traces (`nvidia-gpu-passthrough/traces/mode2_c_reference/`,
 `cap1b_coldboot_hermetic_d6` decoded with `scripts/mode2_diag/rec_dump.py`) and ogkm

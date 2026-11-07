@@ -1,5 +1,7 @@
 # THE CONSTRAINTS — what kayfabe must do, not just do
 
+**STATUS: LIVE, 2026-11-07.** The constraint list itself still governs: read on 2026-11-07 against the root `AGENTS.md` rules (only BAR0 writes trap, nothing blocks on a vCPU, host actions are authored, no CPU executor for GPU work) and against [`THE_ARCHITECTURE_v3.md`](THE_ARCHITECTURE_v3.md), which is built to them (see the 2026-09-26 note below). The measurements and mechanisms inside (w708-w760: isolates, the scratchpad process, `TRAP_FILLS`) belong to the pre-v3 tree and are history, not current numbers. Owner's list, given in conversation 2026-09-13 and consolidated here so it survives a context compaction. ⊘ This supersedes nothing; it COLLECTS what is scattered across `THE_OVERNIGHT_DIRECTIVE.md`, the design docs and agent memory.
+
 > ### ★ STATUS NOTE — 2026-09-26 (v3)
 > The constraints below still govern, and v3 (`THE_ARCHITECTURE_v3.md`) is built to them. For
 > example: only BAR0 writes are trapped, BAR1/BAR2 never are, there is no blocking work on a vCPU,
@@ -9,10 +11,6 @@
 > (`THE_ARCHITECTURE_v3.md` §8). Cite them as the history of a constraint, not as the current
 > tree's numbers. Current results: `docs/STATUS_DETAIL.md`.
 
-
-**STATUS: LIVE, 2026-09-13.** Owner's list, given in conversation this date and consolidated here
-so it survives a context compaction. ⊘ This supersedes nothing; it COLLECTS what is scattered
-across `THE_OVERNIGHT_DIRECTIVE.md`, the design docs and agent memory.
 
 > **Why this file exists.** The owner, 2026-09-13: *"we already got the LLM passing under
 > everything trapped on kayfabe a few days ago… If bar1/bar2 is now STILL trapped under your cuda

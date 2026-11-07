@@ -1,3 +1,5 @@
+> **STATUS: SUPERSEDED, 2026-09-21** (archived, w822). Successor: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) and [`THE_ARCHITECTURE_v3.md`](../design/THE_ARCHITECTURE_v3.md). Historical record: a `STATUS` line further down says what the document claimed when it was written; it is no longer a claim about the current tree.
+>
 > ⊘⊘⊘ **ARCHIVED — THIS DESCRIBES A SUPERSEDED ARCHITECTURE. IT IS REFERENCE, NOT CURRENT.**
 > The live design is `docs/design/THE_DESIGN.md`. This file is kept because its *measurements*,
 > its *ogkm findings* and its *reasoning* remain useful — its **architecture does not**. Do not
@@ -6,7 +8,7 @@
 # Publishing the guest-RAM half — ⊘ STOP AND REPORT: two coupled design choices
 
 > # ★★★★★ SUPERSEDED IN PART 2026-08-14 (w292) — **THE MERGE IS BUILT, AND THE RATE IS NOW A DRAIN**
-> **STATUS: LIVE for choice 1 (still open, still unbuilt); ANSWERED for choice 2; and the
+> **STATUS AT WRITING: LIVE for choice 1 (still open, still unbuilt); ANSWERED for choice 2; and the
 > "not built" line below is now FALSE of (2a).**
 >
 > - **(2a) IS BUILT** — `commit_pin_guest_ram` (`kayfabe-fwd/src/lib.rs:1909-1961`) upgrades the
