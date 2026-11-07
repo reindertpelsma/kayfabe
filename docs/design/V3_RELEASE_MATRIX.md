@@ -21,6 +21,31 @@ inadmissible in the trusted Worker (`MATRIX_NOT_EXECUTABLE`), before any provide
 create. The offline cost/availability estimate remains visible, but `admitted`
 and `execution_ready` are false. The payload refusal remains a second boundary.
 
+## Deferred policies (owner decision, 2026-11-07)
+
+**STATUS: DESIGN-ONLY, 2026-11-07.** OWNER DECISION: defer the preferred
+performance tier, the download-time price term (including its derate and
+`SLOW_NETWORK` feasibility guard), and per-run offer-fact logging for calibration
+until after the first real measured run. CODE READ: none of these policies is
+implemented in PR #296; its effective price is compute plus storage plus the
+profile's expected transfer charges amortised over the lease. The previously
+tested implementation is isolated in draft PR #299 and its separate commits;
+that PR is deferred, not part of the first release change.
+
+MEASURED (owner-supplied dev-box experiment, 2026-11-07; coordinator addition 4):
+R2 presigned range GETs against the private bench object reached **55.6 MB/s**
+(about 445 Mbps) with one stream and **223 MB/s** aggregate (about 1.78 Gbps)
+with eight streams over 2 GiB. The dev-box link may itself cap the eight-stream
+result. MEASURED (2026-11-05,
+[`traces/specviewperf_vast_20261105/`](../../traces/specviewperf_vast_20261105/README.md)):
+the earlier Vast transfer of 42,002,015,727 bytes in 804 seconds was about
+418 Mbps. INFERRED: derate 0.3 was a candidate from that observation versus
+advertised 1562 Mbps; it is not an active policy or a calibrated general rule.
+DESIGN-ONLY: use the first measured release run to review preferred CPU/disk/link
+thresholds, an R2-limited time model and feasibility bounds, and the minimal
+calibration facts to retain. No download-time or performance decision is approved
+by these throughput observations alone.
+
 ## Proposed drivers
 
 PROPOSED (all rows; minimum supported host/Linux/Windows driver for every die is
@@ -378,8 +403,8 @@ four profiles. Markets vary compute prices, both transfer rates and speeds,
 storage, disk capacity/throughput, reliability, CPU, hosts, machines, countries,
 VM support and malformed fields. Configured and persisted bad host/machine ids
 are excluded. The same market with reversed offer and object-field order must
-choose the same ids. A data-based price oracle includes storage, transfer and,
-in the stack, excess download time independently of `offerPrice`.
+choose the same ids. A data-based price oracle checks storage and expected transfer charges
+independently of `offerPrice`. Deferred stacked-policy tests are outside PR #296.
 
 CODE READ: the large loop uses production `OfferBook`, `planRelease`, `Ledger`
 and `Vast` with the existing `MockCloud` transport; at most one selected rental per seed
@@ -402,11 +427,10 @@ safe retention and recovery with that header present; it does not establish an
 adaptive Retry-After scheduler. SSH failure is modeled by absent box callbacks,
 not a real SSH connection. No clock sleeps or external network are used.
 
-CODE READ: the existing protocol helpers configure a synthetic 1 Gbps origin in
-the stacked policy. Two additional scoped cases restore the committed profile
-reference data, including the infeasible 20-minute middle limit at 445 Mbps.
-Synthetic admission coverage is not a claim that the shipped middle profile fits.
-The proposal, unknown compatibility and executor-capability-zero fences remain.
+CODE READ: the proposal, unknown compatibility and executor-capability-zero
+fences remain. This branch has no download-time feasibility limit or R2 reference
+in its offer admission policy; the corresponding tested policy is deferred with
+PR #299. The dated owner decision above governs when they may be reconsidered.
 
 CODE READ: run `nice -n 19 node --test ci/vast-broker/test/simulation-*.test.js`.
 For a larger reproducible sweep, set `KF_SIM_SEEDS=1000 KF_SIM_START=1337` before
