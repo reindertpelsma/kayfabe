@@ -34,6 +34,10 @@ files/anchors are reported without failing. The output tests check SEO (canonica
 links, the landing's blocks, the manual's breadcrumbs, edit links and previous/next links, and that ordinary build output contains no external resources; deployment analytics is tested
 separately with synthetic HTML.
 The broker's workflow tests check the Pages permission boundary and dropdown behavior.
+`python3 -m unittest discover -s site -p test_style.py` checks both colour themes against WCAG AA and that the
+stylesheets load nothing from the network. The status pages' DOM tests (`node --test site/test_status_dom.mjs`)
+run against the committed fixture and against `site/report_fixture.mjs`, a synthetic extension that follows the run
+report contract.
 
 Master pins one toolchain; PR, master and tag builds render every eligible version and fail on any render failure.
 Old HTML is always rebuilt; there are no per-version pins or frozen HTML caches.
