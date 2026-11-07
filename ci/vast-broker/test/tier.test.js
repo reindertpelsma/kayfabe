@@ -85,6 +85,26 @@ test('KF_WINAPPS is sent only when asked for, only with the Windows stage, only 
     assert.throws(() => tierEnvironment('check', { winApps: bad }), /winapps/, String(bad));
 });
 
+test('Windows apps remain absent from every default Worker profile', () => {
+  for (const profile of ['check', 'sweep', 'release'])
+    assert.ok(!Object.hasOwn(tierEnvironment(profile), 'KF_WINAPPS'));
+});
+
+test('each explicit Windows apps profile is carried unchanged', () => {
+  for (const winApps of ['small', 'mid', 'full'])
+    assert.equal(tierEnvironment('release', { winApps }).KF_WINAPPS, winApps);
+});
+
+test('the Linux-only sweep cannot request Windows apps', () => {
+  for (const winApps of ['small', 'mid', 'full'])
+    assert.throws(() => tierEnvironment('sweep', { winApps }), /winapps/);
+});
+
+test('Windows apps reject unknown names and composite profile strings', () => {
+  for (const winApps of ['', 'large', 'release', 'small:full', 'MID', null, 1])
+    assert.throws(() => tierEnvironment('check', { winApps }), /winapps/);
+});
+
 test('per-profile hard limits: check 300 min by default, sweep min(180, check) unless set', () => {
   assert.equal(DEFAULTS.hardMinutes, 300);
   assert.equal(DEFAULTS.sweepHardMinutes, 180);

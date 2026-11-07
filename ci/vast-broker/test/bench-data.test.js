@@ -80,6 +80,16 @@ test('bench-data object table is exactly the four licensed-copy keys and the two
     'winapps-open/manifest.json',
   ]);
 });
+for (const [object, path] of [
+  ['winapps-open.iso', '/kayfabe-bench-enam/winapps-open/kfapps.iso'],
+  ['winapps-open.manifest.json', '/kayfabe-bench-enam/winapps-open/manifest.json'],
+])
+  test('Windows apps allowlist proposal resolves the exact key: ' + object, async () => {
+    const x = await harness();
+    const r = await x.get(route(object));
+    assert.equal(r.status, 302);
+    assert.equal(new URL(r.headers.get('Location')).pathname, path);
+  });
 test('bench-data lifetime is capped at 1200 s and at the run deadline', async () => {
   const x = await harness();
   const lifetime = async () =>
