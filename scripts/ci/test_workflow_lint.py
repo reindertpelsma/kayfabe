@@ -5,7 +5,7 @@ from pathlib import Path
 import workflow_lint as wl
 
 REPO = wl.ROOT
-SHA = "11d5960a326750d5838078e36cf38b85af677262"
+SHA = "3d3c42e5aac5ba805825da76410c181273ba90b1"
 
 GOOD = f"""\
 name: Good
@@ -16,7 +16,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@{SHA} # v4.4.0
+      - uses: actions/checkout@{SHA} # v7.0.1
       - run: echo hi
 """
 
@@ -65,7 +65,7 @@ class Pin(unittest.TestCase):
         self.assertEqual(lint_one(GOOD), [])
 
     def test_tag_fails(self):
-        out = lint_one(mutate(GOOD, f"@{SHA}", "@v4"))
+        out = lint_one(mutate(GOOD, f"@{SHA}", "@v7"))
         self.assertEqual(len(out), 1)
         self.assertIn("pin:", out[0])
 
@@ -74,7 +74,7 @@ class Pin(unittest.TestCase):
         self.assertTrue(any("pin:" in x for x in out))
 
     def test_short_sha_and_uppercase_sha_fail(self):
-        self.assertTrue(lint_one(mutate(GOOD, f"@{SHA}", "@11d5960")))
+        self.assertTrue(lint_one(mutate(GOOD, f"@{SHA}", "@3d3c42e")))
         self.assertTrue(lint_one(mutate(GOOD, f"@{SHA}", f"@{SHA.upper()}")))
 
     def test_sha_with_extra_suffix_fails(self):
@@ -94,7 +94,7 @@ class Pin(unittest.TestCase):
         self.assertEqual(lint_one(text), [])
 
     def test_quoted_unpinned_still_fails(self):
-        self.assertTrue(lint_one(mutate(GOOD, f"actions/checkout@{SHA}", "'actions/checkout@v4'")))
+        self.assertTrue(lint_one(mutate(GOOD, f"actions/checkout@{SHA}", "'actions/checkout@v7'")))
 
     def test_job_level_reusable_workflow_must_be_pinned(self):
         text = GOOD + "  call:\n    uses: org/repo/.github/workflows/w.yml@main\n"
@@ -192,7 +192,7 @@ class Secrets(unittest.TestCase):
         self.assertTrue(any("secrets:" in x and "actions/cache" in x for x in lint_one(text)))
 
     def test_secret_job_with_only_run_steps_passes(self):
-        text = mutate(GOOD, f"      - uses: actions/checkout@{SHA} # v4.4.0\n", "") + self.SECRET
+        text = mutate(GOOD, f"      - uses: actions/checkout@{SHA} # v7.0.1\n", "") + self.SECRET
         self.assertEqual(lint_one(text), [])
 
     def test_secret_in_other_job_is_not_blamed_on_checkout_job(self):
@@ -228,7 +228,7 @@ class Cli(unittest.TestCase):
         d, root = tree(x__yml=GOOD)
         with d:
             self.assertEqual(wl.main(["--root", str(root)]), 0)
-            (root / ".github" / "workflows" / "x.yml").write_text(mutate(GOOD, f"@{SHA}", "@v4"))
+            (root / ".github" / "workflows" / "x.yml").write_text(mutate(GOOD, f"@{SHA}", "@v7"))
             self.assertEqual(wl.main(["--root", str(root)]), 1)
 
     def test_empty_tree_is_an_error(self):
