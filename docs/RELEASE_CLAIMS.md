@@ -177,8 +177,8 @@ CODE READ: `.github/workflows/release-checks.yml` runs the fixture tests, mutati
 and no-patch audit on relevant PRs to `next`/`master`. Its clean-clone job is **manual dispatch
 only**. MEASURED, 2026-11-07, local source `fe0cd47e3`: the release build completed in 5m 53s,
 but the complete cold build/test run exceeded 25 minutes during test compilation at niceness
-19 with two jobs. Per the lane's time limit, that job is not a per-PR build. This local timing
-does not predict GitHub runner timing; the final run record is under
+19 with two jobs; the test run later exceeded three hours. The manual job has a four-hour
+budget. This local timing does not predict GitHub runner timing; the final run record is under
 `traces/release_checks_20261107/`.
 
 ## Claims that can never be automated on Vast

@@ -1,0 +1,677 @@
+CLEAN_CLONE_START rev=fe0cd47e3e8dd6e889a04897a33dc5333f43c966
+Finished `release` profile [optimized] target(s) in 5m 53s
+Finished `test` profile [unoptimized + debuginfo] target(s) in 19m 23s
+Running unittests src/lib.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kayfabe_abi-7c82cea3f6c6a49f)
+test result: ok. 374 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+Running tests/fixed_map_page_size.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/fixed_map_page_size-4c014794ca69e9d0)
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+Running tests/gr_static_info.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/gr_static_info-c4eda72d86098194)
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+Running tests/gvaspace_pdes.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/gvaspace_pdes-2bc6613a7fe3b928)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/initctrl_census.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/initctrl_census-4dcb7ec357d8ab91)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/invariant_classes.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/invariant_classes-a545a0d7ce0f551e)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/mean_wire.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/mean_wire-28037e3e51eb51d3)
+test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+Running tests/oracle_layout.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/oracle_layout-b3a81cf222dc979f)
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/real_ga106_bodies.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/real_ga106_bodies-48d7d75abd8cf5f7)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+Running tests/truncated_row_reads.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/truncated_row_reads-9df7ae3d24dca559)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 36.21s
+Running unittests src/lib.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kayfabe_arch-2d770ab8945b0710)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running unittests src/lib.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kayfabe_chips-adf54fe13e4f3ba4)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/host_classes.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/host_classes-2c8d99f02fe3b3a5)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running unittests src/lib.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kayfabe_cuda-7787f585cc9c6178)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/report_containment.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/report_containment-64240d6d45cb611d)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/synth_origin.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/synth_origin-6422f22caae3ffaf)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/walk_abi_matches_the_cu.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/walk_abi_matches_the_cu-6aa1226d75822d1e)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.45s
+Running unittests src/lib.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kayfabe_doorbell-d90c53e3332d576d)
+test result: ok. 105 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+Running tests/campaign_findings.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/campaign_findings-c714fc7a86898c5a)
+test result: ok. 29 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+Running tests/memory_map.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/memory_map-374fca5199be9077)
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+Running tests/no_orphans.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/no_orphans-436452a494914fa8)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/no_vmm_pointers_in_safe_code.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/no_vmm_pointers_in_safe_code-246927d9692c6bd0)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+Running tests/nouveau_citations.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/nouveau_citations-176405409404019e)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/rpc_coverage.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/rpc_coverage-fb90e4d3eadf2b1d)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+Running unittests src/lib.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kayfabe_isolate-d76870b1e2092fcd)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/compile_fail.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/compile_fail-239c14024912bc65)
+Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.42s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.23s
+Running unittests src/lib.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kayfabe_isolate_host-28ce883e8dc2a6ae)
+test result: ok. 120 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.24s
+Running unittests src/bin/isolate.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kayfabe_isolate-a93f8279ead3a332)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running unittests src/bin/sandbox_probe.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kayfabe_sandbox_probe-8b5398c055d7b7af)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/compile_fail.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/compile_fail-89871396d2580a1f)
+Finished `dev` profile [unoptimized + debuginfo] target(s) in 2m 06s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 257.43s
+Running tests/executor_vas_census.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/executor_vas_census-8ac6f1e39cc450e5)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+Running tests/export_backing.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/export_backing-018a37dc965fa7a5)
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+Running tests/fb_join_crossing.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/fb_join_crossing-abf508e2b8aafa9d)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+Running tests/fd_crossing.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/fd_crossing-eb7d26d10d7ef0c5)
+test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+Running tests/fixed_placement_is_asserted.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/fixed_placement_is_asserted-1051e46b57aa5778)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+Running tests/guest_ram.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/guest_ram-9c49c0aafba3064f)
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+Running tests/guest_ring_census.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/guest_ring_census-25b851d4fa6d11f0)
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.44s
+Running tests/own_client_invariant.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/own_client_invariant-63d95aba8cd95fad)
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s
+Running tests/ownership_split_gates.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/ownership_split_gates-8d5af55b7a71b4e9)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+Running tests/plan_reactor.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/plan_reactor-2c02e83d6f2ec027)
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+Running tests/real_isolate.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/real_isolate-dbc443bf66321c33)
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.91s
+Running tests/sandbox_escape.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/sandbox_escape-b37037893bca6109)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+Running tests/store_reservation_shape.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/store_reservation_shape-7d809091c37eace4)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+Running tests/sysmem_notifier_node.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/sysmem_notifier_node-22c684ed3059640a)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+Running unittests src/lib.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kayfabe_linux_raw-04598a6228890177)
+test result: ok. 165 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+Running tests/census.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/census-066d1038f167644e)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/census_prior.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/census_prior-0881798a5b3a59b9)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/compile_fail.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/compile_fail-f33e8789dc63c49a)
+Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.29s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.84s
+Running tests/effective_memtype.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/effective_memtype-78bbedf5c81f1648)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/kvm_vm_discovery.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kvm_vm_discovery-5b2bcdbff1d58848)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/unsafe_naming.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/unsafe_naming-4009ad260167e329)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running unittests src/main.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kayfabe_rm_ladder-4369fe975f1b90f7)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+Running unittests src/lib.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kayfabe_util-359daa2a45f27030)
+test result: ok. 55 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+Running tests/stale_claim_lint.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/stale_claim_lint-ab280bf02b287c3d)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.55s
+Running unittests src/lib.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kf_abi-413a8a8a1d10cd12)
+test result: ok. 496 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+Running tests/capability_policy_550.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/capability_policy_550-2dd188e85d43f279)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+Running tests/driver_matrix.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/driver_matrix-b40483c43bce223e)
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 16.48s
+Running tests/fixed_map_page_size.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/fixed_map_page_size-7001f5991b6216b9)
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/fn1_negotiation_oracle.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/fn1_negotiation_oracle-c23d20ae1e3e355a)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+Running tests/gr_static_info.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/gr_static_info-dd847c0d017a03a9)
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+Running tests/gvaspace_pdes.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/gvaspace_pdes-92edab1747608a9d)
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/initctrl_census.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/initctrl_census-d5574358a26acc0c)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/invariant_classes.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/invariant_classes-5b3f9d1047cb9d81)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/mean_wire.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/mean_wire-3b38fbf3074be05a)
+test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+Running tests/oracle_layout.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/oracle_layout-adbbb1f63fe2c39b)
+test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+Running tests/real_ga106_bodies.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/real_ga106_bodies-cf42776ed7e16133)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+Running tests/truncated_row_reads.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/truncated_row_reads-0a652423f663dd14)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 35.86s
+Running tests/windows_cell_provenance.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/windows_cell_provenance-dad97ab297a09733)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+Running unittests src/lib.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kf_arch-1da1e9d5d684948b)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running unittests src/lib.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kf_broker-35d64fbde12b1e33)
+test result: ok. 60 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.12s
+Running tests/broker_loopback.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/broker_loopback-49b4ad2048e1a2d7)
+test a_broker_that_cannot_prove_a_dma_buf_gets_shared_memory ... ignored, needs KF_BROKER_BIN (nvkvm-pv's broker at badf2d7+), root and /dev/udmabuf
+test a_rejected_attach_is_reclaimed_by_rule ... ignored, needs KF_BROKER_BIN (nvkvm-pv's broker at 368d2db)
+test a_squatter_under_another_uid_is_refused_before_hello ... ignored, needs root
+test a_squatter_who_owns_the_sockets_directory_is_refused ... ignored, needs root
+test a_stopped_broker_never_blocks_the_relay ... ignored, needs KF_BROKER_BIN (nvkvm-pv's broker at 368d2db)
+test linear_udmabuf_frames_release_and_scripted_input ... ignored, needs KF_BROKER_BIN (nvkvm-pv's broker at 368d2db)
+test shm_frames_and_an_shm_replay_after_kill_9 ... ignored, needs KF_BROKER_BIN (nvkvm-pv's broker at 368d2db)
+test the_broker_answers_query_format_for_the_implicit_modifier ... ignored, needs KF_BROKER_BIN (nvkvm-pv's broker at 368d2db)
+test result: ok. 0 passed; 0 failed; 8 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/broker_ticks_e2e.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/broker_ticks_e2e-99f6e06b0e82e768)
+test the_relay_and_the_real_broker_agree_on_ticks_requests_and_silence ... ignored, needs KF_BROKER_BIN (this repository's broker)
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/host_cursor.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/host_cursor-fb12d28b3efd6681)
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.94s
+Running tests/input_sink.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/input_sink-f2c6437a01c809da)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+Running tests/proto_mirror.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/proto_mirror-b07182a3f5983b92)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.28s
+Running tests/relay_machine.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/relay_machine-8cdc8a6d406e43f8)
+test result: ok. 65 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+Running unittests src/lib.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kf_census-81af8c7aa0e6d96c)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running unittests src/main.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kf_census-5e23702ddbe2953b)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/golden.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/golden-b5bd893c666d271a)
+test regenerate_the_runs_file ... ignored, writes tests/golden/conversation.runs; run with KF_CENSUS_REGEN=1 when the encoder changes
+test result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.04s
+Running tests/oracle.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/oracle-aa5c3387bdd192ba)
+test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+Running tests/scrub.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/scrub-d7976d4057e7dff6)
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.35s
+Running tests/sequence.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/sequence-ab2a753161c21ad3)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+Running unittests src/lib.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kf_chan-9b1ccb12b74ec9b3)
+test result: ok. 224 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.94s
+Running tests/channel_formats_vs_ogkm.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/channel_formats_vs_ogkm-d5f9df6f1b99fadb)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+Running tests/dbfast_bench.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/dbfast_bench-8dd40bdb6492ab5b)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+Running tests/dbfast_exhaust.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/dbfast_exhaust-784d14b1615e1aa2)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/dbfast_kvm.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/dbfast_kvm-042abfaa2d4078a3)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/handoff_protocol.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/handoff_protocol-f458fd112465a46c)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+Running tests/notifiers_vs_ogkm.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/notifiers_vs_ogkm-55a0a847a0a964cd)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+Running tests/relay_fairness.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/relay_fairness-d7aa3e697bb988c1)
+test result: ok. 35 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 717.18s
+Running tests/ring.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/ring-5bf303731ba1c950)
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+Running tests/tmode.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/tmode-31c9d388c31c4eb7)
+test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.67s
+Running tests/translated_rewrite.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/translated_rewrite-34703e388122820a)
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+Running tests/translated_ring_rc.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/translated_ring_rc-5612904069662ec5)
+test result: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+Running tests/user_consumption_model.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/user_consumption_model-890de399e42a0930)
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+Running tests/user_gate_rules.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/user_gate_rules-f480075e504d9bb2)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.43s
+Running tests/user_lazy_model.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/user_lazy_model-a4d4c98870367666)
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+Running tests/user_lazy_turn.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/user_lazy_turn-80db9352356af255)
+test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+Running tests/user_lifecycle_model.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/user_lifecycle_model-fc59c66cc9d7009a)
+test a6_open_a_rebind_in_pointer_mode_is_not_known_to_the_window ... ignored, OPEN: a rebind of the software subchannel while in Pointer mode is invisible; a later trigger on the new subchannel is missed (Open question 5)
+test b_open_continued_indices_need_the_new_gp_put_preset_before_the_switch ... ignored, OPEN: if the indices continue across the growth, the new USERD's GP_PUT must already hold the continued value when the relay switches (Open question 4)
+test i6_open_pointer_mode_credit_waits_need_no_look ... ignored, OPEN: Pointer mode cannot announce private-ring credit without a marker (Open question 1)
+test result: ok. 63 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 2567.60s
+Running tests/user_lifecycle_props.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/user_lifecycle_props-becc61556dde1c48)
+test result: ok. 46 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 105.68s
+Running tests/user_lifecycle_stress.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/user_lifecycle_stress-73e5e5be7d5bc0e0)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.05s
+Running tests/user_loop_model.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/user_loop_model-fdbfa2fc8bacfbb9)
+test result: ok. 38 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 798.53s
+Running tests/user_loop_model_v2.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/user_loop_model_v2-98e849381a20bb64)
+test p10_publish_reads_back_before_the_native_doorbell ... ignored, OPEN (EXPECTED RED since the previous commit): owner decision on a read-back before the private doorbell; docs/design/V3_USER_RING_EVENT_LOOP_20261014.md section 9.2
+test result: ok. 53 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 3511.16s
+Running tests/user_loop_model_v3_pointer.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/user_loop_model_v3_pointer-d95adb9099c06832)
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 22.80s
+Running tests/user_progress_model.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/user_progress_model-f4a0e2d49f1eabfd)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+Running tests/user_ring_model.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/user_ring_model-668964cc7171057e)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+Running tests/user_stream_model.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/user_stream_model-22191a7c0319ee3a)
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+Running tests/user_turn_unit.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/user_turn_unit-3d55c07520d387b1)
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running unittests src/lib.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kf_chip-8ccb26461e40d8eb)
+test result: ok. 39 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.36s
+Running tests/answer_on_store.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/answer_on_store-9ebb21e6158c53aa)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/bar0_boot_regs.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/bar0_boot_regs-48c1ccbe9d64524b)
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+Running tests/boot_sequence_read_gate.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/boot_sequence_read_gate-b54931a9369d8fba)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.66s
+Running tests/console_region.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/console_region-e2307ef4b7f74346)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.67s
+Running tests/falcon_gsp_fb_size.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/falcon_gsp_fb_size-aa1ad78e62fd7bf0)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+Running tests/family_from_arch.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/family_from_arch-9b17b1e629b17bae)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/fsp_cot_sequence.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/fsp_cot_sequence-51a3ab42ee16863b)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+Running tests/fsp_model_selection.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/fsp_model_selection-266118e2b491799e)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+Running tests/fsp_register_plane.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/fsp_register_plane-fd83c85144aee9b7)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+Running tests/fsp_second_life.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/fsp_second_life-d44350637367f364)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.40s
+Running tests/gsp_reset_fsm.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/gsp_reset_fsm-9fbf499722787075)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+Running tests/gsp_teardown.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/gsp_teardown-79879b5036ba67c0)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+Running tests/hwref_is_current.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/hwref_is_current-807922f42a75ca8e)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/riscv_bcr_ctrl.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/riscv_bcr_ctrl-2f2e66f3648f2eb1)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+Running tests/usable_heap.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/usable_heap-2e7534aca5fc2b3f)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+Running tests/wpr_end_margin.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/wpr_end_margin-78daa375ef04db5f)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running unittests src/lib.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kf_core-a99de5ac7b22619a)
+test result: ok. 50 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.42s
+Running unittests src/lib.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kf_crec-2a923d62849d89cb)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/cap1_differential.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/cap1_differential-2a12116ca8b0e7d9)
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 24.52s
+Running tests/cap1b_differential.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/cap1b_differential-7577f38edc3f19c5)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 49.48s
+Running unittests src/lib.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kf_cuda-0cef7063dcdfcca0)
+test result: ok. 53 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.54s
+Running tests/cuda_thread_posture.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/cuda_thread_posture-0fe42db75d0e6ed5)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+Running tests/gmmu_ver2/main.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/gmmu_ver2-e9bc34214c8da8ad)
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.24s
+Running tests/report_containment.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/report_containment-66d91b581b045871)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+Running tests/synth_origin.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/synth_origin-1a3fb2809430ad0e)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/walk_abi_matches_the_cu.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/walk_abi_matches_the_cu-4fc6aff6393c9a4d)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.83s
+Running tests/walk_never_synchronizes.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/walk_never_synchronizes-165a10f8d9b47cc6)
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+Running unittests src/lib.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kf_disp-cf3b49bdf7fa4733)
+test engine::lockstep_exhaustive::lockstep_exhaustive_deep_frames ... ignored, deep: minutes
+test engine::lockstep_exhaustive::lockstep_exhaustive_deep_time_and_silence ... ignored, deep: minutes
+test engine::lockstep_soak::lockstep_soak_long ... ignored, long soak: 10M flips (minutes)
+test result: ok. 254 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 2536.13s
+Running tests/abi_5809402.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/abi_5809402-7e04ea1d61731dff)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+Running tests/ampere_caps.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/ampere_caps-090484c21086398b)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.81s
+Running tests/bl_pack_kernel.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/bl_pack_kernel-ed4e4b874a9fb9d9)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.61s
+Running tests/blackwell_caps_topology.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/blackwell_caps_topology-fcc5bf8133ec54c6)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.21s
+Running tests/blackwell_pushbuffer.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/blackwell_pushbuffer-15a520708cb54490)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.68s
+Running tests/ca73_olut_caps.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/ca73_olut_caps-3dbb729b51efae6d)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.48s
+Running tests/ca73_postcomp_caps.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/ca73_postcomp_caps-e668697f13d44f08)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+Running tests/caps_derive.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/caps_derive-212bc72c6dc45e65)
+test dump_derived_vs_measured ... ignored, prints the diff for the design document
+test emit_family_rows ... ignored, emits data/caps_family_pages.tsv for tools/derive_display_caps.sh
+test result: ok. 16 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.79s
+Running tests/caps_sweep_20261103.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/caps_sweep_20261103-2d19c0353d625f2d)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.28s
+Running tests/compose_kernel.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/compose_kernel-4a9b618b0aa4bce7)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 37.28s
+Running tests/gb202_caps_word.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/gb202_caps_word-f41b504dae00ddb7)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/gb203_caps_word.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/gb203_caps_word-65020ab908fd8430)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+Running tests/gb205_caps_word.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/gb205_caps_word-9205f7c6977aec2b)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/host_precomp.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/host_precomp-a843d88220ea0796)
+test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.84s
+Running tests/lockstep_threads.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/lockstep_threads-e4bda2012beedf70)
+test result: FAILED. 2 passed; 7 failed; 0 ignored; 0 measured; 0 filtered out; finished in 15.84s
+Running tests/precomp_csc_precision.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/precomp_csc_precision-35a2a907c0fd499d)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.15s
+Running tests/turing_caps.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/turing_caps-8381260761cf4417)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.06s
+Running tests/vocab_all_families.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/vocab_all_families-26dffc8f4e14fdf9)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.99s
+Running tests/yuv_kernel.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/yuv_kernel-6546eb288b22e350)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 22.64s
+Running unittests src/lib.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kf_gop_image-19fe1a4d024c9f3a)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+Running unittests src/bin/kf-gop-export.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kf_gop_export-40734f769fbdef63)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/embedded.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/embedded-fb2787a9f28c0a5d)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s
+Running unittests src/lib.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kf_gsp-aff95870c55561f9)
+test result: ok. 67 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 31.89s
+Running unittests src/lib.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kf_harness-a5b73a0f75a3914c)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+Running unittests src/bin/kf-ctl-probe.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kf_ctl_probe-c851def87493f8e7)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running unittests src/bin/kf-deferred-update-probe.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kf_deferred_update_probe-106c96d42cbd422c)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running unittests src/bin/kf-encoder-session-probe.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kf_encoder_session_probe-438b67d249b3a924)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running unittests src/bin/kf-gate1.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kf_gate1-5870d58c75127b59)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running unittests src/bin/kf-gate2.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kf_gate2-76c05d326fe83a36)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running unittests src/bin/kf-gate3.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kf_gate3-a4e02d1535cf5ff8)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running unittests src/bin/kf-gate4.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kf_gate4-49d38a29720db73c)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running unittests src/bin/kf-gate5.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kf_gate5-478857f6cfa89eff)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running unittests src/bin/kf-gate6.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kf_gate6-f83b1215c003fe0d)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running unittests src/bin/kf-gate7.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kf_gate7-5d00fa610edd8510)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running unittests src/bin/kf-gate8.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kf_gate8-6bdee0e6fa5df19a)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+Running unittests src/bin/kf-gate9.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kf_gate9-29551ef46df46751)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+Running unittests src/bin/kf-gr-tier.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kf_gr_tier-3b1ff403bd866af7)
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+Running unittests src/bin/kf-micro-reserve-probe.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kf_micro_reserve_probe-34ce171c8a58a1fe)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+Running unittests src/bin/kf-nvdec-context.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kf_nvdec_context-376cc9fd2d53ca12)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running unittests src/bin/kf-phys-oracle.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kf_phys_oracle-ded659c094473ec8)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running unittests src/bin/kf-rc-journal-probe.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kf_rc_journal_probe-43272d8620043db9)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running unittests src/bin/kf-syncwait-stress.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kf_syncwait_stress-5cfc877d1ac8f28e)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running unittests src/bin/kf-timer-probe.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kf_timer_probe-6e700f6290c3f071)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running unittests src/bin/kf-user-ring-probe.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kf_user_ring_probe-bc40fe6fbe60e5d6)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+Running unittests src/bin/kf-video-semaphore-probe.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kf_video_semaphore_probe-5db64801a7e31588)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running unittests src/lib.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kf_host-97549d347f81ece6)
+test result: ok. 60 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.98s
+Running tests/channel_birth_bound.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/channel_birth_bound-6f76bae89015fcf9)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.28s
+Running tests/precomp_read.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/precomp_read-000b7fbf6044b11a)
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+Running unittests src/lib.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kf_linux_raw-3859636cedc46e8e)
+test result: ok. 168 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.15s
+Running tests/compile_fail.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/compile_fail-f1b4a65b4d41af3c)
+Finished `dev` profile [unoptimized + debuginfo] target(s) in 10.99s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 26.61s
+Running tests/effective_memtype.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/effective_memtype-c10a57284cfa4120)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.76s
+Running tests/kvm_vm_discovery.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kvm_vm_discovery-059e8f0b2ca746df)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/unsafe_naming.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/unsafe_naming-9f91999d75598d5b)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+Running unittests src/lib.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kf_mem-045cb5e9dd5b944e)
+test sim::adversarial::adversarial_debug_replay ... ignored, debug replay
+test sim::fuzz::hostile_rows_replay ... ignored, debug replay
+test sim::tests::property_debug_replay ... ignored, debug replay: KF_SIM_SEED, KF_SIM_FAULT=every,after, KF_SIM_BATCH, KF_SIM_LOW
+test result: FAILED. 178 passed; 3 failed; 3 ignored; 0 measured; 0 filtered out; finished in 417.85s
+Running tests/audit_cpu_window_admission.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/audit_cpu_window_admission-c5ba4523858a9190)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+Running tests/secaudit_cpu_window_views_are_capped.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/secaudit_cpu_window_views_are_capped-7f54e6c74641466e)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.36s
+Running tests/store_is_a_bounds_check.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/store_is_a_bounds_check-a176fbd6972aefc1)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/walk_format_vs_ogkm.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/walk_format_vs_ogkm-4acf0202f6532a6e)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+Running unittests src/lib.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kf_oprom-c30073c653f04462)
+test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.67s
+Running unittests src/bin/kf-oprom.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kf_oprom-e5dc21038f06e878)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/efi_virtio_golden.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/efi_virtio_golden-e04440443bd1ca1c)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+Running unittests src/lib.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kf_qemu-7961e2ce724c9e2d)
+test result: ok. 440 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.29s
+Running tests/bar0_trace_gate.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/bar0_trace_gate-0313f81cd8967af0)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+Running tests/channel_budget_lazy.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/channel_budget_lazy-8b421f2060591963)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.65s
+Running tests/doorbell_no_put_poll.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/doorbell_no_put_poll-06d9d71cf57e3ff3)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/gop_rom_knobs.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/gop_rom_knobs-5ced49c4840831d5)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.65s
+Running tests/gpu_uuid_property.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/gpu_uuid_property-7929919e1a810de8)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+Running tests/kf3_realize_discard.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kf3_realize_discard-6e16883f9a38eea8)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+Running tests/max_fps_property.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/max_fps_property-0be393a36cb0f6c4)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/precomp_serving.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/precomp_serving-4e697fe6d107beb1)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+Running tests/wire_mirror.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/wire_mirror-b831c698acca8a19)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.80s
+Running unittests src/lib.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kf_rawclient-06a22b109c25c773)
+test result: FAILED. 105 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.51s
+Running unittests src/main.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kf_rawclient-10263c2d0961a0a5)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running unittests src/lib.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kf_rm-d91ab4e3e88e13fc)
+test result: ok. 171 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 49.78s
+Running tests/audit_graph_cache_scope.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/audit_graph_cache_scope-7acaa50c14a6c350)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+Running tests/audit_policy_free_budgets.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/audit_policy_free_budgets-d833463fdcd5c4ca)
+test result: FAILED. 7 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.53s
+Running tests/bus_get_c2c_info.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/bus_get_c2c_info-68e631c5ef733c82)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/bus_get_info_v2.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/bus_get_info_v2-b8bd045469db97ef)
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+Running tests/bus_get_pcie_supported_gpu_atomics.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/bus_get_pcie_supported_gpu_atomics-59dc6f6815c8e415)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+Running tests/carried_controls.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/carried_controls-f2176c5fe6d4ab5b)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 24.29s
+Running tests/ce_fault_method_buffer_size.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/ce_fault_method_buffer_size-79ed200427fee251)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.35s
+Running tests/ce_get_all_physical_caps.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/ce_get_all_physical_caps-35d839c574192dff)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+Running tests/chip_info.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/chip_info-3dfad4d4082577e6)
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.45s
+Running tests/cmc_log_probe.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/cmc_log_probe-a14c458e3e4f94d0)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+Running tests/code43_startdevice_batch.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/code43_startdevice_batch-241042cd3a74f251)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+Running tests/console_region.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/console_region-c6680f77cffb379c)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/constructed_falcon_info.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/constructed_falcon_info-7e2c1901c7f069bd)
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+Running tests/consttab_data.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/consttab_data-52434b810a077180)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+Running tests/consttab_loader.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/consttab_loader-4df344236ae8c2a6)
+test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+Running tests/consttab_scope.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/consttab_scope-2319f3de82c510dc)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+Running tests/control_census.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/control_census-87ecb2ca900698e7)
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+Running tests/cudart_clocks.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/cudart_clocks-677317002a0e0cc6)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/cudart_gate_ad104_oracle.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/cudart_gate_ad104_oracle-f7b648968347607a)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+Running tests/cudart_gate_per_die.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/cudart_gate_per_die-7b189f973465a11d)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+Running tests/deferred_api.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/deferred_api-4054bd27987abff4)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+Running tests/display_seat.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/display_seat-f8a12e3451f7df36)
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+Running tests/engine_nonstall_notifiers.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/engine_nonstall_notifiers-1b0c48a0e25add82)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+Running tests/event_set_notification.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/event_set_notification-81f5367454bc7973)
+test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+Running tests/fault_buffer_recorder.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/fault_buffer_recorder-ec9f55c2bc2e1668)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/fb_get_info_v2.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/fb_get_info_v2-d4f5b1ea48c7628a)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+Running tests/fn1_negotiation_oracle.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/fn1_negotiation_oracle-2a8002992509911c)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+Running tests/gpu_types_wiring.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/gpu_types_wiring-b664c38dd8c405a2)
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.79s
+Running tests/gpu_uuid.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/gpu_uuid-657245afa82ed7b4)
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+Running tests/gr_info.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/gr_info-9777274032132eb2)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+Running tests/gr_static_floorswept.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/gr_static_floorswept-c8ee8918447f560c)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.61s
+Running tests/grmgr_get_gr_fs_info.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/grmgr_get_gr_fs_info-325c3ce7519c9cdb)
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+Running tests/gsp_get_features.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/gsp_get_features-2483f4933d87b780)
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+Running tests/gsp_static_info.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/gsp_static_info-ac975e9e430d06f4)
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+Running tests/gss_exact_zero_rows.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/gss_exact_zero_rows-8c40e9f362080187)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+Running tests/gss_legacy_answer.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/gss_legacy_answer-ef193f50fbfcfd65)
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+Running tests/gss_native.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/gss_native-1e7f7ebb3785025b)
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+Running tests/guest_system_info.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/guest_system_info-d3ff025f97f3c965)
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+Running tests/gvas_publication.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/gvas_publication-3785af9046d5a4e5)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+Running tests/host_facts_ga106.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/host_facts_ga106-7c1229ca5929b787)
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+Running tests/host_facts_query_ga106.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/host_facts_query_ga106-d9e222480e1b2f05)
+test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.73s
+Running tests/inert.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/inert-1782700521656471)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+Running tests/init_tables.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/init_tables-c94144b0f34c0936)
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.90s
+Running tests/internal_device_info_table.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/internal_device_info_table-04d23596e4302622)
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.49s
+Running tests/internal_gpu_get_smc_mode.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/internal_gpu_get_smc_mode-cfec70ea4ffa9f65)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+Running tests/l2_invalidate_evict.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/l2_invalidate_evict-66c0b4117b9666cd)
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.53s
+Running tests/mc_service_interrupts.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/mc_service_interrupts-80cd758f36c8f08f)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+Running tests/memory_list_chain.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/memory_list_chain-55ef3a222124679a)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.37s
+Running tests/memsys_static_config.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/memsys_static_config-a2142f85741908b4)
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/notify_slots_are_reclaimed.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/notify_slots_are_reclaimed-8ca431dccddc4d04)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/ofa_engine.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/ofa_engine-5efc34adce21d179)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/pci_bar_info.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/pci_bar_info-77ee50b68b06b6a7)
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+Running tests/precomp_consttab_data.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/precomp_consttab_data-3d6cf24eb0a685e6)
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+Running tests/precomp_serving.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/precomp_serving-20d298c73c265fb8)
+test result: ok. 33 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.27s
+Running tests/promote_fault_method_buffers.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/promote_fault_method_buffers-c3703361d4545271)
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/register_fault_buffer.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/register_fault_buffer-a8ca21a5e23ef3fe)
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+Running tests/reselect_at_fn1.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/reselect_at_fn1-5922dd06a50c8790)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/rmgraph.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/rmgraph-6c58a27721821fc8)
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.47s
+Running tests/rmrpc_bridge.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/rmrpc_bridge-573ccfb8668d5d4d)
+test result: ok. 103 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+Running tests/rowserve_notice_budget.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/rowserve_notice_budget-ecb0056d39197249)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.49s
+Running tests/rpc_trace_budget.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/rpc_trace_budget-5b65838db6f9aac3)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.91s
+Running tests/secaudit_graph_free_is_not_quadratic.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/secaudit_graph_free_is_not_quadratic-024bb79da9974b7c)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.53s
+Running tests/sw_runlist_probe_chain.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/sw_runlist_probe_chain-f3b86a26182125c9)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+Running tests/sweep_batch_controls.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/sweep_batch_controls-0217f8628165d395)
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+Running tests/sweep_triage.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/sweep_triage-276cac5f8cf9aa99)
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+Running tests/sysmembar.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/sysmembar-3236d63a8beae53b)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/unserviced_ledger.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/unserviced_ledger-f7b9cbe43c34c18b)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+Running tests/user_register_access_map.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/user_register_access_map-3538c89c8ef4327f)
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+Running tests/video_engines.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/video_engines-d4c886bcb33d74e1)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+Running tests/wanted_table_versions.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/wanted_table_versions-1fcaf2ba23c4263f)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/windows_rows_vs_authored.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/windows_rows_vs_authored-ae310f8439792ba7)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+Running tests/zbc_defaults_per_die.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/zbc_defaults_per_die-70658c6e72640bd6)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+Running unittests src/lib.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kf_trace-7fd296980af8ca5d)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running unittests src/lib.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kf_trap-220bfa2fbb774e74)
+test result: ok. 90 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 15.66s
+Running tests/audit_privring_load_order.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/audit_privring_load_order-56cbc78ca4185e72)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.17s
+Running tests/doorbell_contract.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/doorbell_contract-48c551c22571c074)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.10s
+Running tests/hw_boundary_vs_ogkm.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/hw_boundary_vs_ogkm-7f8f757df6bcfd1f)
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+Running tests/memory_map.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/memory_map-0ae05113588262d1)
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+Running unittests src/lib.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/kf_util-9fd2f26a0638e30d)
+test result: ok. 57 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s
+Running tests/stale_claim_lint.rs (/workspace/R2-target/clean-clone.6uj2g4IZ/debug/deps/stale_claim_lint-57ab4923f1d13706)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.89s
+Doc-tests kayfabe_abi
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Doc-tests kayfabe_arch
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.42s
+Doc-tests kayfabe_chips
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Doc-tests kayfabe_cuda
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Doc-tests kayfabe_doorbell
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Doc-tests kayfabe_isolate
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Doc-tests kayfabe_isolate_host
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+Doc-tests kayfabe_linux_raw
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Doc-tests kayfabe_util
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Doc-tests kf_abi
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Doc-tests kf_arch
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.96s
+Doc-tests kf_broker
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Doc-tests kf_census
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Doc-tests kf_chan
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Doc-tests kf_chip
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Doc-tests kf_core
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Doc-tests kf_crec
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Doc-tests kf_cuda
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Doc-tests kf_disp
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Doc-tests kf_gop_image
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Doc-tests kf_gsp
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Doc-tests kf_harness
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Doc-tests kf_host
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Doc-tests kf_linux_raw
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Doc-tests kf_mem
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Doc-tests kf_oprom
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Doc-tests kf_qemu
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Doc-tests kf_rawclient
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Doc-tests kf_rm
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Doc-tests kf_trace
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Doc-tests kf_trap
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Doc-tests kf_util
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

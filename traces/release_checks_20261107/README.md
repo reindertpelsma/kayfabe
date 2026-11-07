@@ -16,7 +16,16 @@ not a committed version of the new runner.
 MEASURED, 2026-11-07, source `fe0cd47e3`: `cargo build --workspace --release --locked -j2` passed in 5m 53s.
 The complete cold run exceeded 25 minutes during GPU-free test compilation, so
 `.github/workflows/release-checks.yml` keeps the clean-clone job manual-only.
-The full test result is pending while this record is assembled.
+The complete cold run failed with exit 1: 5,555 passed, 14 failed and 22 ignored in 325 reported Rust harness summaries. Wall time from log creation through final output was 13,093 seconds (3h 38m 13s), excluding cleanup. `cargo-summary.json` and `cargo-results.txt` record the command, source, outcome, counts and full raw-log hash. `cargo-failures.txt` retains completed failing-harness assertion output. The failed targets are `kf-disp --test lockstep_threads` (7), `kf-mem --lib` (3), `kf-rawclient --lib` (1) and `kf-rm --test audit_policy_free_budgets` (3). The observed display failures include immediate-flip and vblank timing violations. Their cause is unverified; this lane changes no Rust tests or pass rules.
+
+MEASURED, 2026-11-07, separate GitHub stable CI at source `dc44b8cb9`:
+`KAYFABE_NO_KVM=1 cargo test --workspace --no-fail-fast` completed successfully
+from 14:26:32 to 14:56:03 UTC. The 325 reported Rust harness summaries total
+5,569 passed, zero failed and 22 ignored. The step also emitted 44 explicit
+`SKIP` output lines; neither skips nor ignored tests establish physical coverage.
+`github-stable-summary.json` records the source, job URL, timestamps and full
+job-log hash; `github-stable-results.txt` retains the timestamped harness results.
+This is existing stable CI evidence, separate from the new clean-clone runner.
 
 MEASURED, 2026-11-07, R2 worktree based on `fe0cd47e3`: focused Python tests: 57 before this lane (the ledger validator),
 126 after (57 ledger + 26 clone + 38 patch-policy + 5 advisory-command tests),
