@@ -23,6 +23,12 @@ const P = 'ci/vast-broker/src/policy.js',
   G = 'scripts/ci/profile_resources.py';
 const cases = [
   [
+    'large sanity cap remains narrow',
+    'ci/vast-broker/defaults.json',
+    '"maxInetUsdPerGb": 0.02',
+    '"maxInetUsdPerGb": 0.01',
+  ],
+  [
     'profile allowances ignored',
     P,
     'const base = DEFAULTS.payloadProfiles[name];',

@@ -44,7 +44,7 @@ test('profile resources: four data profiles include conservative stage allowance
   }
   assert.equal(cfgFor('large').diskGb, 300);
   assert.equal(cfgFor('large').bandwidthDown, 130);
-  assert.equal(cfgFor('large').maxInet, 0.01);
+  assert.equal(cfgFor('large').maxInet, 0.02);
   assert.equal(cfgFor('small').maxInet, 0.005);
   assert.equal(cfgFor('middle').maxInet, 0.005);
 });
@@ -229,7 +229,7 @@ async function largeService() {
 for (const field of ['inet_down_cost', 'inet_up_cost'])
   test('large live-instance cap remains independently enforced ' + field, async () => {
     const { h, first } = await largeService();
-    h.cloud.instances.get(String(first.id))[field] = 0.01001;
+    h.cloud.instances.get(String(first.id))[field] = 0.02001;
     await h.service.sweep();
     assert.equal((await h.storage.get('record:' + first.key)).closed, 'CONTRACT_PRICE');
   });
@@ -238,4 +238,31 @@ test('large live-instance recheck permits rates above the small cap', async () =
   h.cloud.instances.get(String(first.id)).inet_down_cost = 0.0075;
   await h.service.sweep();
   assert.equal((await h.storage.get('record:' + first.key)).closed, null);
+});
+
+// FALSIFIER: the generous sanity cap excludes a rate below .02, or ranking
+// treats dear network as an automatic loser despite a lower total effective price.
+test('large sanity cap admits dear inbound when its effective price wins', async () => {
+  const cfg = cfgFor('large');
+  const rows = [offer(81, 0.1, 0.015, cfg.diskGb), offer(82, 0.6, 0, cfg.diskGb)];
+  const book = new OfferBook(() => 0),
+    ledger = new Ledger(new MemoryStorage());
+  const evaluation = await book.evaluate(null, cfg, ledger, 'release', { market: rows });
+  assert.equal(evaluation.allowed.length, 2);
+  const chosen = await book.select(evaluation, cfg, ledger, 'release', undefined, { die: 'AD104' });
+  assert.equal(chosen.offer.id, 81);
+  assert.ok(chosen.offer.pricing.total < offerPrice(rows[1], cfg).total);
+});
+test('large release plan permits the cheaper box with dear inbound', async () => {
+  const cfg = cfgFor('large');
+  const rows = [offer(83, 0.1, 0.019, cfg.diskGb), offer(84, 0.7, 0, cfg.diskGb)];
+  const evaluation = await new OfferBook(() => 0).evaluate(
+    null,
+    cfg,
+    new Ledger(new MemoryStorage()),
+    'release',
+    { market: rows },
+  );
+  assert.equal(evaluation.allowed.length, 2);
+  assert.equal(dieLegs(evaluation.allowed, cfg)[0].offer_id, 83);
 });

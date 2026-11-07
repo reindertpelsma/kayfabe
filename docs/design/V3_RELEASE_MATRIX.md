@@ -136,7 +136,14 @@ matrix execution or accepting driver/subrun coverage.
 ## Profile resources and capped network pricing
 
 OWNER DECISION (2026-11-07 coordinator addition): the large profile caps each
-inbound and outbound GB at USD 0.01; small and middle retain USD 0.005/GB.
+inbound and outbound GB at USD 0.02; small and middle retain USD 0.005/GB.
+OWNER UPDATE (2026-11-07): USD 0.02/GB supersedes the earlier USD 0.01 choice.
+The unit-price ceiling is a generous sanity guard; expected network is already
+included in effective hourly price and the total-run cap. A cheaper compute box
+with dearer network can win when its effective price is lower and all caps hold.
+OWNER-REPORTED snapshot of 50 VM offers (not independently measured in J2):
+60% at or below USD 0.005/GB, 78% at or below 0.01, 92% at or below 0.02;
+maximum 0.039. No new provider query was made.
 INFERRED: adhoc retains USD 0.005/GB. These four resource profiles are data in
 `defaults.json` (`payloadProfiles`), distinct from the existing check/sweep/release
 budget classes. The stage table `payloadStageResources` derives each profile's
@@ -162,7 +169,7 @@ CODE READ: the resulting profile reservations are:
 |---|---:|---:|---:|---:|
 | small | 120 | 73 | 2 | 0.005 |
 | middle | 120 | 87 | 2 | 0.005 |
-| large | 300 | 130 | 2 | 0.01 |
+| large | 300 | 130 | 2 | 0.02 |
 | adhoc | 120 | 38 | 2 | 0.005 |
 
 INFERRED: these are conservative planning allowances, not measured total traffic

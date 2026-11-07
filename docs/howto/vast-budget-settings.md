@@ -35,7 +35,7 @@ These driver choices are proposed; the current payload refuses them before
 provisioning. A budget-admitted plan is not a completed release verification.
 
 CODE READ (2026-11-07): resource reservations now follow the run profile. Large
-reserves 300 GB of disk, 130 GB inbound and 2 GB outbound, with a $0.01/GB cap in
+reserves 300 GB of disk, 130 GB inbound and 2 GB outbound, with a $0.02/GB sanity cap in
 each direction. Small reserves 73 GB inbound, middle 87 GB and adhoc 38 GB; each
 keeps a 120 GB disk, 2 GB outbound and a $0.005/GB cap. Effective hourly prices
 include those transfer allowances amortised over the lease. Cheaper compute can

@@ -17,7 +17,7 @@
       "diskGb": 300,
       "bandwidthDownGb": 130,
       "bandwidthUpGb": 2,
-      "maxInetUsdPerGb": 0.01
+      "maxInetUsdPerGb": 0.02
     },
     "adhoc": {
       "diskGb": 120,
