@@ -1,5 +1,6 @@
 {%- set kf = load_data(path="data/site.json", required=false) -%}
 {%- set docs = "/docs/" -%}
+{%- set cp = current_path | default(value="") -%}
 {%- if kf and kf.docs_url -%}{%- set docs = kf.docs_url -%}{%- endif -%}
 <!doctype html>
 <html lang="en">
@@ -19,17 +20,21 @@
     <header class="site-header">
       <div class="wrap bar">
         <a class="brand" href="/">kayfabe</a>
-        <nav aria-label="Site">
-          <ul>
-            <li><a href="/works-today/">What works today</a></li>
-            <li><a href="/how-it-differs/">How it differs</a></li>
-            <li><a href="/benchmarks/">Benchmarks</a></li>
-            <li><a href="/docs/">Documentation</a></li>
-            <li><a href="/about/">About</a></li>
-            <li><a href="/security/">Security</a></li>
-            <li><a href="https://github.com/reindertpelsma/kayfabe">GitHub</a></li>
-          </ul>
-        </nav>
+        <details class="menu" open>
+          <summary>Menu</summary>
+          <nav aria-label="Site">
+            <ul>
+              <li><a href="/works-today/"{% if cp is starting_with(pat="/works-today") %} aria-current="page"{% endif %}>What works today</a></li>
+              <li><a href="/how-it-differs/"{% if cp is starting_with(pat="/how-it-differs") %} aria-current="page"{% endif %}>How it differs</a></li>
+              <li><a href="/benchmarks/"{% if cp is starting_with(pat="/benchmarks") %} aria-current="page"{% endif %}>Benchmarks</a></li>
+              <li><a href="/docs/"{% if cp is starting_with(pat="/docs") %} aria-current="page"{% endif %}>Documentation</a></li>
+              <li><a href="/status/">Status</a></li>
+              <li><a href="/about/"{% if cp is starting_with(pat="/about") %} aria-current="page"{% endif %}>About</a></li>
+              <li><a href="/security/"{% if cp is starting_with(pat="/security") %} aria-current="page"{% endif %}>Security</a></li>
+              <li><a href="https://github.com/reindertpelsma/kayfabe">GitHub</a></li>
+            </ul>
+          </nav>
+        </details>
       </div>
     </header>
     <main id="main" tabindex="-1">{% block content %}{% endblock %}</main>

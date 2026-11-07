@@ -12,6 +12,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { JSDOM } from 'jsdom';
+import { withReports, nearestAnswer } from './report_fixture.mjs';
 
 const site = fileURLToPath(new URL('.', import.meta.url));
 const code = readFileSync(join(site, 'status/status.js'), 'utf8');
@@ -212,8 +213,14 @@ test('a live run over both platforms appears in both columns, per tier', async (
   assert.ok(chips.includes('PASS'));
   const links = [...document.querySelectorAll('.kf-block-live a')].map((a) => a.href);
   assert.ok(
-    links.every((h) => h.startsWith('https://kayfabe.dev/status/run/') || h.startsWith(REPO)),
+    links.every(
+      (h) =>
+        h.startsWith('https://kayfabe.dev/status/run/') ||
+        h.startsWith('https://kayfabe.dev/status/session/') ||
+        h.startsWith(REPO),
+    ),
   );
+  assert.ok(links.some((h) => h.startsWith('https://kayfabe.dev/status/session/?id=')), 'each live row links to its session');
   assert.ok(document.querySelectorAll('section .kf-runs tbody tr').length >= 1);
   assert.match(text(document.getElementById('kf-status-state')), /Middle \(master PR\) tier/);
 });
@@ -394,6 +401,16 @@ test('no SPECviewperf score, GPU identifier or address can be drawn from the com
 const setupsOf = (os, die) => fixture.responses['/v1/ci/setups?os=' + os + '&gpu=' + die].setups;
 const setupRequests = (page) => page.requests.filter((r) => r.href.includes('/v1/ci/setups'));
 const norm = (node) => node.textContent.replace(/\s+/g, ' ').trim();
+// Text with a space at every element boundary, so cells read as words.
+const tx = (node) => {
+  const parts = [];
+  const walk = (n) => {
+    if (n.nodeType === 3) parts.push(n.nodeValue);
+    else for (const c of n.childNodes) { parts.push(' '); walk(c); parts.push(' '); }
+  };
+  walk(node);
+  return parts.join('').replace(/\s+/g, ' ').trim();
+};
 const find = (search, opts) => render('fixture', 'find', search, opts);
 // The fixture mode reads one file; request counting needs the live mode, which asks per die.
 const findLive = (search, opts) => render('live', 'find', search, opts);
@@ -408,7 +425,7 @@ test('find: the form has labelled controls, Arm as not tested yet, and the claim
     [...form.querySelectorAll('legend')].map(norm),
     ['Operating system in the guest', 'CPU vendor of the host', 'Show'],
   );
-  for (const input of form.querySelectorAll('input:not([type=radio]):not([type=checkbox]), select')) {
+  for (const input of form.querySelectorAll('input:not([type=radio]):not([type=checkbox]):not([type=hidden]), select')) {
     const label = form.querySelector('label[for="' + input.id + '"]');
     assert.ok(label, input.name + ' has a label');
   }
@@ -565,7 +582,20 @@ test('find: the driver filter matches the host or the guest driver exactly', asy
     host.document.querySelectorAll('table.kf-setups tbody tr').length,
     setupsOf('windows', 'GA106').filter((s) => s.host_driver === '575.64.05').length,
   );
-  assert.equal(host.document.querySelector('input[name=driver]').value, '575.64.05');
+  // The form's own fields name the host and the guest driver; `driver` (either) stays valid in a
+  // shared address.
+  const byHost = await find('?os=windows&gpu=GA106&host_driver=575.64.05');
+  assert.equal(
+    byHost.document.querySelectorAll('table.kf-setups tbody tr').length,
+    setupsOf('windows', 'GA106').filter((s) => s.host_driver === '575.64.05').length,
+  );
+  assert.equal(byHost.document.querySelector('input[name=host_driver]').value, '575.64.05');
+  const byGuest = await find('?os=windows&gpu=GA106&guest_driver=580.88');
+  assert.equal(
+    byGuest.document.querySelectorAll('table.kf-setups tbody tr').length,
+    setupsOf('windows', 'GA106').filter((s) => s.guest_driver === '580.88').length,
+  );
+  assert.equal(byGuest.document.querySelector('input[name=guest_driver]').value, '580.88');
 });
 
 test('find: an untested die says not tested with the reason the repository states', async () => {
@@ -681,8 +711,10 @@ test('find: a hostile query or API value never becomes markup', async () => {
   const hostile = await find('?gpu=%3Cimg%20src%3Dx%20onerror%3Dalert(1)%3E&os=%3Cb%3E');
   assert.equal(hostile.document.querySelector('#kf-status-content img, #kf-status-content b'), null);
   assert.equal(hostile.document.querySelector('input[name=gpu]').value, '');
-  const odd = await find('?os=linux&gpu=GA106&driver=1%27%3Cb%3E');
-  assert.equal(odd.document.querySelector('input[name=driver]').value, '', 'an invalid driver is ignored');
+  const odd = await find('?os=linux&gpu=GA106&driver=1%27%3Cb%3E&host_driver=1%27%3Cb%3E&guest_driver=1%27%3Cb%3E&commit=zz&relax=x');
+  assert.equal(odd.document.querySelector('input[name=host_driver]').value, '', 'an invalid driver is ignored');
+  assert.equal(odd.document.querySelector('input[name=guest_driver]').value, '', 'an invalid guest driver is ignored');
+  assert.equal(odd.document.querySelector('input[name=commit]').value, '', 'an invalid commit is ignored');
   assert.equal(
     odd.document.querySelectorAll('table.kf-setups tbody tr').length,
     setupsOf('linux', 'GA106').length,
@@ -760,4 +792,312 @@ test('run page: shows the box driver and each guest as reported, and no provider
   )[1].run;
   const bare = await render('fixture', 'run', '?id=' + none.id);
   assert.doesNotMatch(norm(bare.document.querySelector('#kf-status-content')), /Host driver \(reported\)/);
+});
+
+// --- Run report, session, stats, nearest subruns (report contract, 2026-11-07) ----------------------
+// FALSIFIER: a number, test or application is drawn that the report does not hold; a missing report
+// or stage reads as a pass; the log button points anywhere but the configured log origin and the
+// run's own key; a SPECviewperf-like row is drawn; an API value becomes markup; a nearest subrun is
+// shown without saying what differs; a sort or filter is not a URL parameter.
+const reported = withReports(fixture.responses);
+const reportRuns = Object.entries(reported)
+  .filter(([k, v]) => /^\/v1\/ci\/runs\//.test(k) && v.run.report)
+  .map(([, v]) => v.run);
+const goodRun = reportRuns.find((r) => r.verdict === 'PASS' && r.platform === 'both' && r.report.apps.length);
+const badRun = reportRuns.find((r) => r.verdict === 'FAIL');
+const LOGS = 'https://logs.kayfabe.dev';
+
+test('run page: summary block first, then numbers, tests, applications, stages, raw details closed', async () => {
+  const { document } = await render('live', 'run', '?id=' + goodRun.id, { responses: reported });
+  const content = document.getElementById('kf-status-content');
+  const order = [...content.children].map((n) => n.getAttribute('aria-label') || n.querySelector('h2')?.textContent || n.tagName);
+  assert.equal(order[1], 'Summary', 'the summary is the first block after the back link');
+  const summary = norm(content.querySelector('.kf-summary'));
+  for (const word of ['PASS', 'Tier', 'Revision', 'Date', 'Duration', 'Die', 'Platform'])
+    assert.match(summary, new RegExp(word), word);
+  assert.match(summary, /43\.0 min/);
+  const headings = [...content.querySelectorAll(':scope > section > h2')].map(norm);
+  assert.deepEqual(headings, ['Performance numbers', 'Tests', 'Applications', 'Windows gate', 'Stages']);
+  const details = content.querySelector('details.kf-details');
+  assert.equal(details.open, false, 'raw details are collapsed');
+  assert.match(norm(details), /Result key/);
+  assert.match(norm(details), /Log SHA-256/);
+});
+
+test('run page: the log and report buttons open the configured origin and this run only', async () => {
+  const { document } = await render('live', 'run', '?id=' + goodRun.id, { responses: reported });
+  const full = document.querySelector('.kf-summary a.kf-btn[href$="/log.txt"]');
+  assert.equal(full.href, LOGS + '/' + goodRun.id + '/log.txt');
+  assert.equal(full.target, '_blank');
+  assert.match(full.rel, /noopener/);
+  assert.match(norm(full), /^Full log \(\d/);
+  const json = [...document.querySelectorAll('.kf-summary a.kf-btn')].find((a) => /report\.json/.test(norm(a)));
+  assert.equal(json.href, LOGS + '/' + goodRun.id + '/report.json');
+  // The fixture build has no log origin: the button says so and is not a link.
+  const noOrigin = await render('fixture', 'run', '?id=' + goodRun.id, { responses: reported });
+  assert.equal(noOrigin.document.querySelector('.kf-summary a[href*="log.txt"]'), null);
+  assert.match(norm(noOrigin.document.querySelector('.kf-summary')), /Full log: no log origin in this build/);
+  // A log url that is another origin, or another run's key, is never linked.
+  for (const url of ['https://evil.example/' + goodRun.id + '/log.txt', LOGS + '/other-run-1/log.txt', LOGS + '/' + goodRun.id + '/x.txt']) {
+    const responses = structuredClone(reported);
+    responses['/v1/ci/runs/' + goodRun.id].run.log.url = url;
+    const page = await render('live', 'run', '?id=' + goodRun.id, { responses });
+    assert.equal(page.document.querySelector('a[href*="log.txt"], a[href*="evil"]'), null, url);
+  }
+  // No log stored: said in words, no link.
+  const responses = structuredClone(reported);
+  delete responses['/v1/ci/runs/' + goodRun.id].run.log;
+  delete responses['/v1/ci/runs/' + goodRun.id].run.report.log;
+  const none = await render('live', 'run', '?id=' + goodRun.id, { responses });
+  assert.match(norm(none.document.querySelector('.kf-summary')), /Full log: none stored for this run/);
+});
+
+test('run page: performance rows show value, unit, direction and the reference ratio in words', async () => {
+  const { document } = await render('live', 'run', '?id=' + goodRun.id, { responses: reported });
+  const table = document.querySelector('table.kf-perf');
+  assert.deepEqual(
+    [...table.querySelectorAll('thead th')].map(norm),
+    ['Subrun', 'Metric', 'Suite', 'Value', 'Unit', 'Better when', 'Same-box reference'],
+  );
+  const rows = [...table.querySelectorAll('tbody tr')].map(tx);
+  assert.ok(rows.some((r) => /cup8bench FP32 matmul \(guest\).*19\.90 TFLOPS higher 0\.970. the reference \(20\.50 TFLOPS\)/.test(r)), rows.join('|'));
+  assert.ok(rows.some((r) => /no reference measured/.test(r)));
+  // A viewport-benchmark row is never drawn, in the page or in the stats.
+  const responses = structuredClone(reported);
+  const run = responses['/v1/ci/runs/' + goodRun.id].run;
+  run.report.perf.push({ sub: 'host', name: 'SPECviewperf 2020 maya', value: 321, unit: 'fps', suite: 'x' });
+  const page = await render('live', 'run', '?id=' + goodRun.id, { responses });
+  assert.doesNotMatch(norm(page.document.getElementById('kf-status-content')), /SPECviewperf|321/);
+});
+
+test('run page: tests list FAIL first, count per suite, and filter by result', async () => {
+  const { document } = await render('live', 'run', '?id=' + badRun.id, { responses: reported });
+  const rows = [...document.querySelectorAll('table.kf-tests tbody tr')];
+  assert.equal(rows[0].dataset.result, 'FAIL');
+  assert.ok(rows[0].querySelector('.kf-v-fail'));
+  assert.match(norm(document.querySelector('.kf-counts')), /thin_suite: \d+ pass, 1 fail, \d+ skipped/);
+  const press = (name) => [...document.querySelectorAll('.kf-seg button')].find((b) => norm(b) === name);
+  press('Failed or refused').click();
+  assert.deepEqual(rows.filter((r) => !r.hidden).map((r) => r.dataset.result), ['FAIL']);
+  assert.equal(press('Failed or refused').getAttribute('aria-pressed'), 'true');
+  assert.equal(press('All').getAttribute('aria-pressed'), 'false');
+  assert.match(norm(document.querySelector('[role=status].kf-small')), /Showing 1 of \d+ tests\./);
+  press('All').click();
+  assert.equal(rows.filter((r) => r.hidden).length, 0);
+});
+
+test('run page: what is absent says so and nothing is invented', async () => {
+  const { document } = await render('fixture', 'run', '?id=' + passRun.id);
+  const text = norm(document.getElementById('kf-status-content'));
+  assert.match(text, /Not measured yet: this run has no stored report/);
+  assert.match(text, /the application matrix stage does not exist in CI yet/);
+  assert.equal(document.querySelector('table.kf-perf, table.kf-tests, table.kf-apps'), null);
+  assert.equal(document.querySelector('.kf-counts'), null);
+  // A report without numbers or applications.
+  const responses = structuredClone(reported);
+  const run = responses['/v1/ci/runs/' + goodRun.id].run;
+  run.report.perf = [];
+  run.report.apps = [];
+  run.report.windows = undefined;
+  const page = await render('live', 'run', '?id=' + goodRun.id, { responses });
+  const t = tx(page.document.getElementById('kf-status-content'));
+  assert.match(t, /this report holds no performance numbers\. Nothing is estimated here/);
+  assert.match(t, /the application matrix stage does not exist in CI yet/);
+  assert.match(tx(page.document.getElementById('kf-status-content')), /Windows gate Not measured yet: this report has no Windows block/);
+});
+
+test('run page: report values are text, never markup, and bad numbers are dropped', async () => {
+  const responses = structuredClone(reported);
+  const run = responses['/v1/ci/runs/' + goodRun.id].run;
+  run.report.tests[0].name = '<img src=x onerror=alert(1)>';
+  run.report.perf[0].name = '<b>x</b>';
+  run.report.perf[1].value = 'NaN';
+  run.report.apps = [{ sub: 'host', name: '<script>1</script>', os: 'windows', result: '<i>PASS</i>', note: '<u>n</u>' }];
+  const { document } = await render('live', 'run', '?id=' + goodRun.id, { responses });
+  assert.equal(document.querySelector('#kf-status-content img, #kf-status-content b, #kf-status-content script, #kf-status-content u, #kf-status-content i'), null);
+  assert.match(norm(document.querySelector('table.kf-tests')), /<img src=x/);
+  assert.doesNotMatch(norm(document.querySelector('table.kf-perf')), /NaN/);
+  assert.equal(document.querySelector('table.kf-apps .kf-v-pass'), null, 'an unknown result is not a pass');
+});
+
+test('session page: header, a row per subrun with its log range, and a section per subrun', async () => {
+  const { document } = await render('live', 'session', '?id=' + goodRun.id, { responses: reported });
+  assert.equal(document.querySelector('h1').textContent, 'Host session ' + goodRun.id);
+  const head = tx(document.querySelector('.kf-summary'));
+  assert.match(head, /Host driver \(reported\) 580\.159\.04/);
+  assert.match(head, /CPU vendor \(reported\) (?:amd|intel)/);
+  const rows = [...document.querySelectorAll('table.kf-subruns tbody tr')];
+  assert.deepEqual(rows.map((r) => norm(r.querySelector('td'))), goodRun.subruns.map((s) => s.sub));
+  const windows = rows.find((r) => /windows-580\.88/.test(norm(r)));
+  assert.match(tx(windows), /Windows guest 580\.88 .*PASS .*2 pass, 0 fail, 0 skipped .*bytes \d+–\d+ of the log/);
+  const link = windows.querySelector('a[type="text/plain"]');
+  assert.equal(link.href, LOGS + '/' + goodRun.id + '/log.txt');
+  const sections = [...document.querySelectorAll('section.kf-sub')];
+  assert.equal(sections.length, goodRun.subruns.length);
+  for (const [i, s] of goodRun.subruns.entries()) {
+    assert.equal(rows[i].querySelector('a').getAttribute('href'), '#' + sections[i].id);
+    assert.match(norm(sections[i].querySelector('h2')), new RegExp('^' + s.sub));
+  }
+  // Rows are filtered by subrun: the host section holds no Linux guest test.
+  const host = sections.find((s) => s.id === 'sub-host');
+  assert.match(norm(host), /merge_bar arm 1/);
+  assert.doesNotMatch(norm(host), /concurrency/);
+  assert.equal(document.querySelectorAll('section.kf-sub h3').length > 0, true, 'inner headings are one level down');
+});
+
+test('session page: a subrun that was not run says so with its reason; no breakdown is an empty state', async () => {
+  const withNotRun = reportRuns.find((r) => r.subruns.some((s) => s.verdict === 'NOT_RUN'));
+  const { document } = await render('live', 'session', '?id=' + withNotRun.id, { responses: reported });
+  const notRun = document.getElementById('sub-windows-575-64-05');
+  assert.match(norm(notRun), /not run/i);
+  assert.match(norm(notRun), /Not run: the small tier does not install a second Windows driver yet/);
+  assert.equal(notRun.querySelector('table.kf-tests'), null);
+  const old = await render('fixture', 'session', '?id=' + passRun.id);
+  assert.match(norm(old.document.getElementById('kf-status-content')), /this session has no subrun breakdown/);
+  assert.ok(old.document.querySelector('.kf-runs'), 'the stages still show');
+  const missing = await render('fixture', 'session', '');
+  assert.match(missing.document.getElementById('kf-status-state').textContent, /needs a run id/);
+});
+
+test('every run row elsewhere links to its session', async () => {
+  const matrix = await render('fixture', '', '?tier=middle');
+  assert.ok([...matrix.document.querySelectorAll('.kf-block-live a')].some((a) => /\/status\/session\/\?id=/.test(a.href)));
+  const commit = await render('fixture', 'commit', '?sha=' + commitKey.split('/').pop());
+  assert.ok([...commit.document.querySelectorAll('.kf-runs tbody tr')].every((r) => r.querySelector('a[href*="/status/session/?id="]')));
+  const f = await find('?os=linux&gpu=GA106');
+  assert.ok([...f.document.querySelectorAll('table.kf-setups tbody tr')].every((r) => r.querySelector('a[href*="/status/session/?id="]')));
+});
+
+test('stats page: rows, sort and filters are URL parameters, and live mode sends the validated filters', async () => {
+  const page = await render('live', 'stats', '', { responses: reported });
+  const rows = [...page.document.querySelectorAll('table.kf-stats > tbody > tr')];
+  assert.equal(rows.length, reportRuns.length);
+  assert.deepEqual(page.requests.filter((r) => r.href.includes('/v1/ci/stats')).map((r) => r.href), [API + '/v1/ci/stats']);
+  const sorted = await render('live', 'stats', '?sort=pass&dir=desc', { responses: reported });
+  const passes = [...sorted.document.querySelectorAll('table.kf-stats > tbody > tr')].map((r) => Number(r.querySelectorAll('td')[4].textContent));
+  assert.deepEqual(passes, [...passes].sort((a, b) => b - a));
+  assert.equal(sorted.document.querySelector('th[aria-sort="descending"]').textContent.trim().startsWith('Tests passed'), true);
+  const headers = [...sorted.document.querySelectorAll('th a.kf-sort')];
+  assert.ok(headers.every((a) => /\/status\/stats\/\?/.test(a.href)), 'sorting is a link, so it can be shared');
+  const die = reportRuns[0].die;
+  const filtered = await render('live', 'stats', '?die=' + die + '&tier=middle&driver=580.159.04&bogus=1', { responses: reported });
+  assert.ok(filtered.requests.some((r) => r.href === API + '/v1/ci/stats?die=' + die + '&tier=middle&driver=580.159.04'));
+  assert.ok([...filtered.document.querySelectorAll('table.kf-stats > tbody > tr')].every((r) => r.querySelector('td').textContent.trim() === die));
+  assert.equal(filtered.document.querySelector('input[name=die]').value, die);
+  // An invalid value is ignored and never reaches a request.
+  const bad = await render('live', 'stats', '?die=x%27y&tier=zz&driver=1&sort=evil', { responses: reported });
+  assert.ok(bad.requests.every((r) => !/evil|x%27|zz/.test(r.href)));
+  assert.deepEqual(bad.requests.filter((r) => r.href.includes('/v1/ci/stats')).map((r) => r.href), [API + '/v1/ci/stats']);
+  assert.ok(bad.document.querySelector('table.kf-stats'), 'an unknown sort key falls back to the default sort');
+  assert.match(bad.document.getElementById('kf-status-state').textContent, /sorted by Die\./);
+});
+
+test('stats page: numbers sit behind each row, an empty answer is not measured yet, nothing is invented', async () => {
+  const page = await render('fixture', 'stats', '', { responses: reported });
+  const row = page.document.querySelector('table.kf-stats > tbody > tr');
+  assert.match(norm(row.querySelector('details summary')), /\d+ numbers?/);
+  assert.ok(row.querySelector('table.kf-perf'));
+  assert.ok(row.querySelector('a[href*="/status/session/?id="]'));
+  const empty = await render('fixture', 'stats', '');
+  assert.match(norm(empty.document.getElementById('kf-status-content')), /Not measured yet: no stored report has pass counts or performance numbers/);
+  assert.equal(empty.document.querySelector('table.kf-stats'), null);
+  assert.doesNotMatch(norm(empty.document.getElementById('kf-status-content')), /SPECviewperf/);
+  const responses = structuredClone(reported);
+  responses['/v1/ci/stats'].stats[0].die = '<img src=x>';
+  responses['/v1/ci/stats'].stats[1].perf = [{ name: 'SPECviewperf 2020', value: 5, unit: 'fps' }, { name: 'ok', value: 1, unit: 'u' }];
+  const hostile = await render('fixture', 'stats', '', { responses });
+  assert.equal(hostile.document.querySelector('#kf-status-content img'), null);
+  assert.doesNotMatch(norm(hostile.document.getElementById('kf-status-content')), /SPECviewperf/);
+});
+
+test('find: when nothing matches exactly the nearest subruns come with what differs', async () => {
+  const responses = structuredClone(reported);
+  const near = nearestAnswer(reportRuns);
+  const path = '/v1/ci/subruns?commit=a1b2c3d4&die=TU102&os=linux&limit=10';
+  responses[path] = near;
+  const page = await render('live', 'find', '?os=linux&gpu=RTX+2080+Ti&commit=a1b2c3d4', { responses });
+  assert.ok(page.requests.some((r) => r.href === API + path), page.requests.map((r) => r.href).join('\n'));
+  const text = norm(page.document.querySelector('.kf-nearest'));
+  assert.match(text, /No exact match: the nearest subruns/);
+  const first = norm(page.document.querySelector('.kf-nearest tbody tr'));
+  assert.match(first, /same guest OS/);
+  assert.match(first, /same host driver/);
+  assert.match(first, /different commit revision \(wanted a1b2c3d4, found [0-9a-f]{8}\)/);
+  assert.match(first, /different CPU type \(wanted amd, found intel\)/);
+  const second = norm(page.document.querySelectorAll('.kf-nearest tbody tr')[1]);
+  assert.match(second, /different host driver \(wanted 590\.12\.34, found 580\.159\.04\)/);
+  assert.match(second, /different die within the same family/);
+  assert.ok(page.document.querySelector('.kf-chip-diff'));
+  const link = page.document.querySelector('.kf-nearest tbody a[href*="/status/session/?id="]');
+  assert.match(link.href, /#sub-linux-580-159-03$/);
+  // No subrun at all is said plainly, not as a blank.
+  const none = structuredClone(reported);
+  none[path] = { api: 'v1', subruns: [] };
+  const empty = await render('live', 'find', '?os=linux&gpu=RTX+2080+Ti&commit=a1b2c3d4', { responses: none });
+  assert.match(norm(empty.document.querySelector('.kf-block-none:last-of-type, .kf-nearest, section.kf-die-result')), /no near match|No subrun of TU102 is close/);
+});
+
+test('find: closeness is an ordered list in the address, validated, reorderable, and sent to the API', async () => {
+  const responses = structuredClone(reported);
+  const mk = (relax) => '/v1/ci/subruns?die=TU102&os=linux' + (relax ? '&relax=' + relax : '') + '&limit=10';
+  responses[mk('')] = nearestAnswer(reportRuns);
+  responses[mk('cpu,commit')] = nearestAnswer(reportRuns);
+  responses[mk('none')] = { api: 'v1', subruns: [] };
+  const given = await render('live', 'find', '?os=linux&gpu=TU102&relax=cpu,commit', { responses });
+  assert.ok(given.requests.some((r) => r.href === API + mk('cpu,commit')));
+  const boxes = [...given.document.querySelectorAll('.kf-relax li')].map((li) => [li.dataset.dim, li.querySelector('input').checked]);
+  assert.deepEqual(boxes.slice(0, 2), [['cpu', true], ['commit', true]]);
+  assert.ok(boxes.slice(2).every(([, on]) => on === false), 'dropped steps are unticked');
+  assert.equal(given.document.querySelector('details.kf-closeness').open, true);
+  // Default and bogus values both mean the default ladder, and neither is sent.
+  for (const value of ['', '&relax=bogus', '&relax=cpu,cpu', '&relax=commit,evil']) {
+    const page = await render('live', 'find', '?os=linux&gpu=TU102' + value, { responses });
+    const asked = page.requests.map((r) => r.href).filter((h) => h.includes('/v1/ci/subruns'));
+    assert.ok(asked.every((h) => !/evil|bogus/.test(h)), value);
+    assert.deepEqual(
+      [...page.document.querySelectorAll('.kf-relax li')].map((li) => li.dataset.dim),
+      ['commit', 'cpu', 'host_driver', 'guest_driver', 'die_family', 'os', 'die_any'],
+      value,
+    );
+  }
+  const none = await render('live', 'find', '?os=linux&gpu=TU102&relax=none', { responses });
+  assert.ok(none.requests.some((r) => r.href === API + mk('none')));
+  assert.ok([...none.document.querySelectorAll('.kf-relax input')].every((i) => !i.checked));
+  // Reordering with the buttons, then submitting, writes the new order into `relax`.
+  const page = await render('live', 'find', '?os=linux&gpu=TU102', { responses });
+  const { document, window } = page;
+  const second = document.querySelector('.kf-relax li[data-dim=cpu]');
+  second.querySelector('[data-move=up]').click();
+  assert.deepEqual([...document.querySelectorAll('.kf-relax li')].slice(0, 2).map((l) => l.dataset.dim), ['cpu', 'commit']);
+  assert.equal(document.querySelector('.kf-relax li:first-child [data-move=up]').disabled, true);
+  document.getElementById('kf-relax-os').checked = false;
+  const form = document.querySelector('form.kf-find');
+  form.dispatchEvent(new window.Event('submit', { cancelable: true }));
+  const hidden = form.querySelector('input[name=relax]');
+  assert.equal(hidden.disabled, false);
+  assert.equal(hidden.value, 'cpu,commit,host_driver,guest_driver,die_family,die_any');
+  for (const li of document.querySelectorAll('.kf-relax li')) li.querySelector('input').checked = true;
+});
+
+test('find: filters and closeness survive the links of an ambiguous name', async () => {
+  const { document } = await find('?os=linux&gpu=RTX+40&host_driver=580.159.04&guest_driver=580.159.03&commit=a1b2c3d4&relax=cpu');
+  const links = [...document.querySelectorAll('#kf-status-content li a')];
+  assert.ok(links.length >= 1);
+  for (const a of links) {
+    const q = new URL(a.href).searchParams;
+    assert.equal(q.get('host_driver'), '580.159.04');
+    assert.equal(q.get('guest_driver'), '580.159.03');
+    assert.equal(q.get('commit'), 'a1b2c3d4');
+    assert.equal(q.get('relax'), 'cpu');
+  }
+});
+
+test('the site stylesheet keeps its promises: tokens for both themes, focus, motion, print', () => {
+  const css = readFileSync(join(site, 'static/style.css'), 'utf8') + readFileSync(join(site, 'status/status.css'), 'utf8');
+  assert.match(css, /prefers-color-scheme: dark/);
+  assert.match(css, /\[data-theme="dark"\]/);
+  assert.match(css, /prefers-reduced-motion: reduce/);
+  assert.match(css, /@media print/);
+  assert.match(css, /:focus-visible/);
+  assert.doesNotMatch(css, /url\(|@import|https?:\/\//);
 });
