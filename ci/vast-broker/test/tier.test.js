@@ -11,6 +11,26 @@ import { setup, env } from './helpers.js';
 // profile keeps a hard limit too short for the Linux bar plus the Windows install and gate while
 // the sweep's grows beyond 180 minutes by default.
 const hex = (n) => n.toString(16).padStart(2, '0').repeat(20);
+test('Windows apps and SPEC options coexist without selecting either by default', () => {
+  const both = tierEnvironment('release', {
+    stages: ['specviewperf'],
+    spec: 'laneb',
+    winApps: 'mid',
+  });
+  assert.equal(both.KF_WINAPPS, 'mid');
+  assert.equal(both.KF_SPEC, 'laneb');
+  assert.equal(both.KF_STAGES, 'specviewperf');
+  const defaults = tierEnvironment('release');
+  assert.equal(defaults.KF_WINAPPS, undefined);
+  assert.equal(defaults.KF_SPEC, undefined);
+});
+test('asking for one optional stage does not ask for its sibling', () => {
+  assert.equal(tierEnvironment('release', { winApps: 'full' }).KF_SPEC, undefined);
+  assert.equal(
+    tierEnvironment('release', { stages: ['specviewperf'], spec: 'lanea' }).KF_WINAPPS,
+    undefined,
+  );
+});
 const sweepClaims = (sha) => ({
   event_name: 'workflow_dispatch',
   sha,

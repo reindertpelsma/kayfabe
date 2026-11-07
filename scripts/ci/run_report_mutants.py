@@ -160,6 +160,42 @@ MUTANTS += [
     ("windows-log-stage-missing", '"windows": ["windows_gate", "windows_apps", "windows_gate_2"]', '"windows": ["windows_gate", "windows_gate_2"]'),
 ]
 
+# 2026-11-07: the SPECviewperf stage's status rows (docs/design/V3_SPEC_GATE.md): status only, neutral suite name.
+MUTANTS += [
+    (
+        "spec-row-with-extra-fields-accepted",
+        'failed=([A-Za-z0-9_,]{1,120}|-)$"\n)\nSPEC_SUITE',
+        'failed=([A-Za-z0-9_,]{1,120}|-)"\n)\nSPEC_SUITE',
+    ),
+    ("spec-not-run-is-a-pass", '"NOT_RUN": "SKIP"}', '"NOT_RUN": "PASS"}'),
+    ("spec-row-with-a-time", "SPEC_RESULT[m[2]], None)", "SPEC_RESULT[m[2]], 1000)"),
+    (
+        "spec-failed-subtests-dropped",
+        '                for sub in ([] if m[3] == "-" else m[3].split(","))[:6]:',
+        "                for sub in []:",
+    ),
+    (
+        "spec-suite-keeps-the-benchmark-name",
+        '                kept["name"] = SPEC_SUITE + kept["name"][len("specviewperf"):]',
+        "                pass",
+    ),
+    (
+        "spec-suite-outside-the-windows-subrun",
+        'if r["name"].startswith(("windows", SPEC_SUITE))] or ["windows_gate"], rows,',
+        'if r["name"].startswith("windows")] or ["windows_gate"], rows,',
+    ),
+    (
+        "spec-retry-stays-a-failure",
+        'all(r["name"].startswith(SPEC_SUITE + "_retry_") for r in spec_bad)',
+        "False",
+    ),
+    (
+        "spec-retry-hides-a-failure",
+        'all(r["name"].startswith(SPEC_SUITE + "_retry_") for r in spec_bad)',
+        'any(r["name"].startswith(SPEC_SUITE + "_retry_") for r in spec_bad)',
+    ),
+]
+
 COLLECT = """import io,json,sys,unittest
 s=unittest.defaultTestLoader.discover('.',pattern='test_vast_run_report.py')
 r=unittest.TextTestRunner(stream=io.StringIO()).run(s)

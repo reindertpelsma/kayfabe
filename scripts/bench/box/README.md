@@ -106,6 +106,14 @@ ssh <alias> 'cat /root/prov/<tag>.log'           # V3_GATES_SUMMARY / KF3_RC / F
   `WINAPPS_PASS` (0), `WINAPPS_FAIL diag=KAYFABE` (1), `WINAPPS_RETRY class=...` (3, never a pass) or `WINAPPS_REFUSED` (2), then
   `WINAPPS_EXIT rc=N`. Log `<prov>/<tag>_winapps.log`, evidence `<prov>/<tag>_winapps.tgz`. A box never fetches an app from a vendor:
   the disk comes from the R2 copy (`docs/DOWNLOADS.md`, "Windows app bundle") or by hand. Design: `docs/design/V3_WINDOWS_APPS_GATE.md`.
+
+- *[2026-11-07, DRAFT, disabled by default]* `specviewperf_stage.sh <tag> <prov>` (through `scripts/ci/vast_stage_specviewperf.sh`) runs
+  one lane of SPECviewperf 15.0.0 (`KF_SPEC_LANE=lanea|laneb|both`) in the Windows guest that `windows_gate.sh` just passed: it
+  fetches the private copy through the Worker's `/bench-data` route (pin: `specviewperf.pin`, without it RETRY class MEDIA),
+  streams the lane's viewsets into a child overlay of the gate's overlay, runs each viewset once (1 iteration, FullHD) after the
+  five-minute settle, and ends in `SPECVIEWPERF_STAGE_PASS` (0), `_FAIL` (1) or `_RETRY class=...` (3). It deletes the copy at the
+  end and prints status lines only. No box has run it; design, lanes, rules and what a first run needs:
+  `docs/design/V3_SPEC_GATE.md`. GPU-free: `python3 -m unittest discover -s scripts/ci -p 'test_vast_spec*.py'`.
 - A merge to master needs `V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS` (2026-10-10: `gate10=FALLBACK` = host RM refused all small micro reservations by a refusal status AND the probe proved a per-2-MiB-leaf reservation works at the flat FB alias, accepted but loud; `gate10=FAIL` never), `KF3_RC=0`,
   `FAST_SUITE_PASS=30` and `BIRTH_CENSUS_OK` on the **exact revision** promoted (docs-only commits on
   top are fine; say so). *[2026-10-03, `v3-sec-nonpriv`]* `BIRTH_CENSUS_OK` (`birth_census.sh`,

@@ -24,7 +24,11 @@ NOT_RUN with a reason. Subrun `duration_ms` is the SUM OF THE MEASURED TEST TIME
 (the payload prints no wall-clock timestamps); the Worker, not this script, finds the position of
 each subrun in the published log from the stage markers.
 The report is a CLAIM: the Worker re-validates and bounds every field, sets the run's identity
-itself, and nothing here can change a verdict. SPECviewperf data is never included. The helper
+itself, and nothing here can change a verdict. SPECviewperf SCORES are never included; since 2026-11-07 the SPECviewperf
+stage (scripts/bench/box/specviewperf_stage.sh, disabled by default) contributes status only: one test row per viewset
+(PASS, FAIL or SKIP for a viewset that did not run) and one FAIL row per failed subtest, under the neutral suite name
+`spec_viewsets` (the Worker drops anything that names the benchmark, ci/vast-broker/src/runreport.js), with no timing
+and no number; its graded suite rows are renamed to the same prefix. They belong to the Windows subrun. The helper
 never raises, never changes the result file and prints one outcome line.
 """
 
@@ -67,6 +71,15 @@ def windows_app_result(cls, verdict):
     return "NOT_RUN"
 
 
+
+# The SPECviewperf stage's status rows (scripts/bench/box/specviewperf_stage.sh; the wrapper lets only these through):
+# a viewset, its result and the names of its failed subtests. Nothing here is a number a benchmark measured.
+SPEC_ROW = re.compile(
+    r"^SPEC_ROW name=([a-z][a-z_]*-[0-9]{2}) result=(PASS|FAIL|NOT_RUN) subtests=[0-9]{1,3}/[0-9]{1,3}"
+    r" reason=(?:[A-Z_]{1,16}|-) failed=([A-Za-z0-9_,]{1,120}|-)$"
+)
+SPEC_SUITE = "spec_viewsets"  # the report's name for the stage's suite rows ("specviewperf" in the result file)
+SPEC_RESULT = {"PASS": "PASS", "FAIL": "FAIL", "NOT_RUN": "SKIP"}
 # The stage markers whose position in the published log delimits a subrun (the Worker finds them).
 LOG_STAGES = {
     "host": ["cuda_host", "merge_bar"],
@@ -189,6 +202,14 @@ class Collector:
                 res = windows_app_result(m[2], m[3])
                 self.windows_apps[m[1]] = (res, m[4], m[5].strip())
                 self.test("windows", "apps_windows", m[1], "SKIP" if res == "NOT_RUN" else res, seconds_ms(m[4]))
+
+        elif head == "SPEC_ROW":
+            # The SPECviewperf stage: one row per viewset and one FAIL row per failed subtest, status only, no time.
+            m = SPEC_ROW.match(line)
+            if m:
+                self.test("windows", SPEC_SUITE, m[1], SPEC_RESULT[m[2]], None)
+                for sub in ([] if m[3] == "-" else m[3].split(","))[:6]:
+                    self.test("windows", SPEC_SUITE, "%s/%s" % (m[1], sub), "FAIL", None)
         elif head == "GATE_PROBE_RESULT":
             parts = line.split(" ", 2)
             if len(parts) == 3 and re.fullmatch(r"[a-z][a-z0-9_]{0,23}", parts[1]):
@@ -271,7 +292,12 @@ def suite_rows(result):
             and contract.SUITE_NAME.fullmatch(row["name"])
             and all(contract._count(row.get(k)) for k in ("pass", "fail", "skip"))
         ):
-            rows.append({k: row[k] for k in ("name", "pass", "fail", "skip")})
+            kept = {k: row[k] for k in ("name", "pass", "fail", "skip")}
+            if kept["name"].startswith("specviewperf"):
+                # the Worker drops names that carry the benchmark's name: the report says `spec_viewsets`
+                kept["name"] = SPEC_SUITE + kept["name"][len("specviewperf"):]
+            if contract.SUITE_NAME.fullmatch(kept["name"]):
+                rows.append(kept)
     return rows[: LIMITS["suites"]]
 
 
@@ -338,7 +364,7 @@ def build_report(lines, result, run_id=None):
         subrun(sub_linux, "linux_guest", "linux", linux_group, rows, host_driver, linux_driver, mine["linux"],
                overall, ("thin_suite", "birth_census", "cuda_fat"), idle),
         subrun(sub_windows, "windows_guest", "windows",
-               [r["name"] for r in rows if r["name"].startswith("windows")] or ["windows_gate"], rows,
+               [r["name"] for r in rows if r["name"].startswith(("windows", SPEC_SUITE))] or ["windows_gate"], rows,
                host_driver, windows_driver, mine["windows"], overall, ("windows_gate",), windows_idle),
     ]
     if subruns[2]["verdict"] == "NOT_RUN":
@@ -346,6 +372,11 @@ def build_report(lines, result, run_id=None):
     if c.windows_requested and c.windows["gate"] in ("FAIL", "RETRY"):
         subruns[2]["verdict"] = c.windows["gate"]
         subruns[2]["reason"] = None
+    # A SPECviewperf lane that could not finish (media, transport, time, a host reference: rows `<stage>_retry_<class>`)
+    # is a RETRY of the Windows subrun, not a failure of the guest; any other failing row of the subrun stays a FAIL.
+    spec_bad = [r for r in rows if r["fail"] > 0 and r["name"].startswith(("windows", SPEC_SUITE))]
+    if spec_bad and subruns[2]["verdict"] == "FAIL" and all(r["name"].startswith(SPEC_SUITE + "_retry_") for r in spec_bad):
+        subruns[2]["verdict"] = "RETRY"
     tests = []
     for key, sub_id in keys.items():
         for t in mine[key]:
