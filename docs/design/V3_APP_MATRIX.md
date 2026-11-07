@@ -26,7 +26,7 @@ pinned official installers per run and supplies them on a transient read-only da
 file/hash/linkage audit into a fresh image, then scanned. CuPy is runtime-only because its wheel bundles proprietary CUDA headers;
 CDP quicksort is a declared static-device-runtime exception built only at provisioning. The claim is **input-pinned +
 inventory-identical, not byte-identical qcow2**. **DESIGN:** build twice, cross-verify against the first
-manifest and run the gate before adoption or hosting. **MEASURED:** LB1 ran no VM/GPU; R5 qualifies the old image at its revision.
+manifest and run the gate before adoption or hosting. **MEASURED, 2026-11-07:** LB1 ran no VM/GPU; R5 qualifies the old image at its revision.
 All old bash paths remain untouched. Steps and limits: [design](V3_APPS_IMAGE_RECIPE.md), [manual](../howto/linux-apps-image.md).
 
 ## R4 — re-run at kf3 `738c90e5` (code of `3f67ed95`, before the CDP fix), RTX 3070, 2026-09-30 — PARTIAL

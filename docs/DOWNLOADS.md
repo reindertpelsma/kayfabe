@@ -165,7 +165,7 @@ Only the qualified open layer could be public in principle, subject to the owner
 This newer Linux policy also supersedes any older proposal below to include NVIDIA payloads in a hosted image/ISO; it does not
 implement changes to the Windows packaging path.
 
-**MEASURED:** LB1 verified public metadata/availability and selected complete payload hashes, but ran no VM or GPU and did not
+**MEASURED, 2026-11-07 ([LB1 evidence](../traces/apps_image_recipe_20261107/README.md)):** LB1 verified public metadata/availability and selected complete payload hashes, but ran no VM or GPU and did not
 hash every large input. **DESIGN:** build twice, cross-verify and run the app gate before adopting or hosting the
 open image with its manifest. The historical image has no demonstrated inventory match to this recipe. Old bash paths are
 untouched. The monthly official-URL check fails on media drift; actual downloads always require hash verification. No upload,
