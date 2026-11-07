@@ -15,9 +15,9 @@ viewset.
    whole lease) and a guest BAR1 of **256 MiB** (`nvidia-smi -q`). The nine ran on two boxes of the same die, so the table is per viewset,
    not one continuous run.
 2. MEASURED: nothing fails natively because of the 256 MiB BAR on the dies tried: catia-07 (two kayfabe subtest failures on 2026-11-05) and
-   enscape-01 (refused by SPEC validation under kayfabe) both pass natively on the 4090; catia-07 also on an RTX 3060 and an RTX 5070.
+   enscape-01 (refused by SPEC validation under kayfabe) both pass natively on the 4090; catia-07 also on an RTX 3060 (GA106) and an RTX 5070 (GB205), and enscape-01 on the RTX 5070.
    **On this evidence the expected CI set is all nine viewsets** on the dies tried (AD102, GA106, GB205); there is no viewset that the native
-   reference excludes. (Ampere GA106 and Blackwell GB205 columns are partial, see the table.)
+   reference excludes. (The GA106 and GB205 columns are partial, see the table; enscape-01 on the 3060 did not finish inside its lease.)
 3. MEASURED, harness finding that matters for CI: a Vast Windows VM has **no monitor** (the NVIDIA adapter reports 1024x768), and
    SPEC's CLI refuses every viewset (`System does not support 4K or Full HD display resolution`) until a 1920x1080 display exists. The native
    arm needed an indirect (virtual) display driver. Under kayfabe the display comes from the broker, so this is a native-arm cost only.
@@ -58,10 +58,10 @@ kayfabe's runs have their own display path; only completion status is compared.
 | 59506269 | 59022146, RTX 3060 GA106 | Quebec | 03:24:26 - 06:19:19 | 0.172 | 0.50 | box C: catia (first run lost to the sysinfo trap) |
 | 59517211 | 59273392, RTX 4090 | Texas | 04:28:46 - 05:48:48 | 0.683 | 0.91 | Windows never reachable over ssh in 80 min; destroyed, nothing ran |
 | 59529251 | 58676490, RTX 4090 AD102 | Romania | 05:40:18 - 07:18:42 | 0.806 | 1.32 | box B: creo, energy, maya, solidworks, add-on probes |
-| 59532831 | 59022146, RTX 3060 GA106 | Quebec | 06:25:27 - 09:16:37 | 0.172 | 0.49 | box D: unreal; enscape unfinished at lease end |
-| 59537364 | 58781474, RTX 5070 GB205 | Quebec | 07:18:54 - TBD | 0.244 | TBD | box E |
+| 59532831 | 59022146, RTX 3060 GA106 | Quebec | 06:25:27 - 09:16:37 | 0.172 | 0.49 | box D: unreal; enscape unfinished at lease end (7 of 10 subtests) |
+| 59537364 | 58781474, RTX 5070 GB205 | Quebec | 07:18:54 - 09:51:53 | 0.244 | 0.62 | box E: catia, enscape (stopped at the coordinator's wrap-up, nothing else run) |
 
-Spend and the ledger lines are in the report; the account credit is shared, so cost is rate x time, not the credit change.
+Total INFERRED cost 6.74 USD of the 15 USD cap (sum of the column), plus inbound traffic of about 50 GB per box that the offers priced at 0.0004 to 0.013 USD/GB (at most about 0.7 USD per box, not itemised). The account credit is shared, so cost is rate x time, not the credit change. Every box was torn down by exact id; `vastai show instances-v1 --raw` listed no instance at 2026-11-07T09:51:53Z.
 
 ## Results (statuses only; MEASURED on the Vast instances named in each row, windows-on-vast 93b65b3, 2026-11-07)
 
@@ -70,15 +70,15 @@ Cell = status (CLI wall seconds, peak GPU memory MiB at the 5 s sampler). Every 
 
 | viewset | RTX 4090 (AD102, boxes A and B) | RTX 3060 (GA106, boxes C, D) | RTX 5070 (GB205, box E) |
 |---|---|---|---|
-| blender-01 | PASS (1876 s, 6790 MiB) | not run | TBD |
-| catia-07 | PASS (803 s, 4593 MiB) | PASS (1611 s, 5757 MiB) | TBD |
+| blender-01 | PASS (1876 s, 6790 MiB) | not run | not run |
+| catia-07 | PASS (803 s, 4593 MiB) | PASS (1611 s, 5757 MiB) | PASS (1806 s, 4810 MiB) |
 | creo-04 | PASS (1243 s, 2472 MiB) | not run | not run |
 | energy-04 | PASS (323 s, 3464 MiB) | not run | not run |
-| enscape-01 | PASS (2042 s, 5157 MiB), SPEC validation passed | unfinished at the 3 h lease end (6 of 10 subtests done, 0 resets) | TBD |
+| enscape-01 | PASS (2042 s, 5157 MiB), SPEC validation passed | unfinished at the 3 h lease end (7 of 10 subtests done, 8th running, 0 resets) | PASS (3298 s, 4675 MiB), SPEC validation passed |
 | maya-07 | PASS (400 s, 1139 MiB) | not run | not run |
 | medical-04 | PASS (318 s, 5832 MiB) | not run | not run |
 | solidworks-08 | PASS (989 s, 2229 MiB) | not run | not run |
-| unreal_engine-01 | PASS (1236 s, 5754 MiB) | PASS (1419 s, 5532 MiB) | TBD |
+| unreal_engine-01 | PASS (1236 s, 5754 MiB) | PASS (1419 s, 5532 MiB) | not run |
 
 BAR1 Total in the guest, `nvidia-smi -q -d MEMORY`: 256 MiB on every box (`box1/box_facts.txt`, `box4/box_facts_tdr_queue.txt`,
 `box2/box_facts_and_tdr.txt`, `box5_facts_tdr_enscape_partial.txt`); the Linux stage of box A also showed `Region 1: ... [size=256M]` for the
@@ -129,10 +129,10 @@ Vast bills inbound traffic on some hosts (`inet_down_cost` 0.0004 to 0.013 USD/G
 |---|---|
 | N1 BAR1 = 256 MiB on the 4090 | **held** (256 MiB, box A and B) |
 | N2 all nine Complete on the 4090, validation passes, zero resets | **held** (two boxes of the same die, per viewset) |
-| N3 catia-07 completes natively, zero resets | **held** (4090, 3060; 5070 TBD) |
+| N3 catia-07 completes natively, zero resets | **held** (4090, 3060, 5070) |
 | N4 enscape-01 passes validation natively on the 4090 | **held** |
 | N5 the 256 MiB BAR does not make enscape/unreal/blender fail on the 4090 | **held** (all three Completed) |
-| N6 on an older/smaller-VRAM die at least one viewset fails or is refused | **not shown**: no failure on the 3060 (12 GB) for the two viewsets that finished; enscape-01 did not finish; no 8 GB or Turing box ran (the 2060 SUPER lease never started) |
+| N6 on an older/smaller-VRAM die at least one viewset fails or is refused | **not shown**: no failure on the 3060 (12 GB) for the two viewsets that finished, none on the 5070 (12 GB) for the two that ran; enscape-01 did not finish on the 3060 inside 3 h (7 of 10 subtests, 0 resets), where seven subtests plus most of the eighth took longer (about 3,500 s) than all ten on the 5070 (3,298 s; n=1 each, different host CPUs); no 8 GB or Turing box ran (the 2060 SUPER lease never started) |
 | N7 the nine do not fit one 300 min lease | **falsified on a fast host (about 200 min, INFERRED sum of parts), borderline on a slow one (275 to 305 min, INFERRED)** |
 | N8 download >= 40 MB/s and sha256 equal; unpack <= 45 min | **held**: 48 to 50 MB/s on boxes A/B, hash equal on every box that was used (one corrupted copy was re-downloaded); unpack 3.7 min (A, B) to 25 min (C, D) |
 
@@ -144,6 +144,6 @@ over ssh after the Windows install and one (Quebec, 2060 SUPER) never started: r
 
 ## Files
 
-`PREREG.md`; `kit/` (scripts that ran on the boxes and `summarize.py`); `box1/` (box A: statuses, resets, `smi.csv`, queue), `box4/` (box B),
-`box2/`, `box5/` (3060), `box6/` (5070) with `box_facts*`/`*_tdr*` files; `box4_addon_probes.txt`. Raw vendor results (scores, screenshots)
+`PREREG.md`; `STATUS_TABLE.txt` (output of `kit/summarize.py` over every box dir); `kit/` (scripts that ran on the boxes and `summarize.py`); `box1/` (box A: statuses, resets, `smi.csv`, queue), `box4/` (box B),
+`box2/` (box C, 3060), `box5/` (box D, 3060), `box6/` (box E, 5070) with `box_facts*`/`*_tdr*` files; `box4_addon_probes.txt`. Raw vendor results (scores, screenshots)
 are not in git. A grep of this directory for the presigned-URL signature parameter is empty.
