@@ -1,6 +1,6 @@
 # b3: opt-in external fault service in host nvidia-uvm
 
-**STATUS: HOST-ONLY PROOF DONE — PASSING ON HARDWARE, 2026-09-30.** The owner selected b3 and
+**STATUS: ANSWERED, 2026-09-30.** The host-only proof is done and passing on hardware (run record in `traces/v3_uvm_b3/`, patch under `tools/uvm_efs/patch/`, both read on 2026-11-07); the guest side is tracked in [V3_UVM_DEMAND_PAGING.md](V3_UVM_DEMAND_PAGING.md). The owner selected b3 and
 requires full ordinary host CUDA coexistence. The opt-in nvidia-uvm patch is **built and measured**
 (`tools/uvm_efs/`, evidence `traces/v3_uvm_b3/`): a real compute kernel faults in an EFS VA space,
 the fault is delivered to the registering process instead of being cancelled, the process maps the

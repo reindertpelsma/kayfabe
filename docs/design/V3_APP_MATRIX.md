@@ -1,13 +1,15 @@
 # V3 app matrix — which real CUDA apps work in a kayfabe v3 fat guest
 
+**STATUS: RESEARCH, 2026-09-30.** A dated record of the CUDA app matrix runs R1 to R4 (last git change 2026-09-30; R4 is partial). `docs/STATUS_DETAIL.md` cites §R3 as the current app result and, read on 2026-11-07, says the matrix was not re-run at newer revisions, so these numbers belong to the revisions named in each section. Newer evidence and the CDP fix: [`V3_CDP.md`](V3_CDP.md).
+
 ★ *2026-09-30 (§R4, partial): the same matrix at kf3 `738c90e5` (= `3f67ed95`, pre-CDP-fix) on an RTX 3070 —
 guest OFF 60/65 + 6/6, identical to R3; PM, 100-process and fast-path-ON runs not run.*
-**STATUS: LIVE, 2026-09-28 — current result is §R3 (kf3 `4c48ca0c` = master `8ab92bf4`'s code,
+**Headline of 2026-09-28 — current result is §R3 (kf3 `4c48ca0c` = master `8ab92bf4`'s code,
 measured 01:20–02:39 UTC): 60/65 apps work, 6/6 stream probes, 100/100 processes in one boot.**
 ★ *2026-09-30 (`v3-cdp`, §R3's 2026-09-30 bullet): the CDP child never ran because the guest's
 SKED-reflected page was mapped as memory; fixed. Full matrix at kf3 `2830988f` (branch `v3-cdp`, not yet
 on master): **61/65 apps + 6/6 probes** in one boot, host 71/71; the four failures are the UVM four.*
-⊘ *Superseded by §R3 (the headline below is R2's):* **LIVE, 2026-09-26 — current result is §R2 (kayfabe `670bd310`, measured 05:00–07:30 UTC):
+⊘ *Superseded by §R3 (the headline below is R2's):* **Headline of 2026-09-26 — current result is §R2 (kayfabe `670bd310`, measured 05:00–07:30 UTC):
 58/65 apps work (was 35/65).** §0–§5 below are the first measurement at `79848341`, kept unchanged
 as the baseline R2 is compared against; their cause list is SUPERSEDED by §R2.3 (A, B, D, E, F fixed).
 

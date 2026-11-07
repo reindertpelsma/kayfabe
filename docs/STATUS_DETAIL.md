@@ -1,9 +1,11 @@
+# Status in detail — what runs, what does not, and where it was measured
+
+**STATUS: RESEARCH, 2026-10-15.** The long form of the README's status as written on 2026-09-26 to 2026-09-30 (revisions, boxes and evidence per line), with a warning banner added on 2026-10-15; for everything after 2026-09-30 it is history. Read on 2026-11-07: later sections still say Windows guests are "research only" and GitHub CI is red, which the current [`README.md`](../README.md) (dated 2026-10-21) no longer says, so do not take its present-tense lines as current. The current status is in [`README.md`](../README.md) and [`STATUS_AND_HANDOFF.md`](STATUS_AND_HANDOFF.md). The older dated blocks below (2026-09-26 "LIVE", the 2026-09-29/30 merge bars) are kept as written and are superseded by this line.
+
 > **UPDATE 2026-10-15 (read first):** section 0 of this page is dated 2026-09-30 and is **history** for everything after that date. The current status, with
 > evidence per line, is in [`../README.md`](../README.md) (what runs, what does not, supported dies) and [`STATUS_AND_HANDOFF.md`](STATUS_AND_HANDOFF.md).
 > GPU-free tests at the 2026-10-15 integration: 3138 passed / 0 failed (22 `kf-*` crates). Since 2026-09-30: Windows 11 runs on the owner host (Minecraft,
 > Heaven, GravityMark, Edge/YouTube NVDEC; matrix `traces/win11_userring_20261014/`), Linux S3 resume, display planes, the event-driven USER-ring relay.
-
-# Status in detail — what runs, what does not, and where it was measured
 
 > **Latest merge bar, 2026-09-30:** exact `afb552ea` passed 1754/0 crate tests, gates 9/9, a kf3
 > build, bare metal 30/30 and thin 30/30 on RTX 3060 ([evidence](../traces/v3_mc23/README.md)). §0

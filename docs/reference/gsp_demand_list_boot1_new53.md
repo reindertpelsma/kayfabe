@@ -1,5 +1,7 @@
 # The 53 controls the SUCCESSFUL boot demands and `cap1` never asks for
 
+**STATUS: ANSWERED, 2026-08-03.** Task #180: classification of the 53 controls the successful GA106 boot demands and `cap1` never asks for, from the committed capture `traces/rpctrace_ga106_boot1.bin`. The result is recorded and the file is not updated; read on 2026-11-07, the capture, `scripts/rm_ctrl_index.py` and `scripts/rpctrace/ctrl_payload_pairs.py` it cites are still in the tree.
+
 **Task #180, the `replay-conformance` line.** `successful_boot_demand_ga106.md` (#178/#179's
 sequel) measured the shape of the remaining ladder: `rpctrace_ga106_boot1` demands **104**
 distinct controls, **53 of them absent from `cap1`'s list**. This document classifies those 53

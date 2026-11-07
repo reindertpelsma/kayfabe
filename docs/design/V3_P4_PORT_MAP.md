@@ -1,6 +1,6 @@
 # V3 P4 PORT MAP — memory, VA and the BARs
 
-**STATUS: PROPOSAL, 2026-09-24 (w826).** A read-only survey (agent) of the P4 design, the v3 crates
+**STATUS: RESEARCH, 2026-10-03.** Porting survey and build record for the P4 memory/VA/BAR step; last git change 2026-10-03. It began as a proposal on 2026-09-24 (w826), the STATUS UPDATE paragraphs below record what was built, and the code it describes now lives in `kf-mem`, `kf-trap`, `kf-cuda` and `kf-qemu` (read on 2026-11-07: `crates/kf-mem/src/vasmgr.rs`, `crates/kf-mem/src/cpuwin.rs`, `crates/kf-trap/src/mmuinval.rs` and `crates/kf-harness/src/bin/kf-gate8.rs` exist). The current design is [THE_ARCHITECTURE_v3.md](THE_ARCHITECTURE_v3.md); this map is kept as history and is not updated. Original header: a read-only survey (agent) of the P4 design, the v3 crates
 at `v3` HEAD `2df4dfc3` (plus `v3-hostfacts` `28638efa` where noted), and the old tree, in the
 format of `V3_P2_PORT_MAP.md`. Nothing in `/workspace/kf-master` was edited. Line numbers are as of
 `2df4dfc3`. ogkm citations are `research_clones/ogkm-580.159.04` (the target driver).

@@ -1,5 +1,7 @@
 # Review: claude/win-lifecycle-p1-20261016 (6f9163848) vs claude/perf-fix-20261015 (0a7461173)
 
+**STATUS: ANSWERED, 2026-10-16.** A point-in-time independent review of a branch at the revisions named in the title (its only git change is 2026-10-16); it is not updated. Its findings D1-D6 are answered in §0a of [V3_USER_RING_LIFECYCLE_20261016.md](V3_USER_RING_LIFECYCLE_20261016.md) (read on 2026-11-07: that table lists the fix and guarding tests per finding); this document does not say which findings are fixed today.
+
 Reviewer: Opus 5.5, 2026-10-16. Read-only. GPU-free runs were made in a scratch worktree (since removed). Labels:
 MEASURED = a run I made or a number from a named trace; READ = code I read; INFERRED = reasoning only.
 

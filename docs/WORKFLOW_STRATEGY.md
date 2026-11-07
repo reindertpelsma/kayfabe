@@ -1,3 +1,7 @@
+# Workflow strategy — debugging instruments
+
+**STATUS: RESEARCH, 2026-08-11.** A one-entry note, written on 2026-08-11 from a pre-v3 lock-rank debugging session, on how to find a transitive lock violation with `RUST_BACKTRACE=full` in QEMU's environment. Read on 2026-11-07: the R1 lock witness it refers to still exists as `crates/kf-util/src/lockwitness.rs` and no script under `scripts/` sets `RUST_BACKTRACE`, which matches the note's "the default boot does not set it"; the example's sections and boot logs were not re-run.
+
 
 ## ★★★ Finding a lock violation whose call is TRANSITIVE — `RUST_BACKTRACE=full`
 

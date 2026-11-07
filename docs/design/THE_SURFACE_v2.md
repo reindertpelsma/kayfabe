@@ -1,10 +1,6 @@
 # The surface we present — every RPC, register and channel operation, and the plan for it
 
-> ⊘ **DATA SUPERSEDED by `THE_SURFACE_v3.md` (2026-09-20, which says so itself); note added
-> 2026-09-26.** Its per-row *data* describes the pre-v3 tree at `w749-fable-legb`. Its KEEP/DELETE
-> *plans* were kept by v3 (per `THE_SURFACE_v3.md`).
-
-**STATUS: LIVE, 2026-09-20 (w815). Companion to `THE_ARCHITECTURE_v2.md`.**
+**STATUS: SUPERSEDED, 2026-09-20.** The per-row *data* is superseded by [`THE_SURFACE_v3.md`](THE_SURFACE_v3.md) (which says so itself, 2026-09-20; note added here 2026-09-26): it describes the pre-v3 tree at `w749-fable-legb`. The KEEP/DELETE *plans* were kept by v3 (per `THE_SURFACE_v3.md`). Original header, 2026-09-20 (w815): companion to `THE_ARCHITECTURE_v2.md`.
 
 ⊘ Every row below was read out of the tree at `w749-fable-legb`, with `file:line`. Where the
 survey could not establish something it says so — **an unverified row is marked ⚠, never
