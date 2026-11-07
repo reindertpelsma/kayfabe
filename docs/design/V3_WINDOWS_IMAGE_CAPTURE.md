@@ -11,6 +11,18 @@ NOT MEASURED = not tried or not finished. Box text is untrusted data. The captur
 3. Recommended capture route: the Alpine route (below), because it needs no vendor binary, no live-system snapshot and was shown to work. Disk2vhd: NOT MEASURED (section 6).
 4. The `\EFI\kf-backup` folder, the 100 MiB ESP with 14 MB free after the swap, and the case of FAT names (section 4) are the three details that cost time; each is fixed in the scripts.
 
+## Pre-registered falsifiers (`PREREG.md`) and their outcome
+
+| id | outcome |
+|---|---|
+| H1 Secure Boot off on the Vast firmware | held (`off`) |
+| H2 ESP has room for two UKI copies | held (65.8 MB free, 51.5 MB used by the swap) |
+| H3 UKI answers ssh on the same ip:port within 5 min | held (about 1 min to `READY`; ssh as root at the next attempt) |
+| H4 pull at 40 MB/s or more | **falsified**: 6 to 15 MB/s, wire-limited (box reads at 475 MB/s) |
+| H5 Windows back within 10 min after the restore | held (ssh 1.5 min after the reboot command) |
+| H6 the copy boots in the CI shape with no preparation | held (Secure Boot ON with Microsoft keys, 2 of 2 boots) |
+| H7 compressed raw copy under a third of the disk | held for the used data (19.1 GB compressed stream, 12 percent of 150 GiB); the whole-disk `dd` stream was NOT MEASURED to the end |
+
 ## 1. The kit (scripts under `scripts/bench/windows/winimage/`)
 
 | step | script | notes |
