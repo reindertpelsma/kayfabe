@@ -26,3 +26,18 @@ rentals only when MAX_CONCURRENT_CHECK is also2 or unset. A third gets BUSY, and
 waits for first admission only while its remaining job budget can hold a complete rental
 plus admission margin. A proved replacement uses the original remaining deadline instead.
 It can fail visibly before either long rental completes. No durable waiting queue is implied.
+
+CODE READ (2026-11-07): a release plan now selects eight explicit dies on eight
+parallel boxes, with two Windows runs on each box. It shows independent host,
+Linux guest and Windows guest driver selections and their proposed subruns.
+The account needs at least nine concurrent slots, including the reserved slot.
+These driver choices are proposed; the current payload refuses them before
+provisioning. A budget-admitted plan is not a completed release verification.
+
+CODE READ (2026-11-07): resource reservations now follow the run profile. Large
+reserves 300 GB of disk, 130 GB inbound and 2 GB outbound, with a $0.01/GB cap in
+each direction. Small reserves 73 GB inbound, middle 87 GB and adhoc 38 GB; each
+keeps a 120 GB disk, 2 GB outbound and a $0.005/GB cap. Effective hourly prices
+include those transfer allowances amortised over the lease. Cheaper compute can
+therefore lose to a host with cheaper inbound. A higher per-GB price is rejected
+even when the effective hourly price would otherwise fit.

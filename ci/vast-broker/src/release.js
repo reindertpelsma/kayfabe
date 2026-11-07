@@ -3,19 +3,14 @@
 // admission path as every other rental (2026-11-05, wtier; design: V3_CI_TIERS_AND_IGNORE_LADDER.md
 // §1, agreed and owner decisions of 2026-11-04/05).
 //
-// Rules encoded here (each pinned by test/release.test.js):
-// - at least `releaseDiesPerFamily` (2) dies of every family (Turing, Ampere, Ada, Blackwell), dies
-//   taken in the configured order (measured lists, defaults.json releaseDies), one driver per die
-//   (the host driver of the rented box; the payload installs the pinned one);
-// - every leg is one box that runs Linux and Windows; at least `releaseWindowsRunsPerDie` (2)
-//   Windows runs per die: a second leg on a DIFFERENT machine when the die is offered on two
-//   machines, otherwise one leg that runs the Windows gate twice (KF_WINDOWS_RUNS=2);
-// - PASS only from a verified guest verdict. RETRY and UNATTRIBUTED are never PASS; they schedule a
-//   fresh-box re-run within the release cost cap; a FAIL stays a FAIL and is never re-rented;
-// - the estimated cost (offer price for the full hard limit, plus the transfer allowance) must
-//   not exceed the release cost cap, and every per-profile cap must admit it, before any rental.
+// Owner decisions of 2026-11-07 live in release-matrix.json: eight explicit dies,
+// two per die family, one full leg per die, eight parallel slots. Each leg carries
+// separate host/Linux/Windows drivers and subruns; Windows still runs twice per die.
+// The matrix is proposed, not an executable coverage claim: the payload refuses it.
+// Existing verdict, retry, cost and admission rules remain in force.
 import { familyOf } from './tier.js';
-import { gpuClass } from './policy.js';
+import { RELEASE_MATRIX, validateReleaseMatrix, hostProvidesDrivers } from './release-matrix.js';
+import { gpuClass, resourceCaps } from './policy.js';
 export const LINUX_LAST_ROW = 'cuda_fat';
 export const VERDICTS = Object.freeze(['PASS', 'FAIL', 'RETRY', 'UNATTRIBUTED']);
 const round = (x) => Math.round(x * 10000) / 10000;
@@ -27,9 +22,17 @@ const byPreference = (cfg) => (a, b) =>
   countryRank(a, cfg) - countryRank(b, cfg) ||
   a.pricing.effective - b.pricing.effective ||
   a.id - b.id;
-// The legs of one die: two machines when offered (prefer different hosts), else one machine
-// that runs Windows twice.
-export function dieLegs(offers, cfg) {
+// One full leg per matrix die; the compatibility path for other callers retains the old split.
+export function dieLegs(offers, cfg, matrixRow) {
+  const releaseMatrix = cfg.releaseMatrix ?? RELEASE_MATRIX;
+  matrixRow ??= releaseMatrix.dies.find((d) => d.die === offers[0]?.die);
+  if (matrixRow)
+    offers = offers.filter((o) =>
+      hostProvidesDrivers(
+        o.host_capabilities ?? releaseMatrix.host_capabilities.vast_kvm,
+        matrixRow,
+      ),
+    );
   const sorted = [...offers].sort(byPreference(cfg));
   if (!sorted.length) return [];
   const first = sorted[0];
@@ -37,6 +40,15 @@ export function dieLegs(offers, cfg) {
   const second = others.find((o) => o.host_id !== first.host_id) ?? others[0];
   const leg = (o, windowsRuns) => ({
     windows_runs: windowsRuns,
+    ...(matrixRow
+      ? {
+          release_matrix: structuredClone(matrixRow),
+          drivers: structuredClone(matrixRow.drivers),
+          subruns: structuredClone(matrixRow.subruns),
+          cross_subrun: structuredClone(matrixRow.cross_subrun),
+          profile: matrixRow.profile,
+        }
+      : {}),
     offer_id: o.id,
     machine_id: o.machine_id,
     host_id: o.host_id ?? null,
@@ -46,13 +58,17 @@ export function dieLegs(offers, cfg) {
     est_usd: round(o.pricing.total),
   });
   const want = cfg.releaseWindowsRuns;
-  if (second && want >= 2) return [leg(first, 1), leg(second, 1)];
+  if (second && want >= 2 && (!matrixRow || releaseMatrix.policy.boxes_per_die > 1))
+    return [leg(first, 1), leg(second, 1)];
   return [leg(first, want)];
 }
 // The plan: which dies and machines a release WOULD rent, and its worst-case cost. `allowed` are
 // offers already evaluated under the release profile (src/offers.js, the same rejection rules as
 // every rental). `budget` (optional) is the ledger's budget summary, `credit` the account credit.
 export function planRelease(allowed, cfg, { budget, credit } = {}) {
+  const releaseMatrix = cfg.releaseMatrix ?? RELEASE_MATRIX;
+  const matrixErrors = validateReleaseMatrix(releaseMatrix, cfg);
+  if (matrixErrors.length) throw Error('release matrix: ' + matrixErrors.join('; '));
   const families = [];
   let estimate = 0,
     legs = 0;
@@ -60,10 +76,11 @@ export function planRelease(allowed, cfg, { budget, credit } = {}) {
   for (const family of Object.keys(cfg.releaseDies)) {
     const cells = [],
       missing = [];
-    for (const die of cfg.releaseDies[family]) {
+    for (const matrixRow of releaseMatrix.dies.filter((d) => d.die_family === family)) {
+      const die = matrixRow.die;
       if (cells.length >= cfg.releaseDiesPerFamily) break;
       const offers = allowed.filter((o) => o.die === die && familyOf(o.die, cfg) === family);
-      const planned = dieLegs(offers, cfg);
+      const planned = dieLegs(offers, cfg, matrixRow);
       if (!planned.length) {
         missing.push({ die, reason: 'NO_OFFER' });
         continue;
@@ -83,7 +100,7 @@ export function planRelease(allowed, cfg, { budget, credit } = {}) {
     perFamily[family] = familyCost;
     families.push({
       family,
-      dies_wanted: cfg.releaseDies[family],
+      dies_wanted: releaseMatrix.dies.filter((d) => d.die_family === family).map((d) => d.die),
       cells,
       missing,
       complete: cells.length >= cfg.releaseDiesPerFamily,
@@ -96,6 +113,7 @@ export function planRelease(allowed, cfg, { budget, credit } = {}) {
   if (estimate > cfg.releaseCostCap) refusals.push('COST_CAP');
   // Review F5: a release runs at most account cap - 1 boxes; with the default account cap of 1 it
   // has no slot until the owner raises MAX_CONCURRENT_RENTALS.
+  if (parallel < releaseMatrix.policy.parallel_boxes) refusals.push('PARALLEL_SLOTS');
   if (parallel < 1) refusals.push('NO_SLOTS');
   if (!cfg.releaseEnabled) refusals.push('RELEASE_DISABLED');
   if (budget) {
@@ -108,6 +126,12 @@ export function planRelease(allowed, cfg, { budget, credit } = {}) {
       refusals.push('CREDIT_RESERVE');
   }
   return {
+    resource_profile: resourceCaps(cfg, 'release', 'large'),
+    matrix_status: releaseMatrix.status,
+    matrix_blockers: releaseMatrix.dies.flatMap((d) =>
+      d.blockers.map((reason) => ({ die: d.die, reason })),
+    ),
+    execution_ready: false,
     tier: 'large',
     profile: 'release',
     hard_minutes: cfg.hardRelease / 60000,

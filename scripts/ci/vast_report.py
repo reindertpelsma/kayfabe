@@ -18,6 +18,7 @@ Worker and the runner sanitise); line length, chunk size, request count and tota
 capped. The token is sent only to KF_BROKER_URL, over HTTPS, and redirects are never followed.
 """
 
+import base64
 import argparse
 import codecs
 import hashlib
@@ -114,10 +115,33 @@ def _match(pattern):
     return lambda v: re.fullmatch(pattern, v) is not None
 
 
+# The matrix is proposed. Validation transports it without granting execution authority.
+def release_subruns_json(value):
+    if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,16384}", value):
+        return False
+    try:
+        parsed = json.loads(base64.b64decode(value + "=" * (-len(value) % 4), altchars=b"-_", validate=True))
+    except (ValueError, TypeError):
+        return False
+    return (
+        isinstance(parsed, dict)
+        and set(parsed) == {"status", "subruns", "cross_subrun"}
+        and parsed["status"] == "proposed"
+        and isinstance(parsed["subruns"], list)
+        and len(parsed["subruns"]) <= 32
+        and (parsed["cross_subrun"] is None or isinstance(parsed["cross_subrun"], dict))
+    )
+
+
 # The run token is a compact HS256 JWT minted and verified only by the Worker (protocol 7).
 TOKEN = r"[A-Za-z0-9_-]{1,64}\.[A-Za-z0-9_-]{1,512}\.[A-Za-z0-9_-]{43}"
 # (name, required, check). Optional entries are validated only when present.
 SPEC = [
+    ("KF_HOST_DRIVER", False, _match(r"[0-9]{3}\.[0-9]{2,3}(?:\.[0-9]{2})?")),
+    ("KF_LINUX_GUEST_DRIVER", False, _match(r"[0-9]{3}\.[0-9]{2,3}(?:\.[0-9]{2})?")),
+    ("KF_WINDOWS_GUEST_DRIVER", False, _match(r"[0-9]{3}\.[0-9]{2,3}(?:\.[0-9]{2})?")),
+    ("KF_WINGATE_GUEST_DRIVER", False, _match(r"[0-9]{3}\.[0-9]{2,3}(?:\.[0-9]{2})?")),
+    ("KF_RELEASE_SUBRUNS", False, release_subruns_json),
     ("KF_ACCESS_ID", False, _match(r"[A-Za-z0-9_.-]{1,256}")),
     ("KF_ACCESS_SECRET", False, _match(r"[A-Za-z0-9_.-]{1,256}")),
     ("KF_PROTOCOL", True, lambda v: v in PROTOCOLS),
