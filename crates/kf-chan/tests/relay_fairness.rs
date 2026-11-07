@@ -29,7 +29,7 @@
 
 use kf_chan::user_loop::{self as ul, Obligation, Peek, Wait};
 use kf_trap::REACT_ROUNDS;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, VecDeque};
 
 /// The bound, in worker passes (all workers' passes counted).
 const K: u8 = 12;

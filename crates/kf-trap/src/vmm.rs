@@ -180,16 +180,6 @@ pub trait GpuDevice: Send + Sync {
     }
 }
 
-/// ⊘ CH hands a byte slice; QEMU hands a value and a size. This is the one conversion the seam
-/// owns, so neither adapter re-derives it.
-pub fn value_of(data: &[u8]) -> u64 {
-    let mut v = 0u64;
-    for (i, b) in data.iter().take(8).enumerate() {
-        v |= (*b as u64) << (8 * i);
-    }
-    v
-}
-
 pub fn store_value(data: &mut [u8], v: u64) {
     for (i, b) in data.iter_mut().take(8).enumerate() {
         *b = (v >> (8 * i)) as u8;

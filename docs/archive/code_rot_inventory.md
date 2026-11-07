@@ -1,3 +1,5 @@
+> **STATUS: SUPERSEDED, 2026-09-21** (archived, w822). Successor: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) and [`THE_ARCHITECTURE_v3.md`](../design/THE_ARCHITECTURE_v3.md). Historical record: a `STATUS` line further down says what the document claimed when it was written; it is no longer a claim about the current tree.
+>
 > ⊘⊘⊘ **ARCHIVED — THIS DESCRIBES A SUPERSEDED ARCHITECTURE. IT IS REFERENCE, NOT CURRENT.**
 > The live design is `docs/design/THE_DESIGN.md`. This file is kept because its *measurements*,
 > its *ogkm findings* and its *reasoning* remain useful — its **architecture does not**. Do not
@@ -5,7 +7,7 @@
 
 # Code-rot inventory — what is dead, what lies, and what it costs
 
-> **STATUS: LIVE, 2026-09-13 (w651).** Read-only audit at `HEAD = f27a60eb`, goal 5 of the
+> **STATUS AT WRITING: LIVE, 2026-09-13 (w651).** Read-only audit at `HEAD = f27a60eb`, goal 5 of the
 > owner's 2026-09-13 standing directive (*"code rot cleaned or marked for mechanical cleanup"*).
 > **Nothing in this audit was changed** — no `.rs`, no `Cargo.toml`, no existing doc. This file
 > is the marking; the cleanup is a separate act.

@@ -14,7 +14,7 @@ measured 01:20–02:39 UTC): 60/65 apps work, 6/6 stream probes, 100/100 process
 ★ *2026-09-30 (`v3-cdp`, §R3's 2026-09-30 bullet): the CDP child never ran because the guest's
 SKED-reflected page was mapped as memory; fixed. Full matrix at kf3 `2830988f` (branch `v3-cdp`, not yet
 on master): **61/65 apps + 6/6 probes** in one boot, host 71/71; the four failures are the UVM four.*
-⊘ *Superseded by §R3 (the headline below is R2's):* **LIVE, 2026-09-26 — current result is §R2 (kayfabe `670bd310`, measured 05:00–07:30 UTC):
+⊘ *Superseded by §R3 (the headline below is R2's):* **Headline of 2026-09-26 — current result is §R2 (kayfabe `670bd310`, measured 05:00–07:30 UTC):
 58/65 apps work (was 35/65).** §0–§5 below are the first measurement at `79848341`, kept unchanged
 as the baseline R2 is compared against; their cause list is SUPERSEDED by §R2.3 (A, B, D, E, F fixed).
 

@@ -1,3 +1,5 @@
+> **STATUS: SUPERSEDED, 2026-09-21** (archived, w822). Successor: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) and [`THE_ARCHITECTURE_v3.md`](../design/THE_ARCHITECTURE_v3.md). Historical record: a `STATUS` line further down says what the document claimed when it was written; it is no longer a claim about the current tree.
+>
 > ⊘⊘⊘ **ARCHIVED — THIS DESCRIBES A SUPERSEDED ARCHITECTURE. IT IS REFERENCE, NOT CURRENT.**
 > The live design is `docs/design/THE_DESIGN.md`. This file is kept because its *measurements*,
 > its *ogkm findings* and its *reasoning* remain useful — its **architecture does not**. Do not
@@ -5,7 +7,7 @@
 
 # w318 — THE LAUNCH FLOOR WAS REPETITION, AND GATING IT IS 20.9× ON THE TRAP AND 21.3× ON THE GUEST'S SUBMIT
 
-**STATUS: LIVE — measured 2026-08-14 on bench `vh2` (RTX 3060 GA106, driver 580.159.04).**
+**STATUS AT WRITING: LIVE — measured 2026-08-14 on bench `vh2` (RTX 3060 GA106, driver 580.159.04).**
 ★ **TWO INDEPENDENT BOOT PAIRS**, at `c6301a57` (pair A) and at the final `44317766`
 (pair B, after the lock-inversion fix §7.2); stamp gate passed on every boot; rebased onto
 `ef05f9b3` (w317) without conflict. Artifacts: `traces/w318_gate/`.

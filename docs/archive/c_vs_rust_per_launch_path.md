@@ -1,3 +1,5 @@
+> **STATUS: SUPERSEDED, 2026-09-21** (archived, w822). Successor: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) and [`THE_ARCHITECTURE_v3.md`](../design/THE_ARCHITECTURE_v3.md). Historical record: a `STATUS` line further down says what the document claimed when it was written; it is no longer a claim about the current tree.
+>
 > ⊘⊘⊘ **ARCHIVED — THIS DESCRIBES A SUPERSEDED ARCHITECTURE. IT IS REFERENCE, NOT CURRENT.**
 > The live design is `docs/design/THE_DESIGN.md`. This file is kept because its *measurements*,
 > its *ogkm findings* and its *reasoning* remain useful — its **architecture does not**. Do not
@@ -5,7 +7,7 @@
 
 # w316 — WHAT THE C DID PER LAUNCH, AND WHY IT WAS FAST
 
-**STATUS: LIVE — written 2026-08-14 (w316). SOURCE-ONLY attribution study, no boot, no build.**
+**STATUS AT WRITING: LIVE — written 2026-08-14 (w316). SOURCE-ONLY attribution study, no boot, no build.**
 Read against `w311_throughput_ratio_and_the_llm_question.md` (the ~100 ms measurement this
 exists to explain) and `w315` (measuring the same floor directly on hardware — the two rungs
 should be able to agree or disagree).

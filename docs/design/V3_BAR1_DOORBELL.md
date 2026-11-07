@@ -1,5 +1,7 @@
 # V3 — the Hopper+ BAR1 doorbell: follow where the guest RM puts it
 
+**STATUS: LIVE, 2026-11-07.** The mechanism is in the current tree (read on 2026-11-07: `crates/kf-trap/src/bar1db.rs`, the `Hopper+` target in `kf-mem`/`kf-qemu`, `kf_chip::usermode`, and the `bar1-overlays` overlay in `qemu/hw/misc/kf3/kf3.c`). Hardware coverage is scoped: T0, T1 and T2 ran on a GB203 (RTX 5080) on 2026-09-26 (see the update below and [`V3_FAMILY_PORT_BLACKWELL.md`](V3_FAMILY_PORT_BLACKWELL.md) §5); T3/T4 were not run, and no Hopper GPU has run it. The Hopper test plan in §7 is still open.
+
 > ⊘ **UPDATED 2026-09-26 (`v3-blackwell`) — MEASURED ON A GB203 (RTX 5080), not an H100.** §7's T0
 > (libcuda DOES set `bBar1Mapping`: a second `0xc661` object mapped at `BAR1 + 0xA0000`), T1 (UVM's
 > view trapped at BAR1 `0x90000`, 10 doorbells through it; the negative control
@@ -7,7 +9,7 @@
 > doorbells per boot through the view) — `V3_FAMILY_PORT_BLACKWELL.md` §5. T3/T4 not run; Hopper
 > itself still unverified.
 
-**STATUS: DESIGN+CODE, 2026-09-26 — HARDWARE-UNVERIFIED (see the update above: verified on GB203).** Branch `v3-bar1db` (off `v3-mc2`).
+**Original header, 2026-09-26 (DESIGN+CODE, hardware-unverified at that time; see the update above for GB203).** Branch `v3-bar1db` (off `v3-mc2`).
 Everything below about RM is read from ogkm-580.159.04 source (the owner's rule: the guest kernel
 driver is open, so derive per-arch behaviour from it); nothing has run on a Hopper or Blackwell
 GPU. The unit tests use a GH100-shaped fixture built from those citations. §7 is the H100 test
