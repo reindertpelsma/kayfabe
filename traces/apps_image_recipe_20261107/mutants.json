@@ -207,13 +207,11 @@
   {
     "name": "inventory-comparison",
     "killers": [
-      "core:FakeQemu.test_verify_rejects_modified_app_binary",
-      "core:FakeQemu.test_verify_rejects_modified_pip_files",
       "core:Inventory.test_verify_compares_binary_bytes",
       "core:Inventory.test_verify_compares_dpkg_versions",
       "core:Inventory.test_verify_compares_installed_pip_bytes"
     ],
-    "count": 5,
+    "count": 3,
     "errors": [],
     "returncode": 1,
     "valid": true
@@ -384,10 +382,11 @@
   {
     "name": "unknown-notice-scan",
     "killers": [
+      "layers:KernelOssHeaders.test_kernel_source_location_does_not_waive_unknown_nvidia_notices",
       "layers:StrictNoticeScan.test_nvidia_copyright_notice_is_not_silently_waived",
       "layers:StrictNoticeScan.test_second_nvidia_notice_is_listed_as_a_finding"
     ],
-    "count": 2,
+    "count": 3,
     "errors": [],
     "returncode": 1,
     "valid": true
@@ -585,6 +584,94 @@
     "killers": [
       "layers:AdditionalLayerFailures.test_scan_byte_budget_exhaustion_is_failure",
       "layers:AdditionalLayerFailures.test_scan_file_budget_exhaustion_is_failure"
+    ],
+    "count": 2,
+    "errors": [],
+    "returncode": 1,
+    "valid": true
+  },
+  {
+    "name": "official-disk-writer-digest",
+    "killers": [
+      "layers:OfficialInputDisk.test_writer_refuses_changed_official_bytes",
+      "layers:OfficialInputDisk.test_writer_refuses_corrupt_second_payload"
+    ],
+    "count": 2,
+    "errors": [],
+    "returncode": 1,
+    "valid": true
+  },
+  {
+    "name": "official-disk-reader-digest",
+    "killers": [
+      "layers:OfficialInputDisk.test_reader_rejects_corrupt_guest_visible_payload",
+      "layers:OfficialInputDisk.test_reader_rejects_payload_with_correct_length_and_wrong_digest"
+    ],
+    "count": 2,
+    "errors": [],
+    "returncode": 1,
+    "valid": true
+  },
+  {
+    "name": "official-disk-declared-size",
+    "killers": [
+      "layers:OfficialInputDisk.test_device_index_cannot_inflate_declared_size",
+      "layers:OfficialInputDisk.test_device_index_cannot_shrink_declared_size"
+    ],
+    "count": 2,
+    "errors": [],
+    "returncode": 1,
+    "valid": true
+  },
+  {
+    "name": "official-disk-existing-file",
+    "killers": [
+      "layers:OfficialInputDisk.test_existing_disk_is_never_overwritten_or_unlinked",
+      "layers:OfficialInputDisk.test_existing_symlink_is_not_followed_or_deleted"
+    ],
+    "count": 2,
+    "errors": [],
+    "returncode": 1,
+    "valid": true
+  },
+  {
+    "name": "official-guest-device-required",
+    "killers": [
+      "layers:GuestOfficialTransport.test_another_block_device_cannot_be_read_as_official_media",
+      "layers:GuestOfficialTransport.test_missing_official_device_cannot_fall_back_to_network"
+    ],
+    "count": 2,
+    "errors": [],
+    "returncode": 1,
+    "valid": true
+  },
+  {
+    "name": "official-disk-readonly",
+    "killers": [
+      "core:FakeQemu.test_builder_input_disk_is_readonly_and_not_attached_to_open_assembly",
+      "core:ForwardedInputs.test_provisioning_official_input_disk_is_explicitly_readonly"
+    ],
+    "count": 2,
+    "errors": [],
+    "returncode": 1,
+    "valid": true
+  },
+  {
+    "name": "official-http-isolation",
+    "killers": [
+      "core:FakeQemu.test_open_assembly_http_cannot_serve_nvidia_payloads",
+      "core:FakeQemu.test_scratch_builder_http_cannot_serve_nvidia_payloads"
+    ],
+    "count": 2,
+    "errors": [],
+    "returncode": 1,
+    "valid": true
+  },
+  {
+    "name": "kernel-source-classification",
+    "killers": [
+      "layers:KernelOssHeaders.test_gpl_header_named_nvidia_is_open_source",
+      "layers:KernelOssHeaders.test_nvidia_kernel_kconfig_directory_is_not_a_vendor_runtime"
     ],
     "count": 2,
     "errors": [],

@@ -1,0 +1,394 @@
+{
+  "date": "2026-11-07",
+  "pin": {
+    "id": "linux-common-headers-audit",
+    "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/l/linux/linux-headers-6.8.0-147_6.8.0-147.147_all.deb",
+    "sha256": "16c59831600aa76bbf2ce56000a7874a5c7b52f9507ae3deb0e633f1d71078bf",
+    "size": 13677052
+  },
+  "scope": "Complete pinned Ubuntu main header package downloaded/hash-verified and inspected as source files, not booted. This is not a full image or legal certification.",
+  "before": {
+    "findings": [
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/uapi/linux/iommufd.h",
+        "reason": "NVIDIA notice without documented OSS licence"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/rdma/iter.h",
+        "reason": "NVIDIA notice without documented OSS licence"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/linux/platform_data/x86/nvidia-wmi-ec-backlight.h",
+        "reason": "NVIDIA payload path"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/linux/mlx5/macsec.h",
+        "reason": "NVIDIA notice without documented OSS licence"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/arch/arm/boot/dts/nvidia/Makefile",
+        "reason": "NVIDIA payload path"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/arch/arm64/boot/dts/nvidia/Makefile",
+        "reason": "NVIDIA payload path"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/drivers/video/fbdev/nvidia/Makefile",
+        "reason": "NVIDIA payload path"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/drivers/net/ethernet/nvidia/Makefile",
+        "reason": "NVIDIA payload path"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/drivers/net/ethernet/nvidia/Kconfig",
+        "reason": "NVIDIA payload path"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/drivers/media/platform/nvidia/tegra-vde",
+        "reason": "NVIDIA payload path"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/drivers/media/platform/nvidia/Makefile",
+        "reason": "NVIDIA payload path"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/drivers/media/platform/nvidia/Kconfig",
+        "reason": "NVIDIA payload path"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/drivers/media/platform/nvidia/tegra-vde/Makefile",
+        "reason": "NVIDIA payload path"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/drivers/media/platform/nvidia/tegra-vde/Kconfig",
+        "reason": "NVIDIA payload path"
+      }
+    ]
+  },
+  "after": {
+    "clean": true,
+    "files": 16280,
+    "bytes": 72854435,
+    "findings": [],
+    "notices": [
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/uapi/drm/tegra_drm.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: MIT"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/uapi/linux/iommufd.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0 WITH Linux-syscall-note"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/drm/drm_panel.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "MIT permission terms in file"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/drm/display/drm_scdc_helper.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "MIT permission terms in file"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/drm/display/drm_scdc.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "MIT permission terms in file"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/trace/events/host1x.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0-or-later"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/rdma/iter.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0 OR Linux-OpenIB"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/soc/tegra/bpmp-abi.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0-only"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/soc/tegra/bpmp.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0-only"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/soc/tegra/fuse.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0-only"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/soc/tegra/irq.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0-only"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/soc/tegra/tegra-cbb.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/soc/tegra/flowctrl.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0-only"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/soc/tegra/pmc.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0-only"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/soc/tegra/pm.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0-only"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/soc/tegra/ahb.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0-only"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/soc/tegra/cpuidle.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0-only"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/soc/tegra/common.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0-only"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/soc/tegra/ivc.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0-only"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/soc/tegra/mc.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0-only"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/linux/host1x_context_bus.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0-or-later"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/linux/mdev.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0-only"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/linux/iommufd.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0-only"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/linux/host1x.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0-or-later"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/linux/iova_bitmap.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/linux/tegra-icc.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0-only"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/linux/platform_data/x86/nvidia-wmi-ec-backlight.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0-only"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/linux/power/sbs-battery.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0-or-later"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/linux/regulator/max8973-regulator.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0-or-later"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/linux/regulator/tps51632-regulator.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0-or-later"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/linux/regulator/tps62360.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0-or-later"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/linux/mfd/aat2870.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0-only"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/linux/mfd/as3722.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0-or-later"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/linux/mfd/tps65090.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0-or-later"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/linux/mfd/rc5t583.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0-only"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/linux/mfd/max8907.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0-only"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/linux/mfd/max77620.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0-only"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/linux/phy/tegra/xusb.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0-only"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/linux/firmware/trusted_foundations.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0-or-later"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/linux/mlx5/macsec.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0 OR Linux-OpenIB"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/linux/clk/tegra.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0-only"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/dt-bindings/power/tegra186-powergate.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0-only"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/dt-bindings/power/tegra194-powergate.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/dt-bindings/power/tegra234-powergate.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/dt-bindings/memory/tegra234-mc.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: (GPL-2.0 OR MIT)"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/dt-bindings/soc/tegra-pmc.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0-only"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/dt-bindings/mfd/as3722.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/dt-bindings/mfd/palmas.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/dt-bindings/mfd/max77620.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/dt-bindings/clock/maxim,max77620.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0-only"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/dt-bindings/clock/tegra194-clock.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/dt-bindings/clock/tegra234-clock.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/dt-bindings/gpio/tegra234-gpio.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/dt-bindings/gpio/tegra241-gpio.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/dt-bindings/gpio/tegra194-gpio.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/dt-bindings/pinctrl/pinctrl-tegra.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0-only"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/dt-bindings/pinctrl/pinctrl-tegra-io-pad.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/dt-bindings/reset/tegra234-reset.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/dt-bindings/reset/tegra186-reset.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0-only"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/include/dt-bindings/reset/tegra194-reset.h",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/arch/arm/include/debug/tegra.S",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0-only"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/drivers/perf/arm_cspmu/Makefile",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0"
+      },
+      {
+        "path": "/usr/src/linux-headers-6.8.0-147/drivers/perf/arm_cspmu/Kconfig",
+        "reason": "NVIDIA copyright notice",
+        "licence_evidence": "SPDX: GPL-2.0"
+      }
+    ]
+  },
+  "policy": "Installed Linux-header package source namespaces are not classified as proprietary runtime payloads by their names. Full content/notice checks still apply; vendor binaries remain forbidden. Standard Linux SPDX identifiers are preserved as evidence."
+}

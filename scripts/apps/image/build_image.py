@@ -40,9 +40,10 @@ from channels import Channels
 from apt_mirror import AptMirror
 import official
 from export_check import validate_export
+import input_disk
 
 HERE = Path(__file__).resolve().parent
-RUNTIME = ("guest.py", "common.py", "elf.py", "scan_image.py")
+RUNTIME = ("guest.py", "common.py", "elf.py", "scan_image.py", "input_disk.py")
 TOOLS = RUNTIME + (
     "build_image.py",
     "iso9660.py",
@@ -69,7 +70,15 @@ def local_files(recipe, root):
 
 
 def cloud_config(
-    recipe, root, nonce, mode, server_url, keys, allowed_packages=(), export_pin=None
+    recipe,
+    root,
+    nonce,
+    mode,
+    server_url,
+    keys,
+    allowed_packages=(),
+    export_pin=None,
+    official_device=False,
 ):
     install = mode in ("builder", "assemble")
     config = {
@@ -131,6 +140,11 @@ def cloud_config(
         "recipe_sha256": hashlib.sha256(canonical(recipe)).hexdigest(),
         "server_url": server_url,
     }
+    if official_device:
+        session["official_disk"] = input_disk.DEVICE
+        session["official_ids"] = [
+            a["id"] for a in official_pins(recipe, builder=mode == "builder")
+        ]
     if export_pin:
         session["export_pin"] = export_pin
     write("/opt/apps/image/session.json", canonical(session).decode(), "0600")
@@ -191,7 +205,15 @@ def seed(
     root=HERE,
     allowed_packages=(),
     export_pin=None,
+    official_disk=None,
 ):
+    disk_transport = Path(directory) / "official-disk.json"
+    if official_disk is not None:
+        disk_transport.write_bytes(
+            canonical({"path": str(Path(official_disk).resolve())})
+        )
+    else:
+        disk_transport.unlink(missing_ok=True)
     transport = Path(directory) / "input-server.json"
     if server_url:
         input_port(server_url)
@@ -199,7 +221,15 @@ def seed(
     else:
         transport.unlink(missing_ok=True)
     data = cloud_config(
-        recipe, root, nonce, mode, server_url, keys, allowed_packages, export_pin
+        recipe,
+        root,
+        nonce,
+        mode,
+        server_url,
+        keys,
+        allowed_packages,
+        export_pin,
+        official_disk is not None,
     )
     files = {
         "user-data": b"#cloud-config\n" + canonical(data) + b"\n",
@@ -356,6 +386,17 @@ def qemu_argv(recipe, disk, seed_path, channels, executable):
             "-device",
             "virtserialport,chardev=export,name=org.kayfabe.export",
         ]
+    official_transport = Path(seed_path).with_name("official-disk.json")
+    if official_transport.exists():
+        official_path = Path(json.loads(official_transport.read_text())["path"])
+        argv += [
+            "-drive",
+            "if=none,id=official,file="
+            + qemu_option(official_path)
+            + ",format=raw,readonly=on",
+            "-device",
+            "virtio-blk-pci,drive=official,serial=KF-OFFICIAL",
+        ]
     return argv
 
 
@@ -465,12 +506,13 @@ def compare_inventory(expected, observed):
         raise ValueError("inventory differs: " + ", ".join(fields))
 
 
-def preflight(path, build=True):
+def preflight(path, build=True, required=None):
     if not sys.platform.startswith("linux") or not os.access(
         "/dev/kvm", os.R_OK | os.W_OK
     ):
         raise ValueError("Linux and KVM access required")
-    if shutil.disk_usage(path).free < (MIN_FREE if build else 6 * 1024**3):
+    minimum = required if required is not None else (MIN_FREE if build else 6 * 1024**3)
+    if shutil.disk_usage(path).free < minimum:
         raise ValueError("insufficient free disk")
 
 
@@ -480,7 +522,7 @@ def fetch_inputs(recipe, cache):
     }
 
 
-def fetch_official(recipe, directory, builder=False):
+def official_pins(recipe, builder=False):
     pins = [
         a
         for a in recipe["official_fetch"]
@@ -491,7 +533,26 @@ def fetch_official(recipe, directory, builder=False):
         for a in pins
         if a["kind"] != "run" or a["version"] == recipe["guest"]["nvidia_version"]
     ]
-    return {a["sha256"]: official.fetch(a, directory) for a in pins}
+    return pins
+
+
+def fetch_official(recipe, directory, builder=False):
+    return {
+        a["sha256"]: official.fetch(a, directory)
+        for a in official_pins(recipe, builder)
+    }
+
+
+def official_input_disk(recipe, paths, path, builder=False):
+    pins = official_pins(recipe, builder)
+    if not pins:
+        return None
+    try:
+        return input_disk.write(path, pins, paths)
+    except ValueError as error:
+        raise official.MediaDrift(
+            "MEDIA_DRIFT: official input disk assembly failure"
+        ) from error
 
 
 def keep_failure(work, out):
@@ -560,7 +621,10 @@ def build(
         create_overlay(qemu_img, base, builder_disk, recipe["guest"]["disk_gib"])
         # These files and the scratch guest are never promoted into the open image.
         transient = fetch_official(recipe, work / "official", builder=True)
-        with serve_inputs({**paths, **transient}, apt) as server:
+        official_data = official_input_disk(
+            recipe, transient, builder / "official-inputs.raw", builder=True
+        )
+        with serve_inputs(paths, apt) as server:
             nonce = secrets.token_hex(16)
             seed_path = seed(
                 recipe,
@@ -570,6 +634,7 @@ def build(
                 server,
                 root=root,
                 allowed_packages=apt.names,
+                official_disk=official_data,
             )
             build_inv = boot_recorded(
                 recipe,
@@ -592,6 +657,8 @@ def build(
         }
         # Delete the entire NVIDIA scratch disk, not just files from its filesystem.
         builder_disk.unlink()
+        if official_data is not None:
+            official_data.unlink()
         shutil.rmtree(work / "official")
         final = work / "open"
         final.mkdir()
@@ -759,7 +826,11 @@ def provisioned(
         recipe["guest"]["nvidia_version"] = driver_version
     out = Path(out).resolve()
     out.mkdir(parents=True, exist_ok=True)
-    preflight(out, build=False)
+    preflight(
+        out,
+        build=False,
+        required=2 * sum(a["size"] for a in official_pins(recipe)) + 12 * 1024**3,
+    )
     with tempfile.TemporaryDirectory(prefix=".apps-runtime-", dir=out) as temporary:
         work = Path(temporary)
         verify(
@@ -774,10 +845,21 @@ def provisioned(
         disk = work / "runtime.qcow2"
         create_overlay(qemu_img, Path(image).resolve(), disk)
         paths = fetch_inputs(recipe, cache)
-        paths.update(fetch_official(recipe, work / "official"))
+        official_paths = fetch_official(recipe, work / "official")
+        official_data = official_input_disk(
+            recipe, official_paths, work / "official-inputs.raw"
+        )
         with serve_inputs(paths) as server:
             nonce = secrets.token_hex(16)
-            seed_path = seed(recipe, work, nonce, "provision", server, root=root)
+            seed_path = seed(
+                recipe,
+                work,
+                nonce,
+                "provision",
+                server,
+                root=root,
+                official_disk=official_data,
+            )
             inv = boot_recorded(
                 recipe, disk, seed_path, work, nonce, "provision", out, qemu, timeout
             )

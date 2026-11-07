@@ -155,23 +155,27 @@ open apps/models and hash-locked wheels. Direct open inputs total 3,541,368,563 
 transient official compiler inputs in a disposable scratch disk and assembles a **fresh open image**, scanned before publication.
 The claim is **input-pinned + inventory-identical**, not byte-identical images. Exactly the gate's Qwen2-0.5B HF and
 Qwen2.5-1.5B Q4_K_M GGUF models are included. No private image or credentials are inputs; every source is public or officially
-downloadable without sign-in. [Reproduction steps, dependency and limits](design/V3_APPS_IMAGE_RECIPE.md).
+downloadable without sign-in. [Reproduction steps and limits](design/V3_APPS_IMAGE_RECIPE.md).
 
 **DESIGN — superseding owner decision, 2026-11-07:** NVIDIA proprietary files must not be distributed in our images or ISOs,
 or stored in R2/GitHub. The box host downloads the separately pinned official driver `.run`, CUDA archives and NVIDIA/Python
-wheels with J4's fetcher at provisioning time, verifies hash/size and supplies them transiently to the offline guest. The NVIDIA
-overlay/downloads are deleted per run. CuPy and Triton are runtime-only; CDP quicksort is a declared static-runtime exception.
+wheels with J4's fetcher at provisioning time, verifies hash/size and supplies them on a transient read-only data disk to the offline guest. The NVIDIA
+overlay/downloads/data disk are deleted per run; no NVIDIA payload enters a NoCloud ISO or the host HTTP allowlist. CuPy and Triton are runtime-only; CDP quicksort is a declared static-runtime exception.
 Only the qualified open layer could be public in principle, subject to the owner's hosting decision and licence review.
 This newer Linux policy also supersedes any older proposal below to include NVIDIA payloads in a hosted image/ISO; it does not
 implement changes to the Windows packaging path.
 
 **MEASURED:** LB1 verified public metadata/availability and selected complete payload hashes, but ran no VM or GPU and did not
-hash every large input. **DESIGN:** integrate J4, build twice, cross-verify and run the app gate before adopting or hosting the
+hash every large input. **DESIGN:** build twice, cross-verify and run the app gate before adopting or hosting the
 open image with its manifest. The historical image has no demonstrated inventory match to this recipe. Old bash paths are
 untouched. The monthly official-URL check fails on media drift; actual downloads always require hash verification. No upload,
 R2 registration, Worker access, rental or deployment is part of this change.
 
 ## Windows app bundle (the Windows apps stage)
+
+**DESIGN — owner supersession, 2026-11-07:** NVIDIA payloads mentioned in this older Windows proposal are provisioning-time
+pinned official downloads only. They must never become image/ISO contents or R2/GitHub objects. Any older suggestion below to
+cache them with the bundle is superseded. LB1 implements the Linux recipe; Windows provisioning integration remains separate.
 
 STATUS: DESIGN-ONLY, 2026-11-07. Nothing below exists in R2 yet: no object is uploaded, the pin file
 (`scripts/bench/windows/appmatrix/bundle.pin`) is empty, and the Worker names are proposed, not deployed. Design:

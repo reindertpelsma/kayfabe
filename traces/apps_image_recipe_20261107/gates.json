@@ -1,0 +1,11 @@
+{
+  "observed_utc": "2026-11-07T22:48:37.296681+00:00",
+  "results": {
+    "doc-freshness": 0,
+    "release-claims": 0,
+    "private-refs": 0,
+    "uuids": 0,
+    "workflow-lint": 0
+  },
+  "scope": "Final local GPU-free hygiene checks; no baseline changes"
+}

@@ -31,7 +31,7 @@ KF_FINAL_SUMMARY_END
 .KF_PAYLOAD_TIER windows=1 source=worker tier=middle windows_runs=1 stages=none spec=none winapps=none
 KF_PREFLIGHT_FREE_BYTES=100000000000
 KF_PAYLOAD_STAGE_START name=provision
-KF_PAYLOAD_STAGE_END name=provision rc=0 duration_ms=3
+KF_PAYLOAD_STAGE_END name=provision rc=0 duration_ms=0
 KF_PAYLOAD_STAGE_START name=cuda_host
 KF_PAYLOAD_STAGE_END name=cuda_host rc=0 duration_ms=0
 KF_PAYLOAD_STAGE_START name=merge_bar
@@ -39,14 +39,14 @@ KF_PAYLOAD_STAGE_END name=merge_bar rc=0 duration_ms=0
 KF_PAYLOAD_STAGE_START name=cuda_guest
 KF_PAYLOAD_STAGE_END name=cuda_guest rc=0 duration_ms=0
 KF_PAYLOAD_STAGE_START name=apps
-KF_PAYLOAD_STAGE_END name=apps rc=1 duration_ms=0
+KF_PAYLOAD_STAGE_END name=apps rc=1 duration_ms=16
 KF_PAYLOAD_FAIL suite=apps
 KF_FINAL_SUMMARY_BEGIN verdict=FAIL stages=6
-stage name=provision rc=0 duration_ms=3 result=PASS
+stage name=provision rc=0 duration_ms=0 result=PASS
 stage name=cuda_host rc=0 duration_ms=0 result=PASS
 stage name=merge_bar rc=0 duration_ms=0 result=PASS
 stage name=cuda_guest rc=0 duration_ms=0 result=PASS
-stage name=apps rc=1 duration_ms=0 result=FAIL reason=apps
+stage name=apps rc=1 duration_ms=16 result=FAIL reason=apps
 stage name=windows_gate result=NOT_RUN
 suite name=provision pass=1 fail=0 skip=0
 suite name=cuda_host pass=4 fail=0 skip=0
@@ -66,20 +66,20 @@ KF_PREFLIGHT_FREE_BYTES=100000000000
 KF_PAYLOAD_STAGE_START name=provision
 KF_PAYLOAD_STAGE_END name=provision rc=0 duration_ms=0
 KF_PAYLOAD_STAGE_START name=cuda_host
-KF_PAYLOAD_STAGE_END name=cuda_host rc=0 duration_ms=0
+KF_PAYLOAD_STAGE_END name=cuda_host rc=0 duration_ms=22
 KF_PAYLOAD_STAGE_START name=merge_bar
-KF_PAYLOAD_STAGE_END name=merge_bar rc=0 duration_ms=2
+KF_PAYLOAD_STAGE_END name=merge_bar rc=0 duration_ms=0
 KF_PAYLOAD_STAGE_START name=cuda_guest
 KF_PAYLOAD_STAGE_END name=cuda_guest rc=0 duration_ms=0
 KF_PAYLOAD_STAGE_START name=apps
-KF_PAYLOAD_STAGE_END name=apps rc=3 duration_ms=8
+KF_PAYLOAD_STAGE_END name=apps rc=3 duration_ms=0
 KF_PAYLOAD_FAIL suite=apps_retry_not_built
 KF_FINAL_SUMMARY_BEGIN verdict=FAIL stages=5
 stage name=provision rc=0 duration_ms=0 result=PASS
-stage name=cuda_host rc=0 duration_ms=0 result=PASS
-stage name=merge_bar rc=0 duration_ms=2 result=PASS
+stage name=cuda_host rc=0 duration_ms=22 result=PASS
+stage name=merge_bar rc=0 duration_ms=0 result=PASS
 stage name=cuda_guest rc=0 duration_ms=0 result=PASS
-stage name=apps rc=3 duration_ms=8 result=FAIL reason=apps_retry_not_built
+stage name=apps rc=3 duration_ms=0 result=FAIL reason=apps_retry_not_built
 suite name=provision pass=1 fail=0 skip=0
 suite name=cuda_host pass=4 fail=0 skip=0
 suite name=gates pass=9 fail=0 skip=0
@@ -94,16 +94,16 @@ KF_FINAL_SUMMARY_END
 .KF_PAYLOAD_TIER windows=0 source=worker tier=middle windows_runs=1 stages=none spec=none winapps=none
 KF_PREFLIGHT_FREE_BYTES=100000000000
 KF_PAYLOAD_STAGE_START name=provision
-KF_PAYLOAD_STAGE_END name=provision rc=0 duration_ms=1
+KF_PAYLOAD_STAGE_END name=provision rc=0 duration_ms=0
 KF_PAYLOAD_STAGE_START name=cuda_host
-KF_PAYLOAD_STAGE_END name=cuda_host rc=0 duration_ms=0
+KF_PAYLOAD_STAGE_END name=cuda_host rc=0 duration_ms=6
 KF_PAYLOAD_STAGE_START name=merge_bar
 KF_PAYLOAD_STAGE_END name=merge_bar rc=0 duration_ms=0
 KF_PAYLOAD_STAGE_START name=cuda_guest
 KF_PAYLOAD_STAGE_END name=cuda_guest rc=0 duration_ms=0
 KF_FINAL_SUMMARY_BEGIN verdict=PASS stages=4
-stage name=provision rc=0 duration_ms=1 result=PASS
-stage name=cuda_host rc=0 duration_ms=0 result=PASS
+stage name=provision rc=0 duration_ms=0 result=PASS
+stage name=cuda_host rc=0 duration_ms=6 result=PASS
 stage name=merge_bar rc=0 duration_ms=0 result=PASS
 stage name=cuda_guest rc=0 duration_ms=0 result=PASS
 suite name=provision pass=1 fail=0 skip=0
@@ -122,14 +122,14 @@ KF_PAYLOAD_STAGE_END name=provision rc=0 duration_ms=0
 KF_PAYLOAD_STAGE_START name=cuda_host
 KF_PAYLOAD_STAGE_END name=cuda_host rc=0 duration_ms=0
 KF_PAYLOAD_STAGE_START name=merge_bar
-KF_PAYLOAD_STAGE_END name=merge_bar rc=0 duration_ms=0
+KF_PAYLOAD_STAGE_END name=merge_bar rc=0 duration_ms=6
 KF_PAYLOAD_STAGE_START name=cuda_guest
-KF_PAYLOAD_STAGE_END name=cuda_guest rc=0 duration_ms=0
+KF_PAYLOAD_STAGE_END name=cuda_guest rc=0 duration_ms=1
 KF_FINAL_SUMMARY_BEGIN verdict=PASS stages=4
 stage name=provision rc=0 duration_ms=0 result=PASS
 stage name=cuda_host rc=0 duration_ms=0 result=PASS
-stage name=merge_bar rc=0 duration_ms=0 result=PASS
-stage name=cuda_guest rc=0 duration_ms=0 result=PASS
+stage name=merge_bar rc=0 duration_ms=6 result=PASS
+stage name=cuda_guest rc=0 duration_ms=1 result=PASS
 suite name=provision pass=1 fail=0 skip=0
 suite name=cuda_host pass=4 fail=0 skip=0
 suite name=gates pass=9 fail=0 skip=0
@@ -148,17 +148,17 @@ KF_PAYLOAD_STAGE_END name=cuda_host rc=0 duration_ms=0
 KF_PAYLOAD_STAGE_START name=merge_bar
 KF_PAYLOAD_STAGE_END name=merge_bar rc=0 duration_ms=0
 KF_PAYLOAD_STAGE_START name=cuda_guest
-KF_PAYLOAD_STAGE_END name=cuda_guest rc=0 duration_ms=0
+KF_PAYLOAD_STAGE_END name=cuda_guest rc=0 duration_ms=9
 KF_PAYLOAD_STAGE_START name=apps
-KF_PAYLOAD_STAGE_END name=apps rc=0 duration_ms=12
+KF_PAYLOAD_STAGE_END name=apps rc=0 duration_ms=0
 KF_PAYLOAD_STAGE_START name=windows_gate
 KF_PAYLOAD_STAGE_END name=windows_gate rc=0 duration_ms=0
 KF_FINAL_SUMMARY_BEGIN verdict=PASS stages=6
 stage name=provision rc=0 duration_ms=0 result=PASS
 stage name=cuda_host rc=0 duration_ms=0 result=PASS
 stage name=merge_bar rc=0 duration_ms=0 result=PASS
-stage name=cuda_guest rc=0 duration_ms=0 result=PASS
-stage name=apps rc=0 duration_ms=12 result=PASS
+stage name=cuda_guest rc=0 duration_ms=9 result=PASS
+stage name=apps rc=0 duration_ms=0 result=PASS
 stage name=windows_gate rc=0 duration_ms=0 result=PASS
 suite name=provision pass=1 fail=0 skip=0
 suite name=cuda_host pass=4 fail=0 skip=0
@@ -174,9 +174,9 @@ KF_FINAL_SUMMARY_END
 KF_PAYLOAD_TIER windows=1 source=worker tier=large windows_runs=1 stages=none spec=none winapps=none
 KF_PREFLIGHT_FREE_BYTES=100000000000
 KF_PAYLOAD_STAGE_START name=provision
-KF_PAYLOAD_STAGE_END name=provision rc=0 duration_ms=1
+KF_PAYLOAD_STAGE_END name=provision rc=0 duration_ms=0
 KF_PAYLOAD_STAGE_START name=cuda_host
-KF_PAYLOAD_STAGE_END name=cuda_host rc=0 duration_ms=1
+KF_PAYLOAD_STAGE_END name=cuda_host rc=0 duration_ms=0
 KF_PAYLOAD_STAGE_START name=merge_bar
 KF_PAYLOAD_STAGE_END name=merge_bar rc=0 duration_ms=0
 KF_PAYLOAD_STAGE_START name=cuda_guest
@@ -186,8 +186,8 @@ KF_PAYLOAD_STAGE_END name=apps rc=0 duration_ms=0
 KF_PAYLOAD_STAGE_START name=windows_gate
 KF_PAYLOAD_STAGE_END name=windows_gate rc=0 duration_ms=0
 KF_FINAL_SUMMARY_BEGIN verdict=PASS stages=6
-stage name=provision rc=0 duration_ms=1 result=PASS
-stage name=cuda_host rc=0 duration_ms=1 result=PASS
+stage name=provision rc=0 duration_ms=0 result=PASS
+stage name=cuda_host rc=0 duration_ms=0 result=PASS
 stage name=merge_bar rc=0 duration_ms=0 result=PASS
 stage name=cuda_guest rc=0 duration_ms=0 result=PASS
 stage name=apps rc=0 duration_ms=0 result=PASS
@@ -210,17 +210,17 @@ KF_PAYLOAD_STAGE_END name=provision rc=0 duration_ms=0
 KF_PAYLOAD_STAGE_START name=cuda_host
 KF_PAYLOAD_STAGE_END name=cuda_host rc=0 duration_ms=0
 KF_PAYLOAD_STAGE_START name=merge_bar
-KF_PAYLOAD_STAGE_END name=merge_bar rc=0 duration_ms=0
+KF_PAYLOAD_STAGE_END name=merge_bar rc=0 duration_ms=1
 KF_PAYLOAD_STAGE_START name=cuda_guest
-KF_PAYLOAD_STAGE_END name=cuda_guest rc=0 duration_ms=1
+KF_PAYLOAD_STAGE_END name=cuda_guest rc=0 duration_ms=0
 KF_PAYLOAD_STAGE_START name=apps
 KF_PAYLOAD_STAGE_END name=apps rc=125 duration_ms=0
 KF_PAYLOAD_FAIL suite=apps_retry_time
 KF_FINAL_SUMMARY_BEGIN verdict=FAIL stages=5
 stage name=provision rc=0 duration_ms=0 result=PASS
 stage name=cuda_host rc=0 duration_ms=0 result=PASS
-stage name=merge_bar rc=0 duration_ms=0 result=PASS
-stage name=cuda_guest rc=0 duration_ms=1 result=PASS
+stage name=merge_bar rc=0 duration_ms=1 result=PASS
+stage name=cuda_guest rc=0 duration_ms=0 result=PASS
 stage name=apps rc=125 duration_ms=0 result=FAIL reason=apps_retry_time
 suite name=provision pass=1 fail=0 skip=0
 suite name=cuda_host pass=4 fail=0 skip=0
@@ -238,14 +238,14 @@ KF_PREFLIGHT_FREE_BYTES=100000000000
 KF_PAYLOAD_STAGE_START name=provision
 KF_PAYLOAD_STAGE_END name=provision rc=0 duration_ms=0
 KF_PAYLOAD_STAGE_START name=cuda_host
-KF_PAYLOAD_STAGE_END name=cuda_host rc=0 duration_ms=0
+KF_PAYLOAD_STAGE_END name=cuda_host rc=0 duration_ms=10
 KF_PAYLOAD_STAGE_START name=merge_bar
 KF_PAYLOAD_STAGE_END name=merge_bar rc=0 duration_ms=0
 KF_PAYLOAD_STAGE_START name=cuda_guest
 KF_PAYLOAD_STAGE_END name=cuda_guest rc=0 duration_ms=0
 KF_FINAL_SUMMARY_BEGIN verdict=PASS stages=4
 stage name=provision rc=0 duration_ms=0 result=PASS
-stage name=cuda_host rc=0 duration_ms=0 result=PASS
+stage name=cuda_host rc=0 duration_ms=10 result=PASS
 stage name=merge_bar rc=0 duration_ms=0 result=PASS
 stage name=cuda_guest rc=0 duration_ms=0 result=PASS
 suite name=provision pass=1 fail=0 skip=0
@@ -260,18 +260,18 @@ KF_FINAL_SUMMARY_END
 KF_PAYLOAD_TIER windows=0 source=worker tier=adhoc windows_runs=1 stages=none spec=none winapps=none
 KF_PREFLIGHT_FREE_BYTES=100000000000
 KF_PAYLOAD_STAGE_START name=provision
-KF_PAYLOAD_STAGE_END name=provision rc=0 duration_ms=0
+KF_PAYLOAD_STAGE_END name=provision rc=0 duration_ms=8
 KF_PAYLOAD_STAGE_START name=cuda_host
 KF_PAYLOAD_STAGE_END name=cuda_host rc=0 duration_ms=0
 KF_PAYLOAD_STAGE_START name=merge_bar
 KF_PAYLOAD_STAGE_END name=merge_bar rc=0 duration_ms=0
 KF_PAYLOAD_STAGE_START name=cuda_guest
-KF_PAYLOAD_STAGE_END name=cuda_guest rc=0 duration_ms=0
+KF_PAYLOAD_STAGE_END name=cuda_guest rc=0 duration_ms=12
 KF_FINAL_SUMMARY_BEGIN verdict=PASS stages=4
-stage name=provision rc=0 duration_ms=0 result=PASS
+stage name=provision rc=0 duration_ms=8 result=PASS
 stage name=cuda_host rc=0 duration_ms=0 result=PASS
 stage name=merge_bar rc=0 duration_ms=0 result=PASS
-stage name=cuda_guest rc=0 duration_ms=0 result=PASS
+stage name=cuda_guest rc=0 duration_ms=12 result=PASS
 suite name=provision pass=1 fail=0 skip=0
 suite name=cuda_host pass=4 fail=0 skip=0
 suite name=gates pass=9 fail=0 skip=0
@@ -284,7 +284,7 @@ KF_FINAL_SUMMARY_END
 .KF_PAYLOAD_TIER windows=0 source=worker tier=large windows_runs=1 stages=none spec=none winapps=none
 KF_PREFLIGHT_FREE_BYTES=100000000000
 KF_PAYLOAD_STAGE_START name=provision
-KF_PAYLOAD_STAGE_END name=provision rc=0 duration_ms=0
+KF_PAYLOAD_STAGE_END name=provision rc=0 duration_ms=6
 KF_PAYLOAD_STAGE_START name=cuda_host
 KF_PAYLOAD_STAGE_END name=cuda_host rc=0 duration_ms=0
 KF_PAYLOAD_STAGE_START name=merge_bar
@@ -292,13 +292,13 @@ KF_PAYLOAD_STAGE_END name=merge_bar rc=0 duration_ms=0
 KF_PAYLOAD_STAGE_START name=cuda_guest
 KF_PAYLOAD_STAGE_END name=cuda_guest rc=0 duration_ms=0
 KF_PAYLOAD_STAGE_START name=apps
-KF_PAYLOAD_STAGE_END name=apps rc=0 duration_ms=0
+KF_PAYLOAD_STAGE_END name=apps rc=0 duration_ms=1
 KF_FINAL_SUMMARY_BEGIN verdict=PASS stages=5
-stage name=provision rc=0 duration_ms=0 result=PASS
+stage name=provision rc=0 duration_ms=6 result=PASS
 stage name=cuda_host rc=0 duration_ms=0 result=PASS
 stage name=merge_bar rc=0 duration_ms=0 result=PASS
 stage name=cuda_guest rc=0 duration_ms=0 result=PASS
-stage name=apps rc=0 duration_ms=0 result=PASS
+stage name=apps rc=0 duration_ms=1 result=PASS
 suite name=provision pass=1 fail=0 skip=0
 suite name=cuda_host pass=4 fail=0 skip=0
 suite name=gates pass=9 fail=0 skip=0
@@ -320,13 +320,13 @@ KF_PAYLOAD_STAGE_END name=merge_bar rc=0 duration_ms=0
 KF_PAYLOAD_STAGE_START name=cuda_guest
 KF_PAYLOAD_STAGE_END name=cuda_guest rc=0 duration_ms=0
 KF_PAYLOAD_STAGE_START name=apps
-KF_PAYLOAD_STAGE_END name=apps rc=0 duration_ms=0
+KF_PAYLOAD_STAGE_END name=apps rc=0 duration_ms=11
 KF_FINAL_SUMMARY_BEGIN verdict=PASS stages=5
 stage name=provision rc=0 duration_ms=0 result=PASS
 stage name=cuda_host rc=0 duration_ms=0 result=PASS
 stage name=merge_bar rc=0 duration_ms=0 result=PASS
 stage name=cuda_guest rc=0 duration_ms=0 result=PASS
-stage name=apps rc=0 duration_ms=0 result=PASS
+stage name=apps rc=0 duration_ms=11 result=PASS
 suite name=provision pass=1 fail=0 skip=0
 suite name=cuda_host pass=4 fail=0 skip=0
 suite name=gates pass=9 fail=0 skip=0
@@ -344,16 +344,16 @@ KF_PAYLOAD_STAGE_END name=provision rc=0 duration_ms=0
 KF_PAYLOAD_STAGE_START name=cuda_host
 KF_PAYLOAD_STAGE_END name=cuda_host rc=0 duration_ms=0
 KF_PAYLOAD_STAGE_START name=merge_bar
-KF_PAYLOAD_STAGE_END name=merge_bar rc=0 duration_ms=1
+KF_PAYLOAD_STAGE_END name=merge_bar rc=0 duration_ms=0
 KF_PAYLOAD_STAGE_START name=cuda_guest
-KF_PAYLOAD_STAGE_END name=cuda_guest rc=0 duration_ms=0
+KF_PAYLOAD_STAGE_END name=cuda_guest rc=0 duration_ms=2
 KF_PAYLOAD_STAGE_START name=apps
 KF_PAYLOAD_STAGE_END name=apps rc=0 duration_ms=0
 KF_FINAL_SUMMARY_BEGIN verdict=PASS stages=5
 stage name=provision rc=0 duration_ms=0 result=PASS
 stage name=cuda_host rc=0 duration_ms=0 result=PASS
-stage name=merge_bar rc=0 duration_ms=1 result=PASS
-stage name=cuda_guest rc=0 duration_ms=0 result=PASS
+stage name=merge_bar rc=0 duration_ms=0 result=PASS
+stage name=cuda_guest rc=0 duration_ms=2 result=PASS
 stage name=apps rc=0 duration_ms=0 result=PASS
 suite name=provision pass=1 fail=0 skip=0
 suite name=cuda_host pass=4 fail=0 skip=0
@@ -367,6 +367,6 @@ suite name=apps pass=3 fail=0 skip=0
 KF_FINAL_SUMMARY_END
 .
 ----------------------------------------------------------------------
-Ran 64 tests in 6.672s
+Ran 64 tests in 16.682s
 
 OK

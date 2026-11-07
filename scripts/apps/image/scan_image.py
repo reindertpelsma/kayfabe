@@ -44,9 +44,13 @@ def oss_evidence(text):
     )
     if spdx:
         expression = spdx[1].decode("ascii", errors="replace").strip(" */")
-        terms = set(re.findall(r"[A-Za-z0-9.+-]+", expression)) - {"AND", "OR"}
+        # Linux's syscall interface exception does not turn GPL source into
+        # proprietary NVIDIA media; preserve the original expression as evidence.
+        recognized = expression.replace("GPL-2.0 WITH Linux-syscall-note", "GPL-2.0")
+        terms = set(re.findall(r"[A-Za-z0-9.+-]+", recognized)) - {"AND", "OR"}
         if terms and terms <= {
             "MIT",
+            "Linux-OpenIB",
             "BSD-2-Clause",
             "BSD-3-Clause",
             "Apache-2.0",
@@ -93,12 +97,15 @@ def scan(
     def finding(path, reason):
         findings.append({"path": path, "reason": reason})
 
+    header_roots = set()
     for row in dpkg:
         parts = row.split("\t")
         if len(parts) < 2:
             finding("/var/lib/dpkg/status", "invalid package row")
             continue
         package = parts[1].split(":")[0]
+        if package.startswith("linux-headers-"):
+            header_roots.add("usr/src/" + package + "/")
         if re.match(
             r"(?i)^(?:lib)?nvidia|^cuda-|^libcu(?:dnn|blas|fft|rand|solver|sparse)",
             package,
@@ -124,7 +131,23 @@ def scan(
             display = "/" + relative
             try:
                 mode = p.lstat().st_mode
-                if (
+                # Ubuntu main's Linux headers include GPL NVIDIA platform
+                # source. Infer this namespace from installed package names,
+                # not a blanket NVIDIA-name exemption. Contents and unknown
+                # copyright notices still undergo the identical full scan.
+                kernel_source = any(
+                    relative.startswith(prefix) for prefix in header_roots
+                ) and (
+                    stat.S_ISDIR(mode)
+                    or (
+                        stat.S_ISREG(mode)
+                        and (
+                            name in {"Makefile", "Kconfig"}
+                            or p.suffix in {".h", ".c", ".S", ".dts", ".dtsi"}
+                        )
+                    )
+                )
+                if not kernel_source and (
                     VENDOR.match(name)
                     or relative.startswith(("usr/local/cuda/", "usr/local/cuda-"))
                     or "/nvidia/" in "/" + relative

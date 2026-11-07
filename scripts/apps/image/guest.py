@@ -20,6 +20,7 @@ import traceback
 import tarfile
 import elf
 import scan_image
+import input_disk
 
 from common import (
     canonical,
@@ -137,6 +138,15 @@ def get_input(pin, session):
     if p.exists():
         verify_file(p, pin)
         return p
+    if pin["id"] in session.get("official_ids", []):
+        if session.get("official_disk") != input_disk.DEVICE:
+            raise ValueError("official input requires the declared transient disk")
+        try:
+            return input_disk.read(input_disk.DEVICE, pin, cache)
+        except (ValueError, OSError) as error:
+            raise ValueError(
+                "MEDIA_DRIFT " + pin["id"] + ": official input disk integrity failure"
+            ) from error
     return fetch_served(pin, session["server_url"] + "/" + pin["sha256"], cache)
 
 

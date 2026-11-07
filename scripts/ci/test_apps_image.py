@@ -19,6 +19,7 @@ import zipfile
 
 IMAGE = Path(__file__).resolve().parents[1] / "apps" / "image"
 sys.path.insert(0, str(IMAGE))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import common
 import iso9660
 import build_image
@@ -599,7 +600,14 @@ class FakeQemu(unittest.TestCase):
 
         def fetch_official(recipe, directory, **kwargs):
             Path(directory).mkdir(parents=True, exist_ok=True)
-            return {}
+            paths = {}
+            for item in build_image.official_pins(recipe, kwargs.get("builder", False)):
+                data = b"official"
+                assert item["sha256"] == digest(data) and item["size"] == len(data)
+                p = Path(directory) / item["sha256"]
+                p.write_bytes(data)
+                paths[item["sha256"]] = p
+            return paths
 
         self.official_patch = patch.object(
             build_image, "fetch_official", side_effect=fetch_official
@@ -621,6 +629,57 @@ class FakeQemu(unittest.TestCase):
 
     def records(self):
         return [json.loads(x) for x in self.commands.read_text().splitlines()]
+
+    def test_builder_input_disk_is_readonly_and_not_attached_to_open_assembly(self):
+        import test_apps_image_layers as layers
+
+        self.recipe["official_fetch"] = [layers.pin()]
+        self.build()
+        vms = [
+            x["argv"] for x in self.records() if x["program"] == "qemu-system-x86_64"
+        ]
+        self.assertTrue(any("id=official" in x and "readonly=on" in x for x in vms[0]))
+        self.assertFalse(any("id=official" in x for x in vms[1]))
+        self.assertFalse(list(self.out.rglob("*.raw")))
+
+    def test_guest_seed_declares_official_device_and_only_selected_pins(self):
+        import test_apps_image_layers as layers
+
+        self.recipe["official_fetch"] = [layers.pin()]
+        config = build_image.cloud_config(
+            self.recipe,
+            IMAGE,
+            "b" * 32,
+            "builder",
+            "http://10.0.2.100:1234",
+            [],
+            official_device=True,
+        )
+        session = json.loads(
+            next(
+                x["content"]
+                for x in config["write_files"]
+                if x["path"].endswith("/session.json")
+            )
+        )
+        self.assertEqual(session["official_ids"], ["driver"])
+        self.assertEqual(session["official_disk"], "/dev/disk/by-id/virtio-KF-OFFICIAL")
+
+    def check_official_http_isolation(self, index):
+        import test_apps_image_layers as layers
+
+        self.recipe["official_fetch"] = [layers.pin()]
+        with patch.object(
+            build_image, "serve_inputs", wraps=build_image.serve_inputs
+        ) as serving:
+            self.build()
+        self.assertNotIn(layers.pin()["sha256"], serving.call_args_list[index].args[0])
+
+    def test_scratch_builder_http_cannot_serve_nvidia_payloads(self):
+        self.check_official_http_isolation(0)
+
+    def test_open_assembly_http_cannot_serve_nvidia_payloads(self):
+        self.check_official_http_isolation(-1)
 
     def test_build_writes_manifest_only_after_verified_completion(self):
         manifest = self.build()
@@ -1025,6 +1084,22 @@ class ForwardedInputs(unittest.TestCase):
             "socket,id=pin-http,host=127.0.0.1,port=12345,reconnect-ms=500", argv
         )
 
+    def test_provisioning_official_input_disk_is_explicitly_readonly(self):
+        path = build_image.seed(
+            fixture(),
+            self.root,
+            "b" * 32,
+            "provision",
+            "http://10.0.2.100:1234",
+            official_disk=self.root / "official-inputs.raw",
+        )
+        with build_image.Channels(self.root, {"serial": 100, "inventory": 100}) as ch:
+            argv = build_image.qemu_argv(
+                fixture(), self.root / "disk", path, ch, "fake-qemu"
+            )
+        self.assertTrue(any("id=official" in x and "readonly=on" in x for x in argv))
+        self.assertIn("virtio-blk-pci,drive=official,serial=KF-OFFICIAL", argv)
+
     def test_input_forward_refuses_an_external_host(self):
         with self.assertRaises(ValueError):
             self.argv("assemble", "http://example.org:4321")
@@ -1057,6 +1132,20 @@ class ForwardedInputs(unittest.TestCase):
             self.assertEqual(connection.getresponse().read(), b"pinned")
             self.assertIs(connection.sock, first_socket)
             connection.close()
+
+
+class MutationDiagnostics(unittest.TestCase):
+    def test_loader_error_is_never_silently_lost_from_mutant_diagnostics(self):
+        import mutants
+
+        output = "ERROR: missing (unittest.loader._FailedTest.missing)\n"
+        self.assertTrue(mutants.failures(output, "core", "ERROR"))
+
+    def test_class_fixture_error_also_invalidates_a_mutant_run(self):
+        import mutants
+
+        output = "ERROR: setUpClass (__main__.Sample)\n"
+        self.assertTrue(mutants.failures(output, "core", "ERROR"))
 
 
 class CommittedRecipe(unittest.TestCase):

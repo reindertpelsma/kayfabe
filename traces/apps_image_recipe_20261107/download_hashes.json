@@ -109,6 +109,12 @@
       "url": "https://files.pythonhosted.org/packages/90/dc/da09e5184d94146b8cbf240c2bef1c4851cbafd7e2d60cc71b1530c766ec/cupy_cuda12x-13.3.0-cp312-cp312-manylinux2014_x86_64.whl",
       "sha256": "e206bd8664f0763732b6012431f484ee535bffd77a5ae95e9bfe1c7c72396625",
       "size": 90980377
+    },
+    {
+      "id": "linux-common-headers-audit",
+      "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/main/l/linux/linux-headers-6.8.0-147_6.8.0-147.147_all.deb",
+      "sha256": "16c59831600aa76bbf2ce56000a7874a5c7b52f9507ae3deb0e633f1d71078bf",
+      "size": 13677052
     }
   ],
   "scope": "Selected complete payload GET/SHA256 observations only; other recipe pins come from upstream metadata. Driver bytes were streamed and discarded."

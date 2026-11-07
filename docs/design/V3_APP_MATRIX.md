@@ -22,10 +22,10 @@ as the baseline R2 is compared against; their cause list is SUPERSEDED by §R2.3
 
 **CODE READ:** the new [recipe and Python builder](V3_APPS_IMAGE_RECIPE.md) separate an open Ubuntu main/universe image from
 transient official NVIDIA provisioning. NVIDIA proprietary files belong in neither image/ISO nor R2/GitHub: the box host fetches
-pinned official installers per run and supplies them to the offline guest. Shared-CUDA-runtime builds are exported through a
+pinned official installers per run and supplies them on a transient read-only data disk to the offline guest. Shared-CUDA-runtime builds are exported through a
 file/hash/linkage audit into a fresh image, then scanned. CuPy is runtime-only because its wheel bundles proprietary CUDA headers;
 CDP quicksort is a declared static-device-runtime exception built only at provisioning. The claim is **input-pinned +
-inventory-identical, not byte-identical qcow2**. **DESIGN:** integrate the J4 fetcher, build twice, cross-verify against the first
+inventory-identical, not byte-identical qcow2**. **DESIGN:** build twice, cross-verify against the first
 manifest and run the gate before adoption or hosting. **MEASURED:** LB1 ran no VM/GPU; R5 qualifies the old image at its revision.
 All old bash paths remain untouched. Steps and limits: [design](V3_APPS_IMAGE_RECIPE.md), [manual](../howto/linux-apps-image.md).
 

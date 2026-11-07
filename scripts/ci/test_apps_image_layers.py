@@ -283,6 +283,269 @@ class ScanIdentity(unittest.TestCase):
         )
 
 
+class OfficialInputDisk(unittest.TestCase):
+    def setUp(self):
+        import input_disk
+
+        self.disk = input_disk
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.pin = pin()
+        self.source = self.root / self.pin["sha256"]
+        self.source.write_bytes(b"official")
+        self.path = self.root / "official-inputs.raw"
+
+    def write(self):
+        return self.disk.write(self.path, [self.pin], {self.pin["sha256"]: self.source})
+
+    def test_disk_delivers_unmodified_verified_installer_bytes(self):
+        self.write()
+        result = self.disk.read(self.path, self.pin, self.root / "guest")
+        self.assertEqual(result.read_bytes(), b"official")
+        self.assertEqual(self.path.stat().st_size % 512, 0)
+
+    def test_second_payload_has_its_own_pin_and_offset(self):
+        other = {
+            **self.pin,
+            "id": "second",
+            "sha256": hashlib.sha256(b"second").hexdigest(),
+            "size": 6,
+        }
+        p = self.root / "second"
+        p.write_bytes(b"second")
+        self.disk.write(
+            self.path,
+            [self.pin, other],
+            {self.pin["sha256"]: self.source, other["sha256"]: p},
+        )
+        self.assertEqual(
+            self.disk.read(self.path, other, self.root / "guest").read_bytes(),
+            b"second",
+        )
+
+    def test_writer_refuses_changed_official_bytes(self):
+        self.source.write_bytes(b"modified")
+        with self.assertRaises(ValueError):
+            self.write()
+
+    def test_writer_refuses_corrupt_second_payload(self):
+        other = {
+            **self.pin,
+            "id": "second",
+            "sha256": hashlib.sha256(b"expected").hexdigest(),
+        }
+        p = self.root / "second"
+        p.write_bytes(b"modified")
+        with self.assertRaises(ValueError):
+            self.disk.write(
+                self.path,
+                [self.pin, other],
+                {self.pin["sha256"]: self.source, other["sha256"]: p},
+            )
+
+    def test_reader_rejects_corrupt_guest_visible_payload(self):
+        self.write()
+        with self.path.open("r+b") as f:
+            f.seek(self.disk.HEADER_BYTES)
+            f.write(b"modified")
+        with self.assertRaises(ValueError):
+            self.disk.read(self.path, self.pin, self.root / "guest")
+
+    def test_reader_rejects_payload_with_correct_length_and_wrong_digest(self):
+        self.write()
+        with self.path.open("r+b") as f:
+            f.seek(self.disk.HEADER_BYTES)
+            f.write(b"ffffffff")
+        with self.assertRaises(ValueError):
+            self.disk.read(self.path, self.pin, self.root / "guest")
+
+    def test_reader_refuses_truncated_device(self):
+        self.write()
+        with self.path.open("r+b") as f:
+            f.truncate(self.disk.HEADER_BYTES + 4)
+        with self.assertRaises(ValueError):
+            self.disk.read(self.path, self.pin, self.root / "guest")
+
+    def test_reader_refuses_bad_magic(self):
+        self.write()
+        with self.path.open("r+b") as f:
+            f.write(b"bad")
+        with self.assertRaises(ValueError):
+            self.disk.read(self.path, self.pin, self.root / "guest")
+
+    def test_missing_official_pin_cannot_fall_back_to_http(self):
+        self.write()
+        other = {**self.pin, "sha256": "0" * 64}
+        with self.assertRaises(ValueError):
+            self.disk.read(self.path, other, self.root / "guest")
+
+    def change_index_size(self, size):
+        import struct
+
+        self.write()
+        with self.path.open("r+b") as f:
+            f.seek(16)
+            length = struct.unpack("<Q", f.read(8))[0]
+            index = json.loads(f.read(length))
+            index[self.pin["sha256"]]["size"] = size
+            data = common.canonical(index)
+            self.assertEqual(len(data), length)
+            f.seek(24)
+            f.write(data)
+
+    def test_device_index_cannot_shrink_declared_size(self):
+        self.change_index_size(7)
+        with self.assertRaises(ValueError):
+            self.disk.read(self.path, self.pin, self.root / "guest")
+
+    def test_device_index_cannot_inflate_declared_size(self):
+        self.change_index_size(9)
+        with self.assertRaises(ValueError):
+            self.disk.read(self.path, self.pin, self.root / "guest")
+
+    def test_existing_disk_is_never_overwritten_or_unlinked(self):
+        self.path.write_bytes(b"existing")
+        with self.assertRaises(FileExistsError):
+            self.write()
+        self.assertTrue(self.path.exists())
+        self.assertEqual(self.path.read_bytes(), b"existing")
+
+    def test_existing_symlink_is_not_followed_or_deleted(self):
+        self.path.symlink_to(self.source)
+        with self.assertRaises(FileExistsError):
+            self.write()
+        self.assertTrue(self.path.is_symlink())
+        self.assertEqual(self.source.read_bytes(), b"official")
+
+    def test_empty_disk_is_not_a_provisioning_input(self):
+        with self.assertRaises(ValueError):
+            self.disk.write(self.path, [], {})
+
+
+class GuestOfficialTransport(unittest.TestCase):
+    def setUp(self):
+        import guest, input_disk
+
+        self.guest = guest
+        self.disk = input_disk
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.patch = patch.object(guest, "ROOT", self.root)
+        self.patch.start()
+        self.addCleanup(self.patch.stop)
+        self.session = {
+            "official_ids": ["driver"],
+            "official_disk": input_disk.DEVICE,
+            "server_url": "http://10.0.2.100:1234",
+        }
+
+    def test_official_payload_is_read_from_the_transient_device_without_http(self):
+        with patch.object(
+            self.disk, "read", return_value=self.root / "pin"
+        ) as reader, patch.object(
+            self.guest,
+            "fetch_served",
+            side_effect=AssertionError("vendor HTTP forbidden"),
+        ):
+            self.assertEqual(
+                self.guest.get_input(pin(), self.session), self.root / "pin"
+            )
+            reader.assert_called_once_with(
+                self.disk.DEVICE, pin(), self.root / "downloads"
+            )
+
+    def test_missing_official_device_cannot_fall_back_to_network(self):
+        self.session.pop("official_disk")
+        with patch.object(
+            self.disk, "read", return_value=self.root / "pin"
+        ), patch.object(
+            self.guest,
+            "fetch_served",
+            side_effect=AssertionError("vendor HTTP forbidden"),
+        ):
+            with self.assertRaises(ValueError):
+                self.guest.get_input(pin(), self.session)
+
+    def test_another_block_device_cannot_be_read_as_official_media(self):
+        self.session["official_disk"] = "/dev/vda"
+        with patch.object(
+            self.disk, "read", return_value=self.root / "pin"
+        ), patch.object(
+            self.guest,
+            "fetch_served",
+            side_effect=AssertionError("vendor HTTP forbidden"),
+        ):
+            with self.assertRaises(ValueError):
+                self.guest.get_input(pin(), self.session)
+
+
+class KernelOssHeaders(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.dpkg = ["ii\tlinux-headers-6.8.0-147\tall\t6.8.0-147.147"]
+
+    def write(self, name, data):
+        p = self.root / "usr/src/linux-headers-6.8.0-147" / name
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_bytes(data)
+
+    def test_gpl_header_named_nvidia_is_open_source(self):
+        self.write(
+            "include/nvidia-wmi-ec-backlight.h",
+            b"/* SPDX-License-Identifier: GPL-2.0-only */\n",
+        )
+        r = scan_image.scan(self.root, self.dpkg)
+        self.assertTrue(r["clean"], r["findings"])
+
+    def test_nvidia_kernel_kconfig_directory_is_not_a_vendor_runtime(self):
+        self.write(
+            "drivers/video/nvidia/Makefile", b"# SPDX-License-Identifier: GPL-2.0\n"
+        )
+        self.write("drivers/video/nvidia/tegra/Kconfig", b"config VIDEO_TEGRA_VDE\n")
+        r = scan_image.scan(self.root, self.dpkg)
+        self.assertTrue(r["clean"], r["findings"])
+
+    def test_kernel_source_location_does_not_waive_a_proprietary_header(self):
+        self.write("include/nvidia-private.h", b"NVIDIA SOFTWARE LICENSE AGREEMENT\n")
+        self.assertFalse(scan_image.scan(self.root, self.dpkg)["clean"])
+
+    def test_kernel_source_location_does_not_waive_unknown_nvidia_notices(self):
+        self.write("include/nvidia-private.h", b"Copyright 2026 NVIDIA Corporation\n")
+        self.assertFalse(scan_image.scan(self.root, self.dpkg)["clean"])
+
+    def test_kernel_headers_cannot_contain_a_vendor_shared_library(self):
+        self.write(
+            "drivers/nvidia/libcudart.so.12", b"SPDX-License-Identifier: GPL-2.0\n"
+        )
+        self.assertFalse(scan_image.scan(self.root, self.dpkg)["clean"])
+
+    def test_uninstalled_kernel_source_path_cannot_claim_package_origin(self):
+        self.write("drivers/nvidia/Makefile", b"# SPDX-License-Identifier: GPL-2.0\n")
+        self.assertFalse(scan_image.scan(self.root, [])["clean"])
+
+    def test_linux_syscall_exception_is_documented_oss_evidence(self):
+        self.write(
+            "include/uapi/linux/iommufd.h",
+            b"/* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */\n/* Copyright 2026 NVIDIA Corporation */\n",
+        )
+        r = scan_image.scan(self.root, self.dpkg)
+        self.assertTrue(r["clean"], r["findings"])
+        self.assertIn("Linux-syscall-note", r["notices"][0]["licence_evidence"])
+
+    def test_linux_openib_identifier_is_documented_oss_evidence(self):
+        self.write(
+            "include/rdma/iter.h",
+            b"/* SPDX-License-Identifier: GPL-2.0 OR Linux-OpenIB */\n/* Copyright 2026 NVIDIA Corporation */\n",
+        )
+        r = scan_image.scan(self.root, self.dpkg)
+        self.assertTrue(r["clean"], r["findings"])
+        self.assertIn("Linux-OpenIB", r["notices"][0]["licence_evidence"])
+
+
 class LayerRecipe(unittest.TestCase):
     def setUp(self):
         self.recipe = common.read_recipe(IMAGE / "recipe.json")
@@ -473,6 +736,52 @@ class RuntimeContext(unittest.TestCase):
 
         self.save()
         return build_image.build(self.recipe, self.out, self.root / "cache", timeout=15)
+
+    def test_runtime_official_inputs_use_a_transient_readonly_disk(self):
+        import build_image
+
+        self.recipe["official_fetch"] = [pin()]
+        self.case["runtime_inventory"]["official_receipts"] = {
+            "driver": pin()["sha256"]
+        }
+        self.build()
+        with build_image.provisioned(
+            self.out / "apps-image.qcow2",
+            self.out / "apps-image.manifest.json",
+            self.root / "runtime",
+            self.root / "cache",
+            timeout=15,
+        ):
+            raw = list((self.root / "runtime").rglob("official-inputs.raw"))
+            self.assertEqual(len(raw), 1)
+            records = [json.loads(x) for x in self.commands.read_text().splitlines()]
+            vm = [x["argv"] for x in records if x["program"] == "qemu-system-x86_64"][
+                -1
+            ]
+            self.assertTrue(any("id=official" in x and "readonly=on" in x for x in vm))
+        self.assertFalse(list((self.root / "runtime").rglob("*.raw")))
+
+    def test_runtime_exception_also_deletes_official_data_disk(self):
+        import build_image
+
+        self.recipe["official_fetch"] = [pin()]
+        self.case["runtime_inventory"]["official_receipts"] = {
+            "driver": pin()["sha256"]
+        }
+        self.build()
+        with self.assertRaisesRegex(RuntimeError, "fixture"):
+            with build_image.provisioned(
+                self.out / "apps-image.qcow2",
+                self.out / "apps-image.manifest.json",
+                self.root / "runtime",
+                self.root / "cache",
+                timeout=15,
+            ):
+                self.assertEqual(
+                    len(list((self.root / "runtime").rglob("official-inputs.raw"))), 1
+                )
+                raise RuntimeError("fixture")
+        self.assertFalse(list((self.root / "runtime").rglob("*.raw")))
 
     def test_runtime_overlay_and_official_payloads_are_deleted_on_context_exit(self):
         import build_image

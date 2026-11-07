@@ -133,7 +133,7 @@ CASES = [
         "common",
         [("bool-part", "pip freeze or wheel pins differ", 1)],
         "core",
-        ["Inventory", "FakeQemu"],
+        ["Inventory", "FakeQemu.test_build_refuses_pip_version_drift"],
     ),
     (
         "open-nvidia-boundary",
@@ -168,30 +168,58 @@ CASES = [
         "build_image",
         [guard("inventory differs")],
         "core",
-        ["Inventory", "FakeQemu"],
+        ["Inventory"],
     ),
     (
         "completion-marker",
         "build_image",
         [guard("missing/duplicate/mismatched completion marker")],
         "core",
-        ["FakeQemu"],
+        [
+            "FakeQemu.test_duplicate_completion_marker_refused",
+            "FakeQemu.test_marker_with_wrong_inventory_digest_refused",
+            "FakeQemu.test_zero_qemu_exit_without_marker_refused",
+        ],
     ),
-    ("fresh-session-check", "build_image", [("nonce",)], "core", ["FakeQemu"]),
+    (
+        "fresh-session-check",
+        "build_image",
+        [("nonce",)],
+        "core",
+        [
+            "FakeQemu.test_stale_completion_refused",
+            "FakeQemu.test_verify_rejects_stale_guest_session",
+        ],
+    ),
     (
         "qemu-exit-status",
         "build_image",
         [guard("QEMU failed with status")],
         "core",
-        ["FakeQemu"],
+        [
+            "FakeQemu.test_nonzero_qemu_exit_refused_despite_complete_report",
+            "FakeQemu.test_verify_rejects_nonzero_qemu_exit",
+        ],
     ),
-    ("qemu-img-exit-status", "build_image", [("check",)], "core", ["FakeQemu"]),
+    (
+        "qemu-img-exit-status",
+        "build_image",
+        [("check",)],
+        "core",
+        [
+            "FakeQemu.test_qemu_img_check_failure_does_not_publish_manifest",
+            "FakeQemu.test_qemu_img_failure_does_not_publish_manifest",
+        ],
+    ),
     (
         "assembled-export-integrity",
         "build_image",
         [guard("assembled app differs from audited builder export")],
         "core",
-        ["FakeQemu"],
+        [
+            "FakeQemu.test_assembled_app_must_match_the_audited_builder_bytes",
+            "FakeQemu.test_assembled_image_cannot_drop_upstream_licence_files",
+        ],
     ),
     (
         "guest-pip-hash-check",
@@ -255,7 +283,7 @@ CASES = [
         "scan_image",
         [finding("NVIDIA notice without documented OSS licence")],
         "layers",
-        ["StrictNoticeScan"],
+        ["StrictNoticeScan", "KernelOssHeaders"],
     ),
     (
         "official-http-status",
@@ -380,6 +408,68 @@ CASES = [
         "layers",
         ["AdditionalLayerFailures"],
     ),
+    (
+        "official-disk-writer-digest",
+        "input_disk",
+        [guard("official disk input digest mismatch")],
+        "layers",
+        ["OfficialInputDisk"],
+    ),
+    (
+        "official-disk-reader-digest",
+        "input_disk",
+        [("call", "verify_file(part, pin)")],
+        "layers",
+        ["OfficialInputDisk"],
+    ),
+    (
+        "official-disk-declared-size",
+        "input_disk",
+        [guard("official disk declared size differs from pin")],
+        "layers",
+        ["OfficialInputDisk"],
+    ),
+    (
+        "official-disk-existing-file",
+        "input_disk",
+        [("created-cleanup",)],
+        "layers",
+        ["OfficialInputDisk"],
+    ),
+    (
+        "official-guest-device-required",
+        "guest",
+        [guard("official input requires the declared transient disk")],
+        "layers",
+        ["GuestOfficialTransport"],
+    ),
+    (
+        "official-disk-readonly",
+        "build_image",
+        [("official-readonly",)],
+        "core",
+        [
+            "FakeQemu.test_builder_input_disk_is_readonly_and_not_attached_to_open_assembly",
+            "ForwardedInputs.test_provisioning_official_input_disk_is_explicitly_readonly",
+        ],
+    ),
+    (
+        "official-http-isolation",
+        "build_image",
+        [("official-http-isolation",)],
+        "core",
+        [
+            "FakeQemu.test_scratch_builder_http_cannot_serve_nvidia_payloads",
+            "FakeQemu.test_open_assembly_http_cannot_serve_nvidia_payloads",
+        ],
+    ),
+    (
+        "kernel-source-classification",
+        "scan_image",
+        [("kernel-source",)],
+        "layers",
+        ["KernelOssHeaders"],
+    ),
 ]
 
 
@@ -457,6 +547,53 @@ def mutate(source, operations):
             )
             # Change to a valid harmless pip option, so rejection cannot be a CLI error.
             replacement = repr("--disable-pip-version-check")
+        elif kind == "kernel-source":
+            node = one(
+                [
+                    n.value
+                    for n in ast.walk(tree)
+                    if isinstance(n, ast.Assign)
+                    and any(
+                        isinstance(t, ast.Name) and t.id == "kernel_source"
+                        for t in n.targets
+                    )
+                ]
+            )
+        elif kind == "official-readonly":
+            node = one(
+                [
+                    n
+                    for n in ast.walk(tree)
+                    if isinstance(n, ast.Constant)
+                    and n.value == ",format=raw,readonly=on"
+                ]
+            )
+            replacement = repr(",format=raw,readonly=off")
+        elif kind == "official-http-isolation":
+            node = one(
+                [
+                    n
+                    for n in ast.walk(tree)
+                    if isinstance(n, ast.Assign)
+                    and any(
+                        isinstance(t, ast.Name) and t.id == "transient"
+                        for t in n.targets
+                    )
+                ]
+            )
+            replacement = (
+                ast.get_source_segment(source, node)
+                + "\n        paths.update(transient)"
+            )
+        elif kind == "created-cleanup":
+            node = one(
+                [
+                    n.test
+                    for n in ast.walk(tree)
+                    if isinstance(n, ast.If) and ast.unparse(n.test) == "created"
+                ]
+            )
+            replacement = "True"
         elif kind == "walk-errors":
             node = one(
                 [
@@ -550,6 +687,15 @@ def mutate(source, operations):
 
 
 def failures(output, label, category):
+    if category == "ERROR":
+        # Loader and setUpClass errors lack the normal Class.method identity.
+        # Keep every ERROR header; none may disappear behind a naming pattern.
+        return sorted(
+            set(
+                label + ":" + line
+                for line in re.findall(r"^ERROR: (.+)$", output, re.M)
+            )
+        )
     # Class + method identifies a test uniquely, including when both files have
     # classes with the same name. ERRORs are retained separately and invalidate a run.
     return sorted(
@@ -619,6 +765,11 @@ def main():
             text=True,
             timeout=300,
         )
+        if args.report:
+            args.report.parent.mkdir(parents=True, exist_ok=True)
+            (args.report.parent / ("baseline-" + Path(test).stem + ".txt")).write_text(
+                baseline.stdout + baseline.stderr
+            )
         if baseline.returncode:
             print(baseline.stdout + baseline.stderr)
             print("baseline failed; no mutation results are valid")

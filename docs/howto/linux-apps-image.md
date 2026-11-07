@@ -2,9 +2,9 @@
 
 STATUS: DESIGN-ONLY, 2026-11-07. MEASURED: only GPU-free fixtures have run. A maintainer must build twice, cross-verify and run the apps gate before adopting the image.
 
-**CODE READ:** this path produces an open Ubuntu image and an audited app bundle. NVIDIA proprietary files are excluded. NVIDIA installers and wheels are fetched from pinned official sources on the box host for each provisioning run, supplied transiently to the offline guest and deleted afterwards. They must never be uploaded to R2 or GitHub, or distributed in an image or ISO. The owner decides whether to host the qualified open layer publicly.
+**CODE READ:** this path produces an open Ubuntu image and an audited app bundle. NVIDIA proprietary files are excluded. NVIDIA installers and wheels are fetched from pinned official sources on the box host for each provisioning run, supplied on a transient read-only data disk to the offline guest and deleted afterwards. They must never be uploaded to R2 or GitHub, or distributed in an image or ISO. The owner decides whether to host the qualified open layer publicly.
 
-**DESIGN:** use Linux with KVM access, Python 3.12+, `qemu-system-x86_64`, `qemu-img`, about 60 GiB free and RAM for a 12 GiB guest. Host root is unnecessary if your account can open `/dev/kvm`. A GPU is unnecessary for building. The J4 `scripts/ci/kf_fetch.py` dependency must be integrated first; it is absent from this change's base revision and has no fallback.
+**DESIGN:** use Linux with KVM access, Python 3.12+, QEMU 9.2+ (`qemu-system-x86_64`, `qemu-img`), about 60 GiB free and RAM for a 12 GiB guest. Host root is unnecessary if your account can open `/dev/kvm`. A GPU is unnecessary for building. The repository includes J4's `scripts/ci/kf_fetch.py` downloader. Keep it with the recipe; official provisioning has no alternate downloader.
 
 **CODE READ:** from the repository root, run these individual programs:
 

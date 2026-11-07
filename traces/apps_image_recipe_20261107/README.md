@@ -6,15 +6,17 @@ STATUS: DESIGN-ONLY, 2026-11-07. MEASURED: GPU-free Python fixtures and public-i
 
 **MEASURED:** [download_hashes.json](download_hashes.json) records selected complete payload hashes. Other large recipe pins derive from upstream checksum/index metadata and were not all downloaded. [open_input_audits.json](open_input_audits.json) is a bounded filename/header audit of CPU torch and Blender, not a full installed-image scan or legal certification. [cupy_header_audit.json](cupy_header_audit.json) records the proprietary CUDA-header finding that moves CuPy to transient runtime provisioning; vendor bytes and header bodies are not included here.
 
-**CODE READ:** the [design](../../docs/design/V3_APPS_IMAGE_RECIPE.md) records the final open-image/transient-NVIDIA policy, J4 dependency, shared-runtime build rules, CDP static-runtime exception, exact reproduction steps and limits. Old shell paths are untouched. Fake QEMU fixtures exercise actual argv launches, NoCloud seed decoding, bounded socket transcripts, marker/inventory checks and cleanup without a VM.
+**CODE READ:** the [design](../../docs/design/V3_APPS_IMAGE_RECIPE.md) records the final open-image/transient-NVIDIA policy, J4 dependency, shared-runtime build rules, CDP static-runtime exception, exact reproduction steps and limits. **MEASURED:** the merged J4 adapter downloaded and verified the official 1,126,072-byte cudart archive ([record](j4_adapter_fetch.json)); temporary payloads were deleted. This does not test a guest installation.
 
-**DESIGN:** integrate J4; build twice; compare the second image against the first manifest; inspect complete scans/inventories; provision from official sources and run the existing apps gate and same-binary host reference. None of those real-image/hardware results is established here.
+**CODE READ:** old shell paths are untouched. Fake QEMU fixtures exercise actual argv launches, NoCloud seed decoding, bounded socket transcripts, marker/inventory checks and cleanup without a VM.
+
+**DESIGN:** build twice; compare the second image against the first manifest; inspect complete scans/inventories; provision from official sources and run the existing apps gate and same-binary host reference. None of those real-image/hardware results is established here.
 
 ## GPU-free checks
 
-**MEASURED:** 117 core image tests + 100 layer tests pass (217 new); the existing legacy payload tests pass 64/64 and matrix-table tests 12/12 (293 total in these suites). At the lane base the new image suites and mutation harness did not exist (CODE READ); a whole-repository before/after test total was not measured. No Rust implementation changed and no Rust build was run. Raw results: [core](tests-core.txt), [layers](tests-layers.txt), [legacy](tests-legacy-apps.txt), [matrix](tests-matrix.txt).
+**MEASURED:** 124 core image tests + 127 layer tests pass (251 new); the existing legacy payload tests pass 64/64 and matrix-table tests 12/12 (327 total in these suites). At the lane base the new image suites and mutation harness did not exist (CODE READ); a whole-repository before/after test total was not measured. No Rust implementation changed and no Rust build was run. Raw results: [core](tests-core.txt), [layers](tests-layers.txt), [legacy](tests-legacy-apps.txt), [matrix](tests-matrix.txt).
 
-**MEASURED:** 52/52 mutants have at least two independently named **assertion failures**, with zero test errors. Syntax/import failures do not count as kills. The baseline passes first; every mutation runs in a scratch tree with its own fixture processes. [Complete machine-readable killers](mutants.json), [run output](mutants.txt). The table lists the count and two example named killers for each case.
+**MEASURED:** 60/60 mutants have at least two independently named **assertion failures**, with zero test errors. Syntax/import failures do not count as kills. The baseline passes first; every mutation runs in a scratch tree with its own fixture processes. [Complete machine-readable killers](mutants.json), [run output](mutants.txt). The table lists the count and two example named killers for each case.
 
 | Mutated rule | Assertion killers | Two independent tests |
 |---|---:|---|
@@ -36,7 +38,7 @@ STATUS: DESIGN-ONLY, 2026-11-07. MEASURED: GPU-free Python fixtures and public-i
 | open-apt-components | 3 | `layers:LayerRecipe.test_multiverse_recipe_is_rejected`; `layers:LayerRecipe.test_restricted_or_multiverse_recipe_is_rejected` |
 | open-scan-required | 5 | `layers:LayerInventories.test_clean_flag_cannot_hide_a_reported_proprietary_header`; `layers:LayerInventories.test_clean_flag_cannot_hide_a_reported_vendor_file` |
 | official-receipts-required | 2 | `layers:LayerInventories.test_runtime_needs_actual_official_install_receipts`; `layers:LayerInventories.test_runtime_receipt_hash_cannot_drift` |
-| inventory-comparison | 5 | `core:FakeQemu.test_verify_rejects_modified_app_binary`; `core:FakeQemu.test_verify_rejects_modified_pip_files` |
+| inventory-comparison | 3 | `core:Inventory.test_verify_compares_binary_bytes`; `core:Inventory.test_verify_compares_dpkg_versions` |
 | completion-marker | 3 | `core:FakeQemu.test_duplicate_completion_marker_refused`; `core:FakeQemu.test_marker_with_wrong_inventory_digest_refused` |
 | fresh-session-check | 2 | `core:FakeQemu.test_stale_completion_refused`; `core:FakeQemu.test_verify_rejects_stale_guest_session` |
 | qemu-exit-status | 2 | `core:FakeQemu.test_nonzero_qemu_exit_refused_despite_complete_report`; `core:FakeQemu.test_verify_rejects_nonzero_qemu_exit` |
@@ -51,7 +53,7 @@ STATUS: DESIGN-ONLY, 2026-11-07. MEASURED: GPU-free Python fixtures and public-i
 | proprietary-header-scan | 5 | `layers:BundledCudaHeaders.test_proprietary_cuda_header_cannot_hide_behind_bsd_marker`; `layers:BundledCudaHeaders.test_wrapped_proprietary_confidential_header_fails` |
 | vendor-payload-path-scan | 7 | `layers:Scan.test_cuda_runtime_file_fails_without_header`; `layers:Scan.test_nvidia_python_distribution_fails` |
 | vendor-package-scan | 2 | `layers:Scan.test_nvidia_deb_origin_fails_even_without_license_text`; `layers:StrictNoticeScan.test_nvidia_cuda_deb_is_not_allowed_without_files` |
-| unknown-notice-scan | 2 | `layers:StrictNoticeScan.test_nvidia_copyright_notice_is_not_silently_waived`; `layers:StrictNoticeScan.test_second_nvidia_notice_is_listed_as_a_finding` |
+| unknown-notice-scan | 3 | `layers:KernelOssHeaders.test_kernel_source_location_does_not_waive_unknown_nvidia_notices`; `layers:StrictNoticeScan.test_nvidia_copyright_notice_is_not_silently_waived` |
 | official-http-status | 2 | `layers:OfficialFetch.test_monthly_failure_cannot_be_a_success_report`; `layers:OfficialFetch.test_unsuccessful_head_status_cannot_be_healthy` |
 | official-content-length | 2 | `layers:OfficialFetch.test_monthly_size_drift_is_not_success`; `layers:OfficialFetch.test_wrong_length_is_media_drift` |
 | monthly-failure-status | 3 | `layers:AdditionalLayerFailures.test_monthly_checks_continue_after_a_missing_url`; `layers:OfficialFetch.test_monthly_failure_cannot_be_a_success_report` |
@@ -70,7 +72,19 @@ STATUS: DESIGN-ONLY, 2026-11-07. MEASURED: GPU-free Python fixtures and public-i
 | explicit-input-forward | 2 | `core:ForwardedInputs.test_builder_has_explicit_forward_to_pinned_input_server`; `core:ForwardedInputs.test_provisioning_can_only_forward_to_local_official_cache` |
 | scan-traversal-errors | 2 | `layers:ScanTraversalErrors.test_io_error_during_traversal_cannot_certify_a_clean_image`; `layers:ScanTraversalErrors.test_permission_denied_directory_cannot_certify_a_clean_image` |
 | scan-resource-bounds | 2 | `layers:AdditionalLayerFailures.test_scan_byte_budget_exhaustion_is_failure`; `layers:AdditionalLayerFailures.test_scan_file_budget_exhaustion_is_failure` |
+| official-disk-writer-digest | 2 | `layers:OfficialInputDisk.test_writer_refuses_changed_official_bytes`; `layers:OfficialInputDisk.test_writer_refuses_corrupt_second_payload` |
+| official-disk-reader-digest | 2 | `layers:OfficialInputDisk.test_reader_rejects_corrupt_guest_visible_payload`; `layers:OfficialInputDisk.test_reader_rejects_payload_with_correct_length_and_wrong_digest` |
+| official-disk-declared-size | 2 | `layers:OfficialInputDisk.test_device_index_cannot_inflate_declared_size`; `layers:OfficialInputDisk.test_device_index_cannot_shrink_declared_size` |
+| official-disk-existing-file | 2 | `layers:OfficialInputDisk.test_existing_disk_is_never_overwritten_or_unlinked`; `layers:OfficialInputDisk.test_existing_symlink_is_not_followed_or_deleted` |
+| official-guest-device-required | 2 | `layers:GuestOfficialTransport.test_another_block_device_cannot_be_read_as_official_media`; `layers:GuestOfficialTransport.test_missing_official_device_cannot_fall_back_to_network` |
+| official-disk-readonly | 2 | `core:FakeQemu.test_builder_input_disk_is_readonly_and_not_attached_to_open_assembly`; `core:ForwardedInputs.test_provisioning_official_input_disk_is_explicitly_readonly` |
+| official-http-isolation | 2 | `core:FakeQemu.test_open_assembly_http_cannot_serve_nvidia_payloads`; `core:FakeQemu.test_scratch_builder_http_cannot_serve_nvidia_payloads` |
+| kernel-source-classification | 2 | `layers:KernelOssHeaders.test_gpl_header_named_nvidia_is_open_source`; `layers:KernelOssHeaders.test_nvidia_kernel_kconfig_directory_is_not_a_vendor_runtime` |
 
-**MEASURED:** documentation freshness, release claims, private-reference, GPU-UUID and workflow-lint gates pass. The release ledger has 133 rows, zero errors and its three existing warnings. No baseline/debt file was changed. Pattern-based secret scanning of staged diffs checks private-key blocks, GitHub/AWS/Slack tokens and bearer literals; no matches were found. Formatting and diff-whitespace checks pass.
+**MEASURED:** documentation freshness, release claims, private-reference, GPU-UUID and workflow-lint gates pass ([exit records](gates.json)). The release ledger has 133 rows, zero errors and its three existing warnings. No baseline/debt file was changed. Pattern-based secret scanning of staged diffs checks private-key blocks, GitHub/AWS/Slack tokens and bearer literals; no matches were found. Formatting and diff-whitespace checks pass.
 
 **CODE READ / source inspection:** all 36 selected CUDA-sample Makefiles were checked for explicit static device/runtime linkage; CDP quicksort is the one selected Makefile explicitly linking `cudadevrt`. The dynamic-link audit and complete licence scan still have to run on actual guest outputs. LB1 tests use fake executables on PATH and fake guest transcripts, not a real QEMU machine.
+
+**MEASURED:** [kernel_headers_audit.json](kernel_headers_audit.json) records the complete pinned Ubuntu main header-package inspection: 14 initial classifier findings, zero after recognizing installed GPL source namespaces and standard Linux SPDX annotations, with all 63 copyright notices retained. This is an input-package audit, not a full image scan. Vendor runtime payloads and undocumented notices still fail in kernel source paths.
+
+**CODE READ:** official installer/wheel bytes travel on a transient, read-only raw data disk, not the NoCloud seed ISO or HTTP allowlist. Host writing and guest reading both verify pins; normal and exceptional context exits remove the data disk. Tests use bounded regular-file/device fixtures and fake QEMU, so Linux virtio block-device discovery and Slirp transport still need a real coordinator boot. Every mutation run starts with both complete image-test suites; per-mutant selection then runs relevant classes or known independent killers to bound CPU cost, with the same two-assertion/no-errors rule.

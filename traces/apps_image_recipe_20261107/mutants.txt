@@ -16,7 +16,7 @@ ok open-nvidia-boundary: 2 assertion killers; 0 errors
 ok open-apt-components: 3 assertion killers; 0 errors
 ok open-scan-required: 5 assertion killers; 0 errors
 ok official-receipts-required: 2 assertion killers; 0 errors
-ok inventory-comparison: 5 assertion killers; 0 errors
+ok inventory-comparison: 3 assertion killers; 0 errors
 ok completion-marker: 3 assertion killers; 0 errors
 ok fresh-session-check: 2 assertion killers; 0 errors
 ok qemu-exit-status: 2 assertion killers; 0 errors
@@ -31,7 +31,7 @@ ok opencl-nvidia-required: 2 assertion killers; 0 errors
 ok proprietary-header-scan: 5 assertion killers; 0 errors
 ok vendor-payload-path-scan: 7 assertion killers; 0 errors
 ok vendor-package-scan: 2 assertion killers; 0 errors
-ok unknown-notice-scan: 2 assertion killers; 0 errors
+ok unknown-notice-scan: 3 assertion killers; 0 errors
 ok official-http-status: 2 assertion killers; 0 errors
 ok official-content-length: 2 assertion killers; 0 errors
 ok monthly-failure-status: 3 assertion killers; 0 errors
@@ -50,4 +50,12 @@ ok forward-endpoint-validation: 2 assertion killers; 0 errors
 ok explicit-input-forward: 2 assertion killers; 0 errors
 ok scan-traversal-errors: 2 assertion killers; 0 errors
 ok scan-resource-bounds: 2 assertion killers; 0 errors
-52/52 mutants killed by at least two named assertion failures
+ok official-disk-writer-digest: 2 assertion killers; 0 errors
+ok official-disk-reader-digest: 2 assertion killers; 0 errors
+ok official-disk-declared-size: 2 assertion killers; 0 errors
+ok official-disk-existing-file: 2 assertion killers; 0 errors
+ok official-guest-device-required: 2 assertion killers; 0 errors
+ok official-disk-readonly: 2 assertion killers; 0 errors
+ok official-http-isolation: 2 assertion killers; 0 errors
+ok kernel-source-classification: 2 assertion killers; 0 errors
+60/60 mutants killed by at least two named assertion failures
