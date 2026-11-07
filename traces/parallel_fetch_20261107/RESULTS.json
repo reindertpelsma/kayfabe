@@ -13,8 +13,18 @@
       }
     ],
     "cases": 43,
+    "ci_verification": {
+      "date": "2026-11-07",
+      "head_revision": "39127e25b15bd11b39c20828e9a12486cc478772",
+      "run_id": 42388976539,
+      "run_report_mutations_step": "success",
+      "setup_cache_mutations_step": "success",
+      "timeout_or_two_killer_rule_changed": false,
+      "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/42388976539"
+    },
+    "local_status": "UNVERIFIED",
     "source": "scripts/ci/setup_cache_mutants.py",
-    "status": "UNVERIFIED",
+    "status": "PASS_IN_CI",
     "timeout_or_pass_rule_changed": false
   },
   "fetch_mutations": {
@@ -218,6 +228,15 @@
     ]
   },
   "gates": {
+    "claim_ledger_followup": {
+      "baseline_changed": false,
+      "command": "python3 scripts/ci/debt.py claims",
+      "date": "2026-11-07",
+      "existing_debt": 3749,
+      "local_run": "J4-followup-claims-after",
+      "new": 0,
+      "resolved": 0
+    },
     "diff_check": "PASS",
     "doc_freshness": "PASS: checked=207 existing-debt=0 new=0",
     "no_gpu_uuids": "PASS: files=179 baselined=179 new=0 stale=0",

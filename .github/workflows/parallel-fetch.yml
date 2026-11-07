@@ -8,6 +8,7 @@ on:
       - 'scripts/ci/vast_setup.py'
       - 'scripts/ci/test_vast_setup_cache.py'
       - 'scripts/bench/box/*fetch_bench_data.sh'
+      - 'docs/design/V3_PARALLEL_FETCH.md'
       - '.github/workflows/parallel-fetch.yml'
   pull_request:
     paths:
@@ -16,6 +17,7 @@ on:
       - 'scripts/ci/vast_setup.py'
       - 'scripts/ci/test_vast_setup_cache.py'
       - 'scripts/bench/box/*fetch_bench_data.sh'
+      - 'docs/design/V3_PARALLEL_FETCH.md'
       - '.github/workflows/parallel-fetch.yml'
   workflow_dispatch:
 
@@ -30,6 +32,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Claim-ledger gate (measurement claims name their run)
+        run: nice -n 19 python3 scripts/ci/debt.py claims
       - name: Local HTTP transfers, killed-run resume and pinned integrations
         run: nice -n 19 python3 -I -m unittest discover -s scripts/ci -p 'test_kf_fetch*.py'
       - name: Existing setup-cache contracts

@@ -142,11 +142,19 @@ counts and named mutation killers are in
 [the local verification record](../../traces/parallel_fetch_20261107/RESULTS.json).
 No Vast download rate was measured.
 
-MEASURED: the broader, unchanged `scripts/ci/setup_cache_mutants.py` did not finish
-locally. Its first attempt hit the existing 45-second `base_env` baseline timeout;
-one isolated retry hit the existing 45-second `readiness` baseline timeout. No
-mutant result for that full legacy harness is claimed, and no timeout/pass rule
-was changed. Its completion remains a CI/coordinator verification item.
+MEASURED, J4 local attempts `J4-existing-mutants` and `J4-existing-mutants-retry`,
+2026-11-07 (outcomes in the local verification record above): the unchanged
+`scripts/ci/setup_cache_mutants.py` stopped at its existing 45-second `base_env`
+baseline limit, then at the existing 45-second `readiness` limit on the retry.
+Those local attempts establish no full legacy mutation result; no timeout or
+pass rule was changed.
+
+MEASURED, GitHub Actions run
+[42388976539](https://github.com/reindertpelsma/kayfabe/actions/runs/42388976539),
+2026-11-07 at commit `39127e25b15bd11b39c20828e9a12486cc478772`: the full
+setup-cache mutation step and the run-report mutation step completed successfully.
+That CI run qualifies those harnesses at that revision; the named local timeout
+attempts remain separate observations.
 
 DESIGN INTENT: `.github/workflows/parallel-fetch.yml` runs the local HTTP tests,
 existing setup-cache contracts and mutation harness. It needs no GPU, VM,
