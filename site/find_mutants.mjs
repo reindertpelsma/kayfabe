@@ -32,6 +32,18 @@ const MUTANTS = [
   ['arm selectable', "el('input', { type: 'radio', name, value: id, disabled: true }),", "el('input', { type: 'radio', name, value: id }),"],
   ['other-guest FAIL shown as fail', "latest.result === 'UNATTRIBUTED' && latest.verdict === 'FAIL'", 'false'],
   ['filters lost from links', "el('a', { href: page('find', keep(e.name)) }, e.name),", "el('a', { href: page('find', { gpu: e.name }) }, e.name),"],
+  // Run report, session, stats and nearest subruns (contract of 2026-11-07).
+  ['log button accepts any origin', "href: want && log.url === want ? want : '', log };", "href: log.url, log };"],
+  ['failures not listed first', 'rank(a.t.result) - rank(b.t.result) || a.i - b.i', 'a.i - b.i'],
+  ['viewport row drawn on the run page', "      (r) => isObj(r) && text(r.name) && finite(r.value) !== null && !/spec\\s*view/i.test(text(r.name) + ' ' + text(r.suite)),\n    );\n    const head = 'Performance numbers';", "      (r) => isObj(r) && text(r.name) && finite(r.value) !== null,\n    );\n    const head = 'Performance numbers';"],
+  ['viewport row drawn in the stats', "        (r) => isObj(r) && text(r.name) && finite(r.value) !== null && !/spec\\s*view/i.test(text(r.name) + ' ' + text(r.suite)),\n      ),\n    };", "        (r) => isObj(r) && text(r.name) && finite(r.value) !== null,\n      ),\n    };"],
+  ['subrun rows not filtered', 'const own = (rows) => arr(rows).filter((r) => isObj(r) && r.sub === s.sub);', 'const own = (rows) => arr(rows).filter((r) => isObj(r));'],
+  ['relaxed subrun called same', "'different ' + relaxLabel(r.dim),", "'same ' + relaxLabel(r.dim),"],
+  ['relax list unvalidated', 'return list.every((d) => RELAX_DEFAULT.includes(d)) && new Set(list).size === list.length ? list : RELAX_DEFAULT;', 'return list;'],
+  ['relax not sent to the API', "if (f.relaxGiven) q.set('relax', f.relax.length ? f.relax.join(',') : 'none');", ''],
+  ['stats sort unvalidated', "sort: SORTS[query.get('sort')] ? query.get('sort') : null,", "sort: query.get('sort'),"],
+  ['unknown result drawn as pass', 'if (VERDICTS.has(result)) return verdict(result, false);\n    if (result === \'REFUSED\')', 'if (result) return verdict(\'PASS\', false);\n    if (result === \'REFUSED\')'],
+  ['missing report drawn as empty table', "if (!isObj(report))\n      return section(head, scope + '-tests', emptyNote('Not measured yet: this run has no stored report.'));", ''],
 ];
 
 const selected = process.argv.slice(2);

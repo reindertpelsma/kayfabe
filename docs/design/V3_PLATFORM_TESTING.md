@@ -337,6 +337,50 @@ mode serves every die of the name table for both OSes and the tier and community
 (a tier together with community is not in the fixture); live mode asks only the configured API
 origin and the same-origin static files, without credentials.
 
+## 9b. Site redesign, run, session and stats pages (Built: `site/`, 2026-11-07)
+
+Static pages only; no Worker change. The look: one system-font stylesheet with light and dark
+tokens (`prefers-color-scheme`, plus a `data-theme` override that a button in the header sets and
+keeps in this browser only), a header menu that is a `<details>` disclosure (open without
+JavaScript, collapsed below 48 rem by `site.js`), status chips that carry a glyph as well as a
+colour, tables that scroll inside their own frame, and a print stylesheet. `site/test_style.py`
+checks the colour pairs of both themes against WCAG AA and that nothing loads from the network.
+The portable build and the "no status URL, no analytics" rules are untouched.
+
+Pages added or changed, all reading the report contract (`report` and `log` on
+`/v1/ci/runs/<id>`, `/v1/ci/stats`, `/v1/ci/subruns`; the Worker side is built by another branch):
+
+- `/status/run/?id=`: a summary block (verdict, tier, revision, date, duration, die, platform) with
+  **Full log**, **Download report.json**, host-session and commit links; then performance numbers
+  (value, unit, direction, ratio to the same-box reference, in words), tests (counts per suite,
+  FAIL first, filter by result), applications, the Windows gate block, stages with durations, and the
+  raw details closed. A button links only `<configured log origin>/<run id>/log.txt` (or the
+  `report.json` beside it); any other `log.url` is not linked.
+- `/status/session/?id=`: the host session: header, a table of subruns (kind, guest driver,
+  result, counts, duration, byte range in the log), then one section per subrun filtered by `sub`.
+  The route is a query string because the site is static; a path segment cannot carry a run id.
+- `/status/stats/`: one sortable table per die and host driver with pass counts and the numbers
+  behind each row; die, tier, driver, sort and direction are URL parameters.
+- `/status/find/`: host driver, guest driver and commit fields, and a **Closeness** control (an
+  ordered list of the differences that may be accepted, in the URL as `relax=`, `none` for exact
+  only). When nothing matches exactly, or when a commit is given, the nearest subruns are listed with
+  chips built from the API's `match` object ("same guest OS", "different commit revision (wanted
+  X, found Y)").
+- Every run row on the matrix, die, commit, stats, find and nearest lists links to its session.
+
+Absent data is shown as an empty state with the reason ("Not measured yet: the application matrix
+stage does not exist in CI yet"); the pages never compute or estimate a number, and a
+viewport-benchmark row is dropped even if a report carried one. The committed fixture does not carry
+reports, subruns or stats yet, so fixture mode shows those empty states; the DOM tests build the
+pages against `site/report_fixture.mjs`, a synthetic extension in the contract's shape.
+
+**Assumed shapes (the contract is silent; INFERRED, to be reconciled with the Worker's answer):**
+`/v1/ci/stats` returns `{stats: [{die, family, tier, host_driver, run_id, commit, ended_at, verdict,
+pass, fail, skip, perf: [...]}]}`; `/v1/ci/subruns` returns `{subruns: [{run_id, sub, kind, os, die,
+guest_driver, host_driver, cpu_vendor, commit, ended_at, verdict, counts, match}]}`; the session's CPU
+vendor comes from `host.cpu_vendor` or `report.cpu_vendor`; `relax` dimension names are `commit,
+cpu, host_driver, guest_driver, die_family, os, die_any`.
+
 ## 10. Enrolled hosts (post-v1; design only, nothing built)
 
 **Owner ruling (2026-11-04).**
