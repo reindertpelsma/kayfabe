@@ -51,7 +51,7 @@
     button.className = 'theme-toggle';
     const label = () => {
       const now = root.getAttribute('data-theme') || 'auto';
-      button.textContent = '\u25D0 ' + now;
+      button.textContent = 'Theme: ' + now;
       button.setAttribute('aria-label', 'Colour theme: ' + now + '. Activate to change.');
     };
     button.addEventListener('click', () => {

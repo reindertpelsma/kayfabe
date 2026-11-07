@@ -446,7 +446,7 @@ main.kf-status section > h2 {
 }
 .kf-summary-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(11rem, 100%), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(8.5rem, 100%), 1fr));
   gap: 0.9rem 1.25rem;
   margin: 1rem 0 0;
 }
