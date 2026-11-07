@@ -1,0 +1,289 @@
+{
+  "base_revision": "7ab64b9095c3fdd774b820be8e11aaa7bbd7068e",
+  "date": "2026-11-07",
+  "existing_cache_mutation_harness": {
+    "attempts": [
+      {
+        "baseline": "base_env",
+        "result": "timeout after unchanged 45-second limit"
+      },
+      {
+        "baseline": "readiness",
+        "result": "timeout after unchanged 45-second limit"
+      }
+    ],
+    "cases": 43,
+    "ci_verification": {
+      "date": "2026-11-07",
+      "head_revision": "39127e25b15bd11b39c20828e9a12486cc478772",
+      "run_id": 42388976539,
+      "run_report_mutations_step": "success",
+      "setup_cache_mutations_step": "success",
+      "timeout_or_two_killer_rule_changed": false,
+      "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/42388976539"
+    },
+    "local_status": "UNVERIFIED",
+    "source": "scripts/ci/setup_cache_mutants.py",
+    "status": "PASS_IN_CI",
+    "timeout_or_pass_rule_changed": false
+  },
+  "fetch_mutations": {
+    "baseline": {
+      "killers": [],
+      "tests": 65
+    },
+    "mutants": [
+      {
+        "killers": [
+          "test_kf_fetch.FetchTests.test_larger_pinned_size_is_refused_before_allocation",
+          "test_kf_fetch.FetchTests.test_smaller_pinned_size_is_refused_before_allocation"
+        ],
+        "mutant": "pinned-size-before-allocation-ignored",
+        "tests": 2
+      },
+      {
+        "killers": [
+          "test_kf_fetch_integration.SetupIntegration.test_default_uses_eight_streams_and_pinned_bytes",
+          "test_kf_fetch_integration.SetupIntegration.test_stream_override_is_honoured"
+        ],
+        "mutant": "setup-pinned-size-not-passed",
+        "tests": 2
+      },
+      {
+        "killers": [
+          "test_kf_fetch_integration.BenchIntegration.test_excess_streams_is_refused_before_mint",
+          "test_kf_fetch_integration.BenchIntegration.test_invalid_zero_streams_is_refused_before_mint"
+        ],
+        "mutant": "media-stream-validation-skipped",
+        "tests": 2
+      },
+      {
+        "killers": [
+          "test_kf_fetch.FetchTests.test_redirect_origin_500_does_not_spend_more_mints",
+          "test_kf_fetch.FetchTests.test_redirect_origin_reset_does_not_spend_more_mints"
+        ],
+        "mutant": "redirect-origin-retried",
+        "tests": 2
+      },
+      {
+        "killers": [
+          "test_kf_fetch.FetchTests.test_corrupt_chunk_is_bad_hash_and_retained",
+          "test_kf_fetch.FetchTests.test_wrong_pin_is_bad_hash_and_retained"
+        ],
+        "mutant": "final-pin-ignored",
+        "tests": 2
+      },
+      {
+        "killers": [
+          "test_kf_fetch.FetchTests.test_flaky_500_then_reset_retries_each_chunk",
+          "test_kf_fetch.FetchTests.test_reset_retries_without_duplicating_output"
+        ],
+        "mutant": "retries-disabled",
+        "tests": 2
+      },
+      {
+        "killers": [
+          "test_kf_fetch.FetchTests.test_wrong_content_range_is_size_failure",
+          "test_kf_fetch.FetchTests.test_wrong_content_range_single_stream"
+        ],
+        "mutant": "range-offset-check-removed",
+        "tests": 2
+      },
+      {
+        "killers": [
+          "test_kf_fetch.FetchTests.test_no_range_falls_back_to_one_stream",
+          "test_kf_fetch.FetchTests.test_no_range_never_requests_chunk_offsets"
+        ],
+        "mutant": "fallback-keeps-parallel-stream-count",
+        "tests": 2
+      },
+      {
+        "killers": [
+          "test_kf_fetch.FetchTests.test_redirect_chain_refused",
+          "test_kf_fetch.FetchTests.test_redirect_requires_opt_in"
+        ],
+        "mutant": "redirects-implicitly-followed",
+        "tests": 2
+      },
+      {
+        "killers": [
+          "test_kf_fetch.FetchTests.test_expiring_url_refresh_is_shared_by_workers",
+          "test_kf_fetch.FetchTests.test_expiring_url_refresh_single_stream"
+        ],
+        "mutant": "expiry-refresh-disabled",
+        "tests": 2
+      },
+      {
+        "killers": [
+          "test_kf_fetch.FetchTests.test_refresh_budget_is_two",
+          "test_kf_fetch.FetchTests.test_refresh_budget_single_stream"
+        ],
+        "mutant": "expiry-budget-raised",
+        "tests": 2
+      },
+      {
+        "killers": [
+          "test_kf_fetch.FetchTests.test_stdin_url_and_origin_headers_never_forwarded",
+          "test_kf_fetch.FetchTests.test_worker_credentials_stay_on_origin_during_refresh"
+        ],
+        "mutant": "origin-credentials-forwarded",
+        "tests": 2
+      },
+      {
+        "killers": [
+          "test_kf_fetch.FetchTests.test_resume_partly_truncated_chunk_is_refetched",
+          "test_kf_fetch.FetchTests.test_resume_truncated_file_rechecks_bounds"
+        ],
+        "mutant": "resume-bounds-ignored",
+        "tests": 2
+      },
+      {
+        "killers": [
+          "test_kf_fetch.FetchTests.test_resume_local_corruption_is_refetched",
+          "test_kf_fetch.FetchTests.test_resume_second_chunk_corruption_is_refetched"
+        ],
+        "mutant": "resume-content-check-ignored",
+        "tests": 2
+      },
+      {
+        "killers": [
+          "test_kf_fetch.FetchTests.test_etag_change_restarts",
+          "test_kf_fetch.FetchTests.test_etag_disappearing_restarts"
+        ],
+        "mutant": "resume-etag-ignored",
+        "tests": 2
+      },
+      {
+        "killers": [
+          "test_kf_fetch.FetchTests.test_size_change_from_smaller_object_restarts",
+          "test_kf_fetch.FetchTests.test_size_change_restarts"
+        ],
+        "mutant": "resume-size-ignored",
+        "tests": 2
+      },
+      {
+        "killers": [
+          "test_kf_fetch.FetchTests.test_default_state_path",
+          "test_kf_fetch.FetchTests.test_resume_after_sigkill"
+        ],
+        "mutant": "completion-not-persisted",
+        "tests": 2
+      },
+      {
+        "killers": [
+          "test_kf_fetch.FetchTests.test_parallel_ranges_and_final_pin",
+          "test_kf_fetch.FetchTests.test_single_stream_ranges"
+        ],
+        "mutant": "chunk-offset-is-zero",
+        "tests": 2
+      },
+      {
+        "killers": [
+          "test_kf_fetch.FetchTests.test_one_byte_pwrite_keeps_all_bytes",
+          "test_kf_fetch.FetchTests.test_partial_pwrite_advances_offset"
+        ],
+        "mutant": "short-pwrite-truncates-buffer",
+        "tests": 2
+      },
+      {
+        "killers": [
+          "test_kf_fetch.FetchTests.test_parallel_ranges_and_final_pin",
+          "test_kf_fetch.FetchTests.test_single_stream_ranges"
+        ],
+        "mutant": "signed-url-logged",
+        "tests": 2
+      },
+      {
+        "killers": [
+          "test_kf_fetch_integration.SetupIntegration.test_default_uses_eight_streams_and_pinned_bytes",
+          "test_kf_fetch_integration.SetupIntegration.test_stream_override_is_honoured"
+        ],
+        "mutant": "setup-parallel-path-disabled",
+        "tests": 2
+      },
+      {
+        "killers": [
+          "test_kf_fetch_integration.SetupIntegration.test_successful_fetch_process_with_wrong_hash_is_refused",
+          "test_kf_fetch_integration.SetupIntegration.test_successful_fetch_process_with_wrong_size_is_refused"
+        ],
+        "mutant": "setup-size-and-pin-check-removed",
+        "tests": 2
+      },
+      {
+        "killers": [
+          "test_kf_fetch_integration.BenchIntegration.test_file_mode_parallel_default_verifies_and_renames",
+          "test_kf_fetch_integration.BenchIntegration.test_file_mode_stream_override_reaches_fetcher"
+        ],
+        "mutant": "media-parallel-path-disabled",
+        "tests": 2
+      },
+      {
+        "killers": [
+          "test_kf_fetch_integration.BenchIntegration.test_file_mode_corrupt_chunk_is_exit_three_without_retry",
+          "test_kf_fetch_integration.BenchIntegration.test_file_mode_hash_failure_is_exit_three_without_retry"
+        ],
+        "mutant": "media-hash-failure-retried",
+        "tests": 2
+      }
+    ]
+  },
+  "gates": {
+    "claim_ledger_followup": {
+      "baseline_changed": false,
+      "command": "python3 scripts/ci/debt.py claims",
+      "date": "2026-11-07",
+      "existing_debt": 3749,
+      "local_run": "J4-followup-claims-after",
+      "new": 0,
+      "resolved": 0
+    },
+    "diff_check": "PASS",
+    "doc_freshness": "PASS: checked=207 existing-debt=0 new=0",
+    "no_gpu_uuids": "PASS: files=179 baselined=179 new=0 stale=0",
+    "no_private_refs": "PASS",
+    "release_claims": "PASS: 133 claims, 0 errors, 3 existing warnings",
+    "secret_and_public_address_scan": "PASS using existing vast_evidence.Scanner and ipaddress"
+  },
+  "red_before_fixes": {
+    "initial_fetch_tests": {
+      "failures": 31,
+      "tests": 34
+    },
+    "invalid_stream_config": {
+      "errors": 2,
+      "tests": 2
+    },
+    "pinned_size_passthrough": {
+      "errors": 1,
+      "tests": 1
+    },
+    "redirect_origin_retry": {
+      "failures": 2,
+      "tests": 2
+    }
+  },
+  "schema": "kayfabe-fetch-local/1",
+  "scope": "MEASURED: GPU-free local HTTP fixtures only; no Worker/Cloudflare/R2/Vast access",
+  "source_sha256": {
+    "scripts/bench/box/fetch_bench_data.sh": "190fb5f0834fc539a334044dc70606ec4005bf94dc854b33062399ad65b7f447",
+    "scripts/bench/box/test_fetch_bench_data.sh": "0ef946f7bf2e0e77691364b255ebc1eb1a0ee9afbb4583e5fe7d669aac19998d",
+    "scripts/ci/kf_fetch.py": "ea2663162e69141216050ab9be275b4bee1adaf35163dd270f69ee2925433d93",
+    "scripts/ci/kf_fetch_mutants.py": "14098aa28b903516b34c8d94683bf2256ac79d9c5cf43696b35819af3be97924",
+    "scripts/ci/test_kf_fetch.py": "95af2c4871aeb8875ff41e86dd7b1b5cc8fd791e6695bf6c7b45747fb5e6e1bb",
+    "scripts/ci/test_kf_fetch_integration.py": "8684c501c4678640abe588e684ca57e9f53e1b01af93ffebe9de33ec08d98389",
+    "scripts/ci/test_vast_setup_cache.py": "4505ed8f231b7485e0d75e5f73b399a782b46ccd3d3f616f1f40d61a14fce24b",
+    "scripts/ci/vast_setup.py": "08227c1c6b7da7e7026fbfaee86b1b58b77ef73ab1e6ca256019a4b853da572b"
+  },
+  "tests": {
+    "existing_setup_after": 43,
+    "existing_setup_before": 43,
+    "fetch_and_integration": 65,
+    "legacy_bench_checks": 49,
+    "legacy_bench_failed": 0
+  },
+  "unmeasured": [
+    "Vast parallel throughput",
+    "live Worker/R2 compatibility",
+    "power-loss durability"
+  ]
+}
