@@ -7,7 +7,7 @@ only in git history and in the archives below. This PR does not rewrite history.
 
 ## What moved
 
-1976 bulk files of 61 `traces/` directories (294,237,348 bytes, 294.2 MB) were packed into one archive per directory:
+1976 bulk files of 61 `traces/` directories (294,237,348 bytes, 294.2 MB) were packed into one archive per directory (1974 of them, 294,196,628 bytes, leave the tree; two stay in the tree as well, see the table):
 61 archives, 151,555,822 bytes together. Each directory keeps its `README.md` (where it had one) and every small file,
 and gains `MANIFEST.tsv` (member path, bytes, sha256, one row per moved file) and `MOVED.md` (the archive name, size,
 sha256, URL and fetch command). `traces/EVIDENCE_ARCHIVE.tsv` is the machine-readable index (directory, archive bytes,
@@ -24,7 +24,8 @@ in `scripts/evidence/`. A "bulk" file is a tracked file under `traces/` that is 
 | the whole directory is read by a test or a generator through a constructed path (`die_coverage_20261104` by `scripts/site/coverage_from_traces.py`; `sweep_windows_20261021`, `sweep_ada_20261018`, `sweep_dies_20261018` by `scripts/bench/tests/` and `scripts/ci/payload_mutants.py`; `blackwell_hw_20261103` by `kf-disp` and `kf-rm` tests; `w304_confirm` by `scripts/bench/relaxation_inert_gate_selftest.sh`) | 83 | 7,686,155 |
 | carries a GPU board UUID in plain text or inside a compressed member (`scripts/ci/no_gpu_uuids.py` reads raw bytes only, so it cannot see the compressed ones): not copied to a second public place; the owner decides whether to scrub them first | 106 | 36,361,107 |
 | a loose file directly under `traces/` (there is no directory to archive it in): `windows_on_kayfabe.png` | 1 | 2,176,762 |
-| **moved** | **1976** | **294,237,348** |
+| archived but also kept in the tree, because a document cites them by exact path (`docs/archive/guest_ram_pin_release.md` cites `traces/boots/w291/w291_2a_merge.log.gz`; `docs/archive/w753_route_k_phase2_prereg.md` cites `traces/w753_route_k/w753_run.log.gz`): found by a literal search of the tree after merging `next` on 2026-11-07, which the first search had missed (a closing `]` directly after the path); they still have a manifest row and an archive member, so the archives are unchanged | 2 | 40,720 |
+| **removed from the tree** | **1974** | **294,196,628** |
 
 How a file is classified is re-derivable: the rule is the text above; the lists are `MANIFEST.tsv` (moved) and the
 tree (stays). The searches were lexical (a path string in a tracked text file). A reader that builds a path from
