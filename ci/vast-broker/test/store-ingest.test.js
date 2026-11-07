@@ -339,7 +339,16 @@ const hungDb = () => ({
   },
   batch: never,
 });
-const settle = () => new Promise((resolve) => setTimeout(resolve, 30));
+// Wait until the code under test has reached a state; a fixed 30 ms is not enough on a loaded CI
+// runner (the same one-tick assumption that made the evidence cap test flaky, #279).
+async function until(condition, what, ms = 20000) {
+  const end = Date.now() + ms;
+  for (;;) {
+    if (await condition()) return;
+    if (Date.now() > end) throw new Error('timed out waiting for ' + what);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+}
 
 test('ingest: a tree key that never returns counts its attempt and gives up', async () => {
   const ledger = new Ledger(new MemoryStorage());
@@ -356,7 +365,7 @@ test('ingest: a tree key that never returns counts its attempt and gives up', as
   // The attempt is saved before the computation starts.
   const other = 'e'.repeat(40);
   treeKeyFor({ ledger, sha: other, now: clock, treeKey: never, budgetMs: 300 });
-  await settle();
+  await until(async () => (await ledger.get('treekey:' + other))?.attempts === 1, 'the attempt');
   assert.equal((await ledger.get('treekey:' + other)).attempts, 1);
 });
 
@@ -380,7 +389,7 @@ async function queued(db) {
 test('ingest: the store tick counts its attempt before any D1 call', async () => {
   const { ledger, env } = await queued(hungDb());
   storeTick({ ledger, env, now: clock });
-  await settle();
+  await until(async () => (await ledger.get('store:5-1:0')).attempts === 1, 'the counted attempt');
   assert.equal((await ledger.get('store:5-1:0')).attempts, 1);
 });
 
@@ -413,7 +422,7 @@ test('ingest: a hung store never blocks cleanup expiry', async () => {
   await h.storage.put('store:999-1:0', { attempts: 0, inflight: true });
   await h.storage.put('treekey:' + sha, { key: 'f'.repeat(64), kind: 'tree', at: clock });
   h.service.sweep();
-  await settle();
+  await until(async () => (await h.storage.get('ended:999-1')) === undefined, 'the expiry');
   assert.equal(await h.storage.get('ended:999-1'), undefined, 'expired before the store work');
 });
 
@@ -423,14 +432,17 @@ test(
   async () => {
     const { h } = await harness();
     const inner = h.cloud.fetch;
-    let hang = false;
+    let hang = false,
+      hung = 0;
     h.cloud.fetch = (input, init) =>
-      hang && new URL(String(input)).hostname === 'console.vast.ai' ? never() : inner(input, init);
+      hang && new URL(String(input)).hostname === 'console.vast.ai'
+        ? (hung++, never())
+        : inner(input, init);
     h.restart();
     assert.equal((await h.call()).status, 200);
     hang = true;
     h.service.sweep(); // holds the serial queue on a provider call that never returns
-    await settle();
+    await until(() => hung > 0, 'the sweep to reach its hung provider call');
     const answer = await check(h);
     assert.equal(answer.status, 200);
     await h.service.storeTrees();
