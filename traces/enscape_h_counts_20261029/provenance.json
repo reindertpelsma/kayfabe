@@ -1,0 +1,120 @@
+{
+  "raw_sources_are_private": true,
+  "files": [
+    {
+      "private_source_alias": "runtime-log",
+      "bytes": 58813887,
+      "sha256": "71e8154fed8fc40eae7360af7f43874e5842af147d22a0621864e7f4c5697099"
+    },
+    {
+      "private_source_alias": "runtime-command",
+      "bytes": 3948,
+      "sha256": "fa53c19eb69856d14411504d5ec21283c264b64fb92e189677bcb1e165cf9448"
+    },
+    {
+      "private_source_alias": "counter-analysis",
+      "bytes": 3452,
+      "sha256": "96bdc7180134c8c44b3416a9e19a8699646e2de972ccd325e084d28ce9bdbf5f"
+    },
+    {
+      "private_source_alias": "first-complete-H-row",
+      "bytes": 451,
+      "sha256": "4a8bfedc07cee4cf05aa9980380e747fc93625ca400766e2d7fe622d02e695a3"
+    },
+    {
+      "private_source_alias": "first-observed-rule-marker",
+      "bytes": 235,
+      "sha256": "979d0382678625eaecc998566bf7585fd112b83164964d595f22b606edd7966b"
+    },
+    {
+      "private_source_alias": "capture-handoff-marker",
+      "bytes": 183,
+      "sha256": "112f6bd604f33cf3e50a9b5e966e701fb8eaa1b2774118bc97a9270bd693bbf9"
+    },
+    {
+      "private_source_alias": "launch-frontier",
+      "bytes": 464,
+      "sha256": "5e1b59ba58a6f9dc36a73d5e5f719b4333c3d2f683f68c814b982a2f54ee3031"
+    },
+    {
+      "private_source_alias": "end-frontier",
+      "bytes": 292,
+      "sha256": "611819aa345e84993ec318f1aec05a4e0bdb8c2b56cc12c4cbf32412163059a9"
+    },
+    {
+      "private_source_alias": "root-identity-proof",
+      "bytes": 677,
+      "sha256": "6f0afc54413c2ba1a9c18ef875e45633d54ecbb08771955348650b3db6d982e1"
+    },
+    {
+      "private_source_alias": "root-tree-cutoff-response",
+      "bytes": 833,
+      "sha256": "90ac3f22f89e88c4e3115061fc5480e893223dae97fab3c54e35da09901a4fcc"
+    },
+    {
+      "private_source_alias": "root-tree-cutoff",
+      "bytes": 891,
+      "sha256": "39f915826fc8538f752ee64a98fa78041ac6f36b8e71885a99352330008f35f1"
+    },
+    {
+      "private_source_alias": "failure-trace-archive",
+      "bytes": 70513549,
+      "sha256": "dc0e324b8b02391543b43acf477266777a8c1e402964f3e14b5f89dc4f7a501c"
+    },
+    {
+      "private_source_alias": "final-metadata-archive",
+      "bytes": 4590652,
+      "sha256": "cd66dc220aada1c7600606fa2d5fcf80ff71a8b459075a58ab638f5ebb7d5192"
+    },
+    {
+      "private_source_alias": "final-outcome",
+      "bytes": 1174,
+      "sha256": "91e4eb28b03324817fbd307230556357e72b7bd0e8d2c62e7cd746562a483ea2"
+    },
+    {
+      "private_source_alias": "trace-export-response",
+      "bytes": 941,
+      "sha256": "2e514c200599f9c188ec5e90eb60c483739e2e9a20fe29e3311a9c0a1bdfdeae"
+    },
+    {
+      "private_source_alias": "final-metadata-response",
+      "bytes": 1145,
+      "sha256": "df3d08654fdd02a0dbd72b96b992abd6a3cae51e1f9f0e5b473117765f7493be"
+    },
+    {
+      "private_source_alias": "runtime-signal-masks",
+      "bytes": 7203,
+      "sha256": "5be3d7a576607b54fd19bab3933adc93d3c48f6d056324e96777958b2a201722"
+    },
+    {
+      "private_source_alias": "session-exit",
+      "bytes": 792,
+      "sha256": "2796657dd51335fd78554b21d99f6d488df0c026145b1ed583ee9b0ff95c3415"
+    },
+    {
+      "private_source_alias": "post-cleanup",
+      "bytes": 328,
+      "sha256": "5a27e3ef9c7e4a723c3a68ed89e8c2f3ab06145dff58d60faaf5a714a52516a0"
+    },
+    {
+      "private_source_alias": "runtime-controller",
+      "bytes": 7023,
+      "sha256": "38ce03ebc0237e6d9a3f097a0d04dd7d87d95e205dee94f219c6906d380c103b"
+    },
+    {
+      "private_source_alias": "execution-amendment",
+      "bytes": 1372,
+      "sha256": "ae09b66814d9230a7a11b1e2e853f89a7c1721dfb9d97c69c2c7c1287a1e8592"
+    },
+    {
+      "private_source_alias": "source-staging",
+      "bytes": 244,
+      "sha256": "b22302e2cac30274e378504f0df3d5ef935eabc9af5462c42d0142a3aaaa0843"
+    },
+    {
+      "private_source_alias": "rust-line-proof",
+      "bytes": 864,
+      "sha256": "fba8a66688873d516ffeae866c83e16a82d777e592d8c61c5acbb25549e2adc6"
+    }
+  ]
+}
