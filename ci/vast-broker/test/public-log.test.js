@@ -25,7 +25,7 @@ test('nothing but secrets changes: addresses, URLs, UUIDs, hashes, ANSI and unic
   const text = [
     'host 203.0.113.7 and 2001:db8::1 mac 52:54:00:12:34:56',
     'url https://example.test/a/b?x=1&y=2#frag and file:///tmp/x',
-    'GPU-3f2504e0-4f89-41d3-9a0c-0305e82c3301 serial=ABC123DEF456',
+    'GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001 serial=ABC123DEF456',
     'commit ' + 'a'.repeat(40) + ' tree ' + 'b'.repeat(64),
     '\x1b[31mred\x1b[0m tab\tbell\x07 café ☃ \u{1f600}',
     'name_with_a_very_long_snake_case_test_identifier_that_is_over_32_characters --- FAILED',

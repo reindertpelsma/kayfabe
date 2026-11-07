@@ -438,7 +438,7 @@ test(
   { skip: d1Skip },
   async () => {
     const keep =
-      'KEEP 203.0.113.9 GPU-3f2504e0-4f89-41d3-9a0c-0305e82c3301 \u001b[31mred\u001b[0m café ☃';
+      'KEEP 203.0.113.9 GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001 \u001b[31mred\u001b[0m café ☃';
     const { bucket } = await runWith([keep + '\n', ...Object.values(SHAPES).map((s) => s + '\n')]);
     const log = bucket.objects.get('vast-123-1-0/log.txt');
     for (const [name, pattern] of Object.entries(PIECES)) assert.doesNotMatch(log, pattern, name);

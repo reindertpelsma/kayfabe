@@ -273,7 +273,7 @@ test('cleanClaimsReport: SPECviewperf, tokens, URLs and identifiers never surviv
     {
       sub: 'host',
       suite: 'raw_suite',
-      name: '3f2504e0-4f89-41d3-9a0c-0305e82c3301',
+      name: 'fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001',
       result: 'PASS',
       ms: 1,
     },
@@ -706,7 +706,7 @@ test('gateway: the run token is checked statelessly (another rental, garbage, ta
 
 const LOG_LINES = [
   'KF_PAYLOAD_STAGE_START name=cuda_host\n',
-  'café host 203.0.113.9 GPU-3f2504e0-4f89-41d3-9a0c-0305e82c3301 commit ' + 'a'.repeat(40) + '\n',
+  'café host 203.0.113.9 GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001 commit ' + 'a'.repeat(40) + '\n',
   'KF_PAYLOAD_STAGE_END name=cuda_host rc=0 duration_ms=5\n',
   'KF_PAYLOAD_STAGE_START name=merge_bar\nlong line https://example.test/x?y=1\n',
   'KF_PAYLOAD_STAGE_END name=merge_bar rc=0 duration_ms=9\n',
@@ -769,7 +769,7 @@ test(
     // Whole: nothing but secrets changed.
     assert.ok(
       log.includes(
-        'café host 203.0.113.9 GPU-3f2504e0-4f89-41d3-9a0c-0305e82c3301 commit ' + 'a'.repeat(40),
+        'café host 203.0.113.9 GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001 commit ' + 'a'.repeat(40),
       ),
     );
     assert.ok(log.includes('long line https://example.test/x?y=1'));
