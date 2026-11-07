@@ -1,3 +1,4 @@
+import { RELEASE_MATRIX, hostProvidesDrivers } from './release-matrix.js';
 import { applyProfile, tierEnvironment, tierForClaims, familyOf, profileCaps } from './tier.js';
 // prettier-ignore
 import {planRelease,classifyLeg,releaseVerdict,wantsRerun} from './release.js';
@@ -31,7 +32,7 @@ import {allowedWorkflowRef} from './workflow-authority.js';
 import {mintBlob,checkBlobBudget} from './blobs.js';
 // prettier-ignore
 import {benchObject,benchBudget,benchCount,benchExpiry,benchUrl,benchRedirect} from './benchdata.js';
-import { offerPrice, providerId } from './policy.js';
+import { offerPrice, providerId, applyResourceProfile } from './policy.js';
 import { reportedProviderFault } from './provider-fault.js';
 // prettier-ignore
 import {EVIDENCE_MAX_BYTES,EVIDENCE_MAX_INFLIGHT,evidenceEnabled,evidenceLength,evidenceReservation,storeEvidence} from './evidence.js';
@@ -356,7 +357,8 @@ export function createService({
     if (record.ended === null) await cleanup(record, vast);
   }
   async function checkContract(record, instance, vast, cfg) {
-    const price = instance && offerPrice(instance, cfg);
+    applyResourceProfile(cfg, budgetClass(record), record.tier);
+    const price = instance && offerPrice(instance, cfg, budgetClass(record));
     const cap = profileCaps(cfg, budgetClass(record)).price;
     if (
       !price ||
@@ -424,7 +426,7 @@ export function createService({
     }
   }
   async function update(record, vast, github, cfg) {
-    applyProfile(cfg, budgetClass(record));
+    applyProfile(cfg, budgetClass(record), record.tier);
     lastReportBytes = cfg.reportBytes;
     if (record.ended !== null) return;
     clocks(record, cfg);
@@ -1125,7 +1127,7 @@ export function createService({
       refuse('BAD_REQUEST', 400);
     if (!allowedWorkflowRef(c, cfg, profile))
       refuse('UNAUTHORIZED', 401, undefined, 'identity:profile_workflow');
-    applyProfile(cfg, profile);
+    applyProfile(cfg, profile, tierForClaims(c, profile));
     if (path === '/availability') {
       await github.authorize(c);
       return json((await offers.evaluate(vast, cfg, ledger, profile)).view);
@@ -1273,6 +1275,13 @@ export function createService({
       );
       if (!evaluation.allowed.length) return null;
     }
+    if (leg?.releaseMatrix)
+      evaluation.allowed = evaluation.allowed.filter((o) =>
+        hostProvidesDrivers(
+          o.host_capabilities ?? RELEASE_MATRIX.host_capabilities.vast_kvm,
+          leg.releaseMatrix,
+        ),
+      );
     const chosen = await offers.select(evaluation, cfg, ledger, profile, preferences, {
         tierName,
         ...(leg?.die ? { die: leg.die } : {}),
@@ -1471,6 +1480,7 @@ export function createService({
           tierName,
           windowsRuns: leg?.windowsRuns ?? 1,
           stages: leg?.stages ?? [],
+          releaseMatrix: leg?.releaseMatrix,
         }),
         // Pass-through for the hostname-wide Access policy; the Worker never verifies Access.
         ...(env.BOX_ACCESS_ID && env.BOX_ACCESS_SECRET
@@ -1524,7 +1534,7 @@ export function createService({
   }
   function batchConfig(tierName) {
     const cfg = configuration(env);
-    applyProfile(cfg, tierName === 'large' ? 'release' : 'check');
+    applyProfile(cfg, tierName === 'large' ? 'release' : 'check', tierName);
     return cfg;
   }
   const tierDies = (cfg, tierName) =>
@@ -1617,7 +1627,7 @@ export function createService({
     await ledger.put('batch-seq', seq);
     const id = '8' + String(now()).padStart(15, '0') + String(seq % 1000).padStart(3, '0');
     const legs = [];
-    const leg = (family, die, windowsRuns) => {
+    const leg = (family, die, windowsRuns, releaseMatrix) => {
       const n = legs.length + 1;
       legs.push({
         seq: n,
@@ -1625,6 +1635,7 @@ export function createService({
         family,
         die,
         windowsRuns,
+        ...(releaseMatrix ? { releaseMatrix } : {}),
         state: 'PENDING',
         avoidMachines: [],
         avoidHosts: [],
@@ -1633,7 +1644,8 @@ export function createService({
     };
     if (request.tier === 'large') {
       for (const f of plan.families)
-        for (const c of f.cells) for (const l of c.legs) leg(f.family, c.die, l.windows_runs);
+        for (const c of f.cells)
+          for (const l of c.legs) leg(f.family, c.die, l.windows_runs, l.release_matrix);
     } else leg(request.die ? familyOf(request.die, cfg) : null, request.die ?? null, 1);
     const batch = {
       id,
@@ -1677,6 +1689,7 @@ export function createService({
         family: l.family,
         die: l.die,
         windows_runs: l.windowsRuns,
+        ...(l.releaseMatrix ? { release_matrix: l.releaseMatrix } : {}),
         state: l.state,
         verdict: l.outcome?.verdict ?? null,
         rerun_of: l.rerunOf ?? null,
@@ -1702,6 +1715,8 @@ export function createService({
   }
   async function tickBatch(batch, vast, github) {
     const cfg = batchConfig(batch.tier);
+    // The cron service starts with default settings; each batch must query/create with its own resources.
+    vast = new Vast(fetcher, cfg, env.VAST_API_KEY);
     // 1. Ended legs: classify once, then a fresh-box re-run for RETRY/UNATTRIBUTED if allowed.
     for (const l of [...batch.legs]) {
       if (l.state !== 'STARTED') continue;
@@ -1727,6 +1742,7 @@ export function createService({
           family: l.family,
           die: l.die,
           windowsRuns: l.windowsRuns,
+          ...(l.releaseMatrix ? { releaseMatrix: l.releaseMatrix } : {}),
           state: 'PENDING',
           // Review F10: a fresh box: not a machine any leg of this die used, the failed one
           // included (its machineId is set above), so two Windows runs stay on two machines.
@@ -1784,6 +1800,7 @@ export function createService({
             batch: batch.id,
             die: l.die ?? undefined,
             windowsRuns: l.windowsRuns,
+            releaseMatrix: l.releaseMatrix,
             stages: batch.stages,
             avoidMachines: l.avoidMachines,
             avoidHosts: l.avoidHosts,

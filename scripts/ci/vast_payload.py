@@ -4,6 +4,7 @@
 No provider/CI credentials or network clone machinery belongs here.
 """
 
+import base64
 import collections, json, os, re, select, shutil, signal, subprocess, sys, time
 from pathlib import Path
 
@@ -168,6 +169,52 @@ def windows_requested(environ):
     if value not in (None, "0", "1"):
         raise EvidenceError("preflight")
     return value != "0", "worker" if value is not None else "default"
+
+
+RELEASE_DRIVER_FIELDS = ("KF_HOST_DRIVER", "KF_LINUX_GUEST_DRIVER", "KF_WINDOWS_GUEST_DRIVER")
+
+
+def release_driver_environment(environ):
+    """Map per-leg driver selections, keeping the Windows media and its guest ABI distinct.
+
+    HOST_DRIVER is the existing host installer's selector; KF_HOST_DRIVER is the readiness
+    check's selector. Linux guest staging and new Windows media still need an executor.
+    """
+    names = (*RELEASE_DRIVER_FIELDS, "KF_WINGATE_GUEST_DRIVER", "KF_RELEASE_SUBRUNS")
+    if not any(name in environ for name in names):
+        return {}
+    if any(name not in environ for name in (*RELEASE_DRIVER_FIELDS, "KF_RELEASE_SUBRUNS")):
+        raise EvidenceError("release_retry_matrix_invalid")
+    selected = {name: environ[name] for name in names if name in environ}
+    for name, value in selected.items():
+        if name != "KF_RELEASE_SUBRUNS" and not re.fullmatch(r"[0-9]{3}\.[0-9]{2,3}(?:\.[0-9]{2})?", value):
+            raise EvidenceError("release_retry_matrix_invalid")
+    # Same bounded JSON contract as the bootstrap, also checked at the payload boundary.
+    try:
+        raw = selected["KF_RELEASE_SUBRUNS"]
+        plan = json.loads(base64.b64decode(raw + "=" * (-len(raw) % 4), altchars=b"-_", validate=True))
+        valid = (re.fullmatch(r"[A-Za-z0-9_-]{1,16384}", raw) is not None and isinstance(plan, dict)
+                 and set(plan) == {"status", "subruns", "cross_subrun"}
+                 and plan["status"] == "proposed" and isinstance(plan["subruns"], list)
+                 and len(plan["subruns"]) <= 32
+                 and (plan["cross_subrun"] is None or isinstance(plan["cross_subrun"], dict)))
+    except (ValueError, TypeError):
+        valid = False
+    if not valid:
+        raise EvidenceError("release_retry_matrix_invalid")
+    selected["HOST_DRIVER"] = selected["KF_HOST_DRIVER"]
+    return selected
+
+
+def require_executable_release(environ):
+    """Never turn a proposed matrix into a successful run of today's pinned payload.
+
+    Removal needs an approved matrix, guest staging, profile dispatch, per-subrun receipts
+    and result grading. No version fallback is permitted in the meantime.
+    """
+    selected = release_driver_environment(environ)
+    if selected:
+        raise EvidenceError("release_retry_matrix_proposed")
 
 
 def tier_requested(environ, windows):
@@ -1157,6 +1204,9 @@ def main():
         # Popped before any stage runs: merge_check.sh must not run the gate inside merge_bar.
         windows, windows_source = windows_requested(os.environ)
         tier, windows_runs, extra_stages = tier_requested(os.environ, windows)
+        selected_drivers = release_driver_environment(os.environ)
+        require_executable_release(os.environ)
+        os.environ.update(selected_drivers)
         refresh_claims(result, windows)
         print(
             "KF_PAYLOAD_TIER windows="

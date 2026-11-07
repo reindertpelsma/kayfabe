@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { BrokerLedger } from '../src/index.js';
-import { BrokerError } from '../src/policy.js';
+import { BrokerError, configuration } from '../src/policy.js';
+import { OfferBook } from '../src/offers.js';
 import { setup, sha, env, MemoryStorage } from './helpers.js';
 import { FakeD1, d1Skip } from './d1.js';
 import { readFileSync } from 'node:fs';
@@ -16,13 +17,15 @@ const DIES = [
   ['TU106', 'RTX_2060', 750],
   ['TU116', 'GTX_1660', 750],
   ['GA106', 'RTX_3060', 860],
+  ['GA102', 'RTX_3090', 860],
   ['GA104', 'RTX_3070', 860],
   ['AD104', 'RTX_4070', 890],
   ['AD102', 'RTX_4090', 890],
   ['GB205', 'RTX_5070', 1200],
   ['GB206', 'RTX_5060', 1200],
+  ['GB202', 'RTX_5090', 1200],
 ];
-// Two machines for TU116, GA106, AD104, GB205; one for the other four: 12 legs.
+// Two machines for TU116, GA106, AD104, GB205; one for the other four: eight full legs.
 const TWICE = ['TU116', 'GA106', 'AD104', 'GB205'];
 function releaseMarket(h, { drop = [], twice = TWICE, price = 0.2, sameHost = [] } = {}) {
   const rows = [];
@@ -40,6 +43,7 @@ function releaseMarket(h, { drop = [], twice = TWICE, price = 0.2, sameHost = []
         // sameHost: both machines of the die on one host (only machine avoidance separates them).
         host_id: sameHost.includes(die) ? 3000 + id - i : 3000 + id,
         gpu_ram: 12288,
+        disk_space: 400,
         price,
       });
     }
@@ -102,17 +106,57 @@ async function tick(h, minutes = 11) {
   await h.service.sweep();
 }
 const batchOf = async (h, id) => h.storage.get('batch:' + id);
+// FALSIFIER: host preference masks a missing machine exclusion, or a pinned
+// selection rents an excluded machine when no unused machine remains.
+test('pinned retry selects another machine even on the same host', async () => {
+  const book = new OfferBook(() => 0);
+  const rows = [1, 2].map((id) => ({
+    id,
+    die: 'TU116',
+    machine_id: 200000 + id,
+    host_id: 3000,
+    country: 'US',
+    pricing: { effective: id / 10 },
+  }));
+  const selected = await book.select(
+    { allowed: rows },
+    configuration(env),
+    null,
+    'release',
+    undefined,
+    { die: 'TU116', avoidMachines: [200001], avoidHosts: [3000] },
+  );
+  assert.equal(selected.offer.machine_id, 200002);
+});
+test('pinned retry refuses when every machine has already been used', async () => {
+  const book = new OfferBook(() => 0);
+  const rows = [1, 2].map((id) => ({
+    id,
+    die: 'TU116',
+    machine_id: 200000 + id,
+    host_id: 3000 + id,
+    country: 'US',
+    pricing: { effective: id / 10 },
+  }));
+  await assert.rejects(
+    book.select({ allowed: rows }, configuration(env), null, 'release', undefined, {
+      die: 'TU116',
+      avoidMachines: [200001, 200002],
+    }),
+    (error) => error.state === 'UNAVAILABLE' && error.reason === 'NO_ALLOWED_OFFERS',
+  );
+});
 test('plan: prints the release it WOULD rent, and rents nothing', async () => {
   const h = await release();
   releaseMarket(h);
   const { plan, renting } = await h.service.adminPlan({ commit_sha: sha, tier: 'large' });
   assert.equal(renting, false);
   assert.equal(plan.admitted, true, JSON.stringify(plan.refusals));
-  assert.equal(plan.legs, 12);
+  assert.equal(plan.legs, 8);
   assert.equal(plan.parallel, 8);
   assert.deepEqual(
     plan.families.map((f) => f.cells.map((c) => c.die).join('+')),
-    ['TU106+TU116', 'GA106+GA104', 'AD104+AD102', 'GB205+GB206'],
+    ['TU106+TU116', 'GA102+GA104', 'AD102+AD104', 'GB202+GB205'],
   );
   assert.equal(h.cloud.creates, 0);
   assert.equal([...h.storage.data.keys()].filter((k) => /^(record|cost|batch):/.test(k)).length, 0);
@@ -122,8 +166,12 @@ test('start: a release fans out up to the cap; each leg is a normal rental', asy
   releaseMarket(h);
   const started = await h.service.adminStart({ commit_sha: sha, tier: 'large' });
   assert.equal(started.tier, 'large');
-  assert.equal(started.legs.length, 12);
-  assert.equal(started.legs.filter((l) => l.state === 'STARTED').length, 8);
+  assert.equal(started.legs.length, 8);
+  assert.equal(
+    started.legs.filter((l) => l.state === 'STARTED').length,
+    8,
+    JSON.stringify(await batchOf(h, started.batch)),
+  );
   assert.equal(h.cloud.creates, 8);
   const bodies = creates(h);
   for (const body of bodies) {
@@ -133,9 +181,16 @@ test('start: a release fans out up to the cap; each leg is a normal rental', asy
     assert.equal(body.env.KF_RUN_ID, body.label.slice('kf-ci-'.length));
     assert.equal(body.env.KF_SHA, sha);
     assert.equal(body.env.KF_STAGES, undefined);
+    assert.match(body.env.KF_HOST_DRIVER, /^[0-9.]+$/);
+    assert.match(body.env.KF_LINUX_GUEST_DRIVER, /^[0-9.]+$/);
+    assert.match(body.env.KF_WINDOWS_GUEST_DRIVER, /^[0-9.]+$/);
+    assert.equal(
+      JSON.parse(Buffer.from(body.env.KF_RELEASE_SUBRUNS, 'base64url')).status,
+      'proposed',
+    );
   }
   const batch = await batchOf(h, started.batch);
-  // Same-machine dies run Windows twice on their one box; two-machine dies use two machines.
+  // Each die runs Windows twice on one box (owner decision 2026-11-07).
   for (const l of batch.legs.filter((x) => x.state === 'STARTED')) {
     const r = await h.storage.get('record:' + l.key);
     assert.equal(r.die, l.die);
@@ -165,7 +220,7 @@ test('start: a release fans out up to the cap; each leg is a normal rental', asy
     (e) => e.reason === 'BATCH_RUNNING',
   );
 });
-test('release: all legs pass on fresh boxes -> PASS; the pending legs start as slots free', async () => {
+test('release: all legs pass on fresh boxes -> PASS; eight mocked legs retain the existing verdict rules', async () => {
   const h = await release();
   releaseMarket(h);
   const { batch: id } = await h.service.adminStart({ commit_sha: sha, tier: 'large' });
@@ -185,11 +240,11 @@ test('release: all legs pass on fresh boxes -> PASS; the pending legs start as s
     'PASS',
     JSON.stringify(batch.cells?.filter((c) => c.verdict !== 'PASS')),
   );
-  assert.equal(batch.legs.length, 12);
+  assert.equal(batch.legs.length, 8);
   assert.ok(batch.legs.every((l) => l.state === 'ENDED' && l.outcome.verdict === 'PASS'));
-  assert.equal(h.cloud.creates, 12);
+  assert.equal(h.cloud.creates, 8);
   // Every box was destroyed by exact id after its result.
-  assert.equal(h.cloud.deletes.length, 12);
+  assert.equal(h.cloud.deletes.length, 8);
   assert.equal(await h.storage.get('batch-open:' + id), undefined);
   assert.ok(batch.spentUsd > 0 && batch.spentUsd <= batch.costCapUsd);
 });
@@ -222,9 +277,13 @@ test('release: RETRY re-runs on a different machine; FAIL is never re-rented; FA
   const rerun = await h.storage.get('record:' + reruns[0].key);
   assert.ok(rerun, 'the re-run started');
   assert.notEqual(rerun.machineId, retried.machineId);
-  // Review F10: nor the machine of the die's other leg.
-  assert.equal(rerun.machineId, 299099);
-  assert.ok(reruns[0].avoidMachines.includes(sibling));
+  // The retry keeps the same matrix selection and uses a fresh machine.
+  assert.notEqual(rerun.machineId, sibling);
+  assert.deepEqual(reruns[0].releaseMatrix, retry.releaseMatrix);
+  assert.equal(
+    creates(h).find((b) => b.label === rerun.label).env.KF_HOST_DRIVER,
+    retry.releaseMatrix.drivers.host_driver,
+  );
   assert.equal(batch.verdict, 'FAIL');
 });
 test('release: an owner stop-all ends the release; no leg starts afterwards', async () => {
@@ -453,26 +512,16 @@ test('an admin leg has no GitHub run to outlive: the cron does not close it as R
   for (const l of legs) assert.equal((await h.storage.get('record:' + l.key)).closed, null);
   assert.equal(h.cloud.deletes.length, 0);
 });
-test('serial legs: the second Windows leg of a die avoids the first leg machine after it ends', async () => {
+test('eight full legs require eight parallel slots before any rental', async () => {
   const h = await release({ MAX_CONCURRENT_RENTALS: '2' });
-  releaseMarket(h, { sameHost: TWICE });
-  const { batch: id } = await h.service.adminStart({ commit_sha: sha, tier: 'large' });
-  for (let round = 0; round < 14; round++) {
-    const batch = await batchOf(h, id);
-    for (const l of batch.legs.filter((x) => x.state === 'STARTED')) {
-      const r = await h.storage.get('record:' + l.key);
-      if (r.resultAt === undefined)
-        await finish(h, l.key, 'PASS', { ...LINUX, ...win(l.windowsRuns) });
-    }
-    await tick(h);
-  }
-  const batch = await batchOf(h, id);
-  assert.equal(batch.verdict, 'PASS');
-  for (const die of TWICE) {
-    const machines = batch.legs.filter((l) => l.die === die).map((l) => l.machineId);
-    assert.equal(machines.length, 2, die);
-    assert.notEqual(machines[0], machines[1], die);
-  }
+  releaseMarket(h);
+  const { plan } = await h.service.adminPlan({ commit_sha: sha, tier: 'large' });
+  assert.ok(plan.refusals.includes('PARALLEL_SLOTS'));
+  await assert.rejects(
+    h.service.adminStart({ commit_sha: sha, tier: 'large' }),
+    (e) => e.reason === 'PLAN_REFUSED',
+  );
+  assert.equal(h.cloud.creates, 0);
 });
 test('the release cost cap bounds every leg start, not only the plan', async () => {
   const h = await release({ RELEASE_COST_CAP_USD: '14' });
@@ -482,17 +531,25 @@ test('the release cost cap bounds every leg start, not only the plan', async () 
     tier: 'large',
   });
   assert.ok(estimate_usd <= 14);
-  // The market moves after the plan: the pending legs would now cost about 10 USD each.
+  // Two infrastructure retries need fresh boxes after all eight full legs started.
+  const initial = await batchOf(h, id);
+  for (const l of initial.legs.filter((x) => x.state === 'STARTED')) {
+    const retry = ['TU116', 'AD104'].includes(l.die);
+    await finish(
+      h,
+      l.key,
+      retry ? 'FAIL' : 'PASS',
+      retry ? { ...LINUX, windows_retry_media: -1 } : { ...LINUX, ...win(l.windowsRuns) },
+    );
+  }
   h.cloud.price = 2;
   for (const o of h.cloud.extraOffers) o.price = 2;
-  for (const l of (await batchOf(h, id)).legs.filter((x) => x.state === 'STARTED'))
-    await finish(h, l.key, 'PASS', { ...LINUX, ...win(l.windowsRuns) });
   await tick(h);
   const batch = await batchOf(h, id);
   // One more leg fits (the ended legs cost minutes); the next would pass the 14 USD cap.
   const pending = batch.legs.filter((l) => l.state === 'PENDING');
   assert.equal(h.cloud.creates, 9);
-  assert.equal(pending.length, 3);
+  assert.equal(pending.length, 1);
   assert.equal(pending[0].lastRefusal, 'BUDGET:release-cost-cap');
   assert.ok(batch.spentUsd <= 14, String(batch.spentUsd));
 });
@@ -533,13 +590,15 @@ for (const [name, value] of [
       releaseMarket(h);
       const { batch: id } = await h.service.adminStart({ commit_sha: sha, tier: 'large' });
       assert.equal(h.cloud.creates, 8);
+      const retry = (await batchOf(h, id)).legs.find((l) => l.die === 'TU116');
+      await finish(h, retry.key, 'FAIL', { ...LINUX, windows_retry_media: -1 });
       h.bindings[name] = value;
       await passStarted(h, id);
       await tick(h);
       await tick(h);
       const batch = await batchOf(h, id);
       assert.equal(h.cloud.creates, 8);
-      assert.equal(batch.legs.filter((l) => l.state === 'MISSING').length, 4);
+      assert.equal(batch.legs.filter((l) => l.state === 'MISSING').length, 1);
       assert.equal(batch.state, 'DONE');
       assert.equal(batch.verdict, 'INCOMPLETE');
     },
@@ -583,7 +642,7 @@ test('F8: a verified contract price that breaks the release cost cap closes the 
   const r = await h.storage.get('record:' + leg.key);
   const instance = h.cloud.instances.get(String(r.id));
   instance.dph_total = 1.9;
-  instance.dph_base = 1.9 - (instance.storage_cost * 120) / 720;
+  instance.dph_base = 1.9 - (instance.storage_cost * 300) / 720;
   await tick(h, 1);
   const after = await h.storage.get('record:' + leg.key);
   assert.equal(after.closed, 'CONTRACT_BUDGET');
@@ -624,15 +683,15 @@ test('F9: a pending leg past its start window is MISSING, not rented later', asy
   const h = await release();
   releaseMarket(h);
   const { batch: id } = await h.service.adminStart({ commit_sha: sha, tier: 'large' });
-  // The last pending leg's die (GB206) leaves the market after the plan.
-  h.cloud.extraOffers = h.cloud.extraOffers.filter((o) => o.gpu_name !== 'RTX_5060');
+  const original = (await batchOf(h, id)).legs.find((l) => l.die === 'GB205');
+  await finish(h, original.key, 'FAIL', { ...LINUX, windows_retry_media: -1 });
+  h.cloud.extraOffers = h.cloud.extraOffers.filter((o) => o.gpu_name !== 'RTX_5070');
   await passStarted(h, id);
   await tick(h);
-  let gb = (await batchOf(h, id)).legs.find((l) => l.die === 'GB206');
+  let gb = (await batchOf(h, id)).legs.find((l) => l.rerunOf === original.key);
   assert.equal(gb.state, 'PENDING');
-  await passStarted(h, id);
   await tick(h, 361);
-  gb = (await batchOf(h, id)).legs.find((l) => l.die === 'GB206');
+  gb = (await batchOf(h, id)).legs.find((l) => l.rerunOf === original.key);
   assert.equal(gb.state, 'MISSING');
 });
 test('F10: finished batches are pruned after 30 days; legs use a non-git branch name', async () => {
@@ -725,7 +784,7 @@ test(
       'a one-machine die ran Windows twice',
     );
     const env = { DB: db, ROW_TAG_KEY: tagKey };
-    assert.equal(db.rows('SELECT run_id FROM ci_runs WHERE verdict = ?', 'PASS').length, 12);
+    assert.equal(db.rows('SELECT run_id FROM ci_runs WHERE verdict = ?', 'PASS').length, 8);
     const answer = await requirementsMet(env, {
       commit_sha: sha,
       tree_hash: null,
@@ -738,3 +797,23 @@ test(
     // here would break the row's HMAC tag and answer TAMPERED instead.)
   },
 );
+test('matrix retry: persisted selection and used-machine exclusions reach the next rental', async () => {
+  const h = await release();
+  releaseMarket(h);
+  const { batch: id } = await h.service.adminStart({ commit_sha: sha, tier: 'large' });
+  const initial = (await batchOf(h, id)).legs.find((l) => l.die === 'TU116');
+  const first = await h.storage.get('record:' + initial.key);
+  await finish(h, initial.key, 'FAIL', { ...LINUX, windows_retry_media: -1 });
+  await tick(h);
+  const retry = (await batchOf(h, id)).legs.find((l) => l.rerunOf === initial.key);
+  assert.ok(retry.avoidMachines.includes(first.machineId));
+  assert.deepEqual(retry.releaseMatrix, initial.releaseMatrix);
+  const record = await h.storage.get('record:' + retry.key);
+  const body = creates(h).find((b) => b.label === record.label);
+  assert.equal(body.env.KF_HOST_DRIVER, initial.releaseMatrix.drivers.host_driver);
+  assert.equal(body.env.KF_LINUX_GUEST_DRIVER, initial.releaseMatrix.drivers.linux_guest_driver);
+  assert.deepEqual(
+    JSON.parse(Buffer.from(body.env.KF_RELEASE_SUBRUNS, 'base64url')).subruns,
+    initial.releaseMatrix.subruns,
+  );
+});

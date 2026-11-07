@@ -172,10 +172,10 @@ const MUTANTS = [
     BATCH,
   ],
   [
-    'sibling may reuse machine',
+    'rerun forgets used machines',
     'src/index.js',
-    'sibling.avoidMachines = [...new Set([...sibling.avoidMachines, started.machineId])];',
-    '',
+    '...batch.legs.filter((x) => x.die === l.die && x.machineId).map((x) => x.machineId),',
+    '...[],',
     BATCH,
   ],
   [

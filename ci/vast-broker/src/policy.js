@@ -150,7 +150,7 @@ export function configuration(env) {
     deniedCountries,
     // Edits3 C: unknown or unparseable geolocation is rejected unless the owner opts in.
     allowUnknownCountry: env.ALLOW_UNKNOWN_COUNTRY === 'true',
-    maxInet: number('MAX_INET_USD_PER_GB', DEFAULTS.maxInetUsdPerGb, 1),
+    maxInet: number('MAX_INET_USD_PER_GB', DEFAULTS.payloadProfiles.small.maxInetUsdPerGb, 1),
     repositoryId: env.REPOSITORY_GITHUB_ID,
     checkWorkflows,
     sweepWorkflow,
@@ -274,8 +274,12 @@ export function configuration(env) {
   if (typeof vram !== 'string' || !/^(0|[1-9][0-9]{0,5})$/.test(vram))
     refuse('CONFIG_VAR:MIDDLE_VRAM_FLOOR_MB', 503);
   cfg.middleVramFloorMb = Number(vram);
-  cfg.bandwidthDown = number('BANDWIDTH_DOWN_GB', DEFAULTS.bandwidthDownGb, 1000);
-  cfg.bandwidthUp = number('BANDWIDTH_UP_GB', DEFAULTS.bandwidthUpGb, 1000);
+  cfg.bandwidthDownOverride =
+    env.BANDWIDTH_DOWN_GB === undefined ? undefined : number('BANDWIDTH_DOWN_GB', 1, 1000);
+  cfg.bandwidthUpOverride =
+    env.BANDWIDTH_UP_GB === undefined ? undefined : number('BANDWIDTH_UP_GB', 1, 1000);
+  cfg.maxInetOverride = env.MAX_INET_USD_PER_GB === undefined ? undefined : cfg.maxInet;
+  applyResourceProfile(cfg, 'check', 'small');
   const data = (name, fallback) => {
     try {
       return JSON.parse(env[name] ?? JSON.stringify(fallback));
@@ -526,7 +530,37 @@ export function gpuClass(offer, cfg) {
   if (rules.length > 1) return null;
   return rules[0]?.die ?? 'CC_' + offer.compute_cap / 10;
 }
-export function offerPrice(offer, cfg) {
+// Resource profiles are execution tiers; check/sweep/release remain budget classes.
+export function resourceCaps(cfg, profile = cfg.profile ?? 'check', tierName = cfg.tierName) {
+  const name =
+    profile === 'release'
+      ? 'large'
+      : profile === 'sweep'
+        ? 'adhoc'
+        : tierName === 'middle'
+          ? 'middle'
+          : 'small';
+  const base = DEFAULTS.payloadProfiles[name];
+  return {
+    ...base,
+    bandwidthDownGb: Math.max(base.bandwidthDownGb, cfg.bandwidthDownOverride ?? 0),
+    bandwidthUpGb: Math.max(base.bandwidthUpGb, cfg.bandwidthUpOverride ?? 0),
+    maxInetUsdPerGb: Math.min(base.maxInetUsdPerGb, cfg.maxInetOverride ?? base.maxInetUsdPerGb),
+  };
+}
+export function applyResourceProfile(cfg, profile, tierName) {
+  const selectedTier =
+    tierName ?? (profile === 'release' ? 'large' : profile === 'sweep' ? 'adhoc' : 'small');
+  const r = resourceCaps(cfg, profile, selectedTier);
+  cfg.tierName = selectedTier;
+  cfg.diskGb = r.diskGb;
+  cfg.bandwidthDown = r.bandwidthDownGb;
+  cfg.bandwidthUp = r.bandwidthUpGb;
+  cfg.maxInet = r.maxInetUsdPerGb;
+  return cfg;
+}
+export function offerPrice(offer, cfg, profile = cfg.profile ?? 'check') {
+  const resources = resourceCaps(cfg, profile);
   for (const key of ['dph_base', 'dph_total', 'storage_cost', 'inet_down_cost', 'inet_up_cost'])
     if (
       typeof offer[key] !== 'number' ||
@@ -535,12 +569,13 @@ export function offerPrice(offer, cfg) {
       offer[key] > 1000
     )
       return null;
-  const storage = (offer.storage_cost * DEFAULTS.diskGb) / DEFAULTS.storageMonthHours,
+  const storage = (offer.storage_cost * resources.diskGb) / DEFAULTS.storageMonthHours,
     computeStorage = offer.dph_base + storage;
-  // Recorded API allocated_storage=120: dph_total already includes this storage.
+  // The API total already includes the allocated storage requested for this resource profile.
   if (Math.abs(offer.dph_total - computeStorage) > Math.max(1e-7, computeStorage * 1e-6))
     return null;
-  const bandwidth = cfg.bandwidthDown * offer.inet_down_cost + cfg.bandwidthUp * offer.inet_up_cost;
+  const bandwidth =
+    resources.bandwidthDownGb * offer.inet_down_cost + resources.bandwidthUpGb * offer.inet_up_cost;
   const effective = computeStorage + bandwidth / (cfg.hard / 3600000);
   return {
     computeStorage,
@@ -593,7 +628,8 @@ export function offerRejections(
   const q = cfg.quality[profile],
     reasons = [],
     die = gpuClass(offer, cfg),
-    price = offerPrice(offer, cfg);
+    price = offerPrice(offer, cfg, profile),
+    resources = resourceCaps(cfg, profile);
   const enough = (key, floor) =>
     typeof offer[key] === 'number' && Number.isFinite(offer[key]) && offer[key] >= floor;
   if (
@@ -610,7 +646,7 @@ export function offerRejections(
     offer.rentable !== true ||
     offer.rented !== false ||
     offer.num_gpus !== 1 ||
-    !enough('disk_space', DEFAULTS.diskGb)
+    !enough('disk_space', resources.diskGb)
   )
     reasons.push('CAPABILITY');
   if (
@@ -645,8 +681,8 @@ export function offerRejections(
   if (!enough('disk_bw', q.diskMbps)) reasons.push('DISK_BW');
   if (!price) reasons.push('PRICE_FIELDS');
   else if (
-    offer.inet_up_cost > cfg.maxInet ||
-    offer.inet_down_cost > cfg.maxInet ||
+    offer.inet_up_cost > resources.maxInetUsdPerGb ||
+    offer.inet_down_cost > resources.maxInetUsdPerGb ||
     price.effective > caps.price ||
     price.total > (caps.price * (cfg.hard + cfg.cronPeriod)) / 3600000
   )

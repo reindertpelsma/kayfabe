@@ -9,8 +9,9 @@
 // 2026-11-05 (wtier): profile `release` carries the large tier's legs; it is reachable only from the
 // owner's admin start route, never from a GitHub token (src/workflow-authority.js has no release
 // workflow). tier.test.js pins the tables.
+import { releaseEnvironment } from './release-matrix.js';
 import { DEFAULTS } from './defaults.js';
-import { profileCaps } from './policy.js';
+import { profileCaps, applyResourceProfile } from './policy.js';
 export const TIERS = Object.freeze({
   check: Object.freeze({ windows: true }),
   sweep: Object.freeze({ windows: false }),
@@ -82,7 +83,10 @@ export { profileCaps };
 // box when no second machine of the die is offered) and KF_STAGES (extra stages, release only) are
 // sent only when they differ from the default, so a check or sweep box sees today's environment
 // plus KF_TIER.
-export function tierEnvironment(profile, { tierName, windowsRuns = 1, stages = [] } = {}) {
+export function tierEnvironment(
+  profile,
+  { tierName, windowsRuns = 1, stages = [], releaseMatrix } = {},
+) {
   const env = { KF_MERGE_WINDOWS: tier(profile).windows ? '1' : '0' };
   if (tierName !== undefined) env.KF_TIER = tierName;
   if (windowsRuns !== 1) {
@@ -93,6 +97,10 @@ export function tierEnvironment(profile, { tierName, windowsRuns = 1, stages = [
     if (profile !== 'release' || stages.some((s) => !/^[a-z][a-z0-9_]{0,31}$/.test(s)))
       throw Error('stages');
     env.KF_STAGES = stages.join(':');
+  }
+  if (releaseMatrix !== undefined) {
+    if (profile !== 'release') throw Error('release matrix profile');
+    Object.assign(env, releaseEnvironment(releaseMatrix));
   }
   return env;
 }
@@ -106,7 +114,8 @@ export function hardLimit(cfg, profile) {
 }
 // Apply a profile to a per-request configuration: every later price, reservation and deadline
 // computation reads cfg.hard / cfg.ttl.
-export function applyProfile(cfg, profile) {
+export function applyProfile(cfg, profile, tierName) {
+  applyResourceProfile(cfg, profile, tierName);
   cfg.profile = profile;
   cfg.hard = hardLimit(cfg, profile);
   cfg.ttl = cfg.hard;

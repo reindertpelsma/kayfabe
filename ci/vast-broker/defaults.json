@@ -1,5 +1,166 @@
 {
   "price": 1,
+  "payloadProfiles": {
+    "small": {
+      "diskGb": 120,
+      "bandwidthDownGb": 73,
+      "bandwidthUpGb": 2,
+      "maxInetUsdPerGb": 0.005
+    },
+    "middle": {
+      "diskGb": 120,
+      "bandwidthDownGb": 87,
+      "bandwidthUpGb": 2,
+      "maxInetUsdPerGb": 0.005
+    },
+    "large": {
+      "diskGb": 300,
+      "bandwidthDownGb": 130,
+      "bandwidthUpGb": 2,
+      "maxInetUsdPerGb": 0.02
+    },
+    "adhoc": {
+      "diskGb": 120,
+      "bandwidthDownGb": 38,
+      "bandwidthUpGb": 2,
+      "maxInetUsdPerGb": 0.005
+    }
+  },
+  "payloadStageResources": {
+    "setup_cache": {
+      "profiles": [
+        "small",
+        "middle",
+        "large",
+        "adhoc"
+      ],
+      "bandwidthDownGb": 1,
+      "bandwidthUpGb": 0,
+      "diskFloorGb": 0,
+      "status": "INFERRED",
+      "source": "docs/design/VAST_SETUP_CACHE_20261023.md",
+      "note": "Rounded allowance for setup assets, not a measured total"
+    },
+    "provision": {
+      "profiles": [
+        "small",
+        "middle",
+        "large",
+        "adhoc"
+      ],
+      "bandwidthDownGb": 20,
+      "bandwidthUpGb": 0,
+      "diskFloorGb": 120,
+      "status": "INFERRED",
+      "source": "scripts/bench/provision_bench_tree.sh",
+      "note": "OS, toolchain, vendor packages and source; conservative cold-box estimate"
+    },
+    "cuda_host": {
+      "profiles": [
+        "small",
+        "middle",
+        "large",
+        "adhoc"
+      ],
+      "bandwidthDownGb": 0,
+      "bandwidthUpGb": 0,
+      "diskFloorGb": 0,
+      "status": "INFERRED",
+      "source": "scripts/ci/vast_payload.py",
+      "note": "Reuses provisioned assets; downloads charged to provision"
+    },
+    "merge_bar": {
+      "profiles": [
+        "small",
+        "middle",
+        "large",
+        "adhoc"
+      ],
+      "bandwidthDownGb": 0,
+      "bandwidthUpGb": 0,
+      "diskFloorGb": 0,
+      "status": "INFERRED",
+      "source": "scripts/ci/vast_payload.py",
+      "note": "Reuses provisioned assets; downloads charged to provision"
+    },
+    "cuda_guest": {
+      "profiles": [
+        "small",
+        "middle",
+        "large",
+        "adhoc"
+      ],
+      "bandwidthDownGb": 0,
+      "bandwidthUpGb": 0,
+      "diskFloorGb": 0,
+      "status": "INFERRED",
+      "source": "scripts/ci/vast_payload.py",
+      "note": "Reuses provisioned assets; downloads charged to provision"
+    },
+    "apps": {
+      "profiles": [
+        "middle",
+        "large"
+      ],
+      "bandwidthDownGb": 14,
+      "bandwidthUpGb": 0,
+      "diskFloorGb": 120,
+      "status": "INFERRED",
+      "source": "traces/apps_linux_20261107/README.md",
+      "note": "Ceiling in decimal GB of the measured compressed image",
+      "measuredDownloadBytes": 13082387956
+    },
+    "windows_gate": {
+      "profiles": [
+        "small",
+        "middle",
+        "large"
+      ],
+      "bandwidthDownGb": 35,
+      "bandwidthUpGb": 0,
+      "diskFloorGb": 120,
+      "status": "INFERRED",
+      "source": "docs/design/V3_WINDOWS_ON_VAST.md",
+      "note": "Owner planning range 15-35 GB compressed; upper endpoint, not measured"
+    },
+    "windows_gate_2": {
+      "profiles": [
+        "large"
+      ],
+      "bandwidthDownGb": 0,
+      "bandwidthUpGb": 0,
+      "diskFloorGb": 0,
+      "status": "INFERRED",
+      "source": "scripts/bench/box/windows_gate.sh",
+      "note": "Reuses first install and media"
+    },
+    "specviewperf": {
+      "profiles": [
+        "large"
+      ],
+      "bandwidthDownGb": 43,
+      "bandwidthUpGb": 0,
+      "diskFloorGb": 220,
+      "status": "INFERRED",
+      "source": "traces/specviewperf_vast_20261105/README.md",
+      "note": "Ceiling in decimal GB of measured compressed tar; 300 GB host allocation recorded",
+      "measuredDownloadBytes": 42002015727
+    },
+    "media_and_margin": {
+      "profiles": [
+        "small",
+        "middle",
+        "large",
+        "adhoc"
+      ],
+      "bandwidthDownGb": 17,
+      "diskFloorGb": 0,
+      "status": "INFERRED",
+      "source": "traces/apps_linux_20261107/README.md",
+      "note": "Extra apps/bundles/media, retries and output allowance; inferred headroom",
+      "bandwidthUpGb": 2
+    }
+  },
   "daily": 6,
   "rolling": 30,
   "reserve": 8,
@@ -26,9 +187,6 @@
   "providerQuietSeconds": 660,
   "providerMessageChars": 120,
   "maxMinutes": 1440,
-  "diskGb": 120,
-  "bandwidthDownGb": 15,
-  "bandwidthUpGb": 2,
   "storageMonthHours": 720,
   "availabilityCacheMs": 60000,
   "availabilityLimit": 100,
@@ -184,7 +342,6 @@
   "benchDataMaxExpirySeconds": 1200,
   "benchDataMinExpirySeconds": 30,
   "preferredCountries": ["US", "CA"],
-  "maxInetUsdPerGb": 0.005,
   "lifecycleCacheMs": 60000,
   "deniedCountries": ["CU", "IR", "KP", "SY", "CN", "HK", "MO"],
   "releasePrice": 2,
@@ -210,9 +367,9 @@
   },
   "releaseDies": {
     "turing": ["TU106", "TU116"],
-    "ampere": ["GA106", "GA104", "GA102"],
-    "ada": ["AD104", "AD102", "AD103", "AD106"],
-    "blackwell": ["GB205", "GB206", "GB202", "GB203"]
+    "ampere": ["GA102", "GA104", "GA106"],
+    "ada": ["AD102", "AD104", "AD103", "AD106"],
+    "blackwell": ["GB202", "GB205", "GB206", "GB203"]
   },
   "releaseDiesPerFamily": 2,
   "releaseWindowsRunsPerDie": 2,

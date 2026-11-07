@@ -1,0 +1,421 @@
+{
+  "schema_version": 1,
+  "status": "proposed",
+  "date": "2026-11-07",
+  "policy": {
+    "die_count": 8,
+    "dies_per_die_family": 2,
+    "boxes_per_die": 1,
+    "parallel_boxes": 8,
+    "full_profile": "full",
+    "subrun_profiles": [
+      "middle",
+      "small"
+    ],
+    "die_families": [
+      "turing",
+      "ampere",
+      "ada",
+      "blackwell"
+    ],
+    "allow_adjacent_driver_families": false
+  },
+  "host_capabilities": {
+    "vast_kvm": {
+      "can_swap_host_driver": true
+    }
+  },
+  "sources": [
+    {
+      "path": "tools/drivermatrix/tags.txt",
+      "checked": "2026-11-07",
+      "meaning": "CODE READ: candidate versions, not per-die qualification"
+    },
+    {
+      "path": "scripts/bench/box/windows_gate.sh",
+      "checked": "2026-11-07",
+      "meaning": "CODE READ: Windows 580.88 media and Linux 580.65.06 guest ABI"
+    },
+    {
+      "url": "https://us.download.nvidia.com/Windows/580.97/580.97-win11-win10-release-notes.pdf",
+      "published": "2025-08-12",
+      "checked": "2026-11-07",
+      "meaning": "PUBLIC RELEASE NOTES: Windows candidate exists; common OS adoption and kayfabe compatibility UNKNOWN"
+    }
+  ],
+  "dies": [
+    {
+      "die": "TU106",
+      "die_family": "turing",
+      "role": "flagship",
+      "status": "proposed",
+      "profile": "full",
+      "drivers": {
+        "host_driver": "580.159.04",
+        "linux_guest_driver": "580.126.09",
+        "windows_guest_driver": "580.97"
+      },
+      "windows_guest_abi": "UNKNOWN",
+      "minimum_drivers": {
+        "host_driver": "UNKNOWN",
+        "linux_guest_driver": "UNKNOWN",
+        "windows_guest_driver": "UNKNOWN"
+      },
+      "subruns": [
+        {
+          "os": "linux",
+          "driver_family": "590",
+          "profile": "middle",
+          "drivers": [
+            "590.48.01"
+          ]
+        },
+        {
+          "os": "windows",
+          "driver_family": "580",
+          "profile": "small",
+          "drivers": [
+            "580.88"
+          ]
+        }
+      ],
+      "cross_subrun": null,
+      "blockers": [
+        "DRIVER_CHOICES_PROPOSED",
+        "MINIMUM_DRIVERS_UNKNOWN",
+        "SUBRUN_EXECUTOR_NOT_BUILT"
+      ]
+    },
+    {
+      "die": "TU116",
+      "die_family": "turing",
+      "role": "second",
+      "status": "proposed",
+      "profile": "full",
+      "drivers": {
+        "host_driver": "580.65.06",
+        "linux_guest_driver": "580.65.06",
+        "windows_guest_driver": "580.88"
+      },
+      "windows_guest_abi": "580.65.06",
+      "minimum_drivers": {
+        "host_driver": "UNKNOWN",
+        "linux_guest_driver": "UNKNOWN",
+        "windows_guest_driver": "UNKNOWN"
+      },
+      "subruns": [
+        {
+          "os": "linux",
+          "driver_family": "590",
+          "profile": "middle",
+          "drivers": [
+            "590.48.01"
+          ]
+        },
+        {
+          "os": "windows",
+          "driver_family": "580",
+          "profile": "small",
+          "drivers": [
+            "580.97"
+          ]
+        }
+      ],
+      "cross_subrun": {
+        "die": "TU106",
+        "profile": "small",
+        "drivers": {
+          "host_driver": "580.159.04",
+          "linux_guest_driver": "580.126.09",
+          "windows_guest_driver": "580.97"
+        },
+        "windows_guest_abi": "UNKNOWN"
+      },
+      "blockers": [
+        "DRIVER_CHOICES_PROPOSED",
+        "MINIMUM_DRIVERS_UNKNOWN",
+        "SUBRUN_EXECUTOR_NOT_BUILT"
+      ]
+    },
+    {
+      "die": "GA102",
+      "die_family": "ampere",
+      "role": "flagship",
+      "status": "proposed",
+      "profile": "full",
+      "drivers": {
+        "host_driver": "580.173.02",
+        "linux_guest_driver": "580.159.04",
+        "windows_guest_driver": "580.97"
+      },
+      "windows_guest_abi": "UNKNOWN",
+      "minimum_drivers": {
+        "host_driver": "UNKNOWN",
+        "linux_guest_driver": "UNKNOWN",
+        "windows_guest_driver": "UNKNOWN"
+      },
+      "subruns": [
+        {
+          "os": "linux",
+          "driver_family": "590",
+          "profile": "middle",
+          "drivers": [
+            "590.48.01"
+          ]
+        },
+        {
+          "os": "windows",
+          "driver_family": "580",
+          "profile": "small",
+          "drivers": [
+            "580.88"
+          ]
+        }
+      ],
+      "cross_subrun": null,
+      "blockers": [
+        "DRIVER_CHOICES_PROPOSED",
+        "MINIMUM_DRIVERS_UNKNOWN",
+        "SUBRUN_EXECUTOR_NOT_BUILT"
+      ]
+    },
+    {
+      "die": "GA104",
+      "die_family": "ampere",
+      "role": "second",
+      "status": "proposed",
+      "profile": "full",
+      "drivers": {
+        "host_driver": "580.82.07",
+        "linux_guest_driver": "580.82.07",
+        "windows_guest_driver": "580.88"
+      },
+      "windows_guest_abi": "580.65.06",
+      "minimum_drivers": {
+        "host_driver": "UNKNOWN",
+        "linux_guest_driver": "UNKNOWN",
+        "windows_guest_driver": "UNKNOWN"
+      },
+      "subruns": [
+        {
+          "os": "linux",
+          "driver_family": "590",
+          "profile": "middle",
+          "drivers": [
+            "590.48.01"
+          ]
+        },
+        {
+          "os": "windows",
+          "driver_family": "580",
+          "profile": "small",
+          "drivers": [
+            "580.97"
+          ]
+        }
+      ],
+      "cross_subrun": {
+        "die": "GA102",
+        "profile": "small",
+        "drivers": {
+          "host_driver": "580.173.02",
+          "linux_guest_driver": "580.159.04",
+          "windows_guest_driver": "580.97"
+        },
+        "windows_guest_abi": "UNKNOWN"
+      },
+      "blockers": [
+        "DRIVER_CHOICES_PROPOSED",
+        "MINIMUM_DRIVERS_UNKNOWN",
+        "SUBRUN_EXECUTOR_NOT_BUILT"
+      ]
+    },
+    {
+      "die": "AD102",
+      "die_family": "ada",
+      "role": "flagship",
+      "status": "proposed",
+      "profile": "full",
+      "drivers": {
+        "host_driver": "580.178.04",
+        "linux_guest_driver": "580.173.02",
+        "windows_guest_driver": "580.97"
+      },
+      "windows_guest_abi": "UNKNOWN",
+      "minimum_drivers": {
+        "host_driver": "UNKNOWN",
+        "linux_guest_driver": "UNKNOWN",
+        "windows_guest_driver": "UNKNOWN"
+      },
+      "subruns": [
+        {
+          "os": "linux",
+          "driver_family": "590",
+          "profile": "middle",
+          "drivers": [
+            "590.48.01"
+          ]
+        },
+        {
+          "os": "windows",
+          "driver_family": "580",
+          "profile": "small",
+          "drivers": [
+            "580.88"
+          ]
+        }
+      ],
+      "cross_subrun": null,
+      "blockers": [
+        "DRIVER_CHOICES_PROPOSED",
+        "MINIMUM_DRIVERS_UNKNOWN",
+        "SUBRUN_EXECUTOR_NOT_BUILT"
+      ]
+    },
+    {
+      "die": "AD104",
+      "die_family": "ada",
+      "role": "second",
+      "status": "proposed",
+      "profile": "full",
+      "drivers": {
+        "host_driver": "580.94.02",
+        "linux_guest_driver": "580.94.02",
+        "windows_guest_driver": "580.88"
+      },
+      "windows_guest_abi": "580.65.06",
+      "minimum_drivers": {
+        "host_driver": "UNKNOWN",
+        "linux_guest_driver": "UNKNOWN",
+        "windows_guest_driver": "UNKNOWN"
+      },
+      "subruns": [
+        {
+          "os": "linux",
+          "driver_family": "590",
+          "profile": "middle",
+          "drivers": [
+            "590.48.01"
+          ]
+        },
+        {
+          "os": "windows",
+          "driver_family": "580",
+          "profile": "small",
+          "drivers": [
+            "580.97"
+          ]
+        }
+      ],
+      "cross_subrun": {
+        "die": "AD102",
+        "profile": "small",
+        "drivers": {
+          "host_driver": "580.178.04",
+          "linux_guest_driver": "580.173.02",
+          "windows_guest_driver": "580.97"
+        },
+        "windows_guest_abi": "UNKNOWN"
+      },
+      "blockers": [
+        "DRIVER_CHOICES_PROPOSED",
+        "MINIMUM_DRIVERS_UNKNOWN",
+        "SUBRUN_EXECUTOR_NOT_BUILT"
+      ]
+    },
+    {
+      "die": "GB202",
+      "die_family": "blackwell",
+      "role": "flagship",
+      "status": "proposed",
+      "profile": "full",
+      "drivers": {
+        "host_driver": "590.48.01",
+        "linux_guest_driver": "590.48.01",
+        "windows_guest_driver": "580.97"
+      },
+      "windows_guest_abi": "UNKNOWN",
+      "minimum_drivers": {
+        "host_driver": "UNKNOWN",
+        "linux_guest_driver": "UNKNOWN",
+        "windows_guest_driver": "UNKNOWN"
+      },
+      "subruns": [
+        {
+          "os": "linux",
+          "driver_family": "580",
+          "profile": "middle",
+          "drivers": [
+            "580.159.04"
+          ]
+        },
+        {
+          "os": "windows",
+          "driver_family": "580",
+          "profile": "small",
+          "drivers": [
+            "580.88"
+          ]
+        }
+      ],
+      "cross_subrun": null,
+      "blockers": [
+        "DRIVER_CHOICES_PROPOSED",
+        "MINIMUM_DRIVERS_UNKNOWN",
+        "SUBRUN_EXECUTOR_NOT_BUILT",
+        "GB202_WINDOWS_BUGCHECK_0X113"
+      ]
+    },
+    {
+      "die": "GB205",
+      "die_family": "blackwell",
+      "role": "second",
+      "status": "proposed",
+      "profile": "full",
+      "drivers": {
+        "host_driver": "580.105.08",
+        "linux_guest_driver": "580.105.08",
+        "windows_guest_driver": "580.88"
+      },
+      "windows_guest_abi": "580.65.06",
+      "minimum_drivers": {
+        "host_driver": "UNKNOWN",
+        "linux_guest_driver": "UNKNOWN",
+        "windows_guest_driver": "UNKNOWN"
+      },
+      "subruns": [
+        {
+          "os": "linux",
+          "driver_family": "590",
+          "profile": "middle",
+          "drivers": [
+            "590.48.01"
+          ]
+        },
+        {
+          "os": "windows",
+          "driver_family": "580",
+          "profile": "small",
+          "drivers": [
+            "580.97"
+          ]
+        }
+      ],
+      "cross_subrun": {
+        "die": "GB202",
+        "profile": "middle",
+        "drivers": {
+          "host_driver": "590.48.01",
+          "linux_guest_driver": "590.48.01",
+          "windows_guest_driver": "580.97"
+        },
+        "windows_guest_abi": "UNKNOWN"
+      },
+      "blockers": [
+        "DRIVER_CHOICES_PROPOSED",
+        "MINIMUM_DRIVERS_UNKNOWN",
+        "SUBRUN_EXECUTOR_NOT_BUILT"
+      ]
+    }
+  ]
+}

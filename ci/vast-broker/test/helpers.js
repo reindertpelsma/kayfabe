@@ -281,7 +281,10 @@ export class MockCloud {
     if (u.pathname === '/api/v0/bundles') {
       if (body.type !== 'ondemand') return new Response('invalid type', { status: 400 });
       const row = (offer, price) => ({
-        dph_base: typeof price === 'number' ? price - (offer.storage_cost * 120) / 720 : price,
+        dph_base:
+          typeof price === 'number'
+            ? price - (offer.storage_cost * (body.allocated_storage ?? body.disk ?? 120)) / 720
+            : price,
         ...offer,
         dph_total: price,
       });
@@ -308,7 +311,7 @@ export class MockCloud {
         onstart: body.onstart,
         image_uuid: body.image,
         actual_status: 'running',
-        dph_base: price - (offer.storage_cost * 120) / 720,
+        dph_base: price - (offer.storage_cost * (body.allocated_storage ?? body.disk ?? 120)) / 720,
         dph_total: price,
         storage_cost: offer.storage_cost,
         inet_down_cost: offer.inet_down_cost,
