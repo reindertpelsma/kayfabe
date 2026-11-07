@@ -46,7 +46,7 @@ rental); its hypotheses are scored at the end of this file, the misses included.
   `apps_gate.sh` now copies the receipt with the image (`logs/guest_driver_attempt0_nostaged.log`). (2) I replaced `setup_side.sh`
   under a running bash and restarted that step once; the host-runtime time above is the second start.
 
-## Per-app table (MEASURED, run r1; `apps_table.tsv`, reproduce: `python3 scripts/apps/matrix_table.py traces/apps_linux_20261107/r1`)
+## Per-app table (MEASURED, run r1, RTX 4090, 2026-11-07; `apps_table.tsv`, reproduce: `python3 scripts/apps/matrix_table.py traces/apps_linux_20261107/r1`)
 
 Columns: app, class, host, guest batched, guest alone, host secs, guest secs, guest Xid, kf3 refusals, the key output line on each
 side, reason. The class is decided mechanically by `scripts/apps/matrix_table.py` (rules in PREREG.md; GPU-free tests:
@@ -62,7 +62,7 @@ side, reason. The class is decided mechanically by `scripts/apps/matrix_table.py
 
 The four defects, each with the evidence the classification rule asks for (`defects/<app>.txt`; the guest Xid count is 0 for all four):
 
-| app | guest result | host Xid in the boot (MEASURED) | kf3 |
+| app | guest result | host Xid in the boot (MEASURED, RTX 4090, 2026-11-07) | kf3 |
 |---|---|---|---|
 | UnifiedMemoryStreams | `CUBLAS_STATUS_EXECUTION_FAILED` at `UnifiedMemoryStreams.cu:221`, rc 134 | Xid 31, GPC0, `FAULT_PTE` VIRT_READ | `RC host twin ... except_type=0x1f (Xid 31)` x8 |
 | UnifiedMemoryPerf | code 719 at `matrixMultiplyPerf.cu:435` | Xid 31, GPC2, `FAULT_PDE` VIRT_READ | same, x8 |
@@ -87,7 +87,7 @@ Other facts of the table:
   `memcpy2d` 6.2 vs 9.2 GB/s, the sub-30-microsecond kernels (`reduction`, `transpose`). `hashcat`'s speed line is not comparable (the
   mask attack ends in 0.1 ms; the guest picked Thr:32 against Thr:64).
 
-## Time (MEASURED, runs r1, g1, g2)
+## Time (MEASURED, runs r1, g1, g2, RTX 4090, 2026-11-07)
 
 | what | wall | apps | note |
 |---|---|---|---|
@@ -110,7 +110,7 @@ Other facts of the table:
   guest** (7.5 min for 63 apps). The owner's middle-tier sentence is therefore met by `gate_list_middle.txt`; the full list is the
   release tier's.
 
-## Downloads, sizes, secrets (MEASURED where a size is given, run r1; otherwise INFERRED)
+## Downloads, sizes, secrets (MEASURED where a size is given, run r1 on the RTX 4090 box, 2026-11-07; otherwise INFERRED)
 
 Everything is official or public; **nothing needs a secret and none is put on a box.** `geekbench_gpu` is the exception: `docs/DOWNLOADS.md`
 marks Geekbench "not allowed (scripts need Pro), manual" and the free mode uploads the result, so `setup_side.sh` no longer fetches it
