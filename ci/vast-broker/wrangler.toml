@@ -61,7 +61,7 @@ WORKER_URL = "https://ci.kayfabe.dev"
 # Numeric owner policy defaults are defined once in defaults.json.
 RENTING_ENABLED = "false"
 # SHA-256 of wrangler's emitted module (equals deployment.json; deploy.mjs refuses otherwise).
-DEPLOYED_BUNDLE_SHA256 = "18146870e63ef5bfe5996691a10fe0ee7682ee10ef5954bf7b0afef1eb7f01f7"
+DEPLOYED_BUNDLE_SHA256 = "2dc7308ac2fca1e4542690c71a690ce05bcbff01857065d74d5bdf0a1ca12fc2"
 # Public GitHub account id of the owner (also in every commit author email); never a secret.
 OWNER_GITHUB_ID = "229738317"
 # Public https origin of the log bucket (a report names its log by this URL); on kayfabe.dev only.

@@ -1,0 +1,217 @@
+{
+ "schema": 1,
+ "status": "DESIGN-ONLY, 2026-11-07; definitions only, all unverified; no hardware run or bundle built",
+ "directx": {
+  "repository": "https://github.com/microsoft/DirectX-Graphics-Samples.git",
+  "commit": "68a2b1e97f71642924e74c7757ca21756ad221b5",
+  "projects": {
+   "dxr": "Samples/Desktop/D3D12Raytracing/src/D3D12RaytracingHelloWorld/D3D12RaytracingHelloWorld.vcxproj",
+   "mesh": "Samples/Desktop/D3D12MeshShaders/src/MeshletRender/D3D12MeshletRender.vcxproj",
+   "vrs": "Samples/Desktop/D3D12VariableRateShading/src/D3D12VariableRateShading.vcxproj"
+  },
+  "blocked": {
+   "sampler_feedback": "SOURCE-SAMPLE-NEEDED: pinned Microsoft tree contains no sampler-feedback sample; owner chose to retain a blocked definition pending an approved Microsoft source"
+  },
+  "required_files": [
+   "directx/dxr/D3D12RaytracingHelloWorld.exe",
+   "directx/mesh/D3D12MeshletRender.exe",
+   "directx/mesh/MeshletMS.cso",
+   "directx/mesh/MeshletPS.cso",
+   "directx/Assets/Dragon_LOD0.bin",
+   "directx/vrs/D3D12VariableRateShading.exe",
+   "directx/vrs/SquidRoom.bin",
+   "directx/vrs/glass_xii_diffuse.dds",
+   "directx/vrs/glass_xii_normal.dds",
+   "directx/LICENSE.txt",
+   "directx/GATE_VRS.patch"
+  ],
+  "patches": {
+   "vrs_gate": "0a88951a1554a41223e93050de871aab34149b3dd25db818f65871acf56179f5"
+  }
+ },
+ "apps": {
+  "blender_cycles": {
+   "status": "unverified",
+   "classification": "reference-required",
+   "verdict": "Both CUDA and OptiX render the 960x540 seed-1, 256-sample scene; all RGBA components compare to hashed same-GPU bare-metal references: MAE <= 1/255, max error <= 8/255; no blank images",
+   "packages": [
+    "blender",
+    "vc_redist"
+   ],
+   "assets": [
+    "references/blender_CUDA.png",
+    "references/blender_CUDA.json",
+    "references/blender_OPTIX.png",
+    "references/blender_OPTIX.json"
+   ]
+  },
+  "llama_cuda_parity": {
+   "status": "unverified",
+   "classification": "reference-required",
+   "verdict": "Fixed prompt, seed 1, temp 0, 64 tokens; full nonzero NVIDIA CUDA offload, rc 0; nonempty normalized output equals hashed bare-metal reference from identical executable and model",
+   "packages": [
+    "python_embed",
+    "llama_cuda",
+    "qwen_gguf",
+    "vc_redist"
+   ],
+   "assets": [
+    "references/llama_cuda.txt",
+    "references/llama_cuda.json"
+   ]
+  },
+  "nvenc_h264": {
+   "status": "unverified",
+   "classification": "owner-supplied-media",
+   "verdict": "rc 0, own success line, NVIDIA GPU proof, no CHECK FAIL, no work on a non-NVIDIA adapter; exactly 600 encoded frames",
+   "packages": [
+    "ffmpeg",
+    "vc_redist"
+   ],
+   "assets": []
+  },
+  "nvdec_h264": {
+   "status": "unverified",
+   "classification": "owner-supplied-media",
+   "verdict": "rc 0, own success line, NVIDIA GPU proof, no CHECK FAIL, no work on a non-NVIDIA adapter; exactly 18000 hardware-decoded frames",
+   "packages": [
+    "ffmpeg",
+    "vc_redist"
+   ],
+   "assets": []
+  },
+  "d3d12_dxr": {
+   "status": "unverified",
+   "classification": "source-built",
+   "verdict": "Source-built sample survives 30 s with NVIDIA process-tree 3D/Compute activity; early exit, missing sample, software adapter or absent proof cannot pass",
+   "packages": [
+    "vc_redist"
+   ],
+   "assets": [
+    "directx/dxr"
+   ]
+  },
+  "d3d12_mesh_shaders": {
+   "status": "unverified",
+   "classification": "source-built",
+   "verdict": "Source-built sample survives 30 s with NVIDIA process-tree 3D/Compute activity; early exit, missing sample, software adapter or absent proof cannot pass",
+   "packages": [
+    "vc_redist"
+   ],
+   "assets": [
+    "directx/mesh"
+   ]
+  },
+  "d3d12_vrs": {
+   "status": "unverified",
+   "classification": "source-built",
+   "verdict": "Source-built sample survives 30 s with NVIDIA process-tree 3D/Compute activity; early exit, missing sample, software adapter or absent proof cannot pass; pinned source patch requires VRS tier 1 and forces 2x2 coarse shading before the scene initializes",
+   "packages": [
+    "vc_redist"
+   ],
+   "assets": [
+    "directx/vrs"
+   ]
+  },
+  "d3d12_sampler_feedback": {
+   "status": "unverified",
+   "classification": "source-blocked",
+   "verdict": "Source-built sample survives 30 s with NVIDIA process-tree 3D/Compute activity; early exit, missing sample, software adapter or absent proof cannot pass; SOURCE-SAMPLE-NEEDED until owner approves source",
+   "packages": [
+    "vc_redist"
+   ],
+   "assets": [
+    "directx/sampler_feedback"
+   ]
+  },
+  "gravitymark_d3d11": {
+   "status": "unverified",
+   "classification": "owner-supplied",
+   "verdict": "rc 0, own success line, NVIDIA GPU proof, no CHECK FAIL, no work on a non-NVIDIA adapter; benchmark finishes with a fresh nonempty image (more than 10000 bytes)",
+   "packages": [
+    "gravitymark",
+    "vc_redist"
+   ],
+   "assets": []
+  },
+  "gravitymark_d3d12": {
+   "status": "unverified",
+   "classification": "owner-supplied",
+   "verdict": "rc 0, own success line, NVIDIA GPU proof, no CHECK FAIL, no work on a non-NVIDIA adapter; benchmark finishes with a fresh nonempty image (more than 10000 bytes)",
+   "packages": [
+    "gravitymark",
+    "vc_redist"
+   ],
+   "assets": []
+  },
+  "gravitymark_vk": {
+   "status": "unverified",
+   "classification": "owner-supplied",
+   "verdict": "rc 0, own success line, NVIDIA GPU proof, no CHECK FAIL, no work on a non-NVIDIA adapter; benchmark finishes with a fresh nonempty image (more than 10000 bytes)",
+   "packages": [
+    "gravitymark",
+    "vc_redist"
+   ],
+   "assets": []
+  },
+  "gravitymark_gl": {
+   "status": "unverified",
+   "classification": "owner-supplied",
+   "verdict": "rc 0, own success line, NVIDIA GPU proof, no CHECK FAIL, no work on a non-NVIDIA adapter; benchmark finishes with a fresh nonempty image (more than 10000 bytes)",
+   "packages": [
+    "gravitymark",
+    "vc_redist"
+   ],
+   "assets": []
+  },
+  "edge_webgl_conformance": {
+   "status": "unverified",
+   "classification": "open-offline",
+   "verdict": "Offline focused conformance subset: all known-answer readback/validation checks pass, nonzero frames, NVIDIA adapter, process-tree GPU proof; this is not the full CTS",
+   "packages": [],
+   "assets": [
+    "guest/web/webgl_conformance.html"
+   ]
+  },
+  "edge_webgpu_conformance": {
+   "status": "unverified",
+   "classification": "open-offline",
+   "verdict": "Offline focused conformance subset: all known-answer readback/validation checks pass, nonzero frames, NVIDIA adapter, process-tree GPU proof; this is not the full CTS",
+   "packages": [],
+   "assets": [
+    "guest/web/webgpu_conformance.html"
+   ]
+  },
+  "deviceQuery_demo": {
+   "status": "unverified",
+   "classification": "open",
+   "verdict": "rc 0, own success line, NVIDIA GPU proof, no CHECK FAIL, no work on a non-NVIDIA adapter",
+   "packages": [
+    "cuda_demo_suite",
+    "vc_redist"
+   ],
+   "assets": []
+  },
+  "bandwidthTest_demo": {
+   "status": "unverified",
+   "classification": "open",
+   "verdict": "rc 0, own success line, NVIDIA GPU proof, no CHECK FAIL, no work on a non-NVIDIA adapter",
+   "packages": [
+    "cuda_demo_suite",
+    "vc_redist"
+   ],
+   "assets": []
+  },
+  "torch_release_smoke": {
+   "status": "unverified",
+   "classification": "open",
+   "verdict": "Explicit CUDA matmul with seed 1, all 4096 finite outputs checked against CPU known answer at rtol=atol=1e-5; no CPU fallback",
+   "packages": [
+    "python_embed",
+    "pywheels",
+    "vc_redist"
+   ],
+   "assets": []
+  }
+ }
+}
