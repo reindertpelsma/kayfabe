@@ -176,7 +176,17 @@ If the owner will not accept the retry-less plan, the cheapest change is a state
 
 INFERRED, not measured: the sealed `base.qcow2` is an 80 GB sparse image; a Windows 11 install is likely 12 to 20 GB used, and a compressed copy needs several parts under 2 GiB each (the per-asset limit of GitHub releases, an external fact to confirm). The only store on record is the private `win-gpu-image-private-store` repository that the Worker's blob route reads (`docs/design/VAST_SETUP_CACHE_20261023.md:45`, `scripts/ci/kf-box-blob-url`); per the TUR1 report its write path is the `win-gpu-image` environment only and its licence review is open (`traces/tur1_20261027/README.md:89`). So a second lease could in principle download parts at box speed and skip the 22 to 44 min install. It is not recommended now, for four reasons:
 
-1. `win_vm.sh` never restores a VM from another VM's state (`README.md:87-88`); a restore needs a new, owner-approved subcommand.
+DESIGN UPDATE, 2026-11-07 (owner/coordinator): the offline prebuilt image now has
+an explicit NON-SENSITIVE-BY-DESIGN exception for disposable guest machine state.
+[V3_WINDOWS_MACHINE_STATE.md](V3_WINDOWS_MACHINE_STATE.md) describes its opt-in
+capture/apply path, private sidecar, fresh per-run TPM/OVMF copies and generated
+guest signing material. CPU observations are diagnostic; no CPU model/features
+are pinned by default. This remains DESIGN-ONLY and does not change ordinary
+production-secret handling. The numbered concerns below describe the earlier
+proposal; the offline exception addresses state transport, not native-image
+compatibility, licences or Windows qualification.
+
+1. The ordinary `win_vm.sh` workflow does not restore another VM's state (`README.md:87-88`); the offline proposal now has the separate opt-in apply path above.
 2. The image is bound to per-VM secrets: the swtpm state, the harness ssh key, the Windows password, and the Secure Boot variables whose `db` carries this host's GOP certificate (`win_vm.sh:236-267`). A new box generates a new db key, so the stored variables and the new key would disagree. Whether the option-ROM policy tolerates that is unmeasured; the discovery run only showed that stock OVMF runs any option ROM (`V3_WINDOWS_DISCOVERY.md:92`).
 3. Legal: the evaluation terms are unread and the stated policy is "rebuild images, do not keep" (`docs/DOWNLOADS.md:68`, `:83`).
 4. The saving is at most one install; the second lease repeats the 14 to 25 min provisioning and adds a download whose speed is unmeasured.

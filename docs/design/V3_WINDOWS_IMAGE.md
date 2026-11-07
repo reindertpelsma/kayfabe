@@ -60,13 +60,14 @@ report (2026-11-07): the QEMU console copy path is low performance, lacks a live
 Windows qualification and may remain only for screenshots; the broker is the
 product viewing path. No live kf3 VNC session is part of this alternative.
 
-DESIGN INTENT: export only the qcow2 disk and manifest. Never clone swtpm state,
-SSH private keys, Secure Boot signing keys or the host `secrets/` directory.
-Owner ruling §K in `docs/OWNER_RULINGS.md` forbids duplicating TPM seeds between
-VMs. Provision fresh per-VM TPM/firmware state for consumers; importing a disk
-into that state is an unverified coordinator task. Preserve the manifest's
-non-secret machine identity for an image's sequential rebuild/run workflow;
-concurrent guests need distinct identities and their own qualification.
+DESIGN INTENT (owner update, 2026-11-07): the offline image also has a private
+[machine-state sidecar](V3_WINDOWS_MACHINE_STATE.md), explicitly
+NON-SENSITIVE-BY-DESIGN for its disposable guest material. This owner exception
+includes TPM/OVMF and generated guest keys; ordinary per-VM restrictions outside
+the offline image remain in force. Each logical run starts from fresh copies of
+the pristine image/state, never writes state back, and records CPU observations
+without pinning a CPU model or feature set. The sidecar path is DESIGN-ONLY;
+native-image compatibility and Windows behavior remain coordinator dry-run tasks.
 
 ## Owner manual checklist template
 
@@ -302,7 +303,8 @@ DESIGN RISKS (unmeasured in Y1):
   separately, including activation/TLS failures.
 - A stock NVIDIA driver can need rebind/restart on another GPU die. The owner
   expects upgrades to work, but cross-die driver rebind and application activation
-  must still be measured. Preserve machine identity without copying TPM secrets.
+  remains an UNTESTED coordinator task. Preserve the offline image's identity
+  through its explicit machine-state sidecar and fresh per-run copies.
 - Some official installers and first launches need a functioning GPU or online
   activation. Completing those steps and then running offline cannot be proven
   by this lane's mocks. Pin UI automation inputs separately at run time.

@@ -163,6 +163,7 @@ inventory contract, risks and unexecuted coordinator dry-run plan.
 |---|---|
 | `windows-images/<build-id>/windows.qcow2` | One flattened compressed qcow2 disk, never a public release asset |
 | `windows-images/<build-id>/manifest.json` | Artifact bytes/SHA-256, qemu-img info, inventory/file exclusions, manual installer record, repo media pins, real UTC date and host revision |
+| `windows-images/<build-id>/MACHINE_STATE.json` | DESIGN-ONLY versioned offline identity/RTC/TPM/OVMF sidecar, image/blob SHA-256s; NON-SENSITIVE-BY-DESIGN disposable guest material, fresh working copy per run |
 | `windows-images/<build-id>/installers/` | Optional owner-held originals and licence texts, only where the applicable terms permit that private copy |
 
 DESIGN INTENT: throwaway accounts only; private R2 only; never public, shared
@@ -171,7 +172,12 @@ version, full pinned SHA-256, manual steps and licence notes. No app rows or
 licence permissions are invented by this proposal. Existing terms findings above
 are not overridden: an image does not authorize automated licensed-app use.
 Keep evaluation-edition expiry on a lawful rebuild/licensing schedule; a faked
-clock is not an extension of a licence. Never clone TPM seeds or signing keys.
+clock is not an extension of a licence. Owner update (2026-11-07): the offline
+image's disposable TPM/OVMF and generated guest signing material belong in the
+private [machine-state sidecar](design/V3_WINDOWS_MACHINE_STATE.md). This explicit
+NON-SENSITIVE-BY-DESIGN exception does not include personal or provider credentials;
+ordinary VM secrets remain outside this proposal. The pristine sidecar is never
+written back from a run. No sidecar upload is implemented or deployed here.
 
 CODE READ: `scripts/bench/windows/image_package.sh` packages only after a clean
 session and validates checksums. It uses a caller-supplied presigned PUT or GET
