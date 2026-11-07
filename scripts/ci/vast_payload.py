@@ -242,8 +242,8 @@ def winapps_rows(text, rc, sha, profile):
 def tier_requested(environ, windows):
     """The release tier's extras (ci/vast-broker/src/tier.js, 2026-11-05): KF_TIER is informational;
     KF_WINDOWS_RUNS=2 runs the Windows gate a second time on the same box (only with the Windows
-    stage); KF_STAGES names extra stages. Only `specviewperf` is a stage slot that can run (its lane
-    is plumbing until the SPECviewperf lane lands); `two_guests` and `trio` are reserved names,
+    stage); KF_STAGES names extra stages. Only `specviewperf` is a stage slot that can run (with
+    KF_SPEC naming its lane, spec_requested); `two_guests` and `trio` are reserved names,
     DESIGN-ONLY and refused. Anything malformed is refused before any stage runs."""
     tier = environ.pop("KF_TIER", None)
     runs = environ.pop("KF_WINDOWS_RUNS", None)
@@ -266,24 +266,118 @@ def tier_requested(environ, windows):
 # Stage slots (names reserved in ci/vast-broker/defaults.json stageSlots). PLUMBING = the stage
 # runs through scripts/ci/vast_stage_specviewperf.sh; DESIGN_ONLY = refused if requested.
 STAGE_SLOTS = {"specviewperf": "PLUMBING", "two_guests": "DESIGN_ONLY", "trio": "DESIGN_ONLY"}
-SPEC_VERDICT = re.compile(r"^SPECVIEWPERF_STAGE_(PASS|FAIL|RETRY)(?: class=([A-Z_]{1,32}))?$", re.M)
+SPEC_VERDICT = re.compile(r"^SPECVIEWPERF_STAGE_(PASS|FAIL|RETRY)(?: class=([A-Z0-9_]{1,32}))?$", re.M)
 
 
-def specviewperf_rows(text, rc):
-    """Grade the SPECviewperf stage wrapper. Only its verdict word leaves the box: the wrapper keeps
-    the lane's own output (scores included) in a private file and prints one verdict line. RETRY
-    (and a missing lane: class NOT_BUILT) is never a pass."""
+# The SPECviewperf stage (docs/design/V3_SPEC_GATE.md, DRAFT 2026-11-07, DISABLED BY DEFAULT: the Worker sends
+# KF_STAGES=specviewperf with KF_SPEC=lanea|laneb|both only when the owner has enabled `releaseStages` and a lane plan,
+# and nothing sends them today). It runs after the Windows gate(s), in the Windows guest the gate passed, on the same
+# box. Lane A (energy, creo, blender, enscape) and lane B (medical, maya, catia, solidworks, unreal_engine) are two
+# boxes of a die; `both` is one box with all nine and needs a lease longer than the 300-minute box limit allows on most
+# hosts (its time check below then fails closed). The lanes and every time constant are one file the lane script
+# reads too: scripts/bench/specviewperf/lanes.json.
+SPEC_LANES = ("lanea", "laneb", "both")
+SPEC_TABLE = "scripts/bench/specviewperf/lanes.json"
+SPEC_RETRY_CLASSES = {
+    "NOT_BUILT", "MEDIA", "PROVIDER", "TRANSPORT", "TIME", "HOSTREF", "BAR1_EXCEPTION", "OPERATOR", "USAGE",
+}
+SPEC_ROW = re.compile(
+    r"^SPEC_ROW name=([a-z][a-z_]*-[0-9]{2}) result=(PASS|FAIL|NOT_RUN) subtests=[0-9]{1,3}/[0-9]{1,3}"
+    r" reason=(?:[A-Z_]{1,16}|-) failed=(?:[A-Za-z0-9_,]{1,120}|-)$",
+    re.M,
+)
+SPEC_LIST = re.compile(r"^SPEC_STAGE_LIST lane=(lanea|laneb|both) n=([0-9]{1,2})$", re.M)
+SPEC_EXIT = re.compile(r"^SPECVIEWPERF_STAGE_EXIT rc=([0-9]+)$", re.M)
+# The Windows image is installed by the gate with a disk this size (a sparse file: it costs only what the guest
+# writes); win_vm.sh's default (80 GB) cannot hold a lane's tree (44 to 50 GB) next to Windows. MEASURED: the
+# 2026-11-05 run installed with 220 GB (traces/specviewperf_vast_20261105/README.md).
+SPEC_DISK_GB = "220"
+# The stage's own deadline is the soft deadline minus this margin (the verdict, the evidence and the deletion of the copy).
+SPEC_DEADLINE_MARGIN_S = 120
+
+
+def spec_requested(environ, windows, stages):
+    """KF_SPEC (lanea, laneb, both) names the lane of the SPECviewperf stage. It goes with the stage slot, and the stage
+    with it: a lane without the slot, the slot without a lane (it would silently run both) and the stage without the
+    Windows gate (it runs in the gate's guest) are refused before any stage runs. Absent and no slot: today's run."""
+    value = environ.pop("KF_SPEC", None)
+    wanted = "specviewperf" in stages
+    if wanted and not windows:
+        raise EvidenceError("preflight")
+    if value is None:
+        if wanted:
+            raise EvidenceError("preflight")
+        return None
+    if value not in SPEC_LANES or not wanted:
+        raise EvidenceError("preflight")
+    return value
+
+
+def spec_table(root):
+    """The lane table (lanes.json); a missing or malformed file is a preflight failure, before any stage."""
+    try:
+        table = json.loads(bounded_text(Path(root) / SPEC_TABLE, 65536))
+        lanes = table["lanes"]
+        assert sorted(lanes) == ["lanea", "laneb"] and all(isinstance(lanes[k], list) and lanes[k] for k in lanes)
+        assert set(sum(lanes.values(), [])) == set(table["viewsets"]) and len(sum(lanes.values(), [])) == len(table["viewsets"])
+        for key in ("setup_s", "factor", "tail_reserve_s"):
+            assert table[key] > 0
+        return table
+    except (OSError, ValueError, KeyError, TypeError, AssertionError, EvidenceError):
+        raise EvidenceError("preflight") from None
+
+
+def spec_names(table, lane):
+    """The viewsets of a lane in run order (`both`: lane A, then lane B)."""
+    if lane == "both":
+        return list(table["lanes"]["lanea"]) + list(table["lanes"]["laneb"])
+    return list(table["lanes"][lane])
+
+
+def spec_min_remaining_ms(table, lane):
+    """The stage does not start when the whole lane cannot plausibly finish: setup, the native walls with a margin and the
+    tail (INFERRED constants, lanes.json). A shortfall is `specviewperf_retry_time`, not a verdict on the guest."""
+    native = sum(table["viewsets"][n]["native_s"] for n in spec_names(table, lane))
+    return int(table["setup_s"] + table["factor"] * native + table["tail_reserve_s"]) * 1000
+
+
+def specviewperf_rows(text, rc, lane, table):
+    """Grade the SPECviewperf stage wrapper. THE GATE IS THE GUEST PASSING: one verdict PASS with exit 0, one exit line
+    rc=0, the lane named in the list line, and exactly one PASS row for every viewset of the lane, no more, no fewer.
+    Only status lines leave the box (the wrapper keeps the lane's own output, which it never reads for scores, in a
+    private file). FAIL is the row `specviewperf` (a viewset failed in the guest, with the passed count beside it).
+    RETRY (a missing lane, media, transport, time, a host or harness fault) is `specviewperf_retry_<class>`: never a
+    pass. A PASS that is not backed by every row is the harness not ending cleanly: retry, class operator."""
+    names = spec_names(table, lane)
     verdicts = SPEC_VERDICT.findall(text)
     if len(verdicts) != 1:
         raise EvidenceError("specviewperf_retry_operator")
     kind, cls = verdicts[0]
-    if kind == "PASS" and rc == 0:
-        return [row("specviewperf", 1)]
+    exits = SPEC_EXIT.findall(text)
+    rows = SPEC_ROW.findall(text)
+    seen = [name for name, _ in rows]
+    passed = sum(1 for _, result in rows if result == "PASS")
+    partial = [row("specviewperf_passed", passed)] if passed else []
+    if (
+        kind == "PASS"
+        and rc == 0
+        and exits == ["0"]
+        and SPEC_LIST.findall(text) == [(lane, str(len(names)))]
+        and sorted(seen) == sorted(names)
+        and passed == len(names)
+    ):
+        out = [row("specviewperf", len(names))]
+        if lane == "both":
+            out += [row("specviewperf_" + k, len(table["lanes"][k])) for k in ("lanea", "laneb")]
+        else:
+            out.append(row("specviewperf_" + lane, len(names)))
+        return out
     if kind == "FAIL":
-        raise EvidenceError("specviewperf")
-    raise EvidenceError(
-        "specviewperf_retry_" + (cls.lower() if kind == "RETRY" and cls else "operator")
-    )
+        raise EvidenceError("specviewperf", partial)
+    if kind == "RETRY":
+        name = "specviewperf_retry_" + (cls.lower() if cls in SPEC_RETRY_CLASSES else "operator")
+        raise EvidenceError(name, partial)
+    raise EvidenceError("specviewperf_retry_operator", partial)
 
 
 # The Linux apps stage (DRAFT 2026-11-07, lane appslinux; DISABLED BY DEFAULT). It runs the app matrix
@@ -1227,6 +1321,9 @@ def main():
         windows, windows_source = windows_requested(os.environ)
         tier, windows_runs, extra_stages = tier_requested(os.environ, windows)
         winapps = winapps_requested(os.environ, windows)
+
+        spec = spec_requested(os.environ, windows, extra_stages)
+        spec_tbl = spec_table(root) if spec else None
         refresh_claims(result, windows)
         print(
             "KF_PAYLOAD_TIER windows="
@@ -1239,6 +1336,8 @@ def main():
             + str(windows_runs)
             + " stages="
             + (":".join(extra_stages) or "none")
+            + " spec="
+            + (spec or "none")
             + " winapps="
             + (winapps or "none"),
             flush=True,
@@ -1279,6 +1378,9 @@ def main():
             KF_PAYLOAD_CONTROL_DIR=str(evidence / "native-controls"),
             KF_PAYLOAD_NATIVE_RECEIPT=str(evidence / "native-receipt.json"),
         )
+        if spec:
+            # the gate installs Windows on a disk that can hold a lane's tree; an explicit WINVM_DISK_GB wins
+            os.environ.setdefault("WINVM_DISK_GB", SPEC_DISK_GB)
         Path(os.environ["KF_PAYLOAD_DIAGNOSTIC_STATE"]).write_text(
             json.dumps({"bytes": 0, "events": []}) + "\n"
         )
@@ -1463,19 +1565,31 @@ def main():
             )
             stages.append(stage)
         if "specviewperf" in extra_stages:
-            # PLUMBING (2026-11-05): the wrapper runs scripts/bench/box/specviewperf_stage.sh when
-            # it exists (the SPECviewperf lane), fetching media through the Worker's presigned
-            # /bench-data route; without it the stage is specviewperf_retry_not_built, never a pass.
+            # DISABLED BY DEFAULT (docs/design/V3_SPEC_GATE.md): the wrapper runs scripts/bench/box/specviewperf_stage.sh,
+            # which fetches the private copy through the Worker's presigned /bench-data route and runs the lane's
+            # viewsets in the Windows guest the gate passed. Last, after every Windows run. Its own deadline is the soft
+            # deadline minus a margin; too little time for the whole lane is specviewperf_retry_time, never a start.
             output3 = evidence / "specviewperf.run"
-            stages.append(
-                make_stage(
-                    "specviewperf",
-                    ["bash", str(root / "scripts/ci/vast_stage_specviewperf.sh"), tag, PROV_DIR],
-                    output3,
-                    [],
-                    lambda rc: specviewperf_rows(bounded_text(output3), rc),
-                )
+            stage = make_stage(
+                "specviewperf",
+                [
+                    "env",
+                    "KF_SPEC_LANE=" + spec,
+                    "KF_SPEC_DEADLINE_EPOCH=" + str(soft // 1000 - SPEC_DEADLINE_MARGIN_S),
+                    "bash",
+                    str(root / "scripts/ci/vast_stage_specviewperf.sh"),
+                    tag,
+                    PROV_DIR,
+                ],
+                output3,
+                [],
+                lambda rc: specviewperf_rows(bounded_text(output3), rc, spec, spec_tbl),
+                [Path(PROV_DIR) / (tag + "_spec") / "stage.log"],
             )
+            stage.update(
+                min_remaining_ms=spec_min_remaining_ms(spec_tbl, spec), short_row="specviewperf_retry_time"
+            )
+            stages.append(stage)
         return execute_stages(stages, soft, result, destination)
     except EvidenceError as error:
         if isinstance(error, ProviderFault):

@@ -20,8 +20,8 @@ const cases = [
   [
     'winapps default enabled',
     'src/tier.js',
-    'stages = [], winApps } = {})',
-    "stages = [], winApps = 'small' } = {})",
+    "  const env = { KF_MERGE_WINDOWS: tier(profile).windows ? '1' : '0' };",
+    "  winApps ??= 'small';\n  const env = { KF_MERGE_WINDOWS: tier(profile).windows ? '1' : '0' };",
   ],
   ['winapps request dropped', 'src/tier.js', 'env.KF_WINAPPS = winApps;', 'void winApps;'],
   [
