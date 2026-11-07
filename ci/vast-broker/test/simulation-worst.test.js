@@ -47,29 +47,36 @@ async function fleet({ changeMarket = (m) => m, overrides = {}, fault, tier = 's
       const intercepted = await state.fault({ h, u, method, init, owned });
       if (intercepted) return intercepted;
     }
-    const response = await original(input, init);
-    if (u.hostname === 'console.vast.ai' && /\/asks\//.test(u.pathname)) {
-      const created = h.cloud.created.at(-1);
-      owned.add(String(created.contract));
-      assert.ok(
-        [...owned].filter((id) => h.cloud.instances.has(id)).length <= (tier === 'large' ? 8 : 1),
-        'fleet concurrency',
-      );
-      const records = [...(await h.storage.list({ prefix: 'record:' })).values()];
-      const estimate = records.reduce(
-        (sum, r) =>
-          sum +
-          (r.closed === 'GONE'
-            ? 0
-            : ((r.computeStoragePrice ?? r.price) *
-                Math.max(0, (r.ended ?? r.started + (r.billingTtl ?? r.ttl)) - r.started)) /
-                3600000 +
-              (r.bandwidthCost ?? 0)),
-        0,
-      );
-      assert.ok(estimate <= 30 + 1e-6, 'fleet estimated cap after create');
+    const beforeCreates = h.cloud.created.length;
+    try {
+      return await original(input, init);
+    } finally {
+      if (
+        u.hostname === 'console.vast.ai' &&
+        /\/asks\//.test(u.pathname) &&
+        h.cloud.created.length > beforeCreates
+      ) {
+        const created = h.cloud.created.at(-1);
+        owned.add(String(created.contract));
+        assert.ok(
+          [...owned].filter((id) => h.cloud.instances.has(id)).length <= (tier === 'large' ? 8 : 1),
+          'fleet concurrency',
+        );
+        const records = [...(await h.storage.list({ prefix: 'record:' })).values()];
+        const estimate = records.reduce(
+          (sum, r) =>
+            sum +
+            (r.closed === 'GONE'
+              ? 0
+              : ((r.computeStoragePrice ?? r.price) *
+                  Math.max(0, (r.ended ?? r.started + (r.billingTtl ?? r.ttl)) - r.started)) /
+                  3600000 +
+                (r.bandwidthCost ?? 0)),
+          0,
+        );
+        assert.ok(estimate <= 30 + 1e-6, 'fleet estimated cap after create');
+      }
     }
-    return response;
   };
   h.restart();
   return { h, owned, outsideDestroyed, state, tier };
@@ -329,4 +336,24 @@ test('simulation worst: clock moves backwards then reaches the hard deadline', a
   await f.h.service.sweep();
   assert.equal((await f.h.storage.get('record:' + r.key)).closed, 'HARD_TIMEOUT');
   await stopAndCheck(f, 'DONE');
+});
+
+// FALSIFIER: losing a create reply loses ownership or leads to a second rental.
+test('simulation worst: allocated create loses reply then restart reconciles exact id', async () => {
+  const f = await fleet();
+  f.h.cloud.ambiguous = true;
+  await start(f);
+  assert.equal(f.h.cloud.creates, 1);
+  assert.equal(f.owned.size, 1);
+  const pending = (await records(f.h))[0];
+  assert.equal(pending.id, null);
+  assert.equal(pending.ended, null);
+  f.h.cloud.ambiguous = false;
+  f.h.restart();
+  await f.h.service.sweep();
+  const recovered = await f.h.storage.get('record:' + pending.key);
+  assert.equal(recovered.id, '900');
+  assert.equal(recovered.idSource, 'reconcile');
+  assert.equal(f.h.cloud.creates, 1);
+  await stopAndCheck(f);
 });
