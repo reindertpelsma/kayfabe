@@ -31,6 +31,11 @@ def main():
         check_reference(meta, dict(backend=dev, gpu=devices[0].name, seed=1, samples=256, width=960, height=540,
                                   blender_version=bpy.app.version_string,
                                   scene_sha256=hashlib.sha256(scene.read_bytes()).hexdigest()), raw)
+        try:
+            Path(out).unlink(missing_ok=True)
+        except OSError as e:
+            print("CHECK cycles_output FAIL", e)
+            return 1
         # Original script consumes the first two arguments after --; the extra reference path is ignored.
         runpy.run_path(str(scene), run_name="__main__")
         actual = bpy.data.images.load(out, check_existing=False)

@@ -44,6 +44,8 @@ MUTANTS = [
     ("blender-runner-skips-reference", "guest/py/blender_release.py",
      'from release_oracles import check_reference, compare_pixels',
      'from release_oracles import compare_pixels\ncheck_reference = lambda *args: None'),
+    ("blender-old-output-not-cleared", "guest/py/blender_release.py",
+     'Path(out).unlink(missing_ok=True)', 'pass'),
     ("bundle-source-pin-ignored", "release_bundle.py",
      'if (receipt.get("schema") != 1 or receipt.get("source_commit") != source["commit"]\n'
      '            or receipt.get("source_repository") != source["repository"]\n'

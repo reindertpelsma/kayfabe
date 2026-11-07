@@ -142,6 +142,22 @@ class Blender(unittest.TestCase):
         self.assertEqual(rc, 1)
         render.assert_not_called()
 
+    def test_locked_old_output_prevents_a_new_render(self):
+        (self.root / "out.png").write_bytes(b"stale synthetic render")
+        with patch.object(B.Path, "unlink", side_effect=PermissionError("locked old render")):
+            rc, log, render, compare = self.run_fake()
+        self.assertEqual(rc, 1)
+        render.assert_not_called()
+        compare.assert_not_called()
+
+    def test_unremovable_old_output_cannot_emit_parity_pass(self):
+        (self.root / "out.png").write_bytes(b"stale synthetic render")
+        with patch.object(B.Path, "unlink", side_effect=OSError("old render cannot be removed")):
+            rc, log, render, compare = self.run_fake()
+        self.assertEqual(rc, 1)
+        self.assertIn("CHECK cycles_output FAIL", log)
+        self.assertNotIn("CYCLES_PARITY_PASS", log)
+
 
 if __name__ == "__main__":
     unittest.main()
