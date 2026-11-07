@@ -65,3 +65,16 @@ jobs:
         run: python3 scripts/ci/evidence_mutants.py
       - name: Run-report mutations (rows, subruns, bounds, upload) require two killers each
         run: python3 scripts/ci/run_report_mutants.py
+
+  # The SPECviewperf stage's tests run the real stage script against fakes (a process per command), so its mutation run is
+  # its own job: it neither slows nor shares the time limit of the job above.
+  spec-stage:
+    name: SPECviewperf stage — mutations
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: SPECviewperf stage mutations (verdict rules, time guard, copy, teardown, status-only output) require two killers each
+        run: python3 scripts/ci/spec_stage_mutants.py --jobs 4

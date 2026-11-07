@@ -99,6 +99,13 @@ ssh <alias> 'cat /root/prov/<tag>.log'           # V3_GATES_SUMMARY / KF3_RC / F
   *[2026-11-03]* The gate leaves no QEMU or `win_vm.sh run` loop behind (the teardown writes `run/stop-requested` first),
   reads a dead guest's reset counters from a post-mortem boot of the same overlay without kf3, and counts a WER
   re-submission of an old report as `livekernelevent_stale` (never gating). First Turing PASS: `traces/turing_boot_20261103/`.
+- *[2026-11-07, DRAFT, disabled by default]* `specviewperf_stage.sh <tag> <prov>` (through `scripts/ci/vast_stage_specviewperf.sh`) runs
+  one lane of SPECviewperf 15.0.0 (`KF_SPEC_LANE=lanea|laneb|both`) in the Windows guest that `windows_gate.sh` just passed: it
+  fetches the private copy through the Worker's `/bench-data` route (pin: `specviewperf.pin`, without it RETRY class MEDIA),
+  streams the lane's viewsets into a child overlay of the gate's overlay, runs each viewset once (1 iteration, FullHD) after the
+  five-minute settle, and ends in `SPECVIEWPERF_STAGE_PASS` (0), `_FAIL` (1) or `_RETRY class=...` (3). It deletes the copy at the
+  end and prints status lines only. No box has run it; design, lanes, rules and what a first run needs:
+  `docs/design/V3_SPEC_GATE.md`. GPU-free: `python3 -m unittest discover -s scripts/ci -p 'test_vast_spec*.py'`.
 - A merge to master needs `V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS` (2026-10-10: `gate10=FALLBACK` = host RM refused all small micro reservations by a refusal status AND the probe proved a per-2-MiB-leaf reservation works at the flat FB alias, accepted but loud; `gate10=FAIL` never), `KF3_RC=0`,
   `FAST_SUITE_PASS=30` and `BIRTH_CENSUS_OK` on the **exact revision** promoted (docs-only commits on
   top are fine; say so). *[2026-10-03, `v3-sec-nonpriv`]* `BIRTH_CENSUS_OK` (`birth_census.sh`,

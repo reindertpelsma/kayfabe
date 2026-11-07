@@ -158,6 +158,29 @@ test('box environment: only the release profile may ask for a second Windows run
   assert.throws(() => tierEnvironment('sweep', { stages: ['specviewperf'] }), /stages/);
   assert.throws(() => tierEnvironment('release', { stages: ['Bad-Name'] }), /stages/);
 });
+test('KF_SPEC (the SPECviewperf lane) is sent only when asked for, only for release, only with the stage slot, only for a named lane', () => {
+  // today's callers pass nothing: no box sees the field
+  for (const p of ['check', 'sweep', 'release']) assert.ok(!('KF_SPEC' in tierEnvironment(p)), p);
+  assert.ok(!('KF_SPEC' in tierEnvironment('release', { tierName: 'large', stages: ['specviewperf'] })));
+  for (const lane of ['lanea', 'laneb', 'both'])
+    assert.deepEqual(tierEnvironment('release', { tierName: 'large', stages: ['specviewperf'], spec: lane }), {
+      KF_MERGE_WINDOWS: '1',
+      KF_TIER: 'large',
+      KF_STAGES: 'specviewperf',
+      KF_SPEC: lane,
+    });
+  // a lane without the slot, on another profile, or with a name that is not a lane
+  assert.throws(() => tierEnvironment('release', { spec: 'lanea' }), /spec/);
+  assert.throws(() => tierEnvironment('release', { stages: ['trio'], spec: 'lanea' }), /spec/);
+  assert.throws(() => tierEnvironment('check', { stages: ['specviewperf'], spec: 'lanea' }), /stages/);
+  assert.throws(() => tierEnvironment('sweep', { spec: 'lanea' }), /spec/);
+  for (const bad of ['', 'lanec', 'LANEA', 'lanea:laneb', 'all', null, 1])
+    assert.throws(() => tierEnvironment('release', { stages: ['specviewperf'], spec: bad }), /spec/, String(bad));
+});
+test('the Worker sends no SPECviewperf stage and no lane by default', () => {
+  assert.deepEqual(DEFAULTS.releaseStages, []);
+  assert.deepEqual(DEFAULTS.stageSlots.specviewperf, { tiers: ['large'], state: 'PLUMBING' });
+});
 test('plan: two dies per family, two Windows runs per die, a second machine when offered', () => {
   const cfg = cfgOf();
   const plan = planRelease(market(cfg), cfg);

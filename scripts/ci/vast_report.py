@@ -148,6 +148,9 @@ SPEC = [
     # (ci/vast-broker/src/index.js). Absent (an older Worker): the box sends no report.
     ("KF_RUN_REPORT", False, _match(r"1")),
     ("KF_STAGES", False, _match(r"[a-z][a-z0-9_]{0,31}(?::[a-z][a-z0-9_]{0,31}){0,3}")),
+    # 2026-11-07 (SPECviewperf stage, docs/design/V3_SPEC_GATE.md): the lane of the specviewperf stage slot. It goes with
+    # KF_STAGES=specviewperf (release tier only; the payload refuses either alone). Absent: today's run.
+    ("KF_SPEC", False, _match(r"lanea|laneb|both")),
 ]
 
 

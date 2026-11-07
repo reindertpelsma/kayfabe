@@ -1,0 +1,26 @@
+{
+  "_comment": "SPECviewperf gate lanes (docs/design/V3_SPEC_GATE.md). native_s = the CLI wall of one iteration at FullHD on a native Windows 11 LTSC VM, RTX 4090, driver 580.88 (MEASURED, traces/specviewperf_native_20261107/README.md, boxes A and B). tree_gb = decompressed size of the viewset directory (MEASURED, traces/specviewperf_vast_20261105/README.md). budget_s = the longest one viewset may run before it is a FAIL (TIMEOUT): max(1200, 3 x native_s) rounded to 300 s (INFERRED, never measured under kayfabe). setup_s = fetch + verify + copy into the guest + two boots, per lane (INFERRED from the 14 min download, 1.5-5 min hash and 18-21 min copy at 40-45 MB/s). factor = the margin over the native walls that the whole-lane time check demands (INFERRED). tail_reserve_s = kept free at the end for the graceful stop of the guest (win_vm.sh stop allows 420 s) and the verdict. settle_s = the guest runs no viewset sooner than this after its last boot (MEASURED: the first CLI run within about 2 minutes of a reboot failed with 'Unable to gather system details' on two native boxes). Lane order is ascending native_s, so a lane that runs out of time has reported the most rows.",
+  "release": "15.0.0",
+  "setup_s": 2700,
+  "factor": 1.25,
+  "tail_reserve_s": 600,
+  "settle_s": 300,
+  "gather_retry_wait_s": 120,
+  "max_guest_boots": 3,
+  "min_free_gb": {"lanea": 130, "laneb": 125, "both": 190},
+  "viewsets": {
+    "medical-04": {"native_s": 318, "budget_s": 1200, "tree_gb": 1.3},
+    "energy-04": {"native_s": 323, "budget_s": 1200, "tree_gb": 1.6},
+    "maya-07": {"native_s": 400, "budget_s": 1200, "tree_gb": 6.3},
+    "catia-07": {"native_s": 803, "budget_s": 2700, "tree_gb": 7.3},
+    "solidworks-08": {"native_s": 989, "budget_s": 3000, "tree_gb": 7.5},
+    "creo-04": {"native_s": 1243, "budget_s": 3900, "tree_gb": 19.7},
+    "unreal_engine-01": {"native_s": 1236, "budget_s": 3900, "tree_gb": 21.5},
+    "blender-01": {"native_s": 1876, "budget_s": 5700, "tree_gb": 26.4},
+    "enscape-01": {"native_s": 2042, "budget_s": 6300, "tree_gb": 2.2}
+  },
+  "lanes": {
+    "lanea": ["energy-04", "creo-04", "blender-01", "enscape-01"],
+    "laneb": ["medical-04", "maya-07", "catia-07", "solidworks-08", "unreal_engine-01"]
+  }
+}
