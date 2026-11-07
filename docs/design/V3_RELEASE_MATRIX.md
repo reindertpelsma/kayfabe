@@ -361,7 +361,7 @@ version, URL or checksum fallback in this path. A 404, redirect, hash mismatch o
 size mismatch emits `DRIVER_MEDIA_DRIFT`, exits unsuccessfully and cannot become
 READY through a previously working stock driver. The payload reports a failing
 `driver_media_drift` row, and the Worker classifies it as RETRY / MEDIA_DRIFT,
-including when ordinary summary rows claim PASS.
+including when ordinary summary rows claim PASS. A simultaneous attributed test or planned subrun failure remains FAIL; media drift cannot downgrade it into a retry.
 
 CODE READ / DESIGN-ONLY: the verifier supports Linux and Windows installer pins,
 but the matrix payload executor still declares capability 0 and refuses all

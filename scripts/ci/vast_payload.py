@@ -60,7 +60,7 @@ def only(pattern, text, name, rows=()):
 
 def provision_rows(text, rc):
     if re.search(r"^DRIVER_MEDIA_DRIFT reason=[A-Z0-9_]{1,32}$", text, re.M):
-        raise EvidenceError("driver_media_drift", [row("driver_media_drift", failed=1)])
+        raise EvidenceError("driver_media_drift")
     if (
         rc
         or red_line(text)

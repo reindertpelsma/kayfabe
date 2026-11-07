@@ -21,6 +21,16 @@ const V = 'ci/vast-broker/src/release-matrix.js',
   P = 'scripts/ci/release_driver_media.py';
 const cases = [
   [
+    'drift receipt duplicated',
+    'scripts/ci/vast_payload.py',
+    'raise EvidenceError("driver_media_drift")',
+    'raise EvidenceError("driver_media_drift", [row("driver_media_drift", failed=1)])',
+    'python',
+  ],
+
+  ['media drift masks attributed failure', L, 'if (realFailure)', 'if (false)', 'node'],
+
+  [
     'filesystem drift escapes reporting',
     P,
     '    except (MediaDrift, OSError, ValueError) as error:',

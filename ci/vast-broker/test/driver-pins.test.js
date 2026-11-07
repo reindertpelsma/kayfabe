@@ -210,3 +210,32 @@ test('pins: Windows Catalog requires its own official catalog record', () => {
   p.os = 'linux';
   assert.notDeepEqual(check(m), []);
 });
+
+for (const suite of ['linux_subrun_590', 'windows_subrun_580'])
+  test('media drift cannot hide an attributed planned failure ' + suite, () => {
+    const row = executableMatrix().dies.find((d) => d.die === 'AD104');
+    const record = {
+      ended: 1,
+      verdict: 'FAIL',
+      hardware: { gpu_name: 'RTX_4070', compute_cap: 890, driver_version: row.drivers.host_driver },
+      result: {
+        verdict: 'FAIL',
+        host_reference: 'GREEN',
+        suites: [
+          { name: 'cuda_fat', pass: 1, fail: 0, skip: 0 },
+          { name: 'windows_gate', pass: 1, fail: 0, skip: 0 },
+          { name: 'windows_gate_2', pass: 1, fail: 0, skip: 0 },
+          { name: 'driver_media_drift', pass: 0, fail: 1, skip: 0 },
+          { name: suite, pass: 0, fail: 1, skip: 0 },
+        ],
+      },
+    };
+    const result = classifyLeg(record, {
+      windowsRuns: 2,
+      die: 'AD104',
+      family: 'ada',
+      cfg: DEFAULTS,
+      releaseMatrix: row,
+    });
+    assert.equal(result.verdict, 'FAIL');
+  });

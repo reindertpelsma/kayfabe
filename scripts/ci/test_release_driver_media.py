@@ -161,4 +161,22 @@ class ShellMediaGuards(unittest.TestCase):
     def test_provision_stops_on_404_before_builds(self):self.provision_guard('HTTP_404')
     def test_provision_stops_on_hash_before_builds(self):self.provision_guard('HASH')
 
+
+class DriftResultTransport(unittest.TestCase):
+    def pipeline(self, reason):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);destination=root/'result.json';output=root/'provision.run'
+            text='DRIVER_MEDIA_DRIFT reason='+reason+'\n'
+            stage=dict(name='provision',command=['synthetic-no-hardware'],output=output,progress=[],grade=lambda rc:vast_payload.provision_rows(text,rc))
+            result=dict(verdict='FAIL',suites=[],hardware=dict(vast_report.UNKNOWN_HW))
+            def runner(command,soft,path,progress):path.write_text(text);return 3
+            with patch.object(vast_payload,'PROV_DIR',root),patch.object(vast_payload,'append_arm_failure',lambda result:None),patch('sys.stdout',new_callable=io.StringIO):
+                rc=vast_payload.execute_stages([stage],10**13,result,destination,runner=runner)
+            self.assertEqual(rc,1)
+            self.assertEqual([r['name'] for r in result['suites']],['driver_media_drift'])
+            doc=vast_report.read_result_file(destination)
+            self.assertEqual(doc['verdict'],'FAIL');self.assertEqual(doc['suites'][0]['fail'],1)
+    def test_404_drift_survives_payload_and_reporter(self):self.pipeline('HTTP_404')
+    def test_hash_drift_survives_payload_and_reporter(self):self.pipeline('HASH')
+
 if __name__=='__main__':unittest.main()
