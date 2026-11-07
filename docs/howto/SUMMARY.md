@@ -19,6 +19,7 @@
 # Reference
 
 - [Troubleshooting](troubleshooting.md)
+- [Downloading pinned CI data](ci-downloads.md)
 - [Security model](security.md)
 - [Technical FAQ](technical-faq.md)
 - [Goals and plans](goals.md)
