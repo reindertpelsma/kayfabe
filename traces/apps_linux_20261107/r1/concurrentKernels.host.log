@@ -1,0 +1,10 @@
+=== concurrentKernels side=host start=2026-11-07T02:22:32+00:00 host=ubuntu cmd: /opt/apps/bundle/samples/concurrentKernels
+[/opt/apps/bundle/samples/concurrentKernels] - Starting...
+GPU Device 0: "Ada" with compute capability 8.9
+
+> Detected Compute SM 8.9 hardware with 128 multi-processors
+Expected time for serial execution of 8 kernels = 0.080s
+Expected time for concurrent execution of 8 kernels = 0.010s
+Measured time for sample = 0.010s
+Test passed
+=== end rc=0 secs=2 2026-11-07T02:22:34+00:00

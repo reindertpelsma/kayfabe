@@ -1,0 +1,17 @@
+START 2026-11-07T01:41:27+00:00
+BOX_RC=0
+144557e43 traces(apps_linux): pre-registration of the Linux app matrix measurement at next (before any rental)
+DRIVER_RC=0
+NVIDIA GeForce RTX 4090, 580.159.04
+/dev/root       214G   18G  196G   9% /
+TREE_RC=0
+[2026-11-07T01:50:05+00:00] B4: guest ladder built: 5061232 bytes
+[2026-11-07T01:50:05+00:00] BENCH_TREE_DONE
+LADDER_RC=0
+FG_RC=0
+== built: /workspace/bench/fastguest/initrd.cpio.gz  112M
+== kernel release: 6.8.0-147-generic
+KF3_RC=0
+KF3_BUILT /workspace/bench/kf3-bins/144557e4/qemu-system-x86_64 rev=144557e4 mtime=2026-11-07 01:51:07.882873130 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+READY driver=580.159.04
+EXIT 2026-11-07T01:51:09+00:00

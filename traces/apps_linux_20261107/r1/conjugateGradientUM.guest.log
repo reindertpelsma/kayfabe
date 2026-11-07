@@ -1,0 +1,10 @@
+=== conjugateGradientUM side=guest start=2026-11-07T02:41:31+00:00 host=ubuntu cmd: /opt/apps/bundle/samples/conjugateGradientUM
+Starting [conjugateGradientUM]...
+GPU Device 0: "Ada" with compute capability 8.9
+
+> GPU device has 128 Multi-Processors, SM 8.9 compute capabilities
+
+Final residual: 0.000000e+00
+&&&& conjugateGradientUM PASSED
+Test Summary:  Error amount = 1.000000, result = SUCCESS
+=== end rc=0 secs=2 2026-11-07T02:41:33+00:00

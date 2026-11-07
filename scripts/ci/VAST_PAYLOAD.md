@@ -1,6 +1,6 @@
 # Thin Vast payload
 
-STATUS: LIVE, 2026-11-06 (host claims added by branch `claude/setup-picker-20261106`; release-tier
+STATUS: LIVE, 2026-11-07 (the apps stage is a DRAFT, disabled by default, no box has run it under the payload; host claims added by branch `claude/setup-picker-20261106`; release-tier
 extras added by branch `claude/worker-tier-20261105`; the evidence bundle added by branch
 `claude/ci-evidence-bundle-20261106`; none has run on a box).
 
@@ -210,3 +210,24 @@ line. Retention (30 days) and reading are in [DEPLOY](../../ci/vast-broker/DEPLO
 
 GPU-free checks: `python3 -m unittest discover -s scripts/ci -p 'test_vast*.py'` and `python3
 scripts/ci/evidence_mutants.py` (every mutant must fail two tests).
+
+## Apps stage (DRAFT, DISABLED BY DEFAULT, 2026-11-07, lane appslinux)
+
+[CODE READ: vast_payload.py `APPS_STAGE_ENABLED`, `apps_requested`, `apps_rows`; scripts/bench/box/apps_gate.sh]
+The owner's ruling (2026-11-07) is that the release gate includes the Linux CUDA/graphics/AI apps of
+`scripts/apps/` in the guest. The stage `apps` runs `apps_gate.sh` after `cuda_guest` and before
+`windows_gate`, over the gate list `scripts/apps/gate_list.txt` (the apps that passed on bare metal AND in the
+guest on the measured box, [traces/apps_linux_20261107](../../traces/apps_linux_20261107/README.md)). It is off
+until the owner sets `APPS_STAGE_ENABLED = True` in `vast_payload.py`; then the tier decides: `middle` and
+`large` run it, `small` and `adhoc` never do. `KF_STAGES=apps` stays refused (the tier decides, not a Worker
+field), so no Worker change is needed: the Worker bundle (`ci/vast-broker/src` plus its config, hash in
+`ci/vast-broker/deployment.json`) is not touched, and the box scripts reach the box through the git checkout of
+the tested SHA. Grading: one `APPS_STAGE_PASS`, exit 0, exactly one PASS `APP_ROW` for every gate-list name and
+no other, else the row `apps` (a gate app failed in the guest, a kayfabe finding) or `apps_retry_<class>`
+(`not_built`, `time`, `box`, `operator`, ...: not a verdict on the guest; the Worker already reads
+`<x>_retry_<y>` rows as RETRY). The stage has its own time budget (`KF_APPS_BUDGET_S`, default 3000 s) and does
+not start with less than `APPS_MIN_REMAINING_MS` left. Per-app rows leave the box as `APP_ROW` log lines and
+become `apps[]` and `tests[]` rows (suite `apps_linux`) in `report.json` through `vast_run_report.py` (PR #282).
+GPU-free checks: `test_vast_payload_apps.py`, `test_apps_matrix_table.py`, the `apps-*` cases of
+`payload_mutants.py` (two killers each).
+

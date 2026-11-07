@@ -1,0 +1,8 @@
+# UnifiedMemoryPerf: guest alone in a fresh boot (MEASURED, run r1, kf3 144557e4, RTX 4090, 2026-11-07)
+guest verdict: APPRES side=guest app=UnifiedMemoryPerf verdict=FAIL rc=1 secs=4 quiet=1 note=Running ...CUDA error at matrixMultiplyPerf.cu:435 code=719(cudaErrorLaunchFailure) "cudaStreamSynchronize(streamToRunOn)" 
+host Xid in that boot:
+  NVRM: Xid (PCI:0000:00:08): 31, pid=109325, name=qemu-system-x86, channel 0x00000022, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC2 GPCCLIENT_T1_0 faulted @ 0x70ca_c2000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+guest Xid lines: 0
+kf3 'RC host twin' lines: 8; first:
+  kf3: RC host twin 0x23 (guest chid 0xc, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+bare metal (same box, run r1): APPRES side=host app=UnifiedMemoryPerf verdict=PASS rc=0 secs=12 quiet=1

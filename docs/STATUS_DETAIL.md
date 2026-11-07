@@ -1,6 +1,6 @@
 # Status in detail — what runs, what does not, and where it was measured
 
-**STATUS: RESEARCH, 2026-10-15.** The long form of the README's status as written on 2026-09-26 to 2026-09-30 (revisions, boxes and evidence per line), with a warning banner added on 2026-10-15; for everything after 2026-09-30 it is history. Read on 2026-11-07: later sections still say Windows guests are "research only" and GitHub CI is red, which the current [`README.md`](../README.md) (dated 2026-10-21) no longer says, so do not take its present-tense lines as current. The current status is in [`README.md`](../README.md) and [`STATUS_AND_HANDOFF.md`](STATUS_AND_HANDOFF.md). The older dated blocks below (2026-09-26 "LIVE", the 2026-09-29/30 merge bars) are kept as written and are superseded by this line.
+**STATUS: LIVE, 2026-11-07.** The newest dated block is the one nearest the top; every earlier block is history and keeps its own date. The app matrix line of 2026-11-07 is in the quoted block below. Read on 2026-11-07: the older blocks below still say Windows guests are "research only" and GitHub CI is red, which the current [`README.md`](../README.md) (dated 2026-10-21) no longer says, so take present-tense lines in blocks older than 2026-10-15 as history. The current status is in [`README.md`](../README.md) and [`STATUS_AND_HANDOFF.md`](STATUS_AND_HANDOFF.md).
 
 > **UPDATE 2026-10-15 (read first):** section 0 of this page is dated 2026-09-30 and is **history** for everything after that date. The current status, with
 > evidence per line, is in [`../README.md`](../README.md) (what runs, what does not, supported dies) and [`STATUS_AND_HANDOFF.md`](STATUS_AND_HANDOFF.md).
@@ -14,7 +14,11 @@
 > fresh QEMU/guest builds and thin 30/30 on RTX 3060. The recovered Claude/Turing code,
 > approved 535/545 capability audit and display acceptance fix are published on master/v3.
 > Evidence: [`recovered integration`](../traces/recovered_integration_20260929/README.md).
-> Current app result is 60/65 at `4c48ca0c`, not rerun at this new revision; see
+> ★ **App matrix at kf3 `144557e4`, RTX 4090, 2026-11-07:** bare metal 70/70 runnable apps, guest 66/70 in one boot;
+> the four that fail alone (`UnifiedMemoryStreams`, `UnifiedMemoryPerf`, `conjugateGradientUM`, `attach_verify`) each take one
+> host Xid 31 and pass on bare metal. Gate lists and the draft apps stage (disabled by default):
+> [`traces/apps_linux_20261107`](../traces/apps_linux_20261107/README.md).
+> ⊘ *Superseded 2026-11-07 by the line above:* Current app result is 60/65 at `4c48ca0c`, not rerun at this new revision; see
 > [`V3_APP_MATRIX.md`](design/V3_APP_MATRIX.md) §R3. Older branch/status claims below are
 > historical; [`STATUS_AND_HANDOFF.md`](STATUS_AND_HANDOFF.md) is the current resume point.
 

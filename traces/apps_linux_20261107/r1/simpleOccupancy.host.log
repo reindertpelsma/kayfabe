@@ -1,0 +1,16 @@
+=== simpleOccupancy side=host start=2026-11-07T02:22:26+00:00 host=ubuntu cmd: /opt/apps/bundle/samples/simpleOccupancy
+starting Simple Occupancy
+
+[ Manual configuration with 32 threads per block ]
+Potential occupancy: 50%
+Elapsed time: 0.10272ms
+
+[ Automatic, occupancy-based configuration ]
+Suggested block size: 768
+Minimum grid size for maximum occupancy: 256
+Potential occupancy: 100%
+Elapsed time: 0.010976ms
+
+Test PASSED
+
+=== end rc=0 secs=2 2026-11-07T02:22:28+00:00
