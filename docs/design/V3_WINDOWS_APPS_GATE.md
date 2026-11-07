@@ -7,8 +7,9 @@ documents: [`V3_WINDOWS_APP_MATRIX.md`](V3_WINDOWS_APP_MATRIX.md) (the inventory
 vocabulary; unchanged), [`V3_WINDOWS_GATE.md`](V3_WINDOWS_GATE.md) (the gate this stage follows) and
 [`../DOWNLOADS.md`](../DOWNLOADS.md) ("Windows app bundle").
 
-Marking in this document: **CODE READ** = read in the repository, **MEASURED** = seen on a box (with revision, box, die),
-**INFERRED** = reasoned, not seen, **DESIGN** = intent.
+Marking in this document: **CODE READ** = repository inspection; **MEASURED** = recorded observations such as the
+2026-11-07 `wa1`/`wa1f` run in section 8 (with revision, box and die); **INFERRED** = reasoned, not seen;
+**DESIGN** = intent.
 
 **CODE READ, J1 integration, 2026-11-07:** the successor to draft PR #286 merges `next` (including Linux apps,
 run-report support and evidence relocation). `vast_run_report.py` consumes the stage's `WINAPPS_APP` output as
@@ -94,7 +95,8 @@ an excuse.**
 - **Same guest as the gate.** `windows_apps.sh` runs after `windows_gate.sh` ended in `WINDOWS_GATE_PASS` for the same tag, on
   the same box. Every apps guest is a new qcow2 overlay **backed by the gate's overlay** (`WINVM_OVERLAY_BACKING`, a new opt-in
   in `win_vm.sh`), so the NVIDIA 580.88 driver, GSP forced on, autologon and the one-time device enable are already there, and a
-  fresh guest after a reset is clean. The gate's overlay is sealed read-only first. **INFERRED, to be measured in section 8:**
+  fresh guest after a reset is clean. The gate's overlay is sealed read-only first. **INFERRED preregistration for the
+  2026-11-07 `wa1`/`wa1f` runs in section 8:**
   that the device comes up at code 0 on a boot of such a child overlay without a second enable.
 - **App disk on the machine's own AHCI bus** (`WINVM_APPS_ISO`, `ide.3` of q35), read-only, present from power-on. The 2026-10
   design hot-plugged a USB CD-ROM through QMP on a broker's `xhci.0`; `win_vm.sh` has no xhci, and a boot-time disk needs no
@@ -127,7 +129,7 @@ No change to a pass rule, to `verdict.py`, to the gate, or to the Linux twin. It
 apps pass or disappear: they are listed, with a reason, until a person rules. It adds no secret to a box and no vendor
 download to a run.
 
-## 8. Measured: first hardware run
+## 8. Measured: 2026-11-07 hardware runs `wa1` and `wa1f`
 
 MEASURED 2026-11-07, Vast box 59505074, RTX 4090 (AD102), kf3 revision `b11655b7` (`next`), Windows 11 LTSC 2024 guest with the stock
 580.88 driver; evidence and the per-app table in [`traces/winapps_20261107/`](../../traces/winapps_20261107/README.md).
@@ -180,7 +182,7 @@ the recorded full run used 16. The falsifier did not hold for the current groupi
 cleanup, health checks and phase-2 isolated verdicts unchanged. **INFERRED arithmetic**, assuming all
 79 apps finish phase 1 without a health restart: ceiling(79/8)=10 boots, ceiling(79/16)=5,
 ceiling(79/32)=3. Applied to the recorded approximate 210 seconds per boot, 16 to 32 could avoid
-about 420 seconds. This is a cost model, not a measured improvement; isolated failures add boots.
+about 420 seconds. This saving is **unmeasured**, a cost model only; isolated failures add boots.
 It does not address the approximate 47-second per-app transport cost. A later implementation could
 combine script writes into one ssh operation, with the existing output and health checks retained.
 No grouping default, timeout, budget or verdict rule is changed here.
