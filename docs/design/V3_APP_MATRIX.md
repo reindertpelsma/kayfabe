@@ -1,5 +1,11 @@
 # V3 app matrix — which real CUDA apps work in a kayfabe v3 fat guest
 
+★ *2026-11-07 (R5, kf3 `144557e4`, RTX 4090 AD102, vast 59497053, destroyed): host 70/70 runnable apps, guest 66/70 in ONE boot (no
+wedge); the four failures are the UVM four, each alone in a fresh boot too, each with one host Xid 31 and a bare-metal PASS. The
+gate lists, the per-app table, the times (host 14.1 min, guest 19.3 min, `apps_gate.sh` full 17.9 min, middle 7.5 min) and the
+draft payload stage are in [`traces/apps_linux_20261107/README.md`](../../traces/apps_linux_20261107/README.md). The R3 headline
+below (61/65) is the previous result of record.*
+
 ★ *2026-09-30 (§R4, partial): the same matrix at kf3 `738c90e5` (= `3f67ed95`, pre-CDP-fix) on an RTX 3070 —
 guest OFF 60/65 + 6/6, identical to R3; PM, 100-process and fast-path-ON runs not run.*
 **STATUS: LIVE, 2026-09-28 — current result is §R3 (kf3 `4c48ca0c` = master `8ab92bf4`'s code,

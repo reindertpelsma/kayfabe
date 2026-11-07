@@ -12,7 +12,11 @@
 > fresh QEMU/guest builds and thin 30/30 on RTX 3060. The recovered Claude/Turing code,
 > approved 535/545 capability audit and display acceptance fix are published on master/v3.
 > Evidence: [`recovered integration`](../traces/recovered_integration_20260929/README.md).
-> Current app result is 60/65 at `4c48ca0c`, not rerun at this new revision; see
+> ★ **App matrix at kf3 `144557e4`, RTX 4090, 2026-11-07:** bare metal 70/70 runnable apps, guest 66/70 in one boot;
+> the four that fail alone (`UnifiedMemoryStreams`, `UnifiedMemoryPerf`, `conjugateGradientUM`, `attach_verify`) each take one
+> host Xid 31 and pass on bare metal. Gate lists and the draft apps stage (disabled by default):
+> [`traces/apps_linux_20261107`](../traces/apps_linux_20261107/README.md).
+> ⊘ *Superseded 2026-11-07 by the line above:* Current app result is 60/65 at `4c48ca0c`, not rerun at this new revision; see
 > [`V3_APP_MATRIX.md`](design/V3_APP_MATRIX.md) §R3. Older branch/status claims below are
 > historical; [`STATUS_AND_HANDOFF.md`](STATUS_AND_HANDOFF.md) is the current resume point.
 

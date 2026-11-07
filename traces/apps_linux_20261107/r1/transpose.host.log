@@ -1,0 +1,22 @@
+=== transpose side=host start=2026-11-07T02:23:39+00:00 host=ubuntu cmd: /opt/apps/bundle/samples/transpose
+Transpose Starting...
+
+GPU Device 0: "Ada" with compute capability 8.9
+
+> Device 0: "NVIDIA GeForce RTX 4090"
+> SM Capability 8.9 detected:
+> [NVIDIA GeForce RTX 4090] has 128 MP(s) x 128 (Cores/MP) = 16384 (Cores)
+> Compute performance scaling factor = 1.00
+
+Matrix size: 1024x1024 (64x64 tiles), tile size: 16x16, block size: 16x16
+
+transpose simple copy       , Throughput = 1971.4198 GB/s, Time = 0.00396 ms, Size = 1048576 fp32 elements, NumDevsUsed = 1, Workgroup = 256
+transpose shared memory copy, Throughput = 1897.8593 GB/s, Time = 0.00412 ms, Size = 1048576 fp32 elements, NumDevsUsed = 1, Workgroup = 256
+transpose naive             , Throughput = 644.3745 GB/s, Time = 0.01212 ms, Size = 1048576 fp32 elements, NumDevsUsed = 1, Workgroup = 256
+transpose coalesced         , Throughput = 1833.9890 GB/s, Time = 0.00426 ms, Size = 1048576 fp32 elements, NumDevsUsed = 1, Workgroup = 256
+transpose optimized         , Throughput = 1897.8593 GB/s, Time = 0.00412 ms, Size = 1048576 fp32 elements, NumDevsUsed = 1, Workgroup = 256
+transpose coarse-grained    , Throughput = 1897.8593 GB/s, Time = 0.00412 ms, Size = 1048576 fp32 elements, NumDevsUsed = 1, Workgroup = 256
+transpose fine-grained      , Throughput = 1907.3486 GB/s, Time = 0.00410 ms, Size = 1048576 fp32 elements, NumDevsUsed = 1, Workgroup = 256
+transpose diagonal          , Throughput = 1774.9227 GB/s, Time = 0.00440 ms, Size = 1048576 fp32 elements, NumDevsUsed = 1, Workgroup = 256
+Test passed
+=== end rc=0 secs=2 2026-11-07T02:23:41+00:00
