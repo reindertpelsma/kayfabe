@@ -118,6 +118,34 @@ Rules the script enforces: every step logs `START` and `EXIT rc=` (a log with no
 - **Do not snapshot an image with a Windows update staged**: it crash-loops `dwm.exe`. Block updates in test images. <!-- src: docs/WINDOWS_GUEST_SETUP.md -->
 - You supply and license Windows. The scripts download Microsoft's evaluation image, the virtio drivers and NVIDIA's installer from their vendors, each pinned by SHA-256. See [Credits and notices](credits.md). <!-- src: scripts/bench/windows/win_vm.sh, docs/NOTICES.md -->
 
+## Preparing the open application disk
+
+**Builder available, full media validation pending (2026-11-07).** The optional app-matrix disk can be
+packaged with Python 3.11+ and a pinned official Zig release, without a shell, distro compiler or ISO utility.
+From the reviewed checkout, run:
+
+```text
+python3 -I scripts/bench/windows/appmatrix/package_bundle.py check
+python3 -I scripts/bench/windows/appmatrix/package_bundle.py fetch --dl downloads
+python3 -I scripts/bench/windows/appmatrix/package_bundle.py build --dl downloads --out out
+python3 -I scripts/bench/windows/appmatrix/package_bundle.py verify-image --out out
+```
+
+The result is `out/winapps-open.iso`, label `KFAPPS`, with an external file/hash manifest and proposed pin
+line. App installers and archives stay intact on the disk and are extracted inside Windows. The compiler
+archive alone is unpacked on the packaging host. This is a local operator step; the builder refuses CI and
+run-token environments and performs no upload. The guest needs no vendor downloads.
+<!-- src: scripts/bench/windows/appmatrix/package_bundle.py, scripts/bench/windows/appmatrix/bundle_tools.py -->
+
+For a file-manager workflow, install official CPython with Tcl/Tk, double-click
+`scripts/bench/windows/appmatrix/package_bundle_gui.pyw`, select your download/output folders and choose
+**Check → Fetch → Verify → Build → Verify image**. You can instead save each manifest-pinned official original
+under `Downloads/<package id>/<filename>` and the matching Zig archive under `Downloads/_toolchain/`, then
+choose **Verify** to compare their sizes and SHA-256 values. Keep every archive unmodified. **Compare receipt**
+checks another ISO against a first build's manifest. The GUI workflow and a full cross-host build still need
+operator validation; the automated reproducibility checks use small fixtures.
+<!-- src: scripts/bench/windows/appmatrix/package_bundle_gui.pyw, scripts/bench/windows/appmatrix/tests/test_package_bundle.py -->
+
 ## Known limits
 
 - **Windows sleep/wake is not supported yet.** <!-- src: docs/WINDOWS_GUEST_SETUP.md, README.md -->

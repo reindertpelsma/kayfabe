@@ -60,12 +60,90 @@ the host reference. The licence or key is never written down.
 
 ## 3. Inputs: one bundle, from our R2, through the Worker
 
-DESIGN. A rented box gets exactly one input for this stage: `winapps-open.iso`, through the Worker's presigned
-`/bench-data` route (`fetch_bench_data.sh`, run token only), pinned by sha256 in `appmatrix/bundle.pin`. It is built once by a
-person with `appmatrix/package_open_bundle.sh`, which fetches only `open_packages`, refuses to run in CI or on a box, builds
-the mingw test programs from our own sources and never uploads. The Worker names are **proposed** in
-`ci/vast-broker/src/benchdata.js` (`winapps-open.iso`, `winapps-open.manifest.json`; not deployed). Without a pin the stage
-answers `RETRY class=MEDIA`, never a pass. `docs/DOWNLOADS.md` has the table and the reasons.
+**CODE READ, WB1, 2026-11-07:** `scripts/bench/windows/appmatrix/package_bundle.py` replaces the
+shell packaging recipe. It uses Python 3.11 or later, standard library only, and the official pinned Zig 0.13.0
+release. It runs unchanged on x86_64/aarch64 Linux, Windows and macOS by design; the WB1 report below distinguishes
+local measurements from portability intent. Run the following from a checkout of the reviewed revision:
+
+```text
+python3 -I scripts/bench/windows/appmatrix/package_bundle.py check
+python3 -I scripts/bench/windows/appmatrix/package_bundle.py layout
+python3 -I scripts/bench/windows/appmatrix/package_bundle.py fetch --dl downloads
+python3 -I scripts/bench/windows/appmatrix/package_bundle.py verify --dl downloads
+python3 -I scripts/bench/windows/appmatrix/package_bundle.py build --dl downloads --out out
+python3 -I scripts/bench/windows/appmatrix/package_bundle.py verify-image --out out
+```
+
+**CODE READ:** `fetch` uses urllib, retries the same URL, resumes a `.part` file with validated HTTP ranges,
+and checks the manifest's byte length and SHA-256 before promotion. A mismatching existing cache entry fails;
+it is never silently repinned. Every failure names the package and input. `CI` or `KF_RUN_TOKEN` being present,
+even empty, refuses every command. The independent allow-list and dependency closure refuse packages outside
+`gate_profiles.json` `open_packages`; no owner-decision or licensed package is selected. `--only` permits a
+smaller open subset for local investigation; the coordinator's release bundle uses the full default selection.
+
+**CODE READ:** application ZIPs, wheels, 7z archives, MSIs and installers ride on the ISO byte for byte.
+The guest's existing `tar.exe`, `msiexec.exe`, installer modes and bundled `7zr.exe` do the staging. The only
+staging change is that `kf_stage.ps1` prefers the ISO's `stage.json` over the controller's legacy table. This
+prevents a legacy `image_form=tree` hint from skipping guest extraction. Python's `._pth` adjustment and wheel
+extraction already ran inside the guest and remain there. All app definitions and verdict rules are unchanged.
+
+**CODE READ:** the compiler's own release archive is the sole host extraction: Python unpacks a hash-verified
+Zig distribution into a fresh directory, rejecting links, special files and escaping paths. It is never put on
+the ISO. Zig's bundled headers/runtime replace the distro mingw package; no host compiler, shell, curl, wget,
+unzip, 7z, ISO utility or msiexec is invoked. Direct argument lists build `kf_dxprobe`, `kf_overlayprobe`,
+`kf_glgears`, `kf_cuda_control` and `cup2/3/8` from the same repository sources as `build_tools.sh`.
+Zig 0.13.0 lacks the feature-level 12_2 enum; the build supplies Microsoft's documented `0xc200` value,
+also used by `windows_gate.sh`. Stripped baseline x86_64 builds use normalized source paths and a fixed source
+epoch; the builder refuses nonzero PE timestamps, build-directory strings and external compiler runtime DLLs.
+The source hashes, compiler pins and resulting binary hashes are recorded in the receipt. Repository licence
+texts and the Zig-bundled C/C++ runtime notices are retained on the ISO.
+
+**CODE READ:** `bundle_iso.py` writes ISO9660 plus Joliet, label `KFAPPS`, without an ISO utility. Both
+namespaces share file extents. Entry order, short aliases, all timestamps (2000-01-01 UTC), padding and volume
+fields are fixed; host ownership, mode, mtime, umask, locale and timezone never enter the image. Repository text
+is normalized to LF, covering CRLF checkouts. Individual files over 4 GiB minus one byte are refused before
+writing; the selected pins fit, including the 2.9 GB torch wheel. Data is streamed, including the readback check.
+The image excludes wall-clock/Python-version metadata; the external receipt includes these audit fields.
+
+**CODE READ:** outputs are `out/winapps-open.iso`, `out/winapps-open.manifest.json` (every ISO file's SHA-256
+and size, payload identity, image hash/size, pins, build source hashes, date and Python version) and
+`out/bundle.pin.line`. The identity hashes sorted payload records excluding `KFAPPS.ID` to avoid a circular
+hash; that file is itself included in the receipt. `verify-image` hashes the entire ISO and independently reads
+its Joliet directory records to check exact file membership, bytes and the identity marker. No mount is needed.
+
+**DESIGN / operator validation:** the full pinned build must run on a person's machine with sufficient disk,
+never in CI or on this lane's dev box. Build into two fresh output directories, then check the second image
+against the first receipt to compare the ISO bytes (receipt dates and Python versions may differ):
+
+```text
+python3 -I scripts/bench/windows/appmatrix/package_bundle.py build --dl downloads --out out-a
+python3 -I scripts/bench/windows/appmatrix/package_bundle.py build --dl downloads --out out-b
+python3 -I scripts/bench/windows/appmatrix/package_bundle.py verify-image --iso out-b/winapps-open.iso --receipt out-a/winapps-open.manifest.json
+```
+
+**MEASURED status and falsifiers:** WB1's GPU-free test suite builds small fixtures in two empty directories
+under different umasks, timezones and locales and compares bytes; optional `isoinfo`/`xorriso` tests read the
+same fixtures when available. A divergent image, changed installer byte, extra/missing file, bad identity or
+non-reproducible PE is a failure. Full installer downloads, cross-host compiler equality, Windows filesystem
+mounting and GPU equivalence to the mingw binaries require operator evidence; no fixture test establishes them.
+The functional comparison must run both compiler sets through the existing unchanged app-matrix oracles on the
+same native Windows machine/driver, including D3D11/12, WGL, cup2/3/8 and every overlay transition. It cannot be
+claimed from PE inspection alone. The shell wrapper is a deprecated pointer; optional source-built release
+assets still use the separate legacy `appdisk.py` workflow and are not added to this canonical open bundle.
+
+**MEASURED, WB1 local x86_64 Linux, 2026-11-07:** two fresh Zig builds produced byte-identical copies of all
+seven probes, with zero PE timestamps and no build-path strings. The second build used CRLF source copies and
+a build path containing spaces. Two final fixture ISOs (real probes and notices, one synthetic installer;
+**not the full pinned media**) under umasks 022/077, TZ Pacific/Honolulu/Asia/Tokyo and locales C/C.UTF-8 were
+byte-identical: 1,122,304 bytes, 47 files, SHA-256
+`9a3688db4b0508086646379f960b2c94cf169377ecac6c0b667c5471063d530a`.
+This is local reproducibility evidence, not a Windows GPU or cross-host compiler result.
+
+**DESIGN:** a rented box gets one input, `winapps-open.iso`, through the Worker's proposed presigned
+`/bench-data` route (`fetch_bench_data.sh`, run token only), pinned by SHA-256 in `appmatrix/bundle.pin`.
+The coordinator uploads the ISO and receipt only after review and full reproduction. This builder has no upload
+operation. Worker names remain proposed, no deployment or pin change is part of WB1. Without a pin the stage
+answers `RETRY class=MEDIA`. `docs/DOWNLOADS.md` gives the manual file-manager recipe and storage exclusions.
 
 ## 4. Verdict rules (guest passes only)
 
@@ -155,7 +233,7 @@ Worker path (no run token, no R2 bundle), the `mid` profile, and the stage insid
 
 ## 9. Open questions and what blocks the release tier
 
-1. **Bundle upload.** A person must run `package_open_bundle.sh`, upload `winapps-open.iso` to R2 and commit the pin; until then the stage is
+1. **Bundle upload.** A person must reproduce and verify the full `package_bundle.py` build, upload `winapps-open.iso` to R2 and commit the pin; until then the stage is
    RETRY class MEDIA by design. The Worker names are proposed (not deployed).
 2. **Owner decision on the 29 apps** that need GravityMark, FurMark, GpuTest, the Vulkan SDK or ffmpeg GPL: private copy in R2 for our own
    boxes (as for SPECviewperf) or manual. **MEASURED, J1:** the ffmpeg pin is replaced by a downloaded,

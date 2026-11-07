@@ -16,6 +16,7 @@ import re
 import shlex
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -90,21 +91,20 @@ class AppsScript(unittest.TestCase):
 
 
 class PackagingScript(unittest.TestCase):
-    PKG = ROOT / "scripts/bench/windows/appmatrix/package_open_bundle.sh"
+    PKG = ROOT / "scripts/bench/windows/appmatrix/package_bundle.py"
     NEVER = ("gravitymark", "furmark2", "gputest", "heaven", "valley", "vulkan_sdk", "ffmpeg")
 
     def run_pkg(self, *args, env=None):
         e = {"PATH": os.environ["PATH"], "HOME": tempfile.gettempdir()}
         e.update(env or {})
-        return subprocess.run(["bash", str(self.PKG), *args], env=e, capture_output=True, text=True, timeout=120)
+        return subprocess.run([sys.executable, "-I", str(self.PKG), *args], env=e, capture_output=True, text=True, timeout=120)
 
     def test_dry_run_names_only_open_packages_and_fetches_nothing(self):
         with tempfile.TemporaryDirectory() as d:
-            r = self.run_pkg("--out", d, "--dry-run")
+            r = self.run_pkg("layout", "--out", d)
             self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-            self.assertIn("DRY-RUN ok", r.stdout)
-            line = [l for l in r.stdout.splitlines() if "packages: " in l][0].split("packages: ")[1]
-            ids = set(line.split(","))
+            self.assertIn("LAYOUT_OK", r.stdout)
+            ids = {l.split("/")[1] for l in r.stdout.splitlines() if l.startswith("pkg/")}
             self.assertTrue({"python_embed", "pywheels", "cuda_demo_suite"} <= ids)
             self.assertFalse(ids & set(self.NEVER), ids & set(self.NEVER))
             self.assertEqual(os.listdir(d), [])                       # nothing was created: no download, no build
@@ -112,9 +112,9 @@ class PackagingScript(unittest.TestCase):
     def test_it_is_a_persons_one_time_step_not_ci_and_not_a_box(self):
         with tempfile.TemporaryDirectory() as d:
             for env in ({"CI": "true"}, {"KF_RUN_TOKEN": "x"}):
-                r = self.run_pkg("--out", d, "--dry-run", env=env)
-                self.assertEqual(r.returncode, 4, env)
-                self.assertIn("REFUSED", r.stdout)
+                r = self.run_pkg("check", "--out", d, env=env)
+                self.assertEqual(r.returncode, 1, env)
+                self.assertIn("REFUSED", r.stderr)
 
     def test_it_never_uploads(self):
         text = self.PKG.read_text()

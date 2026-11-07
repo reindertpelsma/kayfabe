@@ -1350,5 +1350,75 @@
    "sha256": "685adbd46305cdd8a00c6a38474a020b9d298e16de30a6354340391b98e45279",
    "size": 112404
   }
- }
+ },
+ "bundle_toolchain": {
+  "name": "zig",
+  "version": "0.13.0",
+  "license": "MIT (bundled third-party notices in release archive)",
+  "recorded_utc": "2026-11-07",
+  "index": {
+   "url": "https://ziglang.org/download/index.json",
+   "sha256": "6f32677f4c5d0e0515f8259cd8cb102312489d479972bb9ac9ebce205de3bab5",
+   "size": 90260,
+   "date": "2026-11-07"
+  },
+  "hosts": {
+   "x86_64-linux": {
+    "name": "zig-linux-x86_64-0.13.0.tar.xz",
+    "url": "https://ziglang.org/download/0.13.0/zig-linux-x86_64-0.13.0.tar.xz",
+    "sha256": "d45312e61ebcc48032b77bc4cf7fd6915c11fa16e4aad116b66c9468211230ea",
+    "size": 47082308
+   },
+   "aarch64-linux": {
+    "name": "zig-linux-aarch64-0.13.0.tar.xz",
+    "url": "https://ziglang.org/download/0.13.0/zig-linux-aarch64-0.13.0.tar.xz",
+    "sha256": "041ac42323837eb5624068acd8b00cd5777dac4cf91179e8dad7a7e90dd0c556",
+    "size": 43090688
+   },
+   "x86_64-macos": {
+    "name": "zig-macos-x86_64-0.13.0.tar.xz",
+    "url": "https://ziglang.org/download/0.13.0/zig-macos-x86_64-0.13.0.tar.xz",
+    "sha256": "8b06ed1091b2269b700b3b07f8e3be3b833000841bae5aa6a09b1a8b4773effd",
+    "size": 48857012
+   },
+   "aarch64-macos": {
+    "name": "zig-macos-aarch64-0.13.0.tar.xz",
+    "url": "https://ziglang.org/download/0.13.0/zig-macos-aarch64-0.13.0.tar.xz",
+    "sha256": "46fae219656545dfaf4dce12fb4e8685cec5b51d721beee9389ab4194d43394c",
+    "size": 44892040
+   },
+   "x86_64-windows": {
+    "name": "zig-windows-x86_64-0.13.0.zip",
+    "url": "https://ziglang.org/download/0.13.0/zig-windows-x86_64-0.13.0.zip",
+    "sha256": "d859994725ef9402381e557c60bb57497215682e355204d754ee3df75ee3c158",
+    "size": 79163968
+   },
+   "aarch64-windows": {
+    "name": "zig-windows-aarch64-0.13.0.zip",
+    "url": "https://ziglang.org/download/0.13.0/zig-windows-aarch64-0.13.0.zip",
+    "sha256": "95ff88427af7ba2b4f312f45d2377ce7a033e5e3c620c8caaa396a9aba20efda",
+    "size": 75119033
+   }
+  }
+ },
+ "bundle_references": [
+  {
+   "url": "https://ziglang.org/download/0.13.0/release-notes.html",
+   "sha256": "c6c561371cb1b92e402d713531007c90f4fac9ab8e0058ce0e5bd9384a0d34dc",
+   "size": 61172,
+   "date": "2026-11-07"
+  },
+  {
+   "url": "https://ecma-international.org/publications-and-standards/standards/ecma-119/",
+   "sha256": "0a7e2be98a67fb22e15270f027f97862bd11c3e6d4a27fc908eaf338e3898c86",
+   "size": 87744,
+   "date": "2026-11-07"
+  },
+  {
+   "url": "https://learn.microsoft.com/en-us/windows/win32/api/d3dcommon/ne-d3dcommon-d3d_feature_level",
+   "sha256": "9bb4cec35de0e6335edda1643a982c9a91f9ef54463bbf85cc22364453d865d2",
+   "size": 53163,
+   "date": "2026-11-07"
+  }
+ ]
 }

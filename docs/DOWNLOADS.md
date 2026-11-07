@@ -149,23 +149,84 @@ owner-hosted cache is excluded from it.
 
 ## Windows app bundle (the Windows apps stage)
 
-STATUS: DESIGN-ONLY, 2026-11-07. Nothing below exists in R2 yet: no object is uploaded, the pin file
-(`scripts/bench/windows/appmatrix/bundle.pin`) is empty, and the Worker names are proposed, not deployed. Design:
-[`docs/design/V3_WINDOWS_APPS_GATE.md`](design/V3_WINDOWS_APPS_GATE.md).
+STATUS: CODE + DESIGN, 2026-11-07 (WB1). The shell-free builder and offline tests exist. No full pinned
+reproduction, upload, Worker deployment or pin change is claimed by WB1. The storage status recorded before
+WB1 was: no object uploaded and `scripts/bench/windows/appmatrix/bundle.pin` empty. Design and verification
+limits: [`Windows apps gate, section 3`](design/V3_WINDOWS_APPS_GATE.md#3-inputs-one-bundle-from-our-r2-through-the-worker).
 
-A rented box never downloads an app from a vendor: the Windows apps stage gets one app disk, `winapps-open.iso` (volume
-label `KFAPPS`, built by `appdisk.py`), through the Worker's presigned `/bench-data` route, as the SPECviewperf copy does.
-The disk holds only packages whose licence lets us keep a copy (the list is `open_packages` in
-`scripts/bench/windows/appmatrix/gate_profiles.json`, and a test refuses any package whose manifest text says redistribution is
-not granted): the CUDA demo suite and runtime parts, Python and the wheels (torch, cupy, onnxruntime), llama.cpp, the Qwen
-GGUF/HF models, Blender, hashcat, clpeak, vkpeak, the Vulkan runtime and the Visual C++ runtime, plus test programs built from
-this repository's own sources. It is packaged once, by a person, with `package_open_bundle.sh` (it refuses to run in CI or on a
-box and never uploads); the owner uploads it with R2 write credentials and commits the sha256 into `bundle.pin`.
+**CODE READ:** the builder is `scripts/bench/windows/appmatrix/package_bundle.py`, Python 3.11+ standard library
+only. Official Zig 0.13.0 host archives are pinned (URL, SHA-256, size, retrieval date) under `bundle_toolchain`
+in `manifest.json`; no distro mingw package is used. Only the compiler archive is unpacked on the host.
+Every app archive/installer stays unmodified on the `KFAPPS` ISO and is staged inside Windows with its existing
+tools. The guest remains offline. No command uploads, logs in or contacts the Worker/Cloudflare.
+
+The complete shell-free recipe from a checkout of the reviewed revision is:
+
+```text
+python3 -I scripts/bench/windows/appmatrix/package_bundle.py check
+python3 -I scripts/bench/windows/appmatrix/package_bundle.py layout
+python3 -I scripts/bench/windows/appmatrix/package_bundle.py fetch --dl downloads
+python3 -I scripts/bench/windows/appmatrix/package_bundle.py verify --dl downloads
+python3 -I scripts/bench/windows/appmatrix/package_bundle.py build --dl downloads --out out
+python3 -I scripts/bench/windows/appmatrix/package_bundle.py verify-image --out out
+```
+
+**CODE READ:** `fetch` resumes and verifies each original against the manifest without changing its pins.
+`verify` checks manually supplied originals too. `build` verifies the inputs again, cross-compiles the seven
+repository probes using direct Zig argument lists, writes the deterministic ISO and reads every file back.
+The sidecar `out/winapps-open.manifest.json` records every file hash/size, image identity/hash/size, compiler
+pins, probe source hashes, packaging date and Python version. Repository and compiler/runtime licence notices
+are included on the ISO. `out/bundle.pin.line` is proposed pin content,
+not authorization to upload or change the committed pin. Presence of `CI` or `KF_RUN_TOKEN`, even empty,
+refuses all commands. Allow ample disk for original downloads, the ISO and compiler scratch; the full build
+is a manual operator action, never a PR/CI download. Stop on a named mismatch and investigate the original;
+do not accept a replacement vendor version or change a pin to match unexpected bytes.
+
+**Manual path (DESIGN; GUI workflow has not been exercised on Windows in WB1):** no terminal or shell commands
+are required. Use the official CPython installer from [python.org](https://www.python.org/downloads/) with
+Tcl/Tk and `.pyw` file associations enabled. Obtain the reviewed repository checkout with your usual file
+manager/Git GUI; do not use a moving checkout while packaging. Then:
+
+1. Double-click `scripts/bench/windows/appmatrix/package_bundle_gui.pyw`. Select the checkout's `manifest.json`
+   and `gate_profiles.json`, an external Downloads directory and an empty Output directory. Choose **Check**,
+   then **Layout**. The launcher calls the same builder functions as the CLI and has the same refusals.
+2. For each package in `open_packages`, open the exact `files[].url` from `manifest.json` in a browser and save
+   the official original with exactly `files[].name`. In the file manager create `Downloads/<package id>/`
+   and move the file there. Enable visible filename extensions; do not let the browser add `(1)` or change the
+   extension. Keep ZIPs, wheels, 7z, MSI and EXE files intact; do not run installers on the packaging machine.
+   Wheels and model files are also pinned inputs; choosing similar installer versions does not reproduce them.
+3. Select your host in `bundle_toolchain.hosts` (`AMD64` = `x86_64`, `arm64` = `aarch64`, Darwin = `macos`).
+   Save that exact official Zig archive under `Downloads/_toolchain/<name>`, also unmodified. All host pins
+   come from the recorded official Zig index. No compiler needs to be installed through a package manager.
+4. Choose **Verify**. It compares the size and SHA-256 of every original, including Zig, with the committed
+   manifest, naming any mismatch. `VERIFY_OK` means these bytes match; file names or digital signatures alone
+   are insufficient. Alternatively **Fetch** saves the same pinned files automatically using urllib.
+5. Choose **Build**, then **Verify image**. The compiler is bootstrapped automatically; every application
+   archive remains intact. Inspect the three output files in the file manager. For an independent comparison,
+   reproduce into a second empty output directory, then choose **Compare receipt**: select the first sidecar and the second ISO.
+   A successful check verifies the second image against the first receipt. The ISO SHA-256 values in both receipts
+   must match exactly; receipt date and Python-version fields need not match. Compare individual `files` entries
+   to locate any difference. Keep both receipts as operator evidence.
+
+**CODE READ / limitation:** manually clicking each application's own installer inside Windows can reproduce an
+installation, but cannot by itself reproduce the ISO's filesystem metadata or the repository-built probes.
+Use the Python writer, including its GUI path, for byte-identical media. The bundle's existing guest stages
+perform extraction/installation at run time; WB1 changes only their choice of the ISO-carried staging table.
+GPU-free fixtures establish determinism for their inputs, not full cross-host binary equality or GPU behavior.
+Before upload the coordinator must compare two full builds and run the Zig and mingw probe sets through the
+same unchanged native Windows app-matrix checks. No hardware or full bundle build ran in WB1.
+
+**DESIGN:** the Windows apps stage gets one `winapps-open.iso` (volume label `KFAPPS`) through the Worker's
+proposed presigned `/bench-data` route. Only `open_packages` are included: CUDA demo/runtime components,
+Python and wheels, llama.cpp, Qwen models, Blender, hashcat, clpeak, vkpeak, Vulkan/Visual C++ runtimes and our
+source-built probes. GravityMark, FurMark, GpuTest, Unigine, the GPL ffmpeg build and all licensed software
+remain outside. The deprecated `package_open_bundle.sh` only points at Python and performs no packaging.
+The coordinator, separately, uploads the reviewed ISO/receipt and commits the pin.
 
 | Bundle object | Name the box asks the Worker for (proposed) | R2 key (proposed) |
 |---|---|---|
-| the app disk, about 6-7 GB | `winapps-open.iso` | `winapps-open/kfapps.iso` |
-| the manifest it carries (sha256 of every file, image identity) | `winapps-open.manifest.json` | `winapps-open/manifest.json` |
+| the app disk (new size measured at full build) | `winapps-open.iso` | `winapps-open/kfapps.iso` |
+| external manifest (SHA-256 of every file, image identity) | `winapps-open.manifest.json` | `winapps-open/manifest.json` |
 
 Not in the bundle, with the reason (the same classes as `gate_profiles.json`):
 

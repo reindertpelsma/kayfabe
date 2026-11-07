@@ -91,9 +91,12 @@ and copies the runtime binaries, shaders, data, licences and optional six refere
 It records each file's SHA-256 and removes its temporary worktree. It runs no sample and performs no upload.
 The optional references must already have been collected independently; packaging does not bless them.
 
-`package_open_bundle.sh --release-assets DIR` and `appdisk.py build --release-assets DIR` verify the exact
-source/project/patch receipt and every asset hash, then put these files under `release/` in the ISO and its
-file manifest. An open bundle still omits ffmpeg and GravityMark. A future owner-supplied release bundle must
+`appdisk.py build --release-assets DIR` verifies the exact
+source/project/patch receipt and every asset hash, then puts these files under `release/` in the ISO and its
+file manifest. The old `package_open_bundle.sh --release-assets` wrapper is deprecated; the WB1 shell-free
+`package_bundle.py` builds the canonical open bundle without these separately source-built assets. Definitions
+that need them remain blocked until supplied by the separate release workflow. An open bundle still omits
+ffmpeg and GravityMark. A future owner-supplied release bundle must
 include the packages listed for all 17 definitions; no software release bundle was built or stored by this lane.
 
 **OWNER DECISION, 2026-11-07:** retain a blocked sampler-feedback definition pending an approved Microsoft

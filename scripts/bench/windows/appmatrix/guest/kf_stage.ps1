@@ -17,12 +17,16 @@ function Done($ok, $detail) {
 }
 $marker = "C:\kfapps\.staged\$Pkg.json"
 if (Test-Path $marker) { $m = Read-Json $marker; if ($m.ok) { $res.mode = 'cached'; $res.ok = $true; $res.detail = 'already staged'; Write-Output ('KFSTAGE ' + (ConvertTo-Json -InputObject $res -Compress)); exit 0 } }
-$tab = Read-Json 'C:\kf\stage.json'
-if (-not $tab) { Done $false 'C:\kf\stage.json missing' }
-$def = $tab.$Pkg
-if (-not $def) { Done $false "package $Pkg not in stage.json" }
 $cd = (Get-Content -Raw 'C:\kf\cd.txt').Trim()
 if (-not $cd -or -not (Test-Path $cd)) { Done $false 'app disk not mounted' }
+$bundleTable = Join-Path $cd 'stage.json'
+# Shell-free bundles carry their actual archive staging table. This overrides legacy
+# image_form=tree hints in a controller's source manifest; old images use the pushed table.
+if (Test-Path $bundleTable) { $tab = Read-Json $bundleTable }
+else { $tab = Read-Json 'C:\kf\stage.json' }
+if (-not $tab) { Done $false 'stage.json missing' }
+$def = $tab.$Pkg
+if (-not $def) { Done $false "package $Pkg not in stage.json" }
 $res.mode = $def.mode
 $src = Join-Path $cd ('pkg\' + $Pkg)
 $dest = Join-Path 'C:\kfapps' $def.dest
