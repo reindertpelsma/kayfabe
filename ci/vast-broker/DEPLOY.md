@@ -103,6 +103,12 @@ deploy helper at deploy time, not by CI (final review C1). After any
 change under `src/`, `defaults.json` or the lockfile, record the new hash in both files. Preserve
 the SQLite LEDGER namespace and migration when updating.
 
+[MEASURED 2026-11-07, J1, local build only] After merging the Windows apps proposal with `next`,
+two lockfile-pinned wrangler dry-runs emitted the same module SHA-256:
+`9ad006d38e0687fd10cb5d85aa82b1c65208f2fcb62816b9a6bba9c3624e4b9d`.
+Both reviewed-source pins are updated under the rule above. This is not a deployment record:
+no Worker call, upload, setting change or bundle upload occurred. The Windows apps stage is still opt-in.
+
 ## Provider status tolerance (built 2026-11-06, NOT DEPLOYED)
 
 STATUS: LIVE as code, 2026-11-06, on branch `claude/vast-tolerance-20261106`; nothing deployed. The rule,
