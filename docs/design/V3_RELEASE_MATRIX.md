@@ -211,7 +211,7 @@ planner's country preference. Mutants must be killed by at least two named tests
 
 ## RV1 admission and receipt corrections (2026-11-07)
 
-MEASURED by RV1's GPU-free probes against PR #296's previous head: a proposed
+MEASURED by RV1's GPU-free probes on 2026-11-07 at commit `14d22c916`: a proposed
 matrix admitted eight mock rentals, ordinary protocol-7 receipts could certify
 PASS, an accepted attributed `windows_subrun_580` FAIL became RETRY and a ninth
 clean rental produced PASS, and an invalid runtime matrix did not block that
@@ -287,7 +287,7 @@ is `(new_GB - 15) * inbound_USD_per_GB` per lease, amortised over hard lease hou
 in effective hourly price. Their outbound reservation remains 2 GB and their
 unit-price guard stays USD 0.005/GB. Large uses its own 130 GB allowance.
 
-MEASURED by RV1 on its synthetic fixtures: these allowance changes raised quoted
+MEASURED by RV1 on 2026-11-07 at commit `14d22c916`: synthetic fixtures raised quoted
 prices by that transfer delta but left the tested offer ranks unchanged. This
 is fixture evidence, not a claim that real-market ranks never change. CODE READ:
 actual traffic is **not metered**; reservation GB are conservative inferred
