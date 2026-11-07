@@ -470,6 +470,16 @@ CASES = [
         "layers",
         ["KernelOssHeaders"],
     ),
+    (
+        "driver-staging-no-module-load",
+        "recipe",
+        [("driver-module-load",)],
+        "core",
+        [
+            "GuestInstall.test_driver_staging_does_not_try_to_load_a_gpu_module",
+            "CommittedRecipe.test_recipe_declares_gpu_free_driver_staging",
+        ],
+    ),
 ]
 
 
@@ -487,6 +497,18 @@ def one(nodes):
 
 
 def mutate(source, operations):
+    if operations == [("driver-module-load",)]:
+        recipe = json.loads(source)
+        pin = one(
+            [
+                p
+                for p in recipe["official_fetch"]
+                if p["kind"] == "run"
+                and p["version"] == recipe["guest"]["nvidia_version"]
+            ]
+        )
+        pin["install_argv"].remove("--skip-module-load")
+        return json.dumps(recipe, indent=2) + "\n"
     for operation in operations:
         tree = ast.parse(source)
         kind, *args = operation
@@ -710,7 +732,8 @@ def failures(output, label, category):
 
 def run_case(case):
     name, module, operations, label, classes = case
-    source = mutate((HERE / (module + ".py")).read_text(), operations)
+    filename = "recipe.json" if module == "recipe" else module + ".py"
+    source = mutate((HERE / filename).read_text(), operations)
     with tempfile.TemporaryDirectory(prefix="apps-image-mutant-") as temporary:
         root = Path(temporary)
         image = root / "scripts/apps/image"
@@ -722,7 +745,7 @@ def run_case(case):
         for file in HERE.iterdir():
             if file.is_file():
                 shutil.copyfile(file, image / file.name)
-        (image / (module + ".py")).write_text(source)
+        (image / filename).write_text(source)
         for entry in HERE.parent.iterdir():
             if entry.name != "image":
                 (image.parent / entry.name).symlink_to(
@@ -776,7 +799,8 @@ def main():
             return 2
     # Validate every AST site before spending CPU on test subprocesses.
     for _, module, operations, _, _ in CASES:
-        mutate((HERE / (module + ".py")).read_text(), operations)
+        filename = "recipe.json" if module == "recipe" else module + ".py"
+        mutate((HERE / filename).read_text(), operations)
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as pool:
         results = []
         for result in pool.map(run_case, CASES):

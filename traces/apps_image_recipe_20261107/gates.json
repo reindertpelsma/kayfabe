@@ -1,12 +1,12 @@
 {
-  "observed_utc": "2026-11-07T23:02:31.072099+00:00",
+  "observed_utc": "2026-11-07T23:24:03.826186+00:00",
   "results": {
     "doc-freshness": 0,
+    "claims-debt": 0,
     "release-claims": 0,
     "private-refs": 0,
     "uuids": 0,
-    "workflow-lint": 0,
-    "claims-debt": 0
+    "workflow-lint": 0
   },
-  "scope": "Local GPU-free hygiene checks; claim attribution and doc freshness rechecked after adding dated trace citations; no baseline changes"
+  "scope": "Final recipe .3 local GPU-free hygiene checks; no baseline changes"
 }

@@ -1,7 +1,6 @@
 {
   "observed_utc": "2026-11-07T21:55:33.649158+00:00",
-  "recipe_sha256": "98b29ab3314afdcebb61370e6fbb522ca960f9f1349b88f38c7b2bb8d8e61724",
-  "scope": "Anonymous HEAD only; no digest revalidation is claimed by this file. Full selected hashes are recorded separately.",
+  "scope": "Anonymous HEAD only; no digest revalidation is claimed by this file. Installer argv/recipe version changed afterwards; the 88 projected id/URL/SHA256/size pins are unchanged. Complete selected hashes are separate.",
   "results": [
     {
       "id": "ubuntu-noble-20261017",
@@ -795,5 +794,7 @@
       "observed_size": 1222620,
       "observation": "HEAD_MATCHING_LENGTH"
     }
-  ]
+  ],
+  "recipe_sha256_at_observation": "98b29ab3314afdcebb61370e6fbb522ca960f9f1349b88f38c7b2bb8d8e61724",
+  "input_pins_sha256": "61d97b2e5fbabf7e7c82f3a0f54624bb5032c48ef4e21d9d2c83a4afc41135b9"
 }

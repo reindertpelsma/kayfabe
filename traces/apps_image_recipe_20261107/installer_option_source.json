@@ -1,0 +1,8 @@
+{
+  "url": "https://raw.githubusercontent.com/NVIDIA/nvidia-installer/580.159.04/option_table.h",
+  "version": "580.159.04",
+  "option": "--skip-module-load",
+  "scope": "Official tagged installer option table; source inspection only, installer not executed",
+  "source_sha256": "e251f2465811ae38619efa4ae1d36ad356fcb43e3652d4aab4cc74dceb4fec00",
+  "observed_date_utc": "2026-11-07"
+}

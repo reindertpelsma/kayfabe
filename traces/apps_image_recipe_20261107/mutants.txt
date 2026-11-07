@@ -58,4 +58,5 @@ ok official-guest-device-required: 2 assertion killers; 0 errors
 ok official-disk-readonly: 2 assertion killers; 0 errors
 ok official-http-isolation: 2 assertion killers; 0 errors
 ok kernel-source-classification: 2 assertion killers; 0 errors
-60/60 mutants killed by at least two named assertion failures
+ok driver-staging-no-module-load: 2 assertion killers; 0 errors
+61/61 mutants killed by at least two named assertion failures

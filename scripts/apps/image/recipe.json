@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "recipe_version": "2026-11-07.2",
+  "recipe_version": "2026-11-07.3",
   "claim": "DESIGN: open-only image; official NVIDIA inputs acquired on the box host at provision time; separate input-pinned inventories, not byte-identical images",
   "base": {
     "id": "ubuntu-noble-20261017",
@@ -3566,7 +3566,8 @@
         "--silent",
         "--no-questions",
         "--ui=none",
-        "--kernel-module-type=open"
+        "--kernel-module-type=open",
+        "--skip-module-load"
       ]
     },
     {

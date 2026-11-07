@@ -14,9 +14,9 @@ STATUS: DESIGN-ONLY, 2026-11-07. MEASURED: GPU-free Python fixtures and public-i
 
 ## GPU-free checks
 
-**MEASURED, 2026-11-07:** 124 core image tests + 127 layer tests pass (251 new); the existing legacy payload tests pass 64/64 and matrix-table tests 12/12 (327 total in these suites). At the lane base the new image suites and mutation harness did not exist (CODE READ); a whole-repository before/after test total was not measured. No Rust implementation changed and no Rust build was run. Raw results: [core](tests-core.txt), [layers](tests-layers.txt), [legacy](tests-legacy-apps.txt), [matrix](tests-matrix.txt).
+**MEASURED, 2026-11-07:** 126 core image tests + 127 layer tests pass (253 new); the existing legacy payload tests pass 64/64 and matrix-table tests 12/12 (329 total in these suites). At the lane base the new image suites and mutation harness did not exist (CODE READ); a whole-repository before/after test total was not measured. No Rust implementation changed and no Rust build was run. Raw results: [core](tests-core.txt), [layers](tests-layers.txt), [legacy](tests-legacy-apps.txt), [matrix](tests-matrix.txt).
 
-**MEASURED, 2026-11-07:** 60/60 mutants have at least two independently named **assertion failures**, with zero test errors. Syntax/import failures do not count as kills. The baseline passes first; every mutation runs in a scratch tree with its own fixture processes. [Complete machine-readable killers](mutants.json), [run output](mutants.txt). The table lists the count and two example named killers for each case.
+**MEASURED, 2026-11-07:** 61/61 mutants have at least two independently named **assertion failures**, with zero test errors. Syntax/import failures do not count as kills. The baseline passes first; every mutation runs in a scratch tree with its own fixture processes. [Complete machine-readable killers](mutants.json), [run output](mutants.txt). The table lists the count and two example named killers for each case.
 
 | Mutated rule | Assertion killers | Two independent tests |
 |---|---:|---|
@@ -80,6 +80,7 @@ STATUS: DESIGN-ONLY, 2026-11-07. MEASURED: GPU-free Python fixtures and public-i
 | official-disk-readonly | 2 | `core:FakeQemu.test_builder_input_disk_is_readonly_and_not_attached_to_open_assembly`; `core:ForwardedInputs.test_provisioning_official_input_disk_is_explicitly_readonly` |
 | official-http-isolation | 2 | `core:FakeQemu.test_open_assembly_http_cannot_serve_nvidia_payloads`; `core:FakeQemu.test_scratch_builder_http_cannot_serve_nvidia_payloads` |
 | kernel-source-classification | 2 | `layers:KernelOssHeaders.test_gpl_header_named_nvidia_is_open_source`; `layers:KernelOssHeaders.test_nvidia_kernel_kconfig_directory_is_not_a_vendor_runtime` |
+| driver-staging-no-module-load | 2 | `core:CommittedRecipe.test_recipe_declares_gpu_free_driver_staging`; `core:GuestInstall.test_driver_staging_does_not_try_to_load_a_gpu_module` |
 
 **MEASURED, 2026-11-07:** documentation freshness, claim attribution, release claims, private-reference, GPU-UUID and workflow-lint gates pass ([exit records](gates.json)). The release ledger has 133 rows, zero errors and its three existing warnings; [claim-attribution debt](claims-debt.txt) has zero new sites. No baseline/debt file was changed. Pattern-based secret scanning of staged diffs checks private-key blocks, GitHub/AWS/Slack tokens and bearer literals; no matches were found. Formatting and diff-whitespace checks pass.
 
@@ -88,3 +89,5 @@ STATUS: DESIGN-ONLY, 2026-11-07. MEASURED: GPU-free Python fixtures and public-i
 **MEASURED, 2026-11-07:** [kernel_headers_audit.json](kernel_headers_audit.json) records the complete pinned Ubuntu main header-package inspection: 14 initial classifier findings, zero after recognizing installed GPL source namespaces and standard Linux SPDX annotations, with all 63 copyright notices retained. This is an input-package audit, not a full image scan. Vendor runtime payloads and undocumented notices still fail in kernel source paths.
 
 **CODE READ:** official installer/wheel bytes travel on a transient, read-only raw data disk, not the NoCloud seed ISO or HTTP allowlist. Host writing and guest reading both verify pins; normal and exceptional context exits remove the data disk. Tests use bounded regular-file/device fixtures and fake QEMU, so Linux virtio block-device discovery and Slirp transport still need a real coordinator boot. Every mutation run starts with both complete image-test suites; per-mutant selection then runs relevant classes or known independent killers to bound CPU cost, with the same two-assertion/no-errors rule.
+
+**CODE READ:** recipe `2026-11-07.3` installs NVIDIA module files without loading them during GPU-free staging, using the tagged installer's `--skip-module-load` option ([source inspection](installer_option_source.json)). Module loading and GPU functionality remain coordinator checks. The new data-rule mutant is killed independently by a recipe contract test and a mocked guest-installer argv test. No installer was executed in LB1.

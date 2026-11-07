@@ -677,5 +677,16 @@
     "errors": [],
     "returncode": 1,
     "valid": true
+  },
+  {
+    "name": "driver-staging-no-module-load",
+    "killers": [
+      "core:CommittedRecipe.test_recipe_declares_gpu_free_driver_staging",
+      "core:GuestInstall.test_driver_staging_does_not_try_to_load_a_gpu_module"
+    ],
+    "count": 2,
+    "errors": [],
+    "returncode": 1,
+    "valid": true
   }
 ]

@@ -932,6 +932,17 @@ class GuestInstall(unittest.TestCase):
     def install(self):
         guest.install_wheels(self.recipe, self.session, "open")
 
+    def test_driver_staging_does_not_try_to_load_a_gpu_module(self):
+        recipe = common.read_recipe(IMAGE / "recipe.json")
+        driver = next(
+            p
+            for p in recipe["official_fetch"]
+            if p["kind"] == "run" and p["version"] == recipe["guest"]["nvidia_version"]
+        )
+        guest.install_one_official(driver, recipe, self.session, builder=False)
+        self.assertIn("--skip-module-load", self.calls[0])
+        self.assertNotIn("--no-kernel-modules", self.calls[0])
+
     def test_guest_pip_installs_only_hashed_offline_wheels(self):
         self.install()
         argv = next(x for x in self.calls if "pip" in x)
@@ -1231,6 +1242,12 @@ class CommittedRecipe(unittest.TestCase):
                 self.assertIn("/opt/apps/bundle/samples/" + relative, required)
             for relative in re.findall(r"\$B/bin/([A-Za-z0-9_]+)", cmd):
                 self.assertIn("/opt/apps/bundle/bin/" + relative, required)
+
+    def test_recipe_declares_gpu_free_driver_staging(self):
+        for driver in self.recipe["official_fetch"]:
+            if driver["kind"] == "run":
+                self.assertIn("--skip-module-load", driver["install_argv"])
+                self.assertNotIn("--no-kernel-modules", driver["install_argv"])
 
     def test_hashcat_and_nvidia_versions_have_official_deb_hashes(self):
         debs = {a["package"]: a for a in self.recipe["artifacts"] if a["kind"] == "deb"}
