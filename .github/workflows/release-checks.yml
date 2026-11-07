@@ -1,0 +1,65 @@
+name: GPU-free release checks
+
+on:
+  pull_request:
+    branches: [next, master]
+    paths:
+      - 'README.md'
+      - 'Cargo.*'
+      - 'rust-toolchain.toml'
+      - 'crates/**'
+      - 'firmware/**'
+      - 'docs/howto/building.md'
+      - 'docs/howto/installing.md'
+      - 'docs/RELEASE_CLAIMS.*'
+      - 'scripts/**'
+      - 'tools/**'
+      - '**/*.patch'
+      - '**/*.diff'
+      - '.github/workflows/release-checks.yml'
+      - '.github/workflows/release-claims.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  static:
+    name: Release check fixtures, mutants and stock patch policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: GPU-free fixture tests, mutants and patch inventory
+        run: |
+          nice -n 19 python3 -m unittest scripts/ci/test_clean_clone_check.py \
+            scripts/ci/test_no_patch_check.py scripts/ci/test_release_checks_workflows.py
+          nice -n 19 python3 scripts/ci/release_checks_mutants.py
+          nice -n 19 python3 scripts/ci/no_patch_check.py
+          python3 scripts/ci/workflow_lint.py
+
+  clean-clone:
+    name: Documented release build and tests in a clean clone
+    # Trigger choice is recorded with measured local timing in RELEASE_CLAIMS.md.
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1 (2026-10-31; explicit toolchain)
+        with:
+          toolchain: 1.99.0 # pinned with rust-toolchain.toml
+          targets: x86_64-unknown-linux-musl, x86_64-unknown-uefi
+      - name: Documented build packages (no driver or VM provisioning)
+        run: |
+          sudo apt-get update -q
+          mapfile -t packages < <(bash scripts/bench/provision_box.sh --packages full)
+          sudo apt-get install -y --no-install-recommends "${packages[@]}" musl-tools
+      - name: Fresh target and shallow clone; no build cache or evidence restore
+        env:
+          CARGO_TARGET_DIR: ${{ runner.temp }}/clean-clone-target
+        run: nice -n 19 bash scripts/ci/clean_clone_check.sh
