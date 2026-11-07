@@ -25,6 +25,8 @@ restore path can be attempted. That conversion is UNTESTED, not implemented here
 CODE READ (`scripts/bench/windows/machine_state.py`): schema version 1 has these
 root fields. Nested objects reject unknown fields too; duplicate JSON keys are
 rejected at every depth. Base64 blobs carry both their byte count and SHA-256.
+CODE READ: `verify --image` also compares image bytes; omitting `--image`
+checks the schema and embedded blobs only. Apply always checks the image bytes.
 
 | Field | Meaning |
 |---|---|
@@ -50,6 +52,14 @@ comma/property injection are refused. Override brands are limited to 48 ASCII
 bytes and virtio disk serials to 20 bytes to avoid silent identity truncation.
 The legacy `-vmx` setting is unchanged;
 the snapshot adds no feature masks. Brand spoofing across hosts is UNTESTED.
+
+CODE READ: SMBIOS strings may contain literal commas; the JSON retains the raw
+name and the launcher bridge doubles those commas for QEMU's option parser.
+CPU brands still reject commas, and all property strings reject `=` and control
+characters. Source: QEMU 10.2's [SMBIOS option dispatch](https://github.com/qemu/qemu/blob/v10.2.0/system/vl.c#L3191-L3197)
+and [option-value parser](https://github.com/qemu/qemu/blob/v10.2.0/util/qemu-option.c#L51-L81).
+UNTESTED falsifier: a restored Windows SMBIOS name loses a comma or becomes an
+additional QEMU property. The coordinator's identity comparison must catch it.
 
 CODE READ: the monitor field accepts only the current authored KF3 EDID identity
 (`crates/kf-disp/src/edid.rs`, manufacturer KFB/product 1/serial 1). There is no
@@ -78,6 +88,13 @@ these values or discover physical hardware identifiers from a powered-off disk.
 Falsifier: the supplied identifiers differ from guest evidence on the first
 restore, or the native image lacks compatible QEMU TPM/firmware state.
 
+DESIGN INTENT: apply takes the standalone packaged qcow2 expected by the
+existing launcher. A native raw capture needs conversion and a state sidecar
+bound to the derived artifact's SHA-256; that conversion remains outside this
+tool. CODE READ: apply hashes and copies opaque bytes to `disk/base.qcow2`;
+it does not detect the input format or convert it. Input format is an operator
+precondition, established by the separate packaging workflow.
+
 ```sh
 # All paths below are operator placeholders outside the checkout.
 python3 scripts/bench/windows/machine_state.py capture \
@@ -97,8 +114,9 @@ WINVM_ROOT=/private/runs WINVM_NAME=run-one \
 ```
 
 DESIGN INTENT: use the real capture window, not the example's date. Supply
-`--password-file` if the owner's session changed the account password: the old
-host password file may be stale. Capture requires a VM-side
+`--password-file` with raw password bytes (not the session env-file) if the
+owner's session changed the account password: the old host password file may
+be stale. Capture requires a VM-side
 `image-inventory.json` recording `time_service_disabled: true`. That inventory
 assertion and caller-supplied capture window are evidence inputs, not an offline
 proof that Windows actually obeys them. Do not add `--cpu-brand` by default;
@@ -115,6 +133,12 @@ An applied directory refuses `run` without the opt-in. Restricted user-mode
 networking is required. Guest-requested reboots within one logical run retain
 that run's state and overlay; the next logical run resets again. Use a new VM
 directory or new overlay name for the next attempt; no existing overlay is deleted.
+
+CODE READ: snapshot runs refuse `WINVM_OVERLAY_BACKING`; a different parent disk
+would escape the image hash binding. Alternate backing remains available when
+the snapshot opt-in is off. `WINVM_APPS_ISO` remains available as a separate
+runtime layer, including with the snapshot opt-in; it does not become part of
+the pristine machine state.
 
 DESIGN INTENT: retain an independently trusted image/state hash pair in the
 release record. SHA-256 detects accidental substitution against that record;

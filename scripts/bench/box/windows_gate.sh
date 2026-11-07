@@ -500,19 +500,25 @@ selftest() {
             S=$(mktemp -d)
             VM=$S/vm EV=$S LOG=$S/log TAG=gate_t TEARDOWN_POLL_S=0
             mkdir -p "$VM/run"
-            touch "$S/loop_up"
-            [ "$up" != 1 ] || touch "$S/qemu_up"
-            qemu_alive() { [ -e "$S/qemu_up" ]; }
-            guest_stop() { rm -f "$S/qemu_up"; }
+            # This is an in-memory guest/loop model: no processes or wall time
+            # belong to it. Avoid hundreds of external touch/rm/sleep/date/tee
+            # calls for a deliberately leaking mutant on a contended CI host.
+            ST_LOOP_UP=1 ST_QEMU_UP=$up
+            qemu_alive() { [ "$ST_QEMU_UP" = 1 ]; }
+            guest_stop() { ST_QEMU_UP=0; }
+            sleep() { :; }
+            say() { printf '%s\n' "$*"; }
             run_loop_alive() {
-                if [ -e "$S/loop_up" ] && [ ! -e "$S/qemu_up" ]; then
-                    if [ "$honour" = 1 ] && [ -e "$VM/run/stop-requested" ]; then rm -f "$S/loop_up"; else touch "$S/qemu_up"; fi
+                if [ "$ST_LOOP_UP" = 1 ] && [ "$ST_QEMU_UP" = 0 ]; then
+                    if [ "$honour" = 1 ] && [ -e "$VM/run/stop-requested" ]; then ST_LOOP_UP=0; else ST_QEMU_UP=1; fi
                 fi
-                [ -e "$S/loop_up" ]
+                [ "$ST_LOOP_UP" = 1 ]
             }
-            run_loop_pids() { [ ! -e "$S/loop_up" ] || echo 4242; }
+            run_loop_pids() { [ "$ST_LOOP_UP" = 0 ] || echo 4242; }
+            say "SELFTEST_TEARDOWN case=$name honour=$honour qemu_up=$up"
+            sleep "$TEARDOWN_POLL_S"
             real_teardown_guest
-            echo "QEMU_LEFT=$([ -e "$S/qemu_up" ] && echo 1 || echo 0) LOOP_LEFT=$([ -e "$S/loop_up" ] && echo 1 || echo 0)"
+            echo "QEMU_LEFT=$ST_QEMU_UP LOOP_LEFT=$ST_LOOP_UP"
             rm -rf "$S"
         )
         [[ "$out" == *"$want"* ]] && return 0

@@ -18,6 +18,12 @@ export const BENCH_OBJECTS = new Map([
     'specviewperf-15.0.0.SPECviewperf-Setup.exe',
     'specviewperf-15.0.0/original/SPECviewperf-Setup-15.0.0.exe',
   ],
+  // Windows apps stage (docs/design/V3_WINDOWS_APPS_GATE.md, PROPOSED 2026-11-07, not deployed): the app disk
+  // of the Windows app matrix, built once by a person from REDISTRIBUTABLE packages only
+  // (scripts/bench/windows/appmatrix/package_open_bundle.sh) and its manifest. The sha256 pin of the disk is in the
+  // repo (appmatrix/bundle.pin); the Worker does not hold it.
+  ['winapps-open.iso', 'winapps-open/kfapps.iso'],
+  ['winapps-open.manifest.json', 'winapps-open/manifest.json'],
 ]);
 export function benchObject(name) {
   const key = BENCH_OBJECTS.get(name);

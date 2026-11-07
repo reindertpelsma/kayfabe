@@ -39,9 +39,10 @@ def fields(obj, required, optional=()):
     require(set(required) <= obj.keys() <= set(required) | set(optional), "missing or unknown fields")
 
 
-def scalar(value):
+def scalar(value, commas=False):
+    pattern = r"[A-Za-z0-9_., :/+()-]+" if commas else r"[A-Za-z0-9_. :/+()-]+"
     require(isinstance(value, str) and 0 < len(value) <= 120 and
-            re.fullmatch(r"[A-Za-z0-9_. :/+()-]+", value) is not None, "invalid QEMU property string")
+            re.fullmatch(pattern, value) is not None, "invalid QEMU property string")
     return value
 
 
@@ -105,7 +106,7 @@ def verify(state, image=None):
     except (ValueError, TypeError, AttributeError) as error:
         raise StateError("invalid SMBIOS UUID") from error
     for key in ("serial", "manufacturer", "product"):
-        scalar(sm[key])
+        scalar(sm[key], commas=True)
     require(isinstance(state["nics"], list) and 1 <= len(state["nics"]) <= 8, "invalid NIC count")
     macs = []
     for nic in state["nics"]:
@@ -307,8 +308,9 @@ def apply(state, target, image, refresh=False, lock_fd=None):
 def qemu_env(state):
     verify(state)
     sm, machine = state["smbios"], state["machine"]
-    values = {"MS_UUID": sm["uuid"], "MS_SERIAL": sm["serial"], "MS_MANUFACTURER": sm["manufacturer"],
-              "MS_PRODUCT": sm["product"], "MS_MAC": state["nics"][0]["mac"], "MS_MACHINE_TYPE": machine["type"],
+    escaped = {key: sm[key].replace(",", ",,") for key in ("serial", "manufacturer", "product")}
+    values = {"MS_UUID": sm["uuid"], "MS_SERIAL": escaped["serial"], "MS_MANUFACTURER": escaped["manufacturer"],
+              "MS_PRODUCT": escaped["product"], "MS_MAC": state["nics"][0]["mac"], "MS_MACHINE_TYPE": machine["type"],
               "MS_CORES": machine["cores"], "MS_RAM_MB": machine["ram_mb"], "MS_RTC_BASE": state["rtc_base_utc"][:-1],
               "MS_DISK_SERIAL": state["disk"]["serial"], "MS_CPU_BRAND": state.get("cpu_pin", {}).get("brand", "")}
     return "".join(f"{key}={value}\n" for key, value in values.items()) + "".join(

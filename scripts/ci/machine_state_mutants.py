@@ -85,7 +85,7 @@ CASES = [
          "test_invalid_disk_model_is_rejected", "test_unimplemented_scsi_disk_is_rejected"),
     case("no-live-state-capture", 'not (pid.isdigit() and Path("/proc", pid).exists())', 'True',
          "test_capture_refuses_live_qemu_pid", "test_capture_refuses_live_tpm_pid"),
-    case("qemu-property-injection", 're.fullmatch(r"[A-Za-z0-9_. :/+()-]+", value) is not None', 'True',
+    case("qemu-property-injection", 're.fullmatch(pattern, value) is not None', 'True',
          "test_cpu_brand_feature_injection_is_rejected", "test_smbios_property_injection_is_rejected"),
     case("cpu-pin-brand-only", 'fields(state["cpu_pin"], {"brand"})',
          'fields(state["cpu_pin"], {"brand"}, {"features", "flags"})',
@@ -112,6 +112,33 @@ CASES.append(("run-restore-before-qemu", "win_vm.sh", change(SH,
     '      true'), ("test_run_hook_refreshes_tpm_before_qemu_lookup", "test_run_hook_refreshes_ovmf_before_qemu_lookup")))
 
 
+CASES += [
+    case("snapshot-pristine-base", '[ -z "${WINVM_OVERLAY_BACKING:-}" ]', 'true',
+         "test_snapshot_refuses_alternate_disk_backing", "test_snapshot_dry_run_refuses_alternate_disk_backing", shell=True),
+    case("identity-from-json", 'if [ -n "${WINVM_MACHINE_STATE:-}" ]; then\n    VM_UUID=$MS_UUID VM_SERIAL=$MS_SERIAL VM_MAC=$MS_MAC',
+         'if false; then\n    VM_UUID=$MS_UUID VM_SERIAL=$MS_SERIAL VM_MAC=$MS_MAC',
+         "test_qemu_args_pin_machine_rtc_and_identity", "test_apply_identity_json_overrides_legacy_env", shell=True),
+    case("snapshot-rtc-argument", '"base=${MS_RTC_BASE:-utc},driftfix=slew"', 'base=utc,driftfix=slew',
+         "test_qemu_args_pin_machine_rtc_and_identity", "test_snapshot_all_scalars_match_manifest", shell=True),
+    case("working-signing-directory", '  SB=$VM/secureboot', '  :',
+         "test_signed_gop_uses_restored_guest_signing_directory", "test_signed_gop_never_uses_capture_host_signing_cache", shell=True),
+    case("snapshot-disk-serial-argument", '[ -z "${WINVM_MACHINE_STATE:-}" ] || sysdev+=",serial=$MS_DISK_SERIAL"', 'true',
+         "test_qemu_args_pin_machine_rtc_and_identity", "test_pin_memory_cores_and_disk_device", shell=True),
+    case("snapshot-machine-shape", 'MS_MACHINE_TYPE) MS_MACHINE_TYPE=$v ;; MS_CORES) SMP=$v ;; MS_RAM_MB) RAM_MB=$v ;;',
+         'MS_MACHINE_TYPE|MS_CORES|MS_RAM_MB) : ;;',
+         "test_pin_memory_cores_and_disk_device", "test_snapshot_all_scalars_match_manifest", shell=True),
+    case("no-blob-output", 'print("machine-state: " + args.verb + " complete")',
+         'print(json.dumps(state)); print("machine-state: " + args.verb + " complete")',
+         "test_cli_capture_verify_round_trip_does_not_print_blobs", "test_cli_apply_round_trip_does_not_print_blobs"),
+    case("multiple-nic-identities", 'MS_NIC) MS_NICS+=("$v") ;;', 'MS_NIC) : ;;',
+         "test_multiple_nics_are_applied_in_order", "test_snapshot_all_scalars_match_manifest", shell=True),
+]
+
+
+CASES += [case("literal-smbios-commas", 'sm[key].replace(",", ",,")', 'sm[key]',
+               "test_smbios_product_literal_comma_is_escaped", "test_smbios_manufacturer_literal_comma_is_escaped")]
+
+
 # Optional TPM cleanup is also covered by the complete-directory cleanup. Remove
 # both arms of that one rule so a redundant guard cannot hide a missing killer.
 for i, entry in enumerate(CASES):
@@ -121,7 +148,8 @@ for i, entry in enumerate(CASES):
 
 
 def run(tree, tests=()):
-    proc = subprocess.run([sys.executable, "-I", str(tree / "scripts/ci/test_machine_state.py"),
+    # Fresh imported source for every mutant, including same-size edits within one second.
+    proc = subprocess.run([sys.executable, "-I", "-B", str(tree / "scripts/ci/test_machine_state.py"),
                            *("StateTests." + test for test in tests)], text=True, capture_output=True, timeout=300)
     output = proc.stdout + proc.stderr
     return proc.returncode, sorted(set(re.findall(r"^(?:FAIL|ERROR): (\S+)", output, re.M))), output

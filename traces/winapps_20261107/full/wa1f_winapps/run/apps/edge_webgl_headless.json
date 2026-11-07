@@ -1,0 +1,75 @@
+{
+ "quiet": 2,
+ "end_utc": "2026-11-07T05:21:25.1099020Z",
+ "start_utc": "2026-11-07T05:21:10.1368218Z",
+ "rc": 0,
+ "secs": 15,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4090 status=OK code=0"
+ ],
+ "digests": [],
+ "session": 1,
+ "out_files": [
+  "C:\\kf\\out\\edge_webgl_headless\\edge_result.json 353"
+ ],
+ "boot_utc_start": "2026-11-07T05:14:01.5000000Z",
+ "log_tail": [
+  "=== edge_webgl_headless start=2026-11-07T05:21:10.1368218+00:00 host=KFWIN session=1 boot=2026-11-07T05:14:01.5000000Z timeout=150",
+  "KFEDGE {\"page\":\"webgl\",\"ok\":true,\"api\":\"webgl2\",\"vendor\":\"Google Inc. (NVIDIA)\",\"renderer\":\"ANGLE (NVIDIA, NVIDIA GeForce RTX 4090 (0x00002684) Direct3D11 vs_5_0 ps_5_0, D3D11)\",\"version\":\"WebGL 2.0 (OpenGL ES 3.0 Chromium)\",\"pixel\":[64,127,191,255],\"pixel_ok\":true,\"frames\":466,\"secs\":8.002100000000034,\"fps\":58.23471338773547,\"glerr\":0,\"software\":false}",
+  "=== end rc=0 secs=15 2026-11-07T05:21:25.1099020+00:00"
+ ],
+ "pdh": {
+  "pids": [
+   "2620",
+   "2200",
+   "4316",
+   "2208",
+   "7940",
+   "8336",
+   "8404",
+   "3084",
+   "8256",
+   "4588",
+   "6128",
+   "5872",
+   "4060",
+   "5500",
+   "7972",
+   "8112",
+   "4444"
+  ],
+  "nv": {
+   "legacyoverlay": 0,
+   "3d": 0,
+   "vr": 0,
+   "videodecode": 0,
+   "copy": 0.022065702137769573,
+   "ofa_0": 0,
+   "videoencode": 0
+  },
+  "samples": 7,
+  "other": {},
+  "nvidia_luids": "0_5dfe"
+ },
+ "timed_out": false,
+ "token": "g4-edge_webgl_headless-1794028855",
+ "boot_utc_end": "2026-11-07T05:14:01.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 0,
+  "other_nvlddmkm": 0,
+  "lines": [],
+  "live_kernel": 0
+ },
+ "app": "edge_webgl_headless",
+ "smi": {
+  "samples": 0,
+  "mem_used_base_mb": null,
+  "util_max": 0,
+  "mem_used_max_mb": 0
+ }
+}

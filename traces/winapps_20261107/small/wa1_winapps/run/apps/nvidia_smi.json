@@ -1,0 +1,73 @@
+{
+ "quiet": 4,
+ "end_utc": "2026-11-07T04:08:47.3593622Z",
+ "start_utc": "2026-11-07T04:08:42.5952210Z",
+ "rc": 0,
+ "secs": 5,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4090 status=OK code=0"
+ ],
+ "digests": [],
+ "session": 0,
+ "out_files": [],
+ "boot_utc_start": "2026-11-07T04:05:09.5000000Z",
+ "log_tail": [
+  "=== nvidia_smi start=2026-11-07T04:08:42.5952210+00:00 host=KFWIN session=0 boot=2026-11-07T04:05:09.5000000Z timeout=60",
+  "Sat Nov  7 04:08:46 2026       ",
+  "+-----------------------------------------------------------------------------------------+",
+  "| NVIDIA-SMI 580.88                 Driver Version: 580.88         CUDA Version: 13.0     |",
+  "+-----------------------------------------+------------------------+----------------------+",
+  "| GPU  Name                  Driver-Model | Bus-Id          Disp.A | Volatile Uncorr. ECC |",
+  "| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |",
+  "|                                         |                        |               MIG M. |",
+  "|=========================================+========================+======================|",
+  "|   0  NVIDIA GeForce RTX 4090      WDDM  |   00000000:00:05.0  On |                  N/A |",
+  "| N/A    0C  N/A             N/A  /  N/A  |     566MiB /   8192MiB |     N/A      Default |",
+  "|                                         |                        |                  N/A |",
+  "+-----------------------------------------+------------------------+----------------------+",
+  "",
+  "+-----------------------------------------------------------------------------------------+",
+  "| Processes:                                                                              |",
+  "|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |",
+  "|        ID   ID                                                               Usage      |",
+  "|=========================================================================================|",
+  "|    0   N/A  N/A            1632    C+G   C:\\Windows\\System32\\dwm.exe           N/A      |",
+  "|    0   N/A  N/A            5892    C+G   ...indows\\System32\\ShellHost.exe      N/A      |",
+  "|    0   N/A  N/A            5904    C+G   C:\\Windows\\explorer.exe               N/A      |",
+  "|    0   N/A  N/A            6520    C+G   ..._cw5n1h2txyewy\\SearchHost.exe      N/A      |",
+  "|    0   N/A  N/A            6536    C+G   ...y\\StartMenuExperienceHost.exe      N/A      |",
+  "+-----------------------------------------------------------------------------------------+",
+  "=== end rc=0 secs=5 2026-11-07T04:08:47.3593622+00:00"
+ ],
+ "pdh": {
+  "pids": [
+   "1500",
+   "1200"
+  ],
+  "nv": {},
+  "samples": 1,
+  "other": {},
+  "nvidia_luids": "0_594d"
+ },
+ "timed_out": false,
+ "token": "g1-nvidia_smi-1794024506",
+ "boot_utc_end": "2026-11-07T04:05:09.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 0,
+  "other_nvlddmkm": 0,
+  "lines": [],
+  "live_kernel": 0
+ },
+ "app": "nvidia_smi",
+ "smi": {
+  "samples": 0,
+  "mem_used_base_mb": null,
+  "util_max": 0,
+  "mem_used_max_mb": 0
+ }
+}

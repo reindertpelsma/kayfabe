@@ -1,0 +1,6 @@
+=== matmul_t start=2026-11-07T04:11:28.7074261+00:00 host=KFWIN session=0 boot=2026-11-07T04:05:09.5000000Z timeout=120
+KFDEV NVIDIA GeForce RTX 4090
+[eq] device NVIDIA GeForce RTX 4090 torch 2.8.0+cu126
+CHECK matmul_fp32 ok maxerr=2.14e-04
+WINEQ_DONE matmul
+=== end rc=0 secs=16 2026-11-07T04:11:45.1498031+00:00

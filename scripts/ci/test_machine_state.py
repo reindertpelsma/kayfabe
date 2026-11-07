@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 """Offline machine-state fixtures; no VM, GPU, TPM service or real key is used."""
 import copy
+from contextlib import redirect_stdout
+import io
 import fcntl
 import importlib.util
 import json
@@ -52,7 +54,7 @@ class StateTests(unittest.TestCase):
                        "manufacturer": "Fixture Manufacturer", "product": "Offline Windows Image"},
             "nics": [{"mac": "52:54:00:01:02:03"}],
             "disk": {"serial": "FIXTUREDISK01", "model": "virtio-blk-pci"},
-            "machine": {"type": "pc-q35-10.2", "cores": 4, "ram_mb": 8192},
+            "machine": {"type": "pc-q35-10.1", "cores": 4, "ram_mb": 6144},
             "monitor": {"edid_id": "KFB-0001-00000001"},
         }
         self.state = self.ms.capture(self.vm, self.image, self.facts,
@@ -71,17 +73,20 @@ class StateTests(unittest.TestCase):
         data[section][field] = value
         return data
 
-    def dry(self, state=True, pin=None, arm="A"):
+    def dry(self, state=True, pin=None, arm="A", kf3=False):
         if state:
             if pin is not None:
                 self.state["cpu_pin"] = pin
                 self.canonical.write_text(json.dumps(self.state))
             self.ms.apply(self.state, self.target, self.image)
-        env = dict(PATH=os.environ["PATH"], HOME=str(self.tmp), WINVM_ROOT=str(self.tmp / "runs"),
-                   WINVM_NAME="kfwin", WINVM_QEMU="/fixture/qemu", WINVM_DRY_RUN="1")
+        env = dict(PATH=os.environ["PATH"], HOME=str(self.tmp), WINVM_ROOT=str(self.target.parent),
+                   WINVM_NAME=self.target.name, WINVM_QEMU="/fixture/qemu", WINVM_DRY_RUN="1")
         if state:
             env["WINVM_MACHINE_STATE"] = str(self.canonical)
-        r = subprocess.run(["bash", str(WIN), "run", "--dry-run", "--arm", arm, "--no-kf3", "--tag", "fixture"],
+        command = ["bash", str(WIN), "run", "--dry-run", "--arm", arm, "--tag", "fixture"]
+        if not kf3:
+            command += ["--no-kf3"]
+        r = subprocess.run(command,
                            env=env, text=True, capture_output=True, timeout=30)
         self.assertEqual(r.returncode, 0, r.stderr)
         line = next(x for x in r.stdout.splitlines() if x.startswith("DRYRUN_QEMU "))
@@ -481,17 +486,19 @@ class StateTests(unittest.TestCase):
 
     def test_pin_memory_cores_and_disk_device(self):
         args = self.dry()
-        self.assertEqual(args[args.index("-m") + 1], "8192")
+        self.assertEqual(args[args.index("-m") + 1], "6144")
         self.assertEqual(args[args.index("-smp") + 1], "4,sockets=1,cores=4,threads=1")
-        self.assertIn("pc-q35-10.2,accel=kvm,smm=on,memory-backend=ram0", args)
+        self.assertIn("pc-q35-10.1,accel=kvm,smm=on,memory-backend=ram0", args)
         self.assertIn("virtio-blk-pci,drive=sys,bootindex=0,serial=FIXTUREDISK01", args)
 
-    def launch_without_qemu(self, overlay="new-run", restricted="on", opt_in=True):
+    def launch_without_qemu(self, overlay="new-run", restricted="on", opt_in=True, backing=None):
         # The nonexistent binary makes qemu_bin refuse BEFORE prereqs/hardware checks.
         env = dict(PATH=os.environ["PATH"], HOME=str(self.tmp), WINVM_ROOT=str(self.tmp / "runs"),
-                   WINVM_NAME="kfwin", WINVM_QEMU="/fixture/does-not-exist", WINVM_NET_RESTRICT=restricted)
+                   WINVM_NAME="kfwin", WINVM_QEMU=str(self.tmp / "missing-qemu"), WINVM_NET_RESTRICT=restricted)
         if opt_in:
             env["WINVM_MACHINE_STATE"] = str(self.canonical)
+        if backing is not None:
+            env["WINVM_OVERLAY_BACKING"] = backing
         result = subprocess.run(["bash", str(WIN), "run", "--no-kf3", "--overlay", overlay],
                                 env=env, text=True, capture_output=True, timeout=30)
         self.assertNotEqual(result.returncode, 0)
@@ -560,6 +567,88 @@ class StateTests(unittest.TestCase):
         r = subprocess.run(["bash", str(WIN), "run", "--dry-run", "--no-kf3"], env=env, capture_output=True, text=True, timeout=30)
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn(self.facts["smbios"]["uuid"], r.stdout)
+
+
+    def test_snapshot_refuses_alternate_disk_backing(self):
+        self.ms.apply(self.state, self.target, self.image)
+        result = self.launch_without_qemu(backing="sealed-driver")
+        self.assertIn("pristine base image", result.stderr)
+
+    def test_snapshot_dry_run_refuses_alternate_disk_backing(self):
+        self.ms.apply(self.state, self.target, self.image)
+        env = dict(PATH=os.environ["PATH"], HOME=str(self.tmp), WINVM_ROOT=str(self.target.parent),
+                   WINVM_NAME=self.target.name, WINVM_MACHINE_STATE=str(self.canonical),
+                   WINVM_OVERLAY_BACKING="sealed-driver", WINVM_DRY_RUN="1")
+        r = subprocess.run(["bash", str(WIN), "run", "--dry-run", "--no-kf3"],
+                           env=env, text=True, capture_output=True, timeout=30)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("pristine base image", r.stderr)
+
+    def test_cli_capture_verify_round_trip_does_not_print_blobs(self):
+        facts = self.tmp / "facts.json"
+        facts.write_text(json.dumps(self.facts))
+        out = self.tmp / "captured-cli.json"
+        stdout = io.StringIO()
+        with redirect_stdout(stdout):
+            self.assertEqual(self.ms.main(["capture", "--vm", str(self.vm), "--image", str(self.image),
+                "--facts", str(facts), "--cpu-info", str(self.cpu),
+                "--window-start", "2026-11-07T10:00:00Z", "--window-end", "2026-11-07T11:00:00Z",
+                "--rtc-base", "2026-11-07T10:30:00Z", "--output", str(out)]), 0)
+            self.assertEqual(self.ms.main(["verify", str(out), "--image", str(self.image)]), 0)
+        self.assertNotIn("data_base64", stdout.getvalue())
+        self.assertNotIn("fixture throwaway password", stdout.getvalue())
+        self.assertEqual(out.stat().st_mode & 0o777, 0o600)
+        self.assertNotIn("cpu_pin", json.loads(out.read_text()))
+
+    def test_cli_apply_round_trip_does_not_print_blobs(self):
+        stdout = io.StringIO()
+        with redirect_stdout(stdout):
+            self.assertEqual(self.ms.main(["apply", str(self.canonical), "--image", str(self.image),
+                                           "--vm", str(self.target)]), 0)
+        self.assertNotIn("data_base64", stdout.getvalue())
+        self.assertNotIn("fixture throwaway password", stdout.getvalue())
+        for name, value in self.file_bytes.items():
+            self.assertEqual((self.target / name).read_bytes(), value)
+            self.assertEqual((self.target / name).stat().st_mode & 0o777, 0o600)
+        self.assertNotEqual((self.target / "disk/base.qcow2").stat().st_ino, self.image.stat().st_ino)
+
+    def test_snapshot_all_scalars_match_manifest(self):
+        self.state["nics"].append({"mac": "52:54:00:01:02:04"})
+        self.canonical.write_text(json.dumps(self.state))
+        args = self.dry()
+        self.assertEqual(args[args.index("-m") + 1], "6144")
+        self.assertEqual(args[args.index("-smp") + 1], "4,sockets=1,cores=4,threads=1")
+        self.assertIn("pc-q35-10.1,accel=kvm,smm=on,memory-backend=ram0", args)
+        self.assertIn("virtio-blk-pci,drive=sys,bootindex=0,serial=FIXTUREDISK01", args)
+        self.assertIn("base=2026-11-07T10:30:00,driftfix=slew", args)
+        self.assertIn("virtio-net-pci,netdev=n0,mac=52:54:00:01:02:03", args)
+        self.assertIn("virtio-net-pci,netdev=n1,mac=52:54:00:01:02:04", args)
+
+    def test_signed_gop_uses_restored_guest_signing_directory(self):
+        args = self.dry(kf3=True)
+        self.assertTrue(any("gop-efi=" + str(self.target / "secureboot/kf-gop.") in arg for arg in args))
+
+    def test_signed_gop_never_uses_capture_host_signing_cache(self):
+        self.target = self.tmp / "another-root/kfwin"
+        args = self.dry(kf3=True)
+        prop = next(arg for arg in args if arg.startswith("kf3-gpu,"))
+        self.assertIn("gop-efi=" + str(self.target / "secureboot/kf-gop."), prop)
+        self.assertNotIn("gop-efi=" + str(self.target.parent / "secureboot/"), prop)
+
+
+    def test_smbios_product_literal_comma_is_escaped(self):
+        self.state["smbios"]["product"] = "Standard PC (Q35 + ICH9, 2009)"
+        self.canonical.write_text(json.dumps(self.state))
+        args = self.dry()
+        self.assertIn("product=Standard PC (Q35 + ICH9,, 2009)", args[args.index("-smbios") + 1])
+        self.assertEqual(self.state["smbios"]["product"], "Standard PC (Q35 + ICH9, 2009)")
+
+    def test_smbios_manufacturer_literal_comma_is_escaped(self):
+        self.state["smbios"]["manufacturer"] = "Fixture, Inc."
+        self.canonical.write_text(json.dumps(self.state))
+        args = self.dry()
+        self.assertIn("manufacturer=Fixture,, Inc.", args[args.index("-smbios") + 1])
+        self.assertEqual(self.state["smbios"]["manufacturer"], "Fixture, Inc.")
 
 
 if __name__ == "__main__":
