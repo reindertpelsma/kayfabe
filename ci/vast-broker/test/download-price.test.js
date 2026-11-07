@@ -1,12 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { configuration, offerPrice, offerRejections } from '../src/policy.js';
+import { configuration, downloadTiming, offerPrice, offerRejections } from '../src/policy.js';
 import { DEFAULTS } from '../src/defaults.js';
 import { applyProfile } from '../src/tier.js';
 import { OfferBook } from '../src/offers.js';
 import { Ledger } from '../src/ledger.js';
 import { dieLegs } from '../src/release.js';
-import { env, MockCloud, MemoryStorage, setup } from './helpers.js';
+import { env, MockCloud, MemoryStorage, setup, shippedPayloadProfiles } from './helpers.js';
+// These model/admission tests use shipped profile data, independently of the
+// faster origin explicitly simulated by the unrelated protocol fixtures.
+for (const [name, profile] of Object.entries(shippedPayloadProfiles))
+  Object.assign(DEFAULTS.payloadProfiles[name], profile);
 const cfgFor = (tier = 'small', extra = {}) =>
   applyProfile(
     configuration({
@@ -40,9 +44,9 @@ for (const compute of [0.5, 0.8])
   test('download time premium uses extra leased hours ' + compute, () => {
     const cfg = cfgFor('small', { BANDWIDTH_DOWN_GB: '100' });
     const price = offerPrice(offer(1000, compute), cfg);
-    near(price.download.reference_seconds, 800);
+    near(price.download.reference_seconds, (100 * 8000) / 445);
     near(price.download.expected_seconds, (100 * 8000) / 300);
-    near(price.downloadTimeCost, (((100 * 8000) / 300 - 800) / 3600) * compute);
+    near(price.downloadTimeCost, (((100 * 8000) / 300 - (100 * 8000) / 445) / 3600) * compute);
     near(price.bandwidth, 0.202 + price.downloadTimeCost);
     near(price.effective, compute + price.bandwidth / 5);
     near(price.total, compute * (5 + 1 / 60) + price.bandwidth);
@@ -94,18 +98,25 @@ for (const mode of ['price', 'guard'])
       DEFAULTS.downloadModel.derate = original;
     }
   });
-for (const speed of [1000, 2000])
-  test('reference speed is data-driven ' + speed, () => {
-    const old = DEFAULTS.downloadModel.referenceDownMbps;
+for (const tier of ['small', 'large'])
+  test('R2 reference is profile data ' + tier, () => {
+    const resource = DEFAULTS.payloadProfiles[tier],
+      old = resource.r2ReferenceMbps;
+    const other = tier === 'large' ? 'small' : 'large';
     try {
-      const cfg = cfgFor();
-      const before = offerPrice(offer(speed), cfg);
-      DEFAULTS.downloadModel.referenceDownMbps = 500;
-      const after = offerPrice(offer(speed), cfg);
-      assert.ok(after.downloadTimeCost < before.downloadTimeCost);
-      near(after.download.reference_seconds, before.download.reference_seconds * 2);
+      const cfg = cfgFor(tier),
+        before = offerPrice(offer(1000), cfg);
+      const otherBefore = downloadTiming(offer(1000), cfgFor(other));
+      resource.r2ReferenceMbps = 890;
+      const after = offerPrice(offer(1000), cfg);
+      near(after.download.reference_seconds, before.download.reference_seconds / 2);
+      assert.ok(after.downloadTimeCost > before.downloadTimeCost);
+      near(
+        downloadTiming(offer(1000), cfgFor(other)).reference_seconds,
+        otherBefore.reference_seconds,
+      );
     } finally {
-      DEFAULTS.downloadModel.referenceDownMbps = old;
+      resource.r2ReferenceMbps = old;
     }
   });
 for (const mode of ['selection', 'release'])
@@ -113,7 +124,7 @@ for (const mode of ['selection', 'release'])
     const cfg = cfgFor('large'),
       book = new OfferBook(() => 0),
       ledger = new Ledger(new MemoryStorage());
-    const market = [offer(1000, 0.5, 1), offer(10000, 0.54, 2)];
+    const market = [offer(1000, 0.5, 1), offer(10000, 0.52, 2)];
     const evaluation = await book.evaluate(null, cfg, ledger, 'release', { market });
     assert.equal(evaluation.allowed.length, 2);
     const id =
@@ -125,16 +136,18 @@ for (const mode of ['selection', 'release'])
   });
 for (const speed of [200, 300])
   test('live contract uses the same feasibility guard ' + speed, async () => {
-    const h = await setup();
-    assert.equal((await h.call()).status, 200);
+    const h = await setup({ HARD_RUNTIME_MINUTES: '30' });
+    h.cloud.run.event = 'push';
+    assert.equal((await h.call('/rent', { claims: { event_name: 'push' } })).status, 200);
     h.cloud.instances.get('900').inet_down = speed;
     await h.service.sweep();
     assert.equal((await h.storage.get('record:123-1')).closed, 'CONTRACT_SLOW_NETWORK');
   });
 for (const missing of [undefined, null])
   test('live contract can reuse its recorded advertised speed ' + missing, async () => {
-    const h = await setup();
-    assert.equal((await h.call()).status, 200);
+    const h = await setup({ HARD_RUNTIME_MINUTES: '30' });
+    h.cloud.run.event = 'push';
+    assert.equal((await h.call('/rent', { claims: { event_name: 'push' } })).status, 200);
     h.cloud.instances.get('900').inet_down = missing;
     await h.service.sweep();
     assert.equal((await h.storage.get('record:123-1')).closed, null);
@@ -162,7 +175,7 @@ for (const rate of [0.12, 0.24])
     near(p.downloadTimeCost, (p.download.extra_seconds / 3600) * row.dph_total);
     assert.ok(p.downloadTimeCost > (p.download.extra_seconds / 3600) * row.dph_base);
   });
-for (const key of ['derate', 'referenceDownMbps'])
+for (const key of ['derate', 'status'])
   test('invalid download model data refuses configuration ' + key, () => {
     const original = DEFAULTS.downloadModel[key];
     try {
@@ -188,7 +201,7 @@ for (const tier of ['small', 'large'])
       DEFAULTS.payloadProfiles[tier].maxDownloadSeconds = original;
     }
   });
-for (const speed of [1000, 1500])
+for (const speed of [1000, 1200])
   test('release leg reserves the shared time-inclusive estimate ' + speed, async () => {
     const cfg = cfgFor('large'),
       row = offer(speed),
@@ -206,4 +219,119 @@ for (const [tier, minutes, speed] of [
   test('download feasibility also fits a shortened lease ' + tier, () => {
     const cfg = cfgFor(tier, { HARD_RUNTIME_MINUTES: String(minutes), BOOT_LIMIT_MINUTES: '5' });
     assert.ok(offerRejections(offer(speed), cfg).includes('SLOW_NETWORK'));
+  });
+
+// FALSIFIERS: a fast advertisement exceeds R2's configured ceiling, streams change
+// the single-stream reference, a profile borrows another profile's reference, or
+// the feasibility guard ignores the origin's irreducible transfer duration.
+for (const speed of [4000, 10000])
+  test('R2 single-stream ceiling bounds fast offers ' + speed, () => {
+    const p = offerPrice(offer(speed), cfgFor('large'));
+    near(p.download.expected_seconds, (130 * 8000) / 445);
+    near(p.download.reference_seconds, (130 * 8000) / 445);
+    assert.equal(p.download.effective_down_mbps, 445);
+    assert.equal(p.download.streams_factor, 1);
+    assert.equal(p.download.r2_reference_mbps, 445);
+    assert.equal(p.download.reference_status, 'PROPOSED');
+    assert.equal(p.downloadTimeCost, 0);
+  });
+for (const tier of ['small', 'large'])
+  test('streams factor is profile data with nonnegative premium ' + tier, () => {
+    const resource = DEFAULTS.payloadProfiles[tier],
+      old = resource.streamsFactor;
+    try {
+      const cfg = cfgFor(tier),
+        before = downloadTiming(offer(10000), cfg);
+      const other = tier === 'small' ? 'large' : 'small';
+      const otherBefore = downloadTiming(offer(10000), cfgFor(other));
+      resource.streamsFactor = 2;
+      const p = offerPrice(offer(10000), cfg);
+      near(p.download.expected_seconds, before.expected_seconds / 2);
+      near(p.download.reference_seconds, before.reference_seconds);
+      assert.equal(p.download.streams_factor, 2);
+      near(
+        downloadTiming(offer(10000), cfgFor(other)).expected_seconds,
+        otherBefore.expected_seconds,
+      );
+      assert.equal(p.download.extra_seconds, 0);
+      assert.equal(p.downloadTimeCost, 0);
+    } finally {
+      resource.streamsFactor = old;
+    }
+  });
+for (const tier of ['small', 'large'])
+  test('slower profile R2 ceiling can reject an otherwise fast link ' + tier, () => {
+    const resource = DEFAULTS.payloadProfiles[tier],
+      old = resource.r2ReferenceMbps;
+    try {
+      resource.r2ReferenceMbps = 100;
+      const cfg = cfgFor(tier);
+      assert.ok(
+        offerRejections(offer(10000), cfg, {
+          profile: tier === 'large' ? 'release' : 'check',
+        }).includes('SLOW_NETWORK'),
+      );
+    } finally {
+      resource.r2ReferenceMbps = old;
+    }
+  });
+for (const tier of ['small', 'large'])
+  for (const key of ['r2ReferenceMbps', 'streamsFactor'])
+    for (const invalid of [0, NaN, Infinity, -1])
+      test(
+        'invalid profile download data refuses configuration ' + [tier, key, invalid].join('/'),
+        () => {
+          const resource = DEFAULTS.payloadProfiles[tier],
+            old = resource[key];
+          try {
+            resource[key] = invalid;
+            assert.throws(
+              () => cfgFor(tier),
+              (e) => e.state === 'CONFIG_VAR:DOWNLOAD_PROFILE',
+            );
+          } finally {
+            resource[key] = old;
+          }
+        },
+      );
+for (const tier of ['small', 'middle', 'large', 'adhoc'])
+  test('each shipped profile has proposed single-stream R2 data ' + tier, () => {
+    const resource = DEFAULTS.payloadProfiles[tier];
+    assert.equal(resource.r2ReferenceMbps, 445);
+    assert.equal(resource.r2ReferenceStatus, 'PROPOSED');
+    assert.equal(resource.streamsFactor, 1);
+    assert.equal(resource.streamsFactorStatus, 'PROPOSED');
+  });
+for (const speed of [4000, 10000])
+  test('middle origin minimum exceeds unchanged twenty-minute limit ' + speed, () => {
+    const cfg = cfgFor('middle');
+    near(downloadTiming(offer(speed), cfg).expected_seconds, (87 * 8000) / 445);
+    assert.ok(offerRejections(offer(speed), cfg).includes('SLOW_NETWORK'));
+  });
+for (const speed of [4000, 10000])
+  test('short twenty-minute small lease cannot fit the R2 minimum ' + speed, () => {
+    const cfg = cfgFor('small', { HARD_RUNTIME_MINUTES: '20', BOOT_LIMIT_MINUTES: '5' });
+    assert.ok(offerRejections(offer(speed), cfg).includes('SLOW_NETWORK'));
+  });
+
+for (const tier of ['small', 'large'])
+  test('R2 expected ceiling stays within its profile ' + tier, () => {
+    const resource = DEFAULTS.payloadProfiles[tier],
+      old = resource.r2ReferenceMbps;
+    const other = tier === 'small' ? 'large' : 'small';
+    try {
+      const before = downloadTiming(offer(10000), cfgFor(tier));
+      const otherBefore = downloadTiming(offer(10000), cfgFor(other));
+      resource.r2ReferenceMbps = 890;
+      near(
+        downloadTiming(offer(10000), cfgFor(tier)).expected_seconds,
+        before.expected_seconds / 2,
+      );
+      near(
+        downloadTiming(offer(10000), cfgFor(other)).expected_seconds,
+        otherBefore.expected_seconds,
+      );
+    } finally {
+      resource.r2ReferenceMbps = old;
+    }
   });

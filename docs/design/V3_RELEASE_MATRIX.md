@@ -187,7 +187,9 @@ this guard; a future download stage must add and review its table row.
 
 CODE READ: effective hourly price is compute base plus profile-sized storage,
 plus transfer fees and a download-time premium divided by hard lease hours.
-The premium is excess download seconds over a 1 Gbps reference, valued at the
+The premium is excess download seconds over the per-profile proposed 445 Mbps R2
+reference, with expected speed capped by R2 reference times the data streams factor
+(currently 1), valued at the
 compute/storage hourly rate; see [the download model](V3_DOWNLOAD_PRICE.md). Worst-case reservation includes the compute and
 storage cron margin and the network allowance once. Search, disk allocation,
 offer rejection, ranking, live-instance rechecks and release estimates all use

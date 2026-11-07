@@ -1,5 +1,13 @@
 import { webcrypto, createHmac, timingSafeEqual } from 'node:crypto';
 import { useTimingSafeEqual } from '../src/tokens.js';
+import { DEFAULTS } from '../src/defaults.js';
+// Synthetic protocol fixtures model an independently configured 1 Gbps origin.
+// At the shipped 445 Mbps reference, middle cannot fit its proposed 20-minute
+// download maximum, so it cannot exercise unrelated admitted-run contracts.
+// Preserve the shipped data before this explicit fixture configuration. The
+// pricing suite restores it and proves those default infeasibilities directly.
+export const shippedPayloadProfiles = structuredClone(DEFAULTS.payloadProfiles);
+for (const profile of Object.values(DEFAULTS.payloadProfiles)) profile.r2ReferenceMbps = 1000;
 // Plain Node has no crypto.subtle.timingSafeEqual (a Workers API): install Node's.
 useTimingSafeEqual(timingSafeEqual);
 import { readFileSync } from 'node:fs';

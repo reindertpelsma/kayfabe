@@ -413,17 +413,27 @@ export function configuration(env) {
       Number.isFinite(downloadModel.derate) &&
       downloadModel.derate > 0 &&
       downloadModel.derate <= 1
-    ) ||
-    !(Number.isFinite(downloadModel.referenceDownMbps) && downloadModel.referenceDownMbps > 0)
+    )
   )
     refuse('CONFIG_VAR:DOWNLOAD_MODEL', 503);
-  for (const resource of Object.values(DEFAULTS.payloadProfiles))
+  for (const resource of Object.values(DEFAULTS.payloadProfiles)) {
     if (
       !Number.isSafeInteger(resource.maxDownloadSeconds) ||
       resource.maxDownloadSeconds <= 0 ||
       !['PROPOSED', 'APPROVED', 'MEASURED'].includes(resource.downloadLimitStatus)
     )
       refuse('CONFIG_VAR:DOWNLOAD_LIMIT', 503);
+    if (
+      !Number.isFinite(resource.r2ReferenceMbps) ||
+      resource.r2ReferenceMbps <= 0 ||
+      !Number.isFinite(resource.streamsFactor) ||
+      resource.streamsFactor <= 0 ||
+      !['PROPOSED', 'APPROVED', 'MEASURED'].includes(resource.r2ReferenceStatus) ||
+      !['PROPOSED', 'APPROVED', 'MEASURED'].includes(resource.streamsFactorStatus)
+    )
+      refuse('CONFIG_VAR:DOWNLOAD_PROFILE', 503);
+  }
+
   for (const name of ['small', 'middle', 'large', 'adhoc']) {
     const preferred = DEFAULTS.preferredHostQuality[name];
     if (
@@ -602,13 +612,22 @@ export function downloadTiming(offer, cfg, profile = cfg.profile ?? 'check') {
   if (!Number.isFinite(offer.inet_down) || offer.inet_down <= 0) return null;
   const resource = resourceCaps(cfg, profile),
     model = DEFAULTS.downloadModel;
-  const reference = (resource.bandwidthDownGb * 8000) / model.referenceDownMbps;
-  const expected = (resource.bandwidthDownGb * 8000) / (model.derate * offer.inet_down);
+  const reference = (resource.bandwidthDownGb * 8000) / resource.r2ReferenceMbps;
+  const expectedMbps = Math.min(
+    model.derate * offer.inet_down,
+    resource.r2ReferenceMbps * resource.streamsFactor,
+  );
+  const expected = (resource.bandwidthDownGb * 8000) / expectedMbps;
   if (!Number.isFinite(expected)) return null;
   return {
     advertised_down_mbps: offer.inet_down,
     allowance_gb: resource.bandwidthDownGb,
-    reference_down_mbps: model.referenceDownMbps,
+    reference_down_mbps: resource.r2ReferenceMbps,
+    r2_reference_mbps: resource.r2ReferenceMbps,
+    reference_status: resource.r2ReferenceStatus,
+    streams_factor: resource.streamsFactor,
+    streams_factor_status: resource.streamsFactorStatus,
+    effective_down_mbps: expectedMbps,
     derate: model.derate,
     model_status: model.status,
     reference_seconds: reference,

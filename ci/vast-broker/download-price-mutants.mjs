@@ -56,9 +56,59 @@ const cases = [
     P,
     'extra_seconds: Math.max(0, expected - reference),',
     'extra_seconds: expected - reference,',
+    'price',
   ],
-  ['derate hardcoded', P, '(model.derate * offer.inet_down)', '(0.3 * offer.inet_down)'],
-  ['reference hardcoded', P, '/ model.referenceDownMbps', '/ 1000'],
+  ['derate hardcoded', P, 'model.derate * offer.inet_down', '0.3 * offer.inet_down', 'price'],
+  ['reference hardcoded', P, '/ resource.r2ReferenceMbps', '/ 1000', 'price'],
+  [
+    'R2 ceiling omitted',
+    P,
+    'Math.min(\n    model.derate * offer.inet_down,\n    resource.r2ReferenceMbps * resource.streamsFactor,\n  )',
+    'model.derate * offer.inet_down',
+    'price',
+  ],
+  [
+    'R2 ceiling uses maximum',
+    P,
+    'Math.min(\n    model.derate * offer.inet_down,\n    resource.r2ReferenceMbps * resource.streamsFactor,\n  )',
+    'Math.max(model.derate * offer.inet_down, resource.r2ReferenceMbps * resource.streamsFactor)',
+    'price',
+  ],
+  [
+    'streams factor hardcoded',
+    P,
+    'resource.r2ReferenceMbps * resource.streamsFactor',
+    'resource.r2ReferenceMbps * 1',
+    'price',
+  ],
+  [
+    'profile reference ceiling hardcoded',
+    P,
+    'resource.r2ReferenceMbps * resource.streamsFactor',
+    '1000 * resource.streamsFactor',
+    'price',
+  ],
+  [
+    'R2 ceiling borrows large profile',
+    P,
+    'resource.r2ReferenceMbps * resource.streamsFactor',
+    'DEFAULTS.payloadProfiles.large.r2ReferenceMbps * resource.streamsFactor',
+    'price',
+  ],
+  [
+    'streams factor borrows large profile',
+    P,
+    'resource.r2ReferenceMbps * resource.streamsFactor',
+    'resource.r2ReferenceMbps * DEFAULTS.payloadProfiles.large.streamsFactor',
+    'price',
+  ],
+  [
+    'download profile schema unchecked',
+    P,
+    "refuse('CONFIG_VAR:DOWNLOAD_PROFILE', 503);",
+    'void 0;',
+    'price',
+  ],
   ['feasibility guard removed', P, "reasons.push('SLOW_NETWORK');", 'void 0;'],
   [
     'profile download limit ignored',
@@ -146,23 +196,25 @@ function run(mode) {
   const args =
     mode === 'shell'
       ? ['scripts/bench/box/test_fetch_bench_data.sh']
-      : mode === 'publish'
-        ? [
-            '--test',
-            '--test-reporter=tap',
-            '--test-name-pattern',
-            'download measurements publish',
-            'ci/vast-broker/test/run-report.test.js',
-          ]
-        : mode === 'codes'
-          ? ['--test', '--test-reporter=tap', 'ci/vast-broker/test/edits2-identity.test.js']
-          : [
+      : mode === 'price'
+        ? ['--test', '--test-reporter=tap', 'ci/vast-broker/test/download-price.test.js']
+        : mode === 'publish'
+          ? [
               '--test',
               '--test-reporter=tap',
-              'ci/vast-broker/test/download-price.test.js',
-              'ci/vast-broker/test/download-metrics.test.js',
-              'ci/vast-broker/test/download-forwarding.test.js',
-            ];
+              '--test-name-pattern',
+              'download measurements publish',
+              'ci/vast-broker/test/run-report.test.js',
+            ]
+          : mode === 'codes'
+            ? ['--test', '--test-reporter=tap', 'ci/vast-broker/test/edits2-identity.test.js']
+            : [
+                '--test',
+                '--test-reporter=tap',
+                'ci/vast-broker/test/download-price.test.js',
+                'ci/vast-broker/test/download-metrics.test.js',
+                'ci/vast-broker/test/download-forwarding.test.js',
+              ];
   const r = spawnSync(mode === 'shell' ? 'bash' : process.execPath, args, {
     cwd: scratch,
     encoding: 'utf8',
@@ -196,14 +248,15 @@ try {
     mkdirSync(dirname(join(scratch, relative)), { recursive: true });
     cpSync(join(root, relative), join(scratch, relative));
   }
-  for (const mode of ['unit', 'publish', 'shell', 'codes']) {
+  const selected = cases.filter(
+    (c) => process.argv.length === 2 || process.argv.slice(2).includes(c[0]),
+  );
+  for (const mode of new Set(selected.map((c) => c[4] ?? 'unit'))) {
     const killers = run(mode);
     if (killers.length) throw Error('baseline red ' + JSON.stringify(killers));
   }
   const rows = [];
-  for (const [name, relative, before, after, mode] of cases.filter(
-    (c) => process.argv.length === 2 || process.argv.slice(2).includes(c[0]),
-  )) {
+  for (const [name, relative, before, after, mode] of selected) {
     const file = join(scratch, 'ci/vast-broker', relative),
       source = readFileSync(file, 'utf8');
     if (source.split(before).length !== 2) throw Error('mutant anchor: ' + name);
