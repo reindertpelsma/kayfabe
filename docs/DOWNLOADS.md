@@ -170,7 +170,7 @@ Not in the bundle, with the reason (the same classes as `gate_profiles.json`):
 
 | Class | Apps | Packages | Why |
 |---|---|---|---|
-| owner decision | 29 | GravityMark, FurMark, GpuTest, the Vulkan SDK, an ffmpeg GPL build | free to download, redistribution not granted (a private copy for our own boxes is the owner's ruling to make); the pinned BtbN ffmpeg URL answers 404 (2026-11-07, `traces/winapps_20261107/`), so the 10 video apps also need a new pin |
+| owner decision | 29 | GravityMark, FurMark, GpuTest, the Vulkan SDK, an ffmpeg GPL build | storage/redistribution decision still pending; the earlier ffmpeg pin returned 404, but J1 verified a new dated pin by download, official checksum and ZIP CRC (see `design/V3_WINDOWS_RELEASE_SOFTWARE_DEFINITIONS.md`); GPU behavior remains unverified |
 | manual | 4 apps + 3 never-automated items | Unigine Heaven and Valley; 3DMark, Geekbench, TensorRT, Superposition, Xonotic, Q2RTX | paid or account-bound software, command-line automation in a paid edition, or online-only (`gate_profiles.json` `manual`, with the evidence template) |
 
 ## Download etiquette

@@ -15,6 +15,8 @@
 #   --root DIR   staging (default: DIR/stage): downloads in DIR/stage/dl, test programs in DIR/stage/built
 #   --dry-run    validate gate_profiles.json against apps.json and manifest.json, list the packages that WOULD be fetched, and
 #                refuse to go on if any package outside `open_packages` would be included; fetch and build nothing
+#   --release-assets DIR  add the source-built tree from build_release_bundle.ps1 after source/hash verification.
+#                This grants no storage rights for GravityMark/ffmpeg and does not supply missing native references.
 #
 # What it never does: upload (it prints the commands for the owner to run), fetch a package outside gate_profiles.json
 # `open_packages`, or put a free-but-not-redistributable app (GravityMark, FurMark, GpuTest, Unigine), a GPL ffmpeg build or any
@@ -27,15 +29,21 @@
 # then commit DIR/bundle.pin.line as appmatrix/bundle.pin and record the packaging date and operator in docs/DOWNLOADS.md.
 set -euo pipefail
 HERE=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)
-OUT=""; ROOT=""; DRY=0
+OUT=""; ROOT=""; DRY=0; RELEASE_ASSETS=""
 while [ $# -gt 0 ]; do case "$1" in
   --out) OUT=$2; shift 2;; --root) ROOT=$2; shift 2;; --dry-run) DRY=1; shift;;
+  --release-assets) RELEASE_ASSETS=$2; shift 2;;
   -h|--help) sed -n '2,28p' "$0"; exit 0;; *) echo "unknown option $1" >&2; exit 2;; esac; done
 [ -n "$OUT" ] || { sed -n '2,12p' "$0"; exit 2; }
 ROOT=${ROOT:-$OUT/stage}
 say(){ echo "[package_open_bundle $(date -u +%FT%TZ)] $*"; }
 [ -z "${CI:-}" ] && [ -z "${KF_RUN_TOKEN:-}" ] || { say "REFUSED: this is a one-time packaging step for a person, not for CI or a rented box"; exit 4; }
 python3 -I "$HERE/gate_profiles.py" check || exit 1
+RELEASE_ARGS=()
+if [ -n "$RELEASE_ASSETS" ]; then
+  python3 -I "$HERE/release_bundle.py" "$RELEASE_ASSETS"
+  RELEASE_ARGS=(--release-assets "$RELEASE_ASSETS")
+fi
 ONLY=$(python3 -I - "$HERE" <<'PY'
 import json, sys, os
 here = sys.argv[1]
@@ -68,7 +76,7 @@ python3 -I "$HERE/appdisk.py" fetch --manifest "$HERE/manifest.json" --max-tier 
 say "START build_tools"
 bash "$HERE/build_tools.sh" "$ROOT/built"
 say "START build image"
-python3 -I "$HERE/appdisk.py" build --manifest "$HERE/manifest.json" --max-tier 1 --only "$ONLY" --dl "$ROOT/dl" --tools "$ROOT/built" --out "$ROOT/image"
+python3 -I "$HERE/appdisk.py" build --manifest "$HERE/manifest.json" --max-tier 1 --only "$ONLY" --dl "$ROOT/dl" --tools "$ROOT/built" "${RELEASE_ARGS[@]}" --out "$ROOT/image"
 mv "$ROOT/image/kfapps.iso" "$OUT/winapps-open.iso"
 cp "$ROOT/image/manifest.json" "$OUT/winapps-open.manifest.json"
 sha=$(sha256sum "$OUT/winapps-open.iso" | cut -d' ' -f1)

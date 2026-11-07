@@ -4,7 +4,7 @@
 
 STATUS: LIVE, 2026-11-07 (GPU-free; tests/test_gate_profiles.py).
 
-  gate_profiles.py ids PROFILE      comma list of app ids (small | mid | full | ids:a,b,c)
+  gate_profiles.py ids PROFILE      comma list of app ids (small | mid | full | release | ids:a,b,c)
   gate_profiles.py budget PROFILE   the default wall-clock budget in seconds for the apps of that profile
   gate_profiles.py open             every app whose packages are all in the R2 bundle (the automatable set)
   gate_profiles.py classes          the three classes of apps (open / owner decision / manual) with counts
@@ -15,6 +15,10 @@ by their own licences. Apps that need any other package are `owner_decision` (fr
 granted, or a GPL build the owner keeps out of our storage, or a dead pin) or `manual` (licensed, account-bound, or
 online-only); neither is ever in an automated profile. `full` is every open app minus `excluded`, and an exclusion needs
 a reason and evidence (a native-reference failure); an app that fails on kayfabe is NOT excluded: it fails the release.
+
+`release` is a separate definition list of the owner's approved software, including owner-supplied packages and
+source/reference blockers. It does not grant redistribution permission and is not selectable by KF_WINAPPS in the
+Worker payload. All its definitions remain unverified until a hardware run. small/mid/full keep their open-only rule.
 """
 import json
 import os
@@ -47,6 +51,11 @@ def open_apps(apps, manifest, prof):
 def resolve(profile, apps=None, manifest=None, prof=None):
     apps, manifest, prof = apps or load("apps.json"), manifest or load("manifest.json"), prof or load("gate_profiles.json")
     known = {a["id"] for a in apps["apps"]}
+    if profile == "release":
+        ids = prof["release_software"]["apps"]
+        if not ids or len(ids) != len(set(ids)) or not set(ids) <= known:
+            raise SystemExit("invalid release definition list")
+        return list(ids)
     if profile.startswith("ids:"):
         ids = [x for x in profile[4:].split(",") if x]
         bad = [x for x in ids if x not in known]
@@ -70,6 +79,8 @@ def resolve(profile, apps=None, manifest=None, prof=None):
 
 def budget(profile, prof=None):
     prof = prof or load("gate_profiles.json")
+    if profile == "release":
+        return prof["release_software"]["budget_s"]
     if profile.startswith("ids:"):
         return prof["profiles"]["full"]["budget_s"]
     return prof["profiles"][profile]["budget_s"]
@@ -88,6 +99,16 @@ def check():
     known = {a["id"] for a in apps["apps"]}
     pkgs = {p["id"] for p in manifest["packages"]}
     problems = []
+    release = load("release_software.json")["apps"]
+    release_ids = set(prof.get("release_software", {}).get("apps", []))
+    if release_ids != set(release) or not release_ids <= known:
+        problems.append("release software list does not match definitions")
+    for app in apps["apps"]:
+        if app["id"] in release:
+            spec = release[app["id"]]
+            if (app.get("release") != {k: spec.get(k) for k in ("status", "classification", "verdict")}
+                    or spec.get("status") != "unverified" or set(spec.get("packages", [])) != set(app["pkgs"])):
+                problems.append("release definition drift: " + app["id"])
     for p in prof["open_packages"]:
         if p not in pkgs:
             problems.append(f"open package {p} is not in manifest.json")

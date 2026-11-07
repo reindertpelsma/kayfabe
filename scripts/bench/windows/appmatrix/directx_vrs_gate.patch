@@ -1,0 +1,20 @@
+diff --git a/Samples/Desktop/D3D12VariableRateShading/src/VariableRateShadingScene.cpp b/Samples/Desktop/D3D12VariableRateShading/src/VariableRateShadingScene.cpp
+--- a/Samples/Desktop/D3D12VariableRateShading/src/VariableRateShadingScene.cpp
++++ b/Samples/Desktop/D3D12VariableRateShading/src/VariableRateShadingScene.cpp
+@@ -45,6 +45,15 @@ void VariableRateShadingScene::Initialize(ID3D12Device* pDevice, ID3D12CommandQueue* p
+         m_shadingRateTier = options.VariableShadingRateTier;
+     }
+-
++
++    // kayfabe release gate: require and exercise coarse shading; no unsupported fallback.
++    if (m_shadingRateTier < D3D12_VARIABLE_SHADING_RATE_TIER_1)
++    {
++        ThrowIfFailed(E_NOTIMPL);
++    }
++    m_refractionShadingRate = D3D12_SHADING_RATE_2X2;
++    m_sceneShadingRate = D3D12_SHADING_RATE_2X2;
++    m_postprocessShadingRate = D3D12_SHADING_RATE_2X2;
++
+     // Initialize the base scene.
+     ShadowsFogScatteringSquidScene::Initialize(pDevice, pDirectCommandQueue, pCommandList, frameIndex);
+ }

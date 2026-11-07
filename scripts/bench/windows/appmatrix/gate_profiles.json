@@ -24,7 +24,7 @@
  ],
  "owner_decision": {
   "packages": {
-   "ffmpeg": "GPL-3.0 build kept out of our storage (docs/DOWNLOADS.md); the pinned BtbN URL answers 404 (checked 2026-11-07): needs a new pin",
+   "ffmpeg": "GPL build remains outside the open bundle; dated pin verified 2026-11-07 from the official BtbN release and downloaded artifact. Software definition approved; redistribution/storage decision unchanged.",
    "gravitymark": "Tellusim freeware EULA: free to download, redistribution not granted",
    "furmark2": "Geeks3D freeware licence: EULA unread, redistribution not granted",
    "gputest": "Geeks3D freeware licence: redistribution not granted",
@@ -135,5 +135,29 @@
    "apps": "every open app minus excluded",
    "budget_s": 18000
   }
+ },
+ "release_software": {
+  "status": "unverified",
+  "apps": [
+   "blender_cycles",
+   "llama_cuda_parity",
+   "nvenc_h264",
+   "nvdec_h264",
+   "d3d12_dxr",
+   "d3d12_mesh_shaders",
+   "d3d12_vrs",
+   "d3d12_sampler_feedback",
+   "gravitymark_d3d11",
+   "gravitymark_d3d12",
+   "gravitymark_vk",
+   "gravitymark_gl",
+   "edge_webgl_conformance",
+   "edge_webgpu_conformance",
+   "deviceQuery_demo",
+   "bandwidthTest_demo",
+   "torch_release_smoke"
+  ],
+  "policy": "Definitions only; KF_WINAPPS remains disabled by default. Source-blocked and reference-required entries cannot pass until their inputs exist. Software approval does not grant redistribution rights.",
+  "budget_s": 18000
  }
 }

@@ -41,8 +41,9 @@ PS_PUSH = {  # guest path -> repo path (relative to HERE unless absolute)
     r"C:\kf\kf_health.ps1": "guest/kf_health.ps1", r"C:\kf\kf_cleanup.ps1": "guest/kf_cleanup.ps1", r"C:\kf\kf_edge.ps1": "guest/kf_edge.ps1",
     r"C:\kf\d3d12_signal_probe.ps1": "../d3d12_signal_probe.ps1",
 }
-WEB = ["webgl", "webgpu", "video"]
-PY_OWN = ["win_cuda_equiv.py", "torch_burn.py", "ort_dml.py", "cupy_nvrtc.py", "kf_runpy.py", "hf_generate.py", "cdp_quicksort.py", "stream_perthread.py"]
+WEB = ["webgl", "webgpu", "video", "webgl_conformance", "webgpu_conformance"]
+PY_OWN = ["win_cuda_equiv.py", "torch_burn.py", "ort_dml.py", "cupy_nvrtc.py", "kf_runpy.py", "hf_generate.py", "cdp_quicksort.py", "stream_perthread.py",
+          "release_oracles.py", "llama_release.py", "blender_release.py", "release_cuda_smoke.py"]
 PY_LINUX = ["torch_correct.py", "ai_bench.py", "cupy_check.py", "blender_render.py"]     # the unmodified Linux-row scripts
 PS = r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
 

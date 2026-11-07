@@ -37,17 +37,17 @@ version of the roughly 70-app matrix (the apps that worked before). **CODE READ 
 ## 2. What can be automated offline, and what cannot
 
 `scripts/bench/windows/appmatrix/gate_profiles.json` is the one source; `gate_profiles.py check` and
-`tests/test_gate_profiles.py` keep it consistent with `apps.json` and `manifest.json`. **CODE READ / generated counts:** 112
+`tests/test_gate_profiles.py` keep it consistent with `apps.json` and `manifest.json`. **CODE READ / generated counts, J1 definitions 2026-11-07:** 120
 apps, in three classes.
 
 | Class | Apps | What decides | Goes in an automated profile? |
 |---|---:|---|---|
-| open | 79 | every package the app needs is redistributable and in the bundle (`open_packages`) | yes |
-| owner decision | 29 | needs GravityMark, FurMark, GpuTest, the Vulkan SDK or the ffmpeg GPL build: free to download, redistribution not granted, or a dead pin | no, until the owner rules |
+| open | 87 | every package the app needs is redistributable and in the bundle (`open_packages`); source/reference assets are additional prerequisites | yes, with prerequisites |
+| owner decision | 29 | needs GravityMark, FurMark, GpuTest, the Vulkan SDK or the ffmpeg GPL build: free to download, storage rights still pending | no, until the owner rules |
 | manual | 4 (+3 non-matrix items) | Unigine Heaven and Valley (paid automation, evaluation EULA); 3DMark, Geekbench 6, TensorRT, Superposition, Xonotic, Q2RTX | never |
 
-Open apps by category (**generated**): CUDA equivalents 28, CUDA demo 7, stream probes 6, D3D probes 12, CUDA ladder 3, torch 3,
-LLM 3, OpenCL 3, probes 3, browser 3 (Edge WebGL/WebGPU, local pages), Vulkan 2 (vulkaninfo, vkpeak), OpenGL 1 (glgears),
+Open apps by category (**generated, J1 definitions**): CUDA equivalents 28, CUDA demo 7, stream probes 6, D3D probes/samples 16, CUDA ladder 3, torch 4,
+LLM 4, OpenCL 3, probes 3, browser 5 (Edge WebGL/WebGPU, local pages), Vulkan 2 (vulkaninfo, vkpeak), OpenGL 1 (glgears),
 and one each of render (Blender), crypto (hashcat), AI (HF generate), SMI, stress (torch burn).
 
 The guest is **offline** for every app: QEMU user networking with `restrict=on` (`win_vm.sh`), only the harness's ssh forward;
@@ -117,9 +117,13 @@ an excuse.**
 |---|---:|---|---:|
 | `small` | 8 (one per family: SMI, CUDA demo, CUDA python, driver-API ladder, D3D11, OpenGL, Vulkan, torch+CuPy) | tier small (master push) | 40 min |
 | `mid` | 10 (small plus Edge WebGL and D3D12) | tier middle (PR to master) | 60 min |
-| `full` | every open app (79 today) | tier large (release tag) | 300 min **(does not fit the 300-min release hard limit after the gate: open question, section 9)** |
+| `full` | every open app (87 with J1 definitions) | tier large (release tag) | 300 min **(budget sufficiency is unverified; missing new source/reference inputs cannot pass)** |
 
 Proposed mapping (**DESIGN**, not implemented in the Worker): small -> `small`, middle -> `mid`, large -> `full`.
+
+**CODE READ, J1 definitions:** `gate_profiles.py ids release` is a separate list of 17 approved software definitions,
+including owner-supplied packages and source/reference blockers. It is not a Worker `KF_WINAPPS` value.
+All remain unverified; see [release software definitions](V3_WINDOWS_RELEASE_SOFTWARE_DEFINITIONS.md).
 
 ## 7. What this does not do
 
@@ -152,7 +156,9 @@ Worker path (no run token, no R2 bundle), the `mid` profile, and the stage insid
 1. **Bundle upload.** A person must run `package_open_bundle.sh`, upload `winapps-open.iso` to R2 and commit the pin; until then the stage is
    RETRY class MEDIA by design. The Worker names are proposed (not deployed).
 2. **Owner decision on the 29 apps** that need GravityMark, FurMark, GpuTest, the Vulkan SDK or ffmpeg GPL: private copy in R2 for our own
-   boxes (as for SPECviewperf) or manual. The pinned ffmpeg URL is dead and needs a new pin either way.
+   boxes (as for SPECviewperf) or manual. **MEASURED, J1:** the ffmpeg pin is replaced by a downloaded,
+   hash/CRC-checked dated artifact; source and hash are recorded in the release software definitions document.
+   The earlier run's 404 remains historical evidence, not the status of the new pin.
 3. **Failure attribution (CODE READ, 2026-11-07):** `managed_t` has a native PASS in
    `traces/windows_baseline_20261010/apps/managed_t.json` (verdict in `verdict/managed_t.json`), and
    `nbody_demo_gl` has two native PASS records: `traces/windows_baseline_20261010/verdict/nbody_demo_gl.json`
