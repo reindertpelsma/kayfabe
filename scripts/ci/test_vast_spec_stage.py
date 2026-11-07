@@ -676,6 +676,13 @@ class TimeGuard(StageCase):
         self.assertEqual(self.results()["creo-04"], ("NOT_RUN", "TIME"))
         self.assertNotIn("launch creo-04", self.sb.calls())
 
+    def test_enscape_that_no_longer_fits_after_the_fresh_boot_of_a_dead_blender_is_not_started(self):
+        # enscape-01 needs 3,152 s: it fits before the boot (3,380 left) and not after it and the 300 s settle
+        self.go("lanea", budget=3800, **{"viewset__blender-01": "dead"})
+        self.assertEqual(self.results()["enscape-01"], ("NOT_RUN", "TIME"))
+        self.assertNotIn("launch enscape-01", self.sb.calls())
+        self.assertEqual(self.results()["creo-04"][0], "PASS")
+
     def test_a_viewset_that_cannot_fit_is_not_worth_a_boot_after_a_dead_guest(self):
         # energy-04 takes the guest down; creo-04 needs 2,153 s and 2,000 are left: no second kf3 boot for nothing
         self.go("lanea", budget=300 + 2000, **{"viewset__energy-04": "dead"})
@@ -965,6 +972,7 @@ class Interrupted(StageCase):
         rows, order = fk.rows_of(out)
         self.assertEqual(order, ["energy-04", "creo-04"])
         self.assertEqual(out.splitlines()[-1], "SPECVIEWPERF_STAGE_RETRY class=OPERATOR")
+        self.assertEqual(child.returncode, 3)
 
 
 if __name__ == "__main__":
