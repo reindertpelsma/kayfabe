@@ -74,6 +74,6 @@ test_workspace_headroom_overflow_refused (test_image_size_estimate.EstimateTests
 test_zero_asset_ratio_refused (test_image_size_estimate.EstimateTests.test_zero_asset_ratio_refused) ... ok
 
 ----------------------------------------------------------------------
-Ran 74 tests in 0.435s
+Ran 74 tests in 0.054s
 
 OK
