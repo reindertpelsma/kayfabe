@@ -92,8 +92,9 @@ def main(argv=None):
         if len(selected) != 1:
             raise MediaDrift('MISSING_PIN')
         fetch_installer(selected[0], args.out)
-    except MediaDrift as error:
-        print('DRIVER_MEDIA_DRIFT reason=' + error.reason)
+    except (MediaDrift, OSError, ValueError) as error:
+        reason = error.reason if isinstance(error, MediaDrift) else 'FILESYSTEM'
+        print('DRIVER_MEDIA_DRIFT reason=' + reason)
         return 3
     print('DRIVER_MEDIA_OK')
     return 0

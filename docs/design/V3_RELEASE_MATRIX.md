@@ -368,3 +368,52 @@ but the matrix payload executor still declares capability 0 and refuses all
 matrix execution. New guest media staging/dispatch still needs the reviewed
 executor; this change does not claim to execute Windows or Linux guest sweeps.
 No driver was installed and no hardware/VM/rental/Worker request or deploy was made.
+
+
+## Mocked market and failure simulations (2026-11-07)
+
+CODE READ: `test/simulation-market.test.js` runs fixed Mulberry32 seeds
+**1337 through 1536** (200 seeds), each with eight candidates per die across all
+four profiles. Markets vary compute prices, both transfer rates and speeds,
+storage, disk capacity/throughput, reliability, CPU, hosts, machines, countries,
+VM support and malformed fields. Configured and persisted bad host/machine ids
+are excluded. The same market with reversed offer and object-field order must
+choose the same ids. A data-based price oracle includes storage, transfer and,
+in the stack, excess download time independently of `offerPrice`.
+
+CODE READ: the large loop uses production `OfferBook`, `planRelease`, `Ledger`
+and `Vast` with the existing `MockCloud` transport; at most one selected rental per seed
+keeps CI fast. It checks every admitted plan, every eligible quote and every
+mock create, reservation, exact-id destroy and settlement. Refused plans may
+still display an over-cap quote for operator review; they create nothing.
+Only admitted plans/reservations must fit the cap. The full Worker orchestrator
+is exercised separately for named failure cases, including eight-die partial
+fleets, credit/daily exhaustion, restart and duplicate-machine offers. Lifecycle
+cases use one-box admin batches through the same admission and teardown paths.
+Foreign fixture instances survive; every owned rental and ledger liability must
+be gone at completion. No failed/absent instance is promoted to PASS.
+
+CODE READ: named cases cover one offline status flap (#278), twelve minutes in
+`created`, vanished offers, missing VM support, absent dies (`NO_OFFER`), no SSH
+callback, host reboot, third-party destruction, 5xx, synthetic timeouts, 429 with
+Retry-After, partial account limits, credit/daily caps, persisted restart,
+duplicate/late callbacks and backward/forward clock changes. The 429 case checks
+safe retention and recovery with that header present; it does not establish an
+adaptive Retry-After scheduler. SSH failure is modeled by absent box callbacks,
+not a real SSH connection. No clock sleeps or external network are used.
+
+CODE READ: the existing protocol helpers configure a synthetic 1 Gbps origin in
+the stacked policy. Two additional scoped cases restore the committed profile
+reference data, including the infeasible 20-minute middle limit at 445 Mbps.
+Synthetic admission coverage is not a claim that the shipped middle profile fits.
+The proposal, unknown compatibility and executor-capability-zero fences remain.
+
+CODE READ: run `nice -n 19 node --test ci/vast-broker/test/simulation-*.test.js`.
+For a larger reproducible sweep, set `KF_SIM_SEEDS=1000 KF_SIM_START=1337` before
+that command; counts are bounded at 10000 and seed starts at 1000000. CI uses the
+fixed defaults. The simulation mutation runner uses named paired invariants,
+requires two distinct killers and never changes production caps to get green.
+
+UNVERIFIED / CODE READ: seeder selection/upload-pricing code is absent from this
+branch. Seeder upload ranking and a seeder dying during consumer downloads need
+the owner's implementation branch/PR reference; they are not claimed as covered.

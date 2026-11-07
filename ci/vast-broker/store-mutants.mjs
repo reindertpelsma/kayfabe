@@ -334,8 +334,8 @@ const MUTANTS = [
   [
     'family not derived',
     'src/ingest.js',
-    'family: r.family ?? cfgFamilyOf(r.die, cfg)',
-    'family: r.family',
+    'hardwareMatch(r, { die: r.die, family: r.family ?? cfgFamilyOf(r.die, cfg), cfg })',
+    'hardwareMatch(r, { die: r.die, family: r.family, cfg })',
   ],
   // Review of PR #269, R2 (2026-11-05): Windows gate runs of the largest tier.
   [
@@ -373,8 +373,8 @@ const MUTANTS = [
   [
     'claims key refused',
     'src/results.js',
-    "k !== 'host_reference' && k !== 'host_claims'",
-    "k !== 'host_reference'",
+    "['host_reference', 'host_claims', 'matrix_receipts']",
+    "['host_reference', 'matrix_receipts']",
   ],
   [
     'claims identifier check removed',

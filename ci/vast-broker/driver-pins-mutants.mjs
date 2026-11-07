@@ -20,6 +20,14 @@ const V = 'ci/vast-broker/src/release-matrix.js',
   L = 'ci/vast-broker/src/release.js',
   P = 'scripts/ci/release_driver_media.py';
 const cases = [
+  [
+    'filesystem drift escapes reporting',
+    P,
+    '    except (MediaDrift, OSError, ValueError) as error:',
+    '    except MediaDrift as error:',
+    'python',
+  ],
+
   ['insecure installer scheme accepted', V, "u.protocol !== 'https:' ||", 'false ||', 'node'],
   [
     'unofficial installer host accepted',

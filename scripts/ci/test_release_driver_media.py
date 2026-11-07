@@ -84,6 +84,11 @@ def install_cases(os_name):
         with patch.dict('os.environ',{'KF_RELEASE_DRIVER_PINS':encoded([p])}),patch.object(self.media,'fetch_installer',side_effect=self.media.MediaDrift('HTTP_404')),patch('sys.stdout',new_callable=io.StringIO) as out:
             status=self.media.main(['--os',os_name,'--version',p['version'],'--out',str(self.target)])
         self.assertEqual(status,3);self.assertIn('DRIVER_MEDIA_DRIFT reason=HTTP_404',out.getvalue());self.assertNotIn('OK',out.getvalue())
+    def cli_filesystem(self):
+        p=pin(os_name)
+        with patch.dict('os.environ',{'KF_RELEASE_DRIVER_PINS':encoded([p])}),patch.object(self.media,'fetch_installer',side_effect=OSError('synthetic I/O error')),patch('sys.stdout',new_callable=io.StringIO) as out:
+            status=self.media.main(['--os',os_name,'--version',p['version'],'--out',str(self.target)])
+        self.assertEqual(status,3);self.assertEqual(out.getvalue(),'DRIVER_MEDIA_DRIFT reason=FILESYSTEM\n')
     for name,body in locals().copy().items():
         if callable(body) and name not in ['install_cases']:
             setattr(DriverMedia,'test_'+name+'_'+os_name,body)
