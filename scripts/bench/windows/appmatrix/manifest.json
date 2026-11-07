@@ -1419,6 +1419,45 @@
    "sha256": "9bb4cec35de0e6335edda1643a982c9a91f9ef54463bbf85cc22364453d865d2",
    "size": 53163,
    "date": "2026-11-07"
+  },
+  {
+   "url": "https://docs.aws.amazon.com/AmazonS3/latest/API/API_CompleteMultipartUpload.html",
+   "sha256": "12a9c721decf24cf4f95946f547de3410fb9335b023be713844ba16b001a13c5",
+   "size": 80923,
+   "date": "2026-11-07"
+  },
+  {
+   "url": "https://docs.aws.amazon.com/AmazonS3/latest/API/API_UploadPart.html",
+   "sha256": "83b0c9521c7c948bd41669593d2b4fc509c2d816e6dd72b2c1fe80f065633dbb",
+   "size": 67283,
+   "date": "2026-11-07"
+  },
+  {
+   "url": "https://docs.aws.amazon.com/AmazonS3/latest/developerguide/sig-v4-header-based-auth.html",
+   "sha256": "323cc97fffdf79a79ac5620849a79f54a63e771d1c2f628680470d6378ae0092",
+   "size": 59541,
+   "date": "2026-11-07"
+  },
+  {
+   "url": "https://api.github.com/repos/rhysd/actionlint/releases/tags/v1.7.7",
+   "sha256": "1b1339970cf2fd17ef56294c4af0e767fa329b3bf526644d51fc4a10a6a3c309",
+   "size": 21749,
+   "date": "2026-11-07"
+  },
+  {
+   "url": "https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_checksums.txt",
+   "sha256": "ac22e6577b8d133c7cd779682e65712ef722e719a297633699a4da05e9f351e0",
+   "size": 1119,
+   "date": "2026-11-07"
   }
- ]
+ ],
+ "bundle_validation_tools": {
+  "actionlint": {
+   "url": "https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_amd64.tar.gz",
+   "sha256": "023070a287cd8cccd71515fedc843f1985bf96c436b7effaecce67290e7e0757",
+   "date": "2026-11-07",
+   "version": "1.7.7",
+   "size": 2080472
+  }
+ }
 }

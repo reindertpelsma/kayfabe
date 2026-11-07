@@ -133,8 +133,9 @@ python3 -I scripts/bench/windows/appmatrix/package_bundle.py verify-image --out 
 
 The result is `out/winapps-open.iso`, label `KFAPPS`, with an external file/hash manifest and proposed pin
 line. App installers and archives stay intact on the disk and are extracted inside Windows. The compiler
-archive alone is unpacked on the packaging host. This is a local operator step; the builder refuses CI and
-run-token environments and performs no upload. The guest needs no vendor downloads.
+archive alone is unpacked on the packaging host. The local builder refuses run-token environments and performs no upload. An owner-approved, credential-free
+GitHub build mode is available explicitly; the new publication workflow remains dispatch-only and disabled
+for upload by default. It builds twice on the same runner before its final protected upload step. The guest needs no vendor downloads.
 <!-- src: scripts/bench/windows/appmatrix/package_bundle.py, scripts/bench/windows/appmatrix/bundle_tools.py -->
 
 For a file-manager workflow, install official CPython with Tcl/Tk, double-click

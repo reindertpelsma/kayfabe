@@ -177,9 +177,10 @@ repository probes using direct Zig argument lists, writes the deterministic ISO 
 The sidecar `out/winapps-open.manifest.json` records every file hash/size, image identity/hash/size, compiler
 pins, probe source hashes, packaging date and Python version. Repository and compiler/runtime licence notices
 are included on the ISO. `out/bundle.pin.line` is proposed pin content,
-not authorization to upload or change the committed pin. Presence of `CI` or `KF_RUN_TOKEN`, even empty,
-refuses all commands. Allow ample disk for original downloads, the ISO and compiler scratch; the full build
-is a manual operator action, never a PR/CI download. Stop on a named mismatch and investigate the original;
+not authorization to upload or change the committed pin. Default local commands refuse `CI`; the owner-authorized workflow uses explicit `--ci-build` with no upload
+credentials, while `input-hash` is CI-readable. `KF_RUN_TOKEN` and upload credentials always refuse builder
+commands. Allow ample disk for original downloads, the ISO and compiler scratch; the owner-authorized GitHub workflow remains dispatch-only and publication is disabled by default. Full
+builds must not run on WB1's dev box. Stop on a named mismatch and investigate the original;
 do not accept a replacement vendor version or change a pin to match unexpected bytes.
 
 **Manual path (DESIGN; GUI workflow has not been exercised on Windows in WB1):** no terminal or shell commands
@@ -234,6 +235,37 @@ Not in the bundle, with the reason (the same classes as `gate_profiles.json`):
 |---|---|---|---|
 | owner decision | 29 | GravityMark, FurMark, GpuTest, the Vulkan SDK, an ffmpeg GPL build | storage/redistribution decision still pending; the earlier ffmpeg pin returned 404, but J1 verified a new dated pin by download, official checksum and ZIP CRC (see `design/V3_WINDOWS_RELEASE_SOFTWARE_DEFINITIONS.md`); GPU behavior remains unverified |
 | manual | 4 apps + 3 never-automated items | Unigine Heaven and Valley; 3DMark, Geekbench, TensorRT, Superposition, Xonotic, Q2RTX | paid or account-bound software, command-line automation in a paid edition, or online-only (`gate_profiles.json` `manual`, with the evidence template) |
+
+### GitHub build and immutable R2 publication (owner refinement)
+
+**CODE + DESIGN, 2026-11-07:** the new `bundle-publish.yml` workflow remains dispatch-only, with publication
+disabled by default and no secrets configured. Its cheap plan compares `package_bundle.py input-hash` with the
+repo pin's recorded `inputs`. Equal means the build jobs are skipped. A first manual build uses no environment
+or upload secrets, builds twice, requires identical ISO SHA-256 and reports a new hash if it differs from the
+pin. Manual `mode=verify` always rebuilds, requires the pinned hash, and never uploads. PR/master input path
+filters and an optional monthly verification are documented design, not enabled triggers.
+
+The master-only combined build/publish job keeps the ISO on its runner and creates **no Actions artifact**.
+A protected master-restricted environment must be reviewed/configured before its enable flag is set. Bucket-
+scoped access key ID/secret are referenced only by the last publish step; earlier steps reject upload
+credentials. Logs contain redistributable input names and digests; no credentials, URLs or archive contents.
+The uploader uses Python stdlib SigV4 and resumable S3 multipart for files above 5 GiB, with conditional
+create-only completion. Live R2 compatibility remains unverified and must be checked before enabling.
+
+Object names are `winapps-open/kfapps-<iso sha256>.iso` and `winapps-open/manifest-<iso sha256>.json`. They are
+immutable: publication reuses a verified matching object or fails on a conflict. A subsequent automated
+**draft PR against next** should update `appmatrix/bundle.pin` with the digest, `inputs`, and keys only after
+checking that current master still has those inputs. Token handling and the Worker's future digest-to-key
+read mapping are separate work; no Worker code or current consumer is enabled here. The older proposed
+fixed keys in the table above are superseded by these names for new publication.
+
+The computed two-build disk admission budget is 22,378,011,791 bytes. The workflow measures actual free space,
+frees unused hosted-runner toolchains and fails before downloading if it cannot meet that budget. Runner
+cleanup capacity has not been measured in WB1; use a larger runner if needed. Full design, future OIDC route
+and exact input path filters: [Windows apps gate, section 3.1](design/V3_WINDOWS_APPS_GATE.md#31-owner-refinement-build-in-github-publish-immutable-objects).
+
+This bundle flow replaces GitHub Releases in `reindertpelsma/win-gpu-image-private-store`. Its setup cache and
+WinPE image are separate migrations; WB1 moves or deletes neither.
 
 ## SPECviewperf in the Vast gate (the `specviewperf` stage)
 

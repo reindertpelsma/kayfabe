@@ -76,8 +76,9 @@ python3 -I scripts/bench/windows/appmatrix/package_bundle.py verify-image --out 
 
 **CODE READ:** `fetch` uses urllib, retries the same URL, resumes a `.part` file with validated HTTP ranges,
 and checks the manifest's byte length and SHA-256 before promotion. A mismatching existing cache entry fails;
-it is never silently repinned. Every failure names the package and input. `CI` or `KF_RUN_TOKEN` being present,
-even empty, refuses every command. The independent allow-list and dependency closure refuse packages outside
+it is never silently repinned. Every failure names the package and input. The owner refinement below permits explicit credential-free CI with `--ci-build` and permits the cheap
+`input-hash` command in CI. Default local commands still refuse `CI`; `KF_RUN_TOKEN` and upload credentials
+remain forbidden in every builder invocation. The independent allow-list and dependency closure refuse packages outside
 `gate_profiles.json` `open_packages`; no owner-decision or licensed package is selected. `--only` permits a
 smaller open subset for local investigation; the coordinator's release bundle uses the full default selection.
 
@@ -111,8 +112,9 @@ and size, payload identity, image hash/size, pins, build source hashes, date and
 hash; that file is itself included in the receipt. `verify-image` hashes the entire ISO and independently reads
 its Joliet directory records to check exact file membership, bytes and the identity marker. No mount is needed.
 
-**DESIGN / operator validation:** the full pinned build must run on a person's machine with sufficient disk,
-never in CI or on this lane's dev box. Build into two fresh output directories, then check the second image
+**SUPERSEDED for CI by owner refinement below:** the original person-only restriction is lifted for the
+credential-free GitHub workflow. A full build still must not run on this lane's dev box. Operator validation
+may use a person's machine with sufficient disk. Build into two fresh output directories, then check the second image
 against the first receipt to compare the ISO bytes (receipt dates and Python versions may differ):
 
 ```text
@@ -131,7 +133,7 @@ same native Windows machine/driver, including D3D11/12, WGL, cup2/3/8 and every 
 claimed from PE inspection alone. The shell wrapper is a deprecated pointer; optional source-built release
 assets still use the separate legacy `appdisk.py` workflow and are not added to this canonical open bundle.
 
-**MEASURED, WB1 local x86_64 Linux, 2026-11-07:** two fresh Zig builds produced byte-identical copies of all
+**MEASURED, WB1 builder v1 at `8ddffcd6d`, local x86_64 Linux, 2026-11-07:** two fresh Zig builds produced byte-identical copies of all
 seven probes, with zero PE timestamps and no build-path strings. The second build used CRLF source copies and
 a build path containing spaces. Two final fixture ISOs (real probes and notices, one synthetic installer;
 **not the full pinned media**) under umasks 022/077, TZ Pacific/Honolulu/Asia/Tokyo and locales C/C.UTF-8 were
@@ -144,6 +146,101 @@ This is local reproducibility evidence, not a Windows GPU or cross-host compiler
 The coordinator uploads the ISO and receipt only after review and full reproduction. This builder has no upload
 operation. Worker names remain proposed, no deployment or pin change is part of WB1. Without a pin the stage
 answers `RETRY class=MEDIA`. `docs/DOWNLOADS.md` gives the manual file-manager recipe and storage exclusions.
+
+### 3.1 Owner refinement: build in GitHub, publish immutable objects
+
+**CODE READ:** the earlier fixture hash above describes builder v1. The new embedded `inputs` field changes
+the v2 image identity; it is not a new release-media pin.
+
+**CODE READ / DESIGN, 2026-11-07:** the owner changed the packaging location to GitHub CI and permits a final
+master-only upload. `.github/workflows/bundle-publish.yml` implements the structure but remains **disabled for
+automatic execution**: its only trigger is `workflow_dispatch`; no push, PR or monthly schedule is enabled.
+No environment, repository variable, secret, credential or Worker route is configured by this PR. The first
+manual `mode=build` run uses the job with no environment or secret references. Publication additionally
+requires `vars.BUNDLE_PUBLISH_ENABLED == 'true'`, default absent/false.
+
+**CODE READ:** `package_bundle.py input-hash` prints exactly `inputs=<sha256>`. The hash covers the builder
+version and normalized builder/ISO/compiler recipe source, the selected open-package records and pins, sorted
+`open_packages`, every ISO-carried guest/app/licence text, all probe/ladder/header/import-library sources,
+and all official toolchain pins. Compiler-provided notices are covered by their archive pins. Host paths,
+Python version, packaging dates, historical image receipts, publisher/CI helper code and research/lint-only
+metadata are excluded. `inputs` is embedded in the ISO and receipt. Changing a determinant changes the hash;
+merely reformatting the source manifest or changing historical image metadata does not. The publisher verifies
+the receipt against the current checkout and reads the image back before sending any bytes.
+
+**CODE READ:** `bundle_ci.py plan` compares the input hash with `# inputs=` in the committed publication pin.
+An equal hash means `needs_build=false`, and neither large job runs. Missing input metadata is conservatively
+a build. This is a credential-free comparison with the repo-selected publication; it never fetches R2.
+`mode=verify` deliberately rebuilds even when equal, requires a pin, compares with its ISO hash and cannot
+upload. A future optional monthly trigger must use that same mode. No mutable `latest` object exists.
+
+**CODE READ:** the protected combined job builds and publishes on the same runner. It creates no Actions
+artifact, Actions cache, release asset or intermediate transfer. Both build paths fetch only `open_packages`,
+execute only the pinned/hash-verified Zig distribution as vendor code, build twice in fresh output directories
+with different umasks/TZ/locales, and require matching ISO hashes plus cross-receipt readback. PR mode reports a
+new hash when it differs from the pin; verify mode fails on a difference. Upload credentials are rejected by
+the builder and are referenced only in the final publish step's `env:`. The combined job itself requires the
+canonical repository, `refs/heads/master`, push/dispatch, the enable flag and protected environment
+`bundle-publish-master`. **Deployment branches must be restricted to master and reviewers configured there
+before enabling.** Fork PRs and every PR event are refused again by the publisher's own entry point.
+
+**COMPUTED from committed pins, not measured on GitHub:** originals total 6,743,509,381 bytes. The conservative
+admission budget is `3 * originals + 2 GiB` = 22,378,011,791 bytes (20.84 GiB), for downloads, both images and
+compiler scratch. The workflow measures `df` before/after removing unused preinstalled Android, .NET, GHC,
+Boost and hosted tool caches, then checks actual free bytes **before any vendor download**. It uses system
+`/usr/bin/python3` so deleting the hosted cache cannot remove its interpreter. Default free space around 14 GB
+(the coordinator's sizing premise) is insufficient; whether cleanup frees enough is **unverified until a manual
+run**. If not, a larger runner is required; neither the disk gate nor the second build is bypassed. Both jobs
+remove only their own ephemeral workspace on success/failure. Logs are public; app archives/credentials and
+presigned URLs are never printed. Only redistributable packages are eligible for these jobs.
+
+**CODE READ:** `publish_bundle.py` uses standard-library HTTPS, SigV4 (`auto` region), bounded 64 MiB parts,
+service ETags, per-part integrity checks, remote ListParts validation and local resume state. It supports files
+above 5 GiB without aws/rclone. Resume state contains upload IDs/part digests, never credentials or URLs. The
+credentials are environment secrets scoped to **one dedicated bundle bucket**, loaded only by the final
+uploader process. A caller-presigned multipart plan is also accepted through `BUNDLE_UPLOAD_URLS`; capabilities
+remain in memory and final URLs must bind `If-None-Match` in their signature.
+
+**CODE READ / service contract:** keys are exactly `winapps-open/kfapps-<ISO sha256>.iso` and
+`winapps-open/manifest-<ISO sha256>.json`. Existing matching objects are reused; conflicting metadata/receipts
+fail. Both single PUT and multipart completion require `If-None-Match: *`; a concurrent winner is checked and
+only this run's pending multipart is aborted. HTTP 200 containing an XML Error is a failure. No existing key
+is deleted, overwritten or retried without its create-only condition. **R2 conditional multipart-completion
+semantics must be verified by the coordinator before enabling; no live service check occurred in WB1.**
+Configure an incomplete-multipart expiry lifecycle for interrupted/lost runners. Transport failure preserves
+local state for up to three uploader invocations in the same final step; a fresh runner does not receive state or media from Actions artifacts.
+
+**DESIGN: enabling automatic triggers after review.** Add input-filtered `pull_request` for the no-environment
+build job, and `push` restricted to `master` for planning, using only these determinant paths: root `LICENSE`,
+`LICENSE-APACHE`, `LICENSE-GPL`, `THIRD_PARTY_NOTICES.md`; appmatrix `manifest.json`, `gate_profiles.json`,
+`apps.json`, `package_bundle.py`, `bundle_iso.py`, `bundle_tools.py`, `guest/**`, `tools/src/**`;
+`scripts/bench/windows/cuda/nvcuda.def`, `scripts/bench/cuda_min/cuda.h`, `scripts/bench/cup3.c`,
+`scripts/bench/cup8.c`, `archive/nvkvm/tests/mode2/cup2.c`. Pin/output/docs-only commits do not trigger a build.
+The explicit event guards already distinguish the jobs. Do not add `pull_request_target`. This PR does not
+turn these triggers on or provision secrets.
+
+**DESIGN: optional OIDC presigner route, no Worker code change.** A future upload broker would validate GitHub's
+JWT issuer/audience, canonical repository, master ref, reviewed workflow identity and protected-environment
+subject, run identity and expiry. It would authorize only the two digest-derived keys, expected input hash,
+size and bounded multipart plan; sign the create-only condition; and return short-lived method-specific URLs
+for HEAD/GET, parts, completion and abort. Static R2 credentials stay at the broker. It must reject fork/PR/run
+credentials and arbitrary keys, expire unused uploads and bind retries to the same run. Current workflow
+permissions are only `contents: read`; no OIDC permission or route call is installed. GitHub `id-token: write`
+is job-scoped, so adding it to the combined job would grant earlier build steps token-minting capability too;
+that isolation tradeoff needs owner review before adopting this alternative.
+
+**DESIGN: successful publication then pin PR.** The uploader emits `published.pin.line` and the workflow puts its
+non-secret input hash/digest/keys in the job summary. A separate trusted automation should verify the published
+receipt, ensure its input hash still equals the current reviewed master tree, and open a **draft PR against
+`next`** updating only `appmatrix/bundle.pin`. Its first line remains the existing consumer-compatible
+`winapps-open.iso sha256=...`; comment lines record inputs and both immutable keys. Reviewer approval and merge
+select the new object; publication alone never advances the pin. No PR-token handling is implemented here.
+The Worker's current fixed-key read mapping does not consume these new keys yet: before enabling consumer
+use, a separate reviewed read-route/helper change must map the committed digest to the immutable object.
+
+**DESIGN / migration:** this replaces the old GitHub-Releases bundle store
+`reindertpelsma/win-gpu-image-private-store`. That repository's other contents, including the setup cache and
+WinPE image, are a separate migration. No contents are moved or deleted by WB1.
 
 ## 4. Verdict rules (guest passes only)
 

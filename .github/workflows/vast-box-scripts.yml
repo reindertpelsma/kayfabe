@@ -66,6 +66,8 @@ jobs:
         run: python3 scripts/bench/windows/appmatrix/release_mutants.py --jobs 2
       - name: Shell-free bundle mutations require two named killers each
         run: python3 scripts/bench/windows/appmatrix/bundle_mutants.py --jobs 2
+      - name: Immutable publication mutations require two named killers each
+        run: python3 scripts/bench/windows/appmatrix/publish_mutants.py
   gpu-free:
     name: Vast box scripts — tests and mutations
     runs-on: ubuntu-latest

@@ -4,3 +4,5 @@
 # answers RETRY class=MEDIA (never a pass). The owner fills it with the line that package_bundle.py writes
 # (bundle.pin.line) AFTER uploading `winapps-open.iso`; one line, exactly:
 #   winapps-open.iso sha256=<64 lowercase hex digits>
+# Builder v2 also emits comment records for inputs=<sha256> and both immutable object keys.
+# These metadata comments do not change the first-line consumer format above.

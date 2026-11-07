@@ -18,7 +18,7 @@ HERE = Path(__file__).resolve().parent
 MUTANTS = [
     ("ci-guard", "package_bundle.py", 'for key in ("CI", "KF_RUN_TOKEN"):', 'for key in ("KF_RUN_TOKEN",):'),
     ("run-token-guard", "package_bundle.py", 'for key in ("CI", "KF_RUN_TOKEN"):', 'for key in ("CI",):'),
-    ("empty-environment-guard", "package_bundle.py", 'if key in env:', 'if env.get(key):'),
+    ("empty-environment-guard", "package_bundle.py", 'if key in env and not (key == "CI" and allow_ci):', 'if env.get(key) and not (key == "CI" and allow_ci):'),
     ("profile-allowlist", "package_bundle.py", 'if set(allowed) - OPEN_PACKAGES:', 'if False:'),
     ("selection-boundary", "package_bundle.py", 'if pid not in allowed or pid not in byid:', 'if pid not in byid:'),
     ("input-sha-pin", "package_bundle.py", 'if not re.fullmatch(r"[0-9a-f]{64}", fl.get("sha256") or ""):', 'if False:'),

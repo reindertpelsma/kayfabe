@@ -27,13 +27,17 @@ import bundle_iso
 OPEN_PACKAGES = frozenset("cuda_demo_suite python_embed pywheels llama_cuda llama_vulkan qwen_gguf vulkan_rt vkpeak blender clpeak_ocl clpeak_cuda hashcat sevenzip cuda_cudart cuda_cccl vc_redist hf_wheels hf_model cuda_nvrtc".split())
 STAGE_MODES = frozenset(("unzip", "python_embed", "wheels", "copy", "7z", "msi_admin", "installer"))
 UA = "kayfabe-bundle/1 (+https://github.com/reindertpelsma/kayfabe)"
+BUILDER_VERSION = 2
 
 
-def guard(env=None):
+def guard(env=None, allow_ci=False):
     env = os.environ if env is None else env
     for key in ("CI", "KF_RUN_TOKEN"):
-        if key in env:
+        if key in env and not (key == "CI" and allow_ci):
             raise ValueError(f"REFUSED: {key} is set; packaging is a person's local operation")
+    for key in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "BUNDLE_UPLOAD_URLS"):
+        if key in env:
+            raise ValueError(f"REFUSED: build environment contains upload credential/capability {key}")
 
 
 def load(path):
@@ -224,7 +228,37 @@ def identity(records):
     return hashlib.sha256(json.dumps(records, sort_keys=True).encode("utf-8")).hexdigest()
 
 
-def build_image(packages, downloads, tools, output, toolchain, root=HERE, probe_receipt=None):
+def iso_input_hash(packages, toolchain, open_packages, root=HERE):
+    """Hash the complete ISO recipe, excluding clocks, host paths and receipts."""
+    import bundle_tools
+    root = Path(root)
+    contents = repo_files(root)
+    for name in ("package_bundle.py", "bundle_iso.py", "bundle_tools.py"):
+        contents["recipe/" + name] = (root / name).read_bytes().replace(b"\r\n", b"\n")
+    for name in bundle_tools.SOURCES:
+        contents["source/" + name] = (root.parents[3] / name).read_bytes().replace(b"\r\n", b"\n")
+    record = dict(version=BUILDER_VERSION, packages=packages, toolchain=toolchain,
+                  open_packages=sorted(open_packages),
+                  files={k: hashlib.sha256(v).hexdigest() for k, v in sorted(contents.items())})
+    return hashlib.sha256(canonical(record)).hexdigest()
+
+
+def input_hash(man, profile, root=HERE):
+    import bundle_tools
+    packages = select_packages(man, profile)
+    toolchain = bundle_tools.check_toolchain(man.get("bundle_toolchain", {}))
+    return iso_input_hash(packages, toolchain, profile["open_packages"], root)
+
+
+def pin_text(image_sha, inputs):
+    if not all(re.fullmatch(r"[0-9a-f]{64}", x) for x in (image_sha, inputs)):
+        raise ValueError("invalid pin digest")
+    return (f"winapps-open.iso sha256={image_sha}\n# inputs={inputs}\n"
+            f"# iso_key=winapps-open/kfapps-{image_sha}.iso\n"
+            f"# manifest_key=winapps-open/manifest-{image_sha}.json\n")
+
+
+def build_image(packages, downloads, tools, output, toolchain, root=HERE, probe_receipt=None, open_packages=None):
     """Assemble already pinned inputs. Compiler/upload/network are outside this function."""
     output = Path(output)
     output.mkdir(parents=True, exist_ok=True)
@@ -239,7 +273,8 @@ def build_image(packages, downloads, tools, output, toolchain, root=HERE, probe_
     files.update({"tools/" + name: Path(path) for name, path in sorted(tools.items())})
     files["stage.json"] = canonical(stage_table(packages))
     # No wall clock, host paths, Python version or host-specific toolchain selection in ISO.
-    files["bundle.inputs.json"] = canonical(dict(schema=1, packages=packages, toolchain=toolchain))
+    inputs = iso_input_hash(packages, toolchain, open_packages if open_packages is not None else [p["id"] for p in packages], root)
+    files["bundle.inputs.json"] = canonical(dict(schema=1, inputs=inputs, packages=packages, toolchain=toolchain))
     for name, source in files.items():
         if name not in expected:
             expected[name] = dict(sha256=hashlib.sha256(source).hexdigest(), size=len(source)) if isinstance(source, bytes) else dict(sha256=sha256(source), size=source.stat().st_size)
@@ -253,7 +288,7 @@ def build_image(packages, downloads, tools, output, toolchain, root=HERE, probe_
         # Compare hashes of bytes actually copied, catching source races/corruption.
         if any(actual[k] != v for k, v in expected.items()):
             raise ValueError("input changed during image assembly")
-        receipt = dict(schema=1, packages=packages, files=expected,
+        receipt = dict(schema=1, inputs=inputs, packages=packages, files=expected,
             image=dict(file=iso.name, label="KFAPPS", format="iso9660+joliet", identity=ident,
                        size=temp.stat().st_size, sha256=sha256(temp)),
             toolchain=toolchain, packaging_utc=datetime.datetime.now(datetime.timezone.utc).isoformat(),
@@ -267,7 +302,7 @@ def build_image(packages, downloads, tools, output, toolchain, root=HERE, probe_
     finally:
         temp.unlink(missing_ok=True)
     (output / "winapps-open.manifest.json").write_bytes(canonical(receipt))
-    (output / "bundle.pin.line").write_bytes(f"winapps-open.iso sha256={receipt['image']['sha256']}\n".encode("ascii"))
+    (output / "bundle.pin.line").write_bytes(pin_text(receipt["image"]["sha256"], inputs).encode("ascii"))
     return receipt
 
 
@@ -286,11 +321,14 @@ def verify_image(iso, receipt):
                 raise ValueError("image file size/sha256 mismatch: " + name)
         if b"".join(r.chunks("KFAPPS.ID")) != (identity(expected) + "\n").encode("ascii"):
             raise ValueError("KFAPPS.ID mismatch")
+        if receipt.get("inputs") != json.loads(b"".join(r.chunks("bundle.inputs.json"))).get("inputs"):
+            raise ValueError("ISO input hash mismatch")
 
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("command", choices=("check", "fetch", "build", "verify", "verify-image", "layout"))
+    ap.add_argument("command", choices=("check", "fetch", "build", "verify", "verify-image", "layout", "input-hash"))
+    ap.add_argument("--ci-build", action="store_true", help="explicit credential-free CI build (KF_RUN_TOKEN still forbidden)")
     ap.add_argument("--manifest", type=Path, default=HERE / "manifest.json")
     ap.add_argument("--profiles", type=Path, default=HERE / "gate_profiles.json")
     ap.add_argument("--dl", type=Path, default=Path("out/downloads"))
@@ -300,7 +338,10 @@ def main(argv=None):
     ap.add_argument("--receipt", type=Path, help="build receipt for verify-image")
     args = ap.parse_args(argv)
     try:
-        guard()
+        guard(allow_ci=args.ci_build or args.command == "input-hash")
+        if args.command == "input-hash":
+            print("inputs=" + input_hash(load(args.manifest), load(args.profiles)))
+            return 0
         # A single HTTPS-only opener prevents redirect downgrade, while keeping
         # the urllib call easy to fake in offline tests.
         urllib.request.install_opener(urllib.request.build_opener(_HTTPSRedirect()))
@@ -334,7 +375,8 @@ def main(argv=None):
                 if args.command == "build":
                     tools = bundle_tools.build_tools(toolchain, archive, args.out / "build")
                     receipt = build_image(packages, args.dl, tools, args.out, toolchain,
-                                          probe_receipt=load(args.out / "build" / "tools.receipt.json"))
+                                          probe_receipt=load(args.out / "build" / "tools.receipt.json"),
+                                          open_packages=profile["open_packages"])
                     print("BUILD_DONE sha256=" + receipt["image"]["sha256"] + " identity=" + receipt["image"]["identity"])
         print(args.command.upper().replace("-", "_") + "_OK")
         return 0

@@ -459,7 +459,7 @@ class Bundle(unittest.TestCase):
         B.verify_image(self.out / "winapps-open.iso", receipt)
         with I.Reader(self.out / "winapps-open.iso") as reader:
             self.assertEqual(set(reader.files), set(receipt["files"]))
-        self.assertEqual((self.out / "bundle.pin.line").read_text(), "winapps-open.iso sha256=" + receipt["image"]["sha256"] + "\n")
+        self.assertEqual((self.out / "bundle.pin.line").read_text(), B.pin_text(receipt["image"]["sha256"], receipt["inputs"]))
 
     def test_archives_stay_identical_on_image(self):
         receipt = self.build()
