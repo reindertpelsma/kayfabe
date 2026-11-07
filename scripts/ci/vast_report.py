@@ -147,6 +147,8 @@ SPEC = [
     # 2026-11-07 (run report): present only when the Worker has POST /run-report/<run>
     # (ci/vast-broker/src/index.js). Absent (an older Worker): the box sends no report.
     ("KF_RUN_REPORT", False, _match(r"1")),
+    # J3: explicit opt-in, consumed by the payload; only large may request it.
+    ("KF_NESTED", False, _match(r"[01]")),
     ("KF_STAGES", False, _match(r"[a-z][a-z0-9_]{0,31}(?::[a-z][a-z0-9_]{0,31}){0,3}")),
 ]
 

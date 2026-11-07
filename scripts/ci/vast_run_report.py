@@ -54,7 +54,7 @@ APP_ROW = re.compile(
 # The stage markers whose position in the published log delimits a subrun (the Worker finds them).
 LOG_STAGES = {
     "host": ["cuda_host", "merge_bar"],
-    "linux": ["merge_bar", "cuda_guest", "apps"],
+    "linux": ["merge_bar", "cuda_guest", "apps", "nested"],
     "windows": ["windows_gate", "windows_gate_2"],
 }
 DRIVER = re.compile(r"[0-9]{3,4}\.[0-9]{1,5}(?:\.[0-9]{1,5})?")
@@ -160,6 +160,10 @@ class Collector:
                 self.test("linux", "cuda_fat", rung, arm_result(d.get("verdict", "")), seconds_ms(wall))
         elif head == "CL_BENCH":
             self.bench_line(line)
+        elif head == "NESTED_ROW":
+            m = re.fullmatch(r"NESTED_ROW name=(install|probe|boot|raw_ce|cleanup) result=(PASS|FAIL|NOT_RUN) secs=([0-9]+(?:\.[0-9]+)?)", line)
+            if m:
+                self.test("linux", "nested", m[1], "SKIP" if m[2] == "NOT_RUN" else m[2], seconds_ms(m[3]))
         elif head == "APP_ROW":
             # The apps stage (scripts/bench/box/apps_gate.sh): one row per gate app, in the Linux guest.
             m = APP_ROW.match(line)
@@ -309,6 +313,7 @@ def build_report(lines, result, run_id=None):
     keys = {"host": "host", "linux": sub_linux, "windows": sub_windows}
     mine = {k: [t for t in c.tests.values() if t["_key"] == k] for k in keys}
     linux_group = LINUX_SUITES + tuple(r["name"] for r in rows if r["name"].startswith("apps"))
+    linux_group += tuple(r["name"] for r in rows if r["name"] == "nested" or r["name"].startswith("nested_retry_"))
     subruns = [
         subrun("host", "host_bare", "host", HOST_SUITES, rows, host_driver, None, mine["host"], overall,
                ("cuda_host", "gates", "kf3_build", "raw_suite"), idle),
