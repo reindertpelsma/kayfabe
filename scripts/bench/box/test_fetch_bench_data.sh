@@ -108,6 +108,7 @@ pid=$!
 for _ in $(seq 50); do [ -s "$T/port" ] && break; sleep 0.1; done
 port=$(cat "$T/port")
 
+export KF_FETCH_STREAMS=1  # Regression coverage of the established curl/extract path.
 export KF_CI_ENV_FILE=/nonexistent
 export KF_BROKER_URL="https://127.0.0.1:$port/p"
 export KF_RUN_ID=123-1
