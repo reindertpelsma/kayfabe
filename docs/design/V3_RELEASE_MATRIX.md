@@ -248,7 +248,7 @@ records substantial copying costs and overlay growth. INFERRED: GPU score alone
 is insufficient to choose a fast full-run host; these thresholds are candidates,
 not a demonstrated predictor or a promise of those durations.
 
-CODE READ: verified positive dlperf samples produce the existing per-die median.
+CODE READ: validated positive dlperf samples produce the existing per-die median.
 Offers must pass the hard floor, price/unit-price rules and capability checks
 before ranking. The preferred test requires GPU ratio, effective cores, disk and
 inbound throughput together. Default selection and release planning choose the
@@ -280,12 +280,12 @@ Nonfinite or extreme numeric fact values become null rather than unbounded JSON.
 
 PROPOSED owner review: approve or adjust all four per-profile preferred thresholds;
 retain the hard floors and spend gates. Compare the recorded offer facts with
-measured run/stage durations before promoting a proposed value to an established
+future run/stage timing samples before promoting a proposed value to an established
 performance claim. No hardware, provider query or deployment was performed here.
 
 ## RV1 admission and receipt corrections (2026-11-07)
 
-MEASURED by RV1's GPU-free probes against PR #296's previous head: a proposed
+MEASURED by RV1's GPU-free probes on 2026-11-07 at commit `14d22c916`: a proposed
 matrix admitted eight mock rentals, ordinary protocol-7 receipts could certify
 PASS, an accepted attributed `windows_subrun_580` FAIL became RETRY and a ninth
 clean rental produced PASS, and an invalid runtime matrix did not block that
@@ -362,7 +362,7 @@ amortised over hard lease hours in effective hourly price. The stacked timing
 model separately adds its nonnegative excess-download-time reservation. Their outbound reservation remains 2 GB and their
 unit-price guard stays USD 0.005/GB. Large uses its own 130 GB allowance.
 
-MEASURED by RV1 on its synthetic fixtures: these allowance changes raised quoted
+MEASURED by RV1 on 2026-11-07 at commit `14d22c916`: synthetic fixtures raised quoted
 prices by that transfer delta but left the tested offer ranks unchanged. This
 is fixture evidence, not a claim that real-market ranks never change. CODE READ:
 actual traffic is **not metered**; reservation GB are conservative inferred

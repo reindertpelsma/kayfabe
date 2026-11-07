@@ -13,7 +13,7 @@ CODE READ: policy choices are data in `ci/vast-broker/defaults.json`:
 
 | Field | Value | Status |
 |---|---:|---|
-| each profile r2ReferenceMbps | 445 | PROPOSED, owner reference based on the measurement below |
+| each profile r2ReferenceMbps | 445 | PROPOSED, owner reference from coordinator addition 4 (2026-11-07) |
 | each profile streamsFactor | 1 | PROPOSED; current single-stream payload |
 | derate | 0.3 | INFERRED |
 | small maxDownloadSeconds | 3600 (60 min) | PROPOSED by J2 |
@@ -96,28 +96,31 @@ at 60 effective Mbps takes 13,333 seconds (3.70 hours). The default preferred
 inbound value of 300 Mbps also does not guarantee feasibility; the guard applies
 first. A download limit does not prove that downloading plus a 200–305 minute
 SPEC run fits a 300-minute box lease. The stage-duration envelope still needs
-owner review and measurement.
+owner review and calibration.
 
 CODE READ: `fetch_bench_data.sh`, the main provisioning downloads and Windows
 media fetches log fixed numeric `KF_DOWNLOAD_METRIC` lines using curl's time_total
-and size_download. File and streamed benchmark transfers are instrumented.
+and size_download. Default single-stream file and streamed benchmark transfers are instrumented.
+CODE READ: J4's explicitly opted-in parallel file mode uses a separate fetcher and
+does not emit these curl metric lines; its traffic is outside these samples.
 The Worker retains at most 32 numeric samples, advertised inet_down, summed transfer
 seconds/bytes, and a truncation flag. It never retains arbitrary partial log text
 in this parser. The settlement queue snapshots these claims into `download_measurements`
 in R2/D1 reports alongside `offer_facts.download_estimate`. Unknown guest report
 keys cannot replace the Worker's snapshot. Samples are labeled `payload_log_claim`
 and `instrumented_curl_transfers_only`; they are not trusted admission evidence. Package-manager traffic,
-other media paths, cache hits and uninstrumented traffic are not a measured
-full-run total. Summed transfer durations are not wall-clock time when transfers overlap.
+other media paths, cache hits and uninstrumented traffic are excluded; these samples
+do not establish a full-run total. Summed transfer durations are not wall-clock time when transfers overlap.
 Calibration is manual; the samples do not automatically change derate or thresholds.
 
-DESIGN-ONLY, UNTESTED IN J2: J4 is building a parallel range fetch tool. Its
-integration may justify raising the per-profile reference toward the owner-measured
-1780 Mbps after matched payload measurements; no such change is active here.
+DESIGN-ONLY, UNTESTED IN J2: J4's parallel range tool is merged with opt-in hooks. Its
+integration may justify raising the per-profile reference toward the owner-supplied
+1780 Mbps observation (coordinator addition 4, 2026-11-07) after matched payload
+calibration; no such change is active here.
 `streamsFactor` remains 1. Changing the factor models extra origin capacity without
 changing reference seconds; changing `r2ReferenceMbps` changes the reference too, so
 any eventual rollout must set both deliberately and avoid counting the same measured
-gain twice. Parallel range downloads were neither implemented nor tested in J2. Any experiment needs range/content integrity checks, bounded
+gain twice. Parallel range downloads were implemented in J4; their payload throughput was not tested in J2. Any experiment needs range/content integrity checks, bounded
 connections/retries, private URL handling, matched offer/transfer measurements and
 an allowance review before changing this model. Parallelism is not a promise of
 8x speed and may compete with provisioning or shared storage.
