@@ -9,16 +9,16 @@ import { join } from 'node:path';
 // turn the required gpu-vast status green on its own (NOT_NEEDED) without a Worker verdict.
 const read = (name) =>
   readFile(new URL('../../../.github/workflows/' + name, import.meta.url), 'utf8');
-const SETUP_NODE = 'actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020';
+const SETUP_NODE = 'actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1';
 const job = (yaml, id) => yaml.split('  ' + id + ':\n')[1].split(/\n  [\w-]+:\n/)[0];
 for (const name of ['gpu-vast.yml', 'gpu-vast-sweep.yml'])
   test('round V7 every action is pinned by full commit SHA ' + name, async () => {
     const uses = [...(await read(name)).matchAll(/^\s*-?\s*uses:\s*(\S+)(.*)$/gm)];
     for (const [, ref] of uses) assert.match(ref, /^[\w.-]+\/[\w./-]+@[0-9a-f]{40}$/, ref);
   });
-test('round V7 setup-node is the reviewed v4 commit', async () => {
+test('round V7 setup-node is the reviewed v7.1.0 commit', async () => {
   const yaml = await read('gpu-vast.yml');
-  assert.ok(yaml.includes('uses: ' + SETUP_NODE + ' # v4'));
+  assert.ok(yaml.includes('uses: ' + SETUP_NODE + ' # v7.1.0'));
 });
 for (const id of ['policy', 'policy-check'])
   test('round V7 policy runs the resolved node binary ' + id, async () => {
