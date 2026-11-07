@@ -33,6 +33,10 @@ is frozen (see *Layout*).
 - `qemu/hw/misc/kf3/` — the C QOM device. `cuda/walk/` — the walk kernel (`.cu` plus committed
   PTX). `scripts/bench/`, `scripts/fastguest/` — provisioning, gates, lanes. `traces/` —
   evidence. `third_party/` — pinned reference sources (submodules; not built). `archive/` — frozen.
+- `traces/` bulk evidence: 2026-11-07 the bulk files (PNG, large logs, tarballs) of 61 directories left the tree
+  and live in per-directory archives (`traces/EVIDENCE_ARCHIVE.md`: public URL, `scripts/evidence/fetch_evidence_archive.py`,
+  sha256). A citation of a moved file resolves through that directory's `MANIFEST.tsv`. A file that a test, a data table
+  or the Vast box payload (`ci/vast-broker/src/onstart.js`, SPARSE) reads never moves.
 
 ## Rules
 
