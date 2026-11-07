@@ -711,8 +711,9 @@ test('find: a hostile query or API value never becomes markup', async () => {
   const hostile = await find('?gpu=%3Cimg%20src%3Dx%20onerror%3Dalert(1)%3E&os=%3Cb%3E');
   assert.equal(hostile.document.querySelector('#kf-status-content img, #kf-status-content b'), null);
   assert.equal(hostile.document.querySelector('input[name=gpu]').value, '');
-  const odd = await find('?os=linux&gpu=GA106&driver=1%27%3Cb%3E&host_driver=1%27%3Cb%3E&commit=zz&relax=x');
+  const odd = await find('?os=linux&gpu=GA106&driver=1%27%3Cb%3E&host_driver=1%27%3Cb%3E&guest_driver=1%27%3Cb%3E&commit=zz&relax=x');
   assert.equal(odd.document.querySelector('input[name=host_driver]').value, '', 'an invalid driver is ignored');
+  assert.equal(odd.document.querySelector('input[name=guest_driver]').value, '', 'an invalid guest driver is ignored');
   assert.equal(odd.document.querySelector('input[name=commit]').value, '', 'an invalid commit is ignored');
   assert.equal(
     odd.document.querySelectorAll('table.kf-setups tbody tr').length,
