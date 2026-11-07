@@ -305,6 +305,11 @@ class V7Tests(unittest.TestCase):
             (repo / "scripts/bench/provision_box.sh").write_text("# fixture")
             (repo / "tools/drivermatrix").mkdir(parents=True)
             (repo / "tools/drivermatrix/tags.txt").write_text("580.159.04\n")
+            # the SPECviewperf lane table (2026-11-07): read only when KF_SPEC asks for the stage
+            (repo / "scripts/bench/specviewperf").mkdir(parents=True)
+            (repo / "scripts/bench/specviewperf/lanes.json").write_text(
+                (Path(__file__).resolve().parents[1] / "bench/specviewperf/lanes.json").read_text()
+            )
             (root / "root/prov").mkdir(parents=True)
             (root / "workspace/bench").mkdir(parents=True)
             if kvm:
@@ -355,7 +360,7 @@ class V7Tests(unittest.TestCase):
                     return 124 if name == failure else (0 if "GATE_PASS" in (windows_log or WINDOWS_PASS) else 1)
                 elif name in (stage_logs or {}):
                     # wtier 2026-11-05: windows_gate_2 and the specviewperf stage wrapper.
-                    for key in ("KF_TIER", "KF_WINDOWS_RUNS", "KF_STAGES"):
+                    for key in ("KF_TIER", "KF_WINDOWS_RUNS", "KF_STAGES", "KF_SPEC"):
                         self.assertNotIn(key, os.environ)
                     text, code = stage_logs[name]
                     native_path(mapped(output)).parent.mkdir(parents=True, exist_ok=True)
@@ -711,8 +716,10 @@ class ReleaseTierPayloadTests(unittest.TestCase):
     setUp = V7Tests.setUp
     _main_fixture = V7Tests._main_fixture
 
-    def _release(self, stages=None, runs="2", tier="large", windows="1", logs=None):
+    def _release(self, stages=None, runs="2", tier="large", windows="1", logs=None, spec=None):
         env = {"KF_TIER": tier}
+        if spec is not None:
+            env["KF_SPEC"] = spec
         if runs is not None:
             env["KF_WINDOWS_RUNS"] = runs
         if stages is not None:
@@ -743,6 +750,7 @@ class ReleaseTierPayloadTests(unittest.TestCase):
     def test_specviewperf_stage_without_its_lane_is_never_a_pass(self):
         rc, result, calls = self._release(
             stages="specviewperf",
+            spec="lanea",
             runs=None,
             logs={
                 "specviewperf": (
@@ -767,6 +775,7 @@ class ReleaseTierPayloadTests(unittest.TestCase):
     def test_specviewperf_media_retry_is_a_failing_row(self):
         rc, result, _ = self._release(
             stages="specviewperf",
+            spec="laneb",
             runs=None,
             logs={"specviewperf": ("SPECVIEWPERF_STAGE_RETRY class=MEDIA\n", 3)},
         )

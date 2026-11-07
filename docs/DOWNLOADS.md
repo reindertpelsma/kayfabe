@@ -1,6 +1,7 @@
 # External downloads: sources, terms status and caching rules
 
-**STATUS: RESEARCH, 2026-10-31.** Draft summary; the terms status is not final. Since 2026-10-31 the
+**STATUS: RESEARCH, 2026-10-31** (the section "SPECviewperf in the Vast gate" below was added 2026-11-07 and is DESIGN-ONLY until a
+box has run it). Draft summary; the terms status is not final. Since 2026-10-31 the
 code for the private R2 copy exists (Worker route `/bench-data/` and the box helper
 `scripts/bench/box/fetch_bench_data.sh`, section "SPECviewperf private copy: the R2 objects");
 it is merged only when its PR is, and it is not live until the coordinator deploys the Worker and
@@ -179,6 +180,36 @@ contacted. The implemented upload is a retried single PUT, capped at 5 GiB;
 larger artifacts require caller-managed multipart. Verification downloads and
 compares SHA-256/length against an independently retained private manifest.
 These statements describe code, not a tested upload or usable Windows image.
+
+## SPECviewperf in the Vast gate (the `specviewperf` stage)
+
+STATUS: DESIGN + CODE, 2026-11-07 (docs/design/V3_SPEC_GATE.md). Draft PR against `next`, disabled by default; no box has run it.
+This section is how the stage handles the private copy; the rules above ("handling rules") are unchanged and bind the stage.
+
+- Inputs come only through the Worker's `/bench-data` route (`scripts/bench/box/fetch_bench_data.sh`, this run's token): the
+  object `specviewperf-15.0.0.tar.zst`. The stage never reaches spec.org or a vendor, never fetches the installer
+  (`specviewperf-15.0.0.SPECviewperf-Setup.exe` stays an allow-listed Worker name for the owner's own use), and the licence
+  PDF and `CHECKSUMS.txt` are not fetched per run.
+- The sha256 pin is in the repo: `scripts/bench/box/specviewperf.pin`. PROPOSED 2026-11-07, OWNER TO CONFIRM: the values are the
+  ones of the object's own `CHECKSUMS.txt` as recorded in `traces/specviewperf_vast_20261105/spec/CHECKSUMS_pins.txt` (the
+  archive `ffe0e505...d5a`, the decompressed tar `cf37055c...bdb8`). A missing pin line, a missing object (Worker 404) or a
+  mismatch is RETRY class MEDIA; `fetch_bench_data.sh` deletes bytes that do not match. The Worker allows 4 presigned URLs of at
+  most 20 minutes per object per run; the stage uses at most 3 (the helper resumes with `-C -` on a fresh URL).
+- The copy lives for the run only. The 42 GB archive is deleted right after the lane's viewsets are in the guest; the child
+  overlay that holds the tree is deleted at the end of the stage (and by the stage's TERM/EXIT handlers); both deletions print
+  a `SPEC_COPY_DELETED` line, which is the teardown record this section asks for. The box is destroyed after the run anyway.
+- Only exact content is copied: the tree is streamed from the verified archive (`zstd -d | tarfilter.py | tar -x` in the guest)
+  with whole viewset directories left out, never altered; `tarfilter.py` refuses links, devices, absolute paths and `..`.
+  The licence text is not part of the guest copy; the owner's R2 copy keeps it beside the archive.
+- Nothing is shared: the guest is offline apart from the harness's ssh forward, the archive and tree are not collected into the
+  evidence bundle (`disk/`, `*.qcow2` and `*.iso` are never collected), and no score is read: the stage parses the CLI's status
+  lines only and never opens the vendor result directory, which dies with the guest. Fair Use: the public log and the run report
+  carry viewset names and PASS/FAIL/NOT_RUN with subtest counts and the names of failed subtests, no score and no timing
+  (docs/SPEC_RESULTS.md says scores may be published only with `(nc)` and the disclaimer; this stage publishes none).
+- Disk: the Worker rents 120 GB today (`diskGb` in `ci/vast-broker/defaults.json`, `disk: 120` in `src/vast.js`); a lane needs
+  about 130 GB free after the Windows gate (archive 42 GB plus 44 to 50 GB of tree plus Windows), the whole tree about 190 GB.
+  Requesting 300 GB (220 GB floor, MEASURED by the native run) for the release tier is an owner decision and a Worker change,
+  not part of this PR. Without the space the stage is RETRY class PROVIDER.
 
 ## Download etiquette
 

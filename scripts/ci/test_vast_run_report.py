@@ -743,5 +743,127 @@ class Transport2(unittest.TestCase):
             self.assertNotIn("Bearer", out)
 
 
+class SpecStatusRows(unittest.TestCase):
+    """The SPECviewperf stage (disabled by default) reports status only: a test row per viewset and per failed
+    subtest under the neutral suite `spec_viewsets`, no time, no number, in the Windows subrun."""
+
+    ROWS = [
+        "SPEC_ROW name=energy-04 result=PASS subtests=6/6 reason=- failed=-",
+        "SPEC_ROW name=creo-04 result=FAIL subtests=4/6 reason=SUBTEST failed=03_ThreeLoftJetsDarkMirror,06_LoftJets",
+        "SPEC_ROW name=enscape-01 result=NOT_RUN subtests=0/0 reason=TIME failed=-",
+    ]
+    BASE = [("provision", 1, 0, 0), ("gates", 9, 0, 0), ("kf3_build", 1, 0, 0), ("raw_suite", 30, 0, 0),
+            ("thin_suite", 30, 0, 0), ("birth_census", 1, 0, 0), ("cuda_host", 4, 0, 0), ("cuda_fat", 4, 0, 0),
+            ("windows_gate", 1, 0, 0)]
+
+    def build(self, lines, rows=None, verdict="PASS"):
+        return rr.build_report(log_lines() + lines, result(rows=(rows if rows is not None else self.BASE), verdict=verdict))
+
+    def spec_tests(self, doc):
+        return {t["name"]: t for t in doc["tests"] if t["suite"] == "spec_viewsets"}
+
+    def windows(self, doc):
+        return {s["os"]: s for s in doc["subruns"]}["windows"]
+
+    def test_spec_rows_become_status_tests_of_the_windows_subrun(self):
+        doc = self.build(self.ROWS)
+        got = self.spec_tests(doc)
+        self.assertEqual(
+            {k: v["result"] for k, v in got.items()},
+            {"energy-04": "PASS", "creo-04": "FAIL", "enscape-01": "SKIP",
+             "creo-04/03_ThreeLoftJetsDarkMirror": "FAIL", "creo-04/06_LoftJets": "FAIL"},
+        )
+        self.assertEqual({v["sub"] for v in got.values()}, {"windows-580.88"})
+
+    def test_a_viewset_that_did_not_run_is_a_skip_never_a_pass(self):
+        got = self.spec_tests(self.build(self.ROWS))
+        self.assertEqual(got["enscape-01"]["result"], "SKIP")
+        self.assertNotEqual(got["enscape-01"]["result"], "PASS")
+
+    def test_the_rows_carry_no_time_and_no_number(self):
+        doc = self.build(self.ROWS)
+        for t in self.spec_tests(doc).values():
+            self.assertIsNone(t["ms"])
+            self.assertEqual(set(t), {"sub", "suite", "name", "result", "ms"})
+
+    def test_a_viewset_row_has_no_duration_so_no_timing_of_a_benchmark_is_published(self):
+        got = self.spec_tests(self.build(self.ROWS))
+        viewsets = {k: v for k, v in got.items() if "/" not in k}
+        self.assertEqual(sorted(viewsets), ["creo-04", "energy-04", "enscape-01"])
+        self.assertEqual({v["ms"] for v in viewsets.values()}, {None})
+
+    def test_the_failed_subtests_are_named_as_failing_rows(self):
+        got = self.spec_tests(self.build(self.ROWS))
+        self.assertEqual(got["creo-04/06_LoftJets"]["result"], "FAIL")
+        self.assertNotIn("energy-04/01_A", got)
+
+    def test_no_spec_rows_means_no_spec_tests(self):
+        self.assertEqual(self.spec_tests(self.build([])), {})
+
+    def test_a_row_with_extra_fields_is_not_a_row(self):
+        doc = self.build(["SPEC_ROW name=energy-04 result=PASS subtests=6/6 reason=- failed=- score=99.5"])
+        self.assertEqual(self.spec_tests(doc), {})
+        self.assertNotIn("99.5", json.dumps(doc))
+
+    def test_hostile_or_foreign_rows_are_ignored(self):
+        lines = [
+            "SPEC_ROW name=Bad_Name-01 result=PASS subtests=1/1 reason=- failed=-",
+            "SPEC_ROW name=energy-04 result=MAYBE subtests=1/1 reason=- failed=-",
+            "SPEC_ROW name=energy-04 result=PASS subtests=x/1 reason=- failed=-",
+            "SPEC_ROW name=energy-4 result=PASS subtests=1/1 reason=- failed=-",
+            "SPEC_ROW name=energy-04 result=PASS subtests=1/1 reason=- failed=a b",
+            "SPEC_ROW name=energy-04 result=PASS subtests=1/1 reason=lower failed=-",
+        ]
+        self.assertEqual(self.spec_tests(self.build(lines)), {})
+
+    def test_a_row_of_the_stage_is_never_a_number_a_benchmark_measured(self):
+        text = json.dumps(self.build(self.ROWS))
+        self.assertNotRegex(text, r"(?i)viewperf|score|fps|composite")
+
+    def test_the_suite_rows_of_the_result_file_are_renamed_without_the_benchmark_name(self):
+        rows = self.BASE + [("specviewperf", 4, 0, 0), ("specviewperf_lanea", 4, 0, 0)]
+        doc = self.build(self.ROWS[:1], rows)
+        names = [r["name"] for r in doc["suites"]]
+        self.assertIn("spec_viewsets", names)
+        self.assertIn("spec_viewsets_lanea", names)
+        self.assertNotIn("specviewperf", names)
+        self.assertNotRegex(json.dumps(doc), r"(?i)viewperf")
+
+    def test_the_spec_suite_rows_belong_to_the_windows_subrun(self):
+        rows = self.BASE + [("specviewperf", 4, 0, 0)]
+        doc = self.build(self.ROWS[:1], rows)
+        self.assertIn("spec_viewsets", self.windows(doc)["stages"])
+        self.assertEqual(self.windows(doc)["verdict"], "PASS")
+        self.assertEqual(self.windows(doc)["counts"]["pass"], 5)
+
+    def test_a_failed_spec_stage_fails_the_windows_subrun(self):
+        rows = self.BASE + [("specviewperf", 0, 1, 0)]
+        doc = self.build(self.ROWS, rows, verdict="FAIL")
+        self.assertEqual(self.windows(doc)["verdict"], "FAIL")
+        self.assertEqual(self.windows(doc)["counts"]["fail"], 1)
+
+    def test_a_spec_lane_that_could_not_finish_is_a_retry_not_a_guest_failure(self):
+        for cls in ("time", "media", "transport"):
+            with self.subTest(cls):
+                rows = self.BASE + [("specviewperf_retry_" + cls, 0, 1, 0)]
+                doc = self.build(self.ROWS, rows, verdict="FAIL")
+                self.assertEqual(self.windows(doc)["verdict"], "RETRY")
+
+    def test_a_lone_time_retry_row_is_a_retry_and_no_failure_is_counted_as_a_viewset(self):
+        rows = self.BASE + [("specviewperf_retry_time", 0, 1, 0), ("specviewperf_passed", 2, 0, 0)]
+        doc = self.build(self.ROWS[:1], rows, verdict="FAIL")
+        self.assertEqual(self.windows(doc)["verdict"], "RETRY")
+
+    def test_a_retry_next_to_a_failed_viewset_row_stays_a_failure(self):
+        rows = self.BASE + [("specviewperf", 0, 1, 0), ("specviewperf_retry_time", 0, 1, 0)]
+        doc = self.build(self.ROWS, rows, verdict="FAIL")
+        self.assertEqual(self.windows(doc)["verdict"], "FAIL")
+
+    def test_a_retry_next_to_a_failed_windows_gate_stays_a_failure(self):
+        rows = self.BASE[:-1] + [("windows_gate", 0, 1, 0), ("specviewperf_retry_time", 0, 1, 0)]
+        doc = self.build(self.ROWS, rows, verdict="FAIL")
+        self.assertEqual(self.windows(doc)["verdict"], "FAIL")
+
+
 if __name__ == "__main__":
     unittest.main()
