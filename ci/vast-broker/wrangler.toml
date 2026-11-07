@@ -42,6 +42,16 @@ migrations_dir = "../platform-api/migrations"
 binding = "EVIDENCE_BUCKET"
 bucket_name = "kayfabe-ci-evidence"
 
+# Public run logs and reports (src/publiclog.js, src/publish.js, DEPLOY.md "Public logs"): the
+# PUBLIC R2 bucket kayfabe-logs-public (https://logs.kayfabe.dev), written only by the cron publisher
+# through this binding as <run id>/log.txt and <run id>/report.json. The bucket already exists and
+# is public through the custom domain; this Worker never reads it. deploy.mjs passes
+# --x-provision=false, so a bucket that does not exist FAILS the deploy instead of being created
+# without its settings (same rule as EVIDENCE_BUCKET). Remove the block to switch publishing off.
+[[r2_buckets]]
+binding = "LOGS_BUCKET"
+bucket_name = "kayfabe-logs-public"
+
 [triggers]
 crons = ["* * * * *"]
 
@@ -54,6 +64,8 @@ RENTING_ENABLED = "false"
 DEPLOYED_BUNDLE_SHA256 = "ab809a5524b2ff7889f1b7ed5df69ae65cb6acce3cc002ca9bd27f53a1763fe9"
 # Public GitHub account id of the owner (also in every commit author email); never a secret.
 OWNER_GITHUB_ID = "229738317"
+# Public https origin of the log bucket (a report names its log by this URL); on kayfabe.dev only.
+LOGS_BASE = "https://logs.kayfabe.dev"
 REPOSITORY = "reindertpelsma/kayfabe"
 REPOSITORY_GITHUB_ID = "1311106387"
 OIDC_SUB = "repo:reindertpelsma@229738317/kayfabe@1311106387:environment:gpu-vast"

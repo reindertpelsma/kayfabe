@@ -347,6 +347,7 @@ test('log redirect: 302 only for a listed log, only to a valid kayfabe.dev https
 test('every executed statement is a QUERIES entry bound with exactly its parameters', async () => {
   for (const path of ENDPOINTS()) await call(path);
   await call('/v1/logs/' + finalRun.id + '/box.log');
+  await call('/v1/logs/syn-ci-p-8/log.txt'); // a CI run's published objects (migration 0004)
   const known = new Set(Object.values(QUERIES));
   assert.ok(log.length > 20);
   for (const { sql, params } of log) {

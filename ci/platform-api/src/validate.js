@@ -3,11 +3,14 @@
 // echo the request.
 
 export class ApiError extends Error {
-  constructor(status, code, detail) {
+  // `extra` is a small object of fixed words (for example {allowed: [...]}) added to the error body
+  // so a client can correct its request; it never echoes request text.
+  constructor(status, code, detail, extra = {}) {
     super(code);
     this.status = status;
     this.code = code;
     this.detail = detail;
+    this.extra = extra;
   }
 }
 
@@ -52,6 +55,15 @@ export const PATTERNS = Object.freeze({
   runId: /^[a-z0-9][a-z0-9-]{5,63}$/,
   logName: /^[a-z0-9][a-z0-9._-]{0,63}\.(?:log|txt)$/,
   time: /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$/,
+  // /v1/ci/subruns and /v1/ci/stats (migration 0004). The lists are checked word by word in the
+  // handler (known words, no duplicates); the pattern only bounds shape and length.
+  dimList: /^[a-z_]{2,16}(?:,[a-z_]{2,16}){0,8}$/,
+  cpuSpec: /^(?:amd|intel|arm|other)(?:-(?:x86_64|aarch64))?$/,
+  osAny: /^(?:linux|windows|host)$/,
+  subSort: /^(?:closeness|recent|duration)$/,
+  statsSort: /^(?:recent|die|driver)$/,
+  includeList: /^[a-z]{4,6}(?:,[a-z]{4,6}){0,5}$/,
+  closeness: /^[0-7]$/,
 });
 
 export const MAX_LIMIT = 100;
@@ -67,7 +79,10 @@ export function parseQuery(url, allowed) {
   for (const name of Object.keys(allowed)) out[name] = null;
   const seen = new Set();
   for (const [name, value] of url.searchParams) {
-    if (!Object.hasOwn(allowed, name)) throw new ApiError(400, 'bad_request', 'unknown parameter');
+    if (!Object.hasOwn(allowed, name))
+      throw new ApiError(400, 'bad_request', 'unknown parameter', {
+        allowed: Object.keys(allowed),
+      });
     if (seen.has(name)) throw new ApiError(400, 'bad_request', 'repeated parameter');
     seen.add(name);
     const pattern = allowed[name];

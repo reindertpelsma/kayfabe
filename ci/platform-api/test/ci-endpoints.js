@@ -22,6 +22,15 @@ export const CI_ENDPOINTS = () => [
   '/v1/ci/setups?os=windows&gpu=GA106,GA104&cpu=amd&driver=580.95.05&tier=middle&limit=5',
   '/v1/ci/setups?source=reproduced,community&report_tier=unverified',
   '/v1/ci/facets',
+  '/v1/ci/subruns',
+  '/v1/ci/subruns?die=GA106&os=windows&host_driver=580.95.05&relax=host_driver,cpu&include=counts&limit=5',
+  '/v1/ci/subruns?commit=' +
+    finalRun.commit_sha +
+    '&tree=' +
+    finalRun.tree_hash +
+    '&include=stages,tests,perf,apps,counts&limit=3',
+  '/v1/ci/stats',
+  '/v1/ci/stats?die=GA106&os=linux&limit=5&sort=die',
   '/v1/ci/trees',
   '/v1/ci/trees?tier=largest&limit=2',
   '/v1/ci/trees/' + finalRun.tree_hash,

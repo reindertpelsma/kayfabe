@@ -1,10 +1,12 @@
 # Vast GPU CI broker
 
-STATUS: LIVE, 2026-11-06, for the deployed rental path. The result store, tree key and
+STATUS: LIVE, 2026-11-07, for the deployed rental path. The result store, tree key and
 requirements check, the tiers, admin start and release run (sections below; branches
 `claude/worker-store-20261105` and `claude/worker-tier-20261105`, merged in
 `claude/integration-20261105b`) and the failed-run evidence upload (section "Failed-run evidence",
-branch `claude/ci-evidence-bundle-20261106`) are built and tested GPU-free only; NOT DEPLOYED.
+branch `claude/ci-evidence-bundle-20261106`) and the public full logs, structured run reports and host
+sessions (section "Public logs, run reports and host sessions", branch `claude/report-20261107`) are
+built and tested GPU-free only; NOT DEPLOYED.
 
 The broker connects GitHub Actions to rented NVIDIA GPU machines on Vast.ai so kayfabe can run GPU checks beyond the hardware available to hosted runners. It is a Cloudflare Worker backed by a Durable Object ledger that tracks rentals, deadlines and spending. GitHub asks for a check; the Worker handles the provider account and relays the box's result and bounded logs back to the runner.
 
@@ -164,6 +166,38 @@ and run 42152626663 attempt 1, whose timeout screendump was lost).
   mode, gateway buffering) and `node evidence-mutants.mjs` (every mutant must fail at least two tests).
   Not exercised: real R2, the deployed gateway and Durable Object (the tests call the ledger service
   in-process), a real box.
+
+## Public logs, run reports and host sessions (built 2026-11-07, NOT DEPLOYED)
+
+CODE READ (`src/publiclog.js`, `src/runreport.js`, `src/publish.js`, `src/index.js`, `src/ledger.js`,
+`scripts/ci/vast_run_report.py`); GPU-free tests only (`test/public-log.test.js`, `test/run-report.test.js`,
+`report-mutants.mjs`, `scripts/ci/test_vast_run_report.py`, the run-report cases of `test_vast_box.py`); no
+real R2, D1, Worker or box has run any of it. Contract: `/root/night/REPORT_CONTRACT.md`.
+
+- **Full public log.** When a run is settled the cron writes `<run id>/log.txt` to the public R2 bucket
+  `kayfabe-logs-public` (`https://logs.kayfabe.dev`, binding `LOGS_BUCKET`): the text the box streamed, whole,
+  with secrets replaced by `[redacted]` and nothing else changed (no character allow-list, no display budget;
+  a log that holds a secret is redacted, never refused), at most 16 MiB with a visible cut marker. What it can and
+  cannot contain, exactly: [DEPLOY.md](DEPLOY.md), "What the full log can and cannot contain". The runner's
+  display scrub (`runner.py`, `src/sanitize.js`) is a separate path and unchanged.
+- **Off the teardown path.** `publishRuns` runs from the cron AFTER the serialized sweep, outside its queue,
+  with a bounded wait per R2 call (20 s) and at most two runs and 40 s per tick; a failure is one log line with
+  a fixed word, the entry is retried for about an hour and then dropped. The verdict, the teardown and the budget
+  never depend on it.
+- **Run report (box protocol 7, additive).** A box posts one bounded JSON claim to `POST /run-report/<run>-<attempt>`
+  ([box protocol](docs/BOX_PROTOCOL.md), "Optional run report") only when the Worker sets `KF_RUN_REPORT=1`
+  (only with a result store). A separate route, not a key of the result, because a report may be 256 KiB and a
+  `/report` body is at most 64 KiB; the other direction (an older Worker) answers 404 and a box that is not told
+  sends nothing. The Worker re-validates and bounds it (`src/runreport.js`), sets the run's identity itself, writes
+  `<run id>/report.json` to the bucket, and stores it in D1 (migration 0004: `ci_run_reports`, `ci_subruns`,
+  `ci_run_tests`, `ci_run_perf`, `ci_run_apps`, all additive). SPECviewperf data is dropped.
+- **Host sessions and subruns.** A rental is a host session; its results belong to subruns: `host`,
+  `linux-<driver>`, `windows-<driver>`. The public API ranks subruns by similarity
+  ([ci/platform-api/README.md](../platform-api/README.md), `/v1/ci/subruns`).
+- **Tests.** `node --test test/public-log.test.js test/run-report.test.js`, `node report-mutants.mjs` (every
+  mutant must fail at least two tests), `python3 -m unittest test_vast_run_report` and
+  `test_vast_box.Onstart` in `scripts/ci`. Not exercised: real R2 `put` options, real D1 `json_each` batches,
+  the Durable Object storage limits, the cron timing, a real box.
 
 ## Current setup and further reading
 

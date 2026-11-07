@@ -1,8 +1,9 @@
 # Thin Vast payload
 
-STATUS: LIVE, 2026-11-06 (host claims added by branch `claude/setup-picker-20261106`; release-tier
+STATUS: LIVE, 2026-11-07 (host claims added by branch `claude/setup-picker-20261106`; release-tier
 extras added by branch `claude/worker-tier-20261105`; the evidence bundle added by branch
-`claude/ci-evidence-bundle-20261106`; none has run on a box).
+`claude/ci-evidence-bundle-20261106`; the run report added by branch `claude/report-20261107`; none has
+run on a box).
 
 [CODE READ: vast_payload.sh, vast_payload.py] The generic onstart invokes
 `bash scripts/ci/vast_payload.sh <sha> <nonce>` from the exact approved checkout.
@@ -210,3 +211,42 @@ line. Retention (30 days) and reading are in [DEPLOY](../../ci/vast-broker/DEPLO
 
 GPU-free checks: `python3 -m unittest discover -s scripts/ci -p 'test_vast*.py'` and `python3
 scripts/ci/evidence_mutants.py` (every mutant must fail two tests).
+
+## Run report (2026-11-07)
+
+[CODE READ: vast_run_report.py, vast_onstart.sh; GPU-free tests only, no box has run it] After the payload has
+ended and before the result is reported, `vast_onstart.sh` runs `vast_run_report.py` (only when the Worker set
+`KF_RUN_REPORT=1`; at most 30 s, never past the soft deadline plus 150 s; exit status ignored; one outcome line in
+the log: `KF_RUN_REPORT_SENT bytes=<n> subruns=<n>` or `KF_RUN_REPORT_SKIPPED reason=<word>`). It builds one
+`schema 1` document from output the payload ALREADY produces and posts it to `POST <KF_BROKER_URL>/run-report/<run>`
+([box protocol](../../ci/vast-broker/docs/BOX_PROTOCOL.md), "Optional run report"). The result file is never touched,
+and nothing is invented: a field without a source stays empty.
+
+| Report field | Source (already printed or written by the payload) |
+|---|---|
+| `suites` | the graded rows of `/workspace/kf-result.json` (the same rows the `suite name=X pass= fail= skip=` summary lines print) |
+| `stages` | the final summary's `stage name=X rc= duration_ms= result=` lines (a stage with only a `KF_PAYLOAD_STAGE_END` line is `UNATTRIBUTED`; `TIMEOUT` is FAIL, `PROVIDER_FAULT` is RETRY) |
+| `tests`, host | `BARE_CELL_ARM arm= verdict= ms=` (suite `raw_suite`) and `CL_ROW mode=host rung= wall_ms=` (suite `cuda_host`) |
+| `tests`, Linux guest | `FAST_CELL_ARM arm= verdict= client_ms=` (suite `thin_suite`, else `secs`) and `CL_ROW mode=guest rung= CUP8_WALL_S=/BENCH_measure_WALL_S=` (suite `cuda_fat`) |
+| `tests`, Windows | `GATE_PROBE_RESULT <name> ... rc= secs= timeout=` (suite `windows_gate`; a repeated probe is `<name>#2`) |
+| `perf` | the `CL_BENCH` lines of `cuda_ladder.sh` (the lines `scripts/bench/perf_summarize.py` reads): `BSUM N= ... gflops= batch_gflops= med_ms= h2d_ms= d2h_med_ms= ...`, `BENCH_INIT_MS/CTX_MS/MODULE_MS`, and for N of 1024 or more the derived `h2d_GBps` / `d2h_GBps` by the formula of `perf_summarize.py`; a guest row carries the host row of the same name as `ref_value` and their ratio as `ref_ratio` (a same-box reference the box recorded itself) |
+| `windows` | `WINDOWS_GATE_PASS/FAIL/RETRY` (`probes=`, `resets=`, `known_live_dumps_193=`) and `WINDOWS_GATE_TIMING ... install=<n>s` |
+| `guest_drivers`, `subruns[].host_driver` / `guest_driver` | `hardware.driver_version` (the box's `nvidia-smi`), and the host claims of the result file: the Linux guest driver from the `guest.qcow2.STAGED` receipt (as `guest_driver_receipt` does), the Windows driver constant of the harness |
+| `apps` | none: the application matrix is not a payload stage yet, so the list is empty |
+
+Subruns of a host session (one rental): `host` (suites `cuda_host`, `kvm_tests`, `gates`, `kf3_build`,
+`raw_suite`), `linux-<guest driver>` (`thin_suite`, `birth_census`, `cuda_fat`) and `windows-<driver>`
+(`windows_gate`, `windows_gate_2`; `windows` with no driver when none is known). `provision` belongs to the session, not
+to a subrun. A subrun with no graded row is `NOT_RUN` with a reason (`Windows stage not requested for this
+profile`, or `not reached: <failing suite>`); a partial one is `UNATTRIBUTED`; a Windows gate that printed
+`WINDOWS_GATE_RETRY` is `RETRY`. A future small tier adds more `windows-<driver>` subruns to the same session.
+`duration_ms` of a subrun is the sum of the timed tests in it. Its position in the published log is found
+by the Worker from the stage markers (`KF_PAYLOAD_STAGE_START/END name=`), not sent by the box.
+
+Bounds on the box (the Worker repeats and enforces them): at most 256 KiB of JSON (the largest arrays are halved
+until it fits), 2000 tests, 200 perf rows, 64 stages, 20 suites, lines of at most 8192 characters parsed, a log of
+at most 32 MiB read. SPECviewperf lines never become a row (the stage prints only its verdict word).
+
+GPU-free checks: `python3 -m unittest scripts/ci/test_vast_run_report.py` (from `scripts/ci`) and the run-report cases of
+`test_vast_box.py` (`Onstart`); mutants: `python3 scripts/ci/run_report_mutants.py` (every mutant must fail two tests).
+

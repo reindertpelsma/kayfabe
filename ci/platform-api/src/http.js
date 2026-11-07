@@ -37,8 +37,8 @@ export function redirect(location) {
   });
 }
 
-export function errorResponse(status, code, detail) {
-  return json({ error: code, detail }, { status, cache: CACHE.none });
+export function errorResponse(status, code, detail, extra = {}) {
+  return json({ error: code, detail, ...extra }, { status, cache: CACHE.none });
 }
 
 // Non-GET: no CORS header, no body beyond a fixed error.

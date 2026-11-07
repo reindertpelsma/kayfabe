@@ -40,7 +40,13 @@ import {Vast} from './vast.js';
 // prettier-ignore
 import {OfferBook} from './offers.js';
 // prettier-ignore
-import {Ledger,rentalCost,costAttempt,spendClass} from './ledger.js';
+import {Ledger,rentalCost,costAttempt,spendClass,reportChunkKey} from './ledger.js';
+// prettier-ignore
+import {logsEnabled} from './publiclog.js';
+// prettier-ignore
+import {publishTick} from './publish.js';
+// prettier-ignore
+import {REPORT_MAX_BYTES,cleanClaimsReport,fitReport} from './runreport.js';
 // prettier-ignore
 import {onstart} from './onstart.js';
 // prettier-ignore
@@ -94,6 +100,7 @@ export function createService({
     githubCache = new Map(),
     offers = new OfferBook(now);
   let busy = false,
+    publishing = false,
     localVerifier,
     admissionWindow = -1,
     admissionCount = 0,
@@ -282,6 +289,8 @@ export function createService({
       return;
     }
     await ledger.appendLog(r, text);
+    // The public log holds the Worker's own lines too (src/publiclog.js).
+    if (logsEnabled(env)) await ledger.appendPublicLog(r, text);
     r.fullBytes = (r.fullBytes ?? 0) + bytes;
     appendWorkerText(r, text);
     await ledger.save(r);
@@ -628,6 +637,51 @@ export function createService({
     r.rateCount++;
     await ledger.save(r);
   }
+  // POST /run-report/<run>-<attempt>: the box's structured report (src/runreport.js). Same
+  // capability as /report (the live run token of this rental), one report per leg, at most
+  // REPORT_MAX_BYTES. The body is parsed, reduced to the claims the Worker keeps and stored in the
+  // ledger until the rental is settled; the cron publishes it (src/publish.js). Nothing here can
+  // change a verdict, a deadline or the budget, and a bad report is a 400 that costs the box nothing.
+  async function runReport(request, key, bearer, cfg, vast) {
+    const r = await ledger.get('record:' + key);
+    if (
+      !(await tokens.verify(bearer, r)) ||
+      !r ||
+      r.key !== key ||
+      r.ended !== null ||
+      r.closed ||
+      now() >= r.reportExpiry * 1000
+    )
+      refuse('UNAUTHORIZED', 401);
+    if (!storeEnabled(env)) refuse('REPORTS_DISABLED', 404);
+    clocks(r, cfg);
+    await rejectExpiredCallback(r, cfg, vast);
+    await rate(r, cfg);
+    if (r.runReport) refuse('REPORT_EXISTS', 409);
+    let body;
+    try {
+      body = await readBounded(request, REPORT_MAX_BYTES);
+    } catch (error) {
+      if (error instanceof BrokerError) refuse('PAYLOAD_TOO_LARGE', 413);
+      refuse('BAD_REQUEST', 400);
+    }
+    let claims = null;
+    try {
+      claims = cleanClaimsReport(
+        JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(body)),
+      );
+    } catch {}
+    const doc = claims === null ? null : fitReport(claims);
+    if (doc === null) refuse('BAD_REQUEST', 400);
+    const encoded = JSON.stringify(doc);
+    const leg = r.providerRetries ?? 0;
+    const chunks = encoded.match(/[\s\S]{1,60000}/g) ?? [];
+    for (let i = 0; i < chunks.length; i++)
+      await ledger.put(reportChunkKey(key, leg, i), chunks[i]);
+    r.runReport = { chunks: chunks.length, bytes: encoded.length, at: now() };
+    await ledger.save(r);
+    return json({ state: 'STORED' });
+  }
   async function kill(request, key, bearer, cfg, vast) {
     const r = await ledger.get('record:' + key);
     if (!r || r.key !== key || !(await tokens.verify(bearer, r)) || now() >= r.reportExpiry * 1000)
@@ -760,6 +814,8 @@ export function createService({
           { tail: false },
         );
         await ledger.appendLog(r, safe.text);
+        // The text as the box sent it, for the public log (redacted when it is published).
+        if (logsEnabled(env)) await ledger.appendPublicLog(r, payload.text);
         r.fullBytes = (r.fullBytes ?? 0) + new TextEncoder().encode(safe.text).length;
         r.fullBytesDropped = (r.fullBytesDropped ?? 0) + safe.bytesDropped;
         appendBoxText(r, bytes, redactions);
@@ -846,9 +902,10 @@ export function createService({
       );
     const bench =
       /^\/bench-data\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})\/([A-Za-z0-9._-]{1,100})$/.exec(path);
-    const match = /^\/(report|kill|status|stop|logs)\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.exec(
-      path,
-    );
+    const match =
+      /^\/(report|kill|status|stop|logs|run-report)\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.exec(
+        path,
+      );
     if (
       !(blob && request.method === 'GET') &&
       !(bench && request.method === 'GET') &&
@@ -918,6 +975,7 @@ export function createService({
       return json(await mintBlob(fetcher, env, ledger, r, blob[2], blob[3], now()));
     }
     if (match?.[1] === 'report') return report(request, match[2], bearer, cfg, vast);
+    if (match?.[1] === 'run-report') return runReport(request, match[2], bearer, cfg, vast);
     if (match?.[1] === 'kill') return kill(request, match[2], bearer, cfg, vast);
     let rentRequest;
     let checkBody;
@@ -1329,6 +1387,9 @@ export function createService({
         'logHash',
         'fullBytes',
         'fullBytesDropped',
+        'plogChunks',
+        'plogBytes',
+        'plogDropped',
         'bytesDropped',
         'reportBytes',
         'reportCount',
@@ -1380,6 +1441,10 @@ export function createService({
         // result (src/results.js). A box forwards it only when it sees this variable, so a box
         // from a newer commit never sends a field an older Worker would refuse.
         KF_HOST_CLAIMS: '1',
+        // 2026-11-07 (run report): this Worker accepts POST /run-report/<run> (src/runreport.js).
+        // A box sends its report only when it sees this variable, so a box from a newer commit
+        // never calls a route an older Worker does not have. Only with a result store to keep it.
+        ...(storeEnabled(env) ? { KF_RUN_REPORT: '1' } : {}),
         KF_BROKER_URL: cfg.audience + '/' + env.BROKER_PATH_PREFIX,
         KF_RUN_ID: key,
         KF_RUN_TOKEN: runToken,
@@ -2021,7 +2086,7 @@ export function createService({
           const priority =
             path === '/stop-all' || /^\/(?:stop|kill)\//.test(path)
               ? 0
-              : /^\/report\//.test(path)
+              : /^\/(?:run-)?report\//.test(path)
                 ? 1
                 : 2;
           const key = /\/([1-9][0-9]*-[1-9][0-9]*)/.exec(path)?.[1] ?? path;
@@ -2058,6 +2123,20 @@ export function createService({
         await storeTrees({ ledger, env, now: now(), treeKey: githubTreeKey(github) });
       } catch {
         console.log(JSON.stringify({ event: 'store', state: 'TREES_FAILED' }));
+      }
+    },
+    // The public log and report of settled runs, OUTSIDE the serial queue and after the sweep
+    // (src/publish.js): the bucket or the database being slow or down never delays a teardown.
+    // One run of it at a time per isolate; every failure is a log line.
+    async publishRuns() {
+      if (publishing) return;
+      publishing = true;
+      try {
+        await publishTick({ ledger, env, now: now() });
+      } catch {
+        console.log(JSON.stringify({ event: 'public_log', state: 'TICK_FAILED' }));
+      } finally {
+        publishing = false;
       }
     },
     async sweep() {
@@ -2364,6 +2443,7 @@ export class BrokerLedger {
     ) {
       await this.service.sweep();
       await this.service.storeTrees?.();
+      await this.service.publishRuns?.();
       return new Response('ok');
     }
     return this.service.fetch(request);
@@ -2376,13 +2456,15 @@ async function detachedUpload(request, path) {
   const limit =
     (/^\/report\//.test(path)
       ? 65536
-      : /^\/kill\//.test(path)
-        ? 256
-        : path === '/rent'
-          ? 2048
-          : path === CHECK_PATH
-            ? 1024
-            : 0) + 1;
+      : /^\/run-report\//.test(path)
+        ? REPORT_MAX_BYTES
+        : /^\/kill\//.test(path)
+          ? 256
+          : path === '/rent'
+            ? 2048
+            : path === CHECK_PATH
+              ? 1024
+              : 0) + 1;
   const reader = request.body.getReader(),
     chunks = [];
   let length = 0;
@@ -2514,7 +2596,7 @@ export function createGateway({ authorize, fetcher = fetch, now = Date.now } = {
       (await constantTimeEqual(env.OWNER_STOP_TOKEN, bearer))
     )
       return;
-    if (/^\/(?:report|kill|blob-url|bench-data|evidence)\//.test(path)) {
+    if (/^\/(?:report|run-report|kill|blob-url|bench-data|evidence)\//.test(path)) {
       if (boxSecret !== env.RUN_TOKEN_SECRET) {
         boxSecret = env.RUN_TOKEN_SECRET;
         boxVerifier = new RunTokens(boxSecret, now);

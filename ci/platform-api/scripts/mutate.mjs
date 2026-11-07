@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 const here = fileURLToPath(new URL('..', import.meta.url));
 const fixture = fileURLToPath(new URL('../../../site/status/fixture.json', import.meta.url));
 const names = fileURLToPath(new URL('../../../site/status/gpu_names.json', import.meta.url));
+const defaults = fileURLToPath(new URL('../../vast-broker/defaults.json', import.meta.url));
 
 const MUTANTS = [
   // read-only / method boundary
@@ -56,8 +57,8 @@ const MUTANTS = [
   [
     'unknown parameter',
     'src/validate.js',
-    'if (!Object.hasOwn(allowed, name)) throw',
-    'if (false) throw',
+    'if (!Object.hasOwn(allowed, name))\n      throw',
+    'if (false)\n      throw',
   ],
   ['repeated parameter', 'src/validate.js', 'if (seen.has(name)) throw', 'if (false) throw'],
   [
@@ -285,6 +286,294 @@ const MUTANTS = [
     "const driverOut = (v) => (typeof v === 'string' && DRIVER_OUT.test(v) ? v : null);",
     'const driverOut = (v) => v ?? null;',
   ],
+  // Run reports, subruns and stats (migration 0004): ranking, parameters, bounds
+  [
+    'rank ladder commit/cpu swapped',
+    'src/rank.js',
+    "  'commit',\n  'cpu',\n  'host_driver',",
+    "  'cpu',\n  'commit',\n  'host_driver',",
+  ],
+  [
+    'rank relaxed count ignored',
+    'src/rank.js',
+    'const closeness = [relaxed.length, worst, ...vector];',
+    'const closeness = [worst, ...vector];',
+  ],
+  [
+    'rank ladder position ignored',
+    'src/rank.js',
+    'const closeness = [relaxed.length, worst, ...vector];',
+    'const closeness = [relaxed.length, 0, ...vector];',
+  ],
+  [
+    'rank closeness vector ignored',
+    'src/rank.js',
+    'const closeness = [relaxed.length, worst, ...vector];',
+    'const closeness = [relaxed.length, worst];',
+  ],
+  [
+    'rank tie-break not total',
+    'src/rank.js',
+    'const tail = [-(Number.isFinite(ended) ? ended : 0), row.run_id, row.sub];',
+    'const tail = [-(Number.isFinite(ended) ? ended : 0)];',
+  ],
+  [
+    'rank recency inverted',
+    'src/rank.js',
+    'const tail = [-(Number.isFinite(ended) ? ended : 0), row.run_id, row.sub];',
+    'const tail = [Number.isFinite(ended) ? ended : 0, row.run_id, row.sub];',
+  ],
+  [
+    'rank other family not relaxed',
+    'src/rank.js',
+    "put('family', crossFamily ? { level: 1, dist: [0, 0, 0] } : null, wantedFamily, candFamily);",
+    "put('family', null, wantedFamily, candFamily);",
+  ],
+  [
+    'rank relax set not enforced',
+    'src/rank.js',
+    'if (relaxed.length > maxRelaxed || relaxed.some((r) => !position.has(r.dim))) continue;',
+    'if (relaxed.length > maxRelaxed) continue;',
+  ],
+  ['rank min_closeness ignored', 'src/rank.js', 'if (relaxed.length > maxRelaxed ||', 'if ('],
+  [
+    'rank cpu architecture level',
+    'src/rank.js',
+    'c.cpu_arch !== null && c.cpu_arch === wanted.cpu.arch',
+    'false',
+  ],
+  [
+    'rank driver distance',
+    'src/rank.js',
+    '      Math.abs(want[0] - found[0]),\n      Math.abs(want[1] - found[1]),\n      Math.abs(want[2] - found[2]),',
+    '      0,\n      0,\n      0,',
+  ],
+  [
+    'rank same tree not exact',
+    'src/rank.js',
+    '(wanted.tree && c.tree_hash === wanted.tree) ||',
+    '(false) ||',
+  ],
+  [
+    'rank unknown reference',
+    'src/rank.js',
+    'const ref = wanted.refTime ?? ctx.newest;',
+    'const ref = wanted.refTime ?? 0;',
+  ],
+  ['rank same-day window', 'src/rank.js', 'gap <= DAY_MS;', 'false;'],
+  ['rank duration sort', 'src/rank.js', "sort === 'duration'", 'false'],
+  ['rank recent sort', 'src/rank.js', "sort === 'recent'", 'false'],
+  [
+    'dies order abs',
+    'src/dies.js',
+    'return i < 0 || j < 0 ? null : Math.abs(i - j);',
+    'return i < 0 || j < 0 ? null : i - j;',
+  ],
+  [
+    'dies turing order',
+    'src/dies.js',
+    "turing: Object.freeze(['TU117', 'TU116', 'TU106', 'TU104', 'TU102']),",
+    "turing: Object.freeze(['TU116', 'TU117', 'TU106', 'TU104', 'TU102']),",
+  ],
+  [
+    'subruns require relaxable',
+    'src/subruns.js',
+    'const relax = (given ?? [...DIMS]).filter((d) => !require.includes(d) && !ignore.includes(d));',
+    'const relax = (given ?? [...DIMS]).filter((d) => !ignore.includes(d));',
+  ],
+  [
+    'subruns ignore matched',
+    'src/subruns.js',
+    'const relax = (given ?? [...DIMS]).filter((d) => !require.includes(d) && !ignore.includes(d));',
+    'const relax = (given ?? [...DIMS]).filter((d) => !require.includes(d));',
+  ],
+  [
+    'subruns unknown dimension',
+    'src/subruns.js',
+    'const unknown = words.some((w) => !DIMS.includes(w));',
+    'const unknown = false;',
+  ],
+  [
+    'subruns repeated dimension',
+    'src/subruns.js',
+    "if (new Set(words).size !== words.length)\n    throw new ApiError(400, 'bad_request', 'repeated dimension'",
+    "if (false)\n    throw new ApiError(400, 'bad_request', 'repeated dimension'",
+  ],
+  [
+    'subruns require ignore conflict',
+    'src/subruns.js',
+    'if (require.some((d) => ignore.includes(d)))',
+    'if (false)',
+  ],
+  [
+    'subruns required without value',
+    'src/subruns.js',
+    'if (!hasWanted(dim, wanted))\n      throw',
+    'if (false)\n      throw',
+  ],
+  ['subruns limit ceiling', 'src/subruns.js', 'n < 1 || n > MAX_SUBRUN_LIMIT', 'n < 1'],
+  [
+    'subruns include word',
+    'src/subruns.js',
+    'if (list.some((w) => !allowed.includes(w)))',
+    'if (false)',
+  ],
+  ['subruns cursor of another request', 'src/subruns.js', 'parsed.f !== fp', 'false'],
+  [
+    'subruns cursor ignored',
+    'src/subruns.js',
+    'start = at >= 0 ? at + 1 : Math.min(cursor.i, ranked.length);',
+    'start = 0;',
+  ],
+  ['subruns next cursor never', 'src/subruns.js', 'more && last\n        ?', 'false\n        ?'],
+  [
+    'subruns expansion unbounded',
+    'src/subruns.js',
+    'const n = cap(TEST_BUDGET, hits.length, 5, 100);',
+    'const n = 100000;',
+  ],
+  [
+    'subruns truncation unannounced',
+    'src/subruns.js',
+    'target[key] = { rows: list.slice(0, cap).map(shape), truncated: list.length > cap };',
+    'target[key] = { rows: list.slice(0, cap).map(shape), truncated: false };',
+  ],
+  [
+    'subruns not-run subruns offered',
+    'src/queries.js',
+    "WHERE r.verdict IS NOT NULL AND s.verdict IN ('PASS', 'FAIL', 'RETRY')\n      AND (?1 IS NULL OR r.die = ?1)",
+    'WHERE r.verdict IS NOT NULL\n      AND (?1 IS NULL OR r.die = ?1)',
+  ],
+  [
+    'subruns in-flight sessions offered',
+    'src/queries.js',
+    "WHERE r.verdict IS NOT NULL AND s.verdict IN ('PASS', 'FAIL', 'RETRY')",
+    "WHERE s.verdict IN ('PASS', 'FAIL', 'RETRY')",
+  ],
+  [
+    'subruns die filter ignored',
+    'src/queries.js',
+    '      AND (?1 IS NULL OR r.die = ?1)\n      AND (?2 IS NULL OR s.os = ?2)',
+    '      AND (?1 IS NULL OR 1)\n      AND (?2 IS NULL OR s.os = ?2)',
+  ],
+  [
+    'subruns os filter ignored',
+    'src/queries.js',
+    '      AND (?2 IS NULL OR s.os = ?2)\n      AND (?3 IS NULL OR s.host_driver = ?3)',
+    '      AND (?2 IS NULL OR 1)\n      AND (?3 IS NULL OR s.host_driver = ?3)',
+  ],
+  [
+    'subruns private table joined',
+    'src/queries.js',
+    '    FROM ci_subruns s\n    JOIN ci_runs r ON r.run_id = s.run_id\n    LEFT JOIN ci_host_facts f ON f.run_id = r.run_id\n    WHERE r.verdict IS NOT NULL AND s.verdict',
+    '    FROM ci_subruns s\n    JOIN ci_runs r ON r.run_id = s.run_id\n    LEFT JOIN ci_runs_private pv ON pv.run_id = r.run_id\n    LEFT JOIN ci_host_facts f ON f.run_id = r.run_id\n    WHERE r.verdict IS NOT NULL AND s.verdict',
+  ],
+  [
+    'subruns method guard path',
+    'src/api.js',
+    "[/^\\/v1\\/ci\\/subruns$/, 'ciSubruns', 'ciSubruns'],",
+    "[/^\\/v1\\/ci\\/subruns$/, 'ciSubruns', 'none'],",
+  ],
+  [
+    'stats oldest instead of newest',
+    'src/queries.js',
+    'PARTITION BY r.die, p.host_driver ORDER BY r.sort_at DESC, r.run_id DESC',
+    'PARTITION BY r.die, p.host_driver ORDER BY r.sort_at ASC, r.run_id DESC',
+  ],
+  [
+    'stats groups merged across drivers',
+    'src/queries.js',
+    'PARTITION BY r.die, p.host_driver ORDER BY',
+    'PARTITION BY r.die ORDER BY',
+  ],
+  [
+    'stats os filter ignored',
+    'src/queries.js',
+    '        AND (?4 IS NULL OR EXISTS (SELECT 1 FROM ci_subruns s\n                                   WHERE s.run_id = r.run_id AND s.os = ?4',
+    '        AND (1 OR EXISTS (SELECT 1 FROM ci_subruns s\n                                   WHERE s.run_id = r.run_id AND s.os = ?4',
+  ],
+  [
+    'stats tier filter ignored',
+    'src/queries.js',
+    '        AND (?2 IS NULL OR r.tier = ?2)\n        AND (?3 IS NULL OR p.host_driver = ?3)',
+    '        AND (?2 IS NULL OR 1)\n        AND (?3 IS NULL OR p.host_driver = ?3)',
+  ],
+  [
+    'stats limit ignored',
+    'src/queries.js',
+    '             l.sort_at DESC, l.run_id DESC\n    LIMIT ?6`',
+    '             l.sort_at DESC, l.run_id DESC\n    LIMIT 1000`',
+  ],
+  [
+    'stats perf unbounded',
+    'src/subruns.js',
+    'rows.slice(0, perfCap).map(perfOut), truncated: rows.length > perfCap',
+    'rows.map(perfOut), truncated: false',
+  ],
+  [
+    'stats sort ignored',
+    'src/queries.js',
+    "ORDER BY CASE ?5 WHEN 'die' THEN l.die WHEN 'driver' THEN l.host_driver END,",
+    'ORDER BY',
+  ],
+  ['report identity from the stored text', 'src/subruns.js', '  clean.run_id = id;\n', ''],
+  ['report log from the stored text', 'src/subruns.js', '  clean.log = logInfo;\n', ''],
+  ['report schema unchecked', 'src/subruns.js', 'doc.schema !== 1', 'false'],
+  [
+    'report text unbounded',
+    'src/subruns.js',
+    'const safe = (v, max = 200) => {\n  const t = text(v, max);\n  return t === null || TOKENISH.test(t) || /specviewperf/i.test(t) ? null : t;\n};',
+    "const safe = (v) => (typeof v === 'string' ? v : null);",
+  ],
+  [
+    'test rows unbounded',
+    'src/subruns.js',
+    'suite: safe(r.suite, 48),\n  name: safe(r.name, 120),\n  result: RESULTS.has(r.result)',
+    'suite: r.suite,\n  name: r.name,\n  result: RESULTS.has(r.result)',
+  ],
+  [
+    'subrun reason unbounded',
+    'src/subruns.js',
+    '    reason: safe(row.reason),\n    stages,',
+    '    reason: row.reason,\n    stages,',
+  ],
+  [
+    'old database takes the run page down',
+    'src/api.js',
+    '      } catch {\n        return empty;\n      }',
+    '      } catch (error) {\n        throw error;\n      }',
+  ],
+  [
+    'log url without the origin check',
+    'src/api.js',
+    "        const home = logsBase(env.LOGS_BASE);\n        if (!home) throw new ApiError(404, 'not_found', 'logs not configured');\n        return redirect(home + '/' + id + '/' + name);",
+    "        const home = String(env.LOGS_BASE ?? '');\n        return redirect(home + '/' + id + '/' + name);",
+  ],
+  ['log redirect without a published log', 'src/api.js', 'if (present) {', 'if (object || true) {'],
+  [
+    'log identity url unchecked',
+    'src/api.js',
+    "            ...(base ? { url: base + '/' + id + '/log.txt' } : {}),",
+    "            url: (base ?? '') + '/' + id + '/log.txt',",
+  ],
+  [
+    'unknown parameter allowed list',
+    'src/validate.js',
+    "      throw new ApiError(400, 'bad_request', 'unknown parameter', {\n        allowed: Object.keys(allowed),\n      });",
+    "      throw new ApiError(400, 'bad_request', 'unknown parameter');",
+  ],
+  [
+    'cpu pattern',
+    'src/validate.js',
+    'cpuSpec: /^(?:amd|intel|arm|other)(?:-(?:x86_64|aarch64))?$/,',
+    'cpuSpec: /./,',
+  ],
+  [
+    'sort pattern',
+    'src/validate.js',
+    'subSort: /^(?:closeness|recent|duration)$/,',
+    'subSort: /./,',
+  ],
   [
     'outbound fetch',
     'src/index.js',
@@ -310,13 +599,23 @@ for (const [name, file, before, after] of MUTANTS) {
     mkdirSync(join(root, 'site/status'), { recursive: true });
     cpSync(fixture, join(root, 'site/status/fixture.json'));
     cpSync(names, join(root, 'site/status/gpu_names.json'));
+    mkdirSync(join(root, 'ci/vast-broker'), { recursive: true });
+    cpSync(defaults, join(root, 'ci/vast-broker/defaults.json'));
     const target = join(copy, file);
     const original = readFileSync(target, 'utf8');
     if (original.split(before).length !== 2) throw Error('ambiguous or missing mutation: ' + name);
     writeFileSync(target, original.replace(before, after));
-    const tests = ['api', 'static', 'row-tag', 'fixture', 'ci', 'setups'].map((t) =>
-      join(copy, 'test', t + '.test.js'),
-    );
+    const tests = [
+      'api',
+      'static',
+      'row-tag',
+      'fixture',
+      'ci',
+      'setups',
+      'rank',
+      'subruns',
+      'reports',
+    ].map((t) => join(copy, 'test', t + '.test.js'));
     const run = spawnSync(process.execPath, ['--no-warnings', '--test', ...tests], {
       cwd: copy,
       encoding: 'utf8',

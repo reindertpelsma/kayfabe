@@ -97,6 +97,26 @@ fi
 
 exec {ready_fd}>&-
 
+# Structured run report (2026-11-07): the stages, suites, per-arm rows, benchmark rows and host
+# facts that the payload already printed, as one bounded JSON claim for the Worker's public run
+# page (scripts/ci/vast_run_report.py, docs/BOX_PROTOCOL.md "Run report"). Only when the Worker
+# said it takes one (KF_RUN_REPORT=1: an older Worker has no such route), after the payload and
+# before the result. It prints its outcome into the log, always exits 0, never touches the result
+# file and is bounded: 30 s at most, and never past KF_SOFT_DEADLINE + 150 s.
+if [ "${KF_RUN_REPORT:-}" = 1 ] && [ -f "$here/vast_run_report.py" ]; then
+    rr_left=$((KF_SOFT_DEADLINE + 150 - $(date +%s)))
+    [ "$rr_left" -le 30 ] || rr_left=30
+    if [ "$rr_left" -ge 8 ]; then
+        # shellcheck disable=SC2094  # the helper reads the log and its own line is appended to it
+        timeout --signal=TERM --kill-after=3s "${rr_left}s" \
+            python3 -I "$here/vast_run_report.py" --log "$log" --result "$result" \
+            --budget "$((rr_left - 5))" >>"$log" 2>&1 </dev/null \
+            || echo "KF_RUN_REPORT_SKIPPED reason=helper_exit_$?" >>"$log"
+    else
+        echo "KF_RUN_REPORT_SKIPPED reason=time" >>"$log"
+    fi
+fi
+
 # Evidence bundle (2026-11-06): after the payload has ended, whatever its status, and BEFORE the
 # result is reported (the Worker takes uploads until the result grace ends, and the runner stops
 # the box right after it has read the final log). scripts/ci/vast_evidence.py builds one bounded,

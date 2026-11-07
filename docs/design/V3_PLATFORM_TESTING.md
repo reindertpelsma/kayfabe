@@ -227,6 +227,14 @@ the ingest stream in the CI Worker**, by exact value, with a **tail buffer acros
 split over two chunks is still caught), plus a **token-pattern lint that holds a log back** when it
 finds anything token-shaped. There is no raw/scrubbed split. Vast boxes need no GPU-UUID stripping.
 
+**Correction 2026-11-07 (coordinator contract `/root/night/REPORT_CONTRACT.md`, built on branch
+`claude/report-20261107`): the CI Worker's objects are `<run id>/log.txt` (the WHOLE log: secrets
+replaced, nothing else changed, one 16 MiB cap with a visible marker; the token-pattern lint that holds a
+log back is not built, a log is redacted, never refused) and `<run id>/report.json` at the root of the
+bucket, and `/v1/logs/<run>/log.txt` and `report.json` redirect for a run that has them (the host sessions, subruns and
+`/v1/ci/subruns` ranking are in `ci/platform-api/README.md`). The proposal below stays for the legacy
+`runs` table.**
+
 **Proposal (lane 1):** object key `runs/<run id>/<name>`; names match
 `^[a-z0-9][a-z0-9._-]{0,63}\.(log|txt)$`; the run row lists its log names, and the public Worker
 redirects only for a listed name, to `LOGS_BASE` + `/runs/<run>/<name>`. With `LOGS_BASE` unset the
