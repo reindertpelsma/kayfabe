@@ -467,7 +467,7 @@ const MUTANTS = [
     [
       [
         P,
-        "if (outcome === 'DONE' || outcome === 'DROP') await ledger.storage.delete(key);",
+        "if (outcome === 'DONE' || outcome === 'DROP') await ledger.storage.delete(key);\n    else await ledger.put(key, { ...entry, nextAt: now + backoffMs(entry.attempts) });",
         'await ledger.storage.delete(key);',
       ],
     ],

@@ -691,11 +691,18 @@ test(
     const was = publishTimeouts.r2;
     publishTimeouts.r2 = 300;
     try {
-      await Promise.all([
+      const all = Promise.all([
         h.service.publishRuns(),
         h.service.publishRuns(),
         h.service.publishRuns(),
       ]);
+      await new Promise((r) => setTimeout(r, 100));
+      assert.equal(
+        (await h.storage.get('plogq:123-1:0')).attempts,
+        1,
+        'the attempt was saved before the stuck call returned',
+      );
+      await all;
     } finally {
       publishTimeouts.r2 = was;
     }
@@ -1141,15 +1148,20 @@ test(
     });
     bucket.hang = true;
     const was = publishTimeouts.r2;
-    publishTimeouts.r2 = 800;
+    publishTimeouts.r2 = 1500;
     try {
       const running = h.service.publishRuns();
+      let finished = false;
+      running.then(() => (finished = true));
       await new Promise((r) => setTimeout(r, 150));
       assert.equal(
         (await h.storage.get('plogq:123-1:0')).attempts,
         1,
         'saved while the bucket call was still in flight',
       );
+      // The sweep (the teardown queue) is not stuck behind the publisher.
+      await h.service.sweep();
+      assert.equal(finished, false, 'the sweep returned while the publisher was still waiting');
       await running;
     } finally {
       publishTimeouts.r2 = was;
@@ -1949,3 +1961,21 @@ test('attribute: the same holds for the cap marker kind', () => {
     '[Worker] a\n[box] [kayfabe-log] CUT: 1 bytes omitted here\n',
   );
 });
+
+test(
+  'the secret path and the Access id the box was given are redacted after a rotation',
+  { skip: d1Skip },
+  async () => {
+    const oldPath = 'unit-fixture-' + 'p'.repeat(32);
+    const x = await runWith([`path ${oldPath} id ${ACCESS_ID}\n`], {
+      overrides: { BOX_ACCESS_ID: ACCESS_ID },
+      mutate: async (h) => {
+        h.bindings.BOX_ACCESS_ID = 'rotatedId_' + 'q'.repeat(20);
+        h.bindings.BROKER_PATH_PREFIX = 'rotatedPath_' + 'r'.repeat(30);
+      },
+    });
+    const log = x.bucket.objects.get('vast-123-1-0/log.txt');
+    assert.ok(!log.includes(oldPath) && !log.includes(ACCESS_ID));
+    assert.ok(log.includes('path [redacted] id [redacted]'));
+  },
+);
