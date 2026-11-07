@@ -120,8 +120,35 @@ download to a run.
 
 ## 8. Measured: first hardware run
 
-(Filled in below, with the revision, box and die; see `traces/winapps_20261107/README.md`.)
+MEASURED 2026-11-07, Vast box 59505074, RTX 4090 (AD102), kf3 revision `b11655b7` (`next`), Windows 11 LTSC 2024 guest with the stock
+580.88 driver; evidence and the per-app table in [`traces/winapps_20261107/`](../../traces/winapps_20261107/README.md).
 
-## 9. Open questions for the owner
+- The gate passed first: `WINDOWS_GATE_PASS rev=b11655b7 ... hostref=green/green secs=1012` (install 16 min).
+- **Small profile: 8/8 PASS** (12 minutes including a guest boot).
+- **Full profile (79 open apps): 58 PASS, 9 FAIL/TIMEOUT, 12 NOT RUN.** Verdict `WINAPPS_FAIL diag=KAYFABE`, hostref green/green, no
+  host Xid, 0 guest TDR and 0 WER in the 67 apps that ran. The failures: seven `overlay_yuv_*` probes (`CheckOverlaySupport reports no
+  DXGI_OVERLAY_SUPPORT_FLAG_DIRECT`), `nbody_demo_gl` (`no-gpu-proof`) and `managed_t` (TIMEOUT, known from 2026-10-11). The batched verdict
+  is the only one (phase 2 did not run; the driver was stopped for the lease limit), and no failure is attributed: no same-box native
+  reference ran.
+- **The first-run falsifiers did not trigger:** a child overlay of the gate's overlay boots with the adapter at code 0 and `nvidia-smi` working
+  (6 of 6 guests), and the ssh transport ran the QGA-shaped driver with 0 `NOTRUN` and 0 `BOOT_FAIL`.
+- **Cost of the harness, not of the apps:** the apps' own runtimes sum to 900 s, the run took about 94 minutes: at least 47 s per app and
+  about 3.5 minutes per guest. 79 apps would need about 2 h before the slowest apps (clpeak 2 x 1500 s, LLM, Blender).
 
-(See the final report of the PR.)
+What is NOT measured: a Linux-side reference for the failing apps, the 10 video apps (ffmpeg pin 404), any die other than AD102, the
+Worker path (no run token, no R2 bundle), the `mid` profile, and the stage inside the payload.
+
+## 9. Open questions and what blocks the release tier
+
+1. **Bundle upload.** A person must run `package_open_bundle.sh`, upload `winapps-open.iso` to R2 and commit the pin; until then the stage is
+   RETRY class MEDIA by design. The Worker names are proposed (not deployed).
+2. **Owner decision on the 29 apps** that need GravityMark, FurMark, GpuTest, the Vulkan SDK or ffmpeg GPL: private copy in R2 for our own
+   boxes (as for SPECviewperf) or manual. The pinned ffmpeg URL is dead and needs a new pin either way.
+3. **Overlay probes and `nbody_demo_gl`:** are these kayfabe's? Needs a native Windows reference on the same kind of Vast box (the rule for the
+   BAR1 exception). Until then they fail the `full` profile; they are not excluded (an exclusion needs native-failure evidence).
+4. **Harness overhead** (47 s per app, 3.5 min per guest) puts `full` near 2 h plus the slow apps: the release hard limit (300 min after the
+   gate's 20-60 min) is tight. Candidates: batch the per-app scp writes into one, poll less, a bigger `--per-guest`, run the slow apps (clpeak,
+   LLM, Blender) as their own leg. Not done.
+5. **Phase 2 and the budget:** the driver checks the budget only when it starts a guest, so one guest can overrun it (it did, by the stop).
+   A per-guest deadline is not implemented.
+6. **Mapping tier to profile** (small, middle, large to small, mid, full) and turning on `KF_WINAPPS` in the Worker: owner decision plus a deploy.

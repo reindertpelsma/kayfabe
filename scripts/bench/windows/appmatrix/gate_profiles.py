@@ -56,7 +56,9 @@ def resolve(profile, apps=None, manifest=None, prof=None):
     opn = open_apps(apps, manifest, prof)
     if profile == "full":
         ex = set(prof.get("excluded", {}))
-        return [x for x in opn if x not in ex]
+        timeout = {a["id"]: a["timeout_s"] for a in apps["apps"]}
+        # shortest timeout first (stable): when the time budget ends, the apps that did not run are the slowest ones
+        return sorted((x for x in opn if x not in ex), key=lambda x: timeout[x])
     if profile in ("small", "mid"):
         ids = prof["profiles"][profile]["apps"]
         bad = [x for x in ids if x not in opn]

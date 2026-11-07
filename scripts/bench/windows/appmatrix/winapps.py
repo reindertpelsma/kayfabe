@@ -446,7 +446,8 @@ class GuestSession:
         t0 = self.now()
         self.vm.launch(self.tag)
         self.log(f"[{self.tag}] launched; waiting for the guest agent (<= {c.boot_timeout}s)")
-        self.q = self.vm.guest(c.io_timeout)
+        # a controller may bring its own transport (WinVmVm: ssh); the others (BrokerVm, the mock) use the guest agent
+        self.q = self.vm.guest(c.io_timeout) if hasattr(self.vm, "guest") else qgamod.Qga(self.vm.qga_path(), io_timeout=c.io_timeout)
         ta = None
         while self.now() - t0 < c.boot_timeout:
             if not self.vm.alive():
