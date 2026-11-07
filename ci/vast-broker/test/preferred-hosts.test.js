@@ -301,3 +301,22 @@ for (const kind of ['rolling', 'account', 'credit'])
       assert.equal(r.machineId, 100001);
       assert.equal(r.offerFacts.performance_tier, 'floor');
     });
+
+// FALSIFIER: a host exactly meeting a proposed minimum is treated as floor-only.
+for (const mode of ['select', 'release'])
+  test('preferred minimum boundary is inclusive: ' + mode, async () => {
+    const cfg = cfgFor('large');
+    const x = await evaluate(
+      [
+        offer(1, { dph_base: 0.1, cpu_cores_effective: 11, disk_bw: 149, inet_down: 299 }, cfg),
+        offer(2, { cpu_cores_effective: 12, disk_bw: 150, inet_down: 300 }, cfg),
+      ],
+      cfg,
+    );
+    const id =
+      mode === 'select'
+        ? (await select(x, { die: 'AD104' })).offer.id
+        : dieLegs(x.evaluation.allowed, cfg)[0].offer_id;
+    assert.equal(id, 2);
+    assert.equal(x.evaluation.allowed[1].offer_facts.performance_tier, 'preferred');
+  });

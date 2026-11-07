@@ -21,6 +21,12 @@ const P = 'src/policy.js',
   L = 'src/release.js';
 const cases = [
   [
+    'preferred boundary made exclusive',
+    P,
+    'const enough = (key, value) => Number.isFinite(offer[key]) && offer[key] >= value;',
+    'const enough = (key, value) => Number.isFinite(offer[key]) && offer[key] > value;',
+  ],
+  [
     'preferred metadata unchecked',
     P,
     "refuse('CONFIG_VAR:PREFERRED_HOST_QUALITY', 503);",
