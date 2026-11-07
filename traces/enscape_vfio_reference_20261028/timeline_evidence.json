@@ -1,0 +1,39 @@
+{
+  "classification": "MEASURED retained QEMU snapshots; no new clock alignment",
+  "runs": [
+    {
+      "run": "7417",
+      "qemu_log_sha256": "7c182894fc30bdf870a81094d6a8ba1f3b9badf26829878a9ca7007aa90c4735",
+      "observed_deduplicated_request_snapshots": 16167,
+      "snapshots_without_recorded_release": 10925,
+      "true_population_unreleased_count": null,
+      "count_limit": "bounded snapshots; missing release can be stale/censored",
+      "selected_large_diff_ticket": "287150",
+      "selected_request_to_release_ns": 2014969085,
+      "selected_request_to_resume_ns": 2015015415
+    },
+    {
+      "run": "7418",
+      "qemu_log_sha256": "cd58a1fb839cb03f6a380d75b45ce8a8d7873af3fa14153dc29e3c1de1b6a703",
+      "observed_deduplicated_request_snapshots": 10175,
+      "snapshots_without_recorded_release": 6904,
+      "true_population_unreleased_count": null,
+      "count_limit": "bounded snapshots; missing release can be stale/censored",
+      "selected_large_diff_ticket": "283058",
+      "selected_request_to_release_ns": 2664956662,
+      "selected_request_to_resume_ns": 2665006792
+    }
+  ],
+  "h1c_source_sha256": "7baf3a92457c956684fdb5f533e520c43477a8ff392e350ee44a32321fd86b76",
+  "h1c_scope": "requires applied and released timestamps; omits never-released requests",
+  "owner_relayed_timing": {
+    "classification": "REPORTED coordinator/Claude 2026-10-28; not independently aligned here",
+    "run7418_request_before_tdr_seconds": 2.03,
+    "run7418_release_after_tdr_seconds": 0.64,
+    "run7418_all_node_gap_start_distance_ms": 6,
+    "run7417_preceding_long_split": "not observed, not proof of absence",
+    "run7417_gap_seconds": 3.49,
+    "run7417_gap_start": "at TDR; recovery causality limit"
+  },
+  "independent_clock_precision": "old command-pair bounds around3s, not6ms"
+}

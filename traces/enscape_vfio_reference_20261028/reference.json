@@ -1,0 +1,87 @@
+{
+  "schema": 1,
+  "classification": "MEASURED archived text, re-extracted 2026-10-28",
+  "run": "VF1 native SPECviewperf reference, one boot/two iterations",
+  "source_branch": "codex/vfio-ref-20261022",
+  "original_evidence_commit": "26766c5002e96defb2603392db41728bc0888259",
+  "labelled_archive_revision": "b27a1dcb15aa684c6ea062d4593d92733e10d398",
+  "archive_date": "2026-10-22",
+  "spec_release": "15.x; exact patch identity not sealed",
+  "configuration": {
+    "guest": "Windows 11 Pro 10.0.26200",
+    "installed_driver": "580.88",
+    "driver_version": "32.0.15.8088",
+    "gpu": "physical GeForce RTX 4070",
+    "transport": "QEMU/KVM VFIO",
+    "qemu_source": "89fc8a22291dd7bda69c3077ba829b1e934b11db",
+    "ram_mib": 12288,
+    "vcpus": 8,
+    "selection": "nine selected workloads",
+    "resolution": "FullHD",
+    "native_desktop": "3840x2160 nominal 60 Hz"
+  },
+  "image": {
+    "archived_parent_mtime_utc": "2026-10-21T23:22:47.682478+00:00",
+    "parent_read_only_verified": true,
+    "overlay_deleted": true,
+    "byte_sha256": null,
+    "same_bytes_as_ens12": null,
+    "same_bytes_status": "NOT ESTABLISHED; parent labels/mtime differ"
+  },
+  "registry": {
+    "TdrDelay": "UNKNOWN; no archived readback found",
+    "TdrDdiDelay": "UNKNOWN; no archived readback found"
+  },
+  "iterations": [
+    {
+      "run_id": "result_2026-10-21-23-51-37",
+      "workload_statuses": {
+        "blender-01": "Completed",
+        "catia-07": "Completed",
+        "creo-04": "Completed",
+        "energy-04": "Completed",
+        "enscape-01": "Completed",
+        "maya-07": "Completed",
+        "medical-04": "Completed",
+        "solidworks-08": "Completed",
+        "unreal_engine-01": "Completed"
+      },
+      "completed_subtests": 75,
+      "target_subtest": "06_SanMiguelFullUltraHQ",
+      "target_status": "Completed",
+      "recorded_command": "\"C:\\Program Files\\SPECviewperf 15\\common\\tools\\run_vset.bat\" enscape 6",
+      "stdout_sha256": "00bd5b7c58d5507ed3eea9fab60be2856dc7b1ba42c1adba9da8087c3147b330"
+    },
+    {
+      "run_id": "result_2026-10-22-01-15-28",
+      "workload_statuses": {
+        "blender-01": "Completed",
+        "catia-07": "Completed",
+        "creo-04": "Completed",
+        "energy-04": "Completed",
+        "enscape-01": "Completed",
+        "maya-07": "Completed",
+        "medical-04": "Completed",
+        "solidworks-08": "Completed",
+        "unreal_engine-01": "Completed"
+      },
+      "completed_subtests": 75,
+      "target_subtest": "06_SanMiguelFullUltraHQ",
+      "target_status": "Completed",
+      "recorded_command": "\"C:\\Program Files\\SPECviewperf 15\\common\\tools\\run_vset.bat\" enscape 6",
+      "stdout_sha256": "32b2cc270882a0f9d345b6133309bb5c2c75f5dca5a4173409cd8dbfab41b296"
+    }
+  ],
+  "completed_workloads": 18,
+  "completed_subtests": 150,
+  "cli_exit_code": null,
+  "independent_boot_repeats": 1,
+  "limits": [
+    "CLI exitCode null; later command-channel loss and watchdog QMP quit",
+    "nine selected workloads, not every official release workload",
+    "no verified default-TDR native control",
+    "no content hash linking VF1 parent to ENS12 parent",
+    "native GPU capacity/display differ from kayfabe configuration",
+    "Completed status is not a pixel/byte correctness oracle"
+  ]
+}
