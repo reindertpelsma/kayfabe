@@ -10,6 +10,15 @@ export const proposedMatrix = JSON.parse(
 export function executableMatrix() {
   const copy = structuredClone(proposedMatrix);
   copy.status = 'executable';
+  // Synthetic pins permit mock execution; these never replace proposal data on disk.
+  for (const pin of copy.driver_installers)
+    if (pin.status === 'UNPINNED') {
+      pin.status = 'PINNED';
+      pin.sha256 = 'a'.repeat(64);
+      pin.size = 42;
+      pin.source = 'SYNTHETIC test installer, never fetched or used for hardware';
+    }
+
   for (const row of copy.dies) {
     row.status = 'executable';
     row.blockers = [];

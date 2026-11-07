@@ -17,6 +17,7 @@ import {
   matrixReceiptDefinitions,
   checkedMatrixReceipts,
   sameMatrixRow,
+  driverPinsFor,
 } from './release-matrix.js';
 import { DEFAULTS } from './defaults.js';
 import { gpuClass, resourceCaps, performanceRank, spendingHeadroom } from './policy.js';
@@ -59,6 +60,7 @@ export function dieLegs(offers, cfg, matrixRow, { maximumCost = Infinity } = {})
       ? {
           release_matrix: structuredClone(matrixRow),
           drivers: structuredClone(matrixRow.drivers),
+          driver_pins: structuredClone(driverPinsFor(matrixRow, releaseMatrix)),
           subruns: structuredClone(matrixRow.subruns),
           cross_subrun: structuredClone(matrixRow.cross_subrun),
           profile: matrixRow.profile,
@@ -329,8 +331,16 @@ export function classifyLeg(
     return finish(all('RETRY'), 'NOT_ENDED');
   const result = record.result,
     rows = Array.isArray(result?.suites) ? result.suites : [];
-  const passing = (name) => rows.some((r) => r.name === name && r.pass > 0 && r.fail === 0);
   const green = result?.host_reference === 'GREEN';
+  if (rows.some((r) => r.fail > 0 && /^(?:[a-z0-9]+_)*driver_media_drift$/.test(r.name))) {
+    const realFailure = rows.some(
+      (r) => r.fail > 0 && !/^(?:[a-z0-9]+_)*driver_media_drift$/.test(r.name) && !retryRow(r.name),
+    );
+    if (realFailure)
+      return finish(all(green ? 'FAIL' : 'UNATTRIBUTED'), 'TEST_FAILURE_WITH_MEDIA_DRIFT');
+    return finish(all('RETRY'), 'MEDIA_DRIFT');
+  }
+  const passing = (name) => rows.some((r) => r.name === name && r.pass > 0 && r.fail === 0);
   const rowVerdict = (name) => {
     const failures = rows.filter(
       (r) => r.fail > 0 && (r.name === name || r.name.startsWith(name + '_')),

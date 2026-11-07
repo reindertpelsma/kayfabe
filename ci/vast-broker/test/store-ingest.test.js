@@ -496,6 +496,22 @@ const f7Tree = { key: 'f'.repeat(64), kind: 'tree' };
 const f7Row = (extra, cfg = configuration(baseEnv)) =>
   rowFromRecord(f7Record(extra), 0, f7Tree, clock + 700000, cfg);
 
+for (const [die, gpu_name, compute_cap] of [
+  ['TU116', 'NVIDIA GeForce GTX 1660', 750],
+  ['GB205', 'NVIDIA GeForce RTX 5070', 1200],
+])
+  test('legacy ingest derives the die family for ' + die, () => {
+    const row = f7Row({
+      family: undefined,
+      die,
+      profile: 'sweep',
+      tier: 'adhoc',
+      hardware: { gpu_name, compute_cap, driver_version: '580.159.04' },
+    });
+    assert.equal(row.verdict, 'PASS');
+    assert.equal(row.die, die);
+  });
+
 matrixTest('F7: a release leg is stored as tier largest, profile release, platform both', () => {
   // Positive release fixture includes approved synthetic policy and complete
   // receipts. Ordinary passing reports are now tested as UNATTRIBUTED separately.

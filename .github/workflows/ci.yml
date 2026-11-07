@@ -70,6 +70,10 @@ jobs:
           node ci/vast-broker/release-matrix-mutants.mjs
           # RV1 admission/receipt grading and both SPEC lanes: two named killers each.
           node ci/vast-broker/release-safety-mutants.mjs
+          # Official driver pins and media drift: two named killers per mutant.
+          node ci/vast-broker/driver-pins-mutants.mjs
+          # Seeded markets and worst-case renting use only the mocked Vast transport.
+          node ci/vast-broker/simulation-mutants.mjs
           python3 scripts/ci/profile_resources.py
           node ci/vast-broker/profile-resources-mutants.mjs
           # Preferred host quality, affordable fallback and offer-facts snapshots.
@@ -314,6 +318,7 @@ jobs:
           python3 scripts/ci/debt.py frozen
           python3 scripts/ci/workflow_lint.py
           python3 -m unittest discover -s scripts/ci -p 'test_*.py'
+          python3 scripts/ci/image_size_mutants.py
           python3 -m unittest discover -s scripts/evidence -p 'test_*.py'
           bash scripts/bench/qemu_identity_selftest.sh
           bash scripts/bench/box/birth_census.sh --selftest

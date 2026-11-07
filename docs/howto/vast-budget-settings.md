@@ -69,3 +69,35 @@ The report's `download_measurements` records bounded curl timing/byte claims fro
 benchmark, provisioning and Windows media transfers beside advertised inbound speed.
 Coverage is partial, labeled `instrumented_curl_transfers_only`; the data supports manual calibration. The time premium
 is a modelled opportunity cost, not an extra provider billing rate.
+
+## Release driver media
+
+Update driver selections and their `driver_installers` catalog in
+`ci/vast-broker/release-matrix.json` together. Record the official HTTPS installer
+URL, exact SHA-256, byte count, check date and source; use NVIDIA's official
+checksum file or hash the official byte stream. Do not upload NVIDIA installers
+to repository or object storage. If a pin is unavailable, retain `UNPINNED` with
+null hash and size; an executable matrix cannot contain it.
+
+Validate with `node ci/vast-broker/validate-release-matrix.mjs`. A runtime 404 or
+changed installer is reported as `MEDIA_DRIFT`, never PASS. Refresh the official
+pin only after investigating the drift; no automatic alternate URL or version is
+selected. The proposed matrix and payload executor remain disabled.
+
+
+## Reproduce the renting simulations
+
+Run the fixed 200-seed market sweep and named outage cases without provider access:
+
+```sh
+nice -n 19 node --test ci/vast-broker/test/simulation-*.test.js
+```
+
+To expand the same reproducible generator locally:
+
+```sh
+KF_SIM_SEEDS=1000 KF_SIM_START=1337 nice -n 19 node --test ci/vast-broker/test/simulation-*.test.js
+```
+
+The large market loop checks all four profile plans and makes at most one mocked rental
+per seed; named fleet scenarios exercise the complete Worker orchestration.

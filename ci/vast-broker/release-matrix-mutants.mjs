@@ -149,6 +149,7 @@ function run(python, testName = 'release-matrix') {
       : ['--test', '--test-reporter=tap', 'ci/vast-broker/test/' + testName + '.test.js'],
     {
       cwd: scratch,
+      env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' },
       encoding: 'utf8',
       timeout: 300000,
     },

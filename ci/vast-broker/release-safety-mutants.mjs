@@ -39,7 +39,13 @@ const cases = [
     'node',
   ],
 
-  ['root executable status ignored', V, "value.status !== 'executable' ||", 'false ||', 'node'],
+  [
+    'root executable status ignored',
+    V,
+    "if (\n    value.status !== 'executable' ||",
+    'if (\n    false ||',
+    'node',
+  ],
   ['die executable status ignored', V, "row.status !== 'executable' ||", 'false ||', 'node'],
   ['recorded blockers ignored', V, 'row.blockers.length !== 0 ||', 'false ||', 'node'],
   [
@@ -230,6 +236,7 @@ print(json.dumps({'killers':[t.id() for t,_ in r.failures+r.errors]}))`,
     : ['--test', '--test-reporter=tap', 'ci/vast-broker/test/release-safety.test.js'];
   const r = spawnSync(python ? 'python3' : process.execPath, args, {
     cwd: scratch,
+    env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' },
     encoding: 'utf8',
     timeout: 300000,
   });
@@ -279,7 +286,7 @@ try {
         );
     } else if (mode === 'proposal')
       changed = source
-        .replace("value.status !== 'executable' ||", 'false ||')
+        .replace("if (\n    value.status !== 'executable' ||", 'if (\n    false ||')
         .replace("row.status !== 'executable' ||", 'false ||')
         .replace('row.blockers.length !== 0 ||', 'false ||')
         .replace("        row.windows_guest_abi === 'UNKNOWN' ||", 'false ||')

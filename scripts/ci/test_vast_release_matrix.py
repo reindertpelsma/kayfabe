@@ -22,7 +22,7 @@ class ReleaseEnvironment(unittest.TestCase):
         self.payload = load('vast_payload')
         matrix = json.loads((ROOT / 'ci/vast-broker/release-matrix.json').read_text())
         self.row = matrix['dies'][1]
-        self.env = dict(KF_HOST_DRIVER=self.row['drivers']['host_driver'],
+        self.env = dict(KF_RELEASE_DRIVER_PINS=encoded(matrix['driver_installers']), KF_HOST_DRIVER=self.row['drivers']['host_driver'],
             KF_LINUX_GUEST_DRIVER=self.row['drivers']['linux_guest_driver'],
             KF_WINDOWS_GUEST_DRIVER=self.row['drivers']['windows_guest_driver'],
             KF_WINGATE_GUEST_DRIVER=self.row['windows_guest_abi'],

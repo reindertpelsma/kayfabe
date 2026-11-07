@@ -1,0 +1,31 @@
+KILLED missing-csv-schema: 2 | test_duplicate_header_same_width, test_renamed_column_same_width
+KILLED duplicate-id-allowed: 2 | test_duplicate_different_name, test_duplicate_id
+KILLED nonfinite-negative-numbers: 3 | test_infinity_installed, test_nan_installed, test_negative_installed
+KILLED partial-endpoints-allowed: 2 | test_partial_source_pair, test_partial_triplet_missing_low
+KILLED unordered-endpoints-allowed: 3 | test_reversed_range, test_reversed_source_pair, test_reversed_typical_high
+KILLED unknown-source-has-numbers: 2 | test_unknown_confidence_cannot_have_source_size, test_unknown_source_cannot_have_size
+KILLED windows-base-missing: 11 | test_base_cuda_not_counted_twice, test_cli_complete_numeric_output, test_disk_keeps_archive_and_reserve, test_disk_rounds_up, test_free_only_does_not_charge_paid_app, test_minimal_excludes_large_free_app, test_proxy_preserves_explicit_installed_values, test_proxy_required_endpoints_and_midpoint, test_shared_weights_count_on_windows, test_unknown_prevents_total, test_windows_base_once
+KILLED base-compression-extrapolated: 9 | test_cli_complete_numeric_output, test_cost_high_uses_compressed_transfer, test_cost_low_uses_compressed_transfer, test_eight_stream_rate_is_aggregate, test_game_compression, test_measured_base_compression, test_model_compression, test_proxy_typical_uses_midpoint, test_single_stream_decimal_units
+KILLED windows-base-added-on-linux: 2 | test_linux_does_not_add_windows_base, test_shared_weights_count_on_linux
+KILLED windows-compression-on-linux: 2 | test_linux_compression_no_base, test_linux_transfer_and_cost_hand_calculation
+KILLED platform-filter-removed: 3 | test_empty_selected_set_refused, test_linux_excludes_windows, test_platform_excludes_other_os
+KILLED free-filter-removed: 2 | test_free_only_does_not_charge_paid_app, test_free_only_excludes_paid
+KILLED minimal-filter-removed: 3 | test_minimal_excludes_large_free_app, test_minimal_membership, test_selected_empty_minimal_refused
+KILLED cuda-double-counted: 2 | test_base_cuda_not_counted_twice, test_unknown_base_component_not_a_gap
+KILLED required-space-silently-installed: 2 | test_required_space_does_not_produce_disk_request, test_required_space_not_installed
+KILLED download-silently-expanded: 2 | test_download_does_not_produce_transfer_forecast, test_proxy_never_unpacks_downloads
+KILLED proxy-midpoint-uses-low: 2 | test_proxy_required_endpoints_and_midpoint, test_proxy_typical_uses_midpoint
+KILLED assets-use-app-ratio: 3 | test_game_compression, test_linux_transfer_and_cost_hand_calculation, test_model_compression
+KILLED unknown-total-promoted: 6 | test_download_does_not_produce_transfer_forecast, test_download_size_not_installed, test_required_space_does_not_produce_disk_request, test_required_space_not_installed, test_unknown_prevents_disk_and_cost, test_unknown_prevents_total
+KILLED single-rate-factor-ten: 2 | test_linux_transfer_and_cost_hand_calculation, test_single_stream_decimal_units
+KILLED eight-rate-multiplied-again: 2 | test_eight_stream_rate_is_aggregate, test_linux_transfer_and_cost_hand_calculation
+KILLED cheap-inbound-factor-ten: 2 | test_cost_low_uses_compressed_transfer, test_linux_transfer_and_cost_hand_calculation
+KILLED expensive-inbound-factor-ten: 2 | test_cost_high_uses_compressed_transfer, test_linux_transfer_and_cost_hand_calculation
+KILLED disk-archive-omitted: 3 | test_cli_complete_numeric_output, test_disk_keeps_archive_and_reserve, test_disk_rounds_up
+KILLED disk-workspace-omitted: 2 | test_cli_complete_numeric_output, test_disk_keeps_archive_and_reserve
+KILLED disk-headroom-omitted: 3 | test_cli_complete_numeric_output, test_disk_keeps_archive_and_reserve, test_workspace_headroom_overflow_refused
+KILLED disk-rounded-down: 3 | test_cli_complete_numeric_output, test_disk_keeps_archive_and_reserve, test_disk_rounds_up
+KILLED compression-validation-removed: 2 | test_invalid_options, test_zero_asset_ratio_refused
+KILLED workspace-validation-removed: 2 | test_invalid_options, test_negative_workspace_refused
+KILLED empty-selection-allowed: 2 | test_empty_selected_set_refused, test_selected_empty_minimal_refused
+30/30 mutants killed by >=2 named failing tests
