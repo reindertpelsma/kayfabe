@@ -1,0 +1,29 @@
+JOB_START gate_fail 2026-11-07T03:43:05+00:00
+[xid-watch] tag=cizz_appsfail  host=ubuntu  utc=2026-11-07T03:43:05Z
+[xid-watch] command: bash scripts/bench/box/apps_gate.sh g4 /root/prov full
+[xid-watch] host_dmesg_lines=743  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 4090, 580.159.04
+[xid-watch] xid_before=8
+[xid-watch] --- command output begins ---
+APPS_STAGE_LIST n=3 budget_s=3000 per_boot=100
+APPS_STAGE_START 2026-11-07T03:43:06+00:00 tag=g4
+APP_TRY app=vectorAdd verdict=PASS rc=0 secs=3 quiet=0 note=- boot=ap_g4_b1 guest_xid=0 kf3_lines=1222 kf3_refusals=29
+APP_TRY app=UnifiedMemoryPerf verdict=FAIL rc=1 secs=2 quiet=1 note=Running ...CUDA error at matrixMultiplyPerf.cu:435 code=719(cudaErrorLaunchFailure) "cudaStreamSynchronize(streamToRunOn)"  boot=ap_g4_b1 guest_xid=0 kf3_lines=1314 kf3_refusals=23
+APP_TRY app=deviceQuery verdict=PASS rc=0 secs=2 quiet=1 note=- boot=ap_g4_b1 guest_xid=0 kf3_lines=1194 kf3_refusals=20
+APPS_STAGE_MATRIX_END rc=0 secs=156
+APP_ROW name=vectorAdd os=linux result=PASS secs=3 guest_xid=0 note=-
+APP_ROW name=UnifiedMemoryPerf os=linux result=FAIL secs=4 guest_xid=0 note=FAIL Running ...CUDA error at matrixMultiplyPerf.cu:435 code=719(cudaErrorLaunchFailure) "cudaStreamSynchronize(streamToRunOn
+UnifiedMemoryPerf --- FAILED
+APP_ROW name=deviceQuery os=linux result=PASS secs=2 guest_xid=0 note=-
+APPS_STAGE_COUNTS pass=2 fail=1 not_run=0 of=3 secs=156
+APPS_STAGE_FAIL
+APPS_STAGE_EXIT rc=1
+[xid-watch] --- command output ends (rc=1) ---
+[xid-watch] xid_after=10
+[xid-watch] ★★★ NEW HOST Xid ACROSS THE COMMAND — the run is VOID whatever it printed:
+    [ 7480.401410] NVRM: Xid (PCI:0000:00:08): 31, pid=125108, name=qemu-system-x86, channel 0x00000022, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC2 GPCCLIENT_T1_0 faulted @ 0x7959_ca000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+    [ 7557.539863] NVRM: Xid (PCI:0000:00:08): 31, pid=125602, name=qemu-system-x86, channel 0x00000022, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC2 GPCCLIENT_T1_0 faulted @ 0x7d8e_3c000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+[xid-watch]   ⊘ An "Xid 31 … FAULT_PDE" means the host MMU walked for an address that resolved
+[xid-watch]   to nothing — i.e. OUR placement, not the guest's methods. A rung that reports
+[xid-watch]   'the engine never fetched' beside this line has ONE cause, not two candidates.
+JOB_EXIT gate_fail rc=6 2026-11-07T03:45:44+00:00

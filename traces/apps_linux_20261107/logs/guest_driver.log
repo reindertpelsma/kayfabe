@@ -1,0 +1,12 @@
+JOB_START guest 2026-11-07T02:39:00+00:00
+apps: 70
+[apps_matrix 2026-11-07T02:39:00+00:00] START side=guest run=r1 rev=144557e4 apps=70
+[apps_matrix 2026-11-07T02:39:00+00:00] kf3 binary: /workspace/bench/kf3-bins/144557e4/qemu-system-x86_64
+[apps_matrix 2026-11-07T02:58:20+00:00] boot ap_r1_b1 rc=0 apps=[nvidia_smi deviceQuery vectorAdd vectorAddDrv matrixMul matrixMulDrv bandwidthTest simpleStreams asyncAPI simpleAtomicIntrinsics simpleCallback simpleOccupancy simpleZeroCopy simpleCooperativeGroups concurrentKernels simpleIPC UnifiedMemoryStreams UnifiedMemoryPerf conjugateGradientUM cudaTensorCoreGemm bf16TensorCoreGemm globalToShm
+[apps_matrix 2026-11-07T02:59:42+00:00] boot ap_r1_i_UnifiedMemoryPerf rc=0 apps=[UnifiedMemoryPerf] :: /workspace/bench/run_ap_r1_i_UnifiedMemoryPerf_probe.log:APPS_HOOK tag=ap_r1_i_UnifiedMemoryPerf apps=[UnifiedMemoryPerf] guest=NVIDIA GeForce RTX 4090, 580.159.04, Disabled /workspace/bench/run_ap_r1
+[apps_matrix 2026-11-07T03:01:08+00:00] boot ap_r1_i_UnifiedMemoryStreams rc=0 apps=[UnifiedMemoryStreams] :: /workspace/bench/run_ap_r1_i_UnifiedMemoryStreams_probe.log:APPRES side=guest app=UnifiedMemoryStreams verdict=FAIL rc=134 secs=8 quiet=0 note=CUDA error at UnifiedMemoryStreams.cu:221 code=13(CUBLAS_
+[apps_matrix 2026-11-07T03:02:32+00:00] boot ap_r1_i_attach_verify rc=0 apps=[attach_verify] :: /workspace/bench/run_ap_r1_i_attach_verify_probe.log:APPS_HOOK tag=ap_r1_i_attach_verify apps=[attach_verify] guest=NVIDIA GeForce RTX 4090, 580.159.04, Disabled /workspace/bench/run_ap_r1_i_attach_ve
+[apps_matrix 2026-11-07T03:03:58+00:00] boot ap_r1_i_conjugateGradientUM rc=0 apps=[conjugateGradientUM] :: /workspace/bench/run_ap_r1_i_conjugateGradientUM_probe.log:APPS_HOOK tag=ap_r1_i_conjugateGradientUM apps=[conjugateGradientUM] guest=NVIDIA GeForce RTX 4090, 580.159.04, Disabled /workspace/bench/run
+[apps_matrix 2026-11-07T03:03:58+00:00] GUEST_DONE batched: 66 pass / 70;  isolated re-runs: 0
+0 pass / 4
+JOB_EXIT guest rc=0 2026-11-07T03:03:58+00:00
