@@ -1,0 +1,82 @@
+WINAPPS_APP app=cup2_ladder class=pass verdict=PASS batched=PASS alone=- secs=5 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=cup3_ladder class=pass verdict=PASS batched=PASS alone=- secs=5 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=deviceQuery_demo class=pass verdict=PASS batched=PASS alone=- secs=5 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=driver_status class=pass verdict=PASS batched=PASS alone=- secs=5 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=dxgi_adapters class=pass verdict=PASS batched=PASS alone=- secs=5 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=nvidia_smi class=pass verdict=PASS batched=PASS alone=- secs=5 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=opencl_icd class=pass verdict=PASS batched=PASS alone=- secs=5 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=vectorAdd_demo class=pass verdict=PASS batched=PASS alone=- secs=5 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=vulkaninfo class=pass verdict=PASS batched=PASS alone=- secs=7 tdr=0 wer=0 gsp=0 note=warn:WARNING: [Loader Message] Code 0 : windows_read_data_files_in_registry: Registry lookup failed 
+WINAPPS_APP app=cuda_callback class=pass verdict=PASS batched=PASS alone=- secs=5 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=cuda_occupancy class=pass verdict=PASS batched=PASS alone=- secs=5 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=glgears_wgl class=pass verdict=PASS batched=PASS alone=- secs=15 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=nbody_demo_gl class=guest_fail verdict=FAIL batched=FAIL alone=- secs=30 tdr=0 wer=0 gsp=0 note=no-gpu-proof
+WINAPPS_APP app=atomics_t class=pass verdict=PASS batched=PASS alone=- secs=16 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=bandwidthTest_demo class=pass verdict=PASS batched=PASS alone=- secs=5 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=blackscholes_t class=pass verdict=PASS batched=PASS alone=- secs=9 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=cg_t class=pass verdict=PASS batched=PASS alone=- secs=18 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=dxprobe_d3d11 class=pass verdict=PASS batched=PASS alone=- secs=5 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=dxprobe_d3d12 class=pass verdict=PASS batched=PASS alone=- secs=7 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=fft_t class=pass verdict=PASS batched=PASS alone=- secs=7 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=fwt_t class=pass verdict=PASS batched=PASS alone=- secs=6 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=graphs_t class=pass verdict=PASS batched=PASS alone=- secs=6 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=hist_t class=pass verdict=PASS batched=PASS alone=- secs=6 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=mandelbrot_t class=pass verdict=PASS batched=PASS alone=- secs=7 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=matmul_t class=pass verdict=PASS batched=PASS alone=- secs=7 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=memcpy2d_t class=pass verdict=PASS batched=PASS alone=- secs=6 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=nbody_demo_bench class=pass verdict=PASS batched=PASS alone=- secs=4 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=nbody_t class=pass verdict=PASS batched=PASS alone=- secs=7 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=oceanFFT_demo class=pass verdict=PASS batched=PASS alone=- secs=30 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=randomFog_demo class=pass verdict=PASS batched=PASS alone=- secs=32 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=reduce_t class=pass verdict=PASS batched=PASS alone=- secs=9 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=rng_t class=pass verdict=PASS batched=PASS alone=- secs=7 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=scan_t class=pass verdict=PASS batched=PASS alone=- secs=17 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=sort_t class=pass verdict=PASS batched=PASS alone=- secs=9 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=stream_created2nd_t class=pass verdict=PASS batched=PASS alone=- secs=6 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=stream_created_t class=pass verdict=PASS batched=PASS alone=- secs=6 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=stream_default_t class=pass verdict=PASS batched=PASS alone=- secs=7 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=stream_nonblocking_t class=pass verdict=PASS batched=PASS alone=- secs=6 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=stream_perthread_t class=pass verdict=PASS batched=PASS alone=- secs=6 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=stream_two_t class=pass verdict=PASS batched=PASS alone=- secs=6 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=streams_t class=pass verdict=PASS batched=PASS alone=- secs=9 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=tc16_t class=pass verdict=PASS batched=PASS alone=- secs=9 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=tcbf16_t class=pass verdict=PASS batched=PASS alone=- secs=9 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=transpose_t class=pass verdict=PASS batched=PASS alone=- secs=6 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=triad_t class=pass verdict=PASS batched=PASS alone=- secs=9 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=zerocopy_t class=pass verdict=PASS batched=PASS alone=- secs=7 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=overlay_yuv_hide class=guest_fail verdict=FAIL batched=FAIL alone=- secs=4 tdr=0 wer=0 gsp=0 note=rc:5,success-string-missing | KFOVL JSON {"program":"kf_overlayprobe","version":1,"scenario":"hide",
+WINAPPS_APP app=overlay_yuv_occlude class=guest_fail verdict=FAIL batched=FAIL alone=- secs=4 tdr=0 wer=0 gsp=0 note=rc:5,success-string-missing | KFOVL JSON {"program":"kf_overlayprobe","version":1,"scenario":"occlud
+WINAPPS_APP app=overlay_yuv_resize class=guest_fail verdict=FAIL batched=FAIL alone=- secs=6 tdr=0 wer=0 gsp=0 note=rc:5,success-string-missing | KFOVL JSON {"program":"kf_overlayprobe","version":1,"scenario":"resize
+WINAPPS_APP app=overlay_yuv_move class=guest_fail verdict=FAIL batched=FAIL alone=- secs=4 tdr=0 wer=0 gsp=0 note=rc:5,success-string-missing | KFOVL JSON {"program":"kf_overlayprobe","version":1,"scenario":"move",
+WINAPPS_APP app=overlay_yuv_recreate class=guest_fail verdict=FAIL batched=FAIL alone=- secs=5 tdr=0 wer=0 gsp=0 note=rc:5,success-string-missing | KFOVL JSON {"program":"kf_overlayprobe","version":1,"scenario":"recrea
+WINAPPS_APP app=edge_webgl class=pass verdict=PASS batched=PASS alone=- secs=22 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=edge_webgl_headless class=pass verdict=PASS batched=PASS alone=- secs=15 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=edge_webgpu class=pass verdict=PASS batched=PASS alone=- secs=21 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=overlay_yuv_fullscreen class=guest_fail verdict=FAIL batched=FAIL alone=- secs=4 tdr=0 wer=0 gsp=0 note=rc:5,success-string-missing | KFOVL JSON {"program":"kf_overlayprobe","version":1,"scenario":"fullsc
+WINAPPS_APP app=overlay_yuv_probe class=guest_fail verdict=FAIL batched=FAIL alone=- secs=4 tdr=0 wer=0 gsp=0 note=rc:5,success-string-missing | KFOVL JSON {"program":"kf_overlayprobe","version":1,"scenario":"steady
+WINAPPS_APP app=cup8_ladder class=pass verdict=PASS batched=PASS alone=- secs=6 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=cupy_asynccopy class=pass verdict=PASS batched=PASS alone=- secs=17 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=cupy_cg class=pass verdict=PASS batched=PASS alone=- secs=11 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=cupy_sha256 class=pass verdict=PASS batched=PASS alone=- secs=7 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=d3d12_signal_probe class=pass verdict=PASS batched=PASS alone=- secs=9 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=dxdiag_report class=pass verdict=PASS batched=PASS alone=- secs=44 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=managed_t class=guest_fail verdict=TIMEOUT batched=TIMEOUT alone=- secs=181 tdr=0 wer=0 gsp=0 note=timeout
+WINAPPS_APP app=torch_burn class=pass verdict=PASS batched=PASS alone=- secs=78 tdr=0 wer=0 gsp=0 note=warn:[burn] t:10s iters:3116 errors:0
+WINAPPS_APP app=ort_directml class=pass verdict=PASS batched=PASS alone=- secs=11 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=cupy_check class=pass verdict=PASS batched=PASS alone=- secs=9 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=hashcat class=pass verdict=PASS batched=PASS alone=- secs=30 tdr=0 wer=0 gsp=0 note=warn:Watchdog: Temperature abort trigger set to 90c
+WINAPPS_APP app=overlay_yuv_soak class=not_run verdict=- batched=- alone=- secs=- tdr=- wer=- gsp=- note=no row
+WINAPPS_APP app=torch_correct class=not_run verdict=- batched=- alone=- secs=- tdr=- wer=- gsp=- note=no row
+WINAPPS_APP app=cdp_quicksort class=not_run verdict=- batched=- alone=- secs=- tdr=- wer=- gsp=- note=no row
+WINAPPS_APP app=hf_generate class=not_run verdict=- batched=- alone=- secs=- tdr=- wer=- gsp=- note=no row
+WINAPPS_APP app=llama_cuda_gen class=not_run verdict=- batched=- alone=- secs=- tdr=- wer=- gsp=- note=no row
+WINAPPS_APP app=vkpeak class=not_run verdict=- batched=- alone=- secs=- tdr=- wer=- gsp=- note=no row
+WINAPPS_APP app=blender_cycles class=not_run verdict=- batched=- alone=- secs=- tdr=- wer=- gsp=- note=no row
+WINAPPS_APP app=llama_cuda_bench class=not_run verdict=- batched=- alone=- secs=- tdr=- wer=- gsp=- note=no row
+WINAPPS_APP app=llama_vulkan_bench class=not_run verdict=- batched=- alone=- secs=- tdr=- wer=- gsp=- note=no row
+WINAPPS_APP app=torch_ai_bench class=not_run verdict=- batched=- alone=- secs=- tdr=- wer=- gsp=- note=no row
+WINAPPS_APP app=clpeak_cuda class=not_run verdict=- batched=- alone=- secs=- tdr=- wer=- gsp=- note=no row
+WINAPPS_APP app=clpeak_ocl class=not_run verdict=- batched=- alone=- secs=- tdr=- wer=- gsp=- note=no row
+WINAPPS_GRADE kind=FAIL expected=79 pass=58 guest_fail=9 boot_fail=0 harness=0 not_run=12 extra=0
+WINAPPS_GRADE_GUEST_FAIL nbody_demo_gl,overlay_yuv_hide,overlay_yuv_occlude,overlay_yuv_resize,overlay_yuv_move,overlay_yuv_recreate,overlay_yuv_fullscreen,overlay_yuv_probe,managed_t
+WINAPPS_GRADE_NOT_RUN overlay_yuv_soak,torch_correct,cdp_quicksort,hf_generate,llama_cuda_gen,vkpeak,blender_cycles,llama_cuda_bench,llama_vulkan_bench,torch_ai_bench,clpeak_cuda,clpeak_ocl

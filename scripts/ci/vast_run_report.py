@@ -51,11 +51,27 @@ APP_ROW = re.compile(
     r"^APP_ROW name=([A-Za-z0-9_]{1,48}) os=linux result=(PASS|FAIL|NOT_RUN)"
     r"(?: secs=(\S+))?(?: guest_xid=\S+)?(?: note=(.*))?$"
 )
+WINAPP_ROW = re.compile(
+    r"^WINAPPS_APP app=([A-Za-z0-9_]{1,48}) class=(pass|guest_fail|boot_fail|harness|not_run)"
+    r" verdict=(PASS\*?|FAIL|TIMEOUT|BOOT_FAIL|NOTRUN|-) batched=\S+ alone=\S+"
+    r" secs=(\S+) tdr=\S+ wer=\S+ gsp=\S+ note=(.*)$"
+)
+
+
+def windows_app_result(cls, verdict):
+    # Only the exact guest-pass pair can pass. Missing, harness and inconsistent rows cannot.
+    if cls == "pass" and verdict in ("PASS", "PASS*"):
+        return "PASS"
+    if (cls == "guest_fail" and verdict in ("FAIL", "TIMEOUT")) or (cls == "boot_fail" and verdict == "BOOT_FAIL"):
+        return "FAIL"
+    return "NOT_RUN"
+
+
 # The stage markers whose position in the published log delimits a subrun (the Worker finds them).
 LOG_STAGES = {
     "host": ["cuda_host", "merge_bar"],
     "linux": ["merge_bar", "cuda_guest", "apps"],
-    "windows": ["windows_gate", "windows_gate_2"],
+    "windows": ["windows_gate", "windows_apps", "windows_gate_2"],
 }
 DRIVER = re.compile(r"[0-9]{3,4}\.[0-9]{1,5}(?:\.[0-9]{1,5})?")
 KV = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)=(\S+)")
@@ -128,6 +144,7 @@ class Collector:
     def __init__(self):
         self.tests = {}  # (sub key, suite, name) -> row, last one wins
         self.apps = {}  # app name -> (result, secs text, note), last one wins
+        self.windows_apps = {}  # same shape, separate namespace from Linux
         self.bench = {"host": {}, "guest": {}}
         self.stage_rows = {}
         self.stage_end = {}
@@ -166,6 +183,12 @@ class Collector:
             if m:
                 self.apps[m[1]] = (m[2], m[3], (m[4] or "").strip())
                 self.test("linux", "apps_linux", m[1], "SKIP" if m[2] == "NOT_RUN" else m[2], seconds_ms(m[3]))
+        elif head == "WINAPPS_APP":
+            m = WINAPP_ROW.fullmatch(line)
+            if m:
+                res = windows_app_result(m[2], m[3])
+                self.windows_apps[m[1]] = (res, m[4], m[5].strip())
+                self.test("windows", "apps_windows", m[1], "SKIP" if res == "NOT_RUN" else res, seconds_ms(m[4]))
         elif head == "GATE_PROBE_RESULT":
             parts = line.split(" ", 2)
             if len(parts) == 3 and re.fullmatch(r"[a-z][a-z0-9_]{0,23}", parts[1]):
@@ -351,10 +374,13 @@ def build_report(lines, result, run_id=None):
         "suites": rows,
         "subruns": subruns,
         "tests": tests[: LIMITS["tests"]],
-        "apps": [
+        "apps": ([
             {"sub": sub_linux, "name": name, "os": "linux", "result": res, "note": note[:200]}
             for name, (res, _secs, note) in c.apps.items()
-        ][: LIMITS["apps"]],  # empty unless the apps stage ran (it is disabled by default)
+        ] + [
+            {"sub": sub_windows, "name": name, "os": "windows", "result": res, "note": note[:200]}
+            for name, (res, _secs, note) in c.windows_apps.items()
+        ])[: LIMITS["apps"]],  # empty unless an opt-in apps stage ran
         "perf": perf[: LIMITS["perf"]],
         "windows": c.windows,
     }

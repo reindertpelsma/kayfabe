@@ -1,0 +1,6 @@
+=== nbody_t start=2026-11-07T04:50:34.1047828+00:00 host=KFWIN session=0 boot=2026-11-07T04:36:45.5000000Z timeout=120
+KFDEV NVIDIA GeForce RTX 4090
+[eq] device NVIDIA GeForce RTX 4090 torch 2.8.0+cu126
+CHECK nbody_accel ok relerr=5.52e-08
+WINEQ_DONE nbody
+=== end rc=0 secs=7 2026-11-07T04:50:41.1332732+00:00

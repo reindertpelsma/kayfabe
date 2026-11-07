@@ -1,0 +1,7 @@
+=== sort_t start=2026-11-07T05:01:37.0015269+00:00 host=KFWIN session=0 boot=2026-11-07T04:55:48.5000000Z timeout=120
+KFDEV NVIDIA GeForce RTX 4090
+[eq] device NVIDIA GeForce RTX 4090 torch 2.8.0+cu126
+CHECK sort_i32_exact ok
+CHECK sort_argsort_valid ok
+WINEQ_DONE sort
+=== end rc=0 secs=9 2026-11-07T05:01:45.7538589+00:00

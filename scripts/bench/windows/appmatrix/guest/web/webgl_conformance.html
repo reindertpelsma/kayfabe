@@ -1,0 +1,45 @@
+<!doctype html><meta charset="utf-8"><title>kf offline WebGL focused conformance</title>
+<canvas id="c" width="64" height="64"></canvas>
+<script>
+// A focused, local subset; this does not claim Khronos CTS certification.
+function conformanceOK(checks, gpu, frames) {
+  return checks.length === 4 && checks.every(x => x === true) && gpu === true && frames >= 8;
+}
+(async () => {
+  const r = {page: 'webgl_conformance', ok: false, checks: [], frames: 0};
+  try {
+    const gl = document.getElementById('c').getContext('webgl2', {preserveDrawingBuffer: true});
+    if (!gl) throw new Error('WebGL2 unavailable');
+    const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+    r.renderer = dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
+    const gpu = /NVIDIA/i.test(r.renderer) && !/SwiftShader|Basic Render|llvmpipe|Software|Microsoft/i.test(r.renderer);
+    gl.clearColor(.25, .5, .75, 1); gl.clear(gl.COLOR_BUFFER_BIT);
+    const px = new Uint8Array(4); gl.readPixels(32, 32, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+    r.checks.push([64, 128, 191, 255].every((x, i) => Math.abs(x - px[i]) <= 1));
+    const input = new Float32Array([-1, -1, 3, -1, -1, 3]);
+    const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, input, gl.STATIC_DRAW);
+    const read = new Float32Array(6); gl.getBufferSubData(gl.ARRAY_BUFFER, 0, read);
+    r.checks.push(input.every((x, i) => x === read[i]));
+    const shader = (type, src) => {
+      const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+      if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+      return s;
+    };
+    const p = gl.createProgram();
+    gl.attachShader(p, shader(gl.VERTEX_SHADER, '#version 300 es\nin vec2 p; void main(){gl_Position=vec4(p,0,1);}'));
+    gl.attachShader(p, shader(gl.FRAGMENT_SHADER, '#version 300 es\nprecision highp float; out vec4 c; void main(){c=vec4(.2,.4,.6,1);}'));
+    gl.linkProgram(p); if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+    gl.useProgram(p); const loc = gl.getAttribLocation(p, 'p'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+    const t0 = performance.now(), secs = +(new URLSearchParams(location.search).get('s') || 12);
+    do {
+      gl.drawArrays(gl.TRIANGLES, 0, 3); r.frames++;
+      await new Promise(resolve => requestAnimationFrame(resolve));
+    } while (performance.now() - t0 < secs * 1000);
+    gl.finish(); gl.readPixels(32, 32, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+    r.checks.push([51, 102, 153, 255].every((x, i) => Math.abs(x - px[i]) <= 1) && gl.getError() === gl.NO_ERROR);
+    gl.enable(0xdead); r.checks.push(gl.getError() === gl.INVALID_ENUM);
+    r.ok = conformanceOK(r.checks, gpu, r.frames);
+  } catch (e) { r.why = String(e); }
+  await fetch('/result', {method: 'POST', body: JSON.stringify(r)});
+})();
+</script>

@@ -170,6 +170,75 @@ def windows_requested(environ):
     return value != "0", "worker" if value is not None else "default"
 
 
+WINAPPS_PROFILES = ("small", "mid", "full")
+WINAPPS_VERDICT = re.compile(r"^WINAPPS_(PASS|FAIL|RETRY|REFUSED)\b([^\n]*)$", re.M)
+# the classes windows_apps.sh may print on a RETRY; anything else is OPERATOR
+WINAPPS_RETRY_CLASSES = {"PROVIDER", "MEDIA", "OPERATOR", "HOSTREF", "BAR1_EXCEPTION"}
+# Per-profile wall the stage needs after the gate (INFERRED from the apps' own timeouts and the guest restart
+# budget, docs/design/V3_WINDOWS_APPS_GATE.md section 6; replaced by measurements when a box has run the profile).
+WINAPPS_MIN_REMAINING_MS = {"small": 40 * 60000, "mid": 60 * 60000, "full": 200 * 60000}
+
+
+def winapps_requested(environ, windows):
+    """KF_WINAPPS (small, mid, full) asks for the Windows apps stage after the Windows gate. Opt-in: absent means
+    no stage, so a Worker that predates it (or has not been told to send it) changes nothing. It needs the
+    Windows stage; anything else is refused before any stage runs."""
+    value = environ.pop("KF_WINAPPS", None)
+    if value is None:
+        return None
+    if value not in WINAPPS_PROFILES or not windows:
+        raise EvidenceError("preflight")
+    return value
+
+
+def winapps_rows(text, rc, sha, profile):
+    """Grade scripts/bench/box/windows_apps.sh. THE GATE IS THE GUEST PASSING (owner, 2026-11-01): only one
+    WINAPPS_PASS for this revision and this profile with exit 0 is a passing row. RETRY (a host, harness, input or
+    rental fault) and a refused precondition are never a pass and never a verdict on the guest; their row is
+    named windows_apps_retry_<class> so the runner can say "re-run on a fresh box"."""
+    verdicts = WINAPPS_VERDICT.findall(text)
+    exits = re.findall(r"^WINAPPS_EXIT rc=([0-9]+)\b", text, re.M)
+    kinds = {kind for kind, _ in verdicts}
+    if len(verdicts) == 1 and len(exits) == 1:
+        kind, rest = verdicts[0]
+        if (
+            kind == "PASS"
+            and rc == 0
+            and exits[0] == "0"
+            and re.match(r" rev=" + re.escape(sha[:8]) + r"[0-9a-f]* ", rest)
+            and (" profile=" + profile + " ") in rest
+        ):
+            # Like Linux apps: count actual checked apps, not a stage marker. A truncated log,
+            # empty expectation, duplicate app or harness row must not become a successful suite.
+            grade = re.findall(
+                r"^WINAPPS_GRADE kind=PASS expected=([1-9][0-9]{0,3}) pass=([1-9][0-9]{0,3})"
+                r" guest_fail=0 boot_fail=0 harness=0 not_run=0 extra=0$", text, re.M
+            )
+            app_lines = re.findall(r"^WINAPPS_APP .*$", text, re.M)
+            passed = re.findall(
+                r"^WINAPPS_APP app=([A-Za-z0-9_]{1,48}) class=pass verdict=PASS\*? "
+                r"batched=\S+ alone=\S+ secs=\S+ tdr=\S+ wer=\S+ gsp=\S+ note=.*$", text, re.M
+            )
+            count = re.search(r" apps=([1-9][0-9]{0,3})\b", rest)
+            if (len(grade) == 1 and count and grade[0][0] == grade[0][1] == count[1]
+                    and len(app_lines) == len(passed) == len(set(passed)) == int(count[1])):
+                return [row("windows_apps", int(count[1]))]
+            raise EvidenceError("windows_apps_retry_operator")
+        if kind == "FAIL" and rc not in (0, 3):
+            raise EvidenceError("windows_apps")
+    if kinds == {"RETRY"} and len(verdicts) == 1:
+        found = re.search(r" class=([A-Z0-9_]+)\b", verdicts[0][1])
+        cls = found[1] if found and found[1] in WINAPPS_RETRY_CLASSES else "OPERATOR"
+        raise EvidenceError("windows_apps_retry_" + cls.lower())
+    if kinds == {"REFUSED"}:
+        raise EvidenceError("windows_apps_retry_refused")
+    if "FAIL" in kinds:
+        raise EvidenceError("windows_apps")
+    # No verdict, two verdicts, a PASS of another revision or profile, or a PASS with a non-zero exit: the
+    # harness did not end cleanly. Not a pass; a fresh box decides.
+    raise EvidenceError("windows_apps_retry_operator")
+
+
 def tier_requested(environ, windows):
     """The release tier's extras (ci/vast-broker/src/tier.js, 2026-11-05): KF_TIER is informational;
     KF_WINDOWS_RUNS=2 runs the Windows gate a second time on the same box (only with the Windows
@@ -1157,6 +1226,7 @@ def main():
         # Popped before any stage runs: merge_check.sh must not run the gate inside merge_bar.
         windows, windows_source = windows_requested(os.environ)
         tier, windows_runs, extra_stages = tier_requested(os.environ, windows)
+        winapps = winapps_requested(os.environ, windows)
         refresh_claims(result, windows)
         print(
             "KF_PAYLOAD_TIER windows="
@@ -1168,7 +1238,9 @@ def main():
             + " windows_runs="
             + str(windows_runs)
             + " stages="
-            + (":".join(extra_stages) or "none"),
+            + (":".join(extra_stages) or "none")
+            + " winapps="
+            + (winapps or "none"),
             flush=True,
         )
         subprocess.run(["df", "-h", "/"], check=True)
@@ -1350,6 +1422,30 @@ def main():
                 [Path(PROV_DIR) / (tag + "_windows.log")],
             )
             stage.update(min_remaining_ms=WINDOWS_MIN_REMAINING_MS, short_row="windows_retry_time")
+            stages.append(stage)
+        if windows and winapps:
+            # The Windows apps stage (docs/design/V3_WINDOWS_APPS_GATE.md): the Windows app matrix, in a fresh guest
+            # that is a child of the gate's own overlay (same tag), on the same box. It runs only after a green
+            # gate (a first red cancels later work). Opt-in: the Worker sends KF_WINAPPS.
+            output_apps = evidence / "windows_apps.run"
+            stage = make_stage(
+                "windows_apps",
+                [
+                    "env",
+                    "KF_WINAPPS_PROFILE=" + winapps,
+                    "bash",
+                    str(root / "scripts/bench/box/windows_apps.sh"),
+                    tag,
+                    PROV_DIR,
+                ],
+                output_apps,
+                [],
+                lambda rc: winapps_rows(bounded_text(output_apps), rc, sha, winapps),
+                [Path(PROV_DIR) / (tag + "_winapps.log")],
+            )
+            stage.update(
+                min_remaining_ms=WINAPPS_MIN_REMAINING_MS[winapps], short_row="windows_apps_retry_time"
+            )
             stages.append(stage)
         if windows and windows_runs == 2:
             # The release tier's second Windows run when no second machine offers the die.

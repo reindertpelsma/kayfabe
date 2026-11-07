@@ -1,0 +1,8 @@
+
+
+
+KF_COLLECT_DONE C:\kf\evidence\gate_wa1_final
+[2026-11-07T04:03:32Z] EXIT collect rc=0
+[2026-11-07T04:03:32Z] START pull
+[2026-11-07T04:03:34Z] EXIT pull rc=0
+[2026-11-07T04:03:34Z] EVIDENCE /workspace/winvm/kfwin/logs/evidence/gate_wa1_final (23 files)

@@ -146,6 +146,33 @@ streams `zstd -d | tar -x` and never stores the 42 GB archive (about 94 GB unpac
 2 GiB per-run ceiling named under "Download etiquette" stays an example for third-party hosts; the
 owner-hosted cache is excluded from it.
 
+## Windows app bundle (the Windows apps stage)
+
+STATUS: DESIGN-ONLY, 2026-11-07. Nothing below exists in R2 yet: no object is uploaded, the pin file
+(`scripts/bench/windows/appmatrix/bundle.pin`) is empty, and the Worker names are proposed, not deployed. Design:
+[`docs/design/V3_WINDOWS_APPS_GATE.md`](design/V3_WINDOWS_APPS_GATE.md).
+
+A rented box never downloads an app from a vendor: the Windows apps stage gets one app disk, `winapps-open.iso` (volume
+label `KFAPPS`, built by `appdisk.py`), through the Worker's presigned `/bench-data` route, as the SPECviewperf copy does.
+The disk holds only packages whose licence lets us keep a copy (the list is `open_packages` in
+`scripts/bench/windows/appmatrix/gate_profiles.json`, and a test refuses any package whose manifest text says redistribution is
+not granted): the CUDA demo suite and runtime parts, Python and the wheels (torch, cupy, onnxruntime), llama.cpp, the Qwen
+GGUF/HF models, Blender, hashcat, clpeak, vkpeak, the Vulkan runtime and the Visual C++ runtime, plus test programs built from
+this repository's own sources. It is packaged once, by a person, with `package_open_bundle.sh` (it refuses to run in CI or on a
+box and never uploads); the owner uploads it with R2 write credentials and commits the sha256 into `bundle.pin`.
+
+| Bundle object | Name the box asks the Worker for (proposed) | R2 key (proposed) |
+|---|---|---|
+| the app disk, about 6-7 GB | `winapps-open.iso` | `winapps-open/kfapps.iso` |
+| the manifest it carries (sha256 of every file, image identity) | `winapps-open.manifest.json` | `winapps-open/manifest.json` |
+
+Not in the bundle, with the reason (the same classes as `gate_profiles.json`):
+
+| Class | Apps | Packages | Why |
+|---|---|---|---|
+| owner decision | 29 | GravityMark, FurMark, GpuTest, the Vulkan SDK, an ffmpeg GPL build | storage/redistribution decision still pending; the earlier ffmpeg pin returned 404, but J1 verified a new dated pin by download, official checksum and ZIP CRC (see `design/V3_WINDOWS_RELEASE_SOFTWARE_DEFINITIONS.md`); GPU behavior remains unverified |
+| manual | 4 apps + 3 never-automated items | Unigine Heaven and Valley; 3DMark, Geekbench, TensorRT, Superposition, Xonotic, Q2RTX | paid or account-bound software, command-line automation in a paid edition, or online-only (`gate_profiles.json` `manual`, with the evidence template) |
+
 ## Download etiquette
 
 - Pin hashes. Every fetched file is checked against a pinned sha256 (and byte length). A
