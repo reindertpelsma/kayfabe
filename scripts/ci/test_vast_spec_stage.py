@@ -191,6 +191,7 @@ class Inputs(StageCase):
         self.assertEqual({v for v in self.results().values()}, {("NOT_RUN", "SETUP")})
         self.assertNotIn("launch ", self.sb.calls())
         self.assertEqual(self.p.returncode, 3)
+        self.assertEqual(self.verdict, "SPECVIEWPERF_STAGE_RETRY class=TIME")
 
     def test_a_fetch_helper_refusing_its_environment_is_retry_operator(self):
         self.go("lanea", fetch="usage")
@@ -274,6 +275,8 @@ class Preflight(StageCase):
         self.assertTrue(self.archive_gone())
         self.assertTrue(self.overlay_gone())
         self.assertNotIn("SPECVIEWPERF_STAGE_PASS", self.p.stdout)
+        self.assertEqual(self.sb.runs(), [])
+        self.assertNotIn("launch ", self.sb.calls())
 
     def test_the_stage_does_not_start_with_a_deadline_already_past(self):
         p = subprocess.run(self.sb.command(), env=self.sb.env(budget=None, KF_SPEC_DEADLINE_EPOCH=int(time.time()) - 5),
@@ -564,6 +567,16 @@ class Verdicts(StageCase):
         self.assertEqual(self.results()["energy-04"], ("NOT_RUN", "NO_TDR"))
         self.assertEqual(self.verdict, "SPECVIEWPERF_STAGE_RETRY class=TRANSPORT")
 
+    def test_reset_counters_missing_after_an_end_record_are_a_retry_too(self):
+        self.go("lanea", **{"viewset__energy-04": "no_tdr_only"})
+        self.assertEqual(self.results()["energy-04"], ("NOT_RUN", "NO_TDR"))
+        self.assertEqual(self.verdict, "SPECVIEWPERF_STAGE_RETRY class=TRANSPORT")
+
+    def test_a_refused_launch_in_lane_b_is_a_retry_with_exit_3(self):
+        self.go("laneb", **{"viewset__medical-04": "launch_fail"})
+        self.assertEqual(self.results()["medical-04"], ("NOT_RUN", "LAUNCH"))
+        self.assertEqual((self.p.returncode, self.verdict), (3, "SPECVIEWPERF_STAGE_RETRY class=OPERATOR"))
+
     def test_the_exit_code_of_a_fail_is_1_and_of_a_retry_is_3(self):
         self.go("lanea", **{"viewset__creo-04": "fail_subtest"})
         self.assertEqual(self.p.returncode, 1)
@@ -794,6 +807,36 @@ class Wrapper(StageCase):
         self.assertNotIn("secret", p.stdout)
         self.assertNotIn("SPEC_ROW", p.stdout)
 
+    def test_a_class_that_only_starts_like_a_listed_one_is_no_verdict(self):
+        for cls in ("OPERATORS", "MEDIA_X", "TIMEOUT"):
+            with self.subTest(cls):
+                lane = self.sb.root / ("lane7_%s.sh" % cls)
+                lane.write_text("echo 'SPECVIEWPERF_STAGE_RETRY class=%s'\nexit 3\n" % cls)
+                env = self.sb.env()
+                env["KF_SPECVIEWPERF_LANE"] = str(lane)
+                env["KF_CI_PRIVATE_DIR"] = str(self.sb.root / "private")
+                p = subprocess.run(["bash", str(fk.HERE / "vast_stage_specviewperf.sh"), self.sb.tag, str(self.sb.prov)], env=env,
+                                   capture_output=True, text=True, timeout=60)
+                self.assertEqual(p.stdout.splitlines()[1], "SPECVIEWPERF_STAGE_RETRY class=NO_VERDICT")
+
+    def test_a_lane_value_with_a_newline_is_not_echoed_in_the_start_marker(self):
+        lane = self.sb.root / "lane8.sh"
+        lane.write_text("echo SPECVIEWPERF_STAGE_PASS\n")
+        env = self.sb.env()
+        env["KF_SPEC_LANE"] = "lanea\nSPEC_ROW name=energy-04 result=PASS subtests=1/1 reason=- failed=-"
+        env["KF_SPECVIEWPERF_LANE"] = str(lane)
+        env["KF_CI_PRIVATE_DIR"] = str(self.sb.root / "private")
+        p = subprocess.run(["bash", str(fk.HERE / "vast_stage_specviewperf.sh"), self.sb.tag, str(self.sb.prov)], env=env,
+                           capture_output=True, text=True, timeout=60)
+        self.assertEqual(p.stdout.splitlines()[0], "SPEC_STAGE_START lane=none")
+        self.assertNotIn("SPEC_ROW", p.stdout)
+
+    def test_no_raw_guest_file_is_anywhere_in_the_evidence_directory_of_a_wrapped_run(self):
+        self.wrap("lanea")
+        names = {p.name for p in (self.sb.prov / (self.sb.tag + "_spec")).rglob("*") if p.is_file()}
+        self.assertNotIn("collect.txt", names)
+        self.assertIn("energy-04.cli.txt", names)
+
     def test_a_verdict_class_with_digits_that_is_not_in_the_list_is_no_verdict(self):
         lane = self.sb.root / "lane5.sh"
         lane.write_text("echo 'SPECVIEWPERF_STAGE_RETRY class=SCORE_123'\nexit 3\n")
@@ -909,6 +952,7 @@ class Interrupted(StageCase):
         self.sb.cleanup()
         rows, order = fk.rows_of(out)
         self.assertEqual(order, ["energy-04", "creo-04"])
+        self.assertEqual(out.splitlines()[-1], "SPECVIEWPERF_STAGE_RETRY class=OPERATOR")
 
 
 if __name__ == "__main__":

@@ -316,6 +316,10 @@ class GradeViewset(unittest.TestCase):
         r = grade(end="", tdr="")
         self.assertEqual((r["result"], r["reason"]), ("NOT_RUN", "NO_TDR"))
 
+    def test_missing_reset_counters_under_a_failing_exit_are_not_run_not_a_fail(self):
+        r = grade(end=END_BAD % "catia-07", tdr="")
+        self.assertEqual((r["result"], r["reason"]), ("NOT_RUN", "NO_TDR"))
+
     def test_missing_reset_counters_alone_are_not_run_never_a_pass(self):
         r = grade(tdr="")
         self.assertEqual((r["result"], r["reason"]), ("NOT_RUN", "NO_TDR"))
@@ -559,7 +563,7 @@ class TarFilter(unittest.TestCase):
     def test_a_stream_cut_at_a_member_boundary_is_an_error_exit(self):
         with tempfile.TemporaryDirectory() as d:
             raw = tar_of(TREE)
-            cut = raw[:1536]  # after the first two header blocks: whole members, no end-of-archive blocks
+            cut = raw[:1024]  # the two directory members, whole, and no end-of-archive blocks
             p = subprocess.run([sys.executable, "-I", str(SPEC / "tarfilter.py"), "--lane", "lanea", "--manifest", str(Path(d) / "m")],
                                input=cut, capture_output=True)
             self.assertEqual(p.returncode, 4)

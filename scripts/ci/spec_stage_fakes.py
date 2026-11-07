@@ -50,7 +50,7 @@ gen_cli() { # W MODE: the three status files of a run, between the markers spec_
     local w=$1 mode=$2 st wl rc total=0 s cli="" end="" tdr="" name t
     local pre="[2026-11-07|10:00:00] [workload: $w / subtest:"
     case $mode in
-        pass | reset | fail_subtest | no_tdr | scoreleak)
+        pass | reset | fail_subtest | no_tdr | no_tdr_only | scoreleak)
             cli="[2026-11-07|10:00:00] [Workload:$w] Starting"
             for s in 01_A 02_B 03_C; do
                 cli+=$'\n'"$pre $s] Started"
@@ -69,7 +69,8 @@ gen_cli() { # W MODE: the three status files of a run, between the markers spec_
             end="SPECRUN_END workload=$w rc=$rc start=a end=b secs=60"
             [ "$mode" != reset ] || total=7
             tdr="$(tdrline "$total")"$'\n'"GATE_STATE_DONE mode=tdr"
-            if [ "$mode" = no_tdr ]; then end=""; tdr=""; fi ;;
+            if [ "$mode" = no_tdr ]; then end=""; tdr=""; fi
+            if [ "$mode" = no_tdr_only ]; then tdr=""; fi ;;
         refused)
             cli="Error: Requirement: raytracing"$'\n'"  Requirement: sufficientVideoMemory"$'\n'"[Workload: $w] Failed -- check logs for errors"
             end="SPECRUN_END workload=$w rc=1 start=a end=b secs=2"
