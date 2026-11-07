@@ -489,3 +489,5 @@ if (failed) {
   console.log('SURVIVING MUTANT(S): see ok=false above');
   process.exitCode = 1;
 }
+// The opt-in Windows apps proposal requires two named killers per new rule (J1, 2026-11-07).
+if (!failed && selected.length === 0) await import('../winapps-mutants.mjs');

@@ -31,6 +31,7 @@ import sys
 import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)  # our release asset verifier is also available when the packager uses python -I
 DEFAULT_MANIFEST = os.path.join(HERE, "manifest.json")
 DEFAULT_APPS = os.path.join(HERE, "apps.json")
 UA = "Mozilla/5.0 (kayfabe-appmatrix)"
@@ -257,7 +258,7 @@ def cmd_verify(a):
 
 
 # ------------------------------------------------------------------------------------- build
-def plan_layout(man, only=None, max_tier=9, tools=None, guest_root=HERE):
+def plan_layout(man, only=None, max_tier=9, tools=None, guest_root=HERE, release_assets=None):
     """[(iso_path, source_path)] for the ISO tree; pure (does not touch the disk except to list `tools`)."""
     want = only or [p["id"] for p in man["packages"] if p.get("tier", 1) <= max_tier]
     ids = closure(man, want)
@@ -281,6 +282,9 @@ def plan_layout(man, only=None, max_tier=9, tools=None, guest_root=HERE):
                 rel = os.path.relpath(full, guest_root)
                 out.append((rel.replace(os.sep, "/"), ("repo", rel)))
     out.append(("apps.json", ("repo", "apps.json")))
+    if release_assets:
+        from release_bundle import assets
+        out.extend(("release/" + name, ("release", name)) for name in assets(release_assets))
     return out
 
 
@@ -353,7 +357,11 @@ def cmd_build(a):
         print("manifest problems:\n  " + "\n  ".join(bad))
         return 1
     only = a.only.split(",") if a.only else None
-    plan = plan_layout(man, only, a.max_tier, a.tools)
+    try:
+        plan = plan_layout(man, only, a.max_tier, a.tools, release_assets=a.release_assets)
+    except (OSError, ValueError, TypeError) as e:
+        print("RELEASE_ASSETS_REFUSED", e)
+        return 1
     os.makedirs(a.out, exist_ok=True)
     tree = tempfile.mkdtemp(prefix="kfapps-tree-", dir=a.out)
     files_rec = {}
@@ -381,6 +389,10 @@ def cmd_build(a):
                 s = os.path.join(a.tools, src[1])
                 os.symlink(os.path.abspath(s), dst)
                 files_rec[isop] = dict(sha256=sha256_file(s), size=os.path.getsize(s))
+            elif src[0] == "release":
+                s = os.path.join(a.release_assets, src[1])
+                shutil.copy2(s, dst)
+                files_rec[isop] = dict(sha256=sha256_file(dst), size=os.path.getsize(dst))
             else:
                 s = os.path.join(HERE, src[1])
                 shutil.copy2(s, dst)
@@ -394,6 +406,7 @@ def cmd_build(a):
     finally:
         shutil.rmtree(tree, ignore_errors=True)
     man["image"].update(sha256=sha256_file(iso), size=os.path.getsize(iso), built_utc=utcnow(), identity=ident, built_with=tool)
+    man["image"].pop("note", None)  # a new receipt replaces the historical disk note
     man["files"] = files_rec
     outm = os.path.join(a.out, "manifest.json")
     save(outm, man)
@@ -489,7 +502,7 @@ def main(argv=None):
     c = sub.add_parser("check"); common(c); c.add_argument("--apps", default=DEFAULT_APPS); c.add_argument("--require-pinned", action="store_true"); c.set_defaults(fn=cmd_check)
     f = sub.add_parser("fetch"); common(f); f.add_argument("--dl", required=True); f.add_argument("--pipdl"); f.add_argument("--only"); f.add_argument("--no-write", action="store_true"); f.set_defaults(fn=cmd_fetch)
     v = sub.add_parser("verify"); common(v); v.add_argument("--dl", required=True); v.set_defaults(fn=cmd_verify)
-    b = sub.add_parser("build"); common(b); b.add_argument("--dl", required=True); b.add_argument("--tools"); b.add_argument("--out", required=True); b.add_argument("--only"); b.set_defaults(fn=cmd_build)
+    b = sub.add_parser("build"); common(b); b.add_argument("--dl", required=True); b.add_argument("--tools"); b.add_argument("--release-assets"); b.add_argument("--out", required=True); b.add_argument("--only"); b.set_defaults(fn=cmd_build)
     vi = sub.add_parser("verify-image"); common(vi); vi.add_argument("--iso", required=True); vi.add_argument("--whole", action="store_true", help="also hash the whole image file"); vi.add_argument("--mount", action="store_true", help="loop-mount (root) instead of isoinfo; needed for files > 2 GiB"); vi.set_defaults(fn=cmd_verify_image)
     l = sub.add_parser("layout"); common(l); l.set_defaults(fn=cmd_layout)
     a = ap.parse_args(argv)

@@ -64,7 +64,12 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "bandwidthTest.exe --memory=pinned"
+   "cmd": "bandwidthTest.exe --memory=pinned",
+   "release": {
+    "status": "unverified",
+    "classification": "open",
+    "verdict": "rc 0, own success line, NVIDIA GPU proof, no CHECK FAIL, no work on a non-NVIDIA adapter"
+   }
   },
   {
    "id": "blackscholes_t",
@@ -113,22 +118,27 @@
    "tier": 1,
    "timeout_s": 900,
    "expect_s": 120,
-   "rx": "BLENDER_OK OPTIX",
-   "fail_rx": "^CHECK .*FAIL|BLENDER_FAIL",
+   "rx": "^CYCLES_PARITY_ALL_PASS CUDA OPTIX$",
+   "fail_rx": "^CHECK .*FAIL|BLENDER_FAIL|REFERENCE_NOTFOUND",
    "proof": [
     "out:BLENDER_OK .* gpu=NVIDIA|gpu=NVIDIA",
     "pdh:Cuda|Compute|3D|Copy"
    ],
    "difficulty": "high",
    "why": "Cycles on CUDA then OptiX (RT cores) on a scripted scene; minutes of mixed compute and BVH work; OptiX needs the driver's nvoptix.dll",
-   "ps": "$bl = \"$K\\blender\\blender.exe\"\nforeach ($dev in 'CUDA', 'OPTIX') {\n    Invoke-KfExe -Exe $bl -ArgList @('-b', '--factory-startup', '--python', 'C:\\kf\\py\\blender_render.py', '--', $dev, \"$OUT\\blender_$dev.png\") | Where-Object { $_ -match 'BLENDER_|Error|error|Finished' } | Select-Object -Last 8\n}\nexit 0\n",
+   "ps": "$bl = \"$K\\blender\\blender.exe\"\n$ok = 0\nforeach ($dev in 'CUDA', 'OPTIX') {\n    Remove-Item -Force \"$OUT\\blender_$dev.png\" -ErrorAction SilentlyContinue\n    $lines = @(Invoke-KfExe -Exe $bl -ArgList @('-b', '--factory-startup', '--python-exit-code', '1', '--python', 'C:\\kf\\py\\blender_release.py', '--', $dev, \"$OUT\\blender_$dev.png\", \"$CD\\release\\references\"))\n    $lines | Where-Object { $_ -match 'BLENDER_|CYCLES_|CHECK|REFERENCE_|Error|error|Finished' } | Select-Object -Last 12\n    if ($global:KfRc -ne 0 -or -not ($lines -match \"^CYCLES_PARITY_PASS $dev \")) { exit 1 }\n    $ok++\n}\nif ($ok -eq 2) { 'CYCLES_PARITY_ALL_PASS CUDA OPTIX'; exit 0 }; exit 1\n",
    "kill_names": [],
    "screenshot_s": null,
-   "note": "the same scripts/apps/src/blender_render.py as the Linux row; CUDA and OPTIX are rendered one after the other",
+   "note": "unverified release definition: both backends compare the fixed seed-1 scene to hashed bare-metal references; MAE <= 1/255 and maximum error <= 8/255",
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "blender.exe -b --factory-startup --python blender_render.py -- CUDA|OPTIX out.png (both devices)"
+   "cmd": "blender.exe -b --factory-startup --python-exit-code 1 --python blender_release.py -- CUDA|OPTIX out.png offline-reference-dir (both compared)",
+   "release": {
+    "status": "unverified",
+    "classification": "reference-required",
+    "verdict": "Both CUDA and OptiX render the 960x540 seed-1, 256-sample scene; all RGBA components compare to hashed same-GPU bare-metal references: MAE <= 1/255, max error <= 8/255; no blank images"
+   }
   },
   {
    "id": "cdp_quicksort",
@@ -570,6 +580,102 @@
    "cmd": "ffmpeg (libx264 prep) then ffmpeg -hwaccel d3d11va -hwaccel_output_format d3d11 -i x264.mp4 -f null -"
   },
   {
+   "id": "d3d12_dxr",
+   "category": "d3d",
+   "linux": [],
+   "pkgs": [
+    "vc_redist"
+   ],
+   "session": "interactive",
+   "tier": 3,
+   "timeout_s": 120,
+   "expect_s": 35,
+   "rx": "^KFSURVIVE d3d12_dxr ALIVE_AT 30 s$",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "pdh:3D|Compute"
+   ],
+   "difficulty": "high",
+   "why": "Unverified feature-path launch-and-survive with process-tree NVIDIA engine activity; source built at the pinned Microsoft commit; missing source/binary cannot pass",
+   "ps": "$dir = \"$CD\\release\\directx\\dxr\"\n$exe = \"$dir\\D3D12RaytracingHelloWorld.exe\"\nif (-not (Test-Path -LiteralPath $exe)) { 'SAMPLE_NOTFOUND d3d12_dxr (source-built bundle required)'; exit 3 }\nInvoke-KfSurvive -Exe $exe -Cwd $dir -Seconds 30 -Tag d3d12_dxr\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": 15,
+   "note": "No WARP argument or runtime download. Sampler feedback stays source-blocked until the owner identifies/approves a sample; the pinned Microsoft tree has none.",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true,
+   "cmd": "release/directx/dxr/D3D12RaytracingHelloWorld.exe (30 s survival and NVIDIA engine proof)",
+   "release": {
+    "status": "unverified",
+    "classification": "source-built",
+    "verdict": "Source-built sample survives 30 s with NVIDIA process-tree 3D/Compute activity; early exit, missing sample, software adapter or absent proof cannot pass"
+   }
+  },
+  {
+   "id": "d3d12_mesh_shaders",
+   "category": "d3d",
+   "linux": [],
+   "pkgs": [
+    "vc_redist"
+   ],
+   "session": "interactive",
+   "tier": 3,
+   "timeout_s": 120,
+   "expect_s": 35,
+   "rx": "^KFSURVIVE d3d12_mesh_shaders ALIVE_AT 30 s$",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "pdh:3D|Compute"
+   ],
+   "difficulty": "high",
+   "why": "Unverified feature-path launch-and-survive with process-tree NVIDIA engine activity; source built at the pinned Microsoft commit; missing source/binary cannot pass",
+   "ps": "$dir = \"$CD\\release\\directx\\mesh\"\n$exe = \"$dir\\D3D12MeshletRender.exe\"\nif (-not (Test-Path -LiteralPath $exe)) { 'SAMPLE_NOTFOUND d3d12_mesh_shaders (source-built bundle required)'; exit 3 }\nInvoke-KfSurvive -Exe $exe -Cwd $dir -Seconds 30 -Tag d3d12_mesh_shaders\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": 15,
+   "note": "No WARP argument or runtime download. Sampler feedback stays source-blocked until the owner identifies/approves a sample; the pinned Microsoft tree has none.",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true,
+   "cmd": "release/directx/mesh/D3D12MeshletRender.exe (30 s survival and NVIDIA engine proof)",
+   "release": {
+    "status": "unverified",
+    "classification": "source-built",
+    "verdict": "Source-built sample survives 30 s with NVIDIA process-tree 3D/Compute activity; early exit, missing sample, software adapter or absent proof cannot pass"
+   }
+  },
+  {
+   "id": "d3d12_sampler_feedback",
+   "category": "d3d",
+   "linux": [],
+   "pkgs": [
+    "vc_redist"
+   ],
+   "session": "interactive",
+   "tier": 3,
+   "timeout_s": 120,
+   "expect_s": 35,
+   "rx": "^KFSURVIVE d3d12_sampler_feedback ALIVE_AT 30 s$",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "pdh:3D|Compute"
+   ],
+   "difficulty": "high",
+   "why": "Unverified feature-path launch-and-survive with process-tree NVIDIA engine activity; source built at the pinned Microsoft commit; missing source/binary cannot pass",
+   "ps": "$dir = \"$CD\\release\\directx\\sampler_feedback\"\n$exe = \"$dir\\D3D12SamplerFeedback.exe\"\nif (-not (Test-Path -LiteralPath $exe)) { 'SAMPLE_NOTFOUND d3d12_sampler_feedback (source-built bundle required)'; exit 3 }\nInvoke-KfSurvive -Exe $exe -Cwd $dir -Seconds 30 -Tag d3d12_sampler_feedback\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": 15,
+   "note": "No WARP argument or runtime download. Sampler feedback stays source-blocked until the owner identifies/approves a sample; the pinned Microsoft tree has none.",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true,
+   "cmd": "release/directx/sampler_feedback/D3D12SamplerFeedback.exe (SOURCE-SAMPLE-NEEDED; cannot pass while absent)",
+   "release": {
+    "status": "unverified",
+    "classification": "source-blocked",
+    "verdict": "Source-built sample survives 30 s with NVIDIA process-tree 3D/Compute activity; early exit, missing sample, software adapter or absent proof cannot pass; SOURCE-SAMPLE-NEEDED until owner approves source"
+   }
+  },
+  {
    "id": "d3d12_signal_probe",
    "category": "d3d",
    "linux": [],
@@ -596,6 +702,38 @@
    "smi": true,
    "nvidia_only": true,
    "cmd": "powershell -File d3d12_signal_probe.ps1 (scripts/bench/windows)"
+  },
+  {
+   "id": "d3d12_vrs",
+   "category": "d3d",
+   "linux": [],
+   "pkgs": [
+    "vc_redist"
+   ],
+   "session": "interactive",
+   "tier": 3,
+   "timeout_s": 120,
+   "expect_s": 35,
+   "rx": "^KFSURVIVE d3d12_vrs ALIVE_AT 30 s$",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "pdh:3D|Compute"
+   ],
+   "difficulty": "high",
+   "why": "Unverified feature-path launch-and-survive with process-tree NVIDIA engine activity; source built at the pinned Microsoft commit; missing source/binary cannot pass",
+   "ps": "$dir = \"$CD\\release\\directx\\vrs\"\n$exe = \"$dir\\D3D12VariableRateShading.exe\"\nif (-not (Test-Path -LiteralPath $exe)) { 'SAMPLE_NOTFOUND d3d12_vrs (source-built bundle required)'; exit 3 }\nInvoke-KfSurvive -Exe $exe -Cwd $dir -Seconds 30 -Tag d3d12_vrs\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": 15,
+   "note": "No WARP argument or runtime download. Sampler feedback stays source-blocked until the owner identifies/approves a sample; the pinned Microsoft tree has none.",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true,
+   "cmd": "release/directx/vrs/D3D12VariableRateShading.exe (pinned VRS gate patch, 30 s survival and NVIDIA engine proof)",
+   "release": {
+    "status": "unverified",
+    "classification": "source-built",
+    "verdict": "Source-built sample survives 30 s with NVIDIA process-tree 3D/Compute activity; early exit, missing sample, software adapter or absent proof cannot pass; pinned source patch requires VRS tier 1 and forces 2x2 coarse shading before the scene initializes"
+   }
   },
   {
    "id": "deviceQuery_demo",
@@ -625,7 +763,12 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "deviceQuery.exe"
+   "cmd": "deviceQuery.exe",
+   "release": {
+    "status": "unverified",
+    "classification": "open",
+    "verdict": "rc 0, own success line, NVIDIA GPU proof, no CHECK FAIL, no work on a non-NVIDIA adapter"
+   }
   },
   {
    "id": "driver_status",
@@ -870,6 +1013,36 @@
    "cmd": "kf_edge.ps1 -Page webgl -Seconds 12"
   },
   {
+   "id": "edge_webgl_conformance",
+   "category": "browser",
+   "linux": [],
+   "pkgs": [],
+   "session": "interactive",
+   "tier": 3,
+   "timeout_s": 180,
+   "expect_s": 30,
+   "rx": "^KFEDGE \\{.*\"ok\":true",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "pdh:3D|Compute|Copy"
+   ],
+   "difficulty": "high",
+   "why": "Offline focused conformance subset with checked GPU readbacks and validation; not a claim of full Khronos/W3C CTS coverage",
+   "ps": "& C:\\kf\\kf_edge.ps1 -Id @@ID@@ -Page webgl_conformance -Seconds 12 2>&1 | ForEach-Object { \"$_\" }\nexit $LASTEXITCODE\n",
+   "kill_names": [],
+   "screenshot_s": 8,
+   "note": null,
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true,
+   "cmd": "kf_edge.ps1 -Page webgl_conformance -Seconds 12",
+   "release": {
+    "status": "unverified",
+    "classification": "open-offline",
+    "verdict": "Offline focused conformance subset: all known-answer readback/validation checks pass, nonzero frames, NVIDIA adapter, process-tree GPU proof; this is not the full CTS"
+   }
+  },
+  {
    "id": "edge_webgl_headless",
    "category": "browser",
    "linux": [],
@@ -920,6 +1093,36 @@
    "smi": true,
    "nvidia_only": true,
    "cmd": "kf_edge.ps1 -Page webgpu -Seconds 12"
+  },
+  {
+   "id": "edge_webgpu_conformance",
+   "category": "browser",
+   "linux": [],
+   "pkgs": [],
+   "session": "interactive",
+   "tier": 3,
+   "timeout_s": 180,
+   "expect_s": 30,
+   "rx": "^KFEDGE \\{.*\"ok\":true",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "pdh:3D|Compute|Copy"
+   ],
+   "difficulty": "high",
+   "why": "Offline focused conformance subset with checked GPU readbacks and validation; not a claim of full Khronos/W3C CTS coverage",
+   "ps": "& C:\\kf\\kf_edge.ps1 -Id @@ID@@ -Page webgpu_conformance -Seconds 12 2>&1 | ForEach-Object { \"$_\" }\nexit $LASTEXITCODE\n",
+   "kill_names": [],
+   "screenshot_s": 8,
+   "note": null,
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true,
+   "cmd": "kf_edge.ps1 -Page webgpu_conformance -Seconds 12",
+   "release": {
+    "status": "unverified",
+    "classification": "open-offline",
+    "verdict": "Offline focused conformance subset: all known-answer readback/validation checks pass, nonzero frames, NVIDIA adapter, process-tree GPU proof; this is not the full CTS"
+   }
   },
   {
    "id": "fft_t",
@@ -1416,14 +1619,19 @@
    ],
    "difficulty": "high",
    "why": "needs a 3D/graphics channel, the display flip/VSync path and DWM composition on kf3's display; in the recorded runs the first TDR coincides with the first new GPU client after sign-in (DWM, Edge, Shorts), so any windowed app is exposed to it",
-   "ps": "$gmx = Find-KfFile -Root \"$K\\gravitymark\" -Name GravityMark.exe\nif (-not $gmx) { 'GM_NOTFOUND'; exit 1 }\n$gmd = Split-Path $gmx\nInvoke-KfWait -Exe $gmx -ArgList @('-temporal', '1', '-fps', '1', '-info', '1', '-benchmark', '1', '-close', '1', '-count', '1', '-asteroids', '20000', '-width', '1280', '-height', '720', '-fullscreen', '0', '-d3d11', '-image', \"$OUT\\gm.png\", '-times', \"$OUT\\gm_times.txt\") -Cwd $gmd -TimeoutS 600 -Tag gravitymark_d3d11\n$rc = $global:KfRc\nif ((Test-Path \"$OUT\\gm.png\") -and ((Get-Item \"$OUT\\gm.png\").Length -gt 10000)) { \"GM_OK image=$((Get-Item \"$OUT\\gm.png\").Length) bytes\" } else { 'GM_FAIL no benchmark image' ; if ($rc -eq 0) { $rc = 1 } }\nif (Test-Path \"$OUT\\gm_times.txt\") { \"GM_TIMES lines=$((Get-Content \"$OUT\\gm_times.txt\").Count)\" }\nexit $rc\n",
+   "ps": "$gmx = Find-KfFile -Root \"$K\\gravitymark\" -Name GravityMark.exe\nif (-not $gmx) { 'GM_NOTFOUND'; exit 1 }\n$gmd = Split-Path $gmx\nRemove-Item -LiteralPath \"$OUT\\gm.png\", \"$OUT\\gm_times.txt\" -Force -ErrorAction SilentlyContinue\nif ((Test-Path -LiteralPath \"$OUT\\gm.png\") -or (Test-Path -LiteralPath \"$OUT\\gm_times.txt\")) {\n    'CHECK gravitymark_fresh FAIL stale output remains'\n    exit 1\n}\nInvoke-KfWait -Exe $gmx -ArgList @('-temporal', '1', '-fps', '1', '-info', '1', '-benchmark', '1', '-close', '1', '-count', '1', '-asteroids', '20000', '-width', '1280', '-height', '720', '-fullscreen', '0', '-d3d11', '-image', \"$OUT\\gm.png\", '-times', \"$OUT\\gm_times.txt\") -Cwd $gmd -TimeoutS 600 -Tag gravitymark_d3d11\n$rc = $global:KfRc\nif ((Test-Path \"$OUT\\gm.png\") -and ((Get-Item \"$OUT\\gm.png\").Length -gt 10000)) { \"GM_OK image=$((Get-Item \"$OUT\\gm.png\").Length) bytes\" } else { 'GM_FAIL no benchmark image' ; if ($rc -eq 0) { $rc = 1 } }\nif (Test-Path \"$OUT\\gm_times.txt\") { \"GM_TIMES lines=$((Get-Content \"$OUT\\gm_times.txt\").Count)\" }\nexit $rc\n",
    "kill_names": [],
    "screenshot_s": 20,
    "note": "GravityMark 1.89 flags from its own run_*.bat (-benchmark 1 -close 1 -count 1 -image -times); asteroids reduced to 20000",
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "GravityMark.exe -temporal 1 -fps 1 -info 1 -benchmark 1 -close 1 -count 1 -asteroids 20000 -width 1280 -height 720 -fullscreen 0 -d3d11 -image gm.png -times gm_times.txt -image gm.png -times gm_times.txt"
+   "cmd": "GravityMark.exe -temporal 1 -fps 1 -info 1 -benchmark 1 -close 1 -count 1 -asteroids 20000 -width 1280 -height 720 -fullscreen 0 -d3d11 -image gm.png -times gm_times.txt -image gm.png -times gm_times.txt",
+   "release": {
+    "status": "unverified",
+    "classification": "owner-supplied",
+    "verdict": "rc 0, own success line, NVIDIA GPU proof, no CHECK FAIL, no work on a non-NVIDIA adapter; benchmark finishes with a fresh nonempty image (more than 10000 bytes)"
+   }
   },
   {
    "id": "gravitymark_d3d12",
@@ -1444,14 +1652,19 @@
    ],
    "difficulty": "high",
    "why": "needs a 3D/graphics channel, the display flip/VSync path and DWM composition on kf3's display; in the recorded runs the first TDR coincides with the first new GPU client after sign-in (DWM, Edge, Shorts), so any windowed app is exposed to it",
-   "ps": "$gmx = Find-KfFile -Root \"$K\\gravitymark\" -Name GravityMark.exe\nif (-not $gmx) { 'GM_NOTFOUND'; exit 1 }\n$gmd = Split-Path $gmx\nInvoke-KfWait -Exe $gmx -ArgList @('-temporal', '1', '-fps', '1', '-info', '1', '-benchmark', '1', '-close', '1', '-count', '1', '-asteroids', '20000', '-width', '1280', '-height', '720', '-fullscreen', '0', '-d3d12', '-image', \"$OUT\\gm.png\", '-times', \"$OUT\\gm_times.txt\") -Cwd $gmd -TimeoutS 600 -Tag gravitymark_d3d12\n$rc = $global:KfRc\nif ((Test-Path \"$OUT\\gm.png\") -and ((Get-Item \"$OUT\\gm.png\").Length -gt 10000)) { \"GM_OK image=$((Get-Item \"$OUT\\gm.png\").Length) bytes\" } else { 'GM_FAIL no benchmark image' ; if ($rc -eq 0) { $rc = 1 } }\nif (Test-Path \"$OUT\\gm_times.txt\") { \"GM_TIMES lines=$((Get-Content \"$OUT\\gm_times.txt\").Count)\" }\nexit $rc\n",
+   "ps": "$gmx = Find-KfFile -Root \"$K\\gravitymark\" -Name GravityMark.exe\nif (-not $gmx) { 'GM_NOTFOUND'; exit 1 }\n$gmd = Split-Path $gmx\nRemove-Item -LiteralPath \"$OUT\\gm.png\", \"$OUT\\gm_times.txt\" -Force -ErrorAction SilentlyContinue\nif ((Test-Path -LiteralPath \"$OUT\\gm.png\") -or (Test-Path -LiteralPath \"$OUT\\gm_times.txt\")) {\n    'CHECK gravitymark_fresh FAIL stale output remains'\n    exit 1\n}\nInvoke-KfWait -Exe $gmx -ArgList @('-temporal', '1', '-fps', '1', '-info', '1', '-benchmark', '1', '-close', '1', '-count', '1', '-asteroids', '20000', '-width', '1280', '-height', '720', '-fullscreen', '0', '-d3d12', '-image', \"$OUT\\gm.png\", '-times', \"$OUT\\gm_times.txt\") -Cwd $gmd -TimeoutS 600 -Tag gravitymark_d3d12\n$rc = $global:KfRc\nif ((Test-Path \"$OUT\\gm.png\") -and ((Get-Item \"$OUT\\gm.png\").Length -gt 10000)) { \"GM_OK image=$((Get-Item \"$OUT\\gm.png\").Length) bytes\" } else { 'GM_FAIL no benchmark image' ; if ($rc -eq 0) { $rc = 1 } }\nif (Test-Path \"$OUT\\gm_times.txt\") { \"GM_TIMES lines=$((Get-Content \"$OUT\\gm_times.txt\").Count)\" }\nexit $rc\n",
    "kill_names": [],
    "screenshot_s": 20,
    "note": "GravityMark 1.89 flags from its own run_*.bat (-benchmark 1 -close 1 -count 1 -image -times); asteroids reduced to 20000",
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "GravityMark.exe -temporal 1 -fps 1 -info 1 -benchmark 1 -close 1 -count 1 -asteroids 20000 -width 1280 -height 720 -fullscreen 0 -d3d12 -image gm.png -times gm_times.txt -image gm.png -times gm_times.txt"
+   "cmd": "GravityMark.exe -temporal 1 -fps 1 -info 1 -benchmark 1 -close 1 -count 1 -asteroids 20000 -width 1280 -height 720 -fullscreen 0 -d3d12 -image gm.png -times gm_times.txt -image gm.png -times gm_times.txt",
+   "release": {
+    "status": "unverified",
+    "classification": "owner-supplied",
+    "verdict": "rc 0, own success line, NVIDIA GPU proof, no CHECK FAIL, no work on a non-NVIDIA adapter; benchmark finishes with a fresh nonempty image (more than 10000 bytes)"
+   }
   },
   {
    "id": "gravitymark_d3d12_raster",
@@ -1472,7 +1685,7 @@
    ],
    "difficulty": "high",
    "why": "needs a 3D/graphics channel, the display flip/VSync path and DWM composition on kf3's display; in the recorded runs the first TDR coincides with the first new GPU client after sign-in (DWM, Edge, Shorts), so any windowed app is exposed to it",
-   "ps": "$gmx = Find-KfFile -Root \"$K\\gravitymark\" -Name GravityMark.exe\nif (-not $gmx) { 'GM_NOTFOUND'; exit 1 }\n$gmd = Split-Path $gmx\nInvoke-KfWait -Exe $gmx -ArgList @('-temporal', '1', '-fps', '1', '-info', '1', '-benchmark', '1', '-close', '1', '-count', '1', '-asteroids', '20000', '-width', '1280', '-height', '720', '-fullscreen', '0', '-d3d12', '-raster', '1', '-image', \"$OUT\\gm.png\", '-times', \"$OUT\\gm_times.txt\") -Cwd $gmd -TimeoutS 600 -Tag gravitymark_d3d12_raster\n$rc = $global:KfRc\nif ((Test-Path \"$OUT\\gm.png\") -and ((Get-Item \"$OUT\\gm.png\").Length -gt 10000)) { \"GM_OK image=$((Get-Item \"$OUT\\gm.png\").Length) bytes\" } else { 'GM_FAIL no benchmark image' ; if ($rc -eq 0) { $rc = 1 } }\nif (Test-Path \"$OUT\\gm_times.txt\") { \"GM_TIMES lines=$((Get-Content \"$OUT\\gm_times.txt\").Count)\" }\nexit $rc\n",
+   "ps": "$gmx = Find-KfFile -Root \"$K\\gravitymark\" -Name GravityMark.exe\nif (-not $gmx) { 'GM_NOTFOUND'; exit 1 }\n$gmd = Split-Path $gmx\nRemove-Item -LiteralPath \"$OUT\\gm.png\", \"$OUT\\gm_times.txt\" -Force -ErrorAction SilentlyContinue\nif ((Test-Path -LiteralPath \"$OUT\\gm.png\") -or (Test-Path -LiteralPath \"$OUT\\gm_times.txt\")) {\n    'CHECK gravitymark_fresh FAIL stale output remains'\n    exit 1\n}\nInvoke-KfWait -Exe $gmx -ArgList @('-temporal', '1', '-fps', '1', '-info', '1', '-benchmark', '1', '-close', '1', '-count', '1', '-asteroids', '20000', '-width', '1280', '-height', '720', '-fullscreen', '0', '-d3d12', '-raster', '1', '-image', \"$OUT\\gm.png\", '-times', \"$OUT\\gm_times.txt\") -Cwd $gmd -TimeoutS 600 -Tag gravitymark_d3d12_raster\n$rc = $global:KfRc\nif ((Test-Path \"$OUT\\gm.png\") -and ((Get-Item \"$OUT\\gm.png\").Length -gt 10000)) { \"GM_OK image=$((Get-Item \"$OUT\\gm.png\").Length) bytes\" } else { 'GM_FAIL no benchmark image' ; if ($rc -eq 0) { $rc = 1 } }\nif (Test-Path \"$OUT\\gm_times.txt\") { \"GM_TIMES lines=$((Get-Content \"$OUT\\gm_times.txt\").Count)\" }\nexit $rc\n",
    "kill_names": [],
    "screenshot_s": 20,
    "note": "GravityMark 1.89 flags from its own run_*.bat (-benchmark 1 -close 1 -count 1 -image -times); asteroids reduced to 20000",
@@ -1500,7 +1713,7 @@
    ],
    "difficulty": "high",
    "why": "DXR ray tracing on RT cores through the Translated/Passthrough split: the least-trodden path",
-   "ps": "$gmx = Find-KfFile -Root \"$K\\gravitymark\" -Name GravityMark.exe\nif (-not $gmx) { 'GM_NOTFOUND'; exit 1 }\n$gmd = Split-Path $gmx\nInvoke-KfWait -Exe $gmx -ArgList @('-temporal', '1', '-fps', '1', '-info', '1', '-benchmark', '1', '-close', '1', '-count', '1', '-asteroids', '20000', '-width', '1280', '-height', '720', '-fullscreen', '0', '-d3d12', '-raytracing', '1', '-image', \"$OUT\\gm.png\", '-times', \"$OUT\\gm_times.txt\") -Cwd $gmd -TimeoutS 600 -Tag gravitymark_d3d12_rt\n$rc = $global:KfRc\nif ((Test-Path \"$OUT\\gm.png\") -and ((Get-Item \"$OUT\\gm.png\").Length -gt 10000)) { \"GM_OK image=$((Get-Item \"$OUT\\gm.png\").Length) bytes\" } else { 'GM_FAIL no benchmark image' ; if ($rc -eq 0) { $rc = 1 } }\nif (Test-Path \"$OUT\\gm_times.txt\") { \"GM_TIMES lines=$((Get-Content \"$OUT\\gm_times.txt\").Count)\" }\nexit $rc\n",
+   "ps": "$gmx = Find-KfFile -Root \"$K\\gravitymark\" -Name GravityMark.exe\nif (-not $gmx) { 'GM_NOTFOUND'; exit 1 }\n$gmd = Split-Path $gmx\nRemove-Item -LiteralPath \"$OUT\\gm.png\", \"$OUT\\gm_times.txt\" -Force -ErrorAction SilentlyContinue\nif ((Test-Path -LiteralPath \"$OUT\\gm.png\") -or (Test-Path -LiteralPath \"$OUT\\gm_times.txt\")) {\n    'CHECK gravitymark_fresh FAIL stale output remains'\n    exit 1\n}\nInvoke-KfWait -Exe $gmx -ArgList @('-temporal', '1', '-fps', '1', '-info', '1', '-benchmark', '1', '-close', '1', '-count', '1', '-asteroids', '20000', '-width', '1280', '-height', '720', '-fullscreen', '0', '-d3d12', '-raytracing', '1', '-image', \"$OUT\\gm.png\", '-times', \"$OUT\\gm_times.txt\") -Cwd $gmd -TimeoutS 600 -Tag gravitymark_d3d12_rt\n$rc = $global:KfRc\nif ((Test-Path \"$OUT\\gm.png\") -and ((Get-Item \"$OUT\\gm.png\").Length -gt 10000)) { \"GM_OK image=$((Get-Item \"$OUT\\gm.png\").Length) bytes\" } else { 'GM_FAIL no benchmark image' ; if ($rc -eq 0) { $rc = 1 } }\nif (Test-Path \"$OUT\\gm_times.txt\") { \"GM_TIMES lines=$((Get-Content \"$OUT\\gm_times.txt\").Count)\" }\nexit $rc\n",
    "kill_names": [],
    "screenshot_s": 20,
    "note": "GravityMark 1.89 flags from its own run_*.bat (-benchmark 1 -close 1 -count 1 -image -times); asteroids reduced to 20000",
@@ -1528,14 +1741,19 @@
    ],
    "difficulty": "high",
    "why": "needs a 3D/graphics channel, the display flip/VSync path and DWM composition on kf3's display; in the recorded runs the first TDR coincides with the first new GPU client after sign-in (DWM, Edge, Shorts), so any windowed app is exposed to it",
-   "ps": "$gmx = Find-KfFile -Root \"$K\\gravitymark\" -Name GravityMark.exe\nif (-not $gmx) { 'GM_NOTFOUND'; exit 1 }\n$gmd = Split-Path $gmx\nInvoke-KfWait -Exe $gmx -ArgList @('-temporal', '1', '-fps', '1', '-info', '1', '-benchmark', '1', '-close', '1', '-count', '1', '-asteroids', '20000', '-width', '1280', '-height', '720', '-fullscreen', '0', '-gl', '-image', \"$OUT\\gm.png\", '-times', \"$OUT\\gm_times.txt\") -Cwd $gmd -TimeoutS 600 -Tag gravitymark_gl\n$rc = $global:KfRc\nif ((Test-Path \"$OUT\\gm.png\") -and ((Get-Item \"$OUT\\gm.png\").Length -gt 10000)) { \"GM_OK image=$((Get-Item \"$OUT\\gm.png\").Length) bytes\" } else { 'GM_FAIL no benchmark image' ; if ($rc -eq 0) { $rc = 1 } }\nif (Test-Path \"$OUT\\gm_times.txt\") { \"GM_TIMES lines=$((Get-Content \"$OUT\\gm_times.txt\").Count)\" }\nexit $rc\n",
+   "ps": "$gmx = Find-KfFile -Root \"$K\\gravitymark\" -Name GravityMark.exe\nif (-not $gmx) { 'GM_NOTFOUND'; exit 1 }\n$gmd = Split-Path $gmx\nRemove-Item -LiteralPath \"$OUT\\gm.png\", \"$OUT\\gm_times.txt\" -Force -ErrorAction SilentlyContinue\nif ((Test-Path -LiteralPath \"$OUT\\gm.png\") -or (Test-Path -LiteralPath \"$OUT\\gm_times.txt\")) {\n    'CHECK gravitymark_fresh FAIL stale output remains'\n    exit 1\n}\nInvoke-KfWait -Exe $gmx -ArgList @('-temporal', '1', '-fps', '1', '-info', '1', '-benchmark', '1', '-close', '1', '-count', '1', '-asteroids', '20000', '-width', '1280', '-height', '720', '-fullscreen', '0', '-gl', '-image', \"$OUT\\gm.png\", '-times', \"$OUT\\gm_times.txt\") -Cwd $gmd -TimeoutS 600 -Tag gravitymark_gl\n$rc = $global:KfRc\nif ((Test-Path \"$OUT\\gm.png\") -and ((Get-Item \"$OUT\\gm.png\").Length -gt 10000)) { \"GM_OK image=$((Get-Item \"$OUT\\gm.png\").Length) bytes\" } else { 'GM_FAIL no benchmark image' ; if ($rc -eq 0) { $rc = 1 } }\nif (Test-Path \"$OUT\\gm_times.txt\") { \"GM_TIMES lines=$((Get-Content \"$OUT\\gm_times.txt\").Count)\" }\nexit $rc\n",
    "kill_names": [],
    "screenshot_s": 20,
    "note": "GravityMark 1.89 flags from its own run_*.bat (-benchmark 1 -close 1 -count 1 -image -times); asteroids reduced to 20000",
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "GravityMark.exe -temporal 1 -fps 1 -info 1 -benchmark 1 -close 1 -count 1 -asteroids 20000 -width 1280 -height 720 -fullscreen 0 -gl -image gm.png -times gm_times.txt -image gm.png -times gm_times.txt"
+   "cmd": "GravityMark.exe -temporal 1 -fps 1 -info 1 -benchmark 1 -close 1 -count 1 -asteroids 20000 -width 1280 -height 720 -fullscreen 0 -gl -image gm.png -times gm_times.txt -image gm.png -times gm_times.txt",
+   "release": {
+    "status": "unverified",
+    "classification": "owner-supplied",
+    "verdict": "rc 0, own success line, NVIDIA GPU proof, no CHECK FAIL, no work on a non-NVIDIA adapter; benchmark finishes with a fresh nonempty image (more than 10000 bytes)"
+   }
   },
   {
    "id": "gravitymark_vk",
@@ -1556,14 +1774,19 @@
    ],
    "difficulty": "high",
    "why": "needs a 3D/graphics channel, the display flip/VSync path and DWM composition on kf3's display; in the recorded runs the first TDR coincides with the first new GPU client after sign-in (DWM, Edge, Shorts), so any windowed app is exposed to it",
-   "ps": "$gmx = Find-KfFile -Root \"$K\\gravitymark\" -Name GravityMark.exe\nif (-not $gmx) { 'GM_NOTFOUND'; exit 1 }\n$gmd = Split-Path $gmx\nInvoke-KfWait -Exe $gmx -ArgList @('-temporal', '1', '-fps', '1', '-info', '1', '-benchmark', '1', '-close', '1', '-count', '1', '-asteroids', '20000', '-width', '1280', '-height', '720', '-fullscreen', '0', '-vk', '-image', \"$OUT\\gm.png\", '-times', \"$OUT\\gm_times.txt\") -Cwd $gmd -TimeoutS 600 -Tag gravitymark_vk\n$rc = $global:KfRc\nif ((Test-Path \"$OUT\\gm.png\") -and ((Get-Item \"$OUT\\gm.png\").Length -gt 10000)) { \"GM_OK image=$((Get-Item \"$OUT\\gm.png\").Length) bytes\" } else { 'GM_FAIL no benchmark image' ; if ($rc -eq 0) { $rc = 1 } }\nif (Test-Path \"$OUT\\gm_times.txt\") { \"GM_TIMES lines=$((Get-Content \"$OUT\\gm_times.txt\").Count)\" }\nexit $rc\n",
+   "ps": "$gmx = Find-KfFile -Root \"$K\\gravitymark\" -Name GravityMark.exe\nif (-not $gmx) { 'GM_NOTFOUND'; exit 1 }\n$gmd = Split-Path $gmx\nRemove-Item -LiteralPath \"$OUT\\gm.png\", \"$OUT\\gm_times.txt\" -Force -ErrorAction SilentlyContinue\nif ((Test-Path -LiteralPath \"$OUT\\gm.png\") -or (Test-Path -LiteralPath \"$OUT\\gm_times.txt\")) {\n    'CHECK gravitymark_fresh FAIL stale output remains'\n    exit 1\n}\nInvoke-KfWait -Exe $gmx -ArgList @('-temporal', '1', '-fps', '1', '-info', '1', '-benchmark', '1', '-close', '1', '-count', '1', '-asteroids', '20000', '-width', '1280', '-height', '720', '-fullscreen', '0', '-vk', '-image', \"$OUT\\gm.png\", '-times', \"$OUT\\gm_times.txt\") -Cwd $gmd -TimeoutS 600 -Tag gravitymark_vk\n$rc = $global:KfRc\nif ((Test-Path \"$OUT\\gm.png\") -and ((Get-Item \"$OUT\\gm.png\").Length -gt 10000)) { \"GM_OK image=$((Get-Item \"$OUT\\gm.png\").Length) bytes\" } else { 'GM_FAIL no benchmark image' ; if ($rc -eq 0) { $rc = 1 } }\nif (Test-Path \"$OUT\\gm_times.txt\") { \"GM_TIMES lines=$((Get-Content \"$OUT\\gm_times.txt\").Count)\" }\nexit $rc\n",
    "kill_names": [],
    "screenshot_s": 20,
    "note": "GravityMark 1.89 flags from its own run_*.bat (-benchmark 1 -close 1 -count 1 -image -times); asteroids reduced to 20000",
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "GravityMark.exe -temporal 1 -fps 1 -info 1 -benchmark 1 -close 1 -count 1 -asteroids 20000 -width 1280 -height 720 -fullscreen 0 -vk -image gm.png -times gm_times.txt -image gm.png -times gm_times.txt"
+   "cmd": "GravityMark.exe -temporal 1 -fps 1 -info 1 -benchmark 1 -close 1 -count 1 -asteroids 20000 -width 1280 -height 720 -fullscreen 0 -vk -image gm.png -times gm_times.txt -image gm.png -times gm_times.txt",
+   "release": {
+    "status": "unverified",
+    "classification": "owner-supplied",
+    "verdict": "rc 0, own success line, NVIDIA GPU proof, no CHECK FAIL, no work on a non-NVIDIA adapter; benchmark finishes with a fresh nonempty image (more than 10000 bytes)"
+   }
   },
   {
    "id": "hashcat",
@@ -1784,6 +2007,41 @@
    "smi": true,
    "nvidia_only": true,
    "cmd": "llama-completion.exe -m qwen2.5-1.5b-instruct-q4_k_m.gguf -p \"Explain in three sentences why the sky is blue.\" -n 64 -ngl 99 --temp 0 --seed 1 --no-display-prompt (stdin empty); OUTSHA of the text"
+  },
+  {
+   "id": "llama_cuda_parity",
+   "category": "llm",
+   "linux": [],
+   "pkgs": [
+    "python_embed",
+    "llama_cuda",
+    "qwen_gguf",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 600,
+   "expect_s": 90,
+   "rx": "^LLM_PARITY_PASS sha256=[0-9a-f]{64} seed=1 tokens=64 reference=bare-metal$",
+   "fail_rx": "^CHECK .*FAIL|REFERENCE_NOTFOUND",
+   "proof": [
+    "out:Device 0: NVIDIA|CUDA0: NVIDIA"
+   ],
+   "difficulty": "high",
+   "why": "Fixed prompt and seed with full CUDA layer offload; exact normalized output equality to the same Windows executable/model on bare metal",
+   "ps": "$m = \"$K\\models\\qwen2.5-1.5b-instruct-q4_k_m.gguf\"\n& $PY -X utf8 C:\\kf\\py\\llama_release.py \"$K\\llama_cuda\\llama-completion.exe\" $m \"$CD\\release\\references\" $OUT\nexit $LASTEXITCODE\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true,
+   "cmd": "python llama_release.py llama-completion.exe qwen2.5-1.5b-instruct-q4_k_m.gguf release/references out (fixed prompt, seed 1, max 64 tokens, exact native parity)",
+   "release": {
+    "status": "unverified",
+    "classification": "reference-required",
+    "verdict": "Fixed prompt, seed 1, temp 0, 64 tokens; full nonzero NVIDIA CUDA offload, rc 0; nonempty normalized output equals hashed bare-metal reference from identical executable and model"
+   }
   },
   {
    "id": "llama_vulkan_bench",
@@ -2071,7 +2329,12 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "ffmpeg (libx264 prep) then ffmpeg -hwaccel cuda -hwaccel_output_format cuda -i x264.mp4 -f null -"
+   "cmd": "ffmpeg (libx264 prep) then ffmpeg -hwaccel cuda -hwaccel_output_format cuda -i x264.mp4 -f null -",
+   "release": {
+    "status": "unverified",
+    "classification": "owner-supplied-media",
+    "verdict": "rc 0, own success line, NVIDIA GPU proof, no CHECK FAIL, no work on a non-NVIDIA adapter; exactly 18000 hardware-decoded frames"
+   }
   },
   {
    "id": "nvenc_av1",
@@ -2131,7 +2394,12 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "ffmpeg -f lavfi -i testsrc=size=1280x720:rate=30:duration=20 -c:v h264_nvenc -preset p4; ffprobe -count_frames"
+   "cmd": "ffmpeg -f lavfi -i testsrc=size=1280x720:rate=30:duration=20 -c:v h264_nvenc -preset p4; ffprobe -count_frames",
+   "release": {
+    "status": "unverified",
+    "classification": "owner-supplied-media",
+    "verdict": "rc 0, own success line, NVIDIA GPU proof, no CHECK FAIL, no work on a non-NVIDIA adapter; exactly 600 encoded frames"
+   }
   },
   {
    "id": "nvenc_hevc",
@@ -3066,6 +3334,41 @@
    "smi": true,
    "nvidia_only": true,
    "cmd": "python torch_correct.py"
+  },
+  {
+   "id": "torch_release_smoke",
+   "category": "torch",
+   "linux": [],
+   "pkgs": [
+    "python_embed",
+    "pywheels",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 120,
+   "expect_s": 15,
+   "rx": "^CUDA_RELEASE_PASS device=.+ elements=4096 seed=1$",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:NVIDIA|GeForce|RTX",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "low",
+   "why": "Small explicit CUDA matmul, 4096 finite readback values checked against the CPU reference; no CPU fallback",
+   "ps": "Invoke-KfExe -Exe $PY -ArgList ($PYA + @('C:\\kf\\py\\kf_runpy.py', 'C:\\kf\\py\\release_cuda_smoke.py'))\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true,
+   "cmd": "python release_cuda_smoke.py",
+   "release": {
+    "status": "unverified",
+    "classification": "open",
+    "verdict": "Explicit CUDA matmul with seed 1, all 4096 finite outputs checked against CPU known answer at rtol=atol=1e-5; no CPU fallback"
+   }
   },
   {
    "id": "transpose_t",
