@@ -1,0 +1,23 @@
+{
+  "date": "2026-11-07",
+  "id": "official-pip-cupy-cuda12x",
+  "sha256": "e206bd8664f0763732b6012431f484ee535bffd77a5ae95e9bfe1c7c72396625",
+  "size": 90980377,
+  "scope": "Pinned wheel verified completely; first 8192 bytes of .h/.hpp members inspected for proprietary/confidential NVIDIA markers. No header bodies reproduced.",
+  "findings": [
+    "cupy/_core/include/cupy/_cuda/cuda-11/cuda_fp16.h",
+    "cupy/_core/include/cupy/_cuda/cuda-11/cuda_fp16.hpp",
+    "cupy/_core/include/cupy/_cuda/cuda-12/cuda_fp16.h",
+    "cupy/_core/include/cupy/_cuda/cuda-12/cuda_fp16.hpp",
+    "cupy/_core/include/cupy/_cuda/cuda-12.2/cuda_fp16.h",
+    "cupy/_core/include/cupy/_cuda/cuda-12.2/cuda_fp16.hpp",
+    "cupy/_core/include/cupy/_cuda/cuda-12.3/cuda_fp16.h",
+    "cupy/_core/include/cupy/_cuda/cuda-12.3/cuda_fp16.hpp",
+    "cupy/_core/include/cupy/_cuda/cuda-12.4/cuda_fp16.h",
+    "cupy/_core/include/cupy/_cuda/cuda-12.4/cuda_fp16.hpp",
+    "cupy/_core/include/cupy/_cuda/cuda-12.5/cuda_fp16.h",
+    "cupy/_core/include/cupy/_cuda/cuda-12.5/cuda_fp16.hpp",
+    "cupy/_core/include/cupy/_cuda/cuda-12.6/cuda_fp16.h",
+    "cupy/_core/include/cupy/_cuda/cuda-12.6/cuda_fp16.hpp"
+  ]
+}

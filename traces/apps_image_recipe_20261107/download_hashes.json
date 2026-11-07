@@ -1,0 +1,115 @@
+{
+  "observed_date": "2026-11-07",
+  "method": "GET and SHA256 of downloaded bytes",
+  "results": [
+    {
+      "id": "cuda-samples",
+      "url": "https://codeload.github.com/NVIDIA/cuda-samples/tar.gz/9c688d7ff78455ed42e345124d1495aad6bf66de",
+      "sha256": "5a0ad8b32f4ca54492bfda76bd850cd9dcc83998614fcac3383b306bcb77c74e",
+      "size": 144301863
+    },
+    {
+      "id": "llama",
+      "url": "https://codeload.github.com/ggml-org/llama.cpp/tar.gz/4b1a27fa0eb875bbca4f6cfe936e3d65adc685c0",
+      "sha256": "4a718ea3e51745a710b2f511b3876a2f1ec0553ab51397915980fe55712b304a",
+      "size": 37600508
+    },
+    {
+      "id": "clpeak",
+      "url": "https://codeload.github.com/krrishnarraj/clpeak/tar.gz/1.1.2",
+      "sha256": "7bc7beba6b3307290650abc4f13fe9389b271c1a64601fa333461516950d745b",
+      "size": 295735
+    },
+    {
+      "id": "gpu-burn",
+      "url": "https://codeload.github.com/wilicc/gpu-burn/tar.gz/0d19c94dcb2e9b6858b7586a4c327674cd67113b",
+      "sha256": "58a6f4673af294cf98ada99bc0860632182afde862718b05b0e0b7ba3b2bdad7",
+      "size": 25762
+    },
+    {
+      "id": "vkpeak",
+      "url": "https://github.com/nihui/vkpeak/releases/download/20250531/vkpeak-20250531-ubuntu.zip",
+      "sha256": "5d233c230d4dc14c43e76da3feb4a7374f9e79d0a0bbea00b1b8f33f6ac07eaf",
+      "size": 1239961
+    },
+    {
+      "id": "hf-05-LICENSE",
+      "url": "https://huggingface.co/Qwen/Qwen2-0.5B-Instruct/resolve/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/LICENSE",
+      "sha256": "c156170b718ec29139d3653d40ed1986fd92fb7e0959b5c71f3c48f62e6636f4",
+      "size": 11344
+    },
+    {
+      "id": "hf-05-config.json",
+      "url": "https://huggingface.co/Qwen/Qwen2-0.5B-Instruct/resolve/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/config.json",
+      "sha256": "168aa1bd401abc3bc262ba15ba4e499627a8b4e006e9d050b47c22de20660185",
+      "size": 659
+    },
+    {
+      "id": "hf-05-generation_config.json",
+      "url": "https://huggingface.co/Qwen/Qwen2-0.5B-Instruct/resolve/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/generation_config.json",
+      "sha256": "e558847a8b4402616f1273797b015104dc266fe4b520056fca88823ba8f8ebe6",
+      "size": 242
+    },
+    {
+      "id": "hf-05-merges.txt",
+      "url": "https://huggingface.co/Qwen/Qwen2-0.5B-Instruct/resolve/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/merges.txt",
+      "sha256": "599bab54075088774b1733fde865d5bd747cbcc7a547c5bc12610e874e26f5e3",
+      "size": 1671839
+    },
+    {
+      "id": "hf-05-tokenizer.json",
+      "url": "https://huggingface.co/Qwen/Qwen2-0.5B-Instruct/resolve/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/tokenizer.json",
+      "sha256": "f7c9b2dba4a296b1aa76c16a34b8225c0c118978400d4bb66bff0902d702f5b8",
+      "size": 7028015
+    },
+    {
+      "id": "hf-05-tokenizer_config.json",
+      "url": "https://huggingface.co/Qwen/Qwen2-0.5B-Instruct/resolve/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/tokenizer_config.json",
+      "sha256": "482bd979881423375ca5414e4e0d94cd7c5349dbb17fffd46b4d36d71e62a1bc",
+      "size": 1287
+    },
+    {
+      "id": "hf-05-vocab.json",
+      "url": "https://huggingface.co/Qwen/Qwen2-0.5B-Instruct/resolve/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/vocab.json",
+      "sha256": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910",
+      "size": 2776833
+    },
+    {
+      "id": "hf-15-LICENSE",
+      "url": "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/91cad51170dc346986eccefdc2dd33a9da36ead9/LICENSE",
+      "sha256": "832dd9e00a68dd83b3c3fb9f5588dad7dcf337a0db50f7d9483f310cd292e92e",
+      "size": 11343
+    },
+    {
+      "id": "cuda_cudart",
+      "url": "https://developer.download.nvidia.com/compute/cuda/redist/cuda_cudart/linux-x86_64/cuda_cudart-linux-x86_64-12.6.77-archive.tar.xz",
+      "sha256": "f74689258a60fd9c5bdfa7679458527a55e22442691ba678dcfaeffbf4391ef9",
+      "size": 1126072
+    },
+    {
+      "id": "nvidia-driver-580",
+      "url": "https://us.download.nvidia.com/XFree86/Linux-x86_64/580.159.04/NVIDIA-Linux-x86_64-580.159.04.run",
+      "sha256": "c1e66761b088d17b3adf6cb6979de9af38be2684d102b001a176dcfafabdca1e",
+      "size": 397162548
+    },
+    {
+      "id": "pip-torch",
+      "url": "https://download-r2.pytorch.org/whl/cpu/torch-2.6.0%2Bcpu-cp312-cp312-linux_x86_64.whl",
+      "sha256": "59e78aa0c690f70734e42670036d6b541930b8eabbaa18d94e090abf14cc4d91",
+      "size": 178578006
+    },
+    {
+      "id": "blender",
+      "url": "https://download.blender.org/release/Blender4.5/blender-4.5.0-linux-x64.tar.xz",
+      "sha256": "1188b95cc12321c770b631939f7c25a096910b6f884a990bf9c0f62d52b38aec",
+      "size": 376170648
+    },
+    {
+      "id": "official-pip-cupy-cuda12x",
+      "url": "https://files.pythonhosted.org/packages/90/dc/da09e5184d94146b8cbf240c2bef1c4851cbafd7e2d60cc71b1530c766ec/cupy_cuda12x-13.3.0-cp312-cp312-manylinux2014_x86_64.whl",
+      "sha256": "e206bd8664f0763732b6012431f484ee535bffd77a5ae95e9bfe1c7c72396625",
+      "size": 90980377
+    }
+  ],
+  "scope": "Selected complete payload GET/SHA256 observations only; other recipe pins come from upstream metadata. Driver bytes were streamed and discarded."
+}

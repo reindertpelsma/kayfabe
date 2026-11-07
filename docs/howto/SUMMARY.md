@@ -12,6 +12,7 @@
 
 - [Attach to a VM you already have](attach-to-existing-vm.md)
 - [Linux guest](linux-guest.md)
+- [Rebuild the Linux apps image](linux-apps-image.md)
 - [Windows guest](windows-guest.md)
 - [Display and the broker](display.md)
 

@@ -1,0 +1,4324 @@
+{
+  "schema_version": 2,
+  "recipe_version": "2026-11-07.2",
+  "claim": "DESIGN: open-only image; official NVIDIA inputs acquired on the box host at provision time; separate input-pinned inventories, not byte-identical images",
+  "base": {
+    "id": "ubuntu-noble-20261017",
+    "url": "https://cloud-images.ubuntu.com/releases/noble/release-20261017/ubuntu-24.04-server-cloudimg-amd64.img",
+    "sha256": "04e8f2461a16a44e78a370284471f29616cdd9baf1893df25807b71f985b6c94",
+    "size": 621284352
+  },
+  "apt": {
+    "snapshot": "20261101T000000Z",
+    "suites": [
+      "noble",
+      "noble-updates",
+      "noble-security"
+    ],
+    "components": [
+      "main",
+      "universe"
+    ],
+    "packages": [
+      "build-essential",
+      "gcc-13",
+      "g++-13",
+      "cmake",
+      "ninja-build",
+      "pkg-config",
+      "libegl-dev",
+      "libgles-dev",
+      "ocl-icd-opencl-dev",
+      "opencl-headers",
+      "opencl-clhpp-headers",
+      "ffmpeg",
+      "vulkan-tools",
+      "libvulkan1",
+      "clinfo",
+      "ocl-icd-libopencl1",
+      "libegl1",
+      "libgles2",
+      "libgl1",
+      "python3",
+      "python3-venv",
+      "python3-pip",
+      "ca-certificates",
+      "xz-utils",
+      "libxi6",
+      "libxxf86vm1",
+      "libxfixes3",
+      "libxrender1",
+      "libxkbcommon0",
+      "libsm6",
+      "libice6",
+      "libgbm1",
+      "libdrm2",
+      "libwayland-client0",
+      "libwayland-server0",
+      "libx11-xcb1",
+      "libxcb-dri3-0",
+      "libxcb-present0",
+      "libtirpc3t64",
+      "libssl3t64",
+      "linux-headers-6.8.0-147-generic=6.8.0-147.147",
+      "kmod",
+      "patch",
+      "dpkg-dev",
+      "openssh-server",
+      "sudo",
+      "hashcat=6.2.6+ds1-1build2",
+      "hashcat-data=6.2.6+ds1-1build2"
+    ],
+    "metadata": [
+      {
+        "id": "apt-noble-InRelease",
+        "path": "dists/noble/InRelease",
+        "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/dists/noble/InRelease",
+        "sha256": "cdb2f31d809f589719a53c6ad15f255b27569c4059542ada282aaa21b8e164b0",
+        "size": 255850
+      },
+      {
+        "id": "apt-noble-main",
+        "path": "dists/noble/main/binary-amd64/Packages.xz",
+        "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/dists/noble/main/binary-amd64/Packages.xz",
+        "sha256": "2a6a199e1031a5c279cb346646d594993f35b1c03dd4a82aaa0323980dd92451",
+        "size": 1401160
+      },
+      {
+        "id": "apt-noble-universe",
+        "path": "dists/noble/universe/binary-amd64/Packages.xz",
+        "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/dists/noble/universe/binary-amd64/Packages.xz",
+        "sha256": "ba9057fa1b91438cc8a1d26808d00c85389fe101d0c1496254df97236405599a",
+        "size": 15037908
+      },
+      {
+        "id": "apt-noble-updates-InRelease",
+        "path": "dists/noble-updates/InRelease",
+        "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/dists/noble-updates/InRelease",
+        "sha256": "8eb1e59e1d6bea248c204a9d43920aef4263891fa47e4881695a384ef46b0c79",
+        "size": 126125
+      },
+      {
+        "id": "apt-noble-updates-main",
+        "path": "dists/noble-updates/main/binary-amd64/Packages.xz",
+        "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/dists/noble-updates/main/binary-amd64/Packages.xz",
+        "sha256": "14e4812e5725296279524bcabda205a6d924877545c59c0a070df2dd44b2e6ed",
+        "size": 1407696
+      },
+      {
+        "id": "apt-noble-updates-universe",
+        "path": "dists/noble-updates/universe/binary-amd64/Packages.xz",
+        "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/dists/noble-updates/universe/binary-amd64/Packages.xz",
+        "sha256": "2ac420dbe2a60da44e738668763b75c928c36ddd117f2987c601c3cf42c4feef",
+        "size": 1707672
+      },
+      {
+        "id": "apt-noble-security-InRelease",
+        "path": "dists/noble-security/InRelease",
+        "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/dists/noble-security/InRelease",
+        "sha256": "1c365fad2f217c66dc96716b916dc65eaf65fb46459fcffffa87a4ecc5e1c41b",
+        "size": 126127
+      },
+      {
+        "id": "apt-noble-security-main",
+        "path": "dists/noble-security/main/binary-amd64/Packages.xz",
+        "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/dists/noble-security/main/binary-amd64/Packages.xz",
+        "sha256": "a65b8532f4c3f3b864c7c0a423fbc6a4f4c6ee1a871bb78c0f5f0f27cc44a195",
+        "size": 1146132
+      },
+      {
+        "id": "apt-noble-security-universe",
+        "path": "dists/noble-security/universe/binary-amd64/Packages.xz",
+        "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/dists/noble-security/universe/binary-amd64/Packages.xz",
+        "sha256": "7f6bfafb5359adcace1390e09c38136112cf76f1d0d3c3126bded07ab364a716",
+        "size": 1222620
+      }
+    ],
+    "download_budget_bytes": 12884901888
+  },
+  "guest": {
+    "user": "ubuntu",
+    "authorized_keys": [
+      "${SSH_AUTHORIZED_KEY}"
+    ],
+    "kernel": "6.8.0-147-generic",
+    "nvidia_version": "580.159.04",
+    "disk_gib": 74,
+    "memory_mib": 12288,
+    "cpus": 2,
+    "uid": 1000,
+    "network": {
+      "version": 2,
+      "ethernets": {
+        "apps": {
+          "match": {
+            "name": "en*"
+          },
+          "dhcp4": true,
+          "optional": true,
+          "addresses": [
+            "192.168.77.2/24"
+          ],
+          "routes": [
+            {
+              "to": "default",
+              "via": "192.168.77.1",
+              "metric": 500
+            }
+          ]
+        }
+      }
+    }
+  },
+  "artifacts": [
+    {
+      "id": "hashcat",
+      "kind": "deb",
+      "package": "hashcat",
+      "version": "6.2.6+ds1-1build2",
+      "filename": "hashcat_6.2.6+ds1-1build2_amd64.deb",
+      "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/universe/h/hashcat/hashcat_6.2.6+ds1-1build2_amd64.deb",
+      "sha256": "3ca60ea1861dcae534c1b2750b09d774cdcf7780033cf86e8a5e9168e78628a4",
+      "size": 9523360
+    },
+    {
+      "id": "hashcat-data",
+      "kind": "deb",
+      "package": "hashcat-data",
+      "version": "6.2.6+ds1-1build2",
+      "filename": "hashcat-data_6.2.6+ds1-1build2_all.deb",
+      "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/universe/h/hashcat/hashcat-data_6.2.6+ds1-1build2_all.deb",
+      "sha256": "298b008029ff77cec489ad007cf255518e0ee71cc938d54776b174d27b98a6da",
+      "size": 2425170
+    },
+    {
+      "id": "cuda-samples",
+      "url": "https://codeload.github.com/NVIDIA/cuda-samples/tar.gz/9c688d7ff78455ed42e345124d1495aad6bf66de",
+      "sha256": "5a0ad8b32f4ca54492bfda76bd850cd9dcc83998614fcac3383b306bcb77c74e",
+      "size": 144301863,
+      "kind": "archive",
+      "target": "/opt/apps/source/cuda-samples",
+      "strip_components": 1
+    },
+    {
+      "id": "llama",
+      "url": "https://codeload.github.com/ggml-org/llama.cpp/tar.gz/4b1a27fa0eb875bbca4f6cfe936e3d65adc685c0",
+      "sha256": "4a718ea3e51745a710b2f511b3876a2f1ec0553ab51397915980fe55712b304a",
+      "size": 37600508,
+      "kind": "archive",
+      "target": "/opt/apps/source/llama",
+      "strip_components": 1
+    },
+    {
+      "id": "clpeak",
+      "url": "https://codeload.github.com/krrishnarraj/clpeak/tar.gz/1.1.2",
+      "sha256": "7bc7beba6b3307290650abc4f13fe9389b271c1a64601fa333461516950d745b",
+      "size": 295735,
+      "kind": "archive",
+      "target": "/opt/apps/source/clpeak",
+      "strip_components": 1
+    },
+    {
+      "id": "gpu-burn",
+      "url": "https://codeload.github.com/wilicc/gpu-burn/tar.gz/0d19c94dcb2e9b6858b7586a4c327674cd67113b",
+      "sha256": "58a6f4673af294cf98ada99bc0860632182afde862718b05b0e0b7ba3b2bdad7",
+      "size": 25762,
+      "kind": "archive",
+      "target": "/opt/apps/source/gpu-burn",
+      "strip_components": 1
+    },
+    {
+      "id": "vkpeak",
+      "url": "https://github.com/nihui/vkpeak/releases/download/20250531/vkpeak-20250531-ubuntu.zip",
+      "sha256": "5d233c230d4dc14c43e76da3feb4a7374f9e79d0a0bbea00b1b8f33f6ac07eaf",
+      "size": 1239961,
+      "kind": "archive",
+      "version": "20250531",
+      "target": "/opt/apps/source/vkpeak",
+      "strip_components": 1
+    },
+    {
+      "id": "blender",
+      "kind": "archive",
+      "version": "4.5.0",
+      "url": "https://download.blender.org/release/Blender4.5/blender-4.5.0-linux-x64.tar.xz",
+      "sha256": "1188b95cc12321c770b631939f7c25a096910b6f884a990bf9c0f62d52b38aec",
+      "size": 376170648,
+      "target": "/opt/apps/data/blender",
+      "strip_components": 1
+    },
+    {
+      "id": "pip-accelerate",
+      "kind": "wheel",
+      "url": "https://files.pythonhosted.org/packages/d1/d5/0050b2820a1e709ffa623f9a9e8ae42d0903535f2150613cbfeb7f16932a/accelerate-1.1.1-py3-none-any.whl",
+      "sha256": "61edd81762131b8d4bede008643fa1e1f3bf59bec710ebda9771443e24feae02",
+      "size": 333211,
+      "filename": "accelerate-1.1.1-py3-none-any.whl",
+      "package": "accelerate",
+      "version": "1.1.1",
+      "requires_dist": [
+        "huggingface-hub>=0.21.0",
+        "numpy<3.0.0,>=1.17",
+        "packaging>=20.0",
+        "psutil",
+        "pyyaml",
+        "safetensors>=0.4.3",
+        "torch>=1.10.0",
+        "deepspeed; extra == \"deepspeed\"",
+        "bitsandbytes; extra == \"dev\"",
+        "black~=23.1; extra == \"dev\"",
+        "datasets; extra == \"dev\"",
+        "diffusers; extra == \"dev\"",
+        "evaluate; extra == \"dev\"",
+        "hf-doc-builder>=0.3.0; extra == \"dev\"",
+        "parameterized; extra == \"dev\"",
+        "pytest-subtests; extra == \"dev\"",
+        "pytest-xdist; extra == \"dev\"",
+        "pytest<=8.0.0,>=7.2.0; extra == \"dev\"",
+        "rich; extra == \"dev\"",
+        "ruff~=0.6.4; extra == \"dev\"",
+        "scikit-learn; extra == \"dev\"",
+        "scipy; extra == \"dev\"",
+        "timm; extra == \"dev\"",
+        "torchdata>=0.8.0; extra == \"dev\"",
+        "torchpippy>=0.2.0; extra == \"dev\"",
+        "tqdm; extra == \"dev\"",
+        "transformers; extra == \"dev\"",
+        "black~=23.1; extra == \"quality\"",
+        "hf-doc-builder>=0.3.0; extra == \"quality\"",
+        "ruff~=0.6.4; extra == \"quality\"",
+        "rich; extra == \"rich\"",
+        "sagemaker; extra == \"sagemaker\"",
+        "bitsandbytes; extra == \"test-dev\"",
+        "datasets; extra == \"test-dev\"",
+        "diffusers; extra == \"test-dev\"",
+        "evaluate; extra == \"test-dev\"",
+        "scikit-learn; extra == \"test-dev\"",
+        "scipy; extra == \"test-dev\"",
+        "timm; extra == \"test-dev\"",
+        "torchdata>=0.8.0; extra == \"test-dev\"",
+        "torchpippy>=0.2.0; extra == \"test-dev\"",
+        "tqdm; extra == \"test-dev\"",
+        "transformers; extra == \"test-dev\"",
+        "parameterized; extra == \"test-prod\"",
+        "pytest-subtests; extra == \"test-prod\"",
+        "pytest-xdist; extra == \"test-prod\"",
+        "pytest<=8.0.0,>=7.2.0; extra == \"test-prod\"",
+        "comet-ml; extra == \"test-trackers\"",
+        "dvclive; extra == \"test-trackers\"",
+        "tensorboard; extra == \"test-trackers\"",
+        "wandb; extra == \"test-trackers\"",
+        "bitsandbytes; extra == \"testing\"",
+        "datasets; extra == \"testing\"",
+        "diffusers; extra == \"testing\"",
+        "evaluate; extra == \"testing\"",
+        "parameterized; extra == \"testing\"",
+        "pytest-subtests; extra == \"testing\"",
+        "pytest-xdist; extra == \"testing\"",
+        "pytest<=8.0.0,>=7.2.0; extra == \"testing\"",
+        "scikit-learn; extra == \"testing\"",
+        "scipy; extra == \"testing\"",
+        "timm; extra == \"testing\"",
+        "torchdata>=0.8.0; extra == \"testing\"",
+        "torchpippy>=0.2.0; extra == \"testing\"",
+        "tqdm; extra == \"testing\"",
+        "transformers; extra == \"testing\""
+      ]
+    },
+    {
+      "id": "pip-certifi",
+      "kind": "wheel",
+      "url": "https://files.pythonhosted.org/packages/12/90/3c9ff0512038035f59d279fddeb79f5f1eccd8859f06d6163c58798b9487/certifi-2024.8.30-py3-none-any.whl",
+      "sha256": "922820b53db7a7257ffbda3f597266d435245903d80737e34f8a45ff3e3230d8",
+      "size": 167321,
+      "filename": "certifi-2024.8.30-py3-none-any.whl",
+      "package": "certifi",
+      "version": "2024.8.30",
+      "requires_dist": []
+    },
+    {
+      "id": "pip-charset-normalizer",
+      "kind": "wheel",
+      "url": "https://files.pythonhosted.org/packages/16/92/92a76dc2ff3a12e69ba94e7e05168d37d0345fa08c87e1fe24d0c2a42223/charset_normalizer-3.4.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+      "sha256": "8cda06946eac330cbe6598f77bb54e690b4ca93f593dee1568ad22b04f347c15",
+      "size": 143838,
+      "filename": "charset_normalizer-3.4.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+      "package": "charset-normalizer",
+      "version": "3.4.0",
+      "requires_dist": []
+    },
+    {
+      "id": "pip-fastrlock",
+      "kind": "wheel",
+      "url": "https://files.pythonhosted.org/packages/80/07/cdecb7aa976f34328372f1c4efd6c9dc1b039b3cc8d3f38787d640009a25/fastrlock-0.8.3-cp312-cp312-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_28_x86_64.whl",
+      "sha256": "5f13ec08f1adb1aa916c384b05ecb7dbebb8df9ea81abd045f60941c6283a670",
+      "size": 53924,
+      "filename": "fastrlock-0.8.3-cp312-cp312-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_28_x86_64.whl",
+      "package": "fastrlock",
+      "version": "0.8.3",
+      "requires_dist": []
+    },
+    {
+      "id": "pip-filelock",
+      "kind": "wheel",
+      "url": "https://files.pythonhosted.org/packages/b9/f8/feced7779d755758a52d1f6635d990b8d98dc0a29fa568bbe0625f18fdf3/filelock-3.16.1-py3-none-any.whl",
+      "sha256": "2082e5703d51fbf98ea75855d9d5527e33d8ff23099bec374a134febee6946b0",
+      "size": 16163,
+      "filename": "filelock-3.16.1-py3-none-any.whl",
+      "package": "filelock",
+      "version": "3.16.1",
+      "requires_dist": [
+        "furo>=2024.8.6; extra == \"docs\"",
+        "sphinx-autodoc-typehints>=2.4.1; extra == \"docs\"",
+        "sphinx>=8.0.2; extra == \"docs\"",
+        "covdefaults>=2.3; extra == \"testing\"",
+        "coverage>=7.6.1; extra == \"testing\"",
+        "diff-cover>=9.2; extra == \"testing\"",
+        "pytest-asyncio>=0.24; extra == \"testing\"",
+        "pytest-cov>=5; extra == \"testing\"",
+        "pytest-mock>=3.14; extra == \"testing\"",
+        "pytest-timeout>=2.3.1; extra == \"testing\"",
+        "pytest>=8.3.3; extra == \"testing\"",
+        "virtualenv>=20.26.4; extra == \"testing\"",
+        "typing-extensions>=4.12.2; python_version < \"3.11\" and extra == \"typing\""
+      ]
+    },
+    {
+      "id": "pip-fsspec",
+      "kind": "wheel",
+      "url": "https://files.pythonhosted.org/packages/c6/b2/454d6e7f0158951d8a78c2e1eb4f69ae81beb8dca5fee9809c6c99e9d0d0/fsspec-2024.10.0-py3-none-any.whl",
+      "sha256": "03b9a6785766a4de40368b88906366755e2819e758b83705c88cd7cb5fe81871",
+      "size": 179641,
+      "filename": "fsspec-2024.10.0-py3-none-any.whl",
+      "package": "fsspec",
+      "version": "2024.10.0",
+      "requires_dist": [
+        "adlfs; extra == \"abfs\"",
+        "adlfs; extra == \"adl\"",
+        "pyarrow>=1; extra == \"arrow\"",
+        "dask; extra == \"dask\"",
+        "distributed; extra == \"dask\"",
+        "pre-commit; extra == \"dev\"",
+        "ruff; extra == \"dev\"",
+        "numpydoc; extra == \"doc\"",
+        "sphinx; extra == \"doc\"",
+        "sphinx-design; extra == \"doc\"",
+        "sphinx-rtd-theme; extra == \"doc\"",
+        "yarl; extra == \"doc\"",
+        "dropbox; extra == \"dropbox\"",
+        "dropboxdrivefs; extra == \"dropbox\"",
+        "requests; extra == \"dropbox\"",
+        "adlfs; extra == \"full\"",
+        "aiohttp!=4.0.0a0,!=4.0.0a1; extra == \"full\"",
+        "dask; extra == \"full\"",
+        "distributed; extra == \"full\"",
+        "dropbox; extra == \"full\"",
+        "dropboxdrivefs; extra == \"full\"",
+        "fusepy; extra == \"full\"",
+        "gcsfs; extra == \"full\"",
+        "libarchive-c; extra == \"full\"",
+        "ocifs; extra == \"full\"",
+        "panel; extra == \"full\"",
+        "paramiko; extra == \"full\"",
+        "pyarrow>=1; extra == \"full\"",
+        "pygit2; extra == \"full\"",
+        "requests; extra == \"full\"",
+        "s3fs; extra == \"full\"",
+        "smbprotocol; extra == \"full\"",
+        "tqdm; extra == \"full\"",
+        "fusepy; extra == \"fuse\"",
+        "gcsfs; extra == \"gcs\"",
+        "pygit2; extra == \"git\"",
+        "requests; extra == \"github\"",
+        "gcsfs; extra == \"gs\"",
+        "panel; extra == \"gui\"",
+        "pyarrow>=1; extra == \"hdfs\"",
+        "aiohttp!=4.0.0a0,!=4.0.0a1; extra == \"http\"",
+        "libarchive-c; extra == \"libarchive\"",
+        "ocifs; extra == \"oci\"",
+        "s3fs; extra == \"s3\"",
+        "paramiko; extra == \"sftp\"",
+        "smbprotocol; extra == \"smb\"",
+        "paramiko; extra == \"ssh\"",
+        "aiohttp!=4.0.0a0,!=4.0.0a1; extra == \"test\"",
+        "numpy; extra == \"test\"",
+        "pytest; extra == \"test\"",
+        "pytest-asyncio!=0.22.0; extra == \"test\"",
+        "pytest-benchmark; extra == \"test\"",
+        "pytest-cov; extra == \"test\"",
+        "pytest-mock; extra == \"test\"",
+        "pytest-recording; extra == \"test\"",
+        "pytest-rerunfailures; extra == \"test\"",
+        "requests; extra == \"test\"",
+        "aiobotocore<3.0.0,>=2.5.4; extra == \"test-downstream\"",
+        "dask-expr; extra == \"test-downstream\"",
+        "dask[dataframe,test]; extra == \"test-downstream\"",
+        "moto[server]<5,>4; extra == \"test-downstream\"",
+        "pytest-timeout; extra == \"test-downstream\"",
+        "xarray; extra == \"test-downstream\"",
+        "adlfs; extra == \"test-full\"",
+        "aiohttp!=4.0.0a0,!=4.0.0a1; extra == \"test-full\"",
+        "cloudpickle; extra == \"test-full\"",
+        "dask; extra == \"test-full\"",
+        "distributed; extra == \"test-full\"",
+        "dropbox; extra == \"test-full\"",
+        "dropboxdrivefs; extra == \"test-full\"",
+        "fastparquet; extra == \"test-full\"",
+        "fusepy; extra == \"test-full\"",
+        "gcsfs; extra == \"test-full\"",
+        "jinja2; extra == \"test-full\"",
+        "kerchunk; extra == \"test-full\"",
+        "libarchive-c; extra == \"test-full\"",
+        "lz4; extra == \"test-full\"",
+        "notebook; extra == \"test-full\"",
+        "numpy; extra == \"test-full\"",
+        "ocifs; extra == \"test-full\"",
+        "pandas; extra == \"test-full\"",
+        "panel; extra == \"test-full\"",
+        "paramiko; extra == \"test-full\"",
+        "pyarrow; extra == \"test-full\"",
+        "pyarrow>=1; extra == \"test-full\"",
+        "pyftpdlib; extra == \"test-full\"",
+        "pygit2; extra == \"test-full\"",
+        "pytest; extra == \"test-full\"",
+        "pytest-asyncio!=0.22.0; extra == \"test-full\"",
+        "pytest-benchmark; extra == \"test-full\"",
+        "pytest-cov; extra == \"test-full\"",
+        "pytest-mock; extra == \"test-full\"",
+        "pytest-recording; extra == \"test-full\"",
+        "pytest-rerunfailures; extra == \"test-full\"",
+        "python-snappy; extra == \"test-full\"",
+        "requests; extra == \"test-full\"",
+        "smbprotocol; extra == \"test-full\"",
+        "tqdm; extra == \"test-full\"",
+        "urllib3; extra == \"test-full\"",
+        "zarr; extra == \"test-full\"",
+        "zstandard; extra == \"test-full\"",
+        "tqdm; extra == \"tqdm\""
+      ]
+    },
+    {
+      "id": "pip-huggingface-hub",
+      "kind": "wheel",
+      "url": "https://files.pythonhosted.org/packages/60/bf/cea0b9720c32fa01b0c4ec4b16b9f4ae34ca106b202ebbae9f03ab98cd8f/huggingface_hub-0.26.2-py3-none-any.whl",
+      "sha256": "98c2a5a8e786c7b2cb6fdeb2740893cba4d53e312572ed3d8afafda65b128c46",
+      "size": 447536,
+      "filename": "huggingface_hub-0.26.2-py3-none-any.whl",
+      "package": "huggingface-hub",
+      "version": "0.26.2",
+      "requires_dist": [
+        "filelock",
+        "fsspec>=2023.5.0",
+        "packaging>=20.9",
+        "pyyaml>=5.1",
+        "requests",
+        "tqdm>=4.42.1",
+        "typing-extensions>=3.7.4.3",
+        "InquirerPy==0.3.4; extra == \"all\"",
+        "aiohttp; extra == \"all\"",
+        "jedi; extra == \"all\"",
+        "Jinja2; extra == \"all\"",
+        "pytest<8.2.2,>=8.1.1; extra == \"all\"",
+        "pytest-cov; extra == \"all\"",
+        "pytest-env; extra == \"all\"",
+        "pytest-xdist; extra == \"all\"",
+        "pytest-vcr; extra == \"all\"",
+        "pytest-asyncio; extra == \"all\"",
+        "pytest-rerunfailures; extra == \"all\"",
+        "pytest-mock; extra == \"all\"",
+        "urllib3<2.0; extra == \"all\"",
+        "soundfile; extra == \"all\"",
+        "Pillow; extra == \"all\"",
+        "gradio>=4.0.0; extra == \"all\"",
+        "numpy; extra == \"all\"",
+        "fastapi; extra == \"all\"",
+        "ruff>=0.5.0; extra == \"all\"",
+        "mypy==1.5.1; extra == \"all\"",
+        "libcst==1.4.0; extra == \"all\"",
+        "typing-extensions>=4.8.0; extra == \"all\"",
+        "types-PyYAML; extra == \"all\"",
+        "types-requests; extra == \"all\"",
+        "types-simplejson; extra == \"all\"",
+        "types-toml; extra == \"all\"",
+        "types-tqdm; extra == \"all\"",
+        "types-urllib3; extra == \"all\"",
+        "InquirerPy==0.3.4; extra == \"cli\"",
+        "InquirerPy==0.3.4; extra == \"dev\"",
+        "aiohttp; extra == \"dev\"",
+        "jedi; extra == \"dev\"",
+        "Jinja2; extra == \"dev\"",
+        "pytest<8.2.2,>=8.1.1; extra == \"dev\"",
+        "pytest-cov; extra == \"dev\"",
+        "pytest-env; extra == \"dev\"",
+        "pytest-xdist; extra == \"dev\"",
+        "pytest-vcr; extra == \"dev\"",
+        "pytest-asyncio; extra == \"dev\"",
+        "pytest-rerunfailures; extra == \"dev\"",
+        "pytest-mock; extra == \"dev\"",
+        "urllib3<2.0; extra == \"dev\"",
+        "soundfile; extra == \"dev\"",
+        "Pillow; extra == \"dev\"",
+        "gradio>=4.0.0; extra == \"dev\"",
+        "numpy; extra == \"dev\"",
+        "fastapi; extra == \"dev\"",
+        "ruff>=0.5.0; extra == \"dev\"",
+        "mypy==1.5.1; extra == \"dev\"",
+        "libcst==1.4.0; extra == \"dev\"",
+        "typing-extensions>=4.8.0; extra == \"dev\"",
+        "types-PyYAML; extra == \"dev\"",
+        "types-requests; extra == \"dev\"",
+        "types-simplejson; extra == \"dev\"",
+        "types-toml; extra == \"dev\"",
+        "types-tqdm; extra == \"dev\"",
+        "types-urllib3; extra == \"dev\"",
+        "toml; extra == \"fastai\"",
+        "fastai>=2.4; extra == \"fastai\"",
+        "fastcore>=1.3.27; extra == \"fastai\"",
+        "hf-transfer>=0.1.4; extra == \"hf-transfer\"",
+        "aiohttp; extra == \"inference\"",
+        "ruff>=0.5.0; extra == \"quality\"",
+        "mypy==1.5.1; extra == \"quality\"",
+        "libcst==1.4.0; extra == \"quality\"",
+        "tensorflow; extra == \"tensorflow\"",
+        "pydot; extra == \"tensorflow\"",
+        "graphviz; extra == \"tensorflow\"",
+        "tensorflow; extra == \"tensorflow-testing\"",
+        "keras<3.0; extra == \"tensorflow-testing\"",
+        "InquirerPy==0.3.4; extra == \"testing\"",
+        "aiohttp; extra == \"testing\"",
+        "jedi; extra == \"testing\"",
+        "Jinja2; extra == \"testing\"",
+        "pytest<8.2.2,>=8.1.1; extra == \"testing\"",
+        "pytest-cov; extra == \"testing\"",
+        "pytest-env; extra == \"testing\"",
+        "pytest-xdist; extra == \"testing\"",
+        "pytest-vcr; extra == \"testing\"",
+        "pytest-asyncio; extra == \"testing\"",
+        "pytest-rerunfailures; extra == \"testing\"",
+        "pytest-mock; extra == \"testing\"",
+        "urllib3<2.0; extra == \"testing\"",
+        "soundfile; extra == \"testing\"",
+        "Pillow; extra == \"testing\"",
+        "gradio>=4.0.0; extra == \"testing\"",
+        "numpy; extra == \"testing\"",
+        "fastapi; extra == \"testing\"",
+        "torch; extra == \"torch\"",
+        "safetensors[torch]; extra == \"torch\"",
+        "typing-extensions>=4.8.0; extra == \"typing\"",
+        "types-PyYAML; extra == \"typing\"",
+        "types-requests; extra == \"typing\"",
+        "types-simplejson; extra == \"typing\"",
+        "types-toml; extra == \"typing\"",
+        "types-tqdm; extra == \"typing\"",
+        "types-urllib3; extra == \"typing\""
+      ]
+    },
+    {
+      "id": "pip-idna",
+      "kind": "wheel",
+      "url": "https://files.pythonhosted.org/packages/76/c6/c88e154df9c4e1a2a66ccf0005a88dfb2650c1dffb6f5ce603dfbd452ce3/idna-3.10-py3-none-any.whl",
+      "sha256": "946d195a0d259cbba61165e88e65941f16e9b36ea6ddb97f00452bae8b1287d3",
+      "size": 70442,
+      "filename": "idna-3.10-py3-none-any.whl",
+      "package": "idna",
+      "version": "3.10",
+      "requires_dist": [
+        "ruff>=0.6.2; extra == \"all\"",
+        "mypy>=1.11.2; extra == \"all\"",
+        "pytest>=8.3.2; extra == \"all\"",
+        "flake8>=7.1.1; extra == \"all\""
+      ]
+    },
+    {
+      "id": "pip-jinja2",
+      "kind": "wheel",
+      "url": "https://files.pythonhosted.org/packages/31/80/3a54838c3fb461f6fec263ebf3a3a41771bd05190238de3486aae8540c36/jinja2-3.1.4-py3-none-any.whl",
+      "sha256": "bc5dd2abb727a5319567b7a813e6a2e7318c39f4f487cfe6c89c6f9c7d25197d",
+      "size": 133271,
+      "filename": "jinja2-3.1.4-py3-none-any.whl",
+      "package": "jinja2",
+      "version": "3.1.4",
+      "requires_dist": [
+        "MarkupSafe>=2.0",
+        "Babel>=2.7; extra == \"i18n\""
+      ]
+    },
+    {
+      "id": "pip-markupsafe",
+      "kind": "wheel",
+      "url": "https://files.pythonhosted.org/packages/f3/f0/89e7aadfb3749d0f52234a0c8c7867877876e0a20b60e2188e9850794c17/MarkupSafe-3.0.2-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+      "sha256": "e17c96c14e19278594aa4841ec148115f9c7615a47382ecb6b82bd8fea3ab0c8",
+      "size": 23118,
+      "filename": "MarkupSafe-3.0.2-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+      "package": "markupsafe",
+      "version": "3.0.2",
+      "requires_dist": []
+    },
+    {
+      "id": "pip-mpmath",
+      "kind": "wheel",
+      "url": "https://files.pythonhosted.org/packages/43/e3/7d92a15f894aa0c9c4b49b8ee9ac9850d6e63b03c9c32c0367a13ae62209/mpmath-1.3.0-py3-none-any.whl",
+      "sha256": "a0b2b9fe80bbcd81a6647ff13108738cfb482d481d826cc0e02f5b35e5c88d2c",
+      "size": 536198,
+      "filename": "mpmath-1.3.0-py3-none-any.whl",
+      "package": "mpmath",
+      "version": "1.3.0",
+      "requires_dist": [
+        "pytest (>=4.6) ; extra == 'develop'",
+        "pycodestyle ; extra == 'develop'",
+        "pytest-cov ; extra == 'develop'",
+        "codecov ; extra == 'develop'",
+        "wheel ; extra == 'develop'",
+        "sphinx ; extra == 'docs'",
+        "gmpy2 (>=2.1.0a4) ; (platform_python_implementation != \"PyPy\") and extra == 'gmpy'",
+        "pytest (>=4.6) ; extra == 'tests'"
+      ]
+    },
+    {
+      "id": "pip-networkx",
+      "kind": "wheel",
+      "url": "https://files.pythonhosted.org/packages/b9/54/dd730b32ea14ea797530a4479b2ed46a6fb250f682a9cfb997e968bf0261/networkx-3.4.2-py3-none-any.whl",
+      "sha256": "df5d4365b724cf81b8c6a7312509d0c22386097011ad1abe274afd5e9d3bbc5f",
+      "size": 1723263,
+      "filename": "networkx-3.4.2-py3-none-any.whl",
+      "package": "networkx",
+      "version": "3.4.2",
+      "requires_dist": [
+        "numpy>=1.24; extra == \"default\"",
+        "scipy!=1.11.0,!=1.11.1,>=1.10; extra == \"default\"",
+        "matplotlib>=3.7; extra == \"default\"",
+        "pandas>=2.0; extra == \"default\"",
+        "changelist==0.5; extra == \"developer\"",
+        "pre-commit>=3.2; extra == \"developer\"",
+        "mypy>=1.1; extra == \"developer\"",
+        "rtoml; extra == \"developer\"",
+        "sphinx>=7.3; extra == \"doc\"",
+        "pydata-sphinx-theme>=0.15; extra == \"doc\"",
+        "sphinx-gallery>=0.16; extra == \"doc\"",
+        "numpydoc>=1.8.0; extra == \"doc\"",
+        "pillow>=9.4; extra == \"doc\"",
+        "texext>=0.6.7; extra == \"doc\"",
+        "myst-nb>=1.1; extra == \"doc\"",
+        "intersphinx-registry; extra == \"doc\"",
+        "osmnx>=1.9; extra == \"example\"",
+        "momepy>=0.7.2; extra == \"example\"",
+        "contextily>=1.6; extra == \"example\"",
+        "seaborn>=0.13; extra == \"example\"",
+        "cairocffi>=1.7; extra == \"example\"",
+        "igraph>=0.11; extra == \"example\"",
+        "scikit-learn>=1.5; extra == \"example\"",
+        "lxml>=4.6; extra == \"extra\"",
+        "pygraphviz>=1.14; extra == \"extra\"",
+        "pydot>=3.0.1; extra == \"extra\"",
+        "sympy>=1.10; extra == \"extra\"",
+        "pytest>=7.2; extra == \"test\"",
+        "pytest-cov>=4.0; extra == \"test\""
+      ]
+    },
+    {
+      "id": "pip-numpy",
+      "kind": "wheel",
+      "url": "https://files.pythonhosted.org/packages/0f/50/de23fde84e45f5c4fda2488c759b69990fd4512387a8632860f3ac9cd225/numpy-1.26.4-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+      "sha256": "675d61ffbfa78604709862923189bad94014bef562cc35cf61d3a07bba02a7ed",
+      "size": 17950613,
+      "filename": "numpy-1.26.4-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+      "package": "numpy",
+      "version": "1.26.4",
+      "requires_dist": []
+    },
+    {
+      "id": "pip-packaging",
+      "kind": "wheel",
+      "url": "https://files.pythonhosted.org/packages/88/ef/eb23f262cca3c0c4eb7ab1933c3b1f03d021f2c48f54763065b6f0e321be/packaging-24.2-py3-none-any.whl",
+      "sha256": "09abb1bccd265c01f4a3aa3f7a7db064b36514d2cba19a2f694fe6150451a759",
+      "size": 65451,
+      "filename": "packaging-24.2-py3-none-any.whl",
+      "package": "packaging",
+      "version": "24.2",
+      "requires_dist": []
+    },
+    {
+      "id": "pip-pillow",
+      "kind": "wheel",
+      "url": "https://files.pythonhosted.org/packages/7f/42/6e0f2c2d5c60f499aa29be14f860dd4539de322cd8fb84ee01553493fb4d/pillow-11.0.0-cp312-cp312-manylinux_2_28_x86_64.whl",
+      "sha256": "00177a63030d612148e659b55ba99527803288cea7c75fb05766ab7981a8c1b7",
+      "size": 4381824,
+      "filename": "pillow-11.0.0-cp312-cp312-manylinux_2_28_x86_64.whl",
+      "package": "pillow",
+      "version": "11.0.0",
+      "requires_dist": [
+        "furo; extra == \"docs\"",
+        "olefile; extra == \"docs\"",
+        "sphinx>=8.1; extra == \"docs\"",
+        "sphinx-copybutton; extra == \"docs\"",
+        "sphinx-inline-tabs; extra == \"docs\"",
+        "sphinxext-opengraph; extra == \"docs\"",
+        "olefile; extra == \"fpx\"",
+        "olefile; extra == \"mic\"",
+        "check-manifest; extra == \"tests\"",
+        "coverage; extra == \"tests\"",
+        "defusedxml; extra == \"tests\"",
+        "markdown2; extra == \"tests\"",
+        "olefile; extra == \"tests\"",
+        "packaging; extra == \"tests\"",
+        "pyroma; extra == \"tests\"",
+        "pytest; extra == \"tests\"",
+        "pytest-cov; extra == \"tests\"",
+        "pytest-timeout; extra == \"tests\"",
+        "typing-extensions; python_version < \"3.10\" and extra == \"typing\"",
+        "defusedxml; extra == \"xmp\""
+      ]
+    },
+    {
+      "id": "pip-pip",
+      "kind": "wheel",
+      "url": "https://files.pythonhosted.org/packages/ef/7d/500c9ad20238fcfcb4cb9243eede163594d7020ce87bd9610c9e02771876/pip-24.3.1-py3-none-any.whl",
+      "sha256": "3790624780082365f47549d032f3770eeb2b1e8bd1f7b2e02dace1afa361b4ed",
+      "size": 1822182,
+      "filename": "pip-24.3.1-py3-none-any.whl",
+      "package": "pip",
+      "version": "24.3.1",
+      "requires_dist": []
+    },
+    {
+      "id": "pip-psutil",
+      "kind": "wheel",
+      "url": "https://files.pythonhosted.org/packages/58/4d/8245e6f76a93c98aab285a43ea71ff1b171bcd90c9d238bf81f7021fb233/psutil-6.1.0-cp36-abi3-manylinux_2_12_x86_64.manylinux2010_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+      "sha256": "498c6979f9c6637ebc3a73b3f87f9eb1ec24e1ce53a7c5173b8508981614a90b",
+      "size": 287255,
+      "filename": "psutil-6.1.0-cp36-abi3-manylinux_2_12_x86_64.manylinux2010_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+      "package": "psutil",
+      "version": "6.1.0",
+      "requires_dist": [
+        "black; extra == \"dev\"",
+        "check-manifest; extra == \"dev\"",
+        "coverage; extra == \"dev\"",
+        "packaging; extra == \"dev\"",
+        "pylint; extra == \"dev\"",
+        "pyperf; extra == \"dev\"",
+        "pypinfo; extra == \"dev\"",
+        "pytest-cov; extra == \"dev\"",
+        "requests; extra == \"dev\"",
+        "rstcheck; extra == \"dev\"",
+        "ruff; extra == \"dev\"",
+        "sphinx; extra == \"dev\"",
+        "sphinx_rtd_theme; extra == \"dev\"",
+        "toml-sort; extra == \"dev\"",
+        "twine; extra == \"dev\"",
+        "virtualenv; extra == \"dev\"",
+        "wheel; extra == \"dev\"",
+        "pytest; extra == \"test\"",
+        "pytest-xdist; extra == \"test\"",
+        "setuptools; extra == \"test\""
+      ]
+    },
+    {
+      "id": "pip-pyyaml",
+      "kind": "wheel",
+      "url": "https://files.pythonhosted.org/packages/b9/2b/614b4752f2e127db5cc206abc23a8c19678e92b23c3db30fc86ab731d3bd/PyYAML-6.0.2-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+      "sha256": "80bab7bfc629882493af4aa31a4cfa43a4c57c83813253626916b8c7ada83476",
+      "size": 767542,
+      "filename": "PyYAML-6.0.2-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+      "package": "pyyaml",
+      "version": "6.0.2",
+      "requires_dist": []
+    },
+    {
+      "id": "pip-regex",
+      "kind": "wheel",
+      "url": "https://files.pythonhosted.org/packages/fb/13/e3b075031a738c9598c51cfbc4c7879e26729c53aa9cca59211c44235314/regex-2024.11.6-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+      "sha256": "70b7fa6606c2881c1db9479b0eaa11ed5dfa11c8d60a474ff0e095099f39d98e",
+      "size": 796896,
+      "filename": "regex-2024.11.6-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+      "package": "regex",
+      "version": "2024.11.6",
+      "requires_dist": []
+    },
+    {
+      "id": "pip-requests",
+      "kind": "wheel",
+      "url": "https://files.pythonhosted.org/packages/f9/9b/335f9764261e915ed497fcdeb11df5dfd6f7bf257d4a6a2a686d80da4d54/requests-2.32.3-py3-none-any.whl",
+      "sha256": "70761cfe03c773ceb22aa2f671b4757976145175cdfca038c02654d061d6dcc6",
+      "size": 64928,
+      "filename": "requests-2.32.3-py3-none-any.whl",
+      "package": "requests",
+      "version": "2.32.3",
+      "requires_dist": [
+        "charset-normalizer<4,>=2",
+        "idna<4,>=2.5",
+        "urllib3<3,>=1.21.1",
+        "certifi>=2017.4.17",
+        "PySocks!=1.5.7,>=1.5.6; extra == \"socks\"",
+        "chardet<6,>=3.0.2; extra == \"use-chardet-on-py3\""
+      ]
+    },
+    {
+      "id": "pip-safetensors",
+      "kind": "wheel",
+      "url": "https://files.pythonhosted.org/packages/d9/40/a6f75ea449a9647423ec8b6f72c16998d35aa4b43cb38536ac060c5c7bf5/safetensors-0.4.5-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+      "sha256": "3685ce7ed036f916316b567152482b7e959dc754fcc4a8342333d222e05f407c",
+      "size": 434769,
+      "filename": "safetensors-0.4.5-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+      "package": "safetensors",
+      "version": "0.4.5",
+      "requires_dist": [
+        "numpy>=1.21.6; extra == \"numpy\"",
+        "safetensors[numpy]; extra == \"torch\"",
+        "torch>=1.10; extra == \"torch\"",
+        "safetensors[numpy]; extra == \"tensorflow\"",
+        "tensorflow>=2.11.0; extra == \"tensorflow\"",
+        "safetensors[numpy]; extra == \"pinned-tf\"",
+        "tensorflow==2.11.0; extra == \"pinned-tf\"",
+        "safetensors[numpy]; extra == \"jax\"",
+        "flax>=0.6.3; extra == \"jax\"",
+        "jax>=0.3.25; extra == \"jax\"",
+        "jaxlib>=0.3.25; extra == \"jax\"",
+        "mlx>=0.0.9; extra == \"mlx\"",
+        "safetensors[numpy]; extra == \"paddlepaddle\"",
+        "paddlepaddle>=2.4.1; extra == \"paddlepaddle\"",
+        "black==22.3; extra == \"quality\"",
+        "click==8.0.4; extra == \"quality\"",
+        "isort>=5.5.4; extra == \"quality\"",
+        "flake8>=3.8.3; extra == \"quality\"",
+        "safetensors[numpy]; extra == \"testing\"",
+        "h5py>=3.7.0; extra == \"testing\"",
+        "huggingface-hub>=0.12.1; extra == \"testing\"",
+        "setuptools-rust>=1.5.2; extra == \"testing\"",
+        "pytest>=7.2.0; extra == \"testing\"",
+        "pytest-benchmark>=4.0.0; extra == \"testing\"",
+        "hypothesis>=6.70.2; extra == \"testing\"",
+        "safetensors[torch]; extra == \"all\"",
+        "safetensors[numpy]; extra == \"all\"",
+        "safetensors[pinned-tf]; extra == \"all\"",
+        "safetensors[jax]; extra == \"all\"",
+        "safetensors[paddlepaddle]; extra == \"all\"",
+        "safetensors[quality]; extra == \"all\"",
+        "safetensors[testing]; extra == \"all\"",
+        "safetensors[all]; extra == \"dev\""
+      ]
+    },
+    {
+      "id": "pip-setuptools",
+      "kind": "wheel",
+      "url": "https://files.pythonhosted.org/packages/55/21/47d163f615df1d30c094f6c8bbb353619274edccf0327b185cc2493c2c33/setuptools-75.6.0-py3-none-any.whl",
+      "sha256": "ce74b49e8f7110f9bf04883b730f4765b774ef3ef28f722cce7c273d253aaf7d",
+      "size": 1224032,
+      "filename": "setuptools-75.6.0-py3-none-any.whl",
+      "package": "setuptools",
+      "version": "75.6.0",
+      "requires_dist": [
+        "pytest!=8.1.*,>=6; extra == \"test\"",
+        "virtualenv>=13.0.0; extra == \"test\"",
+        "wheel>=0.44.0; extra == \"test\"",
+        "pip>=19.1; extra == \"test\"",
+        "packaging>=24.2; extra == \"test\"",
+        "jaraco.envs>=2.2; extra == \"test\"",
+        "pytest-xdist>=3; extra == \"test\"",
+        "jaraco.path>=3.2.0; extra == \"test\"",
+        "build[virtualenv]>=1.0.3; extra == \"test\"",
+        "filelock>=3.4.0; extra == \"test\"",
+        "ini2toml[lite]>=0.14; extra == \"test\"",
+        "tomli-w>=1.0.0; extra == \"test\"",
+        "pytest-timeout; extra == \"test\"",
+        "pytest-perf; sys_platform != \"cygwin\" and extra == \"test\"",
+        "jaraco.develop>=7.21; (python_version >= \"3.9\" and sys_platform != \"cygwin\") and extra == \"test\"",
+        "pytest-home>=0.5; extra == \"test\"",
+        "pytest-subprocess; extra == \"test\"",
+        "pyproject-hooks!=1.1; extra == \"test\"",
+        "jaraco.test>=5.5; extra == \"test\"",
+        "sphinx>=3.5; extra == \"doc\"",
+        "jaraco.packaging>=9.3; extra == \"doc\"",
+        "rst.linker>=1.9; extra == \"doc\"",
+        "furo; extra == \"doc\"",
+        "sphinx-lint; extra == \"doc\"",
+        "jaraco.tidelift>=1.4; extra == \"doc\"",
+        "pygments-github-lexers==0.0.5; extra == \"doc\"",
+        "sphinx-favicon; extra == \"doc\"",
+        "sphinx-inline-tabs; extra == \"doc\"",
+        "sphinx-reredirects; extra == \"doc\"",
+        "sphinxcontrib-towncrier; extra == \"doc\"",
+        "sphinx-notfound-page<2,>=1; extra == \"doc\"",
+        "pyproject-hooks!=1.1; extra == \"doc\"",
+        "towncrier<24.7; extra == \"doc\"",
+        "packaging>=24.2; extra == \"core\"",
+        "more_itertools>=8.8; extra == \"core\"",
+        "jaraco.text>=3.7; extra == \"core\"",
+        "importlib_metadata>=6; python_version < \"3.10\" and extra == \"core\"",
+        "tomli>=2.0.1; python_version < \"3.11\" and extra == \"core\"",
+        "wheel>=0.43.0; extra == \"core\"",
+        "platformdirs>=4.2.2; extra == \"core\"",
+        "jaraco.collections; extra == \"core\"",
+        "jaraco.functools>=4; extra == \"core\"",
+        "packaging; extra == \"core\"",
+        "more_itertools; extra == \"core\"",
+        "pytest-checkdocs>=2.4; extra == \"check\"",
+        "pytest-ruff>=0.2.1; sys_platform != \"cygwin\" and extra == \"check\"",
+        "ruff>=0.7.0; sys_platform != \"cygwin\" and extra == \"check\"",
+        "pytest-cov; extra == \"cover\"",
+        "pytest-enabler>=2.2; extra == \"enabler\"",
+        "pytest-mypy; extra == \"type\"",
+        "mypy<1.14,>=1.12; extra == \"type\"",
+        "importlib_metadata>=7.0.2; python_version < \"3.10\" and extra == \"type\"",
+        "jaraco.develop>=7.21; sys_platform != \"cygwin\" and extra == \"type\""
+      ]
+    },
+    {
+      "id": "pip-sympy",
+      "kind": "wheel",
+      "url": "https://files.pythonhosted.org/packages/b2/fe/81695a1aa331a842b582453b605175f419fe8540355886031328089d840a/sympy-1.13.1-py3-none-any.whl",
+      "sha256": "db36cdc64bf61b9b24578b6f7bab1ecdd2452cf008f34faa33776680c26d66f8",
+      "size": 6189177,
+      "filename": "sympy-1.13.1-py3-none-any.whl",
+      "package": "sympy",
+      "version": "1.13.1",
+      "requires_dist": [
+        "mpmath<1.4,>=1.1.0",
+        "pytest>=7.1.0; extra == \"dev\"",
+        "hypothesis>=6.70.0; extra == \"dev\""
+      ]
+    },
+    {
+      "id": "pip-tokenizers",
+      "kind": "wheel",
+      "url": "https://files.pythonhosted.org/packages/9e/65/c83cb3545a65a9eaa2e13b22c93d5e00bd7624b354a44adbdc93d5d9bd91/tokenizers-0.20.3-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+      "sha256": "f2b7cb962564785a83dafbba0144ecb7f579f1d57d8c406cdaa7f32fe32f18ad",
+      "size": 2997679,
+      "filename": "tokenizers-0.20.3-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+      "package": "tokenizers",
+      "version": "0.20.3",
+      "requires_dist": [
+        "huggingface-hub<1.0,>=0.16.4",
+        "pytest; extra == \"testing\"",
+        "requests; extra == \"testing\"",
+        "numpy; extra == \"testing\"",
+        "datasets; extra == \"testing\"",
+        "black==22.3; extra == \"testing\"",
+        "ruff; extra == \"testing\"",
+        "sphinx; extra == \"docs\"",
+        "sphinx-rtd-theme; extra == \"docs\"",
+        "setuptools-rust; extra == \"docs\"",
+        "tokenizers[testing]; extra == \"dev\""
+      ]
+    },
+    {
+      "id": "pip-tqdm",
+      "kind": "wheel",
+      "url": "https://files.pythonhosted.org/packages/d0/30/dc54f88dd4a2b5dc8a0279bdd7270e735851848b762aeb1c1184ed1f6b14/tqdm-4.67.1-py3-none-any.whl",
+      "sha256": "26445eca388f82e72884e0d580d5464cd801a3ea01e63e5601bdff9ba6a48de2",
+      "size": 78540,
+      "filename": "tqdm-4.67.1-py3-none-any.whl",
+      "package": "tqdm",
+      "version": "4.67.1",
+      "requires_dist": [
+        "colorama; platform_system == \"Windows\"",
+        "pytest>=6; extra == \"dev\"",
+        "pytest-cov; extra == \"dev\"",
+        "pytest-timeout; extra == \"dev\"",
+        "pytest-asyncio>=0.24; extra == \"dev\"",
+        "nbval; extra == \"dev\"",
+        "requests; extra == \"discord\"",
+        "slack-sdk; extra == \"slack\"",
+        "requests; extra == \"telegram\"",
+        "ipywidgets>=6; extra == \"notebook\""
+      ]
+    },
+    {
+      "id": "pip-transformers",
+      "kind": "wheel",
+      "url": "https://files.pythonhosted.org/packages/51/51/b87caa939fedf307496e4dbf412f4b909af3d9ca8b189fc3b65c1faa456f/transformers-4.46.3-py3-none-any.whl",
+      "sha256": "a12ef6f52841fd190a3e5602145b542d03507222f2c64ebb7ee92e8788093aef",
+      "size": 10034536,
+      "filename": "transformers-4.46.3-py3-none-any.whl",
+      "package": "transformers",
+      "version": "4.46.3",
+      "requires_dist": [
+        "filelock",
+        "huggingface-hub<1.0,>=0.23.2",
+        "numpy>=1.17",
+        "packaging>=20.0",
+        "pyyaml>=5.1",
+        "regex!=2019.12.17",
+        "requests",
+        "tokenizers<0.21,>=0.20",
+        "safetensors>=0.4.1",
+        "tqdm>=4.27",
+        "accelerate>=0.26.0; extra == \"accelerate\"",
+        "diffusers; extra == \"agents\"",
+        "accelerate>=0.26.0; extra == \"agents\"",
+        "datasets!=2.5.0; extra == \"agents\"",
+        "torch; extra == \"agents\"",
+        "sentencepiece!=0.1.92,>=0.1.91; extra == \"agents\"",
+        "opencv-python; extra == \"agents\"",
+        "Pillow<=15.0,>=10.0.1; extra == \"agents\"",
+        "tensorflow<2.16,>2.9; extra == \"all\"",
+        "onnxconverter-common; extra == \"all\"",
+        "tf2onnx; extra == \"all\"",
+        "tensorflow-text<2.16; extra == \"all\"",
+        "keras-nlp<0.14.0,>=0.3.1; extra == \"all\"",
+        "torch; extra == \"all\"",
+        "accelerate>=0.26.0; extra == \"all\"",
+        "jax<=0.4.13,>=0.4.1; extra == \"all\"",
+        "jaxlib<=0.4.13,>=0.4.1; extra == \"all\"",
+        "flax<=0.7.0,>=0.4.1; extra == \"all\"",
+        "optax<=0.1.4,>=0.0.8; extra == \"all\"",
+        "scipy<1.13.0; extra == \"all\"",
+        "sentencepiece!=0.1.92,>=0.1.91; extra == \"all\"",
+        "protobuf; extra == \"all\"",
+        "tokenizers<0.21,>=0.20; extra == \"all\"",
+        "torchaudio; extra == \"all\"",
+        "librosa; extra == \"all\"",
+        "pyctcdecode>=0.4.0; extra == \"all\"",
+        "phonemizer; extra == \"all\"",
+        "kenlm; extra == \"all\"",
+        "Pillow<=15.0,>=10.0.1; extra == \"all\"",
+        "optuna; extra == \"all\"",
+        "ray[tune]>=2.7.0; extra == \"all\"",
+        "sigopt; extra == \"all\"",
+        "timm<=0.9.16; extra == \"all\"",
+        "torchvision; extra == \"all\"",
+        "codecarbon==1.2.0; extra == \"all\"",
+        "av==9.2.0; extra == \"all\"",
+        "librosa; extra == \"audio\"",
+        "pyctcdecode>=0.4.0; extra == \"audio\"",
+        "phonemizer; extra == \"audio\"",
+        "kenlm; extra == \"audio\"",
+        "optimum-benchmark>=0.3.0; extra == \"benchmark\"",
+        "codecarbon==1.2.0; extra == \"codecarbon\"",
+        "deepspeed>=0.9.3; extra == \"deepspeed\"",
+        "accelerate>=0.26.0; extra == \"deepspeed\"",
+        "deepspeed>=0.9.3; extra == \"deepspeed-testing\"",
+        "accelerate>=0.26.0; extra == \"deepspeed-testing\"",
+        "pytest<8.0.0,>=7.2.0; extra == \"deepspeed-testing\"",
+        "pytest-rich; extra == \"deepspeed-testing\"",
+        "pytest-xdist; extra == \"deepspeed-testing\"",
+        "timeout-decorator; extra == \"deepspeed-testing\"",
+        "parameterized; extra == \"deepspeed-testing\"",
+        "psutil; extra == \"deepspeed-testing\"",
+        "datasets!=2.5.0; extra == \"deepspeed-testing\"",
+        "dill<0.3.5; extra == \"deepspeed-testing\"",
+        "evaluate>=0.2.0; extra == \"deepspeed-testing\"",
+        "pytest-timeout; extra == \"deepspeed-testing\"",
+        "ruff==0.5.1; extra == \"deepspeed-testing\"",
+        "sacrebleu<2.0.0,>=1.4.12; extra == \"deepspeed-testing\"",
+        "rouge-score!=0.0.7,!=0.0.8,!=0.1,!=0.1.1; extra == \"deepspeed-testing\"",
+        "nltk<=3.8.1; extra == \"deepspeed-testing\"",
+        "GitPython<3.1.19; extra == \"deepspeed-testing\"",
+        "sacremoses; extra == \"deepspeed-testing\"",
+        "rjieba; extra == \"deepspeed-testing\"",
+        "beautifulsoup4; extra == \"deepspeed-testing\"",
+        "tensorboard; extra == \"deepspeed-testing\"",
+        "pydantic; extra == \"deepspeed-testing\"",
+        "sentencepiece!=0.1.92,>=0.1.91; extra == \"deepspeed-testing\"",
+        "faiss-cpu; extra == \"deepspeed-testing\"",
+        "cookiecutter==1.7.3; extra == \"deepspeed-testing\"",
+        "optuna; extra == \"deepspeed-testing\"",
+        "protobuf; extra == \"deepspeed-testing\"",
+        "tensorflow<2.16,>2.9; extra == \"dev\"",
+        "onnxconverter-common; extra == \"dev\"",
+        "tf2onnx; extra == \"dev\"",
+        "tensorflow-text<2.16; extra == \"dev\"",
+        "keras-nlp<0.14.0,>=0.3.1; extra == \"dev\"",
+        "torch; extra == \"dev\"",
+        "accelerate>=0.26.0; extra == \"dev\"",
+        "jax<=0.4.13,>=0.4.1; extra == \"dev\"",
+        "jaxlib<=0.4.13,>=0.4.1; extra == \"dev\"",
+        "flax<=0.7.0,>=0.4.1; extra == \"dev\"",
+        "optax<=0.1.4,>=0.0.8; extra == \"dev\"",
+        "scipy<1.13.0; extra == \"dev\"",
+        "sentencepiece!=0.1.92,>=0.1.91; extra == \"dev\"",
+        "protobuf; extra == \"dev\"",
+        "tokenizers<0.21,>=0.20; extra == \"dev\"",
+        "torchaudio; extra == \"dev\"",
+        "librosa; extra == \"dev\"",
+        "pyctcdecode>=0.4.0; extra == \"dev\"",
+        "phonemizer; extra == \"dev\"",
+        "kenlm; extra == \"dev\"",
+        "Pillow<=15.0,>=10.0.1; extra == \"dev\"",
+        "optuna; extra == \"dev\"",
+        "ray[tune]>=2.7.0; extra == \"dev\"",
+        "sigopt; extra == \"dev\"",
+        "timm<=0.9.16; extra == \"dev\"",
+        "torchvision; extra == \"dev\"",
+        "codecarbon==1.2.0; extra == \"dev\"",
+        "av==9.2.0; extra == \"dev\"",
+        "pytest<8.0.0,>=7.2.0; extra == \"dev\"",
+        "pytest-rich; extra == \"dev\"",
+        "pytest-xdist; extra == \"dev\"",
+        "timeout-decorator; extra == \"dev\"",
+        "parameterized; extra == \"dev\"",
+        "psutil; extra == \"dev\"",
+        "datasets!=2.5.0; extra == \"dev\"",
+        "dill<0.3.5; extra == \"dev\"",
+        "evaluate>=0.2.0; extra == \"dev\"",
+        "pytest-timeout; extra == \"dev\"",
+        "ruff==0.5.1; extra == \"dev\"",
+        "sacrebleu<2.0.0,>=1.4.12; extra == \"dev\"",
+        "rouge-score!=0.0.7,!=0.0.8,!=0.1,!=0.1.1; extra == \"dev\"",
+        "nltk<=3.8.1; extra == \"dev\"",
+        "GitPython<3.1.19; extra == \"dev\"",
+        "sacremoses; extra == \"dev\"",
+        "rjieba; extra == \"dev\"",
+        "beautifulsoup4; extra == \"dev\"",
+        "tensorboard; extra == \"dev\"",
+        "pydantic; extra == \"dev\"",
+        "faiss-cpu; extra == \"dev\"",
+        "cookiecutter==1.7.3; extra == \"dev\"",
+        "isort>=5.5.4; extra == \"dev\"",
+        "urllib3<2.0.0; extra == \"dev\"",
+        "libcst; extra == \"dev\"",
+        "rich; extra == \"dev\"",
+        "fugashi>=1.0; extra == \"dev\"",
+        "ipadic<2.0,>=1.0.0; extra == \"dev\"",
+        "unidic-lite>=1.0.7; extra == \"dev\"",
+        "unidic>=1.0.2; extra == \"dev\"",
+        "sudachipy>=0.6.6; extra == \"dev\"",
+        "sudachidict-core>=20220729; extra == \"dev\"",
+        "rhoknp<1.3.1,>=1.1.0; extra == \"dev\"",
+        "scikit-learn; extra == \"dev\"",
+        "pytest<8.0.0,>=7.2.0; extra == \"dev-tensorflow\"",
+        "pytest-rich; extra == \"dev-tensorflow\"",
+        "pytest-xdist; extra == \"dev-tensorflow\"",
+        "timeout-decorator; extra == \"dev-tensorflow\"",
+        "parameterized; extra == \"dev-tensorflow\"",
+        "psutil; extra == \"dev-tensorflow\"",
+        "datasets!=2.5.0; extra == \"dev-tensorflow\"",
+        "dill<0.3.5; extra == \"dev-tensorflow\"",
+        "evaluate>=0.2.0; extra == \"dev-tensorflow\"",
+        "pytest-timeout; extra == \"dev-tensorflow\"",
+        "ruff==0.5.1; extra == \"dev-tensorflow\"",
+        "sacrebleu<2.0.0,>=1.4.12; extra == \"dev-tensorflow\"",
+        "rouge-score!=0.0.7,!=0.0.8,!=0.1,!=0.1.1; extra == \"dev-tensorflow\"",
+        "nltk<=3.8.1; extra == \"dev-tensorflow\"",
+        "GitPython<3.1.19; extra == \"dev-tensorflow\"",
+        "sacremoses; extra == \"dev-tensorflow\"",
+        "rjieba; extra == \"dev-tensorflow\"",
+        "beautifulsoup4; extra == \"dev-tensorflow\"",
+        "tensorboard; extra == \"dev-tensorflow\"",
+        "pydantic; extra == \"dev-tensorflow\"",
+        "sentencepiece!=0.1.92,>=0.1.91; extra == \"dev-tensorflow\"",
+        "faiss-cpu; extra == \"dev-tensorflow\"",
+        "cookiecutter==1.7.3; extra == \"dev-tensorflow\"",
+        "tensorflow<2.16,>2.9; extra == \"dev-tensorflow\"",
+        "onnxconverter-common; extra == \"dev-tensorflow\"",
+        "tf2onnx; extra == \"dev-tensorflow\"",
+        "tensorflow-text<2.16; extra == \"dev-tensorflow\"",
+        "keras-nlp<0.14.0,>=0.3.1; extra == \"dev-tensorflow\"",
+        "protobuf; extra == \"dev-tensorflow\"",
+        "tokenizers<0.21,>=0.20; extra == \"dev-tensorflow\"",
+        "Pillow<=15.0,>=10.0.1; extra == \"dev-tensorflow\"",
+        "isort>=5.5.4; extra == \"dev-tensorflow\"",
+        "urllib3<2.0.0; extra == \"dev-tensorflow\"",
+        "libcst; extra == \"dev-tensorflow\"",
+        "rich; extra == \"dev-tensorflow\"",
+        "scikit-learn; extra == \"dev-tensorflow\"",
+        "onnxruntime>=1.4.0; extra == \"dev-tensorflow\"",
+        "onnxruntime-tools>=1.4.2; extra == \"dev-tensorflow\"",
+        "librosa; extra == \"dev-tensorflow\"",
+        "pyctcdecode>=0.4.0; extra == \"dev-tensorflow\"",
+        "phonemizer; extra == \"dev-tensorflow\"",
+        "kenlm; extra == \"dev-tensorflow\"",
+        "pytest<8.0.0,>=7.2.0; extra == \"dev-torch\"",
+        "pytest-rich; extra == \"dev-torch\"",
+        "pytest-xdist; extra == \"dev-torch\"",
+        "timeout-decorator; extra == \"dev-torch\"",
+        "parameterized; extra == \"dev-torch\"",
+        "psutil; extra == \"dev-torch\"",
+        "datasets!=2.5.0; extra == \"dev-torch\"",
+        "dill<0.3.5; extra == \"dev-torch\"",
+        "evaluate>=0.2.0; extra == \"dev-torch\"",
+        "pytest-timeout; extra == \"dev-torch\"",
+        "ruff==0.5.1; extra == \"dev-torch\"",
+        "sacrebleu<2.0.0,>=1.4.12; extra == \"dev-torch\"",
+        "rouge-score!=0.0.7,!=0.0.8,!=0.1,!=0.1.1; extra == \"dev-torch\"",
+        "nltk<=3.8.1; extra == \"dev-torch\"",
+        "GitPython<3.1.19; extra == \"dev-torch\"",
+        "sacremoses; extra == \"dev-torch\"",
+        "rjieba; extra == \"dev-torch\"",
+        "beautifulsoup4; extra == \"dev-torch\"",
+        "tensorboard; extra == \"dev-torch\"",
+        "pydantic; extra == \"dev-torch\"",
+        "sentencepiece!=0.1.92,>=0.1.91; extra == \"dev-torch\"",
+        "faiss-cpu; extra == \"dev-torch\"",
+        "cookiecutter==1.7.3; extra == \"dev-torch\"",
+        "torch; extra == \"dev-torch\"",
+        "accelerate>=0.26.0; extra == \"dev-torch\"",
+        "protobuf; extra == \"dev-torch\"",
+        "tokenizers<0.21,>=0.20; extra == \"dev-torch\"",
+        "torchaudio; extra == \"dev-torch\"",
+        "librosa; extra == \"dev-torch\"",
+        "pyctcdecode>=0.4.0; extra == \"dev-torch\"",
+        "phonemizer; extra == \"dev-torch\"",
+        "kenlm; extra == \"dev-torch\"",
+        "Pillow<=15.0,>=10.0.1; extra == \"dev-torch\"",
+        "optuna; extra == \"dev-torch\"",
+        "ray[tune]>=2.7.0; extra == \"dev-torch\"",
+        "sigopt; extra == \"dev-torch\"",
+        "timm<=0.9.16; extra == \"dev-torch\"",
+        "torchvision; extra == \"dev-torch\"",
+        "codecarbon==1.2.0; extra == \"dev-torch\"",
+        "isort>=5.5.4; extra == \"dev-torch\"",
+        "urllib3<2.0.0; extra == \"dev-torch\"",
+        "libcst; extra == \"dev-torch\"",
+        "rich; extra == \"dev-torch\"",
+        "fugashi>=1.0; extra == \"dev-torch\"",
+        "ipadic<2.0,>=1.0.0; extra == \"dev-torch\"",
+        "unidic-lite>=1.0.7; extra == \"dev-torch\"",
+        "unidic>=1.0.2; extra == \"dev-torch\"",
+        "sudachipy>=0.6.6; extra == \"dev-torch\"",
+        "sudachidict-core>=20220729; extra == \"dev-torch\"",
+        "rhoknp<1.3.1,>=1.1.0; extra == \"dev-torch\"",
+        "scikit-learn; extra == \"dev-torch\"",
+        "onnxruntime>=1.4.0; extra == \"dev-torch\"",
+        "onnxruntime-tools>=1.4.2; extra == \"dev-torch\"",
+        "jax<=0.4.13,>=0.4.1; extra == \"flax\"",
+        "jaxlib<=0.4.13,>=0.4.1; extra == \"flax\"",
+        "flax<=0.7.0,>=0.4.1; extra == \"flax\"",
+        "optax<=0.1.4,>=0.0.8; extra == \"flax\"",
+        "scipy<1.13.0; extra == \"flax\"",
+        "librosa; extra == \"flax-speech\"",
+        "pyctcdecode>=0.4.0; extra == \"flax-speech\"",
+        "phonemizer; extra == \"flax-speech\"",
+        "kenlm; extra == \"flax-speech\"",
+        "ftfy; extra == \"ftfy\"",
+        "optuna; extra == \"integrations\"",
+        "ray[tune]>=2.7.0; extra == \"integrations\"",
+        "sigopt; extra == \"integrations\"",
+        "fugashi>=1.0; extra == \"ja\"",
+        "ipadic<2.0,>=1.0.0; extra == \"ja\"",
+        "unidic-lite>=1.0.7; extra == \"ja\"",
+        "unidic>=1.0.2; extra == \"ja\"",
+        "sudachipy>=0.6.6; extra == \"ja\"",
+        "sudachidict-core>=20220729; extra == \"ja\"",
+        "rhoknp<1.3.1,>=1.1.0; extra == \"ja\"",
+        "cookiecutter==1.7.3; extra == \"modelcreation\"",
+        "natten<0.15.0,>=0.14.6; extra == \"natten\"",
+        "onnxconverter-common; extra == \"onnx\"",
+        "tf2onnx; extra == \"onnx\"",
+        "onnxruntime>=1.4.0; extra == \"onnx\"",
+        "onnxruntime-tools>=1.4.2; extra == \"onnx\"",
+        "onnxruntime>=1.4.0; extra == \"onnxruntime\"",
+        "onnxruntime-tools>=1.4.2; extra == \"onnxruntime\"",
+        "optuna; extra == \"optuna\"",
+        "datasets!=2.5.0; extra == \"quality\"",
+        "isort>=5.5.4; extra == \"quality\"",
+        "ruff==0.5.1; extra == \"quality\"",
+        "GitPython<3.1.19; extra == \"quality\"",
+        "urllib3<2.0.0; extra == \"quality\"",
+        "libcst; extra == \"quality\"",
+        "rich; extra == \"quality\"",
+        "ray[tune]>=2.7.0; extra == \"ray\"",
+        "faiss-cpu; extra == \"retrieval\"",
+        "datasets!=2.5.0; extra == \"retrieval\"",
+        "ruff==0.5.1; extra == \"ruff\"",
+        "sagemaker>=2.31.0; extra == \"sagemaker\"",
+        "sentencepiece!=0.1.92,>=0.1.91; extra == \"sentencepiece\"",
+        "protobuf; extra == \"sentencepiece\"",
+        "pydantic; extra == \"serving\"",
+        "uvicorn; extra == \"serving\"",
+        "fastapi; extra == \"serving\"",
+        "starlette; extra == \"serving\"",
+        "sigopt; extra == \"sigopt\"",
+        "scikit-learn; extra == \"sklearn\"",
+        "torchaudio; extra == \"speech\"",
+        "librosa; extra == \"speech\"",
+        "pyctcdecode>=0.4.0; extra == \"speech\"",
+        "phonemizer; extra == \"speech\"",
+        "kenlm; extra == \"speech\"",
+        "pytest<8.0.0,>=7.2.0; extra == \"testing\"",
+        "pytest-rich; extra == \"testing\"",
+        "pytest-xdist; extra == \"testing\"",
+        "timeout-decorator; extra == \"testing\"",
+        "parameterized; extra == \"testing\"",
+        "psutil; extra == \"testing\"",
+        "datasets!=2.5.0; extra == \"testing\"",
+        "dill<0.3.5; extra == \"testing\"",
+        "evaluate>=0.2.0; extra == \"testing\"",
+        "pytest-timeout; extra == \"testing\"",
+        "ruff==0.5.1; extra == \"testing\"",
+        "sacrebleu<2.0.0,>=1.4.12; extra == \"testing\"",
+        "rouge-score!=0.0.7,!=0.0.8,!=0.1,!=0.1.1; extra == \"testing\"",
+        "nltk<=3.8.1; extra == \"testing\"",
+        "GitPython<3.1.19; extra == \"testing\"",
+        "sacremoses; extra == \"testing\"",
+        "rjieba; extra == \"testing\"",
+        "beautifulsoup4; extra == \"testing\"",
+        "tensorboard; extra == \"testing\"",
+        "pydantic; extra == \"testing\"",
+        "sentencepiece!=0.1.92,>=0.1.91; extra == \"testing\"",
+        "faiss-cpu; extra == \"testing\"",
+        "cookiecutter==1.7.3; extra == \"testing\"",
+        "tensorflow<2.16,>2.9; extra == \"tf\"",
+        "onnxconverter-common; extra == \"tf\"",
+        "tf2onnx; extra == \"tf\"",
+        "tensorflow-text<2.16; extra == \"tf\"",
+        "keras-nlp<0.14.0,>=0.3.1; extra == \"tf\"",
+        "keras<2.16,>2.9; extra == \"tf-cpu\"",
+        "tensorflow-cpu<2.16,>2.9; extra == \"tf-cpu\"",
+        "onnxconverter-common; extra == \"tf-cpu\"",
+        "tf2onnx; extra == \"tf-cpu\"",
+        "tensorflow-text<2.16; extra == \"tf-cpu\"",
+        "keras-nlp<0.14.0,>=0.3.1; extra == \"tf-cpu\"",
+        "tensorflow-probability<0.24; extra == \"tf-cpu\"",
+        "librosa; extra == \"tf-speech\"",
+        "pyctcdecode>=0.4.0; extra == \"tf-speech\"",
+        "phonemizer; extra == \"tf-speech\"",
+        "kenlm; extra == \"tf-speech\"",
+        "tiktoken; extra == \"tiktoken\"",
+        "blobfile; extra == \"tiktoken\"",
+        "timm<=0.9.16; extra == \"timm\"",
+        "tokenizers<0.21,>=0.20; extra == \"tokenizers\"",
+        "torch; extra == \"torch\"",
+        "accelerate>=0.26.0; extra == \"torch\"",
+        "torchaudio; extra == \"torch-speech\"",
+        "librosa; extra == \"torch-speech\"",
+        "pyctcdecode>=0.4.0; extra == \"torch-speech\"",
+        "phonemizer; extra == \"torch-speech\"",
+        "kenlm; extra == \"torch-speech\"",
+        "torchvision; extra == \"torch-vision\"",
+        "Pillow<=15.0,>=10.0.1; extra == \"torch-vision\"",
+        "filelock; extra == \"torchhub\"",
+        "huggingface-hub<1.0,>=0.23.2; extra == \"torchhub\"",
+        "importlib-metadata; extra == \"torchhub\"",
+        "numpy>=1.17; extra == \"torchhub\"",
+        "packaging>=20.0; extra == \"torchhub\"",
+        "protobuf; extra == \"torchhub\"",
+        "regex!=2019.12.17; extra == \"torchhub\"",
+        "requests; extra == \"torchhub\"",
+        "sentencepiece!=0.1.92,>=0.1.91; extra == \"torchhub\"",
+        "torch; extra == \"torchhub\"",
+        "tokenizers<0.21,>=0.20; extra == \"torchhub\"",
+        "tqdm>=4.27; extra == \"torchhub\"",
+        "av==9.2.0; extra == \"video\"",
+        "Pillow<=15.0,>=10.0.1; extra == \"vision\""
+      ]
+    },
+    {
+      "id": "pip-typing-extensions",
+      "kind": "wheel",
+      "url": "https://files.pythonhosted.org/packages/26/9f/ad63fc0248c5379346306f8668cda6e2e2e9c95e01216d2b8ffd9ff037d0/typing_extensions-4.12.2-py3-none-any.whl",
+      "sha256": "04e5ca0351e0f3f85c6853954072df659d0d13fac324d0072316b67d7794700d",
+      "size": 37438,
+      "filename": "typing_extensions-4.12.2-py3-none-any.whl",
+      "package": "typing-extensions",
+      "version": "4.12.2",
+      "requires_dist": []
+    },
+    {
+      "id": "pip-urllib3",
+      "kind": "wheel",
+      "url": "https://files.pythonhosted.org/packages/ce/d9/5f4c13cecde62396b0d3fe530a50ccea91e7dfc1ccf0e09c228841bb5ba8/urllib3-2.2.3-py3-none-any.whl",
+      "sha256": "ca899ca043dcb1bafa3e262d73aa25c465bfb49e0bd9dd5d59f1d0acba2f8fac",
+      "size": 126338,
+      "filename": "urllib3-2.2.3-py3-none-any.whl",
+      "package": "urllib3",
+      "version": "2.2.3",
+      "requires_dist": [
+        "brotli>=1.0.9; platform_python_implementation == \"CPython\" and extra == \"brotli\"",
+        "brotlicffi>=0.8.0; platform_python_implementation != \"CPython\" and extra == \"brotli\"",
+        "h2<5,>=4; extra == \"h2\"",
+        "pysocks!=1.5.7,<2.0,>=1.5.6; extra == \"socks\"",
+        "zstandard>=0.18.0; extra == \"zstd\""
+      ]
+    },
+    {
+      "id": "pip-wheel",
+      "kind": "wheel",
+      "url": "https://files.pythonhosted.org/packages/0b/2c/87f3254fd8ffd29e4c02732eee68a83a1d3c346ae39bc6822dcbcb697f2b/wheel-0.45.1-py3-none-any.whl",
+      "sha256": "708e7481cc80179af0e556bbf0cc00b8444c7321e2700b8d8580231d13017248",
+      "size": 72494,
+      "filename": "wheel-0.45.1-py3-none-any.whl",
+      "package": "wheel",
+      "version": "0.45.1",
+      "requires_dist": [
+        "pytest>=6.0.0; extra == \"test\"",
+        "setuptools>=65; extra == \"test\""
+      ]
+    },
+    {
+      "id": "hf-05-LICENSE",
+      "url": "https://huggingface.co/Qwen/Qwen2-0.5B-Instruct/resolve/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/LICENSE",
+      "sha256": "c156170b718ec29139d3653d40ed1986fd92fb7e0959b5c71f3c48f62e6636f4",
+      "size": 11344,
+      "kind": "file",
+      "target": "/opt/apps/data/hf/hub/models--Qwen--Qwen2-0.5B-Instruct/snapshots/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/LICENSE"
+    },
+    {
+      "id": "hf-05-config.json",
+      "url": "https://huggingface.co/Qwen/Qwen2-0.5B-Instruct/resolve/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/config.json",
+      "sha256": "168aa1bd401abc3bc262ba15ba4e499627a8b4e006e9d050b47c22de20660185",
+      "size": 659,
+      "kind": "file",
+      "target": "/opt/apps/data/hf/hub/models--Qwen--Qwen2-0.5B-Instruct/snapshots/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/config.json"
+    },
+    {
+      "id": "hf-05-generation_config.json",
+      "url": "https://huggingface.co/Qwen/Qwen2-0.5B-Instruct/resolve/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/generation_config.json",
+      "sha256": "e558847a8b4402616f1273797b015104dc266fe4b520056fca88823ba8f8ebe6",
+      "size": 242,
+      "kind": "file",
+      "target": "/opt/apps/data/hf/hub/models--Qwen--Qwen2-0.5B-Instruct/snapshots/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/generation_config.json"
+    },
+    {
+      "id": "hf-05-merges.txt",
+      "url": "https://huggingface.co/Qwen/Qwen2-0.5B-Instruct/resolve/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/merges.txt",
+      "sha256": "599bab54075088774b1733fde865d5bd747cbcc7a547c5bc12610e874e26f5e3",
+      "size": 1671839,
+      "kind": "file",
+      "target": "/opt/apps/data/hf/hub/models--Qwen--Qwen2-0.5B-Instruct/snapshots/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/merges.txt"
+    },
+    {
+      "id": "hf-05-tokenizer.json",
+      "url": "https://huggingface.co/Qwen/Qwen2-0.5B-Instruct/resolve/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/tokenizer.json",
+      "sha256": "f7c9b2dba4a296b1aa76c16a34b8225c0c118978400d4bb66bff0902d702f5b8",
+      "size": 7028015,
+      "kind": "file",
+      "target": "/opt/apps/data/hf/hub/models--Qwen--Qwen2-0.5B-Instruct/snapshots/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/tokenizer.json"
+    },
+    {
+      "id": "hf-05-tokenizer_config.json",
+      "url": "https://huggingface.co/Qwen/Qwen2-0.5B-Instruct/resolve/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/tokenizer_config.json",
+      "sha256": "482bd979881423375ca5414e4e0d94cd7c5349dbb17fffd46b4d36d71e62a1bc",
+      "size": 1287,
+      "kind": "file",
+      "target": "/opt/apps/data/hf/hub/models--Qwen--Qwen2-0.5B-Instruct/snapshots/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/tokenizer_config.json"
+    },
+    {
+      "id": "hf-05-vocab.json",
+      "url": "https://huggingface.co/Qwen/Qwen2-0.5B-Instruct/resolve/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/vocab.json",
+      "sha256": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910",
+      "size": 2776833,
+      "kind": "file",
+      "target": "/opt/apps/data/hf/hub/models--Qwen--Qwen2-0.5B-Instruct/snapshots/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/vocab.json"
+    },
+    {
+      "id": "hf-15-LICENSE",
+      "url": "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/91cad51170dc346986eccefdc2dd33a9da36ead9/LICENSE",
+      "sha256": "832dd9e00a68dd83b3c3fb9f5588dad7dcf337a0db50f7d9483f310cd292e92e",
+      "size": 11343,
+      "kind": "file",
+      "target": "/opt/apps/data/Qwen2.5-GGUF-LICENSE"
+    },
+    {
+      "id": "qwen2-half-billion-weights",
+      "kind": "file",
+      "url": "https://huggingface.co/Qwen/Qwen2-0.5B-Instruct/resolve/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/model.safetensors",
+      "sha256": "130282af0dfa9fe5840737cc49a0d339d06075f83c5a315c3372c9a0740d0b96",
+      "size": 988097824,
+      "target": "/opt/apps/data/hf/hub/models--Qwen--Qwen2-0.5B-Instruct/snapshots/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/model.safetensors"
+    },
+    {
+      "id": "qwen25-1.5b-q4km",
+      "kind": "file",
+      "url": "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/91cad51170dc346986eccefdc2dd33a9da36ead9/qwen2.5-1.5b-instruct-q4_k_m.gguf",
+      "sha256": "6a1a2eb6d15622bf3c96857206351ba97e1af16c30d7a74ee38970e434e9407e",
+      "size": 1117320736,
+      "target": "/opt/apps/data/qwen2.5-1.5b-instruct-q4_k_m.gguf"
+    },
+    {
+      "id": "pip-torch",
+      "kind": "wheel",
+      "url": "https://download-r2.pytorch.org/whl/cpu/torch-2.6.0%2Bcpu-cp312-cp312-linux_x86_64.whl",
+      "sha256": "59e78aa0c690f70734e42670036d6b541930b8eabbaa18d94e090abf14cc4d91",
+      "size": 178578006,
+      "filename": "torch-2.6.0+cpu-cp312-cp312-linux_x86_64.whl",
+      "package": "torch",
+      "version": "2.6.0+cpu"
+    },
+    {
+      "id": "pip-torchvision",
+      "kind": "wheel",
+      "url": "https://download-r2.pytorch.org/whl/cpu/torchvision-0.21.0%2Bcpu-cp312-cp312-linux_x86_64.whl",
+      "sha256": "d6874431e678ba107b60a83f255c33f3755f06bad587b1b919aa514ec325dcd8",
+      "size": 1843456,
+      "filename": "torchvision-0.21.0+cpu-cp312-cp312-linux_x86_64.whl",
+      "package": "torchvision",
+      "version": "0.21.0+cpu"
+    }
+  ],
+  "local_files": [
+    {
+      "path": "scripts/apps/src/ai_bench.py",
+      "sha256": "87c3b8072caed23482712633a781560643b587adeea2414861d69f658d8ab1d6",
+      "target": "/opt/apps/source/local/ai_bench.py"
+    },
+    {
+      "path": "scripts/apps/src/attach_verify.cu",
+      "sha256": "4cf4f4474cfd5c1d97bd9a2639f4d5625035c2d1260b4e8806e6f7b40c9012c1",
+      "target": "/opt/apps/source/local/attach_verify.cu"
+    },
+    {
+      "path": "scripts/apps/src/blackscholes.cu",
+      "sha256": "362d9c0dff48156b5e516c087ab70065e9506be5000fc089b400a955f0789d7b",
+      "target": "/opt/apps/source/local/blackscholes.cu"
+    },
+    {
+      "path": "scripts/apps/src/blender_render.py",
+      "sha256": "7300be6bddab6bbc1d9a49097e893d2bb96bba73b6d4c59146ee1406d5135e6a",
+      "target": "/opt/apps/source/local/blender_render.py"
+    },
+    {
+      "path": "scripts/apps/src/conv2d.cu",
+      "sha256": "836a254dd30d93a3f5e9b10f2b4bcb4c58556523da3bd122f72c81633b1b5312",
+      "target": "/opt/apps/source/local/conv2d.cu"
+    },
+    {
+      "path": "scripts/apps/src/cupy_check.py",
+      "sha256": "d771248d505f9ba887c292b87c900251e60022a8e1829bd46b24064533c525fe",
+      "target": "/opt/apps/source/local/cupy_check.py"
+    },
+    {
+      "path": "scripts/apps/src/egl_offscreen.c",
+      "sha256": "4da6abc0f8c9e316ed2eb4ff6bbd3418a48abf7bec90edeb548ace929648a479",
+      "target": "/opt/apps/source/local/egl_offscreen.c"
+    },
+    {
+      "path": "scripts/apps/src/fft_cufft.cu",
+      "sha256": "d314e6d00996eb4268409ed8a9b9936712fec514fe0bf46f79aa265822940d5a",
+      "target": "/opt/apps/source/local/fft_cufft.cu"
+    },
+    {
+      "path": "scripts/apps/src/hf_generate.py",
+      "sha256": "7fb3f360949dc3b6105e41182fc0b9436b82c4abf0d81e71f6f8be0c924ed32e",
+      "target": "/opt/apps/source/local/hf_generate.py"
+    },
+    {
+      "path": "scripts/apps/src/mandelbrot.cu",
+      "sha256": "4a15852c2d38a3aaf469f0e739887dd4c90706eb6c3e8755f3831831b6ef73fa",
+      "target": "/opt/apps/source/local/mandelbrot.cu"
+    },
+    {
+      "path": "scripts/apps/src/memcpy2d.cu",
+      "sha256": "fb8227680211212b80df0dd7743f64b52c90d35029b236f23c80cf89d1e41d3e",
+      "target": "/opt/apps/source/local/memcpy2d.cu"
+    },
+    {
+      "path": "scripts/apps/src/nbody.cu",
+      "sha256": "29ca40de8ebf08571abce4fde04b6f72265c2c6cd91cbf1ad59abb690f6d5218",
+      "target": "/opt/apps/source/local/nbody.cu"
+    },
+    {
+      "path": "scripts/apps/src/reduce.cu",
+      "sha256": "3d32d971ad0384acdd0120ebb87282eb04158fa656afdf2ff5b7383288718fb6",
+      "target": "/opt/apps/source/local/reduce.cu"
+    },
+    {
+      "path": "scripts/apps/src/sgemm_cublas.cu",
+      "sha256": "71dd6129abeac6878057f9f7775c4415d601c6458f1c667b51bee0235e499bac",
+      "target": "/opt/apps/source/local/sgemm_cublas.cu"
+    },
+    {
+      "path": "scripts/apps/src/sha256.cu",
+      "sha256": "b0807fb23fb52bccf859e8cc27850ea50533f75b825d03250cd8d5399318b0a9",
+      "target": "/opt/apps/source/local/sha256.cu"
+    },
+    {
+      "path": "scripts/apps/src/stream_probe.cu",
+      "sha256": "68f426b36202bd1c9f99f6cf4c92cba3660a640b0c1232963b9a9be42603aaf6",
+      "target": "/opt/apps/source/local/stream_probe.cu"
+    },
+    {
+      "path": "scripts/apps/src/stream_triad.cu",
+      "sha256": "0f9d2e7e963d04bd1bf9b6d938c6ee458bf2b4ff312c4b66dd649cd904776a38",
+      "target": "/opt/apps/source/local/stream_triad.cu"
+    },
+    {
+      "path": "scripts/apps/src/torch_correct.py",
+      "sha256": "7eff6e290e38676ce8ff1d6a86c604ccdea1cc50271584124cfb6fca54ace220",
+      "target": "/opt/apps/source/local/torch_correct.py"
+    },
+    {
+      "path": "scripts/apps/run_apps.sh",
+      "sha256": "c1a33bf2a2dfc44dc5a119d58bdfbb0a12cfdc84cda33cccfa47aae824792f74",
+      "target": "/opt/apps/bundle/run_apps.sh",
+      "permissions": "0755"
+    }
+  ],
+  "write_files": [
+    {
+      "path": "/opt/apps/data/hf/hub/models--Qwen--Qwen2-0.5B-Instruct/refs/main",
+      "content": "c540970f9e29518b1d8f06ab8b24cba66ad77b6d\n",
+      "permissions": "0644"
+    }
+  ],
+  "copies": [
+    {
+      "from": "/opt/apps/source/local/ai_bench.py",
+      "to": "/opt/apps/bundle/share/ai_bench.py"
+    },
+    {
+      "from": "/opt/apps/source/local/blender_render.py",
+      "to": "/opt/apps/bundle/share/blender_render.py"
+    },
+    {
+      "from": "/opt/apps/source/local/cupy_check.py",
+      "to": "/opt/apps/bundle/share/cupy_check.py"
+    },
+    {
+      "from": "/opt/apps/source/local/hf_generate.py",
+      "to": "/opt/apps/bundle/share/hf_generate.py"
+    },
+    {
+      "from": "/opt/apps/source/local/torch_correct.py",
+      "to": "/opt/apps/bundle/share/torch_correct.py"
+    },
+    {
+      "from": "/opt/apps/source/vkpeak/vkpeak",
+      "to": "/opt/apps/bundle/bin/vkpeak"
+    }
+  ],
+  "builds": [
+    {
+      "name": "attach_verify",
+      "source": "local",
+      "cwd": "/opt/apps/source/local",
+      "commands": [
+        [
+          "/usr/local/cuda-12.6/bin/nvcc",
+          "-O3",
+          "-arch=sm_86",
+          "-cudart",
+          "shared",
+          "-o",
+          "/opt/apps/bundle/bin/attach_verify",
+          "attach_verify.cu",
+          "-cudadevrt",
+          "none"
+        ]
+      ],
+      "outputs": [
+        {
+          "path": "/opt/apps/bundle/bin/attach_verify",
+          "sha256": "inventory-only"
+        }
+      ],
+      "requires": "open-layer",
+      "shared_runtime_outputs": {
+        "/opt/apps/bundle/bin/attach_verify": [
+          "libcudart.so"
+        ]
+      }
+    },
+    {
+      "name": "blackscholes",
+      "source": "local",
+      "cwd": "/opt/apps/source/local",
+      "commands": [
+        [
+          "/usr/local/cuda-12.6/bin/nvcc",
+          "-O3",
+          "-arch=sm_86",
+          "-cudart",
+          "shared",
+          "-o",
+          "/opt/apps/bundle/bin/blackscholes",
+          "blackscholes.cu",
+          "-cudadevrt",
+          "none"
+        ]
+      ],
+      "outputs": [
+        {
+          "path": "/opt/apps/bundle/bin/blackscholes",
+          "sha256": "inventory-only"
+        }
+      ],
+      "requires": "open-layer",
+      "shared_runtime_outputs": {
+        "/opt/apps/bundle/bin/blackscholes": [
+          "libcudart.so"
+        ]
+      }
+    },
+    {
+      "name": "conv2d",
+      "source": "local",
+      "cwd": "/opt/apps/source/local",
+      "commands": [
+        [
+          "/usr/local/cuda-12.6/bin/nvcc",
+          "-O3",
+          "-arch=sm_86",
+          "-cudart",
+          "shared",
+          "-o",
+          "/opt/apps/bundle/bin/conv2d",
+          "conv2d.cu",
+          "-cudadevrt",
+          "none"
+        ]
+      ],
+      "outputs": [
+        {
+          "path": "/opt/apps/bundle/bin/conv2d",
+          "sha256": "inventory-only"
+        }
+      ],
+      "requires": "open-layer",
+      "shared_runtime_outputs": {
+        "/opt/apps/bundle/bin/conv2d": [
+          "libcudart.so"
+        ]
+      }
+    },
+    {
+      "name": "fft_cufft",
+      "source": "local",
+      "cwd": "/opt/apps/source/local",
+      "commands": [
+        [
+          "/usr/local/cuda-12.6/bin/nvcc",
+          "-O3",
+          "-arch=sm_86",
+          "-cudart",
+          "shared",
+          "-o",
+          "/opt/apps/bundle/bin/fft_cufft",
+          "fft_cufft.cu",
+          "-lcufft",
+          "-cudadevrt",
+          "none"
+        ]
+      ],
+      "outputs": [
+        {
+          "path": "/opt/apps/bundle/bin/fft_cufft",
+          "sha256": "inventory-only"
+        }
+      ],
+      "requires": "open-layer",
+      "shared_runtime_outputs": {
+        "/opt/apps/bundle/bin/fft_cufft": [
+          "libcudart.so"
+        ]
+      }
+    },
+    {
+      "name": "mandelbrot",
+      "source": "local",
+      "cwd": "/opt/apps/source/local",
+      "commands": [
+        [
+          "/usr/local/cuda-12.6/bin/nvcc",
+          "-O3",
+          "-arch=sm_86",
+          "-cudart",
+          "shared",
+          "-o",
+          "/opt/apps/bundle/bin/mandelbrot",
+          "mandelbrot.cu",
+          "-cudadevrt",
+          "none"
+        ]
+      ],
+      "outputs": [
+        {
+          "path": "/opt/apps/bundle/bin/mandelbrot",
+          "sha256": "inventory-only"
+        }
+      ],
+      "requires": "open-layer",
+      "shared_runtime_outputs": {
+        "/opt/apps/bundle/bin/mandelbrot": [
+          "libcudart.so"
+        ]
+      }
+    },
+    {
+      "name": "memcpy2d",
+      "source": "local",
+      "cwd": "/opt/apps/source/local",
+      "commands": [
+        [
+          "/usr/local/cuda-12.6/bin/nvcc",
+          "-O3",
+          "-arch=sm_86",
+          "-cudart",
+          "shared",
+          "-o",
+          "/opt/apps/bundle/bin/memcpy2d",
+          "memcpy2d.cu",
+          "-cudadevrt",
+          "none"
+        ]
+      ],
+      "outputs": [
+        {
+          "path": "/opt/apps/bundle/bin/memcpy2d",
+          "sha256": "inventory-only"
+        }
+      ],
+      "requires": "open-layer",
+      "shared_runtime_outputs": {
+        "/opt/apps/bundle/bin/memcpy2d": [
+          "libcudart.so"
+        ]
+      }
+    },
+    {
+      "name": "nbody",
+      "source": "local",
+      "cwd": "/opt/apps/source/local",
+      "commands": [
+        [
+          "/usr/local/cuda-12.6/bin/nvcc",
+          "-O3",
+          "-arch=sm_86",
+          "-cudart",
+          "shared",
+          "-o",
+          "/opt/apps/bundle/bin/nbody",
+          "nbody.cu",
+          "-cudadevrt",
+          "none"
+        ]
+      ],
+      "outputs": [
+        {
+          "path": "/opt/apps/bundle/bin/nbody",
+          "sha256": "inventory-only"
+        }
+      ],
+      "requires": "open-layer",
+      "shared_runtime_outputs": {
+        "/opt/apps/bundle/bin/nbody": [
+          "libcudart.so"
+        ]
+      }
+    },
+    {
+      "name": "reduce",
+      "source": "local",
+      "cwd": "/opt/apps/source/local",
+      "commands": [
+        [
+          "/usr/local/cuda-12.6/bin/nvcc",
+          "-O3",
+          "-arch=sm_86",
+          "-cudart",
+          "shared",
+          "-o",
+          "/opt/apps/bundle/bin/reduce",
+          "reduce.cu",
+          "-cudadevrt",
+          "none"
+        ]
+      ],
+      "outputs": [
+        {
+          "path": "/opt/apps/bundle/bin/reduce",
+          "sha256": "inventory-only"
+        }
+      ],
+      "requires": "open-layer",
+      "shared_runtime_outputs": {
+        "/opt/apps/bundle/bin/reduce": [
+          "libcudart.so"
+        ]
+      }
+    },
+    {
+      "name": "sgemm_cublas",
+      "source": "local",
+      "cwd": "/opt/apps/source/local",
+      "commands": [
+        [
+          "/usr/local/cuda-12.6/bin/nvcc",
+          "-O3",
+          "-arch=sm_86",
+          "-cudart",
+          "shared",
+          "-o",
+          "/opt/apps/bundle/bin/sgemm_cublas",
+          "sgemm_cublas.cu",
+          "-lcublas",
+          "-cudadevrt",
+          "none"
+        ]
+      ],
+      "outputs": [
+        {
+          "path": "/opt/apps/bundle/bin/sgemm_cublas",
+          "sha256": "inventory-only"
+        }
+      ],
+      "requires": "open-layer",
+      "shared_runtime_outputs": {
+        "/opt/apps/bundle/bin/sgemm_cublas": [
+          "libcudart.so"
+        ]
+      }
+    },
+    {
+      "name": "sha256",
+      "source": "local",
+      "cwd": "/opt/apps/source/local",
+      "commands": [
+        [
+          "/usr/local/cuda-12.6/bin/nvcc",
+          "-O3",
+          "-arch=sm_86",
+          "-cudart",
+          "shared",
+          "-o",
+          "/opt/apps/bundle/bin/sha256",
+          "sha256.cu",
+          "-cudadevrt",
+          "none"
+        ]
+      ],
+      "outputs": [
+        {
+          "path": "/opt/apps/bundle/bin/sha256",
+          "sha256": "inventory-only"
+        }
+      ],
+      "requires": "open-layer",
+      "shared_runtime_outputs": {
+        "/opt/apps/bundle/bin/sha256": [
+          "libcudart.so"
+        ]
+      }
+    },
+    {
+      "name": "stream_probe",
+      "source": "local",
+      "cwd": "/opt/apps/source/local",
+      "commands": [
+        [
+          "/usr/local/cuda-12.6/bin/nvcc",
+          "-O3",
+          "-arch=sm_86",
+          "-cudart",
+          "shared",
+          "-o",
+          "/opt/apps/bundle/bin/stream_probe",
+          "stream_probe.cu",
+          "-cudadevrt",
+          "none"
+        ]
+      ],
+      "outputs": [
+        {
+          "path": "/opt/apps/bundle/bin/stream_probe",
+          "sha256": "inventory-only"
+        }
+      ],
+      "requires": "open-layer",
+      "shared_runtime_outputs": {
+        "/opt/apps/bundle/bin/stream_probe": [
+          "libcudart.so"
+        ]
+      }
+    },
+    {
+      "name": "stream_triad",
+      "source": "local",
+      "cwd": "/opt/apps/source/local",
+      "commands": [
+        [
+          "/usr/local/cuda-12.6/bin/nvcc",
+          "-O3",
+          "-arch=sm_86",
+          "-cudart",
+          "shared",
+          "-o",
+          "/opt/apps/bundle/bin/stream_triad",
+          "stream_triad.cu",
+          "-cudadevrt",
+          "none"
+        ]
+      ],
+      "outputs": [
+        {
+          "path": "/opt/apps/bundle/bin/stream_triad",
+          "sha256": "inventory-only"
+        }
+      ],
+      "requires": "open-layer",
+      "shared_runtime_outputs": {
+        "/opt/apps/bundle/bin/stream_triad": [
+          "libcudart.so"
+        ]
+      }
+    },
+    {
+      "name": "egl_offscreen",
+      "source": "local",
+      "cwd": "/opt/apps/source/local",
+      "commands": [
+        [
+          "gcc",
+          "-O2",
+          "egl_offscreen.c",
+          "-o",
+          "/opt/apps/bundle/bin/egl_offscreen",
+          "-lEGL",
+          "-lGLESv2"
+        ]
+      ],
+      "outputs": [
+        {
+          "path": "/opt/apps/bundle/bin/egl_offscreen",
+          "sha256": "inventory-only"
+        }
+      ],
+      "requires": "open-layer",
+      "shared_runtime_outputs": {}
+    },
+    {
+      "name": "sample-deviceQuery",
+      "source": "cuda-samples",
+      "cwd": "/opt/apps/source/cuda-samples/Samples/1_Utilities/deviceQuery",
+      "commands": [
+        [
+          "make",
+          "-j2",
+          "SMS=86",
+          "CUDA_PATH=/usr/local/cuda-12.6",
+          "EXTRA_NVCCFLAGS=--threads=2",
+          "NVCC=/usr/local/cuda-12.6/bin/nvcc --cudart shared --cudadevrt none"
+        ]
+      ],
+      "copies": [
+        {
+          "from": "/opt/apps/source/cuda-samples/Samples/1_Utilities/deviceQuery/deviceQuery",
+          "to": "/opt/apps/bundle/samples/deviceQuery"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "/opt/apps/bundle/samples/deviceQuery",
+          "sha256": "inventory-only"
+        }
+      ],
+      "requires": "open-layer",
+      "shared_runtime_outputs": {
+        "/opt/apps/bundle/samples/deviceQuery": [
+          "libcudart.so"
+        ]
+      }
+    },
+    {
+      "name": "sample-bandwidthTest",
+      "source": "cuda-samples",
+      "cwd": "/opt/apps/source/cuda-samples/Samples/1_Utilities/bandwidthTest",
+      "commands": [
+        [
+          "make",
+          "-j2",
+          "SMS=86",
+          "CUDA_PATH=/usr/local/cuda-12.6",
+          "EXTRA_NVCCFLAGS=--threads=2",
+          "NVCC=/usr/local/cuda-12.6/bin/nvcc --cudart shared --cudadevrt none"
+        ]
+      ],
+      "copies": [
+        {
+          "from": "/opt/apps/source/cuda-samples/Samples/1_Utilities/bandwidthTest/bandwidthTest",
+          "to": "/opt/apps/bundle/samples/bandwidthTest"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "/opt/apps/bundle/samples/bandwidthTest",
+          "sha256": "inventory-only"
+        }
+      ],
+      "requires": "open-layer",
+      "shared_runtime_outputs": {
+        "/opt/apps/bundle/samples/bandwidthTest": [
+          "libcudart.so"
+        ]
+      }
+    },
+    {
+      "name": "sample-vectorAdd",
+      "source": "cuda-samples",
+      "cwd": "/opt/apps/source/cuda-samples/Samples/0_Introduction/vectorAdd",
+      "commands": [
+        [
+          "make",
+          "-j2",
+          "SMS=86",
+          "CUDA_PATH=/usr/local/cuda-12.6",
+          "EXTRA_NVCCFLAGS=--threads=2",
+          "NVCC=/usr/local/cuda-12.6/bin/nvcc --cudart shared --cudadevrt none"
+        ]
+      ],
+      "copies": [
+        {
+          "from": "/opt/apps/source/cuda-samples/Samples/0_Introduction/vectorAdd/vectorAdd",
+          "to": "/opt/apps/bundle/samples/vectorAdd"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "/opt/apps/bundle/samples/vectorAdd",
+          "sha256": "inventory-only"
+        }
+      ],
+      "requires": "open-layer",
+      "shared_runtime_outputs": {
+        "/opt/apps/bundle/samples/vectorAdd": [
+          "libcudart.so"
+        ]
+      }
+    },
+    {
+      "name": "sample-matrixMul",
+      "source": "cuda-samples",
+      "cwd": "/opt/apps/source/cuda-samples/Samples/0_Introduction/matrixMul",
+      "commands": [
+        [
+          "make",
+          "-j2",
+          "SMS=86",
+          "CUDA_PATH=/usr/local/cuda-12.6",
+          "EXTRA_NVCCFLAGS=--threads=2",
+          "NVCC=/usr/local/cuda-12.6/bin/nvcc --cudart shared --cudadevrt none"
+        ]
+      ],
+      "copies": [
+        {
+          "from": "/opt/apps/source/cuda-samples/Samples/0_Introduction/matrixMul/matrixMul",
+          "to": "/opt/apps/bundle/samples/matrixMul"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "/opt/apps/bundle/samples/matrixMul",
+          "sha256": "inventory-only"
+        }
+      ],
+      "requires": "open-layer",
+      "shared_runtime_outputs": {
+        "/opt/apps/bundle/samples/matrixMul": [
+          "libcudart.so"
+        ]
+      }
+    },
+    {
+      "name": "sample-simpleStreams",
+      "source": "cuda-samples",
+      "cwd": "/opt/apps/source/cuda-samples/Samples/0_Introduction/simpleStreams",
+      "commands": [
+        [
+          "make",
+          "-j2",
+          "SMS=86",
+          "CUDA_PATH=/usr/local/cuda-12.6",
+          "EXTRA_NVCCFLAGS=--threads=2",
+          "NVCC=/usr/local/cuda-12.6/bin/nvcc --cudart shared --cudadevrt none"
+        ]
+      ],
+      "copies": [
+        {
+          "from": "/opt/apps/source/cuda-samples/Samples/0_Introduction/simpleStreams/simpleStreams",
+          "to": "/opt/apps/bundle/samples/simpleStreams"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "/opt/apps/bundle/samples/simpleStreams",
+          "sha256": "inventory-only"
+        }
+      ],
+      "requires": "open-layer",
+      "shared_runtime_outputs": {
+        "/opt/apps/bundle/samples/simpleStreams": [
+          "libcudart.so"
+        ]
+      }
+    },
+    {
+      "name": "sample-asyncAPI",
+      "source": "cuda-samples",
+      "cwd": "/opt/apps/source/cuda-samples/Samples/0_Introduction/asyncAPI",
+      "commands": [
+        [
+          "make",
+          "-j2",
+          "SMS=86",
+          "CUDA_PATH=/usr/local/cuda-12.6",
+          "EXTRA_NVCCFLAGS=--threads=2",
+          "NVCC=/usr/local/cuda-12.6/bin/nvcc --cudart shared --cudadevrt none"
+        ]
+      ],
+      "copies": [
+        {
+          "from": "/opt/apps/source/cuda-samples/Samples/0_Introduction/asyncAPI/asyncAPI",
+          "to": "/opt/apps/bundle/samples/asyncAPI"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "/opt/apps/bundle/samples/asyncAPI",
+          "sha256": "inventory-only"
+        }
+      ],
+      "requires": "open-layer",
+      "shared_runtime_outputs": {
+        "/opt/apps/bundle/samples/asyncAPI": [
+          "libcudart.so"
+        ]
+      }
+    },
+    {
+      "name": "sample-simpleAtomicIntrinsics",
+      "source": "cuda-samples",
+      "cwd": "/opt/apps/source/cuda-samples/Samples/0_Introduction/simpleAtomicIntrinsics",
+      "commands": [
+        [
+          "make",
+          "-j2",
+          "SMS=86",
+          "CUDA_PATH=/usr/local/cuda-12.6",
+          "EXTRA_NVCCFLAGS=--threads=2",
+          "NVCC=/usr/local/cuda-12.6/bin/nvcc --cudart shared --cudadevrt none"
+        ]
+      ],
+      "copies": [
+        {
+          "from": "/opt/apps/source/cuda-samples/Samples/0_Introduction/simpleAtomicIntrinsics/simpleAtomicIntrinsics",
+          "to": "/opt/apps/bundle/samples/simpleAtomicIntrinsics"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "/opt/apps/bundle/samples/simpleAtomicIntrinsics",
+          "sha256": "inventory-only"
+        }
+      ],
+      "requires": "open-layer",
+      "shared_runtime_outputs": {
+        "/opt/apps/bundle/samples/simpleAtomicIntrinsics": [
+          "libcudart.so"
+        ]
+      }
+    },
+    {
+      "name": "sample-simpleIPC",
+      "source": "cuda-samples",
+      "cwd": "/opt/apps/source/cuda-samples/Samples/0_Introduction/simpleIPC",
+      "commands": [
+        [
+          "make",
+          "-j2",
+          "SMS=86",
+          "CUDA_PATH=/usr/local/cuda-12.6",
+          "EXTRA_NVCCFLAGS=--threads=2",
+          "NVCC=/usr/local/cuda-12.6/bin/nvcc --cudart shared --cudadevrt none"
+        ]
+      ],
+      "copies": [
+        {
+          "from": "/opt/apps/source/cuda-samples/Samples/0_Introduction/simpleIPC/simpleIPC",
+          "to": "/opt/apps/bundle/samples/simpleIPC"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "/opt/apps/bundle/samples/simpleIPC",
+          "sha256": "inventory-only"
+        }
+      ],
+      "requires": "open-layer",
+      "shared_runtime_outputs": {
+        "/opt/apps/bundle/samples/simpleIPC": [
+          "libcudart.so"
+        ]
+      }
+    },
+    {
+      "name": "sample-UnifiedMemoryStreams",
+      "source": "cuda-samples",
+      "cwd": "/opt/apps/source/cuda-samples/Samples/0_Introduction/UnifiedMemoryStreams",
+      "commands": [
+        [
+          "make",
+          "-j2",
+          "SMS=86",
+          "CUDA_PATH=/usr/local/cuda-12.6",
+          "EXTRA_NVCCFLAGS=--threads=2",
+          "NVCC=/usr/local/cuda-12.6/bin/nvcc --cudart shared --cudadevrt none"
+        ]
+      ],
+      "copies": [
+        {
+          "from": "/opt/apps/source/cuda-samples/Samples/0_Introduction/UnifiedMemoryStreams/UnifiedMemoryStreams",
+          "to": "/opt/apps/bundle/samples/UnifiedMemoryStreams"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "/opt/apps/bundle/samples/UnifiedMemoryStreams",
+          "sha256": "inventory-only"
+        }
+      ],
+      "requires": "open-layer",
+      "shared_runtime_outputs": {
+        "/opt/apps/bundle/samples/UnifiedMemoryStreams": [
+          "libcudart.so"
+        ]
+      }
+    },
+    {
+      "name": "sample-simpleCallback",
+      "source": "cuda-samples",
+      "cwd": "/opt/apps/source/cuda-samples/Samples/0_Introduction/simpleCallback",
+      "commands": [
+        [
+          "make",
+          "-j2",
+          "SMS=86",
+          "CUDA_PATH=/usr/local/cuda-12.6",
+          "EXTRA_NVCCFLAGS=--threads=2",
+          "NVCC=/usr/local/cuda-12.6/bin/nvcc --cudart shared --cudadevrt none"
+        ]
+      ],
+      "copies": [
+        {
+          "from": "/opt/apps/source/cuda-samples/Samples/0_Introduction/simpleCallback/simpleCallback",
+          "to": "/opt/apps/bundle/samples/simpleCallback"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "/opt/apps/bundle/samples/simpleCallback",
+          "sha256": "inventory-only"
+        }
+      ],
+      "requires": "open-layer",
+      "shared_runtime_outputs": {
+        "/opt/apps/bundle/samples/simpleCallback": [
+          "libcudart.so"
+        ]
+      }
+    },
+    {
+      "name": "sample-simpleOccupancy",
+      "source": "cuda-samples",
+      "cwd": "/opt/apps/source/cuda-samples/Samples/0_Introduction/simpleOccupancy",
+      "commands": [
+        [
+          "make",
+          "-j2",
+          "SMS=86",
+          "CUDA_PATH=/usr/local/cuda-12.6",
+          "EXTRA_NVCCFLAGS=--threads=2",
+          "NVCC=/usr/local/cuda-12.6/bin/nvcc --cudart shared --cudadevrt none"
+        ]
+      ],
+      "copies": [
+        {
+          "from": "/opt/apps/source/cuda-samples/Samples/0_Introduction/simpleOccupancy/simpleOccupancy",
+          "to": "/opt/apps/bundle/samples/simpleOccupancy"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "/opt/apps/bundle/samples/simpleOccupancy",
+          "sha256": "inventory-only"
+        }
+      ],
+      "requires": "open-layer",
+      "shared_runtime_outputs": {
+        "/opt/apps/bundle/samples/simpleOccupancy": [
+          "libcudart.so"
+        ]
+      }
+    },
+    {
+      "name": "sample-clock_nvrtc",
+      "source": "cuda-samples",
+      "cwd": "/opt/apps/source/cuda-samples/Samples/0_Introduction/clock_nvrtc",
+      "commands": [
+        [
+          "make",
+          "-j2",
+          "SMS=86",
+          "CUDA_PATH=/usr/local/cuda-12.6",
+          "EXTRA_NVCCFLAGS=--threads=2",
+          "NVCC=/usr/local/cuda-12.6/bin/nvcc --cudart shared --cudadevrt none"
+        ]
+      ],
+      "copies": [
+        {
+          "from": "/opt/apps/source/cuda-samples/Samples/0_Introduction/clock_nvrtc/clock_nvrtc",
+          "to": "/opt/apps/bundle/samples/clock_nvrtc"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "/opt/apps/bundle/samples/clock_nvrtc",
+          "sha256": "inventory-only"
+        }
+      ],
+      "requires": "open-layer",
+      "shared_runtime_outputs": {
+        "/opt/apps/bundle/samples/clock_nvrtc": [
+          "libcudart.so"
+        ]
+      }
+    },
+    {
+      "name": "sample-vectorAddDrv",
+      "source": "cuda-samples",
+      "cwd": "/opt/apps/source/cuda-samples/Samples/0_Introduction/vectorAddDrv",
+      "commands": [
+        [
+          "make",
+          "-j2",
+          "SMS=86",
+          "CUDA_PATH=/usr/local/cuda-12.6",
+          "EXTRA_NVCCFLAGS=--threads=2",
+          "NVCC=/usr/local/cuda-12.6/bin/nvcc --cudart shared --cudadevrt none"
+        ]
+      ],
+      "copies": [
+        {
+          "from": "/opt/apps/source/cuda-samples/Samples/0_Introduction/vectorAddDrv/vectorAddDrv",
+          "to": "/opt/apps/bundle/samples/vectorAddDrv"
+        },
+        {
+          "from": "/opt/apps/source/cuda-samples/Samples/0_Introduction/vectorAddDrv/vectorAdd_kernel64.fatbin",
+          "to": "/opt/apps/bundle/samples/vectorAdd_kernel64.fatbin"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "/opt/apps/bundle/samples/vectorAddDrv",
+          "sha256": "inventory-only"
+        },
+        {
+          "path": "/opt/apps/bundle/samples/vectorAdd_kernel64.fatbin",
+          "sha256": "inventory-only"
+        }
+      ],
+      "requires": "open-layer",
+      "shared_runtime_outputs": {
+        "/opt/apps/bundle/samples/vectorAddDrv": [
+          "libcudart.so"
+        ]
+      }
+    },
+    {
+      "name": "sample-matrixMulDrv",
+      "source": "cuda-samples",
+      "cwd": "/opt/apps/source/cuda-samples/Samples/0_Introduction/matrixMulDrv",
+      "commands": [
+        [
+          "make",
+          "-j2",
+          "SMS=86",
+          "CUDA_PATH=/usr/local/cuda-12.6",
+          "EXTRA_NVCCFLAGS=--threads=2",
+          "NVCC=/usr/local/cuda-12.6/bin/nvcc --cudart shared --cudadevrt none"
+        ]
+      ],
+      "copies": [
+        {
+          "from": "/opt/apps/source/cuda-samples/Samples/0_Introduction/matrixMulDrv/matrixMulDrv",
+          "to": "/opt/apps/bundle/samples/matrixMulDrv"
+        },
+        {
+          "from": "/opt/apps/source/cuda-samples/Samples/0_Introduction/matrixMulDrv/matrixMul_kernel64.fatbin",
+          "to": "/opt/apps/bundle/samples/matrixMul_kernel64.fatbin"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "/opt/apps/bundle/samples/matrixMulDrv",
+          "sha256": "inventory-only"
+        },
+        {
+          "path": "/opt/apps/bundle/samples/matrixMul_kernel64.fatbin",
+          "sha256": "inventory-only"
+        }
+      ],
+      "requires": "open-layer",
+      "shared_runtime_outputs": {
+        "/opt/apps/bundle/samples/matrixMulDrv": [
+          "libcudart.so"
+        ]
+      }
+    },
+    {
+      "name": "sample-simpleZeroCopy",
+      "source": "cuda-samples",
+      "cwd": "/opt/apps/source/cuda-samples/Samples/0_Introduction/simpleZeroCopy",
+      "commands": [
+        [
+          "make",
+          "-j2",
+          "SMS=86",
+          "CUDA_PATH=/usr/local/cuda-12.6",
+          "EXTRA_NVCCFLAGS=--threads=2",
+          "NVCC=/usr/local/cuda-12.6/bin/nvcc --cudart shared --cudadevrt none"
+        ]
+      ],
+      "copies": [
+        {
+          "from": "/opt/apps/source/cuda-samples/Samples/0_Introduction/simpleZeroCopy/simpleZeroCopy",
+          "to": "/opt/apps/bundle/samples/simpleZeroCopy"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "/opt/apps/bundle/samples/simpleZeroCopy",
+          "sha256": "inventory-only"
+        }
+      ],
+      "requires": "open-layer",
+      "shared_runtime_outputs": {
+        "/opt/apps/bundle/samples/simpleZeroCopy": [
+          "libcudart.so"
+        ]
+      }
+    },
+    {
+      "name": "sample-simpleCooperativeGroups",
+      "source": "cuda-samples",
+      "cwd": "/opt/apps/source/cuda-samples/Samples/0_Introduction/simpleCooperativeGroups",
+      "commands": [
+        [
+          "make",
+          "-j2",
+          "SMS=86",
+          "CUDA_PATH=/usr/local/cuda-12.6",
+          "EXTRA_NVCCFLAGS=--threads=2",
+          "NVCC=/usr/local/cuda-12.6/bin/nvcc --cudart shared --cudadevrt none"
+        ]
+      ],
+      "copies": [
+        {
+          "from": "/opt/apps/source/cuda-samples/Samples/0_Introduction/simpleCooperativeGroups/simpleCooperativeGroups",
+          "to": "/opt/apps/bundle/samples/simpleCooperativeGroups"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "/opt/apps/bundle/samples/simpleCooperativeGroups",
+          "sha256": "inventory-only"
+        }
+      ],
+      "requires": "open-layer",
+      "shared_runtime_outputs": {
+        "/opt/apps/bundle/samples/simpleCooperativeGroups": [
+          "libcudart.so"
+        ]
+      }
+    },
+    {
+      "name": "sample-cudaTensorCoreGemm",
+      "source": "cuda-samples",
+      "cwd": "/opt/apps/source/cuda-samples/Samples/3_CUDA_Features/cudaTensorCoreGemm",
+      "commands": [
+        [
+          "make",
+          "-j2",
+          "SMS=86",
+          "CUDA_PATH=/usr/local/cuda-12.6",
+          "EXTRA_NVCCFLAGS=--threads=2",
+          "NVCC=/usr/local/cuda-12.6/bin/nvcc --cudart shared --cudadevrt none"
+        ]
+      ],
+      "copies": [
+        {
+          "from": "/opt/apps/source/cuda-samples/Samples/3_CUDA_Features/cudaTensorCoreGemm/cudaTensorCoreGemm",
+          "to": "/opt/apps/bundle/samples/cudaTensorCoreGemm"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "/opt/apps/bundle/samples/cudaTensorCoreGemm",
+          "sha256": "inventory-only"
+        }
+      ],
+      "requires": "open-layer",
+      "shared_runtime_outputs": {
+        "/opt/apps/bundle/samples/cudaTensorCoreGemm": [
+          "libcudart.so"
+        ]
+      }
+    },
+    {
+      "name": "sample-cdpSimpleQuicksort",
+      "source": "cuda-samples",
+      "cwd": "/opt/apps/source/cuda-samples/Samples/3_CUDA_Features/cdpSimpleQuicksort",
+      "commands": [
+        [
+          "make",
+          "-j2",
+          "SMS=86",
+          "CUDA_PATH=/usr/local/cuda-12.6",
+          "EXTRA_NVCCFLAGS=--threads=2",
+          "NVCC=/usr/local/cuda-12.6/bin/nvcc --cudart shared"
+        ]
+      ],
+      "copies": [
+        {
+          "from": "/opt/apps/source/cuda-samples/Samples/3_CUDA_Features/cdpSimpleQuicksort/cdpSimpleQuicksort",
+          "to": "/opt/apps/bundle/samples/cdpSimpleQuicksort"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "/opt/apps/bundle/samples/cdpSimpleQuicksort",
+          "sha256": "inventory-only"
+        }
+      ],
+      "requires": "nvidia-layer-static",
+      "reason": "Pinned upstream Makefile explicitly links -lcudadevrt.",
+      "shared_runtime_outputs": {
+        "/opt/apps/bundle/samples/cdpSimpleQuicksort": [
+          "libcudart.so"
+        ]
+      }
+    },
+    {
+      "name": "sample-graphMemoryNodes",
+      "source": "cuda-samples",
+      "cwd": "/opt/apps/source/cuda-samples/Samples/3_CUDA_Features/graphMemoryNodes",
+      "commands": [
+        [
+          "make",
+          "-j2",
+          "SMS=86",
+          "CUDA_PATH=/usr/local/cuda-12.6",
+          "EXTRA_NVCCFLAGS=--threads=2",
+          "NVCC=/usr/local/cuda-12.6/bin/nvcc --cudart shared --cudadevrt none"
+        ]
+      ],
+      "copies": [
+        {
+          "from": "/opt/apps/source/cuda-samples/Samples/3_CUDA_Features/graphMemoryNodes/graphMemoryNodes",
+          "to": "/opt/apps/bundle/samples/graphMemoryNodes"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "/opt/apps/bundle/samples/graphMemoryNodes",
+          "sha256": "inventory-only"
+        }
+      ],
+      "requires": "open-layer",
+      "shared_runtime_outputs": {
+        "/opt/apps/bundle/samples/graphMemoryNodes": [
+          "libcudart.so"
+        ]
+      }
+    },
+    {
+      "name": "sample-simpleCudaGraphs",
+      "source": "cuda-samples",
+      "cwd": "/opt/apps/source/cuda-samples/Samples/3_CUDA_Features/simpleCudaGraphs",
+      "commands": [
+        [
+          "make",
+          "-j2",
+          "SMS=86",
+          "CUDA_PATH=/usr/local/cuda-12.6",
+          "EXTRA_NVCCFLAGS=--threads=2",
+          "NVCC=/usr/local/cuda-12.6/bin/nvcc --cudart shared --cudadevrt none"
+        ]
+      ],
+      "copies": [
+        {
+          "from": "/opt/apps/source/cuda-samples/Samples/3_CUDA_Features/simpleCudaGraphs/simpleCudaGraphs",
+          "to": "/opt/apps/bundle/samples/simpleCudaGraphs"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "/opt/apps/bundle/samples/simpleCudaGraphs",
+          "sha256": "inventory-only"
+        }
+      ],
+      "requires": "open-layer",
+      "shared_runtime_outputs": {
+        "/opt/apps/bundle/samples/simpleCudaGraphs": [
+          "libcudart.so"
+        ]
+      }
+    },
+    {
+      "name": "sample-globalToShmemAsyncCopy",
+      "source": "cuda-samples",
+      "cwd": "/opt/apps/source/cuda-samples/Samples/3_CUDA_Features/globalToShmemAsyncCopy",
+      "commands": [
+        [
+          "make",
+          "-j2",
+          "SMS=86",
+          "CUDA_PATH=/usr/local/cuda-12.6",
+          "EXTRA_NVCCFLAGS=--threads=2",
+          "NVCC=/usr/local/cuda-12.6/bin/nvcc --cudart shared --cudadevrt none"
+        ]
+      ],
+      "copies": [
+        {
+          "from": "/opt/apps/source/cuda-samples/Samples/3_CUDA_Features/globalToShmemAsyncCopy/globalToShmemAsyncCopy",
+          "to": "/opt/apps/bundle/samples/globalToShmemAsyncCopy"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "/opt/apps/bundle/samples/globalToShmemAsyncCopy",
+          "sha256": "inventory-only"
+        }
+      ],
+      "requires": "open-layer",
+      "shared_runtime_outputs": {
+        "/opt/apps/bundle/samples/globalToShmemAsyncCopy": [
+          "libcudart.so"
+        ]
+      }
+    },
+    {
+      "name": "sample-bf16TensorCoreGemm",
+      "source": "cuda-samples",
+      "cwd": "/opt/apps/source/cuda-samples/Samples/3_CUDA_Features/bf16TensorCoreGemm",
+      "commands": [
+        [
+          "make",
+          "-j2",
+          "SMS=86",
+          "CUDA_PATH=/usr/local/cuda-12.6",
+          "EXTRA_NVCCFLAGS=--threads=2",
+          "NVCC=/usr/local/cuda-12.6/bin/nvcc --cudart shared --cudadevrt none"
+        ]
+      ],
+      "copies": [
+        {
+          "from": "/opt/apps/source/cuda-samples/Samples/3_CUDA_Features/bf16TensorCoreGemm/bf16TensorCoreGemm",
+          "to": "/opt/apps/bundle/samples/bf16TensorCoreGemm"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "/opt/apps/bundle/samples/bf16TensorCoreGemm",
+          "sha256": "inventory-only"
+        }
+      ],
+      "requires": "open-layer",
+      "shared_runtime_outputs": {
+        "/opt/apps/bundle/samples/bf16TensorCoreGemm": [
+          "libcudart.so"
+        ]
+      }
+    },
+    {
+      "name": "sample-simpleCUBLAS",
+      "source": "cuda-samples",
+      "cwd": "/opt/apps/source/cuda-samples/Samples/4_CUDA_Libraries/simpleCUBLAS",
+      "commands": [
+        [
+          "make",
+          "-j2",
+          "SMS=86",
+          "CUDA_PATH=/usr/local/cuda-12.6",
+          "EXTRA_NVCCFLAGS=--threads=2",
+          "NVCC=/usr/local/cuda-12.6/bin/nvcc --cudart shared --cudadevrt none"
+        ]
+      ],
+      "copies": [
+        {
+          "from": "/opt/apps/source/cuda-samples/Samples/4_CUDA_Libraries/simpleCUBLAS/simpleCUBLAS",
+          "to": "/opt/apps/bundle/samples/simpleCUBLAS"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "/opt/apps/bundle/samples/simpleCUBLAS",
+          "sha256": "inventory-only"
+        }
+      ],
+      "requires": "open-layer",
+      "shared_runtime_outputs": {
+        "/opt/apps/bundle/samples/simpleCUBLAS": [
+          "libcudart.so"
+        ]
+      }
+    },
+    {
+      "name": "sample-simpleCUFFT",
+      "source": "cuda-samples",
+      "cwd": "/opt/apps/source/cuda-samples/Samples/4_CUDA_Libraries/simpleCUFFT",
+      "commands": [
+        [
+          "make",
+          "-j2",
+          "SMS=86",
+          "CUDA_PATH=/usr/local/cuda-12.6",
+          "EXTRA_NVCCFLAGS=--threads=2",
+          "NVCC=/usr/local/cuda-12.6/bin/nvcc --cudart shared --cudadevrt none"
+        ]
+      ],
+      "copies": [
+        {
+          "from": "/opt/apps/source/cuda-samples/Samples/4_CUDA_Libraries/simpleCUFFT/simpleCUFFT",
+          "to": "/opt/apps/bundle/samples/simpleCUFFT"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "/opt/apps/bundle/samples/simpleCUFFT",
+          "sha256": "inventory-only"
+        }
+      ],
+      "requires": "open-layer",
+      "shared_runtime_outputs": {
+        "/opt/apps/bundle/samples/simpleCUFFT": [
+          "libcudart.so"
+        ]
+      }
+    },
+    {
+      "name": "sample-conjugateGradient",
+      "source": "cuda-samples",
+      "cwd": "/opt/apps/source/cuda-samples/Samples/4_CUDA_Libraries/conjugateGradient",
+      "commands": [
+        [
+          "make",
+          "-j2",
+          "SMS=86",
+          "CUDA_PATH=/usr/local/cuda-12.6",
+          "EXTRA_NVCCFLAGS=--threads=2",
+          "NVCC=/usr/local/cuda-12.6/bin/nvcc --cudart shared --cudadevrt none"
+        ]
+      ],
+      "copies": [
+        {
+          "from": "/opt/apps/source/cuda-samples/Samples/4_CUDA_Libraries/conjugateGradient/conjugateGradient",
+          "to": "/opt/apps/bundle/samples/conjugateGradient"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "/opt/apps/bundle/samples/conjugateGradient",
+          "sha256": "inventory-only"
+        }
+      ],
+      "requires": "open-layer",
+      "shared_runtime_outputs": {
+        "/opt/apps/bundle/samples/conjugateGradient": [
+          "libcudart.so"
+        ]
+      }
+    },
+    {
+      "name": "sample-MersenneTwisterGP11213",
+      "source": "cuda-samples",
+      "cwd": "/opt/apps/source/cuda-samples/Samples/4_CUDA_Libraries/MersenneTwisterGP11213",
+      "commands": [
+        [
+          "make",
+          "-j2",
+          "SMS=86",
+          "CUDA_PATH=/usr/local/cuda-12.6",
+          "EXTRA_NVCCFLAGS=--threads=2",
+          "NVCC=/usr/local/cuda-12.6/bin/nvcc --cudart shared --cudadevrt none"
+        ]
+      ],
+      "copies": [
+        {
+          "from": "/opt/apps/source/cuda-samples/Samples/4_CUDA_Libraries/MersenneTwisterGP11213/MersenneTwisterGP11213",
+          "to": "/opt/apps/bundle/samples/MersenneTwisterGP11213"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "/opt/apps/bundle/samples/MersenneTwisterGP11213",
+          "sha256": "inventory-only"
+        }
+      ],
+      "requires": "open-layer",
+      "shared_runtime_outputs": {
+        "/opt/apps/bundle/samples/MersenneTwisterGP11213": [
+          "libcudart.so"
+        ]
+      }
+    },
+    {
+      "name": "sample-reduction",
+      "source": "cuda-samples",
+      "cwd": "/opt/apps/source/cuda-samples/Samples/2_Concepts_and_Techniques/reduction",
+      "commands": [
+        [
+          "make",
+          "-j2",
+          "SMS=86",
+          "CUDA_PATH=/usr/local/cuda-12.6",
+          "EXTRA_NVCCFLAGS=--threads=2",
+          "NVCC=/usr/local/cuda-12.6/bin/nvcc --cudart shared --cudadevrt none"
+        ]
+      ],
+      "copies": [
+        {
+          "from": "/opt/apps/source/cuda-samples/Samples/2_Concepts_and_Techniques/reduction/reduction",
+          "to": "/opt/apps/bundle/samples/reduction"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "/opt/apps/bundle/samples/reduction",
+          "sha256": "inventory-only"
+        }
+      ],
+      "requires": "open-layer",
+      "shared_runtime_outputs": {
+        "/opt/apps/bundle/samples/reduction": [
+          "libcudart.so"
+        ]
+      }
+    },
+    {
+      "name": "sample-sortingNetworks",
+      "source": "cuda-samples",
+      "cwd": "/opt/apps/source/cuda-samples/Samples/2_Concepts_and_Techniques/sortingNetworks",
+      "commands": [
+        [
+          "make",
+          "-j2",
+          "SMS=86",
+          "CUDA_PATH=/usr/local/cuda-12.6",
+          "EXTRA_NVCCFLAGS=--threads=2",
+          "NVCC=/usr/local/cuda-12.6/bin/nvcc --cudart shared --cudadevrt none"
+        ]
+      ],
+      "copies": [
+        {
+          "from": "/opt/apps/source/cuda-samples/Samples/2_Concepts_and_Techniques/sortingNetworks/sortingNetworks",
+          "to": "/opt/apps/bundle/samples/sortingNetworks"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "/opt/apps/bundle/samples/sortingNetworks",
+          "sha256": "inventory-only"
+        }
+      ],
+      "requires": "open-layer",
+      "shared_runtime_outputs": {
+        "/opt/apps/bundle/samples/sortingNetworks": [
+          "libcudart.so"
+        ]
+      }
+    },
+    {
+      "name": "sample-scan",
+      "source": "cuda-samples",
+      "cwd": "/opt/apps/source/cuda-samples/Samples/2_Concepts_and_Techniques/scan",
+      "commands": [
+        [
+          "make",
+          "-j2",
+          "SMS=86",
+          "CUDA_PATH=/usr/local/cuda-12.6",
+          "EXTRA_NVCCFLAGS=--threads=2",
+          "NVCC=/usr/local/cuda-12.6/bin/nvcc --cudart shared --cudadevrt none"
+        ]
+      ],
+      "copies": [
+        {
+          "from": "/opt/apps/source/cuda-samples/Samples/2_Concepts_and_Techniques/scan/scan",
+          "to": "/opt/apps/bundle/samples/scan"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "/opt/apps/bundle/samples/scan",
+          "sha256": "inventory-only"
+        }
+      ],
+      "requires": "open-layer",
+      "shared_runtime_outputs": {
+        "/opt/apps/bundle/samples/scan": [
+          "libcudart.so"
+        ]
+      }
+    },
+    {
+      "name": "sample-histogram",
+      "source": "cuda-samples",
+      "cwd": "/opt/apps/source/cuda-samples/Samples/2_Concepts_and_Techniques/histogram",
+      "commands": [
+        [
+          "make",
+          "-j2",
+          "SMS=86",
+          "CUDA_PATH=/usr/local/cuda-12.6",
+          "EXTRA_NVCCFLAGS=--threads=2",
+          "NVCC=/usr/local/cuda-12.6/bin/nvcc --cudart shared --cudadevrt none"
+        ]
+      ],
+      "copies": [
+        {
+          "from": "/opt/apps/source/cuda-samples/Samples/2_Concepts_and_Techniques/histogram/histogram",
+          "to": "/opt/apps/bundle/samples/histogram"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "/opt/apps/bundle/samples/histogram",
+          "sha256": "inventory-only"
+        }
+      ],
+      "requires": "open-layer",
+      "shared_runtime_outputs": {
+        "/opt/apps/bundle/samples/histogram": [
+          "libcudart.so"
+        ]
+      }
+    },
+    {
+      "name": "sample-BlackScholes",
+      "source": "cuda-samples",
+      "cwd": "/opt/apps/source/cuda-samples/Samples/5_Domain_Specific/BlackScholes",
+      "commands": [
+        [
+          "make",
+          "-j2",
+          "SMS=86",
+          "CUDA_PATH=/usr/local/cuda-12.6",
+          "EXTRA_NVCCFLAGS=--threads=2",
+          "NVCC=/usr/local/cuda-12.6/bin/nvcc --cudart shared --cudadevrt none"
+        ]
+      ],
+      "copies": [
+        {
+          "from": "/opt/apps/source/cuda-samples/Samples/5_Domain_Specific/BlackScholes/BlackScholes",
+          "to": "/opt/apps/bundle/samples/BlackScholes"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "/opt/apps/bundle/samples/BlackScholes",
+          "sha256": "inventory-only"
+        }
+      ],
+      "requires": "open-layer",
+      "shared_runtime_outputs": {
+        "/opt/apps/bundle/samples/BlackScholes": [
+          "libcudart.so"
+        ]
+      }
+    },
+    {
+      "name": "sample-fastWalshTransform",
+      "source": "cuda-samples",
+      "cwd": "/opt/apps/source/cuda-samples/Samples/5_Domain_Specific/fastWalshTransform",
+      "commands": [
+        [
+          "make",
+          "-j2",
+          "SMS=86",
+          "CUDA_PATH=/usr/local/cuda-12.6",
+          "EXTRA_NVCCFLAGS=--threads=2",
+          "NVCC=/usr/local/cuda-12.6/bin/nvcc --cudart shared --cudadevrt none"
+        ]
+      ],
+      "copies": [
+        {
+          "from": "/opt/apps/source/cuda-samples/Samples/5_Domain_Specific/fastWalshTransform/fastWalshTransform",
+          "to": "/opt/apps/bundle/samples/fastWalshTransform"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "/opt/apps/bundle/samples/fastWalshTransform",
+          "sha256": "inventory-only"
+        }
+      ],
+      "requires": "open-layer",
+      "shared_runtime_outputs": {
+        "/opt/apps/bundle/samples/fastWalshTransform": [
+          "libcudart.so"
+        ]
+      }
+    },
+    {
+      "name": "sample-transpose",
+      "source": "cuda-samples",
+      "cwd": "/opt/apps/source/cuda-samples/Samples/6_Performance/transpose",
+      "commands": [
+        [
+          "make",
+          "-j2",
+          "SMS=86",
+          "CUDA_PATH=/usr/local/cuda-12.6",
+          "EXTRA_NVCCFLAGS=--threads=2",
+          "NVCC=/usr/local/cuda-12.6/bin/nvcc --cudart shared --cudadevrt none"
+        ]
+      ],
+      "copies": [
+        {
+          "from": "/opt/apps/source/cuda-samples/Samples/6_Performance/transpose/transpose",
+          "to": "/opt/apps/bundle/samples/transpose"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "/opt/apps/bundle/samples/transpose",
+          "sha256": "inventory-only"
+        }
+      ],
+      "requires": "open-layer",
+      "shared_runtime_outputs": {
+        "/opt/apps/bundle/samples/transpose": [
+          "libcudart.so"
+        ]
+      }
+    },
+    {
+      "name": "sample-concurrentKernels",
+      "source": "cuda-samples",
+      "cwd": "/opt/apps/source/cuda-samples/Samples/0_Introduction/concurrentKernels",
+      "commands": [
+        [
+          "make",
+          "-j2",
+          "SMS=86",
+          "CUDA_PATH=/usr/local/cuda-12.6",
+          "EXTRA_NVCCFLAGS=--threads=2",
+          "NVCC=/usr/local/cuda-12.6/bin/nvcc --cudart shared --cudadevrt none"
+        ]
+      ],
+      "copies": [
+        {
+          "from": "/opt/apps/source/cuda-samples/Samples/0_Introduction/concurrentKernels/concurrentKernels",
+          "to": "/opt/apps/bundle/samples/concurrentKernels"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "/opt/apps/bundle/samples/concurrentKernels",
+          "sha256": "inventory-only"
+        }
+      ],
+      "requires": "open-layer",
+      "shared_runtime_outputs": {
+        "/opt/apps/bundle/samples/concurrentKernels": [
+          "libcudart.so"
+        ]
+      }
+    },
+    {
+      "name": "sample-conjugateGradientUM",
+      "source": "cuda-samples",
+      "cwd": "/opt/apps/source/cuda-samples/Samples/4_CUDA_Libraries/conjugateGradientUM",
+      "commands": [
+        [
+          "make",
+          "-j2",
+          "SMS=86",
+          "CUDA_PATH=/usr/local/cuda-12.6",
+          "EXTRA_NVCCFLAGS=--threads=2",
+          "NVCC=/usr/local/cuda-12.6/bin/nvcc --cudart shared --cudadevrt none"
+        ]
+      ],
+      "copies": [
+        {
+          "from": "/opt/apps/source/cuda-samples/Samples/4_CUDA_Libraries/conjugateGradientUM/conjugateGradientUM",
+          "to": "/opt/apps/bundle/samples/conjugateGradientUM"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "/opt/apps/bundle/samples/conjugateGradientUM",
+          "sha256": "inventory-only"
+        }
+      ],
+      "requires": "open-layer",
+      "shared_runtime_outputs": {
+        "/opt/apps/bundle/samples/conjugateGradientUM": [
+          "libcudart.so"
+        ]
+      }
+    },
+    {
+      "name": "sample-UnifiedMemoryPerf",
+      "source": "cuda-samples",
+      "cwd": "/opt/apps/source/cuda-samples/Samples/6_Performance/UnifiedMemoryPerf",
+      "commands": [
+        [
+          "make",
+          "-j2",
+          "SMS=86",
+          "CUDA_PATH=/usr/local/cuda-12.6",
+          "EXTRA_NVCCFLAGS=--threads=2",
+          "NVCC=/usr/local/cuda-12.6/bin/nvcc --cudart shared --cudadevrt none"
+        ]
+      ],
+      "copies": [
+        {
+          "from": "/opt/apps/source/cuda-samples/Samples/6_Performance/UnifiedMemoryPerf/UnifiedMemoryPerf",
+          "to": "/opt/apps/bundle/samples/UnifiedMemoryPerf"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "/opt/apps/bundle/samples/UnifiedMemoryPerf",
+          "sha256": "inventory-only"
+        }
+      ],
+      "requires": "open-layer",
+      "shared_runtime_outputs": {
+        "/opt/apps/bundle/samples/UnifiedMemoryPerf": [
+          "libcudart.so"
+        ]
+      }
+    },
+    {
+      "name": "gpu-burn",
+      "source": "gpu-burn",
+      "cwd": "/opt/apps/source/gpu-burn",
+      "commands": [
+        [
+          "make",
+          "-j2",
+          "CUDAPATH=/usr/local/cuda-12.6",
+          "COMPUTE=86",
+          "IS_JETSON=false",
+          "NVCCFLAGS=--cudart shared --cudadevrt none"
+        ]
+      ],
+      "copies": [
+        {
+          "from": "/opt/apps/source/gpu-burn/gpu_burn",
+          "to": "/opt/apps/bundle/gpu-burn/gpu_burn"
+        },
+        {
+          "from": "/opt/apps/source/gpu-burn/compare.fatbin",
+          "to": "/opt/apps/bundle/gpu-burn/compare.fatbin"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "/opt/apps/bundle/gpu-burn/gpu_burn",
+          "sha256": "inventory-only"
+        },
+        {
+          "path": "/opt/apps/bundle/gpu-burn/compare.fatbin",
+          "sha256": "inventory-only"
+        }
+      ],
+      "requires": "open-layer",
+      "shared_runtime_outputs": {
+        "/opt/apps/bundle/gpu-burn/gpu_burn": [
+          "libcuda.so",
+          "libcublas.so"
+        ]
+      }
+    },
+    {
+      "name": "llama",
+      "source": "llama",
+      "cwd": "/opt/apps/source/llama",
+      "commands": [
+        [
+          "cmake",
+          "-S",
+          ".",
+          "-B",
+          "build",
+          "-G",
+          "Ninja",
+          "-DGGML_CUDA=ON",
+          "-DCMAKE_CUDA_ARCHITECTURES=86",
+          "-DLLAMA_CURL=OFF",
+          "-DCMAKE_BUILD_TYPE=Release",
+          "-DFETCHCONTENT_FULLY_DISCONNECTED=ON",
+          "-DGGML_NATIVE=OFF",
+          "-DLLAMA_BUILD_NUMBER=0",
+          "-DLLAMA_BUILD_COMMIT=4b1a27fa0eb875bbca4f6cfe936e3d65adc685c0",
+          "-DLLAMA_BUILD_IS_DEV=OFF",
+          "-DLLAMA_BUILD_TESTS=OFF",
+          "-DLLAMA_BUILD_SERVER=OFF",
+          "-DLLAMA_BUILD_UI=OFF",
+          "-DCMAKE_CUDA_RUNTIME_LIBRARY=Shared",
+          "-DGGML_STATIC=OFF"
+        ],
+        [
+          "cmake",
+          "--build",
+          "build",
+          "--parallel",
+          "2",
+          "--target",
+          "llama-cli",
+          "llama-bench",
+          "llama-simple"
+        ]
+      ],
+      "copies": [
+        {
+          "from": "/opt/apps/source/llama/build/bin/llama-*",
+          "to": "/opt/apps/bundle/llama",
+          "directory": true
+        },
+        {
+          "from": "/opt/apps/source/llama/build/bin/lib*.so*",
+          "to": "/opt/apps/bundle/llama",
+          "directory": true
+        }
+      ],
+      "outputs": [
+        {
+          "path": "/opt/apps/bundle/llama/llama-cli",
+          "sha256": "inventory-only"
+        },
+        {
+          "path": "/opt/apps/bundle/llama/llama-bench",
+          "sha256": "inventory-only"
+        },
+        {
+          "path": "/opt/apps/bundle/llama/llama-simple",
+          "sha256": "inventory-only"
+        }
+      ],
+      "requires": "open-layer",
+      "shared_runtime_outputs": {
+        "/opt/apps/bundle/llama/libggml-cuda.so": [
+          "libcudart.so"
+        ]
+      }
+    },
+    {
+      "name": "clpeak",
+      "source": "clpeak",
+      "cwd": "/opt/apps/source/clpeak",
+      "commands": [
+        [
+          "cmake",
+          "-S",
+          ".",
+          "-B",
+          "build",
+          "-G",
+          "Ninja",
+          "-DCMAKE_BUILD_TYPE=Release",
+          "-DFETCHCONTENT_FULLY_DISCONNECTED=ON"
+        ],
+        [
+          "cmake",
+          "--build",
+          "build",
+          "--parallel",
+          "2"
+        ]
+      ],
+      "copies": [
+        {
+          "from": "/opt/apps/source/clpeak/build/clpeak",
+          "to": "/opt/apps/bundle/bin/clpeak"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "/opt/apps/bundle/bin/clpeak",
+          "sha256": "inventory-only"
+        }
+      ],
+      "requires": "open-layer",
+      "shared_runtime_outputs": {}
+    }
+  ],
+  "environment": {
+    "PATH": "/usr/local/cuda-12.6/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+    "CUDA_HOME": "/usr/local/cuda-12.6",
+    "CUDA_PATH": "/usr/local/cuda-12.6",
+    "CUDACXX": "/usr/local/cuda-12.6/bin/nvcc",
+    "LC_ALL": "C.UTF-8",
+    "SOURCE_DATE_EPOCH": "1794009600",
+    "KBUILD_BUILD_TIMESTAMP": "Sat Nov 7 00:00:00 UTC 2026",
+    "KBUILD_BUILD_USER": "apps-image",
+    "KBUILD_BUILD_HOST": "kayfabe-apps",
+    "KBUILD_BUILD_VERSION": "1",
+    "CMAKE_BUILD_PARALLEL_LEVEL": "2"
+  },
+  "inventory": {
+    "required_paths": [
+      "/opt/apps/data/hf/hub/models--Qwen--Qwen2-0.5B-Instruct/snapshots/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/LICENSE",
+      "/opt/apps/data/hf/hub/models--Qwen--Qwen2-0.5B-Instruct/snapshots/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/config.json",
+      "/opt/apps/data/hf/hub/models--Qwen--Qwen2-0.5B-Instruct/snapshots/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/generation_config.json",
+      "/opt/apps/data/hf/hub/models--Qwen--Qwen2-0.5B-Instruct/snapshots/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/merges.txt",
+      "/opt/apps/data/hf/hub/models--Qwen--Qwen2-0.5B-Instruct/snapshots/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/tokenizer.json",
+      "/opt/apps/data/hf/hub/models--Qwen--Qwen2-0.5B-Instruct/snapshots/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/tokenizer_config.json",
+      "/opt/apps/data/hf/hub/models--Qwen--Qwen2-0.5B-Instruct/snapshots/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/vocab.json",
+      "/opt/apps/data/Qwen2.5-GGUF-LICENSE",
+      "/opt/apps/data/hf/hub/models--Qwen--Qwen2-0.5B-Instruct/snapshots/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/model.safetensors",
+      "/opt/apps/data/qwen2.5-1.5b-instruct-q4_k_m.gguf",
+      "/opt/apps/bundle/bin/attach_verify",
+      "/opt/apps/bundle/bin/blackscholes",
+      "/opt/apps/bundle/bin/conv2d",
+      "/opt/apps/bundle/bin/fft_cufft",
+      "/opt/apps/bundle/bin/mandelbrot",
+      "/opt/apps/bundle/bin/memcpy2d",
+      "/opt/apps/bundle/bin/nbody",
+      "/opt/apps/bundle/bin/reduce",
+      "/opt/apps/bundle/bin/sgemm_cublas",
+      "/opt/apps/bundle/bin/sha256",
+      "/opt/apps/bundle/bin/stream_probe",
+      "/opt/apps/bundle/bin/stream_triad",
+      "/opt/apps/bundle/bin/egl_offscreen",
+      "/opt/apps/bundle/samples/deviceQuery",
+      "/opt/apps/bundle/samples/bandwidthTest",
+      "/opt/apps/bundle/samples/vectorAdd",
+      "/opt/apps/bundle/samples/matrixMul",
+      "/opt/apps/bundle/samples/simpleStreams",
+      "/opt/apps/bundle/samples/asyncAPI",
+      "/opt/apps/bundle/samples/simpleAtomicIntrinsics",
+      "/opt/apps/bundle/samples/simpleIPC",
+      "/opt/apps/bundle/samples/UnifiedMemoryStreams",
+      "/opt/apps/bundle/samples/simpleCallback",
+      "/opt/apps/bundle/samples/simpleOccupancy",
+      "/opt/apps/bundle/samples/clock_nvrtc",
+      "/opt/apps/bundle/samples/vectorAddDrv",
+      "/opt/apps/bundle/samples/vectorAdd_kernel64.fatbin",
+      "/opt/apps/bundle/samples/matrixMulDrv",
+      "/opt/apps/bundle/samples/matrixMul_kernel64.fatbin",
+      "/opt/apps/bundle/samples/simpleZeroCopy",
+      "/opt/apps/bundle/samples/simpleCooperativeGroups",
+      "/opt/apps/bundle/samples/cudaTensorCoreGemm",
+      "/opt/apps/bundle/samples/graphMemoryNodes",
+      "/opt/apps/bundle/samples/simpleCudaGraphs",
+      "/opt/apps/bundle/samples/globalToShmemAsyncCopy",
+      "/opt/apps/bundle/samples/bf16TensorCoreGemm",
+      "/opt/apps/bundle/samples/simpleCUBLAS",
+      "/opt/apps/bundle/samples/simpleCUFFT",
+      "/opt/apps/bundle/samples/conjugateGradient",
+      "/opt/apps/bundle/samples/MersenneTwisterGP11213",
+      "/opt/apps/bundle/samples/reduction",
+      "/opt/apps/bundle/samples/sortingNetworks",
+      "/opt/apps/bundle/samples/scan",
+      "/opt/apps/bundle/samples/histogram",
+      "/opt/apps/bundle/samples/BlackScholes",
+      "/opt/apps/bundle/samples/fastWalshTransform",
+      "/opt/apps/bundle/samples/transpose",
+      "/opt/apps/bundle/samples/concurrentKernels",
+      "/opt/apps/bundle/samples/conjugateGradientUM",
+      "/opt/apps/bundle/samples/UnifiedMemoryPerf",
+      "/opt/apps/bundle/gpu-burn/gpu_burn",
+      "/opt/apps/bundle/gpu-burn/compare.fatbin",
+      "/opt/apps/bundle/llama/llama-cli",
+      "/opt/apps/bundle/llama/llama-bench",
+      "/opt/apps/bundle/llama/llama-simple",
+      "/opt/apps/bundle/bin/clpeak",
+      "/opt/apps/bundle/bin/vkpeak",
+      "/opt/apps/data/blender/blender",
+      "/opt/apps/bundle/share/ai_bench.py",
+      "/opt/apps/bundle/share/blender_render.py",
+      "/opt/apps/bundle/share/cupy_check.py",
+      "/opt/apps/bundle/share/hf_generate.py",
+      "/opt/apps/bundle/share/torch_correct.py"
+    ],
+    "trees": [
+      "/opt/apps/bundle",
+      "/opt/apps/data/blender"
+    ],
+    "dpkg_binaries": [
+      "ffmpeg",
+      "ffprobe",
+      "vulkaninfo",
+      "clinfo",
+      "hashcat"
+    ],
+    "globs": []
+  },
+  "provenance": {
+    "checked_utc": "2026-11-07",
+    "published_pins": {
+      "ubuntu": "https://cloud-images.ubuntu.com/releases/noble/release-20261017/SHA256SUMS",
+      "cuda": "https://developer.download.nvidia.com/compute/cuda/redist/redistrib_12.6.3.json",
+      "nvidia": "https://us.download.nvidia.com/XFree86/Linux-x86_64/580.159.04/NVIDIA-Linux-x86_64-580.159.04.run.sha256sum",
+      "blender": "https://download.blender.org/release/Blender4.5/blender-4.5.0.sha256",
+      "pip": "PyPI release JSON digests or official PyTorch wheel index SHA256 fragments",
+      "models": "Hugging Face commit API LFS SHA256; small files hashed from downloaded bytes"
+    },
+    "measured_archive_hashes": [
+      "cuda-samples",
+      "llama",
+      "clpeak",
+      "gpu-burn",
+      "vkpeak"
+    ],
+    "cuda_samples_tag": "v12.5",
+    "cuda_samples_commit": "9c688d7ff78455ed42e345124d1495aad6bf66de",
+    "llama_commit": "4b1a27fa0eb875bbca4f6cfe936e3d65adc685c0",
+    "clpeak_tag": "1.1.2",
+    "gpu_burn_commit": "0d19c94dcb2e9b6858b7586a4c327674cd67113b",
+    "vkpeak_version": "20250531"
+  },
+  "official_fetch": [
+    {
+      "id": "nvidia-driver-580",
+      "kind": "run",
+      "version": "580.159.04",
+      "url": "https://us.download.nvidia.com/XFree86/Linux-x86_64/580.159.04/NVIDIA-Linux-x86_64-580.159.04.run",
+      "size": 397162548,
+      "sha256": "c1e66761b088d17b3adf6cb6979de9af38be2684d102b001a176dcfafabdca1e",
+      "filename": "NVIDIA-Linux-x86_64-580.159.04.run",
+      "licence": "NVIDIA Software License Agreement",
+      "install_argv": [
+        "{file}",
+        "--silent",
+        "--no-questions",
+        "--ui=none",
+        "--kernel-module-type=open"
+      ]
+    },
+    {
+      "id": "official-cuda_cccl",
+      "kind": "archive",
+      "version": "12.6.77",
+      "url": "https://developer.download.nvidia.com/compute/cuda/redist/cuda_cccl/linux-x86_64/cuda_cccl-linux-x86_64-12.6.77-archive.tar.xz",
+      "sha256": "9c3145ef01f73e50c0f5fcf923f0899c847f487c529817daa8f8b1a3ecf20925",
+      "size": 934952,
+      "target": "/usr/local/cuda-12.6",
+      "strip_components": 1,
+      "licence": "NVIDIA CUDA Toolkit EULA",
+      "install_argv": [
+        "/usr/bin/python3",
+        "/opt/apps/image/guest.py",
+        "--install-official",
+        "official-cuda_cccl"
+      ],
+      "storage": "transient-per-run-only; never project R2, GitHub, image or ISO"
+    },
+    {
+      "id": "official-cuda_nvcc",
+      "kind": "archive",
+      "version": "12.6.85",
+      "url": "https://developer.download.nvidia.com/compute/cuda/redist/cuda_nvcc/linux-x86_64/cuda_nvcc-linux-x86_64-12.6.85-archive.tar.xz",
+      "sha256": "840deff234d9bef20d6856439c49881cb4f29423b214f9ecd2fa59b7ac323817",
+      "size": 49996208,
+      "target": "/usr/local/cuda-12.6",
+      "strip_components": 1,
+      "licence": "NVIDIA CUDA Toolkit EULA",
+      "install_argv": [
+        "/usr/bin/python3",
+        "/opt/apps/image/guest.py",
+        "--install-official",
+        "official-cuda_nvcc"
+      ],
+      "storage": "transient-per-run-only; never project R2, GitHub, image or ISO"
+    },
+    {
+      "id": "official-cuda_cudart",
+      "kind": "archive",
+      "version": "12.6.77",
+      "url": "https://developer.download.nvidia.com/compute/cuda/redist/cuda_cudart/linux-x86_64/cuda_cudart-linux-x86_64-12.6.77-archive.tar.xz",
+      "sha256": "f74689258a60fd9c5bdfa7679458527a55e22442691ba678dcfaeffbf4391ef9",
+      "size": 1126072,
+      "target": "/usr/local/cuda-12.6",
+      "strip_components": 1,
+      "licence": "NVIDIA CUDA Toolkit EULA",
+      "install_argv": [
+        "/usr/bin/python3",
+        "/opt/apps/image/guest.py",
+        "--install-official",
+        "official-cuda_cudart"
+      ],
+      "storage": "transient-per-run-only; never project R2, GitHub, image or ISO"
+    },
+    {
+      "id": "official-cuda_nvrtc",
+      "kind": "archive",
+      "version": "12.6.85",
+      "url": "https://developer.download.nvidia.com/compute/cuda/redist/cuda_nvrtc/linux-x86_64/cuda_nvrtc-linux-x86_64-12.6.85-archive.tar.xz",
+      "sha256": "a4289ba86f0deeccf4e1d94c58559eae4c8184fcb6eaade8fcab45584e6cf402",
+      "size": 34380240,
+      "target": "/usr/local/cuda-12.6",
+      "strip_components": 1,
+      "licence": "NVIDIA CUDA Toolkit EULA",
+      "install_argv": [
+        "/usr/bin/python3",
+        "/opt/apps/image/guest.py",
+        "--install-official",
+        "official-cuda_nvrtc"
+      ],
+      "storage": "transient-per-run-only; never project R2, GitHub, image or ISO"
+    },
+    {
+      "id": "official-cuda_profiler_api",
+      "kind": "archive",
+      "version": "12.6.77",
+      "url": "https://developer.download.nvidia.com/compute/cuda/redist/cuda_profiler_api/linux-x86_64/cuda_profiler_api-linux-x86_64-12.6.77-archive.tar.xz",
+      "sha256": "0807ec2335ea358a96f984ce08cc0b3d572b5cc486f9082fc3afa9a1773f2a58",
+      "size": 16188,
+      "target": "/usr/local/cuda-12.6",
+      "strip_components": 1,
+      "licence": "NVIDIA CUDA Toolkit EULA",
+      "install_argv": [
+        "/usr/bin/python3",
+        "/opt/apps/image/guest.py",
+        "--install-official",
+        "official-cuda_profiler_api"
+      ],
+      "storage": "transient-per-run-only; never project R2, GitHub, image or ISO"
+    },
+    {
+      "id": "official-libcublas",
+      "kind": "archive",
+      "version": "12.6.4.1",
+      "url": "https://developer.download.nvidia.com/compute/cuda/redist/libcublas/linux-x86_64/libcublas-linux-x86_64-12.6.4.1-archive.tar.xz",
+      "sha256": "ec682bac6387f9cdfd0c20b25a16cd6ed0b8b3b7ff42be9eaeb41828e3a72572",
+      "size": 522827284,
+      "target": "/usr/local/cuda-12.6",
+      "strip_components": 1,
+      "licence": "NVIDIA CUDA Toolkit EULA",
+      "install_argv": [
+        "/usr/bin/python3",
+        "/opt/apps/image/guest.py",
+        "--install-official",
+        "official-libcublas"
+      ],
+      "storage": "transient-per-run-only; never project R2, GitHub, image or ISO"
+    },
+    {
+      "id": "official-libcufft",
+      "kind": "archive",
+      "version": "11.3.0.4",
+      "url": "https://developer.download.nvidia.com/compute/cuda/redist/libcufft/linux-x86_64/libcufft-linux-x86_64-11.3.0.4-archive.tar.xz",
+      "sha256": "63a046d51a45388e10612c3fd423bb7fa5127496aa9bb3951a609e8b9d996852",
+      "size": 476376920,
+      "target": "/usr/local/cuda-12.6",
+      "strip_components": 1,
+      "licence": "NVIDIA CUDA Toolkit EULA",
+      "install_argv": [
+        "/usr/bin/python3",
+        "/opt/apps/image/guest.py",
+        "--install-official",
+        "official-libcufft"
+      ],
+      "storage": "transient-per-run-only; never project R2, GitHub, image or ISO"
+    },
+    {
+      "id": "official-libcurand",
+      "kind": "archive",
+      "version": "10.3.7.77",
+      "url": "https://developer.download.nvidia.com/compute/cuda/redist/libcurand/linux-x86_64/libcurand-linux-x86_64-10.3.7.77-archive.tar.xz",
+      "sha256": "981339cc86d7b8779e9a3c17e72d8c5e1a8a2d06c24db692eecabed8e746a3c7",
+      "size": 81729748,
+      "target": "/usr/local/cuda-12.6",
+      "strip_components": 1,
+      "licence": "NVIDIA CUDA Toolkit EULA",
+      "install_argv": [
+        "/usr/bin/python3",
+        "/opt/apps/image/guest.py",
+        "--install-official",
+        "official-libcurand"
+      ],
+      "storage": "transient-per-run-only; never project R2, GitHub, image or ISO"
+    },
+    {
+      "id": "official-libcusolver",
+      "kind": "archive",
+      "version": "11.7.1.2",
+      "url": "https://developer.download.nvidia.com/compute/cuda/redist/libcusolver/linux-x86_64/libcusolver-linux-x86_64-11.7.1.2-archive.tar.xz",
+      "sha256": "7cf794bf21c4947d0922e378984fa7939f0811bfc355121be1a0d44cd8695c09",
+      "size": 159512244,
+      "target": "/usr/local/cuda-12.6",
+      "strip_components": 1,
+      "licence": "NVIDIA CUDA Toolkit EULA",
+      "install_argv": [
+        "/usr/bin/python3",
+        "/opt/apps/image/guest.py",
+        "--install-official",
+        "official-libcusolver"
+      ],
+      "storage": "transient-per-run-only; never project R2, GitHub, image or ISO"
+    },
+    {
+      "id": "official-libcusparse",
+      "kind": "archive",
+      "version": "12.5.4.2",
+      "url": "https://developer.download.nvidia.com/compute/cuda/redist/libcusparse/linux-x86_64/libcusparse-linux-x86_64-12.5.4.2-archive.tar.xz",
+      "sha256": "a9ad797756a7bb9a92bf8a63768dec837af38064ee8be3c32e21382e03604bd8",
+      "size": 236134716,
+      "target": "/usr/local/cuda-12.6",
+      "strip_components": 1,
+      "licence": "NVIDIA CUDA Toolkit EULA",
+      "install_argv": [
+        "/usr/bin/python3",
+        "/opt/apps/image/guest.py",
+        "--install-official",
+        "official-libcusparse"
+      ],
+      "storage": "transient-per-run-only; never project R2, GitHub, image or ISO"
+    },
+    {
+      "id": "official-libnvjitlink",
+      "kind": "archive",
+      "version": "12.6.85",
+      "url": "https://developer.download.nvidia.com/compute/cuda/redist/libnvjitlink/linux-x86_64/libnvjitlink-linux-x86_64-12.6.85-archive.tar.xz",
+      "sha256": "1055077ce594fad6fd86d23604c60c64b673cdc8dd01fae7e0cbec633c35930d",
+      "size": 28960912,
+      "target": "/usr/local/cuda-12.6",
+      "strip_components": 1,
+      "licence": "NVIDIA CUDA Toolkit EULA",
+      "install_argv": [
+        "/usr/bin/python3",
+        "/opt/apps/image/guest.py",
+        "--install-official",
+        "official-libnvjitlink"
+      ],
+      "storage": "transient-per-run-only; never project R2, GitHub, image or ISO"
+    },
+    {
+      "id": "official-pip-nvidia-cublas-cu12",
+      "kind": "wheel",
+      "url": "https://files.pythonhosted.org/packages/ae/71/1c91302526c45ab494c23f61c7a84aa568b8c1f9d196efa5993957faf906/nvidia_cublas_cu12-12.4.5.8-py3-none-manylinux2014_x86_64.whl",
+      "sha256": "2fc8da60df463fdefa81e323eef2e36489e1c94335b5358bcb38360adf75ac9b",
+      "size": 363438805,
+      "filename": "nvidia_cublas_cu12-12.4.5.8-py3-none-manylinux2014_x86_64.whl",
+      "package": "nvidia-cublas-cu12",
+      "version": "12.4.5.8",
+      "requires_dist": [],
+      "licence": "NVIDIA Software License Agreement",
+      "install_argv": [
+        "/usr/bin/python3",
+        "/opt/apps/image/guest.py",
+        "--install-official",
+        "official-pip-nvidia-cublas-cu12"
+      ],
+      "storage": "transient-per-run-only; never project R2, GitHub, image or ISO"
+    },
+    {
+      "id": "official-pip-nvidia-cuda-cupti-cu12",
+      "kind": "wheel",
+      "url": "https://files.pythonhosted.org/packages/67/42/f4f60238e8194a3106d06a058d494b18e006c10bb2b915655bd9f6ea4cb1/nvidia_cuda_cupti_cu12-12.4.127-py3-none-manylinux2014_x86_64.whl",
+      "sha256": "9dec60f5ac126f7bb551c055072b69d85392b13311fcc1bcda2202d172df30fb",
+      "size": 13813957,
+      "filename": "nvidia_cuda_cupti_cu12-12.4.127-py3-none-manylinux2014_x86_64.whl",
+      "package": "nvidia-cuda-cupti-cu12",
+      "version": "12.4.127",
+      "requires_dist": [],
+      "licence": "NVIDIA Software License Agreement",
+      "install_argv": [
+        "/usr/bin/python3",
+        "/opt/apps/image/guest.py",
+        "--install-official",
+        "official-pip-nvidia-cuda-cupti-cu12"
+      ],
+      "storage": "transient-per-run-only; never project R2, GitHub, image or ISO"
+    },
+    {
+      "id": "official-pip-nvidia-cuda-nvrtc-cu12",
+      "kind": "wheel",
+      "url": "https://files.pythonhosted.org/packages/2c/14/91ae57cd4db3f9ef7aa99f4019cfa8d54cb4caa7e00975df6467e9725a9f/nvidia_cuda_nvrtc_cu12-12.4.127-py3-none-manylinux2014_x86_64.whl",
+      "sha256": "a178759ebb095827bd30ef56598ec182b85547f1508941a3d560eb7ea1fbf338",
+      "size": 24640306,
+      "filename": "nvidia_cuda_nvrtc_cu12-12.4.127-py3-none-manylinux2014_x86_64.whl",
+      "package": "nvidia-cuda-nvrtc-cu12",
+      "version": "12.4.127",
+      "requires_dist": [],
+      "licence": "NVIDIA Software License Agreement",
+      "install_argv": [
+        "/usr/bin/python3",
+        "/opt/apps/image/guest.py",
+        "--install-official",
+        "official-pip-nvidia-cuda-nvrtc-cu12"
+      ],
+      "storage": "transient-per-run-only; never project R2, GitHub, image or ISO"
+    },
+    {
+      "id": "official-pip-nvidia-cuda-runtime-cu12",
+      "kind": "wheel",
+      "url": "https://files.pythonhosted.org/packages/ea/27/1795d86fe88ef397885f2e580ac37628ed058a92ed2c39dc8eac3adf0619/nvidia_cuda_runtime_cu12-12.4.127-py3-none-manylinux2014_x86_64.whl",
+      "sha256": "64403288fa2136ee8e467cdc9c9427e0434110899d07c779f25b5c068934faa5",
+      "size": 883737,
+      "filename": "nvidia_cuda_runtime_cu12-12.4.127-py3-none-manylinux2014_x86_64.whl",
+      "package": "nvidia-cuda-runtime-cu12",
+      "version": "12.4.127",
+      "requires_dist": [],
+      "licence": "NVIDIA Software License Agreement",
+      "install_argv": [
+        "/usr/bin/python3",
+        "/opt/apps/image/guest.py",
+        "--install-official",
+        "official-pip-nvidia-cuda-runtime-cu12"
+      ],
+      "storage": "transient-per-run-only; never project R2, GitHub, image or ISO"
+    },
+    {
+      "id": "official-pip-nvidia-cudnn-cu12",
+      "kind": "wheel",
+      "url": "https://files.pythonhosted.org/packages/9f/fd/713452cd72343f682b1c7b9321e23829f00b842ceaedcda96e742ea0b0b3/nvidia_cudnn_cu12-9.1.0.70-py3-none-manylinux2014_x86_64.whl",
+      "sha256": "165764f44ef8c61fcdfdfdbe769d687e06374059fbb388b6c89ecb0e28793a6f",
+      "size": 664752741,
+      "filename": "nvidia_cudnn_cu12-9.1.0.70-py3-none-manylinux2014_x86_64.whl",
+      "package": "nvidia-cudnn-cu12",
+      "version": "9.1.0.70",
+      "requires_dist": [
+        "nvidia-cublas-cu12"
+      ],
+      "licence": "NVIDIA Software License Agreement",
+      "install_argv": [
+        "/usr/bin/python3",
+        "/opt/apps/image/guest.py",
+        "--install-official",
+        "official-pip-nvidia-cudnn-cu12"
+      ],
+      "storage": "transient-per-run-only; never project R2, GitHub, image or ISO"
+    },
+    {
+      "id": "official-pip-nvidia-cufft-cu12",
+      "kind": "wheel",
+      "url": "https://files.pythonhosted.org/packages/27/94/3266821f65b92b3138631e9c8e7fe1fb513804ac934485a8d05776e1dd43/nvidia_cufft_cu12-11.2.1.3-py3-none-manylinux2014_x86_64.whl",
+      "sha256": "f083fc24912aa410be21fa16d157fed2055dab1cc4b6934a0e03cba69eb242b9",
+      "size": 211459117,
+      "filename": "nvidia_cufft_cu12-11.2.1.3-py3-none-manylinux2014_x86_64.whl",
+      "package": "nvidia-cufft-cu12",
+      "version": "11.2.1.3",
+      "requires_dist": [],
+      "licence": "NVIDIA Software License Agreement",
+      "install_argv": [
+        "/usr/bin/python3",
+        "/opt/apps/image/guest.py",
+        "--install-official",
+        "official-pip-nvidia-cufft-cu12"
+      ],
+      "storage": "transient-per-run-only; never project R2, GitHub, image or ISO"
+    },
+    {
+      "id": "official-pip-nvidia-curand-cu12",
+      "kind": "wheel",
+      "url": "https://files.pythonhosted.org/packages/8a/6d/44ad094874c6f1b9c654f8ed939590bdc408349f137f9b98a3a23ccec411/nvidia_curand_cu12-10.3.5.147-py3-none-manylinux2014_x86_64.whl",
+      "sha256": "a88f583d4e0bb643c49743469964103aa59f7f708d862c3ddb0fc07f851e3b8b",
+      "size": 56305206,
+      "filename": "nvidia_curand_cu12-10.3.5.147-py3-none-manylinux2014_x86_64.whl",
+      "package": "nvidia-curand-cu12",
+      "version": "10.3.5.147",
+      "requires_dist": [],
+      "licence": "NVIDIA Software License Agreement",
+      "install_argv": [
+        "/usr/bin/python3",
+        "/opt/apps/image/guest.py",
+        "--install-official",
+        "official-pip-nvidia-curand-cu12"
+      ],
+      "storage": "transient-per-run-only; never project R2, GitHub, image or ISO"
+    },
+    {
+      "id": "official-pip-nvidia-cusolver-cu12",
+      "kind": "wheel",
+      "url": "https://files.pythonhosted.org/packages/3a/e1/5b9089a4b2a4790dfdea8b3a006052cfecff58139d5a4e34cb1a51df8d6f/nvidia_cusolver_cu12-11.6.1.9-py3-none-manylinux2014_x86_64.whl",
+      "sha256": "19e33fa442bcfd085b3086c4ebf7e8debc07cfe01e11513cc6d332fd918ac260",
+      "size": 127936057,
+      "filename": "nvidia_cusolver_cu12-11.6.1.9-py3-none-manylinux2014_x86_64.whl",
+      "package": "nvidia-cusolver-cu12",
+      "version": "11.6.1.9",
+      "requires_dist": [
+        "nvidia-cublas-cu12",
+        "nvidia-nvjitlink-cu12",
+        "nvidia-cusparse-cu12"
+      ],
+      "licence": "NVIDIA Software License Agreement",
+      "install_argv": [
+        "/usr/bin/python3",
+        "/opt/apps/image/guest.py",
+        "--install-official",
+        "official-pip-nvidia-cusolver-cu12"
+      ],
+      "storage": "transient-per-run-only; never project R2, GitHub, image or ISO"
+    },
+    {
+      "id": "official-pip-nvidia-cusparse-cu12",
+      "kind": "wheel",
+      "url": "https://files.pythonhosted.org/packages/db/f7/97a9ea26ed4bbbfc2d470994b8b4f338ef663be97b8f677519ac195e113d/nvidia_cusparse_cu12-12.3.1.170-py3-none-manylinux2014_x86_64.whl",
+      "sha256": "ea4f11a2904e2a8dc4b1833cc1b5181cde564edd0d5cd33e3c168eff2d1863f1",
+      "size": 207454763,
+      "filename": "nvidia_cusparse_cu12-12.3.1.170-py3-none-manylinux2014_x86_64.whl",
+      "package": "nvidia-cusparse-cu12",
+      "version": "12.3.1.170",
+      "requires_dist": [
+        "nvidia-nvjitlink-cu12"
+      ],
+      "licence": "NVIDIA Software License Agreement",
+      "install_argv": [
+        "/usr/bin/python3",
+        "/opt/apps/image/guest.py",
+        "--install-official",
+        "official-pip-nvidia-cusparse-cu12"
+      ],
+      "storage": "transient-per-run-only; never project R2, GitHub, image or ISO"
+    },
+    {
+      "id": "official-pip-nvidia-cusparselt-cu12",
+      "kind": "wheel",
+      "url": "https://files.pythonhosted.org/packages/78/a8/bcbb63b53a4b1234feeafb65544ee55495e1bb37ec31b999b963cbccfd1d/nvidia_cusparselt_cu12-0.6.2-py3-none-manylinux2014_x86_64.whl",
+      "sha256": "df2c24502fd76ebafe7457dbc4716b2fec071aabaed4fb7691a201cde03704d9",
+      "size": 150057751,
+      "filename": "nvidia_cusparselt_cu12-0.6.2-py3-none-manylinux2014_x86_64.whl",
+      "package": "nvidia-cusparselt-cu12",
+      "version": "0.6.2",
+      "requires_dist": [],
+      "licence": "NVIDIA Software License Agreement",
+      "install_argv": [
+        "/usr/bin/python3",
+        "/opt/apps/image/guest.py",
+        "--install-official",
+        "official-pip-nvidia-cusparselt-cu12"
+      ],
+      "storage": "transient-per-run-only; never project R2, GitHub, image or ISO"
+    },
+    {
+      "id": "official-pip-nvidia-nccl-cu12",
+      "kind": "wheel",
+      "url": "https://files.pythonhosted.org/packages/df/99/12cd266d6233f47d00daf3a72739872bdc10267d0383508b0b9c84a18bb6/nvidia_nccl_cu12-2.21.5-py3-none-manylinux2014_x86_64.whl",
+      "sha256": "8579076d30a8c24988834445f8d633c697d42397e92ffc3f63fa26766d25e0a0",
+      "size": 188654414,
+      "filename": "nvidia_nccl_cu12-2.21.5-py3-none-manylinux2014_x86_64.whl",
+      "package": "nvidia-nccl-cu12",
+      "version": "2.21.5",
+      "requires_dist": [],
+      "licence": "NVIDIA Software License Agreement",
+      "install_argv": [
+        "/usr/bin/python3",
+        "/opt/apps/image/guest.py",
+        "--install-official",
+        "official-pip-nvidia-nccl-cu12"
+      ],
+      "storage": "transient-per-run-only; never project R2, GitHub, image or ISO"
+    },
+    {
+      "id": "official-pip-nvidia-nvjitlink-cu12",
+      "kind": "wheel",
+      "url": "https://files.pythonhosted.org/packages/ff/ff/847841bacfbefc97a00036e0fce5a0f086b640756dc38caea5e1bb002655/nvidia_nvjitlink_cu12-12.4.127-py3-none-manylinux2014_x86_64.whl",
+      "sha256": "06b3b9b25bf3f8af351d664978ca26a16d2c5127dbd53c0497e28d1fb9611d57",
+      "size": 21066810,
+      "filename": "nvidia_nvjitlink_cu12-12.4.127-py3-none-manylinux2014_x86_64.whl",
+      "package": "nvidia-nvjitlink-cu12",
+      "version": "12.4.127",
+      "requires_dist": [],
+      "licence": "NVIDIA Software License Agreement",
+      "install_argv": [
+        "/usr/bin/python3",
+        "/opt/apps/image/guest.py",
+        "--install-official",
+        "official-pip-nvidia-nvjitlink-cu12"
+      ],
+      "storage": "transient-per-run-only; never project R2, GitHub, image or ISO"
+    },
+    {
+      "id": "official-pip-nvidia-nvtx-cu12",
+      "kind": "wheel",
+      "url": "https://files.pythonhosted.org/packages/87/20/199b8713428322a2f22b722c62b8cc278cc53dffa9705d744484b5035ee9/nvidia_nvtx_cu12-12.4.127-py3-none-manylinux2014_x86_64.whl",
+      "sha256": "781e950d9b9f60d8241ccea575b32f5105a5baf4c2351cab5256a24869f12a1a",
+      "size": 99144,
+      "filename": "nvidia_nvtx_cu12-12.4.127-py3-none-manylinux2014_x86_64.whl",
+      "package": "nvidia-nvtx-cu12",
+      "version": "12.4.127",
+      "requires_dist": [],
+      "licence": "NVIDIA Software License Agreement",
+      "install_argv": [
+        "/usr/bin/python3",
+        "/opt/apps/image/guest.py",
+        "--install-official",
+        "official-pip-nvidia-nvtx-cu12"
+      ],
+      "storage": "transient-per-run-only; never project R2, GitHub, image or ISO"
+    },
+    {
+      "id": "official-pip-torch",
+      "kind": "wheel",
+      "url": "https://download-r2.pytorch.org/whl/cu124/torch-2.6.0%2Bcu124-cp312-cp312-linux_x86_64.whl",
+      "sha256": "a393b506844035c0dac2f30ea8478c343b8e95a429f06f3b3cadfc7f53adb597",
+      "size": 768372201,
+      "filename": "torch-2.6.0+cu124-cp312-cp312-linux_x86_64.whl",
+      "package": "torch",
+      "version": "2.6.0+cu124",
+      "requires_dist": [
+        "filelock",
+        "typing-extensions (>=4.10.0)",
+        "networkx",
+        "jinja2",
+        "fsspec",
+        "nvidia-cuda-nvrtc-cu12 (==12.4.127) ; platform_system == \"Linux\" and platform_machine == \"x86_64\"",
+        "nvidia-cuda-runtime-cu12 (==12.4.127) ; platform_system == \"Linux\" and platform_machine == \"x86_64\"",
+        "nvidia-cuda-cupti-cu12 (==12.4.127) ; platform_system == \"Linux\" and platform_machine == \"x86_64\"",
+        "nvidia-cudnn-cu12 (==9.1.0.70) ; platform_system == \"Linux\" and platform_machine == \"x86_64\"",
+        "nvidia-cublas-cu12 (==12.4.5.8) ; platform_system == \"Linux\" and platform_machine == \"x86_64\"",
+        "nvidia-cufft-cu12 (==11.2.1.3) ; platform_system == \"Linux\" and platform_machine == \"x86_64\"",
+        "nvidia-curand-cu12 (==10.3.5.147) ; platform_system == \"Linux\" and platform_machine == \"x86_64\"",
+        "nvidia-cusolver-cu12 (==11.6.1.9) ; platform_system == \"Linux\" and platform_machine == \"x86_64\"",
+        "nvidia-cusparse-cu12 (==12.3.1.170) ; platform_system == \"Linux\" and platform_machine == \"x86_64\"",
+        "nvidia-cusparselt-cu12 (==0.6.2) ; platform_system == \"Linux\" and platform_machine == \"x86_64\"",
+        "nvidia-nccl-cu12 (==2.21.5) ; platform_system == \"Linux\" and platform_machine == \"x86_64\"",
+        "nvidia-nvtx-cu12 (==12.4.127) ; platform_system == \"Linux\" and platform_machine == \"x86_64\"",
+        "nvidia-nvjitlink-cu12 (==12.4.127) ; platform_system == \"Linux\" and platform_machine == \"x86_64\"",
+        "triton (==3.2.0) ; platform_system == \"Linux\" and platform_machine == \"x86_64\"",
+        "setuptools ; python_version >= \"3.12\"",
+        "sympy (==1.13.1) ; python_version >= \"3.9\"",
+        "opt-einsum (>=3.3) ; extra == 'opt-einsum'",
+        "optree (>=0.13.0) ; extra == 'optree'"
+      ],
+      "licence": "Upstream open-source licence plus bundled NVIDIA notices; runtime-only",
+      "install_argv": [
+        "/usr/bin/python3",
+        "/opt/apps/image/guest.py",
+        "--install-official",
+        "official-pip-torch"
+      ],
+      "storage": "transient-per-run-only; never project R2, GitHub, image or ISO"
+    },
+    {
+      "id": "official-pip-torchvision",
+      "kind": "wheel",
+      "url": "https://download-r2.pytorch.org/whl/cu124/torchvision-0.21.0%2Bcu124-cp312-cp312-linux_x86_64.whl",
+      "sha256": "efb53ea0af7bf09b7b53e2a18b9be6d245f7d46a90b51d5cf97f37e9b929a991",
+      "size": 7282566,
+      "filename": "torchvision-0.21.0+cu124-cp312-cp312-linux_x86_64.whl",
+      "package": "torchvision",
+      "version": "0.21.0+cu124",
+      "requires_dist": [
+        "numpy",
+        "torch (==2.6.0)",
+        "pillow (!=8.3.*,>=5.3.0)",
+        "gdown (>=4.7.3) ; extra == 'gdown'",
+        "scipy ; extra == 'scipy'"
+      ],
+      "licence": "Upstream open-source licence plus bundled NVIDIA notices; runtime-only",
+      "install_argv": [
+        "/usr/bin/python3",
+        "/opt/apps/image/guest.py",
+        "--install-official",
+        "official-pip-torchvision"
+      ],
+      "storage": "transient-per-run-only; never project R2, GitHub, image or ISO"
+    },
+    {
+      "id": "official-pip-triton",
+      "kind": "wheel",
+      "url": "https://files.pythonhosted.org/packages/06/00/59500052cb1cf8cf5316be93598946bc451f14072c6ff256904428eaf03c/triton-3.2.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+      "sha256": "8d9b215efc1c26fa7eefb9a157915c92d52e000d2bf83e5f69704047e63f125c",
+      "size": 253159365,
+      "filename": "triton-3.2.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+      "package": "triton",
+      "version": "3.2.0",
+      "requires_dist": [
+        "cmake>=3.20; extra == \"build\"",
+        "lit; extra == \"build\"",
+        "autopep8; extra == \"tests\"",
+        "flake8; extra == \"tests\"",
+        "isort; extra == \"tests\"",
+        "numpy; extra == \"tests\"",
+        "pytest; extra == \"tests\"",
+        "scipy>=1.7.1; extra == \"tests\"",
+        "llnl-hatchet; extra == \"tests\"",
+        "matplotlib; extra == \"tutorials\"",
+        "pandas; extra == \"tutorials\"",
+        "tabulate; extra == \"tutorials\""
+      ],
+      "licence": "Upstream open-source licence plus bundled NVIDIA notices; runtime-only",
+      "install_argv": [
+        "/usr/bin/python3",
+        "/opt/apps/image/guest.py",
+        "--install-official",
+        "official-pip-triton"
+      ],
+      "storage": "transient-per-run-only; never project R2, GitHub, image or ISO"
+    },
+    {
+      "id": "official-pip-cupy-cuda12x",
+      "kind": "wheel",
+      "url": "https://files.pythonhosted.org/packages/90/dc/da09e5184d94146b8cbf240c2bef1c4851cbafd7e2d60cc71b1530c766ec/cupy_cuda12x-13.3.0-cp312-cp312-manylinux2014_x86_64.whl",
+      "sha256": "e206bd8664f0763732b6012431f484ee535bffd77a5ae95e9bfe1c7c72396625",
+      "size": 90980377,
+      "filename": "cupy_cuda12x-13.3.0-cp312-cp312-manylinux2014_x86_64.whl",
+      "package": "cupy-cuda12x",
+      "version": "13.3.0",
+      "requires_dist": [
+        "numpy<2.3,>=1.22",
+        "fastrlock>=0.5",
+        "scipy<1.14,>=1.7; extra == \"all\"",
+        "Cython<3,>=0.29.22; extra == \"all\"",
+        "optuna>=2.0; extra == \"all\"",
+        "autopep8==1.5.5; extra == \"stylecheck\"",
+        "flake8==3.8.4; extra == \"stylecheck\"",
+        "pbr==5.5.1; extra == \"stylecheck\"",
+        "pycodestyle==2.6.0; extra == \"stylecheck\"",
+        "mypy==1.4.1; extra == \"stylecheck\"",
+        "types-setuptools==57.4.14; extra == \"stylecheck\"",
+        "packaging; extra == \"test\"",
+        "pytest>=7.2; extra == \"test\"",
+        "hypothesis<6.55.0,>=6.37.2; extra == \"test\"",
+        "mpmath; extra == \"test\""
+      ],
+      "licence": "CuPy MIT + bundled NVIDIA proprietary CUDA headers",
+      "requires": "nvidia-layer",
+      "reason": "MEASURED pinned wheel contains proprietary/confidential CUDA headers cuda_fp16.h/.hpp in cupy/_core/include/cupy/_cuda/; not an open-image artifact",
+      "install_argv": [
+        "/usr/bin/python3",
+        "/opt/apps/image/guest.py",
+        "--install-official",
+        "official-pip-cupy-cuda12x"
+      ],
+      "storage": "transient-per-run-only; never project R2, GitHub, image or ISO"
+    }
+  ],
+  "driver_versions": {
+    "580.159.04": "nvidia-driver-580"
+  },
+  "official_links": [
+    {
+      "path": "/usr/local/cuda-12.6/lib64",
+      "target": "lib"
+    },
+    {
+      "path": "/usr/local/cuda-12.6/targets/x86_64-linux",
+      "target": ".."
+    },
+    {
+      "path": "/usr/local/cuda",
+      "target": "cuda-12.6"
+    },
+    {
+      "path": "/opt/apps/bundle/lib",
+      "target": "/usr/local/cuda-12.6/lib"
+    },
+    {
+      "path": "/opt/apps/bundle/cuda/include",
+      "target": "/usr/local/cuda-12.6/include"
+    }
+  ],
+  "links": [],
+  "official_write_files": [
+    {
+      "path": "/etc/ld.so.conf.d/apps-cuda.conf",
+      "content": "/usr/local/cuda-12.6/lib\n/opt/apps/bundle/llama\n",
+      "permissions": "0644"
+    },
+    {
+      "path": "/etc/modprobe.d/apps-nvidia.conf",
+      "content": "options nvidia NVreg_OpenRmEnableUnsupportedGpus=1\nblacklist nouveau\n",
+      "permissions": "0644"
+    },
+    {
+      "path": "/etc/OpenCL/vendors/nvidia.icd",
+      "content": "libnvidia-opencl.so.1\n",
+      "permissions": "0644"
+    }
+  ],
+  "runtime_inventory": {
+    "required_paths": [
+      "/opt/apps/data/hf/hub/models--Qwen--Qwen2-0.5B-Instruct/snapshots/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/LICENSE",
+      "/opt/apps/data/hf/hub/models--Qwen--Qwen2-0.5B-Instruct/snapshots/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/config.json",
+      "/opt/apps/data/hf/hub/models--Qwen--Qwen2-0.5B-Instruct/snapshots/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/generation_config.json",
+      "/opt/apps/data/hf/hub/models--Qwen--Qwen2-0.5B-Instruct/snapshots/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/merges.txt",
+      "/opt/apps/data/hf/hub/models--Qwen--Qwen2-0.5B-Instruct/snapshots/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/tokenizer.json",
+      "/opt/apps/data/hf/hub/models--Qwen--Qwen2-0.5B-Instruct/snapshots/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/tokenizer_config.json",
+      "/opt/apps/data/hf/hub/models--Qwen--Qwen2-0.5B-Instruct/snapshots/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/vocab.json",
+      "/opt/apps/data/Qwen2.5-GGUF-LICENSE",
+      "/opt/apps/data/hf/hub/models--Qwen--Qwen2-0.5B-Instruct/snapshots/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/model.safetensors",
+      "/opt/apps/data/qwen2.5-1.5b-instruct-q4_k_m.gguf",
+      "/opt/apps/bundle/bin/attach_verify",
+      "/opt/apps/bundle/bin/blackscholes",
+      "/opt/apps/bundle/bin/conv2d",
+      "/opt/apps/bundle/bin/fft_cufft",
+      "/opt/apps/bundle/bin/mandelbrot",
+      "/opt/apps/bundle/bin/memcpy2d",
+      "/opt/apps/bundle/bin/nbody",
+      "/opt/apps/bundle/bin/reduce",
+      "/opt/apps/bundle/bin/sgemm_cublas",
+      "/opt/apps/bundle/bin/sha256",
+      "/opt/apps/bundle/bin/stream_probe",
+      "/opt/apps/bundle/bin/stream_triad",
+      "/opt/apps/bundle/bin/egl_offscreen",
+      "/opt/apps/bundle/samples/deviceQuery",
+      "/opt/apps/bundle/samples/bandwidthTest",
+      "/opt/apps/bundle/samples/vectorAdd",
+      "/opt/apps/bundle/samples/matrixMul",
+      "/opt/apps/bundle/samples/simpleStreams",
+      "/opt/apps/bundle/samples/asyncAPI",
+      "/opt/apps/bundle/samples/simpleAtomicIntrinsics",
+      "/opt/apps/bundle/samples/simpleIPC",
+      "/opt/apps/bundle/samples/UnifiedMemoryStreams",
+      "/opt/apps/bundle/samples/simpleCallback",
+      "/opt/apps/bundle/samples/simpleOccupancy",
+      "/opt/apps/bundle/samples/clock_nvrtc",
+      "/opt/apps/bundle/samples/vectorAddDrv",
+      "/opt/apps/bundle/samples/vectorAdd_kernel64.fatbin",
+      "/opt/apps/bundle/samples/matrixMulDrv",
+      "/opt/apps/bundle/samples/matrixMul_kernel64.fatbin",
+      "/opt/apps/bundle/samples/simpleZeroCopy",
+      "/opt/apps/bundle/samples/simpleCooperativeGroups",
+      "/opt/apps/bundle/samples/cudaTensorCoreGemm",
+      "/opt/apps/bundle/samples/cdpSimpleQuicksort",
+      "/opt/apps/bundle/samples/graphMemoryNodes",
+      "/opt/apps/bundle/samples/simpleCudaGraphs",
+      "/opt/apps/bundle/samples/globalToShmemAsyncCopy",
+      "/opt/apps/bundle/samples/bf16TensorCoreGemm",
+      "/opt/apps/bundle/samples/simpleCUBLAS",
+      "/opt/apps/bundle/samples/simpleCUFFT",
+      "/opt/apps/bundle/samples/conjugateGradient",
+      "/opt/apps/bundle/samples/MersenneTwisterGP11213",
+      "/opt/apps/bundle/samples/reduction",
+      "/opt/apps/bundle/samples/sortingNetworks",
+      "/opt/apps/bundle/samples/scan",
+      "/opt/apps/bundle/samples/histogram",
+      "/opt/apps/bundle/samples/BlackScholes",
+      "/opt/apps/bundle/samples/fastWalshTransform",
+      "/opt/apps/bundle/samples/transpose",
+      "/opt/apps/bundle/samples/concurrentKernels",
+      "/opt/apps/bundle/samples/conjugateGradientUM",
+      "/opt/apps/bundle/samples/UnifiedMemoryPerf",
+      "/opt/apps/bundle/gpu-burn/gpu_burn",
+      "/opt/apps/bundle/gpu-burn/compare.fatbin",
+      "/opt/apps/bundle/llama/llama-cli",
+      "/opt/apps/bundle/llama/llama-bench",
+      "/opt/apps/bundle/llama/llama-simple",
+      "/opt/apps/bundle/bin/clpeak",
+      "/opt/apps/bundle/bin/vkpeak",
+      "/opt/apps/data/blender/blender",
+      "/opt/apps/bundle/share/ai_bench.py",
+      "/opt/apps/bundle/share/blender_render.py",
+      "/opt/apps/bundle/share/cupy_check.py",
+      "/opt/apps/bundle/share/hf_generate.py",
+      "/opt/apps/bundle/share/torch_correct.py"
+    ],
+    "trees": [
+      "/opt/apps/bundle",
+      "/opt/apps/data/blender",
+      "/usr/local/cuda-12.6"
+    ],
+    "dpkg_binaries": [
+      "ffmpeg",
+      "ffprobe",
+      "vulkaninfo",
+      "clinfo",
+      "hashcat",
+      "nvidia-smi"
+    ],
+    "globs": [
+      "/usr/lib/x86_64-linux-gnu/libnvidia*.so*",
+      "/usr/lib/x86_64-linux-gnu/libcuda.so*",
+      "/etc/OpenCL/vendors/*"
+    ]
+  },
+  "image_policy": {
+    "components": [
+      "main",
+      "universe"
+    ],
+    "no_nvidia_proprietary_files": true,
+    "scan_required": true,
+    "official_payload_storage": "none; acquire official inputs on box host each run; guest offline",
+    "known_static": [
+      "sample-cdpSimpleQuicksort"
+    ],
+    "nvidia_notice_policy": "documented-oss-only",
+    "runtime_opencl": "NVIDIA ICD only; disable other ICD registrations at provisioning, retain their open packages"
+  },
+  "runtime_only_apps": [
+    {
+      "name": "cupy",
+      "requires": "nvidia-layer",
+      "official_input": "official-pip-cupy-cuda12x",
+      "reason": "MEASURED pinned wheel contains proprietary/confidential CUDA headers cuda_fp16.h/.hpp in cupy/_core/include/cupy/_cuda/; not an open-image artifact"
+    }
+  ]
+}

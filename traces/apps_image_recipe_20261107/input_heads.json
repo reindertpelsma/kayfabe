@@ -1,0 +1,799 @@
+{
+  "observed_utc": "2026-11-07T21:55:33.649158+00:00",
+  "recipe_sha256": "98b29ab3314afdcebb61370e6fbb522ca960f9f1349b88f38c7b2bb8d8e61724",
+  "scope": "Anonymous HEAD only; no digest revalidation is claimed by this file. Full selected hashes are recorded separately.",
+  "results": [
+    {
+      "id": "ubuntu-noble-20261017",
+      "url": "https://cloud-images.ubuntu.com/releases/noble/release-20261017/ubuntu-24.04-server-cloudimg-amd64.img",
+      "sha256": "04e8f2461a16a44e78a370284471f29616cdd9baf1893df25807b71f985b6c94",
+      "size": 621284352,
+      "http_status": 200,
+      "observed_size": 621284352,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "hashcat",
+      "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/universe/h/hashcat/hashcat_6.2.6+ds1-1build2_amd64.deb",
+      "sha256": "3ca60ea1861dcae534c1b2750b09d774cdcf7780033cf86e8a5e9168e78628a4",
+      "size": 9523360,
+      "http_status": 200,
+      "observed_size": 9523360,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "hashcat-data",
+      "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/pool/universe/h/hashcat/hashcat-data_6.2.6+ds1-1build2_all.deb",
+      "sha256": "298b008029ff77cec489ad007cf255518e0ee71cc938d54776b174d27b98a6da",
+      "size": 2425170,
+      "http_status": 200,
+      "observed_size": 2425170,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "cuda-samples",
+      "url": "https://codeload.github.com/NVIDIA/cuda-samples/tar.gz/9c688d7ff78455ed42e345124d1495aad6bf66de",
+      "sha256": "5a0ad8b32f4ca54492bfda76bd850cd9dcc83998614fcac3383b306bcb77c74e",
+      "size": 144301863,
+      "http_status": 200,
+      "observed_size": null,
+      "observation": "HEAD_NO_LENGTH"
+    },
+    {
+      "id": "llama",
+      "url": "https://codeload.github.com/ggml-org/llama.cpp/tar.gz/4b1a27fa0eb875bbca4f6cfe936e3d65adc685c0",
+      "sha256": "4a718ea3e51745a710b2f511b3876a2f1ec0553ab51397915980fe55712b304a",
+      "size": 37600508,
+      "http_status": 200,
+      "observed_size": null,
+      "observation": "HEAD_NO_LENGTH"
+    },
+    {
+      "id": "clpeak",
+      "url": "https://codeload.github.com/krrishnarraj/clpeak/tar.gz/1.1.2",
+      "sha256": "7bc7beba6b3307290650abc4f13fe9389b271c1a64601fa333461516950d745b",
+      "size": 295735,
+      "http_status": 200,
+      "observed_size": null,
+      "observation": "HEAD_NO_LENGTH"
+    },
+    {
+      "id": "gpu-burn",
+      "url": "https://codeload.github.com/wilicc/gpu-burn/tar.gz/0d19c94dcb2e9b6858b7586a4c327674cd67113b",
+      "sha256": "58a6f4673af294cf98ada99bc0860632182afde862718b05b0e0b7ba3b2bdad7",
+      "size": 25762,
+      "http_status": 200,
+      "observed_size": null,
+      "observation": "HEAD_NO_LENGTH"
+    },
+    {
+      "id": "vkpeak",
+      "url": "https://github.com/nihui/vkpeak/releases/download/20250531/vkpeak-20250531-ubuntu.zip",
+      "sha256": "5d233c230d4dc14c43e76da3feb4a7374f9e79d0a0bbea00b1b8f33f6ac07eaf",
+      "size": 1239961,
+      "http_status": 200,
+      "observed_size": 1239961,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "blender",
+      "url": "https://download.blender.org/release/Blender4.5/blender-4.5.0-linux-x64.tar.xz",
+      "sha256": "1188b95cc12321c770b631939f7c25a096910b6f884a990bf9c0f62d52b38aec",
+      "size": 376170648,
+      "http_status": 200,
+      "observed_size": 376170648,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "pip-accelerate",
+      "url": "https://files.pythonhosted.org/packages/d1/d5/0050b2820a1e709ffa623f9a9e8ae42d0903535f2150613cbfeb7f16932a/accelerate-1.1.1-py3-none-any.whl",
+      "sha256": "61edd81762131b8d4bede008643fa1e1f3bf59bec710ebda9771443e24feae02",
+      "size": 333211,
+      "http_status": 200,
+      "observed_size": 333211,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "pip-certifi",
+      "url": "https://files.pythonhosted.org/packages/12/90/3c9ff0512038035f59d279fddeb79f5f1eccd8859f06d6163c58798b9487/certifi-2024.8.30-py3-none-any.whl",
+      "sha256": "922820b53db7a7257ffbda3f597266d435245903d80737e34f8a45ff3e3230d8",
+      "size": 167321,
+      "http_status": 200,
+      "observed_size": 167321,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "pip-charset-normalizer",
+      "url": "https://files.pythonhosted.org/packages/16/92/92a76dc2ff3a12e69ba94e7e05168d37d0345fa08c87e1fe24d0c2a42223/charset_normalizer-3.4.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+      "sha256": "8cda06946eac330cbe6598f77bb54e690b4ca93f593dee1568ad22b04f347c15",
+      "size": 143838,
+      "http_status": 200,
+      "observed_size": 143838,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "pip-fastrlock",
+      "url": "https://files.pythonhosted.org/packages/80/07/cdecb7aa976f34328372f1c4efd6c9dc1b039b3cc8d3f38787d640009a25/fastrlock-0.8.3-cp312-cp312-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_28_x86_64.whl",
+      "sha256": "5f13ec08f1adb1aa916c384b05ecb7dbebb8df9ea81abd045f60941c6283a670",
+      "size": 53924,
+      "http_status": 200,
+      "observed_size": 53924,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "pip-filelock",
+      "url": "https://files.pythonhosted.org/packages/b9/f8/feced7779d755758a52d1f6635d990b8d98dc0a29fa568bbe0625f18fdf3/filelock-3.16.1-py3-none-any.whl",
+      "sha256": "2082e5703d51fbf98ea75855d9d5527e33d8ff23099bec374a134febee6946b0",
+      "size": 16163,
+      "http_status": 200,
+      "observed_size": 16163,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "pip-fsspec",
+      "url": "https://files.pythonhosted.org/packages/c6/b2/454d6e7f0158951d8a78c2e1eb4f69ae81beb8dca5fee9809c6c99e9d0d0/fsspec-2024.10.0-py3-none-any.whl",
+      "sha256": "03b9a6785766a4de40368b88906366755e2819e758b83705c88cd7cb5fe81871",
+      "size": 179641,
+      "http_status": 200,
+      "observed_size": 179641,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "pip-huggingface-hub",
+      "url": "https://files.pythonhosted.org/packages/60/bf/cea0b9720c32fa01b0c4ec4b16b9f4ae34ca106b202ebbae9f03ab98cd8f/huggingface_hub-0.26.2-py3-none-any.whl",
+      "sha256": "98c2a5a8e786c7b2cb6fdeb2740893cba4d53e312572ed3d8afafda65b128c46",
+      "size": 447536,
+      "http_status": 200,
+      "observed_size": 447536,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "pip-idna",
+      "url": "https://files.pythonhosted.org/packages/76/c6/c88e154df9c4e1a2a66ccf0005a88dfb2650c1dffb6f5ce603dfbd452ce3/idna-3.10-py3-none-any.whl",
+      "sha256": "946d195a0d259cbba61165e88e65941f16e9b36ea6ddb97f00452bae8b1287d3",
+      "size": 70442,
+      "http_status": 200,
+      "observed_size": 70442,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "pip-jinja2",
+      "url": "https://files.pythonhosted.org/packages/31/80/3a54838c3fb461f6fec263ebf3a3a41771bd05190238de3486aae8540c36/jinja2-3.1.4-py3-none-any.whl",
+      "sha256": "bc5dd2abb727a5319567b7a813e6a2e7318c39f4f487cfe6c89c6f9c7d25197d",
+      "size": 133271,
+      "http_status": 200,
+      "observed_size": 133271,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "pip-markupsafe",
+      "url": "https://files.pythonhosted.org/packages/f3/f0/89e7aadfb3749d0f52234a0c8c7867877876e0a20b60e2188e9850794c17/MarkupSafe-3.0.2-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+      "sha256": "e17c96c14e19278594aa4841ec148115f9c7615a47382ecb6b82bd8fea3ab0c8",
+      "size": 23118,
+      "http_status": 200,
+      "observed_size": 23118,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "pip-mpmath",
+      "url": "https://files.pythonhosted.org/packages/43/e3/7d92a15f894aa0c9c4b49b8ee9ac9850d6e63b03c9c32c0367a13ae62209/mpmath-1.3.0-py3-none-any.whl",
+      "sha256": "a0b2b9fe80bbcd81a6647ff13108738cfb482d481d826cc0e02f5b35e5c88d2c",
+      "size": 536198,
+      "http_status": 200,
+      "observed_size": 536198,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "pip-networkx",
+      "url": "https://files.pythonhosted.org/packages/b9/54/dd730b32ea14ea797530a4479b2ed46a6fb250f682a9cfb997e968bf0261/networkx-3.4.2-py3-none-any.whl",
+      "sha256": "df5d4365b724cf81b8c6a7312509d0c22386097011ad1abe274afd5e9d3bbc5f",
+      "size": 1723263,
+      "http_status": 200,
+      "observed_size": 1723263,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "pip-numpy",
+      "url": "https://files.pythonhosted.org/packages/0f/50/de23fde84e45f5c4fda2488c759b69990fd4512387a8632860f3ac9cd225/numpy-1.26.4-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+      "sha256": "675d61ffbfa78604709862923189bad94014bef562cc35cf61d3a07bba02a7ed",
+      "size": 17950613,
+      "http_status": 200,
+      "observed_size": 17950613,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "pip-packaging",
+      "url": "https://files.pythonhosted.org/packages/88/ef/eb23f262cca3c0c4eb7ab1933c3b1f03d021f2c48f54763065b6f0e321be/packaging-24.2-py3-none-any.whl",
+      "sha256": "09abb1bccd265c01f4a3aa3f7a7db064b36514d2cba19a2f694fe6150451a759",
+      "size": 65451,
+      "http_status": 200,
+      "observed_size": 65451,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "pip-pillow",
+      "url": "https://files.pythonhosted.org/packages/7f/42/6e0f2c2d5c60f499aa29be14f860dd4539de322cd8fb84ee01553493fb4d/pillow-11.0.0-cp312-cp312-manylinux_2_28_x86_64.whl",
+      "sha256": "00177a63030d612148e659b55ba99527803288cea7c75fb05766ab7981a8c1b7",
+      "size": 4381824,
+      "http_status": 200,
+      "observed_size": 4381824,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "pip-pip",
+      "url": "https://files.pythonhosted.org/packages/ef/7d/500c9ad20238fcfcb4cb9243eede163594d7020ce87bd9610c9e02771876/pip-24.3.1-py3-none-any.whl",
+      "sha256": "3790624780082365f47549d032f3770eeb2b1e8bd1f7b2e02dace1afa361b4ed",
+      "size": 1822182,
+      "http_status": 200,
+      "observed_size": 1822182,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "pip-psutil",
+      "url": "https://files.pythonhosted.org/packages/58/4d/8245e6f76a93c98aab285a43ea71ff1b171bcd90c9d238bf81f7021fb233/psutil-6.1.0-cp36-abi3-manylinux_2_12_x86_64.manylinux2010_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+      "sha256": "498c6979f9c6637ebc3a73b3f87f9eb1ec24e1ce53a7c5173b8508981614a90b",
+      "size": 287255,
+      "http_status": 200,
+      "observed_size": 287255,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "pip-pyyaml",
+      "url": "https://files.pythonhosted.org/packages/b9/2b/614b4752f2e127db5cc206abc23a8c19678e92b23c3db30fc86ab731d3bd/PyYAML-6.0.2-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+      "sha256": "80bab7bfc629882493af4aa31a4cfa43a4c57c83813253626916b8c7ada83476",
+      "size": 767542,
+      "http_status": 200,
+      "observed_size": 767542,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "pip-regex",
+      "url": "https://files.pythonhosted.org/packages/fb/13/e3b075031a738c9598c51cfbc4c7879e26729c53aa9cca59211c44235314/regex-2024.11.6-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+      "sha256": "70b7fa6606c2881c1db9479b0eaa11ed5dfa11c8d60a474ff0e095099f39d98e",
+      "size": 796896,
+      "http_status": 200,
+      "observed_size": 796896,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "pip-requests",
+      "url": "https://files.pythonhosted.org/packages/f9/9b/335f9764261e915ed497fcdeb11df5dfd6f7bf257d4a6a2a686d80da4d54/requests-2.32.3-py3-none-any.whl",
+      "sha256": "70761cfe03c773ceb22aa2f671b4757976145175cdfca038c02654d061d6dcc6",
+      "size": 64928,
+      "http_status": 200,
+      "observed_size": 64928,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "pip-safetensors",
+      "url": "https://files.pythonhosted.org/packages/d9/40/a6f75ea449a9647423ec8b6f72c16998d35aa4b43cb38536ac060c5c7bf5/safetensors-0.4.5-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+      "sha256": "3685ce7ed036f916316b567152482b7e959dc754fcc4a8342333d222e05f407c",
+      "size": 434769,
+      "http_status": 200,
+      "observed_size": 434769,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "pip-setuptools",
+      "url": "https://files.pythonhosted.org/packages/55/21/47d163f615df1d30c094f6c8bbb353619274edccf0327b185cc2493c2c33/setuptools-75.6.0-py3-none-any.whl",
+      "sha256": "ce74b49e8f7110f9bf04883b730f4765b774ef3ef28f722cce7c273d253aaf7d",
+      "size": 1224032,
+      "http_status": 200,
+      "observed_size": 1224032,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "pip-sympy",
+      "url": "https://files.pythonhosted.org/packages/b2/fe/81695a1aa331a842b582453b605175f419fe8540355886031328089d840a/sympy-1.13.1-py3-none-any.whl",
+      "sha256": "db36cdc64bf61b9b24578b6f7bab1ecdd2452cf008f34faa33776680c26d66f8",
+      "size": 6189177,
+      "http_status": 200,
+      "observed_size": 6189177,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "pip-tokenizers",
+      "url": "https://files.pythonhosted.org/packages/9e/65/c83cb3545a65a9eaa2e13b22c93d5e00bd7624b354a44adbdc93d5d9bd91/tokenizers-0.20.3-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+      "sha256": "f2b7cb962564785a83dafbba0144ecb7f579f1d57d8c406cdaa7f32fe32f18ad",
+      "size": 2997679,
+      "http_status": 200,
+      "observed_size": 2997679,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "pip-tqdm",
+      "url": "https://files.pythonhosted.org/packages/d0/30/dc54f88dd4a2b5dc8a0279bdd7270e735851848b762aeb1c1184ed1f6b14/tqdm-4.67.1-py3-none-any.whl",
+      "sha256": "26445eca388f82e72884e0d580d5464cd801a3ea01e63e5601bdff9ba6a48de2",
+      "size": 78540,
+      "http_status": 200,
+      "observed_size": 78540,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "pip-transformers",
+      "url": "https://files.pythonhosted.org/packages/51/51/b87caa939fedf307496e4dbf412f4b909af3d9ca8b189fc3b65c1faa456f/transformers-4.46.3-py3-none-any.whl",
+      "sha256": "a12ef6f52841fd190a3e5602145b542d03507222f2c64ebb7ee92e8788093aef",
+      "size": 10034536,
+      "http_status": 200,
+      "observed_size": 10034536,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "pip-typing-extensions",
+      "url": "https://files.pythonhosted.org/packages/26/9f/ad63fc0248c5379346306f8668cda6e2e2e9c95e01216d2b8ffd9ff037d0/typing_extensions-4.12.2-py3-none-any.whl",
+      "sha256": "04e5ca0351e0f3f85c6853954072df659d0d13fac324d0072316b67d7794700d",
+      "size": 37438,
+      "http_status": 200,
+      "observed_size": 37438,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "pip-urllib3",
+      "url": "https://files.pythonhosted.org/packages/ce/d9/5f4c13cecde62396b0d3fe530a50ccea91e7dfc1ccf0e09c228841bb5ba8/urllib3-2.2.3-py3-none-any.whl",
+      "sha256": "ca899ca043dcb1bafa3e262d73aa25c465bfb49e0bd9dd5d59f1d0acba2f8fac",
+      "size": 126338,
+      "http_status": 200,
+      "observed_size": 126338,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "pip-wheel",
+      "url": "https://files.pythonhosted.org/packages/0b/2c/87f3254fd8ffd29e4c02732eee68a83a1d3c346ae39bc6822dcbcb697f2b/wheel-0.45.1-py3-none-any.whl",
+      "sha256": "708e7481cc80179af0e556bbf0cc00b8444c7321e2700b8d8580231d13017248",
+      "size": 72494,
+      "http_status": 200,
+      "observed_size": 72494,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "hf-05-LICENSE",
+      "url": "https://huggingface.co/Qwen/Qwen2-0.5B-Instruct/resolve/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/LICENSE",
+      "sha256": "c156170b718ec29139d3653d40ed1986fd92fb7e0959b5c71f3c48f62e6636f4",
+      "size": 11344,
+      "http_status": 200,
+      "observed_size": 11344,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "hf-05-config.json",
+      "url": "https://huggingface.co/Qwen/Qwen2-0.5B-Instruct/resolve/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/config.json",
+      "sha256": "168aa1bd401abc3bc262ba15ba4e499627a8b4e006e9d050b47c22de20660185",
+      "size": 659,
+      "http_status": 200,
+      "observed_size": 659,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "hf-05-generation_config.json",
+      "url": "https://huggingface.co/Qwen/Qwen2-0.5B-Instruct/resolve/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/generation_config.json",
+      "sha256": "e558847a8b4402616f1273797b015104dc266fe4b520056fca88823ba8f8ebe6",
+      "size": 242,
+      "http_status": 200,
+      "observed_size": 242,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "hf-05-merges.txt",
+      "url": "https://huggingface.co/Qwen/Qwen2-0.5B-Instruct/resolve/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/merges.txt",
+      "sha256": "599bab54075088774b1733fde865d5bd747cbcc7a547c5bc12610e874e26f5e3",
+      "size": 1671839,
+      "http_status": 200,
+      "observed_size": 1671839,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "hf-05-tokenizer.json",
+      "url": "https://huggingface.co/Qwen/Qwen2-0.5B-Instruct/resolve/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/tokenizer.json",
+      "sha256": "f7c9b2dba4a296b1aa76c16a34b8225c0c118978400d4bb66bff0902d702f5b8",
+      "size": 7028015,
+      "http_status": 200,
+      "observed_size": 7028015,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "hf-05-tokenizer_config.json",
+      "url": "https://huggingface.co/Qwen/Qwen2-0.5B-Instruct/resolve/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/tokenizer_config.json",
+      "sha256": "482bd979881423375ca5414e4e0d94cd7c5349dbb17fffd46b4d36d71e62a1bc",
+      "size": 1287,
+      "http_status": 200,
+      "observed_size": 1287,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "hf-05-vocab.json",
+      "url": "https://huggingface.co/Qwen/Qwen2-0.5B-Instruct/resolve/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/vocab.json",
+      "sha256": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910",
+      "size": 2776833,
+      "http_status": 200,
+      "observed_size": 2776833,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "hf-15-LICENSE",
+      "url": "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/91cad51170dc346986eccefdc2dd33a9da36ead9/LICENSE",
+      "sha256": "832dd9e00a68dd83b3c3fb9f5588dad7dcf337a0db50f7d9483f310cd292e92e",
+      "size": 11343,
+      "http_status": 200,
+      "observed_size": 11343,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "qwen2-half-billion-weights",
+      "url": "https://huggingface.co/Qwen/Qwen2-0.5B-Instruct/resolve/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/model.safetensors",
+      "sha256": "130282af0dfa9fe5840737cc49a0d339d06075f83c5a315c3372c9a0740d0b96",
+      "size": 988097824,
+      "http_status": 200,
+      "observed_size": 988097824,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "qwen25-1.5b-q4km",
+      "url": "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/91cad51170dc346986eccefdc2dd33a9da36ead9/qwen2.5-1.5b-instruct-q4_k_m.gguf",
+      "sha256": "6a1a2eb6d15622bf3c96857206351ba97e1af16c30d7a74ee38970e434e9407e",
+      "size": 1117320736,
+      "http_status": 200,
+      "observed_size": 1117320736,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "pip-torch",
+      "url": "https://download-r2.pytorch.org/whl/cpu/torch-2.6.0%2Bcpu-cp312-cp312-linux_x86_64.whl",
+      "sha256": "59e78aa0c690f70734e42670036d6b541930b8eabbaa18d94e090abf14cc4d91",
+      "size": 178578006,
+      "http_status": 200,
+      "observed_size": 178578006,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "pip-torchvision",
+      "url": "https://download-r2.pytorch.org/whl/cpu/torchvision-0.21.0%2Bcpu-cp312-cp312-linux_x86_64.whl",
+      "sha256": "d6874431e678ba107b60a83f255c33f3755f06bad587b1b919aa514ec325dcd8",
+      "size": 1843456,
+      "http_status": 200,
+      "observed_size": 1843456,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "nvidia-driver-580",
+      "url": "https://us.download.nvidia.com/XFree86/Linux-x86_64/580.159.04/NVIDIA-Linux-x86_64-580.159.04.run",
+      "sha256": "c1e66761b088d17b3adf6cb6979de9af38be2684d102b001a176dcfafabdca1e",
+      "size": 397162548,
+      "http_status": 200,
+      "observed_size": 397162548,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "official-cuda_cccl",
+      "url": "https://developer.download.nvidia.com/compute/cuda/redist/cuda_cccl/linux-x86_64/cuda_cccl-linux-x86_64-12.6.77-archive.tar.xz",
+      "sha256": "9c3145ef01f73e50c0f5fcf923f0899c847f487c529817daa8f8b1a3ecf20925",
+      "size": 934952,
+      "http_status": 200,
+      "observed_size": 934952,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "official-cuda_nvcc",
+      "url": "https://developer.download.nvidia.com/compute/cuda/redist/cuda_nvcc/linux-x86_64/cuda_nvcc-linux-x86_64-12.6.85-archive.tar.xz",
+      "sha256": "840deff234d9bef20d6856439c49881cb4f29423b214f9ecd2fa59b7ac323817",
+      "size": 49996208,
+      "http_status": 200,
+      "observed_size": 49996208,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "official-cuda_cudart",
+      "url": "https://developer.download.nvidia.com/compute/cuda/redist/cuda_cudart/linux-x86_64/cuda_cudart-linux-x86_64-12.6.77-archive.tar.xz",
+      "sha256": "f74689258a60fd9c5bdfa7679458527a55e22442691ba678dcfaeffbf4391ef9",
+      "size": 1126072,
+      "http_status": 200,
+      "observed_size": 1126072,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "official-cuda_nvrtc",
+      "url": "https://developer.download.nvidia.com/compute/cuda/redist/cuda_nvrtc/linux-x86_64/cuda_nvrtc-linux-x86_64-12.6.85-archive.tar.xz",
+      "sha256": "a4289ba86f0deeccf4e1d94c58559eae4c8184fcb6eaade8fcab45584e6cf402",
+      "size": 34380240,
+      "http_status": 200,
+      "observed_size": 34380240,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "official-cuda_profiler_api",
+      "url": "https://developer.download.nvidia.com/compute/cuda/redist/cuda_profiler_api/linux-x86_64/cuda_profiler_api-linux-x86_64-12.6.77-archive.tar.xz",
+      "sha256": "0807ec2335ea358a96f984ce08cc0b3d572b5cc486f9082fc3afa9a1773f2a58",
+      "size": 16188,
+      "http_status": 200,
+      "observed_size": 16188,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "official-libcublas",
+      "url": "https://developer.download.nvidia.com/compute/cuda/redist/libcublas/linux-x86_64/libcublas-linux-x86_64-12.6.4.1-archive.tar.xz",
+      "sha256": "ec682bac6387f9cdfd0c20b25a16cd6ed0b8b3b7ff42be9eaeb41828e3a72572",
+      "size": 522827284,
+      "http_status": 200,
+      "observed_size": 522827284,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "official-libcufft",
+      "url": "https://developer.download.nvidia.com/compute/cuda/redist/libcufft/linux-x86_64/libcufft-linux-x86_64-11.3.0.4-archive.tar.xz",
+      "sha256": "63a046d51a45388e10612c3fd423bb7fa5127496aa9bb3951a609e8b9d996852",
+      "size": 476376920,
+      "http_status": 200,
+      "observed_size": 476376920,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "official-libcurand",
+      "url": "https://developer.download.nvidia.com/compute/cuda/redist/libcurand/linux-x86_64/libcurand-linux-x86_64-10.3.7.77-archive.tar.xz",
+      "sha256": "981339cc86d7b8779e9a3c17e72d8c5e1a8a2d06c24db692eecabed8e746a3c7",
+      "size": 81729748,
+      "http_status": 200,
+      "observed_size": 81729748,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "official-libcusolver",
+      "url": "https://developer.download.nvidia.com/compute/cuda/redist/libcusolver/linux-x86_64/libcusolver-linux-x86_64-11.7.1.2-archive.tar.xz",
+      "sha256": "7cf794bf21c4947d0922e378984fa7939f0811bfc355121be1a0d44cd8695c09",
+      "size": 159512244,
+      "http_status": 200,
+      "observed_size": 159512244,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "official-libcusparse",
+      "url": "https://developer.download.nvidia.com/compute/cuda/redist/libcusparse/linux-x86_64/libcusparse-linux-x86_64-12.5.4.2-archive.tar.xz",
+      "sha256": "a9ad797756a7bb9a92bf8a63768dec837af38064ee8be3c32e21382e03604bd8",
+      "size": 236134716,
+      "http_status": 200,
+      "observed_size": 236134716,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "official-libnvjitlink",
+      "url": "https://developer.download.nvidia.com/compute/cuda/redist/libnvjitlink/linux-x86_64/libnvjitlink-linux-x86_64-12.6.85-archive.tar.xz",
+      "sha256": "1055077ce594fad6fd86d23604c60c64b673cdc8dd01fae7e0cbec633c35930d",
+      "size": 28960912,
+      "http_status": 200,
+      "observed_size": 28960912,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "official-pip-nvidia-cublas-cu12",
+      "url": "https://files.pythonhosted.org/packages/ae/71/1c91302526c45ab494c23f61c7a84aa568b8c1f9d196efa5993957faf906/nvidia_cublas_cu12-12.4.5.8-py3-none-manylinux2014_x86_64.whl",
+      "sha256": "2fc8da60df463fdefa81e323eef2e36489e1c94335b5358bcb38360adf75ac9b",
+      "size": 363438805,
+      "http_status": 200,
+      "observed_size": 363438805,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "official-pip-nvidia-cuda-cupti-cu12",
+      "url": "https://files.pythonhosted.org/packages/67/42/f4f60238e8194a3106d06a058d494b18e006c10bb2b915655bd9f6ea4cb1/nvidia_cuda_cupti_cu12-12.4.127-py3-none-manylinux2014_x86_64.whl",
+      "sha256": "9dec60f5ac126f7bb551c055072b69d85392b13311fcc1bcda2202d172df30fb",
+      "size": 13813957,
+      "http_status": 200,
+      "observed_size": 13813957,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "official-pip-nvidia-cuda-nvrtc-cu12",
+      "url": "https://files.pythonhosted.org/packages/2c/14/91ae57cd4db3f9ef7aa99f4019cfa8d54cb4caa7e00975df6467e9725a9f/nvidia_cuda_nvrtc_cu12-12.4.127-py3-none-manylinux2014_x86_64.whl",
+      "sha256": "a178759ebb095827bd30ef56598ec182b85547f1508941a3d560eb7ea1fbf338",
+      "size": 24640306,
+      "http_status": 200,
+      "observed_size": 24640306,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "official-pip-nvidia-cuda-runtime-cu12",
+      "url": "https://files.pythonhosted.org/packages/ea/27/1795d86fe88ef397885f2e580ac37628ed058a92ed2c39dc8eac3adf0619/nvidia_cuda_runtime_cu12-12.4.127-py3-none-manylinux2014_x86_64.whl",
+      "sha256": "64403288fa2136ee8e467cdc9c9427e0434110899d07c779f25b5c068934faa5",
+      "size": 883737,
+      "http_status": 200,
+      "observed_size": 883737,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "official-pip-nvidia-cudnn-cu12",
+      "url": "https://files.pythonhosted.org/packages/9f/fd/713452cd72343f682b1c7b9321e23829f00b842ceaedcda96e742ea0b0b3/nvidia_cudnn_cu12-9.1.0.70-py3-none-manylinux2014_x86_64.whl",
+      "sha256": "165764f44ef8c61fcdfdfdbe769d687e06374059fbb388b6c89ecb0e28793a6f",
+      "size": 664752741,
+      "http_status": 200,
+      "observed_size": 664752741,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "official-pip-nvidia-cufft-cu12",
+      "url": "https://files.pythonhosted.org/packages/27/94/3266821f65b92b3138631e9c8e7fe1fb513804ac934485a8d05776e1dd43/nvidia_cufft_cu12-11.2.1.3-py3-none-manylinux2014_x86_64.whl",
+      "sha256": "f083fc24912aa410be21fa16d157fed2055dab1cc4b6934a0e03cba69eb242b9",
+      "size": 211459117,
+      "http_status": 200,
+      "observed_size": 211459117,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "official-pip-nvidia-curand-cu12",
+      "url": "https://files.pythonhosted.org/packages/8a/6d/44ad094874c6f1b9c654f8ed939590bdc408349f137f9b98a3a23ccec411/nvidia_curand_cu12-10.3.5.147-py3-none-manylinux2014_x86_64.whl",
+      "sha256": "a88f583d4e0bb643c49743469964103aa59f7f708d862c3ddb0fc07f851e3b8b",
+      "size": 56305206,
+      "http_status": 200,
+      "observed_size": 56305206,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "official-pip-nvidia-cusolver-cu12",
+      "url": "https://files.pythonhosted.org/packages/3a/e1/5b9089a4b2a4790dfdea8b3a006052cfecff58139d5a4e34cb1a51df8d6f/nvidia_cusolver_cu12-11.6.1.9-py3-none-manylinux2014_x86_64.whl",
+      "sha256": "19e33fa442bcfd085b3086c4ebf7e8debc07cfe01e11513cc6d332fd918ac260",
+      "size": 127936057,
+      "http_status": 200,
+      "observed_size": 127936057,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "official-pip-nvidia-cusparse-cu12",
+      "url": "https://files.pythonhosted.org/packages/db/f7/97a9ea26ed4bbbfc2d470994b8b4f338ef663be97b8f677519ac195e113d/nvidia_cusparse_cu12-12.3.1.170-py3-none-manylinux2014_x86_64.whl",
+      "sha256": "ea4f11a2904e2a8dc4b1833cc1b5181cde564edd0d5cd33e3c168eff2d1863f1",
+      "size": 207454763,
+      "http_status": 200,
+      "observed_size": 207454763,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "official-pip-nvidia-cusparselt-cu12",
+      "url": "https://files.pythonhosted.org/packages/78/a8/bcbb63b53a4b1234feeafb65544ee55495e1bb37ec31b999b963cbccfd1d/nvidia_cusparselt_cu12-0.6.2-py3-none-manylinux2014_x86_64.whl",
+      "sha256": "df2c24502fd76ebafe7457dbc4716b2fec071aabaed4fb7691a201cde03704d9",
+      "size": 150057751,
+      "http_status": 200,
+      "observed_size": 150057751,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "official-pip-nvidia-nccl-cu12",
+      "url": "https://files.pythonhosted.org/packages/df/99/12cd266d6233f47d00daf3a72739872bdc10267d0383508b0b9c84a18bb6/nvidia_nccl_cu12-2.21.5-py3-none-manylinux2014_x86_64.whl",
+      "sha256": "8579076d30a8c24988834445f8d633c697d42397e92ffc3f63fa26766d25e0a0",
+      "size": 188654414,
+      "http_status": 200,
+      "observed_size": 188654414,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "official-pip-nvidia-nvjitlink-cu12",
+      "url": "https://files.pythonhosted.org/packages/ff/ff/847841bacfbefc97a00036e0fce5a0f086b640756dc38caea5e1bb002655/nvidia_nvjitlink_cu12-12.4.127-py3-none-manylinux2014_x86_64.whl",
+      "sha256": "06b3b9b25bf3f8af351d664978ca26a16d2c5127dbd53c0497e28d1fb9611d57",
+      "size": 21066810,
+      "http_status": 200,
+      "observed_size": 21066810,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "official-pip-nvidia-nvtx-cu12",
+      "url": "https://files.pythonhosted.org/packages/87/20/199b8713428322a2f22b722c62b8cc278cc53dffa9705d744484b5035ee9/nvidia_nvtx_cu12-12.4.127-py3-none-manylinux2014_x86_64.whl",
+      "sha256": "781e950d9b9f60d8241ccea575b32f5105a5baf4c2351cab5256a24869f12a1a",
+      "size": 99144,
+      "http_status": 200,
+      "observed_size": 99144,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "official-pip-torch",
+      "url": "https://download-r2.pytorch.org/whl/cu124/torch-2.6.0%2Bcu124-cp312-cp312-linux_x86_64.whl",
+      "sha256": "a393b506844035c0dac2f30ea8478c343b8e95a429f06f3b3cadfc7f53adb597",
+      "size": 768372201,
+      "http_status": 200,
+      "observed_size": 768372201,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "official-pip-torchvision",
+      "url": "https://download-r2.pytorch.org/whl/cu124/torchvision-0.21.0%2Bcu124-cp312-cp312-linux_x86_64.whl",
+      "sha256": "efb53ea0af7bf09b7b53e2a18b9be6d245f7d46a90b51d5cf97f37e9b929a991",
+      "size": 7282566,
+      "http_status": 200,
+      "observed_size": 7282566,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "official-pip-triton",
+      "url": "https://files.pythonhosted.org/packages/06/00/59500052cb1cf8cf5316be93598946bc451f14072c6ff256904428eaf03c/triton-3.2.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+      "sha256": "8d9b215efc1c26fa7eefb9a157915c92d52e000d2bf83e5f69704047e63f125c",
+      "size": 253159365,
+      "http_status": 200,
+      "observed_size": 253159365,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "official-pip-cupy-cuda12x",
+      "url": "https://files.pythonhosted.org/packages/90/dc/da09e5184d94146b8cbf240c2bef1c4851cbafd7e2d60cc71b1530c766ec/cupy_cuda12x-13.3.0-cp312-cp312-manylinux2014_x86_64.whl",
+      "sha256": "e206bd8664f0763732b6012431f484ee535bffd77a5ae95e9bfe1c7c72396625",
+      "size": 90980377,
+      "http_status": 200,
+      "observed_size": 90980377,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "apt-noble-InRelease",
+      "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/dists/noble/InRelease",
+      "sha256": "cdb2f31d809f589719a53c6ad15f255b27569c4059542ada282aaa21b8e164b0",
+      "size": 255850,
+      "http_status": 200,
+      "observed_size": 255850,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "apt-noble-main",
+      "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/dists/noble/main/binary-amd64/Packages.xz",
+      "sha256": "2a6a199e1031a5c279cb346646d594993f35b1c03dd4a82aaa0323980dd92451",
+      "size": 1401160,
+      "http_status": 200,
+      "observed_size": 1401160,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "apt-noble-universe",
+      "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/dists/noble/universe/binary-amd64/Packages.xz",
+      "sha256": "ba9057fa1b91438cc8a1d26808d00c85389fe101d0c1496254df97236405599a",
+      "size": 15037908,
+      "http_status": 200,
+      "observed_size": 15037908,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "apt-noble-updates-InRelease",
+      "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/dists/noble-updates/InRelease",
+      "sha256": "8eb1e59e1d6bea248c204a9d43920aef4263891fa47e4881695a384ef46b0c79",
+      "size": 126125,
+      "http_status": 200,
+      "observed_size": 126125,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "apt-noble-updates-main",
+      "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/dists/noble-updates/main/binary-amd64/Packages.xz",
+      "sha256": "14e4812e5725296279524bcabda205a6d924877545c59c0a070df2dd44b2e6ed",
+      "size": 1407696,
+      "http_status": 200,
+      "observed_size": 1407696,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "apt-noble-updates-universe",
+      "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/dists/noble-updates/universe/binary-amd64/Packages.xz",
+      "sha256": "2ac420dbe2a60da44e738668763b75c928c36ddd117f2987c601c3cf42c4feef",
+      "size": 1707672,
+      "http_status": 200,
+      "observed_size": 1707672,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "apt-noble-security-InRelease",
+      "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/dists/noble-security/InRelease",
+      "sha256": "1c365fad2f217c66dc96716b916dc65eaf65fb46459fcffffa87a4ecc5e1c41b",
+      "size": 126127,
+      "http_status": 200,
+      "observed_size": 126127,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "apt-noble-security-main",
+      "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/dists/noble-security/main/binary-amd64/Packages.xz",
+      "sha256": "a65b8532f4c3f3b864c7c0a423fbc6a4f4c6ee1a871bb78c0f5f0f27cc44a195",
+      "size": 1146132,
+      "http_status": 200,
+      "observed_size": 1146132,
+      "observation": "HEAD_MATCHING_LENGTH"
+    },
+    {
+      "id": "apt-noble-security-universe",
+      "url": "https://snapshot.ubuntu.com/ubuntu/20261101T000000Z/dists/noble-security/universe/binary-amd64/Packages.xz",
+      "sha256": "7f6bfafb5359adcace1390e09c38136112cf76f1d0d3c3126bded07ab364a716",
+      "size": 1222620,
+      "http_status": 200,
+      "observed_size": 1222620,
+      "observation": "HEAD_MATCHING_LENGTH"
+    }
+  ]
+}
