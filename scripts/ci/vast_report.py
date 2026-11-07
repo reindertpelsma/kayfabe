@@ -45,6 +45,59 @@ GPU_NAME = re.compile(r"[A-Za-z0-9_. -]{1,100}")
 DRIVER = re.compile(r"unknown|[0-9]{3}\.[0-9]{1,3}(?:\.[0-9]{1,2})?")
 REASONS = {"payload_missing"}
 
+# Host claims (setup picker): what the box says about its CPU, guest OS versions and guest drivers.
+# CLAIMS, never evidence: the Worker re-checks every field with the same patterns
+# (ci/vast-broker/src/results.js cleanClaims; shared vectors in host_claims_vectors.json) and no
+# verdict reads them. clean_claims is total: invalid fields are dropped, never an error.
+CLAIM_KEYS = (
+    "cpu_vendor",
+    "cpu_model",
+    "cpu_arch",
+    "host_driver",
+    "linux_os_version",
+    "linux_driver",
+    "windows_os_version",
+    "windows_driver",
+)
+CLAIM_VENDORS = ("amd", "intel", "arm", "other")
+CLAIM_ARCHS = ("x86_64", "aarch64")
+CLAIM_MODEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9 ().@+/_-]{0,63}")
+CLAIM_OS_VERSION = re.compile(r"[a-z0-9][a-z0-9 ._()+-]{0,31}")
+CLAIM_DRIVER = re.compile(r"[0-9]{3,4}\.[0-9]{1,5}(?:\.[0-9]{1,5})?")
+# A UUID, a long hex run, an IPv4-shaped number, a URL or an address with a host part.
+CLAIM_IDENTIFIER = re.compile(
+    r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}|[0-9a-f]{12,}|[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}"
+    r"|://|@[a-z0-9-]+\.",
+    re.I,
+)
+CLAIM_TOKEN = re.compile(r"eyJ[A-Za-z0-9_-]{8,}")  # a run token is an HS256 JWT
+
+
+def _claim_text(value, pattern):
+    if not isinstance(value, str) or pattern.fullmatch(value) is None:
+        return None
+    return None if CLAIM_IDENTIFIER.search(value) or CLAIM_TOKEN.search(value) else value
+
+
+def clean_claims(raw):
+    """A claims dict with every CLAIM_KEYS entry: the value, or None when absent or invalid."""
+    out = {key: None for key in CLAIM_KEYS}
+    if not isinstance(raw, dict):
+        return out
+    if raw.get("cpu_vendor") in CLAIM_VENDORS:
+        out["cpu_vendor"] = raw["cpu_vendor"]
+    if raw.get("cpu_arch") in CLAIM_ARCHS:
+        out["cpu_arch"] = raw["cpu_arch"]
+    model = raw.get("cpu_model")
+    out["cpu_model"] = _claim_text(
+        " ".join(model.split()) if isinstance(model, str) else None, CLAIM_MODEL
+    )
+    for key in ("host_driver", "linux_driver", "windows_driver"):
+        out[key] = _claim_text(raw.get(key), CLAIM_DRIVER)
+    for key in ("linux_os_version", "windows_os_version"):
+        out[key] = _claim_text(raw.get(key), CLAIM_OS_VERSION)
+    return out
+
 
 def _int(lo, hi):
     return lambda v: re.fullmatch(r"[1-9][0-9]{0,15}", v) is not None and lo <= int(v) <= hi
@@ -84,6 +137,17 @@ SPEC = [
     # The tier, a pure function of the Worker profile (ci/vast-broker/src/tier.js): 1 = master
     # gate with the Windows stage, 0 = die sweep. Absent (an older Worker): the payload's default.
     ("KF_MERGE_WINDOWS", False, _match(r"[01]")),
+    # 2026-11-05 (wtier): the run's tier (informational), the release tier's second Windows run on
+    # the same box (2) and its extra stages (colon-separated slot names). Absent: today's run.
+    ("KF_TIER", False, _match(r"small|middle|large|adhoc")),
+    ("KF_WINDOWS_RUNS", False, _match(r"[12]")),
+    # 2026-11-06 (setup picker): present only when the Worker accepts the optional host_claims block
+    # in a result (ci/vast-broker/src/results.js). Absent (an older Worker): the block is not sent.
+    ("KF_HOST_CLAIMS", False, _match(r"1")),
+    # 2026-11-07 (run report): present only when the Worker has POST /run-report/<run>
+    # (ci/vast-broker/src/index.js). Absent (an older Worker): the box sends no report.
+    ("KF_RUN_REPORT", False, _match(r"1")),
+    ("KF_STAGES", False, _match(r"[a-z][a-z0-9_]{0,31}(?::[a-z][a-z0-9_]{0,31}){0,3}")),
 ]
 
 
@@ -227,6 +291,7 @@ def read_result_file(path):
             "runner_nonce",
             "diagnostics",
             "host_reference",
+            "host_claims",
         }
         if type(doc) is not dict or not {"verdict", "suites"} <= set(doc) <= allowed:
             raise ValueError("shape")
@@ -280,6 +345,7 @@ def final_result(env, rc, timed_out, reason, path):
     """Build the structured result. Exit status and log text never supply a PASS."""
     rows, hardware, verdict = [], dict(UNKNOWN_HW), "FAIL"
     reference = {}
+    claims = {}
     if reason in REASONS:
         _ensure_fail(rows, reason)
     else:
@@ -293,6 +359,8 @@ def final_result(env, rc, timed_out, reason, path):
             hardware = dict(doc.get("hardware") or UNKNOWN_HW)
             if "host_reference" in doc:
                 reference["host_reference"] = doc["host_reference"]
+            if "host_claims" in doc:
+                claims = {k: v for k, v in clean_claims(doc["host_claims"]).items() if v is not None}
         except FileNotFoundError:
             if not timed_out:
                 _ensure_fail(rows, "result_missing")
@@ -318,6 +386,8 @@ def final_result(env, rc, timed_out, reason, path):
         "verdict": verdict,
         "suites": rows,
         "hardware": hardware,
+        # Only to a Worker that asked for it (KF_HOST_CLAIMS=1): an older Worker refuses the key.
+        **({"host_claims": claims} if claims and env.get("KF_HOST_CLAIMS") == "1" else {}),
         **reference,
     }
 

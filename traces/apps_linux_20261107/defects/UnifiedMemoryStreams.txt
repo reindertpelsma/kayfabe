@@ -1,0 +1,8 @@
+# UnifiedMemoryStreams: guest alone in a fresh boot (MEASURED, run r1, kf3 144557e4, RTX 4090, 2026-11-07)
+guest verdict: APPRES side=guest app=UnifiedMemoryStreams verdict=FAIL rc=134 secs=8 quiet=0 note=CUDA error at UnifiedMemoryStreams.cu:221 code=13(CUBLAS_STATUS_EXECUTION_FAILED) "cublasDgemv(handle[tid + 1], CUBLAS_OP_N, t.size, t.size, &one, t.data, t.siz
+host Xid in that boot:
+  NVRM: Xid (PCI:0000:00:08): 31, pid=109720, name=qemu-system-x86, channel 0x0000001f, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC0 GPCCLIENT_T1_2 faulted @ 0x7c9c_06176000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+guest Xid lines: 0
+kf3 'RC host twin' lines: 8; first:
+  kf3: RC host twin 0x24 (guest chid 0xd, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+bare metal (same box, run r1): APPRES side=host app=UnifiedMemoryStreams verdict=PASS rc=0 secs=3 quiet=1

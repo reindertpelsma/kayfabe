@@ -18,6 +18,7 @@ database_id = "c6292be2-742d-4a05-95fd-749705ab30bc"
 migrations_dir = "migrations"
 
 [vars]
-# https origin of the public log bucket (for example https://logs.kayfabe.dev); empty = the
-# /v1/logs redirect answers 404. Must be on kayfabe.dev, without a path (src/validate.js).
-LOGS_BASE = ""
+# https origin of the public log bucket kayfabe-logs-public (custom domain attached 2026-11-07);
+# empty = the /v1/logs redirect answers 404 and run objects carry no url. Must be on kayfabe.dev,
+# without a path (src/validate.js).
+LOGS_BASE = "https://logs.kayfabe.dev"

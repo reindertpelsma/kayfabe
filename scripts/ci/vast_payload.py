@@ -126,8 +126,10 @@ WINDOWS_VERDICT = re.compile(r"^WINDOWS_GATE_(PASS|FAIL|RETRY|REFUSED)\b([^\n]*)
 WINDOWS_RETRY_CLASSES = {"PROVIDER", "MEDIA", "OPERATOR", "HOSTREF", "BAR1_EXCEPTION"}
 
 
-def windows_rows(text, rc, sha):
-    """Grade scripts/bench/box/windows_gate.sh. THE GATE IS THE GUEST PASSING (owner, 2026-11-01):
+def windows_rows(text, rc, sha, name="windows_gate"):
+    """Grade scripts/bench/box/windows_gate.sh. `name` is the row of this run: windows_gate, or
+    windows_gate_2 for the release tier's second run on the same box (KF_WINDOWS_RUNS=2).
+    THE GATE IS THE GUEST PASSING (owner, 2026-11-01):
     only one WINDOWS_GATE_PASS for this revision with exit 0 is a row that passes. RETRY (and a
     refused precondition) is a host, harness or rental fault: never a pass, never a verdict on the
     guest; its row is named windows_retry_<class> so the runner can say "re-run on a fresh box"."""
@@ -142,9 +144,9 @@ def windows_rows(text, rc, sha):
             and exits[0] == "0"
             and re.match(r" rev=" + re.escape(sha[:8]) + r"[0-9a-f]* ", rest)
         ):
-            return [row("windows_gate", 1)]
+            return [row(name, 1)]
         if kind == "FAIL" and rc not in (0, 3):
-            raise EvidenceError("windows_gate")
+            raise EvidenceError(name)
     if kinds == {"RETRY"} and len(verdicts) == 1:
         found = re.search(r" class=([A-Z0-9_]+)\b", verdicts[0][1])
         cls = found[1] if found and found[1] in WINDOWS_RETRY_CLASSES else "OPERATOR"
@@ -152,7 +154,7 @@ def windows_rows(text, rc, sha):
     if kinds == {"REFUSED"}:
         raise EvidenceError("windows_retry_refused")
     if "FAIL" in kinds:
-        raise EvidenceError("windows_gate")
+        raise EvidenceError(name)
     # No verdict, two verdicts, a PASS of another revision or with a non-zero exit: the
     # harness did not end cleanly. Not a pass; a fresh box decides.
     raise EvidenceError("windows_retry_operator")
@@ -168,10 +170,143 @@ def windows_requested(environ):
     return value != "0", "worker" if value is not None else "default"
 
 
+def tier_requested(environ, windows):
+    """The release tier's extras (ci/vast-broker/src/tier.js, 2026-11-05): KF_TIER is informational;
+    KF_WINDOWS_RUNS=2 runs the Windows gate a second time on the same box (only with the Windows
+    stage); KF_STAGES names extra stages. Only `specviewperf` is a stage slot that can run (its lane
+    is plumbing until the SPECviewperf lane lands); `two_guests` and `trio` are reserved names,
+    DESIGN-ONLY and refused. Anything malformed is refused before any stage runs."""
+    tier = environ.pop("KF_TIER", None)
+    runs = environ.pop("KF_WINDOWS_RUNS", None)
+    stages = environ.pop("KF_STAGES", None)
+    if tier not in (None, "small", "middle", "large", "adhoc") or runs not in (None, "1", "2"):
+        raise EvidenceError("preflight")
+    if runs == "2" and not windows:
+        raise EvidenceError("preflight")
+    names = [] if stages is None else stages.split(":")
+    if (
+        len(names) != len(set(names))
+        or any(n not in STAGE_SLOTS for n in names)
+        or any(STAGE_SLOTS[n] == "DESIGN_ONLY" for n in names)
+        or (names and tier != "large")
+    ):
+        raise EvidenceError("preflight")
+    return tier or "unknown", 2 if runs == "2" else 1, names
+
+
+# Stage slots (names reserved in ci/vast-broker/defaults.json stageSlots). PLUMBING = the stage
+# runs through scripts/ci/vast_stage_specviewperf.sh; DESIGN_ONLY = refused if requested.
+STAGE_SLOTS = {"specviewperf": "PLUMBING", "two_guests": "DESIGN_ONLY", "trio": "DESIGN_ONLY"}
+SPEC_VERDICT = re.compile(r"^SPECVIEWPERF_STAGE_(PASS|FAIL|RETRY)(?: class=([A-Z_]{1,32}))?$", re.M)
+
+
+def specviewperf_rows(text, rc):
+    """Grade the SPECviewperf stage wrapper. Only its verdict word leaves the box: the wrapper keeps
+    the lane's own output (scores included) in a private file and prints one verdict line. RETRY
+    (and a missing lane: class NOT_BUILT) is never a pass."""
+    verdicts = SPEC_VERDICT.findall(text)
+    if len(verdicts) != 1:
+        raise EvidenceError("specviewperf_retry_operator")
+    kind, cls = verdicts[0]
+    if kind == "PASS" and rc == 0:
+        return [row("specviewperf", 1)]
+    if kind == "FAIL":
+        raise EvidenceError("specviewperf")
+    raise EvidenceError(
+        "specviewperf_retry_" + (cls.lower() if kind == "RETRY" and cls else "operator")
+    )
+
+
+# The Linux apps stage (DRAFT 2026-11-07, lane appslinux; DISABLED BY DEFAULT). It runs the app matrix
+# (scripts/apps/, ~70 CUDA, graphics, AI and video programs) in the fat guest over the GATE LIST
+# (scripts/apps/gate_list.txt: the apps that passed on bare metal AND in the guest on the measured box,
+# traces/apps_linux_20261107/). The owner enables it by setting APPS_STAGE_ENABLED = True here; then the
+# tiers `middle` and `large` run it (after cuda_guest, before windows_gate) and `small` and `adhoc` never
+# do. It is NOT selected by KF_STAGES (a Worker-sent `apps` is still refused above: the tier decides) and
+# needs no Worker change. A gate app that fails in the guest is a kayfabe finding (row `apps`); a missing
+# bundle, an exhausted budget or a boot that gave no row is `apps_retry_<class>`, never a pass.
+APPS_STAGE_ENABLED = False
+APPS_TIERS = ("middle", "large")
+APPS_RETRY_CLASSES = {"NOT_BUILT", "TIME", "BOX", "OPERATOR", "NO_LIST", "BAD_LIST", "USAGE"}
+APPS_VERDICT = re.compile(r"^APPS_STAGE_(PASS|FAIL|RETRY)(?: class=([A-Z_]{1,32}))?$", re.M)
+APPS_ROW = re.compile(
+    r"^APP_ROW name=([A-Za-z0-9_]{1,48}) os=linux result=(PASS|FAIL|NOT_RUN)"
+    r" secs=(?:[0-9]+|-) guest_xid=(?:[0-9]+|-) note=(.*)$",
+    re.M,
+)
+APPS_LIST_LINE = re.compile(r"^APPS_STAGE_LIST n=([0-9]+) ", re.M)
+# Its own wall-clock budget (apps_gate.sh KF_APPS_BUDGET_S) plus margin; INFERRED until a box has run
+# the whole gate list under the payload (the measurement is in traces/apps_linux_20261107/).
+APPS_MIN_REMAINING_MS = 60 * 60000
+
+
+def apps_requested(tier):
+    """The tier decides, and only when the owner has enabled the stage; never for small or adhoc."""
+    return bool(APPS_STAGE_ENABLED) and tier in APPS_TIERS
+
+
+# The release tier (`large`) runs the FULL gate list; `middle` runs the same list without the apps that need
+# more than a minute in the guest (scripts/apps/gate_list_middle.txt), so it fits the middle tier's budget.
+APPS_LISTS = {"large": ("gate_list.txt", "full"), "middle": ("gate_list_middle.txt", "middle")}
+
+
+def apps_gate_list(root, tier="large"):
+    """The gate list of the tier, in run order; one app name per line, `#` comments and blanks ignored."""
+    names = [
+        s.strip()
+        for s in bounded_text(Path(root) / "scripts/apps" / APPS_LISTS[tier][0], 65536).splitlines()
+        if s.strip() and not s.strip().startswith("#")
+    ]
+    if (
+        not names
+        or len(names) != len(set(names))
+        or not all(re.fullmatch(r"[A-Za-z0-9_]{1,48}", n) for n in names)
+    ):
+        raise EvidenceError("apps_retry_no_list")
+    return names
+
+
+def apps_rows(text, rc, names):
+    """Grade scripts/bench/box/apps_gate.sh. THE GATE IS THE GUEST PASSING: one APPS_STAGE_PASS with
+    exit 0, one exit line rc=0, and exactly one PASS APP_ROW for every name of the gate list, no more,
+    no fewer. A FAIL (a gate app failed in the guest) is the row `apps`, with the passed count beside
+    it. RETRY (missing bundle, budget, boot) is `apps_retry_<class>`: not a verdict on the guest."""
+    verdicts = APPS_VERDICT.findall(text)
+    exits = re.findall(r"^APPS_STAGE_EXIT rc=([0-9]+)$", text, re.M)
+    rows = APPS_ROW.findall(text)
+    seen = [name for name, _, _ in rows]
+    passed = sum(1 for _, result, _ in rows if result == "PASS")
+    if len(verdicts) == 1 and len(exits) == 1:
+        kind, cls = verdicts[0]
+        listed = APPS_LIST_LINE.findall(text)
+        if (
+            kind == "PASS"
+            and rc == 0
+            and exits[0] == "0"
+            and listed == [str(len(names))]
+            and sorted(seen) == sorted(names)
+            and passed == len(names)
+        ):
+            return [row("apps", len(names))]
+        if kind == "FAIL" and rc not in (0, 3) and exits[0] != "0":
+            raise EvidenceError("apps", [row("apps_passed", passed)] if passed else [])
+        if kind == "RETRY":
+            name = "apps_retry_" + (cls.lower() if cls in APPS_RETRY_CLASSES else "operator")
+            raise EvidenceError(name, [row("apps_passed", passed)] if passed else [])
+    # No verdict, two verdicts, a PASS with a missing/extra/duplicate/failing app row or a non-zero exit
+    # (names are unique, so sorted(seen) == sorted(names) also rules out a duplicate row):
+    # the harness did not end cleanly. Not a pass; a fresh box decides.
+    raise EvidenceError("apps_retry_operator")
+
+
 # The Windows stage needs about an hour on a fresh box (install 19-31 min, gate 27 min, MEASURED
 # traces/windows_gate_20261101/, traces/blackwell_hw_20261103/); it does not start with less than
 # this left before the soft deadline, and that shortfall is a RETRY, not a verdict.
 WINDOWS_MIN_REMAINING_MS = 75 * 60000
+# The second Windows run reuses the installed image (install=once). MEASURED second runs on
+# 2026-11-04 at rev 0c515b3b: 906 s (AD102 ada102b) and 1795 s (TU116 tu116b2),
+# traces/die_coverage_20261104/; 45 minutes is that plus margin (INFERRED, not measured).
+WINDOWS_REPEAT_MIN_REMAINING_MS = 45 * 60000
 
 
 def ladder_rows(text, rc, mode, sha):
@@ -644,6 +779,78 @@ def hardware():
         return {"gpu_name": "unknown", "compute_cap": 0, "driver_version": "unknown"}
 
 
+# Host claims for the public setup picker (2026-11-06). CLAIMS: read from this box's own /proc and
+# from receipts of its own provisioning; the Worker checks their shape (vast_report.clean_claims,
+# results.js cleanClaims) and no verdict reads them. The guest OS versions are the harness's own
+# images: the fat Linux guest is the Ubuntu noble cloud image (provision_bench_tree.sh) and the
+# Windows guest is Windows 11 Enterprise LTSC 2024, build 26100, with the 580.88 driver
+# (win_vm.sh, windows_gate.sh); test_vast_payload_claims.py checks each against those files.
+LINUX_GUEST_OS = "ubuntu-24.04"
+WINDOWS_GUEST_OS = "11-ltsc-2024-26100"
+WINDOWS_GUEST_DRIVER = "580.88"
+CPU_VENDORS = {"GenuineIntel": "intel", "AuthenticAMD": "amd"}
+
+
+def cpu_claims(cpuinfo="/proc/cpuinfo", machine=None):
+    """cpu_vendor (amd|intel|arm|other), cpu_model (sanitised, bounded) and cpu_arch of this box.
+    Nothing here is a serial, id or address: only the vendor string and the model name line."""
+    import platform
+
+    arch = (machine or platform.machine() or "").lower()
+    arch = {"amd64": "x86_64", "arm64": "aarch64"}.get(arch, arch)
+    vendor = model = None
+    try:
+        text = Path(cpuinfo).read_bytes()[:262144].decode("utf-8", "replace")
+    except OSError:
+        text = ""
+    for line in text.splitlines():
+        key, _, value = line.partition(":")
+        key, value = key.strip().lower(), value.strip()
+        if key == "vendor_id" and vendor is None and value:
+            vendor = CPU_VENDORS.get(value, "other")
+        elif key == "model name" and model is None and value:
+            model = re.sub(r"[^A-Za-z0-9 ().@+/_-]", " ", value)
+            model = " ".join(model.split())[:64].strip()
+    if arch == "aarch64":
+        vendor = "arm"
+    return {"cpu_vendor": vendor, "cpu_model": model or None, "cpu_arch": arch or None}
+
+
+def guest_driver_receipt(bench):
+    """The guest driver the fat guest was provisioned with (provision_bench_tree.sh writes
+    guest.qcow2.STAGED with version=<modinfo version of the guest's nvidia module>)."""
+    try:
+        text = bounded_text(Path(bench) / "guest.qcow2.STAGED", 4096)
+    except (OSError, EvidenceError, UnicodeError):
+        return None
+    for line in text.splitlines():
+        if line.startswith("version="):
+            return line[len("version="):].strip()
+    return None
+
+
+def host_claims(windows, bench=Path("/workspace/bench"), cpuinfo="/proc/cpuinfo", machine=None):
+    """The claims block of the result: only the fields that have a value."""
+    raw = dict(cpu_claims(cpuinfo, machine))
+    raw["linux_os_version"] = LINUX_GUEST_OS
+    raw["linux_driver"] = guest_driver_receipt(bench)
+    if windows:
+        raw["windows_os_version"] = WINDOWS_GUEST_OS
+        raw["windows_driver"] = WINDOWS_GUEST_DRIVER
+    return {k: v for k, v in local_result_contract.clean_claims(raw).items() if v is not None}
+
+
+def refresh_claims(result, windows):
+    """Record the host claims in the result. A claim is never worth a failed run: any error leaves
+    the result as it was."""
+    try:
+        claims = host_claims(windows)
+    except (OSError, ValueError, UnicodeError, EvidenceError):
+        return
+    if claims:
+        result["host_claims"] = claims
+
+
 def persist_result(destination, result):
     destination = Path(destination)
     temporary = destination.with_suffix(".tmp")
@@ -949,8 +1156,19 @@ def main():
         soft = int(os.environ["KF_SOFT_DEADLINE_MS"])
         # Popped before any stage runs: merge_check.sh must not run the gate inside merge_bar.
         windows, windows_source = windows_requested(os.environ)
+        tier, windows_runs, extra_stages = tier_requested(os.environ, windows)
+        refresh_claims(result, windows)
         print(
-            "KF_PAYLOAD_TIER windows=" + str(int(windows)) + " source=" + windows_source,
+            "KF_PAYLOAD_TIER windows="
+            + str(int(windows))
+            + " source="
+            + windows_source
+            + " tier="
+            + tier
+            + " windows_runs="
+            + str(windows_runs)
+            + " stages="
+            + (":".join(extra_stages) or "none"),
             flush=True,
         )
         subprocess.run(["df", "-h", "/"], check=True)
@@ -1015,6 +1233,7 @@ def main():
             fault = provider_fault(log)
             if fault:
                 raise ProviderFault(fault)
+            refresh_claims(result, windows)  # the guest receipt exists once provisioning ran
             result["hardware"] = hardware()
             rows = provision_rows(log, rc)
             tags = {
@@ -1097,6 +1316,28 @@ def main():
                 lambda rc: ladder_rows(bounded_text(path), rc, "guest", sha),
             )
         )
+        if apps_requested(tier):
+            # After the last Linux guest stage, before Windows: the app matrix over the gate list. It
+            # boots the fat guest itself (apps_matrix.sh), one boot at a time, under its own budget.
+            output_apps = evidence / "apps.run"
+            names = apps_gate_list(root, tier)
+            matrix_log = Path(PROV_DIR) / (tag + "_apps_matrix.log")
+            stage = make_stage(
+                "apps",
+                [
+                    "bash",
+                    str(root / "scripts/bench/box/apps_gate.sh"),
+                    tag,
+                    PROV_DIR,
+                    APPS_LISTS[tier][1],
+                ],
+                output_apps,
+                [matrix_log],
+                lambda rc, names=names: apps_rows(bounded_text(output_apps), rc, names),
+                [matrix_log],
+            )
+            stage.update(min_remaining_ms=APPS_MIN_REMAINING_MS, short_row="apps_retry_time")
+            stages.append(stage)
         if windows:
             # Last, after every Linux guest has stopped: windows_gate.sh owns the GPU from here.
             output = evidence / "windows.run"
@@ -1110,6 +1351,35 @@ def main():
             )
             stage.update(min_remaining_ms=WINDOWS_MIN_REMAINING_MS, short_row="windows_retry_time")
             stages.append(stage)
+        if windows and windows_runs == 2:
+            # The release tier's second Windows run when no second machine offers the die.
+            output2 = evidence / "windows_2.run"
+            stage = make_stage(
+                "windows_gate_2",
+                ["bash", str(root / "scripts/bench/box/windows_gate.sh"), tag + "w2", PROV_DIR],
+                output2,
+                [],
+                lambda rc: windows_rows(bounded_text(output2), rc, sha, "windows_gate_2"),
+                [Path(PROV_DIR) / (tag + "w2_windows.log")],
+            )
+            stage.update(
+                min_remaining_ms=WINDOWS_REPEAT_MIN_REMAINING_MS, short_row="windows_retry_time"
+            )
+            stages.append(stage)
+        if "specviewperf" in extra_stages:
+            # PLUMBING (2026-11-05): the wrapper runs scripts/bench/box/specviewperf_stage.sh when
+            # it exists (the SPECviewperf lane), fetching media through the Worker's presigned
+            # /bench-data route; without it the stage is specviewperf_retry_not_built, never a pass.
+            output3 = evidence / "specviewperf.run"
+            stages.append(
+                make_stage(
+                    "specviewperf",
+                    ["bash", str(root / "scripts/ci/vast_stage_specviewperf.sh"), tag, PROV_DIR],
+                    output3,
+                    [],
+                    lambda rc: specviewperf_rows(bounded_text(output3), rc),
+                )
+            )
         return execute_stages(stages, soft, result, destination)
     except EvidenceError as error:
         if isinstance(error, ProviderFault):

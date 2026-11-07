@@ -1,5 +1,5 @@
 # Vast box scripts (repo side of the CI broker)
-STATUS: LIVE, 2026-10-24: box protocol 7 (ported from protocol 4/5 on branch
+STATUS: LIVE, 2026-11-06 (the failed-run evidence bundle, `vast_evidence.py`, is new and has run on no box); box protocol 7 (ported from protocol 4/5 on branch
 claude/vast-payload-p7-20261024). MEASURED 2026-10-25: a real Vast box booted with the
 protocol-7 setup but had not yet reported to the Worker, so protocol 7 has no end-to-end run on a
 real box yet. The evidence below is for the pre-port payload. MEASURED: run `v9-xid-kvm-20261023`, source
@@ -11,7 +11,7 @@ The Worker's tiny onstart clones the repo, checks out `KF_SHA`, execs `scripts/c
 Per-run data is `KF_*` environment variables. Files: `vast_onstart.sh` (tools, env check, root-only
 env file `/run/kf-ci/env`, helpers, reporter, payload under `timeout`); `vast_report.py` (stdlib:
 `check-env [--write F]`, `daemon --log L --done D --result R`); `kf-box-kill`, `kf-box-blob-url`;
-`test_vast_box.py`, `vast_box_mutants.py`. There is no hold helper or login hook (owner ruling
+`test_vast_box.py`, `vast_box_mutants.py`; `vast_evidence.py` (2026-11-06: the failed-run evidence bundle, run by `vast_onstart.sh` after the payload; [VAST_PAYLOAD](VAST_PAYLOAD.md), "Evidence bundle"); `vast_run_report.py` (2026-11-07: the structured run report, run by `vast_onstart.sh` after the payload when the Worker sets `KF_RUN_REPORT=1`; [VAST_PAYLOAD](VAST_PAYLOAD.md), "Run report"); `fetch_evidence.py` (coordinator tool, not CI). There is no hold helper or login hook (owner ruling
 2026-10-23 19:10; the Worker has no hold route). The box sends the Worker-injected Cloudflare
 Access pair (`KF_ACCESS_ID`, `KF_ACCESS_SECRET`) as `CF-Access-Client-Id`/`-Secret` on every
 broker call when both are set (owner ruling 2026-10-23 21:45); the payload process does not get

@@ -1,0 +1,9 @@
+=== simpleCallback side=host start=2026-11-07T02:22:24+00:00 host=ubuntu cmd: /opt/apps/bundle/samples/simpleCallback
+Starting simpleCallback
+Found 1 CUDA capable GPUs
+GPU[0] NVIDIA GeForce RTX 4090 supports SM 8.9, capable GPU Callback Functions
+1 GPUs available to run Callback Functions
+Starting 8 heterogeneous computing workloads
+Total of 8 workloads finished:
+Success
+=== end rc=0 secs=2 2026-11-07T02:22:26+00:00

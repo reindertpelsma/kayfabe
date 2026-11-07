@@ -489,7 +489,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
 
     // ── the doorbell plane: kf_core::Plane, for the host's family ─────────────────────────
     let vmm = Vmm::new();
-    let mut plane = Plane::for_family(
+    let plane = Plane::for_family(
         &vmm,
         TOKEN_TABLE,
         (TOKEN_TABLE - 1) as u32,

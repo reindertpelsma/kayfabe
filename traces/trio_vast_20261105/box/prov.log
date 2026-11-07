@@ -1,0 +1,17 @@
+START 2026-11-05T10:48:36+00:00
+BOX_RC=0
+3aa2a75a6 trio: pre-registration and draft harness for two guests + host on one GPU
+DRIVER_RC=0
+NVIDIA GeForce RTX 4090, 580.159.04
+/dev/root       194G   15G  180G   8% /
+TREE_RC=0
+[2026-11-05T10:56:48+00:00] B4: guest ladder built: 5061232 bytes
+[2026-11-05T10:56:48+00:00] BENCH_TREE_DONE
+LADDER_RC=0
+FG_RC=0
+== built: /workspace/bench/fastguest/initrd.cpio.gz  112M
+== kernel release: 6.8.0-147-generic
+KF3_RC=0
+KF3_BUILT /workspace/bench/kf3-bins/3aa2a75a/qemu-system-x86_64 rev=3aa2a75a mtime=2026-11-05 10:57:22.308977174 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+READY driver=580.159.04
+EXIT 2026-11-05T10:57:23+00:00

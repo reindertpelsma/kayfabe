@@ -938,6 +938,7 @@ fn a_broker_credit_coalesces_to_one_and_a_latch_needs_none() {
     );
 }
 
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::tick::Handoff;

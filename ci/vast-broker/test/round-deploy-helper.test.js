@@ -88,6 +88,7 @@ for (const dry of [false, true])
         '--config',
         'wrangler.toml',
         ...(dry ? ['--dry-run'] : []),
+        '--x-provision=false',
         '--no-bundle',
         join(outdir, 'index.js'),
         '--var',

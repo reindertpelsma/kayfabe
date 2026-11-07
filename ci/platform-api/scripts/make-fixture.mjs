@@ -4,12 +4,14 @@
 // must equal a fresh run (test/fixture.test.js).
 //   node scripts/make-fixture.mjs            # print
 //   node scripts/make-fixture.mjs --write    # update site/status/fixture.json
-import { writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { api } from '../test/helpers.js';
 import { syntheticRows } from './seed-data.mjs';
 import { SUITES } from '../src/validate.js';
 
+const CI_TIERS = ['largest', 'middle', 'small', 'adhoc'];
+const NAMES_PATH = new URL('../../../site/status/gpu_names.json', import.meta.url);
 export const FIXTURE_PATH = new URL('../../../site/status/fixture.json', import.meta.url);
 
 export async function buildFixture() {
@@ -32,6 +34,65 @@ export async function buildFixture() {
     for (const suite of SUITES) await get('/v1/cells/' + die.id + '/' + suite.id);
   for (const run of rows.runs) await get('/v1/runs/' + run.id);
   for (const commit of rows.commits) await get('/v1/commits/' + commit.sha + '/requirements');
+  // CI Worker result store (migration 0002): the paths site/status/status.js asks for, with the
+  // exact query strings it builds (tier tabs, per-family die pages, the tree list).
+  for (const tier of CI_TIERS) {
+    await get('/v1/ci/matrix?tier=' + tier);
+    await get('/v1/ci/trees?tier=' + tier + '&limit=10');
+  }
+  for (const family of [...new Set(rows.ci_runs.map((r) => r.family))].sort())
+    await get('/v1/ci/matrix?family=' + family);
+  for (const run of rows.ci_runs) await get('/v1/ci/runs/' + run.run_id);
+  for (const tree of [...new Set(rows.ci_runs.map((r) => r.tree_hash))].sort())
+    await get('/v1/ci/trees/' + tree);
+  for (const sha of [...new Set(rows.ci_runs.map((r) => r.commit_sha))].sort())
+    await get('/v1/ci/commits/' + sha);
+  // Setup picker (migration 0003, site/status "Find my setup"): the paths the page builds, one die
+  // per request, for every die the name table can send a visitor to and every die in the seed. The
+  // page asks for exactly: os, gpu, then tier, then source (community opt-in). A tier together
+  // with community is not recorded: the fixture view reports it as not in the fixture.
+  const names = JSON.parse(readFileSync(NAMES_PATH, 'utf8'));
+  const dies = [
+    ...new Set([...names.entries.flatMap((e) => e.dies), ...rows.ci_runs.map((r) => r.die)]),
+  ].sort();
+  await get('/v1/ci/facets');
+  for (const os of ['linux', 'windows'])
+    for (const die of dies) {
+      const base = '/v1/ci/setups?os=' + os + '&gpu=' + die;
+      await get(base);
+      for (const tier of CI_TIERS) await get(base + '&tier=' + tier);
+      await get(base + '&source=reproduced,community');
+      await get(base + '&source=community');
+    }
+  // Run reports, subruns and stats (migration 0004): the status pages' run page, "closest match"
+  // lists and the stats page. Every die that has a report, per guest OS, plus the explained
+  // relaxation examples, an exact-only query and a custom relax order.
+  const reported = [
+    ...new Set(
+      rows.ci_runs
+        .filter((r) => rows.ci_run_reports.some((p) => p.run_id === r.run_id))
+        .map((r) => r.die),
+    ),
+  ].sort();
+  await get('/v1/ci/stats');
+  for (const tier of CI_TIERS) await get('/v1/ci/stats?tier=' + tier);
+  for (const os of ['linux', 'windows', 'host']) await get('/v1/ci/stats?os=' + os);
+  for (const die of reported) {
+    await get('/v1/ci/stats?die=' + die);
+    for (const os of ['linux', 'windows'])
+      await get('/v1/ci/subruns?die=' + die + '&os=' + os + '&include=counts');
+  }
+  await get('/v1/ci/subruns');
+  await get('/v1/ci/subruns?include=counts,perf&limit=5');
+  const near = '?die=GA106&os=windows&host_driver=580.95.05&guest_driver=580.88&cpu=amd';
+  await get('/v1/ci/subruns' + near + '&include=counts');
+  await get('/v1/ci/subruns' + near + '&min_closeness=0&include=counts');
+  await get('/v1/ci/subruns' + near + '&require=die,os&include=counts');
+  await get(
+    '/v1/ci/subruns' + near + '&relax=host_driver,guest_driver,cpu,die,family&include=counts',
+  );
+  await get('/v1/ci/subruns' + near + '&sort=recent&include=stages,tests,perf');
+  await get('/v1/ci/subruns?die=AD102&os=linux&host_driver=575.64.05&include=counts');
   return {
     synthetic: true,
     note:

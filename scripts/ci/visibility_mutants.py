@@ -52,8 +52,8 @@ MUTANTS = [
     (
         "tail-never-shown",
         RUNNER,
-        "        self.show(tail)\n\n    def pages",
-        "        pass\n\n    def pages",
+        "        self.show(tail)\n\n    def show_census",
+        "        pass\n\n    def show_census",
     ),
     ("middle-marker-off", RUNNER, "        if middle > 0:", "        if False:"),
     (
@@ -71,7 +71,9 @@ MUTANTS = [
     (
         "tail-line-budget-ignored",
         RUNNER,
-        "room_lines = max(0, min(TAIL_LINES, 199 - self.display_lines))",
+        "room_lines = max(\n"
+        "            0, min(TAIL_LINES, DISPLAY_LINES - 1 - self.display_lines - CENSUS_LINES - 1)\n"
+        "        )",
         "room_lines = 10**6",
     ),
     (
@@ -83,8 +85,8 @@ MUTANTS = [
     (
         "tail-bypasses-the-scrubber",
         RUNNER,
-        "        self.show(tail)\n\n    def pages",
-        "        self.emit(tail)\n\n    def pages",
+        "        self.show(tail)\n\n    def show_census",
+        "        self.emit(tail)\n\n    def show_census",
     ),
     ("line-cost-without-prefix", RUNNER, 'return len("[untrusted] ") + min', "return 0 + min"),
     (

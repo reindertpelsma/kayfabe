@@ -291,6 +291,141 @@ CASES += [
     ),
 ]
 
+# wtier, 2026-11-05: the release tier's payload extras (KF_WINDOWS_RUNS, KF_STAGES).
+CASES += [
+    (
+        "second-windows-run-reuses-row-name",
+        replace("            return [row(name, 1)]", '            return [row("windows_gate", 1)]'),
+    ),
+    (
+        "design-only-stage-runs",
+        replace('        or any(STAGE_SLOTS[n] == "DESIGN_ONLY" for n in names)\n', ""),
+    ),
+    (
+        "specviewperf-retry-passes",
+        replace(
+            '    if kind == "PASS" and rc == 0:\n        return [row("specviewperf", 1)]',
+            '    if kind in ("PASS", "RETRY"):\n        return [row("specviewperf", 1)]',
+        ),
+    ),
+]
+
+# 2026-11-07, lane appslinux: the Linux apps stage (draft, disabled by default).
+CASES += [
+    ("apps-stage-enabled-by-default", replace("APPS_STAGE_ENABLED = False", "APPS_STAGE_ENABLED = True")),
+    (
+        "apps-run-for-small-tier",
+        replace("    return bool(APPS_STAGE_ENABLED) and tier in APPS_TIERS", "    return bool(APPS_STAGE_ENABLED)"),
+    ),
+    (
+        "apps-missing-app-passes",
+        replace("            and sorted(seen) == sorted(names)\n", ""),
+    ),
+    (
+        "apps-failing-app-passes",
+        replace("            and passed == len(names)\n", ""),
+    ),
+    (
+        "apps-nonzero-exit-passes",
+        replace('            and exits[0] == "0"\n            and listed', "            and listed"),
+    ),
+    (
+        "apps-list-size-unchecked",
+        replace("            and listed == [str(len(names))]\n", ""),
+    ),
+    (
+        "apps-retry-passes",
+        replace('        if kind == "RETRY":\n            name = "apps_retry_"', '        if kind == "RETRY":\n            return [row("apps", len(names))]\n            name = "apps_retry_"'),
+    ),
+    (
+        "apps-stage-without-time-guard",
+        replace("APPS_MIN_REMAINING_MS = 60 * 60000", "APPS_MIN_REMAINING_MS = 0"),
+    ),
+    (
+        "apps-stage-selected-by-kf-stages",
+        replace('STAGE_SLOTS = {"specviewperf": "PLUMBING",', 'STAGE_SLOTS = {"apps": "PLUMBING", "specviewperf": "PLUMBING",'),
+    ),
+    (
+        "apps-middle-reads-the-full-list",
+        replace('"middle": ("gate_list_middle.txt", "middle")', '"middle": ("gate_list.txt", "middle")'),
+    ),
+    (
+        "apps-middle-runs-the-full-lane-list",
+        replace('"middle": ("gate_list_middle.txt", "middle")', '"middle": ("gate_list_middle.txt", "full")'),
+    ),
+    (
+        "apps-tier-ignored-when-reading-the-list",
+        replace("            names = apps_gate_list(root, tier)", '            names = apps_gate_list(root, "large")'),
+    ),
+    (
+        "apps-stage-never-appended",
+        replace(
+            '        if apps_requested(tier):\n',
+            '        if False:\n',
+        ),
+    ),
+]
+
+# 2026-11-06: the setup picker's host claims (optional, bounded, never a verdict).
+CASES += [
+    (
+        "claims-sent-to-a-worker-that-did-not-ask",
+        report_replace(
+            '**({"host_claims": claims} if claims and env.get("KF_HOST_CLAIMS") == "1" else {}),',
+            '**({"host_claims": claims} if claims else {}),',
+        ),
+        "vast_report.py",
+    ),
+    (
+        "claims-forwarded-uncleaned",
+        report_replace(
+            'claims = {k: v for k, v in clean_claims(doc["host_claims"]).items() if v is not None}',
+            'claims = dict(doc["host_claims"]) if isinstance(doc["host_claims"], dict) else {}',
+        ),
+        "vast_report.py",
+    ),
+    (
+        "claims-variable-not-in-the-env-contract",
+        report_replace('    ("KF_HOST_CLAIMS", False, _match(r"1")),\n', ""),
+        "vast_report.py",
+    ),
+    (
+        "claims-driver-pattern-loose",
+        report_replace(
+            'CLAIM_DRIVER = re.compile(r"[0-9]{3,4}\\.[0-9]{1,5}(?:\\.[0-9]{1,5})?")',
+            'CLAIM_DRIVER = re.compile(r".{1,16}")',
+        ),
+        "vast_report.py",
+    ),
+    (
+        "claims-identifier-check-removed",
+        report_replace(
+            "    return None if CLAIM_IDENTIFIER.search(value) or CLAIM_TOKEN.search(value) else value",
+            "    return value",
+        ),
+        "vast_report.py",
+    ),
+    (
+        "claims-windows-guest-without-the-stage",
+        replace('    if windows:\n        raw["windows_os_version"]', '    if True:\n        raw["windows_os_version"]'),
+    ),
+    (
+        "claims-model-not-sanitised",
+        replace('            model = re.sub(r"[^A-Za-z0-9 ().@+/_-]", " ", value)', "            model = value"),
+    ),
+    (
+        "claims-error-fails-the-run",
+        replace(
+            "    except (OSError, ValueError, UnicodeError, EvidenceError):\n        return\n    if claims:",
+            "    except ZeroDivisionError:\n        return\n    if claims:",
+        ),
+    ),
+    (
+        "claims-numeric-model-line-is-the-model",
+        replace('        elif key == "model name" and model is None and value:', '        elif key in ("model name", "model") and model is None and value:'),
+    ),
+]
+
 CASES += [
     ("structured-arm-logs-omitted", replace('snapshot["diagnostics"] = events', "pass")),
     (
@@ -538,7 +673,7 @@ print('KF_MUTATION_RESULT='+json.dumps({'tests':r.testsRun,
 
 def run(root):
     p = subprocess.run(
-        [sys.executable, "-c", COLLECT], cwd=root, text=True, capture_output=True, timeout=45
+        [sys.executable, "-c", COLLECT], cwd=root, text=True, capture_output=True, timeout=180
     )
     assert p.returncode == 0, p.stderr[-500:]
     line = next(s for s in p.stdout.splitlines() if s.startswith("KF_MUTATION_RESULT="))
@@ -563,12 +698,33 @@ def main():
             "test_vast_payload_guest_guard.py",
             "test_vast_payload_result_logs.py",
             "test_vast_payload_summary.py",
+            "test_vast_payload_claims.py",
+            "test_vast_payload_apps.py",
+            "host_claims_vectors.json",
             "test_vast_box.py",
             "vast_report.py",
         ]:
             shutil.copyfile(HERE / name, ci / name)
         bench = root / "scripts/bench"
         bench.mkdir()
+        # The claims test checks its guest constants against the scripts that install the guests.
+        for relative in (
+            "provision_bench_tree.sh",
+            "windows/win_vm.sh",
+            "box/windows_gate.sh",
+        ):
+            (bench / relative).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(HERE.parent / "bench" / relative, bench / relative)
+        # The apps stage tests run the lane script and ask run_apps.sh for the app names.
+        (bench / "box").mkdir(exist_ok=True)
+        shutil.copyfile(HERE.parent / "bench/box/apps_gate.sh", bench / "box/apps_gate.sh")
+        (root / "scripts/apps").mkdir()
+        for name in ("run_apps.sh", "gate_list.txt", "gate_list_middle.txt"):
+            shutil.copyfile(HERE.parent / "apps" / name, root / "scripts/apps" / name)
+        for relative in ("g1/gate_full.out", "g2/gate_mid.out", "g3/gate_watched.out", "g4/gate_fail.out"):  # real lane output, replayed by the tests
+            target = root / "traces/apps_linux_20261107" / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(HERE.parents[1] / "traces/apps_linux_20261107" / relative, target)
         shutil.copyfile(HERE.parent / "bench/host_xid_watch.sh", bench / "host_xid_watch.sh")
         shutil.copyfile(HERE.parent / "bench/native_xid_guard.py", bench / "native_xid_guard.py")
         (bench / "tests").mkdir()

@@ -39,6 +39,8 @@ const ENV_KEYS = [
   'KF_GRACE_PASS',
   'KF_HARD_DEADLINE',
   'KF_HEARTBEAT_SECONDS',
+  // 2026-11-06 (setup picker): the Worker accepts the optional host_claims block.
+  'KF_HOST_CLAIMS',
   'KF_MERGE_WINDOWS',
   'KF_NONCE',
   'KF_PROTOCOL',
@@ -48,6 +50,8 @@ const ENV_KEYS = [
   'KF_RUN_TOKEN',
   'KF_SHA',
   'KF_SOFT_DEADLINE',
+  // 2026-11-05 (wtier): the run's tier (informational on the box, src/tier.js).
+  'KF_TIER',
 ];
 for (const withPair of [true, false])
   test('item 7: the Vast create request is the exact allow-list, pair B ' + withPair, async () => {

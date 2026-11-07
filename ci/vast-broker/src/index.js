@@ -1,11 +1,15 @@
-import { applyProfile, tierEnvironment } from './tier.js';
+import { applyProfile, tierEnvironment, tierForClaims, familyOf, profileCaps } from './tier.js';
+// prettier-ignore
+import {planRelease,classifyLeg,releaseVerdict,wantsRerun} from './release.js';
 // prettier-ignore
 import {DEFAULTS} from './defaults.js';
 import {
   BrokerError,
+  budgetClass,
   refuse,
   budgetRefuse,
   configuration,
+  teardownConfiguration,
   numericId,
   hexSha,
   localIdentity,
@@ -30,15 +34,25 @@ import {benchObject,benchBudget,benchCount,benchExpiry,benchUrl,benchRedirect} f
 import { offerPrice, providerId } from './policy.js';
 import { reportedProviderFault } from './provider-fault.js';
 // prettier-ignore
+import {EVIDENCE_MAX_BYTES,EVIDENCE_MAX_INFLIGHT,evidenceEnabled,evidenceLength,evidenceReservation,storeEvidence} from './evidence.js';
+// prettier-ignore
 import {Vast} from './vast.js';
 // prettier-ignore
 import {OfferBook} from './offers.js';
 // prettier-ignore
-import {Ledger,rentalCost,costAttempt} from './ledger.js';
+import {Ledger,rentalCost,costAttempt,spendClass,reportChunkKey} from './ledger.js';
+// prettier-ignore
+import {logsEnabled} from './publiclog.js';
+// prettier-ignore
+import {publishTick} from './publish.js';
+// prettier-ignore
+import {REPORT_MAX_BYTES,cleanClaimsReport,fitReport} from './runreport.js';
 // prettier-ignore
 import {onstart} from './onstart.js';
 // prettier-ignore
 import {appendBoxText,appendWorkerText,sanitizeBoxText} from './sanitize.js';
+// prettier-ignore
+import {CHECK_PATH,storeEnabled,enqueue,freeze,storeTick,storeTrees,githubTreeKey,checkRequirements} from './ingest.js';
 // Signed facts only: repository, environment subject, master ref, run identity and a pinned
 // master workflow. Who triggered the run and which commit it tests come from one run lookup.
 // Log-only trace of a 401: the route word and the fixed check code, never a value.
@@ -86,9 +100,12 @@ export function createService({
     githubCache = new Map(),
     offers = new OfferBook(now);
   let busy = false,
+    publishing = false,
     localVerifier,
     admissionWindow = -1,
-    admissionCount = 0;
+    admissionCount = 0,
+    checkWindow = -1,
+    checkCount = 0;
   const runKey = (c) => c.run_id + '-' + c.run_attempt;
   const json = (data, status = 200) =>
     Response.json(data, {
@@ -105,12 +122,87 @@ export function createService({
     env.BOX_ACCESS_SECRET,
     env.R2_READ_ACCESS_KEY_ID,
     env.R2_READ_SECRET_ACCESS_KEY,
+    env.ROW_TAG_KEY,
     ...endpointSecrets(env),
   ].filter(Boolean);
   // Newly created real provider rows can omit/null actual_status. This grants
   // only the existing provisioning window, never callback/liveness authority.
+  // `offline` flaps on a booting instance (measured 2026-11-06, vanish hunt) and is treated like `created`.
   const pendingInstance = (i) =>
-    i.actual_status == null || ['created', 'loading', 'starting'].includes(i.actual_status);
+    i.actual_status == null ||
+    ['created', 'loading', 'starting', 'offline'].includes(i.actual_status);
+  // The provider's raw status word, restricted to [a-z_]{1,16}; anything else is `unknown`.
+  const providerWord = (i) => {
+    const a = i?.actual_status;
+    if (a == null) return 'null';
+    return typeof a === 'string' && /^[a-z_]{1,16}$/.test(a) ? a : 'unknown';
+  };
+  // The provider's status_msg is third-party text: sanitised like box text FIRST (a longer prefix),
+  // cut to the bound AFTERWARDS, so a token cut by the bound cannot leave an unredacted fragment.
+  // If the input itself was cut, a trailing identifier-like run is dropped (it may be a token cut
+  // in two). One line, at most DEFAULTS.providerMessageChars characters.
+  const MESSAGE_INPUT_CHARS = 8192;
+  const providerMessage = (record, i) => {
+    const m = i?.status_msg;
+    if (typeof m !== 'string' || m === '') return '-';
+    const cut = m.length > MESSAGE_INPUT_CHARS;
+    let text = sanitizeBoxText(
+      new TextEncoder().encode(m.slice(0, MESSAGE_INPUT_CHARS)),
+      16384,
+      [...secrets, record.id, record.label, record.nonce],
+      { tail: false },
+    )
+      .text.replace(/^\[box\] /gm, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (cut) text = text.replace(/[A-Za-z0-9_-]+$/, '');
+    return Array.from(text).slice(0, DEFAULTS.providerMessageChars).join('') || '-';
+  };
+  // Provider readings that are not `running`. `exited` and `stopped` are definite (the instance is
+  // down); every other word, and a provider API error, is ambiguous (flaps were measured on live
+  // instances) and needs a quiet box as well. True when the rental must close now.
+  const DEFINITE = ['exited', 'stopped'];
+  function badReading(record, ambiguous) {
+    const t = now(),
+      spacing = DEFAULTS.providerGoneSpacingSeconds * 1000;
+    let bad = record.providerBad;
+    if (!bad || (record.lastPostAt !== null && record.lastPostAt > bad.first)) {
+      bad = record.providerBad = { first: t, last: t, count: 1 };
+      record.providerFlaps = (record.providerFlaps ?? 0) + 1;
+    } else if (t - bad.last >= spacing) {
+      bad.last = t;
+      bad.count++;
+    }
+    if (
+      bad.count < DEFAULTS.providerGoneReadings ||
+      t - bad.first < DEFAULTS.providerGoneWindowSeconds * 1000
+    )
+      return false;
+    return (
+      !ambiguous ||
+      t - (record.lastPostAt ?? record.started) >= DEFAULTS.providerQuietSeconds * 1000
+    );
+  }
+  // The byte cap of the last configuration seen: close() runs in places that hold no cfg.
+  let lastReportBytes = DEFAULTS.reportBytes;
+  // One Worker line per close, before any destroy: reason, the provider's last raw status, its
+  // bounded message. Never throws (a failed line must not stop the teardown) and never repeats.
+  async function closeLine(record, reason) {
+    if (record.ended !== null || record.closeLogged) return;
+    record.closeLogged = true;
+    try {
+      await workerLine(
+        record,
+        'close reason=' +
+          reason +
+          ' provider=' +
+          (record.providerRaw ?? 'none') +
+          ' msg=' +
+          (record.providerMsg ?? '-'),
+        { reportBytes: lastReportBytes },
+      );
+    } catch {}
+  }
   const phase = (r) =>
     r.ended !== null
       ? 'NONE'
@@ -197,6 +289,8 @@ export function createService({
       return;
     }
     await ledger.appendLog(r, text);
+    // The public log holds the Worker's own lines too (src/publiclog.js).
+    if (logsEnabled(env)) await ledger.appendPublicLog(r, text, undefined, true);
     r.fullBytes = (r.fullBytes ?? 0) + bytes;
     appendWorkerText(r, text);
     await ledger.save(r);
@@ -233,6 +327,7 @@ export function createService({
           record.computeStoragePrice = 0;
           record.price = 0;
           record.bandwidthCost = 0;
+          await closeLine(record, 'GONE');
           await ledger.settle(record, now());
           await clearFailedSha(record);
           return record;
@@ -257,11 +352,12 @@ export function createService({
     record.verdict ||= verdict;
     record.liveCheckedAt = null;
     await ledger.save(record);
+    await closeLine(record, reason);
     if (record.ended === null) await cleanup(record, vast);
   }
   async function checkContract(record, instance, vast, cfg) {
     const price = instance && offerPrice(instance, cfg);
-    const cap = record.profile === 'sweep' ? cfg.sweepPrice : cfg.price;
+    const cap = profileCaps(cfg, budgetClass(record)).price;
     if (
       !price ||
       instance.inet_up_cost > cfg.maxInet ||
@@ -287,6 +383,22 @@ export function createService({
           run_cap_usd: record.runBudgetUsd,
         });
       }
+      // Review F8: a release leg's verified contract price is re-checked against its release's cost
+      // cap (the other legs' spend and reservations plus this leg's full liability).
+      if (budgetClass(record) === 'release' && typeof record.batch === 'string') {
+        const batch = await ledger.get('batch:' + record.batch),
+          others = batch ? await batchSpend(batch, record.key) : 0;
+        if (!batch || !(others + total <= batch.costCapUsd)) {
+          record.computeStoragePrice = computeStorage;
+          record.bandwidthCost = bandwidth;
+          await close(record, vast, 'CONTRACT_BUDGET', 'UNAVAILABLE');
+          budgetRefuse('run-usd', {
+            cost_usd: total,
+            prior_usd: others,
+            run_cap_usd: batch?.costCapUsd ?? 0,
+          });
+        }
+      }
       try {
         const credit = await vast.credit();
         await ledger.budgets(cfg, now(), total, record.key, { credit, sameAttempt: true });
@@ -301,7 +413,7 @@ export function createService({
       await ledger.save(record);
       await ledger.put('cost:' + record.key, {
         ...costAttempt(record),
-        profile: record.profile ?? 'check',
+        ...spendClass(record),
         started: record.started,
         ended: null,
         ttl,
@@ -312,7 +424,8 @@ export function createService({
     }
   }
   async function update(record, vast, github, cfg) {
-    applyProfile(cfg, record.profile ?? 'check');
+    applyProfile(cfg, budgetClass(record));
+    lastReportBytes = cfg.reportBytes;
     if (record.ended !== null) return;
     clocks(record, cfg);
     await ledger.save(record);
@@ -357,34 +470,69 @@ export function createService({
     let instance;
     try {
       instance = await vast.inspect(record);
-    } catch {
-      await workerLine(record, 'provider_error', cfg);
-      record.closed = 'UNAVAILABLE';
-      record.verdict ||= 'UNAVAILABLE';
+    } catch (error) {
+      // A foreign instance closes at once. Any other failure (HTTP 5xx, timeout, bad body) is a
+      // reading of the provider API, not of the instance: counted in the same window as a
+      // non-running status; a persistent outage still closes it as UNAVAILABLE (the destroy
+      // retries on every cron tick until the API answers).
+      if (error instanceof BrokerError && error.state === 'OWNERSHIP_MISMATCH') {
+        record.closed = 'UNAVAILABLE';
+        record.verdict ||= 'UNAVAILABLE';
+        await ledger.save(record);
+        await closeLine(record, 'UNAVAILABLE');
+        throw Error('UNAVAILABLE');
+      }
+      record.providerRaw = 'error';
+      record.providerMsg = '-';
+      if (!record.providerBad) await workerLine(record, 'provider_error', cfg);
+      if (badReading(record, true)) {
+        await workerLine(
+          record,
+          'provider api error persists: ' +
+            record.providerBad.count +
+            ' readings over ' +
+            Math.floor((now() - record.providerBad.first) / 1000) +
+            ' s, no box post',
+          cfg,
+        );
+        record.closed = 'UNAVAILABLE';
+        record.verdict ||= 'UNAVAILABLE';
+        await ledger.save(record);
+        await closeLine(record, 'UNAVAILABLE');
+        throw Error('UNAVAILABLE');
+      }
       await ledger.save(record);
-      throw Error('UNAVAILABLE');
+      return;
     }
     if (instance === null) {
+      // Verified absence (Vast: the instance does not exist) closes at once; only a transient
+      // non-running status of an instance that exists is tolerated below.
       record.closed = 'GONE';
       record.verdict ||= 'UNAVAILABLE';
+      record.providerRaw = 'absent';
+      record.providerMsg = '-';
       await workerLine(record, 'provider_absent', cfg);
+      await closeLine(record, 'GONE');
       await ledger.settle(record, now());
       return;
     }
     await checkContract(record, instance, vast, cfg);
-    const providerState = [
-      'running',
-      'created',
-      'loading',
-      'starting',
-      'stopped',
-      'exited',
-    ].includes(instance.actual_status)
-      ? instance.actual_status
-      : 'unknown';
+    const providerState = providerWord(instance);
+    record.providerRaw = providerState;
+    record.providerMsg = providerMessage(record, instance);
     if (record.providerState !== providerState) {
       record.providerState = providerState;
-      await workerLine(record, 'provider=' + providerState + ' phase=' + record.phase, cfg);
+      await workerLine(
+        record,
+        'provider=' +
+          providerState +
+          ' phase=' +
+          record.phase +
+          ' msg=' +
+          record.providerMsg +
+          (record.providerFlaps ? ' flaps=' + record.providerFlaps : ''),
+        cfg,
+      );
     }
     if (
       ['created', 'running'].includes(instance.actual_status) &&
@@ -418,17 +566,60 @@ export function createService({
       record.bootFailure = null;
       await ledger.save(record);
     }
+    const pendingBoot = record.firstReportAt === undefined && pendingInstance(instance);
+    // RUN_GONE is evaluated whatever Vast reads (a box that keeps posting through a stuck status
+    // must not outlive its workflow): not while a booting instance is still pending (unchanged),
+    // not after the result, not for an admin or release leg (it has no GitHub run). With a
+    // non-running status a GitHub failure must not stop the window below, so it is swallowed there;
+    // with `running` it throws as before.
+    if (!pendingBoot && record.resultAt === undefined && record.source !== 'admin') {
+      let gone = false;
+      try {
+        const run = await github.run(record.run, true, true);
+        gone = run === null || run.status === 'completed';
+      } catch (error) {
+        if (instance.actual_status === 'running') throw error;
+      }
+      if (gone) {
+        await close(record, vast, 'RUN_GONE');
+        return;
+      }
+    }
     if (instance.actual_status !== 'running') {
-      if (record.firstReportAt === undefined && pendingInstance(instance)) return;
-      await close(record, vast, 'ENDED');
+      // Still booting (null, created, loading, starting, offline): bounded by the boot deadline.
+      if (pendingBoot) {
+        delete record.providerBad;
+        await ledger.save(record);
+        return;
+      }
+      // Tolerance (vanish hunt 2026-11-06): one reading proves nothing, Vast's per-instance status
+      // flaps while the instance and the box stay up. See badReading() for the rule. Every hard
+      // limit, deadline and the heartbeat timeout run before this point and are unchanged.
+      if (badReading(record, !DEFINITE.includes(instance.actual_status))) {
+        const bad = record.providerBad;
+        await workerLine(
+          record,
+          'provider gone: ' +
+            bad.count +
+            ' readings over ' +
+            Math.floor((now() - bad.first) / 1000) +
+            ' s, no box post' +
+            (record.lastPostAt === null
+              ? ''
+              : ' for ' + Math.floor((now() - record.lastPostAt) / 1000) + ' s') +
+            (record.machineId ? ' machine=' + providerId(record.machineId) : '') +
+            (record.hostId ? ' host=' + providerId(record.hostId) : ''),
+          cfg,
+        );
+        await close(record, vast, 'ENDED');
+        return;
+      }
+      await ledger.save(record);
       return;
     }
+    delete record.providerBad;
     record.liveCheckedAt = now();
     await ledger.save(record);
-    // Post-result inspection outlives the workflow job; before it, the run must be live.
-    if (record.resultAt !== undefined) return;
-    const run = await github.run(record.run, true, true);
-    if (run === null || run.status === 'completed') await close(record, vast, 'RUN_GONE');
   }
   async function oidc(bearer, cfg) {
     const selected = cfg.testIdentity
@@ -445,6 +636,51 @@ export function createService({
     if (r.rateCount >= cfg.reportRate) refuse('RATE_LIMITED', 429);
     r.rateCount++;
     await ledger.save(r);
+  }
+  // POST /run-report/<run>-<attempt>: the box's structured report (src/runreport.js). Same
+  // capability as /report (the live run token of this rental), one report per leg, at most
+  // REPORT_MAX_BYTES. The body is parsed, reduced to the claims the Worker keeps and stored in the
+  // ledger until the rental is settled; the cron publishes it (src/publish.js). Nothing here can
+  // change a verdict, a deadline or the budget, and a bad report is a 400 that costs the box nothing.
+  async function runReport(request, key, bearer, cfg, vast) {
+    const r = await ledger.get('record:' + key);
+    if (
+      !(await tokens.verify(bearer, r)) ||
+      !r ||
+      r.key !== key ||
+      r.ended !== null ||
+      r.closed ||
+      now() >= r.reportExpiry * 1000
+    )
+      refuse('UNAUTHORIZED', 401);
+    if (!storeEnabled(env)) refuse('REPORTS_DISABLED', 404);
+    clocks(r, cfg);
+    await rejectExpiredCallback(r, cfg, vast);
+    await rate(r, cfg);
+    if (r.runReport) refuse('REPORT_EXISTS', 409);
+    let body;
+    try {
+      body = await readBounded(request, REPORT_MAX_BYTES);
+    } catch (error) {
+      if (error instanceof BrokerError) refuse('PAYLOAD_TOO_LARGE', 413);
+      refuse('BAD_REQUEST', 400);
+    }
+    let claims = null;
+    try {
+      claims = cleanClaimsReport(
+        JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(body)),
+      );
+    } catch {}
+    const doc = claims === null ? null : fitReport(claims);
+    if (doc === null) refuse('BAD_REQUEST', 400);
+    const encoded = JSON.stringify(doc);
+    const leg = r.providerRetries ?? 0;
+    const chunks = encoded.match(/[\s\S]{1,60000}/g) ?? [];
+    for (let i = 0; i < chunks.length; i++)
+      await ledger.put(reportChunkKey(key, leg, i), chunks[i]);
+    r.runReport = { chunks: chunks.length, bytes: encoded.length, at: now() };
+    await ledger.save(r);
+    return json({ state: 'STORED' });
   }
   async function kill(request, key, bearer, cfg, vast) {
     const r = await ledger.get('record:' + key);
@@ -474,6 +710,7 @@ export function createService({
     )
       refuse('UNAUTHORIZED', 401);
     clocks(r, cfg);
+    lastReportBytes = cfg.reportBytes;
     await rejectExpiredCallback(r, cfg, vast);
     if (now() >= r.reportExpiry * 1000 || (r.hardDeadline !== null && now() >= r.hardDeadline)) {
       try {
@@ -496,12 +733,55 @@ export function createService({
         now() - r.liveCheckedAt >= 3000
       ) {
         try {
-          await recover(r, vast);
-          const instance = await vast.inspect(r);
+          let instance;
+          try {
+            await recover(r, vast);
+            instance = await vast.inspect(r);
+          } catch (error) {
+            if (error instanceof BrokerError && error.state === 'OWNERSHIP_MISMATCH') throw error;
+            // A provider API failure is not evidence about the instance: the POST (valid run
+            // token) is accepted and update() counts the outage in its window.
+            instance = undefined;
+            r.providerRaw = 'error';
+            r.providerMsg = '-';
+            r.providerAnomalies = (r.providerAnomalies ?? 0) + 1;
+            if (r.providerState !== 'error') {
+              r.providerState = 'error';
+              await workerLine(r, 'provider_error (box post accepted)', cfg);
+            }
+          }
           if (instance && r.firstReportAt === undefined && pendingInstance(instance))
             refuse('NOT_READY', 409);
-          if (instance === null || instance.actual_status !== 'running') throw Error('NOT_LIVE');
-          r.liveCheckedAt = now();
+          // Verified absence closes the rental. A box that POSTs with a valid run token is alive
+          // whatever one provider reading says: the POST is accepted, the anomaly is counted and
+          // shown, and update() decides on the provider's status only over its tolerance window.
+          if (instance === null) {
+            r.providerRaw = 'absent';
+            r.providerMsg = '-';
+            throw Error('NOT_LIVE');
+          }
+          if (instance !== undefined) {
+            r.providerRaw = providerWord(instance);
+            r.providerMsg = providerMessage(r, instance);
+          }
+          if (instance !== undefined && instance.actual_status !== 'running') {
+            r.providerAnomalies = (r.providerAnomalies ?? 0) + 1;
+            if (r.providerState !== r.providerRaw) {
+              r.providerState = r.providerRaw;
+              await workerLine(
+                r,
+                'provider=' +
+                  r.providerRaw +
+                  ' phase=' +
+                  r.phase +
+                  ' msg=' +
+                  r.providerMsg +
+                  ' (box post accepted)',
+                cfg,
+              );
+            }
+          }
+          r.liveCheckedAt = instance === undefined ? null : now();
         } catch (error) {
           if (error instanceof BrokerError && error.state === 'NOT_READY') throw error;
           try {
@@ -534,6 +814,8 @@ export function createService({
           { tail: false },
         );
         await ledger.appendLog(r, safe.text);
+        // The text as the box sent it, for the public log (redacted when it is published).
+        if (logsEnabled(env)) await ledger.appendPublicLog(r, payload.text);
         r.fullBytes = (r.fullBytes ?? 0) + new TextEncoder().encode(safe.text).length;
         r.fullBytesDropped = (r.fullBytesDropped ?? 0) + safe.bytesDropped;
         appendBoxText(r, bytes, redactions);
@@ -542,6 +824,7 @@ export function createService({
       r.lastDigest = digest;
       r.firstReportAt ??= now();
       r.lastPostAt = now();
+      delete r.providerBad;
       if (r.phase !== 'GRACE') r.phase = 'TESTING';
       if (payload.kind === 'result') {
         r.result = {
@@ -619,15 +902,17 @@ export function createService({
       );
     const bench =
       /^\/bench-data\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})\/([A-Za-z0-9._-]{1,100})$/.exec(path);
-    const match = /^\/(report|kill|status|stop|logs)\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.exec(
-      path,
-    );
+    const match =
+      /^\/(report|kill|status|stop|logs|run-report)\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.exec(
+        path,
+      );
     if (
       !(blob && request.method === 'GET') &&
       !(bench && request.method === 'GET') &&
       !(path === '/availability' && request.method === 'GET') &&
       !(path === '/rent' && request.method === 'POST') &&
       !(path === '/stop-all' && request.method === 'POST') &&
+      !(path === CHECK_PATH && request.method === 'POST') &&
       !(match && request.method === (['status', 'logs'].includes(match[1]) ? 'GET' : 'POST'))
     )
       return notFound();
@@ -690,9 +975,12 @@ export function createService({
       return json(await mintBlob(fetcher, env, ledger, r, blob[2], blob[3], now()));
     }
     if (match?.[1] === 'report') return report(request, match[2], bearer, cfg, vast);
+    if (match?.[1] === 'run-report') return runReport(request, match[2], bearer, cfg, vast);
     if (match?.[1] === 'kill') return kill(request, match[2], bearer, cfg, vast);
     let rentRequest;
-    if (path !== '/rent' && request.body !== null) {
+    let checkBody;
+    if (path === CHECK_PATH) checkBody = await readBounded(request, 1024);
+    else if (path !== '/rent' && request.body !== null) {
       try {
         await readBounded(request, 0);
       } catch {
@@ -703,12 +991,21 @@ export function createService({
       validSecret(env.OWNER_STOP_TOKEN) && (await constantTimeEqual(env.OWNER_STOP_TOKEN, bearer));
     if (path === '/stop-all') {
       if (!owner) refuse('UNAUTHORIZED', 401);
+      // No batch may start another leg after an owner stop-all.
+      for (const [, id] of await ledger.storage.list({ prefix: 'batch-open:', limit: 257 })) {
+        const batch = await ledger.get('batch:' + id);
+        if (batch?.state !== 'RUNNING') continue;
+        batch.state = 'STOPPED';
+        for (const l of batch.legs) if (l.state === 'PENDING') l.state = 'MISSING';
+        await ledger.put('batch:' + id, batch);
+      }
       const records = await ledger.openRecords();
       for (const r of records) {
         r.closed = 'STOPPED';
         r.verdict ||= 'FAIL';
         r.liveCheckedAt = null;
         await ledger.save(r);
+        await closeLine(r, 'STOPPED');
       }
       let failed = false;
       for (const r of records) {
@@ -732,6 +1029,15 @@ export function createService({
     // Runner and Worker must speak the same status protocol; each side refuses the other.
     if (request.headers.get('X-KF-Protocol') !== String(DEFAULTS.statusProtocol))
       refuse('PROTOCOL_MISMATCH', 409);
+    // The result check has its own admission counter: a polling gate never starves /rent.
+    if (path === CHECK_PATH) {
+      const window = Math.floor(now() / 60000);
+      if (checkWindow !== window) {
+        checkWindow = window;
+        checkCount = 0;
+      }
+      if (++checkCount > DEFAULTS.admissionPerMinute) refuse('RATE_LIMIT', 429);
+    }
     if (path === '/availability' || path === '/rent') {
       const window = Math.floor(now() / 60000);
       if (admissionWindow !== window) {
@@ -783,6 +1089,21 @@ export function createService({
     const token = env.GITHUB_API_TOKEN;
     if (token && (token.length > 1024 || !/^[\x21-\x7e]+$/.test(token))) refuse();
     const github = new Github(fetcher, cfg, token, { cache: githubCache, now });
+    // Read-only result check (src/ingest.js): never reserves, rents or queues. It runs outside
+    // the serial queue (fetch below), so its GitHub reads never hold up box reports.
+    if (path === CHECK_PATH) {
+      await github.authorize(c);
+      return json(
+        await checkRequirements({
+          bytes: checkBody,
+          env,
+          github,
+          ledger,
+          treeKey: githubTreeKey(github),
+          now: now(),
+        }),
+      );
+    }
     if (match) {
       if (match[2] !== key) refuse('UNAUTHORIZED', 401);
       const r = await ledger.granted(key);
@@ -847,6 +1168,51 @@ export function createService({
         return json(expose(prior, key));
       }
     }
+    // The tier comes from the verified event (src/tier.js), never from the request body.
+    const admitted = await admit({
+      key,
+      target,
+      profile,
+      tierName: tierForClaims(c, profile),
+      cfg,
+      vast,
+      github,
+      preferences: rentRequest.preferences,
+      runnerNonce: rentRequest.runner_nonce,
+      runnerSeconds: rentRequest.remaining_seconds,
+      force: Number(c.run_attempt) > 1, // An owner re-run; the SHA gap below still applies.
+      retrySource,
+    });
+    return json(expose(admitted ?? retrySource, key));
+  }
+  // One admission path for every rental: the GitHub-triggered check and sweep, the owner's admin
+  // start and each leg of a release. Every check below applies to all of them; the only
+  // differences are inputs: a GitHub run brings its runner's remaining wait budget and may carry a
+  // provider-fault replacement; a batch leg (admin start or release) never names a GitHub run, and
+  // only a release leg is exempt from the one-rental-per-commit gap inside its own release (the
+  // release holds that gap, and the release cost cap bounds its legs). The results store records
+  // every rental admitted here from the ledger; records carry `tier`, `family`, `source`, `batch`.
+  async function admit({
+    key,
+    target,
+    profile,
+    tierName,
+    cfg,
+    vast,
+    github,
+    preferences,
+    runnerNonce,
+    runnerSeconds,
+    force = false,
+    retrySource,
+    leg,
+    market,
+    costGuard,
+  }) {
+    // Review F1: the switches are checked here, on the one admission path, so turning renting (or
+    // the release kill switch) off also stops cron-started release legs and re-runs.
+    if (env.RENTING_ENABLED !== 'true') refuse('RENTING_DISABLED', 503);
+    if (profile === 'release' && !cfg.releaseEnabled) refuse('RELEASE_DISABLED', 503);
     // Review R1: one attempt per run key, also after retention removed the record. Guaranteed:
     // while the spend row exists the key is refused. The row is pruned once its run ended more
     // than 30 days ago (ledger.budgets), so after that a token minted for the same run attempt
@@ -856,14 +1222,21 @@ export function createService({
       budgetRefuse('cost-key', { started_at: previousCost.started, ended_at: previousCost.ended });
     // Review B2: the commit gap before the cap, so a repeated commit is refused at once instead
     // of waiting BUSY, and before the supersede, so it closes nobody.
-    const cached = await ledger.get('sha:' + target.sha),
-      force = Number(c.run_attempt) > 1; // An owner re-run; the SHA gap below still applies.
+    const cached = await ledger.get('sha:' + target.sha);
     // A fresh runner nonce may not inherit another run's result.
-    if (!retrySource && cached && (!force || now() - cached.started < cfg.gap))
+    if (
+      !retrySource &&
+      !(leg && (await ledger.batchLeg(leg.batch, key, target.sha))) &&
+      cached &&
+      (!force || now() - cached.started < cfg.gap)
+    )
       budgetRefuse('sha-gap', { gap_ms: cfg.gap, elapsed_ms: Math.max(0, now() - cached.started) });
     // Review B1: a run whose remaining budget cannot hold the hard limit plus the margin is not
     // admitted (it would time out with a paid box) and supersedes nothing.
-    if (rentRequest.remaining_seconds * 1000 < cfg.hard + DEFAULTS.admissionMarginMinutes * 60000)
+    if (
+      runnerSeconds !== undefined &&
+      runnerSeconds * 1000 < cfg.hard + DEFAULTS.admissionMarginMinutes * 60000
+    )
       refuse('NOT_ELIGIBLE', 409, 'RUNNER_TIME');
     // Owner ruling 2026-10-24 item 8: a set of active runs (every record not yet ended). A newer
     // run supersedes only the older runs of its own branch; an older run's late request never
@@ -878,14 +1251,16 @@ export function createService({
     }
     if (
       open.length >= cfg.maxConcurrent ||
-      open.filter((o) => (o.profile ?? 'check') === profile).length >=
-        cfg.maxConcurrentProfile[profile]
+      open.filter((o) => budgetClass(o) === profile).length >= cfg.maxConcurrentProfile[profile]
     )
       refuse('BUSY', 409);
     if (!validSecret(env.RUN_TOKEN_SECRET) || !validSecret(env.OWNER_STOP_TOKEN)) refuse();
     await github.boxProtocol(target.sha);
-    const market = retrySource ? new OfferBook(now) : offers;
-    const evaluation = await market.evaluate(vast, cfg, ledger, profile);
+    const book = retrySource || market !== undefined ? new OfferBook(now) : offers;
+    const evaluation = await book.evaluate(vast, cfg, ledger, profile, {
+      market,
+      vramFloorMb: tierName === 'middle' ? cfg.middleVramFloorMb : 0,
+    });
     if (retrySource) {
       const remaining = retrySource.runBudgetUsd - rentalCost(retrySource, retrySource.ended);
       evaluation.allowed = evaluation.allowed.filter(
@@ -896,13 +1271,19 @@ export function createService({
           offer.host_id !== retrySource.hostId &&
           offer.pricing.total <= remaining,
       );
-      if (!evaluation.allowed.length) return json(expose(retrySource, key));
+      if (!evaluation.allowed.length) return null;
     }
-    const chosen = await offers.select(evaluation, cfg, ledger, profile, rentRequest.preferences),
+    const chosen = await offers.select(evaluation, cfg, ledger, profile, preferences, {
+        tierName,
+        ...(leg?.die ? { die: leg.die } : {}),
+        avoidMachines: leg?.avoidMachines ?? [],
+        avoidHosts: leg?.avoidHosts ?? [],
+      }),
       offer = chosen.offer,
       cost = offer.pricing.total,
       credit = await vast.credit();
     try {
+      if (costGuard) costGuard(cost);
       await ledger.budgets(cfg, now(), cost, null, {
         credit,
         sameAttempt: retrySource !== undefined,
@@ -920,7 +1301,20 @@ export function createService({
     const started = now(),
       r = {
         ...target,
-        profile,
+        ...spendClass({ profile }),
+        tier: tierName,
+        family: chosen.family ?? familyOf(offer.die, cfg),
+        ...(chosen.wanted !== undefined && chosen.wanted !== chosen.family
+          ? { familyWanted: chosen.wanted }
+          : {}),
+        ...(leg
+          ? {
+              batch: leg.batch,
+              source: 'admin',
+              windowsRuns: leg.windowsRuns,
+              stages: leg.stages,
+            }
+          : { source: 'github' }),
         die: offer.die,
         country: offer.country,
         geolocation:
@@ -943,7 +1337,12 @@ export function createService({
         key,
         label: 'kf-ci-' + key,
         nonce: n,
-        runnerNonce: rentRequest.runner_nonce,
+        // Values the box holds, kept for the public log's redaction even if they are rotated
+        // before it is published (src/publish.js).
+        known: [env.BOX_ACCESS_ID, env.BOX_ACCESS_SECRET, env.BROKER_PATH_PREFIX].filter(
+          (v) => typeof v === 'string' && v.length >= 8,
+        ),
+        runnerNonce,
         logHash: '0'.repeat(64),
         phase: 'CREATING',
         bootDeadline: started + cfg.boot,
@@ -974,8 +1373,7 @@ export function createService({
         rateCount: 0,
         liveCheckedAt: null,
       };
-    r.runBudgetUsd =
-      retrySource?.runBudgetUsd ?? (profile === 'sweep' ? cfg.sweepDaily : cfg.daily);
+    r.runBudgetUsd = retrySource?.runBudgetUsd ?? profileCaps(cfg, profile).dailyUsd;
     r.providerRetries = retrySource ? 1 : 0;
     if (retrySource) {
       r.originalStarted = retrySource.started;
@@ -987,6 +1385,8 @@ export function createService({
       r.reportExpiry = Math.floor(r.hardDeadline / 1000);
       r.retryCostUsd = rentalCost(retrySource, retrySource.ended);
       r.nonce = (await sha256Hex(retrySource.nonce + n + ':provider:1')).slice(0, 32);
+      r.priorNonces = [...(retrySource.priorNonces ?? []), retrySource.nonce];
+      r.known = [...new Set([...(retrySource.known ?? []), ...(r.known ?? [])])];
       // Keep one authenticated log chain and the run-wide byte/report limits across legs.
       for (const field of [
         'log',
@@ -994,6 +1394,9 @@ export function createService({
         'logHash',
         'fullBytes',
         'fullBytesDropped',
+        'plogChunks',
+        'plogBytes',
+        'plogDropped',
         'bytesDropped',
         'reportBytes',
         'reportCount',
@@ -1010,6 +1413,14 @@ export function createService({
         e.selection = { die: offer.die, ignored: chosen.ignored, reason: chosen.reason };
       throw e;
     }
+    // Result store queue (src/ingest.js); never affects admission or the rental.
+    if (storeEnabled(env))
+      try {
+        if (retrySource) await freeze(ledger, retrySource);
+        await enqueue(ledger, r);
+      } catch {
+        console.log(JSON.stringify({ event: 'store', state: 'QUEUE_FAILED' }));
+      }
     await workerLine(
       r,
       'selection profile=' +
@@ -1019,13 +1430,28 @@ export function createService({
         ' reason=' +
         r.selectionReason +
         ' ignored=' +
-        r.preferencesIgnored,
+        r.preferencesIgnored +
+        ' tier=' +
+        tierName +
+        ' family=' +
+        r.family +
+        (r.familyWanted ? ' fallback_from=' + r.familyWanted : ''),
       cfg,
     );
     if (profile === 'sweep') await ledger.put('rotation:lastDie', r.die);
+    if (chosen.reason === 'ROTATE' && tierName === 'middle')
+      await ledger.put('rotation:middleFamily', chosen.family);
     try {
       const environment = {
         KF_PROTOCOL: DEFAULTS.boxProtocol,
+        // 2026-11-06 (setup picker): this Worker accepts the optional host_claims block of a
+        // result (src/results.js). A box forwards it only when it sees this variable, so a box
+        // from a newer commit never sends a field an older Worker would refuse.
+        KF_HOST_CLAIMS: '1',
+        // 2026-11-07 (run report): this Worker accepts POST /run-report/<run> (src/runreport.js).
+        // A box sends its report only when it sees this variable, so a box from a newer commit
+        // never calls a route an older Worker does not have. Only with a result store to keep it.
+        ...(storeEnabled(env) ? { KF_RUN_REPORT: '1' } : {}),
         KF_BROKER_URL: cfg.audience + '/' + env.BROKER_PATH_PREFIX,
         KF_RUN_ID: key,
         KF_RUN_TOKEN: runToken,
@@ -1039,8 +1465,13 @@ export function createService({
         KF_HEARTBEAT_SECONDS: cfg.heartbeat / 1000,
         KF_GRACE_PASS: cfg.passGrace / 1000,
         KF_GRACE_FAIL: cfg.failGrace / 1000,
-        // The tier: a pure function of the profile (src/tier.js), never a request field.
-        ...tierEnvironment(profile),
+        // The tier: a pure function of the profile and the verified event or admin batch
+        // (src/tier.js), never a request field.
+        ...tierEnvironment(profile, {
+          tierName,
+          windowsRuns: leg?.windowsRuns ?? 1,
+          stages: leg?.stages ?? [],
+        }),
         // Pass-through for the hostname-wide Access policy; the Worker never verifies Access.
         ...(env.BOX_ACCESS_ID && env.BOX_ACCESS_SECRET
           ? { KF_ACCESS_ID: env.BOX_ACCESS_ID, KF_ACCESS_SECRET: env.BOX_ACCESS_SECRET }
@@ -1057,6 +1488,7 @@ export function createService({
         r.computeStoragePrice = 0;
         r.price = 0;
         r.bandwidthCost = 0;
+        await closeLine(r, 'GONE');
         await ledger.settle(r, now());
         await clearFailedSha(r);
       }
@@ -1066,7 +1498,400 @@ export function createService({
     r.phase = 'BOOTING';
     await ledger.save(r);
     console.log(JSON.stringify({ event: 'rented' }));
-    return json(expose(r));
+    return r;
+  }
+  // ---- Admin starts and the release (large) tier: batches (2026-11-05, wtier) ----------------
+  // A batch is one owner start: a single leg for small or middle, the planned legs of a release.
+  // Its legs are ordinary rentals through admit(); the cron tick classifies ended legs, schedules
+  // a fresh-box re-run for RETRY/UNATTRIBUTED within the release cost cap, starts pending legs as
+  // slots and caps allow, and finishes with a verdict over (family, die, platform) cells.
+  const BATCH_KEYS = ['commit_sha', 'die', 'tier'];
+  function batchRequest(body) {
+    if (
+      !body ||
+      typeof body !== 'object' ||
+      Array.isArray(body) ||
+      !Object.keys(body).every((k) => BATCH_KEYS.includes(k)) ||
+      !hexSha(body.commit_sha) ||
+      !['small', 'middle', 'large'].includes(body.tier) ||
+      (body.die !== undefined &&
+        (body.tier === 'large' ||
+          typeof body.die !== 'string' ||
+          !/^[A-Z][A-Z0-9_]{1,23}$/.test(body.die)))
+    )
+      refuse('BAD_REQUEST', 400);
+    return body;
+  }
+  function batchConfig(tierName) {
+    const cfg = configuration(env);
+    applyProfile(cfg, tierName === 'large' ? 'release' : 'check');
+    return cfg;
+  }
+  const tierDies = (cfg, tierName) =>
+    tierName === 'middle' ? Object.values(cfg.middleRotation).flat() : cfg.checkDies;
+  async function releaseMarket(vast, cfg) {
+    const seen = new Map();
+    for (const cc of Object.values(cfg.families))
+      for (const offer of await vast.offers({ computeCap: cc, maxPrice: cfg.releasePrice }))
+        if (!seen.has(offer.id)) seen.set(offer.id, offer);
+    return [...seen.values()];
+  }
+  async function planFor(request, cfg, vast) {
+    if (request.tier === 'large') {
+      const market = await releaseMarket(vast, cfg);
+      const evaluation = await new OfferBook(now).evaluate(vast, cfg, ledger, 'release', {
+        market,
+      });
+      return planRelease(evaluation.allowed, cfg, {
+        budget: await ledger.budgetSummary(cfg, now()),
+        credit: await vast.credit(),
+      });
+    }
+    if (request.die !== undefined && !tierDies(cfg, request.tier).includes(request.die))
+      refuse('BAD_REQUEST', 400, 'DIE_NOT_IN_TIER');
+    const evaluation = await new OfferBook(now).evaluate(vast, cfg, ledger, 'check', {
+      market: await vast.offers(),
+      vramFloorMb: request.tier === 'middle' ? cfg.middleVramFloorMb : 0,
+    });
+    let chosen = null,
+      refusal = null;
+    try {
+      chosen = await offers.select(evaluation, cfg, ledger, 'check', undefined, {
+        tierName: request.tier,
+        ...(request.die ? { die: request.die } : {}),
+      });
+    } catch (e) {
+      refusal = e instanceof BrokerError ? (e.reason ?? e.state) : 'UNAVAILABLE';
+    }
+    return {
+      tier: request.tier,
+      profile: 'check',
+      hard_minutes: cfg.hard / 60000,
+      price_cap_usd_hour: cfg.price,
+      vram_floor_mb: request.tier === 'middle' ? cfg.middleVramFloorMb : 0,
+      legs: chosen ? 1 : 0,
+      die: chosen?.offer.die ?? null,
+      family: chosen ? (chosen.family ?? familyOf(chosen.offer.die, cfg)) : null,
+      machine_id: chosen ? providerId(chosen.offer.machine_id) : null,
+      estimate_usd: chosen ? Math.round(chosen.offer.pricing.total * 10000) / 10000 : 0,
+      admitted: chosen !== null,
+      refusals: refusal ? [refusal] : [],
+    };
+  }
+  async function adminPlan(body) {
+    const request = batchRequest(body),
+      cfg = batchConfig(request.tier),
+      vast = new Vast(fetcher, cfg, env.VAST_API_KEY);
+    return { plan: await planFor(request, cfg, vast), renting: false };
+  }
+  async function adminStart(body) {
+    if (env.RENTING_ENABLED !== 'true') refuse('RENTING_DISABLED', 503);
+    const request = batchRequest(body),
+      cfg = batchConfig(request.tier),
+      vast = new Vast(fetcher, cfg, env.VAST_API_KEY),
+      token = env.GITHUB_API_TOKEN;
+    if (request.die !== undefined && !tierDies(cfg, request.tier).includes(request.die))
+      refuse('BAD_REQUEST', 400, 'DIE_NOT_IN_TIER');
+    if (request.tier === 'large' && !cfg.releaseEnabled) refuse('RELEASE_DISABLED', 503);
+    if (token && (token.length > 1024 || !/^[\x21-\x7e]+$/.test(token))) refuse();
+    const github = new Github(fetcher, cfg, token, { cache: githubCache, now });
+    // Forks never trigger rentals: the commit must be on this repository's master or next.
+    await github.reachable(request.commit_sha);
+    await github.boxProtocol(request.commit_sha);
+    for (const [, open] of await ledger.storage.list({ prefix: 'batch-open:', limit: 257 })) {
+      const other = await ledger.get('batch:' + open);
+      if (
+        other?.state === 'RUNNING' &&
+        other.sha === request.commit_sha &&
+        other.tier === request.tier
+      )
+        refuse('BUSY', 409, 'BATCH_RUNNING');
+    }
+    const plan = await planFor(request, cfg, vast);
+    if (!plan.admitted) {
+      const error = new BrokerError('NOT_ELIGIBLE', 409, 'PLAN_REFUSED');
+      error.plan = plan;
+      throw error;
+    }
+    const seq = ((await ledger.get('batch-seq')) ?? 0) + 1;
+    await ledger.put('batch-seq', seq);
+    const id = '8' + String(now()).padStart(15, '0') + String(seq % 1000).padStart(3, '0');
+    const legs = [];
+    const leg = (family, die, windowsRuns) => {
+      const n = legs.length + 1;
+      legs.push({
+        seq: n,
+        key: id + '-' + n,
+        family,
+        die,
+        windowsRuns,
+        state: 'PENDING',
+        avoidMachines: [],
+        avoidHosts: [],
+        rerunDepth: 0,
+      });
+    };
+    if (request.tier === 'large') {
+      for (const f of plan.families)
+        for (const c of f.cells) for (const l of c.legs) leg(f.family, c.die, l.windows_runs);
+    } else leg(request.die ? familyOf(request.die, cfg) : null, request.die ?? null, 1);
+    const batch = {
+      id,
+      sha: request.commit_sha,
+      tier: request.tier,
+      profile: request.tier === 'large' ? 'release' : 'check',
+      state: 'RUNNING',
+      created: now(),
+      updated: now(),
+      runnerNonce: await sha256Hex(
+        'kf-batch:' + id + ':' + (random ? random() : crypto.randomUUID()),
+      ),
+      costCapUsd: request.tier === 'large' ? cfg.releaseCostCap : null,
+      estimateUsd: plan.estimate_usd,
+      windowsRunsPerDie: request.tier === 'large' ? cfg.releaseWindowsRuns : 1,
+      diesPerFamily: cfg.releaseDiesPerFamily,
+      releaseDies: request.tier === 'large' ? cfg.releaseDies : {},
+      stages: request.tier === 'large' ? cfg.releaseStages : [],
+      reruns: request.tier === 'large' ? cfg.releaseReruns : 0,
+      legs,
+      verdict: null,
+    };
+    await ledger.put('batch:' + id, batch);
+    await ledger.put('batch-open:' + id, id);
+    console.log(JSON.stringify({ event: 'batch_started', tier: batch.tier, legs: legs.length }));
+    await tickBatch(batch, vast, github);
+    return batchView(batch, plan);
+  }
+  function batchView(batch, plan) {
+    return {
+      batch: batch.id,
+      sha: batch.sha,
+      tier: batch.tier,
+      state: batch.state,
+      cost_cap_usd: batch.costCapUsd,
+      estimate_usd: batch.estimateUsd,
+      spent_usd: batch.spentUsd ?? 0,
+      verdict: batch.verdict,
+      legs: batch.legs.map((l) => ({
+        key: l.key,
+        family: l.family,
+        die: l.die,
+        windows_runs: l.windowsRuns,
+        state: l.state,
+        verdict: l.outcome?.verdict ?? null,
+        rerun_of: l.rerunOf ?? null,
+      })),
+      ...(plan ? { plan } : {}),
+    };
+  }
+  // Spend of a batch: settled legs at their cost, open legs at their reserved liability.
+  async function batchSpend(batch, exclude) {
+    let spent = 0;
+    for (const l of batch.legs) {
+      if (l.key === exclude) continue;
+      if (l.state === 'ENDED') spent += l.costUsd ?? 0;
+      else if (l.state === 'STARTED') {
+        const r = await ledger.get('record:' + l.key);
+        if (r)
+          spent +=
+            ((r.computeStoragePrice ?? r.price) * (r.billingTtl ?? r.ttl)) / 3600000 +
+            (r.bandwidthCost ?? 0);
+      }
+    }
+    return spent;
+  }
+  async function tickBatch(batch, vast, github) {
+    const cfg = batchConfig(batch.tier);
+    // 1. Ended legs: classify once, then a fresh-box re-run for RETRY/UNATTRIBUTED if allowed.
+    for (const l of [...batch.legs]) {
+      if (l.state !== 'STARTED') continue;
+      const r = await ledger.get('record:' + l.key);
+      if (r && r.ended === null) continue;
+      l.state = 'ENDED';
+      // Only this batch's own run of the SAME commit counts (no tree-key carry-over, coordinator
+      // ruling 2026-11-05): a record of another commit can never answer a release cell.
+      l.outcome = classifyLeg(r?.sha === batch.sha && r?.batch === batch.id ? r : undefined, {
+        windowsRuns: l.windowsRuns,
+        stages: batch.stages,
+        die: batch.tier === 'large' ? l.die : (l.die ?? r?.die),
+        family: batch.tier === 'large' ? l.family : (l.family ?? r?.family),
+        cfg,
+      });
+      l.costUsd = r ? rentalCost(r, r.ended) : 0;
+      l.machineId = r?.machineId ?? null;
+      if (batch.state === 'RUNNING' && wantsRerun(l, batch.reruns)) {
+        const n = Math.max(...batch.legs.map((x) => x.seq)) + 1;
+        batch.legs.push({
+          seq: n,
+          key: batch.id + '-' + n,
+          family: l.family,
+          die: l.die,
+          windowsRuns: l.windowsRuns,
+          state: 'PENDING',
+          // Review F10: a fresh box: not a machine any leg of this die used, the failed one
+          // included (its machineId is set above), so two Windows runs stay on two machines.
+          avoidMachines: [
+            ...new Set([
+              ...l.avoidMachines,
+              ...batch.legs.filter((x) => x.die === l.die && x.machineId).map((x) => x.machineId),
+            ]),
+          ],
+          avoidHosts: [...l.avoidHosts, ...(r?.hostId ? [r.hostId] : [])],
+          rerunDepth: (l.rerunDepth ?? 0) + 1,
+          rerunOf: l.key,
+          queued: now(),
+        });
+      }
+    }
+    // The ledger's batch-leg exemption reads the stored batch: store new re-run legs first.
+    await ledger.put('batch:' + batch.id, batch);
+    // 2. Pending legs: start while slots and caps allow; give up after the start window.
+    let market;
+    for (const l of batch.legs) {
+      if (l.state !== 'PENDING') continue;
+      if (
+        batch.state !== 'RUNNING' ||
+        now() - (l.queued ?? batch.created) > cfg.releaseStartWindow
+      ) {
+        l.state = 'MISSING';
+        l.outcome = null;
+        continue;
+      }
+      if (await ledger.get('record:' + l.key)) {
+        l.state = 'STARTED';
+        continue;
+      }
+      try {
+        if (batch.tier === 'large') market ??= await releaseMarket(vast, cfg);
+        const spent = await batchSpend(batch);
+        const started = await admit({
+          key: l.key,
+          target: {
+            sha: batch.sha,
+            // Review F10: ':' cannot occur in a git ref, so no GitHub head branch shares it.
+            branch: 'batch:' + batch.id,
+            run: batch.id,
+            attempt: String(l.seq),
+          },
+          profile: batch.profile,
+          tierName: batch.tier,
+          cfg,
+          vast,
+          github,
+          preferences: undefined,
+          runnerNonce: batch.runnerNonce,
+          leg: {
+            batch: batch.id,
+            die: l.die ?? undefined,
+            windowsRuns: l.windowsRuns,
+            stages: batch.stages,
+            avoidMachines: l.avoidMachines,
+            avoidHosts: l.avoidHosts,
+          },
+          market,
+          costGuard:
+            batch.costCapUsd === null
+              ? undefined
+              : (cost) => {
+                  if (spent + cost > batch.costCapUsd)
+                    budgetRefuse('release-cost-cap', {
+                      cost_usd: cost,
+                      spent_usd: spent,
+                      cap_usd: batch.costCapUsd,
+                    });
+                },
+        });
+        l.state = 'STARTED';
+        delete l.lastRefusal;
+        l.machineId = started.machineId;
+        l.family ??= started.family;
+        l.die ??= started.die;
+        // A later leg of the same die (the second Windows run) belongs on another machine.
+        for (const sibling of batch.legs)
+          if (sibling.state === 'PENDING' && sibling.die === l.die && sibling !== l) {
+            sibling.avoidMachines = [...new Set([...sibling.avoidMachines, started.machineId])];
+            if (started.hostId)
+              sibling.avoidHosts = [...new Set([...sibling.avoidHosts, started.hostId])];
+          }
+        // Durable at once (review F10): the next leg's contract check reads this leg's liability,
+        // and a crash cannot lose the siblings' machine avoidance.
+        await ledger.put('batch:' + batch.id, batch);
+      } catch (e) {
+        if (await ledger.get('record:' + l.key)) l.state = 'STARTED';
+        const reason = e instanceof BrokerError ? (e.reason ?? e.state) : 'UNAVAILABLE';
+        l.lastRefusal = reason;
+        // Review F1/F4: admit() refused because renting or releases are switched off: nothing of
+        // this batch is rented any more (its pending legs and re-runs end as MISSING).
+        if (['RENTING_DISABLED', 'RELEASE_DISABLED'].includes(reason)) {
+          for (const x of batch.legs) if (x.state === 'PENDING') x.state = 'MISSING';
+          break;
+        }
+        // No offer for this die: try the next leg. Busy, a cap or anything else: next tick.
+        if (reason !== 'NO_ALLOWED_OFFERS') break;
+      }
+    }
+    // 3. The verdict; a batch with nothing pending or running is finished.
+    batch.spentUsd = Math.round((await batchSpend(batch)) * 10000) / 10000;
+    const view = releaseVerdict(batch);
+    batch.verdict = view.verdict;
+    batch.cells = view.cells;
+    batch.updated = now();
+    if (!batch.legs.some((l) => l.state === 'PENDING' || l.state === 'STARTED')) {
+      if (batch.state === 'RUNNING') batch.state = 'DONE';
+      await ledger.storage.delete('batch-open:' + batch.id);
+    }
+    await ledger.put('batch:' + batch.id, batch);
+  }
+  async function batchTicks() {
+    const cfg = configuration(env);
+    const vast = new Vast(fetcher, cfg, env.VAST_API_KEY),
+      github = new Github(fetcher, cfg, env.GITHUB_API_TOKEN, { cache: githubCache, now });
+    for (const [, id] of await ledger.storage.list({ prefix: 'batch-open:', limit: 64 })) {
+      const batch = await ledger.get('batch:' + id);
+      if (!batch) continue;
+      try {
+        await tickBatch(batch, vast, github);
+      } catch {
+        console.log(JSON.stringify({ event: 'batch_tick_unavailable' }));
+      }
+    }
+    // Review F10: finished batches are kept 30 days (the spend rows' horizon), then pruned.
+    let pruned = 0;
+    for (const [key, batch] of await ledger.storage.list({ prefix: 'batch:', limit: 1000 })) {
+      if (pruned >= 20) break;
+      if (
+        batch?.state !== 'RUNNING' &&
+        Number.isFinite(batch?.updated) &&
+        now() - batch.updated > 30 * 86400000
+      ) {
+        await ledger.storage.delete(key);
+        pruned++;
+      }
+    }
+  }
+  // Owner stop of a whole batch: no new legs, every open leg closed by the existing stop path.
+  async function stopBatches(ids, vast) {
+    for (const id of ids) {
+      const batch = await ledger.get('batch:' + id);
+      if (!batch || batch.state !== 'RUNNING') continue;
+      // Review F2: the stop is durable before any provider call, as in /stop-all; a failed close
+      // leaves a STOPPED batch (no new leg) whose box the cron, the owner stop or the reaper ends.
+      batch.state = 'STOPPED';
+      for (const l of batch.legs) if (l.state === 'PENDING') l.state = 'MISSING';
+      await ledger.put('batch:' + id, batch);
+      let failed = false;
+      for (const l of batch.legs) {
+        if (l.state !== 'STARTED') continue;
+        const r = await ledger.get('record:' + l.key);
+        try {
+          if (r && r.ended === null) await close(r, vast, 'STOPPED');
+        } catch {
+          failed = true;
+        }
+      }
+      await tickBatch(batch, vast, null);
+      if (failed) refuse();
+    }
   }
   const releaseUpload = async (request) => {
     if (request.body && !request.body.locked) await request.body.cancel().catch(() => {});
@@ -1145,10 +1970,112 @@ export function createService({
     if (
       !/^\/(?:rent|availability|stop-all|(?:status|logs|stop)\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.test(
         path,
-      )
+      ) &&
+      path !== CHECK_PATH
     )
       return;
     await oidc(bearer, cfg);
+  }
+  // POST /evidence/<run>-<attempt> (src/evidence.js, gateway). The 8 MiB body never enters this
+  // Durable Object: the gateway calls evidenceReserve (below) with a few bytes, writes the bucket
+  // itself, then calls evidenceSettle. One upload per rental: the ledger record carries the flag
+  // (PENDING while a body is being written, STORED after), checked and set in the serial queue, so
+  // two uploads cannot both write. A failed write clears PENDING, so the box may retry; a PENDING
+  // flag older than a minute (a crashed attempt) no longer blocks. At most EVIDENCE_MAX_INFLIGHT
+  // reservations are open across all rentals (the rest get 503 and retry), so the uploads in
+  // flight, which the gateway holds in memory, stay bounded.
+  const EVIDENCE_PENDING_MS = 60000;
+  const evidenceOpen = new Map();
+  const evidenceKey = (v) =>
+    typeof v === 'string' && /^[1-9][0-9]{0,19}-[1-9][0-9]{0,19}$/.test(v)
+      ? v
+      : refuse('BAD_REQUEST', 400);
+  async function evidenceReserve(request) {
+    let ask;
+    try {
+      ask = JSON.parse(
+        new TextDecoder('utf-8', { fatal: true }).decode(await readBounded(request, 256)),
+      );
+    } catch {
+      refuse('BAD_REQUEST', 400);
+    }
+    const key = evidenceKey(ask?.key);
+    if (!Number.isSafeInteger(ask.length) || ask.length < 1 || ask.length > EVIDENCE_MAX_BYTES)
+      refuse('PAYLOAD_TOO_LARGE', 413);
+    const bearer = request.headers.get('Authorization')?.replace(/^Bearer /, '');
+    const cfg = configuration(env),
+      vast = new Vast(fetcher, cfg, env.VAST_API_KEY);
+    return serial(
+      1,
+      async () => {
+        const r = await ledger.get('record:' + key);
+        if (
+          !r ||
+          r.key !== key ||
+          !(await tokens.verify(bearer, r)) ||
+          r.ended !== null ||
+          r.closed ||
+          now() >= r.reportExpiry * 1000
+        )
+          refuse('UNAUTHORIZED', 401);
+        if (!evidenceEnabled(env)) refuse('EVIDENCE_DISABLED', 404);
+        clocks(r, cfg);
+        await rejectExpiredCallback(r, cfg, vast);
+        await rate(r, cfg);
+        const prior = r.evidence;
+        // Review of #274, R1: only STORED is EVIDENCE_EXISTS (the box counts that as stored). A
+        // fresh PENDING flag (an upload still being written, or one whose isolate died) answers
+        // its own state, EVIDENCE_PENDING, which the box retries and never reports as stored.
+        if (prior?.state === 'STORED') refuse('EVIDENCE_EXISTS', 409);
+        if (prior && now() - prior.at < EVIDENCE_PENDING_MS) refuse('EVIDENCE_PENDING', 409);
+        for (const [k, t] of evidenceOpen)
+          if (now() - t >= EVIDENCE_PENDING_MS) evidenceOpen.delete(k);
+        if (evidenceOpen.size >= EVIDENCE_MAX_INFLIGHT) refuse('EVIDENCE_BUSY', 503);
+        const reservation = evidenceReservation(r);
+        const at = now();
+        r.evidence = { state: 'PENDING', at };
+        evidenceOpen.set(key, at);
+        await ledger.save(r);
+        return { state: 'RESERVED', at, ...reservation };
+      },
+      key,
+    );
+  }
+  // The gateway reports the outcome: STORED (with the digest), EXISTS (the object was already
+  // there, whoever put it) or FAILED (the flag is cleared so a retry works).
+  async function evidenceSettle(request) {
+    let ask;
+    try {
+      ask = JSON.parse(
+        new TextDecoder('utf-8', { fatal: true }).decode(await readBounded(request, 512)),
+      );
+    } catch {
+      refuse('BAD_REQUEST', 400);
+    }
+    const key = evidenceKey(ask?.key);
+    if (
+      !Number.isSafeInteger(ask.at) ||
+      !['STORED', 'EXISTS', 'FAILED'].includes(ask.state) ||
+      (ask.state === 'STORED' && !/^[0-9a-f]{64}$/.test(ask.sha256 ?? ''))
+    )
+      refuse('BAD_REQUEST', 400);
+    evidenceOpen.delete(key);
+    try {
+      await serial(
+        1,
+        async () => {
+          const r = await ledger.get('record:' + key);
+          if (!r || r.evidence?.at !== ask.at) return;
+          if (ask.state === 'FAILED') delete r.evidence;
+          else r.evidence = { state: 'STORED', at: now(), sha256: ask.sha256 ?? null };
+          await ledger.save(r);
+        },
+        key,
+      );
+    } catch {
+      // Best effort: a PENDING flag expires by itself.
+    }
+    return { state: 'SETTLED' };
   }
   return {
     async fetch(request) {
@@ -1157,6 +2084,8 @@ export function createService({
         const receipt = await preauthenticate(request);
         if (receipt instanceof Response) return receipt;
         path = await routePath(request, env);
+        // Outside the serial queue: it reads no ledger record and writes only treekey:<sha>.
+        if (path === CHECK_PATH) return await perform(request);
         const renting = path === '/rent';
         if (renting && busy) refuse('BUSY', 409);
         if (renting) busy = true;
@@ -1164,7 +2093,7 @@ export function createService({
           const priority =
             path === '/stop-all' || /^\/(?:stop|kill)\//.test(path)
               ? 0
-              : /^\/report\//.test(path)
+              : /^\/(?:run-)?report\//.test(path)
                 ? 1
                 : 2;
           const key = /\/([1-9][0-9]*-[1-9][0-9]*)/.exec(path)?.[1] ?? path;
@@ -1190,11 +2119,61 @@ export function createService({
         await releaseUpload(request);
       }
     },
+    // Tree keys for the store queue, OUTSIDE the serial queue (GitHub reads, bounded in time).
+    async storeTrees() {
+      if (!storeEnabled(env)) return;
+      try {
+        const github = new Github(fetcher, configuration(env), env.GITHUB_API_TOKEN, {
+          cache: githubCache,
+          now,
+        });
+        await storeTrees({ ledger, env, now: now(), treeKey: githubTreeKey(github) });
+      } catch {
+        console.log(JSON.stringify({ event: 'store', state: 'TREES_FAILED' }));
+      }
+    },
+    // The public log and report of settled runs, OUTSIDE the serial queue and after the sweep
+    // (src/publish.js): the bucket or the database being slow or down never delays a teardown.
+    // One run of it at a time per isolate; every failure is a log line.
+    async publishRuns() {
+      if (publishing) return;
+      publishing = true;
+      try {
+        await publishTick({ ledger, env, now: now() });
+      } catch {
+        console.log(JSON.stringify({ event: 'public_log', state: 'TICK_FAILED' }));
+      } finally {
+        publishing = false;
+      }
+    },
     async sweep() {
       return serial(0, async () => {
         try {
-          const cfg = configuration(env),
-            records = await ledger.openRecords();
+          // Review of PR #269, R3: a malformed policy var refuses every route, but never stops
+          // teardown. The cron then closes and cleans up open rentals on the identity vars and the
+          // committed defaults only, and skips everything that could start work (batch ticks) or
+          // delete data on a default retention (expiry, the store).
+          let cfg,
+            teardownOnly = false;
+          try {
+            cfg = configuration(env);
+          } catch (e) {
+            if (!(e instanceof BrokerError)) throw e;
+            try {
+              cfg = teardownConfiguration(env);
+            } catch {
+              throw e;
+            }
+            teardownOnly = true;
+            console.log(
+              JSON.stringify({
+                event: 'cleanup_config_error',
+                state: /^CONFIG_[A-Z_]+:[A-Z_]+$/.test(e.state) ? e.state : 'CONFIG_UNNAMED',
+                teardown: 'defaults',
+              }),
+            );
+          }
+          const records = await ledger.openRecords();
           for (const r of records) {
             try {
               await update(
@@ -1207,7 +2186,17 @@ export function createService({
               console.log(JSON.stringify({ event: 'cleanup_unavailable' }));
             }
           }
+          if (teardownOnly) return;
+          await batchTicks();
           await ledger.expire(now(), cfg);
+          // After cleanup and expiry, bounded in time (src/ingest.js); tree keys come from the
+          // cache that storeTrees fills outside this queue.
+          if (storeEnabled(env))
+            try {
+              await storeTick({ ledger, env, now: now() });
+            } catch {
+              console.log(JSON.stringify({ event: 'store', state: 'TICK_FAILED' }));
+            }
         } catch (e) {
           // A configuration refusal names only the variable; operators must not read silence.
           console.log(
@@ -1219,6 +2208,20 @@ export function createService({
           );
         }
       });
+    },
+    // Owner admin routes (BrokerLedger, internal origin only): the same serialized ledger queue.
+    evidenceReserve,
+    evidenceSettle,
+    adminPlan: (body) => serial(2, () => adminPlan(body), '@admin-plan'),
+    adminStart: (body) => serial(2, () => adminStart(body), '@admin-start'),
+    adminStopBatch: (id) =>
+      serial(0, () => stopBatches([id], new Vast(fetcher, configuration(env), env.VAST_API_KEY))),
+    adminBatches: async () => {
+      const entries = await ledger.storage.list({ prefix: 'batch:', limit: 1000 });
+      return [...entries.values()]
+        .sort((a, b) => b.created - a.created)
+        .slice(0, 50)
+        .map((b) => batchView(b));
     },
   };
 }
@@ -1310,7 +2313,10 @@ export class BrokerLedger {
                 run: text(r.key),
                 sha: text(r.sha),
                 branch: text(r.branch),
-                profile: text(r.profile ?? 'check'),
+                profile: text(budgetClass(r)),
+                tier: text(r.tier ?? null),
+                family: text(r.family ?? null),
+                batch: text(r.batch ?? null),
                 die: text(r.die),
                 gpu_model: text(r.hardware?.gpu_name ?? r.gpu),
                 machine_id: providerId(r.machineId),
@@ -1334,9 +2340,42 @@ export class BrokerLedger {
             configuration(this.env),
             Date.now(),
           );
-          return json({ runs, budget });
+          return json({ runs, budget, batches: await this.service.adminBatches() });
         } catch {
           return json({ error: 'List unavailable' }, 503);
+        }
+      }
+      // Owner admin start and plan (2026-11-05, wtier). Reachable only through the admin Worker's
+      // DO binding (internal origin), which checks the owner's Cloudflare Access identity. The
+      // plan rents nothing; the start enters the same admission path as a PR-triggered rental.
+      if (
+        (url.pathname === '/admin/start' || url.pathname === '/admin/plan') &&
+        request.method === 'POST'
+      ) {
+        let body;
+        try {
+          body = JSON.parse(
+            new TextDecoder('utf-8', { fatal: true }).decode(await readBounded(request, 512)),
+          );
+        } catch {
+          return json({ error: 'Invalid request' }, 400);
+        }
+        try {
+          const answer =
+            url.pathname === '/admin/plan'
+              ? await this.service.adminPlan(body)
+              : await this.service.adminStart(body);
+          return json(answer);
+        } catch (e) {
+          return json(
+            {
+              error: e instanceof BrokerError ? e.state : 'UNAVAILABLE',
+              ...(e instanceof BrokerError && e.reason ? { reason: e.reason } : {}),
+              ...(e instanceof BrokerError && e.budget ? { budget: e.budget } : {}),
+              ...(e instanceof BrokerError && e.plan ? { plan: e.plan } : {}),
+            },
+            e instanceof BrokerError ? e.status : 503,
+          );
         }
       }
       if (url.pathname === '/admin/stop' && request.method === 'POST') {
@@ -1349,7 +2388,8 @@ export class BrokerLedger {
             !(
               selection.all === true ||
               (typeof selection.run === 'string' &&
-                /^[1-9][0-9]{0,19}-[1-9][0-9]{0,19}$/.test(selection.run))
+                /^[1-9][0-9]{0,19}-[1-9][0-9]{0,19}$/.test(selection.run)) ||
+              (typeof selection.batch === 'string' && /^8[0-9]{18}$/.test(selection.batch))
             )
           )
             throw Error();
@@ -1358,6 +2398,14 @@ export class BrokerLedger {
         }
         if (!validSecret(this.env.OWNER_STOP_TOKEN))
           return json({ error: 'Stop unavailable' }, 503);
+        if (selection.batch !== undefined) {
+          try {
+            await this.service.adminStopBatch(selection.batch);
+            return json({ state: 'NONE' });
+          } catch {
+            return json({ error: 'Stop unavailable' }, 503);
+          }
+        }
         // Enter exactly the existing owner stop path, including its queue and cleanup checks.
         const path = selection.all ? '/stop-all' : '/stop/' + selection.run;
         const prefix = this.env.BROKER_PATH_PREFIX ? '/' + this.env.BROKER_PATH_PREFIX : '';
@@ -1374,11 +2422,35 @@ export class BrokerLedger {
       }
       return notFound();
     }
+    // Evidence reserve and settle: small internal calls from the gateway, which holds the body.
+    if (
+      url.origin === 'https://internal.invalid' &&
+      request.method === 'POST' &&
+      (url.pathname === '/evidence/reserve' || url.pathname === '/evidence/settle')
+    ) {
+      try {
+        const out =
+          url.pathname === '/evidence/reserve'
+            ? await this.service.evidenceReserve(request)
+            : await this.service.evidenceSettle(request);
+        return Response.json(out, { headers: { 'Cache-Control': 'no-store' } });
+      } catch (e) {
+        return Response.json(
+          { state: e instanceof BrokerError ? e.state : 'UNAVAILABLE' },
+          {
+            status: e instanceof BrokerError ? e.status : 503,
+            headers: { 'Cache-Control': 'no-store' },
+          },
+        );
+      }
+    }
     if (
       new URL(request.url).origin === 'https://internal.invalid' &&
       new URL(request.url).pathname === '/cron'
     ) {
       await this.service.sweep();
+      await this.service.storeTrees?.();
+      await this.service.publishRuns?.();
       return new Response('ok');
     }
     return this.service.fetch(request);
@@ -1391,11 +2463,15 @@ async function detachedUpload(request, path) {
   const limit =
     (/^\/report\//.test(path)
       ? 65536
-      : /^\/kill\//.test(path)
-        ? 256
-        : path === '/rent'
-          ? 2048
-          : 0) + 1;
+      : /^\/run-report\//.test(path)
+        ? REPORT_MAX_BYTES
+        : /^\/kill\//.test(path)
+          ? 256
+          : path === '/rent'
+            ? 2048
+            : path === CHECK_PATH
+              ? 1024
+              : 0) + 1;
   const reader = request.body.getReader(),
     chunks = [];
   let length = 0;
@@ -1433,6 +2509,59 @@ export function createGateway({ authorize, fetcher = fetch, now = Date.now } = {
   let boxVerifier, boxSecret;
   let boxWindow = -1;
   const boxCounts = new Map();
+  const evidenceCounts = new Map();
+  // Uploads this isolate holds in memory right now (each is up to 8 MiB, twice while it is joined).
+  let evidenceHeld = 0;
+  // POST /evidence/<run>-<attempt>: the gateway reads, verifies and writes the body; the ledger
+  // Durable Object only reserves and settles the once-per-rental flag (a few bytes each way).
+  async function evidenceGateway(request, env, path, bearer) {
+    const key = /^\/evidence\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.exec(path)?.[1];
+    if (!key || request.method !== 'POST' || new URL(request.url).search) refuse('NOT_FOUND', 404);
+    const length = evidenceLength(request);
+    if (evidenceHeld >= 2) refuse('EVIDENCE_BUSY', 503);
+    evidenceHeld++;
+    let reserved = null,
+      outcome = { state: 'FAILED' };
+    const call = async (op, body, token) => {
+      const response = await placedLedger(env).fetch(
+        new Request('https://internal.invalid/evidence/' + op, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: 'Bearer ' + token } : {}),
+          },
+          body: JSON.stringify(body),
+        }),
+      );
+      let doc = null;
+      try {
+        doc = await response.json();
+      } catch {}
+      if (!response.ok)
+        refuse(typeof doc?.state === 'string' ? doc.state : 'UNAVAILABLE', response.status);
+      return doc;
+    };
+    try {
+      reserved = await call('reserve', { key, length }, bearer);
+      const answer = await storeEvidence(env, reserved, request, now());
+      outcome = { state: 'STORED', sha256: answer.sha256 };
+      return answer;
+    } catch (error) {
+      // An object that is already there (the head check) means stored, whoever put it.
+      if (error instanceof BrokerError && error.status === 409) outcome = { state: 'EXISTS' };
+      throw error;
+    } finally {
+      evidenceHeld--;
+      if (reserved) {
+        try {
+          await call('settle', { key, at: reserved.at, ...outcome });
+        } catch {
+          // The flag expires by itself after a minute.
+        }
+      }
+      if (request.body && !request.body.locked) await request.body.cancel().catch(() => {});
+    }
+  }
   let controlWindow = -1,
     controlCount = 0;
   const controlIps = new Map();
@@ -1474,7 +2603,7 @@ export function createGateway({ authorize, fetcher = fetch, now = Date.now } = {
       (await constantTimeEqual(env.OWNER_STOP_TOKEN, bearer))
     )
       return;
-    if (/^\/(?:report|kill|blob-url|bench-data)\//.test(path)) {
+    if (/^\/(?:report|run-report|kill|blob-url|bench-data|evidence)\//.test(path)) {
       if (boxSecret !== env.RUN_TOKEN_SECRET) {
         boxSecret = env.RUN_TOKEN_SECRET;
         boxVerifier = new RunTokens(boxSecret, now);
@@ -1486,11 +2615,19 @@ export function createGateway({ authorize, fetcher = fetch, now = Date.now } = {
       if (boxWindow !== window) {
         boxWindow = window;
         boxCounts.clear();
+        evidenceCounts.clear();
       }
       const used = boxCounts.get(key) ?? 0;
       if (used >= 300 || (!boxCounts.has(key) && boxCounts.size >= 1024))
         refuse('RATE_LIMITED', 429);
       boxCounts.set(key, used + 1);
+      // An upload carries up to 8 MiB that the gateway buffers: at most 6 per minute per rental.
+      if (path.startsWith('/evidence/')) {
+        const sent = evidenceCounts.get(key) ?? 0;
+        if (sent >= 6 || (!evidenceCounts.has(key) && evidenceCounts.size >= 1024))
+          refuse('RATE_LIMITED', 429);
+        evidenceCounts.set(key, sent + 1);
+      }
       return;
     }
     const identity = localIdentity(env, request.url);
@@ -1534,6 +2671,16 @@ export function createGateway({ authorize, fetcher = fetch, now = Date.now } = {
       try {
         await (authorize ?? frontAuthorize)(request, env, path);
         await controlLimit(request, env, path);
+        if (/^\/evidence\//.test(path))
+          return Response.json(
+            await evidenceGateway(
+              request,
+              env,
+              path,
+              request.headers.get('Authorization')?.replace(/^Bearer /, ''),
+            ),
+            { headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } },
+          );
         buffered = await detachedUpload(request, path);
       } catch (error) {
         logRefusal(error, path);

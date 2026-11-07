@@ -36,7 +36,7 @@ jobs:
   gpu-free:
     name: Vast box scripts — tests and mutations
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -61,3 +61,7 @@ jobs:
         run: python3 scripts/ci/gpu_swap_mutants.py
       - name: Merge-bar mutations (scrubber test names, light bar, KVM stage) require two killers each
         run: python3 scripts/ci/merge_bar_mutants.py
+      - name: Evidence-bundle mutations (scrubbing, scanning, caps, upload) require two killers each
+        run: python3 scripts/ci/evidence_mutants.py
+      - name: Run-report mutations (rows, subruns, bounds, upload) require two killers each
+        run: python3 scripts/ci/run_report_mutants.py

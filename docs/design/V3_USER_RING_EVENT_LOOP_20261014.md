@@ -1,3 +1,7 @@
+# V3 — the USER-ring relay as an event loop: no timer carries correctness
+
+**STATUS: LIVE, 2026-11-07.** The USER-ring relay's event loop, handoff and sleep-safety table described here exist in the tree: checked on 2026-11-07 against `crates/kf-chan/src/worker.rs` (`run_with_relay`), `crates/kf-chan/src/user_loop.rs` (`cover`, `may_block`), `crates/kf-chan/src/handoff.rs` and `crates/kf-qemu/src/userpump.rs`. The §10.1 `LoopPolicy` fix is SUPERSEDED inside the document by §10.0; §10.0 says it was not yet run on hardware when written, and this check did not run anything. The correction below holds for liveness only, not bounded fairness.
+
 **CORRECTION 2026-10-20 (read before §0 and §8):** this document's claim that the relay is validated and that "no timer carries correctness" holds for *liveness* only (every covered entry is eventually
 relayed). It does **not** hold for *bounded fairness*: `worker::run_with_relay` looked at non-doorbell wake sources (engine events whose dispatch injects the guest's completion interrupt, the waiting
 relays' marker/carried waits, demand left by a lost `try_lock`) only when a pass served nothing, so a self-re-ringing relay (`Need::Again`) could keep the worker permanently busy and starve another
@@ -5,13 +9,11 @@ client's wakes for seconds to a minute ("the baton": measured 6-59 s on Linux wi
 (P11-P13, §10); fixed first by `LoopPolicy::after_pass` (a look every `LOOK_EVERY = 4` busy passes) -- **SUPERSEDED 2026-10-20 by §10.0** (one level-triggered loop, lock-holder handoff, sleep-safety table; no pass count, no retry budget). Hardware confirmation of the fix is pending in §10.0. The §8 Linux validation exercised the default
 Passthrough route, on which hot tokens are rung inline and the worker idles, so it could not see this.
 
-**STATUS: LIVE in the code, 2026-10-14** (branch `claude/userring-eventloop-20261014`: tests-first commit `95a9ad422`, then the
+Original status line (2026-10-14): live in the code (branch `claude/userring-eventloop-20261014`: tests-first commit `95a9ad422`, then the
 fix; GPU-free results in §5-§6, Linux hardware validation in §8). Written DESIGN-ONLY first; §2 and §5 keep the
 state of the code BEFORE the fix (77eaf7620) as the record of what the tests found.
 Labels: **[measured]** = a run or a test result named here; **[read]** = public hardware text (`dev_pbdma.ref`,
 `dev_ram.ref`, ogkm 580) or kayfabe code; **[inferred]** = reasoning, never evidence.
-
-# V3 — the USER-ring relay as an event loop: no timer carries correctness
 
 ## 0. Short answer
 

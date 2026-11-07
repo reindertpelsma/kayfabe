@@ -1,0 +1,15 @@
+1793930371.395475 01:59:31.398 pidfile=none alive=0 qemu= swtpm= runloops=
+1793930390.724998 01:59:50.727 pidfile=none alive=0 qemu= swtpm= runloops=266065,
+1793930420.733623 02:00:20.736 pidfile=none alive=0 qemu= swtpm= runloops=266065,268540,
+1793930423.096190 02:00:23.098 pidfile=none alive=0 qemu= swtpm= runloops=266065,
+1793930425.591618 02:00:25.594 pidfile=none alive=0 qemu= swtpm=268961, runloops=266065,
+1793930425.788606 02:00:25.791 pidfile=268964 alive=1 qemu=268964, swtpm=268961, runloops=266065,269012,
+1793931158.119130 02:12:38.122 pidfile=268964 alive=1 qemu=268964, swtpm= runloops=266065,269012,
+1793931161.701577 02:12:41.706 pidfile=268964 alive=0 qemu= swtpm= runloops=266065,
+1793931161.906949 02:12:41.910 pidfile=none alive=0 qemu= swtpm= runloops=266065,
+1793931167.111408 02:12:47.114 pidfile=305601 alive=1 qemu=305601, swtpm=305597, runloops=266065,
+1793931167.319074 02:12:47.322 pidfile=305601 alive=1 qemu=305601, swtpm=305597, runloops=266065,305634,
+1793932752.557116 02:39:12.559 pidfile=305601 alive=1 qemu=305601, swtpm= runloops=266065,305634,
+1793932755.389314 02:39:15.392 pidfile=305601 alive=1 qemu=305601, swtpm= runloops=266065,
+1793932755.661631 02:39:15.671 pidfile=none alive=0 qemu= swtpm= runloops=266065,
+1793932758.626428 02:39:18.640 pidfile=none alive=0 qemu= swtpm= runloops=

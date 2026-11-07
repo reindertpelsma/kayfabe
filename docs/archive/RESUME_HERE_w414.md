@@ -1,3 +1,5 @@
+> **STATUS: SUPERSEDED, 2026-09-21** (archived, w822). Successor: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) and [`THE_ARCHITECTURE_v3.md`](../design/THE_ARCHITECTURE_v3.md). Historical record: a `STATUS` line further down says what the document claimed when it was written; it is no longer a claim about the current tree.
+>
 > ⊘⊘⊘ **ARCHIVED — THIS DESCRIBES A SUPERSEDED ARCHITECTURE. IT IS REFERENCE, NOT CURRENT.**
 > The live design is `docs/design/THE_DESIGN.md`. This file is kept because its *measurements*,
 > its *ogkm findings* and its *reasoning* remain useful — its **architecture does not**. Do not
@@ -12,7 +14,7 @@ Both fixed (w415 `05df1d6b`, w416 `cfd6db36`), with the fault changing kind each
 
 # RESUME — w414, overnight 2026-09-11
 
-**STATUS: LIVE.** Written for a compacted session. Read this first, then
+**STATUS AT WRITING: LIVE.** Written for a compacted session. Read this first, then
 `gpga_is_one_reserved_object.md`.
 
 ## Where things stand

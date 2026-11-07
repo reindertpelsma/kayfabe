@@ -1,3 +1,5 @@
+> **STATUS: SUPERSEDED, 2026-09-21** (archived, w822). Successor: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) and [`THE_ARCHITECTURE_v3.md`](../design/THE_ARCHITECTURE_v3.md). Historical record: a `STATUS` line further down says what the document claimed when it was written; it is no longer a claim about the current tree.
+>
 > ⊘⊘⊘ **ARCHIVED — THIS DESCRIBES A SUPERSEDED ARCHITECTURE. IT IS REFERENCE, NOT CURRENT.**
 > The live design is `docs/design/THE_DESIGN.md`. This file is kept because its *measurements*,
 > its *ogkm findings* and its *reasoning* remain useful — its **architecture does not**. Do not
@@ -5,7 +7,7 @@
 
 # The vidmem chain is built and orphaned — every piece exists, nothing calls it
 
-**STATUS: LIVE (2026-09-06).** Survey + verification of what stands between a
+**STATUS AT WRITING: LIVE (2026-09-06).** Survey + verification of what stands between a
 vidmem-declared guest allocation and real device-local backing with a CPU view.
 Supersedes nothing. Two of its findings are **blocked on an owner ruling** and are
 marked as such.

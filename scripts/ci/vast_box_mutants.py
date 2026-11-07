@@ -24,6 +24,8 @@ HERE = Path(__file__).resolve().parent
 FILES = [
     "vast_onstart.sh",
     "vast_report.py",
+    "vast_evidence.py",
+    "vast_run_report.py",
     "kf-box-kill",
     "kf-box-blob-url",
 ]

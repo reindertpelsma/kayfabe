@@ -2,6 +2,7 @@
 import {DEFAULTS} from './defaults.js';
 // prettier-ignore
 import {gpuClass,offerPrice,offerRejections,providerId,refuse} from './policy.js';
+import { familyOf, profileCaps } from './tier.js';
 // Edits3 C: NFKC folds full-width and compatibility forms; invisible joiners, zero-width
 // spaces, soft hyphens and the BOM are removed; every other space becomes a plain space.
 // Bidi controls and any other format or control character are removed for the denied-name
@@ -119,9 +120,18 @@ export class OfferBook {
     this.at = null;
     this.failed = false;
   }
-  async evaluate(vast, cfg, ledger, profile) {
+  // `market` (optional): an already fetched offer list (the release planner reads one list per
+  // family); it bypasses the one-minute cache and is evaluated by exactly the same rules.
+  // `vramFloorMb`: the middle tier's VRAM floor (0 = off).
+  async evaluate(vast, cfg, ledger, profile, { market, vramFloorMb = 0 } = {}) {
     let hit = this.at !== null && this.now() - this.at < DEFAULTS.availabilityCacheMs;
-    if (!hit) {
+    if (market !== undefined) {
+      if (!Array.isArray(market) || market.length > 400) refuse();
+      hit = false;
+      this.at = this.now();
+      this.cached = market;
+      this.failed = false;
+    } else if (!hit) {
       this.at = this.now();
       this.cached = null;
       this.failed = true;
@@ -142,6 +152,7 @@ export class OfferBook {
       rejected = {},
       rejectedOffers = [],
       allowed = [];
+    let vramRejected = 0;
     for (const offer of this.cached) {
       const die = gpuClass(offer, cfg);
       if (!die) continue;
@@ -192,6 +203,17 @@ export class OfferBook {
           host_id: providerId(offer.host_id),
           reasons,
         });
+      // The middle tier's VRAM floor (0 = off; only a rental passes it, never /availability, so
+      // the runner's closed rejection vocabulary is unchanged). Vast reports gpu_ram in MB; an
+      // offer without a numeric value fails closed while a floor is set.
+      if (
+        !reasons.length &&
+        vramFloorMb > 0 &&
+        !(typeof offer.gpu_ram === 'number' && offer.gpu_ram >= vramFloorMb)
+      ) {
+        vramRejected++;
+        continue;
+      }
       if (!reasons.length)
         allowed.push({
           ...offer,
@@ -233,7 +255,7 @@ export class OfferBook {
       offers: [...grouped.values()].sort((a, b) => a.die.localeCompare(b.die)),
       thresholds: {
         ...cfg.quality[profile],
-        price: profile === 'check' ? cfg.price : cfg.sweepPrice,
+        price: profileCaps(cfg, profile).price,
         bandwidth_down_gb: cfg.bandwidthDown,
         bandwidth_up_gb: cfg.bandwidthUp,
         verified: 1,
@@ -243,9 +265,16 @@ export class OfferBook {
       verified_counts: [...verified.values()].sort((a, b) => a.die.localeCompare(b.die)),
       cache: { hit, age_ms: this.now() - this.at },
     };
-    return { allowed, view };
+    return { allowed, view, vramRejected };
   }
-  async select(evaluation, cfg, ledger, profile, preferences) {
+  // options.die: one die (an admin start or a release leg); options.avoidMachines /
+  // options.avoidHosts: machines and hosts an earlier leg of the same release cell used (a second
+  // Windows run belongs on a different machine, and a re-run on a fresh box). options.tierName
+  // 'middle' (with no preferences): the family rotation with fallback.
+  async select(evaluation, cfg, ledger, profile, preferences, options = {}) {
+    if (options.die !== undefined) return this.#pinned(evaluation, cfg, options);
+    if (profile === 'check' && options.tierName === 'middle' && preferences === undefined)
+      return this.#rotateFamily(evaluation, cfg, ledger);
     const set = profile === 'check' ? cfg.checkDies : cfg.sweepDies,
       rotate =
         profile === 'sweep' &&
@@ -295,5 +324,44 @@ export class OfferBook {
       ignored,
       reason: rotate ? 'ROTATE' : preferences === undefined ? 'DEFAULT_ORDER' : 'PREFERENCE',
     };
+  }
+  #order(candidates, cfg, dies) {
+    return candidates.sort(
+      (a, b) =>
+        dies.indexOf(a.die) - dies.indexOf(b.die) ||
+        countryRank(a, cfg) - countryRank(b, cfg) ||
+        a.pricing.effective - b.pricing.effective ||
+        a.id - b.id,
+    );
+  }
+  #pinned(evaluation, cfg, { die, avoidMachines = [], avoidHosts = [] }) {
+    const candidates = evaluation.allowed.filter(
+      (x) => x.die === die && !avoidMachines.includes(x.machine_id),
+    );
+    // A different host where one exists; the same host (another machine) only as a fallback.
+    const fresh = candidates.filter((x) => !avoidHosts.includes(x.host_id));
+    const pool = this.#order(fresh.length ? fresh : candidates, cfg, [die]);
+    if (!pool.length) refuse('UNAVAILABLE', 503, 'NO_ALLOWED_OFFERS');
+    return { offer: pool[0], ignored: 0, reason: 'PREFERENCE', family: familyOf(die, cfg) };
+  }
+  // Middle tier (agreed 2026-11-05): each admitted run takes the family after the last one that
+  // ran, in the fixed family order; a family with no allowed offer falls through to the next.
+  // Within a family the rotation list's die order applies, then country preference and price.
+  async #rotateFamily(evaluation, cfg, ledger) {
+    const families = Object.keys(cfg.middleRotation),
+      previous = await ledger.get('rotation:middleFamily'),
+      at = families.indexOf(previous),
+      order = [...families.slice(at + 1), ...families.slice(0, at + 1)];
+    for (const [skipped, family] of order.entries()) {
+      const dies = cfg.middleRotation[family],
+        pool = this.#order(
+          evaluation.allowed.filter((x) => dies.includes(x.die)),
+          cfg,
+          dies,
+        );
+      if (pool.length)
+        return { offer: pool[0], ignored: 0, reason: 'ROTATE', family, wanted: order[0], skipped };
+    }
+    refuse('UNAVAILABLE', 503, 'NO_ALLOWED_OFFERS');
   }
 }

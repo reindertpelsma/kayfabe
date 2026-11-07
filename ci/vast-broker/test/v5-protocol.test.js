@@ -39,7 +39,8 @@ for (const verdict of ['PASS', 'FAIL'])
     assert.deepEqual(d.suites, table);
     assert.equal(d.driver_version, hardware.driver_version);
     assert.equal(d.die, 'AD104');
-    assert.equal(d.selection_reason, 'DEFAULT_ORDER');
+    // A master PR is the middle tier: the family rotation picks the die (src/tier.js).
+    assert.equal(d.selection_reason, 'ROTATE');
     assert.equal(d.state, 'GRACE');
   });
 for (const kind of [

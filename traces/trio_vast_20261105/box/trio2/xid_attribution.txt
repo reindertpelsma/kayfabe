@@ -1,0 +1,5 @@
+# Xid lines of phases A and B (trio2), attributed by pid; Windows QEMU pid=109550
+      4 phase=A xid=31 pid=111472 name=qemu-system-x86
+      1 phase=A xid=31 pid=112669 name=qemu-system-x86
+      4 phase=B xid=31 pid=118274 name=qemu-system-x86
+      1 phase=B xid=31 pid=120062 name=qemu-system-x86

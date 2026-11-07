@@ -1,5 +1,9 @@
 # Owner deployment and independent cleanup
 
+STATUS: LIVE, 2026-11-07. The sections "Result store (D1)", "Tiers and the release run" (both added
+2026-11-05), "Evidence bucket" (added 2026-11-06) and "Public logs and run reports" (added 2026-11-07)
+describe deployments that have not been run.
+
 [CODE READ: wrangler.toml, deployment.json, deploy.mjs] The owner/controller deploys; no round
 performs a deployment or a provider call. Keep `RENTING_ENABLED=false` until acceptance.
 `main = "src/index.js"`: wrangler bundles the source with the lockfile-pinned dependencies (there
@@ -99,6 +103,30 @@ deploy helper at deploy time, not by CI (final review C1). After any
 change under `src/`, `defaults.json` or the lockfile, record the new hash in both files. Preserve
 the SQLite LEDGER namespace and migration when updating.
 
+## Provider status tolerance (built 2026-11-06, NOT DEPLOYED)
+
+STATUS: LIVE as code, 2026-11-06, on branch `claude/vast-tolerance-20261106`; nothing deployed. The rule,
+its constants (`defaults.json`: `providerGoneReadings` 3, `providerGoneWindowSeconds` 120,
+`providerGoneSpacingSeconds` 20, `providerQuietSeconds` 660, `providerMessageChars` 120), the worst-case billing exposure (the
+close of a really gone instance moves from one reading to 120-180 s for `exited`/`stopped`, and to 11
+quiet minutes for ambiguous words and API errors: table in the README) and the close-line format are in [README.md](README.md), section
+"Provider status tolerance and close lines". Deploy notes (CODE READ, not run):
+
+- The constants are policy in `defaults.json`, not environment variables, so a deploy cannot disable the
+  tolerance by a var; changing them changes the bundle hash.
+- The Worker change alters the bundle (`deployment.json`, `DEPLOYED_BUNDLE_SHA256`). master's `runner.py`
+  pins the deployed bundle, so the coordinator deploys this Worker only after master carries the new pin.
+  Until then the deployed Worker still destroys a box on one non-running reading.
+- No ledger migration: new record fields (`providerBad`, `providerFlaps`, `providerAnomalies`,
+  `providerRaw`, `providerMsg`, `closeLogged`) are optional, so records written by the old Worker are read
+  as "no episode" and a rollback ignores them. A record already ended gets no close line.
+- Reading a run after a loss: `grep '\[Worker\] close reason='` in the run log names the reason and the
+  provider's last status word; `provider gone:` precedes an `ENDED` close from the tolerance;
+  `provider=offline ... (box post accepted)` followed by a surviving run is the flap this change
+  tolerates. `close reason=ENDED provider=running` cannot occur (a running status never closes as ENDED).
+- The independent reaper and the cron cleanup are unchanged: a record that is `closed` is still destroyed
+  by `cleanup()` on every tick, and `/stop-all` and the owner stop do not wait for any window.
+
 ## Deploy the main Worker
 
 [CODE READ: package-lock.json; deploy.mjs] Install Node 22+ and run `npm ci --ignore-scripts` in
@@ -138,6 +166,16 @@ vars with the toml plus `--var` values, so every public var must be in `wrangler
 file. `OWNER_GITHUB_ID=229738317` is committed in `wrangler.toml` (a public account id, V1); a
 deploy without it refuses rentals with `CONFIG_VAR:OWNER_GITHUB_ID` and the cron logs
 `cleanup_config_error` instead of silently cleaning nothing.
+
+Boolean vars (review of PR #269, R3, CODE READ and tested GPU-free 2026-11-05): `RENTING_ENABLED`,
+`RELEASE_ENABLED`, `ALLOW_UNKNOWN_COUNTRY` and `TREE_KEY_CARRY_OVER` must be exactly `true` or
+`false`. `deploy.mjs` refuses any other value, and the Worker refuses one as
+`CONFIG_VAR:<name>` on every route. A malformed policy var (any var except the identity vars
+`OWNER_GITHUB_ID`, `REPOSITORY`, `REPOSITORY_GITHUB_ID`, `WORKER_URL`, `OIDC_SUB` and the workflow
+refs) does not stop teardown: the cron logs `cleanup_config_error` with `teardown: "defaults"`,
+closes and cleans up open rentals with the identity vars and the committed defaults, and skips
+batch ticks, expiry and the result store until the var is fixed. `/stop-all` still answers 503 in
+that state; the cron's deadlines and the reaper end the boxes.
 
 Main Worker cron schedule: `* * * * *`
 
@@ -454,6 +492,97 @@ other branches and a path-policy `NOT_NEEDED` status refuse, so a docs-only mast
 be released on its own. TODO (owner): the planned tag-only release CI will replace this
 dispatch workflow; the gate then needs its trigger rule restated.
 
+## Tiers and the release run (wtier, 2026-11-05)
+
+CODE READ (`src/tier.js`, `src/policy.js`, `src/release.js`, `deploy.mjs`, branch
+`claude/worker-tier-20261105`); nothing here was deployed or run against Vast. How to plan and
+start a release: [README](README.md), "Tiers, the admin start and the release run".
+
+What changes on deploy without any new var: a master PR (middle tier) rotates its die across the
+four families instead of taking the cheapest `CHECK_DIES` class; boxes carry `KF_TIER`; the admin
+page gains Plan and Start (small and middle starts work at once; a large Start is refused until
+`RELEASE_ENABLED=true`); the cron advances batches; the account-wide daily cap
+`ACCOUNT_DAILY_USD` (default 50) bounds check, sweep and release spend together.
+
+Vars for running a release (public, in the vars file outside the checkout; `deploy.mjs` accepts
+them): `RELEASE_ENABLED=true` (the kill switch; default false), `MAX_CONCURRENT_RENTALS=9` together
+with `MAX_CONCURRENT_CHECK=1` and `MAX_CONCURRENT_SWEEP=1` (raising the account cap alone also raises
+check and sweep). A release gets at most the account cap minus 1 boxes (`MAX_CONCURRENT_RELEASE`,
+default exactly that, at most 8), so one slot always stays free for the master gate; with the
+committed account cap of 1 the plan says `NO_SLOTS`. Optional: `RELEASE_COST_CAP_USD` (default 40,
+at most `RELEASE_DAILY_USD`), `RELEASE_MAX_PRICE_USD_HOUR` (2), `RELEASE_DAILY_USD` (40),
+`RELEASE_DAILY_RENTALS` (24), `RELEASE_HARD_RUNTIME_MINUTES` (300, may only be lowered),
+`RELEASE_RERUNS_PER_LEG` (1, 0 to 2), `RELEASE_STAGES` (`[]`; `["specviewperf"]` only once its
+lane exists), `RELEASE_DIES`, `MIDDLE_ROTATION` (JSON family lists, no spaces),
+`MIDDLE_VRAM_FLOOR_MB` (0 = off; TBD from the trio footprints) and `ACCOUNT_DAILY_USD`. The shared
+`ROLLING_SPEND_USD` (default 30) also bounds a release: the offline plan of the synthetic market
+estimates 18.63 USD from SYNTHETIC prices, so a release in a month with other spend needs it raised.
+INFERRED (admin README storage note): 8 concurrent boxes write 8 log streams into the same Durable
+Object; keep `LOG_RETENTION_HOURS=6` and check storage after the first release.
+
+Money bounds (CODE READ): every release box is admitted only while the release's spend (settled
+legs at cost, open legs at their reserved liability) plus its own worst case stays under the cost
+cap, and its contract price as the provider reports it is re-checked against the same cap (a box above it is closed
+as `CONTRACT_BUDGET`). A release leg reserves its hard limit plus one cron period (301 minutes); the
+independent reaper deletes a box only after 300 + 15 minutes plus up to one 5-minute reaper tick, so
+a box whose teardown failed can bill about 19 minutes beyond its reservation (INFERRED: about 5 USD
+for 8 boxes at the 2 USD/hour cap). Turning `RENTING_ENABLED` or `RELEASE_ENABLED` off stops every
+running release at the next cron tick: `admit()` refuses, so no pending leg or re-run is rented
+(those legs end MISSING); boxes already running finish to their result or deadline unless stopped.
+
+Time budget of one box (300 minutes): the trio agent reported on 2026-11-05 (relayed by the
+coordinator; its run and revision are in that agent's report, not re-checked here) a Windows gate
+of 968 s warm on an RTX 4090 and 89.5 minutes for the whole Worker check run. INFERRED: a second Windows run on the same box
+(`KF_WINDOWS_RUNS=2`, image reused) adds one more gate, about 16 minutes warm, so about 106 minutes in
+all. The slowest gate recorded on 2026-11-04 (AD104, 5065 s, traces/die_coverage_20261104/) would
+give about 3 hours, still inside 300; the payload refuses a second run with less than 45 minutes left
+(`windows_retry_time`, a RETRY, never a pass).
+
+Rollback (CODE READ, review F4): release records and spend rows are stored with `profile: 'check'`
+plus `budgetClass: 'release'`, so an older Worker can read, count and prune them: it counts release
+spend under the check profile's daily cap (conservative; it can refuse check rentals until the UTC
+day ends) and prunes rows after 30 days like any other. An older Worker ignores `batch:` rows, so no
+new release leg starts; for an open release box its cron asks GitHub for the box's run (a batch id,
+not a GitHub run), which is absent, so it closes the box as `RUN_GONE` (INFERRED from the predecessor's
+`update()`). Procedure: set `RELEASE_ENABLED=false` (redeploy vars) first, then press Stop all (or
+`POST /stop-all` with the owner token), confirm in the Vast console that no `kf-ci-8...` box remains
+(the reaper also ends any box older than 315 minutes), and only then deploy the older bundle.
+Correction to the first version of this section (2026-11-05): it said the old Worker recovers once
+release rows age out after 30 days; that was wrong (it refused before reaching its prune line and
+never recovered). That row shape no longer exists.
+
+Commit gap (review F6): release legs do not write the one-rental-per-commit marker, so a release of
+a commit never refuses that commit's own master gate with `BUDGET:sha-gap`.
+
+`/bench-data` scope (unchanged, noted by review F10): any live box can ask for a presigned
+SPECviewperf URL; restricting it to boxes whose run lists the `specviewperf` stage is left for the
+SPECviewperf lane.
+
+The reaper limit does not change: the release hard limit is at most 300 minutes, equal to
+`REAPER_HARD_MINUTES`, so no reaper deploy is needed first.
+
+Coordinator order (after the PR is merged AND master carries the new `deployment.json` pin, because
+master's runner validates the deployed bundle hash):
+
+```sh
+cd /path/to/checkout && git checkout <master commit that carries the pin>
+npm ci --prefix ci/vast-broker --ignore-scripts --no-audit --no-fund
+npm ci --prefix ci/vast-admin --ignore-scripts --no-audit --no-fund
+node --test ci/vast-broker/test
+node --test ci/vast-admin/test/*.test.mjs
+node ci/vast-broker/scripts/mutate-tiers.mjs
+# 1. (no reaper change) 2. the broker, with the release vars if a release is planned:
+node ci/vast-broker/deploy.mjs /path/outside/checkout/broker.vars --dry-run
+node ci/vast-broker/deploy.mjs /path/outside/checkout/broker.vars
+# 3. the admin Worker (same Access vars as before; see ../vast-admin/README.md):
+ci/vast-broker/node_modules/.bin/wrangler deploy --config ci/vast-admin/wrangler.toml --dry-run
+ci/vast-broker/node_modules/.bin/wrangler deploy --config ci/vast-admin/wrangler.toml
+```
+
+Acceptance without renting: on the admin page press Plan for a master commit with tier `large`; the
+answer lists the planned dies and the estimate and `renting: false`, and the Vast account shows no
+new instance. The first Start is a watched run (budget decided by the owner).
+
 ## First watched rental (checklist)
 
 ### Current checklist — correction 2026-10-25
@@ -594,3 +723,270 @@ script `scripts/ci/vast_payload.sh` is still absent (F14), so a real rental toda
 ## Same-tree gate reuse
 
 CODE READ 2026-10-27 (`gate_reuse.py`, `release_gate.py`): master pushes may reuse a direct original hardware PASS from an identical parent/associated-PR tree, with GitHub Actions creator and CI/run checks. The existing named GPU job replays bounded original result lines and summary; missing evidence uses the existing gate. Release validation independently rechecks the original metadata. This is a workflow-only change with no Worker deployment. See [operator guidance](../../docs/howto/gpu-gate-reuse.md).
+
+## Result store (D1)
+
+[CODE READ 2026-11-05: wrangler.toml, src/ingest.js, src/results.js,
+ci/platform-api/migrations] NOT DEPLOYED. What the CI Worker needs for the result store and
+`POST /v1/requirements/check` ([README](README.md), "Result store"):
+
+| Name | Kind | Where | Notes |
+|---|---|---|---|
+| `DB` | D1 binding | `wrangler.toml` (committed) | database `kayfabe-platform`, id `c6292be2-742d-4a05-95fd-749705ab30bc` (not a secret), shared with `ci/platform-api` |
+| `ROW_TAG_KEY` | Worker secret | `wrangler secret put` | random base64url, 32-512 characters; HMAC key of result rows; never on a box, never in GitHub |
+| `GITHUB_API_TOKEN` | Worker secret (existing, optional) | unchanged | the tree key reads the git data API; INFERRED from GitHub's documented limits: unauthenticated reads are limited to 60 per hour, and one tree key costs 2 requests (commit, root tree), 1 for a `.workerignore`, and 1 per top-level directory that is not wholly ignored: 15 for this repository with the default list (16 top-level directories in `git ls-tree` of `d74f6063d`, 3 ignored) |
+| `TREE_KEY_CARRY_OVER` | public var (optional) | vars file (`deploy.mjs` allows `true`/`false`) | default off: requirements count only the same commit's rows. Set `true` only after boxes delete ignored files after cloning (review of #258, H2) |
+
+Without `DB` or `ROW_TAG_KEY` the Worker behaves as before: nothing is queued, nothing is written,
+and the check answers 503 `STORE_UNAVAILABLE`.
+
+Order (coordinator only; a coding lane never runs these):
+
+1. Merge the PR to `next`, then the `next` -> master batch. Master's `runner.py` pins the deployed
+   bundle, so the Worker is deployed only after master carries the new `deployment.json` hash.
+2. Apply the migrations from the public API's directory (the only migrations directory; the
+   broker's `migrations_dir` points to the same files):
+   ```sh
+   cd ci/platform-api
+   npx wrangler d1 migrations list kayfabe-platform --remote
+   npx wrangler d1 migrations apply kayfabe-platform --remote
+   ```
+   `list` shows whether `0001_init.sql` was applied already; `apply` applies what is missing
+   (`0002_ci_results.sql` and `0003_ci_run_claims.sql` only add tables and indexes; 0003 holds the
+   setup picker's claimed host facts). Apply 0003 before deploying the Worker bundle that writes it. A
+   Worker deployed first still stores every run (claims are written in a second batch after the run's
+   row, and a failure there is logged, never fatal) and logs one line per run,
+   `CLAIMS_FAILED ... table ci_run_claims is missing; apply ci/platform-api migration 0003`, until the
+   table exists; those runs then have no claims (their rows are not rewritten).
+   **Run `list` before `apply`:**
+   `0002_ci_results.sql` was edited during review (the `tree_kind` CHECK gained `claimed`), which is
+   safe only because it has never been applied anywhere. If `list` reports 0002 as already applied
+   to the remote database, stop: the remote table has the old CHECK, and the fix is a new migration,
+   not a re-apply.
+3. Create the row-tag key without printing it, and store it as a Worker secret:
+   ```sh
+   cd ci/vast-broker
+   openssl rand -base64 48 | tr '+/' '-_' | tr -d '=\n' | npx wrangler secret put ROW_TAG_KEY
+   ```
+   Keep no other copy: losing it only means existing rows stop counting for gates (open question
+   6 of the design: rotation).
+4. Deploy the CI Worker as above (`node ci/vast-broker/deploy.mjs <vars-file> --dry-run`, then
+   without `--dry-run`); the helper refuses unless the bundle hashes to `deployment.json`.
+5. Deploy the public API (`cd ci/platform-api && npx wrangler deploy`); it needs no secret.
+6. Check: `npx wrangler d1 execute kayfabe-platform --remote --command "SELECT COUNT(*) AS n FROM ci_runs"`
+   from `ci/platform-api` (0 before the first rental), and `GET https://api.kayfabe.dev/v1/ci/trees`
+   (an empty list before the first rental).
+
+Rollback: deleting the `ROW_TAG_KEY` secret (`npx wrangler secret delete ROW_TAG_KEY`) stops all
+queueing and writes on the next request; the tables can stay.
+
+## Evidence bucket (failed-run bundles)
+
+[CODE READ 2026-11-06: wrangler.toml, src/evidence.js, src/index.js, scripts/ci/vast_evidence.py,
+scripts/ci/fetch_evidence.py; GPU-free node and python tests only. NOT DEPLOYED. No real R2 bucket,
+no real Worker and no box has run any of it.] A rented box is destroyed after its grace period and
+the runner shows a bounded part of the log, so a failed run used to lose its evidence. At the end
+of every run (pass or fail) the box builds one bounded, scrubbed bundle (the gate and provision
+evidence, host dmesg, `free`/`df`/`ps`/`nvidia-smi -q` header, log tails and the newest
+screenshots; what it holds and what it drops first is in
+[scripts/ci/VAST_PAYLOAD.md](../../scripts/ci/VAST_PAYLOAD.md), "Evidence bundle") and uploads it
+once to `POST /evidence/<run>-<attempt>` with its run token ([box protocol](docs/BOX_PROTOCOL.md),
+"Evidence upload"). The Worker stores it through an R2 WRITE binding in a PRIVATE bucket. Nothing in
+the public API, the status object, the runner display or the site links to it, and no Worker route
+lists or serves it: only the coordinator reads it.
+
+| Name | Kind | Where | Notes |
+|---|---|---|---|
+| `EVIDENCE_BUCKET` | R2 binding | `wrangler.toml` (committed, `[[r2_buckets]]`) | bucket `kayfabe-ci-evidence`; write-only use (`put`, and `head` to refuse an overwrite) |
+| (none) | secret / var | | the binding needs no secret and no var; `deploy.mjs` is unchanged |
+
+Object keys: `<profile>/<run id>/<attempt>.tgz` (the bundle, `Content-Type: application/gzip`) and
+`<profile>/<run id>/<attempt>.json`; the replacement rental after a provider fault reuses the run key,
+so its objects are `<attempt>-r1.tgz` and `<attempt>-r1.json` and the faulted box's bundle is kept (a small manifest: sha256, size, upload time, the sections the
+box said it kept and dropped, the scrub counts, `scan: clean`, and the rental's tier, family, die,
+batch and verdict as the Worker knows them). `profile` is `check`, `sweep` or `release`. One
+rental is one leg: a release or admin leg is an ordinary rental with its own run key, so the key
+already names run, attempt and leg. A second upload for the same rental is `409 EVIDENCE_EXISTS`
+(the queue's own `409 BUSY` is a different answer: retry). The cap is 8 MiB of compressed bundle,
+enforced from the declared `Content-Length` before the body is read (`411` without one, `413` above
+it).
+
+Where the bytes go (review of PR #274, finding F1): the 8 MiB body is read, checked and written to
+the bucket by the stateless gateway Worker; it never enters the one ledger Durable Object, whose
+128 MB isolate also serves `/report`, `/rent` and the cron. The gateway asks the ledger for a few
+bytes of reservation (`https://internal.invalid/evidence/reserve`: authenticates the run token against
+the record, checks the rental is live, sets the PENDING flag, answers the object keys), writes the
+bucket, and tells the ledger the outcome (`/evidence/settle`: STORED, EXISTS or FAILED; FAILED clears
+the flag so the box can retry). Bounds: at most 2 bodies held per gateway isolate and at most 4
+reservations open across the whole ledger (the rest get `503 EVIDENCE_BUSY`, which the box retries),
+at most 6 uploads a minute per rental at the gateway, and a PENDING flag older than a minute no
+longer blocks.
+
+Order (coordinator only; a coding lane never runs these):
+
+1. Merge the PR to `next`, then the `next` -> master batch. Master's `runner.py` pins the deployed
+   bundle, so the Worker is deployed only after master carries the new `deployment.json` hash.
+2. Create the bucket BEFORE the deploy, then the lifecycle rule (step 3), then deploy. CODE READ of
+   `node_modules/wrangler/wrangler-dist/cli.js` (4.152.0; review of PR #274, finding F9): a plain
+   `wrangler deploy` whose config names a bucket that does not exist CREATES it (`provisionBindings`;
+   the hidden flags `--experimental-provision` / `--x-provision` and `--experimental-auto-create`
+   both default to true), with no location hint and no lifecycle rule, so its objects would never
+   expire. `deploy.mjs` therefore passes `--x-provision=false` (the flag is accepted by `wrangler
+   deploy --dry-run`; run 2026-11-06, bundle unchanged): with it a missing bucket fails the deploy
+   instead of being created. Do not deploy this Worker with a bare `wrangler deploy`. Placement hint
+   `enam` (the ledger's Durable Object is placed in ENAM); no public access, no custom domain, no
+   `r2.dev` URL:
+   ```sh
+   cd ci/vast-broker
+   npx wrangler r2 bucket create kayfabe-ci-evidence --location enam
+   ```
+3. Set the retention rule, 30 days from upload, every key:
+   ```sh
+   npx wrangler r2 bucket lifecycle add kayfabe-ci-evidence expire-evidence-30d "" --expire-days 30 -y
+   npx wrangler r2 bucket lifecycle list kayfabe-ci-evidence
+   ```
+   The argument order (`<bucket> [name] [prefix]`, `--expire-days`) is from `wrangler r2 bucket
+   lifecycle add --help` of the pinned wrangler 4.152.0 (read 2026-11-06, not run; `-y` skips its
+   confirmation prompt). The rule is the only retention: the Worker never deletes an object.
+4. Deploy the CI Worker as above (`node ci/vast-broker/deploy.mjs <vars-file> --dry-run`, then
+   without `--dry-run`). The binding comes from the committed `wrangler.toml`; the helper still
+   refuses unless the bundle hashes to `deployment.json`.
+5. Check without a rental: `POST /evidence/<any run>` with a bad token answers `401` from a
+   deployed Worker (the same answer as without the binding; a live token is needed to see
+   `404 EVIDENCE_DISABLED` or `200`). The first real check is the first failed gate run after the
+   deploy: the box log ends with `evidence uploaded: <run>/<attempt> <bytes> sha256 <12 hex>`, and
+   `python3 scripts/ci/fetch_evidence.py list --run <run>` shows the keys.
+
+To read a bundle, with the coordinator's own credentials (never a box's, never GitHub's):
+
+```sh
+# one known key, with the Cloudflare login wrangler already has:
+npx wrangler r2 object get kayfabe-ci-evidence/check/42111518119/2.tgz --file ev.tgz --remote
+# listing and verified download (S3 key pair of an Object Read token on this bucket, in the environment):
+CF_ACCOUNT_ID=... R2_ACCESS_KEY_ID=... R2_SECRET_ACCESS_KEY=... \
+  python3 scripts/ci/fetch_evidence.py list --run 42111518119
+python3 scripts/ci/fetch_evidence.py get 42111518119-2 --out /data/evidence/42111518119-2
+python3 scripts/ci/fetch_evidence.py members /data/evidence/42111518119-2/42111518119-2.tgz
+```
+
+(`wrangler r2 object get` takes `{bucket}/{key}` and `--file`/`--remote`; read from `--help` of the
+pinned wrangler, not run.) A bundle is DATA from a box that ran untrusted code: read it, never run
+anything from it, extract only into an empty scratch directory.
+
+Without the binding (never created, or the block removed), the route answers `404 EVIDENCE_DISABLED`
+to an authenticated box; the box prints one `KF_EVIDENCE_SKIPPED reason=upload_http_404` line and
+carries on. An old Worker answers 404 for the unknown route, and an old box never calls it, so both
+directions keep working. Rollback: remove the `[[r2_buckets]]` block and redeploy (or delete the
+bucket after removing the binding); nothing else depends on it.
+
+INFERRED, not measured (what a first real run must confirm): that the R2 binding's `put` accepts a
+`Uint8Array` body with `customMetadata`, and that `head` returns `null` for a missing key; that a
+Worker request body of 8 MiB is delivered in full to the gateway Worker; the memory of a gateway
+isolate holding two such bodies (two copies each while they are joined, about 32 MiB); and that the
+lifecycle rule applies to keys written by the binding. The local tests use a fake bucket and call the
+ledger service in-process, not a Durable Object.
+
+
+## Public logs and run reports (full logs, structured reports, host sessions)
+
+STATUS: DESIGN-ONLY as a deployment, 2026-11-07. [CODE READ: wrangler.toml, src/publiclog.js,
+src/runreport.js, src/publish.js, src/index.js, src/ledger.js, ci/platform-api/migrations/0004;
+GPU-free node, python and mutation tests only.] No real R2 bucket, no real D1 database, no Worker
+and no box has run any of it. Contract: `/root/night/REPORT_CONTRACT.md` (coordinator, 2026-11-07).
+
+What it does. When a run is settled (any reason: result, timeout, stop, provider fault), the cron
+publishes, OFF the serialized teardown queue and with bounded waits, two objects to the PUBLIC R2
+bucket `kayfabe-logs-public` (served at `https://logs.kayfabe.dev`): `<run id>/log.txt` (the whole
+log, secrets redacted, and nothing else changed but one prefix on forged lines; see the bounds below) and `<run id>/report.json` (the
+box's structured report, bounded and re-validated by the Worker, with the Worker's own identity
+fields). The run id is `vast-<github run>-<attempt>-<leg>`. The same report goes to D1 (`ci_run_reports`,
+`ci_subruns`, `ci_run_tests`, `ci_run_perf`, `ci_run_apps`, migration 0004). The public API serves it
+([ci/platform-api/README.md](../platform-api/README.md)). The verdict, the teardown and the budget never
+depend on any of it: the publisher runs after the sweep, a failure is one log line (fixed word, never
+a message). An entry that cannot finish backs off (1, 2, 4 minutes, then 5) so that a few stuck runs never keep the others from being published; it is tried at most 60 times (about 4.5 hours, inside the 6 hours the pieces are kept), then dropped.
+
+| Name | Kind | Where | Notes |
+|---|---|---|---|
+| `LOGS_BUCKET` | R2 binding | `wrangler.toml` (committed, `[[r2_buckets]]`) | bucket `kayfabe-logs-public`; write-only use (`put`); the Worker never reads or lists it |
+| `LOGS_BASE` | public var | `wrangler.toml` `[vars]` | `https://logs.kayfabe.dev`; only a https origin on kayfabe.dev is accepted (the report's `log.url`) |
+| (none) | secret | | no new secret; `deploy.mjs` is unchanged: it already passes `--x-provision=false` (as for `EVIDENCE_BUCKET`), so a bucket that does not exist FAILS the deploy instead of being created without its settings |
+
+The bucket already exists and is public through the custom domain `logs.kayfabe.dev` (attached by the
+coordinator on 2026-11-07, per the contract). Do not create it from a deploy.
+
+Order (coordinator only; a coding lane never runs these):
+
+1. Merge the PR to `next`, then the `next` -> master batch. Master's `runner.py` pins the deployed
+   bundle, so the Worker is deployed only after master carries the new `deployment.json` hash.
+2. Apply migration 0004 from the public API's directory, after looking at what is applied:
+   ```sh
+   cd ci/platform-api
+   npx wrangler d1 migrations list kayfabe-platform --remote
+   npx wrangler d1 migrations apply kayfabe-platform --remote
+   ```
+   `0004_ci_run_reports.sql` only adds tables and indexes (a test pins that it contains no ALTER, DROP,
+   DELETE, UPDATE or INSERT and leaves the tables of 0001-0003 unchanged). A Worker deployed before the
+   migration still publishes the log (the R2 write does not need D1); the report step logs one
+   `RETRY_LATER` line per tick (why `error`) until the tables exist. The public API answers a run page
+   without the new tables (no report, no subruns); `/v1/ci/subruns` and `/v1/ci/stats` answer a fixed
+   500 until the migration is applied.
+3. Deploy the CI Worker (`node ci/vast-broker/deploy.mjs <vars-file> --dry-run`, then without
+   `--dry-run`); the helper refuses unless the bundle hashes to `deployment.json`.
+4. Deploy the public API (`cd ci/platform-api && npx wrangler deploy`); its `LOGS_BASE` is in its
+   `wrangler.toml`.
+5. Check after the first run that ended: `https://logs.kayfabe.dev/vast-<run>-<attempt>-0/log.txt` and
+   `report.json` answer 200; `GET https://api.kayfabe.dev/v1/ci/runs/vast-<run>-<attempt>-0` shows `log`,
+   `subruns` and `report`; `npx wrangler d1 execute kayfabe-platform --remote --command "SELECT COUNT(*) FROM ci_subruns"`.
+
+Rollback: remove the `[[r2_buckets]]` block with `LOGS_BUCKET` and redeploy (nothing is stored or
+published; the report route still keeps one report per rental until the ledger expires it), or delete
+`ROW_TAG_KEY` (the result store, and with it the report route, switch off). The objects in the bucket
+and the D1 tables can stay.
+
+### What the full log can and cannot contain
+
+[CODE READ 2026-11-07; numbers are the committed limits, not measurements.]
+
+- It is the text the box's reporter delivered to the Worker, whole, in order, joined, then redacted:
+  the box's `[kf-report]` markers, its own lines, and the Worker's `[Worker] ...` lines (selection,
+  provider status, close reason). Addresses, URLs, UUIDs, hashes, ANSI sequences, tabs and non-ASCII
+  text are NOT changed (the display scrub of the runner, `src/sanitize.js`, is a different, unchanged
+  path: it feeds the GitHub log and the status relay, never this file).
+- The ledger keeps this text in `plog:<run key>:<n>` values (one per post, at most 60000 bytes each)
+  next to the display relay (`log:<run key>:<n>`, 16384-byte chunks of sanitised text). Its only limit
+  is the 16 MiB cap of the public log itself (`LOG_MAX_BYTES`): what does not fit is counted and named
+  in a marker line at the end of the log. Both are deleted with the run's record `LOG_RETENTION_HOURS`
+  (6) after the run ended (`Ledger.expire`); the R2 object has no expiry in this code.
+- It CANNOT contain more than the box's reporter sends. The reporter (`scripts/ci/vast_report.py`,
+  `Limits`) sends at most 3,000,000 bytes of request bodies in at most 1500 posts, cuts every line at
+  4000 bytes (`...[line truncated, N bytes dropped]`), and when a cap binds keeps the END of the log and
+  says `[kf-report] N bytes omitted`. The Worker closes a rental that sends more than `reportBytes`
+  (4194304) or 2000 posts (`LIMIT`). So today the published log is at most about 3 MB of box text plus
+  the Worker's lines: the 16 MiB cap is a bound that this channel cannot reach. NOT raised in this change:
+  a larger channel needs a new box and a new Worker together (an old Worker closes the rental above 4 MiB),
+  and the runner pinned in master reads the relay with its own 4 MiB budget. The way to do it later is an
+  environment variable the Worker sets for new boxes (as `KF_RUN_REPORT`), with `reportBytes` raised in
+  the same change.
+- It CANNOT contain text the box never sent (output after the grace period, a box that was lost before
+  it reported), nor text from reports the Worker refused (a closed rental answers 401).
+- Redaction: exact values (the run token of every leg and its 16-character prefix and suffix, the nonces
+  of every leg, the secret path, the Access pair, every Worker secret of at least 8 characters, and the
+  Access pair and path the box was given at rent time, kept in the rent record so that a rotation while
+  the run waits for publication does not leave the old values unredacted) and shapes (JWT, `Bearer`, presigned-URL
+  parameters, private-key blocks, Cloudflare Access headers, Vast API keys, GitHub tokens, URLs with
+  credentials, `password=`-style assignments of 8 or more characters). A secret that the Worker does not
+  hold and that has none of these shapes (for example a bare random password, which the guest password is)
+  is NOT recognised: the box-side evidence scanner covers the evidence bundle, not this log. This is the
+  main residual risk of publishing the log whole. The same redaction runs over every string of
+  report.json before it is written to the bucket or D1 (review of #282, F1).
+- Forged lines: box text is stored apart from the Worker's own lines, and at publication a box line that
+  starts with `[Worker] ` or `[kayfabe-log] ` is prefixed `[box] `, so the Worker's lines and the cap marker
+  cannot be forged. Stage markers (`KF_PAYLOAD_STAGE_START/END`) can still be forged by a box and only steer
+  that run's own `log_range`.
+
+Known follow-ups (review of #282, not done in this change): the guest password is never known to the
+Worker (a box-side stream redaction in `vast_report.py`, mirroring the evidence scanner, would close it);
+the key-block scan is quadratic on 16 MiB of BEGIN lines with no END (about 5 s in the reviewer's probe,
+bounded to about 4 MiB by the box channel); R2 `put` does not refuse to overwrite; `nosniff` and a
+sandbox CSP belong in a Cloudflare Transform Rule on `logs.kayfabe.dev`; D1 calls in the publisher have no
+timeout; the 0004 tables have no retention.

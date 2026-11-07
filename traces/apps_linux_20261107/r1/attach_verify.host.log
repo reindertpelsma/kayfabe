@@ -1,0 +1,5 @@
+=== attach_verify side=host start=2026-11-07T02:24:02+00:00 host=ubuntu cmd: /opt/apps/bundle/bin/attach_verify
+attach_verify: 4 buffers x 1048576 elements, 0 mismatched
+attach_verify(global): 0 mismatched
+RESULT: CORRECT
+=== end rc=0 secs=1 2026-11-07T02:24:03+00:00

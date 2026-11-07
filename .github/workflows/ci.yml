@@ -62,6 +62,14 @@ jobs:
           # Runtime dependency (jose) from the committed lockfile; no install scripts run.
           npm ci --prefix ci/vast-broker --omit=dev --ignore-scripts --no-audit --no-fund
           node --test ci/vast-broker/test
+          # Tier, release and admin-start mutants (wtier, 2026-11-05): each must be killed.
+          node ci/vast-broker/scripts/mutate-tiers.mjs
+          # Evidence upload route mutants (2026-11-06): each must fail at least two tests.
+          node ci/vast-broker/evidence-mutants.mjs
+          # Public log, run report and publisher mutants (2026-11-07): each must fail at least two tests.
+          node ci/vast-broker/report-mutants.mjs
+          # Provider-status tolerance and close-line mutants (2026-11-06): each must fail at least two tests.
+          node ci/vast-broker/provider-tolerance-mutants.mjs
           npm ci --prefix ci/vast-admin --ignore-scripts --no-audit --no-fund
           node --test ci/vast-admin/test/*.test.mjs
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1 (tip of master on 2026-10-31; toolchain: input is explicit)
@@ -294,6 +302,7 @@ jobs:
           python3 scripts/ci/debt.py frozen
           python3 scripts/ci/workflow_lint.py
           python3 -m unittest discover -s scripts/ci -p 'test_*.py'
+          python3 -m unittest discover -s scripts/evidence -p 'test_*.py'
           bash scripts/bench/qemu_identity_selftest.sh
           bash scripts/bench/box/birth_census.sh --selftest
       # ★ The hexagonal boundary gate (l1_concurrency.md §6.2, decision #37). The
@@ -2395,7 +2404,8 @@ jobs:
     name: platform — public status API and status pages (ci/platform-api, site/status)
     # Read-only public Worker for api.kayfabe.dev: node:sqlite tests against a read-only seeded
     # file, mutants for the read-only / fixed-SQL / validation rules, and the committed synthetic
-    # fixture. No install, no network, no Cloudflare. docs/design/V3_PLATFORM_TESTING.md.
+    # fixture (no install). Second step: the CI Worker's result store (installs jose from the
+    # broker lockfile). No Cloudflare. docs/design/V3_PLATFORM_TESTING.md.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -2409,6 +2419,25 @@ jobs:
           cd ci/platform-api
           node --test test/*.test.js
           node scripts/mutate.mjs
+      - name: Status coverage file (scripts/site, site/status/coverage.json)
+        # coverage.json is built from the committed traces; the tests parse the real logs and check
+        # every count against the trace READMEs. The page tests (jsdom) run in the Site workflow.
+        run: |
+          python3 scripts/site/coverage_from_traces.py --check
+          python3 -m unittest discover -s scripts/site -p 'test_coverage_from_traces.py'
+          python3 scripts/site/coverage_mutants.py
+      - name: CI Worker result store, tree key and requirements check (ci/vast-broker)
+        # Node 22 here guarantees node:sqlite, so the D1 tests run instead of skipping. Runtime
+        # dependency only (jose, from the committed lockfile, no install scripts). The tree-key
+        # parity test compares the matcher with `git check-ignore` on this checkout's paths.
+        run: |
+          npm ci --prefix ci/vast-broker --omit=dev --ignore-scripts --no-audit --no-fund
+          node --test ci/vast-broker/test/treekey.test.js ci/vast-broker/test/treekey-parity.test.js \
+            ci/vast-broker/test/requirements.test.js ci/vast-broker/test/results-store.test.js \
+            ci/vast-broker/test/store-ingest.test.js ci/vast-broker/test/host-claims.test.js \
+            ci/vast-broker/test/edits-no-secrets-on-vast.test.js ci/vast-broker/test/die-rules-turing.test.js \
+            ci/vast-broker/test/run-report.test.js ci/vast-broker/test/run-report-extra.test.js
+          node ci/vast-broker/store-mutants.mjs
 
   slow:
     name: slow — full suite with the soaks (KAYFABE_SLOW=1)

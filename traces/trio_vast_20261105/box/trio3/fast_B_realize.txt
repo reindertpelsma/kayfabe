@@ -1,0 +1,40 @@
+     30 kf3: BAR1 scratch: tile 0x200000 x 64 over 0x8000000 (host RAM bound 0x200000)
+      1 kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=12264: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+      2 kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=153: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+      1 kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=155: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+      2 kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=158: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+      1 kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=161: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+      2 kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=163: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+      5 kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=166: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+      1 kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=172: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+      3 kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=173: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+      3 kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=179: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+      1 kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=185: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+      2 kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=194: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+      1 kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=237: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+      1 kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=240: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+      1 kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=314: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+      1 kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=318: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+      1 kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=357: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+      1 kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=369: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+      1 kf3: guest GPU UUID GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0002 (gpu-uuid=auto, basis RandomNoVmId, devfn 0x18)
+      1 kf3: guest GPU UUID GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0003 (gpu-uuid=auto, basis RandomNoVmId, devfn 0x18)
+      1 kf3: guest GPU UUID GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004 (gpu-uuid=auto, basis RandomNoVmId, devfn 0x18)
+      1 kf3: guest GPU UUID GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0006 (gpu-uuid=auto, basis RandomNoVmId, devfn 0x18)
+      1 kf3: guest GPU UUID GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0008 (gpu-uuid=auto, basis RandomNoVmId, devfn 0x18)
+      1 kf3: guest GPU UUID GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000b (gpu-uuid=auto, basis RandomNoVmId, devfn 0x18)
+      1 kf3: guest GPU UUID GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000c (gpu-uuid=auto, basis RandomNoVmId, devfn 0x18)
+      1 kf3: guest GPU UUID GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000d (gpu-uuid=auto, basis RandomNoVmId, devfn 0x18)
+      1 kf3: guest GPU UUID GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000f (gpu-uuid=auto, basis RandomNoVmId, devfn 0x18)
+      1 kf3: guest GPU UUID GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0014 (gpu-uuid=auto, basis RandomNoVmId, devfn 0x18)
+      1 kf3: guest GPU UUID GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e001a (gpu-uuid=auto, basis RandomNoVmId, devfn 0x18)
+      1 kf3: guest GPU UUID GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e001b (gpu-uuid=auto, basis RandomNoVmId, devfn 0x18)
+      1 kf3: guest GPU UUID GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e001c (gpu-uuid=auto, basis RandomNoVmId, devfn 0x18)
+      1 kf3: guest GPU UUID GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e001e (gpu-uuid=auto, basis RandomNoVmId, devfn 0x18)
+      1 kf3: guest GPU UUID GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0020 (gpu-uuid=auto, basis RandomNoVmId, devfn 0x18)
+      1 kf3: guest GPU UUID GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0022 (gpu-uuid=auto, basis RandomNoVmId, devfn 0x18)
+      1 kf3: guest GPU UUID GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0023 (gpu-uuid=auto, basis RandomNoVmId, devfn 0x18)
+      1 kf3: guest GPU UUID GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0024 (gpu-uuid=auto, basis RandomNoVmId, devfn 0x18)
+      1 kf3: guest GPU UUID GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0026 (gpu-uuid=auto, basis RandomNoVmId, devfn 0x18)
+      1 kf3: guest GPU UUID GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0029 (gpu-uuid=auto, basis RandomNoVmId, devfn 0x18)
+      1 kf3: guest GPU UUID GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e002b (gpu-uuid=auto, basis RandomNoVmId, devfn 0x18)

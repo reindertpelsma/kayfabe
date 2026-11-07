@@ -1,0 +1,68 @@
+=== clpeak side=host start=2026-11-07T02:34:11+00:00 host=ubuntu cmd: /opt/apps/bundle/bin/clpeak
+
+Platform: NVIDIA CUDA
+  Device: NVIDIA GeForce RTX 4090
+    Driver version  : 580.159.04 (Linux x64)
+    Compute units   : 128
+    Clock frequency : 2595 MHz
+
+    Global memory bandwidth (GBPS)
+      float   : 873.44
+      float2  : 901.24
+      float4  : 918.07
+      float8  : 928.96
+      float16 : 939.13
+
+    Single-precision compute (GFLOPS)
+      float   : 89813.73
+      float2  : 87229.60
+      float4  : 87367.30
+      float8  : 86778.89
+      float16 : 85822.46
+
+    No half precision support! Skipped
+
+    Double-precision compute (GFLOPS)
+      double   : 1454.73
+      double2  : 1453.73
+      double4  : 1450.35
+      double8  : 1443.45
+      double16 : 1429.62
+
+    Integer compute (GIOPS)
+      int   : 46035.49
+      int2  : 45971.33
+      int4  : 45863.95
+      int8  : 45848.64
+      int16 : 45787.04
+
+    Integer compute Fast 24bit (GIOPS)
+      int   : 45875.68
+      int2  : 45732.70
+      int4  : 45797.72
+      int8  : 45617.84
+      int16 : 45218.61
+
+    Transfer bandwidth (GBPS)
+      enqueueWriteBuffer              : 7.88
+      enqueueReadBuffer               : 5.66
+      enqueueWriteBuffer non-blocking : 6.98
+      enqueueReadBuffer non-blocking  : 5.98
+      enqueueMapBuffer(for read)      : 10.12
+        memcpy from mapped ptr        : 3.32
+      enqueueUnmap(after write)       : 18.67
+        memcpy to mapped ptr          : 8.28
+
+    Kernel launch latency : 5.19 us
+
+
+Platform: Portable Computing Language
+  Device: pthread-AMD EPYC 7B13 64-Core Processor
+    Driver version  : 1.8 (Linux x64)
+    Compute units   : 30
+    Clock frequency : 2249 MHz
+    Build Log: error: unknown target CPU 'generic'
+Device pthread-AMD EPYC 7B13 64-Core Processor failed to build the program, log: error: unknown target CPU 'generic'
+
+
+=== end rc=0 secs=80 2026-11-07T02:35:31+00:00

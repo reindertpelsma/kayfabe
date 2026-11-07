@@ -1,0 +1,6 @@
+crate	target	source_site	missing_ignored_path	effect
+kf-abi	lib	crates/kf-abi/src/drmnv.rs:215	traces/driver_matrix/drmnv.tsv	lib build: every dependent fails to compile (kf-harness, kf-rm, kf-chan, kf-host, kf-qemu, kf-census, kf-chip, kf-crec, kf-gsp, kayfabe-isolate-host)
+kf-abi	lib test (cfg(test))	crates/kf-abi/src/eventnotify.rs:1251	traces/rawclient_ce_interrupt_20261008/nvos_event_flags_by_tag.txt	test target does not compile
+kf-abi	tests/driver_matrix.rs	crates/kf-abi/tests/driver_matrix.rs:11	traces/driver_matrix/ranges.tsv	test target does not compile
+kf-disp	tests/host_precomp.rs	crates/kf-disp/tests/host_precomp.rs:415,449	traces/blackwell_host_caps_review_20261022/tier_audit/precomp_fields.tsv	test target does not compile
+kf-rm	tests/precomp_consttab_data.rs	crates/kf-rm/tests/precomp_consttab_data.rs:6-15	traces/blackwell_windows_resume_20261023/lease_metadata/precomp_tier3.txt; traces/blackwell_hw_20261103/gb203_tier3/precomp_tier3.txt; traces/blackwell_provider_validation_20261023/lease_metadata/precomp_tier3.txt	test target does not compile

@@ -1,6 +1,6 @@
 # Platform testing: a coverage service behind CI, and a public status site
 
-**STATUS: DESIGN-ONLY, 2026-11-05.** Owner-approved design of 2026-11-04 (lane 1 brief), recorded
+**STATUS: DESIGN-ONLY, 2026-11-06.** Owner-approved design of 2026-11-04 (lane 1 brief), recorded
 here, corrected on 2026-11-05 by the owner's later decisions (box below); nothing in this document is deployed. Branch `claude/platform-status-20261104` builds the
 public read-only API (`ci/platform-api/`), its D1 schema and the static status pages
 (`site/status/`) against **synthetic** fixture data only. The CI Worker side (ingest, lazy
@@ -15,6 +15,20 @@ left after the commit's own `.workerignore`, not a hash over a BASE-branch `ci/t
 a small tier that rides on the middle box, no retries, no scheduled runs, and the event-to-tier rule
 (§2). (3) The tiers' stages gain the two-guest and TRIO stages (that document, §5). Where a section
 below still shows the older text, it is marked SUPERSEDED in place.
+
+**Addition, 2026-11-06 (owner request): the setup picker.** A visitor enters a guest OS, a GPU (a
+marketing name or a die) and optionally a CPU vendor, and the status site shows the runs across
+driver versions with result, counts, latest date and run. Built (GPU-free tests only, nothing
+deployed, no box ran it): migration `0003_ci_run_claims.sql`; `GET /v1/ci/setups` and
+`GET /v1/ci/facets` (§6a); an optional `host_claims` block in the box result, accepted by the CI
+Worker only when it asked for it with `KF_HOST_CLAIMS=1`; the static name table
+`site/status/gpu_names.json`; the page `/status/find/` (§9a). The CPU vendor, the CPU model, the guest
+OS versions and the host and guest drivers are **claims by the test box** (`claimed = 1`): the Worker
+checks their shape, they group and filter public rows, and none decides a verdict, a die or a
+requirement (the die and the PASS cross-check of the box's GPU name are the Worker's, unchanged).
+The public API will later also serve rows of a separate community store, read-only; every row
+therefore carries a `source` field now, and the `source` and `report_tier` filters exist (community
+rows are not populated, accepted, and return nothing; **DESIGN-ONLY**).
 
 Labels used below: **Owner ruling (2026-11-04)** is binding text from the owner's brief.
 **Proposal (lane 1)** is this branch's addition and needs owner review. **Built** names what this
@@ -194,6 +208,16 @@ cell history (die, suite, time), run list (time, with filters) and commit requir
   links on the site are plain hyperlinks built by the frontend.
 - SPECviewperf scores are **never** returned in v1 (§8); the run carries `scores_hidden` instead.
 
+## 6a. Setup picker endpoints (Built: `ci/platform-api/src/`, 2026-11-06)
+
+`GET /v1/ci/setups?os=&gpu=&cpu=&driver=&tier=&source=&report_tier=&limit=` and
+`GET /v1/ci/facets`; the parameters, the row shape, the attribution of a run over both guest OSes and
+the meaning of `source` are in [`ci/platform-api/README.md`](../../ci/platform-api/README.md), "Setup
+picker endpoints". Rules kept: fixed statements, anchored patterns, GET only, CORS `*`, no row tag,
+machine id, price, cost, CPU model or SPECviewperf datum in a response. The host driver is the
+box's own `nvidia-smi` driver, never the provider's offer label (owner ruling 2026-10-24: the offer's
+driver label says nothing about a KVM rental).
+
 ## 7. Logs
 
 **Owner ruling (2026-11-04).** Redacted logs go to the **public** R2 bucket served at
@@ -202,6 +226,14 @@ cell history (die, suite, time), run list (time, with filters) and commit requir
 the ingest stream in the CI Worker**, by exact value, with a **tail buffer across chunks** (a token
 split over two chunks is still caught), plus a **token-pattern lint that holds a log back** when it
 finds anything token-shaped. There is no raw/scrubbed split. Vast boxes need no GPU-UUID stripping.
+
+**Correction 2026-11-07 (coordinator contract `/root/night/REPORT_CONTRACT.md`, built on branch
+`claude/report-20261107`): the CI Worker's objects are `<run id>/log.txt` (the WHOLE log: secrets
+replaced, nothing else changed, one 16 MiB cap with a visible marker; the token-pattern lint that holds a
+log back is not built, a log is redacted, never refused) and `<run id>/report.json` at the root of the
+bucket, and `/v1/logs/<run>/log.txt` and `report.json` redirect for a run that has them (the host sessions, subruns and
+`/v1/ci/subruns` ranking are in `ci/platform-api/README.md`). The proposal below stays for the legacy
+`runs` table.**
 
 **Proposal (lane 1):** object key `runs/<run id>/<name>`; names match
 `^[a-z0-9][a-z0-9._-]{0,63}\.(log|txt)$`; the run row lists its log names, and the public Worker
@@ -242,6 +274,21 @@ and the frontend shows only PASS/FAIL. Showing scores later needs a stamped tabl
 
 ## 9. Frontend (Built: `site/status/`, `site/status_pages.py`)
 
+**Correction (2026-11-05, folded above the text it corrects).** The pages now read the CI Worker's
+result store (`/v1/ci/matrix`, `/v1/ci/trees`, `/v1/ci/runs/<id>`, `/v1/ci/commits/<sha>`; PR stacked on
+#258) and a static evidence file, `site/status/coverage.json`, generated by
+`scripts/site/coverage_from_traces.py` from the committed trace directories
+`traces/die_coverage_20261104` (revision 0c515b3b3, 2026-11-04) and `traces/gate_windows_ci_20261105`
+(gpu-vast run 41936606326, revision d74f6063, 2026-11-05). The routes are `/status/?tier=`,
+`/status/die/?family=&die=`, `/status/run/?id=` and `/status/commit/?sha=` or `?tree=`; the cell page
+and the `/v1/matrix`, `/v1/cells`, `/v1/runs` and `/v1/commits/.../requirements` views of the older
+text below are no longer used by the pages. Every entry carries one of two source labels:
+"CI Worker run (reproduced)" or "Direct Vast run, evidence in repo (imported)". Only runs reproduced
+by the CI Worker count for the release gate, and only through its result store; imported evidence is
+drawn as run counts, never as a verdict. `traces/trio_vast_20261105` is not imported (placeholder in the
+generator, no data). The fixture mode serves the live part from the synthetic fixture and shows the
+evidence file unchanged.
+
 **Owner ruling (2026-11-04).** Static pages at `kayfabe.dev/status/` built by the existing site
 workflow. The API base comes from repository variable `STATUS_API_BASE` (set by the owner to
 `https://api.kayfabe.dev`), optional `STATUS_LOGS_BASE`. **When the variable is empty** (local
@@ -271,6 +318,76 @@ no GitHub API call.
   exclusive.
 - Routes are query-string pages: `/status/`, `/status/cell/?die=&suite=`, `/status/run/?id=`,
   `/status/commit/?sha=`.
+
+## 9a. Find my setup (Built: `site/status/status.js`, `site/status/gpu_names.json`, 2026-11-06)
+
+Route `/status/find/`, every control a URL parameter so a view can be shared: `os`, `gpu` (a name or a
+die), `cpu` (`any`, `amd`, `intel`; Arm is listed as not tested yet and cannot be chosen), `show`
+(repeated: `reproduced`, `imported` on by default, `community` opt-in), `tier`, `driver`. A name is
+looked up in `gpu_names.json`, a hand-written table of desktop names (GTX 16, RTX 20, 30, 40, 50
+lines) to dies, with one name allowed to map to several dies (RTX 3060 is GA106 and GA104; the page
+lists each); a laptop name is answered with "laptops are not covered", an unlisted name asks for the
+die. The table states only dies that are public product knowledge; a test checks it against the
+Worker's die rules and the boards named in the evidence file. The Worker's die rules for Turing were corrected in the same PR after review (INFERRED from public
+product data, not measured on hardware): the GTX 1650 and GTX 1630 are TU117 (the rule `GTX_16*` said
+TU116), the RTX 2070 is TU106 (the rule `RTX_2070*` said TU104; only the RTX 2070 SUPER is TU104).
+A test maps 18 Turing names and checks the PASS hardware check against the same rules; the table and
+the rules now agree without exception. Name rules cannot see board variants (for example an RTX 2060
+on another die); a PCI device id from the box would (follow-up, not built).
+The page asks `/v1/ci/setups` once per die; in live mode the CPU vendor, driver, tier and community
+opt-in all go to the API (so a page limit cannot hide a matching setup); fixture mode filters the CPU
+vendor and driver in the page, because the fixture holds one file per die. Rows from the result store and the repository's imported
+evidence (`coverage.json`) are separate blocks; imported evidence is drawn as counts with its source,
+revision and date, never as a gate verdict. An empty result says "not tested" and "No runs for this
+combination", with the reason `coverage.json` states for that die and OS when it states one. The page
+says in words that the CPU vendor and both drivers are reported by the box and not verified. Fixture
+mode serves every die of the name table for both OSes and the tier and community variants of each
+(a tier together with community is not in the fixture); live mode asks only the configured API
+origin and the same-origin static files, without credentials.
+
+## 9b. Site redesign, run, session and stats pages (Built: `site/`, 2026-11-07)
+
+Static pages only; no Worker change. The look: one system-font stylesheet with light and dark
+tokens (`prefers-color-scheme`, plus a `data-theme` override that a button in the header sets and
+keeps in this browser only), a header menu that is a `<details>` disclosure (open without
+JavaScript, collapsed below 48 rem by `site.js`), status chips that carry a glyph as well as a
+colour, tables that scroll inside their own frame, and a print stylesheet. `site/test_style.py`
+checks the colour pairs of both themes against WCAG AA and that nothing loads from the network.
+The portable build and the "no status URL, no analytics" rules are untouched.
+
+Pages added or changed, all reading the report contract (`report` and `log` on
+`/v1/ci/runs/<id>`, `/v1/ci/stats`, `/v1/ci/subruns`; the Worker side is built by another branch):
+
+- `/status/run/?id=`: a summary block (verdict, tier, revision, date, duration, die, platform) with
+  **Full log**, **Download report.json**, host-session and commit links; then performance numbers
+  (value, unit, direction, ratio to the same-box reference, in words), tests (counts per suite,
+  FAIL first, filter by result), applications, the Windows gate block, stages with durations, and the
+  raw details closed. A button links only `<configured log origin>/<run id>/log.txt` (or the
+  `report.json` beside it); any other `log.url` is not linked.
+- `/status/session/?id=`: the host session: header, a table of subruns (kind, guest driver,
+  result, counts, duration, byte range in the log), then one section per subrun filtered by `sub`.
+  The route is a query string because the site is static; a path segment cannot carry a run id.
+- `/status/stats/`: one sortable table per die and host driver with pass counts and the numbers
+  behind each row; die, tier, driver, sort and direction are URL parameters.
+- `/status/find/`: host driver, guest driver and commit fields, and a **Closeness** control (an
+  ordered list of the differences that may be accepted, in the URL as `relax=`, `none` for exact
+  only). When nothing matches exactly, or when a commit is given, the nearest subruns are listed with
+  chips built from the API's `match` object ("same guest OS", "different commit revision (wanted
+  X, found Y)").
+- Every run row on the matrix, die, commit, stats, find and nearest lists links to its session.
+
+Absent data is shown as an empty state with the reason ("Not measured yet: the application matrix
+stage does not exist in CI yet"); the pages never compute or estimate a number, and a
+viewport-benchmark row is dropped even if a report carried one. The committed fixture does not carry
+reports, subruns or stats yet, so fixture mode shows those empty states; the DOM tests build the
+pages against `site/report_fixture.mjs`, a synthetic extension in the contract's shape.
+
+**Assumed shapes (the contract is silent; INFERRED, to be reconciled with the Worker's answer):**
+`/v1/ci/stats` returns `{stats: [{die, family, tier, host_driver, run_id, commit, ended_at, verdict,
+pass, fail, skip, perf: [...]}]}`; `/v1/ci/subruns` returns `{subruns: [{run_id, sub, kind, os, die,
+guest_driver, host_driver, cpu_vendor, commit, ended_at, verdict, counts, match}]}`; the session's CPU
+vendor comes from `host.cpu_vendor` or `report.cpu_vendor`; `relax` dimension names are `commit,
+cpu, host_driver, guest_driver, die_family, os, die_any`.
 
 ## 10. Enrolled hosts (post-v1; design only, nothing built)
 
@@ -306,6 +423,8 @@ the hub says.
 | CI | `ci.yml` job `platform` (Node 22: format check, tests, mutants), required by the `CI` gate; the site workflow runs `test_status.py` and `test_status_dom.mjs` |
 | Row-tag reference (`shared/row-tag.js`) | Built and tested; nothing calls it yet |
 | Status pages, fixture mode, "not configured" page, workflow validation | Built, tested with the site's own checks |
+| Setup picker: migration 0003, `/v1/ci/setups`, `/v1/ci/facets`, `host_claims` in the box result, `gpu_names.json`, `/status/find/` | Built, GPU-free tests and mutants; **not deployed**, no box has sent a claim |
+| Community rows (`source` community, `report_tier`) | Filters and the per-row `source` field only; no store, no writer (design only) |
 | CI Worker ingest, lazy satisfaction, redaction stream, log lint, R2 writes, HMAC writing | Design only |
 | `ci/requirements.toml` | Design only (§4 shows a proposal) |
 | `ci/test_boundary.toml` | Superseded 2026-11-05 by `.workerignore` and the tree hash; neither exists yet (design only) |

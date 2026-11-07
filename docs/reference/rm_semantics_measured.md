@@ -1,5 +1,7 @@
 # RM semantics — measured and source-verified
 
+**STATUS: RESEARCH, 2026-07-27.** Reference sheet of NVIDIA RM/UVM behaviours read from ogkm and gVisor or observed on a rented GA106, each row tagged with its evidence kind (source, hardware or inferred). Read on 2026-11-07: its [src] rows cite ogkm 610.43.02 while the bench ran 580.159.04 (its own section 0 says so), and it predates v3, so re-check a row before relying on it.
+
 **What this file is.** A *reference sheet* of NVIDIA RM/UVM behaviours that this project has
 either read out of the open kernel modules or **measured on real hardware**, with the citation
 next to each fact. It exists because these facts are load-bearing for several independent

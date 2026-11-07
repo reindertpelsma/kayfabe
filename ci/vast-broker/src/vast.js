@@ -44,15 +44,22 @@ export class Vast {
       missing,
     );
   }
-  async offers() {
+  // `computeCap` / `maxPrice` (release planner only): one family's market at the release price
+  // cap, because the 100 cheapest offers of all families can omit a whole family.
+  async offers({ computeCap, maxPrice } = {}) {
     // Fetch both verification classes so availability can show the impact of
     // mandatory verification. Admission always rechecks the returned fields.
+    if (
+      (computeCap !== undefined && (!Number.isSafeInteger(computeCap) || computeCap < 750)) ||
+      (maxPrice !== undefined && !(maxPrice > 0 && maxPrice <= 10))
+    )
+      refuse();
     const q = {
       limit: 100,
       type: 'ondemand',
       gpu_arch: { eq: 'nvidia' },
-      compute_cap: { gte: 750 },
-      dph_total: { lte: Math.max(this.cfg.price, this.cfg.sweepPrice) },
+      compute_cap: computeCap === undefined ? { gte: 750 } : { eq: computeCap },
+      dph_total: { lte: maxPrice ?? Math.max(this.cfg.price, this.cfg.sweepPrice) },
       vms_enabled: { eq: true },
       rentable: { eq: true },
       rented: { eq: false },

@@ -1,0 +1,1 @@
+[2026-11-05T11:44:48Z] detached: tag=trio_trio1, log logs/trio_trio1_run.log (stdout logs/trio_trio1_run.out)

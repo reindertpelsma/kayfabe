@@ -1,3 +1,5 @@
+> **STATUS: SUPERSEDED, 2026-09-21** (archived, w822). Successor: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) and [`THE_ARCHITECTURE_v3.md`](../design/THE_ARCHITECTURE_v3.md). Historical record: a `STATUS` line further down says what the document claimed when it was written; it is no longer a claim about the current tree.
+>
 > ⊘⊘⊘ **ARCHIVED — THIS DESCRIBES A SUPERSEDED ARCHITECTURE. IT IS REFERENCE, NOT CURRENT.**
 > The live design is `docs/design/THE_DESIGN.md`. This file is kept because its *measurements*,
 > its *ogkm findings* and its *reasoning* remain useful — its **architecture does not**. Do not
@@ -5,7 +7,7 @@
 
 # w392 — ⊘ POINT 2's TRANSPORT IS NOT UNDRAINED, IT IS **UNREACHED**
 
-**STATUS: LIVE, 2026-09-08.** Measured on a real GA106 (RTX 3060, open 580.159.04, KVM
+**STATUS AT WRITING: LIVE, 2026-09-08.** Measured on a real GA106 (RTX 3060, open 580.159.04, KVM
 template box `50260029`), source revision `aa4ffb4d`, stamp gate passed.
 Supersedes nothing; extends `w391_the_three_point_coverage_ruling.md` §2.
 

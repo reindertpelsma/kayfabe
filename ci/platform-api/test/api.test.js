@@ -10,6 +10,7 @@ import { QUERIES } from '../src/queries.js';
 import { handle } from '../src/api.js';
 import { encodeCursor } from '../src/validate.js';
 import { Db } from '../src/db.js';
+import { CI_ENDPOINTS } from './ci-endpoints.js';
 
 const rows = syntheticRows();
 const log = [];
@@ -39,6 +40,7 @@ const ENDPOINTS = () => [
   '/v1/cells/AD104/linux-gate',
   '/v1/cells/GH100/windows-gate',
   '/v1/commits/' + docsCommit.sha + '/requirements',
+  ...CI_ENDPOINTS(),
 ];
 
 test('GET endpoints answer 200 JSON with CORS *, nosniff and a cache policy', async () => {
@@ -345,6 +347,7 @@ test('log redirect: 302 only for a listed log, only to a valid kayfabe.dev https
 test('every executed statement is a QUERIES entry bound with exactly its parameters', async () => {
   for (const path of ENDPOINTS()) await call(path);
   await call('/v1/logs/' + finalRun.id + '/box.log');
+  await call('/v1/logs/syn-ci-p-8/log.txt'); // a CI run's published objects (migration 0004)
   const known = new Set(Object.values(QUERIES));
   assert.ok(log.length > 20);
   for (const { sql, params } of log) {

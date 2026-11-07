@@ -1,0 +1,6 @@
+# final .dockerignore; rev d74f6063d; 2026-11-05
+# docker-stripped tree (final .dockerignore, 24564 files removed), nothing restored: cargo check --workspace --lib --bins --keep-going
+error: couldn't read `crates/kf-abi/src/../../../traces/driver_matrix/drmnv.tsv`: No such file or directory (os error 2)
+error: could not compile `kf-abi` (lib) due to 1 previous error
+# drmnv.tsv restored
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 14.27s

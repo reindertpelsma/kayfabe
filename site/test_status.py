@@ -86,15 +86,23 @@ class Modes(unittest.TestCase):
             self.out, api_base="https://api.kayfabe.dev", logs_base="https://logs.kayfabe.dev"
         )
         self.assertEqual(mode, "live")
-        for page in ["status/index.html", "status/cell/index.html", "status/run/index.html",
-                     "status/commit/index.html"]:
+        for page in ["status/index.html", "status/die/index.html", "status/run/index.html",
+                     "status/commit/index.html", "status/find/index.html"]:
             text = (self.out / page).read_text()
             self.assertEqual(text.count("https://api.kayfabe.dev"), 1, page)
             self.assertIn('<meta name="kf-status-api" content="https://api.kayfabe.dev" />', text)
             self.assertIn('<meta name="kf-status-logs" content="https://logs.kayfabe.dev" />', text)
             self.assertNotIn("Synthetic", text)
         self.assertFalse((self.out / "status/fixture.json").exists())
+        self.assertFalse((self.out / "status/cell").exists())
+        self.assertEqual(self.files(), sorted([
+            "status/index.html", "status/die/index.html", "status/run/index.html",
+            "status/commit/index.html", "status/find/index.html", "status/session/index.html",
+            "status/stats/index.html", "status/status.js",
+            "status/status.css", "status/coverage.json", "status/gpu_names.json"]))
         self.assertNotRegex((self.out / "status/status.js").read_text(), r"https?://")
+        self.assertNotRegex((self.out / "status/coverage.json").read_text(), WORKER_URL)
+        self.assertNotRegex((self.out / "status/gpu_names.json").read_text(), r"https?://")
 
     def test_invalid_logs_base_is_dropped(self):
         status_pages.write_status(
@@ -105,11 +113,42 @@ class Modes(unittest.TestCase):
     def test_fixture_pages_are_labelled_synthetic_and_hold_no_worker_url(self):
         self.assertEqual(status_pages.write_status(self.out, fixture=FIXTURE), "fixture")
         self.assertIn("status/fixture.json", self.files())
+        self.assertIn("status/coverage.json", self.files())
+        self.assertIn("status/gpu_names.json", self.files())
+        self.assertIn("status/find/index.html", self.files())
         for page in self.out.rglob("*.html"):
             text = page.read_text()
             self.assertIn("Synthetic data.", text)
             self.assertNotRegex(text, WORKER_URL)
         self.assertNotRegex((self.out / "status/fixture.json").read_text(), WORKER_URL)
+        self.assertNotRegex((self.out / "status/coverage.json").read_text(), WORKER_URL)
+        self.assertNotRegex((self.out / "status/gpu_names.json").read_text(), WORKER_URL)
+
+    def test_every_page_has_the_menu_the_section_tabs_and_the_site_script(self):
+        status_pages.write_status(self.out, fixture=FIXTURE)
+        for path, current in {
+            "status/index.html": "Matrix",
+            "status/stats/index.html": "Results by die",
+            "status/find/index.html": "Find my setup",
+            "status/session/index.html": None,
+        }.items():
+            text = (self.out / path).read_text()
+            self.assertIn('<details class="menu" open>', text, path)
+            self.assertIn('<a href="/status/" aria-current="page">Status</a>', text, path)
+            self.assertIn('<script src="/site.js" defer></script>', text, path)
+            self.assertEqual(text.count('aria-current="page"'), 1 if current is None else 2, path)
+            if current:
+                self.assertIn('aria-current="page">' + current + "</a>", text, path)
+            self.assertNotIn("kf-status-logs", text, "the fixture has no log origin unless one is given")
+
+    def test_a_fixture_build_takes_a_log_origin_only_when_valid(self):
+        status_pages.write_status(self.out, fixture=FIXTURE, logs_base="https://logs.kayfabe.dev")
+        self.assertIn(
+            '<meta name="kf-status-logs" content="https://logs.kayfabe.dev" />',
+            (self.out / "status/run/index.html").read_text(),
+        )
+        status_pages.write_status(self.out, fixture=FIXTURE, logs_base="https://logs.evil.example")
+        self.assertNotIn("kf-status-logs", (self.out / "status/run/index.html").read_text())
 
     def test_fixture_and_api_are_exclusive_and_fixture_must_be_synthetic(self):
         with self.assertRaises(ValueError):
@@ -123,6 +162,119 @@ class Modes(unittest.TestCase):
         status_pages.write_status(self.out, api_base="https://api.kayfabe.dev")
         status_pages.write_status(self.out)
         self.assertEqual(self.files(), ["status/index.html"])
+
+
+class GpuNames(unittest.TestCase):
+    """site/status/gpu_names.json: the hand-written marketing-name to die table of the picker."""
+
+    PREFIX_FAMILY = {"TU": "turing", "GA": "ampere", "AD": "ada", "GB": "blackwell"}
+    # Names whose die the Worker's rules (ci/vast-broker/defaults.json dieRules) label differently from
+    # the table. Empty since 2026-11-06, when the Turing rules were corrected (GTX 1650 and 1630 are
+    # TU117, the RTX 2070 is TU106; INFERRED from public product data, not measured on hardware).
+    WORKER_RULE_DISAGREES = set()
+
+    def setUp(self):
+        self.data = json.loads((SITE / "status/gpu_names.json").read_text())
+        self.rules = json.loads(
+            (SITE.parent / "ci/vast-broker/defaults.json").read_text())["dieRules"]
+
+    @staticmethod
+    def key(name):
+        return re.sub(r"[^a-z0-9]+", " ", name.lower()).strip()
+
+    def test_shape(self):
+        self.assertEqual(self.data["schema"], 1)
+        for field in ("note", "variants", "laptops", "unmapped"):
+            self.assertTrue(self.data[field], field)
+        self.assertIn("Laptop", self.data["laptops"])
+        names = set()
+        for entry in self.data["entries"]:
+            self.assertEqual(set(entry) - {"note"}, {"name", "dies"}, entry)
+            self.assertRegex(entry["name"], r"^(?:RTX \d{4}|GTX \d{4}|TITAN RTX)(?: (?:Ti|SUPER|D))*$")
+            self.assertNotIn(self.key(entry["name"]), names, "duplicate " + entry["name"])
+            names.add(self.key(entry["name"]))
+            dies = entry["dies"]
+            self.assertTrue(1 <= len(dies) <= 4, entry)  # the API takes up to four dies
+            self.assertEqual(len(set(dies)), len(dies))
+            for die in dies:
+                self.assertRegex(die, r"^(?:TU|GA|AD|GB)[0-9]{3}$")
+        # The consumer lines the owner named are all present.
+        for line in ("GTX 16", "RTX 20", "RTX 30", "RTX 40", "RTX 50"):
+            self.assertTrue(any(e["name"].startswith(line) for e in self.data["entries"]), line)
+        self.assertNotRegex(json.dumps(self.data), r"(?i)laptop \w*[0-9]{4}|https?://")
+
+    def test_a_multi_die_name_says_why(self):
+        by = {e["name"]: e for e in self.data["entries"]}
+        self.assertEqual(by["RTX 3060"]["dies"], ["GA106", "GA104"])
+        for entry in self.data["entries"]:
+            if len(entry["dies"]) > 1:
+                self.assertTrue(entry.get("note"), entry["name"] + " lists several dies without saying so")
+
+    def test_dies_agree_with_the_workers_die_rules_except_the_known_cases(self):
+        def matches(pattern, name):
+            return re.fullmatch(".*".join(re.escape(p) for p in pattern.split("*")), name) is not None
+
+        disagree = set()
+        for entry in self.data["entries"]:
+            worker = entry["name"].upper().replace(" ", "_")
+            for rule in self.rules:
+                if any(matches(p, worker) for p in rule["names"]) and rule["die"] not in entry["dies"]:
+                    disagree.add(entry["name"])
+        self.assertEqual(disagree, self.WORKER_RULE_DISAGREES)
+
+    def test_dies_agree_with_the_boards_named_in_the_evidence_file(self):
+        coverage = json.loads((SITE / "status/coverage.json").read_text())
+        by = {self.key(e["name"]): e for e in self.data["entries"]}
+        checked = 0
+        for family in coverage["families"]:
+            for die in family["dies"]:
+                if not die["board"]:
+                    continue
+                entry = by.get(self.key(die["board"]))
+                self.assertIsNotNone(entry, die["board"])
+                self.assertIn(die["id"], entry["dies"], die["board"])
+                self.assertEqual(self.PREFIX_FAMILY[die["id"][:2]], family["id"])
+                checked += 1
+        self.assertGreaterEqual(checked, 9)
+
+
+class Coverage(unittest.TestCase):
+    """The committed evidence file (scripts/site/coverage_from_traces.py builds it from traces/; its
+    own tests need the traces and run in the platform CI job)."""
+
+    def setUp(self):
+        self.data = json.loads((SITE / "status/coverage.json").read_text())
+
+    def test_shape(self):
+        self.assertEqual(self.data["schema"], 1)
+        self.assertEqual(set(self.data["sources"]), {"worker_reproduced", "imported_vast"})
+        self.assertEqual(self.data["sources"]["worker_reproduced"], "CI Worker run (reproduced)")
+        self.assertEqual(self.data["sources"]["imported_vast"],
+                         "Direct Vast run, evidence in repo (imported)")
+        self.assertIn("Imported evidence never does", self.data["gate_rule"])
+        dies = 0
+        for family in self.data["families"]:
+            for die in family["dies"]:
+                dies += 1
+                self.assertEqual(set(die["cells"]), {"linux", "windows"}, die["id"])
+                for cell in die["cells"].values():
+                    if cell["state"] == "covered":
+                        self.assertTrue(cell["groups"], die["id"])
+                        for g in cell["groups"]:
+                            for key in ("source", "revision", "date", "n", "pass", "fail", "evidence"):
+                                self.assertIn(key, g, die["id"])
+                            self.assertTrue(g["evidence"].startswith("traces/"))
+                    else:
+                        self.assertEqual(cell["state"], "not_covered")
+                        self.assertTrue(cell["reason"], die["id"])
+                        self.assertEqual(cell["groups"], [])
+        self.assertGreaterEqual(dies, 20)
+
+    def test_holds_no_worker_url_and_no_secret_shape(self):
+        text = (SITE / "status/coverage.json").read_text()
+        self.assertNotRegex(text, WORKER_URL)
+        self.assertNotRegex(text, r"https?://")
+        self.assertNotRegex(text, r"(?i)specviewperf|instance_api_key|token")
 
 
 class BuildPolicy(unittest.TestCase):

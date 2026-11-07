@@ -122,12 +122,16 @@ export, trademark clauses). Reading, not advice.
 STATUS: DESIGN-ONLY until the Worker change is deployed (code in the PR that added this section; no
 deployment, bucket content or Cloudflare setting is checked from the repo).
 
+Size correction, 2026-11-05 (folded above the text it corrects): an earlier version of this section said "about 25 GB" for the
+archive. The object is 42,002,015,727 B, and `zstd -d` of it gives a 94,190,929,920 B tar (MEASURED on Vast box 59248850, rev 6a0683af, 2026-11-05,
+`traces/specviewperf_vast_20261105/README.md`).
+
 The private bucket is `kayfabe-bench-enam` (Cloudflare R2, location hint ENAM, private). Its
 objects for SPECviewperf 15.0.0 are:
 
 | R2 key | Name the box asks the Worker for | Role |
 |---|---|---|
-| `specviewperf-15.0.0/specviewperf-15.0.0.tar.zst` | `specviewperf-15.0.0.tar.zst` | the benchmark tree, about 25 GB |
+| `specviewperf-15.0.0/specviewperf-15.0.0.tar.zst` | `specviewperf-15.0.0.tar.zst` | the benchmark tree, 42,002,015,727 B (the tar inside is 94,190,929,920 B) |
 | `specviewperf-15.0.0/CHECKSUMS.txt` | `specviewperf-15.0.0.CHECKSUMS.txt` | checksums of the copy |
 | `specviewperf-15.0.0/SPEC_General_License.pdf` | `specviewperf-15.0.0.SPEC_General_License.pdf` | the licence text kept beside the copy |
 | `specviewperf-15.0.0/original/SPECviewperf-Setup-15.0.0.exe` | `specviewperf-15.0.0.SPECviewperf-Setup.exe` | the original installer, unmodified |
@@ -137,7 +141,7 @@ with a redirect to a presigned URL that lives at most 20 minutes, only while the
 with a valid run token (no country gate), at most 4 URLs per object per run. The box never holds a Cloudflare credential.
 `scripts/bench/box/fetch_bench_data.sh <name> --sha256 <pin> --out <file>` downloads with resume
 into a `.part` file and renames only after the sha256 pin matches; with `--extract <dir>` it
-streams `zstd -d | tar -x` and never stores the 25 GB archive. The pins (the `.tar.zst` and
+streams `zstd -d | tar -x` and never stores the 42 GB archive (about 94 GB unpacked, so a guest disk that will hold the tree needs more than that). The pins (the `.tar.zst` and
 `CHECKSUMS.txt` hashes) are not in the repo yet: the owner pins them at the first upload. The
 2 GiB per-run ceiling named under "Download etiquette" stays an example for third-party hosts; the
 owner-hosted cache is excluded from it.

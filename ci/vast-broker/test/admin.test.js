@@ -38,6 +38,10 @@ const fields = [
   'sha',
   'branch',
   'profile',
+  // 2026-11-05 (wtier): the tier, the die's family and the admin batch of a run.
+  'tier',
+  'family',
+  'batch',
   'die',
   'gpu_model',
   'machine_id',
@@ -52,7 +56,8 @@ const fields = [
   'boot_seconds',
 ].sort();
 
-for (const path of ['list', 'stop']) {
+// 2026-11-05 (wtier): the admin start and plan routes are internal-origin only, like list/stop.
+for (const path of ['list', 'stop', 'start', 'plan']) {
   test('admin public gateway hides ' + path, async () => {
     let calls = 0;
     const gateway = createGateway({ authorize: async () => calls++ });
@@ -117,7 +122,8 @@ test('admin list includes active and ended runs, newest first, exact whitelist',
   const response = await object.fetch(internal('list'));
   assert.equal(response.status, 200);
   const data = await response.json();
-  assert.deepEqual(Object.keys(data), ['runs', 'budget']);
+  assert.deepEqual(Object.keys(data), ['runs', 'budget', 'batches']);
+  assert.deepEqual(data.batches, []);
   assert.deepEqual(
     data.runs.map((r) => r.run),
     ['1000-1', '999-1'],

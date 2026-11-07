@@ -1,0 +1,6 @@
+     53 kf3: GSP REFUSED fn76/X=0x56 (GSP_RM_CONTROL) first_ — the guest read a non-OK status
+     10 kf-rm: RPC-REFUSED  AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_E
+      3 kf3: mem  REFUSED V root X: 1 run(s) not applied: leaf X+X names store X, inside the firmware carve-out at X — a twin maps no kayfabe memo
+      1 kf3: mem  BAR1's physical view REFUSED: boot framebuffer [0x0, +X): 56 placement(s) of the guest's still overlap it (first 0x0+0x10000 -> So
+      1 kf3: GSP REFUSED fn103/X=0x56 (GSP_RM_ALLOC) first_ — the guest read a non-OK status
+      1 kf-host: HOST-ABI REFUSED control X: : body is 1716 bytes, its layout is 1784

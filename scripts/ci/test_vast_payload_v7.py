@@ -291,6 +291,8 @@ class V7Tests(unittest.TestCase):
         windows="0",
         windows_log=None,
         soft_ms=10000,
+        extra_env=None,
+        stage_logs=None,
     ):
         from types import SimpleNamespace
 
@@ -351,6 +353,14 @@ class V7Tests(unittest.TestCase):
                     native_path(mapped(output)).parent.mkdir(parents=True, exist_ok=True)
                     native_path(mapped(output)).write_text(windows_log or WINDOWS_PASS)
                     return 124 if name == failure else (0 if "GATE_PASS" in (windows_log or WINDOWS_PASS) else 1)
+                elif name in (stage_logs or {}):
+                    # wtier 2026-11-05: windows_gate_2 and the specviewperf stage wrapper.
+                    for key in ("KF_TIER", "KF_WINDOWS_RUNS", "KF_STAGES"):
+                        self.assertNotIn(key, os.environ)
+                    text, code = stage_logs[name]
+                    native_path(mapped(output)).parent.mkdir(parents=True, exist_ok=True)
+                    native_path(mapped(output)).write_text(text)
+                    return code
                 elif name == "merge_bar":
                     self.assertNotIn("KF_MERGE_WINDOWS", os.environ)
                     value = MERGE
@@ -388,6 +398,7 @@ class V7Tests(unittest.TestCase):
                         "KF_SOFT_DEADLINE_MS": str(int(time.time() * 1000) + soft_ms),
                         "KF_PROVISION_PROFILE": "full",
                         **({} if windows is None else {"KF_MERGE_WINDOWS": windows}),
+                        **(extra_env or {}),
                     },
                 ),
                 patch("sys.argv", ["vast_payload.py", SHA, "a" * 32]),
@@ -402,7 +413,13 @@ class V7Tests(unittest.TestCase):
         self.assertEqual(calls, ["provision", "cuda_host", "merge_bar", "cuda_guest"])
         self.assertEqual(result["verdict"], "PASS")
         self.assertEqual(len(result["suites"]), 8)
-        self.assertEqual(set(result), {"verdict", "suites", "hardware", "host_reference"})
+        # host_claims (2026-11-06): the optional setup-picker facts, always at least the harness
+        # guest OS; no Windows claim without the Windows stage.
+        self.assertEqual(
+            set(result), {"verdict", "suites", "hardware", "host_reference", "host_claims"}
+        )
+        self.assertEqual(result["host_claims"]["linux_os_version"], "ubuntu-24.04")
+        self.assertNotIn("windows_os_version", result["host_claims"])
         self.assertEqual(result["host_reference"], "GREEN")
 
     # Lane 2, 2026-11-04: the master gate (Worker profile check) carries the Windows stage.
@@ -414,6 +431,9 @@ class V7Tests(unittest.TestCase):
         self.assertEqual(calls, ["provision", "cuda_host", "merge_bar", "cuda_guest", "windows_gate"])
         self.assertEqual(result["verdict"], "PASS")
         self.assertIn({"name": "windows_gate", "pass": 1, "fail": 0, "skip": 0}, result["suites"])
+        # The Windows guest is claimed only when the Windows stage is part of the run.
+        self.assertEqual(result["host_claims"]["windows_driver"], "580.88")
+        self.assertEqual(result["host_claims"]["windows_os_version"], "11-ltsc-2024-26100")
 
     def test_windows_stage_is_the_default_when_the_worker_states_no_tier(self):
         rc, result, calls = self._main_fixture(windows=None, soft_ms=200 * 60000)
@@ -679,3 +699,101 @@ class V7Tests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ReleaseTierPayloadTests(unittest.TestCase):
+    """wtier, 2026-11-05: the release tier's extras on the box. FALSIFIER (written first): a second
+    Windows run without the Windows stage, a DESIGN_ONLY stage (two_guests, trio), a stage outside
+    the large tier or a malformed tier starts any stage; the second run is not graded as its own
+    row; a missing SPECviewperf lane yields a passing row."""
+
+    WIN2 = WINDOWS_PASS
+    setUp = V7Tests.setUp
+    _main_fixture = V7Tests._main_fixture
+
+    def _release(self, stages=None, runs="2", tier="large", windows="1", logs=None):
+        env = {"KF_TIER": tier}
+        if runs is not None:
+            env["KF_WINDOWS_RUNS"] = runs
+        if stages is not None:
+            env["KF_STAGES"] = stages
+        return self._main_fixture(
+            windows=windows, soft_ms=300 * 60000, extra_env=env, stage_logs=logs or {}
+        )
+
+    def test_second_windows_run_is_its_own_row_after_the_first(self):
+        rc, result, calls = self._release(logs={"windows_gate_2": (self.WIN2, 0)})
+        self.assertEqual(rc, 0, result)
+        self.assertEqual(calls[-2:], ["windows_gate", "windows_gate_2"])
+        names = [r["name"] for r in result["suites"]]
+        self.assertIn("windows_gate", names)
+        self.assertIn("windows_gate_2", names)
+        self.assertEqual(result["verdict"], "PASS")
+
+    def test_second_windows_run_failure_is_named_for_that_run(self):
+        fail = WINDOWS_PASS.replace(
+            "WINDOWS_GATE_PASS", "WINDOWS_GATE_FAIL diag=KAYFABE stage=idle"
+        )
+        rc, result, calls = self._release(logs={"windows_gate_2": (fail, 1)})
+        self.assertEqual(rc, 1)
+        failing = [r["name"] for r in result["suites"] if r["fail"]]
+        self.assertEqual(failing, ["windows_gate_2"])
+        self.assertIn({"name": "windows_gate", "pass": 1, "fail": 0, "skip": 0}, result["suites"])
+
+    def test_specviewperf_stage_without_its_lane_is_never_a_pass(self):
+        rc, result, calls = self._release(
+            stages="specviewperf",
+            runs=None,
+            logs={
+                "specviewperf": (
+                    "SPECVIEWPERF_STAGE_RETRY class=NOT_BUILT\nSPECVIEWPERF_STAGE_EXIT rc=3\n",
+                    3,
+                )
+            },
+        )
+        self.assertEqual(rc, 1)
+        self.assertEqual(calls[-1], "specviewperf")
+        self.assertEqual(result["verdict"], "FAIL")
+        self.assertEqual(
+            [r["name"] for r in result["suites"] if r["fail"]], ["specviewperf_retry_not_built"]
+        )
+
+    def test_second_windows_run_rows_are_unique(self):
+        rc, result, _ = self._release(logs={"windows_gate_2": (self.WIN2, 0)})
+        names = [r["name"] for r in result["suites"]]
+        self.assertEqual(len(names), len(set(names)), names)
+        self.assertEqual(names.count("windows_gate_2"), 1)
+
+    def test_specviewperf_media_retry_is_a_failing_row(self):
+        rc, result, _ = self._release(
+            stages="specviewperf",
+            runs=None,
+            logs={"specviewperf": ("SPECVIEWPERF_STAGE_RETRY class=MEDIA\n", 3)},
+        )
+        self.assertEqual((rc, result["verdict"]), (1, "FAIL"))
+        self.assertIn(
+            {"name": "specviewperf_retry_media", "pass": 0, "fail": 1, "skip": 0}, result["suites"]
+        )
+
+    def test_trio_is_design_only(self):
+        rc, result, calls = self._release(stages="trio", runs=None)
+        self.assertEqual((rc, calls), (1, []))
+
+    def test_two_guests_is_design_only(self):
+        rc, result, calls = self._release(stages="two_guests", runs=None)
+        self.assertEqual((rc, calls), (1, []))
+
+    def test_refused_extras_start_no_stage(self):
+        for kwargs in (
+            dict(runs="2", windows="0"),
+            dict(stages="specviewperf", runs=None, tier="middle"),
+            dict(stages="specviewperf:specviewperf", runs=None),
+            dict(stages="apps", runs=None),
+            dict(runs="3"),
+            dict(tier="release", runs=None),
+        ):
+            with self.subTest(**kwargs):
+                rc, result, calls = self._release(**kwargs)
+                self.assertEqual(rc, 1)
+                self.assertEqual(calls, [])
+                self.assertEqual(result["verdict"], "FAIL")

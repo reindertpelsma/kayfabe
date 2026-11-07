@@ -20,6 +20,11 @@
   "admissionMarginMinutes": 5,
   "reportRate": 20,
   "cronPeriod": 60000,
+  "providerGoneReadings": 3,
+  "providerGoneWindowSeconds": 120,
+  "providerGoneSpacingSeconds": 20,
+  "providerQuietSeconds": 660,
+  "providerMessageChars": 120,
   "maxMinutes": 1440,
   "diskGb": 120,
   "bandwidthDownGb": 15,
@@ -70,19 +75,24 @@
   },
   "dieRules": [
     {
+      "die": "TU117",
+      "cc": 750,
+      "names": ["GTX_1650", "GTX_1630"]
+    },
+    {
       "die": "TU116",
       "cc": 750,
-      "names": ["GTX_16*"]
+      "names": ["GTX_1660*", "GTX_1650_SUPER", "GTX_1650_S"]
     },
     {
       "die": "TU106",
       "cc": 750,
-      "names": ["RTX_2060*"]
+      "names": ["RTX_2060*", "RTX_2070"]
     },
     {
       "die": "TU104",
       "cc": 750,
-      "names": ["RTX_2070*", "RTX_2080", "RTX_2080_SUPER"]
+      "names": ["RTX_2070_S*", "RTX_2070S*", "RTX_2080", "RTX_2080_SUPER", "RTX_2080_S", "RTX_2080S"]
     },
     {
       "die": "TU102",
@@ -176,5 +186,50 @@
   "preferredCountries": ["US", "CA"],
   "maxInetUsdPerGb": 0.005,
   "lifecycleCacheMs": 60000,
-  "deniedCountries": ["CU", "IR", "KP", "SY", "CN", "HK", "MO"]
+  "deniedCountries": ["CU", "IR", "KP", "SY", "CN", "HK", "MO"],
+  "releasePrice": 2,
+  "releaseDaily": 40,
+  "releaseDailyCount": 24,
+  "releaseCostCap": 40,
+  "releaseHardMinutes": 300,
+  "maxConcurrentRelease": 8,
+  "releaseRerunsPerLeg": 1,
+  "releaseStartWindowMinutes": 360,
+  "middleVramFloorMb": 0,
+  "families": {
+    "turing": 750,
+    "ampere": 860,
+    "ada": 890,
+    "blackwell": 1200
+  },
+  "middleRotation": {
+    "turing": ["TU106", "TU116"],
+    "ampere": ["GA106", "GA104", "GA102"],
+    "ada": ["AD104", "AD102"],
+    "blackwell": ["GB205", "GB206", "GB203"]
+  },
+  "releaseDies": {
+    "turing": ["TU106", "TU116"],
+    "ampere": ["GA106", "GA104", "GA102"],
+    "ada": ["AD104", "AD102", "AD103", "AD106"],
+    "blackwell": ["GB205", "GB206", "GB202", "GB203"]
+  },
+  "releaseDiesPerFamily": 2,
+  "releaseWindowsRunsPerDie": 2,
+  "releaseStages": [],
+  "stageSlots": {
+    "specviewperf": {
+      "tiers": ["large"],
+      "state": "PLUMBING"
+    },
+    "two_guests": {
+      "tiers": ["middle", "large"],
+      "state": "DESIGN_ONLY"
+    },
+    "trio": {
+      "tiers": ["middle", "large"],
+      "state": "DESIGN_ONLY"
+    }
+  },
+  "accountDaily": 50
 }

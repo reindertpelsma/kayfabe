@@ -1,0 +1,50 @@
+Nov 06 18:38:45 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2886
+Nov 06 18:38:45 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engineDesc) @ kernel_channel_group_api.c:1264
+Nov 06 18:38:45 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+Nov 06 18:38:45 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+Nov 06 18:38:45 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_TYPE_ENG_DESC, engineDesc, ENGINE_INFO_TYPE_RUNLIST, &pKernelChannelGroupApi->pKernelChannelGroup->runlistId) @ kernel_channel_group_api.c:1252
+Nov 06 18:38:45 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2886
+Nov 06 18:38:45 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engineDesc) @ kernel_channel_group_api.c:1264
+Nov 06 18:38:45 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+Nov 06 18:38:45 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:368
+Nov 06 18:38:45 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_TYPE_ENG_DESC, engineDesc, ENGINE_INFO_TYPE_RUNLIST, &pKernelChannelGroupApi->pKernelChannelGroup->runlistId) @ kernel_channel_group_api.c:1252
+Nov 06 18:38:45 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2886
+Nov 06 18:38:45 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engineDesc) @ kernel_channel_group_api.c:1264
+Nov 06 18:38:51 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 18:39:13 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 18:39:39 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 18:40:09 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 18:40:25 ubuntu kernel: NVRM: GPU at PCI:0000:00:08: GPU-<uuid>
+Nov 06 18:40:25 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 31, pid=76427, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+Nov 06 18:40:28 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 31, pid=76427, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+Nov 06 18:40:31 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 31, pid=76427, name=qemu-system-x86, channel 0x0000001b, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+Nov 06 18:40:34 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 31, pid=76427, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+Nov 06 18:40:43 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 18:41:05 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 18:41:28 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 18:41:49 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 18:42:11 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 18:42:33 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 18:42:49 ubuntu kernel: NVRM: GPU at PCI:0000:00:08: GPU-<uuid>
+Nov 06 18:42:49 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 31, pid=78970, name=qemu-system-x86, channel 0x0000001b, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+Nov 06 18:42:58 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 18:43:22 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 18:43:46 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 18:44:09 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 18:44:29 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 18:44:52 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 18:45:15 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 18:45:38 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 18:46:53 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 18:47:15 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 18:47:37 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 18:47:59 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 18:48:18 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 18:48:58 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 18:49:22 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 18:49:46 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 18:50:09 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 18:50:37 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 18:51:30 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 18:53:17 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+Nov 06 18:54:17 ubuntu kernel: NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0

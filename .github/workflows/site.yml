@@ -104,8 +104,10 @@ jobs:
           npm ci --prefix site --ignore-scripts --no-audit --no-fund
           node --test site/test_slots_dom.mjs
           node --test site/test_status_dom.mjs
+          node site/find_mutants.mjs
           python3 -m unittest discover -s site -p 'test_status.py'
           python3 -m unittest discover -s site -p 'test_modes.py'
+          python3 -m unittest discover -s site -p 'test_style.py'
           python3 site/build.py --tools-dir "$RUNNER_TEMP/site-tools" --portable \
             --releases-json "$RUNNER_TEMP/site-releases.json" --root-ref "$ROOT_REF"
           python3 site/check_portable.py

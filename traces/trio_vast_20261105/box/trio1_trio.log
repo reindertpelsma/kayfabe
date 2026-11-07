@@ -1,0 +1,13 @@
+TRIO_START tag=trio1 gate_tag=trio_g rev=3aa2a75a source=/root/kayfabe overlay=gate_trio_g 2026-11-05T11:42:37+00:00
+TRIO_STAGE preflight START 2026-11-05T11:42:37+00:00
+TRIO_NOTE host gpu="NVIDIA GeForce RTX 4090" driver=580.159.04 cpus=30 ram_gib=48 qemu_sha256=73a2c184eb6b1902
+TRIO_STAGE preflight EXIT 10s
+TRIO_STAGE host_solo START 2026-11-05T11:42:47+00:00
+TRIO_NOTE host solo: 68 correct units, 0 wrong
+TRIO_STAGE host_solo EXIT 121s
+TRIO_STAGE win_boot START 2026-11-05T11:44:48+00:00
+TRIO_NOTE windows nvidia-smi -L: uuid=own (own=GPU-<VM_UUID>, never the host's), boot_since=2026-11-05T11:45:02Z
+TRIO_PHASE_A NOTRUN why="kf_dxprobe did not build" rev=3aa2a75a gpu="NVIDIA GeForce RTX 4090"
+TRIO_PHASE_B NOTRUN rev=3aa2a75a gpu="NVIDIA GeForce RTX 4090"
+TRIO_TIMING total=244s preflight=10s host_solo=121s
+TRIO_EXIT rc=1 2026-11-05T11:46:41+00:00

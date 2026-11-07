@@ -640,7 +640,7 @@ fn throughput(l: &mut Checks) -> Result<(), String> {
     let img = k.upload(&vec![0u8; IMG_BYTES]).map_err(|e| e.to_string())?;
     let mut tree = Tree::new(PT_A, PT_BYTES);
     let mut one_run = 0u64;
-    let mut gpu_at = |n: u64, v: &mut Vec<u64>, us: u64| {
+    let gpu_at = |n: u64, v: &mut Vec<u64>, us: u64| {
         if (n > 900 && n <= 1100) || n > ROWS - 200 {
             v.push(us);
         }
