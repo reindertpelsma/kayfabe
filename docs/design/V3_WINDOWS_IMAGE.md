@@ -6,12 +6,12 @@ upload, activation, compression ratio or performance is verified by this lane.
 
 ## Owner choice and layers
 
-DESIGN INTENT (coordinator update, 2026-11-07): the owner chose **native Windows
-on Vast (windows-on-vast)** for the real image build, with an Alpine UEFI ESP
-swap for offline raw-disk capture. A separate Claude lane is validating that
-capture design; its V3_WINDOWS_IMAGE_CAPTURE document is pending merge. This
-page and image_session.sh describe an **alternative QEMU path**, not the chosen
-native capture implementation. Packaging, manifests and presigned-transfer
+DESIGN INTENT (owner/coordinator wind-down, 2026-11-07 UTC): the licensed-image
+program is **DEFERRED** to a later round. The earlier choice of **native Windows
+on Vast (windows-on-vast)** with an Alpine UEFI ESP swap for raw-disk capture
+remains a future design choice, not an active build commitment. This page and
+image_session.sh describe an **alternative QEMU path**, not the chosen native
+capture implementation. Packaging, manifests and presigned-transfer
 helpers remain available; create currently consumes a clean QEMU-session qcow2,
 not an arbitrary native raw capture. Native capture integration is outside Y1.
 
@@ -356,3 +356,32 @@ CODE READ: `python3 scripts/ci/test_windows_image.py` uses fake `win_vm.sh`,
 listed mutant to fail at least two named tests. Guest PowerShell checks are
 explicitly source contracts, not Windows execution. Neither suite boots a VM,
 downloads an image, contacts R2 or establishes a release claim.
+
+## Deferred licensed-image notes (DESIGN-ONLY)
+
+DESIGN INTENT (owner/coordinator wind-down, 2026-11-07 UTC): retain these earlier
+ideas for a later licensed-image round. They are not implemented by this PR,
+are not active lane tasks, and have no Windows/hardware qualification here.
+
+- DESIGN-ONLY: a versioned machine-state JSON beside the private image could
+  bind image/blob SHA-256 values, SMBIOS, NIC/disk identifiers, machine type,
+  monitor identity and a fixed RTC base to pristine TPM/OVMF state. Each run
+  would copy that state afresh and never write back counters/NV changes. CPU
+  observations would be diagnostic only; an optional override would change
+  only the brand string and never mask ISA features. The owner's offline
+  non-sensitive-by-design exception would cover approved disposable guest
+  state only, never personal/host credentials.
+- DESIGN-ONLY: before/after installer footprints could retain new services,
+  tasks, Run/RunOnce values and startup items plus exact installer hashes and
+  original modes for rollback. The final owner correction calls for ordinary
+  Automatic/Delayed-Automatic services to become Manual, with Disabled reserved
+  for exact updater/telemetry service/task IDs. Protected NVIDIA/driver,
+  installer, SSH/guest-agent, virtio and TPM/crypto infrastructure must remain
+  untouched. Prestart would be an optional service-only escape hatch justified
+  by an app's failed demand-start acceptance test. Manual alone would not
+  establish cross-app isolation; cleanup/reboot acceptance and fresh guests
+  would still need a separate plan.
+- DESIGN-ONLY: per-app partitions/packs remain deferred. No partition layout,
+  boot integration or publication plan is selected here. A future design must
+  resolve immutable-base ownership, application/data separation, hashes,
+  rollback and licence/activation behavior before implementation.

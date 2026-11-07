@@ -1,8 +1,11 @@
 # Alternative: build a private Windows image in QEMU
 
+The licensed-image build program is deferred. These instructions are retained
+for a later authorized dry run.
+
 The owner chose native Windows-on-Vast with an Alpine UEFI ESP swap for the real
 image capture. These helpers describe the alternative QEMU path; native capture
-is maintained separately. The image-build helpers are experimental and have only been checked with mocks.
+is outside these helpers. The image-build helpers are experimental and have only been checked with mocks.
 Use them on an authorized Linux builder with the existing Windows VM prerequisites,
 noVNC and websockify installed. A real Windows capture and reuse still need testing.
 
