@@ -1,11 +1,11 @@
-# V3 Windows apps gate: the Windows app matrix as a stage of the Vast gate
-
 **STATUS: DESIGN-ONLY, 2026-11-07** for the Worker and release-tier parts (nothing is deployed, no R2 object exists, no
 Worker setting sends the stage). **LIVE for the harness code** (merged with this document, GPU-free tests), and the
 **first hardware run** is in section 8 (`traces/winapps_20261107/`). Draft PR against `next`; the owner reviews. Parent
 documents: [`V3_WINDOWS_APP_MATRIX.md`](V3_WINDOWS_APP_MATRIX.md) (the inventory, the guest protocol and the verdict
 vocabulary; unchanged), [`V3_WINDOWS_GATE.md`](V3_WINDOWS_GATE.md) (the gate this stage follows) and
 [`../DOWNLOADS.md`](../DOWNLOADS.md) ("Windows app bundle").
+
+# V3 Windows apps gate: the Windows app matrix as a stage of the Vast gate
 
 Marking in this document: **CODE READ** = repository inspection; **MEASURED** = recorded observations such as the
 2026-11-07 `wa1`/`wa1f` run in section 8 (with revision, box and die); **INFERRED** = reasoned, not seen;
