@@ -1,8 +1,14 @@
 # Downloading pinned CI data
 
-The pinned setup-cache downloader and the bench-data helper's `--out` mode use
-eight download streams by default. Set `KF_FETCH_STREAMS=1` to use their existing
-single-stream transfer path, or choose another positive count up to 256.
+The pinned setup-cache downloader and the bench-data helper's `--out` mode keep
+their existing single-stream transfer path by default (`KF_FETCH_STREAMS=1`).
+Leave the variable unset for the same behavior and command line.
+
+Set `KF_FETCH_STREAMS=8` to explicitly opt in to parallel downloads for controlled
+trials; other counts from 2 through 256 are also explicit opt-ins. Parallel
+throughput on Vast and compatibility with the live Worker route are UNMEASURED
+for this tool. The coordinator will qualify them before changing the production
+default in a later PR.
 The bench-data helper's `--extract` mode still streams the archive directly into
 its extractor.
 

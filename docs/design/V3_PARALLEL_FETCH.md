@@ -9,6 +9,13 @@ MEASURED, owner-provided dev-box measurement of 2026-11-07: one stream delivered
 over a 2 GiB private bench object. This lane did not repeat that measurement or
 contact the Worker, Cloudflare/R2, a GPU host or Vast.
 
+DESIGN INTENT, coordinator decision of 2026-11-07: keep every existing production
+integration on its single-stream backend by default (`KF_FETCH_STREAMS=1`). Parallel
+downloads require an explicit opt-in such as `KF_FETCH_STREAMS=8`. The coordinator
+will qualify the Vast box and live Worker route before proposing a default change
+in a later PR. Loopback tests and the supplied dev-box result do not qualify that
+production default.
+
 UNMEASURED: eight-stream throughput on a Vast box, including this implementation's
 checkpoint and final-hash costs. The coordinator must measure it on an authorized
 box. INFERRED: extrapolating the dev-box figure to a 100 GB download on Vast could
@@ -25,7 +32,9 @@ rule out adding an external parallel downloader dependency.
 CODE READ (`scripts/ci/kf_fetch.py`):
 
 - Invocation: `python3 -I scripts/ci/kf_fetch.py URL OUT --sha256 HEX --streams N --chunk-mb M [--state FILE] [--follow-redirect]`.
-  Defaults are eight streams and 16 MiB chunks. `URL=-` reads a URL line from stdin,
+  This standalone operator tool has its own eight-stream/16 MiB defaults; existing
+  production callers use the legacy backend unless explicitly opted in and always
+  pass their requested stream count when invoking this tool. `URL=-` reads a URL line from stdin,
   keeping a signed locator out of process arguments. Optional `--size BYTES` rejects
   a metadata size mismatch before opening/preallocating OUT. `--worker-auth` reads the
   existing run/Access environment variables for the original endpoint only.
@@ -71,10 +80,15 @@ CODE READ (`scripts/ci/kf_fetch.py`):
 
 ## Merged integrations and preserved verdicts
 
-CODE READ: `KF_FETCH_STREAMS` defaults to 8 in both integrated callers; 1 selects
-their established transfer path. A single-stream standalone fetcher also works.
+CODE READ: `KF_FETCH_STREAMS` defaults to 1 in both integrated production callers.
+Unset and explicit `1` select the established curl command or urllib GET exactly,
+including resume/retry flags, headers and timeouts; they do not invoke the new
+fetcher or add a range probe. Set `KF_FETCH_STREAMS=8` to explicitly opt in to eight
+workers. Other supported counts above 1 are also explicit opt-ins. A single-stream
+standalone fetcher remains a separate operator interface, not the legacy backend.
 
-CODE READ: `scripts/bench/box/fetch_bench_data.sh --out` retains its existing outer
+CODE READ: `scripts/bench/box/fetch_bench_data.sh --out` defaults to its existing
+curl command. With an explicit parallel opt-in it retains its existing outer
 attempt loop and Worker mint budget (one final URL per attempt, at most three
 attempts). The fetcher receives that final locator on stdin; it cannot call the
 Worker. Chunk retries reuse it. Expiry requires the existing outer retry to mint
@@ -87,7 +101,8 @@ pipeline and disk use; parallel ranges require an on-disk compressed object.
 
 CODE READ: `scripts/ci/kf-box-blob-url` is a locator resolver, not a byte downloader.
 Its existing scoped authentication, 299-second limit, 401 retries and JSON output
-are unchanged. Its consumer `scripts/ci/vast_setup.py` validates the locator's
+are unchanged. Its consumer `scripts/ci/vast_setup.py` defaults to its existing
+single urllib GET. With an explicit parallel opt-in it validates the locator's
 HTTPS host, asset name and size before invoking the fetcher without redirects or
 headers. It passes the pinned size with `--size` so remote metadata cannot enlarge
 preallocation beyond the existing asset bound. It rechecks pinned size/hash before rename and preserves CacheRefused
@@ -109,8 +124,11 @@ This lane leaves their owned files untouched, including `win_vm.sh`,
 and `docs/DOWNLOADS.md`.
 
 DESIGN INTENT for #293/#294 (`scripts/bench/windows/win_vm.sh`): replace only the
-host-side curl transfer in `cmd_fetch` with the stdin invocation below, using its
-existing sum and `.part` path. Keep its eight-attempt outer loop, local pinned
+host-side curl transfer in `cmd_fetch` with the stdin invocation below only in an
+explicit `KF_FETCH_STREAMS>1` branch, using its existing sum and `.part` path.
+Unset and `KF_FETCH_STREAMS=1` must retain the old curl command line exactly. The
+example below therefore requires an explicit environment value such as `8`.
+Keep its eight-attempt outer loop, local pinned
 size/hash verdict and final rename. A return code of 3 is a pinned-data failure,
 not curl's code 33 (range unsupported). The fetcher handles range fallback itself;
 do not preserve the curl-specific rc=33 deletion rule around the Python command.
@@ -118,7 +136,7 @@ Do not log `$url`; log the object filename. Keep Windows guest downloads out of 
 
 ```bash
 printf '%s\n' "$url" | python3 -I "$REPO/scripts/ci/kf_fetch.py" - "$CACHE/$f.part" \
-  --sha256 "$sum" --size "$bytes" --streams "${KF_FETCH_STREAMS:-8}" --chunk-mb 16 --follow-redirect
+  --sha256 "$sum" --size "$bytes" --streams "${KF_FETCH_STREAMS:?set KF_FETCH_STREAMS=8 to opt in}" --chunk-mb 16 --follow-redirect
 ```
 
 DESIGN INTENT for #291: use the upgraded helper's file mode where a compressed
@@ -134,8 +152,11 @@ Access pair stay on the original request only.
 
 ## Verification and falsifiers
 
-MEASURED, local loopback only, 2026-11-07: 47 fetcher tests and 18 integration tests
-passed; all 24 fetch mutations have two distinct named killers. Existing
+MEASURED, local run `J4-defaults-mutants`, loopback only, 2026-11-07: 47 fetcher
+tests and 23 integration tests passed; all 28 fetch mutations have two distinct
+named killers. The new default/explicit-1 tests compare the complete legacy curl
+argument list and the legacy urllib GET, and the parallel tests explicitly opt in
+to 8 (or another count above 1). Existing
 setup-cache tests passed 43 before and 43 after; the bench helper's established
 single-stream/extraction regression passed 49 checks. Exact source hashes, expanded test
 counts and named mutation killers are in

@@ -30,9 +30,41 @@
   "fetch_mutations": {
     "baseline": {
       "killers": [],
-      "tests": 65
+      "tests": 70
     },
     "mutants": [
+      {
+        "killers": [
+          "test_kf_fetch_integration.SetupIntegration.test_default_matches_explicit_one_request",
+          "test_kf_fetch_integration.SetupIntegration.test_default_uses_established_opener_path"
+        ],
+        "mutant": "setup-default-is-parallel",
+        "tests": 2
+      },
+      {
+        "killers": [
+          "test_kf_fetch_integration.SetupIntegration.test_default_matches_explicit_one_request",
+          "test_kf_fetch_integration.SetupIntegration.test_single_stream_uses_established_opener_path"
+        ],
+        "mutant": "setup-single-stream-bypassed",
+        "tests": 2
+      },
+      {
+        "killers": [
+          "test_kf_fetch_integration.BenchIntegration.test_file_mode_default_matches_explicit_one_command",
+          "test_kf_fetch_integration.BenchIntegration.test_file_mode_default_uses_exact_legacy_curl_command"
+        ],
+        "mutant": "media-default-is-parallel",
+        "tests": 2
+      },
+      {
+        "killers": [
+          "test_kf_fetch_integration.BenchIntegration.test_file_mode_default_matches_explicit_one_command",
+          "test_kf_fetch_integration.BenchIntegration.test_file_mode_one_uses_exact_legacy_curl_command"
+        ],
+        "mutant": "media-single-stream-bypassed",
+        "tests": 2
+      },
       {
         "killers": [
           "test_kf_fetch.FetchTests.test_larger_pinned_size_is_refused_before_allocation",
@@ -43,7 +75,7 @@
       },
       {
         "killers": [
-          "test_kf_fetch_integration.SetupIntegration.test_default_uses_eight_streams_and_pinned_bytes",
+          "test_kf_fetch_integration.SetupIntegration.test_opt_in_uses_eight_streams_and_pinned_bytes",
           "test_kf_fetch_integration.SetupIntegration.test_stream_override_is_honoured"
         ],
         "mutant": "setup-pinned-size-not-passed",
@@ -195,7 +227,7 @@
       },
       {
         "killers": [
-          "test_kf_fetch_integration.SetupIntegration.test_default_uses_eight_streams_and_pinned_bytes",
+          "test_kf_fetch_integration.SetupIntegration.test_opt_in_uses_eight_streams_and_pinned_bytes",
           "test_kf_fetch_integration.SetupIntegration.test_stream_override_is_honoured"
         ],
         "mutant": "setup-parallel-path-disabled",
@@ -211,7 +243,7 @@
       },
       {
         "killers": [
-          "test_kf_fetch_integration.BenchIntegration.test_file_mode_parallel_default_verifies_and_renames",
+          "test_kf_fetch_integration.BenchIntegration.test_file_mode_parallel_opt_in_verifies_and_renames",
           "test_kf_fetch_integration.BenchIntegration.test_file_mode_stream_override_reaches_fetcher"
         ],
         "mutant": "media-parallel-path-disabled",
@@ -228,6 +260,15 @@
     ]
   },
   "gates": {
+    "claim_ledger_default_policy": {
+      "baseline_changed": false,
+      "command": "python3 scripts/ci/debt.py claims",
+      "date": "2026-11-07",
+      "existing_debt": 3749,
+      "local_run": "J4-defaults-final-claims",
+      "new": 0,
+      "resolved": 0
+    },
     "claim_ledger_followup": {
       "baseline_changed": false,
       "command": "python3 scripts/ci/debt.py claims",
@@ -243,6 +284,23 @@
     "no_private_refs": "PASS",
     "release_claims": "PASS: 133 claims, 0 errors, 3 existing warnings",
     "secret_and_public_address_scan": "PASS using existing vast_evidence.Scanner and ipaddress"
+  },
+  "production_default_followup": {
+    "KF_FETCH_STREAMS_default": 1,
+    "date": "2026-11-07",
+    "default_and_one_use_original_backend": true,
+    "exact_legacy_curl_argv_checked": true,
+    "exact_legacy_urllib_request_checked": true,
+    "explicit_parallel_opt_in": 8,
+    "fresh_worker_or_vast_measurement": false,
+    "future_default_change": "separate coordinator PR after live qualification",
+    "red_before_default_change": {
+      "errors": 2,
+      "failures": 2,
+      "tests": 4
+    },
+    "run": "J4-defaults-mutants",
+    "verification_scope": "local fixtures and gates; fresh CI qualification is not claimed in this record"
   },
   "red_before_fixes": {
     "initial_fetch_tests": {
@@ -265,19 +323,19 @@
   "schema": "kayfabe-fetch-local/1",
   "scope": "MEASURED: GPU-free local HTTP fixtures only; no Worker/Cloudflare/R2/Vast access",
   "source_sha256": {
-    "scripts/bench/box/fetch_bench_data.sh": "190fb5f0834fc539a334044dc70606ec4005bf94dc854b33062399ad65b7f447",
+    "scripts/bench/box/fetch_bench_data.sh": "4f9ebd3b914b4451c80aeaeed1bc314c4e8a1623eda33c74dbb50b8470563846",
     "scripts/bench/box/test_fetch_bench_data.sh": "0ef946f7bf2e0e77691364b255ebc1eb1a0ee9afbb4583e5fe7d669aac19998d",
     "scripts/ci/kf_fetch.py": "ea2663162e69141216050ab9be275b4bee1adaf35163dd270f69ee2925433d93",
-    "scripts/ci/kf_fetch_mutants.py": "14098aa28b903516b34c8d94683bf2256ac79d9c5cf43696b35819af3be97924",
+    "scripts/ci/kf_fetch_mutants.py": "c51aadafd97d2b1526e3cd0bee77c990de245f10ede4c8e8862feecfc2f83c89",
     "scripts/ci/test_kf_fetch.py": "95af2c4871aeb8875ff41e86dd7b1b5cc8fd791e6695bf6c7b45747fb5e6e1bb",
-    "scripts/ci/test_kf_fetch_integration.py": "8684c501c4678640abe588e684ca57e9f53e1b01af93ffebe9de33ec08d98389",
+    "scripts/ci/test_kf_fetch_integration.py": "0f5d3209b97e1ab79a621c2b26d30a162055a3be0e4b41a056667120635f1579",
     "scripts/ci/test_vast_setup_cache.py": "4505ed8f231b7485e0d75e5f73b399a782b46ccd3d3f616f1f40d61a14fce24b",
-    "scripts/ci/vast_setup.py": "08227c1c6b7da7e7026fbfaee86b1b58b77ef73ab1e6ca256019a4b853da572b"
+    "scripts/ci/vast_setup.py": "1c7b7f2351bb50c9051e235b4ba1e8efb0031018aa1628a0f0b1236085f30bfa"
   },
   "tests": {
     "existing_setup_after": 43,
     "existing_setup_before": 43,
-    "fetch_and_integration": 65,
+    "fetch_and_integration": 70,
     "legacy_bench_checks": 49,
     "legacy_bench_failed": 0
   },

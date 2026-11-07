@@ -8,13 +8,14 @@
 #
 # <name> is one of the Worker's fixed names (e.g. specviewperf-15.0.0.tar.zst); the Worker answers
 # an unknown name with 404. --sha256 is the pin the CALLER holds (the repo pins it; the Worker does
-# not); a mismatch deletes the bytes and exits 3. --out downloads to <file>.part with a
-# verified chunk checkpoint (curl -C - when KF_FETCH_STREAMS=1) and renames after the hash check. --extract streams `curl | zstd -d | tar -x` into
+# not); a mismatch deletes the bytes and exits 3. --out uses the existing curl -C -
+# download by default. Explicit KF_FETCH_STREAMS>1 selects verified chunk checkpoints;
+# both paths rename <file>.part only after the hash check. --extract streams `curl | zstd -d | tar -x` into
 # <dir>.part (no 25 GB temporary file), hashes the compressed stream on the way, and renames to
 # <dir> only after the hash matches; it cannot resume, so a failed stream restarts from zero.
 #
 # Environment (the box's /run/kf-ci/env is read when readable, as kf-box-blob-url does):
-#   KF_FETCH_STREAMS               8 by default; 1 keeps the existing curl path (file mode only)
+#   KF_FETCH_STREAMS               1 by default (existing curl); 8 explicitly opts in (file mode only)
 #   KF_BROKER_URL (or WORKER_URL)  https origin plus the secret path prefix, no trailing slash
 #   KF_RUN_ID                      <run>-<attempt>
 #   KF_RUN_TOKEN                   the run token
@@ -22,8 +23,8 @@
 #
 # Secrecy: the token and the presigned URL never appear on a command line, in the output or in a
 # log. Step 1 asks the Worker with --max-redirs 0 and captures the 302 target with
-# `-w '%{redirect_url}'` into a shell variable; step 2 gives the locator to kf_fetch.py on stdin
-# (curl --config - for KF_FETCH_STREAMS=1 or streaming extraction). The Authorization header is never sent to R2 (R2 refuses a request that carries both
+# `-w '%{redirect_url}'` into a shell variable; step 2 gives the locator to curl on stdin
+# (--config -), or to kf_fetch.py on stdin for an explicit parallel opt-in. The Authorization header is never sent to R2 (R2 refuses a request that carries both
 # a header and a query signature). curl diagnostics are filtered so no URL is echoed. Each attempt
 # asks the Worker for a fresh URL (valid at most 20 minutes, never past the run's deadline); the
 # Worker allows 4 per object per run, so --attempts is capped at 3.
@@ -87,7 +88,7 @@ ua='kayfabe-bench/1.0 (+https://github.com/reindertpelsma/kayfabe)'
 mode='file'
 if [ -n "$dir" ]; then mode='extract'; fi
 if [ "$mode" = file ]; then
-    fetch_streams=${KF_FETCH_STREAMS:-8}
+    fetch_streams=${KF_FETCH_STREAMS:-1}
     [[ $fetch_streams =~ ^[1-9][0-9]{0,2}$ ]] && [ "$fetch_streams" -le 256 ] || die "KF_FETCH_STREAMS must be 1 through 256"
 fi
 
@@ -159,12 +160,12 @@ ask_worker() {
 # Step 2 (file): resumable download into $1.
 download_file() {
     local rc=0
-    if [ "${KF_FETCH_STREAMS:-8}" != 1 ]; then
+    if [ "$fetch_streams" != 1 ]; then
         # The existing outer loop owns the mint/retry budget (at most three Worker
         # calls). This subprocess only sees the final locator, on stdin, and cannot
         # mint. The extract mode below deliberately keeps its disk-free pipeline.
         printf '%s\n' "$location" | python3 -I "$(dirname "$0")/../../ci/kf_fetch.py" - "$1" \
-            --sha256 "$want" --streams "${KF_FETCH_STREAMS:-8}" --chunk-mb 16 \
+            --sha256 "$want" --streams "$fetch_streams" --chunk-mb 16 \
             | sed '/^FETCH_SOURCE /d' || rc=$?
         # The caller's existing pin check deletes a bad .part and exits 3; do not
         # turn a hash mismatch into a network retry or alter its verdict.

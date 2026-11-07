@@ -118,7 +118,7 @@ def download_asset(locator, asset, destination, *, opener=None):
             or len(locator["url"]) > 8192
         ):
             raise ValueError()
-        streams = int(os.environ.get("KF_FETCH_STREAMS", "8"))
+        streams = int(os.environ.get("KF_FETCH_STREAMS", "1"))
         if not 1 <= streams <= 256:
             raise ValueError()
         if opener is None and streams != 1:
