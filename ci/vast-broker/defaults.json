@@ -1,25 +1,40 @@
 {
   "price": 1,
+  "downloadModel": {
+    "status": "INFERRED",
+    "derate": 0.3,
+    "referenceDownMbps": 1000,
+    "source": "traces/specviewperf_vast_20261105/README.md",
+    "note": "Owner-proposed initial derate; trace measured 418 Mbps against 613 advertised; separate owner live observation advertised 1562 Mbps"
+  },
   "payloadProfiles": {
     "small": {
+      "maxDownloadSeconds": 3600,
+      "downloadLimitStatus": "PROPOSED",
       "diskGb": 120,
       "bandwidthDownGb": 73,
       "bandwidthUpGb": 2,
       "maxInetUsdPerGb": 0.005
     },
     "middle": {
+      "maxDownloadSeconds": 1200,
+      "downloadLimitStatus": "PROPOSED",
       "diskGb": 120,
       "bandwidthDownGb": 87,
       "bandwidthUpGb": 2,
       "maxInetUsdPerGb": 0.005
     },
     "large": {
+      "maxDownloadSeconds": 3600,
+      "downloadLimitStatus": "PROPOSED",
       "diskGb": 300,
       "bandwidthDownGb": 130,
       "bandwidthUpGb": 2,
       "maxInetUsdPerGb": 0.02
     },
     "adhoc": {
+      "maxDownloadSeconds": 1800,
+      "downloadLimitStatus": "PROPOSED",
       "diskGb": 120,
       "bandwidthDownGb": 38,
       "bandwidthUpGb": 2,

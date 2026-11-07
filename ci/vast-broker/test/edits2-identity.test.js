@@ -98,6 +98,7 @@ const CODES = {
   CPU_RAM: (h) => (h.cloud.offer.cpu_ram = 1000),
   PERFORMANCE: (h) => (h.cloud.offer.dlperf = 0),
   NETWORK: (h) => (h.cloud.offer.inet_down = 10),
+  SLOW_NETWORK: (h) => (h.cloud.offer.inet_down = 200),
   DISK_BW: (h) => (h.cloud.offer.disk_bw = 10),
   // Owner ruling 2026-10-24 item 10: no DRIVER code (the host driver is irrelevant for KVM).
   PRICE_FIELDS: (h) => (h.cloud.offer.storage_cost = -1),

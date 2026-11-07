@@ -35,7 +35,7 @@ function offer(id, patch = {}, cfg = cfgFor()) {
     host_id: 90000 + id,
     cpu_cores_effective: 16,
     disk_bw: 500,
-    inet_down: 1000,
+    inet_down: 10000,
     dlperf: 60,
     geolocation: 'Texas, US',
     disk_space: 400,
@@ -68,27 +68,42 @@ test('preferred data: every execution profile explicitly proposes all four dimen
       preferredDownMbps: 300,
     });
 });
+// Feasibility now implies more than the default 300 Mbps preferred floor.
+// Raise the preferred threshold in these fixtures to exercise that dimension independently.
 for (const [axis, low] of [
   ['dlperf', 30],
   ['cpu_cores_effective', 8],
   ['disk_bw', 100],
-  ['inet_down', 200],
+  ['inet_down', 5000],
 ]) {
-  test('preferred beats cheaper floor: ' + axis, async () => {
-    const x = await evaluate([offer(1, { [axis]: low, dph_base: 0.1 }), offer(2)]);
-    assert.equal(x.evaluation.allowed.length, 2);
-    assert.equal((await select(x)).offer.id, 2);
-    assert.equal(x.evaluation.allowed[0].offer_facts.performance_tier, 'floor');
-  });
-  test('release uses preferred before cheap floor: ' + axis, async () => {
-    const cfg = cfgFor('large');
-    const x = await evaluate(
-      [offer(1, { [axis]: low, dph_base: 0.1 }, cfg), offer(2, {}, cfg)],
-      cfg,
+  for (const mode of ['selection', 'release'])
+    test(
+      (mode === 'selection'
+        ? 'preferred beats cheaper floor: '
+        : 'release uses preferred before cheap floor: ') + axis,
+      async () => {
+        const tier = mode === 'release' ? 'large' : 'small';
+        const old = DEFAULTS.preferredHostQuality[tier].preferredDownMbps;
+        if (axis === 'inet_down') DEFAULTS.preferredHostQuality[tier].preferredDownMbps = 6000;
+        try {
+          const cfg = cfgFor(tier);
+          const x = await evaluate(
+            [offer(1, { [axis]: low, dph_base: 0.1 }, cfg), offer(2, {}, cfg)],
+            cfg,
+          );
+          assert.equal(x.evaluation.allowed.length, 2);
+          const id =
+            mode === 'release'
+              ? dieLegs(x.evaluation.allowed, cfg)[0].offer_id
+              : (await select(x)).offer.id;
+          assert.equal(id, 2);
+          assert.equal(x.evaluation.allowed[0].offer_facts.performance_tier, 'floor');
+          assert.equal(x.evaluation.allowed[1].offer_facts.performance_tier, 'preferred');
+        } finally {
+          DEFAULTS.preferredHostQuality[tier].preferredDownMbps = old;
+        }
+      },
     );
-    assert.equal(dieLegs(x.evaluation.allowed, cfg)[0].offer_id, 2);
-    assert.equal(x.evaluation.allowed[1].offer_facts.performance_tier, 'preferred');
-  });
 }
 for (const tier of ['small', 'middle', 'large', 'adhoc'])
   test('preferred profile and cheapest preferred: ' + tier, async () => {
@@ -136,7 +151,7 @@ test('offer facts contain provider values, die median and ratio at selection tim
   assert.equal(facts.median_ratio, 60 / 45);
   assert.equal(facts.cpu_cores_effective, 16);
   assert.equal(facts.disk_bw, 500);
-  assert.equal(facts.inet_down, 1000);
+  assert.equal(facts.inet_down, 10000);
 });
 for (const quality of ['preferred', 'floor'])
   test('ledger records provider offer facts for ' + quality, async () => {
@@ -224,6 +239,7 @@ for (const cap of ['9', '9.25'])
       inet_down_cost: 0,
       inet_up_cost: 0,
       cpu_cores_effective: 8,
+      inet_down: 10000,
     }));
     const first = rows[0];
     rows.push({
@@ -260,6 +276,7 @@ for (const cap of ['9', '9.25'])
       inet_down_cost: 0,
       inet_up_cost: 0,
       cpu_cores_effective: 8,
+      inet_down: 10000,
     }));
     rows.push({
       ...rows[0],
@@ -305,18 +322,24 @@ for (const kind of ['rolling', 'account', 'credit'])
 // FALSIFIER: a host exactly meeting a proposed minimum is treated as floor-only.
 for (const mode of ['select', 'release'])
   test('preferred minimum boundary is inclusive: ' + mode, async () => {
-    const cfg = cfgFor('large');
-    const x = await evaluate(
-      [
-        offer(1, { dph_base: 0.1, cpu_cores_effective: 11, disk_bw: 149, inet_down: 299 }, cfg),
-        offer(2, { cpu_cores_effective: 12, disk_bw: 150, inet_down: 300 }, cfg),
-      ],
-      cfg,
-    );
-    const id =
-      mode === 'select'
-        ? (await select(x, { die: 'AD104' })).offer.id
-        : dieLegs(x.evaluation.allowed, cfg)[0].offer_id;
-    assert.equal(id, 2);
-    assert.equal(x.evaluation.allowed[1].offer_facts.performance_tier, 'preferred');
+    const old = DEFAULTS.preferredHostQuality.large.preferredDownMbps;
+    DEFAULTS.preferredHostQuality.large.preferredDownMbps = 6000;
+    try {
+      const cfg = cfgFor('large');
+      const x = await evaluate(
+        [
+          offer(1, { dph_base: 0.1, cpu_cores_effective: 11, disk_bw: 149, inet_down: 5999 }, cfg),
+          offer(2, { cpu_cores_effective: 12, disk_bw: 150, inet_down: 6000 }, cfg),
+        ],
+        cfg,
+      );
+      const id =
+        mode === 'select'
+          ? (await select(x, { die: 'AD104' })).offer.id
+          : dieLegs(x.evaluation.allowed, cfg)[0].offer_id;
+      assert.equal(id, 2);
+      assert.equal(x.evaluation.allowed[1].offer_facts.performance_tier, 'preferred');
+    } finally {
+      DEFAULTS.preferredHostQuality.large.preferredDownMbps = old;
+    }
   });

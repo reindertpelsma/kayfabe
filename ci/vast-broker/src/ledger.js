@@ -307,6 +307,7 @@ export class Ledger {
           dropped: record.plogDropped ?? 0,
           rchunks: record.runReport?.chunks ?? 0,
           offerFacts: structuredClone(record.offerFacts ?? null),
+          downloadMeasurements: structuredClone(record.downloadMeasurements ?? null),
           leg: record.providerRetries ?? 0,
           key: record.key,
           run: record.run,

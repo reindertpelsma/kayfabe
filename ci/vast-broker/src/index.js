@@ -1,4 +1,5 @@
 import { RELEASE_MATRIX, hostProvidesDrivers } from './release-matrix.js';
+import { captureDownloadMetrics } from './download-metrics.js';
 import { applyProfile, tierEnvironment, tierForClaims, familyOf, profileCaps } from './tier.js';
 // prettier-ignore
 import {planRelease,classifyLeg,releaseVerdict,wantsRerun} from './release.js';
@@ -359,7 +360,15 @@ export function createService({
   }
   async function checkContract(record, instance, vast, cfg) {
     applyResourceProfile(cfg, budgetClass(record), record.tier);
-    const price = instance && offerPrice(instance, cfg, budgetClass(record));
+    const pricedInstance = instance && {
+      ...instance,
+      inet_down: instance.inet_down ?? record.offerFacts?.inet_down,
+    };
+    const price = pricedInstance && offerPrice(pricedInstance, cfg, budgetClass(record));
+    if (price && price.download.expected_seconds > price.download.max_seconds) {
+      await close(record, vast, 'CONTRACT_SLOW_NETWORK', 'UNAVAILABLE');
+      refuse('UNAVAILABLE', 503);
+    }
     const cap = profileCaps(cfg, budgetClass(record)).price;
     if (
       !price ||
@@ -816,6 +825,8 @@ export function createService({
           redactions,
           { tail: false },
         );
+        // Only bounded numeric claims are retained; never copy raw log strings.
+        captureDownloadMetrics(r, payload.text);
         await ledger.appendLog(r, safe.text);
         // The text as the box sent it, for the public log (redacted when it is published).
         if (logsEnabled(env)) await ledger.appendPublicLog(r, payload.text);

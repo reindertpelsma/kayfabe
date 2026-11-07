@@ -405,6 +405,25 @@ export function configuration(env) {
     )
   )
     refuse('CONFIG_VAR:RELEASE_STAGES', 503);
+  const downloadModel = DEFAULTS.downloadModel;
+  if (
+    !downloadModel ||
+    !['INFERRED', 'MEASURED'].includes(downloadModel.status) ||
+    !(
+      Number.isFinite(downloadModel.derate) &&
+      downloadModel.derate > 0 &&
+      downloadModel.derate <= 1
+    ) ||
+    !(Number.isFinite(downloadModel.referenceDownMbps) && downloadModel.referenceDownMbps > 0)
+  )
+    refuse('CONFIG_VAR:DOWNLOAD_MODEL', 503);
+  for (const resource of Object.values(DEFAULTS.payloadProfiles))
+    if (
+      !Number.isSafeInteger(resource.maxDownloadSeconds) ||
+      resource.maxDownloadSeconds <= 0 ||
+      !['PROPOSED', 'APPROVED', 'MEASURED'].includes(resource.downloadLimitStatus)
+    )
+      refuse('CONFIG_VAR:DOWNLOAD_LIMIT', 503);
   for (const name of ['small', 'middle', 'large', 'adhoc']) {
     const preferred = DEFAULTS.preferredHostQuality[name];
     if (
@@ -578,6 +597,28 @@ export function applyResourceProfile(cfg, profile, tierName) {
   cfg.maxInet = r.maxInetUsdPerGb;
   return cfg;
 }
+// Decimal GB and advertised Mbps; all policy choices live in defaults.json.
+export function downloadTiming(offer, cfg, profile = cfg.profile ?? 'check') {
+  if (!Number.isFinite(offer.inet_down) || offer.inet_down <= 0) return null;
+  const resource = resourceCaps(cfg, profile),
+    model = DEFAULTS.downloadModel;
+  const reference = (resource.bandwidthDownGb * 8000) / model.referenceDownMbps;
+  const expected = (resource.bandwidthDownGb * 8000) / (model.derate * offer.inet_down);
+  if (!Number.isFinite(expected)) return null;
+  return {
+    advertised_down_mbps: offer.inet_down,
+    allowance_gb: resource.bandwidthDownGb,
+    reference_down_mbps: model.referenceDownMbps,
+    derate: model.derate,
+    model_status: model.status,
+    reference_seconds: reference,
+    expected_seconds: expected,
+    extra_seconds: Math.max(0, expected - reference),
+    profile_max_seconds: resource.maxDownloadSeconds,
+    max_seconds: Math.min(resource.maxDownloadSeconds, cfg.hard / 1000),
+    limit_status: resource.downloadLimitStatus,
+  };
+}
 // Provider offer facts, not benchmark evidence. Thresholds remain proposed data.
 export function offerPerformanceFacts(offer, cfg, profile, median) {
   const resourceProfile = resourceProfileName(profile, cfg.tierName);
@@ -594,6 +635,7 @@ export function offerPerformanceFacts(offer, cfg, profile, median) {
   const finite = (v) => (Number.isFinite(v) && v >= 0 && v <= 1e15 ? v : null);
   return {
     source: 'provider_offer',
+    download_estimate: downloadTiming(offer, cfg, profile),
     resource_profile: resourceProfile,
     dlperf: finite(offer.dlperf),
     die_median_dlperf: finite(median),
@@ -622,11 +664,18 @@ export function offerPrice(offer, cfg, profile = cfg.profile ?? 'check') {
   // The API total already includes the allocated storage requested for this resource profile.
   if (Math.abs(offer.dph_total - computeStorage) > Math.max(1e-7, computeStorage * 1e-6))
     return null;
-  const bandwidth =
+  const download = downloadTiming(offer, cfg, profile);
+  if (!download) return null;
+  const transferCost =
     resources.bandwidthDownGb * offer.inet_down_cost + resources.bandwidthUpGb * offer.inet_up_cost;
+  const downloadTimeCost = (download.extra_seconds / 3600) * computeStorage;
+  const bandwidth = transferCost + downloadTimeCost;
   const effective = computeStorage + bandwidth / (cfg.hard / 3600000);
   return {
     computeStorage,
+    transferCost,
+    downloadTimeCost,
+    download,
     bandwidth,
     effective,
     total: (computeStorage * (cfg.hard + cfg.cronPeriod)) / 3600000 + bandwidth,
@@ -737,6 +786,8 @@ export function offerRejections(
     reasons.push('PERFORMANCE');
   if (!enough('inet_down', q.downMbps) || !enough('inet_up', q.upMbps)) reasons.push('NETWORK');
   if (!enough('disk_bw', q.diskMbps)) reasons.push('DISK_BW');
+  if (price && price.download.expected_seconds > price.download.max_seconds)
+    reasons.push('SLOW_NETWORK');
   if (!price) reasons.push('PRICE_FIELDS');
   else if (
     offer.inet_up_cost > resources.maxInetUsdPerGb ||

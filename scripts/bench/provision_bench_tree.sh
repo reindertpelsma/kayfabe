@@ -62,7 +62,7 @@ grep -q "Open Kernel Module" /proc/driver/nvidia/version 2>/dev/null \
 # A fresh host installed directly at595 will not already have the580 package.
 if [ ! -s "$RUN" ]; then
   say "fetching the pinned guest580.159.04 package"
-  curl --fail --location --retry 3 --connect-timeout 20 \
+  curl --fail --location --retry 3 --connect-timeout 20 --write-out '%{stderr}\nKF_DOWNLOAD_METRIC seconds=%{time_total} bytes=%{size_download}\n' \
     -o "$RUN.part" \
     https://us.download.nvidia.com/XFree86/Linux-x86_64/580.159.04/NVIDIA-Linux-x86_64-580.159.04.run \
     && mv "$RUN.part" "$RUN" \
@@ -89,10 +89,10 @@ say "apt rc=$?  (ninja=$(command -v ninja||echo NO) meson=$(command -v meson||ec
 # ---- 2. downloads, in parallel ----------------------------------------------------------
 say "phase 3: downloads"
 [ -s "$BENCH/qemu-$QEMU_VER.tar.xz" ] || \
-  curl -fsSL -o "$BENCH/qemu-$QEMU_VER.tar.xz" "https://download.qemu.org/qemu-$QEMU_VER.tar.xz" &
+  curl -fsSL --write-out '%{stderr}\nKF_DOWNLOAD_METRIC seconds=%{time_total} bytes=%{size_download}\n' -o "$BENCH/qemu-$QEMU_VER.tar.xz" "https://download.qemu.org/qemu-$QEMU_VER.tar.xz" &
 P1=$!
 [ -s "$BENCH/noble-server-cloudimg-amd64.img" ] || \
-  curl -fsSL -o "$BENCH/noble-server-cloudimg-amd64.img" \
+  curl -fsSL --write-out '%{stderr}\nKF_DOWNLOAD_METRIC seconds=%{time_total} bytes=%{size_download}\n' -o "$BENCH/noble-server-cloudimg-amd64.img" \
     "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img" &
 P2=$!
 wait $P1; say "qemu tarball rc=$?  $(ls -la $BENCH/qemu-$QEMU_VER.tar.xz 2>/dev/null | awk '{print $5}')"
@@ -362,7 +362,7 @@ UD
   #   the pipe, tar dies of SIGPIPE (141), and the pipeline reports FAILURE OVER A SUCCESSFUL
   #   MATCH. Measured 2026-09-06 — cuda.h was in the archive and the script said it was not.
   if [ ! -s "$BENCH/cuda.h" ]; then
-    curl -fsSL -o /tmp/cudart.tar.xz "${CUDART_URL:-https://developer.download.nvidia.com/compute/cuda/redist/cuda_cudart/linux-x86_64/cuda_cudart-linux-x86_64-12.6.77-archive.tar.xz}"
+    curl -fsSL --write-out '%{stderr}\nKF_DOWNLOAD_METRIC seconds=%{time_total} bytes=%{size_download}\n' -o /tmp/cudart.tar.xz "${CUDART_URL:-https://developer.download.nvidia.com/compute/cuda/redist/cuda_cudart/linux-x86_64/cuda_cudart-linux-x86_64-12.6.77-archive.tar.xz}"
     tar -tf /tmp/cudart.tar.xz > /tmp/cudart.list
     awk -F/ '$NF=="cuda.h"{print; exit}' /tmp/cudart.list > /tmp/cudah.path
     if [ -s /tmp/cudah.path ]; then

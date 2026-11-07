@@ -271,7 +271,16 @@ export function fitReport(doc, max = REPORT_MAX_BYTES) {
 // The published document: the box's claims with the Worker's own identity. `row` is the final
 // ci_runs row (+ host facts), `log` the identity of the published log (or null), `offsets` the
 // stage-marker positions found in that log.
-export function buildReport({ claims, row, runId, log, offsets, logsBase, offerFacts = null }) {
+export function buildReport({
+  claims,
+  row,
+  runId,
+  log,
+  offsets,
+  logsBase,
+  offerFacts = null,
+  downloadMeasurements = null,
+}) {
   const subruns = claims.subruns.map(({ ord, log_stages, ...s }) => {
     let range = null;
     if (offsets && log_stages.length) {
@@ -295,6 +304,7 @@ export function buildReport({ claims, row, runId, log, offsets, logsBase, offerF
     schema: 1,
     run_id: runId,
     offer_facts: offerFacts,
+    download_measurements: downloadMeasurements,
     commit: row.commit_sha,
     tree: row.tree_kind === 'tree' ? row.tree_hash : null,
     tier: row.tier,

@@ -246,7 +246,6 @@ export class OfferBook {
           // The first sorted row is the cheapest offer in the best available tier.
           machine_id: providerId(offer.machine_id),
           host_id: providerId(offer.host_id),
-          offer_facts: offer.offer_facts,
         });
       else {
         prior.count++;

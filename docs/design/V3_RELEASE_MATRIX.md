@@ -186,8 +186,9 @@ host-stage loop and includes conditional stages. The CI job and Python tests run
 this guard; a future download stage must add and review its table row.
 
 CODE READ: effective hourly price is compute base plus profile-sized storage,
-plus `(inbound allowance * inbound unit price + outbound allowance * outbound
-unit price) / hard lease hours`. Worst-case reservation includes the compute and
+plus transfer fees and a download-time premium divided by hard lease hours.
+The premium is excess download seconds over a 1 Gbps reference, valued at the
+compute/storage hourly rate; see [the download model](V3_DOWNLOAD_PRICE.md). Worst-case reservation includes the compute and
 storage cron margin and the network allowance once. Search, disk allocation,
 offer rejection, ranking, live-instance rechecks and release estimates all use
 the selected resource profile. Cross-profile offer caches refresh when disk or
@@ -196,7 +197,8 @@ client from that batch's resource profile. Legacy volume overrides can increase
 allowances; legacy rate overrides can tighten caps. Neither can under-budget the
 stage table or relax its per-GB limit.
 
-INFERRED worked example, same country, five-hour lease, no outbound charge and
+INFERRED worked example, same country, advertised inbound at least 4000 Mbps
+(so no time premium with the current derate), five-hour lease, no outbound charge and
 USD 0.12/GB/month storage: A has compute USD 0.10/h and inbound USD 0.005/GB; B has
 compute USD 0.20/h and free inbound. Small's 120 GB disk and 73 GB inbound make
 A USD 0.193/h versus B USD 0.220/h, so A wins. Large's 300 GB disk and 130 GB

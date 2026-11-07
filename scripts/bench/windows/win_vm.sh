@@ -213,7 +213,7 @@ cmd_fetch() {
       local try=0 rc=1
       while [ "$try" -lt 8 ]; do
         try=$((try + 1))
-        curl -fL --connect-timeout 30 --speed-limit 200000 --speed-time 60 --retry 3 --retry-delay 5 \
+        curl -fL --write-out '%{stderr}\nKF_DOWNLOAD_METRIC seconds=%{time_total} bytes=%{size_download}\n' --connect-timeout 30 --speed-limit 200000 --speed-time 60 --retry 3 --retry-delay 5 \
           --retry-all-errors -C - -o "$CACHE/$f.part" "$url" && { rc=0; break; }
         rc=$?
         log "fetch $f: curl rc=$rc (attempt $try/8)"

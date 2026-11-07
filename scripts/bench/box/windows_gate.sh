@@ -57,6 +57,7 @@ EV=$PROV/${T}_windows
 mkdir -p "$PROV"
 [ ! -e "$LOG" ] || { echo "WINDOWS_GATE_REFUSED why=would-overwrite-$LOG"; exit 2; }
 : > "$LOG"
+emit_download_metrics() { LC_ALL=C grep -a -m 32 -E '^KF_DOWNLOAD_METRIC seconds=[0-9]{1,6}([.][0-9]{1,6})? bytes=[0-9]{1,13}$' -- "$1" 2>/dev/null || true; }
 say() { echo "$*" | tee -a "$LOG"; }
 
 export PATH="$PATH:$HOME/.cargo/bin"
@@ -687,6 +688,7 @@ else
     # media and install are not kayfabe's: no kf3 device is attached during the install
     (cd "$SOURCE" && bash "$WV" install) > "$EV/install_stdout.txt" 2>&1
     irc=$?
+    emit_download_metrics "$EV/install_stdout.txt"
     if [ "$irc" != 0 ] || [ ! -e "$VM/installed" ]; then
         cls=OPERATOR
         grep -q 'sha256' "$EV/install_stdout.txt" && cls=MEDIA

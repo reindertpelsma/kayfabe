@@ -16,7 +16,8 @@ const good = {
   compute_cap: 860,
   dlperf: 12,
   cpu_ram: 65536,
-  inet_down: 1000,
+  // Synthetic reference-fast link isolates these GPU/preference/price contracts.
+  inet_down: 10000,
   inet_up: 100,
   dph_base: 0.1,
   storage_cost: 0.12,
@@ -408,3 +409,10 @@ for (const restart of [false, true])
     assert.equal(r.status, 401);
     assert.equal(h.cloud.calls.filter((x) => x.url.includes('/bundles')).length, 0);
   });
+
+test('V5 middle feasibility rejects a formerly qualifying 1000 Mbps link', async () => {
+  const h = await harness([{ ...good, inet_down: 1000 }]);
+  const data = await (await available(h)).json();
+  assert.equal(data.offers.length, 0);
+  assert.equal(data.rejected.SLOW_NETWORK, 1);
+});
