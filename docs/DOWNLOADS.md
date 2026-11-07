@@ -147,6 +147,40 @@ streams `zstd -d | tar -x` and never stores the 42 GB archive (about 94 GB unpac
 2 GiB per-run ceiling named under "Download etiquette" stays an example for third-party hosts; the
 owner-hosted cache is excluded from it.
 
+## Windows image bucket objects (proposal only, 2026-11-07)
+
+DESIGN-ONLY: no image bucket/object, upload, Worker route or deployment is
+established by this proposal. The owner's 2026-11-07 design is a private Windows
+disk built natively with windows-on-vast (owner choice, 2026-11-07), containing a fresh OS, stock NVIDIA driver and
+licensed software installed manually through official installers. SPEC, the
+harness and scripted open-app bundles remain separate run-time layers.
+The QEMU session wrapper is an alternative; the separate native capture design
+uses an Alpine UEFI ESP swap and is pending merge.
+See [V3_WINDOWS_IMAGE.md](design/V3_WINDOWS_IMAGE.md) for the alternative, manual checklist,
+inventory contract, risks and unexecuted coordinator dry-run plan.
+
+| Proposed private object key | Intended contents |
+|---|---|
+| `windows-images/<build-id>/windows.qcow2` | One flattened compressed qcow2 disk, never a public release asset |
+| `windows-images/<build-id>/manifest.json` | Artifact bytes/SHA-256, qemu-img info, inventory/file exclusions, manual installer record, repo media pins, real UTC date and host revision |
+| `windows-images/<build-id>/installers/` | Optional owner-held originals and licence texts, only where the applicable terms permit that private copy |
+
+DESIGN INTENT: throwaway accounts only; private R2 only; never public, shared
+cache, fork CI or container image. The owner records each official installer URL,
+version, full pinned SHA-256, manual steps and licence notes. No app rows or
+licence permissions are invented by this proposal. Existing terms findings above
+are not overridden: an image does not authorize automated licensed-app use.
+Keep evaluation-edition expiry on a lawful rebuild/licensing schedule; a faked
+clock is not an extension of a licence. Never clone TPM seeds or signing keys.
+
+CODE READ: `scripts/bench/windows/image_package.sh` packages only after a clean
+session and validates checksums. It uses a caller-supplied presigned PUT or GET
+from an owner-only file; no Cloudflare credential is stored and no Worker is
+contacted. The implemented upload is a retried single PUT, capped at 5 GiB;
+larger artifacts require caller-managed multipart. Verification downloads and
+compares SHA-256/length against an independently retained private manifest.
+These statements describe code, not a tested upload or usable Windows image.
+
 ## Windows app bundle (the Windows apps stage)
 
 STATUS: DESIGN-ONLY, 2026-11-07. Nothing below exists in R2 yet: no object is uploaded, the pin file

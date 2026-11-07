@@ -34,6 +34,7 @@
 # Environment: WINVM_ROOT (/workspace/winvm), WINVM_NAME (kfwin), BENCH (/workspace/bench: kf3
 # binaries per revision), WINVM_QEMU (override the binary), WINVM_SSH_PORT (2224),
 # WINVM_SSH_BIND (127.0.0.1), WINVM_RAM_MB (8192), WINVM_SMP (8), WINVM_KF3_FB_MB (8192).
+# WINVM_NET_RESTRICT (on): opt-in off allows outbound networking for owner image installs.
 # Opt-in knobs for a rented Vast box (2026-10-31, docs/design/V3_WINDOWS_ON_VAST.md section 3; the
 # defaults below are the old host workflow's, so setting nothing changes nothing):
 #   WINVM_LOCK_WAIT_S (7200)       how long `run` waits for the GPU lock; the Vast lane uses 120
@@ -485,7 +486,7 @@ qemu_common() {
     -rtc base=utc,driftfix=slew -global kvm-pit.lost_tick_policy=discard
     -chardev "socket,id=chrtpm,path=$VM/run/swtpm.sock" -tpmdev emulator,id=tpm0,chardev=chrtpm
     -device tpm-crb,tpmdev=tpm0
-    -netdev "user,id=n0,restrict=on,hostfwd=tcp:$SSH_BIND:$SSH_PORT-:22"
+    -netdev "user,id=n0,restrict=${WINVM_NET_RESTRICT:-on},hostfwd=tcp:$SSH_BIND:$SSH_PORT-:22"
     -device "virtio-net-pci,netdev=n0,mac=${VM_MAC:-$MAC}"
     -device virtio-serial-pci,id=vser0
     -chardev "socket,id=qga0,path=$VM/run/qga.sock,server=on,wait=off"
@@ -623,10 +624,12 @@ wait_ssh() {  # TIMEOUT_S
   return 1
 }
 qga_diag() {
-  $QMP "$VM/run/qga.sock" qga-ping && $QMP "$VM/run/qga.sock" qga-exec \
+  if ! $QMP "$VM/run/qga.sock" qga-ping || ! $QMP "$VM/run/qga.sock" qga-exec \
     'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe' -NoProfile -Command \
     'Get-Content C:\kf\install-done.txt,C:\kf\firstlogon.log -Tail 60 -ErrorAction SilentlyContinue; Get-Service sshd,QEMU-GA -ErrorAction SilentlyContinue | Format-Table -AutoSize' \
-    2>&1 | tail -80 || log "the guest agent does not answer either"
+    2>&1 | tail -80; then
+    log "the guest agent does not answer either"
+  fi
 }
 
 run_check() {  # TAG [-ExpectKf3]
@@ -1012,7 +1015,7 @@ cmd_collect() {
   step collect gssh "powershell -NoProfile -ExecutionPolicy Bypass -File C:\\kf\\collect.ps1 -Tag $tag" | tr -d '\r' | tail -5
   install -d -m 0700 "$VM/logs/evidence"
   step pull gscp_from "C:/kf/evidence/$tag" "$VM/logs/evidence/"
-  log "EVIDENCE $VM/logs/evidence/$tag ($(ls "$VM/logs/evidence/$tag" | wc -l) files)"
+  log "EVIDENCE $VM/logs/evidence/$tag ($(find "$VM/logs/evidence/$tag" -mindepth 1 -maxdepth 1 ! -name '.*' -printf . | wc -c) files)"
 }
 cmd_shot() {
   local name=${1:-manual_$(date -u +%Y%m%dT%H%M%SZ)}
@@ -1042,8 +1045,17 @@ cmd_status() {
   local s
   for s in qmp qmp-ev qga swtpm vnc; do echo "socket $s: $([ -S "$VM/run/$s.sock" ] && echo present || echo absent)"; done
   echo "ssh $SSH_BIND:$SSH_PORT: $(ss -tln 2>/dev/null | grep -c ":$SSH_PORT " || true) listener(s)"
-  echo "last run log: $(ls -t "$VM"/logs/*_run.log 2>/dev/null | head -1)"
-  ls -t "$VM"/logs/*_run.log 2>/dev/null | head -1 | xargs -r tail -3
+  local latest
+  latest=$(python3 - "$VM/logs" <<'PY'
+from pathlib import Path
+import sys
+logs = list(Path(sys.argv[1]).glob('*_run.log'))
+if logs:
+    print(max(logs, key=lambda p: p.stat().st_mtime_ns))
+PY
+)
+  echo "last run log: $latest"
+  [ -z "$latest" ] || tail -3 -- "$latest"
 }
 
 main() {
@@ -1054,6 +1066,10 @@ main() {
     *) need_seconds WINVM_LOCK_WAIT_S "$LOCK_WAIT_S"
        need_seconds WINVM_INSTALL_WAIT_S "$INSTALL_WAIT_S"
        need_seconds WINVM_SSH_CONNECT_TIMEOUT "$SSH_CONNECT_TIMEOUT"
+       case "${WINVM_NET_RESTRICT-on}" in
+         on|off) ;;
+         *) die "WINVM_NET_RESTRICT must be on or off" ;;
+       esac
        # a QEMU cache mode only: the value goes into a -drive option string, so no comma or "="
        case "${WINVM_INSTALL_CACHE:-}" in
          ""|none|off|writeback|writethrough|directsync|unsafe) ;;
