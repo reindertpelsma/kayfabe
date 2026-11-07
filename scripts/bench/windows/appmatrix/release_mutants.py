@@ -83,6 +83,12 @@ VRS_BODY = '''+    // kayfabe release gate: require and exercise coarse shading;
 +    m_postprocessShadingRate = D3D12_SHADING_RATE_2X2;
 +
 '''
+GM_STALE_GUARD = r'''if ((Test-Path -LiteralPath "$OUT\gm.png") -or (Test-Path -LiteralPath "$OUT\gm_times.txt")) {
+    'CHECK gravitymark_fresh FAIL stale output remains'
+    exit 1
+}
+'''
+MUTANTS.append(("gravitymark-stale-output-accepted", "gen_apps.py", GM_STALE_GUARD, ""))
 MUTANTS.append(("vrs-coarse-gate-disabled", "directx_vrs_gate.patch", VRS_BODY, "+    // Mutant: no feature guard or coarse shading.\n"))
 MUTANTS += [
     ("qga-read-replayed-without-seek", "qga.py",

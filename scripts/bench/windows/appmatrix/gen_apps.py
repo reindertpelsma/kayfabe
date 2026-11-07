@@ -308,6 +308,10 @@ GM = r'''$gmx = Find-KfFile -Root "$K\gravitymark" -Name GravityMark.exe
 if (-not $gmx) { 'GM_NOTFOUND'; exit 1 }
 $gmd = Split-Path $gmx
 Remove-Item -LiteralPath "$OUT\gm.png", "$OUT\gm_times.txt" -Force -ErrorAction SilentlyContinue
+if ((Test-Path -LiteralPath "$OUT\gm.png") -or (Test-Path -LiteralPath "$OUT\gm_times.txt")) {
+    'CHECK gravitymark_fresh FAIL stale output remains'
+    exit 1
+}
 '''
 for aid, api, extra, tier, dif in (("gravitymark_d3d11", "-d3d11", [], 1, W_GFX), ("gravitymark_d3d12", "-d3d12", [], 1, W_GFX), ("gravitymark_vk", "-vk", [], 1, W_GFX),
                                    ("gravitymark_gl", "-gl", [], 2, W_GFX), ("gravitymark_d3d12_raster", "-d3d12", ["-raster", "1"], 2, W_GFX),
