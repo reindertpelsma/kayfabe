@@ -18,7 +18,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
   deploy:
     needs: build
     if: >-
@@ -71,7 +71,7 @@ test('site actions must be SHA pinned', () => {
   assert.ok(
     check(
       site.replace(
-        'actions/checkout@11d5960a326750d5838078e36cf38b85af677262',
+        'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1',
         'actions/checkout@main',
       ),
     ).length,
