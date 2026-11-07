@@ -1,0 +1,33 @@
+name: Release claims (advisory)
+
+on:
+  pull_request:
+    paths:
+      - 'README.md'
+      - 'docs/RELEASE_CLAIMS.*'
+      - 'scripts/ci/release_claims*'
+      - 'scripts/ci/test_release_claims*'
+      - '.github/workflows/release-claims.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release-claims:
+    name: release-claims (advisory)
+    # Separate from the required CI gate; the failure remains visible on this job.
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: Validator fixture tests and mutants
+        run: |
+          python3 -m unittest scripts/ci/test_release_claims.py
+          python3 scripts/ci/release_claims_mutants.py
+      - name: Validate README coverage and ledger pointers
+        if: always()
+        run: python3 scripts/ci/release_claims.py validate

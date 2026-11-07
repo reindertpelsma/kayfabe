@@ -1,0 +1,1 @@
+Stock host and guest NVIDIA drivers are unmodified by default. Patches are opt-in diagnostics.
