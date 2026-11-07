@@ -653,6 +653,14 @@ CASES += [
     ),
 ]
 
+CASES += [
+    ("winapps-all-output-is-pass", function("winapps_rows", '    return [row("windows_apps", 8)]')),
+    ("winapps-never-passes", function("winapps_rows", '    raise EvidenceError("windows_apps_retry_operator")')),
+    ("winapps-enabled-by-default", scoped("winapps_requested", '        return None', '        return "small"')),
+    ("winapps-request-ignored", function("winapps_requested", '    environ.pop("KF_WINAPPS", None)\n    return None')),
+    ("winapps-incomplete-output-is-pass", scoped("winapps_rows", 'if (len(grade) == 1 and count and grade[0][0] == grade[0][1] == count[1]\n                    and len(app_lines) == len(passed) == len(set(passed)) == int(count[1])):', 'if True:')),
+]
+
 COLLECT = """import io,json,unittest,importlib.util
 from pathlib import Path
 s=unittest.defaultTestLoader.discover('scripts/ci',pattern='test_vast_payload*.py')
@@ -700,6 +708,7 @@ def main():
             "test_vast_payload_summary.py",
             "test_vast_payload_claims.py",
             "test_vast_payload_apps.py",
+            "test_vast_payload_winapps.py",
             "host_claims_vectors.json",
             "test_vast_box.py",
             "vast_report.py",

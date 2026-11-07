@@ -103,6 +103,12 @@ deploy helper at deploy time, not by CI (final review C1). After any
 change under `src/`, `defaults.json` or the lockfile, record the new hash in both files. Preserve
 the SQLite LEDGER namespace and migration when updating.
 
+[MEASURED 2026-11-07, J1, local build only] After merging the Windows apps proposal with `next` and applying the required formatter,
+two lockfile-pinned wrangler dry-runs emitted the same module SHA-256:
+`861775b119a883f8da7115936f6c61ae63eb2ae53e5e9e0f96d5efbbb73ca04b`.
+Both reviewed-source pins are updated under the rule above. This is not a deployment record:
+no Worker call, upload, setting change or bundle upload occurred. The Windows apps stage is still opt-in.
+
 ## Provider status tolerance (built 2026-11-06, NOT DEPLOYED)
 
 STATUS: LIVE as code, 2026-11-06, on branch `claude/vast-tolerance-20261106`; nothing deployed. The rule,
@@ -342,6 +348,12 @@ in `src/benchdata.js`; any other name is 404, and nothing lists the bucket:
 | `specviewperf-15.0.0.CHECKSUMS.txt` | `specviewperf-15.0.0/CHECKSUMS.txt` |
 | `specviewperf-15.0.0.SPEC_General_License.pdf` | `specviewperf-15.0.0/SPEC_General_License.pdf` |
 | `specviewperf-15.0.0.SPECviewperf-Setup.exe` | `specviewperf-15.0.0/original/SPECviewperf-Setup-15.0.0.exe` |
+| `winapps-open.iso` | `winapps-open/kfapps.iso` |
+| `winapps-open.manifest.json` | `winapps-open/manifest.json` |
+
+The last two rows are PROPOSED (2026-11-07, Windows apps stage, `docs/design/V3_WINDOWS_APPS_GATE.md`): the app disk of the Windows app matrix, packaged once by a person from
+redistributable packages only. They are not deployed and no object exists until the owner uploads it; until then the
+stage's answer is RETRY class MEDIA.
 
 Limits (defaults in `defaults.json`): the URL lives at most 1200 s and never past the run's next
 deadline (under 30 s left is a 401); at most 4 URLs per object per run, counted in the run

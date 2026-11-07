@@ -131,7 +131,7 @@ class Build(unittest.TestCase):
         self.assertEqual(linux["counts"], {"pass": 35, "fail": 0, "skip": 0})
         self.assertEqual(windows["counts"], {"pass": 1, "fail": 0, "skip": 0})
         self.assertEqual(host["log_stages"], ["cuda_host", "merge_bar"])
-        self.assertEqual(windows["log_stages"], ["windows_gate", "windows_gate_2"])
+        self.assertEqual(windows["log_stages"], ["windows_gate", "windows_apps", "windows_gate_2"])
         self.assertEqual(self.doc["guest_drivers"], {"linux": "580.159.03", "windows": "580.88"})
 
     def test_every_row_carries_its_subrun_and_only_known_subruns(self):
@@ -351,6 +351,88 @@ class Build(unittest.TestCase):
         )
         rows = [t for t in doc["tests"] if t["name"] == "timer"]
         self.assertEqual([(t["result"], t["ms"]) for t in rows], [("PASS", 7)])
+
+
+class WindowsApps(unittest.TestCase):
+    """Falsifier: missing/harness rows pass, Windows overwrites Linux, or a gate PASS hides apps FAIL."""
+
+    def line(self, name="vectorAdd", cls="pass", verdict="PASS", secs="2", note="-"):
+        return (f"WINAPPS_APP app={name} class={cls} verdict={verdict} batched={verdict} alone=- "
+                f"secs={secs} tdr=0 wer=0 gsp=0 note={note}")
+
+    def build(self, lines, suite="windows_apps", failed=0):
+        res = result(verdict="FAIL" if failed else "PASS")
+        res["suites"].append(dict(name=suite, **{"pass": 0 if failed else 1, "fail": failed, "skip": 0}))
+        return rr.build_report(log_lines() + lines, res)
+
+    def test_windows_app_is_reported_with_its_subrun_and_measured_time(self):
+        doc = self.build([self.line()])
+        self.assertEqual(doc["apps"], [dict(sub="windows-580.88", name="vectorAdd", os="windows", result="PASS", note="-")])
+        row = next(t for t in doc["tests"] if t["suite"] == "apps_windows")
+        self.assertEqual((row["sub"], row["result"], row["ms"]), ("windows-580.88", "PASS", 2000))
+        self.assertIn("windows_apps", doc["subruns"][2]["log_stages"])
+
+    def test_same_name_in_linux_and_windows_keeps_both_rows(self):
+        doc = self.build(["APP_ROW name=vectorAdd os=linux result=FAIL secs=1", self.line()])
+        self.assertEqual([(a["os"], a["result"]) for a in doc["apps"]], [("linux", "FAIL"), ("windows", "PASS")])
+
+    def test_missing_and_harness_rows_are_not_run_never_pass(self):
+        for cls, verdict in (("not_run", "-"), ("harness", "NOTRUN"), ("pass", "FAIL")):
+            doc = self.build([self.line(cls=cls, verdict=verdict, secs="-")])
+            self.assertEqual(doc["apps"][0]["result"], "NOT_RUN")
+            row = next(t for t in doc["tests"] if t["suite"] == "apps_windows")
+            self.assertEqual((row["result"], row["ms"]), ("SKIP", None))
+
+    def test_windows_class_and_verdict_mapping_is_fail_closed(self):
+        for cls, verdict, want in (("pass", "PASS", "PASS"), ("pass", "PASS*", "PASS"),
+                                   ("guest_fail", "FAIL", "FAIL"), ("guest_fail", "TIMEOUT", "FAIL"),
+                                   ("boot_fail", "BOOT_FAIL", "FAIL"), ("harness", "NOTRUN", "NOT_RUN"),
+                                   ("not_run", "-", "NOT_RUN"), ("pass", "FAIL", "NOT_RUN")):
+            self.assertEqual(rr.windows_app_result(cls, verdict), want)
+
+    def test_fail_and_timeout_rows_fail_with_bounded_notes(self):
+        for cls, verdict in (("guest_fail", "FAIL"), ("guest_fail", "TIMEOUT"), ("boot_fail", "BOOT_FAIL")):
+            doc = self.build([self.line(cls=cls, verdict=verdict, note="n" * 400)], failed=1)
+            self.assertEqual(doc["apps"][0]["result"], "FAIL")
+            self.assertEqual(len(doc["apps"][0]["note"]), 200)
+            self.assertEqual(next(t for t in doc["tests"] if t["suite"] == "apps_windows")["result"], "FAIL")
+
+    def test_duplicate_windows_app_keeps_the_final_row(self):
+        doc = self.build([self.line(), self.line(cls="guest_fail", verdict="FAIL")], failed=1)
+        self.assertEqual(len(doc["apps"]), 1)
+        self.assertEqual(doc["apps"][0]["result"], "FAIL")
+
+    def test_a_gate_pass_does_not_hide_a_windows_apps_suite_failure(self):
+        for suite in ("windows_apps", "windows_apps_retry_time", "windows_apps_retry_media"):
+            doc = self.build([], suite=suite, failed=1)
+            self.assertEqual(doc["subruns"][2]["verdict"], "FAIL")
+            self.assertIn(suite, doc["subruns"][2]["stages"])
+            self.assertIn(dict(name=suite, **{"pass": 0, "fail": 1, "skip": 0}), doc["suites"])
+
+    def test_no_app_rows_are_invented_by_a_windows_apps_suite(self):
+        self.assertEqual(self.build([])["apps"], [])
+
+    def test_bad_names_and_incomplete_windows_rows_are_ignored(self):
+        doc = self.build([self.line(name="../bad"), "WINAPPS_APP app=ok class=pass verdict=PASS"])
+        self.assertEqual(doc["apps"], [])
+
+    def test_windows_apps_share_the_array_cap_with_linux(self):
+        lines = [f"APP_ROW name=l{i} os=linux result=PASS" for i in range(300)]
+        lines += [self.line(name=f"w{i}") for i in range(300)]
+        self.assertEqual(len(self.build(lines)["apps"]), 500)
+
+    def test_windows_notes_are_bounded_even_for_passing_apps(self):
+        self.assertEqual(len(self.build([self.line(note="n" * 400)])["apps"][0]["note"]), 200)
+
+    def test_recorded_full_run_reports_58_pass_9_fail_12_not_run(self):
+        # This is a replay of recorded output, not a new hardware qualification.
+        trace = Path(__file__).resolve().parents[2] / "traces/winapps_20261107/wa1f_winapps.log"
+        if not trace.exists():
+            self.skipTest("trace not copied into the isolated mutation fixture")
+        doc = self.build(trace.read_text().splitlines(), failed=1)
+        from collections import Counter
+        self.assertEqual(Counter(a["result"] for a in doc["apps"]), {"PASS": 58, "FAIL": 9, "NOT_RUN": 12})
+        self.assertEqual(doc["subruns"][2]["verdict"], "FAIL")
 
 
 class FakeTransport:

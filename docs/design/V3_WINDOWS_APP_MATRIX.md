@@ -8,6 +8,11 @@ are pending. Its evidence and falsifiers are in
 [`windows_matrix_20261011`](../../traces/windows_matrix_20261011/README.md).
 OpenGL gears already passed independently on that candidate.
 
+*[2026-11-07, folded above the text it corrects]* On a rented Vast box this lane runs through `win_vm.sh` and ssh, not through
+`windows_broker_prod2.sh`, the QEMU guest agent and a hot-plugged USB CD-ROM described below (those need the old trusted host):
+see [`V3_WINDOWS_APPS_GATE.md`](V3_WINDOWS_APPS_GATE.md) (`winapps.py --vm winvm`, `sshguest.py`). The inventory, the guest scripts,
+the supervisor protocol and the verdict vocabulary below are unchanged.
+
 ## 0. What exists
 
 <!-- BEGIN GENERATED counts -->

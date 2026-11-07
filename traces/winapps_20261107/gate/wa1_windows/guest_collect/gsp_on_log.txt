@@ -1,0 +1,43 @@
+﻿**********************
+Windows PowerShell transcript start
+Start time: 20261107035043
+Username: KFWIN\kf
+RunAs User: KFWIN\kf
+Configuration Name: 
+Machine: KFWIN (Microsoft Windows NT 10.0.26100.0)
+Host Application: C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\kf\gsp_on.ps1 -Inf C:\kf\nv\Display.Driver\nv_dispi.inf -NoEnable
+Process ID: 4828
+PSVersion: 5.1.26100.1591
+PSEdition: Desktop
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1.26100.1591
+BuildVersion: 10.0.26100.1591
+CLRVersion: 4.0.30319.42000
+WSManStackVersion: 3.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+**********************
+GSP_ON device PCI\VEN_10DE&DEV_2684&SUBSYS_889C1043&REV_A1\3&11583659&0&28 name='Microsoft Basic Display Adapter' status=OK problem=CM_PROB_NONE inf=display.inf driverkey={fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004}\0001
+GSP_ON nvlddmkm.sys signature status=Valid signer='CN=NVIDIA Corporation, OU=1-F, O=NVIDIA Corporation, L=Santa Clara, S=California, C=US'
+GSP_ON disable: Microsoft PnP Utility
+GSP_ON disable:
+GSP_ON disable: Disabling device:          PCI\VEN_10DE&DEV_2684&SUBSYS_889C1043&REV_A1\3&11583659&0&28
+GSP_ON disable: Device disabled successfully.
+GSP_ON disable:
+GSP_ON add-driver: Microsoft PnP Utility
+GSP_ON add-driver:
+GSP_ON add-driver: Adding driver package:  nv_dispi.inf
+GSP_ON add-driver: Driver package added successfully.
+GSP_ON add-driver: Published Name:         oem7.inf
+GSP_ON add-driver: Driver package installed on device: PCI\VEN_10DE&DEV_2684&SUBSYS_889C1043&REV_A1\3&11583659&0&28
+GSP_ON add-driver:
+GSP_ON add-driver: Total driver packages:  1
+GSP_ON add-driver: Added driver packages:  1
+GSP_ON add-driver rc=0
+GSP_ON after install: inf=oem7.inf driverkey={fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004}\0001 version=32.0.15.8088
+GSP_ON readback HKLM:\SYSTEM\CurrentControlSet\Control\Class\{fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004}\0001 EnableGpuFirmware=1
+GSP_ON readback HKLM:\SYSTEM\CurrentControlSet\Services\nvlddmkm EnableGpuFirmware=1
+**********************
+Windows PowerShell transcript end
+End time: 20261107035156
+**********************
+
