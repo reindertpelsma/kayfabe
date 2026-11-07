@@ -14,6 +14,7 @@ import json
 import os
 import re
 import sys
+import prestart as P
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -33,11 +34,14 @@ DEFAULT_FAIL = r"^CHECK .*FAIL"
 
 
 def app(id, cat, ps, rx, timeout, expect, proof, diff, why, linux=(), pkgs=(), session="service", tier=1,
-        fail_rx=DEFAULT_FAIL, kill=(), shot=None, note=None, digest=False, smi=True, nvidia_only=True):
+        fail_rx=DEFAULT_FAIL, kill=(), shot=None, note=None, digest=False, smi=True, nvidia_only=True, prestart=None):
     assert id not in {a["id"] for a in APPS}, id
     APPS.append(dict(id=id, category=cat, linux=list(linux), pkgs=list(pkgs), session=session, tier=tier, timeout_s=timeout,
                      expect_s=expect, rx=rx, fail_rx=fail_rx, proof=list(proof), difficulty=diff, why=why, ps=ps.strip("\n") + "\n",
                      kill_names=list(kill), screenshot_s=shot, note=note, digest=digest, smi=smi, nvidia_only=nvidia_only))
+    if prestart is not None:
+        APPS[-1]["prestart"] = prestart
+        P.config(APPS[-1])
 
 
 def py(script, *args):

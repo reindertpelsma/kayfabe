@@ -1,0 +1,42 @@
+name: Windows app autostart (GPU-free fixtures)
+
+on:
+  push:
+    paths:
+      - 'scripts/bench/windows/app_*.ps1'
+      - 'scripts/bench/windows/lab_prep.ps1'
+      - 'scripts/bench/windows/appmatrix/**'
+      - 'scripts/ci/*app_autostart*.py'
+      - 'docs/design/V3_WINDOWS_APP_AUTOSTART.md'
+      - '.github/workflows/windows-app-autostart.yml'
+  pull_request:
+    paths:
+      - 'scripts/bench/windows/app_*.ps1'
+      - 'scripts/bench/windows/lab_prep.ps1'
+      - 'scripts/bench/windows/appmatrix/**'
+      - 'scripts/ci/*app_autostart*.py'
+      - 'docs/design/V3_WINDOWS_APP_AUTOSTART.md'
+      - '.github/workflows/windows-app-autostart.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fixtures:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Require the fake-provider PowerShell runtime
+        run: command -v pwsh
+      - name: Guest policy fixtures and Windows source contracts
+        run: nice -n 19 python3 -B scripts/ci/test_app_autostart.py
+      - name: App matrix fake guest integration
+        run: nice -n 19 python3 -B -m unittest discover -s scripts/bench/windows/appmatrix/tests
+      - name: Two named killers for every guest policy mutant
+        run: nice -n 19 python3 -B scripts/ci/app_autostart_mutants.py
+      - name: Measurement prose names its run
+        run: python3 scripts/ci/debt.py claims

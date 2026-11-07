@@ -70,7 +70,8 @@ Check the session with:
 scripts/bench/windows/image_session.sh status
 ```
 
-Close applications and background writers. Create a JSON file selecting actual
+Complete the experimental [autostart preparation](#application-footprints-and-lab-preparation)
+before final capture. Close applications and background writers. Create a JSON file selecting actual
 application roots and mutable file exclusions; an empty root list produces
 package/driver inventory only:
 
@@ -126,3 +127,49 @@ Uploads use single PUT with retries and support artifacts up to 5 GiB. Larger
 images need caller-managed multipart upload; `verify` can still check their
 presigned download. Retain the manifest/checksum independently. Never publish
 the disk, its inventory or signed URLs. No storage is deployed by these helpers.
+
+## Application footprints and lab preparation
+
+This procedure is DESIGN-ONLY and needs the coordinator's Windows dry run.
+It also applies to the native build. Stage `app_footprint.ps1`, `lab_prep.ps1`,
+`app_prestart.ps1` and `app_autostart_common.ps1` together in a temporary guest
+tools directory. Run elevated with the fixed disposable account's profile
+loaded. Keep records private under `C:\ProgramData\KayfabeLab`.
+
+Before each official installer, take a new snapshot. After installation, take
+another and produce the app's footprint, supplying its actual pinned SHA-256:
+
+```powershell
+.\app_footprint.ps1 snapshot -OutputPath C:\BuildRecords\app_a-before.json
+# Install the official application by hand, then:
+.\app_footprint.ps1 snapshot -OutputPath C:\BuildRecords\app_a-after.json
+.\app_footprint.ps1 diff -BeforePath C:\BuildRecords\app_a-before.json `
+  -AfterPath C:\BuildRecords\app_a-after.json -App app_a `
+  -InstallerSha256 $InstallerSha256 `
+  -OutputPath C:\ProgramData\KayfabeLab\footprints\app_a.json
+```
+
+Review the new entries and `changed_existing` rows for every app. After all
+installers and manual first-run steps, close applications and run:
+
+```powershell
+.\lab_prep.ps1
+```
+
+Require exit zero, `LAB_PREP_DONE` and `complete: true` in
+`C:\ProgramData\KayfabeLab\lab_prep.json`. Preserve that original report and
+the footprints. If it fails, stop the capture procedure and inspect the policy
+code; do not bypass permissions or overwrite the report by blindly retrying.
+Reboot and use an installed app ID to repeat the audit/reset without replacing
+the original service-mode record:
+
+```powershell
+.\app_prestart.ps1 --app app_a -Action Reset
+```
+
+Test app switching before capture. Opt an app into the app-matrix hook with
+`"prestart": {"timeout_s": 30, "tasks": []}` only after reviewing its footprint.
+Keep task IDs empty unless the app needs manual task invocation. Stage the
+private records at the default ProgramData paths; scripts are delivered at run
+time. The [design and Windows-only checks](../design/V3_WINDOWS_APP_AUTOSTART.md)
+describe protection exceptions, failure handling and coverage limits.
