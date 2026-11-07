@@ -67,7 +67,10 @@ class SpecviewperfWrapper(unittest.TestCase):
         )
         p, texts, modes, dmode = self.run_wrapper(lane)
         self.assertEqual(p.returncode, 0)
-        self.assertEqual(p.stdout, "SPECVIEWPERF_STAGE_PASS\nSPECVIEWPERF_STAGE_EXIT rc=0\n")
+        self.assertEqual(
+            p.stdout,
+            "SPEC_STAGE_START lane=none\nSPECVIEWPERF_STAGE_PASS\nSPECVIEWPERF_STAGE_EXIT rc=0\n",
+        )
         self.assertNotIn("123", p.stdout + p.stderr)
         self.assertEqual(len(texts), 1)
         self.assertIn("123.45", texts[0])
@@ -77,7 +80,8 @@ class SpecviewperfWrapper(unittest.TestCase):
     def test_no_verdict_and_digit_classes_are_not_passed_through(self):
         p, _, _, _ = self.run_wrapper("echo 'SPECVIEWPERF_STAGE_RETRY class=SCORE_123'\nexit 1\n")
         self.assertEqual(
-            p.stdout, "SPECVIEWPERF_STAGE_RETRY class=NO_VERDICT\nSPECVIEWPERF_STAGE_EXIT rc=1\n"
+            p.stdout,
+            "SPEC_STAGE_START lane=none\nSPECVIEWPERF_STAGE_RETRY class=NO_VERDICT\nSPECVIEWPERF_STAGE_EXIT rc=1\n",
         )
 
     def test_bad_arguments_are_refused(self):
@@ -92,13 +96,22 @@ class Grading(unittest.TestCase):
         self.m = payload()
 
     def test_specviewperf_rows(self):
+        # 2026-11-07: the grader needs the lane and its table; the full PASS contract is in test_vast_payload_spec.py
         m = self.m
+        table = m.spec_table(HERE.parents[1])
+        lane = "lanea"
+        names = m.spec_names(table, lane)
+        rows = "".join(
+            "SPEC_ROW name=%s result=PASS subtests=1/1 reason=- failed=-\n" % n for n in names
+        )
+        ok = "SPEC_STAGE_LIST lane=lanea n=4\n" + rows + "SPECVIEWPERF_STAGE_PASS\nSPECVIEWPERF_STAGE_EXIT rc=0\n"
         self.assertEqual(
-            m.specviewperf_rows("SPECVIEWPERF_STAGE_PASS\nSPECVIEWPERF_STAGE_EXIT rc=0\n", 0),
-            [m.row("specviewperf", 1)],
+            m.specviewperf_rows(ok, 0, lane, table),
+            [m.row("specviewperf", 4), m.row("specviewperf_lanea", 4)],
         )
         for text, rc, name in (
             ("SPECVIEWPERF_STAGE_PASS\n", 1, "specviewperf_retry_operator"),
+            ("SPECVIEWPERF_STAGE_PASS\nSPECVIEWPERF_STAGE_EXIT rc=0\n", 0, "specviewperf_retry_operator"),
             ("SPECVIEWPERF_STAGE_FAIL\n", 1, "specviewperf"),
             ("SPECVIEWPERF_STAGE_RETRY class=NOT_BUILT\n", 3, "specviewperf_retry_not_built"),
             ("SPECVIEWPERF_STAGE_RETRY\n", 3, "specviewperf_retry_operator"),
@@ -112,7 +125,7 @@ class Grading(unittest.TestCase):
         ):
             with self.subTest(text=text, rc=rc):
                 with self.assertRaises(m.EvidenceError) as caught:
-                    m.specviewperf_rows(text, rc)
+                    m.specviewperf_rows(text, rc, lane, table)
                 self.assertEqual(caught.exception.name, name)
 
     def test_tier_requested_pops_and_validates(self):

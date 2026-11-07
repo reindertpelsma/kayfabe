@@ -51,7 +51,7 @@ class Manifest(unittest.TestCase):
         lay = dict(appdisk.plan_layout(man, None, 9, None))
         self.assertIn("pkg/pywheels/torch-2.8.0+cu126-cp312-cp312-win_amd64.whl", lay)     # wheels ride on the disk and are unpacked in the guest
         self.assertIn("pkg/python_embed/python-3.12.10-embed-amd64.zip", lay)
-        self.assertIn("pkg/ffmpeg/ffmpeg-n8.1.3-14-g330caae0c1-win64-gpl-8.1.zip", lay)
+        self.assertIn("pkg/ffmpeg/ffmpeg-n8.1.3-34-ga35157abb9-win64-gpl-8.1.zip", lay)
         self.assertIn("guest/kf_run_app.ps1", lay)
         t = appdisk.stage_table(man)
         self.assertEqual(t["pywheels"]["mode"], "wheels")

@@ -301,13 +301,6 @@ CASES += [
         "design-only-stage-runs",
         replace('        or any(STAGE_SLOTS[n] == "DESIGN_ONLY" for n in names)\n', ""),
     ),
-    (
-        "specviewperf-retry-passes",
-        replace(
-            '    if kind == "PASS" and rc == 0:\n        return [row("specviewperf", 1)]',
-            '    if kind in ("PASS", "RETRY"):\n        return [row("specviewperf", 1)]',
-        ),
-    ),
 ]
 
 # 2026-11-07, lane appslinux: the Linux apps stage (draft, disabled by default).
@@ -364,6 +357,59 @@ CASES += [
             '        if False:\n',
         ),
     ),
+]
+
+# 2026-11-07: the SPECviewperf stage (draft, disabled by default; docs/design/V3_SPEC_GATE.md).
+CASES += [
+    (
+        "spec-slot-without-a-lane-runs",
+        replace('        if wanted:\n            raise EvidenceError("preflight")\n        return None', "        return None"),
+    ),
+    ("spec-lane-without-the-slot-runs", replace("    if value not in SPEC_LANES or not wanted:", "    if value not in SPEC_LANES:")),
+    (
+        "spec-without-the-windows-gate-runs",
+        replace('    if wanted and not windows:\n        raise EvidenceError("preflight")\n', ""),
+    ),
+    ("spec-lane-unvalidated", replace("    if value not in SPEC_LANES or not wanted:", "    if not wanted:")),
+    (
+        "spec-pass-with-a-missing-row",
+        replace(
+            "[(lane, str(len(names)))]\n        and sorted(seen) == sorted(names)\n",
+            "[(lane, str(len(names)))]\n",
+        ),
+    ),
+    (
+        "spec-pass-with-a-failing-row",
+        replace(
+            "        and sorted(seen) == sorted(names)\n        and passed == len(names)\n    ):\n        out = [",
+            "        and sorted(seen) == sorted(names)\n    ):\n        out = [",
+        ),
+    ),
+    ("spec-pass-with-a-nonzero-exit-line", replace('        and exits == ["0"]\n', "")),
+    ("spec-pass-for-the-wrong-lane", replace("        and SPEC_LIST.findall(text) == [(lane, str(len(names)))]\n", "")),
+    ("spec-pass-with-a-nonzero-rc", replace("        and rc == 0\n        and exits", "        and exits")),
+    (
+        "spec-retry-passes",
+        replace(
+            '    if kind == "RETRY":\n        name = "specviewperf_retry_"',
+            '    if kind == "RETRY":\n        return [row("specviewperf", len(names))]\n        name = "specviewperf_retry_"',
+        ),
+    ),
+    (
+        "spec-fail-is-a-retry",
+        replace('    if kind == "FAIL":\n        raise EvidenceError("specviewperf", partial)', '    if kind == "FAIL":\n        raise EvidenceError("specviewperf_retry_operator", partial)'),
+    ),
+    ("spec-unknown-retry-class-trusted", replace('cls.lower() if cls in SPEC_RETRY_CLASSES else "operator"', "cls.lower()")),
+    ("spec-stage-without-time-guard", replace("min_remaining_ms=spec_min_remaining_ms(spec_tbl, spec), short_row", "min_remaining_ms=0, short_row")),
+    ("spec-min-remaining-ignores-the-native-walls", replace('table["factor"] * native', "native")),
+    ("spec-windows-disk-not-sized", replace('            os.environ.setdefault("WINVM_DISK_GB", SPEC_DISK_GB)', "            pass")),
+    ("spec-command-always-lane-both", replace('"KF_SPEC_LANE=" + spec,', '"KF_SPEC_LANE=both",')),
+    ("spec-deadline-without-margin", replace("SPEC_DEADLINE_MARGIN_S = 120", "SPEC_DEADLINE_MARGIN_S = 0")),
+    (
+        "spec-both-is-one-lane",
+        replace('        return list(table["lanes"]["lanea"]) + list(table["lanes"]["laneb"])', '        return list(table["lanes"]["laneb"])'),
+    ),
+    ("spec-pass-without-lane-rows", replace('        out = [row("specviewperf", len(names))]\n', '        return [row("specviewperf", len(names))]\n        out = []\n')),
 ]
 
 # 2026-11-06: the setup picker's host claims (optional, bounded, never a verdict).
@@ -653,6 +699,14 @@ CASES += [
     ),
 ]
 
+CASES += [
+    ("winapps-all-output-is-pass", function("winapps_rows", '    return [row("windows_apps", 8)]')),
+    ("winapps-never-passes", function("winapps_rows", '    raise EvidenceError("windows_apps_retry_operator")')),
+    ("winapps-enabled-by-default", scoped("winapps_requested", '        return None', '        return "small"')),
+    ("winapps-request-ignored", function("winapps_requested", '    environ.pop("KF_WINAPPS", None)\n    return None')),
+    ("winapps-incomplete-output-is-pass", scoped("winapps_rows", 'if (len(grade) == 1 and count and grade[0][0] == grade[0][1] == count[1]\n                    and len(app_lines) == len(passed) == len(set(passed)) == int(count[1])):', 'if True:')),
+]
+
 COLLECT = """import io,json,unittest,importlib.util
 from pathlib import Path
 s=unittest.defaultTestLoader.discover('scripts/ci',pattern='test_vast_payload*.py')
@@ -700,6 +754,9 @@ def main():
             "test_vast_payload_summary.py",
             "test_vast_payload_claims.py",
             "test_vast_payload_apps.py",
+            "test_vast_payload_winapps.py",
+
+            "test_vast_payload_spec.py",
             "host_claims_vectors.json",
             "test_vast_box.py",
             "vast_report.py",
@@ -725,6 +782,11 @@ def main():
             target = root / "traces/apps_linux_20261107" / relative
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(HERE.parents[1] / "traces/apps_linux_20261107" / relative, target)
+        # The SPECviewperf stage tests read the lane table and the Worker's stage slots.
+        (bench / "specviewperf").mkdir()
+        shutil.copyfile(HERE.parent / "bench/specviewperf/lanes.json", bench / "specviewperf/lanes.json")
+        (root / "ci/vast-broker").mkdir(parents=True)
+        shutil.copyfile(HERE.parents[1] / "ci/vast-broker/defaults.json", root / "ci/vast-broker/defaults.json")
         shutil.copyfile(HERE.parent / "bench/host_xid_watch.sh", bench / "host_xid_watch.sh")
         shutil.copyfile(HERE.parent / "bench/native_xid_guard.py", bench / "native_xid_guard.py")
         (bench / "tests").mkdir()

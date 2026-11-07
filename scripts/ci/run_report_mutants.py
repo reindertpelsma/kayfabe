@@ -65,14 +65,14 @@ MUTANTS = [
     ("provider-fault-is-fail", '"PROVIDER_FAULT": "RETRY"', '"PROVIDER_FAULT": "FAIL"'),
     ("document-unbounded", "        while size() > limit and doc[key]:", "        while False:"),
     ("apps-rows-of-another-os", 'os=linux result=(PASS|FAIL|NOT_RUN)"', 'os=\\S+ result=(PASS|FAIL|NOT_RUN)"'),
-    ("app-note-unbounded", 'note": note[:200]}', 'note": note}'),
+    ("app-note-unbounded", '"os": "linux", "result": res, "note": note[:200]}', '"os": "linux", "result": res, "note": note}'),
     ("app-not-run-is-a-pass-test", '"SKIP" if m[2] == "NOT_RUN" else m[2]', "m[2]"),
     (
         "apps-suite-outside-the-linux-subrun",
         '    linux_group = LINUX_SUITES + tuple(r["name"] for r in rows if r["name"].startswith("apps"))',
         "    linux_group = LINUX_SUITES",
     ),
-    ("apps-uncapped", '][: LIMITS["apps"]],', "],"),
+    ("apps-uncapped", '])[: LIMITS["apps"]],', "]),"),
     (
         "partial-hidden-by-count",
         'all(r["pass"] > 0 for r in mine) and set(stages_hint) <= {r["name"] for r in mine}',
@@ -150,6 +150,51 @@ MUTANTS[-1] = (
     '        self.tests[(key, suite, name)] = {"suite": suite, "name": name, "result": result, "ms": ms, "_key": key}',
     '        self.tests.setdefault((key, suite, name), {"suite": suite, "name": name, "result": result, "ms": ms, "_key": key})',
 )
+
+MUTANTS += [
+    ("windows-apps-dropped", '                self.windows_apps[m[1]] = (res, m[4], m[5].strip())', '                pass'),
+    ("windows-missing-is-pass", '    return "NOT_RUN"\n', '    return "PASS"\n'),
+    ("windows-failure-is-pass", '        return "FAIL"\n    return "NOT_RUN"', '        return "PASS"\n    return "NOT_RUN"'),
+    ("windows-success-is-not-run", '        return "PASS"\n    if (cls', '        return "NOT_RUN"\n    if (cls'),
+    ("windows-note-unbounded", '"os": "windows", "result": res, "note": note[:200]}', '"os": "windows", "result": res, "note": note}'),
+    ("windows-log-stage-missing", '"windows": ["windows_gate", "windows_apps", "windows_gate_2"]', '"windows": ["windows_gate", "windows_gate_2"]'),
+]
+
+# 2026-11-07: the SPECviewperf stage's status rows (docs/design/V3_SPEC_GATE.md): status only, neutral suite name.
+MUTANTS += [
+    (
+        "spec-row-with-extra-fields-accepted",
+        'failed=([A-Za-z0-9_,]{1,120}|-)$"\n)\nSPEC_SUITE',
+        'failed=([A-Za-z0-9_,]{1,120}|-)"\n)\nSPEC_SUITE',
+    ),
+    ("spec-not-run-is-a-pass", '"NOT_RUN": "SKIP"}', '"NOT_RUN": "PASS"}'),
+    ("spec-row-with-a-time", "SPEC_RESULT[m[2]], None)", "SPEC_RESULT[m[2]], 1000)"),
+    (
+        "spec-failed-subtests-dropped",
+        '                for sub in ([] if m[3] == "-" else m[3].split(","))[:6]:',
+        "                for sub in []:",
+    ),
+    (
+        "spec-suite-keeps-the-benchmark-name",
+        '                kept["name"] = SPEC_SUITE + kept["name"][len("specviewperf"):]',
+        "                pass",
+    ),
+    (
+        "spec-suite-outside-the-windows-subrun",
+        'if r["name"].startswith(("windows", SPEC_SUITE))] or ["windows_gate"], rows,',
+        'if r["name"].startswith("windows")] or ["windows_gate"], rows,',
+    ),
+    (
+        "spec-retry-stays-a-failure",
+        'all(r["name"].startswith(SPEC_SUITE + "_retry_") for r in spec_bad)',
+        "False",
+    ),
+    (
+        "spec-retry-hides-a-failure",
+        'all(r["name"].startswith(SPEC_SUITE + "_retry_") for r in spec_bad)',
+        'any(r["name"].startswith(SPEC_SUITE + "_retry_") for r in spec_bad)',
+    ),
+]
 
 COLLECT = """import io,json,sys,unittest
 s=unittest.defaultTestLoader.discover('.',pattern='test_vast_run_report.py')

@@ -122,11 +122,48 @@ may send three optional variables, each validated by the reporter and popped bef
 refused without the Windows stage; it needs 45 minutes left, an INFERRED margin over the second
 runs of 906 s and 1795 s on 2026-11-04 at rev `0c515b3b`) and `KF_STAGES` (release only,
 colon-separated slot names). Slot `specviewperf` runs `vast_stage_specviewperf.sh` last: it calls
-`scripts/bench/box/specviewperf_stage.sh` when that lane exists, keeps the lane's whole output in a
-0600 file under `/workspace/kf-ci-private/` (never streamed), and prints only the verdict line; without
-the lane the row is `specviewperf_retry_not_built`, never a pass. Slots `two_guests` and `trio`
+`scripts/bench/box/specviewperf_stage.sh`, keeps the lane's whole output in a
+0600 file under `/workspace/kf-ci-private/` (never streamed), and prints only the verdict line and, since 2026-11-07,
+the strict status lines (see "SPECviewperf stage" below, which supersedes the 2026-11-05 text "when that lane exists ...
+only the verdict line"); without the lane file the row is `specviewperf_retry_not_built`, never a pass. Slots `two_guests` and `trio`
 are reserved and DESIGN-ONLY: requesting them is a preflight failure. A malformed value, a stage
 outside the large tier or a duplicate is refused before the first stage.
+
+## Windows apps stage (2026-11-07)
+
+CODE READ (`vast_payload.py` `winapps_requested`, `winapps_rows`; `scripts/bench/box/windows_apps.sh`;
+`vast_report.py` SPEC); GPU-free tests only (`test_vast_payload_winapps.py`, `test_vast_windows_apps.py`); the first
+hardware run is `traces/winapps_20261107/`. Design: [`V3_WINDOWS_APPS_GATE.md`](../../docs/design/V3_WINDOWS_APPS_GATE.md).
+The Worker may send one more optional variable, `KF_WINAPPS` (`small`, `mid`, `full`), validated by the reporter and popped before
+any stage; it needs the Windows stage. Absent means no stage: nothing sends it today. With it the payload runs
+`windows_apps.sh` as the stage `windows_apps` right after `windows_gate` (a first red cancels it), in a fresh guest that is a
+child of the gate's overlay, with the app disk from the private R2 copy (`winapps-open.iso`, proposed Worker name; without its
+sha256 pin the answer is RETRY class MEDIA). Rows: `windows_apps` (pass), `windows_apps_retry_<class>` (PROVIDER, MEDIA,
+OPERATOR, HOSTREF, BAR1_EXCEPTION, refused, time), `windows_apps` as a failing row for a guest failure. Only one `WINAPPS_PASS` of
+this revision and profile with exit 0 is a pass; a host, harness or input fault is never a pass and never an excuse.
+
+## SPECviewperf stage (2026-11-07, DRAFT, disabled by default)
+
+CODE READ (`vast_payload.py` `spec_requested`, `spec_table`, `spec_names`, `spec_min_remaining_ms`,
+`specviewperf_rows`; `scripts/bench/box/specviewperf_stage.sh`; `scripts/bench/specviewperf/lane.py`, `tarfilter.py`,
+`lanes.json`; `scripts/bench/windows/spec/*.ps1`); GPU-free tests only (`test_vast_payload_spec.py`,
+`test_vast_spec_lane.py`, `test_vast_spec_stage.py`, mutants in `payload_mutants.py`, `spec_stage_mutants.py` and
+`run_report_mutants.py`); no box has run it. Design, measurements and the open decisions:
+[V3_SPEC_GATE](../../docs/design/V3_SPEC_GATE.md). One more optional variable, `KF_SPEC` (`lanea`, `laneb`, `both`),
+validated by the reporter and popped before any stage. It goes with the slot (`KF_STAGES=specviewperf`, release tier,
+Windows stage): a lane without the slot, the slot without a lane (it would silently run both) and the stage without the
+Windows gate are refused before any stage runs. Absent: no stage, and nothing sends either today (`releaseStages` is
+empty, `ci/vast-broker/src/tier.js` sends `KF_SPEC` only when a caller passes `spec`, and none does). With it the
+payload sets `WINVM_DISK_GB=220` for the Windows gate (the image is installed on a disk that can hold a lane's tree), and
+runs the stage last, after the Windows gate(s), in the guest the gate passed. It does not start without the time for the
+whole lane (setup plus the native walls with a margin plus a tail, `lanes.json`): that is `specviewperf_retry_time`.
+Rows: `specviewperf` (pass, with `specviewperf_<lane>` beside it), `specviewperf` as a failing row (a viewset failed in
+the guest) next to `specviewperf_passed`, `specviewperf_retry_<class>` (`media`, `transport`, `provider`, `time`,
+`hostref`, `bar1_exception`, `operator`, `not_built`, `usage`: never a pass). PASS needs one verdict PASS with exit 0,
+one exit line `rc=0`, the lane in the list line and exactly one PASS `SPEC_ROW` for every viewset of the lane. Only
+status lines leave the box: the wrapper prints `SPEC_STAGE_START` first and `SPECVIEWPERF_STAGE_EXIT` last and lets exactly the strict patterns `SPEC_STAGE_LIST`, `SPEC_ROW`, `<viewset> ---
+FAILED`, `SPEC_STAGE_COUNTS` and `SPEC_COPY_DELETED` through, as they arrive, and the verdict once at the end; no score,
+timing or note passes (the lane never opens the vendor result directory).
 
 ## Evidence bundle (2026-11-06)
 
