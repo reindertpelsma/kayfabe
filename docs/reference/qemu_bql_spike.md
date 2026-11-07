@@ -1,5 +1,7 @@
 # QEMU BQL spike — what dispatching our MMIO without the big lock actually costs
 
+**STATUS: ANSWERED, 2026-08-09.** Spike on what dispatching MMIO without the QEMU big lock costs, run on 2026-07-26 against QEMU 9.2.0 on a bench that no longer exists; the backport it priced was cancelled in favour of a QEMU 10.2 floor (see the banners below). The result is recorded and the file is not updated; read on 2026-11-07.
+
 **What this file is.** The measured detail behind `../design/l1_os_shell.md` §6.3's
 foreign-lock contract, on the **QEMU** instance of that class. It answers three questions the
 design had left as instructions rather than facts: does the mechanism §6.3 named exist on our

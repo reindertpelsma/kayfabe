@@ -1,6 +1,6 @@
 # GSP-RM size and the GSP RPC surface, driver 580.159.04
 
-**STATUS: REFERENCE, 2026-10-02.** It answers the owner's question of how much of RM lives on the
+**STATUS: RESEARCH, 2026-10-02.** Reference sheet that answers the owner's question of how much of RM lives on the
 GSP, and what the RPC interface between the two halves really is. Everything was counted on the dev
 host, from `NVIDIA-Linux-x86_64-580.159.04.run` (extracted with `-x`) and from the open source tree at
 the same tag (`research_clones/ogkm-580.159.04` in the nvkvm tree). Nothing was run on a GPU.

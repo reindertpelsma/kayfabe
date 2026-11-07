@@ -1,3 +1,5 @@
+> **STATUS: SUPERSEDED, 2026-09-21** (archived, w822). Successor: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) and [`THE_ARCHITECTURE_v3.md`](../design/THE_ARCHITECTURE_v3.md). Historical record: a `STATUS` line further down says what the document claimed when it was written; it is no longer a claim about the current tree.
+>
 > ⊘⊘⊘ **ARCHIVED — THIS DESCRIBES A SUPERSEDED ARCHITECTURE. IT IS REFERENCE, NOT CURRENT.**
 > The live design is `docs/design/THE_DESIGN.md`. This file is kept because its *measurements*,
 > its *ogkm findings* and its *reasoning* remain useful — its **architecture does not**. Do not
@@ -5,7 +7,7 @@
 
 # LEG B — the guest's USERD address WAS on the wire the whole time
 
-> ### STATUS — 2026-08-12 / **LIVE — SOURCE-MEASURED, NOT YET HARDWARE-MEASURED.**
+> ### STATUS AT WRITING — 2026-08-12 / **LIVE — SOURCE-MEASURED, NOT YET HARDWARE-MEASURED.**
 > Supersedes the *blocker* halves of three documents; see §0. Read `§1` before citing any of
 > them. ⚠ **Everything here is read off `ogkm-580.159.04` and off this port's own decoders.
 > No boot has yet shown a non-`UNREADABLE` `phys=` token.** The pre-registration

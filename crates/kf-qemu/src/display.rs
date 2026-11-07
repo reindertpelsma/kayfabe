@@ -2263,7 +2263,7 @@ impl DisplayPlane {
             .map_err(|e| format!("display=on: the display plane's GPU context on {bdf}: {e}"))?;
         gpu.import_store(store_fd, store_bytes)
             .map_err(|e| format!("display=on: store import into the display context: {e}"))?;
-        let mut engine = if constructor_probe {
+        let engine = if constructor_probe {
             eprintln!(
                 "kf3: EXPERIMENT display constructor probe: TMO advertised, ILUT surface loading={ilut_constructor_probe}, TMO surface loading={tmo_surface_constructor_probe}, OLUT surface loading={olut_constructor_probe}; ALL display methods refused before execution"
             );

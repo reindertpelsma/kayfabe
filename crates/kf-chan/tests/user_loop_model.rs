@@ -37,7 +37,7 @@
 //! vacuous nor unsatisfiable.
 #![allow(clippy::too_many_lines, clippy::needless_range_loop)]
 
-use kf_chan::user_gate::{Gate, SyncGate, Witness, witness};
+use kf_chan::user_gate::{Gate, SyncGate};
 use kf_chan::user_loop::{self as ul, Need, Wait};
 use std::collections::{HashMap, VecDeque};
 use std::hash::{Hash, Hasher};

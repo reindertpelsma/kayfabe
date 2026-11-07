@@ -1,3 +1,5 @@
+> **STATUS: SUPERSEDED, 2026-09-21** (archived, w822). Successor: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) and [`THE_ARCHITECTURE_v3.md`](../design/THE_ARCHITECTURE_v3.md). Historical record: a `STATUS` line further down says what the document claimed when it was written; it is no longer a claim about the current tree.
+>
 > ⊘⊘⊘ **ARCHIVED — THIS DESCRIBES A SUPERSEDED ARCHITECTURE. IT IS REFERENCE, NOT CURRENT.**
 > The live design is `docs/design/THE_DESIGN.md`. This file is kept because its *measurements*,
 > its *ogkm findings* and its *reasoning* remain useful — its **architecture does not**. Do not
@@ -5,7 +7,7 @@
 
 # w266 PRE-REGISTRATION — LEG 5: pin the ONE page hardware named
 
-> ### STATUS — 2026-08-12 / **LIVE — PRE-REGISTRATION, committed before the boot.**
+> ### STATUS AT WRITING — 2026-08-12 / **LIVE — PRE-REGISTRATION, committed before the boot.**
 > Branch `leg-5-completion-pin`, off `leg-4-populate-witness` = `f265025`.
 > Predecessor: `traces/boots/w265/RESULT.md` (rev `2f02621`, two arms, real GA106).
 > Authority: `mode2_address_table.md` §6 (C tree), `RESUME_HERE_2026_08_12.md` §1 leg 5.

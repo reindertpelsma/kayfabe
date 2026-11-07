@@ -874,7 +874,7 @@ impl WalkKernel {
             sum: a(KF_MAX_FRONTIER * KF_SUM_BYTES, "cuMemAlloc(par.sum)")?,
             head: a(KF_MAX_FRONTIER, "cuMemAlloc(par.head)")?,
         };
-        let mut h: KfDev = crate::driver_unsafe::zeroed();
+        let h: KfDev = crate::driver_unsafe::zeroed();
         let h = KfDev {
             runs_per_pdb: cfg.runs_per_pdb,
             entry_budget: cfg.entry_budget,

@@ -1,5 +1,7 @@
 # Rebuilding the kayfabe bench from nothing — the first-person log
 
+**STATUS: RESEARCH, 2026-09-06.** First-person log of rebuilding the pre-v3 kayfabe bench on blank rented boxes (QEMU 10.2.4 overlay, `/workspace/bench`, tap networking), kept for its traps. Read on 2026-11-07: v3 renting and teardown rules live in [../../scripts/bench/box/README.md](../../scripts/bench/box/README.md) and the bench scripts; this log was not re-checked against them, so treat its recipes as history and its traps as hypotheses to re-test.
+
 **What this file is.** The `kayfabe` equivalent of the C artifact's
 `/workspace/nvidia-gpu-passthrough/docs/BENCH_REBUILD_NOTES.md`: a first-person record of what it
 actually took to stand a bench up on a blank rented box, written so the *next* rebuild is cheap.

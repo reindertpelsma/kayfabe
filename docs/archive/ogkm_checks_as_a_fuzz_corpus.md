@@ -1,3 +1,5 @@
+> **STATUS: SUPERSEDED, 2026-09-21** (archived, w822). Successor: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) and [`THE_ARCHITECTURE_v3.md`](../design/THE_ARCHITECTURE_v3.md). Historical record: a `STATUS` line further down says what the document claimed when it was written; it is no longer a claim about the current tree.
+>
 > ⊘⊘⊘ **ARCHIVED — THIS DESCRIBES A SUPERSEDED ARCHITECTURE. IT IS REFERENCE, NOT CURRENT.**
 > The live design is `docs/design/THE_DESIGN.md`. This file is kept because its *measurements*,
 > its *ogkm findings* and its *reasoning* remain useful — its **architecture does not**. Do not
@@ -5,7 +7,7 @@
 
 # ogkm's own refusals as our fuzz corpus
 
-**STATUS: LIVE, 2026-09-18 (w760). ✔ The two LIVE BUGS (#1, #2) are FIXED in w760h and
+**STATUS AT WRITING: LIVE, 2026-09-18 (w760). ✔ The two LIVE BUGS (#1, #2) are FIXED in w760h and
 regression-tested on hardware (78/78, container 51417213, RTX 3090 / 580.95.05). Cases
 #3-#9 below are OPEN.**
 

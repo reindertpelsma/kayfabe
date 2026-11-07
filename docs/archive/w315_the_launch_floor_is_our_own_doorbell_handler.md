@@ -1,3 +1,5 @@
+> **STATUS: SUPERSEDED, 2026-09-21** (archived, w822). Successor: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) and [`THE_ARCHITECTURE_v3.md`](../design/THE_ARCHITECTURE_v3.md). Historical record: a `STATUS` line further down says what the document claimed when it was written; it is no longer a claim about the current tree.
+>
 > ⊘⊘⊘ **ARCHIVED — THIS DESCRIBES A SUPERSEDED ARCHITECTURE. IT IS REFERENCE, NOT CURRENT.**
 > The live design is `docs/design/THE_DESIGN.md`. This file is kept because its *measurements*,
 > its *ogkm findings* and its *reasoning* remain useful — its **architecture does not**. Do not
@@ -5,7 +7,7 @@
 
 # w315 — THE ~100 ms PER-LAUNCH FLOOR IS OUR OWN DOORBELL HANDLER, AND 91 % OF IT IS THE PAGE-TABLE PASS
 
-**STATUS: LIVE — measured 2026-08-14 on bench `vh2` (RTX 3060 GA106, driver 580.159.04),
+**STATUS AT WRITING: LIVE — measured 2026-08-14 on bench `vh2` (RTX 3060 GA106, driver 580.159.04),
 five guest boots, source revision `9196b8fa` (stamp gate passed on every boot; the `base`,
 `census`, `full` and `inject` arms ran at `72b6f66f`, the confirmation `full2` at
 `9196b8fa`).** Artifacts: `traces/w315_floor/`.

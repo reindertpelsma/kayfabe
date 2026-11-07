@@ -2480,7 +2480,10 @@ struct EngineObject {
     host: u32,
     kind: kf_chip::classes::Kind,
     // Retained for the forthcoming immutable Windows user-stream binding lookup.
-    #[allow(dead_code)]
+    #[allow(
+        dead_code,
+        reason = "written at birth, read by the binding lookup that is not built yet"
+    )]
     class: u32,
 }
 

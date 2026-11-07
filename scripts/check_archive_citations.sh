@@ -40,7 +40,9 @@ cd "$(dirname "$0")/.." || exit 2
 #       scratchpad-isolate plane §10 deletes).
 # 2026-09-26: 1110 -> 928 (v3 archive move: crates/kayfabe-{core,fwd,rmrpc,rt,shell,crec,
 #       qemu-raw,vmm-kvm,vmm-qemu} left crates/, and their comments with them — no comment edited).
-BASE=${ARCHIVE_CITE_BASELINE:-928}
+# 2026-11-07: 928 -> 678 (the gate's own count on `origin/next` at `a9dee7b2c`, before and after the
+#       documentation cleanup of that day; the script itself said "ratcheted down by 250").
+BASE=${ARCHIVE_CITE_BASELINE:-678}
 
 tmp=$(mktemp)
 grep -rhoE '[A-Za-z0-9_./-]+\.md' --include='*.rs' crates/ 2>/dev/null \

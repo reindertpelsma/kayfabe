@@ -1,5 +1,7 @@
 # Guest kernel patches — BRING-UP ONLY
 
+**STATUS: RESEARCH, 2026-08-08.** Diagnostic reference for two guest-driver bring-up patches (`0001`, `0002`), last changed 2026-08-08 and never part of the product. Read on 2026-11-07: both patch files are present in this directory, and no document or script outside `archive/` cites this directory; the README's build check (against `ogkm-580.159.04`, host kernel 6.8.0-59) is its own dated 2026-08-08 record and was not repeated.
+
 ⊘ **Nothing in this directory is ever required in the final product.** The milestone
 acceptance criterion is and remains a **stock, unpatched** guest driver (owner ruling,
 2026-08-07: guest-side instrumentation is approved *"as long as they are not required in

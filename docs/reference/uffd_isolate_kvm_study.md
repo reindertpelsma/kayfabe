@@ -1,5 +1,7 @@
 # uffd across the isolate boundary, across KVM, and the access matrix — measured
 
+**STATUS: ANSWERED, 2026-07-27.** Experiments on whether uffd write-protect crosses the isolate boundary and traps a KVM guest write, run on 2026-07-27 on a rented bench with a raw `/dev/kvm` harness (no QEMU numbers). The result is recorded and the file is not updated; read on 2026-11-07.
+
 **What this file is.** Three questions the candidate study
 (`region_lock_mechanism_study.md`) did **not** cover, asked because they can invalidate the
 region-lock mechanism choice, and answered by **experiment**. Same authority rule as that file

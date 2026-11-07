@@ -1368,12 +1368,6 @@ impl TranslatedChannel {
         (n, a, g, self.ring.swobj_binds())
     }
 
-    /// ★ §U: the channel is stopped at a software method.
-    #[must_use]
-    pub fn at_sw_method(&self) -> Option<crate::tmode::SwCall> {
-        self.sw.map(|s| s.call)
-    }
-
     /// ★ P1+P2 inc D: run in T-mode against the T-space's windows — every item the ring hands out
     /// is bound at push ([`crate::tmode::push_bound`]); `negctl_stale` is the stale-bind counter's
     /// positive control (`KF3_NEGCTL_STALE_BIND`).

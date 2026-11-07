@@ -1,3 +1,5 @@
+> **STATUS: SUPERSEDED, 2026-09-21** (archived, w822). Successor: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) and [`THE_ARCHITECTURE_v3.md`](../design/THE_ARCHITECTURE_v3.md). Historical record: a `STATUS` line further down says what the document claimed when it was written; it is no longer a claim about the current tree.
+>
 > ⊘⊘⊘ **ARCHIVED — THIS DESCRIBES A SUPERSEDED ARCHITECTURE. IT IS REFERENCE, NOT CURRENT.**
 > The live design is `docs/design/THE_DESIGN.md`. This file is kept because its *measurements*,
 > its *ogkm findings* and its *reasoning* remain useful — its **architecture does not**. Do not
@@ -5,7 +7,7 @@
 
 # w268 PRE-REGISTRATION — **READ `GP_GET`.** Committed before one line of the instrument exists
 
-> ### STATUS — 2026-08-12 / **LIVE — PRE-REGISTRATION.** Branch `w268-the-cursor-and-the-arm`,
+> ### STATUS AT WRITING — 2026-08-12 / **LIVE — PRE-REGISTRATION.** Branch `w268-the-cursor-and-the-arm`,
 > off `w267-read-the-page` = `3ba9e38`. Predecessor: `traces/boots/w267/RESULT.md` (rev
 > `b129770`, 2 arms, real GA106). Bench `vh` = `NVIDIA GeForce RTX 3060` (GA106), host driver
 > `580.159.04`.

@@ -1,3 +1,5 @@
+> **STATUS: SUPERSEDED, 2026-09-21** (archived, w822). Successor: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) and [`THE_ARCHITECTURE_v3.md`](../design/THE_ARCHITECTURE_v3.md). Historical record: a `STATUS` line further down says what the document claimed when it was written; it is no longer a claim about the current tree.
+>
 > ⊘⊘⊘ **ARCHIVED — THIS DESCRIBES A SUPERSEDED ARCHITECTURE. IT IS REFERENCE, NOT CURRENT.**
 > The live design is `docs/design/THE_DESIGN.md`. This file is kept because its *measurements*,
 > its *ogkm findings* and its *reasoning* remain useful — its **architecture does not**. Do not
@@ -5,7 +7,7 @@
 
 # The publication pass's breadth — priced, scoped, and NOT the worst trap
 
-> **STATUS: LIVE — 2026-08-14 (w328).** Branch `w328-scope-the-publication`, base master
+> **STATUS AT WRITING: LIVE — 2026-08-14 (w328).** Branch `w328-scope-the-publication`, base master
 > `308799cd`. Bench `vh`, real GA106, host driver open `580.159.04`.
 > **Corrects** the reading of `the_publish_trigger_measured.md` §3 and §5.2 that this rung's
 > own brief carried — folded in above the text it corrects rather than left beside it.

@@ -1,5 +1,7 @@
 # The region lock without a privilege grant — a candidate study, measured
 
+**STATUS: ANSWERED, 2026-07-27.** Candidate study of region-lock mechanisms that need no privilege grant, run on 2026-07-27 on a rented bench; it recommends a permanent read-only mapping with a blocking handler. The result is recorded and the file is not updated; read on 2026-11-07, the design it served (`guest_memory_lock.md`) is now under `docs/archive/`.
+
 **What this file is.** The measured detail behind `../design/guest_memory_lock.md`. The owner
 ruled that **a mechanism requiring a root-only facility is not acceptable**, because the
 project's premise is an unprivileged host process. This file enumerates every mechanism that
