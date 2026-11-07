@@ -53,6 +53,14 @@ MUTANTS = [
      'if not isinstance(files, dict) or not files or not set(source["required_files"]) <= set(files):', 'if False:'),
     ("bundle-hashes-ignored", "release_bundle.py", 'if hashlib.file_digest(f, "sha256").hexdigest() != expected:', 'if False:'),
     ("bundle-file-list-ignored", "release_bundle.py", 'if seen != set(files) | {"receipt.json"}:', 'if False:'),
+    ("torch-cuda-availability-ignored", "guest/py/release_cuda_smoke.py",
+     'assert torch.cuda.is_available(), "CUDA unavailable"', 'pass'),
+    ("torch-device-identity-ignored", "guest/py/release_cuda_smoke.py",
+     'assert "NVIDIA" in name.upper() or any(x in name for x in ("GeForce", "RTX", "Tesla")), name', 'pass'),
+    ("torch-readback-validity-ignored", "guest/py/release_cuda_smoke.py",
+     'assert actual.numel() == 4096 and torch.isfinite(actual).all()', 'pass'),
+    ("torch-numerical-oracle-ignored", "guest/py/release_cuda_smoke.py",
+     'torch.testing.assert_close(actual, expected, rtol=1e-5, atol=1e-5)', 'pass'),
 ]
 for api in ("webgl", "webgpu"):
     path = "guest/web/" + api + "_conformance.html"
