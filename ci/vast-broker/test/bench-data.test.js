@@ -70,12 +70,14 @@ for (const [object, key] of BENCH_OBJECTS)
     assert.equal(r.status, 302);
     assert.equal(new URL(r.headers.get('Location')).pathname, '/kayfabe-bench-enam/' + key);
   });
-test('bench-data object table is exactly the four licensed-copy keys', () => {
+test('bench-data object table is exactly the four licensed-copy keys and the two Windows app bundle keys', () => {
   assert.deepEqual([...BENCH_OBJECTS.values()].sort(), [
     'specviewperf-15.0.0/CHECKSUMS.txt',
     'specviewperf-15.0.0/SPEC_General_License.pdf',
     'specviewperf-15.0.0/original/SPECviewperf-Setup-15.0.0.exe',
     'specviewperf-15.0.0/specviewperf-15.0.0.tar.zst',
+    'winapps-open/kfapps.iso',
+    'winapps-open/manifest.json',
   ]);
 });
 test('bench-data lifetime is capped at 1200 s and at the run deadline', async () => {

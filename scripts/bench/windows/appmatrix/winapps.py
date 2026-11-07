@@ -142,6 +142,11 @@ class Vm:
     """What the driver needs from a VM launcher. BrokerVm drives windows_broker*.sh; tests use MockVm."""
     def launch(self, tag): raise NotImplementedError
     def qga_path(self): raise NotImplementedError
+
+    def guest(self, io_timeout):
+        """The transport to the guest: the QEMU guest agent unless a controller says otherwise (WinVmVm: ssh)."""
+        return qgamod.Qga(self.qga_path(), io_timeout=io_timeout)
+
     def alive(self): raise NotImplementedError
     def stop(self): raise NotImplementedError
     def send_key(self, qcode, shift=False): raise NotImplementedError
@@ -257,13 +262,166 @@ class BrokerVm(Vm):
             return None
 
 
+class WinVmVm(Vm):
+    """A win_vm.sh guest on a rented box (the Windows gate's guest): `win_vm.sh run --detach` of a fresh overlay
+    that is backed by the overlay the gate left behind (WINVM_OVERLAY_BACKING: NVIDIA driver, GSP forced,
+    autologon and the one-time device enable are in it), the app disk on the machine's own AHCI bus
+    (WINVM_APPS_ISO; no hot-plug), and ssh instead of the guest agent (sshguest.py). Every guest is a new overlay of the
+    same parent, so a fresh guest after a TDR or a bugcheck is clean. The gate's overlay is read-only for as
+    long as children exist (the caller seals it)."""
+    def __init__(self, winvm, root, name, parent, iso, flags, guest_driver, arm, log, prefix="apps", ssh_port=2224, user="kf", boot_wait=420):
+        self.winvm, self.root, self.name, self.parent, self.iso = winvm, root, name, parent, iso
+        self.flags, self.gdrv, self.arm, self.log = flags, guest_driver, arm, log
+        self.prefix, self.port, self.user, self.boot_wait = prefix, ssh_port, user, boot_wait
+        self.vm = os.path.join(root, name)
+        self.count = 0
+        self.runtag = None
+        self.overlay = None
+        self._guest = None
+
+    def _env(self):
+        return dict(os.environ, WINVM_ROOT=self.root, WINVM_NAME=self.name, WINVM_SSH_PORT=str(self.port), WINVM_OVERLAY_BACKING=self.parent,
+                    WINVM_APPS_ISO=self.iso, WINVM_LOCK_WAIT_S=os.environ.get("WINVM_LOCK_WAIT_S", "120"), WINVM_VM_IDENTITY="1")
+
+    def run_dir(self):
+        return os.path.join(self.vm, "logs")
+
+    def _ident(self, key):
+        try:
+            for line in open(os.path.join(self.vm, "identity.env")):
+                if line.startswith(key + "="):
+                    return line.split("=", 1)[1].strip()
+        except OSError:
+            pass
+        return ""
+
+    def launch(self, tag):
+        self.count += 1
+        stamp = time.strftime("%H%M%S", time.gmtime())
+        self.runtag = f"{self.prefix}_{re.sub('[^A-Za-z0-9]', '', tag)}_{stamp}"
+        self.overlay = self.runtag
+        uuid = self._ident("VM_UUID")
+        if not re.fullmatch(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", uuid):
+            raise RuntimeError("no per-VM identity (VM_UUID) in identity.env")
+        cmd = ["bash", self.winvm, "run", "--detach", "--overlay", self.overlay, "--arm", self.arm, "--guest-driver", self.gdrv,
+               "--kf3-extra", f"gpu-uuid=GPU-{uuid}", "--env-file", self.flags, "--tag", self.runtag]
+        r = subprocess.run(cmd, env=self._env(), capture_output=True, text=True, timeout=120, stdin=subprocess.DEVNULL)
+        self.log(f"win_vm.sh run --detach tag={self.runtag} rc={r.returncode}")
+        if r.returncode != 0:
+            raise RuntimeError(f"win_vm.sh run did not start rc={r.returncode}: {(r.stderr or r.stdout)[-200:]}")
+        rl = os.path.join(self.vm, "logs", f"{self.runtag}_run.log")
+        t0 = time.time()
+        while time.time() - t0 < self.boot_wait:       # the loop takes the GPU lock and starts swtpm first: QEMU_START is the proof
+            txt = open(rl, errors="replace").read() if os.path.exists(rl) else ""
+            if f"QEMU_START tag={self.runtag} boot=1 " in txt:
+                return
+            if "WINVM_RUN_END" in txt or "REFUSED: " in txt:
+                raise RuntimeError("the run loop ended before QEMU started: " + txt.strip().splitlines()[-1][:160])
+            time.sleep(2)
+        raise RuntimeError(f"the run loop never started QEMU within {self.boot_wait}s")
+
+    def guest(self, io_timeout):
+        import sshguest
+        if self._guest is not None:
+            self._guest.cleanup()
+        self._guest = sshguest.SshGuest(self.port, os.path.join(self.vm, "secrets", "ssh_ed25519"), user=self.user, io_timeout=io_timeout)
+        return self._guest
+
+    def qga_path(self):
+        return os.path.join(self.vm, "run", "qga.sock")
+
+    def _pid(self):
+        try:
+            return int(open(os.path.join(self.vm, "run", "qemu.pid")).read().strip())
+        except (OSError, ValueError):
+            return None
+
+    def alive(self):
+        pid = self._pid()
+        if pid is None:
+            return False
+        try:
+            with open(f"/proc/{pid}/stat") as f:
+                return f.read().split()[2] != "Z"
+        except OSError:
+            return False
+
+    def _loop_ended(self):
+        rl = os.path.join(self.vm, "logs", f"{self.runtag}_run.log")
+        try:
+            return f"WINVM_RUN_END tag={self.runtag} " in open(rl, errors="replace").read()
+        except OSError:
+            return True
+
+    def stop(self):
+        how = "none"
+        if self.runtag is None:
+            return how
+        if self._guest is not None:
+            self._guest.cleanup()
+            self._guest = None
+        r = subprocess.run(["bash", self.winvm, "stop"], env=self._env(), capture_output=True, text=True, timeout=600, stdin=subprocess.DEVNULL)
+        how = "clean" if r.returncode == 0 else f"stop-rc{r.returncode}"
+        if self.alive():                                  # win_vm.sh stop never kills QEMU; the harness may, after its own bounded wait
+            try:
+                qgamod.Qmp(os.path.join(self.vm, "run", "qmp.sock")).cmd("quit")
+                how += "+qmp-quit"
+            except qgamod.QgaError:
+                pass
+            for _ in range(30):
+                if not self.alive():
+                    break
+                time.sleep(1)
+        for _ in range(60):                               # the run loop must be gone before the next guest takes the GPU lock
+            if self._loop_ended():
+                break
+            time.sleep(1)
+        return how
+
+    def send_key(self, qcode, shift=False):
+        raise NotImplementedError("sign-in is autologon on a win_vm.sh guest (desktop-prep)")
+
+    def screendump(self, png_path):
+        name = re.sub(r"[^A-Za-z0-9_.-]", "_", os.path.basename(png_path))[:60].replace(".png", "")
+        r = subprocess.run(["bash", self.winvm, "shot", f"{self.runtag}_{name}"], env=self._env(),
+                           capture_output=True, text=True, timeout=60, stdin=subprocess.DEVNULL)
+        src = r.stdout.strip().splitlines()[-1] if r.returncode == 0 and r.stdout.strip() else ""
+        if src and os.path.exists(src):
+            os.makedirs(os.path.dirname(png_path), exist_ok=True)
+            shutil.copyfile(src, png_path)
+            return True
+        return False
+
+    def attach_disk(self, iso):
+        return "at launch (WINVM_APPS_ISO, AHCI cd-rom)"
+
+    def detach_disk(self):
+        pass
+
+    def gsp_cycles(self):
+        d = os.path.join(self.vm, "logs")
+        try:
+            names = [x for x in os.listdir(d) if x.startswith(f"{self.runtag}_b") and x.endswith("_qemu.log")] if self.runtag else []
+        except OSError:
+            return None
+        if not names:
+            return None
+        n = 0
+        for x in names:
+            try:
+                n += open(os.path.join(d, x), errors="replace").read().count("GSP phase Running -> Suspending")
+            except OSError:
+                return None
+        return n
+
+
 # ------------------------------------------------------------------------------------------ the guest session
 class Cfg:
     def __init__(self, **kw):
         self.__dict__.update(dict(
             poll_s=3.0, slack_s=90, boot_timeout=900, signin_delay=30, session_timeout=300, max_tdr=3, per_guest=8, recover_wait=180,
             stage_timeout=1800, user="vast", password=None, iso=None, image_identity=None, override_dir="", tier=1, screenshots=True, sample_s=2,
-            max_guests=200, max_boot_failures=3, io_timeout=10.0, ping_s=5.0, time_scale=1.0), **kw)
+            max_guests=200, max_boot_failures=3, io_timeout=10.0, ping_s=5.0, time_scale=1.0, deadline=None), **kw)
 
 
 class GuestSession:
@@ -288,7 +446,7 @@ class GuestSession:
         t0 = self.now()
         self.vm.launch(self.tag)
         self.log(f"[{self.tag}] launched; waiting for the guest agent (<= {c.boot_timeout}s)")
-        self.q = qgamod.Qga(self.vm.qga_path(), io_timeout=c.io_timeout)
+        self.q = self.vm.guest(c.io_timeout)
         ta = None
         while self.now() - t0 < c.boot_timeout:
             if not self.vm.alive():
@@ -709,6 +867,9 @@ def run_matrix(cfg, vm_factory, apps_doc, manifest, run_dir, apps, log, sleep=ti
         if guest_no >= cfg.max_guests:
             log("MATRIX_ABORT max guests reached")
             return 4
+        if cfg.deadline and now() > cfg.deadline:
+            log(f"MATRIX_BUDGET the time budget ended with {len(todo)} apps not run")
+            return 6
         batch = todo[:cfg.per_guest]
         fin = one_guest(batch, res, "g")
         todo = [a for a in todo if a["id"] not in fin]
@@ -721,6 +882,9 @@ def run_matrix(cfg, vm_factory, apps_doc, manifest, run_dir, apps, log, sleep=ti
         redo = [a for a in apps if first.get(a["id"]) not in (None, "PASS", "NOTRUN")]
         log(f"PHASE2 re-running {len(redo)} non-PASS apps alone")
         for a in redo:
+            if cfg.deadline and now() > cfg.deadline:
+                log("MATRIX_BUDGET the time budget ended in phase 2")
+                return 6
             fin = one_guest([a], res_iso, "i")
             if boot_failures >= cfg.max_boot_failures:
                 log("MATRIX_ABORT repeated boot failures in phase 2")
@@ -742,13 +906,22 @@ def main(argv=None):
     ap.add_argument("--iso", help="the app disk image (kfapps.iso) to hot-plug")
     ap.add_argument("--override-dir", default="", help="replace image tools with local *.exe, verify guest SHA256 and record hashes")
     ap.add_argument("--image-manifest", help="manifest.json written next to the image by build_appdisk.sh (gives the image identity)")
-    ap.add_argument("--vm", choices=("broker", "mock"), default="broker")
+    ap.add_argument("--vm", choices=("broker", "mock", "winvm"), default="broker")
     ap.add_argument("--broker", default="")
     ap.add_argument("--w-dir", default=os.environ.get("WIN_DIR", "/var/lib/kf-windows-20261005"))
     ap.add_argument("--kf3-rev", default=os.environ.get("KF3_REV", ""))
     ap.add_argument("--run-base", type=int, default=int(os.environ.get("WIN_RUN_BASE", "0")), help="first boundary-kayfabe-N run number; each guest takes the next")
     ap.add_argument("--pre-guest-cmd", default=os.environ.get("WIN_PRE_GUEST_CMD", ""), help="shell command run before each guest boots (host-specific)")
     ap.add_argument("--post-guest-cmd", default=os.environ.get("WIN_POST_GUEST_CMD", ""), help="shell command run after each guest stopped")
+    ap.add_argument("--winvm-script", default=os.path.join(HERE, "..", "win_vm.sh"), help="(vm winvm) win_vm.sh")
+    ap.add_argument("--winvm-root", default=os.environ.get("WINVM_ROOT", "/workspace/winvm"))
+    ap.add_argument("--winvm-name", default=os.environ.get("WINVM_NAME", "kfwin"))
+    ap.add_argument("--parent-overlay", default="", help="(vm winvm) the overlay (name, in disk/) every guest is a child of: the gate's, with the driver")
+    ap.add_argument("--flags-file", default="", help="(vm winvm) the kf3 env file of the gate (--env-file of win_vm.sh run)")
+    ap.add_argument("--guest-driver", default="580.65.06", help="(vm winvm) kf3 guest-driver= (the guest ABI of the Windows 580.88 driver)")
+    ap.add_argument("--arm", default="B", help="(vm winvm) win_vm.sh run --arm")
+    ap.add_argument("--ssh-port", type=int, default=int(os.environ.get("WINVM_SSH_PORT", "2224")))
+    ap.add_argument("--deadline-epoch", type=int, default=0, help="stop starting guests after this unix time; the rest is NOT RUN (exit 6)")
     ap.add_argument("--per-guest", type=int, default=8)
     ap.add_argument("--max-tdr", type=int, default=3)
     ap.add_argument("--no-isolate", action="store_true")
@@ -771,7 +944,7 @@ def main(argv=None):
     if a.image_manifest and os.path.exists(a.image_manifest):
         ident = json.load(open(a.image_manifest)).get("image", {}).get("identity")
     cfg = Cfg(iso=a.iso, image_identity=ident, per_guest=a.per_guest, max_tdr=a.max_tdr, tier=a.tier, password=os.environ.get("KF_GUEST_PW"),
-              user=os.environ.get("KF_GUEST_USER", "vast"), override_dir=a.override_dir)
+              user=os.environ.get("KF_GUEST_USER", "vast"), override_dir=a.override_dir, deadline=a.deadline_epoch or None)
     sleep, now = time.sleep, time.time
     if a.vm == "mock":
         import mock_guest
@@ -783,6 +956,16 @@ def main(argv=None):
         vm_factory = mock.new_vm
         cfg.password = cfg.password or "mockpw"
         sleep = lambda s: time.sleep(min(s, 0.02) if a.fast else s)
+    elif a.vm == "winvm":
+        for what, val in (("--iso", a.iso), ("--parent-overlay", a.parent_overlay), ("--flags-file", a.flags_file)):
+            if not val:
+                raise SystemExit(f"vm winvm needs {what}")
+        if cfg.password:
+            raise SystemExit("vm winvm signs in by autologon: unset KF_GUEST_PW (no password is passed through the harness)")
+        cfg.boot_timeout, cfg.ping_s, cfg.io_timeout, cfg.session_timeout, cfg.recover_wait = 1500, 30.0, 30.0, 600, 300
+        shared = WinVmVm(a.winvm_script, a.winvm_root, a.winvm_name, a.parent_overlay, a.iso, a.flags_file, a.guest_driver, a.arm, log,
+                         ssh_port=a.ssh_port, user=os.environ.get("KF_GUEST_USER", "kf"))
+        vm_factory = lambda: shared
     else:
         broker = a.broker or next((p for p in (os.path.join(HERE, "..", "windows_broker_prod2.sh"), os.path.join(HERE, "..", "windows_broker.sh"),
                                                os.path.join(a.w_dir, "kayfabe-win-6fafcc6e", "scripts", "bench", "windows", "windows_broker_prod2.sh")) if os.path.exists(p)), None)
