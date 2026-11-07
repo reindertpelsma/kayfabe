@@ -21,7 +21,7 @@ jobs:
       id-token: write
       attestations: write
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
@@ -36,7 +36,7 @@ jobs:
           cargo build --locked --release --workspace -j2
           cargo build --locked --release --target x86_64-unknown-uefi --bin kf-gop --manifest-path firmware/kf-gop/Cargo.toml -j2
       - name: Attest GitHub-built release binaries
-        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: |
             target/release/kayfabe-isolate-host
