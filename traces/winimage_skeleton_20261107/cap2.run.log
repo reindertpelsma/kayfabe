@@ -1,0 +1,21 @@
+CAPTURE_START 2026-11-07T14:50:59Z mode=dd-qcow2 host=<box-ip>:<port> out=/data/winimage_skeleton_20261107/cap2 pid=2827166
+NAME           SIZE TYPE FSTYPE  LABEL  PARTTYPENAME
+vda    161061273600 disk                
+├─vda1    104857600 part vfat           EFI System
+├─vda2     16777216 part                Microsoft reserved
+└─vda3 160938573312 part ntfs           Microsoft basic data
+vdb          397312 disk iso9660 cidata 
+---
+vda 314572800 sectors ro=1 model=
+vdb 776 sectors ro=0 model=
+CAPTURE_DISK /dev/vda
+ro=1 bytes=161061273600
+CAPTURE_NBD /dev/nbd0
+CAPTURE_PARALLEL streams=6 chunk_MiB=1024 chunks=150 (one ssh stream per chunk: a single stream is limited by the round-trip time)
+dd: IO error: Input/output error
+dd: IO error: Input/output error
+dd: IO error: Input/output error
+dd: IO error: Input/output error
+dd: IO error: Input/output error
+dd: IO error: Input/output error
+CAPTURE_EXIT rc=0 2026-11-07T15:37:10Z

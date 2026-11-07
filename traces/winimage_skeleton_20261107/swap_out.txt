@@ -1,0 +1,3 @@
+ESP_SWAP backup_files=bootmgfw.efi,BOOTX64.EFI,net.conf,firmware_entries_before.txt,SHA256SUMS.txt
+ESP_SWAP_DONE ok=True uki_sha256=b34be53452b4ba035e2797816e3180b660814e6067033d42e6afa7d714390735 bytes=25699328 esp_free_after=14376960
+RC=0

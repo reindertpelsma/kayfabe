@@ -1,0 +1,20 @@
+CAPTURE_START 2026-11-07T15:38:53Z mode=ntfsclone-qcow2 host=<box-ip>:<port> out=/data/winimage_skeleton_20261107/cap3 pid=2931620
+NAME           SIZE TYPE FSTYPE  LABEL  PARTTYPENAME
+vda    161061273600 disk                
+├─vda1    104857600 part vfat           EFI System
+├─vda2     16777216 part                Microsoft reserved
+└─vda3 160938573312 part ntfs           Microsoft basic data
+vdb          397312 disk iso9660 cidata 
+---
+vda 314572800 sectors ro=1 model=
+vdb 776 sectors ro=0 model=
+CAPTURE_DISK /dev/vda
+ro=1 bytes=161061273600
+CAPTURE_NTFS partition=vda3 offset=122683392 size=160938573312
+CAPTURE_RANGE head ok skipMiB=0 countMiB=1 sha256=5e689632520ef2faa400245d9d348bf0981ad18116f639a32e294932761b3dc2
+CAPTURE_RANGE espmsr ok skipMiB=1 countMiB=116 sha256=078539eabbadd25a44df3b4bf5cbdb71889612ee408d2a0ad0241d61ac45b570
+CAPTURE_RANGE tail ok skipMiB=153599 countMiB=1 sha256=d37a5a30c9fab33aa0d9dc7c4b45a681804d591ca373d920f0a20510a6e64e78
+CAPTURE_LOOP /dev/loop10 over /dev/nbd0
+CAPTURE_NTFSCLONE_QCOW2 rc=0 ntfs_seconds=1641.5 qcow2_bytes_on_disk=41884254208 image_stream_sha256_remote=9dcd0bca60bfca5a9511af56250838547e98854aa5fdd784806f263eb1abef0d local=9dcd0bca60bfca5a9511af56250838547e98854aa5fdd784806f263eb1abef0d
+CAPTURE_DONE mode=ntfsclone-qcow2
+CAPTURE_EXIT rc=0 2026-11-07T16:06:52Z

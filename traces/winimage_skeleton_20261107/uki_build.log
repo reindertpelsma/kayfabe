@@ -1,0 +1,6 @@
+build_alpine_uki: module libata: not a loadable module here (built in, or absent)
+build_alpine_uki: module crc32c_generic: not a loadable module here (built in, or absent)
+build_alpine_uki: initramfs compression: zstd
+build_alpine_uki: initramfs 12953726 bytes
+UKI_BUILT out=/data/winimage_skeleton_20261107/kf-alpine.efi bytes=25699840 sha256=2cc926b09941241006e4d16bac157cf90c866d0325967c49b7a6820299430dd9 kernel=6.18.60-0-virt alpine=3.24.4 initramfs=zstd
+EXIT rc=0
