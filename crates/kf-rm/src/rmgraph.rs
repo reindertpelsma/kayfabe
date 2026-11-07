@@ -620,29 +620,6 @@ impl DeclaredUserd {
             | None => None,
         }
     }
-
-    /// This USERD's resolved physical placement, as one log-shaped token.
-    ///
-    /// ⊘ **`UNREADABLE` and `UNDECLARED` are different answers and both are printed by
-    /// name.** `None` is *"nothing resolved this"*; `Undeclared` is *"it resolved, and the
-    /// channel declared no address space"* — collapsing either onto `0` would make a
-    /// missing measurement look like a measured zero, which is the `dlen=0` class in a log
-    /// line.
-    #[must_use]
-    pub fn resolved_tag(&self) -> String {
-        match self.resolved {
-            None => "phys=UNREADABLE".to_string(),
-            Some(kf_arch::UserdMem::Framebuffer { base, size }) => {
-                format!("phys=fb:0x{base:x}/0x{size:x}")
-            }
-            Some(kf_arch::UserdMem::Sysmem { base, size }) => {
-                format!("phys=sys:0x{base:x}/0x{size:x}")
-            }
-            Some(kf_arch::UserdMem::Undeclared { address_space }) => {
-                format!("phys=UNDECLARED(as={address_space})")
-            }
-        }
-    }
 }
 
 /// ⊘ Nothing in the core reads it.

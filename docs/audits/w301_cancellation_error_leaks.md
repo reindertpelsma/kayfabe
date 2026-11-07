@@ -1,5 +1,10 @@
 # w301 — cancellation, error reporting, and lifetime: a read-only audit
 
+**STATUS: ANSWERED, 2026-08-14.** A point-in-time audit of the pre-v3 tree (the `kayfabe-*` crates, most of them now under `archive/crates/`); its two acted-on findings (§3.1, §1.4) are recorded in the w303 banner below, and the audit is not being updated. Read-only. Nothing was built, booted or measured on hardware
+for this document; every claim is read off source at `91f8b34b` (kayfabe), the vendored
+`ogkm-580.159.04`, the vendored gVisor `nvproxy`, and committed traces. Where a claim needs a
+boot to settle, it says so and is not asserted.
+
 > ## ★★★★★ TWO OF THIS AUDIT'S FINDINGS WERE ACTED ON — w303, 2026-08-14. Read this before §1.4 or §3.1.
 >
 > Branch `w303-reap-and-preempt`. Both findings were **re-verified still true at master
@@ -59,11 +64,6 @@
 > already reachable (`HostRmBackend::schedule` finds it as `channel_parts(raw).tsg` and issues
 > a group control on it), so the verb is that function with a different command id and the
 > guest's own params. Not built here; it needs a boot to prove.
-
-**STATUS: LIVE — 2026-08-14.** Read-only. Nothing was built, booted or measured on hardware
-for this document; every claim is read off source at `91f8b34b` (kayfabe), the vendored
-`ogkm-580.159.04`, the vendored gVisor `nvproxy`, and committed traces. Where a claim needs a
-boot to settle, it says so and is not asserted.
 
 Scope: `/workspace/nvkvm-rs` (kayfabe, the product). The C artifact
 (`/workspace/nvidia-gpu-passthrough`) appears only as an oracle — and §0.2 records that on this

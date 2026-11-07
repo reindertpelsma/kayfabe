@@ -1,3 +1,5 @@
+> **STATUS: SUPERSEDED, 2026-09-21** (archived, w822). Successor: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) and [`THE_ARCHITECTURE_v3.md`](../design/THE_ARCHITECTURE_v3.md). Historical record: a `STATUS` line further down says what the document claimed when it was written; it is no longer a claim about the current tree.
+>
 > ⊘⊘⊘ **ARCHIVED — THIS DESCRIBES A SUPERSEDED ARCHITECTURE. IT IS REFERENCE, NOT CURRENT.**
 > The live design is `docs/design/THE_DESIGN.md`. This file is kept because its *measurements*,
 > its *ogkm findings* and its *reasoning* remain useful — its **architecture does not**. Do not
@@ -5,7 +7,7 @@
 
 # Guest-RAM pin release — the removal, the safety predicate, and what it deliberately does not do
 
-> **STATUS: LIVE — 2026-08-14 (w310).** Code landed on `w310-pin-release`, rebased onto master
+> **STATUS AT WRITING: LIVE — 2026-08-14 (w310).** Code landed on `w310-pin-release`, rebased onto master
 > `0ff3e1e2` (w309); built and tested on a rented CPU box, **known-positive watched failing**.
 > ★★★★★ **CONFIRMED ON HARDWARE 2026-08-14 (w314) — see the block directly below; §7's
 > "PENDING" is DISCHARGED.** Supersedes nothing. Corrects one sentence in

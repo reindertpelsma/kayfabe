@@ -1,3 +1,5 @@
+> **STATUS: SUPERSEDED, 2026-09-21** (archived, w822). Successor: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) and [`THE_ARCHITECTURE_v3.md`](../design/THE_ARCHITECTURE_v3.md). Historical record: a `STATUS` line further down says what the document claimed when it was written; it is no longer a claim about the current tree.
+>
 > ⊘⊘⊘ **ARCHIVED — THIS DESCRIBES A SUPERSEDED ARCHITECTURE. IT IS REFERENCE, NOT CURRENT.**
 > The live design is `docs/design/THE_DESIGN.md`. This file is kept because its *measurements*,
 > its *ogkm findings* and its *reasoning* remain useful — its **architecture does not**. Do not
@@ -5,7 +7,7 @@
 
 # The store is LIVE-MAPPABLE in the scratchpad — the walk relocation's premise expired six hours after it was written
 
-**STATUS: LIVE, 2026-09-17 (w755i). Design ruling by the owner; supersedes w731a's relocation
+**STATUS AT WRITING: LIVE, 2026-09-17 (w755i). Design ruling by the owner; supersedes w731a's relocation
 for the walk window. NOT YET IMPLEMENTED — sequenced behind the channel-birth blocker.**
 
 ## The ruling

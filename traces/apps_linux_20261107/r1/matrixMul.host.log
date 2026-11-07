@@ -1,0 +1,12 @@
+=== matrixMul side=host start=2026-11-07T02:22:11+00:00 host=ubuntu cmd: /opt/apps/bundle/samples/matrixMul
+[Matrix Multiply Using CUDA] - Starting...
+GPU Device 0: "Ada" with compute capability 8.9
+
+MatrixA(320,320), MatrixB(640,320)
+Computing result using CUDA Kernel...
+done
+Performance= 4898.58 GFlop/s, Time= 0.027 msec, Size= 131072000 Ops, WorkgroupSize= 1024 threads/block
+Checking computed result for correctness: Result = PASS
+
+NOTE: The CUDA Samples are not meant for performance measurements. Results may vary when GPU Boost is enabled.
+=== end rc=0 secs=2 2026-11-07T02:22:13+00:00

@@ -1,14 +1,6 @@
 # The machine, as it is — and what I propose to change
 
-> ⊘ **SUPERSEDED 2026-09-26 — this describes the PRE-v3 machine** (the isolate plane, the scratchpad
-> process, the `nvkvm-gpu` device), surveyed on 2026-09-20 to argue for the rewrite. v3 has since
-> been built (`THE_ARCHITECTURE_v3.md`, `V3_BUILD.md`, the root `ARCHITECTURE.md`). Read this file
-> as the record of what was replaced and why, not as the system that runs.
-
-**STATUS: LIVE, 2026-09-20 (w816).** Companion to `THE_ARCHITECTURE_v2.md` (the proposal) and
-`THE_SURFACE_v2.md` (the per-item inventory). **This** document is the one an engineer should
-attack: it describes the system as it actually runs, from a `file:line` survey, and marks every
-place I propose to change it.
+**STATUS: SUPERSEDED, 2026-09-26.** This describes the PRE-v3 machine (the isolate plane, the scratchpad process, the `nvkvm-gpu` device), surveyed on 2026-09-20 to argue for the rewrite. v3 has since been built; its design is [`THE_ARCHITECTURE_v3.md`](THE_ARCHITECTURE_v3.md) (see also `V3_BUILD.md` and the root [`ARCHITECTURE.md`](../../ARCHITECTURE.md)). Read this file as the record of what was replaced and why, not as the system that runs. Original header, written 2026-09-20 (w816): companion to `THE_ARCHITECTURE_v2.md` (the proposal) and `THE_SURFACE_v2.md` (the per-item inventory). **This** document is the one an engineer should attack: it describes the system as it actually runs, from a `file:line` survey, and marks every place I propose to change it.
 
 ## 0. How to read this
 

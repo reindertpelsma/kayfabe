@@ -94,6 +94,12 @@ impl Rng {
 }
 
 /// One line of the trace, kept compact (formatted only on failure).
+// The variants' fields are read only through the derived `Debug` (`World::dump`, printed with the
+// SEED when an invariant fails); rustc ignores derived `Debug` when it looks for dead fields.
+#[allow(
+    dead_code,
+    reason = "fields are read through the derived Debug in World::dump"
+)]
 #[derive(Clone, Copy, Debug)]
 enum Ev {
     Tick { seq: u32, want: bool },
@@ -781,7 +787,6 @@ struct Out {
     steps: u64,
     max_turn_packets: u64,
     max_held: u32,
-    log_lines: usize,
     worst_flip_ns: u64,
     probation: u64,
     max_inbox: usize,
@@ -877,10 +882,8 @@ struct World {
     partial_rest: Option<(Vec<u8>, TickPkt)>,
     partial_at: Option<u64>,
     out_hostile: u64,
-    t0: std::time::Instant,
 }
 
-const CALLS: usize = 192;
 /// The bound on the vblank's silence: the broker's 50 ms, then up to two periods to the next free tick.
 const TICK_GAP_BOUND: u64 = 50 * MS + 2 * P60 + MS;
 /// The bound on a flip's life: a tick wait, a copy and a wake.
@@ -991,7 +994,6 @@ impl World {
             partial_rest: None,
             partial_at: None,
             out_hostile: 0,
-            t0: std::time::Instant::now(),
             sc,
         }
     }

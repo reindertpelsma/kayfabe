@@ -37,9 +37,16 @@ if [ ! -x "$BL/blender" ]; then
 fi
 "$BL/blender" --version 2>/dev/null | head -1; [ -x "$BL/blender" ]; ok blender $?
 
-# Geekbench 6 (GPU OpenCL); runs in its free mode and uploads the result
+# Geekbench 6 (GPU OpenCL); runs in its free mode and uploads the result. ⊘ [2026-11-07] docs/DOWNLOADS.md
+# lists Geekbench as "not allowed (scripts need Pro), manual" and the free mode uploads the result to a
+# third party, so it is NOT fetched by default and `geekbench_gpu` is a policy skip in matrix_table.py.
+# KF_APPS_GEEKBENCH=1 fetches it for a manual, owner-approved run.
 GB=$D/geekbench; mkdir -p "$GB"
-[ -x "$GB/geekbench6" ] || curl -fsSL https://cdn.geekbench.com/Geekbench-6.4.0-Linux.tar.gz | tar xz -C "$GB" --strip-components=1
-[ -x "$GB/geekbench6" ]; ok geekbench $?
+if [ "${KF_APPS_GEEKBENCH:-0}" = 1 ]; then
+  [ -x "$GB/geekbench6" ] || curl -fsSL https://cdn.geekbench.com/Geekbench-6.4.0-Linux.tar.gz | tar xz -C "$GB" --strip-components=1
+  [ -x "$GB/geekbench6" ]; ok geekbench $?
+else
+  echo "SETUP_geekbench=SKIPPED (policy: docs/DOWNLOADS.md)"
+fi
 df -h / | tail -1
 echo SETUP_SIDE_DONE

@@ -153,29 +153,6 @@ impl RegionMap {
         Ok(RegionMap { page_size, pages })
     }
 
-    /// Build a map directly from a page list. For tests and for a caller that already
-    /// holds the table; the bounds are the same ones [`RegionMap::load`] enforces.
-    ///
-    /// # Errors
-    ///
-    /// [`GspFault::RegionMalformed`] for a bad page size, an empty list, or a misaligned
-    /// entry.
-    pub fn from_pages(page_size: u64, pages: Vec<u64>) -> Result<RegionMap, GspFault> {
-        if page_size == 0 || !page_size.is_power_of_two() {
-            return Err(RegionError::BadPageSize { page_size }.into());
-        }
-        if pages.is_empty() {
-            return Err(RegionError::NoEntries.into());
-        }
-        for (index, &value) in pages.iter().enumerate() {
-            if value & (page_size - 1) != 0 {
-                return Err(RegionError::UnalignedEntry { index, value }.into());
-            }
-        }
-        checked_extent(&pages, page_size)?;
-        Ok(RegionMap { page_size, pages })
-    }
-
     /// The region's total size in bytes.
     ///
     /// ★ Cannot overflow: both constructors refuse a declaration whose extent does not

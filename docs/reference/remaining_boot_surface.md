@@ -1,5 +1,7 @@
 # The remaining boot surface, and two traps that would otherwise be rediscovered
 
+**STATUS: RESEARCH, 2026-08-08.** Notes from 2026-08-07/08 on how much RPC boot surface was left in the pre-v3 port, plus two traps (nested-virt perf numbers, the claim-ledger assessment) that were written down so they are not rediscovered. Read on 2026-11-07: the boot wall it counts against belongs to the frozen pre-v3 tree, and one inference in it was later overturned (see the section 1 note on boot `gis1_e6ed6bc`).
+
 Facts derived in conversation on 2026-08-07/08 that live nowhere else. ⊘ Each was a
 measurement or an owner ruling; none is a plan.
 

@@ -1,3 +1,5 @@
+> **STATUS: SUPERSEDED, 2026-09-21** (archived, w822). Successor: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) and [`THE_ARCHITECTURE_v3.md`](../design/THE_ARCHITECTURE_v3.md). Historical record: a `STATUS` line further down says what the document claimed when it was written; it is no longer a claim about the current tree.
+>
 > ⊘⊘⊘ **ARCHIVED — THIS DESCRIBES A SUPERSEDED ARCHITECTURE. IT IS REFERENCE, NOT CURRENT.**
 > The live design is `docs/design/THE_DESIGN.md`. This file is kept because its *measurements*,
 > its *ogkm findings* and its *reasoning* remain useful — its **architecture does not**. Do not
@@ -5,7 +7,7 @@
 
 # w327 — THE "32 MiB ALLOCATION CLIFF" IS NOT A CLIFF, NOT AT 32 MiB, AND NOT ABOUT SIZE
 
-**STATUS: LIVE, 2026-08-14.** Measured on `vh2` (real GA106, RTX 3060, driver `580.159.04`,
+**STATUS AT WRITING: LIVE, 2026-08-14.** Measured on `vh2` (real GA106, RTX 3060, driver `580.159.04`,
 stock guest driver), base pinned at **`df3043be`** (master = merge of w322). Every number below
 is from a boot on that box on that day; the tag of each boot is given so a log can be found.
 

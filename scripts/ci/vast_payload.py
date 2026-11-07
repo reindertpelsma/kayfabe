@@ -217,6 +217,88 @@ def specviewperf_rows(text, rc):
     )
 
 
+# The Linux apps stage (DRAFT 2026-11-07, lane appslinux; DISABLED BY DEFAULT). It runs the app matrix
+# (scripts/apps/, ~70 CUDA, graphics, AI and video programs) in the fat guest over the GATE LIST
+# (scripts/apps/gate_list.txt: the apps that passed on bare metal AND in the guest on the measured box,
+# traces/apps_linux_20261107/). The owner enables it by setting APPS_STAGE_ENABLED = True here; then the
+# tiers `middle` and `large` run it (after cuda_guest, before windows_gate) and `small` and `adhoc` never
+# do. It is NOT selected by KF_STAGES (a Worker-sent `apps` is still refused above: the tier decides) and
+# needs no Worker change. A gate app that fails in the guest is a kayfabe finding (row `apps`); a missing
+# bundle, an exhausted budget or a boot that gave no row is `apps_retry_<class>`, never a pass.
+APPS_STAGE_ENABLED = False
+APPS_TIERS = ("middle", "large")
+APPS_RETRY_CLASSES = {"NOT_BUILT", "TIME", "BOX", "OPERATOR", "NO_LIST", "BAD_LIST", "USAGE"}
+APPS_VERDICT = re.compile(r"^APPS_STAGE_(PASS|FAIL|RETRY)(?: class=([A-Z_]{1,32}))?$", re.M)
+APPS_ROW = re.compile(
+    r"^APP_ROW name=([A-Za-z0-9_]{1,48}) os=linux result=(PASS|FAIL|NOT_RUN)"
+    r" secs=(?:[0-9]+|-) guest_xid=(?:[0-9]+|-) note=(.*)$",
+    re.M,
+)
+APPS_LIST_LINE = re.compile(r"^APPS_STAGE_LIST n=([0-9]+) ", re.M)
+# Its own wall-clock budget (apps_gate.sh KF_APPS_BUDGET_S) plus margin; INFERRED until a box has run
+# the whole gate list under the payload (the measurement is in traces/apps_linux_20261107/).
+APPS_MIN_REMAINING_MS = 60 * 60000
+
+
+def apps_requested(tier):
+    """The tier decides, and only when the owner has enabled the stage; never for small or adhoc."""
+    return bool(APPS_STAGE_ENABLED) and tier in APPS_TIERS
+
+
+# The release tier (`large`) runs the FULL gate list; `middle` runs the same list without the apps that need
+# more than a minute in the guest (scripts/apps/gate_list_middle.txt), so it fits the middle tier's budget.
+APPS_LISTS = {"large": ("gate_list.txt", "full"), "middle": ("gate_list_middle.txt", "middle")}
+
+
+def apps_gate_list(root, tier="large"):
+    """The gate list of the tier, in run order; one app name per line, `#` comments and blanks ignored."""
+    names = [
+        s.strip()
+        for s in bounded_text(Path(root) / "scripts/apps" / APPS_LISTS[tier][0], 65536).splitlines()
+        if s.strip() and not s.strip().startswith("#")
+    ]
+    if (
+        not names
+        or len(names) != len(set(names))
+        or not all(re.fullmatch(r"[A-Za-z0-9_]{1,48}", n) for n in names)
+    ):
+        raise EvidenceError("apps_retry_no_list")
+    return names
+
+
+def apps_rows(text, rc, names):
+    """Grade scripts/bench/box/apps_gate.sh. THE GATE IS THE GUEST PASSING: one APPS_STAGE_PASS with
+    exit 0, one exit line rc=0, and exactly one PASS APP_ROW for every name of the gate list, no more,
+    no fewer. A FAIL (a gate app failed in the guest) is the row `apps`, with the passed count beside
+    it. RETRY (missing bundle, budget, boot) is `apps_retry_<class>`: not a verdict on the guest."""
+    verdicts = APPS_VERDICT.findall(text)
+    exits = re.findall(r"^APPS_STAGE_EXIT rc=([0-9]+)$", text, re.M)
+    rows = APPS_ROW.findall(text)
+    seen = [name for name, _, _ in rows]
+    passed = sum(1 for _, result, _ in rows if result == "PASS")
+    if len(verdicts) == 1 and len(exits) == 1:
+        kind, cls = verdicts[0]
+        listed = APPS_LIST_LINE.findall(text)
+        if (
+            kind == "PASS"
+            and rc == 0
+            and exits[0] == "0"
+            and listed == [str(len(names))]
+            and sorted(seen) == sorted(names)
+            and passed == len(names)
+        ):
+            return [row("apps", len(names))]
+        if kind == "FAIL" and rc not in (0, 3) and exits[0] != "0":
+            raise EvidenceError("apps", [row("apps_passed", passed)] if passed else [])
+        if kind == "RETRY":
+            name = "apps_retry_" + (cls.lower() if cls in APPS_RETRY_CLASSES else "operator")
+            raise EvidenceError(name, [row("apps_passed", passed)] if passed else [])
+    # No verdict, two verdicts, a PASS with a missing/extra/duplicate/failing app row or a non-zero exit
+    # (names are unique, so sorted(seen) == sorted(names) also rules out a duplicate row):
+    # the harness did not end cleanly. Not a pass; a fresh box decides.
+    raise EvidenceError("apps_retry_operator")
+
+
 # The Windows stage needs about an hour on a fresh box (install 19-31 min, gate 27 min, MEASURED
 # traces/windows_gate_20261101/, traces/blackwell_hw_20261103/); it does not start with less than
 # this left before the soft deadline, and that shortfall is a RETRY, not a verdict.
@@ -1234,6 +1316,28 @@ def main():
                 lambda rc: ladder_rows(bounded_text(path), rc, "guest", sha),
             )
         )
+        if apps_requested(tier):
+            # After the last Linux guest stage, before Windows: the app matrix over the gate list. It
+            # boots the fat guest itself (apps_matrix.sh), one boot at a time, under its own budget.
+            output_apps = evidence / "apps.run"
+            names = apps_gate_list(root, tier)
+            matrix_log = Path(PROV_DIR) / (tag + "_apps_matrix.log")
+            stage = make_stage(
+                "apps",
+                [
+                    "bash",
+                    str(root / "scripts/bench/box/apps_gate.sh"),
+                    tag,
+                    PROV_DIR,
+                    APPS_LISTS[tier][1],
+                ],
+                output_apps,
+                [matrix_log],
+                lambda rc, names=names: apps_rows(bounded_text(output_apps), rc, names),
+                [matrix_log],
+            )
+            stage.update(min_remaining_ms=APPS_MIN_REMAINING_MS, short_row="apps_retry_time")
+            stages.append(stage)
         if windows:
             # Last, after every Linux guest has stopped: windows_gate.sh owns the GPU from here.
             output = evidence / "windows.run"

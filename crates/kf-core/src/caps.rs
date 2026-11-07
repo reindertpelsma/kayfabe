@@ -165,17 +165,6 @@ pub struct Aperture {
 }
 
 impl Aperture {
-    /// ⊘ `free_now` is measured at startup, not assumed from the board's nominal size: the window
-    /// is shared with every other process on that GPU.
-    pub fn size_from_free(requested: u64, free_now: u64) -> Aperture {
-        let len = requested.min(free_now);
-        Aperture {
-            len,
-            backed_len: len,
-            refusals: 0,
-        }
-    }
-
     pub fn back(&mut self, offset: u64, len: u64) -> Backing {
         match offset.checked_add(len) {
             Some(end) if end <= self.backed_len => Backing::Backed {

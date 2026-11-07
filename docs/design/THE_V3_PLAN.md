@@ -1,5 +1,7 @@
 # The v3 plan — what gets built, in what order, and what proves each step
 
+**STATUS: ANSWERED, 2026-09-26.** The phased v3 plan, written 2026-09-20 (w821) as a PROPOSAL, "the thing to argue with". Per the update below (dated 2026-09-26) it was executed through P7 in the `kf-*` crates and its phase gates were passed on hardware at `master` `74dc3113` or earlier, except the LLM bar (at least 0.8x host tok/s), which is not met. Read it as rationale and gate definitions, not as a to-do list. Design: [`THE_ARCHITECTURE_v3.md`](THE_ARCHITECTURE_v3.md); execution rules: [`V3_BUILD.md`](V3_BUILD.md); current results: [`docs/STATUS_DETAIL.md`](../STATUS_DETAIL.md).
+
 > ### ★ STATUS UPDATE — 2026-09-26: EXECUTED THROUGH P7; the LLM bar is NOT met
 > This plan was a proposal on 2026-09-20. It has since been built in the `kf-*` crates (execution
 > rules: `V3_BUILD.md`), and the phase gates below are passed on hardware at `master` `74dc3113`
@@ -23,8 +25,6 @@
 > ⊘ **`[w824]` The Translated plane is now specified end to end in
 > `THE_TRANSLATED_PLANE.md`** — the model, the build order with a measurement per gate, and the
 > 30/30 feasibility per arm. Read it before P4 or P7.
-
-**STATUS: LIVE, 2026-09-20 (w821). PROPOSAL — this is the thing to argue with.**
 
 ⊘ **This document is about the target, not the current tree.** `[owner]` *"you don't have to be
 extensive about what the rotten code now does — I'll look at your intended target instead and

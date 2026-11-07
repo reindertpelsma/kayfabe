@@ -1,5 +1,7 @@
 # What the QEMU ≥ 10.2 floor actually buys — a source-verified facility inventory
 
+**STATUS: RESEARCH, 2026-07-27.** Source-reading inventory of what QEMU 10.2.0 offers over 9.2.0 for the pre-v3 QEMU adapter design; nothing in it was run. Read on 2026-11-07: it feeds `docs/design/l1_os_shell.md` of that design line, and the v3 device is the C QOM device under `qemu/hw/misc/kf3/`, so its rows are upstream-QEMU facts to re-check, not a description of v3.
+
 **What this file is.** The answer to the open task `../design/l1_os_shell.md` §10 L2-Q item 1
 left behind: *"what else the floor buys us. Now that ≥ 10.2 is guaranteed, inventory the
 facilities we were planning to hand-roll against 9.2 and take the upstream ones instead. Do this

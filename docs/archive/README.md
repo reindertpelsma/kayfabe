@@ -1,7 +1,9 @@
 # Archive — superseded architectures, kept as reference
 
+**STATUS: LIVE, 2026-11-07.** Index of the archive directory. Every document below carries its own `STATUS: SUPERSEDED` banner (added 2026-11-07, with the archive date and a link to the current architecture, [`ARCHITECTURE.md`](../../ARCHITECTURE.md) and [`THE_ARCHITECTURE_v3.md`](../design/THE_ARCHITECTURE_v3.md)); the `STATUS` line inside a document says what it claimed when it was written.
+
 **These documents do not describe how kayfabe works.** They describe how it *used to*, or how it
-was once proposed to. The live design is **`../design/THE_DESIGN.md`**.
+was once proposed to. The current design is **[`../design/THE_ARCHITECTURE_v3.md`](../design/THE_ARCHITECTURE_v3.md)**; the banners inside these files name `../design/THE_DESIGN.md`, the design they were archived against on 2026-09-21.
 
 ## Why they are kept rather than deleted
 

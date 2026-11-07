@@ -1,0 +1,248 @@
+diff --git a/scripts/ci/run_report_mutants.py b/scripts/ci/run_report_mutants.py
+index 9363c92..3ff1a0b 100644
+--- a/scripts/ci/run_report_mutants.py
++++ b/scripts/ci/run_report_mutants.py
+@@ -23,9 +23,20 @@ SOURCE = (HERE / "vast_run_report.py").read_text()
+ 
+ # (name, old text (exactly once), new text)
+ MUTANTS = [
++    # The apps stage rows (scripts/bench/box/apps_gate.sh): 2026-11-07, lane appslinux.
++    ("apps-result-forced-pass", '"result": m[2], "ms"', '"result": "PASS", "ms"'),
++    ("apps-os-unchecked", "os=linux result=(PASS|FAIL|NOT_RUN)", "os=[a-z]+ result=(PASS|FAIL|NOT_RUN)"),
++    ("apps-result-unchecked", "result=(PASS|FAIL|NOT_RUN) secs=", "result=([A-Z_]+) secs="),
++    ("apps-name-charset-open", "APP_ROW name=([A-Za-z0-9_]{1,48})", "APP_ROW name=(\\S{1,48})"),
++    ("apps-name-length-open", "APP_ROW name=([A-Za-z0-9_]{1,48})", "APP_ROW name=([A-Za-z0-9_]+)"),
++    ("apps-secs-open", "secs=([0-9]+|-) ", "secs=(\\S+) "),
++    ("apps-note-uncapped", 'm[4].strip()[:200]', "m[4].strip()"),
++    ("apps-rows-on-the-host-subrun", '"sub": sub_linux, "name": name, "os": "linux"', '"sub": "host", "name": name, "os": "linux"'),
++    ("apps-not-in-the-linux-counts", "LINUX_SUITES + apps_names, rows", "LINUX_SUITES, rows"),
++    ("apps-retry-is-a-failure", '    if subruns[1]["verdict"] == "FAIL" and not real_failures:\n', "    if False:\n"),
+     (
+         "apps-invented",
+-        '        "apps": [],  # the application matrix is not a payload stage yet',
++        '        "apps": apps[: LIMITS["apps"]],  # empty unless the (disabled-by-default) apps stage ran',
+         '        "apps": [{"sub": "host", "name": "x", "os": "linux", "result": "PASS", "note": ""}],',
+     ),
+     (
+diff --git a/scripts/ci/test_vast_run_report.py b/scripts/ci/test_vast_run_report.py
+index b79eab5..7c78056 100644
+--- a/scripts/ci/test_vast_run_report.py
++++ b/scripts/ci/test_vast_run_report.py
+@@ -107,6 +107,129 @@ def result(windows=True, verdict="PASS", rows=None, claims=None):
+     }
+ 
+ 
++APPS = ["nvidia_smi", "deviceQuery", "vectorAdd", "torch_correct"]
++
++
++def app_lines(failing=(), unrun=(), names=APPS):
++    out = ["APPS_STAGE_LIST n=%d budget_s=3000 per_boot=100" % len(names)]
++    for n in names:
++        r = "FAIL" if n in failing else "NOT_RUN" if n in unrun else "PASS"
++        out.append("APP_ROW name=%s os=linux result=%s secs=%s guest_xid=0 note=%s"
++                   % (n, r, "-" if r == "NOT_RUN" else "7", "no result row" if r == "NOT_RUN" else "-"))
++    return out
++
++
++class AppsRows(unittest.TestCase):
++    """The apps stage (disabled by default in vast_payload.py): its APP_ROW lines become apps[] and
++    tests[] rows of the Linux guest subrun, and nothing else invents them."""
++
++    BASE = [("provision", 1, 0, 0), ("gates", 9, 0, 0), ("kf3_build", 1, 0, 0), ("raw_suite", 30, 0, 0),
++            ("thin_suite", 30, 0, 0), ("birth_census", 1, 0, 0), ("cuda_host", 4, 0, 0),
++            ("cuda_fat", 4, 0, 0)]
++
++    def doc(self, rows=(), lines=(), windows=False):
++        return rr.build_report(log_lines(windows=windows) + list(lines), result(windows=windows, rows=self.BASE + list(rows)))
++
++    def test_the_rows_belong_to_the_linux_guest_subrun(self):
++        d = self.doc([("apps", 4, 0, 0)], app_lines())
++        self.assertEqual(len(d["apps"]), 4)
++        self.assertEqual({a["sub"] for a in d["apps"]}, {"linux-580.159.03"})
++        self.assertEqual(d["apps"][0], {"sub": "linux-580.159.03", "name": "nvidia_smi", "os": "linux", "result": "PASS", "note": "-"})
++        mine = [t for t in d["tests"] if t["suite"] == "apps_linux"]
++        self.assertEqual([t["name"] for t in mine], APPS)
++        self.assertEqual({t["sub"] for t in mine}, {"linux-580.159.03"})
++        self.assertEqual(mine[0]["ms"], 7000)
++        linux = [s for s in d["subruns"] if s["os"] == "linux"][0]
++        self.assertEqual((linux["verdict"], linux["counts"]["pass"]), ("PASS", 35 + 4))
++
++    def test_no_apps_stage_no_rows(self):
++        d = self.doc()
++        self.assertEqual(d["apps"], [])
++        self.assertEqual([t for t in d["tests"] if t["suite"] == "apps_linux"], [])
++
++    def test_a_failing_gate_app_fails_the_linux_subrun_and_is_a_fail_row(self):
++        d = self.doc([("apps_passed", 3, 0, 0), ("apps", 0, 1, 0)], app_lines(failing=["vectorAdd"]))
++        self.assertEqual([a["result"] for a in d["apps"]], ["PASS", "PASS", "FAIL", "PASS"])
++        linux = [s for s in d["subruns"] if s["os"] == "linux"][0]
++        self.assertEqual(linux["verdict"], "FAIL")
++
++    def test_an_apps_retry_is_a_retry_not_a_failure_of_the_guest(self):
++        d = self.doc([("apps_retry_time", 0, 1, 0)], app_lines(unrun=["vectorAdd", "torch_correct"]))
++        self.assertEqual([a["result"] for a in d["apps"]], ["PASS", "PASS", "NOT_RUN", "NOT_RUN"])
++        linux = [s for s in d["subruns"] if s["os"] == "linux"][0]
++        self.assertEqual(linux["verdict"], "RETRY")
++
++    def test_a_real_failure_beside_an_apps_retry_stays_a_failure(self):
++        d = self.doc([("apps_retry_time", 0, 1, 0), ("thin_suite_x", 0, 1, 0)], app_lines())
++        self.assertEqual([s for s in d["subruns"] if s["os"] == "linux"][0]["verdict"], "FAIL")
++
++    def only_good(self, bad_line):
++        good = "APP_ROW name=good os=linux result=PASS secs=3 guest_xid=0 note=-"
++        d = self.doc([("apps", 1, 0, 0)], [bad_line, good])
++        self.assertEqual([a["name"] for a in d["apps"]], ["good"], bad_line)
++        self.assertEqual([t["name"] for t in d["tests"] if t["suite"] == "apps_linux"], ["good"])
++
++    def test_a_name_with_a_path_is_not_a_row(self):
++        self.only_good("APP_ROW name=../etc os=linux result=PASS secs=1 guest_xid=0 note=x")
++
++    def test_a_name_with_a_shell_character_is_not_a_row(self):
++        self.only_good("APP_ROW name=a;b os=linux result=PASS secs=1 guest_xid=0 note=x")
++
++    def test_a_name_of_49_characters_is_not_a_row(self):
++        self.only_good("APP_ROW name=" + "a" * 49 + " os=linux result=PASS secs=1 guest_xid=0 note=x")
++
++    def test_a_name_of_200_characters_is_not_a_row(self):
++        self.only_good("APP_ROW name=" + "b" * 200 + " os=linux result=PASS secs=1 guest_xid=0 note=x")
++
++    def test_a_windows_app_row_is_not_a_linux_row(self):
++        self.only_good("APP_ROW name=w1 os=windows result=PASS secs=1 guest_xid=0 note=x")
++
++    def test_an_unknown_os_is_not_a_linux_row(self):
++        self.only_good("APP_ROW name=w2 os=macos result=PASS secs=1 guest_xid=0 note=x")
++
++    def test_a_result_outside_the_three_is_not_a_row(self):
++        self.only_good("APP_ROW name=m1 os=linux result=MAYBE secs=1 guest_xid=0 note=x")
++
++    def test_a_timeout_word_is_not_an_app_result(self):
++        self.only_good("APP_ROW name=m2 os=linux result=TIMEOUT secs=1 guest_xid=0 note=x")
++
++    def test_a_scientific_duration_is_not_a_row(self):
++        self.only_good("APP_ROW name=m3 os=linux result=PASS secs=1e9 guest_xid=0 note=x")
++
++    def test_a_word_for_a_duration_is_not_a_row(self):
++        self.only_good("APP_ROW name=m4 os=linux result=PASS secs=soon guest_xid=0 note=x")
++
++    def test_a_500_character_note_is_cut_to_200(self):
++        d = self.doc([("apps", 1, 0, 0)], ["APP_ROW name=good os=linux result=PASS secs=3 guest_xid=0 note=" + "n" * 500])
++        self.assertEqual(len(d["apps"][0]["note"]), 200)
++
++    def test_a_201_character_note_is_cut_to_200(self):
++        d = self.doc([("apps", 1, 0, 0)], ["APP_ROW name=good os=linux result=PASS secs=3 guest_xid=0 note=" + "n" * 201])
++        self.assertEqual(len(d["apps"][0]["note"]), 200)
++
++    def test_every_apps_row_names_a_subrun_of_this_report(self):
++        d = self.doc([("apps", 4, 0, 0)], app_lines())
++        subs = {s["sub"] for s in d["subruns"]}
++        self.assertTrue(all(r["sub"] in subs for r in d["apps"] + d["tests"]))
++        self.assertEqual({r["sub"] for r in d["apps"]}, {"linux-580.159.03"})
++
++    def test_a_missing_bundle_retry_without_any_app_row_is_a_retry_subrun(self):
++        d = self.doc([("apps_retry_not_built", 0, 1, 0)], ["APPS_STAGE_RETRY class=NOT_BUILT"])
++        self.assertEqual(d["apps"], [])
++        self.assertEqual([s for s in d["subruns"] if s["os"] == "linux"][0]["verdict"], "RETRY")
++
++    def test_duplicates_keep_the_last_row_and_the_cap_holds(self):
++        d = self.doc([("apps", 2, 0, 0)], app_lines(names=["a1"]) + app_lines(failing=["a1"], names=["a1"]))
++        self.assertEqual([a["result"] for a in d["apps"]], ["FAIL"])
++        many = ["APP_ROW name=app%d os=linux result=PASS secs=1 guest_xid=0 note=-" % i for i in range(700)]
++        self.assertEqual(len(self.doc([("apps", 700, 0, 0)], many)["apps"]), rr.LIMITS["apps"])
++
++    def test_an_app_row_never_carries_a_token_shape_or_a_score_into_the_report(self):
++        d = self.doc([("apps", 4, 0, 0)], app_lines())
++        self.assertNotIn(TOKEN, json.dumps(d))
++        self.assertNotIn("score", json.dumps(d["apps"]))
++
++
+ class Build(unittest.TestCase):
+     def build(self, lines, res):
+         return rr.build_report(lines, res)
+diff --git a/scripts/ci/vast_run_report.py b/scripts/ci/vast_run_report.py
+index 2a0fdcd..86cb2f4 100644
+--- a/scripts/ci/vast_run_report.py
++++ b/scripts/ci/vast_run_report.py
+@@ -53,6 +53,14 @@ LOG_STAGES = {
+     "linux": ["merge_bar", "cuda_guest"],
+     "windows": ["windows_gate", "windows_gate_2"],
+ }
++# The apps stage (scripts/bench/box/apps_gate.sh, disabled by default in vast_payload.py) prints one
++#   APP_ROW name=<app> os=linux result=PASS|FAIL|NOT_RUN secs=<n|-> guest_xid=<n|-> note=<text, last>
++# line per gate app, after the matrix ended; the note is free text and is the rest of the line.
++APP_ROW = re.compile(
++    r"APP_ROW name=([A-Za-z0-9_]{1,48}) os=linux result=(PASS|FAIL|NOT_RUN) secs=([0-9]+|-) "
++    r"guest_xid=(?:[0-9]+|-) note=(.*)"
++)
++APPS_STAGE_SUITES = re.compile(r"apps(?:_[a-z0-9_]+)?")
+ DRIVER = re.compile(r"[0-9]{3,4}\.[0-9]{1,5}(?:\.[0-9]{1,5})?")
+ KV = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)=(\S+)")
+ STAGE_RESULT = {"PASS": "PASS", "FAIL": "FAIL", "TIMEOUT": "FAIL", "PROVIDER_FAULT": "RETRY"}
+@@ -129,6 +137,7 @@ class Collector:
+         self.windows_requested = None
+         self.windows = {"gate": None, "install_s": None, "probes": [], "resets": None, "live_dumps_193": None}
+         self.probe_seen = {}
++        self.apps = {}  # app name -> row, last one wins
+ 
+     def test(self, key, suite, name, result, ms):
+         self.tests[(key, suite, name)] = {"suite": suite, "name": name, "result": result, "ms": ms, "_key": key}
+@@ -155,6 +164,10 @@ class Collector:
+                 self.test("linux", "cuda_fat", rung, arm_result(d.get("verdict", "")), seconds_ms(wall))
+         elif head == "CL_BENCH":
+             self.bench_line(line)
++        elif head == "APP_ROW":
++            m = APP_ROW.fullmatch(line)
++            if m:
++                self.apps[m[1]] = {"name": m[1], "result": m[2], "ms": seconds_ms(m[3]), "note": m[4].strip()[:200]}
+         elif head == "GATE_PROBE_RESULT":
+             parts = line.split(" ", 2)
+             if len(parts) == 3 and re.fullmatch(r"[a-z][a-z0-9_]{0,23}", parts[1]):
+@@ -291,6 +304,9 @@ def build_report(lines, result, run_id=None):
+         if c.windows_requested is False
+         else idle
+     )
++    # The apps stage is optional: it joins the Linux guest subrun only when the result file has its rows.
++    apps_names = tuple(r["name"] for r in rows if APPS_STAGE_SUITES.fullmatch(r["name"]))
++    apps_hint = ("apps",) if "apps" in apps_names else ()
+     sub_linux = "linux-" + linux_driver if linux_driver else "linux-unknown"
+     sub_windows = "windows-" + windows_driver if windows_driver else "windows"
+     keys = {"host": "host", "linux": sub_linux, "windows": sub_windows}
+@@ -298,12 +314,17 @@ def build_report(lines, result, run_id=None):
+     subruns = [
+         subrun("host", "host_bare", "host", HOST_SUITES, rows, host_driver, None, mine["host"], overall,
+                ("cuda_host", "gates", "kf3_build", "raw_suite"), idle),
+-        subrun(sub_linux, "linux_guest", "linux", LINUX_SUITES, rows, host_driver, linux_driver, mine["linux"],
+-               overall, ("thin_suite", "birth_census", "cuda_fat"), idle),
++        subrun(sub_linux, "linux_guest", "linux", LINUX_SUITES + apps_names, rows, host_driver, linux_driver,
++               mine["linux"], overall, ("thin_suite", "birth_census", "cuda_fat") + apps_hint, idle),
+         subrun(sub_windows, "windows_guest", "windows",
+                [r["name"] for r in rows if r["name"].startswith("windows")] or ["windows_gate"], rows,
+                host_driver, windows_driver, mine["windows"], overall, ("windows_gate",), windows_idle),
+     ]
++    # An apps RETRY row (missing bundle, budget, boot) is not a verdict on the guest: the Linux subrun is
++    # RETRY unless another row really failed.
++    real_failures = [r for r in rows if r["fail"] > 0 and not r["name"].startswith("apps_retry_")]
++    if subruns[1]["verdict"] == "FAIL" and not real_failures:
++        subruns[1]["verdict"] = "RETRY"
+     if subruns[2]["verdict"] == "NOT_RUN":
+         subruns[2]["stages"] = ["windows_gate"]
+     if c.windows_requested and c.windows["gate"] in ("FAIL", "RETRY"):
+@@ -313,6 +334,10 @@ def build_report(lines, result, run_id=None):
+     for key, sub_id in keys.items():
+         for t in mine[key]:
+             tests.append({"sub": sub_id, "suite": t["suite"], "name": t["name"], "result": t["result"], "ms": t["ms"]})
++    apps = []
++    for name, a in c.apps.items():
++        apps.append({"sub": sub_linux, "name": name, "os": "linux", "result": a["result"], "note": a["note"]})
++        tests.append({"sub": sub_linux, "suite": "apps_linux", "name": name, "result": a["result"], "ms": a["ms"]})
+     perf = []
+     for mode, key in (("host", "host"), ("guest", "linux")):
+         for name, (value, unit, up) in c.bench[mode].items():
+@@ -337,7 +362,7 @@ def build_report(lines, result, run_id=None):
+         "suites": rows,
+         "subruns": subruns,
+         "tests": tests[: LIMITS["tests"]],
+-        "apps": [],  # the application matrix is not a payload stage yet
++        "apps": apps[: LIMITS["apps"]],  # empty unless the (disabled-by-default) apps stage ran
+         "perf": perf[: LIMITS["perf"]],
+         "windows": c.windows,
+     }
