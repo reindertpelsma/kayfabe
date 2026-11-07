@@ -1,3 +1,5 @@
+> **STATUS: SUPERSEDED, 2026-09-21** (archived, w822). Successor: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) and [`THE_ARCHITECTURE_v3.md`](../design/THE_ARCHITECTURE_v3.md). Historical record: a `STATUS` line further down says what the document claimed when it was written; it is no longer a claim about the current tree.
+>
 > ⊘⊘⊘ **ARCHIVED — THIS DESCRIBES A SUPERSEDED ARCHITECTURE. IT IS REFERENCE, NOT CURRENT.**
 > The live design is `docs/design/THE_DESIGN.md`. This file is kept because its *measurements*,
 > its *ogkm findings* and its *reasoning* remain useful — its **architecture does not**. Do not
@@ -5,7 +7,7 @@
 
 # ⊘⊘⊘ The doorbell sweep is STEP 1 OF 3 — and the C's own analysis calls a DIFFERENT step "the operative one"
 
-**STATUS: LIVE — 2026-08-12 (w275, written at a redirect, before any code was written).**
+**STATUS AT WRITING: LIVE — 2026-08-12 (w275, written at a redirect, before any code was written).**
 This doc exists to stop a lane from building step 1 of a three-step sequence while skipping the
 step the already-committed answer names as decisive, and while skipping a **cheap priority-1
 audit**.

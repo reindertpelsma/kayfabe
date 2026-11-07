@@ -1,3 +1,5 @@
+> **STATUS: SUPERSEDED, 2026-09-21** (archived, w822). Successor: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) and [`THE_ARCHITECTURE_v3.md`](../design/THE_ARCHITECTURE_v3.md). Historical record: a `STATUS` line further down says what the document claimed when it was written; it is no longer a claim about the current tree.
+>
 > ⊘⊘⊘ **ARCHIVED — THIS DESCRIBES A SUPERSEDED ARCHITECTURE. IT IS REFERENCE, NOT CURRENT.**
 > The live design is `docs/design/THE_DESIGN.md`. This file is kept because its *measurements*,
 > its *ogkm findings* and its *reasoning* remain useful — its **architecture does not**. Do not
@@ -5,7 +7,7 @@
 
 # The LLM lane — state, provisioning recipe, and what bears on the wall
 
-**STATUS: LIVE (2026-09-13, at `ae364d82` / w660).** Written to answer the owner's direct
+**STATUS AT WRITING: LIVE (2026-09-13, at `ae364d82` / w660).** Written to answer the owner's direct
 question *"does the LLM pass?"* from evidence rather than from a stale memory. Supersedes
 nothing; it is the first doc on this lane's *operational* state as opposed to its defects.
 ⚠ **This doc contains NO new boot.** Every "measured" row below is a re-reading of an existing

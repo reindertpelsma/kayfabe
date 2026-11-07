@@ -1,3 +1,5 @@
+> **STATUS: SUPERSEDED, 2026-09-21** (archived, w822). Successor: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) and [`THE_ARCHITECTURE_v3.md`](../design/THE_ARCHITECTURE_v3.md). Historical record: a `STATUS` line further down says what the document claimed when it was written; it is no longer a claim about the current tree.
+>
 > ⊘⊘⊘ **ARCHIVED — THIS DESCRIBES A SUPERSEDED ARCHITECTURE. IT IS REFERENCE, NOT CURRENT.**
 > The live design is `docs/design/THE_DESIGN.md`. This file is kept because its *measurements*,
 > its *ogkm findings* and its *reasoning* remain useful — its **architecture does not**. Do not
@@ -5,7 +7,7 @@
 
 # The publish trigger, measured — the guest's TLB invalidate is a BAR0 register, and what that is and is not worth
 
-> **STATUS: LIVE — 2026-08-14 (w326).** The decoder is built, unit-tested and **booted**
+> **STATUS AT WRITING: LIVE — 2026-08-14 (w326).** The decoder is built, unit-tested and **booted**
 > (`kayfabe_device::mmuinval`). The revocation driver is built, unit-tested and booted
 > (`kayfabe_qemu_raw::reclaimtick`). ⊘ **The deferred publication lane is still NOT wired** —
 > §6 says exactly what blocks it and why this rung did not force it.

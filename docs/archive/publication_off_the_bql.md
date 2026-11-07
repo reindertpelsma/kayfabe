@@ -1,3 +1,5 @@
+> **STATUS: SUPERSEDED, 2026-09-21** (archived, w822). Successor: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) and [`THE_ARCHITECTURE_v3.md`](../design/THE_ARCHITECTURE_v3.md). Historical record: a `STATUS` line further down says what the document claimed when it was written; it is no longer a claim about the current tree.
+>
 > ⊘⊘⊘ **ARCHIVED — THIS DESCRIBES A SUPERSEDED ARCHITECTURE. IT IS REFERENCE, NOT CURRENT.**
 > The live design is `docs/design/THE_DESIGN.md`. This file is kept because its *measurements*,
 > its *ogkm findings* and its *reasoning* remain useful — its **architecture does not**. Do not
@@ -5,7 +7,7 @@
 
 # Publication off the BQL — the deferred map lane, the synchronous revoke floor, and `INLINE-SAFE` as a type
 
-> **STATUS: LIVE — 2026-08-14 (w323), WIRED AND MEASURED 2026-09-06 (w383).**
+> **STATUS AT WRITING: LIVE — 2026-08-14 (w323), WIRED AND MEASURED 2026-09-06 (w383).**
 >
 > ### ✔ THE WIRING IS LANDED. §9's *"Designed, NOT built"* list is discharged; see
 > ### `w383_the_doorbell_is_a_schedule.md`.
