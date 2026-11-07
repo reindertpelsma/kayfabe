@@ -169,6 +169,11 @@
       "opt_in": "scripts/bench/guest_ringtrace_build.sh",
       "reason": "Explicit guest ring diagnostic; stamps RINGTRACE_GUEST=1 and must never grade a stock boot."
     },
+    "scripts/bench/windows/appmatrix/directx_vrs_gate.patch": {
+      "kind": "opt-in",
+      "opt_in": "scripts/bench/windows/appmatrix/build_release_bundle.ps1",
+      "reason": "R2 review, 2026-11-07: explicit offline bundle-build opt-in patches only Microsoft's DirectX VRS test program in a temporary source worktree. release_bundle.py validates the patch receipt/hash; neither path modifies the NVIDIA driver, QEMU or guest OS, and no stock kayfabe install applies this sample patch."
+    },
     "scripts/rpctrace/rpctrace-575.51.03.patch": {
       "kind": "opt-in",
       "opt_in": "scripts/rpctrace/build_instrumented.sh",
@@ -272,6 +277,8 @@
   },
   "applicators": {
     "scripts/bench/guest_ringtrace_build.sh": "d8a3230493653fd4cdb43e03f39be1d3179efe470978156e8ef7e396bb81fff3",
+    "scripts/bench/windows/appmatrix/build_release_bundle.ps1": "d5d3fce6b1e27507e127d788f10bfd3efe6da2d915a2c7d3f3e38a2dced3ad51",
+    "scripts/bench/windows/appmatrix/release_bundle.py": "d7fe73f9e43561967c28a9b4ed60d2d18286aa8bb3dd31fba66ab8ae6e753f07",
     "scripts/bench/windows/host_tools/build/build-observer.sh": "76dc96f5f629c2d306fd6d0c1ca949b47ccf11dd5765172139d81f0b3ffd84c1",
     "scripts/bench/windows/host_tools/misc/root_home/deploy.sh": "6f59791007b9d404098c4b0cb5646fe13636415d7381c43f584b82c3abdea85a",
     "scripts/bench/windows/host_tools/misc/root_home/deploy2.sh": "8cb52f3243928709fdab85c8590b4df076b4a19ad4a6db18a843d736ae11b4be",

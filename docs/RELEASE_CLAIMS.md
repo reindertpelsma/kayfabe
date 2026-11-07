@@ -161,6 +161,16 @@ The public manual must affirm that stock host and guest NVIDIA drivers are unmod
 that wording issue. Custom QEMU device integration is documented separately from optional
 diagnostic QEMU patching in `docs/howto/installing.md`.
 
+CODE READ, 2026-11-07, J1 integration review: the DirectX VRS patch is an **opt-in
+test-program source patch**, applied by the separate offline
+`scripts/bench/windows/appmatrix/build_release_bundle.ps1` in a temporary Microsoft
+sample worktree. It does not modify the NVIDIA driver, QEMU or guest OS. The
+inventory's reviewer note records that scope and points at the explicit builder;
+both its PowerShell source and `release_bundle.py` (receipt/hash validation only)
+are review-hash pinned. PowerShell `.ps1` files participate in the same application
+detection and stock call graph as shell/Python scripts. Every newly discovered
+patch still fails until its classification, scope note and opt-in pointer are reviewed.
+
 LIMIT: the call graph follows literal script names/basenames and Python imports, including
 shell heredocs. It is a static regression check, not a proof about dynamic dispatch, arbitrary
 source rewrites or vendor installer contents. Constructed runtime file paths are exercised by

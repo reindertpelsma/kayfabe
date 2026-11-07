@@ -46,7 +46,7 @@ def script_sources(root: Path) -> dict[str, str]:
                 or "mutation" in path.name
             ):
                 continue
-            if path.suffix not in {".sh", ".py", ".js", ".mjs", ""}:
+            if path.suffix not in {".sh", ".py", ".ps1", ".js", ".mjs", ""}:
                 continue
             text = path.read_text(errors="replace")
             if path.suffix == "" and not text.startswith("#!"):

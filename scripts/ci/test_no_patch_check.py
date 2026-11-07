@@ -5,6 +5,7 @@
 import hashlib
 import json
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -14,6 +15,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import no_patch_check as check
 
 HERE = Path(__file__).resolve().parent
+RELEASE_DIR = "scripts/bench/windows/appmatrix/"
+RELEASE_PATCH = RELEASE_DIR + "directx_vrs_gate.patch"
+RELEASE_BUILDER = RELEASE_DIR + "build_release_bundle.ps1"
+RELEASE_VALIDATOR = RELEASE_DIR + "release_bundle.py"
 
 
 class Policy(unittest.TestCase):
@@ -123,6 +128,14 @@ class Policy(unittest.TestCase):
             "opt_in"
         ] = "docs/absent.md"
         self.assertIn("opt-in pointer", self.errors())
+
+    def test_missing_scope_reason_fails(self):
+        del self.inventory["patches"]["docs/kernel_patches/a.patch"]["reason"]
+        self.assertIn("missing scope reason", self.errors())
+
+    def test_empty_scope_reason_fails(self):
+        self.inventory["patches"]["docs/kernel_patches/a.patch"]["reason"] = ""
+        self.assertIn("missing scope reason", self.errors())
 
     def test_new_patch_command_in_stock_path_fails(self):
         self.write(
@@ -279,6 +292,108 @@ class Policy(unittest.TestCase):
     def test_unknown_classification_fails(self):
         self.inventory["patches"]["docs/kernel_patches/a.patch"]["kind"] = "safe"
         self.assertIn("classification", self.errors())
+
+
+class ReleaseBundlePolicy(unittest.TestCase):
+    """Review the committed registration and real sources without executing a build."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix="kf-release-patch-test-")
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.write(
+            "docs/howto/installing.md",
+            (HERE / "fixtures/release_checks/patch-policy.md.txt").read_text(),
+        )
+        self.write("scripts/install.sh", "#!/bin/sh\necho stock install\n")
+        for rel in (RELEASE_PATCH, RELEASE_BUILDER, RELEASE_VALIDATOR):
+            target = self.root / rel
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(HERE.parents[1] / rel, target)
+        real = json.loads((HERE / "no-patch-inventory.json").read_text())
+        self.inventory = {
+            "version": 1,
+            "entrypoints": ["scripts/install.sh"],
+            "policy_doc": "docs/howto/installing.md",
+            "patches": {
+                rel: item for rel, item in real["patches"].items()
+                if rel == RELEASE_PATCH
+            },
+            "applicators": {
+                rel: digest for rel, digest in real["applicators"].items()
+                if rel in (RELEASE_BUILDER, RELEASE_VALIDATOR)
+            },
+        }
+
+    # Reuse only fixture I/O; inheriting Policy would rerun all unrelated cases.
+    write = Policy.write
+    errors = Policy.errors
+    cli = Policy.cli
+
+    def test_reviewed_sample_build_is_separate_from_stock_install(self):
+        self.assertEqual(self.errors(), "")
+
+    def test_cli_reports_sample_scope_and_reviewer(self):
+        result = self.cli()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn(f"| `{RELEASE_PATCH}` | opt-in | `{RELEASE_BUILDER}` |", result.stdout)
+        self.assertIn("R2 review, 2026-11-07", result.stdout)
+        self.assertIn("test program", result.stdout)
+
+    def test_registration_describes_explicit_test_program_build(self):
+        item = self.inventory["patches"][RELEASE_PATCH]
+        self.assertEqual(item["kind"], "opt-in")
+        self.assertEqual(item["opt_in"], RELEASE_BUILDER)
+        for phrase in ("R2 review, 2026-11-07", "test program", "NVIDIA", "QEMU", "guest OS"):
+            self.assertIn(phrase, item["reason"])
+
+    def test_removed_sample_registration_is_rejected(self):
+        self.inventory["patches"].pop(RELEASE_PATCH, None)
+        self.assertIn(f"unregistered patch: {RELEASE_PATCH}", self.errors())
+
+    def test_unreviewed_receipt_validator_is_rejected(self):
+        self.inventory["applicators"].pop(RELEASE_VALIDATOR, None)
+        self.assertIn(f"unreviewed patch applicator/reference: {RELEASE_VALIDATOR}", self.errors())
+
+    def test_unreviewed_powershell_builder_is_rejected(self):
+        self.inventory["applicators"].pop(RELEASE_BUILDER, None)
+        self.assertIn(f"unreviewed patch applicator/reference: {RELEASE_BUILDER}", self.errors())
+
+    def test_receipt_validator_change_requires_review(self):
+        path = self.root / RELEASE_VALIDATOR
+        path.write_text(path.read_text() + "\n# changed receipt validation\n")
+        self.assertIn(f"{RELEASE_VALIDATOR}: review hash changed", self.errors())
+
+    def test_powershell_builder_change_requires_review(self):
+        path = self.root / RELEASE_BUILDER
+        path.write_text(path.read_text() + "\n# changed source build\n")
+        self.assertIn(f"{RELEASE_BUILDER}: review hash changed", self.errors())
+
+    def test_new_powershell_git_apply_is_rejected(self):
+        self.write("scripts/helper.ps1", "& git -C $Source apply $input\n")
+        self.assertIn("unreviewed patch applicator/reference: scripts/helper.ps1", self.errors())
+
+    def test_new_powershell_git_am_is_rejected(self):
+        self.write("tools/helper.ps1", "& git am $input\n")
+        self.assertIn("unreviewed patch applicator/reference: tools/helper.ps1", self.errors())
+
+    def test_stock_path_cannot_start_sample_builder(self):
+        self.write("scripts/install.sh", f"pwsh -File {RELEASE_BUILDER}\n")
+        self.assertIn(f"stock path reaches opt-in applicator: {RELEASE_BUILDER}", self.errors())
+
+    def test_stock_path_cannot_reach_builder_through_powershell(self):
+        self.write("scripts/install.sh", "pwsh -File scripts/helper.ps1\n")
+        self.write("scripts/helper.ps1", f"& $PSScriptRoot/appmatrix/{Path(RELEASE_BUILDER).name}\n")
+        self.assertIn(f"stock path reaches opt-in applicator: {RELEASE_BUILDER}", self.errors())
+
+    def test_stock_path_cannot_start_receipt_reference(self):
+        self.write("scripts/install.sh", f"python3 {RELEASE_VALIDATOR}\n")
+        self.assertIn(f"stock path reaches opt-in applicator: {RELEASE_VALIDATOR}", self.errors())
+
+    def test_stock_path_cannot_import_receipt_reference(self):
+        self.write("scripts/install.sh", "python3 scripts/helper.py\n")
+        self.write("scripts/helper.py", "from release_bundle import assets\n")
+        self.assertIn(f"stock path reaches opt-in applicator: {RELEASE_VALIDATOR}", self.errors())
 
 
 if __name__ == "__main__":

@@ -19,6 +19,18 @@ UVM and H5 host-driver experiments, guest bring-up/ring/RPC instrumentation, and
 QEMU observer. These require a separate explicit diagnostic build or application command;
 a run with an instrumented driver does not establish a stock-driver result.
 
+**CODE READ, 2026-11-07:** the optional offline release-bundle builder,
+`scripts/bench/windows/appmatrix/build_release_bundle.ps1`, applies
+`directx_vrs_gate.patch` to the Microsoft DirectX VRS test program in a temporary
+source worktree. Running this separate builder is the opt-in; it changes neither
+the NVIDIA driver, QEMU nor the guest OS. `release_bundle.py` only validates the
+resulting source/patch receipt and file hashes. The stock installation does not
+apply this test-program patch.
+<!-- src: scripts/bench/windows/appmatrix/build_release_bundle.ps1,
+     scripts/bench/windows/appmatrix/directx_vrs_gate.patch,
+     scripts/bench/windows/appmatrix/release_bundle.py,
+     scripts/ci/no-patch-inventory.json -->
+
 The QEMU build still adds the `kf3-gpu` device and its Meson/Kconfig integration as described in
 [Building from source](building.md). This is a custom QEMU build; “stock drivers” does not mean
 an unmodified distribution QEMU binary. The optional observer patch is separate from that integration.

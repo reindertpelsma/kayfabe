@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 """Mutate the real release-check rules in isolated scratch trees; >=2 tests per mutant."""
 
+import json
 from pathlib import Path
 import re
 import shutil
@@ -10,6 +11,10 @@ import sys
 import tempfile
 
 HERE = Path(__file__).resolve().parent
+RELEASE_DIR = "scripts/bench/windows/appmatrix/"
+RELEASE_PATCH = RELEASE_DIR + "directx_vrs_gate.patch"
+RELEASE_BUILDER = RELEASE_DIR + "build_release_bundle.ps1"
+RELEASE_VALIDATOR = RELEASE_DIR + "release_bundle.py"
 
 
 def changed(file, old, new):
@@ -18,8 +23,54 @@ def changed(file, old, new):
     return file, source.replace(old, new)
 
 
+def registry_changed(update):
+    inventory = json.loads((HERE / "no-patch-inventory.json").read_text())
+    update(inventory)
+    return "no-patch-inventory.json", json.dumps(inventory, indent=2) + "\n"
+
+
 def cases():
     return [
+        (
+            "release-vrs-registration-removed",
+            registry_changed(lambda data: data["patches"].pop(RELEASE_PATCH)),
+        ),
+        (
+            "release-vrs-classified-as-archive",
+            registry_changed(lambda data: data["patches"][RELEASE_PATCH].update(kind="archive-only")),
+        ),
+        (
+            "release-vrs-build-opt-in-pointer-lost",
+            registry_changed(lambda data: data["patches"][RELEASE_PATCH].update(opt_in=RELEASE_PATCH)),
+        ),
+        (
+            "release-vrs-reviewer-note-lost",
+            registry_changed(lambda data: data["patches"][RELEASE_PATCH].update(reason="")),
+        ),
+        (
+            "release-receipt-reference-unregistered",
+            registry_changed(lambda data: data["applicators"].pop(RELEASE_VALIDATOR)),
+        ),
+        (
+            "release-powershell-builder-unregistered",
+            registry_changed(lambda data: data["applicators"].pop(RELEASE_BUILDER)),
+        ),
+        (
+            "release-receipt-reference-wrong-hash",
+            registry_changed(lambda data: data["applicators"].update({RELEASE_VALIDATOR: "0" * 64})),
+        ),
+        (
+            "release-powershell-builder-wrong-hash",
+            registry_changed(lambda data: data["applicators"].update({RELEASE_BUILDER: "0" * 64})),
+        ),
+        (
+            "patch-powershell-scripts-ignored",
+            changed("no_patch_check.py", '".py", ".ps1", ".js"', '".py", ".js"'),
+        ),
+        (
+            "patch-scope-reason-unchecked",
+            changed("no_patch_check.py", 'if not item.get("reason"):', "if False:"),
+        ),
         (
             "patch-cli-failure-hidden",
             changed("no_patch_check.py", "return int(bool(errors))", "return 0"),
@@ -179,7 +230,7 @@ def run(file=None, source=None):
     else:
         test = (
             "test_no_patch_check.py"
-            if file == "no_patch_check.py"
+            if file in {"no_patch_check.py", "no-patch-inventory.json"}
             else "test_clean_clone_check.py"
         )
     with tempfile.TemporaryDirectory(prefix="kf-release-mutant-") as temp:
@@ -193,6 +244,7 @@ def run(file=None, source=None):
             "clean_clone_check.sh",
             "clean_clone_inputs.py",
             "no_patch_check.py",
+            "no-patch-inventory.json",
             "test_clean_clone_check.py",
             "test_no_patch_check.py",
             "test_release_checks_workflows.py",
@@ -202,6 +254,10 @@ def run(file=None, source=None):
         shutil.copytree(
             HERE / "fixtures/release_checks", ci / "fixtures/release_checks"
         )
+        for rel in (RELEASE_PATCH, RELEASE_BUILDER, RELEASE_VALIDATOR):
+            target = root / rel
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(HERE.parents[1] / rel, target)
         workflows = root / ".github/workflows"
         workflows.mkdir(parents=True)
         for name in ("ci.yml", "release-claims.yml"):
