@@ -99,7 +99,11 @@ export function tierEnvironment(profile, { tierName, windowsRuns = 1, stages = [
     env.KF_STAGES = stages.join(':');
   }
   if (spec !== undefined) {
-    if (profile !== 'release' || !stages.includes('specviewperf') || !['lanea', 'laneb', 'both'].includes(spec))
+    if (
+      profile !== 'release' ||
+      !stages.includes('specviewperf') ||
+      !['lanea', 'laneb', 'both'].includes(spec)
+    )
       throw Error('spec');
     env.KF_SPEC = spec;
   }

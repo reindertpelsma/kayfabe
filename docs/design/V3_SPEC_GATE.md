@@ -212,10 +212,10 @@ Worker rents 120 GB today, `ci/vast-broker/src/vast.js` `disk: 120`, `defaults.j
 
 GPU-free, all in `scripts/ci/` (run by the `Vast box scripts` workflow, which discovers `test_vast*.py`):
 
-- `test_vast_spec_lane.py` (100 tests): lanes, time guard, grading with replayed real evidence (the 2026-11-05 kayfabe medical, solidworks,
+- `test_vast_spec_lane.py` (101 tests): lanes, time guard, grading with replayed real evidence (the 2026-11-05 kayfabe medical, solidworks,
   maya, energy runs PASS; the kayfabe catia-07 run FAIL with the failed subtests named; the 2026-11-07 native catia-07 run PASS), the
   stage decision, the scrub, the tar filter, the command line.
-- `test_vast_spec_stage.py` (115 tests): the REAL stage script against fakes (`spec_stage_fakes.py`: a fake `win_vm.sh` over a scenario directory,
+- `test_vast_spec_stage.py` (123 tests): the REAL stage script against fakes (`spec_stage_fakes.py`: a fake `win_vm.sh` over a scenario directory,
   a fake fetch helper, a clock that moves only when the stage sleeps): happy path for each lane, inputs and media, preflight, copy
   (the filtered stream is captured and inspected), teardown (the archive and the overlay are gone after a pass, a failure, a setup
   failure and a TERM), every verdict row, the gather retry, the settle wait, the time guard, scores, the wrapper and a TERM.
@@ -223,9 +223,13 @@ GPU-free, all in `scripts/ci/` (run by the `Vast box scripts` workflow, which di
   check, the stage through `main()` (order, command, disk size, retry rows).
 - `test_vast_run_report.py`: the new `SpecStatusRows` class. `test_vast_payload_tiers.py` and `test_vast_payload_v7.py` were adapted
   (the lane is required).
-- Mutants, each killed by at least two tests: `payload_mutants.py` (the 19 `spec-*` cases), `spec_stage_mutants.py` (73: the lane,
+- Mutants, each killed by at least two tests: `payload_mutants.py` (the 19 `spec-*` cases), `spec_stage_mutants.py` (74: the lane,
   filter, stage and wrapper rules), `run_report_mutants.py` (8 `spec-*` cases), plus the node tests of `tier.js`
   (`ci/vast-broker/test/tiers-release.test.js`).
+
+CI (`.github/workflows/vast-box-scripts.yml`): the job `gpu-free` runs these tests with the rest of `test_vast*.py`; the stage mutants
+run in their own job `spec-stage` (a run starts the real stage script a few thousand times). MEASURED on GitHub's runner for PR #291
+(2026-11-07, `ubuntu-latest`, the 26.04 image): the baseline of 224 tests plus all 74 stage mutants took 4 min 54 s with 4 jobs.
 
 ## 11. What a first real run needs, and open questions
 
