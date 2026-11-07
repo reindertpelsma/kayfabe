@@ -1,5 +1,7 @@
 # display-max-fps — owner decisions (2026-10-04), authoritative over fps_design.json §13
 
+**STATUS: SUPERSEDED, 2026-11-07.** The owner's display-max-fps decisions D1-D5 of 2026-10-04, kept as the dated input. They are carried into, and in part amended by, [`OWNER_RULINGS.md`](../../OWNER_RULINGS.md) (§M for D1-D5, and §AK, which replaces D1's tearing gate on 2026-10-17); read there for the current rule. Read on 2026-11-07: §M carries D1 to D5 and marks D1 superseded.
+
 Owner, verbatim: "Why copying when not flipping. Yes a tearing copy seems not great though. The rest seems good to md"
 
 - D1 tearing gate: ON. Tearing/async flips count against the cap (in kayfabe a flip copies a finished

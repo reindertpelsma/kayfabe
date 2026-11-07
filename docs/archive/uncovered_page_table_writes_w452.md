@@ -1,3 +1,5 @@
+> **STATUS: SUPERSEDED, 2026-09-21** (archived, w822). Successor: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) and [`THE_ARCHITECTURE_v3.md`](../design/THE_ARCHITECTURE_v3.md). Historical record: a `STATUS` line further down says what the document claimed when it was written; it is no longer a claim about the current tree.
+>
 > ⊘⊘⊘ **ARCHIVED — THIS DESCRIBES A SUPERSEDED ARCHITECTURE. IT IS REFERENCE, NOT CURRENT.**
 > The live design is `docs/design/THE_DESIGN.md`. This file is kept because its *measurements*,
 > its *ogkm findings* and its *reasoning* remain useful — its **architecture does not**. Do not
@@ -5,7 +7,7 @@
 
 # The page-table writes our three signals do NOT cover
 
-**STATUS: LIVE, 2026-09-11.** Source audit of `ogkm-580.159.04`, not a census.
+**STATUS AT WRITING: LIVE, 2026-09-11.** Source audit of `ogkm-580.159.04`, not a census.
 
 > **Owner:** *"at this point instrumentation is to confirm, not to reason from. I would start a
 > subagent that checks if all our 3 paths are sufficient to cover any PTE/PDB update, except

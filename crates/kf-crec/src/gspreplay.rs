@@ -171,24 +171,6 @@ impl ObservationLog {
             })
             .collect()
     }
-
-    /// The kinds that were never observed. **The non-vacuity instrument**: an assertion
-    /// over a log whose relevant kind is in this list is measuring nothing.
-    #[must_use]
-    pub fn unseen_kinds(&self) -> Vec<&'static str> {
-        [
-            "TxHeaderPublished",
-            "ElementPosted",
-            "ReadPtrAcked",
-            "WritePtrAdvanced",
-            "RegisterServed",
-            "IrqRaised",
-            "Refused",
-        ]
-        .into_iter()
-        .filter(|k| self.count(k) == 0)
-        .collect()
-    }
 }
 
 /// A forward map from the structures we publish to their guest-physical addresses.
@@ -347,13 +329,6 @@ impl<'a> RecordingRam<'a> {
             reads: 0,
             writes: 0,
         }
-    }
-
-    /// Attach a projection, so writes decode into observations.
-    #[must_use]
-    pub fn with_projection(mut self, p: Projection) -> RecordingRam<'a> {
-        self.projection = Some(p);
-        self
     }
 
     /// Record a refusal into the log — the class-(2) assertion target.

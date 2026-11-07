@@ -1,8 +1,10 @@
 # Memory cacheability — the four deciders, the C's scars, and what `kayfabe-linux-raw` can and cannot enforce
 
-> **STATUS: LIVE — 2026-08-14 (w312).** Research + design record for `CachePolicy` in
+> **STATUS: RESEARCH, 2026-08-14 (w312).** Research + design record for `CachePolicy` in
 > `kayfabe-linux-raw` (`l1_os_shell.md` §4). Supersede it in place; do not write a successor
 > beside it.
+>
+> Read on 2026-11-07: the file cites the C tree, `ogkm` files and the pre-v3 `kayfabe-vmm` crate (now under `archive/crates/`) by paths that do not resolve in this tree, so it was downgraded from LIVE; `crates/kf-linux-raw/src/cache.rs` and `memtype.rs` still carry the `CachePolicy` design it records. The w312 note follows as written.
 >
 > **§§0–6 are unchanged and still current.** ★ **§7 and §8 are new in w312** and are the
 > reason to re-read this file: §7 records the owner's *"map everything write-back in the VMM"*

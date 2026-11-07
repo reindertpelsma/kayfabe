@@ -1,5 +1,7 @@
 # The NVIDIA ABI oracles — what each one says, and where they disagree
 
+**STATUS: RESEARCH, 2026-07-28.** Cited comparison of the ABI oracles (ogkm 610.43.02 and 580.159.04, gVisor nvproxy, the C artifact) behind the pre-v3 `crates/kayfabe-abi`. Read on 2026-11-07: that crate and its `oracle_layout` test still exist beside `crates/kf-abi`, but the oracle checkouts it cites sit outside this repository and v3 generates offsets from ogkm (see [../../ARCHITECTURE.md](../../ARCHITECTURE.md)), so check any row before reuse.
+
 **What this file is.** The cited ground truth behind `crates/kayfabe-abi`, kept in
 `docs/reference/` per this repo's convention: facts with a `file:line`, correctable in one
 place, deliberately *not* mixed into a design doc. Every number here is asserted by a test in

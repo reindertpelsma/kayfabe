@@ -2545,7 +2545,7 @@ impl Pump {
         if self.trace.is_some() {
             // Measurement only: the OLD ring at the switch (our cursor, the guest's PUT/GET, the
             // entries around our cursor), to compare with the new ring's first entries.
-            let mut word = |off: u64| {
+            let word = |off: u64| {
                 let mut b = [0u8; 4];
                 r.userd
                     .read(me, r.key, &r.allocation, off, &mut b)
@@ -2650,7 +2650,7 @@ impl Pump {
         }
         if self.trace.is_some() {
             // Measurement only: what the guest's NEW ring holds at the switch.
-            let mut word = |off: u64| {
+            let word = |off: u64| {
                 let mut b = [0u8; 4];
                 r.userd
                     .read(me, r.key, &r.allocation, off, &mut b)

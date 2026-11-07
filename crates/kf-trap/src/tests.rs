@@ -613,8 +613,6 @@ fn a_full_privileged_ring_poisons_rather_than_waiting() {
 
 // ---- §7 channels -----------------------------------------------------------------------------
 
-use std::sync::atomic::AtomicBool;
-
 #[test]
 fn the_model_check_finds_the_single_cas_claim_bug() {
     // ★★★ THE KNOWN-POSITIVE FOR THE CHECKER ITSELF. A model checker that reports "no

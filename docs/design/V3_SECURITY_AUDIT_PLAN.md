@@ -1,7 +1,6 @@
 # V3 security audit — plan and gate
 
-**STATUS: PLAN, 2026-10-03 (owner request). Stage 1 written up the same day (§6); stage 2 not
-started.** This document records what the audit must cover, how, and when. Findings go into their
+**STATUS: DESIGN-ONLY, 2026-10-04.** Audit plan written 2026-10-03 at the owner's request; last git change 2026-10-04. Stage 1 was written up in [docs/audits/2026-10-03-v3-stage1.md](../audits/2026-10-03-v3-stage1.md) (§6) and is done; stage 2 is the part not built, and read on 2026-11-07 `docs/audits/` holds no stage-2 findings document. The gate (no public binary before every stage-2 blocker is closed or accepted by the owner) is recorded in `docs/OWNER_RULINGS.md`. This document records what the audit must cover, how, and when. Findings go into their
 own dated documents and are linked from §6; the stage-1 blockers and majors are in §4.
 
 ## 0. Why, and when

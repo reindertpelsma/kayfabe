@@ -1,5 +1,7 @@
 # Running the whole suite on real hardware — and the census of what runs where
 
+**STATUS: SUPERSEDED, 2026-11-07.** It documents `scripts/run_full_suite.sh` and its per-box profile census, and that script is not in the tree today (read on 2026-11-07); the pre-v3 `AGENTS.md` that described it is in git history. The surviving ruling, that GitHub CI is opportunistic and real hardware defines green, and the current gates are in [../../AGENTS.md](../../AGENTS.md) (section *Verification*) and [../CI_V3.md](../CI_V3.md).
+
 **Status:** measured 2026-07-30 on a rented RTX 3090 (GA102) box, 38 cores / 73 GB, driver
 580.159.04, `HEAD = 5c4cb0d` + this branch. Every number below was produced by
 `scripts/run_full_suite.sh` on that box; nothing here is inferred from CI.

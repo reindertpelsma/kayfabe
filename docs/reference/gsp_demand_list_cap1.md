@@ -1,5 +1,7 @@
 # The GSP demand list of `cap1_coldboot_hermetic`, and what each entry IS
 
+**STATUS: ANSWERED, 2026-08-03.** Task #179: the ordered demand list of `cap1_coldboot_hermetic` (a trace of a boot that fails, so a lower bound) and a DATA/ACT classification of its 53 controls. The result is recorded and the file is not updated; read on 2026-11-07, `scripts/demand_list.py`, `scripts/rm_ctrl_index.py` and `traces/cap1_coldboot_hermetic.rec` are still in the tree.
+
 **Task #179, the `replay-conformance` line.** Two answers — an ordered **demand list** and a
 **DATA-vs-ACT** classification of every control in it — and two warnings (§1, §2) that must
 be read before either is used.

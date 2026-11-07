@@ -1,7 +1,9 @@
 # V3 headless-graphics test set — nvkvm-pv's headless graphics workloads on kayfabe v3
 
+**STATUS: ANSWERED, 2026-09-26.** The question was whether nvkvm-pv's headless graphics set passes on v3; the result recorded below is 38/38 in the guest at `d06833f0` (run `gs3`, RTX 3070). Last git change 2026-09-30 (§0 R4: bare metal only, the guest set was not re-run). Read on 2026-11-07: the set's scripts live under `scripts/bench/gfxset/` and are run by `scripts/bench/gfx_suite.sh`; this document is not updated with later runs. Current results: [`docs/STATUS_DETAIL.md`](../STATUS_DETAIL.md).
+
 ★ *2026-09-30 (§0, R4): bare metal 38/38 on a new RTX 3070 box at `738c90e5`; the guest set was not re-run.*
-**STATUS: LIVE, 2026-09-26 (branch `v3-gfxset`; the head to merge is `d06833f0` = master `59cc98a9` + this
+**Original status line, 2026-09-26 (branch `v3-gfxset`; the head to merge is `d06833f0` = master `59cc98a9` + this
 branch).** Measured on one RTX 3070 (GA104, vast 52775275, destroyed after the run; every result is in
 `traces/v3_gfxset/`). **All 38 items pass at `d06833f0` (`gs3`, 38/38)**: nvkvm-pv's 25 headless rows in 23
 items plus 15 extra. 31 items' outputs are byte-identical to bare metal on the same box (content digests),

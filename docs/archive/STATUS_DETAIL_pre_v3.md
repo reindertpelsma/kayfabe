@@ -1,3 +1,5 @@
+> **STATUS: SUPERSEDED, 2026-09-26** (archived). Successor: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) and [`THE_ARCHITECTURE_v3.md`](../design/THE_ARCHITECTURE_v3.md). Historical record: a `STATUS` line further down says what the document claimed when it was written; it is no longer a claim about the current tree.
+>
 > ⊘⊘⊘ **ARCHIVED 2026-09-26 — THIS DESCRIBES THE PRE-v3 TREE. IT IS REFERENCE, NOT CURRENT.**
 > It was `docs/STATUS_DETAIL.md` until the v3 docs rewrite. The live replacement is [`docs/STATUS_DETAIL.md`](../STATUS_DETAIL.md). The crates it
 > names (`kayfabe-core`, `-fwd`, `-rt`, `-shell`, `-qemu-raw`, …) are frozen or archived; do not
@@ -6,7 +8,7 @@
 
 # Status in detail — what runs, what does not, and how it was measured
 
-> ### STATUS — 2026-09-06 / **LIVE**
+> ### STATUS AT WRITING — 2026-09-06 / **LIVE**
 >
 > This file is the long-form status that used to live in `README.md`. It was moved here on
 > 2026-09-06 so the front page could be read by a human in a minute; **nothing was deleted**,

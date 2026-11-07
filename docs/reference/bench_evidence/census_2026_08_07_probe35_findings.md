@@ -1,5 +1,7 @@
 # Boot census, 2026-08-07 — the notifier-35 probe MOVES the wall, and surfaces the aliasing bug
 
+**STATUS: ANSWERED, 2026-08-07.** Findings of two boots at source revision `6c51da7` of the pre-v3 tree (stock vs. notifier-35 probe) that showed index 35 is a gate and not a hang; the result is recorded and the file is not updated. Read on 2026-11-07: the probe and the boot path it describes belong to the frozen pre-v3 tree, not to the v3 `kf-*` crates; current status is in [../../STATUS_DETAIL.md](../../STATUS_DETAIL.md).
+
 Source revision **`6c51da7`** (archive rev stamped in the binary; QEMU 10.2.4 + KVM, bench
 `vh` = RTX 3060 GA106, guest NVIDIA open 580.159.04). Two boots, both through
 `scripts/bench/boot_capture.sh`, dmesg + census committed beside this file.

@@ -1,5 +1,7 @@
 # The `UVM_MAP_EXTERNAL_ALLOCATION` wall
 
+**STATUS: ANSWERED, 2026-09-14.** A pre-v3 investigation of why `cuCtxCreate` hung in `UVM_MAP_EXTERNAL_ALLOCATION`; the box below records the answer (w707/w708, last git change 2026-09-14) and the sections after it are the hunt, kept as written. Read on 2026-11-07, the code it names (`MAX_ENTRIES_PER_DOORBELL`, `CeUtilsRun::stranded`) is under `archive/crates/kayfabe-rt/`, not in a `kf-*` crate, so this is history and not a description of the v3 tree.
+
 > # ★★★★★ SOLVED (w707/w708) — `CUP3_VAL=43`. READ THIS, THEN THE HUNT BELOW.
 >
 > **The cause:** `MAX_ENTRIES_PER_DOORBELL = 8` documents itself as leaving the remainder *"for
@@ -26,7 +28,7 @@
 > of them.
 
 
-**STATUS: LIVE, 2026-09-13 (w695i/w695j).** Measured, not inferred. Supersedes every earlier
+Original status line (2026-09-13, w695i/w695j, then marked live): measured, not inferred. Supersedes every earlier
 account of the `cuCtxCreate` wall in this campaign — in particular the w694 reading
 (*"the projection never files cuCtxCreate's channels"*), which is **refuted**: see §4.
 

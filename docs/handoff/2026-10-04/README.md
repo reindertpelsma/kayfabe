@@ -1,6 +1,6 @@
 # Handoff inputs, 2026-10-04
 
-**STATUS: ARCHIVE OF INPUTS, 2026-10-04.** These are the machine-readable results of the review and
+**STATUS: RESEARCH, 2026-10-04.** An archive of inputs: these are the machine-readable results of the review and
 design workflows run on 2026-10-03/04. Until now they existed only in a session scratch directory.
 They are committed so work can resume from the repo alone, by any agent or person. Each one is
 superseded by the design doc on its lane's branch as soon as that branch folds it in. Read the lane's

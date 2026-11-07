@@ -1,5 +1,7 @@
 # Product positioning — what kayfabe sells, and to whom
 
+**STATUS: RESEARCH, 2026-10-01.** Owner decisions of 2026-08-08 plus the 2026-10-01 audience update: positioning, opinion and direction, with sourced competitor quotes (cited by [`FAQ.md`](FAQ.md)), not a record of what the code does. Its hardware and feature claims are history; they stop at 2026-10-01 and the current state is in [`STATUS_DETAIL.md`](STATUS_DETAIL.md), [`../README.md`](../README.md) and [`STATUS_AND_HANDOFF.md`](STATUS_AND_HANDOFF.md). The last git change to this file was 2026-10-01; the 2026-11-07 review was a read of the opening, the section headings and the closing sections, with no re-check of the claims against the current tree.
+
 > ### ★ STATUS UPDATE — 2026-10-01: who it is for, after issue #1 and an owner discussion
 > Issue #1 (native-context advocates) argued kayfabe matters only where NVIDIA's own stack is needed on
 > Windows. Owner and coordinator converged on a wider but sharper answer. Opinion and direction, not

@@ -1,14 +1,14 @@
 # V3 FAMILY PORT — Ada (AD106, RTX 4060 Ti): the first non-GA106 boot
 
-> **UPDATED 2026-09-26 (branch `v3-families`, off `v3-bar1db`):** §2's second table, §3 and §5 are
-> corrected in place — six of the GA10x-only items are now derived (host control / sysfs / ogkm HAL),
-> Turing has a GSP model, and GA100 is refused by name. Source-only, **hardware-unverified** (no box).
-
 **STATUS: ANSWERED, 2026-09-26 (branch `v3-family`, head `6ccb4585` + this doc).** kf3 boots a
 stock 580.159.04 guest over an **AD106** host and the thin guest passes **30/30** (twice: `ada2`
 at `1d6bb323`, `ada3` at `6ccb4585`), every arm `forwarded>0`, `emulated=0`. Bare metal on the
 same box: **30/30** after one client fix (29/30 before it). One Ada-only boot blocker was found
 and fixed as a per-family data row; A/B-confirmed on hardware.
+
+> **UPDATED 2026-09-26 (branch `v3-families`, off `v3-bar1db`):** §2's second table, §3 and §5 are
+> corrected in place — six of the GA10x-only items are now derived (host control / sysfs / ogkm HAL),
+> Turing has a GSP model, and GA100 is refused by name. Source-only, **hardware-unverified** (no box).
 
 Box: vast `52660152`, RTX 4060 Ti 16 GB (`0x2803`, AD106, arch `0x190` impl 6), AMD EPYC 7K62
 (nested KVM guest), host driver swapped 575.51.03 → **580.159.04 (open)**. Destroyed at the end of

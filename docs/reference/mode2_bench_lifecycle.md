@@ -1,5 +1,7 @@
 # Mode-2 bench lifecycle — what the C artifact actually does at teardown
 
+**STATUS: RESEARCH, 2026-07-26.** Reference record of how the C Mode-2 research artifact behaved at teardown (process exit, driver restart, idle release, kill mid-ioctl) on a rented GA106 bench on 2026-07-25/26. Read on 2026-11-07: the artifact and that bench are outside this tree and the file predates v3, so its rows describe the C artifact only and are not a statement about `kf-*`.
+
 **What this file is.** Measured behaviour of the **C Mode-2 research artifact**
 (`/workspace/nvidia-gpu-passthrough`, `src/qemu/nvkvm_gpu_emul.c`) on the serialized vast.ai
 bench, on the lifecycle paths the Rust rewrite has to reproduce: process exit, driver restart,

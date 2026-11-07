@@ -390,12 +390,6 @@ impl FrameRing {
         self.count
     }
 
-    /// Whether publishes feed the broker.
-    #[must_use]
-    pub fn feeds_broker(&self) -> bool {
-        self.broker
-    }
-
     fn occupied(s: u32) -> u32 {
         let mut m = held(s);
         for f in [front(s), console_ready(s), broker_ready(s)] {

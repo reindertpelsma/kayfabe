@@ -1,5 +1,13 @@
 # The C reference replay traces — the standing oracle
 
+**STATUS: LIVE, 2026-11-07.** ★ 2026-11-07 (owner decision, `docs/OWNER_QUESTIONS_2026-10-03.md` section 3, option (b)): every
+PROM read value (BAR0 `0x300000`-`0x3fffff`) in the two files below, and in the five `archive/nvkvm/traces/mode2_c_reference/*.rec.zst`,
+was replaced by zero with `scripts/evidence/scrub_prom.py`; every other record is byte-identical (one decode of the original and
+of the scrubbed file with `archive/nvkvm/scripts/mode2_diag/rec_dump.py`, line by line: 124,698 lines differ in `cap1b`, all of them
+PROM reads whose value became `0x0`; run 2026-11-07 at `a9dee7b2c`). The md5 column below is of the scrubbed files. The originals are
+still in git history until the history update before release. Where the bulk files of the other directories went:
+`traces/EVIDENCE_ARCHIVE.md`.
+
 `docs/design/c_rust_trace_differential.md` §4: **recorded traces are the durable artifact; a
 bootable C on a rented box is not.** So the artifact is committed here, uncompressed, and the
 harness that reads it (`crates/kayfabe-crec`) needs no decoder, no external binary and no
@@ -7,8 +15,8 @@ third-party crate.
 
 | file | records | md5 | properties |
 |---|---|---|---|
-| `cap1_coldboot_hermetic.rec` | 359 062 | `87c310e1afcf0ee44054d8462b117158` | `m2fwd=off m2exec=off m2romregs=off`, full mask — **HERMETIC** |
-| `cap1b_coldboot_hermetic_d6.rec` | 360 725 | `e503b6f797c1109532f9e3aa05ace9d7` | identical vector, plus BAR0 trace — **HERMETIC**, and **GSP-D6 witnessed** |
+| `cap1_coldboot_hermetic.rec` | 359 062 | `106afd5013b768d6ad8ff83efc68765a` | `m2fwd=off m2exec=off m2romregs=off`, full mask — **HERMETIC** |
+| `cap1b_coldboot_hermetic_d6.rec` | 360 725 | `a6e89bcd444ed88619b62c87065b6023` | identical vector, plus BAR0 trace — **HERMETIC**, and **GSP-D6 witnessed** |
 
 ## ★★★ Why there are two, and why the second one is the one a reply plane is differenced on
 
