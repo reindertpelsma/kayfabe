@@ -388,6 +388,10 @@ PY
 load_identity() {
   local f=$VM/identity.env k v
   VM_UUID="" VM_SERIAL="" VM_MAC=""
+  if [ -n "${WINVM_MACHINE_STATE:-}" ]; then
+    VM_UUID=$MS_UUID VM_SERIAL=$MS_SERIAL VM_MAC=$MS_MAC
+    return 0
+  fi
   if [ ! -e "$f" ]; then
     [ "${WINVM_VM_IDENTITY:-0}" = 1 ] || return 0
     install -d -m 0700 "$VM"
@@ -465,25 +469,51 @@ dry_qbin() { echo "${WINVM_QEMU:-$BENCH/kf3-bins/$(dry_rev)/qemu-system-x86_64}"
 # ------------------------------------------------------------------------------------------------
 # QEMU
 # ------------------------------------------------------------------------------------------------
+MS_CPU_BRAND="" MS_MACHINE_TYPE="" MS_RTC_BASE=""
 cpu_flags() {
+  local flags
   case "$1" in
-    A) echo "host,-vmx" ;;
-    B) echo "host,-vmx,hv-relaxed,hv-vapic,hv-spinlocks=0x1fff,hv-time,hv-vpindex,hv-synic,hv-stimer,hv-crash" ;;
+    A) flags="host,-vmx" ;;
+    B) flags="host,-vmx,hv-relaxed,hv-vapic,hv-spinlocks=0x1fff,hv-time,hv-vpindex,hv-synic,hv-stimer,hv-crash" ;;
     *) die "--arm must be A (no Hyper-V enlightenments) or B (with)" ;;
   esac
+  [ -z "${MS_CPU_BRAND:-}" ] || flags+=",model-id=$MS_CPU_BRAND"
+  echo "$flags"
+}
+# DESIGN-ONLY offline snapshot opt-in. No helper call or changed argv without the opt-in.
+machine_state_load() {
+  local values k v
+  MS_NICS=()
+  if [ -z "${WINVM_MACHINE_STATE:-}" ]; then
+    [ ! -e "$VM/machine-state.sha256" ] || die "applied VM requires WINVM_MACHINE_STATE"
+    return 0
+  fi
+  [ "${WINVM_NET_RESTRICT-on}" = on ] || die "offline machine state requires restricted networking"
+  values=$(python3 "$HERE/machine_state.py" qemu-env "$WINVM_MACHINE_STATE") || die "machine state refused"
+  while IFS='=' read -r k v; do
+    case "$k" in
+      MS_UUID) MS_UUID=$v ;; MS_SERIAL) MS_SERIAL=$v ;; MS_MAC) MS_MAC=$v ;;
+      MS_MANUFACTURER) MS_MANUFACTURER=$v ;; MS_PRODUCT) MS_PRODUCT=$v ;;
+      MS_MACHINE_TYPE) MS_MACHINE_TYPE=$v ;; MS_CORES) SMP=$v ;; MS_RAM_MB) RAM_MB=$v ;;
+      MS_RTC_BASE) MS_RTC_BASE=$v ;; MS_DISK_SERIAL) MS_DISK_SERIAL=$v ;;
+      MS_CPU_BRAND) MS_CPU_BRAND=$v ;; MS_NIC) MS_NICS+=("$v") ;;
+      *) die "unknown machine-state output field" ;;
+    esac
+  done <<< "$values"
+  SB=$VM/secureboot
 }
 qemu_common() {
   load_identity
   QA=(
     -name "$NAME,debug-threads=on"
     -object "memory-backend-memfd,id=ram0,size=${RAM_MB}M,share=on"
-    -machine "pc-q35-10.2,accel=kvm,smm=on,memory-backend=ram0" -m "$RAM_MB"
+    -machine "${MS_MACHINE_TYPE:-pc-q35-10.2},accel=kvm,smm=on,memory-backend=ram0" -m "$RAM_MB"
     -smp "$SMP,sockets=1,cores=$SMP,threads=1"
     -global driver=cfi.pflash01,property=secure,value=on
     -drive "if=pflash,format=raw,unit=0,readonly=on,file=$OVMF_CODE"
     -drive "if=pflash,format=raw,unit=1,file=$VM/firmware/OVMF_VARS.fd"
     -global ICH9-LPC.disable_s3=1 -global ICH9-LPC.disable_s4=1
-    -rtc base=utc,driftfix=slew -global kvm-pit.lost_tick_policy=discard
+    -rtc "base=${MS_RTC_BASE:-utc},driftfix=slew" -global kvm-pit.lost_tick_policy=discard
     -chardev "socket,id=chrtpm,path=$VM/run/swtpm.sock" -tpmdev emulator,id=tpm0,chardev=chrtpm
     -device tpm-crb,tpmdev=tpm0
     -netdev "user,id=n0,restrict=${WINVM_NET_RESTRICT:-on},hostfwd=tcp:$SSH_BIND:$SSH_PORT-:22"
@@ -497,7 +527,20 @@ qemu_common() {
     -qmp "unix:$VM/run/qmp.sock,server=on,wait=off" -qmp "unix:$VM/run/qmp-ev.sock,server=on,wait=off"
     -msg timestamp=on
   )
-  if [ -n "$VM_UUID" ]; then QA+=(-uuid "$VM_UUID" -smbios "type=1,serial=$VM_SERIAL"); fi
+  if [ -n "$VM_UUID" ]; then
+    local smbios="type=1,serial=$VM_SERIAL"
+    if [ -n "${WINVM_MACHINE_STATE:-}" ]; then
+      smbios+=",manufacturer=$MS_MANUFACTURER,product=$MS_PRODUCT"
+    fi
+    QA+=(-uuid "$VM_UUID" -smbios "$smbios")
+  fi
+  if [ -n "${WINVM_MACHINE_STATE:-}" ]; then
+    local i=1 mac
+    for mac in "${MS_NICS[@]}"; do
+      QA+=(-netdev "user,id=n$i,restrict=on" -device "virtio-net-pci,netdev=n$i,mac=$mac")
+      i=$((i + 1))
+    done
+  fi
 }
 
 swtpm_start() {
@@ -838,6 +881,7 @@ cmd_run() {
   done
   [ -e "$VM/installed" ] || dry_run || die "$NAME is not installed (win_vm.sh install)"
   [[ "$overlay" =~ ^[A-Za-z0-9_.-]+$ ]] || die "--overlay must be a plain name"
+  machine_state_load
   cpu_flags "$arm" >/dev/null
   [ -n "$tag" ] || tag="run_$(date -u +%Y%m%dT%H%M%SZ)"
   # refused here, before a --detach forks, when the file is bad; the child parses it again
@@ -855,6 +899,11 @@ cmd_run() {
     LOGFILE=$VM/logs/${tag}_run.log
     exec 7>"$VM/run/vm.lock"
     flock -n 7 || die "$NAME is in use by another win_vm.sh"
+    if [ -n "${WINVM_MACHINE_STATE:-}" ]; then
+      [ ! -e "$VM/disk/$overlay.qcow2" ] || die "machine-state run requires a fresh overlay name"
+      python3 "$HERE/machine_state.py" apply "$WINVM_MACHINE_STATE" --vm "$VM" \
+        --image "$VM/disk/base.qcow2" --refresh --lock-fd 7 || die "machine-state restore refused"
+    fi
     QBIN=$(qemu_bin)
     check_prereqs
   fi
@@ -864,8 +913,10 @@ cmd_run() {
     log "OVERLAY_CREATED disk/$overlay.qcow2 over base.qcow2"
   fi
   qemu_common
+  local sysdev=virtio-blk-pci,drive=sys,bootindex=0
+  [ -z "${WINVM_MACHINE_STATE:-}" ] || sysdev+=",serial=$MS_DISK_SERIAL"
   QA+=(-cpu "$(cpu_flags "$arm")" -action reboot=shutdown,panic=none
-       -drive "file=$disk,if=none,id=sys,format=qcow2,discard=unmap" -device virtio-blk-pci,drive=sys,bootindex=0)
+       -drive "file=$disk,if=none,id=sys,format=qcow2,discard=unmap" -device "$sysdev")
   local gop="" dev=""
   if [ "$kf3" = 1 ]; then
     if [ "${WINVM_KF3_DISPLAY:-on}" = off ]; then gop=""
