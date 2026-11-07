@@ -84,7 +84,13 @@ function fixture() {
 function run(copy) {
   const result = spawnSync(
     process.execPath,
-    ['--test', '--test-concurrency=1', 'test/tier.test.js', 'test/bench-data.test.js'],
+    [
+      '--test',
+      '--test-reporter=tap',
+      '--test-concurrency=1',
+      'test/tier.test.js',
+      'test/bench-data.test.js',
+    ],
     {
       cwd: copy,
       encoding: 'utf8',
@@ -107,7 +113,7 @@ function run(copy) {
   try {
     const baseline = run(copy);
     console.log(JSON.stringify({ baseline: true, ...baseline }));
-    if (baseline.status !== 0 || baseline.error || baseline.killers.length)
+    if (baseline.status !== 0 || baseline.error || baseline.tests < 1 || baseline.killers.length)
       throw Error('Windows apps baseline red');
   } finally {
     rmSync(root, { recursive: true, force: true });
