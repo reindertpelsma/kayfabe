@@ -1,0 +1,38 @@
+name: Parallel fetch (GPU-free)
+
+on:
+  push:
+    paths:
+      - 'scripts/ci/kf_fetch*.py'
+      - 'scripts/ci/test_kf_fetch*.py'
+      - 'scripts/ci/vast_setup.py'
+      - 'scripts/ci/test_vast_setup_cache.py'
+      - 'scripts/bench/box/*fetch_bench_data.sh'
+      - '.github/workflows/parallel-fetch.yml'
+  pull_request:
+    paths:
+      - 'scripts/ci/kf_fetch*.py'
+      - 'scripts/ci/test_kf_fetch*.py'
+      - 'scripts/ci/vast_setup.py'
+      - 'scripts/ci/test_vast_setup_cache.py'
+      - 'scripts/bench/box/*fetch_bench_data.sh'
+      - '.github/workflows/parallel-fetch.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Local HTTP transfers, killed-run resume and pinned integrations
+        run: nice -n 19 python3 -I -m unittest discover -s scripts/ci -p 'test_kf_fetch*.py'
+      - name: Existing setup-cache contracts
+        run: nice -n 19 python3 -m unittest discover -s scripts/ci -p test_vast_setup_cache.py
+      - name: Every fetch mutation needs two named killers
+        run: nice -n 19 python3 -I scripts/ci/kf_fetch_mutants.py --jobs 2

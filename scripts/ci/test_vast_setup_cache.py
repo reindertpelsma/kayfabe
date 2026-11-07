@@ -4,6 +4,7 @@ import copy
 import hashlib
 import io
 import json
+import os
 from pathlib import Path
 import tarfile
 import tempfile
@@ -32,6 +33,12 @@ class Opener:
 
 
 class SetupCache(unittest.TestCase):
+    def setUp(self):
+        # The established single-stream path retains these byte/URL policy checks.
+        self.stream_mode = patch.dict(os.environ, {"KF_FETCH_STREAMS": "1"})
+        self.stream_mode.start()
+        self.addCleanup(self.stream_mode.stop)
+
     def fixture(self, root):
         (root / "firmware/kf-gop").mkdir(parents=True)
         (root / "Cargo.lock").write_bytes(b"root-lock")

@@ -118,6 +118,26 @@ def download_asset(locator, asset, destination, *, opener=None):
             or len(locator["url"]) > 8192
         ):
             raise ValueError()
+        streams = int(os.environ.get("KF_FETCH_STREAMS", "8"))
+        if not 1 <= streams <= 256:
+            raise ValueError()
+        if opener is None and streams != 1:
+            # Locator validation above remains the boundary: no redirect or credentials.
+            # Keep the scoped locator helper's 299 s retry policy unchanged. Signed URLs
+            # reach the isolated fetcher on stdin, never in argv or exception output.
+            subprocess.run(
+                [sys.executable, "-I", str(Path(__file__).with_name("kf_fetch.py")),
+                 "-", str(temporary), "--sha256", asset["sha256"], "--streams", str(streams),
+                 "--chunk-mb", "16", "--size", str(asset["size"])],
+                input=(locator["url"] + "\n").encode(), check=True,
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
+            if temporary.stat().st_size != asset["size"] or digest(temporary) != asset["sha256"]:
+                raise ValueError()
+            temporary.replace(destination)
+            Path(str(temporary) + ".fetch-state.json").unlink(missing_ok=True)
+            Path(str(temporary) + ".fetch-state.json.lock").unlink(missing_ok=True)
+            return
         if opener is None:
             opener = urllib.request.build_opener(NoRedirect())
         request = urllib.request.Request(locator["url"], headers={}, method="GET")
