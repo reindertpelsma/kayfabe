@@ -1721,6 +1721,9 @@ export function createService({
     return batchView(batch, plan);
   }
   function batchView(batch, plan) {
+    // Recompute the release summary under current trusted receipt policy rather
+    // than displaying a pre-fix cached PASS from a completed, unticked batch.
+    const verdict = batch.tier === 'large' ? releaseVerdict(batch).verdict : batch.verdict;
     return {
       batch: batch.id,
       sha: batch.sha,
@@ -1729,7 +1732,7 @@ export function createService({
       cost_cap_usd: batch.costCapUsd,
       estimate_usd: batch.estimateUsd,
       spent_usd: batch.spentUsd ?? 0,
-      verdict: batch.verdict,
+      verdict,
       legs: batch.legs.map((l) => ({
         key: l.key,
         family: l.family,

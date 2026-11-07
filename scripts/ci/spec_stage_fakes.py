@@ -222,8 +222,9 @@ cp "$R/archive.tar.zst" "$out"
 echo "fetch_bench_data: -> $out (sha256 ok)"
 '''
 
+# Use a fixed epoch: scenario time advances only through clock_offset, never host scheduling.
 FAKES = {
-    "date": '#!/bin/bash\nif [ "$#" = 1 ] && [ "$1" = "+%s" ]; then echo $(( $(' + REAL_DATE + ' +%s) + $(cat "$FAKE_ROOT/clock_offset" 2>/dev/null || echo 0) )); else exec ' + REAL_DATE + ' "$@"; fi\n',
+    "date": '#!/bin/bash\nif [ "$#" = 1 ] && [ "$1" = "+%s" ]; then echo $(( 1794000000 + $(cat "$FAKE_ROOT/clock_offset" 2>/dev/null || echo 0) )); else exec ' + REAL_DATE + ' "$@"; fi\n',
     "sleep": '#!/bin/bash\necho "$1" >> "$FAKE_ROOT/sleeps.log"\necho $(( $(cat "$FAKE_ROOT/clock_offset" 2>/dev/null || echo 0) + ${1%.*} )) > "$FAKE_ROOT/clock_offset"\n',
     "pgrep": '#!/bin/bash\n[ "${1:-}" = "-x" ] && exit 1\nexec ' + (shutil.which("pgrep") or "/usr/bin/pgrep") + ' "$@"\n',
     "id": '#!/bin/bash\n[ "${1:-}" = "-u" ] && echo 0 || exec /usr/bin/id "$@"\n',

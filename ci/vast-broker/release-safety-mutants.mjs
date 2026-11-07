@@ -22,6 +22,23 @@ const I = 'ci/vast-broker/src/index.js',
   G = 'ci/vast-broker/src/github.js',
   R = 'scripts/ci/vast_report.py';
 const cases = [
+  [
+    'cached legacy release PASS displayed',
+    I,
+    "batch.tier === 'large' ? releaseVerdict(batch).verdict : batch.verdict",
+    'batch.verdict',
+    'node',
+  ],
+
+  ['merged SPEC environment lost', 'ci/vast-broker/src/tier.js', 'env.KF_SPEC = spec;', '', 'node'],
+  [
+    'merged Windows apps environment lost',
+    'ci/vast-broker/src/tier.js',
+    'env.KF_WINAPPS = winApps;',
+    '',
+    'node',
+  ],
+
   ['root executable status ignored', V, "value.status !== 'executable' ||", 'false ||', 'node'],
   ['die executable status ignored', V, "row.status !== 'executable' ||", 'false ||', 'node'],
   ['recorded blockers ignored', V, 'row.blockers.length !== 0 ||', 'false ||', 'node'],
@@ -35,7 +52,7 @@ const cases = [
   [
     'unknown Windows ABI executable',
     V,
-    "row.windows_guest_abi === 'UNKNOWN' ||",
+    "        row.windows_guest_abi === 'UNKNOWN' ||",
     'false ||',
     'node',
   ],
@@ -247,7 +264,9 @@ try {
     if (failures.length) throw Error('baseline red ' + JSON.stringify(failures));
   }
   const rows = [];
+  const selected = process.argv.slice(2);
   for (const [name, path, before, after, mode] of cases) {
+    if (selected.length && !selected.includes(name)) continue;
     const file = join(scratch, path),
       source = readFileSync(file, 'utf8');
     let changed = source;
@@ -263,7 +282,7 @@ try {
         .replace("value.status !== 'executable' ||", 'false ||')
         .replace("row.status !== 'executable' ||", 'false ||')
         .replace('row.blockers.length !== 0 ||', 'false ||')
-        .replace("row.windows_guest_abi === 'UNKNOWN' ||", 'false ||')
+        .replace("        row.windows_guest_abi === 'UNKNOWN' ||", 'false ||')
         .replace("Object.values(row.minimum_drivers).some((v) => v === 'UNKNOWN') ||", 'false ||');
     else if (mode === 'reporter-cap' || mode === 'payload-cap') {
       const pattern =

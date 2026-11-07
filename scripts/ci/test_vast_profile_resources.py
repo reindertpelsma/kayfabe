@@ -17,6 +17,18 @@ class ProfileResources(unittest.TestCase):
     def test_live_payload_stages_have_budget_rows(self):
         self.assertEqual(guard.validate(DATA, SOURCE), [])
 
+    def test_windows_apps_download_cannot_lose_its_budget_row(self):
+        data = copy.deepcopy(DATA)
+        del data['payloadStageResources']['windows_apps']
+        self.assertIn('unbudgeted payload stage: windows_apps', guard.validate(data, SOURCE))
+
+    def test_windows_bundle_is_allocated_inside_existing_media_headroom(self):
+        table = DATA['payloadStageResources']
+        self.assertEqual(table['windows_apps']['bandwidthDownGb'], 8)
+        self.assertEqual(table['media_and_margin']['bandwidthDownGb'], 9)
+        self.assertEqual([DATA['payloadProfiles'][name]['bandwidthDownGb']
+                         for name in ['small', 'middle', 'large', 'adhoc']], [73, 87, 130, 38])
+
     def test_new_direct_download_stage_is_rejected(self):
         source = SOURCE + '\nmake_stage("extra_download", ["curl", "example.invalid"], None, [], None)\n'
         self.assertIn('unbudgeted payload stage: extra_download', guard.validate(DATA, source))

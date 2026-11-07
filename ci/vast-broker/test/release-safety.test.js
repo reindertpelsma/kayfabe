@@ -549,6 +549,10 @@ for (const single of [false, true])
       }
       const { batch: id } = await h.service.adminStart({ commit_sha: sha, tier: 'large' });
       const batch = await h.storage.get('batch:' + id);
+      // A persisted batch may have waited most of its 360-minute start window
+      // before A was allocated. Its actual rental is still only 31 minutes old.
+      batch.created -= 350 * 60000;
+      await h.storage.put('batch:' + id, batch);
       assert.equal(h.cloud.creates, 8);
       assert.ok(batch.legs.filter((l) => l.state === 'STARTED').every((l) => l.spec === 'lanea'));
       assert.ok(batch.legs.filter((l) => l.spec === 'laneb').every((l) => l.state === 'PENDING'));
@@ -567,6 +571,13 @@ for (const single of [false, true])
         assert.equal(create.body.env.KF_SPEC, 'laneb');
         assert.equal(record.spec, 'laneb');
       }
+      for (const leg of b) await finishLeg(h, leg);
+      h.time.value += 11 * 60000;
+      await h.service.sweep();
+      const completed = await h.storage.get('batch:' + id);
+      assert.equal(completed.verdict, 'PASS');
+      assert.equal(completed.legs.filter((l) => l.state === 'ENDED').length, 16);
+      assert.equal(h.cloud.creates, 16);
     },
   );
 for (const id of ['full', 'windows_cross'])
@@ -834,3 +845,73 @@ for (const die of ['AD104', 'TU116'])
       );
       assert.equal(h.cloud.creates, 0);
     });
+for (const [spec, winApps] of [
+  ['lanea', 'mid'],
+  ['laneb', 'full'],
+])
+  test('merged environment retains matrix, SPEC and Windows apps ' + spec, async () => {
+    const { tierEnvironment } = await import('../src/tier.js');
+    const row = RELEASE_MATRIX.dies.find((r) => r.die === 'AD104');
+    const selected = tierEnvironment('release', {
+      tierName: 'large',
+      stages: ['specviewperf'],
+      spec,
+      winApps,
+      releaseMatrix: row,
+    });
+    assert.equal(selected.KF_SPEC, spec);
+    assert.equal(selected.KF_WINAPPS, winApps);
+    assert.equal(selected.KF_HOST_DRIVER, row.drivers.host_driver);
+    assert.deepEqual(
+      JSON.parse(Buffer.from(selected.KF_RELEASE_SUBRUNS, 'base64url')).subruns,
+      row.subruns,
+    );
+  });
+// FALSIFIER: one settled die frees a slot which a still-running die's lane B
+// steals. Filling all eight slots initially must not mask the dependency rule.
+for (const die of ['GA102', 'AD102'])
+  matrixTest('only the settled die can start its SPEC lane B ' + die, async () => {
+    const h = await harness({ RELEASE_STAGES: '["specviewperf"]' });
+    // A live die has another offered physical machine. Reservation filtering
+    // alone therefore cannot enforce the per-die A-before-B dependency.
+    const template = h.cloud.extraOffers.find((o) => o.gpu_name.includes('2060'));
+    assert.ok(template);
+    h.cloud.extraOffers.push({ ...template, id: 99001, machine_id: 99001, host_id: 99001 });
+    const { batch: id } = await h.service.adminStart({ commit_sha: sha, tier: 'large' });
+    const batch = await h.storage.get('batch:' + id);
+    await finishLeg(
+      h,
+      batch.legs.find((l) => l.die === die && l.spec === 'lanea'),
+    );
+    h.time.value += 11 * 60000;
+    await h.service.sweep();
+    const after = await h.storage.get('batch:' + id);
+    assert.deepEqual(
+      after.legs.filter((l) => l.spec === 'laneb' && l.state === 'STARTED').map((l) => l.die),
+      [die],
+    );
+    assert.equal(h.cloud.creates, 9);
+    const live = after.legs.find((l) => l.die === 'TU106' && l.spec === 'lanea');
+    assert.equal((await h.storage.get('record:' + live.key)).ended, null);
+  });
+// A pre-fix cached PASS cannot survive as the displayed release verdict after
+// the trusted receipt policy changes, even if the completed batch has no tick.
+for (const die of ['AD104', 'TU116'])
+  matrixTest('completed legacy PASS is not displayed without matrix coverage ' + die, async () => {
+    const h = await harness(),
+      row = RELEASE_MATRIX.dies.find((r) => r.die === die);
+    const id = await pendingBatch(h, { row });
+    const batch = await h.storage.get('batch:' + id);
+    batch.state = 'DONE';
+    batch.verdict = 'PASS';
+    batch.releaseDies = { [row.die_family]: [die] };
+    Object.assign(batch.legs[0], {
+      die,
+      family: row.die_family,
+      state: 'ENDED',
+      outcome: { verdict: 'PASS', linux: 'PASS', windows: ['PASS', 'PASS'], stages: {} },
+    });
+    await h.storage.put('batch:' + id, batch);
+    assert.equal((await h.service.adminBatches())[0].verdict, 'INCOMPLETE');
+    assert.equal(h.cloud.creates, 0);
+  });

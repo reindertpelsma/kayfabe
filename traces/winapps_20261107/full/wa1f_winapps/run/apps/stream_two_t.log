@@ -1,0 +1,7 @@
+=== stream_two_t start=2026-11-07T05:06:35.9674452+00:00 host=KFWIN session=0 boot=2026-11-07T04:55:48.5000000Z timeout=120
+KFDEV NVIDIA GeForce RTX 4090
+[eq] device NVIDIA GeForce RTX 4090 torch 2.8.0+cu126
+CHECK two_streams_second ok
+CHECK stream_two ok
+STREAM_PROBE_DONE two rc=0
+=== end rc=0 secs=6 2026-11-07T05:06:42.3733552+00:00

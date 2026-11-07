@@ -165,7 +165,8 @@ INFERRED allowances, in decimal GB; every row has its source in the JSON data:
 | windows_gate | small, middle, large | 35 | 0 | 120 | INFERRED upper endpoint of owner's 15–35 GB planning range; compressed image not measured in `V3_WINDOWS_ON_VAST.md` |
 | windows_gate_2 | large | 0 | 0 | 0 | INFERRED reuse of the first install and media |
 | specviewperf | large | 43 | 0 | 220 | INFERRED ceiling of MEASURED 42,002,015,727 bytes, `traces/specviewperf_vast_20261105/README.md`; 220 GB floor is owner's planning rule |
-| media_and_margin | all | 17 | 2 | 0 | INFERRED extra apps/bundles/media, retry headroom and output; apps trace lists additional vendor/model assets |
+| windows_apps | all (adhoc reserves headroom only) | 8 | 0 | 0 | INFERRED ceiling above the 6–7 GB bundle estimate in `docs/DOWNLOADS.md`; bundle pin remains empty |
+| media_and_margin | all | 9 | 2 | 0 | INFERRED remaining media, retry headroom and output; split from the prior 17 GB shared apps/bundles allocation |
 
 CODE READ: the resulting profile reservations are:
 
@@ -248,7 +249,9 @@ PASS; an attributed suite FAIL with a GREEN host reference makes the leg FAIL
 and never earns a retry. Existing persisted ENDED outcomes are regraded from
 accepted reports on a running batch's next tick, without creating duplicate
 retries. A prior FAIL remains a release FAIL even if a later clean leg exists.
-The result-store path also requires complete matrix coverage for release PASS,
+Completed-batch summaries recompute the release verdict under current trusted
+policy rather than displaying a pre-fix cached PASS. The result-store path also
+requires complete matrix coverage for release PASS,
 so ordinary passing reports cannot bypass the batch rule through stored rows.
 
 ## SPEC lane coverage and separate leases (disabled)
@@ -289,3 +292,13 @@ prices by that transfer delta but left the tested offer ranks unchanged. This
 is fixture evidence, not a claim that real-market ranks never change. CODE READ:
 actual traffic is **not metered**; reservation GB are conservative inferred
 budgets. A new download stage must enter the stage table and pass its guard.
+
+CODE READ / INFERRED integration note (2026-11-07): merging Windows apps adds a
+literal downloading stage, which the resource guard initially rejected as
+unbudgeted. Its explicit 8 GB inferred bundle row is allocated from the existing
+17 GB media/bundles reservation, leaving 9 GB for other margin. Totals therefore
+remain 73/87/130/38 GB. Adhoc retains the same conservative reserved bundle
+headroom while its payload does not enable Windows apps. The 6–7 GB source is a
+planning estimate in `docs/DOWNLOADS.md`, not a measured artifact; the empty
+`bundle.pin` confirms packaging is still unverified. Re-measure the packaged
+bundle and revise this split if necessary before enabling the stage.

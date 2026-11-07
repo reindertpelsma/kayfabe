@@ -168,6 +168,9 @@ SPEC = [
     # the same box (2) and its extra stages (colon-separated slot names). Absent: today's run.
     ("KF_TIER", False, _match(r"small|middle|large|adhoc")),
     ("KF_WINDOWS_RUNS", False, _match(r"[12]")),
+    # 2026-11-07 (windows apps): the Windows apps stage and its profile (docs/design/V3_WINDOWS_APPS_GATE.md).
+    # Absent (today's Worker, or a Worker that has not been told to send it): the stage does not run.
+    ("KF_WINAPPS", False, _match(r"small|mid|full")),
     # 2026-11-06 (setup picker): present only when the Worker accepts the optional host_claims block
     # in a result (ci/vast-broker/src/results.js). Absent (an older Worker): the block is not sent.
     ("KF_HOST_CLAIMS", False, _match(r"1")),
