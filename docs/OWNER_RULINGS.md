@@ -1463,3 +1463,23 @@ sentence was removed. Thin multi-GPU tests and aarch64 builds already exist (ite
    `STATUS_DETAIL.md` section 3 records it: a Linux thin guest with two distinct GPUs. CUDA in a two-GPU guest, UVM
    across GPUs, peer access (refused by name) and Windows or display with several GPUs are not measured. Existing
    two-GPU thin tests and the aarch64 cross-builds do not establish full support.
+
+## §AP. Tests of production code, and tests the boxes depend on, run on the `.workerignore`-stripped tree, 2026-11-08
+
+*(Owner ruling, 2026-11-08. Builds on the AGREED ignore ladder in `design/V3_CI_TIERS_AND_IGNORE_LADDER.md` section 4.)*
+
+1. **Scope.** Every test that exercises production code runs on the tree left after deleting everything
+   `.workerignore` matches, and so does every test whose result a Vast box also needs to be green (for example the
+   tests of the scripts a box runs). This includes the GPU-free Rust build, test and clippy jobs. It does not include
+   auxiliary checks: the site, the docs, Worker infrastructure, repository-structure and claim checks, and scripts
+   where the choice depends on what the script is for. Those keep their own filters.
+2. **Boxes.** Each Vast box removes everything `.workerignore` matches after cloning, release gate included, so a
+   passing run shows the whole project builds, runs and passes its apps and SPEC with those files absent, and a
+   result is keyed by the hash of the unignored files (design section 4). A pattern added to `.workerignore` in a
+   commit removes files from that commit's key, so the commit is not covered by its parent's result.
+3. **Why.** A test that reads an ignored file (a golden file in `traces/`, a text in `docs/`) would pass in CI and
+   break on a box, or a result would answer for files the run never saw. Moving such data next to the test, or
+   removing that path from `.workerignore`, is the fix; the gate is never relaxed.
+4. **Status.** *(Measured 2026-11-08: not built.)* The box does not strip yet, no workflow runs a job on the
+   stripped tree, and `gpu-vast.yml` still uses its own hard-coded skip list. Work is queued behind the batch to
+   `master`: the box strip step, `gpu-vast.yml` reading `.workerignore`, and a stripped-tree CI job.
