@@ -278,7 +278,6 @@
   "applicators": {
     "scripts/bench/guest_ringtrace_build.sh": "d8a3230493653fd4cdb43e03f39be1d3179efe470978156e8ef7e396bb81fff3",
     "scripts/bench/windows/appmatrix/build_release_bundle.ps1": "d5d3fce6b1e27507e127d788f10bfd3efe6da2d915a2c7d3f3e38a2dced3ad51",
-    "scripts/bench/windows/appmatrix/release_bundle.py": "d7fe73f9e43561967c28a9b4ed60d2d18286aa8bb3dd31fba66ab8ae6e753f07",
     "scripts/bench/windows/host_tools/build/build-observer.sh": "76dc96f5f629c2d306fd6d0c1ca949b47ccf11dd5765172139d81f0b3ffd84c1",
     "scripts/bench/windows/host_tools/misc/root_home/deploy.sh": "6f59791007b9d404098c4b0cb5646fe13636415d7381c43f584b82c3abdea85a",
     "scripts/bench/windows/host_tools/misc/root_home/deploy2.sh": "8cb52f3243928709fdab85c8590b4df076b4a19ad4a6db18a843d736ae11b4be",
@@ -287,5 +286,11 @@
     "tools/uvm_efs/box/build_efs.sh": "66ba1b08e0f5a73eb81cccb78eefb74d66f1117e18a720ad125276b089d3831a",
     "tools/uvm_efs/box/provision.sh": "5ea60633b66ed4f8b6ef783a79c48d14559e5be40e0494c8ce453b176da00224",
     "tools/vfio-gsp-observer/apply.py": "7fa8e5a67912d3514a5647477c4dd5dacdac8061a6b7119d1ccfc899c5b186f6"
+  },
+  "references": {
+    "scripts/bench/windows/appmatrix/release_bundle.py": {
+      "sha256": "d7fe73f9e43561967c28a9b4ed60d2d18286aa8bb3dd31fba66ab8ae6e753f07",
+      "reason": "J2 code review, 2026-11-08: read-only receipt, path and SHA256 validator for prebuilt DirectX sample assets. Reads files and prints validation results; performs no build, patch command, driver installation or subprocess execution. Stock Windows-app paths may validate the prebuilt bundle. The PowerShell builder remains an opt-in applicator."
+    }
   }
 }

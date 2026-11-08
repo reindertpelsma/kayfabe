@@ -26,6 +26,11 @@ APPLICATION = re.compile(
     r"['\"]git['\"][^\n]*['\"](?:apply|am)['\"]|['\"]patch['\"]\s*,|"
     r"(?m:^\s*(?:(?:sudo|command|exec|if|then)\s+)*patch(?:\s|$))"
 )
+PATCH_COMMAND = re.compile(
+    r"\bpatch\s+[-<]|\bgit\s+[^\n]*\b(?:apply|am)\b|"
+    r"['\"]git['\"][^\n]*['\"](?:apply|am)['\"]|['\"]patch['\"]\s*,|"
+    r"(?m:^\s*(?:(?:sudo|command|exec|if|then)\s+)*patch(?:\s|$))"
+)
 
 
 def script_sources(root: Path) -> dict[str, str]:
@@ -100,10 +105,22 @@ def validate(root: Path, inventory: dict) -> list[str]:
             errors.append("policy must disclose opt-in patches")
     sources = script_sources(root)
     applicators = inventory["applicators"]
+    references = inventory.get("references", {})
+    for rel, item in references.items():
+        if rel in applicators:
+            errors.append(f"{rel}: ambiguous application/reference classification")
+        if not item.get("reason"):
+            errors.append(f"{rel}: missing read-only review reason")
+        if PATCH_COMMAND.search(sources.get(rel, "")):
+            errors.append(f"{rel}: read-only reference contains patch command")
+    reviewed = {
+        **applicators,
+        **{rel: item["sha256"] for rel, item in references.items()},
+    }
     for rel, text in sources.items():
-        if APPLICATION.search(text) and rel not in applicators:
+        if APPLICATION.search(text) and rel not in reviewed:
             errors.append(f"unreviewed patch applicator/reference: {rel}")
-    for rel, digest in applicators.items():
+    for rel, digest in reviewed.items():
         path = root / rel
         if (
             not path.is_file()
@@ -172,7 +189,9 @@ def main(argv=None) -> int:
     for error in errors:
         print(f"FAIL no-patch-check: {error}", file=sys.stderr)
     print(
-        f"CODE READ: {len(inventory['patches'])} patch artifacts, {len(inventory['applicators'])} reviewed application/reference scripts, {len(errors)} errors"
+        f"CODE READ: {len(inventory['patches'])} patch artifacts, "
+        f"{len(inventory['applicators'])} reviewed applicators, "
+        f"{len(inventory.get('references', {}))} reviewed read-only references, {len(errors)} errors"
     )
     print(
         "LIMIT: lexical stock-path audit; dynamic dispatch and arbitrary source rewrites require code review."
