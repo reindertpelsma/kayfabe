@@ -26,6 +26,15 @@ from kfci.step import RetryClass, Step, StepResult, Verdict
 from kfci.testing import FakeClock, FakeStep
 
 
+def copy_app_policy(root):
+    """Private stage fixtures need the same trusted policy files as the checkout."""
+    for name in ('scripts/ci/app_policy.py', 'scripts/apps/known_unsupported.json',
+                 'scripts/bench/windows/appmatrix/gate_profiles.json'):
+        target = root / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(SCRIPTS.parent / name, target)
+
+
 def assignment(steps, **kw):
     return dict(
         version=1,
@@ -674,7 +683,8 @@ class Cancellation(unittest.TestCase):
                 root / "scripts/kfci",
                 ignore=shutil.ignore_patterns("__pycache__"),
             )
-            (root / "scripts/apps").mkdir()
+            copy_app_policy(root)
+            (root / "scripts/apps").mkdir(exist_ok=True)
             (root / "scripts/apps/run_apps.sh").write_text(
                 "#!/bin/bash\nprintf 'vectorAdd \\n'\n"
             )

@@ -5,8 +5,8 @@
 #   -Mode desktop        the console user, dwm.exe and explorer.exe counts, the NVIDIA adapter's
 #                        ConfigManagerErrorCode, the driver version, the last boot time (UTC)
 #   -Mode display        only the NVIDIA adapter line (cheap; the gate polls it after the enable)
-#   -Mode wer            the small WER report text (EventType, P1..P8) of LiveKernelEvent/WATCHDOG reports, the dump files' times
-#                        and the display-stack events within +-120 s of each (never the dump itself)
+#   -Mode wer            every Report.wer decoded, the LiveKernelEvent/WATCHDOG timeline, dump file times and
+#                        display-stack events within +-120 s; only 0x1000 bytes of each WATCHDOG dump, never a transfer
 #   -Mode tdr -Since T   the reset counters from T (an ISO-8601 UTC stamp taken IN THE GUEST): Display 4101,
 #                        nvlddmkm 153, Kernel-Power 41, EventLog 6008, BugCheck 1001, WER LiveKernelEvent
 #                        (code 193 counted apart, gating only with -Strict), and the live dumps written since T.
@@ -50,8 +50,9 @@ if ($Mode -eq 'desktop') {
 }
 
 if ($Mode -eq 'wer') {
-    # The small text of the WATCHDOG / LiveKernelEvent WER reports (never the dump itself), the dump files' times
-    # and every display-stack event within +-120 s of each report. Read-only.
+    . (Join-Path $PSScriptRoot 'lke_decode.ps1')
+    # Decode every small Report.wer; retain the existing WATCHDOG / LiveKernelEvent timeline and nearby events.
+    # Dump contents are limited to a validated 0x1000-byte header read in the guest. Read-only.
     #   GATE_WER_REPORT dir=<name> where=<archive|queue> mtime=<utc> event_time=<utc from the report's FILETIME>
     #   GATE_WER_PARAM <dir> <key>=<value>        EventType, Sig[n] (P1..P8), DynamicSig[1..2]
     #   GATE_WER_DUMP <utc> <name> bytes=<n>
@@ -62,10 +63,16 @@ if ($Mode -eq 'wer') {
     foreach ($where in 'ReportArchive', 'ReportQueue') {
         $root = Join-Path $wer $where
         if (-not (Test-Path $root)) { continue }
-        foreach ($d in Get-ChildItem $root -Directory -ErrorAction SilentlyContinue) {
-            $f = Join-Path $d.FullName 'Report.wer'
-            if (-not (Test-Path $f)) { continue }
-            $raw = [IO.File]::ReadAllText($f)
+        foreach ($report in Get-ChildItem $root -Filter 'Report.wer' -File -Recurse -ErrorAction SilentlyContinue) {
+            $f = $report.FullName
+            $d = $report.Directory
+            try {
+                $raw = [IO.File]::ReadAllText($f)
+                Write-LkeWerLine $raw $d.Name $where
+            } catch {
+                Write-Output ('GATE_LKE status=REFUSED reason=REPORT_IO report=' + (ConvertTo-Json -InputObject $d.Name -Compress))
+                continue
+            }
             if ($raw -replace "`0", '' -notmatch 'LiveKernelEvent|WATCHDOG|Kernel_1') { continue }
             $lines = ($raw -replace "`0", '') -split "`r?`n"
             $et = ($lines | Where-Object { $_ -match '^EventTime=' } | Select-Object -First 1) -replace '^EventTime=', ''
@@ -79,6 +86,10 @@ if ($Mode -eq 'wer') {
     }
     $dumps = @(Get-ChildItem C:\Windows\LiveKernelReports -Recurse -ErrorAction SilentlyContinue | Where-Object { -not $_.PSIsContainer } | Sort-Object LastWriteTime)
     foreach ($f in $dumps) { Say ("WER_DUMP " + $f.LastWriteTimeUtc.ToString('yyyy-MM-ddTHH:mm:ssZ') + " $($f.Name) bytes=$($f.Length)") }
+    # Only the first 0x1000 bytes, read in the guest. Never transfer the dump.
+    $headers = @(Get-ChildItem -LiteralPath 'C:\Windows\LiveKernelReports\WATCHDOG' -Filter 'WATCHDOG-*.dmp' -File -ErrorAction SilentlyContinue)
+    foreach ($header in $headers) { Write-LkeDumpHeader $header.FullName }
+    Write-Output ('GATE_LKE_HEADERS files=' + $headers.Count)
     $anchors = @($times)
     foreach ($f in $dumps) { $anchors += @{ dir = $f.Name; t = $f.LastWriteTimeUtc } }
     foreach ($a in $anchors) {
@@ -106,9 +117,9 @@ function CountEv([string]$log, [string]$prov, [int]$id, [string]$like = '') {
     if ($like) { $e = @($e | Where-Object { $_.Message -like $like }) }
     return $e.Count
 }
-# WER LiveKernelEvents by their first parameter. 193 is a WATCHDOG live dump: the system keeps running, nothing
-# resets, and it is a recorded open defect on rented-box Ada/Blackwell runs (docs/design/V3_WINDOWS_GATE.md, section 6).
-# It is counted and reported separately and gates only with -Strict; every other LiveKernelEvent code gates.
+# Legacy WER P1 string count. The numeric bugcheck code is reported separately from validated dump headers;
+# do not infer a hexadecimal code from this decimal-looking WER text. Counted separately here; -Strict gates
+# it, and windows_gate.sh additionally checks the evidence-seeded per-die ratchet. Other reset rules are unchanged.
 $lkeAll = @(Get-WinEvent -FilterHashtable @{ LogName = 'Application'; Id = 1001; ProviderName = 'Windows Error Reporting'; StartTime = $t.ToLocalTime() } -ErrorAction SilentlyContinue |
     Where-Object { $_.Message -like '*LiveKernelEvent*' })
 # ⊘ [2026-11-03, Ada-PC lane, traces/ada_pc_20261103/ on claude/ada-pc-regression-20261103] On a non-fresh image WER
