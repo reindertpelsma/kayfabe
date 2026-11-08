@@ -64,6 +64,66 @@ def official_url(raw):
     )
 
 
+def download_path(raw):
+    """Same-path official CDN host aliases only; no query-selected artifacts."""
+    try:
+        u = urllib.parse.urlsplit(raw)
+        host = u.hostname or ""
+        if (
+            not isinstance(raw, str)
+            or not official_url(raw)
+            or u.query
+            or not (host == "download.nvidia.com" or host.endswith(".download.nvidia.com"))
+        ):
+            return None
+        return u.path
+    except (ValueError, TypeError, AttributeError):
+        return None
+
+
+def installer_path(raw, os, version):
+    path = download_path(raw)
+    if path is None:
+        return None
+    if os == "linux":
+        return path if path.endswith(f"/NVIDIA-Linux-x86_64-{version}.run") else None
+    location = re.fullmatch(r"/Windows/(?:Quadro_Certified/)?([^/]+)/([^/]+)", path)
+    filename = (
+        re.fullmatch(
+            "("
+            + VERSION
+            + r")-(?:desktop|quadro-rtx-desktop-notebook)-win10-win11-64bit-international-dch-whql\.exe",
+            location[2],
+        )
+        if location
+        else None
+    )
+    if not location or not filename or location[1] != version or filename[1] != version:
+        return None
+    return path
+
+
+def same_installer(d, raw):
+    expected = installer_path(d["url"], d["os"], d["version"])
+    return expected is not None and installer_path(raw, d["os"], d["version"]) == expected
+
+
+def same_url_path(requested, final):
+    expected = download_path(requested)
+    return expected is not None and download_path(final) == expected
+
+
+def valid_previous_pin(d, previous):
+    source = previous.get("checksum_source")
+    if not isinstance(source, dict) or source.get("kind") != "download-sha256":
+        return False
+    return (
+        same_installer(d, source.get("url"))
+        and same_installer(d, source.get("final_url", source.get("url")))
+        and same_installer(d, previous.get("probe", {}).get("final_url", previous.get("url")))
+    )
+
+
 class OfficialRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         if not official_url(newurl):
@@ -254,6 +314,7 @@ def parse_driver_api(data):
             or d.get("IsWHQL") != "1"
             or "-desktop-" not in path
             or not path.endswith("whql.exe")
+            or installer_path(url, "windows", v) is None
         ):
             continue
         release = d.get("Release", "")
@@ -319,6 +380,8 @@ def collect_installer(candidate, client, previous=None):
     d.setdefault("test_records", [])
     d.update(sha256=None, size=None, checksum_source=None)
     url = d["url"]
+    if not same_installer(d, url):
+        raise ValueError("requested installer identity conflicts with OS/version")
     head = client.request(url, "HEAD")
     d["probe"] = {
         "method": "HEAD",
@@ -330,6 +393,8 @@ def collect_installer(candidate, client, previous=None):
     if head["status"] != 200:
         d["status"] = "UNAVAILABLE" if head["status"] == 404 else "UNKNOWN:probe-error"
         return d
+    if not same_installer(d, head.get("final_url", url)):
+        raise ValueError("HEAD final installer identity differs")
     length = head["headers"].get("content-length", "")
     if not re.fullmatch(r"[0-9]+", length) or int(length) <= 0:
         d["status"] = "UNKNOWN:probe-error"
@@ -345,6 +410,10 @@ def collect_installer(candidate, client, previous=None):
             directory + "/SHA256SUMS",
         ):
             reply = client.request(checksum_url)
+            if reply["status"] == 200 and not same_url_path(
+                checksum_url, reply.get("final_url", checksum_url)
+            ):
+                raise ValueError("checksum final identity differs")
             sha = parse_checksum(reply["body"], filename) if reply["status"] == 200 else None
             if sha:
                 d.update(
@@ -354,6 +423,7 @@ def collect_installer(candidate, client, previous=None):
                         "kind": "nvidia-sha256",
                         "url": checksum_url,
                         "checked_at": reply["checked_at"],
+                        "final_url": reply.get("final_url", checksum_url),
                     },
                 )
                 break
@@ -362,6 +432,7 @@ def collect_installer(candidate, client, previous=None):
         and previous.get("status") == "PINNED"
         and previous.get("url") == url
         and previous.get("size") == d["size"]
+        and valid_previous_pin(d, previous)
     ):
         # Preserve an earlier streamed measurement, including its original date.
         d.update(
@@ -394,6 +465,10 @@ def hash_stream(stream, expected_size, directory):
 def hash_download(d, client):
     if d["os"] != "windows" or d["status"] != "UNPINNED:needs-download":
         raise ValueError("only missing available Windows pins can be downloaded")
+    if not same_installer(d, d["url"]):
+        raise ValueError("requested installer identity conflicts with OS/version")
+    if not same_installer(d, d.get("probe", {}).get("final_url")):
+        raise ValueError("recorded HEAD installer identity differs")
     # Serialize even concurrent invocations of the explicit hash option.
     import fcntl
 
@@ -407,11 +482,13 @@ def hash_download(d, client):
         with client.opener.open(request, timeout=client.timeout) as stream:
             if stream.status != 200 or not official_url(stream.url):
                 raise ValueError("download requires official HTTP 200")
+            if not same_installer(d, stream.url):
+                raise ValueError("stream final installer identity differs")
             sha = hash_stream(stream, d["size"], Path("/tmp"))
         d.update(
             status="PINNED",
             sha256=sha,
-            checksum_source={"kind": "download-sha256", "url": d["url"], "checked_at": now()},
+            checksum_source={"kind": "download-sha256", "url": stream.url, "checked_at": now()},
         )
 
 

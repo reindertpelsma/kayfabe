@@ -55,6 +55,51 @@ function official(raw, download = false) {
     return false;
   }
 }
+// Origin admission is checked separately. Only an official CDN host may change;
+// package, complete path, OS, architecture and query identities cannot change.
+function installerPath(raw, os, version) {
+  try {
+    const u = new URL(raw);
+    if (u.search) return null;
+    const path = u.pathname;
+    if (os === 'linux')
+      return path.endsWith('/NVIDIA-Linux-x86_64-' + version + '.run') ? path : null;
+    const location = path.match(/^\/Windows\/(?:Quadro_Certified\/)?([^/]+)\/([^/]+)$/);
+    const filename = location?.[2].match(
+      /^([0-9]{3}\.[0-9]{1,3}(?:\.[0-9]{1,3})?)-(?:desktop|quadro-rtx-desktop-notebook)-win10-win11-64bit-international-dch-whql\.exe$/,
+    );
+    return location?.[1] === version && filename?.[1] === version ? path : null;
+  } catch {
+    return null;
+  }
+}
+function sameInstaller(d, raw) {
+  const expected = installerPath(d.url, d.os, d.version);
+  return expected !== null && installerPath(raw, d.os, d.version) === expected;
+}
+function checksumPath(d, raw) {
+  try {
+    const requested = new URL(d.url);
+    const source = new URL(raw);
+    const directory = requested.pathname.slice(0, requested.pathname.lastIndexOf('/') + 1);
+    return (
+      d.os === 'linux' &&
+      !source.search &&
+      [
+        requested.pathname + '.sha256sum',
+        directory + 'sha256sum.txt',
+        directory + 'SHA256SUMS',
+      ].includes(source.pathname)
+    );
+  } catch {
+    return false;
+  }
+}
+function checksumIdentity(d, raw) {
+  return d.checksum_source.kind === 'download-sha256'
+    ? sameInstaller(d, raw)
+    : checksumPath(d, raw);
+}
 function record(r) {
   object(r, 'test record');
   insist(
@@ -148,15 +193,7 @@ export function validateTable(t) {
     insist(!keys.has(key), 'duplicate normalized OS/version');
     keys.add(key);
     insist(official(d.url, true), 'installer must have official HTTPS URL');
-    const path = new URL(d.url).pathname;
-    insist(
-      d.os === 'linux'
-        ? path.endsWith(`/NVIDIA-Linux-x86_64-${d.version}.run`)
-        : path.endsWith('whql.exe') &&
-            path.includes(`/${d.version}/`) &&
-            path.includes('-desktop-'),
-      'wrong installer identity',
-    );
+    insist(installerPath(d.url, d.os, d.version) !== null, 'wrong installer identity');
     insist(STATUSES.includes(d.status), 'invalid pin status');
     insist(d.size === null || (Number.isSafeInteger(d.size) && d.size > 0), 'invalid size');
     insist(d.sha256 === null || /^[0-9a-f]{64}$/.test(d.sha256), 'invalid sha256');
@@ -183,6 +220,8 @@ export function validateTable(t) {
       'invalid HEAD probe',
     );
     insist(d.probe.final_url === null || official(d.probe.final_url, true), 'unofficial redirect');
+    if (d.probe.status === 200)
+      insist(sameInstaller(d, d.probe.final_url), 'HEAD final installer identity differs');
     if (d.status === 'PINNED') {
       insist(
         d.probe.status === 200 &&
@@ -199,6 +238,15 @@ export function validateTable(t) {
           d.checksum_source.checked_at <= t.generated_at,
         'invalid checksum provenance',
       );
+      insist(checksumIdentity(d, d.checksum_source.url), 'wrong checksum installer identity');
+      if (d.checksum_source.final_url !== undefined)
+        insist(
+          official(d.checksum_source.final_url, true) &&
+            checksumIdentity(d, d.checksum_source.final_url) &&
+            new URL(d.checksum_source.final_url).pathname ===
+              new URL(d.checksum_source.url).pathname,
+          'checksum final identity differs',
+        );
     } else insist(d.sha256 === null, 'an unpinned record cannot carry an active pin');
     if (d.status === 'UNAVAILABLE') insist(d.probe.status === 404, 'only 404 proves absent');
     if (d.status.startsWith('UNPINNED:'))

@@ -471,7 +471,7 @@ for (const [label, edit] of [
   [
     'redirect outside NVIDIA',
     (t) => {
-      t.drivers[0].probe.final_url = 'https://example.com/file';
+      t.drivers[0].probe.final_url = t.drivers[0].url.replace('download.nvidia.com', 'example.com');
     },
   ],
   [
@@ -520,7 +520,10 @@ for (const [label, edit] of [
   [
     'notebook-only Windows installer',
     (t) => {
-      t.drivers[8].url = t.drivers[8].url.replace('-desktop-', '-notebook-');
+      const d = t.drivers[8];
+      d.url = d.url.replace('-desktop-', '-notebook-');
+      d.probe.final_url = d.url;
+      d.checksum_source.url = d.url;
     },
   ],
   [
@@ -738,3 +741,193 @@ test('small pools agree with an exhaustive independent assignment oracle', () =>
 });
 
 export { fixture, driver, box, versions };
+
+// RV2 falsifier: inconsistent artifact identities must fail at both public entry points,
+// before an assignment. Each control first proves this exact pool can fill two boxes.
+function setWindowsIdentity(d, value) {
+  d.url = value;
+  d.probe.final_url = value;
+  d.checksum_source.url = value;
+}
+const rv2Conflicts = [
+  [
+    'filename version',
+    (t) =>
+      t.drivers
+        .filter((d) => d.os === 'windows')
+        .forEach((d) => {
+          setWindowsIdentity(d, d.url.replace('/' + d.version + '-desktop-', '/535.01-desktop-'));
+        }),
+  ],
+  [
+    '32-bit Windows filename',
+    (t) =>
+      t.drivers
+        .filter((d) => d.os === 'windows')
+        .forEach((d) => {
+          setWindowsIdentity(d, d.url.replace('-64bit-', '-32bit-'));
+        }),
+  ],
+  [
+    'non-Windows filename',
+    (t) =>
+      t.drivers
+        .filter((d) => d.os === 'windows')
+        .forEach((d) => {
+          setWindowsIdentity(d, d.url.replace('-win10-win11-', '-linux-'));
+        }),
+  ],
+  [
+    'version directory',
+    (t) => {
+      const d = t.drivers[8];
+      setWindowsIdentity(d, d.url.replace('/Windows/' + d.version + '/', '/Windows/535.01/'));
+    },
+  ],
+  [
+    'installer query',
+    (t) => {
+      const d = t.drivers[8];
+      setWindowsIdentity(d, d.url + '?other=535.01');
+    },
+  ],
+  [
+    'Windows HEAD final version',
+    (t) => {
+      t.drivers[8].probe.final_url = url('windows', '535.01');
+    },
+  ],
+  [
+    'Linux HEAD final version',
+    (t) => {
+      t.drivers[0].probe.final_url = url('linux', '535.01');
+    },
+  ],
+  [
+    'same-version HEAD package variant',
+    (t) => {
+      const d = t.drivers[8];
+      d.probe.final_url = d.url.replace('-desktop-', '-quadro-rtx-desktop-notebook-');
+    },
+  ],
+  [
+    'unproven same-filename path alias',
+    (t) => {
+      const d = t.drivers[8];
+      d.probe.final_url = d.url.replace('/Windows/', '/Windows/Quadro_Certified/');
+    },
+  ],
+  [
+    'download receipt version',
+    (t) => {
+      t.drivers[8].checksum_source.url = url('windows', '535.01');
+    },
+  ],
+  [
+    'download receipt package variant',
+    (t) => {
+      const d = t.drivers[8];
+      d.checksum_source.url = d.url.replace('-desktop-', '-quadro-rtx-desktop-notebook-');
+    },
+  ],
+  [
+    'download receipt final version',
+    (t) => {
+      t.drivers[8].checksum_source.final_url = url('windows', '535.01');
+    },
+  ],
+  [
+    'Linux checksum filename',
+    (t) => {
+      const d = t.drivers[0];
+      d.checksum_source.url = d.url.replace('.run', '-no-compat32.run') + '.sha256sum';
+    },
+  ],
+  [
+    'Linux checksum directory',
+    (t) => {
+      t.drivers[0].checksum_source.url = new URL('sha256sum.txt', url('linux', '535.01')).href;
+    },
+  ],
+  [
+    'Linux checksum final identity',
+    (t) => {
+      t.drivers[0].checksum_source.final_url = url('linux', '535.01') + '.sha256sum';
+    },
+  ],
+  [
+    'Windows pin using Linux sidecar kind',
+    (t) => {
+      t.drivers[8].checksum_source.kind = 'nvidia-sha256';
+      t.drivers[8].checksum_source.url += '.sha256sum';
+    },
+  ],
+];
+for (const [label, corrupt] of rv2Conflicts) {
+  for (const entry of ['schema', 'selection']) {
+    test('RV2 ' + entry + ' refuses ' + label + ' before assignment', () => {
+      const t = fixture(),
+        boxes = [box('a'), box('b')];
+      assert.equal(versions(selectDrivers('rv2', boxes, t)).length, 6);
+      corrupt(t);
+      assert.throws(
+        () => (entry === 'schema' ? validateTable(t) : selectDrivers('rv2', boxes, t)),
+        /identity|checksum/,
+      );
+    });
+  }
+}
+for (const os of ['linux', 'windows']) {
+  test('RV2 official CDN host alias preserves ' + os + ' assignments', () => {
+    const t = fixture();
+    t.drivers
+      .filter((d) => d.os === os)
+      .forEach((d) => {
+        d.probe.final_url = d.url.replace(
+          new URL(d.url).hostname,
+          'international.download.nvidia.com',
+        );
+        d.checksum_source.url = d.checksum_source.url.replace(
+          new URL(d.url).hostname,
+          'download.nvidia.com',
+        );
+        d.checksum_source.final_url = d.checksum_source.url.replace(
+          'download.nvidia.com',
+          'us.download.nvidia.com',
+        );
+      });
+    assert.equal(validateTable(t), true);
+    assert.equal(new Set(versions(selectDrivers('rv2', [box('a'), box('b')], t))).size, 6);
+  });
+}
+for (const filename of ['sha256sum.txt', 'SHA256SUMS']) {
+  test('RV2 Linux directory checksum control accepts ' + filename, () => {
+    const t = fixture();
+    t.drivers
+      .filter((d) => d.os === 'linux')
+      .forEach((d) => {
+        d.checksum_source.url = new URL(filename, d.url).href;
+      });
+    assert.equal(validateTable(t), true);
+    assert.equal(versions(selectDrivers('rv2', [box('a'), box('b')], t)).length, 6);
+  });
+}
+test('RV2 published enterprise desktop-notebook identity remains valid', () => {
+  const t = fixture();
+  t.drivers
+    .filter((d) => d.os === 'windows')
+    .forEach((d) => {
+      setWindowsIdentity(
+        d,
+        d.url
+          .replace('/Windows/', '/Windows/Quadro_Certified/')
+          .replace('-desktop-', '-quadro-rtx-desktop-notebook-'),
+      );
+      d.product_line = 'rtx-enterprise';
+    });
+  assert.equal(validateTable(t), true);
+  assert.equal(
+    versions(selectDrivers('rv2', [{ ...box(), product_line: 'rtx-enterprise' }], t)).length,
+    3,
+  );
+});

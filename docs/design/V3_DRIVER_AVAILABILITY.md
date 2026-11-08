@@ -153,6 +153,42 @@ in the archived API responses in `observations.json`:** NVIDIA assigns Windows
 Windows branch assignments therefore carry explicit official evidence instead
 of being computed from the version's leading digits.
 
+## Installer identity admission
+
+**DESIGN; implemented and fixture-tested:** a claimed Windows version must match
+both the version directory and the filename's version. Admission recognizes the
+two published x64 Windows 10/11 international DCH WHQL filename forms in this
+snapshot: desktop, and RTX Enterprise desktop/notebook. A different architecture,
+OS token, filename version or query-selected artifact is refused.
+
+**CODE READ:** before selecting any version, the validator checks each HTTP200
+HEAD final URL against the requested installer's complete path. A streamed-hash
+receipt must identify that same installer. Linux NVIDIA checksum receipts must
+name either the exact requested runfile's sidecar or the same directory's
+sha256sum.txt/SHA256SUMS, whose body the generator parses for the exact filename.
+An optional checksum final URL must preserve the requested checksum path.
+
+**DESIGN:** an alias may change the official NVIDIA download CDN hostname while
+preserving the complete path and having no query. No path alias is inferred from
+a shared filename: different directories or package variants are refused until
+separately justified. These checks establish metadata consistency; they do not
+inspect a vendor installer's contents or qualify hardware.
+
+**CODE READ:** collection rejects mismatching requested/HEAD/checksum identities.
+A reused Windows pin must have a matching receipt; any recorded prior HEAD
+identity must also match.
+Explicit hashing checks the recorded HEAD and actual stream URL before reading
+bytes or marking PINNED, and stores the actual final stream URL as checksum
+provenance. Existing receipts retain only their recorded evidence; no historical
+final URL is invented. The saved catalog and its original HTTP observations are
+unchanged by this correction.
+
+**Falsifier:** either public JS entry point accepts a conflicting installer or
+receipt, the generator pins a conflicting mocked stream, or the same-path
+official CDN host controls fail. The synthetic collection-to-hash-to-assignment
+control must fill all six axes on two boxes; corrupting its receipt must throw
+without emitting an assignment.
+
 ## Offline selection contract
 
 **DESIGN; implemented and fixture-tested:**
@@ -217,10 +253,15 @@ research, not a freshness assertion. Omit it to make new requests. No default
 path downloads an installer. `check.mjs TABLE.json BOXES.json SEED` also prints
 a proposed selection or exits nonzero with the blocking reason.
 
-**MEASURED GPU-free:** 87 selector tests include an exhaustive independent
-assignment oracle over 108 small pools; 55 Python tests cover parsing, exact
+**MEASURED GPU-free on 2026-11-08:** 124 selector tests include an exhaustive independent
+assignment oracle over 108 small pools; 74 Python tests cover parsing, exact
 checksum binding, provenance, HEAD classification, bounded hashing/deletion,
-and byte-identical offline regeneration. The mutation receipt is
+and byte-identical offline regeneration. Before the identity correction, the
+added regressions produced 30 JS failures and 17 Python failures; all now pass.
+All 58 mutants, including 19 new identity mutants, have at least two named
+killers each. The stream controls use only three synthetic bytes, mocked
+transport and private temporary lock files; no NVIDIA installer or live network
+is used by these tests. The mutation receipt is
 [`validation.json`](../../ci/vast-broker/driver-availability/validation.json). Every listed mutant must have at least two
 distinct named killers; a source/test edit during the mutation run invalidates
 its result. The runner explicitly requests TAP instead of relying on Node's

@@ -170,7 +170,53 @@ CASES = [
         "windows-branch-evidence-ignored",
         changed(JS, "d.branch_evidence.branch === d.branch", "true"),
     ),
-    ("js", "notebook-installer-admitted", changed(JS, "path.includes('-desktop-')", "true")),
+    (
+        "js",
+        "notebook-installer-admitted",
+        changed(
+            JS,
+            "(?:desktop|quadro-rtx-desktop-notebook)",
+            "(?:desktop|notebook|quadro-rtx-desktop-notebook)",
+        ),
+    ),
+    ("js", "filename-version-not-bound", changed(JS, "filename?.[1] === version", "true")),
+    (
+        "js",
+        "windows-architecture-not-bound",
+        changed(JS, "-win10-win11-64bit-", "-win10-win11-(?:32|64)bit-"),
+    ),
+    ("js", "windows-os-not-bound", changed(JS, "-win10-win11-", "-(?:win10-win11|linux)-")),
+    ("js", "version-directory-not-bound", changed(JS, "location?.[1] === version", "true")),
+    (
+        "js",
+        "installer-query-admitted",
+        changed(JS, "if (u.search) return null;", "if (false) return null;"),
+    ),
+    (
+        "js",
+        "head-final-installer-not-bound",
+        changed(JS, "insist(sameInstaller(d, d.probe.final_url),", "insist(true,"),
+    ),
+    (
+        "js",
+        "download-receipt-installer-not-bound",
+        changed(JS, "? sameInstaller(d, raw)", "? true"),
+    ),
+    ("js", "linux-checksum-installer-not-bound", changed(JS, ": checksumPath(d, raw)", ": true")),
+    (
+        "js",
+        "checksum-final-identity-not-bound",
+        changed(JS, "if (d.checksum_source.final_url !== undefined)", "if (false)"),
+    ),
+    (
+        "js",
+        "same-version-package-path-not-bound",
+        changed(
+            JS,
+            "return expected !== null && installerPath(raw, d.os, d.version) === expected;",
+            "return expected !== null && installerPath(raw, d.os, d.version) !== null;",
+        ),
+    ),
     (
         "py",
         "checksum-filename-ignored",
@@ -239,6 +285,49 @@ CASES = [
             PY,
             "return super().redirect_request(req, fp, code, msg, headers, newurl)",
             'redirected = super().redirect_request(req, fp, code, msg, headers, newurl)\n        redirected.method = "GET"\n        return redirected',
+        ),
+    ),
+    ("py", "filename-version-not-bound", changed(PY, "filename[1] != version", "False")),
+    (
+        "py",
+        "windows-architecture-not-bound",
+        changed(PY, "-win10-win11-64bit-", "-win10-win11-(?:32|64)bit-"),
+    ),
+    (
+        "py",
+        "head-final-installer-not-bound",
+        changed(PY, 'if not same_installer(d, head.get("final_url", url)):', "if False:"),
+    ),
+    (
+        "py",
+        "checksum-final-identity-not-bound",
+        changed(
+            PY, "return expected is not None and download_path(final) == expected", "return True"
+        ),
+    ),
+    (
+        "py",
+        "previous-pin-identity-not-bound",
+        changed(PY, "and valid_previous_pin(d, previous)", "and True"),
+    ),
+    (
+        "py",
+        "hash-recorded-head-not-bound",
+        changed(PY, 'if not same_installer(d, d.get("probe", {}).get("final_url")):', "if False:"),
+    ),
+    (
+        "py",
+        "hash-stream-final-not-bound",
+        changed(PY, "if not same_installer(d, stream.url):", "if False:"),
+    ),
+    ("py", "hash-receipt-discards-final-url", changed(PY, '"url": stream.url', '"url": d["url"]')),
+    (
+        "py",
+        "same-version-package-path-not-bound",
+        changed(
+            PY,
+            'return expected is not None and installer_path(raw, d["os"], d["version"]) == expected',
+            'return expected is not None and installer_path(raw, d["os"], d["version"]) is not None',
         ),
     ),
 ]

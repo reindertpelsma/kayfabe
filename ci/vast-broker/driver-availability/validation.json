@@ -1,12 +1,13 @@
 {
   "status": "DESIGN-ONLY",
-  "checked_at": "2026-11-08T03:13:18Z",
-  "evidence_kind": "MEASURED GPU-free checks; public HTTP metadata and streamed hashes; CODE READ historical repository records",
-  "base_revision": "624bf1dfcf98fac362bc63478e7f9cdb65c4aedf",
+  "checked_at": "2026-11-08T14:14:56Z",
+  "evidence_kind": "MEASURED GPU-free checks and synthetic transport controls; CODE READ original dated HTTP observations and repository records; no fresh vendor probes",
+  "base_revision": "43cc8941183cf75e4c2863d5d8d2e160cae81e0a",
   "tests": {
     "baseline_release_regression": {
       "passed": 22,
-      "failed": 0
+      "failed": 0,
+      "at_revision": "624bf1dfcf98fac362bc63478e7f9cdb65c4aedf"
     },
     "before_implementation": {
       "selector": "expected import failure; module absent",
@@ -14,17 +15,18 @@
     },
     "after": {
       "selector": {
-        "passed": 87,
+        "passed": 124,
         "failed": 0,
         "independent_exhaustive_pool_cases": 108
       },
       "generator": {
-        "passed": 55,
+        "passed": 74,
         "failed": 0
       },
       "release_regression": {
         "passed": 22,
-        "failed": 0
+        "failed": 0,
+        "at_revision": "624bf1dfcf98fac362bc63478e7f9cdb65c4aedf"
       },
       "shared_broker": {
         "tests": 3272,
@@ -32,7 +34,9 @@
         "failed": 0,
         "skipped": 1,
         "node": "24.22.2",
-        "python": "3.14.4"
+        "python": "3.14.4",
+        "at_revision": "61418236542605dfb9338968cebf970bc0d0e4d4",
+        "historical": true
       }
     },
     "offline_regeneration": "byte-identical; Client construction forbidden in the test",
@@ -45,7 +49,8 @@
         "passed": 55,
         "failed": 0
       },
-      "reason": "Runner must explicitly request TAP for both the baseline and mutant subprocess paths"
+      "reason": "Runner must explicitly request TAP for both the baseline and mutant subprocess paths",
+      "at_revision": "f66507d2830f96331b99cf78f3277e706bc325f5"
     }
   },
   "catalog": {
@@ -60,12 +65,12 @@
   "mutations": {
     "rule": "every mutant >=2 distinct named killers",
     "input_sha256": {
-      "validate.js": "48d5e5626e4049fda1514634f722b5f3d9b2a5eb113bc1088b624a6ff26aefdb",
-      "generate.py": "f229f90c6971b05bb367cfd1e73c66691083bc102ab3a1b380d8362caf692218",
-      "selector.test.js": "4ce85e23893c1723af026bc3547b149781f9a033d3ed6fa4c4f8bd0a21288fa9",
-      "test_generate.py": "a5146426ec70f14a4c4a63412d4ee569c9725038ba814d10e889ebfadceeff5e",
+      "validate.js": "556a061fd6dc5fb4d6947c9eec8a0531f2e4d30f19280f778f32e8287eb50d9b",
+      "generate.py": "632bd57281eebaa2243d0e5188367b206f9d2dfdebd4ef88f4165a11667f8119",
+      "selector.test.js": "204f95fa98ca78a28237034c500b8464f30c8d58c7e0b645e6c2fdc52e9abdcd",
+      "test_generate.py": "0b49daee3ecb485cf46a276749b784e6282cae3388669b95886c1d9d9dc40520",
       "sources.json": "7c725d0d6d313970d0fdeacd23a37429486f0778f4e19203958795b498150bfc",
-      "mutants.py": "3a069a24ed95da3c0dbdffe0e58804f74cc120ab8acc21b3403363601bb7c296"
+      "mutants.py": "8c43d78c1a6e1fb568e5e545d6ce3be08031ff3f5a1566ae72526df2c747e874"
     },
     "mutants": [
       {
@@ -95,6 +100,8 @@
         "killers": [
           "403 linux is never selected",
           "404 linux is never selected",
+          "RV2 official CDN host alias preserves linux assignments",
+          "RV2 official CDN host alias preserves windows assignments",
           "UNPINNED linux is never selected",
           "a core reference for another version cannot be reused",
           "a designation in each family still cannot share across families",
@@ -113,7 +120,7 @@
           "ordinary roles cannot use the core sharing exception",
           "small pools agree with an exhaustive independent assignment oracle"
         ],
-        "killer_count": 19
+        "killer_count": 21
       },
       {
         "name": "ownership-reset-between-branches",
@@ -355,6 +362,130 @@
         "killer_count": 2
       },
       {
+        "name": "filename-version-not-bound",
+        "language": "js",
+        "exit_code": 1,
+        "killers": [
+          "RV2 schema refuses 32-bit Windows filename before assignment",
+          "RV2 schema refuses filename version before assignment",
+          "RV2 schema refuses non-Windows filename before assignment",
+          "RV2 selection refuses 32-bit Windows filename before assignment",
+          "RV2 selection refuses filename version before assignment",
+          "RV2 selection refuses non-Windows filename before assignment",
+          "schema rejects notebook-only Windows installer",
+          "selector rejects notebook-only Windows installer before assignment"
+        ],
+        "killer_count": 8
+      },
+      {
+        "name": "windows-architecture-not-bound",
+        "language": "js",
+        "exit_code": 1,
+        "killers": [
+          "RV2 schema refuses 32-bit Windows filename before assignment",
+          "RV2 selection refuses 32-bit Windows filename before assignment"
+        ],
+        "killer_count": 2
+      },
+      {
+        "name": "windows-os-not-bound",
+        "language": "js",
+        "exit_code": 1,
+        "killers": [
+          "RV2 schema refuses non-Windows filename before assignment",
+          "RV2 selection refuses non-Windows filename before assignment"
+        ],
+        "killer_count": 2
+      },
+      {
+        "name": "version-directory-not-bound",
+        "language": "js",
+        "exit_code": 1,
+        "killers": [
+          "RV2 schema refuses version directory before assignment",
+          "RV2 selection refuses version directory before assignment"
+        ],
+        "killer_count": 2
+      },
+      {
+        "name": "installer-query-admitted",
+        "language": "js",
+        "exit_code": 1,
+        "killers": [
+          "RV2 schema refuses installer query before assignment",
+          "RV2 selection refuses installer query before assignment"
+        ],
+        "killer_count": 2
+      },
+      {
+        "name": "head-final-installer-not-bound",
+        "language": "js",
+        "exit_code": 1,
+        "killers": [
+          "RV2 schema refuses Linux HEAD final version before assignment",
+          "RV2 schema refuses Windows HEAD final version before assignment",
+          "RV2 schema refuses same-version HEAD package variant before assignment",
+          "RV2 schema refuses unproven same-filename path alias before assignment",
+          "RV2 selection refuses Linux HEAD final version before assignment",
+          "RV2 selection refuses Windows HEAD final version before assignment",
+          "RV2 selection refuses same-version HEAD package variant before assignment",
+          "RV2 selection refuses unproven same-filename path alias before assignment"
+        ],
+        "killer_count": 8
+      },
+      {
+        "name": "download-receipt-installer-not-bound",
+        "language": "js",
+        "exit_code": 1,
+        "killers": [
+          "RV2 schema refuses download receipt package variant before assignment",
+          "RV2 schema refuses download receipt version before assignment",
+          "RV2 selection refuses download receipt package variant before assignment",
+          "RV2 selection refuses download receipt version before assignment"
+        ],
+        "killer_count": 4
+      },
+      {
+        "name": "linux-checksum-installer-not-bound",
+        "language": "js",
+        "exit_code": 1,
+        "killers": [
+          "RV2 schema refuses Linux checksum directory before assignment",
+          "RV2 schema refuses Linux checksum filename before assignment",
+          "RV2 schema refuses Windows pin using Linux sidecar kind before assignment",
+          "RV2 selection refuses Linux checksum directory before assignment",
+          "RV2 selection refuses Linux checksum filename before assignment",
+          "RV2 selection refuses Windows pin using Linux sidecar kind before assignment"
+        ],
+        "killer_count": 6
+      },
+      {
+        "name": "checksum-final-identity-not-bound",
+        "language": "js",
+        "exit_code": 1,
+        "killers": [
+          "RV2 schema refuses Linux checksum final identity before assignment",
+          "RV2 schema refuses download receipt final version before assignment",
+          "RV2 selection refuses Linux checksum final identity before assignment",
+          "RV2 selection refuses download receipt final version before assignment"
+        ],
+        "killer_count": 4
+      },
+      {
+        "name": "same-version-package-path-not-bound",
+        "language": "js",
+        "exit_code": 1,
+        "killers": [
+          "RV2 schema refuses download receipt package variant before assignment",
+          "RV2 schema refuses same-version HEAD package variant before assignment",
+          "RV2 schema refuses unproven same-filename path alias before assignment",
+          "RV2 selection refuses download receipt package variant before assignment",
+          "RV2 selection refuses same-version HEAD package variant before assignment",
+          "RV2 selection refuses unproven same-filename path alias before assignment"
+        ],
+        "killer_count": 6
+      },
+      {
         "name": "checksum-filename-ignored",
         "language": "py",
         "exit_code": 1,
@@ -391,14 +522,30 @@
         "killers": [
           "test_403_is_unknown_not_absent (__main__.Probes.test_403_is_unknown_not_absent)",
           "test_fallback_sha256sum_txt (__main__.Probes.test_fallback_sha256sum_txt)",
+          "test_hash_refuses_conflicting_recorded_head_package (__main__.InstallerIdentity.test_hash_refuses_conflicting_recorded_head_package)",
+          "test_hash_refuses_conflicting_recorded_head_version (__main__.InstallerIdentity.test_hash_refuses_conflicting_recorded_head_version)",
+          "test_hash_refuses_conflicting_requested_filename (__main__.InstallerIdentity.test_hash_refuses_conflicting_requested_filename)",
+          "test_hash_refuses_stream_of_other_package (__main__.InstallerIdentity.test_hash_refuses_stream_of_other_package)",
+          "test_hash_refuses_stream_of_other_version (__main__.InstallerIdentity.test_hash_refuses_stream_of_other_version)",
+          "test_hash_refuses_wrong_requested_architecture (__main__.InstallerIdentity.test_hash_refuses_wrong_requested_architecture)",
+          "test_hash_retains_actual_download_cdn_url (__main__.InstallerIdentity.test_hash_retains_actual_download_cdn_url)",
+          "test_hash_retains_actual_international_cdn_url (__main__.InstallerIdentity.test_hash_retains_actual_international_cdn_url)",
           "test_head_200_and_official_sha256_pins (__main__.Probes.test_head_200_and_official_sha256_pins)",
+          "test_linux_checksum_cannot_redirect_to_another_directory (__main__.InstallerIdentity.test_linux_checksum_cannot_redirect_to_another_directory)",
+          "test_linux_checksum_final_filename_must_match (__main__.InstallerIdentity.test_linux_checksum_final_filename_must_match)",
+          "test_linux_head_cannot_identify_another_version (__main__.InstallerIdentity.test_linux_head_cannot_identify_another_version)",
+          "test_matching_previous_pin_keeps_its_original_receipt (__main__.InstallerIdentity.test_matching_previous_pin_keeps_its_original_receipt)",
+          "test_matching_stream_hash_control_pins_only_exact_bytes (__main__.InstallerIdentity.test_matching_stream_hash_control_pins_only_exact_bytes)",
           "test_md5_sidecar_is_not_an_active_pin (__main__.Probes.test_md5_sidecar_is_not_an_active_pin)",
           "test_missing_content_length_stays_unknown (__main__.Probes.test_missing_content_length_stays_unknown)",
           "test_missing_sha256_stays_unpinned (__main__.Probes.test_missing_sha256_stays_unpinned)",
+          "test_previous_head_for_other_installer_is_not_reused (__main__.InstallerIdentity.test_previous_head_for_other_installer_is_not_reused)",
+          "test_previous_receipt_for_other_installer_is_not_reused (__main__.InstallerIdentity.test_previous_receipt_for_other_installer_is_not_reused)",
           "test_probe_does_not_get_installer (__main__.Probes.test_probe_does_not_get_installer)",
-          "test_timeout_is_unknown_not_absent (__main__.Probes.test_timeout_is_unknown_not_absent)"
+          "test_timeout_is_unknown_not_absent (__main__.Probes.test_timeout_is_unknown_not_absent)",
+          "test_windows_head_cannot_identify_another_version (__main__.InstallerIdentity.test_windows_head_cannot_identify_another_version)"
         ],
-        "killer_count": 8
+        "killer_count": 24
       },
       {
         "name": "missing-checksum-promoted",
@@ -489,6 +636,96 @@
           "test_302_redirect_preserves_head_method (__main__.Probes.test_302_redirect_preserves_head_method)"
         ],
         "killer_count": 2
+      },
+      {
+        "name": "filename-version-not-bound",
+        "language": "py",
+        "exit_code": 1,
+        "killers": [
+          "test_api_refuses_conflicting_filename_version (__main__.InstallerIdentity.test_api_refuses_conflicting_filename_version)",
+          "test_hash_refuses_conflicting_requested_filename (__main__.InstallerIdentity.test_hash_refuses_conflicting_requested_filename)"
+        ],
+        "killer_count": 2
+      },
+      {
+        "name": "windows-architecture-not-bound",
+        "language": "py",
+        "exit_code": 1,
+        "killers": [
+          "test_api_refuses_32bit_windows_filename (__main__.InstallerIdentity.test_api_refuses_32bit_windows_filename)",
+          "test_hash_refuses_wrong_requested_architecture (__main__.InstallerIdentity.test_hash_refuses_wrong_requested_architecture)"
+        ],
+        "killer_count": 2
+      },
+      {
+        "name": "head-final-installer-not-bound",
+        "language": "py",
+        "exit_code": 1,
+        "killers": [
+          "test_linux_head_cannot_identify_another_version (__main__.InstallerIdentity.test_linux_head_cannot_identify_another_version)",
+          "test_windows_head_cannot_identify_another_version (__main__.InstallerIdentity.test_windows_head_cannot_identify_another_version)"
+        ],
+        "killer_count": 2
+      },
+      {
+        "name": "checksum-final-identity-not-bound",
+        "language": "py",
+        "exit_code": 1,
+        "killers": [
+          "test_linux_checksum_cannot_redirect_to_another_directory (__main__.InstallerIdentity.test_linux_checksum_cannot_redirect_to_another_directory)",
+          "test_linux_checksum_final_filename_must_match (__main__.InstallerIdentity.test_linux_checksum_final_filename_must_match)"
+        ],
+        "killer_count": 2
+      },
+      {
+        "name": "previous-pin-identity-not-bound",
+        "language": "py",
+        "exit_code": 1,
+        "killers": [
+          "test_previous_head_for_other_installer_is_not_reused (__main__.InstallerIdentity.test_previous_head_for_other_installer_is_not_reused)",
+          "test_previous_receipt_for_other_installer_is_not_reused (__main__.InstallerIdentity.test_previous_receipt_for_other_installer_is_not_reused)"
+        ],
+        "killer_count": 2
+      },
+      {
+        "name": "hash-recorded-head-not-bound",
+        "language": "py",
+        "exit_code": 1,
+        "killers": [
+          "test_hash_refuses_conflicting_recorded_head_package (__main__.InstallerIdentity.test_hash_refuses_conflicting_recorded_head_package)",
+          "test_hash_refuses_conflicting_recorded_head_version (__main__.InstallerIdentity.test_hash_refuses_conflicting_recorded_head_version)"
+        ],
+        "killer_count": 2
+      },
+      {
+        "name": "hash-stream-final-not-bound",
+        "language": "py",
+        "exit_code": 1,
+        "killers": [
+          "test_hash_refuses_stream_of_other_package (__main__.InstallerIdentity.test_hash_refuses_stream_of_other_package)",
+          "test_hash_refuses_stream_of_other_version (__main__.InstallerIdentity.test_hash_refuses_stream_of_other_version)"
+        ],
+        "killer_count": 2
+      },
+      {
+        "name": "hash-receipt-discards-final-url",
+        "language": "py",
+        "exit_code": 1,
+        "killers": [
+          "test_hash_retains_actual_download_cdn_url (__main__.InstallerIdentity.test_hash_retains_actual_download_cdn_url)",
+          "test_hash_retains_actual_international_cdn_url (__main__.InstallerIdentity.test_hash_retains_actual_international_cdn_url)"
+        ],
+        "killer_count": 2
+      },
+      {
+        "name": "same-version-package-path-not-bound",
+        "language": "py",
+        "exit_code": 1,
+        "killers": [
+          "test_hash_refuses_conflicting_recorded_head_package (__main__.InstallerIdentity.test_hash_refuses_conflicting_recorded_head_package)",
+          "test_hash_refuses_stream_of_other_package (__main__.InstallerIdentity.test_hash_refuses_stream_of_other_package)"
+        ],
+        "killer_count": 2
       }
     ]
   },
@@ -501,11 +738,15 @@
   "final_gates": {
     "doc_freshness": {
       "result": "PASS",
-      "output": "doc freshness: checked=212 existing-debt=0 new=0"
+      "output": "doc freshness: checked=215 existing-debt=0 new=0"
     },
     "release_claims": {
       "result": "PASS",
-      "output": "WARN row 44 (perf-app-matrix-seconds-1075-1193): verified but action update-wording; is the wording the problem?\nWARN row 54 (win-minecraft-in-a-world): verified but action update-wording; is the wording the problem?\nWARN row 70 (win-3dmark-steel-nomad-runs-to-end): verified but action update-wording; is the wording the problem?\nrelease_claims: 133 claims, 0 errors, 3 warnings"
+      "output": "release_claims: 55 claims, 0 errors, 0 warnings"
+    },
+    "claim_ledger_debt": {
+      "result": "PASS",
+      "output": "claims: existing-debt=3748 new=0 resolved=1"
     },
     "no_private_refs": {
       "result": "PASS",
@@ -532,12 +773,13 @@
     "binary_files": 0,
     "files": 12,
     "followup_files": 4,
-    "format_followup_files": 9
+    "format_followup_files": 9,
+    "rv2_fix_files": 7
   },
   "artifact_sha256": {
     "ci/vast-broker/driver-availability.json": "6fc40ac073f4e0b5d78858b9d9269bfac4439fe80c87e04c8e8408ab6bf0d964",
     "ci/vast-broker/driver-availability/observations.json": "0424a0ab46965db5e1e644319bdc1b13b4f95fb691982b6032fee9a8638658b3",
-    "docs/design/V3_DRIVER_AVAILABILITY.md": "0d16568d117210a07c51f93e6220ea923797311da20841c1672e0fee7f6f88af",
+    "docs/design/V3_DRIVER_AVAILABILITY.md": "9a060411923df1724612ecef66158c2b8c9a9e3a89779c9ee9996024a346f101",
     ".github/workflows/driver-availability.yml": "1eef552aed627bab8f1a945a615f6ce622c00c1d2c28dabe5417569698f708b4"
   },
   "github_first_run": {
@@ -593,5 +835,45 @@
     },
     "baseline_modified": false,
     "change": "Label NVIDIA publication/catalog/API readings as CODE READ; cite the dated HTTP receipt for Linux checksum publication; describe the design hash field without implying a measurement."
+  },
+  "rv2_review_fix": {
+    "reviewed_head": "0dce1c6491a072cad5fae217998562c6f132e770",
+    "merged_next": "43cc8941183cf75e4c2863d5d8d2e160cae81e0a",
+    "merge_commit": "b2c1a93fe4857f6ec9b1524cc2622737e82f0b64",
+    "finding": "P2 exact installer identity not bound before PINNED or assignment",
+    "closure_falsifier": "A conflicting requested filename, HEAD final identity or streamed receipt reaches PINNED/assignment, or a same-path official CDN host control is refused.",
+    "implementation_and_adversarial_checks": "PASS",
+    "before_with_new_tests": {
+      "js": {
+        "passed": 94,
+        "failed": 30
+      },
+      "python": {
+        "passed": 57,
+        "failed": 17
+      }
+    },
+    "after": {
+      "js_passed": 124,
+      "python_passed": 74,
+      "failed": 0,
+      "mutants_killed": 58,
+      "minimum_named_killers": 2
+    },
+    "controls": [
+      "Two boxes receive six distinct exact versions from a valid pool before each JS corruption",
+      "Windows filename version, directory, x64 Windows tokens and queries are checked",
+      "HEAD and receipt final identities preserve the full installer path",
+      "Official NVIDIA download CDN host substitutions keep the same path",
+      "Linux sidecar or same-directory checksum identity remains bound to the exact filename parser",
+      "Three synthetic streamed bytes produce pins and a complete JS assignment; corrupting the receipt emits no assignment",
+      "Wrong final streams are refused before any stream.read; receipts retain actual final CDN URL",
+      "Private temporary lock files preserve real flock while isolating parallel fake downloads"
+    ],
+    "live_network_in_new_tests": "forbidden by mocked OpenerDirector.open",
+    "nvidia_installer_downloads_in_tests": 0,
+    "catalog_and_observations": "unchanged; original dated snapshot, no fresh public discovery",
+    "core_reference_policy": "unchanged authorized explicit same-family exception; committed designation list empty",
+    "shared_ci_evidence": "Exact merged broker/admin CI run block and final status are reported separately in the final lane report; no current result is borrowed from historical tests.after.shared_broker"
   }
 }

@@ -350,19 +350,20 @@ class Probes(unittest.TestCase):
 
     def test_sha256_reuse_requires_same_url_and_size(self):
         h = response()
+        url = "https://us.download.nvidia.com/Windows/580.1/580.1-desktop-win10-win11-64bit-international-dch-whql.exe"
         for old in [
-            {"url": self.url, "size": 999, "sha256": "a" * 64},
-            {"url": self.url + "other", "size": 123, "sha256": "a" * 64},
+            {"url": url, "size": 999, "sha256": "a" * 64},
+            {"url": url + "other", "size": 123, "sha256": "a" * 64},
         ]:
             row = {
                 "os": "windows",
                 "branch": 580,
                 "version": "580.1",
-                "url": self.url,
+                "url": url,
                 "discovery_source_urls": [g.WINDOWS_HISTORY],
             }
             self.assertNotEqual(
-                g.collect_installer(row, FakeClient({("HEAD", self.url): h}), old)["status"],
+                g.collect_installer(row, FakeClient({("HEAD", url): h}), old)["status"],
                 "PINNED",
             )
 
@@ -512,6 +513,271 @@ class MutationRunner(unittest.TestCase):
             result = runner.run("js", "probe-mutant", runner.JS)
         self.assertIn("--test-reporter=tap", run.call_args.args[0])
         self.assertEqual(result["killer_count"], 2)
+
+
+class InstallerIdentity(unittest.TestCase):
+    """RV2 controls use real discovery/collection/hash functions and three fake bytes."""
+
+    def setUp(self):
+        guard = patch.object(
+            g.urllib.request.OpenerDirector,
+            "open",
+            side_effect=AssertionError("RV2 fixtures forbid live network"),
+        )
+        guard.start()
+        self.addCleanup(guard.stop)
+
+    def candidate(self, version="580.11", os="windows"):
+        url = (
+            f"https://us.download.nvidia.com/Windows/{version}/{version}-desktop-win10-win11-64bit-international-dch-whql.exe"
+            if os == "windows"
+            else f"https://download.nvidia.com/XFree86/Linux-x86_64/{version}/NVIDIA-Linux-x86_64-{version}.run"
+        )
+        return {
+            "os": os,
+            "version": version,
+            "branch": 580,
+            "url": url,
+            "branch_evidence": {"branch": 580, "version": version, "source_url": g.WINDOWS_HISTORY},
+            "discovery_source_urls": [g.WINDOWS_HISTORY],
+        }
+
+    def collect(self, candidate=None, final=None, previous=None):
+        c = candidate or self.candidate()
+        head = {**response(length=3), "final_url": final or c["url"]}
+        return g.collect_installer(c, FakeClient({("HEAD", c["url"]): head}), previous)
+
+    def stream_hash(self, row, final=None):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+
+        class Stream(io.BytesIO):
+            status = 200
+            reads = 0
+
+            def read(self, *args):
+                self.reads += 1
+                return super().read(*args)
+
+        stream = Stream(b"abc")
+        stream.url = final or row["url"]
+        self.last_stream = stream
+        opener = Mock(return_value=stream)
+        self.last_opener = opener
+        client = SimpleNamespace(opener=SimpleNamespace(open=opener), timeout=1)
+        # Keep the real flock, but isolate the fake download's lock across mutant
+        # subprocesses. A different mutant must never become a spurious lock error.
+        real_open = open
+        with tempfile.TemporaryDirectory(prefix="DRV1-fake-lock-") as lock_dir:
+
+            def isolated_open(path, *args, **kwargs):
+                target = (
+                    Path(lock_dir) / "hash.lock" if path == "/tmp/DRV1-driver-hash.lock" else path
+                )
+                return real_open(target, *args, **kwargs)
+
+            with (
+                patch.object(g, "open", isolated_open, create=True),
+                patch.object(g.shutil, "disk_usage", return_value=(100 * g.GIB, 0, 100 * g.GIB)),
+            ):
+                g.hash_download(row, client)
+        return stream, opener
+
+    def api(self, url):
+        return g.parse_driver_api(
+            {
+                "Success": "1",
+                "IDS": [
+                    {
+                        "downloadInfo": {
+                            "Version": "580.11",
+                            "Release": "580",
+                            "DownloadURL": url,
+                            "IsWHQL": "1",
+                        }
+                    }
+                ],
+            }
+        )
+
+    def test_api_refuses_conflicting_filename_version(self):
+        c = self.candidate()
+        self.assertEqual(self.api(c["url"].replace("/580.11-desktop-", "/535.01-desktop-")), [])
+
+    def test_api_refuses_32bit_windows_filename(self):
+        self.assertEqual(self.api(self.candidate()["url"].replace("-64bit-", "-32bit-")), [])
+
+    def test_hash_refuses_conflicting_requested_filename(self):
+        row = self.collect()
+        row["url"] = row["url"].replace("/580.11-desktop-", "/535.01-desktop-")
+        row["probe"]["final_url"] = row["url"]
+        with self.assertRaisesRegex(ValueError, "identity"):
+            self.stream_hash(row)
+        self.assertEqual(row["status"], "UNPINNED:needs-download")
+
+    def test_hash_refuses_wrong_requested_architecture(self):
+        row = self.collect()
+        row["url"] = row["url"].replace("-64bit-", "-32bit-")
+        row["probe"]["final_url"] = row["url"]
+        with self.assertRaisesRegex(ValueError, "identity"):
+            self.stream_hash(row)
+
+    def test_windows_head_cannot_identify_another_version(self):
+        with self.assertRaisesRegex(ValueError, "identity"):
+            self.collect(final=self.candidate("535.01")["url"])
+
+    def test_linux_head_cannot_identify_another_version(self):
+        with self.assertRaisesRegex(ValueError, "identity"):
+            self.collect(self.candidate("580.1", "linux"), self.candidate("535.01", "linux")["url"])
+
+    def checksum_redirect(self, final):
+        c = self.candidate("580.1", "linux")
+        reply = {**response("a" * 64 + "  NVIDIA-Linux-x86_64-580.1.run"), "final_url": final}
+        return g.collect_installer(
+            c,
+            FakeClient(
+                {
+                    ("HEAD", c["url"]): response(),
+                    ("GET", c["url"] + ".sha256sum"): reply,
+                }
+            ),
+        )
+
+    def test_linux_checksum_final_filename_must_match(self):
+        with self.assertRaisesRegex(ValueError, "identity"):
+            self.checksum_redirect(self.candidate("535.01", "linux")["url"] + ".sha256sum")
+
+    def test_linux_checksum_cannot_redirect_to_another_directory(self):
+        with self.assertRaisesRegex(ValueError, "identity"):
+            self.checksum_redirect("https://download.nvidia.com/other/sha256sum.txt")
+
+    def previous_pin(self):
+        row = self.collect()
+        row.update(
+            status="PINNED",
+            sha256="a" * 64,
+            checksum_source={
+                "kind": "download-sha256",
+                "url": row["url"],
+                "checked_at": "2026-11-07T00:00:00Z",
+            },
+        )
+        return row
+
+    def test_previous_receipt_for_other_installer_is_not_reused(self):
+        old = self.previous_pin()
+        old["checksum_source"]["url"] = self.candidate("535.01")["url"]
+        self.assertEqual(self.collect(previous=old)["status"], "UNPINNED:needs-download")
+
+    def test_previous_head_for_other_installer_is_not_reused(self):
+        old = self.previous_pin()
+        old["probe"]["final_url"] = self.candidate("535.01")["url"]
+        self.assertEqual(self.collect(previous=old)["status"], "UNPINNED:needs-download")
+
+    def test_matching_previous_pin_keeps_its_original_receipt(self):
+        old = self.previous_pin()
+        row = self.collect(previous=old)
+        self.assertEqual(row["status"], "PINNED")
+        self.assertEqual(row["checksum_source"], old["checksum_source"])
+
+    def test_hash_refuses_conflicting_recorded_head_version(self):
+        row = self.collect()
+        row["probe"]["final_url"] = self.candidate("535.01")["url"]
+        with self.assertRaisesRegex(ValueError, "identity"):
+            self.stream_hash(row)
+
+    def test_hash_refuses_conflicting_recorded_head_package(self):
+        row = self.collect()
+        row["probe"]["final_url"] = row["url"].replace("-desktop-", "-quadro-rtx-desktop-notebook-")
+        with self.assertRaisesRegex(ValueError, "identity"):
+            self.stream_hash(row)
+
+    def test_hash_refuses_stream_of_other_version(self):
+        row = self.collect()
+        with self.assertRaisesRegex(ValueError, "identity"):
+            self.stream_hash(row, self.candidate("535.01")["url"])
+        self.assertEqual(row["status"], "UNPINNED:needs-download")
+        self.assertIsNone(row["sha256"])
+        self.assertEqual(self.last_stream.reads, 0)
+
+    def test_hash_refuses_stream_of_other_package(self):
+        row = self.collect()
+        with self.assertRaisesRegex(ValueError, "identity"):
+            self.stream_hash(row, row["url"].replace("-desktop-", "-quadro-rtx-desktop-notebook-"))
+        self.assertIsNone(row["checksum_source"])
+        self.assertEqual(self.last_stream.reads, 0)
+
+    def test_hash_retains_actual_download_cdn_url(self):
+        row = self.collect()
+        final = row["url"].replace("us.download.nvidia.com", "download.nvidia.com")
+        self.stream_hash(row, final)
+        self.assertEqual(row["checksum_source"]["url"], final)
+
+    def test_hash_retains_actual_international_cdn_url(self):
+        row = self.collect()
+        final = row["url"].replace("us.download.nvidia.com", "international.download.nvidia.com")
+        self.stream_hash(row, final)
+        self.assertEqual(row["checksum_source"]["url"], final)
+
+    def test_matching_stream_hash_control_pins_only_exact_bytes(self):
+        row = self.collect()
+        stream, opener = self.stream_hash(row)
+        self.assertEqual(row["status"], "PINNED")
+        self.assertEqual(
+            row["sha256"], "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        )
+        self.assertEqual(row["checksum_source"]["url"], row["url"])
+        self.assertGreater(stream.reads, 0)
+        opener.assert_called_once()
+
+    @unittest.skipIf(
+        __import__("os").environ.get("DRV1_FIXTURES_ONLY"), "full catalog pipeline control"
+    )
+    def test_mocked_collection_and_hash_reach_complete_js_assignment(self):
+        import subprocess
+
+        table = json.loads((HERE.parent / "driver-availability.json").read_text())
+        table["branches"] = [b for b in table["branches"] if b["id"] == 580]
+        linux = [
+            d
+            for d in table["drivers"]
+            if d["os"] == "linux" and d["branch"] == 580 and d["status"] == "PINNED"
+        ][:4]
+        windows = []
+        for version in ["580.88", "580.97"]:
+            row = self.collect(self.candidate(version))
+            self.stream_hash(
+                row, row["url"].replace("us.download.nvidia.com", "download.nvidia.com")
+            )
+            windows.append(row)
+        table["drivers"] = linux + windows
+        table["generated_at"] = g.now()
+        code = """import {pathToFileURL} from 'node:url';
+const {validateTable, selectDrivers} = await import(pathToFileURL(process.argv[1]));
+let text=''; for await (const chunk of process.stdin) text += chunk;
+const t=JSON.parse(text); validateTable(t);
+console.log(JSON.stringify(selectDrivers('rv2-pipeline', [
+{id:'a',family:'ada',role:'flagship'}, {id:'b',family:'ada',role:'flagship'}], t)));"""
+
+        def run():
+            return subprocess.run(
+                ["node", "--input-type=module", "-e", code, str(HERE / "validate.js")],
+                input=json.dumps(table),
+                capture_output=True,
+                text=True,
+                timeout=20,
+            )
+
+        result = run()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        plan = json.loads(result.stdout)
+        chosen = [d["version"] for b in plan for r in b["runs"] for d in r["drivers"].values()]
+        self.assertEqual(len(chosen), 6)
+        self.assertEqual(len(set(chosen)), 6)
+        windows[0]["checksum_source"]["url"] = self.candidate("535.01")["url"]
+        rejected = run()
+        self.assertNotEqual(rejected.returncode, 0)
+        self.assertEqual(rejected.stdout, "")
 
 
 if __name__ == "__main__":
