@@ -2,9 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 """grade.py -- the verdict rules of the Windows apps stage (docs/design/V3_WINDOWS_APPS_GATE.md, section 4).
 
-STATUS: LIVE, 2026-11-07 (GPU-free; tests/test_grade.py). It reads a run directory of winapps.py (win.res,
+STATUS: LIVE, 2026-11-08 (GPU-free; tests/test_grade.py). It reads a run directory of winapps.py (win.res,
 win_isolated.res) and the list of apps the profile expected, and prints one `WINAPPS_GRADE` line plus one
-`WINAPPS_APP` line per app. It decides nothing about the host: windows_apps.sh combines this with the same-box
+`WINAPPS_APP` line per expected app, plus explicit non-gating `APP_POLICY` rows. It decides nothing about the host: windows_apps.sh combines this with the same-box
 host reference (which only decides whether a guest failure is kayfabe's or a retry).
 
 THE GATE IS THE GUEST PASSING (owner, 2026-11-01; same rule as windows_gate.sh): only a final verdict of PASS (or
@@ -21,12 +21,17 @@ guest (phase 2) when it has one, else the batched one. Classes of everything els
 
 Exit code: 0 all pass, 1 at least one guest_fail or boot_fail, 3 only harness / not_run. A verdict row for an app
 that was not expected is ignored (counted as `extra`). An empty expectation is a harness fault (exit 3).
+Manual or known-unsupported ids in the expectation are also harness faults: their raw observations
+are retained, but they get NOTRUN and zero pass credit. A supported guest failure still outranks them.
 """
 import argparse
 import json
 import os
 import re
 import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "ci"))
+import app_policy
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 KV = re.compile(r"(\w+)=((?:(?! \w+=).)*)")
@@ -61,8 +66,16 @@ def classify(verdict):
 def grade(run_dir, expected):
     batched = rows(os.path.join(run_dir, "win.res"))
     alone = rows(os.path.join(run_dir, "win_isolated.res"))
+    profiles = json.loads(Path(HERE, "gate_profiles.json").read_text())
+    non_gating = set(profiles["manual"]["apps"]) | set(profiles["known_unsupported"])
     per = {}
     for app in expected:
+        if app in non_gating:
+            per[app] = dict(cls="harness", verdict="NOTRUN",
+                            batched=(batched.get(app) or {}).get("verdict", "-"),
+                            alone=(alone.get(app) or {}).get("verdict", "-"),
+                            note="non-gating app in gate expectation")
+            continue
         row = alone.get(app) or batched.get(app)
         if row is None:
             per[app] = dict(cls="not_run", verdict="-", batched="-", alone="-", note="no row")
@@ -91,6 +104,7 @@ def main(argv=None):
     a = ap.parse_args(argv)
     expected = [x for x in a.expected.split(",") if x]
     rc, kind, counts, per, extra = grade(a.run_dir, expected)
+    app_policy.main(["app_policy.py", "windows"])
     for app in expected:
         v = per[app]
         print(f"WINAPPS_APP app={app} class={v['cls']} verdict={v['verdict']} batched={v['batched']} alone={v['alone']} "

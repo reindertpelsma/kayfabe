@@ -38,8 +38,8 @@ an unmodified distribution QEMU binary. The optional observer patch is separate 
 Run `python3 scripts/ci/no_patch_check.py` for the complete patch table, opt-in/record pointers,
 and the static stock-path check. Its source inventory is
 `scripts/ci/no-patch-inventory.json`. This is a lexical regression check over reviewed scripts,
-not a proof about arbitrary dynamic shell/Python execution. The README's absolute “nothing is
-patched” wording still needs the owner's “by default” qualification, tracked in the release ledger.
+not a proof about arbitrary dynamic shell/Python execution. The README scopes its vendor-driver statement to the stock path and points at the opt-in requirements.
+Neither the static check nor the documented command establishes a passing vendor install or guest boot.
 <!-- src: scripts/ci/no_patch_check.py, scripts/ci/no-patch-inventory.json,
      scripts/bench/build_kf3.sh, docs/RELEASE_CLAIMS.md -->
 

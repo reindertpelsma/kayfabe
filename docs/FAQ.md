@@ -1,6 +1,6 @@
 # kayfabe FAQ
 
-**STATUS: LIVE, 2026-10-28 (rootless, containers, display broker, two-VM, anti-cheat, isolation, ordinary-process and project-comparison answers revised; the IOMMU and interrupt answers are from 2026-10-08).** Questions the VM community asks first, answered from the design and the
+**STATUS: LIVE, 2026-11-08 (rootless, containers, display broker, two-VM, anti-cheat, isolation, ordinary-process and project-comparison answers revised; the IOMMU and interrupt answers are from 2026-10-08).** Questions the VM community asks first, answered from the design and the
 evidence in this repository. A statement carries its evidence or says it is inferred. Where the repository has no
 verified answer, the answer says **not documented yet**. Plans and goals are on [Goals and plans](howto/goals.md).
 <!-- src: README.md and docs/howto/*.md; each answer below names its sources -->
@@ -68,7 +68,7 @@ No. There is no installer, no stable interface and no public binary; you build i
 
 ### Which GPUs work?
 
-Turing and newer is the hard line. Below Turing there is no GSP firmware interface for kayfabe to stand in for, so older cards cannot work. Of the newer families, the repository records runs on Turing (TU116), Ampere (GA106, GA104), Ada (AD104, AD106, AD103, AD102) and Blackwell (GB205), mostly with Linux guests. Windows guests have run on fewer dies, and one Blackwell die (GB206) fails under Windows today. Hopper and datacentre Blackwell are derived from the open driver's source only and were never run on hardware. Consumer GPUs are the tested class; "any NVIDIA GPU" is the goal, not a claim. The per-die table is on [Requirements](howto/requirements.md).
+Turing and newer is the hard line. Below Turing there is no GSP firmware interface for kayfabe to stand in for, so older cards cannot work. Of the newer families, the repository records runs on Turing (TU116), Ampere (GA106, GA104), Ada (AD104, AD106, AD103, AD102) and Blackwell (GB205), mostly with Linux guests. MEASURED Windows gate PASS: TU106, TU116, GA104, GA106, AD102, AD104, GB205 and GB206 at `0c515b3b3` (2026-11-04), and GA102 at `006d845a` (2026-11-03). GB202 is intermittent: FAIL then two PASS on one box. <!-- src: traces/die_coverage_20261104/{turing,ampere,ada,blackwell}/README.md; traces/ampere_hw_20261103/README.md --> Hopper and datacentre Blackwell are derived from the open driver's source only and were never run on hardware. Consumer GPUs are the tested class; "any NVIDIA GPU" is the goal, not a claim. The per-die table is on [Requirements](howto/requirements.md).
 <!-- src: docs/howto/requirements.md "GPU"; README.md "GPUs:" paragraph; docs/STATUS_DETAIL.md section 0 -->
 
 ### Which host driver versions work?
@@ -83,7 +83,7 @@ No, by design. The host driver version is read from the host and decides how kay
 
 ### Does the guest need a special driver or kernel module?
 
-No. The guest uses NVIDIA's own installer and driver, unmodified; nothing is patched on the host or in the guest. A Linux guest needs nothing set. A Windows 11 guest needs three registry settings, listed on [Windows guest](howto/windows-guest.md); without the first one the driver stops with Code 43.
+No patches are required by the stock path. The guest uses NVIDIA's own installer and driver; optional bring-up patches and host UVM research are outside that path. A Linux guest needs nothing set. A Windows 11 guest needs three registry settings, listed on [Windows guest](howto/windows-guest.md); without the first one the driver stops with Code 43.
 <!-- src: README.md "Nothing is patched"; docs/howto/windows-guest.md; docs/WINDOWS_GUEST_SETUP.md -->
 
 ### Which guest operating systems and Linux kernels work?
@@ -93,7 +93,7 @@ Windows 11 Pro (build 26200) and Windows 11 Enterprise LTSC 2024 (build 26100), 
 
 ### Do I need root, or a patched host?
 
-No host patches are required: the stock path uses the host's stock driver. Optional enhancements (a helper module in the guest, patched guest or host drivers) are planned, never required, and none is built into the stock path today; an optional research patch to the host's `nvidia-uvm` exists, and the four of the 65 recorded CUDA applications that need unified-memory demand paging fail without it.
+No host patches are required: the stock path uses the host's stock driver. Optional enhancements (a helper module in the guest, patched guest or host drivers) are planned, never required, and none is built into the stock path today; an optional research patch to the host's `nvidia-uvm` exists, and UVM demand paging remains explicitly unsupported. Its per-fault GR hold is unmeasured in the cited app qualification; the owner requires hardware timing and an explicit bound before merge (see the CUDA-results answer below).
 
 Root is not required by the design, and one run without root is recorded, but the scripts in the repository still start as root. **Recorded:** an audit on one host ran kayfabe as a throwaway user whose only group was `kvm` (no capabilities, no sudo). The 30-arm Linux suite passed 30 of 30 and the GPU gates 9 of 9, and a Windows 11 guest ran Unigine Heaven (Direct3D 11) at 92.55 fps on average against 93.09 as root, with no VFIO rebind and no kernel module, driver or udev change [measured, kayfabe `0a746117`, RTX 4070, host driver 595.91.07, one host]. The record is on the branch `claude/rootless-audit-20261016` (commit `32d7319b2`, [report](https://github.com/reindertpelsma/kayfabe/blob/claude/rootless-audit-20261016/traces/rootless_audit_20261016/REPORT.txt)), not on master. **Not recorded:** the heavy lanes (the CUDA application matrix and similar) as that user, a desktop on the NVIDIA card itself, and a repeatable rootless test on master, which is still to be added. See [Security model](howto/security.md).
 <!-- src: branch claude/rootless-audit-20261016, traces/rootless_audit_20261016/REPORT.txt; docs/howto/requirements.md "Privileges"; docs/design/V3_COOPERATIVE_TIERS.md section 1 and docs/design/V3_HOST_PATCH_LIST.md section 1 (optional tiers, stock tier needs no patch) -->
@@ -107,7 +107,7 @@ Root is not required by the design, and one run without root is recorded, but th
 
 ### Can several VMs share one GPU?
 
-Two limited records exist. The September audit reports two overlapping Linux thin guests on one RTX 3060, both copy-engine clients reaching `ALL ARMS MET` [reported in the hardware report, binary revision `4e9aae9b`, host driver 580.159.04, one host, sections 4 and 5]. A later Linux-and-Windows run on one RTX 4070 lasted 3 min 20 s with no new host Xid; the Windows device had to be given a 1024 MiB video-memory store to fit beside the Linux one, and that run checked boot and display only [measured, kayfabe `a88764b3`, 2026-10-08]. These are functional observations. Not measured yet: throughput, fairness, what a guest-triggered GPU fault does to the other VMs, and host BAR1 accounting across separate VMM processes. A repeatable two-VM test is being added; until it exists, do not rely on sharing, and the security review advises one guest per GPU. A design audit also lists several VMs on one GPU as "works as-is (measured, 2 VMs)"; that line is not a workload result.
+Two limited records exist. The September audit reports two overlapping Linux thin guests on one RTX 3060, both copy-engine clients reaching `ALL ARMS MET` [reported in the hardware report, binary revision `4e9aae9b`, host driver 580.159.04, one host, sections 4 and 5]. A later Linux-and-Windows run on one RTX 4070 lasted 3 min 20 s with no new host Xid; the Windows device had to be given a 1024 MiB video-memory store to fit beside the Linux one, and that run checked boot and display only [measured, kayfabe `a88764b3`, 2026-10-08]. These are functional observations. A newer record measured a host CUDA loop and two guests on one RTX 4090, with correct results, no GPU resets and per-workload ratios beside the suite's fault arms (two runs at `3aa2a75a6`, 2026-11-05). General fairness, hostile long kernels and host BAR1 accounting across VMM processes remain unverified; the security review still advises one guest per GPU. <!-- src: traces/trio_vast_20261105/README.md --> A design audit also lists several VMs on one GPU as "works as-is (measured, 2 VMs)"; that line is not a workload result.
 
 By design, each VM is a separate ordinary process on the host driver, so how they share the card is the host driver's multi-process behaviour; NVIDIA documents that by default several processes can use one GPU, with a time-sliced scheduler ([MPS documentation](https://docs.nvidia.com/deploy/mps/architecture.html)). NVIDIA's GPU Operator documentation says of time-sliced replicas that there is "no memory or fault-isolation between replicas" ([time-slicing](https://docs.nvidia.com/datacenter/cloud-native/gpu-operator/latest/gpu-sharing.html)), so time-slicing is sharing without a per-VM quota. Hardware partitions (NVIDIA MIG) would give each VM its own slice of memory and compute; that is a [goal](howto/goals.md) and has not been tested.
 <!-- src: docs/design/V3_MULTI_GPU_AUDIT.md sections 4-5; traces/windows_code43_walls_20261007/README.md "Run54"; docs/design/V3_FEATURE_GAPS.md H21; docs/design/V3_SECURITY_MODEL.md section 11; https://docs.nvidia.com/deploy/mps/when-to-use-mps.html ("multiple processes can use the GPU simultaneously") and https://docs.nvidia.com/deploy/mps/architecture.html ("time sliced scheduler"), retrieved 2026-10-28; https://docs.nvidia.com/datacenter/cloud-native/gpu-operator/latest/gpu-sharing.html ("no memory or fault-isolation between replicas", retrieved 2026-10-28); docs/howto/goals.md "Kayfabe on NVIDIA MIG partitions" -->
@@ -119,13 +119,21 @@ One kayfabe device is created per host GPU. The recorded two-GPU thin-guest chec
 
 ### What is the performance cost?
 
-It depends on the workload. Large batches run close to host speed; many small launches pay for each one, because every doorbell write from the guest is a trapped write (a VM exit), and that cost is much higher on the nested rented hosts most results come from. Examples from the README, each with its limits: a matrix multiply in a Linux guest reached 0.997 of host speed on a rented, nested RTX 3060 box (older revisions), while a separate older campaign recorded eager PyTorch decoding at 0.29 of its own host control. These are separate nested RTX 3060 campaigns, not a matched cross-workload comparison. Windows speed is being benchmarked again on current master; results will be posted in the README.
+It depends on the workload. Large batches run close to host speed; many small launches pay for each one, because every doorbell write from the guest is a trapped write (a VM exit), and that cost is much higher on the nested rented hosts most results come from. Examples from the README, each with its limits: a matrix multiply in a Linux guest reached 0.997 of host speed on a rented, nested RTX 3060 box (older revisions), while a separate older campaign recorded eager PyTorch decoding at 0.29 of its own host control. These are separate nested RTX 3060 campaigns, not a matched cross-workload comparison. The newer RTX 4090 app record at `144557e43`, 2026-11-07, records per-workload figures and their limits; it does not qualify current-tree performance. <!-- src: traces/apps_linux_20261107/README.md -->
 <!-- src: README.md "Windows speed is being benchmarked again"; docs/howto/technical-faq.md "Why is performance uneven?" -->
 
 ### Does CUDA give the same results as the host?
 
-For the 61 of 65 CUDA applications that pass, the recorded outputs equal bare metal [measured, an earlier revision, a rented RTX 3060], and NVENC and NVDEC output was byte-identical to bare metal in the graded lane [measured, RTX 3060]. Four workloads need unified-memory demand paging and fail correctness checks. At least one recorded run printed SUCCESS with an incorrect result; check numerical output and host/guest faults, not just the exit status. Nothing is recorded for a guest with several GPUs.
+MEASURED, RTX 4090, revision `144557e43`, 2026-11-07: 70/70 runnable apps passed on the host and 66/70 in the Linux guest. Passing means each app met its correctness predicate; this is not an all-app byte-equality claim. The three digest-producing apps had matching host/guest digests.
+
+**Unsupported (UVM), for now:** `UnifiedMemoryStreams`, `UnifiedMemoryPerf`, `conjugateGradientUM`, `attach_verify` and the Windows counterpart `managed_t`. The owner keeps UVM unmerged: the per-fault GR hold is unmeasured in this app qualification, and hardware timing plus an explicit bound are required before merge. Gate reports list them as `unsupported (UVM)`; they are not supported-app failures or hidden omissions. Historical results remain in the evidence: `conjugateGradientUM` printed SUCCESS with a wrong numerical result, so an exit code alone is not a correctness check.
+<!-- src: traces/apps_linux_20261107/README.md; docs/OWNER_RULINGS.md section E; scripts/apps/known_unsupported.json; scripts/bench/windows/appmatrix/gate_profiles.json -->
 <!-- src: docs/howto/linux-guest.md "What has been run"; README.md "Linux guest" -->
+
+### Why are Windows YUV overlays manual?
+
+All eight `overlay_yuv_*` entries, including probe and soak, are `manual: needs real display` in reports and excluded from Vast profiles. MEASURED on the native Vast RTX 4090 simulated output (2026-10-10): the probe fails, with no DIRECT overlay support. No native run on a real monitor is recorded. A valid manual record needs the exact revision, GPU, drivers, physical monitor/connector, same-GPU native result, command, per-second overlay modes, screenshots, duration and reset/Xid counts. See [Windows guest](howto/windows-guest.md).
+<!-- src: scripts/bench/windows/appmatrix/gate_profiles.json manual.items evidence_template; traces/windows_overlay_native_20261010/README.md -->
 
 ### Do games with anti-cheat work?
 
@@ -136,7 +144,7 @@ For the 61 of 65 CUDA applications that pass, the recorded outputs equal bare me
 
 ### Is it safe to run untrusted guests?
 
-Not yet; treat it as research. The design treats the guest as hostile and builds every host action itself from a few unprivileged verbs, but nothing has been independently audited and there is no penetration test. What a guest-triggered GPU fault does to other VMs sharing the card is not measured. Read [Security model](howto/security.md) before deciding: it lists what is trusted, what is accepted and what is unfinished, and how to report a suspected vulnerability privately.
+Not yet; treat it as research. The design treats the guest as hostile and builds every host action itself from a few unprivileged verbs, but nothing has been independently audited and there is no penetration test. Two runs beside the suite's fault arms recorded correct progress from a host loop and two guests with no GPU resets (RTX 4090, `3aa2a75a6`, 2026-11-05); hostile long kernels and general fault containment remain unverified. <!-- src: traces/trio_vast_20261105/README.md --> Read [Security model](howto/security.md) before deciding: it lists what is trusted, what is accepted and what is unfinished, and how to report a suspected vulnerability privately.
 <!-- src: README.md status line and "Not finished"; docs/howto/security.md -->
 
 ### How is the VM kept apart from my other GPU programs?

@@ -14,6 +14,11 @@ SOURCE = (HERE / "vast_payload.py").read_text()
 HOOK = (HERE / "vast_payload_hooks.sh").read_text()
 GUARD = (HERE.parent / "bench/native_xid_guard.py").read_text()
 REPORT = (HERE / "vast_report.py").read_text()
+POLICY_FIXTURE_FILES = (
+    "scripts/ci/app_policy.py",
+    "scripts/apps/known_unsupported.json",
+    "scripts/bench/windows/appmatrix/gate_profiles.json",
+)
 
 
 def report_replace(old, new):
@@ -806,8 +811,32 @@ def main():
         )
         for name in ("sweep_ada_20261018", "sweep_dies_20261018", "sweep_windows_20261021"):
             shutil.copytree(HERE.parents[1] / "traces" / name, root / "traces" / name)
+        # apps_gate.sh calls app_policy.py, whose rows() reads both policy sources even for Linux.
+        # The isolated fixture must carry the same dependency closure as the repository checkout.
+        for relative in POLICY_FIXTURE_FILES:
+            target = root / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(HERE.parents[1] / relative, target)
         baseline = run(root)
         assert not baseline["killers"], baseline
+        print("baseline: %d tests, no killers" % baseline["tests"], file=sys.stderr, flush=True)
+        # Falsifier: an omitted policy dependency goes unnoticed. Exercise the real app-stage tests
+        # against each missing file; retain the two-distinct-killer rule used by every other mutant.
+        for relative in POLICY_FIXTURE_FILES:
+            name = "fixture-missing-" + Path(relative).name
+            if len(sys.argv) > 1 and sys.argv[1] not in name:
+                continue
+            target = root / relative
+            original = target.read_bytes()
+            try:
+                target.unlink()
+                result = run(root)
+            finally:
+                target.write_bytes(original)
+            killers = sorted(set(result["killers"]))
+            assert len(killers) >= 2, (name, killers)
+            rows.append({"mutant": name, "killers": killers, "count": len(killers)})
+            print(name + ": " + str(len(killers)) + " killers", file=sys.stderr, flush=True)
         for case in CASES:
             name, source = case[:2]
             if len(sys.argv) > 1 and sys.argv[1] not in name:

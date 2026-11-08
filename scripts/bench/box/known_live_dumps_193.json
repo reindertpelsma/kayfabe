@@ -1,0 +1,26 @@
+{
+  "AD102": {
+    "max_count": 2,
+    "source_evidence": {
+      "path": "traces/windows_gate_20261101/g4_windows.log",
+      "revision": "a5071c24",
+      "date": "2026-11-01"
+    }
+  },
+  "TU106": {
+    "max_count": 3,
+    "source_evidence": {
+      "path": "traces/turing_boot_20261103/README.md",
+      "revision": "e6dad00f",
+      "date": "2026-11-03"
+    }
+  },
+  "GA102": {
+    "max_count": 4,
+    "source_evidence": {
+      "path": "traces/ampere_hw_20261103/README.md",
+      "revision": "006d845a",
+      "date": "2026-11-03"
+    }
+  }
+}
