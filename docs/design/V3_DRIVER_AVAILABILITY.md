@@ -13,7 +13,9 @@ does not qualify a driver, die, kernel, guest ABI or workload.
 | Linux x86_64 full `.run` | 95 | 17 | 63 |
 | Windows x64 desktop WHQL | 3 | 119 | 0 |
 
-**MEASURED:** Linux pins use NVIDIA's exact-filename `.run.sha256sum` sidecars.
+**MEASURED public HTTP on 2026-11-08:** Linux pins use NVIDIA's exact-filename
+`.run.sha256sum` sidecars; the requests and responses are recorded in
+[`observations.json`](../../ci/vast-broker/driver-availability/observations.json).
 For each available Linux candidate the generator also tries `sha256sum.txt` and
 `SHA256SUMS` when necessary. A hash for aarch64 or `-no-compat32` cannot pin the
 full x86_64 installer; MD5 cannot substitute for SHA256. The 17 available Linux
@@ -36,7 +38,7 @@ curated citations, historical references, source fingerprints and the imported
 hypothesis are [`sources.json`](../../ci/vast-broker/driver-availability/sources.json). The observations allow exact,
 offline regeneration of the catalog rather than requiring another network run.
 
-**MEASURED source publications:**
+**CODE READ — NVIDIA source publications:**
 
 - [Linux x86_64 directory](https://download.nvidia.com/XFree86/Linux-x86_64/),
   [Linux display archive](https://www.nvidia.com/en-us/drivers/unix/linux-display-archive/)
@@ -49,7 +51,8 @@ offline regeneration of the catalog rather than requiring another network run.
   NVIDIA's driver-search JavaScript supplies the Game Ready/Studio query flags.
   Search is performed per branch, for both types. No response reached the
   20-result cap. Unsuccessful or saturated queries become `discovery_gaps`.
-- **MEASURED:** 41 Studio result occurrences did not assert `IsWHQL=1` and are
+- **CODE READ — archived API responses in `observations.json`:** 41 Studio
+  result occurrences did not assert `IsWHQL=1` and are
   recorded in `discovery_exclusions`; all their exact versions also occur in
   admitted WHQL results. A `whql.exe` filename alone does not override the API
   flag. GeForce and RTX Enterprise package lines remain distinct.
@@ -67,14 +70,14 @@ have only 404s across their recorded candidate URLs.
 `url`, `sha256`, byte `size`, release date when published, HEAD result/date,
 checksum provenance, candidate/source URLs and scoped repository test records.
 `PINNED` requires all of URL/SHA256/size and HEAD 200. Available Windows records
-without a measured hash are `UNPINNED:needs-download`. `known_bad` and
+without a computed SHA256 are `UNPINNED:needs-download`. `known_bad` and
 `core_reference_versions` start empty. Version bounds are the numeric first/last
 **available discovered** version per OS, not a claim about the branch's original
 GA date, end of support, or completeness of NVIDIA's entire publication history.
 
 ## Branches and family floors
 
-**MEASURED public metadata; CODE READ repository status:**
+**CODE READ — catalog snapshot dated 2026-11-08 and repository status:**
 
 | Branch | NVIDIA designation | Linux pins | Available Linux without SHA256 | Windows pins | Repository status |
 |---|---|---:|---:|---:|---|
@@ -93,7 +96,7 @@ GA date, end of support, or completeness of NVIDIA's entire publication history.
 | R615 | new-feature | 2 | 1 | 0 | referenced-only |
 | R620 | LTS | 1 | 0 | 0 | never-tested |
 
-**MEASURED:** The data center designations above come from NVIDIA's dated
+**CODE READ:** The data center designations above come from NVIDIA's dated
 `releases.json` response; R545 and R555 use NVIDIA's
 [R545](https://www.nvidia.com/en-us/drivers/details/212978/) and
 [R555](https://www.nvidia.com/en-us/drivers/details/228179/) RTX Enterprise
@@ -144,7 +147,8 @@ validator rejects changing it to true. No ABI group can remove a branch from
 the requested branch-by-family coverage.
 
 **Falsifier for numeric Windows branch intervals:** an official Release field
-assigns a version outside the interval. **MEASURED:** NVIDIA assigns Windows
+assigns a version outside the interval. **CODE READ — official Release fields
+in the archived API responses in `observations.json`:** NVIDIA assigns Windows
 576.02 to R570 while 576.28 belongs to R575. Both are regression fixtures.
 Windows branch assignments therefore carry explicit official evidence instead
 of being computed from the version's leading digits.
@@ -178,7 +182,8 @@ The output is a proposed availability plan, not an instruction to install it.
   Exhaustion throws `INSUFFICIENT_PINNED_VERSIONS`, never a partial passing plan.
   The function does not remove a branch to reduce the required version count.
 
-**MEASURED availability, INFERRED consequence:** R620 currently exposes one
+**CODE READ — catalog snapshot dated 2026-11-08; INFERRED consequence:** R620
+currently exposes one
 Linux version and two Windows versions. A four-family release cannot use
 distinct exact R620 versions on four boxes under the requested rule. R565,
 R590 and R615 also have very small Linux pools. Most Windows versions need

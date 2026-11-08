@@ -537,7 +537,7 @@
   "artifact_sha256": {
     "ci/vast-broker/driver-availability.json": "6fc40ac073f4e0b5d78858b9d9269bfac4439fe80c87e04c8e8408ab6bf0d964",
     "ci/vast-broker/driver-availability/observations.json": "0424a0ab46965db5e1e644319bdc1b13b4f95fb691982b6032fee9a8638658b3",
-    "docs/design/V3_DRIVER_AVAILABILITY.md": "4e7fd8db04c7d9ee87964b47aafec152819b1cf331c62239b0e0875425d5a8fe",
+    "docs/design/V3_DRIVER_AVAILABILITY.md": "0d16568d117210a07c51f93e6220ea923797311da20841c1672e0fee7f6f88af",
     ".github/workflows/driver-availability.yml": "1eef552aed627bab8f1a945a615f6ce622c00c1d2c28dabe5417569698f708b4"
   },
   "github_first_run": {
@@ -576,5 +576,22 @@
       "failure": "Unchanged treekey 2040-segment timing test exceeded its existing 50ms bound. The unchanged test and full broker suite pass with CI Node 24.22.2; no threshold was changed."
     },
     "scope": "No AppArmor change, broker runtime change, catalog/pin change, baseline update or pass-rule weakening. Full legacy mutation/admin tail and GitHub rerun are reported separately in the final lane report."
+  },
+  "claim_ledger_followup": {
+    "evidence_kind": "MEASURED",
+    "command": "python3 scripts/ci/debt.py claims",
+    "failed_head": "61418236542605dfb9338968cebf970bc0d0e4d4",
+    "before": {
+      "existing_debt": 3748,
+      "new": 8,
+      "resolved": 1
+    },
+    "after": {
+      "existing_debt": 3748,
+      "new": 0,
+      "resolved": 1
+    },
+    "baseline_modified": false,
+    "change": "Label NVIDIA publication/catalog/API readings as CODE READ; cite the dated HTTP receipt for Linux checksum publication; describe the design hash field without implying a measurement."
   }
 }
