@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
-# GPU-free source-build leg for appdisk.py build --release-assets DIR (separate from the canonical open bundle).
+# GPU-free source-build leg of package_open_bundle.sh --release-assets DIR.
 # Run once on a Windows packaging workstation with MSVC v143, Windows SDK, dxc and nuget.exe.
 # Source must be a clean checkout at the exact commit in release_software.json. No sample is run.
 # Output is an offline asset tree and a per-file SHA-256 receipt. No upload or deployment.

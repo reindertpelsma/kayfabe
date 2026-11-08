@@ -138,7 +138,7 @@ The GUI offers the same build, integrity and reproduction checks. No program cur
 inventory-only/functional-check qualification. A vendor changing pinned bytes is INPUT_DRIFT, not flakiness.
 
 There is no permanent private bundle. The Linux box host obtains required CUDA/torch/llama, driver and
-conditional Microsoft/LunarG artifacts from official_fetch.json using hash-verified J4 downloads. The
+conditional Microsoft/LunarG artifacts from official_fetch.json using J4 downloads with SHA-256 checks. The
 transient KFAPPSP disk and local manifest live only for the run and are removed after all guests stop.
 Nothing NVIDIA is uploaded to R2/GitHub; no Actions media artifact/cache is created. The guest stays offline.
 Both disks are read-only, fixed K: (KFAPPS) and P: (KFAPPSP).

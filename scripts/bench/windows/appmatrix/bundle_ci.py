@@ -111,7 +111,7 @@ def build_twice(root, expected_inputs, pin, verify=False, bundle_class="public",
     second = R.read_candidate(root / "second" / (basename + ".iso"), receipts[1])
     comparison = R.compare(first, second)
     R.report(comparison)
-    (root / 'reproduction.diff.json').write_bytes(B.canonical(comparison))
+    (root / 'reproduction.json').write_bytes(B.canonical(comparison))
     if comparison['level1'] != 'equal': raise ValueError('LEVEL1_FAIL two-build file inventory differs')
     actual = first['image']['sha256']
     if verify:

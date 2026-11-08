@@ -103,7 +103,7 @@ inside the ISO. A private release class is refused before download/build; no per
 **CODE READ:** `bundle_repro.py` compares inventories independently of image digests. A metadata-only
 change in a date, publisher field, extent layout, system area or padding cannot fail Level 1. The independent
 ISO reader snapshots descriptor fields, recording dates, extents and hashes of all non-payload regions.
-`compare-image` prints the Level 1 result, any Level 2 metadata warning, and writes reproduction.diff.json.
+`compare-image` prints the Level 1 result, any Level 2 metadata warning, and writes reproduction.json.
 The second image is read against **its own** receipt before comparison; the first receipt supplies the
 reference file inventory. Optional `--candidate-receipt` selects a second sidecar at another location.
 
@@ -212,7 +212,7 @@ records a redistribution restriction; it does **not** authorize any private ISO/
 
 **CODE READ:** each public build carries LICENSES/, a provenance index, THIRD_PARTY_NOTICES.txt and exact pinned
 SOURCE/ archives. Each ISO file has machine-readable licenses metadata. Upstream licence texts come from
-verified archive members or independently pinned official licence files; no legal text is silently omitted.
+hash-checked archive members or independently pinned official licence files; no legal text is silently omitted.
 Unmodified Blender 4.5.0, 7-Zip 26.04 and clpeak 3.0.1 sources are mirrored alongside their object code;
 notices also give the exact upstream source locations. No GPL binary is modified. The written source offer
 lasts at least three years after our last distribution and while covered support/spare parts remain offered.
@@ -220,7 +220,7 @@ lasts at least three years after our last distribution and while covered support
 Upstream links alone do not discharge that retention obligation. Full transitive source/legal inventory still
 needs inspection with the full real artifacts; no qualified licence clearance is implied by this engineering.
 
-**MEASURED, earlier WB1 evidence:** eleven public HF wheels were downloaded from existing pins, hash/size
+**MEASURED, 2026-11-07, commit 4e8aa9a58 (manifest.json public_audit records):** eleven public HF wheels were downloaded from existing pins, hash/size
 verified and inspected without execution/extraction, including seven native members. Their exact metadata/
 member audits are in manifest.json and are rechecked at build time. Unknown/nonpermissive metadata or
 NVIDIA library names/references are refused for public wheels. Certifi/tqdm remain official-fetch extras.

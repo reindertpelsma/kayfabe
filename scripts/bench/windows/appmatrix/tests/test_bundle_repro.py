@@ -196,6 +196,7 @@ class BuiltPrograms(unittest.TestCase):
             with patch('sys.stdout',new_callable=io.StringIO)as out:
                 self.assertEqual(B.main(['compare-image','--ci-build','--iso',str(iso),'--receipt',str(reference),'--out',str(root/'out')]),0)
             self.assertIn('WARNING LEVEL2_CONTAINER_DIFF',out.getvalue())
+            result=B.load(root/'out/reproduction.json');self.assertEqual(result['level1'],'equal');self.assertTrue(result['container_diff'])
 
     def test_compare_command_fails_for_vendor_bytes(self):
         with tempfile.TemporaryDirectory()as tmp:
@@ -208,6 +209,7 @@ class BuiltPrograms(unittest.TestCase):
             (root/'out/winapps-open.manifest.json').write_bytes(B.canonical(a))
             with patch('sys.stdout',new_callable=io.StringIO):
                 self.assertEqual(B.main(['compare-image','--ci-build','--iso',str(iso),'--receipt',str(reference),'--out',str(root/'out')]),1)
+            result=B.load(root/'out/reproduction.json');self.assertEqual(result['level1'],'different');self.assertIn(name,result['changed'])
 
 
 class Drift(unittest.TestCase):

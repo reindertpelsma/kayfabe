@@ -446,8 +446,8 @@ def main(argv=None):
             candidate = bundle_repro.read_candidate(iso, candidate)
             result = bundle_repro.compare(reference, candidate)
             bundle_repro.report(result)
-            (args.out / "reproduction.diff.json").parent.mkdir(parents=True, exist_ok=True)
-            (args.out / "reproduction.diff.json").write_bytes(canonical(result))
+            (args.out / "reproduction.json").parent.mkdir(parents=True, exist_ok=True)
+            (args.out / "reproduction.json").write_bytes(canonical(result))
             return 0 if result["level1"] == "equal" else 1
         if args.command == "verify-image":
             receipt = load(args.receipt or args.out / (basename + ".manifest.json"))

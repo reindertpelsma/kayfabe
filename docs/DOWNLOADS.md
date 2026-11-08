@@ -155,7 +155,7 @@ build, uploaded media, configured secrets/domains, deployed Worker code or claim
 
 **OWNER POLICY / CODE READ:** winapps-open.iso (KFAPPS) is the only permanent bundle. It contains only
 public-ok packages. The private ISO/R2-secret-set design is superseded: NVIDIA and conditional inputs come
-from exact official URLs on the **BOX HOST at run time**, using hash-verified J4 parallel-range fetching.
+from exact official URLs on the **BOX HOST at run time**, using J4 parallel-range fetching with SHA-256 checks.
 They are never deliberately stored in a published ISO, R2 or GitHub. A deterministic KFAPPSP disk exists only
 for the current run, attaches read-only next to KFAPPS and is discarded after guest teardown. The guest
 remains offline. There is no permanent private pin or private publication workflow.
@@ -182,7 +182,7 @@ and the same SHA-256/size per file, including pinned originals and repository-bu
 best effort: identical ISO container bytes too. If Level 1 matches but Level 2 differs, comparison succeeds
 with a WARNING and a container-metadata diff. Dates/IDs/publisher fields, extent layout and non-payload
 region hashes are recorded for diagnosis; the difference is a builder bug, not failed reproduction.
-The report is also written as reproduction.diff.json.
+The report is also written as reproduction.json.
 
 **CODE READ:** each image has its **own** out/winapps-open.manifest.json with every file/hash/size, licences,
 comparison policy, toolchain/source pins, Level 1 inventory digest, ISO hash/size and container snapshot.
@@ -217,7 +217,7 @@ scripts/bench/windows/appmatrix/package_bundle_gui.pyw. No shell commands are re
 5. Choose Build then Check image integrity. Repeat into a second empty Output directory.
 6. Choose Compare reproduction, select the first receipt and the second ISO. Its own sidecar is read
    automatically. Level 1 differences fail with paths; Level 2 metadata differences warn. Inspect the
-   inventories and reproduction.diff.json, keeping receipts as operator evidence.
+   inventories and reproduction.json, keeping receipts as operator evidence.
 7. Inspect LICENSES/index.json, THIRD_PARTY_NOTICES.txt and SOURCE/ before coordinator upload.
 
 **CODE READ / limitation:** manually installing the same official installers can reproduce an installed

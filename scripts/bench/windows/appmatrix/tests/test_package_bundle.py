@@ -762,7 +762,9 @@ class GuestStaging(unittest.TestCase):
 class Bootstrap(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
-        self.root = Path(self.tmp.name)
+        # build_tools resolves its output root before invoking Zig. macOS /var
+        # aliases and Windows short temp names must model that same real path.
+        self.root = Path(self.tmp.name).resolve()
         self.tc = H.load_manifest()["bundle_toolchain"]
 
     def archive(self, members, tar=False):

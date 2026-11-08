@@ -4,6 +4,7 @@
 import concurrent.futures,json,sys,tempfile
 import bundle_mutants as M
 CASES=[
+ ('comparison-report-json-name', 'package_bundle.py', '            (args.out / "reproduction.json").parent.mkdir(parents=True, exist_ok=True)\n            (args.out / "reproduction.json").write_bytes(canonical(result))', '            (args.out / "reproduction.diff.json").parent.mkdir(parents=True, exist_ok=True)\n            (args.out / "reproduction.diff.json").write_bytes(canonical(result))'),
  ('added-payload','bundle_repro.py','different=bool(added or removed or changed)','different=bool(removed or changed)'),
  ('removed-payload','bundle_repro.py','different=bool(added or removed or changed)','different=bool(added or changed)'),
  ('changed-payload','bundle_repro.py','different=bool(added or removed or changed)','different=bool(added or removed)'),
