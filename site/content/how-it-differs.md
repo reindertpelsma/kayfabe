@@ -23,7 +23,7 @@ Open-IOV is a community project using stock NVIDIA guest drivers without a vGPU 
 <!-- src: https://github.com/DualCoder/vgpu_unlock README.md; https://github.com/noon-at-cgn/geforce-sriov README.md (both retrieved 2026-11-08) -->
 Other community tools, such as [vgpu_unlock](https://github.com/DualCoder/vgpu_unlock) and [geforce-sriov](https://github.com/noon-at-cgn/geforce-sriov), make NVIDIA's own vGPU software run on some GeForce cards.
 
-### GPU paravirtualization (GPU-PV)
+### GPU-PV (Hyper-V)
 
 <!-- src: https://learn.microsoft.com/en-us/windows-server/virtualization/hyper-v/plan/plan-for-gpu-acceleration-in-windows-server; https://learn.microsoft.com/en-us/windows-server/virtualization/hyper-v/partition-assign-vm-gpu; https://github.com/xnixy/guesthouse README.md (retrieved 2026-11-08) -->
 GPU-PV is Microsoft's way of sharing a GPU with Windows guests on Hyper-V. The guest runs the vendor's driver, and the host side comes from Windows and the vendor. KVM has no host side for it. [Guesthouse](https://github.com/xnixy/guesthouse) is an early project that adds one in QEMU, and reports one RTX 5090 so far.
