@@ -44,14 +44,15 @@ async function emit() {
 }
 const skip = existsSync(wrangler) ? false : 'wrangler not installed (npm ci --ignore-scripts)';
 test(
-  'bundle: wrangler output is the reviewed, deterministic, Node-free module',
+  'bundle: three wrangler dry-run emits match the reviewed, deterministic, Node-free module',
   { skip },
   async () => {
-    const [a, b] = [await emit(), await emit()];
+    const [a, b, c] = [await emit(), await emit(), await emit()];
     try {
       const manifest = JSON.parse(await readFile(join(broker, 'deployment.json'), 'utf8'));
       const digest = createHash('sha256').update(a.bytes).digest('hex');
       assert.equal(createHash('sha256').update(b.bytes).digest('hex'), digest, 'deterministic');
+      assert.equal(createHash('sha256').update(c.bytes).digest('hex'), digest, 'deterministic');
       assert.equal(digest, manifest.bundle_sha256, 'reviewed hash');
       const text = a.bytes.toString('utf8');
       assert.doesNotMatch(text, /\bfrom\s*["']node:|\brequire\(|\bimport\(\s*["']/);
@@ -92,6 +93,7 @@ test(
     } finally {
       await rm(a.out, { recursive: true });
       await rm(b.out, { recursive: true });
+      await rm(c.out, { recursive: true });
     }
   },
 );

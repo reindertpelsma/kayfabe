@@ -14,8 +14,7 @@ tested) or a dated run record where one exists.
 1. Among offers that are already eligible, rank offers located in the United States first and
    Canada second. The preference is a tie-break, never a filter.
 2. Do not reject an offer because it is outside the US or Canada. The only location filter is
-   the denied-country list (CU, IR, KP, SY, CN, HK, MO), which is an ownership/abuse rule and not
-   a performance rule.
+   the denied-country list (CU, IR, KP, SY, CN, HK, MO, RU, BY).
 3. Request initial placement of a new Durable Object ledger in eastern North America with
    `locationHint: 'enam'`, for the same reason: the traffic that matters is US-centred.
    This branch implements that request in source; it has not changed the live Worker.
