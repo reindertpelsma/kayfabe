@@ -208,6 +208,16 @@ class LandingAndDocsIndex(unittest.TestCase):
         self.assertRegex(self.landing, r'<img[^>]+alt="[^"]+"')
         self.assertIn('class="skip-link"', self.landing)
 
+    def test_every_site_page_links_the_status_section_in_one_menu(self):
+        for name in ["index.html", "about/index.html", "works-today/index.html", "404.html"]:
+            page = (OUTPUT / name).read_text()
+            self.assertEqual(page.count('<details class="menu" open>'), 1, name)
+            self.assertIn('<a href="/status/">Status</a>', page, name)
+        works = (OUTPUT / "works-today/index.html").read_text()
+        self.assertIn('href="/works-today/" aria-current="page"', works)
+        self.assertEqual(works.count('aria-current="page"'), 1)
+        self.assertNotIn("aria-current", (OUTPUT / "index.html").read_text())
+
     def test_landing_has_no_banned_claim_and_every_block_has_a_source(self):
         import claims_guard
 

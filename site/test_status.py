@@ -97,7 +97,8 @@ class Modes(unittest.TestCase):
         self.assertFalse((self.out / "status/cell").exists())
         self.assertEqual(self.files(), sorted([
             "status/index.html", "status/die/index.html", "status/run/index.html",
-            "status/commit/index.html", "status/find/index.html", "status/status.js",
+            "status/commit/index.html", "status/find/index.html", "status/session/index.html",
+            "status/stats/index.html", "status/status.js",
             "status/status.css", "status/coverage.json", "status/gpu_names.json"]))
         self.assertNotRegex((self.out / "status/status.js").read_text(), r"https?://")
         self.assertNotRegex((self.out / "status/coverage.json").read_text(), WORKER_URL)
@@ -122,6 +123,32 @@ class Modes(unittest.TestCase):
         self.assertNotRegex((self.out / "status/fixture.json").read_text(), WORKER_URL)
         self.assertNotRegex((self.out / "status/coverage.json").read_text(), WORKER_URL)
         self.assertNotRegex((self.out / "status/gpu_names.json").read_text(), WORKER_URL)
+
+    def test_every_page_has_the_menu_the_section_tabs_and_the_site_script(self):
+        status_pages.write_status(self.out, fixture=FIXTURE)
+        for path, current in {
+            "status/index.html": "Matrix",
+            "status/stats/index.html": "Results by die",
+            "status/find/index.html": "Find my setup",
+            "status/session/index.html": None,
+        }.items():
+            text = (self.out / path).read_text()
+            self.assertIn('<details class="menu" open>', text, path)
+            self.assertIn('<a href="/status/" aria-current="page">Status</a>', text, path)
+            self.assertIn('<script src="/site.js" defer></script>', text, path)
+            self.assertEqual(text.count('aria-current="page"'), 1 if current is None else 2, path)
+            if current:
+                self.assertIn('aria-current="page">' + current + "</a>", text, path)
+            self.assertNotIn("kf-status-logs", text, "the fixture has no log origin unless one is given")
+
+    def test_a_fixture_build_takes_a_log_origin_only_when_valid(self):
+        status_pages.write_status(self.out, fixture=FIXTURE, logs_base="https://logs.kayfabe.dev")
+        self.assertIn(
+            '<meta name="kf-status-logs" content="https://logs.kayfabe.dev" />',
+            (self.out / "status/run/index.html").read_text(),
+        )
+        status_pages.write_status(self.out, fixture=FIXTURE, logs_base="https://logs.evil.example")
+        self.assertNotIn("kf-status-logs", (self.out / "status/run/index.html").read_text())
 
     def test_fixture_and_api_are_exclusive_and_fixture_must_be_synthetic(self):
         with self.assertRaises(ValueError):
