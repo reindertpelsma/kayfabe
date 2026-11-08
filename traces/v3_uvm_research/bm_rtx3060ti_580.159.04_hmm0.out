@@ -118,6 +118,6 @@ AFTER  replayable_faults 38560 duplicates 27717 faults_by_access_type:  prefetch
 BM_EXIT rc=0 2026-09-26T10:24:16+00:00
 HOLDER_ALIVE_AT_END=yes
 === dmesg (xid|nvrm|uvm) after run hmm=0
-[ 1103.282775] NVRM: GPU at PCI:0000:00:07: GPU-7ce8028d-13fc-88fe-09c5-7704190763c3
+[ 1103.282775] NVRM: GPU at PCI:0000:00:07: GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e61ef
 [ 1103.282819] NVRM: Xid (PCI:0000:00:07): 31, pid=59659, name=um_probe, channel 0x00000018, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC1 GPCCLIENT_T1_0 faulted @ 0x7584_4db4a000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
 === DMESG_END

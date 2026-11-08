@@ -75,7 +75,7 @@ RESULT EXPECTED_KERNEL_ERROR kernel_error=CUDA_ERROR_ILLEGAL_ADDRESS
 
 === B. patched module, default OFF: stock behaviour, EFS refused ===
 insmod_rc=0 NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
-GPU 0: NVIDIA GeForce RTX 3060 (UUID: GPU-459d2c69-156c-43e9-34db-733876f9671e)
+GPU 0: NVIDIA GeForce RTX 3060 (UUID: GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e5a98)
 ### efs_auth 2026-09-30T10:31:45+00:00
 OK   QUERY_PLAIN ioctl=0 abi=1 enabled=0 active=0
 OK   WAIT_PLAIN_REFUSED ret=-65622
@@ -100,7 +100,7 @@ RESULT EXPECTED_KERNEL_ERROR kernel_error=CUDA_ERROR_ILLEGAL_ADDRESS
 
 === C. patched module, EFS ENABLED ===
 insmod_rc=0 NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
-GPU 0: NVIDIA GeForce RTX 3060 (UUID: GPU-459d2c69-156c-43e9-34db-733876f9671e)
+GPU 0: NVIDIA GeForce RTX 3060 (UUID: GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e5a98)
 ### efs_auth 2026-09-30T10:31:50+00:00
 OK   QUERY_PLAIN ioctl=0 abi=1 enabled=1 active=0
 OK   WAIT_PLAIN_REFUSED ret=-65622
@@ -268,7 +268,7 @@ tools/uvm_efs/box/run_experiment.sh: line 35: 73713 Killed                  /roo
 ### exit=137 efs_fault crash 50
 
 crash_shell_exit=0
-GPU 0: NVIDIA GeForce RTX 3060 (UUID: GPU-459d2c69-156c-43e9-34db-733876f9671e)
+GPU 0: NVIDIA GeForce RTX 3060 (UUID: GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e5a98)
 smi_after_crash=0
 --- C8 context destroy with a fault pending ---
 ### efs_fault ctxdestroy 2026-09-30T10:32:15+00:00
@@ -288,7 +288,7 @@ RESULT CTXDESTROY_COMPLETED ctx_destroy=CUDA_SUCCESS
 
 === D. COEXISTENCE: native host CUDA (matmul + managed demand paging) + EFS fault pressure ===
 insmod_rc=0 NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
-GPU 0: NVIDIA GeForce RTX 3060 (UUID: GPU-459d2c69-156c-43e9-34db-733876f9671e)
+GPU 0: NVIDIA GeForce RTX 3060 (UUID: GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e5a98)
 --- D0 coexist alone (baseline throughput) ---
 ### coexist 6 2026-09-30T10:32:23+00:00
 THROUGHPUT sgemm_iters=1280 iters_per_s=211.9 managed_rounds=64 managed_bad=0 checksum=3321.500 wall=6.04
@@ -344,7 +344,7 @@ DATA bad=0
 RESULT PASS
 === E. latency (median/p99), quiet box, larger sample ===
 insmod_rc=0 NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
-GPU 0: NVIDIA GeForce RTX 3060 (UUID: GPU-459d2c69-156c-43e9-34db-733876f9671e)
+GPU 0: NVIDIA GeForce RTX 3060 (UUID: GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e5a98)
 ### efs_fault service 256 2026-09-30T10:32:58+00:00
 MODE service arg=256 pages=256 op=store map=cuMemMap pid=73902
 UVM_INIT fd=9 rmStatus=0x0 flags=0x4000000000000001 efs_requested=1

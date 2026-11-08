@@ -1,6 +1,6 @@
 # R25 — OS_DESCRIPTOR: guest-RAM-shaped memory reaches the host GPU MMU
 # host: ubuntu  2026-08-10T04:19:07Z
-# gpu: NVIDIA GeForce RTX 3060, 580.159.04, GPU-d0913685-1ec0-805a-e319-43a901a0e1ff, 00000000:00:07.0
+# gpu: NVIDIA GeForce RTX 3060, 580.159.04, GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e7834, 00000000:00:07.0
 # kernel: 6.8.0-136-generic
 # binary: 40d44db84b5d45363cc091f42c88dad3feb57a50  (REV_UNDER_TEST is stamped INTO the binary, below)
 

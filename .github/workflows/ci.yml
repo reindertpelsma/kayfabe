@@ -314,6 +314,11 @@ jobs:
           python3 scripts/ci/dependencies.py
           python3 scripts/ci/debt.py frozen
           python3 scripts/ci/workflow_lint.py
+          # Python < 3.14 uses the zstd CLI for bounded evidence inspection.
+          if ! command -v zstd >/dev/null 2>&1; then
+            sudo apt-get update -q
+            sudo apt-get install -y -q zstd
+          fi
           python3 -m unittest discover -s scripts/ci -p 'test_*.py'
           python3 scripts/ci/image_size_mutants.py
           python3 scripts/ci/kfci_mutants.py
@@ -1067,12 +1072,13 @@ jobs:
       # (383, a census of pre-existing prose across a tree several agents write at once).
       - name: "Claim-ledger gate (a measurement word names its run, not a source read)"
         run: python3 scripts/ci/debt.py claims
-      # A GPU UUID identifies one physical board. A ratchet like the claim ledger: the hits that
-      # were already in traces/ and docs/ are fingerprinted in scripts/ci/gpu-uuids-baseline.json
-      # (never the UUIDs themselves); a new one fails, and so does a baseline entry that is gone
-      # (run `scripts/ci/no_gpu_uuids.py --shrink`), so the count only goes down.
-      - name: "GPU-UUID ratchet (no new board identifier in traces/ or docs/)"
-        run: python3 scripts/ci/no_gpu_uuids.py
+      # Scan every tracked regular file and symlink text, including bounded archive members.
+      # The empty UUID baseline remains shrink-only; additions and stale entries fail.
+      - name: "GPU-UUID ratchet (including bounded archive members)"
+        run: |
+          python3 scripts/ci/no_gpu_uuids.py
+          python3 scripts/ci/gpu_uuid_mutants.py
+          python3 scripts/evidence/gpu_uuid_scrub_mutants.py
       # The public tree must build, test and be reviewed without the private repository
       # (docs/design/V3_PROVENANCE.md section 2). The gate fails on the repository's name anywhere
       # outside the two policy documents; three older mentions are listed in the script as
