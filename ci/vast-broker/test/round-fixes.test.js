@@ -139,7 +139,7 @@ for (const path of ['/rent', '/availability?profile=check']) {
     assert.equal(h.cloud.creates, 0);
   });
 }
-// FALSIFIER H4/H5: labels block cleanup; transfer/export policy admits forbidden boxes.
+// denied countries
 for (const action of ['stop', 'cron']) {
   test('round create-owned ID survives label change ' + action, async () => {
     const h = await setup();
@@ -181,7 +181,7 @@ for (const field of ['dph_total', 'inet_down_cost']) {
     assert.ok(h.cloud.instances.has('888'));
   });
 }
-for (const country of ['CU', 'IR', 'KP', 'SY']) {
+for (const country of ['CU', 'IR', 'KP', 'SY', 'CN', 'HK', 'MO', 'RU', 'BY']) {
   test('round denied country cannot rent ' + country, async () => {
     const h = await setup({ PREFERRED_COUNTRIES: JSON.stringify([country]) });
     h.cloud.offer.geolocation = 'fixture, ' + country;

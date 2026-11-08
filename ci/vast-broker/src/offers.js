@@ -87,6 +87,8 @@ const DENIED_NAMES = new Map(
       'Macau Special Administrative Region',
       'Macao Special Administrative Region',
     ],
+    RU: ['RU', 'RUS', 'Russia', 'Russian Federation'],
+    BY: ['BY', 'BLR', 'Belarus', 'Republic of Belarus'],
   }).flatMap(([code, names]) => names.map((name) => [normal(name), code])),
 );
 // Vast returns geolocation as "region, ISO country code". Region text is discarded; a denied

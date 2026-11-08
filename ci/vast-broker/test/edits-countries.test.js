@@ -5,10 +5,7 @@ import { configuration } from '../src/policy.js';
 import { Ledger } from '../src/ledger.js';
 import { DEFAULTS } from '../src/defaults.js';
 import { setup, env, clock, MemoryStorage } from './helpers.js';
-// Owner ruling 2026-10-24 item 5: boxes in CN, HK and MO repeatedly had broken or very slow
-// CDN/Ubuntu-mirror access. FALSIFIER: an offer there is admitted (even when cheapest or
-// preferred), an alias is not recognised, an invalid override is accepted, or unknown
-// location handling changes.
+// denied countries
 const base = {
   id: 1,
   verified: true,
@@ -51,8 +48,18 @@ async function evaluate(rows, extra = {}) {
     evaluation = await book.evaluate({ offers: async () => rows }, cfg, ledger, 'check');
   return { book, cfg, ledger, evaluation };
 }
-test('item 5: default deny list is CU IR KP SY CN HK MO', () => {
-  assert.deepEqual(DEFAULTS.deniedCountries, ['CU', 'IR', 'KP', 'SY', 'CN', 'HK', 'MO']);
+test('item 5: default deny list is CU IR KP SY CN HK MO RU BY', () => {
+  assert.deepEqual(DEFAULTS.deniedCountries, [
+    'CU',
+    'IR',
+    'KP',
+    'SY',
+    'CN',
+    'HK',
+    'MO',
+    'RU',
+    'BY',
+  ]);
   assert.deepEqual(configuration(env).deniedCountries, DEFAULTS.deniedCountries);
 });
 for (const [geolocation, code] of [
@@ -65,6 +72,18 @@ for (const [geolocation, code] of [
   ['Taipa, MACAO', 'MO'],
   ['Beijing, china', 'CN'],
   ['China', 'CN'],
+  ['Moscow, RU', 'RU'],
+  ['Moscow, RUS', 'RU'],
+  ['Moscow, Russia', 'RU'],
+  ['Moscow, Russian Federation', 'RU'],
+  ['Russia', 'RU'],
+  ['Russian Federation', 'RU'],
+  ['Minsk, BY', 'BY'],
+  ['Minsk, BLR', 'BY'],
+  ['Minsk, Belarus', 'BY'],
+  ['Minsk, Republic of Belarus', 'BY'],
+  ['Belarus', 'BY'],
+  ['Republic of Belarus', 'BY'],
 ])
   test('item 5: ' + JSON.stringify(geolocation) + ' is ' + code + ' and denied', async () => {
     assert.equal(offerCountry({ geolocation }), code);
@@ -80,7 +99,7 @@ for (const [geolocation, code] of [
     assert.equal(evaluation.view.rejected.COUNTRY, 1);
     assert.equal((await book.select(evaluation, cfg, ledger, 'check')).offer.id, 2);
   });
-for (const code of ['CN', 'HK', 'MO'])
+for (const code of ['CN', 'HK', 'MO', 'RU', 'BY'])
   test('item 5: a rental in ' + code + ' alone makes no Vast create', async () => {
     const h = await setup({ PREFERRED_COUNTRIES: JSON.stringify([code]) });
     h.cloud.offer.geolocation = 'Region, ' + code;
@@ -88,7 +107,19 @@ for (const code of ['CN', 'HK', 'MO'])
     assert.equal(response.status, 503);
     assert.equal(h.cloud.creates, 0);
   });
-for (const value of ['["cn"]', '["CN","CN"]', '["CHN"]', '"CN"', '[1]'])
+for (const value of [
+  '["cn"]',
+  '["CN","CN"]',
+  '["CHN"]',
+  '"CN"',
+  '[1]',
+  '["ru"]',
+  '["by"]',
+  '["RU","RU"]',
+  '["BY","BY"]',
+  '["RUS"]',
+  '["BLR"]',
+])
   test('item 5: DENIED_COUNTRIES override stays validated ' + value, () => {
     assert.throws(() => configuration({ ...env, DENIED_COUNTRIES: value }));
   });
@@ -158,3 +189,53 @@ for (const [geolocation, code] of [
     const extra = code === 'UNKNOWN' ? { ALLOW_UNKNOWN_COUNTRY: 'true' } : {};
     assert.equal((await evaluate([offer(1, geolocation)], extra)).evaluation.allowed.length, 1);
   });
+
+for (const [geolocation, code] of [
+  ['Moscow, RU', 'RU'],
+  ['Moscow, Russia', 'RU'],
+  ['Minsk, BY', 'BY'],
+  ['Minsk, Belarus', 'BY'],
+]) {
+  test('denied countries: unknown setting preserves COUNTRY for ' + geolocation, async () => {
+    const { evaluation } = await evaluate([offer(1, geolocation)], {
+      ALLOW_UNKNOWN_COUNTRY: 'true',
+    });
+    assert.equal(offerCountry({ geolocation }), code);
+    assert.equal(evaluation.allowed.length, 0);
+    assert.deepEqual(evaluation.view.rejected, { COUNTRY: 1 });
+  });
+  test('denied countries: explicit override admits ' + geolocation, async () => {
+    const { evaluation } = await evaluate([offer(1, geolocation)], { DENIED_COUNTRIES: '["CN"]' });
+    assert.equal(offerCountry({ geolocation }), code);
+    assert.deepEqual(
+      evaluation.allowed.map((x) => x.id),
+      [1],
+    );
+    assert.equal(evaluation.view.rejected.COUNTRY, undefined);
+  });
+}
+for (const [geolocation, code] of [
+  ['Russia, US', 'US'],
+  ['Belarus, CA', 'CA'],
+  ['Rugby, GB', 'GB'],
+  ['Byron Bay, AU', 'AU'],
+])
+  test('denied countries: region text preserves ' + geolocation, async () => {
+    assert.equal(offerCountry({ geolocation }), code);
+    const { evaluation } = await evaluate([offer(1, geolocation)]);
+    assert.equal(evaluation.allowed.length, 1);
+  });
+
+test('denied countries: configuration preserves the default order', () => {
+  assert.deepEqual(configuration(env).deniedCountries, [
+    'CU',
+    'IR',
+    'KP',
+    'SY',
+    'CN',
+    'HK',
+    'MO',
+    'RU',
+    'BY',
+  ]);
+});

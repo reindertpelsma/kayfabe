@@ -75,6 +75,12 @@ const MEASURED = [
   ['Korea, Republic of', 'UNKNOWN'],
 ];
 const MORE = [
+  ['Moscow, Russian Federation', 'RU'],
+  ['Moscow, RUS', 'RU'],
+  ['Minsk, Republic of Belarus', 'BY'],
+  ['Minsk, BLR', 'BY'],
+  ['Moscow, \uff32\uff35', 'RU'],
+  ['Minsk, B\u200bY', 'BY'],
   ['\ufeffBeijing, CN', 'CN'], // byte-order mark
   ['Beijing, C\u200dN', 'CN'], // zero-width joiner inside the code
   ['Beijing, C\u00adN', 'CN'], // soft hyphen inside the code
@@ -104,7 +110,9 @@ test('C: ALLOW_UNKNOWN_COUNTRY defaults to false', () => {
 });
 for (const [geolocation, code] of [...MEASURED, ...MORE, [undefined, 'UNKNOWN'], ['', 'UNKNOWN']])
   test('C: ' + JSON.stringify(geolocation) + ' admission follows ' + code, async () => {
-    const admitted = !['UNKNOWN', 'CU', 'IR', 'KP', 'SY', 'CN', 'HK', 'MO'].includes(code);
+    const admitted = !['UNKNOWN', 'CU', 'IR', 'KP', 'SY', 'CN', 'HK', 'MO', 'RU', 'BY'].includes(
+      code,
+    );
     const strict = await evaluate(geolocation);
     assert.equal(strict.allowed.length, admitted ? 1 : 0);
     if (!admitted) assert.deepEqual(strict.view.rejected, { COUNTRY: 1 });

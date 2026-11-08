@@ -19,3 +19,8 @@ Every verification, quality, country deny, machine exclusion and spending check 
 applies. Availability lists eligible per-die prices; the runner prints the actual rental's
 machine, host, instance, GPU and offer hourly price. The offer price excludes the broker's
 transfer allowance; admission uses the full reservation estimate.
+
+CODE READ (2026-11-08): the source default for `DENIED_COUNTRIES` is
+`CU IR KP SY CN HK MO RU BY`. Offers matching the active deny list are rejected as
+`COUNTRY` before price or country preference. The override accepts unique uppercase
+two-letter codes.

@@ -201,8 +201,7 @@ $1/hour, $6 daily, $30 rolling, $8 reserve, 75-minute boot and a 300-minute hard
 check profile (lane 2, 2026-11-04: Windows required on the master gate; the sweep keeps 180,
 `src/tier.js`; deploy the reaper with `REAPER_HARD_MINUTES` 300 first).
 MAX_INET_USD_PER_GB defaults to 0.005 in each direction; the offer query, admission and contract
-recheck enforce it. DENIED_COUNTRIES defaults to CU, IR, KP, SY, CN, HK, MO (owner ruling
-2026-10-24: CN, HK and MO boxes repeatedly had broken or very slow CDN/Ubuntu-mirror access) and
+recheck enforce it. DENIED_COUNTRIES defaults to CU, IR, KP, SY, CN, HK, MO, RU, BY (owner update 2026-11-08) and
 applies before price and country preference. Besides the ISO alpha-2 code, the alpha-3 code
 and the names Vast or a geolocation database may print (CHINA, HONG KONG SAR, MACAO, SYRIAN ARAB
 REPUBLIC, "IRAN, ISLAMIC REPUBLIC OF", "KOREA, DEMOCRATIC PEOPLE'S REPUBLIC OF", ...) map to the
