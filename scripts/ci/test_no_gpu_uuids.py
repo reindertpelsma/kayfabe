@@ -371,11 +371,9 @@ class RepositoryTests(unittest.TestCase):
         text = (ROOT / "scripts/ci/gpu-uuids-baseline.json").read_text()
         self.assertEqual(re.findall(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-", text), [])
 
-    def test_the_committed_baseline_only_names_files_under_traces_or_docs(self):
+    def test_the_committed_baseline_has_no_remaining_uuid_debt(self):
         files = json.loads((ROOT / "scripts/ci/gpu-uuids-baseline.json").read_text())["files"]
-        self.assertGreater(len(files), 100)
-        for rel in files:
-            self.assertTrue(rel.startswith(("traces/", "docs/")), rel)
+        self.assertEqual(files, {})
 
     def test_the_gate_is_a_step_of_the_stable_job(self):
         ci = (ROOT / ".github/workflows/ci.yml").read_text()

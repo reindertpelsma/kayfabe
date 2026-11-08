@@ -68,6 +68,6 @@ BARE_CELL_ARM arm=cross-client-leak verdict=PASS secs=1 ms=1317 rc=0 pci_dev=0x2
 --rpc-mixed-allocs           PASS         2s  2s
 BARE_CELL_ARM arm=rpc-mixed-allocs verdict=PASS secs=2 ms=2121 rc=0 pci_dev=0x2C0210DE drv=580.159.04 kmod=open cc=12.0 rev=92b9f912
 BARE_SUITE_PASS=30 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0 ARMS=30
-BARE_CELL pci_dev=0x2C0210DE gpu="NVIDIA GeForce RTX 5080" drv=580.159.04 kmod=open cc=12.0 rev=92b9f912 pass=30 fail=0 crash=0 arms=30 uuid=GPU-ea948815-1637-7b53-8d7c-ee80ed7d49de
+BARE_CELL pci_dev=0x2C0210DE gpu="NVIDIA GeForce RTX 5080" drv=580.159.04 kmod=open cc=12.0 rev=92b9f912 pass=30 fail=0 crash=0 arms=30 uuid=GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e3f46
 BARE_RC=0
 EXIT 2026-09-26T10:45:08+00:00

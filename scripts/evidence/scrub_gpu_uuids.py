@@ -52,13 +52,8 @@ class Pseudonymizer:
         if not key:
             raise ScrubError("empty key")
         self.values = {u.lower(): pseudonym(key, u.lower()) for u in originals}
-        self.compact = {
-            a.replace(b"-", b""): b.replace(b"-", b"") for a, b in self.values.items()
-        }
-        self.binary = {
-            bytes.fromhex(a.decode()): bytes.fromhex(b.decode())
-            for a, b in self.compact.items()
-        }
+        self.logical_hashes = {}
+        self.logical_sizes = {}
         if len(set(self.values.values())) != len(self.values):
             raise ScrubError("synthetic UUID collision; no writes made")
 
@@ -67,15 +62,13 @@ class Pseudonymizer:
 
 
 BARE = re.compile(gate._UUID, re.I)
-COMPACT = re.compile(rb"(?<![0-9a-f])[0-9a-f]{32}(?![0-9a-f])", re.I)
 
 
 def replace_known(data, mapper):
-    # Replace only identities established by a marked occurrence elsewhere.
+    # Replace canonical UUID text, including decoded text encodings. Unmarked
+    # 16-byte blobs and 32-digit hex numbers may be ordinary record counters;
+    # their equality to a UUID value supplies no authority to rewrite them.
     data = BARE.sub(lambda m: mapper.values.get(m.group().lower(), m.group()), data)
-    data = COMPACT.sub(lambda m: mapper.compact.get(m.group().lower(), m.group()), data)
-    for old, new in mapper.binary.items():
-        data = data.replace(old, new)
     return data
 
 
@@ -178,7 +171,7 @@ def manifest_tables(changes):
     return hashes, sizes
 
 
-def repair_entries(originals, rewritten):
+def repair_entries(originals, rewritten, extra_tables=None):
     # Child checksums may themselves be covered by a parent manifest. Recompute
     # from the original text on every iteration, until that dependency DAG settles.
     current = dict(rewritten)
@@ -189,6 +182,8 @@ def repair_entries(originals, rewritten):
             if originals[n] != current[n]
         }
         tables = manifest_tables(changes)
+        if extra_tables is not None:
+            tables = (extra_tables[0] | tables[0], extra_tables[1] | tables[1])
         new = {n: repair_manifest(rewritten[n], changes, tables) for n in rewritten}
         if new == current:
             return current
@@ -227,6 +222,16 @@ def gzip_members(data):
 
 
 def rewrite(data, mapper):
+    result = _rewrite(data, mapper)
+    # A checksum can name a decompressed stream that has no loose counterpart
+    # in the checkout (for example the archived C-reference MD5SUMS).
+    hashes, sizes = manifest_tables({0: (data, result)})
+    mapper.logical_hashes.update(hashes)
+    mapper.logical_sizes.update(sizes)
+    return result
+
+
+def _rewrite(data, mapper):
     kind = gate.archive_kind(data)
     if kind == "gzip":
         out = []
@@ -391,7 +396,9 @@ def main(argv=None):
     # point rule as members. The external archive index stays unchanged unless
     # its actual referenced archive changes; this command never rewrites those.
     print("uuid scrub phase: checksum repair", file=sys.stderr, flush=True)
-    rewritten = repair_entries(originals, rewritten)
+    rewritten = repair_entries(
+        originals, rewritten, (mapper.logical_hashes, mapper.logical_sizes)
+    )
     print("uuid scrub phase: verify before writes", file=sys.stderr, flush=True)
     for protected in ("README.md", "docs/OWNER_RULINGS.md"):
         if rewritten.get(protected) != originals.get(protected):

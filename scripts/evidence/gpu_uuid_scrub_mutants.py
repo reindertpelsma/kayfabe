@@ -10,6 +10,7 @@ import tempfile
 HERE = Path(__file__).resolve().parent
 CI = HERE.parent / "ci"
 MUTANTS = [
+    ("logical-stream-digests-ignored", "if extra_tables is not None:", "if False:"),
     (
         "key-ignored",
         "hmac.new(key, original.lower(), hashlib.sha256)",
@@ -30,7 +31,16 @@ MUTANTS = [
         "for (start, end), encoding, decoded in gate.encoded_views(data):",
         "for (start, end), encoding, decoded in []:",
     ),
-    ("binary-crossrefs-unscrubbed", "data = data.replace(old, new)", "pass"),
+    (
+        "unmarked-binary-corrupted",
+        "    return data\n\n\ndef rewrite_text",
+        '    for old, new in mapper.values.items():\n        data = data.replace(bytes.fromhex(old.decode().replace("-", "")), bytes.fromhex(new.decode().replace("-", "")))\n    return data\n\n\ndef rewrite_text',
+    ),
+    (
+        "unmarked-hex-counter-corrupted",
+        "    return data\n\n\ndef rewrite_text",
+        '    for old, new in mapper.values.items():\n        data = data.replace(old.replace(b"-", b""), new.replace(b"-", b""))\n    return data\n\n\ndef rewrite_text',
+    ),
     (
         "md5-stale",
         "for algorithm in (hashlib.md5, hashlib.sha256):",

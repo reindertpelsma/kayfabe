@@ -1,6 +1,9 @@
 """Falsifier: mapping diverges across forms, bytes outside the scrub change, or hashes go stale."""
 
 import base64
+import contextlib
+import subprocess
+import tempfile
 import gzip
 import hashlib
 import io
@@ -64,13 +67,13 @@ class MappingTests(unittest.TestCase):
         with self.assertRaises(scrub.ScrubError):
             scrub.Pseudonymizer(b"", {UUID})
 
-    def test_plain_and_bare_and_compact_cross_references(self):
+    def test_formatted_uuid_crossrefs_leave_unmarked_hex_unchanged(self):
         mapper = self.mapper()
         body = PAYLOAD + b" " + UUID + b" " + UUID.replace(b"-", b"")
         result = scrub.rewrite_text(body, mapper)
         self.assertNotIn(UUID, result)
         self.assertEqual(result.count(mapper.uuid(UUID)), 2)
-        self.assertIn(mapper.uuid(UUID).replace(b"-", b""), result)
+        self.assertIn(UUID.replace(b"-", b""), result)
 
     def test_bare_hex_uuid_cross_reference(self):
         mapper = self.mapper()
@@ -116,16 +119,15 @@ class MappingTests(unittest.TestCase):
         )
         self.assertEqual(bytes.fromhex(result.decode()), b"GPU-" + mapper.uuid(UUID))
 
-    def test_binary_uuid_inside_a_record(self):
+    def test_unmarked_binary_value_inside_record_stays_identical(self):
         mapper = self.mapper()
         raw = bytes.fromhex(UUID.decode().replace("-", ""))
-        wanted = bytes.fromhex(mapper.uuid(UUID).decode().replace("-", ""))
         self.assertEqual(
             scrub.rewrite_text(b"prefix" + raw + b"suffix", mapper),
-            b"prefix" + wanted + b"suffix",
+            b"prefix" + raw + b"suffix",
         )
 
-    def test_utf16_and_binary_cross_references(self):
+    def test_utf16_uuid_text_scrubs_without_rewriting_unmarked_binary(self):
         mapper = self.mapper()
         for encoding in ("utf-16le", "utf-16be"):
             result = scrub.rewrite_text(PAYLOAD.decode().encode(encoding), mapper)
@@ -133,8 +135,49 @@ class MappingTests(unittest.TestCase):
         binary = bytes.fromhex(UUID.decode().replace("-", ""))
         self.assertEqual(
             scrub.rewrite_text(binary, mapper),
-            bytes.fromhex(mapper.uuid(UUID).decode().replace("-", "")),
+            binary,
         )
+
+    def test_numeric_hex_counter_is_not_a_uuid(self):
+        low = b"-".join([b"0" * 8, b"0" * 4, b"0" * 4, b"0" * 4, b"0" * 11 + b"1"])
+        mapper = scrub.Pseudonymizer(KEY, {low})
+        source = b"counter=" + low.replace(b"-", b"")
+        self.assertEqual(scrub.rewrite_text(source, mapper), source)
+
+    def test_binary_zero_and_one_counters_are_not_uuid_fields(self):
+        low = b"-".join([b"0" * 8, b"0" * 4, b"0" * 4, b"0" * 4, b"0" * 11 + b"1"])
+        mapper = scrub.Pseudonymizer(KEY, {low})
+        source = b"\0" * 64 + b"\x01" + b"\0" * 32
+        self.assertEqual(scrub.rewrite_text(source, mapper), source)
+
+    def test_provenance_uuid_edit_preserves_binary_record_counters(self):
+        import struct
+
+        low = b"-".join([b"0" * 8, b"0" * 4, b"0" * 4, b"0" * 4, b"0" * 11 + b"1"])
+        mapper = scrub.Pseudonymizer(KEY, {low})
+        provenance = b"GPU-" + low
+        header = struct.pack(
+            "<QIIIIQQQQQQ3Q",
+            0x4352434552564B4E,
+            1,
+            96 + len(provenance),
+            32,
+            0,
+            0,
+            0,
+            1,
+            32,
+            0,
+            0,
+            0,
+            0,
+            0,
+        )
+        record = b"\0" * 15 + b"\x01" + b"\0" * 16
+        after = scrub.rewrite(header + provenance + record, mapper)
+        self.assertEqual(after[:96], header)
+        self.assertEqual(after[-32:], record)
+        self.assertEqual(after[96:-32], b"GPU-" + mapper.uuid(low))
 
 
 class RewriteTests(unittest.TestCase):
@@ -291,6 +334,55 @@ class RewriteTests(unittest.TestCase):
 
     def test_discovery_plain_case_insensitive(self):
         self.assertEqual(scrub.discover(PAYLOAD.upper()), {UUID.lower()})
+
+
+class CompressedManifestCliTests(unittest.TestCase):
+    def check_manifest(self, algorithm, kind, manifest):
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            root = parent / "repo"
+            traces = root / "traces"
+            traces.mkdir(parents=True)
+            key = parent / "private-fixture-key"
+            key.write_bytes(KEY)
+            key.chmod(0o600)
+            subprocess.run(
+                ["git", "init", "-q", str(root)], check=True, capture_output=True
+            )
+            if kind == "gzip":
+                packed = gzip.compress(PAYLOAD)
+                target = traces / "log.gz"
+            else:
+                packed = subprocess.run(
+                    ["zstd", "-q", "-c"], input=PAYLOAD, capture_output=True, check=True
+                ).stdout
+                target = traces / "log.zst"
+            target.write_bytes(packed)
+            sums = traces / manifest
+            sums.write_text(algorithm(PAYLOAD).hexdigest() + "  log\n")
+            subprocess.run(
+                ["git", "-C", str(root), "add", "traces"],
+                check=True,
+                capture_output=True,
+            )
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(
+                io.StringIO()
+            ):
+                result = scrub.main(
+                    ["scrub", "--root", str(root), "--key-file", str(key)]
+                )
+            self.assertEqual(result, 0)
+            decoded = scrub.unpack_stream(target.read_bytes(), kind)
+            self.assertFalse(gate.scan(decoded))
+            self.assertEqual(
+                sums.read_text(), algorithm(decoded).hexdigest() + "  log\n"
+            )
+
+    def test_cli_repairs_md5_for_decompressed_gzip(self):
+        self.check_manifest(hashlib.md5, "gzip", "MD5SUMS")
+
+    def test_cli_repairs_sha256_for_decompressed_zstd(self):
+        self.check_manifest(hashlib.sha256, "zstd", "SHA256SUMS")
 
 
 if __name__ == "__main__":

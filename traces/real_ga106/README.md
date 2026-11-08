@@ -1,5 +1,7 @@
 # `traces/real_ga106/` — what a **real GA106** answers, asked directly
 
+**Privacy update, 2026-11-08 (CODE READ):** GPU UUIDs in these retained traces are deterministic synthetic placeholders, shared consistently across files. The original identifiers remain in git history pending the owner's release history rewrite.
+
 ★★★ These are not captures of this port, and they are not the C oracle. They are the
 **physical-control reply plane of a genuine NVIDIA GA106**, read out of the driver that owns
 it, on the day it was asked.
@@ -8,7 +10,7 @@ it, on the day it was asked.
 
 | | |
 |---|---|
-| part | NVIDIA GeForce RTX 3060 (GA106), `GPU-e28d7776-e4f9-704b-d392-d46f187343f8` |
+| part | NVIDIA GeForce RTX 3060 (GA106), `GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4eb470` |
 | host | vast.ai instance `46494693`, kernel `6.8.0-59-generic` |
 | driver | **NVIDIA open kernel modules 580.159.04** — the same version the Mode-2 guest runs |
 | source | `research_clones/ogkm-580.159.04`, git tag `b81d58e` (`version.mk: 580.159.04`) |
@@ -207,7 +209,7 @@ specific move — reading an empty `ctl_` array as *"hardware says zero"*.
 
 ## ★★★ §14.28's two additions, and they are of DIFFERENT KINDS
 
-⚠ **`GPU-d0913685-1ec0-805a-e319-43a901a0e1ff` is a SECOND, DIFFERENT physical GA106.** The
+⚠ **`GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e7834` is a SECOND, DIFFERENT physical GA106.** The
 provenance table above names `GPU-e28d7776`; every file added on 2026-08-08 was read from
 the other part. That distinction is not bookkeeping — it is the whole finding of
 `rmladder_r21_gpuinfo_sweep_real_ga106.txt`.
@@ -229,7 +231,7 @@ kernel's* answer and says nothing about what a GSP would return.
 
 ## ★★★ §14.29–§14.31's additions, and the one that CLEARS a refusal
 
-All read from `GPU-d0913685-1ec0-805a-e319-43a901a0e1ff` — the **second** physical GA106,
+All read from `GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e7834` — the **second** physical GA106,
 not the `GPU-e28d7776` of the provenance table above.
 
 | file | boundary | what it is |

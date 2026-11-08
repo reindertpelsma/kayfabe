@@ -668,7 +668,7 @@
   {
     "source": "/workspace/apps/results/cand2/gpu_burn.guest.log",
     "source_size": 14416,
-    "source_sha256": "d3923c704099c3449931119200e6a083df19296dc15626c5105393f44ccec9bf",
+    "source_sha256": "3ec9a3cae288a1d8933adeb7e9153a54e23bc6dbc05d4a9e1945986ae09fdd65",
     "saved": "workspace/apps/results/cand2/gpu_burn.guest.log"
   },
   {
@@ -680,7 +680,7 @@
   {
     "source": "/workspace/apps/results/cand2/gpu_burn.host.log",
     "source_size": 14531,
-    "source_sha256": "b0d2dd5b81eca00b9cb05b965ea80c3a2bd2a316025d858ce42290fa138b409f",
+    "source_sha256": "ce525dcb28a8c3352c348ffbe74247c918bddea4e40234b5e1a472dd0bceca12",
     "saved": "workspace/apps/results/cand2/gpu_burn.host.log"
   },
   {
@@ -806,7 +806,7 @@
   {
     "source": "/workspace/apps/results/cand2/host_dmesg_tail.log",
     "source_size": 13195,
-    "source_sha256": "ce009c2abcd27a1797e4fe7f925119f0fc8d75b699e7dc1a51d572f80469604e",
+    "source_sha256": "675c8b804894a5a329ebfd09a3a084e6475ad46389d05860493af0751a46e69d",
     "saved": "workspace/apps/results/cand2/host_dmesg_tail.log"
   },
   {

@@ -92,7 +92,7 @@ REV_UNDER_TEST=8176538aee3e618a84a59ea51582e48959e7da0a
 IOCTL     98094us req=0xc020462b len=32    rc=0   head=0xc1d0000b
 ok    W392C hVaSpace      = 0xcafe0004
 --- w392c UVM raw client: forcing nvidia-uvm to build a KERNEL channel ---
-ok    W392C uuid          = GPU-78b352c7-1ccd-7a86-d282-49484c827f27
+ok    W392C uuid          = GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e66f0
 ok    W392C open          = /dev/nvidia-uvm
 IOCTL    125532us req=0x30000001 len=12288 rc=0   head=0x00000000
 ok    W392C INITIALIZE    = rmStatus 0x0

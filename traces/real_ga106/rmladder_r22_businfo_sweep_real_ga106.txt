@@ -7,7 +7,7 @@ max_link_speed       8.0 GT/s PCIe
 current_link_width   16
 max_link_width       16
 uuid, pcie.link.gen.current, pcie.link.gen.max, pcie.link.gen.gpucurrent, pcie.link.gen.gpumax, pcie.link.width.current
-GPU-d0913685-1ec0-805a-e319-43a901a0e1ff, 1, 3, 1, 4, 16
+GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e7834, 1, 3, 1, 4, 16
 --- rmladder ---
 ok    R2 version         = "580.159.04"
 ok    R4 hClient         = 0xc1d00174

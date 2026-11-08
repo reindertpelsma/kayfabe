@@ -1,12 +1,14 @@
 # `traces/real_ad104/` — a floor-swept **Ada** die with a hole in the middle, asked unprivileged
 
+**Privacy update, 2026-11-08 (CODE READ):** GPU UUIDs in these retained traces are deterministic synthetic placeholders, shared consistently across files. The original identifiers remain in git history pending the owner's release history rewrite.
+
 **STATUS: LIVE, 2026-09-26 (v3-gpcmask).**
 
 ## Provenance
 
 | | |
 |---|---|
-| part | NVIDIA GeForce RTX 4070 (AD104, `0x278610DE`), `GPU-9305b68b-d466-5547-51f1-505345f53ddc`, VBIOS `95.04.3E.08.BE` |
+| part | NVIDIA GeForce RTX 4070 (AD104, `0x278610DE`), `GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e9fdf`, VBIOS `95.04.3E.08.BE` |
 | host | vast.ai instance `52747429` — a plain **container** (no KVM); the GPU is `/dev/nvidia1`, RM device instance 1 |
 | driver | NVIDIA **proprietary** kernel module 580.159.04 |
 | client | root in the container **without CAP_SYS_ADMIN** (`CapEff 00000000a80405fb`) — so RM treats it as unprivileged |

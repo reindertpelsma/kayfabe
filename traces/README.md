@@ -1,5 +1,7 @@
 # The C reference replay traces — the standing oracle
 
+**Privacy update, 2026-11-08 (CODE READ):** GPU UUIDs in these retained traces are deterministic synthetic placeholders, shared consistently across files. The original identifiers remain in git history pending the owner's release history rewrite.
+
 **STATUS: LIVE, 2026-11-07.** ★ 2026-11-07 (owner decision, `docs/OWNER_QUESTIONS_2026-10-03.md` section 3, option (b)): every
 PROM read value (BAR0 `0x300000`-`0x3fffff`) in the two files below, and in the five `archive/nvkvm/traces/mode2_c_reference/*.rec.zst`,
 was replaced by zero with `scripts/evidence/scrub_prom.py`; every other record is byte-identical (one decode of the original and
@@ -15,8 +17,8 @@ third-party crate.
 
 | file | records | md5 | properties |
 |---|---|---|---|
-| `cap1_coldboot_hermetic.rec` | 359 062 | `106afd5013b768d6ad8ff83efc68765a` | `m2fwd=off m2exec=off m2romregs=off`, full mask — **HERMETIC** |
-| `cap1b_coldboot_hermetic_d6.rec` | 360 725 | `a6e89bcd444ed88619b62c87065b6023` | identical vector, plus BAR0 trace — **HERMETIC**, and **GSP-D6 witnessed** |
+| `cap1_coldboot_hermetic.rec` | 359 062 | `15b2b86bee98126fc3c1294f11fe353d` | `m2fwd=off m2exec=off m2romregs=off`, full mask — **HERMETIC** |
+| `cap1b_coldboot_hermetic_d6.rec` | 360 725 | `98dde92b6619c403d72d8d8a5a604524` | identical vector, plus BAR0 trace — **HERMETIC**, and **GSP-D6 witnessed** |
 
 ## ★★★ Why there are two, and why the second one is the one a reply plane is differenced on
 

@@ -67,7 +67,7 @@ ok    R6 hSubdevice      = 0xcafe0002
 REV_UNDER_TEST=unstamped
 ok    W392C hVaSpace      = 0xcafe0004
 --- w392c UVM raw client: forcing nvidia-uvm to build a KERNEL channel ---
-ok    W392C uuid          = GPU-68d81366-61f0-09a2-821b-a3d27a12ee77
+ok    W392C uuid          = GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e36cc
 ok    W392C open          = /dev/nvidia-uvm
 ok    W392C INITIALIZE    = rmStatus 0x0
 ok    W392C MM_INITIALIZE = rmStatus 0x0
