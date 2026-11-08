@@ -108,8 +108,8 @@
     "source": "/var/lib/kf-windows-20261005/boundary-kayfabe-1400/qemu.log",
     "artifact": "run1400/qemu.log.gz",
     "original_bytes": 2247408,
-    "original_sha256": "4a6d8f6042f44eed61bfb3eb366ba169d43b92859912b1740c5a4ad453d08572",
-    "artifact_sha256": "b3b06bdde53895a4f04869f1ec27a5707e9b4bd6afe8bef267f55382fbe46ce3"
+    "original_sha256": "e6d28042f1219029ebf83fd99f928e6fdb50c1b07931da1eefd8957cc5300a6d",
+    "artifact_sha256": "2d0656317327a35d1b91b206390b84b0aae74ea9bb9379b27082eed658e1fb89"
   },
   {
     "source": "/var/lib/kf-windows-20261005/boundary-kayfabe-1400/command.json",
@@ -129,8 +129,8 @@
     "source": "/var/lib/kf-windows-20261005/boundary-kayfabe-1401/qemu.log",
     "artifact": "run1401/qemu.log.gz",
     "original_bytes": 3970604,
-    "original_sha256": "fc965050c0d2bfdfa02c532e728d4bc1829eb92f6bc0d825f1b94baa04e6d25e",
-    "artifact_sha256": "dae71608366d08cf627c8b1c2af6ac074477a23de23a90236db9a44b805aac9d"
+    "original_sha256": "d11e5e0e8ad8df45c155db8b787e698f28892e3c9c491f4f730fc2ac9c9e351b",
+    "artifact_sha256": "59eb408613aeb5913daf078c642af5403584f3de2a1b151598519567f08855f0"
   },
   {
     "source": "/var/lib/kf-windows-20261005/boundary-kayfabe-1401/command.json",
@@ -150,8 +150,8 @@
     "source": "/var/lib/kf-windows-20261005/boundary-kayfabe-1460/qemu.log",
     "artifact": "run1460/qemu.log.gz",
     "original_bytes": 1810945,
-    "original_sha256": "e638e0ffc32ce3eaa465e2542d3c3b9c5e6eba3e8b065441cb35e9c03cc61866",
-    "artifact_sha256": "e276e38c2095a10d02ae8d3abebafd11bc5b1152993cc75d057504c6a72bbac7"
+    "original_sha256": "524029681962073a8f48e44156387106021f406df9f1eba3b5c92eece484e498",
+    "artifact_sha256": "c61a4b75ba67f74ba9d75ed9664366659bf216e12fb3f83844069bbe829a3368"
   },
   {
     "source": "/var/lib/kf-windows-20261005/boundary-kayfabe-1460/command.json",

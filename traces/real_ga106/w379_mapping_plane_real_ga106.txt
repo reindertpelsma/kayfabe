@@ -95,7 +95,7 @@ done — w379 mapping-plane rungs only
 W379_TERMINATOR=reached inner_rc=0
 --- host dmesg after the battery ---
 [47865.609370] NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
-[47865.632449] NVRM: GPU at PCI:0000:00:08: GPU-dded0666-8fa8-c122-42d0-beab0498e398
+[47865.632449] NVRM: GPU at PCI:0000:00:08: GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0d31
 [47865.632466] NVRM: Xid (PCI:0000:00:08): 31, pid=143480, name=kayfabe-rm-ladd, channel 0x00000005, intr 00000000. MMU Fault: ENGINE GR0_PBDMA0 HUBCLIENT_ESC faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
 
 # ============================== GRADING ======================================

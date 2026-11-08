@@ -1,6 +1,6 @@
 # The eleven `dlen = 0` rows of the C oracle, plus 0x20800a2a, ASKED OF A REAL GA106.
 #
-# part      NVIDIA GeForce RTX 3060 (GA106), GPU-e28d7776-e4f9-704b-d392-d46f187343f8
+# part      NVIDIA GeForce RTX 3060 (GA106), GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4eb470
 # host      vast.ai instance 46494693, kernel 6.8.0-59-generic
 # driver    NVIDIA open kernel modules 580.159.04 (research_clones/ogkm-580.159.04, tag b81d58e)
 # date      2026-08-01

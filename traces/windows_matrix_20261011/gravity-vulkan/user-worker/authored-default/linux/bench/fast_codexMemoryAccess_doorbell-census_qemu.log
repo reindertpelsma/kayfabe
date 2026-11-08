@@ -13,7 +13,7 @@ kf3: host facts: GSS 0x2080a026 [(0, 400), (8, 0), (10, 2), (14, 1), (18, 0), (1
 kf3: host facts: FIFO latency buffers (engine, gp, pb) from the host: [(1, 240, 2880), (9, 240, 2880), (a, 240, 2000), (b, 20, e00), (c, 20, e00), (13, 20, 80), (1c, 20, 80), (22, 20, 80), (33, 20, 80)]
 kf3: channel budget 1789 per runlist (Derived; derived default 1789, host limit 2045; the count the guest is told AND the enforced cap, refused by name past it — property channel-budget, docs/design/V3_CHANNEL_BUDGET.md)
 kf3: ⚠ gpu-uuid=auto: this VM has no identity (no vm-id= and no QEMU -uuid), so there is nothing stable to derive from; using a RANDOM UUID for this boot. Give the VM `-uuid <uuid>` (or vm-id=) for a UUID that is stable across boots.
-kf3: guest GPU UUID GPU-51b0fff4-8ba5-6635-abb5-e97e86da1433 (gpu-uuid=auto, basis RandomNoVmId, devfn 0x18)
+kf3: guest GPU UUID GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0f4f (gpu-uuid=auto, basis RandomNoVmId, devfn 0x18)
 kf3: permission policy: READ_ONLY+VOLATILE carried to the host map, PRIVILEGED leaves withheld from user twins, ATOMIC_DISABLE not carried (KF3_CARRY_ATOMIC_DISABLE=1 enables it once fault delivery exists) (key_perm=0x68)
 kf-cuda: cuda thread posture thread=kf3-cuda-walk cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
 kf-cuda: cuda thread posture thread=kf3-cuda-store cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
