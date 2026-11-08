@@ -14,7 +14,6 @@
 # Env: DRY_RUN=1 (print only), IDLE_MIN (default 60), EVERY (poll seconds, default 600),
 #      ONCE=1 (one pass, for tests).
 set -u
-DIR=$(cd "$(dirname "$0")" && pwd)
 REG=${REG:-$HOME/.kayfabe/vast_boxes.reg}
 STATE=${STATE:-$HOME/.kayfabe/vast_reaper.state}   # "id first_idle_epoch"
 LOG=${LOG:-$HOME/.kayfabe/vast_reaper.log}

@@ -1,0 +1,40 @@
+#!/usr/bin/env node
+// Offline CLI boundary. The planner imported below performs no I/O.
+import { readFileSync } from 'node:fs';
+import { plan, validatePlan, withoutSeeds, PlanError } from './planner/index.js';
+function read(path) {
+  const data = readFileSync(path === '-' ? 0 : path);
+  if (data.length > 16 * 1024 * 1024) throw new PlanError('BOUNDS');
+  return JSON.parse(data.toString('utf8'));
+}
+try {
+  const [command, inputPath, planPath, ...extra] = process.argv.slice(2);
+  if (
+    !['plan', 'validate'].includes(command) ||
+    !inputPath ||
+    extra.length ||
+    (command === 'validate' && !planPath) ||
+    (command === 'plan' && planPath && !['--without-seeds', '--assignments'].includes(planPath))
+  )
+    throw new PlanError(
+      'USAGE',
+      'kfci plan INPUT.json|- [--without-seeds|--assignments] | kfci validate INPUT.json PLAN.json',
+    );
+  const input = read(inputPath);
+  let output;
+  if (command === 'validate') output = validatePlan(input, read(planPath));
+  else {
+    output = plan(input);
+    if (planPath === '--without-seeds') output = withoutSeeds(input, output);
+    if (planPath === '--assignments') output = output.assignments;
+  }
+  process.stdout.write(JSON.stringify(output, null, 2) + '\n');
+} catch (e) {
+  process.stderr.write(
+    JSON.stringify({
+      error: e instanceof PlanError ? e.code : 'INVALID_JSON',
+      message: e instanceof PlanError ? e.message : 'Input is not valid JSON',
+    }) + '\n',
+  );
+  process.exitCode = 2;
+}

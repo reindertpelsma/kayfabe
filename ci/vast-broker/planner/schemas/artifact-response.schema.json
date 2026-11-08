@@ -1,0 +1,5 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kayfabe.dev/schemas/kfci/v1/artifact-response.schema.json",
+  "$ref": "contract.schema.json#/$defs/artifact_response"
+}
