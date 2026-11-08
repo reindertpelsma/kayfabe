@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 """gate_profiles.py -- which Windows apps the release gate runs, and which it never does (docs/design/V3_WINDOWS_APPS_GATE.md).
 
-STATUS: LIVE, 2026-11-07 (GPU-free; tests/test_gate_profiles.py).
+STATUS: LIVE, 2026-11-08 (GPU-free; tests/test_gate_profiles.py).
 
   gate_profiles.py ids PROFILE      comma list of app ids (small | mid | full | release | ids:a,b,c)
   gate_profiles.py budget PROFILE   the default wall-clock budget in seconds for the apps of that profile
@@ -15,7 +15,7 @@ by their own licences. Apps that need any other package are `owner_decision` (fr
 granted, or a GPL build the owner keeps out of our storage, or a dead pin) or `manual` (licensed, account-bound, or
 online-only, or needs a real display); neither is ever in an automated profile. `known_unsupported` is
 also non-gating and reported explicitly. `full` is every remaining open app minus `excluded`, and an exclusion needs
-a reason and evidence (a native-reference failure); an app that fails on kayfabe is NOT excluded: it fails the release.
+a reason and evidence (a native-reference failure); a supported app that fails on kayfabe is NOT excluded: it fails the release.
 
 `release` is a separate definition list of the owner's approved software, including owner-supplied packages and
 source/reference blockers. It does not grant redistribution permission and is not selectable by KF_WINAPPS in the

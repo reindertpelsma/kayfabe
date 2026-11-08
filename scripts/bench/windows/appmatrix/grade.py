@@ -2,9 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 """grade.py -- the verdict rules of the Windows apps stage (docs/design/V3_WINDOWS_APPS_GATE.md, section 4).
 
-STATUS: LIVE, 2026-11-07 (GPU-free; tests/test_grade.py). It reads a run directory of winapps.py (win.res,
+STATUS: LIVE, 2026-11-08 (GPU-free; tests/test_grade.py). It reads a run directory of winapps.py (win.res,
 win_isolated.res) and the list of apps the profile expected, and prints one `WINAPPS_GRADE` line plus one
-`WINAPPS_APP` line per app. It decides nothing about the host: windows_apps.sh combines this with the same-box
+`WINAPPS_APP` line per expected app, plus explicit non-gating `APP_POLICY` rows. It decides nothing about the host: windows_apps.sh combines this with the same-box
 host reference (which only decides whether a guest failure is kayfabe's or a retry).
 
 THE GATE IS THE GUEST PASSING (owner, 2026-11-01; same rule as windows_gate.sh): only a final verdict of PASS (or

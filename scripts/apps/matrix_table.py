@@ -5,7 +5,8 @@ app-matrix run, with the cause class decided MECHANICALLY (no judgement) from th
 Inputs, in <results-dir> (written by scripts/apps/apps_matrix.sh): host.res, guest.res,
 guest_isolated.res (optional), and the per-app logs <app>.host.log / <app>.guest.log /
 <app>.guest_dmesg.log (optional; only used for the key output line and the Xid counts).
-The classes are the ones pre-registered in traces/apps_linux_20261107/PREREG.md:
+Historical classes follow traces/apps_linux_20261107/PREREG.md. The owner's 2026-11-08
+known-unsupported policy takes precedence; raw observed columns remain visible:
 
   GATE             host PASS and guest PASS (batched, or alone in a fresh boot)        -> required in the gate
   ORDER_SENSITIVE  host PASS, guest PASS alone, FAIL batched (a boot that degrades)     -> kayfabe finding;
