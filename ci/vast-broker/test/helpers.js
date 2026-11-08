@@ -308,7 +308,7 @@ export class MockCloud {
         onstart: body.onstart,
         image_uuid: body.image,
         actual_status: 'running',
-        dph_base: price - (offer.storage_cost * 120) / 720,
+        dph_base: price - (offer.storage_cost * (body.allocated_storage ?? body.disk ?? 120)) / 720,
         dph_total: price,
         storage_cost: offer.storage_cost,
         inet_down_cost: offer.inet_down_cost,
