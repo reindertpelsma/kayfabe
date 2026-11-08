@@ -174,6 +174,7 @@ try {
   symlinkSync(join(broker, 'node_modules'), join(scratch, 'ci/vast-broker/node_modules'), 'dir');
   for (const path of [
     'scripts/ci/vast_report.py',
+    'scripts/ci/release_driver_pins.py',
     'scripts/ci/vast_payload.py',
     'scripts/ci/release_driver_media.py',
     'scripts/ci/test_release_driver_media.py',

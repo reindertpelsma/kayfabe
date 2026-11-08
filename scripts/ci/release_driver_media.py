@@ -11,7 +11,7 @@ import urllib.error
 import urllib.request
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import vast_report
+import release_driver_pins
 
 
 class MediaDrift(Exception):
@@ -39,7 +39,7 @@ def checked_file(pin, target):
 
 
 def fetch_installer(pin, target, *, opener=None):
-    if not vast_report.valid_driver_pin(pin):
+    if not release_driver_pins.valid_driver_pin(pin):
         raise MediaDrift('INVALID_PIN')
     if pin['status'] != 'PINNED':
         raise MediaDrift('UNPINNED')
@@ -85,7 +85,7 @@ def main(argv=None):
     parser.add_argument('--out', type=Path, required=True)
     args = parser.parse_args(argv)
     try:
-        pins = vast_report.decode_driver_pins(os.environ.get('KF_RELEASE_DRIVER_PINS'))
+        pins = release_driver_pins.decode_driver_pins(os.environ.get('KF_RELEASE_DRIVER_PINS'))
         if pins is None:
             raise MediaDrift('INVALID_PIN')
         selected = [p for p in pins if p['os'] == args.os and p['version'] == args.version]

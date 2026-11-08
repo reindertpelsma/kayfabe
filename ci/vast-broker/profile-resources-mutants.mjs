@@ -117,6 +117,7 @@ try {
   const defaults = JSON.parse(readFileSync(join(repo, 'ci/vast-broker/defaults.json')));
   const files = new Set([
     'scripts/ci/vast_report.py',
+    'scripts/ci/release_driver_pins.py',
     'scripts/ci/vast_payload.py',
     'scripts/bench/native_xid_guard.py',
     G,

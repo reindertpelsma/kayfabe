@@ -1709,7 +1709,6 @@ export function createService({
       diesPerFamily: cfg.releaseDiesPerFamily,
       releaseDies: request.tier === 'large' ? cfg.releaseDies : {},
       stages: request.tier === 'large' ? cfg.releaseStages : [],
-      requiredStageRowsPerDie: request.tier === 'large' ? plan.required_stage_rows_per_die : {},
       reruns: request.tier === 'large' ? cfg.releaseReruns : 0,
       legs,
       verdict: null,

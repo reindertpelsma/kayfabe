@@ -316,19 +316,12 @@ class ReleaseBundlePolicy(unittest.TestCase):
             "entrypoints": ["scripts/install.sh"],
             "policy_doc": "docs/howto/installing.md",
             "patches": {
-                rel: item
-                for rel, item in real["patches"].items()
+                rel: item for rel, item in real["patches"].items()
                 if rel == RELEASE_PATCH
             },
             "applicators": {
-                rel: digest
-                for rel, digest in real["applicators"].items()
+                rel: digest for rel, digest in real["applicators"].items()
                 if rel in (RELEASE_BUILDER, RELEASE_VALIDATOR)
-            },
-            "references": {
-                rel: item
-                for rel, item in real.get("references", {}).items()
-                if rel == RELEASE_VALIDATOR
             },
         }
 
@@ -343,9 +336,7 @@ class ReleaseBundlePolicy(unittest.TestCase):
     def test_cli_reports_sample_scope_and_reviewer(self):
         result = self.cli()
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn(
-            f"| `{RELEASE_PATCH}` | opt-in | `{RELEASE_BUILDER}` |", result.stdout
-        )
+        self.assertIn(f"| `{RELEASE_PATCH}` | opt-in | `{RELEASE_BUILDER}` |", result.stdout)
         self.assertIn("R2 review, 2026-11-07", result.stdout)
         self.assertIn("test program", result.stdout)
 
@@ -353,13 +344,7 @@ class ReleaseBundlePolicy(unittest.TestCase):
         item = self.inventory["patches"][RELEASE_PATCH]
         self.assertEqual(item["kind"], "opt-in")
         self.assertEqual(item["opt_in"], RELEASE_BUILDER)
-        for phrase in (
-            "R2 review, 2026-11-07",
-            "test program",
-            "NVIDIA",
-            "QEMU",
-            "guest OS",
-        ):
+        for phrase in ("R2 review, 2026-11-07", "test program", "NVIDIA", "QEMU", "guest OS"):
             self.assertIn(phrase, item["reason"])
 
     def test_removed_sample_registration_is_rejected(self):
@@ -367,16 +352,12 @@ class ReleaseBundlePolicy(unittest.TestCase):
         self.assertIn(f"unregistered patch: {RELEASE_PATCH}", self.errors())
 
     def test_unreviewed_receipt_validator_is_rejected(self):
-        self.inventory["references"].pop(RELEASE_VALIDATOR, None)
-        self.assertIn(
-            f"unreviewed patch applicator/reference: {RELEASE_VALIDATOR}", self.errors()
-        )
+        self.inventory["applicators"].pop(RELEASE_VALIDATOR, None)
+        self.assertIn(f"unreviewed patch applicator/reference: {RELEASE_VALIDATOR}", self.errors())
 
     def test_unreviewed_powershell_builder_is_rejected(self):
         self.inventory["applicators"].pop(RELEASE_BUILDER, None)
-        self.assertIn(
-            f"unreviewed patch applicator/reference: {RELEASE_BUILDER}", self.errors()
-        )
+        self.assertIn(f"unreviewed patch applicator/reference: {RELEASE_BUILDER}", self.errors())
 
     def test_receipt_validator_change_requires_review(self):
         path = self.root / RELEASE_VALIDATOR
@@ -390,78 +371,29 @@ class ReleaseBundlePolicy(unittest.TestCase):
 
     def test_new_powershell_git_apply_is_rejected(self):
         self.write("scripts/helper.ps1", "& git -C $Source apply $input\n")
-        self.assertIn(
-            "unreviewed patch applicator/reference: scripts/helper.ps1", self.errors()
-        )
+        self.assertIn("unreviewed patch applicator/reference: scripts/helper.ps1", self.errors())
 
     def test_new_powershell_git_am_is_rejected(self):
         self.write("tools/helper.ps1", "& git am $input\n")
-        self.assertIn(
-            "unreviewed patch applicator/reference: tools/helper.ps1", self.errors()
-        )
+        self.assertIn("unreviewed patch applicator/reference: tools/helper.ps1", self.errors())
 
     def test_stock_path_cannot_start_sample_builder(self):
         self.write("scripts/install.sh", f"pwsh -File {RELEASE_BUILDER}\n")
-        self.assertIn(
-            f"stock path reaches opt-in applicator: {RELEASE_BUILDER}", self.errors()
-        )
+        self.assertIn(f"stock path reaches opt-in applicator: {RELEASE_BUILDER}", self.errors())
 
     def test_stock_path_cannot_reach_builder_through_powershell(self):
         self.write("scripts/install.sh", "pwsh -File scripts/helper.ps1\n")
-        self.write(
-            "scripts/helper.ps1",
-            f"& $PSScriptRoot/appmatrix/{Path(RELEASE_BUILDER).name}\n",
-        )
-        self.assertIn(
-            f"stock path reaches opt-in applicator: {RELEASE_BUILDER}", self.errors()
-        )
+        self.write("scripts/helper.ps1", f"& $PSScriptRoot/appmatrix/{Path(RELEASE_BUILDER).name}\n")
+        self.assertIn(f"stock path reaches opt-in applicator: {RELEASE_BUILDER}", self.errors())
 
-    def test_stock_path_can_start_read_only_receipt_reference(self):
+    def test_stock_path_cannot_start_receipt_reference(self):
         self.write("scripts/install.sh", f"python3 {RELEASE_VALIDATOR}\n")
-        self.assertEqual(self.errors(), "")
+        self.assertIn(f"stock path reaches opt-in applicator: {RELEASE_VALIDATOR}", self.errors())
 
-    def test_stock_path_can_import_read_only_receipt_reference(self):
+    def test_stock_path_cannot_import_receipt_reference(self):
         self.write("scripts/install.sh", "python3 scripts/helper.py\n")
         self.write("scripts/helper.py", "from release_bundle import assets\n")
-        self.assertEqual(self.errors(), "")
-
-    def test_read_only_reference_cannot_hide_git_apply(self):
-        self.write(
-            RELEASE_VALIDATOR,
-            "import subprocess\nsubprocess.run(['git', 'apply', 'change'])\n",
-        )
-        self.inventory["references"][RELEASE_VALIDATOR]["sha256"] = Policy.digest(
-            self, RELEASE_VALIDATOR
-        )
-        self.assertIn("read-only reference contains patch command", self.errors())
-
-    def test_read_only_reference_cannot_hide_shell_patch(self):
-        self.write(RELEASE_VALIDATOR, "patch -p1 < diagnostic.patch\n")
-        self.inventory["references"][RELEASE_VALIDATOR]["sha256"] = Policy.digest(
-            self, RELEASE_VALIDATOR
-        )
-        self.assertIn("read-only reference contains patch command", self.errors())
-
-    def test_read_only_reference_needs_review_reason(self):
-        self.inventory["references"][RELEASE_VALIDATOR]["reason"] = ""
-        self.assertIn("missing read-only review reason", self.errors())
-
-    def test_read_only_reference_missing_review_reason(self):
-        self.inventory["references"][RELEASE_VALIDATOR].pop("reason")
-        self.assertIn("missing read-only review reason", self.errors())
-
-    def test_read_only_reference_cannot_also_be_an_applicator(self):
-        self.inventory["applicators"][RELEASE_VALIDATOR] = self.inventory["references"][
-            RELEASE_VALIDATOR
-        ]["sha256"]
-        self.assertIn("ambiguous application/reference classification", self.errors())
-
-    def test_read_only_builder_cannot_also_be_an_applicator(self):
-        self.inventory["references"][RELEASE_BUILDER] = {
-            "sha256": self.inventory["applicators"][RELEASE_BUILDER],
-            "reason": "invalid dual class",
-        }
-        self.assertIn("ambiguous application/reference classification", self.errors())
+        self.assertIn(f"stock path reaches opt-in applicator: {RELEASE_VALIDATOR}", self.errors())
 
 
 if __name__ == "__main__":

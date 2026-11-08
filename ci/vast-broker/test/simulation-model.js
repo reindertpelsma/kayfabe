@@ -148,21 +148,8 @@ export async function simulateSeed(seed) {
         o.inet_down_cost <= limits.maxInetUsdPerGb && o.inet_up_cost <= limits.maxInetUsdPerGb,
       );
       const compute = o.dph_base + (o.storage_cost * limits.diskGb) / 720;
-      const extra = DEFAULTS.downloadModel
-        ? Math.max(
-            0,
-            (limits.bandwidthDownGb * 8000) /
-              Math.min(
-                DEFAULTS.downloadModel.derate * o.inet_down,
-                limits.r2ReferenceMbps * limits.streamsFactor,
-              ) -
-              (limits.bandwidthDownGb * 8000) / limits.r2ReferenceMbps,
-          )
-        : 0;
       const network =
-        limits.bandwidthDownGb * o.inet_down_cost +
-        limits.bandwidthUpGb * o.inet_up_cost +
-        (extra / 3600) * compute;
+        limits.bandwidthDownGb * o.inet_down_cost + limits.bandwidthUpGb * o.inet_up_cost;
       assert.ok(
         Math.abs(o.pricing.effective - (compute + network / (cfg.hard / 3600000))) < 1e-8,
         'independent effective-price oracle',

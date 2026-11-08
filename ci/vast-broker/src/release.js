@@ -20,7 +20,7 @@ import {
   driverPinsFor,
 } from './release-matrix.js';
 import { DEFAULTS } from './defaults.js';
-import { gpuClass, resourceCaps } from './policy.js';
+import { gpuClass, resourceCaps, validateStagePolicy } from './policy.js';
 export const LINUX_LAST_ROW = 'cuda_fat';
 export const VERDICTS = Object.freeze(['PASS', 'FAIL', 'RETRY', 'UNATTRIBUTED']);
 const round = (x) => Math.round(x * 10000) / 10000;
@@ -32,12 +32,18 @@ const byPreference = (cfg) => (a, b) =>
   countryRank(a, cfg) - countryRank(b, cfg) ||
   a.pricing.effective - b.pricing.effective ||
   a.id - b.id;
-export const requiredStageRows = (stages) =>
-  Object.fromEntries(
-    stages.map((stage) => [stage, DEFAULTS.stageSlots[stage]?.requiredRowsPerDie ?? [stage]]),
+export const requiredStageRows = (stages) => {
+  validateStagePolicy(stages);
+  return Object.fromEntries(
+    stages.map((stage) => [
+      stage,
+      stage === 'specviewperf' ? [...DEFAULTS.stageSlots.specviewperf.requiredRowsPerDie] : [stage],
+    ]),
   );
+};
 // One full leg per matrix die; the compatibility path for other callers retains the old split.
 export function dieLegs(offers, cfg, matrixRow) {
+  validateStagePolicy(cfg.releaseStages);
   const releaseMatrix = cfg.releaseMatrix ?? RELEASE_MATRIX;
   matrixRow ??= releaseMatrix.dies.find((d) => d.die === offers[0]?.die);
   if (matrixRow)
@@ -92,6 +98,7 @@ export function dieLegs(offers, cfg, matrixRow) {
 // offers already evaluated under the release profile (src/offers.js, the same rejection rules as
 // every rental). `budget` (optional) is the ledger's budget summary, `credit` the account credit.
 export function planRelease(allowed, cfg, { budget, credit } = {}) {
+  validateStagePolicy(cfg.releaseStages);
   const releaseMatrix = cfg.releaseMatrix ?? RELEASE_MATRIX;
   const matrixErrors = validateReleaseMatrix(releaseMatrix, cfg);
   if (matrixErrors.length) throw Error('release matrix: ' + matrixErrors.join('; '));
@@ -289,6 +296,16 @@ export function classifyLeg(
   const result = record.result,
     rows = Array.isArray(result?.suites) ? result.suites : [];
   const green = result?.host_reference === 'GREEN';
+  if (record.closed === 'STOPPED' && record.verdict !== 'PASS')
+    return finish(all('UNATTRIBUTED'), 'STOPPED');
+  const hardware = hardwareMatch(record, { die, family, cfg });
+  // A box that reports another GPU (or none) can neither pass nor fail this die's cell.
+  if (
+    (record.verdict === 'PASS' && hardware !== 'MATCH') ||
+    (record.verdict === 'FAIL' && result && hardware === 'MISMATCH')
+  )
+    return finish(all('RETRY'), 'HARDWARE_MISMATCH');
+
   if (rows.some((r) => r.fail > 0 && /^(?:[a-z0-9]+_)*driver_media_drift$/.test(r.name))) {
     const realFailure = rows.some(
       (r) => r.fail > 0 && !/^(?:[a-z0-9]+_)*driver_media_drift$/.test(r.name) && !retryRow(r.name),
@@ -357,15 +374,6 @@ export function classifyLeg(
     ...(matrixRequired ? { matrix: definitions.length ? matrixParts : { missing: 'RETRY' } } : {}),
     ...(stages.length ? { stageRows } : {}),
   };
-  if (record.closed === 'STOPPED' && record.verdict !== 'PASS')
-    return finish(all('UNATTRIBUTED'), 'STOPPED');
-  const hardware = hardwareMatch(record, { die, family, cfg });
-  // A box that reports another GPU (or none) can neither pass nor fail this die's cell.
-  if (
-    (record.verdict === 'PASS' && hardware !== 'MATCH') ||
-    (record.verdict === 'FAIL' && result && hardware === 'MISMATCH')
-  )
-    return finish(all('RETRY'), 'HARDWARE_MISMATCH');
   if (record.verdict === 'PASS' && result?.verdict === 'PASS') {
     const parts = {
       linux: passing(LINUX_LAST_ROW) ? 'PASS' : 'RETRY',

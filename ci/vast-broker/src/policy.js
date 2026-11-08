@@ -26,6 +26,19 @@ export const hexSha = (v) => typeof v === 'string' && /^[0-9a-f]{40}$/.test(v);
 // Public Vast ids (machine_id, host_id) as shown in /availability and the status object
 // (owner ruling 2026-10-24 item 9): a positive safe integer, otherwise null, never invented.
 export const providerId = (v) => (Number.isSafeInteger(v) && v > 0 ? v : null);
+// The SPEC policy is a schema contract, not an optional aggregate-row fallback.
+export function validateStagePolicy(stages = []) {
+  if (!Array.isArray(stages)) refuse('CONFIG_STAGE_POLICY', 503);
+  if (!stages.includes('specviewperf')) return;
+  const slot = DEFAULTS.stageSlots?.specviewperf;
+  if (
+    !slot ||
+    JSON.stringify(slot.lanes) !== '["lanea","laneb"]' ||
+    JSON.stringify(slot.requiredRowsPerDie) !== '["specviewperf_lanea","specviewperf_laneb"]' ||
+    slot.requiresSeparateRentals !== true
+  )
+    refuse('CONFIG_STAGE_POLICY', 503);
+}
 export const IMAGE = 'docker.io/vastai/kvm:ubuntu_cli_22.04-2025-05-16';
 export const MODELS = []; // Historical local-smoke import only; production has no SKU query whitelist.
 // Review of PR #269, R3: the public vars that hold a boolean. Each is exactly 'true' or 'false'
@@ -405,6 +418,7 @@ export function configuration(env) {
     )
   )
     refuse('CONFIG_VAR:RELEASE_STAGES', 503);
+  validateStagePolicy(cfg.releaseStages);
   cfg.quality = {};
   for (const profile of ['check', 'sweep', 'release']) {
     const q = data(profile.toUpperCase() + '_HOST_QUALITY', DEFAULTS.quality);
@@ -541,6 +555,31 @@ export function resourceCaps(cfg, profile = cfg.profile ?? 'check', tierName = c
           ? 'middle'
           : 'small';
   const base = DEFAULTS.payloadProfiles[name];
+  const keys = ['bandwidthDownGb', 'bandwidthUpGb', 'diskGb', 'maxInetUsdPerGb'];
+  const finite = (n, max) => typeof n === 'number' && Number.isFinite(n) && n >= 0 && n <= max;
+  if (
+    !base ||
+    Object.keys(base).sort().join(',') !== keys.join(',') ||
+    !Number.isSafeInteger(base.diskGb) ||
+    base.diskGb <= 0 ||
+    base.diskGb > 10000 ||
+    !finite(base.bandwidthDownGb, 10000) ||
+    !finite(base.bandwidthUpGb, 10000) ||
+    !finite(base.maxInetUsdPerGb, 1) ||
+    base.maxInetUsdPerGb <= 0
+  )
+    refuse('CONFIG_RESOURCE_PROFILE', 503);
+  for (const [key, max] of [
+    ['bandwidthDownOverride', 10000],
+    ['bandwidthUpOverride', 10000],
+    ['maxInetOverride', 1],
+  ])
+    if (
+      cfg[key] !== undefined &&
+      (!finite(cfg[key], max) || (key === 'maxInetOverride' && cfg[key] <= 0))
+    )
+      refuse('CONFIG_RESOURCE_PROFILE', 503);
+  if (profile === 'release') validateStagePolicy(cfg.releaseStages ?? []);
   return {
     ...base,
     bandwidthDownGb: Math.max(base.bandwidthDownGb, cfg.bandwidthDownOverride ?? 0),
@@ -561,6 +600,15 @@ export function applyResourceProfile(cfg, profile, tierName) {
 }
 export function offerPrice(offer, cfg, profile = cfg.profile ?? 'check') {
   const resources = resourceCaps(cfg, profile);
+  if (
+    typeof cfg.hard !== 'number' ||
+    !Number.isFinite(cfg.hard) ||
+    cfg.hard <= 0 ||
+    typeof cfg.cronPeriod !== 'number' ||
+    !Number.isFinite(cfg.cronPeriod) ||
+    cfg.cronPeriod < 0
+  )
+    return null;
   for (const key of ['dph_base', 'dph_total', 'storage_cost', 'inet_down_cost', 'inet_up_cost'])
     if (
       typeof offer[key] !== 'number' ||
@@ -577,11 +625,14 @@ export function offerPrice(offer, cfg, profile = cfg.profile ?? 'check') {
   const bandwidth =
     resources.bandwidthDownGb * offer.inet_down_cost + resources.bandwidthUpGb * offer.inet_up_cost;
   const effective = computeStorage + bandwidth / (cfg.hard / 3600000);
+  const total = (computeStorage * (cfg.hard + cfg.cronPeriod)) / 3600000 + bandwidth;
+  if (![computeStorage, bandwidth, effective, total].every((n) => Number.isFinite(n) && n >= 0))
+    return null;
   return {
     computeStorage,
     bandwidth,
     effective,
-    total: (computeStorage * (cfg.hard + cfg.cronPeriod)) / 3600000 + bandwidth,
+    total,
   };
 }
 // The explicit per-profile caps: price per hour, daily USD, daily rental count, concurrent rentals,

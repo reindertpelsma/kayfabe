@@ -32,62 +32,24 @@ def registry_changed(update):
 def cases():
     return [
         (
-            "read-only-reference-misclassified-as-applicator",
-            changed(
-                "no_patch_check.py",
-                'if rel in applicators:\n            errors.append(f"stock path reaches opt-in applicator: {rel}")',
-                'if rel in applicators or rel in references:\n            errors.append(f"stock path reaches opt-in applicator: {rel}")',
-            ),
-        ),
-        (
-            "read-only-reference-patch-command-allowed",
-            changed(
-                "no_patch_check.py",
-                'if PATCH_COMMAND.search(sources.get(rel, "")):',
-                "if False:",
-            ),
-        ),
-        (
-            "read-only-reference-reason-ignored",
-            changed(
-                "no_patch_check.py",
-                'if not item.get("reason"):\n            errors.append(f"{rel}: missing read-only review reason")',
-                'if False:\n            errors.append(f"{rel}: missing read-only review reason")',
-            ),
-        ),
-        (
-            "read-only-reference-dual-class-allowed",
-            changed(
-                "no_patch_check.py",
-                'if rel in applicators:\n            errors.append(f"{rel}: ambiguous application/reference classification")',
-                'if False:\n            errors.append(f"{rel}: ambiguous application/reference classification")',
-            ),
-        ),
-        (
             "release-vrs-registration-removed",
             registry_changed(lambda data: data["patches"].pop(RELEASE_PATCH)),
         ),
         (
             "release-vrs-classified-as-archive",
-            registry_changed(
-                lambda data: data["patches"][RELEASE_PATCH].update(kind="archive-only")
-            ),
+            registry_changed(lambda data: data["patches"][RELEASE_PATCH].update(kind="archive-only")),
         ),
         (
             "release-vrs-build-opt-in-pointer-lost",
-            registry_changed(
-                lambda data: data["patches"][RELEASE_PATCH].update(opt_in=RELEASE_PATCH)
-            ),
+            registry_changed(lambda data: data["patches"][RELEASE_PATCH].update(opt_in=RELEASE_PATCH)),
         ),
         (
             "release-vrs-reviewer-note-lost",
-            registry_changed(
-                lambda data: data["patches"][RELEASE_PATCH].update(reason="")
-            ),
+            registry_changed(lambda data: data["patches"][RELEASE_PATCH].update(reason="")),
         ),
         (
             "release-receipt-reference-unregistered",
-            registry_changed(lambda data: data["references"].pop(RELEASE_VALIDATOR)),
+            registry_changed(lambda data: data["applicators"].pop(RELEASE_VALIDATOR)),
         ),
         (
             "release-powershell-builder-unregistered",
@@ -95,17 +57,11 @@ def cases():
         ),
         (
             "release-receipt-reference-wrong-hash",
-            registry_changed(
-                lambda data: data["references"][RELEASE_VALIDATOR].update(
-                    sha256="0" * 64
-                )
-            ),
+            registry_changed(lambda data: data["applicators"].update({RELEASE_VALIDATOR: "0" * 64})),
         ),
         (
             "release-powershell-builder-wrong-hash",
-            registry_changed(
-                lambda data: data["applicators"].update({RELEASE_BUILDER: "0" * 64})
-            ),
+            registry_changed(lambda data: data["applicators"].update({RELEASE_BUILDER: "0" * 64})),
         ),
         (
             "patch-powershell-scripts-ignored",
@@ -113,11 +69,7 @@ def cases():
         ),
         (
             "patch-scope-reason-unchecked",
-            changed(
-                "no_patch_check.py",
-                'if not item.get("reason"):\n            errors.append(f"{rel}: missing scope reason")',
-                'if False:\n            errors.append(f"{rel}: missing scope reason")',
-            ),
+            changed("no_patch_check.py", 'if not item.get("reason"):', "if False:"),
         ),
         (
             "patch-cli-failure-hidden",
@@ -229,7 +181,7 @@ def cases():
             "patch-new-applicators-allowed",
             changed(
                 "no_patch_check.py",
-                "if APPLICATION.search(text) and rel not in reviewed:",
+                "if APPLICATION.search(text) and rel not in applicators:",
                 "if False:",
             ),
         ),
@@ -243,11 +195,7 @@ def cases():
         ),
         (
             "patch-stock-reachability-ignored",
-            changed(
-                "no_patch_check.py",
-                'if rel in applicators:\n            errors.append(f"stock path reaches opt-in applicator: {rel}")',
-                'if False:\n            errors.append(f"stock path reaches opt-in applicator: {rel}")',
-            ),
+            changed("no_patch_check.py", "if rel in applicators:", "if False:"),
         ),
         (
             "patch-default-qualification-ignored",

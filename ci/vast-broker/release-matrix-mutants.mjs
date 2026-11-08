@@ -125,6 +125,7 @@ const files = [
   'ci/requirements.toml',
   'ci/vast-broker/test/fixtures/release-market-synthetic.json',
   'scripts/ci/test_vast_release_matrix.py',
+  'scripts/ci/release_driver_pins.py',
   P,
   R,
   'scripts/bench/native_xid_guard.py',

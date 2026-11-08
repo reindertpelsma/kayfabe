@@ -160,7 +160,7 @@ const cases = [
   [
     'SPEC aggregate row certifies both lanes',
     L,
-    'DEFAULTS.stageSlots[stage]?.requiredRowsPerDie ?? [stage]',
+    "stage === 'specviewperf' ? [...DEFAULTS.stageSlots.specviewperf.requiredRowsPerDie] : [stage]",
     '[stage]',
     'node',
   ],
@@ -259,6 +259,7 @@ try {
   symlinkSync(join(broker, 'node_modules'), join(scratch, 'ci/vast-broker/node_modules'), 'dir');
   for (const p of [
     'scripts/ci/vast_report.py',
+    'scripts/ci/release_driver_pins.py',
     'scripts/ci/vast_payload.py',
     'scripts/ci/test_vast_matrix_receipts.py',
     'scripts/bench/native_xid_guard.py',

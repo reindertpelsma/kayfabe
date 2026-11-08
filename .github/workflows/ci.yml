@@ -68,6 +68,8 @@ jobs:
           node ci/vast-broker/release-matrix-mutants.mjs
           # RV1 admission/receipt grading and both SPEC lanes: two named killers each.
           node ci/vast-broker/release-safety-mutants.mjs
+          # RV2 attribution, SPEC contract and finite-resource regressions: >=2 killers each.
+          node ci/vast-broker/rv2-mutants.mjs
           # Official driver pins and media drift: two named killers per mutant.
           node ci/vast-broker/driver-pins-mutants.mjs
           # Seeded markets and worst-case renting use only the mocked Vast transport.

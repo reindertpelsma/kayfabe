@@ -441,3 +441,29 @@ requires two distinct killers and never changes production caps to get green.
 UNVERIFIED / CODE READ: seeder selection/upload-pricing code is absent from this
 branch. Seeder upload ranking and a seeder dying during consumer downloads need
 the owner's implementation branch/PR reference; they are not claimed as covered.
+
+## RV2 review contracts (2026-11-08)
+
+CODE READ (RV2 review of `5e1fb9a3`, regression fixtures in
+`ci/vast-broker/test/rv2-regressions.test.js`): owner stops and hardware attribution
+precede media-drift classification. A known wrong die or compute capability cannot
+fail the selected die merely because its report also names media drift. A matching
+box with an attributable test failure keeps that failure when media drift coexists.
+
+CODE READ: enabling SPEC requires exactly lanes `lanea`, `laneb`, required rows
+`specviewperf_lanea`, `specviewperf_laneb`, and `requiresSeparateRentals: true`.
+Missing, empty or altered contracts refuse planning, admission and verdict reduction;
+there is no aggregate-row fallback. The disabled stage adds no required rows.
+The redundant persisted copy of the required rows has been removed.
+
+CODE READ: the shared resource accessor accepts only the four declared profile keys,
+finite nonnegative inbound/outbound allowances, a positive integral disk allowance,
+and a positive finite per-GB cap. Computed quotes must remain finite. The Python
+stage-table guard also rejects nonfinite disk allowances before comparing floors.
+
+CODE READ: `scripts/ci/release_driver_pins.py` contains only the pin contract. The
+installer helper imports that contract directly; the reporter delegates to it lazily.
+The stock-path checker and its inventory remain identical to `origin/next` at
+`624bf1dfcf98fac362bc63478e7f9cdb65c4aedf`; no reference-class exemption or baseline
+update is needed. Dormant download-time simulation branches were removed; download
+time pricing remains DESIGN-ONLY as described above.
