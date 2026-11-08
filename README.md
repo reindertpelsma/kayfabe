@@ -6,9 +6,11 @@
 
 Kayfabe is a QEMU device that presents a virtual NVIDIA GPU to a Windows or Linux guest. The real GPU executes the work through the host's NVIDIA driver. It is written in Rust, with a C QEMU device ([architecture](ARCHITECTURE.md)).
 
+**Not finished:** Windows sleep/wake and Edge playback stability. Earlier Windows records include failed sleep/wake and playback resets; short passing probes do not settle either ([sleep/wake](traces/win11_s3_20261014/README.md), [Windows apps](traces/win11_userring_20261014/matrix-eb9f2aa3-20261014-2321.md)).
+
 By design, guests are hostile: kayfabe authors unprivileged host operations and confines GPU work to the guest's mappings. This is a design boundary, not a security certification ([how it is isolated](docs/howto/security.md#what-the-isolation-is-made-of)).
 
-Site: [kayfabe.dev](https://kayfabe.dev/) | [manual](https://kayfabe.dev/docs/) | [FAQ](docs/FAQ.md) | [goals and plans](docs/howto/goals.md) | [what works today](#what-runs-today)
+Site: [kayfabe.dev](https://kayfabe.dev/) | [manual](https://kayfabe.dev/docs/) | [build instructions](docs/howto/building.md) | [FAQ](docs/FAQ.md) | [goals and plans](docs/howto/goals.md) | [what works today](#what-runs-today)
 
 <img alt="Recorded Windows guest and Linux host desktops" src="traces/20261021_131847.jpg" width="1000" height="432" />
 <i>Recorded desktop session, 2026-10-21, revision `89fc8a222`. The photo is not an application stability test ([caption checklist MC-1](docs/RELEASE_CLAIMS.md#mc-1-screenshot-and-caption)).</i>
@@ -38,8 +40,6 @@ The Windows gate checks the stock 580.88 driver, CUDA and D3D11 probes before an
 **Unsupported for now:** UVM demand paging, including `UnifiedMemoryStreams`, `UnifiedMemoryPerf`, `conjugateGradientUM`, `attach_verify` and the Windows counterpart `managed_t`. Reports list them as `unsupported (UVM)`; the owner's merge hold requires the per-fault GR hold to be measured and bounded ([ruling §E](docs/OWNER_RULINGS.md#e-uvm-demand-paging-2026-09-26), [FAQ](docs/FAQ.md#does-cuda-give-the-same-results-as-the-host)).
 
 **Manual: needs real display.** All eight `overlay_yuv_*` entries, including the probe and soak, stay visible in reports and are outside the Vast gate. The native probe failed on a Vast simulated display (no DIRECT overlay); no real-monitor native record is committed ([native record](traces/windows_overlay_native_20261010/README.md), [evidence template](docs/RELEASE_CLAIMS.md#mc-14-windows-yuv-overlays-on-a-real-display)).
-
-**Not finished:** Windows sleep/wake and Edge playback stability. Earlier Windows records include failed sleep/wake and playback resets; short passing probes do not settle either ([sleep/wake](traces/win11_s3_20261014/README.md), [Windows apps](traces/win11_userring_20261014/matrix-eb9f2aa3-20261014-2321.md)).
 
 **Stage code, not deployment:** the Windows apps and SPECviewperf stages exist and remain disabled by default pending their first Worker run; neither new stage is deployed ([Windows apps](docs/design/V3_WINDOWS_APPS_GATE.md), [SPEC stage](docs/design/V3_SPEC_GATE.md)).
 
