@@ -29,10 +29,10 @@ class GateProfiles(unittest.TestCase):
                 self.assertNotIn("not redistributed", txt, p["id"])
 
     def test_every_app_is_in_exactly_one_class(self):
-        opn, owner, manual = G.classes(self.apps, self.man, self.prof)
+        opn, owner, manual, unsupported = G.classes(self.apps, self.man, self.prof)
         ids = {a["id"] for a in self.apps["apps"]}
-        self.assertEqual(opn | owner | manual, ids)
-        self.assertEqual(len(opn) + len(owner) + len(manual), len(ids))
+        self.assertEqual(opn | owner | manual | unsupported, ids)
+        self.assertEqual(len(opn) + len(owner) + len(manual) + len(unsupported), len(ids))
 
     def test_no_open_app_needs_a_package_outside_the_bundle(self):
         needs = {p["id"]: p.get("needs", []) for p in self.man["packages"]}
@@ -76,17 +76,15 @@ class GateProfiles(unittest.TestCase):
         self.assertEqual(b, sorted(b))
         self.assertEqual(G.budget("ids:nvidia_smi", self.prof), b[2])
 
-    def test_november_full_run_failures_stay_in_full(self):
-        failed = {"managed_t", "nbody_demo_gl", "overlay_yuv_probe"} | {
-            "overlay_yuv_" + x for x in ("hide", "occlude", "resize", "move", "recreate", "fullscreen")}
-        self.assertLessEqual(failed, set(G.resolve("full", self.apps, self.man, self.prof)))
-        self.assertFalse(failed & set(self.prof["excluded"]))
+    def test_supported_november_failure_stays_in_full(self):
+        self.assertIn("nbody_demo_gl", G.resolve("full", self.apps, self.man, self.prof))
+        self.assertNotIn("nbody_demo_gl", self.prof["excluded"])
 
-    def test_overlay_applicability_is_not_resolved_by_reclassification(self):
-        opn, owner, manual = G.classes(self.apps, self.man, self.prof)
-        for name in ("managed_t", "nbody_demo_gl", "overlay_yuv_probe", "overlay_yuv_soak"):
-            self.assertIn(name, opn)
-            self.assertNotIn(name, owner | manual)
+    def test_owner_policy_classes_are_disjoint_from_the_open_gate(self):
+        opn, owner, manual, unsupported = G.classes(self.apps, self.man, self.prof)
+        self.assertIn("managed_t", unsupported)
+        self.assertTrue({"overlay_yuv_probe", "overlay_yuv_soak"} <= manual)
+        self.assertFalse((manual | unsupported) & opn)
 
 
 if __name__ == "__main__":

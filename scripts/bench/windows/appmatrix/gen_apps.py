@@ -153,7 +153,7 @@ app("managed_t", "cuda-equiv", py("win_cuda_equiv.py", "managed"), r"^WINEQ_DONE
     "managed (unified) memory: the Linux rows UnifiedMemoryStreams/Perf, conjugateGradientUM and attach_verify are the four that fail on Linux "
     "kayfabe (UVM demand paging, docs/design/V3_UVM_DEMAND_PAGING.md); on Windows WDDM managed memory is the limited model (no oversubscription)",
     linux=["UnifiedMemoryStreams", "UnifiedMemoryPerf", "conjugateGradientUM", "attach_verify"], pkgs=PYPK + ("cuda_cudart",),
-    note="CuPy malloc_managed; expected to be the hardest compute row on both OSes")
+    note="unsupported (UVM): owner keeps UVM unmerged until the per-fault GR hold is measured and bounded; excluded from Vast profiles, reported explicitly (gate_profiles.json)")
 for name, lin in (("default", "stream_default"), ("created", "stream_created"), ("nonblocking", "stream_nonblocking"), ("two", "stream_two"),
                   ("created2nd", "stream_created2nd"), ("perthread", "stream_perthread")):
     # Per-thread work needs CuPy, not Torch/CuPy interoperability. Fresh guest
@@ -302,7 +302,8 @@ for sc, tier, secs, extra, why in (
     app("overlay_yuv_probe" if sc == "steady" else "overlay_yuv_" + sc, "d3d",
         OVL + "Invoke-KfExe -Exe $ov -ArgList @('--scenario', '%s'%s, '--out', \"$OUT\\overlay.json\")\nexit $global:KfRc" % (sc, "".join(", '%s'" % x for x in extra)),
         r"^KFOVL RESULT PASS", secs + 120, secs + 10, [r'out:KFOVL adapter "NVIDIA', GPU_ENG], *W_OVERLAY, session="interactive", tier=tier, shot=min(10, secs - 2),
-        note="kf_overlayprobe.exe (tools/src/kf_overlayprobe.cpp); result JSON " + "(PASS/FAIL, per-second presentation modes, transitions, worst present latency) in the app's out dir: " + why)
+        note="manual: needs real display; evidence template in gate_profiles.json manual.items; no real-monitor native record. "
+             "Virtual-display native probe: SETUP/refused (code 5), no DIRECT overlay, no scenario frames. kf_overlayprobe.exe (tools/src/kf_overlayprobe.cpp); result JSON " + "(PASS/FAIL, per-second presentation modes, transitions, worst present latency) in the app's out dir: " + why)
 
 GM = r'''$gmx = Find-KfFile -Root "$K\gravitymark" -Name GravityMark.exe
 if (-not $gmx) { 'GM_NOTFOUND'; exit 1 }

@@ -1,6 +1,6 @@
 **STATUS: DESIGN-ONLY, 2026-11-08** for the Worker and release-tier rollout (WB1 makes no deployment/object/native claim; no
 Worker setting sends the stage). **LIVE for the harness code** (merged with this document, GPU-free tests), and the
-**first hardware run** is in section 8 (`traces/winapps_20261107/`). Draft PR against `next`; the owner reviews. Parent
+**first hardware run** is in section 8 (`traces/winapps_20261107/`). The harness is present in this tree; the owner reviews release enablement. Parent
 documents: [`V3_WINDOWS_APP_MATRIX.md`](V3_WINDOWS_APP_MATRIX.md) (the inventory, the guest protocol and the verdict
 vocabulary; unchanged), [`V3_WINDOWS_GATE.md`](V3_WINDOWS_GATE.md) (the gate this stage follows) and
 [`../DOWNLOADS.md`](../DOWNLOADS.md) ("Windows app bundle").
@@ -20,6 +20,34 @@ The successful payload suite counts the checked apps (rather than one stage): it
 `WINAPPS_PASS apps=N`, grade summary, and N distinct passing per-app rows. Truncated or inconsistent output
 is `windows_apps_retry_operator`.
 
+## Owner policy, 2026-11-08 (DX1)
+
+**CODE READ:** `gate_profiles.json` classifies all eight `overlay_yuv_*` entries, including probe and soak, as
+`manual: needs real display`. They are outside every Vast profile, including explicit `ids:` lists, and remain in
+stage logs (`APP_POLICY`), Markdown summaries and every structured report, even when the stage did not run.
+The evidence template is in each manual item: physical monitor/connector, exact revision/die/drivers, same-GPU native
+DIRECT-overlay result, command/version/hash, modes/transitions/latency, screenshots, duration and reset/Xid counts.
+**CODE READ of the native Vast RTX 4090 record, 2026-10-10:** the recorded probe outcome is SETUP/refused (code 5),
+with no DIRECT overlay and no scenario frames on the simulated display
+([record](../../traces/windows_overlay_native_20261010/README.md)). No real-monitor native result is committed;
+manual real-display qualification remains pending.
+
+**CODE READ:** the public grader also refuses manual or known-unsupported gate expectations: each such id is
+reported as a harness fault (NOTRUN), retains batched/isolated observations and gets zero pass credit.
+A policy-only expectation is RETRY; a supported guest failure still takes precedence as FAIL.
+
+**Owner policy:** `managed_t` and Linux `UnifiedMemoryStreams`, `UnifiedMemoryPerf`, `conjugateGradientUM`, `attach_verify`
+are `known_unsupported` with the UVM reason. Reports say `unsupported (UVM)`; the owner holds UVM unmerged because the
+per-fault GR hold remains unmeasured in this app qualification. Hardware timing and an explicit bound are required
+before merge (`docs/OWNER_RULINGS.md` §E). `app_policy.py` keeps raw observed verdicts in notes
+when reporting historical runs, and matrix tables retain their observed columns. Supported failures such as
+`nbody_demo_gl` still gate. This supersedes the earlier "all nine failures remain in full" statement below.
+
+**CODE READ:** policy rows are NOT_RUN classification metadata (SKIP for a historical test row), never passing results;
+they record no app execution or timing sample. They are placed first under the 500-app report cap so truncation cannot silently drop them.
+The payload's supported-app completeness, failure and host-Xid rules are unchanged. No Worker code changed, nothing
+was deployed, and the stage remains disabled pending its first Worker run.
+
 ## 1. The problem
 
 Owner requirement (2026-10-10, restated 2026-11-07): the release gate runs, in the Windows 11 LTSC guest, the Windows
@@ -38,18 +66,17 @@ version of the roughly 70-app matrix (the apps that worked before). **CODE READ 
 ## 2. What can be automated offline, and what cannot
 
 `scripts/bench/windows/appmatrix/gate_profiles.json` is the one source; `gate_profiles.py check` and
-`tests/test_gate_profiles.py` keep it consistent with `apps.json` and `manifest.json`. **CODE READ / generated counts, J1 definitions 2026-11-07:** 120
-apps, in three classes.
+`tests/test_gate_profiles.py` keep it consistent with `apps.json` and `manifest.json`. **CODE READ / generated counts, DX1 2026-11-08 at `b370e4f12`:** 120
+apps, in four classes.
 
 | Class | Apps | What decides | Goes in an automated profile? |
 |---|---:|---|---|
-| automatable (legacy `open` app class) | 87 | dependencies are in `open_packages` and/or pinned `official_packages`; official-fetch requirements are explicit, and source/reference assets remain additional prerequisites | yes, with required media and prerequisites |
+| automatable (legacy `open` app class) | 78 | dependencies are public `open_packages` and/or pinned `official_packages`; manual overlays and known-unsupported UVM are separate, and source/reference assets remain additional prerequisites | yes, with required media and prerequisites |
 | owner decision | 29 | needs GravityMark, FurMark, GpuTest, the Vulkan SDK or the ffmpeg GPL build: free to download, storage rights still pending | no, until the owner rules |
-| manual | 4 (+3 non-matrix items) | Unigine Heaven and Valley (paid automation, evaluation EULA); 3DMark, Geekbench 6, TensorRT, Superposition, Xonotic, Q2RTX | never |
+| manual | 12 (+6 non-matrix items) | eight overlays need a real display; four Heaven/Valley rows have paid-automation/evaluation EULA limits; other items include 3DMark, Geekbench 6, TensorRT, Superposition, Xonotic, Q2RTX | never |
+| known unsupported | 1 | `managed_t`: UVM merge hold pending per-fault GR timing and an explicit bound (unmeasured) | never; explicitly reported |
 
-Open apps by category (**generated, J1 definitions**): CUDA equivalents 28, CUDA demo 7, stream probes 6, D3D probes/samples 16, CUDA ladder 3, torch 4,
-LLM 4, OpenCL 3, probes 3, browser 5 (Edge WebGL/WebGPU, local pages), Vulkan 2 (vulkaninfo, vkpeak), OpenGL 1 (glgears),
-and one each of render (Blender), crypto (hashcat), AI (HF generate), SMI, stress (torch burn).
+Open apps by category (**COMPUTED from `gate_profiles.py ids full`, 2026-11-08**): `ai` 1, `browser` 5, `crypto` 1, `cuda-demo` 7, `cuda-equiv` 27, `cuda-ladder` 3, `d3d` 8, `llm` 4, `opencl` 3, `opengl` 1, `probe` 3, `render` 1, `smi` 1, `stream-probe` 6, `stress` 1, `torch` 4, `vulkan` 2.
 
 The guest is **offline** for every app: QEMU user networking with `restrict=on` (`win_vm.sh`), only the harness's ssh forward;
 apps and models come from the app disk, Edge opens pages from `C:\kf\web`. **CODE READ.**
@@ -325,7 +352,7 @@ an excuse.**
 |---|---:|---|---:|
 | `small` | 8 (one per family: SMI, CUDA demo, CUDA python, driver-API ladder, D3D11, OpenGL, Vulkan, torch+CuPy) | tier small (master push) | 40 min |
 | `mid` | 10 (small plus Edge WebGL and D3D12) | tier middle (PR to master) | 60 min |
-| `full` | every open app (87 with J1 definitions) | tier large (release tag) | 300 min **(budget sufficiency is unverified; missing new source/reference inputs cannot pass)** |
+| `full` | every supported open app (78 after DX1 policy classification) | tier large (release tag) | 300 min **(budget sufficiency is unverified; missing new source/reference inputs cannot pass)** |
 
 Proposed mapping (**DESIGN**, not implemented in the Worker): small -> `small`, middle -> `mid`, large -> `full`.
 
@@ -373,8 +400,7 @@ Worker path (no run token, no R2 bundle), the `mid` profile, and the stage insid
    and `traces/windows_matrix_20261011/reference-unigine-nbody/apps/nbody_demo_gl.verdict.json`.
    These older, different-box references establish that both apps can pass natively; they do not establish
    same-box attribution for the November run. The seven failing `overlay_yuv_*` probes have no native PASS
-   on a Vast box: their applicability remains an open owner decision. All nine failures remain in `full`;
-   none is excluded or moved to another class.
+   on a Vast box: their applicability was an open owner decision, resolved by the DX1 policy above. Historical policy before 2026-11-08: all nine failures remained in `full`. Superseded by the DX1 owner policy above: eight overlay entries are manual, `managed_t` unsupported, and `nbody_demo_gl` stays gating.
 4. **Harness overhead** (47 s per app, 3.5 min per guest) puts `full` near 2 h plus the slow apps: the release hard limit (300 min after the
    gate's 20-60 min) is tight. Candidates: batch the per-app scp writes into one, poll less, a bigger `--per-guest`, run the slow apps (clpeak,
    LLM, Blender) as their own leg. Not done.

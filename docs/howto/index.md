@@ -6,12 +6,12 @@ This manual is for developers and system administrators who want to build, run a
 
 ## Status: read this first
 
-<!-- src: README.md, "Status: research, 2026-10-21" -->
+<!-- src: README.md, "Status: research, 2026-11-08" -->
 - **Research stage.** It runs real applications, but there is **no installer**, **no stable interface** and **no security audit**.
 - **No public binary ships.** You build it from source. A QEMU binary built from this tree is not yet distributable under the GPL (see [Credits and notices](credits.md)). <!-- src: README.md, LICENSE exception 2 -->
-- **The security model is designed but not audited.** What a guest-triggered GPU fault does to other VMs sharing the card is not yet measured. See [Security model](security.md). <!-- src: README.md "Not finished" -->
-- **Windows sleep/wake does not survive**, Edge can reset after 7 to 16 minutes of playback, and other GPU dies need more work under Windows. <!-- src: README.md "Not finished" -->
-- Master is the current working version; newer experiments live on branches. <!-- src: README.md -->
+- **The security model is designed but not audited.** The limited two-run trio record includes the suite's fault arms beside a host loop and two guests (RTX 4090, `3aa2a75a6`, 2026-11-05); general fault containment remains unverified. See [Security model](security.md). <!-- src: README.md "Not finished" -->
+- **Windows sleep/wake and Edge playback stability remain unfinished.** Older records include failed sleep/wake and playback resets. <!-- src: README.md "Not finished" -->
+- Read each measurement at its named revision; a passing historical record does not qualify the current tree. <!-- src: README.md -->
 
 Nothing is patched: no host or guest driver or kernel is modified, and the guest uses NVIDIA's own installer. <!-- src: README.md "Nothing is patched" --> Kayfabe ships no NVIDIA or Microsoft binaries. <!-- src: docs/NOTICES.md -->
 
@@ -20,7 +20,7 @@ Nothing is patched: no host or guest driver or kernel is modified, and the guest
 These are the repository's own claims, with their limits. Each page of this manual repeats the evidence for what it describes. <!-- src: README.md "What runs today" -->
 
 - **Windows 11 guest** (Pro and Enterprise LTSC, NVIDIA's stock 580.88 driver): desktop, games, benchmarks, video decode, CUDA and professional applications on an RTX 4070 (AD104). A few registry settings are required: see [Windows guest](windows-guest.md). <!-- src: README.md -->
-- **Linux guest** (NVIDIA's stock driver, nothing to set): a 30-arm test suite, a desktop with display planes, suspend/resume, and 61 of 65 CUDA applications with outputs equal to bare metal on a rented RTX 3060. The 4 failures use unified (UVM) memory paging and fail the checks; one of them printed SUCCESS with a wrong result, so check numerical output and host faults, not only the exit status. See [Linux guest](linux-guest.md). <!-- src: README.md -->
+- **Linux guest:** the latest app record is 70/70 runnable apps on the host and 66/70 in the guest (RTX 4090, `144557e43`, 2026-11-07); passing apps meet their own correctness checks. The four UVM apps are explicitly unsupported for now. See [Linux guest](linux-guest.md). <!-- src: traces/apps_linux_20261107/README.md; docs/OWNER_RULINGS.md section E -->
 - **GPUs:** the families from Turing to Blackwell have been run in some form. The detail is on [Requirements](requirements.md).
 
 ## Pages
