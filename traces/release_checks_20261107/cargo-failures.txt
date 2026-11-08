@@ -1,0 +1,323 @@
+failures:
+
+---- lockstep_threads_partial_packet_then_nothing stdout ----
+kf3: broker: connected to /tmp/kf-lockstep-threads-2947655-lockstep_threads_partial_packet_then_nothing/display.sock, capabilities 0x22a0 — no frame slot carries a dma-buf (no /dev/udmabuf, or UDMABUF_CREATE refused), so frames go as shared memory
+kf3: broker: broker ticks: ON (the broker's refresh drives the guest's vblank while it speaks; frames go one per request; 50 ms of silence hands the vblank back to the clock)
+kf3: broker: guest resolution is now 64x64
+kf3: broker: frames go as shared memory (F_SHM) — an X11 broker accepts it only with --present-mode=shm, and a refusal is not reported back
+kf3: broker: broker ticks: LIVE (1 resume(s)) — frames go one per request again
+kf3: broker: broker ticks: SILENT for 50 ms (1 fallback(s)) — the free clock drives the guest's vblank and frames use the legacy credit
+kf3: broker: broker ticks: LIVE (2 resume(s)) — frames go one per request again
+kf3: broker: broker ticks: SILENT for 50 ms (2 fallback(s)) — the free clock drives the guest's vblank and frames use the legacy credit
+kf3: broker: broker ticks: LIVE (3 resume(s)) — frames go one per request again
+kf3: broker: broker ticks: SILENT for 50 ms (3 fallback(s)) — the free clock drives the guest's vblank and frames use the legacy credit
+kf3: broker: reclaimed frame slot 1: no RELEASE 1116 ms after its commit, and a newer frame was committed (1 reclaimed so far)
+kf3: broker: the display broker stalled mid-packet (a partial event, then nothing for 500 ms); the display and input are gone for now (20 frames relayed, 0 dropped, 0 attached without a commit, 17 releases, 1 reclaimed). The VM keeps running; reconnecting in the background.
+kf3: broker: connected to /tmp/kf-lockstep-threads-2947655-lockstep_threads_partial_packet_then_nothing/display.sock, capabilities 0x22a0 — no frame slot carries a dma-buf (no /dev/udmabuf, or UDMABUF_CREATE refused), so frames go as shared memory
+kf3: broker: frames go as shared memory (F_SHM) — an X11 broker accepts it only with --present-mode=shm, and a refusal is not reported back
+kf3: broker: re-sent geometry 64x64 and the last frame to the new broker
+kf3: broker: broker ticks: ON (the broker's refresh drives the guest's vblank while it speaks; frames go one per request; 50 ms of silence hands the vblank back to the clock)
+kf3: broker: reconnected to the display broker (reconnect #1)
+kf3: broker: broker ticks: LIVE (1 resume(s)) — frames go one per request again
+kf3: broker: broker ticks: SILENT for 50 ms (1 fallback(s)) — the free clock drives the guest's vblank and frames use the legacy credit
+kf3: broker: broker ticks: LIVE (2 resume(s)) — frames go one per request again
+kf3: broker: broker ticks: SILENT for 50 ms (2 fallback(s)) — the free clock drives the guest's vblank and frames use the legacy credit
+kf3: broker: broker ticks: LIVE (3 resume(s)) — frames go one per request again
+kf3: broker: broker ticks: SILENT for 50 ms (3 fallback(s)) — the free clock drives the guest's vblank and frames use the legacy credit
+kf3: broker: broker ticks: LIVE (4 resume(s)) — frames go one per request again
+kf3: broker: broker ticks: SILENT for 50 ms (4 fallback(s)) — the free clock drives the guest's vblank and frames use the legacy credit
+
+thread 'lockstep_threads_partial_packet_then_nothing' (2947669) panicked at crates/kf-disp/tests/lockstep_threads.rs:1134:5:
+lockstep_threads_partial_packet_then_nothing: 14 violation(s): [
+    "an immediate flip took 292 ms (it waits for the copy in flight and nothing else)",
+    "an immediate flip took 104 ms (it waits for the copy in flight and nothing else)",
+    "an immediate flip took 338 ms (it waits for the copy in flight and nothing else)",
+    "an immediate flip took 66 ms (it waits for the copy in flight and nothing else)",
+    "an immediate flip took 174 ms (it waits for the copy in flight and nothing else)",
+    "an immediate flip took 174 ms (it waits for the copy in flight and nothing else)",
+    "the vblank stalled for 137 ms",
+    "an immediate flip took 122 ms (it waits for the copy in flight and nothing else)",
+    "an immediate flip took 68 ms (it waits for the copy in flight and nothing else)",
+    "an immediate flip took 117 ms (it waits for the copy in flight and nothing else)",
+    "an immediate flip took 90 ms (it waits for the copy in flight and nothing else)",
+    "an immediate flip took 81 ms (it waits for the copy in flight and nothing else)",
+    "an immediate flip took 165 ms (it waits for the copy in flight and nothing else)",
+    "an immediate flip took 86 ms (it waits for the copy in flight and nothing else)",
+]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- lockstep_threads_broker_never_reads stdout ----
+kf3: broker: connected to /tmp/kf-lockstep-threads-2947655-lockstep_threads_broker_never_reads/display.sock, capabilities 0x22a0 — no frame slot carries a dma-buf (no /dev/udmabuf, or UDMABUF_CREATE refused), so frames go as shared memory
+kf3: broker: broker ticks: ON (the broker's refresh drives the guest's vblank while it speaks; frames go one per request; 50 ms of silence hands the vblank back to the clock)
+kf3: broker: broker ticks: LIVE (1 resume(s)) — frames go one per request again
+kf3: broker: guest resolution is now 64x64
+kf3: broker: frames go as shared memory (F_SHM) — an X11 broker accepts it only with --present-mode=shm, and a refusal is not reported back
+kf3: broker: broker ticks: SILENT for 50 ms (1 fallback(s)) — the free clock drives the guest's vblank and frames use the legacy credit
+kf3: broker: broker ticks: LIVE (2 resume(s)) — frames go one per request again
+kf3: broker: broker ticks: SILENT for 50 ms (2 fallback(s)) — the free clock drives the guest's vblank and frames use the legacy credit
+kf3: broker: broker ticks: LIVE (3 resume(s)) — frames go one per request again
+kf3: broker: broker ticks: SILENT for 50 ms (3 fallback(s)) — the free clock drives the guest's vblank and frames use the legacy credit
+kf3: broker: broker ticks: LIVE (4 resume(s)) — frames go one per request again
+kf3: broker: broker ticks: SILENT for 50 ms (4 fallback(s)) — the free clock drives the guest's vblank and frames use the legacy credit
+
+thread 'lockstep_threads_broker_never_reads' (2947660) panicked at crates/kf-disp/tests/lockstep_threads.rs:1134:5:
+lockstep_threads_broker_never_reads: 15 violation(s): [
+    "an immediate flip took 293 ms (it waits for the copy in flight and nothing else)",
+    "an immediate flip took 66 ms (it waits for the copy in flight and nothing else)",
+    "the vblank stalled for 309 ms",
+    "an immediate flip took 195 ms (it waits for the copy in flight and nothing else)",
+    "the vblank stalled for 129 ms",
+    "an immediate flip took 193 ms (it waits for the copy in flight and nothing else)",
+    "an immediate flip took 177 ms (it waits for the copy in flight and nothing else)",
+    "an immediate flip took 176 ms (it waits for the copy in flight and nothing else)",
+    "an immediate flip took 94 ms (it waits for the copy in flight and nothing else)",
+    "an immediate flip took 65 ms (it waits for the copy in flight and nothing else)",
+    "the vblank stalled for 134 ms",
+    "an immediate flip took 86 ms (it waits for the copy in flight and nothing else)",
+    "an immediate flip took 79 ms (it waits for the copy in flight and nothing else)",
+    "an immediate flip took 104 ms (it waits for the copy in flight and nothing else)",
+    "an immediate flip took 96 ms (it waits for the copy in flight and nothing else)",
+]
+
+---- lockstep_threads_flood stdout ----
+kf3: broker: connected to /tmp/kf-lockstep-threads-2947655-lockstep_threads_flood/display.sock, capabilities 0x22a0 — no frame slot carries a dma-buf (no /dev/udmabuf, or UDMABUF_CREATE refused), so frames go as shared memory
+kf3: broker: broker ticks: ON (the broker's refresh drives the guest's vblank while it speaks; frames go one per request; 50 ms of silence hands the vblank back to the clock)
+kf3: broker: guest resolution is now 64x64
+kf3: broker: frames go as shared memory (F_SHM) — an X11 broker accepts it only with --present-mode=shm, and a refusal is not reported back
+kf3: broker: broker ticks: LIVE (1 resume(s)) — frames go one per request again
+kf3: broker: broker ticks: SILENT for 50 ms (1 fallback(s)) — the free clock drives the guest's vblank and frames use the legacy credit
+kf3: broker: broker ticks: LIVE (2 resume(s)) — frames go one per request again
+kf3: broker: broker ticks: SILENT for 50 ms (2 fallback(s)) — the free clock drives the guest's vblank and frames use the legacy credit
+kf3: broker: broker ticks: LIVE (3 resume(s)) — frames go one per request again
+kf3: broker: broker ticks: SILENT for 50 ms (3 fallback(s)) — the free clock drives the guest's vblank and frames use the legacy credit
+kf3: broker: broker ticks: LIVE (4 resume(s)) — frames go one per request again
+kf3: broker: broker ticks: SILENT for 50 ms (4 fallback(s)) — the free clock drives the guest's vblank and frames use the legacy credit
+
+thread 'lockstep_threads_flood' (2947668) panicked at crates/kf-disp/tests/lockstep_threads.rs:1134:5:
+lockstep_threads_flood: 15 violation(s): [
+    "an immediate flip took 293 ms (it waits for the copy in flight and nothing else)",
+    "an immediate flip took 98 ms (it waits for the copy in flight and nothing else)",
+    "the vblank stalled for 214 ms",
+    "an immediate flip took 181 ms (it waits for the copy in flight and nothing else)",
+    "an immediate flip took 202 ms (it waits for the copy in flight and nothing else)",
+    "an immediate flip took 246 ms (it waits for the copy in flight and nothing else)",
+    "an immediate flip took 63 ms (it waits for the copy in flight and nothing else)",
+    "an immediate flip took 132 ms (it waits for the copy in flight and nothing else)",
+    "an immediate flip took 173 ms (it waits for the copy in flight and nothing else)",
+    "an immediate flip took 64 ms (it waits for the copy in flight and nothing else)",
+    "an immediate flip took 75 ms (it waits for the copy in flight and nothing else)",
+    "an immediate flip took 196 ms (it waits for the copy in flight and nothing else)",
+    "an immediate flip took 85 ms (it waits for the copy in flight and nothing else)",
+    "an immediate flip took 164 ms (it waits for the copy in flight and nothing else)",
+    "an immediate flip took 116 ms (it waits for the copy in flight and nothing else)",
+]
+
+---- lockstep_threads_crash_and_reconnect stdout ----
+kf3: broker: connected to /tmp/kf-lockstep-threads-2947655-lockstep_threads_crash_and_reconnect/display.sock, capabilities 0x22a0 — no frame slot carries a dma-buf (no /dev/udmabuf, or UDMABUF_CREATE refused), so frames go as shared memory
+kf3: broker: broker ticks: ON (the broker's refresh drives the guest's vblank while it speaks; frames go one per request; 50 ms of silence hands the vblank back to the clock)
+kf3: broker: broker ticks: LIVE (1 resume(s)) — frames go one per request again
+kf3: broker: guest resolution is now 64x64
+kf3: broker: frames go as shared memory (F_SHM) — an X11 broker accepts it only with --present-mode=shm, and a refusal is not reported back
+kf3: broker: broker ticks: SILENT for 50 ms (1 fallback(s)) — the free clock drives the guest's vblank and frames use the legacy credit
+kf3: broker: broker ticks: LIVE (2 resume(s)) — frames go one per request again
+kf3: broker: broker ticks: SILENT for 50 ms (2 fallback(s)) — the free clock drives the guest's vblank and frames use the legacy credit
+kf3: broker: broker ticks: LIVE (3 resume(s)) — frames go one per request again
+kf3: broker: broker ticks: SILENT for 50 ms (3 fallback(s)) — the free clock drives the guest's vblank and frames use the legacy credit
+kf3: broker: broker ticks: LIVE (4 resume(s)) — frames go one per request again
+kf3: broker: broker ticks: SILENT for 50 ms (4 fallback(s)) — the free clock drives the guest's vblank and frames use the legacy credit
+kf3: broker: read error on the broker socket: recvmsg(broker events) failed (errno 104); the display and input are gone for now (10 frames relayed, 0 dropped, 0 attached without a commit, 8 releases, 0 reclaimed). The VM keeps running; reconnecting in the background.
+kf3: broker: connected to /tmp/kf-lockstep-threads-2947655-lockstep_threads_crash_and_reconnect/display.sock, capabilities 0x22a0 — no frame slot carries a dma-buf (no /dev/udmabuf, or UDMABUF_CREATE refused), so frames go as shared memory
+kf3: broker: frames go as shared memory (F_SHM) — an X11 broker accepts it only with --present-mode=shm, and a refusal is not reported back
+kf3: broker: re-sent geometry 64x64 and the last frame to the new broker
+kf3: broker: broker ticks: ON (the broker's refresh drives the guest's vblank while it speaks; frames go one per request; 50 ms of silence hands the vblank back to the clock)
+kf3: broker: reconnected to the display broker (reconnect #1)
+kf3: broker: broker ticks: LIVE (1 resume(s)) — frames go one per request again
+kf3: broker: broker ticks: SILENT for 50 ms (1 fallback(s)) — the free clock drives the guest's vblank and frames use the legacy credit
+kf3: broker: broker ticks: LIVE (2 resume(s)) — frames go one per request again
+kf3: broker: the broker socket failed: sendmsg(broker record) failed (errno 32); the display and input are gone for now (16 frames relayed, 0 dropped, 0 attached without a commit, 13 releases, 0 reclaimed). The VM keeps running; reconnecting in the background.
+kf3: broker: connected to /tmp/kf-lockstep-threads-2947655-lockstep_threads_crash_and_reconnect/display.sock, capabilities 0x22a0 — no frame slot carries a dma-buf (no /dev/udmabuf, or UDMABUF_CREATE refused), so frames go as shared memory
+kf3: broker: frames go as shared memory (F_SHM) — an X11 broker accepts it only with --present-mode=shm, and a refusal is not reported back
+kf3: broker: re-sent geometry 64x64 and the last frame to the new broker
+kf3: broker: broker ticks: ON (the broker's refresh drives the guest's vblank while it speaks; frames go one per request; 50 ms of silence hands the vblank back to the clock)
+kf3: broker: reconnected to the display broker (reconnect #2)
+kf3: broker: broker ticks: LIVE (1 resume(s)) — frames go one per request again
+kf3: broker: broker ticks: SILENT for 50 ms (1 fallback(s)) — the free clock drives the guest's vblank and frames use the legacy credit
+kf3: broker: broker ticks: LIVE (2 resume(s)) — frames go one per request again
+kf3: broker: broker ticks: SILENT for 50 ms (2 fallback(s)) — the free clock drives the guest's vblank and frames use the legacy credit
+kf3: broker: broker ticks: LIVE (3 resume(s)) — frames go one per request again
+kf3: broker: broker ticks: SILENT for 50 ms (3 fallback(s)) — the free clock drives the guest's vblank and frames use the legacy credit
+kf3: broker: broker ticks: LIVE (4 resume(s)) — frames go one per request again
+kf3: broker: broker ticks: SILENT for 50 ms (4 fallback(s)) — the free clock drives the guest's vblank and frames use the legacy credit
+
+thread 'lockstep_threads_crash_and_reconnect' (2947666) panicked at crates/kf-disp/tests/lockstep_threads.rs:1134:5:
+lockstep_threads_crash_and_reconnect: 14 violation(s): [
+    "an immediate flip took 70 ms (it waits for the copy in flight and nothing else)",
+    "an immediate flip took 297 ms (it waits for the copy in flight and nothing else)",
+    "an immediate flip took 66 ms (it waits for the copy in flight and nothing else)",
+    "an immediate flip took 317 ms (it waits for the copy in flight and nothing else)",
+    "an immediate flip took 194 ms (it waits for the copy in flight and nothing else)",
+    "an immediate flip took 93 ms (it waits for the copy in flight and nothing else)",
+    "an immediate flip took 208 ms (it waits for the copy in flight and nothing else)",
+    "an immediate flip took 70 ms (it waits for the copy in flight and nothing else)",
+    "an immediate flip took 132 ms (it waits for the copy in flight and nothing else)",
+    "an immediate flip took 117 ms (it waits for the copy in flight and nothing else)",
+    "an immediate flip took 74 ms (it waits for the copy in flight and nothing else)",
+    "an immediate flip took 79 ms (it waits for the copy in flight and nothing else)",
+    "an immediate flip took 153 ms (it waits for the copy in flight and nothing else)",
+    "an immediate flip took 126 ms (it waits for the copy in flight and nothing else)",
+]
+
+---- lockstep_threads_silence_and_return stdout ----
+kf3: broker: connected to /tmp/kf-lockstep-threads-2947655-lockstep_threads_silence_and_return/display.sock, capabilities 0x22a0 — no frame slot carries a dma-buf (no /dev/udmabuf, or UDMABUF_CREATE refused), so frames go as shared memory
+kf3: broker: broker ticks: ON (the broker's refresh drives the guest's vblank while it speaks; frames go one per request; 50 ms of silence hands the vblank back to the clock)
+kf3: broker: broker ticks: LIVE (1 resume(s)) — frames go one per request again
+kf3: broker: guest resolution is now 64x64
+kf3: broker: frames go as shared memory (F_SHM) — an X11 broker accepts it only with --present-mode=shm, and a refusal is not reported back
+kf3: broker: broker ticks: SILENT for 50 ms (1 fallback(s)) — the free clock drives the guest's vblank and frames use the legacy credit
+kf3: broker: broker ticks: LIVE (2 resume(s)) — frames go one per request again
+kf3: broker: broker ticks: SILENT for 50 ms (2 fallback(s)) — the free clock drives the guest's vblank and frames use the legacy credit
+kf3: broker: broker ticks: LIVE (3 resume(s)) — frames go one per request again
+kf3: broker: broker ticks: SILENT for 50 ms (3 fallback(s)) — the free clock drives the guest's vblank and frames use the legacy credit
+kf3: broker: broker ticks: LIVE (4 resume(s)) — frames go one per request again
+kf3: broker: broker ticks: SILENT for 50 ms (4 fallback(s)) — the free clock drives the guest's vblank and frames use the legacy credit
+
+thread 'lockstep_threads_silence_and_return' (2948101) panicked at crates/kf-disp/tests/lockstep_threads.rs:1134:5:
+lockstep_threads_silence_and_return: 4 violation(s): [
+    "an immediate flip took 162 ms (it waits for the copy in flight and nothing else)",
+    "an immediate flip took 79 ms (it waits for the copy in flight and nothing else)",
+    "an immediate flip took 160 ms (it waits for the copy in flight and nothing else)",
+    "an immediate flip took 62 ms (it waits for the copy in flight and nothing else)",
+]
+
+---- lockstep_threads_steady stdout ----
+kf3: broker: connected to /tmp/kf-lockstep-threads-2947655-lockstep_threads_steady/display.sock, capabilities 0x22a0 — no frame slot carries a dma-buf (no /dev/udmabuf, or UDMABUF_CREATE refused), so frames go as shared memory
+kf3: broker: broker ticks: ON (the broker's refresh drives the guest's vblank while it speaks; frames go one per request; 50 ms of silence hands the vblank back to the clock)
+kf3: broker: broker ticks: LIVE (1 resume(s)) — frames go one per request again
+kf3: broker: guest resolution is now 64x64
+kf3: broker: frames go as shared memory (F_SHM) — an X11 broker accepts it only with --present-mode=shm, and a refusal is not reported back
+kf3: broker: broker ticks: SILENT for 50 ms (1 fallback(s)) — the free clock drives the guest's vblank and frames use the legacy credit
+kf3: broker: broker ticks: LIVE (2 resume(s)) — frames go one per request again
+kf3: broker: broker ticks: SILENT for 50 ms (2 fallback(s)) — the free clock drives the guest's vblank and frames use the legacy credit
+kf3: broker: broker ticks: LIVE (3 resume(s)) — frames go one per request again
+kf3: broker: broker ticks: SILENT for 50 ms (3 fallback(s)) — the free clock drives the guest's vblank and frames use the legacy credit
+kf3: broker: broker ticks: LIVE (4 resume(s)) — frames go one per request again
+kf3: broker: broker ticks: SILENT for 50 ms (4 fallback(s)) — the free clock drives the guest's vblank and frames use the legacy credit
+
+thread 'lockstep_threads_steady' (2948113) panicked at crates/kf-disp/tests/lockstep_threads.rs:1134:5:
+lockstep_threads_steady: 6 violation(s): [
+    "an immediate flip took 79 ms (it waits for the copy in flight and nothing else)",
+    "an immediate flip took 72 ms (it waits for the copy in flight and nothing else)",
+    "an immediate flip took 65 ms (it waits for the copy in flight and nothing else)",
+    "the vblank stalled for 186 ms",
+    "an immediate flip took 181 ms (it waits for the copy in flight and nothing else)",
+    "an immediate flip took 71 ms (it waits for the copy in flight and nothing else)",
+]
+
+---- lockstep_threads_two_flips_per_frame stdout ----
+kf3: broker: connected to /tmp/kf-lockstep-threads-2947655-lockstep_threads_two_flips_per_frame/display.sock, capabilities 0x22a0 — no frame slot carries a dma-buf (no /dev/udmabuf, or UDMABUF_CREATE refused), so frames go as shared memory
+kf3: broker: broker ticks: ON (the broker's refresh drives the guest's vblank while it speaks; frames go one per request; 50 ms of silence hands the vblank back to the clock)
+kf3: broker: broker ticks: LIVE (1 resume(s)) — frames go one per request again
+kf3: broker: guest resolution is now 64x64
+kf3: broker: frames go as shared memory (F_SHM) — an X11 broker accepts it only with --present-mode=shm, and a refusal is not reported back
+kf3: broker: broker ticks: SILENT for 50 ms (1 fallback(s)) — the free clock drives the guest's vblank and frames use the legacy credit
+kf3: broker: broker ticks: LIVE (2 resume(s)) — frames go one per request again
+kf3: broker: broker ticks: SILENT for 50 ms (2 fallback(s)) — the free clock drives the guest's vblank and frames use the legacy credit
+kf3: broker: broker ticks: LIVE (3 resume(s)) — frames go one per request again
+kf3: broker: broker ticks: SILENT for 50 ms (3 fallback(s)) — the free clock drives the guest's vblank and frames use the legacy credit
+kf3: broker: broker ticks: LIVE (4 resume(s)) — frames go one per request again
+kf3: broker: broker ticks: SILENT for 50 ms (4 fallback(s)) — the free clock drives the guest's vblank and frames use the legacy credit
+
+thread 'lockstep_threads_two_flips_per_frame' (2948126) panicked at crates/kf-disp/tests/lockstep_threads.rs:1134:5:
+lockstep_threads_two_flips_per_frame: 7 violation(s): [
+    "an immediate flip took 209 ms (it waits for the copy in flight and nothing else)",
+    "an immediate flip took 112 ms (it waits for the copy in flight and nothing else)",
+    "an immediate flip took 75 ms (it waits for the copy in flight and nothing else)",
+    "an immediate flip took 62 ms (it waits for the copy in flight and nothing else)",
+    "the vblank stalled for 127 ms",
+    "the vblank stalled for 145 ms",
+    "an immediate flip took 88 ms (it waits for the copy in flight and nothing else)",
+]
+
+
+failures:
+    lockstep_threads_broker_never_reads
+    lockstep_threads_crash_and_reconnect
+    lockstep_threads_flood
+    lockstep_threads_partial_packet_then_nothing
+    lockstep_threads_silence_and_return
+    lockstep_threads_steady
+    lockstep_threads_two_flips_per_frame
+
+test result: FAILED. 2 passed; 7 failed; 0 ignored; 0 measured; 0 filtered out; finished in 15.84s
+
+failures:
+
+---- batch::tests::a_big_steer_makes_a_map_wait_for_a_hull_not_for_the_row stdout ----
+big steer: StillOurs took 1033 ms (16384 entries, 8 hulls); a map inside a claimed hull waited 163 ms; claim waits 1 (longest 163007 us)
+
+thread 'batch::tests::a_big_steer_makes_a_map_wait_for_a_hull_not_for_the_row' (2952942) panicked at crates/kf-mem/src/batch.rs:4168:9:
+the map waited 163 ms for one hull of a 1033 ms steer
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- batch::tests::a_hand_over_with_a_slice_stops_early_and_continues_to_free stdout ----
+
+thread 'batch::tests::a_hand_over_with_a_slice_stops_early_and_continues_to_free' (2952946) panicked at crates/kf-mem/src/batch.rs:3974:13:
+65 ms
+
+---- batch::tests::the_act_thread_waits_for_a_chunk_not_for_the_operation stdout ----
+act thread: 16352 hand-overs in 85867 ms (VA thread operations [39426, 23751, 22671] ms); longest lock WAIT 992892 us, longest whole hand-over 992946 us; longest hold 772520 us (2048 entries); VA thread yielded 2041 times (longest 524778 us)
+
+thread 'batch::tests::the_act_thread_waits_for_a_chunk_not_for_the_operation' (2955075) panicked at crates/kf-mem/src/batch.rs:3818:9:
+the act thread waited 992892 us for a ledger lock
+
+
+failures:
+    batch::tests::a_big_steer_makes_a_map_wait_for_a_hull_not_for_the_row
+    batch::tests::a_hand_over_with_a_slice_stops_early_and_continues_to_free
+    batch::tests::the_act_thread_waits_for_a_chunk_not_for_the_operation
+
+test result: FAILED. 178 passed; 3 failed; 3 ignored; 0 measured; 0 filtered out; finished in 417.85s
+
+failures:
+
+---- watchdog::tests::a_stuck_phase_fires_once_with_its_name_and_progress_resets_it stdout ----
+
+thread 'watchdog::tests::a_stuck_phase_fires_once_with_its_name_and_progress_resets_it' (2969711) panicked at crates/kf-rawclient/src/watchdog.rs:239:9:
+assertion `left == right` failed
+  left: 1
+ right: 0
+
+
+failures:
+    watchdog::tests::a_stuck_phase_fires_once_with_its_name_and_progress_resets_it
+
+test result: FAILED. 105 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.51s
+
+failures:
+
+---- page_directory_leaves_45000 stdout ----
+SA04_POLICY kind=page n=45000 free_ns=1229815328
+
+thread 'page_directory_leaves_45000' (2971611) panicked at crates/kf-rm/tests/audit_policy_free_budgets.rs:118:5:
+page 45000 frees took 1229815328ns; indexed work must fit 500ms
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- channel_leaves_30000 stdout ----
+SA04_POLICY kind=channel n=30000 free_ns=1260370206
+
+thread 'channel_leaves_30000' (2971586) panicked at crates/kf-rm/tests/audit_policy_free_budgets.rs:118:5:
+channel 30000 frees took 1260370206ns; indexed work must fit 500ms
+
+---- channel_leaves_45000 stdout ----
+SA04_POLICY kind=channel n=45000 free_ns=522928512
+
+thread 'channel_leaves_45000' (2971587) panicked at crates/kf-rm/tests/audit_policy_free_budgets.rs:118:5:
+channel 45000 frees took 522928512ns; indexed work must fit 500ms
+
+
+failures:
+    channel_leaves_30000
+    channel_leaves_45000
+    page_directory_leaves_45000
+
+test result: FAILED. 7 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.53s

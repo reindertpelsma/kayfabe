@@ -1,0 +1,6 @@
+# Fixture build instructions
+
+```sh
+cargo build --workspace --release
+cargo test -p kf-oprom
+```

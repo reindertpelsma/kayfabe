@@ -334,8 +334,8 @@ const MUTANTS = [
   [
     'family not derived',
     'src/ingest.js',
-    'family: r.family ?? cfgFamilyOf(r.die, cfg)',
-    'family: r.family',
+    'hardwareMatch(r, { die: r.die, family: r.family ?? cfgFamilyOf(r.die, cfg), cfg })',
+    'hardwareMatch(r, { die: r.die, family: r.family, cfg })',
   ],
   // Review of PR #269, R2 (2026-11-05): Windows gate runs of the largest tier.
   [
@@ -373,8 +373,8 @@ const MUTANTS = [
   [
     'claims key refused',
     'src/results.js',
-    "k !== 'host_reference' && k !== 'host_claims'",
-    "k !== 'host_reference'",
+    "['host_reference', 'host_claims', 'matrix_receipts']",
+    "['host_reference', 'matrix_receipts']",
   ],
   [
     'claims identifier check removed',
@@ -453,14 +453,14 @@ const MUTANTS = [
   [
     'gtx 1650 labelled TU116',
     'defaults.json',
-    '"names": ["GTX_1660*", "GTX_1650_SUPER", "GTX_1650_S"]',
+    '"names": [\n        "GTX_1660*",\n        "GTX_1650_SUPER",\n        "GTX_1650_S"\n      ]',
     '"names": ["GTX_16*"]',
   ],
   [
     'rtx 2070 labelled TU104',
     'defaults.json',
-    '"names": ["RTX_2070_S*", "RTX_2070S*",',
-    '"names": ["RTX_2070*", "RTX_2070S*",',
+    '"names": [\n        "RTX_2070_S*",\n        "RTX_2070S*",',
+    '"names": [\n        "RTX_2070*",\n        "RTX_2070S*",',
   ],
   [
     'offer label shown as host driver',

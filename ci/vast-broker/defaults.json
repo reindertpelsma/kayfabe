@@ -1,5 +1,180 @@
 {
   "price": 1,
+  "payloadProfiles": {
+    "small": {
+      "diskGb": 120,
+      "bandwidthDownGb": 73,
+      "bandwidthUpGb": 2,
+      "maxInetUsdPerGb": 0.005
+    },
+    "middle": {
+      "diskGb": 120,
+      "bandwidthDownGb": 87,
+      "bandwidthUpGb": 2,
+      "maxInetUsdPerGb": 0.005
+    },
+    "large": {
+      "diskGb": 300,
+      "bandwidthDownGb": 130,
+      "bandwidthUpGb": 2,
+      "maxInetUsdPerGb": 0.02
+    },
+    "adhoc": {
+      "diskGb": 120,
+      "bandwidthDownGb": 38,
+      "bandwidthUpGb": 2,
+      "maxInetUsdPerGb": 0.005
+    }
+  },
+  "payloadStageResources": {
+    "setup_cache": {
+      "profiles": [
+        "small",
+        "middle",
+        "large",
+        "adhoc"
+      ],
+      "bandwidthDownGb": 1,
+      "bandwidthUpGb": 0,
+      "diskFloorGb": 0,
+      "status": "INFERRED",
+      "source": "docs/design/VAST_SETUP_CACHE_20261023.md",
+      "note": "Rounded allowance for setup assets, not a measured total"
+    },
+    "provision": {
+      "profiles": [
+        "small",
+        "middle",
+        "large",
+        "adhoc"
+      ],
+      "bandwidthDownGb": 20,
+      "bandwidthUpGb": 0,
+      "diskFloorGb": 120,
+      "status": "INFERRED",
+      "source": "scripts/bench/provision_bench_tree.sh",
+      "note": "OS, toolchain, vendor packages and source; conservative cold-box estimate"
+    },
+    "cuda_host": {
+      "profiles": [
+        "small",
+        "middle",
+        "large",
+        "adhoc"
+      ],
+      "bandwidthDownGb": 0,
+      "bandwidthUpGb": 0,
+      "diskFloorGb": 0,
+      "status": "INFERRED",
+      "source": "scripts/ci/vast_payload.py",
+      "note": "Reuses provisioned assets; downloads charged to provision"
+    },
+    "merge_bar": {
+      "profiles": [
+        "small",
+        "middle",
+        "large",
+        "adhoc"
+      ],
+      "bandwidthDownGb": 0,
+      "bandwidthUpGb": 0,
+      "diskFloorGb": 0,
+      "status": "INFERRED",
+      "source": "scripts/ci/vast_payload.py",
+      "note": "Reuses provisioned assets; downloads charged to provision"
+    },
+    "cuda_guest": {
+      "profiles": [
+        "small",
+        "middle",
+        "large",
+        "adhoc"
+      ],
+      "bandwidthDownGb": 0,
+      "bandwidthUpGb": 0,
+      "diskFloorGb": 0,
+      "status": "INFERRED",
+      "source": "scripts/ci/vast_payload.py",
+      "note": "Reuses provisioned assets; downloads charged to provision"
+    },
+    "apps": {
+      "profiles": [
+        "middle",
+        "large"
+      ],
+      "bandwidthDownGb": 14,
+      "bandwidthUpGb": 0,
+      "diskFloorGb": 120,
+      "status": "INFERRED",
+      "source": "traces/apps_linux_20261107/README.md",
+      "note": "Ceiling in decimal GB of the measured compressed image",
+      "measuredDownloadBytes": 13082387956
+    },
+    "windows_gate": {
+      "profiles": [
+        "small",
+        "middle",
+        "large"
+      ],
+      "bandwidthDownGb": 35,
+      "bandwidthUpGb": 0,
+      "diskFloorGb": 120,
+      "status": "INFERRED",
+      "source": "docs/design/V3_WINDOWS_ON_VAST.md",
+      "note": "Owner planning range 15-35 GB compressed; upper endpoint, not measured"
+    },
+    "windows_gate_2": {
+      "profiles": [
+        "large"
+      ],
+      "bandwidthDownGb": 0,
+      "bandwidthUpGb": 0,
+      "diskFloorGb": 0,
+      "status": "INFERRED",
+      "source": "scripts/bench/box/windows_gate.sh",
+      "note": "Reuses first install and media"
+    },
+    "specviewperf": {
+      "profiles": [
+        "large"
+      ],
+      "bandwidthDownGb": 43,
+      "bandwidthUpGb": 0,
+      "diskFloorGb": 220,
+      "status": "INFERRED",
+      "source": "traces/specviewperf_vast_20261105/README.md",
+      "note": "Ceiling in decimal GB of measured compressed tar; 300 GB host allocation recorded",
+      "measuredDownloadBytes": 42002015727
+    },
+    "media_and_margin": {
+      "profiles": [
+        "small",
+        "middle",
+        "large",
+        "adhoc"
+      ],
+      "bandwidthDownGb": 9,
+      "diskFloorGb": 0,
+      "status": "INFERRED",
+      "source": "traces/apps_linux_20261107/README.md",
+      "note": "Remaining extra media/retry/output headroom after allocating 8 of the prior 17 GB shared reservation to the Windows app bundle; INFERRED",
+      "bandwidthUpGb": 2
+    },
+    "windows_apps": {
+      "profiles": [
+        "small",
+        "middle",
+        "large",
+        "adhoc"
+      ],
+      "bandwidthDownGb": 8,
+      "bandwidthUpGb": 0,
+      "diskFloorGb": 0,
+      "status": "INFERRED",
+      "source": "docs/DOWNLOADS.md",
+      "note": "INFERRED ceiling above the documented 6-7 GB Windows app bundle estimate, not measured; split from the existing 17 GB media_and_margin reservation. Adhoc reserves this headroom without enabling Windows apps. Bundle pin is empty; remeasure before enabling."
+    }
+  },
   "daily": 6,
   "rolling": 30,
   "reserve": 8,
@@ -26,9 +201,6 @@
   "providerQuietSeconds": 660,
   "providerMessageChars": 120,
   "maxMinutes": 1440,
-  "diskGb": 120,
-  "bandwidthDownGb": 15,
-  "bandwidthUpGb": 2,
   "storageMonthHours": 720,
   "availabilityCacheMs": 60000,
   "availabilityLimit": 100,
@@ -36,10 +208,26 @@
   "sweepPrice": 2.5,
   "sweepDaily": 8,
   "sweepSkipPassedDays": 0,
-  "badMachines": [42636, 44906, 11908, 24044, 18856, 91962, 56883, 55691],
-  "badHosts": [224600],
+  "badMachines": [
+    42636,
+    44906,
+    11908,
+    24044,
+    18856,
+    91962,
+    56883,
+    55691
+  ],
+  "badHosts": [
+    224600
+  ],
   "gpuDeny": [],
-  "checkDies": ["GA106", "AD104", "GA102", "AD102"],
+  "checkDies": [
+    "GA106",
+    "AD104",
+    "GA102",
+    "AD102"
+  ],
   "sweepDies": [
     "TU116",
     "TU106",
@@ -77,92 +265,144 @@
     {
       "die": "TU117",
       "cc": 750,
-      "names": ["GTX_1650", "GTX_1630"]
+      "names": [
+        "GTX_1650",
+        "GTX_1630"
+      ]
     },
     {
       "die": "TU116",
       "cc": 750,
-      "names": ["GTX_1660*", "GTX_1650_SUPER", "GTX_1650_S"]
+      "names": [
+        "GTX_1660*",
+        "GTX_1650_SUPER",
+        "GTX_1650_S"
+      ]
     },
     {
       "die": "TU106",
       "cc": 750,
-      "names": ["RTX_2060*", "RTX_2070"]
+      "names": [
+        "RTX_2060*",
+        "RTX_2070"
+      ]
     },
     {
       "die": "TU104",
       "cc": 750,
-      "names": ["RTX_2070_S*", "RTX_2070S*", "RTX_2080", "RTX_2080_SUPER", "RTX_2080_S", "RTX_2080S"]
+      "names": [
+        "RTX_2070_S*",
+        "RTX_2070S*",
+        "RTX_2080",
+        "RTX_2080_SUPER",
+        "RTX_2080_S",
+        "RTX_2080S"
+      ]
     },
     {
       "die": "TU102",
       "cc": 750,
-      "names": ["RTX_2080_TI"]
+      "names": [
+        "RTX_2080_TI"
+      ]
     },
     {
       "die": "GA106",
       "cc": 860,
-      "names": ["RTX_3060"]
+      "names": [
+        "RTX_3060"
+      ]
     },
     {
       "die": "GA104",
       "cc": 860,
-      "names": ["RTX_3060_TI", "RTX_3070*"]
+      "names": [
+        "RTX_3060_TI",
+        "RTX_3070*"
+      ]
     },
     {
       "die": "GA102",
       "cc": 860,
-      "names": ["RTX_3080*", "RTX_3090*"]
+      "names": [
+        "RTX_3080*",
+        "RTX_3090*"
+      ]
     },
     {
       "die": "AD107",
       "cc": 890,
-      "names": ["RTX_4060"]
+      "names": [
+        "RTX_4060"
+      ]
     },
     {
       "die": "AD106",
       "cc": 890,
-      "names": ["RTX_4060_TI"]
+      "names": [
+        "RTX_4060_TI"
+      ]
     },
     {
       "die": "AD104",
       "cc": 890,
-      "names": ["RTX_4070", "RTX_4070_SUPER", "RTX_4070_S", "RTX_4070_TI"]
+      "names": [
+        "RTX_4070",
+        "RTX_4070_SUPER",
+        "RTX_4070_S",
+        "RTX_4070_TI"
+      ]
     },
     {
       "die": "AD103",
       "cc": 890,
-      "names": ["RTX_4070_TI_SUPER", "RTX_4080*"]
+      "names": [
+        "RTX_4070_TI_SUPER",
+        "RTX_4080*"
+      ]
     },
     {
       "die": "AD102",
       "cc": 890,
-      "names": ["RTX_4090*"]
+      "names": [
+        "RTX_4090*"
+      ]
     },
     {
       "die": "GB207",
       "cc": 1200,
-      "names": ["RTX_5050*"]
+      "names": [
+        "RTX_5050*"
+      ]
     },
     {
       "die": "GB206",
       "cc": 1200,
-      "names": ["RTX_5060*"]
+      "names": [
+        "RTX_5060*"
+      ]
     },
     {
       "die": "GB205",
       "cc": 1200,
-      "names": ["RTX_5070"]
+      "names": [
+        "RTX_5070"
+      ]
     },
     {
       "die": "GB203",
       "cc": 1200,
-      "names": ["RTX_5070_TI", "RTX_5080*"]
+      "names": [
+        "RTX_5070_TI",
+        "RTX_5080*"
+      ]
     },
     {
       "die": "GB202",
       "cc": 1200,
-      "names": ["RTX_5090*"]
+      "names": [
+        "RTX_5090*"
+      ]
     }
   ],
   "bootFailureFreezeMs": 120000,
@@ -183,10 +423,20 @@
   "benchDataUrlsPerObject": 4,
   "benchDataMaxExpirySeconds": 1200,
   "benchDataMinExpirySeconds": 30,
-  "preferredCountries": ["US", "CA"],
-  "maxInetUsdPerGb": 0.005,
+  "preferredCountries": [
+    "US",
+    "CA"
+  ],
   "lifecycleCacheMs": 60000,
-  "deniedCountries": ["CU", "IR", "KP", "SY", "CN", "HK", "MO"],
+  "deniedCountries": [
+    "CU",
+    "IR",
+    "KP",
+    "SY",
+    "CN",
+    "HK",
+    "MO"
+  ],
   "releasePrice": 2,
   "releaseDaily": 40,
   "releaseDailyCount": 24,
@@ -203,31 +453,79 @@
     "blackwell": 1200
   },
   "middleRotation": {
-    "turing": ["TU106", "TU116"],
-    "ampere": ["GA106", "GA104", "GA102"],
-    "ada": ["AD104", "AD102"],
-    "blackwell": ["GB205", "GB206", "GB203"]
+    "turing": [
+      "TU106",
+      "TU116"
+    ],
+    "ampere": [
+      "GA106",
+      "GA104",
+      "GA102"
+    ],
+    "ada": [
+      "AD104",
+      "AD102"
+    ],
+    "blackwell": [
+      "GB205",
+      "GB206",
+      "GB203"
+    ]
   },
   "releaseDies": {
-    "turing": ["TU106", "TU116"],
-    "ampere": ["GA106", "GA104", "GA102"],
-    "ada": ["AD104", "AD102", "AD103", "AD106"],
-    "blackwell": ["GB205", "GB206", "GB202", "GB203"]
+    "turing": [
+      "TU106",
+      "TU116"
+    ],
+    "ampere": [
+      "GA102",
+      "GA104",
+      "GA106"
+    ],
+    "ada": [
+      "AD102",
+      "AD104",
+      "AD103",
+      "AD106"
+    ],
+    "blackwell": [
+      "GB202",
+      "GB205",
+      "GB206",
+      "GB203"
+    ]
   },
   "releaseDiesPerFamily": 2,
   "releaseWindowsRunsPerDie": 2,
   "releaseStages": [],
   "stageSlots": {
     "specviewperf": {
-      "tiers": ["large"],
-      "state": "PLUMBING"
+      "tiers": [
+        "large"
+      ],
+      "state": "PLUMBING",
+      "requiredRowsPerDie": [
+        "specviewperf_lanea",
+        "specviewperf_laneb"
+      ],
+      "lanes": [
+        "lanea",
+        "laneb"
+      ],
+      "requiresSeparateRentals": true
     },
     "two_guests": {
-      "tiers": ["middle", "large"],
+      "tiers": [
+        "middle",
+        "large"
+      ],
       "state": "DESIGN_ONLY"
     },
     "trio": {
-      "tiers": ["middle", "large"],
+      "tiers": [
+        "middle",
+        "large"
+      ],
       "state": "DESIGN_ONLY"
     }
   },

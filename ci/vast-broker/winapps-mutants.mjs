@@ -72,6 +72,7 @@ function fixture() {
   symlinkSync(join(broker, 'node_modules'), join(copy, 'node_modules'));
   for (const extra of [
     'scripts/ci/vast_report.py',
+    'scripts/ci/release_driver_pins.py',
     'ci/vast-reaper',
     'ci/platform-api/migrations',
     'ci/requirements.toml',
