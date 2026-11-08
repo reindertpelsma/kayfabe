@@ -18,6 +18,18 @@ on master): **61/65 apps + 6/6 probes** in one boot, host 71/71; the four failur
 58/65 apps work (was 35/65).** §0–§5 below are the first measurement at `79848341`, kept unchanged
 as the baseline R2 is compared against; their cause list is SUPERSEDED by §R2.3 (A, B, D, E, F fixed).
 
+## Reproducing the image (DESIGN-ONLY, 2026-11-07)
+
+**RESEARCH, 2026-11-08:** [chroot construction without KVM](V3_APPS_IMAGE_CHROOT_EVALUATION.md) is evaluated as an additional backend for independent release-box builds. It is not implemented or qualified; the working QEMU path and old bash paths remain available.
+
+**CODE READ:** the new [recipe and Python builder](V3_APPS_IMAGE_RECIPE.md) separate an open Ubuntu main/universe image from
+transient official NVIDIA provisioning. NVIDIA proprietary files belong in neither image/ISO nor R2/GitHub: the box host fetches
+pinned official installers per run and supplies them on a transient read-only data disk to the offline guest. Shared-CUDA-runtime builds are exported through a
+file/hash/linkage audit into a fresh image, then scanned. CuPy is runtime-only because its wheel bundles proprietary CUDA headers;
+CDP quicksort is a declared static-device-runtime exception built only at provisioning. The comparison is **PINNED input inventory only; BUILT binary/image hashes are informational**. Observed verbatim scripts and recipe-written model selectors must match their input pins. Missing apps still fail. **DESIGN:** build twice, cross-verify against the first
+manifest and run the gate before adoption or hosting. **MEASURED, 2026-11-07:** LB1 ran no VM/GPU; R5 qualifies the old image at its revision.
+All old bash paths remain untouched. Steps and limits: [design](V3_APPS_IMAGE_RECIPE.md), [manual](../howto/linux-apps-image.md).
+
 ## R4 — re-run at kf3 `738c90e5` (code of `3f67ed95`, before the CDP fix), RTX 3070, 2026-09-30 — PARTIAL
 
 **[M]** Box vast `53563077` (destroyed), **RTX 3070 (GA104, 8 GiB)**, EPYC 7532, **nested** KVM, host + guest

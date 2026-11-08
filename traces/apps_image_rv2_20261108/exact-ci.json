@@ -1,0 +1,31 @@
+[
+  {
+    "argv": [
+      "python3",
+      "scripts/ci/test_apps_image.py"
+    ],
+    "returncode": 0,
+    "elapsed_seconds": 54.235,
+    "log": "tests-core.txt"
+  },
+  {
+    "argv": [
+      "python3",
+      "scripts/ci/test_apps_image_layers.py"
+    ],
+    "returncode": 0,
+    "elapsed_seconds": 17.62,
+    "log": "tests-layers.txt"
+  },
+  {
+    "argv": [
+      "python3",
+      "scripts/apps/image/mutants.py",
+      "--jobs",
+      "2"
+    ],
+    "returncode": 0,
+    "elapsed_seconds": 101.682,
+    "log": "mutants-ci.txt"
+  }
+]

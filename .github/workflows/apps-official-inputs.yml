@@ -1,0 +1,25 @@
+name: Linux apps official input availability
+
+on:
+  schedule:
+    - cron: '0 8 7 * *'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'scripts/apps/image/recipe.json'
+      - 'scripts/apps/image/official.py'
+      - '.github/workflows/apps-official-inputs.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  official-media:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: HEAD every pinned official NVIDIA input; media drift fails
+        run: python3 scripts/apps/image/build_image.py verify-official

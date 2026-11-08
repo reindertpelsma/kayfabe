@@ -1,0 +1,156 @@
+{
+  "fixture_only": true,
+  "no_real_image_built": true,
+  "observed": {
+    "built": {
+      "files": {
+        "/opt/apps/bundle/bin/demo": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "/usr/bin/ffmpeg": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      },
+      "guest": {
+        "kernel": "6.8.0-147-generic",
+        "nvidia_module_version": null
+      },
+      "image": {
+        "sha256": "8462b9155b4eaa2bf94a223d4fa4e28e23a84c5bbdd3a8889b9d3f1c854bc792"
+      },
+      "no_nvidia_proprietary_files": true,
+      "nvidia_scan": {
+        "clean": true,
+        "findings": []
+      },
+      "pip_files": {
+        "demo": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      },
+      "required_apps": [
+        "/opt/apps/bundle/bin/demo",
+        "/opt/apps/data/model",
+        "/usr/bin/ffmpeg"
+      ]
+    },
+    "pinned": {
+      "apt_snapshot": "20261101T000000Z",
+      "dpkg": [
+        "ii\tcmake\tamd64\t1.0",
+        "ii\tpython3\tamd64\t3.12"
+      ],
+      "files": {
+        "/opt/apps/data/model": "9372c470eeadd5ecd9c3c74c2b3cb633f8e2f2fad799250a0f70d652b6b825e4"
+      },
+      "inputs": [
+        {
+          "id": "base",
+          "sha256": "cae662172fd450bb0cd710a769079c05bfc5d8e35efa6576edc7d0377afdd4a2",
+          "size": 4,
+          "url": "https://example.org/base.img"
+        },
+        {
+          "id": "model",
+          "kind": "file",
+          "sha256": "9372c470eeadd5ecd9c3c74c2b3cb633f8e2f2fad799250a0f70d652b6b825e4",
+          "size": 5,
+          "target": "/opt/apps/data/model",
+          "url": "https://example.org/rev/model"
+        },
+        {
+          "filename": "demo-1.0-py3-none-any.whl",
+          "id": "wheel",
+          "kind": "wheel",
+          "package": "demo",
+          "sha256": "ba59926159d2aa256eb8739b8da7e2b574b960e1202c6d624cbe981cef996c91",
+          "size": 5,
+          "url": "https://example.org/demo-1.0-py3-none-any.whl",
+          "version": "1.0"
+        }
+      ],
+      "layer": "open",
+      "local_sources": [],
+      "pip_freeze": [
+        "demo==1.0"
+      ],
+      "recipe_sha256": "8df3eb740be174073bade6c1fa2e75d3b15d83f3361e2977700298f457a2f842",
+      "source_refs": {},
+      "tooling": {},
+      "wheels": {
+        "demo==1.0": "ba59926159d2aa256eb8739b8da7e2b574b960e1202c6d624cbe981cef996c91"
+      }
+    }
+  },
+  "pinned_inventory_sha256": "cac5811bb65e9234b5a7b4e2a6575fe85de686a4a24e91599d8ef1cc510bdbaf",
+  "reference": {
+    "built": {
+      "files": {
+        "/opt/apps/bundle/bin/demo": "586a866f990ab55e36decfffc2011f172e4452d5141c939a5436baffba11111d",
+        "/usr/bin/ffmpeg": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      },
+      "guest": {
+        "kernel": "6.8.0-147-generic",
+        "nvidia_module_version": null
+      },
+      "image": {
+        "sha256": "e1f061da6e2518fd40b4b87446a8df6af3912a303d2cef14e8233ba838f773e8"
+      },
+      "no_nvidia_proprietary_files": true,
+      "nvidia_scan": {
+        "clean": true,
+        "findings": []
+      },
+      "pip_files": {
+        "demo": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      },
+      "required_apps": [
+        "/opt/apps/bundle/bin/demo",
+        "/opt/apps/data/model",
+        "/usr/bin/ffmpeg"
+      ]
+    },
+    "pinned": {
+      "apt_snapshot": "20261101T000000Z",
+      "dpkg": [
+        "ii\tcmake\tamd64\t1.0",
+        "ii\tpython3\tamd64\t3.12"
+      ],
+      "files": {
+        "/opt/apps/data/model": "9372c470eeadd5ecd9c3c74c2b3cb633f8e2f2fad799250a0f70d652b6b825e4"
+      },
+      "inputs": [
+        {
+          "id": "base",
+          "sha256": "cae662172fd450bb0cd710a769079c05bfc5d8e35efa6576edc7d0377afdd4a2",
+          "size": 4,
+          "url": "https://example.org/base.img"
+        },
+        {
+          "id": "model",
+          "kind": "file",
+          "sha256": "9372c470eeadd5ecd9c3c74c2b3cb633f8e2f2fad799250a0f70d652b6b825e4",
+          "size": 5,
+          "target": "/opt/apps/data/model",
+          "url": "https://example.org/rev/model"
+        },
+        {
+          "filename": "demo-1.0-py3-none-any.whl",
+          "id": "wheel",
+          "kind": "wheel",
+          "package": "demo",
+          "sha256": "ba59926159d2aa256eb8739b8da7e2b574b960e1202c6d624cbe981cef996c91",
+          "size": 5,
+          "url": "https://example.org/demo-1.0-py3-none-any.whl",
+          "version": "1.0"
+        }
+      ],
+      "layer": "open",
+      "local_sources": [],
+      "pip_freeze": [
+        "demo==1.0"
+      ],
+      "recipe_sha256": "8df3eb740be174073bade6c1fa2e75d3b15d83f3361e2977700298f457a2f842",
+      "source_refs": {},
+      "tooling": {},
+      "wheels": {
+        "demo==1.0": "ba59926159d2aa256eb8739b8da7e2b574b960e1202c6d624cbe981cef996c91"
+      }
+    }
+  },
+  "status": "pinned-inputs-identical"
+}

@@ -1,0 +1,9 @@
+{
+  "scripts/apps/image/build_image.py": "804a4f31ccb76de2381cd781692c42d91ba7e0cf515f92dfe2cbb9b7e04bcf31",
+  "scripts/apps/image/common.py": "74d1507579e9eb0e452bc420e0d4368725c429046cda2d65016a866652e007ce",
+  "scripts/apps/image/guest.py": "72dbc0a54c736c40d6a12855bcd2e7066705eb5cf83cbff28181eabde936322b",
+  "scripts/apps/image/mutants.py": "c7c2d530f3b618413b43a0280ef231a19709e0c90155115ff990f766a66aefcc",
+  "scripts/apps/image/recipe.json": "e9784fad130277532e7f1615db536f213bc8f60ebad4a9f39c9e8834da61f5e1",
+  "scripts/apps/image/test_fake_qemu.py": "e91638dd11ca9e356de96015718aecaeecfbc565e021cc20da98aa01e6793e55",
+  "scripts/ci/test_apps_image.py": "b3ad2b22e6940878bf170c48191554086a9f8f01c18fd149304a50cad87ba86d"
+}
