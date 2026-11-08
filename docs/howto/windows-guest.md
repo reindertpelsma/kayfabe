@@ -118,6 +118,54 @@ Rules the script enforces: every step logs `START` and `EXIT rc=` (a log with no
 - **Do not snapshot an image with a Windows update staged**: it crash-loops `dwm.exe`. Block updates in test images. <!-- src: docs/WINDOWS_GUEST_SETUP.md -->
 - You supply and license Windows. The scripts download Microsoft's evaluation image, the virtio drivers and NVIDIA's installer from their vendors, each pinned by SHA-256. See [Credits and notices](credits.md). <!-- src: scripts/bench/windows/win_vm.sh, docs/NOTICES.md -->
 
+## Preparing the open application disk
+
+The permanent public disk is winapps-open.iso, label KFAPPS. Build it from a reviewed checkout using Python
+3.11+ standard library; the official Zig compiler is pinned in manifest.json. No shell extractor, ISO utility,
+distro mingw or pip resolution is needed. App originals stay intact and are staged inside Windows.
+
+```text
+python3 -I scripts/bench/windows/appmatrix/package_bundle.py fetch --dl downloads
+python3 -I scripts/bench/windows/appmatrix/package_bundle.py build --dl downloads --out out-a
+python3 -I scripts/bench/windows/appmatrix/package_bundle.py build --dl downloads --out out-b
+python3 -I scripts/bench/windows/appmatrix/package_bundle.py compare-image --iso out-b/winapps-open.iso --receipt out-a/winapps-open.manifest.json --out out-b
+```
+
+For manual downloads, also copy the tagged upstream tokenizers licence to
+Downloads/_compliance/hf_wheels/tokenizers-v0.22.2-LICENSE as shown by Layout. The wheel itself contains
+no legal text; the builder retains this pinned fallback alongside any bundled notices.
+
+Level 1 is the reproduction gate: identical file paths and SHA-256/size values, including the repository
+programs. Level 2 compares ISO bytes too, with a metadata WARNING when the files match but the container
+differs. Both ISO directory namespaces must expose the same files and bytes; a primary-only payload
+fails the check. Rock Ridge/System Use and hybrid filesystem records are unsupported and refused.
+`verify-image --out out-a` checks one object's integrity and its embedded recipe against
+the matching checkout, including pinned package/source bytes, guest files and licence notices. A receipt
+with freshly recalculated hashes cannot approve different inputs. Run it from the reviewed checkout used
+to build the image. Publication additionally requires that checkout's input digest before any store request.
+The GUI offers the same build, integrity and reproduction checks. No program currently uses the supported
+inventory-only/functional-check qualification. A vendor changing pinned bytes is INPUT_DRIFT, not flakiness.
+
+There is no permanent private bundle. The Linux box host obtains required CUDA/torch/llama, driver and
+conditional Microsoft/LunarG artifacts from official_fetch.json using J4 downloads with SHA-256 checks. The
+transient KFAPPSP disk and local manifest live only for the run and are removed after all guests stop.
+Nothing NVIDIA is uploaded to R2/GitHub; no Actions media artifact/cache is created. The guest stays offline.
+Both disks are read-only, fixed K: (KFAPPS) and P: (KFAPPSP).
+
+J2 must select the exact Windows driver with --official-driver VERSION or KF_WINAPPS_OFFICIAL_DRIVER.
+Only known catalogue versions are accepted; currently 580.88 is pinned. Driver staging/install belongs
+before the parent Windows gate; the app harness checks that selected version and does not change it after
+the gate. --guest-driver is the separate kf3 ABI setting. A missing pin or wrong installed version is
+MEDIA_DRIFT/NOTRUN. Missing official media never passes; --no-official-fetch leaves required apps NOTRUN.
+The downloader/person or CI operator must accept the CUDA EULA for private use before official downloads.
+
+The first deliverable is build + verify, followed by coordinator manual upload of public content. CI
+publication remains optional and disabled; no secrets, domain, environment or enable flag is configured.
+The GUI supports selecting the receipt and original archives in a file manager. Keep its licence texts,
+notices and mirrored copyleft source together; source retention remains our obligation while distributing
+the binaries. Native cross-platform builds and live upload have not been measured by this change.
+<!-- src: scripts/bench/windows/appmatrix/package_bundle.py, scripts/bench/windows/appmatrix/bundle_repro.py, scripts/bench/windows/appmatrix/official_runtime.py -->
+
 ## Known limits
 
 - **Windows sleep/wake is not supported yet.** <!-- src: docs/WINDOWS_GUEST_SETUP.md, README.md -->

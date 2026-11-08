@@ -176,34 +176,188 @@ R2 registration, Worker access, rental or deployment is part of this change.
 
 ## Windows app bundle (the Windows apps stage)
 
-**DESIGN — owner supersession, 2026-11-07:** NVIDIA payloads mentioned in this older Windows proposal are provisioning-time
-pinned official downloads only. They must never become image/ISO contents or R2/GitHub objects. Any older suggestion below to
-cache them with the bundle is superseded. LB1 implements the Linux recipe; Windows provisioning integration remains separate.
+STATUS: CODE + DESIGN, 2026-11-08 (latest owner rulings). The first deliverable is build + verification;
+coordinator upload is manual and CI publication remains optional/disabled. The first full public reproduction
+is recorded below. **Update 2026-11-08 (MEASURED):** the coordinator uploaded the bundle (ISO, manifest and three source archives) with create-only
+keys to the public bundles bucket, and the ISO's sha256 was re-verified by downloading it through bundles.kayfabe.dev; the repository bundle pin
+is filled with that digest. No Worker deployment or native/GPU pass is claimed, and the Worker integration is proposed, not deployed.
 
-STATUS: DESIGN-ONLY, 2026-11-07. Nothing below exists in R2 yet: no object is uploaded, the pin file
-(`scripts/bench/windows/appmatrix/bundle.pin`) is empty, and the Worker names are proposed, not deployed. Design:
-[`docs/design/V3_WINDOWS_APPS_GATE.md`](design/V3_WINDOWS_APPS_GATE.md).
+**OWNER SUPERSESSION, 2026-11-07 / CODE READ:** NVIDIA payloads are pinned official provisioning/run-time
+downloads only. They must never enter a distributed image/ISO or R2/GitHub object. Older proposals to cache
+them with a hosted bundle are superseded. LB1's Linux recipe and the Windows packaging path below remain
+separate; temporary per-run media is distinguished from distributed release media in both recipes.
 
-A rented box never downloads an app from a vendor: the Windows apps stage gets one app disk, `winapps-open.iso` (volume
-label `KFAPPS`, built by `appdisk.py`), through the Worker's presigned `/bench-data` route, as the SPECviewperf copy does.
-The disk holds only packages whose licence lets us keep a copy (the list is `open_packages` in
-`scripts/bench/windows/appmatrix/gate_profiles.json`, and a test refuses any package whose manifest text says redistribution is
-not granted): the CUDA demo suite and runtime parts, Python and the wheels (torch, cupy, onnxruntime), llama.cpp, the Qwen
-GGUF/HF models, Blender, hashcat, clpeak, vkpeak, the Vulkan runtime and the Visual C++ runtime, plus test programs built from
-this repository's own sources. It is packaged once, by a person, with `package_open_bundle.sh` (it refuses to run in CI or on a
-box and never uploads); the owner uploads it with R2 write credentials and commits the sha256 into `bundle.pin`.
+**MEASURED, WB1-public-bundle-20261108, source revision 4df88672b:** two full Linux builds with pinned Zig
+and all public inputs have equal file inventories and equal ISO bytes. The ISO is 2708119552 bytes,
+SHA-256 c4d1800350e72fba34943f750e1665953f7c94a57b9f8f9b3213638e21f424ee.
+See [the run and receipts](../traces/wb1_public_bundle_20261108/README.md); the pin remains UNBUILT until upload.
 
-| Bundle object | Name the box asks the Worker for (proposed) | R2 key (proposed) |
-|---|---|---|
-| the app disk, about 6-7 GB | `winapps-open.iso` | `winapps-open/kfapps.iso` |
-| the manifest it carries (sha256 of every file, image identity) | `winapps-open.manifest.json` | `winapps-open/manifest.json` |
+**OWNER POLICY / CODE READ:** winapps-open.iso (KFAPPS) is the only permanent bundle. It contains only
+public-ok packages. The private ISO/R2-secret-set design is superseded: NVIDIA and conditional inputs come
+from exact official URLs on the **BOX HOST at run time**, using J4 parallel-range fetching with SHA-256 checks.
+They are never deliberately stored in a published ISO, R2 or GitHub. A deterministic KFAPPSP disk exists only
+for the current run, attaches read-only next to KFAPPS and is discarded after guest teardown. The guest
+remains offline. There is no permanent private pin or private publication workflow.
 
-Not in the bundle, with the reason (the same classes as `gate_profiles.json`):
+### Shell-free build and the two reproduction levels
 
-| Class | Apps | Packages | Why |
-|---|---|---|---|
-| owner decision | 29 | GravityMark, FurMark, GpuTest, the Vulkan SDK, an ffmpeg GPL build | storage/redistribution decision still pending; the earlier ffmpeg pin returned 404, but J1 verified a new dated pin by download, official checksum and ZIP CRC (see `design/V3_WINDOWS_RELEASE_SOFTWARE_DEFINITIONS.md`); GPU behavior remains unverified |
-| manual | 4 apps + 3 never-automated items | Unigine Heaven and Valley; 3DMark, Geekbench, TensorRT, Superposition, Xonotic, Q2RTX | paid or account-bound software, command-line automation in a paid edition, or online-only (`gate_profiles.json` `manual`, with the evidence template) |
+**CODE READ:** use Python 3.11+ standard library on Linux, Windows or macOS and the pinned official Zig
+release. No bash, curl/wget, pip resolver, distro mingw, host application extractor, ISO utility or host
+compression is required. Original application archives/installers remain intact; the compiler distribution
+alone is unpacked, and legal texts are read into the licence inventory. The script rejects run tokens and
+upload credentials. CI builds require explicit --ci-build. The owner authorized the 2026-11-08 WB1 full
+build on the dev box with an additional monitored 8 GiB free-space reserve; this is a CPU packaging run.
+
+```text
+python3 -I scripts/bench/windows/appmatrix/package_bundle.py check
+python3 -I scripts/bench/windows/appmatrix/package_bundle.py fetch --dl downloads
+python3 -I scripts/bench/windows/appmatrix/package_bundle.py verify --dl downloads
+python3 -I scripts/bench/windows/appmatrix/package_bundle.py build --dl downloads --out out-a
+python3 -I scripts/bench/windows/appmatrix/package_bundle.py build --dl downloads --out out-b
+python3 -I scripts/bench/windows/appmatrix/package_bundle.py compare-image --iso out-b/winapps-open.iso --receipt out-a/winapps-open.manifest.json --out out-b
+```
+
+**OWNER DECISION / CODE READ:** Level 1 is the reproducibility claim and gate: the same complete file list
+and the same SHA-256/size per file, including pinned originals and repository-built programs. Level 2 is
+best effort: identical ISO container bytes too. If Level 1 matches but Level 2 differs, comparison succeeds
+with a WARNING and a container-metadata diff. Dates/IDs/publisher fields, extent layout and non-payload
+region hashes are recorded for diagnosis; the difference is a builder bug, not failed reproduction.
+The report is also written as reproduction.json.
+
+**CODE READ:** each image has its **own** out/winapps-open.manifest.json with every file/hash/size, licences,
+comparison policy, toolchain/source pins, Level 1 inventory digest, ISO hash/size and container snapshot.
+Packaging date and Python version are external audit fields. `verify-image --out out-a` checks that stored
+image against its own digest/receipt; it does not compare two builds. The harness keeps this object-integrity
+check. Corrupt stored bytes fail integrity even if a proposed reproduction's file inventory was unchanged.
+Use compare-image for reproduction and verify-image for one object's integrity.
+
+**CODE READ, 2026-11-08:** both ISO namespaces must expose the same logical files and bytes through the
+writer's deterministic primary aliases. Unsupported Rock Ridge/System Use and hybrid filesystem records
+are refused because they can expose another file view. Primary-only payloads fail; date/publisher changes and relocation
+of identical payloads remain Level 2 warnings. `verify-image` also derives the embedded recipe identity,
+checks actual package/source bytes against their pins, and regenerates guest files, staging, licence texts,
+notices, index and licence metadata from the matching reviewed checkout and pinned archives. Publication
+binds that derived identity to the checkout's input digest before any store client/request. Rehashing a
+modified ISO and sidecar cannot authorize different inputs. Compiled program provenance still needs the
+independent reproduction/native qualification described below.
+
+**CODE READ:** all repository programs are byte-checked by default. A reviewed bundle_toolchain.programs
+entry may mark one known program inventory-only, with a reason and named functional checks. Both builds
+must carry the same policy; the actual program hash remains recorded, and native functional validation is
+still required. Vendor inputs/other files cannot opt out. No real program currently uses this exception.
+All URLs, sizes and SHA-256 values are pinned; wheels use direct hash-locked URLs with no pip resolution.
+Sorted entries, fixed timestamps/IDs, normalized source paths/text, pinned compiler/flags and zero PE
+creation timestamps remove host date/user/locale/umask differences by construction. Vendor replacement or
+404/410 of pinned inputs is INPUT_DRIFT naming the package, never a Level 2 warning or silent repin.
+
+**Manual GUI path (CODE READ; native GUI use is unmeasured):** install official CPython with Tcl/Tk and .pyw
+associations. Use a file manager/Git GUI to obtain a fixed reviewed checkout, then double-click
+scripts/bench/windows/appmatrix/package_bundle_gui.pyw. No shell commands are required:
+
+1. Select manifest.json/profiles, an external Downloads directory and an empty Output directory; choose
+   Check then Layout. Only the public class is offered.
+2. In a browser save every open_packages files[].url using its exact files[].name under
+   Downloads/<package id>/. Keep extensions visible and originals unchanged; do not run application
+   installers on the packaging machine. Similar versions do not reproduce the pinned bytes.
+3. Save the exact bundle_toolchain.hosts archive for your CPU/OS under Downloads/_toolchain/<name>.
+   Also save every selected compliance.license_inputs and compliance.sources original under
+   Downloads/_compliance/<package id>/<name>. Each legal/source input has its own URL/hash/size pin.
+4. Choose Verify (or Fetch to retrieve the same originals using urllib). A mismatch names the package;
+   stop and investigate. Do not replace a pin with a newer vendor hash.
+5. Choose Build then Check image integrity. Repeat into a second empty Output directory.
+6. Choose Compare reproduction, select the first receipt and the second ISO. Its own sidecar is read
+   automatically. Level 1 differences fail with paths; Level 2 metadata differences warn. Inspect the
+   inventories and reproduction.json, keeping receipts as operator evidence.
+7. Inspect LICENSES/index.json, THIRD_PARTY_NOTICES.txt and SOURCE/ before coordinator upload.
+
+**CODE READ / limitation:** manually installing the same official installers can reproduce an installed
+application environment, but cannot itself reproduce the ISO filesystem/probe compilation. Use the Python
+writer (CLI or GUI) for the file-inventory claim. Fixture tests are not proof of full cross-host builds or
+native Zig/mingw functional parity. Keep every native app-matrix verdict and required functional check.
+
+### Official run-time downloads and transient media
+
+**CODE READ:** manifest.json retains package class: public-ok, official-fetch or manual-only.
+gen_official.py derives official_fetch.json and official_requirements.txt. The catalogue lists each
+artifact's ID, official URL, SHA-256, size, licence ID, guest destination, guest-only installer argv and
+staging recipe. apps.json requires.official_fetch links catalogue groups; dependencies and restricted HF
+extras are explicit. No extra unlisted package is fetched. Public media contains python_embed,
+llama_vulkan, qwen_gguf, hf_model, vkpeak, Blender, clpeak_ocl, hashcat, sevenzip and audited permissive HF
+wheels. CUDA/demo/NVRTC/CCCL, torch-related wheels, llama CUDA/cudart, clpeak CUDA, Microsoft/LunarG runtime
+items and restricted HF extras use official fetching. Other licensed/manual apps and standalone ffmpeg
+remain outside the canonical automatic selection.
+
+**CODE READ / J2 interface:** select --official-driver VERSION or KF_WINAPPS_OFFICIAL_DRIVER per Windows
+subrun. Only a pinned version is accepted; the current known Windows pin is 580.88. Additional matrix
+versions require exact official records; no version/URL is guessed from the guest. --guest-driver remains
+the distinct kf3 ABI setting. official_runtime.driver_plan supplies guest-stage/install arguments for J2
+before the parent Windows gate. The app harness checks the installed version; it never switches that
+parent driver after the gate. A mismatch is NOTRUN / MEDIA_DRIFT, not a pass.
+
+**CODE READ:** the Linux box host validates the J4 source hash before executing it, with eight ranges and
+pinned size/hash, no Worker auth flag and a minimal environment. It captures downloader output, reports
+only package IDs/sizes/digests, rechecks files and checks bytes actually copied into KFAPPSP. Temp media
+and its local manifest live outside evidence directories, span all guests/teardown and are removed on
+return/errors; abrupt box/runner destruction discards run storage. KFAPPS K: and KFAPPSP P: are read-only.
+Missing official media gives affected apps NOTRUN / RETRY MEDIA; official URL/hash/size failures give loud
+MEDIA_DRIFT. --no-official-fetch cannot make required apps pass; independent public-only apps need no
+second disk. The offline guest uses bundled 7-Zip or Windows tar/msiexec at run time.
+
+**OWNER POLICY / CUDA EULA:** the downloader is the person or CI operator running official fetch/verify
+for private use; that operator must accept the pinned CUDA EULA. Downloading in CI does not permit public
+redistribution. This is engineering support, not legal advice.
+
+**CODE READ / URL verification:** dispatch mode verify-official hashes every official input into temporary
+storage and removes it; verify also selects this independent job. It produces no ISO, artifact/cache or
+upload. A monthly cron remains disabled pending owner review; its intended command is:
+
+```text
+python3 -I scripts/bench/windows/appmatrix/official_runtime.py verify
+```
+
+### Licence/source retention, CI verification and coordinator upload
+
+**CODE READ:** every public build includes LICENSES/, provenance, generated third-party notices, exact
+pinned copyleft SOURCE/ archives and a written source offer. GPL binaries stay unmodified. **It is OUR
+obligation to retain mirrored source while distributing object code and honor the full offer term**, at
+least three years after last distribution and while covered support/spare parts remain offered. Source
+is offered next to the binary with equivalent access; upstream links alone do not replace our obligation.
+Complete transitive source/licence coverage still needs inspection with the full real artifacts.
+
+**CODE READ, tokenizers v0.22.2:** its wheel has an Apache classifier and no legal member. The manifest
+adds the exact upstream tag's Apache-2.0 text as a pinned fallback (11357 bytes, SHA-256
+c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4). The complete tag tree has no NOTICE
+path; the [licence audit](../traces/wb1_public_bundle_20261108/tokenizers-license-audit.json) records the
+source tree and metadata digest. Existing archive notices are retained alongside the fallback.
+
+
+**CODE READ / CI:** bundle-publish.yml is dispatch-only, minimal-permission, SHA-pinned and disabled for
+publication by default. It plans cheaply, builds/reads back twice without secrets and gates on Level 1.
+Verify compares the published manifest or committed # inventory digest, never the ISO hash as the
+reproduction gate. Container differences produce metadata warnings. An ISO hash alone is insufficient
+for Level 1 verification. The computed two-build disk budget is about 10.9 GiB; CI frees unused toolchains,
+measures space and fails before downloading if insufficient, requiring a larger runner. Actual runner
+capacity/full build duration remain unmeasured on GitHub. The Linux dev-box measurement is in the run above. No Actions media artifact/cache is created.
+
+**CODE READ / first upload:** the coordinator reproduces/inspects the public outputs, then uploads with
+an authorized manual transport. publish_bundle.py --manual-presigned --out out-a supports caller-supplied
+BUNDLE_UPLOAD_URLS and BUNDLE_PUBLIC_BASE_URL in a local environment; it refuses CI/Actions, static
+credentials/run tokens and all transient/official media. It never prints capabilities. Neither this lane
+nor CI invokes manual upload. The optional default CI uploader requires enabled canonical master context
+and a protected master-only environment; only its final step references public-bucket secrets. Nothing
+has been enabled/provisioned by WB1.
+
+**CODE READ:** immutable public keys are winapps-open/kfapps-<ISO sha256>.iso,
+winapps-open/manifest-<ISO sha256>.json and winapps-open/source-<source sha256>.archive. Upload exact sources
+first, then ISO/receipt. Stdlib SigV4 or caller-presigned resumable multipart supports objects above 5 GiB,
+with create-only conditions and matching-object reuse; never overwrite a conflicting existing key. Live
+R2 conditional completion/source access still need coordinator validation. After successful upload,
+review/update bundle.pin with the generated ISO digest, inputs, Level 1 inventory digest and keys. A future
+trusted draft pin PR and OIDC broker are design only; no token handling or Worker change is implemented.
+This replaces the bundle's old GitHub-Releases private store. Setup cache and WinPE migration are separate;
+WB1 does not migrate NVIDIA files or move/delete old-store contents.
+
+Full recipe, qualification rules and rollout details: [Windows apps gate, section 3](design/V3_WINDOWS_APPS_GATE.md#3-inputs-public-bundle-and-official-run-time-media).
 
 ## SPECviewperf in the Vast gate (the `specviewperf` stage)
 

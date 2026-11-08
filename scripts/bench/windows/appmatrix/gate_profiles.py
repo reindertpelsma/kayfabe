@@ -6,12 +6,12 @@ STATUS: LIVE, 2026-11-08 (GPU-free; tests/test_gate_profiles.py).
 
   gate_profiles.py ids PROFILE      comma list of app ids (small | mid | full | release | ids:a,b,c)
   gate_profiles.py budget PROFILE   the default wall-clock budget in seconds for the apps of that profile
-  gate_profiles.py open             every app whose packages are all in the R2 bundle (the automatable set)
-  gate_profiles.py classes          the four classes of apps (open / owner decision / manual / unsupported) with counts
+  gate_profiles.py open             apps whose packages are public or official-fetch (the automatable set)
+  gate_profiles.py classes          four app classes (open / owner decision / manual / unsupported)
   gate_profiles.py check            consistency of gate_profiles.json with apps.json and manifest.json (exit 1 on a problem)
 
-The R2 bundle (`winapps-open.iso`) holds ONLY the packages named in gate_profiles.json `open_packages`: redistributable
-by their own licences. Apps that need any other package are `owner_decision` (free to download, redistribution not
+The public bundle holds only public-ok open_packages; official_packages use transient per-run media.
+The legacy open/classes/full selectors retain the combined automatable set. Profile public needs no official-fetch media. Apps that need any other package are `owner_decision` (free to download, redistribution not
 granted, or a GPL build the owner keeps out of our storage, or a dead pin) or `manual` (licensed, account-bound, or
 online-only, or needs a real display); neither is ever in an automated profile. `known_unsupported` is
 also non-gating and reported explicitly. `full` is every remaining open app minus `excluded`, and an exclusion needs
@@ -45,9 +45,9 @@ def closure(pkgs, needs):
 
 def open_apps(apps, manifest, prof):
     needs = {p["id"]: p.get("needs", []) for p in manifest["packages"]}
-    allowed = set(prof["open_packages"])
+    allowed = set(prof["open_packages"]) | set(prof.get("official_packages", []))
     non_gating = set(prof["manual"]["apps"]) | set(prof.get("known_unsupported", {}))
-    return [a["id"] for a in apps["apps"] if closure(a["pkgs"], needs) <= allowed and a["id"] not in non_gating]
+    return [a["id"] for a in apps["apps"] if closure(a["pkgs"] + a.get("official_pkgs", []), needs) <= allowed and a["id"] not in non_gating]
 
 
 def resolve(profile, apps=None, manifest=None, prof=None):
@@ -71,7 +71,7 @@ def resolve(profile, apps=None, manifest=None, prof=None):
         timeout = {a["id"]: a["timeout_s"] for a in apps["apps"]}
         # shortest timeout first (stable): when the time budget ends, the apps that did not run are the slowest ones
         return sorted((x for x in opn if x not in ex), key=lambda x: timeout[x])
-    if profile in ("small", "mid"):
+    if profile in ("small", "mid", "public"):
         ids = prof["profiles"][profile]["apps"]
         bad = [x for x in ids if x not in opn]
         if bad:
@@ -107,6 +107,11 @@ def check():
     if release_ids != set(release) or not release_ids <= known:
         problems.append("release software list does not match definitions")
     for app in apps["apps"]:
+        dependencies = {p["id"]: p.get("needs", []) for p in manifest["packages"]}
+        required = sorted(closure(app["pkgs"] + app.get("official_pkgs", []), dependencies) & set(prof.get("official_packages", [])))
+        expected = {"official_fetch": required} if required else None
+        if app.get("requires") != expected or prof.get("app_requires", {}).get(app["id"]) != expected:
+            problems.append("official requirement drift: " + app["id"])
         if app["id"] in release:
             spec = release[app["id"]]
             if (app.get("release") != {k: spec.get(k) for k in ("status", "classification", "verdict")}

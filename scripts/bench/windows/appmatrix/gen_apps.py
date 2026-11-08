@@ -554,6 +554,21 @@ def build():
         a["cmd"] = derive_cmd(a)
         if a["id"] in release:
             a["release"] = {k: release[a["id"]][k] for k in ("status", "classification", "verdict")}
+    # Storage classification is independent of app verdicts and software approval.
+    with open(os.path.join(HERE, "manifest.json")) as f:
+        package_manifest = json.load(f)
+    official = {p["id"] for p in package_manifest["packages"] if p.get("class") == "official-fetch"}
+    dependencies = {p["id"]: p.get("needs", []) for p in package_manifest["packages"]}
+    for a in APPS:
+        a.pop("requires", None); a.pop("official_pkgs", None)
+        if "hf_wheels" in a["pkgs"]: a["official_pkgs"] = ["hf_wheels_extra"]
+        todo, seen = list(a["pkgs"]) + a.get("official_pkgs", []), set()
+        while todo:
+            pkg = todo.pop()
+            if pkg in seen: continue
+            seen.add(pkg); todo.extend(dependencies.get(pkg, []))
+        required = sorted(seen & official)
+        if required: a["requires"] = {"official_fetch": required}
     apps = sorted(APPS, key=lambda a: a["id"])
     linux_map = {}
     for a in apps:

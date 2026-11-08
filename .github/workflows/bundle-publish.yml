@@ -1,0 +1,150 @@
+name: Public Windows bundle (manual, publication disabled)
+
+# Owner refinement: dispatch only until reviewed. No secrets/environment/flag are
+# provisioned by this change. Future PR/master path filters are documented.
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Build without secrets, or verify the existing pin without uploading
+        type: choice
+        options: [build, verify, verify-official]
+        default: build
+
+permissions:
+  contents: read
+
+concurrency:
+  group: open-windows-bundle-master
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    if: github.repository == 'reindertpelsma/kayfabe' && github.ref == 'refs/heads/master' && inputs.mode != 'verify-official' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    outputs:
+      needs_build: ${{ steps.plan.outputs.needs_build }}
+      inputs: ${{ steps.plan.outputs.inputs }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: plan
+        name: Compare current inputs with repository publication pin (no network)
+        env:
+          MODE: ${{ inputs.mode }}
+        run: |
+          args=()
+          if [ "$MODE" = verify ]; then args+=(--verify); fi
+          /usr/bin/python3 -I scripts/bench/windows/appmatrix/bundle_ci.py plan "${args[@]}"
+
+  # This job intentionally has no environment and no secret references. It is also
+  # the PR build when the documented input path filters are explicitly enabled.
+  build:
+    needs: [plan]
+    if: >-
+      always() &&
+      (github.event_name == 'pull_request' ||
+       (needs.plan.result == 'success' && needs.plan.outputs.needs_build == 'true' &&
+        (inputs.mode == 'verify' || vars.BUNDLE_PUBLISH_ENABLED != 'true')))
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      BUNDLE_SUFFIX: kf-bundle-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Measure disk and free unused hosted-runner toolchains
+        run: |
+          df -h /
+          sudo /usr/bin/python3 - <<'PY'
+          import shutil
+          for path in ('/usr/local/lib/android', '/usr/share/dotnet', '/opt/ghc', '/usr/local/share/boost', '/opt/hostedtoolcache'):
+              shutil.rmtree(path, ignore_errors=True)
+          PY
+          df -h /
+      - name: Build twice; require matching Level 1 inventories (container equality is best effort)
+        env:
+          PLANNED_INPUTS: ${{ needs.plan.outputs.inputs }}
+          MODE: ${{ inputs.mode }}
+          BUNDLE_PUBLIC_BASE_URL: ${{ vars.BUNDLE_PUBLIC_BASE_URL }}
+        run: |
+          if [ -z "$PLANNED_INPUTS" ]; then
+            PLANNED_INPUTS=$(/usr/bin/python3 -I scripts/bench/windows/appmatrix/package_bundle.py input-hash)
+            PLANNED_INPUTS=${PLANNED_INPUTS#inputs=}
+          fi
+          args=()
+          if [ "$MODE" = verify ]; then args+=(--verify); fi
+          /usr/bin/python3 -I scripts/bench/windows/appmatrix/bundle_ci.py build --root "$RUNNER_TEMP/$BUNDLE_SUFFIX" --inputs "$PLANNED_INPUTS" "${args[@]}"
+      - name: Remove ephemeral media (no Actions artifacts)
+        if: always()
+        run: /usr/bin/python3 -I scripts/bench/windows/appmatrix/bundle_ci.py clean --root "$RUNNER_TEMP/$BUNDLE_SUFFIX"
+
+  build-and-publish:
+    needs: [plan]
+    if: >-
+      needs.plan.outputs.needs_build == 'true' &&
+      vars.BUNDLE_PUBLISH_ENABLED == 'true' && inputs.mode != 'verify' &&
+      github.repository == 'reindertpelsma/kayfabe' && github.ref == 'refs/heads/master' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    # Before enabling, owner MUST restrict this environment's deployment branches
+    # to master and require reviewer approval. No environment is configured here.
+    environment: bundle-publish-public-master
+    env:
+      BUNDLE_SUFFIX: kf-bundle-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Measure disk and free unused hosted-runner toolchains
+        run: |
+          df -h /
+          sudo /usr/bin/python3 - <<'PY'
+          import shutil
+          for path in ('/usr/local/lib/android', '/usr/share/dotnet', '/opt/ghc', '/usr/local/share/boost', '/opt/hostedtoolcache'):
+              shutil.rmtree(path, ignore_errors=True)
+          PY
+          df -h /
+      - name: Build and verify Level 1 twice before any credential is exposed
+        env:
+          PLANNED_INPUTS: ${{ needs.plan.outputs.inputs }}
+        run: /usr/bin/python3 -I scripts/bench/windows/appmatrix/bundle_ci.py build --root "$RUNNER_TEMP/$BUNDLE_SUFFIX" --inputs "$PLANNED_INPUTS"
+      - name: Publish immutable objects (sole credential-bearing step)
+        env:
+          BUNDLE_PUBLISH_APPROVED: 'true'
+          BUNDLE_PUBLIC_BASE_URL: ${{ vars.BUNDLE_PUBLIC_BASE_URL }}
+          R2_ENDPOINT: ${{ vars.BUNDLE_PUBLIC_R2_ENDPOINT }}
+          R2_BUCKET: ${{ vars.BUNDLE_PUBLIC_R2_BUCKET }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.BUNDLE_PUBLIC_R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.BUNDLE_PUBLIC_R2_SECRET_ACCESS_KEY }}
+        run: |
+          for attempt in 1 2 3; do
+            echo "Upload attempt $attempt"
+            if /usr/bin/python3 -I scripts/bench/windows/appmatrix/publish_bundle.py --out "$RUNNER_TEMP/$BUNDLE_SUFFIX/first"; then
+              cat "$RUNNER_TEMP/$BUNDLE_SUFFIX/first/published.pin.line" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+          done
+          exit 1
+      - name: Remove ephemeral media (no Actions artifacts)
+        if: always()
+        run: /usr/bin/python3 -I scripts/bench/windows/appmatrix/bundle_ci.py clean --root "$RUNNER_TEMP/$BUNDLE_SUFFIX"
+
+  verify-official:
+    # The optional monthly schedule remains DISABLED. A future schedule must use
+    # this same secret-free job, never a publishing job or media artifact/cache.
+    if: >-
+      github.repository == 'reindertpelsma/kayfabe' && github.ref == 'refs/heads/master' &&
+      github.event_name == 'workflow_dispatch' &&
+      (inputs.mode == 'verify' || inputs.mode == 'verify-official')
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Hash every official URL into temporary storage, then delete it
+        run: /usr/bin/python3 -I scripts/bench/windows/appmatrix/official_runtime.py verify

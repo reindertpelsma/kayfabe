@@ -38,7 +38,7 @@ class GateProfiles(unittest.TestCase):
         needs = {p["id"]: p.get("needs", []) for p in self.man["packages"]}
         for x in G.resolve("full", self.apps, self.man, self.prof):
             app = next(a for a in self.apps["apps"] if a["id"] == x)
-            self.assertLessEqual(G.closure(app["pkgs"], needs), set(self.prof["open_packages"]), x)
+            self.assertLessEqual(G.closure(app["pkgs"], needs), (set(self.prof["open_packages"]) | set(self.prof["official_packages"])), x)
 
     def test_small_and_mid_are_8_to_10_representative_apps_and_nested(self):
         sm, mid = G.resolve("small", self.apps, self.man, self.prof), G.resolve("mid", self.apps, self.man, self.prof)
