@@ -19,6 +19,8 @@ python3 scripts/apps/image/build_image.py verify --image out/apps-image.qcow2 --
 
 **DESIGN:** build again into a fresh directory, then verify the second image against the **first** manifest. The comparison covers the manifest’s PINNED part: package names/versions, pip freeze with wheel hashes, input URLs and SHA256 pins, source commits/tags and recipe/tooling hashes. BUILT binary, installed-file and image hashes are printed for information and may differ. Missing required apps and PINNED differences fail; each image must independently pass its clean NVIDIA scan and existing transport/integrity checks. Manifest schema 3 keeps both parts separate; schema-2 manifests require rebuilding with the new checkout. Disk timestamps, paths, machine IDs and compiler output bytes need not match.
 
+**CODE READ, 2026-11-08:** recipe `2026-11-08.2` also checks actual bytes of the five copied Python scripts and retained compatibility runner against their local-source pins. Recipe-written files, including the HF model's `refs/main` selector, are collected and checked against their declared content. Changed or missing copies/configuration fail; compiled binaries remain informational. Use a fresh build and manifest from this checkout so both sides include these observed input bytes.
+
 **CODE READ:** test per-run offline provisioning with:
 
 ```text

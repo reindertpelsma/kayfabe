@@ -308,6 +308,64 @@ def requirements(recipe, layer="open"):
     )
 
 
+def _add_runtime_pin(pins, path, sha):
+    absolute_path(path)
+    if path in pins and pins[path] != sha:
+        raise ValueError("conflicting runtime input pin")
+    pins[path] = sha
+
+
+def copied_input_hashes(recipe, layer):
+    """Bind verbatim local inputs at their surviving runtime destinations."""
+    pins = {}
+    copies = list(recipe.get("copies", []))
+    for build in recipe["builds"]:
+        if layer == "runtime" or build["requires"] == "open-layer":
+            copies.extend(build.get("copies", []))
+    for source in recipe["local_files"]:
+        target = PurePosixPath(source["target"])
+        # Compiler sources are deliberately removed after the build. A local
+        # input placed directly in the runtime tree (e.g. run_apps.sh) survives.
+        if not target.is_relative_to("/opt/apps/source"):
+            _add_runtime_pin(pins, str(target), source["sha256"])
+        for spec in copies:
+            if target.match(spec["from"]):
+                destination = PurePosixPath(spec["to"])
+                if spec.get("directory", False):
+                    destination /= target.name
+                _add_runtime_pin(pins, str(destination), source["sha256"])
+    return pins
+
+
+def configuration_input_hashes(recipe, layer):
+    pins = {}
+    configs = list(recipe.get("write_files", []))
+    if layer == "runtime":
+        configs.extend(recipe.get("official_write_files", []))
+    for item in configs:
+        _add_runtime_pin(
+            pins,
+            item["path"],
+            hashlib.sha256(item["content"].encode("utf-8")).hexdigest(),
+        )
+    return pins
+
+
+def runtime_input_hashes(recipe, layer):
+    """Expected observed bytes, distinct from generated binary hashes."""
+    pins = {}
+    for artifact in recipe["artifacts"]:
+        if artifact["kind"] == "file":
+            _add_runtime_pin(pins, artifact["target"], artifact["sha256"])
+    for inputs in (
+        copied_input_hashes(recipe, layer),
+        configuration_input_hashes(recipe, layer),
+    ):
+        for path, sha in inputs.items():
+            _add_runtime_pin(pins, path, sha)
+    return pins
+
+
 def validate_inventory(inv, recipe):
     """A syntactically valid empty report must never certify an incomplete install."""
     try:
@@ -385,6 +443,12 @@ def validate_inventory(inv, recipe):
         for a in recipe["artifacts"]:
             if a["kind"] == "file" and files.get(a["target"]) != a["sha256"]:
                 raise ValueError(f"file pin differs: {a['id']}")
+        for path, sha in copied_input_hashes(recipe, layer).items():
+            if files.get(path) != sha:
+                raise ValueError("copied source pin differs: " + path)
+        for path, sha in configuration_input_hashes(recipe, layer).items():
+            if files.get(path) != sha:
+                raise ValueError("configuration input pin differs: " + path)
         for b in recipe["builds"]:
             if layer == "open" and b["requires"] == "nvidia-layer-static":
                 continue
@@ -423,6 +487,7 @@ def inventory_parts(inv, recipe, source_tooling=None):
     """Owner policy: compare PINNED inputs; record BUILT bytes for information."""
     validate_inventory(inv, recipe)
     input_paths = {a["target"] for a in recipe["artifacts"] if a["kind"] == "file"}
+    input_paths.update(runtime_input_hashes(recipe, inv["layer"]))
     pinned = {
         "layer": inv["layer"],
         "recipe_sha256": hashlib.sha256(canonical(recipe)).hexdigest(),

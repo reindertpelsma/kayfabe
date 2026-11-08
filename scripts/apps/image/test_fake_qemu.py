@@ -61,6 +61,8 @@ def main():
             inv["files"][scenario["extra_builder_file"]] = hashlib.sha256(
                 b"built"
             ).hexdigest()
+        for path, content in scenario.get("builder_contents", {}).items():
+            inv["files"][path] = hashlib.sha256(content.encode("utf-8")).hexdigest()
     else:
         inv = (
             scenario.get("runtime_inventory", scenario["inventory"])
@@ -91,10 +93,15 @@ def main():
         buffer = io.BytesIO()
         with tarfile.open(fileobj=buffer, mode="w:gz") as archive:
             for path in inv["files"]:
+                content = (
+                    scenario.get("builder_contents", {})
+                    .get(path, "built")
+                    .encode("utf-8")
+                )
                 info = tarfile.TarInfo(path.lstrip("/"))
-                info.size = 5
+                info.size = len(content)
                 info.mode = 0o755
-                archive.addfile(info, io.BytesIO(b"built"))
+                archive.addfile(info, io.BytesIO(content))
         send("export", buffer.getvalue())
     if not scenario.get("no_inventory"):
         send("inventory", json.dumps(report).encode())

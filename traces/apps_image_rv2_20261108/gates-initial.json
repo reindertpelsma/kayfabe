@@ -1,0 +1,107 @@
+{
+  "checks": {
+    "claims": {
+      "argv": [
+        "python3",
+        "scripts/ci/debt.py",
+        "claims"
+      ],
+      "exit_code": 1,
+      "stderr": "",
+      "stdout": "NEW traces/apps_image_rv2_20261108/README.md|unattributed|06715debf26700406d25b8d3a02489849bee908444368e863bb8fd62c569acc3: **MEASURED \u2014 tests first:** [unit baseline](tests-first-red.txt) has 12 assertion failures and two missing-new-helper API errors across 14 controls; [\nclaims: existing-debt=3748 new=1 resolved=1\n"
+    },
+    "format": {
+      "argv": [
+        "python3",
+        "-m",
+        "black",
+        "--check",
+        "scripts/apps/image/common.py",
+        "scripts/apps/image/build_image.py",
+        "scripts/apps/image/guest.py",
+        "scripts/apps/image/mutants.py",
+        "scripts/apps/image/test_fake_qemu.py",
+        "scripts/ci/test_apps_image.py"
+      ],
+      "exit_code": 0,
+      "stderr": "All done! \u2728 \ud83c\udf70 \u2728\n6 files would be left unchanged.\n",
+      "stdout": ""
+    },
+    "freshness": {
+      "argv": [
+        "python3",
+        "scripts/ci/doc_freshness.py"
+      ],
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "doc freshness: checked=216 existing-debt=0 new=0\n"
+    },
+    "plan": {
+      "argv": [
+        "python3",
+        "scripts/apps/image/build_image.py",
+        "plan"
+      ],
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "{\"claim\": \"PINNED input equality; BUILT binary/image hashes informational\", \"official_fetch\": 29, \"open_download_bytes\": 3541368563, \"open_inputs\": 50, \"recipe_version\": \"2026-11-08.2\", \"static_runtime_builds\": [\"sample-cdpSimpleQuicksort\"]}\n"
+    },
+    "private": {
+      "argv": [
+        "python3",
+        "scripts/ci/no_private_refs.py"
+      ],
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "no_private_refs: clean\n"
+    },
+    "release": {
+      "argv": [
+        "python3",
+        "scripts/ci/release_claims.py",
+        "validate"
+      ],
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "WARN row 44 (perf-app-matrix-seconds-1075-1193): verified but action update-wording; is the wording the problem?\nWARN row 54 (win-minecraft-in-a-world): verified but action update-wording; is the wording the problem?\nWARN row 70 (win-3dmark-steel-nomad-runs-to-end): verified but action update-wording; is the wording the problem?\nrelease_claims: 133 claims, 0 errors, 3 warnings\n"
+    },
+    "stock": {
+      "argv": [
+        "python3",
+        "scripts/ci/no_patch_check.py"
+      ],
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "| Patch | Scope | Explicit opt-in / record | Reason |\n|---|---|---|---|\n| `archive/nvkvm-unpushed-2026-09-30/0001-CLAUDE.md-POLARITY-CORRECTED-m2hostsem-0-MEANS-THE-F.patch` | archive-only | `archive/README.md` | Frozen historical artifact; no stock entrypoint applies it. |\n| `archive/nvkvm-unpushed-2026-09-30/0001-REFUTED-USERD-s-address-was-never-unobtainable-the-c.patch` | archive-only | `archive/README.md` | Frozen historical artifact; no stock entrypoint applies it. |\n| `archive/nvkvm/docs/design/mode2_12_cont31_prereq_fixes.patch` | archive-only | `archive/README.md` | Frozen historical artifact; no stock entrypoint applies it. |\n| `archive/nvkvm/docs/design/mode2_12_cont33_fix.patch` | archive-only | `archive/README.md` | Frozen historical artifact; no stock entrypoint applies it. |\n| `archive/nvkvm/docs/design/mode2_12_cont34_fix.patch` | archive-only | `archive/README.md` | Frozen historical artifact; no stock entrypoint applies it. |\n| `archive/nvkvm/docs/design/mode2_13_fix.patch` | archive-only | `archive/README.md` | Frozen historical artifact; no stock entrypoint applies it. |\n| `archive/nvkvm/docs/design/mode2_13_fix_v2.patch` | archive-only | `archive/README.md` | Frozen historical artifact; no stock entrypoint applies it. |\n| `archive/nvkvm/docs/design/mode2_13_fix_v3.patch` | archive-only | `archive/README.md` | Frozen historical artifact; no stock entrypoint applies it. |\n| `archive/nvkvm/docs/design/mode2_13_fix_v4.patch` | archive-only | `archive/README.md` | Frozen historical artifact; no stock entrypoint applies it. |\n| `archive/nvkvm/docs/design/mode2_13_fix_v4_wip.patch` | archive-only | `archive/README.md` | Frozen historical artifact; no stock entrypoint applies it. |\n| `archive/nvkvm/docs/design/mode2_13_fix_v5_xfernone.patch` | archive-only | `archive/README.md` | Frozen historical artifact; no stock entrypoint applies it. |\n| `archive/nvkvm/docs/design/mode2_13_fix_v6.patch` | archive-only | `archive/README.md` | Frozen historical artifact; no stock entrypoint applies it. |\n| `archive/nvkvm/docs/design/mode2_13_part1_pd1leaf.patch` | archive-only | `archive/README.md` | Frozen historical artifact; no stock entrypoint applies it. |\n| `archive/nvkvm/docs/design/mode2_14_4c.patch` | archive-only | `archive/README.md` | Frozen historical artifact; no stock entrypoint applies it. |\n| `archive/nvkvm/docs/design/mode2_14_4c2.patch` | archive-only | `archive/README.md` | Frozen historical artifact; no stock entrypoint applies it. |\n| `archive/nvkvm/docs/design/mode2_14_P2.patch` | archive-only | `archive/README.md` | Frozen historical artifact; no stock entrypoint applies it. |\n| `archive/nvkvm/docs/design/mode2_14_P3.patch` | archive-only | `archive/README.md` | Frozen historical artifact; no stock entrypoint applies it. |\n| `archive/nvkvm/docs/design/mode2_14_P4.patch` | archive-only | `archive/README.md` | Frozen historical artifact; no stock entrypoint applies it. |\n| `archive/nvkvm/docs/design/mode2_14_cr3.patch` | archive-only | `archive/README.md` | Frozen historical artifact; no stock entrypoint applies it. |\n| `archive/nvkvm/docs/design/mode2_14_disambig.patch` | archive-only | `archive/README.md` | Frozen historical artifact; no stock entrypoint applies it. |\n| `archive/nvkvm/docs/design/mode2_14_fix_v2.patch` | archive-only | `archive/README.md` | Frozen historical artifact; no stock entrypoint applies it. |\n| `archive/nvkvm/docs/design/mode2_14_fix_v3.patch` | archive-only | `archive/README.md` | Frozen historical artifact; no stock entrypoint applies it. |\n| `archive/nvkvm/docs/design/mode2_14_fix_wip.patch` | archive-only | `archive/README.md` | Frozen historical artifact; no stock entrypoint applies it. |\n| `archive/nvkvm/docs/design/mode2_14_grexec.patch` | archive-only | `archive/README.md` | Frozen historical artifact; no stock entrypoint applies it. |\n| `archive/nvkvm/docs/kernel_patches/mode2_ce_caps_inject_DEBUG.patch` | archive-only | `archive/README.md` | Frozen historical artifact; no stock entrypoint applies it. |\n| `archive/nvkvm/docs/kernel_patches/mode2_gr_allocparams_null_DEBUG.patch` | archive-only | `archive/README.md` | Frozen historical artifact; no stock entrypoint applies it. |\n| `archive/nvkvm/docs/kernel_patches/mode2_uvm_complete_proof.patch` | archive-only | `archive/README.md` | Frozen historical artifact; no stock entrypoint applies it. |\n| `archive/nvkvm/docs/research/mode2_devinfo_capture.patch` | archive-only | `archive/README.md` | Frozen historical artifact; no stock entrypoint applies it. |\n| `docs/kernel_patches/0001-bringup-scrubber-init-printk.patch` | opt-in | `docs/kernel_patches/README.md` | Guest bring-up only; manual patch command in Applying, excluded from product acceptance. |\n| `docs/kernel_patches/0002-bringup-ceutils-finishpayload-wait.patch` | opt-in | `docs/kernel_patches/README.md` | Guest bring-up only; manual patch command in Applying, excluded from product acceptance. |\n| `scripts/bench/guest_ogkm_ringtrace.patch` | opt-in | `scripts/bench/guest_ringtrace_build.sh` | Explicit guest ring diagnostic; stamps RINGTRACE_GUEST=1 and must never grade a stock boot. |\n| `scripts/bench/windows/appmatrix/directx_vrs_gate.patch` | opt-in | `scripts/bench/windows/appmatrix/build_release_bundle.ps1` | R2 review, 2026-11-07: explicit offline bundle-build opt-in patches only Microsoft's DirectX VRS test program in a temporary source worktree. release_bundle.py validates the patch receipt/hash; neither path modifies the NVIDIA driver, QEMU or guest OS, and no stock kayfabe install applies this sample patch. |\n| `scripts/rpctrace/rpctrace-575.51.03.patch` | opt-in | `scripts/rpctrace/build_instrumented.sh` | Explicit diagnostic recorder build; stock module on disk is never replaced by the builder. |\n| `scripts/rpctrace/rpctrace.patch` | opt-in | `scripts/rpctrace/build_instrumented.sh` | Explicit diagnostic recorder build; stock module on disk is never replaced by the builder. |\n| `tools/host_patches/h5_userd_dma/patch/nvidia_h5_userd_dma_595.91.07.patch` | opt-in | `tools/host_patches/h5_userd_dma/README.md` | Explicit H5 source-copy build; build_h5.sh installs and loads nothing. |\n| `tools/uvm_efs/patch/nvidia_uvm_efs_580.159.04.patch` | opt-in | `tools/uvm_efs/box/build_efs.sh` | Explicit UVM experiment build with patch/output arguments; owner ruling E. |\n| `tools/vfio-gsp-observer/integration.patch` | opt-in | `tools/vfio-gsp-observer/README.md` | Explicit diagnostic QEMU observer application via apply.py; separate from the kf3 device overlay. |\n| `traces/antigravity_review_20261006/olut-harness.patch` | recorded-only | `traces/antigravity_review_20261006/olut-harness.patch` | Recorded diagnostic/proposal diff; applying it requires a separate manual action. |\n| `traces/apps_linux_20261107/pr282_apps_rows.patch` | recorded-only | `traces/apps_linux_20261107/pr282_apps_rows.patch` | Recorded diagnostic/proposal diff; applying it requires a separate manual action. |\n| `traces/blackwell_resume_cont_20261022/review_drafts/native_ce_fixture.patch` | recorded-only | `traces/blackwell_resume_cont_20261022/review_drafts/native_ce_fixture.patch` | Recorded diagnostic/proposal diff; applying it requires a separate manual action. |\n| `traces/blackwell_resume_cont_20261022/review_drafts/phase_guard.patch` | recorded-only | `traces/blackwell_resume_cont_20261022/review_drafts/phase_guard.patch` | Recorded diagnostic/proposal diff; applying it requires a separate manual action. |\n| `traces/candidate5_20261018/harness_proposal.patch` | recorded-only | `traces/candidate5_20261018/harness_proposal.patch` | Recorded diagnostic/proposal diff; applying it requires a separate manual action. |\n| `traces/deferred_api_translated_20261008/host_worktree_changes_on_83881ecc.patch` | recorded-only | `traces/deferred_api_translated_20261008/host_worktree_changes_on_83881ecc.patch` | Recorded diagnostic/proposal diff; applying it requires a separate manual action. |\n| `traces/lifecycle_review_20261016/review1_checker.patch` | recorded-only | `traces/lifecycle_review_20261016/review1_checker.patch` | Recorded diagnostic/proposal diff; applying it requires a separate manual action. |\n| `traces/linux_regression_20261010/diag.patch` | recorded-only | `traces/linux_regression_20261010/diag.patch` | Recorded diagnostic/proposal diff; applying it requires a separate manual action. |\n| `traces/parked_2026_08_15/bench_only_commits.patch` | recorded-only | `traces/parked_2026_08_15/bench_only_commits.patch` | Recorded diagnostic/proposal diff; applying it requires a separate manual action. |\n| `traces/real_windows_20261014/mbx_trace_v1.patch` | recorded-only | `traces/real_windows_20261014/mbx_trace_v1.patch` | Recorded diagnostic/proposal diff; applying it requires a separate manual action. |\n| `traces/real_windows_20261014/mbx_trace_v2.patch` | recorded-only | `traces/real_windows_20261014/mbx_trace_v2.patch` | Recorded diagnostic/proposal diff; applying it requires a separate manual action. |\n| `traces/sweep_integrate_20261018/heartbeat_drainer_PROPOSAL.patch` | recorded-only | `traces/sweep_integrate_20261018/heartbeat_drainer_PROPOSAL.patch` | Recorded diagnostic/proposal diff; applying it requires a separate manual action. |\n| `traces/sweep_integrate_20261018/scrub_test_address_key_PROPOSAL.patch` | recorded-only | `traces/sweep_integrate_20261018/scrub_test_address_key_PROPOSAL.patch` | Recorded diagnostic/proposal diff; applying it requires a separate manual action. |\n| `traces/sweep_integrate_20261018/userrelay_family_gate_PROPOSAL.patch` | recorded-only | `traces/sweep_integrate_20261018/userrelay_family_gate_PROPOSAL.patch` | Recorded diagnostic/proposal diff; applying it requires a separate manual action. |\n| `traces/sweep_integrate_20261018/windows_on_vast_README_PROPOSAL.patch` | recorded-only | `traces/sweep_integrate_20261018/windows_on_vast_README_PROPOSAL.patch` | Recorded diagnostic/proposal diff; applying it requires a separate manual action. |\nCODE READ: 52 patch artifacts, 11 reviewed application/reference scripts, 0 errors\nLIMIT: lexical stock-path audit; dynamic dispatch and arbitrary source rewrites require code review.\n"
+    },
+    "uuid": {
+      "argv": [
+        "python3",
+        "scripts/ci/no_gpu_uuids.py"
+      ],
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "gpu-uuids: files=179 baselined=179 new=0 stale=0\n"
+    },
+    "whitespace": {
+      "argv": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": ""
+    },
+    "workflows": {
+      "argv": [
+        "python3",
+        "scripts/ci/workflow_lint.py"
+      ],
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "workflow_lint: ok\n"
+    }
+  },
+  "observed_at": "2026-11-08T13:07:42.456479+00:00"
+}

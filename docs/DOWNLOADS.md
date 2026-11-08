@@ -155,7 +155,7 @@ STATUS: DESIGN-ONLY, 2026-11-07. **CODE READ:** [recipe.json](../scripts/apps/im
 [build_image.py](../scripts/apps/image/build_image.py) pin an official Ubuntu cloud image, dated main/universe apt indexes,
 open apps/models and hash-locked wheels. Direct open inputs total 3,541,368,563 bytes, plus apt dependencies. The builder uses
 transient official compiler inputs in a disposable scratch disk and assembles a **fresh open image**, scanned before publication.
-The comparison is **PINNED input inventory only**; BUILT binary/image hashes are informational and missing apps still fail. Exactly the gate's Qwen2-0.5B HF and
+The comparison is **PINNED input inventory only**; observed verbatim scripts and recipe-written model selectors are checked against their input pins. BUILT binary/image hashes are informational and missing apps still fail. Exactly the gate's Qwen2-0.5B HF and
 Qwen2.5-1.5B Q4_K_M GGUF models are included. No private image or credentials are inputs; every source is public or officially
 downloadable without sign-in. [Reproduction steps and limits](design/V3_APPS_IMAGE_RECIPE.md).
 

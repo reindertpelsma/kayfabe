@@ -109,6 +109,23 @@ def fixture():
     }
 
 
+def add_verbatim_inputs(recipe, inv):
+    """Use the real reviewed scripts/copy mappings without executing their code."""
+    actual = json.loads((IMAGE / "recipe.json").read_text())
+    contents = {}
+    for name in ("hf_generate.py", "ai_bench.py"):
+        pin = next(p for p in actual["local_files"] if p["path"].endswith("/" + name))
+        copied = next(p for p in actual["copies"] if p["from"] == pin["target"])
+        recipe["local_files"].append(copy.deepcopy(pin))
+        recipe["copies"].append(copy.deepcopy(copied))
+        inv["files"][copied["to"]] = pin["sha256"]
+        contents[copied["to"]] = (IMAGE.parents[2] / pin["path"]).read_text()
+    selector = copy.deepcopy(actual["write_files"][0])
+    recipe["write_files"].append(selector)
+    inv["files"][selector["path"]] = digest(selector["content"].encode("utf-8"))
+    return contents
+
+
 class Pins(unittest.TestCase):
     def test_recipe_accepts_complete_fixture(self):
         common.validate_recipe(fixture())
@@ -656,6 +673,245 @@ class Inventory(unittest.TestCase):
         self.assertEqual(common.inventory_observation(self.parts()), self.inv)
 
 
+class VerbatimInputs(unittest.TestCase):
+    def setUp(self):
+        case = Inventory()
+        case.setUp()
+        self.recipe, self.inv = case.recipe, case.inv
+        add_verbatim_inputs(self.recipe, self.inv)
+
+    def script_path(self, name):
+        return "/opt/apps/bundle/share/" + name
+
+    def check_script_drift(self, name):
+        self.inv["files"][self.script_path(name)] = digest(b"forged application")
+        with self.assertRaises(ValueError):
+            common.validate_inventory(self.inv, self.recipe)
+
+    def test_changed_hf_generate_is_rejected(self):
+        self.check_script_drift("hf_generate.py")
+
+    def test_changed_ai_bench_is_rejected(self):
+        self.check_script_drift("ai_bench.py")
+
+    def test_missing_copied_source_is_rejected(self):
+        del self.inv["files"][self.script_path("hf_generate.py")]
+        with self.assertRaises(ValueError):
+            common.validate_inventory(self.inv, self.recipe)
+
+    def test_changed_model_ref_is_rejected(self):
+        self.inv["files"][self.recipe["write_files"][0]["path"]] = digest(
+            b"another revision\n"
+        )
+        with self.assertRaises(ValueError):
+            common.validate_inventory(self.inv, self.recipe)
+
+    def test_missing_model_ref_is_rejected(self):
+        del self.inv["files"][self.recipe["write_files"][0]["path"]]
+        with self.assertRaises(ValueError):
+            common.validate_inventory(self.inv, self.recipe)
+
+    def check_pinned(self, path):
+        parts = common.inventory_parts(self.inv, self.recipe)
+        self.assertIn(path, parts["pinned"]["files"])
+        self.assertEqual(parts["pinned"]["files"][path], self.inv["files"][path])
+        self.assertNotIn(path, parts["built"]["files"])
+
+    def test_hf_generate_observed_bytes_are_pinned(self):
+        self.check_pinned(self.script_path("hf_generate.py"))
+
+    def test_ai_bench_observed_bytes_are_pinned(self):
+        self.check_pinned(self.script_path("ai_bench.py"))
+
+    def test_model_ref_observed_bytes_are_pinned(self):
+        self.check_pinned(self.recipe["write_files"][0]["path"])
+
+    def test_directory_glob_copies_bind_each_local_source(self):
+        self.recipe["copies"] = [
+            {
+                "from": "/opt/apps/source/local/*.py",
+                "to": "/opt/apps/bundle/share",
+                "directory": True,
+            }
+        ]
+        self.check_pinned(self.script_path("hf_generate.py"))
+        self.check_pinned(self.script_path("ai_bench.py"))
+
+    def test_direct_retained_local_source_is_pinned(self):
+        pin = copy.deepcopy(self.recipe["local_files"][0])
+        pin["target"] = "/opt/apps/bundle/run.py"
+        self.recipe["local_files"].append(pin)
+        self.inv["files"][pin["target"]] = pin["sha256"]
+        self.check_pinned(pin["target"])
+
+    def test_real_recipe_binds_all_five_scripts_and_retained_runner(self):
+        recipe = common.read_recipe(IMAGE / "recipe.json")
+        pins = common.runtime_input_hashes(recipe, "open")
+        for name in (
+            "ai_bench.py",
+            "blender_render.py",
+            "cupy_check.py",
+            "hf_generate.py",
+            "torch_correct.py",
+        ):
+            source = next(
+                p for p in recipe["local_files"] if p["path"].endswith("/" + name)
+            )
+            self.assertEqual(pins[self.script_path(name)], source["sha256"])
+        runner = next(
+            p for p in recipe["local_files"] if p["path"].endswith("/run_apps.sh")
+        )
+        self.assertEqual(pins[runner["target"]], runner["sha256"])
+        self.assertFalse(any(path.startswith("/opt/apps/source/") for path in pins))
+
+    def runtime_config(self):
+        self.inv["layer"] = "runtime"
+        self.inv["official_receipts"] = {}
+        self.inv["guest"]["nvidia_module_version"] = self.recipe["guest"][
+            "nvidia_version"
+        ]
+        path = "/etc/ld.so.conf.d/apps-cuda.conf"
+        self.recipe["official_write_files"] = [
+            {"path": path, "content": "/usr/local/cuda-12.6/lib\n"}
+        ]
+        self.inv["files"][path] = digest(
+            self.recipe["official_write_files"][0]["content"].encode()
+        )
+        return path
+
+    def test_runtime_installer_config_is_pinned(self):
+        path = self.runtime_config()
+        self.check_pinned(path)
+        self.assertNotIn(path, common.runtime_input_hashes(self.recipe, "open"))
+
+    def test_changed_runtime_installer_config_is_rejected(self):
+        path = self.runtime_config()
+        self.inv["files"][path] = digest(b"different search path\n")
+        with self.assertRaises(ValueError):
+            common.validate_inventory(self.inv, self.recipe)
+
+    def check_builder_script(self, name):
+        files = {"/opt/apps/bundle/bin/demo": digest(b"built")}
+        files.update(
+            {
+                self.script_path(n): next(
+                    p["sha256"]
+                    for p in self.recipe["local_files"]
+                    if p["path"].endswith("/" + n)
+                )
+                for n in ("hf_generate.py", "ai_bench.py")
+            }
+        )
+        files[self.script_path(name)] = digest(b"forged application")
+        inv = {"layer": "builder", "files": files, "shared_runtime": {}}
+        nonce = "a" * 32
+        with tempfile.TemporaryDirectory() as directory:
+            report, serial = (
+                Path(directory) / "inventory.json",
+                Path(directory) / "serial.log",
+            )
+            report.write_text(
+                json.dumps(
+                    {
+                        "status": "complete",
+                        "nonce": nonce,
+                        "mode": "builder",
+                        "recipe_sha256": digest(common.canonical(self.recipe)),
+                        "inventory": inv,
+                    }
+                )
+            )
+            serial.write_text(
+                f"KF_APPS_IMAGE_COMPLETE {nonce} {digest(common.canonical(inv))}\n"
+            )
+            with self.assertRaises(ValueError):
+                build_image.parse_result(report, serial, nonce, "builder", self.recipe)
+
+    def test_builder_rejects_hf_generate_copy_drift(self):
+        self.check_builder_script("hf_generate.py")
+
+    def test_builder_rejects_ai_bench_copy_drift(self):
+        self.check_builder_script("ai_bench.py")
+
+    def test_conflicting_artifact_and_config_pins_rejected(self):
+        self.recipe["write_files"].append(
+            {"path": "/opt/apps/data/model", "content": "different bytes"}
+        )
+        with self.assertRaises(ValueError):
+            common.runtime_input_hashes(self.recipe, "open")
+
+    def test_conflicting_copy_and_config_pins_rejected(self):
+        self.recipe["write_files"].append(
+            {"path": self.script_path("ai_bench.py"), "content": "different bytes"}
+        )
+        with self.assertRaises(ValueError):
+            common.runtime_input_hashes(self.recipe, "open")
+
+
+class RuntimeInputCollector(unittest.TestCase):
+    def collect(self, filename="refs/main", present=True):
+        from types import SimpleNamespace
+
+        case = Inventory()
+        case.setUp()
+        recipe = case.recipe
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            bundle = root / "bundle"
+            bundle.mkdir()
+            model, demo = root / "model", bundle / "demo"
+            model.write_bytes(b"model")
+            demo.write_bytes(b"built")
+            config = root / filename
+            config.parent.mkdir(parents=True, exist_ok=True)
+            if present:
+                config.write_text("fixed model revision\n")
+            recipe["artifacts"][0]["target"] = str(model)
+            recipe["builds"][0]["outputs"][0]["path"] = str(demo)
+            recipe["runtime_inventory"] = {
+                "required_paths": [str(model), str(demo)],
+                "trees": [str(bundle)],
+                "dpkg_binaries": [],
+            }
+            recipe["write_files"] = [
+                {"path": str(config), "content": "fixed model revision\n"}
+            ]
+            (root / "official-receipts.json").write_text("{}")
+
+            def run(argv, **kwargs):
+                if argv[0] == "modinfo":
+                    return SimpleNamespace(stdout="580.159.04\n")
+                if argv[-1] == "--pip-inventory":
+                    return SimpleNamespace(stdout=json.dumps({"demo": "e" * 64}))
+                self.assertIn("freeze", argv)
+                return SimpleNamespace(stdout="demo==1.0\n")
+
+            with patch.object(guest, "ROOT", root), patch.object(
+                guest, "run", side_effect=run
+            ), patch.object(
+                guest, "dpkg_rows", return_value=case.inv["dpkg"]
+            ), patch.object(
+                guest.os,
+                "uname",
+                return_value=SimpleNamespace(release=recipe["guest"]["kernel"]),
+            ):
+                return guest.collect_inventory(recipe, "runtime"), str(config)
+
+    def test_model_ref_outside_inventory_trees_is_hashed(self):
+        inv, path = self.collect()
+        self.assertIn(path, inv["files"])
+        self.assertEqual(inv["files"][path], digest(b"fixed model revision\n"))
+
+    def test_second_config_outside_inventory_trees_is_hashed(self):
+        inv, path = self.collect("config/runtime.conf")
+        self.assertIn(path, inv["files"])
+        self.assertEqual(inv["files"][path], digest(b"fixed model revision\n"))
+
+    def test_missing_model_ref_is_a_collection_failure(self):
+        with self.assertRaises(ValueError):
+            self.collect(present=False)
+
+
 class FakeQemu(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -730,6 +986,97 @@ class FakeQemu(unittest.TestCase):
 
     def records(self):
         return [json.loads(x) for x in self.commands.read_text().splitlines()]
+
+    def add_verbatim(self):
+        self.case["builder_contents"] = add_verbatim_inputs(self.recipe, self.inv)
+        return self.recipe["write_files"][0]["path"]
+
+    def check_copied_script_build(self, name):
+        self.add_verbatim()
+        path = "/opt/apps/bundle/share/" + name
+        self.case["builder_contents"][path] = "forged application"
+        self.inv["files"][path] = digest(b"forged application")
+        with self.assertRaises(ValueError):
+            self.build()
+        self.assertFalse((self.out / "apps-image.manifest.json").exists())
+
+    def test_build_rejects_changed_hf_generate_input(self):
+        self.check_copied_script_build("hf_generate.py")
+
+    def test_build_rejects_changed_ai_bench_input(self):
+        self.check_copied_script_build("ai_bench.py")
+
+    def check_copied_script_verify(self, name):
+        self.add_verbatim()
+        self.build()
+        self.inv["files"]["/opt/apps/bundle/share/" + name] = digest(
+            b"forged application"
+        )
+        self.save()
+        with self.assertRaises(ValueError):
+            build_image.verify(
+                self.out / "apps-image.qcow2",
+                self.out / "apps-image.manifest.json",
+                self.root / "verify-verbatim",
+            )
+        self.assertFalse(
+            (self.root / "verify-verbatim/apps-image.verify.json").exists()
+        )
+
+    def test_verify_rejects_changed_hf_generate_input(self):
+        self.check_copied_script_verify("hf_generate.py")
+
+    def test_verify_rejects_changed_ai_bench_input(self):
+        self.check_copied_script_verify("ai_bench.py")
+
+    def test_verify_rejects_changed_model_ref_input(self):
+        path = self.add_verbatim()
+        self.build()
+        self.inv["files"][path] = digest(b"another revision\n")
+        self.save()
+        with self.assertRaises(ValueError):
+            build_image.verify(
+                self.out / "apps-image.qcow2",
+                self.out / "apps-image.manifest.json",
+                self.root / "verify-ref",
+            )
+        self.assertFalse((self.root / "verify-ref/apps-image.verify.json").exists())
+
+    def test_verify_rejects_missing_model_ref_input(self):
+        path = self.add_verbatim()
+        self.build()
+        del self.inv["files"][path]
+        self.save()
+        with self.assertRaises(ValueError):
+            build_image.verify(
+                self.out / "apps-image.qcow2",
+                self.out / "apps-image.manifest.json",
+                self.root / "verify-ref",
+            )
+
+    def test_verbatim_inputs_preserve_variable_compiled_and_image_bytes(self):
+        self.add_verbatim()
+        manifest = self.build()
+        self.inv["files"]["/opt/apps/bundle/bin/demo"] = digest(b"another compilation")
+        image = self.out / "apps-image.qcow2"
+        image.write_bytes(b"different image timestamps")
+        self.save()
+        report = build_image.verify(
+            image, self.out / "apps-image.manifest.json", self.root / "verify-built"
+        )
+        self.assertEqual(report["status"], "pinned-inputs-identical")
+        self.assertEqual(report["pinned"], manifest["pinned"])
+        self.assertEqual(
+            report["built"]["files"]["/opt/apps/bundle/bin/demo"],
+            digest(b"another compilation"),
+        )
+
+    def test_build_rejects_missing_model_ref_input(self):
+        path = self.add_verbatim()
+        del self.inv["files"][path]
+        with self.assertRaises(ValueError):
+            self.build()
+        self.assertFalse((self.out / "apps-image.manifest.json").exists())
 
     def test_builder_input_disk_is_readonly_and_not_attached_to_open_assembly(self):
         import test_apps_image_layers as layers

@@ -1,0 +1,98 @@
+FFFFFFFFF
+======================================================================
+FAIL: test_missing_model_ref_is_a_collection_failure (__main__.RuntimeInputCollector.test_missing_model_ref_is_a_collection_failure)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 815, in test_missing_model_ref_is_a_collection_failure
+    with self.assertRaises(ValueError):
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_model_ref_outside_inventory_trees_is_hashed (__main__.RuntimeInputCollector.test_model_ref_outside_inventory_trees_is_hashed)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 806, in test_model_ref_outside_inventory_trees_is_hashed
+    self.assertIn(path, inv["files"])
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+AssertionError: '/tmp/tmpc0kbsvso/refs/main' not found in {'/tmp/tmpc0kbsvso/bundle/demo': '586a866f990ab55e36decfffc2011f172e4452d5141c939a5436baffba11111d', '/tmp/tmpc0kbsvso/model': '9372c470eeadd5ecd9c3c74c2b3cb633f8e2f2fad799250a0f70d652b6b825e4'}
+
+======================================================================
+FAIL: test_second_config_outside_inventory_trees_is_hashed (__main__.RuntimeInputCollector.test_second_config_outside_inventory_trees_is_hashed)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 811, in test_second_config_outside_inventory_trees_is_hashed
+    self.assertIn(path, inv["files"])
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+AssertionError: '/tmp/tmp4emy4oky/config/runtime.conf' not found in {'/tmp/tmp4emy4oky/bundle/demo': '586a866f990ab55e36decfffc2011f172e4452d5141c939a5436baffba11111d', '/tmp/tmp4emy4oky/model': '9372c470eeadd5ecd9c3c74c2b3cb633f8e2f2fad799250a0f70d652b6b825e4'}
+
+======================================================================
+FAIL: test_build_rejects_changed_hf_generate_input (__main__.FakeQemu.test_build_rejects_changed_hf_generate_input)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 908, in test_build_rejects_changed_hf_generate_input
+    self.check_copied_script_build("hf_generate.py")
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 903, in check_copied_script_build
+    with self.assertRaises(ValueError):
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_build_rejects_changed_ai_bench_input (__main__.FakeQemu.test_build_rejects_changed_ai_bench_input)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 911, in test_build_rejects_changed_ai_bench_input
+    self.check_copied_script_build("ai_bench.py")
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 903, in check_copied_script_build
+    with self.assertRaises(ValueError):
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_verify_rejects_changed_hf_generate_input (__main__.FakeQemu.test_verify_rejects_changed_hf_generate_input)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 923, in test_verify_rejects_changed_hf_generate_input
+    self.check_copied_script_verify("hf_generate.py")
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 918, in check_copied_script_verify
+    with self.assertRaises(ValueError):
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_verify_rejects_changed_ai_bench_input (__main__.FakeQemu.test_verify_rejects_changed_ai_bench_input)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 926, in test_verify_rejects_changed_ai_bench_input
+    self.check_copied_script_verify("ai_bench.py")
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 918, in check_copied_script_verify
+    with self.assertRaises(ValueError):
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_verify_rejects_changed_model_ref_input (__main__.FakeQemu.test_verify_rejects_changed_model_ref_input)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 933, in test_verify_rejects_changed_model_ref_input
+    with self.assertRaises(ValueError):
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_verify_rejects_missing_model_ref_input (__main__.FakeQemu.test_verify_rejects_missing_model_ref_input)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 942, in test_verify_rejects_missing_model_ref_input
+    with self.assertRaises(ValueError):
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+----------------------------------------------------------------------
+Ran 9 tests in 8.794s
+
+FAILED (failures=9)

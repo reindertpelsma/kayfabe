@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "recipe_version": "2026-11-08.1",
+  "recipe_version": "2026-11-08.2",
   "claim": "PINNED input equality; BUILT binary and image hashes informational",
   "base": {
     "id": "ubuntu-noble-20261017",

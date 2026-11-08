@@ -27,6 +27,7 @@ import urllib.parse
 from common import (
     MAX_RESULT,
     canonical,
+    copied_input_hashes,
     download,
     read_recipe,
     requirements,
@@ -423,6 +424,9 @@ def parse_result(result_path, serial_path, nonce, mode, recipe):
             or not inv.get("files")
         ):
             raise ValueError("missing builder inventory")
+        for path, sha in copied_input_hashes(recipe, "open").items():
+            if path.startswith("/opt/apps/bundle/") and inv["files"].get(path) != sha:
+                raise ValueError("builder copied source differs: " + path)
         for b in recipe["builds"]:
             if b["requires"] == "open-layer":
                 for output in b["outputs"]:

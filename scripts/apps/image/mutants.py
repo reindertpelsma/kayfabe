@@ -35,6 +35,55 @@ def finding(message):
 # it does not change the two-killer requirement or allow ERRORs to count.
 CASES = [
     (
+        "runtime-installer-configuration",
+        "common",
+        [("expression", "recipe.get('official_write_files', [])", "[]")],
+        "core",
+        ["VerbatimInputs"],
+    ),
+    (
+        "copied-source-pin-binding",
+        "common",
+        [guard("copied source pin differs")],
+        "core",
+        ["VerbatimInputs"],
+    ),
+    (
+        "configuration-pin-binding",
+        "common",
+        [guard("configuration input pin differs")],
+        "core",
+        ["VerbatimInputs"],
+    ),
+    (
+        "observed-runtime-inputs-pinned",
+        "common",
+        [("expression", "runtime_input_hashes(recipe, inv['layer'])", "{}")],
+        "core",
+        ["VerbatimInputs"],
+    ),
+    (
+        "collect-runtime-configuration",
+        "guest",
+        [("expression", "runtime_input_hashes(recipe, layer)", "{}")],
+        "core",
+        ["RuntimeInputCollector"],
+    ),
+    (
+        "builder-copied-source-binding",
+        "build_image",
+        [guard("builder copied source differs")],
+        "core",
+        ["VerbatimInputs"],
+    ),
+    (
+        "conflicting-runtime-pins",
+        "common",
+        [guard("conflicting runtime input pin")],
+        "core",
+        ["VerbatimInputs"],
+    ),
+    (
         "built-part-not-compared",
         "build_image",
         [

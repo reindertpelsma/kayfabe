@@ -29,6 +29,7 @@ from common import (
     locked_wheels,
     read_recipe,
     requirements,
+    runtime_input_hashes,
     sha256_file,
     validate_inventory,
     verify_file,
@@ -383,6 +384,7 @@ def collect_inventory(recipe, layer):
     files = {}
     symlinks = {}
     paths = set(Path(p) for p in spec["required_paths"])
+    paths.update(Path(path) for path in runtime_input_hashes(recipe, layer))
     for tree in spec["trees"]:
         if not Path(tree).is_dir():
             raise ValueError("missing inventory tree")
