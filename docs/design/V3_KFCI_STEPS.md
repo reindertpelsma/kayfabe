@@ -176,6 +176,14 @@ Its estimate is 50 minutes; its maximum step timeout allows optional legacy prov
 plus the matrix budget. The existing payload still controls whether the stage is selected;
 the migration does not enable it or change tier mapping.
 
+**CODE READ, DX1 integration, 2026-11-08:** `scripts/kfci/apps_gate.py` invokes the
+trusted `app_policy.py linux` helper with isolated Python and only `BASE_ENV`, emits
+its `APP_POLICY` rows before bundle preflight, and refuses policy ids in any gate
+list as `RETRY class=BAD_LIST`. Failed, truncated, empty or malformed policy output
+also refuses the list. The existing ASCII name/known-app checks, authoritative
+isolated result, supported-app failure priority and credential-free supervisor
+contract below remain in force. The policy helper gets no legacy namespace exceptions.
+
 CODE READ: gate lists, the `KF_APPS_*` knobs, provisional bundle checks, optional build/copy/
 provision chain, matrix argument order, per-boot and per-app timeouts, log locations, and
 result-file precedence are retained. `APPS_STAGE_LIST`, `APP_TRY` (300-character bound),

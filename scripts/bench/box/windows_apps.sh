@@ -186,6 +186,7 @@ mkdir -p "$EV"
 chmod 0700 "$EV"
 say "WINAPPS_START tag=$T rev=$REV source=$SOURCE $(date -u -Is) profile=$PROFILE gate_tag=$GATE_TAG per_guest=$PER_GUEST"
 say "WINAPPS_REQUESTED=1"
+python3 -I "$SOURCE/scripts/ci/app_policy.py" windows || refuse policy-unreadable
 
 stage preflight
 [ "$(id -u)" = 0 ] || refuse not-root

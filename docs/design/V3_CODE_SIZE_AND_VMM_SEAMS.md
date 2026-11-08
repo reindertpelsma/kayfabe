@@ -2,9 +2,13 @@
 
 # Code size and the boundary to a second VMM
 
-**MEASURED:** AU1 audited `origin/next` at
-`e9408ce4bf3f7956c74309d7b49e4b3e3230479d`, on 2026-11-08. This change adds
-only this document. No GPU, KVM guest, rental, deployment or external private
+**MEASURED:** AU1 audited the fixed source revision
+`e9408ce4bf3f7956c74309d7b49e4b3e3230479d` on 2026-11-08. That revision was
+`origin/next` at the initial fetch; it is an ancestor of the later `origin/next`
+`8d495e905331e1a6fbd0acdb0c483e0c25786032`, merged into this audit branch in
+the fact-check follow-up. The measurements remain pinned to `e9408ce4`, not to
+the later branch head. This change adds this document and two JSON inventories.
+No GPU, KVM guest, rental, deployment or external private
 source was used. Public VMM documentation was read, not its implementation run.
 
 **CODE READ:** The relevant owner rules are [the constraints](THE_CONSTRAINTS.md)
@@ -33,7 +37,7 @@ rule's 22,809. Neither number measures linked binary size.
 | Label | Hypothesis, with falsifier stated before the check | Result |
 |---|---|---|
 | INFERRED | Generated data and feature scope explain much of the apparent size. Falsifier: most retained source is unused or repeated application logic. | The largest identifiable buckets are ABI data, emulation, display and validation; no broad dead-code fraction was established. |
-| INFERRED | The four advertised portable crates are independent of QEMU. Falsifier: a QEMU dependency or executable QEMU API reference in their closure. | Dependency check supports QEMU independence; it does not establish a complete frontend abstraction. |
+| INFERRED | The four crates examined for portability are independent of QEMU (the claim sources differ; see section 7). Falsifier: a QEMU dependency or executable QEMU API reference in their closure. | Dependency check supports QEMU independence; it does not establish a complete frontend abstraction. |
 | INFERRED | `userpump` duplicates `user_turn`. Falsifier: production delegates its per-entry state machine to `user_turn`. | Falsified: `PumpIo` implements `user_turn::Io`, and the pump drives the shared `Relay`. |
 | INFERRED | The unused CUDA upload helper and old self-test entrypoints can leave the v3 API. Falsifier: a workspace/feature caller or a compile failure after scratch removal. | Caller searches and scratch checks are recorded in section 5. |
 | INFERRED | vfio-user is merely a transport substitution. Falsifier: retargetable CPU windows, read-only shadow semantics or asynchronous exits cannot be represented by the client. | Not established; the window backing is a material extra contract, section 10. |
@@ -41,10 +45,17 @@ rule's 22,809. Neither number measures linked binary size.
 ## 2. Counting rule and per-crate inventory
 
 **MEASURED:** `AU1_count.py`, its tests, JSON inventory and logs are in the AU1
-report artifacts, outside the repository as requested. The script enumerates
+report artifacts, outside the repository as requested. The per-file results are
+also published as [literal counts](evidence/v3_code_size_20261108/literal_counts.json)
+and [library-source counts](evidence/v3_code_size_20261108/library_counts.json);
+both identify the fixed source revision and carry source-blob SHA-256 values.
+The library inventory also includes the excluded test-item line spans.
+The script can read immutable git objects with `--rev e9408ce4`, independently
+of the checked-out branch. The script enumerates
 git-tracked `.rs` files under `crates/kf-*`. It excludes any path component named
-`tests`, and, in every remaining file, drops the first line beginning with the
-literal attribute `#[cfg(test)]` and everything to EOF. It counts physical lines,
+`tests`, and, in every remaining file, drops the first line whose text, after
+leading whitespace, begins with `#[cfg(test)]`, and everything to EOF. Blank
+lines preceding that physical line are retained. It counts physical lines,
 not statements or semicolons. Nested block comments, string literals, raw strings
 and character literals are distinguished. Retained lines partition into code,
 comment-only and blank; a code line with a trailing comment counts as code, with
@@ -88,12 +99,25 @@ the workspace total; its manifest still names it `kayfabe-abi-gen`.
 | kf-trap | 3,993 | 1,827 | 0 | 3,993 |
 | kf-util | 1,802 | 1,329 | 0 | 1,802 |
 | **23 workspace crates** | **186,031** | **74,201** | **36,812** | **149,219** |
-| Detached kf-abi/gen, additional | 2,522 | 445 | 0 | 2,522 |
+| Detached kf-abi/gen, additional (approximate; see below) | ≈2,500 | 445 | 0 | ≈2,500 |
 
-**MEASURED:** The workspace total also has 13,675 blank retained lines and
-4,494 code lines containing comments. Including the detached generator gives
-188,553 code lines, 74,646 comment-only lines, and 151,741 code lines outside
-the generated path. The generated directory has 44,485 physical lines including
+**MEASURED:** Re-running the pinned counter reproduces 4,494 workspace code
+lines containing comments. Its physical-line blank count is 13,675. A
+whole-text `^\s*` cutoff can also consume preceding blank lines: that convention
+reproduces the independent check's 13,414 blanks, a difference of 261 blanks
+and no code lines. The published JSON uses the physical-line convention above.
+
+**INFERRED — approximate auxiliary figures:** Treat the detached generator as
+about 2.5k code lines and the workspace-plus-generator total as about **188.6k**.
+The pinned lexer rederives 2,522 generator code lines and a total of 188,553;
+the independent check reports 2,541 and 188,572. The 19-line generator
+classification discrepancy remains unresolved, so neither auxiliary code total
+is presented as a convention-independent exact result. The JSON publishes this
+lexer's full per-file tally rather than silently substituting a different
+classifier. These auxiliary differences do not change any of the 23 workspace
+code rows or their 186,031 total. **MEASURED:** Under the published counter,
+the combined comment-only total is 74,646 and code outside the generated
+directory is 151,741. The generated directory has 44,485 physical lines including
 comments and blanks. Its largest file, `generated/matrix.rs`, has 31,773 code
 lines: version ranges, structure fields, class sets and constants generated by
 `tools/drivermatrix/emit_rust.py`. It alone is 17.1% of the 186,031 total.
@@ -189,16 +213,16 @@ and separate tests inflate `kf-disp` and `kf-mem`.
 
 **CODE READ; file counts are MEASURED under the literal rule:**
 
-| Crate | Main size drivers, with concrete files | Interpretation |
+| Crate | Main size drivers, with concrete files | Interpretation (INFERRED) |
 |---|---|---|
-| kf-qemu | `display.rs` 4,673; `device.rs` 3,431; `userpump.rs` 2,959; `mem.rs` 2,685; `userrelay.rs` 991; plus the omitted bulk of `chan.rs` | Runtime composition and resource lifetimes sit here alongside the frontend ABI. Much of it could serve another VMM. |
-| kf-rm | `chanlink.rs` 1,821; `inittables.rs` 1,489; `hostquery.rs` 1,480; `hostfacts.rs` 991; `rmgraph.rs` 852; `sweep.rs` 732; `rmrpc/policy.rs` 681 | RM object graph, guest allocation/control admission, asynchronous statements, host-fact derivation and authored initialization replies. These are many distinct wire/control obligations, not one forwarded ioctl loop. |
-| kf-disp | `engine.rs` 2,007; `scanout.rs` 1,526; `model.rs` 1,439; `pace.rs` 600; plus 7,805 counted test/model lines | Virtual display channels, interlocks and completion semantics; head/window state, scanout addressing/format plans, EDID/caps, color, pacing and broker-credit handling. Large test scope is an accounting artifact, not shipping emulation. |
-| kf-chan | `host.rs` 1,378; `video_generated.rs` 1,353; `user_lifecycle.rs` 892; `translated.rs` 863; `user_turn.rs` 725; `dbfast.rs` 645 | Host-authored ring publication, method decoding/rewriting, generated video-method address tables, USER relay state machines, completion relays and fast doorbells. `user_turn` is actually shared with QEMU's concrete pump. |
-| kf-mem | `batch.rs` 1,977; `vasmgr.rs` 1,302; `apply.rs` 1,101; `cpuwin.rs` 692; plus 4,086 counted simulator lines | Mapping transactions, ownership, overlap/granularity handling, commit-on-ack, retaining unchanged mappings, async reconciliation and retargetable CPU windows. The simulator tests transient correctness as well as final state. |
-| kf-linux-raw | `mapping_unsafe.rs` 660; `kvm_unsafe.rs` 383; `memtype.rs` 381; `vcpu_unsafe.rs` 345; `chardev_unsafe.rs` 331 | Checked OS/FFI primitives and their audit perimeter, mapping/cache geometry, device ioctls, eventfds/epoll, sockets and KVM test rigs. KVM/vCPU wrappers have harness callers; they are not the QEMU product's hypervisor implementation. Its 4,945 comment-only lines exceed code under this rule. |
-| kf-broker | `conn.rs` 2,517; `slots.rs` 539; `ticks.rs` 442; `cursor.rs` 425; `wire.rs` 393; `input.rs` 359 | Real connection/reconnect and protocol state, negotiated frame rungs, fd/slot ownership, pacing credits, cursor stream and input policy. Input and cursor operations already have VMM-neutral sinks. |
-| kf-cuda | `walk.rs` 1,539; `display.rs` 1,430; `driver_unsafe.rs` 924; `abi.rs` 659; two color examples 432 combined | CUDA driver-API glue, walker/report/ack lifecycle, GPU scanout operations, bounded buffers and GPU completion. Oracle/model/synthetic fixtures also live in the library; examples are not product runtime. PTX/CUDA source outside `.rs` is not in these totals. |
+| kf-qemu | `display.rs` 4,673; `device.rs` 3,431; `userpump.rs` 2,959; `mem.rs` 2,685; `userrelay.rs` 991; plus the omitted bulk of `chan.rs` | **INFERRED:** Runtime composition and resource lifetimes sit here alongside the frontend ABI. Much of it could serve another VMM. |
+| kf-rm | `chanlink.rs` 1,821; `inittables.rs` 1,489; `hostquery.rs` 1,480; `hostfacts.rs` 991; `rmgraph.rs` 852; `sweep.rs` 732; `rmrpc/policy.rs` 681 | **INFERRED:** RM object graph, guest allocation/control admission, asynchronous statements, host-fact derivation and authored initialization replies. These are many distinct wire/control obligations, not one forwarded ioctl loop. |
+| kf-disp | `engine.rs` 2,007; `scanout.rs` 1,526; `model.rs` 1,439; `pace.rs` 600; plus 7,805 counted test/model lines | **INFERRED:** Virtual display channels, interlocks and completion semantics; head/window state, scanout addressing/format plans, EDID/caps, color, pacing and broker-credit handling. Large test scope is an accounting artifact, not shipping emulation. |
+| kf-chan | `host.rs` 1,378; `video_generated.rs` 1,353; `user_lifecycle.rs` 892; `translated.rs` 863; `user_turn.rs` 725; `dbfast.rs` 645 | **INFERRED:** Host-authored ring publication, method decoding/rewriting, generated video-method address tables, USER relay state machines, completion relays and fast doorbells. `user_turn` is actually shared with QEMU's concrete pump. |
+| kf-mem | `batch.rs` 1,977; `vasmgr.rs` 1,302; `apply.rs` 1,101; `cpuwin.rs` 692; plus 4,086 counted simulator lines | **INFERRED:** Mapping transactions, ownership, overlap/granularity handling, commit-on-ack, retaining unchanged mappings, async reconciliation and retargetable CPU windows. The simulator tests transient correctness as well as final state. |
+| kf-linux-raw | `mapping_unsafe.rs` 660; `kvm_unsafe.rs` 383; `memtype.rs` 381; `vcpu_unsafe.rs` 345; `chardev_unsafe.rs` 331 | **INFERRED:** Checked OS/FFI primitives and their audit perimeter, mapping/cache geometry, device ioctls, eventfds/epoll, sockets and KVM test rigs. KVM/vCPU wrapper uses outside their implementation files are in `kf-chan/tests/common/mod.rs` and `kf-linux-raw/tests/kvm_vm_discovery.rs`, with no `kf-harness` caller; they are not the QEMU product's hypervisor implementation. Its 4,945 comment-only lines exceed code under this rule. |
+| kf-broker | `conn.rs` 2,517; `slots.rs` 539; `ticks.rs` 442; `cursor.rs` 425; `wire.rs` 393; `input.rs` 359 | **INFERRED:** Real connection/reconnect and protocol state, negotiated frame rungs, fd/slot ownership, pacing credits, cursor stream and input policy. Input and cursor operations already have VMM-neutral sinks. |
+| kf-cuda | `walk.rs` 1,539; `display.rs` 1,430; `driver_unsafe.rs` 924; `abi.rs` 659; two color examples 432 combined | **INFERRED:** CUDA driver-API glue, walker/report/ack lifecycle, GPU scanout operations, bounded buffers and GPU completion. Oracle/model/synthetic fixtures also live in the library; examples are not product runtime. PTX/CUDA source outside `.rs` is not in these totals. |
 
 **CODE READ:** Per-family variation is concentrated in `kf-chip` and generated
 ABI/class/method data, rather than five complete copies of these runtimes.
@@ -206,6 +230,7 @@ ABI/class/method data, rather than five complete copies of these runtimes.
 choices; the entire crate is 2,545 literal code lines. This does not prove every
 family/die is supported or measured: family intent and hardware qualification
 are separate, as [the release ledger](../RELEASE_CLAIMS.md) requires.
+
 
 ## 4. Why the QEMU crate is not just a small QOM shim
 
@@ -259,7 +284,7 @@ consumer is impossible. No deletion is proposed by this documentation PR.
 | `kf-cuda::selftest` module API | **CONFIRMED** in the scratch check recorded below. `bring_up_and_prove` / `probe_after_sandbox` have no v3 workspace caller. Actual isolate callers explicitly use **`kayfabe_cuda`**. The scratch removes the v3 module declaration, not the frozen implementation. The module is 202 literal code lines / 305 physical lines. | Retire or relocate this copied isolate-era API after checking any external consumers; do not touch the frozen self-test. |
 | `kf-cuda::synth` and `diffmodel` | PLAUSIBLE relocation, not dead. `kf-harness/src/tables.rs` uses `synth`; gate 9 uses `diffmodel`; the memory simulator and `vasmgr` tests also use it. `synth` is 190 literal code lines, `diffmodel` 244. | Put fixture construction in a test-support boundary if worthwhile. Keep the independent walker oracle; do not merge it into the implementation it checks merely to save lines. |
 | `kf-linux-raw` KVM/vCPU rig | PLAUSIBLE relocation, not dead. `kf-chan/tests/common/mod.rs` and `kf-linux-raw/tests/kvm_vm_discovery.rs` use `Kvm`, `KvmVm`, `KvmMemslot`, `KvmVcpu`. Together the two implementation files contribute 728 literal code lines. | A future test-support feature/crate could isolate these APIs. Do not remove their adversarial doorbell tests; feature isolation needs its own gate review. |
-| Scalar wire readers across `kf-rm/src/hostfacts.rs::le16/le32` and `kf-oprom/src/rom.rs::le16/le32` | PLAUSIBLE merge of duplicated little-endian slice-reading logic. The latter checks offset addition; the former relies on its internal call sites. `kf-abi/src/wire.rs` has a further error-returning variant. These are small helpers, not identical parser contracts. | At most a small shared bounded-reader utility; expected savings are tens of lines, not thousands. Preserve short-input/error behavior. |
+| Scalar wire readers across `kf-rm/src/hostfacts.rs::le16/le32`, `kf-oprom/src/rom.rs::le16/le32` and `kf-census/src/capture.rs::le32` (line 358) | PLAUSIBLE merge of duplicated little-endian reading logic, with different bounds contracts. `hostfacts.rs::le32` computes unchecked `at + 4` before `get`; `rom.rs::le32` uses `checked_add`; the census helper indexes four bytes directly. `kf-abi/src/wire.rs` has a further error-returning variant. These are small helpers, not interchangeable parser contracts. | At most a small shared bounded-reader utility; expected savings are tens of lines, not thousands. Preserve short-input/error behavior. |
 | `kf-qemu/src/gpuuid.rs` vs `kf-rm/src/gpuuid.rs`, and `userpump` vs `kf-chan::user_turn` | PLAUSIBLE duplication hypotheses rejected by CODE READ: the QEMU UUID wrapper delegates to RM's implementation, and the pump uses the shared turn machine. | Keep policy and concrete adapter roles; merging crates would not remove an independent implementation. |
 | `kf-qemu/src/chan.rs::EngineObject::class` | PLAUSIBLE small dead-field candidate: a local `allow(dead_code)` explicitly reserves it for a forthcoming binding lookup. Not removed/compiled in scratch. | Recheck all field reads and intended binding work before deleting; no bulk saving claimed. |
 
@@ -298,7 +323,8 @@ tree is justified by this audit.
 
 ## 6. What can actually be compared with Guesthouse
 
-**CODE READ — public documentation, retrieved 2026-11-08:** Guesthouse's
+**INFERRED — external-project reports, public sources read in the initial
+2026-11-08 audit; not independently network-verified by the fact-checker:** Guesthouse's
 [README](https://github.com/xnixy/guesthouse) describes a Windows GPU-PV/VMBus
 route, a Linux driver-call-forwarding route, a separate daemon, desktop viewer
 and installer. Its published QEMU-patch figures are about **900 Windows lines**
@@ -308,7 +334,7 @@ matching code/comment/test convention. The README and
 read for this audit did not supply a comparable total non-test Rust LOC figure.
 No Guesthouse implementation code or device values were imported or used.
 
-| Scope | Kayfabe (CODE READ) | Guesthouse (CODE READ of public docs only) |
+| Scope | Kayfabe (CODE READ) | Guesthouse (INFERRED from public documentation reports) |
 |---|---|---|
 | Guest protocol | Emulated GPU PCI/BAR/GSP/RM; stock physical-device driver path | Windows Hyper-V GPU-PV/VMBus; Linux driver-call forwarding |
 | Display plane | NVDisplay methods, interlocks, head/window model, EDID, scanout and broker | Viewer/frame transport and Windows indirect display driver; desktop display exists, not the same emulated NVDisplay contract |
@@ -327,9 +353,13 @@ No Guesthouse implementation code or device values were imported or used.
 | RM/GSP/chip/architecture vocabulary | 23,073 | 12.4% |
 | All remaining code | 84,231 | 45.3% |
 
-**CODE READ:** `kf-trace` is deliberately **not** in the non-product tool bucket:
-despite the architecture map's “oracle only” grouping, `kf-rm` has a normal
-dependency on it and production code uses `FaultTag`. The four other tool crates
+**CODE READ — inconsistency for a separate follow-up:** `kf-trace` is
+deliberately **not** in the non-product tool bucket. `ARCHITECTURE.md` line 101
+groups it with `kf-crec` as “never linked into the product”, but
+`crates/kf-rm/Cargo.toml` lists a normal dependency on it and
+`crates/kf-rm/src/rmrpc/mod.rs:226` imports `kf_trace::FaultTag`. This audit
+records the inconsistency; it does not edit `ARCHITECTURE.md`. The four other tool
+crates
 above are absent from `kf-qemu`'s normal dependency closure. Test-file inflation
 from section 2 overlaps the functional buckets and must not be subtracted twice.
 
@@ -382,6 +412,17 @@ prove refusal or add the missing check. A new frontend must reject unsupported
 IOVAs explicitly. No guest-IOMMU behavior was tested in this lane.
 
 ### Dependency and symbol checks
+
+**CODE READ — sources of the portability propositions:** Only `kf-broker` is
+explicitly labelled VMM-agnostic in `ARCHITECTURE.md`'s crate table. The four
+propositions do not all originate in that table:
+
+| Crate | Claim source and scope |
+|---|---|
+| kf-broker | CODE READ: `ARCHITECTURE.md`'s crate row and `crates/kf-broker/Cargo.toml` explicitly call it VMM-agnostic. |
+| kf-trap | CODE READ: `crates/kf-trap/src/vmm.rs` opens with the VMM-agnostic seam claim; its interface comments are the source, not the architecture crate row. |
+| kf-core | CODE READ: owner ruling AO.1 and the version-axis tables in `THE_ARCHITECTURE_v3.md` / `THE_DESIGN.md` describe a VMM-agnostic core; source `kf-core/src/lib.rs` describes composition around `HostOps`. This is design intent to check against dependencies, not a working second adapter. |
+| kf-mem | INFERRED: this audit tests QEMU independence from its dependency closure and `MapTarget` / `ViewOps` boundaries. The architecture crate row describes the memory plane without explicitly calling it VMM-agnostic. |
 
 **MEASURED:** Ran, offline and locked:
 
@@ -451,7 +492,7 @@ Allow a shared **1–2 weeks / 300–800 new lines** for the runtime hooks and b
 backing join if done as a prerequisite; moving existing code is additional diff
 volume, not a new implementation of the GPU planes.
 
-| Candidate | Public-document facts (CODE READ) | Required work and constraints at risk (INFERRED) | Initial adapter estimate (INFERRED) |
+| Candidate | External source reports (INFERRED; public links) | Required work and constraints at risk (INFERRED) | Initial adapter estimate (INFERRED) |
 |---|---|---|---|
 | Cloud Hypervisor, in-process | Its [memory documentation](https://github.com/cloud-hypervisor/cloud-hypervisor/blob/main/docs/memory.md) exposes shared mappings and memory zones. Its [vfio-user HOWTO](https://github.com/cloud-hypervisor/cloud-hypervisor/blob/main/docs/vfio-user.md) separately documents an experimental out-of-process PCI route with virtio-mem/IOMMU limitations. | Implement custom PCI registration/configuration, MSI-X and the slot/readonly/overlay hooks against its device and interrupt interfaces. Choose one shared backing and map PCI-hole segments with file offsets; do not silently admit multiple memory-zone fds. Keep host work out of bus callbacks and preserve doorbell eventfds. Existing `vmm.rs` comments are a historical trait comparison, not a build against current Cloud Hypervisor. | 2–4k adapter/integration lines, 1–3k tests, **3–6 weeks**, plus the common prerequisite. Best first in-process candidate. |
 | crosvm | Its [architecture](https://crosvm.dev/book/architecture/overview.html) describes a sandboxed process per device; [advanced usage](https://crosvm.dev/book/running_crosvm/advanced_usage.html#multiprocess-mode) documents that default and the single-process test option. Its [device inventory](https://crosvm.dev/book/devices/index.html) includes PCI and virtio devices. | Add a custom PCI device and MSI-X/slot path. Decide whether kayfabe lives in the main process or one device process; a device-process port needs backing fd, slot-update and interrupt control across that boundary. Avoid a synchronous proxy round trip on every trap; main-process `MAP_FIXED` cannot retarget another process's mapping. One-memfd and GPU-driver resource access need explicit integration. | 3–6k adapter/integration lines, 2–4k tests, **5–9 weeks**, plus the prerequisite. Sandbox/process integration is a large uncertainty; a single-process experiment is not production sandbox parity. |
@@ -480,7 +521,7 @@ subregion update.
 Passing an fd does not cause subsequent `MAP_FIXED` replacements in the server
 to alter the client's virtual mapping. A server needs a stable, safely
 retargetable exported backing object, or client-assisted remaps with clear
-ownership and acknowledgements. **CODE READ/INFERRED, from the
+ownership and acknowledgements. **INFERRED, from the
 [vfio-user protocol](https://www.qemu.org/docs/master/interop/vfio-user.html):** Sparse mmap and multiple-fd capabilities
 describe regions; their existence alone does not prove this runtime retargeting
 operation. The protocol's optional region I/O-fd and no-reply mechanisms likewise
@@ -529,6 +570,9 @@ justifies dropping safety checks, test oracles, family coverage or diagnostics.
 
 ## 12. Validation and limits
 
+**MEASURED:** The initial-audit validation below belongs to the fixed source
+revision `e9408ce4`; the later fact-check merge validation is recorded separately.
+
 **MEASURED:** The counting tool's baseline seven tests passed before expansion;
 its final ten tests pass. Three deliberate counter defects are killed by at
 least two tests each: keeping the test tail (2), counting comments as code (4),
@@ -552,6 +596,20 @@ reference scanning is clean; GPU UUID scanning reports 179 baselined files,
 0 new and 0 stale findings. No gate baseline was changed. The complete scratch
 removal check passed with the working directory and both removals explicitly
 verified; the product worktree's code and test suite are unchanged.
+
+**MEASURED — fact-check follow-up after merging `8d495e90`:** The pinned
+counter reproduces all 469 original per-file metrics, now published with source
+hashes. Its tests increased from 10 to 12, explicitly covering tab-indented
+attributes and preservation of the blank line before the cutoff; the three
+counter mutants are killed by 4, 4 and 2 tests respectively. The column-zero
+variant reproduces 186,624 workspace code lines and 17,178 for `kf-disp`,
+confirming why the leading-whitespace wording matters. The four documentation
+fixture suites pass 203 tests on the merged tree. Freshness checks 216 documents
+with 0 debt and 0 new findings; release-claims validation reports 55 claims,
+0 errors and 0 warnings; private-reference and UUID gates remain clean.
+The merge imports the reviewed `next` changes; this audit's own diff against
+that base contains only this document and the two JSON inventories. No product
+build, GPU or VM was run in this documentation follow-up.
 
 **INFERRED — limits:** This is a bounded source audit, not an exhaustive
 reachability proof or a performance/security qualification. It does not measure

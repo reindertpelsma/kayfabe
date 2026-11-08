@@ -344,6 +344,10 @@ class CliGate(unittest.TestCase):
         rows[0].update(kw)
         return rows
 
+    def test_whitespace_only_readme_edit_keeps_the_ledger_valid(self):
+        code, out = self.cli(covering_rows(), README.replace("A claim line one.", "   A   claim line one.  "))
+        self.assertEqual(code, 0, out)
+
     def test_clean_exit_zero(self):
         code, out = self.cli(covering_rows())
         self.assertEqual(code, 0, out)

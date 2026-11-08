@@ -5,13 +5,15 @@ app-matrix run, with the cause class decided MECHANICALLY (no judgement) from th
 Inputs, in <results-dir> (written by scripts/apps/apps_matrix.sh): host.res, guest.res,
 guest_isolated.res (optional), and the per-app logs <app>.host.log / <app>.guest.log /
 <app>.guest_dmesg.log (optional; only used for the key output line and the Xid counts).
-The classes are the ones pre-registered in traces/apps_linux_20261107/PREREG.md:
+Historical classes follow traces/apps_linux_20261107/PREREG.md. The owner's 2026-11-08
+known-unsupported policy takes precedence; raw observed columns remain visible:
 
   GATE             host PASS and guest PASS (batched, or alone in a fresh boot)        -> required in the gate
   ORDER_SENSITIVE  host PASS, guest PASS alone, FAIL batched (a boot that degrades)     -> kayfabe finding;
                                                                                           runs in its own boot
   KAYFABE_DEFECT   host PASS, guest FAIL alone in a fresh boot                          -> never hidden
   HOST_LIMIT       host FAIL / TIMEOUT / NOTRUN on the same box (bare metal first)      -> documented exception
+  KNOWN_UNSUPPORTED UVM: explicitly unsupported until the per-fault GR hold is measured and bounded
   POLICY_SKIP      not run by policy (docs/DOWNLOADS.md terms status)                   -> not a result
   UNATTRIBUTED     host PASS but the guest has no usable row (boot failure, guest dead,
                    no isolated re-run)                                                  -> re-run, never counted
@@ -22,6 +24,8 @@ one. `--gate-list` writes the GATE apps (one per line, run order of `run_apps.sh
 
 import argparse
 import collections
+import json
+from pathlib import Path
 import os
 import re
 import sys
@@ -29,6 +33,7 @@ import sys
 POLICY_SKIP = {
     "geekbench_gpu": "Geekbench: docs/DOWNLOADS.md says not allowed for scripted use (Pro licence); the free mode uploads the result",
 }
+KNOWN_UNSUPPORTED = json.loads((Path(__file__).resolve().parent / "known_unsupported.json").read_text())["known_unsupported"]
 PASS = "PASS"
 KV = re.compile(r"(\w+)=((?:(?! \w+=).)*)")
 
@@ -94,6 +99,8 @@ def key_line(directory, app, side):
 
 def classify(app, host, guest, isolated):
     """(class, guest verdict of record, reason). Mechanical: the order of the checks IS the rule."""
+    if app in KNOWN_UNSUPPORTED:
+        return "KNOWN_UNSUPPORTED", "-", KNOWN_UNSUPPORTED[app]
     if app in POLICY_SKIP:
         return "POLICY_SKIP", "-", POLICY_SKIP[app]
     hv = host.get("verdict") if host else None
@@ -123,7 +130,7 @@ def table(directory):
         for app in source:
             if app not in order:
                 order.append(app)
-    for app in POLICY_SKIP:
+    for app in list(POLICY_SKIP) + list(KNOWN_UNSUPPORTED):
         if app not in order:
             order.append(app)
     rows = []
@@ -183,6 +190,9 @@ def main(argv=None):
         sys.stdout.write(text)
     if args.gate_list:
         with open(args.gate_list, "w") as handle:
+            handle.write("# known_unsupported (non-gating; listed in reports):\n")
+            for app, reason in KNOWN_UNSUPPORTED.items():
+                handle.write("# " + app + ": " + reason + "\n")
             handle.write("".join(r["app"] + "\n" for r in rows if r["class"] == "GATE"))
     print("MATRIX_TABLE rows=%d %s" % (len(rows), " ".join("%s=%d" % kv for kv in sorted(totals(rows).items()))), file=sys.stderr)
     return 0
