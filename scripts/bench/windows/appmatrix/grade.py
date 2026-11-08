@@ -21,6 +21,8 @@ guest (phase 2) when it has one, else the batched one. Classes of everything els
 
 Exit code: 0 all pass, 1 at least one guest_fail or boot_fail, 3 only harness / not_run. A verdict row for an app
 that was not expected is ignored (counted as `extra`). An empty expectation is a harness fault (exit 3).
+Manual or known-unsupported ids in the expectation are also harness faults: their raw observations
+are retained, but they get NOTRUN and zero pass credit. A supported guest failure still outranks them.
 """
 import argparse
 import json
@@ -64,8 +66,16 @@ def classify(verdict):
 def grade(run_dir, expected):
     batched = rows(os.path.join(run_dir, "win.res"))
     alone = rows(os.path.join(run_dir, "win_isolated.res"))
+    profiles = json.loads(Path(HERE, "gate_profiles.json").read_text())
+    non_gating = set(profiles["manual"]["apps"]) | set(profiles["known_unsupported"])
     per = {}
     for app in expected:
+        if app in non_gating:
+            per[app] = dict(cls="harness", verdict="NOTRUN",
+                            batched=(batched.get(app) or {}).get("verdict", "-"),
+                            alone=(alone.get(app) or {}).get("verdict", "-"),
+                            note="non-gating app in gate expectation")
+            continue
         row = alone.get(app) or batched.get(app)
         if row is None:
             per[app] = dict(cls="not_run", verdict="-", batched="-", alone="-", note="no row")

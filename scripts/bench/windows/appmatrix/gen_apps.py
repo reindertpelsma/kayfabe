@@ -303,7 +303,7 @@ for sc, tier, secs, extra, why in (
         OVL + "Invoke-KfExe -Exe $ov -ArgList @('--scenario', '%s'%s, '--out', \"$OUT\\overlay.json\")\nexit $global:KfRc" % (sc, "".join(", '%s'" % x for x in extra)),
         r"^KFOVL RESULT PASS", secs + 120, secs + 10, [r'out:KFOVL adapter "NVIDIA', GPU_ENG], *W_OVERLAY, session="interactive", tier=tier, shot=min(10, secs - 2),
         note="manual: needs real display; evidence template in gate_profiles.json manual.items; no real-monitor native record. "
-             "Virtual-display native probe is FAIL (no DIRECT overlay). kf_overlayprobe.exe (tools/src/kf_overlayprobe.cpp); result JSON " + "(PASS/FAIL, per-second presentation modes, transitions, worst present latency) in the app's out dir: " + why)
+             "Virtual-display native probe: SETUP/refused (code 5), no DIRECT overlay, no scenario frames. kf_overlayprobe.exe (tools/src/kf_overlayprobe.cpp); result JSON " + "(PASS/FAIL, per-second presentation modes, transitions, worst present latency) in the app's out dir: " + why)
 
 GM = r'''$gmx = Find-KfFile -Root "$K\gravitymark" -Name GravityMark.exe
 if (-not $gmx) { 'GM_NOTFOUND'; exit 1 }

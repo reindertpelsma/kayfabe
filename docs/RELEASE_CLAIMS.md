@@ -300,7 +300,7 @@ All eight entries (`overlay_yuv_probe`, hide, occlude, resize, move, recreate, f
 Copy the general evidence template into `traces/manual_overlay_<date>/<app>.md`, adding physical monitor model and
 connector, the same-GPU native result with DIRECT overlay support, app version/hash and exact command, per-second
 presentation modes, transitions and latency, screenshots, duration, host Xid delta, guest reset counts and 193 counts.
-The native Vast simulated display failed the probe (no DIRECT); that is not a native real-monitor pass. No such
+The native Vast simulated-display record is SETUP/refused (code 5): no DIRECT overlay and no scenario frames. No such
 real-monitor record is committed. The identical template is in `gate_profiles.json` for every overlay item.
 
 MC-11 also covers the current README's no-binary, no-installer, audit/interface and deployment statements: record

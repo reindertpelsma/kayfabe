@@ -39,7 +39,7 @@ The Windows gate checks the stock 580.88 driver, CUDA and D3D11 probes before an
 
 **Unsupported for now:** UVM demand paging, including `UnifiedMemoryStreams`, `UnifiedMemoryPerf`, `conjugateGradientUM`, `attach_verify` and the Windows counterpart `managed_t`. Reports list them as `unsupported (UVM)`; the owner's merge hold requires the per-fault GR hold to be measured and bounded ([ruling §E](docs/OWNER_RULINGS.md#e-uvm-demand-paging-2026-09-26), [FAQ](docs/FAQ.md#does-cuda-give-the-same-results-as-the-host)).
 
-**Manual: needs real display.** All eight `overlay_yuv_*` entries, including the probe and soak, stay visible in reports and are outside the Vast gate. The native probe failed on a Vast simulated display (no DIRECT overlay); no real-monitor native record is committed ([native record](traces/windows_overlay_native_20261010/README.md), [evidence template](docs/RELEASE_CLAIMS.md#mc-14-windows-yuv-overlays-on-a-real-display)).
+**Manual: needs real display.** All eight `overlay_yuv_*` entries, including the probe and soak, stay visible in reports and are outside the Vast gate. The native probe returned SETUP/refused (code 5) on a Vast simulated display: no DIRECT overlay, no scenario frames; no real-monitor native record is committed ([native record](traces/windows_overlay_native_20261010/README.md), [evidence template](docs/RELEASE_CLAIMS.md#mc-14-windows-yuv-overlays-on-a-real-display)).
 
 **Stage code, not deployment:** the Windows apps and SPECviewperf stages exist and remain disabled by default pending their first Worker run; neither new stage is deployed ([Windows apps](docs/design/V3_WINDOWS_APPS_GATE.md), [SPEC stage](docs/design/V3_SPEC_GATE.md)).
 

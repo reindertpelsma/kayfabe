@@ -109,42 +109,42 @@
    {
     "id": "overlay_yuv_probe",
     "reason": "needs real display",
-    "evidence_template": "traces/manual_overlay_<date>/<app>.md: date, kayfabe revision, GPU/die, physical monitor and connector, host/guest OS and drivers, app version and sha256, exact command, same-GPU native reference with DIRECT overlay (no virtual display), per-second presentation modes, transitions and present latency, app verdict, screenshots/log paths, duration, host Xid delta, guest resets and known_live_dumps_193. No real-monitor native record is committed; a virtual-display native probe is FAIL (no DIRECT overlay)."
+    "evidence_template": "traces/manual_overlay_<date>/<app>.md: date, kayfabe revision, GPU/die, physical monitor and connector, host/guest OS and drivers, app version and sha256, exact command, same-GPU native reference with DIRECT overlay (no virtual display), per-second presentation modes, transitions and present latency, app verdict, screenshots/log paths, duration, host Xid delta, guest resets and known_live_dumps_193. No real-monitor native record is committed; the virtual-display native probe returned SETUP/refused (code 5), no DIRECT overlay, no scenario frames."
    },
    {
     "id": "overlay_yuv_hide",
     "reason": "needs real display",
-    "evidence_template": "traces/manual_overlay_<date>/<app>.md: date, kayfabe revision, GPU/die, physical monitor and connector, host/guest OS and drivers, app version and sha256, exact command, same-GPU native reference with DIRECT overlay (no virtual display), per-second presentation modes, transitions and present latency, app verdict, screenshots/log paths, duration, host Xid delta, guest resets and known_live_dumps_193. No real-monitor native record is committed; a virtual-display native probe is FAIL (no DIRECT overlay)."
+    "evidence_template": "traces/manual_overlay_<date>/<app>.md: date, kayfabe revision, GPU/die, physical monitor and connector, host/guest OS and drivers, app version and sha256, exact command, same-GPU native reference with DIRECT overlay (no virtual display), per-second presentation modes, transitions and present latency, app verdict, screenshots/log paths, duration, host Xid delta, guest resets and known_live_dumps_193. No real-monitor native record is committed; the virtual-display native probe returned SETUP/refused (code 5), no DIRECT overlay, no scenario frames."
    },
    {
     "id": "overlay_yuv_occlude",
     "reason": "needs real display",
-    "evidence_template": "traces/manual_overlay_<date>/<app>.md: date, kayfabe revision, GPU/die, physical monitor and connector, host/guest OS and drivers, app version and sha256, exact command, same-GPU native reference with DIRECT overlay (no virtual display), per-second presentation modes, transitions and present latency, app verdict, screenshots/log paths, duration, host Xid delta, guest resets and known_live_dumps_193. No real-monitor native record is committed; a virtual-display native probe is FAIL (no DIRECT overlay)."
+    "evidence_template": "traces/manual_overlay_<date>/<app>.md: date, kayfabe revision, GPU/die, physical monitor and connector, host/guest OS and drivers, app version and sha256, exact command, same-GPU native reference with DIRECT overlay (no virtual display), per-second presentation modes, transitions and present latency, app verdict, screenshots/log paths, duration, host Xid delta, guest resets and known_live_dumps_193. No real-monitor native record is committed; the virtual-display native probe returned SETUP/refused (code 5), no DIRECT overlay, no scenario frames."
    },
    {
     "id": "overlay_yuv_resize",
     "reason": "needs real display",
-    "evidence_template": "traces/manual_overlay_<date>/<app>.md: date, kayfabe revision, GPU/die, physical monitor and connector, host/guest OS and drivers, app version and sha256, exact command, same-GPU native reference with DIRECT overlay (no virtual display), per-second presentation modes, transitions and present latency, app verdict, screenshots/log paths, duration, host Xid delta, guest resets and known_live_dumps_193. No real-monitor native record is committed; a virtual-display native probe is FAIL (no DIRECT overlay)."
+    "evidence_template": "traces/manual_overlay_<date>/<app>.md: date, kayfabe revision, GPU/die, physical monitor and connector, host/guest OS and drivers, app version and sha256, exact command, same-GPU native reference with DIRECT overlay (no virtual display), per-second presentation modes, transitions and present latency, app verdict, screenshots/log paths, duration, host Xid delta, guest resets and known_live_dumps_193. No real-monitor native record is committed; the virtual-display native probe returned SETUP/refused (code 5), no DIRECT overlay, no scenario frames."
    },
    {
     "id": "overlay_yuv_move",
     "reason": "needs real display",
-    "evidence_template": "traces/manual_overlay_<date>/<app>.md: date, kayfabe revision, GPU/die, physical monitor and connector, host/guest OS and drivers, app version and sha256, exact command, same-GPU native reference with DIRECT overlay (no virtual display), per-second presentation modes, transitions and present latency, app verdict, screenshots/log paths, duration, host Xid delta, guest resets and known_live_dumps_193. No real-monitor native record is committed; a virtual-display native probe is FAIL (no DIRECT overlay)."
+    "evidence_template": "traces/manual_overlay_<date>/<app>.md: date, kayfabe revision, GPU/die, physical monitor and connector, host/guest OS and drivers, app version and sha256, exact command, same-GPU native reference with DIRECT overlay (no virtual display), per-second presentation modes, transitions and present latency, app verdict, screenshots/log paths, duration, host Xid delta, guest resets and known_live_dumps_193. No real-monitor native record is committed; the virtual-display native probe returned SETUP/refused (code 5), no DIRECT overlay, no scenario frames."
    },
    {
     "id": "overlay_yuv_recreate",
     "reason": "needs real display",
-    "evidence_template": "traces/manual_overlay_<date>/<app>.md: date, kayfabe revision, GPU/die, physical monitor and connector, host/guest OS and drivers, app version and sha256, exact command, same-GPU native reference with DIRECT overlay (no virtual display), per-second presentation modes, transitions and present latency, app verdict, screenshots/log paths, duration, host Xid delta, guest resets and known_live_dumps_193. No real-monitor native record is committed; a virtual-display native probe is FAIL (no DIRECT overlay)."
+    "evidence_template": "traces/manual_overlay_<date>/<app>.md: date, kayfabe revision, GPU/die, physical monitor and connector, host/guest OS and drivers, app version and sha256, exact command, same-GPU native reference with DIRECT overlay (no virtual display), per-second presentation modes, transitions and present latency, app verdict, screenshots/log paths, duration, host Xid delta, guest resets and known_live_dumps_193. No real-monitor native record is committed; the virtual-display native probe returned SETUP/refused (code 5), no DIRECT overlay, no scenario frames."
    },
    {
     "id": "overlay_yuv_fullscreen",
     "reason": "needs real display",
-    "evidence_template": "traces/manual_overlay_<date>/<app>.md: date, kayfabe revision, GPU/die, physical monitor and connector, host/guest OS and drivers, app version and sha256, exact command, same-GPU native reference with DIRECT overlay (no virtual display), per-second presentation modes, transitions and present latency, app verdict, screenshots/log paths, duration, host Xid delta, guest resets and known_live_dumps_193. No real-monitor native record is committed; a virtual-display native probe is FAIL (no DIRECT overlay)."
+    "evidence_template": "traces/manual_overlay_<date>/<app>.md: date, kayfabe revision, GPU/die, physical monitor and connector, host/guest OS and drivers, app version and sha256, exact command, same-GPU native reference with DIRECT overlay (no virtual display), per-second presentation modes, transitions and present latency, app verdict, screenshots/log paths, duration, host Xid delta, guest resets and known_live_dumps_193. No real-monitor native record is committed; the virtual-display native probe returned SETUP/refused (code 5), no DIRECT overlay, no scenario frames."
    },
    {
     "id": "overlay_yuv_soak",
     "reason": "needs real display",
-    "evidence_template": "traces/manual_overlay_<date>/<app>.md: date, kayfabe revision, GPU/die, physical monitor and connector, host/guest OS and drivers, app version and sha256, exact command, same-GPU native reference with DIRECT overlay (no virtual display), per-second presentation modes, transitions and present latency, app verdict, screenshots/log paths, duration, host Xid delta, guest resets and known_live_dumps_193. No real-monitor native record is committed; a virtual-display native probe is FAIL (no DIRECT overlay)."
+    "evidence_template": "traces/manual_overlay_<date>/<app>.md: date, kayfabe revision, GPU/die, physical monitor and connector, host/guest OS and drivers, app version and sha256, exact command, same-GPU native reference with DIRECT overlay (no virtual display), per-second presentation modes, transitions and present latency, app verdict, screenshots/log paths, duration, host Xid delta, guest resets and known_live_dumps_193. No real-monitor native record is committed; the virtual-display native probe returned SETUP/refused (code 5), no DIRECT overlay, no scenario frames."
    }
   ],
   "evidence_template": "traces/winapps_manual_<yyyymmdd>/<app>.md: kayfabe revision, die, host driver, guest driver 580.88, app + version + sha256 of what was installed, the owner's licence/account note (never the key), command run, start and end time, screenshot path, verdict word (PASS only with the app's own result and the NVIDIA adapter named), guest event counts (nvlddmkm 153, Display 4101, WER) and the same-box host reference result."

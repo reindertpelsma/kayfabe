@@ -27,9 +27,14 @@ is `windows_apps_retry_operator`.
 stage logs (`APP_POLICY`), Markdown summaries and every structured report, even when the stage did not run.
 The evidence template is in each manual item: physical monitor/connector, exact revision/die/drivers, same-GPU native
 DIRECT-overlay result, command/version/hash, modes/transitions/latency, screenshots, duration and reset/Xid counts.
-**MEASURED, native Vast RTX 4090, 2026-10-10:** the probe fails on the simulated display, no DIRECT support
-(`traces/windows_overlay_native_20261010/README.md`, raw `t3.txt`/`t4.txt`). There is no committed real-monitor native record.
-This resolves section 9's earlier applicability question; it does not turn the native failure into a pass.
+**CODE READ of the native Vast RTX 4090 record, 2026-10-10:** the recorded probe outcome is SETUP/refused (code 5),
+with no DIRECT overlay and no scenario frames on the simulated display
+([record](../../traces/windows_overlay_native_20261010/README.md)). No real-monitor native result is committed;
+manual real-display qualification remains pending.
+
+**CODE READ:** the public grader also refuses manual or known-unsupported gate expectations: each such id is
+reported as a harness fault (NOTRUN), retains batched/isolated observations and gets zero pass credit.
+A policy-only expectation is RETRY; a supported guest failure still takes precedence as FAIL.
 
 **Owner policy:** `managed_t` and Linux `UnifiedMemoryStreams`, `UnifiedMemoryPerf`, `conjugateGradientUM`, `attach_verify`
 are `known_unsupported` with the UVM reason. Reports say `unsupported (UVM)`; the owner holds UVM unmerged because the

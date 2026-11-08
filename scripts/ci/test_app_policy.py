@@ -198,6 +198,7 @@ class LinuxGatePolicy(unittest.TestCase):
                                   capture_output=True, text=True, timeout=20)
         self.assertEqual(done.returncode, 3, done.stdout + done.stderr)
         self.assertIn('APPS_STAGE_RETRY class=BAD_LIST', done.stdout)
+        self.assertIn('APP_POLICY name=' + name + ' os=linux result=NOT_RUN note=unsupported (UVM)', done.stdout)
         self.assertNotIn('APPS_STAGE_START', done.stdout)
 
     def test_gate_refuses_a_streams_override_before_setup(self):
@@ -229,6 +230,200 @@ class GradePolicy(unittest.TestCase):
         text = self.output()
         self.assertIn('APP_POLICY name=managed_t os=windows result=NOT_RUN note=unsupported (UVM)', text)
         self.assertNotIn('WINAPPS_APP app=managed_t', text)
+
+
+class DirectGradePolicy(unittest.TestCase):
+    """The public function and real CLI must enforce policy without a profile resolver."""
+
+    def run_grade(self, expected, batched, alone=(), cli=False):
+        import subprocess
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            for file, entries in (('win.res', batched), ('win_isolated.res', alone)):
+                (Path(tmp) / file).write_text(''.join(
+                    f'APPRES app={name} verdict={verdict} secs=1 note=synthetic\n'
+                    for name, verdict in entries))
+            path = ROOT / 'scripts/bench/windows/appmatrix/grade.py'
+            if cli:
+                return subprocess.run([sys.executable, str(path), tmp, '--expected', ','.join(expected)],
+                                      capture_output=True, text=True, timeout=10)
+            spec = importlib.util.spec_from_file_location('direct_win_grade', path)
+            grader = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(grader)
+            return grader.grade(tmp, expected)
+
+    def check_function(self, name):
+        rc, kind, counts, per, extra = self.run_grade([name], [(name, 'PASS')], [(name, 'PASS*')])
+        self.assertEqual((rc, kind, counts['pass'], counts['harness']), (3, 'RETRY', 0, 1))
+        self.assertEqual((per[name]['cls'], per[name]['verdict']), ('harness', 'NOTRUN'))
+        self.assertEqual((per[name]['batched'], per[name]['alone']), ('PASS', 'PASS*'))
+        self.assertIn('non-gating', per[name]['note'])
+        self.assertEqual(extra, [])
+
+    def check_cli(self, name):
+        done = self.run_grade([name], [(name, 'PASS')], [(name, 'PASS*')], cli=True)
+        self.assertEqual(done.returncode, 3, done.stdout + done.stderr)
+        self.assertIn('WINAPPS_GRADE kind=RETRY expected=1 pass=0', done.stdout)
+        self.assertIn(f'WINAPPS_APP app={name} class=harness verdict=NOTRUN batched=PASS alone=PASS*', done.stdout)
+        self.assertIn('WINAPPS_GRADE_HARNESS ' + name, done.stdout)
+        self.assertNotIn(f'WINAPPS_APP app={name} class=pass', done.stdout)
+
+    def test_function_manual_probe_cannot_pass(self):
+        self.check_function('overlay_yuv_probe')
+
+    def test_function_manual_soak_cannot_pass(self):
+        self.check_function('overlay_yuv_soak')
+
+    def test_function_unsupported_uvm_cannot_pass(self):
+        self.check_function('managed_t')
+
+    def test_cli_manual_probe_cannot_pass(self):
+        self.check_cli('overlay_yuv_probe')
+
+    def test_cli_manual_soak_cannot_pass(self):
+        self.check_cli('overlay_yuv_soak')
+
+    def test_cli_unsupported_uvm_cannot_pass(self):
+        self.check_cli('managed_t')
+
+    def test_other_manual_heaven_cannot_pass(self):
+        self.check_function('heaven_d3d11')
+
+    def test_other_manual_valley_cannot_pass(self):
+        self.check_function('valley_opengl')
+
+    def test_mixed_cli_manual_keeps_only_supported_pass_credit(self):
+        done = self.run_grade(['nvidia_smi', 'overlay_yuv_probe'],
+                              [('nvidia_smi', 'PASS'), ('overlay_yuv_probe', 'PASS')], cli=True)
+        self.assertEqual(done.returncode, 3, done.stdout + done.stderr)
+        self.assertIn('WINAPPS_GRADE kind=RETRY expected=2 pass=1 guest_fail=0 boot_fail=0 harness=1', done.stdout)
+
+    def test_mixed_cli_uvm_keeps_only_supported_pass_credit(self):
+        done = self.run_grade(['nvidia_smi', 'managed_t'],
+                              [('nvidia_smi', 'PASS'), ('managed_t', 'PASS')], cli=True)
+        self.assertEqual(done.returncode, 3, done.stdout + done.stderr)
+        self.assertIn('WINAPPS_GRADE kind=RETRY expected=2 pass=1 guest_fail=0 boot_fail=0 harness=1', done.stdout)
+
+    def check_supported_failure(self, name):
+        done = self.run_grade(['nvidia_smi', name], [('nvidia_smi', 'FAIL'), (name, 'PASS')], cli=True)
+        self.assertEqual(done.returncode, 1, done.stdout + done.stderr)
+        self.assertIn('WINAPPS_GRADE kind=FAIL expected=2 pass=0 guest_fail=1 boot_fail=0 harness=1', done.stdout)
+
+    def test_supported_failure_with_manual_stays_fail(self):
+        self.check_supported_failure('overlay_yuv_probe')
+
+    def test_supported_failure_with_uvm_stays_fail(self):
+        self.check_supported_failure('managed_t')
+
+    def test_policy_failures_are_not_guest_failures(self):
+        for name in ('overlay_yuv_soak', 'managed_t'):
+            with self.subTest(name=name):
+                rc, kind, counts, *_ = self.run_grade([name], [(name, 'FAIL')])
+                self.assertEqual((rc, kind, counts['pass'], counts['guest_fail']), (3, 'RETRY', 0, 0))
+
+    def test_supported_cli_pass_control(self):
+        done = self.run_grade(['nvidia_smi'], [('nvidia_smi', 'PASS')], cli=True)
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertIn('WINAPPS_GRADE kind=PASS expected=1 pass=1', done.stdout)
+
+    def test_policy_observations_outside_expected_stay_extra(self):
+        rc, kind, counts, _, extra = self.run_grade(['nvidia_smi'],
+            [('nvidia_smi', 'PASS'), ('overlay_yuv_probe', 'PASS'), ('managed_t', 'FAIL')])
+        self.assertEqual((rc, kind, counts['pass']), (0, 'PASS', 1))
+        self.assertEqual(extra, ['managed_t', 'overlay_yuv_probe'])
+
+
+class NativeOverlayEvidence(unittest.TestCase):
+    """Cited setup refusal must not become a completed overlay correctness result."""
+
+    def generator(self):
+        spec = importlib.util.spec_from_file_location('native_overlay_gen', ROOT / 'scripts/bench/windows/appmatrix/gen_apps.py')
+        generator = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(generator)
+        return generator.build()
+
+    def assert_setup(self, text):
+        self.assertIn('SETUP/refused (code 5)', text)
+        self.assertIn('no scenario frames', text)
+        self.assertNotIn('probe is FAIL', text)
+        self.assertNotIn('probe FAIL', text)
+
+    def ledger_row(self):
+        import csv
+        with (ROOT / 'docs/RELEASE_CLAIMS.tsv').open() as handle:
+            rows = list(csv.DictReader(handle, delimiter='\t'))
+        return next(row for row in rows if row['claim_id'].startswith('native-overlay-probe-'))
+
+    def test_catalog_preserves_native_setup_class(self):
+        catalog = {a['id']: a for a in G.load('apps.json')['apps']}
+        for name in OVERLAYS:
+            with self.subTest(name=name):
+                self.assert_setup(catalog[name]['note'])
+
+    def test_generator_preserves_native_setup_class(self):
+        for app in self.generator()['apps']:
+            if app['id'] in OVERLAYS:
+                with self.subTest(name=app['id']):
+                    self.assert_setup(app['note'])
+
+    def test_generator_and_committed_catalog_agree(self):
+        self.assertEqual(self.generator(), G.load('apps.json'))
+
+    def test_manual_templates_preserve_native_setup_class(self):
+        for item in G.load('gate_profiles.json')['manual']['items']:
+            if item['id'] in OVERLAYS:
+                with self.subTest(name=item['id']):
+                    self.assert_setup(item['evidence_template'])
+
+    def test_manual_profiles_and_catalog_agree_on_refusal(self):
+        catalog = {a['id']: a for a in G.load('apps.json')['apps']}
+        for item in G.load('gate_profiles.json')['manual']['items']:
+            if item['id'] in OVERLAYS:
+                self.assert_setup(item['evidence_template'])
+                self.assert_setup(catalog[item['id']]['note'])
+
+    def test_ledger_class_matches_raw_native_evidence(self):
+        raw = (ROOT / 'traces/windows_overlay_native_20261010/raw/t3.txt').read_text()
+        self.assertIn('KFOVL RESULT SETUP', raw)
+        self.assertIn('(code=5)', raw)
+        self.assertIn('flags=0x0 direct=0', raw)
+        record = (ROOT / 'traces/windows_overlay_native_20261010/README.md').read_text()
+        self.assertIn('scenario never started (no frames)', record)
+        row = self.ledger_row()
+        self.assert_setup(row['claim'])
+        self.assertIn('not a completed correctness failure', row['note'])
+        self.assertIn('raw/t3.txt', row['evidence'])
+
+    def test_readme_and_ledger_agree_on_native_setup(self):
+        readme = (ROOT / 'README.md').read_text()
+        self.assert_setup(readme)
+        self.assert_setup(self.ledger_row()['claim'])
+        self.assertNotIn('probe failed on a Vast', readme)
+
+    def test_readme_keeps_native_attempt_distinct_from_manual_qualification(self):
+        record = (ROOT / 'traces/windows_overlay_native_20261010/README.md').read_text()
+        self.assertIn('scenario never started (no frames)', record)
+        readme = (ROOT / 'README.md').read_text()
+        line = next(line for line in readme.splitlines() if line.startswith('**Manual: needs real display.**'))
+        self.assert_setup(line)
+        self.assertIn('no real-monitor native record is committed', line)
+        self.assertIn('#mc-14-windows-yuv-overlays-on-a-real-display', line)
+
+    def test_generated_matrix_preserves_catalog_native_class(self):
+        doc = (ROOT / 'docs/design/V3_WINDOWS_APP_MATRIX.md').read_text()
+        catalog = {a['id']: a for a in G.load('apps.json')['apps']}
+        for name in OVERLAYS:
+            line = next(line for line in doc.splitlines() if line.startswith('| `' + name + '` |'))
+            with self.subTest(name=name):
+                self.assert_setup(line)
+                self.assertIn(catalog[name]['note'], line)
+
+    def test_generated_probe_doc_matches_native_record(self):
+        raw = (ROOT / 'traces/windows_overlay_native_20261010/raw/t3.txt').read_text()
+        self.assertIn('KFOVL RESULT SETUP', raw)
+        doc = (ROOT / 'docs/design/V3_WINDOWS_APP_MATRIX.md').read_text()
+        line = next(line for line in doc.splitlines() if line.startswith('| `overlay_yuv_probe` |'))
+        self.assert_setup(line)
 
 if __name__ == '__main__':
     unittest.main()
