@@ -26,3 +26,51 @@ rentals only when MAX_CONCURRENT_CHECK is also2 or unset. A third gets BUSY, and
 waits for first admission only while its remaining job budget can hold a complete rental
 plus admission margin. A proved replacement uses the original remaining deadline instead.
 It can fail visibly before either long rental completes. No durable waiting queue is implied.
+
+CODE READ (2026-11-07): a release plan now selects eight explicit dies on eight
+parallel boxes, with two Windows runs on each box. It shows independent host,
+Linux guest and Windows guest driver selections and their proposed subruns.
+The account needs at least nine concurrent slots, including the reserved slot.
+These driver choices are proposed; the current payload refuses them before
+provisioning. A budget-admitted plan is not a completed release verification.
+
+CODE READ (2026-11-07): resource reservations now follow the run profile. Large
+reserves 300 GB of disk, 130 GB inbound and 2 GB outbound, with a $0.02/GB sanity cap in
+each direction. Small reserves 73 GB inbound, middle 87 GB and adhoc 38 GB; each
+keeps a 120 GB disk, 2 GB outbound and a $0.005/GB cap. Effective hourly prices
+include those transfer allowances amortised over the lease. Cheaper compute can
+therefore lose to a host with cheaper inbound. A higher per-GB price is rejected
+even when the effective hourly price would otherwise fit.
+
+
+## Release driver media
+
+Update driver selections and their `driver_installers` catalog in
+`ci/vast-broker/release-matrix.json` together. Record the official HTTPS installer
+URL, exact SHA-256, byte count, check date and source; use NVIDIA's official
+checksum file or hash the official byte stream. Do not upload NVIDIA installers
+to repository or object storage. If a pin is unavailable, retain `UNPINNED` with
+null hash and size; an executable matrix cannot contain it.
+
+Validate with `node ci/vast-broker/validate-release-matrix.mjs`. A runtime 404 or
+changed installer is reported as `MEDIA_DRIFT`, never PASS. Refresh the official
+pin only after investigating the drift; no automatic alternate URL or version is
+selected. The proposed matrix and payload executor remain disabled.
+
+
+## Reproduce the renting simulations
+
+Run the fixed 200-seed market sweep and named outage cases without provider access:
+
+```sh
+nice -n 19 node --test ci/vast-broker/test/simulation-*.test.js
+```
+
+To expand the same reproducible generator locally:
+
+```sh
+KF_SIM_SEEDS=1000 KF_SIM_START=1337 nice -n 19 node --test ci/vast-broker/test/simulation-*.test.js
+```
+
+The large market loop checks all four profile plans and makes at most one mocked rental
+per seed; named fleet scenarios exercise the complete Worker orchestration.

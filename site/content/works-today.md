@@ -81,7 +81,7 @@ No game with kernel anti-cheat is recorded. Products such as Vanguard and FACEIT
 This is the one list of things the project has not measured. Other pages link here instead of repeating it.
 
 - Windows speed on current master. A new benchmark is pending, so no figure is published.
-- Several VMs on one card: general fairness and hostile long-kernel/fault containment; the limited two-run trio result above is not a general guarantee.
+- Several VMs on one card: general fairness and containment during hostile long kernels or faults remain unverified beyond the limited two-run trio result above.
 - The display path: frame rate and latency compared with other approaches, and PCIe traffic itself.
 - Running as an ordinary user on current master, including the CUDA application matrix and a desktop on the NVIDIA card.
 - Running inside a container.

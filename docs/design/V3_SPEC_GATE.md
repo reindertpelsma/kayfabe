@@ -51,9 +51,9 @@ PR, and `test_vast_spec_lane.py` replays the real kayfabe catia-07 failure and r
 | The payload side: `KF_SPEC`, rows, time check, disk size | `scripts/ci/vast_payload.py`, `vast_report.py` | tests and mutants |
 | The report rows | `scripts/ci/vast_run_report.py` | tests and mutants |
 | The sha256 pin (PROPOSED, owner confirms) | `scripts/bench/box/specviewperf.pin` | |
-| The Worker's option (`spec` of `tierEnvironment`, never passed) | `ci/vast-broker/src/tier.js` | node tests |
+| The Worker's option (`spec` of `tierEnvironment`, disabled by the stage flag) | `ci/vast-broker/src/tier.js` | node tests |
 
-Nothing was deployed and nothing in the Worker changes behaviour: no caller passes `spec`, `releaseStages` stays empty.
+CODE READ (J2 follow-up, 2026-11-07): nothing was deployed; `releaseStages` stays empty. The Worker now passes a lane only when that flag is enabled, with both-lane verdict and separate-lease planning described in section 9.
 
 ## 3. Inputs
 
@@ -206,19 +206,17 @@ except the three that pinned the old plumbing). With it, the payload sets `WINVM
 sparse 220 GB disk; win_vm.sh's default 80 GB cannot hold a lane's tree next to Windows; an explicit value wins) and appends the stage
 after `windows_gate` and `windows_gate_2`.
 
-**Tier mapping (DESIGN, OPEN for the owner): small and middle never run it; large runs both lanes, on the two boxes of a die.** The
-release planner (`ci/vast-broker/src/release.js`) already makes two legs on two machines when a die is offered twice. Proposed: the
-first leg of a die sends `KF_SPEC=lanea`, the second `KF_SPEC=laneb`; no ad hoc `both`. A die offered on one machine has only the
-single leg that runs the Windows gate twice; it cannot carry both lanes inside 300 minutes, so it needs a second rental of the same
-machine for lane B (OPEN: owner decides whether that extra rental is paid, or the die is certified on one lane). Not implemented:
-`tier.js` only gains an option that no caller passes (`tierEnvironment(..., {spec})`, tested), the planner is untouched, nothing is
-deployed.
+**CODE READ (J2 follow-up, 2026-11-07), disabled by the same stage flag:** small and middle never run SPEC. Enabling SPEC plans
+lane A and lane B as two FULL leases per die, one ordinary Windows gate on each. The cost estimate includes both leases.
+Lane B waits for lane A's lease to settle; a die with only one offered machine gets a fresh second lease of that machine,
+with its own start window. Eight lane-A boxes can run in parallel, followed by lane B within the existing concurrency cap.
+No ad hoc `both` run is planned. The proposed matrix and absent payload executor independently prevent rental today.
 
-**OPEN, a hole to close before enabling:** `releaseVerdict` passes an enabled extra stage "on at least one PASS" per cell. With two
-lanes a PASS of lane A alone would certify the stage. The payload therefore also writes `specviewperf_lanea` / `specviewperf_laneb` pass
-rows next to `specviewperf`; the Worker must require both lanes on a die before it counts the stage as passed (a Worker change, not in
-this PR). Likewise the Worker's rental must ask for the disk (300 GB requested, 220 GB floor, **MEASURED** by the native run of 2026-11-07, boxes A and B in `traces/specviewperf_native_20261107/README.md`; the
-Worker rents 120 GB today, `ci/vast-broker/src/vast.js` `disk: 120`, `defaults.json` `diskGb`).
+CODE READ: `stageSlots.specviewperf.requiredRowsPerDie` requires both `specviewperf_lanea` and `specviewperf_laneb` for each die;
+the active required-row map is empty while the stage flag is disabled. An aggregate or lane-A-only PASS cannot certify both.
+The large profile requests 300 GB disk, with a 220 GB floor. MEASURED source for the native storage observations remains
+`traces/specviewperf_native_20261107/README.md` (2026-11-07, boxes A and B). These changes have GPU-free tests and mutants;
+no real two-lease run or completion-time claim was verified here. See [the release matrix](V3_RELEASE_MATRIX.md).
 
 ## 10. Tests and mutants
 
@@ -257,8 +255,8 @@ A first real run needs, in this order:
    `tar` through the ssh default shell (`cmd /c "tar -xf - -C C:/"` was used by hand on 2026-11-05), the Defender exclusion, the task
    registration, the status poll cost during a loaded GPU, the real settle behaviour. Mark everything the first run measures here.
 
-Open questions (OPEN): (a) which tier setting turns the stage on and who sends `KF_SPEC` per leg (section 9); (b) a die with one
-machine; (c) the Worker's lane-aware release verdict; (d) the disk request; (e) whether `specviewperf` may appear by name in the run
+CODE READ: J2 implements the disabled tier flag/lane mapping, second lease, both-row verdict and large disk request (section 9).
+Open questions (OPEN): (e) whether `specviewperf` may appear by name in the run
 report (the Worker filter); (f) the budgets and `setup_s` are INFERRED, the first run replaces them; (g) enscape-01 under
 kayfabe was refused by SPEC validation (`raytracing`, `sufficientVideoMemory`, with `fb-mb` 8192 on a 24 GB card): the stage will fail
 it, correctly, until kayfabe passes it natively-like; the native run passed it on the same die.
