@@ -131,10 +131,8 @@ python3 -I scripts/bench/windows/appmatrix/package_bundle.py build --dl download
 python3 -I scripts/bench/windows/appmatrix/package_bundle.py verify-image --out out
 ```
 
-The default is the public bundle. For private media, a person repeats these commands with `--class private`
-and a separate output directory. The private ISO is winapps-private.iso, label KFAPPSP; it is never built or
-uploaded by CI. Keep the corresponding manifest and class-specific pin line with each ISO. The GUI's class
-selector offers the same two choices; private mode refuses CI/run-token/upload-credential environments.
+The default is the public bundle. For private media, repeat these commands with `--class private`
+and a separate output directory. The private ISO is winapps-private.iso, label KFAPPSP. Either class may also build in authorized CI with explicit --ci-build and no upload credentials. Private ISO/manifest uploads go only to the private bucket, never an Actions artifact/cache. Keep the private manifest off GitHub; its repo pin line contains only the ISO SHA-256. The GUI offers the same two class choices; local builds refuse run-token/upload-credential environments. The downloader (person or CI operator) must accept the CUDA EULA for private use before downloading private CUDA inputs.
 
 The result is `out/winapps-open.iso`, label `KFAPPS`, with an external file/hash manifest and proposed pin
 line. App installers and archives stay intact on the disk and are extracted inside Windows. The compiler

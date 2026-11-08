@@ -20,7 +20,7 @@ CASES = [
     ("verified-source-cache", "bundle_compliance.py", 'B.verify_file(owner, pin, path)', 'None'),
     ("source-offer-term", "bundle_compliance.py", 'at least three years after our last distribution', 'one year after our last distribution'),
     ("per-file-license", "package_bundle.py", 'license_records.get(name, own_licenses)', 'own_licenses'),
-    ("source-before-object-code", "publish_bundle.py", '    publish_sources(store, iso, receipt, state_path, part_size)\n', '    pass\n'),
+    ("source-before-object-code", "publish_bundle.py", '    publish_sources(store, iso, receipt, state_path, part_size, bundle_class)\n', '    pass\n'),
     ("published-source-coverage", "publish_bundle.py", 'if receipt.get("sources") != expected:', 'if False:'),
     ("source-key-prefix", "bundle_compliance.py", 'return ("winapps-open/" if bundle_class == "public" else "winapps-private/")', 'return ("other/" if bundle_class == "public" else "winapps-private/")'),
     ("main-license-with-dependencies", "bundle_compliance.py", 'if kind == "upstream" or rule.get("fallback"):', 'if kind == "upstream" or (not count and rule.get("fallback")):'),

@@ -3,7 +3,8 @@
 """Immutable bundle publishing: stdlib S3 SigV4/multipart or caller-presigned URLs.
 
 No credential files, external clients, redirects, arbitrary keys or log URLs.
-Credentials/capability URLs exist only in the final step's environment/memory.
+Credentials/capability URLs stay in their matching protected read/upload process.
+Build processes receive no credentials; private manifest reads never print bodies.
 Resume files contain upload IDs and verified part receipts, never credentials/URLs.
 No network call occurs at import time. Tests use an in-memory store exclusively.
 """
@@ -52,9 +53,11 @@ class StoreError(PublishError):
         super().__init__(f"object service returned HTTP {status}")
 
 
-def keys(digest):
+def keys(digest, bundle_class="public"):
     if not re.fullmatch(r"[0-9a-f]{64}", digest): raise ValueError("invalid image digest")
-    return f"winapps-open/kfapps-{digest}.iso", f"winapps-open/manifest-{digest}.json"
+    if bundle_class not in ("public", "private"): raise ValueError("invalid bundle class")
+    prefix = "winapps-open" if bundle_class == "public" else "winapps-private"
+    return f"{prefix}/kfapps-{digest}.iso", f"{prefix}/manifest-{digest}.json"
 
 
 def guard_publish(env):
@@ -287,14 +290,14 @@ def multipart(store, path, key, digest, inputs, state_path, part_size=DEFAULT_PA
     state_path.unlink(missing_ok=True)
 
 
-def publish(store, iso, receipt, state_path, part_size=DEFAULT_PART):
-    require_public(receipt)
+def publish(store, iso, receipt, state_path, part_size=DEFAULT_PART, bundle_class="public"):
+    require_class(receipt, bundle_class)
     digest, inputs = receipt["image"]["sha256"], receipt["inputs"]
     if not re.fullmatch(r"[0-9a-f]{64}", inputs): raise ValueError("invalid input digest")
-    iso_key, manifest_key = keys(digest)
+    iso_key, manifest_key = keys(digest, bundle_class)
     if Path(iso).stat().st_size != receipt["image"]["size"] or B.sha256(iso) != digest:
         raise PublishError("local ISO does not match receipt")
-    publish_sources(store, iso, receipt, state_path, part_size)
+    publish_sources(store, iso, receipt, state_path, part_size, bundle_class)
     multipart(store, iso, iso_key, digest, inputs, state_path, part_size)
     head = existing(store, manifest_key)
     if head is None:
@@ -313,7 +316,7 @@ def publish(store, iso, receipt, state_path, part_size=DEFAULT_PART):
     return iso_key, manifest_key
 
 
-def publish_sources(store, iso, receipt, state_path, part_size):
+def publish_sources(store, iso, receipt, state_path, part_size, bundle_class="public"):
     """Mirror exact sources BEFORE making object code available. Never overwrite.
 
     Sources are streamed from the verified ISO into one ephemeral local file at
@@ -322,8 +325,8 @@ def publish_sources(store, iso, receipt, state_path, part_size):
     Only resume IDs/hashes are persisted. The existing multipart code handles
     arbitrarily large source archives with the same bounded memory as the ISO.
     """
-    require_public(receipt)
-    expected = [dict(package=p["id"], path=f"SOURCE/{p['id']}/{s['name']}", key=C.source_key(s), **s)
+    require_class(receipt, bundle_class)
+    expected = [dict(package=p["id"], path=f"SOURCE/{p['id']}/{s['name']}", key=C.source_key(s, bundle_class), **s)
                 for p in sorted(receipt["packages"], key=lambda p: p["id"]) for s in p["compliance"]["sources"]]
     if receipt.get("sources") != expected: raise PublishError("source mirror coverage mismatch")
     done = set()
@@ -346,31 +349,46 @@ def require_public(receipt):
         raise PublishError("private media is forbidden in the public publisher")
 
 
+def require_class(receipt, bundle_class):
+    if bundle_class == "public": require_public(receipt)
+    elif bundle_class != "private" or receipt.get("bundle_class") != "private" or any(p["id"] not in B.OPEN_PACKAGES - B.PUBLIC_PACKAGES or p["compliance"]["distribution"] != "private-only" for p in receipt["packages"]):
+        raise PublishError("bundle does not match destination class")
+
+
+def require_separate_buckets(env):
+    if "BUNDLE_OTHER_BUCKET" in env and (not env["BUNDLE_OTHER_BUCKET"] or env.get("R2_BUCKET") == env["BUNDLE_OTHER_BUCKET"]):
+        raise PublishError("public and private buckets must be separately configured")
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--state", type=Path)
+    ap.add_argument("--class", dest="bundle_class", choices=("public", "private"), default="public")
     a = ap.parse_args(argv)
     try:
         guard_publish(os.environ)
-        public_base(os.environ)
-        receipt = B.load(a.out / "winapps-open.manifest.json")
-        expected = B.input_hash(B.load(HERE / "manifest.json"), B.load(HERE / "gate_profiles.json"))
+        require_separate_buckets(os.environ)
+        if a.bundle_class == "public": public_base(os.environ)
+        basename = "winapps-open" if a.bundle_class == "public" else "winapps-private"
+        receipt = B.load(a.out / (basename + ".manifest.json"))
+        require_class(receipt, a.bundle_class)
+        expected = B.input_hash(B.load(HERE / "manifest.json"), B.load(HERE / "gate_profiles.json"), bundle_class=a.bundle_class)
         if receipt.get("inputs") != expected: raise PublishError("receipt does not match the reviewed checkout inputs")
-        B.select_packages(receipt, B.load(HERE / "gate_profiles.json"))
-        B.verify_image(a.out / "winapps-open.iso", receipt)
+        B.select_packages(receipt, B.load(HERE / "gate_profiles.json"), bundle_class=a.bundle_class)
+        B.verify_image(a.out / (basename + ".iso"), receipt)
         if os.environ.get("BUNDLE_UPLOAD_URLS"):
             plans = json.loads(os.environ["BUNDLE_UPLOAD_URLS"])
-            allowed_keys = set(keys(receipt["image"]["sha256"])) | {s["key"] for s in receipt["sources"]}
+            allowed_keys = set(keys(receipt["image"]["sha256"], a.bundle_class)) | {s["key"] for s in receipt["sources"]}
             if set(plans) != allowed_keys: raise PublishError("presigned plan key mismatch")
             store = PresignedStore(plans)
-            part_size = plans[keys(receipt["image"]["sha256"])[0]]["part_size"]
+            part_size = plans[keys(receipt["image"]["sha256"], a.bundle_class)[0]]["part_size"]
         else:
             store = S3Store(os.environ["R2_ENDPOINT"], os.environ["R2_BUCKET"], os.environ["AWS_ACCESS_KEY_ID"], os.environ["AWS_SECRET_ACCESS_KEY"], os.environ.get("AWS_SESSION_TOKEN"))
             part_size = DEFAULT_PART
-        publish(store, a.out / "winapps-open.iso", receipt, a.state or a.out / "multipart-state.json", part_size)
-        (a.out / "published.pin.line").write_bytes(B.pin_text(receipt["image"]["sha256"], expected).encode("ascii"))
-        print("PUBLISH_OK inputs=" + expected + " sha256=" + receipt["image"]["sha256"])
+        publish(store, a.out / (basename + ".iso"), receipt, a.state or a.out / "multipart-state.json", part_size, bundle_class=a.bundle_class)
+        (a.out / "published.pin.line").write_bytes(B.pin_text(receipt["image"]["sha256"], expected, a.bundle_class).encode("ascii"))
+        print("PUBLISH_OK sha256=" + receipt["image"]["sha256"])
         return 0
     except (OSError, ValueError, KeyError, TypeError):
         # Never format an exception from a network/credential/capability layer.

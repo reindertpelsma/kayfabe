@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
-"""Credential-free planning, disk admission and two-build CI verification."""
+"""Per-class planning, disk admission and credential-free two-build verification."""
 import argparse
 import json
 import os
@@ -15,10 +15,11 @@ import package_bundle as B
 import bundle_compliance as C
 
 
-def read_pin(text):
+def read_pin(text, bundle_class="public"):
+    filename = "winapps-open" if bundle_class == "public" else "winapps-private"
     result = {}
     for line in text.splitlines():
-        match = re.fullmatch(r"winapps-open\.iso sha256=([0-9a-f]{64})", line)
+        match = re.fullmatch(filename + r"\.iso sha256=([0-9a-f]{64})", line)
         if match:
             if "sha256" in result: raise ValueError("duplicate image pin")
             result["sha256"] = match[1]
@@ -31,17 +32,22 @@ def read_pin(text):
     return result
 
 
-def plan(inputs, pin, verify=False):
+def plan(inputs, pin, verify=False, bundle_class="public", receipt=None):
     if not re.fullmatch(r"[0-9a-f]{64}", inputs): raise ValueError("invalid input digest")
-    published = read_pin(pin)
+    published = read_pin(pin, bundle_class)
+    if receipt is not None:
+        if receipt.get("bundle_class") != bundle_class or receipt.get("image", {}).get("sha256") != published.get("sha256"):
+            raise ValueError("published manifest differs from selected class/pin")
+        if not re.fullmatch(r"[0-9a-f]{64}", receipt.get("inputs", "")): raise ValueError("invalid published input hash")
+        published["inputs"] = receipt["inputs"]
     if verify and "sha256" not in published: raise ValueError("verify requires an existing image pin")
     return dict(inputs=inputs, needs_build=verify or published.get("inputs") != inputs,
                 expected_sha256=published.get("sha256", ""), pinned_inputs=published.get("inputs", ""))
 
 
-def disk_budget(man, profile):
+def disk_budget(man, profile, bundle_class="public"):
     # Cache + two images + compiler/unpacked runtime/caches/metadata and margin.
-    packages = B.select_packages(man, profile)
+    packages = B.select_packages(man, profile, bundle_class=bundle_class)
     payload = sum(f["size"] for p in packages for f in p["files"])
     compliance = sum(pin["size"] for _, pin, _ in C.inputs(packages))
     # Compliance input cache + two ISO copies + one ephemeral source upload file;
@@ -57,18 +63,19 @@ def check_disk(root, required):
         raise ValueError("insufficient disk after cleanup; use a larger runner")
 
 
-def build_twice(root, expected_inputs, pin, verify=False):
+def build_twice(root, expected_inputs, pin, verify=False, bundle_class="public"):
+    basename = "winapps-open" if bundle_class == "public" else "winapps-private"
     B.guard(allow_ci=True)
     man, profile = B.load(HERE / "manifest.json"), B.load(HERE / "gate_profiles.json")
-    if B.input_hash(man, profile) != expected_inputs:
+    if B.input_hash(man, profile, bundle_class=bundle_class) != expected_inputs:
         raise ValueError("checkout inputs changed after planning")
-    published = read_pin(pin)
+    published = read_pin(pin, bundle_class)
     if verify and "sha256" not in published: raise ValueError("verify requires an existing image pin")
     root = Path(root)
     if root.exists(): raise ValueError("CI workspace must be fresh")
     root.mkdir(parents=True)
-    check_disk(root, disk_budget(man, profile))
-    args = ["--ci-build", "--class", "public", "--dl", str(root / "downloads")]
+    check_disk(root, disk_budget(man, profile, bundle_class))
+    args = ["--ci-build", "--class", bundle_class, "--dl", str(root / "downloads")]
     if B.main(["fetch", *args]): raise ValueError("pinned fetch failed")
     receipts = []
     old_mask = os.umask(0o022)
@@ -78,7 +85,7 @@ def build_twice(root, expected_inputs, pin, verify=False):
             os.umask(mask); os.environ.update(TZ=tz, LC_ALL=loc)
             output = root / label
             if B.main(["build", *args, "--out", str(output)]): raise ValueError("bundle build failed")
-            receipt = B.load(output / "winapps-open.manifest.json")
+            receipt = B.load(output / (basename + ".manifest.json"))
             if receipt.get("inputs") != expected_inputs: raise ValueError("build input hash differs from plan")
             receipts.append(receipt)
     finally:
@@ -88,7 +95,7 @@ def build_twice(root, expected_inputs, pin, verify=False):
             else: os.environ[k] = v
     if receipts[0]["image"]["sha256"] != receipts[1]["image"]["sha256"]:
         raise ValueError("two-build ISO hashes differ")
-    B.verify_image(root / "second/winapps-open.iso", receipts[0])
+    B.verify_image(root / "second" / (basename + ".iso"), receipts[0])
     actual = receipts[0]["image"]["sha256"]
     matches = actual == published.get("sha256")
     print(f"BUNDLE_REPRODUCIBLE sha256={actual} inputs={expected_inputs} pin_match={str(matches).lower()}")
@@ -98,26 +105,55 @@ def build_twice(root, expected_inputs, pin, verify=False):
     return actual
 
 
+def published_manifest(store, digest, bundle_class):
+    if not digest: return None
+    import publish_bundle as P
+    try:
+        _, body = store.request("GET", P.keys(digest, bundle_class)[1])
+    except P.StoreError as error:
+        if error.status == 404: return None
+        raise
+    return json.loads(body)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("command", choices=("plan", "build", "clean"))
+    ap.add_argument("command", choices=("plan", "remote-plan", "build", "clean"))
     ap.add_argument("--root", type=Path)
     ap.add_argument("--inputs")
-    ap.add_argument("--pin", type=Path, default=HERE / "bundle.pin")
+    ap.add_argument("--pin", type=Path, default=None)
     ap.add_argument("--verify", action="store_true")
+    ap.add_argument("--class", dest="bundle_class", choices=("public", "private"), default="public")
+    ap.add_argument("--receipt", type=Path)
     a = ap.parse_args(argv)
     try:
-        B.guard(allow_ci=True)
-        if a.command == "plan":
-            inputs = B.input_hash(B.load(HERE / "manifest.json"), B.load(HERE / "gate_profiles.json"))
-            data = plan(inputs, a.pin.read_text(encoding="utf-8"), a.verify)
+        if a.pin is None: a.pin = HERE / ("bundle.pin" if a.bundle_class == "public" else "bundle.private.pin")
+        if a.command != "remote-plan": B.guard(allow_ci=True)
+        if a.command in ("plan", "remote-plan"):
+            inputs = B.input_hash(B.load(HERE / "manifest.json"), B.load(HERE / "gate_profiles.json"), bundle_class=a.bundle_class)
+            receipt = B.load(a.receipt) if a.receipt else None
+            pin_text = a.pin.read_text(encoding="utf-8")
+            digest = read_pin(pin_text, a.bundle_class).get("sha256")
+            if a.command == "remote-plan":
+                import publish_bundle as P
+                P.guard_publish(os.environ)
+                store = P.S3Store(os.environ["R2_ENDPOINT"], os.environ["R2_BUCKET"], os.environ["AWS_ACCESS_KEY_ID"], os.environ["AWS_SECRET_ACCESS_KEY"])
+                receipt = published_manifest(store, digest, a.bundle_class)
+            elif a.bundle_class == "public" and digest and os.environ.get("BUNDLE_PUBLIC_BASE_URL"):
+                import publish_bundle as P
+                try:
+                    _, body = P.send("GET", P.public_base(os.environ) + "/" + P.keys(digest)[1], {}, b"")
+                    receipt = json.loads(body)
+                except P.StoreError as error:
+                    if error.status != 404: raise
+            data = plan(inputs, pin_text, a.verify, a.bundle_class, receipt)
             print(json.dumps(data, sort_keys=True))
             if os.environ.get("GITHUB_OUTPUT"):
                 with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
                     for k, v in data.items(): f.write(f"{k}={str(v).lower() if isinstance(v, bool) else v}\n")
         elif a.command == "build":
             if not a.root or not a.inputs: raise ValueError("build requires --root and --inputs")
-            build_twice(a.root, a.inputs, a.pin.read_text(encoding="utf-8"), a.verify)
+            build_twice(a.root, a.inputs, a.pin.read_text(encoding="utf-8"), a.verify, a.bundle_class)
         else:
             # Only the workflow-owned ephemeral directory may be removed.
             temp = Path(os.environ["RUNNER_TEMP"]).resolve()
@@ -126,7 +162,7 @@ def main(argv=None):
             if a.root.exists(): shutil.rmtree(a.root)
         return 0
     except (OSError, ValueError, KeyError) as e:
-        print("BUNDLE_CI_FAIL " + str(e), file=sys.stderr)
+        print("BUNDLE_CI_FAIL (details withheld)" if a.bundle_class == "private" else "BUNDLE_CI_FAIL " + str(e), file=sys.stderr)
         return 1
 
 

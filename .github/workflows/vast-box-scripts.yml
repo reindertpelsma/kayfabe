@@ -70,6 +70,8 @@ jobs:
         run: python3 scripts/bench/windows/appmatrix/publish_mutants.py
       - name: Public/private class mutations require two named killers each
         run: python3 scripts/bench/windows/appmatrix/class_mutants.py
+      - name: Private CI confidentiality mutations require two named killers each
+        run: python3 scripts/bench/windows/appmatrix/ci_class_mutants.py
       - name: Bundle licence/source compliance mutations require two named killers each
         run: python3 scripts/bench/windows/appmatrix/compliance_mutants.py
   gpu-free:

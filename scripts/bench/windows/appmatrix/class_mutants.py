@@ -9,7 +9,6 @@ import tempfile
 import bundle_mutants as M
 
 CASES=[
- ('private-ci-boundary','package_bundle.py','if bundle_class == "private" and ("CI" in env or env.get("GITHUB_ACTIONS") == "true"):', 'if False:'),
  ('public-package-boundary','package_bundle.py','if bundle_class == "public" and pid not in PUBLIC_PACKAGES:', 'if False:'),
  ('public-publisher-only','publish_bundle.py','if receipt.get("bundle_class") != "public" or any(p["id"] not in B.PUBLIC_PACKAGES or p["compliance"]["distribution"] != "public-ok" for p in receipt["packages"]):','if False:'),
  ('private-volume-label','package_bundle.py','label = "KFAPPS" if bundle_class == "public" else "KFAPPSP"','label = "KFAPPS"'),

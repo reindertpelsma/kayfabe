@@ -155,7 +155,7 @@ WB1 was: no object uploaded and `scripts/bench/windows/appmatrix/bundle.pin` emp
 limits: [`Windows apps gate, section 3`](design/V3_WINDOWS_APPS_GATE.md#3-inputs-one-bundle-from-our-r2-through-the-worker).
 
 **OWNER DECISION / CODE READ:** winapps-open.iso is PUBLIC (KFAPPS), containing only public-ok packages;
-winapps-private.iso is PRIVATE (KFAPPSP), built only by a person. NVIDIA CUDA cannot be redistributed by owner
+winapps-private.iso is PRIVATE (KFAPPSP), built by a person or authorized CI. NVIDIA CUDA must not be offered for public download by owner
 ruling. NVIDIA components and all conditional/unclear packages stay private. This supersedes the old
 single/full-selection --public-only wording and conditions class. See the [two-class package table](design/V3_WINDOWS_APPS_GATE.md#32-two-classes-licence-inventory-and-source-availability).
 This is engineering support, not legal advice.
@@ -164,7 +164,7 @@ This is engineering support, not legal advice.
 only. Official Zig 0.13.0 host archives are pinned (URL, SHA-256, size, retrieval date) under `bundle_toolchain`
 in `manifest.json`; no distro mingw package is used. Only the compiler's executable files are unpacked on the host;
 legal-text members of verified archives are read separately into the licence inventory.
-Every app archive/installer stays unmodified on the `KFAPPS` ISO and is staged inside Windows with its existing
+Every app archive/installer stays unmodified on the selected `KFAPPS`/`KFAPPSP` ISO and is staged inside Windows with its existing
 tools. The guest remains offline. No command uploads, logs in or contacts the Worker/Cloudflare.
 
 The complete shell-free recipe from a checkout of the reviewed revision is:
@@ -232,10 +232,9 @@ same unchanged native Windows app-matrix checks. No hardware or full bundle buil
 
 **CODE READ / private reproduction:** repeat the same check/fetch/verify/build commands with `--class private`
 and a separate output directory, from a person's machine with CI, run-token and upload credentials unset.
-Private output is winapps-private.iso, winapps-private.manifest.json and winapps-private.pin.line. Public output
+Private output is winapps-private.iso, winapps-private.manifest.json and winapps-private.pin.line; the pin line contains ONLY the ISO SHA-256. Public output
 uses winapps-open names; bundle.pin.line is a public-only compatibility alias. The public builder rejects
-private requests, and the public uploader rejects private receipts before network access. No private production
-build or input download is permitted in CI, including when --ci-build is supplied.
+private requests, and the public uploader rejects private receipts before network access. **OWNER CORRECTION, 2026-11-08:** either class may build in public CI with explicit --ci-build and without credentials. Private outputs must stay on the runner until their private-bucket upload or deletion; no Actions artifact/cache or public download is allowed.
 
 **MEASURED:** 11 public HF wheels were hash verified and content audited; their metadata/licences and native
 member inventory are recorded in manifest.json and checked again at build time. Certifi/tqdm are private
@@ -253,29 +252,28 @@ source available as long as we distribute binaries and to honor the offer's full
 inventory and transitive Corresponding Source still need operator review before publication.
 
 **DESIGN:** private R2 uses a later Worker-presigned route like SPEC, allowlisting winapps-private.iso and
-winapps-private.manifest.json. WB1 does not implement that allowlist, a private uploader or Worker changes.
-No private media goes through the public publisher, CI, an Actions artifact or the public bucket.
+winapps-private.manifest.json. WB1 does not implement that allowlist or Worker changes. The implemented S3 publisher uses --class private and the private bucket; private manifests stay there. No private media goes through an Actions artifact/cache or the public bucket.
 
 **CODE READ:** the public set is python_embed, llama_vulkan, qwen_gguf, hf_model, vkpeak, blender,
 clpeak_ocl, hashcat, sevenzip and audited permissive hf_wheels. The private set contains the CUDA demo/runtime,
 CCCL, torch/Python wheels, llama CUDA/cudart, clpeak CUDA, Vulkan Runtime, VC Redistributable and restricted HF
 wheels. Other licensed/manual apps and the standalone GPL ffmpeg package remain outside both canonical sets.
-The deprecated shell wrapper is only a pointer to Python. Public CI publishes only to the configured public
-bundles bucket/custom domain; private packaging/upload remains a person's separate workflow.
+The deprecated shell wrapper is only a pointer to Python. Public media publishes to the configured public
+bundles bucket/custom domain; private media uploads to its separately scoped private bucket.
+
+**OWNER POLICY / CUDA EULA:** the downloader is the person or CI operator running the build for private use; that operator must accept the pinned CUDA EULA. Private CI builds/private uploads do not authorize public distribution. This is engineering support, not legal advice.
 
 ### GitHub build and immutable R2 publication (owner refinement)
 
-**CODE + DESIGN, 2026-11-07:** the new `bundle-publish.yml` workflow remains dispatch-only, with publication
+**CODE + DESIGN, 2026-11-08 (CI correction):** the new `bundle-publish.yml` workflow remains dispatch-only, with publication
 disabled by default and no secrets configured. Its cheap plan compares `package_bundle.py input-hash` with the
-repo pin's recorded `inputs`. Equal means the build jobs are skipped. A first manual build uses no environment
+selected published manifests (public reads use the custom domain; private reads use a separate protected master-only private-plan step). Equal means that class is omitted from the build matrix. The private repo pin records only its ISO SHA-256, never the manifest/file list. Missing private read configuration on secret-free runs conservatively builds private. A first manual build uses no environment
 or upload secrets, builds twice, requires identical ISO SHA-256 and reports a new hash if it differs from the
 pin. Manual `mode=verify` always rebuilds, requires the pinned hash, and never uploads. PR/master input path
 filters and an optional monthly verification are documented design, not enabled triggers.
 
 The master-only combined build/publish job keeps the ISO on its runner and creates **no Actions artifact**.
-A protected master-restricted environment must be reviewed/configured before its enable flag is set. Bucket-
-scoped access key ID/secret are referenced only by the last publish step; earlier steps reject upload
-credentials. Logs contain redistributable input names and digests; no credentials, URLs or archive contents.
+A protected master-restricted environment must be reviewed/configured before its enable flag is set. Two separate bucket-scoped key-ID/secret sets exist only as protected environment secrets. Each upload step receives only its own set; the private manifest-read step uses only the private set and performs no build/upload. Build steps reject all upload credentials. Private logs expose only package IDs, sizes and SHA-256, never file lists, vendor error text, credentials, URLs or archive contents. Both class matrices build and upload in the SAME job on the SAME runner; neither creates an Actions artifact/cache.
 The uploader uses Python stdlib SigV4 and resumable S3 multipart for files above 5 GiB, with conditional
 create-only completion. Live R2 compatibility remains unverified and must be checked before enabling.
 
@@ -284,12 +282,12 @@ Object names are `winapps-open/kfapps-<iso sha256>.iso`, `winapps-open/manifest-
 are uploaded first; a source failure prevents ISO publication. Caller-presigned plans must include them. They are
 immutable: publication reuses a verified matching object or fails on a conflict. A subsequent automated
 **draft PR against next** should update `appmatrix/bundle.pin` with the digest, `inputs`, and keys only after
-checking that current master still has those inputs. Token handling and the Worker's future digest-to-key
-read mapping are separate work; no Worker code or current consumer is enabled here. The older proposed
+checking that current master still has those inputs. The private update touches appmatrix/bundle.private.pin with ONLY winapps-private.iso sha256=<digest>; its manifest remains private. Token handling and the Worker's future digest-to-key
+read mapping are separate work; no Worker code or current consumer is enabled here. Private objects use the analogous winapps-private/ keys in a PRIVATE bucket, with a private manifest. The older proposed
 fixed keys in the table above are superseded by these names for new publication.
 
 The computed two-build disk admission budget is 11,696,576,173 bytes (10.89 GiB), including compliance/source
-inputs, both images and legal-text caps. The workflow measures actual free space,
+inputs, both images and legal-text caps. The separate private-class runner budget is 15,879,728,046 bytes (14.79 GiB). The workflow measures actual free space,
 frees unused hosted-runner toolchains and fails before downloading if it cannot meet that budget. Runner
 cleanup capacity has not been measured in WB1; use a larger runner if needed. Full design, future OIDC route
 and exact input path filters: [Windows apps gate, section 3.1](design/V3_WINDOWS_APPS_GATE.md#31-owner-refinement-build-in-github-publish-immutable-objects).

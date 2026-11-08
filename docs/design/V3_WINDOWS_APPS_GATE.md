@@ -65,8 +65,8 @@ the host reference. The licence or key is never written down.
 **OWNER DECISION / CODE READ, 2026-11-08:** this supersedes the earlier single/private-copy bundle,
 `--public-only` selection wording and the `conditions` distribution class. There are exactly two classes.
 The public default contains only the explicit public-ok package set; NVIDIA CUDA is not redistributable by
-owner ruling. NVIDIA material and conditional/unclear packages belong only on person-built private media.
-CI builds and publishes only the public image; no private production input is fetched or built by CI.
+owner ruling for public downloads. NVIDIA material and conditional/unclear packages belong only on private media.
+**OWNER CORRECTION, 2026-11-08:** public GitHub CI may build both classes and upload private media solely to a private bucket. This supersedes the earlier person-only/private-never-CI rule; public distribution remains forbidden.
 
 **CODE READ, WB1, 2026-11-07:** `scripts/bench/windows/appmatrix/package_bundle.py` replaces the
 shell packaging recipe. It uses Python 3.11 or later, standard library only, and the official pinned Zig 0.13.0
@@ -156,14 +156,14 @@ This is local reproducibility evidence, not a Windows GPU or cross-host compiler
 **CODE READ:** the earlier fixture hash above describes builder v1. The embedded `inputs` field and v3
 compliance payload change the image identity; that earlier fixture hash is not a new release-media pin.
 
-**CODE READ / DESIGN, 2026-11-07:** the owner changed the packaging location to GitHub CI and permits a final
+**CODE READ / DESIGN, 2026-11-08 (CI correction):** the owner changed the packaging location to GitHub CI and permits a final
 master-only upload. `.github/workflows/bundle-publish.yml` implements the structure but remains **disabled for
 automatic execution**: its only trigger is `workflow_dispatch`; no push, PR or monthly schedule is enabled.
 No environment, repository variable, secret, credential or Worker route is configured by this PR. The first
 manual `mode=build` run uses the job with no environment or secret references. Publication additionally
 requires `vars.BUNDLE_PUBLISH_ENABLED == 'true'`, default absent/false.
 
-**CODE READ:** `package_bundle.py input-hash` prints exactly `inputs=<sha256>`. The hash covers the builder
+**CODE READ:** `package_bundle.py input-hash` prints exactly `inputs=<sha256>`. The hash is computed separately per class and covers the builder
 version and normalized builder/ISO/compiler/compliance recipe source, the selected open-package records and pins, sorted
 `open_packages`, every ISO-carried guest/app/licence text, all probe/ladder/header/import-library sources,
 and all official toolchain pins. Compiler-provided notices are covered by their archive pins. Host paths,
@@ -173,19 +173,18 @@ merely reformatting the source manifest or changing historical image metadata do
 the receipt against the current checkout and reads the image back before sending any bytes.
 
 **CODE READ:** `bundle_ci.py plan` compares the input hash with `# inputs=` in the committed publication pin.
-An equal hash means `needs_build=false`, and neither large job runs. Missing input metadata is conservatively
-a build. This is a credential-free comparison with the repo-selected publication; it never fetches R2.
+The public plan also reads the repo-selected immutable public manifest when a custom domain is configured. An equal hash means needs_build=false for that class. The private repo pin contains only the ISO SHA-256: its inputs/file list stay in the private manifest. With publication enabled, a separate protected master-only private-plan step reads that selected private manifest with only the private bucket secret. It exposes only the hash/decision, never the manifest body. An unchanged class is omitted from the build matrix. Without configured private reads (including the first secret-free run), private planning conservatively builds. Missing manifests build; wrong class/pin, service errors and malformed manifests fail closed.
 `mode=verify` deliberately rebuilds even when equal, requires a pin, compares with its ISO hash and cannot
 upload. A future optional monthly trigger must use that same mode. No mutable `latest` object exists.
 
 **CODE READ:** the protected combined job builds and publishes on the same runner. It creates no Actions
-artifact, Actions cache, release asset or intermediate transfer. Both build paths fetch only `open_packages`,
-execute only the pinned/hash-verified Zig distribution as vendor code, build twice in fresh output directories
-with different umasks/TZ/locales, and require matching ISO hashes plus cross-receipt readback. PR mode reports a
+artifact, Actions cache, release asset or intermediate transfer. Each class matrix entry fetches only its selected open_packages or private_packages,
+executes only the pinned/hash-verified Zig distribution as vendor code, builds twice in fresh output directories
+with different umasks/TZ/locales, and requires matching ISO hashes plus cross-receipt readback. PR mode reports a
 new hash when it differs from the pin; verify mode fails on a difference. Upload credentials are rejected by
-the builder and are referenced only in the final publish step's `env:`. The combined job itself requires the
+the builder. Each final upload step references only its matching bucket secrets; the protected private manifest read is a separate, non-building step. The combined job itself requires the
 canonical repository, `refs/heads/master`, push/dispatch, the enable flag and protected environment
-`bundle-publish-public-master`. **Deployment branches must be restricted to master and reviewers configured there
+`bundle-publish-master`. **Deployment branches must be restricted to master and reviewers configured there
 before enabling.** Fork PRs and every PR event are refused again by the publisher's own entry point.
 
 **COMPUTED from committed pins, not measured on GitHub:** public originals total 2,616,964,183 bytes,
@@ -193,19 +192,17 @@ additional public licence/source inputs 89,005,674 bytes. Admission reserves dow
 legal texts and compiler/source scratch: 11,696,576,173 bytes (10.89 GiB). The runner measures actual free
 space after freeing unused preinstalled toolchains and refuses before downloading if insufficient; use a
 larger runner in that case. The coordinator's approximate 14 GB default-free-space premise is not a measured
-runner result. Private originals total 4,126,545,198 bytes and are never part of CI's budget or download set.
+runner result. Private originals total 4,126,545,198 bytes. Each class has its own runner and disk budget; the computed private two-build budget is 15,879,728,046 bytes (14.79 GiB), admitted against actual free space separately and potentially requiring a larger runner.
 The ISO stays on its runner, no Actions artifact/cache is created, and build steps execute no vendor app code.
-Logs are public: no private payload, credential, capability URL or installer contents may be logged.
+Logs are public: private fetch/cache messages contain only package IDs, pinned sizes and SHA-256; private file lists, vendor/compiler error text, credentials, capability URLs and archive contents are withheld. No Actions artifact or cache entry is created for either image; nothing private leaves its runner except the private upload.
 
 **CODE READ:** `publish_bundle.py` uses standard-library HTTPS, SigV4 (`auto` region), bounded 64 MiB parts,
 service ETags, per-part integrity checks, remote ListParts validation and local resume state. It supports files
 above 5 GiB without aws/rclone. Resume state contains upload IDs/part digests, never credentials or URLs. The
-credentials are environment secrets scoped to **one dedicated bundle bucket**, loaded only by the final
-uploader process. A caller-presigned multipart plan is also accepted through `BUNDLE_UPLOAD_URLS`; capabilities
+credentials are two environment-secret sets, each scoped to its own dedicated bucket. Build steps get neither set. Each uploader receives only its matching set; the separate protected private-plan reader receives only the private set. Public/private bucket names must differ. A caller-presigned multipart plan is also accepted through `BUNDLE_UPLOAD_URLS`; capabilities
 remain in memory and final URLs must bind `If-None-Match` in their signature.
 
-**CODE READ / service contract:** keys are exactly `winapps-open/kfapps-<ISO sha256>.iso` and
-`winapps-open/manifest-<ISO sha256>.json`. Existing matching objects are reused; conflicting metadata/receipts
+**CODE READ / service contract:** public keys are exactly winapps-open/kfapps-<ISO sha256>.iso and winapps-open/manifest-<ISO sha256>.json. Private ISO and manifest use the analogous winapps-private/ prefix in the PRIVATE bucket; the private manifest never goes to GitHub, a public bucket or an Actions artifact. Existing matching objects are reused; conflicting metadata/receipts
 fail. Both single PUT and multipart completion require `If-None-Match: *`; a concurrent winner is checked and
 only this run's pending multipart is aborted. HTTP 200 containing an XML Error is a failure. No existing key
 is deleted, overwritten or retried without its create-only condition. **R2 conditional multipart-completion
@@ -234,9 +231,9 @@ is job-scoped, so adding it to the combined job would grant earlier build steps 
 that isolation tradeoff needs owner review before adopting this alternative.
 
 **DESIGN: successful publication then pin PR.** The uploader emits `published.pin.line` and the workflow puts its
-non-secret input hash/digest/keys in the job summary. A separate trusted automation should verify the published
+public input hash/digest/keys in the job summary; the private summary contains only its ISO SHA-256 pin. A separate trusted automation should verify the published
 receipt, ensure its input hash still equals the current reviewed master tree, and open a **draft PR against
-`next`** updating only `appmatrix/bundle.pin`. Its first line remains the existing consumer-compatible
+`next`** updating appmatrix/bundle.pin and/or appmatrix/bundle.private.pin for successfully published classes. The private pin contains ONLY winapps-private.iso sha256=<digest>; no inputs, file list or manifest contents may be copied into that PR. The public pin's first line remains the existing consumer-compatible
 `winapps-open.iso sha256=...`; comment lines record inputs and both immutable keys. Reviewer approval and merge
 select the new object; publication alone never advances the pin. No PR-token handling is implemented here.
 Public consumers use `fetch_public_bundle.py` with the configured custom domain and committed digest;
@@ -256,7 +253,7 @@ full-selection public-only refusal. Full real media and native two-disk operatio
 | Bundle | Packages | Publication policy |
 |---|---|---|
 | public / public-ok | python_embed, llama_vulkan, qwen_gguf, hf_model, vkpeak, blender, clpeak_ocl, hashcat, sevenzip, audited permissive hf_wheels | `winapps-open.iso`, KFAPPS, public bundles bucket/custom domain; public CI only. |
-| private / private-only | cuda_demo_suite, cuda_cudart, cuda_nvrtc, cuda_cccl, pywheels (including NVIDIA libraries), llama_cuda/cudart, clpeak_cuda, vulkan_rt, vc_redist, hf_wheels_private | `winapps-private.iso`, KFAPPSP; person only, private R2 only, never the public publisher or CI. |
+| private / private-only | cuda_demo_suite, cuda_cudart, cuda_nvrtc, cuda_cccl, pywheels (including NVIDIA libraries), llama_cuda/cudart, clpeak_cuda, vulkan_rt, vc_redist, hf_wheels_private | `winapps-private.iso`, KFAPPSP; person or CI, private R2 only, never public downloads. |
 
 **MEASURED, 2026-11-07 UTC:** all 11 selected public HF wheels were downloaded from their existing pinned
 URLs, hash/size verified and inspected using zipfile without extraction or execution. The audit records exact
@@ -283,8 +280,7 @@ ISO; its manifest records private-prefix mirror targets for the later operator r
 modified. Full transitive Corresponding Source/build-instruction coverage remains a review prerequisite.
 
 **CODE READ:** `--class public` is the default. Any explicitly requested private package is refused, even if a
-manifest edit tries to relabel an NVIDIA/runtime package as public. `--class private` is refused whenever CI is
-set or GitHub Actions is active, even with --ci-build. The old --public-only option is only a compatibility alias
+manifest edit tries to relabel an NVIDIA/runtime package as public. Either class may run in CI with explicit --ci-build; both reject run tokens and upload credentials during builds. The old --public-only option is only a compatibility alias
 for public selection. Neither class silently pulls dependencies from the other disk into its own image.
 Use separate output folders or the distinct .iso/.manifest.json/.pin.line basenames; the legacy bundle.pin.line
 alias is written only for public output. Each receipt embeds its class and its expected volume label.
@@ -297,11 +293,8 @@ missing-private-media, never PASS. The full profile retains every expected app, 
 it RETRY class=MEDIA; an independent public profile contains only apps without private requirements. A guest
 failure still outranks a missing-media retry. Native mounting/drive assignment still needs operator evidence.
 
-**DESIGN, not a Worker change:** a person builds private media locally with the same Python script and original
-pinned inputs, then uses a future private Worker-presigned route like SPEC. The future allowlist names are
-winapps-private.iso and winapps-private.manifest.json; credentials and signed URLs must remain on the person's
-machine. The public uploader rejects private receipts and source requests before any network operation.
-No private uploader, Worker allowlist or Worker deployment is implemented here. Other licensed/manual packages
+**CODE READ / DESIGN:** a person or CI builds private media using the same pinned recipe. The implemented stdlib publisher accepts --class private and uses only the private bucket; it rejects public receipts in that destination and private receipts in the public destination. A later operator Worker-presigned route like SPEC may use the allowlist names
+winapps-private.iso and winapps-private.manifest.json. No Worker allowlist or Worker deployment is implemented here. Other licensed/manual packages
 remain outside both canonical bundle sets; requires: private does not approve their acquisition/distribution.
 
 **CODE READ / public publication:** the protected final step uses only public-bucket scoped environment secrets
@@ -310,7 +303,9 @@ BUNDLE_PUBLIC_BASE_URL for the configured HTTPS custom domain. The publisher rej
 bases. The consumer uses KF_WINAPPS_PUBLIC_BASE_URL and the committed pin, downloads the immutable manifest,
 checks the class/pin, downloads the ISO with urllib and verifies all image/file/source identities. Public reads
 carry no run token and have no Worker/private fallback. Publication remains dispatch-only and disabled;
-no secrets, domain, bucket/environment or enable flag were configured by WB1.
+no secrets, domain, bucket/environment or enable flag were configured by WB1. The private upload step analogously uses BUNDLE_PRIVATE_R2_ACCESS_KEY_ID / BUNDLE_PRIVATE_R2_SECRET_ACCESS_KEY and BUNDLE_PRIVATE_R2_BUCKET / ENDPOINT; it receives no public secret or public base URL.
+
+**OWNER POLICY / CUDA EULA:** the downloader is the person or CI operator that runs fetch/build for private use. That operator must accept the pinned NVIDIA CUDA EULA before downloading or running the private bundle. CI availability is not permission to offer private software for public download. This is engineering support, not legal advice.
 
 ## 4. Verdict rules (guest passes only)
 

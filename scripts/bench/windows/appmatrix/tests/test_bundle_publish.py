@@ -543,21 +543,24 @@ class Workflow(unittest.TestCase):
         self.assertNotIn("secrets.", build)
         self.assertNotIn("environment:", build)
 
-    def test_secret_names_occur_only_in_publish_step(self):
-        publish = self.text.split("- name: Publish immutable objects", 1)[1].split("- name: Remove ephemeral", 1)[0]
-        self.assertEqual(self.text.count("${{ secrets."), publish.count("${{ secrets."))
-        self.assertEqual(publish.count("${{ secrets."), 2)
-        self.assertIn("AWS_SECRET_ACCESS_KEY:", publish)
+    def test_secret_names_occur_only_in_protected_read_and_matching_publish_steps(self):
+        public = self.text.split("- name: Publish immutable objects to public bucket",1)[1].split("- name: Publish immutable objects to private bucket",1)[0]
+        private = self.text.split("- name: Publish immutable objects to private bucket",1)[1].split("- name: Remove ephemeral",1)[0]
+        read = self.text.split("- id: private\n        name: Read selected private manifest",1)[1].split("- id: matrix",1)[0]
+        self.assertEqual(self.text.count("${{ secrets."), 6)
+        for block, allowed, forbidden in ((public,'BUNDLE_PUBLIC_R2','BUNDLE_PRIVATE_R2'),(private,'BUNDLE_PRIVATE_R2','BUNDLE_PUBLIC_R2'),(read,'BUNDLE_PRIVATE_R2','BUNDLE_PUBLIC_R2')):
+            self.assertEqual(block.count("${{ secrets."),2)
+            self.assertIn("secrets."+allowed,block);self.assertNotIn("secrets."+forbidden,block)
 
     def test_publisher_protected_master_and_flag(self):
         job = self.text.split("\n  build-and-publish:\n", 1)[1].split("    steps:", 1)[0]
-        for phrase in ("vars.BUNDLE_PUBLISH_ENABLED == 'true'", "refs/heads/master", "github.event_name == 'push'", "github.event_name == 'workflow_dispatch'", "environment: bundle-publish-public-master"):
+        for phrase in ("vars.BUNDLE_PUBLISH_ENABLED == 'true'", "refs/heads/master", "github.event_name == 'push'", "github.event_name == 'workflow_dispatch'", "environment: bundle-publish-master"):
             self.assertIn(phrase, job)
 
     def test_actions_pinned_and_minimal_permissions(self):
         import re
-        self.assertEqual(len(re.findall(r"uses: actions/checkout@[0-9a-f]{40} # v", self.text)), 3)
-        self.assertNotIn("write", self.text)
+        self.assertEqual(len(re.findall(r"uses: actions/checkout@[0-9a-f]{40} # v", self.text)), 4)
+        self.assertNotIn(": write", self.text.split("permissions:",1)[1].split("concurrency:",1)[0])
 
 
 class PublishGuard(unittest.TestCase):

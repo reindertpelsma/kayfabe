@@ -30,13 +30,13 @@ OPEN_PACKAGES = frozenset("cuda_demo_suite python_embed pywheels llama_cuda llam
 PUBLIC_PACKAGES = frozenset("python_embed llama_vulkan qwen_gguf hf_model vkpeak blender clpeak_ocl hashcat sevenzip hf_wheels".split())
 STAGE_MODES = frozenset(("unzip", "python_embed", "wheels", "copy", "7z", "msi_admin", "installer"))
 UA = "kayfabe-bundle/1 (+https://github.com/reindertpelsma/kayfabe)"
-BUILDER_VERSION = 4
+BUILDER_VERSION = 5
 
 
 def guard(env=None, allow_ci=False, bundle_class="public"):
     env = os.environ if env is None else env
-    if bundle_class == "private" and ("CI" in env or env.get("GITHUB_ACTIONS") == "true"):
-        raise ValueError("REFUSED: private bundles are person-only, never CI")
+    if env.get("GITHUB_ACTIONS") == "true" and not allow_ci:
+        raise ValueError("REFUSED: CI packaging requires explicit --ci-build")
     for key in ("CI", "KF_RUN_TOKEN"):
         if key in env and not (key == "CI" and allow_ci):
             raise ValueError(f"REFUSED: {key} is set; packaging is a person's local operation")
@@ -145,7 +145,7 @@ class _HTTPSRedirect(urllib.request.HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
-def fetch_file(package, fl, destination, retries=4, image=False):
+def fetch_file(package, fl, destination, retries=4, image=False, private=False):
     """Resume a .part using validated Range responses; promote only verified bytes.
 
     Existing bad cache entries fail closed. Transport/truncation retries use the
@@ -155,9 +155,9 @@ def fetch_file(package, fl, destination, retries=4, image=False):
     dest = Path(destination)
     if dest.exists() or dest.is_symlink():
         verify_file(package, fl, dest)
-        print(f"CACHE_OK {package}/{fl['name']}", flush=True)
+        print(f"CACHE_OK package={package} bytes={fl['size']} sha256={fl['sha256']}" if private else f"CACHE_OK {package}/{fl['name']}", flush=True)
         return
-    print(f"FETCH {package}/{fl['name']} bytes={fl['size']}", flush=True)
+    print(f"FETCH package={package} bytes={fl['size']} sha256={fl['sha256']}" if private else f"FETCH {package}/{fl['name']} bytes={fl['size']}", flush=True)
     dest.parent.mkdir(parents=True, exist_ok=True)
     part = dest.with_name(dest.name + ".part")
     if part.is_symlink():
@@ -268,9 +268,10 @@ def pin_text(image_sha, inputs, bundle_class="public"):
     filename = "winapps-open.iso" if bundle_class == "public" else "winapps-private.iso"
     if not all(re.fullmatch(r"[0-9a-f]{64}", x) for x in (image_sha, inputs)):
         raise ValueError("invalid pin digest")
+    if bundle_class == "private": return f"{filename} sha256={image_sha}\n"
     return (f"{filename} sha256={image_sha}\n# inputs={inputs}\n" +
             (f"# iso_key=winapps-open/kfapps-{image_sha}.iso\n"
-             f"# manifest_key=winapps-open/manifest-{image_sha}.json\n" if bundle_class == "public" else "# PRIVATE: person-only; never use the public publisher\n"))
+             f"# manifest_key=winapps-open/manifest-{image_sha}.json\n" if bundle_class == "public" else ""))
 
 
 def build_image(packages, downloads, tools, output, toolchain, root=HERE, probe_receipt=None, open_packages=None, bundle_class="public"):
@@ -380,8 +381,8 @@ def verify_image(iso, receipt, public_only=False):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("command", choices=("check", "fetch", "build", "verify", "verify-image", "layout", "input-hash"))
-    ap.add_argument("--class", dest="bundle_class", choices=("public", "private"), default="public", help="public (default) or person-only private media")
-    ap.add_argument("--ci-build", action="store_true", help="explicit credential-free CI build (KF_RUN_TOKEN still forbidden)")
+    ap.add_argument("--class", dest="bundle_class", choices=("public", "private"), default="public", help="public (default) or private-use media")
+    ap.add_argument("--ci-build", action="store_true", help="explicit credential-free CI build for either class (KF_RUN_TOKEN still forbidden)")
     ap.add_argument("--manifest", type=Path, default=HERE / "manifest.json")
     ap.add_argument("--profiles", type=Path, default=HERE / "gate_profiles.json")
     ap.add_argument("--dl", type=Path, default=Path("out/downloads"))
@@ -391,6 +392,7 @@ def main(argv=None):
     ap.add_argument("--iso", type=Path, help="image for verify-image")
     ap.add_argument("--receipt", type=Path, help="build receipt for verify-image")
     args = ap.parse_args(argv)
+    package_id = "bundle"
     try:
         if args.public_only and args.bundle_class != "public":
             raise ValueError("--public-only is a compatibility alias for --class public")
@@ -418,29 +420,30 @@ def main(argv=None):
                 paths = set(package_files(packages, args.dl)) | set(repo_files()) | {"KFAPPS.ID", "stage.json", "bundle.inputs.json"}
                 paths |= {"tools/" + n for n in bundle_tools.TOOL_NAMES}
                 paths |= {"LICENSES/zig/" + n[len("licenses/zig/"):] for n in bundle_tools.NOTICE_NAMES}
-                print("\n".join(sorted(paths)))
+                print("LAYOUT private file list withheld") if args.bundle_class == "private" else print("\n".join(sorted(paths)))
                 print("COMPLIANCE LICENSES/<package>/<text-sha256>, LICENSES/index.json, THIRD_PARTY_NOTICES.txt")
                 for pid, pin, relative in bundle_compliance.inputs(packages):
-                    print(f"COMPLIANCE_INPUT {pid}/{pin['name']} bytes={pin['size']}")
+                    print(f"COMPLIANCE_INPUT package={pid} bytes={pin['size']} sha256={pin['sha256']}")
                 host, pin = bundle_tools.host_pin(toolchain)
                 print(f"DOWNLOAD_ONLY _toolchain/{pin['name']} host={host} (compiler; not on ISO)")
             elif args.command in ("fetch", "verify", "build"):
                 for p in packages:
+                    package_id = p["id"]
                     for fl in p["files"]:
                         dest = args.dl / p["id"] / fl["name"]
                         if args.command == "fetch":
-                            fetch_file(p["id"], fl, dest)
+                            fetch_file(p["id"], fl, dest, private=args.bundle_class == "private")
                         else:
                             verify_file(p["id"], fl, dest)
                 for pid, fl, relative in bundle_compliance.inputs(packages):
                     if args.command == "fetch":
-                        fetch_file(pid, fl, args.dl / relative)
+                        fetch_file(pid, fl, args.dl / relative, private=args.bundle_class == "private")
                     else:
                         verify_file(pid, fl, args.dl / relative)
                 host, pin = bundle_tools.host_pin(toolchain)
                 archive = args.dl / "_toolchain" / pin["name"]
                 if args.command == "fetch":
-                    fetch_file("zig-" + host, pin, archive)
+                    fetch_file("zig-" + host, pin, archive, private=args.bundle_class == "private")
                 else:
                     verify_file("zig-" + host, pin, archive)
                 if args.command == "build":
@@ -452,7 +455,7 @@ def main(argv=None):
         print(args.command.upper().replace("-", "_") + "_OK")
         return 0
     except (OSError, ValueError, KeyError, TypeError) as e:
-        print("FAIL " + str(e), file=sys.stderr)
+        print("FAIL package=" + package_id if args.bundle_class == "private" else "FAIL " + str(e), file=sys.stderr)
         return 1
 
 

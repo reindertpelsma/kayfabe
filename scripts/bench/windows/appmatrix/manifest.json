@@ -21,7 +21,7 @@
    "version": "12.9.79",
    "tier": 1,
    "license": "NVIDIA CUDA Toolkit EULA (LICENSE inside the archive)",
-   "redistribution": "NVIDIA material: not redistributable publicly by owner ruling; person-built private media only",
+   "redistribution": "NVIDIA material: not redistributable publicly by owner ruling; private-use media only; person or authorized CI",
    "stage": {
     "mode": "unzip",
     "dest": "cuda_demo",
@@ -43,7 +43,7 @@
     "upstream": "https://developer.nvidia.com/cuda-toolkit",
     "distribution": "private-only",
     "conditions": [
-     "Owner ruling: NVIDIA CUDA cannot be redistributed. Private media only, never CI or the public publisher."
+     "Owner correction: NVIDIA CUDA is private-use only; person or CI may build and upload solely to the private bucket. Downloader/operator must accept the CUDA EULA. Never offer public downloads."
     ],
     "sources": [],
     "license_inputs": [],
@@ -96,7 +96,7 @@
    "version": "2026-10-10 resolution",
    "tier": 1,
    "license": "torch/torchvision BSD-3 (CUDA libs inside the torch wheel under the NVIDIA EULA); cupy MIT; onnxruntime MIT; others BSD/MIT/Apache/PSF per wheel metadata",
-   "redistribution": "NVIDIA material: not redistributable publicly by owner ruling; person-built private media only",
+   "redistribution": "NVIDIA material: not redistributable publicly by owner ruling; private-use media only; person or authorized CI",
    "stage": {
     "mode": "wheels",
     "dest": "py\\Lib\\site-packages"
@@ -301,7 +301,7 @@
     "upstream": "https://pytorch.org/",
     "distribution": "private-only",
     "conditions": [
-     "Owner ruling: NVIDIA CUDA cannot be redistributed. Private media only, never CI or the public publisher."
+     "Owner correction: NVIDIA CUDA is private-use only; person or CI may build and upload solely to the private bucket. Downloader/operator must accept the CUDA EULA. Never offer public downloads."
     ],
     "sources": [],
     "license_inputs": [],
@@ -485,7 +485,7 @@
    "version": "b11541",
    "tier": 1,
    "license": "MIT",
-   "redistribution": "NVIDIA material: not redistributable publicly by owner ruling; person-built private media only",
+   "redistribution": "NVIDIA material: not redistributable publicly by owner ruling; private-use media only; person or authorized CI",
    "stage": {
     "mode": "unzip",
     "dest": "llama_cuda"
@@ -515,7 +515,7 @@
     "upstream": "https://github.com/ggml-org/llama.cpp",
     "distribution": "private-only",
     "conditions": [
-     "Owner ruling: NVIDIA CUDA cannot be redistributed. Private media only, never CI or the public publisher."
+     "Owner correction: NVIDIA CUDA is private-use only; person or CI may build and upload solely to the private bucket. Downloader/operator must accept the CUDA EULA. Never offer public downloads."
     ],
     "sources": [],
     "license_inputs": [
@@ -1016,7 +1016,7 @@
    "version": "3.0.1",
    "tier": 1,
    "license": "GPL-3.0-only AND LicenseRef-NVIDIA-CUDA-EULA",
-   "redistribution": "NVIDIA material: not redistributable publicly by owner ruling; person-built private media only",
+   "redistribution": "NVIDIA material: not redistributable publicly by owner ruling; private-use media only; person or authorized CI",
    "stage": {
     "mode": "unzip",
     "dest": "clpeak_cuda",
@@ -1038,7 +1038,7 @@
     "upstream": "https://github.com/krrishnarraj/clpeak",
     "distribution": "private-only",
     "conditions": [
-     "Owner ruling: NVIDIA CUDA cannot be redistributed. Private media only, never CI or the public publisher."
+     "Owner correction: NVIDIA CUDA is private-use only; person or CI may build and upload solely to the private bucket. Downloader/operator must accept the CUDA EULA. Never offer public downloads."
     ],
     "sources": [
      {
@@ -1168,7 +1168,7 @@
    "version": "12.9.79",
    "tier": 1,
    "license": "NVIDIA CUDA Toolkit EULA",
-   "redistribution": "NVIDIA material: not redistributable publicly by owner ruling; person-built private media only",
+   "redistribution": "NVIDIA material: not redistributable publicly by owner ruling; private-use media only; person or authorized CI",
    "stage": {
     "mode": "unzip",
     "dest": "cuda_cudart",
@@ -1190,7 +1190,7 @@
     "upstream": "https://developer.nvidia.com/cuda-toolkit",
     "distribution": "private-only",
     "conditions": [
-     "Owner ruling: NVIDIA CUDA cannot be redistributed. Private media only, never CI or the public publisher."
+     "Owner correction: NVIDIA CUDA is private-use only; person or CI may build and upload solely to the private bucket. Downloader/operator must accept the CUDA EULA. Never offer public downloads."
     ],
     "sources": [],
     "license_inputs": [],
@@ -1207,7 +1207,7 @@
    "version": "12.9.27",
    "tier": 1,
    "license": "Apache-2.0 with LLVM exceptions / NVIDIA CUDA EULA",
-   "redistribution": "NVIDIA material: not redistributable publicly by owner ruling; person-built private media only",
+   "redistribution": "NVIDIA material: not redistributable publicly by owner ruling; private-use media only; person or authorized CI",
    "stage": {
     "mode": "unzip",
     "dest": "cuda_cccl",
@@ -1229,7 +1229,7 @@
     "upstream": "https://github.com/NVIDIA/cccl",
     "distribution": "private-only",
     "conditions": [
-     "Owner ruling: NVIDIA CUDA cannot be redistributed. Private media only, never CI or the public publisher."
+     "Owner correction: NVIDIA CUDA is private-use only; person or CI may build and upload solely to the private bucket. Downloader/operator must accept the CUDA EULA. Never offer public downloads."
     ],
     "sources": [],
     "license_inputs": [],
@@ -1987,7 +1987,7 @@
    "version": "12.9.86",
    "tier": 1,
    "license": "NVIDIA CUDA Toolkit EULA (LICENSE inside archive)",
-   "redistribution": "NVIDIA material: not redistributable publicly by owner ruling; person-built private media only",
+   "redistribution": "NVIDIA material: not redistributable publicly by owner ruling; private-use media only; person or authorized CI",
    "stage": {
     "mode": "unzip",
     "dest": "cuda_nvrtc",
@@ -2009,7 +2009,7 @@
     "upstream": "https://developer.nvidia.com/cuda-toolkit",
     "distribution": "private-only",
     "conditions": [
-     "Owner ruling: NVIDIA CUDA cannot be redistributed. Private media only, never CI or the public publisher."
+     "Owner correction: NVIDIA CUDA is private-use only; person or CI may build and upload solely to the private bucket. Downloader/operator must accept the CUDA EULA. Never offer public downloads."
     ],
     "sources": [],
     "license_inputs": [],

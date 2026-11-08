@@ -41,13 +41,13 @@ class Classes(unittest.TestCase):
     def test_explicit_conditional_refused_public(self):
         with self.assertRaises(ValueError): B.select_packages(self.man, self.profile, ['vulkan_rt'])
 
-    def test_private_ci_flag_cannot_override_person_only(self):
+    def test_private_ci_requires_explicit_build(self):
         with patch.dict(os.environ, {'CI':'true'}, clear=True), patch('sys.stderr', new_callable=io.StringIO):
-            self.assertEqual(B.main(['check','--class','private','--ci-build']), 1)
+            self.assertEqual(B.main(['check','--class','private']), 1)
 
     def test_private_actions_without_ci_refused(self):
         with patch.dict(os.environ, {'GITHUB_ACTIONS':'true'}, clear=True), patch('sys.stderr', new_callable=io.StringIO):
-            self.assertEqual(B.main(['input-hash','--class','private']), 1)
+            self.assertEqual(B.main(['check','--class','private']), 1)
 
     def test_public_private_partition_disjoint(self):
         public = {p['id'] for p in B.select_packages(self.man, self.profile)}
