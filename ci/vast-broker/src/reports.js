@@ -35,21 +35,35 @@ export async function readReportBody(request, record, cfg) {
   return new TextDecoder('utf-8').decode(bytes);
 }
 export function parseReport(text) {
-  // Refuse excess nesting before invoking even the native key-string decoder.
+  // Before any native JSON decoding, retain depth 4 for ordinary fields.
+  // Only result.matrix_receipts needs depth 6 (rows and their driver objects).
+  // Its typed shape is checked below; escaped spellings of the field are refused.
   {
-    let depth = 0,
-      quoted = false,
-      escaped = false;
-    for (const char of text) {
+    const scopes = [];
+    let quoted = false,
+      escaped = false,
+      start = 0;
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i];
       if (quoted) {
         if (escaped) escaped = false;
         else if (char === '\\') escaped = true;
-        else if (char === '"') quoted = false;
-      } else if (char === '"') quoted = true;
-      else if (char === '{' || char === '[') {
-        if (++depth > 4) refuse('BAD_REPORT', 400);
+        else if (char === '"') {
+          quoted = false;
+          let next = i + 1;
+          while (next < text.length && ' \t\r\n'.includes(text[next])) next++;
+          if (text[next] === ':' && scopes.length) scopes.at(-1).key = text.slice(start + 1, i);
+        }
+      } else if (char === '"') {
+        quoted = true;
+        start = i;
+      } else if (char === '{' || char === '[') {
+        const matrix = scopes[0]?.key === 'result' && scopes[1]?.key === 'matrix_receipts';
+        if (scopes.length + 1 > (matrix ? 6 : 4)) refuse('BAD_REPORT', 400);
+        scopes.push({ key: null });
       } else if (char === '}' || char === ']') {
-        if (--depth < 0) refuse('BAD_REPORT', 400);
+        if (!scopes.length) refuse('BAD_REPORT', 400);
+        scopes.pop();
       }
     }
   }
@@ -82,7 +96,7 @@ export function parseReport(text) {
       start = i;
     } else if (char === '{' || char === '[') {
       stack.push({ kind: char, keys: new Set() });
-      if (stack.length > 4) refuse('BAD_REPORT', 400);
+      if (stack.length > 6) refuse('BAD_REPORT', 400);
     } else if (char === '}' || char === ']') {
       if (!stack.length) refuse('BAD_REPORT', 400);
       stack.pop();

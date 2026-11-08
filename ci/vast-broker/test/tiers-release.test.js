@@ -1,4 +1,5 @@
-import test from 'node:test';
+import { matrixTest as test, receiptParts } from './release-fixture.js';
+import { RELEASE_MATRIX } from '../src/release-matrix.js';
 import assert from 'node:assert/strict';
 import { configuration, profileCaps } from '../src/policy.js';
 import { DEFAULTS } from '../src/defaults.js';
@@ -77,9 +78,9 @@ test('the die lists are the measured ones, every family first-class, two dies pe
     Object.values(DEFAULTS.releaseDies).map((d) => d.slice(0, 2)),
     [
       ['TU106', 'TU116'],
-      ['GA106', 'GA104'],
-      ['AD104', 'AD102'],
-      ['GB205', 'GB206'],
+      ['GA102', 'GA104'],
+      ['AD102', 'AD104'],
+      ['GB202', 'GB205'],
     ],
   );
   for (const list of [DEFAULTS.releaseDies, DEFAULTS.middleRotation])
@@ -191,9 +192,10 @@ test('KF_SPEC (the SPECviewperf lane) is sent only when asked for, only for rele
 });
 test('the Worker sends no SPECviewperf stage and no lane by default', () => {
   assert.deepEqual(DEFAULTS.releaseStages, []);
-  assert.deepEqual(DEFAULTS.stageSlots.specviewperf, { tiers: ['large'], state: 'PLUMBING' });
+  assert.equal(DEFAULTS.stageSlots.specviewperf.state, 'PLUMBING');
+  assert.deepEqual(planRelease(market(cfgOf()), cfgOf()).required_stage_rows_per_die, {});
 });
-test('plan: two dies per family, two Windows runs per die, a second machine when offered', () => {
+test('plan: two dies per family, two Windows runs per die, one box per die', () => {
   const cfg = cfgOf();
   const plan = planRelease(market(cfg), cfg);
   assert.deepEqual(plan.refusals, []);
@@ -203,9 +205,9 @@ test('plan: two dies per family, two Windows runs per die, a second machine when
     plan.families.map((f) => [f.family, f.cells.map((c) => c.die)]),
     [
       ['turing', ['TU106', 'TU116']],
-      ['ampere', ['GA106', 'GA104']],
-      ['ada', ['AD104', 'AD102']],
-      ['blackwell', ['GB205', 'GB206']],
+      ['ampere', ['GA102', 'GA104']],
+      ['ada', ['AD102', 'AD104']],
+      ['blackwell', ['GB202', 'GB205']],
     ],
   );
   for (const f of plan.families)
@@ -215,22 +217,23 @@ test('plan: two dies per family, two Windows runs per die, a second machine when
       assert.equal(new Set(c.legs.map((l) => l.machine_id)).size, c.legs.length, c.die);
       assert.equal(c.same_machine, c.legs.length === 1);
     }
-  // TU116, GA106, AD104, GB205 have two machines (two legs); the other four run Windows twice.
-  assert.equal(plan.legs, 12);
+  // Owner decision 2026-11-07: eight boxes; each box runs Windows twice.
+  assert.equal(plan.legs, 8);
   const per = 0.2 * hours(cfg);
-  assert.ok(Math.abs(plan.estimate_usd - 12 * per) < 1e-3, String(plan.estimate_usd));
+  assert.ok(Math.abs(plan.estimate_usd - 8 * per) < 1e-3, String(plan.estimate_usd));
   assert.deepEqual(Object.keys(plan.estimate_by_family_usd), Object.keys(cfg.families));
 });
-test('plan: a missing die falls back to the next measured die of its family', () => {
+test('plan: a missing matrix die is incomplete even when another die is offered', () => {
   const cfg = cfgOf();
   const plan = planRelease(market(cfg, { drop: ['GA104'] }), cfg);
   const ampere = plan.families.find((f) => f.family === 'ampere');
   assert.deepEqual(
     ampere.cells.map((c) => c.die),
-    ['GA106', 'GA102'],
+    ['GA102'],
   );
   assert.deepEqual(ampere.missing, [{ die: 'GA104', reason: 'NO_OFFER' }]);
-  assert.equal(plan.admitted, true);
+  assert.equal(plan.admitted, false);
+  assert.ok(plan.refusals.includes('INCOMPLETE'));
 });
 test('plan: a family short of two offered dies is INCOMPLETE and not admitted', () => {
   const cfg = cfgOf();
@@ -253,7 +256,7 @@ test('plan: over the cost cap or any cap is refused before renting', () => {
   const capped = planRelease(market(big), big, { budget, credit: 9 });
   assert.deepEqual(capped.refusals, ['DAILY_USD', 'DAILY_COUNT', 'ROLLING_USD', 'CREDIT_RESERVE']);
 });
-test('dieLegs: the second machine is on another host when one exists', () => {
+test('dieLegs: one box per die runs Windows twice even with multiple offers', () => {
   const cfg = cfgOf();
   const offers = [
     allowed(cfg, 'AD104', { id: 1, machine: 11, host: 7, price: 0.1 }),
@@ -263,15 +266,12 @@ test('dieLegs: the second machine is on another host when one exists', () => {
   const legs = dieLegs(offers, cfg);
   assert.deepEqual(
     legs.map((l) => [l.machine_id, l.host_id, l.windows_runs]),
-    [
-      [11, 7, 1],
-      [13, 8, 1],
-    ],
+    [[11, 7, 2]],
   );
-  // Same host only: still another machine.
+  // Multiple machines still produce one full leg.
   assert.deepEqual(
     dieLegs(offers.slice(0, 2), cfg).map((l) => l.machine_id),
-    [11, 12],
+    [11],
   );
   // One machine: one leg that runs Windows twice.
   assert.deepEqual(
@@ -347,7 +347,10 @@ test('classify: FAIL is the guest; no host reference is UNATTRIBUTED; harness ro
 });
 test('classify: an enabled stage is its own part; its retry row is not a pass', () => {
   const stages = ['specviewperf'];
-  const ok = classify(rec('PASS', { ...LINUX, windows_gate: 1, specviewperf: 1 }), { stages });
+  const ok = classify(
+    rec('PASS', { ...LINUX, windows_gate: 1, specviewperf_lanea: 1, specviewperf_laneb: 1 }),
+    { stages },
+  );
   assert.deepEqual([ok.verdict, ok.stages], ['PASS', { specviewperf: 'PASS' }]);
   const stub = classify(
     rec('FAIL', { ...LINUX, windows_gate: 1, specviewperf_retry_not_built: -1 }),
@@ -364,7 +367,10 @@ const leg = (key, family, die, outcome, state = 'ENDED', machineId = 1) => ({
   die,
   state,
   machineId,
-  outcome,
+  releaseMatrix: RELEASE_MATRIX.dies.find((r) => r.die === die),
+  outcome: outcome
+    ? { matrix: receiptParts(RELEASE_MATRIX.dies.find((r) => r.die === die)), ...outcome }
+    : outcome,
 });
 const out = (linux, windows) => ({ verdict: 'X', linux, windows, stages: {} });
 const fullBatch = (legs) => ({
@@ -386,11 +392,12 @@ function passingLegs() {
 test('verdict: PASS needs every family, two dies each, linux and two Windows passes', () => {
   const view = releaseVerdict(fullBatch(passingLegs()));
   assert.equal(view.verdict, 'PASS');
-  assert.equal(view.cells.length, 16);
+  assert.equal(view.cells.filter((c) => ['linux', 'windows'].includes(c.platform)).length, 16);
+  assert.ok(view.cells.some((c) => c.platform.startsWith('matrix:')));
   assert.ok(view.cells.every((c) => c.verdict === 'PASS'));
   // One Windows pass on a die is not enough.
   const legs = passingLegs();
-  legs[0].outcome = out('PASS', ['PASS', 'RETRY']);
+  legs[0].outcome = { ...legs[0].outcome, ...out('PASS', ['PASS', 'RETRY']) };
   assert.equal(releaseVerdict(fullBatch(legs)).verdict, 'INCOMPLETE');
   // ... until a fresh-box re-run passes; the RETRY itself never counts.
   legs.push(leg('8-99', legs[0].family, legs[0].die, out('PASS', ['PASS']), 'ENDED', 77));
@@ -401,7 +408,7 @@ test('verdict: PASS needs every family, two dies each, linux and two Windows pas
 });
 test('verdict: any FAIL fails the release; a missing family or die is INCOMPLETE', () => {
   const legs = passingLegs();
-  legs[5].outcome = out('PASS', ['FAIL', 'PASS']);
+  legs[5].outcome = { ...legs[5].outcome, ...out('PASS', ['FAIL', 'PASS']) };
   assert.equal(releaseVerdict(fullBatch(legs)).verdict, 'FAIL');
   const missing = passingLegs().filter((l) => l.family !== 'blackwell');
   assert.equal(releaseVerdict(fullBatch(missing)).verdict, 'INCOMPLETE');
@@ -425,7 +432,7 @@ test('re-runs: RETRY and UNATTRIBUTED within the allowance; never FAIL or an own
   assert.equal(wantsRerun(l('UNATTRIBUTED', 'STOPPED'), 2), false);
   assert.equal(wantsRerun(l('RETRY'), 0), false);
 });
-test('offline plan CLI: the synthetic market plans 12 legs; parallelism follows the caps', async () => {
+test('offline plan CLI: the synthetic market plans eight legs; parallelism follows the caps', async () => {
   const { offlinePlan } = await import('../release-plan.mjs');
   const { readFile } = await import('node:fs/promises');
   const doc = JSON.parse(
@@ -435,10 +442,10 @@ test('offline plan CLI: the synthetic market plans 12 legs; parallelism follows 
   // Committed defaults: account cap 1 leaves the release no slot, and the kill switch is off.
   const off = await offlinePlan(doc.offers);
   assert.deepEqual([off.parallel, off.admitted], [0, false]);
-  assert.deepEqual(off.refusals, ['NO_SLOTS', 'RELEASE_DISABLED']);
-  const on = { RELEASE_ENABLED: 'true', MAX_CONCURRENT_RENTALS: '2' };
+  assert.deepEqual(off.refusals, ['PARALLEL_SLOTS', 'NO_SLOTS', 'RELEASE_DISABLED']);
+  const on = { RELEASE_ENABLED: 'true', MAX_CONCURRENT_RENTALS: '9' };
   const plan = await offlinePlan(doc.offers, on);
-  assert.deepEqual([plan.legs, plan.parallel, plan.admitted], [12, 1, true]);
+  assert.deepEqual([plan.legs, plan.parallel, plan.admitted], [8, 8, true]);
   const sum = plan.families.reduce((s, f) => s + f.est_usd, 0);
   assert.ok(Math.abs(sum - plan.estimate_usd) < 1e-3);
   const eight = await offlinePlan(doc.offers, { ...on, MAX_CONCURRENT_RENTALS: '9' });
@@ -505,4 +512,36 @@ test('classify (review F3): the box must report the planned die and a known driv
     hardware: undefined,
   });
   assert.equal(blind.verdict, 'UNATTRIBUTED');
+});
+
+// Compatibility for pre-matrix consumers; this is not the eight-box release selection.
+test('legacy dieLegs: separate machines and hosts for a die outside the matrix', () => {
+  const cfg = cfgOf();
+  const offers = [
+    allowed(cfg, 'TU104', { id: 1, machine: 11, host: 7 }),
+    allowed(cfg, 'TU104', { id: 2, machine: 11, host: 7 }),
+    allowed(cfg, 'TU104', { id: 3, machine: 13, host: 8 }),
+  ];
+  assert.deepEqual(
+    dieLegs(offers, cfg).map((l) => [l.machine_id, l.windows_runs]),
+    [
+      [11, 1],
+      [13, 1],
+    ],
+  );
+  assert.deepEqual(
+    dieLegs(offers.slice(0, 1), cfg).map((l) => l.windows_runs),
+    [2],
+  );
+});
+test('legacy dieLegs: duplicate offers of one physical machine do not make two legs', () => {
+  const cfg = cfgOf();
+  const offers = [
+    allowed(cfg, 'TU104', { id: 1, machine: 11, host: 7 }),
+    allowed(cfg, 'TU104', { id: 2, machine: 11, host: 7 }),
+  ];
+  assert.deepEqual(
+    dieLegs(offers, cfg).map((l) => [l.machine_id, l.windows_runs]),
+    [[11, 2]],
+  );
 });
