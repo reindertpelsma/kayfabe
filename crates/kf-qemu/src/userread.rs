@@ -850,4 +850,72 @@ mod tests {
             Some(Refusal::Bounds)
         );
     }
+    #[test]
+    fn snapshot_copy_limit_is_inclusive_at_byte_boundaries() {
+        let ram = RamMap::default();
+        let (mem, fd) = crate::raw_unsafe::test_owned_ram(MAX_BYTES + 4096);
+        ram.add(super::super::RamBlock {
+            gpa: 0x2000,
+            mem,
+            fd: Some(fd),
+            fd_off: 0,
+        });
+        let rows = PlacedRows::default();
+        rows.write().unwrap().insert(
+            0x10000,
+            ((MAX_BYTES + 4096) as u64, 0, true, MapPerm::READ_WRITE),
+        );
+        let log = RowsLog::default();
+        let generation = ram.generation.load(Ordering::Relaxed);
+        for len in [0, MAX_BYTES - 1, MAX_BYTES, MAX_BYTES + 1] {
+            let result = snapshot(&rows, &log, &ram, generation, 0x10000, len, &mut NoStore);
+            // Pointer admission never widens this CPU copy boundary, including a one-byte excess.
+            if len == 0 || len > MAX_BYTES {
+                assert_eq!(result.err(), Some(Refusal::Bounds));
+            } else {
+                let snap = result.unwrap();
+                assert_eq!(snap.bytes.len(), len);
+                snap.admit(|| ()).unwrap();
+            }
+        }
+    }
+
+    #[test]
+    fn snapshot_piece_limit_is_inclusive_and_never_bypassed_by_small_bytes() {
+        for pieces in [PIECES - 1, PIECES, PIECES + 1] {
+            let (ram, _, rows, log, generation) = fixture();
+            rows.write().unwrap().clear();
+            for i in 0..pieces as u64 {
+                rows.write()
+                    .unwrap()
+                    .insert(0x10000 + i, (1, i, true, MapPerm::READ_WRITE));
+            }
+            let result = snapshot(&rows, &log, &ram, generation, 0x10000, pieces, &mut NoStore);
+            // Fragment count remains an independent read/traversal bound, even far below MAX_BYTES.
+            assert_eq!(result.is_ok(), pieces <= PIECES);
+            if pieces > PIECES {
+                assert_eq!(result.err(), Some(Refusal::Bounds));
+            }
+        }
+    }
+
+    #[test]
+    fn ring_mapping_byte_limit_and_end_address_are_checked_before_resolution() {
+        let (ram, _, rows, log, generation) = fixture();
+        rows.write().unwrap().clear();
+        rows.write()
+            .unwrap()
+            .insert(0x100000, (9 << 20, 0, false, MapPerm::READ_WRITE));
+        for len in [0, (8 << 20) - 8, 8 << 20, (8 << 20) + 8] {
+            let result = mapped(&rows, &log, &ram, generation, 0x100000, len, 9 << 20);
+            // Ring declaration admission remains independent of the forwarded descriptor's length.
+            assert_eq!(result.is_ok(), len > 0 && len <= 8 << 20);
+        }
+        for (va, len) in [((1 << 40) - 8, 8), ((1 << 40) - 8, 16), (u64::MAX - 7, 8)] {
+            assert_eq!(
+                mapped(&rows, &log, &ram, generation, va, len, 9 << 20).err(),
+                Some(Refusal::Bounds)
+            );
+        }
+    }
 }

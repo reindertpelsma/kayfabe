@@ -1232,6 +1232,84 @@ mod tests {
             assert!(host.calls.borrow().is_empty());
         }
     }
+    #[test]
+    fn user_descriptor_format_edges_and_ring_slots_are_independent_of_copy_budget() {
+        let s = anonymous_live_storage();
+        for len in [
+            MAX_SOURCE_BYTES - 4,
+            MAX_SOURCE_BYTES,
+            MAX_SOURCE_BYTES + 4,
+            8_388_604,
+        ] {
+            let raw = kf_abi::submit::gp_entry(0x4000, len).unwrap();
+            for slot in [0, ENTRIES - 1] {
+                // A legal direct word remains legal above the copy bound; slot admission is independent.
+                s.write_user_gp(slot, raw).unwrap();
+                assert_eq!(
+                    s.cpu()
+                        .unwrap()
+                        .load_u64(HostOffset::new(GP_OFFSET + u64::from(slot) * 8))
+                        .unwrap(),
+                    raw
+                );
+            }
+            for slot in [ENTRIES, ENTRIES + 1, u32::MAX] {
+                assert!(s.write_user_gp(slot, raw).is_err());
+            }
+        }
+        for len in [4, 8, 12] {
+            let raw = kf_abi::submit::gp_entry((1 << 40) - 8, len).unwrap();
+            // The end must be strictly below 2^40; equality and an end above it both refuse.
+            assert_eq!(s.write_user_gp(0, raw).is_ok(), len < 8);
+        }
+        s.write_user_gp(0, 0).unwrap(); // Zero-length CONTROL NOP remains an intact native descriptor.
+        assert_eq!(s.gpu_get().unwrap(), 0);
+        assert_eq!(s.gpu_reference().unwrap(), 0);
+    }
+
+    #[test]
+    fn authored_copy_still_stops_at_staging_boundary_without_touching_ring() {
+        let s = anonymous_live_storage();
+        let raw = kf_abi::submit::gp_entry(0x4000, 4).unwrap();
+        s.write_user_gp(0, raw).unwrap();
+        for len in [GP_OFFSET - 4, GP_OFFSET, GP_OFFSET + 4] {
+            let words = vec![0x12345678; len as usize / 4];
+            // The unchanged copy limit is inclusive, even though Pointer forwarding exceeds it.
+            assert_eq!(s.write_authored(0, &words).is_ok(), len <= GP_OFFSET);
+            assert_eq!(
+                s.cpu()
+                    .unwrap()
+                    .load_u64(HostOffset::new(GP_OFFSET))
+                    .unwrap(),
+                raw
+            );
+        }
+        s.write_authored(GP_OFFSET, &[]).unwrap(); // An empty owned write touches no bytes.
+        assert!(s.write_authored(GP_OFFSET, &[1]).is_err());
+        assert!(s.write_authored(u64::MAX - 3, &[1]).is_err());
+        assert_eq!(s.gpu_get().unwrap(), 0);
+    }
+
+    #[test]
+    fn staged_gp_spans_keep_inclusive_end_nonempty_and_checked_offsets() {
+        let s = anonymous_live_storage();
+        for len in [0, GP_OFFSET - 4, GP_OFFSET, GP_OFFSET + 4] {
+            // Authored GP spans cannot be empty or cross staging; no Pointer exemption applies.
+            assert_eq!(
+                s.write_gp_level(ENTRIES - 1, 0, len, true, true).is_ok(),
+                len > 0 && len <= GP_OFFSET
+            );
+        }
+        assert!(s.write_gp_level(0, GP_OFFSET - 4, 4, false, false).is_ok());
+        for (offset, len) in [(GP_OFFSET, 4), (GP_OFFSET - 4, 8), (u64::MAX - 3, 8)] {
+            assert!(s.write_gp_level(0, offset, len, false, false).is_err());
+        }
+        for slot in [ENTRIES, ENTRIES + 1, u32::MAX] {
+            assert!(s.write_gp_level(slot, 0, 4, false, false).is_err());
+        }
+        assert_eq!(s.gpu_get().unwrap(), 0);
+        assert_eq!(s.gpu_reference().unwrap(), 0);
+    }
 }
 
 impl Storage<CpuView> {

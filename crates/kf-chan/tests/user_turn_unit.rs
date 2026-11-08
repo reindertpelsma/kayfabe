@@ -17,11 +17,14 @@ use kf_chan::user_turn::{
 };
 use std::collections::HashMap;
 use support::{Ge, Kind, ge, sw};
+#[path = "fixtures/run3440.rs"]
+mod measured;
 
 /// What the relay did to the world, in order.
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Call {
     HwWords,
+    ScanBound,
     WriteGuestGet(u32),
     GpPut,
     Load(u32, bool),
@@ -50,6 +53,9 @@ struct Mock {
     hw_get: u32,
     /// The private ring's `REFERENCE` the mock reports (the last processed marker's tag).
     hw_reference: u32,
+    rewrite_on_validate: Option<u64>,
+    rewrite_after_lo: Option<u64>,
+    tested: u64,
 }
 
 impl Mock {
@@ -67,6 +73,9 @@ impl Mock {
             next_scan: Scan::default(),
             hw_get: 0,
             hw_reference: 0,
+            rewrite_on_validate: None,
+            rewrite_after_lo: None,
+            tested: 0,
         }
     }
     /// The guest publishes `g` at `slot` (its pushbuffer words are known to the store).
@@ -95,6 +104,7 @@ impl Io for Mock {
         self.entries
     }
     fn max_entry_bytes(&mut self) -> u64 {
+        self.calls.push(Call::ScanBound);
         kf_chan::user_storage::MAX_SOURCE_BYTES
     }
     fn gp_put(&mut self) -> Turn<Option<u32>> {
@@ -104,6 +114,9 @@ impl Io for Mock {
     fn load_dword(&mut self, slot: u32, hi: bool) -> Turn<u32> {
         self.calls.push(Call::Load(slot, hi));
         let v = self.ring[slot as usize];
+        if !hi && let Some(replacement) = self.rewrite_after_lo.take() {
+            self.ring[slot as usize] = replacement;
+        }
         Ok(if hi { (v >> 32) as u32 } else { v as u32 })
     }
     fn registry_epoch(&mut self) -> u64 {
@@ -143,6 +156,12 @@ impl Io for Mock {
                 self.next_scan = next;
                 Ok(Staged { rare: t.is_some() })
             }
+        }
+    }
+    fn validated(&mut self, entry: u64) {
+        self.tested = entry;
+        if let Some(replacement) = self.rewrite_on_validate.take() {
+            self.ring[2] = replacement;
         }
     }
     fn publish_entry(
@@ -842,4 +861,446 @@ fn without_engine_written_userd_words_the_first_gate_never_opens() {
     turn(&mut r, &mut io).unwrap();
     assert!(io.calls.contains(&Call::ReadPb(gated.raw())));
     assert_eq!(r.cursor, 2);
+}
+// Decision Phase 1: hardware format bounds Pointer; copies alone use the scan budget.
+#[test]
+fn pointer_forwards_each_run3440_descriptor_unchanged_without_reading_its_pushbuffer() {
+    for raw in measured::RUN3440 {
+        let mut io = Mock::new(16);
+        let mut r = pointer_relay(&mut io);
+        io.ring[2] = raw;
+        io.put = 3;
+        turn(&mut r, &mut io).unwrap();
+        assert_eq!(r.cursor, 3);
+        assert!(!r.dead);
+        assert_eq!(r.refused_entry, 0);
+        assert!(io.calls.contains(&Call::Entry(PubKind::Pointer, raw)));
+        assert_eq!(io.tested, raw);
+        assert!(!io.calls.iter().any(|c| matches!(
+            c,
+            Call::ReadPb(_) | Call::Stage | Call::Gate | Call::ScanBound
+        )));
+        assert_eq!(r.life.counts().pointer_pb_read_violation, 0);
+        assert!(format!("{:?}", r.life.counts()).contains("pointer_large_entries: 1"));
+    }
+}
+
+#[test]
+fn a_1026596_byte_pointer_descriptor_completes_through_marker_and_get_writeback() {
+    let mut io = Mock::new(16);
+    let mut r = pointer_relay(&mut io);
+    let raw = measured::RUN3440[0];
+    assert_eq!(((raw >> 42) & 0x1fffff) * 4, 1_026_596);
+    io.ring[2] = raw;
+    io.put = 3;
+    turn(&mut r, &mut io).unwrap();
+    turn(&mut r, &mut io).unwrap();
+    assert_eq!(io.count(&Call::Marker), 1);
+    assert!(
+        !io.calls.contains(&Call::WriteGuestGet(3)),
+        "no receipt before native fetch"
+    );
+    io.hw_get = r.fetch.issued() as u32 & 15;
+    io.hw_reference = Marks::value(r.marks.issued());
+    turn(&mut r, &mut io).unwrap();
+    assert_eq!(r.marks.seen(), r.marks.issued());
+    assert!(io.calls.contains(&Call::WriteGuestGet(3)));
+    assert_eq!(r.written_get, 3);
+    assert!(!r.dead);
+    assert!(format!("{:?}", r.life.counts()).contains("pointer_entry_max_bytes: 1026596"));
+}
+
+#[test]
+fn pointer_forwards_the_largest_representable_descriptor() {
+    let mut io = Mock::new(16);
+    let mut r = pointer_relay(&mut io);
+    let raw = kf_abi::submit::gp_entry(0x4000, 8_388_604).unwrap() | (1 << 41) | (1 << 63);
+    assert!(kf_abi::submit::gp_entry(0x4000, 8_388_608).is_none());
+    io.ring[2] = raw;
+    io.put = 3;
+    turn(&mut r, &mut io).unwrap();
+    assert!(io.calls.contains(&Call::Entry(PubKind::Pointer, raw)));
+    assert!(
+        !io.calls
+            .iter()
+            .any(|c| matches!(c, Call::ReadPb(_) | Call::ScanBound))
+    );
+    assert_eq!(r.life.outstanding_sync(), Some(2));
+    assert!(format!("{:?}", r.life.counts()).contains("pointer_large_entries: 1"));
+    assert!(format!("{:?}", r.life.counts()).contains("pointer_entry_max_bytes: 8388604"));
+}
+
+#[test]
+fn scan_mode_oversized_descriptor_is_refused_as_scan_budget_before_any_read_or_gate() {
+    let mut io = Mock::new(16);
+    let mut r = relay();
+    io.ring[0] = measured::RUN3440[0] | (1 << 63);
+    io.put = 1;
+    let e = turn(&mut r, &mut io).unwrap_err();
+    assert!(
+        matches!(e, Fail::Refused(ref why) if why.starts_with("USER_RING_SCAN_BUDGET ") && why.contains("mode=Scan")),
+        "{e:?}"
+    );
+    assert!(r.dead);
+    assert_eq!(r.refused_entry, 0);
+    assert_eq!(r.cursor, 0);
+    assert!(format!("{:?}", r.life.counts()).contains("refused_scan_budget: 1"));
+    assert!(format!("{:?}", io.events).contains("ScanBudget"));
+    assert!(
+        !io.calls
+            .iter()
+            .any(|c| matches!(c, Call::ReadPb(_) | Call::Gate | Call::Entry(..)))
+    );
+}
+
+#[test]
+fn seeded_window_oversized_descriptor_is_refused_as_scan_budget_before_any_read_or_gate() {
+    let mut io = Mock::new(16);
+    let mut r = flipped_relay(&mut io, true);
+    io.ring[r.cursor as usize] = measured::RUN3440[0];
+    let e = turn(&mut r, &mut io).unwrap_err();
+    assert!(
+        matches!(e, Fail::Refused(ref why) if why.starts_with("USER_RING_SCAN_BUDGET ") && why.contains("mode=Window")),
+        "{e:?}"
+    );
+    assert!(r.dead);
+    assert_eq!(r.refused_entry, 0);
+    assert!(format!("{:?}", r.life.counts()).contains("refused_scan_budget: 1"));
+    assert!(format!("{:?}", io.events).contains("ScanBudget"));
+    assert!(
+        !io.calls
+            .iter()
+            .any(|c| matches!(c, Call::ReadPb(_) | Call::Gate | Call::Entry(..)))
+    );
+}
+
+#[test]
+fn a_large_captured_descriptor_is_not_reloaded_after_guest_mutation() {
+    let mut io = Mock::new(16);
+    let mut r = pointer_relay(&mut io);
+    let raw = measured::RUN3440[0];
+    io.ring[2] = raw;
+    io.rewrite_on_validate = Some(u64::MAX);
+    io.put = 3;
+    turn(&mut r, &mut io).unwrap();
+    assert_eq!(io.ring[2], u64::MAX);
+    assert_eq!(io.tested, raw);
+    assert!(io.calls.contains(&Call::Entry(PubKind::Pointer, raw)));
+    assert!(!io.calls.contains(&Call::Entry(PubKind::Pointer, u64::MAX)));
+}
+
+#[test]
+fn pointer_format_refuses_reserved_controls_and_unrepresentable_end_without_credit() {
+    let good = kf_abi::submit::gp_entry(0x4000, 4).unwrap();
+    let bads = [
+        good | 1,
+        good | 2,
+        good | (1 << 40),
+        1 << 32,
+        2 << 32,
+        kf_abi::submit::gp_entry((1 << 40) - 4, 4).unwrap(),
+    ];
+    for bad in bads {
+        let mut io = Mock::new(16);
+        let mut r = pointer_relay(&mut io);
+        let issued = r.fetch.issued();
+        io.ring[2] = bad;
+        io.put = 3;
+        let e = turn(&mut r, &mut io).unwrap_err();
+        assert!(
+            matches!(e, Fail::Refused(ref why) if why.starts_with("USER_RING_GP_FORMAT Entry")),
+            "{e:?}"
+        );
+        assert!(r.dead);
+        assert_eq!(r.fetch.issued(), issued);
+        assert_eq!(r.cursor, 2);
+    }
+}
+
+#[test]
+fn pointer_zero_length_nops_preserve_sync_level_operand_without_pb_or_budget() {
+    for raw in [0, 0xffff_ffff, (1 << 63) | (1 << 41) | 7] {
+        let mut io = Mock::new(16);
+        let mut r = pointer_relay(&mut io);
+        io.ring[2] = raw;
+        io.put = 3;
+        turn(&mut r, &mut io).unwrap();
+        assert!(io.calls.contains(&Call::Entry(PubKind::Pointer, raw)));
+        assert!(
+            !io.calls
+                .iter()
+                .any(|c| matches!(c, Call::ReadPb(_) | Call::ScanBound | Call::Gate))
+        );
+    }
+}
+
+#[test]
+fn a_ring_of_32768_maximum_pointer_descriptors_has_constant_work_and_no_pb_reads() {
+    let mut io = Mock::new(32768);
+    let mut r = pointer_relay(&mut io);
+    let raw = kf_abi::submit::gp_entry(0x4000, 8_388_604).unwrap();
+    for _ in 0..32768 {
+        let slot = r.cursor;
+        io.ring[slot as usize] = raw;
+        io.put = (slot + 1) & 32767;
+        io.calls.clear();
+        io.hw_get = r.fetch.issued() as u32 & 15;
+        io.hw_reference = Marks::value(r.marks.issued());
+        turn(&mut r, &mut io).unwrap();
+        assert!(io.calls.contains(&Call::Entry(PubKind::Pointer, raw)));
+        turn(&mut r, &mut io).unwrap();
+        assert!(io.calls.len() <= 20, "{:?}", io.calls);
+        assert!(
+            !io.calls
+                .iter()
+                .any(|c| matches!(c, Call::ReadPb(_) | Call::ScanBound))
+        );
+        assert!(!r.dead);
+    }
+}
+
+#[test]
+fn a_large_sync_wait_pointer_entry_seeds_the_next_fresh_window_gate() {
+    let mut io = Mock::new(16);
+    let mut r = pointer_relay(&mut io);
+    io.ring[2] = measured::RUN3440[0] | (1 << 63);
+    io.put = 3;
+    turn(&mut r, &mut io).unwrap();
+    assert_eq!(r.life.outstanding_sync(), Some(2));
+    io.put_entry(3, &ge(3, Kind::Plain));
+    io.put = 4;
+    io.epoch += 1;
+    io.live = 1;
+    io.calls.clear();
+    turn(&mut r, &mut io).unwrap();
+    assert_eq!(r.life.mode(), Mode::Window);
+    assert_eq!(io.gates(), 1);
+    assert!(!io.calls.iter().any(|c| matches!(c, Call::ReadPb(_))));
+}
+
+#[test]
+fn large_pointer_counters_aggregate_counts_but_keep_a_vm_maximum() {
+    let stats = kf_chan::user_lifecycle::LifecycleStats::default();
+    for len in [8_388_604, 1_026_596] {
+        let mut io = Mock::new(16);
+        let mut r = pointer_relay(&mut io);
+        io.ring[2] = kf_abi::submit::gp_entry(0x4000, len).unwrap();
+        io.put = 3;
+        turn(&mut r, &mut io).unwrap();
+        stats.add(&r.life.take_delta());
+        stats.add(&r.life.take_delta());
+    }
+    let summary = stats.summary();
+    assert!(summary.contains("pointer_large_entries=2 "), "{summary}");
+    assert!(
+        summary.contains("pointer_entry_max_bytes=8388604 "),
+        "{summary}"
+    );
+}
+
+#[test]
+fn small_and_control_pointer_entries_do_not_count_as_large() {
+    let mut io = Mock::new(16);
+    let mut r = pointer_relay(&mut io);
+    io.ring[2] = (1 << 63) | (1 << 41);
+    io.put = 3;
+    turn(&mut r, &mut io).unwrap();
+    let stats = kf_chan::user_lifecycle::LifecycleStats::default();
+    stats.add(&r.life.take_delta());
+    let summary = stats.summary();
+    assert!(summary.contains("pointer_large_entries=0 "), "{summary}");
+    assert!(summary.contains("pointer_entry_max_bytes=8 "), "{summary}");
+}
+
+#[test]
+fn small_descriptor_action_transcript() {
+    for always_scan in [false, true] {
+        let mut io = Mock::new(16);
+        let life = if always_scan {
+            Lifecycle::always_scan()
+        } else {
+            Lifecycle::new()
+        };
+        let mut r = Relay::new(16, life, Scan::for_subdevice(1).unwrap()).unwrap();
+        for i in 0..8 {
+            io.put_entry(
+                i,
+                &ge(i as u8, if i == 2 { Kind::SetObj } else { Kind::Plain }),
+            );
+        }
+        io.put = 8;
+        for _ in 0..16 {
+            io.hw_get = r.fetch.issued() as u32 & 15;
+            io.hw_reference = Marks::value(r.marks.issued());
+            turn(&mut r, &mut io).unwrap();
+        }
+        assert!(!r.dead);
+        assert_eq!(r.cursor, 8);
+        assert_eq!(r.written_get, 8);
+        let actions: Vec<_> = io.calls.iter().filter(|c| **c != Call::ScanBound).collect();
+        println!("SMALL_ACTIONS {always_scan}: {actions:?}");
+    }
+}
+
+#[test]
+fn a_large_length_changed_between_dword_loads_stores_exactly_the_validated_pair() {
+    let mut io = Mock::new(16);
+    let mut r = pointer_relay(&mut io);
+    let first = ge(1, Kind::Plain).raw();
+    let second = measured::RUN3440[0];
+    io.ring[2] = first;
+    io.rewrite_after_lo = Some(second);
+    io.put = 3;
+    let captured = (first & 0xffff_ffff) | (second & !0xffff_ffff);
+    turn(&mut r, &mut io).unwrap();
+    assert_ne!(captured, second);
+    assert_eq!(io.tested, captured);
+    assert!(io.calls.contains(&Call::Entry(PubKind::Pointer, captured)));
+    assert!(!io.calls.iter().any(|c| matches!(c, Call::ReadPb(_))));
+}
+
+#[test]
+fn pointer_maximum_is_not_summed_on_repeated_delta_flushes() {
+    let mut io = Mock::new(16);
+    let mut r = pointer_relay(&mut io);
+    io.ring[2] = measured::RUN3440[0];
+    io.put = 3;
+    turn(&mut r, &mut io).unwrap();
+    let stats = kf_chan::user_lifecycle::LifecycleStats::default();
+    for _ in 0..3 {
+        stats.add(&r.life.take_delta());
+        let summary = stats.summary();
+        assert!(summary.contains("pointer_large_entries=1 "), "{summary}");
+        assert!(
+            summary.contains("pointer_entry_max_bytes=1026596 "),
+            "{summary}"
+        );
+    }
+}
+
+#[test]
+fn pointer_admission_at_each_length_boundary_is_intact_and_constant_work() {
+    let cap = kf_chan::user_storage::MAX_SOURCE_BYTES;
+    for len in [4, cap - 4, cap, cap + 4, 8_388_600, 8_388_604] {
+        let mut io = Mock::new(16);
+        let mut r = pointer_relay(&mut io);
+        let raw = kf_abi::submit::gp_entry(0x4000, len).unwrap() | (1 << 41);
+        io.ring[2] = raw;
+        io.put = 3;
+        turn(&mut r, &mut io).unwrap();
+        // Pointer size is constrained by C56F format; it never requests a PB copy or scan budget.
+        assert!(io.calls.contains(&Call::Entry(PubKind::Pointer, raw)));
+        assert!(
+            !io.calls
+                .iter()
+                .any(|c| matches!(c, Call::ReadPb(_) | Call::Stage | Call::ScanBound))
+        );
+        assert!(io.calls.len() <= 16);
+        assert_eq!(r.life.counts().pointer_pb_read_violation, 0);
+    }
+}
+
+fn scan_boundary(window: bool) {
+    let cap = kf_chan::user_storage::MAX_SOURCE_BYTES;
+    for len in [cap - 4, cap, cap + 4, 8_388_604] {
+        let mut io = Mock::new(16);
+        let mut r = if window {
+            flipped_relay(&mut io, false)
+        } else {
+            relay()
+        };
+        io.calls.clear();
+        let slot = r.cursor;
+        let raw = kf_abi::submit::gp_entry(0x4000, len).unwrap();
+        io.ring[slot as usize] = raw;
+        io.put = (slot + 1) & 15;
+        // Only the admitted copy cases allocate PB bytes in this test.
+        if len <= cap {
+            io.pb.insert(raw, vec![0; len as usize / 4]);
+        }
+        let issued = r.fetch.issued();
+        let result = turn(&mut r, &mut io);
+        if len > cap {
+            assert!(
+                matches!(result, Err(Fail::Refused(ref why)) if why.starts_with("USER_RING_SCAN_BUDGET "))
+            );
+            assert_eq!(
+                r.fetch.issued(),
+                issued,
+                "size refusal creates no native receipt"
+            );
+            assert_eq!(r.cursor, slot);
+            assert!(!io.calls.iter().any(|c| matches!(
+                c,
+                Call::ReadPb(_) | Call::Stage | Call::Gate | Call::Entry(..)
+            )));
+        } else {
+            result.unwrap();
+            // Scan and Window admit the copy bound inclusively; all larger copies stop before any read or gate.
+            assert_eq!(io.count(&Call::ReadPb(raw)), 1);
+            assert_eq!(r.cursor, (slot + 1) & 15);
+            assert!(!r.dead);
+        }
+    }
+}
+
+#[test]
+fn scan_copy_bound_is_inclusive_and_checked_before_io() {
+    scan_boundary(false);
+}
+
+#[test]
+fn window_copy_bound_is_inclusive_and_checked_before_io() {
+    scan_boundary(true);
+}
+
+#[test]
+fn pointer_end_address_boundary_is_checked_without_copying_or_credit_on_refusal() {
+    for len in [4, 8, 12] {
+        let mut io = Mock::new(16);
+        let mut r = pointer_relay(&mut io);
+        let raw = kf_abi::submit::gp_entry((1 << 40) - 8, len).unwrap();
+        io.ring[2] = raw;
+        io.put = 3;
+        let issued = r.fetch.issued();
+        let result = turn(&mut r, &mut io);
+        // The first dword beyond the PB must be strictly below 2^40, even in Pointer mode.
+        if len < 8 {
+            result.unwrap();
+            assert!(io.calls.contains(&Call::Entry(PubKind::Pointer, raw)));
+        } else {
+            assert!(
+                matches!(result, Err(Fail::Refused(ref why)) if why.starts_with("USER_RING_GP_FORMAT Entry"))
+            );
+            assert_eq!(r.fetch.issued(), issued);
+            assert_eq!(r.cursor, 2);
+        }
+        assert!(
+            !io.calls
+                .iter()
+                .any(|c| matches!(c, Call::ReadPb(_) | Call::Stage))
+        );
+    }
+}
+
+#[test]
+fn native_ring_capacity_limits_and_wrap_preserve_real_fetch_credit() {
+    for entries in [0, 1, 2, 3, 511, 513, 1024] {
+        assert!(Fetch::new(entries).is_err());
+    }
+    for entries in [4, 256, 512] {
+        let mut fetch = Fetch::new(entries).unwrap();
+        for lap in 0..2 {
+            for slot in 0..entries - 1 {
+                let (actual, _) = fetch.publish(Some((1, slot))).unwrap();
+                assert_eq!(actual, (lap * (entries - 1) + slot) & (entries - 1));
+            }
+            // A full ring refuses before emitting; only native GET restores the reserved capacity.
+            assert_eq!(fetch.available(), 0);
+            assert!(fetch.publish(None).is_err());
+            let get = fetch.issued() as u32 & (entries - 1);
+            assert_eq!(fetch.observe(get).unwrap().len(), (entries - 1) as usize);
+            assert_eq!(fetch.available(), entries - 1);
+        }
+    }
 }
