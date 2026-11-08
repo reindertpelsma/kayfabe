@@ -67,6 +67,98 @@ class MappingTests(unittest.TestCase):
         with self.assertRaises(scrub.ScrubError):
             scrub.Pseudonymizer(b"", {UUID})
 
+    def test_known_short_alias_becomes_full_synthetic_reference(self):
+        mapper = self.mapper()
+        self.assertEqual(
+            scrub.rewrite_text(b"board GPU-" + UUID[:8], mapper),
+            b"board GPU-" + mapper.uuid(UUID),
+        )
+
+    def test_alias_and_provenance_cross_reference_keep_same_identity(self):
+        mapper = self.mapper()
+        source = PAYLOAD + b"; provenance GPU-" + UUID[:8]
+        self.assertEqual(
+            scrub.rewrite_text(source, mapper),
+            b"GPU-" + mapper.uuid(UUID) + b"; provenance GPU-" + mapper.uuid(UUID),
+        )
+
+    def test_ambiguous_short_alias_refuses(self):
+        other = UUID[:-1] + b"f"
+        mapper = scrub.Pseudonymizer(KEY, {UUID, other})
+        with self.assertRaises(scrub.ScrubError):
+            scrub.rewrite_text(b"GPU-" + UUID[:8], mapper)
+
+    def test_ambiguous_alias_inside_base64_refuses(self):
+        mapper = scrub.Pseudonymizer(KEY, {UUID, UUID[:-1] + b"f"})
+        source = base64.b64encode(b"GPU-" + UUID[:8])
+        with self.assertRaises(scrub.ScrubError):
+            scrub.rewrite_text(source, mapper)
+
+    def test_unrelated_short_alias_stays_unchanged(self):
+        source = b"GPU-" + b"98" * 4
+        self.assertEqual(scrub.rewrite_text(source, self.mapper()), source)
+
+    def test_marked_compact_rewrites_but_unmarked_counter_stays(self):
+        mapper = self.mapper()
+        compact = UUID.replace(b"-", b"")
+        self.assertEqual(
+            scrub.rewrite_text(b"GPU-" + compact + b" counter=" + compact, mapper),
+            b"GPU-" + mapper.uuid(UUID).replace(b"-", b"") + b" counter=" + compact,
+        )
+
+    def test_compact_gpu_assignment_inside_gzip(self):
+        mapper = self.mapper()
+        source = b"gpu_uuid=" + UUID.replace(b"-", b"")
+        result = gzip.decompress(scrub.rewrite(gzip.compress(source), mapper))
+        self.assertEqual(result, b"gpu_uuid=" + mapper.uuid(UUID).replace(b"-", b""))
+
+    def test_wrapped_uuid_preserves_whitespace(self):
+        mapper = self.mapper()
+        source = b"GPU-\n" + UUID[:13] + b"\r\n" + UUID[13:]
+        expected = b"GPU-\n" + mapper.uuid(UUID)[:13] + b"\r\n" + mapper.uuid(UUID)[13:]
+        self.assertEqual(scrub.rewrite_text(source, mapper), expected)
+
+    def test_wrapped_uuid_inside_tar(self):
+        mapper = self.mapper()
+        result = scrub.rewrite(tar([("capture", b"GPU-\n" + UUID)]), mapper)
+        with tarfile.open(fileobj=io.BytesIO(result)) as archive:
+            self.assertEqual(
+                archive.extractfile("capture").read(), b"GPU-\n" + mapper.uuid(UUID)
+            )
+
+    def test_eight_character_base64_wrapping_roundtrips(self):
+        mapper = self.mapper()
+        token = base64.b64encode(PAYLOAD)
+        source = b"\n".join(token[i : i + 8] for i in range(0, len(token), 8))
+        result = scrub.rewrite_text(source, mapper)
+        self.assertEqual(base64.b64decode(result), b"GPU-" + mapper.uuid(UUID))
+
+    def test_short_alias_base64_growth_stays_valid(self):
+        mapper = self.mapper()
+        source = base64.b64encode(b"GPU-" + UUID[:8])
+        self.assertEqual(
+            base64.b64decode(scrub.rewrite_text(source, mapper)),
+            b"GPU-" + mapper.uuid(UUID),
+        )
+
+    def test_short_alias_base64_growth_inside_tar_stays_valid(self):
+        mapper = self.mapper()
+        source = tar([("encoded", base64.b64encode(b"GPU-" + UUID[:8]))])
+        result = scrub.rewrite(source, mapper)
+        with tarfile.open(fileobj=io.BytesIO(result)) as archive:
+            self.assertEqual(
+                base64.b64decode(archive.extractfile("encoded").read()),
+                b"GPU-" + mapper.uuid(UUID),
+            )
+
+    def test_short_alias_hex_growth_stays_valid(self):
+        mapper = self.mapper()
+        source = (b"GPU-" + UUID[:8]).hex().encode()
+        self.assertEqual(
+            bytes.fromhex(scrub.rewrite_text(source, mapper).decode()),
+            b"GPU-" + mapper.uuid(UUID),
+        )
+
     def test_formatted_uuid_crossrefs_leave_unmarked_hex_unchanged(self):
         mapper = self.mapper()
         body = PAYLOAD + b" " + UUID + b" " + UUID.replace(b"-", b"")

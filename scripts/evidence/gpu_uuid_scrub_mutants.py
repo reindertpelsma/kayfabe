@@ -10,6 +10,19 @@ import tempfile
 HERE = Path(__file__).resolve().parent
 CI = HERE.parent / "ci"
 MUTANTS = [
+    ("known-alias-unscrubbed", "data = SHORT_ALIAS.sub(alias, data)", "pass"),
+    ("ambiguous-alias-guessed", "if len(candidates) > 1:", "if False:"),
+    ("marked-format-unscrubbed", "data = gate.PATTERN.sub(marked, data)", "pass"),
+    (
+        "encoded-alias-growth-truncated",
+        'if len(source.translate(None, b" \\t\\r\\n")) != len(encoded):',
+        "if False:",
+    ),
+    (
+        "base64-growth-padding-lost",
+        'if not changed_width and not source.rstrip().endswith(b"="):',
+        'if not source.rstrip().endswith(b"="):',
+    ),
     ("logical-stream-digests-ignored", "if extra_tables is not None:", "if False:"),
     (
         "key-ignored",
@@ -33,13 +46,13 @@ MUTANTS = [
     ),
     (
         "unmarked-binary-corrupted",
-        "    return data\n\n\ndef rewrite_text",
-        '    for old, new in mapper.values.items():\n        data = data.replace(bytes.fromhex(old.decode().replace("-", "")), bytes.fromhex(new.decode().replace("-", "")))\n    return data\n\n\ndef rewrite_text',
+        "    return data\n\n\ndef preserve_encoding_layout",
+        '    for old, new in mapper.values.items():\n        data = data.replace(bytes.fromhex(old.decode().replace("-", "")), bytes.fromhex(new.decode().replace("-", "")))\n    return data\n\n\ndef preserve_encoding_layout',
     ),
     (
         "unmarked-hex-counter-corrupted",
-        "    return data\n\n\ndef rewrite_text",
-        '    for old, new in mapper.values.items():\n        data = data.replace(old.replace(b"-", b""), new.replace(b"-", b""))\n    return data\n\n\ndef rewrite_text',
+        "    return data\n\n\ndef preserve_encoding_layout",
+        '    for old, new in mapper.values.items():\n        data = data.replace(old.replace(b"-", b""), new.replace(b"-", b""))\n    return data\n\n\ndef preserve_encoding_layout',
     ),
     (
         "md5-stale",

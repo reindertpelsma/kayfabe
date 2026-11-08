@@ -13,6 +13,8 @@ network mutation. gzip headers, tar/zip order, member names and mtimes are retai
 where possible. Untouched containers are byte-identical. Container compression may
 change for rewritten containers. Every input is validated by the bounded CI scanner
 before writes; all transformed files are staged in memory and rescanned first.
+Known eight-hex GPU aliases expand to the same full synthetic identity. Ambiguous
+prefixes refuse before writes; unknown aliases are unchanged, never guessed.
 """
 
 from __future__ import annotations
@@ -62,14 +64,54 @@ class Pseudonymizer:
 
 
 BARE = re.compile(gate._UUID, re.I)
+SHORT_ALIAS = re.compile(rb"gpu-([0-9a-f]{8})(?![0-9a-f-])", re.I)
 
 
 def replace_known(data, mapper):
     # Replace canonical UUID text, including decoded text encodings. Unmarked
     # 16-byte blobs and 32-digit hex numbers may be ordinary record counters;
     # their equality to a UUID value supplies no authority to rewrite them.
+    def marked(match):
+        original = gate.canonical_uuid(match.group(1))
+        replacement = mapper.values.get(original)
+        if replacement is None:
+            return match.group()
+        token = match.group(1)
+        if b"-" not in token:
+            replacement = replacement.replace(b"-", b"")
+        digits = iter(replacement)
+        rendered = bytes(byte if byte in b" \t\r\n" else next(digits) for byte in token)
+        start, end = match.span(1)
+        return (
+            match.group()[: start - match.start()]
+            + rendered
+            + match.group()[end - match.start() :]
+        )
+
+    data = gate.PATTERN.sub(marked, data)
     data = BARE.sub(lambda m: mapper.values.get(m.group().lower(), m.group()), data)
+
+    def alias(match):
+        prefix = match.group(1).lower()
+        candidates = {
+            new for old, new in mapper.values.items() if old.startswith(prefix)
+        }
+        if len(candidates) > 1:
+            raise ScrubError("ambiguous short GPU alias; no writes made")
+        if candidates:
+            return b"GPU-" + candidates.pop()
+        return match.group()
+
+    data = SHORT_ALIAS.sub(alias, data)
     return data
+
+
+def preserve_encoding_layout(source, encoded):
+    if len(source.translate(None, b" \t\r\n")) != len(encoded):
+        # Expanding a short alias to its full identity changes the token width.
+        return encoded
+    digits = iter(encoded)
+    return bytes(byte if byte in b" \t\r\n" else next(digits) for byte in source)
 
 
 def rewrite_text(data, mapper):
@@ -79,28 +121,21 @@ def rewrite_text(data, mapper):
         if new == decoded:
             continue
         source = data[start:end]
+        changed_width = len(new) != len(decoded)
         if encoding == "hex":
-            digits = iter(new.hex().encode())
-            # Preserve whitespace, hex case convention, and token length.
+            # Preserve whitespace and hex case when the token length survives.
             upper = any(65 <= x <= 70 for x in source) and not any(
                 97 <= x <= 102 for x in source
             )
-            rendered = bytearray()
-            for byte in source:
-                if byte in b" \t\r\n":
-                    rendered.append(byte)
-                else:
-                    digit = next(digits)
-                    rendered.append(
-                        digit - 32 if upper and 97 <= digit <= 102 else digit
-                    )
-            new = bytes(rendered)
+            encoded = new.hex().encode()
+            new = preserve_encoding_layout(
+                source, encoded.upper() if upper else encoded
+            )
         elif encoding == "base64":
             new = base64.b64encode(new)
-            if not source.rstrip().endswith(b"="):
+            if not changed_width and not source.rstrip().endswith(b"="):
                 new = new.rstrip(b"=")
-            digits = iter(new)
-            new = bytes(byte if byte in b" \t\r\n" else next(digits) for byte in source)
+            new = preserve_encoding_layout(source, new)
         else:
             new = new.decode().encode(encoding)
         edits.append((start, end, new))

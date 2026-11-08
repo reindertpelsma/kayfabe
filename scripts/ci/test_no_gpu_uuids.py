@@ -82,9 +82,13 @@ class ScanTests(unittest.TestCase):
         self.assertEqual(sum(gate.scan(near_miss.encode()).values()), 1)
 
     def test_scope_covers_the_source_trees_not_only_traces_and_docs(self):
-        for top in ("traces", "docs", "crates", "scripts", "tools", "archive"):
-            with self.subTest(top=top):
-                self.assertIn(top, gate.SCOPE)
+        tree = Tree()
+        self.addCleanup(tree._tmp.cleanup)
+        names = ["ROOT.txt"] + [f"{top}/capture" for top in
+                 ("traces", "docs", "crates", "scripts", "tools", "archive", "firmware")]
+        for name in names:
+            tree.write(name, "clean")
+        self.assertEqual(gate.tracked(tree.root), sorted(names))
 
     def test_a_bare_uuid_without_a_gpu_marker_is_not_a_hit(self):
         self.assertEqual(gate.scan(A.encode()), Counter())
@@ -161,7 +165,7 @@ class CompareTests(unittest.TestCase):
 
 
 class ScopeTests(unittest.TestCase):
-    def test_the_listed_trees_are_scanned_and_top_level_files_are_not(self):
+    def test_all_trees_and_top_level_files_are_scanned(self):
         t = Tree()
         t.write("traces/a.log", f"GPU-{A}")
         t.write("docs/design/b.md", f"GPU-{B}")
@@ -170,7 +174,7 @@ class ScopeTests(unittest.TestCase):
         t.write("third_party/x.c", f"GPU-{C}")
         self.assertEqual(
             sorted(gate.tracked(t.root)),
-            ["crates/kf-x/src/c.rs", "docs/design/b.md", "traces/a.log"],
+            ["README.md", "crates/kf-x/src/c.rs", "docs/design/b.md", "third_party/x.c", "traces/a.log"],
         )
 
     def test_scan_tree_leaves_out_files_without_a_hit(self):
@@ -251,11 +255,14 @@ class EndToEndTests(unittest.TestCase):
                 self.assertEqual(code, 1)
                 self.assertIn(f"NEW   {rel}", out)
 
-    def test_files_outside_the_scanned_trees_are_not_the_gates_business(self):
+    def test_files_outside_the_old_scope_also_fail_the_gate(self):
         t = self.seeded()
         t.write("README.md", f"GPU-{C}\n")
         t.write("third_party/ogkm/x.c", f"gpu-uuid={C}\n")
-        self.assertEqual(t.run()[0], 0)
+        code, output = t.run()
+        self.assertEqual(code, 1)
+        self.assertIn("NEW   README.md", output)
+        self.assertIn("NEW   third_party/ogkm/x.c", output)
 
     def test_a_known_uuid_in_other_letter_case_is_still_the_known_one(self):
         t = self.seeded()

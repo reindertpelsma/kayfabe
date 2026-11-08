@@ -26,6 +26,11 @@ shared depth/member/expanded-byte limits. Text, ASCII hex/base64 and ASCII UTF-1
 representations are checked. Corrupt/over-limit archives fail closed without
 changing the baseline. See the constants below for the exact bounds.
 
+All tracked regular files and symlink target texts are inspected; symlinks are
+never followed and submodule gitlinks are excluded as separate repositories.
+Explicit GPU fields also admit compact hex and bounded whitespace wrapping.
+This gate does not classify arbitrary short aliases or physical serial numbers.
+
 Exit codes: 0 clean; 1 a new hit or a stale baseline; 2 usage/incomplete scan.
 """
 
@@ -46,6 +51,7 @@ import hashlib
 import json
 import os
 import re
+import stat
 import subprocess
 import sys
 from collections import Counter
@@ -53,29 +59,40 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 BASELINE = Path(__file__).resolve().parent / "gpu-uuids-baseline.json"
-SCOPE = (
-    "traces",
-    "docs",
-    "crates",
-    "scripts",
-    "tools",
-    "archive",
-    "site",
-    "ci",
-    "broker",
-    "qemu",
-    "cuda",
-)
 SYNTHETIC_PREFIX = "fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e"
 
 _UUID = rb"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+# A complete marked field has a size limit, checked before accepting a match.
+# Over-limit formatting refuses rather than disappearing from the scan. Only marked
+# fields admit compact numbers; unmarked counters and binary values stay opaque.
+WS = rb"[ \t\r\n]*"
+MAX_MARKED_BYTES = 4096
+
+
+def hex_group(length):
+    return rb"[0-9a-f](?:" + WS + rb"[0-9a-f]){" + str(length - 1).encode() + rb"}"
+
+
+WRAPPED_UUID = (WS + b"-" + WS).join(hex_group(n) for n in (8, 4, 4, 4, 12))
+COMPACT_UUID = hex_group(32)
 PATTERN = re.compile(
-    rb"(?:gpu-|gpu[-_]uuid[ \t]*[=:][ \t]*[\"']?|deviceUUID[ \t]*[=:][ \t]*)("
-    + _UUID
+    rb"(?:gpu-|gpu[-_]uuid[ \t]*[=:]|deviceUUID[ \t]*[=:])"
+    + WS
+    + rb"[\"']?("
+    + WRAPPED_UUID
+    + b"|"
+    + COMPACT_UUID
     + rb")(?![0-9a-f])",
     re.IGNORECASE,
 )
 NOTE = "Existing hits, fingerprinted. Shrink-only: no_gpu_uuids.py --shrink."
+
+
+def canonical_uuid(value):
+    compact = re.sub(rb"[- \t\r\n]", b"", value).lower()
+    return b"-".join(
+        compact[a:b] for a, b in ((0, 8), (8, 12), (12, 16), (16, 20), (20, 32))
+    )
 
 
 def fingerprint(uuid: bytes) -> str:
@@ -97,9 +114,12 @@ MAX_EXPANDED_BYTES = 256 * 1024 * 1024
 MAX_MEMBERS = 10000
 MAX_DEPTH = 6
 HEX = re.compile(
-    rb"(?<![0-9a-f])[0-9a-f][0-9a-f \t\r\n]{70,}[0-9a-f](?![0-9a-f])", re.I
+    rb"(?<![0-9a-f])[0-9a-f][0-9a-f \t\r\n]{22,}[0-9a-f](?![0-9a-f])", re.I
 )
-B64 = re.compile(rb"(?<![A-Za-z0-9+/])[A-Za-z0-9+/]{16,}={0,2}")
+B64 = re.compile(
+    rb"(?<![A-Za-z0-9+/])[A-Za-z0-9+/]{16,}={0,2}"
+    rb"|(?m:^[ \t]*(?P<short>[A-Za-z0-9+/]{2,15}={0,2})(?=[ \t]*\r?$))"
+)
 B64_TAIL = re.compile(
     rb"[ \t]*\r?\n[ \t]*([A-Za-z0-9+/]{2,15}={0,2})(?![A-Za-z0-9+/=])"
 )
@@ -139,8 +159,9 @@ def encoded_views(data, *, marked_only=False):
     recursively reinterpret arbitrary tokens (which would duplicate occurrences).
     """
     low = data.lower()
-    # A canonical UUID has hyphens, whose ASCII hex byte is 2d.
-    hex_candidates = HEX.finditer(data) if b"2d" in low else ()
+    # Compact assignments need not contain a hyphen (2d). Short marked aliases
+    # are also exposed to the scrubber, which resolves them against known IDs.
+    hex_candidates = HEX.finditer(data)
     for match in hex_candidates:
         try:
             decoded = bytes.fromhex(match.group().decode())
@@ -151,21 +172,25 @@ def encoded_views(data, *, marked_only=False):
     # rewriting. Ordinary words separated by spaces are separate candidates.
     pending = None
     for match in B64.finditer(data):
+        start, end = (
+            match.span("short") if match.group("short") is not None else match.span()
+        )
+        token = data[start:end]
         if pending is not None:
-            start, end, tokens = pending
-            gap = data[end : match.start()]
+            first, previous_end, tokens = pending
+            gap = data[previous_end:start]
             if (
                 b"\n" in gap
                 and not gap.strip(b" \t\r\n")
                 and not tokens[-1].endswith(b"=")
             ):
-                tokens.append(match.group())
-                pending = (start, match.end(), tokens)
+                tokens.append(token)
+                pending = (first, end, tokens)
                 continue
             view = decode_base64(pending, data)
             if view is not None:
                 yield view
-        pending = (match.start(), match.end(), [match.group()])
+        pending = (start, end, [token])
     if pending is not None:
         view = decode_base64(pending, data)
         if view is not None:
@@ -194,7 +219,7 @@ def decode_base64(candidate, data):
     if tail is not None and not token.endswith(b"="):
         token += tail.group(1)
         end = tail.end()
-    if len(token) < 48 or len(token) % 4 == 1:
+    if len(token) < 16 or len(token) % 4 == 1:
         return None
     try:
         decoded = base64.b64decode(token + b"=" * (-len(token) % 4), validate=True)
@@ -209,7 +234,9 @@ def plain_scan(data, identities=None):
         return Counter()
     hits = Counter()
     for match in PATTERN.finditer(data):
-        uuid = match.group(1)
+        if match.end() - match.start() > MAX_MARKED_BYTES:
+            raise ScanError("marked UUID formatting limit")
+        uuid = canonical_uuid(match.group(1))
         if synthetic(uuid):
             continue
         hits[fingerprint(uuid)] += 1
@@ -229,7 +256,10 @@ def archive_kind(data):
     """Magic, not suffix: renaming a bundle cannot bypass the gate."""
     if data.startswith(b"\xfd7zXZ\x00"):
         return "xz"
-    if data.startswith(b"\x28\xb5\x2f\xfd"):
+    if data.startswith(b"\x28\xb5\x2f\xfd") or (
+        len(data) >= 4
+        and 0x184D2A50 <= int.from_bytes(data[:4], "little") <= 0x184D2A5F
+    ):
         return "zstd"
     if data.startswith(b"\x1f\x8b"):
         return "gzip"
@@ -393,32 +423,76 @@ def scan(data: bytes, *, _depth=0, _budget=None, _uuids=None) -> Counter:
 
 
 def tracked(root: Path) -> list[str]:
-    """The files the gate looks at: git's tracked files under traces/ and docs/, else a walk."""
+    """All tracked regular files and symlink texts; gitlinks are separate repos."""
     if (root / ".git").exists():
         out = subprocess.run(
-            ["git", "-C", str(root), "ls-files", "-z", "--", *SCOPE],
+            ["git", "-C", str(root), "ls-files", "-z", "--stage"],
             check=True,
             capture_output=True,
         ).stdout
-        return sorted(p for p in out.decode().split("\0") if p)
+        found = []
+        for entry in out.split(b"\0"):
+            if not entry:
+                continue
+            header, path = entry.split(b"\t", 1)
+            mode, _oid, stage = header.split()
+            if stage != b"0":
+                raise ScanError("unmerged tracked file")
+            if mode == b"160000":
+                continue
+            if mode not in (b"100644", b"100755", b"120000"):
+                raise ScanError("unsupported tracked file mode")
+            found.append(os.fsdecode(path))
+        return sorted(found)
     found = []
-    for top in SCOPE:
-        for base, _dirs, names in os.walk(root / top):
-            found += [str((Path(base) / n).relative_to(root)) for n in names]
+    for base, dirs, names in os.walk(root, followlinks=False):
+        dirs[:] = [name for name in dirs if name != ".git"]
+        links = [name for name in dirs if (Path(base) / name).is_symlink()]
+        found += [str((Path(base) / n).relative_to(root)) for n in names + links]
     return sorted(found)
+
+
+def read_tracked(root, rel):
+    """Read without following leaf or ancestor symlinks, including rename races."""
+    parts = Path(rel).parts
+    if not parts or Path(rel).is_absolute() or any(p in ("..", ".") for p in parts):
+        raise ScanError("invalid tracked path")
+    directory = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        for part in parts[:-1]:
+            child = os.open(
+                part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=directory
+            )
+            os.close(directory)
+            directory = child
+        info = os.stat(parts[-1], dir_fd=directory, follow_symlinks=False)
+        if stat.S_ISLNK(info.st_mode):
+            return os.fsencode(os.readlink(parts[-1], dir_fd=directory))
+        if stat.S_ISDIR(info.st_mode):
+            return None
+        if not stat.S_ISREG(info.st_mode):
+            raise ScanError("nonregular tracked file")
+        fd = os.open(
+            parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory
+        )
+        with os.fdopen(fd, "rb") as stream:
+            if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
+                raise ScanError("nonregular tracked file")
+            data = stream.read(MAX_FILE_BYTES + 1)
+        if len(data) > MAX_FILE_BYTES:
+            raise ScanError("tracked file size limit")
+        return data
+    finally:
+        os.close(directory)
 
 
 def scan_tree(root: Path, rels: list[str]) -> dict[str, Counter]:
     """Relative path -> fingerprints found there (files without a hit are left out)."""
     found = {}
     for rel in rels:
-        path = root / rel
-        if not path.is_file():  # a tracked symlink to nowhere, a submodule entry
+        data = read_tracked(root, rel)
+        if data is None:
             continue
-        with path.open("rb") as stream:
-            data = stream.read(MAX_FILE_BYTES + 1)
-        if len(data) > MAX_FILE_BYTES:
-            raise ScanError("tracked file size limit")
         hits = scan(data)
         if hits:
             found[rel] = hits

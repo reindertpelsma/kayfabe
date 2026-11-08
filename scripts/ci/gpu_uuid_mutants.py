@@ -13,6 +13,77 @@ import tempfile
 
 HERE = Path(__file__).resolve().parent
 MUTANTS = [
+    (
+        "marked-compact-hidden",
+        "COMPACT_UUID = hex_group(32)",
+        'COMPACT_UUID = rb"(?!)"',
+    ),
+    (
+        "wrapped-uuid-hidden",
+        'WRAPPED_UUID = (WS + b"-" + WS).join(hex_group(n) for n in (8, 4, 4, 4, 12))',
+        "WRAPPED_UUID = _UUID",
+    ),
+    ("marker-newline-hidden", "    + WS\n", '    + rb"[ \\t]{0,64}"\n'),
+    (
+        "short-wrapped-base64-hidden",
+        "(?P<short>[A-Za-z0-9+/]{2,15}",
+        "(?P<short>[A-Za-z0-9+/]{16,16}",
+    ),
+    (
+        "compact-hex-prefiltered",
+        "hex_candidates = HEX.finditer(data)",
+        'hex_candidates = HEX.finditer(data) if b"2d" in low else ()',
+    ),
+    (
+        "formatted-identity-not-normalized",
+        "uuid = canonical_uuid(match.group(1))",
+        "uuid = match.group(1)",
+    ),
+    (
+        "marked-format-limit-ignored",
+        "if match.end() - match.start() > MAX_MARKED_BYTES:",
+        "if False:",
+    ),
+    (
+        "skippable-zstd-hidden",
+        'and 0x184D2A50 <= int.from_bytes(data[:4], "little") <= 0x184D2A5F',
+        "and False",
+    ),
+    (
+        "tracked-roots-omitted",
+        '"ls-files", "-z", "--stage"',
+        '"ls-files", "-z", "--stage", "--", "traces", "docs"',
+    ),
+    (
+        "unversioned-roots-omitted",
+        "os.walk(root, followlinks=False)",
+        'os.walk(root / "traces", followlinks=False)',
+    ),
+    (
+        "gitlinks-treated-as-files",
+        'if mode == b"160000":',
+        "if False:",
+    ),
+    (
+        "symlink-text-omitted",
+        "return os.fsencode(os.readlink(parts[-1], dir_fd=directory))",
+        'return b""',
+    ),
+    (
+        "symlink-target-followed",
+        "return os.fsencode(os.readlink(parts[-1], dir_fd=directory))",
+        "return (root / rel).read_bytes()",
+    ),
+    (
+        "symlink-parent-followed",
+        "part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=directory",
+        "part, os.O_RDONLY | os.O_DIRECTORY, dir_fd=directory",
+    ),
+    (
+        "nonregular-file-accepted",
+        'if not stat.S_ISREG(info.st_mode):\n            raise ScanError("nonregular tracked file")',
+        'if not stat.S_ISREG(info.st_mode):\n            return b""',
+    ),
     ("gzip-hidden", 'return "gzip"', "return None"),
     ("tar-hidden", 'elif kind == "tar":', "elif False:"),
     ("zip-hidden", 'elif kind == "zip":', "elif False:"),
@@ -64,7 +135,7 @@ MUTANTS = [
     ),
 ]
 COLLECT = """import io,json,sys,unittest
-suite=unittest.defaultTestLoader.discover('.',pattern='test_gpu_uuid_archives.py')
+suite=unittest.defaultTestLoader.discover('.',pattern='test_gpu_uuid*.py')
 r=unittest.TextTestRunner(stream=io.StringIO()).run(suite)
 print(json.dumps({'tests':r.testsRun,'killers':sorted(set(t.id() for t,_ in r.failures+r.errors))}))
 """
@@ -90,6 +161,9 @@ def main():
         directory = Path(parent)
         (directory / "test_gpu_uuid_archives.py").write_bytes(
             (HERE / "test_gpu_uuid_archives.py").read_bytes()
+        )
+        (directory / "test_gpu_uuid_review.py").write_bytes(
+            (HERE / "test_gpu_uuid_review.py").read_bytes()
         )
         target = directory / "no_gpu_uuids.py"
         target.write_text(source)
