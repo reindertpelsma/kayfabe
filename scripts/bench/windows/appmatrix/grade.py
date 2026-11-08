@@ -27,6 +27,9 @@ import json
 import os
 import re
 import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "ci"))
+import app_policy
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 KV = re.compile(r"(\w+)=((?:(?! \w+=).)*)")
@@ -91,6 +94,7 @@ def main(argv=None):
     a = ap.parse_args(argv)
     expected = [x for x in a.expected.split(",") if x]
     rc, kind, counts, per, extra = grade(a.run_dir, expected)
+    app_policy.main(["app_policy.py", "windows"])
     for app in expected:
         v = per[app]
         print(f"WINAPPS_APP app={app} class={v['cls']} verdict={v['verdict']} batched={v['batched']} alone={v['alone']} "

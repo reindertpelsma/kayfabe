@@ -131,6 +131,12 @@ class PolicyValidation(unittest.TestCase):
     def test_unknown_unsupported_app_is_rejected(self):
         self.assertTrue(self.check_with(lambda p: p['known_unsupported'].update(not_an_app='unsupported (UVM): missing definition')))
 
+    def test_unsupported_cannot_overlap_owner_decision(self):
+        self.assertTrue(self.check_with(lambda p: p['owner_decision']['apps'].append('managed_t')))
+
+    def test_unsupported_cannot_overlap_manual(self):
+        self.assertTrue(self.check_with(lambda p: p['manual']['apps'].append('managed_t')))
+
     def test_explicit_manual_probe_cannot_enter_a_vast_gate(self):
         with self.assertRaises(SystemExit):
             G.resolve('ids:overlay_yuv_probe')
@@ -177,6 +183,52 @@ class Summaries(unittest.TestCase):
         for name in UVM:
             self.assertIn('| ' + name + ' |', done.stdout)
         self.assertEqual(done.stdout.count('unsupported (UVM)'), 8)  # status column and observation detail
+
+class LinuxGatePolicy(unittest.TestCase):
+    def run_gate(self, name):
+        import os
+        import subprocess
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp)
+            (work / 'list').write_text(name + '\n')
+            done = subprocess.run(['bash', str(ROOT / 'scripts/bench/box/apps_gate.sh'), 'policy', str(work / 'prov')],
+                                  env={'PATH': os.environ['PATH'], 'KF_APPS_LIST': str(work / 'list'),
+                                       'KF_APPS_ROOT': str(work / 'unprovisioned')},
+                                  capture_output=True, text=True, timeout=20)
+        self.assertEqual(done.returncode, 3, done.stdout + done.stderr)
+        self.assertIn('APPS_STAGE_RETRY class=BAD_LIST', done.stdout)
+        self.assertNotIn('APPS_STAGE_START', done.stdout)
+
+    def test_gate_refuses_a_streams_override_before_setup(self):
+        self.run_gate('UnifiedMemoryStreams')
+
+    def test_gate_refuses_an_attach_override_before_setup(self):
+        self.run_gate('attach_verify')
+
+class GradePolicy(unittest.TestCase):
+    def output(self):
+        import contextlib
+        import io
+        import tempfile
+        spec = importlib.util.spec_from_file_location('win_grade', ROOT / 'scripts/bench/windows/appmatrix/grade.py')
+        grade = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(grade)
+        out = io.StringIO()
+        with tempfile.TemporaryDirectory() as tmp, contextlib.redirect_stdout(out):
+            self.assertEqual(grade.main([tmp, '--expected', 'nvidia_smi']), 3)
+        return out.getvalue()
+
+    def test_grade_artifact_lists_manual_entries_without_calling_them_passes(self):
+        text = self.output()
+        for name in OVERLAYS:
+            self.assertIn('APP_POLICY name=' + name + ' os=windows result=NOT_RUN note=manual: needs real display', text)
+        self.assertIn('WINAPPS_GRADE kind=RETRY expected=1 pass=0', text)
+
+    def test_grade_artifact_lists_the_unsupported_counterpart(self):
+        text = self.output()
+        self.assertIn('APP_POLICY name=managed_t os=windows result=NOT_RUN note=unsupported (UVM)', text)
+        self.assertNotIn('WINAPPS_APP app=managed_t', text)
 
 if __name__ == '__main__':
     unittest.main()

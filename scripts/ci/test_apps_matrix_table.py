@@ -128,6 +128,14 @@ class Table(unittest.TestCase):
         self.assertEqual(lines[0].split("\t"), mt.COLUMNS)
         self.assertTrue(all(len(x.split("\t")) == len(mt.COLUMNS) for x in lines))
 
+    def test_empty_generated_gate_list_still_names_unsupported_policy(self):
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d, "gate.txt")
+            self.assertEqual(mt.main([d, "--out", str(Path(d, "t.tsv")), "--gate-list", str(out)]), 0)
+            self.assertIn("known_unsupported", out.read_text())
+            self.assertIn("attach_verify: unsupported (UVM)", out.read_text())
+            self.assertFalse([line for line in out.read_text().splitlines() if not line.startswith("#")])
+
     def test_the_gate_list_holds_only_gate_apps_in_run_order(self):
         with tempfile.TemporaryDirectory() as d:
             Path(d, "host.res").write_text(res("host", "a", "PASS") + res("host", "b", "PASS") + res("host", "c", "PASS"))
