@@ -172,6 +172,10 @@ export function materialize(ctx, bins, edges = []) {
         source = byBin.get(e.source),
         artifact = ctx.artifacts.get(e.scope_key.split('@')[0]);
       assert(ctx.limits.seeding.enabled && artifact?.seedable, 'SEED_POLICY');
+      assert(
+        artifact.reuse_policy === 'trusted_content' && artifact.trusted_content !== null,
+        'SEED_TRUST',
+      );
       assert(profileFor(ctx, source.tokens).can_seed, 'SEED_POLICY');
       assert(source.box.capabilities.can_expose_port === true, 'SEED_PORT');
       assert(producer.die_family === a.die_family, 'SEED_DIE_FAMILY');
@@ -221,6 +225,7 @@ export function materialize(ctx, bins, edges = []) {
         deadline_minute: 0,
         fetch_until_minute: 0,
         fallback: 'build_local',
+        trusted_content: artifact.trusted_content,
         fallback_step_ids: [local.id],
         gb: artifact.gb,
       });
@@ -355,6 +360,7 @@ function chooseSeeds(ctx, bins) {
         artifact = ctx.artifacts.get(key.split('@')[0]);
       if (
         !artifact.seedable ||
+        artifact.reuse_policy !== 'trusted_content' ||
         !profile.artifact_sources.some(
           (p) => p.artifact === artifact.id && p.policy === 'optional_seed',
         )

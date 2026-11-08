@@ -447,7 +447,12 @@
               "producer_assignment_id": "box-001",
               "producer_box_id": "offer-1",
               "scope_key": "kf3_bins@box",
-              "transfer_minutes": 0.013334
+              "transfer_minutes": 0.013334,
+              "trusted_content": {
+                "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "size": 100000000,
+                "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+              }
             },
             {
               "artifact": "open_image",
@@ -460,7 +465,12 @@
               "producer_assignment_id": "box-001",
               "producer_box_id": "offer-1",
               "scope_key": "open_image@box",
-              "transfer_minutes": 1.733334
+              "transfer_minutes": 1.733334,
+              "trusted_content": {
+                "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "size": 13000000000,
+                "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+              }
             }
           ],
           "seed_server": null,
@@ -730,7 +740,12 @@
               "producer_assignment_id": "box-001",
               "producer_box_id": "offer-1",
               "scope_key": "kf3_bins@box",
-              "transfer_minutes": 0.013334
+              "transfer_minutes": 0.013334,
+              "trusted_content": {
+                "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "size": 100000000,
+                "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+              }
             },
             {
               "artifact": "open_image",
@@ -743,7 +758,12 @@
               "producer_assignment_id": "box-001",
               "producer_box_id": "offer-1",
               "scope_key": "open_image@box",
-              "transfer_minutes": 1.733334
+              "transfer_minutes": 1.733334,
+              "trusted_content": {
+                "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "size": 13000000000,
+                "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+              }
             }
           ],
           "seed_server": null,
@@ -1014,7 +1034,12 @@
               "producer_assignment_id": "box-001",
               "producer_box_id": "offer-1",
               "scope_key": "kf3_bins@box",
-              "transfer_minutes": 0.013334
+              "transfer_minutes": 0.013334,
+              "trusted_content": {
+                "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "size": 100000000,
+                "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+              }
             },
             {
               "artifact": "open_image",
@@ -1027,7 +1052,12 @@
               "producer_assignment_id": "box-001",
               "producer_box_id": "offer-1",
               "scope_key": "open_image@box",
-              "transfer_minutes": 1.733334
+              "transfer_minutes": 1.733334,
+              "trusted_content": {
+                "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "size": 13000000000,
+                "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+              }
             }
           ],
           "seed_server": null,
@@ -1297,7 +1327,12 @@
               "producer_assignment_id": "box-001",
               "producer_box_id": "offer-1",
               "scope_key": "kf3_bins@box",
-              "transfer_minutes": 0.013334
+              "transfer_minutes": 0.013334,
+              "trusted_content": {
+                "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "size": 100000000,
+                "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+              }
             },
             {
               "artifact": "open_image",
@@ -1310,7 +1345,12 @@
               "producer_assignment_id": "box-001",
               "producer_box_id": "offer-1",
               "scope_key": "open_image@box",
-              "transfer_minutes": 1.733334
+              "transfer_minutes": 1.733334,
+              "trusted_content": {
+                "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "size": 13000000000,
+                "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+              }
             }
           ],
           "seed_server": null,
@@ -1580,7 +1620,12 @@
               "producer_assignment_id": "box-001",
               "producer_box_id": "offer-1",
               "scope_key": "kf3_bins@box",
-              "transfer_minutes": 0.013334
+              "transfer_minutes": 0.013334,
+              "trusted_content": {
+                "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "size": 100000000,
+                "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+              }
             },
             {
               "artifact": "open_image",
@@ -1593,7 +1638,12 @@
               "producer_assignment_id": "box-001",
               "producer_box_id": "offer-1",
               "scope_key": "open_image@box",
-              "transfer_minutes": 1.733334
+              "transfer_minutes": 1.733334,
+              "trusted_content": {
+                "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "size": 13000000000,
+                "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+              }
             }
           ],
           "seed_server": null,
@@ -1864,7 +1914,12 @@
               "producer_assignment_id": "box-001",
               "producer_box_id": "offer-1",
               "scope_key": "kf3_bins@box",
-              "transfer_minutes": 0.013334
+              "transfer_minutes": 0.013334,
+              "trusted_content": {
+                "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "size": 100000000,
+                "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+              }
             },
             {
               "artifact": "open_image",
@@ -1877,7 +1932,12 @@
               "producer_assignment_id": "box-001",
               "producer_box_id": "offer-1",
               "scope_key": "open_image@box",
-              "transfer_minutes": 1.733334
+              "transfer_minutes": 1.733334,
+              "trusted_content": {
+                "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "size": 13000000000,
+                "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+              }
             }
           ],
           "seed_server": null,
@@ -1943,6 +2003,152 @@
             "fallback": "build_local"
           }
         ]
+      }
+    },
+    {
+      "name": "trusted-content-sha256-missing",
+      "schema": "trusted_content",
+      "valid": false,
+      "value": {
+        "size": 4,
+        "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    },
+    {
+      "name": "trusted-content-size-missing",
+      "schema": "trusted_content",
+      "valid": false,
+      "value": {
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    },
+    {
+      "name": "trusted-content-source_revision-missing",
+      "schema": "trusted_content",
+      "valid": false,
+      "value": {
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "size": 4
+      }
+    },
+    {
+      "name": "trusted-content-positive",
+      "schema": "trusted_content",
+      "valid": true,
+      "value": {
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "size": 4,
+        "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    },
+    {
+      "name": "consumer-edge-failure",
+      "schema": "consumer_failure",
+      "valid": true,
+      "value": {
+        "consumer_assignment_id": "box-003",
+        "producer_assignment_id": "box-001",
+        "scope_key": "open_image@box",
+        "reason": "hash_mismatch"
+      }
+    },
+    {
+      "name": "global-consumer-hash_mismatch-forbidden",
+      "schema": "protocol_state",
+      "valid": false,
+      "value": {
+        "artifacts": [
+          {
+            "artifact": "open_image",
+            "gone_reason": "hash_mismatch",
+            "producer_assignment_id": "box-001",
+            "ready_minute": 61.733334,
+            "scope_key": "open_image@box",
+            "serve_until_minute": 187,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "size": 13000000000,
+            "state": "gone",
+            "url": "http://8.8.8.8:45321/abcdefgh/open-image.tar.zst"
+          }
+        ],
+        "assignments": [
+          {
+            "assignment_id": "box-001",
+            "ended_minute": null,
+            "instance_id": "source-instance",
+            "started_minute": 0,
+            "status": "running"
+          },
+          {
+            "assignment_id": "box-002",
+            "ended_minute": null,
+            "instance_id": null,
+            "started_minute": null,
+            "status": "pending"
+          },
+          {
+            "assignment_id": "box-003",
+            "ended_minute": null,
+            "instance_id": null,
+            "started_minute": null,
+            "status": "starting"
+          }
+        ],
+        "consumer_failures": [],
+        "now_minute": 61.733334,
+        "revision": 2,
+        "session_id": "release-test",
+        "version": 1
+      }
+    },
+    {
+      "name": "global-consumer-size_mismatch-forbidden",
+      "schema": "protocol_state",
+      "valid": false,
+      "value": {
+        "artifacts": [
+          {
+            "artifact": "open_image",
+            "gone_reason": "size_mismatch",
+            "producer_assignment_id": "box-001",
+            "ready_minute": 61.733334,
+            "scope_key": "open_image@box",
+            "serve_until_minute": 187,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "size": 13000000000,
+            "state": "gone",
+            "url": "http://8.8.8.8:45321/abcdefgh/open-image.tar.zst"
+          }
+        ],
+        "assignments": [
+          {
+            "assignment_id": "box-001",
+            "ended_minute": null,
+            "instance_id": "source-instance",
+            "started_minute": 0,
+            "status": "running"
+          },
+          {
+            "assignment_id": "box-002",
+            "ended_minute": null,
+            "instance_id": null,
+            "started_minute": null,
+            "status": "pending"
+          },
+          {
+            "assignment_id": "box-003",
+            "ended_minute": null,
+            "instance_id": null,
+            "started_minute": null,
+            "status": "starting"
+          }
+        ],
+        "consumer_failures": [],
+        "now_minute": 61.733334,
+        "revision": 2,
+        "session_id": "release-test",
+        "version": 1
       }
     }
   ]

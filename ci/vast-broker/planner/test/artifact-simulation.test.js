@@ -18,8 +18,11 @@ import { IMAGE } from '../../src/policy.js';
 import { sha256Hex } from '../../src/tokens.js';
 // These are future-handler simulations, not an implementation of Worker routes.
 // Only the existing MockCloud transport is called; port facts are normalized fixtures.
-async function harness() {
-  const f = protocolFixture(1),
+async function harness(consumers = 1) {
+  const f = protocolFixture(consumers, 'local', {
+      sha256: createHash('sha256').update('GOOD').digest('hex'),
+      size: 4,
+    }),
     cloud = new MockCloud(),
     storage = new MemoryStorage(),
     ledger = new Ledger(storage);
@@ -109,7 +112,7 @@ async function harness() {
       instance.inet_down_cost <= profile.max_inet_usd_gb &&
         instance.inet_up_cost <= profile.max_inet_usd_gb,
     );
-    instance.public_ipaddr = '203.0.113.10';
+    instance.public_ipaddr = '8.8.8.8';
     instance.ports = { '8080/tcp': [{ HostIp: '0.0.0.0', HostPort: '45321' }] };
     state = startAssignment(state, a.id, r.id, at);
     await storage.put('release-protocol-state', state);
@@ -222,7 +225,7 @@ for (const scenario of [
           ...body,
           url:
             scenario === 'URL host mismatch'
-              ? body.url.replace('203.0.113.10', '203.0.113.11')
+              ? body.url.replace('8.8.8.8', '8.8.4.4')
               : body.url.replace('45321', '45322'),
         };
         await assert.rejects(() => h.ready(bad, f.now));
@@ -300,5 +303,59 @@ for (const scenario of [
       );
     } finally {
       await h.close(last + 1);
+    }
+  });
+
+for (const reason of ['hash_mismatch', 'size_mismatch'])
+  test('artifact transport simulation: consumer cannot revoke sibling ' + reason, async () => {
+    const h = await harness(2),
+      { f } = h;
+    let last = f.now;
+    try {
+      await h.rent(f.source, f.source.start_minute);
+      await h.ready(f.body, f.now);
+      const other = f.plan.assignments.find(
+        (a) =>
+          a.id !== f.consumer.id &&
+          a.seed_hints.some(
+            (x) => x.artifact === 'open_image' && x.producer_assignment_id === f.source.id,
+          ),
+      );
+      const a = h.ctx(f.consumer, f.now);
+      await h.bad(
+        a,
+        {
+          version: 1,
+          artifact: 'open_image',
+          reason,
+          observed_sha256: '0'.repeat(64),
+          observed_size: f.body.size - 1,
+        },
+        f.now,
+      );
+      assert.equal(h.state.artifacts[0].state, 'ready');
+      assert.equal(
+        artifactStatus(a, h.state, { version: 1, name: 'open_image' }, f.now).state,
+        'gone',
+      );
+      // End the reporter's exact rental before admitting its sibling.
+      const record = h.records.get(f.consumer.id);
+      await h.client.destroy(record);
+      record.closed = 'STOPPED';
+      await h.ledger.settle(record, clock + f.now * 60000);
+      await h.end(f.consumer.id, f.now);
+      await h.ready(f.body, f.now);
+      assert.ok(h.records.has(other.id));
+      const sibling = artifactStatus(
+        h.ctx(other, f.now),
+        h.state,
+        { version: 1, name: 'open_image' },
+        f.now,
+      );
+      assert.equal(sibling.state, 'ready');
+      assert.equal(sibling.sha256, f.body.sha256);
+      assert.deepEqual(await h.storage.get('release-protocol-state'), h.state);
+    } finally {
+      await h.close(last);
     }
   });

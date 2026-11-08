@@ -3,6 +3,7 @@
 import { assert, checkSchema, canonical, same, compare } from './schema.js';
 import { validatePlan, validateAssignment } from './validate.js';
 import { round } from './model.js';
+import ADDRESS_POLICY from './endpoint-policy.json' with { type: 'json' };
 const copy = (x) => JSON.parse(canonical(x));
 const runtime = (s, id) => s.assignments.find((a) => a.assignment_id === id);
 const planned = (c, id) => c.plan.assignments.find((a) => a.id === id);
@@ -63,6 +64,25 @@ function context(c, state, now) {
       state.artifacts.length,
     'PROTOCOL_STATE',
   );
+  assert(
+    new Set(
+      state.consumer_failures.map((x) =>
+        canonical([x.consumer_assignment_id, x.producer_assignment_id, x.scope_key]),
+      ),
+    ).size === state.consumer_failures.length,
+    'PROTOCOL_STATE',
+  );
+  for (const failure of state.consumer_failures) {
+    const consumer = planned(c, failure.consumer_assignment_id);
+    assert(
+      consumer?.seed_hints.some(
+        (h) =>
+          h.producer_assignment_id === failure.producer_assignment_id &&
+          h.scope_key === failure.scope_key,
+      ),
+      'PROTOCOL_STATE',
+    );
+  }
   return { a, r };
 }
 function finish(state, now) {
@@ -80,26 +100,45 @@ function one(items, name) {
   assert(found.length === 1, 'ARTIFACT_NAME');
   return found[0];
 }
+function ipv4Number(ip) {
+  if (!/^(?:\d{1,3}\.){3}\d{1,3}$/.test(ip)) return null;
+  const n = ip.split('.').map(Number);
+  if (!n.every((x) => x <= 255) || n.join('.') !== ip) return null;
+  return n.reduce((v, x) => v * 256 + x, 0);
+}
+function publicV4(ip) {
+  const n = ipv4Number(ip);
+  return (
+    n !== null &&
+    !ADDRESS_POLICY.ipv4_deny.some((cidr) => {
+      const [net, bits] = cidr.split('/'),
+        unit = 2 ** (32 - Number(bits));
+      return Math.floor(n / unit) === Math.floor(ipv4Number(net) / unit);
+    })
+  );
+}
+function ipv6Words(ip) {
+  const [left, right] = ip.split('::');
+  const l = left ? left.split(':') : [],
+    r = right ? right.split(':') : [];
+  const words = ip.includes('::') ? [...l, ...Array(8 - l.length - r.length).fill('0'), ...r] : l;
+  return words.map((x) => parseInt(x, 16));
+}
 function publicIp(ip) {
-  if (/^(?:\d{1,3}\.){3}\d{1,3}$/.test(ip)) {
-    const n = ip.split('.').map(Number);
-    return (
-      n.every((x) => x <= 255) &&
-      n.join('.') === ip &&
-      n[0] > 0 &&
-      n[0] !== 10 &&
-      n[0] !== 127 &&
-      n[0] < 224 &&
-      !(n[0] === 169 && n[1] === 254) &&
-      !(n[0] === 172 && n[1] >= 16 && n[1] <= 31) &&
-      !(n[0] === 192 && n[1] === 168)
-    );
-  }
+  if (!ip.includes(':')) return publicV4(ip);
   try {
-    const host = new URL('http://[' + ip + ']/').hostname;
-    return (
-      host === '[' + ip + ']' && ip !== '::' && ip !== '::1' && !/^(?:f[cd]|fe[89ab])/i.test(ip)
-    );
+    // URL parsing rejects malformed literals and zone IDs. Require normalized provider facts.
+    if (new URL('http://[' + ip + ']/').hostname !== '[' + ip + ']') return false;
+    const words = ipv6Words(ip);
+    if (words.slice(0, 5).every((x) => x === 0) && words[5] === 0xffff)
+      return publicV4([words[6] >> 8, words[6] & 255, words[7] >> 8, words[7] & 255].join('.'));
+    const number = words.reduce((v, x) => (v << 16n) + BigInt(x), 0n);
+    const inRange = (cidr) => {
+      const [net, bits] = cidr.split('/');
+      const prefix = ipv6Words(net).reduce((v, x) => (v << 16n) + BigInt(x), 0n);
+      return number >> BigInt(128 - Number(bits)) === prefix >> BigInt(128 - Number(bits));
+    };
+    return inRange(ADDRESS_POLICY.ipv6_unicast) && !ADDRESS_POLICY.ipv6_deny.some(inRange);
   } catch {
     return false;
   }
@@ -161,6 +200,7 @@ export function createSession(plan, session_id) {
     session_id,
     now_minute: 0,
     artifacts: [],
+    consumer_failures: [],
     assignments: plan.assignments.map((a) => ({
       assignment_id: a.id,
       instance_id: null,
@@ -213,12 +253,22 @@ function resolved(c, state, a, r, h, now) {
   const row = state.artifacts.find(
     (x) => x.producer_assignment_id === producer.id && x.scope_key === h.scope_key,
   );
+  const rejected = state.consumer_failures.some(
+    (x) =>
+      x.consumer_assignment_id === a.id &&
+      x.producer_assignment_id === producer.id &&
+      x.scope_key === h.scope_key,
+  );
   const expired =
     now > deadline ||
     now + h.transfer_minutes > producer.seed_server.serve_until_minute ||
     live.status === 'ended';
   const status =
-    expired || row?.state === 'gone' ? 'gone' : row?.state === 'ready' ? 'ready' : 'waiting';
+    rejected || expired || row?.state === 'gone'
+      ? 'gone'
+      : row?.state === 'ready'
+        ? 'ready'
+        : 'waiting';
   const out = {
     version: 1,
     artifact: h.artifact,
@@ -247,6 +297,13 @@ export function artifactReady(c, state, body, now) {
   const exported = one(a.seed_exports, body.artifact),
     spec = c.input.catalog.artifacts.find((x) => x.id === exported.artifact);
   assert(spec?.seedable, 'ARTIFACT_NAME');
+  assert(
+    spec.reuse_policy === 'trusted_content' &&
+      spec.trusted_content !== null &&
+      body.sha256 === spec.trusted_content.sha256 &&
+      body.size === spec.trusted_content.size,
+    'ARTIFACT_TRUST',
+  );
   assert(body.size <= spec.gb * 1000000000, 'ARTIFACT_SIZE');
   assert(now < a.seed_server.serve_until_minute, 'ARTIFACT_EXPIRED');
   const out = copy(state),
@@ -317,6 +374,22 @@ export function artifactGone(c, state, body, now) {
         : body.observed_size !== null && body.observed_size !== row.size,
       'ARTIFACT_MISMATCH',
     );
+    // A consumer observation is not evidence about any other consumer's bytes.
+    if (
+      !out.consumer_failures.some(
+        (x) =>
+          x.consumer_assignment_id === a.id &&
+          x.producer_assignment_id === producer.id &&
+          x.scope_key === scope,
+      )
+    )
+      out.consumer_failures.push({
+        consumer_assignment_id: a.id,
+        producer_assignment_id: producer.id,
+        scope_key: scope,
+        reason: body.reason,
+      });
+    return finish(out, now);
   }
   if (row) {
     row.state = 'gone';

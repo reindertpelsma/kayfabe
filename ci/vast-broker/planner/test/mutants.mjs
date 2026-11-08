@@ -15,6 +15,7 @@ const files = [
   'purity',
   'protocol',
   'seed-lifetime',
+  'review-rv2',
 ].map((x) => 'test/' + x + '.test.js');
 const one = (name, file, before, after, pattern) => ({
   name,
@@ -22,6 +23,127 @@ const one = (name, file, before, after, pattern) => ({
   pattern,
 });
 const cases = [
+  one(
+    'RV310 duplicate consumer cache accepted',
+    'artifacts.js',
+    'new Set(state.consumer_failures.map((x) => canonical([x.consumer_assignment_id, x.producer_assignment_id, x.scope_key]))).size === state.consumer_failures.length',
+    'true',
+    'RV310 duplicate consumer cache refuses',
+  ),
+  one(
+    'RV310 foreign consumer cache accepted',
+    'artifacts.js',
+    'consumer?.seed_hints.some((h) => h.producer_assignment_id === failure.producer_assignment_id && h.scope_key === failure.scope_key)',
+    'true',
+    'RV310 foreign consumer cache refuses',
+  ),
+  {
+    name: 'RV310 consumer claim revokes shared row',
+    pattern: 'RV310 consumer isolation',
+    edits: [
+      {
+        file: 'artifacts.js',
+        before: 'return finish(out, now); } if (row) {',
+        after: '} if (row) {',
+      },
+      {
+        file: 'artifacts.js',
+        before: 'row.gone_reason = body.reason;',
+        after: "row.gone_reason = 'unavailable';",
+      },
+    ],
+  },
+  one(
+    'RV310 shared registry accepts consumer evidence',
+    'schemas/contract.schema.json',
+    '"enum": ["ended", "unavailable", "expired"]',
+    '"enum": ["ended", "unavailable", "expired", "hash_mismatch", "size_mismatch"]',
+    'RV310 shared registry excludes consumer reports',
+  ),
+  one(
+    'RV310 consumer failure ignored',
+    'artifacts.js',
+    "rejected || expired || row?.state === 'gone'",
+    "expired || row?.state === 'gone'",
+    'RV310 consumer isolation',
+  ),
+  one(
+    'RV310 consumer cache loses identity',
+    'artifacts.js',
+    'x.consumer_assignment_id === a.id && x.producer_assignment_id === producer.id && x.scope_key === h.scope_key',
+    'x.producer_assignment_id === producer.id && x.scope_key === h.scope_key',
+    'RV310 consumer isolation',
+  ),
+  one(
+    'RV310 mapped IPv4 form trusted',
+    'artifacts.js',
+    "return publicV4([words[6] >> 8, words[6] & 255, words[7] >> 8, words[7] & 255].join('.'));",
+    'return true;',
+    'RV310 endpoint refuses',
+  ),
+  one(
+    'RV310 IPv6 unicast requirement skipped',
+    'artifacts.js',
+    'inRange(ADDRESS_POLICY.ipv6_unicast)',
+    'true',
+    'RV310 endpoint refuses',
+  ),
+  one(
+    'RV310 IPv6 special ranges ignored',
+    'artifacts.js',
+    '!ADDRESS_POLICY.ipv6_deny.some(inRange)',
+    'true',
+    'RV310 endpoint refuses',
+  ),
+  one(
+    'RV310 shared IPv4 allowed',
+    'endpoint-policy.json',
+    '"100.64.0.0/10",',
+    '',
+    'RV310 endpoint refuses',
+  ),
+  one(
+    'RV310 producer selects content pins',
+    'artifacts.js',
+    "spec.reuse_policy === 'trusted_content' && spec.trusted_content !== null && body.sha256 === spec.trusted_content.sha256 && body.size === spec.trusted_content.size",
+    'true',
+    'RV310 producer cannot select trusted',
+  ),
+  one(
+    'RV310 content revision ignored',
+    'model.js',
+    'a.trusted_content.source_revision === input.source_revision',
+    'true',
+    'RV310 content revision must match',
+  ),
+  one(
+    'RV310 local build offers seed candidates',
+    'plan.js',
+    "artifact.reuse_policy !== 'trusted_content'",
+    'false',
+    'RV310 local build required without trusted content',
+  ),
+  one(
+    'RV310 assignment pin replaced',
+    'plan.js',
+    'trusted_content: artifact.trusted_content',
+    "trusted_content: {...artifact.trusted_content,sha256:'c'.repeat(64)}",
+    'RV310 assignment contains trusted content',
+  ),
+  one(
+    'RV310 catalog reuse policy optional',
+    'schemas/contract.schema.json',
+    '"required": ["id", "producer", "gb", "scope", "seedable", "reuse_policy", "trusted_content"]',
+    '"required": ["id", "producer", "gb", "scope", "seedable", "trusted_content"]',
+    'RV310 catalog requires reuse_policy',
+  ),
+  one(
+    'RV310 catalog pin optional',
+    'schemas/contract.schema.json',
+    '"required": ["id", "producer", "gb", "scope", "seedable", "reuse_policy", "trusted_content"]',
+    '"required": ["id", "producer", "gb", "scope", "seedable", "reuse_policy"]',
+    'RV310 catalog requires trusted_content',
+  ),
   one(
     'artifact URL host binding skipped',
     'artifacts.js',
@@ -75,16 +197,17 @@ const cases = [
     'artifact name not checked against the plan',
     'artifacts.js',
     'const exported = one(a.seed_exports, body.artifact),',
-    'const exported = a.seed_exports[0],',
+    "const exported = one(a.seed_exports, 'open_image'),",
     'artifact protocol refuses name',
   ),
-  one(
-    'artifact exceeds priced GB',
-    'artifacts.js',
-    'body.size <= spec.gb * 1000000000',
-    'true',
-    'artifact protocol refuses bytes above the priced',
-  ),
+  {
+    name: 'artifact exceeds priced GB',
+    pattern: 'RV310 trusted bytes must fit priced allowance',
+    edits: [
+      { file: 'artifacts.js', before: 'body.size <= spec.gb * 1000000000', after: 'true' },
+      { file: 'model.js', before: 'a.trusted_content.size <= a.gb * 1000000000', after: 'true' },
+    ],
+  },
   one(
     'artifact HTTP scheme ignored',
     'artifacts.js',
@@ -160,7 +283,7 @@ const cases = [
     'artifacts.js',
     "old.state === 'ready'",
     'true',
-    'artifact protocol hash mismatch invalidates direct source',
+    'artifact protocol gone post creates a terminal tombstone',
   ),
   one(
     'ending a source leaves its artifacts ready',
@@ -732,7 +855,8 @@ try {
         writeFileSync(path, replace(readFileSync(path, 'utf8'), e.before, e.after));
       }
       let selectedFiles = ['test/contracts.test.js'];
-      if (c.pattern.startsWith('artifact protocol')) selectedFiles = ['test/protocol.test.js'];
+      if (c.pattern.startsWith('RV310')) selectedFiles = ['test/review-rv2.test.js'];
+      else if (c.pattern.startsWith('artifact protocol')) selectedFiles = ['test/protocol.test.js'];
       else if (
         /no exposed port|one concurrent box|direct serving|direct seed port|assignment has explicit optional wait/.test(
           c.pattern,

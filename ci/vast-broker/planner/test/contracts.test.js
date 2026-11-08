@@ -128,6 +128,8 @@ for (const n of [1, 2])
       gb: 0,
       scope: 'box',
       seedable: false,
+      reuse_policy: 'local_build',
+      trusted_content: null,
     });
     const r = f.catalog.runs.find((r) => r.id === 'linux_apps_full');
     r.needs.push('image-sidecar');

@@ -113,6 +113,26 @@ missing installer versions/URLs are null UNPINNED records, never invented values
 
 ## Optional seeding and bounded fallback
 
+DECISION FOR THE PROPOSED CONTRACT (RV2 follow-up, 2026-11-08): correctness-sensitive
+executable images and binaries build locally unless independently approved content pins
+exist. The trusted catalog must explicitly select `reuse_policy: local_build` with
+`trusted_content: null`, or `reuse_policy: trusted_content` with an approved SHA256, exact
+byte size and source revision. Pins come from reviewed content or a trusted reproducible
+build/verification process, never a producer ready POST or an untrusted box's attestation.
+The pin revision must match `input.source_revision`; bytes must fit the priced GB allowance.
+This PR does not implement that approval process. The proposed release fixture marks
+every artifact local-build, including open images and kf3-bins; no real executable seed
+is approved here. Synthetic test pins exercise the future verified-content path only.
+
+CODE READ: only trusted-content artifacts can acquire seed edges or optional setup steps.
+Assignments carry the trusted pin per hint. A ready POST with another digest or byte count
+refuses before any start claim; declaring a matching digest does not prove the served
+bytes match. The executor must hash/count the actual completed bytes against that pin
+before unpacking, installing or executing them; disagreement uses local fallback. Enforce
+the pinned byte-count bound while streaming and stop an oversized transfer; do not unpack
+unverified bytes.
+An explicit requested build is still mandatory. Removing every seed edge remains valid.
+
 OWNER DECISION: removing every seed edge must leave a complete local-build plan. Consumers
 wait only until their deadline, then build locally. Seeding can improve the forecast but
 cannot be necessary for correctness. Version 1 uses one level of optional source-box serving:
@@ -120,7 +140,7 @@ seed sources build locally; they are not themselves seed consumers. Metadata liv
 resource tiers may seed and which artifacts may be optional seed inputs.
 
 CODE READ: assignments retain the complete cold ordered run list. A hint may skip only an
-unrequested, single-output setup producer; it cannot satisfy an explicit required build.
+unrequested, single-output setup producer after verification against trusted content pins; it cannot satisfy an explicit required build.
 It names the source, artifact scope, expected transfer, absolute plan-relative deadline and
 fallback step. A source has `seed_exports` with the producing step, consumer, GB, estimated
 upload, expected availability and transfer deadline. Exports may begin after that step
@@ -226,7 +246,7 @@ versioned; GET normalizers attach contract version 1 and reject extra query fiel
 |---|---|---|
 | `GET /assignment` | response `assignment_response` | Return only this token's immutable assignment, launch mode, actual start and bounded artifact resolutions. |
 | `POST /artifact/ready` | `artifact_ready` | Accept `{version, artifact, url, sha256, size}`; 204 after durable state/claims and permitted immediate starts. Identical repeats are idempotent. |
-| `POST /artifact/gone` | `artifact_gone` | Producer reports ended/unavailable, or a planned consumer reports hash/size mismatch; 204. A tombstone cannot be republished into ready. |
+| `POST /artifact/gone` | `artifact_gone` | A producer withdraws its own export; a consumer mismatch disables only its own edge. 204. Global producer tombstones cannot be republished into ready. |
 | `GET /artifact?name=X` | normalized `artifact_query`; response `artifact_response` | 200 ready, 202 waiting, 410 gone/expired, always with `fallback: build_local`. Unknown/unplanned names are 404. |
 
 CODE READ: auth failure/expiry/mismatched live identity maps to a generic 401; malformed
@@ -238,7 +258,7 @@ an ambiguous short name is refused. A consumer can access only its planned produ
 
 CODE READ: a ready POST requires a planned seedable artifact, canonical HTTP(S) URL with
 an IP literal, no credentials/query/fragment/encoded path, a file under a source-generated
-8–128-character capability path, a SHA256 and a sane positive byte size. The host must equal
+8–128-character capability path, and SHA256/size matching the trusted catalog content pin. The host must equal
 the instance public IP from fresh provider facts; the public TCP port must map to the
 assignment's requested container port, which must be recorded among ports requested at create.
 Vast facts must come from the authenticated Vast API and the trusted create record, never
@@ -246,12 +266,33 @@ from the POST. Non-Vast daemon facts require the corresponding trusted provider/
 adapter; a NAT box with no exposed mapping sets the capability false. The Worker validates
 metadata and never fetches the submitted URL.
 
+CODE READ (RV2 follow-up, 2026-11-08): consumer observations are untrusted and never
+revoke a source for other consumers. Global revocation is reserved for the authenticated
+producer withdrawing its own export, or trusted control-plane lifecycle/expiry evidence
+(`endAssignment` or the serving deadline). The shared-record schema excludes consumer mismatch reasons. Consumer edge failures persist across restart
+and cannot be cleared by source reposting. The future HTTP adapter must derive producer/
+consumer identity from the verified token and ledger, not request fields.
+
+CODE READ: `endpoint-policy.json` defines conservative public-unicast admission. IPv4-mapped
+IPv6 is decoded and classified using the IPv4 policy; shared space 100.64.0.0/10 is declined.
+Native IPv6 must be canonical global-unicast form and outside the excluded special ranges;
+multicast, site-local, link-local, unique-local, documentation and transition destinations
+refuse. Some special-purpose globally reachable exceptions are deliberately declined.
+This is an admission policy, not a reachability measurement. Source references, consulted
+2026-11-08: [IANA IPv4 registry](https://www.iana.org/assignments/iana-ipv4-special-registry/)
+and [IANA IPv6 registry](https://www.iana.org/assignments/iana-ipv6-special-registry/).
+Provider adapters must supply canonical IP literals; no DNS or address probing occurs.
+
 PROPOSED data: source container port 8080 and provider-fact maximum age one minute.
 These are initial policy values, not measurements. CODE READ: a ready file must fit
 the artifact GB allowance already included in seeder/consumer pricing; a larger file
 is declined and the consumer builds locally. Executors compute SHA256 and byte size over the completed transfer
-before reusing it. A planned consumer's mismatch report marks that artifact gone. It cannot
-certify those bytes; it may build locally and submit ordinary independently earned receipts.
+before reusing it, comparing against the immutable hint's `trusted_content`, never merely against
+producer metadata. `verifyArtifact` checks content consistency only; caller-selected matching
+metadata is not provenance. A planned consumer's mismatch report records only its own
+`consumer_failures` edge/cache and returns build-local fallback to that consumer. The shared
+producer row and other consumers stay ready; an identical producer repost remains valid. The
+consumer cannot certify those bytes; it may build locally and submit ordinary independently earned receipts.
 Pinned driver media still use the official-source/media-drift rules and cannot PASS a 404
 or hash mismatch.
 
@@ -266,7 +307,7 @@ Scheduling still reserves conservative worst-case intervals.
 
 CODE READ: `execution_steps` is the executor order: optional `wait_for_artifact` instructions
 followed by references to the complete cold `runs`. Wait instructions name the fallback setup
-steps. After a validated fetch, the executor skips only those optional setup steps; on timeout,
+steps. After a fetch verified against the trusted hint pin, the executor skips only those optional setup steps; on timeout,
 source loss or verification failure it executes them locally. A box already running polls
 GET; the Worker does not push. The assignment response clamps the wait to the actual start,
 token expiry and source lifetime, so an early event-triggered start cannot gain an unbounded

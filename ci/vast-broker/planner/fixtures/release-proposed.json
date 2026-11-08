@@ -372,35 +372,45 @@
         "producer": "provision",
         "gb": 0,
         "scope": "box",
-        "seedable": false
+        "seedable": false,
+        "reuse_policy": "local_build",
+        "trusted_content": null
       },
       {
         "id": "kf3_bins",
         "producer": "kayfabe_build",
         "gb": 0.11,
         "scope": "box",
-        "seedable": true
+        "seedable": true,
+        "reuse_policy": "local_build",
+        "trusted_content": null
       },
       {
         "id": "open_image",
         "producer": "linux_image_build",
         "gb": 13,
         "scope": "box",
-        "seedable": true
+        "seedable": true,
+        "reuse_policy": "local_build",
+        "trusted_content": null
       },
       {
         "id": "windows_base",
         "producer": "windows_install_gate",
         "gb": 35,
         "scope": "driver",
-        "seedable": false
+        "seedable": false,
+        "reuse_policy": "local_build",
+        "trusted_content": null
       },
       {
         "id": "spec_tree",
         "producer": "spec_prepare",
         "gb": 43,
         "scope": "box",
-        "seedable": false
+        "seedable": false,
+        "reuse_policy": "local_build",
+        "trusted_content": null
       }
     ],
     "dies": [

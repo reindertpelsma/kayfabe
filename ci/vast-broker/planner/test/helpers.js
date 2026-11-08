@@ -131,6 +131,13 @@ export function fixture() {
     },
     { id: 'spec_tree', producer: 'spec_prepare', gb: 43, scope: 'box', seedable: false },
   ];
+  // SYNTHETIC content pins for protocol tests, never real image/binary provenance.
+  for (const a of artifacts) {
+    a.reuse_policy = a.seedable ? 'trusted_content' : 'local_build';
+    a.trusted_content = a.seedable
+      ? { sha256: 'a'.repeat(64), size: a.gb * 1000000000, source_revision: 'b'.repeat(40) }
+      : null;
+  }
   const profiles = ['large', 'medium', 'small'].map((tier, i) => ({
     tier,
     rank: 3 - i,

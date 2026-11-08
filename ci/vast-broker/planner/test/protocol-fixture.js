@@ -1,8 +1,13 @@
 import { plan } from '../index.js';
 import { seeded } from './seed-fixture.js';
 import { createSession, startAssignment } from '../artifacts.js';
-export function protocolFixture(n = 1, consumerProvider = 'local') {
+export function protocolFixture(n = 1, consumerProvider = 'local', content = null) {
   const input = seeded(n);
+  if (content)
+    Object.assign(
+      input.catalog.artifacts.find((a) => a.id === 'open_image').trusted_content,
+      content,
+    );
   for (const b of input.boxes)
     if (input.requirements.items.some((q) => q.tier === 'medium' && q.die === b.die))
       b.provider = consumerProvider;
@@ -30,7 +35,7 @@ export function protocolFixture(n = 1, consumerProvider = 'local') {
       assignment_id: source.id,
       instance_id: 'source-instance',
       provider: source.provider,
-      public_ip: '203.0.113.10',
+      public_ip: '8.8.8.8',
       mapped_ports: [{ container_port: 8080, public_port: 45321, protocol: 'tcp' }],
       requested_ports: [8080],
       observed_minute: now,
@@ -39,9 +44,9 @@ export function protocolFixture(n = 1, consumerProvider = 'local') {
   const body = {
     version: 1,
     artifact: 'open_image',
-    url: 'http://203.0.113.10:45321/abcdefgh/open-image.tar.zst',
-    sha256: 'a'.repeat(64),
-    size: 13_000_000_000,
+    url: 'http://8.8.8.8:45321/abcdefgh/open-image.tar.zst',
+    sha256: hint.trusted_content.sha256,
+    size: hint.trusted_content.size,
   };
   const consumerContext = () => ({
     ...ctx,

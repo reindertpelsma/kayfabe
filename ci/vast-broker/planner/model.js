@@ -118,6 +118,14 @@ export function prepare(input) {
   for (const a of catalog.artifacts) {
     const r = ctx.runs.get(a.producer);
     assert(r && r.setup && r.produces.includes(a.id), 'ARTIFACT_PRODUCER');
+    assert(
+      a.reuse_policy === 'trusted_content'
+        ? a.trusted_content !== null &&
+            a.trusted_content.source_revision === input.source_revision &&
+            a.trusted_content.size <= a.gb * 1000000000
+        : a.trusted_content === null,
+      'ARTIFACT_TRUST',
+    );
   }
   for (const r of catalog.runs) {
     unique(r.needs, (x) => x);

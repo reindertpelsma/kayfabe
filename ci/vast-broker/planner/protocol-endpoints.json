@@ -28,7 +28,7 @@
       "response": null,
       "statuses": [204, 400, 401, 409],
       "handler": "artifactGone",
-      "purpose": "Producer reports unavailable or ended; a planned consumer may report a byte/hash mismatch. Gone is terminal."
+      "purpose": "Producer withdraws its own export; a consumer mismatch invalidates only its own edge/cache. Global lifecycle revocation is terminal."
     },
     {
       "method": "GET",

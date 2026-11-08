@@ -39,3 +39,10 @@ to serve seeds; NAT boxes can leave it false or omit it. `--without-seeds` remov
 serving and waiting options while preserving the requested work. The JSON contracts also
 include a direct-mode envelope with `report.json` as its output path; the Python executor
 and Worker HTTP routes remain separate integration work.
+
+Artifact entries must declare `reuse_policy` and `trusted_content`. Use `local_build` with
+a null pin for images or binaries that have no independently approved content. Seed
+reuse requires `trusted_content` policy with a reviewed SHA256, exact size and source
+revision matching the plan. A producer-selected checksum is insufficient. Consumers
+verify completed bytes against their assignment pin before reuse; mismatch falls back
+locally and does not revoke another consumer's source.

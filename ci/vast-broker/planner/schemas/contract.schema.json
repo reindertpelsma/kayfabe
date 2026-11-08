@@ -370,9 +370,22 @@
         },
         "seedable": {
           "type": "boolean"
+        },
+        "reuse_policy": {
+          "enum": ["local_build", "trusted_content"]
+        },
+        "trusted_content": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/trusted_content"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
-      "required": ["id", "producer", "gb", "scope", "seedable"],
+      "required": ["id", "producer", "gb", "scope", "seedable", "reuse_policy", "trusted_content"],
       "additionalProperties": false
     },
     "die": {
@@ -1340,6 +1353,9 @@
           "type": "number",
           "minimum": 0,
           "maximum": 100000
+        },
+        "trusted_content": {
+          "$ref": "#/$defs/trusted_content"
         }
       },
       "required": [
@@ -1353,7 +1369,8 @@
         "fallback_step_ids",
         "gb",
         "fallback",
-        "fetch_until_minute"
+        "fetch_until_minute",
+        "trusted_content"
       ],
       "additionalProperties": false
     },
@@ -2308,7 +2325,7 @@
         "gone_reason": {
           "anyOf": [
             {
-              "enum": ["ended", "unavailable", "expired", "hash_mismatch", "size_mismatch"]
+              "enum": ["ended", "unavailable", "expired"]
             },
             {
               "type": "null"
@@ -2810,9 +2827,75 @@
           "type": "integer",
           "minimum": 0,
           "maximum": 1000000000
+        },
+        "consumer_failures": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/consumer_failure"
+          },
+          "maxItems": 4096
         }
       },
-      "required": ["version", "session_id", "now_minute", "assignments", "artifacts", "revision"],
+      "required": [
+        "version",
+        "session_id",
+        "now_minute",
+        "assignments",
+        "artifacts",
+        "revision",
+        "consumer_failures"
+      ],
+      "additionalProperties": false
+    },
+    "consumer_failure": {
+      "type": "object",
+      "properties": {
+        "consumer_assignment_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
+        },
+        "producer_assignment_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
+        },
+        "scope_key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "reason": {
+          "enum": ["hash_mismatch", "size_mismatch"]
+        }
+      },
+      "required": ["consumer_assignment_id", "producer_assignment_id", "scope_key", "reason"],
+      "additionalProperties": false
+    },
+    "trusted_content": {
+      "type": "object",
+      "properties": {
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "minLength": 64,
+          "maxLength": 64
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000000000000
+        },
+        "source_revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40,
+          "pattern": "^[a-f0-9]{40}$"
+        }
+      },
+      "required": ["sha256", "size", "source_revision"],
       "additionalProperties": false
     }
   }

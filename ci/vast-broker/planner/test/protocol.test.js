@@ -46,7 +46,7 @@ for (const n of [1, 2]) {
       const f = protocolFixture(n),
         b = { ...f.body },
         c = structuredClone(f.ctx);
-      if (bad === 'host') b.url = b.url.replace('203.0.113.10', '203.0.113.11');
+      if (bad === 'host') b.url = b.url.replace('8.8.8.8', '8.8.4.4');
       if (bad === 'port') b.url = b.url.replace('45321', '45322');
       if (bad === 'requested') c.facts.requested_ports = [];
       if (bad === 'stale') c.facts.observed_minute = f.now - 2;
@@ -54,7 +54,6 @@ for (const n of [1, 2]) {
       if (bad === 'instance') c.facts.instance_id = 'foreign-instance';
       if (bad === 'name') {
         b.artifact = 'not-in-plan';
-        b.size = 4;
       }
       if (bad === 'size') b.size = 99_000_000_000;
       if (bad === 'scheme') b.url = b.url.replace('http:', 'ftp:');
@@ -88,7 +87,7 @@ for (const n of [1, 2]) {
     assert.equal(r.fallback, 'build_local');
     assert.equal(r.url, null);
   });
-  test('artifact protocol hash mismatch invalidates direct source ' + n, () => {
+  test('artifact protocol hash mismatch invalidates consumer edge ' + n, () => {
     const f = protocolFixture(n),
       r = artifactReady(f.ctx, f.state, f.body, f.now);
     const state = startAssignment(r.state, f.consumer.id, 'consumer-instance', f.now),
@@ -109,12 +108,13 @@ for (const n of [1, 2]) {
       },
       f.now,
     );
-    assert.equal(gone.artifacts[0].state, 'gone');
+    assert.equal(gone.artifacts[0].state, 'ready');
+    assert.equal(gone.consumer_failures[0].consumer_assignment_id, f.consumer.id);
     assert.equal(
       artifactStatus(c, gone, { version: 1, name: 'open_image' }, f.now).fallback,
       'build_local',
     );
-    rejects(() => artifactReady(f.ctx, gone, f.body, f.now));
+    assert.doesNotThrow(() => artifactReady(f.ctx, gone, f.body, f.now));
   });
   test('artifact protocol assignment launch modes retain one cold executor shape ' + n, () => {
     for (const mode of ['worker_vast', 'worker_daemon', 'direct']) {
@@ -186,9 +186,10 @@ for (const n of [1, 2]) {
   });
   test('artifact protocol gone post creates a terminal tombstone ' + n, () => {
     const f = protocolFixture(n),
+      ready = artifactReady(f.ctx, f.state, f.body, f.now).state,
       s = artifactGone(
         f.ctx,
-        f.state,
+        ready,
         { version: 1, artifact: 'open_image', reason: 'unavailable' },
         f.now,
       );
@@ -304,7 +305,7 @@ for (const n of [1, 2])
       artifactReady(
         c,
         f.state,
-        { ...f.body, url: f.body.url.replace('203.0.113.10', '127.0.0.1') },
+        { ...f.body, url: f.body.url.replace('8.8.8.8', '127.0.0.1') },
         f.now,
       ),
     );
