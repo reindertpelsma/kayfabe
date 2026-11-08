@@ -31,7 +31,7 @@ OPEN_PACKAGES = frozenset("cuda_demo_suite python_embed pywheels llama_cuda llam
 PUBLIC_PACKAGES = frozenset("python_embed llama_vulkan qwen_gguf hf_model vkpeak blender clpeak_ocl hashcat sevenzip hf_wheels".split())
 STAGE_MODES = frozenset(("unzip", "python_embed", "wheels", "copy", "7z", "msi_admin", "installer"))
 UA = "kayfabe-bundle/1 (+https://github.com/reindertpelsma/kayfabe)"
-BUILDER_VERSION = 6
+BUILDER_VERSION = 7
 
 
 class InputDrift(ValueError):
@@ -320,8 +320,10 @@ def build_image(packages, downloads, tools, output, toolchain, root=HERE, probe_
                   Path(path) for name, path in sorted(tools.items())})
     files["stage.json"] = canonical(stage_table(packages))
     # No wall clock, host paths, Python version or host-specific toolchain selection in ISO.
-    inputs = iso_input_hash(packages, toolchain, open_packages if open_packages is not None else [p["id"] for p in packages], root)
-    files["bundle.inputs.json"] = canonical(dict(schema=1, inputs=inputs, packages=packages, toolchain=toolchain, bundle_class=bundle_class))
+    open_packages = sorted(open_packages if open_packages is not None else [p["id"] for p in packages])
+    inputs = iso_input_hash(packages, toolchain, open_packages, root)
+    files["bundle.inputs.json"] = canonical(dict(schema=1, inputs=inputs, packages=packages,
+        toolchain=toolchain, open_packages=open_packages, bundle_class=bundle_class))
     for name, source in files.items():
         if name not in expected:
             expected[name] = dict(sha256=hashlib.sha256(source).hexdigest(), size=len(source)) if isinstance(source, bytes) else dict(sha256=sha256(source), size=source.stat().st_size)
@@ -349,11 +351,11 @@ def build_image(packages, downloads, tools, output, toolchain, root=HERE, probe_
         receipt["inventory_sha256"] = bundle_repro.inventory_hash(receipt)
         with bundle_iso.Reader(temp) as image:
             receipt["container_metadata"] = image.metadata()
-        receipt["recipe_sha256"] = {name: hashlib.sha256((HERE / name).read_bytes().replace(b"\r\n", b"\n")).hexdigest()
+        receipt["recipe_sha256"] = {name: hashlib.sha256((Path(root) / name).read_bytes().replace(b"\r\n", b"\n")).hexdigest()
                                      for name in ("package_bundle.py", "bundle_iso.py", "bundle_tools.py", "bundle_compliance.py", "bundle_wheels.py", "bundle_repro.py")}
         if probe_receipt is not None:
             receipt["probe_build"] = probe_receipt
-        verify_image(temp, receipt)
+        verify_image(temp, receipt, root=root)
         os.replace(temp, iso)
     finally:
         temp.unlink(missing_ok=True)
@@ -364,7 +366,13 @@ def build_image(packages, downloads, tools, output, toolchain, root=HERE, probe_
     return receipt
 
 
-def verify_image(iso, receipt, public_only=False):
+def verify_image(iso, receipt, public_only=False, *, expected_inputs=None, root=HERE):
+    """Check integrity AND derive the recipe from embedded pins and actual bytes.
+
+    expected_inputs is the trusted reviewed checkout digest at a publication
+    boundary. The artifact's own claim is never that authorization. Compiled
+    probes remain per-file reproduction checks, not a compiler attestation.
+    """
     if Path(iso).stat().st_size != receipt["image"]["size"] or sha256(iso) != receipt["image"]["sha256"]:
         raise ValueError("image size/sha256 mismatch")
     expected = receipt["files"]
@@ -392,6 +400,15 @@ def verify_image(iso, receipt, public_only=False):
             raise ValueError("ISO input hash mismatch")
         if receipt["packages"] != embedded["packages"] or receipt["toolchain"] != embedded["toolchain"] or bundle_class != embedded.get("bundle_class"):
             raise ValueError("ISO package/toolchain record mismatch")
+        derived = iso_input_hash(embedded["packages"], embedded["toolchain"], embedded["open_packages"], root)
+        if derived != embedded["inputs"]:
+            raise ValueError("embedded recipe input identity mismatch")
+        if expected_inputs is not None and derived != expected_inputs:
+            raise ValueError("artifact recipe differs from reviewed checkout inputs")
+        recipe = {name: hashlib.sha256((Path(root) / name).read_bytes().replace(b"\r\n", b"\n")).hexdigest()
+                  for name in ("package_bundle.py", "bundle_iso.py", "bundle_tools.py", "bundle_compliance.py", "bundle_wheels.py", "bundle_repro.py")}
+        if receipt.get("recipe_sha256") != recipe:
+            raise ValueError("recipe source audit differs from reviewed checkout")
         bundle_compliance.validate(receipt["packages"], validate_pin, public_only or bundle_class == "public")
         if any(p["compliance"]["distribution"] != "public-ok" for p in receipt["packages"]):
             raise ValueError("receipt crosses bundle class boundary")
@@ -403,6 +420,33 @@ def verify_image(iso, receipt, public_only=False):
             if (source["path"] not in expected or source["sha256"] != expected[source["path"]]["sha256"] or
                     source["size"] != expected[source["path"]]["size"] or source["key"] != bundle_compliance.source_key(source, bundle_class)):
                 raise ValueError("source mirror receipt mismatch")
+
+        # Re-read the intact vendor archives, source archives and legal texts
+        # through seekable ISO slices. This checks payloads against their pins
+        # and regenerates the notices, licence index and licence metadata.
+        legal_files, licenses, _ = bundle_compliance.stage(embedded["packages"], None, image=r, records=got)
+        derived_files = dict(repo_files(root), **legal_files)
+        derived_files["stage.json"] = canonical(stage_table(embedded["packages"]))
+        derived_files["bundle.inputs.json"] = canonical(dict(schema=1, inputs=derived,
+            packages=embedded["packages"], toolchain=embedded["toolchain"],
+            open_packages=sorted(embedded["open_packages"]), bundle_class=bundle_class))
+        for name, body in derived_files.items():
+            pin = (dict(sha256=hashlib.sha256(body).hexdigest(), size=len(body)) if isinstance(body, bytes)
+                   else got[body.iso_path])
+            if got.get(name) != pin:
+                raise ValueError("reviewed recipe file bytes mismatch: " + name)
+        import bundle_tools
+        package_paths = {f"pkg/{p['id']}/{fl['name']}" for p in embedded["packages"] for fl in p["files"]}
+        tool_paths = {"tools/" + name for name in bundle_tools.TOOL_NAMES}
+        tool_paths |= {"LICENSES/zig/" + name[len("licenses/zig/"):] for name in bundle_tools.NOTICE_NAMES}
+        if expected_inputs is not None and not tool_paths <= set(got):
+            raise ValueError("reviewed publication requires every owned probe and compiler notice")
+        if set(got) - (set(derived_files) | package_paths | tool_paths | {"KFAPPS.ID"}):
+            raise ValueError("unexpected file outside reviewed recipe")
+        for name, record in expected.items():
+            own = bundle_compliance.TOOL_LICENSE if name in tool_paths else bundle_compliance.REPO_LICENSE
+            if record["licenses"] != licenses.get(name, own):
+                raise ValueError("reviewed per-file licence metadata mismatch: " + name)
 
     inventory_sha = bundle_repro.inventory_hash(receipt)
     if receipt.get("inventory_sha256", inventory_sha) != inventory_sha:
@@ -452,7 +496,14 @@ def main(argv=None):
         if args.command == "verify-image":
             receipt = load(args.receipt or args.out / (basename + ".manifest.json"))
             if receipt.get("bundle_class") != args.bundle_class: raise ValueError("requested/receipt class differs")
-            verify_image(args.iso or args.out / (basename + ".iso"), receipt, args.public_only)
+            man, profile = load(args.manifest), load(args.profiles)
+            packages = select_packages(man, profile, args.only.split(",") if args.only is not None else None,
+                                       args.public_only, args.bundle_class)
+            import bundle_tools
+            reviewed = iso_input_hash(packages, bundle_tools.check_toolchain(man.get("bundle_toolchain", {})),
+                                      profile["open_packages"])
+            verify_image(args.iso or args.out / (basename + ".iso"), receipt, args.public_only,
+                         expected_inputs=reviewed)
         else:
             man, profile = load(args.manifest), load(args.profiles)
             packages = select_packages(man, profile, args.only.split(",") if args.only is not None else None, args.public_only, args.bundle_class)

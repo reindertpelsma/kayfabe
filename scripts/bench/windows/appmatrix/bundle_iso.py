@@ -8,6 +8,7 @@ bundle's largest file is < 4 GiB; an oversized file fails before image creation.
 All recording dates are 2000-01-01 UTC; all metadata and padding bytes are fixed.
 """
 import hashlib
+import io
 import os
 from pathlib import Path
 import re
@@ -256,15 +257,12 @@ class Reader:
             self.label = svd[40:72].decode("utf-16-be").rstrip(" ")
             if not allow_any_label and (self.label not in ("KFAPPS", "KFAPPSP") or pvd[40:72].rstrip(b" ") != self.label.encode("ascii")):
                 raise ValueError("wrong ISO volume label")
-            self.files = {}
-            self._visited = set()
-            self._ranges = []
-            root = self._entry(svd[156:190])
-            self._walk("", root[1], root[2], 0)
-            ranges = sorted(self._ranges)
-            for (_, end, _), (start, _, name) in zip(ranges, ranges[1:]):
-                if start < end:
-                    raise ValueError(f"overlapping ISO extent: {name}")
+            joliet_files, joliet_dirs = self._namespace(svd, True)
+            primary_files, primary_dirs = self._namespace(pvd, False)
+            self._check_aliases(joliet_files, joliet_dirs, primary_files, primary_dirs)
+            self.files = joliet_files
+            self.primary_files = primary_files
+            self.directories = joliet_dirs
         except BaseException:
             self.file.close()
             raise
@@ -293,10 +291,11 @@ class Reader:
             raise ValueError("invalid ISO directory identifier")
         return data[33:33 + data[32]], self._number(data, 2, 4), self._number(data, 10, 4), data[25] == 2
 
-    def _walk(self, prefix, extent, length, depth):
+    def _walk(self, prefix, extent, length, depth, parent=None):
         if depth > 8 or extent in self._visited or extent < 19 or length % BLOCK or not 0 < length <= 64 * BLOCK:
             raise ValueError("invalid/cyclic ISO directory")
         self._visited.add(extent)
+        self._directories[prefix.rstrip("/")] = (extent, length)
         self._ranges.append((extent * BLOCK, extent * BLOCK + length, prefix))
         data = self._read(extent * BLOCK, length)
         pos, names = 0, set()
@@ -312,23 +311,129 @@ class Reader:
                 raise ValueError("ISO record crosses directory block")
             name, start, size, isdir = self._entry(data[pos:pos + n]); pos += n
             if name in (b"\x00", b"\x01"):
+                target = (extent, length) if name == b"\x00" else parent or (extent, length)
+                if not isdir or (start, size) != target:
+                    raise ValueError("invalid ISO dot/parent directory reference")
                 continue
             try:
-                component = name.decode("utf-16-be")
+                component = name.decode("utf-16-be" if self._joliet else "ascii")
             except UnicodeError as e:
-                raise ValueError("invalid Joliet name") from e
-            valid_path(component)
+                raise ValueError("invalid ISO namespace name") from e
+            if self._joliet:
+                if len(valid_path(component)) != 1:
+                    raise ValueError("invalid Joliet component")
+            elif not re.fullmatch(r"D[0-9]{7}" if isdir else r"F[0-9]{7}\.BIN;1", component):
+                raise ValueError("invalid primary alias")
             if component.casefold() in names:
                 raise ValueError("duplicate Joliet name")
             names.add(component.casefold())
             path = prefix + component
             if isdir:
-                self._walk(path + "/", start, size, depth + 1)
+                self._walk(path + "/", start, size, depth + 1, (extent, length))
             else:
                 if start < 19 or (start + max(1, blocks(size))) * BLOCK > self.size:
                     raise ValueError("ISO file outside image")
                 self.files[path] = (start * BLOCK, size)
                 self._ranges.append((start * BLOCK, (start + max(1, blocks(size))) * BLOCK, path))
+
+    def _namespace(self, descriptor, joliet):
+        self.files, self._directories = {}, {}
+        self._visited, self._ranges, self._joliet = set(), [], joliet
+        name, start, size, directory = self._entry(descriptor[156:190])
+        if name != b"\x00" or not directory:
+            raise ValueError("invalid ISO namespace root")
+        self._walk("", start, size, 0)
+        self._path_tables(descriptor, joliet)
+        ranges = sorted(self._ranges)
+        for (_, end, _), (start, _, name) in zip(ranges, ranges[1:]):
+            if start < end:
+                raise ValueError(f"overlapping ISO extent: {name}")
+        return self.files, self._directories
+
+    def _path_tables(self, descriptor, joliet):
+        size = self._number(descriptor, 132, 4)
+        # At most 65535 directory indices, each with at most 128 name bytes.
+        if not 0 < size <= 65535 * 138:
+            raise ValueError("invalid ISO path table size")
+        for offset, endian, required in ((140, "little", True), (144, "little", False),
+                                         (148, "big", True), (152, "big", False)):
+            block = int.from_bytes(descriptor[offset:offset+4], endian)
+            if not block and not required:
+                continue
+            if block < 19:
+                raise ValueError("ISO path table outside data area")
+            data = self._read(block * BLOCK, size)
+            rows, paths, pos = {}, [], 0
+            while pos < size:
+                length = data[pos]
+                end = pos + 8 + length + length % 2
+                if not length or end > size or data[pos+1] or len(paths) >= 65535:
+                    raise ValueError("invalid ISO path table record")
+                extent = int.from_bytes(data[pos+2:pos+6], endian)
+                parent = int.from_bytes(data[pos+6:pos+8], endian)
+                name = data[pos+8:pos+8+length]
+                if not paths:
+                    if name != b"\0" or parent != 1:
+                        raise ValueError("invalid ISO path table root")
+                    path = ""
+                else:
+                    if not 1 <= parent <= len(paths):
+                        raise ValueError("invalid ISO path table parent")
+                    try:
+                        component = name.decode("utf-16-be" if joliet else "ascii")
+                    except UnicodeError as error:
+                        raise ValueError("invalid ISO path table name") from error
+                    if joliet:
+                        if len(valid_path(component)) != 1:
+                            raise ValueError("invalid path table component")
+                    elif not re.fullmatch(r"D[0-9]{7}", component):
+                        raise ValueError("invalid primary path table alias")
+                    path = (paths[parent-1] + "/" if paths[parent-1] else "") + component
+                if path in rows:
+                    raise ValueError("duplicate ISO path table directory")
+                rows[path] = extent
+                paths.append(path)
+                pos = end
+            if rows != {p: e[0] for p, e in self._directories.items()}:
+                raise ValueError("ISO path table differs from namespace directories")
+            # Optional copies may share their exact extent with the mandatory table.
+            region = (block * BLOCK, (block + blocks(size)) * BLOCK, "path table")
+            if region not in self._ranges:
+                self._ranges.append(region)
+
+    def _check_aliases(self, joliet_files, joliet_dirs, primary_files, primary_dirs):
+        # Derive aliases independently of the writer's _Tree/layout objects.
+        alias_dirs, alias_files = {"": ""}, {}
+        children = {path: [] for path in joliet_dirs}
+        for path in (set(joliet_dirs) - {""}) | set(joliet_files):
+            children[path.rpartition("/")[0]].append(path)
+        for parent in sorted(children, key=lambda p: (p.count("/"), p)):
+            for number, child in enumerate(sorted(children[parent]), 1):
+                directory = child in joliet_dirs
+                component = f"D{number:07}" if directory else f"F{number:07}.BIN;1"
+                alias = (alias_dirs[parent] + "/" if alias_dirs[parent] else "") + component
+                if directory:
+                    alias_dirs[child] = alias
+                else:
+                    alias_files[alias] = child
+        if set(primary_dirs) != set(alias_dirs.values()) or set(primary_files) != set(alias_files):
+            raise ValueError("primary/Joliet namespace file list differs")
+        for alias, path in alias_files.items():
+            expected, actual = joliet_files[path], primary_files[alias]
+            if actual == expected:
+                continue
+            def pin(extent):
+                offset, remaining = extent
+                digest = hashlib.sha256()
+                while remaining:
+                    data = self._read(offset, min(remaining, 1 << 20))
+                    digest.update(data); offset += len(data); remaining -= len(data)
+                return digest.digest(), extent[1]
+            if pin(actual) != pin(expected):
+                raise ValueError("primary/Joliet namespace payload differs: " + path)
+
+    def member(self, path):
+        return _Member(self, path)
 
     def chunks(self, path):
         offset, remaining = self.files[path]
@@ -357,23 +462,59 @@ class Reader:
                 created=data[813:830].hex(),modified=data[830:847].hex(),
                 sha256=hashlib.sha256(data).hexdigest())
         h=hashlib.sha256();gaps=[];position=0
-        for start,size in sorted(self.files.values()):
+        payload = sorted(set(self.files.values()) | set(self.primary_files.values()))
+        for start,size in payload:
             if start>position:
                 digest=hashlib.sha256();offset=position
                 while offset<start:
                     block=self._read(offset,min(start-offset,1024**2));digest.update(block);h.update(block);offset+=len(block)
                 gaps.append(dict(offset=position,size=start-position,sha256=digest.hexdigest()))
-            position=start+size
+            position=max(position,start+size)
         if position<self.size:
             digest=hashlib.sha256();offset=position
             while offset<self.size:
                 block=self._read(offset,min(self.size-offset,1024**2));digest.update(block);h.update(block);offset+=len(block)
             gaps.append(dict(offset=position,size=self.size-position,sha256=digest.hexdigest()))
         return dict(descriptors=descriptors,non_payload_sha256=h.hexdigest(),regions=gaps,
-                    extents={p:dict(offset=v[0],size=v[1])for p,v in sorted(self.files.items())})
+                    extents={p:dict(offset=v[0],size=v[1])for p,v in sorted(self.files.items())},
+                    primary_extents={p:dict(offset=v[0],size=v[1])for p,v in sorted(self.primary_files.items())})
 
     def __enter__(self):
         return self
 
     def __exit__(self, *exc):
         self.file.close()
+
+
+class _Member(io.RawIOBase):
+    """Seekable read-only ISO slice for stdlib archive readers; no host extraction."""
+    def __init__(self, reader, name):
+        super().__init__()
+        self.reader, self.iso_path = reader, name
+        self.offset, self.size = reader.files[name]
+        self.position = 0
+        self.display_path = Path(name)
+        self.name, self.parent = self.display_path.name, self.display_path.parent
+
+    def readable(self): return True
+    def seekable(self): return True
+    def tell(self): return self.position
+
+    def seek(self, offset, whence=0):
+        target = offset + (self.position if whence == 1 else self.size if whence == 2 else 0)
+        if whence not in (0, 1, 2) or not 0 <= target <= self.size:
+            raise ValueError("ISO member seek outside payload")
+        self.position = target
+        return target
+
+    def read(self, size=-1):
+        if self.closed: raise ValueError("read from closed ISO member")
+        size = self.size - self.position if size is None or size < 0 else size
+        length = min(size, self.size - self.position)
+        data = self.reader._read(self.offset + self.position, length)
+        self.position += length
+        return data
+
+    def open(self, mode="rb"):
+        if mode != "rb": raise ValueError("ISO members are read-only")
+        return _Member(self.reader, self.iso_path)

@@ -413,6 +413,23 @@ class Image(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "outside"):
             I.Reader(self.iso)
 
+    def invalid_empty_extents(self, extent):
+        I.write_image({'empty':b''}, self.iso)
+        raw = bytearray(self.iso.read_bytes())
+        for sector in (16, 17):
+            at = int.from_bytes(raw[sector*I.BLOCK+158:sector*I.BLOCK+162], 'little')*I.BLOCK
+            for _ in range(2): at += raw[at]
+            raw[at+2:at+10] = I.both32(extent)
+        self.iso.write_bytes(raw)
+        with self.assertRaisesRegex(ValueError, 'outside'):
+            I.Reader(self.iso)
+
+    def test_empty_payload_in_system_area_refused(self):
+        self.invalid_empty_extents(0)
+
+    def test_empty_payload_past_image_refused(self):
+        self.invalid_empty_extents(0xFFFFFFF0)
+
     def test_fixed_recording_date(self):
         I.write_image(self.files, self.iso)
         data = self.iso.read_bytes()
@@ -604,6 +621,49 @@ m=B.load(sys.argv[2]); B.build_image(m['packages'],Path(sys.argv[2]).parent/'dl'
         receipt["image"]["sha256"] = B.sha256(iso)
         with self.assertRaisesRegex(ValueError, "sevenzip"):
             B.verify_image(iso, receipt)
+
+    def tool_fixture(self, name):
+        tool = self.root / name
+        tool.write_bytes(b'MZ synthetic owned probe')
+        receipt = B.build_image(self.packages, self.downloads, {name:tool}, self.out, {})
+        return self.out / 'winapps-open.iso', receipt, 'tools/' + name
+
+    def corrupt_owned_tool(self, name):
+        iso, receipt, path = self.tool_fixture(name)
+        with I.Reader(iso) as image:
+            offset, _ = image.files[path]
+        with iso.open('r+b') as out:
+            out.seek(offset); out.write(b'XX')
+        receipt['image']['sha256'] = B.sha256(iso)
+        with self.assertRaisesRegex(ValueError, 'image file size/sha256 mismatch'):
+            B.verify_image(iso, receipt)
+
+    def test_owned_dxprobe_bytes_cannot_escape_receipt_check(self):
+        self.corrupt_owned_tool('kf_dxprobe.exe')
+
+    def test_owned_cuda_probe_bytes_cannot_escape_receipt_check(self):
+        self.corrupt_owned_tool('cup2.exe')
+
+    def omit_owned_tool_from_receipt(self, name):
+        iso, receipt, path = self.tool_fixture(name)
+        del receipt['files'][path]
+        ident = B.identity(receipt['files'])
+        marker = (ident + '\n').encode('ascii')
+        with I.Reader(iso) as image:
+            offset, _ = image.files['KFAPPS.ID']
+        with iso.open('r+b') as out:
+            out.seek(offset); out.write(marker)
+        receipt['files']['KFAPPS.ID']['sha256'] = hashlib.sha256(marker).hexdigest()
+        receipt['image'].update(identity=ident, sha256=B.sha256(iso))
+        receipt['inventory_sha256'] = R.inventory_hash(receipt)
+        with self.assertRaisesRegex(ValueError, 'image file list mismatch'):
+            B.verify_image(iso, receipt)
+
+    def test_owned_dxprobe_cannot_be_hidden_from_receipt(self):
+        self.omit_owned_tool_from_receipt('kf_dxprobe.exe')
+
+    def test_owned_cuda_probe_cannot_be_hidden_from_receipt(self):
+        self.omit_owned_tool_from_receipt('cup2.exe')
 
     def test_staging_file_corruption_detected_after_outer_repin(self):
         receipt = self.build(); iso = self.out / "winapps-open.iso"

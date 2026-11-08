@@ -192,6 +192,15 @@ image against its own digest/receipt; it does not compare two builds. The harnes
 check. Corrupt stored bytes fail integrity even if a proposed reproduction's file inventory was unchanged.
 Use compare-image for reproduction and verify-image for one object's integrity.
 
+**CODE READ, 2026-11-08:** both ISO namespaces must expose the same logical files and bytes through the
+writer's deterministic primary aliases. Primary-only payloads fail; date/publisher changes and relocation
+of identical payloads remain Level 2 warnings. `verify-image` also derives the embedded recipe identity,
+checks actual package/source bytes against their pins, and regenerates guest files, staging, licence texts,
+notices, index and licence metadata from the matching reviewed checkout and pinned archives. Publication
+binds that derived identity to the checkout's input digest before any store client/request. Rehashing a
+modified ISO and sidecar cannot authorize different inputs. Compiled program provenance still needs the
+independent reproduction/native qualification described below.
+
 **CODE READ:** all repository programs are byte-checked by default. A reviewed bundle_toolchain.programs
 entry may mark one known program inventory-only, with a reason and named functional checks. Both builds
 must carry the same policy; the actual program hash remains recorded, and native functional validation is

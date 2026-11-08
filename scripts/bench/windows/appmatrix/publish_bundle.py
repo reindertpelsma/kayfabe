@@ -375,9 +375,8 @@ def main(argv=None):
         receipt = B.load(a.out / (basename + ".manifest.json"))
         require_class(receipt, a.bundle_class)
         expected = B.input_hash(B.load(HERE / "manifest.json"), B.load(HERE / "gate_profiles.json"), bundle_class=a.bundle_class)
-        if receipt.get("inputs") != expected: raise PublishError("receipt does not match the reviewed checkout inputs")
         B.select_packages(receipt, B.load(HERE / "gate_profiles.json"), bundle_class=a.bundle_class)
-        B.verify_image(a.out / (basename + ".iso"), receipt)
+        B.verify_image(a.out / (basename + ".iso"), receipt, expected_inputs=expected)
         if os.environ.get("BUNDLE_UPLOAD_URLS"):
             plans = json.loads(os.environ["BUNDLE_UPLOAD_URLS"])
             allowed_keys = set(keys(receipt["image"]["sha256"], a.bundle_class)) | {s["key"] for s in receipt["sources"]}

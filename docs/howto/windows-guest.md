@@ -133,7 +133,11 @@ python3 -I scripts/bench/windows/appmatrix/package_bundle.py compare-image --iso
 
 Level 1 is the reproduction gate: identical file paths and SHA-256/size values, including the repository
 programs. Level 2 compares ISO bytes too, with a metadata WARNING when the files match but the container
-differs. `verify-image --out out-a` instead checks that one stored image matches its own digest/receipt.
+differs. Both ISO directory namespaces must expose the same files and bytes; a primary-only payload
+fails the check. `verify-image --out out-a` checks one object's integrity and its embedded recipe against
+the matching checkout, including pinned package/source bytes, guest files and licence notices. A receipt
+with freshly recalculated hashes cannot approve different inputs. Run it from the reviewed checkout used
+to build the image. Publication additionally requires that checkout's input digest before any store request.
 The GUI offers the same build, integrity and reproduction checks. No program currently uses the supported
 inventory-only/functional-check qualification. A vendor changing pinned bytes is INPUT_DRIFT, not flakiness.
 

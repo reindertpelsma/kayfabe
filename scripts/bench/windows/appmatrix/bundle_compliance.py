@@ -128,7 +128,9 @@ def _archive_legal_members(path, kind):
     else:
         # Only source archives, never application payloads; streaming avoids a
         # tar member table proportional to an untrusted archive's entry count.
-        with tarfile.open(path, "r|*", encoding="utf-8", errors="surrogateescape") as t:
+        with tarfile.open(name=None if hasattr(path, "read") else path,
+                          fileobj=path if hasattr(path, "read") else None,
+                          mode="r|*", encoding="utf-8", errors="surrogateescape") as t:
             for count, entry in enumerate(t):
                 if count >= 200000: raise ValueError("too many source members")
                 if not legal_name(entry.name) or entry.isdir(): continue
@@ -141,12 +143,12 @@ def legal_members(path, kind):
     try:
         yield from _archive_legal_members(path, kind)
     except (OSError, EOFError, ValueError, zipfile.BadZipFile, tarfile.TarError, RuntimeError, NotImplementedError) as error:
-        path = Path(path)
+        path = Path(getattr(path, "display_path", path))
         raise ValueError(f"package {path.parent.name}/{path.name}: invalid licence archive ({type(error).__name__})") from None
 
 
 def read_text(path):
-    with Path(path).open("rb") as source:
+    with (path if hasattr(path, "open") else Path(path)).open("rb") as source:
         return source.read(MAX_TEXT + 1)
 
 
@@ -158,9 +160,22 @@ def licenses(p, filename=None):
                  sources=[dict(version=s["version"], url=s["url"], sha256=s["sha256"], key=source_key(s, "public" if c["distribution"] == "public-ok" else "private")) for s in c["sources"]])]
 
 
-def stage(packages, downloads):
+def stage(packages, downloads, *, image=None, records=None):
+    """Derive legal files from pinned bytes, from a cache or a bounded ISO view.
+
+    ISO verification replays the same recipe without extracting app archives or
+    trusting the producer's per-file receipt. records comes from Reader.records.
+    """
     import package_bundle as B
     validate(packages, B.validate_pin)
+    def checked(owner, pin, relative, iso_name):
+        if image is None:
+            path = Path(downloads) / relative; B.verify_file(owner, pin, path)
+            return path
+        if records.get(iso_name) != {k: pin[k] for k in ("sha256", "size")}:
+            raise B.InputDrift(f"INPUT_DRIFT package {owner}/{pin['name']}: ISO bytes differ from pin")
+        return image.member(iso_name)
+
     files, meta, index, sources = {}, {}, [], []
     notices = ["Kayfabe Windows app bundle: THIRD PARTY NOTICES", "",
         "Distributor: Reindert Pelsma / kayfabe", "Contact: https://github.com/reindertpelsma/kayfabe/issues", "",
@@ -181,7 +196,9 @@ def stage(packages, downloads):
         original = {f["name"]: f for f in p["files"]}
         cached = {}
         for owner, pin, relative in inputs([p]):
-            path = Path(downloads) / relative; B.verify_file(owner, pin, path); cached[pin["name"]] = path
+            target = (f"SOURCE/{pid}/{pin['name']}" if pin in c["sources"]
+                      else f"LICENSES/{pid}/{pin['sha256']}")
+            cached[pin["name"]] = checked(owner, pin, relative, target)
         package_total = 0
         def add(name, body, origin, parent_pin, covered, pinned_text=False):
             nonlocal package_total
@@ -197,9 +214,10 @@ def stage(packages, downloads):
             files[target] = body; meta[target] = licenses(p)
             index.append(dict(path=target, original=name, origin=origin, input_sha256=parent_pin["sha256"],
                               sha256=digest, size=len(body), covers=covered, package=pid))
+        binaries = {}
         for fl in p["files"]:
-            path = Path(downloads) / pid / fl["name"]
-            B.verify_file(pid, fl, path)
+            path = checked(pid, fl, Path(pid) / fl["name"], f"pkg/{pid}/{fl['name']}")
+            binaries[fl["name"]] = path
             if fl["name"].endswith(".whl") and c["distribution"] == "public-ok":
                 import bundle_wheels
                 bundle_wheels.verify(path, fl, c["components"][fl["name"]])
@@ -211,7 +229,7 @@ def stage(packages, downloads):
         for name, rule in sorted(c["license_rules"].items()):
             kind = rule["kind"]; fl = original[name]; count = 0
             if kind == "zip":
-                for member, body in legal_members(Path(downloads) / pid / name, "zip"):
+                for member, body in legal_members(binaries[name], "zip"):
                     add(member, body, fl["url"], fl, name); count += 1
             elif kind == "source":
                 src = next(s for s in c["sources"] if s["name"] == rule["input"])
@@ -219,7 +237,7 @@ def stage(packages, downloads):
                     add(member, body, src["url"], src, name); count += 1
             elif kind == "file":
                 lp = original[rule["file"]]
-                add(lp["name"], read_text(Path(downloads) / pid / lp["name"]), lp["url"], lp, name, pinned_text=True); count = 1
+                add(lp["name"], read_text(binaries[lp["name"]]), lp["url"], lp, name, pinned_text=True); count = 1
             # Always retain an explicitly pinned upstream text as well as any
             # bundled notices: a dependency's MIT notice cannot replace the
             # main program's GPL/Apache licence merely by being present.

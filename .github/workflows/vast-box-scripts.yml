@@ -51,6 +51,8 @@ jobs:
         run: python -m unittest discover -s scripts/bench/windows/appmatrix/tests -p test_package_bundle.py
       - name: Level 1 gate and Level 2 metadata warnings (offline fixtures)
         run: python -m unittest discover -s scripts/bench/windows/appmatrix/tests -p test_bundle_repro.py
+      - name: Reviewed artifact and both ISO namespaces (offline fixtures)
+        run: python -m unittest discover -s scripts/bench/windows/appmatrix/tests -p test_bundle_receivers.py
   windows-appmatrix:
     env:
       DOTNET_PROCESSOR_COUNT: 2
@@ -84,6 +86,8 @@ jobs:
         run: python3 scripts/bench/windows/appmatrix/official_mutants.py
       - name: Two-level reproduction mutation checks
         run: python3 scripts/bench/windows/appmatrix/repro_mutants.py
+      - name: Reviewed artifact receiver mutation checks
+        run: python3 scripts/bench/windows/appmatrix/receiver_mutants.py
   gpu-free:
     name: Vast box scripts — tests and mutations
     runs-on: ubuntu-latest

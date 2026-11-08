@@ -128,8 +128,12 @@ inside the ISO. A private release class is refused before download/build; no per
 | **2: best effort** | Entire ISO container bytes also match | A difference with Level 1 equal is a WARNING, with container metadata differences; it is a builder bug to fix. |
 
 **CODE READ:** `bundle_repro.py` compares inventories independently of image digests. A metadata-only
-change in a date, publisher field, extent layout, system area or padding cannot fail Level 1. The independent
-ISO reader snapshots descriptor fields, recording dates, extents and hashes of all non-payload regions.
+change in a date, publisher field, extent layout, system area or padding cannot fail Level 1 when the
+complete payload remains the same in both namespaces. The independent ISO reader walks both primary
+ISO9660 and Joliet directories, derives the permitted sorted short aliases, checks both endian path tables
+and directory references, and requires identical logical file lists and payloads. A primary-only file,
+redirected payload or swapped payload fails before comparison. Relocation of the same payload is allowed.
+The reader snapshots descriptor fields, recording dates, extents and hashes of all non-payload regions.
 `compare-image` prints the Level 1 result, any Level 2 metadata warning, and writes reproduction.json.
 The second image is read against **its own** receipt before comparison; the first receipt supplies the
 reference file inventory. Optional `--candidate-receipt` selects a second sidecar at another location.
@@ -138,6 +142,18 @@ reference file inventory. Optional `--candidate-receipt` selects a second sideca
 size and file hashes. The harness's public downloader still checks the repo-selected ISO's own digest and
 receipt. A corrupt download is an integrity failure; it is never excused as Level 2 variation. Do not use a
 first build's ISO digest as the second build's integrity digest when assessing reproduction.
+
+**CODE READ, 2026-11-08 / recipe binding:** `verify-image` additionally recomputes the embedded recipe
+identity from its package/toolchain records, open_packages and checkout source/recipe files. Every intact
+package and mirrored source must match its declared SHA-256/size. Bounded seekable ISO views replay the
+licence recipe without host extraction; repository guest files, generated staging/notices/index and per-file
+licences must match that recipe, and unlisted payloads are refused. Authorized publication also requires
+all seven owned probes and the compiler notices, and checks the recorded recipe-source digests. The embedded
+record must use the generated schema and exact fields; additional payload fields are refused. A self-consistent
+sidecar is insufficient. The verify-image CLI and publisher supply the trusted checkout input digest;
+publication checks it **before constructing a store client or making any store request**. An honestly hashed
+but unreviewed recipe is also refused. Run the verifier from the matching reviewed checkout. Compiled probes still require independent reproduction and
+native functional qualification: this check is not an attestation that a compiler produced their bytes.
 
 **CODE READ:** all seven repository programs currently use `mode: sha256`. No real program has been marked
 inventory-only. The pinned `bundle_toolchain.programs` policy supports a deliberately qualified exception:
