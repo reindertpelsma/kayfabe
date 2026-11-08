@@ -43,6 +43,7 @@ import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import app_policy
 import vast_report as contract  # noqa: E402  (the one definition of the box environment contract)
 
 MAX_BYTES = 262144  # the Worker's cap (ci/vast-broker/src/runreport.js REPORT_MAX_BYTES)
@@ -339,6 +340,9 @@ def build_report(lines, result, run_id=None):
     c = Collector()
     for line in lines:
         c.feed(line)
+    app_policy.apply(c)
+    policy = app_policy.rows()
+    policy_names = {os: {p["name"] for p in policy if p["os"] == os} for os in ("linux", "windows")}
     rows = suite_rows(result)
     hardware = result.get("hardware") if isinstance(result.get("hardware"), dict) else {}
     claims = contract.clean_claims(result.get("host_claims"))
@@ -406,12 +410,18 @@ def build_report(lines, result, run_id=None):
         "subruns": subruns,
         "tests": tests[: LIMITS["tests"]],
         "apps": ([
+            {"sub": sub_linux if p["os"] == "linux" else sub_windows, "name": p["name"], "os": p["os"],
+             "result": "NOT_RUN", "note": (c.apps if p["os"] == "linux" else c.windows_apps)[p["name"]][2][:200]}
+            for p in policy
+        ] + [
             {"sub": sub_linux, "name": name, "os": "linux", "result": res, "note": note[:200]}
             for name, (res, _secs, note) in c.apps.items()
+            if name not in policy_names["linux"]
         ] + [
             {"sub": sub_windows, "name": name, "os": "windows", "result": res, "note": note[:200]}
             for name, (res, _secs, note) in c.windows_apps.items()
-        ])[: LIMITS["apps"]],  # empty unless an opt-in apps stage ran
+            if name not in policy_names["windows"]
+        ])[: LIMITS["apps"]],  # policy entries always present; observed supported apps follow
         "perf": perf[: LIMITS["perf"]],
         "windows": c.windows,
     }

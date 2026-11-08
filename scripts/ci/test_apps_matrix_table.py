@@ -62,6 +62,16 @@ class Classify(unittest.TestCase):
         self.assertEqual(self.cls("PASS", "FAIL", "BOOT_FAIL"), "UNATTRIBUTED")
         self.assertEqual(self.cls("PASS", None, None), "UNATTRIBUTED")
 
+    def test_uvm_stays_unsupported_even_with_a_recorded_guest_failure(self):
+        for name in mt.KNOWN_UNSUPPORTED:
+            cls, final, reason = mt.classify(name, {"verdict": "PASS"}, {"verdict": "FAIL"}, {"verdict": "FAIL"})
+            self.assertEqual((cls, final), ("KNOWN_UNSUPPORTED", "-"))
+            self.assertIn("unsupported (UVM)", reason)
+
+    def test_uvm_is_not_a_gate_pass_even_if_a_guest_prints_pass(self):
+        for name in mt.KNOWN_UNSUPPORTED:
+            self.assertEqual(mt.classify(name, {"verdict": "PASS"}, {"verdict": "PASS"}, None)[0], "KNOWN_UNSUPPORTED")
+
     def test_policy_skip_is_not_a_result(self):
         self.assertEqual(mt.classify("geekbench_gpu", {"verdict": "PASS"}, {"verdict": "PASS"}, None)[0], "POLICY_SKIP")
 
@@ -92,6 +102,22 @@ class Table(unittest.TestCase):
         self.assertEqual(by["bad"]["class"], "HOST_LIMIT")
         self.assertEqual(by["geekbench_gpu"]["class"], "POLICY_SKIP")
 
+    def test_all_unsupported_apps_are_visible_even_without_input_rows(self):
+        by = {r["app"]: r for r in self.table("", "")}
+        for name in mt.KNOWN_UNSUPPORTED:
+            self.assertEqual(by[name]["class"], "KNOWN_UNSUPPORTED")
+            self.assertIn("unsupported (UVM)", by[name]["reason"])
+
+    def test_unsupported_missing_rows_are_listed_beside_a_supported_app(self):
+        by = {r["app"]: r for r in self.table(res("host", "a", "PASS"), res("guest", "a", "PASS"))}
+        self.assertTrue(set(mt.KNOWN_UNSUPPORTED) <= set(by))
+        self.assertEqual(by["a"]["class"], "GATE")
+
+    def test_unsupported_keeps_the_historical_observed_columns(self):
+        by = {r["app"]: r for r in self.table(res("host", "attach_verify", "PASS"), res("guest", "attach_verify", "FAIL"))}
+        self.assertEqual(by["attach_verify"]["class"], "KNOWN_UNSUPPORTED")
+        self.assertEqual(by["attach_verify"]["guest_batched"], "FAIL")
+
     def test_the_last_row_of_an_app_wins(self):
         rows = self.table(res("host", "a", "FAIL") + res("host", "a", "PASS"), res("guest", "a", "PASS"))
         self.assertEqual({r["app"]: r["class"] for r in rows}["a"], "GATE")
@@ -109,7 +135,10 @@ class Table(unittest.TestCase):
             Path(d, "guest_isolated.res").write_text(res("guest", "b", "FAIL"))
             out = Path(d, "gate.txt")
             self.assertEqual(mt.main([d, "--out", str(Path(d, "t.tsv")), "--gate-list", str(out)]), 0)
-            self.assertEqual(out.read_text().split(), ["a", "c"])
+            self.assertEqual([line for line in out.read_text().splitlines() if not line.startswith("#")], ["a", "c"])
+            self.assertIn("known_unsupported", out.read_text())
+            for name in mt.KNOWN_UNSUPPORTED:
+                self.assertIn(name + ": unsupported (UVM)", out.read_text())
 
 
 if __name__ == "__main__":

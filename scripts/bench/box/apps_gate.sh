@@ -51,6 +51,9 @@ finish() {  # verdict-line rc
     exit "$2"
 }
 
+policy=$(python3 -I "$here/../../ci/app_policy.py" linux) || finish "APPS_STAGE_RETRY class=BAD_LIST" 3
+printf '%s\n' "$policy"
+
 [ -s "$list" ] || finish "APPS_STAGE_RETRY class=NO_LIST" 3
 mapfile -t gate < <(grep -Ev '^[[:space:]]*(#|$)' "$list")
 [ "${#gate[@]}" -ge 1 ] || finish "APPS_STAGE_RETRY class=NO_LIST" 3
@@ -58,6 +61,9 @@ scratch=$(mktemp -d)   # run_apps.sh makes its output directory before it lists:
 known=$(APPS_ROOT=$scratch bash "$apps/run_apps.sh" x list)
 rm -rf "$scratch"
 for app in "${gate[@]}"; do
+    if grep -Fq "APP_POLICY name=$app " <<< "$policy"; then
+        finish "APPS_STAGE_RETRY class=BAD_LIST" 3
+    fi
     case $app in *[!A-Za-z0-9_]*) finish "APPS_STAGE_RETRY class=BAD_LIST" 3 ;; esac
     case " $known " in *" $app "*) ;; *) finish "APPS_STAGE_RETRY class=BAD_LIST" 3 ;; esac
 done
