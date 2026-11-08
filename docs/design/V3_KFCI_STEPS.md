@@ -33,7 +33,7 @@ before any paid run. PM1 has no paid-run path and no provider credentials.
 - Keep ShellCheck pinned at 0.10.0 for remaining glue; Python migration does not disable it.
 - Tests precede a new rule. A mutant of each verdict/guard rule needs at least two distinct
   killing tests. Preserve negative cases, isolated reruns, failure priority and RETRY classes.
-- Mark CODE READ, MEASURED, INFERRED and DESIGN separately. Fake tests do not qualify hardware
+- DESIGN: distinguish source reads, experiments, inferences and plans explicitly. Fake tests do not qualify hardware
   behavior; changing an implementation does not refresh the historical hardware records.
 
 ## Implemented step contract (CODE READ)
@@ -204,7 +204,10 @@ between suites; they are not a combined unique-test total. Detailed evidence:
 [`kfci_mutants.json`](../../traces/kfci_pm1_20261108/kfci_mutants.json),
 [`payload_apps_mutants.json`](../../traces/kfci_pm1_20261108/payload_apps_mutants.json).
 
-MEASURED: the equivalence cases feed the same fake APPRES transcript to old Bash
+MEASURED, PM1 GPU-free run on 2026-11-08 at commit `22c98880d`:
+`python3 -m unittest discover -s scripts/ci -p 'test_*.py'` ran 2,104 tests
+with two skips and no failures. Within that run, the equivalence cases in
+`scripts/ci/test_kfci_apps.py` feed the same fake APPRES transcript to old Bash
 and new Python, comparing rows, order, verdict and exit status; timestamps and elapsed
 seconds are the only normalized fields. Cases include isolated reruns, all verdict
 kinds, missing/duplicate rows, notes, invalid lists, budget exhaustion and GNU timeout's
@@ -212,7 +215,9 @@ invalid-duration exit. Tests preceded implementation (expected missing-module/fo
 failures). The comparisons caught omitted environment forwarding and a timeout-parser
 classification difference; both were corrected with the original verdicts retained.
 
-MEASURED: cancellation tests cover SIGTERM/SIGINT with a fake matrix, require its
+MEASURED, PM1 GPU-free run on 2026-11-08 at commit `22c98880d`:
+the same full Python discovery command ran `scripts/ci/test_kfci.py` and
+`scripts/ci/test_kfci_planner.py`. Their cancellation tests cover SIGTERM/SIGINT with a fake matrix, require its
 owned process group to stop, and check the last exit line. Image-copy tests cover
 private/group modes and umask with fake files. J2 parity tests cover JavaScript ASCII
 digits, strict end anchors and UTF-16 string-length bounds; the Python interpreter
