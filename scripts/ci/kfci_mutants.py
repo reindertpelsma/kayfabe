@@ -458,6 +458,11 @@ def main():
         (root / "ci").mkdir()
         (root / "apps").mkdir()
         shutil.copyfile(SCRIPTS / "apps/run_apps.sh", root / "apps/run_apps.sh")
+        for relative in ('ci/app_policy.py', 'apps/known_unsupported.json',
+                         'bench/windows/appmatrix/gate_profiles.json'):
+            target = root / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(SCRIPTS / relative, target)
         shutil.copyfile(HERE / "test_kfci.py", root / "ci/test_kfci.py")
         shutil.copyfile(HERE / "test_kfci_planner.py", root / "ci/test_kfci_planner.py")
         shutil.copyfile(

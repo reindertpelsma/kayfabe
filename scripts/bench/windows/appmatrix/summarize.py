@@ -19,6 +19,9 @@ import json
 import os
 import re
 import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "ci"))
+import app_policy
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 KV = re.compile(r"(\w+)=((?:(?! \w+=).)*)")
@@ -77,6 +80,8 @@ def summarize(run, apps_doc, linux_ref=None, digest_ref=None):
     out = [f"\n### {run}\n", "| app | linux guest | win (batched) | win (alone) | detail |", "|---|---|---|---|---|"]
     cnt, cat, tdr, wer, cyc = collections.Counter(), collections.defaultdict(collections.Counter), 0, 0, 0
     order = list(batched.keys()) + [a for a in alone if a not in batched]
+    policy = {p["name"]: p for p in app_policy.rows("windows")}
+    order += [name for name in policy if name not in order]
     for app in order:
         b, i = batched.get(app, {}), alone.get(app, {})
         bv, iv = b.get("verdict", "-"), i.get("verdict", "")
@@ -102,6 +107,9 @@ def summarize(run, apps_doc, linux_ref=None, digest_ref=None):
                     notes.append(f"{k} digest {'==' if same else '!='} ref")
                     if not same and final == "PASS":
                         final = "PASS*"
+        if app in policy:
+            notes.insert(0, policy[app]["note"] + f"; observed batched={bv}, alone={iv or '-'}")
+            bv, iv, final = policy[app]["note"], "-", "NOTRUN"
         tdr += t
         wer += int(det.get("wer") or 0)
         cnt[final] += 1

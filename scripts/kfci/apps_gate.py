@@ -12,6 +12,7 @@ from pathlib import Path
 import os
 import re
 import shutil
+import sys
 import tempfile
 import time
 
@@ -275,6 +276,26 @@ class AppsGate(Step):
         marker = root / "PROVISIONED"
         prov = Path(prov)
         prov.mkdir(parents=True, exist_ok=True)
+        policy = ctx.process(
+            [sys.executable, "-I", str(ctx.root / "scripts/ci/app_policy.py"), "linux"],
+            timeout=30,
+            allow_env=BASE_ENV,
+        )
+        if policy.returncode or policy.timed_out or policy.truncated:
+            return StepResult.retry(RetryClass.BAD_LIST)
+        policy_lines = policy.output.splitlines()
+        non_gating = set()
+        if not policy_lines:
+            return StepResult.retry(RetryClass.BAD_LIST)
+        for line in policy_lines:
+            match = re.fullmatch(
+                r"APP_POLICY name=([A-Za-z0-9_]+) os=linux result=NOT_RUN note=.+", line
+            )
+            if not match:
+                return StepResult.retry(RetryClass.BAD_LIST)
+            non_gating.add(match[1])
+        for line in policy_lines:
+            ctx.emit(line)
         if not listing.is_file() or listing.stat().st_size == 0:
             return StepResult.retry(RetryClass.NO_LIST)
         with listing.open(newline="\n") as stream:
@@ -305,6 +326,7 @@ class AppsGate(Step):
         for app in gate:
             if (
                 not re.fullmatch(r"[A-Za-z0-9_]+", app)
+                or app in non_gating
                 or " " + app + " " not in " " + known.output.rstrip("\n") + " "
             ):
                 return StepResult.retry(RetryClass.BAD_LIST)

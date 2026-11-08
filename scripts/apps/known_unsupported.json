@@ -1,0 +1,9 @@
+{
+  "status": "LIVE, 2026-11-08. Owner DX1 decision; reported by app_policy.py and matrix_table.py; excluded from Vast gate lists.",
+  "known_unsupported": {
+    "UnifiedMemoryStreams": "unsupported (UVM): owner ruling 2026-10-02 keeps UVM unmerged until the per-fault GR hold is measured and bounded (docs/OWNER_RULINGS.md section E)",
+    "UnifiedMemoryPerf": "unsupported (UVM): owner ruling 2026-10-02 keeps UVM unmerged until the per-fault GR hold is measured and bounded (docs/OWNER_RULINGS.md section E)",
+    "conjugateGradientUM": "unsupported (UVM): owner ruling 2026-10-02 keeps UVM unmerged until the per-fault GR hold is measured and bounded (docs/OWNER_RULINGS.md section E)",
+    "attach_verify": "unsupported (UVM): owner ruling 2026-10-02 keeps UVM unmerged until the per-fault GR hold is measured and bounded (docs/OWNER_RULINGS.md section E)"
+  }
+}

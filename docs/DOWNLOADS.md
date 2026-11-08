@@ -142,8 +142,9 @@ with a redirect to a presigned URL that lives at most 20 minutes, only while the
 with a valid run token (no country gate), at most 4 URLs per object per run. The box never holds a Cloudflare credential.
 `scripts/bench/box/fetch_bench_data.sh <name> --sha256 <pin> --out <file>` downloads with resume
 into a `.part` file and renames only after the sha256 pin matches; with `--extract <dir>` it
-streams `zstd -d | tar -x` and never stores the 42 GB archive (about 94 GB unpacked, so a guest disk that will hold the tree needs more than that). The pins (the `.tar.zst` and
-`CHECKSUMS.txt` hashes) are not in the repo yet: the owner pins them at the first upload. The
+streams `zstd -d | tar -x` and never stores the 42 GB archive (about 94 GB unpacked, so a guest disk that will hold the tree needs more than that). CODE READ, 2026-11-08 at `50640c605`: the archive and decompressed-tar pins are in
+`scripts/bench/box/specviewperf.pin`; they match the recorded checksums below. No pin for
+`CHECKSUMS.txt` itself is recorded. The licensee still confirms the pins before enabling the stage. The
 2 GiB per-run ceiling named under "Download etiquette" stays an example for third-party hosts; the
 owner-hosted cache is excluded from it.
 
@@ -215,7 +216,7 @@ This section is how the stage handles the private copy; the rules above ("handli
   PDF and `CHECKSUMS.txt` are not fetched per run.
 - The sha256 pin is in the repo: `scripts/bench/box/specviewperf.pin`. PROPOSED 2026-11-07, OWNER TO CONFIRM: the values are the
   ones of the object's own `CHECKSUMS.txt` as recorded in `traces/specviewperf_vast_20261105/spec/CHECKSUMS_pins.txt` (the
-  archive `ffe0e505...d5a`, the decompressed tar `cf37055c...bdb8`). A missing pin line, a missing object (Worker 404) or a
+  archive `ffe0e505e2f841ac876fbeac4d5f53edb0c36bd23d442cfe7f536f91cd114d5a`, the decompressed tar `cf37055cc6f61e2025c4abf9746f5d65486c4818f52f9a465c28ad9a3a2bdbf8`). A missing pin line, a missing object (Worker 404) or a
   mismatch is RETRY class MEDIA; `fetch_bench_data.sh` deletes bytes that do not match. The Worker allows 4 presigned URLs of at
   most 20 minutes per object per run; the stage uses at most 3 (the helper resumes with `-C -` on a fresh URL).
 - The copy lives for the run only. The 42 GB archive is deleted right after the lane's viewsets are in the guest; the child
