@@ -158,6 +158,23 @@ class Rules(unittest.TestCase):
         with patch.object(CI.shutil, "disk_usage", return_value=type("Disk", (), {"free": admitted})()):
             with self.assertRaises(ValueError): CI.check_disk(".", CI.disk_budget(m, profile))
 
+    def test_tokenizers_fallback_is_exact_upstream_tag(self):
+        p = next(p for p in H.load_manifest()['packages'] if p['id'] == 'hf_wheels')
+        name = 'tokenizers-0.22.2-cp39-abi3-win_amd64.whl'
+        self.assertEqual(p['compliance']['license_rules'][name].get('fallback'), 'tokenizers-v0.22.2-LICENSE')
+        source = next(f for f in p['compliance']['license_inputs'] if f['name'] == 'tokenizers-v0.22.2-LICENSE')
+        self.assertEqual(source['url'], 'https://raw.githubusercontent.com/huggingface/tokenizers/v0.22.2/LICENSE')
+        self.assertEqual(source['sha256'], 'c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4')
+        self.assertEqual(source['size'], 11357)
+
+    def test_tokenizers_fallback_agrees_with_wheel_metadata(self):
+        p = next(p for p in H.load_manifest()['packages'] if p['id'] == 'hf_wheels')
+        name = 'tokenizers-0.22.2-cp39-abi3-win_amd64.whl'; c = p['compliance']
+        self.assertEqual(c['components'][name]['license_id'], 'Apache-2.0')
+        audit = next(f for f in p['files'] if f['name'] == name)['public_audit']
+        self.assertIn('License :: OSI Approved :: Apache Software License', audit['license_classifiers'])
+        self.assertEqual(c['license_rules'][name].get('fallback'), 'tokenizers-v0.22.2-LICENSE')
+
 
 class Artifacts(unittest.TestCase):
     def setUp(self):
@@ -176,6 +193,39 @@ class Artifacts(unittest.TestCase):
         self.p["files"] = [pin("app.zip", raw)]
         self.p["compliance"]["license_rules"] = {"app.zip": dict(kind="zip")}
         return raw
+
+    def tokenizers_wheel(self, bundled_notice=False):
+        import bundle_wheels as W
+        self.p = copy.deepcopy(next(p for p in H.load_manifest()['packages'] if p['id'] == 'hf_wheels'))
+        name = 'tokenizers-0.22.2-cp39-abi3-win_amd64.whl'; c = self.p['compliance']
+        data = io.BytesIO()
+        with zipfile.ZipFile(data, 'w') as archive:
+            archive.writestr('tokenizers-0.22.2.dist-info/METADATA',
+                'Name: tokenizers\nVersion: 0.22.2\nClassifier: License :: OSI Approved :: Apache Software License\n')
+            archive.writestr('tokenizers/tokenizers.pyd', b'MZ synthetic public wheel')
+            if bundled_notice: archive.writestr('deps/NOTICE', b'dependency attribution')
+        fl = pin(name, data.getvalue()); component = c['components'][name]
+        fl['public_audit'] = W.inspect(io.BytesIO(data.getvalue()), fl, component)
+        self.p['files'] = [fl]; c['license_rules'] = {name:c['license_rules'][name]}; c['components'] = {name:component}
+        binary = self.cache / 'hf_wheels' / name; binary.parent.mkdir(); binary.write_bytes(data.getvalue())
+        main = b'fixture Apache-2.0 upstream licence'
+        for source in c['license_inputs']:
+            source.update(size=len(main), sha256=hashlib.sha256(main).hexdigest())
+            path = self.cache / '_compliance/hf_wheels' / source['name']
+            path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(main)
+        return name, main
+
+    def test_tokenizers_without_legal_member_gets_upstream_license(self):
+        name, main = self.tokenizers_wheel()
+        files, _, _ = self.stage()
+        self.assertIn(main, files.values())
+        index = json.loads(files['LICENSES/index.json'])
+        self.assertTrue(any(e['covers'] == name and e['origin'].endswith('/v0.22.2/LICENSE') for e in index))
+
+    def test_tokenizers_dependency_notice_cannot_replace_main_license(self):
+        _, main = self.tokenizers_wheel(bundled_notice=True)
+        files, _, _ = self.stage()
+        self.assertIn(main, files.values()); self.assertIn(b'dependency attribution', files.values())
 
     def test_license_text_inside_iso_layout(self):
         files, meta, sources = self.stage()

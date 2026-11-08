@@ -9,6 +9,7 @@ import tempfile
 import bundle_mutants as M
 
 CASES = [
+    ("tokenizers-main-license-fallback", "manifest.json", '"fallback": "tokenizers-v0.22.2-LICENSE"', '"missing_fallback": "tokenizers-v0.22.2-LICENSE"'),
     ("compliance-identity", "bundle_compliance.py", 'if not c.get("license_id") or not https(c.get("upstream", "")) or not p.get("version"):', 'if False:'),
     ("public-only", "bundle_compliance.py", 'if public_only and c["distribution"] != "public-ok":', 'if False:'),
     ("all-files-covered", "bundle_compliance.py", 'if set(rules) != {f["name"] for f in p["files"]}:', 'if False:'),

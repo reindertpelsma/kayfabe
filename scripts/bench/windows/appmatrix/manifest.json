@@ -1784,7 +1784,15 @@
     "distribution": "public-ok",
     "conditions": [],
     "sources": [],
-    "license_inputs": [],
+    "license_inputs": [
+     {
+      "name": "tokenizers-v0.22.2-LICENSE",
+      "url": "https://raw.githubusercontent.com/huggingface/tokenizers/v0.22.2/LICENSE",
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+      "size": 11357,
+      "date": "2026-11-08"
+     }
+    ],
     "license_rules": {
      "charset_normalizer-3.5.2-cp312-cp312-win_amd64.whl": {
       "kind": "zip"
@@ -1811,7 +1819,8 @@
       "kind": "zip"
      },
      "tokenizers-0.22.2-cp39-abi3-win_amd64.whl": {
-      "kind": "zip"
+      "kind": "zip",
+      "fallback": "tokenizers-v0.22.2-LICENSE"
      },
      "transformers-4.57.1-py3-none-any.whl": {
       "kind": "zip"
