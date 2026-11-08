@@ -1,0 +1,36 @@
+{
+  "status": "MEASURED GPU-FREE ONLY",
+  "date": "2026-11-08",
+  "source_parent": "3e80108d7bb87da745c2032fc12b09ee9903b027",
+  "implementation_diff_sha256": "5736abdcc6812ef82923209f4059c49aebc6c4da3a2231c7e16e95d2999da2b7",
+  "review": "RV2 PR309 follow-up",
+  "new_tests_before": 134,
+  "new_tests_after": 161,
+  "core_tests": 75,
+  "planner_tests": 47,
+  "migration_tests": 22,
+  "progress_tests": 17,
+  "existing_apps_and_report_tests": 177,
+  "new_mutant_baseline_tests": 139,
+  "new_mutants": 56,
+  "minimum_distinct_killing_methods": 2,
+  "initial_progress_reproduction": {
+    "tests": 13,
+    "failures": 10
+  },
+  "j2_schema_source_revision": "ca01ec8c9d5e7d2b8009d133d5d0858783502cff",
+  "j2_contract_sha256": "1027555309f8731cf2349f0550d6d3fa7d9150c72f61cc03c4cbcdf013c1359e",
+  "hardware_run": false,
+  "vm_run": false,
+  "worker_network_or_deploy": false,
+  "list_line_ending_reproduction": {
+    "tests": 17,
+    "failures": 2
+  },
+  "payload_mutants": 19,
+  "payload_mutant_baseline_tests": 496,
+  "payload_baseline_count_provenance": "unchanged selector counted in the initial PM1 run; fresh harness baseline passed",
+  "claims_new": 0,
+  "doc_freshness_new": 0,
+  "secret_scan_findings": 0
+}
