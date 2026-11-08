@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "KFCI local convenience assignment v1; J2 wire schema is schemas/planner-assignment.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "id",
+    "budget_seconds",
+    "steps"
+  ],
+  "properties": {
+    "version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "id": {
+      "$ref": "#/$defs/identifier"
+    },
+    "budget_seconds": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "reserve_seconds": {
+      "type": "number",
+      "minimum": 0
+    },
+    "inputs": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/identifier"
+      }
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/$defs/identifier"
+          },
+          "parameters": {
+            "type": "object"
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]{0,95}$"
+    }
+  },
+  "$comment": "assignment.py additionally enforces reserve < budget, finite numbers and unique step ids. It implements validation without a third-party jsonschema library."
+}

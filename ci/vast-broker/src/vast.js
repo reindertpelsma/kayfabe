@@ -1,3 +1,4 @@
+import { DEFAULTS } from './defaults.js';
 // prettier-ignore
 import {fetchJson,fetchBounded,readBounded,refuse,IMAGE} from './policy.js';
 // prettier-ignore
@@ -64,8 +65,8 @@ export class Vast {
       rentable: { eq: true },
       rented: { eq: false },
       num_gpus: { eq: 1 },
-      disk_space: { gte: 120 },
-      allocated_storage: 120,
+      disk_space: { gte: this.cfg.diskGb ?? DEFAULTS.payloadProfiles.small.diskGb },
+      allocated_storage: this.cfg.diskGb ?? DEFAULTS.payloadProfiles.small.diskGb,
       inet_up_cost: { lte: this.cfg.maxInet },
       inet_down_cost: { lte: this.cfg.maxInet },
       order: [['dph_total', 'asc']],
@@ -83,7 +84,7 @@ export class Vast {
     const body = {
       image: IMAGE,
       vm: true,
-      disk: 120,
+      disk: this.cfg.diskGb ?? DEFAULTS.payloadProfiles.small.diskGb,
       runtype: 'ssh_direct',
       onstart: script,
       env: Object.fromEntries(

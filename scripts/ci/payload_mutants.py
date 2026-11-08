@@ -775,6 +775,7 @@ def main():
         # The apps stage tests run the lane script and ask run_apps.sh for the app names.
         (bench / "box").mkdir(exist_ok=True)
         shutil.copyfile(HERE.parent / "bench/box/apps_gate.sh", bench / "box/apps_gate.sh")
+        shutil.copytree(HERE.parent / "kfci", root / "scripts/kfci", ignore=shutil.ignore_patterns("__pycache__"))
         (root / "scripts/apps").mkdir()
         for name in ("run_apps.sh", "gate_list.txt", "gate_list_middle.txt"):
             shutil.copyfile(HERE.parent / "apps" / name, root / "scripts/apps" / name)

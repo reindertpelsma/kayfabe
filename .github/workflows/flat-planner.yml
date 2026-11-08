@@ -1,0 +1,44 @@
+name: Flat release planner (GPU-free)
+on:
+  push:
+    paths:
+      - 'ci/vast-broker/planner/**'
+      - 'ci/vast-broker/kfci'
+      - 'ci/vast-broker/test/helpers.js'
+      - 'docs/design/V3_RELEASE_PLANNER.md'
+      - 'docs/howto/kfci-plan.md'
+      - '.github/workflows/flat-planner.yml'
+  pull_request:
+    paths:
+      - 'ci/vast-broker/planner/**'
+      - 'ci/vast-broker/kfci'
+      - 'ci/vast-broker/test/helpers.js'
+      - 'docs/design/V3_RELEASE_PLANNER.md'
+      - 'docs/howto/kfci-plan.md'
+      - '.github/workflows/flat-planner.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  planner:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Install existing mock transport runtime dependency
+        run: npm ci --prefix ci/vast-broker --omit=dev --ignore-scripts --no-audit --no-fund
+      - name: Reference schema engine for contract conformance (test only)
+        run: python3 -m pip install --disable-pip-version-check jsonschema==4.19.2
+      - name: Pure module, shared dependency vectors and seeded rental simulations
+        run: nice -n 19 node --test ci/vast-broker/planner/test/*.test.js
+      - name: Every planner mutant has two named killers
+        run: nice -n 19 node ci/vast-broker/planner/test/mutants.mjs
+      - name: Documentation and claim gates
+        run: |
+          python3 scripts/ci/doc_freshness.py
+          python3 scripts/ci/debt.py claims
+          python3 scripts/ci/release_claims.py validate
+          python3 scripts/ci/no_private_refs.py
+          python3 scripts/ci/no_gpu_uuids.py

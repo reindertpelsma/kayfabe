@@ -1,0 +1,42 @@
+{
+  "recorded_utc": "2026-11-07T16:00:24.973720+00:00",
+  "outcome": "failed",
+  "process_exit_code": 1,
+  "rust_source_revision": "fe0cd47e3e8dd6e889a04897a33dc5333f43c966",
+  "release_build": {
+    "outcome": "pass",
+    "cargo_reported_time": "5m 53s"
+  },
+  "test_profile_compile_time": "19m 23s",
+  "reported_rust_harness_results": 325,
+  "reported_passed": 5555,
+  "reported_failed": 14,
+  "reported_ignored": 22,
+  "individual_failed_test_lines_seen": 14,
+  "full_run_success_marker": null,
+  "clone_and_build_seconds": null,
+  "total_seconds": null,
+  "log_bytes": 698426,
+  "log_sha256": "c4febd25a16181fb35a9d2cb9a6d626b42ea619a232f45cd3615d4cde6b8b47e",
+  "commands": [
+    "cargo build --workspace --release --locked -j2",
+    "KAYFABE_NO_KVM=1 cargo test --workspace --locked --no-fail-fast -j2"
+  ],
+  "notes": [
+    "Fresh shallow clone and empty target; no submodules or evidence restoration.",
+    "Niceness 19, two cargo jobs including nested builds, shared cargo lock held.",
+    "Counts are reported Rust harness totals; ignored and external-reference skips are not physical coverage.",
+    "R2 changes scripts, CI, docs and records; no Rust source or Cargo input is changed.",
+    "Runner was developed during the run; revision identifies the cloned Rust inputs."
+  ],
+  "invocation_started_utc": "2026-11-07T12:21:44+00:00",
+  "final_output_utc": "2026-11-07T15:59:56.656229+00:00",
+  "observed_wall_seconds_to_final_output": 13093,
+  "timing_limit": "Wall duration uses log creation second through final output; cleanup time excluded.",
+  "failed_targets": [
+    "kf-disp --test lockstep_threads",
+    "kf-mem --lib",
+    "kf-rawclient --lib",
+    "kf-rm --test audit_policy_free_budgets"
+  ]
+}

@@ -1,11 +1,12 @@
 // prettier-ignore
 import {refuse} from './policy.js';
+import { checkedMatrixReceipts } from './release-matrix.js';
 export function checkedResult(result) {
   const object = (x) => x !== null && typeof x === 'object' && !Array.isArray(x);
   if (
     !object(result) ||
     Object.keys(result)
-      .filter((k) => k !== 'host_reference' && k !== 'host_claims')
+      .filter((k) => !['host_reference', 'host_claims', 'matrix_receipts'].includes(k))
       .sort()
       .join(',') !== 'hardware,nonce,runner_nonce,sha,suites,verdict' ||
     (result.host_reference !== undefined &&
@@ -15,6 +16,8 @@ export function checkedResult(result) {
     !/^([0-9a-f]{64})$/.test(result.runner_nonce) ||
     !/^([0-9a-f]{40})$/.test(result.sha)
   )
+    refuse('BAD_REPORT', 400);
+  if (result.matrix_receipts !== undefined && !checkedMatrixReceipts(result.matrix_receipts))
     refuse('BAD_REPORT', 400);
   const rows = result.suites;
   if (
@@ -62,6 +65,7 @@ export function checkedResult(result) {
     refuse('BAD_REPORT', 400);
   if (result.verdict === 'PASS') {
     if (
+      result.matrix_receipts?.rows.some((r) => r.verdict !== 'PASS') ||
       rows.some((r) => r.fail !== 0 || r.skip !== 0 || r.pass <= 0) ||
       h.gpu_name === 'unknown' ||
       h.driver_version === 'unknown' ||

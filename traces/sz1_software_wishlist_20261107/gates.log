@@ -1,0 +1,35 @@
+SZ1 CPU validation, 2026-11-07; source base 4dad9e1c24e362ff4bb37712eac65436a77de78f plus Portal feature/source metadata and documentation/evidence updates; exact source hashes are in README.md.
+
+COMMAND python3 scripts/ci/doc_freshness.py
+doc freshness: checked=208 existing-debt=0 new=0
+EXIT 0
+
+COMMAND python3 scripts/ci/release_claims.py validate
+WARN row 44 (perf-app-matrix-seconds-1075-1193): verified but action update-wording; is the wording the problem?
+WARN row 54 (win-minecraft-in-a-world): verified but action update-wording; is the wording the problem?
+WARN row 70 (win-3dmark-steel-nomad-runs-to-end): verified but action update-wording; is the wording the problem?
+release_claims: 133 claims, 0 errors, 3 warnings
+EXIT 0
+
+COMMAND python3 scripts/ci/no_private_refs.py
+no_private_refs: clean
+EXIT 0
+
+COMMAND python3 scripts/ci/no_gpu_uuids.py
+gpu-uuids: files=179 baselined=179 new=0 stale=0
+EXIT 0
+
+COMMAND python3 scripts/ci/workflow_lint.py
+workflow_lint: ok
+EXIT 0
+
+COMMAND python3 scripts/ci/debt.py claims
+claims: existing-debt=3749 new=0 resolved=0
+EXIT 0
+
+COMMAND bash docs/design/check_sections.sh
+SECTION_GATE files=152 offenders=0
+EXIT 0
+
+COMMAND git diff --cached --check
+EXIT 0

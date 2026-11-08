@@ -24,7 +24,8 @@ PROV=${KF_PROV_DIR:-/root/prov}
 mkdir -p "$PROV"
 [ ! -e "$PROV/$T.log" ] || { echo "refusing to overwrite $PROV/$T.log" >&2; exit 2; }
 exec >"$PROV/$T.log" 2>&1
-trap 'rc=$?; echo "EXIT rc=$rc $(date -Is)"' EXIT
+on_exit() { local rc=$?; echo "EXIT rc=$rc $(date -Is)"; }
+trap on_exit EXIT
 echo "START $(date -Is)"
 exec 8>/tmp/kayfabe-merge-check.lock
 flock -n 8 || { echo "another merge check is running"; exit 2; }

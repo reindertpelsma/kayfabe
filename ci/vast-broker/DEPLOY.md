@@ -1013,3 +1013,15 @@ the key-block scan is quadratic on 16 MiB of BEGIN lines with no END (about 5 s 
 bounded to about 4 MiB by the box channel); R2 `put` does not refuse to overwrite; `nosniff` and a
 sandbox CSP belong in a Cloudflare Transform Rule on `logs.kayfabe.dev`; D1 calls in the publisher have no
 timeout; the 0004 tables have no retention.
+
+
+**CODE READ — J2 RV1 correction, 2026-11-07 (not deployed):** release plans remain
+visible but a proposed matrix is refused before every rental, including cron
+retries. A future executable matrix requires reviewed minima/ABI and no blockers,
+plus selected-commit reporter receipt capability 1 and payload executor capability
+1 in addition to box protocol 7. Today's payload declares executor capability 0.
+Do not enable it by editing only status or flags. Release PASS requires the exact
+matrix driver/subrun receipts; ordinary protocol-7 PASS rows cannot certify it.
+An attributed planned subrun FAIL is sticky and never earns a retry. SPEC stays
+disabled; enabling it plans and prices separate A/B leases and requires both lane
+rows per die. See [the design and review corrections](../../docs/design/V3_RELEASE_MATRIX.md).
