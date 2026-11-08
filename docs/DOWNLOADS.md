@@ -178,8 +178,9 @@ R2 registration, Worker access, rental or deployment is part of this change.
 
 STATUS: CODE + DESIGN, 2026-11-08 (latest owner rulings). The first deliverable is build + verification;
 coordinator upload is manual and CI publication remains optional/disabled. The first full public reproduction
-is recorded below; no media upload, secret/domain configuration, Worker deployment or native/GPU pass is claimed.
-The repository bundle pin remains UNBUILT and the Worker integration is proposed, not deployed.
+is recorded below. **Update 2026-11-08 (MEASURED):** the coordinator uploaded the bundle (ISO, manifest and three source archives) with create-only
+keys to the public bundles bucket, and the ISO's sha256 was re-verified by downloading it through bundles.kayfabe.dev; the repository bundle pin
+is filled with that digest. No Worker deployment or native/GPU pass is claimed, and the Worker integration is proposed, not deployed.
 
 **OWNER SUPERSESSION, 2026-11-07 / CODE READ:** NVIDIA payloads are pinned official provisioning/run-time
 downloads only. They must never enter a distributed image/ISO or R2/GitHub object. Older proposals to cache
