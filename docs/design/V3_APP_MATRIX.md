@@ -20,6 +20,8 @@ as the baseline R2 is compared against; their cause list is SUPERSEDED by §R2.3
 
 ## Reproducing the image (DESIGN-ONLY, 2026-11-07)
 
+**RESEARCH, 2026-11-08:** [chroot construction without KVM](V3_APPS_IMAGE_CHROOT_EVALUATION.md) is evaluated as an additional backend for independent release-box builds. It is not implemented or qualified; the working QEMU path and old bash paths remain available.
+
 **CODE READ:** the new [recipe and Python builder](V3_APPS_IMAGE_RECIPE.md) separate an open Ubuntu main/universe image from
 transient official NVIDIA provisioning. NVIDIA proprietary files belong in neither image/ISO nor R2/GitHub: the box host fetches
 pinned official installers per run and supplies them on a transient read-only data disk to the offline guest. Shared-CUDA-runtime builds are exported through a

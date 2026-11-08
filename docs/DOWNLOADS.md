@@ -149,6 +149,8 @@ owner-hosted cache is excluded from it.
 
 ## Linux apps guest image: open image and official per-run inputs
 
+**RESEARCH, 2026-11-08:** a [chroot alternative](design/V3_APPS_IMAGE_CHROOT_EVALUATION.md) evaluates snapshot bootstrap, transient compiler inputs, smaller sequential build directories and per-box inventory hashes without KVM during construction. Its resource figures are estimates; no complete alternative image is qualified. Existing reproduction steps remain unchanged.
+
 STATUS: DESIGN-ONLY, 2026-11-07. **CODE READ:** [recipe.json](../scripts/apps/image/recipe.json) and
 [build_image.py](../scripts/apps/image/build_image.py) pin an official Ubuntu cloud image, dated main/universe apt indexes,
 open apps/models and hash-locked wheels. Direct open inputs total 3,541,368,563 bytes, plus apt dependencies. The builder uses

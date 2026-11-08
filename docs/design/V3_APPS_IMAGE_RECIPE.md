@@ -2,6 +2,8 @@ STATUS: DESIGN-ONLY, 2026-11-07. CODE READ: implementation and GPU-free fixtures
 
 # Linux apps image recipe
 
+**RESEARCH, 2026-11-08:** the owner requested an additional build path without KVM. The [chroot evaluation](V3_APPS_IMAGE_CHROOT_EVALUATION.md) records bootstrap/privilege requirements, offline-init limitations, resource estimates, eight-box inventory comparison and a bounded ext4 determinism probe. It does not implement or qualify that backend. The QEMU/cloud-init implementation and requirements below remain in force until coordinator qualification.
+
 **DESIGN — owner decision, 2026-11-07:** distribute an **open image only**. NVIDIA proprietary files belong in neither images nor ISOs, R2 nor GitHub. For each provisioning run, the box host downloads pinned official installers and wheels using J4's fetcher, supplies them on a transient read-only data disk to the offline guest, and deletes the runtime overlay and downloads afterwards. The open image could be public in principle; the owner decides hosting after checking the complete result and applicable licences. This recipe grants no redistribution rights.
 
 **CODE READ:** the reproduction claim is **input-pinned + inventory-identical**, not byte-identical qcow2. ext4 timestamps, machine IDs and generated keys can differ. The recorded image SHA256 identifies one output; `verify` accepts another image with the same app inventory. This does not establish reproducibility of the historical shell-built 20.2 GiB image, whose complete transitive inputs were not recorded. Its measured app results remain in [R5](../../traces/apps_linux_20261107/README.md), at that record's revision.

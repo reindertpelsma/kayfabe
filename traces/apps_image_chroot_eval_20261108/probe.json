@@ -1,0 +1,100 @@
+{
+  "cap_eff": "0000000000000000",
+  "config": "[defaults]\nbase_features = sparse_super,large_file,filetype,resize_inode,dir_index,ext_attr\nblocksize = 4096\ninode_size = 256\ninode_ratio = 16384\n[fs_types]\next4 = {\nfeatures = has_journal,extent,huge_file,flex_bg,metadata_csum,64bit,dir_nlink,extra_isize\n}\n",
+  "config_sha256": "e1cfacb5dc55d6c1c17a9670af964434a53d80f1a88d4d8507d0612a69168ef4",
+  "content_inventories_equal": true,
+  "elapsed_seconds": 10.294097,
+  "images": {
+    "normalized_a": {
+      "allocated_bytes": 4603904,
+      "elapsed_seconds_including_hash_and_check": 1.309317,
+      "fsck": "Pass 1: Checking inodes, blocks, and sizes\nPass 2: Checking directory structure\nPass 3: Checking directory connectivity\nPass 4: Checking reference counts\nPass 5: Checking group summary information\nKF-OPEN-PROBE: 18/1024 files (5.6% non-contiguous), 1107/8192 blocks\ne2fsck 1.47.2 (1-Jan-2025)",
+      "model_inode": "Inode: 16   Type: regular    Mode:  0644   Flags: 0x80000\nGeneration: 0    Version: 0x00000000:00000000\nUser: 65534   Group: 65534   Project:     0   Size: 21\nFile ACL: 0\nLinks: 1   Blockcount: 8\nFragment:  Address: 0    Number: 0    Size: 0\n ctime: 0x6aee6a00:00000000 -- Sat Nov  7 00:00:00 2026\n atime: 0x6aee6a00:00000000 -- Sat Nov  7 00:00:00 2026\n mtime: 0x6aee6a00:00000000 -- Sat Nov  7 00:00:00 2026\ncrtime: 0x6aee6a00:00000000 -- Sat Nov  7 00:00:00 2026\nSize of extra inode fields: 32\nInode checksum: 0x143f5248\nEXTENTS:\n(0):1105\ndebugfs 1.47.2 (1-Jan-2025)",
+      "readonly_check_unchanged": true,
+      "sha256": "875fe5da3d1f2ec4d8aed88279c0d3218cf77406a80bb9c68d2a057283981c29",
+      "size": 33554432
+    },
+    "normalized_b": {
+      "allocated_bytes": 4603904,
+      "elapsed_seconds_including_hash_and_check": 0.77909,
+      "fsck": "Pass 1: Checking inodes, blocks, and sizes\nPass 2: Checking directory structure\nPass 3: Checking directory connectivity\nPass 4: Checking reference counts\nPass 5: Checking group summary information\nKF-OPEN-PROBE: 18/1024 files (5.6% non-contiguous), 1107/8192 blocks\ne2fsck 1.47.2 (1-Jan-2025)",
+      "model_inode": "Inode: 16   Type: regular    Mode:  0644   Flags: 0x80000\nGeneration: 0    Version: 0x00000000:00000000\nUser: 65534   Group: 65534   Project:     0   Size: 21\nFile ACL: 0\nLinks: 1   Blockcount: 8\nFragment:  Address: 0    Number: 0    Size: 0\n ctime: 0x6aee6a00:00000000 -- Sat Nov  7 00:00:00 2026\n atime: 0x6aee6a00:00000000 -- Sat Nov  7 00:00:00 2026\n mtime: 0x6aee6a00:00000000 -- Sat Nov  7 00:00:00 2026\ncrtime: 0x6aee6a00:00000000 -- Sat Nov  7 00:00:00 2026\nSize of extra inode fields: 32\nInode checksum: 0x143f5248\nEXTENTS:\n(0):1105\ndebugfs 1.47.2 (1-Jan-2025)",
+      "readonly_check_unchanged": true,
+      "sha256": "875fe5da3d1f2ec4d8aed88279c0d3218cf77406a80bb9c68d2a057283981c29",
+      "size": 33554432
+    },
+    "normalized_repeat": {
+      "allocated_bytes": 4603904,
+      "elapsed_seconds_including_hash_and_check": 1.197552,
+      "fsck": "Pass 1: Checking inodes, blocks, and sizes\nPass 2: Checking directory structure\nPass 3: Checking directory connectivity\nPass 4: Checking reference counts\nPass 5: Checking group summary information\nKF-OPEN-PROBE: 18/1024 files (5.6% non-contiguous), 1107/8192 blocks\ne2fsck 1.47.2 (1-Jan-2025)",
+      "model_inode": "Inode: 16   Type: regular    Mode:  0644   Flags: 0x80000\nGeneration: 0    Version: 0x00000000:00000000\nUser: 65534   Group: 65534   Project:     0   Size: 21\nFile ACL: 0\nLinks: 1   Blockcount: 8\nFragment:  Address: 0    Number: 0    Size: 0\n ctime: 0x6aee6a00:00000000 -- Sat Nov  7 00:00:00 2026\n atime: 0x6aee6a00:00000000 -- Sat Nov  7 00:00:00 2026\n mtime: 0x6aee6a00:00000000 -- Sat Nov  7 00:00:00 2026\ncrtime: 0x6aee6a00:00000000 -- Sat Nov  7 00:00:00 2026\nSize of extra inode fields: 32\nInode checksum: 0x143f5248\nEXTENTS:\n(0):1105\ndebugfs 1.47.2 (1-Jan-2025)",
+      "readonly_check_unchanged": true,
+      "sha256": "875fe5da3d1f2ec4d8aed88279c0d3218cf77406a80bb9c68d2a057283981c29",
+      "size": 33554432
+    },
+    "older_mtime": {
+      "allocated_bytes": 4603904,
+      "elapsed_seconds_including_hash_and_check": 0.934426,
+      "fsck": "Pass 1: Checking inodes, blocks, and sizes\nPass 2: Checking directory structure\nPass 3: Checking directory connectivity\nPass 4: Checking reference counts\nPass 5: Checking group summary information\nKF-OPEN-PROBE: 18/1024 files (5.6% non-contiguous), 1107/8192 blocks\ne2fsck 1.47.2 (1-Jan-2025)",
+      "model_inode": "Inode: 16   Type: regular    Mode:  0644   Flags: 0x80000\nGeneration: 0    Version: 0x00000000:00000000\nUser: 65534   Group: 65534   Project:     0   Size: 21\nFile ACL: 0\nLinks: 1   Blockcount: 8\nFragment:  Address: 0    Number: 0    Size: 0\n ctime: 0x6aee6a00:00000000 -- Sat Nov  7 00:00:00 2026\n atime: 0x6aee6a00:00000000 -- Sat Nov  7 00:00:00 2026\n mtime: 0x6aed1880:00000000 -- Fri Nov  6 00:00:00 2026\ncrtime: 0x6aee6a00:00000000 -- Sat Nov  7 00:00:00 2026\nSize of extra inode fields: 32\nInode checksum: 0x67238551\nEXTENTS:\n(0):1105\ndebugfs 1.47.2 (1-Jan-2025)",
+      "readonly_check_unchanged": true,
+      "sha256": "0a63b54e405dcd0a6ac3cdec7aa203a00c0750c62943e729da27e72835b41a62",
+      "size": 33554432
+    },
+    "random_fs_uuid": {
+      "allocated_bytes": 4603904,
+      "elapsed_seconds_including_hash_and_check": 2.299849,
+      "fsck": "Pass 1: Checking inodes, blocks, and sizes\nPass 2: Checking directory structure\nPass 3: Checking directory connectivity\nPass 4: Checking reference counts\nPass 5: Checking group summary information\nKF-OPEN-PROBE: 18/1024 files (5.6% non-contiguous), 1107/8192 blocks\ne2fsck 1.47.2 (1-Jan-2025)",
+      "model_inode": "Inode: 16   Type: regular    Mode:  0644   Flags: 0x80000\nGeneration: 0    Version: 0x00000000:00000000\nUser: 65534   Group: 65534   Project:     0   Size: 21\nFile ACL: 0\nLinks: 1   Blockcount: 8\nFragment:  Address: 0    Number: 0    Size: 0\n ctime: 0x6aee6a00:00000000 -- Sat Nov  7 00:00:00 2026\n atime: 0x6aee6a00:00000000 -- Sat Nov  7 00:00:00 2026\n mtime: 0x6aee6a00:00000000 -- Sat Nov  7 00:00:00 2026\ncrtime: 0x6aee6a00:00000000 -- Sat Nov  7 00:00:00 2026\nSize of extra inode fields: 32\nInode checksum: 0xdae9ee95\nEXTENTS:\n(0):1105\ndebugfs 1.47.2 (1-Jan-2025)",
+      "readonly_check_unchanged": true,
+      "sha256": "90a6120df8e0d7381bb7084c49a6bbfe20924727174df22ef69548106277ca3f",
+      "size": 33554432
+    },
+    "random_hash_seed": {
+      "allocated_bytes": 4603904,
+      "elapsed_seconds_including_hash_and_check": 1.705797,
+      "fsck": "Pass 1: Checking inodes, blocks, and sizes\nPass 2: Checking directory structure\nPass 3: Checking directory connectivity\nPass 4: Checking reference counts\nPass 5: Checking group summary information\nKF-OPEN-PROBE: 18/1024 files (5.6% non-contiguous), 1107/8192 blocks\ne2fsck 1.47.2 (1-Jan-2025)",
+      "model_inode": "Inode: 16   Type: regular    Mode:  0644   Flags: 0x80000\nGeneration: 0    Version: 0x00000000:00000000\nUser: 65534   Group: 65534   Project:     0   Size: 21\nFile ACL: 0\nLinks: 1   Blockcount: 8\nFragment:  Address: 0    Number: 0    Size: 0\n ctime: 0x6aee6a00:00000000 -- Sat Nov  7 00:00:00 2026\n atime: 0x6aee6a00:00000000 -- Sat Nov  7 00:00:00 2026\n mtime: 0x6aee6a00:00000000 -- Sat Nov  7 00:00:00 2026\ncrtime: 0x6aee6a00:00000000 -- Sat Nov  7 00:00:00 2026\nSize of extra inode fields: 32\nInode checksum: 0x143f5248\nEXTENTS:\n(0):1105\ndebugfs 1.47.2 (1-Jan-2025)",
+      "readonly_check_unchanged": true,
+      "sha256": "c5abdd29f0d6762124996382d5b09a4391d7b451876b20be26f980e2dd6c3221",
+      "size": 33554432
+    },
+    "wall_clock": {
+      "allocated_bytes": 4603904,
+      "elapsed_seconds_including_hash_and_check": 1.262325,
+      "fsck": "Pass 1: Checking inodes, blocks, and sizes\nPass 2: Checking directory structure\nPass 3: Checking directory connectivity\nPass 4: Checking reference counts\nPass 5: Checking group summary information\nKF-OPEN-PROBE: 18/1024 files (5.6% non-contiguous), 1107/8192 blocks\ne2fsck 1.47.2 (1-Jan-2025)",
+      "model_inode": "Inode: 16   Type: regular    Mode:  0644   Flags: 0x80000\nGeneration: 0    Version: 0x00000000:00000000\nUser: 65534   Group: 65534   Project:     0   Size: 21\nFile ACL: 0\nLinks: 1   Blockcount: 8\nFragment:  Address: 0    Number: 0    Size: 0\n ctime: 0x6aefcdbd:00000000 -- Sun Nov  8 01:17:49 2026\n atime: 0x6aefcdbd:00000000 -- Sun Nov  8 01:17:49 2026\n mtime: 0x6aee6a00:00000000 -- Sat Nov  7 00:00:00 2026\ncrtime: 0x6aefcdc3:00000000 -- Sun Nov  8 01:17:55 2026\nSize of extra inode fields: 32\nInode checksum: 0x41fa397a\nEXTENTS:\n(0):1105\ndebugfs 1.47.2 (1-Jan-2025)",
+      "readonly_check_unchanged": true,
+      "sha256": "f727332bb81526a422df929ba25ae09c62f3a6c1eb82306a37790d0ff5414de7",
+      "size": 33554432
+    }
+  },
+  "observation_date": "2026-11-08",
+  "observations": {
+    "different_creation_order_equal": true,
+    "older_mtime_equal": false,
+    "repeat_equal": true,
+    "unfixed_epoch_equal": false,
+    "unfixed_fs_uuid_equal": false,
+    "unfixed_hash_seed_equal": false
+  },
+  "peak_virtual_image_bytes": 33554432,
+  "probe_sha256": "a33d38073ce9650209055c7c9f604591b3287a5a3bb5dfc270367e0bf908c9de",
+  "scope": "one host, tiny ext4 fixtures only; no chroot/apps build, boot or cross-host qualification",
+  "source_date_epoch": 1794009600,
+  "tools": {
+    "debugfs": {
+      "sha256": "864e1d7b445e7b5bfc831da78330dbcafc590fa82b89ea9de60b7527f989954f",
+      "version": "debugfs 1.47.2 (1-Jan-2025)\n\tUsing EXT2FS Library version 1.47.2"
+    },
+    "e2fsck": {
+      "sha256": "2e51f521c676729920eaba694933d9d4048645f1a5789556fd0027e62d11ecc8",
+      "version": "e2fsck 1.47.2 (1-Jan-2025)\n\tUsing EXT2FS Library version 1.47.2, 1-Jan-2025"
+    },
+    "mke2fs": {
+      "sha256": "e42e49656dfc308efeed86f9bfad7746fc22ad1d4a3b0d508b5dba7a4b9a904f",
+      "version": "mke2fs 1.47.2 (1-Jan-2025)\n\tUsing EXT2FS Library version 1.47.2"
+    }
+  },
+  "uid": 65534
+}
