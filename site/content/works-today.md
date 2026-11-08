@@ -15,7 +15,7 @@ Windows 11 was tested in a matrix on 14 October 2026, at revision `eb9f2aa3`, on
 The README also reports CUDA in the guest, Blender renders with CUDA and OptiX, and one 4K YouTube playback in Edge that ran to the end. Those are separate observations, not part of that matrix. No all-app pass exists. Only Windows driver 580.88 is covered, and it needs [three registry settings](/@docs/windows-guest.html).
 
 <!-- src: README.md Linux guest; docs/howto/linux-guest.md -->
-Linux guests have run a full desktop, display planes, suspend and resume, and a 30-test suite. On a rented RTX 3060, 61 of 65 CUDA programs gave the same output as the host. These include PyTorch and llama.cpp. The four failures need memory paging that is not supported yet. One failure printed SUCCESS with a wrong result.
+Linux guests have run a full desktop, display planes, suspend and resume, and a 30-test suite. MEASURED on an RTX 4090 at `144557e43`, 2026-11-07: 70/70 runnable apps passed on the host and 66/70 in the guest. Passing apps met their own correctness predicates; the three digest-producing apps matched host digests. The four UVM apps are explicitly unsupported for now, listed in every report. <!-- src: traces/apps_linux_20261107/README.md; docs/OWNER_RULINGS.md section E -->
 
 <!-- src: README.md screenshot; traces/20261021_131847.jpg -->
 ![Windows 11 and a Linux desktop using one RTX 4070](/screenshot-windows-desktop.jpg)
@@ -29,16 +29,16 @@ These are recorded stages, not a promise that every card or application works. A
 
 | Family / die | Linux evidence | Windows evidence |
 |---|---|---|
-| Turing TU116 | Guest tests passed | Not documented yet |
-| Ampere GA106 (RTX 3060) | CUDA application tests and desktop | On a branch: Code 0, then repeated driver resets |
-| Ampere GA104 | GPU gates and guest tests passed | GPU enumeration only; no display or application result |
-| Ada AD104 (RTX 4070) | Guest tests and desktop | Desktop and applications |
-| Ada AD104 (RTX 4000 Ada) | Guest tests passed | Not documented yet |
+| Turing TU116 | Guest tests passed | MEASURED: Windows gate PASS, `0c515b3b3`, 2026-11-04; stock 580.88. This is a gate result, not full application qualification |
+| Ampere GA106 (RTX 3060) | CUDA application tests and desktop | MEASURED: Windows gate PASS, `0c515b3b3`, 2026-11-04; stock 580.88. This is a gate result, not full application qualification |
+| Ampere GA104 | GPU gates and guest tests passed | MEASURED: Windows gate PASS, `0c515b3b3`, 2026-11-04; stock 580.88. This is a gate result, not full application qualification |
+| Ada AD104 (RTX 4070) | Guest tests and desktop | MEASURED: Windows gate PASS, `0c515b3b3`, 2026-11-04; stock 580.88. This is a gate result, not full application qualification |
+| Ada AD104 (RTX 4000 Ada) | Guest tests passed | MEASURED: Windows gate PASS, `0c515b3b3`, 2026-11-04; stock 580.88. This is a gate result, not full application qualification |
 | Ada AD106, AD103 | Passed on AD106; AD103 not documented | Desktops with a borrowed display page |
-| Ada AD102 | Guest driver 590 passed | On a branch: 13 of 18 recorded rows passed, 4 failed, 1 not run |
-| Blackwell GB205 | Guest tests passed | One idle ten-minute pass with unmerged fixes; no apps tested |
-| Blackwell GB202 | On a branch: guest tests and CUDA passed | Open: a crash on one machine was not repeated on another |
-| Blackwell GB206 | Passed on earlier revisions | Open: Code 43 |
+| Ada AD102 | yes; 30/30 at `0c515b3b3` (580.159.04 guest), 2026-11-04 | MEASURED: Windows gate PASS, `0c515b3b3`, 2026-11-04; stock 580.88. This is a gate result, not full application qualification |
+| Blackwell GB205 | Guest tests passed | MEASURED: Windows gate PASS, `0c515b3b3`, 2026-11-04; stock 580.88. This is a gate result, not full application qualification |
+| Blackwell GB202 | On a branch: guest tests and CUDA passed | MEASURED: Windows gate intermittent: FAIL, then two PASS on one box, `0c515b3b3`, 2026-11-04; stock 580.88. This is a gate result, not full application qualification |
+| Blackwell GB206 | Passed on earlier revisions | MEASURED: Windows gate PASS, `0c515b3b3`, 2026-11-04; stock 580.88. This is a gate result, not full application qualification |
 
 <!-- src: docs/howto/requirements.md GPU table (2026-10-28); branches claude/blackwell-fixes-20261024, codex/bw6b-20261024, claude/bw11-20261026, codex/sweep-dies-20261022, claude/tur1-20261027 and codex/sweep-integrate-20261018 -->
 Rows marked "On a branch" come from records on branches that are not merged. Each rests on one machine. The [requirements table](/@docs/requirements.html#gpu) links the records.
@@ -64,7 +64,7 @@ The launch scripts still use root; a [run without sudo](/@docs/security.html) is
 The test suite boots 30 short-lived VMs in a row, one for each test. There is no GPU to rebind between runs. We recommend one VM per card at a time.
 
 <!-- src: README.md 'Not finished'; traces/windows_code43_walls_20261007/README.md run54 (a88764b3, 2026-10-08); docs/FAQ.md 'Can several VMs share one GPU?' -->
-There is no security audit. Two VMs have booted together on one card, but sharing performance is untested. Nobody has measured what one VM's GPU fault does to the other VMs. The [sharing FAQ](/@docs/FAQ.html#can-several-vms-share-one-gpu) describes the limits.
+There is no security audit. Two runs on one RTX 4090 recorded a host CUDA loop and two guests with correct results, no GPU resets and per-workload ratios beside the suite's fault arms (`3aa2a75a6`, 2026-11-05). Hostile long kernels and general fault containment remain unverified. <!-- src: traces/trio_vast_20261105/README.md --> The [sharing FAQ](/@docs/FAQ.html#can-several-vms-share-one-gpu) describes the limits.
 
 <!-- src: README.md 'Trying it' and STATUS line; docs/howto/goals.md 'An installer and a stable interface'; docs/howto/credits.md (LICENSE exception 2) -->
 There is no installer, public binary or stable interface. Build from source. An installer is planned, with no date.
@@ -81,7 +81,7 @@ No game with kernel anti-cheat is recorded. Products such as Vanguard and FACEIT
 This is the one list of things the project has not measured. Other pages link here instead of repeating it.
 
 - Windows speed on current master. A new benchmark is pending, so no figure is published.
-- Several VMs on one card: throughput, fairness, and what one VM's GPU fault does to the others.
+- Several VMs on one card: general fairness and containment during hostile long kernels or faults remain unverified beyond the limited two-run trio result above.
 - The display path: frame rate and latency compared with other approaches, and PCIe traffic itself.
 - Running as an ordinary user on current master, including the CUDA application matrix and a desktop on the NVIDIA card.
 - Running inside a container.

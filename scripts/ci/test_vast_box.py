@@ -29,6 +29,7 @@ FILES = [
     "vast_report.py",
     "vast_evidence.py",
     "vast_run_report.py",
+    "app_policy.py",
     "kf-box-kill",
     "kf-box-blob-url",
 ]
@@ -1139,6 +1140,12 @@ class Onstart(Tmp):
         ci.mkdir(parents=True, exist_ok=True)
         for name in FILES:
             shutil.copy(SCRIPTS / name, ci / name)
+        # The reporter reads the committed app policy, including in this isolated checkout.
+        repo = Path(__file__).resolve().parents[2]
+        for rel in ("scripts/apps/known_unsupported.json", "scripts/bench/windows/appmatrix/gate_profiles.json"):
+            target = root / rel
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy(repo / rel, target)
         if payload is not None:
             (ci / "vast_payload.sh").write_text(PAYLOAD_HEADER + payload)
         self.ws, self.run_dir = self.tmp / "ws", self.tmp / "run"

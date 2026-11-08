@@ -43,6 +43,7 @@ import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import app_policy
 import vast_report as contract  # noqa: E402  (the one definition of the box environment contract)
 
 MAX_BYTES = 262144  # the Worker's cap (ci/vast-broker/src/runreport.js REPORT_MAX_BYTES)
@@ -162,7 +163,8 @@ class Collector:
         self.stage_rows = {}
         self.stage_end = {}
         self.windows_requested = None
-        self.windows = {"gate": None, "install_s": None, "probes": [], "resets": None, "live_dumps_193": None}
+        self.windows = {"gate": None, "install_s": None, "probes": [], "resets": None, "live_dumps_193": None, "known_live_dumps_193": None,
+                        "live_dumps_193_ratchet": None, "live_dumps_193_die": None, "live_dumps_193_max": None}
         self.probe_seen = {}
 
     def test(self, key, suite, name, result, ms):
@@ -210,6 +212,13 @@ class Collector:
                 self.test("windows", SPEC_SUITE, m[1], SPEC_RESULT[m[2]], None)
                 for sub in ([] if m[3] == "-" else m[3].split(","))[:6]:
                     self.test("windows", SPEC_SUITE, "%s/%s" % (m[1], sub), "FAIL", None)
+        elif head == "GATE_LKE_RATCHET":
+            m = re.fullmatch(r"GATE_LKE_RATCHET die=([A-Z]{2}[0-9]{3}|unknown) count=([0-9]{1,10}) max=([0-9]{1,10}|-) verdict=(PASS|FAIL|UNKNOWN)", line)
+            if m and self.windows["live_dumps_193_ratchet"] is None:
+                self.windows["known_live_dumps_193"] = self.windows["live_dumps_193"] = int(m[2])
+                self.windows["live_dumps_193_ratchet"] = m[4]
+                self.windows["live_dumps_193_die"] = m[1]
+                self.windows["live_dumps_193_max"] = None if m[3] == "-" else int(m[3])
         elif head == "GATE_PROBE_RESULT":
             parts = line.split(" ", 2)
             if len(parts) == 3 and re.fullmatch(r"[a-z][a-z0-9_]{0,23}", parts[1]):
@@ -242,7 +251,8 @@ class Collector:
                 self.windows["probes"] = [p for p in probes if not re.fullmatch(r"x[0-9]+", p)][:8]
                 self.windows["resets"] = int_or_none(d.get("resets"))
                 dumps = d.get("known_live_dumps_193")
-                self.windows["live_dumps_193"] = int_or_none(dumps) if dumps and dumps != "?" else None
+                if self.windows["known_live_dumps_193"] is None:
+                    self.windows["known_live_dumps_193"] = self.windows["live_dumps_193"] = int_or_none(dumps) if dumps and dumps != "?" else None
         elif line.startswith("WINDOWS_GATE_TIMING") and self.windows["install_s"] is None:
             m = re.search(r"\binstall=([0-9]+)s", line)
             if m:
@@ -339,6 +349,9 @@ def build_report(lines, result, run_id=None):
     c = Collector()
     for line in lines:
         c.feed(line)
+    app_policy.apply(c)
+    policy = app_policy.rows()
+    policy_names = {os: {p["name"] for p in policy if p["os"] == os} for os in ("linux", "windows")}
     rows = suite_rows(result)
     hardware = result.get("hardware") if isinstance(result.get("hardware"), dict) else {}
     claims = contract.clean_claims(result.get("host_claims"))
@@ -406,12 +419,18 @@ def build_report(lines, result, run_id=None):
         "subruns": subruns,
         "tests": tests[: LIMITS["tests"]],
         "apps": ([
+            {"sub": sub_linux if p["os"] == "linux" else sub_windows, "name": p["name"], "os": p["os"],
+             "result": "NOT_RUN", "note": (c.apps if p["os"] == "linux" else c.windows_apps)[p["name"]][2][:200]}
+            for p in policy
+        ] + [
             {"sub": sub_linux, "name": name, "os": "linux", "result": res, "note": note[:200]}
             for name, (res, _secs, note) in c.apps.items()
+            if name not in policy_names["linux"]
         ] + [
             {"sub": sub_windows, "name": name, "os": "windows", "result": res, "note": note[:200]}
             for name, (res, _secs, note) in c.windows_apps.items()
-        ])[: LIMITS["apps"]],  # empty unless an opt-in apps stage ran
+            if name not in policy_names["windows"]
+        ])[: LIMITS["apps"]],  # policy entries always present; observed supported apps follow
         "perf": perf[: LIMITS["perf"]],
         "windows": c.windows,
     }

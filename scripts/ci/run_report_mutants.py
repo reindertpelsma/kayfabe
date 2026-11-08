@@ -221,8 +221,12 @@ def workdir(parent, name, source):
     root = Path(tempfile.mkdtemp(prefix=name + "-", dir=parent))
     ci = root / "scripts" / "ci"
     ci.mkdir(parents=True)
-    for f in ("test_vast_run_report.py", "vast_report.py"):
+    for f in ("test_vast_run_report.py", "vast_report.py", "app_policy.py"):
         shutil.copyfile(HERE / f, ci / f)
+    for rel in ("scripts/apps/known_unsupported.json", "scripts/bench/windows/appmatrix/gate_profiles.json"):
+        dst = root / rel
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(HERE.parents[1] / rel, dst)
     (ci / "vast_run_report.py").write_text(source)
     return ci
 

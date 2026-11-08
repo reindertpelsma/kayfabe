@@ -15,8 +15,8 @@
 #   runs, a CUDA matmul (cup8, byte exact) and a D3D11 compute+draw+readback (kf_dxprobe) pass, a bounded idle
 #   window (KF_WINGATE_IDLE_S, default 300 s) ends with zero resets (Display 4101, nvlddmkm 153, Kernel-Power 41,
 #   6008, BugCheck 1001, WER LiveKernelEvent other than code 193) and the same two probes pass AGAIN after the idle;
-#   the WATCHDOG live dumps (LiveKernelEvent 193, no reset: a recorded open defect) are counted and reported, and gate
-#   only with KF_WINGATE_STRICT_LKE=1; then a graceful stop.
+#   the recorded open LiveKernelEvent 193 defect is counted and reported, and gates above an evidence-seeded per-die
+#   maximum or with KF_WINGATE_STRICT_LKE=1; then a graceful stop. The validated dump header supplies the numeric code.
 #
 # Verdict lines. THE GATE IS THE GUEST PASSING: exit 0 only for WINDOWS_GATE_PASS (owner, 2026-11-01). A host
 # failure, a harness failure or a rental fault is never an excuse to merge: it is RETRY, non-zero, "re-run on a
@@ -89,6 +89,8 @@ STAGE=start
 GUEST_STARTED=0                 # 1 once a kf3 QEMU was started: only then can a failure be kayfabe's
 ENABLE_UTC=""
 LKE193=""
+LKE_DIE=unknown
+LKE_RATCHET=UNAVAILABLE
 LKESTALE=""                     # WER re-submissions of reports older than the enable (never gate)
 rc_final=0
 FAILMODE=none FAILWHY="" FAILSTAGE=""
@@ -171,18 +173,32 @@ pack_evidence() {
     say "GATE_NOTE evidence: $EV ($(find "$EV" -type f | wc -l) files), $PROV/${T}_windows.tgz sha256=$(sha256sum "$PROV/${T}_windows.tgz" | cut -c1-16)"
 }
 
-# The small WER texts of the LiveKernelEvent/WATCHDOG reports (P1..P8), the dump times, the display-stack events within
-# +-120 s of each, and the timeline enable -> first probe -> first dump (never the dump). Evidence for the open
+# Every small WER report (P1..P8), validated WATCHDOG headers (0x1000 bytes, in the guest), dump times, display-stack
+# events within +-120 s, and the timeline enable -> first probe -> first dump. No dump transfer. Evidence for the open
 # defect "LiveKernelEvent 193"; falsifier kept in the log: a dump that precedes a reset, a TDR or a probe failure.
 wer_timeline() { # OUTFILE
     local out="$EV/$1" first_probe first_dump
     gps 150 'C:\kf\gate_state.ps1' -Mode wer > "$out" 2>&1
     grep -a '^GATE_WER_REPORT\|^GATE_WER_PARAM\|^GATE_WER_DUMP' "$out" | while read -r l; do say "  $l"; done
+    grep -a '^GATE_LKE' "$out" | while read -r l; do say "$l"; done
     first_probe=$(cat "$EV"/probe_*.txt 2> /dev/null | sed -n 's/^GATE_PROBE_START .* utc=//p' | sort | head -1)
     first_dump=$(sed -n 's/^GATE_WER_DUMP \([0-9TZ:-]*\) .*/\1/p' "$out" | sort | head -1)
     say "GATE_TIMELINE enable=${ENABLE_UTC:-none} first_probe=${first_probe:-none} first_dump=${first_dump:-none}$(timeline_deltas "$first_probe" "$first_dump")"
     grep -a '^GATE_WER_NEAR' "$out" | while read -r l; do say "  $l"; done
 }
+# No learned/auto-raised maximum. Unknown dies are explicit and non-gating.
+lke_ratchet() {
+    local result rc
+    result="$EV/lke193_ratchet.txt"
+    python3 -I "$SOURCE/scripts/bench/box/lke193.py" check --die "$LKE_DIE" --count "${LKE193:-?}" \
+        --out "$EV/lke193_ratchet.json" > "$result" 2>&1
+    rc=$?
+    while IFS= read -r line; do say "$line"; done < "$result"
+    case "$rc" in 0|1) ;; *) fail_op "193 ratchet metadata unreadable (lke193_ratchet.txt)" ;; esac
+    LKE_RATCHET=$(sed -n 's/^GATE_LKE_RATCHET .* verdict=\([A-Z]*\)$/\1/p' "$result")
+    [ "$rc" != 1 ] || fail_guest "LiveKernelEvent 193 count $LKE193 exceeds the recorded maximum for $LKE_DIE (lke193_ratchet.json)"
+}
+
 timeline_deltas() { # FIRST_PROBE FIRST_DUMP -> " dump_minus_enable=Ns dump_minus_first_probe=Ns" when both parse
     local e p d s=""
     e=$(date -u -d "${ENABLE_UTC:-x}" +%s 2> /dev/null) || e=""
@@ -241,7 +257,7 @@ conclude() {
                 verdict FAIL KAYFABE "the kf3 log shows the no-flags refusal 0x2080121f although the flags were exported"
             else
                 STAGE="done"
-                verdict PASS NONE "install=once driver=580.88 gsp=forced code=0 probes=cup8,d3d11,x2 resets=0 known_live_dumps_193=${LKE193:-?} stale_lke_resubmits=${LKESTALE:-?} strict=${KF_WINGATE_STRICT_LKE:-0} enable_utc=$ENABLE_UTC"
+                verdict PASS NONE "install=once driver=580.88 gsp=forced code=0 probes=cup8,d3d11,x2 resets=0 known_live_dumps_193=${LKE193:-?} live_dumps_193_ratchet=$LKE_RATCHET live_dumps_193_die=$LKE_DIE stale_lke_resubmits=${LKESTALE:-?} strict=${KF_WINGATE_STRICT_LKE:-0} enable_utc=$ENABLE_UTC"
             fi ;;
     esac
     finish
@@ -680,6 +696,23 @@ if [ ! -x "$WINVM_QEMU" ]; then verdict RETRY OPERATOR "no kf3 QEMU at $WINVM_QE
 say "GATE_NOTE kf3 qemu=$WINVM_QEMU sha256=$(sha256sum "$WINVM_QEMU" | cut -c1-16) rev=$REV"
 stage_end
 
+# Read the host RM identity using the existing unprivileged native probe. No GPU workload is submitted by it.
+# The mapping comes from kf-chip's OGKM-derived table; never infer the die from a marketing name.
+stage_begin lke_die
+lke_target=${CARGO_TARGET_DIR:-target}
+[[ "$lke_target" = /* ]] || lke_target="$SOURCE/$lke_target"
+if ! (cd "$SOURCE" && nice -n 19 timeout 900 cargo build --release -p kf-harness --bin kf-timer-probe -j2) > "$EV/lke_die_build.txt" 2>&1; then
+    fail_op "the native RM identity probe did not build (lke_die_build.txt)"
+fi
+if ! timeout 60 "$lke_target/release/kf-timer-probe" > "$EV/lke_die_native.txt" 2>&1; then
+    fail_op "the native RM identity probe did not complete (lke_die_native.txt)"
+fi
+if ! LKE_DIE=$(python3 -I "$SOURCE/scripts/bench/box/lke193.py" identify "$EV/lke_die_native.txt" "$SOURCE" 2> "$EV/lke_die_error.txt"); then
+    fail_op "the host RM identity is unreadable (lke_die_error.txt)"
+fi
+say "GATE_LKE_DIE die=$LKE_DIE source=native_rm"
+stage_end
+
 stage_begin install
 if [ -e "$VM/installed" ]; then
     say "GATE_NOTE Windows already installed on this box ($(cat "$VM/installed")): install once per lease"
@@ -788,6 +821,7 @@ wait_ssh "$(cap 900)" || fail_guest "the guest never answered ssh after the rebo
 stage_end
 
 stage_begin desktop
+guest_scp "$WIN/lke_decode.ps1" 'C:/kf/lke_decode.ps1' || fail_op "scp of lke_decode.ps1 failed"
 guest_scp "$WIN/gate_state.ps1" 'C:/kf/gate_state.ps1' || fail_op "scp of gate_state.ps1 failed"
 guest_scp "$WIN/gate_run.ps1" 'C:/kf/gate_run.ps1' || fail_op "scp of gate_run.ps1 failed"
 ok=0
@@ -892,6 +926,7 @@ grep -a '^GATE_TDR\|^GATE_LIVEDUMP' "$EV/tdr_counts.txt" | while read -r l; do s
 LKE193=$(sed -n 's/.* livekernelevent193=\([0-9]*\) .*/\1/p' "$EV/tdr_counts.txt" | head -1)
 LKESTALE=$(sed -n 's/.* livekernelevent_stale=\([0-9]*\) .*/\1/p' "$EV/tdr_counts.txt" | head -1)
 wer_timeline "wer_reports.txt"
+lke_ratchet
 grep -aq '^GATE_TDR .* total=0$' "$EV/tdr_counts.txt" || fail_guest "reset counters are not all zero since the enable: $(grep -a '^GATE_TDR' "$EV/tdr_counts.txt" | head -1)"
 gps 120 'C:\kf\gate_state.ps1' -Mode display > "$EV/display_final.txt" 2>&1
 grep -aq "code=0 " "$EV/display_final.txt" || fail_guest "the adapter is not at code 0 at the end: $(grep -a GATE_DISPLAY "$EV/display_final.txt" | head -1)"

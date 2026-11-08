@@ -2,19 +2,20 @@
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 """gate_profiles.py -- which Windows apps the release gate runs, and which it never does (docs/design/V3_WINDOWS_APPS_GATE.md).
 
-STATUS: LIVE, 2026-11-07 (GPU-free; tests/test_gate_profiles.py).
+STATUS: LIVE, 2026-11-08 (GPU-free; tests/test_gate_profiles.py).
 
   gate_profiles.py ids PROFILE      comma list of app ids (small | mid | full | release | ids:a,b,c)
   gate_profiles.py budget PROFILE   the default wall-clock budget in seconds for the apps of that profile
   gate_profiles.py open             every app whose packages are all in the R2 bundle (the automatable set)
-  gate_profiles.py classes          the three classes of apps (open / owner decision / manual) with counts
+  gate_profiles.py classes          the four classes of apps (open / owner decision / manual / unsupported) with counts
   gate_profiles.py check            consistency of gate_profiles.json with apps.json and manifest.json (exit 1 on a problem)
 
 The R2 bundle (`winapps-open.iso`) holds ONLY the packages named in gate_profiles.json `open_packages`: redistributable
 by their own licences. Apps that need any other package are `owner_decision` (free to download, redistribution not
 granted, or a GPL build the owner keeps out of our storage, or a dead pin) or `manual` (licensed, account-bound, or
-online-only); neither is ever in an automated profile. `full` is every open app minus `excluded`, and an exclusion needs
-a reason and evidence (a native-reference failure); an app that fails on kayfabe is NOT excluded: it fails the release.
+online-only, or needs a real display); neither is ever in an automated profile. `known_unsupported` is
+also non-gating and reported explicitly. `full` is every remaining open app minus `excluded`, and an exclusion needs
+a reason and evidence (a native-reference failure); a supported app that fails on kayfabe is NOT excluded: it fails the release.
 
 `release` is a separate definition list of the owner's approved software, including owner-supplied packages and
 source/reference blockers. It does not grant redistribution permission and is not selectable by KF_WINAPPS in the
@@ -45,20 +46,22 @@ def closure(pkgs, needs):
 def open_apps(apps, manifest, prof):
     needs = {p["id"]: p.get("needs", []) for p in manifest["packages"]}
     allowed = set(prof["open_packages"])
-    return [a["id"] for a in apps["apps"] if closure(a["pkgs"], needs) <= allowed]
+    non_gating = set(prof["manual"]["apps"]) | set(prof.get("known_unsupported", {}))
+    return [a["id"] for a in apps["apps"] if closure(a["pkgs"], needs) <= allowed and a["id"] not in non_gating]
 
 
 def resolve(profile, apps=None, manifest=None, prof=None):
     apps, manifest, prof = apps or load("apps.json"), manifest or load("manifest.json"), prof or load("gate_profiles.json")
     known = {a["id"] for a in apps["apps"]}
+    non_gating = set(prof["manual"]["apps"]) | set(prof.get("known_unsupported", {}))
     if profile == "release":
         ids = prof["release_software"]["apps"]
-        if not ids or len(ids) != len(set(ids)) or not set(ids) <= known:
+        if not ids or len(ids) != len(set(ids)) or not set(ids) <= known or set(ids) & non_gating:
             raise SystemExit("invalid release definition list")
         return list(ids)
     if profile.startswith("ids:"):
         ids = [x for x in profile[4:].split(",") if x]
-        bad = [x for x in ids if x not in known]
+        bad = [x for x in ids if x not in known or x in non_gating]
         if not ids or bad:
             raise SystemExit(f"unknown or empty app list: {bad or profile}")
         return ids
@@ -91,7 +94,7 @@ def classes(apps=None, manifest=None, prof=None):
     opn = set(open_apps(apps, manifest, prof))
     owner = set(prof["owner_decision"]["apps"])
     manual = set(prof["manual"]["apps"])
-    return opn, owner, manual
+    return opn, owner, manual, set(prof.get("known_unsupported", {}))
 
 
 def check():
@@ -115,13 +118,23 @@ def check():
     for p in prof["open_packages"]:
         if p in prof["owner_decision"]["packages"]:
             problems.append(f"{p} is both open and owner_decision")
-    opn, owner, manual = classes(apps, manifest, prof)
+    opn, owner, manual, unsupported = classes(apps, manifest, prof)
     if owner & opn or manual & opn or owner & manual:
         problems.append(f"classes overlap: open&owner={sorted(owner & opn)} open&manual={sorted(manual & opn)} owner&manual={sorted(owner & manual)}")
-    rest = known - opn - owner - manual
+    if unsupported & (opn | owner | manual):
+        problems.append("known_unsupported overlaps another class")
+    for name, reason in prof.get("known_unsupported", {}).items():
+        if name not in known or not isinstance(reason, str) or len(reason) < 20:
+            problems.append("known_unsupported needs a known app and reason: " + name)
+    items = {item["id"]: item for item in prof["manual"]["items"]}
+    for name in manual:
+        item = items.get(name, {})
+        if name.startswith("overlay_yuv_") and (item.get("reason") != "needs real display" or not item.get("evidence_template")):
+            problems.append("manual overlay needs a real-display reason and evidence template: " + name)
+    rest = known - opn - owner - manual - unsupported
     if rest:
         problems.append(f"apps in no class: {sorted(rest)}")
-    for x in owner | manual:
+    for x in owner | manual | unsupported:
         if x not in known:
             problems.append(f"{x} is listed but not in apps.json")
     for x in prof.get("excluded", {}):
@@ -152,8 +165,8 @@ def main(argv):
     elif cmd == "open":
         print(",".join(open_apps(load("apps.json"), load("manifest.json"), load("gate_profiles.json"))))
     elif cmd == "classes":
-        o, w, m = classes()
-        print(f"open={len(o)} owner_decision={len(w)} manual={len(m)} total={len(o) + len(w) + len(m)}")
+        o, w, m, u = classes()
+        print(f"open={len(o)} owner_decision={len(w)} manual={len(m)} unsupported={len(u)} total={len(o) + len(w) + len(m) + len(u)}")
     elif cmd == "check":
         pr = check()
         for p in pr:
