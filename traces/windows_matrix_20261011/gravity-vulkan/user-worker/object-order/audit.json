@@ -3,7 +3,7 @@
   "reports": [
     {
       "input": "snapshot-result/run1360-qemu.log.gz",
-      "compressed_sha256": "7c317cbb32523e7d516b32607d24694d5c6b41f88697833f09ec2221f43ec500",
+      "compressed_sha256": "7d8415e88b62126b3fd7377da2c8eb5b9b7af2d7ffb559aa52c54b8add82680b",
       "counts": {
         "births": 49,
         "with_object": 49,
@@ -608,7 +608,7 @@
     },
     {
       "input": "snapshot-result/run1361-qemu.log.gz",
-      "compressed_sha256": "fdca3f62f765e62c62105b0808c73f47ca11b3c5a0972383707a3d90fe031093",
+      "compressed_sha256": "2e388cbd1d0d0e188746bd355c78c7717e4081194f1ce14d568bb7f2730fbf90",
       "counts": {
         "births": 71,
         "with_object": 71,
@@ -1485,7 +1485,7 @@
     },
     {
       "input": "late-fifo-89e8ddf8/control/run1495-qemu.log.gz",
-      "compressed_sha256": "69fc0c504d1aa6ac65c36be858b164fe44acadc7b5c50e60cb263f6fade292ec",
+      "compressed_sha256": "4c8bd51ec9dac1ed7a117319dfd995e17a3cb7b5ec1c5cbba1960ac3ecee2685",
       "counts": {
         "births": 52,
         "with_object": 52,
@@ -2134,7 +2134,7 @@
     },
     {
       "input": "late-fifo-89e8ddf8/probe/run1510-qemu.log.gz",
-      "compressed_sha256": "79192e14212a31a09d94a6ab36fb3f818e6a31d683c1b13aaf2a56678dee01c4",
+      "compressed_sha256": "79f9b9d1f89d1b48f407274c9ed528452219bf8604fa24490a63ea03a202791a",
       "counts": {
         "births": 73,
         "with_object": 73,
@@ -3035,7 +3035,7 @@
     },
     {
       "input": "registration-refusal/result/qemu.log.gz",
-      "compressed_sha256": "97b7d3fc7ae8ae50ed18b3b47180aed6102089382b922bde7096807976969e39",
+      "compressed_sha256": "9f595b1cf07ad90d6b3d921aca13666a001592c63defd4ee3b681984704dceae",
       "counts": {
         "births": 56,
         "with_object": 56,

@@ -645,7 +645,7 @@
     "source": "/workspace/apps/results/cand1b/gpu_burn.guest.log",
     "saved": "apps/gpu_burn.guest.log",
     "source_size": 14495,
-    "source_sha256": "460485b10022a7adacd94c8fdeececb9a4c3124d790d5d2be33aaaec313f2173"
+    "source_sha256": "322c6c093faaec16fb471236e1b258aedb8ba1310de130a6266a71667aab82cb"
   },
   {
     "source": "/workspace/apps/results/cand1b/gpu_burn.guest_dmesg.log",
@@ -657,7 +657,7 @@
     "source": "/workspace/apps/results/cand1b/gpu_burn.host.log",
     "saved": "apps/gpu_burn.host.log",
     "source_size": 15691,
-    "source_sha256": "d2bd0bc50c0f98dfd4fc2f748d3c2ab6e18b819d34d394c0f409ccf07f7e92dc"
+    "source_sha256": "9faf6e3ec2258dc74d40a245301398c4bd5305cf031851f96b6c61bb310a97bc"
   },
   {
     "source": "/workspace/apps/results/cand1b/gpu_burn.kf3.log",
@@ -789,13 +789,13 @@
     "source": "/workspace/apps/results/cand1b/host_dmesg_tail.log",
     "saved": "apps/host_dmesg_tail.log",
     "source_size": 13195,
-    "source_sha256": "ec136904425785ade18592344b682e1a08c0430b83ed9a9ff1ab807fee508b06"
+    "source_sha256": "fe3544b032041a7d42dd950b719c1420dbeb55ad90084c8588ec53bba9eb72ae"
   },
   {
     "source": "/workspace/apps/results/cand1b/host_xid_journal.log",
     "saved": "apps/host_xid_journal.log",
     "source_size": 2545,
-    "source_sha256": "cf824e3f3909e461fb5508e9696613a57eeadce7bc85c3d27e92f4ee14b6f6aa"
+    "source_sha256": "a3510d3ab99cae24846710034a405cd009ca522e6f9e269adfbe14c07cecf659"
   },
   {
     "source": "/workspace/apps/results/cand1b/iso/UnifiedMemoryPerf.guest.log",
@@ -3339,7 +3339,7 @@
     "source": "/root/prov/cand1bmb2_host.log",
     "saved": "jobs/cand1bmb2_host.log",
     "source_size": 5898,
-    "source_sha256": "9479010fdd2c77619a70a97d2e4a1328e9db15adeda8b94874341d7d94f05d45"
+    "source_sha256": "eb3ff1c026532b828da6a91fdef2e55f61fe3b251d16cb672bad500912e7ee5b"
   },
   {
     "source": "/root/prov/cand1bmb2_kf3.log",

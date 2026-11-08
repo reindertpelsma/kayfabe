@@ -1,9 +1,11 @@
 # `traces/v3_gpcmask/` — the floor-swept GR fix, measured
 
+**Privacy update, 2026-11-08 (CODE READ):** GPU UUIDs in these retained traces are deterministic synthetic placeholders, shared consistently across files. The original identifiers remain in git history pending the owner's release history rewrite.
+
 **STATUS: LIVE, 2026-09-26.** Evidence for [`docs/design/V3_FLOORSWEPT_GR.md`](../../docs/design/V3_FLOORSWEPT_GR.md) §5.
 
 Box: vast `52739422`, NVIDIA GeForce RTX 3060 Ti (GA104, `0x248910DE`,
-`GPU-7ce8028d-13fc-88fe-09c5-7704190763c3`, 8 GB), host driver 580.159.04 (open), a nested KVM
+`GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e61ef`, 8 GB), host driver 580.159.04 (open), a nested KVM
 guest; the guest runs the stock 580.159.04 driver.
 
 | file | revision | what |

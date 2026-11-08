@@ -3,7 +3,7 @@
   "source": "/var/lib/kf-windows-20261005/boundary-kayfabe-1510/qemu.log",
   "snapshot_bytes": 4096409,
   "source_size_at_open": 4096409,
-  "prefix_sha256": "68f868418a053dacac91d064472aa089b8dc059328b7688f96c93a9cb65019b5",
+  "prefix_sha256": "24b14e2cf0709feb961f85072543ee0da7eded02cde8a2efc556044040b50956",
   "line_count": 21506,
   "counts": {
     "RELAY-PEEK ARMED": 1,

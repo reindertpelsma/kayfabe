@@ -1,5 +1,5 @@
 === gpu_burn side=host start=2026-09-30T18:49:30+00:00 host=ubuntu cmd: cd /opt/apps/bundle/gpu-burn && ./gpu_burn 60
-GPU 0: NVIDIA GeForce RTX 3070 (UUID: GPU-1bdfb3ee-ff0e-5f8f-6b89-dc09d3a1fa00)
+GPU 0: NVIDIA GeForce RTX 3070 (UUID: GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e5bd8)
 cuInit returned 0 (no error)
 Using compare file: compare.fatbin
 Burning for 60 seconds.

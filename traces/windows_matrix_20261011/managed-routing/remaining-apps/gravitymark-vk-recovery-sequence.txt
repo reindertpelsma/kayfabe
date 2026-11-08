@@ -41,4 +41,4 @@ Filtered phase/hardware-channel records; no method identified.
 10723: kf3: GSP phase ProtectedRegionUp -> Booted
 10727: kf3: GSP phase Booted -> Running
 
-sha256 of uncompressed saved snapshot=1435e061b00d139ce56218332cf457537bdff49472272a2d06801efc8d4c2743
+sha256 of uncompressed saved snapshot=27e79ab593aae7f2a59ad570c1ba2b53dd5676ac24afd890c193728acd72ca7a
