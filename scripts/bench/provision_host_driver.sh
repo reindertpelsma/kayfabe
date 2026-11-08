@@ -23,6 +23,14 @@ set -uo pipefail
   RUN_URL=https://us.download.nvidia.com/XFree86/Linux-x86_64/$HOST_DRIVER/NVIDIA-Linux-x86_64-$HOST_DRIVER.run
 RUN_URL=${RUN_URL:-https://us.download.nvidia.com/XFree86/Linux-x86_64/580.159.04/NVIDIA-Linux-x86_64-580.159.04.run}
 RUN=/root/$(basename "$RUN_URL")
+# KF_DRIVER_PIN_BEGIN
+# A matrix selection carries immutable official media pins. Verify cache/download
+# before any hardware change, and never fall through to the legacy URL fallback.
+if [ -n "${KF_RELEASE_DRIVER_PINS:-}" ]; then
+  python3 -I "$(dirname "$0")/../ci/release_driver_media.py" --os linux \
+    --version "${HOST_DRIVER:-580.159.04}" --out "$RUN" || exit 3
+fi
+# KF_DRIVER_PIN_END
 echo "DRIVER_SWAP_START $(date -Is)"
 echo "before: $(cat /proc/driver/nvidia/version 2>/dev/null | head -1)"
 
