@@ -1,0 +1,34 @@
+{
+  "wheel_sha256": "c9ea31edff2968b44a88f97d784c2f16dc0729b8b143ed004699ebca91f05c48",
+  "size": 2747786,
+  "metadata_sha256": "5ad9bccf21ae53d45f812703c80c7c03ecea300823655a2968f9e6778779bdb3",
+  "component_license": "Apache-2.0",
+  "metadata_license_classifiers": [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Education",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence"
+  ],
+  "wheel_legal_paths": [],
+  "source_tag": "v0.22.2",
+  "source_tree": "f383101a26663708484cac0727792aad74f78234",
+  "source_tree_truncated": false,
+  "source_notice_paths": [],
+  "license_pin": {
+    "name": "tokenizers-v0.22.2-LICENSE",
+    "url": "https://raw.githubusercontent.com/huggingface/tokenizers/v0.22.2/LICENSE",
+    "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+    "size": 11357,
+    "date": "2026-11-08"
+  }
+}

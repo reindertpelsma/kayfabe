@@ -93,8 +93,14 @@ the host reference. The licence or key is never written down.
 private bundle, private R2 bucket/secrets and two-class publication workflow are **SUPERSEDED**. NVIDIA
 software is never deliberately included in a distributed release ISO or uploaded to R2/GitHub. Public
 release media contains only public-ok packages. Official run-time downloads use a transient second disk;
-this is local working media, never a published bundle. No full media build, native run, upload, secret
-configuration or Worker deployment is claimed by WB1.
+this is local working media, never a published bundle. Public media reproduction is recorded below;
+no native/guest/GPU run, upload, secret configuration or Worker deployment is claimed by WB1.
+
+**MEASURED, WB1-public-bundle-20261108, source revision 4df88672b:** the owner-authorized full public
+build completed twice with different output directories, umasks, TZ and locale. All 150 file records match
+(Level 1); both ISO containers are identical too (Level 2). Seven real Windows programs compiled with pinned
+Zig. [The run](../../traces/wb1_public_bundle_20261108/README.md) records hashes, source inputs, disk reserve,
+licence audit and the exact command. This qualifies Linux packaging only, not native apps or cross-host builds.
 
 **CODE READ:** `package_bundle.py` runs with Python 3.11+ standard library on Linux, Windows and macOS.
 Application ZIP/7z/MSI/EXE/wheel originals ride unchanged on the public ISO, label KFAPPS. Only the pinned
@@ -264,7 +270,12 @@ Unmodified Blender 4.5.0, 7-Zip 26.04 and clpeak 3.0.1 sources are mirrored alon
 notices also give the exact upstream source locations. No GPL binary is modified. The written source offer
 lasts at least three years after our last distribution and while covered support/spare parts remain offered.
 **It is OUR obligation to retain mirrored source while distributing binaries and honor the full offer term.**
-Upstream links alone do not discharge that retention obligation. Full transitive source/legal inventory still
+Upstream links alone do not discharge that retention obligation.
+**CODE READ, tokenizers v0.22.2:** its Apache-classified wheel omits legal text. The manifest retains its
+existing artifact pin and adds the exact upstream tag's Apache-2.0 LICENSE as a hash/size-pinned fallback.
+The complete tag tree contains no NOTICE path; the run's licence audit records this check. Archive notices
+remain preserved, and cannot replace the main licence merely by existing.
+ Full transitive source/legal inventory still
 needs inspection with the full real artifacts; no qualified licence clearance is implied by this engineering.
 
 **MEASURED, 2026-11-07, commit 4e8aa9a58 (manifest.json public_audit records):** eleven public HF wheels were downloaded from existing pins, hash/size
@@ -408,8 +419,9 @@ Worker path (no run token, no R2 bundle), the `mid` profile, and the stage insid
 
 ## 9. Open questions and what blocks the release tier
 
-1. **Bundle upload.** A person must reproduce and verify the full `package_bundle.py` build, upload `winapps-open.iso` to R2 and commit the pin; until then the stage is
-   RETRY class MEDIA by design. The Worker names are proposed (not deployed).
+1. **Bundle upload.** Full public Linux reproduction is recorded in WB1-public-bundle-20261108 at source
+   revision 4df88672b. Coordinator upload and the subsequent pin update remain pending; until then the
+   stage is RETRY class MEDIA by design. The Worker names are proposed (not deployed).
 2. **Owner decision on the 29 apps** that need GravityMark, FurMark, GpuTest, the Vulkan SDK or ffmpeg GPL: private copy in R2 for our own
    boxes (as for SPECviewperf) or manual. **MEASURED, J1:** the ffmpeg pin is replaced by a downloaded,
    hash/CRC-checked dated artifact; source and hash are recorded in the release software definitions document.

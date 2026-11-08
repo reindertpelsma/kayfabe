@@ -1,0 +1,16 @@
+[
+  {
+    "name": "tokenizers-LICENSE",
+    "url": "https://raw.githubusercontent.com/huggingface/tokenizers/v0.22.2/LICENSE",
+    "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+    "size": 11357,
+    "date": "2026-11-08T18:06:20.424438+00:00"
+  },
+  {
+    "name": "tokenizers-tree",
+    "url": "https://api.github.com/repos/huggingface/tokenizers/git/trees/v0.22.2?recursive=1",
+    "sha256": "348a486a5f5701f16f1ef1c199c18d3f94c43b03d36bbc99142bb2c2cc0ca907",
+    "size": 107933,
+    "date": "2026-11-08T18:06:20.727669+00:00"
+  }
+]

@@ -151,8 +151,13 @@ owner-hosted cache is excluded from it.
 ## Windows app bundle (the Windows apps stage)
 
 STATUS: CODE + DESIGN, 2026-11-08 (latest owner rulings). The first deliverable is build + verification;
-coordinator upload is manual and CI publication remains optional/disabled. WB1 has not run a full pinned
-build, uploaded media, configured secrets/domains, deployed Worker code or claimed a native/GPU pass.
+coordinator upload is manual and CI publication remains optional/disabled. The first full public reproduction
+is recorded below; no media upload, secret/domain configuration, Worker deployment or native/GPU pass is claimed.
+
+**MEASURED, WB1-public-bundle-20261108, source revision 4df88672b:** two full Linux builds with pinned Zig
+and all public inputs have equal file inventories and equal ISO bytes. The ISO is 2708119552 bytes,
+SHA-256 c4d1800350e72fba34943f750e1665953f7c94a57b9f8f9b3213638e21f424ee.
+See [the run and receipts](../traces/wb1_public_bundle_20261108/README.md); the pin remains UNBUILT until upload.
 
 **OWNER POLICY / CODE READ:** winapps-open.iso (KFAPPS) is the only permanent bundle. It contains only
 public-ok packages. The private ISO/R2-secret-set design is superseded: NVIDIA and conditional inputs come
@@ -167,7 +172,8 @@ remains offline. There is no permanent private pin or private publication workfl
 release. No bash, curl/wget, pip resolver, distro mingw, host application extractor, ISO utility or host
 compression is required. Original application archives/installers remain intact; the compiler distribution
 alone is unpacked, and legal texts are read into the licence inventory. The script rejects run tokens and
-upload credentials. CI builds require explicit --ci-build; full builds remain prohibited on WB1's dev box.
+upload credentials. CI builds require explicit --ci-build. The owner authorized the 2026-11-08 WB1 full
+build on the dev box with an additional monitored 8 GiB free-space reserve; this is a CPU packaging run.
 
 ```text
 python3 -I scripts/bench/windows/appmatrix/package_bundle.py check
@@ -285,13 +291,20 @@ least three years after last distribution and while covered support/spare parts 
 is offered next to the binary with equivalent access; upstream links alone do not replace our obligation.
 Complete transitive source/licence coverage still needs inspection with the full real artifacts.
 
+**CODE READ, tokenizers v0.22.2:** its wheel has an Apache classifier and no legal member. The manifest
+adds the exact upstream tag's Apache-2.0 text as a pinned fallback (11357 bytes, SHA-256
+c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4). The complete tag tree has no NOTICE
+path; the [licence audit](../traces/wb1_public_bundle_20261108/tokenizers-license-audit.json) records the
+source tree and metadata digest. Existing archive notices are retained alongside the fallback.
+
+
 **CODE READ / CI:** bundle-publish.yml is dispatch-only, minimal-permission, SHA-pinned and disabled for
 publication by default. It plans cheaply, builds/reads back twice without secrets and gates on Level 1.
 Verify compares the published manifest or committed # inventory digest, never the ISO hash as the
 reproduction gate. Container differences produce metadata warnings. An ISO hash alone is insufficient
 for Level 1 verification. The computed two-build disk budget is about 10.9 GiB; CI frees unused toolchains,
 measures space and fails before downloading if insufficient, requiring a larger runner. Actual runner
-capacity/full build duration remain unmeasured. No Actions media artifact/cache is created.
+capacity/full build duration remain unmeasured on GitHub. The Linux dev-box measurement is in the run above. No Actions media artifact/cache is created.
 
 **CODE READ / first upload:** the coordinator reproduces/inspects the public outputs, then uploads with
 an authorized manual transport. publish_bundle.py --manual-presigned --out out-a supports caller-supplied

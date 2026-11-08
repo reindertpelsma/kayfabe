@@ -1,0 +1,62 @@
+BUNDLE_DISK free=43206389760 required=11696621601
+FETCH blender/blender-4.5.0-windows-x64.zip bytes=399946398
+FETCH clpeak_ocl/clpeak-3.0.1-windows-AMD64.zip bytes=13932566
+FETCH sevenzip/7zr.exe bytes=602624
+FETCH hashcat/hashcat-7.1.2.7z bytes=19682772
+FETCH hf_model/LICENSE bytes=11344
+FETCH hf_model/config.json bytes=659
+FETCH hf_model/generation_config.json bytes=242
+FETCH hf_model/merges.txt bytes=1671839
+FETCH hf_model/model.safetensors bytes=988097824
+FETCH hf_model/tokenizer.json bytes=7028015
+FETCH hf_model/tokenizer_config.json bytes=1287
+FETCH hf_model/vocab.json bytes=2776833
+FETCH hf_wheels/charset_normalizer-3.5.2-cp312-cp312-win_amd64.whl bytes=207486
+FETCH hf_wheels/hf_xet-1.7.0-cp38-abi3-win_amd64.whl bytes=3822644
+FETCH hf_wheels/huggingface_hub-0.36.2-py3-none-any.whl bytes=566395
+FETCH hf_wheels/idna-3.20-py3-none-any.whl bytes=69583
+FETCH hf_wheels/pyyaml-6.0.3-cp312-cp312-win_amd64.whl bytes=154003
+FETCH hf_wheels/regex-2026.9.29-cp312-cp312-win_amd64.whl bytes=280334
+FETCH hf_wheels/requests-2.34.2-py3-none-any.whl bytes=73075
+FETCH hf_wheels/safetensors-0.8.0-cp310-abi3-win_amd64.whl bytes=355540
+FETCH hf_wheels/tokenizers-0.22.2-cp39-abi3-win_amd64.whl bytes=2747786
+FETCH hf_wheels/transformers-4.57.1-py3-none-any.whl bytes=11990925
+FETCH hf_wheels/urllib3-2.8.0-py3-none-any.whl bytes=135717
+FETCH llama_vulkan/llama-b11541-bin-win-vulkan-x64.zip bytes=33464528
+FETCH python_embed/python-3.12.10-embed-amd64.zip bytes=11133606
+FETCH qwen_gguf/qwen2.5-1.5b-instruct-q4_k_m.gguf bytes=1117320736
+FETCH vkpeak/vkpeak-20260527-windows.zip bytes=889422
+FETCH blender/blender-4.5.0.tar.xz bytes=85059376
+FETCH clpeak_ocl/LICENSE bytes=35149
+FETCH clpeak_ocl/clpeak-3.0.1.tar.gz bytes=2335991
+FETCH sevenzip/7z2604-src.tar.xz bytes=1560440
+FETCH hashcat/license.txt bytes=1225
+FETCH hf_wheels/tokenizers-v0.22.2-LICENSE bytes=11357
+FETCH llama_vulkan/LICENSE bytes=1078
+FETCH qwen_gguf/LICENSE bytes=11343
+FETCH vkpeak/LICENSE bytes=1072
+FETCH zig-x86_64-linux/zig-linux-x86_64-0.13.0.tar.xz bytes=47082308
+FETCH_OK
+BUILD_TOOL nvcuda import library
+BUILD_TOOL kf_dxprobe.exe
+BUILD_TOOL kf_overlayprobe.exe
+BUILD_TOOL kf_glgears.exe
+BUILD_TOOL cup2.exe
+BUILD_TOOL cup3.exe
+BUILD_TOOL cup8.exe
+BUILD_TOOL kf_cuda_control.exe
+BUILD_DONE sha256=c4d1800350e72fba34943f750e1665953f7c94a57b9f8f9b3213638e21f424ee identity=d179314819b80132c20d23049d383c60ad7df30eafbf6af1e6c9648b02f7a181
+BUILD_OK
+BUILD_TOOL nvcuda import library
+BUILD_TOOL kf_dxprobe.exe
+BUILD_TOOL kf_overlayprobe.exe
+BUILD_TOOL kf_glgears.exe
+BUILD_TOOL cup2.exe
+BUILD_TOOL cup3.exe
+BUILD_TOOL cup8.exe
+BUILD_TOOL kf_cuda_control.exe
+BUILD_DONE sha256=c4d1800350e72fba34943f750e1665953f7c94a57b9f8f9b3213638e21f424ee identity=d179314819b80132c20d23049d383c60ad7df30eafbf6af1e6c9648b02f7a181
+BUILD_OK
+REPRODUCTION_LEVEL1 EQUAL
+BUNDLE_LEVEL1_REPRODUCIBLE sha256=c4d1800350e72fba34943f750e1665953f7c94a57b9f8f9b3213638e21f424ee inputs=ed2ddea144310b76306d4af498bdc9af3c94a7b69164f05bc54a47a913034f1c inventory=713c281c5439e83023435d7f1a14eed03f2f2a1230811260a0f977485cf0a131
+BUNDLE_NEW_HASH c4d1800350e72fba34943f750e1665953f7c94a57b9f8f9b3213638e21f424ee

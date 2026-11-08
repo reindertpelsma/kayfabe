@@ -1,0 +1,70 @@
+{
+  "run": "WB1-public-bundle-20261108",
+  "date": "2026-11-08",
+  "source_revision": "4df88672b84258efd41da99186c2a071f5ac31d7",
+  "inputs": "ed2ddea144310b76306d4af498bdc9af3c94a7b69164f05bc54a47a913034f1c",
+  "images": [
+    {
+      "build": "first",
+      "file": "winapps-open.iso",
+      "format": "iso9660+joliet",
+      "identity": "d179314819b80132c20d23049d383c60ad7df30eafbf6af1e6c9648b02f7a181",
+      "label": "KFAPPS",
+      "sha256": "c4d1800350e72fba34943f750e1665953f7c94a57b9f8f9b3213638e21f424ee",
+      "size": 2708119552
+    },
+    {
+      "build": "second",
+      "file": "winapps-open.iso",
+      "format": "iso9660+joliet",
+      "identity": "d179314819b80132c20d23049d383c60ad7df30eafbf6af1e6c9648b02f7a181",
+      "label": "KFAPPS",
+      "sha256": "c4d1800350e72fba34943f750e1665953f7c94a57b9f8f9b3213638e21f424ee",
+      "size": 2708119552
+    }
+  ],
+  "inventory": "713c281c5439e83023435d7f1a14eed03f2f2a1230811260a0f977485cf0a131",
+  "file_count": 150,
+  "package_ids": [
+    "blender",
+    "clpeak_ocl",
+    "sevenzip",
+    "hashcat",
+    "hf_model",
+    "hf_wheels",
+    "llama_vulkan",
+    "python_embed",
+    "qwen_gguf",
+    "vkpeak"
+  ],
+  "owned_programs": [
+    "tools/cup2.exe",
+    "tools/cup3.exe",
+    "tools/cup8.exe",
+    "tools/kf_cuda_control.exe",
+    "tools/kf_dxprobe.exe",
+    "tools/kf_glgears.exe",
+    "tools/kf_overlayprobe.exe"
+  ],
+  "comparison": {
+    "added": [],
+    "changed": [],
+    "container_diff": [],
+    "inventory_only": [],
+    "level1": "equal",
+    "level2": "equal",
+    "removed": []
+  },
+  "wall_seconds": 440.305,
+  "minimum_free_bytes": 35034148864,
+  "reserve_bytes": 8589934592,
+  "credential_environment_keys": [
+    "PATH",
+    "LANG",
+    "LC_ALL",
+    "TMPDIR",
+    "DOTNET_PROCESSOR_COUNT"
+  ],
+  "uploads": 0,
+  "guest_or_gpu_runs": 0
+}

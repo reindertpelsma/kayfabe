@@ -131,6 +131,10 @@ python3 -I scripts/bench/windows/appmatrix/package_bundle.py build --dl download
 python3 -I scripts/bench/windows/appmatrix/package_bundle.py compare-image --iso out-b/winapps-open.iso --receipt out-a/winapps-open.manifest.json --out out-b
 ```
 
+For manual downloads, also copy the tagged upstream tokenizers licence to
+Downloads/_compliance/hf_wheels/tokenizers-v0.22.2-LICENSE as shown by Layout. The wheel itself contains
+no legal text; the builder retains this pinned fallback alongside any bundled notices.
+
 Level 1 is the reproduction gate: identical file paths and SHA-256/size values, including the repository
 programs. Level 2 compares ISO bytes too, with a metadata WARNING when the files match but the container
 differs. Both ISO directory namespaces must expose the same files and bytes; a primary-only payload
