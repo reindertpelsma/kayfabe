@@ -1,4 +1,4 @@
-name: Open Windows bundle (manual, publication disabled)
+name: Public Windows bundle (manual, publication disabled)
 
 # Owner refinement: dispatch only until reviewed. No secrets/environment/flag are
 # provisioned by this change. Future PR/master path filters are documented.
@@ -91,7 +91,7 @@ jobs:
     timeout-minutes: 360
     # Before enabling, owner MUST restrict this environment's deployment branches
     # to master and require reviewer approval. No environment is configured here.
-    environment: bundle-publish-master
+    environment: bundle-publish-public-master
     env:
       BUNDLE_SUFFIX: kf-bundle-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
@@ -114,10 +114,11 @@ jobs:
       - name: Publish immutable objects (sole credential-bearing step)
         env:
           BUNDLE_PUBLISH_APPROVED: 'true'
-          R2_ENDPOINT: ${{ vars.BUNDLE_R2_ENDPOINT }}
-          R2_BUCKET: ${{ vars.BUNDLE_R2_BUCKET }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.BUNDLE_R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.BUNDLE_R2_SECRET_ACCESS_KEY }}
+          BUNDLE_PUBLIC_BASE_URL: ${{ vars.BUNDLE_PUBLIC_BASE_URL }}
+          R2_ENDPOINT: ${{ vars.BUNDLE_PUBLIC_R2_ENDPOINT }}
+          R2_BUCKET: ${{ vars.BUNDLE_PUBLIC_R2_BUCKET }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.BUNDLE_PUBLIC_R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.BUNDLE_PUBLIC_R2_SECRET_ACCESS_KEY }}
         run: |
           for attempt in 1 2 3; do
             echo "Upload attempt $attempt"

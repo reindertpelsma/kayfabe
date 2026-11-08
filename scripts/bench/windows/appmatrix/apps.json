@@ -33,7 +33,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "python win_cuda_equiv.py atomics"
+   "cmd": "python win_cuda_equiv.py atomics",
+   "requires": "private"
   },
   {
    "id": "bandwidthTest_demo",
@@ -69,7 +70,8 @@
     "status": "unverified",
     "classification": "open",
     "verdict": "rc 0, own success line, NVIDIA GPU proof, no CHECK FAIL, no work on a non-NVIDIA adapter"
-   }
+   },
+   "requires": "private"
   },
   {
    "id": "blackscholes_t",
@@ -102,7 +104,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "python win_cuda_equiv.py blackscholes"
+   "cmd": "python win_cuda_equiv.py blackscholes",
+   "requires": "private"
   },
   {
    "id": "blender_cycles",
@@ -138,7 +141,8 @@
     "status": "unverified",
     "classification": "reference-required",
     "verdict": "Both CUDA and OptiX render the 960x540 seed-1, 256-sample scene; all RGBA components compare to hashed same-GPU bare-metal references: MAE <= 1/255, max error <= 8/255; no blank images"
-   }
+   },
+   "requires": "private"
   },
   {
    "id": "cdp_quicksort",
@@ -172,7 +176,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "python cdp_quicksort.py"
+   "cmd": "python cdp_quicksort.py",
+   "requires": "private"
   },
   {
    "id": "cg_t",
@@ -204,7 +209,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "python win_cuda_equiv.py cg"
+   "cmd": "python win_cuda_equiv.py cg",
+   "requires": "private"
   },
   {
    "id": "clpeak_cuda",
@@ -233,7 +239,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "clpeak_cuda\\bin\\clpeak.exe"
+   "cmd": "clpeak_cuda\\bin\\clpeak.exe",
+   "requires": "private"
   },
   {
    "id": "clpeak_ocl",
@@ -264,7 +271,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "clpeak_ocl\\bin\\clpeak.exe"
+   "cmd": "clpeak_ocl\\bin\\clpeak.exe",
+   "requires": "private"
   },
   {
    "id": "cuda_callback",
@@ -294,7 +302,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "tools\\kf_cuda_control.exe callback"
+   "cmd": "tools\\kf_cuda_control.exe callback",
+   "requires": "private"
   },
   {
    "id": "cuda_occupancy",
@@ -324,7 +333,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "tools\\kf_cuda_control.exe occupancy"
+   "cmd": "tools\\kf_cuda_control.exe occupancy",
+   "requires": "private"
   },
   {
    "id": "cup2_ladder",
@@ -354,7 +364,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "tools\\cup2.exe"
+   "cmd": "tools\\cup2.exe",
+   "requires": "private"
   },
   {
    "id": "cup3_ladder",
@@ -382,7 +393,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "tools\\cup3.exe"
+   "cmd": "tools\\cup3.exe",
+   "requires": "private"
   },
   {
    "id": "cup8_ladder",
@@ -413,7 +425,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "tools\\cup8.exe"
+   "cmd": "tools\\cup8.exe",
+   "requires": "private"
   },
   {
    "id": "cupy_asynccopy",
@@ -447,7 +460,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "python cupy_nvrtc.py asynccopy"
+   "cmd": "python cupy_nvrtc.py asynccopy",
+   "requires": "private"
   },
   {
    "id": "cupy_cg",
@@ -481,7 +495,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "python cupy_nvrtc.py cg"
+   "cmd": "python cupy_nvrtc.py cg",
+   "requires": "private"
   },
   {
    "id": "cupy_check",
@@ -514,7 +529,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "python cupy_check.py"
+   "cmd": "python cupy_check.py",
+   "requires": "private"
   },
   {
    "id": "cupy_sha256",
@@ -548,7 +564,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "python cupy_nvrtc.py sha256"
+   "cmd": "python cupy_nvrtc.py sha256",
+   "requires": "private"
   },
   {
    "id": "d3d11va_h264",
@@ -577,7 +594,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "ffmpeg (libx264 prep) then ffmpeg -hwaccel d3d11va -hwaccel_output_format d3d11 -i x264.mp4 -f null -"
+   "cmd": "ffmpeg (libx264 prep) then ffmpeg -hwaccel d3d11va -hwaccel_output_format d3d11 -i x264.mp4 -f null -",
+   "requires": "private"
   },
   {
    "id": "d3d12_dxr",
@@ -609,7 +627,8 @@
     "status": "unverified",
     "classification": "source-built",
     "verdict": "Source-built sample survives 30 s with NVIDIA process-tree 3D/Compute activity; early exit, missing sample, software adapter or absent proof cannot pass"
-   }
+   },
+   "requires": "private"
   },
   {
    "id": "d3d12_mesh_shaders",
@@ -641,7 +660,8 @@
     "status": "unverified",
     "classification": "source-built",
     "verdict": "Source-built sample survives 30 s with NVIDIA process-tree 3D/Compute activity; early exit, missing sample, software adapter or absent proof cannot pass"
-   }
+   },
+   "requires": "private"
   },
   {
    "id": "d3d12_sampler_feedback",
@@ -673,7 +693,8 @@
     "status": "unverified",
     "classification": "source-blocked",
     "verdict": "Source-built sample survives 30 s with NVIDIA process-tree 3D/Compute activity; early exit, missing sample, software adapter or absent proof cannot pass; SOURCE-SAMPLE-NEEDED until owner approves source"
-   }
+   },
+   "requires": "private"
   },
   {
    "id": "d3d12_signal_probe",
@@ -701,7 +722,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "powershell -File d3d12_signal_probe.ps1 (scripts/bench/windows)"
+   "cmd": "powershell -File d3d12_signal_probe.ps1 (scripts/bench/windows)",
+   "requires": "private"
   },
   {
    "id": "d3d12_vrs",
@@ -733,7 +755,8 @@
     "status": "unverified",
     "classification": "source-built",
     "verdict": "Source-built sample survives 30 s with NVIDIA process-tree 3D/Compute activity; early exit, missing sample, software adapter or absent proof cannot pass; pinned source patch requires VRS tier 1 and forces 2x2 coarse shading before the scene initializes"
-   }
+   },
+   "requires": "private"
   },
   {
    "id": "deviceQuery_demo",
@@ -768,7 +791,8 @@
     "status": "unverified",
     "classification": "open",
     "verdict": "rc 0, own success line, NVIDIA GPU proof, no CHECK FAIL, no work on a non-NVIDIA adapter"
-   }
+   },
+   "requires": "private"
   },
   {
    "id": "driver_status",
@@ -871,7 +895,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "tools\\kf_dxprobe.exe d3d11 --iters 200"
+   "cmd": "tools\\kf_dxprobe.exe d3d11 --iters 200",
+   "requires": "private"
   },
   {
    "id": "dxprobe_d3d12",
@@ -899,7 +924,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "tools\\kf_dxprobe.exe d3d12 --iters 200"
+   "cmd": "tools\\kf_dxprobe.exe d3d12 --iters 200",
+   "requires": "private"
   },
   {
    "id": "dxva2_h264",
@@ -928,7 +954,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "ffmpeg (libx264 prep) then ffmpeg -hwaccel dxva2 -i x264.mp4 -f null -"
+   "cmd": "ffmpeg (libx264 prep) then ffmpeg -hwaccel dxva2 -i x264.mp4 -f null -",
+   "requires": "private"
   },
   {
    "id": "edge_video_h264",
@@ -956,7 +983,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "kf_edge.ps1 -Page video -Seconds 15 -Codec h264"
+   "cmd": "kf_edge.ps1 -Page video -Seconds 15 -Codec h264",
+   "requires": "private"
   },
   {
    "id": "edge_video_vp9",
@@ -984,7 +1012,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "kf_edge.ps1 -Page video -Seconds 15 -Codec vp9"
+   "cmd": "kf_edge.ps1 -Page video -Seconds 15 -Codec vp9",
+   "requires": "private"
   },
   {
    "id": "edge_webgl",
@@ -1155,7 +1184,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "python win_cuda_equiv.py fft"
+   "cmd": "python win_cuda_equiv.py fft",
+   "requires": "private"
   },
   {
    "id": "furmark_gl_bench",
@@ -1184,7 +1214,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "furmark.exe --demo furmark-gl --width 1280 --height 720 --max-time 15 --no-score-box --benchmark --logfile-suffix $logSuffix"
+   "cmd": "furmark.exe --demo furmark-gl --width 1280 --height 720 --max-time 15 --no-score-box --benchmark --logfile-suffix $logSuffix",
+   "requires": "private"
   },
   {
    "id": "furmark_gl_stress",
@@ -1215,7 +1246,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "furmark.exe --demo furmark-gl --width 1280 --height 720 --max-time 60 --no-score-box --logfile-suffix $logSuffix"
+   "cmd": "furmark.exe --demo furmark-gl --width 1280 --height 720 --max-time 60 --no-score-box --logfile-suffix $logSuffix",
+   "requires": "private"
   },
   {
    "id": "furmark_glinfo",
@@ -1243,7 +1275,8 @@
    "digest": false,
    "smi": false,
    "nvidia_only": true,
-   "cmd": "furmark.exe --glrenderer"
+   "cmd": "furmark.exe --glrenderer",
+   "requires": "private"
   },
   {
    "id": "furmark_knot_gl",
@@ -1272,7 +1305,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "furmark.exe --demo furmark-knot-gl --width 1280 --height 720 --max-time 15 --no-score-box --benchmark --logfile-suffix $logSuffix"
+   "cmd": "furmark.exe --demo furmark-knot-gl --width 1280 --height 720 --max-time 15 --no-score-box --benchmark --logfile-suffix $logSuffix",
+   "requires": "private"
   },
   {
    "id": "furmark_vk_bench",
@@ -1301,7 +1335,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "furmark.exe --demo furmark-vk --width 1280 --height 720 --max-time 15 --no-score-box --benchmark --logfile-suffix $logSuffix"
+   "cmd": "furmark.exe --demo furmark-vk --width 1280 --height 720 --max-time 15 --no-score-box --benchmark --logfile-suffix $logSuffix",
+   "requires": "private"
   },
   {
    "id": "furmark_vkinfo",
@@ -1329,7 +1364,8 @@
    "digest": false,
    "smi": false,
    "nvidia_only": true,
-   "cmd": "furmark.exe --vkinfo"
+   "cmd": "furmark.exe --vkinfo",
+   "requires": "private"
   },
   {
    "id": "fwt_t",
@@ -1361,7 +1397,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "python win_cuda_equiv.py fwt"
+   "cmd": "python win_cuda_equiv.py fwt",
+   "requires": "private"
   },
   {
    "id": "glgears_wgl",
@@ -1391,7 +1428,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "tools\\kf_glgears.exe --seconds 10"
+   "cmd": "tools\\kf_glgears.exe --seconds 10",
+   "requires": "private"
   },
   {
    "id": "gputest_fur",
@@ -1420,7 +1458,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "GpuTest.exe /test=fur /width=1280 /height=720 /benchmark /benchmark_duration_ms=10000 /no_scorebox"
+   "cmd": "GpuTest.exe /test=fur /width=1280 /height=720 /benchmark /benchmark_duration_ms=10000 /no_scorebox",
+   "requires": "private"
   },
   {
    "id": "gputest_gi",
@@ -1449,7 +1488,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "GpuTest.exe /test=gi /width=1280 /height=720 /benchmark /benchmark_duration_ms=10000 /no_scorebox"
+   "cmd": "GpuTest.exe /test=gi /width=1280 /height=720 /benchmark /benchmark_duration_ms=10000 /no_scorebox",
+   "requires": "private"
   },
   {
    "id": "gputest_pixmark_piano",
@@ -1478,7 +1518,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "GpuTest.exe /test=pixmark_piano /width=1280 /height=720 /benchmark /benchmark_duration_ms=10000 /no_scorebox"
+   "cmd": "GpuTest.exe /test=pixmark_piano /width=1280 /height=720 /benchmark /benchmark_duration_ms=10000 /no_scorebox",
+   "requires": "private"
   },
   {
    "id": "gputest_plot3d",
@@ -1507,7 +1548,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "GpuTest.exe /test=plot3d /width=1280 /height=720 /benchmark /benchmark_duration_ms=10000 /no_scorebox"
+   "cmd": "GpuTest.exe /test=plot3d /width=1280 /height=720 /benchmark /benchmark_duration_ms=10000 /no_scorebox",
+   "requires": "private"
   },
   {
    "id": "gputest_tess",
@@ -1536,7 +1578,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "GpuTest.exe /test=tess /width=1280 /height=720 /benchmark /benchmark_duration_ms=10000 /no_scorebox"
+   "cmd": "GpuTest.exe /test=tess /width=1280 /height=720 /benchmark /benchmark_duration_ms=10000 /no_scorebox",
+   "requires": "private"
   },
   {
    "id": "gputest_triangle",
@@ -1565,7 +1608,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "GpuTest.exe /test=triangle /width=1280 /height=720 /benchmark /benchmark_duration_ms=8000 /no_scorebox"
+   "cmd": "GpuTest.exe /test=triangle /width=1280 /height=720 /benchmark /benchmark_duration_ms=8000 /no_scorebox",
+   "requires": "private"
   },
   {
    "id": "graphs_t",
@@ -1598,7 +1642,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "python win_cuda_equiv.py graphs"
+   "cmd": "python win_cuda_equiv.py graphs",
+   "requires": "private"
   },
   {
    "id": "gravitymark_d3d11",
@@ -1631,7 +1676,8 @@
     "status": "unverified",
     "classification": "owner-supplied",
     "verdict": "rc 0, own success line, NVIDIA GPU proof, no CHECK FAIL, no work on a non-NVIDIA adapter; benchmark finishes with a fresh nonempty image (more than 10000 bytes)"
-   }
+   },
+   "requires": "private"
   },
   {
    "id": "gravitymark_d3d12",
@@ -1664,7 +1710,8 @@
     "status": "unverified",
     "classification": "owner-supplied",
     "verdict": "rc 0, own success line, NVIDIA GPU proof, no CHECK FAIL, no work on a non-NVIDIA adapter; benchmark finishes with a fresh nonempty image (more than 10000 bytes)"
-   }
+   },
+   "requires": "private"
   },
   {
    "id": "gravitymark_d3d12_raster",
@@ -1692,7 +1739,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "GravityMark.exe -temporal 1 -fps 1 -info 1 -benchmark 1 -close 1 -count 1 -asteroids 20000 -width 1280 -height 720 -fullscreen 0 -d3d12 -raster 1 -image gm.png -times gm_times.txt -image gm.png -times gm_times.txt"
+   "cmd": "GravityMark.exe -temporal 1 -fps 1 -info 1 -benchmark 1 -close 1 -count 1 -asteroids 20000 -width 1280 -height 720 -fullscreen 0 -d3d12 -raster 1 -image gm.png -times gm_times.txt -image gm.png -times gm_times.txt",
+   "requires": "private"
   },
   {
    "id": "gravitymark_d3d12_rt",
@@ -1720,7 +1768,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "GravityMark.exe -temporal 1 -fps 1 -info 1 -benchmark 1 -close 1 -count 1 -asteroids 20000 -width 1280 -height 720 -fullscreen 0 -d3d12 -raytracing 1 -image gm.png -times gm_times.txt -image gm.png -times gm_times.txt"
+   "cmd": "GravityMark.exe -temporal 1 -fps 1 -info 1 -benchmark 1 -close 1 -count 1 -asteroids 20000 -width 1280 -height 720 -fullscreen 0 -d3d12 -raytracing 1 -image gm.png -times gm_times.txt -image gm.png -times gm_times.txt",
+   "requires": "private"
   },
   {
    "id": "gravitymark_gl",
@@ -1753,7 +1802,8 @@
     "status": "unverified",
     "classification": "owner-supplied",
     "verdict": "rc 0, own success line, NVIDIA GPU proof, no CHECK FAIL, no work on a non-NVIDIA adapter; benchmark finishes with a fresh nonempty image (more than 10000 bytes)"
-   }
+   },
+   "requires": "private"
   },
   {
    "id": "gravitymark_vk",
@@ -1786,7 +1836,8 @@
     "status": "unverified",
     "classification": "owner-supplied",
     "verdict": "rc 0, own success line, NVIDIA GPU proof, no CHECK FAIL, no work on a non-NVIDIA adapter; benchmark finishes with a fresh nonempty image (more than 10000 bytes)"
-   }
+   },
+   "requires": "private"
   },
   {
    "id": "hashcat",
@@ -1820,7 +1871,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "hashcat\\hashcat.exe --potfile-disable -O -m 0 -a 3 e4726719b68b205913167f0975d977ee ?l?l?l?l?l?l"
+   "cmd": "hashcat\\hashcat.exe --potfile-disable -O -m 0 -a 3 e4726719b68b205913167f0975d977ee ?l?l?l?l?l?l",
+   "requires": "private"
   },
   {
    "id": "heaven_d3d11",
@@ -1848,7 +1900,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "Heaven.exe -project_name Heaven -data_path ../ -engine_config ../data/heaven_4.0.cfg -system_script heaven/unigine.cpp -sound_app null -video_app direct3d11 -video_multisample 0 -video_fullscreen 0 -video_mode -1 -video_width 1280 -video_height 720 -extern_define RELEASE,QUALITY_MEDIUM"
+   "cmd": "Heaven.exe -project_name Heaven -data_path ../ -engine_config ../data/heaven_4.0.cfg -system_script heaven/unigine.cpp -sound_app null -video_app direct3d11 -video_multisample 0 -video_fullscreen 0 -video_mode -1 -video_width 1280 -video_height 720 -extern_define RELEASE,QUALITY_MEDIUM",
+   "requires": "private"
   },
   {
    "id": "heaven_opengl",
@@ -1876,7 +1929,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "Heaven.exe -project_name Heaven -data_path ../ -engine_config ../data/heaven_4.0.cfg -system_script heaven/unigine.cpp -sound_app null -video_app opengl -video_multisample 0 -video_fullscreen 0 -video_mode -1 -video_width 1280 -video_height 720 -extern_define RELEASE,QUALITY_MEDIUM"
+   "cmd": "Heaven.exe -project_name Heaven -data_path ../ -engine_config ../data/heaven_4.0.cfg -system_script heaven/unigine.cpp -sound_app null -video_app opengl -video_multisample 0 -video_fullscreen 0 -video_mode -1 -video_width 1280 -video_height 720 -extern_define RELEASE,QUALITY_MEDIUM",
+   "requires": "private"
   },
   {
    "id": "hf_generate",
@@ -1910,7 +1964,11 @@
    "digest": true,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "python hf_generate.py"
+   "cmd": "python hf_generate.py",
+   "private_pkgs": [
+    "hf_wheels_private"
+   ],
+   "requires": "private"
   },
   {
    "id": "hist_t",
@@ -1942,7 +2000,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "python win_cuda_equiv.py hist"
+   "cmd": "python win_cuda_equiv.py hist",
+   "requires": "private"
   },
   {
    "id": "llama_cuda_bench",
@@ -1974,7 +2033,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "llama_cuda\\llama-bench.exe -m qwen2.5-1.5b-instruct-q4_k_m.gguf -ngl 99 -p 512 -n 64 -r 2"
+   "cmd": "llama_cuda\\llama-bench.exe -m qwen2.5-1.5b-instruct-q4_k_m.gguf -ngl 99 -p 512 -n 64 -r 2",
+   "requires": "private"
   },
   {
    "id": "llama_cuda_gen",
@@ -2006,7 +2066,8 @@
    "digest": true,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "llama-completion.exe -m qwen2.5-1.5b-instruct-q4_k_m.gguf -p \"Explain in three sentences why the sky is blue.\" -n 64 -ngl 99 --temp 0 --seed 1 --no-display-prompt (stdin empty); OUTSHA of the text"
+   "cmd": "llama-completion.exe -m qwen2.5-1.5b-instruct-q4_k_m.gguf -p \"Explain in three sentences why the sky is blue.\" -n 64 -ngl 99 --temp 0 --seed 1 --no-display-prompt (stdin empty); OUTSHA of the text",
+   "requires": "private"
   },
   {
    "id": "llama_cuda_parity",
@@ -2041,7 +2102,8 @@
     "status": "unverified",
     "classification": "reference-required",
     "verdict": "Fixed prompt, seed 1, temp 0, 64 tokens; full nonzero NVIDIA CUDA offload, rc 0; nonempty normalized output equals hashed bare-metal reference from identical executable and model"
-   }
+   },
+   "requires": "private"
   },
   {
    "id": "llama_vulkan_bench",
@@ -2071,7 +2133,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "llama_vulkan\\llama-bench.exe -m qwen2.5-1.5b-instruct-q4_k_m.gguf -ngl 99 -p 512 -n 64 -r 2"
+   "cmd": "llama_vulkan\\llama-bench.exe -m qwen2.5-1.5b-instruct-q4_k_m.gguf -ngl 99 -p 512 -n 64 -r 2",
+   "requires": "private"
   },
   {
    "id": "managed_t",
@@ -2107,7 +2170,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "python win_cuda_equiv.py managed"
+   "cmd": "python win_cuda_equiv.py managed",
+   "requires": "private"
   },
   {
    "id": "mandelbrot_t",
@@ -2139,7 +2203,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "python win_cuda_equiv.py mandelbrot"
+   "cmd": "python win_cuda_equiv.py mandelbrot",
+   "requires": "private"
   },
   {
    "id": "matmul_t",
@@ -2173,7 +2238,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "python win_cuda_equiv.py matmul"
+   "cmd": "python win_cuda_equiv.py matmul",
+   "requires": "private"
   },
   {
    "id": "memcpy2d_t",
@@ -2205,7 +2271,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "python win_cuda_equiv.py memcpy2d"
+   "cmd": "python win_cuda_equiv.py memcpy2d",
+   "requires": "private"
   },
   {
    "id": "nbody_demo_bench",
@@ -2236,7 +2303,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "nbody.exe -benchmark -numbodies=32768"
+   "cmd": "nbody.exe -benchmark -numbodies=32768",
+   "requires": "private"
   },
   {
    "id": "nbody_demo_gl",
@@ -2266,7 +2334,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "nbody.exe -numbodies=16384"
+   "cmd": "nbody.exe -numbodies=16384",
+   "requires": "private"
   },
   {
    "id": "nbody_t",
@@ -2298,7 +2367,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "python win_cuda_equiv.py nbody"
+   "cmd": "python win_cuda_equiv.py nbody",
+   "requires": "private"
   },
   {
    "id": "nvdec_h264",
@@ -2334,7 +2404,8 @@
     "status": "unverified",
     "classification": "owner-supplied-media",
     "verdict": "rc 0, own success line, NVIDIA GPU proof, no CHECK FAIL, no work on a non-NVIDIA adapter; exactly 18000 hardware-decoded frames"
-   }
+   },
+   "requires": "private"
   },
   {
    "id": "nvenc_av1",
@@ -2363,7 +2434,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "ffmpeg -f lavfi -i testsrc=... -c:v av1_nvenc -preset p4; ffprobe -count_frames"
+   "cmd": "ffmpeg -f lavfi -i testsrc=... -c:v av1_nvenc -preset p4; ffprobe -count_frames",
+   "requires": "private"
   },
   {
    "id": "nvenc_h264",
@@ -2399,7 +2471,8 @@
     "status": "unverified",
     "classification": "owner-supplied-media",
     "verdict": "rc 0, own success line, NVIDIA GPU proof, no CHECK FAIL, no work on a non-NVIDIA adapter; exactly 600 encoded frames"
-   }
+   },
+   "requires": "private"
   },
   {
    "id": "nvenc_hevc",
@@ -2430,7 +2503,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "ffmpeg -f lavfi -i testsrc=... -c:v hevc_nvenc -preset p4; ffprobe -count_frames"
+   "cmd": "ffmpeg -f lavfi -i testsrc=... -c:v hevc_nvenc -preset p4; ffprobe -count_frames",
+   "requires": "private"
   },
   {
    "id": "nvidia_smi",
@@ -2489,7 +2563,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "oceanFFT.exe -qatest"
+   "cmd": "oceanFFT.exe -qatest",
+   "requires": "private"
   },
   {
    "id": "opencl_icd",
@@ -2546,7 +2621,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "python ort_dml.py"
+   "cmd": "python ort_dml.py",
+   "requires": "private"
   },
   {
    "id": "overlay_yuv_fullscreen",
@@ -2786,7 +2862,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "randomFog.exe -qatest"
+   "cmd": "randomFog.exe -qatest",
+   "requires": "private"
   },
   {
    "id": "reduce_t",
@@ -2819,7 +2896,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "python win_cuda_equiv.py reduce"
+   "cmd": "python win_cuda_equiv.py reduce",
+   "requires": "private"
   },
   {
    "id": "rng_t",
@@ -2851,7 +2929,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "python win_cuda_equiv.py rng"
+   "cmd": "python win_cuda_equiv.py rng",
+   "requires": "private"
   },
   {
    "id": "scale_cuda_nvenc",
@@ -2880,7 +2959,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "ffmpeg -hwaccel cuda -hwaccel_output_format cuda -i x264.mp4 -vf scale_cuda=640:360 -c:v h264_nvenc"
+   "cmd": "ffmpeg -hwaccel cuda -hwaccel_output_format cuda -i x264.mp4 -vf scale_cuda=640:360 -c:v h264_nvenc",
+   "requires": "private"
   },
   {
    "id": "scan_t",
@@ -2912,7 +2992,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "python win_cuda_equiv.py scan"
+   "cmd": "python win_cuda_equiv.py scan",
+   "requires": "private"
   },
   {
    "id": "sort_t",
@@ -2944,7 +3025,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "python win_cuda_equiv.py sort"
+   "cmd": "python win_cuda_equiv.py sort",
+   "requires": "private"
   },
   {
    "id": "stream_created2nd_t",
@@ -2976,7 +3058,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "python win_cuda_equiv.py stream_created2nd"
+   "cmd": "python win_cuda_equiv.py stream_created2nd",
+   "requires": "private"
   },
   {
    "id": "stream_created_t",
@@ -3008,7 +3091,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "python win_cuda_equiv.py stream_created"
+   "cmd": "python win_cuda_equiv.py stream_created",
+   "requires": "private"
   },
   {
    "id": "stream_default_t",
@@ -3040,7 +3124,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "python win_cuda_equiv.py stream_default"
+   "cmd": "python win_cuda_equiv.py stream_default",
+   "requires": "private"
   },
   {
    "id": "stream_nonblocking_t",
@@ -3072,7 +3157,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "python win_cuda_equiv.py stream_nonblocking"
+   "cmd": "python win_cuda_equiv.py stream_nonblocking",
+   "requires": "private"
   },
   {
    "id": "stream_perthread_t",
@@ -3105,7 +3191,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "python stream_perthread.py"
+   "cmd": "python stream_perthread.py",
+   "requires": "private"
   },
   {
    "id": "stream_two_t",
@@ -3137,7 +3224,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "python win_cuda_equiv.py stream_two"
+   "cmd": "python win_cuda_equiv.py stream_two",
+   "requires": "private"
   },
   {
    "id": "streams_t",
@@ -3171,7 +3259,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "python win_cuda_equiv.py streams"
+   "cmd": "python win_cuda_equiv.py streams",
+   "requires": "private"
   },
   {
    "id": "tc16_t",
@@ -3203,7 +3292,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "python win_cuda_equiv.py tc16"
+   "cmd": "python win_cuda_equiv.py tc16",
+   "requires": "private"
   },
   {
    "id": "tcbf16_t",
@@ -3235,7 +3325,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "python win_cuda_equiv.py tcbf16"
+   "cmd": "python win_cuda_equiv.py tcbf16",
+   "requires": "private"
   },
   {
    "id": "torch_ai_bench",
@@ -3267,7 +3358,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "python ai_bench.py"
+   "cmd": "python ai_bench.py",
+   "requires": "private"
   },
   {
    "id": "torch_burn",
@@ -3300,7 +3392,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "python torch_burn.py 60"
+   "cmd": "python torch_burn.py 60",
+   "requires": "private"
   },
   {
    "id": "torch_correct",
@@ -3333,7 +3426,8 @@
    "digest": true,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "python torch_correct.py"
+   "cmd": "python torch_correct.py",
+   "requires": "private"
   },
   {
    "id": "torch_release_smoke",
@@ -3368,7 +3462,8 @@
     "status": "unverified",
     "classification": "open",
     "verdict": "Explicit CUDA matmul with seed 1, all 4096 finite outputs checked against CPU known answer at rtol=atol=1e-5; no CPU fallback"
-   }
+   },
+   "requires": "private"
   },
   {
    "id": "transpose_t",
@@ -3400,7 +3495,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "python win_cuda_equiv.py transpose"
+   "cmd": "python win_cuda_equiv.py transpose",
+   "requires": "private"
   },
   {
    "id": "triad_t",
@@ -3432,7 +3528,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "python win_cuda_equiv.py triad"
+   "cmd": "python win_cuda_equiv.py triad",
+   "requires": "private"
   },
   {
    "id": "valley_d3d11",
@@ -3460,7 +3557,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "Valley.exe -project_name Valley -data_path ../ -engine_config ../data/valley_1.0.cfg -system_script valley/unigine.cpp -sound_app null -video_app direct3d11 -video_multisample 0 -video_fullscreen 0 -video_mode -1 -video_width 1280 -video_height 720 -extern_define RELEASE,QUALITY_MEDIUM"
+   "cmd": "Valley.exe -project_name Valley -data_path ../ -engine_config ../data/valley_1.0.cfg -system_script valley/unigine.cpp -sound_app null -video_app direct3d11 -video_multisample 0 -video_fullscreen 0 -video_mode -1 -video_width 1280 -video_height 720 -extern_define RELEASE,QUALITY_MEDIUM",
+   "requires": "private"
   },
   {
    "id": "valley_opengl",
@@ -3488,7 +3586,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "Valley.exe -project_name Valley -data_path ../ -engine_config ../data/valley_1.0.cfg -system_script valley/unigine.cpp -sound_app null -video_app opengl -video_multisample 0 -video_fullscreen 0 -video_mode -1 -video_width 1280 -video_height 720 -extern_define RELEASE,QUALITY_MEDIUM"
+   "cmd": "Valley.exe -project_name Valley -data_path ../ -engine_config ../data/valley_1.0.cfg -system_script valley/unigine.cpp -sound_app null -video_app opengl -video_multisample 0 -video_fullscreen 0 -video_mode -1 -video_width 1280 -video_height 720 -extern_define RELEASE,QUALITY_MEDIUM",
+   "requires": "private"
   },
   {
    "id": "vectorAdd_demo",
@@ -3520,7 +3619,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "vectorAdd.exe"
+   "cmd": "vectorAdd.exe",
+   "requires": "private"
   },
   {
    "id": "vkcube",
@@ -3548,7 +3648,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "vkcube.exe --c 600 (from the LunarG SDK installed silently into C:\\kfapps\\vulkan_sdk)"
+   "cmd": "vkcube.exe --c 600 (from the LunarG SDK installed silently into C:\\kfapps\\vulkan_sdk)",
+   "requires": "private"
   },
   {
    "id": "vkpeak",
@@ -3579,7 +3680,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "vkpeak\\vkpeak.exe 0"
+   "cmd": "vkpeak\\vkpeak.exe 0",
+   "requires": "private"
   },
   {
    "id": "vulkan_video_decode",
@@ -3608,7 +3710,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "ffmpeg -init_hw_device vulkan=vk -hwaccel vulkan -hwaccel_output_format vulkan -i x264.mp4 -f null -"
+   "cmd": "ffmpeg -init_hw_device vulkan=vk -hwaccel vulkan -hwaccel_output_format vulkan -i x264.mp4 -f null -",
+   "requires": "private"
   },
   {
    "id": "vulkaninfo",
@@ -3638,7 +3741,8 @@
    "digest": false,
    "smi": false,
    "nvidia_only": true,
-   "cmd": "vulkan_rt\\x64\\vulkaninfo.exe --summary"
+   "cmd": "vulkan_rt\\x64\\vulkaninfo.exe --summary",
+   "requires": "private"
   },
   {
    "id": "zerocopy_t",
@@ -3670,7 +3774,8 @@
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "python win_cuda_equiv.py zerocopy"
+   "cmd": "python win_cuda_equiv.py zerocopy",
+   "requires": "private"
   }
  ],
  "linux_map": {

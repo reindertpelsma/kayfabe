@@ -149,10 +149,16 @@ owner-hosted cache is excluded from it.
 
 ## Windows app bundle (the Windows apps stage)
 
-STATUS: CODE + DESIGN, 2026-11-07 (WB1). The shell-free builder and offline tests exist. No full pinned
+STATUS: CODE + DESIGN, 2026-11-08 (WB1 two-class owner refinement). The shell-free builder and offline tests exist. No full pinned
 reproduction, upload, Worker deployment or pin change is claimed by WB1. The storage status recorded before
 WB1 was: no object uploaded and `scripts/bench/windows/appmatrix/bundle.pin` empty. Design and verification
 limits: [`Windows apps gate, section 3`](design/V3_WINDOWS_APPS_GATE.md#3-inputs-one-bundle-from-our-r2-through-the-worker).
+
+**OWNER DECISION / CODE READ:** winapps-open.iso is PUBLIC (KFAPPS), containing only public-ok packages;
+winapps-private.iso is PRIVATE (KFAPPSP), built only by a person. NVIDIA CUDA cannot be redistributed by owner
+ruling. NVIDIA components and all conditional/unclear packages stay private. This supersedes the old
+single/full-selection --public-only wording and conditions class. See the [two-class package table](design/V3_WINDOWS_APPS_GATE.md#32-two-classes-licence-inventory-and-source-availability).
+This is engineering support, not legal advice.
 
 **CODE READ:** the builder is `scripts/bench/windows/appmatrix/package_bundle.py`, Python 3.11+ standard library
 only. Official Zig 0.13.0 host archives are pinned (URL, SHA-256, size, retrieval date) under `bundle_toolchain`
@@ -224,42 +230,38 @@ GPU-free fixtures establish determinism for their inputs, not full cross-host bi
 Before upload the coordinator must compare two full builds and run the Zig and mingw probe sets through the
 same unchanged native Windows app-matrix checks. No hardware or full bundle build ran in WB1.
 
-**CODE READ / distribution policy, 2026-11-07:** the default full bundle includes `private-only` NVIDIA
-CUDA EULA components (including CUDA libraries inside torch wheels) and `conditions` packages (Vulkan
-Runtime and Visual C++ Redistributable terms; hf_wheels also needs its MPL source review). It must not be
-published as a public bundle without qualified review. `--public-only` refuses any selected package or
-dependency outside `public-ok`, including during image verification; it never silently drops packages.
-For a limited public-policy subset, use `--only blender,sevenzip,clpeak_ocl --public-only` with check,
-fetch, verify and build. That subset is not the full app gate or the canonical CI publication selection.
-See the [complete distribution table and source obligations](design/V3_WINDOWS_APPS_GATE.md#32-licence-inventory-distribution-classes-and-source-availability).
-This is engineering support, not legal advice.
+**CODE READ / private reproduction:** repeat the same check/fetch/verify/build commands with `--class private`
+and a separate output directory, from a person's machine with CI, run-token and upload credentials unset.
+Private output is winapps-private.iso, winapps-private.manifest.json and winapps-private.pin.line. Public output
+uses winapps-open names; bundle.pin.line is a public-only compatibility alias. The public builder rejects
+private requests, and the public uploader rejects private receipts before network access. No private production
+build or input download is permitted in CI, including when --ci-build is supplied.
 
-**OWNER OBLIGATION / DESIGN:** unmodified Blender, 7-Zip and clpeak source archives are carried on the ISO
-and must be mirrored alongside its object code, with equivalent access at no extra charge. The notices
-give the exact upstream location, source digest, ISO path and immutable mirror key, plus our written source
-offer valid for at least three years after our last distribution and while covered support/spare parts
-remain offered. It is **OUR obligation to keep the mirrored source available as long as we distribute the
-binary**, and to honor that offer for its full term. The full legal-text inventory and transitive source
-completeness still need operator review; a main-project source archive alone is not proof of completeness.
+**MEASURED:** 11 public HF wheels were hash verified and content audited; their metadata/licences and native
+member inventory are recorded in manifest.json and checked again at build time. Certifi/tqdm are private
+hf_wheels_private. App commands/verdicts are unchanged, but private dependencies are explicitly marked.
 
-**DESIGN:** the Windows apps stage gets one `winapps-open.iso` (volume label `KFAPPS`) through the Worker's
-proposed presigned `/bench-data` route. Only `open_packages` are included: CUDA demo/runtime components,
-Python and wheels, llama.cpp, Qwen models, Blender, hashcat, clpeak, vkpeak, Vulkan/Visual C++ runtimes and our
-source-built probes. GravityMark, FurMark, GpuTest, Unigine, the GPL ffmpeg build and all licensed software
-remain outside. The deprecated `package_open_bundle.sh` only points at Python and performs no packaging.
-The coordinator, separately, uploads the reviewed ISO/receipt and commits the pin.
+**CODE READ / operator use:** set KF_WINAPPS_PUBLIC_BASE_URL to the public bundles custom domain. Public
+reads use urllib and the repo pin, with no Worker/run token. Supply a person-built private disk through
+KF_WINAPPS_PRIVATE_ISO (or winapps.py --private-iso). Both disks are read-only, fixed K: (KFAPPS) / P: (KFAPPSP).
+Missing private media gives required apps NOT RUN with missing-private-media and makes only those expected
+lanes RETRY class=MEDIA; it never passes them or removes them from full. Profile public selects independent apps.
 
-| Bundle object | Name the box asks the Worker for (proposed) | R2 key (proposed) |
-|---|---|---|
-| the app disk (new size measured at full build) | `winapps-open.iso` | `winapps-open/kfapps.iso` |
-| external manifest (SHA-256 of every file, image identity) | `winapps-open.manifest.json` | `winapps-open/manifest.json` |
+**OWNER OBLIGATION:** unmodified GPL/LGPL apps include licences, exact source archives, upstream links and our
+written source offer for at least three years after last distribution. It is OUR obligation to keep mirrored
+source available as long as we distribute binaries and to honor the offer's full term. The full archive/licence
+inventory and transitive Corresponding Source still need operator review before publication.
 
-Not in the bundle, with the reason (the same classes as `gate_profiles.json`):
+**DESIGN:** private R2 uses a later Worker-presigned route like SPEC, allowlisting winapps-private.iso and
+winapps-private.manifest.json. WB1 does not implement that allowlist, a private uploader or Worker changes.
+No private media goes through the public publisher, CI, an Actions artifact or the public bucket.
 
-| Class | Apps | Packages | Why |
-|---|---|---|---|
-| owner decision | 29 | GravityMark, FurMark, GpuTest, the Vulkan SDK, an ffmpeg GPL build | storage/redistribution decision still pending; the earlier ffmpeg pin returned 404, but J1 verified a new dated pin by download, official checksum and ZIP CRC (see `design/V3_WINDOWS_RELEASE_SOFTWARE_DEFINITIONS.md`); GPU behavior remains unverified |
-| manual | 4 apps + 3 never-automated items | Unigine Heaven and Valley; 3DMark, Geekbench, TensorRT, Superposition, Xonotic, Q2RTX | paid or account-bound software, command-line automation in a paid edition, or online-only (`gate_profiles.json` `manual`, with the evidence template) |
+**CODE READ:** the public set is python_embed, llama_vulkan, qwen_gguf, hf_model, vkpeak, blender,
+clpeak_ocl, hashcat, sevenzip and audited permissive hf_wheels. The private set contains the CUDA demo/runtime,
+CCCL, torch/Python wheels, llama CUDA/cudart, clpeak CUDA, Vulkan Runtime, VC Redistributable and restricted HF
+wheels. Other licensed/manual apps and the standalone GPL ffmpeg package remain outside both canonical sets.
+The deprecated shell wrapper is only a pointer to Python. Public CI publishes only to the configured public
+bundles bucket/custom domain; private packaging/upload remains a person's separate workflow.
 
 ### GitHub build and immutable R2 publication (owner refinement)
 
@@ -286,7 +288,7 @@ checking that current master still has those inputs. Token handling and the Work
 read mapping are separate work; no Worker code or current consumer is enabled here. The older proposed
 fixed keys in the table above are superseded by these names for new publication.
 
-The computed two-build disk admission budget is 25,294,602,843 bytes (23.56 GiB), including compliance/source
+The computed two-build disk admission budget is 11,696,576,173 bytes (10.89 GiB), including compliance/source
 inputs, both images and legal-text caps. The workflow measures actual free space,
 frees unused hosted-runner toolchains and fails before downloading if it cannot meet that budget. Runner
 cleanup capacity has not been measured in WB1; use a larger runner if needed. Full design, future OIDC route

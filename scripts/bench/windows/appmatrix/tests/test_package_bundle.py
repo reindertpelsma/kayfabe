@@ -70,6 +70,12 @@ class Policy(unittest.TestCase):
         fl = pin(); fl["name"] = "C:\\escape"
         with self.assertRaises(ValueError): B.validate_pin("sevenzip", fl)
 
+    def test_unselected_ffmpeg_cannot_enter_profile(self):
+        with self.assertRaises(ValueError): B.select_packages(manifest(), {"open_packages":["sevenzip","ffmpeg"]}, ['sevenzip'])
+
+    def test_unselected_gravitymark_cannot_enter_profile(self):
+        with self.assertRaises(ValueError): B.select_packages(manifest(), {"open_packages":["sevenzip","gravitymark"]}, ['sevenzip'])
+
     def test_forbidden_requested(self):
         with self.assertRaisesRegex(ValueError, "ffmpeg"):
             B.select_packages(manifest(), {"open_packages": ["sevenzip"]}, ["ffmpeg"])

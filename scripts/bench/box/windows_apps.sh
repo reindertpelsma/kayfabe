@@ -17,9 +17,9 @@
 #
 # Inputs (never from a vendor: DOCS: docs/DOWNLOADS.md "Windows app bundle"):
 #   KF_WINAPPS_ISO=<file>   an app disk that is already on the box (by hand); or
-#   the pinned R2 bundle `winapps-open.iso` (name in ci/vast-broker/src/benchdata.js), fetched by
-#   fetch_bench_data.sh through the Worker with this run's token; the sha256 pin is
-#   scripts/bench/windows/appmatrix/bundle.pin. Without a pin the stage is RETRY class=MEDIA, never a pass.
+#   the pinned public bundle from KF_WINAPPS_PUBLIC_BASE_URL, fetched by fetch_public_bundle.py without
+#   a run token; the sha256 pin is scripts/bench/windows/appmatrix/bundle.pin. Optional private media is
+#   supplied locally through KF_WINAPPS_PRIVATE_ISO. Missing required media is RETRY class=MEDIA, never pass.
 #
 # Verdict lines. THE GATE IS THE GUEST PASSING (owner, 2026-11-01): exit 0 only for WINAPPS_PASS. A host fault, a
 # harness fault, a missing input or a rental fault is RETRY (exit 3, "re-run on a fresh box"), never a pass and never
@@ -35,7 +35,7 @@
 #                                                                                   driver died), HOSTREF, BAR1_EXCEPTION
 #   WINAPPS_REFUSED why=<w>                                                  exit 2  a precondition (not root, no gate pass, ...)
 #   WINAPPS_EXIT rc=<n> <utc>                                                always last
-# Knobs: KF_WINAPPS_PROFILE (small | mid | full | ids:a,b,c; default small), KF_WINAPPS_BUDGET_S (per profile default),
+# Knobs: KF_WINAPPS_PROFILE (small | mid | full | public | ids:a,b,c; default small), KF_WINAPPS_BUDGET_S (per profile default),
 # KF_WINAPPS_PER_GUEST (8), KF_WINAPPS_MAX_TDR (3), KF_WINAPPS_GATE_TAG (the gate's overlay tag), WINVM_ROOT, BENCH.
 set -uo pipefail
 SELFTEST=0
@@ -100,7 +100,8 @@ refuse() { say "WINAPPS_REFUSED why=$1"; VERDICT=REFUSED; rc_final=2; exit 2; }
 
 # The class of a non-zero outcome from the grade (grade.py), the same-box host reference and the BAR1 exception.
 # $1 = grade kind (PASS|FAIL|RETRY), $2 = host reference before, $3 = after, $4 = 1 when kf3 refused a BAR1 size and
-# no guest ever answered ssh (the documented Vast exception), $5 = new host Xid count over the run.
+# no guest ever answered ssh (the documented Vast exception), $5 = new host Xid count over the run,
+# $6 = an expected app reported missing-private-media.
 classify() {
     local kind=$1 hb=$2 ha=$3 bar1=$4 xid=$5
     case "$kind" in
@@ -108,7 +109,7 @@ classify() {
             if [ "$bar1" = 1 ]; then echo "RETRY BAR1_EXCEPTION"
             elif [ "$hb" != green ] || [ "$ha" != green ]; then echo "RETRY HOSTREF"
             else echo "FAIL KAYFABE"; fi ;;
-        RETRY) echo "RETRY OPERATOR" ;;
+        RETRY) if [ "${6:-0}" = 1 ]; then echo "RETRY MEDIA"; else echo "RETRY OPERATOR"; fi ;;
         PASS)
             if [ "$ha" != green ]; then echo "RETRY HOSTREF"
             elif [ "${xid:-0}" != 0 ]; then echo "FAIL KAYFABE"
@@ -147,7 +148,7 @@ selftest() {
     local n=0 bad=0 out
     cs() { # NAME WANT KIND HB HA BAR1 XID
         n=$((n + 1))
-        out=$(classify "$3" "$4" "$5" "$6" "$7")
+        out=$(classify "$3" "$4" "$5" "$6" "$7" "${8:-0}")
         [ "$out" = "$2" ] && return 0
         bad=$((bad + 1))
         echo "WINAPPS_SELFTEST_FAIL case=$1 want=\"$2\" got=\"$out\""
@@ -160,6 +161,8 @@ selftest() {
     cs fail-hostref-after 'RETRY HOSTREF' FAIL green RED 0 0
     cs fail-bar1 'RETRY BAR1_EXCEPTION' FAIL green green 1 0
     cs retry-harness 'RETRY OPERATOR' RETRY green green 0 0
+    cs missing-private 'RETRY MEDIA' RETRY green green 0 0 1
+    cs missing-private-hostref 'RETRY MEDIA' RETRY RED RED 0 0 1
     cs unknown-kind-never-pass 'RETRY OPERATOR' MAYBE green green 0 0
     # a log can only pass through verdict(): the exit code and the line agree
     n=$((n + 1))
@@ -223,7 +226,7 @@ if [ -z "$ISO" ]; then
     fi
     ISO=/workspace/winapps/kfapps.iso
     mkdir -p "$(dirname "$ISO")"
-    if ! bash "$SOURCE/scripts/bench/box/fetch_bench_data.sh" winapps-open.iso --sha256 "$PIN" --out "$ISO" > "$EV/fetch_bundle.txt" 2>&1; then
+    if ! python3 -I "$APPM/fetch_public_bundle.py" --base "${KF_WINAPPS_PUBLIC_BASE_URL:-}" --pin "$APPM/bundle.pin" --out "$ISO" > "$EV/fetch_bundle.txt" 2>&1; then
         verdict RETRY MEDIA "fetch of winapps-open.iso failed (fetch_bundle.txt): $(tail -1 "$EV/fetch_bundle.txt" | head -c 160)"
         exit 3
     fi
@@ -231,8 +234,15 @@ fi
 [ -f "$ISO" ] || { verdict RETRY MEDIA "no app disk at $ISO"; exit 3; }
 ISO_SHA=$(sha256sum "$ISO" | cut -d' ' -f1)
 say "APPS_NOTE app disk $ISO sha256=$ISO_SHA bytes=$(stat -c %s "$ISO")"
-IMGMAN=${KF_WINAPPS_IMAGE_MANIFEST:-$(dirname "$ISO")/manifest.json}
+IMGMAN=${KF_WINAPPS_IMAGE_MANIFEST:-$(dirname "$ISO")/winapps-open.manifest.json}
 [ -f "$IMGMAN" ] || IMGMAN=$APPM/manifest.json
+
+# Private media is supplied locally by a person; its Worker allowlist is future work.
+PRIVATE_ISO=${KF_WINAPPS_PRIVATE_ISO:-}
+PRIVATE_ARGS=()
+if [ -n "$PRIVATE_ISO" ]; then
+    if [ -f "$PRIVATE_ISO" ]; then PRIVATE_ARGS=(--private-iso "$PRIVATE_ISO"); fi
+fi
 
 stage hostref_before
 LIBCUDA=-lcuda
@@ -274,7 +284,7 @@ stage run_matrix
 GUEST_STARTED=1
 RUN=$EV/run
 DEADLINE=$(($(date +%s) + BUDGET_S))
-python3 -I "$APPM/winapps.py" --vm winvm --run-dir "$RUN" --apps "$IDS" --tier 3 --iso "$ISO" --image-manifest "$IMGMAN" \
+python3 -I "$APPM/winapps.py" --vm winvm --run-dir "$RUN" --apps "$IDS" --tier 3 --iso "$ISO" "${PRIVATE_ARGS[@]}" --image-manifest "$IMGMAN" \
     --winvm-script "$WV" --winvm-root "$WINVM_ROOT" --winvm-name "${WINVM_NAME:-kfwin}" --parent-overlay "$GATE_TAG" --flags-file "$FLAGS" \
     --guest-driver "$GDRV" --arm "$ARM" --per-guest "$PER_GUEST" --max-tdr "$MAX_TDR" --deadline-epoch "$DEADLINE" > "$EV/driver.out" 2>&1
 DRC=$?
@@ -301,7 +311,9 @@ for q in "$VM"/logs/apps_*_b1_qemu.log; do
     grep -a 'realize refused' "$q" | sed 's/.*realize refused//' | grep -qi 'bar1' && bar1=1
 done
 grep -q 'SSH_UP\|READY boot=' "$RUN/session.log" 2> /dev/null && bar1=0    # a guest answered: not the BAR1 exception
-read -r KIND CLASS <<< "$(classify "$kind" "$HOSTREF_BEFORE" "$HOSTREF_AFTER" "$bar1" "$xid_delta")"
+private_media_fault=0
+grep -q 'missing-private-media' "$EV/grade.txt" && private_media_fault=1
+read -r KIND CLASS <<< "$(classify "$kind" "$HOSTREF_BEFORE" "$HOSTREF_AFTER" "$bar1" "$xid_delta" "$private_media_fault")"
 why="grade: $(grep -a '^WINAPPS_GRADE kind=' "$EV/grade.txt" | head -1 | cut -d' ' -f2-)"
 for k in GUEST_FAIL BOOT_FAIL HARNESS NOT_RUN; do
     l=$(grep -a "^WINAPPS_GRADE_$k " "$EV/grade.txt" | head -1 | cut -d' ' -f2-)

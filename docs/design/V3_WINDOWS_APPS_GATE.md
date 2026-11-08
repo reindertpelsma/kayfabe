@@ -43,7 +43,7 @@ apps, in three classes.
 
 | Class | Apps | What decides | Goes in an automated profile? |
 |---|---:|---|---|
-| open | 87 | every package the app needs is redistributable and in the bundle (`open_packages`); source/reference assets are additional prerequisites | yes, with prerequisites |
+| automatable (legacy `open` app class) | 87 | dependencies are in `open_packages` and/or `private_packages`; private requirements are explicit, and source/reference assets remain additional prerequisites | yes, with required media and prerequisites |
 | owner decision | 29 | needs GravityMark, FurMark, GpuTest, the Vulkan SDK or the ffmpeg GPL build: free to download, storage rights still pending | no, until the owner rules |
 | manual | 4 (+3 non-matrix items) | Unigine Heaven and Valley (paid automation, evaluation EULA); 3DMark, Geekbench 6, TensorRT, Superposition, Xonotic, Q2RTX | never |
 
@@ -58,7 +58,15 @@ apps and models come from the app disk, Edge opens pages from `C:\kf\web`. **COD
 gate guest and commits `traces/winapps_manual_<date>/<app>.md` with the revision, die, driver, the app's own result and
 the host reference. The licence or key is never written down.
 
-## 3. Inputs: one bundle, from our R2, through the Worker
+<a id="3-inputs-one-bundle-from-our-r2-through-the-worker"></a>
+
+## 3. Inputs: public and private bundles
+
+**OWNER DECISION / CODE READ, 2026-11-08:** this supersedes the earlier single/private-copy bundle,
+`--public-only` selection wording and the `conditions` distribution class. There are exactly two classes.
+The public default contains only the explicit public-ok package set; NVIDIA CUDA is not redistributable by
+owner ruling. NVIDIA material and conditional/unclear packages belong only on person-built private media.
+CI builds and publishes only the public image; no private production input is fetched or built by CI.
 
 **CODE READ, WB1, 2026-11-07:** `scripts/bench/windows/appmatrix/package_bundle.py` replaces the
 shell packaging recipe. It uses Python 3.11 or later, standard library only, and the official pinned Zig 0.13.0
@@ -79,14 +87,14 @@ and checks the manifest's byte length and SHA-256 before promotion. A mismatchin
 it is never silently repinned. Every failure names the package and input. The owner refinement below permits explicit credential-free CI with `--ci-build` and permits the cheap
 `input-hash` command in CI. Default local commands still refuse `CI`; `KF_RUN_TOKEN` and upload credentials
 remain forbidden in every builder invocation. The independent allow-list and dependency closure refuse packages outside
-`gate_profiles.json` `open_packages`; no owner-decision or licensed package is selected. `--only` permits a
+`gate_profiles.json` `open_packages` for public media or `private_packages` for private media; the independent public whitelist also rejects a mislabelled NVIDIA/runtime package. `--only` permits a
 smaller open subset for local investigation; the coordinator's release bundle uses the full default selection.
 
 **CODE READ:** application ZIPs, wheels, 7z archives, MSIs and installers ride on the ISO byte for byte.
 The guest's existing `tar.exe`, `msiexec.exe`, installer modes and bundled `7zr.exe` do the staging. The only
 staging change is that `kf_stage.ps1` prefers the ISO's `stage.json` over the controller's legacy table. This
 prevents a legacy `image_form=tree` hint from skipping guest extraction. Python's `._pth` adjustment and wheel
-extraction already ran inside the guest and remain there. All app definitions and verdict rules are unchanged.
+extraction already ran inside the guest and remain there. App commands and verdict predicates are unchanged. Storage metadata adds `requires: private` and the separated private HF dependency package; full-profile expectations still include these apps.
 
 **CODE READ:** the compiler's own release archive is the sole host extraction: Python unpacks a hash-verified
 Zig distribution into a fresh directory, rejecting links, special files and escaping paths. It is never put on
@@ -99,7 +107,7 @@ epoch; the builder refuses nonzero PE timestamps, build-directory strings and ex
 The source hashes, compiler pins and resulting binary hashes are recorded in the receipt. Repository licence
 texts and the Zig-bundled C/C++ runtime notices are retained on the ISO.
 
-**CODE READ:** `bundle_iso.py` writes ISO9660 plus Joliet, label `KFAPPS`, without an ISO utility. Both
+**CODE READ:** `bundle_iso.py` writes ISO9660 plus Joliet, labels `KFAPPS` (public) or `KFAPPSP` (private), without an ISO utility. Both
 namespaces share file extents. Entry order, short aliases, all timestamps (2000-01-01 UTC), padding and volume
 fields are fixed; host ownership, mode, mtime, umask, locale and timezone never enter the image. Repository text
 is normalized to LF, covering CRLF checkouts. Individual files over 4 GiB minus one byte are refused before
@@ -141,11 +149,7 @@ byte-identical: 1,122,304 bytes, 47 files, SHA-256
 `9a3688db4b0508086646379f960b2c94cf169377ecac6c0b667c5471063d530a`.
 This is local reproducibility evidence, not a Windows GPU or cross-host compiler result.
 
-**DESIGN:** a rented box gets one input, `winapps-open.iso`, through the Worker's proposed presigned
-`/bench-data` route (`fetch_bench_data.sh`, run token only), pinned by SHA-256 in `appmatrix/bundle.pin`.
-The coordinator uploads the ISO and receipt only after review and full reproduction. This builder has no upload
-operation. Worker names remain proposed, no deployment or pin change is part of WB1. Without a pin the stage
-answers `RETRY class=MEDIA`. `docs/DOWNLOADS.md` gives the manual file-manager recipe and storage exclusions.
+**CODE READ / DESIGN:** the public image is fetched from a configured public bundles custom domain using the repo pin and immutable manifest/key. No Worker or run token is used for public media. Private media is supplied locally by a person; its future private Worker allowlist is documented below. No deployment or pin change is part of WB1. Without public media the stage remains RETRY class=MEDIA.
 
 ### 3.1 Owner refinement: build in GitHub, publish immutable objects
 
@@ -181,20 +185,17 @@ with different umasks/TZ/locales, and require matching ISO hashes plus cross-rec
 new hash when it differs from the pin; verify mode fails on a difference. Upload credentials are rejected by
 the builder and are referenced only in the final publish step's `env:`. The combined job itself requires the
 canonical repository, `refs/heads/master`, push/dispatch, the enable flag and protected environment
-`bundle-publish-master`. **Deployment branches must be restricted to master and reviewers configured there
+`bundle-publish-public-master`. **Deployment branches must be restricted to master and reviewers configured there
 before enabling.** Fork PRs and every PR event are refused again by the publisher's own entry point.
 
-**COMPUTED from committed pins, not measured on GitHub:** originals total 6,743,509,381 bytes and additional
-licence/source inputs total 91,613,555 bytes (shared pins are counted conservatively per package). The admission
-budget is `3 * originals + 4 * compliance inputs + 2 * package count * 64 MiB + 2 GiB` =
-25,294,602,843 bytes (23.56 GiB), including both images, legal-text caps, source upload staging and compiler
-scratch. The workflow measures `df` before/after removing unused preinstalled Android, .NET, GHC,
-Boost and hosted tool caches, then checks actual free bytes **before any vendor download**. It uses system
-`/usr/bin/python3` so deleting the hosted cache cannot remove its interpreter. Default free space around 14 GB
-(the coordinator's sizing premise) is insufficient; whether cleanup frees enough is **unverified until a manual
-run**. If not, a larger runner is required; neither the disk gate nor the second build is bypassed. Both jobs
-remove only their own ephemeral workspace on success/failure. Logs are public; app archives/credentials and
-presigned URLs are never printed. Only redistributable packages are eligible for these jobs.
+**COMPUTED from committed pins, not measured on GitHub:** public originals total 2,616,964,183 bytes,
+additional public licence/source inputs 89,005,674 bytes. Admission reserves downloads, two images, bounded
+legal texts and compiler/source scratch: 11,696,576,173 bytes (10.89 GiB). The runner measures actual free
+space after freeing unused preinstalled toolchains and refuses before downloading if insufficient; use a
+larger runner in that case. The coordinator's approximate 14 GB default-free-space premise is not a measured
+runner result. Private originals total 4,126,545,198 bytes and are never part of CI's budget or download set.
+The ISO stays on its runner, no Actions artifact/cache is created, and build steps execute no vendor app code.
+Logs are public: no private payload, credential, capability URL or installer contents may be logged.
 
 **CODE READ:** `publish_bundle.py` uses standard-library HTTPS, SigV4 (`auto` region), bounded 64 MiB parts,
 service ETags, per-part integrity checks, remote ListParts validation and local resume state. It supports files
@@ -215,7 +216,7 @@ local state for up to three uploader invocations in the same final step; a fresh
 **DESIGN: enabling automatic triggers after review.** Add input-filtered `pull_request` for the no-environment
 build job, and `push` restricted to `master` for planning, using only these determinant paths: root `LICENSE`,
 `LICENSE-APACHE`, `LICENSE-GPL`, `THIRD_PARTY_NOTICES.md`; appmatrix `manifest.json`, `gate_profiles.json`,
-`apps.json`, `package_bundle.py`, `bundle_iso.py`, `bundle_tools.py`, `bundle_compliance.py`, `guest/**`, `tools/src/**`;
+`apps.json`, `package_bundle.py`, `bundle_iso.py`, `bundle_tools.py`, `bundle_compliance.py`, `bundle_wheels.py`, `guest/**`, `tools/src/**`;
 `scripts/bench/windows/cuda/nvcuda.def`, `scripts/bench/cuda_min/cuda.h`, `scripts/bench/cup3.c`,
 `scripts/bench/cup8.c`, `archive/nvkvm/tests/mode2/cup2.c`. Pin/output/docs-only commits do not trigger a build.
 The explicit event guards already distinguish the jobs. Do not add `pull_request_target`. This PR does not
@@ -238,98 +239,78 @@ receipt, ensure its input hash still equals the current reviewed master tree, an
 `next`** updating only `appmatrix/bundle.pin`. Its first line remains the existing consumer-compatible
 `winapps-open.iso sha256=...`; comment lines record inputs and both immutable keys. Reviewer approval and merge
 select the new object; publication alone never advances the pin. No PR-token handling is implemented here.
-The Worker's current fixed-key read mapping does not consume these new keys yet: before enabling consumer
-use, a separate reviewed read-route/helper change must map the committed digest to the immutable object.
+Public consumers use `fetch_public_bundle.py` with the configured custom domain and committed digest;
+the Worker's existing fixed-key mapping is not used for public bundle reads.
 
 **DESIGN / migration:** this replaces the old GitHub-Releases bundle store
 `reindertpelsma/win-gpu-image-private-store`. That repository's other contents, including the setup cache and
 WinPE image, are a separate migration. No contents are moved or deleted by WB1.
 
-### 3.2 Licence inventory, distribution classes and source availability
+### 3.2 Two classes, licence inventory and source availability
 
-STATUS: CODE + DESIGN, 2026-11-07 (WB1 owner addition). Engineering checks and small fixtures exist;
-the full archive inventory and complete transitive Corresponding Source have not been audited here.
-Publication remains disabled. This section does not establish legal clearance for a public release.
+STATUS: CODE + DESIGN, 2026-11-08 (owner refinement). This replaces the old conditions class and the old
+full-selection public-only refusal. Full real media and native two-disk operation have not been measured.
 
-**CODE READ:** every build, including private builds, carries `LICENSES/<package>/<text sha256>`,
-`LICENSES/index.json` and generated `THIRD_PARTY_NOTICES.txt`. The index preserves original legal-text
-paths, upstream URLs, parent archive SHA-256, covered input and each text's SHA-256. Legal members of pinned
-ZIPs/wheels are read into memory using `zipfile`; application payloads are never extracted on the host.
-7-Zip legal texts are read from its exact pinned source tar using `tarfile`. Neither path executes vendor
-code. Whole-archive hashes transitively pin the contained texts; separate upstream licence downloads have
-their own URL/hash/size pins. Missing coverage for any binary input, an archive with no legal text and no
-pinned fallback, an invalid source pin or a source/binary version mismatch fails the build.
+**CODE READ, engineering policy:** there are two distribution classes. This is engineering support, not legal advice.
 
-**CODE READ:** notices list package, exact version, licence identifier, upstream project, conditions,
-exact wheel versions/identifiers, and source locations. Every ISO file in the external manifest has a
-machine-readable `licenses` list with package/component, version, identifier, upstream, `distribution`,
-conditions and mirrored source pins. Its metadata participates in the payload identity. Repository licence
-texts are in `LICENSES/kayfabe`; exact Zig/runtime notices are in `LICENSES/zig`.
-
-**CODE READ, engineering policy:** `compliance.distribution` in `manifest.json` controls this table.
-This is engineering support, not legal advice.
-
-| Packages | Class | Required handling |
+| Bundle | Packages | Publication policy |
 |---|---|---|
-| python_embed, llama_vulkan, qwen_gguf, vkpeak, hashcat, hf_model | `public-ok` | Retain pinned upstream/as-shipped licences and notices; inspect bundled dependency inventory before release. |
-| Blender 4.5.0, 7-Zip 26.04, clpeak_ocl 3.0.1 | `public-ok` | Unmodified upstream object code; exact source archives on ISO and mirrored beside it; retain notices and honor the source offer. Complete transitive source coverage still needs operator review. |
-| vulkan_rt | `conditions` | Retain VulkanRT-License.txt and copyrights; comply with the pinned LunarG Runtime redistribution terms. |
-| vc_redist | `conditions` | Comply with Microsoft terms for permitted redistribution, unmodified distributable code, notices and end-user restrictions; confirm applicability to the exact installer. |
-| hf_wheels | `conditions` | Includes MPL-2.0 certifi; source is not mirrored yet. Review its exact source/retention requirements and bundled notices before public distribution. |
-| cuda_demo_suite, cuda_cudart, cuda_nvrtc, pywheels | `private-only` | NVIDIA CUDA EULA components, including CUDA libraries inside torch wheels, require qualified licence review before public distribution. |
-| llama_cuda, clpeak_cuda, cuda_cccl | `private-only` | Conservatively apply the same rule to their CUDA runtime/EULA material; an open-source wrapper does not clear it. |
+| public / public-ok | python_embed, llama_vulkan, qwen_gguf, hf_model, vkpeak, blender, clpeak_ocl, hashcat, sevenzip, audited permissive hf_wheels | `winapps-open.iso`, KFAPPS, public bundles bucket/custom domain; public CI only. |
+| private / private-only | cuda_demo_suite, cuda_cudart, cuda_nvrtc, cuda_cccl, pywheels (including NVIDIA libraries), llama_cuda/cudart, clpeak_cuda, vulkan_rt, vc_redist, hf_wheels_private | `winapps-private.iso`, KFAPPSP; person only, private R2 only, never the public publisher or CI. |
 
-**CODE READ:** `--public-only` refuses the entire requested selection if any selected package or dependency
-is outside `public-ok`; it never silently omits one. Consequently the default complete open selection is
-refused in this mode. For a limited reproduction, for example:
+**MEASURED, 2026-11-07 UTC:** all 11 selected public HF wheels were downloaded from their existing pinned
+URLs, hash/size verified and inspected using zipfile without extraction or execution. The audit records exact
+metadata hashes, licence fields/classifiers, versions, member counts and native-member names in the manifest.
+No NVIDIA libraries/references were found in their seven native members. The builder rechecks that inventory,
+requires a clearly permissive metadata licence and rejects NVIDIA DLL/library filenames or native references.
+Certifi and tqdm carry MPL terms and are separated into hf_wheels_private. Unknown/nonpermissive wheels fail
+closed. This inventory is engineering evidence, not proof of every native dependency's legal status.
 
-```text
-python3 -I scripts/bench/windows/appmatrix/package_bundle.py check --only blender,sevenzip,clpeak_ocl --public-only
-```
+**CODE READ:** every build carries LICENSES/, LICENSES/index.json, THIRD_PARTY_NOTICES.txt and pinned SOURCE/
+archives. Legal text comes from hash-verified archive members or separately pinned upstream text; app payloads
+stay unmodified. Every ISO file's licenses metadata includes the package/component licence, distribution class,
+conditions and exact source locations. Metadata participates in the image identity. Unmodified Blender 4.5.0,
+7-Zip 26.04 and clpeak 3.0.1 source archives are included; notices also link their exact official source URLs.
+Clpeak's old Apache label was corrected to the upstream GPLv3 text. The original 7zr bytes identify 26.04 and
+the original VC installer bytes identify 14.44.35211.0; neither installer is executed on the packaging host.
 
-Use the same flags for fetch, verify and build. This subset is diagnostic media and cannot pass the full
-open-app gate or the canonical full-selection publisher. `verify-image --public-only` also checks receipt
-classes. A class records engineering policy, not a conclusion that every embedded component has been reviewed.
+**OWNER OBLIGATION:** notices include our written source offer, valid for at least three years after our last
+distribution and while covered support/spare parts remain offered. It is OUR obligation to keep mirrored source
+available as long as we distribute the binary, and honor the full offer term. Public sources upload first under
+winapps-open/source-<source sha256>.archive, next to the object code, with equivalent access at no extra charge.
+Upstream links alone do not replace our retention obligation. Private source archives travel inside the private
+ISO; its manifest records private-prefix mirror targets for the later operator route. GPL binaries are never
+modified. Full transitive Corresponding Source/build-instruction coverage remains a review prerequisite.
 
-**MEASURED, 2026-11-07:** the existing 7zr.exe SHA-256 matches the official 26.04 release byte-for-byte;
-its mutable download URL is replaced by that release's immutable URL. The original Visual C++ installer hash
-still matches; its PE FileVersion and ProductVersion are `14.44.35211.0` (read without execution). The pinned
-clpeak 3.0.1 upstream LICENSE contains GPLv3, contradicting the earlier Apache-2.0 label; both backend records
-are corrected and share its pinned source archive. No app definition or verdict rule changes.
+**CODE READ:** `--class public` is the default. Any explicitly requested private package is refused, even if a
+manifest edit tries to relabel an NVIDIA/runtime package as public. `--class private` is refused whenever CI is
+set or GitHub Actions is active, even with --ci-build. The old --public-only option is only a compatibility alias
+for public selection. Neither class silently pulls dependencies from the other disk into its own image.
+Use separate output folders or the distinct .iso/.manifest.json/.pin.line basenames; the legacy bundle.pin.line
+alias is written only for public output. Each receipt embeds its class and its expected volume label.
 
-**MEASURED source downloads, 2026-11-07:** official Blender 4.5.0 source (85,059,376 bytes), official 7-Zip
-26.04 source (1,560,440 bytes), and upstream clpeak 3.0.1 source (2,335,991 bytes) were downloaded and SHA-256
-pinned in `compliance.sources`. Their URL, exact version, size, digest and retrieval date are in the manifest.
-They are copied unmodified into `SOURCE/<package>/<archive name>` on the ISO. This measures archive identity,
-not completeness of third-party dependency source or GPU functionality.
+**CODE READ / guest protocol:** both media are attached read-only when supplied. KFAPPS is assigned K: and
+KFAPPSP P:; a public letter conflict fails setup; a private conflict makes only private media unavailable. A guest label alone never proves private media: the controller also requires its own successful host attachment. Guest staging looks
+for each package on its own ISO. Private packages are not staged during global setup. Apps and profiles carry
+requires: private metadata, including the separated HF dependencies; absent private media produces NOTRUN with
+missing-private-media, never PASS. The full profile retains every expected app, so missing private rows make
+it RETRY class=MEDIA; an independent public profile contains only apps without private requirements. A guest
+failure still outranks a missing-media retry. Native mounting/drive assignment still needs operator evidence.
 
-**CODE READ / DESIGN:** the final uploader streams each source archive from the verified ISO and publishes
-it **before** the ISO/manifest under `winapps-open/source-<source sha256>.archive`, in the same dedicated
-bucket and prefix. Original archive names/format and keys are in the notices and receipt. Shared exact
-source is reused by digest across builds; conditional multipart completion never overwrites an existing key.
-Source failure stops object-code publication. Caller-presigned plans must include these exact source keys,
-not just the ISO and manifest. All multipart plans use the same bounded part size (at most 64 MiB). For source
-objects, both `x-amz-meta-image-sha256` and `x-amz-meta-inputs` contain the source digest, so recipes can reuse
-the same source object; the caller must set that metadata when pre-initiating a presigned upload.
-The future download route must provide equivalent source access at no extra
-charge alongside binary access, including for private recipients; a private bucket alone is not that route.
+**DESIGN, not a Worker change:** a person builds private media locally with the same Python script and original
+pinned inputs, then uses a future private Worker-presigned route like SPEC. The future allowlist names are
+winapps-private.iso and winapps-private.manifest.json; credentials and signed URLs must remain on the person's
+machine. The public uploader rejects private receipts and source requests before any network operation.
+No private uploader, Worker allowlist or Worker deployment is implemented here. Other licensed/manual packages
+remain outside both canonical bundle sets; requires: private does not approve their acquisition/distribution.
 
-**OWNER OBLIGATION / DESIGN:** the notices contain our written offer of Corresponding Source, valid for at
-least three years after our last distribution and as long as covered product support/spare parts are offered.
-It offers network access at no charge, or physical media at no more than the reasonable cost of conveying it;
-requests go to the distributor through the repository's issues page. It is **OUR obligation to keep the
-mirrored source available as long as we distribute the binary**, and to honor the offer for its full term.
-Do not expire these objects with binary cleanup, rely only on upstream URLs, or modify GPL object code.
-For designated-place downloads the intended mechanism is equivalent source access under
-[GPLv3 section 6(d)](https://www.gnu.org/licenses/gpl-3.0.html#section6), with this additional written offer;
-the source offer alone is not a substitute for operating the source download route. Read the exact
-[7-Zip distribution terms](https://github.com/ip7z/7zip/blob/26.04/DOC/License.txt) and shipped licences.
-
-**UNVERIFIED / release prerequisite:** a coordinator must run the full build, inspect its legal-text inventory
-(including native dependencies embedded in wheels and Blender), ensure all required Corresponding Source,
-build scripts, exceptions and notices are represented, and complete qualified review of restricted packages
-before public distribution. Merely pinning the main project's source does not establish transitive source
-completeness. No full bundle or live source/binary upload was performed in this lane.
+**CODE READ / public publication:** the protected final step uses only public-bucket scoped environment secrets
+BUNDLE_PUBLIC_R2_ACCESS_KEY_ID / BUNDLE_PUBLIC_R2_SECRET_ACCESS_KEY, public bucket/endpoint variables, and
+BUNDLE_PUBLIC_BASE_URL for the configured HTTPS custom domain. The publisher rejects missing or S3/r2.dev
+bases. The consumer uses KF_WINAPPS_PUBLIC_BASE_URL and the committed pin, downloads the immutable manifest,
+checks the class/pin, downloads the ISO with urllib and verifies all image/file/source identities. Public reads
+carry no run token and have no Worker/private fallback. Publication remains dispatch-only and disabled;
+no secrets, domain, bucket/environment or enable flag were configured by WB1.
 
 ## 4. Verdict rules (guest passes only)
 

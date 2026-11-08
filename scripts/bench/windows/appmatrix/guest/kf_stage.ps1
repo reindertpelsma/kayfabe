@@ -26,7 +26,15 @@ if (Test-Path $bundleTable) { $tab = Read-Json $bundleTable }
 else { $tab = Read-Json 'C:\kf\stage.json' }
 if (-not $tab) { Done $false 'stage.json missing' }
 $def = $tab.$Pkg
-if (-not $def) { Done $false "package $Pkg not in stage.json" }
+# A package may live only on the private disk. Never substitute another package.
+if (-not $def -or -not (Test-Path (Join-Path $cd ('pkg\' + $Pkg)))) {
+    $privateCd = if (Test-Path 'C:\kf\private_cd.txt') { (Get-Content -Raw 'C:\kf\private_cd.txt').Trim() } else { '' }
+    if ($privateCd -and (Test-Path (Join-Path $privateCd 'stage.json'))) {
+        $privateTab = Read-Json (Join-Path $privateCd 'stage.json')
+        if ($privateTab.$Pkg) { $cd = $privateCd; $def = $privateTab.$Pkg }
+    }
+}
+if (-not $def -or -not (Test-Path (Join-Path $cd ('pkg\' + $Pkg)))) { Done $false "missing-private-media:$Pkg" }
 $res.mode = $def.mode
 $src = Join-Path $cd ('pkg\' + $Pkg)
 $dest = Join-Path 'C:\kfapps' $def.dest

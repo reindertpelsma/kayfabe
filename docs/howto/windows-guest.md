@@ -131,6 +131,11 @@ python3 -I scripts/bench/windows/appmatrix/package_bundle.py build --dl download
 python3 -I scripts/bench/windows/appmatrix/package_bundle.py verify-image --out out
 ```
 
+The default is the public bundle. For private media, a person repeats these commands with `--class private`
+and a separate output directory. The private ISO is winapps-private.iso, label KFAPPSP; it is never built or
+uploaded by CI. Keep the corresponding manifest and class-specific pin line with each ISO. The GUI's class
+selector offers the same two choices; private mode refuses CI/run-token/upload-credential environments.
+
 The result is `out/winapps-open.iso`, label `KFAPPS`, with an external file/hash manifest and proposed pin
 line. App installers and archives stay intact on the disk and are extracted inside Windows. The compiler
 archive alone is unpacked on the packaging host. The local builder refuses run-token environments and performs no upload. An owner-approved, credential-free
@@ -146,6 +151,12 @@ choose **Verify** to compare their sizes and SHA-256 values. Keep every archive 
 checks another ISO against a first build's manifest. The GUI workflow and a full cross-host build still need
 operator validation; the automated reproducibility checks use small fixtures.
 <!-- src: scripts/bench/windows/appmatrix/package_bundle_gui.pyw, scripts/bench/windows/appmatrix/tests/test_package_bundle.py -->
+
+Set `KF_WINAPPS_PUBLIC_BASE_URL` to the public bundles custom domain when running the app stage. For apps
+marked `requires: private`, provide `KF_WINAPPS_PRIVATE_ISO` (or `winapps.py --private-iso`). The harness attaches
+both disks read-only and uses K: for KFAPPS and P: for KFAPPSP. Without private media those apps are NOT RUN
+with a missing-private-media reason; a full lane needing them retries as MEDIA. `gate_profiles.py ids public`
+selects the independent public app lane. Private R2 upload support through the Worker is separate future work.
 
 ## Known limits
 

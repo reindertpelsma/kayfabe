@@ -37,11 +37,14 @@ def main():
             if selected:
                 v.set(selected)
         ttk.Button(root, text="Browse", command=browse).grid(row=row, column=2, padx=8)
-    ttk.Label(root, text="Check → Fetch (or copy official downloads manually) → Verify → Build → Verify image").grid(row=4, column=0, columnspan=3, sticky="w", padx=8, pady=8)
-    controls = ttk.Frame(root); controls.grid(row=5, column=0, columnspan=3, sticky="w", padx=8)
+    bundle_class = tk.StringVar(value="public")
+    ttk.Label(root, text="Bundle class").grid(row=4, column=0, sticky="w", padx=8)
+    ttk.Combobox(root, textvariable=bundle_class, values=("public", "private"), state="readonly").grid(row=4, column=1, sticky="w")
+    ttk.Label(root, text="Check → Fetch (or copy official downloads manually) → Verify → Build → Verify image").grid(row=5, column=0, columnspan=3, sticky="w", padx=8, pady=8)
+    controls = ttk.Frame(root); controls.grid(row=6, column=0, columnspan=3, sticky="w", padx=8)
     output = tk.Text(root, wrap="word", state="disabled")
-    output.grid(row=6, column=0, columnspan=3, sticky="nsew", padx=8, pady=8)
-    root.columnconfigure(1, weight=1); root.rowconfigure(6, weight=1)
+    output.grid(row=7, column=0, columnspan=3, sticky="nsew", padx=8, pady=8)
+    root.columnconfigure(1, weight=1); root.rowconfigure(7, weight=1)
     messages = queue.Queue()
     buttons = []
     active = False
@@ -56,7 +59,7 @@ def main():
         active = True
         for b in buttons:
             b.configure(state="disabled")
-        args = [command, "--manifest", fields["Manifest"].get(), "--profiles", fields["Profiles"].get(),
+        args = [command, "--class", bundle_class.get(), "--manifest", fields["Manifest"].get(), "--profiles", fields["Profiles"].get(),
                 "--dl", fields["Downloads"].get(), "--out", fields["Output"].get()]
         args.extend(extra)
         def run():

@@ -26,14 +26,17 @@ sys.path.insert(0, str(HERE))  # sibling modules also work under python -I
 import bundle_iso
 import bundle_compliance
 
-OPEN_PACKAGES = frozenset("cuda_demo_suite python_embed pywheels llama_cuda llama_vulkan qwen_gguf vulkan_rt vkpeak blender clpeak_ocl clpeak_cuda hashcat sevenzip cuda_cudart cuda_cccl vc_redist hf_wheels hf_model cuda_nvrtc".split())
+OPEN_PACKAGES = frozenset("cuda_demo_suite python_embed pywheels llama_cuda llama_vulkan qwen_gguf vulkan_rt vkpeak blender clpeak_ocl clpeak_cuda hashcat sevenzip cuda_cudart cuda_cccl vc_redist hf_wheels hf_model cuda_nvrtc hf_wheels_private".split())
+PUBLIC_PACKAGES = frozenset("python_embed llama_vulkan qwen_gguf hf_model vkpeak blender clpeak_ocl hashcat sevenzip hf_wheels".split())
 STAGE_MODES = frozenset(("unzip", "python_embed", "wheels", "copy", "7z", "msi_admin", "installer"))
 UA = "kayfabe-bundle/1 (+https://github.com/reindertpelsma/kayfabe)"
-BUILDER_VERSION = 3
+BUILDER_VERSION = 4
 
 
-def guard(env=None, allow_ci=False):
+def guard(env=None, allow_ci=False, bundle_class="public"):
     env = os.environ if env is None else env
+    if bundle_class == "private" and ("CI" in env or env.get("GITHUB_ACTIONS") == "true"):
+        raise ValueError("REFUSED: private bundles are person-only, never CI")
     for key in ("CI", "KF_RUN_TOKEN"):
         if key in env and not (key == "CI" and allow_ci):
             raise ValueError(f"REFUSED: {key} is set; packaging is a person's local operation")
@@ -58,14 +61,14 @@ def sha256(path):
     return h.hexdigest()
 
 
-def validate_pin(package, fl):
+def validate_pin(package, fl, image=False):
     try:
         name = fl["name"]
         if len(bundle_iso.valid_path(name)) != 1:
             raise ValueError("filename must be one component")
         if not re.fullmatch(r"[0-9a-f]{64}", fl.get("sha256") or ""):
             raise ValueError("missing/invalid sha256 pin")
-        if type(fl.get("size")) is not int or not 0 < fl["size"] <= bundle_iso.MAX_FILE:
+        if type(fl.get("size")) is not int or not 0 < fl["size"] <= (1 << 50 if image else bundle_iso.MAX_FILE):
             raise ValueError("missing/invalid size pin")
         url = urllib.parse.urlsplit(fl.get("url", ""))
         if url.scheme != "https" or not url.hostname or url.username or url.password or url.fragment:
@@ -74,13 +77,15 @@ def validate_pin(package, fl):
         raise ValueError(f"package {package}: {e}") from e
 
 
-def select_packages(man, profile, only=None, public_only=False):
-    allowed = profile.get("open_packages", [])
+def select_packages(man, profile, only=None, public_only=False, bundle_class="public"):
+    allowed = profile.get("open_packages", []) + profile.get("private_packages", [])
     if not allowed or len(set(allowed)) != len(allowed):
         raise ValueError("open_packages must be nonempty and unique")
     if set(allowed) - OPEN_PACKAGES:
         raise ValueError("forbidden open_packages: " + ",".join(sorted(set(allowed) - OPEN_PACKAGES)))
-    want = list(allowed) if only is None else list(only)
+    target = "public-ok" if bundle_class == "public" else "private-only"
+    defaults = profile.get("open_packages", []) if bundle_class == "public" else profile.get("private_packages", [])
+    want = list(defaults) if only is None else list(only)
     if not want:
         raise ValueError("empty package selection")
     byid = {}
@@ -89,7 +94,7 @@ def select_packages(man, profile, only=None, public_only=False):
             raise ValueError("duplicate package: " + p["id"])
         byid[p["id"]] = p
     selected, active, seen = [], set(), set()
-    def visit(pid):
+    def visit(pid, dependency=False):
         if pid not in allowed or pid not in byid:
             raise ValueError(f"package {pid}: outside open_packages or absent from manifest")
         if pid in active:
@@ -98,6 +103,12 @@ def select_packages(man, profile, only=None, public_only=False):
             return
         active.add(pid)
         p = byid[pid]
+        if bundle_class == "public" and pid not in PUBLIC_PACKAGES:
+            raise ValueError(f"package {pid}: forbidden on public media")
+        if p.get("compliance", {}).get("distribution") != target:
+            if dependency and bundle_class == "private" and p.get("compliance", {}).get("distribution") == "public-ok":
+                active.remove(pid); return  # dependency lives on the mandatory public disk
+            raise ValueError(f"package {pid}: refused by {bundle_class} bundle class")
         if not p.get("license") or not p.get("redistribution"):
             raise ValueError(f"package {pid}: missing licence/redistribution record")
         if p.get("stage", {}).get("mode") not in STAGE_MODES:
@@ -111,13 +122,13 @@ def select_packages(man, profile, only=None, public_only=False):
                 raise ValueError(f"package {pid}: duplicate/case-colliding file")
             names.add(fl["name"].casefold())
         for dep in sorted(p.get("needs", [])):
-            visit(dep)
+            visit(dep, dependency=True)
         active.remove(pid); seen.add(pid); selected.append(p)
     if man.get("schema") != 1:
         raise ValueError("unsupported manifest schema")
     for pid in sorted(want):
         visit(pid)
-    bundle_compliance.validate(selected, validate_pin, public_only)
+    bundle_compliance.validate(selected, validate_pin, bundle_class == "public")
     return selected
 
 
@@ -134,13 +145,13 @@ class _HTTPSRedirect(urllib.request.HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
-def fetch_file(package, fl, destination, retries=4):
+def fetch_file(package, fl, destination, retries=4, image=False):
     """Resume a .part using validated Range responses; promote only verified bytes.
 
     Existing bad cache entries fail closed. Transport/truncation retries use the
     same URL; hash mismatch is terminal. Never rewrite a pin or choose a mirror.
     """
-    validate_pin(package, fl)
+    validate_pin(package, fl, image=image)
     dest = Path(destination)
     if dest.exists() or dest.is_symlink():
         verify_file(package, fl, dest)
@@ -236,7 +247,7 @@ def iso_input_hash(packages, toolchain, open_packages, root=HERE):
     import bundle_tools
     root = Path(root)
     contents = repo_files(root)
-    for name in ("package_bundle.py", "bundle_iso.py", "bundle_tools.py", "bundle_compliance.py"):
+    for name in ("package_bundle.py", "bundle_iso.py", "bundle_tools.py", "bundle_compliance.py", "bundle_wheels.py"):
         contents["recipe/" + name] = (root / name).read_bytes().replace(b"\r\n", b"\n")
     for name in bundle_tools.SOURCES:
         contents["source/" + name] = (root.parents[3] / name).read_bytes().replace(b"\r\n", b"\n")
@@ -246,23 +257,31 @@ def iso_input_hash(packages, toolchain, open_packages, root=HERE):
     return hashlib.sha256(canonical(record)).hexdigest()
 
 
-def input_hash(man, profile, root=HERE):
+def input_hash(man, profile, root=HERE, bundle_class="public"):
     import bundle_tools
-    packages = select_packages(man, profile)
+    packages = select_packages(man, profile, bundle_class=bundle_class)
     toolchain = bundle_tools.check_toolchain(man.get("bundle_toolchain", {}))
     return iso_input_hash(packages, toolchain, profile["open_packages"], root)
 
 
-def pin_text(image_sha, inputs):
+def pin_text(image_sha, inputs, bundle_class="public"):
+    filename = "winapps-open.iso" if bundle_class == "public" else "winapps-private.iso"
     if not all(re.fullmatch(r"[0-9a-f]{64}", x) for x in (image_sha, inputs)):
         raise ValueError("invalid pin digest")
-    return (f"winapps-open.iso sha256={image_sha}\n# inputs={inputs}\n"
-            f"# iso_key=winapps-open/kfapps-{image_sha}.iso\n"
-            f"# manifest_key=winapps-open/manifest-{image_sha}.json\n")
+    return (f"{filename} sha256={image_sha}\n# inputs={inputs}\n" +
+            (f"# iso_key=winapps-open/kfapps-{image_sha}.iso\n"
+             f"# manifest_key=winapps-open/manifest-{image_sha}.json\n" if bundle_class == "public" else "# PRIVATE: person-only; never use the public publisher\n"))
 
 
-def build_image(packages, downloads, tools, output, toolchain, root=HERE, probe_receipt=None, open_packages=None):
+def build_image(packages, downloads, tools, output, toolchain, root=HERE, probe_receipt=None, open_packages=None, bundle_class="public"):
     """Assemble already pinned inputs. Compiler/upload/network are outside this function."""
+    bundle_compliance.validate(packages, validate_pin, bundle_class == "public")
+    if bundle_class not in ("public", "private") or any(p["compliance"]["distribution"] != ("public-ok" if bundle_class == "public" else "private-only") for p in packages):
+        raise ValueError("package crosses bundle class boundary")
+    if bundle_class == "public" and any(p["id"] not in PUBLIC_PACKAGES for p in packages):
+        raise ValueError("forbidden package on public media")
+    basename = "winapps-open" if bundle_class == "public" else "winapps-private"
+    label = "KFAPPS" if bundle_class == "public" else "KFAPPSP"
     output = Path(output)
     output.mkdir(parents=True, exist_ok=True)
     files = package_files(packages, downloads)
@@ -280,7 +299,7 @@ def build_image(packages, downloads, tools, output, toolchain, root=HERE, probe_
     files["stage.json"] = canonical(stage_table(packages))
     # No wall clock, host paths, Python version or host-specific toolchain selection in ISO.
     inputs = iso_input_hash(packages, toolchain, open_packages if open_packages is not None else [p["id"] for p in packages], root)
-    files["bundle.inputs.json"] = canonical(dict(schema=1, inputs=inputs, packages=packages, toolchain=toolchain))
+    files["bundle.inputs.json"] = canonical(dict(schema=1, inputs=inputs, packages=packages, toolchain=toolchain, bundle_class=bundle_class))
     for name, source in files.items():
         if name not in expected:
             expected[name] = dict(sha256=hashlib.sha256(source).hexdigest(), size=len(source)) if isinstance(source, bytes) else dict(sha256=sha256(source), size=source.stat().st_size)
@@ -290,28 +309,30 @@ def build_image(packages, downloads, tools, output, toolchain, root=HERE, probe_
     files["KFAPPS.ID"] = (ident + "\n").encode("ascii")
     expected["KFAPPS.ID"] = dict(sha256=hashlib.sha256(files["KFAPPS.ID"]).hexdigest(), size=len(files["KFAPPS.ID"]))
     expected["KFAPPS.ID"]["licenses"] = bundle_compliance.REPO_LICENSE
-    iso = output / "winapps-open.iso"
-    temp = output / "winapps-open.pending.iso"
+    iso = output / (basename + ".iso")
+    temp = output / (basename + ".pending.iso")
     try:
-        actual = bundle_iso.write_image(files, temp)
+        actual = bundle_iso.write_image(files, temp, label=label)
         # Compare hashes of bytes actually copied, catching source races/corruption.
         if any(actual[k] != {field: v[field] for field in ("sha256", "size")} for k, v in expected.items()):
             raise ValueError("input changed during image assembly")
-        receipt = dict(schema=1, inputs=inputs, packages=packages, files=expected, sources=sources,
-            image=dict(file=iso.name, label="KFAPPS", format="iso9660+joliet", identity=ident,
+        receipt = dict(schema=1, inputs=inputs, packages=packages, files=expected, sources=sources, bundle_class=bundle_class,
+            image=dict(file=iso.name, label=label, format="iso9660+joliet", identity=ident,
                        size=temp.stat().st_size, sha256=sha256(temp)),
             toolchain=toolchain, packaging_utc=datetime.datetime.now(datetime.timezone.utc).isoformat(),
             python_version=sys.version, writer="bundle_iso.py/v1", guest_root="C:\\kfapps")
         receipt["recipe_sha256"] = {name: hashlib.sha256((HERE / name).read_bytes().replace(b"\r\n", b"\n")).hexdigest()
-                                     for name in ("package_bundle.py", "bundle_iso.py", "bundle_tools.py", "bundle_compliance.py")}
+                                     for name in ("package_bundle.py", "bundle_iso.py", "bundle_tools.py", "bundle_compliance.py", "bundle_wheels.py")}
         if probe_receipt is not None:
             receipt["probe_build"] = probe_receipt
         verify_image(temp, receipt)
         os.replace(temp, iso)
     finally:
         temp.unlink(missing_ok=True)
-    (output / "winapps-open.manifest.json").write_bytes(canonical(receipt))
-    (output / "bundle.pin.line").write_bytes(pin_text(receipt["image"]["sha256"], inputs).encode("ascii"))
+    (output / (basename + ".manifest.json")).write_bytes(canonical(receipt))
+    pin_line = pin_text(receipt["image"]["sha256"], inputs, bundle_class).encode("ascii")
+    (output / (basename + ".pin.line")).write_bytes(pin_line)
+    if bundle_class == "public": (output / "bundle.pin.line").write_bytes(pin_line)
     return receipt
 
 
@@ -321,7 +342,12 @@ def verify_image(iso, receipt, public_only=False):
     expected = receipt["files"]
     if not expected or receipt["image"]["identity"] != identity(expected):
         raise ValueError("image identity mismatch")
+    bundle_class = receipt.get("bundle_class")
+    if bundle_class not in ("public", "private") or (public_only and bundle_class != "public"):
+        raise ValueError("invalid or private bundle class")
     with bundle_iso.Reader(iso) as r:
+        if r.label != receipt["image"]["label"] or r.label != ("KFAPPS" if bundle_class == "public" else "KFAPPSP"):
+            raise ValueError("bundle class/label mismatch")
         if "KFAPPS.ID" not in expected or set(r.files) != set(expected):
             raise ValueError("image file list mismatch")
         got = r.records()
@@ -336,22 +362,25 @@ def verify_image(iso, receipt, public_only=False):
         embedded = json.loads(b"".join(r.chunks("bundle.inputs.json")))
         if receipt.get("inputs") != embedded.get("inputs"):
             raise ValueError("ISO input hash mismatch")
-        if receipt["packages"] != embedded["packages"] or receipt["toolchain"] != embedded["toolchain"]:
+        if receipt["packages"] != embedded["packages"] or receipt["toolchain"] != embedded["toolchain"] or bundle_class != embedded.get("bundle_class"):
             raise ValueError("ISO package/toolchain record mismatch")
-        bundle_compliance.validate(receipt["packages"], validate_pin, public_only)
-        source_records = [dict(package=p["id"], path=f"SOURCE/{p['id']}/{s['name']}", key=bundle_compliance.source_key(s), **s)
+        bundle_compliance.validate(receipt["packages"], validate_pin, public_only or bundle_class == "public")
+        if any(p["compliance"]["distribution"] != ("public-ok" if bundle_class == "public" else "private-only") for p in receipt["packages"]):
+            raise ValueError("receipt crosses bundle class boundary")
+        source_records = [dict(package=p["id"], path=f"SOURCE/{p['id']}/{s['name']}", key=bundle_compliance.source_key(s, bundle_class), **s)
                           for p in sorted(embedded["packages"], key=lambda p: p["id"]) for s in p["compliance"]["sources"]]
         if receipt.get("sources") != source_records:
             raise ValueError("source mirror coverage mismatch")
         for source in receipt.get("sources", []):
             if (source["path"] not in expected or source["sha256"] != expected[source["path"]]["sha256"] or
-                    source["size"] != expected[source["path"]]["size"] or source["key"] != bundle_compliance.source_key(source)):
+                    source["size"] != expected[source["path"]]["size"] or source["key"] != bundle_compliance.source_key(source, bundle_class)):
                 raise ValueError("source mirror receipt mismatch")
 
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("command", choices=("check", "fetch", "build", "verify", "verify-image", "layout", "input-hash"))
+    ap.add_argument("--class", dest="bundle_class", choices=("public", "private"), default="public", help="public (default) or person-only private media")
     ap.add_argument("--ci-build", action="store_true", help="explicit credential-free CI build (KF_RUN_TOKEN still forbidden)")
     ap.add_argument("--manifest", type=Path, default=HERE / "manifest.json")
     ap.add_argument("--profiles", type=Path, default=HERE / "gate_profiles.json")
@@ -363,21 +392,26 @@ def main(argv=None):
     ap.add_argument("--receipt", type=Path, help="build receipt for verify-image")
     args = ap.parse_args(argv)
     try:
-        guard(allow_ci=args.ci_build or args.command == "input-hash")
+        if args.public_only and args.bundle_class != "public":
+            raise ValueError("--public-only is a compatibility alias for --class public")
+        guard(allow_ci=args.ci_build or args.command == "input-hash", bundle_class=args.bundle_class)
         if args.command == "input-hash":
             man, profile = load(args.manifest), load(args.profiles)
-            packages = select_packages(man, profile, args.only.split(",") if args.only is not None else None, args.public_only)
+            packages = select_packages(man, profile, args.only.split(",") if args.only is not None else None, args.public_only, args.bundle_class)
             import bundle_tools
             print("inputs=" + iso_input_hash(packages, bundle_tools.check_toolchain(man.get("bundle_toolchain", {})), profile["open_packages"]))
             return 0
+        basename = "winapps-open" if args.bundle_class == "public" else "winapps-private"
         # A single HTTPS-only opener prevents redirect downgrade, while keeping
         # the urllib call easy to fake in offline tests.
         urllib.request.install_opener(urllib.request.build_opener(_HTTPSRedirect()))
         if args.command == "verify-image":
-            verify_image(args.iso or args.out / "winapps-open.iso", load(args.receipt or args.out / "winapps-open.manifest.json"), args.public_only)
+            receipt = load(args.receipt or args.out / (basename + ".manifest.json"))
+            if receipt.get("bundle_class") != args.bundle_class: raise ValueError("requested/receipt class differs")
+            verify_image(args.iso or args.out / (basename + ".iso"), receipt, args.public_only)
         else:
             man, profile = load(args.manifest), load(args.profiles)
-            packages = select_packages(man, profile, args.only.split(",") if args.only is not None else None, args.public_only)
+            packages = select_packages(man, profile, args.only.split(",") if args.only is not None else None, args.public_only, args.bundle_class)
             import bundle_tools
             toolchain = bundle_tools.check_toolchain(man.get("bundle_toolchain", {}))
             if args.command == "layout":
@@ -413,7 +447,7 @@ def main(argv=None):
                     tools = bundle_tools.build_tools(toolchain, archive, args.out / "build")
                     receipt = build_image(packages, args.dl, tools, args.out, toolchain,
                                           probe_receipt=load(args.out / "build" / "tools.receipt.json"),
-                                          open_packages=profile["open_packages"])
+                                          open_packages=profile["open_packages"], bundle_class=args.bundle_class)
                     print("BUILD_DONE sha256=" + receipt["image"]["sha256"] + " identity=" + receipt["image"]["identity"])
         print(args.command.upper().replace("-", "_") + "_OK")
         return 0

@@ -34,6 +34,14 @@ DEFAULT_PART = 64 * 1024**2
 MAX_PART = 5 * 1024**3
 
 
+def public_base(env):
+    base = env.get("BUNDLE_PUBLIC_BASE_URL", "")
+    host = (urllib.parse.urlsplit(base).hostname or "").lower()
+    if not C.https(base) or "?" in base or host.endswith((".r2.dev", ".r2.cloudflarestorage.com")):
+        raise ValueError("a public bundles custom domain must be configured")
+    return base.rstrip("/")
+
+
 class PublishError(ValueError):
     """Safe diagnostic, never containing provider bodies, keys or signed URLs."""
 
@@ -280,6 +288,7 @@ def multipart(store, path, key, digest, inputs, state_path, part_size=DEFAULT_PA
 
 
 def publish(store, iso, receipt, state_path, part_size=DEFAULT_PART):
+    require_public(receipt)
     digest, inputs = receipt["image"]["sha256"], receipt["inputs"]
     if not re.fullmatch(r"[0-9a-f]{64}", inputs): raise ValueError("invalid input digest")
     iso_key, manifest_key = keys(digest)
@@ -313,6 +322,7 @@ def publish_sources(store, iso, receipt, state_path, part_size):
     Only resume IDs/hashes are persisted. The existing multipart code handles
     arbitrarily large source archives with the same bounded memory as the ISO.
     """
+    require_public(receipt)
     expected = [dict(package=p["id"], path=f"SOURCE/{p['id']}/{s['name']}", key=C.source_key(s), **s)
                 for p in sorted(receipt["packages"], key=lambda p: p["id"]) for s in p["compliance"]["sources"]]
     if receipt.get("sources") != expected: raise PublishError("source mirror coverage mismatch")
@@ -331,6 +341,11 @@ def publish_sources(store, iso, receipt, state_path, part_size):
             path.unlink(); done.add(key)
 
 
+def require_public(receipt):
+    if receipt.get("bundle_class") != "public" or any(p["id"] not in B.PUBLIC_PACKAGES or p["compliance"]["distribution"] != "public-ok" for p in receipt["packages"]):
+        raise PublishError("private media is forbidden in the public publisher")
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--out", type=Path, required=True)
@@ -338,6 +353,7 @@ def main(argv=None):
     a = ap.parse_args(argv)
     try:
         guard_publish(os.environ)
+        public_base(os.environ)
         receipt = B.load(a.out / "winapps-open.manifest.json")
         expected = B.input_hash(B.load(HERE / "manifest.json"), B.load(HERE / "gate_profiles.json"))
         if receipt.get("inputs") != expected: raise PublishError("receipt does not match the reviewed checkout inputs")

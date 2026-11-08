@@ -249,6 +249,9 @@ class BrokerVm(Vm):
     def attach_disk(self, iso):
         return self._qmp().attach_cdrom(iso)
 
+    def attach_private_disk(self, iso):
+        return self._qmp().attach_cdrom(iso, node="kfprivate_node", bus_id="kfprivatebot", dev_id="kfprivatecd")
+
     def detach_disk(self):
         self._qmp().detach_cdrom()
 
@@ -270,8 +273,9 @@ class WinVmVm(Vm):
     (WINVM_APPS_ISO; no hot-plug), and ssh instead of the guest agent (sshguest.py). Every guest is a new overlay of the
     same parent, so a fresh guest after a TDR or a bugcheck is clean. The gate's overlay is read-only for as
     long as children exist (the caller seals it)."""
-    def __init__(self, winvm, root, name, parent, iso, flags, guest_driver, arm, log, prefix="apps", ssh_port=2224, user="kf", boot_wait=420):
+    def __init__(self, winvm, root, name, parent, iso, flags, guest_driver, arm, log, prefix="apps", ssh_port=2224, user="kf", boot_wait=420, private_iso=None):
         self.winvm, self.root, self.name, self.parent, self.iso = winvm, root, name, parent, iso
+        self.private_iso = private_iso
         self.flags, self.gdrv, self.arm, self.log = flags, guest_driver, arm, log
         self.prefix, self.port, self.user, self.boot_wait = prefix, ssh_port, user, boot_wait
         self.vm = os.path.join(root, name)
@@ -282,7 +286,7 @@ class WinVmVm(Vm):
 
     def _env(self):
         return dict(os.environ, WINVM_ROOT=self.root, WINVM_NAME=self.name, WINVM_SSH_PORT=str(self.port), WINVM_OVERLAY_BACKING=self.parent,
-                    WINVM_APPS_ISO=self.iso, WINVM_LOCK_WAIT_S=os.environ.get("WINVM_LOCK_WAIT_S", "120"), WINVM_VM_IDENTITY="1")
+                    WINVM_APPS_ISO=self.iso, WINVM_PRIVATE_APPS_ISO=self.private_iso or "", WINVM_LOCK_WAIT_S=os.environ.get("WINVM_LOCK_WAIT_S", "120"), WINVM_VM_IDENTITY="1")
 
     def run_dir(self):
         return os.path.join(self.vm, "logs")
@@ -393,6 +397,10 @@ class WinVmVm(Vm):
             return True
         return False
 
+    def attach_private_disk(self, iso):
+        if iso != self.private_iso: raise RuntimeError("private disk changed after boot")
+        return "pre-attached-private-readonly"
+
     def attach_disk(self, iso):
         return "at launch (WINVM_APPS_ISO, AHCI cd-rom)"
 
@@ -421,7 +429,7 @@ class Cfg:
     def __init__(self, **kw):
         self.__dict__.update(dict(
             poll_s=3.0, slack_s=90, boot_timeout=900, signin_delay=30, session_timeout=300, max_tdr=3, per_guest=8, recover_wait=180,
-            stage_timeout=1800, user="vast", password=None, iso=None, image_identity=None, override_dir="", tier=1, screenshots=True, sample_s=2,
+            stage_timeout=1800, user="vast", password=None, iso=None, private_iso=None, image_identity=None, override_dir="", tier=1, screenshots=True, sample_s=2,
             max_guests=200, max_boot_failures=3, io_timeout=10.0, ping_s=5.0, time_scale=1.0, deadline=None), **kw)
 
 
@@ -431,6 +439,8 @@ class GuestSession:
         self.sleep, self.now = sleep, now
         self.q = None
         self.cd = None
+        self.private_cd = None
+        self.private_attached = False
         self.boot_utc = None
         self.start_utc = None
         self.tdr_total = 0
@@ -465,6 +475,12 @@ class GuestSession:
         self._push()
         how = self.vm.attach_disk(c.iso)
         self.log(f"[{self.tag}] app disk attached ({how})")
+        if c.private_iso:
+            try:
+                self.vm.attach_private_disk(c.private_iso)
+                self.private_attached = True
+            except (OSError, qgamod.QgaError):
+                self.log(f"[{self.tag}] private media unavailable; required apps will be NOTRUN")
         self._setup()
         h = self.health()
         self.boot_utc = h.get("boot_utc")
@@ -547,17 +563,19 @@ class GuestSession:
 
     def _setup(self):
         for attempt in (1, 2, 3):
-            r = self.q.powershell(r"C:\kf\kf_guest_setup.ps1", ["-ExpectedIdentity", self.cfg.image_identity or ""], timeout=300)
+            setup_args = ["-ExpectedIdentity", self.cfg.image_identity or ""]
+            if self.cfg.private_iso: setup_args.append("-ExpectPrivate")
+            r = self.q.powershell(r"C:\kf\kf_guest_setup.ps1", setup_args, timeout=300)
             info = parse_marker(r.text(), "KFSETUP") or {}
             with open(os.path.join(self.dir, "setup.json"), "w") as f:
                 json.dump(info, f, indent=1)
             if info.get("ok"):
                 self.cd = info["cd"]
+                self.private_cd = info.get("private_cd") if self.private_attached else None
                 if info.get("notes"):
                     self.log(f"[{self.tag}] setup notes: {info['notes']}")
                 self.log(f"[{self.tag}] setup ok: cd={self.cd} nvidia_adapters={info.get('nvidia_adapters')} {info.get('smi', '')}")
                 self._override_tools()
-                self._stage(["vc_redist"])
                 return
             self.log(f"[{self.tag}] setup attempt {attempt} not ok: cd={info.get('cd')} nvidia_adapters={info.get('nvidia_adapters')} notes={info.get('notes')}")
             self.sleep(20)
@@ -633,7 +651,10 @@ class GuestSession:
         g0 = self.vm.gsp_cycles()
         t0 = self.now()
         try:
-            self._stage(list(app.get("pkgs") or []))
+            if app.get("requires") == "private" and (not self.private_attached or not self.private_cd):
+                raise StageFailure("private", "missing-private-media:KFAPPSP")
+            if app.get("requires") == "private": self._stage(["vc_redist"])
+            self._stage(list(app.get("pkgs") or []) + list(app.get("private_pkgs") or []))
         except StageFailure as e:
             d = V.decide(app, {"notrun": f"stage-failed:{e.pkg}:{e.detail}"[:120]}, "")
             return self._finish(app, d, "", {}, g0, need_restart="")
@@ -905,6 +926,7 @@ def main(argv=None):
     ap.add_argument("--exclude", default="")
     ap.add_argument("--manifest", default=os.path.join(HERE, "manifest.json"))
     ap.add_argument("--apps-json", default=os.path.join(HERE, "apps.json"))
+    ap.add_argument("--private-iso", help="optional person-built private disk (KFAPPSP), read-only")
     ap.add_argument("--iso", help="the app disk image (kfapps.iso) to hot-plug")
     ap.add_argument("--override-dir", default="", help="replace image tools with local *.exe, verify guest SHA256 and record hashes")
     ap.add_argument("--image-manifest", help="manifest.json written next to the image by build_appdisk.sh (gives the image identity)")
@@ -942,15 +964,19 @@ def main(argv=None):
         return 0
     os.makedirs(a.run_dir, exist_ok=True)
     log = Log(os.path.join(a.run_dir, "session.log"))
+    if a.private_iso and a.vm != "mock" and not os.path.isfile(a.private_iso):
+        log("PRIVATE_MEDIA unavailable; required apps will be NOTRUN")
+        a.private_iso = None
     ident = None
     if a.image_manifest and os.path.exists(a.image_manifest):
         ident = json.load(open(a.image_manifest)).get("image", {}).get("identity")
-    cfg = Cfg(iso=a.iso, image_identity=ident, per_guest=a.per_guest, max_tdr=a.max_tdr, tier=a.tier, password=os.environ.get("KF_GUEST_PW"),
+    cfg = Cfg(iso=a.iso, private_iso=a.private_iso, image_identity=ident, per_guest=a.per_guest, max_tdr=a.max_tdr, tier=a.tier, password=os.environ.get("KF_GUEST_PW"),
               user=os.environ.get("KF_GUEST_USER", "vast"), override_dir=a.override_dir, deadline=a.deadline_epoch or None)
     sleep, now = time.sleep, time.time
     if a.vm == "mock":
         import mock_guest
         scen = json.load(open(a.mock_scenario)) if a.mock_scenario else {}
+        cfg.private_iso = "mock-private.iso" if scen.get("_private_media", True) else None
         if a.fast:
             cfg.poll_s, cfg.signin_delay, cfg.recover_wait, cfg.boot_timeout, cfg.slack_s, cfg.session_timeout = 0.01, 0, 1.0, 20, 2, 20
             cfg.io_timeout, cfg.ping_s, cfg.time_scale = 0.4, 0.4, 0.01
@@ -966,7 +992,7 @@ def main(argv=None):
             raise SystemExit("vm winvm signs in by autologon: unset KF_GUEST_PW (no password is passed through the harness)")
         cfg.boot_timeout, cfg.ping_s, cfg.io_timeout, cfg.session_timeout, cfg.recover_wait = 1500, 30.0, 30.0, 600, 300
         shared = WinVmVm(a.winvm_script, a.winvm_root, a.winvm_name, a.parent_overlay, a.iso, a.flags_file, a.guest_driver, a.arm, log,
-                         ssh_port=a.ssh_port, user=os.environ.get("KF_GUEST_USER", "kf"))
+                         ssh_port=a.ssh_port, user=os.environ.get("KF_GUEST_USER", "kf"), private_iso=a.private_iso)
         vm_factory = lambda: shared
     else:
         broker = a.broker or next((p for p in (os.path.join(HERE, "..", "windows_broker_prod2.sh"), os.path.join(HERE, "..", "windows_broker.sh"),

@@ -47,11 +47,15 @@ class Rules(unittest.TestCase):
 
     def test_public_refuses_private(self):
         p = package(); p["compliance"].update(distribution="private-only", conditions=["Review CUDA EULA"])
-        with self.assertRaisesRegex(ValueError, "public-only"): self.validate(p, True)
+        with self.assertRaises(ValueError): self.validate(p, True)
 
-    def test_public_refuses_conditions(self):
+    def test_public_inventory_rejects_private_member(self):
+        a=package();b=package();b['id']='python_embed';b['compliance'].update(distribution='private-only',conditions=['private'])
+        with self.assertRaises(ValueError):C.validate([a,b],B.validate_pin,True)
+
+    def test_removed_conditions_class_refused(self):
         p = package(); p["compliance"].update(distribution="conditions", conditions=["Retain runtime terms"])
-        with self.assertRaisesRegex(ValueError, "public-only"): self.validate(p, True)
+        with self.assertRaises(ValueError): self.validate(p, True)
 
     def test_unknown_distribution_refused(self):
         p = package(); p["compliance"]["distribution"] = "probably-ok"
@@ -102,10 +106,10 @@ class Rules(unittest.TestCase):
         for pid in ("cuda_demo_suite", "cuda_cudart", "cuda_nvrtc", "pywheels"):
             self.assertEqual(byid[pid]["compliance"]["distribution"], "private-only")
 
-    def test_committed_terms_are_conditions(self):
+    def test_committed_conditional_terms_are_private(self):
         byid = {p["id"]: p for p in H.load_manifest()["packages"]}
         for pid in ("vulkan_rt", "vc_redist"):
-            self.assertEqual(byid[pid]["compliance"]["distribution"], "conditions")
+            self.assertEqual(byid[pid]["compliance"]["distribution"], "private-only")
 
     def test_missing_id_refused(self):
         p = package(); p["compliance"]["license_id"] = ""
@@ -115,15 +119,15 @@ class Rules(unittest.TestCase):
         p = package(); p["compliance"]["upstream"] = "http://upstream.invalid/project"
         with self.assertRaises(ValueError): self.validate(p)
 
-    def test_default_public_cli_refuses_closed_packages(self):
+    def test_default_public_cli_selects_only_public_packages(self):
         from unittest.mock import patch
         with patch.dict(os.environ, {}, clear=True), patch("sys.stderr", new_callable=io.StringIO):
-            self.assertEqual(B.main(["check", "--public-only"]), 1)
+            self.assertEqual(B.main(["check", "--class", "public"]), 0)
 
-    def test_public_input_hash_also_refuses_closed_packages(self):
+    def test_public_input_hash_selects_public_packages(self):
         from unittest.mock import patch
         with patch.dict(os.environ, {}, clear=True), patch("sys.stderr", new_callable=io.StringIO):
-            self.assertEqual(B.main(["input-hash", "--public-only"]), 1)
+            self.assertEqual(B.main(["input-hash", "--class", "public"]), 0)
 
     def test_compliance_recipe_is_hashed(self):
         from unittest.mock import patch
@@ -150,7 +154,7 @@ class Rules(unittest.TestCase):
         from unittest.mock import patch
         m, profile = H.load_manifest(), B.load(Path(H.AM) / "gate_profiles.json")
         admitted = CI.disk_budget(m, profile)
-        next(p for p in m["packages"] if p["id"] == "vc_redist")["compliance"]["license_inputs"][0]["size"] += 1
+        next(p for p in m["packages"] if p["id"] == "qwen_gguf")["compliance"]["license_inputs"][0]["size"] += 1
         with patch.object(CI.shutil, "disk_usage", return_value=type("Disk", (), {"free": admitted})()):
             with self.assertRaises(ValueError): CI.check_disk(".", CI.disk_budget(m, profile))
 
@@ -371,8 +375,8 @@ class Artifacts(unittest.TestCase):
 
     def test_public_verify_refuses_private_receipt(self):
         self.p["compliance"].update(distribution="private-only", conditions=["Review needed"])
-        receipt = B.build_image([self.p], self.cache, {}, self.root / "out", {})
-        with self.assertRaises(ValueError): B.verify_image(self.root / "out/winapps-open.iso", receipt, True)
+        receipt = B.build_image([self.p], self.cache, {}, self.root / "out", {}, bundle_class="private")
+        with self.assertRaises(ValueError): B.verify_image(self.root / "out/winapps-private.iso", receipt, True)
 
     def build_source(self):
         self.source()

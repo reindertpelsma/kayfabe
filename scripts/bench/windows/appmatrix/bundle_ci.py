@@ -68,7 +68,7 @@ def build_twice(root, expected_inputs, pin, verify=False):
     if root.exists(): raise ValueError("CI workspace must be fresh")
     root.mkdir(parents=True)
     check_disk(root, disk_budget(man, profile))
-    args = ["--ci-build", "--dl", str(root / "downloads")]
+    args = ["--ci-build", "--class", "public", "--dl", str(root / "downloads")]
     if B.main(["fetch", *args]): raise ValueError("pinned fetch failed")
     receipts = []
     old_mask = os.umask(0o022)

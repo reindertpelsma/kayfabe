@@ -105,8 +105,8 @@ class PackagingScript(unittest.TestCase):
             self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
             self.assertIn("LAYOUT_OK", r.stdout)
             ids = {l.split("/")[1] for l in r.stdout.splitlines() if l.startswith("pkg/")}
-            self.assertTrue({"python_embed", "pywheels", "cuda_demo_suite"} <= ids)
-            self.assertFalse(ids & set(self.NEVER), ids & set(self.NEVER))
+            self.assertTrue({"python_embed", "blender", "sevenzip"} <= ids)
+            self.assertFalse(ids & (set(self.NEVER) | {"pywheels", "cuda_demo_suite", "vc_redist", "vulkan_rt"}))
             self.assertEqual(os.listdir(d), [])                       # nothing was created: no download, no build
 
     def test_it_is_a_persons_one_time_step_not_ci_and_not_a_box(self):

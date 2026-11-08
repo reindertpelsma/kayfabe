@@ -16,7 +16,7 @@ import zipfile
 
 MAX_TEXT = 4 * 1024**2
 MAX_TOTAL = 64 * 1024**2
-CLASSES = frozenset(("public-ok", "conditions", "private-only"))
+CLASSES = frozenset(("public-ok", "private-only"))
 REPO_LICENSE = [dict(package="kayfabe", id="Apache-2.0 OR GPL-2.0-or-later",
                      upstream="https://github.com/reindertpelsma/kayfabe",
                      distribution="public-ok", conditions=[], sources=[])]
@@ -26,9 +26,9 @@ TOOL_LICENSE = REPO_LICENSE + [dict(package="zig-runtime", version="0.13.0",
     notices="LICENSES/zig/ (exact pinned compiler release notices)")]
 
 
-def source_key(pin):
+def source_key(pin, bundle_class="public"):
     if not re.fullmatch(r"[0-9a-f]{64}", pin["sha256"]): raise ValueError("invalid source digest")
-    return "winapps-open/source-" + pin["sha256"] + ".archive"
+    return ("winapps-open/" if bundle_class == "public" else "winapps-private/") + "source-" + pin["sha256"] + ".archive"
 
 
 def inputs(packages):
@@ -98,6 +98,11 @@ def validate(packages, validate_pin, public_only=False):
             for name, component in components.items():
                 if not component.get("version") or not component.get("license_id") or not https(component.get("upstream", "")):
                     raise ValueError(f"package {pid}/{name}: incomplete wheel compliance")
+            if c["distribution"] == "public-ok":
+                import bundle_wheels
+                for fl in p["files"]:
+                    if not bundle_wheels.permissive(components[fl["name"]]["license_id"]) or fl.get("public_audit", {}).get("archive_sha256") != fl["sha256"]:
+                        raise ValueError(f"package {pid}: public wheel needs a reviewed permissive/content audit")
 
 
 def legal_name(name):
@@ -149,7 +154,7 @@ def licenses(p, filename=None):
     return [dict(package=p["id"], component=filename, version=component.get("version", p["version"]),
                  id=component.get("license_id", c["license_id"]), upstream=component.get("upstream", c["upstream"]),
                  distribution=c["distribution"], conditions=c["conditions"],
-                 sources=[dict(version=s["version"], url=s["url"], sha256=s["sha256"], key=source_key(s)) for s in c["sources"]])]
+                 sources=[dict(version=s["version"], url=s["url"], sha256=s["sha256"], key=source_key(s, "public" if c["distribution"] == "public-ok" else "private")) for s in c["sources"]])]
 
 
 def stage(packages, downloads):
@@ -194,11 +199,14 @@ def stage(packages, downloads):
         for fl in p["files"]:
             path = Path(downloads) / pid / fl["name"]
             B.verify_file(pid, fl, path)
+            if fl["name"].endswith(".whl") and c["distribution"] == "public-ok":
+                import bundle_wheels
+                bundle_wheels.verify(path, fl, c["components"][fl["name"]])
             meta[f"pkg/{pid}/{fl['name']}"] = licenses(p, fl["name"])
         for fl in c["sources"]:
             path = cached[fl["name"]]; target = f"SOURCE/{pid}/{fl['name']}"
             files[target] = path; meta[target] = licenses(p)
-            sources.append(dict(package=pid, path=target, key=source_key(fl), **fl))
+            sources.append(dict(package=pid, path=target, key=source_key(fl, "public" if c["distribution"] == "public-ok" else "private"), **fl))
         for name, rule in sorted(c["license_rules"].items()):
             kind = rule["kind"]; fl = original[name]; count = 0
             if kind == "zip":
@@ -226,7 +234,7 @@ def stage(packages, downloads):
         for src in c["sources"]:
             notices.extend([f"SOURCE exact version: {src['version']}", "SOURCE upstream: " + src["url"],
                 "SOURCE sha256: " + src["sha256"], f"SOURCE on ISO: SOURCE/{pid}/{src['name']}",
-                "SOURCE mirror next to ISO: " + source_key(src)])
+                "SOURCE mirror next to ISO: " + source_key(src, "public" if c["distribution"] == "public-ok" else "private")])
         notices.append("")
     files["LICENSES/index.json"] = B.canonical(sorted(index, key=lambda x: (x["package"], x["covers"], x["original"])))
     files["THIRD_PARTY_NOTICES.txt"] = ("\n".join(notices) + "\n").encode("utf-8")

@@ -29,7 +29,7 @@ class Inputs(unittest.TestCase):
 
     def test_pin_change_invalidates(self):
         before = B.input_hash(self.man, self.prof)
-        self.man["packages"][0]["files"][0]["sha256"] = "0" * 64
+        next(p for p in self.man["packages"] if p["id"] == "python_embed")["files"][0]["sha256"] = "0" * 64
         self.assertNotEqual(before, B.input_hash(self.man, self.prof))
 
     def test_toolchain_change_invalidates(self):
@@ -551,7 +551,7 @@ class Workflow(unittest.TestCase):
 
     def test_publisher_protected_master_and_flag(self):
         job = self.text.split("\n  build-and-publish:\n", 1)[1].split("    steps:", 1)[0]
-        for phrase in ("vars.BUNDLE_PUBLISH_ENABLED == 'true'", "refs/heads/master", "github.event_name == 'push'", "github.event_name == 'workflow_dispatch'", "environment: bundle-publish-master"):
+        for phrase in ("vars.BUNDLE_PUBLISH_ENABLED == 'true'", "refs/heads/master", "github.event_name == 'push'", "github.event_name == 'workflow_dispatch'", "environment: bundle-publish-public-master"):
             self.assertIn(phrase, job)
 
     def test_actions_pinned_and_minimal_permissions(self):

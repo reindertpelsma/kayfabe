@@ -3,16 +3,47 @@
 # check its identity, create the working directories, enumerate the DXGI adapters (C:\kf\adapters.json,
 # the LUID of the NVIDIA adapter is what the GPU-use proof compares against), make the session usable
 # for unattended runs (no sleep, no screen saver, Defender exclusions) and print one `KFSETUP {json}` line.
-param([string]$ExpectedIdentity = '')
+param([string]$ExpectedIdentity = '', [switch]$ExpectPrivate)
 $ErrorActionPreference = 'Continue'
 . "$PSScriptRoot\kf_common.ps1"
 Initialize-KfDirs
 $info = @{ ok = $false; notes = @() }
+# Reserve stable letters for the two labels; refuse a conflicting assignment.
+$privateMappingFailed = $false
+foreach ($pair in @(@('KFAPPS', 'K'), @('KFAPPSP', 'P'))) {
+    $vol = Get-CimInstance Win32_Volume | Where-Object { $_.Label -eq $pair[0] } | Select-Object -First 1
+    if ($pair[0] -eq 'KFAPPS' -or $ExpectPrivate) {
+        for ($wait = 0; $wait -lt 30 -and -not $vol; $wait++) {
+            Start-Sleep -Seconds 2
+            $vol = Get-CimInstance Win32_Volume | Where-Object { $_.Label -eq $pair[0] } | Select-Object -First 1
+        }
+    }
+    if ($vol) {
+        $occupied = Get-CimInstance Win32_Volume | Where-Object { $_.DriveLetter -eq ($pair[1] + ':') -and $_.Label -ne $pair[0] }
+        if ($occupied) {
+            if ($pair[0] -eq 'KFAPPSP') { $privateMappingFailed = $true; $info.notes += 'private drive-letter conflict'; continue }
+            Write-Output 'KFSETUP drive-letter-conflict'; exit 3
+        }
+        if ($vol.DriveLetter -ne ($pair[1] + ':')) {
+            try { Set-CimInstance -InputObject $vol -Property @{ DriveLetter = ($pair[1] + ':') } -ErrorAction Stop | Out-Null }
+            catch {
+                if ($pair[0] -eq 'KFAPPSP') { $privateMappingFailed = $true; $info.notes += 'private drive-letter assignment failed'; continue }
+                Write-Output 'KFSETUP public drive-letter assignment failed'; exit 3
+            }
+        }
+    }
+}
+$privateCd = if ($privateMappingFailed) { $null } else { Get-AppDiskDrive 'KFAPPSP' }
+if ($privateCd -and $privateCd -ne 'P:') { $privateCd = $null; $info.notes += 'private drive letter not P:' }
+$info.private_cd = $privateCd
+if ($privateCd) { Set-Content -Path 'C:\kf\private_cd.txt' -Value $privateCd -Encoding ASCII }
+else { Remove-Item -Force -ErrorAction SilentlyContinue 'C:\kf\private_cd.txt' }
 $cd = Get-AppDiskDrive
 if (-not $cd) {
     # the hot-plugged disk can take a few seconds to appear
     for ($i = 0; $i -lt 30 -and -not $cd; $i++) { Start-Sleep -Seconds 2; $cd = Get-AppDiskDrive }
 }
+if ($cd -and $cd -ne 'K:') { Write-Output 'KFSETUP public drive letter not K:'; exit 3 }
 $info.cd = $cd
 if ($cd) {
     $idf = Join-Path $cd 'KFAPPS.ID'

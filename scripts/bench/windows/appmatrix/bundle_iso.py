@@ -126,7 +126,7 @@ class _Tree:
         return pack_records(recs)
 
 
-def descriptor(tree, total, table_size, little, big):
+def descriptor(tree, total, table_size, little, big, label="KFAPPS"):
     d = bytearray(BLOCK)
     d[:7] = bytes((2 if tree.joliet else 1,)) + b"CD001\x01"
     enc = "utf-16-be" if tree.joliet else "ascii"
@@ -134,7 +134,7 @@ def descriptor(tree, total, table_size, little, big):
         pad = " " * (length // (2 if tree.joliet else 1) - len(text))
         d[start:start + length] = (text + pad).encode(enc)
     text_field(8, 32, "KAYFABE")
-    text_field(40, 32, "KFAPPS")
+    text_field(40, 32, label)
     d[80:88] = both32(total)
     if tree.joliet:
         d[88:91] = b"%/E"
@@ -159,12 +159,13 @@ def descriptor(tree, total, table_size, little, big):
     return bytes(d)
 
 
-def write_image(files, output):
+def write_image(files, output, label="KFAPPS"):
     """Write {ISO path: bytes | local Path}. Returns the sha256/size of each input.
 
     Hashes are computed from the bytes actually streamed into the image. A changing
     source length aborts; the caller compares these records with its pinned inputs.
     """
+    if label not in ("KFAPPS", "KFAPPSP"): raise ValueError("invalid bundle label")
     if not files:
         raise ValueError("empty ISO")
     paths = sorted(files)
@@ -194,7 +195,7 @@ def write_image(files, output):
         with temp.open("wb") as f:
             f.write(bytes(16 * BLOCK))
             for tree, (length, little, big) in zip(trees, tables):
-                f.write(descriptor(tree, sector, length, little, big))
+                f.write(descriptor(tree, sector, length, little, big, label))
             f.write(b"\xffCD001\x01" + bytes(BLOCK - 7))
             for tree in trees:
                 for endian in ("<", ">"):
@@ -253,7 +254,7 @@ class Reader:
                 if self._number(d, 80, 4) * BLOCK != self.size or self._number(d, 128, 2) != BLOCK:
                     raise ValueError("ISO volume size/block mismatch")
             self.label = svd[40:72].decode("utf-16-be").rstrip(" ")
-            if self.label != "KFAPPS" or pvd[40:72].rstrip(b" ") != b"KFAPPS":
+            if self.label not in ("KFAPPS", "KFAPPSP") or pvd[40:72].rstrip(b" ") != self.label.encode("ascii"):
                 raise ValueError("wrong ISO volume label")
             self.files = {}
             self._visited = set()

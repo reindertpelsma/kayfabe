@@ -22,7 +22,7 @@ CASES = [
     ("per-file-license", "package_bundle.py", 'license_records.get(name, own_licenses)', 'own_licenses'),
     ("source-before-object-code", "publish_bundle.py", '    publish_sources(store, iso, receipt, state_path, part_size)\n', '    pass\n'),
     ("published-source-coverage", "publish_bundle.py", 'if receipt.get("sources") != expected:', 'if False:'),
-    ("source-key-prefix", "bundle_compliance.py", 'return "winapps-open/source-"', 'return "other/source-"'),
+    ("source-key-prefix", "bundle_compliance.py", 'return ("winapps-open/" if bundle_class == "public" else "winapps-private/")', 'return ("other/" if bundle_class == "public" else "winapps-private/")'),
     ("main-license-with-dependencies", "bundle_compliance.py", 'if kind == "upstream" or rule.get("fallback"):', 'if kind == "upstream" or (not count and rule.get("fallback")):'),
     ("runtime-eula-names", "bundle_compliance.py", 're.search(r"licen[cs]e|copying|copyright|notice|eula|third.party|acknowledg", base)', 're.match(r"licen[cs]e|copying|copyright|notice", base)'),
     ("bounded-legal-text-read", "bundle_compliance.py", 'return source.read(MAX_TEXT + 1)', 'return source.read()'),

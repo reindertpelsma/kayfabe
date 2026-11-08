@@ -131,8 +131,8 @@ function Get-BootTimeUtc {
 }
 
 # the volume of the app disk (label KFAPPS): its drive letter, or $null
-function Get-AppDiskDrive {
-    $v = Get-Volume -ErrorAction SilentlyContinue | Where-Object { $_.FileSystemLabel -eq 'KFAPPS' -and $_.DriveLetter } | Select-Object -First 1
+function Get-AppDiskDrive([string]$Label = 'KFAPPS') {
+    $v = Get-Volume -ErrorAction SilentlyContinue | Where-Object { $_.FileSystemLabel -eq $Label -and $_.DriveLetter } | Select-Object -First 1
     if ($v) { return ([string]$v.DriveLetter + ':') }
     return $null
 }

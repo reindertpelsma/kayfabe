@@ -21,7 +21,7 @@
    "version": "12.9.79",
    "tier": 1,
    "license": "NVIDIA CUDA Toolkit EULA (LICENSE inside the archive)",
-   "redistribution": "Redistributable component of the CUDA Toolkit per the EULA attachment A; staged for internal test use only",
+   "redistribution": "NVIDIA material: not redistributable publicly by owner ruling; person-built private media only",
    "stage": {
     "mode": "unzip",
     "dest": "cuda_demo",
@@ -43,7 +43,7 @@
     "upstream": "https://developer.nvidia.com/cuda-toolkit",
     "distribution": "private-only",
     "conditions": [
-     "NVIDIA CUDA EULA component: private-only until a qualified licence review clears public distribution; do not infer permission from the open-source wrapper."
+     "Owner ruling: NVIDIA CUDA cannot be redistributed. Private media only, never CI or the public publisher."
     ],
     "sources": [],
     "license_inputs": [],
@@ -96,7 +96,7 @@
    "version": "2026-10-10 resolution",
    "tier": 1,
    "license": "torch/torchvision BSD-3 (CUDA libs inside the torch wheel under the NVIDIA EULA); cupy MIT; onnxruntime MIT; others BSD/MIT/Apache/PSF per wheel metadata",
-   "redistribution": "Redistributable components subject to individual licences and NVIDIA CUDA EULA; classified private-only pending qualified review for public distribution",
+   "redistribution": "NVIDIA material: not redistributable publicly by owner ruling; person-built private media only",
    "stage": {
     "mode": "wheels",
     "dest": "py\\Lib\\site-packages"
@@ -301,7 +301,7 @@
     "upstream": "https://pytorch.org/",
     "distribution": "private-only",
     "conditions": [
-     "NVIDIA CUDA EULA component: private-only until a qualified licence review clears public distribution; do not infer permission from the open-source wrapper."
+     "Owner ruling: NVIDIA CUDA cannot be redistributed. Private media only, never CI or the public publisher."
     ],
     "sources": [],
     "license_inputs": [],
@@ -485,7 +485,7 @@
    "version": "b11541",
    "tier": 1,
    "license": "MIT",
-   "redistribution": "Redistributable (MIT; cudart under the CUDA EULA)",
+   "redistribution": "NVIDIA material: not redistributable publicly by owner ruling; person-built private media only",
    "stage": {
     "mode": "unzip",
     "dest": "llama_cuda"
@@ -515,7 +515,7 @@
     "upstream": "https://github.com/ggml-org/llama.cpp",
     "distribution": "private-only",
     "conditions": [
-     "NVIDIA CUDA EULA component: private-only until a qualified licence review clears public distribution; do not infer permission from the open-source wrapper."
+     "Owner ruling: NVIDIA CUDA cannot be redistributed. Private media only, never CI or the public publisher."
     ],
     "sources": [],
     "license_inputs": [
@@ -655,7 +655,7 @@
    "compliance": {
     "license_id": "LicenseRef-LunarG-Vulkan-Runtime",
     "upstream": "https://vulkan.lunarg.com/",
-    "distribution": "conditions",
+    "distribution": "private-only",
     "conditions": [
      "Retain VulkanRT-License.txt and all bundled copyright notices.",
      "Review and comply with the exact pinned LunarG Runtime redistribution terms before public distribution."
@@ -1016,7 +1016,7 @@
    "version": "3.0.1",
    "tier": 1,
    "license": "GPL-3.0-only AND LicenseRef-NVIDIA-CUDA-EULA",
-   "redistribution": "Redistributable under GPL-3.0 with corresponding source; CUDA backend additionally requires CUDA EULA review",
+   "redistribution": "NVIDIA material: not redistributable publicly by owner ruling; person-built private media only",
    "stage": {
     "mode": "unzip",
     "dest": "clpeak_cuda",
@@ -1038,7 +1038,7 @@
     "upstream": "https://github.com/krrishnarraj/clpeak",
     "distribution": "private-only",
     "conditions": [
-     "NVIDIA CUDA EULA component: private-only until a qualified licence review clears public distribution; do not infer permission from the open-source wrapper."
+     "Owner ruling: NVIDIA CUDA cannot be redistributed. Private media only, never CI or the public publisher."
     ],
     "sources": [
      {
@@ -1168,7 +1168,7 @@
    "version": "12.9.79",
    "tier": 1,
    "license": "NVIDIA CUDA Toolkit EULA",
-   "redistribution": "Redistributable component (EULA attachment A)",
+   "redistribution": "NVIDIA material: not redistributable publicly by owner ruling; person-built private media only",
    "stage": {
     "mode": "unzip",
     "dest": "cuda_cudart",
@@ -1190,7 +1190,7 @@
     "upstream": "https://developer.nvidia.com/cuda-toolkit",
     "distribution": "private-only",
     "conditions": [
-     "NVIDIA CUDA EULA component: private-only until a qualified licence review clears public distribution; do not infer permission from the open-source wrapper."
+     "Owner ruling: NVIDIA CUDA cannot be redistributed. Private media only, never CI or the public publisher."
     ],
     "sources": [],
     "license_inputs": [],
@@ -1207,7 +1207,7 @@
    "version": "12.9.27",
    "tier": 1,
    "license": "Apache-2.0 with LLVM exceptions / NVIDIA CUDA EULA",
-   "redistribution": "Redistributable",
+   "redistribution": "NVIDIA material: not redistributable publicly by owner ruling; person-built private media only",
    "stage": {
     "mode": "unzip",
     "dest": "cuda_cccl",
@@ -1229,7 +1229,7 @@
     "upstream": "https://github.com/NVIDIA/cccl",
     "distribution": "private-only",
     "conditions": [
-     "NVIDIA CUDA EULA component: private-only until a qualified licence review clears public distribution; do not infer permission from the open-source wrapper."
+     "Owner ruling: NVIDIA CUDA cannot be redistributed. Private media only, never CI or the public publisher."
     ],
     "sources": [],
     "license_inputs": [],
@@ -1272,7 +1272,7 @@
    "compliance": {
     "license_id": "LicenseRef-Microsoft-VC-Redistributable",
     "upstream": "https://visualstudio.microsoft.com/",
-    "distribution": "conditions",
+    "distribution": "private-only",
     "conditions": [
      "Comply with Microsoft Visual C++ Redistributable licence terms, including permitted redistribution, unmodified distributable code, notices and end-user restrictions.",
      "Confirm the pinned installer version and applicable Microsoft terms before public distribution."
@@ -1307,22 +1307,13 @@
    "title": "Offline transformers 4.57.1 and additional CPython 3.12 Windows dependencies",
    "version": "4.57.1 with pinned dependency wheels",
    "tier": 1,
-   "license": "Apache-2.0/BSD/MIT/PSF/MPL-2.0 per pinned wheel metadata; see compliance.components",
-   "redistribution": "Redistributable open-source wheels subject to bundled notices and applicable source obligations; public distribution requires review",
+   "license": "Apache-2.0/BSD-3-Clause/MIT/CNRI-Python; audited permissive wheels only",
+   "redistribution": "Redistributable permissive wheels with shipped notices; verified no NVIDIA libraries",
    "stage": {
     "mode": "wheels",
     "dest": "py\\Lib\\site-packages"
    },
    "files": [
-    {
-     "name": "certifi-2026.7.22-py3-none-any.whl",
-     "url": "https://files.pythonhosted.org/packages/0b/a7/71ac2cff56fec219ed242bb11b8efb69fcc4bec75db06fb7bfe35de520e6/certifi-2026.7.22-py3-none-any.whl",
-     "sha256": "62f22742b58a1a33014a2b6b706588a8d7e2a88ae7bd1a6ebe8c992928483775",
-     "size": 136983,
-     "http": 200,
-     "head_length": 136983,
-     "verified_utc": "2026-10-11T13:29:46Z"
-    },
     {
      "name": "charset_normalizer-3.5.2-cp312-cp312-win_amd64.whl",
      "url": "https://files.pythonhosted.org/packages/eb/e6/e6e083884cbcfd49c64865af05027fe7011be7b2d9179524f099a1b611f3/charset_normalizer-3.5.2-cp312-cp312-win_amd64.whl",
@@ -1330,7 +1321,46 @@
      "size": 207486,
      "http": 200,
      "head_length": 207486,
-     "verified_utc": "2026-10-11T13:29:46Z"
+     "verified_utc": "2026-10-11T13:29:46Z",
+     "public_audit": {
+      "archive_sha256": "780fbe7cab297b81dad9fb8dc5eb003c0468ffb0d9e5f65068c53a34661a96bc",
+      "metadata_sha256": "49e955a09e1a159e0846872798006e8db7d518d8d70c637066fefdb08d3d9f7b",
+      "name": "charset-normalizer",
+      "version": "3.5.2",
+      "license_expression": null,
+      "license_text": "MIT",
+      "license_classifiers": [
+       "Development Status :: 5 - Production/Stable",
+       "Intended Audience :: Developers",
+       "Operating System :: OS Independent",
+       "Programming Language :: Python",
+       "Programming Language :: Python :: 3",
+       "Programming Language :: Python :: 3.7",
+       "Programming Language :: Python :: 3.8",
+       "Programming Language :: Python :: 3.9",
+       "Programming Language :: Python :: 3.10",
+       "Programming Language :: Python :: 3.11",
+       "Programming Language :: Python :: 3.12",
+       "Programming Language :: Python :: 3.13",
+       "Programming Language :: Python :: 3.14",
+       "Programming Language :: Python :: 3.15",
+       "Programming Language :: Python :: 3 :: Only",
+       "Programming Language :: Python :: Implementation :: CPython",
+       "Programming Language :: Python :: Implementation :: PyPy",
+       "Programming Language :: Python :: Free Threading :: 4 - Resilient",
+       "Environment :: WebAssembly",
+       "Environment :: WebAssembly :: Emscripten",
+       "Topic :: Text Processing :: Linguistic",
+       "Topic :: Utilities",
+       "Typing :: Typed"
+      ],
+      "binary_members": [
+       "charset_normalizer/cd.cp312-win_amd64.pyd",
+       "charset_normalizer/md.cp312-win_amd64.pyd"
+      ],
+      "member_count": 21,
+      "no_nvidia_libraries": true
+     }
     },
     {
      "name": "hf_xet-1.7.0-cp38-abi3-win_amd64.whl",
@@ -1339,7 +1369,39 @@
      "size": 3822644,
      "http": 200,
      "head_length": 3822644,
-     "verified_utc": "2026-10-11T13:29:46Z"
+     "verified_utc": "2026-10-11T13:29:46Z",
+     "public_audit": {
+      "archive_sha256": "2b7bb5727889b0f2436dbaaad8fc4c3e66b8240d992716989e0c086b4278b1bc",
+      "metadata_sha256": "dd5d0eda013d5f77f184486c9e306ffc49321bad39ef864273f93edaa8492759",
+      "name": "hf-xet",
+      "version": "1.7.0",
+      "license_expression": "Apache-2.0",
+      "license_text": null,
+      "license_classifiers": [
+       "Development Status :: 5 - Production/Stable",
+       "License :: OSI Approved :: Apache Software License",
+       "Programming Language :: Rust",
+       "Programming Language :: Python :: Implementation :: CPython",
+       "Programming Language :: Python :: Implementation :: PyPy",
+       "Programming Language :: Python :: 3",
+       "Programming Language :: Python :: 3 :: Only",
+       "Programming Language :: Python :: 3.8",
+       "Programming Language :: Python :: 3.9",
+       "Programming Language :: Python :: 3.10",
+       "Programming Language :: Python :: 3.11",
+       "Programming Language :: Python :: 3.12",
+       "Programming Language :: Python :: 3.13",
+       "Programming Language :: Python :: 3.14",
+       "Programming Language :: Python :: Free Threading",
+       "Programming Language :: Python :: Free Threading :: 2 - Beta",
+       "Topic :: Scientific/Engineering :: Artificial Intelligence"
+      ],
+      "binary_members": [
+       "hf_xet/hf_xet.pyd"
+      ],
+      "member_count": 7,
+      "no_nvidia_libraries": true
+     }
     },
     {
      "name": "huggingface_hub-0.36.2-py3-none-any.whl",
@@ -1348,7 +1410,34 @@
      "size": 566395,
      "http": 200,
      "head_length": 566395,
-     "verified_utc": "2026-10-11T13:29:46Z"
+     "verified_utc": "2026-10-11T13:29:46Z",
+     "public_audit": {
+      "archive_sha256": "48f0c8eac16145dfce371e9d2d7772854a4f591bcb56c9cf548accf531d54270",
+      "metadata_sha256": "4dc2b0a3fb27bcba8b091f98bccff4b94369d269c9768aeaecd0b99d970665d9",
+      "name": "huggingface_hub",
+      "version": "0.36.2",
+      "license_expression": null,
+      "license_text": "Apache",
+      "license_classifiers": [
+       "Intended Audience :: Developers",
+       "Intended Audience :: Education",
+       "Intended Audience :: Science/Research",
+       "License :: OSI Approved :: Apache Software License",
+       "Operating System :: OS Independent",
+       "Programming Language :: Python :: 3",
+       "Programming Language :: Python :: 3 :: Only",
+       "Programming Language :: Python :: 3.8",
+       "Programming Language :: Python :: 3.9",
+       "Programming Language :: Python :: 3.10",
+       "Programming Language :: Python :: 3.11",
+       "Programming Language :: Python :: 3.12",
+       "Programming Language :: Python :: 3.13",
+       "Topic :: Scientific/Engineering :: Artificial Intelligence"
+      ],
+      "binary_members": [],
+      "member_count": 170,
+      "no_nvidia_libraries": true
+     }
     },
     {
      "name": "idna-3.20-py3-none-any.whl",
@@ -1357,7 +1446,39 @@
      "size": 69583,
      "http": 200,
      "head_length": 69583,
-     "verified_utc": "2026-10-11T13:29:46Z"
+     "verified_utc": "2026-10-11T13:29:46Z",
+     "public_audit": {
+      "archive_sha256": "ab7ae7122974553370f0bdb919e1a960b2cd1bc1ef0276416d896db81c14582c",
+      "metadata_sha256": "dbd8c14c1e4ca1e0c9824a6dbc7cbbf78884f38eb52d91148cd3025f671e4b85",
+      "name": "idna",
+      "version": "3.20",
+      "license_expression": "BSD-3-Clause",
+      "license_text": null,
+      "license_classifiers": [
+       "Development Status :: 5 - Production/Stable",
+       "Intended Audience :: Developers",
+       "Intended Audience :: System Administrators",
+       "Operating System :: OS Independent",
+       "Programming Language :: Python",
+       "Programming Language :: Python :: 3",
+       "Programming Language :: Python :: 3 :: Only",
+       "Programming Language :: Python :: 3.9",
+       "Programming Language :: Python :: 3.10",
+       "Programming Language :: Python :: 3.11",
+       "Programming Language :: Python :: 3.12",
+       "Programming Language :: Python :: 3.13",
+       "Programming Language :: Python :: 3.14",
+       "Programming Language :: Python :: 3.15",
+       "Programming Language :: Python :: Implementation :: CPython",
+       "Programming Language :: Python :: Implementation :: PyPy",
+       "Topic :: Internet :: Name Service (DNS)",
+       "Topic :: Software Development :: Libraries :: Python Modules",
+       "Topic :: Utilities"
+      ],
+      "binary_members": [],
+      "member_count": 16,
+      "no_nvidia_libraries": true
+     }
     },
     {
      "name": "pyyaml-6.0.3-cp312-cp312-win_amd64.whl",
@@ -1366,7 +1487,40 @@
      "size": 154003,
      "http": 200,
      "head_length": 154003,
-     "verified_utc": "2026-10-11T13:29:46Z"
+     "verified_utc": "2026-10-11T13:29:46Z",
+     "public_audit": {
+      "archive_sha256": "5fcd34e47f6e0b794d17de1b4ff496c00986e1c83f7ab2fb8fcfe9616ff7477b",
+      "metadata_sha256": "847a701020334386852b6e07bad1053cb0ce3da9ee1846e7e9d02b24e8bb3f8d",
+      "name": "PyYAML",
+      "version": "6.0.3",
+      "license_expression": null,
+      "license_text": "MIT",
+      "license_classifiers": [
+       "Development Status :: 5 - Production/Stable",
+       "Intended Audience :: Developers",
+       "License :: OSI Approved :: MIT License",
+       "Operating System :: OS Independent",
+       "Programming Language :: Cython",
+       "Programming Language :: Python",
+       "Programming Language :: Python :: 3",
+       "Programming Language :: Python :: 3.8",
+       "Programming Language :: Python :: 3.9",
+       "Programming Language :: Python :: 3.10",
+       "Programming Language :: Python :: 3.11",
+       "Programming Language :: Python :: 3.12",
+       "Programming Language :: Python :: 3.13",
+       "Programming Language :: Python :: 3.14",
+       "Programming Language :: Python :: Implementation :: CPython",
+       "Programming Language :: Python :: Implementation :: PyPy",
+       "Topic :: Software Development :: Libraries :: Python Modules",
+       "Topic :: Text Processing :: Markup"
+      ],
+      "binary_members": [
+       "yaml/_yaml.cp312-win_amd64.pyd"
+      ],
+      "member_count": 24,
+      "no_nvidia_libraries": true
+     }
     },
     {
      "name": "regex-2026.9.29-cp312-cp312-win_amd64.whl",
@@ -1375,7 +1529,35 @@
      "size": 280334,
      "http": 200,
      "head_length": 280334,
-     "verified_utc": "2026-10-11T13:29:46Z"
+     "verified_utc": "2026-10-11T13:29:46Z",
+     "public_audit": {
+      "archive_sha256": "fdd88ed5e20b1bcdd234421e454962c971aa44b653bdb7f1ea9ef683e90fb649",
+      "metadata_sha256": "726c658b5d0ee420e773f9e6c843918e8a2ad7c27577d20c8f502c08eccb211e",
+      "name": "regex",
+      "version": "2026.9.29",
+      "license_expression": "Apache-2.0 AND CNRI-Python",
+      "license_text": null,
+      "license_classifiers": [
+       "Development Status :: 5 - Production/Stable",
+       "Intended Audience :: Developers",
+       "Operating System :: OS Independent",
+       "Programming Language :: Python :: 3.10",
+       "Programming Language :: Python :: 3.11",
+       "Programming Language :: Python :: 3.12",
+       "Programming Language :: Python :: 3.13",
+       "Programming Language :: Python :: 3.14",
+       "Programming Language :: Python :: 3.15",
+       "Topic :: Scientific/Engineering :: Information Analysis",
+       "Topic :: Software Development :: Libraries :: Python Modules",
+       "Topic :: Text Processing",
+       "Topic :: Text Processing :: General"
+      ],
+      "binary_members": [
+       "regex/_regex.cp312-win_amd64.pyd"
+      ],
+      "member_count": 10,
+      "no_nvidia_libraries": true
+     }
     },
     {
      "name": "requests-2.34.2-py3-none-any.whl",
@@ -1384,7 +1566,40 @@
      "size": 73075,
      "http": 200,
      "head_length": 73075,
-     "verified_utc": "2026-10-11T13:29:46Z"
+     "verified_utc": "2026-10-11T13:29:46Z",
+     "public_audit": {
+      "archive_sha256": "2a0d60c172f83ac6ab31e4554906c0f3b3588d37b5cb939b1c061f4907e278e0",
+      "metadata_sha256": "8c384ba3e979480faae2859d3c5e6c1276dd2c3616e322e124d52c8cfc556f27",
+      "name": "requests",
+      "version": "2.34.2",
+      "license_expression": null,
+      "license_text": "Apache-2.0",
+      "license_classifiers": [
+       "Development Status :: 5 - Production/Stable",
+       "Environment :: Web Environment",
+       "Intended Audience :: Developers",
+       "License :: OSI Approved :: Apache Software License",
+       "Natural Language :: English",
+       "Operating System :: OS Independent",
+       "Programming Language :: Python",
+       "Programming Language :: Python :: 3",
+       "Programming Language :: Python :: 3.10",
+       "Programming Language :: Python :: 3.11",
+       "Programming Language :: Python :: 3.12",
+       "Programming Language :: Python :: 3.13",
+       "Programming Language :: Python :: 3.14",
+       "Programming Language :: Python :: 3.15",
+       "Programming Language :: Python :: 3 :: Only",
+       "Programming Language :: Python :: Implementation :: CPython",
+       "Programming Language :: Python :: Implementation :: PyPy",
+       "Programming Language :: Python :: Free Threading :: 2 - Beta",
+       "Topic :: Internet :: WWW/HTTP",
+       "Topic :: Software Development :: Libraries"
+      ],
+      "binary_members": [],
+      "member_count": 26,
+      "no_nvidia_libraries": true
+     }
     },
     {
      "name": "safetensors-0.8.0-cp310-abi3-win_amd64.whl",
@@ -1393,7 +1608,36 @@
      "size": 355540,
      "http": 200,
      "head_length": 355540,
-     "verified_utc": "2026-10-11T13:29:46Z"
+     "verified_utc": "2026-10-11T13:29:46Z",
+     "public_audit": {
+      "archive_sha256": "096ec1a98435df7beb08853bb5aa9081a84f23d0adc67ed1a0a10550f608373f",
+      "metadata_sha256": "597731d1baf7a94219753fa0a74abd1a8a18562d50d98b2e25d91e11e3224d36",
+      "name": "safetensors",
+      "version": "0.8.0",
+      "license_expression": null,
+      "license_text": null,
+      "license_classifiers": [
+       "Development Status :: 5 - Production/Stable",
+       "Intended Audience :: Developers",
+       "Intended Audience :: Education",
+       "Intended Audience :: Science/Research",
+       "License :: OSI Approved :: Apache Software License",
+       "Operating System :: OS Independent",
+       "Programming Language :: Python :: 3",
+       "Programming Language :: Python :: 3.10",
+       "Programming Language :: Python :: 3.11",
+       "Programming Language :: Python :: 3.12",
+       "Programming Language :: Python :: 3.13",
+       "Programming Language :: Python :: 3.14",
+       "Topic :: Scientific/Engineering :: Artificial Intelligence",
+       "Typing :: Typed"
+      ],
+      "binary_members": [
+       "safetensors/_safetensors_rust.pyd"
+      ],
+      "member_count": 15,
+      "no_nvidia_libraries": true
+     }
     },
     {
      "name": "tokenizers-0.22.2-cp39-abi3-win_amd64.whl",
@@ -1402,16 +1646,36 @@
      "size": 2747786,
      "http": 200,
      "head_length": 2747786,
-     "verified_utc": "2026-10-11T13:29:46Z"
-    },
-    {
-     "name": "tqdm-4.70.1-py3-none-any.whl",
-     "url": "https://files.pythonhosted.org/packages/a7/03/921a3d3c75785aca9ebfbfcabfbc3a1be12e2ab5265deb026d55a5a3f83e/tqdm-4.70.1-py3-none-any.whl",
-     "sha256": "c293e525e6fef9c20e8728fd4612df02a0aa31bb5fe91ecd93e123b1b7bffa73",
-     "size": 80199,
-     "http": 200,
-     "head_length": 80199,
-     "verified_utc": "2026-10-11T13:29:46Z"
+     "verified_utc": "2026-10-11T13:29:46Z",
+     "public_audit": {
+      "archive_sha256": "c9ea31edff2968b44a88f97d784c2f16dc0729b8b143ed004699ebca91f05c48",
+      "metadata_sha256": "5ad9bccf21ae53d45f812703c80c7c03ecea300823655a2968f9e6778779bdb3",
+      "name": "tokenizers",
+      "version": "0.22.2",
+      "license_expression": null,
+      "license_text": null,
+      "license_classifiers": [
+       "Development Status :: 5 - Production/Stable",
+       "Intended Audience :: Developers",
+       "Intended Audience :: Education",
+       "Intended Audience :: Science/Research",
+       "License :: OSI Approved :: Apache Software License",
+       "Operating System :: OS Independent",
+       "Programming Language :: Python :: 3",
+       "Programming Language :: Python :: 3.9",
+       "Programming Language :: Python :: 3.10",
+       "Programming Language :: Python :: 3.11",
+       "Programming Language :: Python :: 3.12",
+       "Programming Language :: Python :: 3.13",
+       "Programming Language :: Python :: 3 :: Only",
+       "Topic :: Scientific/Engineering :: Artificial Intelligence"
+      ],
+      "binary_members": [
+       "tokenizers/tokenizers.pyd"
+      ],
+      "member_count": 29,
+      "no_nvidia_libraries": true
+     }
     },
     {
      "name": "transformers-4.57.1-py3-none-any.whl",
@@ -1420,7 +1684,33 @@
      "size": 11990925,
      "http": 200,
      "head_length": 11990925,
-     "verified_utc": "2026-10-11T13:29:46Z"
+     "verified_utc": "2026-10-11T13:29:46Z",
+     "public_audit": {
+      "archive_sha256": "b10d05da8fa67dc41644dbbf9bc45a44cb86ae33da6f9295f5fbf5b7890bd267",
+      "metadata_sha256": "5a7907140118994d1b284d23ea8cda916e6fa8a4d8698aa1d20ab5f59e610590",
+      "name": "transformers",
+      "version": "4.57.1",
+      "license_expression": null,
+      "license_text": "Apache 2.0 License",
+      "license_classifiers": [
+       "Development Status :: 5 - Production/Stable",
+       "Intended Audience :: Developers",
+       "Intended Audience :: Education",
+       "Intended Audience :: Science/Research",
+       "License :: OSI Approved :: Apache Software License",
+       "Operating System :: OS Independent",
+       "Programming Language :: Python :: 3",
+       "Programming Language :: Python :: 3.9",
+       "Programming Language :: Python :: 3.10",
+       "Programming Language :: Python :: 3.11",
+       "Programming Language :: Python :: 3.12",
+       "Programming Language :: Python :: 3.13",
+       "Topic :: Scientific/Engineering :: Artificial Intelligence"
+      ],
+      "binary_members": [],
+      "member_count": 2246,
+      "no_nvidia_libraries": true
+     }
     },
     {
      "name": "urllib3-2.8.0-py3-none-any.whl",
@@ -1429,23 +1719,47 @@
      "size": 135717,
      "http": 200,
      "head_length": 135717,
-     "verified_utc": "2026-10-11T13:29:46Z"
+     "verified_utc": "2026-10-11T13:29:46Z",
+     "public_audit": {
+      "archive_sha256": "0cf3cae568d36aa9576b28dfb35f11328f1cb974ca7647d9475ebb86c75ac6e3",
+      "metadata_sha256": "10898c620e8007c030e07fa5622b68358a43010025dfbd78a1cb797699de2bb4",
+      "name": "urllib3",
+      "version": "2.8.0",
+      "license_expression": "MIT",
+      "license_text": null,
+      "license_classifiers": [
+       "Environment :: Web Environment",
+       "Intended Audience :: Developers",
+       "Operating System :: OS Independent",
+       "Programming Language :: Python",
+       "Programming Language :: Python :: 3",
+       "Programming Language :: Python :: 3 :: Only",
+       "Programming Language :: Python :: 3.10",
+       "Programming Language :: Python :: 3.11",
+       "Programming Language :: Python :: 3.12",
+       "Programming Language :: Python :: 3.13",
+       "Programming Language :: Python :: 3.14",
+       "Programming Language :: Python :: 3.15",
+       "Programming Language :: Python :: Free Threading :: 2 - Beta",
+       "Programming Language :: Python :: Implementation :: CPython",
+       "Programming Language :: Python :: Implementation :: PyPy",
+       "Topic :: Internet :: WWW/HTTP",
+       "Topic :: Software Development :: Libraries"
+      ],
+      "binary_members": [],
+      "member_count": 42,
+      "no_nvidia_libraries": true
+     }
     }
    ],
    "compliance": {
     "license_id": "LicenseRef-Wheel-Components",
     "upstream": "https://huggingface.co/docs/transformers/",
-    "distribution": "conditions",
-    "conditions": [
-     "certifi is MPL-2.0: exact corresponding source and retention obligations require review before public distribution; source is not yet mirrored.",
-     "Retain all wheel and bundled third-party notices."
-    ],
+    "distribution": "public-ok",
+    "conditions": [],
     "sources": [],
     "license_inputs": [],
     "license_rules": {
-     "certifi-2026.7.22-py3-none-any.whl": {
-      "kind": "zip"
-     },
      "charset_normalizer-3.5.2-cp312-cp312-win_amd64.whl": {
       "kind": "zip"
      },
@@ -1473,9 +1787,6 @@
      "tokenizers-0.22.2-cp39-abi3-win_amd64.whl": {
       "kind": "zip"
      },
-     "tqdm-4.70.1-py3-none-any.whl": {
-      "kind": "zip"
-     },
      "transformers-4.57.1-py3-none-any.whl": {
       "kind": "zip"
      },
@@ -1484,11 +1795,6 @@
      }
     },
     "components": {
-     "certifi-2026.7.22-py3-none-any.whl": {
-      "version": "2026.7.22",
-      "license_id": "MPL-2.0",
-      "upstream": "https://github.com/certifi/python-certifi"
-     },
      "charset_normalizer-3.5.2-cp312-cp312-win_amd64.whl": {
       "version": "3.5.2",
       "license_id": "MIT",
@@ -1533,11 +1839,6 @@
       "version": "0.22.2",
       "license_id": "Apache-2.0",
       "upstream": "https://github.com/huggingface/tokenizers"
-     },
-     "tqdm-4.70.1-py3-none-any.whl": {
-      "version": "4.70.1",
-      "license_id": "MPL-2.0 AND MIT",
-      "upstream": "https://tqdm.github.io"
      },
      "transformers-4.57.1-py3-none-any.whl": {
       "version": "4.57.1",
@@ -1686,7 +1987,7 @@
    "version": "12.9.86",
    "tier": 1,
    "license": "NVIDIA CUDA Toolkit EULA (LICENSE inside archive)",
-   "redistribution": "Redistributable NVRTC component under CUDA EULA attachment A; staged for internal tests",
+   "redistribution": "NVIDIA material: not redistributable publicly by owner ruling; person-built private media only",
    "stage": {
     "mode": "unzip",
     "dest": "cuda_nvrtc",
@@ -1708,13 +2009,76 @@
     "upstream": "https://developer.nvidia.com/cuda-toolkit",
     "distribution": "private-only",
     "conditions": [
-     "NVIDIA CUDA EULA component: private-only until a qualified licence review clears public distribution; do not infer permission from the open-source wrapper."
+     "Owner ruling: NVIDIA CUDA cannot be redistributed. Private media only, never CI or the public publisher."
     ],
     "sources": [],
     "license_inputs": [],
     "license_rules": {
      "cuda_nvrtc-windows-x86_64-12.9.86-archive.zip": {
       "kind": "zip"
+     }
+    }
+   }
+  },
+  {
+   "id": "hf_wheels_private",
+   "title": "HF dependency wheels requiring review (MPL or unclear)",
+   "version": "4.57.1 with pinned dependency wheels",
+   "tier": 1,
+   "license": "MPL-2.0 AND MIT per wheel metadata (certifi/tqdm)",
+   "redistribution": "Private media only pending qualified review; excluded from public wheels",
+   "stage": {
+    "mode": "wheels",
+    "dest": "py\\Lib\\site-packages"
+   },
+   "files": [
+    {
+     "name": "certifi-2026.7.22-py3-none-any.whl",
+     "url": "https://files.pythonhosted.org/packages/0b/a7/71ac2cff56fec219ed242bb11b8efb69fcc4bec75db06fb7bfe35de520e6/certifi-2026.7.22-py3-none-any.whl",
+     "sha256": "62f22742b58a1a33014a2b6b706588a8d7e2a88ae7bd1a6ebe8c992928483775",
+     "size": 136983,
+     "http": 200,
+     "head_length": 136983,
+     "verified_utc": "2026-10-11T13:29:46Z"
+    },
+    {
+     "name": "tqdm-4.70.1-py3-none-any.whl",
+     "url": "https://files.pythonhosted.org/packages/a7/03/921a3d3c75785aca9ebfbfcabfbc3a1be12e2ab5265deb026d55a5a3f83e/tqdm-4.70.1-py3-none-any.whl",
+     "sha256": "c293e525e6fef9c20e8728fd4612df02a0aa31bb5fe91ecd93e123b1b7bffa73",
+     "size": 80199,
+     "http": 200,
+     "head_length": 80199,
+     "verified_utc": "2026-10-11T13:29:46Z"
+    }
+   ],
+   "compliance": {
+    "license_id": "LicenseRef-Wheel-Components",
+    "upstream": "https://huggingface.co/docs/transformers/",
+    "distribution": "private-only",
+    "conditions": [
+     "certifi is MPL-2.0: exact corresponding source and retention obligations require review before public distribution; source is not yet mirrored.",
+     "Retain all wheel and bundled third-party notices."
+    ],
+    "sources": [],
+    "license_inputs": [],
+    "license_rules": {
+     "certifi-2026.7.22-py3-none-any.whl": {
+      "kind": "zip"
+     },
+     "tqdm-4.70.1-py3-none-any.whl": {
+      "kind": "zip"
+     }
+    },
+    "components": {
+     "certifi-2026.7.22-py3-none-any.whl": {
+      "version": "2026.7.22",
+      "license_id": "MPL-2.0",
+      "upstream": "https://github.com/certifi/python-certifi"
+     },
+     "tqdm-4.70.1-py3-none-any.whl": {
+      "version": "4.70.1",
+      "license_id": "MPL-2.0 AND MIT",
+      "upstream": "https://tqdm.github.io"
      }
     }
    }
@@ -2505,6 +2869,7 @@
     "DOC/unRarLicense.txt"
    ],
    "method": "bundle_compliance.stage on the verified 7zr.exe and exact source archive only; no compilation, full media build, installer execution or upload"
-  }
+  },
+  "public_hf_wheels_audited_utc": "2026-11-07T23:28:05.533532+00:00"
  }
 }
