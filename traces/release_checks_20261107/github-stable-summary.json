@@ -1,0 +1,24 @@
+{
+  "outcome": "pass",
+  "source_revision": "dc44b8cb9df1cc4ad8dd63bf14f619c49623f69a",
+  "run_url": "https://github.com/reindertpelsma/kayfabe/actions/runs/42379709978",
+  "job_url": "https://github.com/reindertpelsma/kayfabe/actions/runs/42379709978/job/128424550137",
+  "job_name": "stable \u2014 build, test, clippy, fmt, boundary",
+  "job_conclusion": "success",
+  "step_name": "Test (OS-free configuration \u2014 KVM forced absent)",
+  "step_started_at": "2026-11-07T14:26:32Z",
+  "step_completed_at": "2026-11-07T14:56:03Z",
+  "command": "KAYFABE_NO_KVM=1 cargo test --workspace --no-fail-fast",
+  "reported_harnesses": 325,
+  "reported_passed": 5569,
+  "reported_failed": 0,
+  "reported_ignored": 22,
+  "explicit_SKIP_output_lines": 44,
+  "raw_job_log_bytes": 3958488,
+  "raw_job_log_sha256": "80e76b994c6e11a9c084b00c01cec56cbdf1a3b0856873e1914f0d1449f63a43",
+  "limits": [
+    "Existing stable CI, separate from the R2 clean-clone runner.",
+    "Reported Rust harness counts; ignored tests and explicit SKIP outcomes are not physical coverage.",
+    "No hardware or external oracle coverage is established by this GPU-free job."
+  ]
+}

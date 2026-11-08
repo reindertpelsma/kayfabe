@@ -1,0 +1,291 @@
+{
+  "version": 1,
+  "policy_doc": "docs/howto/installing.md",
+  "entrypoints": [
+    "scripts/bench/provision_host_driver.sh",
+    "scripts/bench/provision_bench_tree.sh",
+    "scripts/bench/provision_box.sh",
+    "scripts/bench/box/provision_full.sh",
+    "scripts/bench/build_kf3.sh",
+    "scripts/fastguest/build_fast_guest.sh",
+    "scripts/bench/box/merge_check.sh",
+    "scripts/bench/box/windows_gate.sh",
+    "scripts/bench/windows/win_vm.sh",
+    "scripts/ci/vast_setup.py"
+  ],
+  "patches": {
+    "archive/nvkvm-unpushed-2026-09-30/0001-CLAUDE.md-POLARITY-CORRECTED-m2hostsem-0-MEANS-THE-F.patch": {
+      "kind": "archive-only",
+      "opt_in": "archive/README.md",
+      "reason": "Frozen historical artifact; no stock entrypoint applies it."
+    },
+    "archive/nvkvm-unpushed-2026-09-30/0001-REFUTED-USERD-s-address-was-never-unobtainable-the-c.patch": {
+      "kind": "archive-only",
+      "opt_in": "archive/README.md",
+      "reason": "Frozen historical artifact; no stock entrypoint applies it."
+    },
+    "archive/nvkvm/docs/design/mode2_12_cont31_prereq_fixes.patch": {
+      "kind": "archive-only",
+      "opt_in": "archive/README.md",
+      "reason": "Frozen historical artifact; no stock entrypoint applies it."
+    },
+    "archive/nvkvm/docs/design/mode2_12_cont33_fix.patch": {
+      "kind": "archive-only",
+      "opt_in": "archive/README.md",
+      "reason": "Frozen historical artifact; no stock entrypoint applies it."
+    },
+    "archive/nvkvm/docs/design/mode2_12_cont34_fix.patch": {
+      "kind": "archive-only",
+      "opt_in": "archive/README.md",
+      "reason": "Frozen historical artifact; no stock entrypoint applies it."
+    },
+    "archive/nvkvm/docs/design/mode2_13_fix.patch": {
+      "kind": "archive-only",
+      "opt_in": "archive/README.md",
+      "reason": "Frozen historical artifact; no stock entrypoint applies it."
+    },
+    "archive/nvkvm/docs/design/mode2_13_fix_v2.patch": {
+      "kind": "archive-only",
+      "opt_in": "archive/README.md",
+      "reason": "Frozen historical artifact; no stock entrypoint applies it."
+    },
+    "archive/nvkvm/docs/design/mode2_13_fix_v3.patch": {
+      "kind": "archive-only",
+      "opt_in": "archive/README.md",
+      "reason": "Frozen historical artifact; no stock entrypoint applies it."
+    },
+    "archive/nvkvm/docs/design/mode2_13_fix_v4.patch": {
+      "kind": "archive-only",
+      "opt_in": "archive/README.md",
+      "reason": "Frozen historical artifact; no stock entrypoint applies it."
+    },
+    "archive/nvkvm/docs/design/mode2_13_fix_v4_wip.patch": {
+      "kind": "archive-only",
+      "opt_in": "archive/README.md",
+      "reason": "Frozen historical artifact; no stock entrypoint applies it."
+    },
+    "archive/nvkvm/docs/design/mode2_13_fix_v5_xfernone.patch": {
+      "kind": "archive-only",
+      "opt_in": "archive/README.md",
+      "reason": "Frozen historical artifact; no stock entrypoint applies it."
+    },
+    "archive/nvkvm/docs/design/mode2_13_fix_v6.patch": {
+      "kind": "archive-only",
+      "opt_in": "archive/README.md",
+      "reason": "Frozen historical artifact; no stock entrypoint applies it."
+    },
+    "archive/nvkvm/docs/design/mode2_13_part1_pd1leaf.patch": {
+      "kind": "archive-only",
+      "opt_in": "archive/README.md",
+      "reason": "Frozen historical artifact; no stock entrypoint applies it."
+    },
+    "archive/nvkvm/docs/design/mode2_14_4c.patch": {
+      "kind": "archive-only",
+      "opt_in": "archive/README.md",
+      "reason": "Frozen historical artifact; no stock entrypoint applies it."
+    },
+    "archive/nvkvm/docs/design/mode2_14_4c2.patch": {
+      "kind": "archive-only",
+      "opt_in": "archive/README.md",
+      "reason": "Frozen historical artifact; no stock entrypoint applies it."
+    },
+    "archive/nvkvm/docs/design/mode2_14_P2.patch": {
+      "kind": "archive-only",
+      "opt_in": "archive/README.md",
+      "reason": "Frozen historical artifact; no stock entrypoint applies it."
+    },
+    "archive/nvkvm/docs/design/mode2_14_P3.patch": {
+      "kind": "archive-only",
+      "opt_in": "archive/README.md",
+      "reason": "Frozen historical artifact; no stock entrypoint applies it."
+    },
+    "archive/nvkvm/docs/design/mode2_14_P4.patch": {
+      "kind": "archive-only",
+      "opt_in": "archive/README.md",
+      "reason": "Frozen historical artifact; no stock entrypoint applies it."
+    },
+    "archive/nvkvm/docs/design/mode2_14_cr3.patch": {
+      "kind": "archive-only",
+      "opt_in": "archive/README.md",
+      "reason": "Frozen historical artifact; no stock entrypoint applies it."
+    },
+    "archive/nvkvm/docs/design/mode2_14_disambig.patch": {
+      "kind": "archive-only",
+      "opt_in": "archive/README.md",
+      "reason": "Frozen historical artifact; no stock entrypoint applies it."
+    },
+    "archive/nvkvm/docs/design/mode2_14_fix_v2.patch": {
+      "kind": "archive-only",
+      "opt_in": "archive/README.md",
+      "reason": "Frozen historical artifact; no stock entrypoint applies it."
+    },
+    "archive/nvkvm/docs/design/mode2_14_fix_v3.patch": {
+      "kind": "archive-only",
+      "opt_in": "archive/README.md",
+      "reason": "Frozen historical artifact; no stock entrypoint applies it."
+    },
+    "archive/nvkvm/docs/design/mode2_14_fix_wip.patch": {
+      "kind": "archive-only",
+      "opt_in": "archive/README.md",
+      "reason": "Frozen historical artifact; no stock entrypoint applies it."
+    },
+    "archive/nvkvm/docs/design/mode2_14_grexec.patch": {
+      "kind": "archive-only",
+      "opt_in": "archive/README.md",
+      "reason": "Frozen historical artifact; no stock entrypoint applies it."
+    },
+    "archive/nvkvm/docs/kernel_patches/mode2_ce_caps_inject_DEBUG.patch": {
+      "kind": "archive-only",
+      "opt_in": "archive/README.md",
+      "reason": "Frozen historical artifact; no stock entrypoint applies it."
+    },
+    "archive/nvkvm/docs/kernel_patches/mode2_gr_allocparams_null_DEBUG.patch": {
+      "kind": "archive-only",
+      "opt_in": "archive/README.md",
+      "reason": "Frozen historical artifact; no stock entrypoint applies it."
+    },
+    "archive/nvkvm/docs/kernel_patches/mode2_uvm_complete_proof.patch": {
+      "kind": "archive-only",
+      "opt_in": "archive/README.md",
+      "reason": "Frozen historical artifact; no stock entrypoint applies it."
+    },
+    "archive/nvkvm/docs/research/mode2_devinfo_capture.patch": {
+      "kind": "archive-only",
+      "opt_in": "archive/README.md",
+      "reason": "Frozen historical artifact; no stock entrypoint applies it."
+    },
+    "docs/kernel_patches/0001-bringup-scrubber-init-printk.patch": {
+      "kind": "opt-in",
+      "opt_in": "docs/kernel_patches/README.md",
+      "reason": "Guest bring-up only; manual patch command in Applying, excluded from product acceptance."
+    },
+    "docs/kernel_patches/0002-bringup-ceutils-finishpayload-wait.patch": {
+      "kind": "opt-in",
+      "opt_in": "docs/kernel_patches/README.md",
+      "reason": "Guest bring-up only; manual patch command in Applying, excluded from product acceptance."
+    },
+    "scripts/bench/guest_ogkm_ringtrace.patch": {
+      "kind": "opt-in",
+      "opt_in": "scripts/bench/guest_ringtrace_build.sh",
+      "reason": "Explicit guest ring diagnostic; stamps RINGTRACE_GUEST=1 and must never grade a stock boot."
+    },
+    "scripts/bench/windows/appmatrix/directx_vrs_gate.patch": {
+      "kind": "opt-in",
+      "opt_in": "scripts/bench/windows/appmatrix/build_release_bundle.ps1",
+      "reason": "R2 review, 2026-11-07: explicit offline bundle-build opt-in patches only Microsoft's DirectX VRS test program in a temporary source worktree. release_bundle.py validates the patch receipt/hash; neither path modifies the NVIDIA driver, QEMU or guest OS, and no stock kayfabe install applies this sample patch."
+    },
+    "scripts/rpctrace/rpctrace-575.51.03.patch": {
+      "kind": "opt-in",
+      "opt_in": "scripts/rpctrace/build_instrumented.sh",
+      "reason": "Explicit diagnostic recorder build; stock module on disk is never replaced by the builder."
+    },
+    "scripts/rpctrace/rpctrace.patch": {
+      "kind": "opt-in",
+      "opt_in": "scripts/rpctrace/build_instrumented.sh",
+      "reason": "Explicit diagnostic recorder build; stock module on disk is never replaced by the builder."
+    },
+    "tools/host_patches/h5_userd_dma/patch/nvidia_h5_userd_dma_595.91.07.patch": {
+      "kind": "opt-in",
+      "opt_in": "tools/host_patches/h5_userd_dma/README.md",
+      "reason": "Explicit H5 source-copy build; build_h5.sh installs and loads nothing."
+    },
+    "tools/uvm_efs/patch/nvidia_uvm_efs_580.159.04.patch": {
+      "kind": "opt-in",
+      "opt_in": "tools/uvm_efs/box/build_efs.sh",
+      "reason": "Explicit UVM experiment build with patch/output arguments; owner ruling E."
+    },
+    "tools/vfio-gsp-observer/integration.patch": {
+      "kind": "opt-in",
+      "opt_in": "tools/vfio-gsp-observer/README.md",
+      "reason": "Explicit diagnostic QEMU observer application via apply.py; separate from the kf3 device overlay."
+    },
+    "traces/antigravity_review_20261006/olut-harness.patch": {
+      "kind": "recorded-only",
+      "opt_in": "traces/antigravity_review_20261006/olut-harness.patch",
+      "reason": "Recorded diagnostic/proposal diff; applying it requires a separate manual action."
+    },
+    "traces/apps_linux_20261107/pr282_apps_rows.patch": {
+      "kind": "recorded-only",
+      "opt_in": "traces/apps_linux_20261107/pr282_apps_rows.patch",
+      "reason": "Recorded diagnostic/proposal diff; applying it requires a separate manual action."
+    },
+    "traces/blackwell_resume_cont_20261022/review_drafts/native_ce_fixture.patch": {
+      "kind": "recorded-only",
+      "opt_in": "traces/blackwell_resume_cont_20261022/review_drafts/native_ce_fixture.patch",
+      "reason": "Recorded diagnostic/proposal diff; applying it requires a separate manual action."
+    },
+    "traces/blackwell_resume_cont_20261022/review_drafts/phase_guard.patch": {
+      "kind": "recorded-only",
+      "opt_in": "traces/blackwell_resume_cont_20261022/review_drafts/phase_guard.patch",
+      "reason": "Recorded diagnostic/proposal diff; applying it requires a separate manual action."
+    },
+    "traces/candidate5_20261018/harness_proposal.patch": {
+      "kind": "recorded-only",
+      "opt_in": "traces/candidate5_20261018/harness_proposal.patch",
+      "reason": "Recorded diagnostic/proposal diff; applying it requires a separate manual action."
+    },
+    "traces/deferred_api_translated_20261008/host_worktree_changes_on_83881ecc.patch": {
+      "kind": "recorded-only",
+      "opt_in": "traces/deferred_api_translated_20261008/host_worktree_changes_on_83881ecc.patch",
+      "reason": "Recorded diagnostic/proposal diff; applying it requires a separate manual action."
+    },
+    "traces/lifecycle_review_20261016/review1_checker.patch": {
+      "kind": "recorded-only",
+      "opt_in": "traces/lifecycle_review_20261016/review1_checker.patch",
+      "reason": "Recorded diagnostic/proposal diff; applying it requires a separate manual action."
+    },
+    "traces/linux_regression_20261010/diag.patch": {
+      "kind": "recorded-only",
+      "opt_in": "traces/linux_regression_20261010/diag.patch",
+      "reason": "Recorded diagnostic/proposal diff; applying it requires a separate manual action."
+    },
+    "traces/parked_2026_08_15/bench_only_commits.patch": {
+      "kind": "recorded-only",
+      "opt_in": "traces/parked_2026_08_15/bench_only_commits.patch",
+      "reason": "Recorded diagnostic/proposal diff; applying it requires a separate manual action."
+    },
+    "traces/real_windows_20261014/mbx_trace_v1.patch": {
+      "kind": "recorded-only",
+      "opt_in": "traces/real_windows_20261014/mbx_trace_v1.patch",
+      "reason": "Recorded diagnostic/proposal diff; applying it requires a separate manual action."
+    },
+    "traces/real_windows_20261014/mbx_trace_v2.patch": {
+      "kind": "recorded-only",
+      "opt_in": "traces/real_windows_20261014/mbx_trace_v2.patch",
+      "reason": "Recorded diagnostic/proposal diff; applying it requires a separate manual action."
+    },
+    "traces/sweep_integrate_20261018/heartbeat_drainer_PROPOSAL.patch": {
+      "kind": "recorded-only",
+      "opt_in": "traces/sweep_integrate_20261018/heartbeat_drainer_PROPOSAL.patch",
+      "reason": "Recorded diagnostic/proposal diff; applying it requires a separate manual action."
+    },
+    "traces/sweep_integrate_20261018/scrub_test_address_key_PROPOSAL.patch": {
+      "kind": "recorded-only",
+      "opt_in": "traces/sweep_integrate_20261018/scrub_test_address_key_PROPOSAL.patch",
+      "reason": "Recorded diagnostic/proposal diff; applying it requires a separate manual action."
+    },
+    "traces/sweep_integrate_20261018/userrelay_family_gate_PROPOSAL.patch": {
+      "kind": "recorded-only",
+      "opt_in": "traces/sweep_integrate_20261018/userrelay_family_gate_PROPOSAL.patch",
+      "reason": "Recorded diagnostic/proposal diff; applying it requires a separate manual action."
+    },
+    "traces/sweep_integrate_20261018/windows_on_vast_README_PROPOSAL.patch": {
+      "kind": "recorded-only",
+      "opt_in": "traces/sweep_integrate_20261018/windows_on_vast_README_PROPOSAL.patch",
+      "reason": "Recorded diagnostic/proposal diff; applying it requires a separate manual action."
+    }
+  },
+  "applicators": {
+    "scripts/bench/guest_ringtrace_build.sh": "d8a3230493653fd4cdb43e03f39be1d3179efe470978156e8ef7e396bb81fff3",
+    "scripts/bench/windows/appmatrix/build_release_bundle.ps1": "d5d3fce6b1e27507e127d788f10bfd3efe6da2d915a2c7d3f3e38a2dced3ad51",
+    "scripts/bench/windows/appmatrix/release_bundle.py": "d7fe73f9e43561967c28a9b4ed60d2d18286aa8bb3dd31fba66ab8ae6e753f07",
+    "scripts/bench/windows/host_tools/build/build-observer.sh": "76dc96f5f629c2d306fd6d0c1ca949b47ccf11dd5765172139d81f0b3ffd84c1",
+    "scripts/bench/windows/host_tools/misc/root_home/deploy.sh": "6f59791007b9d404098c4b0cb5646fe13636415d7381c43f584b82c3abdea85a",
+    "scripts/bench/windows/host_tools/misc/root_home/deploy2.sh": "8cb52f3243928709fdab85c8590b4df076b4a19ad4a6db18a843d736ae11b4be",
+    "scripts/rpctrace/build_instrumented.sh": "5ced1351277b2fcfed0ed8c7d16fee05e9562af3f147128420af07058cc455e9",
+    "tools/host_patches/h5_userd_dma/box/build_h5.sh": "98cf1c76eb20a59a556574be2ed390e97312d661989c6baf51817c65479fdc65",
+    "tools/uvm_efs/box/build_efs.sh": "66ba1b08e0f5a73eb81cccb78eefb74d66f1117e18a720ad125276b089d3831a",
+    "tools/uvm_efs/box/provision.sh": "5ea60633b66ed4f8b6ef783a79c48d14559e5be40e0494c8ce453b176da00224",
+    "tools/vfio-gsp-observer/apply.py": "7fa8e5a67912d3514a5647477c4dd5dacdac8061a6b7119d1ccfc899c5b186f6"
+  }
+}
