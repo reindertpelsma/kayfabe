@@ -1,0 +1,757 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kayfabe.dev/schemas/kfci/v1/contract.schema.json",
+  "title": "kfci planner and executor contract version 1",
+  "$defs": {
+    "drivers": {
+      "type": "object",
+      "properties": {
+        "host": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
+        },
+        "linux_guest": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
+        },
+        "windows_guest": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
+        }
+      },
+      "required": [
+        "host",
+        "linux_guest",
+        "windows_guest"
+      ],
+      "additionalProperties": false
+    },
+    "capabilities": {
+      "type": "object",
+      "properties": {
+        "can_swap_host_driver": {
+          "type": "boolean"
+        },
+        "kvm": {
+          "type": "boolean"
+        },
+        "vfio": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "can_swap_host_driver",
+        "kvm",
+        "vfio"
+      ],
+      "additionalProperties": false
+    },
+    "pin": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
+        },
+        "os": {
+          "enum": [
+            "linux",
+            "windows"
+          ]
+        },
+        "driver_family": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 9999
+        },
+        "version": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40,
+              "pattern": "^\\d{3,4}\\.\\d+(?:\\.\\d+)?$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "enum": [
+            "PINNED",
+            "UNPINNED"
+          ]
+        },
+        "url": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sha256": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "size": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000000000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "checked": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 10,
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "catalog_url": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "os",
+        "driver_family",
+        "version",
+        "status",
+        "url",
+        "sha256",
+        "size",
+        "source",
+        "checked",
+        "catalog_url"
+      ],
+      "additionalProperties": false
+    },
+    "step": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
+        },
+        "run_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
+        },
+        "drivers": {
+          "$ref": "#/$defs/drivers"
+        },
+        "parameters": {
+          "type": "object",
+          "maxProperties": 16,
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 300
+              },
+              {
+                "type": "number",
+                "minimum": -1000000,
+                "maximum": 1000000
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 300
+                },
+                "minItems": 0,
+                "maxItems": 32
+              }
+            ]
+          }
+        },
+        "minutes": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1440
+        },
+        "needs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "minItems": 0,
+          "maxItems": 32
+        },
+        "produces": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "minItems": 0,
+          "maxItems": 16
+        },
+        "coverage": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "pattern": "^[A-Za-z0-9_.:-]+$"
+          },
+          "minItems": 0,
+          "maxItems": 1024
+        },
+        "optional_seed_for": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "run_id",
+        "drivers",
+        "parameters",
+        "minutes",
+        "needs",
+        "produces",
+        "coverage",
+        "optional_seed_for"
+      ],
+      "additionalProperties": false
+    },
+    "seed_hint": {
+      "type": "object",
+      "properties": {
+        "artifact": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
+        },
+        "scope_key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "producer_assignment_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
+        },
+        "producer_box_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
+        },
+        "available_minute": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "transfer_minutes": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1440
+        },
+        "deadline_minute": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "fallback_step_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "pattern": "^[A-Za-z0-9_.:-]+$"
+          },
+          "minItems": 1,
+          "maxItems": 32
+        },
+        "gb": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 10000
+        }
+      },
+      "required": [
+        "artifact",
+        "scope_key",
+        "producer_assignment_id",
+        "producer_box_id",
+        "available_minute",
+        "transfer_minutes",
+        "deadline_minute",
+        "fallback_step_ids",
+        "gb"
+      ],
+      "additionalProperties": false
+    },
+    "seed_export": {
+      "type": "object",
+      "properties": {
+        "artifact": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
+        },
+        "scope_key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "consumer_assignment_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
+        },
+        "ready_after_step_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
+        },
+        "gb": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "minutes": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1440
+        },
+        "available_minute": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "deadline_minute": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100000
+        }
+      },
+      "required": [
+        "artifact",
+        "scope_key",
+        "consumer_assignment_id",
+        "ready_after_step_id",
+        "gb",
+        "minutes",
+        "available_minute",
+        "deadline_minute"
+      ],
+      "additionalProperties": false
+    },
+    "reuse": {
+      "type": "object",
+      "properties": {
+        "artifact": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
+        },
+        "scope_key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "producer_step_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
+        },
+        "consumer_step_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "pattern": "^[A-Za-z0-9_.:-]+$"
+          },
+          "minItems": 1,
+          "maxItems": 512
+        }
+      },
+      "required": [
+        "artifact",
+        "scope_key",
+        "producer_step_id",
+        "consumer_step_ids"
+      ],
+      "additionalProperties": false
+    },
+    "source": {
+      "type": "object",
+      "properties": {
+        "artifact": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
+        },
+        "scope_key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "tier": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
+        },
+        "kind": {
+          "enum": [
+            "local",
+            "optional_seed",
+            "official"
+          ]
+        },
+        "producer_assignment_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "pattern": "^[A-Za-z0-9_.:-]+$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "artifact",
+        "scope_key",
+        "tier",
+        "kind",
+        "producer_assignment_id"
+      ],
+      "additionalProperties": false
+    },
+    "pricing": {
+      "type": "object",
+      "properties": {
+        "disk_gb": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "bandwidth_down_gb": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "bandwidth_up_gb": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "hourly_usd": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "transfer_usd": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "effective_usd_hour": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "estimated_usd": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "reserved_usd": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000000
+        }
+      },
+      "required": [
+        "disk_gb",
+        "bandwidth_down_gb",
+        "bandwidth_up_gb",
+        "hourly_usd",
+        "transfer_usd",
+        "effective_usd_hour",
+        "estimated_usd",
+        "reserved_usd"
+      ],
+      "additionalProperties": false
+    },
+    "assignment": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "status": {
+          "enum": [
+            "proposed",
+            "executable"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
+        },
+        "box_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
+        },
+        "machine_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
+        },
+        "host_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
+        },
+        "die": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
+        },
+        "die_family": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
+        },
+        "provider": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
+        },
+        "tier": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
+        },
+        "capabilities": {
+          "$ref": "#/$defs/capabilities"
+        },
+        "source_revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40,
+          "pattern": "^[a-f0-9]{40}$"
+        },
+        "catalog_revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40,
+          "pattern": "^[a-f0-9]{40}$"
+        },
+        "primary_evidence": {
+          "type": "boolean"
+        },
+        "start_minute": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "estimated_minutes": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1440
+        },
+        "fallback_minutes": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1440
+        },
+        "worst_case_minutes": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1440
+        },
+        "reservation_minutes": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 1440
+        },
+        "runs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/step"
+          },
+          "minItems": 1,
+          "maxItems": 1024
+        },
+        "setup_reuse": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/reuse"
+          },
+          "minItems": 0,
+          "maxItems": 512
+        },
+        "seed_hints": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/seed_hint"
+          },
+          "minItems": 0,
+          "maxItems": 128
+        },
+        "seed_exports": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/seed_export"
+          },
+          "minItems": 0,
+          "maxItems": 128
+        },
+        "driver_pins": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/pin"
+          },
+          "minItems": 1,
+          "maxItems": 128
+        },
+        "artifact_sources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/source"
+          },
+          "minItems": 0,
+          "maxItems": 512
+        },
+        "assigned_consumers": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "pattern": "^[A-Za-z0-9_.:-]+$"
+          },
+          "minItems": 0,
+          "maxItems": 128
+        },
+        "pricing": {
+          "$ref": "#/$defs/pricing"
+        }
+      },
+      "required": [
+        "version",
+        "status",
+        "id",
+        "box_id",
+        "machine_id",
+        "host_id",
+        "die",
+        "die_family",
+        "provider",
+        "tier",
+        "capabilities",
+        "source_revision",
+        "catalog_revision",
+        "primary_evidence",
+        "start_minute",
+        "estimated_minutes",
+        "fallback_minutes",
+        "worst_case_minutes",
+        "reservation_minutes",
+        "runs",
+        "setup_reuse",
+        "seed_hints",
+        "seed_exports",
+        "driver_pins",
+        "artifact_sources",
+        "assigned_consumers",
+        "pricing"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$ref": "#/$defs/assignment",
+  "$comment": "Assignment-reachable definitions copied without edits from J2 read-only snapshot, 2026-11-08; full contract sha256 306b615a319de11b0e823c8c0b8d2ef66e4fa9229d708725bb26f31d3cb3dd79. Base 50640c605; J2 files were uncommitted at snapshot time."
+}
