@@ -1,7 +1,7 @@
 {
   "schema_version": 2,
-  "recipe_version": "2026-11-07.3",
-  "claim": "DESIGN: open-only image; official NVIDIA inputs acquired on the box host at provision time; separate input-pinned inventories, not byte-identical images",
+  "recipe_version": "2026-11-08.1",
+  "claim": "PINNED input equality; BUILT binary and image hashes informational",
   "base": {
     "id": "ubuntu-noble-20261017",
     "url": "https://cloud-images.ubuntu.com/releases/noble/release-20261017/ubuntu-24.04-server-cloudimg-amd64.img",

@@ -505,11 +505,10 @@ class Inventory(unittest.TestCase):
         with self.assertRaises(ValueError):
             common.validate_inventory(self.inv, self.recipe)
 
-    def test_pinned_binary_cannot_change(self):
+    def test_pinned_binary_hash_is_informational(self):
         self.recipe["builds"][0]["outputs"][0]["sha256"] = "d" * 64
         self.inv["files"]["/opt/apps/bundle/bin/demo"] = "e" * 64
-        with self.assertRaises(ValueError):
-            common.validate_inventory(self.inv, self.recipe)
+        self.assertIsNone(self.validation_error())
 
     def test_pip_freeze_normalizes_pep503_names(self):
         self.recipe["artifacts"][1]["package"] = "demo-package"
@@ -518,10 +517,9 @@ class Inventory(unittest.TestCase):
         self.inv["pip_freeze"] = ["Demo_Package==1.0"]
         common.validate_inventory(self.inv, self.recipe)
 
-    def test_expected_binary_hash_enforced(self):
+    def test_expected_binary_hash_is_not_a_gate(self):
         self.recipe["builds"][0]["outputs"][0]["sha256"] = "a" * 64
-        with self.assertRaises(ValueError):
-            common.validate_inventory(self.inv, self.recipe)
+        self.assertIsNone(self.validation_error())
 
     def test_wheel_hash_refused(self):
         self.inv["wheels"]["demo==1.0"] = "0" * 64
@@ -533,26 +531,129 @@ class Inventory(unittest.TestCase):
         with self.assertRaises(ValueError):
             common.validate_inventory(self.inv, self.recipe)
 
+    def validation_error(self):
+        try:
+            common.validate_inventory(self.inv, self.recipe)
+        except ValueError as error:
+            return str(error)
+        return None
+
+    def parts(self, inv=None, recipe=None):
+        return common.inventory_parts(inv or self.inv, recipe or self.recipe)
+
+    def accepts(self, expected, observed):
+        try:
+            build_image.compare_inventory(expected, observed)
+        except ValueError:
+            return False
+        return True
+
     def test_verify_compares_dpkg_versions(self):
-        observed = copy.deepcopy(self.inv)
-        observed["dpkg"] = ["ii\tcmake\tamd64\t2.0"]
-        with self.assertRaises(ValueError):
-            build_image.compare_inventory(self.inv, observed)
+        observed = copy.deepcopy(self.parts())
+        observed["pinned"]["dpkg"][0] = "ii\tcmake\tamd64\t2.0"
+        self.assertFalse(self.accepts(self.parts(), observed))
 
-    def test_verify_compares_binary_bytes(self):
-        observed = copy.deepcopy(self.inv)
-        observed["files"]["/usr/bin/ffmpeg"] = "0" * 64
-        with self.assertRaises(ValueError):
-            build_image.compare_inventory(self.inv, observed)
+    def test_verify_allows_different_binary_bytes(self):
+        observed = copy.deepcopy(self.parts())
+        observed["built"]["files"]["/usr/bin/ffmpeg"] = "0" * 64
+        self.assertTrue(self.accepts(self.parts(), observed))
 
-    def test_verify_compares_installed_pip_bytes(self):
-        observed = copy.deepcopy(self.inv)
-        observed["pip_files"]["demo"] = "a" * 64
-        with self.assertRaises(ValueError):
-            build_image.compare_inventory(self.inv, observed)
+    def test_verify_allows_different_compiled_app_bytes(self):
+        observed = copy.deepcopy(self.parts())
+        observed["built"]["files"]["/opt/apps/bundle/bin/demo"] = "a" * 64
+        self.assertTrue(self.accepts(self.parts(), observed))
+
+    def test_verify_allows_image_hash_difference(self):
+        expected, observed = self.parts(), self.parts()
+        expected["built"]["image"] = {"sha256": "a" * 64}
+        observed["built"]["image"] = {"sha256": "b" * 64}
+        self.assertTrue(self.accepts(expected, observed))
+
+    def test_verify_allows_image_size_difference(self):
+        expected, observed = self.parts(), self.parts()
+        expected["built"]["image"] = {"size": 123}
+        observed["built"]["image"] = {"size": 456}
+        self.assertTrue(self.accepts(expected, observed))
+
+    def test_verify_allows_installed_pip_byte_differences(self):
+        observed = copy.deepcopy(self.parts())
+        observed["built"]["pip_files"]["demo"] = "a" * 64
+        self.assertTrue(self.accepts(self.parts(), observed))
 
     def test_equal_inventories_pass(self):
-        build_image.compare_inventory(self.inv, copy.deepcopy(self.inv))
+        self.assertTrue(self.accepts(self.parts(), copy.deepcopy(self.parts())))
+
+    def test_pinned_records_model_input_url_and_hash(self):
+        self.assertIn(self.recipe["artifacts"][0], self.parts()["pinned"]["inputs"])
+
+    def test_pinned_records_wheel_input_url_and_hash(self):
+        self.assertIn(self.recipe["artifacts"][1], self.parts()["pinned"]["inputs"])
+
+    def test_source_commit_is_visible_in_pinned_part(self):
+        self.recipe["provenance"] = {"llama_commit": "a" * 40}
+        self.assertEqual(
+            self.parts()["pinned"]["source_refs"], self.recipe["provenance"]
+        )
+
+    def test_source_tag_is_visible_in_pinned_part(self):
+        self.recipe["provenance"] = {"cuda_samples_tag": "v12.5"}
+        self.assertEqual(
+            self.parts()["pinned"]["source_refs"], self.recipe["provenance"]
+        )
+
+    def test_verify_refuses_source_url_drift(self):
+        observed = copy.deepcopy(self.parts())
+        self.assertTrue(observed["pinned"]["inputs"])
+        observed["pinned"]["inputs"][0]["url"] += "?different-source"
+        self.assertFalse(self.accepts(self.parts(), observed))
+
+    def test_verify_refuses_source_hash_drift(self):
+        observed = copy.deepcopy(self.parts())
+        self.assertTrue(observed["pinned"]["inputs"])
+        observed["pinned"]["inputs"][0]["sha256"] = "0" * 64
+        self.assertFalse(self.accepts(self.parts(), observed))
+
+    def test_recipe_environment_drift_changes_pinned_identity(self):
+        other = copy.deepcopy(self.recipe)
+        other["environment"]["LC_ALL"] = "C"
+        self.assertFalse(self.accepts(self.parts(), self.parts(recipe=other)))
+
+    def test_recipe_version_drift_changes_pinned_identity(self):
+        other = copy.deepcopy(self.recipe)
+        other["recipe_version"] = "other-recipe"
+        self.assertFalse(self.accepts(self.parts(), self.parts(recipe=other)))
+
+    def test_compare_refuses_missing_compiled_app(self):
+        observed = copy.deepcopy(self.parts())
+        del observed["built"]["files"]["/opt/apps/bundle/bin/demo"]
+        self.assertFalse(self.accepts(self.parts(), observed))
+
+    def test_compare_refuses_missing_packaged_app(self):
+        observed = copy.deepcopy(self.parts())
+        del observed["built"]["files"]["/usr/bin/ffmpeg"]
+        self.assertFalse(self.accepts(self.parts(), observed))
+
+    def test_inventory_refuses_missing_packaged_app(self):
+        del self.inv["files"]["/usr/bin/ffmpeg"]
+        self.assertIsNotNone(self.validation_error())
+
+    def test_inventory_refuses_another_missing_packaged_app(self):
+        self.recipe["inventory"]["dpkg_binaries"].append("ffprobe")
+        self.assertIsNotNone(self.validation_error())
+
+    def test_model_hash_is_in_pinned_part(self):
+        self.assertEqual(
+            self.parts()["pinned"]["files"]["/opt/apps/data/model"], digest(b"model")
+        )
+        self.assertNotIn("/opt/apps/data/model", self.parts()["built"]["files"])
+
+    def test_wheel_hash_is_compared(self):
+        observed = copy.deepcopy(self.parts())
+        observed["pinned"]["wheels"]["demo==1.0"] = "0" * 64
+        self.assertFalse(self.accepts(self.parts(), observed))
+
+    def test_input_parts_roundtrip_to_observation(self):
+        self.assertEqual(common.inventory_observation(self.parts()), self.inv)
 
 
 class FakeQemu(unittest.TestCase):
@@ -683,9 +784,10 @@ class FakeQemu(unittest.TestCase):
 
     def test_build_writes_manifest_only_after_verified_completion(self):
         manifest = self.build()
-        self.assertEqual(manifest["inventory"], self.inv)
+        self.assertEqual(common.inventory_observation(manifest), self.inv)
+        self.assertEqual(manifest["schema_version"], 3)
         self.assertEqual(
-            manifest["image"]["sha256"],
+            manifest["built"]["image"]["sha256"],
             digest((self.out / "apps-image.qcow2").read_bytes()),
         )
         self.assertEqual(
@@ -702,7 +804,9 @@ class FakeQemu(unittest.TestCase):
     def test_build_publishes_only_the_audited_open_bundle(self):
         manifest = self.build()
         bundle = self.out / "apps-open-bundle.tar.gz"
-        self.assertEqual(common.sha256_file(bundle), manifest["open_bundle"]["sha256"])
+        self.assertEqual(
+            common.sha256_file(bundle), manifest["built"]["open_bundle"]["sha256"]
+        )
         with tarfile.open(bundle) as archive:
             self.assertEqual(archive.getnames(), ["opt/apps/bundle/bin/demo"])
 
@@ -802,7 +906,7 @@ class FakeQemu(unittest.TestCase):
         report = build_image.verify(
             image, self.out / "apps-image.manifest.json", self.root / "verified"
         )
-        self.assertEqual(report["status"], "inventory-identical")
+        self.assertEqual(report["status"], "pinned-inputs-identical")
         self.assertEqual(image.read_bytes(), before)
         records = self.records()
         vm = [r for r in records if r["program"] == "qemu-system-x86_64"][-1]["argv"]
@@ -832,16 +936,17 @@ class FakeQemu(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.build()
 
-    def test_verify_rejects_modified_pip_files(self):
+    def test_verify_reports_modified_pip_files(self):
         self.build()
         self.inv["pip_files"]["demo"] = "a" * 64
         self.save()
-        with self.assertRaises(ValueError):
-            build_image.verify(
-                self.out / "apps-image.qcow2",
-                self.out / "apps-image.manifest.json",
-                self.root / "v",
-            )
+        report = build_image.verify(
+            self.out / "apps-image.qcow2",
+            self.out / "apps-image.manifest.json",
+            self.root / "v",
+        )
+        self.assertEqual(report["status"], "pinned-inputs-identical")
+        self.assertIn("built", report)
 
     def test_verify_rejects_nonzero_qemu_exit(self):
         self.build()
@@ -865,16 +970,17 @@ class FakeQemu(unittest.TestCase):
                 self.root / "v",
             )
 
-    def test_verify_rejects_modified_app_binary(self):
+    def test_verify_reports_modified_app_binary(self):
         self.build()
         self.inv["files"]["/usr/bin/ffmpeg"] = "0" * 64
         self.save()
-        with self.assertRaises(ValueError):
-            build_image.verify(
-                self.out / "apps-image.qcow2",
-                self.out / "apps-image.manifest.json",
-                self.root / "v",
-            )
+        report = build_image.verify(
+            self.out / "apps-image.qcow2",
+            self.out / "apps-image.manifest.json",
+            self.root / "v",
+        )
+        self.assertEqual(report["status"], "pinned-inputs-identical")
+        self.assertIn("built", report)
 
     def test_verify_allows_different_image_bytes_with_equal_inventory(self):
         self.build()
@@ -883,8 +989,91 @@ class FakeQemu(unittest.TestCase):
         report = build_image.verify(
             image, self.out / "apps-image.manifest.json", self.root / "v"
         )
-        self.assertFalse(report["image_sha256_matches_manifest"])
-        self.assertEqual(report["status"], "inventory-identical")
+        self.assertNotIn("image_sha256_matches_manifest", report["built"])
+        self.assertEqual(
+            report["built"]["image"]["sha256"], digest(b"different ext4 timestamps")
+        )
+        self.assertEqual(report["status"], "pinned-inputs-identical")
+
+    def test_verify_reports_actual_compiled_hash_and_stable_pinned_digest(self):
+        manifest = self.build()
+        self.inv["files"]["/opt/apps/bundle/bin/demo"] = "1" * 64
+        self.save()
+        report = build_image.verify(
+            self.out / "apps-image.qcow2",
+            self.out / "apps-image.manifest.json",
+            self.root / "v",
+        )
+        self.assertEqual(report["pinned"], manifest["pinned"])
+        self.assertEqual(
+            report["built"]["files"]["/opt/apps/bundle/bin/demo"], "1" * 64
+        )
+        self.assertEqual(
+            report["pinned_inventory_sha256"],
+            digest(common.canonical(manifest["pinned"])),
+        )
+
+    def test_verify_refuses_missing_app_despite_matching_input_pins(self):
+        self.build()
+        del self.inv["files"]["/usr/bin/ffmpeg"]
+        self.save()
+        with self.assertRaises(ValueError):
+            build_image.verify(
+                self.out / "apps-image.qcow2",
+                self.out / "apps-image.manifest.json",
+                self.root / "v",
+            )
+
+    def test_cli_prints_built_hashes_without_gating_them(self):
+        self.build()
+        self.inv["files"]["/usr/bin/ffmpeg"] = "2" * 64
+        self.save()
+        with patch("sys.stdout", new_callable=io.StringIO) as output:
+            status = build_image.main(
+                [
+                    "verify",
+                    "--image",
+                    str(self.out / "apps-image.qcow2"),
+                    "--manifest",
+                    str(self.out / "apps-image.manifest.json"),
+                    "--out",
+                    str(self.root / "cli-verify"),
+                ]
+            )
+        self.assertEqual(status, 0)
+        report = json.loads(output.getvalue())
+        self.assertEqual(report["built"]["files"]["/usr/bin/ffmpeg"], "2" * 64)
+        self.assertIn("pinned_inventory_sha256", report)
+
+    def check_manifest_pin_tampering(self, field, value):
+        self.build()
+        path = self.out / "apps-image.manifest.json"
+        manifest = json.loads(path.read_text())
+        manifest["pinned"]["inputs"][0][field] = value
+        path.write_text(json.dumps(manifest))
+        with self.assertRaises(ValueError):
+            build_image.load_manifest(path, IMAGE)
+
+    def test_manifest_cannot_substitute_recorded_source_url(self):
+        self.check_manifest_pin_tampering("url", "https://example.org/substitute")
+
+    def test_manifest_cannot_substitute_recorded_source_hash(self):
+        self.check_manifest_pin_tampering("sha256", "0" * 64)
+
+    def check_required_app_tampering(self, app):
+        self.build()
+        path = self.out / "apps-image.manifest.json"
+        manifest = json.loads(path.read_text())
+        manifest["built"]["required_apps"].remove(app)
+        path.write_text(json.dumps(manifest))
+        with self.assertRaises(ValueError):
+            build_image.load_manifest(path, IMAGE)
+
+    def test_manifest_cannot_omit_compiled_app_presence(self):
+        self.check_required_app_tampering("/opt/apps/bundle/bin/demo")
+
+    def test_manifest_cannot_omit_packaged_app_presence(self):
+        self.check_required_app_tampering("/usr/bin/ffmpeg")
 
     def test_build_refuses_overwrite(self):
         self.build()
@@ -899,6 +1088,27 @@ class FakeQemu(unittest.TestCase):
 
 
 class GuestInstall(unittest.TestCase):
+    def built_hash_error(self, name):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / name
+            path.write_bytes(b"compiled output")
+            recipe = fixture()
+            item = recipe["builds"][0]
+            item.update(requires="nvidia-layer-static", cwd=directory)
+            item["outputs"] = [{"path": str(path), "sha256": "0" * 64}]
+            with patch.object(guest, "run"):
+                try:
+                    guest.build_apps(recipe, runtime=True)
+                except ValueError as error:
+                    return str(error)
+        return None
+
+    def test_guest_records_first_compiled_output_without_expected_hash_gate(self):
+        self.assertIsNone(self.built_hash_error("first"))
+
+    def test_guest_records_second_compiled_output_without_expected_hash_gate(self):
+        self.assertIsNone(self.built_hash_error("second"))
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)

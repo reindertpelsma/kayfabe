@@ -35,6 +35,90 @@ def finding(message):
 # it does not change the two-killer requirement or allow ERRORs to count.
 CASES = [
     (
+        "built-part-not-compared",
+        "build_image",
+        [
+            (
+                "expression",
+                "canonical(expected['pinned']) != canonical(observed['pinned'])",
+                "canonical(expected) != canonical(observed)",
+            )
+        ],
+        "core",
+        ["Inventory"],
+    ),
+    (
+        "input-pins-visible",
+        "common",
+        [("expression", "inventory_input_pins(recipe, inv['layer'])", "[]")],
+        "core",
+        ["Inventory"],
+    ),
+    (
+        "recipe-hash-visible",
+        "common",
+        [("expression", "hashlib.sha256(canonical(recipe)).hexdigest()", "'0' * 64")],
+        "core",
+        ["Inventory"],
+    ),
+    (
+        "source-refs-visible",
+        "common",
+        [("expression", "source_refs(recipe)", "{}")],
+        "core",
+        ["Inventory"],
+    ),
+    (
+        "missing-app-comparison",
+        "build_image",
+        [guard("missing inventory app")],
+        "core",
+        ["Inventory"],
+    ),
+    (
+        "packaged-app-presence",
+        "common",
+        [guard("missing installed app")],
+        "core",
+        ["Inventory"],
+    ),
+    (
+        "manifest-input-consistency",
+        "build_image",
+        [guard("manifest pinned inventory differs")],
+        "core",
+        [
+            "FakeQemu.test_manifest_cannot_substitute_recorded_source_url",
+            "FakeQemu.test_manifest_cannot_substitute_recorded_source_hash",
+        ],
+    ),
+    (
+        "manifest-required-apps",
+        "build_image",
+        [guard("manifest required apps differ")],
+        "core",
+        [
+            "FakeQemu.test_manifest_cannot_omit_compiled_app_presence",
+            "FakeQemu.test_manifest_cannot_omit_packaged_app_presence",
+        ],
+    ),
+    (
+        "guest-compiled-hash-is-advisory",
+        "guest",
+        [
+            (
+                "expression",
+                "not p.is_file()",
+                "not p.is_file() or (output['sha256'] != 'inventory-only' and sha256_file(p) != output['sha256'])",
+            )
+        ],
+        "core",
+        [
+            "GuestInstall.test_guest_records_first_compiled_output_without_expected_hash_gate",
+            "GuestInstall.test_guest_records_second_compiled_output_without_expected_hash_gate",
+        ],
+    ),
+    (
         "missing-input-hash",
         "common",
         [guard("input needs an id and SHA256 pin")],
@@ -122,9 +206,15 @@ CASES = [
         ["Inventory"],
     ),
     (
-        "built-binary-pin",
+        "compiled-hash-is-advisory",
         "common",
-        [guard("build output hash mismatch")],
+        [
+            (
+                "expression",
+                "o['path'] not in files",
+                "o['path'] not in files or (o['sha256'] != 'inventory-only' and files.get(o['path']) != o['sha256'])",
+            )
+        ],
         "core",
         ["Inventory"],
     ),
@@ -166,7 +256,7 @@ CASES = [
     (
         "inventory-comparison",
         "build_image",
-        [guard("inventory differs")],
+        [guard("inventory differs (PINNED)")],
         "core",
         ["Inventory"],
     ),
@@ -527,6 +617,17 @@ def mutate(source, operations):
             ).test
             if kind == "bool-part":
                 node = node.values[args[1]]
+        elif kind == "expression":
+            target = ast.dump(ast.parse(args[0], mode="eval").body)
+            node = one(
+                [
+                    n
+                    for n in ast.walk(tree)
+                    if isinstance(n, ast.expr) and ast.dump(n) == target
+                ]
+            )
+            replacement = args[1]
+            ast.parse(replacement, mode="eval")
         elif kind == "finding":
             node = one(
                 [

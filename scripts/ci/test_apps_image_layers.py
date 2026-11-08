@@ -864,7 +864,9 @@ class RuntimeContext(unittest.TestCase):
                 disk, path, self.root / "runtime-verification", timeout=15
             )
             self.assertEqual(report["layer"], "runtime")
-            self.assertEqual(report["status"], "inventory-identical")
+            self.assertEqual(report["status"], "pinned-inputs-identical")
+            self.assertIn("official_receipts", report["pinned"])
+            self.assertNotIn("official_inputs", manifest["built"])
 
     def test_runtime_verification_rejects_nvidia_install_drift(self):
         import build_image

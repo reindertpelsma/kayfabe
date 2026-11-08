@@ -1,0 +1,9 @@
+{
+  "scripts/apps/image/build_image.py": "6b27794dc042eab571857b53d2c17d38bd8836207b6fe3a88fa7f3cfacbd8e0e",
+  "scripts/apps/image/common.py": "5d58141379f6bfe4873424b11b927fcdebb95af38f14b64ffcb350ebb2fb8f54",
+  "scripts/apps/image/guest.py": "6802f1fdb96f708434869917f67d117b01bb9d1136596b17ace043846ca6ee4e",
+  "scripts/apps/image/mutants.py": "344b97129523ae4599d9d5510e07fbc528b4b33f0ed69169a9f73172d8f0cf12",
+  "scripts/apps/image/recipe.json": "be1c62eba8c76e268b68925a3e4440007cad901eb4df9561520aa72e497290ef",
+  "scripts/ci/test_apps_image.py": "837e745daeb4747467a13a2e9a8f23a8bf0141d02853437013ee8995ade05383",
+  "scripts/ci/test_apps_image_layers.py": "e0343287567d840f6b697d4457208284134b683d7bc6df8b1990838264fd2025"
+}

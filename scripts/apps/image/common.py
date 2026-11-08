@@ -379,6 +379,9 @@ def validate_inventory(inv, recipe):
         for p in inventory_spec["required_paths"]:
             if p not in files:
                 raise ValueError(f"missing inventory file: {p}")
+        for name in inventory_spec["dpkg_binaries"]:
+            if not any(PurePosixPath(path).name == name for path in files):
+                raise ValueError("missing installed app: " + name)
         for a in recipe["artifacts"]:
             if a["kind"] == "file" and files.get(a["target"]) != a["sha256"]:
                 raise ValueError(f"file pin differs: {a['id']}")
@@ -388,7 +391,115 @@ def validate_inventory(inv, recipe):
             for o in b["outputs"]:
                 if o["path"] not in files:
                     raise ValueError("missing build output")
-                if o["sha256"] != "inventory-only" and files[o["path"]] != o["sha256"]:
-                    raise ValueError("build output hash mismatch")
     except (KeyError, TypeError, AttributeError) as e:
         raise ValueError("incomplete inventory") from e
+
+
+def inventory_input_pins(recipe, layer):
+    """Declared inputs whose acquisition is hash-checked, never generated outputs."""
+    official = [
+        pin
+        for pin in recipe["official_fetch"]
+        if (layer == "runtime" or pin["kind"] != "wheel")
+        and (
+            pin["kind"] != "run" or pin["version"] == recipe["guest"]["nvidia_version"]
+        )
+    ]
+    return sorted(
+        [recipe["base"], *recipe["artifacts"], *recipe["apt"]["metadata"], *official],
+        key=lambda pin: pin["id"],
+    )
+
+
+def source_refs(recipe):
+    return {
+        key: value
+        for key, value in recipe.get("provenance", {}).items()
+        if key.endswith(("_commit", "_tag", "_version"))
+    }
+
+
+def inventory_parts(inv, recipe, source_tooling=None):
+    """Owner policy: compare PINNED inputs; record BUILT bytes for information."""
+    validate_inventory(inv, recipe)
+    input_paths = {a["target"] for a in recipe["artifacts"] if a["kind"] == "file"}
+    pinned = {
+        "layer": inv["layer"],
+        "recipe_sha256": hashlib.sha256(canonical(recipe)).hexdigest(),
+        "apt_snapshot": recipe["apt"]["snapshot"],
+        "tooling": source_tooling or {},
+        "dpkg": sorted(inv["dpkg"]),
+        "pip_freeze": sorted(inv["pip_freeze"]),
+        "wheels": inv["wheels"],
+        "inputs": inventory_input_pins(recipe, inv["layer"]),
+        "local_sources": recipe["local_files"],
+        "source_refs": source_refs(recipe),
+        "files": {
+            path: sha for path, sha in inv["files"].items() if path in input_paths
+        },
+    }
+    if inv["layer"] == "runtime":
+        pinned["official_receipts"] = inv["official_receipts"]
+    built = {
+        key: value
+        for key, value in inv.items()
+        if key
+        not in {
+            "schema_version",
+            "layer",
+            "dpkg",
+            "pip_freeze",
+            "wheels",
+            "files",
+            "official_receipts",
+        }
+    }
+    built["files"] = {
+        path: sha for path, sha in inv["files"].items() if path not in input_paths
+    }
+    spec = (
+        recipe["inventory"] if inv["layer"] == "open" else recipe["runtime_inventory"]
+    )
+    required = set(spec["required_paths"])
+    for build in recipe["builds"]:
+        if inv["layer"] == "runtime" or build["requires"] == "open-layer":
+            required.update(output["path"] for output in build["outputs"])
+    required.update(
+        path
+        for path in inv["files"]
+        if PurePosixPath(path).name in spec["dpkg_binaries"]
+    )
+    built["required_apps"] = sorted(required)
+    return {"pinned": pinned, "built": built}
+
+
+def inventory_observation(parts):
+    """Reconstruct the bounded guest observation for structural/policy validation."""
+    try:
+        pinned, built = parts["pinned"], parts["built"]
+        if set(pinned["files"]) & set(built["files"]):
+            raise ValueError("input and built file categories overlap")
+        inv = {
+            key: built[key]
+            for key in (
+                "guest",
+                "pip_files",
+                "nvidia_scan",
+                "no_nvidia_proprietary_files",
+                "symlinks",
+            )
+            if key in built
+        }
+        inv.update(
+            schema_version=1,
+            layer=pinned["layer"],
+            dpkg=pinned["dpkg"],
+            pip_freeze=pinned["pip_freeze"],
+            wheels=pinned["wheels"],
+            files={**pinned["files"], **built["files"]},
+        )
+        if "official_receipts" in pinned:
+            inv["official_receipts"] = pinned["official_receipts"]
+        return inv
+    except (KeyError, TypeError, AttributeError) as error:
+        raise ValueError("incomplete split inventory") from error

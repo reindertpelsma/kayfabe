@@ -33,6 +33,8 @@ from common import (
     relative_path,
     sha256_file,
     validate_inventory,
+    inventory_parts,
+    inventory_observation,
     validate_recipe,
 )
 from iso9660 import make_iso
@@ -497,13 +499,16 @@ def boot(
 
 
 def compare_inventory(expected, observed):
-    if canonical(expected) != canonical(observed):
+    if canonical(expected["pinned"]) != canonical(observed["pinned"]):
         fields = sorted(
-            k
-            for k in set(expected) | set(observed)
-            if expected.get(k) != observed.get(k)
+            key
+            for key in set(expected["pinned"]) | set(observed["pinned"])
+            if expected["pinned"].get(key) != observed["pinned"].get(key)
         )
-        raise ValueError("inventory differs: " + ", ".join(fields))
+        raise ValueError("inventory differs (PINNED): " + ", ".join(fields))
+    present = set(observed["built"]["files"]) | set(observed["pinned"]["files"])
+    if set(expected["built"]["required_apps"]) - present:
+        raise ValueError("missing inventory app")
 
 
 def preflight(path, build=True, required=None):
@@ -701,30 +706,33 @@ def build(
         )
         run_qemu_tool([qemu_img, "check", "-f", "qcow2", str(converted)])
         manifest = {
-            "schema_version": 2,
+            "schema_version": 3,
             "layer": "open",
             "no_nvidia_proprietary_files": True,
-            "claim": "input-pinned + inventory-identical; not byte-identical",
+            "claim": "PINNED inputs identical; BUILT hashes informational",
             "recipe": recipe,
             "recipe_sha256": hashlib.sha256(canonical(recipe)).hexdigest(),
             "base": recipe["base"],
             "apt_snapshot": recipe["apt"]["snapshot"],
             "main_universe_packages": sorted(apt.names),
             "apt_inputs": list(apt.used.values()),
-            "tooling": tooling(root),
-            "builder_inventory": build_inv,
-            "inventory": inv,
-            "open_bundle": {
-                "filename": bundle_path.name,
-                "sha256": export_pin["sha256"],
-                "size": export_pin["size"],
-            },
-            "image": {
-                "filename": image.name,
-                "sha256": sha256_file(converted),
-                "size": converted.stat().st_size,
-            },
+            **inventory_parts(inv, recipe, tooling(root)),
         }
+        manifest["built"].update(
+            {
+                "builder_inventory": build_inv,
+                "open_bundle": {
+                    "filename": bundle_path.name,
+                    "sha256": export_pin["sha256"],
+                    "size": export_pin["size"],
+                },
+                "image": {
+                    "filename": image.name,
+                    "sha256": sha256_file(converted),
+                    "size": converted.stat().st_size,
+                },
+            }
+        )
         pending = work / "manifest.json"
         pending.write_bytes(canonical(manifest) + b"\n")
         shutil.copyfile(export, bundle_path)
@@ -736,12 +744,22 @@ def build(
 def load_manifest(path, root):
     manifest = json.loads(Path(path).read_text())
     recipe = validate_recipe(manifest["recipe"])
-    if manifest["schema_version"] != 2 or manifest["tooling"] != tooling(root):
+    if manifest["schema_version"] != 3 or manifest["pinned"].get("tooling") != tooling(
+        root
+    ):
         raise ValueError("manifest schema/tooling differs; use original checkout")
     if manifest["recipe_sha256"] != hashlib.sha256(canonical(recipe)).hexdigest():
         raise ValueError("manifest recipe digest differs")
-    validate_inventory(manifest["inventory"], recipe)
-    if manifest["layer"] != manifest["inventory"]["layer"]:
+    inv = inventory_observation(manifest)
+    validate_inventory(inv, recipe)
+    if manifest["pinned"] != inventory_parts(inv, recipe, tooling(root))["pinned"]:
+        raise ValueError("manifest pinned inventory differs from recipe/observation")
+    if (
+        manifest["built"]["required_apps"]
+        != inventory_parts(inv, recipe, tooling(root))["built"]["required_apps"]
+    ):
+        raise ValueError("manifest required apps differ")
+    if manifest["layer"] != inv["layer"]:
         raise ValueError("manifest/inventory layer differs")
     return manifest, recipe
 
@@ -783,15 +801,22 @@ def verify(
         inv = boot_recorded(
             recipe, disk, seed_path, work, nonce, mode, out, qemu, timeout
         )
-        compare_inventory(manifest["inventory"], inv)
+        observed = inventory_parts(inv, recipe, tooling(root))
+        compare_inventory(manifest, observed)
         if sha256_file(image) != before:
             raise ValueError("verification changed input image")
         report = {
-            "status": "inventory-identical",
+            "status": "pinned-inputs-identical",
             "layer": layer,
-            "image_sha256": before,
-            "image_sha256_matches_manifest": before == manifest["image"]["sha256"],
-            "inventory_sha256": hashlib.sha256(canonical(inv)).hexdigest(),
+            "pinned": observed["pinned"],
+            "pinned_inventory_sha256": hashlib.sha256(
+                canonical(observed["pinned"])
+            ).hexdigest(),
+            "built": {
+                **observed["built"],
+                "image": {"sha256": before, "size": image.stat().st_size},
+                "reference_image_sha256": manifest["built"]["image"]["sha256"],
+            },
         }
         pending = work / "report.json"
         pending.write_bytes(canonical(report) + b"\n")
@@ -869,15 +894,18 @@ def provisioned(
             "recipe_sha256": hashlib.sha256(canonical(recipe)).hexdigest(),
             "layer": "runtime",
             "no_nvidia_proprietary_files": False,
-            "inventory": inv,
-            "official_inputs": recipe["official_fetch"],
-            "open_image_sha256": manifest["image"]["sha256"],
-            "image": {
-                "filename": disk.name,
-                "sha256": sha256_file(disk),
-                "size": disk.stat().st_size,
-            },
+            **inventory_parts(inv, recipe, tooling(root)),
         }
+        runtime["built"].update(
+            {
+                "open_image_sha256": manifest["built"]["image"]["sha256"],
+                "image": {
+                    "filename": disk.name,
+                    "sha256": sha256_file(disk),
+                    "size": disk.stat().st_size,
+                },
+            }
+        )
         receipt = work / (disk.name + ".STAGED")
         receipt.write_text(
             "version="
@@ -964,7 +992,10 @@ def main(argv=None):
                     )
                     # Inventory data can be retained; never retain the NVIDIA overlay or installers.
                     (args.out / "apps-runtime.inventory.json").write_bytes(
-                        canonical(runtime["inventory"]) + b"\n"
+                        canonical(
+                            {"pinned": runtime["pinned"], "built": runtime["built"]}
+                        )
+                        + b"\n"
                     )
         else:
             recipe = read_recipe(args.recipe)
@@ -990,7 +1021,7 @@ def main(argv=None):
                         for b in recipe["builds"]
                         if b["requires"] == "nvidia-layer-static"
                     ],
-                    "claim": "open image + transient official NVIDIA provisioning; inventories, not byte-identical images",
+                    "claim": "PINNED input equality; BUILT binary/image hashes informational",
                 }
             elif args.action == "inputs":
                 fetch_inputs(recipe, args.cache)
@@ -1006,7 +1037,8 @@ def main(argv=None):
                     args.timeout or 14400,
                 )
                 result = {
-                    "image": manifest["image"],
+                    "pinned": manifest["pinned"],
+                    "built": manifest["built"],
                     "manifest": str(args.out / "apps-image.manifest.json"),
                     "layer": "open",
                 }

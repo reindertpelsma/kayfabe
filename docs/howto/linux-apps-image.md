@@ -17,7 +17,7 @@ python3 scripts/apps/image/build_image.py verify --image out/apps-image.qcow2 --
 
 **CODE READ:** supply only a public SSH key for the bench harness, or omit the option for serial-only work. The builder verifies every fetched input's hash/size, builds in a disposable scratch guest, exports only audited open app files to a fresh guest, and scans that guest before publishing `out/apps-image.qcow2`, `out/apps-image.manifest.json` and `out/apps-open-bundle.tar.gz`. Existing outputs are refused. Open direct downloads total about 3.54 GB, plus apt packages and temporary official compiler inputs.
 
-**DESIGN:** build again into a fresh directory, then verify the second image against the **first** manifest. The claim is pinned inputs and identical app inventories, not byte-identical disks. Disk timestamps, machine IDs, generated keys and log sizes can differ. Package versions, Python installation hashes, app/model hashes and clean scan findings must agree.
+**DESIGN:** build again into a fresh directory, then verify the second image against the **first** manifest. The comparison covers the manifest’s PINNED part: package names/versions, pip freeze with wheel hashes, input URLs and SHA256 pins, source commits/tags and recipe/tooling hashes. BUILT binary, installed-file and image hashes are printed for information and may differ. Missing required apps and PINNED differences fail; each image must independently pass its clean NVIDIA scan and existing transport/integrity checks. Manifest schema 3 keeps both parts separate; schema-2 manifests require rebuilding with the new checkout. Disk timestamps, paths, machine IDs and compiler output bytes need not match.
 
 **CODE READ:** test per-run offline provisioning with:
 

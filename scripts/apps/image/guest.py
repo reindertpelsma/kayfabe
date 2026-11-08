@@ -285,11 +285,6 @@ def build_apps(recipe, runtime=False):
             p = Path(output["path"])
             if not p.is_file():
                 raise ValueError("missing declared build output: " + str(p))
-            if (
-                output["sha256"] != "inventory-only"
-                and sha256_file(p) != output["sha256"]
-            ):
-                raise ValueError("built output pin mismatch")
         for path, libraries in item.get("shared_runtime_outputs", {}).items():
             shared[path] = elf.check_shared(path, libraries)
     if not runtime:
