@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "status": "PROPOSED",
+  "authentication": "existing run-token Bearer credential, bound to the release session, assignment and live instance",
+  "endpoints": [
+    {
+      "method": "GET",
+      "path": "/assignment",
+      "request": null,
+      "response": "assignment_response",
+      "statuses": [200, 401, 409],
+      "handler": "assignmentResponse",
+      "purpose": "Pull only the authenticated box assignment. No client assignment id."
+    },
+    {
+      "method": "POST",
+      "path": "/artifact/ready",
+      "request": "artifact_ready",
+      "response": null,
+      "statuses": [204, 400, 401, 409],
+      "handler": "artifactReady",
+      "purpose": "Commit ready metadata and pending-to-starting claims atomically; perform permitted starts in this request handler."
+    },
+    {
+      "method": "POST",
+      "path": "/artifact/gone",
+      "request": "artifact_gone",
+      "response": null,
+      "statuses": [204, 400, 401, 409],
+      "handler": "artifactGone",
+      "purpose": "Producer reports unavailable or ended; a planned consumer may report a byte/hash mismatch. Gone is terminal."
+    },
+    {
+      "method": "GET",
+      "path": "/artifact?name=X",
+      "request": "artifact_query",
+      "response": "artifact_response",
+      "statuses": [200, 202, 410, 400, 401, 404],
+      "handler": "artifactStatus",
+      "purpose": "Consumer polls its planned artifact until ready or deadline. All unavailable outcomes retain build_local."
+    }
+  ],
+  "cache_control": "no-store"
+}

@@ -218,6 +218,8 @@ export function fixture() {
       enabled: false,
       min_savings_minutes: 1,
       max_wait_minutes: 5,
+      container_port: 8080,
+      provider_facts_max_age_minutes: 1,
       price_weight: 1,
       upload_cost_weight: 1,
       upload_speed_weight: 0,
@@ -230,7 +232,7 @@ export function fixture() {
     die: i < 6 ? 'TU106' : 'TU116',
     provider: i % 2 ? 'vast' : 'local',
     host_driver: l,
-    capabilities: { can_swap_host_driver: true, kvm: true, vfio: true },
+    capabilities: { can_swap_host_driver: true, kvm: true, vfio: true, can_expose_port: true },
     limits: {
       hard_minutes: 300,
       disk_gb: 400,

@@ -32,6 +32,10 @@ test('versioned JSON Schemas conform to independent Draft 2020-12 engine', () =>
     for (const version of [0, 2, '1']) vectors.push({ name, value: { ...clone(value), version } });
     vectors.push({ name, value: { ...clone(value), unknown: 'no' } });
   }
+  const wire = JSON.parse(
+    readFileSync(new URL('../fixtures/protocol-wire-vectors.json', import.meta.url)),
+  );
+  for (const v of wire.vectors) vectors.push({ name: v.schema, value: v.value });
   for (const v of vectors) {
     try {
       checkSchema(v.name, v.value);

@@ -80,7 +80,6 @@ for (const provider of ['workstation', 'container'])
 test('assignment simulation worst: seeder dies during consumer download; local fallback remains valid', async () => {
   const f = seeded(1);
   f.limits.max_concurrent_boxes = 2;
-  f.requirements.items[0].runs.push('windows_apps_full');
   const d = { ...clone(f.catalog.dies[1]), id: 'TU104' };
   f.catalog.dies.push(d);
   f.catalog.driver_sets[0].supported_dies.push(d.id);

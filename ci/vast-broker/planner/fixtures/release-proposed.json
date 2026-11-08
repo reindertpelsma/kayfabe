@@ -1524,7 +1524,9 @@
       "max_wait_minutes": 5,
       "price_weight": 1,
       "upload_cost_weight": 1,
-      "upload_speed_weight": 0.001
+      "upload_speed_weight": 0.001,
+      "container_port": 8080,
+      "provider_facts_max_age_minutes": 1
     }
   },
   "boxes": []

@@ -32,3 +32,10 @@ Seeding is optional. An assignment retains its local-build steps and gives each 
 a deadline and fallback. `--without-seeds` shows the cold plan with the same requirements.
 The assignment-pull route and Python execution are separate integration work; use these
 commands to inspect and validate planning data today.
+
+Assignments include ordered `execution_steps`, complete cold `runs`, and optional seed hints
+with `fallback: build_local`. A provider snapshot must explicitly set `can_expose_port: true`
+to serve seeds; NAT boxes can leave it false or omit it. `--without-seeds` removes both
+serving and waiting options while preserving the requested work. The JSON contracts also
+include a direct-mode envelope with `report.json` as its output path; the Python executor
+and Worker HTTP routes remain separate integration work.

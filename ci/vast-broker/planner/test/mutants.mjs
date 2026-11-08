@@ -7,15 +7,261 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 const root = dirname(dirname(fileURLToPath(import.meta.url))),
   scratch = mkdtempSync(join(tmpdir(), 'kf-J2-planner-mutants-'));
-const files = ['planner', 'contracts', 'seeding', 'dependency-vectors', 'purity'].map(
-  (x) => 'test/' + x + '.test.js',
-);
+const files = [
+  'planner',
+  'contracts',
+  'seeding',
+  'dependency-vectors',
+  'purity',
+  'protocol',
+  'seed-lifetime',
+].map((x) => 'test/' + x + '.test.js');
 const one = (name, file, before, after, pattern) => ({
   name,
   edits: [{ file, before, after }],
   pattern,
 });
 const cases = [
+  one(
+    'artifact URL host binding skipped',
+    'artifacts.js',
+    'host === f.public_ip',
+    'true',
+    'artifact protocol refuses host',
+  ),
+  one(
+    'artifact mapped public port ignored',
+    'artifacts.js',
+    'p.public_port === port',
+    'true',
+    'artifact protocol refuses port',
+  ),
+  one(
+    'artifact requested port ignored',
+    'artifacts.js',
+    'f.requested_ports.includes(a.seed_server.container_port)',
+    'true',
+    'artifact protocol refuses requested',
+  ),
+  one(
+    'artifact provider facts freshness ignored',
+    'artifacts.js',
+    'now - f.observed_minute <= c.input.limits.seeding.provider_facts_max_age_minutes',
+    'true',
+    'artifact protocol refuses stale',
+  ),
+  one(
+    'artifact instance binding ignored',
+    'artifacts.js',
+    'f.instance_id === c.auth.instance_id',
+    'true',
+    'artifact protocol refuses instance',
+  ),
+  one(
+    'artifact verified run token skipped',
+    'artifacts.js',
+    "checkSchema('protocol_auth', c.auth);",
+    ';',
+    'artifact protocol refuses token',
+  ),
+  one(
+    'artifact session binding ignored',
+    'artifacts.js',
+    'state.session_id === c.session_id && c.auth.session_id === state.session_id',
+    'true',
+    'artifact protocol cannot extend identity',
+  ),
+  one(
+    'artifact name not checked against the plan',
+    'artifacts.js',
+    'const exported = one(a.seed_exports, body.artifact),',
+    'const exported = a.seed_exports[0],',
+    'artifact protocol refuses name',
+  ),
+  one(
+    'artifact exceeds priced GB',
+    'artifacts.js',
+    'body.size <= spec.gb * 1000000000',
+    'true',
+    'artifact protocol refuses bytes above the priced',
+  ),
+  one(
+    'artifact HTTP scheme ignored',
+    'artifacts.js',
+    "['http:', 'https:'].includes(u.protocol)",
+    'true',
+    'artifact protocol refuses scheme',
+  ),
+  one(
+    'artifact URL capability path ignored',
+    'artifacts.js',
+    '/^\\/[A-Za-z0-9_-]{8,128}\\/[A-Za-z0-9_.-]+$/.test(u.pathname)',
+    'true',
+    'artifact protocol refuses path',
+  ),
+  one(
+    'artifact public IP sanity guard ignored',
+    'artifacts.js',
+    'publicIp(f.public_ip)',
+    'true',
+    'artifact protocol refuses nonpublic provider',
+  ),
+  one(
+    'ready POST does not dispatch consumers',
+    'artifacts.js',
+    'starts.push(target.id);',
+    ';',
+    'artifact protocol ready claims pending',
+  ),
+  one(
+    'duplicate ready restarts an ended consumer',
+    'artifacts.js',
+    "pending.status !== 'pending'",
+    'false',
+    'artifact protocol ended consumer',
+  ),
+  one(
+    'starting claims do not consume concurrency',
+    'artifacts.js',
+    "['starting', 'running'].includes(x.status)",
+    "['running'].includes(x.status)",
+    'artifact protocol starting claims',
+  ),
+  one(
+    'ready bypasses live concurrency',
+    'artifacts.js',
+    'active >= c.input.limits.max_concurrent_boxes',
+    'false',
+    'artifact protocol never claims more',
+  ),
+  one(
+    'ready bypasses closed admission',
+    'artifacts.js',
+    'c.admission_open !== true',
+    'false',
+    'artifact protocol no new starts while admission',
+  ),
+  one(
+    'late ready starts a consumer',
+    'artifacts.js',
+    'now > hint.deadline_minute',
+    'false',
+    'artifact protocol late ready',
+  ),
+  one(
+    'source publishes after serving lifetime',
+    'artifacts.js',
+    'now < a.seed_server.serve_until_minute',
+    'true',
+    'artifact protocol source cannot publish after',
+  ),
+  one(
+    'gone artifact accepts a new ready POST',
+    'artifacts.js',
+    "old.state === 'ready'",
+    'true',
+    'artifact protocol hash mismatch invalidates direct source',
+  ),
+  one(
+    'ending a source leaves its artifacts ready',
+    'artifacts.js',
+    "(a) => a.producer_assignment_id === id && a.state === 'ready'",
+    '(a) => false',
+    'artifact protocol consumer polls ready then source loss',
+  ),
+  one(
+    'artifact hash mismatch passes verification',
+    'artifacts.js',
+    'observed.sha256 !== expected.sha256',
+    'false',
+    'artifact protocol metadata verifier checks',
+  ),
+  one(
+    'artifact size mismatch passes verification',
+    'artifacts.js',
+    'observed.size !== expected.size',
+    'false',
+    'artifact protocol metadata verifier checks',
+  ),
+  one(
+    'false consumer hash mismatch invalidates artifact',
+    'artifacts.js',
+    'body.observed_sha256 !== null && body.observed_sha256 !== row.sha256',
+    'true',
+    'artifact protocol false mismatch report',
+  ),
+  one(
+    'early consumer gets an unbounded wait',
+    'artifacts.js',
+    'r.started_minute + c.input.limits.seeding.max_wait_minutes',
+    '100000',
+    'artifact protocol early consumer',
+  ),
+  one(
+    'launch mode ignores provider',
+    'artifacts.js',
+    "mode === 'direct' || (mode === 'worker_vast' ? a.provider === 'vast' : a.provider !== 'vast')",
+    'true',
+    'artifact protocol launch mode must match',
+  ),
+  one(
+    'DIRECT requires a Worker token',
+    'artifacts.js',
+    'export function directAssignment(input, assignment, { plan: parent } = {}) {',
+    "export function directAssignment(input, assignment, { plan: parent } = {}) { assert(false,'PROTOCOL_IDENTITY');",
+    'artifact protocol local assignment needs no Worker',
+  ),
+  one(
+    'direct seed lifetime ignored',
+    'plan.js',
+    'h.deadline_minute >= a.start_minute && h.fetch_until_minute <= end + 1e-7',
+    'true',
+    'one concurrent box cannot consume',
+  ),
+  one(
+    'invalid direct edge aborts cold planning',
+    'plan.js',
+    "if (!edges.length || !(e instanceof PlanError) || e.code !== 'SEED_LIFETIME') throw e;",
+    'throw e;',
+    'one concurrent box cannot consume',
+  ),
+  one(
+    'direct serving idle time not charged',
+    'plan.js',
+    'source.estimated_minutes = round(end - source.start_minute);',
+    'source.estimated_minutes = source.fallback_minutes;',
+    'direct serving minutes and cost',
+  ),
+  one(
+    'wait instructions omitted from assignment',
+    'plan.js',
+    '...a.seed_hints.map((h) => ({',
+    '...[].map((h) => ({',
+    'assignment has explicit optional wait',
+  ),
+  one(
+    'seed port is hardcoded',
+    'plan.js',
+    'container_port: ctx.limits.seeding.container_port',
+    'container_port: 8080',
+    'direct seed port is a data',
+  ),
+  {
+    name: 'portless source allowed to seed',
+    edits: [
+      {
+        file: 'plan.js',
+        before: 'source.box.capabilities.can_expose_port === true',
+        after: 'true',
+      },
+      {
+        file: 'plan.js',
+        before: 'byId.get(s.id).box.capabilities.can_expose_port === true',
+        after: 'true',
+      },
+    ],
+    pattern: 'no exposed port disables',
+  },
   one(
     'inherited schema field admitted',
     'schema.js',
@@ -486,7 +732,14 @@ try {
         writeFileSync(path, replace(readFileSync(path, 'utf8'), e.before, e.after));
       }
       let selectedFiles = ['test/contracts.test.js'];
-      if (/published schema|pure API/.test(c.pattern)) selectedFiles = ['test/purity.test.js'];
+      if (c.pattern.startsWith('artifact protocol')) selectedFiles = ['test/protocol.test.js'];
+      else if (
+        /no exposed port|one concurrent box|direct serving|direct seed port|assignment has explicit optional wait/.test(
+          c.pattern,
+        )
+      )
+        selectedFiles = ['test/seed-lifetime.test.js'];
+      else if (/published schema|pure API/.test(c.pattern)) selectedFiles = ['test/purity.test.js'];
       else if (c.pattern.includes('shared dependency vector'))
         selectedFiles = ['test/dependency-vectors.test.js'];
       else if (c.pattern.includes('validator refuses tampered'))

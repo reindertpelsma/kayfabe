@@ -19,3 +19,15 @@ export function withoutSeeds(input, p) {
   validatePrepared(ctx, cold, { forExecution: false });
   return JSON.parse(canonical(cold));
 }
+
+export {
+  createSession,
+  startAssignment,
+  endAssignment,
+  artifactReady,
+  artifactGone,
+  artifactStatus,
+  assignmentResponse,
+  directAssignment,
+  verifyArtifact,
+} from './artifacts.js';

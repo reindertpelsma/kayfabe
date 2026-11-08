@@ -70,6 +70,8 @@ function baseAssignment(ctx, bin) {
     setup_reuse: built.reuse,
     seed_hints: [],
     seed_exports: [],
+    seed_server: null,
+    execution_steps: [],
     driver_pins: [...pins].sort().map((id) => ({ ...ctx.pins.get(id) })),
     artifact_sources: built.reuse.map((r) => ({
       artifact: r.artifact,
@@ -171,6 +173,7 @@ export function materialize(ctx, bins, edges = []) {
         artifact = ctx.artifacts.get(e.scope_key.split('@')[0]);
       assert(ctx.limits.seeding.enabled && artifact?.seedable, 'SEED_POLICY');
       assert(profileFor(ctx, source.tokens).can_seed, 'SEED_POLICY');
+      assert(source.box.capabilities.can_expose_port === true, 'SEED_PORT');
       assert(producer.die_family === a.die_family, 'SEED_DIE_FAMILY');
       assert(
         profile.artifact_sources.some(
@@ -216,6 +219,8 @@ export function materialize(ctx, bins, edges = []) {
         available_minute: available,
         transfer_minutes: minutes,
         deadline_minute: 0,
+        fetch_until_minute: 0,
+        fallback: 'build_local',
         fallback_step_ids: [local.id],
         gb: artifact.gb,
       });
@@ -245,8 +250,19 @@ export function materialize(ctx, bins, edges = []) {
       intervals,
       ctx.limits.max_concurrent_boxes,
     );
-    for (const h of hints)
-      h.deadline_minute = round(a.start_minute + ctx.limits.seeding.max_wait_minutes);
+    for (const h of hints) {
+      const source = assignments.get(h.producer_assignment_id);
+      const end = round(source.start_minute + source.worst_case_minutes);
+      h.deadline_minute = Math.min(
+        round(a.start_minute + ctx.limits.seeding.max_wait_minutes),
+        round(end - h.transfer_minutes),
+      );
+      h.fetch_until_minute = round(h.deadline_minute + h.transfer_minutes);
+      assert(
+        h.deadline_minute >= a.start_minute && h.fetch_until_minute <= end + 1e-7,
+        'SEED_LIFETIME',
+      );
+    }
     for (const e of a.seed_exports) {
       e.available_minute = round(e.available_minute + a.start_minute);
       e.deadline_minute = round(e.deadline_minute + a.start_minute);
@@ -276,6 +292,42 @@ export function materialize(ctx, bins, edges = []) {
     }
   }
   const out = [...assignments.values()].sort((a, b) => lex(a.id, b.id));
+  for (const source of out.filter((a) => a.seed_exports.length)) {
+    const hints = out
+      .flatMap((a) => a.seed_hints)
+      .filter((h) => h.producer_assignment_id === source.id);
+    const end = round(
+      Math.max(
+        source.start_minute + source.estimated_minutes,
+        ...hints.map((h) => h.fetch_until_minute),
+      ),
+    );
+    assert(end <= source.start_minute + source.worst_case_minutes + 1e-7, 'SEED_LIFETIME');
+    source.seed_server = {
+      container_port: ctx.limits.seeding.container_port,
+      serve_until_minute: end,
+    };
+    source.estimated_minutes = round(end - source.start_minute);
+    const bin = byBin.get(source.id);
+    source.pricing = quote(ctx, bin.box, profileFor(ctx, bin.tokens), buildSteps(ctx, bin.tokens), {
+      uploadGb: source.pricing.bandwidth_up_gb,
+      minutes: source.estimated_minutes,
+    });
+  }
+  for (const a of out)
+    a.execution_steps = [
+      ...a.seed_hints.map((h) => ({
+        kind: 'wait_for_artifact',
+        artifact: h.artifact,
+        scope_key: h.scope_key,
+        deadline_minute: h.deadline_minute,
+        fetch_until_minute: h.fetch_until_minute,
+        minutes: round(h.deadline_minute - a.start_minute),
+        fallback: 'build_local',
+        fallback_step_ids: [...h.fallback_step_ids],
+      })),
+      ...a.runs.map((s) => ({ kind: 'run', step_id: s.id })),
+    ];
   const execution = executableData(ctx, out);
   for (const a of out) a.status = execution ? 'executable' : 'proposed';
   return out;
@@ -313,6 +365,7 @@ function chooseSeeds(ctx, bins) {
           s.id !== target.id &&
           s.die_family === target.die_family &&
           profileFor(ctx, byId.get(s.id).tokens).can_seed &&
+          byId.get(s.id).box.capabilities.can_expose_port === true &&
           s.runs.some((r) => r.produces.includes(key)),
       );
       const choices = sources
@@ -366,11 +419,29 @@ const feasiblePrices = (ctx, assignments) =>
   ) <= ctx.limits.cost_cap_usd;
 function seededAssignments(ctx, bins) {
   let edges = chooseSeeds(ctx, bins),
-    out = materialize(ctx, bins, edges);
+    out;
+  const cold = materialize(ctx, bins, []);
+  for (;;) {
+    try {
+      out = materialize(ctx, bins, edges);
+      break;
+    } catch (e) {
+      if (!edges.length || !(e instanceof PlanError) || e.code !== 'SEED_LIFETIME') throw e;
+      edges.pop();
+    }
+  }
   // Seeding is optional. Never make an otherwise capped cold plan unsafe.
-  while (edges.length && !feasiblePrices(ctx, out)) {
+  while (
+    edges.length &&
+    (!feasiblePrices(ctx, out) || sum(out, 'estimated_minutes') > sum(cold, 'estimated_minutes'))
+  ) {
     edges.pop();
-    out = materialize(ctx, bins, edges);
+    try {
+      out = materialize(ctx, bins, edges);
+    } catch (e) {
+      if (!(e instanceof PlanError) || e.code !== 'SEED_LIFETIME') throw e;
+      return { assignments: cold, edges: [] };
+    }
   }
   return { assignments: out, edges };
 }

@@ -7,5 +7,6 @@
   "driver_branches": "570/580/590 are only the candidate branches named by owner/repository evidence; completeness and per-die support remain UNVERIFIED. Official version/pin gaps are explicit null UNPINNED records. This is not an executable release matrix.",
   "resource_gb": "INFERRED planning allowances carried from J2 stage budgets; 300GB large disk, 220GB floor; small/medium 120GB; conservative transfer budgets. large-lite allowance needs measured recalibration.",
   "cost_cap": "USD45 is the owner PROPOSED planning value, not a measured market fit. Empty market intentionally produces not_offered coverage; users must supply their own verified box/provider facts.",
-  "seeding": "INFERRED artifact allowances: open image 13 GB; kf3_bins bundle 0.11 GB = about 0.1 GB binaries + 0.01 GB instruments. PROPOSED optimizer thresholds and speed/cost weights; uploads costed per actual planned artifact edge; every consumer retains cold-build fallback."
+  "seeding": "INFERRED artifact allowances: open image 13 GB; kf3_bins bundle 0.11 GB = about 0.1 GB binaries + 0.01 GB instruments. PROPOSED optimizer thresholds and speed/cost weights; uploads costed per actual planned artifact edge; every consumer retains cold-build fallback.",
+  "artifact_protocol": "PROPOSED direct-serving policy: container port8080, provider facts max age1minute; ready bytes must fit the priced catalog GB allowance. Exposed-port capability is fail-closed; all seed edges optional, bounded by source serve-until and consumer fallback deadlines. HTTP routes and D1 integration deferred."
 }

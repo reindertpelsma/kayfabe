@@ -14,7 +14,7 @@ for (const n of [1, 2])
     assert.equal(a.box_id, 'offer-1');
     assert.equal(a.assigned_consumers.length, n);
     assert.ok(Math.abs(a.pricing.bandwidth_up_gb - (2 + n * 13.1)) < 1e-6);
-    for (const c of p.assignments.filter((a) => a.die !== 'TU106')) {
+    for (const c of p.assignments.filter((a) => a.tier === 'medium')) {
       assert.equal(c.pricing.bandwidth_up_gb, 2);
       assert.equal(c.seed_hints.length, 2);
     }
@@ -172,7 +172,12 @@ for (const n of [1, 2])
   test('source publication deadlines fit source hard budget ' + n, () => {
     const f = seeded(n);
     f.limits.seeding.max_wait_minutes = 20;
-    f.requirements.items[0].runs.push('windows_apps_full', ...Array(4).fill('windows_gate'));
+    f.requirements.items[0].runs = [
+      'linux_image_build',
+      'kayfabe_build',
+      'windows_apps_full',
+      ...Array(4).fill('windows_gate'),
+    ];
     const p = plan(f);
     assert.equal(p.admitted, true);
     const source = p.assignments.find((a) => a.die === 'TU106');

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://kayfabe.dev/schemas/kfci/v1/contract.schema.json",
-  "title": "kfci planner and executor contract version 1",
+  "title": "kfci planner, assignments and optional artifact protocol version 1",
   "$defs": {
     "drivers": {
       "type": "object",
@@ -38,6 +38,9 @@
           "type": "boolean"
         },
         "vfio": {
+          "type": "boolean"
+        },
+        "can_expose_port": {
           "type": "boolean"
         }
       },
@@ -924,6 +927,16 @@
               "type": "number",
               "minimum": 0,
               "maximum": 1000
+            },
+            "container_port": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535
+            },
+            "provider_facts_max_age_minutes": {
+              "type": "number",
+              "minimum": 0.001,
+              "maximum": 10
             }
           },
           "required": [
@@ -932,7 +945,9 @@
             "max_wait_minutes",
             "price_weight",
             "upload_cost_weight",
-            "upload_speed_weight"
+            "upload_speed_weight",
+            "container_port",
+            "provider_facts_max_age_minutes"
           ],
           "additionalProperties": false
         }
@@ -1317,6 +1332,14 @@
           "type": "number",
           "minimum": 0,
           "maximum": 10000
+        },
+        "fallback": {
+          "const": "build_local"
+        },
+        "fetch_until_minute": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100000
         }
       },
       "required": [
@@ -1328,7 +1351,9 @@
         "transfer_minutes",
         "deadline_minute",
         "fallback_step_ids",
-        "gb"
+        "gb",
+        "fallback",
+        "fetch_until_minute"
       ],
       "additionalProperties": false
     },
@@ -1683,6 +1708,23 @@
         },
         "pricing": {
           "$ref": "#/$defs/pricing"
+        },
+        "seed_server": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/seed_server"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "execution_steps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/execution_step"
+          },
+          "maxItems": 2048
         }
       },
       "required": [
@@ -1712,7 +1754,9 @@
         "driver_pins",
         "artifact_sources",
         "assigned_consumers",
-        "pricing"
+        "pricing",
+        "seed_server",
+        "execution_steps"
       ],
       "additionalProperties": false
     },
@@ -1969,6 +2013,806 @@
         "refusals",
         "admitted"
       ],
+      "additionalProperties": false
+    },
+    "wait_step": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "wait_for_artifact"
+        },
+        "artifact": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
+        },
+        "scope_key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "deadline_minute": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "fetch_until_minute": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "minutes": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 300
+        },
+        "fallback": {
+          "const": "build_local"
+        },
+        "fallback_step_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "pattern": "^[A-Za-z0-9_.:-]+$"
+          },
+          "maxItems": 32,
+          "minItems": 1
+        }
+      },
+      "required": [
+        "kind",
+        "artifact",
+        "scope_key",
+        "deadline_minute",
+        "fetch_until_minute",
+        "minutes",
+        "fallback",
+        "fallback_step_ids"
+      ],
+      "additionalProperties": false
+    },
+    "execution_step": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/wait_step"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "run"
+            },
+            "step_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "pattern": "^[A-Za-z0-9_.:-]+$"
+            }
+          },
+          "required": ["kind", "step_id"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "seed_server": {
+      "type": "object",
+      "properties": {
+        "container_port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "serve_until_minute": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100000
+        }
+      },
+      "required": ["container_port", "serve_until_minute"],
+      "additionalProperties": false
+    },
+    "artifact_ready": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "artifact": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "url": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "sha256": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000000000000
+        }
+      },
+      "required": ["version", "artifact", "url", "sha256", "size"],
+      "additionalProperties": false
+    },
+    "artifact_gone": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "version": {
+              "const": 1
+            },
+            "artifact": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            },
+            "reason": {
+              "enum": ["ended", "unavailable"]
+            }
+          },
+          "required": ["version", "artifact", "reason"],
+          "additionalProperties": false
+        },
+        {
+          "$ref": "#/$defs/artifact_bad"
+        }
+      ]
+    },
+    "artifact_query": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        }
+      },
+      "required": ["version", "name"],
+      "additionalProperties": false
+    },
+    "artifact_bad": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "artifact": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "reason": {
+          "enum": ["hash_mismatch", "size_mismatch"]
+        },
+        "observed_sha256": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "observed_size": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000000000000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": ["version", "artifact", "reason", "observed_sha256", "observed_size"],
+      "additionalProperties": false
+    },
+    "artifact_record": {
+      "type": "object",
+      "properties": {
+        "artifact": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
+        },
+        "scope_key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "producer_assignment_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sha256": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "size": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000000000000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "state": {
+          "enum": ["ready", "gone"]
+        },
+        "ready_minute": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "serve_until_minute": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "gone_reason": {
+          "anyOf": [
+            {
+              "enum": ["ended", "unavailable", "expired", "hash_mismatch", "size_mismatch"]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "artifact",
+        "scope_key",
+        "producer_assignment_id",
+        "url",
+        "sha256",
+        "size",
+        "state",
+        "ready_minute",
+        "serve_until_minute",
+        "gone_reason"
+      ],
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "properties": {
+            "state": {
+              "const": "ready"
+            },
+            "gone_reason": {
+              "type": "null"
+            },
+            "url": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            },
+            "sha256": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "size": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000000000000
+            },
+            "ready_minute": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100000
+            }
+          }
+        },
+        {
+          "properties": {
+            "state": {
+              "const": "gone"
+            },
+            "gone_reason": {
+              "enum": ["ended", "unavailable", "expired", "hash_mismatch", "size_mismatch"]
+            }
+          }
+        }
+      ]
+    },
+    "artifact_response": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "artifact": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
+        },
+        "state": {
+          "enum": ["ready", "waiting", "gone"]
+        },
+        "url": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sha256": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "size": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000000000000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "deadline_minute": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "fetch_until_minute": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "fallback": {
+          "const": "build_local"
+        },
+        "scope_key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "server_minute": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100000
+        }
+      },
+      "required": [
+        "version",
+        "artifact",
+        "state",
+        "url",
+        "sha256",
+        "size",
+        "deadline_minute",
+        "fetch_until_minute",
+        "fallback",
+        "scope_key",
+        "server_minute"
+      ],
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "properties": {
+            "state": {
+              "const": "ready"
+            },
+            "url": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            },
+            "sha256": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "size": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000000000000
+            }
+          }
+        },
+        {
+          "properties": {
+            "state": {
+              "enum": ["waiting", "gone"]
+            },
+            "url": {
+              "type": "null"
+            },
+            "sha256": {
+              "type": "null"
+            },
+            "size": {
+              "type": "null"
+            }
+          }
+        }
+      ]
+    },
+    "launch": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "enum": ["worker_vast", "worker_daemon", "direct"]
+        },
+        "worker_url": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "report_path": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": ["mode", "worker_url", "report_path"],
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "properties": {
+            "mode": {
+              "const": "direct"
+            },
+            "worker_url": {
+              "type": "null"
+            },
+            "report_path": {
+              "const": "report.json"
+            }
+          }
+        },
+        {
+          "properties": {
+            "mode": {
+              "enum": ["worker_vast", "worker_daemon"]
+            },
+            "worker_url": {
+              "type": "string",
+              "minLength": 9,
+              "maxLength": 2048,
+              "pattern": "^https://[^/?#]+$"
+            },
+            "report_path": {
+              "type": "null"
+            }
+          }
+        }
+      ]
+    },
+    "assignment_response": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "assignment": {
+          "$ref": "#/$defs/assignment"
+        },
+        "launch": {
+          "$ref": "#/$defs/launch"
+        },
+        "artifacts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/artifact_response"
+          },
+          "maxItems": 128
+        },
+        "started_minute": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "server_minute": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100000
+        }
+      },
+      "required": [
+        "version",
+        "assignment",
+        "launch",
+        "artifacts",
+        "started_minute",
+        "server_minute"
+      ],
+      "additionalProperties": false
+    },
+    "mapped_port": {
+      "type": "object",
+      "properties": {
+        "container_port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "public_port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "protocol": {
+          "const": "tcp"
+        }
+      },
+      "required": ["container_port", "public_port", "protocol"],
+      "additionalProperties": false
+    },
+    "provider_facts": {
+      "type": "object",
+      "properties": {
+        "assignment_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
+        },
+        "instance_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
+        },
+        "provider": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
+        },
+        "public_ip": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "mapped_ports": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/mapped_port"
+          },
+          "maxItems": 64
+        },
+        "requested_ports": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "maxItems": 64
+        },
+        "observed_minute": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100000
+        }
+      },
+      "required": [
+        "assignment_id",
+        "instance_id",
+        "provider",
+        "public_ip",
+        "mapped_ports",
+        "requested_ports",
+        "observed_minute"
+      ],
+      "additionalProperties": false
+    },
+    "protocol_auth": {
+      "type": "object",
+      "properties": {
+        "verified": {
+          "const": true
+        },
+        "session_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
+        },
+        "assignment_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
+        },
+        "instance_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
+        },
+        "expires_minute": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100000
+        }
+      },
+      "required": ["verified", "session_id", "assignment_id", "instance_id", "expires_minute"],
+      "additionalProperties": false
+    },
+    "runtime_assignment": {
+      "type": "object",
+      "properties": {
+        "assignment_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
+        },
+        "instance_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "pattern": "^[A-Za-z0-9_.:-]+$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "enum": ["pending", "starting", "running", "ended"]
+        },
+        "started_minute": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ended_minute": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": ["assignment_id", "instance_id", "status", "started_minute", "ended_minute"],
+      "additionalProperties": false
+    },
+    "protocol_state": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "session_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
+        },
+        "now_minute": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "assignments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/runtime_assignment"
+          },
+          "maxItems": 128
+        },
+        "artifacts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/artifact_record"
+          },
+          "maxItems": 1024
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000000
+        }
+      },
+      "required": ["version", "session_id", "now_minute", "assignments", "artifacts", "revision"],
       "additionalProperties": false
     }
   }
