@@ -1,6 +1,6 @@
 {
  "schema": 1,
- "status": "LIVE, 2026-11-07. Read by gate_profiles.py (box script windows_apps.sh); tests/test_gate_profiles.py checks it against apps.json and manifest.json.",
+ "status": "LIVE, 2026-11-08. Owner DX1 decisions: overlays manual, UVM known unsupported; gate_profiles.py enforces the profiles.",
  "open_packages": [
   "cuda_demo_suite",
   "python_embed",
@@ -67,7 +67,15 @@
    "heaven_d3d11",
    "heaven_opengl",
    "valley_d3d11",
-   "valley_opengl"
+   "valley_opengl",
+   "overlay_yuv_probe",
+   "overlay_yuv_hide",
+   "overlay_yuv_occlude",
+   "overlay_yuv_resize",
+   "overlay_yuv_move",
+   "overlay_yuv_recreate",
+   "overlay_yuv_fullscreen",
+   "overlay_yuv_soak"
   ],
   "items": [
    {
@@ -97,6 +105,46 @@
    {
     "id": "q2rtx",
     "reason": "installer and a ray-tracing path that is not first wave"
+   },
+   {
+    "id": "overlay_yuv_probe",
+    "reason": "needs real display",
+    "evidence_template": "traces/manual_overlay_<date>/<app>.md: date, kayfabe revision, GPU/die, physical monitor and connector, host/guest OS and drivers, app version and sha256, exact command, same-GPU native reference with DIRECT overlay (no virtual display), per-second presentation modes, transitions and present latency, app verdict, screenshots/log paths, duration, host Xid delta, guest resets and known_live_dumps_193. No real-monitor native record is committed; the virtual-display native probe returned SETUP/refused (code 5), no DIRECT overlay, no scenario frames."
+   },
+   {
+    "id": "overlay_yuv_hide",
+    "reason": "needs real display",
+    "evidence_template": "traces/manual_overlay_<date>/<app>.md: date, kayfabe revision, GPU/die, physical monitor and connector, host/guest OS and drivers, app version and sha256, exact command, same-GPU native reference with DIRECT overlay (no virtual display), per-second presentation modes, transitions and present latency, app verdict, screenshots/log paths, duration, host Xid delta, guest resets and known_live_dumps_193. No real-monitor native record is committed; the virtual-display native probe returned SETUP/refused (code 5), no DIRECT overlay, no scenario frames."
+   },
+   {
+    "id": "overlay_yuv_occlude",
+    "reason": "needs real display",
+    "evidence_template": "traces/manual_overlay_<date>/<app>.md: date, kayfabe revision, GPU/die, physical monitor and connector, host/guest OS and drivers, app version and sha256, exact command, same-GPU native reference with DIRECT overlay (no virtual display), per-second presentation modes, transitions and present latency, app verdict, screenshots/log paths, duration, host Xid delta, guest resets and known_live_dumps_193. No real-monitor native record is committed; the virtual-display native probe returned SETUP/refused (code 5), no DIRECT overlay, no scenario frames."
+   },
+   {
+    "id": "overlay_yuv_resize",
+    "reason": "needs real display",
+    "evidence_template": "traces/manual_overlay_<date>/<app>.md: date, kayfabe revision, GPU/die, physical monitor and connector, host/guest OS and drivers, app version and sha256, exact command, same-GPU native reference with DIRECT overlay (no virtual display), per-second presentation modes, transitions and present latency, app verdict, screenshots/log paths, duration, host Xid delta, guest resets and known_live_dumps_193. No real-monitor native record is committed; the virtual-display native probe returned SETUP/refused (code 5), no DIRECT overlay, no scenario frames."
+   },
+   {
+    "id": "overlay_yuv_move",
+    "reason": "needs real display",
+    "evidence_template": "traces/manual_overlay_<date>/<app>.md: date, kayfabe revision, GPU/die, physical monitor and connector, host/guest OS and drivers, app version and sha256, exact command, same-GPU native reference with DIRECT overlay (no virtual display), per-second presentation modes, transitions and present latency, app verdict, screenshots/log paths, duration, host Xid delta, guest resets and known_live_dumps_193. No real-monitor native record is committed; the virtual-display native probe returned SETUP/refused (code 5), no DIRECT overlay, no scenario frames."
+   },
+   {
+    "id": "overlay_yuv_recreate",
+    "reason": "needs real display",
+    "evidence_template": "traces/manual_overlay_<date>/<app>.md: date, kayfabe revision, GPU/die, physical monitor and connector, host/guest OS and drivers, app version and sha256, exact command, same-GPU native reference with DIRECT overlay (no virtual display), per-second presentation modes, transitions and present latency, app verdict, screenshots/log paths, duration, host Xid delta, guest resets and known_live_dumps_193. No real-monitor native record is committed; the virtual-display native probe returned SETUP/refused (code 5), no DIRECT overlay, no scenario frames."
+   },
+   {
+    "id": "overlay_yuv_fullscreen",
+    "reason": "needs real display",
+    "evidence_template": "traces/manual_overlay_<date>/<app>.md: date, kayfabe revision, GPU/die, physical monitor and connector, host/guest OS and drivers, app version and sha256, exact command, same-GPU native reference with DIRECT overlay (no virtual display), per-second presentation modes, transitions and present latency, app verdict, screenshots/log paths, duration, host Xid delta, guest resets and known_live_dumps_193. No real-monitor native record is committed; the virtual-display native probe returned SETUP/refused (code 5), no DIRECT overlay, no scenario frames."
+   },
+   {
+    "id": "overlay_yuv_soak",
+    "reason": "needs real display",
+    "evidence_template": "traces/manual_overlay_<date>/<app>.md: date, kayfabe revision, GPU/die, physical monitor and connector, host/guest OS and drivers, app version and sha256, exact command, same-GPU native reference with DIRECT overlay (no virtual display), per-second presentation modes, transitions and present latency, app verdict, screenshots/log paths, duration, host Xid delta, guest resets and known_live_dumps_193. No real-monitor native record is committed; the virtual-display native probe returned SETUP/refused (code 5), no DIRECT overlay, no scenario frames."
    }
   ],
   "evidence_template": "traces/winapps_manual_<yyyymmdd>/<app>.md: kayfabe revision, die, host driver, guest driver 580.88, app + version + sha256 of what was installed, the owner's licence/account note (never the key), command run, start and end time, screenshot path, verdict word (PASS only with the app's own result and the NVIDIA adapter named), guest event counts (nvlddmkm 153, Display 4101, WER) and the same-box host reference result."
@@ -132,7 +180,7 @@
    "budget_s": 3600
   },
   "full": {
-   "apps": "every open app minus excluded",
+   "apps": "every open app minus excluded; manual and known_unsupported are reported separately",
    "budget_s": 18000
   }
  },
@@ -159,5 +207,8 @@
   ],
   "policy": "Definitions only; KF_WINAPPS remains disabled by default. Source-blocked and reference-required entries cannot pass until their inputs exist. Software approval does not grant redistribution rights.",
   "budget_s": 18000
+ },
+ "known_unsupported": {
+  "managed_t": "unsupported (UVM): owner ruling 2026-10-02 keeps UVM unmerged until the per-fault GR hold is measured and bounded (docs/OWNER_RULINGS.md section E)"
  }
 }
