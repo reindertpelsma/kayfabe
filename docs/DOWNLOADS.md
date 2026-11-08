@@ -148,11 +148,43 @@ streams `zstd -d | tar -x` and never stores the 42 GB archive (about 94 GB unpac
 2 GiB per-run ceiling named under "Download etiquette" stays an example for third-party hosts; the
 owner-hosted cache is excluded from it.
 
+## Linux apps guest image: open image and official per-run inputs
+
+**RESEARCH, 2026-11-08:** a [chroot alternative](design/V3_APPS_IMAGE_CHROOT_EVALUATION.md) evaluates snapshot bootstrap, transient compiler inputs, smaller sequential build directories and per-box inventory hashes without KVM during construction. Its resource figures are estimates; no complete alternative image is qualified. Existing reproduction steps remain unchanged.
+
+STATUS: DESIGN-ONLY, 2026-11-07. **CODE READ:** [recipe.json](../scripts/apps/image/recipe.json) and
+[build_image.py](../scripts/apps/image/build_image.py) pin an official Ubuntu cloud image, dated main/universe apt indexes,
+open apps/models and hash-locked wheels. Direct open inputs total 3,541,368,563 bytes, plus apt dependencies. The builder uses
+transient official compiler inputs in a disposable scratch disk and assembles a **fresh open image**, scanned before publication.
+The comparison is **PINNED input inventory only**; observed verbatim scripts and recipe-written model selectors are checked against their input pins. BUILT binary/image hashes are informational and missing apps still fail. Exactly the gate's Qwen2-0.5B HF and
+Qwen2.5-1.5B Q4_K_M GGUF models are included. No private image or credentials are inputs; every source is public or officially
+downloadable without sign-in. [Reproduction steps and limits](design/V3_APPS_IMAGE_RECIPE.md).
+
+**DESIGN — superseding owner decision, 2026-11-07:** NVIDIA proprietary files must not be distributed in our images or ISOs,
+or stored in R2/GitHub. The box host downloads the separately pinned official driver `.run`, CUDA archives and NVIDIA/Python
+wheels with J4's fetcher at provisioning time, verifies hash/size and supplies them on a transient read-only data disk to the offline guest. The NVIDIA
+overlay/downloads/data disk are deleted per run; no NVIDIA payload enters a NoCloud ISO or the host HTTP allowlist. CuPy and Triton are runtime-only; CDP quicksort is a declared static-runtime exception.
+Only the qualified open layer could be public in principle, subject to the owner's hosting decision and licence review.
+This newer Linux policy also supersedes any older proposal below to include NVIDIA payloads in a hosted image/ISO; it does not
+implement changes to the Windows packaging path.
+
+**MEASURED, 2026-11-07 ([LB1 evidence](../traces/apps_image_recipe_20261107/README.md)):** LB1 verified public metadata/availability and selected complete payload hashes, but ran no VM or GPU and did not
+hash every large input. **DESIGN:** build twice, cross-verify and run the app gate before adopting or hosting the
+open image with its manifest. The historical image has no demonstrated inventory match to this recipe. Old bash paths are
+untouched. The monthly official-URL check fails on media drift; actual downloads always require hash verification. No upload,
+R2 registration, Worker access, rental or deployment is part of this change.
+
 ## Windows app bundle (the Windows apps stage)
 
 STATUS: CODE + DESIGN, 2026-11-08 (latest owner rulings). The first deliverable is build + verification;
 coordinator upload is manual and CI publication remains optional/disabled. The first full public reproduction
 is recorded below; no media upload, secret/domain configuration, Worker deployment or native/GPU pass is claimed.
+The repository bundle pin remains UNBUILT and the Worker integration is proposed, not deployed.
+
+**OWNER SUPERSESSION, 2026-11-07 / CODE READ:** NVIDIA payloads are pinned official provisioning/run-time
+downloads only. They must never enter a distributed image/ISO or R2/GitHub object. Older proposals to cache
+them with a hosted bundle are superseded. LB1's Linux recipe and the Windows packaging path below remain
+separate; temporary per-run media is distinguished from distributed release media in both recipes.
 
 **MEASURED, WB1-public-bundle-20261108, source revision 4df88672b:** two full Linux builds with pinned Zig
 and all public inputs have equal file inventories and equal ISO bytes. The ISO is 2708119552 bytes,

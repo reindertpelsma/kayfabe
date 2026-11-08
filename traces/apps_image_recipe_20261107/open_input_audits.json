@@ -1,0 +1,18 @@
+[
+  {
+    "id": "blender",
+    "sha256": "1188b95cc12321c770b631939f7c25a096910b6f884a990bf9c0f62d52b38aec",
+    "size": 376170648,
+    "nvidia_notice_headers": 9,
+    "findings": [],
+    "scope": "Package filenames and first 8192 bytes of licence/header files only; no binary disassembly, image build or legal certification"
+  },
+  {
+    "id": "pip-torch",
+    "sha256": "59e78aa0c690f70734e42670036d6b541930b8eabbaa18d94e090abf14cc4d91",
+    "size": 178578006,
+    "nvidia_notice_headers": 15,
+    "findings": [],
+    "scope": "Package filenames and first 8192 bytes of licence/header files only; no binary disassembly, image build or legal certification"
+  }
+]

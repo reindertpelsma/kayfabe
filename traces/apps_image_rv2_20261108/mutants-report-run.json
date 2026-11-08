@@ -1,0 +1,13 @@
+{
+  "argv": [
+    "python3",
+    "scripts/apps/image/mutants.py",
+    "--jobs",
+    "2",
+    "--report",
+    "traces/apps_image_rv2_20261108/mutants.json"
+  ],
+  "returncode": 0,
+  "elapsed_seconds": 105.415,
+  "purpose": "Record full named-killer receipt in addition to exact CI command"
+}

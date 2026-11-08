@@ -6,6 +6,7 @@ on:
       - 'scripts/ci/**'
       - 'scripts/bench/**'
       - 'scripts/fastguest/**'
+      - 'scripts/apps/**'
       - 'ci/vast-broker/runner.py'
       - 'ci/vast-broker/test/runner_head_tail_fixture.py'
       - 'ci/vast-broker/src/sanitize.js'
@@ -17,6 +18,7 @@ on:
       - 'scripts/ci/**'
       - 'scripts/bench/**'
       - 'scripts/fastguest/**'
+      - 'scripts/apps/**'
       - 'ci/vast-broker/runner.py'
       - 'ci/vast-broker/test/runner_head_tail_fixture.py'
       - 'ci/vast-broker/src/sanitize.js'
@@ -33,6 +35,20 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  linux-apps-image:
+    name: Linux apps image recipe — GPU-free
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Recipe, deterministic seed, fake QEMU and guest inventory contracts
+        run: python3 scripts/ci/test_apps_image.py
+      - name: Open/runtime boundary, official media and NVIDIA-file scan
+        run: python3 scripts/ci/test_apps_image_layers.py
+      - name: Every image-rule mutant needs two named killers
+        run: python3 scripts/apps/image/mutants.py --jobs 2
   shell-free-bundle-portability:
     env:
       DOTNET_PROCESSOR_COUNT: 2

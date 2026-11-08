@@ -1,0 +1,20 @@
+[
+  {
+    "argv": [
+      "python3",
+      "scripts/ci/test_vast_payload_apps.py"
+    ],
+    "returncode": 0,
+    "elapsed_seconds": 4.814,
+    "log": "tests-legacy.txt"
+  },
+  {
+    "argv": [
+      "python3",
+      "scripts/ci/test_apps_matrix_table.py"
+    ],
+    "returncode": 0,
+    "elapsed_seconds": 0.13,
+    "log": "tests-matrix.txt"
+  }
+]
