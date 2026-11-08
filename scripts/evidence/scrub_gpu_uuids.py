@@ -352,6 +352,7 @@ def _rewrite(data, mapper):
                 if member.isfile():
                     with archive.extractfile(member) as stream:
                         originals[i] = gate.Budget().read(stream, member.size)
+            padding_bytes = gate.check_tar_tail(data, archive)
         rewritten = {i: rewrite(body, mapper) for i, body in originals.items()}
         rewritten = repair_entries(originals, rewritten)
         metadata_changed = False
@@ -383,7 +384,8 @@ def _rewrite(data, mapper):
                     if "size" in member.pax_headers:
                         member.pax_headers["size"] = str(len(body))
                 archive.addfile(member, io.BytesIO(body) if body is not None else None)
-        return out.getvalue()
+            logical_end = archive.offset
+        return out.getvalue()[:logical_end] + b"\0" * padding_bytes
     if kind == "zip":
         out = io.BytesIO()
         with zipfile.ZipFile(io.BytesIO(data)) as archive:

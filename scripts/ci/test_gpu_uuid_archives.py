@@ -124,11 +124,15 @@ class ArchiveTests(unittest.TestCase):
     def test_zip_member_name(self):
         self.assert_hit(zip_bytes([(PAYLOAD.decode(), b"clean")]))
 
-    def test_tar_trailing_raw_bytes_keep_previous_gate_coverage(self):
-        self.assert_hit(tar([("clean", b"clean")]) + PAYLOAD)
+    def test_tar_nonzero_trailing_raw_bytes_are_refused(self):
+        with self.assertRaises(gate.ScanError):
+            gate.scan(tar([("clean", b"clean")]) + PAYLOAD)
 
     def test_zip_trailing_raw_bytes_keep_previous_gate_coverage(self):
         self.assert_hit(zip_bytes([("clean", b"clean")]) + PAYLOAD)
+
+    def test_zip_trailing_encoded_bytes_keep_previous_gate_coverage(self):
+        self.assert_hit(zip_bytes([("clean", b"clean")]) + base64.b64encode(PAYLOAD))
 
     def test_no_extract_of_traversal_or_links(self):
         data = tar([("../../outside", PAYLOAD)])

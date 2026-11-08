@@ -289,10 +289,6 @@ def archive_kind(data):
         return "gzip"
     if data.startswith((b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08")):
         return "zip"
-    # ZIP permits a prepended executable/stub. A valid end record identifies
-    # those archives too; changing the first bytes must not hide members.
-    if b"PK\x05\x06" in data[-65557:] and zipfile.is_zipfile(io.BytesIO(data)):
-        return "zip"
     if data[257:262] == b"ustar":
         return "tar"
     # Old V7 tar has no ustar magic; a valid first header still identifies it.
@@ -302,7 +298,36 @@ def archive_kind(data):
             return "tar"
         except tarfile.HeaderError:
             pass
+    # An empty TAR has no identifying header. A recognized archive after whole
+    # zero blocks is an ambiguous empty-TAR carrier, not an excuse to skip it.
+    # Opaque zero-prefixed binary captures are not identified as TAR by zeros
+    # alone. The suffix below begins with a nonzero block, so this recurses once.
+    offset = 0
+    while len(data) - offset >= 512 and not any(
+        memoryview(data)[offset : offset + 512]
+    ):
+        offset += 512
+    if offset and offset < len(data) and archive_kind(data[offset:]) is not None:
+        return "tar"
+    # ZIP permits a prepended executable/stub, but an explicit TAR header owns
+    # the framing before a ZIP footer. Otherwise a polyglot can hide TAR members.
+    if b"PK\x05\x06" in data[-65557:] and zipfile.is_zipfile(io.BytesIO(data)):
+        return "zip"
     return None
+
+
+def check_tar_tail(data, archive):
+    """After iteration, validate every byte beyond the reader's consumed extent.
+
+    TarFile.offset follows header/payload framing, including extended headers;
+    searching for zero blocks would mistake member payload bytes for EOF.
+    Invalid headers and nonzero post-EOF streams must never become clean scans.
+    Return the accepted zero-padding length for lossless rewrite bookkeeping.
+    """
+    offset = archive.offset
+    if offset < 0 or offset > len(data) or any(memoryview(data)[offset:]):
+        raise ScanError("nonzero or incomplete tar tail")
+    return len(data) - offset
 
 
 @contextmanager
@@ -415,6 +440,7 @@ def scan(data: bytes, *, _depth=0, _budget=None, _uuids=None) -> Counter:
                     if member.isfile():
                         with archive.extractfile(member) as stream:
                             child(budget.read(stream, member.size))
+                check_tar_tail(data, archive)
         elif kind == "zip":
             with zipfile.ZipFile(io.BytesIO(data)) as archive:
                 hits.update(text_scan(archive.comment, _uuids))

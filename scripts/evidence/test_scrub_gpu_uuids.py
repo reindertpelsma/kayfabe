@@ -23,6 +23,116 @@ OTHER = UUID.replace(b"a1", b"a2")
 KEY = b"unit-test-key-never-used-for-real-evidence"  # fixture only
 
 
+class TarTailCliTests(unittest.TestCase):
+    def carrier(self, first_uuid=False, zipped=False, empty=False):
+        first = tar([] if empty else [("first", PAYLOAD if first_uuid else b"clean")])
+        if zipped:
+            first = tar([("prefix.gz", gzip.compress(PAYLOAD))])
+        tail = (
+            zip_bytes([("clean", b"clean")])
+            if zipped
+            else tar([("nested.gz", gzip.compress(PAYLOAD))])
+        )
+        return first + tail
+
+    def cli_refuses_without_writes(self, compressed=False, zipped=False, empty=False):
+        data = self.carrier(first_uuid=zipped, zipped=zipped, empty=empty)
+        # Independent decoder confirms the original is genuinely recoverable.
+        if not zipped:
+            with tarfile.open(
+                fileobj=io.BytesIO(data), mode="r:", ignore_zeros=True
+            ) as archive:
+                self.assertEqual(
+                    gzip.decompress(archive.extractfile("nested.gz").read()), PAYLOAD
+                )
+        else:
+            with tarfile.open(fileobj=io.BytesIO(data), mode="r:") as archive:
+                self.assertEqual(
+                    gzip.decompress(archive.extractfile("prefix.gz").read()), PAYLOAD
+                )
+        with tempfile.TemporaryDirectory() as outer:
+            root = Path(outer) / "repo"
+            root.mkdir()
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            stored = gzip.compress(data) if compressed else data
+            (root / "carrier").write_bytes(stored)
+            (root / "plain").write_bytes(PAYLOAD)
+            subprocess.run(["git", "-C", str(root), "add", "."], check=True)
+            key = Path(outer) / "key"
+            key.write_bytes(KEY)
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    scrub.__file__,
+                    "scrub",
+                    "--root",
+                    str(root),
+                    "--key-file",
+                    str(key),
+                ],
+                capture_output=True,
+            )
+            self.assertEqual(result.returncode, 2)
+            self.assertEqual((root / "carrier").read_bytes(), stored)
+            self.assertEqual((root / "plain").read_bytes(), PAYLOAD)
+
+    def test_tar_tail_scrub_cli_refuses_without_partial_writes(self):
+        self.cli_refuses_without_writes()
+
+    def test_outer_gzip_tar_tail_scrub_cli_refuses(self):
+        self.cli_refuses_without_writes(compressed=True)
+
+    def test_tar_zip_polyglot_scrub_cli_refuses(self):
+        self.cli_refuses_without_writes(zipped=True)
+
+    def test_outer_gzip_tar_zip_scrub_cli_refuses(self):
+        self.cli_refuses_without_writes(compressed=True, zipped=True)
+
+    def test_empty_tar_tail_scrub_cli_refuses(self):
+        self.cli_refuses_without_writes(empty=True)
+
+    def test_empty_tar_tail_inside_gzip_scrub_cli_refuses(self):
+        self.cli_refuses_without_writes(compressed=True, empty=True)
+
+    def test_direct_rewriter_does_not_discard_tar_tail(self):
+        with self.assertRaises(gate.ScanError):
+            scrub.rewrite(
+                self.carrier(first_uuid=True), scrub.Pseudonymizer(KEY, {UUID})
+            )
+
+    def test_direct_gzip_rewriter_does_not_discard_tar_tail(self):
+        with self.assertRaises(gate.ScanError):
+            scrub.rewrite(
+                gzip.compress(self.carrier(first_uuid=True)),
+                scrub.Pseudonymizer(KEY, {UUID}),
+            )
+
+    def check_padding(self, compressed):
+        data = tar([("capture", PAYLOAD)]) + b"\0" * 1536
+
+        def inspect(body):
+            with tarfile.open(fileobj=io.BytesIO(body), mode="r:") as archive:
+                infos = list(archive)
+                end = archive.offset
+                payload = archive.extractfile("capture").read()
+            return [(m.name, m.mtime, m.mode) for m in infos], len(body) - end, payload
+
+        before = inspect(data)
+        mapper = scrub.Pseudonymizer(KEY, {UUID})
+        result = scrub.rewrite(gzip.compress(data) if compressed else data, mapper)
+        result = gzip.decompress(result) if compressed else result
+        after = inspect(result)
+        self.assertEqual(after[:2], before[:2])
+        self.assertEqual(after[2], b"GPU-" + mapper.uuid(UUID))
+        self.assertFalse(gate.scan(result))
+
+    def test_tar_zero_padding_and_member_metadata_preserved(self):
+        self.check_padding(False)
+
+    def test_gzip_tar_zero_padding_and_member_metadata_preserved(self):
+        self.check_padding(True)
+
+
 class LabelledBase64CliTests(unittest.TestCase):
     def check_cli(self, label, width=0, compressed=False, plain=True):
         encoded = base64.b64encode(PAYLOAD)

@@ -11,6 +11,16 @@ HERE = Path(__file__).resolve().parent
 CI = HERE.parent / "ci"
 MUTANTS = [
     (
+        "tar-rewriter-tail-check-omitted",
+        "padding_bytes = gate.check_tar_tail(data, archive)",
+        "padding_bytes = len(data) - archive.offset",
+    ),
+    (
+        "tar-zero-padding-discarded",
+        'return out.getvalue()[:logical_end] + b"\\0" * padding_bytes',
+        "return out.getvalue()",
+    ),
+    (
         "overlapping-base64-view-restores-original",
         "patched[offset], written[offset] = new_byte, 1",
         "patched[offset], written[offset] = new_byte, 1\n            patched[start:end] = new",

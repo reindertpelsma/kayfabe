@@ -14,6 +14,31 @@ import tempfile
 HERE = Path(__file__).resolve().parent
 MUTANTS = [
     (
+        "tar-tail-check-omitted",
+        "                check_tar_tail(data, archive)",
+        "                pass",
+    ),
+    (
+        "tar-nonzero-tail-accepted",
+        'raise ScanError("nonzero or incomplete tar tail")',
+        "return 0",
+    ),
+    (
+        "empty-tar-supported-tail-hidden",
+        "if offset and offset < len(data) and archive_kind(data[offset:]) is not None:",
+        "if False:",
+    ),
+    (
+        "zero-prefix-opaque-binary-rejected",
+        "archive_kind(data[offset:]) is not None",
+        "True",
+    ),
+    (
+        "zip-footer-overrides-tar-framing",
+        '    if data[257:262] == b"ustar":',
+        '    if b"PK\\x05\\x06" in data[-65557:] and zipfile.is_zipfile(io.BytesIO(data)):\n        return "zip"\n    if data[257:262] == b"ustar":',
+    ),
+    (
         "base64-label-shifts-alignment",
         "for alignment in range(4):",
         "for alignment in range(1):",

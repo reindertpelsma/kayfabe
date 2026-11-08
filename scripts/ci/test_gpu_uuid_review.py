@@ -12,6 +12,7 @@ import os
 import struct
 import subprocess
 import sys
+import tarfile
 import tempfile
 import unittest
 from pathlib import Path
@@ -20,6 +21,116 @@ from unittest.mock import patch
 import no_gpu_uuids as gate
 from test_gpu_uuid_archives import UUID, PAYLOAD, tar
 import test_gpu_uuid_archives as archives
+
+
+class TarTailTests(unittest.TestCase):
+    def carrier(self, zipped=False):
+        first = tar([("clean", b"clean")])
+        tail = (
+            archives.zip_bytes([("clean", b"clean")])
+            if zipped
+            else tar([("nested.gz", gzip.compress(PAYLOAD))])
+        )
+        return first + tail
+
+    def cli_refuses(self, compressed=False, zipped=False, empty=False):
+        data = self.carrier(zipped)
+        if zipped:
+            # The first TAR, not the ZIP footer, owns the outer framing.
+            data = tar([("nested.gz", gzip.compress(PAYLOAD))]) + archives.zip_bytes(
+                [("clean", b"clean")]
+            )
+        if empty:
+            data = tar([]) + tar([("nested.gz", gzip.compress(PAYLOAD))])
+        if compressed:
+            data = gzip.compress(data)
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            subprocess.run(["git", "init", "-q", d], check=True)
+            (root / "carrier").write_bytes(data)
+            subprocess.run(["git", "-C", d, "add", "carrier"], check=True)
+            baseline = root / "baseline.json"
+            baseline.write_text(json.dumps({"files": {}}))
+            before = baseline.read_bytes()
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    gate.__file__,
+                    "--root",
+                    d,
+                    "--baseline",
+                    str(baseline),
+                    "--shrink",
+                ],
+                capture_output=True,
+            )
+            self.assertEqual(result.returncode, 2)
+            self.assertEqual(baseline.read_bytes(), before)
+
+    def test_concatenated_tar_nested_gzip_cli_refused(self):
+        self.cli_refuses()
+
+    def test_outer_gzip_tar_tail_cli_refused(self):
+        self.cli_refuses(compressed=True)
+
+    def test_tar_header_precedes_zip_footer_cli(self):
+        self.cli_refuses(zipped=True)
+
+    def test_tar_zip_polyglot_inside_gzip_cli(self):
+        self.cli_refuses(compressed=True, zipped=True)
+
+    def test_empty_tar_followed_by_tar_cli_refused(self):
+        self.cli_refuses(empty=True)
+
+    def test_empty_tar_tail_inside_gzip_cli_refused(self):
+        self.cli_refuses(compressed=True, empty=True)
+
+    def test_raw_compressed_tail_refused(self):
+        with self.assertRaises(gate.ScanError):
+            gate.scan(tar([("clean", b"clean")]) + gzip.compress(PAYLOAD))
+
+    def test_nonarchive_nonzero_tail_refused(self):
+        with self.assertRaises(gate.ScanError):
+            gate.scan(tar([("clean", b"clean")]) + b"opaque tail")
+
+    def test_zero_padding_still_scans_the_member(self):
+        self.assertEqual(
+            gate.scan(tar([("capture", PAYLOAD)]) + b"\0" * 1536), gate.scan(PAYLOAD)
+        )
+
+    def test_zero_blocks_inside_member_are_payload(self):
+        body = PAYLOAD + b"\0" * 1024 + b"opaque"
+        self.assertEqual(gate.scan(tar([("capture", body)])), gate.scan(body))
+
+    def test_clean_zero_padding_remains_clean(self):
+        self.assertFalse(gate.scan(tar([("clean", b"clean")]) + b"\0" * 1536))
+
+    def test_empty_zero_tar_remains_clean(self):
+        self.assertFalse(gate.scan(tar([])))
+
+    def test_zero_prefixed_opaque_binary_is_not_tar(self):
+        data = b"\0" * 512 + b"opaque binary data"
+        self.assertIsNone(gate.archive_kind(data))
+        self.assertFalse(gate.scan(data))
+
+    def test_long_zero_prefix_does_not_invent_tar_framing(self):
+        data = b"\0" * 2048 + b"\x01\x02ordinary memory"
+        self.assertIsNone(gate.archive_kind(data))
+        self.assertFalse(gate.scan(data))
+
+    def test_pax_extended_header_uses_real_consumed_extent(self):
+        self.extended_header(tarfile.PAX_FORMAT)
+
+    def test_gnu_longname_uses_real_consumed_extent(self):
+        self.extended_header(tarfile.GNU_FORMAT)
+
+    def extended_header(self, fmt):
+        out = io.BytesIO()
+        with tarfile.open(fileobj=out, mode="w", format=fmt) as archive:
+            member = tarfile.TarInfo("x" * 180)
+            member.size = len(PAYLOAD)
+            archive.addfile(member, io.BytesIO(PAYLOAD))
+        self.assertEqual(gate.scan(out.getvalue()), gate.scan(PAYLOAD))
 
 
 def wrapped(value, width):
