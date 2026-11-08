@@ -73,7 +73,7 @@
 [ 2575.342630] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
 [ 2578.531263] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
 [ 2580.606157] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
-[ 2601.433020] NVRM: GPU at PCI:0000:00:07: GPU-e148da8c-d27b-2045-3332-47f9f94d3447
+[ 2601.433020] NVRM: GPU at PCI:0000:00:07: GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e045c
 [ 2601.433046] NVRM: Xid (PCI:0000:00:07): 31, pid=95539, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE0 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
 [ 2604.550922] NVRM: Xid (PCI:0000:00:07): 31, pid=95539, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE0 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
 [ 2607.565728] NVRM: Xid (PCI:0000:00:07): 31, pid=95539, name=qemu-system-x86, channel 0x0000001b, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE0 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
@@ -94,7 +94,7 @@
 [ 2740.083359] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
 [ 2743.287700] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
 [ 2745.374982] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
-[ 2765.268410] NVRM: GPU at PCI:0000:00:07: GPU-e148da8c-d27b-2045-3332-47f9f94d3447
+[ 2765.268410] NVRM: GPU at PCI:0000:00:07: GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e045c
 [ 2765.268427] NVRM: Xid (PCI:0000:00:07): 31, pid=96789, name=qemu-system-x86, channel 0x0000001b, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE0 faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
 [ 2769.746494] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
 [ 2772.952194] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0

@@ -1,5 +1,7 @@
 # C reference replay traces (task #90)
 
+**Privacy correction, 2026-11-08 (software comparison with `3056b955f`):** Board UUIDs in the 4,192-byte provenance headers are now deterministic synthetic placeholders. The first 96 header bytes and every replay record byte are unchanged in all five captures. `MD5SUMS` was recomputed over the decompressed files, and the compressed sizes below reflect the rewritten archives. No new hardware run was performed.
+
 **STATUS: LIVE, 2026-11-07.** ★ 2026-11-07 (owner decision, `docs/OWNER_QUESTIONS_2026-10-03.md` section 3, option (b)): every PROM
 read value (BAR0 `0x300000`-`0x3fffff`) in the five files below was replaced by zero with `scripts/evidence/scrub_prom.py`; every other
 record is byte-identical. `MD5SUMS` is of the scrubbed decompressed files; the files are recompressed (`zstd -19 --long`); the
@@ -29,11 +31,11 @@ python3 ../../scripts/mode2_diag/rec_dump.py /tmp/c.rec --head 40
 
 | file | records | raw / zst | props | what it is |
 |---|---|---|---|---|
-| `cap1_coldboot_hermetic.rec.zst` | 359 062 | 13.0 MB / 0.7 MB | `m2fwd=off m2exec=off m2romregs=off` — **hermetic** | Cold GSP bring-up: PCI enumerate → VBIOS stream → FWSEC/WPR2 → LibOS boot args → msgq handshake → `GSP_INIT_DONE` → `nvidia-smi -q` enumerates the emulated GA106. Superseded by `cap1b`; kept because the two together are the audit trail. |
-| `cap1b_coldboot_hermetic_d6.rec.zst` | 360 725 | 14.1 MB / 0.7 MB | identical vector: `m2fwd=off m2exec=off m2romregs=off`, full mask, BAR0 trace on — **hermetic** | ★★ The same experiment as `cap1`, re-captured at `819282d` with the **GSP-D6 continuation elements witnessed**. **The only trace a replay can be closed over**, and the only one that can be closed *past the first multi-element command*. |
-| `cap2_stalequeue_negative.rec.zst` | 886 999 | 34.2 MB / 1.6 MB | `m2fwd=on m2exec=on` — **NON-HERMETIC** | NEGATIVE. `cup2` (PASS) → `rmmod`/`insmod` twice in ONE QEMU lifetime. Life 2 dies on `msgqRxLink failed: -7 … NV_ERR_TIMEOUT`, life 3 on `unexpected WPR2 already up`. |
-| `cap2b_stalequeue_nofn47.rec.zst` | 862 940 | 46.1 MB / 1.5 MB | `m2fwd=on m2exec=on` — **NON-HERMETIC** | ★ NEGATIVE, the sharp one. Driver restart **without** a prior CUDA process (so no `fn-47`). Contains **378 GSP command elements read out of arbitrary guest RAM and answered `NV_OK`**. |
-| `cap3_matmul_forwarding.rec.zst` | 532 824 | 22.8 MB / 1.2 MB | `m2fwd=on m2exec=on` — **NON-HERMETIC** | `cuCtxCreate` → 2048² matmul (`cup8`, `bad=0 maxerr=0`, VERDICT PASS). Value is the **decision planes**, not replayability. |
+| `cap1_coldboot_hermetic.rec.zst` | 359 062 | 13.0 MB / 0.9 MB | `m2fwd=off m2exec=off m2romregs=off` — **hermetic** | Cold GSP bring-up: PCI enumerate → VBIOS stream → FWSEC/WPR2 → LibOS boot args → msgq handshake → `GSP_INIT_DONE` → `nvidia-smi -q` enumerates the emulated GA106. Superseded by `cap1b`; kept because the two together are the audit trail. |
+| `cap1b_coldboot_hermetic_d6.rec.zst` | 360 725 | 14.1 MB / 0.9 MB | identical vector: `m2fwd=off m2exec=off m2romregs=off`, full mask, BAR0 trace on — **hermetic** | ★★ The same experiment as `cap1`, re-captured at `819282d` with the **GSP-D6 continuation elements witnessed**. **The only trace a replay can be closed over**, and the only one that can be closed *past the first multi-element command*. |
+| `cap2_stalequeue_negative.rec.zst` | 886 999 | 34.2 MB / 2.1 MB | `m2fwd=on m2exec=on` — **NON-HERMETIC** | NEGATIVE. `cup2` (PASS) → `rmmod`/`insmod` twice in ONE QEMU lifetime. Life 2 dies on `msgqRxLink failed: -7 … NV_ERR_TIMEOUT`, life 3 on `unexpected WPR2 already up`. |
+| `cap2b_stalequeue_nofn47.rec.zst` | 862 940 | 46.1 MB / 1.9 MB | `m2fwd=on m2exec=on` — **NON-HERMETIC** | ★ NEGATIVE, the sharp one. Driver restart **without** a prior CUDA process (so no `fn-47`). Contains **378 GSP command elements read out of arbitrary guest RAM and answered `NV_OK`**. |
+| `cap3_matmul_forwarding.rec.zst` | 532 824 | 22.8 MB / 1.4 MB | `m2fwd=on m2exec=on` — **NON-HERMETIC** | `cuCtxCreate` → 2048² matmul (`cup8`, `bad=0 maxerr=0`, VERDICT PASS). Value is the **decision planes**, not replayability. |
 
 Every header carries its own property vector, the declared filter, the guest/host driver
 versions, the VBIOS md5 and an `nvidia-smi` summary — `rec_dump.py` prints it. All five are

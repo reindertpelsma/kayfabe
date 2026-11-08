@@ -1,5 +1,7 @@
 # `traces/real_ga104/` — a **floor-swept** die, asked directly
 
+**Privacy update, 2026-11-08 (CODE READ):** GPU UUIDs in these retained traces are deterministic synthetic placeholders, shared consistently across files. The original identifiers remain in git history pending the owner's release history rewrite.
+
 **STATUS: LIVE, 2026-09-26 (v3-gpcmask).**
 
 ★★★ The first die in this tree whose GPC mask is **not** `0..n`. On it, realize refused
@@ -9,7 +11,7 @@
 
 | | |
 |---|---|
-| part | NVIDIA GeForce RTX 3060 Ti (GA104, `0x248910DE`), `GPU-7ce8028d-13fc-88fe-09c5-7704190763c3`, VBIOS `94.04.6B.00.F4` |
+| part | NVIDIA GeForce RTX 3060 Ti (GA104, `0x248910DE`), `GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e61ef`, VBIOS `94.04.6B.00.F4` |
 | host | vast.ai instance `52739422` (a KVM-template box; the card is passed through to the box's VM) |
 | driver | NVIDIA **open** kernel modules 580.159.04 — the version the guest runs |
 | date | 2026-09-26 |

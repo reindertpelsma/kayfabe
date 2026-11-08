@@ -5,6 +5,8 @@
 request that added this file has merged, every file named here is still in the tree; after it, the files exist
 only in git history and in the archives below. This PR does not rewrite history.
 
+**Privacy correction, 2026-11-08 (CODE READ):** The 106-file UUID retention row below records the pre-scrub inventory. The retained tree has now been scrubbed with `scripts/evidence/scrub_gpu_uuids.py`; UUIDs are synthetic and the CI scanner inspects bounded gzip, tar, zip, xz and zstd contents. The external archives and their index/manifests remain unchanged. Their separate privacy inventory is incomplete after a decompression-limit stop and requires coordinator follow-up before release.
+
 ## What moved
 
 1976 bulk files of 61 `traces/` directories (294,237,348 bytes, 294.2 MB) were packed into one archive per directory (1974 of them, 294,196,628 bytes, leave the tree; two stay in the tree as well, see the table):

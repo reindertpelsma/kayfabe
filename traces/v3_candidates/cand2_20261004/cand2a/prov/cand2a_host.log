@@ -63,4 +63,4 @@ BARE_CELL_ARM arm=cross-client-leak verdict=PASS secs=2 ms=2191 rc=0 pci_dev=0x2
 --rpc-mixed-allocs           PASS         3s  3s
 BARE_CELL_ARM arm=rpc-mixed-allocs verdict=PASS secs=3 ms=2948 rc=0 pci_dev=0x250410DE drv=580.159.04 kmod=open cc=8.6 rev=3588789e
 BARE_SUITE_PASS=30 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0 ARMS=30
-BARE_CELL pci_dev=0x250410DE gpu="NVIDIA GeForce RTX 3060" drv=580.159.04 kmod=open cc=8.6 rev=3588789e pass=30 fail=0 crash=0 arms=30 uuid=GPU-9fdaccfb-1920-54dc-3d1b-48aaa43e2692
+BARE_CELL pci_dev=0x250410DE gpu="NVIDIA GeForce RTX 3060" drv=580.159.04 kmod=open cc=8.6 rev=3588789e pass=30 fail=0 crash=0 arms=30 uuid=GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e188f
