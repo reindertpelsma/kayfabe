@@ -24,7 +24,7 @@ GPU 00000000:00:08.0
         Current                                        : N/A
         Pending                                        : N/A
     Serial Number                                      : N/A
-    GPU UUID                                           : GPU-24bbcede-1885-b6d7-1a44-c2c338aaad2e
+    GPU UUID                                           : GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e434d
     GPU PDI                                            : 0x8d789fc2d23ca2a6
     Minor Number                                       : 0
     VBIOS Version                                      : 94.06.2F.00.95

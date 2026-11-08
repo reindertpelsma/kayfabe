@@ -39,12 +39,12 @@
 [13989.621230] NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_TYPE_ENG_DESC, engineDesc, ENGINE_INFO_TYPE_RUNLIST, &pKernelChannelGroupApi->pKernelChannelGroup->runlistId) @ kernel_channel_group_api.c:1252
 [13989.621821] NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2886
 [13989.621840] NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engineDesc) @ kernel_channel_group_api.c:1264
-[14126.055980] NVRM: GPU at PCI:0000:00:08: GPU-9fdaccfb-1920-54dc-3d1b-48aaa43e2692
+[14126.055980] NVRM: GPU at PCI:0000:00:08: GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e188f
 [14126.056012] NVRM: Xid (PCI:0000:00:08): 31, pid=191062, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
 [14129.240095] NVRM: Xid (PCI:0000:00:08): 31, pid=191062, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
 [14132.258031] NVRM: Xid (PCI:0000:00:08): 31, pid=191062, name=qemu-system-x86, channel 0x0000001b, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
 [14135.420723] NVRM: Xid (PCI:0000:00:08): 31, pid=191062, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
-[14298.107159] NVRM: GPU at PCI:0000:00:08: GPU-9fdaccfb-1920-54dc-3d1b-48aaa43e2692
+[14298.107159] NVRM: GPU at PCI:0000:00:08: GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e188f
 [14298.107169] NVRM: Xid (PCI:0000:00:08): 31, pid=192278, name=qemu-system-x86, channel 0x0000001b, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
 [17037.518044] NVRM: nvCheckOkFailedNoLog: Check failed: Out of memory [NV_ERR_NO_MEMORY] (0x00000051) returned from _memdescAllocInternal(pMemDesc) @ mem_desc.c:1359
 [17114.637617] NVRM: nvCheckOkFailedNoLog: Check failed: Out of memory [NV_ERR_NO_MEMORY] (0x00000051) returned from _memdescAllocInternal(pMemDesc) @ mem_desc.c:1359
