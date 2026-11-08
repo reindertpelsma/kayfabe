@@ -1,12 +1,13 @@
 # Release claims ledger
 
-**STATUS: LIVE, 2026-11-08 for the ledger and validator; DESIGN-ONLY for proposed release jobs.** The ledger and GPU-free validator exist; release enforcement is not wired. Windows apps and SPEC stage code exists, disabled pending the first Worker run; neither new stage is deployed. The historical audit below describes `a9dee7b2c`, not today's README. Owner rule of 2026-11-07: every claim `README.md` makes about what works is
+**STATUS: LIVE, 2026-11-08 for the ledger, validator, two GPU-free release checks and advisory PR workflow; DESIGN-ONLY for remaining `NEW:` stages and release-tag enforcement.** Windows apps and SPEC stage code exists, disabled pending the first Worker run; neither new stage is deployed. Owner rule of 2026-11-07: every claim `README.md` makes about what works is
 re-checked before a release, by an automated stage where one can exist and by a written manual checklist where
-not. This page explains the ledger `docs/RELEASE_CLAIMS.tsv`, the validator `scripts/ci/release_claims.py`, the
-stages each claim runs on, and the manual checklists. Release-claims enforcement is not wired into required CI.
-The historical counts are from `a9dee7b2c` (next, 2026-11-07); the DX1 section gives current counts. Hardware
-statuses are read from named committed records; CODE READ rows describe repository facts. DX1 ran GPU-free tests,
-not hardware.
+not. This page explains `docs/RELEASE_CLAIMS.tsv`, `scripts/ci/release_claims.py`, the implemented checks and the manual
+checklists. The advisory workflow is separate from required CI; release-tag enforcement is not implemented.
+The historical audit below describes `a9dee7b2c`, not today's README. The DX1 section gives the current counts.
+Hardware statuses come from named committed records; CODE READ rows describe repository facts. DX1 ran GPU-free
+checks, not hardware.
+
 
 ## The contract
 
@@ -71,8 +72,8 @@ Rows for removed sentences are deleted instead of reused as positive evidence; d
 claims. Navigation rows check local targets; remote site availability is unverified. Project/deployment statements
 remain unverified manual MC-11 claims with the evidence template above/below. The validator and its pass rules are unchanged.
 
-**COMPUTED after the DX1 rewrite, 2026-11-08:** 53 rows cover 26 README claim lines: 41 auto and 12 manual;
-44 verified at their named source/run revisions, 9 never-verified manual statements. No current claim is marked
+**COMPUTED after the DX1/R2 merge, 2026-11-08:** 55 rows cover 27 README claim lines: 43 auto and 12 manual;
+46 verified at their named source/run revisions, 9 never-verified manual statements. No current claim is marked
 contradicted or outdated. This is a structural/evidence audit, not a new hardware qualification. Policy behavior is
 GPU-free tested at `34ab0a267`; the release-tag recheck requirement remains unchanged.
 
@@ -107,8 +108,7 @@ The status `verified` (at `a9dee7b2c`, 2026-11-07) only says a record exists. At
 5. **A release changes the truth of the status line.** "No public binary" and "master is the current working
    version" must be decided with the release (the `release-asset-policy` row).
 6. **Most automated stages exist as scripts but are not release stages.** The trio, fault containment, sleep/wake,
-   the Windows NVDEC soak, the relay-forced suite, the no-patch check and the clean-clone build are not built or
-   not wired.
+   the Windows NVDEC soak and the relay-forced suite are not built or not wired. The no-patch and clean-clone checks now have scripts and fixture/mutation tests (see below).
 
 ### Original README sentences removed or reworded by DX1
 
@@ -148,7 +148,8 @@ headers, not run here):
 The README makes no native SPECviewperf result claim: that trace directory is absent from this checkout. The SPEC stage code exists, disabled by default; its design is release tier only
 (`docs/design/V3_CI_TIERS_AND_IGNORE_LADDER.md` section 6).
 
-### Original planned stages (the `NEW:` slugs; release wiring still proposed)
+### Remaining planned stages (the `NEW:` slugs; design intent)
+
 
 | slug | design | tier |
 |---|---|---|
@@ -157,12 +158,75 @@ The README makes no native SPECviewperf result claim: that trace directory is ab
 | `windows-nvdec-soak` | 15 to 20 min of 4K60 playback from a local file in Edge; at least 3 passing runs across dies confirm or retire "Edge can reset after 7 to 16 minutes" | release large |
 | `windows-sleep-wake` | S3 sleep and wake of the Windows guest; expected FAIL today; the README sentence flips the day it passes; master gate only if it takes about 2 min | release large |
 | `linux-display-desktop` | desktop and display planes; manual (MC-10) unless a Vast display lane exists | release large or owner hardware |
-| `clean-clone-build` | lean clone of the tag, `cargo build --workspace --release --locked`, GPU-free `cargo test` | CI GPU-free |
-| `no-patch-check` | lane scripts only run vendor installers; no default lane applies `docs/kernel_patches` or the UVM host patch | CI GPU-free |
 | `release-asset-policy` | compares the release assets with the "no public binary" sentence | release large |
 | `host-device-files-census` | the QEMU process opens only `/dev/nvidiactl`, `/dev/nvidia0`, `/dev/nvidia-uvm`, `/dev/kvm` | master gate middle |
-| `fast-suite-relay-forced` | `fast_suite.sh` with `KF3_DEBUG=1 KF3_DEBUG_FORCE_MIGRATABLE=1`; env passthrough to be confirmed | release large |
+| `fast-suite-relay-forced` | DESIGN-ONLY, unverified: `fast_suite.sh` with `KF3_DEBUG=1 KF3_DEBUG_FORCE_MIGRATABLE=1`; env passthrough is not verified | release large |
 | `windows-gate-nvidia-smi-cuda-version`, `windows-setup-doc-vs-gate`, `app-gpu-attribution`, `relay-stall-pairs-linux`, `closed-module-refusal-check`, `license-spdx-check`, `external-link-check`, `ghsa-enabled-check` | each a small check named in its rows | per row |
+
+## GPU-free release checks (implemented)
+
+CODE READ, 2026-11-07: `scripts/ci/clean_clone_check.sh` shallow-clones committed sources
+(`--source URL|DIR`, optionally `--ref BRANCH|TAG`) without submodules or evidence restoration.
+It checks the README/manual build commands, required workspace/firmware locks, literal Rust
+includes and exact references to archived trace members, then runs:
+
+```sh
+cargo build --workspace --release --locked -j2
+KAYFABE_NO_KVM=1 cargo test --workspace --locked --no-fail-fast -j2
+```
+
+CODE READ: this is the documented Rust workspace build, including `kf-qemu`, not a QEMU C
+build, driver install or guest boot. `README.md` and `docs/howto/building.md` document the
+workspace command; the README also names the cold-clone record with 14 local test failures, so the command is not a
+claim of passing qualification; root `CONTRIBUTING.md` contains the sparse-clone alternative. This check uses
+a complete shallow tree. A fresh target subdirectory
+is removed on success or a reported failure. The script runs at niceness 19, exports two jobs to nested cargo,
+requires at least 6 GiB free on `/` before either cargo phase, and does not use image stubs.
+On the shared development host, hold the existing global lock:
+
+```sh
+CARGO_TARGET_DIR=/workspace/R2-target nice -n 19 \
+  flock /tmp/claude-0/kf-local-cargo.lock bash scripts/ci/clean_clone_check.sh
+```
+
+CODE READ: `python3 scripts/ci/no_patch_check.py` prints every patch artifact's classification
+and explicit opt-in or historical-record pointer from `scripts/ci/no-patch-inventory.json`.
+New artifacts, unreviewed application/reference scripts, changed review hashes, missing scope
+pointers, missing stock entrypoints, and stock paths reaching a reviewed applicator fail.
+The public manual must affirm that stock host and guest NVIDIA drivers are unmodified
+“by default” and disclose “opt-in” exceptions. The README now scopes the vendor-driver statement to the stock path
+and links to those opt-in requirements; the earlier absolute wording is no longer a current claim. Custom QEMU device integration is documented separately from optional
+diagnostic QEMU patching in `docs/howto/installing.md`.
+
+CODE READ, 2026-11-07, J1 integration review: the DirectX VRS patch is an **opt-in
+test-program source patch**, applied by the separate offline
+`scripts/bench/windows/appmatrix/build_release_bundle.ps1` in a temporary Microsoft
+sample worktree. It does not modify the NVIDIA driver, QEMU or guest OS. The
+inventory's reviewer note records that scope and points at the explicit builder;
+both its PowerShell source and `release_bundle.py` (receipt/hash validation only)
+are review-hash pinned. PowerShell `.ps1` files participate in the same application
+detection and stock call graph as shell/Python scripts. Every newly discovered
+patch still fails until its classification, scope note and opt-in pointer are reviewed.
+
+LIMIT: the call graph follows literal script names/basenames and Python imports, including
+shell heredocs. It is a static regression check, not a proof about dynamic dispatch, arbitrary
+source rewrites or vendor installer contents. Constructed runtime file paths are exercised by
+cargo tests; literal include/archived-input scanning is not a complete Rust parser. No check
+fetches an evidence archive to turn a missing input into a pass.
+
+```sh
+python3 -m unittest scripts/ci/test_clean_clone_check.py scripts/ci/test_no_patch_check.py \
+  scripts/ci/test_release_checks_workflows.py
+python3 scripts/ci/release_checks_mutants.py
+```
+
+CODE READ: `.github/workflows/release-checks.yml` runs the fixture tests, mutation checks
+and no-patch audit on relevant PRs to `next`/`master`. Its clean-clone job is **manual dispatch
+only**. MEASURED, 2026-11-07, local source `fe0cd47e3`: the release build completed in 5m 53s,
+but the complete cold build/test run exceeded 25 minutes during test compilation at niceness
+19 with two jobs; the test run later exceeded three hours. The manual job has a four-hour
+budget. This local timing does not predict GitHub runner timing; the final run record is under
+`traces/release_checks_20261107/`.
 
 ## Claims that can never be automated on Vast
 
@@ -256,12 +320,10 @@ python3 -m unittest scripts/ci/test_release_claims.py
 python3 scripts/ci/release_claims_mutants.py
 ```
 
-## Proposed jobs (not wired)
+## CI wiring and remaining proposed jobs
 
-1. **Advisory PR job** `release-claims` (non-required): `validate`, on PRs that touch `README.md`,
-   `docs/RELEASE_CLAIMS.*` or `scripts/ci/release_claims*`. It makes a README edit visible with the missing
-   ledger rows, without blocking.
-2. **Release-tag check**: on a tag, `validate --check-git` then `release --rev <tag commit>`. It fails until
+1. **Implemented advisory PR job** `release-claims` in `.github/workflows/release-claims.yml`: `validate`, on PRs touching `README.md`, `docs/RELEASE_CLAIMS.*` or the validator/tests/workflow. CODE READ: job-level `continue-on-error: true`, read-only contents permission, SHA-pinned checkout, no dependency from the required `CI` gate. The workflow command is tested against valid, README-drift and missing-pointer fixtures; existing validator mutants also run.
+2. **Release-tag check (design intent; not implemented)**: on a tag, `validate --check-git` then `release --rev <tag commit>`. It fails until
    every non-dropped row names the tag's revision, which forces the stages above (or the manual evidence) to run
    at that revision. The release tier of `V3_CI_TIERS_AND_IGNORE_LADDER.md` (largest, release tag, no retries,
    RETRY never passes) is the place the automated rows run.
