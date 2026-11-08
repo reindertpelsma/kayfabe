@@ -139,7 +139,7 @@ for (const path of ['/rent', '/availability?profile=check']) {
     assert.equal(h.cloud.creates, 0);
   });
 }
-// FALSIFIER H4/H5: labels block cleanup; transfer/export policy admits forbidden boxes.
+// denied countries
 for (const action of ['stop', 'cron']) {
   test('round create-owned ID survives label change ' + action, async () => {
     const h = await setup();
