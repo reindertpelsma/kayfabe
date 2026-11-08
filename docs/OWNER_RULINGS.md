@@ -1464,7 +1464,7 @@ sentence was removed. Thin multi-GPU tests and aarch64 builds already exist (ite
    across GPUs, peer access (refused by name) and Windows or display with several GPUs are not measured. Existing
    two-GPU thin tests and the aarch64 cross-builds do not establish full support.
 
-## §AP. Tests of production code, and tests the boxes depend on, run on the `.workerignore`-stripped tree, 2026-11-08
+## §AQ. Tests of production code, and tests the boxes depend on, run on the `.workerignore`-stripped tree, 2026-11-08
 
 *(Owner ruling, 2026-11-08. Builds on the AGREED ignore ladder in `design/V3_CI_TIERS_AND_IGNORE_LADDER.md` section 4.)*
 
