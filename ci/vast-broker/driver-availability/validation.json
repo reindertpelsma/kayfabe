@@ -1,0 +1,521 @@
+{
+  "status": "DESIGN-ONLY",
+  "checked_at": "2026-11-08T01:31:30Z",
+  "evidence_kind": "MEASURED GPU-free checks; public HTTP metadata and streamed hashes; CODE READ historical repository records",
+  "base_revision": "624bf1dfcf98fac362bc63478e7f9cdb65c4aedf",
+  "tests": {
+    "baseline_release_regression": {
+      "passed": 22,
+      "failed": 0
+    },
+    "before_implementation": {
+      "selector": "expected import failure; module absent",
+      "generator": "expected import failure; script absent"
+    },
+    "after": {
+      "selector": {
+        "passed": 87,
+        "failed": 0,
+        "independent_exhaustive_pool_cases": 108
+      },
+      "generator": {
+        "passed": 53,
+        "failed": 0
+      },
+      "release_regression": {
+        "passed": 22,
+        "failed": 0
+      }
+    },
+    "offline_regeneration": "byte-identical; Client construction forbidden in the test"
+  },
+  "catalog": {
+    "branches": 14,
+    "installers": 297,
+    "pins": 98,
+    "metadata_request_receipts": 625,
+    "head_request_receipts": 378,
+    "discovery_gaps": 0,
+    "api_whql_flag_exclusions": 41
+  },
+  "mutations": {
+    "rule": "every mutant >=2 distinct named killers",
+    "input_sha256": {
+      "validate.js": "d054d0d0b8beedcd503f705537605dec98080c146cdf0a549bec21be713cd175",
+      "generate.py": "e4e9ebd630e1c8b94923f78b374a2f848c05de1595e27184f06cf652d2ba2019",
+      "selector.test.js": "e4596473e193a2f14bba96514b298f1d0039d7afec4803ccad49e8adff0c991d",
+      "test_generate.py": "d85addc3abd1570de03417f0baba0af5a769696c415910ef1345cee05bed8c3d",
+      "sources.json": "7c725d0d6d313970d0fdeacd23a37429486f0778f4e19203958795b498150bfc"
+    },
+    "mutants": [
+      {
+        "name": "unpinned-admitted",
+        "language": "js",
+        "exit_code": 1,
+        "killers": [
+          "UNPINNED linux is never selected",
+          "UNPINNED windows is never selected"
+        ],
+        "killer_count": 2
+      },
+      {
+        "name": "known-bad-admitted",
+        "language": "js",
+        "exit_code": 1,
+        "killers": [
+          "known_bad excludes linux even with a valid pin",
+          "known_bad excludes windows even with a valid pin"
+        ],
+        "killer_count": 2
+      },
+      {
+        "name": "duplicates-admitted",
+        "language": "js",
+        "exit_code": 1,
+        "killers": [
+          "403 linux is never selected",
+          "404 linux is never selected",
+          "UNPINNED linux is never selected",
+          "a core reference for another version cannot be reused",
+          "a designation in each family still cannot share across families",
+          "core designation does not permit within-box duplicate axes",
+          "core exception cannot cross family boundary",
+          "core roles without a designated version cannot share",
+          "core sharing still assigns three distinct axes on each box",
+          "cross-branch OS overlap cannot bypass exhaustion",
+          "exact version ownership spans all branch runs",
+          "exhaustion never falls back to a version on another box",
+          "known_bad excludes linux even with a valid pin",
+          "no exact version repeats across boxes or axes",
+          "oldest test dates rank before newer dates for every OS",
+          "one normalized version on two OSes cannot fill both guest axes",
+          "one ordinary box cannot share with a core-reference box",
+          "ordinary roles cannot use the core sharing exception",
+          "small pools agree with an exhaustive independent assignment oracle"
+        ],
+        "killer_count": 19
+      },
+      {
+        "name": "ownership-reset-between-branches",
+        "language": "js",
+        "exit_code": 1,
+        "killers": [
+          "cross-branch OS overlap cannot bypass exhaustion",
+          "exact version ownership spans all branch runs"
+        ],
+        "killer_count": 2
+      },
+      {
+        "name": "core-crosses-family",
+        "language": "js",
+        "exit_code": 1,
+        "killers": [
+          "a designation in each family still cannot share across families",
+          "core exception cannot cross family boundary",
+          "small pools agree with an exhaustive independent assignment oracle"
+        ],
+        "killer_count": 3
+      },
+      {
+        "name": "ordinary-role-core-sharing",
+        "language": "js",
+        "exit_code": 1,
+        "killers": [
+          "one ordinary box cannot share with a core-reference box",
+          "ordinary roles cannot use the core sharing exception",
+          "small pools agree with an exhaustive independent assignment oracle"
+        ],
+        "killer_count": 3
+      },
+      {
+        "name": "undesignated-core-sharing",
+        "language": "js",
+        "exit_code": 1,
+        "killers": [
+          "a core reference for another version cannot be reused",
+          "core roles without a designated version cannot share",
+          "small pools agree with an exhaustive independent assignment oracle"
+        ],
+        "killer_count": 3
+      },
+      {
+        "name": "same-box-core-duplicates",
+        "language": "js",
+        "exit_code": 1,
+        "killers": [
+          "core designation does not permit within-box duplicate axes",
+          "core sharing still assigns three distinct axes on each box",
+          "small pools agree with an exhaustive independent assignment oracle"
+        ],
+        "killer_count": 3
+      },
+      {
+        "name": "newest-first",
+        "language": "js",
+        "exit_code": 1,
+        "killers": [
+          "never tested versions rank before dated tests",
+          "oldest test dates rank before newer dates for every OS"
+        ],
+        "killer_count": 2
+      },
+      {
+        "name": "seed-ignored",
+        "language": "js",
+        "exit_code": 1,
+        "killers": [
+          "seed changes tie choices across a bank of seeds",
+          "seed participates even when box IDs are different"
+        ],
+        "killer_count": 2
+      },
+      {
+        "name": "blackwell-floor-ignored",
+        "language": "js",
+        "exit_code": 1,
+        "killers": [
+          "Blackwell excludes branches below its floor",
+          "unsupported Blackwell branches are explicit in coverage accounting"
+        ],
+        "killer_count": 2
+      },
+      {
+        "name": "branch-pruned",
+        "language": "js",
+        "exit_code": 1,
+        "killers": [
+          "a second branch without pins cannot silently disappear",
+          "each supported branch remains in the sweep"
+        ],
+        "killer_count": 2
+      },
+      {
+        "name": "version-not-normalized",
+        "language": "js",
+        "exit_code": 1,
+        "killers": [
+          "one normalized version on two OSes cannot fill both guest axes",
+          "schema rejects duplicate normalized version",
+          "selector rejects duplicate normalized version before assignment",
+          "version keys equate omitted and zero patch",
+          "version keys equate zero padding"
+        ],
+        "killer_count": 5
+      },
+      {
+        "name": "input-mutated",
+        "language": "js",
+        "exit_code": 1,
+        "killers": [
+          "deep-frozen inputs are accepted",
+          "selector has no input mutation"
+        ],
+        "killer_count": 2
+      },
+      {
+        "name": "package-lines-mixed",
+        "language": "js",
+        "exit_code": 1,
+        "killers": [
+          "GeForce boxes cannot select an RTX Enterprise package",
+          "explicit enterprise boxes cannot select a GeForce package"
+        ],
+        "killer_count": 2
+      },
+      {
+        "name": "malformed-sha-admitted",
+        "language": "js",
+        "exit_code": 1,
+        "killers": [
+          "schema rejects malformed sha256",
+          "selector rejects malformed sha256 before assignment"
+        ],
+        "killer_count": 2
+      },
+      {
+        "name": "pin-size-not-required",
+        "language": "js",
+        "exit_code": 1,
+        "killers": [
+          "schema rejects missing size",
+          "selector rejects missing size before assignment"
+        ],
+        "killer_count": 2
+      },
+      {
+        "name": "installer-origin-not-checked",
+        "language": "js",
+        "exit_code": 1,
+        "killers": [
+          "schema rejects credential URL",
+          "selector rejects credential URL before assignment"
+        ],
+        "killer_count": 2
+      },
+      {
+        "name": "redirect-origin-not-checked",
+        "language": "js",
+        "exit_code": 1,
+        "killers": [
+          "schema rejects redirect outside NVIDIA",
+          "selector rejects redirect outside NVIDIA before assignment"
+        ],
+        "killer_count": 2
+      },
+      {
+        "name": "head-method-not-checked",
+        "language": "js",
+        "exit_code": 1,
+        "killers": [
+          "schema rejects GET instead of HEAD",
+          "selector rejects GET instead of HEAD before assignment"
+        ],
+        "killer_count": 2
+      },
+      {
+        "name": "pin-can-have-http-error",
+        "language": "js",
+        "exit_code": 1,
+        "killers": [
+          "schema rejects PINNED with HTTP403",
+          "schema rejects PINNED with HTTP404",
+          "selector rejects PINNED with HTTP403 before assignment",
+          "selector rejects PINNED with HTTP404 before assignment"
+        ],
+        "killer_count": 4
+      },
+      {
+        "name": "known-good-proof-not-required",
+        "language": "js",
+        "exit_code": 1,
+        "killers": [
+          "schema rejects missing known-good proof",
+          "selector rejects missing known-good proof before assignment"
+        ],
+        "killer_count": 2
+      },
+      {
+        "name": "abi-can-prune-sweep",
+        "language": "js",
+        "exit_code": 1,
+        "killers": [
+          "schema rejects ABI used for selection",
+          "selector rejects ABI used for selection before assignment"
+        ],
+        "killer_count": 2
+      },
+      {
+        "name": "future-test-date-admitted",
+        "language": "js",
+        "exit_code": 1,
+        "killers": [
+          "schema rejects future test date",
+          "selector rejects future test date before assignment"
+        ],
+        "killer_count": 2
+      },
+      {
+        "name": "windows-branch-evidence-ignored",
+        "language": "js",
+        "exit_code": 1,
+        "killers": [
+          "Windows branch evidence rejected: d => { d.branch_evidence.branch = 570; }",
+          "selector refuses bad Windows branch evidence: d => { d.branch_evidence.branch = 570; }"
+        ],
+        "killer_count": 2
+      },
+      {
+        "name": "notebook-installer-admitted",
+        "language": "js",
+        "exit_code": 1,
+        "killers": [
+          "schema rejects notebook-only Windows installer",
+          "selector rejects notebook-only Windows installer before assignment"
+        ],
+        "killer_count": 2
+      },
+      {
+        "name": "checksum-filename-ignored",
+        "language": "py",
+        "exit_code": 1,
+        "killers": [
+          "test_no_compat32_checksum_cannot_pin_full_installer (__main__.Checksums.test_no_compat32_checksum_cannot_pin_full_installer)",
+          "test_other_arch_checksum_cannot_pin_x64 (__main__.Checksums.test_other_arch_checksum_cannot_pin_x64)"
+        ],
+        "killer_count": 2
+      },
+      {
+        "name": "checksum-conflicts-ignored",
+        "language": "py",
+        "exit_code": 1,
+        "killers": [
+          "test_conflicting_bsd_and_gnu_checksums_are_rejected (__main__.Checksums.test_conflicting_bsd_and_gnu_checksums_are_rejected)",
+          "test_conflicting_sha256s_are_rejected (__main__.Checksums.test_conflicting_sha256s_are_rejected)"
+        ],
+        "killer_count": 2
+      },
+      {
+        "name": "errors-treated-as-absent",
+        "language": "py",
+        "exit_code": 1,
+        "killers": [
+          "test_403_is_unknown_not_absent (__main__.Probes.test_403_is_unknown_not_absent)",
+          "test_timeout_is_unknown_not_absent (__main__.Probes.test_timeout_is_unknown_not_absent)"
+        ],
+        "killer_count": 2
+      },
+      {
+        "name": "installer-get-instead-of-head",
+        "language": "py",
+        "exit_code": 1,
+        "killers": [
+          "test_403_is_unknown_not_absent (__main__.Probes.test_403_is_unknown_not_absent)",
+          "test_fallback_sha256sum_txt (__main__.Probes.test_fallback_sha256sum_txt)",
+          "test_head_200_and_official_sha256_pins (__main__.Probes.test_head_200_and_official_sha256_pins)",
+          "test_md5_sidecar_is_not_an_active_pin (__main__.Probes.test_md5_sidecar_is_not_an_active_pin)",
+          "test_missing_content_length_stays_unknown (__main__.Probes.test_missing_content_length_stays_unknown)",
+          "test_missing_sha256_stays_unpinned (__main__.Probes.test_missing_sha256_stays_unpinned)",
+          "test_probe_does_not_get_installer (__main__.Probes.test_probe_does_not_get_installer)",
+          "test_timeout_is_unknown_not_absent (__main__.Probes.test_timeout_is_unknown_not_absent)"
+        ],
+        "killer_count": 8
+      },
+      {
+        "name": "missing-checksum-promoted",
+        "language": "py",
+        "exit_code": 1,
+        "killers": [
+          "test_md5_sidecar_is_not_an_active_pin (__main__.Probes.test_md5_sidecar_is_not_an_active_pin)",
+          "test_missing_sha256_stays_unpinned (__main__.Probes.test_missing_sha256_stays_unpinned)"
+        ],
+        "killer_count": 2
+      },
+      {
+        "name": "download-size-mismatch-admitted",
+        "language": "py",
+        "exit_code": 1,
+        "killers": [
+          "test_oversize_download_is_not_a_pin_and_is_deleted (__main__.BoundedDownload.test_oversize_download_is_not_a_pin_and_is_deleted)",
+          "test_truncated_download_is_not_a_pin_and_is_deleted (__main__.BoundedDownload.test_truncated_download_is_not_a_pin_and_is_deleted)"
+        ],
+        "killer_count": 2
+      },
+      {
+        "name": "download-disk-guard-removed",
+        "language": "py",
+        "exit_code": 1,
+        "killers": [
+          "test_disk_guard_fails_before_reading (__main__.BoundedDownload.test_disk_guard_fails_before_reading)",
+          "test_disk_guard_reserves_space_for_the_expected_download (__main__.BoundedDownload.test_disk_guard_reserves_space_for_the_expected_download)"
+        ],
+        "killer_count": 2
+      },
+      {
+        "name": "published-tesla-host-rewritten",
+        "language": "py",
+        "exit_code": 1,
+        "killers": [
+          "test_exact_published_tesla_url_is_preserved (__main__.Discovery.test_exact_published_tesla_url_is_preserved)",
+          "test_historical_available_url_is_reprobed_without_rewriting_host (__main__.Discovery.test_historical_available_url_is_reprobed_without_rewriting_host)"
+        ],
+        "killer_count": 2
+      },
+      {
+        "name": "search-query-flags-inverted",
+        "language": "py",
+        "exit_code": 1,
+        "killers": [
+          "test_game_ready_query_requires_whql (__main__.Discovery.test_game_ready_query_requires_whql)",
+          "test_studio_uses_the_documented_studio_query_flags (__main__.Discovery.test_studio_uses_the_documented_studio_query_flags)"
+        ],
+        "killer_count": 2
+      },
+      {
+        "name": "api-whql-flag-ignored",
+        "language": "py",
+        "exit_code": 1,
+        "killers": [
+          "test_api_whql_zero_is_not_certified_by_filename (__main__.Discovery.test_api_whql_zero_is_not_certified_by_filename)",
+          "test_enterprise_whql_zero_is_not_certified_by_filename (__main__.Discovery.test_enterprise_whql_zero_is_not_certified_by_filename)"
+        ],
+        "killer_count": 2
+      },
+      {
+        "name": "url-userinfo-admitted",
+        "language": "py",
+        "exit_code": 1,
+        "killers": [
+          "test_official_host_with_username_only_is_refused (__main__.Probes.test_official_host_with_username_only_is_refused)",
+          "test_url_userinfo_is_refused (__main__.Probes.test_url_userinfo_is_refused)"
+        ],
+        "killer_count": 2
+      },
+      {
+        "name": "download-size-guard-removed",
+        "language": "py",
+        "exit_code": 1,
+        "killers": [
+          "test_large_size_refused_before_file_creation (__main__.BoundedDownload.test_large_size_refused_before_file_creation)",
+          "test_nonpositive_size_refused_before_file_creation (__main__.BoundedDownload.test_nonpositive_size_refused_before_file_creation)"
+        ],
+        "killer_count": 2
+      },
+      {
+        "name": "redirect-head-becomes-get",
+        "language": "py",
+        "exit_code": 1,
+        "killers": [
+          "test_301_redirect_preserves_head_method (__main__.Probes.test_301_redirect_preserves_head_method)",
+          "test_302_redirect_preserves_head_method (__main__.Probes.test_302_redirect_preserves_head_method)"
+        ],
+        "killer_count": 2
+      }
+    ]
+  },
+  "baseline_gates": {
+    "doc_freshness": "PASS checked=211 existing-debt=0 new=0",
+    "release_claims": "PASS 133 claims, 0 errors, 3 existing warnings",
+    "no_private_refs": "PASS clean",
+    "no_gpu_uuids": "PASS new=0 stale=0"
+  },
+  "final_gates": {
+    "doc_freshness": {
+      "result": "PASS",
+      "output": "doc freshness: checked=212 existing-debt=0 new=0"
+    },
+    "release_claims": {
+      "result": "PASS",
+      "output": "WARN row 44 (perf-app-matrix-seconds-1075-1193): verified but action update-wording; is the wording the problem?\nWARN row 54 (win-minecraft-in-a-world): verified but action update-wording; is the wording the problem?\nWARN row 70 (win-3dmark-steel-nomad-runs-to-end): verified but action update-wording; is the wording the problem?\nrelease_claims: 133 claims, 0 errors, 3 warnings"
+    },
+    "no_private_refs": {
+      "result": "PASS",
+      "output": "no_private_refs: clean"
+    },
+    "no_gpu_uuids": {
+      "result": "PASS",
+      "output": "gpu-uuids: files=179 baselined=179 new=0 stale=0"
+    },
+    "workflow_lint": {
+      "result": "PASS",
+      "output": "workflow_lint: ok"
+    }
+  },
+  "limits": [
+    "No new hardware, VM, installer execution, Worker/Cloudflare access, deployment or rental",
+    "Windows119 and Linux17 available entries remain unpinned",
+    "Family-only availability is not per-die qualification",
+    "Sparse branches cannot satisfy all-family release uniqueness today"
+  ],
+  "diff_scan": {
+    "credential_pattern_findings": 0,
+    "global_ipv4_findings": 0,
+    "binary_files": 0,
+    "files": 12
+  },
+  "artifact_sha256": {
+    "ci/vast-broker/driver-availability.json": "6fc40ac073f4e0b5d78858b9d9269bfac4439fe80c87e04c8e8408ab6bf0d964",
+    "ci/vast-broker/driver-availability/observations.json": "0424a0ab46965db5e1e644319bdc1b13b4f95fb691982b6032fee9a8638658b3",
+    "docs/design/V3_DRIVER_AVAILABILITY.md": "c6466c1085978455e7d70518fd436cda7a074111718d4cb4e63ae9f346916f8d",
+    ".github/workflows/driver-availability.yml": "c20678863bfe20848a193b1522eb54ea1589a486beb0deaef199cc60ef473c4b"
+  }
+}

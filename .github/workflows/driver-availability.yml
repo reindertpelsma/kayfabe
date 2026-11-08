@@ -1,0 +1,32 @@
+name: Driver availability (GPU-free)
+
+on:
+  pull_request:
+    branches: [next]
+    paths:
+      - 'ci/vast-broker/driver-availability.json'
+      - 'ci/vast-broker/driver-availability/**'
+      - '.github/workflows/driver-availability.yml'
+  push:
+    paths:
+      - 'ci/vast-broker/driver-availability.json'
+      - 'ci/vast-broker/driver-availability/**'
+      - '.github/workflows/driver-availability.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-catalog:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Catalog and selection fixtures (no network)
+        run: |
+          nice -n 19 node ci/vast-broker/driver-availability/check.mjs
+          nice -n 19 node --test ci/vast-broker/driver-availability/selector.test.js
+          nice -n 19 python3 ci/vast-broker/driver-availability/test_generate.py
+      - name: Every mutant needs at least two killers
+        run: nice -n 19 python3 ci/vast-broker/driver-availability/mutants.py
