@@ -108,7 +108,7 @@ impl Io for Mock {
     fn src_entries(&mut self) -> u32 {
         self.entries
     }
-    fn max_entry_bytes(&mut self) -> u64 {
+    fn max_scan_bytes(&mut self) -> u64 {
         kf_chan::user_storage::MAX_SOURCE_BYTES
     }
     fn walk_busy(&mut self) -> bool {

@@ -10,8 +10,8 @@ use super::{PlacedRows, RamMap, RowsLog};
 use kf_chan::tmode::Span;
 use std::sync::{Arc, RwLock, RwLockReadGuard, TryLockError, Weak, atomic::Ordering};
 
-/// Trusted bounded snapshot policy, shared with native descriptor admission and
-/// limited by the existing private staging region. All reads remain off-vCPU.
+/// Trusted snapshot bound, independent of native Pointer descriptor admission.
+/// Limited by the private staging region; all reads remain off-vCPU.
 pub(crate) const MAX_BYTES: usize = kf_chan::user_storage::MAX_SOURCE_BYTES as usize;
 // Complete maximum span at public4KiB grain, including an unaligned first page.
 // Finer hostile fragmentation still refuses; no guest-sized unbounded traversal.
@@ -916,6 +916,26 @@ mod tests {
                 mapped(&rows, &log, &ram, generation, va, len, 9 << 20).err(),
                 Some(Refusal::Bounds)
             );
+        }
+    }
+    #[test]
+    fn ring_mapping_piece_limit_is_independent_of_byte_limit() {
+        for pieces in [RING_PIECES - 1, RING_PIECES, RING_PIECES + 1] {
+            let (ram, _, rows, log, generation) = fixture();
+            rows.write().unwrap().clear();
+            for i in 0..pieces as u64 {
+                rows.write()
+                    .unwrap()
+                    .insert(0x100000 + 8 * i, (8, 8 * i, false, MapPerm::READ_WRITE));
+            }
+            let bytes = pieces as u64 * 8;
+            let result = mapped(&rows, &log, &ram, generation, 0x100000, bytes, bytes);
+            // Small but hostile fragmentation cannot turn declaration admission into an unbounded traversal.
+            if pieces <= RING_PIECES {
+                result.unwrap().admit(|| ()).unwrap();
+            } else {
+                assert_eq!(result.err(), Some(Refusal::Bounds));
+            }
         }
     }
 }

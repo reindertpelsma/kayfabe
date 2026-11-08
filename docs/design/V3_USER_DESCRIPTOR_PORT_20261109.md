@@ -94,5 +94,17 @@ for a reason other than the explicitly reconciled admission contract.
 
 ## Verification
 
-MEASURED: pending local runs. This section will record exact counts, mutant killers,
-clippy/fmt and claim/doc/privacy/UUID gate results before the draft PR is opened.
+MEASURED, UR1 local run 2026-11-09 (original product sources at `115a0c39d`):
+`cargo test -p kf-chan --test user_loop_model_v2 -j2`, with `KAYFABE_NO_KVM=1`,
+passes 53 tests, fails 0, and retains 1 existing ignore (900.50 seconds, debug).
+The matching `--release` command also passes 53 / 0 / 1 (288.76 seconds).
+No SIGSEGV was reproduced in either baseline profile. The existing ignore concerns the independent native-doorbell
+read-back decision; this port does not change or hide it.
+
+MEASURED, UR1 local run 2026-11-09 (same original product sources plus the new probes):
+the expected-red Relay suite has 28 passes / 17 failures; the library has 226 passes /
+1 failure. All 224 original library tests pass. The new failing Storage boundary
+probe and Relay failures expose the global budget and missing mode-scoped observations.
+H1's expected-red falsifier was not met. Logs remain under `/root/codex_lanes/UR1/logs/`.
+
+VERIFICATION PENDING: port, mutants and final clippy/fmt/claim/doc/privacy/UUID results.

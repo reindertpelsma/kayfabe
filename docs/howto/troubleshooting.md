@@ -77,6 +77,7 @@ The device checks its configuration when QEMU starts and refuses by name rather 
 | Boot to ssh takes about 20 minutes; the guest ignores `shutdown /s` for 5 minutes | The driver is in Code 43, which slows everything. Fix the cause (settings above). `win_vm.sh stop` falls back to QMP `quit`. <!-- src: scripts/bench/windows/README.md --> |
 | The guest was enrolled in an unrelated company's Autopilot tenant | A default-identity VM matched it once. Give every VM a unique SMBIOS UUID, serial and MAC, and keep setup offline until after OOBE. <!-- src: docs/WINDOWS_GUEST_SETUP.md --> |
 | The display driver resets (TDR) | See below. |
+| `USER_RING_SCAN_BUDGET` in the QEMU log | A Windows command buffer requiring inspection exceeds the supported 917,504-byte copy limit, so its channel stops. Save the log and report the application and workload. Larger buffers on the native pointer path are accepted; this message identifies the inspection limit. <!-- src: crates/kf-chan/src/user_turn.rs, docs/design/V3_USER_DESCRIPTOR_DECISION_20261022.md --> |
 | Edge resets after 7 to 16 minutes of playback | Known and unfinished. <!-- src: README.md "Not finished" --> |
 | The guest does not wake from sleep | Windows sleep/wake is not supported yet. <!-- src: README.md --> |
 

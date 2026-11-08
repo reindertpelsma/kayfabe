@@ -1,4 +1,4 @@
-// MEASURED: T1 snapshot3, twelve public C56F words; no guest pushbuffer bytes.
+// MEASURED: T1 snapshot3, 2026-10-22, at 03715b7d3; twelve public C56F words, no PB bytes.
 pub const RUN3440: [u64; 12] = [
     0x0faa26023110102c,
     0x0ef7d2001dd1002c,

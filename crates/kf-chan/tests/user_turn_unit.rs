@@ -103,7 +103,7 @@ impl Io for Mock {
     fn src_entries(&mut self) -> u32 {
         self.entries
     }
-    fn max_entry_bytes(&mut self) -> u64 {
+    fn max_scan_bytes(&mut self) -> u64 {
         self.calls.push(Call::ScanBound);
         kf_chan::user_storage::MAX_SOURCE_BYTES
     }
@@ -1303,4 +1303,83 @@ fn native_ring_capacity_limits_and_wrap_preserve_real_fetch_credit() {
             assert_eq!(fetch.available(), entries - 1);
         }
     }
+}
+
+#[test]
+fn zero_length_controls_in_scan_and_window_preserve_native_words_without_copy_budget() {
+    for window in [false, true] {
+        for raw in [0, (1 << 41) | 0xffff_ffff] {
+            let mut io = Mock::new(16);
+            let mut r = if window {
+                flipped_relay(&mut io, false)
+            } else {
+                relay()
+            };
+            let slot = r.cursor;
+            io.ring[slot as usize] = raw;
+            io.put = (slot + 1) & 15;
+            io.calls.clear();
+            turn(&mut r, &mut io).unwrap();
+            // A CONTROL NOP has no PB in any mode; its operand and LEVEL remain native, never CPU credit.
+            assert!(io.calls.contains(&Call::Entry(PubKind::Control, raw)));
+            assert!(
+                !io.calls
+                    .iter()
+                    .any(|c| matches!(c, Call::ReadPb(_) | Call::Stage | Call::ScanBound))
+            );
+            assert_eq!(r.cursor, (slot + 1) & 15);
+        }
+    }
+}
+
+#[test]
+fn window_to_pointer_transition_releases_only_the_copy_bound() {
+    let mut io = Mock::new(16);
+    let mut r = flipped_relay(&mut io, false);
+    turn(&mut r, &mut io).unwrap();
+    assert_eq!(r.life.mode(), Mode::Window);
+    io.live = 0;
+    io.epoch += 1;
+    let slot = r.cursor;
+    let raw =
+        kf_abi::submit::gp_entry(0x4000, kf_chan::user_storage::MAX_SOURCE_BYTES + 4).unwrap();
+    io.ring[slot as usize] = raw;
+    io.put = slot + 1;
+    io.calls.clear();
+    turn(&mut r, &mut io).unwrap();
+    // Once the registry is drained and the gate is quiescent, Pointer again forwards the intact large word.
+    assert_eq!(r.life.mode(), Mode::Pointer);
+    assert!(io.calls.contains(&Call::Entry(PubKind::Pointer, raw)));
+    assert!(
+        !io.calls
+            .iter()
+            .any(|c| matches!(c, Call::ReadPb(_) | Call::Stage | Call::ScanBound))
+    );
+}
+
+#[test]
+fn ring_switch_in_window_keeps_copy_bound_even_after_registry_drains() {
+    let mut io = Mock::new(16);
+    let mut r = flipped_relay(&mut io, false);
+    turn(&mut r, &mut io).unwrap();
+    assert_eq!(r.life.mode(), Mode::Window);
+    r.switch_source(2);
+    io.live = 0;
+    io.epoch += 1;
+    io.ring[0] =
+        kf_abi::submit::gp_entry(0x4000, kf_chan::user_storage::MAX_SOURCE_BYTES + 4).unwrap();
+    io.put = 1;
+    io.calls.clear();
+    let issued = r.fetch.issued();
+    let result = turn(&mut r, &mut io);
+    // A Window migration retains its post-switch scan obligation even when registrations drain.
+    assert!(
+        matches!(result, Err(Fail::Refused(ref why)) if why.starts_with("USER_RING_SCAN_BUDGET "))
+    );
+    assert_eq!(r.fetch.issued(), issued);
+    assert_eq!(r.cursor, 0);
+    assert!(!io.calls.iter().any(|c| matches!(
+        c,
+        Call::ReadPb(_) | Call::Stage | Call::Gate | Call::Entry(..)
+    )));
 }
