@@ -1,11 +1,12 @@
 # Release claims ledger
 
-**STATUS: DESIGN-ONLY, 2026-11-07.** The ledger, the validator and its tests exist; the jobs and stages named below are design intent, none is wired. Owner rule of 2026-11-07: every claim `README.md` makes about what works is
+**STATUS: LIVE, 2026-11-08 for the ledger and validator; DESIGN-ONLY for proposed release jobs.** The ledger and GPU-free validator exist; release enforcement is not wired. Windows apps and SPEC stage code exists, disabled pending the first Worker run; neither new stage is deployed. The historical audit below describes `a9dee7b2c`, not today's README. Owner rule of 2026-11-07: every claim `README.md` makes about what works is
 re-checked before a release, by an automated stage where one can exist and by a written manual checklist where
 not. This page explains the ledger `docs/RELEASE_CLAIMS.tsv`, the validator `scripts/ci/release_claims.py`, the
-stages each claim runs on, and the manual checklists. Nothing here is wired into required CI. The counts below
-are COMPUTED from the ledger at `a9dee7b2c` (next, 2026-11-07) with `release_claims.py summary`; the status of
-each row is INFERRED from the repository's own records, never from a new run: this lane ran no hardware.
+stages each claim runs on, and the manual checklists. Release-claims enforcement is not wired into required CI.
+The historical counts are from `a9dee7b2c` (next, 2026-11-07); the DX1 section gives current counts. Hardware
+statuses are read from named committed records; CODE READ rows describe repository facts. DX1 ran GPU-free tests,
+not hardware.
 
 ## The contract
 
@@ -42,7 +43,37 @@ Pages other than the README (`site/content/works-today.md`, `docs/howto/requirem
 | `evidence`, `rev`, `date` | pointer(s), revision(s) the run used, date of the run |
 | `action` | `keep`, `update-wording`, `add-test`, `drop` |
 
-## Today's ledger (COMPUTED, `a9dee7b2c`, 2026-11-07)
+## DX1 reconciliation, 2026-11-08
+
+**CODE READ:** README claims now point to the revisions in the committed die sweep (TU106, TU116, GA104, GA106,
+AD102, AD104, GB205 and GB206 at `0c515b3b3`, 2026-11-04; GA102 at `006d845a`, 2026-11-03), the intermittent GB202
+record, and the Linux app matrix (70/70 host, 66/70 guest at `144557e43`, 2026-11-07). These are historical measurements,
+not current-tree qualification. No hardware was run in DX1. Native SPEC 9/9 is omitted: its PR #289 trace directory is
+absent in this checkout. The coordinator's native comparison for issue #305 is labelled separately in `V3_WINDOWS_GATE.md`.
+
+The obsolete blanket parity, 65/61 counts, borrowed-page/Code-43 die summaries, owner-4070 blanket attribution and
+unrecorded application stability claims are removed. Manual software claims remain pending MC-2 through MC-9; the README
+makes no compatibility promise from them. Windows sleep/wake and Edge stability remain unfinished. The prior audit below
+is retained as the dated explanation of what changed, not the status of the rewritten README.
+
+**CODE READ:** all eight overlay entries are `manual: needs real display`, with the MC-14 template. The four Linux UVM
+apps and `managed_t` are `known_unsupported`, reported as `unsupported (UVM)` under the owner's GR-hold merge condition.
+Every structured report includes policy rows (NOT_RUN, never passing results), even with no app stage; historical raw
+verdicts remain in notes and table columns. Supported-app completeness/failure and host-Xid rules remain in force.
+LiveKernelEvent 193 stays non-gating by default, reported as `known_live_dumps_193` on the gate PASS line and
+`windows.live_dumps_193` in the structured report. Non-gating does not establish harmlessness (issue #305).
+
+The ledger is rewritten with the README's new hashes. Rows for removed sentences are removed, not relabelled as verified;
+derived-page rows now name the corrected claims. Navigation rows verify local targets only, not remote site availability.
+Project/deployment statements remain manual MC-11 claims with the evidence template above/below; they have not been
+independently checked against releases or deployment state. The validator and its pass rules are unchanged.
+
+**COMPUTED after the DX1 rewrite, 2026-11-08:** 53 rows cover 26 README claim lines: 41 auto and 12 manual;
+44 verified at their named source/run revisions, 9 never-verified manual statements. No current claim is marked
+contradicted or outdated. This is a structural/evidence audit, not a new hardware qualification. Policy behavior is
+GPU-free tested at `34ab0a267`; the release-tag recheck requirement remains unchanged.
+
+## Historical audit snapshot (COMPUTED, `a9dee7b2c`, 2026-11-07)
 
 COMPUTED at `a9dee7b2c` on 2026-11-07, 133 rows: 77 auto, 29 manual, 27 wording. Status: 59 verified, 9 outdated, 27 contradicted, 34 never-verified,
 4 unknown. Action: 53 keep, 47 update-wording, 32 add-test, 1 drop. Where: 14 CI GPU-free, 8 master gate middle,
@@ -51,7 +82,7 @@ COMPUTED at `a9dee7b2c` on 2026-11-07, 133 rows: 77 auto, 29 manual, 27 wording.
 The status `verified` (at `a9dee7b2c`, 2026-11-07) only says a record exists. At release every row is re-checked, and `release_claims.py release
 --rev <tag revision>` fails until each row names that revision (see Proposed jobs).
 
-### Top gaps
+### Gaps in the original README at `a9dee7b2c`
 
 1. **The README contradicts newer records on dies.** GB206, GA104, TU116, AD102 and GB205 have
    `WINDOWS_GATE_PASS` at `0c515b3b3` on 2026-11-04 (`traces/die_coverage_20261104/`); the README, the site,
@@ -76,7 +107,7 @@ The status `verified` (at `a9dee7b2c`, 2026-11-07) only says a record exists. At
    the Windows NVDEC soak, the relay-forced suite, the no-patch check and the clean-clone build are not built or
    not wired.
 
-### README sentences to reword or remove now
+### Original README sentences removed or reworded by DX1
 
 | line | sentence | action |
 |---|---|---|
@@ -105,16 +136,16 @@ headers, not run here):
 | `scripts/bench/box/merge_check.sh` | one provisioned GPU box; gates, kf3 build, raw and thin suites, census; about 11 min on a Vast box (`traces/trio_vast_20261105/`) |
 | `scripts/bench/box/windows_gate.sh` | the Windows media and an install (16 to 45 min, once per box), then the gate (968 s to 3692 s recorded) |
 | `scripts/bench/box/trio_stage.sh` | DRAFT; after `windows_gate.sh` on the same box; about 20 min; not wired |
-| `scripts/apps/apps_matrix.sh` | the fat guest image; 71 rows; failures re-run alone |
-| `scripts/bench/windows/appmatrix/run_windows_apps.sh` | the Windows base image, an app disk (`build_appdisk.sh`, pinned `manifest.json`), a guest agent; no committed run of it exists |
+| `scripts/apps/apps_matrix.sh` | the fat guest image; 70 runnable apps plus one policy skip in the 2026-11-07 record; four UVM apps now known unsupported |
+| `scripts/bench/windows/appmatrix/run_windows_apps.sh` | the Windows base image, an app disk (`build_appdisk.sh`, pinned `manifest.json`), guest transport; manual stage runs are recorded in `traces/winapps_20261107/`, not a Worker run |
 | `scripts/bench/gfx_suite.sh`, `video_lane.sh`, `llm_parity.sh`, `dbfast_lane.sh`, `cuda_ladder.sh`, `perf_compare.sh` | a provisioned box; host and guest on the same box |
 | `scripts/bench/display/desktop_smoke.sh`, `planes_oracle.sh`, `desktop_s3.sh` | Linux desktop guest; the broker lane (`broker_lane.sh`, `interactive.sh`) needs a host desktop session and cannot run on a headless rental |
 | `scripts/bench/gpu_fault_containment.sh`, `gpu_vram_denial.sh`, `gpu_wedge_containment.sh` | a GPU with a driver; host-side probes, no guest |
 
-SPECviewperf is not a claim stage: the README makes no SPECviewperf claim; its design is release tier only
+The README makes no native SPECviewperf result claim: that trace directory is absent from this checkout. The SPEC stage code exists, disabled by default; its design is release tier only
 (`docs/design/V3_CI_TIERS_AND_IGNORE_LADDER.md` section 6).
 
-### Planned stages (the `NEW:` slugs; design intent, none built)
+### Original planned stages (the `NEW:` slugs; release wiring still proposed)
 
 | slug | design | tier |
 |---|---|---|
@@ -195,6 +226,19 @@ VFIO, vGPU and nvkvm-pv rows: re-read the linked vendor pages and the nvkvm-pv d
 
 ### MC-13 Owner RTX 4070 claims
 Which README claims hold on the owner's RTX 4070: the perf set (non-nested), the Linux rows, the Windows rows.
+
+### MC-14 Windows YUV overlays on a real display
+
+All eight entries (`overlay_yuv_probe`, hide, occlude, resize, move, recreate, fullscreen and soak) are manual.
+Copy the general evidence template into `traces/manual_overlay_<date>/<app>.md`, adding physical monitor model and
+connector, the same-GPU native result with DIRECT overlay support, app version/hash and exact command, per-second
+presentation modes, transitions and latency, screenshots, duration, host Xid delta, guest reset counts and 193 counts.
+The native Vast simulated display failed the probe (no DIRECT); that is not a native real-monitor pass. No such
+real-monitor record is committed. The identical template is in `gate_profiles.json` for every overlay item.
+
+MC-11 also covers the current README's no-binary, no-installer, audit/interface and deployment statements: record
+the date and revision, checked release assets, maintainer confirmation, and the deployment/version record without
+credentials. A statement supplied by the owner is still manual until that evidence is committed.
 
 ## Usage
 

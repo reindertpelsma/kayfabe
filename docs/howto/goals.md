@@ -30,13 +30,13 @@ These are **goals**, not promises. Kayfabe is a research project with no release
 
 **Goal:** every family from Turing to Blackwell, Hopper included, is a first-class target, not only the one the author owns. Per-die facts are read from the host GPU, and only a small per-family table is kept by hand. Pre-Turing cards cannot work (there is no GSP firmware to stand in for). <!-- src: docs/OWNER_RULINGS.md "All GPU families are first-class" (principle 7); docs/howto/technical-faq.md "Why only the GSP path?" -->
 
-**Status today:** runs are recorded on Turing (TU116), Ampere (GA106, GA104), Ada (AD104, AD106, AD103, AD102) and Blackwell (GB205), mostly with Linux guests. Hopper and datacentre Blackwell were never run on hardware, and two parts are refused by name (GA100, GB10B). See [Requirements](requirements.md). <!-- src: docs/howto/requirements.md "GPU"; docs/STATUS_DETAIL.md section 0 -->
+**Status today:** Linux and Windows gate runs are recorded on Turing (TU106, TU116), Ampere (GA102, GA104, GA106), Ada (AD102, AD104) and Blackwell (GB205, GB206); GB202 is intermittent under Windows. The Windows revisions are `0c515b3b3` (2026-11-04) and, for GA102, `006d845a` (2026-11-03). <!-- src: traces/die_coverage_20261104/{turing,ampere,ada,blackwell}/README.md; traces/ampere_hw_20261103/README.md --> Hopper and datacentre Blackwell were never run on hardware, and two parts are refused by name (GA100, GB10B). See [Requirements](requirements.md). <!-- src: docs/howto/requirements.md "GPU"; docs/STATUS_DETAIL.md section 0 -->
 
 ## Windows guests and display
 
 **Goal:** Windows is the end goal of the Mode-2 design (the guest runs NVIDIA's own driver), with the guest's screen shown on the host desktop through the display broker. Windows sleep/wake and more GPU dies are on the list to fix. <!-- src: docs/PROJECT_HISTORY.md sections 1 and 3; docs/OWNER_RULINGS.md section C item 6; README.md "Not finished" -->
 
-**Status today:** Windows 11 runs a desktop and a set of applications on the author's RTX 4070 with NVIDIA's 580.88 driver and three registry settings. Sleep/wake does not survive, and one Blackwell die (GB206) fails under Windows with Code 43. See [Windows guest](windows-guest.md) and [Display and the broker](display.md). <!-- src: README.md "What runs today" and "Not finished"; docs/howto/windows-guest.md; docs/howto/requirements.md -->
+**Status today:** Windows 11 runs a desktop and a set of applications on the author's RTX 4070 with NVIDIA's 580.88 driver and three registry settings. Sleep/wake and Edge playback stability remain unfinished. GB206 has a recorded Windows gate PASS at `0c515b3b3`, 2026-11-04; GB202 is intermittent in that sweep. See [Windows guest](windows-guest.md) and [Display and the broker](display.md). <!-- src: README.md "What runs today" and "Not finished"; docs/howto/windows-guest.md; docs/howto/requirements.md -->
 
 ## Driver versions beyond the tested set
 

@@ -1,6 +1,6 @@
 # V3: the Windows stage of the merge bar (`KF_MERGE_WINDOWS=1`, `windows_gate.sh`)
 
-STATUS: LIVE, 2026-11-04 (§0: required on the gpu-vast master gate, first Worker run FAIL at the reboot stage on GA106; first hardware run: section 6; teardown and state-at-failure fixes: section 3a). The gate is implemented (`scripts/bench/box/windows_gate.sh`, wired into
+STATUS: LIVE, 2026-11-08 (DX1 policy and issue #305 update; §0: required on the gpu-vast master gate, first Worker run FAIL at the reboot stage on GA106; first hardware run: section 6; teardown and state-at-failure fixes: section 3a). The gate is implemented (`scripts/bench/box/windows_gate.sh`, wired into
 `scripts/bench/box/merge_check.sh` as an opt-in last stage). The first real run is recorded in
 `traces/windows_gate_20261101/README.md`; this file carries the design and the rules, that file carries the
 numbers. It implements the verification plan of [`V3_WINDOWS_ON_VAST.md`](V3_WINDOWS_ON_VAST.md) (bar (b)) as a
@@ -13,6 +13,14 @@ driver sweep.
 CODE READ: the Worker profile `check` (gpu-vast on a master PR or push) sends `KF_MERGE_WINDOWS=1`; the die sweep sends `0` (`ci/vast-broker/src/tier.js`). The payload runs this gate as its own last stage, `windows_gate`, after `cuda_guest` (`scripts/ci/vast_payload.py`). Only one `WINDOWS_GATE_PASS` for the tested revision with exit 0 passes. FAIL is the row `windows_gate`. RETRY, REFUSED, no verdict, or less than 75 minutes left are failing `windows_retry_<class>` rows, and the check says "GPU gate RETRY: not a verdict; re-run on a fresh box". The Windows prerequisites are part of the setup-cache package policy (`provision_box.sh --packages windows`), because inside the payload `apt-get` is the cache-only shim. Limits and money: `V3_CI_VAST_GPU_20261021.md`, lane 2 section.
 
 MEASURED, run 41749680326, rev 0ca8873e, 2026-11-04, Vast instance 59035303, RTX 3060 (GA106), host 580.159.04, guest 580.88 (`traces/gate_windows_ci_20261104/README.md`). The Linux bar was green: 9/9 gates, raw 30/30, thin 30/30, census OK, CUDA 4+4. The gate's install took 3197 s; boot1, `check --kf3` (fail=0), nv_install (GSP keys 1) and desktop_prep all passed. Then `WINDOWS_GATE_FAIL diag=KAYFABE stage=reboot why="the guest did not restart within 420 s of shutdown /r (no second QEMU)"` with the host reference green/green. The check failed. This is the first Windows gate on GA106. Cause not known (INFERRED candidates: a GA106-specific hang of the guest's shutdown with kf3, or the run loop). The evidence archive was on the destroyed box, so the next step is one manual GA106 lease that keeps it. ⊘ Correction 2026-11-04, from the coordinator: the Ampere die lane diagnosed the same signature on GA106 (dca106a) as a HARNESS defect. The guest did reboot, but the QMP event logger never attached, so the run loop ended with `no-events-file`. Fixed in 7c6586cd4 and def5114d4 (on this branch as 4300fc5d8 and 1bd1756a4): the attach retries for up to 120 s, `no-events-file` is RETRY/OPERATOR, and the logger's stderr is kept. Run 4 (41763934006, rev 942ca543, same machine) did not reach Windows: thin guest suite `concurrent-fuzz` FAIL, bare metal 30/30. Run 5 (41768641016, rev e7d6a3fa, same machine) did not reach Windows either: thin guest arm `bus-info-sweep` FAIL (`cuEventQuery refused: 700`), bare metal 30/30. So the fixed harness has not yet passed through the Worker.
+
+## LiveKernelEvent 193 reporting (owner decision, 2026-11-08)
+
+**CODE READ at `50640c605`:** with the default `strict=0`, LiveKernelEvent 193 is non-gating and counted separately.
+`gate_state.ps1 -Mode tdr` writes `livekernelevent193` in `tdr_counts.txt`; `windows_gate.sh` carries it on
+`WINDOWS_GATE_PASS`. `-Mode wer` writes `wer_reports.txt` with the report parameters and timeline. The box's
+`vast_run_report.py` maps the PASS-line count to `windows.live_dumps_193`. Unknown/unreadable is not invented as zero.
+Other reset-class counters still gate. The explicit diagnostic strict mode can include 193; the default remains non-gating.
 
 ## 1. What it is, and what it is not
 
@@ -159,5 +167,40 @@ box that is then destroyed loses the install; the evidence is exported by the ga
 - **Blackwell** is not leased for: the Windows results for GB202/GB205/GB206 are all from `claude/blackwell-fixes-20261024` (503 commits not in `next`), and its relay-route fix (`engine_writes_userd_gp_get`) is not in `next`. What is missing is that branch's code merged and validated; the driver pin (580.88) and the host driver (595.91.07) are not the blocker.
 
 ### Open defect: LiveKernelEvent 193, per die (strict default unchanged)
+
+
+**Update 2026-11-08 (coordinator): what the evidence does and does not say, and the plan.**
+Issue [#305](https://github.com/reindertpelsma/kayfabe/issues/305). This update is folded above the older observations;
+non-gating is a scheduling choice, not a finding that the event is harmless.
+
+- **CODE READ, Microsoft documentation (checked 2026-11-08):**
+  [Bug Check 0x193 VIDEO_DXGKRNL_LIVEDUMP](https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/bug-check-0x193--video-dxgkrnl-livedump)
+  describes it as "a live dump triggered by dxgkrnl". Parameter 1 is the reason code (0x100 = Internal), and parameters 2-4
+  are reserved. The page does not describe a memory-corruption or guard-page check. **CODE READ of our record:** WATCHDOG
+  here names the dump bucket/files for display-stack watchdog-style dumps; it is not evidence of a guard-page violation.
+  Our one decoded WER report was `P1 193 P2 815 P3 2 P4 <kernel pointer>`; 0x815 is not documented on that page.
+- **HYPOTHESES, not measured causes:** "kayfabe returns an invalid value and the Windows driver corrupts memory" is one
+  possibility. A late or missed completion/interrupt (this project has lost completions until a TDR), a flip/vblank timing
+  condition, or an invalid register value are alternatives. Nothing measured separates them yet. Falsifier for each proposed
+  mechanism: a controlled change removes that mechanism while the same event still occurs under the matched workload.
+- **MEASURED, reported by the coordinator, not re-run by DX1:** native Windows on Vast (RTX 4090, 580.88) recorded
+  LiveKernelEvent = 0 over every SPECviewperf run. The native trace is on the PR #289 branch and is absent from this checkout;
+  this is a coordinator report, not independently verified evidence in this lane. **MEASURED in committed kayfabe records:**
+  it occurs on each of the dies named in this comparison: AD102 = 2 (`a5071c24`, 2026-11-01,
+  `traces/windows_gate_20261101/g4_windows.log`), TU106 = 3 (`e6dad00f`, 2026-11-03,
+  `traces/turing_boot_20261103/README.md`), GA102 = 3-4 (`006d845a`, 2026-11-03,
+  `traces/ampere_hw_20261103/README.md`). **INFERRED attribution (coordinator):** the kayfabe path induces it; the comparison
+  does not isolate the cause. These counts are per recorded run, not a claim that every gate run emits it: AD102 also has
+  zero-count runs at `0c515b3b3` (`traces/die_coverage_20261104/ada/README.md`). Benign versus correctness impact is unknown,
+  so it is not safe to dismiss.
+- **Comparison limit:** a Linux guest has no dxgkrnl, so "no event on Linux" is weak evidence. The useful Linux-side
+  signals are guest Xids and host Xids. **MEASURED in the current app matrix**, RTX 4090, `144557e43`, 2026-11-07:
+  guest Xids are 0, but each of the four UVM failures produces a host Xid 31 (`traces/apps_linux_20261107/README.md`).
+
+**PLAN, no hardware work authorized in DX1:** retain 193 counts, WER fields, enable/probe/dump timestamps and nearby
+reset events in issue #305; preserve the distinction from reset counters. Before a later authorized hardware investigation,
+preregister matched native/kayfabe workloads and separate completion/interrupt, flip/vblank and register-value hypotheses,
+each with a falsifier. Any debugger analysis must respect the repository's provenance boundary. Keep the default non-gating
+and reported; do not close the defect or call it benign without evidence.
 
 Measured and inferred apart. MEASURED 2026-11-01 (gate runs g3 and g4 on lease 58592558, `traces/windows_gate_20261101/g3_windows.log` and `g4_windows.log`; TU106 `tu106/t2_posthoc/`): AD102 g3/g4 each two 193 reports and one WATCHDOG dump 66-73 s after the enable, 9-11 s before the first probe, zero other reset counters, probes passing before and after the idle; the one Report.wer read of it (manual, during g2) was `P1 193 P2 815 P3 2 P4 ffff8185c66c5080 P5 0 P6 10_0_26100` with no `nvlddmkm`/`Display`/`dxgkrnl` event nearby. TU106: 43 events, no 193 report or dump kept (`dump_files=0`), the first reset-class event (`nvlddmkm` 153 at 14:13:58Z) is 2 min 15 s after the enable. INFERRED: nothing about the cause. The gate now collects, in every run, the Report.wer text (event name, P1..P8), the dump file times, the display-stack events within +-120 s of each report and the timeline enable, first probe, first dump (`gate_state.ps1 -Mode wer`, `wer_reports.txt` and `state_at_failure_wer.txt` in the evidence); the dump itself is never downloaded. Falsifier kept: a run in which a 193 dump precedes a reset, a TDR or a probe failure. Not triggered on the AD102; not decidable on the TU106 (no 193 report survived the storm).
