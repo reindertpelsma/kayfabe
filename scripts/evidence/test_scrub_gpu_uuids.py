@@ -7,6 +7,7 @@ import tempfile
 import gzip
 import hashlib
 import io
+import json
 import sys
 import tarfile
 import unittest
@@ -20,6 +21,241 @@ import scrub_gpu_uuids as scrub
 
 OTHER = UUID.replace(b"a1", b"a2")
 KEY = b"unit-test-key-never-used-for-real-evidence"  # fixture only
+
+
+class LabelledBase64CliTests(unittest.TestCase):
+    def check_cli(self, label, width=0, compressed=False, plain=True):
+        encoded = base64.b64encode(PAYLOAD)
+        if width:
+            encoded = b"\n".join(
+                encoded[i : i + width] for i in range(0, len(encoded), width)
+            )
+        data = label + b"\n" + encoded
+        with tempfile.TemporaryDirectory() as outer:
+            root = Path(outer) / "repo"
+            root.mkdir()
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            target = root / "encoded.txt"
+            target.write_bytes(gzip.compress(data, mtime=12345) if compressed else data)
+            if plain:
+                (root / "plain.txt").write_bytes(PAYLOAD)
+            subprocess.run(["git", "-C", str(root), "add", "."], check=True)
+            key = Path(outer) / "test-key"
+            key.write_bytes(KEY)
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    scrub.__file__,
+                    "scrub",
+                    "--root",
+                    str(root),
+                    "--key-file",
+                    str(key),
+                ],
+                capture_output=True,
+            )
+            self.assertEqual(result.returncode, 0)
+            actual = (
+                gzip.decompress(target.read_bytes())
+                if compressed
+                else target.read_bytes()
+            )
+            header, block = actual.split(b"\n", 1)
+            self.assertEqual(header, label)
+            expected = b"GPU-" + scrub.pseudonym(KEY, UUID)
+            # This oracle does not call the scanner or its encoded-view iterator.
+            self.assertEqual(base64.b64decode(block, validate=False), expected)
+            if plain:
+                self.assertEqual((root / "plain.txt").read_bytes(), expected)
+            baseline = Path(outer) / "baseline.json"
+            baseline.write_text(json.dumps({"files": {}}))
+            gate_result = subprocess.run(
+                [
+                    sys.executable,
+                    gate.__file__,
+                    "--root",
+                    str(root),
+                    "--baseline",
+                    str(baseline),
+                ],
+                capture_output=True,
+            )
+            self.assertEqual(gate_result.returncode, 0)
+            self.assertEqual(json.loads(baseline.read_text()), {"files": {}})
+
+    def test_payload_label_contiguous_scrub_cli(self):
+        self.check_cli(b"payload")
+
+    def test_abc_label_contiguous_scrub_cli(self):
+        self.check_cli(b"abc")
+
+    def test_payload_label_wrapped_scrub_cli(self):
+        self.check_cli(b"payload", width=8)
+
+    def test_abc_label_wrapped_scrub_cli(self):
+        self.check_cli(b"abc", width=8)
+
+    def test_labelled_contiguous_gzip_scrub_cli(self):
+        self.check_cli(b"payload", compressed=True)
+
+    def test_labelled_wrapped_gzip_scrub_cli(self):
+        self.check_cli(b"abc", width=8, compressed=True)
+
+    def test_labelled_contiguous_discovery_without_plain_control(self):
+        self.check_cli(b"payload", plain=False)
+
+    def test_labelled_gzip_wrapped_discovery_without_plain_control(self):
+        self.check_cli(b"abc", width=8, compressed=True, plain=False)
+
+    def test_different_alignment_views_preserve_both_payloads_and_label(self):
+        mapper = scrub.Pseudonymizer(KEY, {UUID})
+        token = base64.b64encode(PAYLOAD).rstrip(b"=")
+        source = token + b"\nabc\n" + token
+        result = scrub.rewrite_text(source, mapper)
+        first, label, last = result.split(b"\n")
+        self.assertEqual(label, b"abc")
+        for encoded in (first, last):
+            self.assertEqual(
+                base64.b64decode(encoded + b"=" * (-len(encoded) % 4)),
+                b"GPU-" + mapper.uuid(UUID),
+            )
+
+    def test_multiple_alignment_views_inside_gzip(self):
+        mapper = scrub.Pseudonymizer(KEY, {UUID})
+        token = base64.b64encode(PAYLOAD).rstrip(b"=")
+        source = token + b"\npayload\n" + token
+        result = gzip.decompress(scrub.rewrite(gzip.compress(source), mapper))
+        first, label, last = result.split(b"\n")
+        self.assertEqual(label, b"payload")
+        for encoded in (first, last):
+            self.assertEqual(
+                base64.b64decode(encoded + b"=" * (-len(encoded) % 4)),
+                b"GPU-" + mapper.uuid(UUID),
+            )
+
+    def test_alignment_matrix_changes_only_encoded_identities(self):
+        mapper = scrub.Pseudonymizer(KEY, {UUID})
+        expected = b"GPU-" + mapper.uuid(UUID)
+        for length in range(2, 17):
+            for padded in (True, False):
+                with self.subTest(length=length, padded=padded):
+                    original = base64.b64encode(PAYLOAD)
+                    replacement = base64.b64encode(expected)
+                    if not padded:
+                        original, replacement = original.rstrip(
+                            b"="
+                        ), replacement.rstrip(b"=")
+                    label = b"x" * length
+                    source = label + b"\n" + original + b"\nabc\n" + original
+                    wanted = label + b"\n" + replacement + b"\nabc\n" + replacement
+                    self.assertEqual(scrub.rewrite_text(source, mapper), wanted)
+
+    def test_labelled_unmarked_compact_counter_is_unchanged(self):
+        source = b"payload\n" + base64.b64encode(b"counter=" + UUID.replace(b"-", b""))
+        self.assertEqual(
+            scrub.rewrite_text(source, scrub.Pseudonymizer(KEY, {UUID})), source
+        )
+
+    def test_labelled_unmarked_binary_counter_is_unchanged(self):
+        raw = bytes.fromhex(UUID.decode().replace("-", ""))
+        source = b"abc\n" + base64.b64encode(raw)
+        self.assertEqual(
+            scrub.rewrite_text(source, scrub.Pseudonymizer(KEY, {UUID})), source
+        )
+
+    def noncanonical_cli(self, compressed):
+        encoded = bytearray(base64.b64encode(PAYLOAD))
+        alphabet = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+        encoded[-3] = alphabet[alphabet.index(encoded[-3]) | 1]
+        self.assertEqual(base64.b64decode(encoded), PAYLOAD)
+        data = b"payload\n" + encoded
+        with tempfile.TemporaryDirectory() as outer:
+            root = Path(outer) / "repo"
+            root.mkdir()
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            capture = gzip.compress(data) if compressed else data
+            (root / "encoded").write_bytes(capture)
+            (root / "plain").write_bytes(PAYLOAD)
+            subprocess.run(["git", "-C", str(root), "add", "."], check=True)
+            key = Path(outer) / "key"
+            key.write_bytes(KEY)
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    scrub.__file__,
+                    "scrub",
+                    "--root",
+                    str(root),
+                    "--key-file",
+                    str(key),
+                ],
+                capture_output=True,
+            )
+            self.assertEqual(result.returncode, 2)
+            self.assertEqual((root / "encoded").read_bytes(), capture)
+            self.assertEqual((root / "plain").read_bytes(), PAYLOAD)
+
+    def test_noncanonical_labelled_base64_refuses_without_writes(self):
+        self.noncanonical_cli(False)
+
+    def test_noncanonical_labelled_gzip_refuses_without_writes(self):
+        self.noncanonical_cli(True)
+
+    def inconsistent_views(self, compressed):
+        from unittest.mock import patch
+
+        mapper = scrub.Pseudonymizer(KEY, {UUID, OTHER})
+        source = UUID.hex().encode()
+        # A contradictory decoder result must not silently choose an identity.
+        views = [((0, len(source)), "hex", value) for value in (UUID, OTHER)]
+        with patch.object(
+            gate,
+            "encoded_views",
+            side_effect=lambda data, **kwargs: iter(views if data == source else ()),
+        ):
+            with self.assertRaises(scrub.ScrubError):
+                scrub.rewrite(gzip.compress(source) if compressed else source, mapper)
+
+    def test_inconsistent_decoder_views_refused(self):
+        self.inconsistent_views(False)
+
+    def test_inconsistent_decoder_views_in_gzip_refused(self):
+        self.inconsistent_views(True)
+
+    def inconsistent_width_views(self, compressed):
+        from unittest.mock import patch
+
+        mapper = scrub.Pseudonymizer(KEY, {UUID, OTHER})
+        source = (b"GPU-" + UUID[:8]).hex().encode()
+        views = [
+            ((0, len(source)), "hex", b"GPU-" + value[:8]) for value in (UUID, OTHER)
+        ]
+        with patch.object(
+            gate,
+            "encoded_views",
+            side_effect=lambda data, **kwargs: iter(views if data == source else ()),
+        ):
+            with self.assertRaises(scrub.ScrubError):
+                scrub.rewrite(gzip.compress(source) if compressed else source, mapper)
+
+    def test_inconsistent_width_changing_views_refused(self):
+        self.inconsistent_width_views(False)
+
+    def test_inconsistent_width_changing_views_in_gzip_refused(self):
+        self.inconsistent_width_views(True)
+
+    def overlapping_aliases(self, compressed):
+        mapper = scrub.Pseudonymizer(KEY, {UUID})
+        token = base64.b64encode(b"GPU-" + UUID[:8])
+        source = token + b"\nabc\n" + token
+        with self.assertRaises(scrub.ScrubError):
+            scrub.rewrite(gzip.compress(source) if compressed else source, mapper)
+
+    def test_overlapping_width_changing_alias_views_refused(self):
+        self.overlapping_aliases(False)
+
+    def test_overlapping_alias_views_in_gzip_refused(self):
+        self.overlapping_aliases(True)
 
 
 class MappingTests(unittest.TestCase):

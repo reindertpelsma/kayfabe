@@ -11,6 +11,7 @@ import json
 import os
 import struct
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -31,6 +32,96 @@ def skipped_zstd(body):
         + b"extra"
         + archives.ExtraCompressionTests().zstd(body)
     )
+
+
+class Base64FramingTests(unittest.TestCase):
+    """A neighboring alphanumeric label must not choose the payload's alignment."""
+
+    def cli_case(self, label, width=0, compressed=False):
+        encoded = base64.b64encode(PAYLOAD)
+        if width:
+            encoded = wrapped(encoded, width)
+        data = label + b"\n" + encoded
+        if compressed:
+            data = gzip.compress(data)
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            subprocess.run(["git", "init", "-q", d], check=True)
+            (root / "capture").write_bytes(data)
+            subprocess.run(["git", "-C", d, "add", "capture"], check=True)
+            baseline = root / "baseline.json"
+            baseline.write_text(json.dumps({"files": {}}))
+            before = baseline.read_bytes()
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    gate.__file__,
+                    "--root",
+                    d,
+                    "--baseline",
+                    str(baseline),
+                ],
+                capture_output=True,
+            )
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(baseline.read_bytes(), before)
+
+    def test_payload_label_contiguous_cli(self):
+        self.cli_case(b"payload")
+
+    def test_abc_label_contiguous_cli(self):
+        self.cli_case(b"abc")
+
+    def test_payload_label_wrapped_cli(self):
+        self.cli_case(b"payload", width=8)
+
+    def test_abc_label_wrapped_cli(self):
+        self.cli_case(b"abc", width=8)
+
+    def test_labelled_contiguous_gzip_cli(self):
+        self.cli_case(b"payload", compressed=True)
+
+    def test_labelled_wrapped_gzip_cli(self):
+        self.cli_case(b"abc", width=8, compressed=True)
+
+    def test_every_label_alignment_and_wrapping(self):
+        encoded = base64.b64encode(PAYLOAD)
+        for length in range(2, 17):
+            for width in (4, 8, 20, 100):
+                with self.subTest(length=length, width=width):
+                    data = b"x" * length + b"\n" + wrapped(encoded, width)
+                    self.assertEqual(gate.scan(data), gate.scan(PAYLOAD))
+
+    def test_multiple_label_lines_before_payload(self):
+        data = b"header\nabc\npayload\n" + wrapped(base64.b64encode(PAYLOAD), 8)
+        self.assertEqual(gate.scan(data), gate.scan(PAYLOAD))
+
+    def test_unpadded_payload_before_label(self):
+        data = base64.b64encode(PAYLOAD).rstrip(b"=") + b"\nabc"
+        self.assertEqual(gate.scan(data), gate.scan(PAYLOAD))
+
+    def test_unpadded_wrapped_payload_before_label(self):
+        data = wrapped(base64.b64encode(PAYLOAD).rstrip(b"="), 8) + b"\npayload"
+        self.assertEqual(gate.scan(gzip.compress(data)), gate.scan(PAYLOAD))
+
+    def test_two_payloads_at_different_alignments(self):
+        encoded = base64.b64encode(PAYLOAD).rstrip(b"=")
+        self.assertEqual(
+            gate.scan(encoded + b"\nabc\n" + encoded), gate.scan(PAYLOAD * 2)
+        )
+
+    def test_alignment_work_is_bounded_independently_of_label_count(self):
+        decode = gate.base64.b64decode
+        with patch.object(gate.base64, "b64decode", wraps=decode) as calls:
+            self.assertFalse(gate.scan(b"abcd\n" * 2000))
+        self.assertLessEqual(calls.call_count, 8)
+
+    def test_many_labels_keep_bounded_work_and_payload_detection(self):
+        data = b"abc\npayload\n" * 1000 + wrapped(base64.b64encode(PAYLOAD), 8)
+        decode = gate.base64.b64decode
+        with patch.object(gate.base64, "b64decode", wraps=decode) as calls:
+            self.assertEqual(gate.scan(data), gate.scan(PAYLOAD))
+        self.assertLessEqual(calls.call_count, 8)
 
 
 class MarkedFormatTests(unittest.TestCase):

@@ -155,8 +155,8 @@ class Budget:
 def encoded_views(data, *, marked_only=False):
     """(span, encoding, decoded bytes) for ASCII hex/base64 and UTF-16 text.
 
-    The decoded size is bounded by the input size. Decode candidates once, never
-    recursively reinterpret arbitrary tokens (which would duplicate occurrences).
+    Each decoded view is bounded by the input size. Base64 considers four fixed
+    character alignments, never every possible suffix or recursive decodings.
     """
     low = data.lower()
     # Compact assignments need not contain a hyphen (2d). Short marked aliases
@@ -187,14 +187,10 @@ def encoded_views(data, *, marked_only=False):
                 tokens.append(token)
                 pending = (first, end, tokens)
                 continue
-            view = decode_base64(pending, data)
-            if view is not None:
-                yield view
+            yield from decode_base64(pending, data)
         pending = (start, end, [token])
     if pending is not None:
-        view = decode_base64(pending, data)
-        if view is not None:
-            yield view
+        yield from decode_base64(pending, data)
     # Decode only aligned ASCII UTF-16 runs; do not remove arbitrary NUL bytes.
     for encoding, pattern in (
         ("utf-16le", rb"(?:[\x09\x0a\x0d\x20-\x7e]\x00){36,}"),
@@ -213,19 +209,47 @@ def encoded_views(data, *, marked_only=False):
 
 
 def decode_base64(candidate, data):
+    """Cover ambiguous label/block boundaries in at most four alignments.
+
+    A label made of base64 characters can prepend any number of characters.
+    Its length modulo four determines the payload alignment, so a constant four
+    decodes cover all starts without quadratic suffix enumeration. A trailing
+    label can invalidate padding; retain the complete-quartet prefix in that
+    case. Spans refer to the original bytes, including wrapping whitespace.
+    """
     start, end, tokens = candidate
     token = b"".join(tokens)
     tail = B64_TAIL.match(data, end)
     if tail is not None and not token.endswith(b"="):
         token += tail.group(1)
         end = tail.end()
-    if len(token) < 16 or len(token) % 4 == 1:
-        return None
-    try:
-        decoded = base64.b64decode(token + b"=" * (-len(token) % 4), validate=True)
-    except binascii.Error:
-        return None
-    return (start, end), "base64", decoded
+    for alignment in range(4):
+        encoded = token[alignment:]
+        if len(encoded) < 16:
+            continue
+        used = len(encoded)
+        try:
+            decoded = base64.b64decode(
+                encoded + b"=" * (-len(encoded) % 4), validate=True
+            )
+        except binascii.Error:
+            # Complete quartets preserve embedded bytes even if an unrelated
+            # suffix made the final partial quartet/padding invalid.
+            encoded = encoded.rstrip(b"=")
+            used = len(encoded) // 4 * 4
+            if used < 16:
+                continue
+            decoded = base64.b64decode(encoded[:used], validate=True)
+        left, right = start, end
+        remaining = alignment
+        while remaining:
+            remaining -= data[left] not in b" \t\r\n"
+            left += 1
+        remaining = len(token) - alignment - used
+        while remaining:
+            right -= 1
+            remaining -= data[right] not in b" \t\r\n"
+        yield (left, right), "base64", decoded
 
 
 def plain_scan(data, identities=None):

@@ -14,6 +14,17 @@ import tempfile
 HERE = Path(__file__).resolve().parent
 MUTANTS = [
     (
+        "base64-label-shifts-alignment",
+        "for alignment in range(4):",
+        "for alignment in range(1):",
+    ),
+    ("base64-labelled-tail-dropped", "used = len(encoded) // 4 * 4", "used = 0"),
+    (
+        "base64-repeated-alignments",
+        "for alignment in range(4):",
+        "for alignment in range(8):",
+    ),
+    (
         "marked-compact-hidden",
         "COMPACT_UUID = hex_group(32)",
         'COMPACT_UUID = rb"(?!)"',
@@ -137,7 +148,7 @@ MUTANTS = [
 COLLECT = """import io,json,sys,unittest
 suite=unittest.defaultTestLoader.discover('.',pattern='test_gpu_uuid*.py')
 r=unittest.TextTestRunner(stream=io.StringIO()).run(suite)
-print(json.dumps({'tests':r.testsRun,'killers':sorted(set(t.id() for t,_ in r.failures+r.errors))}))
+print(json.dumps({'tests':r.testsRun,'killers':sorted(set(t.id().split(' (',1)[0] for t,_ in r.failures+r.errors))}))
 """
 
 

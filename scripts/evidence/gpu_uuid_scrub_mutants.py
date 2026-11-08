@@ -10,6 +10,26 @@ import tempfile
 HERE = Path(__file__).resolve().parent
 CI = HERE.parent / "ci"
 MUTANTS = [
+    (
+        "overlapping-base64-view-restores-original",
+        "patched[offset], written[offset] = new_byte, 1",
+        "patched[offset], written[offset] = new_byte, 1\n            patched[start:end] = new",
+    ),
+    (
+        "noncanonical-base64-silently-rewritten",
+        'if base64.b64encode(decoded).rstrip(b"=") != original:',
+        "if False:",
+    ),
+    (
+        "conflicting-views-accepted",
+        "if written[offset] and patched[offset] != new_byte:",
+        "if False:",
+    ),
+    (
+        "variable-width-overlap-accepted",
+        "if end > previous or (written is not None and any(written[start:end])):",
+        "if False:",
+    ),
     ("known-alias-unscrubbed", "data = SHORT_ALIAS.sub(alias, data)", "pass"),
     ("ambiguous-alias-guessed", "if len(candidates) > 1:", "if False:"),
     ("marked-format-unscrubbed", "data = gate.PATTERN.sub(marked, data)", "pass"),
@@ -79,7 +99,7 @@ MUTANTS = [
 COLLECT = """import io,json,unittest
 suite=unittest.defaultTestLoader.discover('.',pattern='test_scrub_gpu_uuids.py')
 r=unittest.TextTestRunner(stream=io.StringIO()).run(suite)
-print(json.dumps({'tests':r.testsRun,'killers':sorted(set(t.id() for t,_ in r.failures+r.errors))}))
+print(json.dumps({'tests':r.testsRun,'killers':sorted(set(t.id().split(' (',1)[0] for t,_ in r.failures+r.errors))}))
 """
 
 

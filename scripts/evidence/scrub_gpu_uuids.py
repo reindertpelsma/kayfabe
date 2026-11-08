@@ -116,6 +116,7 @@ def preserve_encoding_layout(source, encoded):
 
 def rewrite_text(data, mapper):
     edits = []
+    patched, written = None, None
     for (start, end), encoding, decoded in gate.encoded_views(data):
         new = replace_known(decoded, mapper)
         if new == decoded:
@@ -132,15 +133,48 @@ def rewrite_text(data, mapper):
                 source, encoded.upper() if upper else encoded
             )
         elif encoding == "base64":
+            original = source.translate(None, b" \t\r\n").rstrip(b"=")
+            if base64.b64encode(decoded).rstrip(b"=") != original:
+                raise ScrubError("noncanonical base64 framing; no writes made")
             new = base64.b64encode(new)
             if not changed_width and not source.rstrip().endswith(b"="):
                 new = new.rstrip(b"=")
             new = preserve_encoding_layout(source, new)
         else:
             new = new.decode().encode(encoding)
-        edits.append((start, end, new))
+        if len(new) == end - start:
+            if patched is None:
+                patched, written = bytearray(data), bytearray(len(data))
+            # Alignment views overlap. Apply only actual byte changes, never
+            # an unchanged prefix/suffix that could restore another identity.
+            for offset, (old_byte, new_byte) in enumerate(zip(source, new), start):
+                if old_byte == new_byte:
+                    continue
+                if written[offset] and patched[offset] != new_byte:
+                    raise ScrubError("conflicting encoded views; no writes made")
+                patched[offset], written[offset] = new_byte, 1
+        else:
+            # Width-changing alias edits cannot silently override another view.
+            prefix = 0
+            while prefix < min(len(source), len(new)) and source[prefix] == new[prefix]:
+                prefix += 1
+            suffix = 0
+            while (
+                suffix < min(len(source), len(new)) - prefix
+                and source[-suffix - 1] == new[-suffix - 1]
+            ):
+                suffix += 1
+            edits.append(
+                (start + prefix, end - suffix, new[prefix : len(new) - suffix])
+            )
+    if patched is not None:
+        data = bytes(patched)
+    previous = len(data)
     for start, end, new in sorted(edits, reverse=True):
+        if end > previous or (written is not None and any(written[start:end])):
+            raise ScrubError("overlapping variable-width views; no writes made")
         data = data[:start] + new + data[end:]
+        previous = start
     return replace_known(data, mapper)
 
 
