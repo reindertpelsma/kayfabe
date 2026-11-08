@@ -1,0 +1,254 @@
+EE...EFEFF.....EFEE....EEEEEEEEEEE...
+======================================================================
+ERROR: test_compare_refuses_missing_compiled_app (__main__.Inventory.test_compare_refuses_missing_compiled_app)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 609, in test_compare_refuses_missing_compiled_app
+    observed = copy.deepcopy(self.parts())
+                             ~~~~~~~~~~^^
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 542, in parts
+    return common.inventory_parts(inv or self.inv, recipe or self.recipe)
+           ^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'common' has no attribute 'inventory_parts'
+
+======================================================================
+ERROR: test_compare_refuses_missing_packaged_app (__main__.Inventory.test_compare_refuses_missing_packaged_app)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 614, in test_compare_refuses_missing_packaged_app
+    observed = copy.deepcopy(self.parts())
+                             ~~~~~~~~~~^^
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 542, in parts
+    return common.inventory_parts(inv or self.inv, recipe or self.recipe)
+           ^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'common' has no attribute 'inventory_parts'
+
+======================================================================
+ERROR: test_equal_inventories_pass (__main__.Inventory.test_equal_inventories_pass)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 572, in test_equal_inventories_pass
+    self.assertTrue(self.accepts(self.parts(), copy.deepcopy(self.parts())))
+                                 ~~~~~~~~~~^^
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 542, in parts
+    return common.inventory_parts(inv or self.inv, recipe or self.recipe)
+           ^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'common' has no attribute 'inventory_parts'
+
+======================================================================
+ERROR: test_input_parts_roundtrip_to_observation (__main__.Inventory.test_input_parts_roundtrip_to_observation)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 636, in test_input_parts_roundtrip_to_observation
+    self.assertEqual(common.inventory_observation(self.parts()), self.inv)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'common' has no attribute 'inventory_observation'
+
+======================================================================
+ERROR: test_model_hash_is_in_pinned_part (__main__.Inventory.test_model_hash_is_in_pinned_part)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 627, in test_model_hash_is_in_pinned_part
+    self.assertEqual(self.parts()["pinned"]["files"]["/opt/apps/data/model"], digest(b"model"))
+                     ~~~~~~~~~~^^
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 542, in parts
+    return common.inventory_parts(inv or self.inv, recipe or self.recipe)
+           ^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'common' has no attribute 'inventory_parts'
+
+======================================================================
+ERROR: test_pinned_records_model_input_url_and_hash (__main__.Inventory.test_pinned_records_model_input_url_and_hash)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 575, in test_pinned_records_model_input_url_and_hash
+    self.assertIn(self.recipe["artifacts"][0], self.parts()["pinned"]["inputs"])
+                                               ~~~~~~~~~~^^
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 542, in parts
+    return common.inventory_parts(inv or self.inv, recipe or self.recipe)
+           ^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'common' has no attribute 'inventory_parts'
+
+======================================================================
+ERROR: test_pinned_records_wheel_input_url_and_hash (__main__.Inventory.test_pinned_records_wheel_input_url_and_hash)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 578, in test_pinned_records_wheel_input_url_and_hash
+    self.assertIn(self.recipe["artifacts"][1], self.parts()["pinned"]["inputs"])
+                                               ~~~~~~~~~~^^
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 542, in parts
+    return common.inventory_parts(inv or self.inv, recipe or self.recipe)
+           ^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'common' has no attribute 'inventory_parts'
+
+======================================================================
+ERROR: test_recipe_environment_drift_changes_pinned_identity (__main__.Inventory.test_recipe_environment_drift_changes_pinned_identity)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 601, in test_recipe_environment_drift_changes_pinned_identity
+    self.assertFalse(self.accepts(self.parts(), self.parts(recipe=other)))
+                                  ~~~~~~~~~~^^
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 542, in parts
+    return common.inventory_parts(inv or self.inv, recipe or self.recipe)
+           ^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'common' has no attribute 'inventory_parts'
+
+======================================================================
+ERROR: test_recipe_version_drift_changes_pinned_identity (__main__.Inventory.test_recipe_version_drift_changes_pinned_identity)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 606, in test_recipe_version_drift_changes_pinned_identity
+    self.assertFalse(self.accepts(self.parts(), self.parts(recipe=other)))
+                                  ~~~~~~~~~~^^
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 542, in parts
+    return common.inventory_parts(inv or self.inv, recipe or self.recipe)
+           ^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'common' has no attribute 'inventory_parts'
+
+======================================================================
+ERROR: test_source_commit_is_visible_in_pinned_part (__main__.Inventory.test_source_commit_is_visible_in_pinned_part)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 582, in test_source_commit_is_visible_in_pinned_part
+    self.assertEqual(self.parts()["pinned"]["source_refs"], self.recipe["provenance"])
+                     ~~~~~~~~~~^^
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 542, in parts
+    return common.inventory_parts(inv or self.inv, recipe or self.recipe)
+           ^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'common' has no attribute 'inventory_parts'
+
+======================================================================
+ERROR: test_source_tag_is_visible_in_pinned_part (__main__.Inventory.test_source_tag_is_visible_in_pinned_part)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 586, in test_source_tag_is_visible_in_pinned_part
+    self.assertEqual(self.parts()["pinned"]["source_refs"], self.recipe["provenance"])
+                     ~~~~~~~~~~^^
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 542, in parts
+    return common.inventory_parts(inv or self.inv, recipe or self.recipe)
+           ^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'common' has no attribute 'inventory_parts'
+
+======================================================================
+ERROR: test_verify_allows_different_binary_bytes (__main__.Inventory.test_verify_allows_different_binary_bytes)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 557, in test_verify_allows_different_binary_bytes
+    observed = copy.deepcopy(self.parts())
+                             ~~~~~~~~~~^^
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 542, in parts
+    return common.inventory_parts(inv or self.inv, recipe or self.recipe)
+           ^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'common' has no attribute 'inventory_parts'
+
+======================================================================
+ERROR: test_verify_allows_different_compiled_app_bytes (__main__.Inventory.test_verify_allows_different_compiled_app_bytes)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 562, in test_verify_allows_different_compiled_app_bytes
+    observed = copy.deepcopy(self.parts())
+                             ~~~~~~~~~~^^
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 542, in parts
+    return common.inventory_parts(inv or self.inv, recipe or self.recipe)
+           ^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'common' has no attribute 'inventory_parts'
+
+======================================================================
+ERROR: test_verify_allows_installed_pip_byte_differences (__main__.Inventory.test_verify_allows_installed_pip_byte_differences)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 567, in test_verify_allows_installed_pip_byte_differences
+    observed = copy.deepcopy(self.parts())
+                             ~~~~~~~~~~^^
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 542, in parts
+    return common.inventory_parts(inv or self.inv, recipe or self.recipe)
+           ^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'common' has no attribute 'inventory_parts'
+
+======================================================================
+ERROR: test_verify_compares_dpkg_versions (__main__.Inventory.test_verify_compares_dpkg_versions)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 552, in test_verify_compares_dpkg_versions
+    observed = copy.deepcopy(self.parts())
+                             ~~~~~~~~~~^^
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 542, in parts
+    return common.inventory_parts(inv or self.inv, recipe or self.recipe)
+           ^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'common' has no attribute 'inventory_parts'
+
+======================================================================
+ERROR: test_verify_refuses_source_hash_drift (__main__.Inventory.test_verify_refuses_source_hash_drift)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 594, in test_verify_refuses_source_hash_drift
+    observed = copy.deepcopy(self.parts())
+                             ~~~~~~~~~~^^
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 542, in parts
+    return common.inventory_parts(inv or self.inv, recipe or self.recipe)
+           ^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'common' has no attribute 'inventory_parts'
+
+======================================================================
+ERROR: test_verify_refuses_source_url_drift (__main__.Inventory.test_verify_refuses_source_url_drift)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 589, in test_verify_refuses_source_url_drift
+    observed = copy.deepcopy(self.parts())
+                             ~~~~~~~~~~^^
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 542, in parts
+    return common.inventory_parts(inv or self.inv, recipe or self.recipe)
+           ^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'common' has no attribute 'inventory_parts'
+
+======================================================================
+ERROR: test_wheel_hash_is_compared (__main__.Inventory.test_wheel_hash_is_compared)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 631, in test_wheel_hash_is_compared
+    observed = copy.deepcopy(self.parts())
+                             ~~~~~~~~~~^^
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 542, in parts
+    return common.inventory_parts(inv or self.inv, recipe or self.recipe)
+           ^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'common' has no attribute 'inventory_parts'
+
+======================================================================
+FAIL: test_expected_binary_hash_is_not_a_gate (__main__.Inventory.test_expected_binary_hash_is_not_a_gate)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 522, in test_expected_binary_hash_is_not_a_gate
+    self.assertIsNone(self.validation_error())
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'build output hash mismatch' is not None
+
+======================================================================
+FAIL: test_inventory_refuses_another_missing_packaged_app (__main__.Inventory.test_inventory_refuses_another_missing_packaged_app)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 624, in test_inventory_refuses_another_missing_packaged_app
+    self.assertIsNotNone(self.validation_error())
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None
+
+======================================================================
+FAIL: test_inventory_refuses_missing_packaged_app (__main__.Inventory.test_inventory_refuses_missing_packaged_app)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 620, in test_inventory_refuses_missing_packaged_app
+    self.assertIsNotNone(self.validation_error())
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None
+
+======================================================================
+FAIL: test_pinned_binary_hash_is_informational (__main__.Inventory.test_pinned_binary_hash_is_informational)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 511, in test_pinned_binary_hash_is_informational
+    self.assertIsNone(self.validation_error())
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'build output hash mismatch' is not None
+
+----------------------------------------------------------------------
+Ran 37 tests in 0.021s
+
+FAILED (failures=4, errors=18)

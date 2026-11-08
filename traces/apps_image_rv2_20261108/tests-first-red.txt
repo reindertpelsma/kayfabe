@@ -1,0 +1,158 @@
+FFFFFFEEFFFFFF
+======================================================================
+ERROR: test_conflicting_artifact_and_config_pins_rejected (__main__.VerbatimInputs.test_conflicting_artifact_and_config_pins_rejected)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 761, in test_conflicting_artifact_and_config_pins_rejected
+    common.runtime_input_hashes(self.recipe, "open")
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'common' has no attribute 'runtime_input_hashes'
+
+======================================================================
+ERROR: test_conflicting_copy_and_config_pins_rejected (__main__.VerbatimInputs.test_conflicting_copy_and_config_pins_rejected)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 766, in test_conflicting_copy_and_config_pins_rejected
+    common.runtime_input_hashes(self.recipe, "open")
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'common' has no attribute 'runtime_input_hashes'
+
+======================================================================
+FAIL: test_ai_bench_observed_bytes_are_pinned (__main__.VerbatimInputs.test_ai_bench_observed_bytes_are_pinned)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 722, in test_ai_bench_observed_bytes_are_pinned
+    self.check_pinned(self.script_path("ai_bench.py"))
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 714, in check_pinned
+    self.assertIn(path, parts["pinned"]["files"])
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: '/opt/apps/bundle/share/ai_bench.py' not found in {'/opt/apps/data/model': '9372c470eeadd5ecd9c3c74c2b3cb633f8e2f2fad799250a0f70d652b6b825e4'}
+
+======================================================================
+FAIL: test_builder_rejects_ai_bench_copy_drift (__main__.VerbatimInputs.test_builder_rejects_ai_bench_copy_drift)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 756, in test_builder_rejects_ai_bench_copy_drift
+    self.check_builder_script("ai_bench.py")
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 749, in check_builder_script
+    with self.assertRaises(ValueError):
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_builder_rejects_hf_generate_copy_drift (__main__.VerbatimInputs.test_builder_rejects_hf_generate_copy_drift)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 753, in test_builder_rejects_hf_generate_copy_drift
+    self.check_builder_script("hf_generate.py")
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 749, in check_builder_script
+    with self.assertRaises(ValueError):
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_changed_ai_bench_is_rejected (__main__.VerbatimInputs.test_changed_ai_bench_is_rejected)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 695, in test_changed_ai_bench_is_rejected
+    self.check_script_drift("ai_bench.py")
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 688, in check_script_drift
+    with self.assertRaises(ValueError):
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_changed_hf_generate_is_rejected (__main__.VerbatimInputs.test_changed_hf_generate_is_rejected)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 692, in test_changed_hf_generate_is_rejected
+    self.check_script_drift("hf_generate.py")
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 688, in check_script_drift
+    with self.assertRaises(ValueError):
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_changed_model_ref_is_rejected (__main__.VerbatimInputs.test_changed_model_ref_is_rejected)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 704, in test_changed_model_ref_is_rejected
+    with self.assertRaises(ValueError):
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_direct_retained_local_source_is_pinned (__main__.VerbatimInputs.test_direct_retained_local_source_is_pinned)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 737, in test_direct_retained_local_source_is_pinned
+    self.check_pinned(pin["target"])
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 714, in check_pinned
+    self.assertIn(path, parts["pinned"]["files"])
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: '/opt/apps/bundle/run.py' not found in {'/opt/apps/data/model': '9372c470eeadd5ecd9c3c74c2b3cb633f8e2f2fad799250a0f70d652b6b825e4'}
+
+======================================================================
+FAIL: test_directory_glob_copies_bind_each_local_source (__main__.VerbatimInputs.test_directory_glob_copies_bind_each_local_source)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 729, in test_directory_glob_copies_bind_each_local_source
+    self.check_pinned(self.script_path("hf_generate.py"))
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 714, in check_pinned
+    self.assertIn(path, parts["pinned"]["files"])
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: '/opt/apps/bundle/share/hf_generate.py' not found in {'/opt/apps/data/model': '9372c470eeadd5ecd9c3c74c2b3cb633f8e2f2fad799250a0f70d652b6b825e4'}
+
+======================================================================
+FAIL: test_hf_generate_observed_bytes_are_pinned (__main__.VerbatimInputs.test_hf_generate_observed_bytes_are_pinned)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 719, in test_hf_generate_observed_bytes_are_pinned
+    self.check_pinned(self.script_path("hf_generate.py"))
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 714, in check_pinned
+    self.assertIn(path, parts["pinned"]["files"])
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: '/opt/apps/bundle/share/hf_generate.py' not found in {'/opt/apps/data/model': '9372c470eeadd5ecd9c3c74c2b3cb633f8e2f2fad799250a0f70d652b6b825e4'}
+
+======================================================================
+FAIL: test_missing_copied_source_is_rejected (__main__.VerbatimInputs.test_missing_copied_source_is_rejected)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 699, in test_missing_copied_source_is_rejected
+    with self.assertRaises(ValueError):
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_missing_model_ref_is_rejected (__main__.VerbatimInputs.test_missing_model_ref_is_rejected)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 709, in test_missing_model_ref_is_rejected
+    with self.assertRaises(ValueError):
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_model_ref_observed_bytes_are_pinned (__main__.VerbatimInputs.test_model_ref_observed_bytes_are_pinned)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 725, in test_model_ref_observed_bytes_are_pinned
+    self.check_pinned(self.recipe["write_files"][0]["path"])
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/LB1-wt/scripts/ci/test_apps_image.py", line 714, in check_pinned
+    self.assertIn(path, parts["pinned"]["files"])
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: '/opt/apps/data/hf/hub/models--Qwen--Qwen2-0.5B-Instruct/refs/main' not found in {'/opt/apps/data/model': '9372c470eeadd5ecd9c3c74c2b3cb633f8e2f2fad799250a0f70d652b6b825e4'}
+
+----------------------------------------------------------------------
+Ran 14 tests in 0.032s
+
+FAILED (failures=12, errors=2)

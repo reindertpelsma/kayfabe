@@ -1,0 +1,26 @@
+{
+  "black": {
+    "exit_code": 0,
+    "output": "All done! \u2728 \ud83c\udf70 \u2728\n1 file would be left unchanged.\n"
+  },
+  "existing_production_suites_and_61_mutants": "unchanged; prior evidence in apps_image_recipe_20261107, not rerun for this documentation/research follow-up",
+  "new_production_mutants": 0,
+  "new_production_rules": 0,
+  "new_production_tests": 0,
+  "observational_variants": 7,
+  "observed_at": "2026-11-08T01:28:33.866268+00:00",
+  "probe_record_source_matches": true,
+  "readonly_filesystem_checks": 7,
+  "secret_scan_limit": "pattern scan, not exhaustive",
+  "staged_secret_pattern_matches": {
+    "aws": 0,
+    "bearer_literal": 0,
+    "github": 0,
+    "private_key": 0,
+    "slack": 0
+  },
+  "whitespace": {
+    "exit_code": 0,
+    "output": ""
+  }
+}
