@@ -213,12 +213,17 @@ path downloads an installer. `check.mjs TABLE.json BOXES.json SEED` also prints
 a proposed selection or exits nonzero with the blocking reason.
 
 **MEASURED GPU-free:** 87 selector tests include an exhaustive independent
-assignment oracle over 108 small pools; 53 Python tests cover parsing, exact
+assignment oracle over 108 small pools; 55 Python tests cover parsing, exact
 checksum binding, provenance, HEAD classification, bounded hashing/deletion,
 and byte-identical offline regeneration. The mutation receipt is
 [`validation.json`](../../ci/vast-broker/driver-availability/validation.json). Every listed mutant must have at least two
 distinct named killers; a source/test edit during the mutation run invalidates
-its result. The dedicated GitHub workflow runs these checks offline.
+its result. The runner explicitly requests TAP instead of relying on Node's
+default reporter. MEASURED, first GitHub run at `6076492b7`: all ordinary tests
+passed, but the default spec reporter yielded zero parsed JavaScript killers,
+so the mutation gate failed. Two runner contract tests cover explicit TAP on
+the baseline and mutant paths. The dedicated GitHub workflow runs these checks
+offline.
 
 **Unverified:** actual installation/build on a target kernel; exact per-die
 driver support; any new kayfabe host/guest ABI pair; the complete Cartesian

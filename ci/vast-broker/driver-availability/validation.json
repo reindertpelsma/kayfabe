@@ -1,6 +1,6 @@
 {
   "status": "DESIGN-ONLY",
-  "checked_at": "2026-11-08T01:31:30Z",
+  "checked_at": "2026-11-08T01:42:41Z",
   "evidence_kind": "MEASURED GPU-free checks; public HTTP metadata and streamed hashes; CODE READ historical repository records",
   "base_revision": "624bf1dfcf98fac362bc63478e7f9cdb65c4aedf",
   "tests": {
@@ -19,7 +19,7 @@
         "independent_exhaustive_pool_cases": 108
       },
       "generator": {
-        "passed": 53,
+        "passed": 55,
         "failed": 0
       },
       "release_regression": {
@@ -27,7 +27,18 @@
         "failed": 0
       }
     },
-    "offline_regeneration": "byte-identical; Client construction forbidden in the test"
+    "offline_regeneration": "byte-identical; Client construction forbidden in the test",
+    "reporter_regression": {
+      "before": {
+        "passed": 53,
+        "failed": 2
+      },
+      "after": {
+        "passed": 55,
+        "failed": 0
+      },
+      "reason": "Runner must explicitly request TAP for both the baseline and mutant subprocess paths"
+    }
   },
   "catalog": {
     "branches": 14,
@@ -44,8 +55,9 @@
       "validate.js": "d054d0d0b8beedcd503f705537605dec98080c146cdf0a549bec21be713cd175",
       "generate.py": "e4e9ebd630e1c8b94923f78b374a2f848c05de1595e27184f06cf652d2ba2019",
       "selector.test.js": "e4596473e193a2f14bba96514b298f1d0039d7afec4803ccad49e8adff0c991d",
-      "test_generate.py": "d85addc3abd1570de03417f0baba0af5a769696c415910ef1345cee05bed8c3d",
-      "sources.json": "7c725d0d6d313970d0fdeacd23a37429486f0778f4e19203958795b498150bfc"
+      "test_generate.py": "cc0961f2f6784757790f747bc117f6e369962943295b6c1379d6c4d2cfc17104",
+      "sources.json": "7c725d0d6d313970d0fdeacd23a37429486f0778f4e19203958795b498150bfc",
+      "mutants.py": "c2766476ffddbd78e004b297d852c13caae54305e8f4861111adc008d3f5c8c3"
     },
     "mutants": [
       {
@@ -510,12 +522,19 @@
     "credential_pattern_findings": 0,
     "global_ipv4_findings": 0,
     "binary_files": 0,
-    "files": 12
+    "files": 12,
+    "followup_files": 4
   },
   "artifact_sha256": {
     "ci/vast-broker/driver-availability.json": "6fc40ac073f4e0b5d78858b9d9269bfac4439fe80c87e04c8e8408ab6bf0d964",
     "ci/vast-broker/driver-availability/observations.json": "0424a0ab46965db5e1e644319bdc1b13b4f95fb691982b6032fee9a8638658b3",
-    "docs/design/V3_DRIVER_AVAILABILITY.md": "c6466c1085978455e7d70518fd436cda7a074111718d4cb4e63ae9f346916f8d",
+    "docs/design/V3_DRIVER_AVAILABILITY.md": "b7ffefccae31ab85f8f221e1fec618e48897c14a74a72042c82b68d10097093e",
     ".github/workflows/driver-availability.yml": "c20678863bfe20848a193b1522eb54ea1589a486beb0deaef199cc60ef473c4b"
+  },
+  "github_first_run": {
+    "head": "6076492b7ab445d67e905da7b358a8cd86049b22",
+    "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/42434884962",
+    "result": "FAILURE",
+    "reason": "Normal tests passed; default Node spec reporter produced zero parsed JS killers, correctly failing the mutation gate. Runner now explicitly requests TAP; minimum two killers unchanged."
   }
 }

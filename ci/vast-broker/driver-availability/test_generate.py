@@ -285,5 +285,31 @@ class Catalog(unittest.TestCase):
         self.assertEqual(meta['core_reference_versions'], [])
 
 
+@unittest.skipIf(__import__('os').environ.get('DRV1_FIXTURES_ONLY'), 'runner contract tested outside product mutants')
+class MutationRunner(unittest.TestCase):
+    def load_runner(self):
+        runner_spec = importlib.util.spec_from_file_location('drv1_runner_contract', HERE / 'mutants.py')
+        runner = importlib.util.module_from_spec(runner_spec)
+        runner_spec.loader.exec_module(runner)
+        return runner
+
+    def test_baseline_requests_tap_even_when_default_reporter_is_spec(self):
+        runner = self.load_runner()
+        from types import SimpleNamespace
+        with patch.object(runner.subprocess, 'run', return_value=SimpleNamespace(returncode=0, stdout='TAP version 13\nok 1 - baseline\n', stderr='')) as run:
+            result = runner.run('js', 'baseline', runner.JS)
+        self.assertIn('--test-reporter=tap', run.call_args.args[0])
+        self.assertEqual(result['exit_code'], 0)
+
+    def test_mutant_requests_tap_and_counts_distinct_named_failures(self):
+        runner = self.load_runner()
+        from types import SimpleNamespace
+        output = 'TAP version 13\nnot ok 1 - first killer\nnot ok 2 - second killer\n'
+        with patch.object(runner.subprocess, 'run', return_value=SimpleNamespace(returncode=1, stdout=output, stderr='')) as run:
+            result = runner.run('js', 'probe-mutant', runner.JS)
+        self.assertIn('--test-reporter=tap', run.call_args.args[0])
+        self.assertEqual(result['killer_count'], 2)
+
+
 if __name__ == "__main__":
     unittest.main()

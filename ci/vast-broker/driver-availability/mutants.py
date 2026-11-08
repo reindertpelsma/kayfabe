@@ -18,7 +18,7 @@ ROOT = HERE.parents[2]
 JS = (HERE / "validate.js").read_text()
 PY = (HERE / "generate.py").read_text()
 INPUT_HASHES = {name: hashlib.sha256((HERE / name).read_bytes()).hexdigest()
-                for name in ("validate.js", "generate.py", "selector.test.js", "test_generate.py", "sources.json")}
+                for name in ("validate.js", "generate.py", "selector.test.js", "test_generate.py", "sources.json", "mutants.py")}
 
 
 def changed(source, old, new):
@@ -85,7 +85,7 @@ def run(kind, name, source):
             else:
                 shutil.copyfile(HERE / filename, module / filename)
         env = {**os.environ, "DRV1_FIXTURES_ONLY": "1", "PYTHONDONTWRITEBYTECODE": "1"}
-        cmd = ["node", "--test", str(module / "selector.test.js")] if kind == "js" else [sys.executable, str(module / "test_generate.py")]
+        cmd = ["node", "--test", "--test-reporter=tap", str(module / "selector.test.js")] if kind == "js" else [sys.executable, str(module / "test_generate.py")]
         result = subprocess.run(cmd, cwd=root, capture_output=True, text=True, env=env, timeout=180)
         output = result.stdout + result.stderr
         pattern = r"^not ok \d+ - (.+)$" if kind == "js" else r"^(?:FAIL|ERROR): (.+)$"
