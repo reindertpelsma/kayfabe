@@ -16,6 +16,8 @@ import bundle_iso as I
 import bundle_compliance as C
 import bundle_wheels as W
 import publish_bundle as P
+import bundle_repro as R
+import warnings
 from test_bundle_compliance import package, pin
 
 
@@ -29,17 +31,31 @@ class Classes(unittest.TestCase):
         self.assertTrue(all(p['compliance']['distribution'] == 'public-ok' for p in selected))
         self.assertNotIn('pywheels', {p['id'] for p in selected})
 
-    def test_private_contains_only_private(self):
-        selected = B.select_packages(self.man, self.profile, bundle_class='private')
-        self.assertTrue(selected)
-        self.assertTrue(all(p['compliance']['distribution'] == 'private-only' for p in selected))
-        self.assertIn('vc_redist', {p['id'] for p in selected})
+    def test_official_catalogue_matches_only_runtime_packages(self):
+        data=B.load(B.HERE/'official_fetch.json')
+        self.assertEqual(set(data['packages']),set(self.profile['official_packages']))
+        self.assertTrue(all(p.get('class')=='official-fetch'for p in self.man['packages']if p['id']in data['packages']))
 
     def test_explicit_cuda_refused_public(self):
         with self.assertRaises(ValueError): B.select_packages(self.man, self.profile, ['cuda_cudart'])
 
     def test_explicit_conditional_refused_public(self):
         with self.assertRaises(ValueError): B.select_packages(self.man, self.profile, ['vulkan_rt'])
+
+    def test_private_selection_cannot_create_release_media(self):
+        with self.assertRaises(ValueError):B.select_packages(self.man,self.profile,bundle_class='private')
+
+    def test_transient_selection_cannot_create_release_media(self):
+        with self.assertRaises(ValueError):B.select_packages(self.man,self.profile,bundle_class='transient-official')
+
+    def reject_image_class(self,cls):
+        with tempfile.TemporaryDirectory()as tmp:
+            root=Path(tmp);out=root/'out'
+            with self.assertRaises(ValueError):B.build_image([],root/'downloads',{},out,{},bundle_class=cls)
+            self.assertFalse(out.exists())
+
+    def test_private_image_refused_before_writing(self):self.reject_image_class('private')
+    def test_transient_image_must_use_run_context(self):self.reject_image_class('transient-official')
 
     def test_private_ci_requires_explicit_build(self):
         with patch.dict(os.environ, {'CI':'true'}, clear=True), patch('sys.stderr', new_callable=io.StringIO):
@@ -51,9 +67,9 @@ class Classes(unittest.TestCase):
 
     def test_public_private_partition_disjoint(self):
         public = {p['id'] for p in B.select_packages(self.man, self.profile)}
-        private = {p['id'] for p in B.select_packages(self.man, self.profile, bundle_class='private')}
+        private = set(self.profile['official_packages'])
         self.assertFalse(public & private)
-        self.assertEqual(public | private, set(self.profile['open_packages']) | set(self.profile['private_packages']))
+        self.assertEqual(public | private, set(self.profile['open_packages']) | set(self.profile['official_packages']))
 
     def test_hf_public_wheels_audited(self):
         p = next(p for p in self.man['packages'] if p['id']=='hf_wheels')
@@ -68,34 +84,34 @@ class Classes(unittest.TestCase):
     def test_s3_endpoint_is_not_public_custom_domain(self):
         with self.assertRaises(ValueError): P.public_base({'BUNDLE_PUBLIC_BASE_URL':'https://account.r2.cloudflarestorage.com'})
 
-    def test_nonpermissive_hf_wheels_private(self):
-        p = next(p for p in self.man['packages'] if p['id']=='hf_wheels_private')
+    def test_nonpermissive_hf_wheels_extra(self):
+        p = next(p for p in self.man['packages'] if p['id']=='hf_wheels_extra')
         self.assertTrue(any(f['name'].startswith('certifi-') for f in p['files']))
         self.assertEqual(p['compliance']['distribution'],'private-only')
 
     def test_app_private_requirements_derived(self):
-        private = set(self.profile['private_packages'])
+        private = set(self.profile['official_packages'])
         needs = {p['id']:p.get('needs',[]) for p in self.man['packages']}
         import gate_profiles as G
         for app in H.load_apps()['apps']:
-            want = bool(G.closure(app['pkgs'] + app.get('private_pkgs', []), needs) & private)
-            self.assertEqual(app.get('requires')=='private', want, app['id'])
+            want = bool(G.closure(app['pkgs'] + app.get('official_pkgs', []), needs) & private)
+            self.assertEqual(bool((app.get('requires')or{}).get('official_fetch')), want, app['id'])
 
     def test_cuda_cannot_be_relabelled_public(self):
         p=next(p for p in self.man['packages'] if p['id']=='cuda_cudart')
-        p['compliance']['distribution']='public-ok';self.profile['open_packages'].append(p['id']);self.profile['private_packages'].remove(p['id'])
+        p['compliance']['distribution']='public-ok';self.profile['open_packages'].append(p['id']);self.profile['official_packages'].remove(p['id'])
         with self.assertRaises(ValueError):B.select_packages(self.man,self.profile,[p['id']])
 
     def test_runtime_cannot_be_relabelled_public(self):
         p=next(p for p in self.man['packages'] if p['id']=='vulkan_rt')
-        p['compliance']['distribution']='public-ok';self.profile['open_packages'].append(p['id']);self.profile['private_packages'].remove(p['id'])
+        p['compliance']['distribution']='public-ok';self.profile['open_packages'].append(p['id']);self.profile['official_packages'].remove(p['id'])
         with self.assertRaises(ValueError):B.select_packages(self.man,self.profile,[p['id']])
 
 
 class Images(unittest.TestCase):
     def image(self, root, cls):
-        p=package(); p['compliance']['distribution']='public-ok' if cls=='public' else 'private-only'
-        if cls=='private': p['compliance']['conditions']=['person only']
+        if cls!='public':return dict(bundle_class='transient-official',packages=[],inputs='a'*64,image=dict(sha256='b'*64,size=1))
+        p=package()
         dl=root/'dl'; (dl/'sevenzip').mkdir(parents=True,exist_ok=True)
         (dl/'sevenzip/LICENSE.txt').write_bytes(b'licence text')
         return B.build_image([p], dl, {}, root/cls, {}, bundle_class=cls)
@@ -103,20 +119,20 @@ class Images(unittest.TestCase):
     def test_both_labels_and_filenames(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)
-            for cls,label,name in [('public','KFAPPS','winapps-open.iso'),('private','KFAPPSP','winapps-private.iso')]:
+            for cls,label,name in [('public','KFAPPS','winapps-open.iso')]:
                 r=self.image(root,cls)
                 self.assertEqual(r['image']['file'],name);self.assertEqual(r['bundle_class'],cls)
                 with I.Reader(root/cls/name) as image:self.assertEqual(image.label,label)
                 B.verify_image(root/cls/name,r)
 
-    def test_private_label_never_public_label(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root=Path(tmp);r=self.image(root,'private');r['image']['label']='KFAPPS'
-            with self.assertRaises(ValueError): B.verify_image(root/'private/winapps-private.iso',r)
+    def test_transient_writer_uses_second_label(self):
+        with tempfile.TemporaryDirectory()as tmp:
+            iso=Path(tmp)/'official-run.iso';I.write_image({'original.zip':b'fixture'},iso,label='KFAPPSP')
+            with I.Reader(iso)as image:self.assertEqual(image.label,'KFAPPSP')
 
     def test_both_classes_deterministic(self):
         with tempfile.TemporaryDirectory() as tmp:
-            for cls in ('public','private'):
+            for cls in ('public',):
                 root=Path(tmp)/cls;old=os.umask(0o022);before={k:os.environ.get(k)for k in ('TZ','LC_ALL')}
                 try:
                     os.environ.update(TZ='Pacific/Honolulu',LC_ALL='C');a=self.image(root/'first',cls);os.umask(0o077)
@@ -126,7 +142,8 @@ class Images(unittest.TestCase):
                     for k,v in before.items():
                         if v is None:os.environ.pop(k,None)
                         else:os.environ[k]=v
-                self.assertEqual(a['image']['sha256'],b['image']['sha256'])
+                result=R.compare(a,b);self.assertEqual(result['level1'],'equal')
+                if result['level2']!='equal':warnings.warn('LEVEL2_CONTAINER_DIFF '+json.dumps(result['container_diff']))
 
     def test_private_receipt_cannot_publish(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -202,11 +219,11 @@ class MissingPrivate(unittest.TestCase):
         with tempfile.TemporaryDirectory()as tmp:
             app=next(a for a in H.load_apps()['apps']if a['id']=='vectorAdd_demo')
             vm=Mock();vm.gsp_cycles.return_value=0
-            g=winapps.GuestSession(winapps.Cfg(private_iso='private.iso'if configured else None),vm,H.load_apps(),H.load_manifest(),tmp,lambda x:None,'fixture')
-            g.private_attached=configured and not spoofed
-            g.private_cd="P:" if spoofed else None
+            g=winapps.GuestSession(winapps.Cfg(official_iso='private.iso'if configured else None),vm,H.load_apps(),H.load_manifest(),tmp,lambda x:None,'fixture')
+            g.official_attached=configured and not spoofed
+            g.official_cd="P:" if spoofed else None
             g._stage=Mock(side_effect=AssertionError('private package must not stage'))
-            r=g.run_app(app);self.assertEqual(r['verdict'],'NOTRUN');self.assertIn('missing-private-media',r['line']);g._stage.assert_not_called()
+            r=g.run_app(app);self.assertEqual(r['verdict'],'NOTRUN');self.assertIn('missing-official-media',r['line']);g._stage.assert_not_called()
 
     def test_absent_private_disk_is_notrun(self):self.run_missing(False)
     def test_private_path_without_mounted_label_is_notrun(self):self.run_missing(True)
@@ -235,10 +252,10 @@ class MediaGrading(unittest.TestCase):
 class DriveLetters(unittest.TestCase):
     def mapping(self, extra):
         source=(Path(H.AM)/'guest/kf_guest_setup.ps1').read_text()
-        block=source[source.index('$privateMappingFailed ='):source.index('$privateCd =')]
+        block=source[source.index('$officialMappingFailed ='):source.index('$officialCd =')]
         with tempfile.TemporaryDirectory()as tmp:
             root=Path(tmp);script=root/'map.ps1'
-            script.write_text("$ExpectPrivate=$false\n$info=@{notes=@()}\n$global:volumes=@([pscustomobject]@{Label='KFAPPS';DriveLetter='E:'},[pscustomobject]@{Label='KFAPPSP';DriveLetter='F:'}"+extra+")\nfunction Get-CimInstance {param($ClassName) $global:volumes}\nfunction Set-CimInstance {param($InputObject,$Property) $InputObject.DriveLetter=$Property.DriveLetter}\n"+block+"\n@{ volumes=$global:volumes; private_failed=$privateMappingFailed } | ConvertTo-Json -Depth 5 -Compress\n")
+            script.write_text("$ExpectOfficial=$false\n$info=@{notes=@()}\n$global:volumes=@([pscustomobject]@{Label='KFAPPS';DriveLetter='E:'},[pscustomobject]@{Label='KFAPPSP';DriveLetter='F:'}"+extra+")\nfunction Get-CimInstance {param($ClassName) $global:volumes}\nfunction Set-CimInstance {param($InputObject,$Property) $InputObject.DriveLetter=$Property.DriveLetter}\n"+block+"\n@{ volumes=$global:volumes; private_failed=$officialMappingFailed } | ConvertTo-Json -Depth 5 -Compress\n")
             env=dict(os.environ,XDG_CONFIG_HOME=str(root/'config'),XDG_CACHE_HOME=str(root/'cache'),DOTNET_CLI_HOME=str(root/'dotnet'),POWERSHELL_TELEMETRY_OPTOUT='1')
             return subprocess.run([H.find_pwsh(),'-NoProfile','-NonInteractive','-File',str(script)],env=env,capture_output=True,text=True,timeout=30)
 

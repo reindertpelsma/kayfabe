@@ -106,7 +106,9 @@
     "torch_correct"
    ],
    "budget_s": 2400,
-   "requires": "private"
+   "requires": {
+    "official_fetch": true
+   }
   },
   "mid": {
    "apps": [
@@ -122,12 +124,16 @@
     "dxprobe_d3d12"
    ],
    "budget_s": 3600,
-   "requires": "private"
+   "requires": {
+    "official_fetch": true
+   }
   },
   "full": {
    "apps": "every open app minus excluded",
    "budget_s": 18000,
-   "requires": "private"
+   "requires": {
+    "official_fetch": true
+   }
   },
   "public": {
    "apps": [
@@ -178,18 +184,6 @@
   "budget_s": 18000,
   "requires": "private"
  },
- "private_packages": [
-  "clpeak_cuda",
-  "cuda_cccl",
-  "cuda_cudart",
-  "cuda_demo_suite",
-  "cuda_nvrtc",
-  "hf_wheels_private",
-  "llama_cuda",
-  "pywheels",
-  "vc_redist",
-  "vulkan_rt"
- ],
  "package_classes": {
   "clpeak_ocl": "public",
   "llama_vulkan": "public",
@@ -205,7 +199,7 @@
   "cuda_demo_suite": "private",
   "cuda_cccl": "private",
   "clpeak_cuda": "private",
-  "hf_wheels_private": "private",
+  "hf_wheels_extra": "private",
   "cuda_nvrtc": "private",
   "vc_redist": "private",
   "pywheels": "private",
@@ -213,107 +207,593 @@
   "llama_cuda": "private"
  },
  "app_requires": {
-  "atomics_t": "private",
-  "bandwidthTest_demo": "private",
-  "blackscholes_t": "private",
-  "blender_cycles": "private",
-  "cdp_quicksort": "private",
-  "cg_t": "private",
-  "clpeak_cuda": "private",
-  "clpeak_ocl": "private",
-  "cuda_callback": "private",
-  "cuda_occupancy": "private",
-  "cup2_ladder": "private",
-  "cup3_ladder": "private",
-  "cup8_ladder": "private",
-  "cupy_asynccopy": "private",
-  "cupy_cg": "private",
-  "cupy_check": "private",
-  "cupy_sha256": "private",
-  "d3d11va_h264": "private",
-  "d3d12_dxr": "private",
-  "d3d12_mesh_shaders": "private",
-  "d3d12_sampler_feedback": "private",
-  "d3d12_signal_probe": "private",
-  "d3d12_vrs": "private",
-  "deviceQuery_demo": "private",
-  "dxprobe_d3d11": "private",
-  "dxprobe_d3d12": "private",
-  "dxva2_h264": "private",
-  "edge_video_h264": "private",
-  "edge_video_vp9": "private",
-  "fft_t": "private",
-  "furmark_gl_bench": "private",
-  "furmark_gl_stress": "private",
-  "furmark_glinfo": "private",
-  "furmark_knot_gl": "private",
-  "furmark_vk_bench": "private",
-  "furmark_vkinfo": "private",
-  "fwt_t": "private",
-  "glgears_wgl": "private",
-  "gputest_fur": "private",
-  "gputest_gi": "private",
-  "gputest_pixmark_piano": "private",
-  "gputest_plot3d": "private",
-  "gputest_tess": "private",
-  "gputest_triangle": "private",
-  "graphs_t": "private",
-  "gravitymark_d3d11": "private",
-  "gravitymark_d3d12": "private",
-  "gravitymark_d3d12_raster": "private",
-  "gravitymark_d3d12_rt": "private",
-  "gravitymark_gl": "private",
-  "gravitymark_vk": "private",
-  "hashcat": "private",
-  "heaven_d3d11": "private",
-  "heaven_opengl": "private",
-  "hf_generate": "private",
-  "hist_t": "private",
-  "llama_cuda_bench": "private",
-  "llama_cuda_gen": "private",
-  "llama_cuda_parity": "private",
-  "llama_vulkan_bench": "private",
-  "managed_t": "private",
-  "mandelbrot_t": "private",
-  "matmul_t": "private",
-  "memcpy2d_t": "private",
-  "nbody_demo_bench": "private",
-  "nbody_demo_gl": "private",
-  "nbody_t": "private",
-  "nvdec_h264": "private",
-  "nvenc_av1": "private",
-  "nvenc_h264": "private",
-  "nvenc_hevc": "private",
-  "oceanFFT_demo": "private",
-  "ort_directml": "private",
-  "randomFog_demo": "private",
-  "reduce_t": "private",
-  "rng_t": "private",
-  "scale_cuda_nvenc": "private",
-  "scan_t": "private",
-  "sort_t": "private",
-  "stream_created2nd_t": "private",
-  "stream_created_t": "private",
-  "stream_default_t": "private",
-  "stream_nonblocking_t": "private",
-  "stream_perthread_t": "private",
-  "stream_two_t": "private",
-  "streams_t": "private",
-  "tc16_t": "private",
-  "tcbf16_t": "private",
-  "torch_ai_bench": "private",
-  "torch_burn": "private",
-  "torch_correct": "private",
-  "torch_release_smoke": "private",
-  "transpose_t": "private",
-  "triad_t": "private",
-  "valley_d3d11": "private",
-  "valley_opengl": "private",
-  "vectorAdd_demo": "private",
-  "vkcube": "private",
-  "vkpeak": "private",
-  "vulkan_video_decode": "private",
-  "vulkaninfo": "private",
-  "zerocopy_t": "private"
- }
+  "atomics_t": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "bandwidthTest_demo": {
+   "official_fetch": [
+    "cuda_demo_suite",
+    "vc_redist"
+   ]
+  },
+  "blackscholes_t": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "blender_cycles": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "cdp_quicksort": {
+   "official_fetch": [
+    "cuda_cudart",
+    "cuda_nvrtc",
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "cg_t": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "clpeak_cuda": {
+   "official_fetch": [
+    "clpeak_cuda",
+    "vc_redist"
+   ]
+  },
+  "clpeak_ocl": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "cuda_callback": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "cuda_occupancy": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "cup2_ladder": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "cup3_ladder": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "cup8_ladder": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "cupy_asynccopy": {
+   "official_fetch": [
+    "cuda_cccl",
+    "cuda_cudart",
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "cupy_cg": {
+   "official_fetch": [
+    "cuda_cccl",
+    "cuda_cudart",
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "cupy_check": {
+   "official_fetch": [
+    "cuda_cudart",
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "cupy_sha256": {
+   "official_fetch": [
+    "cuda_cccl",
+    "cuda_cudart",
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "d3d11va_h264": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "d3d12_dxr": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "d3d12_mesh_shaders": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "d3d12_sampler_feedback": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "d3d12_signal_probe": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "d3d12_vrs": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "deviceQuery_demo": {
+   "official_fetch": [
+    "cuda_demo_suite",
+    "vc_redist"
+   ]
+  },
+  "dxprobe_d3d11": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "dxprobe_d3d12": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "dxva2_h264": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "edge_video_h264": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "edge_video_vp9": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "fft_t": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "furmark_gl_bench": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "furmark_gl_stress": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "furmark_glinfo": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "furmark_knot_gl": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "furmark_vk_bench": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "furmark_vkinfo": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "fwt_t": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "glgears_wgl": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "gputest_fur": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "gputest_gi": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "gputest_pixmark_piano": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "gputest_plot3d": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "gputest_tess": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "gputest_triangle": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "graphs_t": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "gravitymark_d3d11": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "gravitymark_d3d12": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "gravitymark_d3d12_raster": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "gravitymark_d3d12_rt": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "gravitymark_gl": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "gravitymark_vk": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "hashcat": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "heaven_d3d11": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "heaven_opengl": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "hf_generate": {
+   "official_fetch": [
+    "hf_wheels_extra",
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "hist_t": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "llama_cuda_bench": {
+   "official_fetch": [
+    "llama_cuda",
+    "vc_redist"
+   ]
+  },
+  "llama_cuda_gen": {
+   "official_fetch": [
+    "llama_cuda",
+    "vc_redist"
+   ]
+  },
+  "llama_cuda_parity": {
+   "official_fetch": [
+    "llama_cuda",
+    "vc_redist"
+   ]
+  },
+  "llama_vulkan_bench": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "managed_t": {
+   "official_fetch": [
+    "cuda_cudart",
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "mandelbrot_t": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "matmul_t": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "memcpy2d_t": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "nbody_demo_bench": {
+   "official_fetch": [
+    "cuda_demo_suite",
+    "vc_redist"
+   ]
+  },
+  "nbody_demo_gl": {
+   "official_fetch": [
+    "cuda_demo_suite",
+    "vc_redist"
+   ]
+  },
+  "nbody_t": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "nvdec_h264": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "nvenc_av1": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "nvenc_h264": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "nvenc_hevc": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "oceanFFT_demo": {
+   "official_fetch": [
+    "cuda_demo_suite",
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "ort_directml": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "randomFog_demo": {
+   "official_fetch": [
+    "cuda_demo_suite",
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "reduce_t": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "rng_t": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "scale_cuda_nvenc": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "scan_t": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "sort_t": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "stream_created2nd_t": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "stream_created_t": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "stream_default_t": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "stream_nonblocking_t": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "stream_perthread_t": {
+   "official_fetch": [
+    "cuda_cudart",
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "stream_two_t": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "streams_t": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "tc16_t": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "tcbf16_t": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "torch_ai_bench": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "torch_burn": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "torch_correct": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "torch_release_smoke": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "transpose_t": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "triad_t": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "valley_d3d11": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "valley_opengl": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "vectorAdd_demo": {
+   "official_fetch": [
+    "cuda_demo_suite",
+    "vc_redist"
+   ]
+  },
+  "vkcube": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "vkpeak": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "vulkan_video_decode": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "vulkaninfo": {
+   "official_fetch": [
+    "vc_redist",
+    "vulkan_rt"
+   ]
+  },
+  "zerocopy_t": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  }
+ },
+ "official_packages": [
+  "clpeak_cuda",
+  "cuda_cccl",
+  "cuda_cudart",
+  "cuda_demo_suite",
+  "cuda_nvrtc",
+  "hf_wheels_extra",
+  "llama_cuda",
+  "pywheels",
+  "vc_redist",
+  "vulkan_rt"
+ ]
 }

@@ -120,41 +120,42 @@ Rules the script enforces: every step logs `START` and `EXIT rc=` (a log with no
 
 ## Preparing the open application disk
 
-**Builder available, full media validation pending (2026-11-07).** The optional app-matrix disk can be
-packaged with Python 3.11+ and a pinned official Zig release, without a shell, distro compiler or ISO utility.
-From the reviewed checkout, run:
+The permanent public disk is winapps-open.iso, label KFAPPS. Build it from a reviewed checkout using Python
+3.11+ standard library; the official Zig compiler is pinned in manifest.json. No shell extractor, ISO utility,
+distro mingw or pip resolution is needed. App originals stay intact and are staged inside Windows.
 
 ```text
-python3 -I scripts/bench/windows/appmatrix/package_bundle.py check
 python3 -I scripts/bench/windows/appmatrix/package_bundle.py fetch --dl downloads
-python3 -I scripts/bench/windows/appmatrix/package_bundle.py build --dl downloads --out out
-python3 -I scripts/bench/windows/appmatrix/package_bundle.py verify-image --out out
+python3 -I scripts/bench/windows/appmatrix/package_bundle.py build --dl downloads --out out-a
+python3 -I scripts/bench/windows/appmatrix/package_bundle.py build --dl downloads --out out-b
+python3 -I scripts/bench/windows/appmatrix/package_bundle.py compare-image --iso out-b/winapps-open.iso --receipt out-a/winapps-open.manifest.json --out out-b
 ```
 
-The default is the public bundle. For private media, repeat these commands with `--class private`
-and a separate output directory. The private ISO is winapps-private.iso, label KFAPPSP. Either class may also build in authorized CI with explicit --ci-build and no upload credentials. Private ISO/manifest uploads go only to the private bucket, never an Actions artifact/cache. Keep the private manifest off GitHub; its repo pin line contains only the ISO SHA-256. The GUI offers the same two class choices; local builds refuse run-token/upload-credential environments. The downloader (person or CI operator) must accept the CUDA EULA for private use before downloading private CUDA inputs.
+Level 1 is the reproduction gate: identical file paths and SHA-256/size values, including the repository
+programs. Level 2 compares ISO bytes too, with a metadata WARNING when the files match but the container
+differs. `verify-image --out out-a` instead checks that one stored image matches its own digest/receipt.
+The GUI offers the same build, integrity and reproduction checks. No program currently uses the supported
+inventory-only/functional-check qualification. A vendor changing pinned bytes is INPUT_DRIFT, not flakiness.
 
-The result is `out/winapps-open.iso`, label `KFAPPS`, with an external file/hash manifest and proposed pin
-line. App installers and archives stay intact on the disk and are extracted inside Windows. The compiler
-archive alone is unpacked on the packaging host. The local builder refuses run-token environments and performs no upload. An owner-approved, credential-free
-GitHub build mode is available explicitly; the new publication workflow remains dispatch-only and disabled
-for upload by default. It builds twice on the same runner before its final protected upload step. The guest needs no vendor downloads.
-<!-- src: scripts/bench/windows/appmatrix/package_bundle.py, scripts/bench/windows/appmatrix/bundle_tools.py -->
+There is no permanent private bundle. The Linux box host obtains required CUDA/torch/llama, driver and
+conditional Microsoft/LunarG artifacts from official_fetch.json using hash-verified J4 downloads. The
+transient KFAPPSP disk and local manifest live only for the run and are removed after all guests stop.
+Nothing NVIDIA is uploaded to R2/GitHub; no Actions media artifact/cache is created. The guest stays offline.
+Both disks are read-only, fixed K: (KFAPPS) and P: (KFAPPSP).
 
-For a file-manager workflow, install official CPython with Tcl/Tk, double-click
-`scripts/bench/windows/appmatrix/package_bundle_gui.pyw`, select your download/output folders and choose
-**Check → Fetch → Verify → Build → Verify image**. You can instead save each manifest-pinned official original
-under `Downloads/<package id>/<filename>` and the matching Zig archive under `Downloads/_toolchain/`, then
-choose **Verify** to compare their sizes and SHA-256 values. Keep every archive unmodified. **Compare receipt**
-checks another ISO against a first build's manifest. The GUI workflow and a full cross-host build still need
-operator validation; the automated reproducibility checks use small fixtures.
-<!-- src: scripts/bench/windows/appmatrix/package_bundle_gui.pyw, scripts/bench/windows/appmatrix/tests/test_package_bundle.py -->
+J2 must select the exact Windows driver with --official-driver VERSION or KF_WINAPPS_OFFICIAL_DRIVER.
+Only known catalogue versions are accepted; currently 580.88 is pinned. Driver staging/install belongs
+before the parent Windows gate; the app harness checks that selected version and does not change it after
+the gate. --guest-driver is the separate kf3 ABI setting. A missing pin or wrong installed version is
+MEDIA_DRIFT/NOTRUN. Missing official media never passes; --no-official-fetch leaves required apps NOTRUN.
+The downloader/person or CI operator must accept the CUDA EULA for private use before official downloads.
 
-Set `KF_WINAPPS_PUBLIC_BASE_URL` to the public bundles custom domain when running the app stage. For apps
-marked `requires: private`, provide `KF_WINAPPS_PRIVATE_ISO` (or `winapps.py --private-iso`). The harness attaches
-both disks read-only and uses K: for KFAPPS and P: for KFAPPSP. Without private media those apps are NOT RUN
-with a missing-private-media reason; a full lane needing them retries as MEDIA. `gate_profiles.py ids public`
-selects the independent public app lane. Private R2 upload support through the Worker is separate future work.
+The first deliverable is build + verify, followed by coordinator manual upload of public content. CI
+publication remains optional and disabled; no secrets, domain, environment or enable flag is configured.
+The GUI supports selecting the receipt and original archives in a file manager. Keep its licence texts,
+notices and mirrored copyleft source together; source retention remains our obligation while distributing
+the binaries. Native cross-platform builds and live upload have not been measured by this change.
+<!-- src: scripts/bench/windows/appmatrix/package_bundle.py, scripts/bench/windows/appmatrix/bundle_repro.py, scripts/bench/windows/appmatrix/official_runtime.py -->
 
 ## Known limits
 

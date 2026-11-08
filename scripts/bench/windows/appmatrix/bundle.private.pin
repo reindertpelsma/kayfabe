@@ -1,3 +1,0 @@
-# STATUS: EMPTY, 2026-11-08. Private manifest stays in the private bucket.
-# After successful private publication, replace with ONLY this ISO digest line:
-# winapps-private.iso sha256=<64 lowercase hex digits>

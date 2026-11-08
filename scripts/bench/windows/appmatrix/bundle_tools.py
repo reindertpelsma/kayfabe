@@ -32,12 +32,15 @@ SOURCES = ("scripts/bench/windows/appmatrix/tools/src/kf_dxprobe.cpp",
 
 def check_toolchain(toolchain):
     from package_bundle import validate_pin
+    import bundle_repro
     if toolchain.get("name") != "zig" or toolchain.get("version") != "0.13.0" or set(toolchain.get("hosts", {})) != HOSTS:
         raise ValueError("toolchain must pin official Zig 0.13.0 for all six supported hosts")
     for host, pin in toolchain["hosts"].items():
         validate_pin("zig-" + host, pin)
         if pin["url"] != "https://ziglang.org/download/0.13.0/" + pin["name"]:
             raise ValueError("toolchain URL is not the official pinned release: " + host)
+    for name in toolchain.get("programs", {}):
+        bundle_repro.policy("tools/" + name, toolchain)
     return toolchain
 
 

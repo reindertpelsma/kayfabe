@@ -17,6 +17,7 @@ import helpers as H
 import package_bundle as B
 import bundle_ci as C
 import publish_bundle as P
+import bundle_repro as R
 
 
 class Inputs(unittest.TestCase):
@@ -194,31 +195,47 @@ class Planning(unittest.TestCase):
 
 
 class BuildOrchestration(unittest.TestCase):
-    def run_fake(self, hashes, pin_sha="a" * 64, verify=False):
+    def run_fake(self, hashes, pin_sha="a" * 64, verify=False, file_hashes=None, pinned_file="d"*64, reference=False):
         inputs = B.input_hash(B.load(Path(H.AM) / "manifest.json"), B.load(Path(H.AM) / "gate_profiles.json"))
-        sequence = iter(hashes)
+        sequence = iter(zip(hashes,file_hashes or ['d'*64]*len(hashes)))
+        def manifest(image_sha,file_sha):
+            return dict(inputs=inputs,files={'fixture':dict(sha256=file_sha,size=1)},image=dict(sha256=image_sha,size=2048),toolchain={})
+        baseline=manifest(pin_sha,pinned_file)
         def fake_main(args):
             if args[0] == "build":
-                out = Path(args[args.index("--out") + 1]); out.mkdir()
-                (out / "winapps-open.manifest.json").write_bytes(B.canonical(dict(inputs=inputs, image=dict(sha256=next(sequence)))))
+                out=Path(args[args.index("--out")+1]);out.mkdir();image_sha,file_sha=next(sequence)
+                (out/"winapps-open.manifest.json").write_bytes(B.canonical(manifest(image_sha,file_sha)))
             return 0
-        with tempfile.TemporaryDirectory() as root, patch.dict(os.environ, {}, clear=True), patch.object(B, "main", side_effect=fake_main), patch.object(B, "verify_image"), patch.object(C, "check_disk"):
-            return C.build_twice(Path(root) / "fresh", inputs, B.pin_text(pin_sha, inputs), verify)
+        pin=B.pin_text(pin_sha,inputs,inventory_sha=R.inventory_hash(baseline))
+        with tempfile.TemporaryDirectory()as root,patch.dict(os.environ,{},clear=True),patch.object(B,"main",side_effect=fake_main),patch.object(R,"read_candidate",side_effect=lambda path,r:r),patch.object(C,"check_disk"):
+            return C.build_twice(Path(root)/"fresh",inputs,pin,verify,reference=baseline if reference else None)
 
-    def test_equal_builds_match_pin(self):
-        self.assertEqual(self.run_fake(["a" * 64, "a" * 64]), "a" * 64)
+    def test_equal_builds_match_pin(self):self.assertEqual(self.run_fake(['a'*64,'a'*64]),'a'*64)
+    def test_second_container_difference_warns(self):self.assertEqual(self.run_fake(['a'*64,'b'*64]),'a'*64)
+    def test_other_second_container_difference_warns(self):self.assertEqual(self.run_fake(['a'*64,'c'*64]),'a'*64)
+    def test_verification_container_difference_warns(self):self.assertEqual(self.run_fake(['a'*64,'a'*64],'b'*64,True),'a'*64)
+    def test_other_verification_container_difference_warns(self):self.assertEqual(self.run_fake(['a'*64,'a'*64],'c'*64,True),'a'*64)
+    def test_second_file_hash_difference_fails(self):
+        with self.assertRaises(ValueError):self.run_fake(['a'*64,'b'*64],file_hashes=['d'*64,'e'*64])
+    def test_other_second_file_hash_difference_fails(self):
+        with self.assertRaises(ValueError):self.run_fake(['a'*64,'a'*64],file_hashes=['d'*64,'f'*64])
+    def test_verification_inventory_pin_difference_fails(self):
+        with self.assertRaises(ValueError):self.run_fake(['a'*64,'a'*64],verify=True,pinned_file='e'*64)
+    def test_other_verification_inventory_pin_difference_fails(self):
+        with self.assertRaises(ValueError):self.run_fake(['a'*64,'a'*64],verify=True,pinned_file='f'*64)
+    def test_verification_published_manifest_difference_fails(self):
+        with self.assertRaises(ValueError):self.run_fake(['a'*64,'a'*64],verify=True,pinned_file='e'*64,reference=True)
+    def test_other_verification_published_manifest_difference_fails(self):
+        with self.assertRaises(ValueError):self.run_fake(['a'*64,'a'*64],verify=True,pinned_file='f'*64,reference=True)
 
-    def test_different_second_build_refused(self):
-        with self.assertRaises(ValueError): self.run_fake(["a" * 64, "b" * 64])
+    def no_inventory_pin(self,with_inputs):
+        inputs=B.input_hash(B.load(B.HERE/'manifest.json'),B.load(B.HERE/'gate_profiles.json'))
+        pin='winapps-open.iso sha256='+'a'*64+'\n'+('# inputs='+inputs+'\n'if with_inputs else'')
+        with tempfile.TemporaryDirectory()as root,patch.dict(os.environ,{},clear=True),patch.object(B,'main',side_effect=AssertionError('no download without Level 1 reference')):
+            with self.assertRaisesRegex(ValueError,'Level 1'):C.build_twice(Path(root)/'fresh',inputs,pin,True)
 
-    def test_other_different_second_build_refused(self):
-        with self.assertRaises(ValueError): self.run_fake(["a" * 64, "c" * 64])
-
-    def test_verification_mismatch_refused(self):
-        with self.assertRaises(ValueError): self.run_fake(["a" * 64, "a" * 64], "b" * 64, True)
-
-    def test_other_verification_mismatch_refused(self):
-        with self.assertRaises(ValueError): self.run_fake(["a" * 64, "a" * 64], "c" * 64, True)
+    def test_iso_digest_alone_cannot_verify_level1(self):self.no_inventory_pin(False)
+    def test_input_digest_cannot_replace_file_inventory(self):self.no_inventory_pin(True)
 
 
 class Signing(unittest.TestCase):
@@ -543,27 +560,45 @@ class Workflow(unittest.TestCase):
         self.assertNotIn("secrets.", build)
         self.assertNotIn("environment:", build)
 
-    def test_secret_names_occur_only_in_protected_read_and_matching_publish_steps(self):
-        public = self.text.split("- name: Publish immutable objects to public bucket",1)[1].split("- name: Publish immutable objects to private bucket",1)[0]
-        private = self.text.split("- name: Publish immutable objects to private bucket",1)[1].split("- name: Remove ephemeral",1)[0]
-        read = self.text.split("- id: private\n        name: Read selected private manifest",1)[1].split("- id: matrix",1)[0]
-        self.assertEqual(self.text.count("${{ secrets."), 6)
-        for block, allowed, forbidden in ((public,'BUNDLE_PUBLIC_R2','BUNDLE_PRIVATE_R2'),(private,'BUNDLE_PRIVATE_R2','BUNDLE_PUBLIC_R2'),(read,'BUNDLE_PRIVATE_R2','BUNDLE_PUBLIC_R2')):
-            self.assertEqual(block.count("${{ secrets."),2)
-            self.assertIn("secrets."+allowed,block);self.assertNotIn("secrets."+forbidden,block)
+    def test_secret_names_occur_only_in_publish_step(self):
+        publish = self.text.split("- name: Publish immutable objects", 1)[1].split("- name: Remove ephemeral", 1)[0]
+        self.assertEqual(self.text.count("${{ secrets."), publish.count("${{ secrets."))
+        self.assertEqual(publish.count("${{ secrets."), 2)
+        self.assertIn("AWS_SECRET_ACCESS_KEY:", publish)
 
     def test_publisher_protected_master_and_flag(self):
         job = self.text.split("\n  build-and-publish:\n", 1)[1].split("    steps:", 1)[0]
-        for phrase in ("vars.BUNDLE_PUBLISH_ENABLED == 'true'", "refs/heads/master", "github.event_name == 'push'", "github.event_name == 'workflow_dispatch'", "environment: bundle-publish-master"):
+        for phrase in ("vars.BUNDLE_PUBLISH_ENABLED == 'true'", "refs/heads/master", "github.event_name == 'push'", "github.event_name == 'workflow_dispatch'", "environment: bundle-publish-public-master"):
             self.assertIn(phrase, job)
 
     def test_actions_pinned_and_minimal_permissions(self):
         import re
         self.assertEqual(len(re.findall(r"uses: actions/checkout@[0-9a-f]{40} # v", self.text)), 4)
-        self.assertNotIn(": write", self.text.split("permissions:",1)[1].split("concurrency:",1)[0])
+        self.assertNotIn("write", self.text)
 
 
 class PublishGuard(unittest.TestCase):
+    def test_manual_presigned_local_context_allowed(self):
+        P.guard_publish({'BUNDLE_UPLOAD_URLS':'{}'},manual=True)
+
+    def test_manual_mode_refuses_ci(self):
+        with self.assertRaises(ValueError):P.guard_publish({'BUNDLE_UPLOAD_URLS':'{}','CI':'true'},manual=True)
+
+    def test_manual_mode_refuses_actions_even_if_false(self):
+        with self.assertRaises(ValueError):P.guard_publish({'BUNDLE_UPLOAD_URLS':'{}','GITHUB_ACTIONS':'false'},manual=True)
+
+    def test_manual_mode_requires_presigned_plan(self):
+        with self.assertRaises(ValueError):P.guard_publish({},manual=True)
+
+    def test_manual_mode_rejects_empty_presigned_plan(self):
+        with self.assertRaises(ValueError):P.guard_publish({'BUNDLE_UPLOAD_URLS':''},manual=True)
+
+    def test_manual_mode_refuses_static_access_key(self):
+        with self.assertRaises(ValueError):P.guard_publish({'BUNDLE_UPLOAD_URLS':'{}','AWS_ACCESS_KEY_ID':'fixture'},manual=True)
+
+    def test_manual_mode_refuses_static_secret(self):
+        with self.assertRaises(ValueError):P.guard_publish({'BUNDLE_UPLOAD_URLS':'{}','AWS_SECRET_ACCESS_KEY':'fixture'},manual=True)
+
     def context(self):
         return dict(GITHUB_REPOSITORY="reindertpelsma/kayfabe", GITHUB_REF="refs/heads/master",
                     GITHUB_EVENT_NAME="workflow_dispatch", GITHUB_ACTIONS="true", BUNDLE_PUBLISH_APPROVED="true")

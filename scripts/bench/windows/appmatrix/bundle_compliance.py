@@ -28,7 +28,8 @@ TOOL_LICENSE = REPO_LICENSE + [dict(package="zig-runtime", version="0.13.0",
 
 def source_key(pin, bundle_class="public"):
     if not re.fullmatch(r"[0-9a-f]{64}", pin["sha256"]): raise ValueError("invalid source digest")
-    return ("winapps-open/" if bundle_class == "public" else "winapps-private/") + "source-" + pin["sha256"] + ".archive"
+    if bundle_class != "public": raise ValueError("only public source mirrors are permitted")
+    return "winapps-open/source-" + pin["sha256"] + ".archive"
 
 
 def inputs(packages):

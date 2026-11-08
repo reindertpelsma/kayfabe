@@ -34,6 +34,8 @@ concurrency:
 
 jobs:
   shell-free-bundle-portability:
+    env:
+      DOTNET_PROCESSOR_COUNT: 2
     name: Shell-free ISO fixtures — ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -47,7 +49,11 @@ jobs:
           persist-credentials: false
       - name: Offline fixtures only (no vendor downloads or compiler bootstrap)
         run: python -m unittest discover -s scripts/bench/windows/appmatrix/tests -p test_package_bundle.py
+      - name: Level 1 gate and Level 2 metadata warnings (offline fixtures)
+        run: python -m unittest discover -s scripts/bench/windows/appmatrix/tests -p test_bundle_repro.py
   windows-appmatrix:
+    env:
+      DOTNET_PROCESSOR_COUNT: 2
     name: Windows application definitions — GPU-free
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -68,12 +74,16 @@ jobs:
         run: python3 scripts/bench/windows/appmatrix/bundle_mutants.py --jobs 2
       - name: Immutable publication mutations require two named killers each
         run: python3 scripts/bench/windows/appmatrix/publish_mutants.py
-      - name: Public/private class mutations require two named killers each
+      - name: Public release and transient media boundaries require two named killers each
         run: python3 scripts/bench/windows/appmatrix/class_mutants.py
-      - name: Private CI confidentiality mutations require two named killers each
+      - name: Public-only CI manifest binding requires two named killers each
         run: python3 scripts/bench/windows/appmatrix/ci_class_mutants.py
       - name: Bundle licence/source compliance mutations require two named killers each
         run: python3 scripts/bench/windows/appmatrix/compliance_mutants.py
+      - name: Official runtime mutation checks
+        run: python3 scripts/bench/windows/appmatrix/official_mutants.py
+      - name: Two-level reproduction mutation checks
+        run: python3 scripts/bench/windows/appmatrix/repro_mutants.py
   gpu-free:
     name: Vast box scripts — tests and mutations
     runs-on: ubuntu-latest

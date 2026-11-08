@@ -3,16 +3,16 @@
 # check its identity, create the working directories, enumerate the DXGI adapters (C:\kf\adapters.json,
 # the LUID of the NVIDIA adapter is what the GPU-use proof compares against), make the session usable
 # for unattended runs (no sleep, no screen saver, Defender exclusions) and print one `KFSETUP {json}` line.
-param([string]$ExpectedIdentity = '', [switch]$ExpectPrivate)
+param([string]$ExpectedIdentity = '', [switch]$ExpectOfficial)
 $ErrorActionPreference = 'Continue'
 . "$PSScriptRoot\kf_common.ps1"
 Initialize-KfDirs
 $info = @{ ok = $false; notes = @() }
 # Reserve stable letters for the two labels; refuse a conflicting assignment.
-$privateMappingFailed = $false
+$officialMappingFailed = $false
 foreach ($pair in @(@('KFAPPS', 'K'), @('KFAPPSP', 'P'))) {
     $vol = Get-CimInstance Win32_Volume | Where-Object { $_.Label -eq $pair[0] } | Select-Object -First 1
-    if ($pair[0] -eq 'KFAPPS' -or $ExpectPrivate) {
+    if ($pair[0] -eq 'KFAPPS' -or $ExpectOfficial) {
         for ($wait = 0; $wait -lt 30 -and -not $vol; $wait++) {
             Start-Sleep -Seconds 2
             $vol = Get-CimInstance Win32_Volume | Where-Object { $_.Label -eq $pair[0] } | Select-Object -First 1
@@ -21,23 +21,23 @@ foreach ($pair in @(@('KFAPPS', 'K'), @('KFAPPSP', 'P'))) {
     if ($vol) {
         $occupied = Get-CimInstance Win32_Volume | Where-Object { $_.DriveLetter -eq ($pair[1] + ':') -and $_.Label -ne $pair[0] }
         if ($occupied) {
-            if ($pair[0] -eq 'KFAPPSP') { $privateMappingFailed = $true; $info.notes += 'private drive-letter conflict'; continue }
+            if ($pair[0] -eq 'KFAPPSP') { $officialMappingFailed = $true; $info.notes += 'official drive-letter conflict'; continue }
             Write-Output 'KFSETUP drive-letter-conflict'; exit 3
         }
         if ($vol.DriveLetter -ne ($pair[1] + ':')) {
             try { Set-CimInstance -InputObject $vol -Property @{ DriveLetter = ($pair[1] + ':') } -ErrorAction Stop | Out-Null }
             catch {
-                if ($pair[0] -eq 'KFAPPSP') { $privateMappingFailed = $true; $info.notes += 'private drive-letter assignment failed'; continue }
+                if ($pair[0] -eq 'KFAPPSP') { $officialMappingFailed = $true; $info.notes += 'official drive-letter assignment failed'; continue }
                 Write-Output 'KFSETUP public drive-letter assignment failed'; exit 3
             }
         }
     }
 }
-$privateCd = if ($privateMappingFailed) { $null } else { Get-AppDiskDrive 'KFAPPSP' }
-if ($privateCd -and $privateCd -ne 'P:') { $privateCd = $null; $info.notes += 'private drive letter not P:' }
-$info.private_cd = $privateCd
-if ($privateCd) { Set-Content -Path 'C:\kf\private_cd.txt' -Value $privateCd -Encoding ASCII }
-else { Remove-Item -Force -ErrorAction SilentlyContinue 'C:\kf\private_cd.txt' }
+$officialCd = if ($officialMappingFailed) { $null } else { Get-AppDiskDrive 'KFAPPSP' }
+if ($officialCd -and $officialCd -ne 'P:') { $officialCd = $null; $info.notes += 'official drive letter not P:' }
+$info.official_cd = $officialCd
+if ($officialCd) { Set-Content -Path 'C:\kf\official_cd.txt' -Value $officialCd -Encoding ASCII }
+else { Remove-Item -Force -ErrorAction SilentlyContinue 'C:\kf\official_cd.txt' }
 $cd = Get-AppDiskDrive
 if (-not $cd) {
     # the hot-plugged disk can take a few seconds to appear
@@ -114,6 +114,7 @@ $info.explorer = [bool](Get-Process explorer -ErrorAction SilentlyContinue)
 $smi = Get-SmiPath
 if ($smi) {
     $info.smi = (& $smi --query-gpu=name,driver_version,memory.total --format=csv,noheader 2>&1 | Select-Object -First 1) -as [string]
+    $info.driver_version = ((& $smi --query-gpu=driver_version --format=csv,noheader 2>$null | Select-Object -First 1) -as [string]).Trim()
 }
 $vc = Get-CimInstance Win32_VideoController | Select-Object Name, DriverVersion, Status, ConfigManagerErrorCode
 $info.video = @($vc | ForEach-Object { '{0} | {1} | {2} | code {3}' -f $_.Name, $_.DriverVersion, $_.Status, $_.ConfigManagerErrorCode })

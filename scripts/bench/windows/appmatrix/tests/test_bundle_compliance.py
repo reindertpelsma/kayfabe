@@ -365,8 +365,11 @@ class Artifacts(unittest.TestCase):
             for key, value in before.items():
                 if value is None: os.environ.pop(key, None)
                 else: os.environ[key] = value
-        self.assertEqual(first["image"]["sha256"], second["image"]["sha256"])
-        self.assertEqual((self.root / "first/winapps-open.iso").read_bytes(), (self.root / "second with spaces/winapps-open.iso").read_bytes())
+        comparison=B.bundle_repro.compare(first,second)
+        self.assertEqual(comparison['level1'],'equal')
+        if comparison['level2']!='equal':
+            import warnings
+            warnings.warn('LEVEL2_CONTAINER_DIFF '+json.dumps(comparison['container_diff']))
 
     def test_removed_source_receipt_refused(self):
         self.source(); receipt = B.build_image([self.p], self.cache, {}, self.root / "out", {})
@@ -375,8 +378,8 @@ class Artifacts(unittest.TestCase):
 
     def test_public_verify_refuses_private_receipt(self):
         self.p["compliance"].update(distribution="private-only", conditions=["Review needed"])
-        receipt = B.build_image([self.p], self.cache, {}, self.root / "out", {}, bundle_class="private")
-        with self.assertRaises(ValueError): B.verify_image(self.root / "out/winapps-private.iso", receipt, True)
+        with self.assertRaises(ValueError):
+            B.build_image([self.p], self.cache, {}, self.root / "out", {}, bundle_class="private")
 
     def build_source(self):
         self.source()

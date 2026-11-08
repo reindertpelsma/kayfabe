@@ -1,4 +1,4 @@
-name: Windows bundles (manual, publication disabled)
+name: Public Windows bundle (manual, publication disabled)
 
 # Owner refinement: dispatch only until reviewed. No secrets/environment/flag are
 # provisioned by this change. Future PR/master path filters are documented.
@@ -8,7 +8,7 @@ on:
       mode:
         description: Build without secrets, or verify the existing pin without uploading
         type: choice
-        options: [build, verify]
+        options: [build, verify, verify-official]
         default: build
 
 permissions:
@@ -20,89 +20,23 @@ concurrency:
 
 jobs:
   plan:
-    if: github.repository == 'reindertpelsma/kayfabe' && github.ref == 'refs/heads/master' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    if: github.repository == 'reindertpelsma/kayfabe' && github.ref == 'refs/heads/master' && inputs.mode != 'verify-official' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     outputs:
-      public_needs_build: ${{ steps.public.outputs.needs_build }}
-      public_inputs: ${{ steps.public.outputs.inputs }}
-      private_inputs: ${{ steps.private.outputs.inputs }}
-      matrix: ${{ steps.matrix.outputs.matrix }}
-      any_needs: ${{ steps.matrix.outputs.any_needs }}
+      needs_build: ${{ steps.plan.outputs.needs_build }}
+      inputs: ${{ steps.plan.outputs.inputs }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - id: public
-        name: Plan public inputs against the selected published manifest or pin
-        env:
-          MODE: ${{ inputs.mode }}
-          BUNDLE_PUBLIC_BASE_URL: ${{ vars.BUNDLE_PUBLIC_BASE_URL }}
-        run: |
-          args=()
-          if [ "$MODE" = verify ]; then args+=(--verify); fi
-          /usr/bin/python3 -I scripts/bench/windows/appmatrix/bundle_ci.py plan --class public "${args[@]}"
-      - id: private
-        name: Compute private inputs without reading private storage
+      - id: plan
+        name: Compare current inputs with repository publication pin (no network)
         env:
           MODE: ${{ inputs.mode }}
         run: |
           args=()
           if [ "$MODE" = verify ]; then args+=(--verify); fi
-          /usr/bin/python3 -I scripts/bench/windows/appmatrix/bundle_ci.py plan --class private "${args[@]}"
-      - id: matrix
-        name: Select credential-free build classes
-        env:
-          PUBLIC_NEEDS: ${{ steps.public.outputs.needs_build }}
-          PRIVATE_NEEDS: ${{ steps.private.outputs.needs_build }}
-          PUBLIC_INPUTS: ${{ steps.public.outputs.inputs }}
-          PRIVATE_INPUTS: ${{ steps.private.outputs.inputs }}
-        run: |
-          /usr/bin/python3 - <<'PY'
-          import json, os
-          rows = [dict(bundle_class=c, inputs=os.environ[c.upper()+'_INPUTS']) for c in ('public','private') if os.environ[c.upper()+'_NEEDS']=='true']
-          with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
-              out.write('matrix='+json.dumps(dict(include=rows))+'\nany_needs='+str(bool(rows)).lower()+'\n')
-          PY
-
-  # Optional protected read: never runs for PRs/forks or while publication is disabled.
-  private-plan:
-    needs: [plan]
-    if: >-
-      vars.BUNDLE_PUBLISH_ENABLED == 'true' && inputs.mode != 'verify' &&
-      github.repository == 'reindertpelsma/kayfabe' && github.ref == 'refs/heads/master' &&
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-    runs-on: ubuntu-latest
-    environment: bundle-publish-master
-    outputs:
-      matrix: ${{ steps.matrix.outputs.matrix }}
-      any_needs: ${{ steps.matrix.outputs.any_needs }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - id: private
-        name: Read selected private manifest only (no build or upload)
-        env:
-          BUNDLE_PUBLISH_APPROVED: 'true'
-          R2_ENDPOINT: ${{ vars.BUNDLE_PRIVATE_R2_ENDPOINT }}
-          R2_BUCKET: ${{ vars.BUNDLE_PRIVATE_R2_BUCKET }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.BUNDLE_PRIVATE_R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.BUNDLE_PRIVATE_R2_SECRET_ACCESS_KEY }}
-        run: /usr/bin/python3 -I scripts/bench/windows/appmatrix/bundle_ci.py remote-plan --class private
-      - id: matrix
-        name: Skip every class whose published inputs match
-        env:
-          PUBLIC_NEEDS: ${{ needs.plan.outputs.public_needs_build }}
-          PRIVATE_NEEDS: ${{ steps.private.outputs.needs_build }}
-          PUBLIC_INPUTS: ${{ needs.plan.outputs.public_inputs }}
-          PRIVATE_INPUTS: ${{ steps.private.outputs.inputs }}
-        run: |
-          /usr/bin/python3 - <<'PY'
-          import json, os
-          rows = [dict(bundle_class=c, inputs=os.environ[c.upper()+'_INPUTS']) for c in ('public','private') if os.environ[c.upper()+'_NEEDS']=='true']
-          with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
-              out.write('matrix='+json.dumps(dict(include=rows))+'\nany_needs='+str(bool(rows)).lower()+'\n')
-          PY
+          /usr/bin/python3 -I scripts/bench/windows/appmatrix/bundle_ci.py plan "${args[@]}"
 
   # This job intentionally has no environment and no secret references. It is also
   # the PR build when the documented input path filters are explicitly enabled.
@@ -111,15 +45,12 @@ jobs:
     if: >-
       always() &&
       (github.event_name == 'pull_request' ||
-       (needs.plan.result == 'success' && needs.plan.outputs.any_needs == 'true' &&
+       (needs.plan.result == 'success' && needs.plan.outputs.needs_build == 'true' &&
         (inputs.mode == 'verify' || vars.BUNDLE_PUBLISH_ENABLED != 'true')))
-    strategy:
-      fail-fast: false
-      matrix: ${{ github.event_name == 'pull_request' && fromJSON('{"include":[{"bundle_class":"public","inputs":""},{"bundle_class":"private","inputs":""}]}') || fromJSON(needs.plan.outputs.matrix) }}
     runs-on: ubuntu-latest
     timeout-minutes: 360
     env:
-      BUNDLE_SUFFIX: kf-bundle-${{ matrix.bundle_class }}-${{ github.run_id }}-${{ github.run_attempt }}
+      BUNDLE_SUFFIX: kf-bundle-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -133,40 +64,37 @@ jobs:
               shutil.rmtree(path, ignore_errors=True)
           PY
           df -h /
-      - name: Fetch selected pinned inputs and require two identical builds
+      - name: Build twice; require matching Level 1 inventories (container equality is best effort)
         env:
-          PLANNED_INPUTS: ${{ matrix.inputs }}
-          BUNDLE_CLASS: ${{ matrix.bundle_class }}
+          PLANNED_INPUTS: ${{ needs.plan.outputs.inputs }}
           MODE: ${{ inputs.mode }}
+          BUNDLE_PUBLIC_BASE_URL: ${{ vars.BUNDLE_PUBLIC_BASE_URL }}
         run: |
           if [ -z "$PLANNED_INPUTS" ]; then
-            PLANNED_INPUTS=$(/usr/bin/python3 -I scripts/bench/windows/appmatrix/package_bundle.py input-hash --class "$BUNDLE_CLASS")
+            PLANNED_INPUTS=$(/usr/bin/python3 -I scripts/bench/windows/appmatrix/package_bundle.py input-hash)
             PLANNED_INPUTS=${PLANNED_INPUTS#inputs=}
           fi
           args=()
           if [ "$MODE" = verify ]; then args+=(--verify); fi
-          /usr/bin/python3 -I scripts/bench/windows/appmatrix/bundle_ci.py build --class "$BUNDLE_CLASS" --root "$RUNNER_TEMP/$BUNDLE_SUFFIX" --inputs "$PLANNED_INPUTS" "${args[@]}"
+          /usr/bin/python3 -I scripts/bench/windows/appmatrix/bundle_ci.py build --root "$RUNNER_TEMP/$BUNDLE_SUFFIX" --inputs "$PLANNED_INPUTS" "${args[@]}"
       - name: Remove ephemeral media (no Actions artifacts)
         if: always()
         run: /usr/bin/python3 -I scripts/bench/windows/appmatrix/bundle_ci.py clean --root "$RUNNER_TEMP/$BUNDLE_SUFFIX"
 
   build-and-publish:
-    needs: [plan, private-plan]
+    needs: [plan]
     if: >-
-      needs.private-plan.outputs.any_needs == 'true' &&
+      needs.plan.outputs.needs_build == 'true' &&
       vars.BUNDLE_PUBLISH_ENABLED == 'true' && inputs.mode != 'verify' &&
       github.repository == 'reindertpelsma/kayfabe' && github.ref == 'refs/heads/master' &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJSON(needs.private-plan.outputs.matrix) }}
     runs-on: ubuntu-latest
     timeout-minutes: 360
     # Before enabling, owner MUST restrict this environment's deployment branches
     # to master and require reviewer approval. No environment is configured here.
-    environment: bundle-publish-master
+    environment: bundle-publish-public-master
     env:
-      BUNDLE_SUFFIX: kf-bundle-${{ matrix.bundle_class }}-${{ github.run_id }}-${{ github.run_attempt }}
+      BUNDLE_SUFFIX: kf-bundle-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -180,43 +108,22 @@ jobs:
               shutil.rmtree(path, ignore_errors=True)
           PY
           df -h /
-      - name: Build twice before any credential is exposed
+      - name: Build and verify Level 1 twice before any credential is exposed
         env:
-          PLANNED_INPUTS: ${{ matrix.inputs }}
-          BUNDLE_CLASS: ${{ matrix.bundle_class }}
-        run: /usr/bin/python3 -I scripts/bench/windows/appmatrix/bundle_ci.py build --class "$BUNDLE_CLASS" --root "$RUNNER_TEMP/$BUNDLE_SUFFIX" --inputs "$PLANNED_INPUTS"
-      - name: Publish immutable objects to public bucket (sole credential-bearing step)
-        if: matrix.bundle_class == 'public'
+          PLANNED_INPUTS: ${{ needs.plan.outputs.inputs }}
+        run: /usr/bin/python3 -I scripts/bench/windows/appmatrix/bundle_ci.py build --root "$RUNNER_TEMP/$BUNDLE_SUFFIX" --inputs "$PLANNED_INPUTS"
+      - name: Publish immutable objects (sole credential-bearing step)
         env:
           BUNDLE_PUBLISH_APPROVED: 'true'
           BUNDLE_PUBLIC_BASE_URL: ${{ vars.BUNDLE_PUBLIC_BASE_URL }}
           R2_ENDPOINT: ${{ vars.BUNDLE_PUBLIC_R2_ENDPOINT }}
           R2_BUCKET: ${{ vars.BUNDLE_PUBLIC_R2_BUCKET }}
-          BUNDLE_OTHER_BUCKET: ${{ vars.BUNDLE_PRIVATE_R2_BUCKET }}
           AWS_ACCESS_KEY_ID: ${{ secrets.BUNDLE_PUBLIC_R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.BUNDLE_PUBLIC_R2_SECRET_ACCESS_KEY }}
         run: |
           for attempt in 1 2 3; do
             echo "Upload attempt $attempt"
-            if /usr/bin/python3 -I scripts/bench/windows/appmatrix/publish_bundle.py --class public --out "$RUNNER_TEMP/$BUNDLE_SUFFIX/first"; then
-              cat "$RUNNER_TEMP/$BUNDLE_SUFFIX/first/published.pin.line" >> "$GITHUB_STEP_SUMMARY"
-              exit 0
-            fi
-          done
-          exit 1
-      - name: Publish immutable objects to private bucket (sole credential-bearing step)
-        if: matrix.bundle_class == 'private'
-        env:
-          BUNDLE_PUBLISH_APPROVED: 'true'
-          R2_ENDPOINT: ${{ vars.BUNDLE_PRIVATE_R2_ENDPOINT }}
-          R2_BUCKET: ${{ vars.BUNDLE_PRIVATE_R2_BUCKET }}
-          BUNDLE_OTHER_BUCKET: ${{ vars.BUNDLE_PUBLIC_R2_BUCKET }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.BUNDLE_PRIVATE_R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.BUNDLE_PRIVATE_R2_SECRET_ACCESS_KEY }}
-        run: |
-          for attempt in 1 2 3; do
-            echo "Upload attempt $attempt"
-            if /usr/bin/python3 -I scripts/bench/windows/appmatrix/publish_bundle.py --class private --out "$RUNNER_TEMP/$BUNDLE_SUFFIX/first"; then
+            if /usr/bin/python3 -I scripts/bench/windows/appmatrix/publish_bundle.py --out "$RUNNER_TEMP/$BUNDLE_SUFFIX/first"; then
               cat "$RUNNER_TEMP/$BUNDLE_SUFFIX/first/published.pin.line" >> "$GITHUB_STEP_SUMMARY"
               exit 0
             fi
@@ -225,3 +132,19 @@ jobs:
       - name: Remove ephemeral media (no Actions artifacts)
         if: always()
         run: /usr/bin/python3 -I scripts/bench/windows/appmatrix/bundle_ci.py clean --root "$RUNNER_TEMP/$BUNDLE_SUFFIX"
+
+  verify-official:
+    # The optional monthly schedule remains DISABLED. A future schedule must use
+    # this same secret-free job, never a publishing job or media artifact/cache.
+    if: >-
+      github.repository == 'reindertpelsma/kayfabe' && github.ref == 'refs/heads/master' &&
+      github.event_name == 'workflow_dispatch' &&
+      (inputs.mode == 'verify' || inputs.mode == 'verify-official')
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Hash every official URL into temporary storage, then delete it
+        run: /usr/bin/python3 -I scripts/bench/windows/appmatrix/official_runtime.py verify

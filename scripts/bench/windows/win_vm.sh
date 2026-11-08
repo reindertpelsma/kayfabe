@@ -879,10 +879,10 @@ cmd_run() {
     dry_run || [ -f "$WINVM_APPS_ISO" ] || die "WINVM_APPS_ISO: no such file $WINVM_APPS_ISO"
     QA+=(-drive "file=$WINVM_APPS_ISO,if=none,id=kfapps,media=cdrom,readonly=on" -device ide-cd,drive=kfapps,bus=ide.3)
   fi
-  # Optional person-built private app media; no network fetch and always read-only.
-  if [ -n "${WINVM_PRIVATE_APPS_ISO:-}" ]; then
-    dry_run || [ -f "$WINVM_PRIVATE_APPS_ISO" ] || die "WINVM_PRIVATE_APPS_ISO: no such file $WINVM_PRIVATE_APPS_ISO"
-    QA+=(-drive "file=$WINVM_PRIVATE_APPS_ISO,if=none,id=kfappsp,media=cdrom,readonly=on" -device ide-cd,drive=kfappsp,bus=ide.4)
+  # Transient per-run official app media, owned by the host harness; always read-only.
+  if [ -n "${WINVM_OFFICIAL_APPS_ISO:-}" ]; then
+    dry_run || [ -f "$WINVM_OFFICIAL_APPS_ISO" ] || die "WINVM_OFFICIAL_APPS_ISO: no such file $WINVM_OFFICIAL_APPS_ISO"
+    QA+=(-drive "file=$WINVM_OFFICIAL_APPS_ISO,if=none,id=kfappsp,media=cdrom,readonly=on" -device ide-cd,drive=kfappsp,bus=ide.4)
   fi
   local gop="" dev=""
   if [ "$kf3" = 1 ]; then

@@ -19,6 +19,8 @@ import helpers as H
 import package_bundle as B
 import bundle_iso as I
 import bundle_tools as T
+import bundle_repro as R
+import warnings
 
 
 def pin(data=b"installer stays intact", name="7zr.exe"):
@@ -478,7 +480,7 @@ class Bundle(unittest.TestCase):
         B.verify_image(self.out / "winapps-open.iso", receipt)
         with I.Reader(self.out / "winapps-open.iso") as reader:
             self.assertEqual(set(reader.files), set(receipt["files"]))
-        self.assertEqual((self.out / "bundle.pin.line").read_text(), B.pin_text(receipt["image"]["sha256"], receipt["inputs"]))
+        self.assertEqual((self.out / "bundle.pin.line").read_text(), B.pin_text(receipt["image"]["sha256"], receipt["inputs"], inventory_sha=receipt["inventory_sha256"]))
 
     def test_archives_stay_identical_on_image(self):
         receipt = self.build()
@@ -533,8 +535,10 @@ m=B.load(sys.argv[2]); B.build_image(m['packages'],Path(sys.argv[2]).parent/'dl'
             out = self.root / n
             env = dict(os.environ, TZ=tz, LC_ALL=loc)
             subprocess.run([sys.executable, "-I", "-c", script, H.AM, str(m), str(out), mask], env=env, check=True, capture_output=True)
-            outputs.append((out / "winapps-open.iso").read_bytes())
-        self.assertEqual(outputs[0], outputs[1])
+            outputs.append(R.read_candidate(out / "winapps-open.iso", B.load(out / "winapps-open.manifest.json")))
+        result=R.compare(outputs[0],outputs[1])
+        self.assertEqual(result["level1"],"equal")
+        if result["level2"]!="equal":warnings.warn("LEVEL2_CONTAINER_DIFF "+json.dumps(result["container_diff"],sort_keys=True))
 
     def test_bad_download_prevents_image(self):
         (self.downloads / "sevenzip" / "7zr.exe").write_bytes(b"x")

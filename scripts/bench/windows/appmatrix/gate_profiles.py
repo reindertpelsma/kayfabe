@@ -6,12 +6,12 @@ STATUS: LIVE, 2026-11-07 (GPU-free; tests/test_gate_profiles.py).
 
   gate_profiles.py ids PROFILE      comma list of app ids (small | mid | full | release | ids:a,b,c)
   gate_profiles.py budget PROFILE   the default wall-clock budget in seconds for the apps of that profile
-  gate_profiles.py open             every app whose packages are all in the R2 bundle (the automatable set)
+  gate_profiles.py open             every app whose packages are public or official-fetch (the automatable set)
   gate_profiles.py classes          the three classes of apps (open / owner decision / manual) with counts
   gate_profiles.py check            consistency of gate_profiles.json with apps.json and manifest.json (exit 1 on a problem)
 
-The public bundle holds only public-ok open_packages; private_packages live on person-built private media.
-The legacy open/classes/full selectors retain the combined automatable set. Profile public needs no private media. Apps that need any other package are `owner_decision` (free to download, redistribution not
+The public bundle holds only public-ok open_packages; official_packages use transient per-run media.
+The legacy open/classes/full selectors retain the combined automatable set. Profile public needs no official-fetch media. Apps that need any other package are `owner_decision` (free to download, redistribution not
 granted, or a GPL build the owner keeps out of our storage, or a dead pin) or `manual` (licensed, account-bound, or
 online-only); neither is ever in an automated profile. `full` is every open app minus `excluded`, and an exclusion needs
 a reason and evidence (a native-reference failure); an app that fails on kayfabe is NOT excluded: it fails the release.
@@ -44,8 +44,8 @@ def closure(pkgs, needs):
 
 def open_apps(apps, manifest, prof):
     needs = {p["id"]: p.get("needs", []) for p in manifest["packages"]}
-    allowed = set(prof["open_packages"]) | set(prof.get("private_packages", []))
-    return [a["id"] for a in apps["apps"] if closure(a["pkgs"] + a.get("private_pkgs", []), needs) <= allowed]
+    allowed = set(prof["open_packages"]) | set(prof.get("official_packages", []))
+    return [a["id"] for a in apps["apps"] if closure(a["pkgs"] + a.get("official_pkgs", []), needs) <= allowed]
 
 
 def resolve(profile, apps=None, manifest=None, prof=None):
@@ -105,9 +105,10 @@ def check():
         problems.append("release software list does not match definitions")
     for app in apps["apps"]:
         dependencies = {p["id"]: p.get("needs", []) for p in manifest["packages"]}
-        private = bool(closure(app["pkgs"] + app.get("private_pkgs", []), dependencies) & set(prof.get("private_packages", [])))
-        if (app.get("requires") == "private") != private or (prof.get("app_requires", {}).get(app["id"]) == "private") != private:
-            problems.append("private requirement drift: " + app["id"])
+        required = sorted(closure(app["pkgs"] + app.get("official_pkgs", []), dependencies) & set(prof.get("official_packages", [])))
+        expected = {"official_fetch": required} if required else None
+        if app.get("requires") != expected or prof.get("app_requires", {}).get(app["id"]) != expected:
+            problems.append("official requirement drift: " + app["id"])
         if app["id"] in release:
             spec = release[app["id"]]
             if (app.get("release") != {k: spec.get(k) for k in ("status", "classification", "verdict")}

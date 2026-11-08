@@ -4,7 +4,7 @@
 
 No credential files, external clients, redirects, arbitrary keys or log URLs.
 Credentials/capability URLs stay in their matching protected read/upload process.
-Build processes receive no credentials; private manifest reads never print bodies.
+Build processes receive no credentials; only the optional public upload uses secrets.
 Resume files contain upload IDs and verified part receipts, never credentials/URLs.
 No network call occurs at import time. Tests use an in-memory store exclusively.
 """
@@ -55,12 +55,18 @@ class StoreError(PublishError):
 
 def keys(digest, bundle_class="public"):
     if not re.fullmatch(r"[0-9a-f]{64}", digest): raise ValueError("invalid image digest")
-    if bundle_class not in ("public", "private"): raise ValueError("invalid bundle class")
-    prefix = "winapps-open" if bundle_class == "public" else "winapps-private"
+    if bundle_class != "public": raise ValueError("only public release object keys are permitted")
+    prefix = "winapps-open"
     return f"{prefix}/kfapps-{digest}.iso", f"{prefix}/manifest-{digest}.json"
 
 
-def guard_publish(env):
+def guard_publish(env, manual=False):
+    if manual:
+        if "CI" in env or "GITHUB_ACTIONS" in env:
+            raise ValueError("manual publication cannot run in CI/Actions")
+        if not env.get("BUNDLE_UPLOAD_URLS") or any(k in env for k in ("AWS_ACCESS_KEY_ID","AWS_SECRET_ACCESS_KEY","AWS_SESSION_TOKEN","R2_ACCESS_KEY_ID","R2_SECRET_ACCESS_KEY","KF_RUN_TOKEN")):
+            raise ValueError("manual upload requires caller-presigned URLs only, without credentials/run tokens")
+        return
     if (env.get("GITHUB_ACTIONS") != "true" or env.get("GITHUB_REPOSITORY") != "reindertpelsma/kayfabe"
             or env.get("GITHUB_REF") != "refs/heads/master"
             or env.get("GITHUB_EVENT_NAME") not in ("push", "workflow_dispatch")
@@ -350,27 +356,22 @@ def require_public(receipt):
 
 
 def require_class(receipt, bundle_class):
-    if bundle_class == "public": require_public(receipt)
-    elif bundle_class != "private" or receipt.get("bundle_class") != "private" or any(p["id"] not in B.OPEN_PACKAGES - B.PUBLIC_PACKAGES or p["compliance"]["distribution"] != "private-only" for p in receipt["packages"]):
-        raise PublishError("bundle does not match destination class")
-
-
-def require_separate_buckets(env):
-    if "BUNDLE_OTHER_BUCKET" in env and (not env["BUNDLE_OTHER_BUCKET"] or env.get("R2_BUCKET") == env["BUNDLE_OTHER_BUCKET"]):
-        raise PublishError("public and private buckets must be separately configured")
+    if bundle_class != "public": raise PublishError("only public release publication is permitted")
+    require_public(receipt)
 
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--state", type=Path)
+    ap.add_argument("--manual-presigned", action="store_true", help="coordinator's LOCAL public-only upload using caller-presigned URLs; never allowed in CI")
     ap.add_argument("--class", dest="bundle_class", choices=("public", "private"), default="public")
     a = ap.parse_args(argv)
     try:
-        guard_publish(os.environ)
-        require_separate_buckets(os.environ)
+        guard_publish(os.environ, manual=a.manual_presigned)
+        if a.bundle_class != "public": raise PublishError("private publication retired")
         if a.bundle_class == "public": public_base(os.environ)
-        basename = "winapps-open" if a.bundle_class == "public" else "winapps-private"
+        basename = "winapps-open"
         receipt = B.load(a.out / (basename + ".manifest.json"))
         require_class(receipt, a.bundle_class)
         expected = B.input_hash(B.load(HERE / "manifest.json"), B.load(HERE / "gate_profiles.json"), bundle_class=a.bundle_class)
@@ -387,7 +388,7 @@ def main(argv=None):
             store = S3Store(os.environ["R2_ENDPOINT"], os.environ["R2_BUCKET"], os.environ["AWS_ACCESS_KEY_ID"], os.environ["AWS_SECRET_ACCESS_KEY"], os.environ.get("AWS_SESSION_TOKEN"))
             part_size = DEFAULT_PART
         publish(store, a.out / (basename + ".iso"), receipt, a.state or a.out / "multipart-state.json", part_size, bundle_class=a.bundle_class)
-        (a.out / "published.pin.line").write_bytes(B.pin_text(receipt["image"]["sha256"], expected, a.bundle_class).encode("ascii"))
+        (a.out / "published.pin.line").write_bytes(B.pin_text(receipt["image"]["sha256"], expected, a.bundle_class, B.bundle_repro.inventory_hash(receipt)).encode("ascii"))
         print("PUBLISH_OK sha256=" + receipt["image"]["sha256"])
         return 0
     except (OSError, ValueError, KeyError, TypeError):

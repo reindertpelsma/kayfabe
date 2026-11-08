@@ -239,7 +239,7 @@ class Reader:
     supply the extents; no expected layout is used. Bounds, endian twins, directory
     cycles, duplicate names and overlapping extents are rejected before hashing.
     """
-    def __init__(self, path):
+    def __init__(self, path, allow_any_label=False):
         self.file = Path(path).open("rb")
         try:
             self.size = Path(path).stat().st_size
@@ -254,7 +254,7 @@ class Reader:
                 if self._number(d, 80, 4) * BLOCK != self.size or self._number(d, 128, 2) != BLOCK:
                     raise ValueError("ISO volume size/block mismatch")
             self.label = svd[40:72].decode("utf-16-be").rstrip(" ")
-            if self.label not in ("KFAPPS", "KFAPPSP") or pvd[40:72].rstrip(b" ") != self.label.encode("ascii"):
+            if not allow_any_label and (self.label not in ("KFAPPS", "KFAPPSP") or pvd[40:72].rstrip(b" ") != self.label.encode("ascii")):
                 raise ValueError("wrong ISO volume label")
             self.files = {}
             self._visited = set()
@@ -345,6 +345,32 @@ class Reader:
                 h.update(chunk)
             out[path] = dict(sha256=h.hexdigest(), size=self.files[path][1])
         return out
+
+    def metadata(self):
+        """Describe every non-payload byte without dumping application contents."""
+        descriptors={}
+        for sector,label,joliet in ((16,'primary',False),(17,'joliet',True)):
+            data=self._read(sector*BLOCK,BLOCK);encoding='utf-16-be'if joliet else'ascii'
+            def field(at,size):return data[at:at+size].decode(encoding,errors='replace').rstrip(' \x00')
+            descriptors[label]=dict(system_id=field(8,32),volume_id=field(40,32),
+                publisher=field(318,128),preparer=field(446,128),application=field(574,128),
+                created=data[813:830].hex(),modified=data[830:847].hex(),
+                sha256=hashlib.sha256(data).hexdigest())
+        h=hashlib.sha256();gaps=[];position=0
+        for start,size in sorted(self.files.values()):
+            if start>position:
+                digest=hashlib.sha256();offset=position
+                while offset<start:
+                    block=self._read(offset,min(start-offset,1024**2));digest.update(block);h.update(block);offset+=len(block)
+                gaps.append(dict(offset=position,size=start-position,sha256=digest.hexdigest()))
+            position=start+size
+        if position<self.size:
+            digest=hashlib.sha256();offset=position
+            while offset<self.size:
+                block=self._read(offset,min(self.size-offset,1024**2));digest.update(block);h.update(block);offset+=len(block)
+            gaps.append(dict(offset=position,size=self.size-position,sha256=digest.hexdigest()))
+        return dict(descriptors=descriptors,non_payload_sha256=h.hexdigest(),regions=gaps,
+                    extents={p:dict(offset=v[0],size=v[1])for p,v in sorted(self.files.items())})
 
     def __enter__(self):
         return self

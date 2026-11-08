@@ -21,7 +21,7 @@
    "version": "12.9.79",
    "tier": 1,
    "license": "NVIDIA CUDA Toolkit EULA (LICENSE inside the archive)",
-   "redistribution": "NVIDIA material: not redistributable publicly by owner ruling; private-use media only; person or authorized CI",
+   "redistribution": "Never distribute this input in release media/R2/GitHub; fetch its exact official bytes on the box host per run.",
    "stage": {
     "mode": "unzip",
     "dest": "cuda_demo",
@@ -43,7 +43,7 @@
     "upstream": "https://developer.nvidia.com/cuda-toolkit",
     "distribution": "private-only",
     "conditions": [
-     "Owner correction: NVIDIA CUDA is private-use only; person or CI may build and upload solely to the private bucket. Downloader/operator must accept the CUDA EULA. Never offer public downloads."
+     "Owner correction: NVIDIA CUDA is private-use only; person/CI may download only for run-time private use; never upload to R2 or GitHub. Downloader/operator must accept the CUDA EULA. Never offer public downloads."
     ],
     "sources": [],
     "license_inputs": [],
@@ -52,7 +52,8 @@
       "kind": "zip"
      }
     }
-   }
+   },
+   "class": "official-fetch"
   },
   {
    "id": "python_embed",
@@ -88,7 +89,8 @@
       "kind": "zip"
      }
     }
-   }
+   },
+   "class": "public-ok"
   },
   {
    "id": "pywheels",
@@ -96,7 +98,7 @@
    "version": "2026-10-10 resolution",
    "tier": 1,
    "license": "torch/torchvision BSD-3 (CUDA libs inside the torch wheel under the NVIDIA EULA); cupy MIT; onnxruntime MIT; others BSD/MIT/Apache/PSF per wheel metadata",
-   "redistribution": "NVIDIA material: not redistributable publicly by owner ruling; private-use media only; person or authorized CI",
+   "redistribution": "Never distribute this input in release media/R2/GitHub; fetch its exact official bytes on the box host per run.",
    "stage": {
     "mode": "wheels",
     "dest": "py\\Lib\\site-packages"
@@ -301,7 +303,7 @@
     "upstream": "https://pytorch.org/",
     "distribution": "private-only",
     "conditions": [
-     "Owner correction: NVIDIA CUDA is private-use only; person or CI may build and upload solely to the private bucket. Downloader/operator must accept the CUDA EULA. Never offer public downloads."
+     "Owner correction: NVIDIA CUDA is private-use only; person/CI may download only for run-time private use; never upload to R2 or GitHub. Downloader/operator must accept the CUDA EULA. Never offer public downloads."
     ],
     "sources": [],
     "license_inputs": [],
@@ -477,7 +479,8 @@
       "upstream": "https://github.com/python/typing_extensions"
      }
     }
-   }
+   },
+   "class": "official-fetch"
   },
   {
    "id": "llama_cuda",
@@ -485,7 +488,7 @@
    "version": "b11541",
    "tier": 1,
    "license": "MIT",
-   "redistribution": "NVIDIA material: not redistributable publicly by owner ruling; private-use media only; person or authorized CI",
+   "redistribution": "Never distribute this input in release media/R2/GitHub; fetch its exact official bytes on the box host per run.",
    "stage": {
     "mode": "unzip",
     "dest": "llama_cuda"
@@ -515,7 +518,7 @@
     "upstream": "https://github.com/ggml-org/llama.cpp",
     "distribution": "private-only",
     "conditions": [
-     "Owner correction: NVIDIA CUDA is private-use only; person or CI may build and upload solely to the private bucket. Downloader/operator must accept the CUDA EULA. Never offer public downloads."
+     "Owner correction: NVIDIA CUDA is private-use only; person/CI may download only for run-time private use; never upload to R2 or GitHub. Downloader/operator must accept the CUDA EULA. Never offer public downloads."
     ],
     "sources": [],
     "license_inputs": [
@@ -537,7 +540,8 @@
       "fallback": "LICENSE"
      }
     }
-   }
+   },
+   "class": "official-fetch"
   },
   {
    "id": "llama_vulkan",
@@ -582,7 +586,8 @@
       "fallback": "LICENSE"
      }
     }
-   }
+   },
+   "class": "public-ok"
   },
   {
    "id": "qwen_gguf",
@@ -627,7 +632,8 @@
       "input": "LICENSE"
      }
     }
-   }
+   },
+   "class": "public-ok"
   },
   {
    "id": "vulkan_rt",
@@ -635,7 +641,7 @@
    "version": "1.4.363.0",
    "tier": 1,
    "license": "LunarG Vulkan Runtime licence (VulkanRT-License.txt inside)",
-   "redistribution": "Redistributable per the licence text",
+   "redistribution": "Never distribute this input in release media/R2/GitHub; fetch its exact official bytes on the box host per run.",
    "stage": {
     "mode": "unzip",
     "dest": "vulkan_rt",
@@ -667,7 +673,8 @@
       "kind": "zip"
      }
     }
-   }
+   },
+   "class": "official-fetch"
   },
   {
    "id": "vulkan_sdk",
@@ -699,7 +706,8 @@
      "head_length": 303082720,
      "verified_utc": "2026-10-10T11:25:54Z"
     }
-   ]
+   ],
+   "class": "manual-only"
   },
   {
    "id": "vkpeak",
@@ -745,7 +753,8 @@
       "fallback": "LICENSE"
      }
     }
-   }
+   },
+   "class": "public-ok"
   },
   {
    "id": "ffmpeg",
@@ -772,7 +781,8 @@
     }
    ],
    "release_page": "https://github.com/BtbN/FFmpeg-Builds/releases/tag/autobuild-2026-11-07-12-47",
-   "checksums_url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-11-07-12-47/checksums.sha256"
+   "checksums_url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-11-07-12-47/checksums.sha256",
+   "class": "manual-only"
   },
   {
    "id": "blender",
@@ -818,7 +828,8 @@
       "kind": "zip"
      }
     }
-   }
+   },
+   "class": "public-ok"
   },
   {
    "id": "gravitymark",
@@ -841,7 +852,8 @@
      "head_length": 220901376,
      "verified_utc": "2026-10-10T11:26:24Z"
     }
-   ]
+   ],
+   "class": "manual-only"
   },
   {
    "id": "furmark2",
@@ -865,7 +877,8 @@
      "head_length": 35267572,
      "verified_utc": "2026-10-10T11:27:00Z"
     }
-   ]
+   ],
+   "class": "manual-only"
   },
   {
    "id": "gputest",
@@ -889,7 +902,8 @@
      "head_length": 2103678,
      "verified_utc": "2026-10-10T11:27:02Z"
     }
-   ]
+   ],
+   "class": "manual-only"
   },
   {
    "id": "heaven",
@@ -921,7 +935,8 @@
      "verified_utc": "2026-10-10T11:27:05Z"
     }
    ],
-   "note": "Inno Setup installer (innoextract lists a 32-bit app: bin\\Heaven.exe / Valley.exe); silent flags are Inno's"
+   "note": "Inno Setup installer (innoextract lists a 32-bit app: bin\\Heaven.exe / Valley.exe); silent flags are Inno's",
+   "class": "manual-only"
   },
   {
    "id": "valley",
@@ -953,7 +968,8 @@
      "verified_utc": "2026-10-10T11:27:13Z"
     }
    ],
-   "note": "Inno Setup installer (innoextract lists a 32-bit app: bin\\Heaven.exe / Valley.exe); silent flags are Inno's"
+   "note": "Inno Setup installer (innoextract lists a 32-bit app: bin\\Heaven.exe / Valley.exe); silent flags are Inno's",
+   "class": "manual-only"
   },
   {
    "id": "clpeak_ocl",
@@ -1008,7 +1024,8 @@
       "fallback": "LICENSE"
      }
     }
-   }
+   },
+   "class": "public-ok"
   },
   {
    "id": "clpeak_cuda",
@@ -1016,7 +1033,7 @@
    "version": "3.0.1",
    "tier": 1,
    "license": "GPL-3.0-only AND LicenseRef-NVIDIA-CUDA-EULA",
-   "redistribution": "NVIDIA material: not redistributable publicly by owner ruling; private-use media only; person or authorized CI",
+   "redistribution": "Never distribute this input in release media/R2/GitHub; fetch its exact official bytes on the box host per run.",
    "stage": {
     "mode": "unzip",
     "dest": "clpeak_cuda",
@@ -1038,7 +1055,7 @@
     "upstream": "https://github.com/krrishnarraj/clpeak",
     "distribution": "private-only",
     "conditions": [
-     "Owner correction: NVIDIA CUDA is private-use only; person or CI may build and upload solely to the private bucket. Downloader/operator must accept the CUDA EULA. Never offer public downloads."
+     "Owner correction: NVIDIA CUDA is private-use only; person/CI may download only for run-time private use; never upload to R2 or GitHub. Downloader/operator must accept the CUDA EULA. Never offer public downloads."
     ],
     "sources": [
      {
@@ -1065,7 +1082,8 @@
       "fallback": "LICENSE"
      }
     }
-   }
+   },
+   "class": "official-fetch"
   },
   {
    "id": "hashcat",
@@ -1114,7 +1132,8 @@
       "input": "license.txt"
      }
     }
-   }
+   },
+   "class": "public-ok"
   },
   {
    "id": "sevenzip",
@@ -1160,7 +1179,8 @@
       "input": "7z2604-src.tar.xz"
      }
     }
-   }
+   },
+   "class": "public-ok"
   },
   {
    "id": "cuda_cudart",
@@ -1168,7 +1188,7 @@
    "version": "12.9.79",
    "tier": 1,
    "license": "NVIDIA CUDA Toolkit EULA",
-   "redistribution": "NVIDIA material: not redistributable publicly by owner ruling; private-use media only; person or authorized CI",
+   "redistribution": "Never distribute this input in release media/R2/GitHub; fetch its exact official bytes on the box host per run.",
    "stage": {
     "mode": "unzip",
     "dest": "cuda_cudart",
@@ -1190,7 +1210,7 @@
     "upstream": "https://developer.nvidia.com/cuda-toolkit",
     "distribution": "private-only",
     "conditions": [
-     "Owner correction: NVIDIA CUDA is private-use only; person or CI may build and upload solely to the private bucket. Downloader/operator must accept the CUDA EULA. Never offer public downloads."
+     "Owner correction: NVIDIA CUDA is private-use only; person/CI may download only for run-time private use; never upload to R2 or GitHub. Downloader/operator must accept the CUDA EULA. Never offer public downloads."
     ],
     "sources": [],
     "license_inputs": [],
@@ -1199,7 +1219,8 @@
       "kind": "zip"
      }
     }
-   }
+   },
+   "class": "official-fetch"
   },
   {
    "id": "cuda_cccl",
@@ -1207,7 +1228,7 @@
    "version": "12.9.27",
    "tier": 1,
    "license": "Apache-2.0 with LLVM exceptions / NVIDIA CUDA EULA",
-   "redistribution": "NVIDIA material: not redistributable publicly by owner ruling; private-use media only; person or authorized CI",
+   "redistribution": "Never distribute this input in release media/R2/GitHub; fetch its exact official bytes on the box host per run.",
    "stage": {
     "mode": "unzip",
     "dest": "cuda_cccl",
@@ -1229,7 +1250,7 @@
     "upstream": "https://github.com/NVIDIA/cccl",
     "distribution": "private-only",
     "conditions": [
-     "Owner correction: NVIDIA CUDA is private-use only; person or CI may build and upload solely to the private bucket. Downloader/operator must accept the CUDA EULA. Never offer public downloads."
+     "Owner correction: NVIDIA CUDA is private-use only; person/CI may download only for run-time private use; never upload to R2 or GitHub. Downloader/operator must accept the CUDA EULA. Never offer public downloads."
     ],
     "sources": [],
     "license_inputs": [],
@@ -1238,7 +1259,8 @@
       "kind": "zip"
      }
     }
-   }
+   },
+   "class": "official-fetch"
   },
   {
    "id": "vc_redist",
@@ -1246,7 +1268,7 @@
    "version": "14.44.35211.0",
    "tier": 1,
    "license": "Microsoft Visual C++ Redistributable licence",
-   "redistribution": "Redistributable by Microsoft licence terms (the CRT runtime DLLs torch and several apps need)",
+   "redistribution": "Never distribute this input in release media/R2/GitHub; fetch its exact official bytes on the box host per run.",
    "stage": {
     "mode": "installer",
     "dest": "vc_redist",
@@ -1260,12 +1282,15 @@
    "files": [
     {
      "name": "vc_redist.x64.exe",
-     "url": "https://aka.ms/vs/17/release/vc_redist.x64.exe",
+     "url": "https://download.visualstudio.microsoft.com/download/pr/990c720a-46ce-4dc7-87b9-c2eb615d34b9/CC0FF0EB1DC3F5188AE6300FAEF32BF5BEEBA4BDD6E8E445A9184072096B713B/VC_redist.x64.exe",
      "sha256": "cc0ff0eb1dc3f5188ae6300faef32bf5beeba4bdd6e8e445a9184072096b713b",
      "size": 25635768,
      "http": 200,
      "head_length": 25635768,
-     "verified_utc": "2026-10-10T11:39:37Z"
+     "verified_utc": "2026-10-10T11:39:37Z",
+     "resolved_from": "https://aka.ms/vs/17/release/vc_redist.x64.exe",
+     "resolved_utc": "2026-11-08T01:41:04.253645+00:00",
+     "resolution_note": "Official pinned alias HEAD redirected to this versioned CDN object. Expected SHA/size unchanged; bytes are checked by the fetcher before use."
     }
    ],
    "note": "installed by kf_guest_setup before any other package; the permalink moves with each VC++ release, so the pinned sha256 will mismatch after Microsoft updates it (re-pin deliberately)",
@@ -1300,7 +1325,8 @@
     "size": 25635768,
     "verified_utc": "2026-11-07T22:20:23.168369+00:00",
     "method": "Pinned PE UTF-16 FileVersion/ProductVersion strings; binary not executed"
-   }
+   },
+   "class": "official-fetch"
   },
   {
    "id": "hf_wheels",
@@ -1851,7 +1877,8 @@
       "upstream": "https://pypi.org/project/urllib3/2.8.0/"
      }
     }
-   }
+   },
+   "class": "public-ok"
   },
   {
    "id": "hf_model",
@@ -1979,7 +2006,8 @@
       "file": "LICENSE"
      }
     }
-   }
+   },
+   "class": "public-ok"
   },
   {
    "id": "cuda_nvrtc",
@@ -1987,7 +2015,7 @@
    "version": "12.9.86",
    "tier": 1,
    "license": "NVIDIA CUDA Toolkit EULA (LICENSE inside archive)",
-   "redistribution": "NVIDIA material: not redistributable publicly by owner ruling; private-use media only; person or authorized CI",
+   "redistribution": "Never distribute this input in release media/R2/GitHub; fetch its exact official bytes on the box host per run.",
    "stage": {
     "mode": "unzip",
     "dest": "cuda_nvrtc",
@@ -2009,7 +2037,7 @@
     "upstream": "https://developer.nvidia.com/cuda-toolkit",
     "distribution": "private-only",
     "conditions": [
-     "Owner correction: NVIDIA CUDA is private-use only; person or CI may build and upload solely to the private bucket. Downloader/operator must accept the CUDA EULA. Never offer public downloads."
+     "Owner correction: NVIDIA CUDA is private-use only; person/CI may download only for run-time private use; never upload to R2 or GitHub. Downloader/operator must accept the CUDA EULA. Never offer public downloads."
     ],
     "sources": [],
     "license_inputs": [],
@@ -2018,15 +2046,16 @@
       "kind": "zip"
      }
     }
-   }
+   },
+   "class": "official-fetch"
   },
   {
-   "id": "hf_wheels_private",
+   "id": "hf_wheels_extra",
    "title": "HF dependency wheels requiring review (MPL or unclear)",
    "version": "4.57.1 with pinned dependency wheels",
    "tier": 1,
    "license": "MPL-2.0 AND MIT per wheel metadata (certifi/tqdm)",
-   "redistribution": "Private media only pending qualified review; excluded from public wheels",
+   "redistribution": "Never distribute this input in release media/R2/GitHub; fetch its exact official bytes on the box host per run.",
    "stage": {
     "mode": "wheels",
     "dest": "py\\Lib\\site-packages"
@@ -2081,7 +2110,8 @@
       "upstream": "https://tqdm.github.io"
      }
     }
-   }
+   },
+   "class": "official-fetch"
   }
  ],
  "dropped": [
@@ -2451,6 +2481,59 @@
     "url": "https://ziglang.org/download/0.13.0/zig-windows-aarch64-0.13.0.zip",
     "sha256": "95ff88427af7ba2b4f312f45d2377ce7a033e5e3c620c8caaa396a9aba20efda",
     "size": 75119033
+   }
+  },
+  "programs": {
+   "cup2.exe": {
+    "mode": "sha256",
+    "functional_checks": [
+     "cup2_ladder"
+    ]
+   },
+   "cup3.exe": {
+    "mode": "sha256",
+    "functional_checks": [
+     "cup3_ladder"
+    ]
+   },
+   "cup8.exe": {
+    "mode": "sha256",
+    "functional_checks": [
+     "cup8_ladder"
+    ]
+   },
+   "kf_cuda_control.exe": {
+    "mode": "sha256",
+    "functional_checks": [
+     "cuda_callback",
+     "cuda_occupancy"
+    ]
+   },
+   "kf_dxprobe.exe": {
+    "mode": "sha256",
+    "functional_checks": [
+     "dxprobe_d3d11",
+     "dxprobe_d3d12"
+    ]
+   },
+   "kf_glgears.exe": {
+    "mode": "sha256",
+    "functional_checks": [
+     "glgears_wgl"
+    ]
+   },
+   "kf_overlayprobe.exe": {
+    "mode": "sha256",
+    "functional_checks": [
+     "overlay_yuv_fullscreen",
+     "overlay_yuv_hide",
+     "overlay_yuv_move",
+     "overlay_yuv_occlude",
+     "overlay_yuv_probe",
+     "overlay_yuv_recreate",
+     "overlay_yuv_resize",
+     "overlay_yuv_soak"
+    ]
    }
   }
  },
@@ -2871,5 +2954,38 @@
    "method": "bundle_compliance.stage on the verified 7zr.exe and exact source archive only; no compilation, full media build, installer execution or upload"
   },
   "public_hf_wheels_audited_utc": "2026-11-07T23:28:05.533532+00:00"
- }
+ },
+ "official_fetcher": {
+  "path": "scripts/ci/kf_fetch.py",
+  "sha256": "ea2663162e69141216050ab9be275b4bee1adaf35163dd270f69ee2925433d93",
+  "size": 18706,
+  "source_commit": "624bf1dfcf98fac362bc63478e7f9cdb65c4aedf",
+  "source_url": "https://raw.githubusercontent.com/reindertpelsma/kayfabe/624bf1dfcf98fac362bc63478e7f9cdb65c4aedf/scripts/ci/kf_fetch.py",
+  "recorded_utc": "2026-11-08"
+ },
+ "official_drivers": [
+  {
+   "id": "nvidia_driver/580.88",
+   "package": "nvidia_driver",
+   "name": "580.88-desktop-win10-win11-64bit-international-dch-whql.exe",
+   "url": "https://us.download.nvidia.com/Windows/580.88/580.88-desktop-win10-win11-64bit-international-dch-whql.exe",
+   "sha256": "90c49f925b41ee062e02cc8094a16b6d057abfde4e85235a76d63ffe267f63a9",
+   "size": 890807536,
+   "license_id": "LicenseRef-NVIDIA-Driver-EULA",
+   "guest_destination": "C:\\kfapps\\official_driver",
+   "installer_argv": [
+    "C:\\Windows\\System32\\pnputil.exe",
+    "/add-driver",
+    "{dest}\\Display.Driver\\nv_dispi.inf",
+    "/install"
+   ],
+   "stage": {
+    "mode": "7z",
+    "dest": "official_driver",
+    "strip_top": false
+   },
+   "version": "580.88",
+   "provenance": "Exact archive pin and Display.Driver/nv_dispi.inf path from win_vm.sh; guest PNPUTIL phase belongs before the J2 Windows gate. App harness verifies the selected installed version; it never switches the driver after that gate."
+  }
+ ]
 }

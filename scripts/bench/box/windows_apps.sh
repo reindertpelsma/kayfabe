@@ -18,8 +18,8 @@
 # Inputs (never from a vendor: DOCS: docs/DOWNLOADS.md "Windows app bundle"):
 #   KF_WINAPPS_ISO=<file>   an app disk that is already on the box (by hand); or
 #   the pinned public bundle from KF_WINAPPS_PUBLIC_BASE_URL, fetched by fetch_public_bundle.py without
-#   a run token; the sha256 pin is scripts/bench/windows/appmatrix/bundle.pin. Optional private media is
-#   supplied locally through KF_WINAPPS_PRIVATE_ISO. Missing required media is RETRY class=MEDIA, never pass.
+#   a run token; the sha256 pin is scripts/bench/windows/appmatrix/bundle.pin. Official runtime inputs are
+#   fetched by the host from pinned origins, with KF_WINAPPS_OFFICIAL_DRIVER selected by J2. Missing required media is RETRY class=MEDIA, never pass.
 #
 # Verdict lines. THE GATE IS THE GUEST PASSING (owner, 2026-11-01): exit 0 only for WINAPPS_PASS. A host fault, a
 # harness fault, a missing input or a rental fault is RETRY (exit 3, "re-run on a fresh box"), never a pass and never
@@ -101,7 +101,7 @@ refuse() { say "WINAPPS_REFUSED why=$1"; VERDICT=REFUSED; rc_final=2; exit 2; }
 # The class of a non-zero outcome from the grade (grade.py), the same-box host reference and the BAR1 exception.
 # $1 = grade kind (PASS|FAIL|RETRY), $2 = host reference before, $3 = after, $4 = 1 when kf3 refused a BAR1 size and
 # no guest ever answered ssh (the documented Vast exception), $5 = new host Xid count over the run,
-# $6 = an expected app reported missing-private-media.
+# $6 = an expected app reported missing-official-media.
 classify() {
     local kind=$1 hb=$2 ha=$3 bar1=$4 xid=$5
     case "$kind" in
@@ -109,7 +109,7 @@ classify() {
             if [ "$bar1" = 1 ]; then echo "RETRY BAR1_EXCEPTION"
             elif [ "$hb" != green ] || [ "$ha" != green ]; then echo "RETRY HOSTREF"
             else echo "FAIL KAYFABE"; fi ;;
-        RETRY) if [ "${6:-0}" = 1 ]; then echo "RETRY MEDIA"; else echo "RETRY OPERATOR"; fi ;;
+        RETRY) if [ "${6:-0}" = 2 ]; then echo "RETRY MEDIA_DRIFT"; elif [ "${6:-0}" = 1 ]; then echo "RETRY MEDIA"; else echo "RETRY OPERATOR"; fi ;;
         PASS)
             if [ "$ha" != green ]; then echo "RETRY HOSTREF"
             elif [ "${xid:-0}" != 0 ]; then echo "FAIL KAYFABE"
@@ -161,8 +161,9 @@ selftest() {
     cs fail-hostref-after 'RETRY HOSTREF' FAIL green RED 0 0
     cs fail-bar1 'RETRY BAR1_EXCEPTION' FAIL green green 1 0
     cs retry-harness 'RETRY OPERATOR' RETRY green green 0 0
-    cs missing-private 'RETRY MEDIA' RETRY green green 0 0 1
-    cs missing-private-hostref 'RETRY MEDIA' RETRY RED RED 0 0 1
+    cs missing-official 'RETRY MEDIA' RETRY green green 0 0 1
+    cs missing-official-hostref 'RETRY MEDIA' RETRY RED RED 0 0 1
+    cs official-driver-drift 'RETRY MEDIA_DRIFT' RETRY green green 0 0 2
     cs unknown-kind-never-pass 'RETRY OPERATOR' MAYBE green green 0 0
     # a log can only pass through verdict(): the exit code and the line agree
     n=$((n + 1))
@@ -237,12 +238,10 @@ say "APPS_NOTE app disk $ISO sha256=$ISO_SHA bytes=$(stat -c %s "$ISO")"
 IMGMAN=${KF_WINAPPS_IMAGE_MANIFEST:-$(dirname "$ISO")/winapps-open.manifest.json}
 [ -f "$IMGMAN" ] || IMGMAN=$APPM/manifest.json
 
-# Private media is supplied locally by a person; its Worker allowlist is future work.
-PRIVATE_ISO=${KF_WINAPPS_PRIVATE_ISO:-}
-PRIVATE_ARGS=()
-if [ -n "$PRIVATE_ISO" ]; then
-    if [ -f "$PRIVATE_ISO" ]; then PRIVATE_ARGS=(--private-iso "$PRIVATE_ISO"); fi
-fi
+# J2 selects the Windows driver version explicitly. The Python host harness owns
+# official downloads/transient media for the entire run; no permanent second ISO.
+OFFICIAL_ARGS=()
+if [ -n "${KF_WINAPPS_OFFICIAL_DRIVER:-}" ]; then OFFICIAL_ARGS=(--official-driver "$KF_WINAPPS_OFFICIAL_DRIVER"); fi
 
 stage hostref_before
 LIBCUDA=-lcuda
@@ -284,13 +283,17 @@ stage run_matrix
 GUEST_STARTED=1
 RUN=$EV/run
 DEADLINE=$(($(date +%s) + BUDGET_S))
-python3 -I "$APPM/winapps.py" --vm winvm --run-dir "$RUN" --apps "$IDS" --tier 3 --iso "$ISO" "${PRIVATE_ARGS[@]}" --image-manifest "$IMGMAN" \
+python3 -I "$APPM/winapps.py" --vm winvm --run-dir "$RUN" --apps "$IDS" --tier 3 --iso "$ISO" "${OFFICIAL_ARGS[@]}" --image-manifest "$IMGMAN" \
     --winvm-script "$WV" --winvm-root "$WINVM_ROOT" --winvm-name "${WINVM_NAME:-kfwin}" --parent-overlay "$GATE_TAG" --flags-file "$FLAGS" \
     --guest-driver "$GDRV" --arm "$ARM" --per-guest "$PER_GUEST" --max-tdr "$MAX_TDR" --deadline-epoch "$DEADLINE" > "$EV/driver.out" 2>&1
 DRC=$?
 say "APPS_NOTE winapps.py rc=$DRC (0 done, 3 repeated guest boot failures, 4 guest limit, 6 time budget ended)"
 teardown_all
 GUEST_STARTED=0
+if [ "$DRC" = 8 ]; then
+    verdict RETRY MEDIA_DRIFT "official pinned download/catalogue failed; no app pass claimed (driver.out)"
+    exit 3
+fi
 
 stage hostref_after
 hostref after
@@ -311,9 +314,10 @@ for q in "$VM"/logs/apps_*_b1_qemu.log; do
     grep -a 'realize refused' "$q" | sed 's/.*realize refused//' | grep -qi 'bar1' && bar1=1
 done
 grep -q 'SSH_UP\|READY boot=' "$RUN/session.log" 2> /dev/null && bar1=0    # a guest answered: not the BAR1 exception
-private_media_fault=0
-grep -q 'missing-private-media' "$EV/grade.txt" && private_media_fault=1
-read -r KIND CLASS <<< "$(classify "$kind" "$HOSTREF_BEFORE" "$HOSTREF_AFTER" "$bar1" "$xid_delta" "$private_media_fault")"
+official_media_fault=0
+grep -q 'missing-official-media' "$EV/grade.txt" && official_media_fault=1
+grep -q 'official-driver-version-mismatch' "$EV/grade.txt" && official_media_fault=2
+read -r KIND CLASS <<< "$(classify "$kind" "$HOSTREF_BEFORE" "$HOSTREF_AFTER" "$bar1" "$xid_delta" "$official_media_fault")"
 why="grade: $(grep -a '^WINAPPS_GRADE kind=' "$EV/grade.txt" | head -1 | cut -d' ' -f2-)"
 for k in GUEST_FAIL BOOT_FAIL HARNESS NOT_RUN; do
     l=$(grep -a "^WINAPPS_GRADE_$k " "$EV/grade.txt" | head -1 | cut -d' ' -f2-)

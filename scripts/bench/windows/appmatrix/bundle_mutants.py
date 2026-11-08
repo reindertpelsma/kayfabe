@@ -8,6 +8,7 @@ guest, GPU, mount or upload. Mutants live in disposable private copies.
 import argparse
 import concurrent.futures
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -48,7 +49,7 @@ MUTANTS = [
     ("compiler-failure", "bundle_tools.py", 'if result.returncode:', 'if False:'),
     ("compiler-source-epoch", "bundle_tools.py", 'SOURCE_DATE_EPOCH="0"', 'SOURCE_DATE_EPOCH="1"'),
     ("iso-file-bounds", "bundle_iso.py", 'if start < 19 or (start + max(1, blocks(size))) * BLOCK > self.size:', 'if False:'),
-    ("iso-volume-label", "bundle_iso.py", 'if self.label not in ("KFAPPS", "KFAPPSP") or pvd[40:72].rstrip(b" ") != self.label.encode("ascii"):', 'if False:'),
+    ("iso-volume-label", "bundle_iso.py", 'if not allow_any_label and (self.label not in ("KFAPPS", "KFAPPSP") or pvd[40:72].rstrip(b" ") != self.label.encode("ascii")):', 'if False:'),
     ("guest-bundle-staging-table", "guest/kf_stage.ps1", 'if (Test-Path $bundleTable) { $tab = Read-Json $bundleTable }', 'if ($false) { $tab = Read-Json $bundleTable }'),
     ("repository-notices", "package_bundle.py", 'for name in ("LICENSE", "LICENSE-APACHE", "LICENSE-GPL", "THIRD_PARTY_NOTICES.md"):', 'for name in ():'),
     ("compiler-notices", "bundle_tools.py", 'return dict(tools, **notices)', 'return tools'),
@@ -65,7 +66,10 @@ print(json.dumps({'tests':r.testsRun,'killers':[t.id() for t,_ in r.failures+r.e
 def run(root):
     # PowerShell startup/JIT can be slow on a shared low-priority dev host. This
     # bounds infrastructure time only; every mutant still needs two named kills.
-    p = subprocess.run([sys.executable, "-c", COLLECT], cwd=root, capture_output=True, text=True, timeout=240)
+    scratch = root.parents[3] / ".fixture-tmp"
+    scratch.mkdir(exist_ok=True)
+    env = dict(os.environ, TMPDIR=str(scratch), TEMP=str(scratch), TMP=str(scratch))
+    p = subprocess.run([sys.executable, "-c", COLLECT], cwd=root, env=env, capture_output=True, text=True, timeout=240)
     if p.returncode:
         raise RuntimeError("mutation test harness failed: " + p.stderr[-500:])
     return json.loads(p.stdout.splitlines()[-1])
@@ -77,7 +81,7 @@ def fixture(parent, name):
     # Fake compile tests copy the real probe sources; no compiler runs.
     repo = HERE.parents[3]
     import bundle_tools
-    for rel in bundle_tools.SOURCES + ("LICENSE", "LICENSE-APACHE", "LICENSE-GPL", "THIRD_PARTY_NOTICES.md"):
+    for rel in bundle_tools.SOURCES + ("LICENSE", "LICENSE-APACHE", "LICENSE-GPL", "THIRD_PARTY_NOTICES.md", "scripts/ci/kf_fetch.py"):
         dst = root.parents[3] / rel
         if not dst.exists():
             dst.parent.mkdir(parents=True, exist_ok=True)

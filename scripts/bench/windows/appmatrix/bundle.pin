@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
-# The sha256 pin of the Windows apps bundle in the private R2 copy (docs/DOWNLOADS.md, "Windows app bundle").
+# The sha256 pin of the Windows apps bundle in the public bundles bucket (docs/DOWNLOADS.md, "Windows app bundle").
 # STATUS: EMPTY, 2026-11-07. No pin means the bundle was never packaged and uploaded: scripts/bench/box/windows_apps.sh
 # answers RETRY class=MEDIA (never a pass). The owner fills it with the line that package_bundle.py writes
 # (bundle.pin.line) AFTER uploading `winapps-open.iso`; one line, exactly:
 #   winapps-open.iso sha256=<64 lowercase hex digits>
-# Builder v2 also emits comment records for inputs=<sha256> and both immutable object keys.
+# Builder v6 emits inputs=<sha256>, inventory=<sha256>, and both immutable object keys.
 # These metadata comments do not change the first-line consumer format above.

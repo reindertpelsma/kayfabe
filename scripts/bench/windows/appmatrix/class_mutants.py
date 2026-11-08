@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
-"""Two-bundle boundaries: each mutant must have two named killing tests."""
+"""Public release/transient runtime boundaries: each mutant must have two named killing tests."""
 import concurrent.futures
 import json
 import sys
@@ -11,13 +11,13 @@ import bundle_mutants as M
 CASES=[
  ('public-package-boundary','package_bundle.py','if bundle_class == "public" and pid not in PUBLIC_PACKAGES:', 'if False:'),
  ('public-publisher-only','publish_bundle.py','if receipt.get("bundle_class") != "public" or any(p["id"] not in B.PUBLIC_PACKAGES or p["compliance"]["distribution"] != "public-ok" for p in receipt["packages"]):','if False:'),
- ('private-volume-label','package_bundle.py','label = "KFAPPS" if bundle_class == "public" else "KFAPPSP"','label = "KFAPPS"'),
+ ('release-class-before-write', 'package_bundle.py', 'if bundle_class != "public": raise ValueError("release image must be public; KFAPPSP is transient-only")', 'if False: raise ValueError()'),
  ('permissive-wheel-only','bundle_wheels.py','def permissive(expression):','def permissive(expression):\n    return True\n\ndef unused_permissive(expression):'),
  ('wheel-nvidia-content','bundle_wheels.py','if NVIDIA.search(data):','if False:'),
  ('wheel-reviewed-inventory','bundle_wheels.py',"if inspect(path, pin, component) != pin.get('public_audit'):",'if False:'),
- ('missing-private-notrun','winapps.py','if app.get("requires") == "private" and (not self.private_attached or not self.private_cd):','if False:'),
+ ('missing-official-notrun','winapps.py','if required_official and (not self.official_attached or not self.official_cd):','if False:'),
  ('unknown-legacy-license','bundle_wheels.py',"if raw_license and not recognized: raise ValueError('unclear legacy licence field')", 'if False: raise ValueError()'),
- ('media-retry-class','../../box/windows_apps.sh','if [ "${6:-0}" = 1 ]; then echo "RETRY MEDIA";', 'if false; then echo "RETRY MEDIA";'),
+ ('media-retry-class','../../box/windows_apps.sh','elif [ "${6:-0}" = 1 ]; then echo "RETRY MEDIA";', 'elif false; then echo "RETRY MEDIA";'),
  ('drive-letter-conflicts','guest/kf_guest_setup.ps1','if ($occupied) {','if ($false) {'),
  ('public-domain-required','publish_bundle.py','if not C.https(base) or "?" in base or host.endswith((".r2.dev", ".r2.cloudflarestorage.com")):','if False:'),
 ]
