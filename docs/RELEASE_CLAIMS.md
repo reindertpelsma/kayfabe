@@ -66,10 +66,10 @@ ratchet verdict; the current Worker sanitizer publishes only the existing `windo
 header tests establish parser behavior, not the code of an actual WATCHDOG dump. Non-gating within the ceiling does not
 establish harmlessness (issue #305; the ordered investigation plan is in `design/V3_WINDOWS_GATE.md`).
 
-The ledger is rewritten with the README's new hashes. Rows for removed sentences are removed, not relabelled as verified;
-derived-page rows now name the corrected claims. Navigation rows verify local targets only, not remote site availability.
-Project/deployment statements remain manual MC-11 claims with the evidence template above/below; they have not been
-independently checked against releases or deployment state. The validator and its pass rules are unchanged.
+**CODE READ (`scripts/ci/release_claims.py`, `docs/RELEASE_CLAIMS.tsv`):** the ledger uses the README's new hashes.
+Rows for removed sentences are deleted instead of reused as positive evidence; derived-page rows name the corrected
+claims. Navigation rows check local targets; remote site availability is unverified. Project/deployment statements
+remain unverified manual MC-11 claims with the evidence template above/below. The validator and its pass rules are unchanged.
 
 **COMPUTED after the DX1 rewrite, 2026-11-08:** 53 rows cover 26 README claim lines: 41 auto and 12 manual;
 44 verified at their named source/run revisions, 9 never-verified manual statements. No current claim is marked

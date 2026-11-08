@@ -32,13 +32,14 @@ DIRECT-overlay result, command/version/hash, modes/transitions/latency, screensh
 This resolves section 9's earlier applicability question; it does not turn the native failure into a pass.
 
 **Owner policy:** `managed_t` and Linux `UnifiedMemoryStreams`, `UnifiedMemoryPerf`, `conjugateGradientUM`, `attach_verify`
-are `known_unsupported` with the UVM reason. Reports say `unsupported (UVM)`; the owner holds UVM unmerged until the
-per-fault GR hold is measured and bounded (`docs/OWNER_RULINGS.md` §E). `app_policy.py` keeps raw observed verdicts in notes
+are `known_unsupported` with the UVM reason. Reports say `unsupported (UVM)`; the owner holds UVM unmerged because the
+per-fault GR hold remains unmeasured in this app qualification. Hardware timing and an explicit bound are required
+before merge (`docs/OWNER_RULINGS.md` §E). `app_policy.py` keeps raw observed verdicts in notes
 when reporting historical runs, and matrix tables retain their observed columns. Supported failures such as
 `nbody_demo_gl` still gate. This supersedes the earlier "all nine failures remain in full" statement below.
 
-**CODE READ:** policy rows are NOT_RUN apps (SKIP for a historical test row), never passing results; absent policy apps
-create no measured test or timing. They are placed first under the 500-app report cap so truncation cannot silently drop them.
+**CODE READ:** policy rows are NOT_RUN classification metadata (SKIP for a historical test row), never passing results;
+they record no app execution or timing sample. They are placed first under the 500-app report cap so truncation cannot silently drop them.
 The payload's supported-app completeness, failure and host-Xid rules are unchanged. No Worker code changed, nothing
 was deployed, and the stage remains disabled pending its first Worker run.
 
@@ -68,7 +69,7 @@ apps, in four classes.
 | open | 78 | every package the app needs is redistributable and in the bundle (`open_packages`); source/reference assets are additional prerequisites | yes, with prerequisites |
 | owner decision | 29 | needs GravityMark, FurMark, GpuTest, the Vulkan SDK or the ffmpeg GPL build: free to download, storage rights still pending | no, until the owner rules |
 | manual | 12 (+6 non-matrix items) | eight overlays need a real display; four Heaven/Valley rows have paid-automation/evaluation EULA limits; other items include 3DMark, Geekbench 6, TensorRT, Superposition, Xonotic, Q2RTX | never |
-| known unsupported | 1 | `managed_t`: UVM merge hold until the per-fault GR hold is measured and bounded | never; explicitly reported |
+| known unsupported | 1 | `managed_t`: UVM merge hold pending per-fault GR timing and an explicit bound (unmeasured) | never; explicitly reported |
 
 Open apps by category (**COMPUTED from `gate_profiles.py ids full`, 2026-11-08**): `ai` 1, `browser` 5, `crypto` 1, `cuda-demo` 7, `cuda-equiv` 27, `cuda-ladder` 3, `d3d` 8, `llm` 4, `opencl` 3, `opengl` 1, `probe` 3, `render` 1, `smi` 1, `stream-probe` 6, `stress` 1, `torch` 4, `vulkan` 2.
 

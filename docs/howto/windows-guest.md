@@ -140,7 +140,7 @@ Verified on: Windows 11 Pro 26200 with driver 580.88 on an RTX 4070 (kayfabe `eb
 
 ## App gate policy
 
-**Unsupported (UVM), for now:** `UnifiedMemoryStreams`, `UnifiedMemoryPerf`, `conjugateGradientUM`, `attach_verify` and the Windows counterpart `managed_t`. The owner keeps UVM unmerged until the per-fault GR hold is measured and bounded. Gate reports list them as `unsupported (UVM)`; they are not supported-app failures or hidden omissions. Historical results remain in the evidence: `conjugateGradientUM` printed SUCCESS with a wrong numerical result, so an exit code alone is not a correctness check.
+**Unsupported (UVM), for now:** `UnifiedMemoryStreams`, `UnifiedMemoryPerf`, `conjugateGradientUM`, `attach_verify` and the Windows counterpart `managed_t`. The owner keeps UVM unmerged: the per-fault GR hold is unmeasured in this app qualification, and hardware timing plus an explicit bound are required before merge. Gate reports list them as `unsupported (UVM)`; they are not supported-app failures or hidden omissions. Historical results remain in the evidence: `conjugateGradientUM` printed SUCCESS with a wrong numerical result, so an exit code alone is not a correctness check.
 
 All eight `overlay_yuv_*` entries (probe, hide, occlude, resize, move, recreate, fullscreen, soak) are `manual: needs real display`, excluded from Vast profiles and listed in reports. The native simulated-display probe failed on Vast (no DIRECT overlay); no real-monitor native record is committed. Evidence must name the physical monitor/connector, exact revision, GPU and drivers, native DIRECT-overlay reference, command, app version/hash, per-second modes/transitions/latency, duration, screenshots and reset/Xid counts.
 
