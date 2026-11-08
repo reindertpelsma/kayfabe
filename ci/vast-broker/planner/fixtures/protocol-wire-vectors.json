@@ -1,0 +1,2155 @@
+{
+  "version": 1,
+  "status": "INFERRED synthetic wire examples; no hardware or live endpoint evidence",
+  "vectors": [
+    {
+      "name": "ready-request",
+      "schema": "artifact_ready",
+      "valid": true,
+      "value": {
+        "version": 1,
+        "artifact": "open_image",
+        "url": "http://203.0.113.10:45321/abcdefgh/open-image.tar.zst",
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "size": 13000000000
+      }
+    },
+    {
+      "name": "ready-request-unknown",
+      "schema": "artifact_ready",
+      "valid": false,
+      "value": {
+        "version": 1,
+        "artifact": "open_image",
+        "url": "http://203.0.113.10:45321/abcdefgh/open-image.tar.zst",
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "size": 13000000000,
+        "unknown": true
+      }
+    },
+    {
+      "name": "ready-request-version",
+      "schema": "artifact_ready",
+      "valid": false,
+      "value": {
+        "version": 2,
+        "artifact": "open_image",
+        "url": "http://203.0.113.10:45321/abcdefgh/open-image.tar.zst",
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "size": 13000000000
+      }
+    },
+    {
+      "name": "gone-request",
+      "schema": "artifact_gone",
+      "valid": true,
+      "value": {
+        "version": 1,
+        "artifact": "open_image",
+        "reason": "unavailable"
+      }
+    },
+    {
+      "name": "gone-request-unknown",
+      "schema": "artifact_gone",
+      "valid": false,
+      "value": {
+        "version": 1,
+        "artifact": "open_image",
+        "reason": "unavailable",
+        "unknown": true
+      }
+    },
+    {
+      "name": "gone-request-version",
+      "schema": "artifact_gone",
+      "valid": false,
+      "value": {
+        "version": 2,
+        "artifact": "open_image",
+        "reason": "unavailable"
+      }
+    },
+    {
+      "name": "hash-report",
+      "schema": "artifact_gone",
+      "valid": true,
+      "value": {
+        "version": 1,
+        "artifact": "open_image",
+        "reason": "hash_mismatch",
+        "observed_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "observed_size": 13000000000
+      }
+    },
+    {
+      "name": "hash-report-unknown",
+      "schema": "artifact_gone",
+      "valid": false,
+      "value": {
+        "version": 1,
+        "artifact": "open_image",
+        "reason": "hash_mismatch",
+        "observed_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "observed_size": 13000000000,
+        "unknown": true
+      }
+    },
+    {
+      "name": "hash-report-version",
+      "schema": "artifact_gone",
+      "valid": false,
+      "value": {
+        "version": 2,
+        "artifact": "open_image",
+        "reason": "hash_mismatch",
+        "observed_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "observed_size": 13000000000
+      }
+    },
+    {
+      "name": "query",
+      "schema": "artifact_query",
+      "valid": true,
+      "value": {
+        "version": 1,
+        "name": "open_image"
+      }
+    },
+    {
+      "name": "query-unknown",
+      "schema": "artifact_query",
+      "valid": false,
+      "value": {
+        "version": 1,
+        "name": "open_image",
+        "unknown": true
+      }
+    },
+    {
+      "name": "query-version",
+      "schema": "artifact_query",
+      "valid": false,
+      "value": {
+        "version": 2,
+        "name": "open_image"
+      }
+    },
+    {
+      "name": "ready-response",
+      "schema": "artifact_response",
+      "valid": true,
+      "value": {
+        "version": 1,
+        "artifact": "open_image",
+        "scope_key": "open_image@box",
+        "server_minute": 61.733334,
+        "state": "ready",
+        "url": "http://203.0.113.10:45321/abcdefgh/open-image.tar.zst",
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "size": 13000000000,
+        "deadline_minute": 66.733334,
+        "fetch_until_minute": 68.466668,
+        "fallback": "build_local"
+      }
+    },
+    {
+      "name": "ready-response-unknown",
+      "schema": "artifact_response",
+      "valid": false,
+      "value": {
+        "version": 1,
+        "artifact": "open_image",
+        "scope_key": "open_image@box",
+        "server_minute": 61.733334,
+        "state": "ready",
+        "url": "http://203.0.113.10:45321/abcdefgh/open-image.tar.zst",
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "size": 13000000000,
+        "deadline_minute": 66.733334,
+        "fetch_until_minute": 68.466668,
+        "fallback": "build_local",
+        "unknown": true
+      }
+    },
+    {
+      "name": "ready-response-version",
+      "schema": "artifact_response",
+      "valid": false,
+      "value": {
+        "version": 2,
+        "artifact": "open_image",
+        "scope_key": "open_image@box",
+        "server_minute": 61.733334,
+        "state": "ready",
+        "url": "http://203.0.113.10:45321/abcdefgh/open-image.tar.zst",
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "size": 13000000000,
+        "deadline_minute": 66.733334,
+        "fetch_until_minute": 68.466668,
+        "fallback": "build_local"
+      }
+    },
+    {
+      "name": "gone-response",
+      "schema": "artifact_response",
+      "valid": true,
+      "value": {
+        "version": 1,
+        "artifact": "open_image",
+        "scope_key": "open_image@box",
+        "server_minute": 61.733334,
+        "state": "gone",
+        "url": null,
+        "sha256": null,
+        "size": null,
+        "deadline_minute": 66.733334,
+        "fetch_until_minute": 68.466668,
+        "fallback": "build_local"
+      }
+    },
+    {
+      "name": "gone-response-unknown",
+      "schema": "artifact_response",
+      "valid": false,
+      "value": {
+        "version": 1,
+        "artifact": "open_image",
+        "scope_key": "open_image@box",
+        "server_minute": 61.733334,
+        "state": "gone",
+        "url": null,
+        "sha256": null,
+        "size": null,
+        "deadline_minute": 66.733334,
+        "fetch_until_minute": 68.466668,
+        "fallback": "build_local",
+        "unknown": true
+      }
+    },
+    {
+      "name": "gone-response-version",
+      "schema": "artifact_response",
+      "valid": false,
+      "value": {
+        "version": 2,
+        "artifact": "open_image",
+        "scope_key": "open_image@box",
+        "server_minute": 61.733334,
+        "state": "gone",
+        "url": null,
+        "sha256": null,
+        "size": null,
+        "deadline_minute": 66.733334,
+        "fetch_until_minute": 68.466668,
+        "fallback": "build_local"
+      }
+    },
+    {
+      "name": "daemon-assignment",
+      "schema": "assignment_response",
+      "valid": true,
+      "value": {
+        "version": 1,
+        "assignment": {
+          "artifact_sources": [
+            {
+              "artifact": "kf3_bins",
+              "kind": "optional_seed",
+              "producer_assignment_id": "box-001",
+              "scope_key": "kf3_bins@box",
+              "tier": "medium"
+            },
+            {
+              "artifact": "open_image",
+              "kind": "optional_seed",
+              "producer_assignment_id": "box-001",
+              "scope_key": "open_image@box",
+              "tier": "medium"
+            },
+            {
+              "artifact": "source",
+              "kind": "local",
+              "producer_assignment_id": null,
+              "scope_key": "source@box",
+              "tier": "medium"
+            }
+          ],
+          "assigned_consumers": [],
+          "box_id": "offer-6",
+          "capabilities": {
+            "can_expose_port": true,
+            "can_swap_host_driver": true,
+            "kvm": true,
+            "vfio": true
+          },
+          "catalog_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "die": "TU116",
+          "die_family": "Turing",
+          "driver_pins": [
+            {
+              "abi_version": "580.159.04",
+              "catalog_url": null,
+              "checked": "2026-11-07",
+              "driver_family": 580,
+              "id": "2",
+              "os": "linux",
+              "sha256": "c1e66761b088d17b3adf6cb6979de9af38be2684d102b001a176dcfafabdca1e",
+              "size": 397162548,
+              "source": "MEASURED official .sha256sum and installer Content-Length on 2026-11-07",
+              "status": "PINNED",
+              "url": "https://download.nvidia.com/XFree86/Linux-x86_64/580.159.04/NVIDIA-Linux-x86_64-580.159.04.run",
+              "version": "580.159.04"
+            },
+            {
+              "abi_version": "580.65.06",
+              "catalog_url": null,
+              "checked": "2026-11-07",
+              "driver_family": 580,
+              "id": "9",
+              "os": "windows",
+              "sha256": "90c49f925b41ee062e02cc8094a16b6d057abfde4e85235a76d63ffe267f63a9",
+              "size": 890807536,
+              "source": "MEASURED streamed official installer sha256 and byte count on 2026-11-07; bytes not retained",
+              "status": "PINNED",
+              "url": "https://us.download.nvidia.com/Windows/580.88/580.88-desktop-win10-win11-64bit-international-dch-whql.exe",
+              "version": "580.88"
+            }
+          ],
+          "estimated_minutes": 31.746668,
+          "execution_steps": [
+            {
+              "artifact": "kf3_bins",
+              "deadline_minute": 90,
+              "fallback": "build_local",
+              "fallback_step_ids": ["step-002"],
+              "fetch_until_minute": 90.013334,
+              "kind": "wait_for_artifact",
+              "minutes": 5,
+              "scope_key": "kf3_bins@box"
+            },
+            {
+              "artifact": "open_image",
+              "deadline_minute": 90,
+              "fallback": "build_local",
+              "fallback_step_ids": ["step-003"],
+              "fetch_until_minute": 91.733334,
+              "kind": "wait_for_artifact",
+              "minutes": 5,
+              "scope_key": "open_image@box"
+            },
+            {
+              "kind": "run",
+              "step_id": "step-001"
+            },
+            {
+              "kind": "run",
+              "step_id": "step-002"
+            },
+            {
+              "kind": "run",
+              "step_id": "step-003"
+            },
+            {
+              "kind": "run",
+              "step_id": "step-004"
+            }
+          ],
+          "fallback_minutes": 80,
+          "host_id": "host-6",
+          "id": "box-003",
+          "machine_id": "machine-6",
+          "pricing": {
+            "bandwidth_down_gb": 100.1,
+            "bandwidth_up_gb": 2,
+            "disk_gb": 120,
+            "effective_usd_hour": 0.14642,
+            "estimated_usd": 0.168769,
+            "hourly_usd": 0.126,
+            "reserved_usd": 0.7321,
+            "transfer_usd": 0.1021
+          },
+          "primary_evidence": true,
+          "provider": "local",
+          "reservation_minutes": 300,
+          "runs": [
+            {
+              "coverage": [],
+              "drivers": {
+                "host": "2",
+                "linux_guest": "2",
+                "windows_guest": "9"
+              },
+              "id": "step-001",
+              "minutes": 10,
+              "needs": [],
+              "optional_seed_for": null,
+              "parameters": {},
+              "produces": ["source@box"],
+              "run_id": "provision"
+            },
+            {
+              "coverage": [],
+              "drivers": {
+                "host": "2",
+                "linux_guest": "2",
+                "windows_guest": "9"
+              },
+              "id": "step-002",
+              "minutes": 20,
+              "needs": ["source@box"],
+              "optional_seed_for": "kf3_bins@box",
+              "parameters": {},
+              "produces": ["kf3_bins@box"],
+              "run_id": "kayfabe_build"
+            },
+            {
+              "coverage": [],
+              "drivers": {
+                "host": "2",
+                "linux_guest": "2",
+                "windows_guest": "9"
+              },
+              "id": "step-003",
+              "minutes": 30,
+              "needs": ["source@box"],
+              "optional_seed_for": "open_image@box",
+              "parameters": {},
+              "produces": ["open_image@box"],
+              "run_id": "linux_image_build"
+            },
+            {
+              "coverage": ["q0-d0-r0"],
+              "drivers": {
+                "host": "2",
+                "linux_guest": "2",
+                "windows_guest": "9"
+              },
+              "id": "step-004",
+              "minutes": 20,
+              "needs": ["kf3_bins@box", "open_image@box"],
+              "optional_seed_for": null,
+              "parameters": {},
+              "produces": [],
+              "run_id": "linux_apps_full"
+            }
+          ],
+          "seed_exports": [],
+          "seed_hints": [
+            {
+              "artifact": "kf3_bins",
+              "available_minute": 30.013334,
+              "deadline_minute": 90,
+              "fallback": "build_local",
+              "fallback_step_ids": ["step-002"],
+              "fetch_until_minute": 90.013334,
+              "gb": 0.1,
+              "producer_assignment_id": "box-001",
+              "producer_box_id": "offer-1",
+              "scope_key": "kf3_bins@box",
+              "transfer_minutes": 0.013334,
+              "trusted_content": {
+                "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "size": 100000000,
+                "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+              }
+            },
+            {
+              "artifact": "open_image",
+              "available_minute": 61.733334,
+              "deadline_minute": 90,
+              "fallback": "build_local",
+              "fallback_step_ids": ["step-003"],
+              "fetch_until_minute": 91.733334,
+              "gb": 13,
+              "producer_assignment_id": "box-001",
+              "producer_box_id": "offer-1",
+              "scope_key": "open_image@box",
+              "transfer_minutes": 1.733334,
+              "trusted_content": {
+                "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "size": 13000000000,
+                "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+              }
+            }
+          ],
+          "seed_server": null,
+          "setup_reuse": [
+            {
+              "artifact": "kf3_bins",
+              "consumer_step_ids": ["step-004"],
+              "producer_step_id": "step-002",
+              "scope_key": "kf3_bins@box"
+            },
+            {
+              "artifact": "open_image",
+              "consumer_step_ids": ["step-004"],
+              "producer_step_id": "step-003",
+              "scope_key": "open_image@box"
+            },
+            {
+              "artifact": "source",
+              "consumer_step_ids": ["step-002", "step-003"],
+              "producer_step_id": "step-001",
+              "scope_key": "source@box"
+            }
+          ],
+          "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "start_minute": 85,
+          "status": "executable",
+          "tier": "medium",
+          "version": 1,
+          "worst_case_minutes": 85
+        },
+        "server_minute": 61.733334,
+        "started_minute": 61.733334,
+        "launch": {
+          "mode": "worker_daemon",
+          "worker_url": "https://worker.example",
+          "report_path": null
+        },
+        "artifacts": [
+          {
+            "version": 1,
+            "artifact": "kf3_bins",
+            "scope_key": "kf3_bins@box",
+            "server_minute": 61.733334,
+            "state": "waiting",
+            "url": null,
+            "sha256": null,
+            "size": null,
+            "deadline_minute": 66.733334,
+            "fetch_until_minute": 66.746668,
+            "fallback": "build_local"
+          },
+          {
+            "version": 1,
+            "artifact": "open_image",
+            "scope_key": "open_image@box",
+            "server_minute": 61.733334,
+            "state": "ready",
+            "url": "http://203.0.113.10:45321/abcdefgh/open-image.tar.zst",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "size": 13000000000,
+            "deadline_minute": 66.733334,
+            "fetch_until_minute": 68.466668,
+            "fallback": "build_local"
+          }
+        ]
+      }
+    },
+    {
+      "name": "daemon-assignment-unknown",
+      "schema": "assignment_response",
+      "valid": false,
+      "value": {
+        "version": 1,
+        "assignment": {
+          "artifact_sources": [
+            {
+              "artifact": "kf3_bins",
+              "kind": "optional_seed",
+              "producer_assignment_id": "box-001",
+              "scope_key": "kf3_bins@box",
+              "tier": "medium"
+            },
+            {
+              "artifact": "open_image",
+              "kind": "optional_seed",
+              "producer_assignment_id": "box-001",
+              "scope_key": "open_image@box",
+              "tier": "medium"
+            },
+            {
+              "artifact": "source",
+              "kind": "local",
+              "producer_assignment_id": null,
+              "scope_key": "source@box",
+              "tier": "medium"
+            }
+          ],
+          "assigned_consumers": [],
+          "box_id": "offer-6",
+          "capabilities": {
+            "can_expose_port": true,
+            "can_swap_host_driver": true,
+            "kvm": true,
+            "vfio": true
+          },
+          "catalog_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "die": "TU116",
+          "die_family": "Turing",
+          "driver_pins": [
+            {
+              "abi_version": "580.159.04",
+              "catalog_url": null,
+              "checked": "2026-11-07",
+              "driver_family": 580,
+              "id": "2",
+              "os": "linux",
+              "sha256": "c1e66761b088d17b3adf6cb6979de9af38be2684d102b001a176dcfafabdca1e",
+              "size": 397162548,
+              "source": "MEASURED official .sha256sum and installer Content-Length on 2026-11-07",
+              "status": "PINNED",
+              "url": "https://download.nvidia.com/XFree86/Linux-x86_64/580.159.04/NVIDIA-Linux-x86_64-580.159.04.run",
+              "version": "580.159.04"
+            },
+            {
+              "abi_version": "580.65.06",
+              "catalog_url": null,
+              "checked": "2026-11-07",
+              "driver_family": 580,
+              "id": "9",
+              "os": "windows",
+              "sha256": "90c49f925b41ee062e02cc8094a16b6d057abfde4e85235a76d63ffe267f63a9",
+              "size": 890807536,
+              "source": "MEASURED streamed official installer sha256 and byte count on 2026-11-07; bytes not retained",
+              "status": "PINNED",
+              "url": "https://us.download.nvidia.com/Windows/580.88/580.88-desktop-win10-win11-64bit-international-dch-whql.exe",
+              "version": "580.88"
+            }
+          ],
+          "estimated_minutes": 31.746668,
+          "execution_steps": [
+            {
+              "artifact": "kf3_bins",
+              "deadline_minute": 90,
+              "fallback": "build_local",
+              "fallback_step_ids": ["step-002"],
+              "fetch_until_minute": 90.013334,
+              "kind": "wait_for_artifact",
+              "minutes": 5,
+              "scope_key": "kf3_bins@box"
+            },
+            {
+              "artifact": "open_image",
+              "deadline_minute": 90,
+              "fallback": "build_local",
+              "fallback_step_ids": ["step-003"],
+              "fetch_until_minute": 91.733334,
+              "kind": "wait_for_artifact",
+              "minutes": 5,
+              "scope_key": "open_image@box"
+            },
+            {
+              "kind": "run",
+              "step_id": "step-001"
+            },
+            {
+              "kind": "run",
+              "step_id": "step-002"
+            },
+            {
+              "kind": "run",
+              "step_id": "step-003"
+            },
+            {
+              "kind": "run",
+              "step_id": "step-004"
+            }
+          ],
+          "fallback_minutes": 80,
+          "host_id": "host-6",
+          "id": "box-003",
+          "machine_id": "machine-6",
+          "pricing": {
+            "bandwidth_down_gb": 100.1,
+            "bandwidth_up_gb": 2,
+            "disk_gb": 120,
+            "effective_usd_hour": 0.14642,
+            "estimated_usd": 0.168769,
+            "hourly_usd": 0.126,
+            "reserved_usd": 0.7321,
+            "transfer_usd": 0.1021
+          },
+          "primary_evidence": true,
+          "provider": "local",
+          "reservation_minutes": 300,
+          "runs": [
+            {
+              "coverage": [],
+              "drivers": {
+                "host": "2",
+                "linux_guest": "2",
+                "windows_guest": "9"
+              },
+              "id": "step-001",
+              "minutes": 10,
+              "needs": [],
+              "optional_seed_for": null,
+              "parameters": {},
+              "produces": ["source@box"],
+              "run_id": "provision"
+            },
+            {
+              "coverage": [],
+              "drivers": {
+                "host": "2",
+                "linux_guest": "2",
+                "windows_guest": "9"
+              },
+              "id": "step-002",
+              "minutes": 20,
+              "needs": ["source@box"],
+              "optional_seed_for": "kf3_bins@box",
+              "parameters": {},
+              "produces": ["kf3_bins@box"],
+              "run_id": "kayfabe_build"
+            },
+            {
+              "coverage": [],
+              "drivers": {
+                "host": "2",
+                "linux_guest": "2",
+                "windows_guest": "9"
+              },
+              "id": "step-003",
+              "minutes": 30,
+              "needs": ["source@box"],
+              "optional_seed_for": "open_image@box",
+              "parameters": {},
+              "produces": ["open_image@box"],
+              "run_id": "linux_image_build"
+            },
+            {
+              "coverage": ["q0-d0-r0"],
+              "drivers": {
+                "host": "2",
+                "linux_guest": "2",
+                "windows_guest": "9"
+              },
+              "id": "step-004",
+              "minutes": 20,
+              "needs": ["kf3_bins@box", "open_image@box"],
+              "optional_seed_for": null,
+              "parameters": {},
+              "produces": [],
+              "run_id": "linux_apps_full"
+            }
+          ],
+          "seed_exports": [],
+          "seed_hints": [
+            {
+              "artifact": "kf3_bins",
+              "available_minute": 30.013334,
+              "deadline_minute": 90,
+              "fallback": "build_local",
+              "fallback_step_ids": ["step-002"],
+              "fetch_until_minute": 90.013334,
+              "gb": 0.1,
+              "producer_assignment_id": "box-001",
+              "producer_box_id": "offer-1",
+              "scope_key": "kf3_bins@box",
+              "transfer_minutes": 0.013334,
+              "trusted_content": {
+                "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "size": 100000000,
+                "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+              }
+            },
+            {
+              "artifact": "open_image",
+              "available_minute": 61.733334,
+              "deadline_minute": 90,
+              "fallback": "build_local",
+              "fallback_step_ids": ["step-003"],
+              "fetch_until_minute": 91.733334,
+              "gb": 13,
+              "producer_assignment_id": "box-001",
+              "producer_box_id": "offer-1",
+              "scope_key": "open_image@box",
+              "transfer_minutes": 1.733334,
+              "trusted_content": {
+                "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "size": 13000000000,
+                "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+              }
+            }
+          ],
+          "seed_server": null,
+          "setup_reuse": [
+            {
+              "artifact": "kf3_bins",
+              "consumer_step_ids": ["step-004"],
+              "producer_step_id": "step-002",
+              "scope_key": "kf3_bins@box"
+            },
+            {
+              "artifact": "open_image",
+              "consumer_step_ids": ["step-004"],
+              "producer_step_id": "step-003",
+              "scope_key": "open_image@box"
+            },
+            {
+              "artifact": "source",
+              "consumer_step_ids": ["step-002", "step-003"],
+              "producer_step_id": "step-001",
+              "scope_key": "source@box"
+            }
+          ],
+          "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "start_minute": 85,
+          "status": "executable",
+          "tier": "medium",
+          "version": 1,
+          "worst_case_minutes": 85
+        },
+        "server_minute": 61.733334,
+        "started_minute": 61.733334,
+        "launch": {
+          "mode": "worker_daemon",
+          "worker_url": "https://worker.example",
+          "report_path": null
+        },
+        "artifacts": [
+          {
+            "version": 1,
+            "artifact": "kf3_bins",
+            "scope_key": "kf3_bins@box",
+            "server_minute": 61.733334,
+            "state": "waiting",
+            "url": null,
+            "sha256": null,
+            "size": null,
+            "deadline_minute": 66.733334,
+            "fetch_until_minute": 66.746668,
+            "fallback": "build_local"
+          },
+          {
+            "version": 1,
+            "artifact": "open_image",
+            "scope_key": "open_image@box",
+            "server_minute": 61.733334,
+            "state": "ready",
+            "url": "http://203.0.113.10:45321/abcdefgh/open-image.tar.zst",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "size": 13000000000,
+            "deadline_minute": 66.733334,
+            "fetch_until_minute": 68.466668,
+            "fallback": "build_local"
+          }
+        ],
+        "unknown": true
+      }
+    },
+    {
+      "name": "daemon-assignment-version",
+      "schema": "assignment_response",
+      "valid": false,
+      "value": {
+        "version": 2,
+        "assignment": {
+          "artifact_sources": [
+            {
+              "artifact": "kf3_bins",
+              "kind": "optional_seed",
+              "producer_assignment_id": "box-001",
+              "scope_key": "kf3_bins@box",
+              "tier": "medium"
+            },
+            {
+              "artifact": "open_image",
+              "kind": "optional_seed",
+              "producer_assignment_id": "box-001",
+              "scope_key": "open_image@box",
+              "tier": "medium"
+            },
+            {
+              "artifact": "source",
+              "kind": "local",
+              "producer_assignment_id": null,
+              "scope_key": "source@box",
+              "tier": "medium"
+            }
+          ],
+          "assigned_consumers": [],
+          "box_id": "offer-6",
+          "capabilities": {
+            "can_expose_port": true,
+            "can_swap_host_driver": true,
+            "kvm": true,
+            "vfio": true
+          },
+          "catalog_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "die": "TU116",
+          "die_family": "Turing",
+          "driver_pins": [
+            {
+              "abi_version": "580.159.04",
+              "catalog_url": null,
+              "checked": "2026-11-07",
+              "driver_family": 580,
+              "id": "2",
+              "os": "linux",
+              "sha256": "c1e66761b088d17b3adf6cb6979de9af38be2684d102b001a176dcfafabdca1e",
+              "size": 397162548,
+              "source": "MEASURED official .sha256sum and installer Content-Length on 2026-11-07",
+              "status": "PINNED",
+              "url": "https://download.nvidia.com/XFree86/Linux-x86_64/580.159.04/NVIDIA-Linux-x86_64-580.159.04.run",
+              "version": "580.159.04"
+            },
+            {
+              "abi_version": "580.65.06",
+              "catalog_url": null,
+              "checked": "2026-11-07",
+              "driver_family": 580,
+              "id": "9",
+              "os": "windows",
+              "sha256": "90c49f925b41ee062e02cc8094a16b6d057abfde4e85235a76d63ffe267f63a9",
+              "size": 890807536,
+              "source": "MEASURED streamed official installer sha256 and byte count on 2026-11-07; bytes not retained",
+              "status": "PINNED",
+              "url": "https://us.download.nvidia.com/Windows/580.88/580.88-desktop-win10-win11-64bit-international-dch-whql.exe",
+              "version": "580.88"
+            }
+          ],
+          "estimated_minutes": 31.746668,
+          "execution_steps": [
+            {
+              "artifact": "kf3_bins",
+              "deadline_minute": 90,
+              "fallback": "build_local",
+              "fallback_step_ids": ["step-002"],
+              "fetch_until_minute": 90.013334,
+              "kind": "wait_for_artifact",
+              "minutes": 5,
+              "scope_key": "kf3_bins@box"
+            },
+            {
+              "artifact": "open_image",
+              "deadline_minute": 90,
+              "fallback": "build_local",
+              "fallback_step_ids": ["step-003"],
+              "fetch_until_minute": 91.733334,
+              "kind": "wait_for_artifact",
+              "minutes": 5,
+              "scope_key": "open_image@box"
+            },
+            {
+              "kind": "run",
+              "step_id": "step-001"
+            },
+            {
+              "kind": "run",
+              "step_id": "step-002"
+            },
+            {
+              "kind": "run",
+              "step_id": "step-003"
+            },
+            {
+              "kind": "run",
+              "step_id": "step-004"
+            }
+          ],
+          "fallback_minutes": 80,
+          "host_id": "host-6",
+          "id": "box-003",
+          "machine_id": "machine-6",
+          "pricing": {
+            "bandwidth_down_gb": 100.1,
+            "bandwidth_up_gb": 2,
+            "disk_gb": 120,
+            "effective_usd_hour": 0.14642,
+            "estimated_usd": 0.168769,
+            "hourly_usd": 0.126,
+            "reserved_usd": 0.7321,
+            "transfer_usd": 0.1021
+          },
+          "primary_evidence": true,
+          "provider": "local",
+          "reservation_minutes": 300,
+          "runs": [
+            {
+              "coverage": [],
+              "drivers": {
+                "host": "2",
+                "linux_guest": "2",
+                "windows_guest": "9"
+              },
+              "id": "step-001",
+              "minutes": 10,
+              "needs": [],
+              "optional_seed_for": null,
+              "parameters": {},
+              "produces": ["source@box"],
+              "run_id": "provision"
+            },
+            {
+              "coverage": [],
+              "drivers": {
+                "host": "2",
+                "linux_guest": "2",
+                "windows_guest": "9"
+              },
+              "id": "step-002",
+              "minutes": 20,
+              "needs": ["source@box"],
+              "optional_seed_for": "kf3_bins@box",
+              "parameters": {},
+              "produces": ["kf3_bins@box"],
+              "run_id": "kayfabe_build"
+            },
+            {
+              "coverage": [],
+              "drivers": {
+                "host": "2",
+                "linux_guest": "2",
+                "windows_guest": "9"
+              },
+              "id": "step-003",
+              "minutes": 30,
+              "needs": ["source@box"],
+              "optional_seed_for": "open_image@box",
+              "parameters": {},
+              "produces": ["open_image@box"],
+              "run_id": "linux_image_build"
+            },
+            {
+              "coverage": ["q0-d0-r0"],
+              "drivers": {
+                "host": "2",
+                "linux_guest": "2",
+                "windows_guest": "9"
+              },
+              "id": "step-004",
+              "minutes": 20,
+              "needs": ["kf3_bins@box", "open_image@box"],
+              "optional_seed_for": null,
+              "parameters": {},
+              "produces": [],
+              "run_id": "linux_apps_full"
+            }
+          ],
+          "seed_exports": [],
+          "seed_hints": [
+            {
+              "artifact": "kf3_bins",
+              "available_minute": 30.013334,
+              "deadline_minute": 90,
+              "fallback": "build_local",
+              "fallback_step_ids": ["step-002"],
+              "fetch_until_minute": 90.013334,
+              "gb": 0.1,
+              "producer_assignment_id": "box-001",
+              "producer_box_id": "offer-1",
+              "scope_key": "kf3_bins@box",
+              "transfer_minutes": 0.013334,
+              "trusted_content": {
+                "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "size": 100000000,
+                "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+              }
+            },
+            {
+              "artifact": "open_image",
+              "available_minute": 61.733334,
+              "deadline_minute": 90,
+              "fallback": "build_local",
+              "fallback_step_ids": ["step-003"],
+              "fetch_until_minute": 91.733334,
+              "gb": 13,
+              "producer_assignment_id": "box-001",
+              "producer_box_id": "offer-1",
+              "scope_key": "open_image@box",
+              "transfer_minutes": 1.733334,
+              "trusted_content": {
+                "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "size": 13000000000,
+                "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+              }
+            }
+          ],
+          "seed_server": null,
+          "setup_reuse": [
+            {
+              "artifact": "kf3_bins",
+              "consumer_step_ids": ["step-004"],
+              "producer_step_id": "step-002",
+              "scope_key": "kf3_bins@box"
+            },
+            {
+              "artifact": "open_image",
+              "consumer_step_ids": ["step-004"],
+              "producer_step_id": "step-003",
+              "scope_key": "open_image@box"
+            },
+            {
+              "artifact": "source",
+              "consumer_step_ids": ["step-002", "step-003"],
+              "producer_step_id": "step-001",
+              "scope_key": "source@box"
+            }
+          ],
+          "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "start_minute": 85,
+          "status": "executable",
+          "tier": "medium",
+          "version": 1,
+          "worst_case_minutes": 85
+        },
+        "server_minute": 61.733334,
+        "started_minute": 61.733334,
+        "launch": {
+          "mode": "worker_daemon",
+          "worker_url": "https://worker.example",
+          "report_path": null
+        },
+        "artifacts": [
+          {
+            "version": 1,
+            "artifact": "kf3_bins",
+            "scope_key": "kf3_bins@box",
+            "server_minute": 61.733334,
+            "state": "waiting",
+            "url": null,
+            "sha256": null,
+            "size": null,
+            "deadline_minute": 66.733334,
+            "fetch_until_minute": 66.746668,
+            "fallback": "build_local"
+          },
+          {
+            "version": 1,
+            "artifact": "open_image",
+            "scope_key": "open_image@box",
+            "server_minute": 61.733334,
+            "state": "ready",
+            "url": "http://203.0.113.10:45321/abcdefgh/open-image.tar.zst",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "size": 13000000000,
+            "deadline_minute": 66.733334,
+            "fetch_until_minute": 68.466668,
+            "fallback": "build_local"
+          }
+        ]
+      }
+    },
+    {
+      "name": "direct-assignment",
+      "schema": "assignment_response",
+      "valid": true,
+      "value": {
+        "version": 1,
+        "assignment": {
+          "artifact_sources": [
+            {
+              "artifact": "kf3_bins",
+              "kind": "optional_seed",
+              "producer_assignment_id": "box-001",
+              "scope_key": "kf3_bins@box",
+              "tier": "medium"
+            },
+            {
+              "artifact": "open_image",
+              "kind": "optional_seed",
+              "producer_assignment_id": "box-001",
+              "scope_key": "open_image@box",
+              "tier": "medium"
+            },
+            {
+              "artifact": "source",
+              "kind": "local",
+              "producer_assignment_id": null,
+              "scope_key": "source@box",
+              "tier": "medium"
+            }
+          ],
+          "assigned_consumers": [],
+          "box_id": "offer-6",
+          "capabilities": {
+            "can_expose_port": true,
+            "can_swap_host_driver": true,
+            "kvm": true,
+            "vfio": true
+          },
+          "catalog_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "die": "TU116",
+          "die_family": "Turing",
+          "driver_pins": [
+            {
+              "abi_version": "580.159.04",
+              "catalog_url": null,
+              "checked": "2026-11-07",
+              "driver_family": 580,
+              "id": "2",
+              "os": "linux",
+              "sha256": "c1e66761b088d17b3adf6cb6979de9af38be2684d102b001a176dcfafabdca1e",
+              "size": 397162548,
+              "source": "MEASURED official .sha256sum and installer Content-Length on 2026-11-07",
+              "status": "PINNED",
+              "url": "https://download.nvidia.com/XFree86/Linux-x86_64/580.159.04/NVIDIA-Linux-x86_64-580.159.04.run",
+              "version": "580.159.04"
+            },
+            {
+              "abi_version": "580.65.06",
+              "catalog_url": null,
+              "checked": "2026-11-07",
+              "driver_family": 580,
+              "id": "9",
+              "os": "windows",
+              "sha256": "90c49f925b41ee062e02cc8094a16b6d057abfde4e85235a76d63ffe267f63a9",
+              "size": 890807536,
+              "source": "MEASURED streamed official installer sha256 and byte count on 2026-11-07; bytes not retained",
+              "status": "PINNED",
+              "url": "https://us.download.nvidia.com/Windows/580.88/580.88-desktop-win10-win11-64bit-international-dch-whql.exe",
+              "version": "580.88"
+            }
+          ],
+          "estimated_minutes": 31.746668,
+          "execution_steps": [
+            {
+              "artifact": "kf3_bins",
+              "deadline_minute": 90,
+              "fallback": "build_local",
+              "fallback_step_ids": ["step-002"],
+              "fetch_until_minute": 90.013334,
+              "kind": "wait_for_artifact",
+              "minutes": 5,
+              "scope_key": "kf3_bins@box"
+            },
+            {
+              "artifact": "open_image",
+              "deadline_minute": 90,
+              "fallback": "build_local",
+              "fallback_step_ids": ["step-003"],
+              "fetch_until_minute": 91.733334,
+              "kind": "wait_for_artifact",
+              "minutes": 5,
+              "scope_key": "open_image@box"
+            },
+            {
+              "kind": "run",
+              "step_id": "step-001"
+            },
+            {
+              "kind": "run",
+              "step_id": "step-002"
+            },
+            {
+              "kind": "run",
+              "step_id": "step-003"
+            },
+            {
+              "kind": "run",
+              "step_id": "step-004"
+            }
+          ],
+          "fallback_minutes": 80,
+          "host_id": "host-6",
+          "id": "box-003",
+          "machine_id": "machine-6",
+          "pricing": {
+            "bandwidth_down_gb": 100.1,
+            "bandwidth_up_gb": 2,
+            "disk_gb": 120,
+            "effective_usd_hour": 0.14642,
+            "estimated_usd": 0.168769,
+            "hourly_usd": 0.126,
+            "reserved_usd": 0.7321,
+            "transfer_usd": 0.1021
+          },
+          "primary_evidence": true,
+          "provider": "local",
+          "reservation_minutes": 300,
+          "runs": [
+            {
+              "coverage": [],
+              "drivers": {
+                "host": "2",
+                "linux_guest": "2",
+                "windows_guest": "9"
+              },
+              "id": "step-001",
+              "minutes": 10,
+              "needs": [],
+              "optional_seed_for": null,
+              "parameters": {},
+              "produces": ["source@box"],
+              "run_id": "provision"
+            },
+            {
+              "coverage": [],
+              "drivers": {
+                "host": "2",
+                "linux_guest": "2",
+                "windows_guest": "9"
+              },
+              "id": "step-002",
+              "minutes": 20,
+              "needs": ["source@box"],
+              "optional_seed_for": "kf3_bins@box",
+              "parameters": {},
+              "produces": ["kf3_bins@box"],
+              "run_id": "kayfabe_build"
+            },
+            {
+              "coverage": [],
+              "drivers": {
+                "host": "2",
+                "linux_guest": "2",
+                "windows_guest": "9"
+              },
+              "id": "step-003",
+              "minutes": 30,
+              "needs": ["source@box"],
+              "optional_seed_for": "open_image@box",
+              "parameters": {},
+              "produces": ["open_image@box"],
+              "run_id": "linux_image_build"
+            },
+            {
+              "coverage": ["q0-d0-r0"],
+              "drivers": {
+                "host": "2",
+                "linux_guest": "2",
+                "windows_guest": "9"
+              },
+              "id": "step-004",
+              "minutes": 20,
+              "needs": ["kf3_bins@box", "open_image@box"],
+              "optional_seed_for": null,
+              "parameters": {},
+              "produces": [],
+              "run_id": "linux_apps_full"
+            }
+          ],
+          "seed_exports": [],
+          "seed_hints": [
+            {
+              "artifact": "kf3_bins",
+              "available_minute": 30.013334,
+              "deadline_minute": 90,
+              "fallback": "build_local",
+              "fallback_step_ids": ["step-002"],
+              "fetch_until_minute": 90.013334,
+              "gb": 0.1,
+              "producer_assignment_id": "box-001",
+              "producer_box_id": "offer-1",
+              "scope_key": "kf3_bins@box",
+              "transfer_minutes": 0.013334,
+              "trusted_content": {
+                "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "size": 100000000,
+                "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+              }
+            },
+            {
+              "artifact": "open_image",
+              "available_minute": 61.733334,
+              "deadline_minute": 90,
+              "fallback": "build_local",
+              "fallback_step_ids": ["step-003"],
+              "fetch_until_minute": 91.733334,
+              "gb": 13,
+              "producer_assignment_id": "box-001",
+              "producer_box_id": "offer-1",
+              "scope_key": "open_image@box",
+              "transfer_minutes": 1.733334,
+              "trusted_content": {
+                "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "size": 13000000000,
+                "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+              }
+            }
+          ],
+          "seed_server": null,
+          "setup_reuse": [
+            {
+              "artifact": "kf3_bins",
+              "consumer_step_ids": ["step-004"],
+              "producer_step_id": "step-002",
+              "scope_key": "kf3_bins@box"
+            },
+            {
+              "artifact": "open_image",
+              "consumer_step_ids": ["step-004"],
+              "producer_step_id": "step-003",
+              "scope_key": "open_image@box"
+            },
+            {
+              "artifact": "source",
+              "consumer_step_ids": ["step-002", "step-003"],
+              "producer_step_id": "step-001",
+              "scope_key": "source@box"
+            }
+          ],
+          "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "start_minute": 85,
+          "status": "executable",
+          "tier": "medium",
+          "version": 1,
+          "worst_case_minutes": 85
+        },
+        "server_minute": 0,
+        "started_minute": 0,
+        "launch": {
+          "mode": "direct",
+          "worker_url": null,
+          "report_path": "report.json"
+        },
+        "artifacts": [
+          {
+            "version": 1,
+            "artifact": "kf3_bins",
+            "scope_key": "kf3_bins@box",
+            "state": "gone",
+            "server_minute": 0,
+            "url": null,
+            "sha256": null,
+            "size": null,
+            "deadline_minute": 0,
+            "fetch_until_minute": 0,
+            "fallback": "build_local"
+          },
+          {
+            "version": 1,
+            "artifact": "open_image",
+            "scope_key": "open_image@box",
+            "state": "gone",
+            "server_minute": 0,
+            "url": null,
+            "sha256": null,
+            "size": null,
+            "deadline_minute": 0,
+            "fetch_until_minute": 0,
+            "fallback": "build_local"
+          }
+        ]
+      }
+    },
+    {
+      "name": "direct-assignment-unknown",
+      "schema": "assignment_response",
+      "valid": false,
+      "value": {
+        "version": 1,
+        "assignment": {
+          "artifact_sources": [
+            {
+              "artifact": "kf3_bins",
+              "kind": "optional_seed",
+              "producer_assignment_id": "box-001",
+              "scope_key": "kf3_bins@box",
+              "tier": "medium"
+            },
+            {
+              "artifact": "open_image",
+              "kind": "optional_seed",
+              "producer_assignment_id": "box-001",
+              "scope_key": "open_image@box",
+              "tier": "medium"
+            },
+            {
+              "artifact": "source",
+              "kind": "local",
+              "producer_assignment_id": null,
+              "scope_key": "source@box",
+              "tier": "medium"
+            }
+          ],
+          "assigned_consumers": [],
+          "box_id": "offer-6",
+          "capabilities": {
+            "can_expose_port": true,
+            "can_swap_host_driver": true,
+            "kvm": true,
+            "vfio": true
+          },
+          "catalog_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "die": "TU116",
+          "die_family": "Turing",
+          "driver_pins": [
+            {
+              "abi_version": "580.159.04",
+              "catalog_url": null,
+              "checked": "2026-11-07",
+              "driver_family": 580,
+              "id": "2",
+              "os": "linux",
+              "sha256": "c1e66761b088d17b3adf6cb6979de9af38be2684d102b001a176dcfafabdca1e",
+              "size": 397162548,
+              "source": "MEASURED official .sha256sum and installer Content-Length on 2026-11-07",
+              "status": "PINNED",
+              "url": "https://download.nvidia.com/XFree86/Linux-x86_64/580.159.04/NVIDIA-Linux-x86_64-580.159.04.run",
+              "version": "580.159.04"
+            },
+            {
+              "abi_version": "580.65.06",
+              "catalog_url": null,
+              "checked": "2026-11-07",
+              "driver_family": 580,
+              "id": "9",
+              "os": "windows",
+              "sha256": "90c49f925b41ee062e02cc8094a16b6d057abfde4e85235a76d63ffe267f63a9",
+              "size": 890807536,
+              "source": "MEASURED streamed official installer sha256 and byte count on 2026-11-07; bytes not retained",
+              "status": "PINNED",
+              "url": "https://us.download.nvidia.com/Windows/580.88/580.88-desktop-win10-win11-64bit-international-dch-whql.exe",
+              "version": "580.88"
+            }
+          ],
+          "estimated_minutes": 31.746668,
+          "execution_steps": [
+            {
+              "artifact": "kf3_bins",
+              "deadline_minute": 90,
+              "fallback": "build_local",
+              "fallback_step_ids": ["step-002"],
+              "fetch_until_minute": 90.013334,
+              "kind": "wait_for_artifact",
+              "minutes": 5,
+              "scope_key": "kf3_bins@box"
+            },
+            {
+              "artifact": "open_image",
+              "deadline_minute": 90,
+              "fallback": "build_local",
+              "fallback_step_ids": ["step-003"],
+              "fetch_until_minute": 91.733334,
+              "kind": "wait_for_artifact",
+              "minutes": 5,
+              "scope_key": "open_image@box"
+            },
+            {
+              "kind": "run",
+              "step_id": "step-001"
+            },
+            {
+              "kind": "run",
+              "step_id": "step-002"
+            },
+            {
+              "kind": "run",
+              "step_id": "step-003"
+            },
+            {
+              "kind": "run",
+              "step_id": "step-004"
+            }
+          ],
+          "fallback_minutes": 80,
+          "host_id": "host-6",
+          "id": "box-003",
+          "machine_id": "machine-6",
+          "pricing": {
+            "bandwidth_down_gb": 100.1,
+            "bandwidth_up_gb": 2,
+            "disk_gb": 120,
+            "effective_usd_hour": 0.14642,
+            "estimated_usd": 0.168769,
+            "hourly_usd": 0.126,
+            "reserved_usd": 0.7321,
+            "transfer_usd": 0.1021
+          },
+          "primary_evidence": true,
+          "provider": "local",
+          "reservation_minutes": 300,
+          "runs": [
+            {
+              "coverage": [],
+              "drivers": {
+                "host": "2",
+                "linux_guest": "2",
+                "windows_guest": "9"
+              },
+              "id": "step-001",
+              "minutes": 10,
+              "needs": [],
+              "optional_seed_for": null,
+              "parameters": {},
+              "produces": ["source@box"],
+              "run_id": "provision"
+            },
+            {
+              "coverage": [],
+              "drivers": {
+                "host": "2",
+                "linux_guest": "2",
+                "windows_guest": "9"
+              },
+              "id": "step-002",
+              "minutes": 20,
+              "needs": ["source@box"],
+              "optional_seed_for": "kf3_bins@box",
+              "parameters": {},
+              "produces": ["kf3_bins@box"],
+              "run_id": "kayfabe_build"
+            },
+            {
+              "coverage": [],
+              "drivers": {
+                "host": "2",
+                "linux_guest": "2",
+                "windows_guest": "9"
+              },
+              "id": "step-003",
+              "minutes": 30,
+              "needs": ["source@box"],
+              "optional_seed_for": "open_image@box",
+              "parameters": {},
+              "produces": ["open_image@box"],
+              "run_id": "linux_image_build"
+            },
+            {
+              "coverage": ["q0-d0-r0"],
+              "drivers": {
+                "host": "2",
+                "linux_guest": "2",
+                "windows_guest": "9"
+              },
+              "id": "step-004",
+              "minutes": 20,
+              "needs": ["kf3_bins@box", "open_image@box"],
+              "optional_seed_for": null,
+              "parameters": {},
+              "produces": [],
+              "run_id": "linux_apps_full"
+            }
+          ],
+          "seed_exports": [],
+          "seed_hints": [
+            {
+              "artifact": "kf3_bins",
+              "available_minute": 30.013334,
+              "deadline_minute": 90,
+              "fallback": "build_local",
+              "fallback_step_ids": ["step-002"],
+              "fetch_until_minute": 90.013334,
+              "gb": 0.1,
+              "producer_assignment_id": "box-001",
+              "producer_box_id": "offer-1",
+              "scope_key": "kf3_bins@box",
+              "transfer_minutes": 0.013334,
+              "trusted_content": {
+                "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "size": 100000000,
+                "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+              }
+            },
+            {
+              "artifact": "open_image",
+              "available_minute": 61.733334,
+              "deadline_minute": 90,
+              "fallback": "build_local",
+              "fallback_step_ids": ["step-003"],
+              "fetch_until_minute": 91.733334,
+              "gb": 13,
+              "producer_assignment_id": "box-001",
+              "producer_box_id": "offer-1",
+              "scope_key": "open_image@box",
+              "transfer_minutes": 1.733334,
+              "trusted_content": {
+                "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "size": 13000000000,
+                "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+              }
+            }
+          ],
+          "seed_server": null,
+          "setup_reuse": [
+            {
+              "artifact": "kf3_bins",
+              "consumer_step_ids": ["step-004"],
+              "producer_step_id": "step-002",
+              "scope_key": "kf3_bins@box"
+            },
+            {
+              "artifact": "open_image",
+              "consumer_step_ids": ["step-004"],
+              "producer_step_id": "step-003",
+              "scope_key": "open_image@box"
+            },
+            {
+              "artifact": "source",
+              "consumer_step_ids": ["step-002", "step-003"],
+              "producer_step_id": "step-001",
+              "scope_key": "source@box"
+            }
+          ],
+          "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "start_minute": 85,
+          "status": "executable",
+          "tier": "medium",
+          "version": 1,
+          "worst_case_minutes": 85
+        },
+        "server_minute": 0,
+        "started_minute": 0,
+        "launch": {
+          "mode": "direct",
+          "worker_url": null,
+          "report_path": "report.json"
+        },
+        "artifacts": [
+          {
+            "version": 1,
+            "artifact": "kf3_bins",
+            "scope_key": "kf3_bins@box",
+            "state": "gone",
+            "server_minute": 0,
+            "url": null,
+            "sha256": null,
+            "size": null,
+            "deadline_minute": 0,
+            "fetch_until_minute": 0,
+            "fallback": "build_local"
+          },
+          {
+            "version": 1,
+            "artifact": "open_image",
+            "scope_key": "open_image@box",
+            "state": "gone",
+            "server_minute": 0,
+            "url": null,
+            "sha256": null,
+            "size": null,
+            "deadline_minute": 0,
+            "fetch_until_minute": 0,
+            "fallback": "build_local"
+          }
+        ],
+        "unknown": true
+      }
+    },
+    {
+      "name": "direct-assignment-version",
+      "schema": "assignment_response",
+      "valid": false,
+      "value": {
+        "version": 2,
+        "assignment": {
+          "artifact_sources": [
+            {
+              "artifact": "kf3_bins",
+              "kind": "optional_seed",
+              "producer_assignment_id": "box-001",
+              "scope_key": "kf3_bins@box",
+              "tier": "medium"
+            },
+            {
+              "artifact": "open_image",
+              "kind": "optional_seed",
+              "producer_assignment_id": "box-001",
+              "scope_key": "open_image@box",
+              "tier": "medium"
+            },
+            {
+              "artifact": "source",
+              "kind": "local",
+              "producer_assignment_id": null,
+              "scope_key": "source@box",
+              "tier": "medium"
+            }
+          ],
+          "assigned_consumers": [],
+          "box_id": "offer-6",
+          "capabilities": {
+            "can_expose_port": true,
+            "can_swap_host_driver": true,
+            "kvm": true,
+            "vfio": true
+          },
+          "catalog_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "die": "TU116",
+          "die_family": "Turing",
+          "driver_pins": [
+            {
+              "abi_version": "580.159.04",
+              "catalog_url": null,
+              "checked": "2026-11-07",
+              "driver_family": 580,
+              "id": "2",
+              "os": "linux",
+              "sha256": "c1e66761b088d17b3adf6cb6979de9af38be2684d102b001a176dcfafabdca1e",
+              "size": 397162548,
+              "source": "MEASURED official .sha256sum and installer Content-Length on 2026-11-07",
+              "status": "PINNED",
+              "url": "https://download.nvidia.com/XFree86/Linux-x86_64/580.159.04/NVIDIA-Linux-x86_64-580.159.04.run",
+              "version": "580.159.04"
+            },
+            {
+              "abi_version": "580.65.06",
+              "catalog_url": null,
+              "checked": "2026-11-07",
+              "driver_family": 580,
+              "id": "9",
+              "os": "windows",
+              "sha256": "90c49f925b41ee062e02cc8094a16b6d057abfde4e85235a76d63ffe267f63a9",
+              "size": 890807536,
+              "source": "MEASURED streamed official installer sha256 and byte count on 2026-11-07; bytes not retained",
+              "status": "PINNED",
+              "url": "https://us.download.nvidia.com/Windows/580.88/580.88-desktop-win10-win11-64bit-international-dch-whql.exe",
+              "version": "580.88"
+            }
+          ],
+          "estimated_minutes": 31.746668,
+          "execution_steps": [
+            {
+              "artifact": "kf3_bins",
+              "deadline_minute": 90,
+              "fallback": "build_local",
+              "fallback_step_ids": ["step-002"],
+              "fetch_until_minute": 90.013334,
+              "kind": "wait_for_artifact",
+              "minutes": 5,
+              "scope_key": "kf3_bins@box"
+            },
+            {
+              "artifact": "open_image",
+              "deadline_minute": 90,
+              "fallback": "build_local",
+              "fallback_step_ids": ["step-003"],
+              "fetch_until_minute": 91.733334,
+              "kind": "wait_for_artifact",
+              "minutes": 5,
+              "scope_key": "open_image@box"
+            },
+            {
+              "kind": "run",
+              "step_id": "step-001"
+            },
+            {
+              "kind": "run",
+              "step_id": "step-002"
+            },
+            {
+              "kind": "run",
+              "step_id": "step-003"
+            },
+            {
+              "kind": "run",
+              "step_id": "step-004"
+            }
+          ],
+          "fallback_minutes": 80,
+          "host_id": "host-6",
+          "id": "box-003",
+          "machine_id": "machine-6",
+          "pricing": {
+            "bandwidth_down_gb": 100.1,
+            "bandwidth_up_gb": 2,
+            "disk_gb": 120,
+            "effective_usd_hour": 0.14642,
+            "estimated_usd": 0.168769,
+            "hourly_usd": 0.126,
+            "reserved_usd": 0.7321,
+            "transfer_usd": 0.1021
+          },
+          "primary_evidence": true,
+          "provider": "local",
+          "reservation_minutes": 300,
+          "runs": [
+            {
+              "coverage": [],
+              "drivers": {
+                "host": "2",
+                "linux_guest": "2",
+                "windows_guest": "9"
+              },
+              "id": "step-001",
+              "minutes": 10,
+              "needs": [],
+              "optional_seed_for": null,
+              "parameters": {},
+              "produces": ["source@box"],
+              "run_id": "provision"
+            },
+            {
+              "coverage": [],
+              "drivers": {
+                "host": "2",
+                "linux_guest": "2",
+                "windows_guest": "9"
+              },
+              "id": "step-002",
+              "minutes": 20,
+              "needs": ["source@box"],
+              "optional_seed_for": "kf3_bins@box",
+              "parameters": {},
+              "produces": ["kf3_bins@box"],
+              "run_id": "kayfabe_build"
+            },
+            {
+              "coverage": [],
+              "drivers": {
+                "host": "2",
+                "linux_guest": "2",
+                "windows_guest": "9"
+              },
+              "id": "step-003",
+              "minutes": 30,
+              "needs": ["source@box"],
+              "optional_seed_for": "open_image@box",
+              "parameters": {},
+              "produces": ["open_image@box"],
+              "run_id": "linux_image_build"
+            },
+            {
+              "coverage": ["q0-d0-r0"],
+              "drivers": {
+                "host": "2",
+                "linux_guest": "2",
+                "windows_guest": "9"
+              },
+              "id": "step-004",
+              "minutes": 20,
+              "needs": ["kf3_bins@box", "open_image@box"],
+              "optional_seed_for": null,
+              "parameters": {},
+              "produces": [],
+              "run_id": "linux_apps_full"
+            }
+          ],
+          "seed_exports": [],
+          "seed_hints": [
+            {
+              "artifact": "kf3_bins",
+              "available_minute": 30.013334,
+              "deadline_minute": 90,
+              "fallback": "build_local",
+              "fallback_step_ids": ["step-002"],
+              "fetch_until_minute": 90.013334,
+              "gb": 0.1,
+              "producer_assignment_id": "box-001",
+              "producer_box_id": "offer-1",
+              "scope_key": "kf3_bins@box",
+              "transfer_minutes": 0.013334,
+              "trusted_content": {
+                "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "size": 100000000,
+                "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+              }
+            },
+            {
+              "artifact": "open_image",
+              "available_minute": 61.733334,
+              "deadline_minute": 90,
+              "fallback": "build_local",
+              "fallback_step_ids": ["step-003"],
+              "fetch_until_minute": 91.733334,
+              "gb": 13,
+              "producer_assignment_id": "box-001",
+              "producer_box_id": "offer-1",
+              "scope_key": "open_image@box",
+              "transfer_minutes": 1.733334,
+              "trusted_content": {
+                "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "size": 13000000000,
+                "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+              }
+            }
+          ],
+          "seed_server": null,
+          "setup_reuse": [
+            {
+              "artifact": "kf3_bins",
+              "consumer_step_ids": ["step-004"],
+              "producer_step_id": "step-002",
+              "scope_key": "kf3_bins@box"
+            },
+            {
+              "artifact": "open_image",
+              "consumer_step_ids": ["step-004"],
+              "producer_step_id": "step-003",
+              "scope_key": "open_image@box"
+            },
+            {
+              "artifact": "source",
+              "consumer_step_ids": ["step-002", "step-003"],
+              "producer_step_id": "step-001",
+              "scope_key": "source@box"
+            }
+          ],
+          "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "start_minute": 85,
+          "status": "executable",
+          "tier": "medium",
+          "version": 1,
+          "worst_case_minutes": 85
+        },
+        "server_minute": 0,
+        "started_minute": 0,
+        "launch": {
+          "mode": "direct",
+          "worker_url": null,
+          "report_path": "report.json"
+        },
+        "artifacts": [
+          {
+            "version": 1,
+            "artifact": "kf3_bins",
+            "scope_key": "kf3_bins@box",
+            "state": "gone",
+            "server_minute": 0,
+            "url": null,
+            "sha256": null,
+            "size": null,
+            "deadline_minute": 0,
+            "fetch_until_minute": 0,
+            "fallback": "build_local"
+          },
+          {
+            "version": 1,
+            "artifact": "open_image",
+            "scope_key": "open_image@box",
+            "state": "gone",
+            "server_minute": 0,
+            "url": null,
+            "sha256": null,
+            "size": null,
+            "deadline_minute": 0,
+            "fetch_until_minute": 0,
+            "fallback": "build_local"
+          }
+        ]
+      }
+    },
+    {
+      "name": "trusted-content-sha256-missing",
+      "schema": "trusted_content",
+      "valid": false,
+      "value": {
+        "size": 4,
+        "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    },
+    {
+      "name": "trusted-content-size-missing",
+      "schema": "trusted_content",
+      "valid": false,
+      "value": {
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    },
+    {
+      "name": "trusted-content-source_revision-missing",
+      "schema": "trusted_content",
+      "valid": false,
+      "value": {
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "size": 4
+      }
+    },
+    {
+      "name": "trusted-content-positive",
+      "schema": "trusted_content",
+      "valid": true,
+      "value": {
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "size": 4,
+        "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    },
+    {
+      "name": "consumer-edge-failure",
+      "schema": "consumer_failure",
+      "valid": true,
+      "value": {
+        "consumer_assignment_id": "box-003",
+        "producer_assignment_id": "box-001",
+        "scope_key": "open_image@box",
+        "reason": "hash_mismatch"
+      }
+    },
+    {
+      "name": "global-consumer-hash_mismatch-forbidden",
+      "schema": "protocol_state",
+      "valid": false,
+      "value": {
+        "artifacts": [
+          {
+            "artifact": "open_image",
+            "gone_reason": "hash_mismatch",
+            "producer_assignment_id": "box-001",
+            "ready_minute": 61.733334,
+            "scope_key": "open_image@box",
+            "serve_until_minute": 187,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "size": 13000000000,
+            "state": "gone",
+            "url": "http://8.8.8.8:45321/abcdefgh/open-image.tar.zst"
+          }
+        ],
+        "assignments": [
+          {
+            "assignment_id": "box-001",
+            "ended_minute": null,
+            "instance_id": "source-instance",
+            "started_minute": 0,
+            "status": "running"
+          },
+          {
+            "assignment_id": "box-002",
+            "ended_minute": null,
+            "instance_id": null,
+            "started_minute": null,
+            "status": "pending"
+          },
+          {
+            "assignment_id": "box-003",
+            "ended_minute": null,
+            "instance_id": null,
+            "started_minute": null,
+            "status": "starting"
+          }
+        ],
+        "consumer_failures": [],
+        "now_minute": 61.733334,
+        "revision": 2,
+        "session_id": "release-test",
+        "version": 1
+      }
+    },
+    {
+      "name": "global-consumer-size_mismatch-forbidden",
+      "schema": "protocol_state",
+      "valid": false,
+      "value": {
+        "artifacts": [
+          {
+            "artifact": "open_image",
+            "gone_reason": "size_mismatch",
+            "producer_assignment_id": "box-001",
+            "ready_minute": 61.733334,
+            "scope_key": "open_image@box",
+            "serve_until_minute": 187,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "size": 13000000000,
+            "state": "gone",
+            "url": "http://8.8.8.8:45321/abcdefgh/open-image.tar.zst"
+          }
+        ],
+        "assignments": [
+          {
+            "assignment_id": "box-001",
+            "ended_minute": null,
+            "instance_id": "source-instance",
+            "started_minute": 0,
+            "status": "running"
+          },
+          {
+            "assignment_id": "box-002",
+            "ended_minute": null,
+            "instance_id": null,
+            "started_minute": null,
+            "status": "pending"
+          },
+          {
+            "assignment_id": "box-003",
+            "ended_minute": null,
+            "instance_id": null,
+            "started_minute": null,
+            "status": "starting"
+          }
+        ],
+        "consumer_failures": [],
+        "now_minute": 61.733334,
+        "revision": 2,
+        "session_id": "release-test",
+        "version": 1
+      }
+    }
+  ]
+}
