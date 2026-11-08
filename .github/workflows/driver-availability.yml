@@ -23,6 +23,13 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Driver tooling formatting (shared CI versions)
+        run: |
+          nice -n 19 npx --yes prettier@3.6.2 --check \
+            'ci/vast-broker/driver-availability/*.js' 'ci/vast-broker/driver-availability/*.mjs'
+          nice -n 19 python3 -m pip install black==25.1.0
+          nice -n 19 python3 -m black --check --config ci/vast-broker/pyproject.toml \
+            ci/vast-broker/driver-availability
       - name: Catalog and selection fixtures (no network)
         run: |
           nice -n 19 node ci/vast-broker/driver-availability/check.mjs

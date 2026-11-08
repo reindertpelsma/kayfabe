@@ -222,8 +222,14 @@ its result. The runner explicitly requests TAP instead of relying on Node's
 default reporter. MEASURED, first GitHub run at `6076492b7`: all ordinary tests
 passed, but the default spec reporter yielded zero parsed JavaScript killers,
 so the mutation gate failed. Two runner contract tests cover explicit TAP on
-the baseline and mutant paths. The dedicated GitHub workflow runs these checks
-offline.
+the baseline and mutant paths. Tests and mutants in the dedicated GitHub
+workflow run offline. The workflow also installs the same pinned Prettier3.6.2
+and Black25.1.0 used by the shared broker CI step and checks this tooling's
+formatting before the tests. MEASURED at `f66507d28`: the shared step stopped at
+Prettier on the three DRV1 JavaScript files before any broker mocks ran; local
+Black also rejected the three Python files. Formatting and the corresponding
+exact mutation anchors were corrected without changing generator/test Python
+ASTs or the two-killer rule. No AppArmor setting or cleanup was changed.
 
 **Unverified:** actual installation/build on a target kernel; exact per-die
 driver support; any new kayfabe host/guest ABI pair; the complete Cartesian

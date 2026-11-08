@@ -1,6 +1,6 @@
 {
   "status": "DESIGN-ONLY",
-  "checked_at": "2026-11-08T01:42:41Z",
+  "checked_at": "2026-11-08T03:13:18Z",
   "evidence_kind": "MEASURED GPU-free checks; public HTTP metadata and streamed hashes; CODE READ historical repository records",
   "base_revision": "624bf1dfcf98fac362bc63478e7f9cdb65c4aedf",
   "tests": {
@@ -25,6 +25,14 @@
       "release_regression": {
         "passed": 22,
         "failed": 0
+      },
+      "shared_broker": {
+        "tests": 3272,
+        "passed": 3271,
+        "failed": 0,
+        "skipped": 1,
+        "node": "24.22.2",
+        "python": "3.14.4"
       }
     },
     "offline_regeneration": "byte-identical; Client construction forbidden in the test",
@@ -52,12 +60,12 @@
   "mutations": {
     "rule": "every mutant >=2 distinct named killers",
     "input_sha256": {
-      "validate.js": "d054d0d0b8beedcd503f705537605dec98080c146cdf0a549bec21be713cd175",
-      "generate.py": "e4e9ebd630e1c8b94923f78b374a2f848c05de1595e27184f06cf652d2ba2019",
-      "selector.test.js": "e4596473e193a2f14bba96514b298f1d0039d7afec4803ccad49e8adff0c991d",
-      "test_generate.py": "cc0961f2f6784757790f747bc117f6e369962943295b6c1379d6c4d2cfc17104",
+      "validate.js": "48d5e5626e4049fda1514634f722b5f3d9b2a5eb113bc1088b624a6ff26aefdb",
+      "generate.py": "f229f90c6971b05bb367cfd1e73c66691083bc102ab3a1b380d8362caf692218",
+      "selector.test.js": "4ce85e23893c1723af026bc3547b149781f9a033d3ed6fa4c4f8bd0a21288fa9",
+      "test_generate.py": "a5146426ec70f14a4c4a63412d4ee569c9725038ba814d10e889ebfadceeff5e",
       "sources.json": "7c725d0d6d313970d0fdeacd23a37429486f0778f4e19203958795b498150bfc",
-      "mutants.py": "c2766476ffddbd78e004b297d852c13caae54305e8f4861111adc008d3f5c8c3"
+      "mutants.py": "3a069a24ed95da3c0dbdffe0e58804f74cc120ab8acc21b3403363601bb7c296"
     },
     "mutants": [
       {
@@ -331,8 +339,8 @@
         "language": "js",
         "exit_code": 1,
         "killers": [
-          "Windows branch evidence rejected: d => { d.branch_evidence.branch = 570; }",
-          "selector refuses bad Windows branch evidence: d => { d.branch_evidence.branch = 570; }"
+          "Windows branch evidence rejected: (d) => {\\\\n    d.branch_evidence.branch = 570;\\\\n  }",
+          "selector refuses bad Windows branch evidence: (d) => {\\\\n    d.branch_evidence.branch = 570;\\\\n  }"
         ],
         "killer_count": 2
       },
@@ -523,18 +531,50 @@
     "global_ipv4_findings": 0,
     "binary_files": 0,
     "files": 12,
-    "followup_files": 4
+    "followup_files": 4,
+    "format_followup_files": 9
   },
   "artifact_sha256": {
     "ci/vast-broker/driver-availability.json": "6fc40ac073f4e0b5d78858b9d9269bfac4439fe80c87e04c8e8408ab6bf0d964",
     "ci/vast-broker/driver-availability/observations.json": "0424a0ab46965db5e1e644319bdc1b13b4f95fb691982b6032fee9a8638658b3",
-    "docs/design/V3_DRIVER_AVAILABILITY.md": "b7ffefccae31ab85f8f221e1fec618e48897c14a74a72042c82b68d10097093e",
-    ".github/workflows/driver-availability.yml": "c20678863bfe20848a193b1522eb54ea1589a486beb0deaef199cc60ef473c4b"
+    "docs/design/V3_DRIVER_AVAILABILITY.md": "4e7fd8db04c7d9ee87964b47aafec152819b1cf331c62239b0e0875425d5a8fe",
+    ".github/workflows/driver-availability.yml": "1eef552aed627bab8f1a945a615f6ce622c00c1d2c28dabe5417569698f708b4"
   },
   "github_first_run": {
     "head": "6076492b7ab445d67e905da7b358a8cd86049b22",
     "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/42434884962",
     "result": "FAILURE",
     "reason": "Normal tests passed; default Node spec reporter produced zero parsed JS killers, correctly failing the mutation gate. Runner now explicitly requests TAP; minimum two killers unchanged."
+  },
+  "format_gate_followup": {
+    "evidence_kind": "MEASURED",
+    "failed_head": "f66507d2830f96331b99cf78f3277e706bc325f5",
+    "failed_run": "https://github.com/reindertpelsma/kayfabe/actions/runs/42435507666/job/128593362635",
+    "failed_step": "Vast broker mocks and workflow boundary",
+    "cause": "Pinned Prettier 3.6.2 rejected check.mjs, selector.test.js and validate.js; bash stopped before broker mocks. Local Black 25.1.0 also rejected generate.py, mutants.py and test_generate.py.",
+    "before": {
+      "prettier_rejected_files": 3,
+      "black_rejected_files": 3
+    },
+    "after": {
+      "shared_broker_prettier": "PASS",
+      "shared_admin_prettier": "PASS",
+      "shared_black": "PASS: 36 files unchanged",
+      "generator_and_test_python_ast": "identical",
+      "driver_mutants": "39/39; same named-killer counts; minimum 2 unchanged"
+    },
+    "prevention": "Dedicated driver workflow checks these files with shared CI pinned formatters before fixtures and mutants.",
+    "latest_next": "624bf1dfcf98fac362bc63478e7f9cdb65c4aedf",
+    "merge_required": false,
+    "next_check": "HEAD..origin/next count 0; broker mock tests and CI workflow have no incoming diff.",
+    "non_ci_runtime_attempt": {
+      "node": "22.22.1",
+      "tests": 3272,
+      "passed": 3270,
+      "failed": 1,
+      "skipped": 1,
+      "failure": "Unchanged treekey 2040-segment timing test exceeded its existing 50ms bound. The unchanged test and full broker suite pass with CI Node 24.22.2; no threshold was changed."
+    },
+    "scope": "No AppArmor change, broker runtime change, catalog/pin change, baseline update or pass-rule weakening. Full legacy mutation/admin tail and GitHub rerun are reported separately in the final lane report."
   }
 }

@@ -30,9 +30,13 @@ HERE = Path(__file__).resolve().parent
 LINUX_INDEX = "https://download.nvidia.com/XFree86/Linux-x86_64/"
 LINUX_ARCHIVE = "https://www.nvidia.com/en-us/drivers/unix/linux-display-archive/"
 RELEASES = "https://docs.nvidia.com/datacenter/tesla/drivers/releases.json"
-WINDOWS_HISTORY = "https://www.nvidia.com/en-us/drivers/rtx-enterprise-and-quadro-driver-branch-history/"
-API = "https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php"
-GIB = 1024 ** 3
+WINDOWS_HISTORY = (
+    "https://www.nvidia.com/en-us/drivers/rtx-enterprise-and-quadro-driver-branch-history/"
+)
+API = (
+    "https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php"
+)
+GIB = 1024**3
 VERSION = r"[0-9]{3}\.[0-9]{1,3}(?:\.[0-9]{1,3})?"
 
 
@@ -50,9 +54,14 @@ def version_key(value):
 def official_url(raw):
     u = urllib.parse.urlsplit(raw)
     host = u.hostname or ""
-    return (u.scheme == "https" and not u.username and not u.password and not u.port
-            and not u.fragment and (host == "nvidia.com" or host.endswith(".nvidia.com")
-                                   or host == "gfwsl.geforce.com"))
+    return (
+        u.scheme == "https"
+        and not u.username
+        and not u.password
+        and not u.port
+        and not u.fragment
+        and (host == "nvidia.com" or host.endswith(".nvidia.com") or host == "gfwsl.geforce.com")
+    )
 
 
 class OfficialRedirect(urllib.request.HTTPRedirectHandler):
@@ -64,6 +73,7 @@ class OfficialRedirect(urllib.request.HTTPRedirectHandler):
 
 class Client:
     """Small public-text cache outside git. HEAD never falls back to GET."""
+
     def __init__(self, cache=None, timeout=20):
         self.cache = cache
         self.timeout = timeout
@@ -84,16 +94,27 @@ class Client:
         if path and path.exists():
             row = json.loads(path.read_text())
         else:
-            row = {"status": None, "body": "", "headers": {}, "final_url": url,
-                   "checked_at": now(), "error": None}
-            request = urllib.request.Request(url, method=method, headers={"User-Agent": "kayfabe-DRV1-public-catalog/1"})
+            row = {
+                "status": None,
+                "body": "",
+                "headers": {},
+                "final_url": url,
+                "checked_at": now(),
+                "error": None,
+            }
+            request = urllib.request.Request(
+                url, method=method, headers={"User-Agent": "kayfabe-DRV1-public-catalog/1"}
+            )
             try:
                 with self.opener.open(request, timeout=self.timeout) as reply:
-                    row.update(status=reply.status, final_url=reply.url,
-                               headers={k.lower(): v for k, v in reply.headers.items()})
+                    row.update(
+                        status=reply.status,
+                        final_url=reply.url,
+                        headers={k.lower(): v for k, v in reply.headers.items()},
+                    )
                     if method == "GET":
-                        raw = reply.read(8 * 1024 ** 2 + 1)
-                        if len(raw) > 8 * 1024 ** 2:
+                        raw = reply.read(8 * 1024**2 + 1)
+                        if len(raw) > 8 * 1024**2:
                             raise ValueError("public metadata exceeds 8 MiB")
                         row["body"] = raw.decode("utf-8")
             except urllib.error.HTTPError as e:
@@ -102,8 +123,17 @@ class Client:
                 row["error"] = type(e).__name__
             if path:
                 path.write_text(json.dumps(row, sort_keys=True) + "\n")
-        receipt = {"url": url, "method": method, "status": row["status"], "checked_at": row["checked_at"],
-                   "body_sha256": hashlib.sha256(row["body"].encode()).hexdigest() if method == "GET" and row["status"] == 200 else None}
+        receipt = {
+            "url": url,
+            "method": method,
+            "status": row["status"],
+            "checked_at": row["checked_at"],
+            "body_sha256": (
+                hashlib.sha256(row["body"].encode()).hexdigest()
+                if method == "GET" and row["status"] == 200
+                else None
+            ),
+        }
         with self.lock:
             self.receipts[method + " " + url] = receipt
         return row
@@ -191,11 +221,21 @@ def parse_windows_history(text):
     rows = []
     for cells in parser.rows:
         values = [c["text"].strip() for c in cells]
-        if len(values) == 4 and re.fullmatch(r"R\d{3}", values[0]) and re.fullmatch(VERSION, values[2]):
+        if (
+            len(values) == 4
+            and re.fullmatch(r"R\d{3}", values[0])
+            and re.fullmatch(VERSION, values[2])
+        ):
             branch = int(values[0][1:])
             if branch >= 535:
-                rows.append({"branch": branch, "version": values[2], "release_date": parse_date(values[3]),
-                             "details_url": cells[2]["href"]})
+                rows.append(
+                    {
+                        "branch": branch,
+                        "version": values[2],
+                        "release_date": parse_date(values[3]),
+                        "details_url": cells[2]["href"],
+                    }
+                )
     return rows
 
 
@@ -209,23 +249,52 @@ def parse_driver_api(data):
         if not re.fullmatch(VERSION, v) or version_key(v)[0] < 535:
             continue
         path = urllib.parse.urlsplit(url).path.lower()
-        if not official_url(url) or d.get("IsWHQL") != "1" or "-desktop-" not in path or not path.endswith("whql.exe"):
+        if (
+            not official_url(url)
+            or d.get("IsWHQL") != "1"
+            or "-desktop-" not in path
+            or not path.endswith("whql.exe")
+        ):
             continue
         release = d.get("Release", "")
-        rows.append({"os": "windows", "version": v, "branch": int(release) if release.isdigit() else None,
-                     "branch_evidence": {"branch": int(release) if release.isdigit() else None, "version": v, "source_url": None},
-                     "url": url, "release_date": parse_date(d.get("ReleaseDateTime", d.get("ReleaseDate", ""))),
-                     "product_line": "rtx-enterprise" if "quadro" in path else "geforce",
-                     "details_url": d.get("DetailsURL"), "discovery_source_urls": []})
+        rows.append(
+            {
+                "os": "windows",
+                "version": v,
+                "branch": int(release) if release.isdigit() else None,
+                "branch_evidence": {
+                    "branch": int(release) if release.isdigit() else None,
+                    "version": v,
+                    "source_url": None,
+                },
+                "url": url,
+                "release_date": parse_date(d.get("ReleaseDateTime", d.get("ReleaseDate", ""))),
+                "product_line": "rtx-enterprise" if "quadro" in path else "geforce",
+                "details_url": d.get("DetailsURL"),
+                "discovery_source_urls": [],
+            }
+        )
     return rows
 
 
 def windows_search_url(branch, studio):
     # Flags are NVIDIA's current driver-search JavaScript's Studio/Game Ready
     # contract. Independently require IsWHQL=1 on each admitted result.
-    query = {"func": "DriverManualLookup", "psid": 107, "pfid": 877, "osID": 57, "languageCode": 1033,
-             "beta": 0, "isWHQL": 0 if studio else 1, "dltype": -1, "dch": 1, "sort1": 1,
-             "numberOfResults": 20, "release": branch, "upCRD": int(studio)}
+    query = {
+        "func": "DriverManualLookup",
+        "psid": 107,
+        "pfid": 877,
+        "osID": 57,
+        "languageCode": 1033,
+        "beta": 0,
+        "isWHQL": 0 if studio else 1,
+        "dltype": -1,
+        "dch": 1,
+        "sort1": 1,
+        "numberOfResults": 20,
+        "release": branch,
+        "upCRD": int(studio),
+    }
     return API + "?" + urllib.parse.urlencode(query)
 
 
@@ -251,8 +320,13 @@ def collect_installer(candidate, client, previous=None):
     d.update(sha256=None, size=None, checksum_source=None)
     url = d["url"]
     head = client.request(url, "HEAD")
-    d["probe"] = {"method": "HEAD", "status": head["status"], "checked_at": head["checked_at"],
-                  "final_url": head.get("final_url", url), "error": head.get("error")}
+    d["probe"] = {
+        "method": "HEAD",
+        "status": head["status"],
+        "checked_at": head["checked_at"],
+        "final_url": head.get("final_url", url),
+        "error": head.get("error"),
+    }
     if head["status"] != 200:
         d["status"] = "UNAVAILABLE" if head["status"] == 404 else "UNKNOWN:probe-error"
         return d
@@ -265,15 +339,34 @@ def collect_installer(candidate, client, previous=None):
     d["status"] = "UNPINNED:needs-download" if d["os"] == "windows" else "UNPINNED:no-sha256"
     if d["os"] == "linux":
         directory, filename = url.rsplit("/", 1)
-        for checksum_url in (url + ".sha256sum", directory + "/sha256sum.txt", directory + "/SHA256SUMS"):
+        for checksum_url in (
+            url + ".sha256sum",
+            directory + "/sha256sum.txt",
+            directory + "/SHA256SUMS",
+        ):
             reply = client.request(checksum_url)
             sha = parse_checksum(reply["body"], filename) if reply["status"] == 200 else None
             if sha:
-                d.update(status="PINNED", sha256=sha, checksum_source={"kind": "nvidia-sha256", "url": checksum_url, "checked_at": reply["checked_at"]})
+                d.update(
+                    status="PINNED",
+                    sha256=sha,
+                    checksum_source={
+                        "kind": "nvidia-sha256",
+                        "url": checksum_url,
+                        "checked_at": reply["checked_at"],
+                    },
+                )
                 break
-    elif previous and previous.get("status") == "PINNED" and previous.get("url") == url and previous.get("size") == d["size"]:
+    elif (
+        previous
+        and previous.get("status") == "PINNED"
+        and previous.get("url") == url
+        and previous.get("size") == d["size"]
+    ):
         # Preserve an earlier streamed measurement, including its original date.
-        d.update(status="PINNED", sha256=previous["sha256"], checksum_source=previous["checksum_source"])
+        d.update(
+            status="PINNED", sha256=previous["sha256"], checksum_source=previous["checksum_source"]
+        )
     return d
 
 
@@ -287,7 +380,7 @@ def hash_stream(stream, expected_size, directory):
     with tempfile.TemporaryDirectory(prefix="DRV1-nvidia-", dir=directory) as tmp:
         digest, size = hashlib.sha256(), 0
         with (Path(tmp) / "installer.bin").open("xb") as out:
-            while chunk := stream.read(1024 ** 2):
+            while chunk := stream.read(1024**2):
                 size += len(chunk)
                 if size > expected_size:
                     raise ValueError("download size exceeds HEAD")
@@ -303,16 +396,23 @@ def hash_download(d, client):
         raise ValueError("only missing available Windows pins can be downloaded")
     # Serialize even concurrent invocations of the explicit hash option.
     import fcntl
+
     with open("/tmp/DRV1-driver-hash.lock", "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         if shutil.disk_usage("/")[2] - d["size"] < 6 * GIB or d["size"] > 15 * GIB:
             raise ValueError("download disk/15 GiB guard")
-        request = urllib.request.Request(d["url"], headers={"User-Agent": "kayfabe-DRV1-public-catalog/1"})
+        request = urllib.request.Request(
+            d["url"], headers={"User-Agent": "kayfabe-DRV1-public-catalog/1"}
+        )
         with client.opener.open(request, timeout=client.timeout) as stream:
             if stream.status != 200 or not official_url(stream.url):
                 raise ValueError("download requires official HTTP 200")
             sha = hash_stream(stream, d["size"], Path("/tmp"))
-        d.update(status="PINNED", sha256=sha, checksum_source={"kind": "download-sha256", "url": d["url"], "checked_at": now()})
+        d.update(
+            status="PINNED",
+            sha256=sha,
+            checksum_source={"kind": "download-sha256", "url": d["url"], "checked_at": now()},
+        )
 
 
 def discover(client, curated):
@@ -330,12 +430,19 @@ def discover(client, curated):
             candidates[key] = row
         else:
             existing = candidates[key]
-            if row.get("product_line") == "geforce" and existing.get("product_line") == "rtx-enterprise":
+            if (
+                row.get("product_line") == "geforce"
+                and existing.get("product_line") == "rtx-enterprise"
+            ):
                 row["candidate_urls"] = [row["url"], existing["url"]]
-                row["discovery_source_urls"] = sorted(set(row["discovery_source_urls"] + existing["discovery_source_urls"]))
+                row["discovery_source_urls"] = sorted(
+                    set(row["discovery_source_urls"] + existing["discovery_source_urls"])
+                )
                 candidates[key] = row
                 return
-            existing["discovery_source_urls"] = sorted(set(existing["discovery_source_urls"] + row["discovery_source_urls"]))
+            existing["discovery_source_urls"] = sorted(
+                set(existing["discovery_source_urls"] + row["discovery_source_urls"])
+            )
             for url in row.get("candidate_urls", [row["url"]]):
                 if url not in existing.setdefault("candidate_urls", [existing["url"]]):
                     existing["candidate_urls"].append(url)
@@ -344,10 +451,23 @@ def discover(client, curated):
             if row.get("branch"):
                 existing["branch"] = row["branch"]
 
-    date_by_version = {v["release_version"]: v["release_date"] for branch in releases.values() for v in branch["driver_info"]}
+    date_by_version = {
+        v["release_version"]: v["release_date"]
+        for branch in releases.values()
+        for v in branch["driver_info"]
+    }
     for key, data in releases.items():
         if int(key) >= 535:
-            branch_meta[int(key)] = {"id": int(key), "branch_type": {"lts branch": "LTS", "production branch": "production", "new feature branch": "new-feature"}.get(data["type"], "UNKNOWN"), "source_url": RELEASES, "type_scope": "NVIDIA data center designation"}
+            branch_meta[int(key)] = {
+                "id": int(key),
+                "branch_type": {
+                    "lts branch": "LTS",
+                    "production branch": "production",
+                    "new feature branch": "new-feature",
+                }.get(data["type"], "UNKNOWN"),
+                "source_url": RELEASES,
+                "type_scope": "NVIDIA data center designation",
+            }
             for info in data["driver_info"]:
                 if isinstance(info.get("runfile_url"), dict) and info["runfile_url"].get("x86_64"):
                     linux.append(info["release_version"])
@@ -356,13 +476,36 @@ def discover(client, curated):
         if branch < 535:
             continue
         urls = linux_urls(ver, releases, curated.get("historical_linux_urls", {}))
-        src = [LINUX_INDEX] if ver in linux else [curated["historical_candidates_source"]["official_probe_root"]]
+        src = (
+            [LINUX_INDEX]
+            if ver in linux
+            else [curated["historical_candidates_source"]["official_probe_root"]]
+        )
         if ver in date_by_version:
             src.append(RELEASES)
-        add({"os": "linux", "version": ver, "branch": branch, "url": urls[0], "candidate_urls": urls,
-             "release_date": date_by_version.get(ver, archive.get(ver, {}).get("release_date")), "discovery_source_urls": src,
-             "discovery_kind": "official-listing" if ver in linux else "historical-tag-candidate"})
-        branch_meta.setdefault(branch, {"id": branch, "branch_type": "UNKNOWN", "source_url": LINUX_INDEX, "type_scope": "UNKNOWN"})
+        add(
+            {
+                "os": "linux",
+                "version": ver,
+                "branch": branch,
+                "url": urls[0],
+                "candidate_urls": urls,
+                "release_date": date_by_version.get(ver, archive.get(ver, {}).get("release_date")),
+                "discovery_source_urls": src,
+                "discovery_kind": (
+                    "official-listing" if ver in linux else "historical-tag-candidate"
+                ),
+            }
+        )
+        branch_meta.setdefault(
+            branch,
+            {
+                "id": branch,
+                "branch_type": "UNKNOWN",
+                "source_url": LINUX_INDEX,
+                "type_scope": "UNKNOWN",
+            },
+        )
     for key, row in curated.get("branch_type_overrides", {}).items():
         branch_meta[int(key)] = {"id": int(key), **row}
 
@@ -371,15 +514,31 @@ def discover(client, curated):
     def history_details(row):
         ident = re.search(r"(?:details/|driverResults.aspx/)(\d+)", row["details_url"] or "")
         if not ident:
-            return [], {"source_url": WINDOWS_HISTORY, "reason": "DETAILS_ID_MISSING", "version": row["version"]}
+            return [], {
+                "source_url": WINDOWS_HISTORY,
+                "reason": "DETAILS_ID_MISSING",
+                "version": row["version"],
+            }
         url = API + "?func=GetDownloadDetails&downloadID=" + ident[1]
         reply = client.request(url)
         if reply["status"] != 200:
-            return [], {"source_url": url, "reason": "DETAILS_UNAVAILABLE", "version": row["version"]}
+            return [], {
+                "source_url": url,
+                "reason": "DETAILS_UNAVAILABLE",
+                "version": row["version"],
+            }
         rows = parse_driver_api(json.loads(reply["body"]))
         for d in rows:
-            d.update(branch=row["branch"], release_date=row["release_date"], discovery_source_urls=[WINDOWS_HISTORY, url])
-            d["branch_evidence"] = {"branch": row["branch"], "version": d["version"], "source_url": WINDOWS_HISTORY}
+            d.update(
+                branch=row["branch"],
+                release_date=row["release_date"],
+                discovery_source_urls=[WINDOWS_HISTORY, url],
+            )
+            d["branch_evidence"] = {
+                "branch": row["branch"],
+                "version": d["version"],
+                "source_url": WINDOWS_HISTORY,
+            }
         return rows, None
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
@@ -405,18 +564,36 @@ def discover(client, curated):
         for d in rows:
             d["discovery_source_urls"] = [url]
             d["branch_evidence"]["source_url"] = url
-        gap = {"source_url": url, "reason": "SEARCH_RESULT_LIMIT", "branch": branch} if len(data.get("IDS", [])) >= 20 else None
-        excluded = [{"source_url": url, "version": x["downloadInfo"]["Version"], "reason": "API_ISWHQL_NOT_1"}
-                    for x in data.get("IDS", []) if x.get("downloadInfo", {}).get("Version")
-                    and x["downloadInfo"].get("IsWHQL") != "1"]
+        gap = (
+            {"source_url": url, "reason": "SEARCH_RESULT_LIMIT", "branch": branch}
+            if len(data.get("IDS", [])) >= 20
+            else None
+        )
+        excluded = [
+            {
+                "source_url": url,
+                "version": x["downloadInfo"]["Version"],
+                "reason": "API_ISWHQL_NOT_1",
+            }
+            for x in data.get("IDS", [])
+            if x.get("downloadInfo", {}).get("Version") and x["downloadInfo"].get("IsWHQL") != "1"
+        ]
         return rows, gap, excluded
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
-        for rows, gap, excluded in pool.map(search, [(b, s) for b in sorted(branch_meta) for s in (0, 1)]):
+        for rows, gap, excluded in pool.map(
+            search, [(b, s) for b in sorted(branch_meta) for s in (0, 1)]
+        ):
             exclusions.extend(excluded)
             for row in rows:
                 if row["branch"] is None:
-                    gaps.append({"source_url": row["discovery_source_urls"][0], "reason": "BRANCH_UNKNOWN", "version": row["version"]})
+                    gaps.append(
+                        {
+                            "source_url": row["discovery_source_urls"][0],
+                            "reason": "BRANCH_UNKNOWN",
+                            "version": row["version"],
+                        }
+                    )
                 else:
                     add(row)
             if gap:
@@ -424,15 +601,32 @@ def discover(client, curated):
     for candidate in curated.get("extra_windows_candidates", []):
         add(candidate.copy())
     for d in candidates.values():
-        branch_meta.setdefault(d["branch"], {"id": d["branch"], "branch_type": "UNKNOWN", "source_url": d["discovery_source_urls"][0], "type_scope": "UNKNOWN"})
-    return list(branch_meta.values()), sorted(candidates.values(), key=lambda d: (d["branch"], d["os"], version_key(d["version"]))), gaps, exclusions
+        branch_meta.setdefault(
+            d["branch"],
+            {
+                "id": d["branch"],
+                "branch_type": "UNKNOWN",
+                "source_url": d["discovery_source_urls"][0],
+                "type_scope": "UNKNOWN",
+            },
+        )
+    return (
+        list(branch_meta.values()),
+        sorted(
+            candidates.values(), key=lambda d: (d["branch"], d["os"], version_key(d["version"]))
+        ),
+        gaps,
+        exclusions,
+    )
 
 
 def collect(candidate, client, previous):
     attempts = []
     selected = None
     for url in candidate.get("candidate_urls", [candidate["url"]]):
-        row = collect_installer({**candidate, "url": url}, client, previous.get((candidate["os"], candidate["version"])))
+        row = collect_installer(
+            {**candidate, "url": url}, client, previous.get((candidate["os"], candidate["version"]))
+        )
         attempts.append(row["probe"])
         if row["probe"]["status"] == 200:
             selected = row
@@ -442,7 +636,9 @@ def collect(candidate, client, previous):
             selected = row
     selected.pop("candidate_urls", None)
     if selected["os"] == "windows":
-        selected["product_line"] = "rtx-enterprise" if "quadro" in selected["url"].lower() else "geforce"
+        selected["product_line"] = (
+            "rtx-enterprise" if "quadro" in selected["url"].lower() else "geforce"
+        )
     selected["availability_probes"] = attempts
     return selected
 
@@ -455,22 +651,45 @@ def build_table(observations, curated):
         rows = [d for d in drivers if d["branch"] == b["id"]]
         # Bounds are discovered exact version extrema, not a historical-completeness claim.
         for key, choose in (("first_version", min), ("last_version", max)):
-            b[key] = {os: choose((d["version"] for d in rows if d["os"] == os and d["probe"]["status"] == 200), key=version_key, default=None) for os in ("linux", "windows")}
+            b[key] = {
+                os: choose(
+                    (d["version"] for d in rows if d["os"] == os and d["probe"]["status"] == 200),
+                    key=version_key,
+                    default=None,
+                )
+                for os in ("linux", "windows")
+            }
         records = [r for r in curated["test_records"] if r["branch"] == b["id"]]
         b["test_records"] = records
-        b["repo_status"] = "known-good" if any(r["result"] == "pass" for r in records) else "referenced-only" if records else "never-tested"
+        b["repo_status"] = (
+            "known-good"
+            if any(r["result"] == "pass" for r in records)
+            else "referenced-only" if records else "never-tested"
+        )
         branches.append(b)
     for d in drivers:
-        records = [r for r in curated["test_records"] if r.get("os") == d["os"] and r.get("version") == d["version"]]
+        records = [
+            r
+            for r in curated["test_records"]
+            if r.get("os") == d["os"] and r.get("version") == d["version"]
+        ]
         d["test_records"] = records
         d["last_tested"] = max((r["date"] for r in records if r["result"] == "pass"), default=None)
-    return {"schema_version": 1, "status": "DESIGN-ONLY", "generated_at": observations["observed_at"],
-            "scope": curated["scope"], "families": curated["families"], "branches": branches,
-            "known_bad": curated["known_bad"], "core_reference_versions": curated["core_reference_versions"],
-            "abi_boundary_hypothesis": curated["abi_boundary_hypothesis"],
-            "sources": observations["requests"], "discovery_gaps": observations["discovery_gaps"],
-            "discovery_exclusions": observations.get("discovery_exclusions", []),
-            "drivers": sorted(drivers, key=lambda d: (d["branch"], d["os"], version_key(d["version"])))}
+    return {
+        "schema_version": 1,
+        "status": "DESIGN-ONLY",
+        "generated_at": observations["observed_at"],
+        "scope": curated["scope"],
+        "families": curated["families"],
+        "branches": branches,
+        "known_bad": curated["known_bad"],
+        "core_reference_versions": curated["core_reference_versions"],
+        "abi_boundary_hypothesis": curated["abi_boundary_hypothesis"],
+        "sources": observations["requests"],
+        "discovery_gaps": observations["discovery_gaps"],
+        "discovery_exclusions": observations.get("discovery_exclusions", []),
+        "drivers": sorted(drivers, key=lambda d: (d["branch"], d["os"], version_key(d["version"]))),
+    }
 
 
 def write_json(path, value):
@@ -495,10 +714,18 @@ def main(argv=None):
     else:
         client = Client(args.cache, args.timeout)
         branches, candidates, gaps, exclusions = discover(client, curated)
-        previous = {(d["os"], d["version"]): d for d in json.loads(args.output.read_text())["drivers"]} if args.output.exists() else {}
+        previous = (
+            {(d["os"], d["version"]): d for d in json.loads(args.output.read_text())["drivers"]}
+            if args.output.exists()
+            else {}
+        )
         # A reviewed prior streamed hash is a pin receipt, never a fabricated digest.
         previous.update({(d["os"], d["version"]): d for d in curated.get("prior_windows_pins", [])})
-        print(f"discovered {len(branches)} branches, {len(candidates)} OS/version candidates; probing HEAD", file=sys.stderr, flush=True)
+        print(
+            f"discovered {len(branches)} branches, {len(candidates)} OS/version candidates; probing HEAD",
+            file=sys.stderr,
+            flush=True,
+        )
         with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
             installers = list(pool.map(lambda d: collect(d, client, previous), candidates))
         for ver in args.hash_windows:
@@ -508,13 +735,21 @@ def main(argv=None):
             if matches[0]["status"] != "PINNED":
                 print(f"hashing Windows {ver}, one temporary file", file=sys.stderr, flush=True)
                 hash_download(matches[0], client)
-        observations = {"schema_version": 1, "observed_at": now(), "branches": branches, "installers": installers,
-                        "requests": sorted(client.receipts.values(), key=lambda r: (r["url"], r["method"])), "discovery_gaps": gaps,
-                        "discovery_exclusions": exclusions}
+        observations = {
+            "schema_version": 1,
+            "observed_at": now(),
+            "branches": branches,
+            "installers": installers,
+            "requests": sorted(client.receipts.values(), key=lambda r: (r["url"], r["method"])),
+            "discovery_gaps": gaps,
+            "discovery_exclusions": exclusions,
+        }
         write_json(args.observations, observations)
     table = build_table(observations, curated)
     write_json(args.output, table)
-    print(f"wrote {args.output}: {len(table['drivers'])} installers, {sum(d['status'] == 'PINNED' for d in table['drivers'])} pins; {len(table['discovery_gaps'])} discovery gaps")
+    print(
+        f"wrote {args.output}: {len(table['drivers'])} installers, {sum(d['status'] == 'PINNED' for d in table['drivers'])} pins; {len(table['discovery_gaps'])} discovery gaps"
+    )
     return 0
 
 
