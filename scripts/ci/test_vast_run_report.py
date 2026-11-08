@@ -181,7 +181,8 @@ class Build(unittest.TestCase):
     def test_windows_facts_come_from_the_gate_lines(self):
         self.assertEqual(
             self.doc["windows"],
-            {"gate": "PASS", "install_s": 1852, "probes": ["cup8", "d3d11"], "resets": 0, "live_dumps_193": 1},
+            {"gate": "PASS", "install_s": 1852, "probes": ["cup8", "d3d11"], "resets": 0, "live_dumps_193": 1, "known_live_dumps_193": 1,
+             "live_dumps_193_ratchet": None, "live_dumps_193_die": None, "live_dumps_193_max": None},
         )
 
     def test_stage_rows_map_the_payload_results(self):

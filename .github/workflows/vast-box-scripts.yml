@@ -60,6 +60,10 @@ jobs:
           persist-credentials: false
       - name: Contract, payload, environment and diagnostic tests
         run: python3 -m unittest discover -s scripts/ci -p 'test_vast*.py'
+      - name: Live-dump metadata and per-die regression ratchet mutations
+        run: |
+          command -v pwsh
+          python3 scripts/ci/lke193_mutants.py
       - name: App policy, unsupported matrix rows and mutations
         run: |
           python3 -m unittest discover -s scripts/ci -p 'test_app_policy.py'
