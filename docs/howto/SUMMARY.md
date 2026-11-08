@@ -20,6 +20,7 @@
 
 - [Troubleshooting](troubleshooting.md)
 - [Downloading pinned CI data](ci-downloads.md)
+- [Plan work for a box or fleet](kfci-plan.md)
 - [Security model](security.md)
 - [Technical FAQ](technical-faq.md)
 - [Goals and plans](goals.md)

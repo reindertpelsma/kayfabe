@@ -23,7 +23,8 @@ import { tier as profileShape, familyOf as cfgFamilyOf } from './tier.js';
 import { normalTier, INFLIGHT_MAX_MS } from './requirements.js';
 import { rentalCost } from './ledger.js';
 import { refuse, budgetClass, configuration } from './policy.js';
-import { hardwareMatch } from './release.js';
+import { hardwareMatch, classifyLeg } from './release.js';
+import { RELEASE_MATRIX, matrixExecutionProblem, sameMatrixRow } from './release-matrix.js';
 
 export const STORE_PREFIX = 'store:';
 export const MAX_ATTEMPTS = 60; // about an hour of cron ticks
@@ -106,6 +107,26 @@ export function rowFromRecord(r, leg, tree, now, cfg) {
   )
     verdict = 'UNATTRIBUTED';
   const profile = budgetClass(r); // 'release' for release legs (stored as check + budgetClass)
+  if (verdict === 'PASS' && (profile === 'release' || r.tier === 'large' || r.releaseMatrix)) {
+    const row = RELEASE_MATRIX.dies.find((d) => d.die === r.die);
+    const outcome = classifyLeg(r, {
+      die: r.die,
+      family: r.family ?? cfgFamilyOf(r.die, cfg),
+      cfg,
+      windowsRuns: r.windowsRuns ?? 2,
+      stages: r.stages ?? [],
+      releaseMatrix: row,
+      spec: r.spec,
+    });
+    if (
+      !cfg ||
+      matrixExecutionProblem(RELEASE_MATRIX, cfg) ||
+      !sameMatrixRow(r.releaseMatrix, row) ||
+      outcome.verdict !== 'PASS'
+    )
+      verdict = 'UNATTRIBUTED';
+  }
+
   // driver_versions.host = the driver the box's nvidia-smi reported: the machine that runs kayfabe.
   // The provider's offer label (hostDriverVersion) says nothing about a KVM rental and is never
   // stored or shown (owner ruling 2026-10-24; review of #271, L1). The guest drivers are claims.

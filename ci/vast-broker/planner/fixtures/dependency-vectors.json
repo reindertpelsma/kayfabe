@@ -1,0 +1,894 @@
+{
+  "version": 1,
+  "contract": "Needs are resolved in lexical artifact order; requested host swaps first, then lexical run-ID order; setup producers once, non-setup occurrences preserved; available artifacts need no local producer invocation. Errors use stable codes.",
+  "vectors": [
+    {
+      "id": "linux-chain",
+      "catalog": {
+        "runs": [
+          {
+            "id": "provision",
+            "needs": [],
+            "produces": ["source"],
+            "setup": true
+          },
+          {
+            "id": "build",
+            "needs": ["source"],
+            "produces": ["bins"],
+            "setup": true
+          },
+          {
+            "id": "image",
+            "needs": ["source"],
+            "produces": ["image"],
+            "setup": true
+          },
+          {
+            "id": "linux_apps",
+            "needs": ["bins", "image"],
+            "produces": [],
+            "setup": false
+          },
+          {
+            "id": "merge",
+            "needs": ["bins"],
+            "produces": [],
+            "setup": false
+          },
+          {
+            "id": "windows_install",
+            "needs": ["source"],
+            "produces": ["windows"],
+            "setup": true
+          },
+          {
+            "id": "windows_gate",
+            "needs": ["windows"],
+            "produces": [],
+            "setup": false
+          }
+        ],
+        "artifacts": [
+          {
+            "id": "source",
+            "producer": "provision"
+          },
+          {
+            "id": "bins",
+            "producer": "build"
+          },
+          {
+            "id": "image",
+            "producer": "image"
+          },
+          {
+            "id": "windows",
+            "producer": "windows_install"
+          }
+        ]
+      },
+      "requested": ["linux_apps"],
+      "available": [],
+      "expected_order": ["provision", "build", "image", "linux_apps"]
+    },
+    {
+      "id": "shared-provision",
+      "catalog": {
+        "runs": [
+          {
+            "id": "provision",
+            "needs": [],
+            "produces": ["source"],
+            "setup": true
+          },
+          {
+            "id": "build",
+            "needs": ["source"],
+            "produces": ["bins"],
+            "setup": true
+          },
+          {
+            "id": "image",
+            "needs": ["source"],
+            "produces": ["image"],
+            "setup": true
+          },
+          {
+            "id": "linux_apps",
+            "needs": ["bins", "image"],
+            "produces": [],
+            "setup": false
+          },
+          {
+            "id": "merge",
+            "needs": ["bins"],
+            "produces": [],
+            "setup": false
+          },
+          {
+            "id": "windows_install",
+            "needs": ["source"],
+            "produces": ["windows"],
+            "setup": true
+          },
+          {
+            "id": "windows_gate",
+            "needs": ["windows"],
+            "produces": [],
+            "setup": false
+          }
+        ],
+        "artifacts": [
+          {
+            "id": "source",
+            "producer": "provision"
+          },
+          {
+            "id": "bins",
+            "producer": "build"
+          },
+          {
+            "id": "image",
+            "producer": "image"
+          },
+          {
+            "id": "windows",
+            "producer": "windows_install"
+          }
+        ]
+      },
+      "requested": ["merge", "linux_apps"],
+      "available": [],
+      "expected_order": ["provision", "build", "image", "linux_apps", "merge"]
+    },
+    {
+      "id": "request-order-is-not-a-tiebreaker",
+      "catalog": {
+        "runs": [
+          {
+            "id": "provision",
+            "needs": [],
+            "produces": ["source"],
+            "setup": true
+          },
+          {
+            "id": "build",
+            "needs": ["source"],
+            "produces": ["bins"],
+            "setup": true
+          },
+          {
+            "id": "image",
+            "needs": ["source"],
+            "produces": ["image"],
+            "setup": true
+          },
+          {
+            "id": "linux_apps",
+            "needs": ["bins", "image"],
+            "produces": [],
+            "setup": false
+          },
+          {
+            "id": "merge",
+            "needs": ["bins"],
+            "produces": [],
+            "setup": false
+          },
+          {
+            "id": "windows_install",
+            "needs": ["source"],
+            "produces": ["windows"],
+            "setup": true
+          },
+          {
+            "id": "windows_gate",
+            "needs": ["windows"],
+            "produces": [],
+            "setup": false
+          }
+        ],
+        "artifacts": [
+          {
+            "id": "source",
+            "producer": "provision"
+          },
+          {
+            "id": "bins",
+            "producer": "build"
+          },
+          {
+            "id": "image",
+            "producer": "image"
+          },
+          {
+            "id": "windows",
+            "producer": "windows_install"
+          }
+        ]
+      },
+      "requested": ["linux_apps", "merge"],
+      "available": [],
+      "expected_order": ["provision", "build", "image", "linux_apps", "merge"]
+    },
+    {
+      "id": "repeated-nonsetup-gates",
+      "catalog": {
+        "runs": [
+          {
+            "id": "provision",
+            "needs": [],
+            "produces": ["source"],
+            "setup": true
+          },
+          {
+            "id": "build",
+            "needs": ["source"],
+            "produces": ["bins"],
+            "setup": true
+          },
+          {
+            "id": "image",
+            "needs": ["source"],
+            "produces": ["image"],
+            "setup": true
+          },
+          {
+            "id": "linux_apps",
+            "needs": ["bins", "image"],
+            "produces": [],
+            "setup": false
+          },
+          {
+            "id": "merge",
+            "needs": ["bins"],
+            "produces": [],
+            "setup": false
+          },
+          {
+            "id": "windows_install",
+            "needs": ["source"],
+            "produces": ["windows"],
+            "setup": true
+          },
+          {
+            "id": "windows_gate",
+            "needs": ["windows"],
+            "produces": [],
+            "setup": false
+          }
+        ],
+        "artifacts": [
+          {
+            "id": "source",
+            "producer": "provision"
+          },
+          {
+            "id": "bins",
+            "producer": "build"
+          },
+          {
+            "id": "image",
+            "producer": "image"
+          },
+          {
+            "id": "windows",
+            "producer": "windows_install"
+          }
+        ]
+      },
+      "requested": ["windows_gate", "windows_gate"],
+      "available": [],
+      "expected_order": ["provision", "windows_install", "windows_gate", "windows_gate"]
+    },
+    {
+      "id": "explicit-setup-reused",
+      "catalog": {
+        "runs": [
+          {
+            "id": "provision",
+            "needs": [],
+            "produces": ["source"],
+            "setup": true
+          },
+          {
+            "id": "build",
+            "needs": ["source"],
+            "produces": ["bins"],
+            "setup": true
+          },
+          {
+            "id": "image",
+            "needs": ["source"],
+            "produces": ["image"],
+            "setup": true
+          },
+          {
+            "id": "linux_apps",
+            "needs": ["bins", "image"],
+            "produces": [],
+            "setup": false
+          },
+          {
+            "id": "merge",
+            "needs": ["bins"],
+            "produces": [],
+            "setup": false
+          },
+          {
+            "id": "windows_install",
+            "needs": ["source"],
+            "produces": ["windows"],
+            "setup": true
+          },
+          {
+            "id": "windows_gate",
+            "needs": ["windows"],
+            "produces": [],
+            "setup": false
+          }
+        ],
+        "artifacts": [
+          {
+            "id": "source",
+            "producer": "provision"
+          },
+          {
+            "id": "bins",
+            "producer": "build"
+          },
+          {
+            "id": "image",
+            "producer": "image"
+          },
+          {
+            "id": "windows",
+            "producer": "windows_install"
+          }
+        ]
+      },
+      "requested": ["build", "merge"],
+      "available": [],
+      "expected_order": ["provision", "build", "merge"]
+    },
+    {
+      "id": "available-image",
+      "catalog": {
+        "runs": [
+          {
+            "id": "provision",
+            "needs": [],
+            "produces": ["source"],
+            "setup": true
+          },
+          {
+            "id": "build",
+            "needs": ["source"],
+            "produces": ["bins"],
+            "setup": true
+          },
+          {
+            "id": "image",
+            "needs": ["source"],
+            "produces": ["image"],
+            "setup": true
+          },
+          {
+            "id": "linux_apps",
+            "needs": ["bins", "image"],
+            "produces": [],
+            "setup": false
+          },
+          {
+            "id": "merge",
+            "needs": ["bins"],
+            "produces": [],
+            "setup": false
+          },
+          {
+            "id": "windows_install",
+            "needs": ["source"],
+            "produces": ["windows"],
+            "setup": true
+          },
+          {
+            "id": "windows_gate",
+            "needs": ["windows"],
+            "produces": [],
+            "setup": false
+          }
+        ],
+        "artifacts": [
+          {
+            "id": "source",
+            "producer": "provision"
+          },
+          {
+            "id": "bins",
+            "producer": "build"
+          },
+          {
+            "id": "image",
+            "producer": "image"
+          },
+          {
+            "id": "windows",
+            "producer": "windows_install"
+          }
+        ]
+      },
+      "requested": ["linux_apps"],
+      "available": ["image"],
+      "expected_order": ["provision", "build", "linux_apps"]
+    },
+    {
+      "id": "all-artifacts-available",
+      "catalog": {
+        "runs": [
+          {
+            "id": "provision",
+            "needs": [],
+            "produces": ["source"],
+            "setup": true
+          },
+          {
+            "id": "build",
+            "needs": ["source"],
+            "produces": ["bins"],
+            "setup": true
+          },
+          {
+            "id": "image",
+            "needs": ["source"],
+            "produces": ["image"],
+            "setup": true
+          },
+          {
+            "id": "linux_apps",
+            "needs": ["bins", "image"],
+            "produces": [],
+            "setup": false
+          },
+          {
+            "id": "merge",
+            "needs": ["bins"],
+            "produces": [],
+            "setup": false
+          },
+          {
+            "id": "windows_install",
+            "needs": ["source"],
+            "produces": ["windows"],
+            "setup": true
+          },
+          {
+            "id": "windows_gate",
+            "needs": ["windows"],
+            "produces": [],
+            "setup": false
+          }
+        ],
+        "artifacts": [
+          {
+            "id": "source",
+            "producer": "provision"
+          },
+          {
+            "id": "bins",
+            "producer": "build"
+          },
+          {
+            "id": "image",
+            "producer": "image"
+          },
+          {
+            "id": "windows",
+            "producer": "windows_install"
+          }
+        ]
+      },
+      "requested": ["linux_apps"],
+      "available": ["bins", "image"],
+      "expected_order": ["linux_apps"]
+    },
+    {
+      "id": "missing-requested-run",
+      "catalog": {
+        "runs": [
+          {
+            "id": "provision",
+            "needs": [],
+            "produces": ["source"],
+            "setup": true
+          },
+          {
+            "id": "build",
+            "needs": ["source"],
+            "produces": ["bins"],
+            "setup": true
+          },
+          {
+            "id": "image",
+            "needs": ["source"],
+            "produces": ["image"],
+            "setup": true
+          },
+          {
+            "id": "linux_apps",
+            "needs": ["bins", "image"],
+            "produces": [],
+            "setup": false
+          },
+          {
+            "id": "merge",
+            "needs": ["bins"],
+            "produces": [],
+            "setup": false
+          },
+          {
+            "id": "windows_install",
+            "needs": ["source"],
+            "produces": ["windows"],
+            "setup": true
+          },
+          {
+            "id": "windows_gate",
+            "needs": ["windows"],
+            "produces": [],
+            "setup": false
+          }
+        ],
+        "artifacts": [
+          {
+            "id": "source",
+            "producer": "provision"
+          },
+          {
+            "id": "bins",
+            "producer": "build"
+          },
+          {
+            "id": "image",
+            "producer": "image"
+          },
+          {
+            "id": "windows",
+            "producer": "windows_install"
+          }
+        ]
+      },
+      "requested": ["unknown"],
+      "available": [],
+      "expected_error": "UNKNOWN_RUN"
+    },
+    {
+      "id": "missing-artifact",
+      "catalog": {
+        "runs": [
+          {
+            "id": "bad",
+            "needs": ["missing"],
+            "produces": [],
+            "setup": false
+          }
+        ],
+        "artifacts": []
+      },
+      "requested": ["bad"],
+      "available": [],
+      "expected_error": "MISSING_ARTIFACT"
+    },
+    {
+      "id": "missing-producer",
+      "catalog": {
+        "runs": [
+          {
+            "id": "bad",
+            "needs": ["x"],
+            "produces": [],
+            "setup": false
+          }
+        ],
+        "artifacts": [
+          {
+            "id": "x",
+            "producer": "unknown"
+          }
+        ]
+      },
+      "requested": ["bad"],
+      "available": [],
+      "expected_error": "MISSING_ARTIFACT"
+    },
+    {
+      "id": "producer-does-not-produce",
+      "catalog": {
+        "runs": [
+          {
+            "id": "bad",
+            "needs": ["x"],
+            "produces": [],
+            "setup": false
+          },
+          {
+            "id": "builder",
+            "needs": [],
+            "produces": [],
+            "setup": true
+          }
+        ],
+        "artifacts": [
+          {
+            "id": "x",
+            "producer": "builder"
+          }
+        ]
+      },
+      "requested": ["bad"],
+      "available": [],
+      "expected_error": "MISSING_ARTIFACT"
+    },
+    {
+      "id": "cycle-two-runs",
+      "catalog": {
+        "runs": [
+          {
+            "id": "one",
+            "needs": ["two_out"],
+            "produces": ["one_out"],
+            "setup": true
+          },
+          {
+            "id": "two",
+            "needs": ["one_out"],
+            "produces": ["two_out"],
+            "setup": true
+          }
+        ],
+        "artifacts": [
+          {
+            "id": "one_out",
+            "producer": "one"
+          },
+          {
+            "id": "two_out",
+            "producer": "two"
+          }
+        ]
+      },
+      "requested": ["one"],
+      "available": [],
+      "expected_error": "DEPENDENCY_CYCLE"
+    },
+    {
+      "id": "self-cycle",
+      "catalog": {
+        "runs": [
+          {
+            "id": "self",
+            "needs": ["out"],
+            "produces": ["out"],
+            "setup": true
+          }
+        ],
+        "artifacts": [
+          {
+            "id": "out",
+            "producer": "self"
+          }
+        ]
+      },
+      "requested": ["self"],
+      "available": [],
+      "expected_error": "DEPENDENCY_CYCLE"
+    },
+    {
+      "id": "shared-producer-multiple-artifacts",
+      "catalog": {
+        "runs": [
+          {
+            "id": "builder",
+            "needs": [],
+            "produces": ["one", "two"],
+            "setup": true
+          },
+          {
+            "id": "work",
+            "needs": ["two", "one"],
+            "produces": [],
+            "setup": false
+          }
+        ],
+        "artifacts": [
+          {
+            "id": "one",
+            "producer": "builder"
+          },
+          {
+            "id": "two",
+            "producer": "builder"
+          }
+        ]
+      },
+      "requested": ["work"],
+      "available": [],
+      "expected_order": ["builder", "work"]
+    },
+    {
+      "id": "explicit-producer-after-consumer",
+      "catalog": {
+        "runs": [
+          {
+            "id": "provision",
+            "needs": [],
+            "produces": ["source"],
+            "setup": true
+          },
+          {
+            "id": "build",
+            "needs": ["source"],
+            "produces": ["bins"],
+            "setup": true
+          },
+          {
+            "id": "image",
+            "needs": ["source"],
+            "produces": ["image"],
+            "setup": true
+          },
+          {
+            "id": "linux_apps",
+            "needs": ["bins", "image"],
+            "produces": [],
+            "setup": false
+          },
+          {
+            "id": "merge",
+            "needs": ["bins"],
+            "produces": [],
+            "setup": false
+          },
+          {
+            "id": "windows_install",
+            "needs": ["source"],
+            "produces": ["windows"],
+            "setup": true
+          },
+          {
+            "id": "windows_gate",
+            "needs": ["windows"],
+            "produces": [],
+            "setup": false
+          }
+        ],
+        "artifacts": [
+          {
+            "id": "source",
+            "producer": "provision"
+          },
+          {
+            "id": "bins",
+            "producer": "build"
+          },
+          {
+            "id": "image",
+            "producer": "image"
+          },
+          {
+            "id": "windows",
+            "producer": "windows_install"
+          }
+        ]
+      },
+      "requested": ["windows_gate", "windows_install"],
+      "available": [],
+      "expected_order": ["provision", "windows_install", "windows_gate"]
+    },
+    {
+      "id": "explicit-build-even-if-output-available",
+      "catalog": {
+        "runs": [
+          {
+            "id": "provision",
+            "needs": [],
+            "produces": ["source"],
+            "setup": true
+          },
+          {
+            "id": "build",
+            "needs": ["source"],
+            "produces": ["bins"],
+            "setup": true
+          },
+          {
+            "id": "image",
+            "needs": ["source"],
+            "produces": ["image"],
+            "setup": true
+          },
+          {
+            "id": "linux_apps",
+            "needs": ["bins", "image"],
+            "produces": [],
+            "setup": false
+          },
+          {
+            "id": "merge",
+            "needs": ["bins"],
+            "produces": [],
+            "setup": false
+          },
+          {
+            "id": "windows_install",
+            "needs": ["source"],
+            "produces": ["windows"],
+            "setup": true
+          },
+          {
+            "id": "windows_gate",
+            "needs": ["windows"],
+            "produces": [],
+            "setup": false
+          }
+        ],
+        "artifacts": [
+          {
+            "id": "source",
+            "producer": "provision"
+          },
+          {
+            "id": "bins",
+            "producer": "build"
+          },
+          {
+            "id": "image",
+            "producer": "image"
+          },
+          {
+            "id": "windows",
+            "producer": "windows_install"
+          }
+        ]
+      },
+      "requested": ["build"],
+      "available": ["bins"],
+      "expected_order": ["provision", "build"]
+    },
+    {
+      "id": "host-swap-before-guests",
+      "catalog": {
+        "runs": [
+          {
+            "id": "host_swap",
+            "needs": ["source"],
+            "produces": [],
+            "setup": false,
+            "host_swap": true
+          },
+          {
+            "id": "bootstrap",
+            "needs": [],
+            "produces": ["source"],
+            "setup": true
+          },
+          {
+            "id": "guest",
+            "needs": ["source"],
+            "produces": [],
+            "setup": false
+          }
+        ],
+        "artifacts": [
+          {
+            "id": "source",
+            "producer": "bootstrap"
+          }
+        ]
+      },
+      "requested": ["guest", "host_swap"],
+      "available": [],
+      "expected_order": ["bootstrap", "host_swap", "guest"]
+    }
+  ]
+}

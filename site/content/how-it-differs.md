@@ -20,10 +20,18 @@ NVIDIA vGPU shares a card between VMs. It needs a GPU on [NVIDIA's supported lis
 
 Open-IOV is a community project using stock NVIDIA guest drivers without a vGPU licence, with its own host module.
 
+<!-- src: https://github.com/DualCoder/vgpu_unlock README.md; https://github.com/noon-at-cgn/geforce-sriov README.md (both retrieved 2026-11-08) -->
+Other community tools, such as [vgpu_unlock](https://github.com/DualCoder/vgpu_unlock) and [geforce-sriov](https://github.com/noon-at-cgn/geforce-sriov), make NVIDIA's own vGPU software run on some GeForce cards.
+
+### GPU-PV (Hyper-V)
+
+<!-- src: https://learn.microsoft.com/en-us/windows-server/virtualization/hyper-v/plan/plan-for-gpu-acceleration-in-windows-server; https://learn.microsoft.com/en-us/windows-server/virtualization/hyper-v/partition-assign-vm-gpu; https://github.com/xnixy/guesthouse README.md (retrieved 2026-11-08) -->
+GPU-PV is Microsoft's way of sharing a GPU with Windows guests on Hyper-V. The guest runs the vendor's driver, and the host side comes from Windows and the vendor. KVM has no host side for it. [Guesthouse](https://github.com/xnixy/guesthouse) is an early project that adds one in QEMU, and reports one RTX 5090 so far.
+
 ### API forwarding
 
-<!-- src: https://github.com/reindertpelsma/nvkvm-pv README and docs/faq.md (matching driver versions); https://github.com/nestrilabs/virtio-nvgpu/blob/dev/README.md; docs/PROJECT_HISTORY.md section 3 -->
-API forwarding leaves the card with the host. Examples include nvkvm-pv and virtio-nvgpu. They use custom guest drivers and support Linux guests. nvkvm-pv needs matching host and guest NVIDIA driver versions.
+<!-- src: https://github.com/reindertpelsma/nvkvm-pv README and docs/faq.md (matching driver versions); https://github.com/nestrilabs/virtio-nvgpu/blob/dev/README.md; docs/PROJECT_HISTORY.md section 3; https://github.com/xnixy/guesthouse linux/README.md (retrieved 2026-11-08) -->
+API forwarding leaves the card with the host. Examples include nvkvm-pv and virtio-nvgpu. They use custom guest drivers and support Linux guests. nvkvm-pv needs matching host and guest NVIDIA driver versions. Guesthouse's Linux guests work this way too.
 
 ### CUDA container
 
