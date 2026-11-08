@@ -4,6 +4,9 @@ guest_isolated.res (+ APPDIG digests compared host vs guest). The LAST row per (
 The guest verdict is the ISOLATED re-run when there is one (a fresh boot with that app alone), and
 the batched verdict is shown beside it when they differ."""
 import re, sys, os, collections
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ci"))
+import app_policy
 
 def rows(path):
     out = collections.OrderedDict()
@@ -36,6 +39,8 @@ for R in sys.argv[1:]:
     for app in host.keys() | gb.keys():
         pass
     order = list(host.keys()) + [a for a in gb if a not in host]
+    policy = {p["name"]: p for p in app_policy.rows("linux")}
+    order += [name for name in policy if name not in order]
     for app in order:
         h = host.get(app, {}); b = gb.get(app, {}); i = gi.get(app, {})
         hv = h.get("verdict", "-"); bv = b.get("verdict", "-"); iv = i.get("verdict", "")
@@ -49,6 +54,9 @@ for R in sys.argv[1:]:
                 same = gd[(a, k)] == v
                 detail += f" {k} digest {'==' if same else '!='} host"
                 if not same and final == "PASS": final = "PASS*"
+        if app in policy:
+            detail = policy[app]["note"] + f"; observed batched={bv}, alone={iv or '-'}; " + detail
+            bv, iv, final = policy[app]["note"], "-", "NOTRUN"
         cnt[(hv, final)] += 1
         print(f"| {app} | {hv} | {bv} | {iv or '-'} | {detail.strip()} |")
     print("\n" + ", ".join(f"host {k[0]} / guest {k[1]}: {v}" for k, v in sorted(cnt.items())))

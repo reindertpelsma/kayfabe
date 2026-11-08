@@ -2,6 +2,11 @@
 # Generated from the per-app table of traces/apps_linux_20261107/ (RTX 4090, kf3 144557e4, 2026-11-07): the apps
 # that passed on bare metal AND in the Linux guest. One app per line, in run order. A change to this list is a
 # change to the gate: say why in the commit. Regenerate with scripts/apps/matrix_table.py --gate-list.
+# known_unsupported (non-gating; listed in reports):
+# UnifiedMemoryStreams: unsupported (UVM): owner ruling 2026-10-02 keeps UVM unmerged until the per-fault GR hold is measured and bounded (docs/OWNER_RULINGS.md section E)
+# UnifiedMemoryPerf: unsupported (UVM): owner ruling 2026-10-02 keeps UVM unmerged until the per-fault GR hold is measured and bounded (docs/OWNER_RULINGS.md section E)
+# conjugateGradientUM: unsupported (UVM): owner ruling 2026-10-02 keeps UVM unmerged until the per-fault GR hold is measured and bounded (docs/OWNER_RULINGS.md section E)
+# attach_verify: unsupported (UVM): owner ruling 2026-10-02 keeps UVM unmerged until the per-fault GR hold is measured and bounded (docs/OWNER_RULINGS.md section E)
 nvidia_smi
 deviceQuery
 vectorAdd

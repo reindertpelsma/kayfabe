@@ -10,6 +10,7 @@ import sys
 import tempfile
 
 HERE = Path(__file__).resolve().parent
+POLICY_FIXTURE_FILE = "scripts/apps/known_unsupported.json"
 CASES = [
     (
         "home-bootstrap-disabled",
@@ -309,8 +310,26 @@ def main():
         root = Path(d)
         shutil.copytree(HERE, root / "scripts/ci", ignore=shutil.ignore_patterns("__pycache__"))
         shutil.copytree(HERE.parent / "bench", root / "scripts/bench")
+        # BaseEnvironment reuses Onstart.tree(), which copies this reporter policy into its checkout.
+        # The helper and Windows profile already arrive with scripts/ci and scripts/bench above.
+        policy = root / POLICY_FIXTURE_FILE
+        policy.parent.mkdir(parents=True)
+        shutil.copyfile(HERE.parents[1] / POLICY_FIXTURE_FILE, policy)
         for suite in sorted({c[4] for c in CASES}):
-            assert not run(root, suite)["killers"], suite
+            baseline = run(root, suite)
+            assert not baseline["killers"], (suite, baseline)
+            print("baseline %s: %d tests, no killers" % (suite, baseline["tests"]), file=sys.stderr, flush=True)
+        # Falsifier: losing the policy fixture still passes the onstart environment contracts.
+        original = policy.read_bytes()
+        try:
+            policy.unlink()
+            result = run(root, "base_env")
+        finally:
+            policy.write_bytes(original)
+        killers = sorted(set(result["killers"]))
+        name = "fixture-missing-known_unsupported.json"
+        assert len(killers) >= 2, (name, killers)
+        rows.append({"mutant": name, "count": len(killers), "killers": killers})
         for name, filename, old, new, suite in CASES:
             path = root / "scripts/ci" / filename
             source = path.read_text()
