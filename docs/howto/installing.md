@@ -11,6 +11,38 @@
 3. Prepare a guest ([Linux guest](linux-guest.md), [Windows guest](windows-guest.md)).
 4. Start QEMU with a `kf3-gpu` device. One GPU job at a time.
 
+## Stock drivers and opt-in patches
+
+**CODE READ, 2026-11-07:** stock host and guest NVIDIA drivers are unmodified **by default**.
+The normal provisioners run the vendor installers. The repository also contains **opt-in**
+UVM and H5 host-driver experiments, guest bring-up/ring/RPC instrumentation, and a diagnostic
+QEMU observer. These require a separate explicit diagnostic build or application command;
+a run with an instrumented driver does not establish a stock-driver result.
+
+**CODE READ, 2026-11-07:** the optional offline release-bundle builder,
+`scripts/bench/windows/appmatrix/build_release_bundle.ps1`, applies
+`directx_vrs_gate.patch` to the Microsoft DirectX VRS test program in a temporary
+source worktree. Running this separate builder is the opt-in; it changes neither
+the NVIDIA driver, QEMU nor the guest OS. `release_bundle.py` only validates the
+resulting source/patch receipt and file hashes. The stock installation does not
+apply this test-program patch.
+<!-- src: scripts/bench/windows/appmatrix/build_release_bundle.ps1,
+     scripts/bench/windows/appmatrix/directx_vrs_gate.patch,
+     scripts/bench/windows/appmatrix/release_bundle.py,
+     scripts/ci/no-patch-inventory.json -->
+
+The QEMU build still adds the `kf3-gpu` device and its Meson/Kconfig integration as described in
+[Building from source](building.md). This is a custom QEMU build; “stock drivers” does not mean
+an unmodified distribution QEMU binary. The optional observer patch is separate from that integration.
+
+Run `python3 scripts/ci/no_patch_check.py` for the complete patch table, opt-in/record pointers,
+and the static stock-path check. Its source inventory is
+`scripts/ci/no-patch-inventory.json`. This is a lexical regression check over reviewed scripts,
+not a proof about arbitrary dynamic shell/Python execution. The README's absolute “nothing is
+patched” wording still needs the owner's “by default” qualification, tracked in the release ledger.
+<!-- src: scripts/ci/no_patch_check.py, scripts/ci/no-patch-inventory.json,
+     scripts/bench/build_kf3.sh, docs/RELEASE_CLAIMS.md -->
+
 ## 1. The host driver
 
 The recorded runs use the open kernel module. The script that installs it for the bench is `scripts/bench/provision_host_driver.sh` (run as root; default version 580.159.04):
