@@ -1,4 +1,6 @@
 import test from 'node:test';
+import { matrixTest, receipts, subrunSuites } from './release-fixture.js';
+import { RELEASE_MATRIX } from '../src/release-matrix.js';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { setup, nonce, sha, jwt, clock, env as baseEnv, MemoryStorage } from './helpers.js';
@@ -494,8 +496,43 @@ const f7Tree = { key: 'f'.repeat(64), kind: 'tree' };
 const f7Row = (extra, cfg = configuration(baseEnv)) =>
   rowFromRecord(f7Record(extra), 0, f7Tree, clock + 700000, cfg);
 
-test('F7: a release leg is stored as tier largest, profile release, platform both', () => {
-  const row = f7Row({ budgetClass: 'release', tier: 'large' });
+for (const [die, gpu_name, compute_cap] of [
+  ['TU116', 'NVIDIA GeForce GTX 1660', 750],
+  ['GB205', 'NVIDIA GeForce RTX 5070', 1200],
+])
+  test('legacy ingest derives the die family for ' + die, () => {
+    const row = f7Row({
+      family: undefined,
+      die,
+      profile: 'sweep',
+      tier: 'adhoc',
+      hardware: { gpu_name, compute_cap, driver_version: '580.159.04' },
+    });
+    assert.equal(row.verdict, 'PASS');
+    assert.equal(row.die, die);
+  });
+
+matrixTest('F7: a release leg is stored as tier largest, profile release, platform both', () => {
+  // Positive release fixture includes approved synthetic policy and complete
+  // receipts. Ordinary passing reports are now tested as UNATTRIBUTED separately.
+  const selected = RELEASE_MATRIX.dies.find((r) => r.die === 'AD104');
+  const row = f7Row({
+    budgetClass: 'release',
+    tier: 'large',
+    releaseMatrix: selected,
+    windowsRuns: 2,
+    stages: [],
+    hardware: { ...hardware, driver_version: selected.drivers.host_driver },
+    result: {
+      verdict: 'PASS',
+      host_reference: 'GREEN',
+      matrix_receipts: receipts(selected),
+      suites: [
+        ...passSuites(['cuda_fat', 'windows_gate', 'windows_gate_2']),
+        ...subrunSuites(selected),
+      ],
+    },
+  });
   assert.deepEqual(
     [row.tier, row.profile, row.platform, row.verdict, row.run_id],
     ['largest', 'release', 'both', 'PASS', 'vast-8000000000000000001-1-0'],

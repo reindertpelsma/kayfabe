@@ -64,6 +64,18 @@ jobs:
           node --test ci/vast-broker/test
           # Tier, release and admin-start mutants (wtier, 2026-11-05): each must be killed.
           node ci/vast-broker/scripts/mutate-tiers.mjs
+          # Proposed release matrix and payload contract: two named killers per mutant.
+          node ci/vast-broker/release-matrix-mutants.mjs
+          # RV1 admission/receipt grading and both SPEC lanes: two named killers each.
+          node ci/vast-broker/release-safety-mutants.mjs
+          # RV2 attribution, SPEC contract and finite-resource regressions: >=2 killers each.
+          node ci/vast-broker/rv2-mutants.mjs
+          # Official driver pins and media drift: two named killers per mutant.
+          node ci/vast-broker/driver-pins-mutants.mjs
+          # Seeded markets and worst-case renting use only the mocked Vast transport.
+          node ci/vast-broker/simulation-mutants.mjs
+          python3 scripts/ci/profile_resources.py
+          node ci/vast-broker/profile-resources-mutants.mjs
           # Evidence upload route mutants (2026-11-06): each must fail at least two tests.
           node ci/vast-broker/evidence-mutants.mjs
           # Public log, run report and publisher mutants (2026-11-07): each must fail at least two tests.

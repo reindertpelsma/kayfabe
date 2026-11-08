@@ -124,7 +124,12 @@ export class OfferBook {
   // family); it bypasses the one-minute cache and is evaluated by exactly the same rules.
   // `vramFloorMb`: the middle tier's VRAM floor (0 = off).
   async evaluate(vast, cfg, ledger, profile, { market, vramFloorMb = 0 } = {}) {
-    let hit = this.at !== null && this.now() - this.at < DEFAULTS.availabilityCacheMs;
+    const queryKey = String(cfg.diskGb) + ':' + String(cfg.maxInet);
+    let hit =
+      this.queryKey === queryKey &&
+      this.at !== null &&
+      this.now() - this.at < DEFAULTS.availabilityCacheMs;
+    this.queryKey = queryKey;
     if (market !== undefined) {
       if (!Array.isArray(market) || market.length > 400) refuse();
       hit = false;
@@ -219,7 +224,7 @@ export class OfferBook {
           ...offer,
           die,
           country: offerCountry(offer),
-          pricing: offerPrice(offer, cfg),
+          pricing: offerPrice(offer, cfg, profile),
         });
     }
     const grouped = new Map();

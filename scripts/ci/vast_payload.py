@@ -4,11 +4,16 @@
 No provider/CI credentials or network clone machinery belongs here.
 """
 
+import base64
 import collections, json, os, re, select, shutil, signal, subprocess, sys, time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import vast_report as local_result_contract
+
+# The current payload has no matrix driver/subrun executor. The trusted Worker
+# checks this exact declaration at the selected commit before creating a lease.
+PAYLOAD_RELEASE_MATRIX_EXECUTOR = 0
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "bench"))
 import native_xid_guard as xid_guard
@@ -54,6 +59,8 @@ def only(pattern, text, name, rows=()):
 
 
 def provision_rows(text, rc):
+    if re.search(r"^DRIVER_MEDIA_DRIFT reason=[A-Z0-9_]{1,32}$", text, re.M):
+        raise EvidenceError("driver_media_drift")
     if (
         rc
         or red_line(text)
@@ -169,6 +176,75 @@ def windows_requested(environ):
         raise EvidenceError("preflight")
     return value != "0", "worker" if value is not None else "default"
 
+
+RELEASE_DRIVER_FIELDS = ("KF_HOST_DRIVER", "KF_LINUX_GUEST_DRIVER", "KF_WINDOWS_GUEST_DRIVER")
+
+
+def release_driver_environment(environ):
+    """Map per-leg driver selections, keeping the Windows media and its guest ABI distinct.
+
+    HOST_DRIVER is the existing host installer's selector; KF_HOST_DRIVER is the readiness
+    check's selector. Linux guest staging and new Windows media still need an executor.
+    """
+    names = (*RELEASE_DRIVER_FIELDS, "KF_WINGATE_GUEST_DRIVER", "KF_RELEASE_SUBRUNS", "KF_RELEASE_DRIVER_PINS")
+    if not any(name in environ for name in names):
+        return {}
+    if any(name not in environ for name in (*RELEASE_DRIVER_FIELDS, "KF_RELEASE_SUBRUNS", "KF_RELEASE_DRIVER_PINS")):
+        raise EvidenceError("release_retry_matrix_invalid")
+    selected = {name: environ[name] for name in names if name in environ}
+    for name, value in selected.items():
+        if name not in ("KF_RELEASE_SUBRUNS", "KF_RELEASE_DRIVER_PINS") and not re.fullmatch(r"[0-9]{3}\.[0-9]{2,3}(?:\.[0-9]{2})?", value):
+            raise EvidenceError("release_retry_matrix_invalid")
+    # Same bounded JSON contract as the bootstrap, also checked at the payload boundary.
+    try:
+        raw = selected["KF_RELEASE_SUBRUNS"]
+        plan = json.loads(base64.b64decode(raw + "=" * (-len(raw) % 4), altchars=b"-_", validate=True))
+        valid = (re.fullmatch(r"[A-Za-z0-9_-]{1,16384}", raw) is not None and isinstance(plan, dict)
+                 and set(plan) == {"status", "subruns", "cross_subrun"}
+                 and plan["status"] == "proposed" and isinstance(plan["subruns"], list)
+                 and len(plan["subruns"]) <= 32
+                 and (plan["cross_subrun"] is None or isinstance(plan["cross_subrun"], dict)))
+    except (ValueError, TypeError):
+        valid = False
+    if not valid:
+        raise EvidenceError("release_retry_matrix_invalid")
+    pins = local_result_contract.decode_driver_pins(selected["KF_RELEASE_DRIVER_PINS"])
+    if pins is None:
+        raise EvidenceError("release_retry_matrix_invalid")
+    required = {("windows" if name == "KF_WINDOWS_GUEST_DRIVER" else "linux", selected[name]) for name in RELEASE_DRIVER_FIELDS}
+    try:
+        for run in plan["subruns"]:
+            if not isinstance(run, dict) or run.get("os") not in ("linux", "windows") or not isinstance(run.get("drivers"), list):
+                raise ValueError()
+            for version in run["drivers"]:
+                if not isinstance(version, str) or not re.fullmatch(r"[0-9]{3}\.[0-9]{2,3}(?:\.[0-9]{2})?", version):
+                    raise ValueError()
+                required.add((run["os"], version))
+        cross = plan["cross_subrun"]
+        if cross is not None:
+            if not isinstance(cross, dict) or not isinstance(cross.get("drivers"), dict) or set(cross["drivers"]) != {"host_driver", "linux_guest_driver", "windows_guest_driver"}:
+                raise ValueError()
+            for axis, version in cross["drivers"].items():
+                if not isinstance(version, str) or not re.fullmatch(r"[0-9]{3}\.[0-9]{2,3}(?:\.[0-9]{2})?", version):
+                    raise ValueError()
+                required.add(("windows" if axis == "windows_guest_driver" else "linux", version))
+    except (ValueError, TypeError):
+        raise EvidenceError("release_retry_matrix_invalid") from None
+    if not required.issubset({(p["os"], p["version"]) for p in pins}):
+        raise EvidenceError("release_retry_matrix_invalid")
+    selected["HOST_DRIVER"] = selected["KF_HOST_DRIVER"]
+    return selected
+
+
+def require_executable_release(environ):
+    """Never turn a proposed matrix into a successful run of today's pinned payload.
+
+    Removal needs an approved matrix, guest staging, profile dispatch, per-subrun receipts
+    and result grading. No version fallback is permitted in the meantime.
+    """
+    selected = release_driver_environment(environ)
+    if selected:
+        raise EvidenceError("release_retry_matrix_proposed")
 
 WINAPPS_PROFILES = ("small", "mid", "full")
 WINAPPS_VERDICT = re.compile(r"^WINAPPS_(PASS|FAIL|RETRY|REFUSED)\b([^\n]*)$", re.M)
@@ -1320,6 +1396,10 @@ def main():
         # Popped before any stage runs: merge_check.sh must not run the gate inside merge_bar.
         windows, windows_source = windows_requested(os.environ)
         tier, windows_runs, extra_stages = tier_requested(os.environ, windows)
+        selected_drivers = release_driver_environment(os.environ)
+        require_executable_release(os.environ)
+        os.environ.update(selected_drivers)
+
         winapps = winapps_requested(os.environ, windows)
 
         spec = spec_requested(os.environ, windows, extra_stages)
@@ -1404,6 +1484,8 @@ def main():
 
         def provision_grade(rc):
             log = bounded_text("/root/prov/prov.log")
+            if re.search(r"^DRIVER_MEDIA_DRIFT reason=[A-Z0-9_]{1,32}$", log, re.M):
+                provision_rows(log, rc)
             fault = provider_fault(log)
             if fault:
                 raise ProviderFault(fault)
