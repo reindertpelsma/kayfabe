@@ -193,7 +193,8 @@ check. Corrupt stored bytes fail integrity even if a proposed reproduction's fil
 Use compare-image for reproduction and verify-image for one object's integrity.
 
 **CODE READ, 2026-11-08:** both ISO namespaces must expose the same logical files and bytes through the
-writer's deterministic primary aliases. Primary-only payloads fail; date/publisher changes and relocation
+writer's deterministic primary aliases. Unsupported Rock Ridge/System Use and hybrid filesystem records
+are refused because they can expose another file view. Primary-only payloads fail; date/publisher changes and relocation
 of identical payloads remain Level 2 warnings. `verify-image` also derives the embedded recipe identity,
 checks actual package/source bytes against their pins, and regenerates guest files, staging, licence texts,
 notices, index and licence metadata from the matching reviewed checkout and pinned archives. Publication

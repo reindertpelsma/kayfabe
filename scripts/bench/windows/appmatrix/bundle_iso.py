@@ -249,6 +249,13 @@ class Reader:
             pvd, svd, end = (self._read(n * BLOCK, BLOCK) for n in (16, 17, 18))
             if any(d[1:7] != b"CD001\x01" for d in (pvd, svd, end)) or (pvd[0], svd[0], end[0]) != (1, 2, 255):
                 raise ValueError("invalid ISO descriptors")
+            # A hybrid recognition sequence after the ISO terminator can select
+            # a different filesystem in another reader. We emit only ISO/Joliet.
+            # Stop at the very first post-terminator sector, before any such
+            # sequence can begin (including extra CD001 descriptors).
+            if self.size > 19 * BLOCK and self._read(19 * BLOCK, 7)[1:6] in (
+                    b"CD001", b"BEA01", b"NSR02", b"NSR03", b"BOOT2", b"CDW02"):
+                raise ValueError("unsupported hybrid volume recognition sequence")
             if svd[88:91] != b"%/E":
                 raise ValueError("missing Joliet escape sequence")
             for d in (pvd, svd):
@@ -287,6 +294,10 @@ class Reader:
     def _entry(self, data):
         if len(data) < 34 or data[0] != len(data) or data[1] or data[26:28] != b"\x00\x00" or data[25] not in (0, 2):
             raise ValueError("invalid/unsupported ISO directory record")
+        # Extra System Use bytes can carry SUSP/Rock Ridge names, symlinks or
+        # child-link extents. They are filesystem semantics, never L2 padding.
+        if len(data) != 33 + data[32] + (data[32] % 2 == 0):
+            raise ValueError("unsupported ISO directory System Use extension")
         if self._number(data, 28, 2) != 1 or 33 + data[32] > len(data):
             raise ValueError("invalid ISO directory identifier")
         return data[33:33 + data[32]], self._number(data, 2, 4), self._number(data, 10, 4), data[25] == 2

@@ -28,6 +28,8 @@ CASES = [
     ("primary-joliet-payload", "bundle_iso.py", 'if pin(actual) != pin(expected):', 'if False:'),
     ("namespace-path-table-validation", "bundle_iso.py", '        self._path_tables(descriptor, joliet)', '        pass'),
     ("path-table-directory-correspondence", "bundle_iso.py", 'if rows != {p: e[0] for p, e in self._directories.items()}:', 'if False:'),
+    ("no-system-use-namespace", "bundle_iso.py", 'if len(data) != 33 + data[32] + (data[32] % 2 == 0):', 'if False:'),
+    ("no-hybrid-filesystem", "bundle_iso.py", 'if self.size > 19 * BLOCK and self._read(19 * BLOCK, 7)[1:6] in (', 'if False and self._read(19 * BLOCK, 7)[1:6] in ('),
     ("namespace-dot-references", "bundle_iso.py", 'if not isdir or (start, size) != target:', 'if False:'),
     ("member-read-bound", "bundle_iso.py", 'length = min(size, self.size - self.position)', 'length = size'),
     ("member-seek-bound", "bundle_iso.py", 'if whence not in (0, 1, 2) or not 0 <= target <= self.size:', 'if False:'),

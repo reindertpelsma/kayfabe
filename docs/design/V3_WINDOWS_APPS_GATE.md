@@ -133,7 +133,11 @@ complete payload remains the same in both namespaces. The independent ISO reader
 ISO9660 and Joliet directories, derives the permitted sorted short aliases, checks both endian path tables
 and directory references, and requires identical logical file lists and payloads. A primary-only file,
 redirected payload or swapped payload fails before comparison. Relocation of the same payload is allowed.
-The reader snapshots descriptor fields, recording dates, extents and hashes of all non-payload regions.
+The reader also refuses System Use extensions (including Rock Ridge name/symlink overrides) and hybrid
+filesystem recognition records after the ISO terminator; neither is emitted by this writer. They can
+change a consumer's file view and are not metadata-only variation. Plain front padding and relocation of
+both namespaces remain allowed. The reader snapshots descriptor fields, recording dates, extents and
+hashes of all non-payload regions.
 `compare-image` prints the Level 1 result, any Level 2 metadata warning, and writes reproduction.json.
 The second image is read against **its own** receipt before comparison; the first receipt supplies the
 reference file inventory. Optional `--candidate-receipt` selects a second sidecar at another location.

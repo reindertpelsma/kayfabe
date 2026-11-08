@@ -11,7 +11,7 @@ import helpers as H
 import package_bundle as B
 import bundle_iso as I
 import bundle_repro as R
-from receiver_fixtures import Artifact, ImagePair, digest, directory_entries
+from receiver_fixtures import Artifact, ImagePair, digest, directory_entries, add_primary_extension, insert_front_blocks
 
 
 class ReviewedPublication(unittest.TestCase):
@@ -200,6 +200,28 @@ class PrimaryNamespace(unittest.TestCase):
             row = I.record(b'F9999998.BIN;1', extent, 0)
             raw[end:end+len(row)] = row
         self.p.alter(edit); self.rejected()
+
+    def test_primary_system_use_cannot_override_file_name(self):
+        self.p.alter(lambda raw: add_primary_extension(raw, 'name')); self.rejected()
+
+    def test_primary_system_use_cannot_create_symlink(self):
+        self.p.alter(lambda raw: add_primary_extension(raw, 'symlink')); self.rejected()
+
+    def test_udf_nsr02_recognition_is_unsupported(self):
+        self.p.alter(lambda raw: insert_front_blocks(raw, [b'\0NSR02\1']))
+        self.rejected()
+
+    def test_udf_nsr03_recognition_is_unsupported(self):
+        self.p.alter(lambda raw: insert_front_blocks(raw, [b'\0NSR03\1']))
+        self.rejected()
+
+    def test_secondary_iso_descriptor_cannot_hide_hybrid_view(self):
+        self.p.alter(lambda raw: insert_front_blocks(raw, [b'\xffCD001\1', b'\0BEA01\1', b'\0NSR03\1']))
+        self.rejected()
+
+    def test_plain_front_padding_and_relocated_namespaces_warn(self):
+        self.p.alter(lambda raw: insert_front_blocks(raw, [b'', b'', b'']))
+        self.warning()
 
     def test_primary_dot_reference_cannot_point_elsewhere(self): self.bad_dot(16, False)
     def test_primary_parent_reference_cannot_point_elsewhere(self): self.bad_dot(16, True)

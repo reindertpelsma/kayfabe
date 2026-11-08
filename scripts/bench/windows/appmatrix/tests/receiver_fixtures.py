@@ -149,3 +149,65 @@ class ImagePair:
         extent=len(raw)//I.BLOCK;raw.extend(payload.ljust(I.BLOCK,b'\0'))
         for sector in (16,17):raw[sector*I.BLOCK+80:sector*I.BLOCK+88]=I.both32(len(raw)//I.BLOCK)
         return extent
+
+
+def add_primary_extension(raw, kind):
+    """Independent SUSP/Rock Ridge encoding: expose a name or symlink override."""
+    start = int.from_bytes(raw[16*I.BLOCK+158:16*I.BLOCK+162], 'little')*I.BLOCK
+    rows = []; pos = start
+    while raw[pos]:
+        row = bytearray(raw[pos:pos+raw[pos]])
+        name = row[33:33+row[32]]
+        if name == b'\0':
+            row += b'SP\x07\x01\xbe\xef\x00' + b'ER\x12\x01\x0a\x00\x00\x01RRIP_1991A'
+        if name == b'F0000001.BIN;1':
+            alternative = b'unreviewed.txt'
+            if kind == 'name':
+                row += b'NM' + bytes((5+len(alternative), 1, 0)) + alternative
+            elif kind == 'symlink':
+                row += b'PX\x2c\x01' + b''.join(I.both32(n) for n in (0o120777, 1, 0, 0, 1))
+                row += b'SL' + bytes((7+len(alternative), 1, 0, 0, len(alternative))) + alternative
+            else:
+                raise ValueError('unknown fixture extension')
+        row[0] = len(row); rows.append(bytes(row)); pos += raw[pos]
+    body = I.pack_records(rows)
+    assert len(body) == I.BLOCK
+    raw[start:start+I.BLOCK] = body
+
+
+def insert_front_blocks(raw, descriptors):
+    """Relocate both complete namespaces; insert VRS records or plain padding."""
+    original = bytes(raw); count = len(descriptors)
+    result = bytearray(original[:19*I.BLOCK] + b''.join(d.ljust(I.BLOCK, b'\0') for d in descriptors)
+                       + original[19*I.BLOCK:])
+    for sector in (16, 17):
+        at = sector*I.BLOCK
+        result[at+80:at+88] = I.both32(len(result)//I.BLOCK)
+        root = int.from_bytes(original[at+158:at+162], 'little')
+        result[at+158:at+166] = I.both32(root+count)
+        size = int.from_bytes(original[at+166:at+170], 'little')
+        def directory(start, length):
+            pos = start*I.BLOCK; end = pos+length
+            while pos < end:
+                n = original[pos]
+                if not n:
+                    pos = (pos//I.BLOCK+1)*I.BLOCK; continue
+                extent = int.from_bytes(original[pos+2:pos+6], 'little')
+                offset = pos+count*I.BLOCK
+                result[offset+2:offset+10] = I.both32(extent+count)
+                name = original[pos+33:pos+33+original[pos+32]]
+                if original[pos+25]&2 and name not in (b'\0', b'\1'):
+                    directory(extent, int.from_bytes(original[pos+10:pos+14], 'little'))
+                pos += n
+        directory(root, size)
+        table_size = int.from_bytes(original[at+132:at+136], 'little')
+        for pointer, endian in ((140, 'little'), (148, 'big')):
+            block = int.from_bytes(original[at+pointer:at+pointer+4], endian)
+            result[at+pointer:at+pointer+4] = (block+count).to_bytes(4, endian)
+            pos = block*I.BLOCK; end = pos+table_size
+            while pos < end:
+                extent = int.from_bytes(original[pos+2:pos+6], endian)
+                offset = pos+count*I.BLOCK
+                result[offset+2:offset+6] = (extent+count).to_bytes(4, endian)
+                pos += 8 + original[pos] + original[pos]%2
+    raw[:] = result
