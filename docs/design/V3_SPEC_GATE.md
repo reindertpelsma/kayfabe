@@ -1,7 +1,7 @@
 # V3 SPECviewperf gate: the `specviewperf` stage of the Vast release tier
 
-**STATUS: DESIGN-ONLY, 2026-11-07** for everything that runs on a box, the Worker and the tier plan: this is a draft PR against
-`next`, **disabled by default** (nothing sends the stage until the owner enables it for the large tier), with GPU-free tests and mutants
+**STATUS: DESIGN-ONLY, 2026-11-08** for everything that runs on a box, the Worker and the tier plan: the stage code is present in this tree,
+**disabled by default** (nothing sends the stage until the owner enables it for the large tier), with GPU-free tests and mutants
 only; **no box, no rental and no Windows guest has run any of it**, and the stage's PowerShell has never run on Windows. The GPU-free code
 (`lane.py`, `tarfilter.py`, the payload grading, the report rows) is real and tested. Parent documents:
 [`V3_WINDOWS_GATE.md`](V3_WINDOWS_GATE.md) (the gate this stage follows, same guest and same verdict philosophy),
@@ -13,6 +13,18 @@ only; **no box, no rental and no Windows guest has run any of it**, and the stag
 Marking: **MEASURED** = a line in a file of those traces (revision, box and die in them, e.g. kayfabe rev `6a0683af` on Vast box 59248850, 2026-11-05), **CODE READ** = read in this repository,
 **INFERRED** = reasoned from those numbers, not seen, **DESIGN** = intent, **OPEN** = an owner decision. An unmarked sentence is a
 claim of fact about the code in this PR.
+
+## DX1 repository check, 2026-11-08
+
+**CODE READ at `50640c605`:** `traces/specviewperf_native_20261107/` is absent in this checkout. Native 9/9
+statements below came from the PR #289 branch, not evidence present here; DX1 does not promote them into README claims.
+The stage remains disabled pending its first Worker run; this lane changes no Worker code or deployment.
+Both values in `scripts/bench/box/specviewperf.pin` equal the recorded `zst_sha256` and `tar_sha256` in
+`traces/specviewperf_vast_20261105/spec/CHECKSUMS_pins.txt`. `docs/DOWNLOADS.md` now spells out those same full values
+and corrects its earlier "pins not in the repo" sentence. The old abbreviated tar suffix `...bdb8`
+was imprecise: the recorded full value ends `...bdbf8`; the full value is now shown. No pin-versus-recorded-checksum
+mismatch was found, and the pin file is unchanged. The pin remains proposed for the
+licensee's confirmation before enablement; no remote object or download was checked in this GPU-free lane.
 
 ## 1. What the stage is for
 

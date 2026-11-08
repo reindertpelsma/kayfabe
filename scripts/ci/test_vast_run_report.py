@@ -1,6 +1,6 @@
 """GPU-free tests of the box run report (vast_run_report.py).
 
-FALSIFIER: a report that invents a number or a row no output of the payload produced (an apps row,
+FALSIFIER: a report that invents a number or a row no output of the payload produced (an observed apps row without output, except explicit non-gating policy rows,
 a perf row without a BSUM or BENCH_*_MS line, a test row without an arm line); that puts a
 SPECviewperf datum, a run token or any secret in a row; that exceeds 256 KiB; that attaches a row
 to the wrong subrun or to none; that hides a subrun that did not run (it must be NOT_RUN with a
@@ -18,6 +18,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import vast_run_report as rr  # noqa: E402
+
+
+def supported_apps(doc):
+    # Policies are CODE READ statements, not measured results. Test observed rows independently.
+    return [a for a in doc["apps"] if not a["note"].startswith(("manual: needs real display", "unsupported (UVM)"))]
 
 RUN = "4242-7"
 TOKEN = ".".join(["eyJhbGciOiJIUzI1NiJ9", "eyJydW4iOiI0MjQyIn0", ("Zk9_-Qw" * 7)[:43]])
@@ -168,7 +173,7 @@ class Build(unittest.TestCase):
         self.assertAlmostEqual(gb["value"], 2 * 2048 * 2048 * 4 / (3.2 / 1000) / 1e9)
         self.assertEqual(gb["unit"], "GB/s")
         self.assertNotIn(("host", "cup8bench N=16 h2d_GBps"), perf, "small sizes are not a bandwidth measure")
-        self.assertEqual(self.doc["apps"], [], "the application matrix is not a payload stage yet")
+        self.assertEqual(supported_apps(self.doc), [], "no measured application rows without a stage")
         for p in self.doc["perf"]:
             self.assertTrue(p["suite"] in ("cuda_host", "cuda_fat"))
             self.assertIsNone(p["ref_value"]) if p["sub"] == "host" else None
@@ -176,7 +181,8 @@ class Build(unittest.TestCase):
     def test_windows_facts_come_from_the_gate_lines(self):
         self.assertEqual(
             self.doc["windows"],
-            {"gate": "PASS", "install_s": 1852, "probes": ["cup8", "d3d11"], "resets": 0, "live_dumps_193": 1},
+            {"gate": "PASS", "install_s": 1852, "probes": ["cup8", "d3d11"], "resets": 0, "live_dumps_193": 1, "known_live_dumps_193": 1,
+             "live_dumps_193_ratchet": None, "live_dumps_193_die": None, "live_dumps_193_max": None},
         )
 
     def test_stage_rows_map_the_payload_results(self):
@@ -251,7 +257,7 @@ class Build(unittest.TestCase):
         doc = self.build(log_lines() + self.APPS, result())
         sub = "linux-580.159.03"
         self.assertEqual(
-            doc["apps"],
+            supported_apps(doc),
             [
                 {"sub": sub, "name": "blender", "os": "linux", "result": "PASS", "note": "ok"},
                 {"sub": sub, "name": "ollama", "os": "linux", "result": "FAIL", "note": "FAIL exit 1 with spaces in the note"},
@@ -264,7 +270,7 @@ class Build(unittest.TestCase):
 
     def test_no_apps_stage_means_no_apps_rows(self):
         doc = self.build(log_lines(), result())
-        self.assertEqual(doc["apps"], [])
+        self.assertEqual(supported_apps(doc), [])
         self.assertFalse([t for t in doc["tests"] if t["suite"] == "apps_linux"])
 
     def test_a_failed_apps_stage_fails_the_linux_subrun_and_a_retry_does_too(self):
@@ -290,8 +296,8 @@ class Build(unittest.TestCase):
             "APP_ROW name=" + "a" * 60 + " os=linux result=PASS",
         ]
         doc = self.build(lines, result())
-        self.assertEqual([a["name"] for a in doc["apps"]], ["ok"])
-        self.assertEqual(len(doc["apps"][0]["note"]), 200)
+        self.assertEqual([a["name"] for a in supported_apps(doc)], ["ok"])
+        self.assertEqual(len(supported_apps(doc)[0]["note"]), 200)
 
     def test_the_apps_array_is_capped(self):
         lines = ["APP_ROW name=a%d os=linux result=PASS secs=1" % i for i in range(650)]
@@ -314,7 +320,7 @@ class Build(unittest.TestCase):
         doc = self.build([], {})
         self.assertEqual(doc["schema"], 1)
         self.assertTrue(all(s["verdict"] == "NOT_RUN" and s["reason"] for s in doc["subruns"]))
-        self.assertEqual((doc["tests"], doc["perf"], doc["apps"]), ([], [], []))
+        self.assertEqual((doc["tests"], doc["perf"], supported_apps(doc)), ([], [], []))
 
     def test_hostile_lines_are_skipped_not_trusted(self):
         hostile = [
@@ -367,19 +373,19 @@ class WindowsApps(unittest.TestCase):
 
     def test_windows_app_is_reported_with_its_subrun_and_measured_time(self):
         doc = self.build([self.line()])
-        self.assertEqual(doc["apps"], [dict(sub="windows-580.88", name="vectorAdd", os="windows", result="PASS", note="-")])
+        self.assertEqual(supported_apps(doc), [dict(sub="windows-580.88", name="vectorAdd", os="windows", result="PASS", note="-")])
         row = next(t for t in doc["tests"] if t["suite"] == "apps_windows")
         self.assertEqual((row["sub"], row["result"], row["ms"]), ("windows-580.88", "PASS", 2000))
         self.assertIn("windows_apps", doc["subruns"][2]["log_stages"])
 
     def test_same_name_in_linux_and_windows_keeps_both_rows(self):
         doc = self.build(["APP_ROW name=vectorAdd os=linux result=FAIL secs=1", self.line()])
-        self.assertEqual([(a["os"], a["result"]) for a in doc["apps"]], [("linux", "FAIL"), ("windows", "PASS")])
+        self.assertEqual([(a["os"], a["result"]) for a in supported_apps(doc)], [("linux", "FAIL"), ("windows", "PASS")])
 
     def test_missing_and_harness_rows_are_not_run_never_pass(self):
         for cls, verdict in (("not_run", "-"), ("harness", "NOTRUN"), ("pass", "FAIL")):
             doc = self.build([self.line(cls=cls, verdict=verdict, secs="-")])
-            self.assertEqual(doc["apps"][0]["result"], "NOT_RUN")
+            self.assertEqual(supported_apps(doc)[0]["result"], "NOT_RUN")
             row = next(t for t in doc["tests"] if t["suite"] == "apps_windows")
             self.assertEqual((row["result"], row["ms"]), ("SKIP", None))
 
@@ -393,14 +399,14 @@ class WindowsApps(unittest.TestCase):
     def test_fail_and_timeout_rows_fail_with_bounded_notes(self):
         for cls, verdict in (("guest_fail", "FAIL"), ("guest_fail", "TIMEOUT"), ("boot_fail", "BOOT_FAIL")):
             doc = self.build([self.line(cls=cls, verdict=verdict, note="n" * 400)], failed=1)
-            self.assertEqual(doc["apps"][0]["result"], "FAIL")
-            self.assertEqual(len(doc["apps"][0]["note"]), 200)
+            self.assertEqual(supported_apps(doc)[0]["result"], "FAIL")
+            self.assertEqual(len(supported_apps(doc)[0]["note"]), 200)
             self.assertEqual(next(t for t in doc["tests"] if t["suite"] == "apps_windows")["result"], "FAIL")
 
     def test_duplicate_windows_app_keeps_the_final_row(self):
         doc = self.build([self.line(), self.line(cls="guest_fail", verdict="FAIL")], failed=1)
-        self.assertEqual(len(doc["apps"]), 1)
-        self.assertEqual(doc["apps"][0]["result"], "FAIL")
+        self.assertEqual(len(supported_apps(doc)), 1)
+        self.assertEqual(supported_apps(doc)[0]["result"], "FAIL")
 
     def test_a_gate_pass_does_not_hide_a_windows_apps_suite_failure(self):
         for suite in ("windows_apps", "windows_apps_retry_time", "windows_apps_retry_media"):
@@ -410,11 +416,11 @@ class WindowsApps(unittest.TestCase):
             self.assertIn(dict(name=suite, **{"pass": 0, "fail": 1, "skip": 0}), doc["suites"])
 
     def test_no_app_rows_are_invented_by_a_windows_apps_suite(self):
-        self.assertEqual(self.build([])["apps"], [])
+        self.assertEqual(supported_apps(self.build([])), [])
 
     def test_bad_names_and_incomplete_windows_rows_are_ignored(self):
         doc = self.build([self.line(name="../bad"), "WINAPPS_APP app=ok class=pass verdict=PASS"])
-        self.assertEqual(doc["apps"], [])
+        self.assertEqual(supported_apps(doc), [])
 
     def test_windows_apps_share_the_array_cap_with_linux(self):
         lines = [f"APP_ROW name=l{i} os=linux result=PASS" for i in range(300)]
@@ -422,16 +428,16 @@ class WindowsApps(unittest.TestCase):
         self.assertEqual(len(self.build(lines)["apps"]), 500)
 
     def test_windows_notes_are_bounded_even_for_passing_apps(self):
-        self.assertEqual(len(self.build([self.line(note="n" * 400)])["apps"][0]["note"]), 200)
+        self.assertEqual(len(supported_apps(self.build([self.line(note="n" * 400)]))[0]["note"]), 200)
 
-    def test_recorded_full_run_reports_58_pass_9_fail_12_not_run(self):
+    def test_recorded_full_run_keeps_supported_failures_and_policy_observations(self):
         # This is a replay of recorded output, not a new hardware qualification.
         trace = Path(__file__).resolve().parents[2] / "traces/winapps_20261107/wa1f_winapps.log"
         if not trace.exists():
             self.skipTest("trace not copied into the isolated mutation fixture")
         doc = self.build(trace.read_text().splitlines(), failed=1)
         from collections import Counter
-        self.assertEqual(Counter(a["result"] for a in doc["apps"]), {"PASS": 58, "FAIL": 9, "NOT_RUN": 12})
+        self.assertEqual(Counter(a["result"] for a in doc["apps"]), {"PASS": 58, "FAIL": 1, "NOT_RUN": 24})
         self.assertEqual(doc["subruns"][2]["verdict"], "FAIL")
 
 
@@ -855,7 +861,7 @@ class SpecStatusRows(unittest.TestCase):
         self.assertEqual(windows_app["sub"], spec["sub"])
         self.assertEqual(windows_app["ms"], 2000)
         self.assertIsNone(spec["ms"])
-        self.assertEqual(doc["apps"][0]["os"], "windows")
+        self.assertEqual(supported_apps(doc)[0]["os"], "windows")
 
     def test_spec_retry_cannot_hide_a_windows_apps_guest_failure(self):
         doc = self.build([WindowsApps().line(cls="guest_fail", verdict="FAIL")],

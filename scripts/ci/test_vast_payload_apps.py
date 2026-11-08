@@ -477,11 +477,30 @@ class AppsGateScript(unittest.TestCase):
             % (app, verdict, secs)
         )
 
+    def test_unsupported_is_reported_when_bundle_is_missing(self):
+        rc, out = self.run_gate([], provisioned=False)
+        self.assertEqual(rc, 3)
+        self.assertIn("APP_POLICY name=attach_verify os=linux result=NOT_RUN note=unsupported (UVM)", out)
+
+    def test_unsupported_cannot_be_in_an_override_gate_list(self):
+        for name in ("UnifiedMemoryPerf", "attach_verify"):
+            rc, out = self.run_gate([], list_text=name + "\n")
+            self.assertEqual(rc, 3)
+            self.assertIn("APPS_STAGE_RETRY class=BAD_LIST", out)
+            self.assertNotIn("APPS_STAGE_START", out)
+
+    def test_unsupported_streams_cannot_be_in_an_override_gate_list(self):
+        rc, out = self.run_gate([], list_text="UnifiedMemoryStreams\n")
+        self.assertEqual(rc, 3)
+        self.assertIn("APPS_STAGE_RETRY class=BAD_LIST", out)
+        self.assertNotIn("APPS_STAGE_START", out)
+
     def test_all_pass(self):
         rc, out = self.run_gate([self.res("vectorAdd"), self.res("deviceQuery")])
         self.assertEqual(rc, 0, out)
         lines = out.splitlines()
-        self.assertEqual(lines[0], "APPS_STAGE_LIST n=2 budget_s=30 per_boot=100")
+        self.assertIn("APPS_STAGE_LIST n=2 budget_s=30 per_boot=100", lines)
+        self.assertEqual(sum(x.startswith("APP_POLICY ") for x in lines), 4)
         self.assertEqual(lines[-2:], ["APPS_STAGE_PASS", "APPS_STAGE_EXIT rc=0"])
         self.assertEqual(sum(s.startswith("APP_ROW ") and " result=PASS " in s for s in lines), 2)
         self.assertLess(
@@ -513,13 +532,13 @@ class AppsGateScript(unittest.TestCase):
         rc, out = self.run_gate([])
         self.assertEqual(rc, 3, out)
         self.assertIn("APPS_STAGE_RETRY class=BOX", out)
-        self.assertEqual(out.count("result=NOT_RUN"), 2)
+        self.assertEqual(sum(line.startswith("APP_ROW ") and "result=NOT_RUN" in line for line in out.splitlines()), 2)
 
     def test_budget_exhausted_is_retry_time_with_unrun_rows(self):
         rc, out = self.run_gate([], budget="1", matrix_body="#!/bin/bash\nsleep 60\n")
         self.assertEqual(rc, 3, out)
         self.assertIn("APPS_STAGE_RETRY class=TIME", out)
-        self.assertEqual(out.count("result=NOT_RUN"), 2)
+        self.assertEqual(sum(line.startswith("APP_ROW ") and "result=NOT_RUN" in line for line in out.splitlines()), 2)
 
     def test_missing_bundle_is_retry_not_built_and_runs_nothing(self):
         rc, out = self.run_gate([self.res("vectorAdd"), self.res("deviceQuery")], provisioned=False)
