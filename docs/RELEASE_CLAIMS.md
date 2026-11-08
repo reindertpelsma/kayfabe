@@ -60,8 +60,11 @@ is retained as the dated explanation of what changed, not the status of the rewr
 apps and `managed_t` are `known_unsupported`, reported as `unsupported (UVM)` under the owner's GR-hold merge condition.
 Every structured report includes policy rows (NOT_RUN, never passing results), even with no app stage; historical raw
 verdicts remain in notes and table columns. Supported-app completeness/failure and host-Xid rules remain in force.
-LiveKernelEvent 193 stays non-gating by default, reported as `known_live_dumps_193` on the gate PASS line and
-`windows.live_dumps_193` in the structured report. Non-gating does not establish harmlessness (issue #305).
+CODE READ at `a1209e3da`: LiveKernelEvent 193 is reported as `known_live_dumps_193` and gates above an evidence-seeded
+per-die maximum, or in explicit strict mode. Unseeded dies are UNKNOWN. The box report includes the known count and
+ratchet verdict; the current Worker sanitizer publishes only the existing `windows.live_dumps_193` alias. Synthetic
+header tests establish parser behavior, not the code of an actual WATCHDOG dump. Non-gating within the ceiling does not
+establish harmlessness (issue #305; the ordered investigation plan is in `design/V3_WINDOWS_GATE.md`).
 
 The ledger is rewritten with the README's new hashes. Rows for removed sentences are removed, not relabelled as verified;
 derived-page rows now name the corrected claims. Navigation rows verify local targets only, not remote site availability.

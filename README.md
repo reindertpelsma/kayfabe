@@ -31,7 +31,7 @@ These are recorded results at named revisions, not qualification of the current 
 | AD102, AD104: PASS | `0c515b3b3`, 2026-11-04 | [Ada](traces/die_coverage_20261104/ada/README.md) |
 | GB205, GB206: PASS; GB202: intermittent (FAIL, then two PASS on the same box) | `0c515b3b3`, 2026-11-04 | [Blackwell](traces/die_coverage_20261104/blackwell/README.md) |
 
-The Windows gate checks the stock 580.88 driver, CUDA and D3D11 probes before and after an idle period, reset counters and a same-box host reference. LiveKernelEvent 193 is non-gating by default and reported as `known_live_dumps_193` ([gate contract](docs/design/V3_WINDOWS_GATE.md), [setup](docs/WINDOWS_GUEST_SETUP.md)).
+The Windows gate checks the stock 580.88 driver, CUDA and D3D11 probes before and after an idle period, reset counters and a same-box host reference. LiveKernelEvent 193 is reported as `known_live_dumps_193`; it gates above a recorded per-die maximum or with explicit strict mode ([gate contract](docs/design/V3_WINDOWS_GATE.md), [setup](docs/WINDOWS_GUEST_SETUP.md)).
 
 **Linux applications, RTX 4090:** 70/70 runnable apps passed on the host and 66/70 in the guest, revision `144557e43`, 2026-11-07. Passing apps met their own correctness predicates; only the three digest-producing apps have matching host/guest digests in that run ([matrix and limits](traces/apps_linux_20261107/README.md)).
 

@@ -1,6 +1,6 @@
 # V3: the Windows stage of the merge bar (`KF_MERGE_WINDOWS=1`, `windows_gate.sh`)
 
-STATUS: LIVE, 2026-11-08 (DX1 policy and issue #305 update; §0: required on the gpu-vast master gate, first Worker run FAIL at the reboot stage on GA106; first hardware run: section 6; teardown and state-at-failure fixes: section 3a). The gate is implemented (`scripts/bench/box/windows_gate.sh`, wired into
+STATUS: LIVE, 2026-11-08 (DX1 policy and issue #305 metadata/ratchet implemented, GPU-free tested only; §0: required on the gpu-vast master gate, first Worker run FAIL at the reboot stage on GA106; first hardware run: section 6; teardown and state-at-failure fixes: section 3a). The gate is implemented (`scripts/bench/box/windows_gate.sh`, wired into
 `scripts/bench/box/merge_check.sh` as an opt-in last stage). The first real run is recorded in
 `traces/windows_gate_20261101/README.md`; this file carries the design and the rules, that file carries the
 numbers. It implements the verification plan of [`V3_WINDOWS_ON_VAST.md`](V3_WINDOWS_ON_VAST.md) (bar (b)) as a
@@ -16,11 +16,14 @@ MEASURED, run 41749680326, rev 0ca8873e, 2026-11-04, Vast instance 59035303, RTX
 
 ## LiveKernelEvent 193 reporting (owner decision, 2026-11-08)
 
-**CODE READ at `50640c605`:** with the default `strict=0`, LiveKernelEvent 193 is non-gating and counted separately.
+**CODE READ at `a1209e3da`:** with the default `strict=0`, LiveKernelEvent 193 is counted separately and gates only
+when its count exceeds the evidence-seeded maximum for the measured die. Unseeded dies have an explicit UNKNOWN verdict.
 `gate_state.ps1 -Mode tdr` writes `livekernelevent193` in `tdr_counts.txt`; `windows_gate.sh` carries it on
-`WINDOWS_GATE_PASS`. `-Mode wer` writes `wer_reports.txt` with the report parameters and timeline. The box's
-`vast_run_report.py` maps the PASS-line count to `windows.live_dumps_193`. Unknown/unreadable is not invented as zero.
-Other reset-class counters still gate. The explicit diagnostic strict mode can include 193; the default remains non-gating.
+`WINDOWS_GATE_PASS`. `-Mode wer` writes decoded `GATE_LKE` reports and `GATE_LKE_HEADER` metadata in `wer_reports.txt`
+and the gate log. The box's `vast_run_report.py` records `windows.known_live_dumps_193`, the existing
+`windows.live_dumps_193` alias and `windows.live_dumps_193_ratchet`; see the implementation details in section 6.
+Unknown/unreadable is not invented as zero. Other reset-class counters still gate. `KF_WINGATE_STRICT_LKE=1` retains its
+existing meaning: any non-stale 193 event gates, even below the maximum or on an unseeded die.
 
 ## 1. What it is, and what it is not
 
@@ -42,7 +45,8 @@ One run proves this, on one box, in one boot of one freshly installed image:
 6. A bounded idle (`KF_WINGATE_IDLE_S`, 300 s) with QEMU liveness, `GUEST_PANICKED` and ssh liveness polled.
 7. The same probes pass again after the idle, and the reset counters since the enable instant are all zero:
    Display 4101, `nvlddmkm` 153, Kernel-Power 41, EventLog 6008, BugCheck 1001, WER LiveKernelEvent (code 193, the
-   WATCHDOG live dump, is counted and reported apart and gates only with `KF_WINGATE_STRICT_LKE=1`: section 6).
+   legacy WER category, is counted and reported apart and gates above its per-die maximum or with
+   `KF_WINGATE_STRICT_LKE=1`: section 6). The dump header establishes the numeric code independently of the WER text.
 8. A graceful stop (guest shutdown, then QMP powerdown), and the same-box host reference after the run.
 
 It is a stable-enough check, not a soak, and it makes no performance claim. It does not prove application
@@ -168,6 +172,44 @@ box that is then destroyed loses the install; the evidence is exported by the ga
 
 ### Open defect: LiveKernelEvent 193, per die (strict default unchanged)
 
+**Update 2026-11-08 (DX1, issue #305): cheap instrumentation and ratchet implemented.**
+
+**CODE READ at `a1209e3da`; MEASURED by GPU-free tests with synthetic files, not a Windows gate run:**
+`gate_state.ps1 -Mode wer` recursively decodes every `Report.wer` found under ReportArchive and ReportQueue before
+the older LiveKernelEvent timeline filter. Each `GATE_LKE` line preserves P1..P8 as raw strings mapped by `Sig[n].Name`,
+the UTC EventTime and original FILETIME, event type and bucket. Missing fields are explicit; a WER string such as `193`
+or `815` is not interpreted as decimal or hexadecimal. These lines are in the gate output and `wer_reports.txt`, or
+`state_at_failure_wer.txt` on failure. This diagnostic inventory is separate from the existing non-stale Application
+1001 event counter; report-file and dump-file counts do not replace that counter.
+
+**CODE READ at `a1209e3da`:** for each `WATCHDOG-*.dmp` in `C:\Windows\LiveKernelReports\WATCHDOG`, the guest opens
+the file read-only and reads at most the first `0x1000` bytes. Only the exact `PAGEDU64` signature is accepted. The parser
+reads UInt32 BugCheckCode at `0x38` and UInt64 parameters at `0x40`, `0x48`, `0x50`, `0x58`, and emits
+`GATE_LKE_HEADER bugcheck=0x... p1=0x... p2=0x... p3=0x... p4=0x... bytes_read=4096 file=...`. Short, unreadable or other
+layouts produce `status=REFUSED` and no guessed bugcheck. No dump is copied or inspected beyond that header. The header
+is the authority for the numeric code: Microsoft's
+[0x193 documentation](https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/bug-check-0x193--video-dxgkrnl-livedump)
+describes a dxgkrnl live dump, whereas
+[0xC1](https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/bug-check-0xc1--special-pool-detected-memory-corruption)
+is SPECIAL_POOL_DETECTED_MEMORY_CORRUPTION. Decimal 193 equals 0xC1; WER's unqualified text alone settles neither.
+**NOT MEASURED:** no real WATCHDOG header has been read by DX1, so this change establishes no actual dump code or cause.
+
+**CODE READ at `a1209e3da`:** `scripts/bench/box/known_live_dumps_193.json` seeds AD102 = 2 (`a5071c24`, g4),
+TU106 = 3 (`e6dad00f`, tbB1), GA102 = 4 (`006d845a`, am2), with the committed source paths and dates listed below.
+An existing native read-only RM timer probe supplies the architecture/implementation tuple; the die name is derived
+from `kf-chip`'s existing table, never from a marketing name. A tuple absent from that table or a die absent from the
+ratchet yields UNKNOWN and no ceiling; failed or ambiguous identity collection uses the existing OPERATOR retry path.
+No run learns or raises a ceiling. Counts at or below it remain non-gating; a greater count sets a guest failure and
+`GATE_LKE_RATCHET ... verdict=FAIL`, retaining the existing host-reference FAIL/RETRY classification. All other reset,
+stale-report, probe and host-reference rules, including strict mode, are unchanged. The ratchet result and its source
+evidence are saved in `lke193_ratchet.json`; native identity/build diagnostics are saved as `lke_die_*.txt`.
+
+**CODE READ at `a1209e3da`:** the box's `report.json` windows section contains `known_live_dumps_193`,
+`live_dumps_193` (compatibility alias), `live_dumps_193_ratchet` (PASS/FAIL/UNKNOWN), `live_dumps_193_die` and
+`live_dumps_193_max`. A failed regression is reported before the final gate verdict; unreached metadata is null.
+**Transport limit, CODE READ:** the current Worker sanitizer retains only the older `live_dumps_193` count from these
+fields. New fields are present locally and in the gate log, but are discarded from its published JSON. DX1 changes no
+Worker code or deployment; publishing those extra fields needs a separately scoped Worker change.
 
 **Update 2026-11-08 (coordinator): what the evidence does and does not say, and the plan.**
 Issue [#305](https://github.com/reindertpelsma/kayfabe/issues/305). This update is folded above the older observations;
@@ -197,10 +239,19 @@ non-gating is a scheduling choice, not a finding that the event is harmless.
   signals are guest Xids and host Xids. **MEASURED in the current app matrix**, RTX 4090, `144557e43`, 2026-11-07:
   guest Xids are 0, but each of the four UVM failures produces a host Xid 31 (`traces/apps_linux_20261107/README.md`).
 
-**PLAN, no hardware work authorized in DX1:** retain 193 counts, WER fields, enable/probe/dump timestamps and nearby
-reset events in issue #305; preserve the distinction from reset counters. Before a later authorized hardware investigation,
-preregister matched native/kayfabe workloads and separate completion/interrupt, flip/vblank and register-value hypotheses,
-each with a falsifier. Any debugger analysis must respect the repository's provenance boundary. Keep the default non-gating
-and reported; do not close the defect or call it benign without evidence.
+**PLAN, ordered cheap first; only step 1 implemented in this GPU-free lane:**
+
+1. Decode every WER report and the bounded WATCHDOG header, retain enable/probe/dump timestamps and nearby reset events,
+   and enforce the per-die count ratchet above. Falsifier for adequate regression detection: a count above its die's
+   recorded maximum passes, or an unknown die silently borrows a baseline. Synthetic tests and mutants cover both.
+2. On separately authorized hardware, capture the same DxgKrnl ETW provider with the same tracer around device enable
+   on a kayfabe guest and a native Vast box; compare event sequences and timing. Preregister controls and falsifiers for
+   completion/interrupt, flip/vblank and invalid-register hypotheses. A Linux guest's lack of dxgkrnl is not a control.
+3. On a separately authorized Windows box, analyze the dumping thread and reason with public dxgkrnl symbols. Only if
+   the stack reaches `nvlddmkm` do the project's reverse-engineering rules apply: an isolated agent, facts only, nothing
+   derived committed. No stack or proprietary-code inspection was performed in DX1.
+
+**Owner decision:** if the investigation establishes a correctness defect, make the gate strict. Until then the defect
+stays open and reported; non-gating within the ratchet is a scheduling choice, not a finding of harmlessness.
 
 Measured and inferred apart. MEASURED 2026-11-01 (gate runs g3 and g4 on lease 58592558, `traces/windows_gate_20261101/g3_windows.log` and `g4_windows.log`; TU106 `tu106/t2_posthoc/`): AD102 g3/g4 each two 193 reports and one WATCHDOG dump 66-73 s after the enable, 9-11 s before the first probe, zero other reset counters, probes passing before and after the idle; the one Report.wer read of it (manual, during g2) was `P1 193 P2 815 P3 2 P4 ffff8185c66c5080 P5 0 P6 10_0_26100` with no `nvlddmkm`/`Display`/`dxgkrnl` event nearby. TU106: 43 events, no 193 report or dump kept (`dump_files=0`), the first reset-class event (`nvlddmkm` 153 at 14:13:58Z) is 2 min 15 s after the enable. INFERRED: nothing about the cause. The gate now collects, in every run, the Report.wer text (event name, P1..P8), the dump file times, the display-stack events within +-120 s of each report and the timeline enable, first probe, first dump (`gate_state.ps1 -Mode wer`, `wer_reports.txt` and `state_at_failure_wer.txt` in the evidence); the dump itself is never downloaded. Falsifier kept: a run in which a 193 dump precedes a reset, a TDR or a probe failure. Not triggered on the AD102; not decidable on the TU106 (no 193 report survived the storm).
