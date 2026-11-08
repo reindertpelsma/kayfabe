@@ -43,6 +43,9 @@
         },
         "vfio": {
           "type": "boolean"
+        },
+        "can_expose_port": {
+          "type": "boolean"
         }
       },
       "required": [
@@ -73,6 +76,19 @@
           "maximum": 9999
         },
         "version": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40,
+              "pattern": "^\\d{3,4}\\.\\d+(?:\\.\\d+)?$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "abi_version": {
           "anyOf": [
             {
               "type": "string",
@@ -157,6 +173,7 @@
         "os",
         "driver_family",
         "version",
+        "abi_version",
         "status",
         "url",
         "sha256",
@@ -165,7 +182,51 @@
         "checked",
         "catalog_url"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "properties": {
+            "status": {
+              "const": "PINNED"
+            },
+            "version": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40,
+              "pattern": "^\\d{3,4}\\.\\d+(?:\\.\\d+)?$"
+            },
+            "url": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            },
+            "sha256": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "size": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000000000
+            }
+          }
+        },
+        {
+          "properties": {
+            "status": {
+              "const": "UNPINNED"
+            },
+            "sha256": {
+              "type": "null"
+            },
+            "size": {
+              "type": "null"
+            }
+          }
+        }
+      ]
     },
     "step": {
       "type": "object",
@@ -334,6 +395,14 @@
           "type": "number",
           "minimum": 0,
           "maximum": 10000
+        },
+        "fallback": {
+          "const": "build_local"
+        },
+        "fetch_until_minute": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100000
         }
       },
       "required": [
@@ -345,7 +414,9 @@
         "transfer_minutes",
         "deadline_minute",
         "fallback_step_ids",
-        "gb"
+        "gb",
+        "fallback",
+        "fetch_until_minute"
       ],
       "additionalProperties": false
     },
@@ -718,6 +789,23 @@
         },
         "pricing": {
           "$ref": "#/$defs/pricing"
+        },
+        "seed_server": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/seed_server"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "execution_steps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/execution_step"
+          },
+          "maxItems": 2048
         }
       },
       "required": [
@@ -747,11 +835,118 @@
         "driver_pins",
         "artifact_sources",
         "assigned_consumers",
-        "pricing"
+        "pricing",
+        "seed_server",
+        "execution_steps"
+      ],
+      "additionalProperties": false
+    },
+    "execution_step": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/wait_step"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "run"
+            },
+            "step_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "pattern": "^[A-Za-z0-9_.:-]+$"
+            }
+          },
+          "required": [
+            "kind",
+            "step_id"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "seed_server": {
+      "type": "object",
+      "properties": {
+        "container_port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "serve_until_minute": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100000
+        }
+      },
+      "required": [
+        "container_port",
+        "serve_until_minute"
+      ],
+      "additionalProperties": false
+    },
+    "wait_step": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "wait_for_artifact"
+        },
+        "artifact": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
+        },
+        "scope_key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "deadline_minute": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "fetch_until_minute": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "minutes": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 300
+        },
+        "fallback": {
+          "const": "build_local"
+        },
+        "fallback_step_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "pattern": "^[A-Za-z0-9_.:-]+$"
+          },
+          "maxItems": 32,
+          "minItems": 1
+        }
+      },
+      "required": [
+        "kind",
+        "artifact",
+        "scope_key",
+        "deadline_minute",
+        "fetch_until_minute",
+        "minutes",
+        "fallback",
+        "fallback_step_ids"
       ],
       "additionalProperties": false
     }
   },
   "$ref": "#/$defs/assignment",
-  "$comment": "Assignment-reachable definitions copied without edits from J2 read-only snapshot, 2026-11-08; full contract sha256 306b615a319de11b0e823c8c0b8d2ef66e4fa9229d708725bb26f31d3cb3dd79. Base 50640c605; J2 files were uncommitted at snapshot time."
+  "$comment": "Assignment-reachable definitions copied unchanged from PR310 ca01ec8c9d5e7d2b8009d133d5d0858783502cff; full contract SHA256 1027555309f8731cf2349f0550d6d3fa7d9150c72f61cc03c4cbcdf013c1359e. No Worker sources changed."
 }

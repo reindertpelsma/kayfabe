@@ -1,7 +1,8 @@
 """Stage migration falsifier: same fake APPRES input differs in rows, verdict or exit.
 
 The checked-in oracle is apps_gate.sh from 50640c605. Timestamps and elapsed wall
-seconds are the only normalized fields; APP_ROW, APP_TRY, verdict and rc are exact.
+seconds are the only normalized fields for ordinary cases. Hostile display controls
+allow the documented sanitization and compare authoritative payload grades.
 """
 
 from pathlib import Path
@@ -142,6 +143,39 @@ class Equivalence(existing.AppsGateScript):
 
     def test_equivalence_failure_outranks_missing_rows_and_time(self):
         self.pair([self.res("vectorAdd", "FAIL")])
+
+    def assert_payload_failure(self, rows):
+        from test_kfci_progress import matrix_bytes
+
+        module = existing.payload()
+        for legacy in (False, True):
+            gate = self.legacy if legacy else existing.GATE
+            with patch.object(existing, "GATE", gate):
+                rc, out = self.run_gate(
+                    [], matrix_body=matrix_bytes(("\n".join(rows) + "\n").encode())
+                )
+            self.assertEqual(rc, 1, out[-1000:])
+            with self.assertRaises(module.EvidenceError) as caught:
+                module.apps_rows(out, rc, ["vectorAdd", "deviceQuery"])
+            self.assertEqual(caught.exception.name, "apps")
+            self.assertEqual(caught.exception.rows, [module.row("apps_passed", 1)])
+
+    def test_payload_failure_priority_with_cr_progress_matches_old(self):
+        self.assert_payload_failure(
+            [
+                self.res("vectorAdd", "FAIL"),
+                self.res("deviceQuery").replace("note=-", "note=bad\rnote"),
+            ]
+        )
+
+    def test_payload_failure_priority_with_oversized_progress_matches_old(self):
+        self.assert_payload_failure(
+            [
+                self.res("vectorAdd", "FAIL"),
+                self.res("deviceQuery"),
+                "APPRES side=guest app=unused note=" + "x" * 66000,
+            ]
+        )
 
 
 class StageMetadata(unittest.TestCase):

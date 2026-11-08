@@ -25,6 +25,71 @@ def wire():
     )
 
 
+def modern_wire():
+    value = wire()
+    value["capabilities"]["can_expose_port"] = False
+    value["seed_server"] = None
+    value["execution_steps"] = [
+        {"kind": "run", "step_id": item["id"]} for item in value["runs"]
+    ]
+    for pin in value["driver_pins"]:
+        pin["abi_version"] = pin["version"]
+    return value
+
+
+class PlannerCurrentContract(unittest.TestCase):
+    def test_reviewed_wire_without_seed_operations_is_accepted(self):
+        value = modern_wire()
+        self.assertEqual(validate(value), value)
+
+    def test_reviewed_abi_metadata_survives_validation(self):
+        value = modern_wire()
+        value["driver_pins"][0]["abi_version"] = "580.1"
+        self.assertEqual(validate(value)["driver_pins"][0]["abi_version"], "580.1")
+
+    def test_seed_server_is_refused_before_any_action(self):
+        value = modern_wire()
+        value["seed_server"] = {"container_port": 1234, "serve_until_minute": 50}
+        with self.assertRaises(AssignmentError):
+            validate(value)
+
+    def test_another_seed_server_is_not_silently_ignored(self):
+        value = modern_wire()
+        value["seed_server"] = {"container_port": 8080, "serve_until_minute": 100}
+        with self.assertRaises(AssignmentError):
+            validate(value)
+
+    def test_execution_sequence_cannot_drop_a_run(self):
+        value = modern_wire()
+        value["execution_steps"] = []
+        with self.assertRaises(AssignmentError):
+            validate(value)
+
+    def test_execution_sequence_cannot_duplicate_a_run(self):
+        value = modern_wire()
+        value["execution_steps"] *= 2
+        with self.assertRaises(AssignmentError):
+            validate(value)
+
+    def test_wait_operation_is_refused_instead_of_skipped(self):
+        value = modern_wire()
+        value["execution_steps"].insert(
+            0,
+            dict(
+                kind="wait_for_artifact",
+                artifact="open_image",
+                scope_key="open_image@box:fake",
+                deadline_minute=10,
+                fetch_until_minute=5,
+                minutes=1,
+                fallback="build_local",
+                fallback_step_ids=["setup:0"],
+            ),
+        )
+        with self.assertRaises(AssignmentError):
+            validate(value)
+
+
 class PlannerSchema(unittest.TestCase):
     def test_j2_wire_assignment_loads(self):
         value = wire()
@@ -115,6 +180,8 @@ class PlannerSchema(unittest.TestCase):
     def test_unpinned_driver_is_not_executable(self):
         value = wire()
         value["driver_pins"][0]["status"] = "UNPINNED"
+        value["driver_pins"][0]["sha256"] = None
+        value["driver_pins"][0]["size"] = None
         with self.assertRaises(AssignmentError):
             validate(value)
 
@@ -127,12 +194,18 @@ class PlannerSchema(unittest.TestCase):
     def test_duplicate_instance_ids_are_refused(self):
         value = wire()
         value["runs"][1]["id"] = value["runs"][0]["id"]
+        value["execution_steps"] = [
+            {"kind": "run", "step_id": item["id"]} for item in value["runs"]
+        ]
         with self.assertRaises(AssignmentError):
             validate(value)
 
     def test_duplicate_later_instance_is_refused(self):
         value = wire()
         value["runs"].append(copy.deepcopy(value["runs"][1]))
+        value["execution_steps"] = [
+            {"kind": "run", "step_id": item["id"]} for item in value["runs"]
+        ]
         with self.assertRaises(AssignmentError):
             validate(value)
 
@@ -159,6 +232,8 @@ class PlannerSchema(unittest.TestCase):
                 available_minute=1,
                 transfer_minutes=1,
                 deadline_minute=2,
+                fallback="build_local",
+                fetch_until_minute=1,
                 fallback_step_ids=["setup:0"],
                 gb=1,
             )
@@ -206,6 +281,9 @@ class PlannerSchema(unittest.TestCase):
     def test_instance_marker_cannot_contain_newline(self):
         value = wire()
         value["runs"][1]["id"] += "\n"
+        value["execution_steps"] = [
+            {"kind": "run", "step_id": item["id"]} for item in value["runs"]
+        ]
         with self.assertRaises(AssignmentError):
             validate(value)
 
@@ -247,11 +325,25 @@ class PlannerExecution(unittest.TestCase):
         self.assertEqual(second.calls[0].assignment_id, "wire_box")
         self.assertIn("KFCI_STEP_START id=probe:0", output.getvalue())
 
+    def test_unpinned_driver_is_refused_before_setup_runs(self):
+        value, runner, first, second, _ = self.setup_plan()
+        pin = value["driver_pins"][0]
+        pin.update(
+            status="UNPINNED", sha256=None, size=None, version=None, abi_version=None
+        )
+        with self.assertRaises(AssignmentError):
+            runner.run(value)
+        self.assertEqual(first.calls, [])
+        self.assertEqual(second.calls, [])
+
     def test_repeated_run_type_is_not_deduplicated(self):
         value, runner, first, second, _ = self.setup_plan()
         repeated = copy.deepcopy(value["runs"][1])
         repeated["id"] = "probe:1"
         value["runs"].append(repeated)
+        value["execution_steps"] = [
+            {"kind": "run", "step_id": item["id"]} for item in value["runs"]
+        ]
         summary = runner.run(value)
         self.assertEqual(summary["verdict"], "PASS")
         self.assertEqual(len(second.calls), 2)
@@ -269,6 +361,9 @@ class PlannerExecution(unittest.TestCase):
     def test_scoped_artifact_order_is_checked(self):
         value, runner, first, _, _ = self.setup_plan()
         value["runs"].reverse()
+        value["execution_steps"] = [
+            {"kind": "run", "step_id": item["id"]} for item in value["runs"]
+        ]
         with self.assertRaises(CatalogError):
             runner.run(value)
         self.assertEqual(first.calls, [])

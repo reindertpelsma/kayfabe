@@ -12,7 +12,8 @@
   "capabilities": {
     "can_swap_host_driver": false,
     "kvm": false,
-    "vfio": false
+    "vfio": false,
+    "can_expose_port": false
   },
   "source_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "catalog_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -73,7 +74,8 @@
       "size": 1,
       "source": "synthetic",
       "checked": "2026-11-08",
-      "catalog_url": null
+      "catalog_url": null,
+      "abi_version": "580.159.04"
     }
   ],
   "artifact_sources": [],
@@ -87,5 +89,16 @@
     "effective_usd_hour": 0,
     "estimated_usd": 0,
     "reserved_usd": 0
-  }
+  },
+  "seed_server": null,
+  "execution_steps": [
+    {
+      "kind": "run",
+      "step_id": "setup:0"
+    },
+    {
+      "kind": "run",
+      "step_id": "probe:0"
+    }
+  ]
 }

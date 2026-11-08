@@ -22,6 +22,62 @@ SCRIPTS = HERE.parent
 # Names are deliberately rule-oriented; killing tests are reported, not hardcoded.
 CASES = [
     (
+        "apps-list-cr-splits-comment",
+        "apps_gate.py",
+        'listing.open(newline="\\n")',
+        'listing.open(newline="")',
+        "test_kfci_progress.Progress",
+    ),
+    (
+        "apps-progress-cr-erases-failure",
+        "apps_gate.py",
+        'ctx.emit(bounded_text("APP_TRY " + rest, 300))',
+        'ctx.emit(("APP_TRY " + rest)[:300])',
+        "test_kfci_progress.Progress",
+    ),
+    (
+        "apps-oversized-progress-erases-failure",
+        "apps_gate.py",
+        "prefix = line[:65536]",
+        'raise ValueError("oversized result row")',
+        "test_kfci_progress.Progress",
+    ),
+    (
+        "apps-invalid-required-evidence-admitted",
+        "apps_gate.py",
+        "if invalid",
+        "if False",
+        "test_kfci_progress.Progress",
+    ),
+    (
+        "apps-unicode-list-widened",
+        "apps_gate.py",
+        'r"^[ \\t\\r\\v\\f]*(#|$)"',
+        'r"^\\s*(#|$)"',
+        "test_kfci_progress.Progress",
+    ),
+    (
+        "apps-byte-bounds-lost",
+        "apps_gate.py",
+        'text.encode("utf-8")[:limit].decode("utf-8", errors="ignore")',
+        "text[:limit]",
+        "test_kfci_progress.Progress",
+    ),
+    (
+        "wire-seed-server-silently-ignored",
+        "planner_assignment.py",
+        'if value["seed_server"] is not None:',
+        "if False:",
+        "test_kfci_planner.PlannerCurrentContract",
+    ),
+    (
+        "wire-execution-sequence-silently-ignored",
+        "planner_assignment.py",
+        'if value["execution_steps"] != expected_execution:',
+        "if False:",
+        "test_kfci_planner.PlannerCurrentContract",
+    ),
+    (
         "wire-javascript-regex-ascii-lost",
         "planner_assignment.py",
         "re.search(pattern, value, re.ASCII)",
@@ -99,7 +155,7 @@ CASES = [
         "planner_assignment.py",
         'if pin["status"] != "PINNED" or any(\n            pin[key] is None for key in ("version", "url", "sha256", "size")\n        ):',
         "if False:",
-        "test_kfci_planner.PlannerSchema",
+        "test_kfci_planner.PlannerSchema test_kfci_planner.PlannerExecution",
     ),
     (
         "wire-duplicate-instance-id-admitted",
@@ -316,7 +372,7 @@ CASES = [
         "apps_gate.py",
         "if failed > 0:",
         "if False:",
-        "AppsRules",
+        "AppsRules test_kfci_progress.Progress",
     ),
     (
         "apps-missing-rows-pass",
@@ -356,8 +412,8 @@ CASES = [
     (
         "apps-note-unbounded",
         "apps_gate.py",
-        'row)[:120] or "-"',
-        'row) or "-"',
+        'row), 120) or "-"',
+        'row), 65536) or "-"',
         "AppsRules",
     ),
 ]
@@ -404,11 +460,21 @@ def main():
         shutil.copyfile(SCRIPTS / "apps/run_apps.sh", root / "apps/run_apps.sh")
         shutil.copyfile(HERE / "test_kfci.py", root / "ci/test_kfci.py")
         shutil.copyfile(HERE / "test_kfci_planner.py", root / "ci/test_kfci_planner.py")
+        shutil.copyfile(
+            HERE / "test_kfci_progress.py", root / "ci/test_kfci_progress.py"
+        )
+        wrapper = root / "bench/box/apps_gate.sh"
+        wrapper.parent.mkdir(parents=True)
+        shutil.copyfile(SCRIPTS / "bench/box/apps_gate.sh", wrapper)
         fixture = root / "ci/fixtures/kfci"
         fixture.mkdir(parents=True)
         shutil.copyfile(
             HERE / "fixtures/kfci/planner_assignment.json",
             fixture / "planner_assignment.json",
+        )
+        shutil.copyfile(
+            HERE / "fixtures/kfci/apps_gate_legacy.sh.txt",
+            fixture / "apps_gate_legacy.sh.txt",
         )
         baseline = collect(
             root,
@@ -425,6 +491,8 @@ def main():
                 "test_kfci_planner.PlannerSchema",
                 "test_kfci_planner.PlannerExecution",
                 "test_kfci_planner.PlannerStageAliases",
+                "test_kfci_planner.PlannerCurrentContract",
+                "test_kfci_progress.Progress",
             ],
         )
         if baseline["killers"]:

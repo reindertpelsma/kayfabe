@@ -165,6 +165,15 @@ def validate_wire(value):
     for entry in value["runs"]:
         if any(pin not in pins for pin in entry["drivers"].values()):
             raise AssignmentError("step refers to an undeclared driver pin")
+    if value["seed_server"] is not None:
+        raise AssignmentError("seed serving requires a migrated seed server step")
+    expected_execution = [
+        {"kind": "run", "step_id": entry["id"]} for entry in value["runs"]
+    ]
+    if value["execution_steps"] != expected_execution:
+        raise AssignmentError(
+            "execution sequence requires migrated wait support or must match runs"
+        )
     unsupported_seed = (
         value["seed_hints"]
         or value["seed_exports"]

@@ -22,7 +22,7 @@ Python planning helpers. PM1 follows the owner decision of 2026-11-08: one execu
 in Python, with actions as functions/classes; planning belongs to the JavaScript Worker.
 The reference lessons retained here are pinned ShellCheck 0.10.0, argument-list discipline
 (remote shell boundaries require explicit quoting), and checking the actual source tree
-before any paid run. PM1 has no paid-run path and no provider credentials.
+before any paid run. PM1 has no paid-run path and does not acquire provider credentials.
 
 ## Migration policy (DESIGN, owner decision)
 
@@ -81,17 +81,17 @@ replanned. `scripts/kfci/testing.py` provides `FakeClock`, `FakeStep` and `FakeP
 
 ## Assignment contracts (CODE READ; deployment DESIGN)
 
-CODE READ: `scripts/kfci/planner_assignment.py` interprets the assignment-reachable
-J2 schema definitions in `scripts/kfci/schemas/planner-assignment.schema.json`, using
-stdlib only and local references only. Input is capped at 1 MiB; the interpreter
-also enforces J2's finite JSON and structural bounds. The snapshot was read without edits from J2's
-in-progress schema on 2026-11-08 (base `50640c605`, not yet committed by J2); its full
-source contract SHA-256 is
-`306b615a319de11b0e823c8c0b8d2ef66e4fa9229d708725bb26f31d3cb3dd79`.
-Every copied definition is unchanged; the subset adds its root reference and provenance
-comment. Source location: `ci/vast-broker/planner/schemas/contract.schema.json` in J2's
-worktree, absent on the PM1 base. PM1 changes no Worker files. DESIGN: reconcile the
-snapshot with J2's reviewed commit before enabling a deployed caller.
+CODE READ, reconciliation audit on 2026-11-08: `scripts/kfci/planner_assignment.py`
+interprets the 13 assignment-reachable definitions copied unchanged from PR #310 at
+commit `ca01ec8c9d5e7d2b8009d133d5d0858783502cff`, in
+`ci/vast-broker/planner/schemas/contract.schema.json`. The full source contract SHA-256 is
+`1027555309f8731cf2349f0550d6d3fa7d9150c72f61cc03c4cbcdf013c1359e`.
+The local subset is `scripts/kfci/schemas/planner-assignment.schema.json`; it adds only
+its root reference and provenance comment. This replaces PM1's earlier uncommitted J2
+snapshot. It includes ABI metadata, port capability, seed-server and execution-sequence
+fields. PM1 changes no Worker source. Validation uses stdlib and local references only;
+input remains capped at 1 MiB with finite JSON and structural bounds. DESIGN: pin both
+reviewed revisions together before deployment; later J2 protocol changes need another audit.
 
 CODE READ: J2 assignments carry `runs`, with unique instance `id` values and registry
 `run_id` values, driver pin references, scoped artifact `needs`/`produces`, per-run
@@ -103,6 +103,10 @@ driver swaps. The Worker retains pricing, coverage and admission decisions. Prop
 assignments, incomplete/unpinned drivers, unknown run ids, and seed operations without
 migrated seed support are refused before work. Only registered implementations can run;
 a complete current plan still contains unmigrated actions and is therefore refused.
+The current wire contract is accepted only when `seed_server` is null and
+`execution_steps` is exactly the ordered run-instance sequence. Seed-serving and wait
+operations are unsupported and rejected before any step starts; they are never skipped.
+ABI metadata is retained as data, without implementing driver installation.
 
 CODE READ: the J2 reservation bounds the assignment, and admission uses the larger of
 the registered implementation estimate and the assigned run minutes. The J2 Linux app
@@ -184,14 +188,50 @@ hook variables; the product configuration namespaces `KF3_` and `KAYFABE_` are
 also explicitly allowed, so existing diagnostic/build flags continue to reach the
 remaining helpers. Unrelated environment keys are not forwarded.
 
-CODE READ: stricter operational error handling emits OPERATOR for unreadable or oversized
-individual result lines (64 KiB), invalid process limits, or filesystem errors instead of
-crashing without an exit. This is outside the ordinary fake transcript equivalence domain;
-it adds no passing verdict. Legacy provisioning can still create detached processes; its
-hardware lifecycle is unverified here. The frozen old Bash body lives only in
-`scripts/ci/fixtures/kfci/apps_gate_legacy.sh.txt` as a test oracle, not a production stage.
+DESIGN — required supervisor contract: supply a credential-free execution environment.
+Do not put secrets or bearer capabilities in `KF3_*`, `KAYFABE_*`, `BASH_ENV`, or files
+made available to the box. These prefix exceptions preserve product configuration;
+they do not recognize arbitrary secrets and are not a universal credential filter.
+`BASH_ENV` and legacy helpers are trusted supervisor-authored code, never guest or
+assignment input. Worker/daemon enablement requires the supervisor to strip provider,
+Worker and Access capabilities before delivery. This library is not a sandbox for a
+credential-bearing caller.
 
-## GPU-free validation
+CODE READ: progress rendering is separate from authoritative grading. Result input is
+read in chunks of at most 65,537 bytes; oversized lines are drained without retaining
+their remainder. An oversized or NUL-bearing matching app row becomes invalid evidence
+and cannot produce PASS; an unrelated progress row does not determine an app's verdict.
+`APP_TRY` text is bounded to 300 UTF-8 bytes. Note content is bounded to 120 UTF-8 bytes
+before the legacy failure prefix, without cutting a multibyte character. Control bytes
+and Unicode line separators in display text become spaces. These display sanitizations
+are deliberate exceptions to unrestricted byte equivalence with Bash. Bash strips NUL
+in command substitution; Python deliberately refuses NUL-bearing authoritative evidence.
+The list preflight splits only at LF and uses ASCII whitespace, retaining CR inside
+comments and the legacy rejection of NBSP,
+EM SPACE and NEL before comments. Known app FAIL retains priority over missing evidence
+and malformed unrelated progress. Unknown/missing evidence cannot create a PASS.
+Unreadable files, invalid process limits and other operational errors still fail closed;
+this is not a guarantee against arbitrary host I/O failure after a process has started.
+Legacy provisioning can create detached processes; its hardware lifecycle is unverified
+here. The frozen old Bash body remains only in
+`scripts/ci/fixtures/kfci/apps_gate_legacy.sh.txt` as a test oracle.
+
+## RV2 follow-up validation
+
+MEASURED, PM1 RV2 GPU-free run on 2026-11-08: `python3 -m unittest discover -s scripts/ci
+-p 'test_kfci*.py'` passes 161 tests. The paired old/new controls include CR in failing,
+passing and unrelated progress notes, oversized unrelated progress before/after the
+failure, NUL verdict rejection, Unicode list preflight and byte-bounded UTF-8 display.
+Two controls pass both transcripts through the unchanged payload grader and retain
+its `apps` failure with `apps_passed=1`, rather than `apps_retry_operator`.
+The 177 existing apps/report cases pass. `python3 scripts/ci/kfci_mutants.py` has a
+139-test green baseline and kills all 56 mutants with at least two distinct methods
+per mutant, including end-to-end failure priority. Evidence:
+[`validation.json`](../../traces/kfci_pm1_rv2_20261108/validation.json) and
+[`kfci_mutants.json`](../../traces/kfci_pm1_rv2_20261108/kfci_mutants.json).
+These counts overlap and are not additive. No hardware qualification is implied.
+
+## Initial GPU-free validation (before RV2)
 
 MEASURED, 2026-11-08: the initial Linux apps module ran 64 tests, all passing;
 the same 64 pass after the migration. The final new suite runs 134 tests:

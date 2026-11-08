@@ -88,7 +88,10 @@ APPS_ENV = BASE_ENV | frozenset(
 
 
 def legacy_allowlist(env):
-    """Keep the product's declared configuration namespaces, including diagnostics."""
+    """Keep trusted product configuration; callers must keep these namespaces secret-free.
+
+    KF3_*, KAYFABE_* and BASH_ENV are compatibility exceptions, not a secret detector.
+    """
     return APPS_ENV | {key for key in env if key.startswith(("KF3_", "KAYFABE_"))}
 
 
@@ -115,21 +118,40 @@ def result_lines(path):
             if not line:
                 return
             if len(line) > 65536:
-                raise ValueError("oversized result row")
-            # Bash grep -a is byte-oriented; retain CR and NUL in evidence.
-            yield line.decode("utf-8", errors="replace").removesuffix("\n")
+                prefix = line[:65536]
+                while line and not line.endswith(b"\n"):
+                    line = stream.readline(65537)
+                # Keep the app prefix, but never grade a truncated PASS as evidence.
+                yield prefix.decode("utf-8", errors="replace"), True
+                continue
+            yield line.decode("utf-8", errors="replace").removesuffix(
+                "\n"
+            ), b"\0" in line
 
 
 def last_row(paths, app):
     prefix = "APPRES side=guest app=" + app + " "
     for path in paths:
         row = ""
-        for line in result_lines(path):
+        for line, invalid in result_lines(path):
             if line.startswith(prefix):
-                row = line
+                row = (
+                    (prefix + "verdict=INVALID rc=- secs=- note=invalid_result boot=-")
+                    if invalid
+                    else line
+                )
         if row:
             return row
     return ""
+
+
+def bounded_text(text, limit):
+    """Render untrusted display text as one bounded UTF-8 line, without grading it."""
+    text = "".join(
+        " " if ord(char) < 32 or char in "\x7f\x85\u2028\u2029" else char
+        for char in text
+    )
+    return text.encode("utf-8")[:limit].decode("utf-8", errors="ignore")
 
 
 def field(pattern, row):
@@ -147,7 +169,7 @@ def grade_row(app, row):
     verdict = field(r".* verdict=([A-Z_]*) .*", row)
     secs = field(r".* secs=([0-9-]*) .*", row) or "-"
     xid = field(r".* guest_xid=([0-9]*).*", row) or "-"
-    note = field(r".* note=(.*) boot=.*", row)[:120] or "-"
+    note = bounded_text(field(r".* note=(.*) boot=.*", row), 120) or "-"
     if verdict == "PASS":
         result = "PASS"
     elif verdict in ("NOTRUN", "BOOT_FAIL"):
@@ -255,9 +277,11 @@ class AppsGate(Step):
         prov.mkdir(parents=True, exist_ok=True)
         if not listing.is_file() or listing.stat().st_size == 0:
             return StepResult.retry(RetryClass.NO_LIST)
-        with listing.open(newline="") as stream:
+        with listing.open(newline="\n") as stream:
             gate = [
-                s.removesuffix("\n") for s in stream if not re.match(r"^\s*(#|$)", s)
+                s.removesuffix("\n")
+                for s in stream
+                if not re.match(r"^[ \t\r\v\f]*(#|$)", s)
             ]
         if not gate:
             return StepResult.retry(RetryClass.NO_LIST)
@@ -314,13 +338,13 @@ class AppsGate(Step):
                 return
             next_poll = time.monotonic() + poll
             total = 0
-            for line in result_lines(results / "guest.res"):
+            for line, _invalid in result_lines(results / "guest.res"):
                 if not line.startswith("APPRES "):
                     continue
                 total += 1
                 if total > seen:
                     rest = line.removeprefix("APPRES side=guest ")
-                    ctx.emit(("APP_TRY " + rest)[:300])
+                    ctx.emit(bounded_text("APP_TRY " + rest, 300))
             seen = total
 
         env["APPS_PER_BOOT"] = per_boot
