@@ -1,0 +1,104 @@
+{
+  "version": 1,
+  "status": "executable",
+  "id": "wire_box",
+  "box_id": "fake",
+  "machine_id": "fake",
+  "host_id": "fake",
+  "die": "FAKE",
+  "die_family": "fake",
+  "provider": "local",
+  "tier": "large",
+  "capabilities": {
+    "can_swap_host_driver": false,
+    "kvm": false,
+    "vfio": false,
+    "can_expose_port": false
+  },
+  "source_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "catalog_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "primary_evidence": false,
+  "start_minute": 0,
+  "estimated_minutes": 2,
+  "fallback_minutes": 2,
+  "worst_case_minutes": 2,
+  "reservation_minutes": 120,
+  "runs": [
+    {
+      "id": "setup:0",
+      "run_id": "prepare",
+      "drivers": {
+        "host": "linux:fake",
+        "linux_guest": "linux:fake",
+        "windows_guest": "linux:fake"
+      },
+      "parameters": {},
+      "minutes": 1,
+      "needs": [],
+      "produces": [
+        "linux_apps_ready@box:fake"
+      ],
+      "coverage": [],
+      "optional_seed_for": null
+    },
+    {
+      "id": "probe:0",
+      "run_id": "probe",
+      "drivers": {
+        "host": "linux:fake",
+        "linux_guest": "linux:fake",
+        "windows_guest": "linux:fake"
+      },
+      "parameters": {},
+      "minutes": 1,
+      "needs": [
+        "linux_apps_ready@box:fake"
+      ],
+      "produces": [],
+      "coverage": [],
+      "optional_seed_for": null
+    }
+  ],
+  "setup_reuse": [],
+  "seed_hints": [],
+  "seed_exports": [],
+  "driver_pins": [
+    {
+      "id": "linux:fake",
+      "os": "linux",
+      "driver_family": 580,
+      "version": "580.159.04",
+      "status": "PINNED",
+      "url": "https://example.invalid/fake.run",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "size": 1,
+      "source": "synthetic",
+      "checked": "2026-11-08",
+      "catalog_url": null,
+      "abi_version": "580.159.04"
+    }
+  ],
+  "artifact_sources": [],
+  "assigned_consumers": [],
+  "pricing": {
+    "disk_gb": 1,
+    "bandwidth_down_gb": 0,
+    "bandwidth_up_gb": 0,
+    "hourly_usd": 0,
+    "transfer_usd": 0,
+    "effective_usd_hour": 0,
+    "estimated_usd": 0,
+    "reserved_usd": 0
+  },
+  "seed_server": null,
+  "execution_steps": [
+    {
+      "kind": "run",
+      "step_id": "setup:0"
+    },
+    {
+      "kind": "run",
+      "step_id": "probe:0"
+    }
+  ]
+}

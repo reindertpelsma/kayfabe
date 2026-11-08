@@ -1,0 +1,1543 @@
+{
+  "version": 1,
+  "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "catalog": {
+    "version": 1,
+    "status": "proposed",
+    "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "runs": [
+      {
+        "scope": "die",
+        "driver_axes": [],
+        "setup": true,
+        "capabilities": [],
+        "host_swap": false,
+        "parameters": {},
+        "download_gb": 0,
+        "disk_gb": 120,
+        "includes_setup": [],
+        "id": "provision",
+        "estimated_minutes": 10,
+        "needs": [],
+        "produces": ["source"]
+      },
+      {
+        "scope": "die",
+        "driver_axes": [],
+        "setup": true,
+        "capabilities": [],
+        "host_swap": false,
+        "parameters": {},
+        "download_gb": 0,
+        "disk_gb": 120,
+        "includes_setup": [],
+        "id": "kayfabe_build",
+        "estimated_minutes": 20,
+        "needs": ["source"],
+        "produces": ["kf3_bins"]
+      },
+      {
+        "scope": "die",
+        "driver_axes": [],
+        "setup": true,
+        "capabilities": [],
+        "host_swap": false,
+        "parameters": {
+          "open_only": true,
+          "include_nvidia_installers": false
+        },
+        "download_gb": 0,
+        "disk_gb": 120,
+        "includes_setup": [],
+        "id": "linux_image_build",
+        "estimated_minutes": 30,
+        "needs": ["source"],
+        "produces": ["open_image"]
+      },
+      {
+        "scope": "die",
+        "driver_axes": ["linux_guest"],
+        "setup": false,
+        "capabilities": [],
+        "host_swap": false,
+        "parameters": {},
+        "download_gb": 0,
+        "disk_gb": 120,
+        "includes_setup": [],
+        "id": "merge_bar",
+        "estimated_minutes": 11,
+        "needs": ["kf3_bins"],
+        "produces": []
+      },
+      {
+        "scope": "die",
+        "driver_axes": ["linux_guest"],
+        "setup": false,
+        "capabilities": [],
+        "host_swap": false,
+        "parameters": {},
+        "download_gb": 0,
+        "disk_gb": 120,
+        "includes_setup": [],
+        "id": "linux_apps_full",
+        "estimated_minutes": 20,
+        "needs": ["kf3_bins", "open_image"],
+        "produces": []
+      },
+      {
+        "scope": "die",
+        "driver_axes": ["windows_guest"],
+        "setup": true,
+        "capabilities": ["kvm", "vfio"],
+        "host_swap": false,
+        "parameters": {},
+        "download_gb": 0,
+        "disk_gb": 120,
+        "includes_setup": [],
+        "id": "windows_install_gate",
+        "estimated_minutes": 33,
+        "needs": ["source"],
+        "produces": ["windows_base"]
+      },
+      {
+        "scope": "die",
+        "driver_axes": ["windows_guest"],
+        "setup": false,
+        "capabilities": ["kvm", "vfio"],
+        "host_swap": false,
+        "parameters": {},
+        "download_gb": 0,
+        "disk_gb": 120,
+        "includes_setup": [],
+        "id": "windows_gate",
+        "estimated_minutes": 17,
+        "needs": ["windows_base"],
+        "produces": []
+      },
+      {
+        "scope": "die",
+        "driver_axes": ["windows_guest"],
+        "setup": false,
+        "capabilities": ["kvm", "vfio"],
+        "host_swap": false,
+        "parameters": {},
+        "download_gb": 0,
+        "disk_gb": 120,
+        "includes_setup": [],
+        "id": "windows_apps_full",
+        "estimated_minutes": 94,
+        "needs": ["windows_base"],
+        "produces": []
+      },
+      {
+        "scope": "die",
+        "driver_axes": ["windows_guest"],
+        "setup": true,
+        "capabilities": [],
+        "host_swap": false,
+        "parameters": {},
+        "download_gb": 43,
+        "disk_gb": 220,
+        "includes_setup": [],
+        "id": "spec_prepare",
+        "estimated_minutes": 30,
+        "needs": ["windows_base"],
+        "produces": ["spec_tree"]
+      },
+      {
+        "scope": "die",
+        "driver_axes": ["windows_guest"],
+        "setup": false,
+        "capabilities": [],
+        "host_swap": false,
+        "parameters": {
+          "lane": "a"
+        },
+        "download_gb": 0,
+        "disk_gb": 220,
+        "includes_setup": ["spec_tree"],
+        "id": "spec_lane_a",
+        "estimated_minutes": 150,
+        "needs": ["spec_tree"],
+        "produces": []
+      },
+      {
+        "scope": "die",
+        "driver_axes": ["windows_guest"],
+        "setup": false,
+        "capabilities": [],
+        "host_swap": false,
+        "parameters": {
+          "lane": "b"
+        },
+        "download_gb": 0,
+        "disk_gb": 220,
+        "includes_setup": ["spec_tree"],
+        "id": "spec_lane_b",
+        "estimated_minutes": 120,
+        "needs": ["spec_tree"],
+        "produces": []
+      },
+      {
+        "scope": "driver",
+        "driver_axes": ["linux_guest"],
+        "setup": false,
+        "capabilities": [],
+        "host_swap": false,
+        "parameters": {
+          "driver_action": "guest_linux",
+          "checks": ["nvidia-smi", "deviceQuery", "vectorAdd", "raw-two-arms"]
+        },
+        "download_gb": 0,
+        "disk_gb": 120,
+        "includes_setup": [],
+        "id": "guest_linux_tiny",
+        "estimated_minutes": 5,
+        "needs": ["kf3_bins"],
+        "produces": []
+      },
+      {
+        "scope": "driver",
+        "driver_axes": ["windows_guest"],
+        "setup": false,
+        "capabilities": ["kvm", "vfio"],
+        "host_swap": false,
+        "parameters": {
+          "driver_action": "guest_windows",
+          "checks": ["device-code-0", "nvidia-smi", "cup8"]
+        },
+        "download_gb": 0,
+        "disk_gb": 120,
+        "includes_setup": [],
+        "id": "guest_windows_tiny",
+        "estimated_minutes": 13,
+        "needs": ["windows_base"],
+        "produces": []
+      },
+      {
+        "scope": "driver",
+        "driver_axes": ["host"],
+        "setup": false,
+        "capabilities": ["can_swap_host_driver"],
+        "host_swap": true,
+        "parameters": {
+          "driver_action": "host_swap",
+          "gate_scope": "subset"
+        },
+        "download_gb": 0,
+        "disk_gb": 120,
+        "includes_setup": [],
+        "id": "host_tiny",
+        "estimated_minutes": 12,
+        "needs": ["source"],
+        "produces": []
+      },
+      {
+        "id": "linux_apps_middle",
+        "estimated_minutes": 8,
+        "needs": ["kf3_bins", "open_image"],
+        "produces": [],
+        "scope": "die",
+        "setup": false,
+        "capabilities": ["kvm"],
+        "host_swap": false,
+        "driver_axes": ["linux_guest"],
+        "parameters": {},
+        "download_gb": 0,
+        "disk_gb": 120,
+        "includes_setup": []
+      },
+      {
+        "id": "nested",
+        "estimated_minutes": 10,
+        "needs": ["kf3_bins"],
+        "produces": [],
+        "scope": "die",
+        "setup": false,
+        "capabilities": ["kvm"],
+        "host_swap": false,
+        "driver_axes": ["linux_guest"],
+        "parameters": {},
+        "download_gb": 0,
+        "disk_gb": 120,
+        "includes_setup": []
+      },
+      {
+        "id": "windows_apps_small",
+        "estimated_minutes": 12,
+        "needs": ["windows_base"],
+        "produces": [],
+        "scope": "die",
+        "setup": false,
+        "capabilities": ["kvm", "vfio"],
+        "host_swap": false,
+        "driver_axes": ["windows_guest"],
+        "parameters": {},
+        "download_gb": 0,
+        "disk_gb": 120,
+        "includes_setup": []
+      },
+      {
+        "id": "windows_apps_mid",
+        "estimated_minutes": 25,
+        "needs": ["windows_base"],
+        "produces": [],
+        "scope": "die",
+        "setup": false,
+        "capabilities": ["kvm", "vfio"],
+        "host_swap": false,
+        "driver_axes": ["windows_guest"],
+        "parameters": {},
+        "download_gb": 0,
+        "disk_gb": 120,
+        "includes_setup": []
+      },
+      {
+        "id": "spec_smoke",
+        "estimated_minutes": 10,
+        "needs": ["spec_tree"],
+        "produces": [],
+        "scope": "die",
+        "setup": false,
+        "capabilities": ["kvm", "vfio"],
+        "host_swap": false,
+        "driver_axes": ["windows_guest"],
+        "parameters": {
+          "viewsets": ["medical-04", "energy-04"]
+        },
+        "download_gb": 0,
+        "disk_gb": 220,
+        "includes_setup": []
+      },
+      {
+        "id": "guest_linux_full",
+        "estimated_minutes": 15,
+        "needs": ["kf3_bins", "open_image"],
+        "produces": [],
+        "scope": "driver",
+        "setup": false,
+        "capabilities": ["kvm"],
+        "host_swap": false,
+        "driver_axes": ["linux_guest"],
+        "parameters": {
+          "driver_action": "guest_linux",
+          "suite": "full"
+        },
+        "download_gb": 0,
+        "disk_gb": 120,
+        "includes_setup": []
+      },
+      {
+        "id": "guest_windows_full",
+        "estimated_minutes": 35,
+        "needs": ["windows_base"],
+        "produces": [],
+        "scope": "driver",
+        "setup": false,
+        "capabilities": ["kvm", "vfio"],
+        "host_swap": false,
+        "driver_axes": ["windows_guest"],
+        "parameters": {
+          "driver_action": "guest_windows",
+          "suite": "full"
+        },
+        "download_gb": 0,
+        "disk_gb": 120,
+        "includes_setup": []
+      },
+      {
+        "id": "host_full",
+        "estimated_minutes": 20,
+        "needs": ["source"],
+        "produces": [],
+        "scope": "driver",
+        "setup": false,
+        "capabilities": ["can_swap_host_driver"],
+        "host_swap": true,
+        "driver_axes": ["host"],
+        "parameters": {
+          "driver_action": "host_swap",
+          "host_gates": "9/9",
+          "raw": "30/30",
+          "thin": "30/30"
+        },
+        "download_gb": 0,
+        "disk_gb": 120,
+        "includes_setup": []
+      }
+    ],
+    "artifacts": [
+      {
+        "id": "source",
+        "producer": "provision",
+        "gb": 0,
+        "scope": "box",
+        "seedable": false,
+        "reuse_policy": "local_build",
+        "trusted_content": null
+      },
+      {
+        "id": "kf3_bins",
+        "producer": "kayfabe_build",
+        "gb": 0.11,
+        "scope": "box",
+        "seedable": true,
+        "reuse_policy": "local_build",
+        "trusted_content": null
+      },
+      {
+        "id": "open_image",
+        "producer": "linux_image_build",
+        "gb": 13,
+        "scope": "box",
+        "seedable": true,
+        "reuse_policy": "local_build",
+        "trusted_content": null
+      },
+      {
+        "id": "windows_base",
+        "producer": "windows_install_gate",
+        "gb": 35,
+        "scope": "driver",
+        "seedable": false,
+        "reuse_policy": "local_build",
+        "trusted_content": null
+      },
+      {
+        "id": "spec_tree",
+        "producer": "spec_prepare",
+        "gb": 43,
+        "scope": "box",
+        "seedable": false,
+        "reuse_policy": "local_build",
+        "trusted_content": null
+      }
+    ],
+    "dies": [
+      {
+        "id": "TU106",
+        "die_family": "Turing",
+        "status": "proposed",
+        "supported_branches": [570, 580, 590],
+        "minimum_driver_branches": {
+          "host": null,
+          "linux_guest": null,
+          "windows_guest": null
+        }
+      },
+      {
+        "id": "TU116",
+        "die_family": "Turing",
+        "status": "proposed",
+        "supported_branches": [570, 580, 590],
+        "minimum_driver_branches": {
+          "host": null,
+          "linux_guest": null,
+          "windows_guest": null
+        }
+      },
+      {
+        "id": "GA102",
+        "die_family": "Ampere",
+        "status": "proposed",
+        "supported_branches": [570, 580, 590],
+        "minimum_driver_branches": {
+          "host": null,
+          "linux_guest": null,
+          "windows_guest": null
+        }
+      },
+      {
+        "id": "GA104",
+        "die_family": "Ampere",
+        "status": "proposed",
+        "supported_branches": [570, 580, 590],
+        "minimum_driver_branches": {
+          "host": null,
+          "linux_guest": null,
+          "windows_guest": null
+        }
+      },
+      {
+        "id": "AD102",
+        "die_family": "Ada",
+        "status": "proposed",
+        "supported_branches": [570, 580, 590],
+        "minimum_driver_branches": {
+          "host": null,
+          "linux_guest": null,
+          "windows_guest": null
+        }
+      },
+      {
+        "id": "AD104",
+        "die_family": "Ada",
+        "status": "proposed",
+        "supported_branches": [570, 580, 590],
+        "minimum_driver_branches": {
+          "host": null,
+          "linux_guest": null,
+          "windows_guest": null
+        }
+      },
+      {
+        "id": "GB202",
+        "die_family": "Blackwell",
+        "status": "proposed",
+        "supported_branches": [570, 580, 590],
+        "minimum_driver_branches": {
+          "host": 570,
+          "linux_guest": 570,
+          "windows_guest": 570
+        }
+      },
+      {
+        "id": "GB205",
+        "die_family": "Blackwell",
+        "status": "proposed",
+        "supported_branches": [570, 580, 590],
+        "minimum_driver_branches": {
+          "host": 570,
+          "linux_guest": 570,
+          "windows_guest": 570
+        }
+      },
+      {
+        "id": "TU102",
+        "die_family": "Turing",
+        "status": "proposed",
+        "supported_branches": [570, 580, 590],
+        "minimum_driver_branches": {
+          "host": null,
+          "linux_guest": null,
+          "windows_guest": null
+        }
+      },
+      {
+        "id": "GA106",
+        "die_family": "Ampere",
+        "status": "proposed",
+        "supported_branches": [570, 580, 590],
+        "minimum_driver_branches": {
+          "host": null,
+          "linux_guest": null,
+          "windows_guest": null
+        }
+      },
+      {
+        "id": "AD103",
+        "die_family": "Ada",
+        "status": "proposed",
+        "supported_branches": [570, 580, 590],
+        "minimum_driver_branches": {
+          "host": null,
+          "linux_guest": null,
+          "windows_guest": null
+        }
+      },
+      {
+        "id": "AD106",
+        "die_family": "Ada",
+        "status": "proposed",
+        "supported_branches": [570, 580, 590],
+        "minimum_driver_branches": {
+          "host": null,
+          "linux_guest": null,
+          "windows_guest": null
+        }
+      },
+      {
+        "id": "GB203",
+        "die_family": "Blackwell",
+        "status": "proposed",
+        "supported_branches": [570, 580, 590],
+        "minimum_driver_branches": {
+          "host": 570,
+          "linux_guest": 570,
+          "windows_guest": 570
+        }
+      },
+      {
+        "id": "GB206",
+        "die_family": "Blackwell",
+        "status": "proposed",
+        "supported_branches": [570, 580, 590],
+        "minimum_driver_branches": {
+          "host": 570,
+          "linux_guest": 570,
+          "windows_guest": 570
+        }
+      },
+      {
+        "id": "TU104",
+        "die_family": "Turing",
+        "status": "proposed",
+        "supported_branches": [570, 580, 590],
+        "minimum_driver_branches": {
+          "host": null,
+          "linux_guest": null,
+          "windows_guest": null
+        }
+      },
+      {
+        "id": "TU117",
+        "die_family": "Turing",
+        "status": "proposed",
+        "supported_branches": [570, 580, 590],
+        "minimum_driver_branches": {
+          "host": null,
+          "linux_guest": null,
+          "windows_guest": null
+        }
+      },
+      {
+        "id": "GA103",
+        "die_family": "Ampere",
+        "status": "proposed",
+        "supported_branches": [570, 580, 590],
+        "minimum_driver_branches": {
+          "host": null,
+          "linux_guest": null,
+          "windows_guest": null
+        }
+      },
+      {
+        "id": "GA107",
+        "die_family": "Ampere",
+        "status": "proposed",
+        "supported_branches": [570, 580, 590],
+        "minimum_driver_branches": {
+          "host": null,
+          "linux_guest": null,
+          "windows_guest": null
+        }
+      },
+      {
+        "id": "AD107",
+        "die_family": "Ada",
+        "status": "proposed",
+        "supported_branches": [570, 580, 590],
+        "minimum_driver_branches": {
+          "host": null,
+          "linux_guest": null,
+          "windows_guest": null
+        }
+      },
+      {
+        "id": "GB207",
+        "die_family": "Blackwell",
+        "status": "proposed",
+        "supported_branches": [570, 580, 590],
+        "minimum_driver_branches": {
+          "host": 570,
+          "linux_guest": 570,
+          "windows_guest": 570
+        }
+      },
+      {
+        "id": "GA100",
+        "die_family": "Ampere",
+        "status": "unsupported",
+        "supported_branches": [],
+        "minimum_driver_branches": {
+          "host": null,
+          "linux_guest": null,
+          "windows_guest": null
+        }
+      },
+      {
+        "id": "GH100",
+        "die_family": "Hopper",
+        "status": "unsupported",
+        "supported_branches": [],
+        "minimum_driver_branches": {
+          "host": null,
+          "linux_guest": null,
+          "windows_guest": null
+        }
+      },
+      {
+        "id": "GB10x",
+        "die_family": "GraceBlackwell",
+        "status": "unsupported",
+        "supported_branches": [],
+        "minimum_driver_branches": {
+          "host": null,
+          "linux_guest": null,
+          "windows_guest": null
+        }
+      }
+    ],
+    "driver_pins": [
+      {
+        "id": "0",
+        "driver_family": 580,
+        "abi_version": "580.105.08",
+        "os": "linux",
+        "version": "580.105.08",
+        "status": "PINNED",
+        "url": "https://download.nvidia.com/XFree86/Linux-x86_64/580.105.08/NVIDIA-Linux-x86_64-580.105.08.run",
+        "sha256": "d9c6e8188672f3eb74dd04cfa69dd58479fa1d0162c8c28c8d17625763293475",
+        "size": 396635119,
+        "checked": "2026-11-07",
+        "source": "MEASURED official .sha256sum and installer Content-Length on 2026-11-07",
+        "catalog_url": null
+      },
+      {
+        "id": "1",
+        "driver_family": 580,
+        "abi_version": "580.126.09",
+        "os": "linux",
+        "version": "580.126.09",
+        "status": "PINNED",
+        "url": "https://download.nvidia.com/XFree86/Linux-x86_64/580.126.09/NVIDIA-Linux-x86_64-580.126.09.run",
+        "sha256": "4cac53e48f8adff661d47c8788ed24059a248c9fd8098ceafd088a498986ec26",
+        "size": 396807358,
+        "checked": "2026-11-07",
+        "source": "MEASURED official .sha256sum and installer Content-Length on 2026-11-07",
+        "catalog_url": null
+      },
+      {
+        "id": "2",
+        "driver_family": 580,
+        "abi_version": "580.159.04",
+        "os": "linux",
+        "version": "580.159.04",
+        "status": "PINNED",
+        "url": "https://download.nvidia.com/XFree86/Linux-x86_64/580.159.04/NVIDIA-Linux-x86_64-580.159.04.run",
+        "sha256": "c1e66761b088d17b3adf6cb6979de9af38be2684d102b001a176dcfafabdca1e",
+        "size": 397162548,
+        "checked": "2026-11-07",
+        "source": "MEASURED official .sha256sum and installer Content-Length on 2026-11-07",
+        "catalog_url": null
+      },
+      {
+        "id": "3",
+        "driver_family": 580,
+        "abi_version": "580.173.02",
+        "os": "linux",
+        "version": "580.173.02",
+        "status": "PINNED",
+        "url": "https://download.nvidia.com/XFree86/Linux-x86_64/580.173.02/NVIDIA-Linux-x86_64-580.173.02.run",
+        "sha256": "8d8eb9001e05a9a8a663d3d5d304feb64ef2844ee185ccdfd952786820f46e1b",
+        "size": 398312209,
+        "checked": "2026-11-07",
+        "source": "MEASURED official .sha256sum and installer Content-Length on 2026-11-07",
+        "catalog_url": null
+      },
+      {
+        "id": "4",
+        "driver_family": 580,
+        "abi_version": "580.178.04",
+        "os": "linux",
+        "version": "580.178.04",
+        "status": "PINNED",
+        "url": "https://download.nvidia.com/XFree86/Linux-x86_64/580.178.04/NVIDIA-Linux-x86_64-580.178.04.run",
+        "sha256": "5975a86ee45bffcb626f51ae33d1169b108186a2ea47ad651e72f13fa4b6d6f9",
+        "size": 397214534,
+        "checked": "2026-11-07",
+        "source": "MEASURED official .sha256sum and installer Content-Length on 2026-11-07",
+        "catalog_url": null
+      },
+      {
+        "id": "5",
+        "driver_family": 580,
+        "abi_version": "580.65.06",
+        "os": "linux",
+        "version": "580.65.06",
+        "status": "PINNED",
+        "url": "https://download.nvidia.com/XFree86/Linux-x86_64/580.65.06/NVIDIA-Linux-x86_64-580.65.06.run",
+        "sha256": "04b10867af585e765cfbfdcf39ed5f4bd112375bebab0172eaa187c6aa5024ff",
+        "size": 393832804,
+        "checked": "2026-11-07",
+        "source": "MEASURED official .sha256sum and installer Content-Length on 2026-11-07",
+        "catalog_url": null
+      },
+      {
+        "id": "6",
+        "driver_family": 580,
+        "abi_version": "580.82.07",
+        "os": "linux",
+        "version": "580.82.07",
+        "status": "PINNED",
+        "url": "https://download.nvidia.com/XFree86/Linux-x86_64/580.82.07/NVIDIA-Linux-x86_64-580.82.07.run",
+        "sha256": "061e48e11fe552232095811d0b1cea9b718ba2540d605074ff227fce0628798c",
+        "size": 396359634,
+        "checked": "2026-11-07",
+        "source": "MEASURED official .sha256sum and installer Content-Length on 2026-11-07",
+        "catalog_url": null
+      },
+      {
+        "id": "7",
+        "driver_family": 580,
+        "abi_version": "580.94.02",
+        "os": "linux",
+        "version": "580.94.02",
+        "status": "UNPINNED",
+        "url": "https://download.nvidia.com/XFree86/Linux-x86_64/580.94.02/NVIDIA-Linux-x86_64-580.94.02.run",
+        "sha256": null,
+        "size": null,
+        "checked": "2026-11-07",
+        "source": "UNPINNED: official XFree86 and tesla candidate URLs returned HTTP 404 on 2026-11-07",
+        "catalog_url": null
+      },
+      {
+        "id": "8",
+        "driver_family": 590,
+        "abi_version": "590.48.01",
+        "os": "linux",
+        "version": "590.48.01",
+        "status": "PINNED",
+        "url": "https://download.nvidia.com/XFree86/Linux-x86_64/590.48.01/NVIDIA-Linux-x86_64-590.48.01.run",
+        "sha256": "b9e2f80693781431cc87f4cd29109e133dcecb50a50d6b68d4b3bf2d696bd689",
+        "size": 416273526,
+        "checked": "2026-11-07",
+        "source": "MEASURED official .sha256sum and installer Content-Length on 2026-11-07",
+        "catalog_url": null
+      },
+      {
+        "id": "9",
+        "driver_family": 580,
+        "abi_version": "580.65.06",
+        "os": "windows",
+        "version": "580.88",
+        "status": "PINNED",
+        "url": "https://us.download.nvidia.com/Windows/580.88/580.88-desktop-win10-win11-64bit-international-dch-whql.exe",
+        "sha256": "90c49f925b41ee062e02cc8094a16b6d057abfde4e85235a76d63ffe267f63a9",
+        "size": 890807536,
+        "checked": "2026-11-07",
+        "source": "MEASURED streamed official installer sha256 and byte count on 2026-11-07; bytes not retained",
+        "catalog_url": null
+      },
+      {
+        "id": "10",
+        "driver_family": 580,
+        "abi_version": null,
+        "os": "windows",
+        "version": "580.97",
+        "status": "PINNED",
+        "url": "https://us.download.nvidia.com/Windows/580.97/580.97-desktop-win10-win11-64bit-international-dch-whql.exe",
+        "sha256": "081878a323fc24b8ec4f7c9b0e72e22ad6f9ae73219a6fac324b59cd6258d076",
+        "size": 890779664,
+        "checked": "2026-11-07",
+        "source": "MEASURED streamed official installer sha256 and byte count on 2026-11-07; bytes not retained",
+        "catalog_url": null
+      },
+      {
+        "id": "pending-linux-570",
+        "os": "linux",
+        "driver_family": 570,
+        "version": null,
+        "abi_version": null,
+        "status": "UNPINNED",
+        "url": null,
+        "sha256": null,
+        "size": null,
+        "source": "Owner requires production-branch coverage; official installer version/pin unresolved. No version, URL or checksum invented.",
+        "checked": "2026-11-08",
+        "catalog_url": null
+      },
+      {
+        "id": "pending-windows-570",
+        "os": "windows",
+        "driver_family": 570,
+        "version": null,
+        "abi_version": null,
+        "status": "UNPINNED",
+        "url": null,
+        "sha256": null,
+        "size": null,
+        "source": "Owner requires production-branch coverage; official installer version/pin unresolved. No version, URL or checksum invented.",
+        "checked": "2026-11-08",
+        "catalog_url": null
+      },
+      {
+        "id": "pending-windows-590",
+        "os": "windows",
+        "driver_family": 590,
+        "version": null,
+        "abi_version": null,
+        "status": "UNPINNED",
+        "url": null,
+        "sha256": null,
+        "size": null,
+        "source": "Owner requires production-branch coverage; official installer version/pin unresolved. No version, URL or checksum invented.",
+        "checked": "2026-11-08",
+        "catalog_url": null
+      }
+    ],
+    "driver_sets": [
+      {
+        "id": "570",
+        "kind": "branch",
+        "branch": 570,
+        "drivers": {
+          "host": "pending-linux-570",
+          "linux_guest": "pending-linux-570",
+          "windows_guest": "pending-windows-570"
+        },
+        "supported_dies": [
+          "TU106",
+          "TU116",
+          "GA102",
+          "GA104",
+          "AD102",
+          "AD104",
+          "GB202",
+          "GB205",
+          "TU102",
+          "GA106",
+          "AD103",
+          "AD106",
+          "GB203",
+          "GB206",
+          "TU104",
+          "TU117",
+          "GA103",
+          "GA107",
+          "AD107",
+          "GB207"
+        ]
+      },
+      {
+        "id": "580",
+        "kind": "branch",
+        "branch": 580,
+        "drivers": {
+          "host": "2",
+          "linux_guest": "2",
+          "windows_guest": "9"
+        },
+        "supported_dies": [
+          "TU106",
+          "TU116",
+          "GA102",
+          "GA104",
+          "AD102",
+          "AD104",
+          "GB202",
+          "GB205",
+          "TU102",
+          "GA106",
+          "AD103",
+          "AD106",
+          "GB203",
+          "GB206",
+          "TU104",
+          "TU117",
+          "GA103",
+          "GA107",
+          "AD107",
+          "GB207"
+        ]
+      },
+      {
+        "id": "590",
+        "kind": "branch",
+        "branch": 590,
+        "drivers": {
+          "host": "8",
+          "linux_guest": "8",
+          "windows_guest": "pending-windows-590"
+        },
+        "supported_dies": [
+          "TU106",
+          "TU116",
+          "GA102",
+          "GA104",
+          "AD102",
+          "AD104",
+          "GB202",
+          "GB205",
+          "TU102",
+          "GA106",
+          "AD103",
+          "AD106",
+          "GB203",
+          "GB206",
+          "TU104",
+          "TU117",
+          "GA103",
+          "GA107",
+          "AD107",
+          "GB207"
+        ]
+      }
+    ],
+    "profiles": [
+      {
+        "tier": "large",
+        "rank": 4,
+        "can_seed": true,
+        "disk_gb": 300,
+        "min_disk_gb": 220,
+        "bandwidth_down_gb": 130,
+        "base_upload_gb": 2,
+        "max_inet_usd_gb": 0.02,
+        "min_cpu_cores": 8,
+        "min_disk_mb_per_second": 100,
+        "min_down_mbps": 200,
+        "min_up_mbps": 50,
+        "min_reliability": 0.98,
+        "min_dlperf_ratio": 0.5,
+        "artifact_sources": [
+          {
+            "artifact": "source",
+            "policy": "local"
+          },
+          {
+            "artifact": "kf3_bins",
+            "policy": "local"
+          },
+          {
+            "artifact": "open_image",
+            "policy": "local"
+          },
+          {
+            "artifact": "windows_base",
+            "policy": "local"
+          },
+          {
+            "artifact": "spec_tree",
+            "policy": "local"
+          }
+        ]
+      },
+      {
+        "tier": "medium",
+        "rank": 2,
+        "can_seed": false,
+        "disk_gb": 120,
+        "min_disk_gb": 120,
+        "bandwidth_down_gb": 87,
+        "base_upload_gb": 2,
+        "max_inet_usd_gb": 0.005,
+        "min_cpu_cores": 8,
+        "min_disk_mb_per_second": 100,
+        "min_down_mbps": 200,
+        "min_up_mbps": 50,
+        "min_reliability": 0.98,
+        "min_dlperf_ratio": 0.5,
+        "artifact_sources": [
+          {
+            "artifact": "source",
+            "policy": "local"
+          },
+          {
+            "artifact": "kf3_bins",
+            "policy": "optional_seed"
+          },
+          {
+            "artifact": "open_image",
+            "policy": "optional_seed"
+          },
+          {
+            "artifact": "windows_base",
+            "policy": "local"
+          },
+          {
+            "artifact": "spec_tree",
+            "policy": "local"
+          }
+        ]
+      },
+      {
+        "tier": "small",
+        "rank": 1,
+        "can_seed": false,
+        "disk_gb": 120,
+        "min_disk_gb": 120,
+        "bandwidth_down_gb": 73,
+        "base_upload_gb": 2,
+        "max_inet_usd_gb": 0.005,
+        "min_cpu_cores": 8,
+        "min_disk_mb_per_second": 100,
+        "min_down_mbps": 200,
+        "min_up_mbps": 50,
+        "min_reliability": 0.98,
+        "min_dlperf_ratio": 0.5,
+        "artifact_sources": [
+          {
+            "artifact": "source",
+            "policy": "local"
+          },
+          {
+            "artifact": "kf3_bins",
+            "policy": "optional_seed"
+          },
+          {
+            "artifact": "open_image",
+            "policy": "optional_seed"
+          },
+          {
+            "artifact": "windows_base",
+            "policy": "local"
+          },
+          {
+            "artifact": "spec_tree",
+            "policy": "local"
+          }
+        ]
+      },
+      {
+        "tier": "large-lite",
+        "rank": 3,
+        "can_seed": false,
+        "disk_gb": 300,
+        "min_disk_gb": 220,
+        "bandwidth_down_gb": 87,
+        "base_upload_gb": 2,
+        "max_inet_usd_gb": 0.02,
+        "min_cpu_cores": 8,
+        "min_disk_mb_per_second": 100,
+        "min_down_mbps": 200,
+        "min_up_mbps": 50,
+        "min_reliability": 0.98,
+        "min_dlperf_ratio": 0.5,
+        "artifact_sources": [
+          {
+            "artifact": "source",
+            "policy": "local"
+          },
+          {
+            "artifact": "kf3_bins",
+            "policy": "optional_seed"
+          },
+          {
+            "artifact": "open_image",
+            "policy": "optional_seed"
+          },
+          {
+            "artifact": "windows_base",
+            "policy": "local"
+          },
+          {
+            "artifact": "spec_tree",
+            "policy": "local"
+          }
+        ]
+      }
+    ]
+  },
+  "requirements": {
+    "version": 1,
+    "status": "proposed",
+    "items": [
+      {
+        "id": "primary-TU106",
+        "die": "TU106",
+        "runs": [
+          "merge_bar",
+          "linux_apps_full",
+          "linux_image_build",
+          "kayfabe_build",
+          "nested",
+          "windows_install_gate",
+          "windows_gate",
+          "windows_apps_full",
+          "spec_lane_a",
+          "spec_lane_b"
+        ],
+        "driver": {
+          "host": "2",
+          "linux_guest": "1",
+          "windows_guest": "10"
+        },
+        "tier": "large",
+        "evidence": "primary",
+        "must": true
+      },
+      {
+        "id": "primary-TU116",
+        "die": "TU116",
+        "runs": [
+          "merge_bar",
+          "linux_apps_full",
+          "windows_install_gate",
+          "windows_gate",
+          "windows_apps_mid"
+        ],
+        "driver": {
+          "host": "5",
+          "linux_guest": "5",
+          "windows_guest": "9"
+        },
+        "tier": "large-lite",
+        "evidence": "primary",
+        "must": true
+      },
+      {
+        "id": "primary-GA102",
+        "die": "GA102",
+        "runs": [
+          "merge_bar",
+          "linux_apps_full",
+          "linux_image_build",
+          "kayfabe_build",
+          "nested",
+          "windows_install_gate",
+          "windows_gate",
+          "windows_apps_full",
+          "spec_lane_a",
+          "spec_lane_b"
+        ],
+        "driver": {
+          "host": "3",
+          "linux_guest": "2",
+          "windows_guest": "10"
+        },
+        "tier": "large",
+        "evidence": "primary",
+        "must": true
+      },
+      {
+        "id": "primary-GA104",
+        "die": "GA104",
+        "runs": [
+          "merge_bar",
+          "linux_apps_full",
+          "windows_install_gate",
+          "windows_gate",
+          "windows_apps_mid"
+        ],
+        "driver": {
+          "host": "6",
+          "linux_guest": "6",
+          "windows_guest": "9"
+        },
+        "tier": "large-lite",
+        "evidence": "primary",
+        "must": true
+      },
+      {
+        "id": "primary-AD102",
+        "die": "AD102",
+        "runs": [
+          "merge_bar",
+          "linux_apps_full",
+          "linux_image_build",
+          "kayfabe_build",
+          "nested",
+          "windows_install_gate",
+          "windows_gate",
+          "windows_apps_full",
+          "spec_lane_a",
+          "spec_lane_b"
+        ],
+        "driver": {
+          "host": "4",
+          "linux_guest": "3",
+          "windows_guest": "10"
+        },
+        "tier": "large",
+        "evidence": "primary",
+        "must": true
+      },
+      {
+        "id": "primary-AD104",
+        "die": "AD104",
+        "runs": [
+          "merge_bar",
+          "linux_apps_full",
+          "windows_install_gate",
+          "windows_gate",
+          "windows_apps_mid"
+        ],
+        "driver": {
+          "host": "7",
+          "linux_guest": "7",
+          "windows_guest": "9"
+        },
+        "tier": "large-lite",
+        "evidence": "primary",
+        "must": true
+      },
+      {
+        "id": "primary-GB202",
+        "die": "GB202",
+        "runs": [
+          "merge_bar",
+          "linux_apps_full",
+          "linux_image_build",
+          "kayfabe_build",
+          "nested",
+          "windows_install_gate",
+          "windows_gate",
+          "windows_apps_full",
+          "spec_lane_a",
+          "spec_lane_b"
+        ],
+        "driver": {
+          "host": "8",
+          "linux_guest": "8",
+          "windows_guest": "10"
+        },
+        "tier": "large",
+        "evidence": "primary",
+        "must": true
+      },
+      {
+        "id": "primary-GB205",
+        "die": "GB205",
+        "runs": [
+          "merge_bar",
+          "linux_apps_full",
+          "windows_install_gate",
+          "windows_gate",
+          "windows_apps_mid"
+        ],
+        "driver": {
+          "host": "0",
+          "linux_guest": "0",
+          "windows_guest": "9"
+        },
+        "tier": "large-lite",
+        "evidence": "primary",
+        "must": true
+      },
+      {
+        "id": "primary-TU102",
+        "die": "TU102",
+        "runs": ["merge_bar", "linux_apps_middle", "windows_install_gate", "windows_apps_mid"],
+        "driver": {
+          "host": "2",
+          "linux_guest": "2",
+          "windows_guest": "9"
+        },
+        "tier": "medium",
+        "evidence": "primary",
+        "must": true
+      },
+      {
+        "id": "primary-GA106",
+        "die": "GA106",
+        "runs": ["merge_bar", "linux_apps_middle", "windows_install_gate", "windows_apps_mid"],
+        "driver": {
+          "host": "2",
+          "linux_guest": "2",
+          "windows_guest": "9"
+        },
+        "tier": "medium",
+        "evidence": "primary",
+        "must": true
+      },
+      {
+        "id": "primary-AD103",
+        "die": "AD103",
+        "runs": ["merge_bar", "linux_apps_middle", "windows_install_gate", "windows_apps_mid"],
+        "driver": {
+          "host": "2",
+          "linux_guest": "2",
+          "windows_guest": "9"
+        },
+        "tier": "medium",
+        "evidence": "primary",
+        "must": true
+      },
+      {
+        "id": "primary-AD106",
+        "die": "AD106",
+        "runs": ["merge_bar", "linux_apps_middle", "windows_install_gate", "windows_apps_mid"],
+        "driver": {
+          "host": "2",
+          "linux_guest": "2",
+          "windows_guest": "9"
+        },
+        "tier": "medium",
+        "evidence": "primary",
+        "must": true
+      },
+      {
+        "id": "primary-GB203",
+        "die": "GB203",
+        "runs": ["merge_bar", "linux_apps_middle", "windows_install_gate", "windows_apps_mid"],
+        "driver": {
+          "host": "2",
+          "linux_guest": "2",
+          "windows_guest": "9"
+        },
+        "tier": "medium",
+        "evidence": "primary",
+        "must": true
+      },
+      {
+        "id": "primary-GB206",
+        "die": "GB206",
+        "runs": ["merge_bar", "linux_apps_middle", "windows_install_gate", "windows_apps_mid"],
+        "driver": {
+          "host": "2",
+          "linux_guest": "2",
+          "windows_guest": "9"
+        },
+        "tier": "medium",
+        "evidence": "primary",
+        "must": true
+      },
+      {
+        "id": "primary-TU104",
+        "die": "TU104",
+        "runs": ["merge_bar", "windows_install_gate", "windows_apps_small"],
+        "driver": {
+          "host": "2",
+          "linux_guest": "2",
+          "windows_guest": "9"
+        },
+        "tier": "small",
+        "evidence": "primary",
+        "must": true
+      },
+      {
+        "id": "primary-TU117",
+        "die": "TU117",
+        "runs": ["merge_bar", "windows_install_gate", "windows_apps_small"],
+        "driver": {
+          "host": "2",
+          "linux_guest": "2",
+          "windows_guest": "9"
+        },
+        "tier": "small",
+        "evidence": "primary",
+        "must": true
+      },
+      {
+        "id": "primary-GA103",
+        "die": "GA103",
+        "runs": ["merge_bar", "windows_install_gate", "windows_apps_small"],
+        "driver": {
+          "host": "2",
+          "linux_guest": "2",
+          "windows_guest": "9"
+        },
+        "tier": "small",
+        "evidence": "primary",
+        "must": true
+      },
+      {
+        "id": "primary-GA107",
+        "die": "GA107",
+        "runs": ["merge_bar", "windows_install_gate", "windows_apps_small"],
+        "driver": {
+          "host": "2",
+          "linux_guest": "2",
+          "windows_guest": "9"
+        },
+        "tier": "small",
+        "evidence": "primary",
+        "must": true
+      },
+      {
+        "id": "primary-AD107",
+        "die": "AD107",
+        "runs": ["merge_bar", "windows_install_gate", "windows_apps_small"],
+        "driver": {
+          "host": "2",
+          "linux_guest": "2",
+          "windows_guest": "9"
+        },
+        "tier": "small",
+        "evidence": "primary",
+        "must": true
+      },
+      {
+        "id": "primary-GB207",
+        "die": "GB207",
+        "runs": ["merge_bar", "windows_install_gate", "windows_apps_small"],
+        "driver": {
+          "host": "2",
+          "linux_guest": "2",
+          "windows_guest": "9"
+        },
+        "tier": "small",
+        "evidence": "primary",
+        "must": true
+      },
+      {
+        "id": "branches-Turing",
+        "die_family": "Turing",
+        "runs": ["guest_linux_tiny", "guest_windows_tiny", "host_tiny"],
+        "driver_sweep": {
+          "branches": ["570", "580", "590"]
+        },
+        "tier": "large",
+        "evidence": "driver",
+        "must": true
+      },
+      {
+        "id": "branches-Ampere",
+        "die_family": "Ampere",
+        "runs": ["guest_linux_tiny", "guest_windows_tiny", "host_tiny"],
+        "driver_sweep": {
+          "branches": ["570", "580", "590"]
+        },
+        "tier": "large",
+        "evidence": "driver",
+        "must": true
+      },
+      {
+        "id": "branches-Ada",
+        "die_family": "Ada",
+        "runs": ["guest_linux_tiny", "guest_windows_tiny", "host_tiny"],
+        "driver_sweep": {
+          "branches": ["570", "580", "590"]
+        },
+        "tier": "large",
+        "evidence": "driver",
+        "must": true
+      },
+      {
+        "id": "branches-Blackwell",
+        "die_family": "Blackwell",
+        "runs": ["guest_linux_tiny", "guest_windows_tiny", "host_tiny"],
+        "driver_sweep": {
+          "branches": ["570", "580", "590"]
+        },
+        "tier": "large",
+        "evidence": "driver",
+        "must": true
+      }
+    ]
+  },
+  "limits": {
+    "version": 1,
+    "status": "proposed",
+    "hard_minutes": 300,
+    "margin_minutes": 15,
+    "max_concurrent_boxes": 8,
+    "max_boxes": 64,
+    "cost_cap_usd": 45,
+    "storage_month_hours": 720,
+    "price_caps": [
+      {
+        "tier": "large",
+        "usd_hour": 2
+      },
+      {
+        "tier": "medium",
+        "usd_hour": 2
+      },
+      {
+        "tier": "small",
+        "usd_hour": 2
+      },
+      {
+        "tier": "large-lite",
+        "usd_hour": 2
+      }
+    ],
+    "bad_machine_ids": [],
+    "bad_host_ids": [],
+    "host_swap_policy": "separate_from_primary",
+    "host_transition_run": "host_tiny",
+    "seeding": {
+      "enabled": true,
+      "min_savings_minutes": 1,
+      "max_wait_minutes": 5,
+      "price_weight": 1,
+      "upload_cost_weight": 1,
+      "upload_speed_weight": 0.001,
+      "container_port": 8080,
+      "provider_facts_max_age_minutes": 1
+    }
+  },
+  "boxes": []
+}

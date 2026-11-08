@@ -320,6 +320,7 @@ jobs:
           fi
           python3 -m unittest discover -s scripts/ci -p 'test_*.py'
           python3 scripts/ci/image_size_mutants.py
+          python3 scripts/ci/kfci_mutants.py
           python3 -m unittest discover -s scripts/evidence -p 'test_*.py'
           bash scripts/bench/qemu_identity_selftest.sh
           bash scripts/bench/box/birth_census.sh --selftest
