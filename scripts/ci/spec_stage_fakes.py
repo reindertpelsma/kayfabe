@@ -117,7 +117,7 @@ run)
     esac
     /bin/sleep 3600 > /dev/null 2>&1 &
     echo $! > "$VMD/run/qemu.pid"
-    echo "[t] QEMU_START tag=$tag boot=1 pid=$! log=x" > "$VMD/logs/${tag}_run.log"
+    echo "[t] QEMU_START tag=$tag boot=1 pid=$! log=x" >> "$VMD/logs/${tag}_run.log"
     [ "$f" != nossh ] || touch "$R/nossh"
     exit 0 ;;
 stop)

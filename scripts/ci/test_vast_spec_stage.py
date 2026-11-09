@@ -341,6 +341,34 @@ class Copy(StageCase):
         mode = (self.sb.vm / "disk/gate_ci0123abcd.qcow2").stat().st_mode & 0o777
         self.assertEqual(mode, 0o400)
 
+    def test_logs_of_an_earlier_run_with_the_same_tag_are_moved_aside(self):
+        # win_vm.sh appends to <tag>_run.log; a stale QEMU_START in it would end the wait for the new boot at once
+        sb = fk.Sandbox(tempfile.mkdtemp(prefix="kfspec-"))
+        self.addCleanup(lambda: shutil.rmtree(sb.root, ignore_errors=True))
+        logs = sb.vm / "logs"
+        logs.mkdir(parents=True, exist_ok=True)
+        (logs / "spec_ci0123abcd_copy1_run.log").write_text("[old] QEMU_START tag=spec_ci0123abcd_copy1 boot=1 pid=1 log=x\n[old] WINVM_RUN_END tag=spec_ci0123abcd_copy1 boots=1\n")
+        (logs / "spec_ci0123abcd_copy1_b1_qemu.log").write_text("old qemu log\n")
+        (logs / "stop.log").write_text("not this run's\n")
+        p = sb.run("lanea")
+        self.assertEqual(fk.verdict_of(p.stdout), "SPECVIEWPERF_STAGE_PASS")
+        olds = sorted(d for d in logs.iterdir() if d.name.startswith("old_"))
+        self.assertEqual(len(olds), 1)
+        self.assertEqual(sorted(f.name for f in olds[0].iterdir()), ["spec_ci0123abcd_copy1_b1_qemu.log", "spec_ci0123abcd_copy1_run.log"])
+        self.assertTrue((logs / "stop.log").exists())
+
+    def test_the_new_boot_log_holds_nothing_of_the_old_run(self):
+        sb = fk.Sandbox(tempfile.mkdtemp(prefix="kfspec-"))
+        self.addCleanup(lambda: shutil.rmtree(sb.root, ignore_errors=True))
+        logs = sb.vm / "logs"
+        logs.mkdir(parents=True, exist_ok=True)
+        (logs / "spec_ci0123abcd_copy1_run.log").write_text("[old] STALE_MARKER\n")
+        p = sb.run("lanea")
+        self.assertEqual(fk.verdict_of(p.stdout), "SPECVIEWPERF_STAGE_PASS")
+        evidence = "".join(f.read_text(errors="replace") for f in (sb.prov / (sb.tag + "_spec")).glob("*_run.log"))
+        self.assertIn("QEMU_START", evidence)
+        self.assertNotIn("STALE_MARKER", evidence)
+
     def test_the_guest_gets_16_gb_of_ram(self):
         self.go("lanea")
         for line in self.sb.runs():

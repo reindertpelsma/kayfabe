@@ -404,6 +404,19 @@ PIN=$(sed -n 's/^specviewperf-15\.0\.0\.tar\.zst sha256=\([0-9a-f]\{64\}\)$/\1/p
 [ -n "$PIN" ] || abort MEDIA "no sha256 pin for $OBJECT in $PINFILE (the owner pins it)"
 [ -f "$FETCH" ] || abort OPERATOR "no fetch helper"
 
+# win_vm.sh APPENDS to logs/<tag>_run.log, and wait_qemu_start reads that file for this boot's QEMU_START: a stale line of an
+# earlier stage run with the same tag on this box (a retry by hand) was read as the new boot's, the wait ended at once and the
+# stage aborted "the copy boot did not come up" (proof run, 2026-11-09, second attempt). Old logs are moved aside, never deleted.
+stale=("$VM/logs/${TAG}"_*)
+if [ -e "${stale[0]}" ]; then
+    old=$VM/logs/old_$(date +%s)
+    if mkdir -p "$old" && mv -- "${stale[@]}" "$old/"; then
+        note "moved ${#stale[@]} log file(s) of an earlier run with tag $TAG to $(basename "$old")"
+    else
+        abort OPERATOR "could not move the logs of an earlier run with tag $TAG out of the way"
+    fi
+fi
+
 # ------------------------------------------------------------------------------------------------
 # the copy: download in the background (the Worker's /bench-data route, this run's token only)
 # ------------------------------------------------------------------------------------------------

@@ -173,6 +173,8 @@ MUTANTS = [
       t("Copy", "the_kf3_boot_leaves_2_gib_of_a_small_card_as_the_gate_does"), t("Copy", "a_10_gib_card_is_still_a_small_card")),
     M("stage-large-card-gets-an-fb-too", "stage", '[ "$vram_mb" -le 10240 ]', '[ "$vram_mb" -le 99999 ]',
       t("Copy", "a_12_gib_card_keeps_the_default_fb"), t("Copy", "a_24_gib_card_keeps_the_default_fb")),
+    M("stage-stale-logs-of-the-same-tag-stay", "stage", '    if mkdir -p "$old" && mv -- "${stale[@]}" "$old/"; then', '    if true; then',
+      t("Copy", "logs_of_an_earlier_run_with_the_same_tag_are_moved_aside"), t("Copy", "the_new_boot_log_holds_nothing_of_the_old_run")),
     M("stage-no-guest-ram", "stage", "    if ! WINVM_RAM_MB=$GUEST_RAM_MB bash", "    if ! bash", CP),
     M("stage-evidence-unscrubbed", "stage", '--scrub-out "$EVD/$w.cli.txt" ${abn:+--timeout "$abn"})',
       '${abn:+--timeout "$abn"}); cp "$d/cli.log" "$EVD/$w.cli.txt"', SC),
