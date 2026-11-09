@@ -89,6 +89,8 @@ class Ratchet(unittest.TestCase):
         with self.assertRaises(ValueError): L.decide('AD102',1,entries=-1)
     def test_raw_entries_cannot_be_booleans(self):
         with self.assertRaises(ValueError): L.decide('GA102',1,entries=True)
+    def test_unresolved_entries_cannot_be_negative(self):
+        with self.assertRaises(ValueError): L.decide('AD102',1,entries=3,unresolved=-1)
     def test_report_count_cannot_exceed_entry_count(self):
         with self.assertRaises(ValueError): L.decide('AD102',2,entries=1)
     def test_unresolved_entries_cannot_exceed_entry_count(self):
