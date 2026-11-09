@@ -24,7 +24,15 @@ import unittest
 from pathlib import Path
 
 SCRIPTS = Path(os.environ.get("KF_CI_SCRIPTS_DIR") or Path(__file__).resolve().parent)
-FILES = ["vast_onstart.sh", "vast_report.py", "vast_evidence.py", "kf-box-kill", "kf-box-blob-url"]
+FILES = [
+    "vast_onstart.sh",
+    "vast_report.py",
+    "vast_evidence.py",
+    "vast_run_report.py",
+    "app_policy.py",
+    "kf-box-kill",
+    "kf-box-blob-url",
+]
 RUN = "4242-7"
 # A run token is a compact HS256 JWT (box protocol 7); the box never verifies it.
 TOKEN = ".".join(
@@ -143,7 +151,7 @@ class Broker:
         base = self.prefix.split("/")
         ok = parts[: len(base)] == base and parts[len(base) + 1 :] == [self.run]
         kind = parts[len(base)] if len(parts) > len(base) else ""
-        if not ok or kind not in ("report", "kill", "evidence"):
+        if not ok or kind not in ("report", "kill", "evidence", "run-report"):
             return 404, {"state": "NOT_FOUND"}, {}
         if auth != "Bearer " + self.token:
             return 401, {"state": "UNAUTHORIZED"}, {}
@@ -157,7 +165,7 @@ class Broker:
             return 302, {}, {"Location": self.redirect_to + "/stolen"}
         if fault in ("401", "429", "400", "404", "500"):
             return int(fault), {"state": "FAULT"}, {}
-        if kind == "evidence":
+        if kind in ("evidence", "run-report"):
             return 200, {"state": "STORED"}, {}
         if kind != "report":
             return 200, {"state": "OK"}, {}
@@ -1132,6 +1140,12 @@ class Onstart(Tmp):
         ci.mkdir(parents=True, exist_ok=True)
         for name in FILES:
             shutil.copy(SCRIPTS / name, ci / name)
+        # The reporter reads the committed app policy, including in this isolated checkout.
+        repo = Path(__file__).resolve().parents[2]
+        for rel in ("scripts/apps/known_unsupported.json", "scripts/bench/windows/appmatrix/gate_profiles.json"):
+            target = root / rel
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy(repo / rel, target)
         if payload is not None:
             (ci / "vast_payload.sh").write_text(PAYLOAD_HEADER + payload)
         self.ws, self.run_dir = self.tmp / "ws", self.tmp / "run"
@@ -1271,6 +1285,82 @@ class Onstart(Tmp):
         self.assertLess(self.took, 45)
         self.assertEqual(b.results()[0]["verdict"], "PASS")
         self.assertIn("KF_EVIDENCE_SKIPPED reason=helper_exit_124", b.texts())
+
+    # --- run report (2026-11-07): sent after the payload, before the result, only when asked, never fatal ---
+
+    REPORT_PAYLOAD = (
+        'echo "KF_PAYLOAD_TIER windows=0 source=worker tier=middle windows_runs=1 stages=none"\n'
+        'echo "FAST_CELL_ARM arm=timer verdict=PASS secs=3 client_ms=2500"\n'
+        'cat > "$KF_CI_WORKSPACE/kf-result.json" <<EOF\n'
+        '{"verdict":"PASS","suites":[{"name":"thin_suite","pass":30,"fail":0,"skip":0}],\n'
+        ' "hardware":{"gpu_name":"NVIDIA GeForce RTX 3060","compute_cap":860,'
+        '"driver_version":"580.159.04"}}\n'
+        "EOF\n"
+    )
+
+    def test_run_report_is_posted_before_the_result_when_the_worker_asked(self):
+        b = self.broker()
+        proc = self.onstart(
+            self.tree(self.REPORT_PAYLOAD), b, env_extra=dict(ACCESS, KF_RUN_REPORT="1")
+        )
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        sent = b.hits("run-report")
+        self.assertEqual(len(sent), 1)
+        self.assertEqual(sent[0]["path"], PREFIX + "/run-report/" + RUN)
+        self.assertEqual(sent[0]["auth"], "Bearer " + TOKEN)
+        self.assertEqual(sent[0]["access"], (ACCESS["KF_ACCESS_ID"], ACCESS["KF_ACCESS_SECRET"]))
+        doc = json.loads(sent[0]["body"])
+        self.assertEqual(doc["schema"], 1)
+        self.assertEqual([s["sub"] for s in doc["subruns"]], ["host", "linux-unknown", "windows"])
+        self.assertEqual(doc["tests"][0]["name"], "timer")
+        result_at = [r["t"] for r in b.reports() if b'"kind":"result"' in r["body"]]
+        self.assertTrue(result_at and sent[0]["t"] < result_at[0])
+        self.assertRegex(b.texts(), r"KF_RUN_REPORT_SENT bytes=[0-9]+ subruns=3")
+        self.assertEqual(b.results()[0]["verdict"], "PASS")
+        self.assertNotIn(TOKEN, b.texts())
+
+    def test_run_report_is_not_sent_unless_the_worker_asked(self):
+        b = self.broker()
+        proc = self.onstart(self.tree(self.REPORT_PAYLOAD), b)
+        self.assertEqual(proc.returncode, 0)
+        self.assertEqual(b.hits("run-report"), [])
+        self.assertNotIn("KF_RUN_REPORT", b.texts())
+        self.assertEqual(b.results()[0]["verdict"], "PASS")
+
+    def test_a_refused_or_failing_report_never_changes_the_verdict(self):
+        for fault, reason in (("404", "http_404"), ("401", "http_401"), ("400", "http_400")):
+            b = self.broker()
+            b.faults["run-report"] = [fault]
+            proc = self.onstart(self.tree(self.REPORT_PAYLOAD), b, env_extra={"KF_RUN_REPORT": "1"})
+            self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+            self.assertEqual(b.results()[0]["verdict"], "PASS")
+            self.assertIn("KF_RUN_REPORT_SKIPPED reason=" + reason, b.texts())
+            self.assertEqual(len(b.hits("run-report")), 1)
+        b = self.broker()
+        b.faults["run-report"] = ["500", "500", "500"]
+        proc = self.onstart(self.tree(self.REPORT_PAYLOAD), b, env_extra={"KF_RUN_REPORT": "1"})
+        self.assertEqual(proc.returncode, 0)
+        self.assertEqual(len(b.hits("run-report")), 3)
+        self.assertEqual(b.results()[0]["verdict"], "PASS")
+
+    def test_a_checkout_without_the_report_helper_runs_unchanged(self):
+        b = self.broker()
+        root = self.tree(self.REPORT_PAYLOAD)
+        (root / "scripts" / "ci" / "vast_run_report.py").unlink()
+        proc = self.onstart(root, b, env_extra={"KF_RUN_REPORT": "1"})
+        self.assertEqual(proc.returncode, 0)
+        self.assertEqual(b.hits("run-report"), [])
+        self.assertEqual(b.results()[0]["verdict"], "PASS")
+
+    def test_a_hung_report_helper_is_killed_and_the_result_still_goes(self):
+        b = self.broker()
+        root = self.tree(self.REPORT_PAYLOAD)
+        (root / "scripts" / "ci" / "vast_run_report.py").write_text("import time\ntime.sleep(600)\n")
+        proc = self.onstart(root, b, env_extra={"KF_RUN_REPORT": "1"}, timeout=120)
+        self.assertEqual(proc.returncode, 0)
+        self.assertLess(self.took, 60)
+        self.assertEqual(b.results()[0]["verdict"], "PASS")
+        self.assertIn("KF_RUN_REPORT_SKIPPED reason=helper_exit_124", b.texts())
 
     def test_failing_payload_exit_code_demotes_and_is_propagated(self):
         b = self.broker()

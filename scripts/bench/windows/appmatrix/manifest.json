@@ -10,7 +10,8 @@
   "size": 6785255424,
   "built_utc": "2026-10-10T12:05:23Z",
   "identity": "b67d6a2a8629278d5ef7000e7765577038ab546a54344eb09500d6b08c7ee6b8",
-  "built_with": "genisoimage"
+  "built_with": "genisoimage",
+  "note": "Historical 2026-10-10 disk receipt; package definitions may have newer pins. Rebuild before a release; this is not the identity of a new bundle."
  },
  "guest_root": "C:\\kfapps",
  "packages": [
@@ -20,7 +21,7 @@
    "version": "12.9.79",
    "tier": 1,
    "license": "NVIDIA CUDA Toolkit EULA (LICENSE inside the archive)",
-   "redistribution": "Redistributable component of the CUDA Toolkit per the EULA attachment A; staged for internal test use only",
+   "redistribution": "Never distribute this input in release media/R2/GitHub; fetch its exact official bytes on the box host per run.",
    "stage": {
     "mode": "unzip",
     "dest": "cuda_demo",
@@ -36,7 +37,23 @@
      "head_length": 5164004,
      "verified_utc": "2026-10-10T11:24:50Z"
     }
-   ]
+   ],
+   "compliance": {
+    "license_id": "LicenseRef-NVIDIA-CUDA-EULA",
+    "upstream": "https://developer.nvidia.com/cuda-toolkit",
+    "distribution": "private-only",
+    "conditions": [
+     "Owner correction: NVIDIA CUDA is private-use only; person/CI may download only for run-time private use; never upload to R2 or GitHub. Downloader/operator must accept the CUDA EULA. Never offer public downloads."
+    ],
+    "sources": [],
+    "license_inputs": [],
+    "license_rules": {
+     "cuda_demo_suite-windows-x86_64-12.9.79-archive.zip": {
+      "kind": "zip"
+     }
+    }
+   },
+   "class": "official-fetch"
   },
   {
    "id": "python_embed",
@@ -59,7 +76,21 @@
      "head_length": 11133606,
      "verified_utc": "2026-10-10T11:24:51Z"
     }
-   ]
+   ],
+   "compliance": {
+    "license_id": "PSF-2.0",
+    "upstream": "https://www.python.org/",
+    "distribution": "public-ok",
+    "conditions": [],
+    "sources": [],
+    "license_inputs": [],
+    "license_rules": {
+     "python-3.12.10-embed-amd64.zip": {
+      "kind": "zip"
+     }
+    }
+   },
+   "class": "public-ok"
   },
   {
    "id": "pywheels",
@@ -67,7 +98,7 @@
    "version": "2026-10-10 resolution",
    "tier": 1,
    "license": "torch/torchvision BSD-3 (CUDA libs inside the torch wheel under the NVIDIA EULA); cupy MIT; onnxruntime MIT; others BSD/MIT/Apache/PSF per wheel metadata",
-   "redistribution": "Redistributable (open-source licences); the NVIDIA CUDA libraries inside the torch wheel are redistributable under the CUDA EULA",
+   "redistribution": "Never distribute this input in release media/R2/GitHub; fetch its exact official bytes on the box host per run.",
    "stage": {
     "mode": "wheels",
     "dest": "py\\Lib\\site-packages"
@@ -266,7 +297,190 @@
    "note": "resolved with pip download --platform win_amd64 --python-version 3.12 --abi cp312 --only-binary=:all: (torch/torchvision from download.pytorch.org/whl/cu126, the rest from PyPI); extracted in the guest into C:\\kfapps\\py\\Lib\\site-packages (a pre-extracted-tree image form exists in appdisk.py but costs 2 GB more disk)",
    "needs": [
     "python_embed"
-   ]
+   ],
+   "compliance": {
+    "license_id": "LicenseRef-Wheel-Components-AND-NVIDIA-CUDA-EULA",
+    "upstream": "https://pytorch.org/",
+    "distribution": "private-only",
+    "conditions": [
+     "Owner correction: NVIDIA CUDA is private-use only; person/CI may download only for run-time private use; never upload to R2 or GitHub. Downloader/operator must accept the CUDA EULA. Never offer public downloads."
+    ],
+    "sources": [],
+    "license_inputs": [],
+    "license_rules": {
+     "torch-2.8.0+cu126-cp312-cp312-win_amd64.whl": {
+      "kind": "zip"
+     },
+     "torchvision-0.23.0+cu126-cp312-cp312-win_amd64.whl": {
+      "kind": "zip"
+     },
+     "cuda_pathfinder-1.8.3-py3-none-any.whl": {
+      "kind": "zip"
+     },
+     "cupy_cuda12x-14.2.0-cp312-cp312-win_amd64.whl": {
+      "kind": "zip"
+     },
+     "filelock-4.1.0-py3-none-any.whl": {
+      "kind": "zip"
+     },
+     "flatbuffers-25.12.19-py2.py3-none-any.whl": {
+      "kind": "zip"
+     },
+     "fsspec-2026.9.0-py3-none-any.whl": {
+      "kind": "zip"
+     },
+     "jinja2-3.1.6-py3-none-any.whl": {
+      "kind": "zip"
+     },
+     "markupsafe-3.0.4-cp312-cp312-win_amd64.whl": {
+      "kind": "zip"
+     },
+     "ml_dtypes-0.6.0-cp312-cp312-win_amd64.whl": {
+      "kind": "zip"
+     },
+     "mpmath-1.3.0-py3-none-any.whl": {
+      "kind": "zip"
+     },
+     "networkx-3.7-py3-none-any.whl": {
+      "kind": "zip"
+     },
+     "numpy-2.5.3-cp312-cp312-win_amd64.whl": {
+      "kind": "zip"
+     },
+     "onnx-1.23.2-cp312-abi3-win_amd64.whl": {
+      "kind": "zip"
+     },
+     "onnxruntime_directml-1.24.4-cp312-cp312-win_amd64.whl": {
+      "kind": "zip"
+     },
+     "packaging-26.3-py3-none-any.whl": {
+      "kind": "zip"
+     },
+     "pillow-12.3.0-cp312-cp312-win_amd64.whl": {
+      "kind": "zip"
+     },
+     "protobuf-7.36.2-cp310-abi3-win_amd64.whl": {
+      "kind": "zip"
+     },
+     "setuptools-84.0.0-py3-none-any.whl": {
+      "kind": "zip"
+     },
+     "sympy-1.14.0-py3-none-any.whl": {
+      "kind": "zip"
+     },
+     "typing_extensions-4.16.0-py3-none-any.whl": {
+      "kind": "zip"
+     }
+    },
+    "components": {
+     "torch-2.8.0+cu126-cp312-cp312-win_amd64.whl": {
+      "version": "2.8.0+cu126",
+      "license_id": "BSD-3-Clause AND LicenseRef-NVIDIA-CUDA-EULA",
+      "upstream": "https://pytorch.org/"
+     },
+     "torchvision-0.23.0+cu126-cp312-cp312-win_amd64.whl": {
+      "version": "0.23.0+cu126",
+      "license_id": "BSD-3-Clause",
+      "upstream": "https://github.com/pytorch/vision"
+     },
+     "cuda_pathfinder-1.8.3-py3-none-any.whl": {
+      "version": "1.8.3",
+      "license_id": "Apache-2.0",
+      "upstream": "https://github.com/NVIDIA/cuda-python"
+     },
+     "cupy_cuda12x-14.2.0-cp312-cp312-win_amd64.whl": {
+      "version": "14.2.0",
+      "license_id": "MIT",
+      "upstream": "https://cupy.dev/"
+     },
+     "filelock-4.1.0-py3-none-any.whl": {
+      "version": "4.1.0",
+      "license_id": "MIT",
+      "upstream": "https://github.com/tox-dev/py-filelock"
+     },
+     "flatbuffers-25.12.19-py2.py3-none-any.whl": {
+      "version": "25.12.19",
+      "license_id": "Apache-2.0",
+      "upstream": "https://google.github.io/flatbuffers/"
+     },
+     "fsspec-2026.9.0-py3-none-any.whl": {
+      "version": "2026.9.0",
+      "license_id": "BSD-3-Clause",
+      "upstream": "https://github.com/fsspec/filesystem_spec"
+     },
+     "jinja2-3.1.6-py3-none-any.whl": {
+      "version": "3.1.6",
+      "license_id": "BSD-3-Clause",
+      "upstream": "https://github.com/pallets/jinja/"
+     },
+     "markupsafe-3.0.4-cp312-cp312-win_amd64.whl": {
+      "version": "3.0.4",
+      "license_id": "BSD-3-Clause",
+      "upstream": "https://github.com/pallets/markupsafe/"
+     },
+     "ml_dtypes-0.6.0-cp312-cp312-win_amd64.whl": {
+      "version": "0.6.0",
+      "license_id": "Apache-2.0",
+      "upstream": "https://github.com/jax-ml/ml_dtypes"
+     },
+     "mpmath-1.3.0-py3-none-any.whl": {
+      "version": "1.3.0",
+      "license_id": "BSD-3-Clause",
+      "upstream": "https://github.com/fredrik-johansson/mpmath"
+     },
+     "networkx-3.7-py3-none-any.whl": {
+      "version": "3.7",
+      "license_id": "BSD-3-Clause",
+      "upstream": "https://networkx.org/"
+     },
+     "numpy-2.5.3-cp312-cp312-win_amd64.whl": {
+      "version": "2.5.3",
+      "license_id": "BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0 AND LicenseRef-Bundled-Native-Libraries",
+      "upstream": "https://numpy.org"
+     },
+     "onnx-1.23.2-cp312-abi3-win_amd64.whl": {
+      "version": "1.23.2",
+      "license_id": "Apache-2.0",
+      "upstream": "https://onnx.ai/"
+     },
+     "onnxruntime_directml-1.24.4-cp312-cp312-win_amd64.whl": {
+      "version": "1.24.4",
+      "license_id": "MIT",
+      "upstream": "https://onnxruntime.ai"
+     },
+     "packaging-26.3-py3-none-any.whl": {
+      "version": "26.3",
+      "license_id": "Apache-2.0 OR BSD-2-Clause",
+      "upstream": "https://github.com/pypa/packaging"
+     },
+     "pillow-12.3.0-cp312-cp312-win_amd64.whl": {
+      "version": "12.3.0",
+      "license_id": "MIT-CMU",
+      "upstream": "https://python-pillow.github.io"
+     },
+     "protobuf-7.36.2-cp310-abi3-win_amd64.whl": {
+      "version": "7.36.2",
+      "license_id": "BSD-3-Clause",
+      "upstream": "https://developers.google.com/protocol-buffers/"
+     },
+     "setuptools-84.0.0-py3-none-any.whl": {
+      "version": "84.0.0",
+      "license_id": "MIT",
+      "upstream": "https://github.com/pypa/setuptools"
+     },
+     "sympy-1.14.0-py3-none-any.whl": {
+      "version": "1.14.0",
+      "license_id": "BSD-3-Clause",
+      "upstream": "https://sympy.org"
+     },
+     "typing_extensions-4.16.0-py3-none-any.whl": {
+      "version": "4.16.0",
+      "license_id": "PSF-2.0",
+      "upstream": "https://github.com/python/typing_extensions"
+     }
+    }
+   },
+   "class": "official-fetch"
   },
   {
    "id": "llama_cuda",
@@ -274,7 +488,7 @@
    "version": "b11541",
    "tier": 1,
    "license": "MIT",
-   "redistribution": "Redistributable (MIT; cudart under the CUDA EULA)",
+   "redistribution": "Never distribute this input in release media/R2/GitHub; fetch its exact official bytes on the box host per run.",
    "stage": {
     "mode": "unzip",
     "dest": "llama_cuda"
@@ -298,7 +512,36 @@
      "head_length": 391443627,
      "verified_utc": "2026-10-10T11:25:05Z"
     }
-   ]
+   ],
+   "compliance": {
+    "license_id": "MIT AND LicenseRef-NVIDIA-CUDA-EULA",
+    "upstream": "https://github.com/ggml-org/llama.cpp",
+    "distribution": "private-only",
+    "conditions": [
+     "Owner correction: NVIDIA CUDA is private-use only; person/CI may download only for run-time private use; never upload to R2 or GitHub. Downloader/operator must accept the CUDA EULA. Never offer public downloads."
+    ],
+    "sources": [],
+    "license_inputs": [
+     {
+      "url": "https://raw.githubusercontent.com/ggml-org/llama.cpp/b11541/LICENSE",
+      "verified_utc": "2026-11-07T22:12:40.024596+00:00",
+      "size": 1078,
+      "sha256": "94f29bbed6a22c35b992c5c6ebf0e7c92f13b836b90f36f461c9cf2f0f1d010d",
+      "name": "LICENSE"
+     }
+    ],
+    "license_rules": {
+     "llama-b11541-bin-win-cuda-12.4-x64.zip": {
+      "kind": "zip",
+      "fallback": "LICENSE"
+     },
+     "cudart-llama-bin-win-cuda-12.4-x64.zip": {
+      "kind": "zip",
+      "fallback": "LICENSE"
+     }
+    }
+   },
+   "class": "official-fetch"
   },
   {
    "id": "llama_vulkan",
@@ -321,7 +564,30 @@
      "head_length": 33464528,
      "verified_utc": "2026-10-10T11:25:19Z"
     }
-   ]
+   ],
+   "compliance": {
+    "license_id": "MIT",
+    "upstream": "https://github.com/ggml-org/llama.cpp",
+    "distribution": "public-ok",
+    "conditions": [],
+    "sources": [],
+    "license_inputs": [
+     {
+      "url": "https://raw.githubusercontent.com/ggml-org/llama.cpp/b11541/LICENSE",
+      "verified_utc": "2026-11-07T22:12:40.024596+00:00",
+      "size": 1078,
+      "sha256": "94f29bbed6a22c35b992c5c6ebf0e7c92f13b836b90f36f461c9cf2f0f1d010d",
+      "name": "LICENSE"
+     }
+    ],
+    "license_rules": {
+     "llama-b11541-bin-win-vulkan-x64.zip": {
+      "kind": "zip",
+      "fallback": "LICENSE"
+     }
+    }
+   },
+   "class": "public-ok"
   },
   {
    "id": "qwen_gguf",
@@ -344,7 +610,30 @@
      "head_length": 1117320736,
      "verified_utc": "2026-10-10T11:25:20Z"
     }
-   ]
+   ],
+   "compliance": {
+    "license_id": "Apache-2.0",
+    "upstream": "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF",
+    "distribution": "public-ok",
+    "conditions": [],
+    "sources": [],
+    "license_inputs": [
+     {
+      "url": "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/91cad51170dc346986eccefdc2dd33a9da36ead9/LICENSE",
+      "verified_utc": "2026-11-07T22:12:40.423750+00:00",
+      "size": 11343,
+      "sha256": "832dd9e00a68dd83b3c3fb9f5588dad7dcf337a0db50f7d9483f310cd292e92e",
+      "name": "LICENSE"
+     }
+    ],
+    "license_rules": {
+     "qwen2.5-1.5b-instruct-q4_k_m.gguf": {
+      "kind": "upstream",
+      "input": "LICENSE"
+     }
+    }
+   },
+   "class": "public-ok"
   },
   {
    "id": "vulkan_rt",
@@ -352,7 +641,7 @@
    "version": "1.4.363.0",
    "tier": 1,
    "license": "LunarG Vulkan Runtime licence (VulkanRT-License.txt inside)",
-   "redistribution": "Redistributable per the licence text",
+   "redistribution": "Never distribute this input in release media/R2/GitHub; fetch its exact official bytes on the box host per run.",
    "stage": {
     "mode": "unzip",
     "dest": "vulkan_rt",
@@ -368,7 +657,24 @@
      "head_length": 18211191,
      "verified_utc": "2026-10-10T11:25:54Z"
     }
-   ]
+   ],
+   "compliance": {
+    "license_id": "LicenseRef-LunarG-Vulkan-Runtime",
+    "upstream": "https://vulkan.lunarg.com/",
+    "distribution": "private-only",
+    "conditions": [
+     "Retain VulkanRT-License.txt and all bundled copyright notices.",
+     "Review and comply with the exact pinned LunarG Runtime redistribution terms before public distribution."
+    ],
+    "sources": [],
+    "license_inputs": [],
+    "license_rules": {
+     "vulkan-runtime-components-1.4.363.0.zip": {
+      "kind": "zip"
+     }
+    }
+   },
+   "class": "official-fetch"
   },
   {
    "id": "vulkan_sdk",
@@ -400,7 +706,8 @@
      "head_length": 303082720,
      "verified_utc": "2026-10-10T11:25:54Z"
     }
-   ]
+   ],
+   "class": "manual-only"
   },
   {
    "id": "vkpeak",
@@ -424,12 +731,35 @@
      "head_length": 889422,
      "verified_utc": "2026-10-10T11:26:03Z"
     }
-   ]
+   ],
+   "compliance": {
+    "license_id": "MIT",
+    "upstream": "https://github.com/nihui/vkpeak",
+    "distribution": "public-ok",
+    "conditions": [],
+    "sources": [],
+    "license_inputs": [
+     {
+      "url": "https://raw.githubusercontent.com/nihui/vkpeak/20260527/LICENSE",
+      "verified_utc": "2026-11-07T22:12:40.032068+00:00",
+      "size": 1072,
+      "sha256": "57157b0fc6954dd1645dc674cc99bebbab4cb84c5b306b910989777e3d0d6fbd",
+      "name": "LICENSE"
+     }
+    ],
+    "license_rules": {
+     "vkpeak-20260527-windows.zip": {
+      "kind": "zip",
+      "fallback": "LICENSE"
+     }
+    }
+   },
+   "class": "public-ok"
   },
   {
    "id": "ffmpeg",
-   "title": "FFmpeg n8.1.3 win64 GPL (BtbN autobuild 2026-10-08-13-05): NVENC/NVDEC/D3D11VA/DXVA2/Vulkan/libx264",
-   "version": "n8.1.3-14-g330caae0c1",
+   "title": "FFmpeg n8.1.3 win64 GPL (BtbN autobuild 2026-11-07-12-47): NVENC/NVDEC/D3D11VA/DXVA2/Vulkan/libx264",
+   "version": "n8.1.3-34-ga35157abb9",
    "tier": 1,
    "license": "GPL-3.0-or-later build (LGPL/GPL components)",
    "redistribution": "Redistributable under the GPL (source offer via BtbN)",
@@ -440,15 +770,19 @@
    },
    "files": [
     {
-     "name": "ffmpeg-n8.1.3-14-g330caae0c1-win64-gpl-8.1.zip",
-     "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-08-13-05/ffmpeg-n8.1.3-14-g330caae0c1-win64-gpl-8.1.zip",
-     "sha256": "6e63b4f8aae35949f4a5b471784f97a51b29b2466038769e3f8ecf513316ec6c",
-     "size": 193034772,
+     "name": "ffmpeg-n8.1.3-34-ga35157abb9-win64-gpl-8.1.zip",
+     "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-11-07-12-47/ffmpeg-n8.1.3-34-ga35157abb9-win64-gpl-8.1.zip",
+     "sha256": "06bfc0069beb764b75f9eed956acc90c4d651bf06aed340fbf0708d10a6f76dc",
+     "size": 194355634,
      "http": 200,
-     "head_length": 193034772,
-     "verified_utc": "2026-10-10T11:26:04Z"
+     "head_length": 194355634,
+     "verified_utc": "2026-11-07T15:12:43Z",
+     "verification": "Downloaded bytes match official dated checksums.sha256 and GitHub asset digest; ZIP CRC and ffmpeg/ffprobe entries checked; no binary executed"
     }
-   ]
+   ],
+   "release_page": "https://github.com/BtbN/FFmpeg-Builds/releases/tag/autobuild-2026-11-07-12-47",
+   "checksums_url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-11-07-12-47/checksums.sha256",
+   "class": "manual-only"
   },
   {
    "id": "blender",
@@ -472,7 +806,30 @@
      "head_length": 399946398,
      "verified_utc": "2026-10-10T11:26:12Z"
     }
-   ]
+   ],
+   "compliance": {
+    "license_id": "GPL-3.0-or-later",
+    "upstream": "https://www.blender.org/",
+    "distribution": "public-ok",
+    "conditions": [],
+    "sources": [
+     {
+      "url": "https://download.blender.org/source/blender-4.5.0.tar.xz",
+      "verified_utc": "2026-11-07T22:12:40.022259+00:00",
+      "size": 85059376,
+      "sha256": "ca9160ee3d8741e8e255cb0aee506a9270ef392512aa9c584f130a91df9fb394",
+      "name": "blender-4.5.0.tar.xz",
+      "version": "4.5.0"
+     }
+    ],
+    "license_inputs": [],
+    "license_rules": {
+     "blender-4.5.0-windows-x64.zip": {
+      "kind": "zip"
+     }
+    }
+   },
+   "class": "public-ok"
   },
   {
    "id": "gravitymark",
@@ -495,7 +852,8 @@
      "head_length": 220901376,
      "verified_utc": "2026-10-10T11:26:24Z"
     }
-   ]
+   ],
+   "class": "manual-only"
   },
   {
    "id": "furmark2",
@@ -519,7 +877,8 @@
      "head_length": 35267572,
      "verified_utc": "2026-10-10T11:27:00Z"
     }
-   ]
+   ],
+   "class": "manual-only"
   },
   {
    "id": "gputest",
@@ -543,7 +902,8 @@
      "head_length": 2103678,
      "verified_utc": "2026-10-10T11:27:02Z"
     }
-   ]
+   ],
+   "class": "manual-only"
   },
   {
    "id": "heaven",
@@ -575,7 +935,8 @@
      "verified_utc": "2026-10-10T11:27:05Z"
     }
    ],
-   "note": "Inno Setup installer (innoextract lists a 32-bit app: bin\\Heaven.exe / Valley.exe); silent flags are Inno's"
+   "note": "Inno Setup installer (innoextract lists a 32-bit app: bin\\Heaven.exe / Valley.exe); silent flags are Inno's",
+   "class": "manual-only"
   },
   {
    "id": "valley",
@@ -607,15 +968,16 @@
      "verified_utc": "2026-10-10T11:27:13Z"
     }
    ],
-   "note": "Inno Setup installer (innoextract lists a 32-bit app: bin\\Heaven.exe / Valley.exe); silent flags are Inno's"
+   "note": "Inno Setup installer (innoextract lists a 32-bit app: bin\\Heaven.exe / Valley.exe); silent flags are Inno's",
+   "class": "manual-only"
   },
   {
    "id": "clpeak_ocl",
    "title": "clpeak 3.0.1 Windows (OpenCL backend)",
    "version": "3.0.1",
    "tier": 1,
-   "license": "Apache-2.0",
-   "redistribution": "Redistributable",
+   "license": "GPL-3.0-only",
+   "redistribution": "Redistributable under GPL-3.0 with corresponding source; CUDA backend additionally requires CUDA EULA review",
    "stage": {
     "mode": "unzip",
     "dest": "clpeak_ocl",
@@ -631,15 +993,47 @@
      "head_length": 13932566,
      "verified_utc": "2026-10-10T11:27:24Z"
     }
-   ]
+   ],
+   "compliance": {
+    "license_id": "GPL-3.0-only",
+    "upstream": "https://github.com/krrishnarraj/clpeak",
+    "distribution": "public-ok",
+    "conditions": [],
+    "sources": [
+     {
+      "name": "clpeak-3.0.1.tar.gz",
+      "url": "https://github.com/krrishnarraj/clpeak/archive/refs/tags/3.0.1.tar.gz",
+      "size": 2335991,
+      "sha256": "42b255477e473c7fbd9ad1ad60e52db0274d1ddbc4e37d6687c0eeae4056e350",
+      "verified_utc": "2026-11-07T22:13:23.482475+00:00",
+      "version": "3.0.1"
+     }
+    ],
+    "license_inputs": [
+     {
+      "url": "https://raw.githubusercontent.com/krrishnarraj/clpeak/3.0.1/LICENSE",
+      "verified_utc": "2026-11-07T22:12:40.296763+00:00",
+      "size": 35149,
+      "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+      "name": "LICENSE"
+     }
+    ],
+    "license_rules": {
+     "clpeak-3.0.1-windows-AMD64.zip": {
+      "kind": "zip",
+      "fallback": "LICENSE"
+     }
+    }
+   },
+   "class": "public-ok"
   },
   {
    "id": "clpeak_cuda",
    "title": "clpeak 3.0.1 Windows (CUDA backend)",
    "version": "3.0.1",
    "tier": 1,
-   "license": "Apache-2.0",
-   "redistribution": "Redistributable",
+   "license": "GPL-3.0-only AND LicenseRef-NVIDIA-CUDA-EULA",
+   "redistribution": "Never distribute this input in release media/R2/GitHub; fetch its exact official bytes on the box host per run.",
    "stage": {
     "mode": "unzip",
     "dest": "clpeak_cuda",
@@ -655,7 +1049,41 @@
      "head_length": 14725271,
      "verified_utc": "2026-10-10T11:27:25Z"
     }
-   ]
+   ],
+   "compliance": {
+    "license_id": "GPL-3.0-only AND LicenseRef-NVIDIA-CUDA-EULA",
+    "upstream": "https://github.com/krrishnarraj/clpeak",
+    "distribution": "private-only",
+    "conditions": [
+     "Owner correction: NVIDIA CUDA is private-use only; person/CI may download only for run-time private use; never upload to R2 or GitHub. Downloader/operator must accept the CUDA EULA. Never offer public downloads."
+    ],
+    "sources": [
+     {
+      "name": "clpeak-3.0.1.tar.gz",
+      "url": "https://github.com/krrishnarraj/clpeak/archive/refs/tags/3.0.1.tar.gz",
+      "size": 2335991,
+      "sha256": "42b255477e473c7fbd9ad1ad60e52db0274d1ddbc4e37d6687c0eeae4056e350",
+      "verified_utc": "2026-11-07T22:13:23.482475+00:00",
+      "version": "3.0.1"
+     }
+    ],
+    "license_inputs": [
+     {
+      "url": "https://raw.githubusercontent.com/krrishnarraj/clpeak/3.0.1/LICENSE",
+      "verified_utc": "2026-11-07T22:12:40.296763+00:00",
+      "size": 35149,
+      "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+      "name": "LICENSE"
+     }
+    ],
+    "license_rules": {
+     "clpeak-3.0.1-windows-AMD64-cuda.zip": {
+      "kind": "zip",
+      "fallback": "LICENSE"
+     }
+    }
+   },
+   "class": "official-fetch"
   },
   {
    "id": "hashcat",
@@ -682,14 +1110,37 @@
    ],
    "needs": [
     "sevenzip"
-   ]
+   ],
+   "compliance": {
+    "license_id": "MIT",
+    "upstream": "https://hashcat.net/hashcat/",
+    "distribution": "public-ok",
+    "conditions": [],
+    "sources": [],
+    "license_inputs": [
+     {
+      "url": "https://raw.githubusercontent.com/hashcat/hashcat/v7.1.2/docs/license.txt",
+      "verified_utc": "2026-11-07T22:12:40.302627+00:00",
+      "size": 1225,
+      "sha256": "696fea993e355eb08efe8f0625326eee9f98353cf00064778caf3c01821ec255",
+      "name": "license.txt"
+     }
+    ],
+    "license_rules": {
+     "hashcat-7.1.2.7z": {
+      "kind": "upstream",
+      "input": "license.txt"
+     }
+    }
+   },
+   "class": "public-ok"
   },
   {
    "id": "sevenzip",
    "title": "7-Zip 7zr.exe (standalone console extractor)",
-   "version": "26.x (7zr.exe as served 2026-10-10)",
+   "version": "26.04",
    "tier": 1,
-   "license": "LGPL-2.1+ with unRAR restriction (7zr.exe has no RAR code)",
+   "license": "LGPL-2.1-or-later (7zr.exe; no RAR code)",
    "redistribution": "Redistributable",
    "stage": {
     "mode": "copy",
@@ -698,14 +1149,38 @@
    "files": [
     {
      "name": "7zr.exe",
-     "url": "https://www.7-zip.org/a/7zr.exe",
+     "url": "https://github.com/ip7z/7zip/releases/download/26.04/7zr.exe",
      "sha256": "256feca8e274e5da655e2a284fabafd9f554365eb164862089dacd4e8276d282",
      "size": 602624,
      "http": 200,
      "head_length": 602624,
-     "verified_utc": "2026-10-10T11:27:27Z"
+     "verified_utc": "2026-11-07T22:12:40.518021+00:00"
     }
-   ]
+   ],
+   "compliance": {
+    "license_id": "LGPL-2.1-or-later",
+    "upstream": "https://www.7-zip.org/",
+    "distribution": "public-ok",
+    "conditions": [],
+    "sources": [
+     {
+      "url": "https://github.com/ip7z/7zip/releases/download/26.04/7z2604-src.tar.xz",
+      "verified_utc": "2026-11-07T22:12:40.022959+00:00",
+      "size": 1560440,
+      "sha256": "9691944c0fe0d01bb49373a704fb983fd33bc98b1738695179dfbf99ac1734f6",
+      "name": "7z2604-src.tar.xz",
+      "version": "26.04"
+     }
+    ],
+    "license_inputs": [],
+    "license_rules": {
+     "7zr.exe": {
+      "kind": "source",
+      "input": "7z2604-src.tar.xz"
+     }
+    }
+   },
+   "class": "public-ok"
   },
   {
    "id": "cuda_cudart",
@@ -713,7 +1188,7 @@
    "version": "12.9.79",
    "tier": 1,
    "license": "NVIDIA CUDA Toolkit EULA",
-   "redistribution": "Redistributable component (EULA attachment A)",
+   "redistribution": "Never distribute this input in release media/R2/GitHub; fetch its exact official bytes on the box host per run.",
    "stage": {
     "mode": "unzip",
     "dest": "cuda_cudart",
@@ -729,7 +1204,23 @@
      "head_length": 3521238,
      "verified_utc": "2026-10-10T11:39:32Z"
     }
-   ]
+   ],
+   "compliance": {
+    "license_id": "LicenseRef-NVIDIA-CUDA-EULA",
+    "upstream": "https://developer.nvidia.com/cuda-toolkit",
+    "distribution": "private-only",
+    "conditions": [
+     "Owner correction: NVIDIA CUDA is private-use only; person/CI may download only for run-time private use; never upload to R2 or GitHub. Downloader/operator must accept the CUDA EULA. Never offer public downloads."
+    ],
+    "sources": [],
+    "license_inputs": [],
+    "license_rules": {
+     "cuda_cudart-windows-x86_64-12.9.79-archive.zip": {
+      "kind": "zip"
+     }
+    }
+   },
+   "class": "official-fetch"
   },
   {
    "id": "cuda_cccl",
@@ -737,7 +1228,7 @@
    "version": "12.9.27",
    "tier": 1,
    "license": "Apache-2.0 with LLVM exceptions / NVIDIA CUDA EULA",
-   "redistribution": "Redistributable",
+   "redistribution": "Never distribute this input in release media/R2/GitHub; fetch its exact official bytes on the box host per run.",
    "stage": {
     "mode": "unzip",
     "dest": "cuda_cccl",
@@ -753,15 +1244,31 @@
      "head_length": 3127658,
      "verified_utc": "2026-10-10T11:39:34Z"
     }
-   ]
+   ],
+   "compliance": {
+    "license_id": "Apache-2.0 WITH LLVM-exception AND LicenseRef-NVIDIA-CUDA-EULA",
+    "upstream": "https://github.com/NVIDIA/cccl",
+    "distribution": "private-only",
+    "conditions": [
+     "Owner correction: NVIDIA CUDA is private-use only; person/CI may download only for run-time private use; never upload to R2 or GitHub. Downloader/operator must accept the CUDA EULA. Never offer public downloads."
+    ],
+    "sources": [],
+    "license_inputs": [],
+    "license_rules": {
+     "cuda_cccl-windows-x86_64-12.9.27-archive.zip": {
+      "kind": "zip"
+     }
+    }
+   },
+   "class": "official-fetch"
   },
   {
    "id": "vc_redist",
    "title": "Microsoft Visual C++ Redistributable (x64), permalink aka.ms/vs/17/release",
-   "version": "latest as of 2026-10-10",
+   "version": "14.44.35211.0",
    "tier": 1,
    "license": "Microsoft Visual C++ Redistributable licence",
-   "redistribution": "Redistributable by Microsoft licence terms (the CRT runtime DLLs torch and several apps need)",
+   "redistribution": "Never distribute this input in release media/R2/GitHub; fetch its exact official bytes on the box host per run.",
    "stage": {
     "mode": "installer",
     "dest": "vc_redist",
@@ -775,37 +1282,64 @@
    "files": [
     {
      "name": "vc_redist.x64.exe",
-     "url": "https://aka.ms/vs/17/release/vc_redist.x64.exe",
+     "url": "https://download.visualstudio.microsoft.com/download/pr/990c720a-46ce-4dc7-87b9-c2eb615d34b9/CC0FF0EB1DC3F5188AE6300FAEF32BF5BEEBA4BDD6E8E445A9184072096B713B/VC_redist.x64.exe",
      "sha256": "cc0ff0eb1dc3f5188ae6300faef32bf5beeba4bdd6e8e445a9184072096b713b",
      "size": 25635768,
      "http": 200,
      "head_length": 25635768,
-     "verified_utc": "2026-10-10T11:39:37Z"
+     "verified_utc": "2026-10-10T11:39:37Z",
+     "resolved_from": "https://aka.ms/vs/17/release/vc_redist.x64.exe",
+     "resolved_utc": "2026-11-08T01:41:04.253645+00:00",
+     "resolution_note": "Official pinned alias HEAD redirected to this versioned CDN object. Expected SHA/size unchanged; bytes are checked by the fetcher before use."
     }
    ],
-   "note": "installed by kf_guest_setup before any other package; the permalink moves with each VC++ release, so the pinned sha256 will mismatch after Microsoft updates it (re-pin deliberately)"
+   "note": "installed by kf_guest_setup before any other package; the permalink moves with each VC++ release, so the pinned sha256 will mismatch after Microsoft updates it (re-pin deliberately)",
+   "compliance": {
+    "license_id": "LicenseRef-Microsoft-VC-Redistributable",
+    "upstream": "https://visualstudio.microsoft.com/",
+    "distribution": "private-only",
+    "conditions": [
+     "Comply with Microsoft Visual C++ Redistributable licence terms, including permitted redistribution, unmodified distributable code, notices and end-user restrictions.",
+     "Confirm the pinned installer version and applicable Microsoft terms before public distribution."
+    ],
+    "sources": [],
+    "license_inputs": [
+     {
+      "url": "https://visualstudio.microsoft.com/license-terms/vs2022-cruntime/",
+      "verified_utc": "2026-11-07T22:12:40.516575+00:00",
+      "size": 235663,
+      "sha256": "eb96d0038c2632cedfaefdde15cd1cb01e6017a19d4c89f91eddaa16a81347e1",
+      "name": "LICENSE.html"
+     }
+    ],
+    "license_rules": {
+     "vc_redist.x64.exe": {
+      "kind": "upstream",
+      "input": "LICENSE.html"
+     }
+    }
+   },
+   "version_evidence": {
+    "url": "https://aka.ms/vs/17/release/vc_redist.x64.exe",
+    "sha256": "cc0ff0eb1dc3f5188ae6300faef32bf5beeba4bdd6e8e445a9184072096b713b",
+    "size": 25635768,
+    "verified_utc": "2026-11-07T22:20:23.168369+00:00",
+    "method": "Pinned PE UTF-16 FileVersion/ProductVersion strings; binary not executed"
+   },
+   "class": "official-fetch"
   },
   {
    "id": "hf_wheels",
    "title": "Offline transformers 4.57.1 and additional CPython 3.12 Windows dependencies",
    "version": "4.57.1 with pinned dependency wheels",
    "tier": 1,
-   "license": "Apache-2.0/BSD/MIT/PSF per wheel metadata",
-   "redistribution": "Redistributable open-source wheels; existing shared wheel versions remain unchanged",
+   "license": "Apache-2.0/BSD-3-Clause/MIT/CNRI-Python; audited permissive wheels only",
+   "redistribution": "Redistributable permissive wheels with shipped notices; verified no NVIDIA libraries",
    "stage": {
     "mode": "wheels",
     "dest": "py\\Lib\\site-packages"
    },
    "files": [
-    {
-     "name": "certifi-2026.7.22-py3-none-any.whl",
-     "url": "https://files.pythonhosted.org/packages/0b/a7/71ac2cff56fec219ed242bb11b8efb69fcc4bec75db06fb7bfe35de520e6/certifi-2026.7.22-py3-none-any.whl",
-     "sha256": "62f22742b58a1a33014a2b6b706588a8d7e2a88ae7bd1a6ebe8c992928483775",
-     "size": 136983,
-     "http": 200,
-     "head_length": 136983,
-     "verified_utc": "2026-10-11T13:29:46Z"
-    },
     {
      "name": "charset_normalizer-3.5.2-cp312-cp312-win_amd64.whl",
      "url": "https://files.pythonhosted.org/packages/eb/e6/e6e083884cbcfd49c64865af05027fe7011be7b2d9179524f099a1b611f3/charset_normalizer-3.5.2-cp312-cp312-win_amd64.whl",
@@ -813,7 +1347,46 @@
      "size": 207486,
      "http": 200,
      "head_length": 207486,
-     "verified_utc": "2026-10-11T13:29:46Z"
+     "verified_utc": "2026-10-11T13:29:46Z",
+     "public_audit": {
+      "archive_sha256": "780fbe7cab297b81dad9fb8dc5eb003c0468ffb0d9e5f65068c53a34661a96bc",
+      "metadata_sha256": "49e955a09e1a159e0846872798006e8db7d518d8d70c637066fefdb08d3d9f7b",
+      "name": "charset-normalizer",
+      "version": "3.5.2",
+      "license_expression": null,
+      "license_text": "MIT",
+      "license_classifiers": [
+       "Development Status :: 5 - Production/Stable",
+       "Intended Audience :: Developers",
+       "Operating System :: OS Independent",
+       "Programming Language :: Python",
+       "Programming Language :: Python :: 3",
+       "Programming Language :: Python :: 3.7",
+       "Programming Language :: Python :: 3.8",
+       "Programming Language :: Python :: 3.9",
+       "Programming Language :: Python :: 3.10",
+       "Programming Language :: Python :: 3.11",
+       "Programming Language :: Python :: 3.12",
+       "Programming Language :: Python :: 3.13",
+       "Programming Language :: Python :: 3.14",
+       "Programming Language :: Python :: 3.15",
+       "Programming Language :: Python :: 3 :: Only",
+       "Programming Language :: Python :: Implementation :: CPython",
+       "Programming Language :: Python :: Implementation :: PyPy",
+       "Programming Language :: Python :: Free Threading :: 4 - Resilient",
+       "Environment :: WebAssembly",
+       "Environment :: WebAssembly :: Emscripten",
+       "Topic :: Text Processing :: Linguistic",
+       "Topic :: Utilities",
+       "Typing :: Typed"
+      ],
+      "binary_members": [
+       "charset_normalizer/cd.cp312-win_amd64.pyd",
+       "charset_normalizer/md.cp312-win_amd64.pyd"
+      ],
+      "member_count": 21,
+      "no_nvidia_libraries": true
+     }
     },
     {
      "name": "hf_xet-1.7.0-cp38-abi3-win_amd64.whl",
@@ -822,7 +1395,39 @@
      "size": 3822644,
      "http": 200,
      "head_length": 3822644,
-     "verified_utc": "2026-10-11T13:29:46Z"
+     "verified_utc": "2026-10-11T13:29:46Z",
+     "public_audit": {
+      "archive_sha256": "2b7bb5727889b0f2436dbaaad8fc4c3e66b8240d992716989e0c086b4278b1bc",
+      "metadata_sha256": "dd5d0eda013d5f77f184486c9e306ffc49321bad39ef864273f93edaa8492759",
+      "name": "hf-xet",
+      "version": "1.7.0",
+      "license_expression": "Apache-2.0",
+      "license_text": null,
+      "license_classifiers": [
+       "Development Status :: 5 - Production/Stable",
+       "License :: OSI Approved :: Apache Software License",
+       "Programming Language :: Rust",
+       "Programming Language :: Python :: Implementation :: CPython",
+       "Programming Language :: Python :: Implementation :: PyPy",
+       "Programming Language :: Python :: 3",
+       "Programming Language :: Python :: 3 :: Only",
+       "Programming Language :: Python :: 3.8",
+       "Programming Language :: Python :: 3.9",
+       "Programming Language :: Python :: 3.10",
+       "Programming Language :: Python :: 3.11",
+       "Programming Language :: Python :: 3.12",
+       "Programming Language :: Python :: 3.13",
+       "Programming Language :: Python :: 3.14",
+       "Programming Language :: Python :: Free Threading",
+       "Programming Language :: Python :: Free Threading :: 2 - Beta",
+       "Topic :: Scientific/Engineering :: Artificial Intelligence"
+      ],
+      "binary_members": [
+       "hf_xet/hf_xet.pyd"
+      ],
+      "member_count": 7,
+      "no_nvidia_libraries": true
+     }
     },
     {
      "name": "huggingface_hub-0.36.2-py3-none-any.whl",
@@ -831,7 +1436,34 @@
      "size": 566395,
      "http": 200,
      "head_length": 566395,
-     "verified_utc": "2026-10-11T13:29:46Z"
+     "verified_utc": "2026-10-11T13:29:46Z",
+     "public_audit": {
+      "archive_sha256": "48f0c8eac16145dfce371e9d2d7772854a4f591bcb56c9cf548accf531d54270",
+      "metadata_sha256": "4dc2b0a3fb27bcba8b091f98bccff4b94369d269c9768aeaecd0b99d970665d9",
+      "name": "huggingface_hub",
+      "version": "0.36.2",
+      "license_expression": null,
+      "license_text": "Apache",
+      "license_classifiers": [
+       "Intended Audience :: Developers",
+       "Intended Audience :: Education",
+       "Intended Audience :: Science/Research",
+       "License :: OSI Approved :: Apache Software License",
+       "Operating System :: OS Independent",
+       "Programming Language :: Python :: 3",
+       "Programming Language :: Python :: 3 :: Only",
+       "Programming Language :: Python :: 3.8",
+       "Programming Language :: Python :: 3.9",
+       "Programming Language :: Python :: 3.10",
+       "Programming Language :: Python :: 3.11",
+       "Programming Language :: Python :: 3.12",
+       "Programming Language :: Python :: 3.13",
+       "Topic :: Scientific/Engineering :: Artificial Intelligence"
+      ],
+      "binary_members": [],
+      "member_count": 170,
+      "no_nvidia_libraries": true
+     }
     },
     {
      "name": "idna-3.20-py3-none-any.whl",
@@ -840,7 +1472,39 @@
      "size": 69583,
      "http": 200,
      "head_length": 69583,
-     "verified_utc": "2026-10-11T13:29:46Z"
+     "verified_utc": "2026-10-11T13:29:46Z",
+     "public_audit": {
+      "archive_sha256": "ab7ae7122974553370f0bdb919e1a960b2cd1bc1ef0276416d896db81c14582c",
+      "metadata_sha256": "dbd8c14c1e4ca1e0c9824a6dbc7cbbf78884f38eb52d91148cd3025f671e4b85",
+      "name": "idna",
+      "version": "3.20",
+      "license_expression": "BSD-3-Clause",
+      "license_text": null,
+      "license_classifiers": [
+       "Development Status :: 5 - Production/Stable",
+       "Intended Audience :: Developers",
+       "Intended Audience :: System Administrators",
+       "Operating System :: OS Independent",
+       "Programming Language :: Python",
+       "Programming Language :: Python :: 3",
+       "Programming Language :: Python :: 3 :: Only",
+       "Programming Language :: Python :: 3.9",
+       "Programming Language :: Python :: 3.10",
+       "Programming Language :: Python :: 3.11",
+       "Programming Language :: Python :: 3.12",
+       "Programming Language :: Python :: 3.13",
+       "Programming Language :: Python :: 3.14",
+       "Programming Language :: Python :: 3.15",
+       "Programming Language :: Python :: Implementation :: CPython",
+       "Programming Language :: Python :: Implementation :: PyPy",
+       "Topic :: Internet :: Name Service (DNS)",
+       "Topic :: Software Development :: Libraries :: Python Modules",
+       "Topic :: Utilities"
+      ],
+      "binary_members": [],
+      "member_count": 16,
+      "no_nvidia_libraries": true
+     }
     },
     {
      "name": "pyyaml-6.0.3-cp312-cp312-win_amd64.whl",
@@ -849,7 +1513,40 @@
      "size": 154003,
      "http": 200,
      "head_length": 154003,
-     "verified_utc": "2026-10-11T13:29:46Z"
+     "verified_utc": "2026-10-11T13:29:46Z",
+     "public_audit": {
+      "archive_sha256": "5fcd34e47f6e0b794d17de1b4ff496c00986e1c83f7ab2fb8fcfe9616ff7477b",
+      "metadata_sha256": "847a701020334386852b6e07bad1053cb0ce3da9ee1846e7e9d02b24e8bb3f8d",
+      "name": "PyYAML",
+      "version": "6.0.3",
+      "license_expression": null,
+      "license_text": "MIT",
+      "license_classifiers": [
+       "Development Status :: 5 - Production/Stable",
+       "Intended Audience :: Developers",
+       "License :: OSI Approved :: MIT License",
+       "Operating System :: OS Independent",
+       "Programming Language :: Cython",
+       "Programming Language :: Python",
+       "Programming Language :: Python :: 3",
+       "Programming Language :: Python :: 3.8",
+       "Programming Language :: Python :: 3.9",
+       "Programming Language :: Python :: 3.10",
+       "Programming Language :: Python :: 3.11",
+       "Programming Language :: Python :: 3.12",
+       "Programming Language :: Python :: 3.13",
+       "Programming Language :: Python :: 3.14",
+       "Programming Language :: Python :: Implementation :: CPython",
+       "Programming Language :: Python :: Implementation :: PyPy",
+       "Topic :: Software Development :: Libraries :: Python Modules",
+       "Topic :: Text Processing :: Markup"
+      ],
+      "binary_members": [
+       "yaml/_yaml.cp312-win_amd64.pyd"
+      ],
+      "member_count": 24,
+      "no_nvidia_libraries": true
+     }
     },
     {
      "name": "regex-2026.9.29-cp312-cp312-win_amd64.whl",
@@ -858,7 +1555,35 @@
      "size": 280334,
      "http": 200,
      "head_length": 280334,
-     "verified_utc": "2026-10-11T13:29:46Z"
+     "verified_utc": "2026-10-11T13:29:46Z",
+     "public_audit": {
+      "archive_sha256": "fdd88ed5e20b1bcdd234421e454962c971aa44b653bdb7f1ea9ef683e90fb649",
+      "metadata_sha256": "726c658b5d0ee420e773f9e6c843918e8a2ad7c27577d20c8f502c08eccb211e",
+      "name": "regex",
+      "version": "2026.9.29",
+      "license_expression": "Apache-2.0 AND CNRI-Python",
+      "license_text": null,
+      "license_classifiers": [
+       "Development Status :: 5 - Production/Stable",
+       "Intended Audience :: Developers",
+       "Operating System :: OS Independent",
+       "Programming Language :: Python :: 3.10",
+       "Programming Language :: Python :: 3.11",
+       "Programming Language :: Python :: 3.12",
+       "Programming Language :: Python :: 3.13",
+       "Programming Language :: Python :: 3.14",
+       "Programming Language :: Python :: 3.15",
+       "Topic :: Scientific/Engineering :: Information Analysis",
+       "Topic :: Software Development :: Libraries :: Python Modules",
+       "Topic :: Text Processing",
+       "Topic :: Text Processing :: General"
+      ],
+      "binary_members": [
+       "regex/_regex.cp312-win_amd64.pyd"
+      ],
+      "member_count": 10,
+      "no_nvidia_libraries": true
+     }
     },
     {
      "name": "requests-2.34.2-py3-none-any.whl",
@@ -867,7 +1592,40 @@
      "size": 73075,
      "http": 200,
      "head_length": 73075,
-     "verified_utc": "2026-10-11T13:29:46Z"
+     "verified_utc": "2026-10-11T13:29:46Z",
+     "public_audit": {
+      "archive_sha256": "2a0d60c172f83ac6ab31e4554906c0f3b3588d37b5cb939b1c061f4907e278e0",
+      "metadata_sha256": "8c384ba3e979480faae2859d3c5e6c1276dd2c3616e322e124d52c8cfc556f27",
+      "name": "requests",
+      "version": "2.34.2",
+      "license_expression": null,
+      "license_text": "Apache-2.0",
+      "license_classifiers": [
+       "Development Status :: 5 - Production/Stable",
+       "Environment :: Web Environment",
+       "Intended Audience :: Developers",
+       "License :: OSI Approved :: Apache Software License",
+       "Natural Language :: English",
+       "Operating System :: OS Independent",
+       "Programming Language :: Python",
+       "Programming Language :: Python :: 3",
+       "Programming Language :: Python :: 3.10",
+       "Programming Language :: Python :: 3.11",
+       "Programming Language :: Python :: 3.12",
+       "Programming Language :: Python :: 3.13",
+       "Programming Language :: Python :: 3.14",
+       "Programming Language :: Python :: 3.15",
+       "Programming Language :: Python :: 3 :: Only",
+       "Programming Language :: Python :: Implementation :: CPython",
+       "Programming Language :: Python :: Implementation :: PyPy",
+       "Programming Language :: Python :: Free Threading :: 2 - Beta",
+       "Topic :: Internet :: WWW/HTTP",
+       "Topic :: Software Development :: Libraries"
+      ],
+      "binary_members": [],
+      "member_count": 26,
+      "no_nvidia_libraries": true
+     }
     },
     {
      "name": "safetensors-0.8.0-cp310-abi3-win_amd64.whl",
@@ -876,7 +1634,36 @@
      "size": 355540,
      "http": 200,
      "head_length": 355540,
-     "verified_utc": "2026-10-11T13:29:46Z"
+     "verified_utc": "2026-10-11T13:29:46Z",
+     "public_audit": {
+      "archive_sha256": "096ec1a98435df7beb08853bb5aa9081a84f23d0adc67ed1a0a10550f608373f",
+      "metadata_sha256": "597731d1baf7a94219753fa0a74abd1a8a18562d50d98b2e25d91e11e3224d36",
+      "name": "safetensors",
+      "version": "0.8.0",
+      "license_expression": null,
+      "license_text": null,
+      "license_classifiers": [
+       "Development Status :: 5 - Production/Stable",
+       "Intended Audience :: Developers",
+       "Intended Audience :: Education",
+       "Intended Audience :: Science/Research",
+       "License :: OSI Approved :: Apache Software License",
+       "Operating System :: OS Independent",
+       "Programming Language :: Python :: 3",
+       "Programming Language :: Python :: 3.10",
+       "Programming Language :: Python :: 3.11",
+       "Programming Language :: Python :: 3.12",
+       "Programming Language :: Python :: 3.13",
+       "Programming Language :: Python :: 3.14",
+       "Topic :: Scientific/Engineering :: Artificial Intelligence",
+       "Typing :: Typed"
+      ],
+      "binary_members": [
+       "safetensors/_safetensors_rust.pyd"
+      ],
+      "member_count": 15,
+      "no_nvidia_libraries": true
+     }
     },
     {
      "name": "tokenizers-0.22.2-cp39-abi3-win_amd64.whl",
@@ -885,16 +1672,36 @@
      "size": 2747786,
      "http": 200,
      "head_length": 2747786,
-     "verified_utc": "2026-10-11T13:29:46Z"
-    },
-    {
-     "name": "tqdm-4.70.1-py3-none-any.whl",
-     "url": "https://files.pythonhosted.org/packages/a7/03/921a3d3c75785aca9ebfbfcabfbc3a1be12e2ab5265deb026d55a5a3f83e/tqdm-4.70.1-py3-none-any.whl",
-     "sha256": "c293e525e6fef9c20e8728fd4612df02a0aa31bb5fe91ecd93e123b1b7bffa73",
-     "size": 80199,
-     "http": 200,
-     "head_length": 80199,
-     "verified_utc": "2026-10-11T13:29:46Z"
+     "verified_utc": "2026-10-11T13:29:46Z",
+     "public_audit": {
+      "archive_sha256": "c9ea31edff2968b44a88f97d784c2f16dc0729b8b143ed004699ebca91f05c48",
+      "metadata_sha256": "5ad9bccf21ae53d45f812703c80c7c03ecea300823655a2968f9e6778779bdb3",
+      "name": "tokenizers",
+      "version": "0.22.2",
+      "license_expression": null,
+      "license_text": null,
+      "license_classifiers": [
+       "Development Status :: 5 - Production/Stable",
+       "Intended Audience :: Developers",
+       "Intended Audience :: Education",
+       "Intended Audience :: Science/Research",
+       "License :: OSI Approved :: Apache Software License",
+       "Operating System :: OS Independent",
+       "Programming Language :: Python :: 3",
+       "Programming Language :: Python :: 3.9",
+       "Programming Language :: Python :: 3.10",
+       "Programming Language :: Python :: 3.11",
+       "Programming Language :: Python :: 3.12",
+       "Programming Language :: Python :: 3.13",
+       "Programming Language :: Python :: 3 :: Only",
+       "Topic :: Scientific/Engineering :: Artificial Intelligence"
+      ],
+      "binary_members": [
+       "tokenizers/tokenizers.pyd"
+      ],
+      "member_count": 29,
+      "no_nvidia_libraries": true
+     }
     },
     {
      "name": "transformers-4.57.1-py3-none-any.whl",
@@ -903,7 +1710,33 @@
      "size": 11990925,
      "http": 200,
      "head_length": 11990925,
-     "verified_utc": "2026-10-11T13:29:46Z"
+     "verified_utc": "2026-10-11T13:29:46Z",
+     "public_audit": {
+      "archive_sha256": "b10d05da8fa67dc41644dbbf9bc45a44cb86ae33da6f9295f5fbf5b7890bd267",
+      "metadata_sha256": "5a7907140118994d1b284d23ea8cda916e6fa8a4d8698aa1d20ab5f59e610590",
+      "name": "transformers",
+      "version": "4.57.1",
+      "license_expression": null,
+      "license_text": "Apache 2.0 License",
+      "license_classifiers": [
+       "Development Status :: 5 - Production/Stable",
+       "Intended Audience :: Developers",
+       "Intended Audience :: Education",
+       "Intended Audience :: Science/Research",
+       "License :: OSI Approved :: Apache Software License",
+       "Operating System :: OS Independent",
+       "Programming Language :: Python :: 3",
+       "Programming Language :: Python :: 3.9",
+       "Programming Language :: Python :: 3.10",
+       "Programming Language :: Python :: 3.11",
+       "Programming Language :: Python :: 3.12",
+       "Programming Language :: Python :: 3.13",
+       "Topic :: Scientific/Engineering :: Artificial Intelligence"
+      ],
+      "binary_members": [],
+      "member_count": 2246,
+      "no_nvidia_libraries": true
+     }
     },
     {
      "name": "urllib3-2.8.0-py3-none-any.whl",
@@ -912,9 +1745,149 @@
      "size": 135717,
      "http": 200,
      "head_length": 135717,
-     "verified_utc": "2026-10-11T13:29:46Z"
+     "verified_utc": "2026-10-11T13:29:46Z",
+     "public_audit": {
+      "archive_sha256": "0cf3cae568d36aa9576b28dfb35f11328f1cb974ca7647d9475ebb86c75ac6e3",
+      "metadata_sha256": "10898c620e8007c030e07fa5622b68358a43010025dfbd78a1cb797699de2bb4",
+      "name": "urllib3",
+      "version": "2.8.0",
+      "license_expression": "MIT",
+      "license_text": null,
+      "license_classifiers": [
+       "Environment :: Web Environment",
+       "Intended Audience :: Developers",
+       "Operating System :: OS Independent",
+       "Programming Language :: Python",
+       "Programming Language :: Python :: 3",
+       "Programming Language :: Python :: 3 :: Only",
+       "Programming Language :: Python :: 3.10",
+       "Programming Language :: Python :: 3.11",
+       "Programming Language :: Python :: 3.12",
+       "Programming Language :: Python :: 3.13",
+       "Programming Language :: Python :: 3.14",
+       "Programming Language :: Python :: 3.15",
+       "Programming Language :: Python :: Free Threading :: 2 - Beta",
+       "Programming Language :: Python :: Implementation :: CPython",
+       "Programming Language :: Python :: Implementation :: PyPy",
+       "Topic :: Internet :: WWW/HTTP",
+       "Topic :: Software Development :: Libraries"
+      ],
+      "binary_members": [],
+      "member_count": 42,
+      "no_nvidia_libraries": true
+     }
     }
-   ]
+   ],
+   "compliance": {
+    "license_id": "LicenseRef-Wheel-Components",
+    "upstream": "https://huggingface.co/docs/transformers/",
+    "distribution": "public-ok",
+    "conditions": [],
+    "sources": [],
+    "license_inputs": [
+     {
+      "name": "tokenizers-v0.22.2-LICENSE",
+      "url": "https://raw.githubusercontent.com/huggingface/tokenizers/v0.22.2/LICENSE",
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+      "size": 11357,
+      "date": "2026-11-08"
+     }
+    ],
+    "license_rules": {
+     "charset_normalizer-3.5.2-cp312-cp312-win_amd64.whl": {
+      "kind": "zip"
+     },
+     "hf_xet-1.7.0-cp38-abi3-win_amd64.whl": {
+      "kind": "zip"
+     },
+     "huggingface_hub-0.36.2-py3-none-any.whl": {
+      "kind": "zip"
+     },
+     "idna-3.20-py3-none-any.whl": {
+      "kind": "zip"
+     },
+     "pyyaml-6.0.3-cp312-cp312-win_amd64.whl": {
+      "kind": "zip"
+     },
+     "regex-2026.9.29-cp312-cp312-win_amd64.whl": {
+      "kind": "zip"
+     },
+     "requests-2.34.2-py3-none-any.whl": {
+      "kind": "zip"
+     },
+     "safetensors-0.8.0-cp310-abi3-win_amd64.whl": {
+      "kind": "zip"
+     },
+     "tokenizers-0.22.2-cp39-abi3-win_amd64.whl": {
+      "kind": "zip",
+      "fallback": "tokenizers-v0.22.2-LICENSE"
+     },
+     "transformers-4.57.1-py3-none-any.whl": {
+      "kind": "zip"
+     },
+     "urllib3-2.8.0-py3-none-any.whl": {
+      "kind": "zip"
+     }
+    },
+    "components": {
+     "charset_normalizer-3.5.2-cp312-cp312-win_amd64.whl": {
+      "version": "3.5.2",
+      "license_id": "MIT",
+      "upstream": "https://pypi.org/project/charset_normalizer/3.5.2/"
+     },
+     "hf_xet-1.7.0-cp38-abi3-win_amd64.whl": {
+      "version": "1.7.0",
+      "license_id": "Apache-2.0",
+      "upstream": "https://github.com/huggingface/xet-core"
+     },
+     "huggingface_hub-0.36.2-py3-none-any.whl": {
+      "version": "0.36.2",
+      "license_id": "Apache-2.0",
+      "upstream": "https://github.com/huggingface/huggingface_hub"
+     },
+     "idna-3.20-py3-none-any.whl": {
+      "version": "3.20",
+      "license_id": "BSD-3-Clause",
+      "upstream": "https://github.com/kjd/idna"
+     },
+     "pyyaml-6.0.3-cp312-cp312-win_amd64.whl": {
+      "version": "6.0.3",
+      "license_id": "MIT",
+      "upstream": "https://pyyaml.org/"
+     },
+     "regex-2026.9.29-cp312-cp312-win_amd64.whl": {
+      "version": "2026.9.29",
+      "license_id": "Apache-2.0 AND CNRI-Python",
+      "upstream": "https://github.com/mrabarnett/mrab-regex"
+     },
+     "requests-2.34.2-py3-none-any.whl": {
+      "version": "2.34.2",
+      "license_id": "Apache-2.0",
+      "upstream": "https://github.com/psf/requests"
+     },
+     "safetensors-0.8.0-cp310-abi3-win_amd64.whl": {
+      "version": "0.8.0",
+      "license_id": "MIT",
+      "upstream": "https://github.com/huggingface/safetensors"
+     },
+     "tokenizers-0.22.2-cp39-abi3-win_amd64.whl": {
+      "version": "0.22.2",
+      "license_id": "Apache-2.0",
+      "upstream": "https://github.com/huggingface/tokenizers"
+     },
+     "transformers-4.57.1-py3-none-any.whl": {
+      "version": "4.57.1",
+      "license_id": "Apache-2.0",
+      "upstream": "https://github.com/huggingface/transformers"
+     },
+     "urllib3-2.8.0-py3-none-any.whl": {
+      "version": "2.8.0",
+      "license_id": "MIT",
+      "upstream": "https://pypi.org/project/urllib3/2.8.0/"
+     }
+    }
+   },
+   "class": "public-ok"
   },
   {
    "id": "hf_model",
@@ -1000,7 +1973,50 @@
      "head_length": 2776833,
      "verified_utc": "2026-10-11T13:29:46Z"
     }
-   ]
+   ],
+   "compliance": {
+    "license_id": "Apache-2.0",
+    "upstream": "https://huggingface.co/Qwen/Qwen2-0.5B-Instruct",
+    "distribution": "public-ok",
+    "conditions": [],
+    "sources": [],
+    "license_inputs": [],
+    "license_rules": {
+     "LICENSE": {
+      "kind": "file",
+      "file": "LICENSE"
+     },
+     "config.json": {
+      "kind": "file",
+      "file": "LICENSE"
+     },
+     "generation_config.json": {
+      "kind": "file",
+      "file": "LICENSE"
+     },
+     "merges.txt": {
+      "kind": "file",
+      "file": "LICENSE"
+     },
+     "model.safetensors": {
+      "kind": "file",
+      "file": "LICENSE"
+     },
+     "tokenizer.json": {
+      "kind": "file",
+      "file": "LICENSE"
+     },
+     "tokenizer_config.json": {
+      "kind": "file",
+      "file": "LICENSE"
+     },
+     "vocab.json": {
+      "kind": "file",
+      "file": "LICENSE"
+     }
+    }
+   },
+   "class": "public-ok"
   },
   {
    "id": "cuda_nvrtc",
@@ -1008,7 +2024,7 @@
    "version": "12.9.86",
    "tier": 1,
    "license": "NVIDIA CUDA Toolkit EULA (LICENSE inside archive)",
-   "redistribution": "Redistributable NVRTC component under CUDA EULA attachment A; staged for internal tests",
+   "redistribution": "Never distribute this input in release media/R2/GitHub; fetch its exact official bytes on the box host per run.",
    "stage": {
     "mode": "unzip",
     "dest": "cuda_nvrtc",
@@ -1024,7 +2040,87 @@
      "head_length": 314608748,
      "verified_utc": "2026-10-11T13:37:40Z"
     }
-   ]
+   ],
+   "compliance": {
+    "license_id": "LicenseRef-NVIDIA-CUDA-EULA",
+    "upstream": "https://developer.nvidia.com/cuda-toolkit",
+    "distribution": "private-only",
+    "conditions": [
+     "Owner correction: NVIDIA CUDA is private-use only; person/CI may download only for run-time private use; never upload to R2 or GitHub. Downloader/operator must accept the CUDA EULA. Never offer public downloads."
+    ],
+    "sources": [],
+    "license_inputs": [],
+    "license_rules": {
+     "cuda_nvrtc-windows-x86_64-12.9.86-archive.zip": {
+      "kind": "zip"
+     }
+    }
+   },
+   "class": "official-fetch"
+  },
+  {
+   "id": "hf_wheels_extra",
+   "title": "HF dependency wheels requiring review (MPL or unclear)",
+   "version": "4.57.1 with pinned dependency wheels",
+   "tier": 1,
+   "license": "MPL-2.0 AND MIT per wheel metadata (certifi/tqdm)",
+   "redistribution": "Never distribute this input in release media/R2/GitHub; fetch its exact official bytes on the box host per run.",
+   "stage": {
+    "mode": "wheels",
+    "dest": "py\\Lib\\site-packages"
+   },
+   "files": [
+    {
+     "name": "certifi-2026.7.22-py3-none-any.whl",
+     "url": "https://files.pythonhosted.org/packages/0b/a7/71ac2cff56fec219ed242bb11b8efb69fcc4bec75db06fb7bfe35de520e6/certifi-2026.7.22-py3-none-any.whl",
+     "sha256": "62f22742b58a1a33014a2b6b706588a8d7e2a88ae7bd1a6ebe8c992928483775",
+     "size": 136983,
+     "http": 200,
+     "head_length": 136983,
+     "verified_utc": "2026-10-11T13:29:46Z"
+    },
+    {
+     "name": "tqdm-4.70.1-py3-none-any.whl",
+     "url": "https://files.pythonhosted.org/packages/a7/03/921a3d3c75785aca9ebfbfcabfbc3a1be12e2ab5265deb026d55a5a3f83e/tqdm-4.70.1-py3-none-any.whl",
+     "sha256": "c293e525e6fef9c20e8728fd4612df02a0aa31bb5fe91ecd93e123b1b7bffa73",
+     "size": 80199,
+     "http": 200,
+     "head_length": 80199,
+     "verified_utc": "2026-10-11T13:29:46Z"
+    }
+   ],
+   "compliance": {
+    "license_id": "LicenseRef-Wheel-Components",
+    "upstream": "https://huggingface.co/docs/transformers/",
+    "distribution": "private-only",
+    "conditions": [
+     "certifi is MPL-2.0: exact corresponding source and retention obligations require review before public distribution; source is not yet mirrored.",
+     "Retain all wheel and bundled third-party notices."
+    ],
+    "sources": [],
+    "license_inputs": [],
+    "license_rules": {
+     "certifi-2026.7.22-py3-none-any.whl": {
+      "kind": "zip"
+     },
+     "tqdm-4.70.1-py3-none-any.whl": {
+      "kind": "zip"
+     }
+    },
+    "components": {
+     "certifi-2026.7.22-py3-none-any.whl": {
+      "version": "2026.7.22",
+      "license_id": "MPL-2.0",
+      "upstream": "https://github.com/certifi/python-certifi"
+     },
+     "tqdm-4.70.1-py3-none-any.whl": {
+      "version": "4.70.1",
+      "license_id": "MPL-2.0 AND MIT",
+      "upstream": "https://tqdm.github.io"
+     }
+    }
+   },
+   "class": "official-fetch"
   }
  ],
  "dropped": [
@@ -1346,5 +2442,559 @@
    "sha256": "685adbd46305cdd8a00c6a38474a020b9d298e16de30a6354340391b98e45279",
    "size": 112404
   }
- }
+ },
+ "bundle_toolchain": {
+  "name": "zig",
+  "version": "0.13.0",
+  "license": "MIT (bundled third-party notices in release archive)",
+  "recorded_utc": "2026-11-07",
+  "index": {
+   "url": "https://ziglang.org/download/index.json",
+   "sha256": "6f32677f4c5d0e0515f8259cd8cb102312489d479972bb9ac9ebce205de3bab5",
+   "size": 90260,
+   "date": "2026-11-07"
+  },
+  "hosts": {
+   "x86_64-linux": {
+    "name": "zig-linux-x86_64-0.13.0.tar.xz",
+    "url": "https://ziglang.org/download/0.13.0/zig-linux-x86_64-0.13.0.tar.xz",
+    "sha256": "d45312e61ebcc48032b77bc4cf7fd6915c11fa16e4aad116b66c9468211230ea",
+    "size": 47082308
+   },
+   "aarch64-linux": {
+    "name": "zig-linux-aarch64-0.13.0.tar.xz",
+    "url": "https://ziglang.org/download/0.13.0/zig-linux-aarch64-0.13.0.tar.xz",
+    "sha256": "041ac42323837eb5624068acd8b00cd5777dac4cf91179e8dad7a7e90dd0c556",
+    "size": 43090688
+   },
+   "x86_64-macos": {
+    "name": "zig-macos-x86_64-0.13.0.tar.xz",
+    "url": "https://ziglang.org/download/0.13.0/zig-macos-x86_64-0.13.0.tar.xz",
+    "sha256": "8b06ed1091b2269b700b3b07f8e3be3b833000841bae5aa6a09b1a8b4773effd",
+    "size": 48857012
+   },
+   "aarch64-macos": {
+    "name": "zig-macos-aarch64-0.13.0.tar.xz",
+    "url": "https://ziglang.org/download/0.13.0/zig-macos-aarch64-0.13.0.tar.xz",
+    "sha256": "46fae219656545dfaf4dce12fb4e8685cec5b51d721beee9389ab4194d43394c",
+    "size": 44892040
+   },
+   "x86_64-windows": {
+    "name": "zig-windows-x86_64-0.13.0.zip",
+    "url": "https://ziglang.org/download/0.13.0/zig-windows-x86_64-0.13.0.zip",
+    "sha256": "d859994725ef9402381e557c60bb57497215682e355204d754ee3df75ee3c158",
+    "size": 79163968
+   },
+   "aarch64-windows": {
+    "name": "zig-windows-aarch64-0.13.0.zip",
+    "url": "https://ziglang.org/download/0.13.0/zig-windows-aarch64-0.13.0.zip",
+    "sha256": "95ff88427af7ba2b4f312f45d2377ce7a033e5e3c620c8caaa396a9aba20efda",
+    "size": 75119033
+   }
+  },
+  "programs": {
+   "cup2.exe": {
+    "mode": "sha256",
+    "functional_checks": [
+     "cup2_ladder"
+    ]
+   },
+   "cup3.exe": {
+    "mode": "sha256",
+    "functional_checks": [
+     "cup3_ladder"
+    ]
+   },
+   "cup8.exe": {
+    "mode": "sha256",
+    "functional_checks": [
+     "cup8_ladder"
+    ]
+   },
+   "kf_cuda_control.exe": {
+    "mode": "sha256",
+    "functional_checks": [
+     "cuda_callback",
+     "cuda_occupancy"
+    ]
+   },
+   "kf_dxprobe.exe": {
+    "mode": "sha256",
+    "functional_checks": [
+     "dxprobe_d3d11",
+     "dxprobe_d3d12"
+    ]
+   },
+   "kf_glgears.exe": {
+    "mode": "sha256",
+    "functional_checks": [
+     "glgears_wgl"
+    ]
+   },
+   "kf_overlayprobe.exe": {
+    "mode": "sha256",
+    "functional_checks": [
+     "overlay_yuv_fullscreen",
+     "overlay_yuv_hide",
+     "overlay_yuv_move",
+     "overlay_yuv_occlude",
+     "overlay_yuv_probe",
+     "overlay_yuv_recreate",
+     "overlay_yuv_resize",
+     "overlay_yuv_soak"
+    ]
+   }
+  }
+ },
+ "bundle_references": [
+  {
+   "url": "https://ziglang.org/download/0.13.0/release-notes.html",
+   "sha256": "c6c561371cb1b92e402d713531007c90f4fac9ab8e0058ce0e5bd9384a0d34dc",
+   "size": 61172,
+   "date": "2026-11-07"
+  },
+  {
+   "url": "https://ecma-international.org/publications-and-standards/standards/ecma-119/",
+   "sha256": "0a7e2be98a67fb22e15270f027f97862bd11c3e6d4a27fc908eaf338e3898c86",
+   "size": 87744,
+   "date": "2026-11-07"
+  },
+  {
+   "url": "https://learn.microsoft.com/en-us/windows/win32/api/d3dcommon/ne-d3dcommon-d3d_feature_level",
+   "sha256": "9bb4cec35de0e6335edda1643a982c9a91f9ef54463bbf85cc22364453d865d2",
+   "size": 53163,
+   "date": "2026-11-07"
+  },
+  {
+   "url": "https://docs.aws.amazon.com/AmazonS3/latest/API/API_CompleteMultipartUpload.html",
+   "sha256": "12a9c721decf24cf4f95946f547de3410fb9335b023be713844ba16b001a13c5",
+   "size": 80923,
+   "date": "2026-11-07"
+  },
+  {
+   "url": "https://docs.aws.amazon.com/AmazonS3/latest/API/API_UploadPart.html",
+   "sha256": "83b0c9521c7c948bd41669593d2b4fc509c2d816e6dd72b2c1fe80f065633dbb",
+   "size": 67283,
+   "date": "2026-11-07"
+  },
+  {
+   "url": "https://docs.aws.amazon.com/AmazonS3/latest/developerguide/sig-v4-header-based-auth.html",
+   "sha256": "323cc97fffdf79a79ac5620849a79f54a63e771d1c2f628680470d6378ae0092",
+   "size": 59541,
+   "date": "2026-11-07"
+  },
+  {
+   "url": "https://api.github.com/repos/rhysd/actionlint/releases/tags/v1.7.7",
+   "sha256": "1b1339970cf2fd17ef56294c4af0e767fa329b3bf526644d51fc4a10a6a3c309",
+   "size": 21749,
+   "date": "2026-11-07"
+  },
+  {
+   "url": "https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_checksums.txt",
+   "sha256": "ac22e6577b8d133c7cd779682e65712ef722e719a297633699a4da05e9f351e0",
+   "size": 1119,
+   "date": "2026-11-07"
+  }
+ ],
+ "bundle_validation_tools": {
+  "actionlint": {
+   "url": "https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_amd64.tar.gz",
+   "sha256": "023070a287cd8cccd71515fedc843f1985bf96c436b7effaecce67290e7e0757",
+   "date": "2026-11-07",
+   "version": "1.7.7",
+   "size": 2080472
+  }
+ },
+ "bundle_compliance_research": {
+  "verified_utc": "2026-11-07",
+  "notes": [
+   "7zr.exe original SHA matches official 26.04 release; URL made immutable without changing bytes.",
+   "clpeak 3.0.1 upstream LICENSE is GPLv3, contradicting the previous Apache-2.0 label.",
+   "Archive licence member bytes are transitively pinned by their parent archive SHA256. All legal-text members are inventoried at build time, never application payloads extracted.",
+   "Full binary/archive and transitive source completeness has not been verified in this lane; classes are engineering policy, not legal clearance.",
+   "VC redist original pinned bytes re-downloaded and verified; FileVersion and ProductVersion are both 14.44.35211.0.",
+   "Wheel project metadata URLs and response SHA256/date recorded; licence expressions used where provided. These describe top-level projects, not a complete native dependency audit. Torch project metadata uses its upstream base version; CUDA wheel extras remain private-only."
+  ],
+  "wheel_metadata": {
+   "torch": {
+    "url": "https://pypi.org/pypi/torch/2.8.0/json",
+    "verified_utc": "2026-11-07T22:28:58.138503+00:00",
+    "size": 56939,
+    "sha256": "956e3ce7d4d3c1a07a088b58756ba31b96f59e8e382a5456e6bd7edfabb40e88",
+    "license_expression": null,
+    "license_classifiers": [
+     "License :: OSI Approved :: BSD License"
+    ]
+   },
+   "torchvision": {
+    "url": "https://pypi.org/pypi/torchvision/0.23.0/json",
+    "verified_utc": "2026-11-07T22:28:58.143268+00:00",
+    "size": 27624,
+    "sha256": "f33ad147614023218a232ba880758923dfb6f30d73e28b50113be4b4bcf4e9c7",
+    "license_expression": null,
+    "license_classifiers": []
+   },
+   "cuda_pathfinder": {
+    "url": "https://pypi.org/pypi/cuda_pathfinder/1.8.3/json",
+    "verified_utc": "2026-11-07T22:28:58.145161+00:00",
+    "size": 3543,
+    "sha256": "f7c2e719be0cb89691e2b089e593b34af4a464affc38329de8132b6d36284087",
+    "license_expression": "Apache-2.0",
+    "license_classifiers": []
+   },
+   "cupy_cuda12x": {
+    "url": "https://pypi.org/pypi/cupy_cuda12x/14.2.0/json",
+    "verified_utc": "2026-11-07T22:28:58.147575+00:00",
+    "size": 18560,
+    "sha256": "b9668ed7a8cefcdffc3afc57dfae7d79586e141443d72d52483bf1406ad8250a",
+    "license_expression": "MIT",
+    "license_classifiers": []
+   },
+   "filelock": {
+    "url": "https://pypi.org/pypi/filelock/4.1.0/json",
+    "verified_utc": "2026-11-07T22:28:58.283099+00:00",
+    "size": 368030,
+    "sha256": "3a324d8463a424e2fd642e1641878cbc41d2d741ee9df456051c59fa44398d42",
+    "license_expression": "MIT",
+    "license_classifiers": [
+     "License :: OSI Approved :: MIT License"
+    ]
+   },
+   "flatbuffers": {
+    "url": "https://pypi.org/pypi/flatbuffers/25.12.19/json",
+    "verified_utc": "2026-11-07T22:28:58.303643+00:00",
+    "size": 2562,
+    "sha256": "3800bcba3177624044bb53f06f4a588061c10034f93467a0d163549b0928045a",
+    "license_expression": null,
+    "license_classifiers": [
+     "License :: OSI Approved :: Apache Software License"
+    ]
+   },
+   "fsspec": {
+    "url": "https://pypi.org/pypi/fsspec/2026.9.0/json",
+    "verified_utc": "2026-11-07T22:28:58.306863+00:00",
+    "size": 11349,
+    "sha256": "4a93a853911936a59262f3ccc1a36a42cfbff106beec53d6e247d00f7a3aa1e9",
+    "license_expression": "BSD-3-Clause",
+    "license_classifiers": []
+   },
+   "jinja2": {
+    "url": "https://pypi.org/pypi/jinja2/3.1.6/json",
+    "verified_utc": "2026-11-07T22:28:58.318163+00:00",
+    "size": 4925,
+    "sha256": "1bc757d7065f3e67d3a49e72ebc731d0774055575732592eede9820c136329cc",
+    "license_expression": null,
+    "license_classifiers": [
+     "License :: OSI Approved :: BSD License"
+    ]
+   },
+   "markupsafe": {
+    "url": "https://pypi.org/pypi/markupsafe/3.0.4/json",
+    "verified_utc": "2026-11-07T22:28:58.353306+00:00",
+    "size": 135847,
+    "sha256": "85cd5bce3f85e67ab0b921be9c9ba144a7cc01a2d02b85ad65b1f8dabeac4c57",
+    "license_expression": "BSD-3-Clause",
+    "license_classifiers": []
+   },
+   "ml_dtypes": {
+    "url": "https://pypi.org/pypi/ml_dtypes/0.6.0/json",
+    "verified_utc": "2026-11-07T22:28:58.400206+00:00",
+    "size": 44310,
+    "sha256": "99684e9e2e506da8db8acbfb076e2b8108ae442e62d8af858613bd41d42662ea",
+    "license_expression": "Apache-2.0",
+    "license_classifiers": []
+   },
+   "mpmath": {
+    "url": "https://pypi.org/pypi/mpmath/1.3.0/json",
+    "verified_utc": "2026-11-07T22:28:58.405700+00:00",
+    "size": 10700,
+    "sha256": "cc8d63714e311b9a2f9419d8dcb63d52190b5f69a63bc85e570987a434dc7a57",
+    "license_expression": null,
+    "license_classifiers": [
+     "License :: OSI Approved :: BSD License"
+    ]
+   },
+   "networkx": {
+    "url": "https://pypi.org/pypi/networkx/3.7/json",
+    "verified_utc": "2026-11-07T22:28:58.416685+00:00",
+    "size": 8358,
+    "sha256": "7f1ed131b5a2e9e53bd980cfce44f80960241c76ea494935c3ec798bed686442",
+    "license_expression": "BSD-3-Clause",
+    "license_classifiers": []
+   },
+   "numpy": {
+    "url": "https://pypi.org/pypi/numpy/2.5.3/json",
+    "verified_utc": "2026-11-07T22:28:58.484091+00:00",
+    "size": 63184,
+    "sha256": "2f7296e81e93d8a90ea442e7b7a5393ddab2f7ead5075cafd9be381dcbdffb6e",
+    "license_expression": "BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0",
+    "license_classifiers": []
+   },
+   "onnx": {
+    "url": "https://pypi.org/pypi/onnx/1.23.2/json",
+    "verified_utc": "2026-11-07T22:28:58.516081+00:00",
+    "size": 29921,
+    "sha256": "fba596e5e4a96cdbd7fb0ec75407545256160e272a3ebe074c316dab3fd2f94c",
+    "license_expression": "Apache-2.0",
+    "license_classifiers": []
+   },
+   "onnxruntime_directml": {
+    "url": "https://pypi.org/pypi/onnxruntime_directml/1.24.4/json",
+    "verified_utc": "2026-11-07T22:28:58.518272+00:00",
+    "size": 9196,
+    "sha256": "2022cf61b4fd9e1b628772049d9053f8ab8131b2c3f5675b0c7515e4797782b0",
+    "license_expression": null,
+    "license_classifiers": [
+     "License :: OSI Approved :: MIT License"
+    ]
+   },
+   "packaging": {
+    "url": "https://pypi.org/pypi/packaging/26.3/json",
+    "verified_utc": "2026-11-07T22:28:58.536279+00:00",
+    "size": 5748,
+    "sha256": "4f190d2f0b312b3086058cee64ab4333bf3ce67fb78b4c2bdb43899049b29f4d",
+    "license_expression": "Apache-2.0 OR BSD-2-Clause",
+    "license_classifiers": []
+   },
+   "pillow": {
+    "url": "https://pypi.org/pypi/pillow/12.3.0/json",
+    "verified_utc": "2026-11-07T22:28:58.544080+00:00",
+    "size": 509639,
+    "sha256": "5182199d7ea7bc53cf195aed977f24405f13becd6902f6efbddd3f18336e0b57",
+    "license_expression": "MIT-CMU",
+    "license_classifiers": []
+   },
+   "protobuf": {
+    "url": "https://pypi.org/pypi/protobuf/7.36.2/json",
+    "verified_utc": "2026-11-07T22:28:58.558929+00:00",
+    "size": 7940,
+    "sha256": "090d6bb0e21b26299221770a798ec48c5d45dc4d71a374b44b5e0e7c3a7c47f1",
+    "license_expression": null,
+    "license_classifiers": []
+   },
+   "setuptools": {
+    "url": "https://pypi.org/pypi/setuptools/84.0.0/json",
+    "verified_utc": "2026-11-07T22:28:58.613003+00:00",
+    "size": 11090,
+    "sha256": "fc55c3c123a680b2f77f3071bc028741023be1c67f076b878907e5a3823b2dbd",
+    "license_expression": "MIT",
+    "license_classifiers": []
+   },
+   "sympy": {
+    "url": "https://pypi.org/pypi/sympy/1.14.0/json",
+    "verified_utc": "2026-11-07T22:28:58.617673+00:00",
+    "size": 15089,
+    "sha256": "7f17c97b2d9ccec17969f30bd7e43c58db3de1145cd1cf00773e48991048d176",
+    "license_expression": null,
+    "license_classifiers": [
+     "License :: OSI Approved :: BSD License"
+    ]
+   },
+   "typing_extensions": {
+    "url": "https://pypi.org/pypi/typing_extensions/4.16.0/json",
+    "verified_utc": "2026-11-07T22:28:58.620828+00:00",
+    "size": 5631,
+    "sha256": "2140da00d62dde967f52d0be0ae28444f1d6a3fe603f52c83c23988c32122d5a",
+    "license_expression": "PSF-2.0",
+    "license_classifiers": []
+   },
+   "certifi": {
+    "url": "https://pypi.org/pypi/certifi/2026.7.22/json",
+    "verified_utc": "2026-11-07T22:28:58.642917+00:00",
+    "size": 6515,
+    "sha256": "1cdb529dfcaf4fea8e4fe581726f335a0da5abbbd5bde225205a6911ca1981b1",
+    "license_expression": null,
+    "license_classifiers": [
+     "License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)"
+    ]
+   },
+   "charset_normalizer": {
+    "url": "https://pypi.org/pypi/charset_normalizer/3.5.2/json",
+    "verified_utc": "2026-11-07T22:28:58.659511+00:00",
+    "size": 202370,
+    "sha256": "9fda300857ae6a0486b4cd2d2fec7817ed2d45657249a6dfc0c2bbd1a44267b6",
+    "license_expression": null,
+    "license_classifiers": []
+   },
+   "hf_xet": {
+    "url": "https://pypi.org/pypi/hf_xet/1.7.0/json",
+    "verified_utc": "2026-11-07T22:28:58.663159+00:00",
+    "size": 19854,
+    "sha256": "d6fb6ee3babc8264520eacdbca63182f83c634f3e0260c0c5141ca6ee66d7bba",
+    "license_expression": "Apache-2.0",
+    "license_classifiers": [
+     "License :: OSI Approved :: Apache Software License"
+    ]
+   },
+   "huggingface_hub": {
+    "url": "https://pypi.org/pypi/huggingface_hub/0.36.2/json",
+    "verified_utc": "2026-11-07T22:28:58.664202+00:00",
+    "size": 16010,
+    "sha256": "201d4f42a66cd202d579ae6f50df89483c90c23afba45028ab8a0f4b7d8056b7",
+    "license_expression": null,
+    "license_classifiers": [
+     "License :: OSI Approved :: Apache Software License"
+    ]
+   },
+   "idna": {
+    "url": "https://pypi.org/pypi/idna/3.20/json",
+    "verified_utc": "2026-11-07T22:28:58.698454+00:00",
+    "size": 9180,
+    "sha256": "e7cbd26e23ce60f6cb3a151d2adf3b1b087bb8f10ac2d9d6db70fdccbf3bb041",
+    "license_expression": "BSD-3-Clause",
+    "license_classifiers": []
+   },
+   "pyyaml": {
+    "url": "https://pypi.org/pypi/pyyaml/6.0.3/json",
+    "verified_utc": "2026-11-07T22:28:58.729011+00:00",
+    "size": 66402,
+    "sha256": "c3f35597bc2f08cc990c2a5fe57bef6687b3a3d7c61d8b0ba4cc067777eb1def",
+    "license_expression": null,
+    "license_classifiers": [
+     "License :: OSI Approved :: MIT License"
+    ]
+   },
+   "regex": {
+    "url": "https://pypi.org/pypi/regex/2026.9.29/json",
+    "verified_utc": "2026-11-07T22:28:58.736044+00:00",
+    "size": 156896,
+    "sha256": "a8c8be9b6cd548537b8e8ba921ac87bc1955272402e2ca3562c7f9bebd575709",
+    "license_expression": "Apache-2.0 AND CNRI-Python",
+    "license_classifiers": []
+   },
+   "requests": {
+    "url": "https://pypi.org/pypi/requests/2.34.2/json",
+    "verified_utc": "2026-11-07T22:28:58.760346+00:00",
+    "size": 6811,
+    "sha256": "8622e50ffd295ed759ec793f2a009172a4ed0204bbc5e948de23111bc3d2aeae",
+    "license_expression": null,
+    "license_classifiers": [
+     "License :: OSI Approved :: Apache Software License"
+    ]
+   },
+   "safetensors": {
+    "url": "https://pypi.org/pypi/safetensors/0.8.0/json",
+    "verified_utc": "2026-11-07T22:28:58.762937+00:00",
+    "size": 18780,
+    "sha256": "b8d395b433d0319498c9192ed323b86a84d82b5f40b4adf1b97b3bf8963fafad",
+    "license_expression": null,
+    "license_classifiers": [
+     "License :: OSI Approved :: Apache Software License"
+    ]
+   },
+   "tokenizers": {
+    "url": "https://pypi.org/pypi/tokenizers/0.22.2/json",
+    "verified_utc": "2026-11-07T22:28:58.778126+00:00",
+    "size": 29063,
+    "sha256": "8ae49a98d1383e64acce0c8ee5e856bcfffda54d77b5e44e4f2313db9a4c2f9d",
+    "license_expression": null,
+    "license_classifiers": [
+     "License :: OSI Approved :: Apache Software License"
+    ]
+   },
+   "tqdm": {
+    "url": "https://pypi.org/pypi/tqdm/4.70.1/json",
+    "verified_utc": "2026-11-07T22:28:58.779733+00:00",
+    "size": 60697,
+    "sha256": "0589819a1bc3437c8f215d95f3f64ff24d602dc6a62598eb8d2e420c8e6a0b25",
+    "license_expression": null,
+    "license_classifiers": []
+   },
+   "transformers": {
+    "url": "https://pypi.org/pypi/transformers/4.57.1/json",
+    "verified_utc": "2026-11-07T22:28:58.785846+00:00",
+    "size": 53820,
+    "sha256": "7578836774f9bbc5cc6f048cb49782b566d36843ef7962ba258fde29dc22fe90",
+    "license_expression": null,
+    "license_classifiers": [
+     "License :: OSI Approved :: Apache Software License"
+    ]
+   },
+   "urllib3": {
+    "url": "https://pypi.org/pypi/urllib3/2.8.0/json",
+    "verified_utc": "2026-11-07T22:28:58.828818+00:00",
+    "size": 9510,
+    "sha256": "5315e7401db3cacccd0c2ce5daf81f752a9cc3614b18c37f2b79930b7159ce2f",
+    "license_expression": "MIT",
+    "license_classifiers": []
+   }
+  },
+  "discovery_metadata": [
+   {
+    "url": "https://api.github.com/repos/ip7z/7zip/releases?per_page=15",
+    "size": 370671,
+    "sha256": "20c6e1d9a33cba91d0c98f33629668d958ee8386fffc947d83b57094db408ce2",
+    "verified_utc": "2026-11-07T22:35:32.900662+00:00"
+   },
+   {
+    "url": "https://download.blender.org/source/",
+    "size": 74953,
+    "sha256": "ff4d61605666c4328ead9e40036f2d6a09c9cf1d00605e8cbe0f3302e43432b8",
+    "verified_utc": "2026-11-07T22:35:32.482329+00:00"
+   },
+   {
+    "url": "https://www.7-zip.org/download.html",
+    "size": 20162,
+    "sha256": "1af56d14bd780d6a83245f1d5524702346b5c057925c5197f1c3f8aa28467223",
+    "verified_utc": "2026-11-07T22:35:32.567624+00:00"
+   },
+   {
+    "url": "https://www.7-zip.org/license.txt",
+    "size": 6031,
+    "sha256": "3a184aa13dc8ad30734e28ff901b478ccbcb5b41be52427a5e7609c8fd9e5ddb",
+    "verified_utc": "2026-11-07T22:35:32.607460+00:00"
+   },
+   {
+    "url": "https://raw.githubusercontent.com/blender/blender/v4.5.0/COPYING",
+    "size": 302,
+    "sha256": "19e6f4b541772f9d7b98a52bdbca3ebd5ef9e404956a9a6de68bfc3c1a178387",
+    "verified_utc": "2026-11-07T22:35:32.777320+00:00"
+   }
+  ],
+  "sevenzip_inventory_measurement": {
+   "date": "2026-11-07",
+   "binary_sha256": "256feca8e274e5da655e2a284fabafd9f554365eb164862089dacd4e8276d282",
+   "source_sha256": "9691944c0fe0d01bb49373a704fb983fd33bc98b1738695179dfbf99ac1734f6",
+   "legal_members": [
+    "DOC/License.txt",
+    "DOC/copying.txt",
+    "DOC/unRarLicense.txt"
+   ],
+   "method": "bundle_compliance.stage on the verified 7zr.exe and exact source archive only; no compilation, full media build, installer execution or upload"
+  },
+  "public_hf_wheels_audited_utc": "2026-11-07T23:28:05.533532+00:00"
+ },
+ "official_fetcher": {
+  "path": "scripts/ci/kf_fetch.py",
+  "sha256": "ea2663162e69141216050ab9be275b4bee1adaf35163dd270f69ee2925433d93",
+  "size": 18706,
+  "source_commit": "624bf1dfcf98fac362bc63478e7f9cdb65c4aedf",
+  "source_url": "https://raw.githubusercontent.com/reindertpelsma/kayfabe/624bf1dfcf98fac362bc63478e7f9cdb65c4aedf/scripts/ci/kf_fetch.py",
+  "recorded_utc": "2026-11-08"
+ },
+ "official_drivers": [
+  {
+   "id": "nvidia_driver/580.88",
+   "package": "nvidia_driver",
+   "name": "580.88-desktop-win10-win11-64bit-international-dch-whql.exe",
+   "url": "https://us.download.nvidia.com/Windows/580.88/580.88-desktop-win10-win11-64bit-international-dch-whql.exe",
+   "sha256": "90c49f925b41ee062e02cc8094a16b6d057abfde4e85235a76d63ffe267f63a9",
+   "size": 890807536,
+   "license_id": "LicenseRef-NVIDIA-Driver-EULA",
+   "guest_destination": "C:\\kfapps\\official_driver",
+   "installer_argv": [
+    "C:\\Windows\\System32\\pnputil.exe",
+    "/add-driver",
+    "{dest}\\Display.Driver\\nv_dispi.inf",
+    "/install"
+   ],
+   "stage": {
+    "mode": "7z",
+    "dest": "official_driver",
+    "strip_top": false
+   },
+   "version": "580.88",
+   "provenance": "Exact archive pin and Display.Driver/nv_dispi.inf path from win_vm.sh; guest PNPUTIL phase belongs before the J2 Windows gate. App harness verifies the selected installed version; it never switches the driver after that gate."
+  }
+ ]
 }

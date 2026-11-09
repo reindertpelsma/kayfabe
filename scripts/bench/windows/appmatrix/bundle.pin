@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
+# The sha256 pin of the Windows apps bundle in the public bundles bucket (docs/DOWNLOADS.md, "Windows app bundle").
+# STATUS: FILLED, 2026-11-08. The bundle was built twice from pinned official sources (Level 1 and Level 2 equal), uploaded by
+# the coordinator to the public bundles bucket (create-only keys), and the ISO's sha256 was re-verified through bundles.kayfabe.dev.
+# Consumers match the pin line by pattern and ignore comments; the metadata comments below are the builder's own (inputs, inventory, immutable keys).
+winapps-open.iso sha256=c4d1800350e72fba34943f750e1665953f7c94a57b9f8f9b3213638e21f424ee
+# inputs=ed2ddea144310b76306d4af498bdc9af3c94a7b69164f05bc54a47a913034f1c
+# inventory=713c281c5439e83023435d7f1a14eed03f2f2a1230811260a0f977485cf0a131
+# iso_key=winapps-open/kfapps-c4d1800350e72fba34943f750e1665953f7c94a57b9f8f9b3213638e21f424ee.iso
+# manifest_key=winapps-open/manifest-c4d1800350e72fba34943f750e1665953f7c94a57b9f8f9b3213638e21f424ee.json

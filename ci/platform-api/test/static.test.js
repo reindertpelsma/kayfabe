@@ -102,7 +102,7 @@ test('wrangler.toml binds D1 and the custom domain and declares no secret', () =
   assert.match(toml, /^database_name = "kayfabe-platform"$/m);
   assert.match(toml, /^database_id = "c6292be2-742d-4a05-95fd-749705ab30bc"$/m);
   assert.match(toml, /pattern = "api\.kayfabe\.dev", custom_domain = true/);
-  assert.match(toml, /^LOGS_BASE = ""$/m);
+  assert.match(toml, /^LOGS_BASE = "https:\/\/logs\.kayfabe\.dev"$/m);
   assert.match(toml, /^workers_dev = false$/m);
   const config = toml.replace(/#[^\n]*/g, '');
   assert.doesNotMatch(config, /secret|token|key\s*=|password|durable_objects|r2_buckets|services/i);

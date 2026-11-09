@@ -6,6 +6,7 @@ on:
       - 'scripts/ci/**'
       - 'scripts/bench/**'
       - 'scripts/fastguest/**'
+      - 'scripts/apps/**'
       - 'ci/vast-broker/runner.py'
       - 'ci/vast-broker/test/runner_head_tail_fixture.py'
       - 'ci/vast-broker/src/sanitize.js'
@@ -17,6 +18,7 @@ on:
       - 'scripts/ci/**'
       - 'scripts/bench/**'
       - 'scripts/fastguest/**'
+      - 'scripts/apps/**'
       - 'ci/vast-broker/runner.py'
       - 'ci/vast-broker/test/runner_head_tail_fixture.py'
       - 'ci/vast-broker/src/sanitize.js'
@@ -33,16 +35,94 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  gpu-free:
-    name: Vast box scripts — tests and mutations
+  linux-apps-image:
+    name: Linux apps image recipe — GPU-free
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Recipe, deterministic seed, fake QEMU and guest inventory contracts
+        run: python3 scripts/ci/test_apps_image.py
+      - name: Open/runtime boundary, official media and NVIDIA-file scan
+        run: python3 scripts/ci/test_apps_image_layers.py
+      - name: Every image-rule mutant needs two named killers
+        run: python3 scripts/apps/image/mutants.py --jobs 2
+  shell-free-bundle-portability:
+    env:
+      DOTNET_PROCESSOR_COUNT: 2
+    name: Shell-free ISO fixtures — ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Offline fixtures only (no vendor downloads or compiler bootstrap)
+        run: python -m unittest discover -s scripts/bench/windows/appmatrix/tests -p test_package_bundle.py
+      - name: Level 1 gate and Level 2 metadata warnings (offline fixtures)
+        run: python -m unittest discover -s scripts/bench/windows/appmatrix/tests -p test_bundle_repro.py
+      - name: Reviewed artifact and both ISO namespaces (offline fixtures)
+        run: python -m unittest discover -s scripts/bench/windows/appmatrix/tests -p test_bundle_receivers.py
+  windows-appmatrix:
+    env:
+      DOTNET_PROCESSOR_COUNT: 2
+    name: Windows application definitions — GPU-free
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Prepare CPU-only packaging and PowerShell tests
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends genisoimage
+          command -v pwsh
+      - name: App inventory, mock guest, release oracles and offline packaging
+        run: python3 -m unittest discover -s scripts/bench/windows/appmatrix/tests
+      - name: Release definition mutations require two named killers each
+        run: python3 scripts/bench/windows/appmatrix/release_mutants.py --jobs 2
+      - name: Shell-free bundle mutations require two named killers each
+        run: python3 scripts/bench/windows/appmatrix/bundle_mutants.py --jobs 2
+      - name: Immutable publication mutations require two named killers each
+        run: python3 scripts/bench/windows/appmatrix/publish_mutants.py
+      - name: Public release and transient media boundaries require two named killers each
+        run: python3 scripts/bench/windows/appmatrix/class_mutants.py
+      - name: Public-only CI manifest binding requires two named killers each
+        run: python3 scripts/bench/windows/appmatrix/ci_class_mutants.py
+      - name: Bundle licence/source compliance mutations require two named killers each
+        run: python3 scripts/bench/windows/appmatrix/compliance_mutants.py
+      - name: Official runtime mutation checks
+        run: python3 scripts/bench/windows/appmatrix/official_mutants.py
+      - name: Two-level reproduction mutation checks
+        run: python3 scripts/bench/windows/appmatrix/repro_mutants.py
+      - name: Reviewed artifact receiver mutation checks
+        run: python3 scripts/bench/windows/appmatrix/receiver_mutants.py
+  gpu-free:
+    name: Vast box scripts — tests and mutations
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Contract, payload, environment and diagnostic tests
         run: python3 -m unittest discover -s scripts/ci -p 'test_vast*.py'
+      - name: Live-dump metadata and per-die regression ratchet mutations
+        run: |
+          command -v pwsh
+          python3 scripts/ci/lke193_mutants.py
+      - name: App policy, unsupported matrix rows and mutations
+        run: |
+          python3 -m unittest discover -s scripts/ci -p 'test_app_policy.py'
+          python3 -m unittest discover -s scripts/ci -p 'test_apps_matrix_table.py'
+          python3 scripts/ci/app_policy_mutants.py
       - name: Payload mutations require two named killers each
         run: python3 scripts/ci/payload_mutants.py
       - name: Provider environment mutations require two named killers each
@@ -63,3 +143,18 @@ jobs:
         run: python3 scripts/ci/merge_bar_mutants.py
       - name: Evidence-bundle mutations (scrubbing, scanning, caps, upload) require two killers each
         run: python3 scripts/ci/evidence_mutants.py
+      - name: Run-report mutations (rows, subruns, bounds, upload) require two killers each
+        run: python3 scripts/ci/run_report_mutants.py
+
+  # The SPECviewperf stage's tests run the real stage script against fakes (a process per command), so its mutation run is
+  # its own job: it neither slows nor shares the time limit of the job above.
+  spec-stage:
+    name: SPECviewperf stage — mutations
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: SPECviewperf stage mutations (verdict rules, time guard, copy, teardown, status-only output) require two killers each
+        run: python3 scripts/ci/spec_stage_mutants.py --jobs 4

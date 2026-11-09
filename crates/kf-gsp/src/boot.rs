@@ -189,12 +189,6 @@ impl QueueBinding {
         &self.geom
     }
 
-    /// Our status-queue cursor.
-    #[must_use]
-    pub fn status_cursor(&self) -> TxCursor {
-        self.stat
-    }
-
     /// Our command-queue cursor.
     #[must_use]
     pub fn command_cursor(&self) -> RxCursor {

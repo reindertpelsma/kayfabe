@@ -250,8 +250,6 @@ pub struct Cuda {
     pub(crate) cuMemMap: Option<unsafe extern "C" fn(u64, usize, usize, u64, u64) -> CUresult>,
     pub(crate) cuMemSetAccess:
         Option<unsafe extern "C" fn(u64, usize, *const c_void, usize) -> CUresult>,
-    pub(crate) cuMemUnmap: Option<unsafe extern "C" fn(u64, usize) -> CUresult>,
-    pub(crate) cuMemAddressFree: Option<unsafe extern "C" fn(u64, usize) -> CUresult>,
     // ★ 2026-10-03 (display step 3, the broker relay): page-lock memory WE mapped (a sealed
     // memfd the broker also receives) so the display's async D2H copy can land in it.
     // ⊘ `Option`, like the VMM set: a driver without them loses the broker path BY NAME at its
@@ -436,8 +434,6 @@ impl Cuda {
             cuMemAddressReserve: opt!("cuMemAddressReserve"),
             cuMemMap: opt!("cuMemMap"),
             cuMemSetAccess: opt!("cuMemSetAccess"),
-            cuMemUnmap: opt!("cuMemUnmap"),
-            cuMemAddressFree: opt!("cuMemAddressFree"),
             // ⚠ `_v2`, as everywhere a size is carried (the unsuffixed entry is the 32-bit ABI)
             cuMemHostRegister: opt!("cuMemHostRegister_v2"),
             cuMemHostUnregister: opt!("cuMemHostUnregister"),
@@ -1085,7 +1081,10 @@ impl Cuda {
     ///
     /// # Panics
     /// If the range leaves `buf`.
-    #[allow(dead_code)]
+    #[allow(
+        dead_code,
+        reason = "no caller since P4b; kept as the audited spelling of the call (see above)"
+    )]
     pub(crate) fn memcpy_h2d_async(
         &self,
         s: StreamHandle,
@@ -1115,7 +1114,6 @@ impl Cuda {
     ///
     /// # Panics
     /// If the range leaves `buf`.
-    #[allow(dead_code)]
     pub(crate) fn memcpy_d2h_async(
         &self,
         s: StreamHandle,
@@ -1721,14 +1719,6 @@ struct CuMemAllocationProp {
 }
 
 impl Cuda {
-    /// Does this driver expose the VMM API at all? ⊘ A measurement: `false` is an answer.
-    #[must_use]
-    pub fn has_vmm_api(&self) -> bool {
-        self.cuMemCreate.is_some()
-            && self.cuMemExportToShareableHandle.is_some()
-            && self.cuMemGetAllocationGranularity.is_some()
-    }
-
     /// Allocate `bytes` of device memory through CUDA and export it to a POSIX fd.
     ///
     /// # Errors

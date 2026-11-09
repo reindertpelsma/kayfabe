@@ -1,8 +1,10 @@
 # V3 vIOMMU — a guest IOMMU in front of the kf3 device (design only)
 
+**STATUS: DESIGN-ONLY, 2026-10-08 (corrected 2026-10-13).** A vIOMMU design; nothing is built (read on 2026-11-07: `crates/kf-qemu/src/mem.rs` has a named vIOMMU seam that is the identity today, and `crates/kf-qemu/src/userdram.rs` rejects a vIOMMU at realize; no IOVA translation or invalidation code was found). The correction below overrides the GpuMmu sentence in the original status paragraph under it.
+
 **Correction 2026-10-13 (research, `V3_VIOMMU_NEED_RESEARCH_20261013.md`):** "discrete NVIDIA GPUs use the GpuMmu model" is true but incomplete. WDDM 3.0 also requires discrete GPU drivers to support IOMMU DMA remapping, and a guest with a DMAR table can make Windows enable Dxgkrnl IOMMU GPU isolation when a secure VM starts; that is where Windows would consume IOVAs. Adding a vIOMMU is therefore not free of risk (one Proxmox report: VBS failed to start with a guest vIOMMU), and a missing one is a minor blocker (hardened-enterprise VBS level 3 and the Kernel DMA Protection line); nested virtualization is the larger one. Owner view recorded: a vIOMMU is not needed for kayfabe's security (kayfabe already sees guest memory; the kernel driver is trusted; kayfabe maps no guest RAM into a GPU VA).
 
-**STATUS: DESIGN-ONLY, 2026-10-08.** Nothing is built. Prompted by the owner's question whether Windows
+Original status paragraph (2026-10-08): nothing is built. Prompted by the owner's question whether Windows
 needs an IOMMU and what a vIOMMU would cost. Today kayfabe presents no vIOMMU: every bus address the
 guest hands the device is a guest-physical address (GPA), and Windows 11 runs without one (its
 hardware requirements are Secure Boot and TPM 2.0; Kernel DMA Protection and the DMA part of

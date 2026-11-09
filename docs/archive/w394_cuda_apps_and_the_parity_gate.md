@@ -1,3 +1,5 @@
+> **STATUS: SUPERSEDED, 2026-09-21** (archived, w822). Successor: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) and [`THE_ARCHITECTURE_v3.md`](../design/THE_ARCHITECTURE_v3.md). Historical record: a `STATUS` line further down says what the document claimed when it was written; it is no longer a claim about the current tree.
+>
 > ⊘⊘⊘ **ARCHIVED — THIS DESCRIBES A SUPERSEDED ARCHITECTURE. IT IS REFERENCE, NOT CURRENT.**
 > The live design is `docs/design/THE_DESIGN.md`. This file is kept because its *measurements*,
 > its *ogkm findings* and its *reasoning* remain useful — its **architecture does not**. Do not
@@ -5,7 +7,7 @@
 
 # ★★★★★ w394 — CUDA APPS PASS, and the BAR TRAP IS **NOT** THE PARITY GATE
 
-**STATUS: LIVE**, 2026-09-09. Box `50376491` (RTX 3060, GA106, `580.159.04`), binary stamped
+**STATUS AT WRITING: LIVE**, 2026-09-09. Box `50376491` (RTX 3060, GA106, `580.159.04`), binary stamped
 `kayfabe-rev:a9815c91` (= tree HEAD, the LLM-passing master rev). Everything below is measured
 from `traces/w394_cuda_apps/`.
 

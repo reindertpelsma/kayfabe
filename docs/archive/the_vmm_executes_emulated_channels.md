@@ -1,3 +1,5 @@
+> **STATUS: SUPERSEDED, 2026-09-21** (archived, w822). Successor: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) and [`THE_ARCHITECTURE_v3.md`](../design/THE_ARCHITECTURE_v3.md). Historical record: a `STATUS` line further down says what the document claimed when it was written; it is no longer a claim about the current tree.
+>
 > ⊘⊘⊘ **ARCHIVED — THIS DESCRIBES A SUPERSEDED ARCHITECTURE. IT IS REFERENCE, NOT CURRENT.**
 > The live design is `docs/design/THE_DESIGN.md`. This file is kept because its *measurements*,
 > its *ogkm findings* and its *reasoning* remain useful — its **architecture does not**. Do not
@@ -5,7 +7,7 @@
 
 # The VMM executes emulated channels — through a raw client it owns
 
-**STATUS: LIVE — written 2026-09-17 (w755p), from the owner's ruling of the same day.**
+**STATUS AT WRITING: LIVE — written 2026-09-17 (w755p), from the owner's ruling of the same day.**
 Supersedes nothing; it *replaces the executor* behind `DoorbellRoute::CpuCe` and changes no
 routing. Constraint: **§37**. Related: §20 (which this must not reopen), §23, §35, §36, and
 `route_k_phase_1_holds.md` (whose machinery this reuses wholesale).

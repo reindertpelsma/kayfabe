@@ -1,6 +1,6 @@
 # Box interface
 
-STATUS: LIVE, 2026-11-06. Box protocol 7 (since 2026-10-23; unchanged by the evidence upload and the optional host claims below,
+STATUS: LIVE, 2026-11-07. Box protocol 7 (since 2026-10-23; unchanged by the evidence upload, the optional host claims and the optional run report below,
 which are additive); runner status protocol 6 (was 5 until the edits2 round of 2026-10-24). Owner
 rulings 2026-10-24: right after the runner's verified final log fetch it sends `POST /stop/<run>`
 and the Worker destroys the box at once, so the result grace below is only the fallback; box
@@ -110,3 +110,52 @@ instead of refusing the report, and no verdict reads them. Without the variable 
 reporter sends none, because an older Worker refuses any other top-level key of a result; a newer
 Worker accepts a result without the key (an older box). `host_driver` and the GPU name already travel
 in `hardware`; the Worker takes the host driver from `hardware.driver_version`.
+
+## Optional run report (2026-11-07)
+
+[CODE READ: scripts/ci/vast_run_report.py, scripts/ci/vast_onstart.sh, ci/vast-broker/src/runreport.js,
+src/index.js; GPU-free tests only, nothing deployed] The box protocol stays 7. A Worker that has a
+result store adds the optional environment variable `KF_RUN_REPORT=1` to the box environment (as for
+`KF_HOST_CLAIMS`: the reporter's contract lists it as an optional name that must be `1`). Only a box that
+sees it posts a report, so a newer box never calls a route an older Worker lacks, and an older box on a
+newer Worker simply sends none. Why a separate route and not a key of the result (as `host_claims`):
+the structured result must fit one report request of at most 65536 bytes, and a report can be 256 KiB.
+
+`POST /run-report/<run>-<attempt>` uses the same run capability as `/report` (the live run token of this
+rental, `Authorization: Bearer`), no query string, body `Content-Type: application/json`, at most
+262144 bytes (`413 PAYLOAD_TOO_LARGE`; the gateway buffers at most that plus one byte). It is accepted
+while the rental is not closed or ended (so before the result report; the box sends it after the payload and
+before the result, bounded to 30 s by `vast_onstart.sh`). The body is a JSON object with `"schema": 1` and the
+claims below; the Worker keeps the shape and drops the rest (unknown keys, rows of an unknown subrun, bad
+enums, non-finite numbers, strings that are not printable ASCII of at most 200 characters, anything
+token-shaped, URL-shaped or about SPECviewperf), fits it into 256 KiB, and stores it in the ledger until the
+rental is settled, when the cron publishes it ([DEPLOY.md](../DEPLOY.md), "Public logs and run reports").
+Answers: `200 {"state":"STORED"}`; `400 BAD_REQUEST` (not JSON, not an object, `schema` is not 1); `401`
+(token or rental state); `404 REPORTS_DISABLED` (no result store) or an unknown route (an older Worker);
+`409 REPORT_EXISTS` (one report per rental; the box counts it as sent); `413`; `429` (the per-rental rate of
+`/report`). The box tries at most 3 times (network error, 429, 5xx) and treats every other answer as a
+skipped report: the report never changes a result, a verdict, a deadline or the exit status.
+
+Claims (`vast_run_report.py` builds them only from output the payload already prints; a field with no
+source is empty, never invented): `guest_drivers` {linux, windows}; `stages` [{name, result PASS, FAIL,
+SKIP, NOT_RUN, RETRY or UNATTRIBUTED, rc, duration_ms}]; `suites` [{name, pass, fail, skip}] (the graded rows of
+the result file); `subruns` [{sub, kind, os, guest_driver, host_driver, verdict (PASS, FAIL, RETRY,
+UNATTRIBUTED or NOT_RUN), reason (always present for NOT_RUN), stages, log_stages, started_at, ended_at,
+duration_ms, counts {pass, fail, skip}}]; `tests` [{sub, suite, name, result PASS, FAIL, SKIP or REFUSED, ms}];
+`apps` (the `APP_ROW` lines of the apps stage; `[]` while that stage is disabled, which is the default); `perf` [{sub, name, value, unit,
+higher_is_better, suite, ref_value, ref_ratio}]; `windows` {gate, install_s, probes, resets,
+live_dumps_193}. A host session (one rental) holds several subruns: `host` (bare-metal arms and the host CUDA
+ladder, host driver), `linux-<guest driver>` (thin suite, birth census and the guest CUDA ladder),
+`windows-<driver>` (the Windows gate); a subrun that did not run is NOT_RUN with a reason.
+`sub` ids are `host`, `linux-<driver>`, `linux-unknown`, `windows-<driver>` or `windows`. Every test, perf and
+app row names its `sub`. `duration_ms` of a subrun is the sum of the timed tests in it (the payload
+prints no wall-clock timestamps). The offsets of a subrun in the published log (`log_range`) are NOT sent by
+the box: the Worker finds them from the `KF_PAYLOAD_STAGE_START/END name=<stage>` lines of the log it wrote
+(`log_stages` names the stages), because redaction and the Worker's own lines move every byte of the box's
+file.
+
+What the Worker sets itself when it publishes (never taken from the box): `run_id`, `commit`, `tree`, `tier`,
+`die`, `family`, `gpu_name`, `host_driver`, `started_at`, `ended_at`, `verdict`, and `log` {url, bytes, sha256}
+of the published log. Every other value is a claim of an untrusted box: shown as such, never a gate, never
+an input to a requirement. SPECviewperf scores are never part of a report (docs/SPEC_RESULTS.md).
+

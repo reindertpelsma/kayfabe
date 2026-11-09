@@ -1,6 +1,6 @@
 # V3 display pacing — the guest's flips are never parked; copies are bounded; who ticks
 
-**STATUS (2026-10-18, hitch-20261017): CORRECTION to everything below that says the colour experiment keeps the old rule.** §6.2's colour
+**STATUS: LIVE, 2026-11-07.** Read on 2026-11-07 against the tree: the phase 1 flip/copy rule (`ScanState::on_window_latch` in `crates/kf-qemu/src/display.rs`), the pure tick source and pacing (`crates/kf-disp/src/tick.rs`, `pace.rs`) and the broker tick source (`crates/kf-broker/src/ticks.rs`) exist; §8 (phase 3) is DESIGN-ONLY. The owner's decisions are `OWNER_RULINGS.md` §AK. **CORRECTION (2026-10-18, hitch-20261017) to everything below that says the colour experiment keeps the old rule.** §6.2's colour
 bullet and mutation row W9 describe a rule that production ran until `claude/hitch-20261017`: with `KF3_DISPLAY_SDR_COLOR=1` (a production flag)
 every window flip waited for its OWN scanout copy (`barrier = started + 1`, `want = true`), so the §6 rule (a flip completes behind the copy in
 flight at its latch; the newest latched frame is copied once per tick) never applied on the owner's boxes. It applies now, colour path included
@@ -10,7 +10,7 @@ D3D11 Ultra 1920x1080 fullscreen exclusive, vsync on, per pass: Heaven average 5
 (0.56 -> 0.51 per minute) and the 1% low (21.3 -> 21.8 fps) did NOT improve beyond the spread: those hitches sit at the same benchmark seconds in every
 boot and build and are born in the guest application. Evidence summary: `traces/hitch_20261017/README.md`.
 
-**STATUS: LIVE, 2026-10-17.** Phase 1 (§4–§6) is BUILT on `claude/display-pacing-20261017` (cut from `claude/tear-gate-exp-20261017`
+**Status as written 2026-10-17.** Phase 1 (§4–§6) is BUILT on `claude/display-pacing-20261017` (cut from `claude/tear-gate-exp-20261017`
 `ec42327f0` = `integration/prod-candidate-3-20261017` + the `KF3_TEAR_GATE` measurement flag), GPU-free tested, **NOT RUN ON A BOX**.
 Phase 2 (§11: the broker as tick source, lock-step frame requests) is BUILT on `claude/display-tick-20261017`, GPU-free tested, **NOT RUN ON A BOX**. Phase 3 (§8) is DESIGN-ONLY. The owner's decisions are `OWNER_RULINGS.md` §AK (they amend §M D1). The mechanism this
 replaces is `V3_DISPLAY.md` §8.16 (corrected in place).

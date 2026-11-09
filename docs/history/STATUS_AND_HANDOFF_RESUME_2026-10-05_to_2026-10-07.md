@@ -1,0 +1,852 @@
+# Status and handoff, history part 3: the 2026-10-07 and 2026-10-05 resumption entries
+
+**STATUS: SUPERSEDED, 2026-11-07** by [`../STATUS_AND_HANDOFF.md`](../STATUS_AND_HANDOFF.md) (current resume point) and [`../STATUS_DETAIL.md`](../STATUS_DETAIL.md). The "0.0 RESUME HERE 2026-10-07" entry and the "0.0 Historical resumption 2026-10-05" entry of `docs/STATUS_AND_HANDOFF.md` (the older of the two was already superseded by the newer when they were written). Moved here, unchanged, on 2026-11-07 when the 223 KB file was split (lines 1602-2448 of the file at `a9dee7b2c`; `git show a9dee7b2c:docs/STATUS_AND_HANDOFF.md` returns the unsplit text). The only edit is that relative links gained a `../` prefix so they still resolve from this directory. Every statement below carries its own date and is a record of that day, not a description of today.
+
+---
+
+### 0.0 ★ RESUME HERE — 2026-10-07
+
+**BRANCH `claude/passthrough-nsi-nogate-20261008` (off `claude/passthrough-interrupt-20261008` 96336228), 2026-10-08/09 — owner ruling §X: the non-stall relay wakes every VM whose guest ARMED the event, never drops an edge. Verified, NOT merged.** ⊘ *An independent review of `1f083ac4` found it not mergeable (the guest kernel's non-stall callbacks, classes 0x78/0x7e, were never counted as armed, a regression); fixed at `cd0fab8d`, so every claim before that revision is about the earlier binary.*
+- Re-review of `7519cd89` (mergeable; small items) fixed at `53f298d6`/`d00c9f2b` (the code tip). GPU-free at `d00c9f2b` on the trusted host: `cargo test` kf-chan, kf-host, kf-rm, kf-abi, kf-qemu, kf-harness 1526 passed / 0 failed, kayfabe-isolate-host 120/120; `scripts/ci_gates.sh` 14 clean; clippy and claims new=0; rustfmt clean. Hardware at `d00c9f2b`: guest `--ce-interrupt` PASS (legs as bare metal, controls 0/10), 30-arm suite 30/30, overflow counts 0 (INDEX.txt, CONFIRM). Earlier GPU-free at `e8d9a5a8` (crates = `eca43847`): 1525/0.
+- Hardware at `eca43847` (RTX 4070, 595.91.07, `traces/passthrough_nsi_nogate_20261008/INDEX.txt`, RE-VERIFY): guest `--ce-interrupt` PASS with every leg landing as on bare metal, controls 0/10; 30-arm suite 30/30; two guest-kernel non-stall registrations reach kf3 and arm `FIFO_EVENT_MTHD` (233 of 264 FIFO edges raised, against 138 of 269 before the fix); with a 5 s wait before power-off every arm returns to 0.
+- Earlier, at `15a400b5`/`b831b364`: pacing at 50 ms alone lost no completion (late raises 99/49/148), and beside a noisy neighbour VM every interrupt leg of both guests completed while their controls saw each other's edges (the accepted residual). Not re-run after the fix (pacer and vector choice unchanged).
+- GRCE hypothesis: its falsifier did not happen (bare metal: a COPY0 copy's interrupt lands on GR0 and `FIFO_EVENT_MTHD` 50/50, CE0 0/50).
+Open: no VM-reset hook exists in kf3 (arms are cleared at fn 1, the guest RM's start). PLAUSIBLE, unverified: if a Windows KMD re-sends fn 1 within one RM life while it still holds events, `clear()` leaves those events unarmed until they are registered again (lost wakes); Linux cannot do this (`kgspInitRm` runs only from `RmInitAdapter`). Windows' use of the kernel-callback classes is unverified; the owner decides whether this branch lands. Design: `docs/design/the_three_channel_kinds.md` §1.2; residuals in `docs/FAQ.md`.
+
+**MASTER, 2026-10-09 (night of 2026-10-08) — promoted a second time: master is the code of `3f4904ca` plus docs.** The standing merge approval was met for the exact code commit `3f4904ca` (candidate 2 = the first promotion plus the input traits, the physical-operand oracle, and the broker scripts):
+- **Merge bar, `mcbox5` (vast box, RTX 3060, driver 580.159.04, 2026-10-08):** 2419 tests / 0 failed, v3 gates 9/9, bare-metal suite 30/30, fast guest suite 30/30, birth census OK. **CUDA ladder and apps at the same commit (`mcl4_guest`, `mcapps4`):** all four ladder rungs PASS; guest 67/71 = 61/65 apps + 6/6 probes, the same four UVM failures as the baseline (`UnifiedMemoryStreams`, `UnifiedMemoryPerf`, `conjugateGradientUM`, `attach_verify`).
+- **Review:** an independent read-only review of the candidate against master found no merge blocker; the 17 new `kf-qemu` unsafe items (ratchet 67 to 84) were each read and found sound. Its findings are fixed in `3f4904ca`: the `kf3.c` shim re-checks the cursor hot spot and the absolute range, the two positional booleans of `birth_member` are now the `PhysicalCeBelt` type with a guard test, the subpixel scripts clean their udev rule. GitHub CI is green on the tip; everything after `3f4904ca` is docs and traces only.
+- **New in master:** VMM-neutral input traits (`InputSink`, `CursorSink` in `kf-broker`; kf3 ABI 22 to 23), the native physical-operand oracle (`kf-phys-oracle`, `traces/phys_operand_oracle_20261008/`: a copy-engine physical operand is refused on a USER-privilege channel, measured; 3D/compute/video have no physical-operand method, by reading), `docs/design/the_three_channel_kinds.md` §1.1 (the relayed Passthrough sub-kind), the real-hardware control diff `traces/windows_code43_walls_20261007/vfio10-vs-run89-controls.txt` (⊘ its framing is partly wrong: the vfio-10 reference is a DisplayPort monitor while kayfabe's connector is DVI-D by design, so the DP cluster is not a signal; see the Windows lines below).
+- **Not in master (branches; each needs the merge bar):** Windows `claude/windows-display-20261008`, `claude/windows-walls-20261008`, `claude/windows-timeout-20261008`, `claude/windows-reenable-20261008`, `claude/windows-pass-20261008` (in progress); `claude/rawclient-ce-interrupt-20261008` (the `--ce-interrupt` arm: bare metal positive leg 50/50 at a median 47 us wake, but the negative control cannot be graded on a busy GPU: other tenants raise the GPU-wide notifier; run it on the quiet box, then in the guest); `claude/userd-iova-spike-20261008` (negative result, below); the nvkvm-pv branch `kf-broker-fixes-20261008` (sub-pixel remainder, host cursor under grab).
+- **Windows state (2026-10-08):** NVIDIA-enabled idle works; per-process channels run as Passthrough twins; D3D device creation still fails and the guest bugchecks 0x116 at the first D3D device work (a GPU-scheduler timeout). RULED OUT with falsifiers: lost CE interrupts, stale `GP_GET`, the preempt and its re-enable, the USERD relay, the USERD address (run 89: identity IOMMU, plain adoption, same hang), a second GSP event, subchannel binds, VA base, display control `0x007302a5`. Leading inference: the display flip/vblank path (kayfabe raises no guest vblank interrupt, `vblirq=0.0`; Linux works without one). The owner may connect a DVI-D monitor so a like-for-like real-hardware reference can be traced.
+- **USERD (urgent, to be discussed once Windows passes):** Windows' USERD is in guest system memory; the host's IOVA for it is 47-bit and RM refuses it (`NV_ERR_INVALID_ADDRESS`, address > 2^40). Measured: a separate one-page OS descriptor is refused as well (`userd-iova-spike`), probably the kernel's 47-bit DMA latch. Run 89 shows that an identity IOMMU domain for the GPU makes adoption work. Agreed packaging: adopt first; fall back only on exactly 0x1e AND a system-memory USERD (and, later, no host-kernel patch); fallback = the relay, with the twin's USERD in host-owned VRAM, done inline in the doorbell table (copy `GPPut` in; the owner assumes Windows never reads `GP_GET`, a poison experiment would test it); the VRAM-backed alias as the later host-independent fix. ⚠ The GPU's IOMMU group on the trusted test host may currently be in identity mode (set by the Windows agents for their control runs): check `cat /sys/kernel/iommu_groups/<n>/type` (the group of `0000:01:00.0`); the default is `DMA-FQ`.
+- **Owner decisions waiting:** `KF3_WIN_TWIN_DEFAPI_OBJECT` (conflicts with §U.1; meets §U.3), `KF3_ASYNC_PREEMPT`, `KF3_RELAY_GET_REFRESH`, the software-runlist flag, the USERD packaging above, §T items T.9 and T.10, `raw_control_native` behind a non-default feature, the colour mode-3 hardware test, the DVI-D reference session.
+
+**MASTER, 2026-10-08 (later the same day) — the candidate below was promoted: master is the code of `6692e621` plus docs.** ⊘ *The "MASTER CANDIDATE" paragraph after this one is history: its "NOT run" list was run.* The standing merge approval was met for the exact code commit `6692e621`:
+- **Merge bar, `mcbox3` (vast box, RTX 3060, driver 580.159.04, 2026-10-08):** 2403 tests / 0 failed, v3 gates 9/9, bare-metal suite 30/30, fast guest suite 30/30, birth census OK (all `PRIVILEGED_CHANNEL=0`). Earlier, the same bar on `0e64a960` on the trusted host (RTX 4070, driver 595.91.07): 2396/0, 9/9, 30/30, 30/30. Logs: `traces/merge_bar_20261008/`.
+- **Apps and CUDA ladder at `6692e621` (box, runs `mcapps3`, `mcl3_guest`):** guest 67/71 = 61/65 apps + 6/6 probes, the same four UVM failures as the baseline (`UnifiedMemoryStreams`, `UnifiedMemoryPerf`, `conjugateGradientUM`, `attach_verify`); all four ladder rungs PASS. At `ac5d086f` (before the release `overflow-checks` and the review fixes) the app matrix was also 67/71.
+- **Review:** an independent read-only review of `b5c9f717..ac5d086f` found no merge blocker; its three findings (unbounded display queue and wait, `NV50_MEMORY_VIRTUAL` struct pairing, a PID-reuse kill in `interactive.sh stop`) are fixed in `b6fe369b`. GitHub CI is green on the tip. Everything after `6692e621` is docs only.
+- **What is new in master since `906a76a4`:** the Windows chain through the Translated deferred API (default-off flags), the raw client on every measured host driver (595.91.07 passes; `kayfabe-isolate-host` now depends on `kf-abi`), the per-VM GPU UUID, the interactive broker window and launcher, mouse grab routing, early-frame freeze fix, `x11-dispsw` at 595, the GPU-copy rung at 595, release `overflow-checks`, owner rulings §U-§W and the filtered §T, `docs/FAQ.md`, `V3_VIOMMU.md`, the physical-operand oracle result in §V.
+- **Not in master (branches, each needs the merge bar before it is):** `claude/input-sink-trait-20261008` (VMM-neutral input traits, kf3 ABI 23, unsafe ratchet 67 to 84: review the 17 items), `claude/phys-operand-oracle-20261008` (the `kf-phys-oracle` arm and a `kf-host` flag toggle), `claude/broker-interactive-20261008` (the docs and scripts after `c83ad2be`), the nvkvm-pv branch `kf-broker-fixes-20261008`, the Windows branches `claude/windows-display-20261008`, `claude/windows-walls-20261008` and `claude/windows-timeout-20261008` (in progress), `claude/colour-chroma-20261007` (colour mode-3 hardware test pending).
+- **Windows state:** NVIDIA-enabled idle works; per-process channels as Passthrough twins with the USERD relay run; D3D device creation still fails after the twins run their work (guest TDR, bugcheck 0x116); the window shows the Basic Display desktop. Next walls: copy-engine completion interrupts, a stale `GP_GET`, display control `0x007302a5`; `traces/windows_code43_walls_20261007/README.md`.
+- **Owner decisions waiting:** the software-runlist flag (`KF3_SW_RUNLIST_HOST_OWNED`, recommended for Windows guests only), the `NV50_DEFERRED_API` object on Windows user-work twins versus §U.1, ruling-B-style preemption and ZCULL binds, the `raw_control_native` feature gate, §T items T.9 and T.10, the colour mode-3 test.
+
+**MASTER CANDIDATE, 2026-10-08 — branch `integration/master-candidate-20261008`. Master is unchanged (`906a76a4`); this branch is a straight fast-forward of it (207+ commits).** Owner, 2026-10-08: merge the verified work so there are fewer sub-branches, record it, push, stop for the day. The standing merge approval (recorded in the owner-decisions summary lower in this file, next to the §Q/§R bullets) requires the EXACT commit to pass CI, review, and a real-GPU guest boot with the merge bar and the apps, so master was NOT touched: the candidate waits for that run.
+- **Contains:** the Windows chain through the Translated deferred API (class 5080 Translated-only, trigger behind `KF3_DEFERRED_API=1`; code `83881ecc`), the Windows run records 47-53 and probes (`scripts/bench/windows/`: `video_memory_probe.ps1`, `display_probe.ps1`, `qga_run_ps.py`, `gsp_info_scan.py`), the per-VM GPU UUID (`claude/gpu-uuid-per-vm-20261008`, `950fd747`, design `docs/design/V3_GPU_UUID.md`), and owner ruling §U.
+- **Verified here (GPU-free, on the trusted host, from this tree):** `cargo test` for kf-util, kf-abi, kf-rm, kf-chan, kf-qemu, kf-harness: 1523 passed, 0 failed; `scripts/ci_gates.sh` default mode: ALL GATES CLEAN (14 steps). Earlier, at `83881ecc`: native gates 9/9, 11/11 USER births, `kf-gr-tier` PASS.
+- **NOT run on this commit (so it is not mergeable yet):** `scripts/bench/v3_gates.sh` 9/9, `build_kf3.sh`, the fast suite 30/30 (`KF_DEVICE=kf3 scripts/fastguest/fast_suite.sh`), the CUDA ladder, the app matrix (baseline 61/65 + 6/6), and any guest boot of the per-VM UUID (check `nvidia-smi -L` differs between two VMs on one chip row). Next session: run that bar once on this branch, then fast-forward master.
+- **Left out on purpose (branches stay as they are):** `claude/deferred-falsify-20261007` and `claude/deferred-oracle-20261007` (the falsify probe adds `kf_host::raw_control_native`, a test-only bypass of the validated-driver guard, awaiting owner review; the oracle depends on it, and its wedge diagnosis and eight-command table are unfinished: a channel appeared to take exactly one `0x200` trigger, cause not established); `docs/owner-directives-20261007` (§T: recovered directives whose quotes await owner approval); `claude/colour-chroma-20261007` (TMO/chroma decision pending); `claude/audit-derive-20261007` (an audit document). The Windows D3D branch's first commit swept an earlier draft of the UUID code into its history from a shared checkout; the candidate takes that branch's own files only and the final UUID code from its own branch.
+- **Owner's order of work (2026-10-08):** (1) this merge; (2) make the VGA device and the bootloader (grub) drive the screen before the NVIDIA driver loads; (3) the display window on the host through the broker, as in nvkvm-pv; (4) that exercises `NV0073_CTRL_CMD_SYSTEM_GET_CONNECTOR_TABLE`, `GET_HOTPLUG_CONFIG`, `DP_GET_CAPS` (formats known), giving Linux display in full; (5) then Windows.
+- **Owner decisions waiting:** per-VM UUID A-D (VM identity source; random UUID when no identity; the `pci_devfn` byte; refuse when the host UUID is unavailable); `GR_CTXSW_PREEMPTION_BIND` (real host-authored bind versus a ruling that preemption is host-owned); EVICT_CTX under ruling B; `pstate` (constant versus refused); RUSD controls `0x20800afe/aff`; the software-runlist flag; review of `raw_control_native`; approval of §T; the colour/TMO decision; whether to delete the immutable original `/data/paguro-work.old/winvm/base.qcow2` (13 GB, copy verified at `/mnt/windows-work/archive/paguro-work`).
+- **Disks:** build and run on the trusted host (686 GB free); the local root disk is ~90% full. Layout is documented in `/mnt/windows-work/README.md`.
+
+**Windows loop, 2026-10-08 second session (branch `claude/code43-d3d-20261008`, run 53, binary `kf3-bins/80169b57`; [record](../../traces/windows_code43_walls_20261007/README.md#run53-result-h-seg-falsified-a-kernel-wddm-device-is-created-the-fb-list-equals-the-reference-the-last-rm-requests-before-every-failed-create-are-two-refused-gr_ctxsw_preemption_bind)).**
+One run of the six. **Measured:** the NVIDIA adapter's video memory is sane in the guest (DedicatedVideoMemory 3748 MB, LOCAL Budget 3185 MB;
+H-seg FALSIFIED); `D3DKMTCreateDevice` succeeds (the kernel WDDM device exists); `D3D11/12CreateDevice` still return `0x8876017c` at every feature
+level; the FB_GET_INFO_V2 index list Windows sends equals vfio-8/9/10's 19 indices (kayfabe answers 12, refuses on the first of 7; none of the
+19 is a size); in all five failing creates the last two RM requests before the Free of everything are the **refused `GR_CTXSW_PREEMPTION_BIND`
+(`0x20801211`)**, which the real GSP answers with status 0 twice per channel. `AdapterRAM`, `qwMemorySize` and NVML memory are 0/N/A (untested why).
+**Inferred, test first tomorrow (H-preempt-bind):** answering that control the way the real GSP does makes device creation go further.
+It needs an owner choice (real host-authored bind on the VM's host twin, validated VAs, native oracle first, versus an owner-ruled
+"preemption is host-owned" policy). Nothing was served; no new control is half-done on the branch. Cheap and independent: serve the 7 missing FB
+indices (hardware-config facts, values in `traces/windows_code43_walls_20261007/vfio8-9-10-fb-bus-info.txt`) via `FORWARDED_FB_EXTRA_INDICES`.
+**Display (owner question, measured):** the NVIDIA adapter is Code 0 and a kayfabe monitor (`KFB0001`, active, 7 listed modes) is present; the Basic Display
+stand-in is Code 10; 8330 Core/Window display methods were submitted, but the kayfabe console still shows "Guest has not initialized the display (yet)".
+Host left clean (no QEMU, driver `nvidia`, display enabled, Xid 61). Note: this checkout (`/workspace/kayfabe`) is shared with the per-VM-UUID agent
+(its branch is checked out there); this loop works in the worktree `/workspace/kayfabe-d3d`.
+
+**Windows loop, 2026-10-08 (branch `claude/code43-deferred-20261008`, runs 47-52, code `83881ecc`; [record](../../traces/windows_code43_walls_20261007/README.md#stop-loop-2026-10-08-after-6-hardware-runs-runs-47-52-owner-decisions-waiting)).**
+With `KF3_DEFERRED_API=1` the software-method wall of runs 44-46 is gone: Windows registers INITIALIZE_CTX,
+PROMOTE_CTX and EVICT_CTX per user GR TSG, all triggers are `DONE` (69 in run49), no channel dies, and the guest
+keeps the NVIDIA adapter at Code 0 and `nvidia-smi` at exit 0 with no TDR/bugcheck for 559 s (run48, 46 samples),
+through a clean ACPI shutdown. Idle guest only; not a pass claim. **Next wall:** D3D11/D3D12 hardware device
+creation returns `D3DERR_OUTOFVIDEOMEMORY` (`0x8876017c`), also with a 1 GiB BAR1 (BAR1 falsified, run52); NVML
+FB fields are `N/A`. Prepared: the FB/BUS info refusal now logs the whole requested index list (one boot of a
+tip build records what Windows asks). **Owner:** EVICT_CTX is a real act on the host twin; pstate, RUSD and the
+utilization extras are not served (reasons in the record); the memory fields do not depend on a query-time control.
+Task B (`KF3_SW_RUNLIST_HOST_OWNED`) was not needed and stays off.
+
+**Deferred API, Translated-only (OWNER_RULINGS §U), 2026-10-08 (branch
+`claude/deferred-translated-20261007`, code `83881ecc`; answers the next paragraph's decision 1
+for the case it really is).** The "inert" software method `0x200` on subchannel 5 is
+`NV50_DEFERRED_API`'s trigger: `[measured: the 2026-10-05 VFIO boots 8/9/10]` every Windows channel's
+first software child is a 5080 (so `SET_OBJECT` value 1 names it), Windows registers only
+`0x50800101` (584-byte V1 params, `NV_OK` echoed) on its kernel GR channel's object — deferred
+`GPU_INITIALIZE_CTX` + legacy-shape `GPU_PROMOTE_CTX` for each user GR TSG — and runs 44/45's `0x200`
+data (`0x40000002/03`) are the handles VFIO registers first; kayfabe had refused both registrations.
+Built (design and the real/refused/unverified list: `THE_TRANSLATED_PLANE.md` §29):
+- **Real, unconditional:** class 5080 admitted only under Translated channels (Passthrough:
+  `NOT_SUPPORTED`, §U.1) and numbered per channel; the four registration controls served from
+  per-object tables with `deferred_api.c`'s statuses (`kf_rm::defapi`), layouts from the driver
+  matrix (regenerated: NV5080 params, bundle members, ids, flag bits).
+- **Real behind `KF3_DEFERRED_API=1` (default off):** the trigger. INITIALIZE/PROMOTE satisfied by
+  the target twin's own host context (ruling B), EVICT as the direct act, `DMA_INVALIDATE_TLB` as a
+  host gate in kayfabe's stream released by the VA-manager thread after its commit (model test over
+  the real words; never sent by Windows 580.88).
+- **Refused by name, for the owner:** `PRESERVE_CTX` (context migration), promote entry lists /
+  `hVirtMemory`, the GR ctxsw ZCULL/PM/PREEMPTION binds, `FIFO_UPDATE_CHANNEL_INFO`; an unknown
+  handle, method or object number kills the channel (the hardware RCs it — inferred with a 5080
+  bound).
+- **GPU-free (at `83881ecc`, 2026-10-08):** kf-abi, kf-rm, kf-chan, kf-mem, kf-qemu, kf-harness —
+  1533 passed, 0 failed; Clippy new debt 0; `ci_gates.sh` 14/14. **Native (RTX 4070, host
+  595.91.07, 2026-10-08, `83881ecc` dirty=0):** v3 gates 9/9, 11/11 USER births; `kf-gr-tier` PASS
+  including `gate_holds_the_engine_until_released` (an unreleased gate held its fence 300 ms; another
+  thread's store opened it) and `gate_revoked_with_its_ring`; no new Xid (dmesg 61 before and after).
+  [Evidence](../../traces/deferred_api_translated_20261008/). The Windows runner gains an opt-in
+  `--deferred-api` (`scripts/bench/windows/pc_sdr_experiment.py`).
+- **Next (the Windows loop):** run with `KF3_DEFERRED_API=1` beside run45's flags; predicted: the
+  kernel GR channel passes both `0x200`s (log `DEFERRED-API trigger … DONE`), and the next wall is
+  further on. Falsified if a GR death names the software method again or a `DEFERRED-API` refusal.
+
+**Runs 44-46, 2026-10-07 (branch `claude/code43-mem-20261007`; answers the next paragraph's "memory
+plane, next measurement").** Run43's empty VA space was a walk-kernel bug: a VIDMEM PDE with address
+0 was skipped as "no sub-table", and Windows moves a kernel VA space's shift-29 level to FB 0
+(measured `phys=0x0`). Fixed per OGKM (`gmmu_trace.c:111-134`, `mmu_trace.h:32`; VER2 and VER3), with a
+kf-gate9 replay per format, a CUDA-suite case and fixture tests (the VER2 fixtures' `big_pde(0)` was a
+present table at FB 0). The kernel copy channel now lives, and **in runs 44-45 the adapter reads
+Code 0 and `nvidia-smi` exits 0 at the first status samples, then bugchecks 0x116** (no pass claimed).
+GR-tier batch 3 (the 3D report-semaphore release, native-validated) moved the GR death to the ruling-4
+software method on subchannel 5 (run45, as predicted). Task B (software-runlist submit as host-owned
+scheduling, `KF3_SW_RUNLIST_HOST_OWNED`, default off, AWAITING OWNER CONFIRMATION) ran once (run46):
+answered, Windows takes a further path and a third GR channel dies on an unbound subchannel; 0x116
+earlier. **Stopped for two owner decisions** (the inert-subchannel software method `0x200`; B).
+[Runs 44-46 and the stop](../../traces/windows_code43_walls_20261007/README.md#stop-owner-decisions-are-needed-2026-10-07-after-run46).
+
+> **Correction, 2026-10-31 (provenance fix).** The paragraph below says the `0x2081010d` id is "confirmed by the pinned retail driver's export row" via `tools/windows-ctrl-export/derive.py` and that "the retail flags say the control is NON_PRIVILEGED". Both are withdrawn: the tool is deleted, `crates/kf-abi/src/hoststub.rs` is a hand-maintained table whose message `0xd` and params size `0` are `measured:` rows citing `traces/windows_code43_walls_20261007/run41-requests.log:95` and `run53-requests.log:526`, and the control's per-control privilege is unknown from public sources (`docs/OWNER_RULINGS.md` §S, correction above that entry). Behaviour is unchanged; the Windows path is UNVERIFIED on hardware after this change and rests on unit tests until a Windows run (owner ruling 2026-10-31: no merge to master before that).
+
+**Runs 38-43, 2026-10-07 (branch `claude/code43-stubs-20261007`; answers the next paragraph's
+"stopped for an owner decision" on the 13 queries, under the coordinator's relay of the owner's §S
+statement).** A bisect (runs 38-41) found the minimal set: `0x2081010d` alone moves StartDevice past
+VFIO 2861; the other 12, including the four with public layouts, are not needed and stay refused.
+It ships default on as `kf_rm::hoststub`: its id is generated from OGKM's
+`FINN_NV2081_BINAPI_INTERFACE_ID` plus a message number confirmed by the pinned retail driver's
+export row (`tools/windows-ctrl-export/derive.py`), gated on the guest's declared Windows 580.88
+identity; `KF3_DIAG_ZERO_OK` is removed. `OWNER_RULINGS.md` §S records it as ASSUMED, owner to
+confirm: the retail flags say the control is NON_PRIVILEGED. Also served: the server-context-only
+`COPY_SERVER_RESERVED_PDES` (OGKM `gpu_vaspace.c:4418-4427`) and the FECS-trace query as "disabled"
+(driver matrix regen). Windows now gets past VFIO 2931 without a bugcheck, but kayfabe kills its
+kernel copy channel and nvlddmkm logs TDR cycles (runs 38-43). Run43 measured why the channel dies:
+an `ALL_VA` walk right before Windows' PDE-level move empties the whole VA space (kayfabe's memory
+plane, no decision needed; next measurement named in the README). **Stopped for an owner decision:**
+the software-runlist submit `0x20801111`, options (a)/(b)/(c) in the README. Code43/smi were last
+measured in runs 39-40 (43 / exit 9); since run38 the guest is in TDR cycles and the status script
+times out. Host healthy after every run (Xid 5 unchanged).
+[Runs 38-43 and the stop](../../traces/windows_code43_walls_20261007/README.md#stop-an-owner-decision-is-needed-for-the-software-runlist-the-bisect-and-c-are-done-2026-10-07-after-run43).
+
+**Runs 36-37, 2026-10-07 (branch `claude/code43-trace-20261007`). This answers the next
+paragraph's "proposed bounded BAR0 trace run", which the owner approved (`OWNER_RULINGS.md` §S
+exception).** No boot was needed for the reference: vfio-1's MMIO trace aligns with vfio-10's RPC
+index and shows only the RPC handshake after the paging channel's `GPFIFO_SCHEDULE` (VFIO 2861).
+DIAGNOSTIC run36 at 68c5879f (`KF3_BAR0_TRACE`, default off) shows the same in kayfabe. The
+window before the first `Free` holds no BAR0 read at all, USERD is zero and no error notifier is
+declared, so hypotheses 1 and 2 are out. Abort unchanged. DIAGNOSTIC run37 at fd636c98
+(`KF3_DIAG_ZERO_OK`, default off) answers 13 refused power/thermal/perf/clock queries with zero
+`NV_OK`. **StartDevice then gets past VFIO 2861 to VFIO 2931**, and the guest **bugchecks 0x119**
+(VIDEO_SCHEDULER_INTERNAL_ERROR, parameters 2 and `0xC000000D`, read from the run's pagefile
+header) on its first command submission. Top candidate for the next wall: the unserviced
+software-runlist control `0x20801111`. **Stopped for an owner decision:** how §S's power/thermal
+stub answers these queries (nine have no public layout), and the software-runlist design. Host
+healthy after both runs (Xid 5 unchanged).
+[Runs 36-37 and the stop](../../traces/windows_code43_walls_20261007/README.md#stop-an-owner-decision-is-needed-2026-10-07-after-run37).
+
+**Runs 34-35, 2026-10-07 (branch `claude/code43-lat-20261007`; answers the next paragraph's "top
+hypothesis", which run34 falsified).** Run34 at 0c74f4fc answers `0x0080170e` from the host's own
+`FIFO_GET_LATENCY_BUFFER_SIZE` (realize-time, per advertised engine; the rows equal vfio-10's) and
+`0x0080170f` as a real host `SET_TIMESLICE` on the channel's own group; run35 at d1b6cfdd adds a
+default-off relay of Translated copy-engine completions to the guest's CE vector
+(`KF3_TRANSLATED_CE_RELAY`; three CE2 relays raised, none held). Both runs: Code43/smi9, abort still
+at VFIO 2861, so the loop **stopped by the two-runs rule** with ranked hypotheses outside the RPC
+stream and ONE proposed bounded BAR0 read/write trace run (needs a go-ahead). Audit SHOULD-FIX 3/5
+done (ids, sizes, values and notifier indices from the driver matrix, which now measures them);
+`PERF_GET_POWERSTATE` AC recorded in `OWNER_RULINGS.md` §S as *assumed*, owner to confirm; the
+capability allowlist change (`capability.rs:1531-1543`) still needs owner review. Host healthy after
+every run. [Runs 34-35 and the stop](../../traces/windows_code43_walls_20261007/README.md#thirteenth-repair-the-paging-clients-fifo-controls-answered-for-real-run34-setup).
+
+**Kernel-GR tier, runs 32-33, 2026-10-07 (branch `claude/code43-gr-20261007`; supersedes the
+next paragraph's "stopped for an owner decision", which the owner answered: `OWNER_RULINGS.md`
+§S, guest-kernel GR work).** Default-off `KF3_KERNEL_GR_WORK` runs Windows' kernel-GR work on a
+USER host channel (asserted at birth, tested), re-authored from per-class allowlists whose class
+ids come from kf-chip's generated sets: 17 2D state methods and the 3D/compute `SET_NOTIFY`
+address (resolved through the placement rows into the T-space windows). The engine writes the
+guest's GP_GET, and completions are relayed to the guest's GR0 vector. `KF3_SW_SUBCH_INERT`
+accepts a software-subchannel bind to a non-class value and refuses its later methods; the
+hardware behaviour this matches is inferred. The native oracle `kf-gr-tier` passed before each
+run. Run33 at 9b178991: both kernel channels' first work completes on the engine, `NSI RELAY` to
+GR0 is logged and the MSI is raised (not held). Code43/smi9 persist, and the abort stays at
+VFIO 2861 (runs 31-33). **Stopped by the three-runs rule.** Top hypothesis: the paging client's
+`0x0080170e`/`0x0080170f` stay unserviced (VFIO returns 0 at 2855/2860), and the teardown starts
+~3 ms after `GPFIFO_SCHEDULE`. Owner open questions from the compliance audit are listed in the
+README. [Runs 32-33](../../traces/windows_code43_walls_20261007/README.md#eleventh-repair-the-kernel-gr-tier-and-the-software-subchannel-rule-run32-setup).
+
+**Code43 loop, runs 29-31, 2026-10-07 (branch `claude/code43-loop-20261007`; corrects the next
+paragraph's "run29 needs a go-ahead").** Run29 at 23dbc5b7 binds display events to the alloc's
+`hParent`, as RM's fixup does (`rmapi_specific.c:71`). Both NV0073 enables succeed, and the abort
+moves from VFIO 2558 to 2846 (DMA_SET_DEFAULT_VASPACE). Run30 at 0fc7a7db serves that control,
+answers IMP as bypassed, and answers SYSTEM_GET_HOTPLUG_STATE and the internal
+ACPI and modeset notifications. Its abort is at VFIO 2861, right after a successful
+GPFIFO_SCHEDULE. Diagnostic run31 at c15c2628 reproduces it and logs why Windows' first
+kernel-channel work dies in kayfabe's Translated rewriter. The GR channel runs FERMI_TWOD_A and
+KEPLER_INLINE_TO_MEMORY_B work. The CE channel binds software subchannel 5 to value 1. Code43 and smi
+exit 9 persist; host healthy after every run. **Stopped for an owner decision:** whether, and how,
+kayfabe executes guest-kernel GR work on the host twin (a new Translated tier), and how it treats a
+software-subchannel bind. [Runs 29-31](../../traces/windows_code43_walls_20261007/README.md#ninth-repair-the-display-event-binding-uses-the-allocs-hparent-run29-setup).
+
+**StartDevice batch, 2026-10-07 (corrects the next paragraph).** The VFIO
+GSP actually answered `rcEnable=ENABLED`, and Windows then sent
+`SET_RC_RECOVERY(ENABLED)`. The earlier decode read the reserved word at offset 36,
+not `params` at offset 40. The batch (`kf_rm::vfguest`, the class-0x78 edge,
+NV0073 EVENT_SET_NOTIFICATION, PERF_GET_POWERSTATE) answers as the `_VF` vGPU-guest
+HAL does: GET reports DISABLED, SET(DISABLED) is accepted and SET(ENABLED) is refused.
+Run25 at 3b436488 (gates 9/9, host healthy, no Xid): Code43 and smi exit 9 are
+verified again. GET is served, and the abort moved by one RPC to
+`SET_RC_RECOVERY` (0x56). Windows sends ENABLED even after GET reports DISABLED.
+**Owner decision pending:** accept ENABLED with no effect (`_VF` HAL), report
+ENABLED as an inferred host fact, or implement per-VM RC recovery. The class-0x78
+and NV0073 event entries that follow are already served. DIAGNOSTIC run26 at
+8208effe (default-off `KF3_RC_RECOVERY_ENABLED_DIAG`) accepts ENABLED and aborts
+at VFIO index 2518: the first `0x20800301` arming (notifier 44) is refused. Code43
+persists. The next wall is the 23 notifier indices Windows arms, ranked in the
+traces README.
+Owner ruling §S (2026-10-07, `OWNER_RULINGS.md`) is applied at 4448be53: RC recovery is a
+stub (ENABLED), the notifier family is classified per index, and hotplug is real for Windows.
+Run27 still shows Code43. The abort is at VFIO index 2524, the arming of 120
+HOTPLUG_PROCESSING_COMPLETE, which has no OGKM producer. That needs an owner decision or
+semantics, followed by real-host-event notifiers (PSTATE, CE, GRAPHICS, runlist preempt).
+VFIO event census (no boot): the real GSP posts only 33 PSTATE_CHANGE, 34/45 (HDCP/audio
+for display 0x200) and 139 RUNLIST_PREEMPT_COMPLETE. Every other armed index, 120 and 122
+included, is never posted and is now accepted silently. 33 and 139 (armed at 2528 and 2530)
+are owner decision items; run28 is on hold. *(Superseded the same day:* the owner ruled on all four and they are now
+silent arms. Run28 at c474de60 reaches VFIO 2558, the first NV0073 control, and aborts there
+with kayfabe's own INVALID_STATE (the event-to-display-object binding was not found). Code43
+persists. A diagnostic log for that binding is committed but not run; run29 needs a go-ahead.) [Batch and run25](../../traces/windows_code43_walls_20261007/README.md#sixth-repair-startdevice-batch-after-get_rc_recovery).
+
+**Code43 cause analysis, 2026-10-07 (corrects the paragraph below).** Run24 at
+a6f84d0d births and promotes OFA0. Code43/smi9 is verified and the 24 assertions
+are unchanged. Reading the unchanged list as "the walls are not the cause" is
+wrong. The RM assert journal is a 4 KiB buffer that holds exactly 24 records
+(OGKM `journal.c`, `rmcd.h`), so it keeps only the first asserts of the boot.
+In runs 13-24, the driver's Free-teardown begins right after the first
+StartDevice refusal it does not tolerate. That RPC was C56F, then 5080, then
+GPU_PROMOTE_CTX, and is now GET_RC_RECOVERY 0x2080220e. The livedump is 0x1B0
+"Start device failed" with STATUS_INSUFFICIENT_RESOURCES, whatever the RM status.
+Three Code43-free VFIO boots return rcEnable=DISABLED at the same RPC index
+(2515), then continue. A VFIO-derived forecast lists 98 later controls/classes
+that kayfabe has never served. Next: VM-scoped RC_RECOVERY, then run25 to test
+the prediction. [Analysis](../../traces/windows_code43_walls_20261007/README.md#abort-point-analysis-against-the-vfio-reference).
+
+**Active Code43 iteration, 2026-10-07:** owner requests continued repair one wall
+at a time. The first change resolves the declared Device-shared default VA for
+COPY2; bounded same-GPU relationships and revocation tests pass (611 kf-rm tests).
+Run16 at c30ee910 verifies COPY2 birth on the canonical shared VA with a real
+USER host channel. The next allocation, class5080 deferred API, refuses; Windows
+retires COPY2 with zero submissions. Code43/smi9 persist. FBMEM registration and
+FIFO latency query also still refuse. No initialization success claim.
+[Iteration record](../../traces/windows_code43_walls_20261007/README.md).
+The second change adds checked FBMEM registration for audited580.65.06 and
+580.159.04 guest contracts, scoped to the VM's usable FB heap; focused18 tests
+and full612 kf-rm tests pass. Run17 at5348fccf verifies the captured class82
+FBMEM request returns0; COPY2 births but class5080 still refuses, no submissions.
+Code43/smi9 persist. Next: Deferred API software-object constructor and its
+queue-triggered control protocol; do not fake its execution or completion.
+The source-backed constructor is now implemented with optional notification
+policy and channel-parent lifetime checks;1172 ABI/RM tests pass. Run18 at
+c34d8dac returns0 for both class5080 constructors, then engine allocation and
+group scheduling succeed. Newly reached a06c0103 SET_TIMESLICE refuses because
+the handler only resolves passthrough group members. Next: apply the authored
+host control to Translated members off the GSP lock. This handler change is now
+implemented;101 kf-qemu tests pass, zero new Clippy debt. Run19 at f6aa9d2e
+applies4000us on the actual owned host group; a06c0103 returns0 and watchdog
+hint site-053 disappears. Code43/smi9 persist. Next: kernel GR channels are
+acknowledged without birth, then GPU_PROMOTE_CTX refuses. Capture exact inline
+promotion entries before implementing a real owned unprivileged GR context.
+The default-off observer is implemented with16 records of at most16 entries;
+615 kf-rm tests pass, zero new Clippy debt. Run20 at bf909e1a captures both
+nine-entry requests: main/patch/FECS/maps initialize, four entries only carry VA.
+The payload decodes; the missing real kernel-GR twin refuses promotion. Next:
+owned unprivileged GR context and actual Translated CE work on that runlist,
+with bare-metal validation before another guest test. Native b7ef3e56 passes
+all gate3 copy/split/GPU-completion checks on a real GR context. Kernel-GR
+admission is now implemented behind KF3_KERNEL_GR_CE plus TSPACE, with promotion
+requiring the actual owned context. Compatible CE-class native arm and Windows
+run21 at3fd6fc39 births/promotes both kernel-GR channels and executes two real
+RM-scrubber GPU submissions with GP_GET2. Code43 persists. Next missing birth:
+kernel NVDEC0/engine13 channel ff040003; legacy Falcon-context promotion
+(VA1203cd000 +4KiB, entryCount0) returns0x56. The newly reached0080170f channel-properties control
+also refuses. Native7152d1a8 now constructs a real USER NVDEC0/C9B0 context,
+completes its GPU fence and releases all resources. Guestb52da0c7 adds default-off
+KF3_KERNEL_NVDEC_CTX with TSPACE and requires actual context ownership;101 QEMU
+tests pass, zero new Clippy debt. Run22 atb52da0c7 births/promotes NVDEC0;
+seven Translated births, two real GPU submissions, Code43/smi9 persist. Next:
+NVENC1/engine1c clientc1d0001a/ff040005 missing birth and Falcon promotion
+returns0x56. The property observer decodes0080170f as COPY2 engine timeslice
+4000us; that independent setter still refuses. Native e465d356 NVENC1 USER context/fence/release passes; guest e462194d
+adds default-off KF3_KERNEL_NVENC_CTX plus TSPACE.101 QEMU tests pass, zero new
+Clippy debt. Run23 at e462194d births/promotes both NVENC1 channels, nine
+Translated births, same two real GPU submissions. Code43/smi9 persist. Next:
+OFA0/engine33 clientc1d0001c/ff040007 has no birth and Falcon promotion refuses.
+Native ff12e6a7 OFA0 USER context/fence/release passes; default-off
+KF3_KERNEL_OFA_CTX plus TSPACE implemented,101 QEMU tests pass, zero new Clippy
+and claims debt. Windows run24 pending. A second4000us channel-timeslice setter also refuses. NVENC0 native bind refused, and is not
+substituted for the requested NVENC1 instance. Arbitrary kernel GR/software/codec execution remains unsupported;
+queued Deferred API controls/methods remain unsupported; no completion is forged.
+
+
+**Windows allocation investigation, 2026-10-07:** bounded diagnostic run14 at
+`b928ab4c` captures the complete single-inline memory descriptor: class82
+FBMEM registration, flags48040200, direct PFN0xea6e0, 128KiB. Its shape is not
+malformed; our SYSRAM-only decoder rejects class/location/GPU-cacheability.
+Run15 at `b6336577` captures the failing COPY2 channel Device share explicitly:
+client c1d00012 shares c1d00002's Device default, vaMode0; our channel resolver
+drops that relation and returns INVALID_STATE before any host channel creation.
+The adjacent 0080170e query is FIFO latency-buffer sizing, also unsupported.
+Code43 persists; run14 retains the same24 saved assertions as run13. This is
+source-backed diagnosis, not a functional repair or proof tying either RPC to
+assertion site-018. [Exact decodings/evidence](../../traces/windows_exact_decode_20261007/README.md).
+
+**Latest checkpoint, 2026-10-06:** product `74cd590c` implements GPU TMO and
+indexed CSC tables under the existing opt-in colour flag. The strict Linux
+TMO run C passes: retained curve, accepted atomic requests, nonzero armed tone
+buffer, black transformed output and exact restoration. SDR/TMO GPU fixtures,
+9/9 GPU gates and 11/11 USER births pass; no promotion or full HDR parity claim.
+[Source scope](../design/V3_TMO_COLOR.md), [evidence](../../traces/tmo_stage_20261006/README.md).
+The owner clarified that broader table formats and chroma-correction controls
+must also gain real processing; this checkpoint is not the intended endpoint.
+Windows run13 at `74cd590c` still reports Code43, but reaches 8,330 display
+methods (zero UPDATEs/scanouts) rather than zero methods. Its fresh watchdog
+changes after the same first 17 assertions: `site-044` is replaced by
+`site-018`; no interpretation as an NV_STATUS or completed initialization.
+Product `8dde9b51` additionally executes variable tone segments and 65..1025
+sample tables; GPU fixtures pass, including exact compact extents and hostile
+header rejection. Product `00220cc6` adds real DIRECT8 input/output lookup; all eight SDR GPU
+fixtures pass on the borrowed host; strict Linux run E passes again.
+Broader segmented input/output and chroma policies
+still need implementation and independent semantics/oracles.
+The identified absent-TMO fallback lives in NVKMS,
+whose build documents Unix sharing; its Windows use is not established.
+
+The earlier SDR product `2aa8b92d` and missing-capability test follow:
+
+**Latest owner-directed implementation:** branch `codex/sdr-lut-20261006`,
+product `2aa8b92de6c6ab158f9bc8e788be792408a074a3`, real bounded GPU SDR
+ILUT/OLUT processing under `KF3_DISPLAY_SDR_COLOR=1` (default off).
+Linux open580.159.04 on borrowed RTX 4070 runs Weston and Sway. A 2501K
+KMS curve changes output with **zero error in all 6,220,800 RGB components**;
+restoration is byte-identical, with no compositor gamma failure. Six GPU colour
+fixtures and 9/9 GPU gates (11/11 USER births) pass. Workspace tests, formatting,
+zero-new-debt Clippy and product CI pass. Matched open580.159.04 fast guest
+passes 30/30; the frozen native grader refuses host595.91.07 before running arms,
+so this is not the full hardware merge bar. No master promotion/full app claim.
+[Implementation and limitations](../design/V3_SDR_COLOR.md),
+[evidence](../../traces/sdr_lut_20261006/README.md).
+
+**Owner-directed strict TMO test (2026-10-06): FAIL.** The corrected Linux
+harness `8316cb61` runs against unchanged product `2aa8b92d`. The active primary
+plane exposes no `NV_PLANE_TMO_LUT`; the guest adapter rejects three TEST_ONLY
+requests before kernel submission. Zero real TMO commits/bindings/control words;
+all three console captures are identical despite a ready compositor callback.
+The strict checker returns 1; VM exit is 0, restoration is byte-exact and host
+GNOME/GPU remain healthy. An unprivileged read-only native control exposes the
+property on host595.91.07, but no native TMO operation was performed and the
+driver/kernel versions differ. [Evidence and limits](../../traces/tmo_stage_20261006/README.md).
+This catches the skipped stage the owner wanted ruled out; the broader positive
+TMO objective remains unmet. Next, derive the actual ICtCp/TMO capability and
+implement bounded GPU TMO before advertising it or retesting Windows. Ordinary
+SDR rendering and working gamma do not establish a TMO buffer.
+
+Windows run 12 with implemented DIRECT10 surface-loading declarations still
+has Code 43 / smi exit 9 and zero display methods. Its fresh dump reaches
+`site-044`: the display-buffer precondition path; the leading hypothesis (an inference)
+is a zero-sized TMO descriptor with TMO absent (no live size captured). Do not
+reintroduce a fake TMO capability. Next Windows work needs a supported path
+avoiding TMO or real bounded TMO processing, with further walls possible.
+Complete dump records remain usable; outer NVCD is one byte short.
+Borrowed-host source/target/evidence: `/var/lib/kf-sdr-lut-20261006/`;
+controller private evidence: `/data/kayfabe-runtime/sdr-lut-20261006/`.
+All code/evidence checkpoints are committed and pushed. Master/v3 stay
+`906a76a4`; all owned VMs exited, NBD disconnected, host GPU healthy, no rental created.
+
+**Historical Linux diagnostic (superseded by real SDR implementation above):**
+
+**Latest owner-directed test:** `codex/linux-color-oracle-20261006`, diagnostic
+product `8bbcd7f3`, follows the Antigravity repair. Linux guest open580.159.04
+on the borrowed AD104 runs Weston13 and Sway1.9 with NVIDIA rendering. The
+fixed SDR image reaches the console pixel-exact and matches the native client's
+RGBA hash. OGKM binds identity input/output LUTs during ordinary composition.
+A 2501K KMS gamma blob is accepted but ignored by the virtual output; all three
+screenshots are identical. A separate guest-only KMS refusal makes the gamma
+client fail while Sway preserves the image, without a shader replacement.
+Evidence: [Linux color audit](../../traces/linux_color_20261006/README.md).
+
+The next Windows investigation should identify its actual methods and the
+smallest correct identity/disabled SDR subset; full arbitrary LUT support is
+not yet established as a startup requirement. Unsupported actions must remain
+absent/refused under §H, never successful no-ops. M/N/O remain construction-only
+and off by default. No Windows success or master promotion. No VM remains
+running, host GPU healthy, no rental created.
+
+The earlier Antigravity repair and Windows constructor result follow:
+
+The owner resumed work and requested review/repair of Antigravity's changes.
+Branch `codex/antigravity-review-20261006`, product repair `e294fbe1`, source
+`4cb9e609` after comment/CI corrections, removes fabricated Windows control
+success, restores isolated default-off LUT probes and removes the incomplete
+CPU-reference-only ILUT path. Both original histories are backed up on GitHub.
+The generated method vocabulary is retained and reproduced from OGKM.
+
+Validation so far: 2,262 v3 tests at `e294fbe1`, Clippy with zero new warnings,
+format check, all 14 fast CI gates, and exact `4cb9e609` real GPU gates 9/9
+(11/11 USER births) plus the Rust/C QEMU 10.2.4 rebuild on the borrowed RTX 4070.
+No promotion or full merge-bar/application claim. Master/v3 remain `906a76a4`.
+See [review and evidence](../../traces/antigravity_review_20261006/README.md).
+
+The controlled O Windows run `boundary-kayfabe-10` completed: Code 43 /
+`nvidia-smi` exit 9 remains, but 455 RPCs (N: 365) now reach the probe's explicit
+display-method refusals. The fresh dump's first changed assertion moved from
+`site-011` to `site-018`; the first 17 of 24 complete saved assertions match N.
+Outer NVCD remains one byte short, so its checksum cannot be validated. The guest
+shut down cleanly, supervisor exit zero, RTX 4070 healthy, no VM or NBD attachment
+remains. Sanitized evidence is in the review directory; raw private controller
+evidence is under `/data/kayfabe-runtime/windows-boundary-20261005/`.
+Next (refined by the Linux result above): review the production LUT/color plan
+and establish the supported subset with completion/lifetime tests. Constructor
+declarations alone are insufficient.
+No rentals were created. Preserve overlays until fresh evidence is durable.
+The previous session's Windows priority and constructor analysis are recorded in
+`codex/windows-boundary-comparison-20261005` at `fba14de6`, including
+`docs/handoff/2026-10-05-WINDOWS-PAUSE.md`; the owner's resume revokes that pause.
+
+### 0.0 Historical resumption — 2026-10-05 (superseded by the 2026-10-06 entry above)
+
+**Experimental integration, not promoted:** `codex/p1p2-integration-2026-10-05`,
+worktree `/tmp/kayfabe-p1p2-integration-20261005`, combines master `906a76a4`,
+the complete P1/P2 branch `31b64802` (merge `a5a350a8`), and Windows branch
+`c1d4e415`. **KF3 ABI 19** retains all ABI-18 display/broker fields and appends
+the signed-GOP path to `kf3_realize`. P0's USER-channel birth guard is included.
+`KF3_TSPACE` and `KF3_GFX_POOL_PROBE` both stay off by default. No hardware or
+Windows success is claimed for this integration; master remains the verified
+candidate-2 source described below.
+
+Before Windows was added, the integrated P1/P2 source passed 919 GPU-free tests
+(ABI/chip/host/mem/chan/qemu/harness), 18 Python instrument tests, and the full
+unsafe-containment gate. The combined driver matrix was compared with the full
+30-tag compiler sweep: 129,240 cells, zero differences, including 595.91.07 and
+the display-SW allocation structure. These are source/logic checks, not a GPU
+bar. Final combined validation is recorded in
+`traces/windows_p1p2_integration_20261005/README.md`.
+
+Next: incorporate the separately audited real timer mapping, rebuild the C and
+Rust device together against QEMU 10.2.4, then run exact-revision GPU gates and
+Linux regression lanes serially. P1/P2 additionally needs the window-reach
+positive/negative control and Translated-ring/physical-CE probes (still unwritten
+at `31b64802`), family coverage, unload/re-init, and A/B application checks before
+changing its default. `V3_P1P2_TSPACE.md` has the exact requirements. No claim of
+hostile-guest isolation may omit the remaining audit findings.
+
+The narrow Windows A/B/C evidence remains on its original branch/source:
+QUERY_SIZE success moved startup beyond the old barrier; timer allocation alone
+did not clear Code 43. Those results do not validate this newer integration.
+The borrowed PC and Vast rentals remain controlled by the root agent; this
+integration task runs no hardware jobs and creates no rentals.
+
+**Current verified integration (2026-10-04, candidate 2):**
+`codex/candidate-2-2026-10-04`, local worktree `/data/kayfabe-candidate2-20261004`,
+combines promoted candidate 1 with broker/maxfps, **KF3 ABI 18**. Product revision
+`9d82f259` includes the HMP AioContext fix and asynchronous console cursor update.
+All later commits are docs/evidence/recipes, with no product/build/test-source delta.
+
+- Exact-source `cand2b`: **2131/0 tests, gates 9/9, bare and guest 30/30**, USER
+  birth census. Product CI, including the full slow dispatch, passes.
+- Apps: **host 71/71; guest 61/65 ordinary apps + 6/6 probes**, zero verdict
+  changes from candidate 1, including four failures rerun alone. All three
+  output digests match host and candidate 1. The same managed-memory limits
+  remain (eight host Xid 31 records; conjugateGradientUM's wrong-answer success
+  exit is correctly graded FAIL by the matrix).
+- HMP/QMP fresh-frame checks pass, including the box where the old binary hung.
+  At `9d82f259`, cap-30 KMS/Wayland/X11, forced-60-raster clamp, measured Vulkan FIFO 29.976857
+  FPS, async-60 pacing, D2 idle/unwatched behavior, broker GPU-copy, cursor parity,
+  reconnect and rendering with a stopped broker all have committed evidence.
+- Refresh-only hints reach actual guest EDID at 30/50/60 Hz on userspace
+  connector reprobe. No automatic DRM uevent/desktop mode switch or physical
+  monitor transition is claimed. Baseline Xorg-start warnings and darker guest
+  cursor edges remain documented; actual DDX import refusal was not provoked.
+  `x11-dispsw` stays **off by default** pending §N's security conditions.
+
+Evidence and full limitations: `traces/v3_candidates/cand2_20261004/README.md`.
+Under §R, promote master/v3 only after CI passes on the final docs/evidence head;
+check the remote refs for the exact promotion commit. The earlier candidate 1
+promotion was `9b50d295`. Next integration work remains the P1/P2 and security
+lanes in the table below; Windows is parked behind those priorities.
+
+Owned display box **54137212** was destroyed after all its evidence was pushed,
+and absence was verified. Existing **54049598** (vmb) remains; its candidate-2
+jobs are finished. Do not destroy another session's box. nvkvm-pv dependency
+`codex/broker-refresh-2026-10-04` at `9f2fd00` passes its own broker tests/CI but
+was **not** promoted to that project's default branch or VMM hardware bar.
+No code loss is known. The lost old-box display results were regenerated and
+saved after each batch; retain that practice. The original dirty workspace on
+`codex/ci-repair-2026-09-29` was preserved separately throughout.
+
+**Candidate 1 recovery record (completed):**
+
+**Verified integration = `0ac157b2` (+ docs/evidence).** Candidate 1's post-B5-fix hardware jobs
+finished after the earlier handoff; their results were recovered on 2026-10-04 in
+`traces/v3_candidates/cand1_20261004/`. Master was `529de32c` at recovery start.
+This branch combines the tested candidate with those newer master docs; no product or test code
+changed during recovery. Code reaches master only through a **candidate branch** tested as a
+whole on a real GPU (rules below). Branch heads change; always
+`git fetch` and read each lane's own design doc STATUS. Workflow results that lived only in a session
+are committed in `docs/handoff/2026-10-04/` (README there).
+
+**Rules that govern everything (read first):** `docs/OWNER_RULINGS.md`
+- §Q, the address model: passthrough spaces hold only guest PTE/PDB rows; Translated spaces hold
+  guest VRAM and/or guest RAM; a channel the guest made unprivileged never shares a space with a
+  window or kayfabe memory.
+- §R, memory safety: the `_unsafe` file is the audit perimeter, and validation sits at the boundary,
+  never at call sites. The proposals and gates are adopted. The **standing merge approval**: merge
+  without asking iff CI is green, the code is reviewed, and the EXACT commit passed on a real GPU
+  box a real guest boot, the merge bar and the apps.
+- §K: Secure Boot uses a self-signed ROM with a per-install key. The vTPM state is a persistent
+  secret. Bench Windows runs without BitLocker.
+- §M: display-max-fps decisions D1-D5. §N: x11-dispsw. §O: cursor. §P: security audit.
+
+**Lanes (GitHub branches; each is the only source of truth for its work):**
+
+| lane | branch @ last known head | state | next step |
+|---|---|---|---|
+| **Candidate 1** | `v3-cand-1` tested at `0ac157b2`; recovery `codex/resume-2026-10-04` adds master docs + evidence (KF3 ABI 13) | B5 fixed at `c1ca7945`; full hardware bar passed on unchanged retry: 1937/0, 9/9, bare 30/30, guest 30/30, USER births. Apps host 71/71, guest 61/65+6/6 = baseline; B0/B1, B5 **4×14/14**, X11 A/B pass. First-attempt churn-test failure and its fake-token collision diagnosis retained. | Promoted at `9b50d295`; candidate 2 now incorporates it. Evidence: `traces/v3_candidates/cand1_20261004/` |
+| Display: broker | integrated in candidate 2 at `9d82f259` (ABI 18) | Post-review union passes GPU-copy/cursor/reconnect/stopped-broker checks; evidence in candidate 2 | Promote the candidate as a whole after final-head CI; companion nvkvm-pv default stays separate |
+| Display: max fps | integrated in candidate 2 at `9d82f259` (ABI 18) | Hardware checks complete, including actual X11 FIFO present cadence and D4 correction folded into §M | Keep x11-dispsw default off until §N security conditions hold |
+| nvkvm-pv broker | `codex/broker-refresh-2026-10-04` @ `9f2fd00`, based on block-linear extent fix `c386fec` | Broker CI/tests pass; GPU-copy/cursor/reconnect/hint checks pass with kayfabe candidate 2 | Not merged to nvkvm-pv main: needs its own HW test with nvkvm-pv's VMM |
+| x11-dispsw default-on | (not started) | prep plan in `docs/handoff/2026-10-04/dispsw_default_on_prep.json` | **owner question below**; then the forced-release probe + flip |
+| Security S1-21 (critical) | `v3-p1p2` @ `31b64802` | P1+P2 implemented behind `KF3_TSPACE` (default off; inc A count-only on the default path); two reviews + fix round done, CI green; design + box plan in the branch's docs; probe tools `tests/p1p2/window_reach_probe` and `kmod_tring` NOT yet written; owner decisions 8-12 (in the branch docs and `docs/handoff/2026-10-04/p1p2_result.json`) | box: A/B with the flag on, T-WINDOW-USER, T-PHYS-CE (S1-20), an app as an UNPRIVILEGED guest user; then default on |
+| Security S1-03/04 | `v3-sec-rawaddr` @ `20a38e96` | done, CI green: addresses behind opaque handles, kf-cuda unsafe 75→64, gates G1/G1b/G1c/G1d + PERIMETER line ratchet (`docs/design/V3_RAWADDR_PERIMETER.md`, §9 = what v3-broker must convert) | HW rows H1-H4 in a security candidate after the display candidates |
+| Security §R gates | `v3-sec-perimeter` | S1-01 gates, perimeter ratchet, export table, kf3.c in CI; implementing | candidate after review |
+| Guest IOVA | `v3-viommu` @ `05009d07` (ABI 15) | detection + fail-closed + typed seam; CI green; the translator itself (~16-24 eng-days) not built | the 10 box tests in V3_VIOMMU.md §7.5; OD-1..6 recommendations in that doc |
+| Windows | `v3-windows` @ `c50fad9a` (took ABI 12 → renumber at merge) | discovery complete: Windows 11 boots with Secure Boot, persistent TPM and the signed GOP; NVIDIA 580.88 boots GSP, then Code 43 at unserved `GR_GFX_POOL_QUERY_SIZE` after 141 RM-init commands. NVIDIA display takeover/CUDA not reached. | branch `docs/design/V3_WINDOWS_DISCOVERY.md` and `traces/v3_windows/discovery_20261004/`; park until display + S1-21 merge |
+| managed-memory loudness | `v3-loud-uvm` | real work, never box-run | §R5.7 box run, then a candidate |
+| guest UVM fault plane | `v3-uvm-guest` | BLOCKED by owner ruling §E | redesign first |
+
+**KF3 ABI registry:** 11 historical GOP master · 12 v3-broker · 13 v3-dispsw-exp (cand-1) · 14 reserved for
+broker-on-13 · 15 v3-viommu · 16 v3-maxfps · v3-windows also took 12 and is renumbered at its merge.
+Candidate 2 uses **18** (17 was a discarded scratch ordering and is not reused). Numbers are never reused.
+
+**Open owner questions:**
+1. §N condition 3 for x11-dispsw default-on. Restate it as "no kayfabe mapping is ever kernel-mapped,
+   and no address space running a display-SW object's channel holds kayfabe memory" (true by tests
+   today + after S1-21's fix), and flip the default after `v3-p1p2` merges. The alternative is the
+   literal client split (3-5 days). Recommendation: restate.
+2. vIOMMU OD-1..OD-6 and S1-32 severity (recommendations in `V3_VIOMMU.md`).
+3. §M D2 (non-flip copies at the emulated vblank, send-on-change, none while unwatched) is adopted
+   unless the owner objects.
+
+**Boxes (vast; the account is shared, so destroy only ids you created, by id, and verify):** 54032077
+(display lane, KDE desktop template), 54049598 (merge bar, KVM template), 54071272 (Windows lane, KVM
+template). Find addresses with `vastai show instances --raw`. Destroy any that are idle.
+
+**How to run things:** merge bar = `scripts/bench/box/merge_check.sh` run FROM the box checkout with
+`CARGO_BUILD_JOBS=$(nproc)` and a fresh `CARGO_TARGET_DIR` (README there). Apps = `scripts/apps/`
+(V3_APP_MATRIX.md). Display = `scripts/bench/display/` (GOP lane, unload_hook B5, dispsw_run.sh,
+broker_lane.sh). Candidate procedure = `traces/v3_candidates/cand1_20261003/README.md`. Traps:
+- `pgrep -x qemu-system-x86` (never `_64`); put any pkill in its own ssh call.
+- Detached box jobs write START/EXIT lines; a launcher's exit code says nothing about the job.
+- Host Xids come from journald (the dmesg ring wraps).
+- The dev host's `/` is nearly full: build in `/data`.
+
+
+- ★ **DISPLAY STEP 1 — 2026-10-03 (late): ONE branch, `v3-gop`, supersedes the two below** — both halves
+  squashed onto `master` with no compiled binary in any commit, plus the owner's §K (the GOP driver is
+  built from source by `crates/kf-gop-image/build.rs`; the ROM is arch-neutral; CI's `aarch64` job builds
+  the driver) and every finding of the halves' review fixed (`design/V3_DISPLAY.md` §4.11.12's ⊘ block).
+  Merge `v3-gop` instead of `v3-gop-rom`/`v3-gop-kf3`, whose history carries the old `.efi`. Resume: B0a,
+  as below; nothing has run on a GPU box. Local stand-in at `adbe6fcd`: 11 PASS, 3 OBSERVED, 0 FAIL,
+  including test F1 (a ROM-verifying OVMF runs the signed ROM and refuses unsigned/tail-padded ones). The *Open* and *Merge order* lines below are superseded.
+- (superseded the same day, kept as written) ★ **DISPLAY STEP 1 (the boot display) — 2026-10-03: both halves BUILT on branches, not merged, nothing
+  run on a GPU box.** `v3-gop-rom` (the `kf-gop` UEFI GOP firmware, `crates/kf-oprom`, the local stand-in,
+  11/11 at `3dd574e5`) and, on top of it, `v3-gop-kf3` (the kf3 integration behind property `gop`,
+  default off: ROM BAR, KF3 ABI 11; BAR1 seed of store `[0, G)`; the display worker's boot layer; fn 72 kept
+  → fn 65's console region). CI green at `37740a4b` (run 37132057723). Design and as-built:
+  `design/V3_DISPLAY.md` §4.11 (§4.11.12 = what was built and what changed).
+  - **Resume:** box test **B0a** first (today's bench, no build: `boot_vga` and Xorg with no `xorg.conf`),
+    then B0, B1, B2 — exact commands in §4.11.9 (`KF_FIRMWARE=ovmf`, `DISPLAY_KF3_EXTRA=gop=on`).
+  - **Open:** the owner's §K follow-up — build.rs compiles `firmware/kf-gop` instead of the committed
+    `.efi`, and the ROM made arch-neutral (`OWNER_RULINGS.md` §K); owner questions 1–6 in §4.11.11.
+  - **Merge order:** `v3-gop-rom`, then `v3-gop-kf3` (it contains the former and master `281a10a1`).
+
+- ★ **RESUME HERE — 2026-10-03 (session wrap before compaction).** Master and v3 are equal and CI
+  is green. No Vast box is running.
+  - **Done this session, all on master:**
+    - the dual licence (`LICENSE`, `OWNER_RULINGS.md` §G);
+    - the section-number gate, wired into CI and made able to fail;
+    - `design/V3_UVM_STATE_MACHINE.md`;
+    - rulings §H (the stub rule; the vGPU guest stack crossed off) and §I (release scope);
+    - `design/V3_COOPERATIVE_TIERS.md` (post-release);
+    - the display plan of 2026-10-03, in `design/V3_DISPLAY.md` (NEXT block);
+    - `reference/gsp_rm_size_and_rpc_surface_580.md`.
+  - **Next, in order (owner, §I):**
+    1. The display path:
+       1. the GOP option ROM;
+       2. a stock guest display with no tweaks;
+       3. the broker;
+       4. the unload tests.
+    2. The install path and the sweep.
+    3. Windows.
+  - **Waiting on the owner** (facts and recommendations for all four: `OWNER_QUESTIONS_2026-10-03.md`):
+    - the go-ahead and the seven open questions (Q2–Q8) in `design/V3_SWEEP_AND_INSTALL.md` §4;
+    - the `GF100_DISP_SW` choice (A or B);
+    - whether the archived C traces holding VBIOS-served PROM reads stay public (§G);
+    - renting a GPU box before display testing.
+  - **Release items found:**
+    - managed-memory faults must fail loudly (`conjugateGradientUM` is silent);
+    - add a CUDA virtual-memory-API sample to the sweep;
+    - ship the doorbell helper only after the per-token breakdown and a non-nested baseline.
+  - **Assumed, not contradicted:** the git identities `x <x>`, `r <r@r>` and `w330 <a@b>` are the
+    owner's box sessions. They committed the w384, E0b/E1 and w330 work.
+- **2026-10-03 — DESIGN, nothing built:** `design/V3_COOPERATIVE_TIERS.md` is the stock tier plus opt-in stages:
+  - doorbell passthrough by token;
+  - Linux dynamic memory with allocations that can fail;
+  - host-owned UVM;
+  - a host helper module.
+  - The Windows balloon is dropped.
+- **2026-10-02 — RESEARCH, docs only:** `design/V3_UVM_STATE_MACHINE.md` maps the managed-page state machine from the nvidia-uvm 580 source.
+  - Owner's hypotheses (§7): H1, H2, H4 and H5 hold on x86 PCIe; H3 only partly; GSP-side placement is refuted.
+  - The all-tenant GR hold is NVIDIA's designed "fault and stall" (`uvm_gpu_non_replayable_faults.c:78-81`).
+  - Two kf3 gaps: ATOMIC_DISABLE is carried only under `KF3_CARRY_ATOMIC_DISABLE=1`; Ampere resumes a faulted CE channel through CHRAM plus the runlist doorbell, not the C076 method (§8).
+- **2026-10-02 — LICENCE:** the repository is now `Apache-2.0 OR GPL-2.0-or-later`, by owner ruling (`OWNER_RULINGS.md` §G; `LICENSE` lists the exceptions). Still open:
+  - I7: re-derive the nvproxy-derived `capability.rs`. Until then a QEMU binary built from this tree is not GPL-distributable.
+  - Per-file SPDX headers.
+  - Owner decision: whether the archived C traces, which hold PROM reads served from a real VBIOS dump, stay public.
+- **2026-10-02 — DESIGN, nothing built (branch `v3-sweep`):** the driver × GPU-family sweep and the one-binary install artifact it runs on — `design/V3_SWEEP_AND_INSTALL.md`.
+- ★ **WRAP-UP 2026-09-30 (evening) — the owner resumes Friday 2026-10-02. Where everything stands:**
+  - **master = v3** = the code of **`afb552ea`** (+ docs/evidence/README only). Bar at that exact revision:
+    tests 1754/0, gates 9/9, bare 30/30, thin 30/30, CDP smoke 4/4 shapes (`traces/v3_mc23/`). GitHub CI
+    green, incl. the slow job. Families at master code: TU116, AD104, GB205 bars + CUDA ladder 4/4.
+  - **Apps:** 61/65 + 6/6 at `2830988f` (CDP fixed). R4 on an RTX 3070 at `738c90e5` (pre-CDP code):
+    guest 60/65 + 6/6 = R3, host 71/71 ⇒ no regression from display/ioeventfd/CI (`design/V3_APP_MATRIX.md`
+    §R4). **Not run:** guest graphics set, the fast-path-ON app lane, PM and 100-process shapes.
+  - **In flight, on a branch (not merged): `v3-uvm-guest` (`bf83d0ca`) — guest managed memory WORKS end to
+    end (M2):** `um_probe` gpufirst/cpuinit/prefetch/advise/malloc all `ok bad=0` (3 499 faults delivered and
+    replayed, 0 cancels, 0 Xid). M3 partial: `attach_verify`, `UnifiedMemoryStreams`, `UnifiedMemoryPerf`
+    (79 713 faults) passed; `UnifiedMemoryPerf` failed ONCE (719 after 197 s: 16 faults timed out after 30 s —
+    a guest-side stall, undiagnosed); `conjugateGradientUM` not run (`libnvJitLink` missing on that box).
+    Stop note + exact next recipe: `design/V3_UVM_GUEST_FAULT_PLANE.md`; runs: `traces/v3_uvm_guest/`.
+  - **Owner questions (open):**
+    1. ⊘ **ANSWERED 2026-10-02 — both NO** (`OWNER_RULINGS.md` §E): no MMIO/BAR CPU page-table reads
+       (a copy-engine snapshot if a CPU decode is unavoidable); the ~4 s all-tenant stall is not
+       acceptable; UVM stays unmerged until the GR hold per fault is measured and bounded. Original text:
+       **UVM (new, 2026-09-30):** a parked replayable fault blocks the host GPU's GR engine for EVERY
+       tenant (host CUDA included) until serviced or ~4.3 s; kf3's GPU page-table walker needs that engine,
+       so the design deadlocks (walk waits 4.3 s, twin killed, Xid 109). The branch's experiment reads the
+       guest's page-table words on the CPU while faults are parked — which the v3 rule "no CPU read of a
+       guest page table" forbids. (a) May the fault path do that? (b) Is a stall of every tenant's GPU work
+       of up to ~4 s per parked fault acceptable? (c) Bug 1624521 ownership check: now or later?
+    2. **Doorbells:** build the guest helper now, or first measure a non-nested host (none reachable)?
+    3. **X11 desktops:** `GF100_DISP_SW` option A or B (recommendation B, §0 below).
+  - **Next, in order (suggested):** (1) UVM after the owner's answers: diagnose the 30 s stall, run
+    `conjugateGradientUM`, the Bug-1624521 negative control, the merge bar EFS off/on, merge. (2) A per-token
+    LLM time breakdown on nested boxes: doorbells explain ~22 of the ~58 ms/token gap of PyTorch eager; the
+    rest is unattributed (offered to the owner, not started). ★ llama.cpp is already 0.92× there (§1 LLM row). (2b) The owner's **doorbell pump** idea
+    (`design/V3_DOORBELL_IOEVENTFD.md` §8b, design only): stage 1 ≈ the spin's +16–18 % without an
+    always-busy core; stage 2 makes doorbells exitless while pumping, with a stock guest. (3) R4's remainder. (4) §4 items 10–12. (5) Driver
+    matrix continuation. (6) Windows last.
+  - **CI flake (2026-09-30):** GitHub CI failed once at `8644e477` (a README-only commit) in
+    `kf-util`'s `a_blocking_section_outside_a_trap_is_not_a_violation_and_is_not_recorded`: it compared a
+    process-global row count that a parallel sibling test writes to (run 36771653449: before 1, after 3).
+    Test-only fix `101b1f7e` (`v3-flakefix`, inside `#[cfg(test)]`, CI green) — ★ MERGED the same evening
+    after the flake hit master twice more (`baba8084`, `c51b43cc`; the same SHAs passed on v3). A second
+    test of the same class then failed master at `2f4ad7c8` (`kayfabe-mmu`'s global epoch, 54 vs 53); it and
+    `kayfabe-util`'s identical copy of the first are fixed by `fa4b29aa` (`v3-flakefix2`, test-only, CI
+    green), merged. ⚠ **The class:** a test that compares a PROCESS-GLOBAL counter exactly while sibling
+    tests change it in parallel. Unobserved but same-shaped, to audit: `kf-util` `lock.rs`
+    `the_allowed_acquisitions_are_not_reported` (`in_trap_census() == before`) and `trapwitness.rs`
+    `the_enumerated_exception_mints_inside_a_trap_and_counts_itself` (`== before + 1`), plus their
+    `kayfabe-util` copies.
+  - **Rust 1.99.0 (2026-10-02):** GitHub's runner moved from rustc 1.98.1 to 1.99.0 and CI went red on
+    every commit: four `trybuild` compile-fail snapshots changed wording (every snippet still fails to
+    compile — the guards hold) and clippy 1.99 reports six new sites (std `Atomic*::fetch_update`
+    deprecated → `try_update`, four in kf-chan/kf-qemu; `clippy::double_must_use`, two in the frozen
+    kayfabe-device). Fixed by `v3-rust199` (snapshots regenerated; the six sites recorded as migration
+    debt in `scripts/ci/clippy-debt.json`), merged; no product code changed. ⚠ Owner decisions: pin the
+    toolchain (`rust-toolchain.toml`, bumped deliberately) so a Rust release cannot break CI unannounced;
+    and rename to `try_update` (needs ≥1.99 on every box) as a reviewed change.
+  - **Durability:** everything is on GitHub. The dev host's local-only branches and two uncommitted Codex
+    worktrees are backed up as `backup/host-2026-09-30/*` (13 branches, secret-scanned, not reviewed). Two
+    unpushable research-repo corrections are `archive/nvkvm-unpushed-2026-09-30/`. **All vast boxes are
+    destroyed** at wrap-up (the recipe re-provisions a box in 7–45 min: `scripts/bench/box/README.md`).
+
+- **2026-09-30 — R4 matrices (partial, `v3-matrix-r4`):** kf3 `738c90e5` (= `3f67ed95`, pre-CDP-fix), RTX 3070,
+  nested: apps bare metal 71/71; guest OFF **60/65 + 6/6, identical to R3** (UVM four + CDP); gfx bare metal
+  38/38. Not run (owner pause): apps PM / 100-process / `doorbell-ioeventfd=on`, the guest gfx set, the §4.9
+  kill cycles. `design/V3_APP_MATRIX.md` §R4, `V3_GFX_TESTSET.md` §0.
+- **2026-09-30 — `v3-cdp` MERGED as `v3-mc23` (`afb552ea`): CUDA dynamic parallelism works in a kf3
+  guest.** Bar at exactly `afb552ea`: tests 1754/0, gates 9/9, bare 30/30, thin 30/30; CDP smoke on the
+  merged binary: all four launch shapes run their child, `cdpSimpleQuicksort` validates (default and 10 000)
+  (`traces/v3_mc23/`). Branch detail follows.
+  ⊘ *Branch-time text:* **`v3-cdp`: CUDA dynamic parallelism works in a kf3 guest.** The child grid never ran because the guest's SKED-reflected page (libcuda's `UVM_MAP_DYNAMIC_PARALLELISM_REGION`, kind `SMSKED_MESSAGE`) was mirrored as a memory row; fix `46509dce` places it as a message-kind host mapping. At kf3 `090b20d9` (RTX 3060) every CDP launch shape runs its child and `cdpSimpleQuicksort` passes (128/1 000/10 000); merge bar passed at `2830988f` (1752/0, gates 9/9, KF3_RC=0, bare 30/30, thin 30/30; later commits evidence/docs only); app matrix there 61/65 + 6/6. `design/V3_CDP.md`, `traces/v3_cdp/`.
+- **2026-09-30 — landed on master earlier the same day** (first `b32aa046`, then the items below), since `5c639f54`:
+  - **CI repair** (`v3-ci`, `bf6e7640`): first green GitHub CI; the hardware bar is now fail-closed and
+    includes a bare-metal suite (`scripts/bench/box/merge_check.sh`, run from a repo checkout).
+  - **Display M1–M3** (`v3-display2`): the emulated display (`display=on`, default **off**) drives a
+    virtual monitor. Pixel-exact 1920x1080 scanout, 120/120 flips at 60 Hz, Mint's Cinnamon Wayland
+    desktop with vkcube; weston; Xorg with the NVIDIA driver. X11 Cinnamon/Vulkan need
+    `GF100_DISP_SW` (owner choice below). `design/V3_DISPLAY.md`, `traces/v3_display/`.
+  - **Doorbell fast path** (`v3-ioeventfd`): one KVM ioeventfd per live token, drained off the vCPU,
+    Passthrough rung inline, Translated handed on. Default **off** (`doorbell-ioeventfd=on`). Nested
+    boxes only: LLM decode 0.29× → 0.32× of host. `design/V3_DOORBELL_IOEVENTFD.md`.
+  - **UVM b3 host-only proof** (`v3-uvm-b3`, tools only): the opt-in nvidia-uvm patch delivers a real
+    compute fault to the owning process, which maps the page and replays to correct data, alongside
+    native host CUDA. No guest fault plane yet. `design/V3_UVM_B3_IMPLEMENTATION.md`, `traces/v3_uvm_b3/`.
+  - **Bars:** `v3-mc22` (display + fast path, KF3 ABI 10) passed at `b84250b8`
+    (`traces/v3_mc22/`). Then `3f67ed95` (lint fixes plus claim-ledger citations, no behaviour change;
+    GitHub CI run 36744304349 green): tests **1742/0**, gates **9/9**, KF3_RC=0, bare **30/30**,
+    FG_RC=0, and the display lane pixel-exact. The thin suite was **29/30** on the first run: `--timer`
+    CeUtils timeout on the first boot after a stray QEMU was SIGKILLed on the same GPU (§4.9). It was
+    **30/30** on the rerun at the same revision. `traces/v3_cifix/`.
+  - **Open owner choices:** (1) build the guest doorbell helper now, or first measure a non-nested
+    host? Needs a physical host: the trusted test host was still `Network is unreachable` from this workspace
+    on 2026-09-30, and the RTX 3050 kiosk PC's address is not recorded in the repo.
+    (2) `GF100_DISP_SW` (X11 desktops): A = allocate a host object for it, which breaks the rule that
+    kf-rm refuses unknown classes; B = keep refusing it, which leaves X11 partial. Recommendation: B
+    now; try a kayfabe-serviced vblank next; A only with a headless guard. (3) b3 registration
+    ownership (NVIDIA Bug 1624521) for mutually untrusting VMMs on one GPU: now or later.
+  - **Queued:** the UVM guest fault plane (`design/V3_UVM_DEMAND_PAGING.md` §5, "What the guest must see"); CDP child launch (⊘ answered on `v3-cdp`, first line of §0);
+    display leftovers (cursor, scaled windows, 16-bit/YUV, the §7 display apps); the rest of the driver
+    matrix (570 UVM first-channel wall; hosts 535/590/595/610); re-running the app and graphics matrices
+    at this master; Turing on hardware.
+  - **CI at `fc2dadc4` (2026-09-30): all three jobs green**, including the **slow** job (the whole suite
+    with the soaks, `KAYFABE_SLOW=1`), dispatched as run 36760547434. First green slow run since the CI
+    repair; the scheduled runs of 09-28…09-30 had failed at pre-repair revisions.
+  - **`v3-ramobj` merged (2026-09-30):** kf3 no longer caches a transient "guest RAM not registered
+    yet" for the VM's life — the cause of the one `--timer` failure in the `3f67ed95` bar (§4.9). Bar at
+    `f442980e` on TU116: 1744/0, 9/9, bare 30/30, thin 30/30 (`traces/v3_ramobj/`).
+  - **Ada AD104 (RTX 4000 Ada) and Blackwell GB205 (RTX 5070) at this master (2026-09-30,
+    `traces/v3_families_master/`):** merge bar 1744/0 resp. 1742/0, gates 9/9, bare 30/30, thin 30/30;
+    CUDA ladder host 4/4 and guest 4/4 on both. Two dies not measured before.
+  - **Turing at this master (2026-09-30, `traces/v3_turing_master/`):** GTX 1660 SUPER (TU116), merge
+    bar at `1915bd71` (code `3f67ed95`): tests 1742/0, gates 9/9, bare 30/30, thin 30/30; CUDA ladder
+    host 4/4 and guest 4/4.
+  - **Boxes (2026-09-30):** `53004208` (RTX 3060, alias `v3060`, retained; the CDP agent's box);
+    `53562843` (GTX 1660 SUPER, alias `vtu`, the `v3-ramobj` bar); plus one box per agent (UVM guest
+    plane, app/graphics matrix R4), each registered with the reaper. Nothing on any box is the only
+    copy of anything.
+
+- **2026-09-29 CI repair in progress:** `codex/ci-repair-2026-09-29` contains the benchmark
+  process-identity fix and v3/retained-grader CI repairs. See `CI_V3.md` for test and lint scope.
+  Do not promote until CI and the exact-revision hardware bar finish; previous results below
+  do not certify this candidate. The live ioeventfd accelerator remains a subsequent experiment.
+- **2026-09-29 Paguro retirement:** the owner canceled the retention requirement. Source and
+  unique artifacts were re-audited and backed up in Paguro commits `bb8cf91` and `17a51b9` on
+  `recovery/resume-2026-09-28`; then instance `53076605` was destroyed. Vast inventory now contains
+  only `53004208` (RTX 3060, about $0.1661/hour) for Kayfabe checks. The Windows VM is no longer
+  running; its disposable images were not treated as irreplaceable work.
+- **2026-09-29 integration verified:** `codex/recovered-integration-2026-09-29` combines the
+  published allowlist baseline with Claude `826ef957` (merge `4e6e1fbf`) and recovered Turing
+  code `576f5bb0` (merge `cd80712a`). Display allocation/free observation is moved to successful
+  object application; rejected operations cannot replace/release live display channels.
+  **Exact `d883d0eb`: 1683/0 crate tests, gates 9/9, KF3_RC=0, fresh FG_RC=0, thin 30/30**,
+  terminal EXIT 2026-09-29 13:33:52 UTC on retained RTX 3060 `53004208`.
+  All 96 evidence files are recovered and hash-checked in `traces/recovered_integration_20260929/`.
+  **Promoted to master/v3 as `5c639f54`**, documentation/evidence only after the tested revision.
+  Historical TU116 results do not certify the new candidate on Turing hardware.
+- **Separate benchmark candidate:** `2676902f` on `codex/benchmark-pid-2026-09-29` binds LLM
+  perf counters to the launched QEMU PID/starttime, with GPU-free identity tests. GitHub-backed,
+  not included in this merge bar or promotion. No production doorbell fast path or b3 module yet.
+- **Display-on smoke at the same code:** guest boot and `nvidia-smi` pass, and the display model
+  accepts a core channel. NVKMS then stalls on `0xc67d:0` progress; no DRM node/connector.
+  This is incomplete display, not an M1 pass. Evidence is hash-verified and preserved in
+  `traces/recovered_display_20260929/`. Next display work remains engine/worker/notifiers.
+- **Historical; superseded by retirement above. Paguro recovered again, 2026-09-29:** at about 18:19 UTC, `53076605` reported stopped/exited,
+  `GPU error, unable to start instance`, and direct SSH refused. One start retry restored the host.
+  The verified Windows launcher reused the existing overlay/firmware/TPM state; QEMU PID 1564
+  started at 18:22 UTC and guest SSH returned Windows 10.0.26200.6584. Retained for Paguro; no reset.
+- **2026-09-29 checkpoint:** terminal network access is restored; GitHub, Vast and both boxes
+  are reachable. The final run at **`61c49f14` passed: 1653/0 tests, gates 9/9, KF3_RC=0,
+  fresh FG_RC=0, thin 30/30**, terminal EXIT on 2026-09-28 at 18:44:21 UTC. Evidence is now
+  recovered locally in `traces/capability_535_545_audit_20260928/final-run/`. Changes through the
+  published `9c3d87fd` are documentation/evidence only. **Promoted to master/v3 as `7c5b2a13`**; the
+  earlier sandbox-blocked checkpoint is historical, not a failed test result.
+
+- **2026-09-28 owner decisions:** 535/545 capability extension approved, subject to the independent
+  audit and exact-revision merge bar; **b3 patched host nvidia-uvm selected, full native host CUDA
+  coexistence required**; doorbells: **non-nested baseline and host-side/ioeventfd work first, guest
+  helper afterward**, optional modified guest driver deferred. See §3 and `OWNER_RULINGS.md`.
+- **Recovery is preserved, not implicitly merged:** source/evidence at
+  [`recovery/resume-2026-09-28`](https://github.com/reindertpelsma/kayfabe/blob/recovery/resume-2026-09-28/docs/RESUME_2026-09-28.md),
+  recovered Turing code at `recovery/vast-tuwork-2026-09-28` (`2825c42f`, code tree `576f5bb0`).
+  The Claude head `826ef957` has 30 commits beyond the previous baseline, integrated and verified
+  in the exact combined candidate above.
+  Do not use those historical results to certify a new candidate. The fresh allowlist candidate
+  starts from the published baseline, so it does not silently promote the other pending changes.
+- **Physical baseline access:** read-only SSH to the trusted test host reports `Network is unreachable`
+  from this workspace on 2026-09-28. Prepare the protocol locally; do not label a Vast KVM VM as a
+  non-nested host. No physical-host session or display was changed. The owner subsequently
+  requested the nested Vast ioeventfd experiment; label its results as nested, not physical-host.
+- **Allowlist audit complete:** full 550–610 before/after policy comparison plus compiler-derived
+  checks for all 16 admitted controls from the previously unchecked shared groups. Both the
+  pre-change golden and the two header fixtures were independently regenerated on the trusted
+  development host with byte-identical results. Final merge bar at `61c49f14` passed;
+  see `traces/capability_535_545_audit_20260928/README.md` for exact revisions and limitations.
+- **Doorbell work is mechanism evidence, not production acceleration:** the GPU-free KVM probe
+  verifies token-matched ioeventfd and unmatched MMIO fallback on a read-only memslot. No timers
+  or intentional batching delay; initially accelerate passthrough only, retaining the existing
+  translated ordering and real-GPU completion paths. The generic Emulated route is not a live
+  kf3 channel backend. See `design/V3_DOORBELL_BASELINE.md`.
+- **UVM next:** finish the checked registration/lifetime proof described in
+  `design/V3_UVM_B3_IMPLEMENTATION.md`, then build the bounded host-only experiment. No b3 patch
+  has been loaded. In particular, a UVM channel-memory reference alone does not prevent hardware
+  state from being detached and freed; delayed userspace replies need explicit invalidation.
+- **Historical box inventory, superseded by retirement above (2026-09-29):** `53080587` (GTX 1660 SUPER) was retired after
+  rechecking all 493 saved evidence hashes and its recovered source tree. Retained: `53004208`
+  (RTX 3060, verification/next Kayfabe tests) and `53076605` (Paguro Windows). No new rentals.
+  Both retained instances are running, and Paguro's Windows QEMU remains live. Combined listed
+  rate is approximately $0.5203/hour before additional fees. Preserve evidence before retirement.
+- **Historical pause notes below are superseded by this resumption.** mc21 was promoted to
+  `8ab92bf4`; older "awaiting promotion", "all boxes being destroyed", and open-choice lines below
+  describe earlier points in the campaign, not current actions.
+- **2026-09-27 19:59 UTC — `v3-mc21` (= master `db038f5f` + `origin/v3-display`, merge `4c48ca0c`) PASSED THE
+  FULL MERGE BAR** at exactly `4c48ca0c`: crate tests **1651 / 0**, gates **9/9**, `KF3_RC=0` (VNC+pixman build),
+  `FG_RC=0`, fast suite **30/30** — same box. Evidence: `traces/v3_mc21/`. Display stays default-off.
+  **Master and v3 fast-forwarded to `8ab92bf4`** (= `4c48ca0c` + evidence/docs; owner go-ahead in the session,
+  2026-09-28). The `display=on` M0 lane on GA106 (`traces/v3_display/mc21m0/`) reproduces GA102's `m0a`
+  exactly: KernelDisplay up, NVKMS stops at `0x730101`/`0x730102`/`0x730107`/`0x730151` ⇒ displayless.
+- **Boxes from a cloud session:** the container has no SSH egress, so a box is driven through the **`vx`
+  kit** (execd behind a cloudflared quick tunnel). `provision_full.sh` and `merge_check.sh` run unchanged
+  that way; `traces/v3_mc20/README.md` records the v3-mc20 bar run like this.
+- **`v3-uvm-e6pp` (`c6765f5c`): E6″ phase 0 ran** (a capture on a stock box — no fault numbers yet); §2, §3.2.
+- ⊘ *Superseded 2026-09-28 (master is now `8ab92bf4`, above; v3-mc21 passed):* **2026-09-27 19:38 UTC — master
+  and v3 = `db038f5f`** (= `c0ef7b75`, the revision that passed the bar below, + the commit that added its
+  evidence, `traces/v3_mc20/` and this file only), fast-forwarded with the owner's go-ahead. `v3-drivers~1`
+  (`8f9bdd14`) is therefore **ON MASTER** (via merge `5018bb57`); `v3-drivers` now holds only the held 535/545
+  allowlist commit, **`a50265f8`** (§3.1). Merge candidate `v3-mc21` = `4c48ca0c` … bar in progress.
+- **2026-09-27 18:27 UTC — `v3-mc20` PASSED THE FULL MERGE BAR** at `c0ef7b75` (= `5018bb57` + docs only), on
+  branch `claude/kayfabe-gpu-testing-m0cv1q`: crate tests **1639 / 0**, gates **9/9**, `KF3_RC=0`, `FG_RC=0`,
+  fast suite **30/30** — vast 53004208, RTX 3060 GA106, host 580.159.04 open. Evidence: `traces/v3_mc20/`.
+  ⊘ *2026-09-27 19:38 UTC: done; see the first line.* Ready to fast-forward master and v3 (owner go-ahead
+  asked in the session). Cloud sessions now reach boxes through execd behind a cloudflared quick tunnel
+  (the `vx` kit), not SSH.
+- ⊘ *Superseded by the line above:* 2026-09-27, resumed (cloud session): merge candidate `v3-mc20` = master `0d3ecde9` + `v3-drivers~1` (`8f9bdd14`,
+  the held 535/545 allowlist commit left out) — merge commit `5018bb57`, clean, on branch `claude/relaxed-babbage-7zz89s`.
+  GPU-free: all `kf-*` crate tests **1639 passed / 0 failed** at `5018bb57`. Hardware bar (gates, kf3 build, 30/30)
+  NOT run: this session's container has no SSH egress, so `merge_check.sh` cannot be driven on a box from here.
+  Do not promote to master until the bar passes at `5018bb57`.
+- ⊘ *Superseded 2026-09-27 19:38 UTC — master is now `db038f5f` (v3-mc20), see the first line:*
+  **Master = `v3-mc19` verified** (`08bf7f18`: 1637 tests / 0 failed, gates 9/9, 30/30) + docs. All vast boxes are being
+  destroyed; nothing depends on a box or on local files. Every branch below is on GitHub.
+- **`v3-initrace` is ON MASTER** (verified at `08bf7f18`). It contains: USERD cleared at Translated-channel birth (the re-init "flake": a reborn CeUtils channel
+  inherited a leftover GP_PUT — 0/300 after, 20/20 injected failures before) and WPR2 served at the guest's
+  own FWSEC-FRTS offset after a failed GSP boot (retry boots; 20/20 later opens pass).
+- ⊘ *Merged 2026-09-27: `8f9bdd14` is on master via v3-mc20 (`5018bb57`; bar at `c0ef7b75`); the held
+  allowlist commit is now `a50265f8`, the only commit on `v3-drivers` beyond master. The "Next for that
+  branch" items below still stand:*
+  **`v3-drivers` mergeable head `8f9bdd14`** (= `42b25354` + a default-off logging aid + its stop note; the bar was
+  last fully green at `1837166d`, the thin suite at the newest head never ran) (rebased on `6ec7ec1a`; the 535/545 allowlist commit is LAST and held
+  for owner review): guest 610 ladder 4/4, hosts 575.57.08 / 580.95.05 / 580.65.06 green on every row,
+  (runlist, chid) token index, ≤545 GET_CHIP_INFO carry, 595+ GSP heartbeat. Merge it onto the new master
+  after `v3-mc19`, then run the bar. Next for that branch: the 570 guest's UVM-first-channel wall (token
+  0x803 reads its GPFIFO before the mirror maps it) and a 570 thin-guest NULL deref seen on master.
+- ⊘ *2026-09-28: ON MASTER — merged as v3-mc21 `4c48ca0c`, bar passed (§0 first line), master `8ab92bf4`; step (1)
+  is wired in code since (`docs/design/V3_DISPLAY.md` step-(1) note); superseded text follows:*
+  **`v3-display` (`adbea28e`)**: Phase 1 decided — emulate the display hardware the stock guest driver expects
+  (~3–5 weeks to a desktop on GA10x); M0 (behind `display=on`, default off) brings the guest's display layer
+  up; next step and plan in the stop note at the top of `docs/design/V3_DISPLAY.md`. Merge bar not run.
+- **Owner decisions resolved 2026-09-28**: §3. The cloud-only execd shared-key question remains
+  separate; direct SSH without agent forwarding avoids it and does not block this work.

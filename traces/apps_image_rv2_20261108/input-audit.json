@@ -1,0 +1,31 @@
+{
+  "local_pin_count": 19,
+  "local_pins_match": true,
+  "open_runtime_file_pins": {
+    "/opt/apps/bundle/run_apps.sh": "c1a33bf2a2dfc44dc5a119d58bdfbb0a12cfdc84cda33cccfa47aae824792f74",
+    "/opt/apps/bundle/share/ai_bench.py": "87c3b8072caed23482712633a781560643b587adeea2414861d69f658d8ab1d6",
+    "/opt/apps/bundle/share/blender_render.py": "7300be6bddab6bbc1d9a49097e893d2bb96bba73b6d4c59146ee1406d5135e6a",
+    "/opt/apps/bundle/share/cupy_check.py": "d771248d505f9ba887c292b87c900251e60022a8e1829bd46b24064533c525fe",
+    "/opt/apps/bundle/share/hf_generate.py": "7fb3f360949dc3b6105e41182fc0b9436b82c4abf0d81e71f6f8be0c924ed32e",
+    "/opt/apps/bundle/share/torch_correct.py": "7eff6e290e38676ce8ff1d6a86c604ccdea1cc50271584124cfb6fca54ace220",
+    "/opt/apps/data/Qwen2.5-GGUF-LICENSE": "832dd9e00a68dd83b3c3fb9f5588dad7dcf337a0db50f7d9483f310cd292e92e",
+    "/opt/apps/data/hf/hub/models--Qwen--Qwen2-0.5B-Instruct/refs/main": "4c396e581fc95cba32d544dcd647edb27b166040ec8f43dcb7f75d987f863038",
+    "/opt/apps/data/hf/hub/models--Qwen--Qwen2-0.5B-Instruct/snapshots/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/LICENSE": "c156170b718ec29139d3653d40ed1986fd92fb7e0959b5c71f3c48f62e6636f4",
+    "/opt/apps/data/hf/hub/models--Qwen--Qwen2-0.5B-Instruct/snapshots/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/config.json": "168aa1bd401abc3bc262ba15ba4e499627a8b4e006e9d050b47c22de20660185",
+    "/opt/apps/data/hf/hub/models--Qwen--Qwen2-0.5B-Instruct/snapshots/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/generation_config.json": "e558847a8b4402616f1273797b015104dc266fe4b520056fca88823ba8f8ebe6",
+    "/opt/apps/data/hf/hub/models--Qwen--Qwen2-0.5B-Instruct/snapshots/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/merges.txt": "599bab54075088774b1733fde865d5bd747cbcc7a547c5bc12610e874e26f5e3",
+    "/opt/apps/data/hf/hub/models--Qwen--Qwen2-0.5B-Instruct/snapshots/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/model.safetensors": "130282af0dfa9fe5840737cc49a0d339d06075f83c5a315c3372c9a0740d0b96",
+    "/opt/apps/data/hf/hub/models--Qwen--Qwen2-0.5B-Instruct/snapshots/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/tokenizer.json": "f7c9b2dba4a296b1aa76c16a34b8225c0c118978400d4bb66bff0902d702f5b8",
+    "/opt/apps/data/hf/hub/models--Qwen--Qwen2-0.5B-Instruct/snapshots/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/tokenizer_config.json": "482bd979881423375ca5414e4e0d94cd7c5349dbb17fffd46b4d36d71e62a1bc",
+    "/opt/apps/data/hf/hub/models--Qwen--Qwen2-0.5B-Instruct/snapshots/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/vocab.json": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910",
+    "/opt/apps/data/qwen2.5-1.5b-instruct-q4_k_m.gguf": "6a1a2eb6d15622bf3c96857206351ba97e1af16c30d7a74ee38970e434e9407e"
+  },
+  "recipe_version": "2026-11-08.2",
+  "requirements_locks_match": true,
+  "runtime_only_configuration": {
+    "/etc/OpenCL/vendors/nvidia.icd": "4ad07f8afc189894374aecb91023e6ff16bbceedf82496c04c0fdb0e2fe81e73",
+    "/etc/ld.so.conf.d/apps-cuda.conf": "d8aa621c67e44a06798b73093c1147a540cf85c54ae0a66f9cd1b1580e130c59",
+    "/etc/modprobe.d/apps-nvidia.conf": "c5167f1095d844fbb75d2f3bee7cf6bb8f9cca743205fe9d5b056656a6905621",
+    "/opt/apps/data/hf/hub/models--Qwen--Qwen2-0.5B-Instruct/refs/main": "4c396e581fc95cba32d544dcd647edb27b166040ec8f43dcb7f75d987f863038"
+  }
+}

@@ -153,7 +153,7 @@ app("managed_t", "cuda-equiv", py("win_cuda_equiv.py", "managed"), r"^WINEQ_DONE
     "managed (unified) memory: the Linux rows UnifiedMemoryStreams/Perf, conjugateGradientUM and attach_verify are the four that fail on Linux "
     "kayfabe (UVM demand paging, docs/design/V3_UVM_DEMAND_PAGING.md); on Windows WDDM managed memory is the limited model (no oversubscription)",
     linux=["UnifiedMemoryStreams", "UnifiedMemoryPerf", "conjugateGradientUM", "attach_verify"], pkgs=PYPK + ("cuda_cudart",),
-    note="CuPy malloc_managed; expected to be the hardest compute row on both OSes")
+    note="unsupported (UVM): owner keeps UVM unmerged until the per-fault GR hold is measured and bounded; excluded from Vast profiles, reported explicitly (gate_profiles.json)")
 for name, lin in (("default", "stream_default"), ("created", "stream_created"), ("nonblocking", "stream_nonblocking"), ("two", "stream_two"),
                   ("created2nd", "stream_created2nd"), ("perthread", "stream_perthread")):
     # Per-thread work needs CuPy, not Torch/CuPy interoperability. Fresh guest
@@ -302,11 +302,17 @@ for sc, tier, secs, extra, why in (
     app("overlay_yuv_probe" if sc == "steady" else "overlay_yuv_" + sc, "d3d",
         OVL + "Invoke-KfExe -Exe $ov -ArgList @('--scenario', '%s'%s, '--out', \"$OUT\\overlay.json\")\nexit $global:KfRc" % (sc, "".join(", '%s'" % x for x in extra)),
         r"^KFOVL RESULT PASS", secs + 120, secs + 10, [r'out:KFOVL adapter "NVIDIA', GPU_ENG], *W_OVERLAY, session="interactive", tier=tier, shot=min(10, secs - 2),
-        note="kf_overlayprobe.exe (tools/src/kf_overlayprobe.cpp); result JSON " + "(PASS/FAIL, per-second presentation modes, transitions, worst present latency) in the app's out dir: " + why)
+        note="manual: needs real display; evidence template in gate_profiles.json manual.items; no real-monitor native record. "
+             "Virtual-display native probe: SETUP/refused (code 5), no DIRECT overlay, no scenario frames. kf_overlayprobe.exe (tools/src/kf_overlayprobe.cpp); result JSON " + "(PASS/FAIL, per-second presentation modes, transitions, worst present latency) in the app's out dir: " + why)
 
 GM = r'''$gmx = Find-KfFile -Root "$K\gravitymark" -Name GravityMark.exe
 if (-not $gmx) { 'GM_NOTFOUND'; exit 1 }
 $gmd = Split-Path $gmx
+Remove-Item -LiteralPath "$OUT\gm.png", "$OUT\gm_times.txt" -Force -ErrorAction SilentlyContinue
+if ((Test-Path -LiteralPath "$OUT\gm.png") -or (Test-Path -LiteralPath "$OUT\gm_times.txt")) {
+    'CHECK gravitymark_fresh FAIL stale output remains'
+    exit 1
+}
 '''
 for aid, api, extra, tier, dif in (("gravitymark_d3d11", "-d3d11", [], 1, W_GFX), ("gravitymark_d3d12", "-d3d12", [], 1, W_GFX), ("gravitymark_vk", "-vk", [], 1, W_GFX),
                                    ("gravitymark_gl", "-gl", [], 2, W_GFX), ("gravitymark_d3d12_raster", "-d3d12", ["-raster", "1"], 2, W_GFX),
@@ -384,12 +390,17 @@ app("vulkan_video_decode", "video", dec("'-init_hw_device', 'vulkan=vk', '-hwacc
 
 # ---------------------------------------------------------------------------------------------- J. render, crypto, OpenCL
 app("blender_cycles", "render", r"""$bl = "$K\blender\blender.exe"
+$ok = 0
 foreach ($dev in 'CUDA', 'OPTIX') {
-    Invoke-KfExe -Exe $bl -ArgList @('-b', '--factory-startup', '--python', 'C:\kf\py\blender_render.py', '--', $dev, "$OUT\blender_$dev.png") | Where-Object { $_ -match 'BLENDER_|Error|error|Finished' } | Select-Object -Last 8
+    Remove-Item -Force "$OUT\blender_$dev.png" -ErrorAction SilentlyContinue
+    $lines = @(Invoke-KfExe -Exe $bl -ArgList @('-b', '--factory-startup', '--python-exit-code', '1', '--python', 'C:\kf\py\blender_release.py', '--', $dev, "$OUT\blender_$dev.png", "$CD\release\references"))
+    $lines | Where-Object { $_ -match 'BLENDER_|CYCLES_|CHECK|REFERENCE_|Error|error|Finished' } | Select-Object -Last 12
+    if ($global:KfRc -ne 0 -or -not ($lines -match "^CYCLES_PARITY_PASS $dev ")) { exit 1 }
+    $ok++
 }
-exit 0""", r"BLENDER_OK OPTIX", 900, 120, [r"out:BLENDER_OK .* gpu=NVIDIA|gpu=NVIDIA", GPU_ENG], "high",
+if ($ok -eq 2) { 'CYCLES_PARITY_ALL_PASS CUDA OPTIX'; exit 0 }; exit 1""", r"^CYCLES_PARITY_ALL_PASS CUDA OPTIX$", 900, 120, [r"out:BLENDER_OK .* gpu=NVIDIA|gpu=NVIDIA", GPU_ENG], "high",
     "Cycles on CUDA then OptiX (RT cores) on a scripted scene; minutes of mixed compute and BVH work; OptiX needs the driver's nvoptix.dll", linux=["blender_cycles"],
-    pkgs=("blender", "vc_redist"), fail_rx=r"^CHECK .*FAIL|BLENDER_FAIL", note="the same scripts/apps/src/blender_render.py as the Linux row; CUDA and OPTIX are rendered one after the other")
+    pkgs=("blender", "vc_redist"), fail_rx=r"^CHECK .*FAIL|BLENDER_FAIL|REFERENCE_NOTFOUND", note="unverified release definition: both backends compare the fixed seed-1 scene to hashed bare-metal references; MAE <= 1/255 and maximum error <= 8/255")
 app("hashcat", "crypto", r"""$env:PATH = "$TL;$env:PATH"
 Invoke-KfUntil -Exe "$K\hashcat\hashcat.exe" -ArgList @('--potfile-disable', '-O', '-m', '0', '-a', '3', 'e4726719b68b205913167f0975d977ee', '?l?l?l?l?l?l') -Cwd "$K\hashcat" -Pattern 'Status\.+: Cracked' -TimeoutS 240 -Out $OUT -Tag hashcat
 exit 0""", r"e4726719b68b205913167f0975d977ee:kayfab", 300, 40, [r"out:NVIDIA|CUDA|OpenCL", GPU_ENG], "medium",
@@ -452,6 +463,33 @@ for mode, linux_row in (("callback", "simpleCallback"), ("occupancy", "simpleOcc
 # ---------------------------------------------------------------------------------------------- Linux matrix -> Windows map
 # every row of scripts/apps/run_apps.sh must appear here (tests/test_apps.py checks that) either with the Windows apps
 # that stand for it (derived from `linux=` above) or with the reason there is none.
+# Release additions are definitions only; release_software.json keeps every row unverified.
+app("llama_cuda_parity", "llm", MODEL + r"""& $PY -X utf8 C:\kf\py\llama_release.py "$K\llama_cuda\llama-completion.exe" $m "$CD\release\references" $OUT
+exit $LASTEXITCODE""", r"^LLM_PARITY_PASS sha256=[0-9a-f]{64} seed=1 tokens=64 reference=bare-metal$", 600, 90,
+    [r"out:Device 0: NVIDIA|CUDA0: NVIDIA"], "high", "Fixed prompt and seed with full CUDA layer offload; exact normalized output equality to the same Windows executable/model on bare metal",
+    pkgs=("python_embed", "llama_cuda", "qwen_gguf", "vc_redist"), fail_rx=r"^CHECK .*FAIL|REFERENCE_NOTFOUND")
+app("torch_release_smoke", "torch", py("release_cuda_smoke.py"), r"^CUDA_RELEASE_PASS device=.+ elements=4096 seed=1$", 120, 15,
+    [OUT_NV, GPU_ENG], "low", "Small explicit CUDA matmul, 4096 finite readback values checked against the CPU reference; no CPU fallback", pkgs=PYPK)
+
+for aid, folder, exe in (("d3d12_dxr", "dxr", "D3D12RaytracingHelloWorld.exe"),
+                         ("d3d12_mesh_shaders", "mesh", "D3D12MeshletRender.exe"),
+                         ("d3d12_vrs", "vrs", "D3D12VariableRateShading.exe"),
+                         ("d3d12_sampler_feedback", "sampler_feedback", "D3D12SamplerFeedback.exe")):
+    app(aid, "d3d", rf'''$dir = "$CD\release\directx\{folder}"
+$exe = "$dir\{exe}"
+if (-not (Test-Path -LiteralPath $exe)) {{ 'SAMPLE_NOTFOUND {aid} (source-built bundle required)'; exit 3 }}
+Invoke-KfSurvive -Exe $exe -Cwd $dir -Seconds 30 -Tag {aid}
+exit $global:KfRc''', r"^KFSURVIVE " + aid + r" ALIVE_AT 30 s$", 120, 35, ["pdh:3D|Compute"], "high",
+        "Unverified feature-path launch-and-survive with process-tree NVIDIA engine activity; source built at the pinned Microsoft commit; missing source/binary cannot pass",
+        pkgs=("vc_redist",), session="interactive", tier=3, shot=15,
+        note="No WARP argument or runtime download. Sampler feedback stays source-blocked until the owner identifies/approves a sample; the pinned Microsoft tree has none.")
+
+for api in ("webgl", "webgpu"):
+    app("edge_" + api + "_conformance", "browser", edge(api + "_conformance", 12), r'^KFEDGE \{.*"ok":true', 180, 30,
+        ["pdh:3D|Compute|Copy"], "high", "Offline focused conformance subset with checked GPU readbacks and validation; not a claim of full Khronos/W3C CTS coverage",
+        pkgs=(), session="interactive", tier=3, shot=8)
+
+
 NO_EQUIVALENT = {
     "simpleIPC": "CUDA IPC (cudaIpcGetMemHandle) is not supported on WDDM Windows (TCC/Linux only)",
     "geekbench_gpu": "Geekbench needs the internet to upload results (the Linux pass string is 'Uploading results'); the lane forbids guest internet at run time",
@@ -466,7 +504,12 @@ CMD_OVERRIDES = {
     "dxdiag_report": "dxdiag /whql:off /t report.txt, then grep the report",
     "opencl_icd": "PowerShell: list HKLM:\\SOFTWARE\\Khronos\\OpenCL\\Vendors",
     "llama_cuda_gen": "llama-completion.exe -m qwen2.5-1.5b-instruct-q4_k_m.gguf -p \"Explain in three sentences why the sky is blue.\" -n 64 -ngl 99 --temp 0 --seed 1 --no-display-prompt (stdin empty); OUTSHA of the text",
-    "blender_cycles": "blender.exe -b --factory-startup --python blender_render.py -- CUDA|OPTIX out.png (both devices)",
+    "llama_cuda_parity": "python llama_release.py llama-completion.exe qwen2.5-1.5b-instruct-q4_k_m.gguf release/references out (fixed prompt, seed 1, max 64 tokens, exact native parity)",
+    "d3d12_dxr": "release/directx/dxr/D3D12RaytracingHelloWorld.exe (30 s survival and NVIDIA engine proof)",
+    "d3d12_mesh_shaders": "release/directx/mesh/D3D12MeshletRender.exe (30 s survival and NVIDIA engine proof)",
+    "d3d12_vrs": "release/directx/vrs/D3D12VariableRateShading.exe (pinned VRS gate patch, 30 s survival and NVIDIA engine proof)",
+    "d3d12_sampler_feedback": "release/directx/sampler_feedback/D3D12SamplerFeedback.exe (SOURCE-SAMPLE-NEEDED; cannot pass while absent)",
+    "blender_cycles": "blender.exe -b --factory-startup --python-exit-code 1 --python blender_release.py -- CUDA|OPTIX out.png offline-reference-dir (both compared)",
     "nvenc_h264": "ffmpeg -f lavfi -i testsrc=size=1280x720:rate=30:duration=20 -c:v h264_nvenc -preset p4; ffprobe -count_frames",
     "nvenc_hevc": "ffmpeg -f lavfi -i testsrc=... -c:v hevc_nvenc -preset p4; ffprobe -count_frames",
     "nvenc_av1": "ffmpeg -f lavfi -i testsrc=... -c:v av1_nvenc -preset p4; ffprobe -count_frames",
@@ -505,8 +548,27 @@ def derive_cmd(a):
 
 
 def build():
+    with open(os.path.join(HERE, "release_software.json")) as f:
+        release = json.load(f)["apps"]
     for a in APPS:
         a["cmd"] = derive_cmd(a)
+        if a["id"] in release:
+            a["release"] = {k: release[a["id"]][k] for k in ("status", "classification", "verdict")}
+    # Storage classification is independent of app verdicts and software approval.
+    with open(os.path.join(HERE, "manifest.json")) as f:
+        package_manifest = json.load(f)
+    official = {p["id"] for p in package_manifest["packages"] if p.get("class") == "official-fetch"}
+    dependencies = {p["id"]: p.get("needs", []) for p in package_manifest["packages"]}
+    for a in APPS:
+        a.pop("requires", None); a.pop("official_pkgs", None)
+        if "hf_wheels" in a["pkgs"]: a["official_pkgs"] = ["hf_wheels_extra"]
+        todo, seen = list(a["pkgs"]) + a.get("official_pkgs", []), set()
+        while todo:
+            pkg = todo.pop()
+            if pkg in seen: continue
+            seen.add(pkg); todo.extend(dependencies.get(pkg, []))
+        required = sorted(seen & official)
+        if required: a["requires"] = {"official_fetch": required}
     apps = sorted(APPS, key=lambda a: a["id"])
     linux_map = {}
     for a in apps:

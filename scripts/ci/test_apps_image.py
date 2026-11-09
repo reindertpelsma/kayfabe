@@ -1,0 +1,1839 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
+"""GPU-free LB1 contracts. No network and no real QEMU is invoked."""
+
+import copy
+import hashlib
+import importlib.util
+import io
+import json
+import os
+from pathlib import Path
+import struct
+import sys
+import tarfile
+import tempfile
+import unittest
+from unittest.mock import patch
+import zipfile
+
+IMAGE = Path(__file__).resolve().parents[1] / "apps" / "image"
+sys.path.insert(0, str(IMAGE))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import common
+import iso9660
+import build_image
+import guest
+
+
+def digest(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+def fixture():
+    return {
+        "schema_version": 2,
+        "recipe_version": "fixture-2",
+        "base": {
+            "id": "base",
+            "url": "https://example.org/base.img",
+            "sha256": digest(b"base"),
+            "size": 4,
+        },
+        "apt": {
+            "snapshot": "20261101T000000Z",
+            "packages": ["python3", "cmake"],
+            "suites": ["noble", "noble-updates", "noble-security"],
+            "components": ["main", "universe"],
+            "metadata": [],
+            "download_budget_bytes": 1024**3,
+        },
+        "guest": {
+            "user": "ubuntu",
+            "authorized_keys": ["${SSH_AUTHORIZED_KEY}"],
+            "kernel": "6.8.0-147-generic",
+            "nvidia_version": "580.159.04",
+            "disk_gib": 74,
+            "memory_mib": 12288,
+            "cpus": 2,
+        },
+        "artifacts": [
+            {
+                "id": "model",
+                "url": "https://example.org/rev/model",
+                "sha256": digest(b"model"),
+                "size": 5,
+                "kind": "file",
+                "target": "/opt/apps/data/model",
+            },
+            {
+                "id": "wheel",
+                "url": "https://example.org/demo-1.0-py3-none-any.whl",
+                "sha256": digest(b"wheel"),
+                "size": 5,
+                "kind": "wheel",
+                "filename": "demo-1.0-py3-none-any.whl",
+                "package": "demo",
+                "version": "1.0",
+            },
+        ],
+        "local_files": [],
+        "write_files": [],
+        "official_fetch": [],
+        "image_policy": {"nvidia_notice_policy": "documented-oss-only"},
+        "runtime_inventory": {
+            "required_paths": ["/opt/apps/data/model", "/opt/apps/bundle/bin/demo"],
+            "trees": ["/opt/apps/bundle"],
+            "dpkg_binaries": ["ffmpeg"],
+        },
+        "builds": [
+            {
+                "name": "demo",
+                "requires": "open-layer",
+                "source": "local",
+                "cwd": "/opt/apps/source",
+                "commands": [["cmake", "--version"]],
+                "outputs": [
+                    {"path": "/opt/apps/bundle/bin/demo", "sha256": "inventory-only"}
+                ],
+            }
+        ],
+        "inventory": {
+            "required_paths": ["/opt/apps/data/model", "/opt/apps/bundle/bin/demo"],
+            "trees": ["/opt/apps/bundle"],
+            "dpkg_binaries": ["ffmpeg"],
+        },
+        "environment": {},
+        "links": [],
+        "copies": [],
+    }
+
+
+def add_verbatim_inputs(recipe, inv):
+    """Use the real reviewed scripts/copy mappings without executing their code."""
+    actual = json.loads((IMAGE / "recipe.json").read_text())
+    contents = {}
+    for name in ("hf_generate.py", "ai_bench.py"):
+        pin = next(p for p in actual["local_files"] if p["path"].endswith("/" + name))
+        copied = next(p for p in actual["copies"] if p["from"] == pin["target"])
+        recipe["local_files"].append(copy.deepcopy(pin))
+        recipe["copies"].append(copy.deepcopy(copied))
+        inv["files"][copied["to"]] = pin["sha256"]
+        contents[copied["to"]] = (IMAGE.parents[2] / pin["path"]).read_text()
+    selector = copy.deepcopy(actual["write_files"][0])
+    recipe["write_files"].append(selector)
+    inv["files"][selector["path"]] = digest(selector["content"].encode("utf-8"))
+    return contents
+
+
+class Pins(unittest.TestCase):
+    def test_recipe_accepts_complete_fixture(self):
+        common.validate_recipe(fixture())
+
+    def test_missing_base_hash_refused(self):
+        r = fixture()
+        del r["base"]["sha256"]
+        with self.assertRaises(ValueError):
+            common.validate_recipe(r)
+
+    def test_missing_model_hash_refused(self):
+        r = fixture()
+        r["artifacts"][0]["sha256"] = ""
+        with self.assertRaises(ValueError):
+            common.validate_recipe(r)
+
+    def test_shell_absolute_path_refused(self):
+        r = fixture()
+        r["builds"][0]["commands"] = [["/bin/sh", "-c", "make"]]
+        with self.assertRaises(ValueError):
+            common.validate_recipe(r)
+
+    def test_malformed_snapshot_refused(self):
+        r = fixture()
+        r["apt"]["snapshot"] = "2026-11-01"
+        with self.assertRaises(ValueError):
+            common.validate_recipe(r)
+
+    def test_wrong_schema_refused(self):
+        r = fixture()
+        r["schema_version"] = 99
+        with self.assertRaises(ValueError):
+            common.validate_recipe(r)
+
+    def test_moving_snapshot_refused(self):
+        r = fixture()
+        r["apt"]["snapshot"] = "latest"
+        with self.assertRaises(ValueError):
+            common.validate_recipe(r)
+
+    def test_no_http_base(self):
+        r = fixture()
+        r["base"]["url"] = "http://example.org/base"
+        with self.assertRaises(ValueError):
+            common.validate_recipe(r)
+
+    def test_no_url_credentials(self):
+        r = fixture()
+        r["artifacts"][0]["url"] = "https://name:password@example.org/model"
+        with self.assertRaises(ValueError):
+            common.validate_recipe(r)
+
+    def test_shell_command_refused(self):
+        r = fixture()
+        r["builds"][0]["commands"] = [["bash", "-c", "make"]]
+        with self.assertRaises(ValueError):
+            common.validate_recipe(r)
+
+    def test_string_command_refused(self):
+        r = fixture()
+        r["builds"][0]["commands"] = ["cmake --build build"]
+        with self.assertRaises(ValueError):
+            common.validate_recipe(r)
+
+    def test_shell_operator_refused(self):
+        r = fixture()
+        r["builds"][0]["commands"] = [["make", "&&", "cp"]]
+        with self.assertRaises(ValueError):
+            common.validate_recipe(r)
+
+    def test_unpinned_output_refused(self):
+        r = fixture()
+        r["builds"][0]["outputs"][0]["sha256"] = "later"
+        with self.assertRaises(ValueError):
+            common.validate_recipe(r)
+
+    def test_duplicate_input_refused(self):
+        r = fixture()
+        r["artifacts"].append(copy.deepcopy(r["artifacts"][0]))
+        with self.assertRaises(ValueError):
+            common.validate_recipe(r)
+
+    def test_local_path_escape_refused(self):
+        r = fixture()
+        r["local_files"] = [
+            {
+                "path": "../../../secret",
+                "sha256": digest(b"x"),
+                "target": "/opt/apps/source/x",
+            }
+        ]
+        with self.assertRaises(ValueError):
+            common.validate_recipe(r)
+
+
+class Downloads(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.cache = Path(self.tmp.name)
+        self.pin = fixture()["artifacts"][0]
+
+    def fetch(self, data):
+        response = io.BytesIO(data)
+        response.headers = {}
+        return common.download(self.pin, self.cache, opener=lambda *a, **k: response)
+
+    def test_download_verified_before_publish(self):
+        p = self.fetch(b"model")
+        self.assertEqual(p.read_bytes(), b"model")
+        self.assertEqual(p.name, self.pin["sha256"])
+
+    def test_corrupt_download_refused(self):
+        with self.assertRaises(ValueError):
+            self.fetch(b"wrong")
+        self.assertFalse((self.cache / self.pin["sha256"]).exists())
+
+    def test_truncated_download_refused(self):
+        with self.assertRaises(ValueError):
+            self.fetch(b"mod")
+        self.assertFalse(list(self.cache.glob("*.part")))
+
+    def test_poisoned_cache_refused(self):
+        (self.cache / self.pin["sha256"]).write_bytes(b"wrong")
+        with self.assertRaises(ValueError):
+            self.fetch(b"model")
+
+    def test_oversize_cache_refused(self):
+        (self.cache / self.pin["sha256"]).write_bytes(b"model extra")
+        with self.assertRaises(ValueError):
+            self.fetch(b"model")
+
+    def test_valid_cache_uses_no_network(self):
+        p = self.cache / self.pin["sha256"]
+        p.write_bytes(b"model")
+        with patch.object(
+            common.urllib.request, "urlopen", side_effect=AssertionError("network")
+        ):
+            self.assertEqual(common.download(self.pin, self.cache), p)
+
+    def test_declared_length_must_match_even_with_correct_hash(self):
+        self.pin["size"] = 9
+        with self.assertRaises(ValueError):
+            self.fetch(b"model")
+
+    def test_cached_length_must_match_even_with_correct_hash(self):
+        self.pin["size"] = 9
+        (self.cache / self.pin["sha256"]).write_bytes(b"model")
+        with self.assertRaises(ValueError):
+            self.fetch(b"model")
+
+    def test_oversize_download_refused(self):
+        with self.assertRaises(ValueError):
+            self.fetch(b"model" * 100)
+
+
+class Archives(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+
+    def tar(self, name, link=None):
+        p = self.root / "source.tar"
+        with tarfile.open(p, "w") as t:
+            i = tarfile.TarInfo(name)
+            if link is None:
+                i.size = 2
+                t.addfile(i, io.BytesIO(b"ok"))
+            else:
+                i.type = tarfile.SYMTYPE
+                i.linkname = link
+                t.addfile(i)
+        return p
+
+    def test_parent_component_rejected_before_extraction(self):
+        with self.assertRaises(ValueError):
+            common.relative_path("../file")
+
+    def test_absolute_member_rejected_before_extraction(self):
+        with self.assertRaises(ValueError):
+            common.relative_path("/file")
+
+    def test_tar_path_escape_refused(self):
+        with self.assertRaises(ValueError):
+            common.extract(self.tar("../outside"), self.root / "out", 0)
+        self.assertFalse((self.root / "outside").exists())
+
+    def test_absolute_tar_path_refused(self):
+        with self.assertRaises(ValueError):
+            common.extract(self.tar("/tmp/escape"), self.root / "out", 0)
+
+    def test_tar_symlink_escape_refused(self):
+        with self.assertRaises(ValueError):
+            common.extract(self.tar("a", "../../outside"), self.root / "out", 0)
+
+    def test_zip_path_escape_refused(self):
+        p = self.root / "source.zip"
+        with zipfile.ZipFile(p, "w") as z:
+            z.writestr("../outside", b"bad")
+        with self.assertRaises(ValueError):
+            common.extract(p, self.root / "out", 0)
+
+    def test_tar_normal_file(self):
+        out = self.root / "out"
+        common.extract(self.tar("project/file"), out, 1)
+        self.assertEqual((out / "file").read_bytes(), b"ok")
+
+    def test_strip_cannot_hide_traversal(self):
+        with self.assertRaises(ValueError):
+            common.extract(self.tar("../file"), self.root / "out", 1)
+
+
+class Seed(unittest.TestCase):
+    def files(self):
+        return {
+            "user-data": b"#cloud-config\n{}\n",
+            "meta-data": b"instance-id: test\n",
+            "network-config": b"version: 2\n",
+        }
+
+    def test_seed_deterministic(self):
+        self.assertEqual(
+            iso9660.make_iso(self.files()),
+            iso9660.make_iso(dict(reversed(list(self.files().items())))),
+        )
+
+    def test_seed_primary_volume_descriptor(self):
+        b = iso9660.make_iso(self.files())
+        pvd = b[16 * 2048 : 17 * 2048]
+        self.assertEqual(pvd[:7], b"\x01CD001\x01")
+        self.assertEqual(pvd[40:72].rstrip(), b"cidata")
+        self.assertEqual(len(b) % 2048, 0)
+        self.assertEqual(struct.unpack_from("<I", pvd, 80)[0] * 2048, len(b))
+
+    def test_seed_joliet_names_and_data(self):
+        b = iso9660.make_iso(self.files())
+        svd = b[17 * 2048 : 18 * 2048]
+        self.assertEqual(svd[88:91], b"%/E")
+        extent = struct.unpack_from("<I", svd, 158)[0]
+        directory = b[extent * 2048 : (extent + 1) * 2048]
+        names = {}
+        offset = 0
+        while offset < len(directory) and directory[offset]:
+            record = directory[offset : offset + directory[offset]]
+            n = record[33 : 33 + record[32]]
+            if n not in (b"\x00", b"\x01"):
+                name = n.decode("utf-16-be")
+                start = struct.unpack_from("<I", record, 2)[0] * 2048
+                size = struct.unpack_from("<I", record, 10)[0]
+                names[name] = b[start : start + size]
+            offset += directory[offset]
+        self.assertEqual(names, self.files())
+
+    def test_seed_rejects_incomplete_nocloud_data(self):
+        with self.assertRaises(ValueError):
+            iso9660.make_iso({"meta-data": b"instance-id: test"})
+
+    def test_both_iso_namespaces_advertise_cidata(self):
+        b = iso9660.make_iso(self.files())
+        self.assertEqual(b[16 * 2048 + 40 : 16 * 2048 + 72].rstrip(), b"cidata")
+        self.assertEqual(
+            b[17 * 2048 + 40 : 17 * 2048 + 72].decode("utf-16-be").rstrip(), "cidata"
+        )
+
+    def test_seed_rejects_extra_files(self):
+        with self.assertRaises(ValueError):
+            iso9660.make_iso({"../../escape": b"bad"})
+
+
+class CloudConfig(unittest.TestCase):
+    def config(self, mode="assemble"):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            for n in build_image.RUNTIME:
+                (root / n).write_text("# fixture\n")
+            return build_image.cloud_config(
+                fixture(), root, "a" * 32, mode, "http://10.0.2.100:4321", []
+            )
+
+    def test_no_shell_runcmd_or_bootcmd(self):
+        d = self.config()
+        self.assertNotIn("runcmd", d)
+        self.assertNotIn("bootcmd", d)
+        scripts = [x for x in d["write_files"] if "scripts/per-instance/" in x["path"]]
+        self.assertEqual(len(scripts), 1)
+        self.assertTrue(scripts[0]["content"].startswith("#!/usr/bin/python3"))
+
+    def test_snapshot_is_only_apt_origin(self):
+        d = self.config()
+        apt = json.dumps(d["apt"])
+        self.assertIn("http://10.0.2.100:4321/ubuntu/", apt)
+        self.assertIn("Components: main universe", apt)
+        self.assertNotIn("archive.ubuntu.com", apt)
+        self.assertNotIn("security.ubuntu.com", apt)
+        self.assertFalse(d["apt"]["preserve_sources_list"])
+
+    def test_verify_does_not_install_packages(self):
+        d = self.config("verify-open")
+        self.assertEqual(d["packages"], [])
+        self.assertFalse(d["package_update"])
+        self.assertFalse(d["package_upgrade"])
+
+    def test_key_placeholder_not_written(self):
+        d = self.config()
+        self.assertEqual(d["users"][0]["ssh_authorized_keys"], [])
+        self.assertNotIn("${SSH_AUTHORIZED_KEY}", json.dumps(d["users"]))
+
+
+class Inventory(unittest.TestCase):
+    def setUp(self):
+        self.recipe = fixture()
+        self.inv = {
+            "schema_version": 1,
+            "layer": "open",
+            "nvidia_scan": {"clean": True, "findings": []},
+            "no_nvidia_proprietary_files": True,
+            "guest": {"kernel": "6.8.0-147-generic", "nvidia_module_version": None},
+            "dpkg": ["ii\tcmake\tamd64\t1.0", "ii\tpython3\tamd64\t3.12"],
+            "pip_freeze": ["demo==1.0"],
+            "pip_files": {"demo": "e" * 64},
+            "wheels": {"demo==1.0": digest(b"wheel")},
+            "files": {
+                "/opt/apps/data/model": digest(b"model"),
+                "/opt/apps/bundle/bin/demo": digest(b"built"),
+                "/usr/bin/ffmpeg": "f" * 64,
+            },
+        }
+
+    def test_missing_apt_package_refused(self):
+        self.inv["dpkg"] = ["ii\tcmake\tamd64\t1.0"]
+        with self.assertRaises(ValueError):
+            common.validate_inventory(self.inv, self.recipe)
+
+    def test_missing_other_apt_package_refused(self):
+        self.inv["dpkg"] = ["ii\tpython3\tamd64\t3.12"]
+        with self.assertRaises(ValueError):
+            common.validate_inventory(self.inv, self.recipe)
+
+    def test_pip_distribution_digest_missing_refused(self):
+        self.inv["pip_files"] = {"other": "a" * 64}
+        with self.assertRaises(ValueError):
+            common.validate_inventory(self.inv, self.recipe)
+
+    def test_pip_distribution_digest_extra_refused(self):
+        self.inv["pip_files"]["extra"] = "a" * 64
+        with self.assertRaises(ValueError):
+            common.validate_inventory(self.inv, self.recipe)
+
+    def test_wrong_guest_kernel_refused(self):
+        self.inv["guest"]["kernel"] = "wrong"
+        with self.assertRaises(ValueError):
+            common.validate_inventory(self.inv, self.recipe)
+
+    def test_wrong_guest_module_version_refused(self):
+        self.inv["guest"]["nvidia_module_version"] = "wrong"
+        with self.assertRaises(ValueError):
+            common.validate_inventory(self.inv, self.recipe)
+
+    def test_complete_inventory(self):
+        common.validate_inventory(self.inv, self.recipe)
+
+    def test_empty_inventory_refused(self):
+        with self.assertRaises(ValueError):
+            common.validate_inventory({}, self.recipe)
+
+    def test_missing_model_refused(self):
+        del self.inv["files"]["/opt/apps/data/model"]
+        with self.assertRaises(ValueError):
+            common.validate_inventory(self.inv, self.recipe)
+
+    def test_corrupt_model_refused(self):
+        self.inv["files"]["/opt/apps/data/model"] = "0" * 64
+        with self.assertRaises(ValueError):
+            common.validate_inventory(self.inv, self.recipe)
+
+    def test_model_config_digest_must_match_its_own_pin(self):
+        config = {
+            "id": "model-config",
+            "kind": "file",
+            "url": "https://example.org/config.json",
+            "sha256": digest(b"{}"),
+            "size": 2,
+            "target": "/opt/apps/data/config.json",
+        }
+        self.recipe["artifacts"].append(config)
+        self.recipe["inventory"]["required_paths"].append(config["target"])
+        self.inv["files"][config["target"]] = digest(b"{ }")
+        with self.assertRaises(ValueError):
+            common.validate_inventory(self.inv, self.recipe)
+
+    def test_missing_binary_refused(self):
+        del self.inv["files"]["/opt/apps/bundle/bin/demo"]
+        with self.assertRaises(ValueError):
+            common.validate_inventory(self.inv, self.recipe)
+
+    def test_pinned_binary_hash_is_informational(self):
+        self.recipe["builds"][0]["outputs"][0]["sha256"] = "d" * 64
+        self.inv["files"]["/opt/apps/bundle/bin/demo"] = "e" * 64
+        self.assertIsNone(self.validation_error())
+
+    def test_pip_freeze_normalizes_pep503_names(self):
+        self.recipe["artifacts"][1]["package"] = "demo-package"
+        self.inv["wheels"] = {"demo-package==1.0": digest(b"wheel")}
+        self.inv["pip_files"] = {"demo-package": "e" * 64}
+        self.inv["pip_freeze"] = ["Demo_Package==1.0"]
+        common.validate_inventory(self.inv, self.recipe)
+
+    def test_expected_binary_hash_is_not_a_gate(self):
+        self.recipe["builds"][0]["outputs"][0]["sha256"] = "a" * 64
+        self.assertIsNone(self.validation_error())
+
+    def test_wheel_hash_refused(self):
+        self.inv["wheels"]["demo==1.0"] = "0" * 64
+        with self.assertRaises(ValueError):
+            common.validate_inventory(self.inv, self.recipe)
+
+    def test_pip_drift_refused(self):
+        self.inv["pip_freeze"] = ["demo==2.0"]
+        with self.assertRaises(ValueError):
+            common.validate_inventory(self.inv, self.recipe)
+
+    def validation_error(self):
+        try:
+            common.validate_inventory(self.inv, self.recipe)
+        except ValueError as error:
+            return str(error)
+        return None
+
+    def parts(self, inv=None, recipe=None):
+        return common.inventory_parts(inv or self.inv, recipe or self.recipe)
+
+    def accepts(self, expected, observed):
+        try:
+            build_image.compare_inventory(expected, observed)
+        except ValueError:
+            return False
+        return True
+
+    def test_verify_compares_dpkg_versions(self):
+        observed = copy.deepcopy(self.parts())
+        observed["pinned"]["dpkg"][0] = "ii\tcmake\tamd64\t2.0"
+        self.assertFalse(self.accepts(self.parts(), observed))
+
+    def test_verify_allows_different_binary_bytes(self):
+        observed = copy.deepcopy(self.parts())
+        observed["built"]["files"]["/usr/bin/ffmpeg"] = "0" * 64
+        self.assertTrue(self.accepts(self.parts(), observed))
+
+    def test_verify_allows_different_compiled_app_bytes(self):
+        observed = copy.deepcopy(self.parts())
+        observed["built"]["files"]["/opt/apps/bundle/bin/demo"] = "a" * 64
+        self.assertTrue(self.accepts(self.parts(), observed))
+
+    def test_verify_allows_image_hash_difference(self):
+        expected, observed = self.parts(), self.parts()
+        expected["built"]["image"] = {"sha256": "a" * 64}
+        observed["built"]["image"] = {"sha256": "b" * 64}
+        self.assertTrue(self.accepts(expected, observed))
+
+    def test_verify_allows_image_size_difference(self):
+        expected, observed = self.parts(), self.parts()
+        expected["built"]["image"] = {"size": 123}
+        observed["built"]["image"] = {"size": 456}
+        self.assertTrue(self.accepts(expected, observed))
+
+    def test_verify_allows_installed_pip_byte_differences(self):
+        observed = copy.deepcopy(self.parts())
+        observed["built"]["pip_files"]["demo"] = "a" * 64
+        self.assertTrue(self.accepts(self.parts(), observed))
+
+    def test_equal_inventories_pass(self):
+        self.assertTrue(self.accepts(self.parts(), copy.deepcopy(self.parts())))
+
+    def test_pinned_records_model_input_url_and_hash(self):
+        self.assertIn(self.recipe["artifacts"][0], self.parts()["pinned"]["inputs"])
+
+    def test_pinned_records_wheel_input_url_and_hash(self):
+        self.assertIn(self.recipe["artifacts"][1], self.parts()["pinned"]["inputs"])
+
+    def test_source_commit_is_visible_in_pinned_part(self):
+        self.recipe["provenance"] = {"llama_commit": "a" * 40}
+        self.assertEqual(
+            self.parts()["pinned"]["source_refs"], self.recipe["provenance"]
+        )
+
+    def test_source_tag_is_visible_in_pinned_part(self):
+        self.recipe["provenance"] = {"cuda_samples_tag": "v12.5"}
+        self.assertEqual(
+            self.parts()["pinned"]["source_refs"], self.recipe["provenance"]
+        )
+
+    def test_verify_refuses_source_url_drift(self):
+        observed = copy.deepcopy(self.parts())
+        self.assertTrue(observed["pinned"]["inputs"])
+        observed["pinned"]["inputs"][0]["url"] += "?different-source"
+        self.assertFalse(self.accepts(self.parts(), observed))
+
+    def test_verify_refuses_source_hash_drift(self):
+        observed = copy.deepcopy(self.parts())
+        self.assertTrue(observed["pinned"]["inputs"])
+        observed["pinned"]["inputs"][0]["sha256"] = "0" * 64
+        self.assertFalse(self.accepts(self.parts(), observed))
+
+    def test_recipe_environment_drift_changes_pinned_identity(self):
+        other = copy.deepcopy(self.recipe)
+        other["environment"]["LC_ALL"] = "C"
+        self.assertFalse(self.accepts(self.parts(), self.parts(recipe=other)))
+
+    def test_recipe_version_drift_changes_pinned_identity(self):
+        other = copy.deepcopy(self.recipe)
+        other["recipe_version"] = "other-recipe"
+        self.assertFalse(self.accepts(self.parts(), self.parts(recipe=other)))
+
+    def test_compare_refuses_missing_compiled_app(self):
+        observed = copy.deepcopy(self.parts())
+        del observed["built"]["files"]["/opt/apps/bundle/bin/demo"]
+        self.assertFalse(self.accepts(self.parts(), observed))
+
+    def test_compare_refuses_missing_packaged_app(self):
+        observed = copy.deepcopy(self.parts())
+        del observed["built"]["files"]["/usr/bin/ffmpeg"]
+        self.assertFalse(self.accepts(self.parts(), observed))
+
+    def test_inventory_refuses_missing_packaged_app(self):
+        del self.inv["files"]["/usr/bin/ffmpeg"]
+        self.assertIsNotNone(self.validation_error())
+
+    def test_inventory_refuses_another_missing_packaged_app(self):
+        self.recipe["inventory"]["dpkg_binaries"].append("ffprobe")
+        self.assertIsNotNone(self.validation_error())
+
+    def test_model_hash_is_in_pinned_part(self):
+        self.assertEqual(
+            self.parts()["pinned"]["files"]["/opt/apps/data/model"], digest(b"model")
+        )
+        self.assertNotIn("/opt/apps/data/model", self.parts()["built"]["files"])
+
+    def test_wheel_hash_is_compared(self):
+        observed = copy.deepcopy(self.parts())
+        observed["pinned"]["wheels"]["demo==1.0"] = "0" * 64
+        self.assertFalse(self.accepts(self.parts(), observed))
+
+    def test_input_parts_roundtrip_to_observation(self):
+        self.assertEqual(common.inventory_observation(self.parts()), self.inv)
+
+
+class VerbatimInputs(unittest.TestCase):
+    def setUp(self):
+        case = Inventory()
+        case.setUp()
+        self.recipe, self.inv = case.recipe, case.inv
+        add_verbatim_inputs(self.recipe, self.inv)
+
+    def script_path(self, name):
+        return "/opt/apps/bundle/share/" + name
+
+    def check_script_drift(self, name):
+        self.inv["files"][self.script_path(name)] = digest(b"forged application")
+        with self.assertRaises(ValueError):
+            common.validate_inventory(self.inv, self.recipe)
+
+    def test_changed_hf_generate_is_rejected(self):
+        self.check_script_drift("hf_generate.py")
+
+    def test_changed_ai_bench_is_rejected(self):
+        self.check_script_drift("ai_bench.py")
+
+    def test_missing_copied_source_is_rejected(self):
+        del self.inv["files"][self.script_path("hf_generate.py")]
+        with self.assertRaises(ValueError):
+            common.validate_inventory(self.inv, self.recipe)
+
+    def test_changed_model_ref_is_rejected(self):
+        self.inv["files"][self.recipe["write_files"][0]["path"]] = digest(
+            b"another revision\n"
+        )
+        with self.assertRaises(ValueError):
+            common.validate_inventory(self.inv, self.recipe)
+
+    def test_missing_model_ref_is_rejected(self):
+        del self.inv["files"][self.recipe["write_files"][0]["path"]]
+        with self.assertRaises(ValueError):
+            common.validate_inventory(self.inv, self.recipe)
+
+    def check_pinned(self, path):
+        parts = common.inventory_parts(self.inv, self.recipe)
+        self.assertIn(path, parts["pinned"]["files"])
+        self.assertEqual(parts["pinned"]["files"][path], self.inv["files"][path])
+        self.assertNotIn(path, parts["built"]["files"])
+
+    def test_hf_generate_observed_bytes_are_pinned(self):
+        self.check_pinned(self.script_path("hf_generate.py"))
+
+    def test_ai_bench_observed_bytes_are_pinned(self):
+        self.check_pinned(self.script_path("ai_bench.py"))
+
+    def test_model_ref_observed_bytes_are_pinned(self):
+        self.check_pinned(self.recipe["write_files"][0]["path"])
+
+    def test_directory_glob_copies_bind_each_local_source(self):
+        self.recipe["copies"] = [
+            {
+                "from": "/opt/apps/source/local/*.py",
+                "to": "/opt/apps/bundle/share",
+                "directory": True,
+            }
+        ]
+        self.check_pinned(self.script_path("hf_generate.py"))
+        self.check_pinned(self.script_path("ai_bench.py"))
+
+    def test_direct_retained_local_source_is_pinned(self):
+        pin = copy.deepcopy(self.recipe["local_files"][0])
+        pin["target"] = "/opt/apps/bundle/run.py"
+        self.recipe["local_files"].append(pin)
+        self.inv["files"][pin["target"]] = pin["sha256"]
+        self.check_pinned(pin["target"])
+
+    def test_real_recipe_binds_all_five_scripts_and_retained_runner(self):
+        recipe = common.read_recipe(IMAGE / "recipe.json")
+        pins = common.runtime_input_hashes(recipe, "open")
+        for name in (
+            "ai_bench.py",
+            "blender_render.py",
+            "cupy_check.py",
+            "hf_generate.py",
+            "torch_correct.py",
+        ):
+            source = next(
+                p for p in recipe["local_files"] if p["path"].endswith("/" + name)
+            )
+            self.assertEqual(pins[self.script_path(name)], source["sha256"])
+        runner = next(
+            p for p in recipe["local_files"] if p["path"].endswith("/run_apps.sh")
+        )
+        self.assertEqual(pins[runner["target"]], runner["sha256"])
+        self.assertFalse(any(path.startswith("/opt/apps/source/") for path in pins))
+
+    def runtime_config(self):
+        self.inv["layer"] = "runtime"
+        self.inv["official_receipts"] = {}
+        self.inv["guest"]["nvidia_module_version"] = self.recipe["guest"][
+            "nvidia_version"
+        ]
+        path = "/etc/ld.so.conf.d/apps-cuda.conf"
+        self.recipe["official_write_files"] = [
+            {"path": path, "content": "/usr/local/cuda-12.6/lib\n"}
+        ]
+        self.inv["files"][path] = digest(
+            self.recipe["official_write_files"][0]["content"].encode()
+        )
+        return path
+
+    def test_runtime_installer_config_is_pinned(self):
+        path = self.runtime_config()
+        self.check_pinned(path)
+        self.assertNotIn(path, common.runtime_input_hashes(self.recipe, "open"))
+
+    def test_changed_runtime_installer_config_is_rejected(self):
+        path = self.runtime_config()
+        self.inv["files"][path] = digest(b"different search path\n")
+        with self.assertRaises(ValueError):
+            common.validate_inventory(self.inv, self.recipe)
+
+    def check_builder_script(self, name):
+        files = {"/opt/apps/bundle/bin/demo": digest(b"built")}
+        files.update(
+            {
+                self.script_path(n): next(
+                    p["sha256"]
+                    for p in self.recipe["local_files"]
+                    if p["path"].endswith("/" + n)
+                )
+                for n in ("hf_generate.py", "ai_bench.py")
+            }
+        )
+        files[self.script_path(name)] = digest(b"forged application")
+        inv = {"layer": "builder", "files": files, "shared_runtime": {}}
+        nonce = "a" * 32
+        with tempfile.TemporaryDirectory() as directory:
+            report, serial = (
+                Path(directory) / "inventory.json",
+                Path(directory) / "serial.log",
+            )
+            report.write_text(
+                json.dumps(
+                    {
+                        "status": "complete",
+                        "nonce": nonce,
+                        "mode": "builder",
+                        "recipe_sha256": digest(common.canonical(self.recipe)),
+                        "inventory": inv,
+                    }
+                )
+            )
+            serial.write_text(
+                f"KF_APPS_IMAGE_COMPLETE {nonce} {digest(common.canonical(inv))}\n"
+            )
+            with self.assertRaises(ValueError):
+                build_image.parse_result(report, serial, nonce, "builder", self.recipe)
+
+    def test_builder_rejects_hf_generate_copy_drift(self):
+        self.check_builder_script("hf_generate.py")
+
+    def test_builder_rejects_ai_bench_copy_drift(self):
+        self.check_builder_script("ai_bench.py")
+
+    def test_conflicting_artifact_and_config_pins_rejected(self):
+        self.recipe["write_files"].append(
+            {"path": "/opt/apps/data/model", "content": "different bytes"}
+        )
+        with self.assertRaises(ValueError):
+            common.runtime_input_hashes(self.recipe, "open")
+
+    def test_conflicting_copy_and_config_pins_rejected(self):
+        self.recipe["write_files"].append(
+            {"path": self.script_path("ai_bench.py"), "content": "different bytes"}
+        )
+        with self.assertRaises(ValueError):
+            common.runtime_input_hashes(self.recipe, "open")
+
+
+class RuntimeInputCollector(unittest.TestCase):
+    def collect(self, filename="refs/main", present=True):
+        from types import SimpleNamespace
+
+        case = Inventory()
+        case.setUp()
+        recipe = case.recipe
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            bundle = root / "bundle"
+            bundle.mkdir()
+            model, demo = root / "model", bundle / "demo"
+            model.write_bytes(b"model")
+            demo.write_bytes(b"built")
+            config = root / filename
+            config.parent.mkdir(parents=True, exist_ok=True)
+            if present:
+                config.write_text("fixed model revision\n")
+            recipe["artifacts"][0]["target"] = str(model)
+            recipe["builds"][0]["outputs"][0]["path"] = str(demo)
+            recipe["runtime_inventory"] = {
+                "required_paths": [str(model), str(demo)],
+                "trees": [str(bundle)],
+                "dpkg_binaries": [],
+            }
+            recipe["write_files"] = [
+                {"path": str(config), "content": "fixed model revision\n"}
+            ]
+            (root / "official-receipts.json").write_text("{}")
+
+            def run(argv, **kwargs):
+                if argv[0] == "modinfo":
+                    return SimpleNamespace(stdout="580.159.04\n")
+                if argv[-1] == "--pip-inventory":
+                    return SimpleNamespace(stdout=json.dumps({"demo": "e" * 64}))
+                self.assertIn("freeze", argv)
+                return SimpleNamespace(stdout="demo==1.0\n")
+
+            with patch.object(guest, "ROOT", root), patch.object(
+                guest, "run", side_effect=run
+            ), patch.object(
+                guest, "dpkg_rows", return_value=case.inv["dpkg"]
+            ), patch.object(
+                guest.os,
+                "uname",
+                return_value=SimpleNamespace(release=recipe["guest"]["kernel"]),
+            ):
+                return guest.collect_inventory(recipe, "runtime"), str(config)
+
+    def test_model_ref_outside_inventory_trees_is_hashed(self):
+        inv, path = self.collect()
+        self.assertIn(path, inv["files"])
+        self.assertEqual(inv["files"][path], digest(b"fixed model revision\n"))
+
+    def test_second_config_outside_inventory_trees_is_hashed(self):
+        inv, path = self.collect("config/runtime.conf")
+        self.assertIn(path, inv["files"])
+        self.assertEqual(inv["files"][path], digest(b"fixed model revision\n"))
+
+    def test_missing_model_ref_is_a_collection_failure(self):
+        with self.assertRaises(ValueError):
+            self.collect(present=False)
+
+
+class FakeQemu(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.fakebin = self.root / "bin"
+        self.fakebin.mkdir()
+        for name in ("qemu-img", "qemu-system-x86_64"):
+            p = self.fakebin / name
+            p.write_bytes((IMAGE / "test_fake_qemu.py").read_bytes())
+            p.chmod(0o755)
+        self.scenario = self.root / "scenario.json"
+        self.commands = self.root / "commands.jsonl"
+        case = Inventory()
+        case.setUp()
+        self.inv = case.inv
+        self.recipe = case.recipe
+        self.case = {"inventory": self.inv}
+        self.save()
+        self.environment = patch.dict(
+            os.environ,
+            {
+                "PATH": str(self.fakebin) + os.pathsep + os.environ["PATH"],
+                "APPS_IMAGE_TEST_SCENARIO": str(self.scenario),
+                "APPS_IMAGE_TEST_COMMANDS": str(self.commands),
+            },
+        )
+        self.environment.start()
+        self.addCleanup(self.environment.stop)
+        self.preflight = patch.object(build_image, "preflight")
+        self.preflight.start()
+        self.addCleanup(self.preflight.stop)
+        self.base = self.root / "base"
+        self.base.write_bytes(b"base")
+        paths = {self.recipe["base"]["sha256"]: self.base}
+        for name in ("model", "wheel"):
+            path = self.root / name
+            path.write_bytes(name.encode())
+            paths[digest(name.encode())] = path
+        self.fetch = patch.object(build_image, "fetch_inputs", return_value=paths)
+        self.fetch.start()
+        self.addCleanup(self.fetch.stop)
+
+        def fetch_official(recipe, directory, **kwargs):
+            Path(directory).mkdir(parents=True, exist_ok=True)
+            paths = {}
+            for item in build_image.official_pins(recipe, kwargs.get("builder", False)):
+                data = b"official"
+                assert item["sha256"] == digest(data) and item["size"] == len(data)
+                p = Path(directory) / item["sha256"]
+                p.write_bytes(data)
+                paths[item["sha256"]] = p
+            return paths
+
+        self.official_patch = patch.object(
+            build_image, "fetch_official", side_effect=fetch_official
+        )
+        self.official_patch.start()
+        self.addCleanup(self.official_patch.stop)
+        mirror = type("Mirror", (), {"names": {"cmake", "python3"}, "used": {}})()
+        self.mirror_patch = patch.object(build_image, "AptMirror", return_value=mirror)
+        self.mirror_patch.start()
+        self.addCleanup(self.mirror_patch.stop)
+        self.out = self.root / "out"
+
+    def save(self):
+        self.scenario.write_text(json.dumps(self.case))
+
+    def build(self):
+        self.save()
+        return build_image.build(self.recipe, self.out, self.root / "cache", timeout=15)
+
+    def records(self):
+        return [json.loads(x) for x in self.commands.read_text().splitlines()]
+
+    def add_verbatim(self):
+        self.case["builder_contents"] = add_verbatim_inputs(self.recipe, self.inv)
+        return self.recipe["write_files"][0]["path"]
+
+    def check_copied_script_build(self, name):
+        self.add_verbatim()
+        path = "/opt/apps/bundle/share/" + name
+        self.case["builder_contents"][path] = "forged application"
+        self.inv["files"][path] = digest(b"forged application")
+        with self.assertRaises(ValueError):
+            self.build()
+        self.assertFalse((self.out / "apps-image.manifest.json").exists())
+
+    def test_build_rejects_changed_hf_generate_input(self):
+        self.check_copied_script_build("hf_generate.py")
+
+    def test_build_rejects_changed_ai_bench_input(self):
+        self.check_copied_script_build("ai_bench.py")
+
+    def check_copied_script_verify(self, name):
+        self.add_verbatim()
+        self.build()
+        self.inv["files"]["/opt/apps/bundle/share/" + name] = digest(
+            b"forged application"
+        )
+        self.save()
+        with self.assertRaises(ValueError):
+            build_image.verify(
+                self.out / "apps-image.qcow2",
+                self.out / "apps-image.manifest.json",
+                self.root / "verify-verbatim",
+            )
+        self.assertFalse(
+            (self.root / "verify-verbatim/apps-image.verify.json").exists()
+        )
+
+    def test_verify_rejects_changed_hf_generate_input(self):
+        self.check_copied_script_verify("hf_generate.py")
+
+    def test_verify_rejects_changed_ai_bench_input(self):
+        self.check_copied_script_verify("ai_bench.py")
+
+    def test_verify_rejects_changed_model_ref_input(self):
+        path = self.add_verbatim()
+        self.build()
+        self.inv["files"][path] = digest(b"another revision\n")
+        self.save()
+        with self.assertRaises(ValueError):
+            build_image.verify(
+                self.out / "apps-image.qcow2",
+                self.out / "apps-image.manifest.json",
+                self.root / "verify-ref",
+            )
+        self.assertFalse((self.root / "verify-ref/apps-image.verify.json").exists())
+
+    def test_verify_rejects_missing_model_ref_input(self):
+        path = self.add_verbatim()
+        self.build()
+        del self.inv["files"][path]
+        self.save()
+        with self.assertRaises(ValueError):
+            build_image.verify(
+                self.out / "apps-image.qcow2",
+                self.out / "apps-image.manifest.json",
+                self.root / "verify-ref",
+            )
+
+    def test_verbatim_inputs_preserve_variable_compiled_and_image_bytes(self):
+        self.add_verbatim()
+        manifest = self.build()
+        self.inv["files"]["/opt/apps/bundle/bin/demo"] = digest(b"another compilation")
+        image = self.out / "apps-image.qcow2"
+        image.write_bytes(b"different image timestamps")
+        self.save()
+        report = build_image.verify(
+            image, self.out / "apps-image.manifest.json", self.root / "verify-built"
+        )
+        self.assertEqual(report["status"], "pinned-inputs-identical")
+        self.assertEqual(report["pinned"], manifest["pinned"])
+        self.assertEqual(
+            report["built"]["files"]["/opt/apps/bundle/bin/demo"],
+            digest(b"another compilation"),
+        )
+
+    def test_build_rejects_missing_model_ref_input(self):
+        path = self.add_verbatim()
+        del self.inv["files"][path]
+        with self.assertRaises(ValueError):
+            self.build()
+        self.assertFalse((self.out / "apps-image.manifest.json").exists())
+
+    def test_builder_input_disk_is_readonly_and_not_attached_to_open_assembly(self):
+        import test_apps_image_layers as layers
+
+        self.recipe["official_fetch"] = [layers.pin()]
+        self.build()
+        vms = [
+            x["argv"] for x in self.records() if x["program"] == "qemu-system-x86_64"
+        ]
+        self.assertTrue(any("id=official" in x and "readonly=on" in x for x in vms[0]))
+        self.assertFalse(any("id=official" in x for x in vms[1]))
+        self.assertFalse(list(self.out.rglob("*.raw")))
+
+    def test_guest_seed_declares_official_device_and_only_selected_pins(self):
+        import test_apps_image_layers as layers
+
+        self.recipe["official_fetch"] = [layers.pin()]
+        config = build_image.cloud_config(
+            self.recipe,
+            IMAGE,
+            "b" * 32,
+            "builder",
+            "http://10.0.2.100:1234",
+            [],
+            official_device=True,
+        )
+        session = json.loads(
+            next(
+                x["content"]
+                for x in config["write_files"]
+                if x["path"].endswith("/session.json")
+            )
+        )
+        self.assertEqual(session["official_ids"], ["driver"])
+        self.assertEqual(session["official_disk"], "/dev/disk/by-id/virtio-KF-OFFICIAL")
+
+    def check_official_http_isolation(self, index):
+        import test_apps_image_layers as layers
+
+        self.recipe["official_fetch"] = [layers.pin()]
+        with patch.object(
+            build_image, "serve_inputs", wraps=build_image.serve_inputs
+        ) as serving:
+            self.build()
+        self.assertNotIn(layers.pin()["sha256"], serving.call_args_list[index].args[0])
+
+    def test_scratch_builder_http_cannot_serve_nvidia_payloads(self):
+        self.check_official_http_isolation(0)
+
+    def test_open_assembly_http_cannot_serve_nvidia_payloads(self):
+        self.check_official_http_isolation(-1)
+
+    def test_build_writes_manifest_only_after_verified_completion(self):
+        manifest = self.build()
+        self.assertEqual(common.inventory_observation(manifest), self.inv)
+        self.assertEqual(manifest["schema_version"], 3)
+        self.assertEqual(
+            manifest["built"]["image"]["sha256"],
+            digest((self.out / "apps-image.qcow2").read_bytes()),
+        )
+        self.assertEqual(
+            json.loads((self.out / "apps-image.manifest.json").read_text()), manifest
+        )
+        commands = self.records()
+        operations = [r["argv"][0] for r in commands if r["program"] == "qemu-img"]
+        self.assertEqual(operations, ["create", "create", "convert", "check"])
+        self.assertIn(
+            "-c", next(r["argv"] for r in commands if r["argv"][0] == "convert")
+        )
+        self.assertFalse(list(self.out.glob(".apps-build-*")))
+
+    def test_build_publishes_only_the_audited_open_bundle(self):
+        manifest = self.build()
+        bundle = self.out / "apps-open-bundle.tar.gz"
+        self.assertEqual(
+            common.sha256_file(bundle), manifest["built"]["open_bundle"]["sha256"]
+        )
+        with tarfile.open(bundle) as archive:
+            self.assertEqual(archive.getnames(), ["opt/apps/bundle/bin/demo"])
+
+    def test_failed_scan_does_not_publish_an_open_bundle(self):
+        self.inv["nvidia_scan"]["clean"] = False
+        with self.assertRaises(ValueError):
+            self.build()
+        self.assertFalse((self.out / "apps-open-bundle.tar.gz").exists())
+
+    def test_assembled_app_must_match_the_audited_builder_bytes(self):
+        self.inv["files"]["/opt/apps/bundle/bin/demo"] = "0" * 64
+        with self.assertRaises(ValueError):
+            self.build()
+
+    def test_assembled_image_cannot_drop_upstream_licence_files(self):
+        self.case["extra_builder_file"] = "/opt/apps/bundle/share/licenses/LICENSE"
+        with self.assertRaises(ValueError):
+            self.build()
+
+    def test_zero_qemu_exit_without_marker_refused(self):
+        self.case["no_marker"] = True
+        with self.assertRaises(ValueError):
+            self.build()
+        self.assertFalse((self.out / "apps-image.manifest.json").exists())
+
+    def test_duplicate_completion_marker_refused(self):
+        self.case["duplicate"] = True
+        with self.assertRaises(ValueError):
+            self.build()
+
+    def test_marker_with_wrong_inventory_digest_refused(self):
+        self.case["bad_digest"] = True
+        with self.assertRaises(ValueError):
+            self.build()
+
+    def test_zero_qemu_exit_without_inventory_refused(self):
+        self.case["no_inventory"] = True
+        with self.assertRaises(ValueError):
+            self.build()
+
+    def test_stale_completion_refused(self):
+        self.case["stale"] = True
+        with self.assertRaises(ValueError):
+            self.build()
+
+    def test_error_report_refused(self):
+        self.case["error"] = True
+        with self.assertRaises(ValueError):
+            self.build()
+
+    def test_nonzero_qemu_exit_refused_despite_complete_report(self):
+        self.case["qemu_rc"] = 3
+        with self.assertRaises(ValueError):
+            self.build()
+        self.assertFalse((self.out / "apps-image.qcow2").exists())
+
+    def test_corrupt_guest_model_not_certified(self):
+        self.inv["files"]["/opt/apps/data/model"] = "0" * 64
+        with self.assertRaises(ValueError):
+            self.build()
+
+    def test_missing_guest_binary_not_certified(self):
+        del self.inv["files"]["/opt/apps/bundle/bin/demo"]
+        with self.assertRaises(ValueError):
+            self.build()
+
+    def test_qemu_img_failure_does_not_publish_manifest(self):
+        self.case["qemu_img_rc"] = 2
+        with self.assertRaises(build_image.subprocess.CalledProcessError):
+            self.build()
+        self.assertFalse((self.out / "apps-image.manifest.json").exists())
+
+    def test_qemu_img_check_failure_does_not_publish_manifest(self):
+        self.case["qemu_img_rc"] = 2
+        self.case["qemu_img_fail_on"] = "check"
+        with self.assertRaises(build_image.subprocess.CalledProcessError):
+            self.build()
+        self.assertFalse((self.out / "apps-image.manifest.json").exists())
+
+    def test_hung_fake_qemu_times_out_and_is_reaped(self):
+        self.case["hang"] = True
+        self.save()
+        # Direct boot keeps this test under a second while exercising real process ownership.
+        work = self.root / "hang"
+        work.mkdir()
+        seed = build_image.seed(self.recipe, work, "a" * 32, "verify-open")
+        with self.assertRaises(TimeoutError):
+            build_image.boot(
+                self.recipe, self.base, seed, work, "a" * 32, "verify-open", timeout=0.1
+            )
+        self.assertFalse((self.out / "apps-image.manifest.json").exists())
+
+    def test_verify_boots_overlay_and_preserves_image(self):
+        self.build()
+        image = self.out / "apps-image.qcow2"
+        before = image.read_bytes()
+        report = build_image.verify(
+            image, self.out / "apps-image.manifest.json", self.root / "verified"
+        )
+        self.assertEqual(report["status"], "pinned-inputs-identical")
+        self.assertEqual(image.read_bytes(), before)
+        records = self.records()
+        vm = [r for r in records if r["program"] == "qemu-system-x86_64"][-1]["argv"]
+        self.assertIn("user,id=n0,restrict=on", vm)
+        disk = next(
+            vm[i + 1]
+            for i, x in enumerate(vm)
+            if x == "-drive" and "if=virtio" in vm[i + 1]
+        )
+        self.assertNotIn(str(image) + ",", disk)
+        self.assertFalse(list((self.root / "verified").glob(".apps-verify-*")))
+
+    def test_verify_rejects_package_drift(self):
+        self.build()
+        self.inv["dpkg"] = ["ii\tcmake\tamd64\t2.0"]
+        self.save()
+        with self.assertRaises(ValueError):
+            build_image.verify(
+                self.out / "apps-image.qcow2",
+                self.out / "apps-image.manifest.json",
+                self.root / "v",
+            )
+        self.assertFalse((self.root / "v" / "apps-image.verify.json").exists())
+
+    def test_build_refuses_pip_version_drift(self):
+        self.inv["pip_freeze"] = ["demo==2.0"]
+        with self.assertRaises(ValueError):
+            self.build()
+
+    def test_verify_reports_modified_pip_files(self):
+        self.build()
+        self.inv["pip_files"]["demo"] = "a" * 64
+        self.save()
+        report = build_image.verify(
+            self.out / "apps-image.qcow2",
+            self.out / "apps-image.manifest.json",
+            self.root / "v",
+        )
+        self.assertEqual(report["status"], "pinned-inputs-identical")
+        self.assertIn("built", report)
+
+    def test_verify_rejects_nonzero_qemu_exit(self):
+        self.build()
+        self.case["qemu_rc"] = 2
+        self.save()
+        with self.assertRaises(ValueError):
+            build_image.verify(
+                self.out / "apps-image.qcow2",
+                self.out / "apps-image.manifest.json",
+                self.root / "v",
+            )
+
+    def test_verify_rejects_stale_guest_session(self):
+        self.build()
+        self.case["stale"] = True
+        self.save()
+        with self.assertRaises(ValueError):
+            build_image.verify(
+                self.out / "apps-image.qcow2",
+                self.out / "apps-image.manifest.json",
+                self.root / "v",
+            )
+
+    def test_verify_reports_modified_app_binary(self):
+        self.build()
+        self.inv["files"]["/usr/bin/ffmpeg"] = "0" * 64
+        self.save()
+        report = build_image.verify(
+            self.out / "apps-image.qcow2",
+            self.out / "apps-image.manifest.json",
+            self.root / "v",
+        )
+        self.assertEqual(report["status"], "pinned-inputs-identical")
+        self.assertIn("built", report)
+
+    def test_verify_allows_different_image_bytes_with_equal_inventory(self):
+        self.build()
+        image = self.out / "apps-image.qcow2"
+        image.write_bytes(b"different ext4 timestamps")
+        report = build_image.verify(
+            image, self.out / "apps-image.manifest.json", self.root / "v"
+        )
+        self.assertNotIn("image_sha256_matches_manifest", report["built"])
+        self.assertEqual(
+            report["built"]["image"]["sha256"], digest(b"different ext4 timestamps")
+        )
+        self.assertEqual(report["status"], "pinned-inputs-identical")
+
+    def test_verify_reports_actual_compiled_hash_and_stable_pinned_digest(self):
+        manifest = self.build()
+        self.inv["files"]["/opt/apps/bundle/bin/demo"] = "1" * 64
+        self.save()
+        report = build_image.verify(
+            self.out / "apps-image.qcow2",
+            self.out / "apps-image.manifest.json",
+            self.root / "v",
+        )
+        self.assertEqual(report["pinned"], manifest["pinned"])
+        self.assertEqual(
+            report["built"]["files"]["/opt/apps/bundle/bin/demo"], "1" * 64
+        )
+        self.assertEqual(
+            report["pinned_inventory_sha256"],
+            digest(common.canonical(manifest["pinned"])),
+        )
+
+    def test_verify_refuses_missing_app_despite_matching_input_pins(self):
+        self.build()
+        del self.inv["files"]["/usr/bin/ffmpeg"]
+        self.save()
+        with self.assertRaises(ValueError):
+            build_image.verify(
+                self.out / "apps-image.qcow2",
+                self.out / "apps-image.manifest.json",
+                self.root / "v",
+            )
+
+    def test_cli_prints_built_hashes_without_gating_them(self):
+        self.build()
+        self.inv["files"]["/usr/bin/ffmpeg"] = "2" * 64
+        self.save()
+        with patch("sys.stdout", new_callable=io.StringIO) as output:
+            status = build_image.main(
+                [
+                    "verify",
+                    "--image",
+                    str(self.out / "apps-image.qcow2"),
+                    "--manifest",
+                    str(self.out / "apps-image.manifest.json"),
+                    "--out",
+                    str(self.root / "cli-verify"),
+                ]
+            )
+        self.assertEqual(status, 0)
+        report = json.loads(output.getvalue())
+        self.assertEqual(report["built"]["files"]["/usr/bin/ffmpeg"], "2" * 64)
+        self.assertIn("pinned_inventory_sha256", report)
+
+    def check_manifest_pin_tampering(self, field, value):
+        self.build()
+        path = self.out / "apps-image.manifest.json"
+        manifest = json.loads(path.read_text())
+        manifest["pinned"]["inputs"][0][field] = value
+        path.write_text(json.dumps(manifest))
+        with self.assertRaises(ValueError):
+            build_image.load_manifest(path, IMAGE)
+
+    def test_manifest_cannot_substitute_recorded_source_url(self):
+        self.check_manifest_pin_tampering("url", "https://example.org/substitute")
+
+    def test_manifest_cannot_substitute_recorded_source_hash(self):
+        self.check_manifest_pin_tampering("sha256", "0" * 64)
+
+    def check_required_app_tampering(self, app):
+        self.build()
+        path = self.out / "apps-image.manifest.json"
+        manifest = json.loads(path.read_text())
+        manifest["built"]["required_apps"].remove(app)
+        path.write_text(json.dumps(manifest))
+        with self.assertRaises(ValueError):
+            build_image.load_manifest(path, IMAGE)
+
+    def test_manifest_cannot_omit_compiled_app_presence(self):
+        self.check_required_app_tampering("/opt/apps/bundle/bin/demo")
+
+    def test_manifest_cannot_omit_packaged_app_presence(self):
+        self.check_required_app_tampering("/usr/bin/ffmpeg")
+
+    def test_build_refuses_overwrite(self):
+        self.build()
+        with self.assertRaises(ValueError):
+            self.build()
+
+    def test_paths_with_spaces_and_shell_characters_are_literal_arguments(self):
+        self.out = self.root / "out ; touch BAD"
+        self.build()
+        self.assertFalse((self.root / "BAD").exists())
+        self.assertTrue((self.out / "apps-image.qcow2").exists())
+
+
+class GuestInstall(unittest.TestCase):
+    def built_hash_error(self, name):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / name
+            path.write_bytes(b"compiled output")
+            recipe = fixture()
+            item = recipe["builds"][0]
+            item.update(requires="nvidia-layer-static", cwd=directory)
+            item["outputs"] = [{"path": str(path), "sha256": "0" * 64}]
+            with patch.object(guest, "run"):
+                try:
+                    guest.build_apps(recipe, runtime=True)
+                except ValueError as error:
+                    return str(error)
+        return None
+
+    def test_guest_records_first_compiled_output_without_expected_hash_gate(self):
+        self.assertIsNone(self.built_hash_error("first"))
+
+    def test_guest_records_second_compiled_output_without_expected_hash_gate(self):
+        self.assertIsNone(self.built_hash_error("second"))
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.recipe = fixture()
+        self.calls = []
+        self.session = {"server_url": "http://10.0.2.100:1234"}
+        for layer, file in [
+            ("open", "requirements.lock"),
+            ("runtime", "requirements-runtime.lock"),
+        ]:
+            (self.root / file).write_text(common.requirements(self.recipe, layer))
+        self.root_patch = patch.object(guest, "ROOT", self.root)
+        self.root_patch.start()
+        self.addCleanup(self.root_patch.stop)
+
+        def get(pin, session):
+            p = self.root / pin["sha256"]
+            p.write_bytes(pin["id"].encode())
+            return p
+
+        self.get_patch = patch.object(guest, "get_input", side_effect=get)
+        self.get_mock = self.get_patch.start()
+        self.addCleanup(self.get_patch.stop)
+        self.command = patch.object(
+            guest, "run", side_effect=lambda argv, **kw: self.calls.append(argv)
+        )
+        self.command.start()
+        self.addCleanup(self.command.stop)
+
+    def install(self):
+        guest.install_wheels(self.recipe, self.session, "open")
+
+    def test_driver_staging_does_not_try_to_load_a_gpu_module(self):
+        recipe = common.read_recipe(IMAGE / "recipe.json")
+        driver = next(
+            p
+            for p in recipe["official_fetch"]
+            if p["kind"] == "run" and p["version"] == recipe["guest"]["nvidia_version"]
+        )
+        guest.install_one_official(driver, recipe, self.session, builder=False)
+        self.assertIn("--skip-module-load", self.calls[0])
+        self.assertNotIn("--no-kernel-modules", self.calls[0])
+
+    def test_guest_pip_installs_only_hashed_offline_wheels(self):
+        self.install()
+        argv = next(x for x in self.calls if "pip" in x)
+        for flag in [
+            "--require-hashes",
+            "--no-index",
+            "--only-binary=:all:",
+            "--no-cache-dir",
+        ]:
+            self.assertIn(flag, argv)
+
+    def test_guest_wheel_resolution_enforces_hashes_without_public_index(self):
+        self.install()
+        argv = next(x for x in self.calls if "pip" in x)
+        self.assertIn("--require-hashes", argv)
+        self.assertIn("--no-index", argv)
+        self.assertNotIn("--extra-index-url", argv)
+
+    def test_guest_actual_nonzero_command_refused(self):
+        self.command.stop()
+        with self.assertRaises(guest.subprocess.CalledProcessError):
+            guest.run([sys.executable, "-c", "import sys;sys.exit(7)"])
+
+    def test_guest_subprocess_is_argument_list_without_shell(self):
+        self.command.stop()
+        with patch.object(guest.subprocess, "run") as run:
+            guest.run(["cmake", "--build", "build"], capture=True)
+        args, kwargs = run.call_args
+        self.assertEqual(args[0], ["cmake", "--build", "build"])
+        self.assertTrue(kwargs["check"])
+        self.assertNotIn("shell", kwargs)
+
+    def test_guest_pip_failure_is_not_completion(self):
+        self.command.stop()
+        with patch.object(
+            guest, "run", side_effect=guest.subprocess.CalledProcessError(1, ["pip"])
+        ):
+            with self.assertRaises(guest.subprocess.CalledProcessError):
+                self.install()
+
+    def test_guest_lock_cannot_drift(self):
+        (self.root / "requirements.lock").write_text("demo==9.0")
+        with self.assertRaises(ValueError):
+            self.install()
+
+    def test_open_wheels_do_not_fetch_official_inputs(self):
+        self.recipe["official_fetch"] = [
+            {
+                "kind": "wheel",
+                "id": "nvidia",
+                "package": "nvidia-demo",
+                "version": "1.0",
+                "sha256": "0" * 64,
+            }
+        ]
+        self.install()
+        self.assertEqual(
+            [c.args[0]["id"] for c in self.get_mock.call_args_list], ["wheel"]
+        )
+
+
+class PipBytes(unittest.TestCase):
+    def setUp(self):
+        from types import SimpleNamespace
+
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        (self.root / "data.py").write_bytes(b"original")
+        dist = SimpleNamespace(
+            metadata={"Name": "demo"},
+            files=[Path("data.py")],
+            locate_file=lambda x: self.root / x,
+        )
+        self.metadata = patch.object(
+            guest.importlib.metadata, "distributions", return_value=[dist]
+        )
+        self.metadata.start()
+        self.addCleanup(self.metadata.stop)
+
+    def test_installed_pip_bytes_are_actually_hashed(self):
+        before = guest.pip_files()
+        (self.root / "data.py").write_bytes(b"changed")
+        self.assertNotEqual(guest.pip_files(), before)
+
+    def test_installed_pip_file_removal_is_not_invisible(self):
+        (self.root / "data.py").unlink()
+        with self.assertRaises(ValueError):
+            guest.pip_files()
+
+
+class HostAllowlist(unittest.TestCase):
+    def test_local_server_only_serves_pinned_paths(self):
+        import urllib.request
+
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "pin"
+            p.write_bytes(b"pinned")
+            with build_image.serve_inputs({"a" * 64: p}) as url:
+                local = url.replace("10.0.2.100", "127.0.0.1")
+                self.assertEqual(
+                    urllib.request.urlopen(local + "/" + "a" * 64).read(), b"pinned"
+                )
+                with self.assertRaises(urllib.error.HTTPError) as ctx:
+                    urllib.request.urlopen(local + "/../pin")
+                ctx.exception.close()
+
+    def test_local_server_does_not_accept_uploads(self):
+        import urllib.request
+
+        with build_image.serve_inputs({}) as url:
+            request = urllib.request.Request(
+                url.replace("10.0.2.100", "127.0.0.1") + "/new",
+                data=b"data",
+                method="POST",
+            )
+            with self.assertRaises(urllib.error.HTTPError) as ctx:
+                urllib.request.urlopen(request)
+            ctx.exception.close()
+
+
+class ForwardedInputs(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+
+    def argv(self, mode, url):
+        path = build_image.seed(fixture(), self.root, "b" * 32, mode, url)
+        with build_image.Channels(self.root, {"serial": 100, "inventory": 100}) as ch:
+            return build_image.qemu_argv(
+                fixture(), self.root / "disk", path, ch, "fake-qemu"
+            )
+
+    def test_builder_has_explicit_forward_to_pinned_input_server(self):
+        argv = self.argv("builder", "http://10.0.2.100:4321")
+        net = argv[argv.index("-netdev") + 1]
+        self.assertIn("restrict=on", net)
+        self.assertIn("guestfwd=tcp:10.0.2.100:4321-chardev:pin-http", net)
+        self.assertIn(
+            "socket,id=pin-http,host=127.0.0.1,port=4321,reconnect-ms=500", argv
+        )
+
+    def test_provisioning_can_only_forward_to_local_official_cache(self):
+        argv = self.argv("provision", "http://10.0.2.100:12345")
+        net = argv[argv.index("-netdev") + 1]
+        self.assertIn("guestfwd=tcp:10.0.2.100:12345-chardev:pin-http", net)
+        self.assertNotIn("cmd:", net)
+        self.assertIn(
+            "socket,id=pin-http,host=127.0.0.1,port=12345,reconnect-ms=500", argv
+        )
+
+    def test_provisioning_official_input_disk_is_explicitly_readonly(self):
+        path = build_image.seed(
+            fixture(),
+            self.root,
+            "b" * 32,
+            "provision",
+            "http://10.0.2.100:1234",
+            official_disk=self.root / "official-inputs.raw",
+        )
+        with build_image.Channels(self.root, {"serial": 100, "inventory": 100}) as ch:
+            argv = build_image.qemu_argv(
+                fixture(), self.root / "disk", path, ch, "fake-qemu"
+            )
+        self.assertTrue(any("id=official" in x and "readonly=on" in x for x in argv))
+        self.assertIn("virtio-blk-pci,drive=official,serial=KF-OFFICIAL", argv)
+
+    def test_input_forward_refuses_an_external_host(self):
+        with self.assertRaises(ValueError):
+            self.argv("assemble", "http://example.org:4321")
+
+    def test_input_forward_refuses_credentials(self):
+        with self.assertRaises(ValueError):
+            self.argv("assemble", "http://user:password@10.0.2.100:4321")
+
+    def test_verification_has_no_input_forward(self):
+        argv = self.argv("verify-open", "")
+        self.assertEqual(argv[argv.index("-netdev") + 1], "user,id=n0,restrict=on")
+        self.assertFalse(any("pin-http" in x for x in argv))
+
+    def test_input_server_keeps_forwarded_stream_for_multiple_requests(self):
+        import http.client
+        import urllib.parse
+
+        p = self.root / "pin"
+        p.write_bytes(b"pinned")
+        with build_image.serve_inputs({"a" * 64: p}) as url:
+            port = urllib.parse.urlsplit(url).port
+            connection = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+            self.addCleanup(connection.close)
+            connection.request("GET", "/" + "a" * 64, headers={"Connection": "close"})
+            response = connection.getresponse()
+            self.assertEqual(response.read(), b"pinned")
+            self.assertFalse(response.will_close)
+            first_socket = connection.sock
+            connection.request("GET", "/" + "a" * 64, headers={"Connection": "close"})
+            self.assertEqual(connection.getresponse().read(), b"pinned")
+            self.assertIs(connection.sock, first_socket)
+            connection.close()
+
+
+class MutationDiagnostics(unittest.TestCase):
+    def test_loader_error_is_never_silently_lost_from_mutant_diagnostics(self):
+        import mutants
+
+        output = "ERROR: missing (unittest.loader._FailedTest.missing)\n"
+        self.assertTrue(mutants.failures(output, "core", "ERROR"))
+
+    def test_class_fixture_error_also_invalidates_a_mutant_run(self):
+        import mutants
+
+        output = "ERROR: setUpClass (__main__.Sample)\n"
+        self.assertTrue(mutants.failures(output, "core", "ERROR"))
+
+
+class CommittedRecipe(unittest.TestCase):
+    def setUp(self):
+        self.recipe = common.read_recipe(IMAGE / "recipe.json")
+
+    def test_requirements_lock_matches_every_wheel_pin(self):
+        self.assertEqual(
+            (IMAGE / "requirements.lock").read_text(), common.requirements(self.recipe)
+        )
+        self.assertTrue(
+            all(not p.startswith("nvidia-") for p in common.locked_wheels(self.recipe))
+        )
+        self.assertEqual(
+            (IMAGE / "requirements-runtime.lock").read_text(),
+            common.requirements(self.recipe, "runtime"),
+        )
+
+    def test_every_local_input_matches_its_content_pin(self):
+        files = list(build_image.local_files(self.recipe, IMAGE))
+        self.assertGreater(len(files), 15)
+        for row, path in files:
+            self.assertEqual(row["sha256"], common.sha256_file(path))
+
+    def test_every_legacy_cuda_source_is_built(self):
+        sources = {p.stem for p in (IMAGE.parent / "src").glob("*.cu")}
+        builds = {b["name"] for b in self.recipe["builds"] if b["source"] == "local"}
+        self.assertTrue(sources <= builds)
+
+    def test_every_legacy_sample_and_driver_fatbin_is_in_inventory(self):
+        text = (IMAGE.parent / "build_bundle.sh").read_text()
+        samples = (
+            text.split('SAMPLES="', 1)[1].split('"', 1)[0].replace("\\\n", " ").split()
+        )
+        required = set(self.recipe["runtime_inventory"]["required_paths"])
+        for path in samples:
+            if path == "\\":
+                continue
+            self.assertIn(
+                "/opt/apps/bundle/samples/" + path.rsplit("/", 1)[-1], required
+            )
+        for name in ("vectorAdd_kernel64.fatbin", "matrixMul_kernel64.fatbin"):
+            self.assertIn("/opt/apps/bundle/samples/" + name, required)
+
+    def test_only_the_two_gate_models_are_included(self):
+        weights = [
+            a
+            for a in self.recipe["artifacts"]
+            if a["kind"] == "file" and a["target"].endswith((".safetensors", ".gguf"))
+        ]
+        self.assertEqual(
+            {a["id"] for a in weights},
+            {"qwen2-half-billion-weights", "qwen25-1.5b-q4km"},
+        )
+        for a in weights:
+            self.assertNotIn("/resolve/main/", a["url"])
+            self.assertNotIn("/resolve/master/", a["url"])
+
+    def test_gate_cuda_and_native_binaries_have_declared_outputs(self):
+        required = set(self.recipe["runtime_inventory"]["required_paths"])
+        gate = [
+            s.strip()
+            for s in (IMAGE.parent / "gate_list.txt").read_text().splitlines()
+            if s and not s.startswith("#")
+        ]
+        rows = (
+            (IMAGE.parent / "run_apps.sh")
+            .read_text()
+            .split("<<'EOF'", 1)[1]
+            .split("\nEOF", 1)[0]
+            .splitlines()
+        )
+        commands = {
+            row.split("|", 3)[0]: row.split("|", 3)[3]
+            for row in rows
+            if row.count("|") >= 3
+        }
+        import re
+
+        for name in gate:
+            cmd = commands[name]
+            for relative in re.findall(r"\$S/([A-Za-z0-9_]+)", cmd):
+                self.assertIn("/opt/apps/bundle/samples/" + relative, required)
+            for relative in re.findall(r"\$B/bin/([A-Za-z0-9_]+)", cmd):
+                self.assertIn("/opt/apps/bundle/bin/" + relative, required)
+
+    def test_recipe_declares_gpu_free_driver_staging(self):
+        for driver in self.recipe["official_fetch"]:
+            if driver["kind"] == "run":
+                self.assertIn("--skip-module-load", driver["install_argv"])
+                self.assertNotIn("--no-kernel-modules", driver["install_argv"])
+
+    def test_hashcat_and_nvidia_versions_have_official_deb_hashes(self):
+        debs = {a["package"]: a for a in self.recipe["artifacts"] if a["kind"] == "deb"}
+        self.assertEqual(debs["hashcat"]["version"], "6.2.6+ds1-1build2")
+        self.assertFalse(any(p.startswith("libnvidia") for p in debs))
+        driver = next(a for a in self.recipe["official_fetch"] if a["kind"] == "run")
+        self.assertEqual(driver["version"], "580.159.04")
+        for a in debs.values():
+            common.validate_pin(a)
+
+    def test_all_authored_builds_use_argv(self):
+        for b in self.recipe["builds"]:
+            for argv in b["commands"]:
+                common.check_argv(argv)
+                self.assertFalse(argv[0].endswith(".sh"))
+
+    def test_portable_llama_build_avoids_host_cpu_tuning(self):
+        argv = next(b for b in self.recipe["builds"] if b["name"] == "llama")[
+            "commands"
+        ][0]
+        self.assertIn("-DGGML_NATIVE=OFF", argv)
+        self.assertIn("-DCMAKE_CUDA_ARCHITECTURES=86", argv)
+
+    def test_seed_preserves_legacy_tap_address_and_slirp_dhcp(self):
+        network = self.recipe["guest"]["network"]["ethernets"]["apps"]
+        self.assertEqual(network["addresses"], ["192.168.77.2/24"])
+        self.assertTrue(network["dhcp4"])
+        self.assertEqual(network["routes"][0]["metric"], 500)
+
+
+if __name__ == "__main__":
+    unittest.main()

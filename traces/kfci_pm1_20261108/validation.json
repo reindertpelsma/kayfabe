@@ -1,0 +1,19 @@
+{
+  "status": "MEASURED GPU-FREE ONLY",
+  "date": "2026-11-08",
+  "base_revision": "50640c6053a697184664428f5ed4d9ce29d0589b",
+  "implementation_diff_sha256": "830d6c219589560e54d86dd5259ee90ba821277b0f0a383649e0732a30a22d56",
+  "python": "Python 3.14.4",
+  "existing_apps_tests_before": 64,
+  "existing_apps_tests_after": 64,
+  "new_tests": 134,
+  "new_mutant_baseline_tests": 114,
+  "payload_mutant_baseline_tests": 496,
+  "report_tests": 113,
+  "new_mutants": 48,
+  "payload_mutants": 19,
+  "minimum_distinct_killing_methods": 2,
+  "hardware_run": false,
+  "vm_run": false,
+  "worker_network_or_deploy": false
+}

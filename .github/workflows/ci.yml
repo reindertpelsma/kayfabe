@@ -51,7 +51,7 @@ jobs:
     name: stable — build, test, clippy, fmt, boundary
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Vast broker mocks and workflow boundary
         run: |
           npx --yes prettier@3.6.2 --check 'ci/vast-broker/**/*.js' 'ci/vast-broker/**/*.mjs'
@@ -64,10 +64,25 @@ jobs:
           node --test ci/vast-broker/test
           # Tier, release and admin-start mutants (wtier, 2026-11-05): each must be killed.
           node ci/vast-broker/scripts/mutate-tiers.mjs
+          # Proposed release matrix and payload contract: two named killers per mutant.
+          node ci/vast-broker/release-matrix-mutants.mjs
+          # RV1 admission/receipt grading and both SPEC lanes: two named killers each.
+          node ci/vast-broker/release-safety-mutants.mjs
+          # RV2 attribution, SPEC contract and finite-resource regressions: >=2 killers each.
+          node ci/vast-broker/rv2-mutants.mjs
+          # Official driver pins and media drift: two named killers per mutant.
+          node ci/vast-broker/driver-pins-mutants.mjs
+          # Seeded markets and worst-case renting use only the mocked Vast transport.
+          node ci/vast-broker/simulation-mutants.mjs
+          python3 scripts/ci/profile_resources.py
+          node ci/vast-broker/profile-resources-mutants.mjs
           # Evidence upload route mutants (2026-11-06): each must fail at least two tests.
           node ci/vast-broker/evidence-mutants.mjs
+          # Public log, run report and publisher mutants (2026-11-07): each must fail at least two tests.
+          node ci/vast-broker/report-mutants.mjs
           # Provider-status tolerance and close-line mutants (2026-11-06): each must fail at least two tests.
           node ci/vast-broker/provider-tolerance-mutants.mjs
+          node ci/vast-broker/denied-countries-mutants.mjs
           npm ci --prefix ci/vast-admin --ignore-scripts --no-audit --no-fund
           node --test ci/vast-admin/test/*.test.mjs
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1 (tip of master on 2026-10-31; toolchain: input is explicit)
@@ -299,7 +314,15 @@ jobs:
           python3 scripts/ci/dependencies.py
           python3 scripts/ci/debt.py frozen
           python3 scripts/ci/workflow_lint.py
+          # Python < 3.14 uses the zstd CLI for bounded evidence inspection.
+          if ! command -v zstd >/dev/null 2>&1; then
+            sudo apt-get update -q
+            sudo apt-get install -y -q zstd
+          fi
           python3 -m unittest discover -s scripts/ci -p 'test_*.py'
+          python3 scripts/ci/image_size_mutants.py
+          python3 scripts/ci/kfci_mutants.py
+          python3 -m unittest discover -s scripts/evidence -p 'test_*.py'
           bash scripts/bench/qemu_identity_selftest.sh
           bash scripts/bench/box/birth_census.sh --selftest
       # ★ The hexagonal boundary gate (l1_concurrency.md §6.2, decision #37). The
@@ -1049,12 +1072,13 @@ jobs:
       # (383, a census of pre-existing prose across a tree several agents write at once).
       - name: "Claim-ledger gate (a measurement word names its run, not a source read)"
         run: python3 scripts/ci/debt.py claims
-      # A GPU UUID identifies one physical board. A ratchet like the claim ledger: the hits that
-      # were already in traces/ and docs/ are fingerprinted in scripts/ci/gpu-uuids-baseline.json
-      # (never the UUIDs themselves); a new one fails, and so does a baseline entry that is gone
-      # (run `scripts/ci/no_gpu_uuids.py --shrink`), so the count only goes down.
-      - name: "GPU-UUID ratchet (no new board identifier in traces/ or docs/)"
-        run: python3 scripts/ci/no_gpu_uuids.py
+      # Scan every tracked regular file and symlink text, including bounded archive members.
+      # The empty UUID baseline remains shrink-only; additions and stale entries fail.
+      - name: "GPU-UUID ratchet (including bounded archive members)"
+        run: |
+          python3 scripts/ci/no_gpu_uuids.py
+          python3 scripts/ci/gpu_uuid_mutants.py
+          python3 scripts/evidence/gpu_uuid_scrub_mutants.py
       # The public tree must build, test and be reviewed without the private repository
       # (docs/design/V3_PROVENANCE.md section 2). The gate fails on the repository's name anywhere
       # outside the two policy documents; three older mentions are listed in the script as
@@ -2183,7 +2207,7 @@ jobs:
     name: aarch64 — core cross-checks (no x86 assumptions)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1 (tip of master on 2026-10-31; toolchain: input is explicit)
         with:
           toolchain: 1.99.0   # pinned with rust-toolchain.toml; bump both together
@@ -2243,7 +2267,7 @@ jobs:
     name: firmware — kf-gop (x86_64-unknown-uefi), kf3's PE check, size, local stand-in
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1 (tip of master on 2026-10-31; toolchain: input is explicit)
         with:
           toolchain: 1.99.0   # pinned with rust-toolchain.toml; bump both together
@@ -2379,7 +2403,7 @@ jobs:
     # skip, as the Makefile documents. Added 2026-10-21 (owner: "the broker is something CI can test well").
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Vast Worker admission in workerd (Wrangler dependencies)
         env:
           MINIFLARE_ASSERT_BODIES_CONSUMED: "true"
@@ -2405,8 +2429,8 @@ jobs:
     # broker lockfile). No Cloudflare. docs/design/V3_PLATFORM_TESTING.md.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '22'
       - name: Format, tests and mutants
@@ -2432,7 +2456,8 @@ jobs:
           node --test ci/vast-broker/test/treekey.test.js ci/vast-broker/test/treekey-parity.test.js \
             ci/vast-broker/test/requirements.test.js ci/vast-broker/test/results-store.test.js \
             ci/vast-broker/test/store-ingest.test.js ci/vast-broker/test/host-claims.test.js \
-            ci/vast-broker/test/edits-no-secrets-on-vast.test.js ci/vast-broker/test/die-rules-turing.test.js
+            ci/vast-broker/test/edits-no-secrets-on-vast.test.js ci/vast-broker/test/die-rules-turing.test.js \
+            ci/vast-broker/test/run-report.test.js ci/vast-broker/test/run-report-extra.test.js
           node ci/vast-broker/store-mutants.mjs
 
   slow:
@@ -2443,7 +2468,7 @@ jobs:
     if: github.event.schedule == '43 2 * * *' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1 (tip of master on 2026-10-31; toolchain: input is explicit)
         with:
           toolchain: 1.99.0   # pinned with rust-toolchain.toml; bump both together

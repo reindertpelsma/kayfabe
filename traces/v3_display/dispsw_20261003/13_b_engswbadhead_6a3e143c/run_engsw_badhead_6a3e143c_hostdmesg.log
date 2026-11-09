@@ -1,4 +1,4 @@
-[ 9760.991968] NVRM: GPU at PCI:0000:00:08: GPU-e36737d2-9080-9fc2-b9d4-a959768aade6
+[ 9760.991968] NVRM: GPU at PCI:0000:00:08: GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0ae0
 [ 9760.992018] NVRM: Xid (PCI:0000:00:08): 32, pid=122843, name=qemu-system-x86, channel 0x0000002c intr 00800000
 [ 9761.555354] NVRM: Xid (PCI:0000:00:08): 32, pid=122843, name=qemu-system-x86, channel 0x0000002c intr 00800000
 [ 9762.053759] NVRM: Xid (PCI:0000:00:08): 32, pid=122843, name=qemu-system-x86, channel 0x0000002c intr 00800000

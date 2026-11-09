@@ -1,3 +1,5 @@
+> **STATUS: SUPERSEDED, 2026-09-21** (archived, w822). Successor: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) and [`THE_ARCHITECTURE_v3.md`](../design/THE_ARCHITECTURE_v3.md). Historical record: a `STATUS` line further down says what the document claimed when it was written; it is no longer a claim about the current tree.
+>
 > ⊘⊘⊘ **ARCHIVED — THIS DESCRIBES A SUPERSEDED ARCHITECTURE. IT IS REFERENCE, NOT CURRENT.**
 > The live design is `docs/design/THE_DESIGN.md`. This file is kept because its *measurements*,
 > its *ogkm findings* and its *reasoning* remain useful — its **architecture does not**. Do not
@@ -5,7 +7,7 @@
 
 # The CE executor decision tree, and the trusted scratch VAS
 
-**STATUS: LIVE — owner's design 2026-08-07, EXTENDED by the owner 2026-08-11 (§Scope-2026-08-11
+**STATUS AT WRITING: LIVE — owner's design 2026-08-07, EXTENDED by the owner 2026-08-11 (§Scope-2026-08-11
 below, which folds in above the §Scope paragraph it extends).** The 2026-08-07 rule about
 executor choice is unchanged and unqualified. What 2026-08-11 adds is a *second* axis — the
 same populations, now with a rule about **which thread** may do the work — and it is new

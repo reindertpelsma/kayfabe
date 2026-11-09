@@ -305,11 +305,6 @@ pub(crate) const fn nvos46_map_flags(extra: u32, page_size: u32, fixed: bool) ->
         & !NVOS46_FLAGS_KERNEL_MAPPING_ENABLE
 }
 
-fn host_version_gate(reported: Option<&str>) -> Result<String, String> {
-    kf_abi::host_driver::check(reported).map_err(|r| r.to_string())?;
-    Ok(reported.unwrap_or_default().to_string())
-}
-
 fn read_version(ctl: &CharDevice) -> Option<String> {
     const SIZE: usize = 72;
     let mut arg = [0u8; SIZE];
@@ -522,7 +517,7 @@ impl HostRm {
         // ★★★ R2 — the version string, and IT IS NOW A GATE. `cmd = '2'` is the
         // query-non-strict form; `cmd = 0` is STRICT and deliberately returns EINVAL after
         // filling the string in, which the open driver enforces
-        // (`C: src/qemu/virtio_nvgpu.c:1157-1170`). See [`host_version_gate`] for why the
+        // (`C: src/qemu/virtio_nvgpu.c:1157-1170`). See [`host_abi_gate`] for why the
         // rung changed and why the answer is a refusal rather than a table.
         let (version, abi) =
             host_abi_gate(read_version(&ctl).as_deref()).map_err(|detail| BringUpError {

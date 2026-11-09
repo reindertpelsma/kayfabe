@@ -1395,20 +1395,6 @@ impl MmuFaultInfoParams {
         (u64::from(self.addr_hi) << 32) | u64::from(self.addr_lo)
     }
 
-    /// The fault string as far as its first NUL, lossily — **for a log line only**.
-    ///
-    /// ⊘ Never used to decide anything. See [`Self::fault_string`] for why the raw bytes are
-    /// what the struct carries.
-    #[must_use]
-    pub fn fault_string_lossy(&self) -> String {
-        let end = self
-            .fault_string
-            .iter()
-            .position(|&b| b == 0)
-            .unwrap_or(Self::FAULT_STRING_LEN);
-        String::from_utf8_lossy(&self.fault_string[..end]).into_owned()
-    }
-
     /// Decode from a little-endian image of at least [`Self::SIZE`] bytes.
     ///
     /// # Errors
@@ -3635,34 +3621,6 @@ impl McServiceInterruptsRequest {
             &self.engines.to_le_bytes(),
         )
     }
-}
-
-/// Decode an `NV2080_CTRL_MC_SERVICE_INTERRUPTS_PARAMS` image.
-///
-/// # Errors
-/// [`McServiceInterruptsError`], by variant.
-pub fn decode_mc_service_interrupts(
-    params: &[u8],
-) -> Result<McServiceInterruptsRequest, McServiceInterruptsError> {
-    if params.len() < McServiceInterruptsRequest::SIZE {
-        return Err(McServiceInterruptsError::ShortParams { got: params.len() });
-    }
-    Ok(McServiceInterruptsRequest {
-        engines: u32::from_le_bytes(
-            params[0..4]
-                .try_into()
-                .expect("4 bytes inside a SIZE-checked image"),
-        ),
-    })
-}
-
-/// Encode an `NV2080_CTRL_MC_SERVICE_INTERRUPTS_PARAMS` image.
-#[must_use]
-pub fn encode_mc_service_interrupts(req: &McServiceInterruptsRequest) -> Vec<u8> {
-    let mut out = vec![0u8; McServiceInterruptsRequest::SIZE];
-    req.encode_into(&mut out)
-        .expect("SIZE bytes is exactly what encode_into needs");
-    out
 }
 
 /// Why a [`McServiceInterruptsRequest`] image was refused at **decode**.

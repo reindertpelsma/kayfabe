@@ -1,0 +1,150 @@
+{
+  "results": [
+    {
+      "id": "nvidia-driver-580",
+      "size": 397162548,
+      "status": 200
+    },
+    {
+      "id": "official-cuda_cccl",
+      "size": 934952,
+      "status": 200
+    },
+    {
+      "id": "official-cuda_nvcc",
+      "size": 49996208,
+      "status": 200
+    },
+    {
+      "id": "official-cuda_cudart",
+      "size": 1126072,
+      "status": 200
+    },
+    {
+      "id": "official-cuda_nvrtc",
+      "size": 34380240,
+      "status": 200
+    },
+    {
+      "id": "official-cuda_profiler_api",
+      "size": 16188,
+      "status": 200
+    },
+    {
+      "id": "official-libcublas",
+      "size": 522827284,
+      "status": 200
+    },
+    {
+      "id": "official-libcufft",
+      "size": 476376920,
+      "status": 200
+    },
+    {
+      "id": "official-libcurand",
+      "size": 81729748,
+      "status": 200
+    },
+    {
+      "id": "official-libcusolver",
+      "size": 159512244,
+      "status": 200
+    },
+    {
+      "id": "official-libcusparse",
+      "size": 236134716,
+      "status": 200
+    },
+    {
+      "id": "official-libnvjitlink",
+      "size": 28960912,
+      "status": 200
+    },
+    {
+      "id": "official-pip-nvidia-cublas-cu12",
+      "size": 363438805,
+      "status": 200
+    },
+    {
+      "id": "official-pip-nvidia-cuda-cupti-cu12",
+      "size": 13813957,
+      "status": 200
+    },
+    {
+      "id": "official-pip-nvidia-cuda-nvrtc-cu12",
+      "size": 24640306,
+      "status": 200
+    },
+    {
+      "id": "official-pip-nvidia-cuda-runtime-cu12",
+      "size": 883737,
+      "status": 200
+    },
+    {
+      "id": "official-pip-nvidia-cudnn-cu12",
+      "size": 664752741,
+      "status": 200
+    },
+    {
+      "id": "official-pip-nvidia-cufft-cu12",
+      "size": 211459117,
+      "status": 200
+    },
+    {
+      "id": "official-pip-nvidia-curand-cu12",
+      "size": 56305206,
+      "status": 200
+    },
+    {
+      "id": "official-pip-nvidia-cusolver-cu12",
+      "size": 127936057,
+      "status": 200
+    },
+    {
+      "id": "official-pip-nvidia-cusparse-cu12",
+      "size": 207454763,
+      "status": 200
+    },
+    {
+      "id": "official-pip-nvidia-cusparselt-cu12",
+      "size": 150057751,
+      "status": 200
+    },
+    {
+      "id": "official-pip-nvidia-nccl-cu12",
+      "size": 188654414,
+      "status": 200
+    },
+    {
+      "id": "official-pip-nvidia-nvjitlink-cu12",
+      "size": 21066810,
+      "status": 200
+    },
+    {
+      "id": "official-pip-nvidia-nvtx-cu12",
+      "size": 99144,
+      "status": 200
+    },
+    {
+      "id": "official-pip-torch",
+      "size": 768372201,
+      "status": 200
+    },
+    {
+      "id": "official-pip-torchvision",
+      "size": 7282566,
+      "status": 200
+    },
+    {
+      "id": "official-pip-triton",
+      "size": 253159365,
+      "status": 200
+    },
+    {
+      "id": "official-pip-cupy-cuda12x",
+      "size": 90980377,
+      "status": 200
+    }
+  ],
+  "status": "official-urls-answer"
+}

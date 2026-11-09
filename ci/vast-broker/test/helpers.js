@@ -236,6 +236,16 @@ export class MockCloud {
           content: content.replace(/(.{60})/g, '$1\n'),
         });
       }
+      if (u.pathname.endsWith('/contents/scripts/ci/vast_payload.py')) {
+        const value =
+          this.payloadText ??
+          readFileSync(new URL('../../../scripts/ci/vast_payload.py', import.meta.url), 'utf8');
+        return Response.json({
+          type: 'file',
+          encoding: 'base64',
+          content: Buffer.from(value).toString('base64'),
+        });
+      }
       const run = u.pathname.match(/\/actions\/runs\/(\d+)(?:\/attempts\/\d+)?$/);
       if (run) return Response.json(this.runs.get(run[1]) ?? this.run);
       if (/\/commits\/[a-f0-9]+$/.test(u.pathname))
@@ -281,7 +291,10 @@ export class MockCloud {
     if (u.pathname === '/api/v0/bundles') {
       if (body.type !== 'ondemand') return new Response('invalid type', { status: 400 });
       const row = (offer, price) => ({
-        dph_base: typeof price === 'number' ? price - (offer.storage_cost * 120) / 720 : price,
+        dph_base:
+          typeof price === 'number'
+            ? price - (offer.storage_cost * (body.allocated_storage ?? body.disk ?? 120)) / 720
+            : price,
         ...offer,
         dph_total: price,
       });
@@ -308,7 +321,7 @@ export class MockCloud {
         onstart: body.onstart,
         image_uuid: body.image,
         actual_status: 'running',
-        dph_base: price - (offer.storage_cost * 120) / 720,
+        dph_base: price - (offer.storage_cost * (body.allocated_storage ?? body.disk ?? 120)) / 720,
         dph_total: price,
         storage_cost: offer.storage_cost,
         inet_down_cost: offer.inet_down_cost,
@@ -391,6 +404,7 @@ export async function setup(overrides = {}) {
     },
     sweep: (...args) => service.sweep(...args),
     storeTrees: (...args) => service.storeTrees(...args),
+    publishRuns: (...args) => service.publishRuns(...args),
     adminPlan: (...args) => service.adminPlan(...args),
     adminStart: (...args) => service.adminStart(...args),
     adminStopBatch: (...args) => service.adminStopBatch(...args),

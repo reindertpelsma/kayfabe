@@ -88,13 +88,13 @@ Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Re
 Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_TYPE_ENG_DESC, engineDesc, ENGINE_INFO_TYPE_RUNLIST, &pKernelChannelGroupApi->pKernelChannelGroup->runlistId) @ kernel_channel_group_api.c:1252
 Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2886
 Oct 04 02:24:10 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engineDesc) @ kernel_channel_group_api.c:1264
-Oct 04 02:24:27 ubuntu kernel: NVRM: GPU at PCI:0000:00:08: GPU-9fdaccfb-1920-54dc-3d1b-48aaa43e2692
+Oct 04 02:24:27 ubuntu kernel: NVRM: GPU at PCI:0000:00:08: GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e188f
 Oct 04 02:24:27 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 31, pid=291246, name=kayfabe-rm-ladd, channel 0x00000004, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
 Oct 04 02:24:30 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 31, pid=291246, name=kayfabe-rm-ladd, channel 0x00000004, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
 Oct 04 02:24:33 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 31, pid=291246, name=kayfabe-rm-ladd, channel 0x00000005, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
 Oct 04 02:24:36 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 31, pid=291246, name=kayfabe-rm-ladd, channel 0x00000004, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
 Oct 04 02:24:48 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
-Oct 04 02:24:53 ubuntu kernel: NVRM: GPU at PCI:0000:00:08: GPU-9fdaccfb-1920-54dc-3d1b-48aaa43e2692
+Oct 04 02:24:53 ubuntu kernel: NVRM: GPU at PCI:0000:00:08: GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e188f
 Oct 04 02:24:53 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 31, pid=291622, name=kayfabe-rm-ladd, channel 0x00000005, intr 00000000. MMU Fault: ENGINE GR0_PBDMA0 HUBCLIENT_ESC faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
 Oct 04 02:25:00 ubuntu kernel: NVRM: kchannelIsSchedulable_IMPL: Cannot schedule externally-owned channel 0x0000000a with unbound allocations!
 Oct 04 02:25:03 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
@@ -307,12 +307,12 @@ Oct 04 02:28:06 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Re
 Oct 04 02:28:06 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_TYPE_ENG_DESC, engineDesc, ENGINE_INFO_TYPE_RUNLIST, &pKernelChannelGroupApi->pKernelChannelGroup->runlistId) @ kernel_channel_group_api.c:1252
 Oct 04 02:28:06 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2886
 Oct 04 02:28:06 ubuntu kernel: NVRM: nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engineDesc) @ kernel_channel_group_api.c:1264
-Oct 04 02:30:21 ubuntu kernel: NVRM: GPU at PCI:0000:00:08: GPU-9fdaccfb-1920-54dc-3d1b-48aaa43e2692
+Oct 04 02:30:21 ubuntu kernel: NVRM: GPU at PCI:0000:00:08: GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e188f
 Oct 04 02:30:21 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 31, pid=293641, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
 Oct 04 02:30:24 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 31, pid=293641, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
 Oct 04 02:30:27 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 31, pid=293641, name=qemu-system-x86, channel 0x0000001b, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
 Oct 04 02:30:31 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 31, pid=293641, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
-Oct 04 02:33:14 ubuntu kernel: NVRM: GPU at PCI:0000:00:08: GPU-9fdaccfb-1920-54dc-3d1b-48aaa43e2692
+Oct 04 02:33:14 ubuntu kernel: NVRM: GPU at PCI:0000:00:08: GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e188f
 Oct 04 02:33:14 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 31, pid=294839, name=qemu-system-x86, channel 0x0000001b, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
 Oct 04 02:41:36 ubuntu kernel: x86/PAT: kf3-vamgr:297663 freeing invalid memtype [mem 0x1000a80000-0x1000beffff]
 Oct 04 02:41:36 ubuntu kernel: x86/PAT: kf3-vamgr:297663 freeing invalid memtype [mem 0x1000bf0000-0x1000deffff]

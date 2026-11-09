@@ -33,7 +33,7 @@ def sample_from_regex(rx):
     if "|" in s and "(" not in s and "[" not in s.replace("[0-9]", ""):
         s = s.split("|")[0]
     s = re.sub(r"\(([^()|]*)\|[^()]*\)", r"\1", s)
-    for a, b in (("\\d+", "1"), ("[0-9]+", "1"), ("\\s*", ""), ("\\s+", " "), (" *", " "), (".*", "x"), (".+", "x")):
+    for a, b in (("[0-9a-f]{64}", "a" * 64), ("\\d+", "1"), ("[0-9]+", "1"), ("\\s*", ""), ("\\s+", " "), (" *", " "), (".*", "x"), (".+", "x")):
         s = s.replace(a, b)
     s = re.sub(r"\\(.)", r"\1", s)
     return s.lstrip("^").rstrip("$")
@@ -139,6 +139,9 @@ class MockVm:
             f.write(b"\x89PNG mock")
         self.shots.append(png_path)
         return True
+
+    def attach_official_disk(self, iso):
+        return "mock-official-readonly"
 
     def attach_disk(self, iso):
         self.attached = iso
@@ -301,8 +304,8 @@ class Server(threading.Thread):
         st = self.st
         ok = st.adapters_ok and st.display_problem == "CM_PROB_NONE"
         info = dict(ok=ok, cd=st.cd, image_identity=self.opt(rest, "-ExpectedIdentity"), notes=[], nvidia_adapters=1 if ok else 0,
-                    smi="NVIDIA GeForce RTX 4070, 595.91, 12282 MiB", os="mock", boot_utc=st.boot_utc, user="MOCK\\vast", explorer=True)
-        return (0 if ok else 3, "KFSETUP " + json.dumps(info) + "\n")
+                    smi="NVIDIA GeForce RTX 4070, "+st.world.scenario.get("_driver_version","580.88")+", 12282 MiB", os="mock", boot_utc=st.boot_utc, user="MOCK\\vast", explorer=True)
+        return (0 if ok else 3, "KFSETUP " + json.dumps(dict(info, official_cd="P:" if self.st.world.scenario.get("_official_media", True) else None, driver_version=self.st.world.scenario.get("_driver_version", "580.88"))) + "\n")
 
     def ps_kf_stage(self, rest):
         pkg = self.opt(rest, "-Pkg")

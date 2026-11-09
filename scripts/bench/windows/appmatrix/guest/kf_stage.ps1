@@ -17,12 +17,24 @@ function Done($ok, $detail) {
 }
 $marker = "C:\kfapps\.staged\$Pkg.json"
 if (Test-Path $marker) { $m = Read-Json $marker; if ($m.ok) { $res.mode = 'cached'; $res.ok = $true; $res.detail = 'already staged'; Write-Output ('KFSTAGE ' + (ConvertTo-Json -InputObject $res -Compress)); exit 0 } }
-$tab = Read-Json 'C:\kf\stage.json'
-if (-not $tab) { Done $false 'C:\kf\stage.json missing' }
-$def = $tab.$Pkg
-if (-not $def) { Done $false "package $Pkg not in stage.json" }
 $cd = (Get-Content -Raw 'C:\kf\cd.txt').Trim()
 if (-not $cd -or -not (Test-Path $cd)) { Done $false 'app disk not mounted' }
+$bundleTable = Join-Path $cd 'stage.json'
+# Shell-free bundles carry their actual archive staging table. This overrides legacy
+# image_form=tree hints in a controller's source manifest; old images use the pushed table.
+if (Test-Path $bundleTable) { $tab = Read-Json $bundleTable }
+else { $tab = Read-Json 'C:\kf\stage.json' }
+if (-not $tab) { Done $false 'stage.json missing' }
+$def = $tab.$Pkg
+# A package may live only on the official disk. Never substitute another package.
+if (-not $def -or -not (Test-Path (Join-Path $cd ('pkg\' + $Pkg)))) {
+    $officialCd = if (Test-Path 'C:\kf\official_cd.txt') { (Get-Content -Raw 'C:\kf\official_cd.txt').Trim() } else { '' }
+    if ($officialCd -and (Test-Path (Join-Path $officialCd 'stage.json'))) {
+        $officialTab = Read-Json (Join-Path $officialCd 'stage.json')
+        if ($officialTab.$Pkg) { $cd = $officialCd; $def = $officialTab.$Pkg }
+    }
+}
+if (-not $def -or -not (Test-Path (Join-Path $cd ('pkg\' + $Pkg)))) { Done $false "missing-official-media:$Pkg" }
 $res.mode = $def.mode
 $src = Join-Path $cd ('pkg\' + $Pkg)
 $dest = Join-Path 'C:\kfapps' $def.dest

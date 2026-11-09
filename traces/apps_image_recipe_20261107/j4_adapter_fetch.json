@@ -1,0 +1,10 @@
+{
+  "observed_utc": "2026-11-07T22:13:26.100177+00:00",
+  "status": "PIN_VERIFIED",
+  "id": "official-cuda_cudart",
+  "sha256": "f74689258a60fd9c5bdfa7679458527a55e22442691ba678dcfaeffbf4391ef9",
+  "size": 1126072,
+  "url": "https://developer.download.nvidia.com/compute/cuda/redist/cuda_cudart/linux-x86_64/cuda_cudart-linux-x86_64-12.6.77-archive.tar.xz",
+  "fetcher_sha256": "ea2663162e69141216050ab9be275b4bee1adaf35163dd270f69ee2925433d93",
+  "scope": "Actual LB1 adapter calling the merged J4 Download API, anonymous official source, two streams, no VM/GPU/install. Payload directory deleted on exit."
+}

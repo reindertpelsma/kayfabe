@@ -1,0 +1,13 @@
+JOB_START side 2026-11-07T02:12:25+00:00
+SETUP_apt=ok
+SETUP_torch=ok
+SETUP_pylibs=ok
+IMPORT_OK 2.6.0+cu124 0.21.0+cu124 4.46.3 13.3.0
+HF_MODEL_CACHED
+SETUP_gguf=ok
+Blender 4.5.0
+SETUP_blender=ok
+SETUP_geekbench=SKIPPED (policy: docs/DOWNLOADS.md)
+/dev/root       214G   58G  156G  28% /
+SETUP_SIDE_DONE
+JOB_EXIT side rc=0 2026-11-07T02:14:31+00:00

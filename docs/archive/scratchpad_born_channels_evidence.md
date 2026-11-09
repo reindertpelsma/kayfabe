@@ -1,3 +1,5 @@
+> **STATUS: SUPERSEDED, 2026-09-21** (archived, w822). Successor: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) and [`THE_ARCHITECTURE_v3.md`](../design/THE_ARCHITECTURE_v3.md). Historical record: a `STATUS` line further down says what the document claimed when it was written; it is no longer a claim about the current tree.
+>
 > ⊘⊘⊘ **ARCHIVED — THIS DESCRIBES A SUPERSEDED ARCHITECTURE. IT IS REFERENCE, NOT CURRENT.**
 > The live design is `docs/design/THE_DESIGN.md`. This file is kept because its *measurements*,
 > its *ogkm findings* and its *reasoning* remain useful — its **architecture does not**. Do not
@@ -5,7 +7,7 @@
 
 # If the SCRATCHPAD births a guest channel instead of the per-proc isolate
 
-**STATUS: LIVE — research deliverable, w748, 2026-09-16.**
+**STATUS AT WRITING: LIVE — research deliverable, w748, 2026-09-16.**
 Evidence-only. **No decision is recommended here**; the owner rules on posture.
 
 Scope: what changes, in RM and in our own tree, if the long-lived VM-wide **scratchpad isolate

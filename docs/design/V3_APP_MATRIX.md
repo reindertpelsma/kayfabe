@@ -1,15 +1,34 @@
 # V3 app matrix — which real CUDA apps work in a kayfabe v3 fat guest
 
+**STATUS: LIVE, 2026-11-07 — current result is §R5 (kf3 `144557e4`, RTX 4090 AD102, vast 59497053, destroyed): host 70/70
+runnable apps, guest 66/70 in ONE boot (no wedge). The four failures are the UVM four, each failing alone in a fresh boot too, each
+with one host Xid 31 and a bare-metal PASS. The per-app table, the gate lists, the times (host 14.1 min, guest 19.3 min,
+`apps_gate.sh` full 17.9 min, middle 7.5 min) and the draft payload stage (disabled by default) are in
+[`traces/apps_linux_20261107/README.md`](../../traces/apps_linux_20261107/README.md).** The text below is the history of R1-R4.
+The result of record before R5 was §R3, below: 61/65 apps at kf3 `2830988f` (RTX 3060).
+
 ★ *2026-09-30 (§R4, partial): the same matrix at kf3 `738c90e5` (= `3f67ed95`, pre-CDP-fix) on an RTX 3070 —
 guest OFF 60/65 + 6/6, identical to R3; PM, 100-process and fast-path-ON runs not run.*
-**STATUS: LIVE, 2026-09-28 — current result is §R3 (kf3 `4c48ca0c` = master `8ab92bf4`'s code,
+⊘ *Superseded 2026-11-07 by the STATUS above (this was the STATUS of 2026-09-28):* **current result is §R3 (kf3 `4c48ca0c` = master `8ab92bf4`'s code,
 measured 01:20–02:39 UTC): 60/65 apps work, 6/6 stream probes, 100/100 processes in one boot.**
 ★ *2026-09-30 (`v3-cdp`, §R3's 2026-09-30 bullet): the CDP child never ran because the guest's
 SKED-reflected page was mapped as memory; fixed. Full matrix at kf3 `2830988f` (branch `v3-cdp`, not yet
 on master): **61/65 apps + 6/6 probes** in one boot, host 71/71; the four failures are the UVM four.*
-⊘ *Superseded by §R3 (the headline below is R2's):* **LIVE, 2026-09-26 — current result is §R2 (kayfabe `670bd310`, measured 05:00–07:30 UTC):
+⊘ *Superseded by §R3 (the headline below is R2's):* **Headline of 2026-09-26 — current result is §R2 (kayfabe `670bd310`, measured 05:00–07:30 UTC):
 58/65 apps work (was 35/65).** §0–§5 below are the first measurement at `79848341`, kept unchanged
 as the baseline R2 is compared against; their cause list is SUPERSEDED by §R2.3 (A, B, D, E, F fixed).
+
+## Reproducing the image (DESIGN-ONLY, 2026-11-07)
+
+**RESEARCH, 2026-11-08:** [chroot construction without KVM](V3_APPS_IMAGE_CHROOT_EVALUATION.md) is evaluated as an additional backend for independent release-box builds. It is not implemented or qualified; the working QEMU path and old bash paths remain available.
+
+**CODE READ:** the new [recipe and Python builder](V3_APPS_IMAGE_RECIPE.md) separate an open Ubuntu main/universe image from
+transient official NVIDIA provisioning. NVIDIA proprietary files belong in neither image/ISO nor R2/GitHub: the box host fetches
+pinned official installers per run and supplies them on a transient read-only data disk to the offline guest. Shared-CUDA-runtime builds are exported through a
+file/hash/linkage audit into a fresh image, then scanned. CuPy is runtime-only because its wheel bundles proprietary CUDA headers;
+CDP quicksort is a declared static-device-runtime exception built only at provisioning. The comparison is **PINNED input inventory only; BUILT binary/image hashes are informational**. Observed verbatim scripts and recipe-written model selectors must match their input pins. Missing apps still fail. **DESIGN:** build twice, cross-verify against the first
+manifest and run the gate before adoption or hosting. **MEASURED, 2026-11-07:** LB1 ran no VM/GPU; R5 qualifies the old image at its revision.
+All old bash paths remain untouched. Steps and limits: [design](V3_APPS_IMAGE_RECIPE.md), [manual](../howto/linux-apps-image.md).
 
 ## R4 — re-run at kf3 `738c90e5` (code of `3f67ed95`, before the CDP fix), RTX 3070, 2026-09-30 — PARTIAL
 

@@ -9,8 +9,9 @@
 // 2026-11-05 (wtier): profile `release` carries the large tier's legs; it is reachable only from the
 // owner's admin start route, never from a GitHub token (src/workflow-authority.js has no release
 // workflow). tier.test.js pins the tables.
+import { releaseEnvironment } from './release-matrix.js';
 import { DEFAULTS } from './defaults.js';
-import { profileCaps } from './policy.js';
+import { profileCaps, applyResourceProfile } from './policy.js';
 export const TIERS = Object.freeze({
   check: Object.freeze({ windows: true }),
   sweep: Object.freeze({ windows: false }),
@@ -82,7 +83,17 @@ export { profileCaps };
 // box when no second machine of the die is offered) and KF_STAGES (extra stages, release only) are
 // sent only when they differ from the default, so a check or sweep box sees today's environment
 // plus KF_TIER.
-export function tierEnvironment(profile, { tierName, windowsRuns = 1, stages = [] } = {}) {
+// 2026-11-07 (Windows apps stage, PROPOSED, docs/design/V3_WINDOWS_APPS_GATE.md): `winApps` (small, mid, full) is
+// sent as KF_WINAPPS only when the caller passes it. Nothing passes it today, so no box sees the field and no run
+// changes; the Worker setting that turns it on per tier is the owner's decision (and a deploy), not part of this change.
+// 2026-11-07 (SPECviewperf stage, PROPOSED, docs/design/V3_SPEC_GATE.md): `spec` (lanea, laneb, both) is sent as KF_SPEC
+// only when the caller passes it, only for the release profile and only together with the specviewperf stage slot (the box
+// refuses either alone). The release planner assigns lanes only behind the disabled stage flag;
+// the proposed matrix and absent executor independently prevent rentals.
+export function tierEnvironment(
+  profile,
+  { tierName, windowsRuns = 1, stages = [], releaseMatrix, spec, winApps } = {},
+) {
   const env = { KF_MERGE_WINDOWS: tier(profile).windows ? '1' : '0' };
   if (tierName !== undefined) env.KF_TIER = tierName;
   if (windowsRuns !== 1) {
@@ -93,6 +104,25 @@ export function tierEnvironment(profile, { tierName, windowsRuns = 1, stages = [
     if (profile !== 'release' || stages.some((s) => !/^[a-z][a-z0-9_]{0,31}$/.test(s)))
       throw Error('stages');
     env.KF_STAGES = stages.join(':');
+  }
+  if (releaseMatrix !== undefined) {
+    if (profile !== 'release') throw Error('release matrix profile');
+    Object.assign(env, releaseEnvironment(releaseMatrix));
+  }
+  if (winApps !== undefined) {
+    // needs the Windows stage, and only a named profile
+    if (!tier(profile).windows || !['small', 'mid', 'full'].includes(winApps))
+      throw Error('winapps');
+    env.KF_WINAPPS = winApps;
+  }
+  if (spec !== undefined) {
+    if (
+      profile !== 'release' ||
+      !stages.includes('specviewperf') ||
+      !['lanea', 'laneb', 'both'].includes(spec)
+    )
+      throw Error('spec');
+    env.KF_SPEC = spec;
   }
   return env;
 }
@@ -106,7 +136,8 @@ export function hardLimit(cfg, profile) {
 }
 // Apply a profile to a per-request configuration: every later price, reservation and deadline
 // computation reads cfg.hard / cfg.ttl.
-export function applyProfile(cfg, profile) {
+export function applyProfile(cfg, profile, tierName) {
+  applyResourceProfile(cfg, profile, tierName);
   cfg.profile = profile;
   cfg.hard = hardLimit(cfg, profile);
   cfg.ttl = cfg.hard;

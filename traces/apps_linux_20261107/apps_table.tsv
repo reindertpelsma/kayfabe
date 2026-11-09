@@ -1,0 +1,72 @@
+app	class	host	guest_batched	guest_alone	host_secs	guest_secs	guest_xid	kf3_refusals	key_host	key_guest	reason
+nvidia_smi	GATE	PASS	PASS	-	2	1	0	18	-	-	
+deviceQuery	GATE	PASS	PASS	-	2	3	0	29	-	-	
+vectorAdd	GATE	PASS	PASS	-	2	2	0	22	-	-	
+vectorAddDrv	GATE	PASS	PASS	-	1	2	0	20	-	-	
+matrixMul	GATE	PASS	PASS	-	2	3	0	19	Performance= 4898.58 GFlop/s, Time= 0.027 msec, Size= 131072000 Ops, WorkgroupSize= 1024 threads/block	Performance= 4744.84 GFlop/s, Time= 0.028 msec, Size= 131072000 Ops, WorkgroupSize= 1024 threads/block	
+matrixMulDrv	GATE	PASS	PASS	-	2	1	0	19	Processing time: 0.083000 (ms)	Processing time: 0.102000 (ms)	
+bandwidthTest	GATE	PASS	PASS	-	3	3	0	19	32000000 23.0	32000000 14.9	
+simpleStreams	GATE	PASS	PASS	-	3	3	0	19	[ simpleStreams ]	[ simpleStreams ]	
+asyncAPI	GATE	PASS	PASS	-	2	2	0	19	-	-	
+simpleAtomicIntrinsics	GATE	PASS	PASS	-	1	2	0	17	Processing time: 9.211000 (ms)	Processing time: 8.538000 (ms)	
+simpleCallback	GATE	PASS	PASS	-	2	2	0	17	-	-	
+simpleOccupancy	GATE	PASS	PASS	-	2	2	0	17	Elapsed time: 0.10272ms	Elapsed time: 0.350912ms	
+simpleZeroCopy	GATE	PASS	PASS	-	2	1	0	17	-	-	
+simpleCooperativeGroups	GATE	PASS	PASS	-	2	2	0	17	-	-	
+concurrentKernels	GATE	PASS	PASS	-	2	1	0	17	-	-	
+simpleIPC	GATE	PASS	PASS	-	2	3	0	17	-	-	
+UnifiedMemoryStreams	KAYFABE_DEFECT	PASS	FAIL	FAIL	3	8	0	30	-	CUDA error at UnifiedMemoryStreams.cu:221 code=13(CUBLAS_STATUS_EXECUTION_FAILED) "cublasDgemv(handle[tid + 1], CUBLAS_OP_N, t.size, t.size, &one, t.data, t.siz	host PASS, guest FAIL alone in a fresh boot
+UnifiedMemoryPerf	KAYFABE_DEFECT	PASS	FAIL	FAIL	12	4	0	30	16384 26.806 21.535 66.219 105.068 25.775 26.225 16.089 16.432	-	host PASS, guest FAIL alone in a fresh boot
+conjugateGradientUM	KAYFABE_DEFECT	PASS	FAIL	FAIL	2	6	0	30	-	-	host PASS, guest FAIL alone in a fresh boot
+cudaTensorCoreGemm	GATE	PASS	PASS	-	3	3	0	14	TFLOPS: 15.43	TFLOPS: 15.53	
+bf16TensorCoreGemm	GATE	PASS	PASS	-	5	12	0	14	TFLOPS: 116.56	TFLOPS: 85.58	
+globalToShmemAsyncCopy	GATE	PASS	PASS	-	2	2	0	14	-	-	
+cdpSimpleQuicksort	GATE	PASS	PASS	-	2	2	0	14	-	-	
+graphMemoryNodes	GATE	PASS	PASS	-	3	2	0	14	-	-	
+simpleCudaGraphs	GATE	PASS	PASS	-	2	2	0	14	-	-	
+simpleCUBLAS	GATE	PASS	PASS	-	2	2	0	14	-	-	
+simpleCUFFT	GATE	PASS	PASS	-	2	1	0	14	-	-	
+conjugateGradient	GATE	PASS	PASS	-	2	2	0	14	-	-	
+MersenneTwisterGP11213	GATE	PASS	PASS	-	2	1	0	14	-	-	
+reduction	GATE	PASS	PASS	-	2	2	0	12	Reduction, Throughput = 65.7402 GB/s, Time = 0.00102 s, Size = 16777216 Elements, NumDevsUsed = 1, Workgroup = 256	Reduction, Throughput = 24.3558 GB/s, Time = 0.00276 s, Size = 16777216 Elements, NumDevsUsed = 1, Workgroup = 256	
+sortingNetworks	GATE	PASS	PASS	-	6	5	0	14	Average time: 0.328000 ms	Average time: 0.414000 ms	
+scan	GATE	PASS	PASS	-	2	3	0	14	-	-	
+histogram	GATE	PASS	PASS	-	3	3	0	14	histogram64() time (average) : 0.00004 sec, 1600211.3530 MB/sec	histogram64() time (average) : 0.00006 sec, 1206451.5070 MB/sec	
+BlackScholes	GATE	PASS	PASS	-	2	2	0	14	Effective memory bandwidth: 1369.853894 GB/s	Effective memory bandwidth: 1139.708977 GB/s	
+fastWalshTransform	GATE	PASS	PASS	-	6	5	0	14	GPU time: 0.735000 ms; GOP/s: 393.750980	GPU time: 1.128000 ms; GOP/s: 256.566463	
+transpose	GATE	PASS	PASS	-	2	1	0	14	transpose simple copy , Throughput = 1971.4198 GB/s, Time = 0.00396 ms, Size = 1048576 fp32 elements, NumDevsUsed = 1, Workgroup = 256	transpose simple copy , Throughput = 307.6369 GB/s, Time = 0.02540 ms, Size = 1048576 fp32 elements, NumDevsUsed = 1, Workgroup = 256	
+stream_triad	GATE	PASS	PASS	-	2	2	0	14	METRIC stream_triad_GBs 932.0	METRIC stream_triad_GBs 928.9	
+reduce	GATE	PASS	PASS	-	3	2	0	14	METRIC reduce_GBs 767.7	METRIC reduce_GBs 764.5	
+nbody	GATE	PASS	PASS	-	1	1	0	14	METRIC nbody_GFLOPs 12765.7	METRIC nbody_GFLOPs 12714.9	
+blackscholes	GATE	PASS	PASS	-	2	2	0	14	METRIC blackscholes_Mopts 57599.0	METRIC blackscholes_Mopts 57294.0	
+mandelbrot	GATE	PASS	PASS	-	2	2	0	14	METRIC mandelbrot_Mpix_iter_s 17470128.4	METRIC mandelbrot_Mpix_iter_s 17431531.7	
+conv2d	GATE	PASS	PASS	-	2	1	0	14	METRIC conv2d_GFLOPs 5483.7	METRIC conv2d_GFLOPs 5244.8	
+sgemm_cublas	GATE	PASS	PASS	-	3	2	0	14	METRIC sgemm_cublas_TFLOPs 59.07	METRIC sgemm_cublas_TFLOPs 58.78	
+fft_cufft	GATE	PASS	PASS	-	2	2	0	14	METRIC fft_cufft_GFLOPs 3433.2	METRIC fft_cufft_GFLOPs 3397.0	
+sha256	GATE	PASS	PASS	-	2	1	0	14	METRIC sha256_MHs 5754.8	METRIC sha256_MHs 5673.1	
+memcpy2d	GATE	PASS	PASS	-	2	2	0	14	METRIC memcpy2d_GBs 9.18	METRIC memcpy2d_GBs 6.21	
+attach_verify	KAYFABE_DEFECT	PASS	FAIL	FAIL	1	8	0	30	-	-	host PASS, guest FAIL alone in a fresh boot
+stream_default	GATE	PASS	PASS	-	1	2	0	14	-	-	
+stream_created	GATE	PASS	PASS	-	2	1	0	14	-	-	
+stream_nonblocking	GATE	PASS	PASS	-	2	2	0	14	-	-	
+stream_perthread	GATE	PASS	PASS	-	2	1	0	14	-	-	
+stream_two	GATE	PASS	PASS	-	2	2	0	14	-	-	
+stream_created2nd	GATE	PASS	PASS	-	2	2	0	14	-	-	
+gpu_burn	GATE	PASS	PASS	-	95	94	0	23	GPU 0: OK	GPU 0: OK	
+torch_correct	GATE	PASS	PASS	-	9	53	0	14	-	-	
+torch_ai_bench	GATE	PASS	PASS	-	15	21	0	14	CHECK bert_infer_seqs ok	CHECK bert_infer_seqs ok	
+hf_generate	GATE	PASS	PASS	-	9	15	0	14	OUTSHA hf_generate 0d973108a6251e14	OUTSHA hf_generate 0d973108a6251e14	
+cupy	GATE	PASS	PASS	-	3	4	0	14	-	-	
+llama_cpp_gen	GATE	PASS	PASS	-	4	4	0	14	OUTSHA llama_cpp 30451301af8e011d	OUTSHA llama_cpp 30451301af8e011d	
+llama_bench	GATE	PASS	PASS	-	3	3	0	14	| qwen2 1.5B Q4_K - Medium | 1.04 GiB | 1.78 B | CUDA | 99 | tg64 | 483.43 ± 19.87 |	| qwen2 1.5B Q4_K - Medium | 1.04 GiB | 1.78 B | CUDA | 99 | tg64 | 417.12 ± 11.69 |	
+vulkaninfo	GATE	PASS	PASS	-	2	2	0	8	-	-	
+vkpeak	GATE	PASS	PASS	-	445	451	0	4	fp32-scalar = 62058.39 GFLOPS	fp32-scalar = 62106.86 GFLOPS	
+egl_offscreen	GATE	PASS	PASS	-	7	6	0	6	METRIC egl_gl_Mtri_s 7.3	METRIC egl_gl_Mtri_s 7.4	
+clinfo	GATE	PASS	PASS	-	4	3	0	28	-	-	
+clpeak	GATE	PASS	PASS	-	80	120	0	14	Global memory bandwidth (GBPS)	Global memory bandwidth (GBPS)	
+nvenc_h264	GATE	PASS	PASS	-	5	6	0	15	frame= 600	frame= 600	
+nvenc_hevc	GATE	PASS	PASS	-	5	6	0	14	frame= 600	frame= 600	
+nvdec_h264	GATE	PASS	PASS	-	7	6	0	14	frame= 600 fps=0.0 q=-0.0 Lsize=N/A time=00:00:20.00 bitrate=N/A speed=50.2x	frame= 600 fps=0.0 q=-0.0 Lsize=N/A time=00:00:19.96 bitrate=N/A speed=37.2x	
+hashcat	GATE	PASS	PASS	-	11	22	0	17	Speed.#1.........: 43063.9 MH/s (0.17ms) @ Accel:256 Loops:676 Thr:64 Vec:1	Speed.#1.........: 5296.5 MH/s (0.09ms) @ Accel:256 Loops:169 Thr:32 Vec:1	
+blender_cycles	GATE	PASS	PASS	-	8	10	0	28	BLENDER_OK CUDA gpu=NVIDIA GeForce RTX 4090 mean=0.6405	BLENDER_OK CUDA gpu=NVIDIA GeForce RTX 4090 mean=0.6405	
+geekbench_gpu	POLICY_SKIP	NOTRUN	-	-	0	-	-	-	-	-	Geekbench: docs/DOWNLOADS.md says not allowed for scripted use (Pro licence); the free mode uploads the result

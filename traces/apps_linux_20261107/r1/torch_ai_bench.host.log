@@ -1,0 +1,18 @@
+=== torch_ai_bench side=host start=2026-11-07T02:25:59+00:00 host=ubuntu cmd: /opt/apps/venv/bin/python /opt/apps/bundle/share/ai_bench.py
+[ai] device NVIDIA GeForce RTX 4090 torch 2.6.0+cu124
+METRIC torch_matmul_fp32_TFLOPs 58.97
+CHECK torch_matmul_fp32_TFLOPs ok
+METRIC torch_matmul_fp16_TFLOPs 168.16
+CHECK torch_matmul_fp16_TFLOPs ok
+METRIC resnet50_infer_imgs 2560.55
+CHECK resnet50_infer_imgs ok
+METRIC resnet50_infer_amp_imgs 5199.38
+CHECK resnet50_infer_amp_imgs ok
+METRIC resnet50_train_imgs 806.33
+CHECK resnet50_train_imgs ok
+METRIC vit_b16_infer_imgs 1008.66
+CHECK vit_b16_infer_imgs ok
+METRIC bert_infer_seqs 1715.15
+CHECK bert_infer_seqs ok
+[ai] done
+=== end rc=0 secs=15 2026-11-07T02:26:14+00:00

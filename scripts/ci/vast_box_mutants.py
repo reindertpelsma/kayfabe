@@ -25,6 +25,8 @@ FILES = [
     "vast_onstart.sh",
     "vast_report.py",
     "vast_evidence.py",
+    "vast_run_report.py",
+    "app_policy.py",
     "kf-box-kill",
     "kf-box-blob-url",
 ]

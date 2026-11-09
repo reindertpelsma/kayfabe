@@ -1,5 +1,7 @@
 # w385 — the concurrent-fuzz run logs
 
+**STATUS: ANSWERED, 2026-09-06.** Index of the committed run logs of the w385 concurrent-fuzz ladder (the red run, the fix replay, the watchdog control and the wide arms) from a rented box that no longer exists; the result is recorded and the logs are not updated. Read on 2026-11-07: it describes the pre-v3 `kayfabe-*` isolate tree, and the design document it points to (`docs/design/w385_the_concurrent_fuzz.md`) now lives at `docs/archive/w385_the_concurrent_fuzz.md`.
+
 Source `b16dca06`..`2db47b0e`, RTX 3060 (GA106), host driver **580.159.04 open** kernel
 module, kernel `6.8.0-59-generic`, vast instance **50080465** (19 cores, destroyed after the
 run). ⊘ **The rented box is not the artefact; these files are.**

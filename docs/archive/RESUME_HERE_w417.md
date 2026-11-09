@@ -1,3 +1,5 @@
+> **STATUS: SUPERSEDED, 2026-09-21** (archived, w822). Successor: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) and [`THE_ARCHITECTURE_v3.md`](../design/THE_ARCHITECTURE_v3.md). Historical record: a `STATUS` line further down says what the document claimed when it was written; it is no longer a claim about the current tree.
+>
 > ⊘⊘⊘ **ARCHIVED — THIS DESCRIBES A SUPERSEDED ARCHITECTURE. IT IS REFERENCE, NOT CURRENT.**
 > The live design is `docs/design/THE_DESIGN.md`. This file is kept because its *measurements*,
 > its *ogkm findings* and its *reasoning* remain useful — its **architecture does not**. Do not
@@ -5,7 +7,7 @@
 
 # RESUME HERE — w417 (supersedes `RESUME_HERE_w414.md`)
 
-**STATUS: LIVE, 2026-09-11.** Supersedes `RESUME_HERE_w414.md` in full — that doc's central
+**STATUS AT WRITING: LIVE, 2026-09-11.** Supersedes `RESUME_HERE_w414.md` in full — that doc's central
 claim (*"there is NO general operand path"*) is **half right and the other half was the bug**.
 
 ## Where the LLM actually stands

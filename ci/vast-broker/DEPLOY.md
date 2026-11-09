@@ -1,7 +1,8 @@
 # Owner deployment and independent cleanup
 
-STATUS: LIVE, 2026-11-06. The sections "Result store (D1)", "Tiers and the release run" (both added
-2026-11-05) and "Evidence bucket" (added 2026-11-06) describe deployments that have not been run.
+STATUS: LIVE, 2026-11-07. The sections "Result store (D1)", "Tiers and the release run" (both added
+2026-11-05), "Evidence bucket" (added 2026-11-06) and "Public logs and run reports" (added 2026-11-07)
+describe deployments that have not been run.
 
 [CODE READ: wrangler.toml, deployment.json, deploy.mjs] The owner/controller deploys; no round
 performs a deployment or a provider call. Keep `RENTING_ENABLED=false` until acceptance.
@@ -102,6 +103,12 @@ deploy helper at deploy time, not by CI (final review C1). After any
 change under `src/`, `defaults.json` or the lockfile, record the new hash in both files. Preserve
 the SQLite LEDGER namespace and migration when updating.
 
+[MEASURED 2026-11-07, J1, local build only] After merging the Windows apps proposal with `next` and applying the required formatter,
+two lockfile-pinned wrangler dry-runs emitted the same module SHA-256:
+`2dc7308ac2fca1e4542690c71a690ce05bcbff01857065d74d5bdf0a1ca12fc2`.
+Both reviewed-source pins are updated under the rule above. This is not a deployment record:
+no Worker call, upload, setting change or bundle upload occurred. The Windows apps stage is still opt-in.
+
 ## Provider status tolerance (built 2026-11-06, NOT DEPLOYED)
 
 STATUS: LIVE as code, 2026-11-06, on branch `claude/vast-tolerance-20261106`; nothing deployed. The rule,
@@ -194,8 +201,7 @@ $1/hour, $6 daily, $30 rolling, $8 reserve, 75-minute boot and a 300-minute hard
 check profile (lane 2, 2026-11-04: Windows required on the master gate; the sweep keeps 180,
 `src/tier.js`; deploy the reaper with `REAPER_HARD_MINUTES` 300 first).
 MAX_INET_USD_PER_GB defaults to 0.005 in each direction; the offer query, admission and contract
-recheck enforce it. DENIED_COUNTRIES defaults to CU, IR, KP, SY, CN, HK, MO (owner ruling
-2026-10-24: CN, HK and MO boxes repeatedly had broken or very slow CDN/Ubuntu-mirror access) and
+recheck enforce it. DENIED_COUNTRIES defaults to CU, IR, KP, SY, CN, HK, MO, RU, BY (owner update 2026-11-08) and
 applies before price and country preference. Besides the ISO alpha-2 code, the alpha-3 code
 and the names Vast or a geolocation database may print (CHINA, HONG KONG SAR, MACAO, SYRIAN ARAB
 REPUBLIC, "IRAN, ISLAMIC REPUBLIC OF", "KOREA, DEMOCRATIC PEOPLE'S REPUBLIC OF", ...) map to the
@@ -341,6 +347,12 @@ in `src/benchdata.js`; any other name is 404, and nothing lists the bucket:
 | `specviewperf-15.0.0.CHECKSUMS.txt` | `specviewperf-15.0.0/CHECKSUMS.txt` |
 | `specviewperf-15.0.0.SPEC_General_License.pdf` | `specviewperf-15.0.0/SPEC_General_License.pdf` |
 | `specviewperf-15.0.0.SPECviewperf-Setup.exe` | `specviewperf-15.0.0/original/SPECviewperf-Setup-15.0.0.exe` |
+| `winapps-open.iso` | `winapps-open/kfapps.iso` |
+| `winapps-open.manifest.json` | `winapps-open/manifest.json` |
+
+The last two rows are PROPOSED (2026-11-07, Windows apps stage, `docs/design/V3_WINDOWS_APPS_GATE.md`): the app disk of the Windows app matrix, packaged once by a person from
+redistributable packages only. They are not deployed and no object exists until the owner uploads it; until then the
+stage's answer is RETRY class MEDIA.
 
 Limits (defaults in `defaults.json`): the URL lives at most 1200 s and never past the run's next
 deadline (under 30 s left is a 401); at most 4 URLs per object per run, counted in the run
@@ -511,8 +523,9 @@ default exactly that, at most 8), so one slot always stays free for the master g
 committed account cap of 1 the plan says `NO_SLOTS`. Optional: `RELEASE_COST_CAP_USD` (default 40,
 at most `RELEASE_DAILY_USD`), `RELEASE_MAX_PRICE_USD_HOUR` (2), `RELEASE_DAILY_USD` (40),
 `RELEASE_DAILY_RENTALS` (24), `RELEASE_HARD_RUNTIME_MINUTES` (300, may only be lowered),
-`RELEASE_RERUNS_PER_LEG` (1, 0 to 2), `RELEASE_STAGES` (`[]`; `["specviewperf"]` only once its
-lane exists), `RELEASE_DIES`, `MIDDLE_ROTATION` (JSON family lists, no spaces),
+`RELEASE_RERUNS_PER_LEG` (1, 0 to 2), `RELEASE_STAGES` (`[]`; `["specviewperf"]` only once the lane
+plan below exists: the lane exists since 2026-11-07 as a DRAFT, `docs/design/V3_SPEC_GATE.md`, and a box that gets the slot without
+`KF_SPEC` refuses it before any stage), `RELEASE_DIES`, `MIDDLE_ROTATION` (JSON family lists, no spaces),
 `MIDDLE_VRAM_FLOOR_MB` (0 = off; TBD from the trio footprints) and `ACCOUNT_DAILY_USD`. The shared
 `ROLLING_SPEND_USD` (default 30) also bounds a release: the offline plan of the synthetic market
 estimates 18.63 USD from SYNTHETIC prices, so a release in a month with other spend needs it raised.
@@ -556,6 +569,16 @@ a commit never refuses that commit's own master gate with `BUDGET:sha-gap`.
 `/bench-data` scope (unchanged, noted by review F10): any live box can ask for a presigned
 SPECviewperf URL; restricting it to boxes whose run lists the `specviewperf` stage is left for the
 SPECviewperf lane.
+
+SPECviewperf stage, PROPOSED 2026-11-07 (`docs/design/V3_SPEC_GATE.md`; nothing here is deployed and nothing changes today): the box
+runs one lane per box, `KF_SPEC=lanea|laneb|both`, with `KF_STAGES=specviewperf` (large tier only). `src/tier.js` can send `KF_SPEC`
+(`tierEnvironment(profile, {stages, spec})`, tested) but no caller does. To turn the stage on the owner decides: (1) which leg of a die
+sends which lane (proposal: the first of two machines `lanea`, the second `laneb`; a die with one machine needs a second rental for
+lane B); (2) a release verdict that needs BOTH lane rows (`specviewperf_lanea`, `specviewperf_laneb`) before it counts the stage as
+passed, because `releaseVerdict` today counts the stage on one PASS; (3) the disk request for release legs: a lane needs about 130 GB
+free and the whole tree 190 GB, and the Worker asks for 120 GB (`diskGb`, `src/vast.js`); the native run requested 300 GB with a
+220 GB floor. The run report drops every string that names the benchmark (`runreport.js`), so the stage's rows reach the report as
+`spec_viewsets*`.
 
 The reaper limit does not change: the release hard limit is at most 300 minutes, equal to
 `REAPER_HARD_MINUTES`, so no reaper deploy is needed first.
@@ -884,3 +907,120 @@ Worker request body of 8 MiB is delivered in full to the gateway Worker; the mem
 isolate holding two such bodies (two copies each while they are joined, about 32 MiB); and that the
 lifecycle rule applies to keys written by the binding. The local tests use a fake bucket and call the
 ledger service in-process, not a Durable Object.
+
+
+## Public logs and run reports (full logs, structured reports, host sessions)
+
+STATUS: DESIGN-ONLY as a deployment, 2026-11-07. [CODE READ: wrangler.toml, src/publiclog.js,
+src/runreport.js, src/publish.js, src/index.js, src/ledger.js, ci/platform-api/migrations/0004;
+GPU-free node, python and mutation tests only.] No real R2 bucket, no real D1 database, no Worker
+and no box has run any of it. Contract: `/root/night/REPORT_CONTRACT.md` (coordinator, 2026-11-07).
+
+What it does. When a run is settled (any reason: result, timeout, stop, provider fault), the cron
+publishes, OFF the serialized teardown queue and with bounded waits, two objects to the PUBLIC R2
+bucket `kayfabe-logs-public` (served at `https://logs.kayfabe.dev`): `<run id>/log.txt` (the whole
+log, secrets redacted, and nothing else changed but one prefix on forged lines; see the bounds below) and `<run id>/report.json` (the
+box's structured report, bounded and re-validated by the Worker, with the Worker's own identity
+fields). The run id is `vast-<github run>-<attempt>-<leg>`. The same report goes to D1 (`ci_run_reports`,
+`ci_subruns`, `ci_run_tests`, `ci_run_perf`, `ci_run_apps`, migration 0004). The public API serves it
+([ci/platform-api/README.md](../platform-api/README.md)). The verdict, the teardown and the budget never
+depend on any of it: the publisher runs after the sweep, a failure is one log line (fixed word, never
+a message). An entry that cannot finish backs off (1, 2, 4 minutes, then 5) so that a few stuck runs never keep the others from being published; it is tried at most 60 times (about 4.5 hours, inside the 6 hours the pieces are kept), then dropped.
+
+| Name | Kind | Where | Notes |
+|---|---|---|---|
+| `LOGS_BUCKET` | R2 binding | `wrangler.toml` (committed, `[[r2_buckets]]`) | bucket `kayfabe-logs-public`; write-only use (`put`); the Worker never reads or lists it |
+| `LOGS_BASE` | public var | `wrangler.toml` `[vars]` | `https://logs.kayfabe.dev`; only a https origin on kayfabe.dev is accepted (the report's `log.url`) |
+| (none) | secret | | no new secret; `deploy.mjs` is unchanged: it already passes `--x-provision=false` (as for `EVIDENCE_BUCKET`), so a bucket that does not exist FAILS the deploy instead of being created without its settings |
+
+The bucket already exists and is public through the custom domain `logs.kayfabe.dev` (attached by the
+coordinator on 2026-11-07, per the contract). Do not create it from a deploy.
+
+Order (coordinator only; a coding lane never runs these):
+
+1. Merge the PR to `next`, then the `next` -> master batch. Master's `runner.py` pins the deployed
+   bundle, so the Worker is deployed only after master carries the new `deployment.json` hash.
+2. Apply migration 0004 from the public API's directory, after looking at what is applied:
+   ```sh
+   cd ci/platform-api
+   npx wrangler d1 migrations list kayfabe-platform --remote
+   npx wrangler d1 migrations apply kayfabe-platform --remote
+   ```
+   `0004_ci_run_reports.sql` only adds tables and indexes (a test pins that it contains no ALTER, DROP,
+   DELETE, UPDATE or INSERT and leaves the tables of 0001-0003 unchanged). A Worker deployed before the
+   migration still publishes the log (the R2 write does not need D1); the report step logs one
+   `RETRY_LATER` line per tick (why `error`) until the tables exist. The public API answers a run page
+   without the new tables (no report, no subruns); `/v1/ci/subruns` and `/v1/ci/stats` answer a fixed
+   500 until the migration is applied.
+3. Deploy the CI Worker (`node ci/vast-broker/deploy.mjs <vars-file> --dry-run`, then without
+   `--dry-run`); the helper refuses unless the bundle hashes to `deployment.json`.
+4. Deploy the public API (`cd ci/platform-api && npx wrangler deploy`); its `LOGS_BASE` is in its
+   `wrangler.toml`.
+5. Check after the first run that ended: `https://logs.kayfabe.dev/vast-<run>-<attempt>-0/log.txt` and
+   `report.json` answer 200; `GET https://api.kayfabe.dev/v1/ci/runs/vast-<run>-<attempt>-0` shows `log`,
+   `subruns` and `report`; `npx wrangler d1 execute kayfabe-platform --remote --command "SELECT COUNT(*) FROM ci_subruns"`.
+
+Rollback: remove the `[[r2_buckets]]` block with `LOGS_BUCKET` and redeploy (nothing is stored or
+published; the report route still keeps one report per rental until the ledger expires it), or delete
+`ROW_TAG_KEY` (the result store, and with it the report route, switch off). The objects in the bucket
+and the D1 tables can stay.
+
+### What the full log can and cannot contain
+
+[CODE READ 2026-11-07; numbers are the committed limits, not measurements.]
+
+- It is the text the box's reporter delivered to the Worker, whole, in order, joined, then redacted:
+  the box's `[kf-report]` markers, its own lines, and the Worker's `[Worker] ...` lines (selection,
+  provider status, close reason). Addresses, URLs, UUIDs, hashes, ANSI sequences, tabs and non-ASCII
+  text are NOT changed (the display scrub of the runner, `src/sanitize.js`, is a different, unchanged
+  path: it feeds the GitHub log and the status relay, never this file).
+- The ledger keeps this text in `plog:<run key>:<n>` values (one per post, at most 60000 bytes each)
+  next to the display relay (`log:<run key>:<n>`, 16384-byte chunks of sanitised text). Its only limit
+  is the 16 MiB cap of the public log itself (`LOG_MAX_BYTES`): what does not fit is counted and named
+  in a marker line at the end of the log. Both are deleted with the run's record `LOG_RETENTION_HOURS`
+  (6) after the run ended (`Ledger.expire`); the R2 object has no expiry in this code.
+- It CANNOT contain more than the box's reporter sends. The reporter (`scripts/ci/vast_report.py`,
+  `Limits`) sends at most 3,000,000 bytes of request bodies in at most 1500 posts, cuts every line at
+  4000 bytes (`...[line truncated, N bytes dropped]`), and when a cap binds keeps the END of the log and
+  says `[kf-report] N bytes omitted`. The Worker closes a rental that sends more than `reportBytes`
+  (4194304) or 2000 posts (`LIMIT`). So today the published log is at most about 3 MB of box text plus
+  the Worker's lines: the 16 MiB cap is a bound that this channel cannot reach. NOT raised in this change:
+  a larger channel needs a new box and a new Worker together (an old Worker closes the rental above 4 MiB),
+  and the runner pinned in master reads the relay with its own 4 MiB budget. The way to do it later is an
+  environment variable the Worker sets for new boxes (as `KF_RUN_REPORT`), with `reportBytes` raised in
+  the same change.
+- It CANNOT contain text the box never sent (output after the grace period, a box that was lost before
+  it reported), nor text from reports the Worker refused (a closed rental answers 401).
+- Redaction: exact values (the run token of every leg and its 16-character prefix and suffix, the nonces
+  of every leg, the secret path, the Access pair, every Worker secret of at least 8 characters, and the
+  Access pair and path the box was given at rent time, kept in the rent record so that a rotation while
+  the run waits for publication does not leave the old values unredacted) and shapes (JWT, `Bearer`, presigned-URL
+  parameters, private-key blocks, Cloudflare Access headers, Vast API keys, GitHub tokens, URLs with
+  credentials, `password=`-style assignments of 8 or more characters). A secret that the Worker does not
+  hold and that has none of these shapes (for example a bare random password, which the guest password is)
+  is NOT recognised: the box-side evidence scanner covers the evidence bundle, not this log. This is the
+  main residual risk of publishing the log whole. The same redaction runs over every string of
+  report.json before it is written to the bucket or D1 (review of #282, F1).
+- Forged lines: box text is stored apart from the Worker's own lines, and at publication a box line that
+  starts with `[Worker] ` or `[kayfabe-log] ` is prefixed `[box] `, so the Worker's lines and the cap marker
+  cannot be forged. Stage markers (`KF_PAYLOAD_STAGE_START/END`) can still be forged by a box and only steer
+  that run's own `log_range`.
+
+Known follow-ups (review of #282, not done in this change): the guest password is never known to the
+Worker (a box-side stream redaction in `vast_report.py`, mirroring the evidence scanner, would close it);
+the key-block scan is quadratic on 16 MiB of BEGIN lines with no END (about 5 s in the reviewer's probe,
+bounded to about 4 MiB by the box channel); R2 `put` does not refuse to overwrite; `nosniff` and a
+sandbox CSP belong in a Cloudflare Transform Rule on `logs.kayfabe.dev`; D1 calls in the publisher have no
+timeout; the 0004 tables have no retention.
+
+
+**CODE READ — J2 RV1 correction, 2026-11-07 (not deployed):** release plans remain
+visible but a proposed matrix is refused before every rental, including cron
+retries. A future executable matrix requires reviewed minima/ABI and no blockers,
+plus selected-commit reporter receipt capability 1 and payload executor capability
+1 in addition to box protocol 7. Today's payload declares executor capability 0.
+Do not enable it by editing only status or flags. Release PASS requires the exact
+matrix driver/subrun receipts; ordinary protocol-7 PASS rows cannot certify it.
+An attributed planned subrun FAIL is sticky and never earns a retry. SPEC stays
+disabled; enabling it plans and prices separate A/B leases and requires both lane
+rows per die. See [the design and review corrections](../../docs/design/V3_RELEASE_MATRIX.md).

@@ -1,0 +1,844 @@
+{
+ "schema": 1,
+ "status": "LIVE, 2026-11-08. Owner DX1 decisions: overlays manual, UVM known unsupported; gate_profiles.py enforces the profiles.",
+ "open_packages": [
+  "blender",
+  "clpeak_ocl",
+  "hashcat",
+  "hf_model",
+  "hf_wheels",
+  "llama_vulkan",
+  "python_embed",
+  "qwen_gguf",
+  "sevenzip",
+  "vkpeak"
+ ],
+ "owner_decision": {
+  "packages": {
+   "ffmpeg": "GPL build remains outside the open bundle; dated pin verified 2026-11-07 from the official BtbN release and downloaded artifact. Software definition approved; redistribution/storage decision unchanged.",
+   "gravitymark": "Tellusim freeware EULA: free to download, redistribution not granted",
+   "furmark2": "Geeks3D freeware licence: EULA unread, redistribution not granted",
+   "gputest": "Geeks3D freeware licence: redistribution not granted",
+   "vulkan_sdk": "LunarG SDK installer: used locally only, not redistributed"
+  },
+  "apps": [
+   "d3d11va_h264",
+   "dxva2_h264",
+   "edge_video_h264",
+   "edge_video_vp9",
+   "furmark_gl_bench",
+   "furmark_gl_stress",
+   "furmark_glinfo",
+   "furmark_knot_gl",
+   "furmark_vk_bench",
+   "furmark_vkinfo",
+   "gputest_fur",
+   "gputest_gi",
+   "gputest_pixmark_piano",
+   "gputest_plot3d",
+   "gputest_tess",
+   "gputest_triangle",
+   "gravitymark_d3d11",
+   "gravitymark_d3d12",
+   "gravitymark_d3d12_raster",
+   "gravitymark_d3d12_rt",
+   "gravitymark_gl",
+   "gravitymark_vk",
+   "nvdec_h264",
+   "nvenc_av1",
+   "nvenc_h264",
+   "nvenc_hevc",
+   "scale_cuda_nvenc",
+   "vkcube",
+   "vulkan_video_decode"
+  ]
+ },
+ "manual": {
+  "apps": [
+   "heaven_d3d11",
+   "heaven_opengl",
+   "valley_d3d11",
+   "valley_opengl",
+   "overlay_yuv_probe",
+   "overlay_yuv_hide",
+   "overlay_yuv_occlude",
+   "overlay_yuv_resize",
+   "overlay_yuv_move",
+   "overlay_yuv_recreate",
+   "overlay_yuv_fullscreen",
+   "overlay_yuv_soak"
+  ],
+  "items": [
+   {
+    "id": "heaven_d3d11",
+    "reason": "Unigine Heaven/Valley Basic EULA: evaluation use, command-line automation is the paid edition; redistribution not granted"
+   },
+   {
+    "id": "3dmark",
+    "reason": "licensed (paid) software, personal licence, one computer, no distribution (docs/DOWNLOADS.md)"
+   },
+   {
+    "id": "geekbench6",
+    "reason": "scripts need the Pro licence and the run uploads results (internet)"
+   },
+   {
+    "id": "tensorrt",
+    "reason": "download needs an NVIDIA developer login"
+   },
+   {
+    "id": "superposition",
+    "reason": "Unigine EULA; 1.3 GB; not in the first wave"
+   },
+   {
+    "id": "xonotic",
+    "reason": "1.2 GB; the benchmark mode needs a timedemo and a work area"
+   },
+   {
+    "id": "q2rtx",
+    "reason": "installer and a ray-tracing path that is not first wave"
+   },
+   {
+    "id": "overlay_yuv_probe",
+    "reason": "needs real display",
+    "evidence_template": "traces/manual_overlay_<date>/<app>.md: date, kayfabe revision, GPU/die, physical monitor and connector, host/guest OS and drivers, app version and sha256, exact command, same-GPU native reference with DIRECT overlay (no virtual display), per-second presentation modes, transitions and present latency, app verdict, screenshots/log paths, duration, host Xid delta, guest resets and known_live_dumps_193. No real-monitor native record is committed; the virtual-display native probe returned SETUP/refused (code 5), no DIRECT overlay, no scenario frames."
+   },
+   {
+    "id": "overlay_yuv_hide",
+    "reason": "needs real display",
+    "evidence_template": "traces/manual_overlay_<date>/<app>.md: date, kayfabe revision, GPU/die, physical monitor and connector, host/guest OS and drivers, app version and sha256, exact command, same-GPU native reference with DIRECT overlay (no virtual display), per-second presentation modes, transitions and present latency, app verdict, screenshots/log paths, duration, host Xid delta, guest resets and known_live_dumps_193. No real-monitor native record is committed; the virtual-display native probe returned SETUP/refused (code 5), no DIRECT overlay, no scenario frames."
+   },
+   {
+    "id": "overlay_yuv_occlude",
+    "reason": "needs real display",
+    "evidence_template": "traces/manual_overlay_<date>/<app>.md: date, kayfabe revision, GPU/die, physical monitor and connector, host/guest OS and drivers, app version and sha256, exact command, same-GPU native reference with DIRECT overlay (no virtual display), per-second presentation modes, transitions and present latency, app verdict, screenshots/log paths, duration, host Xid delta, guest resets and known_live_dumps_193. No real-monitor native record is committed; the virtual-display native probe returned SETUP/refused (code 5), no DIRECT overlay, no scenario frames."
+   },
+   {
+    "id": "overlay_yuv_resize",
+    "reason": "needs real display",
+    "evidence_template": "traces/manual_overlay_<date>/<app>.md: date, kayfabe revision, GPU/die, physical monitor and connector, host/guest OS and drivers, app version and sha256, exact command, same-GPU native reference with DIRECT overlay (no virtual display), per-second presentation modes, transitions and present latency, app verdict, screenshots/log paths, duration, host Xid delta, guest resets and known_live_dumps_193. No real-monitor native record is committed; the virtual-display native probe returned SETUP/refused (code 5), no DIRECT overlay, no scenario frames."
+   },
+   {
+    "id": "overlay_yuv_move",
+    "reason": "needs real display",
+    "evidence_template": "traces/manual_overlay_<date>/<app>.md: date, kayfabe revision, GPU/die, physical monitor and connector, host/guest OS and drivers, app version and sha256, exact command, same-GPU native reference with DIRECT overlay (no virtual display), per-second presentation modes, transitions and present latency, app verdict, screenshots/log paths, duration, host Xid delta, guest resets and known_live_dumps_193. No real-monitor native record is committed; the virtual-display native probe returned SETUP/refused (code 5), no DIRECT overlay, no scenario frames."
+   },
+   {
+    "id": "overlay_yuv_recreate",
+    "reason": "needs real display",
+    "evidence_template": "traces/manual_overlay_<date>/<app>.md: date, kayfabe revision, GPU/die, physical monitor and connector, host/guest OS and drivers, app version and sha256, exact command, same-GPU native reference with DIRECT overlay (no virtual display), per-second presentation modes, transitions and present latency, app verdict, screenshots/log paths, duration, host Xid delta, guest resets and known_live_dumps_193. No real-monitor native record is committed; the virtual-display native probe returned SETUP/refused (code 5), no DIRECT overlay, no scenario frames."
+   },
+   {
+    "id": "overlay_yuv_fullscreen",
+    "reason": "needs real display",
+    "evidence_template": "traces/manual_overlay_<date>/<app>.md: date, kayfabe revision, GPU/die, physical monitor and connector, host/guest OS and drivers, app version and sha256, exact command, same-GPU native reference with DIRECT overlay (no virtual display), per-second presentation modes, transitions and present latency, app verdict, screenshots/log paths, duration, host Xid delta, guest resets and known_live_dumps_193. No real-monitor native record is committed; the virtual-display native probe returned SETUP/refused (code 5), no DIRECT overlay, no scenario frames."
+   },
+   {
+    "id": "overlay_yuv_soak",
+    "reason": "needs real display",
+    "evidence_template": "traces/manual_overlay_<date>/<app>.md: date, kayfabe revision, GPU/die, physical monitor and connector, host/guest OS and drivers, app version and sha256, exact command, same-GPU native reference with DIRECT overlay (no virtual display), per-second presentation modes, transitions and present latency, app verdict, screenshots/log paths, duration, host Xid delta, guest resets and known_live_dumps_193. No real-monitor native record is committed; the virtual-display native probe returned SETUP/refused (code 5), no DIRECT overlay, no scenario frames."
+   }
+  ],
+  "evidence_template": "traces/winapps_manual_<yyyymmdd>/<app>.md: kayfabe revision, die, host driver, guest driver 580.88, app + version + sha256 of what was installed, the owner's licence/account note (never the key), command run, start and end time, screenshot path, verdict word (PASS only with the app's own result and the NVIDIA adapter named), guest event counts (nvlddmkm 153, Display 4101, WER) and the same-box host reference result."
+ },
+ "excluded": {},
+ "profiles": {
+  "small": {
+   "apps": [
+    "nvidia_smi",
+    "deviceQuery_demo",
+    "matmul_t",
+    "cup8_ladder",
+    "dxprobe_d3d11",
+    "glgears_wgl",
+    "vulkaninfo",
+    "torch_correct"
+   ],
+   "budget_s": 2400,
+   "requires": {
+    "official_fetch": true
+   }
+  },
+  "mid": {
+   "apps": [
+    "nvidia_smi",
+    "deviceQuery_demo",
+    "matmul_t",
+    "cup8_ladder",
+    "dxprobe_d3d11",
+    "glgears_wgl",
+    "vulkaninfo",
+    "torch_correct",
+    "edge_webgl",
+    "dxprobe_d3d12"
+   ],
+   "budget_s": 3600,
+   "requires": {
+    "official_fetch": true
+   }
+  },
+  "full": {
+   "apps": "every open app minus excluded; manual and known_unsupported are reported separately",
+   "budget_s": 18000,
+   "requires": {
+    "official_fetch": true
+   }
+  },
+  "public": {
+   "apps": [
+    "driver_status",
+    "dxdiag_report",
+    "dxgi_adapters",
+    "edge_webgl",
+    "edge_webgl_conformance",
+    "edge_webgl_headless",
+    "edge_webgpu",
+    "edge_webgpu_conformance",
+    "nvidia_smi",
+    "opencl_icd"
+   ],
+   "budget_s": 18000
+  }
+ },
+ "release_software": {
+  "status": "unverified",
+  "apps": [
+   "blender_cycles",
+   "llama_cuda_parity",
+   "nvenc_h264",
+   "nvdec_h264",
+   "d3d12_dxr",
+   "d3d12_mesh_shaders",
+   "d3d12_vrs",
+   "d3d12_sampler_feedback",
+   "gravitymark_d3d11",
+   "gravitymark_d3d12",
+   "gravitymark_vk",
+   "gravitymark_gl",
+   "edge_webgl_conformance",
+   "edge_webgpu_conformance",
+   "deviceQuery_demo",
+   "bandwidthTest_demo",
+   "torch_release_smoke"
+  ],
+  "policy": "Definitions only; KF_WINAPPS remains disabled by default. Source-blocked and reference-required entries cannot pass until their inputs exist. Software approval does not grant redistribution rights.",
+  "budget_s": 18000,
+  "requires": {
+   "official_fetch": true
+  }
+ },
+ "package_classes": {
+  "clpeak_ocl": "public-ok",
+  "llama_vulkan": "public-ok",
+  "hashcat": "public-ok",
+  "qwen_gguf": "public-ok",
+  "vkpeak": "public-ok",
+  "blender": "public-ok",
+  "hf_wheels": "public-ok",
+  "python_embed": "public-ok",
+  "hf_model": "public-ok",
+  "sevenzip": "public-ok",
+  "cuda_cudart": "official-fetch",
+  "cuda_demo_suite": "official-fetch",
+  "cuda_cccl": "official-fetch",
+  "clpeak_cuda": "official-fetch",
+  "hf_wheels_extra": "official-fetch",
+  "cuda_nvrtc": "official-fetch",
+  "vc_redist": "official-fetch",
+  "pywheels": "official-fetch",
+  "vulkan_rt": "official-fetch",
+  "llama_cuda": "official-fetch"
+ },
+ "app_requires": {
+  "atomics_t": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "bandwidthTest_demo": {
+   "official_fetch": [
+    "cuda_demo_suite",
+    "vc_redist"
+   ]
+  },
+  "blackscholes_t": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "blender_cycles": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "cdp_quicksort": {
+   "official_fetch": [
+    "cuda_cudart",
+    "cuda_nvrtc",
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "cg_t": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "clpeak_cuda": {
+   "official_fetch": [
+    "clpeak_cuda",
+    "vc_redist"
+   ]
+  },
+  "clpeak_ocl": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "cuda_callback": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "cuda_occupancy": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "cup2_ladder": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "cup3_ladder": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "cup8_ladder": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "cupy_asynccopy": {
+   "official_fetch": [
+    "cuda_cccl",
+    "cuda_cudart",
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "cupy_cg": {
+   "official_fetch": [
+    "cuda_cccl",
+    "cuda_cudart",
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "cupy_check": {
+   "official_fetch": [
+    "cuda_cudart",
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "cupy_sha256": {
+   "official_fetch": [
+    "cuda_cccl",
+    "cuda_cudart",
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "d3d11va_h264": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "d3d12_dxr": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "d3d12_mesh_shaders": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "d3d12_sampler_feedback": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "d3d12_signal_probe": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "d3d12_vrs": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "deviceQuery_demo": {
+   "official_fetch": [
+    "cuda_demo_suite",
+    "vc_redist"
+   ]
+  },
+  "dxprobe_d3d11": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "dxprobe_d3d12": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "dxva2_h264": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "edge_video_h264": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "edge_video_vp9": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "fft_t": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "furmark_gl_bench": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "furmark_gl_stress": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "furmark_glinfo": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "furmark_knot_gl": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "furmark_vk_bench": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "furmark_vkinfo": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "fwt_t": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "glgears_wgl": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "gputest_fur": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "gputest_gi": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "gputest_pixmark_piano": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "gputest_plot3d": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "gputest_tess": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "gputest_triangle": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "graphs_t": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "gravitymark_d3d11": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "gravitymark_d3d12": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "gravitymark_d3d12_raster": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "gravitymark_d3d12_rt": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "gravitymark_gl": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "gravitymark_vk": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "hashcat": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "heaven_d3d11": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "heaven_opengl": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "hf_generate": {
+   "official_fetch": [
+    "hf_wheels_extra",
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "hist_t": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "llama_cuda_bench": {
+   "official_fetch": [
+    "llama_cuda",
+    "vc_redist"
+   ]
+  },
+  "llama_cuda_gen": {
+   "official_fetch": [
+    "llama_cuda",
+    "vc_redist"
+   ]
+  },
+  "llama_cuda_parity": {
+   "official_fetch": [
+    "llama_cuda",
+    "vc_redist"
+   ]
+  },
+  "llama_vulkan_bench": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "managed_t": {
+   "official_fetch": [
+    "cuda_cudart",
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "mandelbrot_t": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "matmul_t": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "memcpy2d_t": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "nbody_demo_bench": {
+   "official_fetch": [
+    "cuda_demo_suite",
+    "vc_redist"
+   ]
+  },
+  "nbody_demo_gl": {
+   "official_fetch": [
+    "cuda_demo_suite",
+    "vc_redist"
+   ]
+  },
+  "nbody_t": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "nvdec_h264": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "nvenc_av1": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "nvenc_h264": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "nvenc_hevc": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "oceanFFT_demo": {
+   "official_fetch": [
+    "cuda_demo_suite",
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "ort_directml": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "randomFog_demo": {
+   "official_fetch": [
+    "cuda_demo_suite",
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "reduce_t": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "rng_t": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "scale_cuda_nvenc": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "scan_t": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "sort_t": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "stream_created2nd_t": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "stream_created_t": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "stream_default_t": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "stream_nonblocking_t": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "stream_perthread_t": {
+   "official_fetch": [
+    "cuda_cudart",
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "stream_two_t": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "streams_t": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "tc16_t": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "tcbf16_t": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "torch_ai_bench": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "torch_burn": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "torch_correct": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "torch_release_smoke": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "transpose_t": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "triad_t": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  },
+  "valley_d3d11": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "valley_opengl": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "vectorAdd_demo": {
+   "official_fetch": [
+    "cuda_demo_suite",
+    "vc_redist"
+   ]
+  },
+  "vkcube": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "vkpeak": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "vulkan_video_decode": {
+   "official_fetch": [
+    "vc_redist"
+   ]
+  },
+  "vulkaninfo": {
+   "official_fetch": [
+    "vc_redist",
+    "vulkan_rt"
+   ]
+  },
+  "zerocopy_t": {
+   "official_fetch": [
+    "pywheels",
+    "vc_redist"
+   ]
+  }
+ },
+ "official_packages": [
+  "clpeak_cuda",
+  "cuda_cccl",
+  "cuda_cudart",
+  "cuda_demo_suite",
+  "cuda_nvrtc",
+  "hf_wheels_extra",
+  "llama_cuda",
+  "pywheels",
+  "vc_redist",
+  "vulkan_rt"
+ ],
+ "known_unsupported": {
+  "managed_t": "unsupported (UVM): owner ruling 2026-10-02 keeps UVM unmerged until the per-fault GR hold is measured and bounded (docs/OWNER_RULINGS.md section E)"
+ }
+}

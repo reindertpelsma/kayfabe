@@ -118,12 +118,60 @@ Rules the script enforces: every step logs `START` and `EXIT rc=` (a log with no
 - **Do not snapshot an image with a Windows update staged**: it crash-loops `dwm.exe`. Block updates in test images. <!-- src: docs/WINDOWS_GUEST_SETUP.md -->
 - You supply and license Windows. The scripts download Microsoft's evaluation image, the virtio drivers and NVIDIA's installer from their vendors, each pinned by SHA-256. See [Credits and notices](credits.md). <!-- src: scripts/bench/windows/win_vm.sh, docs/NOTICES.md -->
 
+## Preparing the open application disk
+
+The permanent public disk is winapps-open.iso, label KFAPPS. Build it from a reviewed checkout using Python
+3.11+ standard library; the official Zig compiler is pinned in manifest.json. No shell extractor, ISO utility,
+distro mingw or pip resolution is needed. App originals stay intact and are staged inside Windows.
+
+```text
+python3 -I scripts/bench/windows/appmatrix/package_bundle.py fetch --dl downloads
+python3 -I scripts/bench/windows/appmatrix/package_bundle.py build --dl downloads --out out-a
+python3 -I scripts/bench/windows/appmatrix/package_bundle.py build --dl downloads --out out-b
+python3 -I scripts/bench/windows/appmatrix/package_bundle.py compare-image --iso out-b/winapps-open.iso --receipt out-a/winapps-open.manifest.json --out out-b
+```
+
+For manual downloads, also copy the tagged upstream tokenizers licence to
+Downloads/_compliance/hf_wheels/tokenizers-v0.22.2-LICENSE as shown by Layout. The wheel itself contains
+no legal text; the builder retains this pinned fallback alongside any bundled notices.
+
+Level 1 is the reproduction gate: identical file paths and SHA-256/size values, including the repository
+programs. Level 2 compares ISO bytes too, with a metadata WARNING when the files match but the container
+differs. Both ISO directory namespaces must expose the same files and bytes; a primary-only payload
+fails the check. Rock Ridge/System Use and hybrid filesystem records are unsupported and refused.
+`verify-image --out out-a` checks one object's integrity and its embedded recipe against
+the matching checkout, including pinned package/source bytes, guest files and licence notices. A receipt
+with freshly recalculated hashes cannot approve different inputs. Run it from the reviewed checkout used
+to build the image. Publication additionally requires that checkout's input digest before any store request.
+The GUI offers the same build, integrity and reproduction checks. No program currently uses the supported
+inventory-only/functional-check qualification. A vendor changing pinned bytes is INPUT_DRIFT, not flakiness.
+
+There is no permanent private bundle. The Linux box host obtains required CUDA/torch/llama, driver and
+conditional Microsoft/LunarG artifacts from official_fetch.json using J4 downloads with SHA-256 checks. The
+transient KFAPPSP disk and local manifest live only for the run and are removed after all guests stop.
+Nothing NVIDIA is uploaded to R2/GitHub; no Actions media artifact/cache is created. The guest stays offline.
+Both disks are read-only, fixed K: (KFAPPS) and P: (KFAPPSP).
+
+J2 must select the exact Windows driver with --official-driver VERSION or KF_WINAPPS_OFFICIAL_DRIVER.
+Only known catalogue versions are accepted; currently 580.88 is pinned. Driver staging/install belongs
+before the parent Windows gate; the app harness checks that selected version and does not change it after
+the gate. --guest-driver is the separate kf3 ABI setting. A missing pin or wrong installed version is
+MEDIA_DRIFT/NOTRUN. Missing official media never passes; --no-official-fetch leaves required apps NOTRUN.
+The downloader/person or CI operator must accept the CUDA EULA for private use before official downloads.
+
+The first deliverable is build + verify, followed by coordinator manual upload of public content. CI
+publication remains optional and disabled; no secrets, domain, environment or enable flag is configured.
+The GUI supports selecting the receipt and original archives in a file manager. Keep its licence texts,
+notices and mirrored copyleft source together; source retention remains our obligation while distributing
+the binaries. Native cross-platform builds and live upload have not been measured by this change.
+<!-- src: scripts/bench/windows/appmatrix/package_bundle.py, scripts/bench/windows/appmatrix/bundle_repro.py, scripts/bench/windows/appmatrix/official_runtime.py -->
+
 ## Known limits
 
 - **Windows sleep/wake is not supported yet.** <!-- src: docs/WINDOWS_GUEST_SETUP.md, README.md -->
 - Edge can reset the display driver after 7 to 16 minutes of playback. <!-- src: README.md "Not finished" -->
-- Other GPU dies need more work under Windows; GB206 under Windows is open (Code 43). <!-- src: README.md "GPUs:" -->
-- On GB203 (RTX 5070 Ti) the Windows gate passed once with the display fixes of 2026-11-03; before them the driver loaded but never lit the display (a black screen). Other Blackwell dies were not run with these fixes. <!-- src: traces/blackwell_win_20261103/, n=1 -->
+- MEASURED Windows gate PASS: TU106, TU116, GA104, GA106, AD102, AD104, GB205 and GB206 at `0c515b3b3`, 2026-11-04; GA102 at `006d845a`, 2026-11-03. GB202 is intermittent (FAIL, then two PASS on one box). See [requirements](requirements.md). <!-- src: traces/die_coverage_20261104/{turing,ampere,ada,blackwell}/README.md; traces/ampere_hw_20261103/README.md -->
+- On GB203 (RTX 5070 Ti) an earlier Windows gate passed once at `54410b7d`, 2026-11-03; before the display fixes the screen stayed black. <!-- src: traces/blackwell_win_20261103/, n=1 -->
 - `nv-install` is slow: it copies the 2.6 GB driver package over user networking at about 2.4 MB/s (18 minutes). <!-- src: scripts/bench/windows/README.md "Known limits" -->
 - **A failed NVIDIA driver slows everything down.** With the driver in Code 43, boot to ssh took about 20 minutes and the guest ignored `shutdown /s` for 5 minutes. <!-- src: scripts/bench/windows/README.md "Known limits" -->
 - The guest changes its own Secure Boot variables (it adds the 2023 CAs to `db` and updates `dbx`). The variables file is per-VM live state; never regenerate it or copy it to another VM. <!-- src: scripts/bench/windows/README.md "Known limits" -->
@@ -137,3 +185,14 @@ See also [Troubleshooting](troubleshooting.md) and [Display and the broker](disp
 - A successful guest run with another NVIDIA driver version. Windows 581.51 was attempted on AD102 and failed with Code 43 [measured in the sweep matrix, revision `24906bf33`, P19 profile; historical source `9d6f210ba`]. This is recorded on the branch `codex/sweep-integrate-20261018`, not merged: [matrix](https://github.com/reindertpelsma/kayfabe/blob/0bbf3c55f/traces/sweep_integrate_20261018/MATRIX.md). Its same-board native Windows control passed, which is not a kayfabe guest pass.
 
 Verified on: Windows 11 Pro 26200 with driver 580.88 on an RTX 4070 (kayfabe `eb9f2aa3`, 2026-10-14; further results up to master `89fc8a222`, 2026-10-21, in the README); LTSC 26100 on rented hosts. Not verified end to end: the `reg add` snippet is the repository's own text and is not a recorded run of exactly those lines. Settings 1 and 2 are the part that `gsp_on.ps1` applies and reads back in the harness.
+
+## App gate policy
+
+**Unsupported (UVM), for now:** `UnifiedMemoryStreams`, `UnifiedMemoryPerf`, `conjugateGradientUM`, `attach_verify` and the Windows counterpart `managed_t`. The owner keeps UVM unmerged: the per-fault GR hold is unmeasured in this app qualification, and hardware timing plus an explicit bound are required before merge. Gate reports list them as `unsupported (UVM)`; they are not supported-app failures or hidden omissions. Historical results remain in the evidence: `conjugateGradientUM` printed SUCCESS with a wrong numerical result, so an exit code alone is not a correctness check.
+
+Manual or unsupported IDs supplied as gate expectations produce RETRY with no pass credit; raw results stay visible as observations.
+
+All eight `overlay_yuv_*` entries (probe, hide, occlude, resize, move, recreate, fullscreen, soak) are `manual: needs real display`, excluded from Vast profiles and listed in reports. The native simulated-display probe returned SETUP/refused (code 5) on Vast: no DIRECT overlay and no scenario frames; no real-monitor native record is committed. Evidence must name the physical monitor/connector, exact revision, GPU and drivers, native DIRECT-overlay reference, command, app version/hash, per-second modes/transitions/latency, duration, screenshots and reset/Xid counts.
+
+CODE READ at `a1209e3da`: LiveKernelEvent 193 is reported as `known_live_dumps_193`. It gates above the recorded per-die maximum (AD102 2, TU106 3, GA102 4), or with `KF_WINGATE_STRICT_LKE=1`; unseeded dies explicitly report UNKNOWN and have no ceiling. Other reset counters still gate. `wer_reports.txt` and the gate log decode every found Report.wer and validated WATCHDOG headers, reading only the first 0x1000 bytes in the guest. No real header was read in DX1; the numeric bugcheck and correctness impact remain unverified. The box's structured report adds the known count and ratchet verdict; the current Worker sanitizer publishes only the existing `windows.live_dumps_193` alias. The Windows apps and SPEC stages remain disabled pending the first Worker run; neither new stage is deployed.
+<!-- src: scripts/bench/windows/appmatrix/gate_profiles.json; traces/windows_overlay_native_20261010/README.md; docs/OWNER_RULINGS.md section E; scripts/bench/box/windows_gate.sh; scripts/ci/vast_run_report.py -->

@@ -51,7 +51,7 @@ final review of 2026-10-23] On top of the jose round:
 - Right after its verified final log fetch the runner sends `POST /stop/<run>`; the Worker
   destroys at once. The PASS/FAIL grace timer is only the fallback. (Round 2: a failed final
   fetch is stopped too.)
-- Denied countries: CU, IR, KP, SY, CN, HK, MO, matched on ISO alpha-2/alpha-3 codes and long
+- Denied countries: CU, IR, KP, SY, CN, HK, MO, RU, BY, matched on ISO alpha-2/alpha-3 codes and long
   names (V13). `BAD_HOST_IDS` rejects every machine of a listed hoster (`BAD_HOST`).
 - A Worker-sent NOT_NEEDED (and MANUAL / NEEDS_APPROVAL) is refused; only the workflow's two
   agreeing path decisions post NOT_NEEDED success (W2). The release gate wants the gpu-vast
@@ -120,7 +120,7 @@ provider billing bound during an outage.
 [CODE READ: defaults.json, src/offers.js, runner.py] `PREFERRED_COUNTRIES` is an
 ordered JSON list, default `["US","CA"]`. All forced eligibility checks and die
 preferences run first. Within the chosen class, country rank precedes effective
-price and offer ID. The separate DENIED_COUNTRIES filter first rejects CU/IR/KP/SY/CN/HK/MO;
+price and offer ID. The separate DENIED_COUNTRIES filter first rejects CU/IR/KP/SY/CN/HK/MO/RU/BY;
 country preference does not relax it. Unknown or unparseable metadata is rejected by default
 (edits3 C); ALLOW_UNKNOWN_COUNTRY=true admits it and ranks it last. The provider's
 `geolocation` must be `region, CC` or a known denied name. Structured status records `country`;

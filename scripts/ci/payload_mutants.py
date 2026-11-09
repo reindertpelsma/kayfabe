@@ -14,6 +14,11 @@ SOURCE = (HERE / "vast_payload.py").read_text()
 HOOK = (HERE / "vast_payload_hooks.sh").read_text()
 GUARD = (HERE.parent / "bench/native_xid_guard.py").read_text()
 REPORT = (HERE / "vast_report.py").read_text()
+POLICY_FIXTURE_FILES = (
+    "scripts/ci/app_policy.py",
+    "scripts/apps/known_unsupported.json",
+    "scripts/bench/windows/appmatrix/gate_profiles.json",
+)
 
 
 def report_replace(old, new):
@@ -301,13 +306,115 @@ CASES += [
         "design-only-stage-runs",
         replace('        or any(STAGE_SLOTS[n] == "DESIGN_ONLY" for n in names)\n', ""),
     ),
+]
+
+# 2026-11-07, lane appslinux: the Linux apps stage (draft, disabled by default).
+CASES += [
+    ("apps-stage-enabled-by-default", replace("APPS_STAGE_ENABLED = False", "APPS_STAGE_ENABLED = True")),
     (
-        "specviewperf-retry-passes",
+        "apps-run-for-small-tier",
+        replace("    return bool(APPS_STAGE_ENABLED) and tier in APPS_TIERS", "    return bool(APPS_STAGE_ENABLED)"),
+    ),
+    (
+        "apps-missing-app-passes",
+        replace("            and sorted(seen) == sorted(names)\n", ""),
+    ),
+    (
+        "apps-failing-app-passes",
+        replace("            and passed == len(names)\n", ""),
+    ),
+    (
+        "apps-nonzero-exit-passes",
+        replace('            and exits[0] == "0"\n            and listed', "            and listed"),
+    ),
+    (
+        "apps-list-size-unchecked",
+        replace("            and listed == [str(len(names))]\n", ""),
+    ),
+    (
+        "apps-retry-passes",
+        replace('        if kind == "RETRY":\n            name = "apps_retry_"', '        if kind == "RETRY":\n            return [row("apps", len(names))]\n            name = "apps_retry_"'),
+    ),
+    (
+        "apps-stage-without-time-guard",
+        replace("APPS_MIN_REMAINING_MS = 60 * 60000", "APPS_MIN_REMAINING_MS = 0"),
+    ),
+    (
+        "apps-stage-selected-by-kf-stages",
+        replace('STAGE_SLOTS = {"specviewperf": "PLUMBING",', 'STAGE_SLOTS = {"apps": "PLUMBING", "specviewperf": "PLUMBING",'),
+    ),
+    (
+        "apps-middle-reads-the-full-list",
+        replace('"middle": ("gate_list_middle.txt", "middle")', '"middle": ("gate_list.txt", "middle")'),
+    ),
+    (
+        "apps-middle-runs-the-full-lane-list",
+        replace('"middle": ("gate_list_middle.txt", "middle")', '"middle": ("gate_list_middle.txt", "full")'),
+    ),
+    (
+        "apps-tier-ignored-when-reading-the-list",
+        replace("            names = apps_gate_list(root, tier)", '            names = apps_gate_list(root, "large")'),
+    ),
+    (
+        "apps-stage-never-appended",
         replace(
-            '    if kind == "PASS" and rc == 0:\n        return [row("specviewperf", 1)]',
-            '    if kind in ("PASS", "RETRY"):\n        return [row("specviewperf", 1)]',
+            '        if apps_requested(tier):\n',
+            '        if False:\n',
         ),
     ),
+]
+
+# 2026-11-07: the SPECviewperf stage (draft, disabled by default; docs/design/V3_SPEC_GATE.md).
+CASES += [
+    (
+        "spec-slot-without-a-lane-runs",
+        replace('        if wanted:\n            raise EvidenceError("preflight")\n        return None', "        return None"),
+    ),
+    ("spec-lane-without-the-slot-runs", replace("    if value not in SPEC_LANES or not wanted:", "    if value not in SPEC_LANES:")),
+    (
+        "spec-without-the-windows-gate-runs",
+        replace('    if wanted and not windows:\n        raise EvidenceError("preflight")\n', ""),
+    ),
+    ("spec-lane-unvalidated", replace("    if value not in SPEC_LANES or not wanted:", "    if not wanted:")),
+    (
+        "spec-pass-with-a-missing-row",
+        replace(
+            "[(lane, str(len(names)))]\n        and sorted(seen) == sorted(names)\n",
+            "[(lane, str(len(names)))]\n",
+        ),
+    ),
+    (
+        "spec-pass-with-a-failing-row",
+        replace(
+            "        and sorted(seen) == sorted(names)\n        and passed == len(names)\n    ):\n        out = [",
+            "        and sorted(seen) == sorted(names)\n    ):\n        out = [",
+        ),
+    ),
+    ("spec-pass-with-a-nonzero-exit-line", replace('        and exits == ["0"]\n', "")),
+    ("spec-pass-for-the-wrong-lane", replace("        and SPEC_LIST.findall(text) == [(lane, str(len(names)))]\n", "")),
+    ("spec-pass-with-a-nonzero-rc", replace("        and rc == 0\n        and exits", "        and exits")),
+    (
+        "spec-retry-passes",
+        replace(
+            '    if kind == "RETRY":\n        name = "specviewperf_retry_"',
+            '    if kind == "RETRY":\n        return [row("specviewperf", len(names))]\n        name = "specviewperf_retry_"',
+        ),
+    ),
+    (
+        "spec-fail-is-a-retry",
+        replace('    if kind == "FAIL":\n        raise EvidenceError("specviewperf", partial)', '    if kind == "FAIL":\n        raise EvidenceError("specviewperf_retry_operator", partial)'),
+    ),
+    ("spec-unknown-retry-class-trusted", replace('cls.lower() if cls in SPEC_RETRY_CLASSES else "operator"', "cls.lower()")),
+    ("spec-stage-without-time-guard", replace("min_remaining_ms=spec_min_remaining_ms(spec_tbl, spec), short_row", "min_remaining_ms=0, short_row")),
+    ("spec-min-remaining-ignores-the-native-walls", replace('table["factor"] * native', "native")),
+    ("spec-windows-disk-not-sized", replace('            os.environ.setdefault("WINVM_DISK_GB", SPEC_DISK_GB)', "            pass")),
+    ("spec-command-always-lane-both", replace('"KF_SPEC_LANE=" + spec,', '"KF_SPEC_LANE=both",')),
+    ("spec-deadline-without-margin", replace("SPEC_DEADLINE_MARGIN_S = 120", "SPEC_DEADLINE_MARGIN_S = 0")),
+    (
+        "spec-both-is-one-lane",
+        replace('        return list(table["lanes"]["lanea"]) + list(table["lanes"]["laneb"])', '        return list(table["lanes"]["laneb"])'),
+    ),
+    ("spec-pass-without-lane-rows", replace('        out = [row("specviewperf", len(names))]\n', '        return [row("specviewperf", len(names))]\n        out = []\n')),
 ]
 
 # 2026-11-06: the setup picker's host claims (optional, bounded, never a verdict).
@@ -597,6 +704,14 @@ CASES += [
     ),
 ]
 
+CASES += [
+    ("winapps-all-output-is-pass", function("winapps_rows", '    return [row("windows_apps", 8)]')),
+    ("winapps-never-passes", function("winapps_rows", '    raise EvidenceError("windows_apps_retry_operator")')),
+    ("winapps-enabled-by-default", scoped("winapps_requested", '        return None', '        return "small"')),
+    ("winapps-request-ignored", function("winapps_requested", '    environ.pop("KF_WINAPPS", None)\n    return None')),
+    ("winapps-incomplete-output-is-pass", scoped("winapps_rows", 'if (len(grade) == 1 and count and grade[0][0] == grade[0][1] == count[1]\n                    and len(app_lines) == len(passed) == len(set(passed)) == int(count[1])):', 'if True:')),
+]
+
 COLLECT = """import io,json,unittest,importlib.util
 from pathlib import Path
 s=unittest.defaultTestLoader.discover('scripts/ci',pattern='test_vast_payload*.py')
@@ -617,7 +732,7 @@ print('KF_MUTATION_RESULT='+json.dumps({'tests':r.testsRun,
 
 def run(root):
     p = subprocess.run(
-        [sys.executable, "-c", COLLECT], cwd=root, text=True, capture_output=True, timeout=45
+        [sys.executable, "-c", COLLECT], cwd=root, text=True, capture_output=True, timeout=180
     )
     assert p.returncode == 0, p.stderr[-500:]
     line = next(s for s in p.stdout.splitlines() if s.startswith("KF_MUTATION_RESULT="))
@@ -643,6 +758,10 @@ def main():
             "test_vast_payload_result_logs.py",
             "test_vast_payload_summary.py",
             "test_vast_payload_claims.py",
+            "test_vast_payload_apps.py",
+            "test_vast_payload_winapps.py",
+
+            "test_vast_payload_spec.py",
             "host_claims_vectors.json",
             "test_vast_box.py",
             "vast_report.py",
@@ -658,6 +777,22 @@ def main():
         ):
             (bench / relative).parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(HERE.parent / "bench" / relative, bench / relative)
+        # The apps stage tests run the lane script and ask run_apps.sh for the app names.
+        (bench / "box").mkdir(exist_ok=True)
+        shutil.copyfile(HERE.parent / "bench/box/apps_gate.sh", bench / "box/apps_gate.sh")
+        shutil.copytree(HERE.parent / "kfci", root / "scripts/kfci", ignore=shutil.ignore_patterns("__pycache__"))
+        (root / "scripts/apps").mkdir()
+        for name in ("run_apps.sh", "gate_list.txt", "gate_list_middle.txt"):
+            shutil.copyfile(HERE.parent / "apps" / name, root / "scripts/apps" / name)
+        for relative in ("g1/gate_full.out", "g2/gate_mid.out", "g3/gate_watched.out", "g4/gate_fail.out"):  # real lane output, replayed by the tests
+            target = root / "traces/apps_linux_20261107" / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(HERE.parents[1] / "traces/apps_linux_20261107" / relative, target)
+        # The SPECviewperf stage tests read the lane table and the Worker's stage slots.
+        (bench / "specviewperf").mkdir()
+        shutil.copyfile(HERE.parent / "bench/specviewperf/lanes.json", bench / "specviewperf/lanes.json")
+        (root / "ci/vast-broker").mkdir(parents=True)
+        shutil.copyfile(HERE.parents[1] / "ci/vast-broker/defaults.json", root / "ci/vast-broker/defaults.json")
         shutil.copyfile(HERE.parent / "bench/host_xid_watch.sh", bench / "host_xid_watch.sh")
         shutil.copyfile(HERE.parent / "bench/native_xid_guard.py", bench / "native_xid_guard.py")
         (bench / "tests").mkdir()
@@ -676,8 +811,32 @@ def main():
         )
         for name in ("sweep_ada_20261018", "sweep_dies_20261018", "sweep_windows_20261021"):
             shutil.copytree(HERE.parents[1] / "traces" / name, root / "traces" / name)
+        # apps_gate.sh calls app_policy.py, whose rows() reads both policy sources even for Linux.
+        # The isolated fixture must carry the same dependency closure as the repository checkout.
+        for relative in POLICY_FIXTURE_FILES:
+            target = root / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(HERE.parents[1] / relative, target)
         baseline = run(root)
         assert not baseline["killers"], baseline
+        print("baseline: %d tests, no killers" % baseline["tests"], file=sys.stderr, flush=True)
+        # Falsifier: an omitted policy dependency goes unnoticed. Exercise the real app-stage tests
+        # against each missing file; retain the two-distinct-killer rule used by every other mutant.
+        for relative in POLICY_FIXTURE_FILES:
+            name = "fixture-missing-" + Path(relative).name
+            if len(sys.argv) > 1 and sys.argv[1] not in name:
+                continue
+            target = root / relative
+            original = target.read_bytes()
+            try:
+                target.unlink()
+                result = run(root)
+            finally:
+                target.write_bytes(original)
+            killers = sorted(set(result["killers"]))
+            assert len(killers) >= 2, (name, killers)
+            rows.append({"mutant": name, "killers": killers, "count": len(killers)})
+            print(name + ": " + str(len(killers)) + " killers", file=sys.stderr, flush=True)
         for case in CASES:
             name, source = case[:2]
             if len(sys.argv) > 1 and sys.argv[1] not in name:

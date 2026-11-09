@@ -1,0 +1,624 @@
+{
+ "schema": 1,
+ "status": "PINNED, 2026-11-08; official downloads only, per-run use; no redistribution",
+ "fetcher": {
+  "path": "scripts/ci/kf_fetch.py",
+  "sha256": "ea2663162e69141216050ab9be275b4bee1adaf35163dd270f69ee2925433d93",
+  "size": 18706,
+  "source_commit": "624bf1dfcf98fac362bc63478e7f9cdb65c4aedf",
+  "source_url": "https://raw.githubusercontent.com/reindertpelsma/kayfabe/624bf1dfcf98fac362bc63478e7f9cdb65c4aedf/scripts/ci/kf_fetch.py",
+  "recorded_utc": "2026-11-08"
+ },
+ "entries": [
+  {
+   "id": "clpeak_cuda/clpeak-3.0.1-windows-AMD64-cuda.zip",
+   "package": "clpeak_cuda",
+   "name": "clpeak-3.0.1-windows-AMD64-cuda.zip",
+   "official_url": "https://github.com/krrishnarraj/clpeak/releases/download/3.0.1/clpeak-3.0.1-windows-AMD64-cuda.zip",
+   "sha256": "b5657a10d4b9e771a16583c6cfcd7e89dde8505a799a6b6eddacbfa60b593ee1",
+   "size": 14725271,
+   "license_id": "GPL-3.0-only AND LicenseRef-NVIDIA-CUDA-EULA",
+   "guest_destination": "C:\\kfapps\\clpeak_cuda",
+   "installer_argv": [],
+   "stage": {
+    "mode": "unzip",
+    "dest": "clpeak_cuda",
+    "strip_top": true
+   },
+   "class": "official-fetch"
+  },
+  {
+   "id": "cuda_cccl/cuda_cccl-windows-x86_64-12.9.27-archive.zip",
+   "package": "cuda_cccl",
+   "name": "cuda_cccl-windows-x86_64-12.9.27-archive.zip",
+   "official_url": "https://developer.download.nvidia.com/compute/cuda/redist/cuda_cccl/windows-x86_64/cuda_cccl-windows-x86_64-12.9.27-archive.zip",
+   "sha256": "17aaa7c6b8f94a417d8f3261780b7e34b9cbdfab7513bce86768623b06aa28b5",
+   "size": 3127658,
+   "license_id": "Apache-2.0 WITH LLVM-exception AND LicenseRef-NVIDIA-CUDA-EULA",
+   "guest_destination": "C:\\kfapps\\cuda_cccl",
+   "installer_argv": [],
+   "stage": {
+    "mode": "unzip",
+    "dest": "cuda_cccl",
+    "strip_top": true
+   },
+   "class": "official-fetch"
+  },
+  {
+   "id": "cuda_cudart/cuda_cudart-windows-x86_64-12.9.79-archive.zip",
+   "package": "cuda_cudart",
+   "name": "cuda_cudart-windows-x86_64-12.9.79-archive.zip",
+   "official_url": "https://developer.download.nvidia.com/compute/cuda/redist/cuda_cudart/windows-x86_64/cuda_cudart-windows-x86_64-12.9.79-archive.zip",
+   "sha256": "179e9c43b0735ffe67207b3da556eb5a0c50f3047961882b7657d3b822d34ef8",
+   "size": 3521238,
+   "license_id": "LicenseRef-NVIDIA-CUDA-EULA",
+   "guest_destination": "C:\\kfapps\\cuda_cudart",
+   "installer_argv": [],
+   "stage": {
+    "mode": "unzip",
+    "dest": "cuda_cudart",
+    "strip_top": true
+   },
+   "class": "official-fetch"
+  },
+  {
+   "id": "cuda_demo_suite/cuda_demo_suite-windows-x86_64-12.9.79-archive.zip",
+   "package": "cuda_demo_suite",
+   "name": "cuda_demo_suite-windows-x86_64-12.9.79-archive.zip",
+   "official_url": "https://developer.download.nvidia.com/compute/cuda/redist/cuda_demo_suite/windows-x86_64/cuda_demo_suite-windows-x86_64-12.9.79-archive.zip",
+   "sha256": "adffd0b0f7cca262025f171dcaa73f62af020de5d9a0d6e0fbe7dbd827dd77a8",
+   "size": 5164004,
+   "license_id": "LicenseRef-NVIDIA-CUDA-EULA",
+   "guest_destination": "C:\\kfapps\\cuda_demo",
+   "installer_argv": [],
+   "stage": {
+    "mode": "unzip",
+    "dest": "cuda_demo",
+    "strip_top": true
+   },
+   "class": "official-fetch"
+  },
+  {
+   "id": "cuda_nvrtc/cuda_nvrtc-windows-x86_64-12.9.86-archive.zip",
+   "package": "cuda_nvrtc",
+   "name": "cuda_nvrtc-windows-x86_64-12.9.86-archive.zip",
+   "official_url": "https://developer.download.nvidia.com/compute/cuda/redist/cuda_nvrtc/windows-x86_64/cuda_nvrtc-windows-x86_64-12.9.86-archive.zip",
+   "sha256": "1aa0644fa53c8ca34cdc73db17bcc73530557bdd3f582c7bfdbd7916c8b48f65",
+   "size": 314608748,
+   "license_id": "LicenseRef-NVIDIA-CUDA-EULA",
+   "guest_destination": "C:\\kfapps\\cuda_nvrtc",
+   "installer_argv": [],
+   "stage": {
+    "mode": "unzip",
+    "dest": "cuda_nvrtc",
+    "strip_top": true
+   },
+   "class": "official-fetch"
+  },
+  {
+   "id": "hf_wheels_extra/certifi-2026.7.22-py3-none-any.whl",
+   "package": "hf_wheels_extra",
+   "name": "certifi-2026.7.22-py3-none-any.whl",
+   "official_url": "https://files.pythonhosted.org/packages/0b/a7/71ac2cff56fec219ed242bb11b8efb69fcc4bec75db06fb7bfe35de520e6/certifi-2026.7.22-py3-none-any.whl",
+   "sha256": "62f22742b58a1a33014a2b6b706588a8d7e2a88ae7bd1a6ebe8c992928483775",
+   "size": 136983,
+   "license_id": "MPL-2.0",
+   "guest_destination": "C:\\kfapps\\py\\Lib\\site-packages",
+   "installer_argv": [],
+   "stage": {
+    "mode": "wheels",
+    "dest": "py\\Lib\\site-packages"
+   },
+   "class": "official-fetch"
+  },
+  {
+   "id": "hf_wheels_extra/tqdm-4.70.1-py3-none-any.whl",
+   "package": "hf_wheels_extra",
+   "name": "tqdm-4.70.1-py3-none-any.whl",
+   "official_url": "https://files.pythonhosted.org/packages/a7/03/921a3d3c75785aca9ebfbfcabfbc3a1be12e2ab5265deb026d55a5a3f83e/tqdm-4.70.1-py3-none-any.whl",
+   "sha256": "c293e525e6fef9c20e8728fd4612df02a0aa31bb5fe91ecd93e123b1b7bffa73",
+   "size": 80199,
+   "license_id": "MPL-2.0 AND MIT",
+   "guest_destination": "C:\\kfapps\\py\\Lib\\site-packages",
+   "installer_argv": [],
+   "stage": {
+    "mode": "wheels",
+    "dest": "py\\Lib\\site-packages"
+   },
+   "class": "official-fetch"
+  },
+  {
+   "id": "llama_cuda/cudart-llama-bin-win-cuda-12.4-x64.zip",
+   "package": "llama_cuda",
+   "name": "cudart-llama-bin-win-cuda-12.4-x64.zip",
+   "official_url": "https://github.com/ggml-org/llama.cpp/releases/download/b11541/cudart-llama-bin-win-cuda-12.4-x64.zip",
+   "sha256": "8c79a9b226de4b3cacfd1f83d24f962d0773be79f1e7b75c6af4ded7e32ae1d6",
+   "size": 391443627,
+   "license_id": "MIT AND LicenseRef-NVIDIA-CUDA-EULA",
+   "guest_destination": "C:\\kfapps\\llama_cuda",
+   "installer_argv": [],
+   "stage": {
+    "mode": "unzip",
+    "dest": "llama_cuda"
+   },
+   "class": "official-fetch"
+  },
+  {
+   "id": "llama_cuda/llama-b11541-bin-win-cuda-12.4-x64.zip",
+   "package": "llama_cuda",
+   "name": "llama-b11541-bin-win-cuda-12.4-x64.zip",
+   "official_url": "https://github.com/ggml-org/llama.cpp/releases/download/b11541/llama-b11541-bin-win-cuda-12.4-x64.zip",
+   "sha256": "c5ccdd22e6b11c013efd6a931f93c3707e6fa5ab2f90df5c7d1838785540ece3",
+   "size": 265224711,
+   "license_id": "MIT AND LicenseRef-NVIDIA-CUDA-EULA",
+   "guest_destination": "C:\\kfapps\\llama_cuda",
+   "installer_argv": [],
+   "stage": {
+    "mode": "unzip",
+    "dest": "llama_cuda"
+   },
+   "class": "official-fetch"
+  },
+  {
+   "id": "nvidia_driver/580.88",
+   "package": "nvidia_driver",
+   "name": "580.88-desktop-win10-win11-64bit-international-dch-whql.exe",
+   "sha256": "90c49f925b41ee062e02cc8094a16b6d057abfde4e85235a76d63ffe267f63a9",
+   "size": 890807536,
+   "license_id": "LicenseRef-NVIDIA-Driver-EULA",
+   "guest_destination": "C:\\kfapps\\official_driver",
+   "installer_argv": [
+    "C:\\Windows\\System32\\pnputil.exe",
+    "/add-driver",
+    "{dest}\\Display.Driver\\nv_dispi.inf",
+    "/install"
+   ],
+   "stage": {
+    "mode": "7z",
+    "dest": "official_driver",
+    "strip_top": false
+   },
+   "version": "580.88",
+   "provenance": "Exact archive pin and Display.Driver/nv_dispi.inf path from win_vm.sh; guest PNPUTIL phase belongs before the J2 Windows gate. App harness verifies the selected installed version; it never switches the driver after that gate.",
+   "official_url": "https://us.download.nvidia.com/Windows/580.88/580.88-desktop-win10-win11-64bit-international-dch-whql.exe",
+   "class": "official-fetch"
+  },
+  {
+   "id": "pywheels/cuda_pathfinder-1.8.3-py3-none-any.whl",
+   "package": "pywheels",
+   "name": "cuda_pathfinder-1.8.3-py3-none-any.whl",
+   "official_url": "https://files.pythonhosted.org/packages/b9/fb/f8e1890428f9f590b4beebd63b068aac1ce32a3331510c847b9f9a78f261/cuda_pathfinder-1.8.3-py3-none-any.whl",
+   "sha256": "e29e59829c297a7a5233bd9cc71094fc5bddbd076951482670178f9eade39b1f",
+   "size": 62561,
+   "license_id": "Apache-2.0",
+   "guest_destination": "C:\\kfapps\\py\\Lib\\site-packages",
+   "installer_argv": [],
+   "stage": {
+    "mode": "wheels",
+    "dest": "py\\Lib\\site-packages"
+   },
+   "class": "official-fetch"
+  },
+  {
+   "id": "pywheels/cupy_cuda12x-14.2.0-cp312-cp312-win_amd64.whl",
+   "package": "pywheels",
+   "name": "cupy_cuda12x-14.2.0-cp312-cp312-win_amd64.whl",
+   "official_url": "https://files.pythonhosted.org/packages/e9/18/ddea819204701024bef7fa748730702245d803847c841b737723b94fd091/cupy_cuda12x-14.2.0-cp312-cp312-win_amd64.whl",
+   "sha256": "c9571d3b5f2e65758137e210f7fb3c3b34767f0af6b6ca04035a244b6141ee12",
+   "size": 98780018,
+   "license_id": "MIT",
+   "guest_destination": "C:\\kfapps\\py\\Lib\\site-packages",
+   "installer_argv": [],
+   "stage": {
+    "mode": "wheels",
+    "dest": "py\\Lib\\site-packages"
+   },
+   "class": "official-fetch"
+  },
+  {
+   "id": "pywheels/filelock-4.1.0-py3-none-any.whl",
+   "package": "pywheels",
+   "name": "filelock-4.1.0-py3-none-any.whl",
+   "official_url": "https://files.pythonhosted.org/packages/ee/86/032133892a5de43b5a98200b01aadcad68cc255e274a762f08b8a76d2912/filelock-4.1.0-py3-none-any.whl",
+   "sha256": "2ce9818e3e2d8f284c1a964414447ef148d42a5fd5e2a477a7118e574b293ec1",
+   "size": 133003,
+   "license_id": "MIT",
+   "guest_destination": "C:\\kfapps\\py\\Lib\\site-packages",
+   "installer_argv": [],
+   "stage": {
+    "mode": "wheels",
+    "dest": "py\\Lib\\site-packages"
+   },
+   "class": "official-fetch"
+  },
+  {
+   "id": "pywheels/flatbuffers-25.12.19-py2.py3-none-any.whl",
+   "package": "pywheels",
+   "name": "flatbuffers-25.12.19-py2.py3-none-any.whl",
+   "official_url": "https://files.pythonhosted.org/packages/e8/2d/d2a548598be01649e2d46231d151a6c56d10b964d94043a335ae56ea2d92/flatbuffers-25.12.19-py2.py3-none-any.whl",
+   "sha256": "7634f50c427838bb021c2d66a3d1168e9d199b0607e6329399f04846d42e20b4",
+   "size": 26661,
+   "license_id": "Apache-2.0",
+   "guest_destination": "C:\\kfapps\\py\\Lib\\site-packages",
+   "installer_argv": [],
+   "stage": {
+    "mode": "wheels",
+    "dest": "py\\Lib\\site-packages"
+   },
+   "class": "official-fetch"
+  },
+  {
+   "id": "pywheels/fsspec-2026.9.0-py3-none-any.whl",
+   "package": "pywheels",
+   "name": "fsspec-2026.9.0-py3-none-any.whl",
+   "official_url": "https://files.pythonhosted.org/packages/6c/c0/a98505f18594f1bce828bb159cec0fcf9860562f1a2c85913409fc8f3d9e/fsspec-2026.9.0-py3-none-any.whl",
+   "sha256": "8dd6e646e99ea382bd85f97a45e6b526a442d79423a7dc673f1e2756d05fcb5f",
+   "size": 221738,
+   "license_id": "BSD-3-Clause",
+   "guest_destination": "C:\\kfapps\\py\\Lib\\site-packages",
+   "installer_argv": [],
+   "stage": {
+    "mode": "wheels",
+    "dest": "py\\Lib\\site-packages"
+   },
+   "class": "official-fetch"
+  },
+  {
+   "id": "pywheels/jinja2-3.1.6-py3-none-any.whl",
+   "package": "pywheels",
+   "name": "jinja2-3.1.6-py3-none-any.whl",
+   "official_url": "https://files.pythonhosted.org/packages/62/a1/3d680cbfd5f4b8f15abc1d571870c5fc3e594bb582bc3b64ea099db13e56/jinja2-3.1.6-py3-none-any.whl",
+   "sha256": "85ece4451f492d0c13c5dd7c13a64681a86afae63a5f347908daf103ce6d2f67",
+   "size": 134899,
+   "license_id": "BSD-3-Clause",
+   "guest_destination": "C:\\kfapps\\py\\Lib\\site-packages",
+   "installer_argv": [],
+   "stage": {
+    "mode": "wheels",
+    "dest": "py\\Lib\\site-packages"
+   },
+   "class": "official-fetch"
+  },
+  {
+   "id": "pywheels/markupsafe-3.0.4-cp312-cp312-win_amd64.whl",
+   "package": "pywheels",
+   "name": "markupsafe-3.0.4-cp312-cp312-win_amd64.whl",
+   "official_url": "https://files.pythonhosted.org/packages/3f/bf/62495e180b7000aaf30000fff849e933f74264638057176cf46852500adc/markupsafe-3.0.4-cp312-cp312-win_amd64.whl",
+   "sha256": "11935df9bf455ed0c04eb87bcd720f02b1fe5e02128a9430f23aed6f93336fc7",
+   "size": 14303,
+   "license_id": "BSD-3-Clause",
+   "guest_destination": "C:\\kfapps\\py\\Lib\\site-packages",
+   "installer_argv": [],
+   "stage": {
+    "mode": "wheels",
+    "dest": "py\\Lib\\site-packages"
+   },
+   "class": "official-fetch"
+  },
+  {
+   "id": "pywheels/ml_dtypes-0.6.0-cp312-cp312-win_amd64.whl",
+   "package": "pywheels",
+   "name": "ml_dtypes-0.6.0-cp312-cp312-win_amd64.whl",
+   "official_url": "https://files.pythonhosted.org/packages/ba/db/9c61ec2760b5cbfb1c6558d5c991a6d8fd3271053c32db20506a9a90272b/ml_dtypes-0.6.0-cp312-cp312-win_amd64.whl",
+   "sha256": "2a3e9d53925597fbffafd2a37048dadeddd0bdaba58058f6ae0869ed709a184d",
+   "size": 439333,
+   "license_id": "Apache-2.0",
+   "guest_destination": "C:\\kfapps\\py\\Lib\\site-packages",
+   "installer_argv": [],
+   "stage": {
+    "mode": "wheels",
+    "dest": "py\\Lib\\site-packages"
+   },
+   "class": "official-fetch"
+  },
+  {
+   "id": "pywheels/mpmath-1.3.0-py3-none-any.whl",
+   "package": "pywheels",
+   "name": "mpmath-1.3.0-py3-none-any.whl",
+   "official_url": "https://files.pythonhosted.org/packages/43/e3/7d92a15f894aa0c9c4b49b8ee9ac9850d6e63b03c9c32c0367a13ae62209/mpmath-1.3.0-py3-none-any.whl",
+   "sha256": "a0b2b9fe80bbcd81a6647ff13108738cfb482d481d826cc0e02f5b35e5c88d2c",
+   "size": 536198,
+   "license_id": "BSD-3-Clause",
+   "guest_destination": "C:\\kfapps\\py\\Lib\\site-packages",
+   "installer_argv": [],
+   "stage": {
+    "mode": "wheels",
+    "dest": "py\\Lib\\site-packages"
+   },
+   "class": "official-fetch"
+  },
+  {
+   "id": "pywheels/networkx-3.7-py3-none-any.whl",
+   "package": "pywheels",
+   "name": "networkx-3.7-py3-none-any.whl",
+   "official_url": "https://files.pythonhosted.org/packages/7e/cd/fe58041e9011f307c490e3e17dd48cc516448f7c698a3f2d9d9d65d7e6a8/networkx-3.7-py3-none-any.whl",
+   "sha256": "e3fd2c13a7814cee3746340d8d7f8598a67f16a58bf47fb7f8793fab6efca1b0",
+   "size": 2142205,
+   "license_id": "BSD-3-Clause",
+   "guest_destination": "C:\\kfapps\\py\\Lib\\site-packages",
+   "installer_argv": [],
+   "stage": {
+    "mode": "wheels",
+    "dest": "py\\Lib\\site-packages"
+   },
+   "class": "official-fetch"
+  },
+  {
+   "id": "pywheels/numpy-2.5.3-cp312-cp312-win_amd64.whl",
+   "package": "pywheels",
+   "name": "numpy-2.5.3-cp312-cp312-win_amd64.whl",
+   "official_url": "https://files.pythonhosted.org/packages/3c/a1/accf6d4f0c80c5d9ba9735d6b1550e444180599f34dec69ca01360f717ad/numpy-2.5.3-cp312-cp312-win_amd64.whl",
+   "sha256": "0a59a421a32580a009e8a1751345bf829631b990dc1794b80514ab722b435def",
+   "size": 12567828,
+   "license_id": "BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0 AND LicenseRef-Bundled-Native-Libraries",
+   "guest_destination": "C:\\kfapps\\py\\Lib\\site-packages",
+   "installer_argv": [],
+   "stage": {
+    "mode": "wheels",
+    "dest": "py\\Lib\\site-packages"
+   },
+   "class": "official-fetch"
+  },
+  {
+   "id": "pywheels/onnx-1.23.2-cp312-abi3-win_amd64.whl",
+   "package": "pywheels",
+   "name": "onnx-1.23.2-cp312-abi3-win_amd64.whl",
+   "official_url": "https://files.pythonhosted.org/packages/38/ce/102fd4a0b2a6d111a9c86745e084c4c68c0ee020eaa359a03a8d43e4646f/onnx-1.23.2-cp312-abi3-win_amd64.whl",
+   "sha256": "9b382ba898a7c142a0801d03cf04ecabced96c1543c7b643a86f0928143802de",
+   "size": 7872489,
+   "license_id": "Apache-2.0",
+   "guest_destination": "C:\\kfapps\\py\\Lib\\site-packages",
+   "installer_argv": [],
+   "stage": {
+    "mode": "wheels",
+    "dest": "py\\Lib\\site-packages"
+   },
+   "class": "official-fetch"
+  },
+  {
+   "id": "pywheels/onnxruntime_directml-1.24.4-cp312-cp312-win_amd64.whl",
+   "package": "pywheels",
+   "name": "onnxruntime_directml-1.24.4-cp312-cp312-win_amd64.whl",
+   "official_url": "https://files.pythonhosted.org/packages/88/ea/33814eb0ec96775eda4c1d30b0d86e91d7d2cd0d84c66d3915aef0e06fa3/onnxruntime_directml-1.24.4-cp312-cp312-win_amd64.whl",
+   "sha256": "f2ecb68b7b7b259d2ef3112ae760149f9b5a1e7c0fbb73d539da6250a648a614",
+   "size": 25111930,
+   "license_id": "MIT",
+   "guest_destination": "C:\\kfapps\\py\\Lib\\site-packages",
+   "installer_argv": [],
+   "stage": {
+    "mode": "wheels",
+    "dest": "py\\Lib\\site-packages"
+   },
+   "class": "official-fetch"
+  },
+  {
+   "id": "pywheels/packaging-26.3-py3-none-any.whl",
+   "package": "pywheels",
+   "name": "packaging-26.3-py3-none-any.whl",
+   "official_url": "https://files.pythonhosted.org/packages/63/34/ba1c580383c9eada3711951fef0795c80b829a078d72188184bcab9dd527/packaging-26.3-py3-none-any.whl",
+   "sha256": "d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c",
+   "size": 129956,
+   "license_id": "Apache-2.0 OR BSD-2-Clause",
+   "guest_destination": "C:\\kfapps\\py\\Lib\\site-packages",
+   "installer_argv": [],
+   "stage": {
+    "mode": "wheels",
+    "dest": "py\\Lib\\site-packages"
+   },
+   "class": "official-fetch"
+  },
+  {
+   "id": "pywheels/pillow-12.3.0-cp312-cp312-win_amd64.whl",
+   "package": "pywheels",
+   "name": "pillow-12.3.0-cp312-cp312-win_amd64.whl",
+   "official_url": "https://files.pythonhosted.org/packages/45/89/da2f7971a317f83d807fdd4065c0af40208e59e692cc43d315a71a0e96d1/pillow-12.3.0-cp312-cp312-win_amd64.whl",
+   "sha256": "a2b55dd6b2a4c4b7d87ffa56bdb33fdc5fdb9a462173861a7bc097f17d91cb09",
+   "size": 7227137,
+   "license_id": "MIT-CMU",
+   "guest_destination": "C:\\kfapps\\py\\Lib\\site-packages",
+   "installer_argv": [],
+   "stage": {
+    "mode": "wheels",
+    "dest": "py\\Lib\\site-packages"
+   },
+   "class": "official-fetch"
+  },
+  {
+   "id": "pywheels/protobuf-7.36.2-cp310-abi3-win_amd64.whl",
+   "package": "pywheels",
+   "name": "protobuf-7.36.2-cp310-abi3-win_amd64.whl",
+   "official_url": "https://files.pythonhosted.org/packages/8a/55/b77bda4e5e5f5971fb51b07663694690e9afdb9402136c16a522bd621cad/protobuf-7.36.2-cp310-abi3-win_amd64.whl",
+   "sha256": "a300819d441e078a5608c0d3c709796bb548136058fda017ae51d425b44fd353",
+   "size": 456514,
+   "license_id": "BSD-3-Clause",
+   "guest_destination": "C:\\kfapps\\py\\Lib\\site-packages",
+   "installer_argv": [],
+   "stage": {
+    "mode": "wheels",
+    "dest": "py\\Lib\\site-packages"
+   },
+   "class": "official-fetch"
+  },
+  {
+   "id": "pywheels/setuptools-84.0.0-py3-none-any.whl",
+   "package": "pywheels",
+   "name": "setuptools-84.0.0-py3-none-any.whl",
+   "official_url": "https://files.pythonhosted.org/packages/95/9c/c510029fc6ef33a6275cd2c5d3cecd6613dfd6aa401d57c54f1c18852ccf/setuptools-84.0.0-py3-none-any.whl",
+   "sha256": "51a52592b3b99e102b609654876bd65f19f999935166d1352678931132b0c670",
+   "size": 818216,
+   "license_id": "MIT",
+   "guest_destination": "C:\\kfapps\\py\\Lib\\site-packages",
+   "installer_argv": [],
+   "stage": {
+    "mode": "wheels",
+    "dest": "py\\Lib\\site-packages"
+   },
+   "class": "official-fetch"
+  },
+  {
+   "id": "pywheels/sympy-1.14.0-py3-none-any.whl",
+   "package": "pywheels",
+   "name": "sympy-1.14.0-py3-none-any.whl",
+   "official_url": "https://files.pythonhosted.org/packages/a2/09/77d55d46fd61b4a135c444fc97158ef34a095e5681d0a6c10b75bf356191/sympy-1.14.0-py3-none-any.whl",
+   "sha256": "e091cc3e99d2141a0ba2847328f5479b05d94a6635cb96148ccb3f34671bd8f5",
+   "size": 6299353,
+   "license_id": "BSD-3-Clause",
+   "guest_destination": "C:\\kfapps\\py\\Lib\\site-packages",
+   "installer_argv": [],
+   "stage": {
+    "mode": "wheels",
+    "dest": "py\\Lib\\site-packages"
+   },
+   "class": "official-fetch"
+  },
+  {
+   "id": "pywheels/torch-2.8.0+cu126-cp312-cp312-win_amd64.whl",
+   "package": "pywheels",
+   "name": "torch-2.8.0+cu126-cp312-cp312-win_amd64.whl",
+   "official_url": "https://download.pytorch.org/whl/cu126/torch-2.8.0%2Bcu126-cp312-cp312-win_amd64.whl",
+   "sha256": "f6c79eac0018f9d131479ee1b7a68edb030619a316bfbc69275043aa4f338e4c",
+   "size": 2915418348,
+   "license_id": "BSD-3-Clause AND LicenseRef-NVIDIA-CUDA-EULA",
+   "guest_destination": "C:\\kfapps\\py\\Lib\\site-packages",
+   "installer_argv": [],
+   "stage": {
+    "mode": "wheels",
+    "dest": "py\\Lib\\site-packages"
+   },
+   "class": "official-fetch"
+  },
+  {
+   "id": "pywheels/torchvision-0.23.0+cu126-cp312-cp312-win_amd64.whl",
+   "package": "pywheels",
+   "name": "torchvision-0.23.0+cu126-cp312-cp312-win_amd64.whl",
+   "official_url": "https://download.pytorch.org/whl/cu126/torchvision-0.23.0%2Bcu126-cp312-cp312-win_amd64.whl",
+   "sha256": "e59fc7405f2e0cfceefc2f867794900478871c2639d02779d55dc143657a7bbb",
+   "size": 6227539,
+   "license_id": "BSD-3-Clause",
+   "guest_destination": "C:\\kfapps\\py\\Lib\\site-packages",
+   "installer_argv": [],
+   "stage": {
+    "mode": "wheels",
+    "dest": "py\\Lib\\site-packages"
+   },
+   "class": "official-fetch"
+  },
+  {
+   "id": "pywheels/typing_extensions-4.16.0-py3-none-any.whl",
+   "package": "pywheels",
+   "name": "typing_extensions-4.16.0-py3-none-any.whl",
+   "official_url": "https://files.pythonhosted.org/packages/49/d3/b8441a820a491ddfc024b0b0cf0393375b75ea13866d9c66727e54c2fc80/typing_extensions-4.16.0-py3-none-any.whl",
+   "sha256": "481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8",
+   "size": 45571,
+   "license_id": "PSF-2.0",
+   "guest_destination": "C:\\kfapps\\py\\Lib\\site-packages",
+   "installer_argv": [],
+   "stage": {
+    "mode": "wheels",
+    "dest": "py\\Lib\\site-packages"
+   },
+   "class": "official-fetch"
+  },
+  {
+   "id": "vc_redist/vc_redist.x64.exe",
+   "package": "vc_redist",
+   "name": "vc_redist.x64.exe",
+   "official_url": "https://download.visualstudio.microsoft.com/download/pr/990c720a-46ce-4dc7-87b9-c2eb615d34b9/CC0FF0EB1DC3F5188AE6300FAEF32BF5BEEBA4BDD6E8E445A9184072096B713B/VC_redist.x64.exe",
+   "sha256": "cc0ff0eb1dc3f5188ae6300faef32bf5beeba4bdd6e8e445a9184072096b713b",
+   "size": 25635768,
+   "license_id": "LicenseRef-Microsoft-VC-Redistributable",
+   "guest_destination": "C:\\kfapps\\vc_redist",
+   "installer_argv": [
+    "{file}",
+    "/install",
+    "/quiet",
+    "/norestart"
+   ],
+   "stage": {
+    "mode": "installer",
+    "dest": "vc_redist",
+    "run": [
+     "{file}",
+     "/install",
+     "/quiet",
+     "/norestart"
+    ]
+   },
+   "class": "official-fetch"
+  },
+  {
+   "id": "vulkan_rt/vulkan-runtime-components-1.4.363.0.zip",
+   "package": "vulkan_rt",
+   "name": "vulkan-runtime-components-1.4.363.0.zip",
+   "official_url": "https://sdk.lunarg.com/sdk/download/1.4.363.0/windows/vulkan-runtime-components.zip",
+   "sha256": "a25a927aa8b9f0371048f1861cf88ac3b9bc9b1fb332c42d897c8ab32695769a",
+   "size": 18211191,
+   "license_id": "LicenseRef-LunarG-Vulkan-Runtime",
+   "guest_destination": "C:\\kfapps\\vulkan_rt",
+   "installer_argv": [],
+   "stage": {
+    "mode": "unzip",
+    "dest": "vulkan_rt",
+    "strip_top": true
+   },
+   "class": "official-fetch"
+  }
+ ],
+ "packages": {
+  "cuda_demo_suite": [
+   "cuda_demo_suite/cuda_demo_suite-windows-x86_64-12.9.79-archive.zip"
+  ],
+  "pywheels": [
+   "pywheels/torch-2.8.0+cu126-cp312-cp312-win_amd64.whl",
+   "pywheels/torchvision-0.23.0+cu126-cp312-cp312-win_amd64.whl",
+   "pywheels/cuda_pathfinder-1.8.3-py3-none-any.whl",
+   "pywheels/cupy_cuda12x-14.2.0-cp312-cp312-win_amd64.whl",
+   "pywheels/filelock-4.1.0-py3-none-any.whl",
+   "pywheels/flatbuffers-25.12.19-py2.py3-none-any.whl",
+   "pywheels/fsspec-2026.9.0-py3-none-any.whl",
+   "pywheels/jinja2-3.1.6-py3-none-any.whl",
+   "pywheels/markupsafe-3.0.4-cp312-cp312-win_amd64.whl",
+   "pywheels/ml_dtypes-0.6.0-cp312-cp312-win_amd64.whl",
+   "pywheels/mpmath-1.3.0-py3-none-any.whl",
+   "pywheels/networkx-3.7-py3-none-any.whl",
+   "pywheels/numpy-2.5.3-cp312-cp312-win_amd64.whl",
+   "pywheels/onnx-1.23.2-cp312-abi3-win_amd64.whl",
+   "pywheels/onnxruntime_directml-1.24.4-cp312-cp312-win_amd64.whl",
+   "pywheels/packaging-26.3-py3-none-any.whl",
+   "pywheels/pillow-12.3.0-cp312-cp312-win_amd64.whl",
+   "pywheels/protobuf-7.36.2-cp310-abi3-win_amd64.whl",
+   "pywheels/setuptools-84.0.0-py3-none-any.whl",
+   "pywheels/sympy-1.14.0-py3-none-any.whl",
+   "pywheels/typing_extensions-4.16.0-py3-none-any.whl"
+  ],
+  "llama_cuda": [
+   "llama_cuda/llama-b11541-bin-win-cuda-12.4-x64.zip",
+   "llama_cuda/cudart-llama-bin-win-cuda-12.4-x64.zip"
+  ],
+  "vulkan_rt": [
+   "vulkan_rt/vulkan-runtime-components-1.4.363.0.zip"
+  ],
+  "clpeak_cuda": [
+   "clpeak_cuda/clpeak-3.0.1-windows-AMD64-cuda.zip"
+  ],
+  "cuda_cudart": [
+   "cuda_cudart/cuda_cudart-windows-x86_64-12.9.79-archive.zip"
+  ],
+  "cuda_cccl": [
+   "cuda_cccl/cuda_cccl-windows-x86_64-12.9.27-archive.zip"
+  ],
+  "vc_redist": [
+   "vc_redist/vc_redist.x64.exe"
+  ],
+  "cuda_nvrtc": [
+   "cuda_nvrtc/cuda_nvrtc-windows-x86_64-12.9.86-archive.zip"
+  ],
+  "hf_wheels_extra": [
+   "hf_wheels_extra/certifi-2026.7.22-py3-none-any.whl",
+   "hf_wheels_extra/tqdm-4.70.1-py3-none-any.whl"
+  ]
+ },
+ "driver_versions": {
+  "580.88": "nvidia_driver/580.88"
+ }
+}

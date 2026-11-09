@@ -1,5 +1,5 @@
 === gpu_burn side=host start=2026-09-26T12:57:44+00:00 cmd: cd /opt/apps/bundle/gpu-burn && ./gpu_burn 10
-GPU 0: NVIDIA GeForce RTX 3090 (UUID: GPU-56181f4b-81f6-e17b-9fd5-7e3578375942)
+GPU 0: NVIDIA GeForce RTX 3090 (UUID: GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4efd92)
 cuInit returned 0 (no error)
 Using compare file: compare.fatbin
 Burning for 10 seconds.

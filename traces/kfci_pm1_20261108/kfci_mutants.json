@@ -1,0 +1,404 @@
+{
+  "baseline_tests": 114,
+  "cases": [
+    {
+      "mutant": "wire-javascript-regex-ascii-lost",
+      "count": 2,
+      "killers": [
+        "test_kfci_planner.PlannerSchema.test_driver_date_pattern_uses_ascii_digits_like_javascript",
+        "test_kfci_planner.PlannerSchema.test_driver_version_pattern_uses_ascii_digits_like_javascript"
+      ]
+    },
+    {
+      "mutant": "wire-javascript-end-anchor-lost",
+      "count": 2,
+      "killers": [
+        "test_kfci_planner.PlannerSchema.test_driver_pin_identifier_disallows_trailing_newline_like_javascript",
+        "test_kfci_planner.PlannerSchema.test_driver_version_disallows_trailing_newline_like_javascript"
+      ]
+    },
+    {
+      "mutant": "wire-javascript-string-length-lost",
+      "count": 2,
+      "killers": [
+        "test_kfci_planner.PlannerSchema.test_parameter_array_item_limit_counts_javascript_utf16_units",
+        "test_kfci_planner.PlannerSchema.test_parameter_string_limit_counts_javascript_utf16_units"
+      ]
+    },
+    {
+      "mutant": "apps-image-permissions-widened",
+      "count": 2,
+      "killers": [
+        "test_kfci.ImageCopy.test_group_readable_source_keeps_its_mode",
+        "test_kfci.ImageCopy.test_private_source_stays_private"
+      ]
+    },
+    {
+      "mutant": "wire-seed-steps-silently-skipped",
+      "count": 2,
+      "killers": [
+        "test_kfci_planner.PlannerSchema.test_seed_export_needs_a_migrated_seed_step",
+        "test_kfci_planner.PlannerSchema.test_seed_hint_needs_a_migrated_seed_step"
+      ]
+    },
+    {
+      "mutant": "wire-duplicate-driver-pin-admitted",
+      "count": 2,
+      "killers": [
+        "test_kfci_planner.PlannerSchema.test_conflicting_duplicate_driver_pin_is_refused",
+        "test_kfci_planner.PlannerSchema.test_duplicate_driver_pin_is_refused"
+      ]
+    },
+    {
+      "mutant": "wire-marker-newline-admitted",
+      "count": 4,
+      "killers": [
+        "test_kfci_planner.PlannerSchema.test_assignment_marker_cannot_contain_newline",
+        "test_kfci_planner.PlannerSchema.test_driver_pin_identifier_disallows_trailing_newline_like_javascript",
+        "test_kfci_planner.PlannerSchema.test_driver_version_disallows_trailing_newline_like_javascript",
+        "test_kfci_planner.PlannerSchema.test_instance_marker_cannot_contain_newline"
+      ]
+    },
+    {
+      "mutant": "wire-worst-case-over-reservation-admitted",
+      "count": 2,
+      "killers": [
+        "test_kfci_planner.PlannerSchema.test_smaller_reservation_cannot_admit_worst_case",
+        "test_kfci_planner.PlannerSchema.test_worst_case_cannot_exceed_reservation"
+      ]
+    },
+    {
+      "mutant": "wire-schema-validation-bypassed",
+      "count": 10,
+      "killers": [
+        "test_kfci_planner.PlannerSchema.test_another_nested_unknown_field_is_refused",
+        "test_kfci_planner.PlannerSchema.test_driver_date_disallows_trailing_newline_like_javascript",
+        "test_kfci_planner.PlannerSchema.test_driver_date_pattern_uses_ascii_digits_like_javascript",
+        "test_kfci_planner.PlannerSchema.test_driver_pin_identifier_disallows_trailing_newline_like_javascript",
+        "test_kfci_planner.PlannerSchema.test_driver_version_disallows_trailing_newline_like_javascript",
+        "test_kfci_planner.PlannerSchema.test_driver_version_pattern_uses_ascii_digits_like_javascript",
+        "test_kfci_planner.PlannerSchema.test_nested_unknown_step_field_is_refused",
+        "test_kfci_planner.PlannerSchema.test_parameter_array_item_limit_counts_javascript_utf16_units",
+        "test_kfci_planner.PlannerSchema.test_parameter_string_limit_counts_javascript_utf16_units",
+        "test_kfci_planner.PlannerSchema.test_wrong_nested_types_are_refused"
+      ]
+    },
+    {
+      "mutant": "wire-proposed-runs",
+      "count": 2,
+      "killers": [
+        "test_kfci_planner.PlannerSchema.test_another_proposed_assignment_cannot_execute",
+        "test_kfci_planner.PlannerSchema.test_proposed_assignment_is_not_executable"
+      ]
+    },
+    {
+      "mutant": "wire-unpinned-or-incomplete-driver-runs",
+      "count": 2,
+      "killers": [
+        "test_kfci_planner.PlannerSchema.test_incomplete_pin_is_not_executable",
+        "test_kfci_planner.PlannerSchema.test_unpinned_driver_is_not_executable"
+      ]
+    },
+    {
+      "mutant": "wire-duplicate-instance-id-admitted",
+      "count": 2,
+      "killers": [
+        "test_kfci_planner.PlannerSchema.test_duplicate_instance_ids_are_refused",
+        "test_kfci_planner.PlannerSchema.test_duplicate_later_instance_is_refused"
+      ]
+    },
+    {
+      "mutant": "wire-undeclared-driver-admitted",
+      "count": 2,
+      "killers": [
+        "test_kfci_planner.PlannerSchema.test_missing_guest_driver_reference_is_refused",
+        "test_kfci_planner.PlannerSchema.test_undeclared_driver_reference_is_refused"
+      ]
+    },
+    {
+      "mutant": "wire-artifact-metadata-forged",
+      "count": 2,
+      "killers": [
+        "test_kfci_planner.PlannerExecution.test_wire_needs_cannot_erase_registered_preconditions",
+        "test_kfci_planner.PlannerExecution.test_wire_products_cannot_claim_unproduced_artifacts"
+      ]
+    },
+    {
+      "mutant": "wire-artifact-order-ignored",
+      "count": 2,
+      "killers": [
+        "test_kfci_planner.PlannerExecution.test_different_scoped_artifact_is_unavailable",
+        "test_kfci_planner.PlannerExecution.test_scoped_artifact_order_is_checked"
+      ]
+    },
+    {
+      "mutant": "wire-instance-names-lost",
+      "count": 2,
+      "killers": [
+        "test_kfci_planner.PlannerExecution.test_repeated_run_type_is_not_deduplicated",
+        "test_kfci_planner.PlannerExecution.test_wire_instance_order_and_metadata_are_preserved"
+      ]
+    },
+    {
+      "mutant": "wire-budget-ignored",
+      "count": 2,
+      "killers": [
+        "test_kfci_planner.PlannerExecution.test_later_declared_estimate_is_a_budget_guard",
+        "test_kfci_planner.PlannerExecution.test_reservation_is_a_budget_guard"
+      ]
+    },
+    {
+      "mutant": "wire-declared-estimates-ignored",
+      "count": 2,
+      "killers": [
+        "test_kfci_planner.PlannerExecution.test_later_declared_estimate_is_a_budget_guard",
+        "test_kfci_planner.PlannerExecution.test_reservation_is_a_budget_guard"
+      ]
+    },
+    {
+      "mutant": "apps-product-environment-dropped",
+      "count": 2,
+      "killers": [
+        "test_kfci.Contracts.test_guest_diagnostic_environment_is_kept",
+        "test_kfci.Contracts.test_product_build_environment_is_kept"
+      ]
+    },
+    {
+      "mutant": "assignment-duplicate-json-keys-admitted",
+      "count": 2,
+      "killers": [
+        "test_kfci.Assignments.test_duplicate_json_keys_are_refused",
+        "test_kfci.Contracts.test_nested_duplicate_json_key_is_refused"
+      ]
+    },
+    {
+      "mutant": "assignment-duplicate-step-id-admitted",
+      "count": 2,
+      "killers": [
+        "test_kfci.Assignments.test_invalid_fields_are_refused",
+        "test_kfci.Contracts.test_duplicate_step_id_is_refused"
+      ]
+    },
+    {
+      "mutant": "assignment-unknown-envelope-field-admitted",
+      "count": 2,
+      "killers": [
+        "test_kfci.Assignments.test_invalid_fields_are_refused",
+        "test_kfci.Contracts.test_unknown_assignment_field_cannot_supply_commands"
+      ]
+    },
+    {
+      "mutant": "dependency-cycle-unclear",
+      "count": 2,
+      "killers": [
+        "test_kfci.Contracts.test_mutual_dependency_cycle_has_a_clear_error",
+        "test_kfci.Dependencies.test_cycles_and_missing_products_are_errors"
+      ]
+    },
+    {
+      "mutant": "dependency-ambiguity-guessed",
+      "count": 2,
+      "killers": [
+        "test_kfci.Contracts.test_another_ambiguous_dependency_is_an_error",
+        "test_kfci.Dependencies.test_ambiguous_product_requires_an_explicit_producer"
+      ]
+    },
+    {
+      "mutant": "dependency-missing-producer-unclear",
+      "count": 2,
+      "killers": [
+        "test_kfci.Contracts.test_unavailable_product_has_a_clear_error",
+        "test_kfci.Dependencies.test_cycles_and_missing_products_are_errors"
+      ]
+    },
+    {
+      "mutant": "runner-overdue-pass-admitted",
+      "count": 2,
+      "killers": [
+        "test_kfci.Contracts.test_second_overdue_step_cannot_pass",
+        "test_kfci.Execution.test_an_overdue_pass_is_retry_time"
+      ]
+    },
+    {
+      "mutant": "process-inherited-session",
+      "count": 2,
+      "killers": [
+        "test_kfci.Contracts.test_child_has_its_own_process_group",
+        "test_kfci.Contracts.test_child_has_its_own_session"
+      ]
+    },
+    {
+      "mutant": "cancel-handler-missing",
+      "count": 2,
+      "killers": [
+        "test_kfci.Cancellation.test_cancelled_stage_cleans_its_matrix_and_writes_exit",
+        "test_kfci.Cancellation.test_interrupted_stage_cleans_its_matrix_and_writes_exit"
+      ]
+    },
+    {
+      "mutant": "cancel-swallowed-by-selector",
+      "count": 2,
+      "killers": [
+        "test_kfci.Cancellation.test_cancelled_stage_cleans_its_matrix_and_writes_exit",
+        "test_kfci.Cancellation.test_interrupted_stage_cleans_its_matrix_and_writes_exit"
+      ]
+    },
+    {
+      "mutant": "assignment-required-fields",
+      "count": 2,
+      "killers": [
+        "test_kfci.Assignments.test_missing_required_fields_are_refused",
+        "test_kfci.Contracts.test_missing_version_is_a_validation_error"
+      ]
+    },
+    {
+      "mutant": "assignment-budgets-unchecked",
+      "count": 2,
+      "killers": [
+        "test_kfci.Assignments.test_another_invalid_budget_or_identifier_is_refused",
+        "test_kfci.Assignments.test_invalid_fields_are_refused"
+      ]
+    },
+    {
+      "mutant": "assignment-identifiers-unchecked",
+      "count": 2,
+      "killers": [
+        "test_kfci.Assignments.test_another_invalid_budget_or_identifier_is_refused",
+        "test_kfci.Assignments.test_invalid_fields_are_refused"
+      ]
+    },
+    {
+      "mutant": "dependency-order-unchecked",
+      "count": 2,
+      "killers": [
+        "test_kfci.Dependencies.test_worker_order_is_validated_without_replanning",
+        "test_kfci.Execution.test_invalid_order_is_refused_before_any_work"
+      ]
+    },
+    {
+      "mutant": "runner-continues-after-red",
+      "count": 2,
+      "killers": [
+        "test_kfci.Execution.test_fail_stops_the_following_step",
+        "test_kfci.Execution.test_retry_is_not_pass_and_stops"
+      ]
+    },
+    {
+      "mutant": "runner-admission-guard-removed",
+      "count": 3,
+      "killers": [
+        "test_kfci.Execution.test_budget_is_rechecked_after_each_step",
+        "test_kfci.Execution.test_tail_reserve_is_not_spent",
+        "test_kfci.Execution.test_time_guard_never_starts_a_step_without_its_estimate"
+      ]
+    },
+    {
+      "mutant": "runner-reserve-spent",
+      "count": 2,
+      "killers": [
+        "test_kfci.Contracts.test_second_step_cannot_spend_reserved_tail",
+        "test_kfci.Execution.test_tail_reserve_is_not_spent"
+      ]
+    },
+    {
+      "mutant": "retry-misreported-as-pass",
+      "count": 4,
+      "killers": [
+        "test_kfci.Execution.test_retry_is_not_pass_and_stops",
+        "test_kfci.Execution.test_step_exception_writes_exit_and_is_retry_operator",
+        "test_kfci.Execution.test_time_guard_never_starts_a_step_without_its_estimate",
+        "test_kfci.LaunchModes.test_three_launch_modes_share_the_same_stage_result"
+      ]
+    },
+    {
+      "mutant": "retry-class-optional",
+      "count": 2,
+      "killers": [
+        "test_kfci.Contracts.test_unknown_retry_class_is_rejected",
+        "test_kfci.Execution.test_retry_requires_a_class_and_pass_cannot_have_one"
+      ]
+    },
+    {
+      "mutant": "process-output-unbounded",
+      "count": 2,
+      "killers": [
+        "test_kfci.Processes.test_output_is_bounded_even_without_newlines",
+        "test_kfci.Processes.test_stderr_is_also_bounded"
+      ]
+    },
+    {
+      "mutant": "process-env-inherited",
+      "count": 2,
+      "killers": [
+        "test_kfci.Processes.test_environment_is_allowlisted",
+        "test_kfci.Processes.test_parent_environment_is_not_implicitly_forwarded"
+      ]
+    },
+    {
+      "mutant": "process-timeout-status-forged",
+      "count": 2,
+      "killers": [
+        "test_kfci.Contracts.test_another_timeout_cannot_be_success",
+        "test_kfci.Processes.test_timeout_is_not_success"
+      ]
+    },
+    {
+      "mutant": "apps-failure-ignored",
+      "count": 2,
+      "killers": [
+        "test_kfci.AppsRules.test_failed_app_beats_missing_rows",
+        "test_kfci.AppsRules.test_failed_app_beats_timeout"
+      ]
+    },
+    {
+      "mutant": "apps-missing-rows-pass",
+      "count": 4,
+      "killers": [
+        "test_kfci.AppsRules.test_forced_kill_retries_time",
+        "test_kfci.AppsRules.test_missing_rows_without_timeout_retry_box",
+        "test_kfci.AppsRules.test_one_missing_row_cannot_pass",
+        "test_kfci.AppsRules.test_timeout_retries_time"
+      ]
+    },
+    {
+      "mutant": "apps-timeout-class-lost",
+      "count": 2,
+      "killers": [
+        "test_kfci.AppsRules.test_forced_kill_retries_time",
+        "test_kfci.AppsRules.test_timeout_retries_time"
+      ]
+    },
+    {
+      "mutant": "apps-matrix-rc-ignored",
+      "count": 2,
+      "killers": [
+        "test_kfci.AppsRules.test_dead_matrix_cannot_pass_complete_rows",
+        "test_kfci.AppsRules.test_nonzero_matrix_cannot_pass_complete_rows"
+      ]
+    },
+    {
+      "mutant": "apps-harness-row-is-fail",
+      "count": 2,
+      "killers": [
+        "test_kfci.AppsRules.test_boot_fail_row_is_not_failure",
+        "test_kfci.AppsRules.test_notrun_row_is_not_failure"
+      ]
+    },
+    {
+      "mutant": "apps-isolated-ignored",
+      "count": 2,
+      "killers": [
+        "test_kfci.AppsRules.test_isolated_failure_is_authoritative",
+        "test_kfci.AppsRules.test_isolated_last_row_is_authoritative"
+      ]
+    },
+    {
+      "mutant": "apps-note-unbounded",
+      "count": 2,
+      "killers": [
+        "test_kfci.AppsRules.test_note_is_limited_to_120_characters",
+        "test_kfci.AppsRules.test_progress_and_notes_cannot_grow_to_guest_line_size"
+      ]
+    }
+  ]
+}

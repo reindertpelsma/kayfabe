@@ -1,9 +1,8 @@
 //! Ported from the old kayfabe-doorbell suite: the tests of the composed plane.
-#![allow(unused_imports)]
 
 use crate::*;
 use kf_trap::*;
-use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::AtomicBool;
 
 struct Fixture {
     tokens: Vec<TokenWord>,
@@ -1036,7 +1035,7 @@ fn a_kernel_channel_with_an_untranslatable_operand_is_refused_not_faulted_on_the
     // ⊘ A fault here would be a guest-wide DoS -- UVM treats any channel error as globally fatal.
     use std::sync::atomic::Ordering as O;
     let vmm = plane::Vmm::new();
-    let mut p = Plane::new(&vmm, 32, 0x1f);
+    let p = Plane::new(&vmm, 32, 0x1f);
     let host = RecordingHost::default();
     let mut caps = VmCaps::from_declared(8, 8, 8, 8);
     p.allocate_channel(&mut caps, 3, Route::Translated, 0x33, Owner::Kernel)
@@ -1064,7 +1063,7 @@ fn a_kernel_channel_with_an_untranslatable_operand_is_refused_not_faulted_on_the
 fn a_user_channel_with_the_same_miss_faults_on_the_live_path() {
     use std::sync::atomic::Ordering as O;
     let vmm = plane::Vmm::new();
-    let mut p = Plane::new(&vmm, 32, 0x1f);
+    let p = Plane::new(&vmm, 32, 0x1f);
     let host = RecordingHost::default();
     let mut caps = VmCaps::from_declared(8, 8, 8, 8);
     p.allocate_channel(&mut caps, 4, Route::Translated, 0x44, Owner::User)
@@ -1083,7 +1082,7 @@ fn a_forge_happens_only_for_emulated_work_on_the_live_path() {
     // had its semaphore forwarded, so forging would be a second author for one value.
     use std::sync::atomic::Ordering as O;
     let vmm = plane::Vmm::new();
-    let mut p = Plane::new(&vmm, 32, 0x1f);
+    let p = Plane::new(&vmm, 32, 0x1f);
     let host = RecordingHost::default();
     let mut caps = VmCaps::from_declared(8, 8, 8, 8);
     p.allocate_channel(&mut caps, 5, Route::Emulated, 0x55, Owner::User)
@@ -1111,7 +1110,7 @@ fn a_forge_happens_only_for_emulated_work_on_the_live_path() {
 fn the_cap_refuses_a_channel_on_the_live_path() {
     // §9.1 wired into allocation, which is the only place it can stop a guest starving a neighbour.
     let vmm = plane::Vmm::new();
-    let mut p = Plane::new(&vmm, 32, 0x1f);
+    let p = Plane::new(&vmm, 32, 0x1f);
     let mut caps = VmCaps::from_declared(2, 8, 8, 8);
     assert!(
         p.allocate_channel(&mut caps, 1, Route::Translated, 1, Owner::User)
@@ -1190,7 +1189,7 @@ fn a_stale_mirror_puts_the_token_back_instead_of_poisoning_the_device() {
     // ⇒ §5.6's fence is "the mirror must catch up"; §5.2 says put it back and re-publish.
     use std::sync::atomic::Ordering as O;
     let vmm = plane::Vmm::new();
-    let mut p = Plane::new(&vmm, 32, 0x1f);
+    let p = Plane::new(&vmm, 32, 0x1f);
     let host = RecordingHost::default();
     let mut caps = VmCaps::from_declared(8, 8, 8, 8);
     p.allocate_channel(&mut caps, 3, Route::Translated, 0x33, Owner::Kernel)
@@ -1226,7 +1225,7 @@ fn a_genuinely_untranslatable_kernel_operand_still_refuses() {
     // refuses+poisons on a kernel channel.
     use std::sync::atomic::Ordering as O;
     let vmm = plane::Vmm::new();
-    let mut p = Plane::new(&vmm, 32, 0x1f);
+    let p = Plane::new(&vmm, 32, 0x1f);
     let host = RecordingHost::default();
     let mut caps = VmCaps::from_declared(8, 8, 8, 8);
     p.allocate_channel(&mut caps, 4, Route::Translated, 0x44, Owner::Kernel)
@@ -1244,7 +1243,7 @@ fn no_completion_is_forged_for_work_that_was_refused_or_faulted() {
     // becomes a leak" -- and REFUSED work is the purest case of work that did not happen.
     use std::sync::atomic::Ordering as O;
     let vmm = plane::Vmm::new();
-    let mut p = Plane::new(&vmm, 32, 0x1f);
+    let p = Plane::new(&vmm, 32, 0x1f);
     let host = RecordingHost::default();
     let mut caps = VmCaps::from_declared(8, 8, 8, 8);
     p.allocate_channel(&mut caps, 5, Route::Emulated, 0x55, Owner::User)
@@ -1267,7 +1266,7 @@ fn a_passthrough_token_reached_by_a_worker_is_released_not_wedged() {
     // so retire() returned false forever and the free path spun. Reachable via the trap's
     // load->ring TOCTOU during a chid recycle.
     let vmm = plane::Vmm::new();
-    let mut p = Plane::new(&vmm, 32, 0x1f);
+    let p = Plane::new(&vmm, 32, 0x1f);
     let host = RecordingHost::default();
     let mut caps = VmCaps::from_declared(8, 8, 8, 8);
     p.allocate_channel(&mut caps, 6, Route::Translated, 0x66, Owner::User)
@@ -1293,7 +1292,7 @@ fn allocating_over_a_live_token_is_refused_and_the_caller_learns() {
     // chid 7 for process B; process A rings 7 between the load and the CAS; allocate fails; the
     // word keeps A's host_token; B's rings are served on A's FREED host channel.
     let vmm = plane::Vmm::new();
-    let mut p = Plane::new(&vmm, 32, 0x1f);
+    let p = Plane::new(&vmm, 32, 0x1f);
     let mut caps = VmCaps::from_declared(8, 8, 8, 8);
     p.allocate_channel(&mut caps, 7, Route::Translated, 0x77, Owner::User)
         .unwrap();
@@ -1318,7 +1317,7 @@ fn a_recycled_kernel_chid_does_not_keep_the_kernel_failure_policy() {
     // blast-radius argument.
     use std::sync::atomic::Ordering as O;
     let vmm = plane::Vmm::new();
-    let mut p = Plane::new(&vmm, 32, 0x1f);
+    let p = Plane::new(&vmm, 32, 0x1f);
     let host = RecordingHost::default();
     let mut caps = VmCaps::from_declared(8, 8, 8, 8);
     p.allocate_channel(&mut caps, 9, Route::Translated, 0x99, Owner::Kernel)
@@ -1347,7 +1346,7 @@ fn a_recycled_kernel_chid_does_not_keep_the_kernel_failure_policy() {
 fn a_guest_root_token_index_cannot_panic_the_vmm() {
     // ⊘ `[fable S7]`. `self.tokens[tok as usize]` with no bound. The value is guest-derived.
     let vmm = plane::Vmm::new();
-    let mut p = Plane::new(&vmm, 16, 0xf);
+    let p = Plane::new(&vmm, 16, 0xf);
     let mut caps = VmCaps::from_declared(64, 8, 8, 8);
     // Far past the table; must refuse, not panic.
     let _ = p.allocate_channel(&mut caps, 4_000_000_000, Route::Translated, 1, Owner::User);
@@ -1359,7 +1358,7 @@ fn caps_are_released_on_free_so_a_long_lived_guest_is_not_refused_forever() {
     // ⊘ `[fable H3]`. acquire with no release: a guest that allocated and freed more channels
     // than its cap over its LIFE was refused forever.
     let vmm = plane::Vmm::new();
-    let mut p = Plane::new(&vmm, 32, 0x1f);
+    let p = Plane::new(&vmm, 32, 0x1f);
     let mut caps = VmCaps::from_declared(2, 8, 8, 8);
     for i in 0..20u32 {
         let tok = i % 2;
@@ -1381,7 +1380,7 @@ fn a_hostile_guest_past_its_channel_budget_is_refused_by_name_per_runlist() {
     // runlist's share is untouched, and a free gives the slot back.
     let vmm = plane::Vmm::new();
     let budget = 256u32;
-    let mut p = Plane::for_device(&vmm, 0, 0, kf_chip::Family::Ada, 0x100_0000);
+    let p = Plane::for_device(&vmm, 0, 0, kf_chip::Family::Ada, 0x100_0000);
     let mut caps = VmCaps::from_declared(budget, 8, 8, 8);
     let rl1 = 1u32 << kf_trap::tokenindex::TokenIndex::CHID_BITS;
     for chid in 0..budget {

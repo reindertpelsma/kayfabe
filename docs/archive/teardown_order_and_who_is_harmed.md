@@ -1,3 +1,5 @@
+> **STATUS: SUPERSEDED, 2026-09-21** (archived, w822). Successor: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) and [`THE_ARCHITECTURE_v3.md`](../design/THE_ARCHITECTURE_v3.md). Historical record: a `STATUS` line further down says what the document claimed when it was written; it is no longer a claim about the current tree.
+>
 > ⊘⊘⊘ **ARCHIVED — THIS DESCRIBES A SUPERSEDED ARCHITECTURE. IT IS REFERENCE, NOT CURRENT.**
 > The live design is `docs/design/THE_DESIGN.md`. This file is kept because its *measurements*,
 > its *ogkm findings* and its *reasoning* remain useful — its **architecture does not**. Do not
@@ -5,7 +7,7 @@
 
 # Teardown order, and who is harmed — is stop-before-unmap guaranteed by a compliant guest?
 
-> **STATUS: LIVE — 2026-08-14 (w307).** Read-only adjudication. ⊘ **Nothing was built, booted or
+> **STATUS AT WRITING: LIVE — 2026-08-14 (w307).** Read-only adjudication. ⊘ **Nothing was built, booted or
 > measured on hardware for this document.** Every claim is read off `ogkm-580.159.04`, kayfabe
 > source at master `74200b2b`, or a committed measurement made by somebody else — and each claim
 > says which. Where a claim needs a boot it says so and is **not** asserted.

@@ -64,6 +64,35 @@ export async function buildFixture() {
       await get(base + '&source=reproduced,community');
       await get(base + '&source=community');
     }
+  // Run reports, subruns and stats (migration 0004): the status pages' run page, "closest match"
+  // lists and the stats page. Every die that has a report, per guest OS, plus the explained
+  // relaxation examples, an exact-only query and a custom relax order.
+  const reported = [
+    ...new Set(
+      rows.ci_runs
+        .filter((r) => rows.ci_run_reports.some((p) => p.run_id === r.run_id))
+        .map((r) => r.die),
+    ),
+  ].sort();
+  await get('/v1/ci/stats');
+  for (const tier of CI_TIERS) await get('/v1/ci/stats?tier=' + tier);
+  for (const os of ['linux', 'windows', 'host']) await get('/v1/ci/stats?os=' + os);
+  for (const die of reported) {
+    await get('/v1/ci/stats?die=' + die);
+    for (const os of ['linux', 'windows'])
+      await get('/v1/ci/subruns?die=' + die + '&os=' + os + '&include=counts');
+  }
+  await get('/v1/ci/subruns');
+  await get('/v1/ci/subruns?include=counts,perf&limit=5');
+  const near = '?die=GA106&os=windows&host_driver=580.95.05&guest_driver=580.88&cpu=amd';
+  await get('/v1/ci/subruns' + near + '&include=counts');
+  await get('/v1/ci/subruns' + near + '&min_closeness=0&include=counts');
+  await get('/v1/ci/subruns' + near + '&require=die,os&include=counts');
+  await get(
+    '/v1/ci/subruns' + near + '&relax=host_driver,guest_driver,cpu,die,family&include=counts',
+  );
+  await get('/v1/ci/subruns' + near + '&sort=recent&include=stages,tests,perf');
+  await get('/v1/ci/subruns?die=AD102&os=linux&host_driver=575.64.05&include=counts');
   return {
     synthetic: true,
     note:

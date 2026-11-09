@@ -3,6 +3,12 @@ import {refuse,numericId,budgetRefuse} from './policy.js';
 // prettier-ignore
 import {logChain} from './tokens.js';
 import { profileCaps, budgetClass } from './policy.js';
+import { LOG_MAX_BYTES, workerPiece, boxPiece } from './publiclog.js';
+// Queue of the public log and report of a settled leg (src/publish.js): plogq:<run key>:<leg>.
+export const PUBLISH_PREFIX = 'plogq:';
+export const publishEntryKey = (record) =>
+  PUBLISH_PREFIX + record.key + ':' + (record.providerRetries ?? 0);
+export const reportChunkKey = (key, leg, i) => 'rreport:' + key + ':' + leg + ':' + i;
 // One leg's estimated provider spend; previous legs remain separate durable cost receipts.
 export function rentalCost(record, at) {
   return (
@@ -79,6 +85,24 @@ export class Ledger {
       chunk += line;
     }
     await flush();
+  }
+  // The text the box streamed, kept WHOLE for the public log (src/publiclog.js). Unlike appendLog
+  // this is not display text: nothing is stripped here, the redaction happens when the log is
+  // published. One storage value per post (a post carries at most 60000 bytes). The only limit is
+  // the public log's own cap; what does not fit is counted (plogDropped) and said in the log.
+  async appendPublicLog(record, text, cap = LOG_MAX_BYTES, worker = false) {
+    if (typeof text !== 'string' || text === '') return;
+    text = worker ? workerPiece(text) : boxPiece(text);
+    const bytes = new TextEncoder().encode(text).length;
+    record.plogChunks ??= 0;
+    record.plogBytes ??= 0;
+    if (record.plogBytes + bytes > cap) {
+      record.plogDropped = (record.plogDropped ?? 0) + bytes;
+      return;
+    }
+    await this.put('plog:' + record.key + ':' + record.plogChunks, text);
+    record.plogChunks++;
+    record.plogBytes += bytes;
   }
   async logPage(record, cursor, count = 4) {
     const end = Math.min(record.logChunks ?? 0, cursor + count);
@@ -273,6 +297,29 @@ export class Ledger {
       });
       await storage.delete('open:' + record.key);
       await ledger.put('ended:' + record.key, now);
+      // The public log and the run report of this leg are published by the cron, off this queue
+      // (src/publish.js). The entry holds only what that job needs, fixed at this moment: the
+      // chunk counts and the values to redact (a replacement leg changes the record).
+      if ((record.plogChunks ?? 0) > 0 || record.runReport) {
+        await ledger.put(publishEntryKey(record), {
+          attempts: 0,
+          chunks: record.plogChunks ?? 0,
+          dropped: record.plogDropped ?? 0,
+          rchunks: record.runReport?.chunks ?? 0,
+          leg: record.providerRetries ?? 0,
+          key: record.key,
+          run: record.run,
+          attempt: record.attempt,
+          sha: record.sha,
+          nonce: record.nonce,
+          // The values the box held in earlier legs of this run or at rent time (review of #282, F4/F5).
+          priorNonces: record.priorNonces ?? [],
+          known: record.known ?? [],
+          runnerNonce: record.runnerNonce ?? null,
+          reportExpiry: record.reportExpiry,
+          at: now,
+        });
+      }
       if ((await ledger.get('active')) === record.key) await storage.delete('active');
     });
   }
@@ -308,6 +355,12 @@ export class Ledger {
         await this.storage.delete('log:' + key + ':' + i);
         await this.storage.delete('log-hash:' + key + ':' + i);
       }
+      // The public log's pieces, the report chunks of every leg and the publish entries of this run.
+      for (let i = 0; i < (record?.plogChunks ?? 0); i++)
+        await this.storage.delete('plog:' + key + ':' + i);
+      for (const prefix of ['rreport:' + key + ':', PUBLISH_PREFIX + key + ':'])
+        for (const [name] of await this.storage.list({ prefix, limit: 256 }))
+          await this.storage.delete(name);
       if (record?.id && (await this.get('id:' + record.id)) === key)
         await this.storage.delete('id:' + record.id);
       for (const name of ['run:', 'run-pr:', 'record:']) await this.storage.delete(name + key);
