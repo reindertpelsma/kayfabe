@@ -707,6 +707,24 @@ class StripStep(unittest.TestCase):
             self.assertIn("exactly one", both.stdout)
             self.assertTrue(STRIP_KEPT < tree_files(root) and "docs/guide.txt" in tree_files(root))
 
+    def test_strip_without_a_target_is_refused_with_the_reason(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.repo(tmp)
+            p = run_cli(root, "strip")
+            self.assertEqual(p.returncode, 3, p.stdout + p.stderr)
+            self.assertIn("exactly one of --in-place and --dest", p.stdout)
+            self.assertNotIn("Traceback", p.stderr)
+
+    def test_strip_with_both_targets_deletes_nothing_and_exports_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.repo(tmp)
+            before = tree_files(root)
+            dest = os.path.join(tmp, "o")
+            p = run_cli(root, "strip", "--in-place", "--dest", dest)
+            self.assertEqual(p.returncode, 3, p.stdout + p.stderr)
+            self.assertEqual(tree_files(root), before)
+            self.assertFalse(os.path.exists(dest))
+
     def test_a_non_empty_destination_is_refused(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = self.repo(tmp)
@@ -1163,6 +1181,14 @@ class TreeKey(unittest.TestCase):
                 p = run_cli(root, cmd)
                 self.assertEqual(p.returncode, 3, cmd + p.stdout + p.stderr)
                 self.assertIn("IGNORE_LADDER_FAIL_CLOSED", p.stdout)
+
+    def test_keycheck_without_the_worker_tree_names_the_missing_helper(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_repo(tmp, STRIP_FILES, {".workerignore": STRIP_IGNORE})[0]
+            p = run_cli(root, "keycheck")
+            self.assertIn("IGNORE_LADDER_FAIL_CLOSED", p.stdout)
+            self.assertIn("tree-key.mjs", p.stdout)
+            self.assertNotIn("IGNORE_KEY python=", p.stdout)
 
     def test_keycheck_needs_the_worker_tree(self):
         with tempfile.TemporaryDirectory() as tmp:
