@@ -21,7 +21,7 @@ the coordinator and the owner agreed; it is binding as intent and can still chan
 | | LARGEST (release) | MIDDLE (PR to master) | SMALL |
 |---|---|---|---|
 | Event | release tag | PR to master (the `next` -> master batch) | push, and manual |
-| Coverage | middle plus SPECviewperf and a real LLM workload; at least 1 driver and 2 dies per family; Windows and Linux required on Turing, Ampere, Ada and Blackwell; at least 2 Windows runs per die | today's check plus all 63 Linux middle-list apps and Windows `mid`'s 10 apps (including all 8 small apps) | today's Linux bar and required Windows gate; no apps request |
+| Coverage | middle plus SPECviewperf and a real LLM workload; at least 1 driver and 2 dies per family; Windows and Linux required on Turing, Ampere, Ada and Blackwell; at least 2 Windows runs per die | today's check plus all 66 supported Linux apps and Windows `mid`'s 10 apps (including all 8 small apps) | today's Linux bar and required Windows gate; no apps request |
 | Parallelism | up to 8 Vast boxes at once | 1 box | rides on the box the middle run already rented (AGREED RECOMMENDATION) |
 | Time and cost | hours and several USD are fine; real workload execution is DESIGN-ONLY | 300 min hard limit: reserve 205 min for Linux apps + Windows gate + Windows mid apps, 85 min for earlier work and 10 min soft margin; RETRY on insufficient time | existing check budget; no new apps allocation |
 | Excluded | nothing by tier intent; LLM slot is refused pending its adapter | SPECviewperf and real LLM workload | SPECviewperf, real LLM workload and apps |

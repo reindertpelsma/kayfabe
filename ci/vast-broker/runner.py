@@ -534,7 +534,7 @@ def provider_id(v):
 
 
 # Trusted BASE expectations. Tests bind these counts to the supported middle catalogues.
-MIDDLE_APP_COUNTS = {"apps": 63, "windows_apps": 10}
+MIDDLE_APP_COUNTS = {"apps": 66, "windows_apps": 10}
 
 
 def read_apps_policy(availability, ctx, profile):
@@ -554,6 +554,15 @@ def read_apps_policy(availability, ctx, profile):
 def complete_requested_apps(suites):
     counts = {row["name"]: row["pass"] for row in suites}
     return all(counts.get(name) == count for name, count in MIDDLE_APP_COUNTS.items())
+
+
+def retry_only_failures(suites):
+    """Untrusted retry rows cannot override any attributed or otherwise non-retry failure."""
+    failures = [r for r in suites if r["fail"]]
+    return bool(failures) and all(
+        r["name"].startswith(("windows_retry_", "apps_retry_", "windows_apps_retry_"))
+        for r in failures
+    )
 
 
 def validate_availability(data, profile):
@@ -1209,8 +1218,7 @@ class Runner:
         # Keep room for the census of the middle (<= CENSUS_LINES + 1 lines, ~2 KB) before the tail.
         room_bytes = max(0, min(TAIL_BYTES, DISPLAY_BYTES - self.displayed - 512 - 2048))
         room_lines = max(
-            0,
-            min(TAIL_LINES, DISPLAY_LINES - 1 - self.display_lines - CENSUS_LINES - 1),
+            0, min(TAIL_LINES, DISPLAY_LINES - 1 - self.display_lines - CENSUS_LINES - 1)
         )
         skipped, tail = take_tail(rest, room_bytes, room_lines)
         middle = len(raw) - self.head_end - len(tail.encode())
@@ -1550,18 +1558,10 @@ class Runner:
                         "verdict": data["verdict"],
                         "verified": 1,
                     }
-                    # Lane 2: a failing windows_retry_<class> row is a host, harness or rental
-                    # fault (re-run on a fresh box), never a pass. Box data: it can only relabel
-                    # a FAIL so the workflow says RETRY; it never changes the verdict.
+                    # Retry classification requires every failure to be retry-class evidence.
+                    # Any attributed guest/harness failure takes priority over untrusted retries.
                     self.retry = int(
-                        data["verdict"] == "FAIL"
-                        and any(
-                            r["fail"]
-                            and r["name"].startswith(
-                                ("windows_retry_", "apps_retry_", "windows_apps_retry_")
-                            )
-                            for r in data.get("suites") or []
-                        )
+                        data["verdict"] == "FAIL" and retry_only_failures(data.get("suites") or [])
                     )
                     self.show(data["gpu_model"])
                     break

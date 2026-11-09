@@ -82,7 +82,8 @@ export const TIER_CONTENTS = Object.freeze({
 });
 // Owner 2026-11-09: real apps are mandatory only for the signed middle tier.
 // Callers request this exact pair; neither PR request fields nor informational box fields choose policy.
-export const MIDDLE_APP_COUNTS = Object.freeze({ apps: 63, windows_apps: 10 });
+// Middle includes every supported Linux probe, including clpeak, gpu_burn and vkpeak.
+export const MIDDLE_APP_COUNTS = Object.freeze({ apps: 66, windows_apps: 10 });
 // A validated box PASS is still incomplete without the suites requested at admission.
 // Only narrow PASS to an operator failure. Never relabel an attributed guest FAIL.
 export function middleAppsResult(result, requested) {

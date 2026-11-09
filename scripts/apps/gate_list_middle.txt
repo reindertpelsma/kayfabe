@@ -1,4 +1,4 @@
-# Linux app gate list, MIDDLE tier: the full list without the apps that need more than 60 s in the guest (63 apps; left out: gpu_burn, vkpeak, clpeak)
+# Linux app gate list, MIDDLE tier: all 66 supported probes (owner clarification 2026-11-09, RV2 F2)
 # Generated from the per-app table of traces/apps_linux_20261107/ (RTX 4090, kf3 144557e4, 2026-11-07): the apps
 # that passed on bare metal AND in the Linux guest. One app per line, in run order. A change to this list is a
 # change to the gate: say why in the commit. Regenerate with scripts/apps/matrix_table.py --gate-list.
@@ -56,6 +56,7 @@ stream_nonblocking
 stream_perthread
 stream_two
 stream_created2nd
+gpu_burn
 torch_correct
 torch_ai_bench
 hf_generate
@@ -63,8 +64,10 @@ cupy
 llama_cpp_gen
 llama_bench
 vulkaninfo
+vkpeak
 egl_offscreen
 clinfo
+clpeak
 nvenc_h264
 nvenc_hevc
 nvdec_h264

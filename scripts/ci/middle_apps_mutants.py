@@ -89,7 +89,23 @@ CASES = [
         "return True",
         "py",
     ),
-    ("linux-count-weakened", BROKER + "runner.py", '"apps": 63', '"apps": 62', "py"),
+    ("linux-count-weakened", BROKER + "runner.py", '"apps": 66', '"apps": 63', "py"),
+    (
+        "middle-linux-restores-old-63-probe-subset",
+        "scripts/apps/gate_list_middle.txt",
+        ["gpu_burn\n", "vkpeak\n", "clpeak\n"],
+        ["", "", ""],
+        "py",
+    ),
+    (
+        "mixed-app-failure-laundered-as-retry",
+        BROKER + "runner.py",
+        "@retry_only_failures",
+        'return any(r["fail"] and r["name"].startswith(\n'
+        '    ("windows_retry_", "apps_retry_", "windows_apps_retry_")\n'
+        ") for r in suites)",
+        "node",
+    ),
     (
         "windows-count-weakened",
         BROKER + "runner.py",
@@ -372,6 +388,13 @@ def main():
         ]:
             shutil.copytree(ROOT / name, root / name, ignore=ignore)
         shutil.copyfile(ROOT / "ci/requirements.toml", root / "ci/requirements.toml")
+        for relative in (
+            "traces/apps_linux_20261107/g1/gate_full.out",
+            "traces/apps_linux_20261107/g2/gate_mid.out",
+        ):
+            target = root / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(ROOT / relative, target)
         (root / BROKER / "node_modules").symlink_to(
             ROOT / BROKER / "node_modules", target_is_directory=True
         )

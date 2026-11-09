@@ -489,8 +489,8 @@ def linuxapps_requested(environ, tier):
     return True
 
 
-# The release tier (`large`) runs the FULL gate list; `middle` runs the same list without the apps that need
-# more than a minute in the guest (scripts/apps/gate_list_middle.txt), so it fits the middle tier's budget.
+# Both tiers require every supported Linux app. The middle profile mirrors the full 66-probe list;
+# unsupported UVM rows stay nonpassing policy metadata. Large adds its separate real workloads.
 APPS_LISTS = {"large": ("gate_list.txt", "full"), "middle": ("gate_list_middle.txt", "middle")}
 
 

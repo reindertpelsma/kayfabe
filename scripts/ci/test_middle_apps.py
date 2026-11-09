@@ -73,14 +73,14 @@ class TrustedRunner(unittest.TestCase):
             runner_nonce=ctx["nonce"],
             log_sha256="0" * 64,
             **manifest,
-            **fixture["extra_status"](verdict)
+            **fixture["extra_status"]("PASS")
         )
         status["verdict"] = verdict
         status["suites"] += rows if rows is not None else []
         if rows is None and enabled:
             status["suites"] += [
                 dict(name=n, **{"pass": c, "fail": 0, "skip": 0})
-                for n, c in [("apps", 63), ("windows_apps", 10)]
+                for n, c in [("apps", 66), ("windows_apps", 10)]
             ]
         calls = []
 
@@ -144,7 +144,7 @@ class TrustedRunner(unittest.TestCase):
 
     def test_requested_windows_stage_cannot_disappear_from_a_pass(self):
         result, controller, _ = self.execute(
-            rows=[dict(name="apps", **{"pass": 63, "fail": 0, "skip": 0})]
+            rows=[dict(name="apps", **{"pass": 66, "fail": 0, "skip": 0})]
         )
         self.assertEqual(result["verdict"], "FAIL")
         self.assertEqual(controller.retry, 1)
@@ -152,14 +152,14 @@ class TrustedRunner(unittest.TestCase):
     def test_linux_count_cannot_shrink(self):
         rows = [
             dict(name=n, **{"pass": c, "fail": 0, "skip": 0})
-            for n, c in [("apps", 62), ("windows_apps", 10)]
+            for n, c in [("apps", 65), ("windows_apps", 10)]
         ]
         self.assertEqual(self.execute(rows=rows)[0]["verdict"], "FAIL")
 
     def test_windows_mid_count_cannot_shrink(self):
         rows = [
             dict(name=n, **{"pass": c, "fail": 0, "skip": 0})
-            for n, c in [("apps", 63), ("windows_apps", 9)]
+            for n, c in [("apps", 66), ("windows_apps", 9)]
         ]
         self.assertEqual(self.execute(rows=rows)[0]["verdict"], "FAIL")
 
@@ -235,6 +235,53 @@ class TrustedRunner(unittest.TestCase):
             if line and not line.startswith("#")
         ]
         self.assertEqual(r.MIDDLE_APP_COUNTS["apps"], len(names))
+
+    def test_middle_count_covers_every_supported_linux_probe(self):
+        names = apps.payload().apps_gate_list(ROOT, "large")
+        self.assertEqual(r.MIDDLE_APP_COUNTS["apps"], len(names))
+        self.assertEqual(len(names), 66)
+
+    def test_middle_cannot_accept_the_old_63_app_pass(self):
+        rows = [
+            dict(name=n, **{"pass": c, "fail": 0, "skip": 0})
+            for n, c in [("apps", 63), ("windows_apps", 10)]
+        ]
+        result, controller, _ = self.execute(rows=rows)
+        self.assertEqual(result["verdict"], "FAIL")
+        self.assertEqual(controller.retry, 1)
+
+    def review_failure(self, names, expected_retry):
+        rows = [dict(name=n, **{"pass": 0, "fail": 1, "skip": 0}) for n in names]
+        result, controller, _ = self.execute(verdict="FAIL", rows=rows)
+        self.assertEqual((result["verdict"], result["verified"]), ("FAIL", 1))
+        self.assertEqual(controller.retry, expected_retry)
+
+    def test_rv2_linux_failure_only_is_guest_fail(self):
+        self.review_failure(["apps"], 0)
+
+    def test_rv2_media_retry_only_is_retry(self):
+        self.review_failure(["apps_retry_media"], 1)
+
+    def test_rv2_linux_failure_overrides_its_operator_retry(self):
+        self.review_failure(["apps", "apps_retry_operator"], 0)
+
+    def test_rv2_linux_failure_overrides_windows_media_retry(self):
+        self.review_failure(["apps", "windows_apps_retry_media"], 0)
+
+    def test_rv2_windows_failure_overrides_linux_media_retry(self):
+        self.review_failure(["windows_apps", "apps_retry_media"], 0)
+
+    def test_rv2_windows_failure_overrides_its_operator_retry(self):
+        self.review_failure(["windows_apps", "windows_apps_retry_operator"], 0)
+
+    def test_all_retry_failures_still_request_retry(self):
+        self.review_failure(["apps_retry_media", "windows_apps_retry_operator"], 1)
+
+    def test_other_attributed_failure_overrides_app_retry(self):
+        self.review_failure(["windows_gate", "apps_retry_media"], 0)
+
+    def test_unknown_failure_cannot_be_hidden_by_an_app_retry(self):
+        self.review_failure(["custom_failure", "windows_apps_retry_operator"], 0)
 
 
 class TrustedMain(unittest.TestCase):
@@ -316,15 +363,32 @@ class PayloadMiddle(unittest.TestCase):
     setUp = v7.V7Tests.setUp
     _main_fixture = v7.V7Tests._main_fixture
 
-    def go(self, soft=300, logs=None, env=None, probe=None):
+    def test_payload_middle_contains_the_entire_supported_linux_set(self):
+        self.assertEqual(
+            self.m.apps_gate_list(ROOT, "middle"), self.m.apps_gate_list(ROOT, "large")
+        )
+
+    def test_full_66_probe_record_passes_the_middle_grader(self):
+        names = self.m.apps_gate_list(ROOT, "middle")
+        text = (ROOT / "traces/apps_linux_20261107/g1/gate_full.out").read_text()
+        self.assertEqual(self.m.apps_rows(text, 0, names), [self.m.row("apps", 66)])
+
+    def test_historical_63_probe_record_cannot_pass_middle(self):
+        names = self.m.apps_gate_list(ROOT, "middle")
+        text = (ROOT / "traces/apps_linux_20261107/g2/gate_mid.out").read_text()
+        with self.assertRaises(self.m.EvidenceError):
+            self.m.apps_rows(text, 0, names)
+
+    def go(self, soft=300, logs=None, env=None, probe=None, names=None):
+        names = apps.NAMES if names is None else names
         extra = {"KF_TIER": "middle", "KF_LINUX_APPS": "1", "KF_WINAPPS": "mid"}
         extra.update(env or {})
         stage_logs = {
-            "apps": (apps.log(), 0),
+            "apps": (apps.log(names=names), 0),
             "windows_apps": winapps.apps_log("PASS", profile="mid"),
         }
         stage_logs.update(logs or {})
-        with patch.object(self.m, "apps_gate_list", return_value=apps.NAMES):
+        with patch.object(self.m, "apps_gate_list", return_value=names):
             return self._main_fixture(
                 windows="1",
                 soft_ms=soft * 60000,
@@ -337,6 +401,36 @@ class PayloadMiddle(unittest.TestCase):
         rc, result, calls = self.go()
         self.assertEqual(rc, 0, result)
         self.assertEqual(calls[-3:], ["apps", "windows_gate", "windows_apps"])
+
+    def test_all_66_apps_and_windows_mid_fit_the_declared_suffix(self):
+        names = self.m.apps_gate_list(ROOT, "middle")
+        text, rc = winapps.apps_log("PASS", profile="mid")
+        text = text.replace(
+            "WINAPPS_GRADE",
+            "".join(
+                "WINAPPS_APP app=a%d class=pass verdict=PASS batched=PASS alone=- "
+                "secs=1 tdr=0 wer=0 gsp=0 note=-\n" % i
+                for i in (8, 9)
+            )
+            + "WINAPPS_GRADE",
+        )
+        text = text.replace("expected=8 pass=8", "expected=10 pass=10").replace(
+            " apps=8 ", " apps=10 "
+        )
+        rc, result, calls = self.go(
+            soft=206, names=names, logs={"windows_apps": (text, rc)}
+        )
+        self.assertEqual(rc, 0, result)
+        self.assertEqual(calls[-3:], ["apps", "windows_gate", "windows_apps"])
+        counts = {row["name"]: row["pass"] for row in result["suites"]}
+        self.assertEqual((counts["apps"], counts["windows_apps"]), (66, 10))
+
+    def test_all_66_apps_do_not_start_with_less_than_the_full_suffix(self):
+        names = self.m.apps_gate_list(ROOT, "middle")
+        rc, result, calls = self.go(soft=204, names=names)
+        self.assertEqual(rc, 1)
+        self.assertNotIn("apps", calls)
+        self.assertIn("apps_retry_time", [row["name"] for row in result["suites"]])
 
     def test_linux_missing_output_is_retry_never_pass(self):
         rc, result, _ = self.go(logs={"apps": ("", 0)})

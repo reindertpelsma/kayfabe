@@ -1,0 +1,409 @@
+{
+  "baselines": {
+    "py": 66,
+    "node": 40,
+    "config": 17
+  },
+  "cases": [
+    {
+      "mutant": "missing-bundle-marker-trusted",
+      "count": 4,
+      "killers": [
+        "test_middle_apps.MissingMediaStage.test_full_stale_marker_with_empty_bundle_is_media",
+        "test_middle_apps.MissingMediaStage.test_full_stale_marker_without_bundle_is_media",
+        "test_middle_apps.MissingMediaStage.test_middle_stale_marker_with_empty_bundle_is_media",
+        "test_middle_apps.MissingMediaStage.test_middle_stale_marker_without_bundle_is_media"
+      ]
+    },
+    {
+      "mutant": "missing-bundle-not-media",
+      "count": 6,
+      "killers": [
+        "test_middle_apps.MissingMediaStage.test_full_missing_bundle_also_uses_media",
+        "test_middle_apps.MissingMediaStage.test_full_stale_marker_with_empty_bundle_is_media",
+        "test_middle_apps.MissingMediaStage.test_full_stale_marker_without_bundle_is_media",
+        "test_middle_apps.MissingMediaStage.test_middle_missing_bundle_is_media_without_launching_apps",
+        "test_middle_apps.MissingMediaStage.test_middle_stale_marker_with_empty_bundle_is_media",
+        "test_middle_apps.MissingMediaStage.test_middle_stale_marker_without_bundle_is_media"
+      ]
+    },
+    {
+      "mutant": "llm-payload-slot-enabled",
+      "count": 4,
+      "killers": [
+        "test_middle_apps.TierDefinitionTests.test_llm_cannot_be_requested_as_a_large_stage",
+        "test_middle_apps.TierDefinitionTests.test_llm_only_cannot_silently_run_an_incomplete_large_tier",
+        "test_middle_apps.TierDefinitionTests.test_llm_plus_spec_cannot_start_any_work",
+        "test_middle_apps.TierDefinitionTests.test_llm_slot_is_explicitly_design_only"
+      ]
+    },
+    {
+      "mutant": "llm-worker-slot-enabled",
+      "count": 2,
+      "killers": [
+        "SPEC plus LLM cannot enable an unimplemented release stage",
+        "the LLM slot is reserved in the release catalogue and cannot be enabled"
+      ]
+    },
+    {
+      "mutant": "large-loses-middle-inheritance",
+      "count": 2,
+      "killers": [
+        "large retains the complete inherited probe profiles before adding workloads",
+        "large tier contract inherits middle and adds SPEC plus reserved LLM"
+      ]
+    },
+    {
+      "mutant": "base-policy-read-required",
+      "count": 2,
+      "killers": [
+        "test_middle_apps.TrustedMain.test_pr_inputs_cannot_disable_authenticated_policy_read",
+        "test_middle_apps.TrustedMain.test_push_inputs_cannot_supply_the_apps_policy"
+      ]
+    },
+    {
+      "mutant": "policy-binding-unchecked",
+      "count": 3,
+      "killers": [
+        "test_middle_apps.TrustedRunner.test_nonboolean_policy_is_rejected_before_rent",
+        "test_middle_apps.TrustedRunner.test_small_policy_cannot_enable_apps",
+        "test_middle_apps.TrustedRunner.test_wrong_run_policy_is_rejected_before_rent"
+      ]
+    },
+    {
+      "mutant": "linux-request-dropped",
+      "count": 2,
+      "killers": [
+        "test_middle_apps.TrustedRunner.test_middle_requests_both_real_app_stages",
+        "test_middle_apps.TrustedRunner.test_pr_request_fields_cannot_disable_middle_apps"
+      ]
+    },
+    {
+      "mutant": "windows-request-dropped",
+      "count": 2,
+      "killers": [
+        "test_middle_apps.TrustedRunner.test_middle_requests_both_real_app_stages",
+        "test_middle_apps.TrustedRunner.test_pr_request_fields_cannot_disable_middle_apps"
+      ]
+    },
+    {
+      "mutant": "missing-stage-pass",
+      "count": 5,
+      "killers": [
+        "test_middle_apps.TrustedRunner.test_linux_count_cannot_shrink",
+        "test_middle_apps.TrustedRunner.test_middle_cannot_accept_the_old_63_app_pass",
+        "test_middle_apps.TrustedRunner.test_requested_linux_stage_cannot_disappear_from_a_pass",
+        "test_middle_apps.TrustedRunner.test_requested_windows_stage_cannot_disappear_from_a_pass",
+        "test_middle_apps.TrustedRunner.test_windows_mid_count_cannot_shrink"
+      ]
+    },
+    {
+      "mutant": "linux-count-weakened",
+      "count": 4,
+      "killers": [
+        "test_middle_apps.TrustedRunner.test_middle_cannot_accept_the_old_63_app_pass",
+        "test_middle_apps.TrustedRunner.test_middle_count_covers_every_supported_linux_probe",
+        "test_middle_apps.TrustedRunner.test_middle_requests_both_real_app_stages",
+        "test_middle_apps.TrustedRunner.test_python_linux_count_matches_supported_middle_gate"
+      ]
+    },
+    {
+      "mutant": "middle-linux-restores-old-63-probe-subset",
+      "count": 5,
+      "killers": [
+        "test_middle_apps.PayloadMiddle.test_all_66_apps_and_windows_mid_fit_the_declared_suffix",
+        "test_middle_apps.PayloadMiddle.test_full_66_probe_record_passes_the_middle_grader",
+        "test_middle_apps.PayloadMiddle.test_historical_63_probe_record_cannot_pass_middle",
+        "test_middle_apps.PayloadMiddle.test_payload_middle_contains_the_entire_supported_linux_set",
+        "test_middle_apps.TrustedRunner.test_python_linux_count_matches_supported_middle_gate"
+      ]
+    },
+    {
+      "mutant": "mixed-app-failure-laundered-as-retry",
+      "count": 4,
+      "killers": [
+        "Worker to BASE failure precedence: apps + apps_retry_operator",
+        "Worker to BASE failure precedence: apps + windows_apps_retry_media",
+        "Worker to BASE failure precedence: windows_apps + apps_retry_media",
+        "Worker to BASE failure precedence: windows_apps + windows_apps_retry_operator"
+      ]
+    },
+    {
+      "mutant": "windows-count-weakened",
+      "count": 3,
+      "killers": [
+        "test_middle_apps.TrustedRunner.test_middle_requests_both_real_app_stages",
+        "test_middle_apps.TrustedRunner.test_python_windows_count_matches_current_mid_profile",
+        "test_middle_apps.TrustedRunner.test_windows_mid_count_cannot_shrink"
+      ]
+    },
+    {
+      "mutant": "apps-retry-output-lost",
+      "count": 4,
+      "killers": [
+        "test_middle_apps.TrustedRunner.test_all_retry_failures_still_request_retry",
+        "test_middle_apps.TrustedRunner.test_linux_media_failure_sets_retry_output",
+        "test_middle_apps.TrustedRunner.test_rv2_media_retry_only_is_retry",
+        "test_middle_apps.TrustedRunner.test_windows_apps_media_failure_sets_retry_output"
+      ]
+    },
+    {
+      "mutant": "guest-failure-retried",
+      "count": 9,
+      "killers": [
+        "test_middle_apps.TrustedRunner.test_linux_guest_failure_does_not_become_retry",
+        "test_middle_apps.TrustedRunner.test_other_attributed_failure_overrides_app_retry",
+        "test_middle_apps.TrustedRunner.test_rv2_linux_failure_only_is_guest_fail",
+        "test_middle_apps.TrustedRunner.test_rv2_linux_failure_overrides_its_operator_retry",
+        "test_middle_apps.TrustedRunner.test_rv2_linux_failure_overrides_windows_media_retry",
+        "test_middle_apps.TrustedRunner.test_rv2_windows_failure_overrides_its_operator_retry",
+        "test_middle_apps.TrustedRunner.test_rv2_windows_failure_overrides_linux_media_retry",
+        "test_middle_apps.TrustedRunner.test_unknown_failure_cannot_be_hidden_by_an_app_retry",
+        "test_middle_apps.TrustedRunner.test_windows_guest_failure_does_not_become_retry"
+      ]
+    },
+    {
+      "mutant": "explicit-linux-opt-in-ignored",
+      "count": 16,
+      "killers": [
+        "test_middle_apps.PayloadMiddle.test_all_66_apps_and_windows_mid_fit_the_declared_suffix",
+        "test_middle_apps.PayloadMiddle.test_all_66_apps_do_not_start_with_less_than_the_full_suffix",
+        "test_middle_apps.PayloadMiddle.test_another_invalid_linux_opt_in_is_refused",
+        "test_middle_apps.PayloadMiddle.test_direct_linux_opt_in_consumes_its_transport_flag",
+        "test_middle_apps.PayloadMiddle.test_explicit_linux_opt_in_cannot_enable_adhoc",
+        "test_middle_apps.PayloadMiddle.test_explicit_linux_opt_in_cannot_enable_small",
+        "test_middle_apps.PayloadMiddle.test_explicit_middle_request_runs_both_after_the_linux_bar",
+        "test_middle_apps.PayloadMiddle.test_gate_does_not_start_without_time_for_mid_apps",
+        "test_middle_apps.PayloadMiddle.test_gate_reserves_the_apps_suffix_after_another_time_jump",
+        "test_middle_apps.PayloadMiddle.test_guest_failure_remains_fail",
+        "test_middle_apps.PayloadMiddle.test_invalid_linux_opt_in_is_not_silently_ignored",
+        "test_middle_apps.PayloadMiddle.test_linux_bundle_retry_is_classified_as_media",
+        "test_middle_apps.PayloadMiddle.test_linux_missing_output_is_retry_never_pass",
+        "test_middle_apps.PayloadMiddle.test_mid_apps_do_not_start_with_only_the_raw_matrix_budget",
+        "test_middle_apps.PayloadMiddle.test_mid_apps_need_their_cleanup_margin_too",
+        "test_middle_apps.PayloadMiddle.test_short_suffix_does_not_start_linux_apps"
+      ]
+    },
+    {
+      "mutant": "linux-opt-in-tier-ignored",
+      "count": 2,
+      "killers": [
+        "test_middle_apps.PayloadMiddle.test_explicit_linux_opt_in_cannot_enable_adhoc",
+        "test_middle_apps.PayloadMiddle.test_explicit_linux_opt_in_cannot_enable_small"
+      ]
+    },
+    {
+      "mutant": "linux-opt-in-value-ignored",
+      "count": 2,
+      "killers": [
+        "test_middle_apps.PayloadMiddle.test_another_invalid_linux_opt_in_is_refused",
+        "test_middle_apps.PayloadMiddle.test_invalid_linux_opt_in_is_not_silently_ignored"
+      ]
+    },
+    {
+      "mutant": "linux-transport-flag-leaks",
+      "count": 2,
+      "killers": [
+        "test_middle_apps.PayloadMiddle.test_direct_linux_opt_in_consumes_its_transport_flag",
+        "test_middle_apps.PayloadMiddle.test_opt_in_is_consumed_before_child_helpers_run"
+      ]
+    },
+    {
+      "mutant": "linux-suffix-reserve-lost",
+      "count": 3,
+      "killers": [
+        "test_middle_apps.PayloadMiddle.test_all_66_apps_do_not_start_with_less_than_the_full_suffix",
+        "test_middle_apps.PayloadMiddle.test_another_short_suffix_cannot_consume_the_windows_apps_budget",
+        "test_middle_apps.PayloadMiddle.test_short_suffix_does_not_start_linux_apps"
+      ]
+    },
+    {
+      "mutant": "gate-suffix-reserve-lost",
+      "count": 2,
+      "killers": [
+        "test_middle_apps.PayloadMiddle.test_gate_does_not_start_without_time_for_mid_apps",
+        "test_middle_apps.PayloadMiddle.test_gate_reserves_the_apps_suffix_after_another_time_jump"
+      ]
+    },
+    {
+      "mutant": "mid-cleanup-margin-lost",
+      "count": 5,
+      "killers": [
+        "test_middle_apps.PayloadMiddle.test_all_66_apps_do_not_start_with_less_than_the_full_suffix",
+        "test_middle_apps.PayloadMiddle.test_gate_does_not_start_without_time_for_mid_apps",
+        "test_middle_apps.PayloadMiddle.test_mid_apps_do_not_start_with_only_the_raw_matrix_budget",
+        "test_middle_apps.PayloadMiddle.test_mid_apps_need_their_cleanup_margin_too",
+        "test_middle_apps.PayloadMiddle.test_short_suffix_does_not_start_linux_apps"
+      ]
+    },
+    {
+      "mutant": "linux-log-late-bound",
+      "count": 10,
+      "killers": [
+        "test_middle_apps.PayloadMiddle.test_all_66_apps_and_windows_mid_fit_the_declared_suffix",
+        "test_middle_apps.PayloadMiddle.test_explicit_middle_request_runs_both_after_the_linux_bar",
+        "test_middle_apps.PayloadMiddle.test_gate_does_not_start_without_time_for_mid_apps",
+        "test_middle_apps.PayloadMiddle.test_guest_failure_remains_fail",
+        "test_middle_apps.PayloadMiddle.test_linux_bundle_retry_is_classified_as_media",
+        "test_middle_apps.PayloadMiddle.test_linux_missing_output_is_retry_never_pass",
+        "test_middle_apps.PayloadMiddle.test_mid_apps_need_their_cleanup_margin_too",
+        "test_middle_apps.PayloadMiddle.test_opt_in_is_consumed_before_child_helpers_run",
+        "test_middle_apps.PayloadMiddle.test_windows_bundle_retry_remains_media",
+        "test_middle_apps.PayloadMiddle.test_windows_missing_output_is_retry_never_pass"
+      ]
+    },
+    {
+      "mutant": "media-alias-lost",
+      "count": 2,
+      "killers": [
+        "test_middle_apps.PayloadMiddle.test_linux_bundle_retry_is_classified_as_media",
+        "test_middle_apps.PayloadMiddle.test_linux_legacy_bundle_class_is_normalized_to_media"
+      ]
+    },
+    {
+      "mutant": "media-class-refused",
+      "count": 3,
+      "killers": [
+        "test_middle_apps.PayloadMiddle.test_linux_bundle_retry_is_classified_as_media",
+        "test_middle_apps.PayloadMiddle.test_linux_explicit_media_class_is_not_operator",
+        "test_middle_apps.PayloadMiddle.test_linux_legacy_bundle_class_is_normalized_to_media"
+      ]
+    },
+    {
+      "mutant": "owner-default-disabled",
+      "count": 19,
+      "killers": [
+        "Worker never stores PASS when requested apps evidence is missing",
+        "Worker never stores PASS when requested windows_apps evidence is missing",
+        "Worker preserves an attributed guest failure in apps",
+        "Worker preserves an attributed guest failure in windows_apps",
+        "Worker refuses a reduced real-app count for apps",
+        "Worker refuses a reduced real-app count for windows_apps",
+        "Worker to BASE failure precedence: apps",
+        "Worker to BASE failure precedence: apps + apps_retry_operator",
+        "Worker to BASE failure precedence: apps + windows_apps_retry_media",
+        "Worker to BASE failure precedence: apps_retry_media",
+        "Worker to BASE failure precedence: windows_apps + apps_retry_media",
+        "Worker to BASE failure precedence: windows_apps + windows_apps_retry_operator",
+        "complete real-app evidence remains PASS, progress=false",
+        "complete real-app evidence remains PASS, progress=true",
+        "middle PASS with only the old 63 Linux probes is rejected",
+        "middle policy defaults on for signed PR claims and requests both apps",
+        "middle preferences do not drop either real-app request",
+        "operator narrowing remains bounded and unique for missing apps",
+        "operator narrowing remains bounded and unique for missing windows_apps"
+      ]
+    },
+    {
+      "mutant": "owner-switch-ignored",
+      "count": 2,
+      "killers": [
+        "owner false cannot be overridden by a middle request",
+        "owner false switches off both stages without a source edit"
+      ]
+    },
+    {
+      "mutant": "owner-switch-schema-lost",
+      "count": 2,
+      "killers": [
+        "invalid owner switch is refused rather than silently disabling apps",
+        "malformed owner switch refuses authenticated policy reads before rental"
+      ]
+    },
+    {
+      "mutant": "signed-tier-ignored",
+      "count": 2,
+      "killers": [
+        "push cannot enable apps through an explicit request",
+        "push policy never enables either app stage"
+      ]
+    },
+    {
+      "mutant": "linux-request-policy-unchecked",
+      "count": 2,
+      "killers": [
+        "Linux opt-in cannot be omitted while requesting the middle Windows profile",
+        "a caller cannot disable Linux apps on a signed middle run"
+      ]
+    },
+    {
+      "mutant": "windows-request-policy-unchecked",
+      "count": 3,
+      "killers": [
+        "a caller cannot disable Windows apps on a signed middle run",
+        "a caller cannot substitute full Windows apps either",
+        "a middle caller cannot substitute another Windows profile"
+      ]
+    },
+    {
+      "mutant": "linux-environment-dropped",
+      "count": 2,
+      "killers": [
+        "middle policy defaults on for signed PR claims and requests both apps",
+        "middle preferences do not drop either real-app request"
+      ]
+    },
+    {
+      "mutant": "windows-environment-dropped",
+      "count": 2,
+      "killers": [
+        "middle policy defaults on for signed PR claims and requests both apps",
+        "middle preferences do not drop either real-app request"
+      ]
+    },
+    {
+      "mutant": "stored-pass-not-checked",
+      "count": 7,
+      "killers": [
+        "Worker never stores PASS when requested apps evidence is missing",
+        "Worker never stores PASS when requested windows_apps evidence is missing",
+        "Worker refuses a reduced real-app count for apps",
+        "Worker refuses a reduced real-app count for windows_apps",
+        "middle PASS with only the old 63 Linux probes is rejected",
+        "operator narrowing remains bounded and unique for missing apps",
+        "operator narrowing remains bounded and unique for missing windows_apps"
+      ]
+    },
+    {
+      "mutant": "stored-count-not-checked",
+      "count": 3,
+      "killers": [
+        "Worker refuses a reduced real-app count for apps",
+        "Worker refuses a reduced real-app count for windows_apps",
+        "middle PASS with only the old 63 Linux probes is rejected"
+      ]
+    },
+    {
+      "mutant": "stored-guest-failure-relabelled",
+      "count": 2,
+      "killers": [
+        "Worker preserves an attributed guest failure in apps",
+        "Worker preserves an attributed guest failure in windows_apps"
+      ]
+    },
+    {
+      "mutant": "stored-retry-row-duplicated",
+      "count": 2,
+      "killers": [
+        "operator narrowing remains bounded and unique for missing apps",
+        "operator narrowing remains bounded and unique for missing windows_apps"
+      ]
+    },
+    {
+      "mutant": "deployed-switch-not-boolean",
+      "count": 2,
+      "killers": [
+        "R3: deploy.mjs accepts only true|false for MIDDLE_APPS_ENABLED",
+        "R3: deploy.mjs and the Worker name the same boolean vars, all deployable"
+      ]
+    },
+    {
+      "mutant": "deployed-switch-not-allowed",
+      "count": 2,
+      "killers": [
+        "R3: deploy.mjs accepts only true|false for MIDDLE_APPS_ENABLED",
+        "R3: deploy.mjs and the Worker name the same boolean vars, all deployable"
+      ]
+    }
+  ]
+}

@@ -32,7 +32,7 @@ two-letter codes.
 ## Applications in the middle check
 
 With the matching Worker bundle installed, the 2026-11-09 middle-tier policy adds real
-applications to the PR-to-master check: all 63 entries of the Linux middle gate list, then
+applications to the PR-to-master check: all 66 supported entries of the Linux middle gate list, then
 the Windows gate, then the 10 Windows `mid` apps. `mid` includes all eight `small` apps.
 Push/small keeps today's Linux/Windows check without the application stages. A release's
 large-tier contract adds SPECviewperf and a real LLM workload; that orchestration remains

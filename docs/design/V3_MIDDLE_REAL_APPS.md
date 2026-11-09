@@ -14,12 +14,21 @@ execution remains DESIGN-ONLY; the LLM adapter is deliberately refused.
 | middle, PR to master | Small check plus the complete Linux middle gate list and Windows `mid` probe profile | Implemented, pending matching Worker deployment and first combined run |
 | large, release | Everything in middle plus SPECviewperf and a real LLM workload | Intent only; no new large-tier execution wiring |
 
-CODE READ: `gate_list_middle.txt` names **63 Linux apps**. It is unchanged. The full supported
-list has 66; `vkpeak`, `clpeak` and `gpu_burn` were already outside the middle list. This change
-removes no app. The four known-unsupported UVM entries remain explicitly reported, with no
-passing credit. Windows `gate_profiles.json` names **8 small** and **10 mid** apps; every small
-id is in mid. Therefore the request is `mid`, with no ad hoc union. Manual and unsupported
-Windows ids are outside this profile. The catalogues and both trusted count tables have tests.
+CODE READ, RV2 round-18 correction (2026-11-09): both `gate_list_middle.txt` and
+`gate_list.txt` name the same **66 supported Linux probes**, in full order. Middle includes
+`clpeak`, `gpu_burn` and `vkpeak`; the earlier 63-app reduction did not meet the owner's ALL-apps
+contract and is superseded. The four known-unsupported UVM rows (`UnifiedMemoryStreams`,
+`UnifiedMemoryPerf`, `conjugateGradientUM`, `attach_verify`) remain explicit nonpassing policy
+metadata, outside the 66 passing-count requirement. Windows `gate_profiles.json` names **8 small**
+and **10 mid** apps; every small id is in mid. The request stays `mid`, with no ad hoc union.
+Manual and unsupported Windows ids remain outside that profile. Independent full-catalogue
+checks and both trusted count guards reject a purported middle PASS with only 63 Linux apps.
+
+DESIGN dependency F1: integrate the Ada/AD102-first policy from corrected PR #323 only after the
+coordinator signals that it has merged. This head does not duplicate that policy. CODE READ:
+the existing family rotation remains until that integration; the current bundle does not claim
+to include #323. After integration, regenerate one combined pin and run both signed-middle
+AD102-versus-AD104 and AD102-versus-GA106 create controls before claiming F1 closed.
 
 CODE READ: `TIER_CONTENTS` in `src/tier.js` records the inheritance. Both
 `ci/vast-broker/defaults.json` and the payload's `STAGE_SLOTS` reserve `llm_parity` for large
@@ -75,16 +84,24 @@ It does not cancel an already admitted run; the existing owner stop control rema
 | Component | Existing observation | Admission allocation |
 |---|---|---:|
 | Windows gate | OWNER-REPORTED, 2026-11-09: last passing AD102 gate took 3,847 s | 4,500 s / 75 min |
-| Linux middle | MEASURED historical run `g2`, RTX 4090, 2026-11-07: 63/63, 451 s; watched `g3` stage 456 s | 3,000 s matrix + 600 s margin = 60 min |
+| Linux middle, all 66 | MEASURED historical run `g1`, RTX 4090, 2026-11-07: 66/66, 1,071 s. Earlier reduced `g2`/`g3` runs took 451/456 s and do not qualify current coverage | 3,000 s matrix + 600 s margin = 60 min |
 | Windows apps | MEASURED historical `wa1`, rev `b11655b7`, 2026-11-07: small 8/8, 735 s; mid's 10-app duration has no record found here | 3,600 s profile budget + 600 s margin = 70 min |
 
-Historical sources: [`apps_linux_20261107`](../../traces/apps_linux_20261107/README.md),
+Historical sources: [`full g1 output`](../../traces/apps_linux_20261107/g1/gate_full.out),
+[`apps_linux_20261107`](../../traces/apps_linux_20261107/README.md),
 [`g2 output`](../../traces/apps_linux_20261107/g2/gate_mid.out),
 [`watched g3`](../../traces/apps_linux_20261107/g3/gate_watched.out),
 [`Windows small output`](../../traces/winapps_20261107/small/wa1_winapps.log), and
 [`winapps_20261107`](../../traces/winapps_20261107/README.md). The Windows full run was a FAIL,
 not a successful mid timing: its stage took 5,624 s with 58 pass, 9 fail/timeout and 12 not run.
 No timings from these different runs are presented as a combined middle measurement.
+
+MEASURED historical `g1`: `gpu_burn` took 95 s, `vkpeak` 437 s and `clpeak` 119 s
+(651 s together). The complete 66-app stage took 1,071 s, below its existing 3,000 s matrix
+budget by 1,929 s. These are per-run observations, not a duration inferred by subtracting
+different `g1` and `g2` runs. INFERRED: retain the existing 50-minute matrix allocation plus
+10-minute margin; the extra probes do not require a shorter list or a larger box limit under
+this declared envelope. Combined timing and Windows mid's actual duration remain unverified.
 
 INFERRED admission envelope: the suffix is **60 + 75 + 70 = 205 min**. Of the 300-minute
 hard limit, the existing 10-minute soft margin leaves 290 minutes; at most **85 minutes**
@@ -114,11 +131,14 @@ The frozen Bash fixture is unchanged; only that documented historical nonpassing
 normalized in migration equivalence tests. Both old and new outcomes remain RETRY / rc 3.
 
 CODE READ: the Worker freezes whether apps were requested on each rental. A claimed PASS
-without exactly the 63/10 successful suite counts is narrowed to FAIL with an appropriate
+without exactly the 66/10 successful suite counts is narrowed to FAIL with an appropriate
 `*_retry_operator` row, bounded to the result row cap with unique names. An attributed FAIL
 is never relabelled by that guard. The BASE runner independently checks the same counts before
 accepting PASS. Its retry output now includes `apps_retry_*` and `windows_apps_retry_*`, while
-actual `apps` or `windows_apps` guest failures remain FAIL. Manual/unsupported entries never
+RETRY classification requires every failing suite to be retry-class evidence. Any attributed
+`apps`, `windows_apps`, other guest/harness failure or unknown non-retry failure keeps FAIL,
+even when another untrusted row claims retry. Six Worker-report/status/log-to-BASE replay
+controls preserve RV2's guest-only, retry-only and four mixed-row outcomes. Manual/unsupported entries never
 become passing app evidence. No silent successful no-op remains at any of these three layers.
 
 ## Bundle and rollout
@@ -150,3 +170,9 @@ includes signed-tier and PR-input isolation, owner on/off/invalid settings, push
 required stage rows/counts, guest FAIL priority, media retries, independent log paths,
 downstream time reservations, subset/count policy and refused LLM intent. Final run counts and
 pin receipts are recorded with the PR; none qualify new hardware.
+
+The original `validation.json` under `traces/middle_real_apps_20261109/` records the reviewed
+16d5843f snapshot and its superseded 63-app count. Round-18 receipts record F2/F3 separately;
+historical evidence and hygiene baselines are not rewritten. The visibility gate's PR-caused
+format-sensitive anchor was repaired by restoring the original runner expression formatting,
+with its mutation and two-killer threshold unchanged.

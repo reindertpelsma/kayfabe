@@ -1,0 +1,137 @@
+{
+  "status": "GPU-FREE local controls; combined hardware qualification unverified",
+  "date": "2026-11-09",
+  "reviewed_head": "16d5843fdbe10e0bc5ad4a6828942d5ad5dad0ac",
+  "findings": {
+    "F2": "all 66 supported Linux probes; Windows mid 10 includes small 8; old 63-app PASS rejected at Worker and BASE",
+    "F3": "every failing suite must be retry-class for RETRY; six actual Worker-to-BASE controls",
+    "F1": "DEFERRED until coordinator signals PR #323 merged; no duplicated die policy"
+  },
+  "counts": {
+    "linux_supported": 66,
+    "windows_mid": 10,
+    "windows_small": 8,
+    "unsupported_linux_nonpassing": [
+      "UnifiedMemoryStreams",
+      "UnifiedMemoryPerf",
+      "conjugateGradientUM",
+      "attach_verify"
+    ]
+  },
+  "tests": {
+    "python_before_fix": {
+      "tests": 64,
+      "failures": 10,
+      "errors": 1
+    },
+    "worker_before_fix": {
+      "tests": 40,
+      "passed": 34,
+      "failed": 6
+    },
+    "python_after_fix": {
+      "tests": 183,
+      "passed": 183
+    },
+    "focused_worker_after_fix": {
+      "tests": 40,
+      "passed": 40
+    },
+    "full_broker": {
+      "tests": 3851,
+      "passed": 3851,
+      "failed": 0,
+      "skipped": 0,
+      "duration_ms": 734908.295679
+    }
+  },
+  "mutants": {
+    "middle": {
+      "count": 40,
+      "minimum_named_killers": 2
+    },
+    "visibility": {
+      "count": 15,
+      "minimum_named_killers": 2
+    },
+    "existing_payload_apps": {
+      "count": 19,
+      "minimum_named_killers": 2,
+      "baseline_tests": 564
+    }
+  },
+  "timing": {
+    "historical_source": "traces/apps_linux_20261107/g1/gate_full.out, RTX 4090, 2026-11-07",
+    "historical_full_linux_seconds": 1071,
+    "historical_extra_probe_seconds": {
+      "gpu_burn": 95,
+      "vkpeak": 437,
+      "clpeak": 119
+    },
+    "windows_gate_owner_reported_seconds": 3847,
+    "windows_mid_hardware_seconds": null,
+    "linux_allocation_minutes": 60,
+    "windows_gate_allocation_minutes": 75,
+    "windows_mid_allocation_minutes": 70,
+    "suffix_minutes": 205,
+    "hard_minutes": 300,
+    "soft_margin_minutes": 10,
+    "remaining_earlier_work_minutes": 85,
+    "shortfall": "RETRY TIME; corresponding apps child does not start; no apps dropped"
+  },
+  "red_checks": {
+    "jobs": [
+      129218376495,
+      129218351548
+    ],
+    "pr_caused": true,
+    "cause": "runner.py Black formatting removed the unchanged visibility mutant exact source anchor; tail-line-budget-ignored found zero targets",
+    "fix": "restore original expression formatting; unchanged harness and thresholds; all 15 mutants killed"
+  },
+  "bundle": {
+    "sha256": "b41014cdef24977a2985f4144a0e3bb3470f40c2d5f536d7e872a531b43a7487",
+    "bytes": 400116,
+    "scope": "F2 intermediate bundle only; regenerate combined pin after #323 integration",
+    "offline_confirm": "two isolated offline Wrangler 4.152.0 builds are byte-identical; SHA-256 equals deployment.json and wrangler.toml",
+    "deployment_performed": false,
+    "redeploy_required": true
+  },
+  "hardware_or_live_worker_access": false,
+  "gates": {
+    "doc_freshness": "220 checked, 0 debt/new",
+    "release_claims": "55 claims, 0 errors/warnings",
+    "claim_ledger": "3748 existing, 0 new, 1 resolved; baseline unchanged",
+    "no_private_refs": "clean",
+    "gpu_uuids": "0 baselined/new/stale; full-tree gate clean",
+    "workflow_lint": "ok",
+    "section_numbers": "164 files, 0 offenders",
+    "black": "25.1.0: all 37 broker Python files unchanged",
+    "prettier": "3.6.2: all broker JS/MJS pass",
+    "shellcheck": "0.10.0: apps_gate.sh, vast_payload.sh and vast_payload_hooks.sh pass",
+    "staged_secret_and_whitespace": "0 findings; whitespace clean (rechecked before commit)"
+  },
+  "reviewed_head_ci": {
+    "stable": "SUCCESS",
+    "CI": "SUCCESS",
+    "failing_checks": "only the two duplicate box-scripts jobs listed above"
+  },
+  "implementation_diff_sha256": "376ad66f7e2137e320113579b7e2791ffc024b6e59e263aa8465c806b22c1116",
+  "implementation_diff_paths": [
+    "ci/vast-broker/deployment.json",
+    "ci/vast-broker/runner.py",
+    "ci/vast-broker/src/tier.js",
+    "ci/vast-broker/test/middle-apps.test.js",
+    "ci/vast-broker/test/middle_apps_replay.py",
+    "ci/vast-broker/wrangler.toml",
+    "docs/design/V3_CI_TIERS_AND_IGNORE_LADDER.md",
+    "docs/design/V3_MIDDLE_REAL_APPS.md",
+    "docs/howto/gpu-vast-windows.md",
+    "docs/howto/vast-check-selection.md",
+    "scripts/apps/gate_list.txt",
+    "scripts/apps/gate_list_middle.txt",
+    "scripts/ci/middle_apps_mutants.py",
+    "scripts/ci/test_middle_apps.py",
+    "scripts/ci/test_vast_payload_apps.py",
+    "scripts/ci/vast_payload.py"
+  ]
+}

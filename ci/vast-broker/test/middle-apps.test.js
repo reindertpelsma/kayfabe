@@ -6,6 +6,7 @@ import { setup, rentBody, sha, env, nonce, sampleResult } from './helpers.js';
 import { MIDDLE_APP_COUNTS } from '../src/tier.js';
 import { readFileSync } from 'node:fs';
 import { configuration } from '../src/policy.js';
+import { spawnSync } from 'node:child_process';
 
 const configured = (extra = {}) => setup({ MIDDLE_APPS_ENABLED: undefined, ...extra });
 const requested = () => rentBody(sha, { linuxApps: true, winApps: 'mid' });
@@ -116,7 +117,7 @@ for (const missing of ['apps', 'windows_apps']) {
     assert.equal((await h.call('/rent', { body: requested() })).status, 200);
     const result = { nonce, verdict: 'PASS', ...sampleResult() };
     result.suites.push(
-      ...Object.entries({ apps: 63, windows_apps: 10 })
+      ...Object.entries({ apps: 66, windows_apps: 10 })
         .filter(([name]) => name !== missing)
         .map(([name, pass]) => ({ name, pass, fail: 0, skip: 0 })),
     );
@@ -166,6 +167,82 @@ test('Linux middle count is pinned to its supported gate list', () => {
   assert.equal(ids.length, MIDDLE_APP_COUNTS.apps);
   for (const id of ids) assert.ok(!Object.hasOwn(p.known_unsupported, id));
 });
+
+test('middle Linux profile includes the entire supported catalogue', () => {
+  const ids = (name) =>
+    readFileSync(new URL('../../../scripts/apps/' + name, import.meta.url), 'utf8')
+      .split('\n')
+      .filter((line) => line && !line.startsWith('#'));
+  assert.deepEqual(ids('gate_list_middle.txt'), ids('gate_list.txt'));
+  assert.equal(MIDDLE_APP_COUNTS.apps, ids('gate_list.txt').length);
+  assert.equal(MIDDLE_APP_COUNTS.apps, 66);
+});
+
+test('middle PASS with only the old 63 Linux probes is rejected', async () => {
+  const h = await configured();
+  assert.equal((await h.call('/rent', { body: requested() })).status, 200);
+  const result = { nonce, verdict: 'PASS', ...sampleResult() };
+  result.suites.push(
+    { name: 'apps', pass: 63, fail: 0, skip: 0 },
+    { name: 'windows_apps', pass: 10, fail: 0, skip: 0 },
+  );
+  assert.equal((await h.report({ seq: 1, kind: 'result', result })).status, 200);
+  const stored = (await h.storage.get('record:123-1')).result;
+  assert.equal(stored.verdict, 'FAIL');
+  assert.ok(stored.suites.some((row) => row.name === 'apps_retry_operator' && row.fail === 1));
+});
+
+// RV2 round-18's six actual Worker -> trusted runner controls. A retry row never erases guest FAIL.
+for (const [names, retry] of [
+  [['apps'], 0],
+  [['apps_retry_media'], 1],
+  [['apps', 'apps_retry_operator'], 0],
+  [['apps', 'windows_apps_retry_media'], 0],
+  [['windows_apps', 'apps_retry_media'], 0],
+  [['windows_apps', 'windows_apps_retry_operator'], 0],
+]) {
+  test('Worker to BASE failure precedence: ' + names.join(' + '), async () => {
+    const h = await configured();
+    const available = await h.call('/availability?profile=check&apps=1', { method: 'GET' });
+    assert.equal(available.status, 200);
+    const availability = await available.json();
+    assert.equal((await h.call('/rent', { body: requested() })).status, 200);
+    try {
+      const result = { nonce, verdict: 'FAIL', ...sampleResult() };
+      result.suites.push(...names.map((name) => ({ name, pass: 0, fail: 1, skip: 0 })));
+      assert.equal((await h.report({ seq: 1, kind: 'result', result })).status, 200);
+      const status = await (await h.call('/status/123-1', { method: 'GET' })).json();
+      assert.equal(status.verdict, 'FAIL');
+      const pages = {};
+      let cursor = 0;
+      while (cursor < status.log_cursor) {
+        const route = '/logs/123-1?cursor=' + cursor;
+        const response = await h.call(route, { method: 'GET' });
+        assert.equal(response.status, 200);
+        const page = await response.json();
+        assert.ok(page.next_cursor > cursor);
+        pages[route] = page;
+        cursor = page.next_cursor;
+      }
+      const replay = spawnSync(
+        'python3',
+        ['-I', new URL('./middle_apps_replay.py', import.meta.url).pathname],
+        {
+          input: JSON.stringify({ availability, status, pages }),
+          encoding: 'utf8',
+          timeout: 15000,
+        },
+      );
+      assert.equal(replay.status, 0, replay.stderr);
+      const out = JSON.parse(replay.stdout);
+      assert.deepEqual(out.result, { state: status.state, verdict: 'FAIL', verified: 1 });
+      assert.equal(out.retry, retry);
+    } finally {
+      await h.call('/stop/123-1');
+      assert.equal(h.cloud.instances.has('900'), false);
+    }
+  });
+}
 
 test('Linux opt-in cannot be omitted while requesting the middle Windows profile', async () => {
   const h = await configured();
