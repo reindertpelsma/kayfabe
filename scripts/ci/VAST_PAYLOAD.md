@@ -96,6 +96,10 @@ no die, board, PCI address, PID, channel, VA or captured-log input. Regenerate/c
 python3 scripts/bench/derive_native_fault_names.py --check
 ```
 
+**CODE READ:** a copied guard must carry `native_fault_names.json` beside the Python
+module. Payload, SPEC and broker mutation fixtures include both files; missing data
+fails the import instead of falling back to an incomplete admission rule.
+
 **CODE READ (remaining constraints):** the raw shell hook inserts `native-exec` inside the
 existing timeout. Immediately before exec it emits its own PID; exec preserves that PID.
 The matcher requires exactly one identity marker inside the watched command output,

@@ -120,6 +120,7 @@ try {
     'scripts/ci/release_driver_pins.py',
     'scripts/ci/vast_payload.py',
     'scripts/bench/native_xid_guard.py',
+    'scripts/bench/native_fault_names.json',
     G,
     'scripts/ci/test_vast_profile_resources.py',
     ...Object.values(defaults.payloadStageResources).map((s) => s.source),
