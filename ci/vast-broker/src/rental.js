@@ -41,17 +41,65 @@ function maskedEndpoint(value, ip) {
   const prefix = ipPrefix(ip);
   return prefix === 'unknown' ? value : prefix;
 }
+function portOperandEnd(text, start) {
+  let end = start;
+  if (text[end] === '+' || text[end] === '-') end++;
+  while (/[ \t\r\n\v\f]/.test(text[end] ?? '')) end++;
+  const digits = end;
+  while (end < text.length && text[end] >= '0' && text[end] <= '9') end++;
+  return end === digits || /[A-Za-z0-9_:]/.test(text[end] ?? '') ? null : end;
+}
+function portSeparators(text, start) {
+  while (start < text.length && /[ \t\r\n\v\f"'=:]/.test(text[start])) start++;
+  return start;
+}
+function redactPortFields(text) {
+  let out = '',
+    through = 0;
+  const selectors =
+    /(?<![A-Za-z0-9])(?:--(?:ssh-)?port\b|-o|-[pP]|\b(?:ssh[_ -]?(?:port|host)|port)\b)/gi;
+  for (const match of text.matchAll(selectors)) {
+    if (match.index < through) continue;
+    let start = match.index + match[0].length;
+    const option = match[0].toLowerCase();
+    if (option === '-o') {
+      start = portSeparators(text, start);
+      if (text.slice(start, start + 4).toLowerCase() !== 'port') continue;
+      start += 4;
+    }
+    start = portSeparators(text, start);
+    const end = portOperandEnd(text, start);
+    if (end === null) continue;
+    const label = option === '-o' ? '-oPort=' : option === '-p' ? '-p ' : 'ssh_port=';
+    out += text.slice(through, match.index) + label + '[redacted]';
+    through = end;
+  }
+  text = out + text.slice(through);
+  out = '';
+  through = 0;
+  const endpoints = /(?<![A-Za-z0-9_.:%-])(\[[^\[\]\s]+\]|[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*):/g;
+  for (const match of text.matchAll(endpoints)) {
+    if (match.index < through) continue;
+    const host = match[1].replace(/^\[|\]$/g, '');
+    const prefix = ipPrefix(host);
+    let contextEnd = match.index;
+    while (contextEnd > 0 && /[ \t\r\n\v\f]/.test(text[contextEnd - 1])) contextEnd--;
+    const context = text.slice(Math.max(0, contextEnd - 96), contextEnd);
+    const authority = /(?:^|\W)(?:ssh|scp|endpoint|host)[=:]?$|:\/\/$|@$/i.test(context);
+    const qualified = host.includes('.') && /[A-Za-z]/.test(host);
+    if (prefix === 'unknown' && !qualified && !authority) continue;
+    const start = portSeparators(text, match.index + match[0].length);
+    const end = portOperandEnd(text, start);
+    if (end === null) continue;
+    out +=
+      text.slice(through, match.index) + (prefix === 'unknown' ? match[1] + ':[redacted]' : prefix);
+    through = end;
+  }
+  return out + text.slice(through);
+}
 export function redactEndpoints(text) {
+  text = redactPortFields(text);
   return text
-    .replace(
-      /(?<![A-Za-z0-9])-o[ \t]*(?:["'][ \t]*)?port["']?[ \t]*(?:=[ \t]*)?["']?[0-9]{1,5}\b/gi,
-      '-oPort=[redacted]',
-    )
-    .replace(/(?<![A-Za-z0-9])-[pP][ \t]*[0-9]{1,5}\b/g, '-p [redacted]')
-    .replace(
-      /\b(?:ssh[_ -]?(?:port|host)|(?:ssh )?port)["']?\s*(?:[=:]\s*)?["']?[0-9]{1,5}\b/gi,
-      'ssh_port=[redacted]',
-    )
     .replace(/\[?\b((?:[0-9]{1,3}\.){3}[0-9]{1,3})\]?(?::[0-9]{1,5})?(?![0-9])/g, (v, ip) =>
       maskedEndpoint(v, ip),
     )

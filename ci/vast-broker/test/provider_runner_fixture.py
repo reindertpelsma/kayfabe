@@ -38,6 +38,19 @@ raw = (
     + ("-p" if variant == 1 else "-P")
     + port
 )
+diagnostic = (
+    raw
+    + " ssh -oPort=+000"
+    + port
+    + " scp -P000"
+    + port
+    + " ssh --port=000"
+    + port
+    + " ssh://user@"
+    + ip
+    + ":+000"
+    + port
+)
 m.time.monotonic = lambda: clock
 
 
@@ -78,7 +91,7 @@ def status(verdict="UNAVAILABLE", posted=False):
         "dph_total": 0.2,
         "cost_estimate_usd": 0.01,
         "log_cursor": 0,
-        "log_tail_sanitised": raw,
+        "log_tail_sanitised": diagnostic,
         "bytes_dropped": 0,
         "tail_bytes_dropped": 0,
         "log_sha256": "0" * 64,
@@ -128,7 +141,7 @@ def client(route, method="GET", body=None):
             data = status("PROVIDER_FAULT")
         elif case == "outage" and post_seen:
             code = 503
-            data = {"private_error": raw}
+            data = {"private_error": diagnostic}
         elif case == "outage":
             post_seen = True
             data = status(posted=True)

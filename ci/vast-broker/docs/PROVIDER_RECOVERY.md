@@ -19,7 +19,7 @@ CODE READ (`src/provider-policy.js`, `src/index.js`): running state clears a pen
 fatal witness, including a retained fatal status message. Boot log checks use only a
 new suffix, tracked with a bounded hashed cursor; retained text is never rescanned.
 An unchanged log plus the same non-running state and status message preserves the
-original frozen-failure witness. New nonfatal output, changed state/message, a log
+original frozen-failure witness. New progress output, changed state/message, a log
 reset or an unreadable log cancels that witness. Cursor and observation state persist
 across Worker restarts without storing raw provider log text.
 CODE READ: healthy pre-report observations advance the log baseline without granting
@@ -31,6 +31,13 @@ confirm within the configured window.
 CODE READ: status text seen during recovery is also historical across a later
 provider-state flap until that text changes. A newly changed fatal status remains
 actionable; the recovery baseline does not disable subsequent failures.
+CODE READ: each new log suffix is processed in order. A later progress/healthy
+line from the configured ignorable-signature table clears an earlier fatal
+event in that batch; a subsequent fatal event wins again. Error-only tails still
+confirm after the full window. This gives the same outcome when progress is
+batched with the error or delivered in a separate poll.
+CODE READ: progress followed by another fatal in a batch starts a fresh
+confirmation window; it cannot reuse a pre-progress witness's elapsed time.
 
 CODE READ: confirmation requires at least two observations separated by
 `observationSpacingSeconds` (default 1), and at least `confirmationSeconds`
@@ -161,7 +168,11 @@ prefix is retained in public metadata. IPv4-mapped IPv6 is normalized to IPv4.
 The full address and SSH port are never public fields. Invalid address-like
 text, including MAC addresses and version strings, keeps its original spelling. Output redaction covers
 bare/bracketed endpoints, named SSH ports, command-line ports (including compact/quoted `-oPort` options), provider diagnostics,
-box log text, error paths and summaries. Reuse parsing accepts the new bounded
+box log text, error paths and summaries. Port operands are parsed structurally
+after short/long options, configuration keys and endpoint/URL host separators;
+optional signs and arbitrarily many leading zeros do not bypass the mask.
+Numeric MAC addresses, counts and version text remain negative controls.
+Reuse parsing accepts the new bounded
 rental-line shape; runs with multiple rental lines remain ineligible for reuse
 under its existing single-rental proof rule.
 

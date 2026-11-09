@@ -968,20 +968,80 @@ def public_endpoint_match(match):
     return match[0] if prefix == "unknown" else prefix
 
 
+def port_operand_end(text, start):
+    end = start
+    if end < len(text) and text[end] in "+-":
+        end += 1
+    while end < len(text) and text[end] in " \t\r\n\v\f":
+        end += 1
+    digits = end
+    while end < len(text) and text[end] in "0123456789":
+        end += 1
+    if end == digits or (end < len(text) and re.match(r"[A-Za-z0-9_:]", text[end])):
+        return None
+    return end
+
+
+def port_separators(text, start):
+    while start < len(text) and text[start] in " \t\r\n\v\f\"'=:":
+        start += 1
+    return start
+
+
+def redact_port_fields(text):
+    pieces = []
+    through = 0
+    selectors = (
+        r"(?<![A-Za-z0-9])(?:--(?:ssh-)?port\b|-o|-[pP]|\b(?:ssh[_ -]?(?:port|host)|port)\b)"
+    )
+    for match in re.finditer(selectors, text, re.I):
+        if match.start() < through:
+            continue
+        start = match.end()
+        option = match[0].lower()
+        if option == "-o":
+            start = port_separators(text, start)
+            if text[start : start + 4].lower() != "port":
+                continue
+            start += 4
+        start = port_separators(text, start)
+        end = port_operand_end(text, start)
+        if end is None:
+            continue
+        label = "-oPort=" if option == "-o" else "-p " if option == "-p" else "ssh_port="
+        pieces.append(text[through : match.start()] + label + "[redacted]")
+        through = end
+    text = "".join(pieces) + text[through:]
+    pieces = []
+    through = 0
+    endpoints = r"(?<![A-Za-z0-9_.:%-])(\[[^\[\]\s]+\]|[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*):"
+    for match in re.finditer(endpoints, text):
+        if match.start() < through:
+            continue
+        host = match[1].removeprefix("[").removesuffix("]")
+        prefix = public_ip_prefix(host)
+        context_end = match.start()
+        while context_end > 0 and text[context_end - 1] in " \t\r\n\v\f":
+            context_end -= 1
+        context = text[max(0, context_end - 96) : context_end]
+        authority = re.search(r"(?:^|\W)(?:ssh|scp|endpoint|host)[=:]?$|://$|@$", context, re.I)
+        qualified = "." in host and re.search(r"[A-Za-z]", host)
+        if prefix == "unknown" and not qualified and not authority:
+            continue
+        start = port_separators(text, match.end())
+        end = port_operand_end(text, start)
+        if end is None:
+            continue
+        pieces.append(
+            text[through : match.start()]
+            + (match[1] + ":[redacted]" if prefix == "unknown" else prefix)
+        )
+        through = end
+    return "".join(pieces) + text[through:]
+
+
 def redact_endpoints(text):
-    text = re.sub(
-        r"""(?<![A-Za-z0-9])-o[ \t]*(?:["'][ \t]*)?port["']?[ \t]*(?:=[ \t]*)?["']?[0-9]{1,5}\b""",
-        "-oPort=[redacted]",
-        text,
-        flags=re.I,
-    )
-    text = re.sub(r"(?<![A-Za-z0-9])-[pP][ \t]*[0-9]{1,5}\b", "-p [redacted]", text)
-    text = re.sub(
-        r"""\b(?:ssh[_ -]?(?:port|host)|(?:ssh )?port)["']?\s*(?:[=:]\s*)?["']?[0-9]{1,5}\b""",
-        "ssh_port=[redacted]",
-        text,
-        flags=re.I,
-    )
+    text = redact_port_fields(text)
     text = re.sub(
         r"\[?\b((?:[0-9]{1,3}\.){3}[0-9]{1,3})\]?(?::[0-9]{1,5})?(?![0-9])",
         public_endpoint_match,

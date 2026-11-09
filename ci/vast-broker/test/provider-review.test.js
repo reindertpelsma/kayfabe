@@ -78,7 +78,7 @@ for (const restart of [false, true]) {
       status_msg: 'Preparing GPUs...',
     });
     await tick(h, 1000);
-    h.cloud.logText += domainError('900') + 'Domain successfully started; GPUs ready\n';
+    h.cloud.logText += domainError('900');
     h.cloud.logStatus = 503;
     Object.assign(h.cloud.instances.get('900'), {
       actual_status: 'running',
@@ -653,3 +653,160 @@ for (const state of ['unrecognised', { invalid: true }])
       await h.call('/stop/123-1');
     },
   );
+
+for (const restart of [false, true]) {
+  test('RV2 terminal historical log after running remains inert ' + restart, async () => {
+    const h = await boot();
+    h.cloud.logText = domainError('900');
+    await tick(h, 1000);
+    if (restart) h.restart();
+    Object.assign(h.cloud.instances.get('900'), {
+      actual_status: 'created',
+      status_msg: 'Retrying',
+    });
+    await tick(h, 1000);
+    await tick(h, 90000);
+    assert.equal((await row(h)).closed, null);
+    assert.equal(await h.storage.get('provider-machine:100001'), undefined);
+    await h.call('/stop/123-1');
+  });
+  for (const seeded of [false, true])
+    for (const [name, events, split, fails] of [
+      ['fatal-progress', ['fatal', 'progress'], false, false],
+      ['progress-fatal', ['progress', 'fatal'], false, true],
+      ['interleaved-fatal', ['fatal', 'progress', 'fatal'], false, true],
+      ['interleaved-progress', ['progress', 'fatal', 'progress'], false, false],
+      ['split-progress', ['fatal', 'progress'], true, false],
+    ])
+      test(`RV2 ordered boot batch ${name} seeded=${seeded} restart=${restart}`, async () => {
+        const h = await boot();
+        Object.assign(h.cloud.instances.get('900'), {
+          actual_status: 'created',
+          status_msg: 'Preparing GPUs',
+        });
+        h.cloud.logText = seeded ? 'VM preparation begins\n' : '';
+        if (seeded) await tick(h, 500);
+        for (const event of events) {
+          h.cloud.logText +=
+            event === 'fatal' ? domainError('900') : 'Domain successfully started; GPUs ready\n';
+          if (split) await tick(h, 1000);
+        }
+        if (!split) await tick(h, 1000);
+        if (restart) h.restart();
+        await tick(h, 90000);
+        const r = await row(h);
+        assert.equal(r.closed, fails ? 'PROVIDER_FAULT' : null);
+        if (!fails) {
+          assert.equal(await h.storage.get('provider-machine:100001'), undefined);
+          await h.call('/stop/123-1');
+        } else assert.deepEqual(h.cloud.deletes, ['900']);
+      });
+}
+function portSpellings(port) {
+  const rows = [];
+  for (const zeros of [0, 1, 3, 8, 32, 128])
+    for (const sign of ['', '+']) {
+      const number = sign + '0'.repeat(zeros) + port;
+      for (const raw of [
+        `ssh -oPort=${number} user@203.0.113.91`,
+        `ssh -o "Port\t${number}" user@203.0.113.91`,
+        `ssh -p${number} user@203.0.113.91`,
+        `scp -P '${number}' file user@203.0.113.91:path`,
+        `ssh --port\t"${number}" user@203.0.113.91`,
+        `ssh -p "\v${number}" user@203.0.113.91`,
+        `ssh -o "Port\f${number}" user@203.0.113.91`,
+        `ssh --ssh-port=${number} user@203.0.113.91`,
+        `ssh ssh://user@host.example:${number}/path`,
+        `ssh barehost:${number}`,
+        `ssh user@203.0.113.91:${number}`,
+        `ssh user@[2001:db8:1234:5678:90ab:cdef:1234:5678]:${number}`,
+        `ssh_port = '${number}'`,
+      ])
+        rows.push(raw + ' count=31999 count:31999 version=580.159.04 MAC=aa:12:34:56:78:90');
+    }
+  return rows;
+}
+function assertPortPrivate(clean, port) {
+  assert.equal(clean.includes(String(port)), false, clean);
+  assert.equal(clean.includes('203.0.113.91'), false, clean);
+  assert.equal(clean.includes('2001:db8:1234:5678:90ab:cdef:1234:5678'), false, clean);
+  assert.match(clean, /count=31999/);
+  assert.match(clean, /count:31999/);
+  assert.match(clean, /version=580.159.04/);
+  assert.match(clean, /aa:12:34:56:78:90/);
+}
+for (const port of [23456, 22331]) {
+  test('RV2 structural port spellings JS property ' + port, () => {
+    for (const raw of portSpellings(port))
+      for (const clean of [redactEndpoints(raw), redactPublic(raw, [])])
+        assertPortPrivate(clean, port);
+  });
+  test('RV2 structural port spellings Python property ' + port, () => {
+    const script = `import ast,ipaddress,json,re,runpy,sys
+x=json.load(sys.stdin);r=runpy.run_path(sys.argv[1],run_name='residual_fixture')
+g={'re':re,'ipaddress':ipaddress};exec(compile(ast.Module(body=[n for n in ast.parse(x['renderer']).body if isinstance(n,ast.FunctionDef)],type_ignores=[]),'literal_renderer','exec'),g)
+print(json.dumps([[r['sanitise'](raw)[0],g['clean'](raw)] for raw in x['rows']]))`;
+    const result = spawnSync(
+      'python3',
+      ['-I', '-c', script, fileURLToPath(new URL('../runner.py', import.meta.url))],
+      {
+        input: JSON.stringify({ rows: portSpellings(port), renderer: publicLogRenderer }),
+        encoding: 'utf8',
+      },
+    );
+    assert.equal(result.status, 0, result.stderr);
+    for (const pair of JSON.parse(result.stdout))
+      for (const clean of pair) assertPortPrivate(clean, port);
+  });
+  test('RV2 accepted numeric SSH spellings ' + port, () => {
+    for (const whitespace of [' ', '\t', '\n', '\r', '\v', '\f']) {
+      const result = spawnSync(
+        'ssh',
+        ['-G', '-F', '/dev/null', '-p', whitespace + '+000' + port, 'user@203.0.113.91'],
+        { encoding: 'utf8' },
+      );
+      assert.equal(result.status, 0, result.stderr);
+      assert.match(result.stdout, new RegExp('^port ' + port + '$', 'm'));
+    }
+    for (const option of [`-oPort=000${port}`, `-oPort=+${port}`, `-p000${port}`, `-p+${port}`]) {
+      const result = spawnSync('ssh', ['-G', '-F', '/dev/null', option, 'user@203.0.113.91'], {
+        encoding: 'utf8',
+      });
+      assert.equal(result.status, 0, result.stderr);
+      assert.match(result.stdout, new RegExp('^port ' + port + '$', 'm'));
+    }
+  });
+  test('RV2 structural port Worker diagnostics ' + port, async () => {
+    for (const option of [`-oPort=000${port}`, `-oPort=+${port}`, `-p000${port}`, `-p+${port}`]) {
+      const h = await boot({ PROVIDER_CONFIRM_SECONDS: '1' });
+      Object.assign(h.cloud.instances.get('900'), {
+        actual_status: 'created',
+        status_msg: 'GPU error, unable to start instance; ssh ' + option + ' user@203.0.113.91',
+      });
+      await tick(h, 1000);
+      await tick(h, 1000);
+      const r = await row(h);
+      assert.equal(r.closed, 'PROVIDER_FAULT');
+      assert.equal(r.log.includes(String(port)), false);
+      assert.equal(r.log.includes('203.0.113.91'), false);
+    }
+  });
+}
+
+for (const restart of [false, true])
+  test('RV2 interleaved progress restarts current fatal confirmation ' + restart, async () => {
+    const h = await boot();
+    Object.assign(h.cloud.instances.get('900'), {
+      actual_status: 'created',
+      status_msg: 'Preparing GPUs',
+    });
+    h.cloud.logText = domainError('900');
+    await tick(h, 1000);
+    h.cloud.logText += 'Domain successfully started; GPUs ready\n' + domainError('900');
+    await tick(h, 80000);
+    if (restart) h.restart();
+    await tick(h, 10000);
+    assert.equal((await row(h)).closed, null);
+    await tick(h, 80000);
+    assert.equal((await row(h)).closed, 'PROVIDER_FAULT');
+  });

@@ -59,6 +59,27 @@ const BOOT_FAILURE_STATES = new Set([
   'stopped',
 ]);
 
+export function orderedBootFailure(text, id, policy) {
+  let reason = null;
+  let progress = false;
+  let fragment = '';
+  for (const line of text.split('\n')) {
+    fragment += line + '\n';
+    const fatal = fatalSignature(null, fragment, id, policy);
+    if (fatal) {
+      reason = fatal;
+      fragment = '';
+    } else if (
+      policy.ignorableSignatures.some((s) => line.toLowerCase().includes(s.toLowerCase()))
+    ) {
+      reason = null;
+      progress = true;
+      fragment = '';
+    }
+  }
+  return { reason, progress };
+}
+
 export async function currentBootFailure(prior, cursor, instance, log, id, policy) {
   const state = instance.actual_status;
   if (state !== null && state !== 'running' && !BOOT_FAILURE_STATES.has(state))
@@ -84,7 +105,9 @@ export async function currentBootFailure(prior, cursor, instance, log, id, polic
       witness: state + ':status',
       cursor: nextCursor,
     };
-  let reason = fatalSignature(null, delta.fresh, id, policy);
+  const outcome = orderedBootFailure(delta.fresh, id, policy);
+  let reason = outcome.reason;
+  let witness = state + ':boot_log:' + statusHash;
   // No new output plus the same failing state/message preserves the original witness.
   // New progress, running recovery, changed state/message or an unreadable log cancels it.
   if (
@@ -94,14 +117,23 @@ export async function currentBootFailure(prior, cursor, instance, log, id, polic
     prior?.source === 'boot_log' &&
     prior.state === state &&
     prior.statusHash === statusHash
-  )
+  ) {
     reason = prior.reason;
+    witness = prior.witness;
+  } else if (outcome.progress && reason) witness += ':' + delta.cursor.hash;
+  else if (
+    prior?.source === 'boot_log' &&
+    prior.reason === reason &&
+    prior.state === state &&
+    prior.statusHash === statusHash
+  )
+    witness = prior.witness;
   return {
     reason,
     source: 'boot_log',
     state,
     statusHash,
-    witness: state + ':boot_log:' + statusHash,
+    witness,
     cursor: nextCursor,
     historicalStatus,
   };

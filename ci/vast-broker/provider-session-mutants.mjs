@@ -16,6 +16,87 @@ const broker = fileURLToPath(new URL('.', import.meta.url)),
 const scratch = mkdtempSync(join(tmpdir(), 'kf-J2-provider-'));
 const cases = [
   {
+    name: 'review interleaved recovery reuses the old fatal timer',
+    file: 'src/provider-policy.js',
+    before: 'outcome.progress && reason',
+    after: 'false && reason',
+    pattern: '^RV2 interleaved progress restarts current fatal confirmation',
+    test: 'test/provider-review.test.js',
+    all: false,
+  },
+  {
+    name: 'review JS signed port operand is not consumed',
+    file: 'src/rental.js',
+    before: "if (text[end] === '+' || text[end] === '-') end++;",
+    after: 'if (false) end++;',
+    pattern: '^RV2 structural port spellings JS property',
+    test: 'test/provider-review.test.js',
+    all: false,
+  },
+  {
+    name: 'review runner signed port operand is not consumed',
+    file: 'runner.py',
+    before: 'if end < len(text) and text[end] in "+-":',
+    after: 'if False:',
+    pattern: '^RV2 structural port spellings Python property',
+    test: 'test/provider-review.test.js',
+    all: false,
+  },
+  {
+    name: 'review renderer signed port operand is not consumed',
+    file: 'public-log.js',
+    before: "if end < len(text) and text[end] in '+-':",
+    after: 'if False:',
+    pattern: '^RV2 structural port spellings Python property',
+    test: 'test/provider-review.test.js',
+    all: false,
+  },
+  {
+    name: 'review boot batch is scanned in reverse order',
+    file: 'src/provider-policy.js',
+    before: "for (const line of text.split('\\n'))",
+    after: "for (const line of text.split('\\n').reverse())",
+    pattern: '^RV2 ordered boot batch fatal-progress',
+    test: 'test/provider-review.test.js',
+    all: false,
+  },
+  {
+    name: 'review later progress does not clear fatal evidence',
+    file: 'src/provider-policy.js',
+    before: '      reason = null;\n      progress = true;',
+    after: '      progress = true;',
+    pattern: '^RV2 ordered boot batch fatal-progress',
+    test: 'test/provider-review.test.js',
+    all: false,
+  },
+  {
+    name: 'review JS numeric port operand is width limited',
+    file: 'src/rental.js',
+    before: "while (end < text.length && text[end] >= '0' && text[end] <= '9')",
+    after: "while (end - digits < 5 && end < text.length && text[end] >= '0' && text[end] <= '9')",
+    pattern: '^RV2 structural port spellings JS property',
+    test: 'test/provider-review.test.js',
+    all: false,
+  },
+  {
+    name: 'review runner numeric port operand is width limited',
+    file: 'runner.py',
+    before: 'while end < len(text) and text[end] in "0123456789":',
+    after: 'while end - digits < 5 and end < len(text) and text[end] in "0123456789":',
+    pattern: '^RV2 structural port spellings Python property',
+    test: 'test/provider-review.test.js',
+    all: false,
+  },
+  {
+    name: 'review renderer numeric port operand is width limited',
+    file: 'public-log.js',
+    before: "while end < len(text) and text[end] in '0123456789':",
+    after: "while end - digits < 5 and end < len(text) and text[end] in '0123456789':",
+    pattern: '^RV2 structural port spellings Python property',
+    test: 'test/provider-review.test.js',
+    all: false,
+  },
+  {
     name: 'review recovered status text becomes current on a flap',
     file: 'src/provider-policy.js',
     before: "historicalStatus ? null : fatalSignature(instance, '', id, policy)",
@@ -38,7 +119,7 @@ const cases = [
     file: 'src/provider-policy.js',
     before: 'cursor: recoveryCursor',
     after: 'cursor',
-    pattern: '^RV2 first observed running state fences historical fatal log',
+    pattern: '^RV2 terminal historical log after running remains inert',
     test: 'test/provider-review.test.js',
     all: false,
   },
@@ -54,8 +135,8 @@ const cases = [
   {
     name: 'review healthy baseline suppresses newly emitted fatal text',
     file: 'src/provider-policy.js',
-    before: 'let reason = fatalSignature(null, delta.fresh, id, policy);',
-    after: 'let reason = cursor ? null : fatalSignature(null, delta.fresh, id, policy);',
+    before: 'let reason = outcome.reason;',
+    after: 'let reason = cursor ? null : outcome.reason;',
     pattern: '^RV2 fresh fatal after healthy baseline still confirms within bound',
     test: 'test/provider-review.test.js',
     all: false,
@@ -90,9 +171,9 @@ const cases = [
   {
     name: 'review retained boot log is rescanned',
     file: 'src/provider-policy.js',
-    before: 'fatalSignature(null, delta.fresh, id, policy)',
-    after: 'fatalSignature(null, log, id, policy)',
-    pattern: '^RV2 pending progress cannot replay historical fatal lines',
+    before: 'orderedBootFailure(delta.fresh, id, policy)',
+    after: 'orderedBootFailure(log, id, policy)',
+    pattern: '^RV2 terminal historical log after running remains inert',
     test: 'test/provider-review.test.js',
     all: false,
   },
@@ -154,8 +235,8 @@ const cases = [
   {
     name: 'review compact Port remains in JS output',
     file: 'src/rental.js',
-    before: '(?<![A-Za-z0-9])-o',
-    after: '(?<![A-Za-z0-9])-q',
+    before: 'text = redactPortFields(text);',
+    after: '/* test mutation: structural fields retained */',
     pattern: '^RV2 compact Port removed by JS boundaries',
     test: 'test/provider-review.test.js',
     all: false,
@@ -163,8 +244,8 @@ const cases = [
   {
     name: 'review compact Port remains in runner output',
     file: 'runner.py',
-    before: '(?<![A-Za-z0-9])-o',
-    after: '(?<![A-Za-z0-9])-q',
+    before: 'text = redact_port_fields(text)',
+    after: 'pass',
     pattern: '^RV2 compact Port removed by Python pipelines',
     test: 'test/provider-review.test.js',
     all: false,
@@ -172,8 +253,8 @@ const cases = [
   {
     name: 'review compact Port remains in renderer output',
     file: 'public-log.js',
-    before: '(?<![A-Za-z0-9])-o',
-    after: '(?<![A-Za-z0-9])-q',
+    before: 'text = redact_port_fields(text)',
+    after: 'pass',
     pattern: '^RV2 compact Port removed by Python pipelines',
     test: 'test/provider-review.test.js',
     all: false,
@@ -261,8 +342,8 @@ const cases = [
   {
     name: 'compact SSH port is exposed',
     file: 'src/rental.js',
-    before: '(?<![A-Za-z0-9])-[pP][ \\t]*',
-    after: '(?<![A-Za-z0-9])-p[ \\t]+',
+    before: '|-[pP]|',
+    after: '|-q|',
     all: false,
     pattern: '^rules compact SSH port remains private',
   },
@@ -619,7 +700,7 @@ const cases = [
   {
     name: 'ssh port masking disabled',
     file: 'src/rental.js',
-    before: '(?:ssh[_ -]?(?:port|host)|(?:ssh )?port)',
+    before: '(?:ssh[_ -]?(?:port|host)|port)',
     after: '(?:NEVER_SSH_PORT)',
     all: false,
     pattern: '^rules no endpoint in public text',
@@ -757,6 +838,9 @@ try {
   const publicationBaseline = run('^RV2 settled later', 'test/run-report-extra.test.js');
   if (publicationBaseline.status !== 0)
     throw Error('publication baseline failed: ' + JSON.stringify(publicationBaseline));
+  const runnerBaseline = run(undefined, 'test/provider-runner.test.js');
+  if (runnerBaseline.status !== 0)
+    throw Error('runner baseline failed: ' + JSON.stringify(runnerBaseline));
   const rows = [];
   for (const c of cases.filter(
     (c) => !process.argv.slice(2).length || process.argv.slice(2).includes(c.name),

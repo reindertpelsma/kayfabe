@@ -556,7 +556,9 @@
       "Pulling fs layer",
       "Downloading",
       "Retrying",
-      "daemon retry"
+      "daemon retry",
+      "Domain successfully started",
+      "GPUs ready"
     ],
     "confirmationSeconds": 90,
     "observationSpacingSeconds": 1,
