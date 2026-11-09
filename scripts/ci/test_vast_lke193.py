@@ -69,7 +69,8 @@ class Ratchet(unittest.TestCase):
         table=L.load_ratchet(); del table['AD102']['source_evidence']['revision']
         with self.assertRaises(ValueError): L.validate_table(table)
     def test_seeded_limits_need_evidence(self):
-        with self.assertRaises(ValueError): L.validate_table({'AD102':dict(max_count=2,source_evidence={})})
+        with self.assertRaises(ValueError):
+            L.validate_table({'AD102':dict(max_count=2,count_unit='distinct_reports',source_evidence={})})
     def test_large_regression_cannot_escape_the_ratchet(self):
         self.assertEqual(L.decide('GA102',100001,mode='gate')['verdict'],'FAIL')
     def test_large_turing_regression_cannot_escape_the_ratchet(self):

@@ -91,14 +91,20 @@ FILES=[PY,PS,GATE,RR,'scripts/ci/test_vast_lke193.py','scripts/ci/vast_report.py
  'traces/windows_gate_20261101/g4_windows.log','traces/turing_boot_20261103/README.md','traces/ampere_hw_20261103/README.md']
 FILES += ['traces/turing_boot_20261103/boxB/tbB1/wer_reports.txt','traces/ampere_hw_20261103/boxA/am2_win/wer_reports.txt']
 FILES += [str(path.relative_to(ROOT)) for path in (ROOT/'traces/lke193_phase0_20261109').rglob('*') if path.is_file()]
-COLLECT='''import io,json,unittest
+COLLECT='''import io,json,sys,unittest
 s=unittest.defaultTestLoader.discover('.',pattern='test_vast_lke193*.py')
+def cases(suite):
+ for test in suite:
+  if isinstance(test,unittest.TestSuite): yield from cases(test)
+  else: yield test
+if sys.argv[1]=='fast':
+ s=unittest.TestSuite(t for t in cases(s) if t.__class__.__name__ not in ('GuestDecode','DistinctReports'))
 r=unittest.TextTestRunner(stream=io.StringIO()).run(s)
 print(json.dumps({'tests':r.testsRun,'skips':len(r.skipped),'killers':sorted(set(getattr(t,'test_case',t).id() for t,_ in r.failures+r.errors))}))
 '''
 
-def run(root):
- p=subprocess.run([sys.executable,'-c',COLLECT],cwd=root/'scripts/ci',capture_output=True,text=True,timeout=180,
+def run(root, powershell=True):
+ p=subprocess.run([sys.executable,'-c',COLLECT,'all' if powershell else 'fast'],cwd=root/'scripts/ci',capture_output=True,text=True,timeout=180,
                   env={'PATH':os.environ['PATH'],'PYTHONDONTWRITEBYTECODE':'1'})
  if p.returncode: raise RuntimeError('harness failed: '+p.stderr[-500:])
  return json.loads(p.stdout.splitlines()[-1])
@@ -116,8 +122,10 @@ def main():
   for name,file,old,new,count in CASES:
    path=root/file; source=path.read_text()
    if source.count(old)!=count: raise RuntimeError(name+': anchor count '+str(source.count(old)))
-   path.write_text(source.replace(old,new)); result=run(root); path.write_text(source)
-   row=dict(mutant=name,count=len(result['killers']),killers=result['killers']); rows.append(row)
+   # Python/report/shell mutations cannot change the PowerShell fixture modules.
+   # Always run the complete baseline and the complete decoder/counter mutations.
+   path.write_text(source.replace(old,new)); result=run(root,powershell=file in (PS,STATE)); path.write_text(source)
+   row=dict(mutant=name,tests=result['tests'],count=len(result['killers']),killers=result['killers']); rows.append(row)
    print(name+': '+str(row['count'])+' killers',file=sys.stderr,flush=True)
   print(json.dumps(dict(tests=baseline['tests'],cases=rows),indent=2))
   return int(any(row['count']<2 for row in rows))

@@ -476,6 +476,9 @@ hostref() { # before|after
 # ------------------------------------------------------------------------------------------------
 selftest() {
     local n=0 bad=0 out
+    # Keep the synthetic teardown's hundreds of polls free of tee subprocesses.
+    # Normal gate logging is unchanged; the selftest checks these same output lines.
+    say() { printf '%s\n' "$*"; }
     trap - EXIT
     eval "real_$(declare -f teardown_guest)"
     eval "real_$(declare -f postmortem_state)"
