@@ -23,6 +23,42 @@ S = CH + "user_storage.rs"
 L = CH + "user_lifecycle.rs"
 F = CH + "user_stream.rs"
 
+# A format bypass must preserve valid setup classifications. Audit the negative
+# assertions themselves, and require healthy Pointer paths to remain green.
+FORMAT_KILL_SITES = {
+    "an_entry_inspect_entry_refuses_is_refused_by_name_and_never_published": "GP_FORMAT_BAD_RESERVED_BIT",
+    "pointer_format_refuses_reserved_controls_and_unrepresentable_end_without_credit": "GP_FORMAT_BAD_WORD",
+}
+FORMAT_CONTROLS = [
+    "pointer_forwards_each_run3440_descriptor_unchanged_without_reading_its_pushbuffer",
+    "pointer_forwards_the_largest_representable_descriptor",
+    "pointer_zero_length_nops_preserve_sync_level_operand_without_pb_or_budget",
+    "pointer_admission_at_each_length_boundary_is_intact_and_constant_work",
+]
+
+
+def audit_format_kills(log, source):
+    """Reject setup panics, misplaced markers, and broken valid-entry controls."""
+    for name in FORMAT_CONTROLS:
+        if not re.search(rf"^test {re.escape(name)} \.\.\. ok$", log, re.M):
+            raise ValueError(f"{name}: positive control must pass")
+    sites = {}
+    for name, marker in FORMAT_KILL_SITES.items():
+        function = re.search(rf"^fn {re.escape(name)}\(\).*?(?=^fn |\Z)", source, re.M | re.S)
+        assertion = f'expect_err("{marker}")'
+        if function is None or function.group().count(assertion) != 1:
+            raise ValueError(f"{name}: unique bad-entry assertion missing")
+        offset = function.start() + function.group().index(assertion)
+        line = source.count("\n", 0, offset) + 1
+        block = re.search(rf"^---- {re.escape(name)} stdout ----\n(.*?)(?=^---- |\Z)", log, re.M | re.S)
+        path = "crates/kf-chan/tests/user_turn_unit.rs"
+        panic = None if block is None else re.search(
+            rf"panicked at {re.escape(path)}:{line}:(\d+):\n{re.escape(marker)}:", block.group(1))
+        if panic is None:
+            raise ValueError(f"{name}: failure must reach its own bad-entry assertion at {path}:{line}")
+        sites[name] = {"path": path, "line": line, "column": int(panic.group(1)), "assertion_marker": marker}
+    return sites
+
 # name, file, exact old/new, two required independent killing tests
 MUTANTS = [
     ("pointer_admission_keeps_snapshot_budget", T,
@@ -32,7 +68,7 @@ MUTANTS = [
      "crate::user_stream::inspect_format(entry)", "crate::user_stream::inspect_entry(entry, MAX_SOURCE_BYTES)",
      ["user_storage::tests::large_user_descriptors_cross_snapshot_bound_without_changing_real_credit_fields", "user_storage::tests::write_user_gp_stores_each_run3440_descriptor"]),
     ("pointer_format_check_bypassed", T,
-     "match inspect_format(self.raw)", "match Ok::<_, crate::user_stream::Refusal>(Source::Nop)",
+     "match inspect_format(self.raw)", "match inspect_format(self.raw).or(Ok::<_, crate::user_stream::Refusal>(Source::Nop))",
      ["an_entry_inspect_entry_refuses_is_refused_by_name_and_never_published", "pointer_format_refuses_reserved_controls_and_unrepresentable_end_without_credit"]),
     ("storage_format_check_removed", S,
      "crate::user_stream::inspect_format(entry)", "Ok::<_, crate::user_stream::Refusal>(crate::user_stream::Source::Nop)",
@@ -135,7 +171,12 @@ def main():
         finally:
             file.write_bytes(original)
         good = rc != 0 and len(failed) >= 2 and set(killers) <= set(failed)
-        records.append({"mutant": name, "failed": failed, "required_killers": killers, "killed": good})
+        record = {"mutant": name, "failed": failed, "required_killers": killers, "killed": good}
+        if name == "pointer_format_check_bypassed":
+            record["kill_sites"] = audit_format_kills(
+                (out / (name + ".log")).read_text(), (ROOT / "crates/kf-chan/tests/user_turn_unit.rs").read_text())
+            record["positive_controls"] = FORMAT_CONTROLS
+        records.append(record)
         (out / "results.json").write_text(json.dumps(records, indent=2) + "\n")
         print(f"{name}: {'KILLED' if good else 'SURVIVED/THIN'} ({len(failed)} tests)", flush=True)
         if not good:

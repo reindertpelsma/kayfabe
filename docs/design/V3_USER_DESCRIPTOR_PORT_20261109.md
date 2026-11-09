@@ -93,6 +93,13 @@ INFERRED H3: changing admission does not alter small-entry decisions or I/O.
 Falsifier: the retained legacy I/O golden changes, or existing safety/model tests fail
 for a reason other than the explicitly reconciled admission contract.
 
+INFERRED H4 (RV2 follow-up, 2026-11-09): preserving successful classifications while
+turning only format refusals into NOP will leave healthy Pointer setup intact and
+reach each negative's malformed-entry assertion. Falsifier: any of four named valid
+Pointer controls fails, or either required negative panics outside its own marked
+`expect_err` line. The runner now audits per-test panic locations and markers;
+test names alone are insufficient evidence for this mutant.
+
 ## Verification
 
 MEASURED, UR1 local run 2026-11-09 (original product sources at `115a0c39d`):
@@ -113,20 +120,47 @@ MEASURED, UR1 local run 2026-11-09 at `4c4568594`: the targeted debug run passes
 The legacy small-entry I/O golden is unchanged. Direct action transcripts from the old
 and ported Relay match exactly for default and always-scan modes.
 
-MEASURED, UR1 local run 2026-11-09 at `4c4568594`: all 15 production source mutants
-are killed by both required named tests. The separate unmutated mutation baseline
-passes 278 tests. Compile errors do not count as kills; sources are restored after
-each mutation, and every variant has a fresh target directory. Reproduce with:
+MEASURED, RV2 P3 follow-up 2026-11-09 after merge `1ea348b59` (next `593ec01dc`):
+all 15 descriptor-harness production mutants are freshly killed by both required
+named tests. The unmutated baseline passes 278 tests (231 library, 47 Relay).
+The table below replaces the earlier result for the broken format mutant; all other
+descriptor-harness counts reproduce. Compile errors do not count as kills; sources are
+restored after each mutation, and every variant has a fresh target directory.
+Reproduce with:
 
 ```sh
+nice -n 19 python3 -m unittest discover -s scripts -p test_descriptor_mutation_check.py
 nice -n 19 flock /tmp/claude-0/kf-local-cargo.lock python3 scripts/descriptor_mutation_check.py OUTDIR TARGET_ROOT
 ```
+
+MEASURED, RV2 P3 follow-up 2026-11-09 after merging `origin/next` at `593ec01dc`:
+the corrected format-bypass mutant preserves successful `inspect_format` results and
+substitutes NOP only for refusals. It fails 3 tests, not 44. The previous mutant
+replaced healthy setup classifications too; **its 44 failures are invalid evidence
+for malformed-entry checks**. Both required negatives now fail at their own
+bad-entry `expect_err` assertions in `crates/kf-chan/tests/user_turn_unit.rs`:
+
+| Required negative | Panic line:column | Assertion marker |
+|---|---|---|
+| `an_entry_inspect_entry_refuses_is_refused_by_name_and_never_published` | 354:35 | `GP_FORMAT_BAD_RESERVED_BIT` |
+| `pointer_format_refuses_reserved_controls_and_unrepresentable_end_without_credit` | 1011:39 | `GP_FORMAT_BAD_WORD` |
+
+MEASURED, UR1 local run 2026-11-09 (`review-followup/mutants/results.json`,
+`pointer_format_check_bypassed`): the four healthy controls in `FORMAT_CONTROLS` all pass: run3440 forwarding,
+maximum representable length, zero-length NOP and the length-boundary matrix. The
+third failure is `pointer_end_address_boundary_is_checked_without_copying_or_credit_on_refusal`.
+These are counts of failed tests, not counts of malformed loop inputs exercised.
+The new runner records the named assertion sites and positive controls in `results.json`
+and rejects setup panics, a marker from another test, the wrong source line or a
+failed positive control. Its five Python regression tests fail before implementation
+and all pass afterward. Logs and JSON remain under
+`/root/codex_lanes/UR1/review-followup/`; no production admission code changes in this follow-up.
 
 | Mutant | Failed tests | Two required named killers |
 |---|---:|---|
 | `pointer_admission_keeps_snapshot_budget` | 18 | `a_1026596_byte_pointer_descriptor_completes_through_marker_and_get_writeback`; `a_large_captured_descriptor_is_not_reloaded_after_guest_mutation` |
 | `storage_keeps_snapshot_budget` | 4 | `user_storage::tests::large_user_descriptors_cross_snapshot_bound_without_changing_real_credit_fields`; `user_storage::tests::write_user_gp_stores_each_run3440_descriptor` |
-| `pointer_format_check_bypassed` | 44 | `an_entry_inspect_entry_refuses_is_refused_by_name_and_never_published`; `pointer_format_refuses_reserved_controls_and_unrepresentable_end_without_credit` |
+| `pointer_format_check_bypassed` | 3 | `an_entry_inspect_entry_refuses_is_refused_by_name_and_never_published`; `pointer_format_refuses_reserved_controls_and_unrepresentable_end_without_credit` |
 | `storage_format_check_removed` | 4 | `user_storage::tests::bad_user_descriptor_cannot_modify_private_ring_or_userd`; `user_storage::tests::shadow_writer_preserves_opaque_bits_but_cannot_publish_or_forge_progress` |
 | `scan_budget_removed` | 5 | `scan_mode_oversized_descriptor_is_refused_as_scan_budget_before_any_read_or_gate`; `seeded_window_oversized_descriptor_is_refused_as_scan_budget_before_any_read_or_gate` |
 | `scan_bound_exclusive` | 2 | `scan_copy_bound_is_inclusive_and_checked_before_io`; `window_copy_bound_is_inclusive_and_checked_before_io` |
@@ -149,6 +183,14 @@ Executing that selector's exact replacement in a fresh target against the librar
 and Relay suites yields 3 failed format-refusal tests, including both named killers
 in the table. This is the 16th checked variant; the new descriptor harness still has
 15 variants. No production crate source remains mutated.
+
+MEASURED, RV2 P3 follow-up 2026-11-09 after merge `1ea348b59`
+(`/root/codex_lanes/UR1/review-followup/legacy-format-result.json`): the exact legacy selector is
+rerun in its own fresh target and again fails 3 tests. Both required negatives panic
+at the same marked bad-entry assertions (354:35 and 1011:39), and all four healthy
+Pointer controls pass. Across all 16 variants, the JSON failure counts match the
+sum of Cargo's library and Relay failure summaries, and both required names fail.
+All production source mutations are restored before the full pair verification.
 
 
 MEASURED, UR1 local run 2026-11-09 at `4c4568594`: the complete GPU-free pair command

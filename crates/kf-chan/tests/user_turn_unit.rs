@@ -350,7 +350,8 @@ fn an_entry_inspect_entry_refuses_is_refused_by_name_and_never_published() {
     // reserved bit 8 of the high dword
     io.ring[2] = ge(2, Kind::Plain).raw() | (1 << 40);
     io.put = 3;
-    let e = turn(&mut r, &mut io).unwrap_err();
+    // The mutant audit requires refusal here, after healthy Pointer setup.
+    let e = turn(&mut r, &mut io).expect_err("GP_FORMAT_BAD_RESERVED_BIT");
     assert!(
         matches!(&e, Fail::Refused(w) if w.starts_with("USER_RING_GP_FORMAT")),
         "{e:?}"
@@ -1006,7 +1007,8 @@ fn pointer_format_refuses_reserved_controls_and_unrepresentable_end_without_cred
         let issued = r.fetch.issued();
         io.ring[2] = bad;
         io.put = 3;
-        let e = turn(&mut r, &mut io).unwrap_err();
+        // Each malformed word must be refused without breaking valid setup.
+        let e = turn(&mut r, &mut io).expect_err("GP_FORMAT_BAD_WORD");
         assert!(
             matches!(e, Fail::Refused(ref why) if why.starts_with("USER_RING_GP_FORMAT Entry")),
             "{e:?}"
