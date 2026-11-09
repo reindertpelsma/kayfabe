@@ -1,4 +1,4 @@
-"""GPU-free issue #305 tests. Falsifier: an over-limit count passes, an unknown die
+"""GPU-free issue #305 tests. Falsifier: a default excess gates or loses WARN, an unknown die
 borrows a baseline, WER fields are inferred as hex, or an unvalidated dump is decoded.
 Synthetic headers use the owner's public PAGE/DU64 offsets, not a captured dump.
 """
@@ -33,10 +33,14 @@ class Ratchet(unittest.TestCase):
         self.assertEqual(L.decide('AD102',2)['verdict'],'PASS')
     def test_ga102_at_the_max_is_non_gating(self):
         self.assertEqual(L.decide('GA102',4)['verdict'],'PASS')
-    def test_ad102_excess_is_a_regression(self):
-        self.assertEqual(L.decide('AD102',3)['verdict'],'FAIL')
-    def test_tu106_excess_is_a_regression(self):
-        self.assertEqual(L.decide('TU106',4)['verdict'],'FAIL')
+    def test_ad102_excess_warns_by_default(self):
+        self.assertEqual(L.decide('AD102',3)['verdict'],'WARN')
+    def test_tu106_excess_warns_by_default(self):
+        self.assertEqual(L.decide('TU106',4)['verdict'],'WARN')
+    def test_ad102_explicit_gate_mode_still_fails(self):
+        self.assertEqual(L.decide('AD102',3,mode='gate')['verdict'],'FAIL')
+    def test_turing_explicit_gate_mode_still_fails(self):
+        self.assertEqual(L.decide('TU106',4,mode='gate')['verdict'],'FAIL')
     def test_no_neighbours_baseline_for_ad104(self):
         self.assertEqual(L.decide('AD104',99)['verdict'],'UNKNOWN')
     def test_no_neighbours_baseline_for_unknown(self):
@@ -59,9 +63,9 @@ class Ratchet(unittest.TestCase):
     def test_seeded_limits_need_evidence(self):
         with self.assertRaises(ValueError): L.validate_table({'AD102':dict(max_count=2,source_evidence={})})
     def test_large_regression_cannot_escape_the_ratchet(self):
-        self.assertEqual(L.decide('GA102',100001)['verdict'],'FAIL')
+        self.assertEqual(L.decide('GA102',100001,mode='gate')['verdict'],'FAIL')
     def test_large_turing_regression_cannot_escape_the_ratchet(self):
-        self.assertEqual(L.decide('TU106',100001)['verdict'],'FAIL')
+        self.assertEqual(L.decide('TU106',100001,mode='gate')['verdict'],'FAIL')
     def test_check_never_updates_the_ratchet(self):
         p=HELPER.with_name('known_live_dumps_193.json'); before=p.read_bytes()
         L.decide('AD102',999)
@@ -202,22 +206,38 @@ $out | ConvertTo-Json -Depth 8 -Compress
 
 class GateIntegration(unittest.TestCase):
     gate=ROOT / 'scripts/bench/box/windows_gate.sh'
-    def run_ratchet(self, die, count):
+    def run_ratchet(self, die, count, mode=None):
         text=self.gate.read_text(); start=text.index('lke_ratchet() {'); end=text.index('\n}\n',start)+3
         with tempfile.TemporaryDirectory() as tmp:
             script='\n'.join(['SOURCE='+str(ROOT), 'EV='+tmp, 'LKE_DIE='+die, 'LKE193='+str(count),
                 'say() { echo "$*"; }', 'fail_op() { echo OPERATOR; exit 3; }',
                 'fail_guest() { echo GUEST_FAIL; exit 1; }', text[start:end], 'lke_ratchet', 'echo CONTINUED'])
-            done=subprocess.run(['bash','-c',script],capture_output=True,text=True,timeout=20)
+            env={'PATH':os.environ['PATH']}
+            if mode is not None: env['KF_WINGATE_LKE_RATCHET']=mode
+            done=subprocess.run(['bash','-c',script],env=env,capture_output=True,text=True,timeout=20)
             record=json.loads(Path(tmp,'lke193_ratchet.json').read_text())
         return done,record
     def test_gate_regression_fails_with_evidence(self):
-        done,row=self.run_ratchet('AD102',3)
+        done,row=self.run_ratchet('AD102',3,'gate')
         self.assertEqual(done.returncode,1,done.stdout+done.stderr); self.assertEqual(row['verdict'],'FAIL')
         self.assertNotIn('CONTINUED',done.stdout)
     def test_gate_turing_regression_fails_with_evidence(self):
-        done,row=self.run_ratchet('TU106',4)
+        done,row=self.run_ratchet('TU106',4,'gate')
         self.assertEqual(done.returncode,1,done.stdout+done.stderr); self.assertIn('GATE_LKE_RATCHET',done.stdout)
+    def test_default_ad102_excess_warns_and_keeps_running(self):
+        done,row=self.run_ratchet('AD102',3)
+        self.assertEqual(done.returncode,0,done.stdout+done.stderr)
+        self.assertEqual((row['count'],row['max_count'],row['verdict']),(3,2,'WARN'))
+        self.assertIn('GATE_LKE_RATCHET die=AD102 count=3 max=2 verdict=WARN',done.stdout)
+        self.assertIn('CONTINUED',done.stdout)
+    def test_default_turing_excess_warns_and_keeps_running(self):
+        done,row=self.run_ratchet('TU106',4)
+        self.assertEqual(done.returncode,0,done.stdout+done.stderr)
+        self.assertEqual((row['count'],row['max_count'],row['verdict']),(4,3,'WARN'))
+        self.assertIn('GATE_LKE_RATCHET die=TU106 count=4 max=3 verdict=WARN',done.stdout)
+    def test_explicit_report_mode_warns(self):
+        done,row=self.run_ratchet('GA102',5,'report')
+        self.assertEqual((done.returncode,row['verdict']),(0,'WARN'))
     def test_gate_equal_max_keeps_running(self):
         done,row=self.run_ratchet('GA102',4)
         self.assertEqual(done.returncode,0,done.stdout+done.stderr); self.assertIn('CONTINUED',done.stdout)
@@ -241,6 +261,60 @@ class GateIntegration(unittest.TestCase):
     def test_gate_streams_decoded_metadata_to_log(self):
         text=self.gate.read_text(); self.assertIn("grep -a '^GATE_LKE'",text)
 
+class PostIdleRules(unittest.TestCase):
+    """Execute the real post-idle shell checks against synthetic state/probe outputs."""
+    def run_post_idle(self, *, die='AD102', count=3, strict=False, other=0, probe_bad=''):
+        text=(ROOT/'scripts/bench/box/windows_gate.sh').read_text()
+        start=text.index('lke_ratchet() {'); end=text.index('\n}\n',start)+3
+        post=text[text.index('stage_begin post_idle\n'):text.index('stage_begin collect_stop\n')]
+        with tempfile.TemporaryDirectory() as tmp:
+            fake=Path(tmp,'winvm.sh'); fake.write_text('exit 0\n')
+            script='\n'.join([
+                'SOURCE='+str(ROOT), 'EV='+tmp, 'WV='+str(fake), 'TAG=synthetic', 'ENABLE_UTC=synthetic',
+                'LKE_DIE='+die, 'COUNT='+str(count), 'OTHER='+str(other), 'BAD='+probe_bad,
+                'say() { echo "$*"; }', 'stage_begin() { :; }', 'stage_end() { :; }',
+                'smi() { return 0; }', 'probes_round() { PROBE_BAD=$BAD; }', 'wer_timeline() { :; }',
+                'fail_op() { echo OPERATOR; exit 3; }', 'fail_guest() { echo GUEST_FAIL; exit 1; }',
+                '''gps() {
+                    if [[ "$*" == *"-Mode tdr"* ]]; then
+                        total=$OTHER
+                        for arg in "$@"; do [ "$arg" != -Strict ] || total=$((total+COUNT)); done
+                        echo "GATE_TDR livekernelevent193=$COUNT livekernelevent_stale=0 livekernelevent_other=$OTHER total=$total"
+                    else echo 'GATE_DISPLAY code=0 '; fi
+                }''', text[start:end], post, 'echo POST_IDLE_PASSED'])
+            env={'PATH':os.environ['PATH'],'KF_WINGATE_STRICT_LKE':'1' if strict else '0'}
+            return subprocess.run(['bash','-c',script],env=env,capture_output=True,text=True,timeout=20)
+
+    def test_default_ad102_excess_passes_only_zero_reset_checks(self):
+        done=self.run_post_idle()
+        self.assertEqual(done.returncode,0,done.stdout+done.stderr)
+        self.assertIn('verdict=WARN',done.stdout)
+        self.assertIn('POST_IDLE_PASSED',done.stdout)
+    def test_default_turing_excess_passes_only_zero_reset_checks(self):
+        done=self.run_post_idle(die='TU106',count=4)
+        self.assertEqual(done.returncode,0,done.stdout+done.stderr)
+        self.assertIn('verdict=WARN',done.stdout)
+    def test_strict_still_gates_one_193_below_seeded_maximum(self):
+        done=self.run_post_idle(count=1,strict=True)
+        self.assertEqual(done.returncode,1,done.stdout+done.stderr)
+        self.assertNotIn('POST_IDLE_PASSED',done.stdout)
+    def test_strict_still_gates_193_on_an_unseeded_die(self):
+        done=self.run_post_idle(die='GB206',count=1,strict=True)
+        self.assertEqual(done.returncode,1,done.stdout+done.stderr)
+    def test_non193_event_still_fails_with_a_warn_ratchet(self):
+        done=self.run_post_idle(other=1)
+        self.assertEqual(done.returncode,1,done.stdout+done.stderr)
+        self.assertIn('verdict=WARN',done.stdout)
+    def test_non193_events_still_fail_without_any_193(self):
+        done=self.run_post_idle(count=0,other=2)
+        self.assertEqual(done.returncode,1,done.stdout+done.stderr)
+    def test_cuda_probe_failure_still_fails(self):
+        done=self.run_post_idle(probe_bad='cup8')
+        self.assertEqual(done.returncode,1,done.stdout+done.stderr)
+    def test_d3d_probe_failure_still_fails(self):
+        done=self.run_post_idle(probe_bad='d3d11')
+        self.assertEqual(done.returncode,1,done.stdout+done.stderr)
+
 class ReportFields(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -254,6 +328,13 @@ class ReportFields(unittest.TestCase):
         self.assertEqual(self.build()['known_live_dumps_193'],3)
     def test_failed_gate_reports_ratchet_verdict(self):
         self.assertEqual(self.build()['live_dumps_193_ratchet'],'FAIL')
+    def test_warn_survives_in_a_passing_gate_report(self):
+        row=self.R.build_report(['GATE_LKE_RATCHET die=AD102 count=3 max=2 verdict=WARN',
+            'WINDOWS_GATE_PASS resets=0 known_live_dumps_193=3'],{})['windows']
+        self.assertEqual((row['known_live_dumps_193'],row['live_dumps_193_max'],row['live_dumps_193_ratchet']),(3,2,'WARN'))
+    def test_turing_warn_retains_count_and_maximum(self):
+        row=self.build('TU106',4,'3','WARN')
+        self.assertEqual((row['known_live_dumps_193'],row['live_dumps_193_max'],row['live_dumps_193_ratchet']),(4,3,'WARN'))
     def test_count_alias_is_preserved(self): self.assertEqual(self.build()['live_dumps_193'],3)
     def test_unknown_is_not_a_fabricated_pass(self):
         self.assertEqual(self.build('GB206',50,'-','UNKNOWN')['live_dumps_193_ratchet'],'UNKNOWN')

@@ -16,7 +16,8 @@
 #   window (KF_WINGATE_IDLE_S, default 300 s) ends with zero resets (Display 4101, nvlddmkm 153, Kernel-Power 41,
 #   6008, BugCheck 1001, WER LiveKernelEvent other than code 193) and the same two probes pass AGAIN after the idle;
 #   the recorded open LiveKernelEvent 193 defect is counted and reported, and gates above an evidence-seeded per-die
-#   maximum or with KF_WINGATE_STRICT_LKE=1; then a graceful stop. The validated dump header supplies the numeric code.
+#   maximum in explicit KF_WINGATE_LKE_RATCHET=gate mode or with KF_WINGATE_STRICT_LKE=1;
+#   otherwise the ratchet is report-only. Then a graceful stop. The validated dump header supplies the numeric code.
 #
 # Verdict lines. THE GATE IS THE GUEST PASSING: exit 0 only for WINDOWS_GATE_PASS (owner, 2026-11-01). A host
 # failure, a harness failure or a rental fault is never an excuse to merge: it is RETRY, non-zero, "re-run on a
@@ -36,7 +37,9 @@
 # classes are DIAGNOSTICS in the log. They decide the label of a non-zero exit (FAIL or RETRY); they never make an
 # exit zero.
 #
-# Knobs (all optional): KF_WINGATE_STRICT_LKE (0: 1 makes LiveKernelEvent 193 gate), KF_WINGATE_IDLE_S (300), KF_WINGATE_BUDGET_S (9000: the wall for everything after the
+# Knobs (all optional): KF_WINGATE_STRICT_LKE (0: 1 makes any LiveKernelEvent 193 gate),
+# KF_WINGATE_LKE_RATCHET (report: warn above the per-die maximum; gate: fail above it),
+# KF_WINGATE_IDLE_S (300), KF_WINGATE_BUDGET_S (9000: the wall for everything after the
 # install; the install itself is bounded by WINVM_INSTALL_WAIT_S, 4200), KF_WINGATE_FLAGS (the kf3 env file,
 # scripts/bench/windows/kf3_flags.sample.env), KF_WINGATE_GUEST_DRIVER (580.65.06: the guest ABI of the
 # Windows 580.88 driver), KF_WINGATE_ARM (B), WINVM_ROOT (/workspace/winvm), BENCH (/workspace/bench).
@@ -186,11 +189,12 @@ wer_timeline() { # OUTFILE
     say "GATE_TIMELINE enable=${ENABLE_UTC:-none} first_probe=${first_probe:-none} first_dump=${first_dump:-none}$(timeline_deltas "$first_probe" "$first_dump")"
     grep -a '^GATE_WER_NEAR' "$out" | while read -r l; do say "  $l"; done
 }
-# No learned/auto-raised maximum. Unknown dies are explicit and non-gating.
+# Report-only by default; no learned/auto-raised maximum. Unknown dies have no ceiling.
 lke_ratchet() {
     local result rc
     result="$EV/lke193_ratchet.txt"
     python3 -I "$SOURCE/scripts/bench/box/lke193.py" check --die "$LKE_DIE" --count "${LKE193:-?}" \
+        --mode "${KF_WINGATE_LKE_RATCHET:-report}" \
         --out "$EV/lke193_ratchet.json" > "$result" 2>&1
     rc=$?
     while IFS= read -r line; do say "$line"; done < "$result"

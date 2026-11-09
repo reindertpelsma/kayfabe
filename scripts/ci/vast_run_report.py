@@ -213,7 +213,7 @@ class Collector:
                 for sub in ([] if m[3] == "-" else m[3].split(","))[:6]:
                     self.test("windows", SPEC_SUITE, "%s/%s" % (m[1], sub), "FAIL", None)
         elif head == "GATE_LKE_RATCHET":
-            m = re.fullmatch(r"GATE_LKE_RATCHET die=([A-Z]{2}[0-9]{3}|unknown) count=([0-9]{1,10}) max=([0-9]{1,10}|-) verdict=(PASS|FAIL|UNKNOWN)", line)
+            m = re.fullmatch(r"GATE_LKE_RATCHET die=([A-Z]{2}[0-9]{3}|unknown) count=([0-9]{1,10}) max=([0-9]{1,10}|-) verdict=(PASS|WARN|FAIL|UNKNOWN)", line)
             if m and self.windows["live_dumps_193_ratchet"] is None:
                 self.windows["known_live_dumps_193"] = self.windows["live_dumps_193"] = int(m[2])
                 self.windows["live_dumps_193_ratchet"] = m[4]

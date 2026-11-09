@@ -21,7 +21,7 @@ STATE='scripts/bench/windows/gate_state.ps1'
 RR='scripts/ci/vast_run_report.py'
 CASES=[
  ('equal-count-regresses',PY,'count > maximum','count >= maximum',1),
- ('excess-count-accepted',PY,"('FAIL' if count > maximum else 'PASS')","'PASS'",1),
+ ('excess-count-accepted',PY,"(excess if count > maximum else 'PASS')","'PASS'",1),
  ('unknown-borrows-ad102',PY,'row = table.get(die)',"row = table.get(die, table['AD102'])",1),
  ('count-validation-removed',PY,"if type(count) is not int or not 0 <= count <= 0x7fffffff:\n        raise ValueError('missing or invalid live dump count')",'if False:\n        pass',1),
  ('maximum-validation-removed',PY,"if type(count) is not int or not 0 <= count <= 0x7fffffff:\n            raise ValueError('invalid max_count')",'if False:\n            pass',1),
@@ -48,6 +48,18 @@ CASES=[
  ('nested-reports-hidden',STATE,"-Filter 'Report.wer' -File -Recurse","-Filter 'Report.wer' -File",1),
  ('bad-header-guessed',PS,"GATE_LKE_HEADER status=REFUSED reason=","GATE_LKE_HEADER bugcheck=0x00000193 status=OK reason=",1),
  ('ratchet-failure-does-not-stop-gate',GATE,'[ "$rc" != 1 ] || fail_guest "LiveKernelEvent 193', '[ "$rc" != 1 ] || true "LiveKernelEvent 193',1),
+ ('default-ratchet-gates-again',GATE,'${KF_WINGATE_LKE_RATCHET:-report}','${KF_WINGATE_LKE_RATCHET:-gate}',1),
+ ('warn-line-dropped',GATE,'while IFS= read -r line; do say "$line"; done < "$result"',
+  'while IFS= read -r line; do [[ "$line" == *"verdict=WARN" ]] || say "$line"; done < "$result"',1),
+ ('report-mode-regression-gates',PY,"excess = 'FAIL' if mode == 'gate' else 'WARN'","excess = 'FAIL'",1),
+ ('explicit-gate-mode-ignored',PY,"excess = 'FAIL' if mode == 'gate' else 'WARN'","excess = 'WARN'",1),
+ ('gate-mode-not-forwarded',GATE,'--mode "${KF_WINGATE_LKE_RATCHET:-report}"','--mode report',1),
+ ('strict-mode-ignored',GATE,'|| strict="-Strict"','|| strict=""',1),
+ ('non193-reset-check-ignored',GATE,'grep -aq \'^GATE_TDR .* total=0$\' "$EV/tdr_counts.txt" || fail_guest',
+  'true || fail_guest',1),
+ ('post-idle-probe-check-ignored',GATE,'[ -z "$PROBE_BAD" ] || fail_guest "graded probes failed AFTER',
+  '[ -z "$PROBE_BAD" ] || true "graded probes failed AFTER',1),
+ ('warn-report-fields-dropped',RR,'verdict=(PASS|WARN|FAIL|UNKNOWN)','verdict=(PASS|FAIL|UNKNOWN)',1),
  ('ratchet-fields-dropped',RR,'elif head == "GATE_LKE_RATCHET":','elif head == "NEVER_LKE_RATCHET":',1),
  ('ratchet-report-invents-pass',RR,'self.windows["live_dumps_193_ratchet"] = m[4]','self.windows["live_dumps_193_ratchet"] = "PASS"',1),
 ]
@@ -59,7 +71,7 @@ FILES=[PY,PS,GATE,RR,'scripts/ci/test_vast_lke193.py','scripts/ci/vast_report.py
 COLLECT='''import io,json,unittest
 s=unittest.defaultTestLoader.discover('.',pattern='test_vast_lke193.py')
 r=unittest.TextTestRunner(stream=io.StringIO()).run(s)
-print(json.dumps({'tests':r.testsRun,'skips':len(r.skipped),'killers':sorted(set(t.id() for t,_ in r.failures+r.errors))}))
+print(json.dumps({'tests':r.testsRun,'skips':len(r.skipped),'killers':sorted(set(getattr(t,'test_case',t).id() for t,_ in r.failures+r.errors))}))
 '''
 
 def run(root):

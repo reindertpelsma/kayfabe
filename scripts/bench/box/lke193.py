@@ -2,7 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 """Issue #305: a read-only, evidence-seeded count ratchet and native RM die identification.
 
-STATUS: LIVE, 2026-11-08 (GPU-free tests). No baseline is learned or raised by a run.
+STATUS: LIVE, 2026-11-09 (GPU-free tests). Report-only by default until header classification;
+explicit gate mode retains the old ceiling enforcement. No baseline is learned or raised by a run.
 An unseeded die is UNKNOWN, not an assertion that its dumps are harmless.
 """
 import argparse
@@ -37,13 +38,14 @@ def load_ratchet(path=None):
     return validate_table(json.loads(Path(path or HERE / 'known_live_dumps_193.json').read_text()))
 
 
-def decide(die, count, table=None):
+def decide(die, count, table=None, mode='report'):
     table = load_ratchet() if table is None else validate_table(table)
     if type(count) is not int or not 0 <= count <= 0x7fffffff:
         raise ValueError('missing or invalid live dump count')
     row = table.get(die)
     maximum = row['max_count'] if row else None
-    verdict = 'UNKNOWN' if row is None else ('FAIL' if count > maximum else 'PASS')
+    excess = 'FAIL' if mode == 'gate' else 'WARN'
+    verdict = 'UNKNOWN' if row is None else (excess if count > maximum else 'PASS')
     return dict(die=die, count=count, max_count=maximum, verdict=verdict,
                 source_evidence=row['source_evidence'] if row else None)
 
@@ -82,13 +84,14 @@ def main(argv=None):
     ident = subs.add_parser('identify'); ident.add_argument('probe'); ident.add_argument('root')
     check = subs.add_parser('check'); check.add_argument('--die',required=True); check.add_argument('--count',required=True)
     check.add_argument('--table'); check.add_argument('--out',required=True)
+    check.add_argument('--mode',choices=('report','gate'),default='report')
     args = p.parse_args(argv)
     try:
         if args.command == 'identify':
             print(identify(Path(args.probe).read_text(),args.root)); return 0
         if not re.fullmatch(r'(?:[A-Z]{2}[0-9]{3}|unknown)',args.die): raise ValueError('invalid die')
         if not re.fullmatch(r'[0-9]{1,10}',args.count): raise ValueError('invalid count')
-        row = decide(args.die,int(args.count),load_ratchet(args.table))
+        row = decide(args.die,int(args.count),load_ratchet(args.table),mode=args.mode)
         Path(args.out).write_text(json.dumps(row,sort_keys=True)+'\n')
         print('GATE_LKE_RATCHET die=%s count=%d max=%s verdict=%s' %
               (row['die'],row['count'],row['max_count'] if row['max_count'] is not None else '-',row['verdict']))
