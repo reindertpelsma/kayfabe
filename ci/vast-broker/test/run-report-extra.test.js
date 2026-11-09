@@ -2052,3 +2052,29 @@ for (const variant of [1, 2])
       assert.equal(text.includes(secret), false);
     },
   );
+
+for (const variant of [1, 2])
+  test(
+    'publish: legacy stored chunks retain rent-time values after rotation ' + variant,
+    { skip: d1Skip },
+    async () => {
+      const field = variant === 1 ? 'BOX_ACCESS_SECRET' : 'BOX_ACCESS_ID';
+      const secret = 'legacy-rent-' + variant + '-unique-value-' + 'q'.repeat(12);
+      const { bucket } = await runWith([], {
+        overrides: { [field]: secret },
+        mutate: async (h) => {
+          const ledger = new Ledger(h.storage),
+            record = await h.storage.get('record:123-1');
+          assert.ok(record.known.includes(secret));
+          // Stored chunks can predate ingestion masking and the current environment.
+          await ledger.appendPublicLog(record, 'legacy rent diagnostic ' + secret + ' end\n');
+          await ledger.save(record);
+          h.bindings[field] = 'rotated-rent-' + variant + '-replacement-value';
+        },
+      });
+      const text = bucket.objects.get('vast-123-1-0/log.txt');
+      assert.match(text, /legacy rent diagnostic/);
+      assert.equal(text.includes(secret.slice(0, 18)), false);
+      assert.equal(text.includes(secret), false);
+    },
+  );
