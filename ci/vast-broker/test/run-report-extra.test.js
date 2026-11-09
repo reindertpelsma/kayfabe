@@ -1,3 +1,4 @@
+import { enqueue } from '../src/ingest.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { setup, nonce, sha, callbackToken, env as baseEnv } from './helpers.js';
@@ -34,6 +35,7 @@ async function harness(overrides = {}, { store = true } = {}) {
   const db = store ? new FakeD1() : null;
   const bucket = new Bucket();
   const h = await setup({
+    PROVIDER_CONFIRM_SECONDS: '1',
     ...(store ? { DB: db, ROW_TAG_KEY: TAG_KEY } : {}),
     LOGS_BUCKET: bucket,
     ...overrides,
@@ -726,6 +728,7 @@ test(
       { ...h.cloud.offer, id: 6, machine_id: 100002, host_id: 200, price: 0.1 },
     ];
     const r0 = await h.storage.get('record:123-1');
+    h.cloud.instances.get(r0.id).actual_status = 'created';
     h.cloud.instances.get(r0.id).status_msg = 'GPU error, unable to start instance LEG-ZERO-MARK';
     for (let i = 0; i < 2; i++) {
       h.time.value += 20000;
@@ -1260,6 +1263,7 @@ test(
       { ...h.cloud.offer, id: 6, machine_id: 100002, host_id: 200, price: 0.1 },
     ];
     const r0 = await h.storage.get('record:123-1');
+    h.cloud.instances.get(r0.id).actual_status = 'created';
     h.cloud.instances.get(r0.id).status_msg = 'GPU error, unable to start instance ZERO';
     for (let poll = 0; poll < 2; poll++) {
       h.time.value += 20000;
@@ -1716,6 +1720,7 @@ test(
     const r0 = await h.storage.get('record:123-1');
     const token0 = callbackToken(r0, h.bindings.RUN_TOKEN_SECRET);
     // Pieces that only an exact match (not a shape) can catch: the nonce, and a fragment of the token.
+    h.cloud.instances.get(r0.id).actual_status = 'created';
     h.cloud.instances.get(r0.id).status_msg =
       'GPU error, unable to start instance leg0 nonce ' + r0.nonce + ' frag ' + token0.slice(-24);
     for (let poll = 0; poll < 2; poll++) {
@@ -1933,6 +1938,7 @@ test(
       { ...h.cloud.offer, id: 6, machine_id: 100002, host_id: 200, price: 0.1 },
     ];
     const r0 = await h.storage.get('record:123-1');
+    h.cloud.instances.get(r0.id).actual_status = 'created';
     h.cloud.instances.get(r0.id).status_msg = 'GPU error, unable to start instance z';
     for (let poll = 0; poll < 2; poll++) {
       h.time.value += 20000;
@@ -1981,3 +1987,45 @@ test(
     assert.ok(log.includes('path [redacted] id [redacted]'));
   },
 );
+
+for (const leg of [10, 31])
+  test(
+    'RV2 settled later attempt publishes log and structured report ' + leg,
+    { skip: d1Skip },
+    async () => {
+      const { h, bucket, db } = await harness({ PROVIDER_MAX_ATTEMPTS: '32' });
+      assert.equal((await h.call()).status, 200);
+      const record = await h.storage.get('record:123-1');
+      record.providerRetries = leg;
+      await h.storage.put('record:123-1', record);
+      await enqueue(new Ledger(h.storage), record);
+      await cron(h, 2);
+      assert.equal(
+        (await h.report({ seq: 1, kind: 'progress', text: 'later attempt public log\n' })).status,
+        200,
+      );
+      assert.equal((await post(h, base())).status, 200);
+      assert.equal(
+        (
+          await h.report({
+            seq: 2,
+            kind: 'result',
+            result: { nonce, verdict: 'PASS', suites: pass, hardware },
+          })
+        ).status,
+        200,
+      );
+      h.time.value += 11 * 60000;
+      await cron(h, 3);
+      await h.service.publishRuns();
+      const id = 'vast-123-1-' + leg;
+      assert.match(bucket.objects.get(id + '/log.txt'), /later attempt public log/);
+      const report = JSON.parse(bucket.objects.get(id + '/report.json'));
+      assert.equal(report.run_id, id);
+      assert.equal(
+        db.rows('SELECT COUNT(*) AS n FROM ci_run_reports WHERE run_id = ?', id)[0].n,
+        1,
+      );
+      assert.equal((await h.storage.list({ prefix: 'plogq:' })).size, 0);
+    },
+  );

@@ -16,6 +16,179 @@ const broker = fileURLToPath(new URL('.', import.meta.url)),
 const scratch = mkdtempSync(join(tmpdir(), 'kf-J2-provider-'));
 const cases = [
   {
+    name: 'review unknown provider state earns hardware blame',
+    file: 'src/provider-policy.js',
+    before: '!BOOT_FAILURE_STATES.has(state)',
+    after: "state === 'running'",
+    pattern: '^RV2 malformed provider state cannot confirm hardware blame',
+    test: 'test/provider-review.test.js',
+    all: false,
+  },
+  {
+    name: 'review fatal elapsed window bypassed',
+    file: 'src/provider-policy.js',
+    before: 'at - next.first >= policy.confirmationSeconds * 1000',
+    after: 'true',
+    pattern: '^RV2 fatal helper enforces elapsed window',
+    test: 'test/provider-review.test.js',
+    all: false,
+  },
+  {
+    name: 'review close polls count as independent observations',
+    file: 'src/provider-policy.js',
+    before: 'policy.observationSpacingSeconds * 1000',
+    after: '0',
+    pattern: '^RV2 close polls are not independent fatal observations',
+    test: 'test/provider-review.test.js',
+    all: false,
+  },
+  {
+    name: 'review retained boot log is rescanned',
+    file: 'src/provider-policy.js',
+    before: 'fatalSignature(null, delta.fresh, id, policy)',
+    after: 'fatalSignature(null, log, id, policy)',
+    pattern: '^RV2 pending progress cannot replay historical fatal lines',
+    test: 'test/provider-review.test.js',
+    all: false,
+  },
+  {
+    name: 'review running state no longer clears fatal status',
+    file: 'src/provider-policy.js',
+    before:
+      'if (state !== null && !BOOT_FAILURE_STATES.has(state)) return { reason: null, cursor };',
+    after: 'if (false) return { reason: null, cursor };',
+    pattern: '^RV2 running state cancels a retained fatal status message',
+    test: 'test/provider-review.test.js',
+    all: false,
+  },
+  {
+    name: 'review unchanged current failure loses its witness',
+    file: 'src/provider-policy.js',
+    before: 'prior.state === state &&',
+    after: 'false &&',
+    pattern: '^RV2 unchanged current fatal waits for window',
+    test: 'test/provider-review.test.js',
+    all: false,
+  },
+  {
+    name: 'review changed provider progress preserves old witness',
+    file: 'src/provider-policy.js',
+    before: 'prior.statusHash === statusHash',
+    after: 'true',
+    pattern: '^RV2 changing provider progress clears prior witness',
+    test: 'test/provider-review.test.js',
+    all: false,
+  },
+  {
+    name: 'review boot cursor history is unbounded',
+    file: 'src/provider-policy.js',
+    before: 'lines.slice(-64)',
+    after: 'lines.slice(0)',
+    pattern: '^RV2 log cursor storage stays bounded',
+    test: 'test/provider-review.test.js',
+    all: false,
+  },
+  {
+    name: 'review observation spacing ignores configured data',
+    file: 'src/provider-policy.js',
+    before: 'policy.observationSpacingSeconds * 1000',
+    after: '1000',
+    pattern: '^RV2 fatal observation spacing comes from validated data',
+    test: 'test/provider-review.test.js',
+    all: false,
+  },
+  {
+    name: 'review old confirmed history blames a running timeout',
+    file: 'src/index.js',
+    before: "['created', 'loading', 'starting', 'offline', 'null']",
+    after:
+      "(record.bootFailure?.confirmed ? ['running'] : ['created', 'loading', 'starting', 'offline', 'null'])",
+    pattern: '^RV2 running boot timeout ignores old confirmed history',
+    test: 'test/provider-review.test.js',
+    all: false,
+  },
+  {
+    name: 'review compact Port remains in JS output',
+    file: 'src/rental.js',
+    before: '(?<![A-Za-z0-9])-o',
+    after: '(?<![A-Za-z0-9])-q',
+    pattern: '^RV2 compact Port removed by JS boundaries',
+    test: 'test/provider-review.test.js',
+    all: false,
+  },
+  {
+    name: 'review compact Port remains in runner output',
+    file: 'runner.py',
+    before: '(?<![A-Za-z0-9])-o',
+    after: '(?<![A-Za-z0-9])-q',
+    pattern: '^RV2 compact Port removed by Python pipelines',
+    test: 'test/provider-review.test.js',
+    all: false,
+  },
+  {
+    name: 'review compact Port remains in renderer output',
+    file: 'public-log.js',
+    before: '(?<![A-Za-z0-9])-o',
+    after: '(?<![A-Za-z0-9])-q',
+    pattern: '^RV2 compact Port removed by Python pipelines',
+    test: 'test/provider-review.test.js',
+    all: false,
+  },
+  {
+    name: 'review publication drops later attempts',
+    file: 'src/publish.js',
+    before: '((?:[0-9]|[12][0-9]|3[01]))',
+    after: '([0-9])',
+    pattern: '^RV2 settled later attempt publishes log and structured report',
+    test: 'test/run-report-extra.test.js',
+    all: false,
+  },
+  {
+    name: 'review publication accepts mismatched attempt identity',
+    file: 'src/publish.js',
+    before: 'entry.leg !== Number(m[2])',
+    after: 'false',
+    pattern: '^RV2 publication rejects mismatched later attempt identity',
+    test: 'test/provider-review.test.js',
+    all: false,
+  },
+  {
+    name: 'review publication accepts unsupported attempt range',
+    file: 'src/publish.js',
+    before: '[12][0-9]|3[01]',
+    after: '[123][0-9]',
+    pattern: '^RV2 publication rejects malformed attempt',
+    test: 'test/provider-review.test.js',
+    all: false,
+  },
+  {
+    name: 'review penalty clock advances within one market',
+    file: 'src/offers.js',
+    before: 'evaluatedAt,',
+    after: 'this.now(),',
+    pattern: '^RV2 advancing clock preserves equal penalty ranking',
+    test: 'test/provider-review.test.js',
+    all: false,
+  },
+  {
+    name: 'review first report marker is not persisted',
+    file: 'src/index.js',
+    before: 'r.firstReportAt ??= now();',
+    after: '/* test mutation: marker omitted */',
+    pattern: '^RV2 first accepted log permanently fences provider replacement',
+    test: 'test/provider-review.test.js',
+    all: true,
+  },
+  {
+    name: 'review settled failures keep full TTL liability',
+    file: 'src/ledger.js',
+    before: 'v.ended === null ? (Math.max(0, v.started + v.ttl - now) * v.price) / 3600000 : 0',
+    after: '(Math.max(0, v.started + v.ttl - now) * v.price) / 3600000',
+    pattern: '^RV2 settled failures release unused TTL reservations',
+    test: 'test/provider-review.test.js',
+    all: false,
+  },
+  {
     name: 'daily room replaces the original total-run cap',
     file: 'src/index.js',
     before: 'profileCaps(cfg, profile).price',
@@ -534,6 +707,12 @@ try {
   }
   const baseline = run();
   if (baseline.status !== 0) throw Error('baseline failed: ' + JSON.stringify(baseline));
+  const reviewBaseline = run(undefined, 'test/provider-review.test.js');
+  if (reviewBaseline.status !== 0)
+    throw Error('review baseline failed: ' + JSON.stringify(reviewBaseline));
+  const publicationBaseline = run('^RV2 settled later', 'test/run-report-extra.test.js');
+  if (publicationBaseline.status !== 0)
+    throw Error('publication baseline failed: ' + JSON.stringify(publicationBaseline));
   const rows = [];
   for (const c of cases.filter(
     (c) => !process.argv.slice(2).length || process.argv.slice(2).includes(c.name),
@@ -562,7 +741,17 @@ try {
     }
   }
   process.stdout.write(
-    JSON.stringify({ status: 'PASS', baseline_tests: baseline.tests, cases: rows }, null, 2) + '\n',
+    JSON.stringify(
+      {
+        status: 'PASS',
+        baseline_tests: baseline.tests,
+        review_tests: reviewBaseline.tests,
+        publication_tests: publicationBaseline.tests,
+        cases: rows,
+      },
+      null,
+      2,
+    ) + '\n',
   );
 } finally {
   rmSync(scratch, { recursive: true, force: true });

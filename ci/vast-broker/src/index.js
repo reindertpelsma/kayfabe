@@ -42,6 +42,7 @@ import {
   fatalSignature,
   providerMessageClass,
   observeFatal,
+  currentBootFailure,
   providerLossVerdict,
   retryEligible,
   attemptReceipt,
@@ -520,8 +521,7 @@ export function createService({
       const providerFault = reason === 'BOOT_TIMEOUT' && record.firstReportAt === undefined;
       const attributable =
         expiredInstance !== null &&
-        (record.bootFailure?.confirmed ||
-          ['created', 'loading', 'starting', 'offline', 'null'].includes(record.providerState));
+        ['created', 'loading', 'starting', 'offline', 'null'].includes(record.providerState);
       if (providerFault) {
         record.faultReason = attributable
           ? (record.bootFailure?.reason ?? 'BOOT_TIMEOUT')
@@ -555,6 +555,7 @@ export function createService({
       }
       record.providerRaw = 'error';
       record.providerMsg = '-';
+      record.bootFailure = null;
       if (!record.providerBad) await workerLine(record, 'provider_error', cfg);
       if (badReading(record, true)) {
         await workerLine(
@@ -609,17 +610,40 @@ export function createService({
       );
     }
     if (record.firstReportAt === undefined) {
-      let log = '';
-      let signature = fatalSignature(instance, '', record.id, cfg.provider);
-      if (!signature && (pendingInstance(instance) || instance.actual_status === 'running')) {
+      let log;
+      if (pendingInstance(instance) && !fatalSignature(instance, '', record.id, cfg.provider)) {
         try {
           log = await vast.bootLog(record);
         } catch {}
-        signature = fatalSignature(instance, log, record.id, cfg.provider);
       }
-      const disposition = providerMessageClass(instance, log, record.id, cfg.provider);
-      record.providerMessageClass = disposition.kind;
-      record.bootFailure = observeFatal(record.bootFailure, signature, now(), cfg.provider);
+      const observation = await currentBootFailure(
+        record.bootFailure,
+        record.bootLogCursor,
+        instance,
+        log,
+        record.id,
+        cfg.provider,
+      );
+      record.bootLogCursor = observation.cursor;
+      const signature = observation.reason;
+      record.providerMessageClass = signature
+        ? 'FATAL'
+        : instance.actual_status === 'running'
+          ? 'IGNORABLE'
+          : providerMessageClass(instance, '', record.id, cfg.provider).kind;
+      const failure = observeFatal(
+        record.bootFailure,
+        signature,
+        now(),
+        cfg.provider,
+        observation.witness,
+      );
+      record.bootFailure = failure && {
+        ...failure,
+        source: observation.source,
+        state: observation.state,
+        statusHash: observation.statusHash,
+      };
       await ledger.save(record);
       if (record.bootFailure?.confirmed) {
         record.faultReason = signature;

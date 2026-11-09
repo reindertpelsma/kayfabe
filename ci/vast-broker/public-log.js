@@ -29,8 +29,9 @@ def public_endpoint_match(match):
 
 
 def redact_endpoints(text):
+    text = re.sub(r'''(?<![A-Za-z0-9])-o[ \t]*(?:["'][ \t]*)?port["']?[ \t]*(?:=[ \t]*)?["']?[0-9]{1,5}\b''', "-oPort=[redacted]", text, flags=re.I)
     text = re.sub(r"(?<![A-Za-z0-9])-[pP][ \t]*[0-9]{1,5}\b", "-p [redacted]", text)
-    text = re.sub(r'''\b(?:ssh[_ -]?(?:port|host)|(?:ssh )?port)["']?\s*[=:]?\s*["']?[0-9]{1,5}\b''', "ssh_port=[redacted]", text, flags=re.I)
+    text = re.sub(r'''\b(?:ssh[_ -]?(?:port|host)|(?:ssh )?port)["']?\s*(?:[=:]\s*)?["']?[0-9]{1,5}\b''', "ssh_port=[redacted]", text, flags=re.I)
     text = re.sub(r"\[?\b((?:[0-9]{1,3}\.){3}[0-9]{1,3})\]?(?::[0-9]{1,5})?(?![0-9])", public_endpoint_match, text)
     return re.sub(r"(?<![A-Za-z0-9_])\[?([0-9a-f]{0,4}(?::[0-9a-f]{0,4}){2,7})\]?(?::[0-9]{1,5})?(?:/48)?(?![A-Za-z0-9_])", public_endpoint_match, text, flags=re.I)
 

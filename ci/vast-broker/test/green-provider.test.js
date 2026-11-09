@@ -42,7 +42,9 @@ for (const kind of ['boot', 'running-boot', 'report'])
       assert.equal(failed.verdict, 'PROVIDER_FAULT');
       assert.notEqual(failed.ended, null);
       assert.equal(h.cloud.instances.has('900'), false);
-      assert.ok(await h.storage.get('provider-machine:100001'));
+      if (kind === 'running-boot')
+        assert.equal(await h.storage.get('provider-machine:100001'), undefined);
+      else assert.ok(await h.storage.get('provider-machine:100001'));
       if (restart) h.restart();
       const response = await h.call();
       assert.equal(response.status, 200);

@@ -6,7 +6,13 @@ import { configuration } from '../src/policy.js';
 import { rentalLine } from '../src/rental.js';
 const row = (h) => h.storage.get('record:123-1');
 async function market(vars = {}) {
-  const h = await setup({ HARD_RUNTIME_MINUTES: '180', BOOT_LIMIT_MINUTES: '75', ...vars });
+  // Fault-path simulations use a short confirmation window; the default is tested separately.
+  const h = await setup({
+    PROVIDER_CONFIRM_SECONDS: '1',
+    HARD_RUNTIME_MINUTES: '180',
+    BOOT_LIMIT_MINUTES: '75',
+    ...vars,
+  });
   h.cloud.offer.host_id = 100;
   h.cloud.contracts = Array.from({ length: 20 }, (_, i) => 900 + i);
   h.cloud.extraOffers = Array.from({ length: 10 }, (_, i) => ({
@@ -163,12 +169,14 @@ for (const v of [1, 2]) {
     const h = await market();
     const r = await rent(h),
       i = h.cloud.instances.get(r.id);
+    i.actual_status = 'created';
     i.status_msg = 'GPU error, unable to start instance';
     h.time.value += 20000;
     await h.service.sweep();
     i.status_msg = 'Preparing GPUs...';
     h.time.value += 20000;
     await h.service.sweep();
+    i.actual_status = 'created';
     i.status_msg = 'GPU error, unable to start instance';
     h.time.value += 20000;
     await h.service.sweep();

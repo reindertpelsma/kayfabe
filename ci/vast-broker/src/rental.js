@@ -43,9 +43,13 @@ function maskedEndpoint(value, ip) {
 }
 export function redactEndpoints(text) {
   return text
+    .replace(
+      /(?<![A-Za-z0-9])-o[ \t]*(?:["'][ \t]*)?port["']?[ \t]*(?:=[ \t]*)?["']?[0-9]{1,5}\b/gi,
+      '-oPort=[redacted]',
+    )
     .replace(/(?<![A-Za-z0-9])-[pP][ \t]*[0-9]{1,5}\b/g, '-p [redacted]')
     .replace(
-      /\b(?:ssh[_ -]?(?:port|host)|(?:ssh )?port)["']?\s*[=:]?\s*["']?[0-9]{1,5}\b/gi,
+      /\b(?:ssh[_ -]?(?:port|host)|(?:ssh )?port)["']?\s*(?:[=:]\s*)?["']?[0-9]{1,5}\b/gi,
       'ssh_port=[redacted]',
     )
     .replace(/\[?\b((?:[0-9]{1,3}\.){3}[0-9]{1,3})\]?(?::[0-9]{1,5})?(?![0-9])/g, (v, ip) =>

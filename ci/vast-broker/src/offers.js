@@ -128,6 +128,7 @@ export class OfferBook {
   // family); it bypasses the one-minute cache and is evaluated by exactly the same rules.
   // `vramFloorMb`: the middle tier's VRAM floor (0 = off).
   async evaluate(vast, cfg, ledger, profile, { market, vramFloorMb = 0 } = {}) {
+    const evaluatedAt = this.now();
     const queryKey = String(cfg.diskGb) + ':' + String(cfg.maxInet);
     let hit =
       this.queryKey === queryKey &&
@@ -235,7 +236,7 @@ export class OfferBook {
           penalty: await ledger.providerPenalty(
             offer.machine_id,
             offer.host_id,
-            this.now(),
+            evaluatedAt,
             cfg.provider,
           ),
         });

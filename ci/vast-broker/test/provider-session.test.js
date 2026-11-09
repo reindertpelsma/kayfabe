@@ -5,7 +5,13 @@ import { Ledger } from '../src/ledger.js';
 import { configuration } from '../src/policy.js';
 const record = (h) => h.storage.get('record:123-1');
 async function boot(vars = {}) {
-  const h = await setup({ HARD_RUNTIME_MINUTES: '180', BOOT_LIMIT_MINUTES: '75', ...vars });
+  // Short window isolates replacement/accounting rules; provider-review covers the default window.
+  const h = await setup({
+    PROVIDER_CONFIRM_SECONDS: '1',
+    HARD_RUNTIME_MINUTES: '180',
+    BOOT_LIMIT_MINUTES: '75',
+    ...vars,
+  });
   h.cloud.contracts = Array.from({ length: 16 }, (_, i) => 900 + i);
   h.cloud.offer.host_id = 100;
   assert.equal((await h.call()).status, 200);
@@ -14,9 +20,10 @@ async function boot(vars = {}) {
 }
 async function fatal(h, text = 'Error: GPU error, unable to start instance.') {
   const r = await record(h);
-  h.cloud.instances.get(r.id).status_msg = text;
+  Object.assign(h.cloud.instances.get(r.id), { actual_status: 'created', status_msg: text });
   for (let i = 0; i < 2; i++) {
-    h.time.value += 20000;
+    h.time.value +=
+      (i === 0 ? 20 : Math.max(20, configuration(h.bindings).provider.confirmationSeconds)) * 1000;
     await h.service.sweep();
   }
   return record(h);
@@ -212,7 +219,13 @@ for (const retry of [false, true])
 for (const price of [0.4, 0.5])
   test('session cumulative transfers obey original total-run ceiling ' + price, async () => {
     const vars = { MAX_PRICE_USD_HOUR: String(price) };
-    const h = await setup({ HARD_RUNTIME_MINUTES: '180', BOOT_LIMIT_MINUTES: '75', ...vars });
+    // Short window isolates replacement/accounting rules; provider-review covers the default window.
+    const h = await setup({
+      PROVIDER_CONFIRM_SECONDS: '1',
+      HARD_RUNTIME_MINUTES: '180',
+      BOOT_LIMIT_MINUTES: '75',
+      ...vars,
+    });
     h.cloud.offer.host_id = 100;
     h.cloud.offer.inet_down_cost = 0.005;
     h.cloud.contracts = Array.from({ length: 16 }, (_, i) => 900 + i);

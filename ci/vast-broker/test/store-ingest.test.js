@@ -293,6 +293,8 @@ test(
   { skip: d1Skip },
   async () => {
     const { h, db } = await harness();
+    h.bindings.PROVIDER_CONFIRM_SECONDS = '1';
+    h.restart();
     Object.assign(h.cloud.offer, { host_id: 100 });
     h.cloud.contracts = [900, 901];
     assert.equal((await h.call()).status, 200);
@@ -301,6 +303,7 @@ test(
       { ...h.cloud.offer, id: 6, machine_id: 100002, host_id: 200, price: 0.1 },
     ];
     const r0 = await h.storage.get('record:123-1');
+    h.cloud.instances.get(r0.id).actual_status = 'created';
     h.cloud.instances.get(r0.id).status_msg = 'GPU error, unable to start instance';
     for (let i = 0; i < 2; i++) {
       h.time.value += 20000;

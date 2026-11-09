@@ -31,7 +31,10 @@ for (const variant of [1, 2]) {
     const one = observeFatal(null, reason, 1000, policy);
     assert.equal(one.confirmed, false);
     assert.equal(observeFatal(one, reason, 1000, policy).count, 1);
-    assert.equal(observeFatal(one, reason, 21000, policy).confirmed, true);
+    assert.equal(
+      observeFatal(one, reason, 1000 + policy.confirmationSeconds * 1000, policy).confirmed,
+      true,
+    );
     assert.equal(observeFatal(one, null, 21000, policy), null);
     assert.equal(observeFatal(one, reason, 999, policy).confirmed, false);
   });
@@ -448,10 +451,11 @@ for (const v of [1, 2]) {
 
 for (const v of [1, 2])
   test('rules exhaustion lists every attempt ' + v, async () => {
-    const h = await setup({ PROVIDER_MAX_ATTEMPTS: '1' });
+    const h = await setup({ PROVIDER_MAX_ATTEMPTS: '1', PROVIDER_CONFIRM_SECONDS: '1' });
     h.cloud.offer.host_id = 100 + v;
     await h.call();
     const instance = h.cloud.instances.get('900');
+    instance.actual_status = 'created';
     instance.status_msg =
       v === 1
         ? 'GPU error, unable to start instance'

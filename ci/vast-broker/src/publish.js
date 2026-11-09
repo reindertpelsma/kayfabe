@@ -200,9 +200,15 @@ export async function publishTick({ ledger, env, now, clock = Date.now, budgetMs
   for (const [key, stored] of await ledger.storage.list({ prefix: PUBLISH_PREFIX, limit: 64 })) {
     if (worked >= PER_TICK || clock() >= deadline) break;
     if (Number.isFinite(stored?.nextAt) && stored.nextAt > now) continue; // backing off
-    const m = /^plogq:([1-9][0-9]{0,19}-[1-9][0-9]{0,19}):([0-9])$/.exec(key);
+    const m = /^plogq:([1-9][0-9]{0,19}-[1-9][0-9]{0,19}):((?:[0-9]|[12][0-9]|3[01]))$/.exec(key);
     const entry = stored;
-    if (!m || entry === null || typeof entry !== 'object' || entry.key !== m[1]) {
+    if (
+      !m ||
+      entry === null ||
+      typeof entry !== 'object' ||
+      entry.key !== m[1] ||
+      entry.leg !== Number(m[2])
+    ) {
       await ledger.storage.delete(key);
       event({ state: 'DROPPED', why: 'entry' });
       continue;

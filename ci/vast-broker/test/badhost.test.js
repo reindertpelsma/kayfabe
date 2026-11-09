@@ -9,7 +9,11 @@ import { Ledger } from '../src/ledger.js';
 const summary = readFileSync(new URL('./fixtures/provider-57945969.txt', import.meta.url), 'utf8');
 const hardware = { gpu_name: 'unknown', compute_cap: 0, driver_version: 'unknown' };
 async function fixture() {
-  const h = await setup({ HARD_RUNTIME_MINUTES: '180', BOOT_LIMIT_MINUTES: '40' });
+  const h = await setup({
+    HARD_RUNTIME_MINUTES: '180',
+    BOOT_LIMIT_MINUTES: '40',
+    PROVIDER_CONFIRM_SECONDS: '1',
+  });
   h.cloud.offer.host_id = 5000;
   h.cloud.contracts = [900, 901];
   assert.equal((await h.call()).status, 200);
@@ -60,7 +64,10 @@ for (const reason of ['host_xid', 'provision'])
     });
 async function bootFault(h) {
   const r = await h.storage.get('record:123-1');
-  h.cloud.instances.get(r.id).status_msg = 'GPU error, unable to start instance';
+  Object.assign(h.cloud.instances.get(r.id), {
+    actual_status: 'created',
+    status_msg: 'GPU error, unable to start instance',
+  });
   for (let i = 0; i < 2; i++) {
     h.time.value += 20000;
     await h.service.sweep();

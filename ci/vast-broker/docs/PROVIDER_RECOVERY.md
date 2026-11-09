@@ -11,14 +11,26 @@ CODE READ (`src/provider-policy.js`, `src/index.js`): during BOOTING, the Worker
 matches literal, case-insensitive signatures from `defaults.json.providerPolicy`.
 The initial fatal rules are the GPU start error and the owned instance's exact
 KVM Domain-not-found signature. The latter requires both the QEMU error marker
-and the matching instance id; changes elsewhere in a boot log do not erase a
-repeated fatal signature. Image pull progress, checksum verification, GPU
+and the matching instance id in newly observed output. Image pull progress, checksum verification, GPU
 preparation, daemon retries and other unmatched error text do not qualify.
-Fatal rules take precedence over ignorable progress on the same status line.
-A recovery reading clears the sequence. Two distinct consecutive polls confirm
-a fatal signature; the configurable confirmation window also permits confirmation
-on a later observation. Duplicate readings at the same clock instant do not count
-twice; a backwards clock resets the sequence.
+For known non-running provider states, fatal status rules take precedence over
+ignorable progress on the same status line.
+CODE READ (`src/provider-policy.js`, `src/index.js`): running state clears a pending
+fatal witness, including a retained fatal status message. Boot log checks use only a
+new suffix, tracked with a bounded hashed cursor; retained text is never rescanned.
+An unchanged log plus the same non-running state and status message preserves the
+original frozen-failure witness. New nonfatal output, changed state/message, a log
+reset or an unreadable log cancels that witness. Cursor and observation state persist
+across Worker restarts without storing raw provider log text.
+
+CODE READ: confirmation requires at least two observations separated by
+`observationSpacingSeconds` (default 1), and at least `confirmationSeconds`
+(default 90) elapsed since the first matching current-failure observation. Closely
+spaced status/cron polls do not count twice. The next available poll at or after the
+window confirms a persistent fault; with the default one-minute cron the bound is
+90 seconds plus one normal poll interval, assuming the provider API answers. A
+backwards clock or changed witness resets the sequence. Both values are data, and
+the spacing cannot exceed the confirmation window.
 
 INFERRED from source (`src/index.js`, `runner.py`, `src/ledger.js`): confirmed fatal messages
 close as `PROVIDER_FAULT` immediately. A provider row still pending at boot expiry
@@ -84,6 +96,7 @@ the existing identity-only teardown configuration still permits cleanup.
 | `PROVIDER_MAX_ATTEMPTS` | 8 | Integer 1–32 |
 | `PROVIDER_SESSION_MINUTES` | 90 | 1–180 |
 | `PROVIDER_CONFIRM_SECONDS` | 90 | 1–600 |
+| `PROVIDER_OBSERVATION_SPACING_SECONDS` | 1 | 1–600, no greater than the confirmation window |
 | `PROVIDER_PENALTY_BASE_USD_HOUR` | 0.25 | 0.001–10 |
 | `PROVIDER_PENALTY_HALF_LIFE_HOURS` | 24 | 0.01–720 |
 | `PROVIDER_PENALTY_CAP_USD_HOUR` | 5 | 0.001–100 |
@@ -138,7 +151,7 @@ names `public_ipaddr`; only its IPv4 network address at /24 or canonical IPv6 /4
 prefix is retained in public metadata. IPv4-mapped IPv6 is normalized to IPv4.
 The full address and SSH port are never public fields. Invalid address-like
 text, including MAC addresses and version strings, keeps its original spelling. Output redaction covers
-bare/bracketed endpoints, named SSH ports, command-line ports, provider diagnostics,
+bare/bracketed endpoints, named SSH ports, command-line ports (including compact/quoted `-oPort` options), provider diagnostics,
 box log text, error paths and summaries. Reuse parsing accepts the new bounded
 rental-line shape; runs with multiple rental lines remain ineligible for reuse
 under its existing single-rental proof rule.
@@ -162,4 +175,4 @@ KF_PROVIDER_SIM_START=9001 KF_PROVIDER_SIM_SEEDS=5000 node --test ci/vast-broker
 ```
 
 CODE READ: simulations use no provider network, rentals, hardware or deployment.
-Status protocol is 7 for the new trusted metadata; box protocol stays 7.
+Status protocol is 7 for the trusted metadata; box protocol stays 7. CODE READ: publication accepts canonical retry indices 0–31, validates the queue leg against its key, and publishes log/report identity from that same index. Offer evaluation snapshots one timestamp for every penalty decay calculation; input order and storage latency cannot age one candidate more than another.

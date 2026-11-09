@@ -1,3 +1,5 @@
+import { sha256Hex } from './tokens.js';
+
 export function fatalSignature(instance, log, id, policy) {
   for (const rule of policy.fatalSignatures) {
     const text = rule.source === 'status' ? instance?.status_msg : log;
@@ -20,13 +22,85 @@ export function providerMessageClass(instance, log, id, policy) {
   );
   return { kind: ignored ? 'IGNORABLE' : 'UNKNOWN', reason: null };
 }
-export function observeFatal(prior, reason, at, policy) {
+// Keep hashes, not retained provider text. A rewritten/truncated log is not proof of new output.
+export async function bootLogDelta(prior, text) {
+  if (typeof text !== 'string') return { cursor: prior, fresh: '', stable: false };
+  const hash = await sha256Hex(text);
+  const lines = text.split('\n');
+  if (text.endsWith('\n')) lines.pop();
+  const tail = await Promise.all(lines.slice(-64).map(sha256Hex));
+  const cursor = { length: text.length, hash, tail };
+  if (!prior) return { cursor, fresh: text, stable: true };
+  if (prior.hash === hash && prior.length === text.length)
+    return { cursor, fresh: '', stable: true };
+  if (
+    Number.isSafeInteger(prior.length) &&
+    prior.length >= 0 &&
+    prior.length <= text.length &&
+    (await sha256Hex(text.slice(0, prior.length))) === prior.hash
+  )
+    return { cursor, fresh: text.slice(prior.length), stable: true };
+  const head = await Promise.all(lines.slice(0, 64).map(sha256Hex));
+  for (let n = Math.min(prior.tail?.length ?? 0, head.length); n > 0; n--) {
+    if (head.slice(0, n).every((value, i) => value === prior.tail[prior.tail.length - n + i]))
+      return { cursor, fresh: lines.slice(n).join('\n'), stable: true };
+  }
+  return { cursor, fresh: '', stable: false };
+}
+
+const BOOT_FAILURE_STATES = new Set([
+  'created',
+  'loading',
+  'starting',
+  'offline',
+  'null',
+  'error',
+  'exited',
+  'stopped',
+]);
+
+export async function currentBootFailure(prior, cursor, instance, log, id, policy) {
+  const state = instance.actual_status;
+  if (state !== null && !BOOT_FAILURE_STATES.has(state)) return { reason: null, cursor };
+  const direct = fatalSignature(instance, '', id, policy);
+  if (direct)
+    return { reason: direct, source: 'status', state, witness: state + ':status', cursor };
+  const delta = await bootLogDelta(cursor, log);
+  const statusHash = await sha256Hex(instance.status_msg ?? '');
+  let reason = fatalSignature(null, delta.fresh, id, policy);
+  // No new output plus the same failing state/message preserves the original witness.
+  // New progress, running recovery, changed state/message or an unreadable log cancels it.
+  if (
+    !reason &&
+    delta.stable &&
+    !delta.fresh.trim() &&
+    prior?.source === 'boot_log' &&
+    prior.state === state &&
+    prior.statusHash === statusHash
+  )
+    reason = prior.reason;
+  return {
+    reason,
+    source: 'boot_log',
+    state,
+    statusHash,
+    witness: state + ':boot_log:' + statusHash,
+    cursor: delta.cursor,
+  };
+}
+
+export function observeFatal(prior, reason, at, policy, witness = reason) {
   if (!reason) return null;
-  if (!prior || prior.reason !== reason || at < prior.last)
-    return { reason, first: at, last: at, count: 1, confirmed: false };
-  if (at === prior.last) return prior;
-  const next = { ...prior, last: at, count: prior.count + 1 };
-  next.confirmed = next.count >= 2 || at - next.first >= policy.confirmationSeconds * 1000;
+  if (!prior || prior.reason !== reason || prior.witness !== witness || at < prior.observedAt)
+    return { reason, witness, first: at, last: at, observedAt: at, count: 1, confirmed: false };
+  if (at === prior.observedAt) return prior;
+  const separated = at - prior.last >= policy.observationSpacingSeconds * 1000;
+  const next = {
+    ...prior,
+    observedAt: at,
+    ...(separated ? { last: at, count: Math.min(2, prior.count + 1) } : {}),
+  };
+  next.confirmed = next.count >= 2 && at - next.first >= policy.confirmationSeconds * 1000;
   return next;
 }
 export function faultPenalty(history, at, policy) {

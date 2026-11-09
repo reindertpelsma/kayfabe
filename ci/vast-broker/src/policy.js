@@ -776,6 +776,7 @@ export function providerPolicy(env = {}) {
     throw new Error('CONFIG_VAR:PROVIDER_POLICY');
   const numeric = {
     PROVIDER_CONFIRM_SECONDS: ['confirmationSeconds', 1, 600],
+    PROVIDER_OBSERVATION_SPACING_SECONDS: ['observationSpacingSeconds', 1, 600],
     PROVIDER_MAX_ATTEMPTS: ['maxAttempts', 1, MAX_PROVIDER_ATTEMPTS],
     PROVIDER_SESSION_MINUTES: ['sessionMinutes', 1, 180],
     PROVIDER_PENALTY_BASE_USD_HOUR: ['penaltyBaseUsdHour', 0.001, 10],
@@ -795,6 +796,8 @@ export function providerPolicy(env = {}) {
       throw new Error('CONFIG_VAR:' + key);
     p[field] = value;
   }
+  if (p.observationSpacingSeconds > p.confirmationSeconds)
+    throw new Error('CONFIG_VAR:PROVIDER_OBSERVATION_SPACING_SECONDS');
   if (env.PROVIDER_IGNORABLE_SIGNATURES !== undefined)
     p.ignorableSignatures = JSON.parse(env.PROVIDER_IGNORABLE_SIGNATURES);
   if (
