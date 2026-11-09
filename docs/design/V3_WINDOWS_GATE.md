@@ -1,6 +1,6 @@
 # V3: the Windows stage of the merge bar (`KF_MERGE_WINDOWS=1`, `windows_gate.sh`)
 
-STATUS: LIVE, 2026-11-08 (DX1 policy and issue #305 metadata/ratchet implemented, GPU-free tested only; §0: required on the gpu-vast master gate, first Worker run FAIL at the reboot stage on GA106; first hardware run: section 6; teardown and state-at-failure fixes: section 3a). The gate is implemented (`scripts/bench/box/windows_gate.sh`, wired into
+STATUS: LIVE, 2026-11-09 (DX1 policy and issue #305 metadata/ratchet implemented, GPU-free tested only; §0: required on the gpu-vast master gate, first Worker run FAIL at the reboot stage on GA106; first hardware run: section 6; teardown and state-at-failure fixes: section 3a). The gate is implemented (`scripts/bench/box/windows_gate.sh`, wired into
 `scripts/bench/box/merge_check.sh` as an opt-in last stage). The first real run is recorded in
 `traces/windows_gate_20261101/README.md`; this file carries the design and the rules, that file carries the
 numbers. It implements the verification plan of [`V3_WINDOWS_ON_VAST.md`](V3_WINDOWS_ON_VAST.md) (bar (b)) as a
@@ -15,6 +15,25 @@ CODE READ: the Worker profile `check` (gpu-vast on a master PR or push) sends `K
 MEASURED, run 41749680326, rev 0ca8873e, 2026-11-04, Vast instance 59035303, RTX 3060 (GA106), host 580.159.04, guest 580.88 (`traces/gate_windows_ci_20261104/README.md`). The Linux bar was green: 9/9 gates, raw 30/30, thin 30/30, census OK, CUDA 4+4. The gate's install took 3197 s; boot1, `check --kf3` (fail=0), nv_install (GSP keys 1) and desktop_prep all passed. Then `WINDOWS_GATE_FAIL diag=KAYFABE stage=reboot why="the guest did not restart within 420 s of shutdown /r (no second QEMU)"` with the host reference green/green. The check failed. This is the first Windows gate on GA106. Cause not known (INFERRED candidates: a GA106-specific hang of the guest's shutdown with kf3, or the run loop). The evidence archive was on the destroyed box, so the next step is one manual GA106 lease that keeps it. ⊘ Correction 2026-11-04, from the coordinator: the Ampere die lane diagnosed the same signature on GA106 (dca106a) as a HARNESS defect. The guest did reboot, but the QMP event logger never attached, so the run loop ended with `no-events-file`. Fixed in 7c6586cd4 and def5114d4 (on this branch as 4300fc5d8 and 1bd1756a4): the attach retries for up to 120 s, `no-events-file` is RETRY/OPERATOR, and the logger's stderr is kept. Run 4 (41763934006, rev 942ca543, same machine) did not reach Windows: thin guest suite `concurrent-fuzz` FAIL, bare metal 30/30. Run 5 (41768641016, rev e7d6a3fa, same machine) did not reach Windows either: thin guest arm `bus-info-sweep` FAIL (`cuEventQuery refused: 700`), bare metal 30/30. So the fixed harness has not yet passed through the Worker.
 
 ## LiveKernelEvent 193 reporting (owner decision, 2026-11-08)
+
+**Correction: owner decision 2026-11-09: ratchet is report-only until the dump header is classified.**
+
+**Coordinator-reported observation, 2026-11-09:** one AD102 run counted 3 against a seeded maximum of 2.
+No run revision or trace was supplied with that observation; this GPU-free change does not reproduce it.
+
+**POLICY / CODE READ at `92d6c4aed`:** unset `KF_WINGATE_LKE_RATCHET` (or `report`) preserves the count,
+per-die maximum and evidence, with `GATE_LKE_RATCHET ... verdict=WARN` above a seeded maximum. It does not fail
+for that overrun. `KF_WINGATE_LKE_RATCHET=gate` explicitly restores the previous ceiling enforcement (FAIL above
+maximum). `KF_WINGATE_STRICT_LKE=1` still gates on any non-stale 193, including below the ceiling or on an
+unseeded die. Unknown dies remain UNKNOWN; no ceiling is learned or raised. `WINDOWS_GATE_PASS` still requires
+`resets=0`, passing probes before and after idle, and every non-193 reset/event code at zero.
+
+**PLAN:** phase 0 is measuring the actual numeric code from a real dump header. Synthetic header fixtures do not
+classify that dump, and report-only scheduling does not establish harmlessness. The gate log, `lke193_ratchet.json`
+and local run report retain count/maximum; `windows.known_live_dumps_193` and `windows.live_dumps_193_ratchet`
+retain the observed count and WARN verdict. Existing Worker publication limits below are unchanged.
+
+**Historical default below, superseded by the 2026-11-09 correction:**
 
 **CODE READ at `a1209e3da`:** with the default `strict=0`, LiveKernelEvent 193 is counted separately and gates only
 when its count exceeds the evidence-seeded maximum for the measured die. Unseeded dies have an explicit UNKNOWN verdict.
@@ -171,6 +190,10 @@ box that is then destroyed loses the install; the evidence is exported by the ga
 - **Blackwell** is not leased for: the Windows results for GB202/GB205/GB206 are all from `claude/blackwell-fixes-20261024` (503 commits not in `next`), and its relay-route fix (`engine_writes_userd_gp_get`) is not in `next`. What is missing is that branch's code merged and validated; the driver pin (580.88) and the host driver (595.91.07) are not the blocker.
 
 ### Open defect: LiveKernelEvent 193, per die (strict default unchanged)
+
+**Correction 2026-11-09:** the owner decision in the reporting section above supersedes default ceiling
+enforcement in the 2026-11-08 updates below. Above-ceiling counts now WARN by default; explicit `gate` mode and
+strict mode retain their enforcement. The seeded maxima and historical observations are unchanged.
 
 **Update 2026-11-08 (DX1, issue #305): cheap instrumentation and ratchet implemented.**
 
