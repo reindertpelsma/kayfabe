@@ -95,8 +95,10 @@ is frozen (see *Layout*).
   checks it; design in `docs/design/V3_CI_TIERS_AND_IGNORE_LADDER.md`). An ignored path is **deleted**
   from the box checkout and from the `stripped` CI job before they test, so a test of production code
   may not read one: keep its data off the list (the syntax has no negation, so list the neighbours) or
-  move it next to the test. Never relax the test. `KF_REQUIRE_ORACLES=1` (stripped job, boxes) makes a
-  missing oracle a failure; `scripts/ci/fetch_oracles.sh` checks the pinned `third_party/ogkm-580` out.
+  move it next to the test. Never relax the test. `KF_REQUIRE_ORACLES=1` makes a missing oracle a
+  failure. The `stripped` job sets it and runs `scripts/ci/fetch_oracles.sh` (pinned `third_party/ogkm-580`
+  and `third_party/ogkm-595`). `merge_check.sh` exports it too, but the box merge bar fetches no oracle and
+  runs no `cargo test` except the opt-in KVM stage (kf-linux-raw, kf-chan), so no oracle test runs on a box today.
 - Break-glass: the owner may bypass the required `gpu-vast` check on one PR (rare, e.g. a broken gate
   runner); no other exceptions.
 

@@ -9,8 +9,11 @@
 //! # The skip is loud
 //!
 //! Tree absent -> [`oracle`] returns `None` and prints `FN1-ORACLE-GATE: SKIPPED <test> — <reason>`
-//! (and `RAN` otherwise), so a CI floor can count both. A tree that is present but does not build, or
-//! whose function moved, panics: that is a rotted oracle, not a machine without one.
+//! (and `RAN` otherwise) straight to the real stderr, which libtest does not capture, so a CI floor can
+//! count both (an `eprintln!` of a passing test is swallowed). With `KF_REQUIRE_ORACLES` set to anything
+//! but empty or `0` (the stripped-tree job; `scripts/ci/fetch_oracles.sh` checks the pinned 595.84 tree
+//! out into `third_party/ogkm-595`) an absent tree PANICS instead. A tree that is present but does not
+//! build, or whose function moved, panics: that is a rotted oracle, not a machine without one.
 #![allow(dead_code)]
 
 use std::collections::BTreeMap;
@@ -27,8 +30,27 @@ pub const DEFAULT_OGKM_595: &str = "/workspace/ogkm-tars/open-gpu-kernel-modules
 pub const BODY_LEN: usize = 792;
 
 fn ogkm_root() -> PathBuf {
-    std::env::var_os("KAYFABE_OGKM_595")
-        .map_or_else(|| PathBuf::from(DEFAULT_OGKM_595), PathBuf::from)
+    if let Some(p) = std::env::var_os("KAYFABE_OGKM_595") {
+        return PathBuf::from(p);
+    }
+    let fetched = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../third_party/ogkm-595");
+    if fetched.join("src/nvidia/src/kernel/vgpu/rpc.c").exists() {
+        return fetched;
+    }
+    PathBuf::from(DEFAULT_OGKM_595)
+}
+
+/// `KF_REQUIRE_ORACLES`: unset, empty or `0` lets an absent oracle skip; anything else requires it.
+fn oracles_required() -> bool {
+    !matches!(
+        std::env::var("KF_REQUIRE_ORACLES").ok().as_deref(),
+        None | Some("" | "0")
+    )
+}
+
+/// Straight to the real stderr: libtest swallows `eprintln!` of a passing test.
+fn announce(line: &str) {
+    let _ = writeln!(std::io::stderr(), "{line}");
 }
 
 static BUILT: OnceLock<Result<PathBuf, String>> = OnceLock::new();
@@ -38,11 +60,15 @@ pub fn oracle(test: &str) -> Option<PathBuf> {
     let built = BUILT.get_or_init(build);
     match built {
         Ok(p) => {
-            eprintln!("FN1-ORACLE-GATE: RAN {test}");
+            announce(&format!("FN1-ORACLE-GATE: RAN {test}"));
             Some(p.clone())
         }
         Err(reason) if reason.starts_with("SKIP") => {
-            eprintln!("FN1-ORACLE-GATE: SKIPPED {test} — {reason}");
+            announce(&format!("FN1-ORACLE-GATE: SKIPPED {test} — {reason}"));
+            assert!(
+                !oracles_required(),
+                "KF_REQUIRE_ORACLES is set and the fn-1 oracle cannot run: {reason}"
+            );
             None
         }
         Err(e) => panic!("the fn-1 oracle is present but did not build: {e}"),

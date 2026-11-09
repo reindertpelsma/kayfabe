@@ -85,6 +85,35 @@ def check(root_rows):
     return problems
 
 
+def check_reads(root_rows, matches, tracked):
+    """Each `reads` token (separated by `;`) must be named in the test target's source and be a path the strip
+    deletes (some tracked file at or under it matches `matches`). A token starting with `~` is free text for
+    something outside the repository and is not checked; a row needs at least one checked token or only `~` ones.
+    """
+    problems = []
+    for package, target, test, reads in root_rows:
+        src = source_of(package, target)
+        text = ""
+        if src:
+            with open(src, encoding="utf-8", errors="replace") as f:
+                text = f.read()
+        tokens = [t.strip() for t in reads.split(";") if t.strip()]
+        checked = [t for t in tokens if not t.startswith("~")]
+        if not tokens or (len(checked) == 0 and len(tokens) == 0):
+            problems.append("%s/%s %s: empty reads column" % (package, target, test))
+        for token in checked:
+            if token not in text:
+                problems.append(
+                    "%s/%s %s: the source never names %r" % (package, target, test, token)
+                )
+            under = [p for p in tracked if p == token or p.startswith(token + "/")]
+            if not any(matches(p) for p in under):
+                problems.append(
+                    "%s/%s %s: %r is not a path the strip deletes" % (package, target, test, token)
+                )
+    return problems
+
+
 def skips(root_rows):
     args = []
     for _package, _target, test, _reads in root_rows:
@@ -121,6 +150,27 @@ def run(root_rows):
     return 1 if failed else 0
 
 
+def real_reads_problems(root_rows):
+    """check_reads against this checkout's .workerignore and tracked files; skipped in a tree that has neither
+    (the stripped tree has no .workerignore, so `stripped` calls `skips` and `check` only before the strip).
+    """
+    ignore = os.path.join(ROOT, ".workerignore")
+    if not os.path.exists(ignore):
+        return []
+    sys.path.insert(0, os.path.join(ROOT, "scripts/ci"))
+    import ignore_ladder as L
+
+    with open(ignore, encoding="utf-8") as f:
+        pats = L.read_patterns(f.read(), ".workerignore")
+    out = subprocess.run(
+        ["git", "-C", ROOT, "ls-files", "-z"], capture_output=True, check=False
+    ).stdout
+    tracked = [os.fsdecode(x) for x in out.split(b"\0") if x]
+    if not tracked:
+        return []
+    return check_reads(root_rows, lambda p: L.matches(pats, p), tracked)
+
+
 def main(argv):
     if len(argv) != 2 or argv[1] not in ("skips", "run", "check"):
         print(__doc__)
@@ -135,6 +185,11 @@ def main(argv):
     if problems:
         return 1
     if argv[1] == "check":
+        problems = real_reads_problems(r)
+        for p in problems:
+            print("FULL_TREE_TESTS_PROBLEM " + p)
+        if problems:
+            return 1
         print("FULL_TREE_TESTS_OK %d tests" % len(r))
         return 0
     return run(r)

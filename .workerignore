@@ -23,20 +23,14 @@
 # path is fixed by moving its data next to it or by listing the NEIGHBOURS here instead of the
 # directory (the syntax has no negation); never by relaxing the test.
 #
-# OWNER DECISION NEEDED, nothing here is changed silently: the line `/ci/vast-broker` below ignores a
-# code root that treekey.js PROTECTED refuses, so the Worker refuses this whole file and
-# produces NO tree key today for any commit that carries it: every commit is stored under its
-# per-commit key (tree_kind 'commit') and no result falls through between commits. TREE_KEY_CARRY_OVER stays off (unset). This change neither drops the line nor
-# shrinks PROTECTED. What changed since the refusal was written (review of PR #269, R1: "the box does
-# not remove ignored files, so a key would let a result answer for files the run may have read"): the
-# box now deletes them. Two ways out:
-#   (A) drop `/ci/vast-broker` here and in .dockerignore: the Worker accepts the file and keys by tree,
-#       a Worker-only change moves the key (the gate runs; the Worker is part of what it validates),
-#       and nothing else changes. RECOMMENDED until a stripped box has passed a real gate.
-#   (B) keep the line and remove ci/vast-broker from PROTECTED: sound only if no box stage reads it
-#       (scripts/ci/test_box_stripped.py proves the static half) AND the gate-skip list
-#       (ci/vast-broker/trigger-policy.mjs, which never skips ci/vast-broker/) is changed the same way.
-# Do not drop lines or shrink PROTECTED to obtain tree keys without that decision.
+# The Worker and PROTECTED (decision taken on review of PR #326, option A of the earlier proposal):
+# `/ci/vast-broker` is NOT ignored. treekey.js PROTECTED lists ci/vast-broker as a code root and
+# refuses any ignore set that covers it, so while this file ignored it the Worker produced no tree key
+# at all; with it kept, the Worker accepts this file and keys commits by tree. PROTECTED is unchanged and
+# TREE_KEY_CARRY_OVER stays off (unset), so a requirement still counts only rows of the same commit. A
+# Worker-only change moves the key (and the gate runs: the Worker is part of what it validates).
+# `ci/platform-api`, `ci/vast-admin` and `ci/vast-reaper` stay ignored (not PROTECTED roots).
+# Do not shrink PROTECTED, and do not ignore ci/vast-broker again, without an owner decision.
 #
 # The ladder:  .gitignore  is a subset of  .workerignore  is a subset of  .dockerignore.
 # Line based and checked by scripts/ci/ignore_ladder.py. Every line of the group below is
@@ -109,6 +103,7 @@
 
 # --- everything .gitignore ignores (kept line for line) ---
 /target
+/third_party/ogkm-595
 /target-*
 /crates/kayfabe-abi/gen/target
 /firmware/*/target
@@ -158,7 +153,6 @@
 # --- Cloudflare Worker code and its tests: run by CI on the runner, never on a box ---
 /ci/platform-api
 /ci/vast-admin
-/ci/vast-broker
 /ci/vast-reaper
 
 # --- local test and gate scripts the box payload does not run ---

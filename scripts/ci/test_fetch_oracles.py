@@ -31,6 +31,7 @@ GIT = [
     "protocol.file.allow=always",
 ]
 HEADER = "src/common/inc/swref/published/nv_ref.h"
+RPC = "src/nvidia/src/kernel/vgpu/rpc.c"
 
 
 def sh(*cmd, cwd=None, env=None):
@@ -83,6 +84,8 @@ def superproject(tmp, pin, url, gitlink=None):
     text = open(SCRIPT).read()
     text, n1 = re.subn(r"(?m)^PIN=[0-9a-f]{40}$", "PIN=" + pin, text)
     text, n2 = re.subn(r"(?m)^URL=.*$", "URL=" + url, text)
+    text, n3 = re.subn(r"(?m)^PIN_595=[0-9a-f]{40}$", "PIN_595=" + pin, text)
+    assert n3 == 1, "the script no longer has one PIN_595= line"
     assert n1 == 1 and n2 == 1, "the script no longer has one PIN= and one URL= line"
     copy = os.path.join(tmp, "fetch_oracles_copy.sh")
     with open(copy, "w") as f:
@@ -92,11 +95,13 @@ def superproject(tmp, pin, url, gitlink=None):
     return root, copy
 
 
-def run(copy, root, env=None, path_prefix=None):
+def run(copy, root, env=None, path_prefix=None, trees=None):
     e = {**os.environ, "KF_ORACLE_RETRY_SLEEP": "0", **(env or {})}
     if path_prefix:
         e["PATH"] = path_prefix + os.pathsep + e["PATH"]
-    return subprocess.run(["bash", copy, root], capture_output=True, text=True, env=e)
+    return subprocess.run(
+        ["bash", copy, root, *(trees or ["ogkm-580"])], capture_output=True, text=True, env=e
+    )
 
 
 def git_wrapper(tmp, log, fail_first_fetches=0):
@@ -147,6 +152,28 @@ class FetchOracles(unittest.TestCase):
             self.assertEqual(run(copy, root).returncode, 0)
             dest = os.path.join(root, "third_party", "ogkm-580")
             self.assertTrue(os.path.isfile(os.path.join(dest, ".git", "shallow")))
+
+    def test_the_595_tree_lands_in_third_party_ogkm_595_without_a_gitlink(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _rem, pin, root, copy = self.setup(tmp, files={RPC: "int rpc;\n"}, gitlink="none")
+            p = run(copy, root, trees=["ogkm-595"])
+            self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+            self.assertIn("ORACLE_FETCH_OK ogkm-595 sha=" + pin, p.stdout)
+            self.assertTrue(os.path.isfile(os.path.join(root, "third_party", "ogkm-595", RPC)))
+
+    def test_the_595_tree_without_its_marker_file_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _rem, _pin, root, copy = self.setup(tmp, files={HEADER: "x\n"}, gitlink="none")
+            p = run(copy, root, trees=["ogkm-595"])
+            self.assertEqual(p.returncode, 1, p.stdout)
+            self.assertIn("rpc.c", p.stderr)
+
+    def test_an_unknown_tree_name_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _rem, _pin, root, copy = self.setup(tmp)
+            p = run(copy, root, trees=["ogkm-999"])
+            self.assertEqual(p.returncode, 2, p.stdout)
+            self.assertIn("unknown tree", p.stderr)
 
     def test_the_report_numbers_are_positive_integers(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -279,6 +306,7 @@ class FetchOracles(unittest.TestCase):
     def test_the_real_script_has_no_environment_override_of_the_pin_or_the_url(self):
         text = open(SCRIPT).read()
         self.assertRegex(text, r"(?m)^PIN=[0-9a-f]{40}$")
+        self.assertRegex(text, r"(?m)^PIN_595=[0-9a-f]{40}$")
         self.assertRegex(text, r"(?m)^URL=https://")
         self.assertNotRegex(text, r"\$\{KF_[A-Z_]*(PIN|URL)")
 

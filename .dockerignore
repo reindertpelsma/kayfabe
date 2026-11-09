@@ -6,6 +6,7 @@
 
 # --- everything .workerignore ignores (kept line for line) ---
 /target
+/third_party/ogkm-595
 /target-*
 /crates/kayfabe-abi/gen/target
 /firmware/*/target
@@ -82,7 +83,6 @@
 **/*.md
 /ci/platform-api
 /ci/vast-admin
-/ci/vast-broker
 /ci/vast-reaper
 /scripts/ci/test_*.py
 /scripts/ci/*_mutants.py

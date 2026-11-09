@@ -5,11 +5,24 @@
 # stripped-tree rule: they run on the FULL tree, in the `stable` job (scripts/ci/full_tree_tests.py run), and the
 # `stripped` job skips exactly these names (full_tree_tests.py skips). Nothing is dropped: a listed test that does
 # not exist, or does not pass, fails `stable`; a test missing from this list fails `stripped`.
-# Columns (tab separated): package, test target, test name, what it reads.
-kayfabe-abi	truncated_row_reads	every_declared_site_exists_and_names_the_control_it_claims_to_argue_about	archive/crates/kayfabe-device sources
-kf-abi	truncated_row_reads	every_declared_site_exists_and_names_the_control_it_claims_to_argue_about	archive/crates/kayfabe-device sources
-kayfabe-isolate-host	guest_ring_census	the_birth_witness_can_tell_declined_from_never_asked	archive/crates/kayfabe-fwd/src/lib.rs
-kf-abi	windows_cell_provenance	every_cited_trace_line_exists_and_shows_what_the_row_says	the traces/ lines the rows cite
-kf-abi	windows_cell_provenance	no_cited_line_carries_a_closed_binary_reading	the traces/ lines the rows cite
+# Columns (tab separated): package, test target, test name, what it reads (`;` separated paths; each must be named in
+# the test's source and be a path the strip deletes; a `~` token is free text for something outside the repository).
+# HONEST LIMIT (2026-11-09): the nouveau_citations tests (7) need third_party/linux (about 2 GB, never fetched in CI) and
+# the derive_classes test needs an ogkm clone outside the repository. Both families SKIP LOUDLY on every CI machine, full
+# tree included; they are listed so the stripped job does not count them, not because the full tree runs them. They are
+# NOT covered by KF_REQUIRE_ORACLES. Closing them needs a pinned fetch of the linux submodule and of an ogkm tree (owner).
+kayfabe-abi	truncated_row_reads	every_declared_site_exists_and_names_the_control_it_claims_to_argue_about	archive/crates/kayfabe-device
+kf-abi	truncated_row_reads	every_declared_site_exists_and_names_the_control_it_claims_to_argue_about	archive/crates/kayfabe-device
+kayfabe-isolate-host	guest_ring_census	the_birth_witness_can_tell_declined_from_never_asked	archive/crates/kayfabe-fwd
+kf-abi	windows_cell_provenance	every_cited_trace_line_exists_and_shows_what_the_row_says	traces
+kf-abi	windows_cell_provenance	no_cited_line_carries_a_closed_binary_reading	traces
 kf-census	scrub	the_builtin_list_is_the_documented_one	docs/design/tier_checks/tier1_ogkm.tsv
 kf-census	scrub	the_lists_cover_the_windows_only_control_ids_exactly	docs/design/V3_WINDOWS_ONLY_CONSTANTS_20261013.md
+kayfabe-doorbell	nouveau_citations	the_ptimer_read_is_a_retry_loop_which_proves_there_is_no_latch	third_party/linux
+kayfabe-doorbell	nouveau_citations	every_falcon_queue_cursor_is_advanced_by_a_write_never_by_a_read	third_party/linux
+kayfabe-doorbell	nouveau_citations	the_mmu_fault_buffer_is_acknowledged_by_a_write_in_the_pascal_plus_era	third_party/linux
+kayfabe-doorbell	nouveau_citations	the_falcon_pio_data_port_advances_on_a_READ_which_is_the_one_real_read_side_effect	third_party/linux
+kayfabe-doorbell	nouveau_citations	ogkm_asserts_that_the_emem_read_advanced_the_offset	third_party/linux
+kayfabe-doorbell	nouveau_citations	gsp_emem_is_crashcat_only_which_is_what_keeps_page_0x110000_out_of_the_hole_list	third_party/linux
+kayfabe-doorbell	nouveau_citations	the_gsp_boot_path_reads_an_aincr_port_only_on_hopper_and_blackwell	third_party/linux
+kayfabe-doorbell	campaign_findings	the_class_sets_match_what_the_c_compiler_says_each_chip_lists	~/workspace/nvidia-gpu-passthrough/research_clones/ogkm (not a repository path)

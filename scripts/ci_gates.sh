@@ -98,15 +98,14 @@ want_all=0
 # The scoped CI namespace profile's setup and removal are explicit steps too.
 # ★ 19 -> 20 and 13 -> 14: the GPU-UUID ratchet step (scripts/ci/no_gpu_uuids.py). It reads only
 # the tree, produces no artifact and consumes none, so it runs in BOTH modes and both literals move.
-# ★ 20 -> 14 and 14 -> 14 (2026-11-09, OWNER_RULINGS section AQ): `cargo build`, the test step, the two
-# namespace-profile steps and the four reached-count steps moved from `stable` to the new `stripped` job
-# (the production half, run on the tree left after `.workerignore` is applied); two steps were added to
-# `stable` (the full-tree Rust checks, the oracle-gate mutations). Measured on the new ci.yml with this
-# extractor's own rules: 19 steps with a `run:` in --all mode (was 25) and 17 in the default mode (was
-# 17); the floors keep the slack they had (5 and 3). NOT run here, on purpose: the `stripped` job DELETES
-# files from the checkout it runs in, which must never happen to a developer tree.
-GATE_STEPS_ALL_MIN=14
-GATE_STEPS_FAST_MIN=14
+# ★ 20 -> 24 and 14 -> 16 (2026-11-09, OWNER_RULINGS section AQ): the extractor now reads `stable` AND the
+# non-destructive steps of `stripped` (build, test, namespace profile, the reached-count steps, clippy), because
+# build and test moved there; it never runs the strip or the oracle download. Measured with the extractor's own
+# rules: 29 steps with a `run:` in --all mode (was 25) and 19 in the default mode (was 17); the floors keep the
+# slack they had (5 and 3). The first version of this change read only `stable` and so silently stopped building
+# and testing under `--all`: the exact vacuous green this floor exists for (found in review of #326).
+GATE_STEPS_ALL_MIN=24
+GATE_STEPS_FAST_MIN=16
 
 # ★★ A PER-INVOCATION test log, MEASURED 2026-07-30.
 #
@@ -134,7 +133,16 @@ deferred_note=$(mktemp)
 steps_raw=$(python3 - "$want_all" 2>"$deferred_note" <<'PY'
 import sys, yaml, json
 want_all = sys.argv[1] == "1"
-job = yaml.safe_load(open(".github/workflows/ci.yml"))["jobs"]["stable"]
+jobs = yaml.safe_load(open(".github/workflows/ci.yml"))["jobs"]
+# `stable` plus the build/test/clippy half that moved to `stripped` (2026-11-09). The `stripped` steps that DELETE
+# files from the checkout (the strip) or download the oracle trees are never run here: a developer tree must not
+# be stripped. Locally `--all` therefore builds and tests the FULL tree; it sets KF_REQUIRE_ORACLES=1 like the job,
+# so run `scripts/ci/fetch_oracles.sh` first or the oracle tests fail by design.
+NEVER_LOCALLY = ("ignore_ladder.py strip", "fetch_oracles.sh")
+job = {"steps": list(jobs["stable"].get("steps", [])) + [
+    st for st in jobs["stripped"].get("steps", [])
+    if not any(n in str(st.get("run", "")) for n in NEVER_LOCALLY)
+]}
 heavy = ("cargo build", "cargo test", "cargo clippy", "cargo fmt", "bash scripts/ci/clippy.sh")
 # Steps that CONSUME an artifact a heavy step produces. Skipping the producer while
 # running the consumer reports a failure that says nothing about the tree — which is

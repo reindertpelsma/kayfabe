@@ -888,6 +888,34 @@ class StripStep(unittest.TestCase):
             self.assertEqual(p.returncode, 3, p.stdout)
             self.assertTrue(os.path.exists(os.path.join(outside, "x.txt")))
 
+    def test_a_parent_symlinked_to_another_directory_inside_the_tree_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.repo(tmp)
+            victim = os.path.join(root, "crates", "kf-a", "src", "guide.txt")
+            with open(victim, "w") as f:
+                f.write("a source file that must survive")
+            shutil.rmtree(os.path.join(root, "docs"))
+            os.symlink(os.path.join(root, "crates", "kf-a", "src"), os.path.join(root, "docs"))
+            p = run_cli(root, "strip", "--in-place")
+            self.assertEqual(p.returncode, 3, p.stdout + p.stderr)
+            self.assertTrue(os.path.exists(victim))
+            self.assertTrue(os.path.exists(os.path.join(root, "crates", "kf-a", "src", "lib.rs")))
+
+    def test_a_nested_parent_symlinked_inside_the_tree_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.repo(tmp, files={**STRIP_FILES, "docs/deep/er/x.txt": "d\n"})
+            victim = os.path.join(root, "crates", "kf-a", "src", "x.txt")
+            with open(victim, "w") as f:
+                f.write("must survive")
+            shutil.rmtree(os.path.join(root, "docs", "deep", "er"))
+            os.symlink(
+                os.path.join(root, "crates", "kf-a", "src"),
+                os.path.join(root, "docs", "deep", "er"),
+            )
+            p = run_cli(root, "strip", "--in-place")
+            self.assertEqual(p.returncode, 3, p.stdout + p.stderr)
+            self.assertTrue(os.path.exists(victim))
+
     def test_a_gitlink_path_that_is_a_symlink_is_unlinked_not_followed(self):
         with tempfile.TemporaryDirectory() as tmp:
             outside = os.path.join(tmp, "outside")

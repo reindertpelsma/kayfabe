@@ -109,18 +109,19 @@ test(
   },
 );
 
-// Review of PR #269, R1 (2026-11-05): the committed .workerignore says that it is read by this
-// Worker and that it yields no tree key today (it covers the PROTECTED root ci/vast-broker). If the
-// file changes so that a key is produced, this fails: update the header (and decide on carry-over).
+// Review of PR #326 (2026-11-09): the committed .workerignore no longer covers the PROTECTED root
+// ci/vast-broker, so the Worker accepts it and can compute a tree key. If a later change ignores
+// ci/vast-broker (or another PROTECTED root) again, this fails: update the header and decide on
+// carry-over first (TREE_KEY_CARRY_OVER stays off).
 test(
-  "treekey: the checkout's own .workerignore yields no tree key, as its header says",
+  "treekey: the checkout's own .workerignore is accepted by the Worker (no PROTECTED root covered)",
   { skip: existsSync(own) ? false : 'no .workerignore in this checkout' },
   () => {
     const text = readFileSync(own, 'utf8');
     assert.ok(parseIgnore(text), 'inside the subset');
-    assert.equal(patternsFor(text), null, 'refused: covers a protected code root');
-    assert.ok(ignored(parseIgnore(text), 'ci/vast-broker', true));
-    assert.match(text, /produces NO tree key today/);
+    assert.ok(patternsFor(text), 'accepted: covers no protected code root');
+    assert.equal(ignored(parseIgnore(text), 'ci/vast-broker', true), false);
+    assert.match(text, /`\/ci\/vast-broker` is NOT ignored/);
     assert.doesNotMatch(text, /Not read by anything/);
   },
 );

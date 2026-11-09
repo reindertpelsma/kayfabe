@@ -2,8 +2,8 @@
 // from `git ls-tree` and the commit's own .workerignore. Used by scripts/ci/ignore_ladder.py
 // keycheck, which compares it with the Python matcher's key (the strip step's matcher).
 // Usage: node tree-key.mjs [REV]. Exit 0 and the key on stdout; exit 2 when the ignore file is
-// missing or outside the subset (the Worker would produce no key either). PROTECTED is reported on
-// stderr and not applied: the ladder keeps /ci/vast-broker ignored on purpose (see .workerignore).
+// missing or outside the subset, or when PROTECTED refuses it (the Worker would produce no key either:
+// a key the deployed Worker cannot produce is not a cross-check). Uses the checkout's own treekey.js.
 import { execFileSync } from 'node:child_process';
 import { guarded, parseIgnore, treeKeyOf } from '../src/treekey.js';
 
@@ -14,7 +14,10 @@ if (patterns === null) {
   console.error('the commit .workerignore is outside the treekey.js subset');
   process.exit(2);
 }
-if (guarded(patterns) === null) console.error('PROTECTED refuses this ignore set (no Worker key)');
+if (guarded(patterns) === null) {
+  console.error('PROTECTED refuses this ignore set (no Worker key)');
+  process.exit(2);
+}
 const entries = [];
 for (const record of git('ls-tree', '-r', '-z', '--full-tree', rev).toString('utf8').split('\0')) {
   if (!record) continue;

@@ -134,6 +134,13 @@ CASES = [
         ),
     ),
     ("containment-check-dropped", changed("if not _inside(root, full):", "if False:")),
+    (
+        "containment-only-checks-the-root",
+        changed(
+            "    return os.path.realpath(os.path.dirname(full)) == want\n",
+            "    return os.path.commonpath([r, os.path.realpath(os.path.dirname(full))]) == r\n",
+        ),
+    ),
     ("symlinks-followed", changed("st = os.lstat(full)", "st = os.stat(full)")),
     (
         "emptied-directories-kept",
@@ -176,7 +183,10 @@ CASES = [
             "for m, s, p in entries if matches(tuple(patterns), p)",
         ),
     ),
-    ("key-unsorted", changed("    keep = sorted((os.fsencode(p)", "    keep = list((os.fsencode(p)")),
+    (
+        "key-unsorted",
+        changed("    keep = sorted((os.fsencode(p)", "    keep = list((os.fsencode(p)"),
+    ),
     (
         "key-drops-mode",
         changed(

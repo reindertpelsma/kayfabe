@@ -392,6 +392,8 @@ KEEP_DIRS = (
     ".cargo",
     "third_party/ogkm",
     "third_party/ogkm-580",
+    # The Worker: a PROTECTED root of treekey.js; ignoring it makes the Worker refuse the whole ignore set.
+    "ci/vast-broker",
 )
 KEEP_FILES = (
     "Cargo.toml",
@@ -407,7 +409,6 @@ KEEP_NAME = re.compile(r"^(Dockerfile[A-Za-z0-9_.-]*|docker-compose[A-Za-z0-9_.-
 PROTECTED_NOT_FLOORED = {
     "scripts": "partly ignored on purpose (CI self-tests, local gates): scripts/ci/test_*.py ...",
     "ci": "the Worker trees under ci/ are ignored on purpose: they run on the runner, never on a box",
-    "ci/vast-broker": "ignored by .workerignore, REFUSED by treekey.js PROTECTED: see the header of .workerignore",
 }
 
 
@@ -470,8 +471,13 @@ def tree_key(entries, pattern_lines, patterns=None):
 
 
 def _inside(root, full):
+    """The parent directory of FULL must really be root/<the path's own directory>: a symlinked parent that
+    points elsewhere INSIDE the tree (docs -> crates/a/src) is as bad as one that points outside it.
+    """
     r = os.path.realpath(root)
-    return os.path.commonpath([r, os.path.realpath(os.path.dirname(full))]) == r
+    rel = os.path.relpath(os.path.dirname(full), root)
+    want = r if rel == "." else os.path.join(r, rel)
+    return os.path.realpath(os.path.dirname(full)) == want
 
 
 def strip_in_place(root, rev="HEAD"):

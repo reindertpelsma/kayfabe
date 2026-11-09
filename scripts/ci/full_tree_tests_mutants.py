@@ -46,6 +46,21 @@ CASES = [
             "        if False:\n            problems.append",
         ),
     ),
+    (
+        "reads-not-in-source-tolerated",
+        changed("            if token not in text:\n", "            if False:\n"),
+    ),
+    (
+        "reads-not-stripped-tolerated",
+        changed("            if not any(matches(p) for p in under):\n", "            if False:\n"),
+    ),
+    (
+        "empty-reads-tolerated",
+        changed(
+            "        if not tokens or (len(checked) == 0 and len(tokens) == 0):\n",
+            "        if False:\n",
+        ),
+    ),
     ("duplicates-tolerated", changed("    if len(set(keys)) != len(keys):", "    if False:")),
     ("empty-list-tolerated", changed("    if not out:\n", "    if False:\n")),
     (

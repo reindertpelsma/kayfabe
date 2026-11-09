@@ -43,7 +43,7 @@ CASES = [
     (
         "reference-header-not-required",
         changed(
-            '[ -s "$dest/src/common/inc/swref/published/nv_ref.h" ] || {',
+            '[ -s "$dest/$marker" ] || {',
             "true || {",
         ),
     ),
@@ -65,8 +65,8 @@ CASES = [
     (
         "ok-line-without-size",
         changed(
-            'echo "ORACLE_FETCH_OK ogkm-580 sha=$got files=$files worktree_bytes=$bytes git_bytes=$gitbytes seconds=$(($(date +%s) - start))"',
-            'echo "ORACLE_FETCH_OK ogkm-580 sha=$got"',
+            'echo "ORACLE_FETCH_OK $name sha=$got files=$files worktree_bytes=$bytes git_bytes=$gitbytes seconds=$(($(date +%s) - start))"',
+            'echo "ORACLE_FETCH_OK $name sha=$got"',
         ),
     ),
     ("no-fresh-init", changed('[ -d "$dest/.git" ] || git -C "$dest" init -q', "true")),

@@ -45,20 +45,7 @@ BOX_SCRIPT = [
     ),
 ]
 # (script, named path) -> why the mention is not a read. A stale entry fails the test.
-PROSE = {
-    (
-        "scripts/ci/vast_evidence.py",
-        "ci/vast-broker/src/evidence.js",
-    ): "docstring: names the Worker module",
-    (
-        "scripts/ci/vast_payload.py",
-        "ci/vast-broker/src/tier.js",
-    ): "docstring: names the Worker module",
-    (
-        "scripts/ci/vast_run_report.py",
-        "ci/vast-broker/src/runreport.js",
-    ): "docstring: names the Worker module",
-}
+PROSE = {}
 
 
 class BoxPathsSurviveTheStrip(unittest.TestCase):

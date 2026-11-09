@@ -188,6 +188,63 @@ class Check(unittest.TestCase):
         self.assertEqual(F.check(self.ROWS), [])
 
 
+class Reads(unittest.TestCase):
+    """The `reads` column: named in the test source and a path the strip deletes."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.saved = F.ROOT
+        F.ROOT = self.tmp.name
+        self.addCleanup(setattr, F, "ROOT", self.saved)
+        crate(
+            self.tmp.name,
+            "pkg-a",
+            "tgt",
+            '#[test]\nfn t() { read("docs/x.md"); read("archive/y"); }\n',
+        )
+
+    TRACKED = ["docs/x.md", "docs/z.md", "archive/y/f.rs", "crates/pkg-a/src/lib.rs"]
+
+    @staticmethod
+    def stripped(path):
+        return path.startswith(("docs", "archive"))
+
+    def problems(self, reads, tracked=None):
+        rows = [("pkg-a", "tgt", "t", reads)]
+        return F.check_reads(rows, self.stripped, self.TRACKED if tracked is None else tracked)
+
+    def test_a_named_and_stripped_path_passes(self):
+        self.assertEqual(self.problems("docs/x.md"), [])
+
+    def test_several_paths_pass_together(self):
+        self.assertEqual(self.problems("docs/x.md;archive/y"), [])
+
+    def test_a_path_the_source_never_names_is_reported(self):
+        self.assertTrue(any("never names" in p for p in self.problems("docs/other.md")))
+
+    def test_one_missing_path_among_good_ones_is_reported(self):
+        got = self.problems("docs/x.md;archive/missing")
+        self.assertTrue(any("never names 'archive/missing'" in p for p in got), got)
+
+    def test_a_path_that_survives_the_strip_is_reported(self):
+        got = self.problems("crates/pkg-a/src/lib.rs")
+        self.assertTrue(any("not a path the strip deletes" in p for p in got), got)
+
+    def test_a_path_with_no_tracked_file_under_it_is_reported(self):
+        got = self.problems("docs/x.md", tracked=["crates/pkg-a/src/lib.rs"])
+        self.assertTrue(any("not a path the strip deletes" in p for p in got), got)
+
+    def test_a_free_text_token_is_not_checked(self):
+        self.assertEqual(self.problems("~/somewhere/outside the repository"), [])
+
+    def test_an_empty_reads_column_is_reported(self):
+        self.assertTrue(any("empty reads" in p for p in self.problems("")))
+
+    def test_a_reads_column_of_only_separators_is_reported(self):
+        self.assertTrue(any("empty reads" in p for p in self.problems(" ; ")))
+
+
 class Run(unittest.TestCase):
     """`run` against a fake `cargo` that prints a chosen libtest log."""
 
@@ -264,11 +321,23 @@ class Run(unittest.TestCase):
 class RealList(unittest.TestCase):
     def test_the_real_list_checks_clean_against_the_real_tree(self):
         self.assertEqual(F.check(F.rows()), [])
+        self.assertEqual(F.real_reads_problems(F.rows()), [])
 
     def test_the_real_list_is_not_empty_and_every_row_says_what_it_reads(self):
         rows = F.rows()
         self.assertGreaterEqual(len(rows), 7)
         self.assertTrue(all(r[3] for r in rows))
+
+    def test_the_stripped_job_must_succeed_for_the_gate_to_pass(self):
+        import yaml
+
+        with open(os.path.join(F.ROOT, ".github/workflows/ci.yml")) as f:
+            gate = yaml.safe_load(f)["jobs"]["gate"]
+        text = "\n".join(str(s.get("run", "")) for s in gate["steps"])
+        env = {k: v for s in gate["steps"] for k, v in (s.get("env") or {}).items()}
+        self.assertIn("stripped", gate["needs"])
+        self.assertIn("needs.stripped.result", env.get("STRIPPED", ""))
+        self.assertIn('"$STRIPPED" != success', text)
 
     def test_the_workflow_runs_the_list_in_stable_and_skips_it_in_stripped(self):
         import yaml

@@ -2279,6 +2279,15 @@ jobs:
             echo "::error::the oracle test did not run with the oracle required: ran=$ran skipped=$skipped"
             exit 1
           fi
+          # The fn-1 negotiation oracle (ogkm 595.84, fetched into third_party/ogkm-595): every one of its tests
+          # announces RAN or SKIPPED straight to stderr; with the oracle required none may skip.
+          fran=$(grep -c 'FN1-ORACLE-GATE: RAN' "$log" || true)
+          fskipped=$(grep -c 'FN1-ORACLE-GATE: SKIPPED' "$log" || true)
+          echo "FN1-oracle-gate: ran=$fran skipped=$fskipped (ran must be >= 9, skipped must be 0)"
+          if [ "$fran" -lt 9 ] || [ "$fskipped" -ne 0 ]; then
+            echo "::error::the fn-1 oracle tests did not all run: ran=$fran skipped=$fskipped"
+            exit 1
+          fi
       # Compiler and denied-lint errors are fatal here; the warning-site debt ratchet needs
       # scripts/ci/debt.py and its JSON, which the strip removes, and stays in `stable`.
       - name: Clippy on the stripped tree (errors fail)
@@ -2577,8 +2586,15 @@ jobs:
       - name: Require every needed job to have passed
         env:
           RESULTS: ${{ join(needs.*.result, ' ') }}
+          # `stripped` is the production verdict: it must have RUN and passed. A skipped result (a pull request
+          # that adds `if: false` to the job) is not accepted, unlike the other jobs' own-`if:` skips.
+          STRIPPED: ${{ needs.stripped.result }}
         run: |
-          echo "needed job results: $RESULTS"
+          echo "needed job results: $RESULTS (stripped: $STRIPPED)"
+          if [ "$STRIPPED" != success ]; then
+            echo "the stripped-tree job did not succeed: $STRIPPED"
+            exit 1
+          fi
           for r in $RESULTS; do
             case "$r" in
               success|skipped) ;;

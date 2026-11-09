@@ -33,12 +33,12 @@ What exists (CODE READ unless marked):
   never run on a rented box; the first `gpu-vast` run of a batch PR is its test.
 - **Oracles must run.** `crates/kf-chip/tests/hwref_is_current.rs` skipped (a printed line that cargo counts
   as a pass) when `third_party/ogkm-580` or `gcc` was absent. With `KF_REQUIRE_ORACLES` set to anything but
-  empty or `0` an absence is a failure. The stripped job and `merge_check.sh` set it; a developer may leave it
+  empty or `0` an absence is a failure. The stripped job sets it (`merge_check.sh` exports it too, but the box merge bar fetches no oracle and runs no cargo test except the opt-in KVM stage, so no oracle test runs on a box today); a developer may leave it
   unset and skip. `scripts/ci/fetch_oracles.sh` checks the oracle out shallow at the pinned commit and fails
   unless the commit recorded in the tree and the id fetched both equal the pin written in the script.
   The `stripped` job also fails unless the log carries `ORACLE-GATE: RAN hwref_is_current required=true`.
   The other oracle test that skips when its tree is absent, the fn-1 negotiation oracle
-  (`FN1-ORACLE-GATE: SKIPPED`, ogkm 595.84, not a submodule), is **not** covered; see the PR for the decision.
+  (ogkm 595.84, not a submodule), now runs: `fetch_oracles.sh` checks the pinned tag out into `third_party/ogkm-595`, and under `KF_REQUIRE_ORACLES` an absent tree is a failure (its `FN1-ORACLE-GATE` lines go straight to stderr, so the job counts them). Two families still skip loudly everywhere, the full tree included, and are listed with that reason in `scripts/ci/full_tree_tests.tsv`: the nouveau citation tests (they need the 2 GB `third_party/linux`) and the `derive_classes` test (it needs an ogkm clone outside the repository).
 
 **Why `gpu-vast.yml` does not read `.workerignore` (decision: left out).** Its two policy jobs run the
 BASE workflow with a hard-coded skip list, so a pull request cannot change the skip set of its own run.
@@ -192,8 +192,10 @@ truncated/failed Clippy output cannot pass, and dependency aliases cannot bypass
 the v3 boundary. The QEMU process-identity shell regression test also runs in CI.
 
 Run `bash scripts/ci_gates.sh` for fast guards, or `--all` for the build/test/lint
-steps too. The runner extracts the actual workflow and enforces minimum step
-counts, so a shortened or malformed job cannot report a vacuous green.
+steps too. The runner extracts the actual workflow (the `stable` job and the
+non-destructive steps of `stripped`, where build and test live; it never runs the
+strip, which deletes files, so `--all` builds and tests the full tree) and enforces
+minimum step counts, so a shortened or malformed job cannot report a vacuous green.
 
 ## Documentation freshness policy (2026-10-22)
 
