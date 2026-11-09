@@ -7,7 +7,8 @@ EXACT source channel + EXACT VA + EXACT fault/access type and a copy-engine clie
 SW5-R2 2026-10-26 also admits Turing's HUBCLIENT_HSCE[0-9]+ spelling wherever
 HUBCLIENT_CE[0-9]+ was admitted; every other proof condition is unchanged.
 CE instance equality is not required. Extra/non-source/non-CE records still refuse.
-The separate native GR control retains its exact ESC shape; later history is frozen.
+The native host-semaphore control uses open-driver-derived GR host/ESC spellings;
+PID, source channel, VA, fault/access type and count remain exact. Later history is frozen.
 No per-die client table. Bench only; no global Xid31 exemption. Marker addresses and
 channels come from this run's positive-control logs, never a per-die table.
 """
@@ -25,6 +26,9 @@ import time
 
 MAX_BYTES = 16 * 1024 * 1024
 COPY_ENGINE_CLIENT = "HUBCLIENT_CE*"
+HOST_SEMAPHORE_ENGINE = "HOST_SEMAPHORE"
+HOST_SEMAPHORE_CLIENT = "ESC"
+HOST_FAULT_NAMES = json.loads(Path(__file__).with_name('native_fault_names.json').read_text())
 
 
 def copy_engine_client(name):
@@ -56,7 +60,27 @@ def channel_before(text, end):
     return int(hits[-1])
 
 
+def native_pid(source):
+    """Identity emitted by the harness immediately before exec, never from an Xid."""
+    markers = list(re.finditer(
+        r'^KF_NATIVE_EXEC pid=([0-9]+) name=kayfabe-rm-ladd$', source, re.M))
+    if len(markers) != 1 or int(markers[0][1]) <= 1:
+        raise GuardRefused('missing/duplicate native exec identity')
+    if 'FAULT_MARK=' in source[:markers[0].start()]:
+        raise GuardRefused('native exec identity follows fault operation')
+    return int(markers[0][1])
+
+
+def native_exec(binary, arguments):
+    """Exec preserves this PID and the caller's timeout/exit semantics."""
+    if Path(binary).name != 'kayfabe-rm-ladder' or not Path(binary).is_absolute():
+        raise GuardRefused('native exec requires the raw grader executable')
+    print(f'KF_NATIVE_EXEC pid={os.getpid()} name=kayfabe-rm-ladd', flush=True)
+    os.execv(binary, [binary] + arguments)
+
+
 def expected_defer_faults(defer_log):
+    pid = native_pid(defer_log)
     for line in ("DEFER_PRIME_FAULTS=3/3", "DEFER_RIGCTL=PASS", "DEFER_NEGCTL=PASS", "RUNG_defer_liveness=PASS"):
         if line not in defer_log.splitlines():
             raise GuardRefused("native defer positive-control proof missing")
@@ -73,15 +97,16 @@ def expected_defer_faults(defer_log):
         va = int(marker[2], 16)
         # Exact approved native fault shapes: prime/test CE reads and the GR
         # missing-page release below. These are test operations, not die facts.
-        result.append((31, channel_before(tail, prime.start()), va, "FAULT_PTE", "ACCESS_TYPE_VIRT_READ", "CE0", COPY_ENGINE_CLIENT, "kayfabe-rm-ladd"))
+        result.append((31, channel_before(tail, prime.start()), va, "FAULT_PTE", "ACCESS_TYPE_VIRT_READ", "CE0", COPY_ENGINE_CLIENT, "kayfabe-rm-ladd", pid))
         if test[1] == "Dead":
             if marker[1] != "DEFER(the-question)" or "DL rescue copy     = Live" not in tail:
                 raise GuardRefused("unrecovered/unexpected test-channel fault")
-            result.append((31, channel_before(tail, test.start()), va, "FAULT_PTE", "ACCESS_TYPE_VIRT_READ", "CE0", COPY_ENGINE_CLIENT, "kayfabe-rm-ladd"))
+            result.append((31, channel_before(tail, test.start()), va, "FAULT_PTE", "ACCESS_TYPE_VIRT_READ", "CE0", COPY_ENGINE_CLIENT, "kayfabe-rm-ladd", pid))
     return result
 
 
 def expected_missing_faults(missing_log):
+    pid = native_pid(missing_log)
     for line in ("RUNGCTL_missing_page=PASS", "RUNG_missing_page=PASS"):
         if line not in missing_log.splitlines():
             raise GuardRefused("native missing-page positive-control proof missing")
@@ -93,7 +118,13 @@ def expected_missing_faults(missing_log):
     victim = re.search(r"info\s+R3 victim\s*= Lost", tail)
     if victim is None:
         raise GuardRefused("missing-page victim did not fault")
-    result.append((31, channel_before(tail, victim.start()), int(markers[0][1], 16), "FAULT_PDE", "ACCESS_TYPE_VIRT_WRITE", "GR0_PBDMA0", "HUBCLIENT_ESC", "kayfabe-rm-ladd"))
+    # Frozen grader main.rs::missing_page_fault, VICT_NEVER_MAPPED. A changed
+    # marker and changed journal cannot redefine this arm's deliberate fault.
+    if int(markers[0][1], 16) != 0x0000000a11000000:
+        raise GuardRefused('missing-page VA differs from the arm contract')
+    if not re.search(r'R3 notifier\s*= fired=true status=0xffff except_type=0x1f\b', tail):
+        raise GuardRefused('missing-page named MMU fault proof absent')
+    result.append((31, channel_before(tail, victim.start()), int(markers[0][1], 16), "FAULT_PDE", "ACCESS_TYPE_VIRT_WRITE", HOST_SEMAPHORE_ENGINE, HOST_SEMAPHORE_CLIENT, "kayfabe-rm-ladd", pid))
     return result
 
 
@@ -128,13 +159,16 @@ def approve_native_records(journal, expected):
     """Single native matcher for complete baselines and per-arm receipts."""
     actual = []
     lines = xid_lines(journal)
-    pattern = re.compile(r"NVRM: Xid \(PCI:[^)]+\): (?P<code>[0-9]+), pid=[0-9]+, name=(?P<name>[^,]+), channel (?P<channel>0x[0-9a-f]+),.*?MMU Fault: ENGINE (?P<engine>\S+) (?P<client>\S+) faulted @ (?P<va>0x[0-9a-f_]+)\. Fault is of type (?P<fault>\S+) (?P<access>\S+)$")
+    pattern = re.compile(r"NVRM: Xid \(PCI:[^)]+\): (?P<code>[0-9]+), pid=(?P<pid>[0-9]+), name=(?P<name>[^,]+), channel (?P<channel>0x[0-9a-f]+), intr [0-9a-f]{8}\. MMU Fault: ENGINE (?P<engine>\S+) (?P<client>\S+) faulted @ (?P<va>0x[0-9a-f_]+)\. Fault is of type (?P<fault>\S+) (?P<access>\S+)$")
     for line in lines:
         m = pattern.search(line)
-        if m is None:
+        if m is None or line.count('NVRM: Xid') != 1:
             raise GuardRefused("unmatched Xid record")
+        engine = m['engine']
         client = COPY_ENGINE_CLIENT if m['engine'] == 'CE0' and copy_engine_client(m['client']) else m['client']
-        actual.append((int(m['code']), int(m['channel'], 16), int(m['va'].replace('_', ''), 16), m['fault'], m['access'], m['engine'], client, m['name']))
+        if engine in HOST_FAULT_NAMES['engines'] and client in HOST_FAULT_NAMES['clients']:
+            engine, client = HOST_SEMAPHORE_ENGINE, HOST_SEMAPHORE_CLIENT
+        actual.append((int(m['code']), int(m['channel'], 16), int(m['va'].replace('_', ''), 16), m['fault'], m['access'], engine, client, m['name'], int(m['pid'])))
     if Counter(actual) != Counter(expected):
         raise GuardRefused("Xid type/channel/address/source multiset differs from fault controls")
     return lines
@@ -543,9 +577,13 @@ def main():
     g = sub.add_parser('guest-exec')
     g.add_argument('receipt'); g.add_argument('revision'); g.add_argument('binary')
     g.add_argument('arguments', nargs=argparse.REMAINDER)
+    e = sub.add_parser('native-exec')
+    e.add_argument('binary'); e.add_argument('arguments', nargs=argparse.REMAINDER)
     a = p.parse_args()
     try:
-        if a.mode == 'native':
+        if a.mode == 'native-exec':
+            native_exec(a.binary, a.arguments)
+        elif a.mode == 'native':
             lines = approve_native(bounded(a.journal), bounded(a.defer), bounded(a.missing))
             print(json.dumps({'approved_native_xid_lines': lines, 'count': len(lines), 'rule': 'owner decision1: source-matched controls only; all later changes fatal'}))
         elif a.mode == 'check':

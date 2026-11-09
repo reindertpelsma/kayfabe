@@ -1,6 +1,6 @@
 # Thin Vast payload
 
-STATUS: LIVE, 2026-11-07 (the apps stage is a DRAFT, disabled by default, no box has run it under the payload; host claims added by branch `claude/setup-picker-20261106`; release-tier
+STATUS: LIVE, 2026-11-09 (XD1 host-semaphore admission correction is GPU-free tested, not hardware-qualified; the apps stage is a DRAFT, disabled by default, no box has run it under the payload; host claims added by branch `claude/setup-picker-20261106`; release-tier
 extras added by branch `claude/worker-tier-20261105`; the evidence bundle added by branch
 `claude/ci-evidence-bundle-20261106`; the run report added by branch `claude/report-20261107`; none has
 run on a box).
@@ -23,11 +23,106 @@ logs, writes per-stage duration lines, and atomically preserves finished rows in
 A first red cancels later work. Soft-deadline expiry records FAIL/timeout with finished rows.
 No run/account credential is required by the payload; the reporter owns the run capability.
 
-[CODE READ: vast_payload_hooks.sh, vast_payload.py xid_ok] The existing host_xid_watch is
-used both per raw/guest arm and per full stage. One raw victim_release missing-page fault at
-0xa11000000 is the only first-version admission, with exact PDE/write type and a CE client.
-All other new records refuse. S4's exact-channel guard has one replacement point, xid_ok;
-the raw marker currently carries the VA, not its channel. No per-die allowance is introduced.
+[CODE READ: vast_payload_hooks.sh, vast_payload.py xid_ok, native_xid_guard.py] The existing
+host_xid_watch runs per raw/guest arm and per full stage. S4 admits four source-checked CE
+read faults from `--defer-liveness` and one host-semaphore write fault from
+`--missing-page-fault`. Channel IDs come from each arm's own DOORBELL-STORE records;
+the missing-page marker names VA `0xa11000000`. This supersedes this paragraph's
+first-version description of a CE-client-only, VA-only missing-page admission.
+
+## XD1: Blackwell host-semaphore spelling, 2026-11-09
+
+**MEASURED (retained GitHub log, not a new GPU run):** batch PR #318,
+[run 42532080804](https://github.com/reindertpelsma/kayfabe/actions/runs/42532080804),
+RTX 5070 / host driver 580.159.04: provision and cuda_host passed; merge_bar failed
+`raw_suite`; cuda_guest and windows_gate were NOT_RUN. The missing-page command exited
+0, its wrapper exited 6, and `KF_ARM_DIAG_BEGIN ... admitted=0` followed a 4-to-5 Xid
+count. Its victim lost, notifier fired with exception `0x1f`, and its bystander landed
+before and after. The source doorbell identifies victim chid 3, not the host token
+`0x40000003` (runlist 16384). The retained line, with PCI omitted and the public log's
+name redaction preserved, is:
+
+```text
+[ 1193.744521] NVRM: Xid (PCI:omitted): 31, pid=60677, name=[redacted]-rm-ladd, channel 0x00000003, intr 00000000. MMU Fault: ENGINE GR_HOST0 HUBCLIENT_ESC0 faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+```
+
+**CODE READ (frozen grader `crates/kayfabe-rm-ladder/src/main.rs`,
+`missing_page_fault` and its argument dispatch):** this arm explicitly provokes one real
+Xid 31. `VICT_NEVER_MAPPED` is `0x0000000a11000000`; the victim's SEM_RELEASE writes
+there, must lose, and must produce a named fault while the independent bystander survives.
+The exception number is `ROBUST_CHANNEL_FIFO_ERROR_MMU_ERR_FLT` (`0x1f`). This is the
+arm's intended bare-metal operation, including on Blackwell.
+CODE READ: `docs/design/V3_RAW_CLIENT.md` row 13 independently documents this arm as
+"Xid 31 by design (admitted)"; its command dispatch makes the real fault opt-in.
+
+**MEASURED (2026-10-22 historical journals):** the same arm has these records (PCI omitted here):
+
+```text
+AD102: 2026-10-22T02:33:38.454938+0000 ubuntu kernel: NVRM: Xid (PCI:omitted): 31, pid=90771, name=kayfabe-rm-ladd, channel 0x00000005, intr 00000000. MMU Fault: ENGINE GR0_PBDMA0 HUBCLIENT_ESC faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+GA102: 2026-10-22T12:53:18.514117+0000 ubuntu kernel: NVRM: Xid (PCI:omitted): 31, pid=89637, name=kayfabe-rm-ladd, channel 0x00000005, intr 00000000. MMU Fault: ENGINE GR0_PBDMA0 HUBCLIENT_ESC faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+```
+
+**CODE READ:** those journals and PASS control outputs are retained in
+`traces/sweep_ada_20261018/lease_57144505/native_complete/` and
+`traces/sweep_dies_20261018/lease_57209908/` (native_controls plus
+safety_stopped/native_kernel_snapshot.log). `test_vast_payload_admission.py` replays them.
+The prior shared matcher required literal `GR0_PBDMA0/HUBCLIENT_ESC`; either of the
+5070's engine/client spelling differences suffices to refuse. It already derived the
+channel from the arm's submissions and the address from its marker, but discarded PID.
+Thus its engine/client constraint was trace-shaped, not a family-independent derivation.
+CODE READ: the separate campaign helper `scripts/bench/blackwell/phase_xid_guard.py`
+already recognises GR host/PBDMA and ESC spellings in `verify_native_run`; that
+phase-specific helper is not the canonical payload admission path.
+
+**CODE READ (provenance):**
+`traces/vast_xid_followup_20261018/admission_provenance.json` records the S4 shared matcher
+unchanged from `2c908a0e8dc8965dde7f57ec8ff787d19b28ca09`; the accompanying historical
+README traces its import from `12f86ae38`. The shared module records owner approval dated
+2026-10-22. `docs/OWNER_RULINGS.md` §A.7 and §AF–§AH require source derivation rather than
+per-die captures; §AA explains faults on absent leaves. There is no
+`docs/design/V3_CHANNEL_FAULT*` file at the XD1 base `115a0c39d`; that requested citation
+cannot be verified from this tree. The owner instructions for XD1 supply the scoped
+admission mandate; this update does not invent a new owner ruling.
+
+**CODE READ (replacement rule):** `derive_native_fault_names.py` reads pinned public OGKM
+`b81d58ee0224d1d290bef1c080592b619e184042`. `kernel_fifo.c`'s
+`kfifoPrintFaultingPbdmaEngineName_IMPL` supplies GR_HOST indices and PBDMA suffixes;
+the generated GR host set includes GR0…7_PBDMA0…1 and GR_HOST0…7.
+Ampere/Blackwell client printers and their published `dev_fault.h` definitions supply
+ESC and ESC0…11. The generated `native_fault_names.json` carries source hashes and has
+no die, board, PCI address, PID, channel, VA or captured-log input. Regenerate/check with:
+
+```sh
+python3 scripts/bench/derive_native_fault_names.py --check
+```
+
+**CODE READ (remaining constraints):** the raw shell hook inserts `native-exec` inside the
+existing timeout. Immediately before exec it emits its own PID; exec preserves that PID.
+The matcher requires exactly one identity marker inside the watched command output,
+the raw grader's name, the actual PID, source chid, fixed contract VA, Xid 31,
+FAULT_PDE / ACCESS_TYPE_VIRT_WRITE, a fired MMU notifier, both
+bystander successes and the arm's PASS records. One matching record is required;
+missing, extra or duplicate records refuse. The interrupt field is parsed as eight hex
+digits; its value is diagnostic data, not a captured admission constant. Defer admission also checks its own
+exec PID. Old standalone native proof logs without an exec marker refuse; new standalone
+captures must launch the raw grader through `native-exec` too. The grader is unchanged.
+Other arms admit no new Xid; instrument/command failure still refuses. Source proof
+outside the command interval refuses; later guest/stage checks retain the exact frozen
+history, so even another otherwise matching fault is fatal. The watcher still prints
+VOID and returns 6; only the source-checked receipt can admit that delta.
+
+**MEASURED (GPU-free, XD1, 2026-11-09):** `test_vast_payload_native_fault.py` exercises the scrubbed
+5070 line shape, legacy spelling, independently chosen source chids, open-header name
+bounds, wrong Xid/PID/name/chid/VA/type/access, second faults, missing/duplicate identity,
+failed notifier, command-window violations, non-fault arms and later history changes.
+Its fake-dmesg tests run the real shell hook, watcher, native-exec and grader together.
+Historical replays add explicitly synthetic exec attestations; they do not establish
+that old logs independently proved PID ownership. Mutants in `payload_mutants.py`
+require two named killers each.
+
+**INFERRED:** the spelling correction addresses the observed refusal without a per-die
+exception. No GPU was run in XD1; guest containment and batch results remain unverified.
+An authorized exact-revision GPU gate is still needed to establish those outcomes.
 
 [CODE READ: test_vast_payload.py, test_vast_payload_v7.py, payload_mutants.py] GPU-free checks:
 `python3 -m unittest discover -s scripts/ci -p 'test_vast_payload*.py'`

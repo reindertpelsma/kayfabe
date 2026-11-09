@@ -12,8 +12,12 @@ if [ -n "${KF_PAYLOAD_ROOT:-}" ]; then
     }
     timeout() {
         local arg arm='' kind=other tag log rc timer fast=0 seen=0 qlog caller_pid
-        local -a timer_args=() guest_args=()
+        local -a timer_args=() guest_args=() raw_args=()
         for arg in "$@"; do
+            if [[ "$arg" = */kayfabe-rm-ladder ]]; then
+                raw_args+=(python3 -I "$KF_PAYLOAD_ROOT/scripts/bench/native_xid_guard.py" native-exec)
+            fi
+            raw_args+=("$arg")
             case "$arg" in
                 */kayfabe-rm-ladder) kind=raw ;;
                 */qemu-system-x86_64) kind=guest ;;
@@ -43,7 +47,7 @@ if [ -n "${KF_PAYLOAD_ROOT:-}" ]; then
         tag="ci-arm-${BASHPID}-${RANDOM}"
         log="${BENCH_DIR:-/workspace/bench}/xid_${tag}.log"
         command bash "$KF_PAYLOAD_ROOT/scripts/bench/host_xid_watch.sh" \
-            "$tag" -- "$timer" "$@"
+            "$tag" -- "$timer" "${raw_args[@]}"
         rc=$?
         python3 -I "$KF_PAYLOAD_ROOT/scripts/ci/vast_payload.py" \
             --grade-xid "$arm" "$log" "$rc"

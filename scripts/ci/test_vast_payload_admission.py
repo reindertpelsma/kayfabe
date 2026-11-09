@@ -17,18 +17,20 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def replay(die):
+    # SYNTHETIC exec attestations: the historical source logs predate native-exec.
+    # Keep the journals unchanged; this is not independent historical PID proof.
     if die == "GA102":
         base = ROOT / "traces/sweep_dies_20261018/lease_57209908"
         return (
             (base / "safety_stopped/native_kernel_snapshot.log").read_text(),
-            (base / "native_controls/defer-liveness.log").read_text(),
-            (base / "native_controls/missing-page-fault.log").read_text(),
+            "KF_NATIVE_EXEC pid=89601 name=kayfabe-rm-ladd\n" + (base / "native_controls/defer-liveness.log").read_text(),
+            "KF_NATIVE_EXEC pid=89637 name=kayfabe-rm-ladd\n" + (base / "native_controls/missing-page-fault.log").read_text(),
         )
     base = ROOT / "traces/sweep_ada_20261018/lease_57144505/native_complete"
     return (
         (base / "kernel_xids.log").read_text(),
-        (base / "sweepf98ceae6_ad102_native595_defer-liveness.log").read_text(),
-        (base / "sweepf98ceae6_ad102_native595_missing-page-fault.log").read_text(),
+        "KF_NATIVE_EXEC pid=90735 name=kayfabe-rm-ladd\n" + (base / "sweepf98ceae6_ad102_native595_defer-liveness.log").read_text(),
+        "KF_NATIVE_EXEC pid=90771 name=kayfabe-rm-ladd\n" + (base / "sweepf98ceae6_ad102_native595_missing-page-fault.log").read_text(),
     )
 
 

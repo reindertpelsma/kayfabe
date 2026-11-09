@@ -854,6 +854,15 @@ def watch_delta(text, rc, *, failed_provider=False):
     return delta
 
 
+def watched_command_output(text):
+    """Only the command's own interval may supply fault source/identity proof."""
+    begin = "[xid-watch] --- command output begins ---\n"
+    end = "[xid-watch] --- command output ends "
+    if text.count(begin) != 1 or text.count(end) != 1:
+        raise EvidenceError("host_xid")
+    return text.split(begin, 1)[1].split(end, 1)[0]
+
+
 def xid_ok(text, rc, arm, arm_output=""):
     """Admission delegates to the single S4 exact-source implementation."""
     try:
@@ -863,7 +872,7 @@ def xid_ok(text, rc, arm, arm_output=""):
         journal = "\n".join(delta)
         if len(xid_guard.xid_lines(journal)) != len(delta):
             return False
-        xid_guard.approve_native_arm(journal, arm, arm_output)
+        xid_guard.approve_native_arm(journal, arm, watched_command_output(text))
         return True
     except (EvidenceError, xid_guard.GuardRefused, ValueError, TypeError):
         return False
@@ -1242,7 +1251,7 @@ def retain_native_control(arm, text):
         return
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)
-    (directory / (arm.removeprefix("--") + ".log")).write_text(text)
+    (directory / (arm.removeprefix("--") + ".log")).write_text(watched_command_output(text))
     defer = directory / "defer-liveness.log"
     missing = directory / "missing-page-fault.log"
     if defer.is_file() and missing.is_file():
