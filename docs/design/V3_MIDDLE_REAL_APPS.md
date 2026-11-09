@@ -24,11 +24,14 @@ and **10 mid** apps; every small id is in mid. The request stays `mid`, with no 
 Manual and unsupported Windows ids remain outside that profile. Independent full-catalogue
 checks and both trusted count guards reject a purported middle PASS with only 63 Linux apps.
 
-DESIGN dependency F1: integrate the Ada/AD102-first policy from corrected PR #323 only after the
-coordinator signals that it has merged. This head does not duplicate that policy. CODE READ:
-the existing family rotation remains until that integration; the current bundle does not claim
-to include #323. After integration, regenerate one combined pin and run both signed-middle
-AD102-versus-AD104 and AD102-versus-GA106 create controls before claiming F1 closed.
+CODE READ, F1 integration (2026-11-09): merged `origin/next` at `ca9901987`, including
+PR #323 at `70c40805`. Selection uses that policy unchanged: signed middle prefers AD102,
+then AD103, AD104 and AD106, with the existing fallback and provider replacement bounds.
+There is no second pin policy in this change. Two signed-middle Worker/create controls pair
+AD102 RTX 4090 with AD104 RTX 4070 or GA106 RTX 3060 and require AD102 plus both application
+flags. The merged status protocol is version 7; the combined offline bundle replaces the
+separate #323 and F2 pins. App RETRY classification remains terminal for the check and does
+not authorize a provider replacement after any box report.
 
 CODE READ: `TIER_CONTENTS` in `src/tier.js` records the inheritance. Both
 `ci/vast-broker/defaults.json` and the payload's `STAGE_SLOTS` reserve `llm_parity` for large

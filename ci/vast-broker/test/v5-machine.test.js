@@ -6,7 +6,7 @@ const message =
 // FALSIFIER: boot expiry alone learns a bad host; only the exact owned-instance
 // signature frozen across observations may produce a persistent deny entry.
 for (const restart of [false, true])
-  test('V5 learns frozen KVM failure only at boot expiry ' + restart, async () => {
+  test('V5 penalises confirmed KVM failure before boot expiry ' + restart, async () => {
     const h = await setup({ BOOT_LIMIT_MINUTES: '40', HARD_RUNTIME_MINUTES: '180' });
     assert.equal((await h.call()).status, 200);
     h.cloud.instances.get('900').actual_status = 'created';
@@ -16,19 +16,20 @@ for (const restart of [false, true])
     if (restart) h.restart();
     h.time.value += 180000;
     await h.service.sweep();
+    assert.ok(await h.storage.get('provider-machine:100001'));
     assert.equal(await h.storage.get('bad-machine:100001'), undefined);
     h.time.value = clock + 39 * 60000;
     await h.service.sweep();
     h.time.value = clock + 40 * 60000;
     await h.service.sweep();
-    const denied = await h.storage.get('bad-machine:100001');
-    assert.equal(denied?.reason, 'KVM_DOMAIN_NOT_FOUND');
+    const penalised = await h.storage.get('provider-machine:100001');
+    assert.equal(penalised?.faults[0].reason, 'KVM_DOMAIN_NOT_FOUND');
     assert.equal((await h.storage.get('record:123-1')).closed, 'PROVIDER_FAULT');
     h.restart();
     h.time.value += 60000;
     const r = await h.call('/availability?profile=check', { method: 'GET' });
     assert.equal(r.status, 200);
-    assert.equal((await r.json()).offers.length, 0);
+    assert.equal((await r.json()).offers.length, 1);
   });
 for (const kind of ['plain-timeout', 'wrong-id', 'changed-log', 'running'])
   test('V5 never learns ambiguous boot failure ' + kind, async () => {

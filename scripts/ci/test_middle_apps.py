@@ -47,7 +47,7 @@ class TrustedRunner(unittest.TestCase):
             apps_policy_required=True,
         )
         ctx.update(extra or {})
-        manifest = dict(protocol_version=6, worker_version="v5", bundle_sha256="b" * 64)
+        manifest = dict(protocol_version=7, worker_version="v5", bundle_sha256="b" * 64)
         availability = fixture["availability"]()
         availability["apps_policy"] = dict(run=ctx["run"], tier=tier, enabled=enabled)
         availability["apps_policy"].update(policy_update or {})
@@ -310,7 +310,7 @@ class TrustedMain(unittest.TestCase):
             (path / "manifest").write_text(
                 json.dumps(
                     dict(
-                        protocol_version=6, worker_version="v5", bundle_sha256="b" * 64
+                        protocol_version=7, worker_version="v5", bundle_sha256="b" * 64
                     )
                 )
             )

@@ -22,6 +22,47 @@ test('middle policy defaults on for signed PR claims and requests both apps', as
   assert.equal(created(h).KF_LINUX_APPS, '1');
   assert.equal(created(h).KF_WINAPPS, 'mid');
 });
+// RV2 F1: signed PR claims must reach the merged #323 selector, then a real mocked create.
+for (const [competitor, cap, die] of [
+  ['RTX_4070', 890, 'AD104'],
+  ['RTX_3060', 860, 'GA106'],
+]) {
+  test('signed middle creates AD102 ahead of ' + die + ' with both apps', async () => {
+    const h = await configured();
+    const original = { ...h.cloud.offer };
+    Object.assign(h.cloud.offer, { gpu_name: 'RTX_4090', compute_cap: 890, price: 0.2 });
+    h.cloud.extraOffers = [
+      {
+        ...original,
+        id: 6,
+        machine_id: 100002,
+        price: 0.21,
+        gpu_name: competitor,
+        compute_cap: cap,
+      },
+    ];
+    const response = await h.call('/availability?profile=check&apps=1', { method: 'GET' });
+    assert.equal(response.status, 200);
+    const availability = await response.json();
+    assert.deepEqual(availability.apps_policy, { run: '123-1', tier: 'middle', enabled: true });
+    assert.ok(availability.offers.some((offer) => offer.die === 'AD102'));
+    assert.ok(availability.offers.some((offer) => offer.die === die));
+    const rent = await h.call('/rent', { body: requested() });
+    assert.equal(rent.status, 200, await rent.clone().text());
+    try {
+      const record = await h.storage.get('record:123-1');
+      assert.equal(record.die, 'AD102');
+      assert.equal(h.cloud.creates, 1);
+      assert.equal(created(h).KF_TIER, 'middle');
+      assert.equal(created(h).KF_LINUX_APPS, '1');
+      assert.equal(created(h).KF_WINAPPS, 'mid');
+    } finally {
+      assert.equal((await h.call('/stop/123-1')).status, 200);
+      assert.equal(h.cloud.instances.has('900'), false);
+    }
+  });
+}
+
 test('a caller cannot disable Linux apps on a signed middle run', async () => {
   const h = await configured();
   const response = await h.call('/rent', { body: { ...requested(), linuxApps: false } });

@@ -110,7 +110,7 @@ const cases = [
     [["value.driver_installers.every((p) => p?.status === 'PINNED')", 'true']],
   ],
   ['offer tie depends on input order', 'src/offers.js', []],
-  ['release tie depends on input order', 'src/release.js', [['a.id - b.id;', '0;']]],
+  ['release tie chooses highest id', 'src/release.js', [['a.id - b.id;', 'b.id - a.id;']]],
   [
     'network quote omitted',
     'src/policy.js',

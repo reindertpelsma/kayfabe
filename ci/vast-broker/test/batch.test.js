@@ -383,7 +383,7 @@ test('admin middle start: one leg, the PR path checks, the commit gap applies', 
   );
 });
 test('middle tier: PRs rotate families in order and fall back when a family has no offer', async () => {
-  const h = await release();
+  const h = await release({ PINNED_MIDDLE_DIES: '[]' });
   releaseMarket(h, { drop: ['TU106', 'TU116'] });
   const families = [];
   for (let n = 1; n <= 4; n++) {
@@ -449,7 +449,7 @@ test('every rental record carries its tier and family for the results store', as
   const pr = await h.storage.get('record:123-1');
   assert.deepEqual(
     [pr.tier, pr.family, pr.source, pr.batch],
-    ['middle', 'turing', 'github', undefined],
+    ['middle', 'ada', 'github', undefined],
   );
   const { batch: id } = await h.service
     .adminStart({ commit_sha: 'c'.repeat(40), tier: 'large' })

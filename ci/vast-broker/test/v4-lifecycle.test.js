@@ -34,7 +34,7 @@ for (const verdict of ['PASS', 'FAIL', 'UNAVAILABLE'])
     await h.service.sweep();
     assert.deepEqual(h.cloud.deletes, ['900']);
     r = await record(h);
-    assert.equal(r.verdict, verdict);
+    assert.equal(r.verdict, verdict === 'UNAVAILABLE' ? 'FAIL' : verdict);
     assert.notEqual(r.ended, null);
   });
 for (const verdict of ['PASS', 'FAIL'])

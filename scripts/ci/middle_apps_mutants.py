@@ -89,6 +89,13 @@ CASES = [
         "return True",
         "py",
     ),
+    (
+        "combined-middle-pin-bypassed",
+        BROKER + "src/offers.js",
+        "profile === 'check' && options.tierName === 'middle' && cfg.pinnedMiddleDies.length",
+        "false && profile === 'check' && options.tierName === 'middle' && cfg.pinnedMiddleDies.length",
+        "node",
+    ),
     ("linux-count-weakened", BROKER + "runner.py", '"apps": 66', '"apps": 63', "py"),
     (
         "middle-linux-restores-old-63-probe-subset",

@@ -35,7 +35,7 @@ if case.startswith("bounded-"):
 sentinel = "PRIVATE-SENTINEL"
 m.time.sleep = lambda _: None
 calls = []
-manifest = {"protocol_version": 6, "worker_version": "v5", "bundle_sha256": "b" * 64}
+manifest = {"protocol_version": 7, "worker_version": "v5", "bundle_sha256": "b" * 64}
 error = {
     "state": "UNAVAILABLE",
     "verdict": "UNAVAILABLE",

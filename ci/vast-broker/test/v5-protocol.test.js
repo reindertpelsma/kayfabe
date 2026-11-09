@@ -34,13 +34,13 @@ for (const verdict of ['PASS', 'FAIL'])
     });
     assert.equal(r.status, 200);
     const d = await (await h.call('/status/123-1')).json();
-    assert.equal(d.protocol_version, 6);
+    assert.equal(d.protocol_version, 7);
     assert.equal(d.worker_version, 'v5');
     assert.deepEqual(d.suites, table);
     assert.equal(d.driver_version, hardware.driver_version);
     assert.equal(d.die, 'AD104');
-    // A master PR is the middle tier: the family rotation picks the die (src/tier.js).
-    assert.equal(d.selection_reason, 'ROTATE');
+    // A master PR uses the first available pinned middle die.
+    assert.equal(d.selection_reason, 'PIN');
     assert.equal(d.state, 'GRACE');
   });
 for (const kind of [

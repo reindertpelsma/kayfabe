@@ -21,7 +21,7 @@ exec(Path(__file__).with_name("v5_fixture_data.py").read_text(), scope)
 args = json.loads(sys.argv[1])
 m.time.sleep = lambda _: None
 ctx = {"run": "123-1", "sha": "a" * 40, "nonce": "f" * 64, "profile": "check"}
-manifest = {"protocol_version": 6, "worker_version": "v5", "bundle_sha256": "b" * 64}
+manifest = {"protocol_version": 7, "worker_version": "v5", "bundle_sha256": "b" * 64}
 text = "box line\n"
 digest = m.chain(m.ZERO, text)
 final = {
