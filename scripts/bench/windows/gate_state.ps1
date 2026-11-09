@@ -199,8 +199,8 @@ foreach ($e in $lkeAll) {
         if (Is-193 $e) {
             $key = $report.key
             if ($null -eq $rt -or -not $report.key) { $lkeUnresolved++ }
-            # Missing identity is not a report. Keep those entries visible and
-            # make the comparison UNKNOWN rather than inventing distinct IDs.
+            # Keep unresolved entries visible without inventing an identity.
+            # Resolved fresh reports can still establish a ceiling overrun.
             if ($key) { $lke193Reports[$key] = $true }
             if ($key -and ($null -ne $rt)) { $lke193Resolved[$key] = $true }
         }
