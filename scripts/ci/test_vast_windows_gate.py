@@ -314,7 +314,7 @@ class GuestScripts(unittest.TestCase):
         self.assertRegex(body, r"\$rt -lt \$t")
         self.assertIn("$lkeStale++", body)
         self.assertIn("livekernelevent_stale=$lkeStale", body)
-        gated = body[body.index("$lke193 ="):]
+        gated = body[body.index("$lke193Entries ="):]
         self.assertIn("$lke | Where-Object", gated)  # 193 and other are counted over the filtered set
         self.assertNotIn("$lkeAll |", gated)
         self.assertNotIn("lkeStale", body[body.index("$total = 0"): body.index("Say (\"TDR")])
@@ -324,7 +324,7 @@ class GuestScripts(unittest.TestCase):
         text = code(GATE)
         self.assertIn("livekernelevent_stale=", text)
         self.assertIn("stale_lke_resubmits=", text)
-        self.assertRegex(ps, r'livekernelevent193=\$lke193 livekernelevent_stale=\$lkeStale strict=.*total=\$total"')
+        self.assertRegex(ps, r'livekernelevent193=\$lke193 livekernelevent193_entries=\$lke193Entries .*livekernelevent_stale=\$lkeStale strict=.*total=\$total"')
 
     def test_gate_run_only_runs_probes_under_the_probe_directory(self):
         ps = (WIN / "gate_run.ps1").read_text()

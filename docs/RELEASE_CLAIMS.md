@@ -61,11 +61,15 @@ is retained as the dated explanation of what changed, not the status of the rewr
 apps and `managed_t` are `known_unsupported`, reported as `unsupported (UVM)` under the owner's GR-hold merge condition.
 Every structured report includes policy rows (NOT_RUN, never passing results), even with no app stage; historical raw
 verdicts remain in notes and table columns. Supported-app completeness/failure and host-Xid rules remain in force.
-CODE READ at `a1209e3da`: LiveKernelEvent 193 is reported as `known_live_dumps_193` and gates above an evidence-seeded
-per-die maximum, or in explicit strict mode. Unseeded dies are UNKNOWN. The box report includes the known count and
-ratchet verdict; the current Worker sanitizer publishes only the existing `windows.live_dumps_193` alias. Synthetic
-header tests establish parser behavior, not the code of an actual WATCHDOG dump. Non-gating within the ceiling does not
-establish harmlessness (issue #305; the ordered investigation plan is in `design/V3_WINDOWS_GATE.md`).
+CODE READ at `a01a0cb6cb9796b277b125bf58852b3e7cd271ad`, owner decision and RV2 correction 2026-11-09: LiveKernelEvent 193 is reported
+as distinct reports in `known_live_dumps_193`, with raw entries recorded separately. The per-die ratchet remains
+report-only by default (WARN above its seeded maximum); `KF_WINGATE_LKE_RATCHET=gate` enables ceiling enforcement,
+while `KF_WINGATE_STRICT_LKE=1` gates on any non-stale 193 entry. Current seeds are one distinct report for AD102,
+TU106 and GA102, with legacy entry maxima 2/3/4 and provenance retained. Unseeded dies give UNKNOWN. Unresolved identity/time gives UNKNOWN unless resolved fresh reports already prove
+an overrun (default WARN; explicit gate FAIL). The local report retains count, resolved count, entries, unit, unresolved entries, maximum and ratchet verdict;
+the current Worker sanitizer publishes only the existing `windows.live_dumps_193` alias. MEASURED in the supplied
+record at `8d495e90`: retained 193-report headers contain code `0x193`, reason `0x815`; this does not establish cause
+or harmlessness (issue #305; `design/V3_WINDOWS_GATE.md`, `traces/lke193_phase0_20261109/README.md`). DX1 ran no hardware.
 
 **CODE READ (`scripts/ci/release_claims.py`, `docs/RELEASE_CLAIMS.tsv`):** the ledger uses the README's new hashes.
 Rows for removed sentences are deleted instead of reused as positive evidence; derived-page rows name the corrected
