@@ -189,8 +189,8 @@ const cases = [
   {
     name: 'review unchanged current failure loses its witness',
     file: 'src/provider-policy.js',
-    before: 'prior.state === state &&',
-    after: 'false &&',
+    before: "prior?.source === 'boot_log' &&\n    prior.state === state &&",
+    after: "prior?.source === 'boot_log' &&\n    false &&",
     pattern: '^RV2 unchanged current fatal waits for window',
     test: 'test/provider-review.test.js',
     all: false,
@@ -198,8 +198,8 @@ const cases = [
   {
     name: 'review changed provider progress preserves old witness',
     file: 'src/provider-policy.js',
-    before: 'prior.statusHash === statusHash',
-    after: 'true',
+    before: 'prior.statusHash === statusHash\n  ) {',
+    after: 'true\n  ) {',
     pattern: '^RV2 changing provider progress clears prior witness',
     test: 'test/provider-review.test.js',
     all: false,
