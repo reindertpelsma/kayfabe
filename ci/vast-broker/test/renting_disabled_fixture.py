@@ -97,7 +97,7 @@ def pop(queue):
 def client(route, method="GET", body=None):
     calls.append((route, method, clock[0]))
     if route.startswith("/availability"):
-        return answer(200, scope["availability"]())
+        return answer(200, scope["availability"](apps=("&apps=1" in route)))
     if route == "/rent":
         return pop(rent_replies)
     if route.startswith("/status/"):

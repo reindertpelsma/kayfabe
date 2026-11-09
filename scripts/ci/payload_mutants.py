@@ -333,7 +333,7 @@ CASES += [
     ),
     (
         "apps-retry-passes",
-        replace('        if kind == "RETRY":\n            name = "apps_retry_"', '        if kind == "RETRY":\n            return [row("apps", len(names))]\n            name = "apps_retry_"'),
+        scoped("apps_rows", '        if kind == "RETRY":', '        if kind == "RETRY":\n            return [row("apps", len(names))]'),
     ),
     (
         "apps-stage-without-time-guard",
@@ -358,7 +358,7 @@ CASES += [
     (
         "apps-stage-never-appended",
         replace(
-            '        if apps_requested(tier):\n',
+            '        if linuxapps:\n',
             '        if False:\n',
         ),
     ),

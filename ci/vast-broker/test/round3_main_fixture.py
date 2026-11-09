@@ -103,7 +103,9 @@ with tempfile.TemporaryDirectory(prefix="v3-r3-main-") as directory:
         route = urllib.parse.urlsplit(url).path
         if route.endswith("/availability"):
             return m.Reply(
-                200, {"content-type": "application/json"}, json.dumps(availability()).encode()
+                200,
+                {"content-type": "application/json"},
+                json.dumps(availability(apps=True)).encode(),
             )
         if route.endswith("/rent"):
             nonce = json.loads(body)["runner_nonce"]

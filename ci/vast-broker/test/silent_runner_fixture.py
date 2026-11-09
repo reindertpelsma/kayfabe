@@ -57,7 +57,7 @@ def client(url, method="GET", headers=None, body=None):
         "availability" if "/availability" in url else "rent" if url.endswith("/rent") else "stop"
     )
     calls.append(route)
-    data, status = scope["availability"](), 200
+    data, status = scope["availability"](apps=True), 200
     if route == "availability":
         if case.startswith("availability-5"):
             data, status = error, int(case.rsplit("-", 1)[1])

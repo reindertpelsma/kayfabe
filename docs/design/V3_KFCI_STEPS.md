@@ -3,6 +3,11 @@ CODE READ: the stdlib execution library and Linux apps port described below are 
 MEASURED: GPU-free validation is recorded below. No new GPU, VM, Worker, provider or deployment
 run was performed for PM1. Worker deployment and execution of a complete unmigrated plan remain DESIGN.
 
+CODE READ, policy update 2026-11-09: [middle real apps](V3_MIDDLE_REAL_APPS.md) adds a
+Worker-authored middle opt-in and required evidence, separate from this original migration.
+New missing-bundle outcomes are MEDIA; historical NOT_BUILT remains an accepted retry alias.
+The older measurements below retain their original run scope; rollout is not performed here.
+
 # Python CI steps and migration contract
 
 ## Scope and starting evidence
