@@ -3,12 +3,13 @@
   "run": "middle_real_apps_20261109",
   "state": "LOCAL_CHECKS_COMPLETE_WITH_ENVIRONMENTAL_RECHECKS",
   "source_base": "3c5c21e49df400c40ca0bbf680da3a0f6ef29fa6",
-  "staged_implementation_diff_sha256": "5cbf96e205591b1d7f7ab585982490e1e64c277a146e3d16dcd3091d62f9fe35",
+  "staged_implementation_diff_sha256": "59db435dba8760440bc6b9116c4dfe23c1b0028cf74ad98ad4a0986e121f19c8",
   "diff_command": [
     "git",
     "diff",
     "--cached",
     "--binary",
+    "3c5c21e49df400c40ca0bbf680da3a0f6ef29fa6",
     "--",
     ".github/workflows/ci.yml",
     "ci/vast-broker",
@@ -105,7 +106,8 @@
         "node": 32,
         "config": 17
       },
-      "receipt": "middle-apps-mutants.json"
+      "receipt": "middle-apps-mutants.json",
+      "environment": "GITHUB_ACTIONS=true; explicit --test-reporter=tap"
     },
     "cli_regression": {
       "tests": 113,
@@ -182,6 +184,28 @@
       "seconds": 4.823206377,
       "failure": "same unchanged deep-path timing testcase, 50 ms wall-time limits",
       "environment": "same host, nice 19, unmodified source copied to owned temporary directory"
+    },
+    "full_kfci_regression": {
+      "tests": 174,
+      "pass": 174,
+      "fail": 0,
+      "seconds": 57.73
+    },
+    "existing_kfci_mutants": {
+      "cases": 56,
+      "killed": 56,
+      "baseline_tests": 139,
+      "minimum_distinct_named_killers": 2,
+      "receipt": "kfci-mutants.json"
+    },
+    "first_head_ci_broker": {
+      "head": "7cff271fe25068771b6d16b41d7dca2b857747cb",
+      "tests": 3843,
+      "pass": 3842,
+      "skip": 1,
+      "fail": 0,
+      "skip_reason": "Wrangler omitted by npm ci --omit=dev; matching offline bundling/determinism passed locally with Wrangler installed",
+      "job": "https://github.com/reindertpelsma/kayfabe/actions/runs/42631836023/job/129209819272"
     }
   },
   "limitations": [
@@ -202,7 +226,7 @@
     "private_references": "PASS: clean over staged files",
     "gpu_uuids": "PASS: files=0 baselined=0 new=0 stale=0; baseline unchanged",
     "staged_path_uuid_and_private_scan": {
-      "paths": 35,
+      "paths": 37,
       "uuid_new": 0,
       "uuid_stale": 0,
       "private_reference_paths": 0,
@@ -215,7 +239,8 @@
     "A stale-media red-test fixture initially left its matrix boundary unfaked. Its owned processes were stopped while in the busy wait, with no VM launch or guest output; the empty owned result directory was removed. All final media controls use a fake matrix and temporary bench path.",
     "The first legacy apps mutant attempt hit its unchanged 180-second subprocess timeout after a green 564-test baseline; the final retry uses the same timeout and thresholds.",
     "The full broker run used a changing index while receipt files were staged. Three tree parity failures were reproduced as index drift, then passed with a fixed index. The unchanged deep-path timing control passed alone at nice 19. Raw counts are retained; this receipt does not claim the initial full run green.",
-    "An unmodified origin/next control also fails only the same deep-path timing testcase with 50 ms limits (18/19); no timing threshold or tree-key code was changed. A fresh-checkout CI run remains required for the draft head."
+    "An unmodified origin/next control also fails only the same deep-path timing testcase with 50 ms limits (18/19); no timing threshold or tree-key code was changed. A fresh-checkout CI run remains required for the draft head.",
+    "First-head CI completed the broker suite with 3842 pass / 1 optional Wrangler skip / 0 failures, then the new collector failed closed because Node emitted spec rather than TAP. The collector now explicitly requests TAP like existing harnesses; all 38 variants pass in GITHUB_ACTIONS=true mode. Two old app-policy assertions were aligned with the required MEDIA result; all 174 KFCI tests pass."
   ],
   "previous_delivery": {
     "pr": 309,

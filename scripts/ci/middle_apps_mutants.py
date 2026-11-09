@@ -310,7 +310,12 @@ def collect(root, mode):
         return json.loads(run.stdout.splitlines()[-1])
     tests = ["config-booleans.test.js"] if mode == "config" else ["middle-apps.test.js"]
     run = subprocess.run(
-        ["node", "--test", *[str(root / BROKER / "test" / name) for name in tests]],
+        [
+            "node",
+            "--test-reporter=tap",
+            "--test",
+            *[str(root / BROKER / "test" / name) for name in tests],
+        ],
         cwd=root,
         capture_output=True,
         text=True,
