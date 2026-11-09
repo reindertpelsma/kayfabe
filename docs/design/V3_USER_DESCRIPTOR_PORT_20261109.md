@@ -139,6 +139,17 @@ nice -n 19 flock /tmp/claude-0/kf-local-cargo.lock python3 scripts/descriptor_mu
 | `large_counter_stops_relay` | 11 | `a_1026596_byte_pointer_descriptor_completes_through_marker_and_get_writeback`; `a_large_captured_descriptor_is_not_reloaded_after_guest_mutation` |
 | `end_at_2_40_admitted` | 6 | `pointer_end_address_boundary_is_checked_without_copying_or_credit_on_refusal`; `user_storage::tests::write_user_gp_refuses_end_at_2_40` |
 | `scan_budget_after_gate` | 5 | `scan_mode_oversized_descriptor_is_refused_as_scan_budget_before_any_read_or_gate`; `seeded_window_oversized_descriptor_is_refused_as_scan_budget_before_any_read_or_gate` |
+| `legacy_core_skip_validation` | 3 | `an_entry_inspect_entry_refuses_is_refused_by_name_and_never_published`; `pointer_format_refuses_reserved_controls_and_unrepresentable_end_without_credit` |
+
+MEASURED, UR1 local run 2026-11-09 (product source at `4c4568594`): the existing
+`scripts/lifecycle_mutation_check.sh` `core_skip_validation` selector is also aligned
+with `inspect_format`; Pointer validation no longer consults a copy budget. Its
+`bash -n` check and `ONLY=core_skip_validation DRYRUN=1` application/restoration pass.
+Executing that selector's exact replacement in a fresh target against the library
+and Relay suites yields 3 failed format-refusal tests, including both named killers
+in the table. This is the 16th checked variant; the new descriptor harness still has
+15 variants. No production crate source remains mutated.
+
 
 MEASURED, UR1 local run 2026-11-09 at `4c4568594`: the complete GPU-free pair command
 Cargo reports 1,191 passed, 0 failed and 4 existing ignores across 38 groups: `kf-chan`
