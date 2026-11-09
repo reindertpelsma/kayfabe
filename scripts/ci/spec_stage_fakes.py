@@ -103,7 +103,7 @@ run)
             *) shift ;;
         esac
     done
-    echo "RUN tag=$tag nokf3=$nokf3 overlay=$overlay ram=${WINVM_RAM_MB:-unset} :: ${args[*]}" >> "$R/runs.log"
+    echo "RUN tag=$tag nokf3=$nokf3 overlay=$overlay ram=${WINVM_RAM_MB:-unset} fb=${WINVM_KF3_FB_MB:-unset} :: ${args[*]}" >> "$R/runs.log"
     kind=$(sed 's/.*_\(copy\|run\)\([0-9]*\)$/\1\2/' <<< "$tag")
     echo "$kind" > "$R/current_kind"
     rm -f "$R/nossh"
@@ -231,7 +231,7 @@ FAKES = {
     "free": '#!/bin/bash\nprintf "              total\\nMem:             %s\\n" "$(cat "$FAKE_ROOT/scn/ram" 2>/dev/null || echo 64)"\n',
     "df": '#!/bin/bash\nprintf "Avail\\n  %sG\\n" "$(cat "$FAKE_ROOT/scn/disk" 2>/dev/null || echo 500)"\n',
     "dmesg": '#!/bin/bash\nn=$(cat "$FAKE_ROOT/xid_count" 2>/dev/null || echo 0)\nfor i in $(seq 1 "$n"); do echo "[1.0] NVRM: Xid (PCI:0000:01:00): 31, fake"; done\necho "[1.0] unrelated line"\n',
-    "nvidia-smi": '#!/bin/bash\ncase "$*" in *"-L"*) echo "GPU 0: NVIDIA GeForce RTX 4090 (UUID: fake)";; *) echo "NVIDIA GeForce RTX 4090, 580.159.04, 24564 MiB, P8";; esac\n',
+    "nvidia-smi": '#!/bin/bash\ncase "$*" in *"-L"*) echo "GPU 0: NVIDIA GeForce RTX 4090 (UUID: fake)";; *memory.total*) cat "$FAKE_ROOT/scn/vram" 2>/dev/null || echo 24564;; *) echo "NVIDIA GeForce RTX 4090, 580.159.04, 24564 MiB, P8";; esac\n',
     "gcc": '#!/bin/bash\nout=""\nwhile [ $# -gt 0 ]; do case $1 in -o) out=$2; shift 2;; *) shift;; esac; done\n'
            'cat > "$out" <<\'EOS\'\n#!/bin/bash\nn=$(cat "$FAKE_ROOT/cup8_calls" 2>/dev/null || echo 0); echo $((n+1)) > "$FAKE_ROOT/cup8_calls"\n'
            'if [ "$n" != 0 ] && [ -e "$FAKE_ROOT/scn/cup8_fail_after" ]; then echo "CUP8 VERDICT: FAIL"; exit 1; fi\necho "CUP8 VERDICT: PASS"\nEOS\nchmod +x "$out"\n',

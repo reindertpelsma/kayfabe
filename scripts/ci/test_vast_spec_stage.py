@@ -350,6 +350,29 @@ class Copy(StageCase):
         self.go("lanea")
         self.assertIn("ram=16384", self.sb.runs()[0])
 
+    def test_the_kf3_boot_leaves_2_gib_of_a_small_card_as_the_gate_does(self):
+        self.go("lanea", vram="8192")
+        self.assertIn("fb=6144", self.sb.runs()[1])
+
+    def test_a_10_gib_card_is_still_a_small_card(self):
+        self.go("lanea", vram="10240")
+        self.assertIn("fb=8192", self.sb.runs()[1])
+
+    def test_a_12_gib_card_keeps_the_default_fb(self):
+        self.go("lanea", vram="12288")
+        self.assertIn("fb=unset", self.sb.runs()[1])
+
+    def test_a_24_gib_card_keeps_the_default_fb(self):
+        self.go("lanea")
+        self.assertIn("fb=unset", self.sb.runs()[1])
+
+    def test_an_explicit_fb_wins_over_the_small_card_rule(self):
+        sb = fk.Sandbox(tempfile.mkdtemp(prefix="kfspec-"))
+        self.addCleanup(lambda: shutil.rmtree(sb.root, ignore_errors=True))
+        sb.set("vram", "8192")
+        sb.run("lanea", 40000, WINVM_KF3_FB_MB="4096")
+        self.assertIn("fb=4096", sb.runs()[1])
+
     def test_the_run_boot_gets_the_ram_too(self):
         self.go("lanea")
         self.assertIn("ram=16384", self.sb.runs()[1])

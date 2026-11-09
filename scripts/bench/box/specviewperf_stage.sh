@@ -304,13 +304,17 @@ collect_host_logs() {
     done
     rm -f "$EVD/cup8_host"
 }
-conclude() {
-    local xid_delta bar1=0 kind cls pass fail nrun
-    stage conclude
+kill_fetch() { # a download still running is stopped with its curl: killing the helper alone leaves curl writing a (deleted) 42 GB .part
     if [ -n "$FETCH_PID" ] && kill -0 "$FETCH_PID" 2> /dev/null; then
         kill "$FETCH_PID" 2> /dev/null
         pkill -f -- "fetch_bench_data.sh $OBJECT --sha256" 2> /dev/null
+        pkill -f -- "--output $ZST.part" 2> /dev/null
     fi
+}
+conclude() {
+    local xid_delta bar1=0 kind cls pass fail nrun
+    stage conclude
+    kill_fetch
     teardown_guest
     if [ "$GUEST_STARTED" = 1 ] && [ "$HOSTREF_BEFORE" = green ] && [ "$HOSTREF_AFTER" = unrun ]; then hostref after; fi
     xid_delta=$(sed -n 's/^HOSTREF_XID_DELTA //p' "$EVD/hostref_after.txt" 2> /dev/null)
@@ -348,6 +352,7 @@ on_exit() {
         VERDICT=RETRY
         trap - EXIT
         note "the stage script ended without a verdict (rc=$rc, stage=$STAGE)"
+        kill_fetch
         if [ "$GUEST_STARTED" = 1 ]; then teardown_guest; fi
         delete_copy
         echo "SPECVIEWPERF_STAGE_RETRY class=OPERATOR"
@@ -384,6 +389,16 @@ mem_gb=$(free -g | awk '/^Mem:/{print $2}')
 [ "${mem_gb:-0}" -ge 24 ] || abort PROVIDER "ram ${mem_gb:-0}G, need 24G for a 16G guest"
 if ! nvidia-smi -L > "$EVD/nvidia_smi_L.txt" 2>&1; then abort PROVIDER "nvidia-smi -L failed on the host"; fi
 GPU_NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader | head -1)
+# kf3's fb-mb is real host VRAM: the gate leaves 2 GiB on a card of 10 GiB or less (an 8 GB RTX 20xx cannot take win_vm.sh's
+# 8192 default); the kf3 boot of this stage must use the same value, or it fails on exactly those dies. An explicit
+# WINVM_KF3_FB_MB always wins.
+if [ -z "${WINVM_KF3_FB_MB:-}" ]; then
+    vram_mb=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits | head -1 | tr -dc 0-9)
+    if [ "${vram_mb:-0}" -gt 0 ] && [ "$vram_mb" -le 10240 ]; then
+        export WINVM_KF3_FB_MB=$(((vram_mb - 2048) / 1024 * 1024))
+        note "host VRAM ${vram_mb} MiB: WINVM_KF3_FB_MB=$WINVM_KF3_FB_MB"
+    fi
+fi
 note "host: gpu=\"$GPU_NAME\" cpus=$(nproc) ram_gb=$mem_gb disk_free_gb=$avail_gb need_gb=$need_gb"
 PIN=$(sed -n 's/^specviewperf-15\.0\.0\.tar\.zst sha256=\([0-9a-f]\{64\}\)$/\1/p' "$PINFILE" 2> /dev/null | head -1)
 [ -n "$PIN" ] || abort MEDIA "no sha256 pin for $OBJECT in $PINFILE (the owner pins it)"
