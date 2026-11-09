@@ -39,6 +39,7 @@ import {mintBlob,checkBlobBudget} from './blobs.js';
 import {benchObject,benchBudget,benchCount,benchExpiry,benchUrl,benchRedirect} from './benchdata.js';
 import { offerPrice, providerId, applyResourceProfile } from './policy.js';
 import {
+  BOOT_FAILURE_STATES,
   providerMessageClass,
   observeFatal,
   currentBootFailure,
@@ -634,7 +635,7 @@ export function createService({
     }
     if (record.firstReportAt === undefined) {
       let log;
-      if (pendingInstance(instance) || instance.actual_status === 'running') {
+      if (instance.actual_status == null || BOOT_FAILURE_STATES.has(instance.actual_status)) {
         try {
           log = await vast.bootLog(record);
         } catch {}

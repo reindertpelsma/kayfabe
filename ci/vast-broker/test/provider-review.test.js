@@ -36,6 +36,28 @@ async function tick(h, milliseconds) {
   h.time.value += milliseconds;
   await h.service.sweep();
 }
+for (const state of ['error', 'exited', 'stopped'])
+  test('R19 F1b readable fatal log confirms across created/' + state, async () => {
+    const h = await boot();
+    h.cloud.logText = domainError('900');
+    const firstAt = h.time.value + 1000;
+    let record;
+    for (let i = 0; i < 4; i++) {
+      Object.assign(h.cloud.instances.get('900'), {
+        actual_status: i % 2 ? state : 'created',
+        status_msg: 'waiting for boot',
+      });
+      h.time.value = firstAt + i * 30000;
+      await h.service.sweep();
+      record = await row(h);
+      if (i < 3) assert.equal(record.closed, null, 'must respect the full 90-second window');
+    }
+    await h.call('/stop/123-1');
+    assert.deepEqual(h.cloud.deletes, ['900']);
+    assert.equal(record.closed, 'PROVIDER_FAULT', 'readable unchanged fatal log confirms at 90s');
+    assert.equal(record.ended, firstAt + 90000);
+    assert.equal(record.bootFailure.first, firstAt);
+  });
 for (const restart of [false, true]) {
   test('RV2 healthy status text stays historical across provider flap ' + restart, async () => {
     const h = await boot();

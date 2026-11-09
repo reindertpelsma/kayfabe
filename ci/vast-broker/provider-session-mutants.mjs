@@ -15,6 +15,15 @@ const broker = fileURLToPath(new URL('.', import.meta.url)),
   repo = fileURLToPath(new URL('../..', import.meta.url));
 const scratch = mkdtempSync(join(tmpdir(), 'kf-J2-provider-'));
 const cases = [
+  {
+    name: 'review recognized failure states omit boot-log reads',
+    file: 'src/index.js',
+    before: 'instance.actual_status == null || BOOT_FAILURE_STATES.has(instance.actual_status)',
+    after: "pendingInstance(instance) || instance.actual_status === 'running'",
+    pattern: '^R19 F1b readable fatal log',
+    test: 'test/provider-review.test.js',
+    all: false,
+  },
   ...['error', 'exited', 'stopped'].map((state) => ({
     name: 'review recognized ' + state + ' state resets continuous fatal',
     file: 'src/provider-policy.js',

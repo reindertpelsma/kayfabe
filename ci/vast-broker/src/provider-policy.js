@@ -48,7 +48,7 @@ export async function bootLogDelta(prior, text) {
   return { cursor, fresh: '', stable: false };
 }
 
-const BOOT_FAILURE_STATES = new Set([
+export const BOOT_FAILURE_STATES = new Set([
   'created',
   'loading',
   'starting',
