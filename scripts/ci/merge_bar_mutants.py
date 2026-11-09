@@ -14,6 +14,7 @@ Stdlib only; GPU-free. A baseline run must be green first.
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -189,6 +190,10 @@ def main():
     only = sys.argv[1] if len(sys.argv) > 1 else ""
     rows, bad = [], 0
     with tempfile.TemporaryDirectory(prefix="kf-merge-bar-") as directory:
+        # Scratch sanitizer modules retain their real relative import dependency.
+        shutil.copyfile(
+            SANITIZE.with_name("endpoint-values.js"), Path(directory) / "endpoint-values.js"
+        )
         for target, runner in RUNNERS.items():
             work = Path(directory) / ("base-" + target.name)
             work.write_text(target.read_text())
