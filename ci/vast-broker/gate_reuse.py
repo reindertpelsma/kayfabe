@@ -178,7 +178,9 @@ def summary_lines(text, parent):
     # Copy bounded, literal public result lines. Never replay arbitrary workflow commands,
     # capabilities, URLs, source snippets, control characters or provider-supplied Markdown.
     patterns = [
-        r"RENTAL machine=[0-9]+ host=[0-9]+ instance=[0-9]+ gpu=[A-Za-z0-9_]+ price=[0-9.]+",
+        r"RENTAL instance=[0-9]+ host=[0-9]+ machine=[0-9]+ datacenter=(?:true|false|unknown) "
+        r"country=(?:[A-Z]{2}|UNKNOWN) ip=(?:unknown|(?:[0-9]{1,3}\.){3}0|[0-9a-f:]+::/48) "
+        r"gpu=[A-Za-z0-9_]+ price=[0-9.]+",
         r"\[untrusted\] \[Worker\] selection profile=check die=[A-Z0-9_]+ "
         r"reason=[A-Z_]+ ignored=[0-9]+",
         r"\[untrusted\] \[box\] CUDA_LADDER_STARTED=[0-9T:+-]+ mode=(host|guest) "

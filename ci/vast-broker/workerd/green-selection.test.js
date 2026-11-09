@@ -48,7 +48,7 @@ for (const gpu of ['RTX_4090', 'RTX_4070']) {
     const token = await jwt({ iat: now, nbf: now - 1, exp: now + 300, event_name: 'push' });
     const response = await stub.fetch(env.WORKER_URL + '/' + prefix + '/rent', {
       method: 'POST',
-      headers: { Authorization: 'Bearer ' + token, 'X-KF-Protocol': '6' },
+      headers: { Authorization: 'Bearer ' + token, 'X-KF-Protocol': '7' },
       body: JSON.stringify({
         runner_nonce: 'f'.repeat(64),
         tested_sha: cloud.run.head_sha,

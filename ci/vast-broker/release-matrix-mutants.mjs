@@ -129,6 +129,7 @@ const files = [
   P,
   R,
   'scripts/bench/native_xid_guard.py',
+  'scripts/bench/native_fault_names.json',
 ];
 // Copy broker sources because the planner integration tests exercise its real policy and offers.
 import { readdirSync } from 'node:fs';

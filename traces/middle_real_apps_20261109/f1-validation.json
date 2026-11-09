@@ -1,0 +1,138 @@
+{
+  "status": "GPU-FREE local integration; not deployed or hardware-qualified",
+  "date": "2026-11-09",
+  "previous_head": "e97075a0f073b306b21b84769642b5896802a9e7",
+  "merged_next": "ca9901987de07dc51293de471f4864ea64d3dbcd",
+  "integrated_pr323": "70c408054",
+  "findings": {
+    "F1": "merged original #323 pin policy, no divergent selector",
+    "F2": "66 supported Linux probes plus Windows mid 10, including all 8 small",
+    "F3": "all failures must be retry-class for RETRY classification; any report remains terminal, no provider replacement"
+  },
+  "protocol_version": 7,
+  "bundle_sha256": "d7a30055f2b1e6ebd56f21b0404e7ac4a9484caf107552f3a52beb2717305b12",
+  "bundle_bytes": 436107,
+  "offline_builds": "two fresh Wrangler 4.152.0 processes, separate output directories, byte-identical, matching both pins",
+  "signed_middle_controls": [
+    {
+      "offers": [
+        "AD102 RTX4090 $0.20/h",
+        "AD104 RTX4070 $0.21/h"
+      ],
+      "created": "AD102",
+      "linux_apps": "1",
+      "windows_apps": "mid",
+      "stopped": true
+    },
+    {
+      "offers": [
+        "AD102 RTX4090 $0.20/h",
+        "GA106 RTX3060 $0.21/h"
+      ],
+      "created": "AD102",
+      "linux_apps": "1",
+      "windows_apps": "mid",
+      "stopped": true
+    }
+  ],
+  "focused_tests": {
+    "python": 66,
+    "worker": 42
+  },
+  "full_broker": {
+    "tests": 4167,
+    "pass": 4167,
+    "fail": 0,
+    "skipped": 0,
+    "duration_ms": 910674.687577
+  },
+  "python_regression": {
+    "tests": 183,
+    "groups": [
+      67,
+      18,
+      7,
+      25,
+      66
+    ],
+    "all_pass": true
+  },
+  "mutants": {
+    "middle": {
+      "cases": 41,
+      "minimum_named_killers": 2
+    },
+    "visibility": {
+      "cases": 15,
+      "minimum_named_killers": 2
+    },
+    "provider_embedded": {
+      "cases": 116,
+      "required_named_killers_per_case": 2,
+      "proof": "ok 1590 - provider invariants have two named killers per mutant"
+    }
+  },
+  "hygiene": {
+    "doc_freshness": "220 checked, no debt/new",
+    "release_claims": "55 claims, no errors/warnings",
+    "claim_ledger": "3748 existing, 0 new, 1 resolved; baseline unchanged",
+    "private_refs": "clean",
+    "full_tree_uuid": "0 new/stale/baselined",
+    "workflow": "ok",
+    "section_numbers": "164 files, 0 offenders",
+    "black": "25.1.0, 39 files unchanged",
+    "prettier": "3.6.2, all broker JS/MJS pass",
+    "final_secret_and_whitespace_scan": "0 findings (rechecked before commit)"
+  },
+  "hardware_or_live_worker_access": false,
+  "deployed": false,
+  "signed_middle_create_receipts": [
+    {
+      "competitor": "AD104",
+      "allowed": [
+        "AD102",
+        "AD104"
+      ],
+      "created_die": "AD102",
+      "created_offer": 5,
+      "flags": {
+        "KF_TIER": "middle",
+        "KF_LINUX_APPS": "1",
+        "KF_WINAPPS": "mid"
+      },
+      "stopped": true
+    },
+    {
+      "competitor": "GA106",
+      "allowed": [
+        "AD102",
+        "GA106"
+      ],
+      "created_die": "AD102",
+      "created_offer": 5,
+      "flags": {
+        "KF_TIER": "middle",
+        "KF_LINUX_APPS": "1",
+        "KF_WINAPPS": "mid"
+      },
+      "stopped": true
+    }
+  ],
+  "bootstrap": {
+    "master_base": "c1790f2b4fa65edd8cfe0046f829a541f055a3bb",
+    "paths": 146,
+    "changed_paths": 145,
+    "unchanged_retained_contract": ".github/workflows/gpu-vast.yml",
+    "manifest_sha256": "2c2762cf43c866edfe63af311710841e94a24716426407a12bce0326dd431fb0",
+    "python_middle_pass": 66,
+    "worker_middle_pass": 42,
+    "next_product_source_copied": false,
+    "native_helper_dependencies": [
+      "04dcf0344",
+      "6f62e8203"
+    ],
+    "independent_lke193_migration_excluded": "3188706d9",
+    "new_master_pr_or_deployment": false
+  },
+  "implementation_diff_sha256": "51fe0f9239d810a1df136ac297d0a035f91a6d8e1ea5ebb0b7015164acf8997d"
+}

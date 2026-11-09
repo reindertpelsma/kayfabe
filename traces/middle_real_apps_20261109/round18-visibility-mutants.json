@@ -1,0 +1,166 @@
+{
+  "cases": [
+    {
+      "mutant": "head-never-full",
+      "killers": [
+        "markers",
+        "count",
+        "head-size",
+        "tail-size",
+        "wide-budget",
+        "wide-sizes",
+        "ragged",
+        "ragged-again",
+        "ragged-ramp",
+        "flood-lines",
+        "scrub",
+        "summary-tail"
+      ],
+      "count": 12
+    },
+    {
+      "mutant": "tail-never-shown",
+      "killers": [
+        "markers",
+        "count",
+        "head-size",
+        "tail-size",
+        "wide-budget",
+        "wide-sizes",
+        "ragged",
+        "ragged-again",
+        "ragged-ramp",
+        "flood-lines",
+        "scrub",
+        "summary-tail"
+      ],
+      "count": 12
+    },
+    {
+      "mutant": "middle-marker-off",
+      "killers": [
+        "markers",
+        "count",
+        "ragged",
+        "ragged-again",
+        "ragged-ramp",
+        "flood-lines",
+        "scrub",
+        "summary-tail"
+      ],
+      "count": 8
+    },
+    {
+      "mutant": "middle-count-ignores-the-head",
+      "killers": [
+        "count",
+        "ragged",
+        "ragged-again",
+        "ragged-ramp",
+        "flood-lines"
+      ],
+      "count": 5
+    },
+    {
+      "mutant": "tail-takes-the-start",
+      "killers": [
+        "ragged-again",
+        "ragged-ramp"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "tail-line-budget-ignored",
+      "killers": [
+        "tail-size",
+        "flood-lines"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "head-byte-budget-ignored",
+      "killers": [
+        "wide-budget",
+        "wide-sizes",
+        "ragged"
+      ],
+      "count": 3
+    },
+    {
+      "mutant": "tail-bypasses-the-scrubber",
+      "killers": [
+        "markers",
+        "count",
+        "head-size",
+        "tail-size",
+        "wide-budget",
+        "wide-sizes",
+        "ragged",
+        "ragged-again",
+        "ragged-ramp",
+        "flood-lines",
+        "scrub"
+      ],
+      "count": 11
+    },
+    {
+      "mutant": "line-cost-without-prefix",
+      "killers": [
+        "wide-sizes",
+        "ragged",
+        "ragged-again",
+        "ragged-ramp"
+      ],
+      "count": 4
+    },
+    {
+      "mutant": "head-size-constant",
+      "killers": [
+        "wide-budget",
+        "constants"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "tail-size-constant",
+      "killers": [
+        "wide-budget",
+        "constants"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "ladder-warnings-reach-the-log",
+      "killers": [
+        "test_a_failed_build_prints_its_tail_but_is_bounded",
+        "test_warnings_are_kept_in_a_file",
+        "test_warnings_do_not_flood_the_log"
+      ],
+      "count": 3
+    },
+    {
+      "mutant": "ladder-errors-hidden",
+      "killers": [
+        "test_a_failed_build_prints_its_tail_but_is_bounded",
+        "test_errors_still_print"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "ladder-rc-lost",
+      "killers": [
+        "test_a_failed_build_prints_its_tail_but_is_bounded",
+        "test_errors_still_print"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "ladder-lints-capped",
+      "killers": [
+        "test_cargo_gets_exactly_the_original_arguments",
+        "test_lint_level_and_build_flags_are_untouched"
+      ],
+      "count": 2
+    }
+  ]
+}

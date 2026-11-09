@@ -22,6 +22,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 MERGE_CHECK = Path(os.environ.get("KF_MERGE_CHECK") or ROOT / "scripts/bench/box/merge_check.sh")
 KVM_TESTS = Path(os.environ.get("KF_KVM_TESTS") or ROOT / "scripts/bench/box/kvm_tests.sh")
+LADDER = ROOT / "scripts/ci/ignore_ladder.py"
 
 
 def code(path):
@@ -102,6 +103,22 @@ class MergeCheckComposition(unittest.TestCase):
         positions = [text.index(s) for s in order]
         self.assertEqual(positions, sorted(positions))
 
+    def test_the_strip_runs_in_the_checkout_after_the_reset_and_before_every_stage(self):
+        text = code(MERGE_CHECK)
+        strip = text.index("ignore_ladder.py strip --in-place")
+        self.assertLess(text.index("reset -q --hard"), strip)
+        self.assertLess(text.index('cd "$CHECKOUT"'), strip)
+        for later in ("crates/kf-*/Cargo.toml", "kvm_tests.sh", "v3_gates.sh", "build_kf3.sh"):
+            self.assertLess(strip, text.index(later), later)
+        self.assertIn("exit 2", text[strip : strip + 200])
+
+    def test_oracles_are_required_on_the_box_unless_a_caller_says_otherwise(self):
+        text = code(MERGE_CHECK)
+        self.assertIn("export KF_REQUIRE_ORACLES=${KF_REQUIRE_ORACLES:-1}", text)
+        self.assertLess(
+            text.index("KF_REQUIRE_ORACLES"), text.index("kvm_tests.sh"), "before the first stage"
+        )
+
     def test_the_header_names_what_the_bar_is(self):
         head = "\n".join(MERGE_CHECK.read_text().splitlines()[:12])
         self.assertNotIn("every kf-* crate test", head)
@@ -111,12 +128,21 @@ class MergeCheckComposition(unittest.TestCase):
 class MergeCheckRun(unittest.TestCase):
     """Run the real merge_check.sh in a one-crate git fixture: it must stop at the census."""
 
-    def run_bar(self, **extra):
+    WORKERIGNORE = "/.git\n/.workerignore\n/docs\n**/*.md\n"
+
+    def run_bar(self, workerignore=WORKERIGNORE, ladder=True, **extra):
         with tempfile.TemporaryDirectory() as d:
             root = Path(d) / "repo"
             (root / "scripts/bench/box").mkdir(parents=True)
+            (root / "scripts/ci").mkdir(parents=True)
             (root / "crates/kf-only").mkdir(parents=True)
             (root / "crates/kf-only/Cargo.toml").write_text("[package]\nname='kf-only'\n")
+            (root / "docs").mkdir()
+            (root / "docs/ignored.txt").write_text("doc\n")
+            if workerignore is not None:
+                (root / ".workerignore").write_text(workerignore)
+            if ladder:
+                (root / "scripts/ci/ignore_ladder.py").write_text(LADDER.read_text())
             for name in ("merge_check.sh", "kvm_tests.sh"):
                 source = MERGE_CHECK if name == "merge_check.sh" else KVM_TESTS
                 (root / "scripts/bench/box" / name).write_text(source.read_text())
@@ -153,6 +179,47 @@ class MergeCheckRun(unittest.TestCase):
         self.assertIn("v3 crate census truncated", log)
         self.assertRegex(log, r"EXIT rc=2 ")
         self.assertNotIn("GATES_RC", log)
+
+    def test_the_checkout_is_stripped_before_the_census_and_the_result_is_logged(self):
+        rc, log = self.run_or_skip()
+        self.assertRegex(log, r"IGNORE_STRIP kept=\d+ removed=\d+ rev=HEAD")
+        self.assertRegex(log, r"IGNORE_STRIP_KEY [0-9a-f]{64}")
+        self.assertLess(log.index("IGNORE_STRIP kept="), log.index("v3 crate census truncated"))
+
+    def test_the_log_says_oracles_are_required_by_default(self):
+        rc, log = self.run_or_skip()
+        self.assertIn("KF_REQUIRE_ORACLES=1\n", log)
+
+    def test_a_caller_can_opt_out_of_required_oracles_and_the_log_says_so(self):
+        rc, log = self.run_or_skip(KF_REQUIRE_ORACLES="0")
+        self.assertIn("KF_REQUIRE_ORACLES=0\n", log)
+        self.assertNotIn("KF_REQUIRE_ORACLES=1\n", log)
+
+    def test_an_unreadable_ignore_file_stops_the_run_before_any_stage_with_rc_2(self):
+        rc, log = self.run_or_skip(workerignore="!/crates\n")
+        self.assertEqual(rc, 2, log)
+        self.assertIn("STRIP_FAILED", log)
+        self.assertIn("IGNORE_LADDER_FAIL_CLOSED", log)
+        self.assertNotIn("census", log)
+        self.assertNotIn("GATES_RC", log)
+
+    def test_a_commit_without_an_ignore_file_stops_the_run_with_rc_2(self):
+        rc, log = self.run_or_skip(workerignore=None)
+        self.assertEqual(rc, 2, log)
+        self.assertIn("STRIP_FAILED", log)
+        self.assertNotIn("census", log)
+
+    def test_an_ignore_set_that_removes_crate_code_stops_the_run_with_rc_2(self):
+        rc, log = self.run_or_skip(workerignore=self.WORKERIGNORE + "/crates/kf-only\n")
+        self.assertEqual(rc, 2, log)
+        self.assertIn("STRIP_FAILED", log)
+        self.assertNotIn("census", log)
+
+    def test_a_checkout_that_lacks_the_strip_tool_stops_the_run_with_rc_2(self):
+        rc, log = self.run_or_skip(ladder=False)
+        self.assertEqual(rc, 2, log)
+        self.assertIn("STRIP_FAILED", log)
+        self.assertNotIn("census", log)
 
     def test_the_kvm_flag_does_not_run_tests_on_a_truncated_checkout(self):
         rc, log = self.run_or_skip(KF_MERGE_KVM_TESTS="1")

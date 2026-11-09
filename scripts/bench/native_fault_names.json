@@ -1,0 +1,52 @@
+{
+  "source": "NVIDIA/open-gpu-kernel-modules",
+  "revision": "b81d58ee0224d1d290bef1c080592b619e184042",
+  "sha256": {
+    "src/nvidia/src/kernel/gpu/fifo/kernel_fifo.c": "db6f1c1ffb7a096d37827d4ebfd1d8e65ce4a77f34914e1e99c1ed999010cc23",
+    "src/nvidia/src/kernel/gpu/fifo/arch/ampere/kernel_fifo_ga100.c": "bd1913c3931abfae706d64d2e3e722835f462a2afc9198f68ec9a7c062fa1e57",
+    "src/nvidia/src/kernel/gpu/fifo/arch/blackwell/kernel_fifo_gb202.c": "b1b219d8f8c4837b3101756c440f3438dd355669c7f0c817f460f21c581775f2",
+    "src/common/inc/swref/published/ampere/ga100/dev_fault.h": "4636a1dab710c0d25309d805faabba80f05cd5d03c3d864936c784a63beeaf39",
+    "src/common/inc/swref/published/blackwell/gb202/dev_fault.h": "96753b062f4451bb183dd90229c1cf3e9fd0d0567636ea58734e26e1f8b6b862"
+  },
+  "engines": [
+    "GR0_PBDMA0",
+    "GR0_PBDMA1",
+    "GR1_PBDMA0",
+    "GR1_PBDMA1",
+    "GR2_PBDMA0",
+    "GR2_PBDMA1",
+    "GR3_PBDMA0",
+    "GR3_PBDMA1",
+    "GR4_PBDMA0",
+    "GR4_PBDMA1",
+    "GR5_PBDMA0",
+    "GR5_PBDMA1",
+    "GR6_PBDMA0",
+    "GR6_PBDMA1",
+    "GR7_PBDMA0",
+    "GR7_PBDMA1",
+    "GR_HOST0",
+    "GR_HOST1",
+    "GR_HOST2",
+    "GR_HOST3",
+    "GR_HOST4",
+    "GR_HOST5",
+    "GR_HOST6",
+    "GR_HOST7"
+  ],
+  "clients": [
+    "HUBCLIENT_ESC",
+    "HUBCLIENT_ESC0",
+    "HUBCLIENT_ESC1",
+    "HUBCLIENT_ESC10",
+    "HUBCLIENT_ESC11",
+    "HUBCLIENT_ESC2",
+    "HUBCLIENT_ESC3",
+    "HUBCLIENT_ESC4",
+    "HUBCLIENT_ESC5",
+    "HUBCLIENT_ESC6",
+    "HUBCLIENT_ESC7",
+    "HUBCLIENT_ESC8",
+    "HUBCLIENT_ESC9"
+  ]
+}

@@ -1,5 +1,6 @@
-**STATUS: DESIGN-ONLY, 2026-11-08** for the Worker and release-tier rollout (WB1 makes no deployment/object/native claim; no
-Worker setting sends the stage). **LIVE for the harness code** (merged with this document, GPU-free tests), and the
+**STATUS: DESIGN-ONLY, 2026-11-08** for the Worker and release-tier rollout (no new deployment/object/native claim). CODE READ, 2026-11-09:
+[middle real-app selection](V3_MIDDLE_REAL_APPS.md) now supplies the 10-app mid request in source;
+its initial Worker rollout and combined qualification remain pending. **LIVE for the harness code** (merged with this document, GPU-free tests), and the
 **first hardware run** is in section 8 (`traces/winapps_20261107/`). The harness is present in this tree; the owner reviews release enablement. Parent
 documents: [`V3_WINDOWS_APP_MATRIX.md`](V3_WINDOWS_APP_MATRIX.md) (the inventory, the guest protocol and the verdict
 vocabulary; unchanged), [`V3_WINDOWS_GATE.md`](V3_WINDOWS_GATE.md) (the gate this stage follows) and

@@ -28,7 +28,7 @@ for (const slash of ['', '/'])
       assert.deepEqual(
         api.map((x) => x.url),
         [
-          origin + '/' + prefix + '/availability?profile=check',
+          origin + '/' + prefix + '/availability?profile=check&apps=1',
           origin + '/' + prefix + '/rent',
           origin + '/' + prefix + '/status/123-1',
           origin + '/' + prefix + '/logs/123-1?cursor=0',

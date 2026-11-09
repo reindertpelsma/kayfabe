@@ -127,8 +127,8 @@ const MUTANTS = [
     [
       [
         L,
-        "let text = redactPublic(attribute(parts.join('')), exact);",
-        "let text = parts.map((p) => redactPublic(attribute(p), exact)).join('');",
+        "let text = attribute(redactPublic(parts.join(''), exact, endpoints));",
+        "let text = parts.map((p) => attribute(redactPublic(p, exact, endpoints))).join('');",
       ],
     ],
   ],
@@ -404,7 +404,7 @@ const MUTANTS = [
   // ---- the ledger and the queue ----
   [
     'public log not stored (box text)',
-    [[I, 'if (logsEnabled(env)) await ledger.appendPublicLog(r, payload.text);', '']],
+    [[I, 'if (logsEnabled(env)) await ledger.appendPublicLog(r, privateText);', '']],
   ],
   [
     'public log without the Worker lines',
@@ -415,8 +415,8 @@ const MUTANTS = [
     [
       [
         I,
-        'if (logsEnabled(env)) await ledger.appendPublicLog(r, payload.text);',
-        'await ledger.appendPublicLog(r, payload.text);',
+        'if (logsEnabled(env)) await ledger.appendPublicLog(r, privateText);',
+        'await ledger.appendPublicLog(r, privateText);',
       ],
     ],
   ],
@@ -528,14 +528,20 @@ const MUTANTS = [
   // ---- review of #282 ----
   [
     'report strings not redacted',
-    [[P, 'doc = fitReport(redactDoc(full, exact));', 'doc = fitReport(full);']],
+    [
+      [
+        P,
+        'doc = fitReport(redactDoc(full, exact, entry.endpointRedactions));',
+        'doc = fitReport(full);',
+      ],
+    ],
   ],
   [
     'report redaction skips arrays',
     [
       [
         R,
-        'if (Array.isArray(value)) return value.map((v) => redactDoc(v, exact));',
+        'if (Array.isArray(value)) return value.map((v) => redactDoc(v, exact, endpoints));',
         'if (Array.isArray(value)) return value;',
       ],
     ],
@@ -545,7 +551,7 @@ const MUTANTS = [
     [
       [
         R,
-        '    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, redactDoc(v, exact)]));',
+        '    return Object.fromEntries(\n      Object.entries(value).map(([k, v]) => [k, redactDoc(v, exact, endpoints)]),\n    );',
         '    return value;',
       ],
     ],

@@ -39,6 +39,9 @@ class Equivalence(existing.AppsGateScript):
             legacy = self.run_gate(*args, **kw)
 
         def stable(out):
+            # Owner 2026-11-09: missing app media is MEDIA. Historical Bash used NOT_BUILT.
+            # Both remain RETRY/rc3; only this documented nonpassing spelling is normalized.
+            out = out.replace("APPS_STAGE_RETRY class=NOT_BUILT", "APPS_STAGE_RETRY class=MEDIA")
             lines = []
             for line in out.splitlines():
                 if (

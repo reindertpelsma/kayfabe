@@ -17,6 +17,10 @@ class NativeXidGuardTests(unittest.TestCase):
         self.journal = (FIX / "native_expected_xids.log").read_text()
         self.defer = (FIX / "sweep1ce11cf4_ad106_native595_defer-liveness.log").read_text()
         self.missing = (FIX / "sweep1ce11cf4_ad106_native595_missing-page-fault.log").read_text()
+        # Synthetic harness attestations: historical logs predate native-exec.
+        # This replay does not claim those PIDs were independently captured then.
+        self.defer = "KF_NATIVE_EXEC pid=89396 name=kayfabe-rm-ladd\n" + self.defer
+        self.missing = "KF_NATIVE_EXEC pid=89433 name=kayfabe-rm-ladd\n" + self.missing
         self.baseline = G.xid_lines(self.journal)
 
     def approve(self, journal=None, defer=None, missing=None):

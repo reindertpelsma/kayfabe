@@ -135,7 +135,7 @@ class AppsRows(unittest.TestCase):
         self.assertEqual(caught.exception.name, want)
 
     def test_retry_not_built_names_the_cause_and_never_passes(self):
-        self.retry("NOT_BUILT", "apps_retry_not_built")
+        self.retry("NOT_BUILT", "apps_retry_media")
 
     def test_retry_time_names_the_cause_and_never_passes(self):
         self.retry("TIME", "apps_retry_time")
@@ -200,11 +200,11 @@ class AppsGateList(unittest.TestCase):
             self.assertTrue(set(names) <= set(known), (tier, sorted(set(names) - set(known))))
             self.assertNotIn("geekbench_gpu", names)  # docs/DOWNLOADS.md: not for scripted use
 
-    def test_the_middle_list_is_the_full_list_without_the_slow_apps(self):
+    def test_the_middle_list_includes_all_supported_apps_in_full_order(self):
         full, middle = self.committed("large"), self.committed("middle")
-        self.assertTrue(set(middle) < set(full))
-        self.assertEqual([n for n in full if n in middle], middle)  # same order
-        self.assertEqual(set(full) - set(middle), {"gpu_burn", "vkpeak", "clpeak"})
+        self.assertEqual(middle, full)
+        self.assertEqual(len(middle), 66)
+        self.assertTrue({"gpu_burn", "vkpeak", "clpeak"} <= set(middle))
 
     def test_no_known_defect_is_in_a_gate_list(self):
         # the four UVM demand-paging apps fail in the guest alone (traces/apps_linux_20261107/)
@@ -236,13 +236,15 @@ class AppsRealOutput(unittest.TestCase):
         self.assertEqual(self.m.apps_rows(text, 0, names), [self.m.row("apps", len(names))])
         self.assertEqual(len(names), 66)
 
-    def test_the_real_g2_stage_output_grades_as_a_pass(self):
+    def test_historical_g2_passes_only_its_original_63_app_contract(self):
         text, names = self.case("middle", "g2/gate_mid.out")
+        names = [n for n in names if n not in {"gpu_burn", "vkpeak", "clpeak"}]
         self.assertEqual(self.m.apps_rows(text, 0, names), [self.m.row("apps", len(names))])
         self.assertEqual(len(names), 63)
 
-    def test_the_real_g3_output_under_the_xid_watch_wrapper_is_clean_and_a_pass(self):
+    def test_historical_g3_is_clean_and_passes_its_original_63_app_contract(self):
         text, names = self.case("middle", "g3/gate_watched.out")
+        names = [n for n in names if n not in {"gpu_burn", "vkpeak", "clpeak"}]
         self.assertEqual(self.m.watch_delta(text, 0), [])  # 8 host Xid before, 8 after: none new
         self.assertEqual(self.m.apps_rows(text, 0, names), [self.m.row("apps", len(names))])
 
@@ -407,7 +409,7 @@ class AppsStageInThePayload(unittest.TestCase):
         rc, result, calls = self.run_tier("middle", logs={"apps": (text, 3)})
         self.assertEqual(rc, 1)
         self.assertEqual(
-            [r["name"] for r in result["suites"] if r["fail"]], ["apps_retry_not_built"]
+            [r["name"] for r in result["suites"] if r["fail"]], ["apps_retry_media"]
         )
 
     def short_of_time(self, minutes):
@@ -540,10 +542,10 @@ class AppsGateScript(unittest.TestCase):
         self.assertIn("APPS_STAGE_RETRY class=TIME", out)
         self.assertEqual(sum(line.startswith("APP_ROW ") and "result=NOT_RUN" in line for line in out.splitlines()), 2)
 
-    def test_missing_bundle_is_retry_not_built_and_runs_nothing(self):
+    def test_missing_bundle_is_retry_media_and_runs_nothing(self):
         rc, out = self.run_gate([self.res("vectorAdd"), self.res("deviceQuery")], provisioned=False)
         self.assertEqual(rc, 3, out)
-        self.assertIn("APPS_STAGE_RETRY class=NOT_BUILT", out)
+        self.assertIn("APPS_STAGE_RETRY class=MEDIA", out)
         self.assertNotIn("APP_ROW", out)
 
     def test_bad_lists_are_refused(self):

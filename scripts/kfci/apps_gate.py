@@ -345,8 +345,12 @@ class AppsGate(Step):
                 except (OSError, ValueError):
                     rc = 1
                 ctx.emit("APPS_PROVISION_END rc=%d %s" % (rc, timestamp()))
-            if not marker.is_file():
-                return StepResult.retry(RetryClass.NOT_BUILT)
+            if (
+                not bundle.is_file()
+                or not bundle.stat().st_size
+                or not marker.is_file()
+            ):
+                return StepResult.retry(RetryClass.MEDIA)
         if results.exists():
             shutil.rmtree(results)
         results.mkdir(parents=True)

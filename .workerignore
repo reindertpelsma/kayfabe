@@ -1,29 +1,109 @@
-# .workerignore -- STATUS: PROPOSAL, 2026-11-05 (design: docs/design/V3_CI_TIERS_AND_IGNORE_LADDER.md section 4;
-# evidence in traces/ignore_ladder_20261105/).
+# .workerignore -- STATUS: LIVE, 2026-11-09 (design: docs/design/V3_CI_TIERS_AND_IGNORE_LADDER.md section 4;
+# evidence in traces/ignore_ladder_20261105/; the strip step: docs/CI_V3.md, "Stripped tree").
 #
-# Who reads it (CODE READ 2026-11-05, ci/vast-broker/src/treekey.js, PR #258): the CI Worker's
-# result store reads this file from the root of every commit it records, to compute the commit's
-# tree key. This file ignores /ci/vast-broker, a code root in treekey.js PROTECTED, so the Worker
-# refuses the whole ignore set and produces NO tree key today for any commit that carries this
-# file; its runs are stored under the per-commit key (tree_kind 'commit'). TREE_KEY_CARRY_OVER
-# stays off (unset), so a requirement counts only rows of the same commit either way. Do not drop
-# lines here or shrink PROTECTED to obtain tree keys: the box does not remove ignored files yet, so
-# a key would let a result answer for files the run may have read (review of PR #269, R1).
+# Who reads it (CODE READ 2026-11-09):
+#   1. The Vast box. scripts/bench/box/merge_check.sh runs `scripts/ci/ignore_ladder.py strip --in-place`
+#      in its checkout of the tested commit: every tracked file that a line below matches is deleted
+#      before any box stage runs, so a box test cannot depend on an ignored path. NOT YET RUN ON
+#      HARDWARE: the first gpu-vast run on a batch PR is its verification.
+#   2. The stripped-tree CI job (.github/workflows/ci.yml, job `stripped`): the same strip with the same
+#      matcher, then the GPU-free Rust build, test and clippy. The commit's OWN copy of this file is
+#      read (git show REV:.workerignore), never the working copy.
+#   3. The CI Worker's result store (ci/vast-broker/src/treekey.js, PR #258): it reads this file from the
+#      root of every commit it records, to compute the commit's tree key. The key is the hash of the
+#      unignored files plus the effective lines of this file, so adding a line changes the key.
+# ONE matcher: `matches` in scripts/ci/ignore_ladder.py. The Worker's JavaScript matcher is a second
+# implementation and is cross-checked against it (ci/vast-broker/test/ladder-parity.test.js: the real
+# files, 400 seeded adversarial pattern sets, the key bytes) and against `git check-ignore`.
+#
+# Fail closed (exit 3, nothing deleted): a missing file, a line outside the syntax below, an ignore set
+# that would delete code under crates/ qemu/ cuda/ firmware/ tools/ .cargo/ or the two oracle
+# submodules, Cargo.* / rust-toolchain.toml / clippy.toml / .gitmodules / .dockerignore / Dockerfile*
+# (prose .md and .gitignore files excepted), or a tree with nothing left. A test that needs an ignored
+# path is fixed by moving its data next to it or by listing the NEIGHBOURS here instead of the
+# directory (the syntax has no negation); never by relaxing the test.
+#
+# The Worker and PROTECTED (decision taken on review of PR #326, option A of the earlier proposal):
+# `/ci/vast-broker` is NOT ignored. treekey.js PROTECTED lists ci/vast-broker as a code root and
+# refuses any ignore set that covers it, so while this file ignored it the Worker produced no tree key
+# at all; with it kept, the Worker accepts this file and keys commits by tree. PROTECTED is unchanged and
+# TREE_KEY_CARRY_OVER stays off (unset), so a requirement still counts only rows of the same commit. A
+# Worker-only change moves the key (and the gate runs: the Worker is part of what it validates).
+# `ci/platform-api`, `ci/vast-admin` and `ci/vast-reaper` stay ignored (not PROTECTED roots).
+# Do not shrink PROTECTED, and do not ignore ci/vast-broker again, without an owner decision.
 #
 # The ladder:  .gitignore  is a subset of  .workerignore  is a subset of  .dockerignore.
 # Line based and checked by scripts/ci/ignore_ladder.py. Every line of the group below is
 # copied from .gitignore; the checker fails if a line is missing.
 #
-# Intended meaning (DESIGN-ONLY, not built): the Vast box clones the repository and removes
-# everything that matches this file, so a box test cannot depend on an ignored path. A test result
-# is keyed by the hash of the sorted UNIGNORED tracked files (path, mode, blob id), so a change
-# confined to ignored paths shares the result of its parent.
+# A test result is keyed by the hash of the sorted UNIGNORED tracked files (path, mode, blob id), so a
+# change confined to ignored paths shares the result of its parent.
 #
 # Syntax (asserted by the checker): every line starts with / or **/, no negation, no trailing /,
 # `**` only as a whole segment. git, docker and the checker's matcher then read it the same way.
 
+# --- traces/: ignored EXCEPT the evidence that tests read (include_str! and runtime reads) ---
+# The syntax has no negation, so the kept directories are listed by being left out: each line below is the
+# shortest prefix glob that matches no kept name. Kept (a test of a workspace crate reads them; the box
+# sparse list in ci/vast-broker/src/onstart.js names the same data): driver_matrix, rawclient_ce_interrupt_20261008, blackwell_host_caps_review_20261022, blackwell_hw_20261103, blackwell_provider_validation_20261023, blackwell_windows_resume_20261023, real_ga106, c_oracle_census, user_ring_scan_20261014, constants_night_20261014, real_ad104, real_ga104, real_hw_20261013, real_tu116, die_driver_sweep_20261015, constants_measure_20261014b, cap1_coldboot_hermetic.rec, cap1b_coldboot_hermetic_d6.rec.
+# A new traces/ directory whose name starts like one of these globs is ignored without a line; one that
+# starts like a kept name stays in the stripped tree (harmless, it only enters the key).
+# ORDER MATTERS TO THE WORKER, NOT TO THE STRIP: treekey.js stops at the first line that matches, and it
+# must list traces/ (part of it is kept, so it cannot skip the directory), so these lines come FIRST and
+# the broadest first. Measured 2026-11-09: 7.5 M of the Worker matcher's 20 M steps in this order,
+# more than 20 M (no key) when they follow the other lines. ci/vast-broker/test/ladder-parity.test.js
+# fails above 60 percent of the budget.
+/traces/w*
+/traces/v*
+/traces/die_c*
+/traces/s*
+/traces/g*
+/traces/a*
+/traces/bo*
+/traces/t*
+/traces/p*
+/traces/blackwell_v*
+/traces/blackwell_r*
+/traces/l*
+/traces/blackwell_win_*
+/traces/blackwell_c*
+/traces/rec*
+/traces/blackwell_a*
+/traces/capa*
+/traces/blackwell_f*
+/traces/blackwell_e*
+/traces/real_w*
+/traces/o*
+/traces/dis*
+/traces/blackwell_n*
+/traces/die_s*
+/traces/caps*
+/traces/k*
+/traces/can*
+/traces/i*
+/traces/rel*
+/traces/f*
+/traces/cw*
+/traces/do*
+/traces/m*
+/traces/de*
+/traces/h*
+/traces/e*
+/traces/n*
+/traces/cu*
+/traces/rawclient_a*
+/traces/rp*
+/traces/ru*
+/traces/E*
+/traces/bw*
+/traces/2*
+/traces/R*
+/traces/cl*
+/traces/dia*
+
 # --- everything .gitignore ignores (kept line for line) ---
 /target
+/third_party/ogkm-595
 /target-*
 /crates/kayfabe-abi/gen/target
 /firmware/*/target
@@ -51,10 +131,21 @@
 
 # --- trees a box never reads ---
 /archive
-/traces
 /site
 /.github
 /.deadman
+
+# --- repository notices and markers: read only by packaging and by documents ---
+# LICENSE* (the three notice files and any later one, like the gate's own `LICENSE*` skip pattern): scripts/bench/windows/appmatrix/package_bundle.py copies them into the Windows app bundle
+# (CI runner, bundle-publish.yml, full tree; it already reads THIRD_PARTY_NOTICES.md, which `**/*.md`
+# below ignores). KAYFABE_REV.txt: read by no code, only cited by documents.
+/LICENSE*
+/KAYFABE_REV.txt
+
+# --- reference submodules no GPU-free test needs (they are uninitialised empty directories) ---
+# third_party/ogkm and third_party/ogkm-580 stay: tools/derive_hwref.sh and the oracle tests read them.
+/third_party/linux
+/third_party/gvisor
 
 # --- prose (an exception, if one is found, is listed in the evidence README) ---
 **/*.md
@@ -62,10 +153,11 @@
 # --- Cloudflare Worker code and its tests: run by CI on the runner, never on a box ---
 /ci/platform-api
 /ci/vast-admin
-/ci/vast-broker
 /ci/vast-reaper
 
 # --- local test and gate scripts the box payload does not run ---
+# (scripts/ci/runner_namespaces.py is NOT here: the `stripped` CI job runs it after the strip, to give this
+# checkout's test binaries the user-namespace prerequisite; a test of it lives in test_box_stripped.py.)
 /scripts/ci/test_*.py
 /scripts/ci/*_mutants.py
 /scripts/ci/clippy.sh
@@ -78,7 +170,6 @@
 /scripts/ci/doc_status_check.py
 /scripts/ci/no_gpu_uuids.py
 /scripts/ci/no_private_refs.py
-/scripts/ci/runner_namespaces.py
 /scripts/ci/workflow_lint.py
 /scripts/bench/tests
 /scripts/mutate

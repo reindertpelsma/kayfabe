@@ -202,7 +202,9 @@ for (const variant of [0, 1]) {
         ? Response.json({ success: false }, { status: variant ? 400 : 200 })
         : original(url, init);
     h.restart();
-    assert.equal((await h.call()).status, 503);
+    const refused = await h.call();
+    assert.equal(refused.status, 200);
+    assert.equal((await refused.json()).verdict, 'PROVIDER_FAULT');
     assert.equal((await h.storage.get('cost:123-1')).created, false);
     h.cloud.fetch = original;
     h.cloud.runs.set('124', { ...h.cloud.run, id: 124, head_sha: 'c'.repeat(40) });
