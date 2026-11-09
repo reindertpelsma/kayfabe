@@ -1,0 +1,10 @@
+STAGE_RUN_START 1
+SPEC_STAGE_START lane=laneb
+SPEC_STAGE_LIST lane=laneb n=2
+SPEC_COPY_DELETED removed=overlay
+SPEC_ROW name=medical-04 result=NOT_RUN subtests=0/0 reason=SETUP failed=-
+SPEC_ROW name=catia-07 result=NOT_RUN subtests=0/0 reason=SETUP failed=-
+SPEC_STAGE_COUNTS pass=0 fail=0 not_run=2 of=2
+SPECVIEWPERF_STAGE_RETRY class=PROVIDER
+SPECVIEWPERF_STAGE_EXIT rc=3
+STAGE_RUN_RC 3

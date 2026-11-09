@@ -6,9 +6,11 @@
 #
 #   KF_SPEC_LANE=lanea|laneb|both KF_SPEC_DEADLINE_EPOCH=<epoch s> bash scripts/bench/box/specviewperf_stage.sh <tag> <prov-dir>
 #
-# STATUS: DESIGN + CODE, 2026-11-07 (docs/design/V3_SPEC_GATE.md). GPU-free tests only
+# STATUS: DESIGN + CODE, 2026-11-07 (docs/design/V3_SPEC_GATE.md), first run on a real box 2026-11-09: PASS for a two-viewset lane B on an RTX 4090
+# (traces/spec_stage_proof_20261109/); everything else is GPU-free tests only
 # (scripts/ci/test_vast_spec_stage.py, scripts/ci/spec_stage_mutants.py: a fake win_vm.sh and a fake fetch script).
-# NO BOX HAS RUN IT. DISABLED BY DEFAULT: nothing starts it until the Worker sends KF_STAGES=specviewperf with KF_SPEC.
+# DISABLED BY DEFAULT: nothing starts it until the Worker sends KF_STAGES=specviewperf with KF_SPEC.
+# Proof runs narrow a lane with KF_SPEC_TABLE=<file shaped like lanes.json> (read by lane.py and tarfilter.py).
 #
 # What it does, strictly serial:
 #   1. preflight: root, /dev/kvm, the gate's PASS and overlay, the lane, the deadline, disk and RAM; the sha256 pin
