@@ -45,7 +45,10 @@ export async function simulateProviderSeed(seed) {
   market = prices.map(({ price, ...o }) => ({ ...o, dph_total: price }));
   const vast = new Vast(cloud.fetch, cfg, 'mock-market-key'),
     book = new OfferBook(() => at),
-    cap = profileCaps(cfg, 'check').dailyUsd;
+    cap = Math.min(
+      profileCaps(cfg, 'check').dailyUsd,
+      (profileCaps(cfg, 'check').price * (cfg.hard + cfg.cronPeriod)) / 3600000,
+    );
   const output = [];
   for (let n = 0; n < cfg.provider.maxAttempts; n++) {
     if (prior && !retryEligible(prior, at, cfg.provider)) break;

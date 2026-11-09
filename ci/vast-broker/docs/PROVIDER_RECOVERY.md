@@ -42,7 +42,10 @@ label lookups alone cannot erase that uncertainty.
 
 CODE READ: the default session allows eight create attempts, within 90 minutes
 before the first accepted report. Attempts retain the original hard and soft
-runtime deadlines, the original run allowance, and one authenticated log chain.
+runtime deadlines, the original run allowance, and one authenticated log chain. The cumulative run allowance
+is the smaller of the profile daily ceiling and its hourly price cap multiplied by
+the original lease plus cleanup period; repeated transfer reservations cannot borrow
+extra daily room above that run ceiling.
 Legacy sessions with an already-used replacement and missing hardware history stop
 with an explicit `LEGACY_HISTORY_MISSING` diagnostic; the Worker does not invent
 the missing identities or reuse unknown failed hardware.

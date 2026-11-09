@@ -208,3 +208,38 @@ for (const retry of [false, true])
     assert.equal(h.cloud.created.length, retry ? 2 : 1);
     await h.call('/stop/123-1');
   });
+
+for (const price of [0.4, 0.5])
+  test('session cumulative transfers obey original total-run ceiling ' + price, async () => {
+    const vars = { MAX_PRICE_USD_HOUR: String(price) };
+    const h = await setup({ HARD_RUNTIME_MINUTES: '180', BOOT_LIMIT_MINUTES: '75', ...vars });
+    h.cloud.offer.host_id = 100;
+    h.cloud.offer.inet_down_cost = 0.005;
+    h.cloud.contracts = Array.from({ length: 16 }, (_, i) => 900 + i);
+    h.cloud.extraOffers = Array.from({ length: 10 }, (_, i) => ({
+      ...h.cloud.offer,
+      id: 20 + i,
+      machine_id: 200000 + i,
+      host_id: 200 + i,
+      price: 0.21,
+    }));
+    assert.equal((await h.call()).status, 200);
+    const cap = (price * (180 + 1)) / 60;
+    for (let i = 0; i < 8; i++) {
+      const r = await record(h);
+      if (r.ended !== null) break;
+      await fatal(h);
+      await h.call();
+    }
+    const r = await record(h);
+    assert.ok(r.runBudgetUsd <= cap, 'the original per-run ceiling is retained');
+    const ledger = new Ledger(h.storage);
+    const cost = await ledger.budgetSummary(configuration({ ...env, ...vars }), h.time.value);
+    assert.ok(
+      cost.rolling_usd <= cap,
+      'failed transfers plus the live reservation fit the run cap',
+    );
+    assert.ok(h.cloud.created.length < 8, 'daily room cannot fund replacements above the run cap');
+    if (r.ended === null) await h.call('/stop/123-1');
+    for (const c of h.cloud.created) assert.equal(h.cloud.instances.has(String(c.contract)), false);
+  });

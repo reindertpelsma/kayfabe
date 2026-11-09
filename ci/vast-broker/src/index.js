@@ -1555,7 +1555,12 @@ export function createService({
         rateCount: 0,
         liveCheckedAt: null,
       };
-    r.runBudgetUsd = retrySource?.runBudgetUsd ?? profileCaps(cfg, profile).dailyUsd;
+    r.runBudgetUsd =
+      retrySource?.runBudgetUsd ??
+      Math.min(
+        profileCaps(cfg, profile).dailyUsd,
+        (profileCaps(cfg, profile).price * (cfg.hard + cfg.cronPeriod)) / 3600000,
+      );
     r.providerRetries = retrySource ? (retrySource.providerRetries ?? 0) + 1 : 0;
     if (retrySource) {
       r.originalStarted = retrySource.originalStarted ?? retrySource.started;

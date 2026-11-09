@@ -16,6 +16,15 @@ const broker = fileURLToPath(new URL('.', import.meta.url)),
 const scratch = mkdtempSync(join(tmpdir(), 'kf-J2-provider-'));
 const cases = [
   {
+    name: 'daily room replaces the original total-run cap',
+    file: 'src/index.js',
+    before: 'profileCaps(cfg, profile).price',
+    after: 'profileCaps(cfg, profile).dailyUsd',
+    all: false,
+    pattern: '^session cumulative transfers obey original total-run ceiling',
+    test: 'test/provider-session.test.js',
+  },
+  {
     name: 'provider stop before reporting becomes a test failure',
     file: 'src/index.js',
     before: "record.firstReportAt === undefined ? 'PROVIDER_FAULT' : 'ENDED'",
