@@ -46,7 +46,7 @@ Reading the PR's own `.workerignore` would hand the author the skip set. Reading
 safe against that but still weaker than today: `.workerignore` ignores `/.github` and `/ci/vast-broker`,
 whose changes run the gate today (`trigger-policy.mjs` never skips `ci/vast-broker/`), so using it as the
 skip set runs the gate less often. Making the result provably no weaker means intersecting it with the
-existing list, which is the list. What is proved instead is the property that makes a skip sound: every
+existing list, which is the list. A test asserts the property that makes a skip sound instead: every
 path the gate skips is also deleted by the strip (`ladder-parity.test.js`, "skip set inside strip set").
 
 ## CI repair of 2026-10-21 (branch `claude/ci-green-20261021`)

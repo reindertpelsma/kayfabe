@@ -4,7 +4,7 @@
 
 Each mutant must be killed by at least two independently named failing tests of
 scripts/ci/test_ignore_ladder.py, like the other *_mutants.py harnesses in this directory.
-Run: python3 scripts/ci/ignore_ladder_mutants.py [--jobs N]  (exit 0 only if every mutant has >= 2 killers)
+Run: python3 scripts/ci/ignore_ladder_mutants.py [--jobs N] [name-substring ...]  (exit 0 only if every mutant has >= 2 killers)
 """
 
 import concurrent.futures
@@ -141,7 +141,10 @@ CASES = [
     ),
     (
         "fail-closed-only-for-syntax",
-        changed("    except FailClosed as e:", "    except SyntaxProblem as e:"),
+        changed(
+            "        return run(a, root, pats_for, load)\n    except FailClosed as e:",
+            "        return run(a, root, pats_for, load)\n    except SyntaxProblem as e:",
+        ),
     ),
     ("export-into-non-empty-dir-allowed", changed("    if os.listdir(dest):", "    if False:")),
     (
@@ -173,7 +176,7 @@ CASES = [
             "for m, s, p in entries if matches(tuple(patterns), p)",
         ),
     ),
-    ("key-unsorted", changed("    keep = sorted(\n", "    keep = list(\n")),
+    ("key-unsorted", changed("    keep = sorted((os.fsencode(p)", "    keep = list((os.fsencode(p)")),
     (
         "key-drops-mode",
         changed(
@@ -228,19 +231,21 @@ def run(source):
 
 def main():
     jobs = int(sys.argv[sys.argv.index("--jobs") + 1]) if "--jobs" in sys.argv else 1
+    only = [a for a in sys.argv[1:] if not a.startswith("--") and not a.isdigit()]
+    cases = [c for c in CASES if not only or any(o in c[0] for o in only)]
     base = run(SOURCE)
     assert base["killers"] == [], base
     print("baseline: %d tests, %d skipped, 0 failing" % (base["tests"], base["skipped"]))
     weak = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as pool:
-        results = list(pool.map(lambda case: run(case[1])["killers"], CASES))
-    for (name, _src), killers in zip(CASES, results):
+        results = list(pool.map(lambda case: run(case[1])["killers"], cases))
+    for (name, _src), killers in zip(cases, results):
         print(
             "%-36s killers=%d %s" % (name, len(killers), "" if len(killers) >= 2 else "  <-- WEAK")
         )
         if len(killers) < 2:
             weak.append(name)
-    print("MUTANTS total=%d weak=%d" % (len(CASES), len(weak)))
+    print("MUTANTS total=%d weak=%d" % (len(cases), len(weak)))
     return 1 if weak else 0
 
 

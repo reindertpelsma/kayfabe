@@ -24,9 +24,9 @@
 # directory (the syntax has no negation); never by relaxing the test.
 #
 # OWNER DECISION NEEDED, nothing here is changed silently: the line `/ci/vast-broker` below ignores a
-# code root that treekey.js PROTECTED refuses, so the Worker refuses this whole file and stores every
-# commit that carries it under its per-commit key (tree_kind 'commit'); no result falls through
-# between commits. TREE_KEY_CARRY_OVER stays off (unset). This change neither drops the line nor
+# code root that treekey.js PROTECTED refuses, so the Worker refuses this whole file and
+# produces NO tree key today for any commit that carries it: every commit is stored under its
+# per-commit key (tree_kind 'commit') and no result falls through between commits. TREE_KEY_CARRY_OVER stays off (unset). This change neither drops the line nor
 # shrinks PROTECTED. What changed since the refusal was written (review of PR #269, R1: "the box does
 # not remove ignored files, so a key would let a result answer for files the run may have read"): the
 # box now deletes them. Two ways out:
@@ -141,12 +141,10 @@
 /.deadman
 
 # --- repository notices and markers: read only by packaging and by documents ---
-# LICENSE*: scripts/bench/windows/appmatrix/package_bundle.py copies them into the Windows app bundle
+# LICENSE* (the three notice files and any later one, like the gate's own `LICENSE*` skip pattern): scripts/bench/windows/appmatrix/package_bundle.py copies them into the Windows app bundle
 # (CI runner, bundle-publish.yml, full tree; it already reads THIRD_PARTY_NOTICES.md, which `**/*.md`
 # below ignores). KAYFABE_REV.txt: read by no code, only cited by documents.
-/LICENSE
-/LICENSE-APACHE
-/LICENSE-GPL
+/LICENSE*
 /KAYFABE_REV.txt
 
 # --- reference submodules no GPU-free test needs (they are uninitialised empty directories) ---

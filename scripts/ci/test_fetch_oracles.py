@@ -140,6 +140,12 @@ class FetchOracles(unittest.TestCase):
             self.assertEqual(sh("git", "-C", dest, "rev-parse", "HEAD"), pin)
             self.assertTrue(os.path.isfile(os.path.join(dest, HEADER)))
             self.assertEqual(sh("git", "-C", dest, "rev-list", "--count", "HEAD"), "1")
+
+    def test_the_checkout_is_marked_shallow(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _rem, _pin, root, copy = self.setup(tmp)
+            self.assertEqual(run(copy, root).returncode, 0)
+            dest = os.path.join(root, "third_party", "ogkm-580")
             self.assertTrue(os.path.isfile(os.path.join(dest, ".git", "shallow")))
 
     def test_the_report_numbers_are_positive_integers(self):

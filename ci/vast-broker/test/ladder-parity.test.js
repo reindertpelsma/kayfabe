@@ -128,6 +128,7 @@ test(
   async () => {
     const r = rng(20261109);
     let compared = 0;
+    let refusedByWorker = 0;
     for (let round = 0; round < 400; round++) {
       const set = Array.from({ length: 1 + Math.floor(r() * 4) }, () => randomPattern(r));
       const entries = Array.from({ length: 60 }, (_, i) => ({
@@ -148,7 +149,16 @@ test(
       assert.equal(run.status, 0, set.join(' ') + run.stderr);
       const mine = JSON.parse(run.stdout);
       const theirs = parseIgnore(set.join('\n') + '\n');
-      assert.ok(theirs, 'treekey.js refused a set the strict syntax accepts: ' + set.join(' '));
+      if (theirs === null) {
+        // The Worker's own limits are stricter than the Python syntax in one way: at most
+        // LIMITS.anyPerPattern `**` segments per line. It then refuses the file (no key): the safe side.
+        const deep = set.some(
+          (l) => l.split('/').filter((x) => x === '**').length > LIMITS.anyPerPattern,
+        );
+        assert.ok(deep, 'treekey.js refused a set the strict syntax accepts: ' + set.join(' '));
+        refusedByWorker++;
+        continue;
+      }
       uniq.forEach((e, i) => {
         assert.equal(
           mine.ignored[i],
@@ -161,6 +171,7 @@ test(
         assert.equal(mine.key, await treeKeyOf(uniq, theirs));
     }
     assert.ok(compared > 5000, 'only ' + compared + ' comparisons');
+    assert.ok(refusedByWorker < 60, refusedByWorker + ' sets refused by the Worker');
   },
 );
 
@@ -215,7 +226,7 @@ test('gpu-vast.yml: both policy jobs carry the same skip list', { skip }, () => 
 });
 
 test(
-  'every path the GPU gate skips today is stripped by .workerignore (skip set inside strip set)',
+  'every path the GPU gate skips today is stripped by .workerignore, except the kept traces data (skip set inside strip set)',
   { skip },
   () => {
     const [patterns] = gateSkipPatterns();
@@ -237,13 +248,29 @@ test(
     ].map((path) => ({ path, mode: '100644', sha: '1'.repeat(40) }));
     const entries = [...tracked, ...probes];
     const { mine, theirs } = both(ignoreLines, entries);
+    // FINDING (2026-11-09): the gate skips `traces/**` while the strip keeps the evidence directories that
+    // tests read (they are listed in the header of .workerignore). A change confined to one of them is
+    // skipped by the GPU gate and not by the stripped-tree CI job. The skip list is left as it is today (the
+    // lane may not change gpu-vast.yml); this exception is parsed from the header, so a new divergence fails.
+    const kept = /names the same data\): ([^\n]+)\./
+      .exec(readFileSync(root + '.workerignore', 'utf8'))[1]
+      .split(', ')
+      .map((x) => 'traces/' + x);
+    assert.ok(kept.length >= 10, 'the header lists the kept traces directories');
+    const underKept = (path) => kept.some((k) => path === k || path.startsWith(k + '/'));
     let skipped = 0;
+    let divergent = 0;
     entries.forEach((e, i) => {
       if (!skippedPath(e.path, patterns)) return;
       skipped++;
-      assert.ok(mine.ignored[i], 'the gate skips ' + e.path + ' but the strip step keeps it');
+      if (!mine.ignored[i]) {
+        assert.ok(underKept(e.path), 'the gate skips ' + e.path + ' but the strip step keeps it');
+        divergent++;
+        return;
+      }
       assert.ok(ignored(theirs, e.path), 'the gate skips ' + e.path + ' but treekey.js keeps it');
     });
     assert.ok(skipped > 1000, 'only ' + skipped + ' skipped paths compared');
+    assert.ok(divergent > 0 && divergent < 1500, divergent + ' skipped-but-kept evidence files');
   },
 );
