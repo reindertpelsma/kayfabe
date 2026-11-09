@@ -16,6 +16,39 @@ MEASURED, run 41749680326, rev 0ca8873e, 2026-11-04, Vast instance 59035303, RTX
 
 ## LiveKernelEvent 193 reporting (owner decision, 2026-11-08)
 
+**RV2 correction 2026-11-09 (PR #322): contradictory identities, proven overruns and hidden metadata.**
+
+**CODE READ at `a01a0cb6cb9796b277b125bf58852b3e7cd271ad`:** an explicit Report Id that contradicts the report found at the event's path
+leaves the entry unresolved. Neither record supplies a stale timestamp. Fresh code 141 still contributes to the
+non-193 total, and strict mode still counts the raw 193 entry. Consistent old reports remain excluded as stale;
+archive/queue copies and full EventTime deduplication retain their behavior.
+
+**CODE READ at `a01a0cb6cb9796b277b125bf58852b3e7cd271ad`:** the counter also tracks distinct resolved fresh reports in
+`livekernelevent193_resolved`. The gate forwards that count as `--resolved`; the evidence JSON contains
+`resolved_count` and `resolved_lower_bound`, and the local run report retains `windows.live_dumps_193_resolved`.
+A proven lower bound above the die's ceiling produces WARN by default and FAIL only with
+`KF_WINGATE_LKE_RATCHET=gate`, even when unrelated entries are unresolved. For example, two resolved fresh reports
+still exceed a ceiling of one after adding missing-file entries or repeated submissions of a missing report.
+Entirely unresolved or potentially stale evidence cannot alone establish an overrun. If the optional resolved
+count is absent, the helper uses the conservative `max(0, reports - unresolved_entries)` lower bound; if neither
+optional count is supplied, the legacy count-only interface keeps its existing meaning. UNKNOWN applies where
+no ceiling or sufficient resolved evidence exists, rather than erasing an already-proven overrun. Strict mode,
+probes, host references and non-193 zero requirements retain their enforcement. No seed or hygiene baseline changes.
+
+**CODE READ at `a01a0cb6cb9796b277b125bf58852b3e7cd271ad`:** report inventory, report-time lookup, dump headers and the dump timeline enumerate
+accessible hidden/system children with `-Force`. Header reads remain read-only and bounded to `0x1000` bytes;
+non-PAGEDU64 layouts are refused. The earlier unrestricted discovery description below is superseded by this
+accessible-child contract and implementation.
+
+**MEASURED CPU-only at `a01a0cb6cb9796b277b125bf58852b3e7cd271ad`, 2026-11-09:** the regression controls in `test_vast_lke193_counts.py` use
+RV2's two-report identity conflict and known-overrun counterexamples through the real PowerShell counter and CLI.
+`test_vast_lke193.py` includes the `.rv2-hidden/extra.dmp` header control, explicit 4096-byte checks and hidden WER
+records. No GPU, guest or vendor stack was used. **NOT VERIFIED:** Windows hidden/system attributes were not
+exercised on this Linux host; the same fixtures set those attributes when running on Windows. These controls
+establish metadata/gate behavior, not the cause or harmlessness of 193.
+
+**Earlier phase-0 text below is historical where the resolved-overrun and hidden-child corrections above differ:**
+
 **Phase-0 correction 2026-11-09 (issue #305): distinct reports, decoded headers, report-only policy retained.**
 
 **MEASURED in coordinator-supplied records at `8d495e90`:** each AD102 gate-flow boot h1/h2 has one fresh report
@@ -31,8 +64,8 @@ deduplicated by ReportIdentifier (or report-file directory identity) plus the re
 entry counts remain `livekernelevent193_entries` and `windows.live_dumps_193_entries`; the report also records
 `live_dumps_193_unit=distinct_reports` and `live_dumps_193_unresolved_entries`. A unique signature match can resolve
 an existing report when an entry lacks its identity; a signature never becomes a report identity or overrides an
-explicit identity. Missing/ambiguous identity or report time is visible as unresolved and gives ratchet UNKNOWN,
-not an invented count comparison. Strict mode still gates on every non-stale 193 entry, including unresolved ones.
+explicit identity. Missing/ambiguous identity or report time remains visible as unresolved. The RV2 correction above supersedes
+the original blanket UNKNOWN rule when resolved reports already prove an overrun. Strict mode still gates on every non-stale 193 entry, including unresolved ones.
 
 **MEASURED source records; CODE READ seed correction at `3188706d9602b744dbbac434de7596063dbc7347`:** maxima are now AD102 = 1 (h1/h2),
 TU106 = 1 (tbB1 `wer_reports.txt`) and GA102 = 1 (am2 `wer_reports.txt`), all in distinct-report units. The TU106
