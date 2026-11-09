@@ -1,26 +1,56 @@
 {
   "AD102": {
-    "max_count": 2,
+    "max_count": 1,
     "source_evidence": {
+      "path": "traces/lke193_phase0_20261109/README.md",
+      "revision": "8d495e90",
+      "date": "2026-11-09"
+    },
+    "count_unit": "distinct_reports",
+    "derivation": "MEASURED",
+    "legacy_entry_max_count": 2,
+    "legacy_count_unit": "WER event-1001 entries",
+    "legacy_source_evidence": {
       "path": "traces/windows_gate_20261101/g4_windows.log",
       "revision": "a5071c24",
       "date": "2026-11-01"
-    }
+    },
+    "derivation_note": "One distinct fresh report in each phase-0 h1/h2 boot. INFERRED only for the old g4 report count: its two entry records and one dump do not establish report identities."
   },
   "TU106": {
-    "max_count": 3,
+    "max_count": 1,
     "source_evidence": {
+      "path": "traces/turing_boot_20261103/boxB/tbB1/wer_reports.txt",
+      "revision": "e6dad00f",
+      "date": "2026-11-03"
+    },
+    "count_unit": "distinct_reports",
+    "derivation": "MEASURED",
+    "legacy_entry_max_count": 3,
+    "legacy_count_unit": "WER event-1001 entries",
+    "legacy_source_evidence": {
       "path": "traces/turing_boot_20261103/README.md",
       "revision": "e6dad00f",
       "date": "2026-11-03"
-    }
+    },
+    "derivation_note": "The cited trace enumerates one fresh Kernel_193 report identity/EventTime; the old tdr count 3 was event entries."
   },
   "GA102": {
-    "max_count": 4,
+    "max_count": 1,
     "source_evidence": {
+      "path": "traces/ampere_hw_20261103/boxA/am2_win/wer_reports.txt",
+      "revision": "006d845a",
+      "date": "2026-11-03"
+    },
+    "count_unit": "distinct_reports",
+    "derivation": "MEASURED",
+    "legacy_entry_max_count": 4,
+    "legacy_count_unit": "WER event-1001 entries",
+    "legacy_source_evidence": {
       "path": "traces/ampere_hw_20261103/README.md",
       "revision": "006d845a",
       "date": "2026-11-03"
-    }
+    },
+    "derivation_note": "The cited trace enumerates one fresh Kernel_193 report identity/EventTime; the old tdr count 4 was event entries."
   }
 }

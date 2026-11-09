@@ -92,6 +92,8 @@ STAGE=start
 GUEST_STARTED=0                 # 1 once a kf3 QEMU was started: only then can a failure be kayfabe's
 ENABLE_UTC=""
 LKE193=""
+LKE193_ENTRIES=""
+LKE193_UNRESOLVED=""
 LKE_DIE=unknown
 LKE_RATCHET=UNAVAILABLE
 LKESTALE=""                     # WER re-submissions of reports older than the enable (never gate)
@@ -195,6 +197,7 @@ lke_ratchet() {
     result="$EV/lke193_ratchet.txt"
     python3 -I "$SOURCE/scripts/bench/box/lke193.py" check --die "$LKE_DIE" --count "${LKE193:-?}" \
         --mode "${KF_WINGATE_LKE_RATCHET:-report}" \
+        --entries "${LKE193_ENTRIES:--}" --unresolved "${LKE193_UNRESOLVED:--}" \
         --out "$EV/lke193_ratchet.json" > "$result" 2>&1
     rc=$?
     while IFS= read -r line; do say "$line"; done < "$result"
@@ -261,7 +264,7 @@ conclude() {
                 verdict FAIL KAYFABE "the kf3 log shows the no-flags refusal 0x2080121f although the flags were exported"
             else
                 STAGE="done"
-                verdict PASS NONE "install=once driver=580.88 gsp=forced code=0 probes=cup8,d3d11,x2 resets=0 known_live_dumps_193=${LKE193:-?} live_dumps_193_ratchet=$LKE_RATCHET live_dumps_193_die=$LKE_DIE stale_lke_resubmits=${LKESTALE:-?} strict=${KF_WINGATE_STRICT_LKE:-0} enable_utc=$ENABLE_UTC"
+                verdict PASS NONE "install=once driver=580.88 gsp=forced code=0 probes=cup8,d3d11,x2 resets=0 known_live_dumps_193=${LKE193:-?} live_dumps_193_entries=${LKE193_ENTRIES:-?} live_dumps_193_ratchet=$LKE_RATCHET live_dumps_193_die=$LKE_DIE stale_lke_resubmits=${LKESTALE:-?} strict=${KF_WINGATE_STRICT_LKE:-0} enable_utc=$ENABLE_UTC"
             fi ;;
     esac
     finish
@@ -928,6 +931,8 @@ strict=""
 gps 300 'C:\kf\gate_state.ps1' -Mode tdr -Since "$ENABLE_UTC" $strict > "$EV/tdr_counts.txt" 2>&1
 grep -a '^GATE_TDR\|^GATE_LIVEDUMP' "$EV/tdr_counts.txt" | while read -r l; do say "  $l"; done
 LKE193=$(sed -n 's/.* livekernelevent193=\([0-9]*\) .*/\1/p' "$EV/tdr_counts.txt" | head -1)
+LKE193_ENTRIES=$(sed -n 's/.* livekernelevent193_entries=\([0-9]*\) .*/\1/p' "$EV/tdr_counts.txt" | head -1)
+LKE193_UNRESOLVED=$(sed -n 's/.* livekernelevent193_unresolved=\([0-9]*\) .*/\1/p' "$EV/tdr_counts.txt" | head -1)
 LKESTALE=$(sed -n 's/.* livekernelevent_stale=\([0-9]*\) .*/\1/p' "$EV/tdr_counts.txt" | head -1)
 wer_timeline "wer_reports.txt"
 lke_ratchet

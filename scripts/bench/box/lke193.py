@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 """Issue #305: a read-only, evidence-seeded count ratchet and native RM die identification.
 
-STATUS: LIVE, 2026-11-09 (GPU-free tests). Report-only by default until header classification;
+STATUS: LIVE, 2026-11-09 (GPU-free tests). Owner keeps the ratchet report-only by default;
 explicit gate mode retains the old ceiling enforcement. No baseline is learned or raised by a run.
 An unseeded die is UNKNOWN, not an assertion that its dumps are harmless.
 """
@@ -23,6 +23,8 @@ def validate_table(table):
             raise ValueError('invalid die or entry')
         count = row.get('max_count')
         evidence = row.get('source_evidence', {})
+        if row.get('count_unit') != 'distinct_reports':
+            raise ValueError('ratchet limit must use distinct_reports, not event entries')
         if type(count) is not int or not 0 <= count <= 0x7fffffff:
             raise ValueError('invalid max_count')
         if not (isinstance(evidence, dict) and isinstance(evidence.get('path'), str)
@@ -38,15 +40,21 @@ def load_ratchet(path=None):
     return validate_table(json.loads(Path(path or HERE / 'known_live_dumps_193.json').read_text()))
 
 
-def decide(die, count, table=None, mode='report'):
+def decide(die, count, table=None, mode='report', entries=None, unresolved=None):
     table = load_ratchet() if table is None else validate_table(table)
     if type(count) is not int or not 0 <= count <= 0x7fffffff:
         raise ValueError('missing or invalid live dump count')
+    for value in (entries, unresolved):
+        if value is not None and (type(value) is not int or not 0 <= value <= 0x7fffffff):
+            raise ValueError('invalid raw or unresolved entry count')
+    if entries is not None and (entries < count or (unresolved is not None and unresolved > entries)):
+        raise ValueError('report/entry counts are inconsistent')
     row = table.get(die)
     maximum = row['max_count'] if row else None
     excess = 'FAIL' if mode == 'gate' else 'WARN'
-    verdict = 'UNKNOWN' if row is None else (excess if count > maximum else 'PASS')
-    return dict(die=die, count=count, max_count=maximum, verdict=verdict,
+    verdict = 'UNKNOWN' if row is None or unresolved else (excess if count > maximum else 'PASS')
+    return dict(die=die, count=count, max_count=maximum, verdict=verdict, unit='distinct_reports',
+                entries=entries, unresolved_entries=unresolved,
                 source_evidence=row['source_evidence'] if row else None)
 
 
@@ -85,16 +93,24 @@ def main(argv=None):
     check = subs.add_parser('check'); check.add_argument('--die',required=True); check.add_argument('--count',required=True)
     check.add_argument('--table'); check.add_argument('--out',required=True)
     check.add_argument('--mode',choices=('report','gate'),default='report')
+    check.add_argument('--entries',default='-'); check.add_argument('--unresolved',default='-')
     args = p.parse_args(argv)
     try:
         if args.command == 'identify':
             print(identify(Path(args.probe).read_text(),args.root)); return 0
         if not re.fullmatch(r'(?:[A-Z]{2}[0-9]{3}|unknown)',args.die): raise ValueError('invalid die')
         if not re.fullmatch(r'[0-9]{1,10}',args.count): raise ValueError('invalid count')
-        row = decide(args.die,int(args.count),load_ratchet(args.table),mode=args.mode)
+        for value in (args.entries,args.unresolved):
+            if value != '-' and not re.fullmatch(r'[0-9]{1,10}',value): raise ValueError('invalid entry count')
+        row = decide(args.die,int(args.count),load_ratchet(args.table),mode=args.mode,
+                     entries=None if args.entries=='-' else int(args.entries),
+                     unresolved=None if args.unresolved=='-' else int(args.unresolved))
         Path(args.out).write_text(json.dumps(row,sort_keys=True)+'\n')
         print('GATE_LKE_RATCHET die=%s count=%d max=%s verdict=%s' %
               (row['die'],row['count'],row['max_count'] if row['max_count'] is not None else '-',row['verdict']))
+        print('GATE_LKE_COUNTS reports=%d entries=%s unresolved=%s unit=distinct_reports' %
+              (row['count'],row['entries'] if row['entries'] is not None else '-',
+               row['unresolved_entries'] if row['unresolved_entries'] is not None else '-'))
         return 1 if row['verdict'] == 'FAIL' else 0
     except (OSError,ValueError,KeyError) as error:
         print('GATE_LKE_RATCHET_ERROR '+str(error),file=sys.stderr); return 2

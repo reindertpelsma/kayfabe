@@ -37,7 +37,8 @@ function ConvertFrom-LkeWerReport([string]$Text) {
         $pair = $line -split '=', 2
         if ($pair.Length -eq 2) { $values[$pair[0]] = $pair[1] }
     }
-    $row = [ordered]@{ event_type = '-'; event_time = 'unknown'; event_time_raw = '-'; bucket = '-' }
+    $row = [ordered]@{ event_type = '-'; event_time = 'unknown'; event_time_raw = '-'; bucket = '-'; report_id = '-' }
+    if ($values.ContainsKey('ReportIdentifier')) { $row['report_id'] = $values['ReportIdentifier'] }
     if ($values.ContainsKey('EventType')) { $row['event_type'] = $values['EventType'] }
     if ($values.ContainsKey('EventTime')) {
         $row['event_time_raw'] = $values['EventTime']
@@ -46,11 +47,15 @@ function ConvertFrom-LkeWerReport([string]$Text) {
     foreach ($key in @('Response.BucketId', 'BucketId', 'Response.LegacyBucketId')) {
         if ($values.ContainsKey($key)) { $row['bucket'] = $values[$key]; break }
     }
+    # Windows names the signature fields Code, Parameter 1..4, OS version,
+    # Service Pack and Product. Retain the older P1..P8 spelling as an alias.
+    $labels = @('Code', 'Parameter 1', 'Parameter 2', 'Parameter 3', 'Parameter 4', 'OS version', 'Service Pack', 'Product')
     foreach ($number in 1..8) {
         $name = 'P' + $number
         $row[$name] = '-'
         foreach ($key in $values.Keys) {
-            if ($key -match '^Sig\[(\d+)\]\.Name$' -and $values[$key] -ceq $name) {
+            if ($key -match '^Sig\[(\d+)\]\.Name$' -and
+                (@($name, $labels[$number - 1]) -icontains (($values[$key] -replace '\s+', ' ').Trim()))) {
                 $valueKey = 'Sig[' + $Matches[1] + '].Value'
                 if ($values.ContainsKey($valueKey)) { $row[$name] = $values[$valueKey] }
             }

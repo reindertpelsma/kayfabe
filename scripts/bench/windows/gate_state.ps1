@@ -6,10 +6,10 @@
 #                        ConfigManagerErrorCode, the driver version, the last boot time (UTC)
 #   -Mode display        only the NVIDIA adapter line (cheap; the gate polls it after the enable)
 #   -Mode wer            every Report.wer decoded, the LiveKernelEvent/WATCHDOG timeline, dump file times and
-#                        display-stack events within +-120 s; only 0x1000 bytes of each WATCHDOG dump, never a transfer
+#                        display-stack events within +-120 s; only 0x1000 bytes of each recursively found dump
 #   -Mode tdr -Since T   the reset counters from T (an ISO-8601 UTC stamp taken IN THE GUEST): Display 4101,
 #                        nvlddmkm 153, Kernel-Power 41, EventLog 6008, BugCheck 1001, WER LiveKernelEvent
-#                        (code 193 counted apart, gating only with -Strict), and the live dumps written since T.
+#                        (distinct 193 reports and raw entries apart, gating only with -Strict), and live dumps since T.
 #                        Every id is printed, also with a zero (no events is the zero case, not an error).
 #
 # It changes nothing in the guest. `GATE_STATE_DONE mode=<m>` is the last line.
@@ -19,6 +19,7 @@ param(
     [switch]$Strict
 )
 $ErrorActionPreference = 'Continue'
+. (Join-Path $PSScriptRoot 'lke_decode.ps1')
 function Say([string]$s) { Write-Output ("GATE_" + (($s -replace '\s+', ' ').Trim())) }
 
 function Show-Display {
@@ -50,7 +51,6 @@ if ($Mode -eq 'desktop') {
 }
 
 if ($Mode -eq 'wer') {
-    . (Join-Path $PSScriptRoot 'lke_decode.ps1')
     # Decode every small Report.wer; retain the existing WATCHDOG / LiveKernelEvent timeline and nearby events.
     # Dump contents are limited to a validated 0x1000-byte header read in the guest. Read-only.
     #   GATE_WER_REPORT dir=<name> where=<archive|queue> mtime=<utc> event_time=<utc from the report's FILETIME>
@@ -84,10 +84,14 @@ if ($Mode -eq 'wer') {
             foreach ($l in $lines) { if ($l -match $keep) { Say ("WER_PARAM $($d.Name) $l") } }
         }
     }
-    $dumps = @(Get-ChildItem C:\Windows\LiveKernelReports -Recurse -ErrorAction SilentlyContinue | Where-Object { -not $_.PSIsContainer } | Sort-Object LastWriteTime)
+    $dumpRoots = @('C:\Windows\LiveKernelReports', (Join-Path $wer 'ReportArchive'), (Join-Path $wer 'ReportQueue'))
+    $dumps = @(foreach ($root in $dumpRoots) {
+        if (Test-Path $root) { Get-ChildItem -LiteralPath $root -Filter '*.dmp' -File -Recurse -ErrorAction SilentlyContinue }
+    }) | Sort-Object FullName -Unique
+    $dumps = @($dumps)
     foreach ($f in $dumps) { Say ("WER_DUMP " + $f.LastWriteTimeUtc.ToString('yyyy-MM-ddTHH:mm:ssZ') + " $($f.Name) bytes=$($f.Length)") }
     # Only the first 0x1000 bytes, read in the guest. Never transfer the dump.
-    $headers = @(Get-ChildItem -LiteralPath 'C:\Windows\LiveKernelReports\WATCHDOG' -Filter 'WATCHDOG-*.dmp' -File -ErrorAction SilentlyContinue)
+    $headers = @($dumps)
     foreach ($header in $headers) { Write-LkeDumpHeader $header.FullName }
     Write-Output ('GATE_LKE_HEADERS files=' + $headers.Count)
     $anchors = @($times)
@@ -117,55 +121,88 @@ function CountEv([string]$log, [string]$prov, [int]$id, [string]$like = '') {
     if ($like) { $e = @($e | Where-Object { $_.Message -like $like }) }
     return $e.Count
 }
-# Legacy WER P1 string count. The numeric bugcheck code is reported separately from validated dump headers;
-# do not infer a hexadecimal code from this decimal-looking WER text. Counted separately here; -Strict gates
-# it, and windows_gate.sh additionally checks the evidence-seeded per-die ratchet. Other reset rules are unchanged.
+# Count distinct 193 reports, not WER's repeated event-1001 submissions.
+# A report identity includes its own EventTime, never the entry's TimeCreated.
 $lkeAll = @(Get-WinEvent -FilterHashtable @{ LogName = 'Application'; Id = 1001; ProviderName = 'Windows Error Reporting'; StartTime = $t.ToLocalTime() } -ErrorAction SilentlyContinue |
     Where-Object { $_.Message -like '*LiveKernelEvent*' })
-# ⊘ [2026-11-03, Ada-PC lane, traces/ada_pc_20261103/ on claude/ada-pc-regression-20261103] On a non-fresh image WER
-# RE-SUBMITS reports already queued on the disk: each re-submission is a NEW 1001 event (TimeCreated after $t) of an
-# OLD report (78 events of 26 code-141 reports with event times 2026-10-20..22, no dump written after the boot). Such
-# an event is not a reset of this run. So an event is matched to its Report.wer (by `Report Id:` = ReportIdentifier,
-# else by the report directory the message names) and is STALE when that report's own EventTime is before $t. Stale
-# events are counted apart and never gate; an event whose report cannot be found still counts (fail closed).
-$repTime = @{}
+$reports = @()
 foreach ($where in 'ReportArchive', 'ReportQueue') {
     $root = Join-Path 'C:\ProgramData\Microsoft\Windows\WER' $where
     if (-not (Test-Path $root)) { continue }
-    foreach ($d in Get-ChildItem $root -Directory -ErrorAction SilentlyContinue) {
-        $f = Join-Path $d.FullName 'Report.wer'
-        if (-not (Test-Path $f)) { continue }
-        $lines = ([IO.File]::ReadAllText($f) -replace "`0", '') -split "`r?`n"
+    foreach ($f in Get-ChildItem $root -Filter 'Report.wer' -File -Recurse -ErrorAction SilentlyContinue) {
+        try { $raw = [IO.File]::ReadAllText($f.FullName) } catch { continue }
+        $lines = ($raw -replace "`0", '') -split "`r?`n"
         $et = ($lines | Where-Object { $_ -match '^EventTime=\d+$' } | Select-Object -First 1) -replace '^EventTime=', ''
-        if (-not $et) { continue }
-        $evt = [DateTime]::FromFileTimeUtc([int64]$et)
+        $evt = $null
+        try { if ($et) { $evt = [DateTime]::FromFileTimeUtc([int64]$et) } } catch { }
         $rid = ($lines | Where-Object { $_ -match '^ReportIdentifier=' } | Select-Object -First 1) -replace '^ReportIdentifier=', ''
-        if ($rid) { $repTime['id:' + $rid.Trim().ToLower()] = $evt }
-        $repTime['dir:' + $d.Name.ToLower()] = $evt
+        $rid = if ($rid) { $rid.Trim().ToLowerInvariant() } else { '' }
+        $decoded = ConvertFrom-LkeWerReport $raw
+        $signature = @('P1','P2','P3','P4','P5' | ForEach-Object { [string]$decoded[$_] })
+        $signature = if ($signature -contains '-') { '' } else { ($signature -join '|').ToLowerInvariant() }
+        $identity = if ($rid) { 'id:' + $rid } else { 'dir:' + $f.Directory.Name.ToLowerInvariant() }
+        $ownTime = if ($null -ne $evt) { $evt.ToFileTimeUtc().ToString() } else { '?' }
+        $reports += [pscustomobject]@{ key=($identity + '|time:' + $ownTime); time=$evt; id=$rid;
+            directory=$f.Directory.Name.ToLowerInvariant(); store=$where; signature=$signature }
     }
 }
-function Get-ReportTime($e) {
-    if ($e.Message -match 'Report Id:\s*([0-9a-fA-F-]{36})') {
-        $k = 'id:' + $Matches[1].ToLower()
-        if ($repTime.ContainsKey($k)) { return $repTime[$k] }
+function Event-Signature($e) {
+    $parts = @()
+    foreach ($number in 1..5) {
+        $label = if ($number -eq 1) { '(?:P1|Code)' } else { '(?:P' + $number + '|Parameter\s+' + ($number-1) + ')' }
+        if ($e.Message -notmatch ('(?:^|\s)' + $label + ':\s*(\S+)')) { return '' }
+        $parts += $Matches[1].ToLowerInvariant()
     }
+    return $parts -join '|'
+}
+function Find-Report($e) {
+    $id = ''; $directory = ''; $store = ''
+    if ($e.Message -match 'Report Id:\s*([0-9a-fA-F-]{36})') { $id = $Matches[1].ToLowerInvariant() }
     if ($e.Message -match '\\WER\\Report(Archive|Queue)\\([^\\\r\n]+)') {
-        $k = 'dir:' + $Matches[2].Trim().ToLower()
-        if ($repTime.ContainsKey($k)) { return $repTime[$k] }
+        $directory = $Matches[2].Trim().ToLowerInvariant(); $store = 'Report' + $Matches[1]
     }
-    return $null
+    $found = @()
+    if ($directory) { $found = @($reports | Where-Object { $_.directory -eq $directory -and $_.store -eq $store }) }
+    if (-not $found -and $id) { $found = @($reports | Where-Object { $_.id -eq $id }) }
+    $signature = Event-Signature $e
+    if (-not $found -and $signature -and -not $id -and -not $directory -and (Is-193 $e)) { $found = @($reports | Where-Object { $_.signature -eq $signature }) }
+    # Archive/queue copies of the same identity/EventTime are one report. A
+    # signature may resolve an existing report only when the match is unique.
+    $unique = @($found | Group-Object key | ForEach-Object { $_.Group[0] })
+    if ($unique.Count -gt 1 -and $signature) { $unique = @($unique | Where-Object { $_.signature -eq $signature }) }
+    if ($unique.Count -eq 1) { return $unique[0] }
+    if ($found.Count -eq 0) {
+        $identity = if ($id) { 'id:' + $id } elseif ($directory) { 'dir:' + $directory } else { $null }
+        return [pscustomobject]@{ key=$(if ($identity) { $identity + '|time:?' } else { $null }); time=$null }
+    }
+    return [pscustomobject]@{ key=$null; time=$null }
 }
+function Is-193($e) { return $e.Message -match '(?:^|\s)(?:P1|Code):\s*(?:0x)?193\b' }
 $lke = @()
 $lkeStale = 0
+$lke193Reports = @{}
+$lkeUnresolved = 0
 foreach ($e in $lkeAll) {
-    $rt = Get-ReportTime $e
+    $report = Find-Report $e
+    $rt = $report.time
     if ($null -ne $rt -and $rt -lt $t) {
         $lkeStale++
         Say ("LKE_STALE event=" + $e.TimeCreated.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ') + " report_event_time=" + $rt.ToString('yyyy-MM-ddTHH:mm:ssZ'))
-    } else { $lke += $e }
+    } else {
+        $lke += $e
+        if (Is-193 $e) {
+            $key = $report.key
+            if ($null -eq $rt -or -not $report.key) { $lkeUnresolved++ }
+            # Missing identity is not a report. Keep those entries visible and
+            # make the comparison UNKNOWN rather than inventing distinct IDs.
+            if ($key) { $lke193Reports[$key] = $true }
+        }
+    }
 }
-$lke193 = @($lke | Where-Object { $_.Message -match 'P1:\s*193\b' }).Count
-$lkeOther = $lke.Count - $lke193
+$lke193Entries = @($lke | Where-Object { Is-193 $_ }).Count
+$lke193 = $lke193Reports.Count
+# Other codes remain entry counts; 193 resubmissions never become "other" events.
+$lkeOther = $lke.Count - $lke193Entries
 $c = [ordered]@{
     display4101      = CountEv 'System' 'Display' 4101
     nvlddmkm153      = CountEv 'System' 'nvlddmkm' 153
@@ -176,8 +213,8 @@ $c = [ordered]@{
 }
 $total = 0
 foreach ($k in $c.Keys) { $total += [int]$c[$k] }
-if ($Strict) { $total += $lke193 }
-Say ("TDR since=$Since " + (($c.Keys | ForEach-Object { "$_=$($c[$_])" }) -join ' ') + " livekernelevent193=$lke193 livekernelevent_stale=$lkeStale strict=" + [int][bool]$Strict + " total=$total")
+if ($Strict) { $total += $lke193Entries }
+Say ("TDR since=$Since " + (($c.Keys | ForEach-Object { "$_=$($c[$_])" }) -join ' ') + " livekernelevent193=$lke193 livekernelevent193_entries=$lke193Entries livekernelevent193_unresolved=$lkeUnresolved livekernelevent_stale=$lkeStale strict=" + [int][bool]$Strict + " total=$total")
 Get-ChildItem C:\Windows\LiveKernelReports -Recurse -ErrorAction SilentlyContinue | Where-Object { -not $_.PSIsContainer -and $_.LastWriteTimeUtc -ge $t } |
     Sort-Object LastWriteTime | ForEach-Object { Say ("LIVEDUMP " + $_.LastWriteTimeUtc.ToString('yyyy-MM-ddTHH:mm:ssZ') + " " + $_.Name + " bytes=" + $_.Length) }
 Say 'STATE_DONE mode=tdr'

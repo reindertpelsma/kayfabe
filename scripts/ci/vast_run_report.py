@@ -164,7 +164,8 @@ class Collector:
         self.stage_end = {}
         self.windows_requested = None
         self.windows = {"gate": None, "install_s": None, "probes": [], "resets": None, "live_dumps_193": None, "known_live_dumps_193": None,
-                        "live_dumps_193_ratchet": None, "live_dumps_193_die": None, "live_dumps_193_max": None}
+                        "live_dumps_193_ratchet": None, "live_dumps_193_die": None, "live_dumps_193_max": None,
+                        "live_dumps_193_entries": None, "live_dumps_193_unresolved_entries": None, "live_dumps_193_unit": None}
         self.probe_seen = {}
 
     def test(self, key, suite, name, result, ms):
@@ -212,6 +213,13 @@ class Collector:
                 self.test("windows", SPEC_SUITE, m[1], SPEC_RESULT[m[2]], None)
                 for sub in ([] if m[3] == "-" else m[3].split(","))[:6]:
                     self.test("windows", SPEC_SUITE, "%s/%s" % (m[1], sub), "FAIL", None)
+        elif head == "GATE_LKE_COUNTS":
+            m = re.fullmatch(r"GATE_LKE_COUNTS reports=([0-9]{1,10}) entries=([0-9]{1,10}|-) unresolved=([0-9]{1,10}|-) unit=distinct_reports", line)
+            if m:
+                self.windows["known_live_dumps_193"] = self.windows["live_dumps_193"] = int(m[1])
+                self.windows["live_dumps_193_entries"] = None if m[2] == "-" else int(m[2])
+                self.windows["live_dumps_193_unresolved_entries"] = None if m[3] == "-" else int(m[3])
+                self.windows["live_dumps_193_unit"] = "distinct_reports"
         elif head == "GATE_LKE_RATCHET":
             m = re.fullmatch(r"GATE_LKE_RATCHET die=([A-Z]{2}[0-9]{3}|unknown) count=([0-9]{1,10}) max=([0-9]{1,10}|-) verdict=(PASS|WARN|FAIL|UNKNOWN)", line)
             if m and self.windows["live_dumps_193_ratchet"] is None:
@@ -251,6 +259,9 @@ class Collector:
                 self.windows["probes"] = [p for p in probes if not re.fullmatch(r"x[0-9]+", p)][:8]
                 self.windows["resets"] = int_or_none(d.get("resets"))
                 dumps = d.get("known_live_dumps_193")
+                if "live_dumps_193_entries" in d:
+                    self.windows["live_dumps_193_entries"] = int_or_none(d["live_dumps_193_entries"])
+                    self.windows["live_dumps_193_unit"] = "distinct_reports"
                 if self.windows["known_live_dumps_193"] is None:
                     self.windows["known_live_dumps_193"] = self.windows["live_dumps_193"] = int_or_none(dumps) if dumps and dumps != "?" else None
         elif line.startswith("WINDOWS_GATE_TIMING") and self.windows["install_s"] is None:
