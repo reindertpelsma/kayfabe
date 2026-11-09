@@ -67,6 +67,44 @@ export function tierForClaims(c, profile) {
     profile,
   });
 }
+// Tier contents, owner 2026-11-09. The large contract is intent, not an enabled executor.
+export const TIER_CONTENTS = Object.freeze({
+  small: Object.freeze({ base: 'check' }),
+  middle: Object.freeze({
+    inherits: 'small',
+    appProfiles: Object.freeze({ linux: 'middle', windows: 'mid' }),
+  }),
+  large: Object.freeze({
+    inherits: 'middle',
+    additionalStages: Object.freeze(['specviewperf', 'llm_parity']),
+    state: 'DESIGN_ONLY',
+  }),
+});
+// Owner 2026-11-09: real apps are mandatory only for the signed middle tier.
+// Callers request this exact pair; neither PR request fields nor informational box fields choose policy.
+export const MIDDLE_APP_COUNTS = Object.freeze({ apps: 63, windows_apps: 10 });
+// A validated box PASS is still incomplete without the suites requested at admission.
+// Only narrow PASS to an operator failure. Never relabel an attributed guest FAIL.
+export function middleAppsResult(result, requested) {
+  if (!requested || result.verdict !== 'PASS') return result;
+  const missing = Object.entries(MIDDLE_APP_COUNTS).find(
+    ([name, count]) => !result.suites.some((row) => row.name === name && row.pass === count),
+  );
+  if (!missing) return result;
+  return {
+    ...result,
+    verdict: 'FAIL',
+    suites: [
+      { name: missing[0] + '_retry_operator', pass: 0, fail: 1, skip: 0 },
+      ...result.suites.filter((row) => row.name !== missing[0] + '_retry_operator'),
+    ].slice(0, 20),
+  };
+}
+export function middleAppsRequest(profile, tierName, enabled) {
+  return profile === 'check' && tierName === 'middle' && enabled
+    ? { linuxApps: true, winApps: TIER_CONTENTS.middle.appProfiles.windows }
+    : {};
+}
 // The family of a die class, from its compute capability in the die rules (one source of truth).
 export function familyOf(die, cfg) {
   const rule = (cfg.dieRules ?? DEFAULTS.dieRules).find((r) => r.die === die);
@@ -83,16 +121,16 @@ export { profileCaps };
 // box when no second machine of the die is offered) and KF_STAGES (extra stages, release only) are
 // sent only when they differ from the default, so a check or sweep box sees today's environment
 // plus KF_TIER.
-// 2026-11-07 (Windows apps stage, PROPOSED, docs/design/V3_WINDOWS_APPS_GATE.md): `winApps` (small, mid, full) is
-// sent as KF_WINAPPS only when the caller passes it. Nothing passes it today, so no box sees the field and no run
-// changes; the Worker setting that turns it on per tier is the owner's decision (and a deploy), not part of this change.
+// Owner 2026-11-09: the trusted BASE runner requests Linux apps and winApps=mid for the signed
+// middle tier when MIDDLE_APPS_ENABLED is not false. Admission independently enforces the pair.
+// Small/push and adhoc/sweep never request them. Source changes require a matching bundle pin.
 // 2026-11-07 (SPECviewperf stage, PROPOSED, docs/design/V3_SPEC_GATE.md): `spec` (lanea, laneb, both) is sent as KF_SPEC
 // only when the caller passes it, only for the release profile and only together with the specviewperf stage slot (the box
 // refuses either alone). The release planner assigns lanes only behind the disabled stage flag;
 // the proposed matrix and absent executor independently prevent rentals.
 export function tierEnvironment(
   profile,
-  { tierName, windowsRuns = 1, stages = [], releaseMatrix, spec, winApps } = {},
+  { tierName, windowsRuns = 1, stages = [], releaseMatrix, spec, winApps, linuxApps } = {},
 ) {
   const env = { KF_MERGE_WINDOWS: tier(profile).windows ? '1' : '0' };
   if (tierName !== undefined) env.KF_TIER = tierName;
@@ -108,6 +146,11 @@ export function tierEnvironment(
   if (releaseMatrix !== undefined) {
     if (profile !== 'release') throw Error('release matrix profile');
     Object.assign(env, releaseEnvironment(releaseMatrix));
+  }
+  if (linuxApps !== undefined) {
+    if (profile !== 'check' || tierName !== 'middle' || linuxApps !== true)
+      throw Error('linuxapps');
+    env.KF_LINUX_APPS = '1';
   }
   if (winApps !== undefined) {
     // needs the Windows stage, and only a named profile

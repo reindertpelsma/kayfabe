@@ -35,8 +35,8 @@ def extra_status(verdict="PASS", pending=False):
     )
 
 
-def availability():
-    return {
+def availability(*, apps=False):
+    data = {
         "profile": "check",
         "offers": [],
         "thresholds": {
@@ -58,3 +58,7 @@ def availability():
         "verified_counts": [],
         "cache": {"hit": True, "age_ms": 0},
     }
+    if apps:
+        # Legacy CLI scenarios use the owner-disabled policy; middle-apps tests cover default on.
+        data["apps_policy"] = {"run": "123-1", "tier": "middle", "enabled": False}
+    return data

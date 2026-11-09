@@ -1,11 +1,14 @@
 # CI tiers, the admin start route, the tree-hash key and the ignore ladder
 
-**STATUS: DESIGN-ONLY, 2026-11-05.** Records the owner's decisions of 2026-11-04 and 2026-11-05 and
-the coordinator recommendations the owner agreed with. Nothing here is implemented: there is no
-`.workerignore`, no `.dockerignore`, no tree-hash key, no admin start route and no trio stage in the
-tree today. Parent document: [V3_PLATFORM_TESTING.md](V3_PLATFORM_TESTING.md), whose §2 (tiers), §1
-and §4 (fall-through key) this document corrects. Every number below is a design target unless a
-source is cited. Only §8 reports a result.
+**STATUS: DESIGN-ONLY for the release workload contract, updated 2026-11-09.**
+The tier intent below includes the owner's 2026-11-09 clarification. CODE READ: signed tier
+selection, the ignore/tree-key controls and the admin routes now exist; the original
+2026-11-05 sections below describe their design history, not a current implementation census.
+Middle applications are implemented in the pending change described by
+[V3_MIDDLE_REAL_APPS.md](V3_MIDDLE_REAL_APPS.md); matching Worker deployment and a combined
+hardware run remain unverified. Large-tier SPEC plus real LLM execution remains design intent.
+Parent document: [V3_PLATFORM_TESTING.md](V3_PLATFORM_TESTING.md), whose §2 (tiers), §1 and §4
+(fall-through key) this document corrects. Numbers are design targets unless a run is cited.
 
 Labels: **OWNER DECISION** is binding text from the owner. **AGREED RECOMMENDATION** was proposed by
 the coordinator and the owner agreed; it is binding as intent and can still change when built.
@@ -18,10 +21,10 @@ the coordinator and the owner agreed; it is binding as intent and can still chan
 | | LARGEST (release) | MIDDLE (PR to master) | SMALL |
 |---|---|---|---|
 | Event | release tag | PR to master (the `next` -> master batch) | push, and manual |
-| Coverage | at least 1 driver and 2 dies per family; Windows and Linux required on Turing, Ampere, Ada and Blackwell; at least 2 Windows runs per die | one Vast run, Windows required | matrix of guest-driver patch versions and host/guest driver mismatch |
+| Coverage | middle plus SPECviewperf and a real LLM workload; at least 1 driver and 2 dies per family; Windows and Linux required on Turing, Ampere, Ada and Blackwell; at least 2 Windows runs per die | today's check plus all 63 Linux middle-list apps and Windows `mid`'s 10 apps (including all 8 small apps) | today's Linux bar and required Windows gate; no apps request |
 | Parallelism | up to 8 Vast boxes at once | 1 box | rides on the box the middle run already rented (AGREED RECOMMENDATION) |
-| Time and cost | hours and several USD are fine | about 70 apps in about 10 minutes | about 1 minute per run |
-| Excluded | nothing | SPECviewperf | SPECviewperf, apps |
+| Time and cost | hours and several USD are fine; real workload execution is DESIGN-ONLY | 300 min hard limit: reserve 205 min for Linux apps + Windows gate + Windows mid apps, 85 min for earlier work and 10 min soft margin; RETRY on insufficient time | existing check budget; no new apps allocation |
+| Excluded | nothing by tier intent; LLM slot is refused pending its adapter | SPECviewperf and real LLM workload | SPECviewperf, real LLM workload and apps |
 | Retries | none: **RETRY never passes** | none | none |
 | Die choice | every die in the release matrix | **rotation** across families per PR, with fallback; the family is recorded on the run (AGREED RECOMMENDATION) | the middle run's die |
 | VRAM floor | no offer filter (see §5) | a tier setting here only (AGREED RECOMMENDATION) | inherited |
@@ -31,8 +34,11 @@ the coordinator and the owner agreed; it is binding as intent and can still chan
 - **Scheduled runs were considered and dropped for now** (OWNER DECISION). Manual admin runs (§2) and
   the release gate cover that need.
 - A retry is never a pass. A FAIL stays a FAIL; the release tier does not re-rent to turn it green.
-- **OPEN:** which subset of apps makes "about 70 apps in about 10 minutes" (parent §13 item 1). The
-  committed 65-app Linux pass recorded in the parent §2 is longer than 10 minutes.
+- **OWNER DECISION, 2026-11-09:** middle includes every Linux middle-list app and Windows
+  `mid`, which is a superset of `small`. The old approximate app/time target is superseded by
+  the exact lists and guarded budget above. No app is silently dropped to fit. Large inherits
+  middle and adds SPEC plus a real LLM workload; `llm_parity` is reserved and refused until its
+  CI adapter exists. See the linked middle-apps design for historical timing sources.
 - **OPEN:** the exact middle-tier rotation order and the fallback die when the rotation's die has no
   offer.
 

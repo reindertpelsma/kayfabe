@@ -159,7 +159,9 @@ def strict_json(raw):
 
     try:
         value = json.loads(
-            raw.decode("utf-8", errors="strict"), object_pairs_hook=pairs, parse_constant=bad
+            raw.decode("utf-8", errors="strict"),
+            object_pairs_hook=pairs,
+            parse_constant=bad,
         )
     except (ValueError, UnicodeError, RecursionError):
         raise Invalid() from None
@@ -241,11 +243,15 @@ def sanitise(raw, redactions=()):
         text = text.replace(secret, "[redacted]")
     text = re.sub(r"\bBearer\s+[^\s]+", "Bearer [redacted]", text, flags=re.I)
     text = re.sub(
-        r"\b(?:gh[pousr]_[A-Za-z0-9]{20,255}|github_pat_[A-Za-z0-9_]{20,255})\b", "[redacted]", text
+        r"\b(?:gh[pousr]_[A-Za-z0-9]{20,255}|github_pat_[A-Za-z0-9_]{20,255})\b",
+        "[redacted]",
+        text,
     )
     text = re.sub(r"[A-Za-z0-9_-]{32,}", blank_run, text)
     text = re.sub(
-        r":{2,}", lambda x: (": " * (len(x[0]) // 2) + (":" if len(x[0]) % 2 else "")), text
+        r":{2,}",
+        lambda x: (": " * (len(x[0]) // 2) + (":" if len(x[0]) % 2 else "")),
+        text,
     ).replace("##[", "# [")
     text = re.sub(r"""https?://[^\s<>"']+""", "[url redacted]", text, flags=re.I)  # signed-url
     return text, original
@@ -283,7 +289,11 @@ def render(text, original, max_bytes, max_lines, max_line=1000):
         kept += cost
     dropped = max(0, original - kept)
     capped = max(0, min(dropped, total - kept))
-    return "".join(rows) + marker_lines(max(0, dropped - capped), capped), dropped, capped
+    return (
+        "".join(rows) + marker_lines(max(0, dropped - capped), capped),
+        dropped,
+        capped,
+    )
 
 
 def scrub(raw, max_bytes=65536, max_lines=200, max_line=1000, redactions=()):
@@ -401,7 +411,8 @@ def key_lines(text, max_lines=KEY_LINES, max_bytes=KEY_BYTES):
 
 def census_key(line):
     """Group key of a dropped line: its first tokens up to and including the first one that holds a
-    number (`#`) or a field (`=`); numbers and hex become `#`; at most CENSUS_PREFIX characters."""
+    number (`#`) or a field (`=`); numbers and hex become `#`; at most CENSUS_PREFIX characters.
+    """
     t = line.rstrip("\n")[:400]
     t = re.sub(r"^(?:\[box\]\s*)?(?:\[\s*\d+\.\d+\]\s*)?", "", t)
     t = re.sub(r"^\d{4}-\d\d-\d\d[T ][\d:.]+Z?\s*", "", t)
@@ -520,6 +531,29 @@ REJECTION_CODES = frozenset(
 def provider_id(v):
     """A public Vast machine_id or host_id (item 9): a positive safe integer or null."""
     return v is None or integer(v, 1, 2**53 - 1)
+
+
+# Trusted BASE expectations. Tests bind these counts to the supported middle catalogues.
+MIDDLE_APP_COUNTS = {"apps": 63, "windows_apps": 10}
+
+
+def read_apps_policy(availability, ctx, profile):
+    policy = availability.pop("apps_policy", None)
+    if (
+        type(policy) is not dict
+        or set(policy) != {"run", "tier", "enabled"}
+        or policy["run"] != ctx["run"]
+        or type(policy["enabled"]) is not bool
+        or policy["tier"] not in ({"small", "middle"} if profile == "check" else {"adhoc"})
+        or (policy["enabled"] and (profile != "check" or policy["tier"] != "middle"))
+    ):
+        raise Invalid()
+    return policy["enabled"]
+
+
+def complete_requested_apps(suites):
+    counts = {row["name"]: row["pass"] for row in suites}
+    return all(counts.get(name) == count for name, count in MIDDLE_APP_COUNTS.items())
 
 
 def validate_availability(data, profile):
@@ -1007,7 +1041,9 @@ class Runner:
         self.phase = (
             "availability"
             if route.startswith("/availability?")
-            else "rent" if route == "/rent" else "logs" if route.startswith("/logs/") else "status"
+            else (
+                "rent" if route == "/rent" else "logs" if route.startswith("/logs/") else "status"
+            )
         )
         for attempt in range(6):
             if time.monotonic() >= self.until:
@@ -1173,7 +1209,8 @@ class Runner:
         # Keep room for the census of the middle (<= CENSUS_LINES + 1 lines, ~2 KB) before the tail.
         room_bytes = max(0, min(TAIL_BYTES, DISPLAY_BYTES - self.displayed - 512 - 2048))
         room_lines = max(
-            0, min(TAIL_LINES, DISPLAY_LINES - 1 - self.display_lines - CENSUS_LINES - 1)
+            0,
+            min(TAIL_LINES, DISPLAY_LINES - 1 - self.display_lines - CENSUS_LINES - 1),
         )
         skipped, tail = take_tail(rest, room_bytes, room_lines)
         middle = len(raw) - self.head_end - len(tail.encode())
@@ -1204,7 +1241,8 @@ class Runner:
         self.last_chunk_at = now
         before = "".join(self.raw[: -len(chunks)] if chunks else self.raw)[-200:]
         found = re.findall(
-            r"KF_PAYLOAD_STAGE_START name=([A-Za-z0-9_.-]{1,40})", before + "".join(chunks)
+            r"KF_PAYLOAD_STAGE_START name=([A-Za-z0-9_.-]{1,40})",
+            before + "".join(chunks),
         )
         if found:
             self.stage_seen = (found[-1], now)
@@ -1325,10 +1363,16 @@ class Runner:
         self.provider_retry = False
         try:
             profile = self.ctx.get("profile", "check")
-            code, availability = self.retry_read("/availability?profile=" + profile)
+            app_policy = self.ctx.get("apps_policy_required", False)
+            code, availability = self.retry_read(
+                "/availability?profile=" + profile + ("&apps=1" if app_policy else "")
+            )
             if code != 200:
                 validate_status(availability, self.ctx, self.manifest, code)
                 raise Invalid()
+            requested_apps = (
+                read_apps_policy(availability, self.ctx, profile) if app_policy else False
+            )
             validate_availability(availability, profile)
             lines = [
                 "Availability: " + profile,
@@ -1389,6 +1433,8 @@ class Runner:
             }
             if "preferences" in self.ctx:
                 request["preferences"] = self.ctx["preferences"]
+            if requested_apps:
+                request.update(linuxApps=True, winApps="mid")
             self.rent_at = time.monotonic()
             code, data = self.retry_read("/rent", "POST", request)
             for attempt in range(600):
@@ -1406,7 +1452,9 @@ class Runner:
                         time.sleep(20)
                         route = "/status/" + self.ctx["run"] if admitted else "/rent"
                         code, data = self.retry_read(
-                            route, "GET" if admitted else "POST", None if admitted else request
+                            route,
+                            "GET" if admitted else "POST",
+                            None if admitted else request,
                         )
                         continue
                     if data["state"] != "RENTING_DISABLED":
@@ -1481,14 +1529,37 @@ class Runner:
                     self.phase = "result"
                     self.metadata = data
                     terminal = True
-                    result = {"state": data["state"], "verdict": data["verdict"], "verified": 1}
+                    if (
+                        requested_apps
+                        and data["verdict"] == "PASS"
+                        and not complete_requested_apps(data["suites"])
+                    ):
+                        self.retry = 1
+                        self.diagnostic = (
+                            "runner: requested app evidence missing; RETRY class=OPERATOR"
+                        )
+                        self.emit(self.diagnostic + "\n")
+                        result = {
+                            "state": data["state"],
+                            "verdict": "FAIL",
+                            "verified": 1,
+                        }
+                        break
+                    result = {
+                        "state": data["state"],
+                        "verdict": data["verdict"],
+                        "verified": 1,
+                    }
                     # Lane 2: a failing windows_retry_<class> row is a host, harness or rental
                     # fault (re-run on a fresh box), never a pass. Box data: it can only relabel
                     # a FAIL so the workflow says RETRY; it never changes the verdict.
                     self.retry = int(
                         data["verdict"] == "FAIL"
                         and any(
-                            r["fail"] and r["name"].startswith("windows_retry_")
+                            r["fail"]
+                            and r["name"].startswith(
+                                ("windows_retry_", "apps_retry_", "windows_apps_retry_")
+                            )
                             for r in data.get("suites") or []
                         )
                     )
@@ -1522,7 +1593,7 @@ class Runner:
                     diagnostic_line(
                         self.diagnostic or "runner: Worker run did not pass",
                         self.phase,
-                        result["state"] if result["state"] != "UNAVAILABLE" else self.reply_state,
+                        (result["state"] if result["state"] != "UNAVAILABLE" else self.reply_state),
                         self.http_status,
                     )
                 )
@@ -1609,7 +1680,10 @@ class Runner:
                             else "unknown"
                         ),
                     ),
-                    ("Host driver label (untrusted)", d.get("host_driver_version", "unknown")),
+                    (
+                        "Host driver label (untrusted)",
+                        d.get("host_driver_version", "unknown"),
+                    ),
                     ("Host reference (untrusted)", d.get("host_reference", "MISSING")),
                     ("Driver (untrusted)", d["driver_version"]),
                     ("Selection reason", d["selection_reason"]),
@@ -1812,6 +1886,7 @@ def main():
             raise Invalid()
         ctx = {
             "profile": profile,
+            "apps_policy_required": True,
             **({"preferences": preferences} if preferences is not None else {}),
             "sha": sha,
             "run": run,
@@ -1861,7 +1936,8 @@ def main():
                     or set(token_data) != {"value"}
                     or not isinstance(token_data["value"], str)
                     or not re.fullmatch(
-                        r"[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+", token_data["value"]
+                        r"[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+",
+                        token_data["value"],
                     )
                     or len(token_data["value"]) > 8192
                 ):
@@ -1882,7 +1958,7 @@ def main():
                     "Content-Type": "application/json",
                     "X-KF-Protocol": str(STATUS_PROTOCOL),
                 },
-                None if body is None else json.dumps(body, separators=(",", ":")).encode(),
+                (None if body is None else json.dumps(body, separators=(",", ":")).encode()),
             )
 
         phase = "summary"

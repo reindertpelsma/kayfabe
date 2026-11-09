@@ -48,6 +48,7 @@ export const BOOLEAN_VARS = Object.freeze([
   'RELEASE_ENABLED',
   'ALLOW_UNKNOWN_COUNTRY',
   'TREE_KEY_CARRY_OVER',
+  'MIDDLE_APPS_ENABLED',
 ]);
 // The deployment's identity: without these no request can be authorized. A configuration error in
 // any other (policy) var must not stop the cron's teardown, which then runs on these vars and the
@@ -162,6 +163,7 @@ export function configuration(env) {
     preferredCountries,
     deniedCountries,
     // Edits3 C: unknown or unparseable geolocation is rejected unless the owner opts in.
+    middleAppsEnabled: env.MIDDLE_APPS_ENABLED !== 'false',
     allowUnknownCountry: env.ALLOW_UNKNOWN_COUNTRY === 'true',
     maxInet: number('MAX_INET_USD_PER_GB', DEFAULTS.payloadProfiles.small.maxInetUsdPerGb, 1),
     repositoryId: env.REPOSITORY_GITHUB_ID,

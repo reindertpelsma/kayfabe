@@ -529,6 +529,12 @@
         "large"
       ],
       "state": "DESIGN_ONLY"
+    },
+    "llm_parity": {
+      "tiers": [
+        "large"
+      ],
+      "state": "DESIGN_ONLY"
     }
   },
   "accountDaily": 50

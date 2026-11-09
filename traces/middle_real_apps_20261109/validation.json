@@ -1,0 +1,240 @@
+{
+  "schema": "pm1-middle-real-apps-local/1",
+  "run": "middle_real_apps_20261109",
+  "state": "LOCAL_CHECKS_COMPLETE_WITH_ENVIRONMENTAL_RECHECKS",
+  "source_base": "3c5c21e49df400c40ca0bbf680da3a0f6ef29fa6",
+  "staged_implementation_diff_sha256": "5cbf96e205591b1d7f7ab585982490e1e64c277a146e3d16dcd3091d62f9fe35",
+  "diff_command": [
+    "git",
+    "diff",
+    "--cached",
+    "--binary",
+    "--",
+    ".github/workflows/ci.yml",
+    "ci/vast-broker",
+    "scripts"
+  ],
+  "scope": {
+    "hardware": false,
+    "vm": false,
+    "provider_rental": false,
+    "live_worker_request": false,
+    "deployment": false
+  },
+  "catalogues": {
+    "linux_middle": 63,
+    "windows_small": 8,
+    "windows_mid": 10,
+    "small_minus_mid": [],
+    "windows_mid_budget_s": 3600
+  },
+  "budget_minutes": {
+    "hard": 300,
+    "soft_margin": 10,
+    "linux_apps": 60,
+    "windows_gate": 75,
+    "windows_mid_apps": 70,
+    "suffix": 205,
+    "earlier_work_max": 85
+  },
+  "timing_sources": [
+    {
+      "scope": "OWNER_REPORTED",
+      "component": "windows_gate",
+      "run": "owner instruction 2026-11-09, last passing AD102",
+      "seconds": 3847
+    },
+    {
+      "scope": "MEASURED_HISTORICAL",
+      "component": "linux_middle",
+      "path": "traces/apps_linux_20261107/g2/gate_mid.out",
+      "run": "g2",
+      "seconds": 451,
+      "apps_passed": 63
+    },
+    {
+      "scope": "MEASURED_HISTORICAL",
+      "component": "linux_middle",
+      "path": "traces/apps_linux_20261107/g3/gate_watched.out",
+      "run": "g3",
+      "seconds": 456,
+      "apps_passed": 63
+    },
+    {
+      "scope": "MEASURED_HISTORICAL",
+      "component": "windows_small",
+      "path": "traces/winapps_20261107/small/wa1_winapps.log",
+      "run": "wa1",
+      "revision": "b11655b7",
+      "seconds": 735,
+      "apps_passed": 8
+    },
+    {
+      "scope": "UNVERIFIED",
+      "component": "windows_mid",
+      "seconds": null,
+      "reason": "no mid hardware duration found; small duration is not a mid measurement"
+    }
+  ],
+  "bundle": {
+    "sha256": "101ad8a2bfceb815fc8c64de90b4166d4c2789333840f923ea1fbda9c98d4567",
+    "bytes": 400116,
+    "wrangler": "4.152.0",
+    "pins_match": true,
+    "redeploy_required": true,
+    "offline_direct_confirmed_emits": 2,
+    "broker_determinism_test_emits": 3
+  },
+  "tests": {
+    "new_python_controls_before": 0,
+    "new_python_controls_after": 50,
+    "new_node_controls_before": 0,
+    "new_node_controls_after": 32,
+    "focused_python": {
+      "tests": 167,
+      "pass": 167,
+      "seconds": 244.25
+    },
+    "before_counts_scope": "CODE_READ: the new test modules do not exist at source_base; before counts are additions, not an unmodified-tree test run.",
+    "middle_apps_mutants": {
+      "cases": 38,
+      "killed": 38,
+      "minimum_distinct_named_killers": 2,
+      "baselines": {
+        "python": 50,
+        "node": 32,
+        "config": 17
+      },
+      "receipt": "middle-apps-mutants.json"
+    },
+    "cli_regression": {
+      "tests": 113,
+      "pass": 113,
+      "seconds": 85.679066138
+    },
+    "focused_python_after_cli_fixture_update": {
+      "tests": 50,
+      "pass": 50,
+      "seconds": 17.92
+    },
+    "legacy_tier_mutants": {
+      "cases": 56,
+      "killed": 56,
+      "minimum_named_killers": 1,
+      "unchanged_legacy_threshold": 1,
+      "receipt": "tier-apps-mutants.json"
+    },
+    "existing_windows_optin_mutants": {
+      "cases": 8,
+      "killed": 8,
+      "minimum_distinct_named_killers": 2,
+      "receipt": "tier-apps-mutants.json"
+    },
+    "existing_payload_apps_mutants": {
+      "cases": 19,
+      "killed": 19,
+      "baseline_tests": 564,
+      "minimum_distinct_named_killers": 2,
+      "receipt": "payload-apps-mutants.json"
+    },
+    "full_broker": {
+      "tests": 3843,
+      "pass": 3839,
+      "fail": 4,
+      "seconds": 1572.581290126,
+      "failures": [
+        "treekey parity: built-in default list",
+        "treekey parity: every rule of the subset",
+        "treekey parity: the checkout's own .workerignore",
+        "treekey: a 2040-segment path gives no key in milliseconds"
+      ],
+      "explanation": "The first three compare an index captured before two trace files were staged with a later reference scan (25001 vs 25003 paths). The fourth exceeded an unchanged wall-time threshold under nice 19; tree-key source/tests are byte-identical to origin/next."
+    },
+    "tree_key_recheck": {
+      "tests": 23,
+      "pass": 22,
+      "fail": 1,
+      "seconds": 38.099242242,
+      "remaining_failure": "unchanged 50 ms timing threshold",
+      "parity_cases_passed": 3
+    },
+    "tree_key_timing_isolated": {
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "seconds": 1.273960997,
+      "threshold_ms": 50,
+      "threshold_unchanged": true
+    },
+    "tree_key_stable_index_recheck": {
+      "tests": 23,
+      "pass": 22,
+      "fail": 1,
+      "seconds": 31.07947001,
+      "parity_cases_passed": 3,
+      "remaining_failure": "unchanged 50 ms timing assertion"
+    },
+    "tree_key_origin_next_control": {
+      "revision": "3c5c21e49df400c40ca0bbf680da3a0f6ef29fa6",
+      "tests": 19,
+      "pass": 18,
+      "fail": 1,
+      "seconds": 4.823206377,
+      "failure": "same unchanged deep-path timing testcase, 50 ms wall-time limits",
+      "environment": "same host, nice 19, unmodified source copied to owned temporary directory"
+    }
+  },
+  "limitations": [
+    "No combined hardware run or Windows mid duration was obtained.",
+    "Prepared Linux application media is required; the request does not enable two-hour provisioning.",
+    "Large SPEC+LLM orchestration remains design intent; llm_parity is refused."
+  ],
+  "checks": {
+    "doc_freshness": "PASS after final how-to status edits: checked=220 existing-debt=0 new=0",
+    "claim_ledger": "PASS after final how-to status edits: existing-debt=3748 new=0 resolved=1; baseline unchanged",
+    "release_claims": "PASS: 55 claims, 0 errors, 0 warnings",
+    "workflow_lint": "PASS",
+    "black_broker": "PASS: Black 25.1.0, 36 files unchanged after CLI fixture updates",
+    "black_new_scripts": "PASS: 3 files unchanged",
+    "prettier": "PASS: pinned 3.6.2 broker JS/MJS after exact apps query assertion update",
+    "shellcheck": "PASS: 0.10.0, apps_gate.sh and windows_apps.sh warnings level",
+    "staged_secret_scan": "PASS: 0 findings; rerun before commit",
+    "private_references": "PASS: clean over staged files",
+    "gpu_uuids": "PASS: files=0 baselined=0 new=0 stale=0; baseline unchanged",
+    "staged_path_uuid_and_private_scan": {
+      "paths": 35,
+      "uuid_new": 0,
+      "uuid_stale": 0,
+      "private_reference_paths": 0,
+      "reason": "supplements the whole-tree scans with late staged fixtures and receipt files using the same scanners"
+    }
+  },
+  "validation_notes": [
+    "The broad CLI run exposed pre-extension fake availability replies; fixtures now explicitly return owner-disabled apps policy. The route assertion requires apps=1. The production policy-read requirement was retained.",
+    "The first isolated broad command omitted normal HOME; the final run preserves the normal environment and isolates Wrangler via os.homedir/XDG paths. No protected configuration was inspected.",
+    "A stale-media red-test fixture initially left its matrix boundary unfaked. Its owned processes were stopped while in the busy wait, with no VM launch or guest output; the empty owned result directory was removed. All final media controls use a fake matrix and temporary bench path.",
+    "The first legacy apps mutant attempt hit its unchanged 180-second subprocess timeout after a green 564-test baseline; the final retry uses the same timeout and thresholds.",
+    "The full broker run used a changing index while receipt files were staged. Three tree parity failures were reproduced as index drift, then passed with a fixed index. The unchanged deep-path timing control passed alone at nice 19. Raw counts are retained; this receipt does not claim the initial full run green.",
+    "An unmodified origin/next control also fails only the same deep-path timing testcase with 50 ms limits (18/19); no timing threshold or tree-key code was changed. A fresh-checkout CI run remains required for the draft head."
+  ],
+  "previous_delivery": {
+    "pr": 309,
+    "state": "MERGED",
+    "head": "33e87abf41c3d2ed0a42c8a995664c6497ba37b1",
+    "merged_at": "2026-11-08T10:48:04Z",
+    "checks": [
+      {
+        "name": "stable \u2014 build, test, clippy, fmt, boundary",
+        "status": "COMPLETED",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/reindertpelsma/kayfabe/actions/runs/42466594776/job/128687443504"
+      },
+      {
+        "name": "CI",
+        "status": "COMPLETED",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/reindertpelsma/kayfabe/actions/runs/42466594776/job/128703497431"
+      }
+    ]
+  }
+}

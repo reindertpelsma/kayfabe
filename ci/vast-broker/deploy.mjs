@@ -26,6 +26,7 @@ export const BOOLEAN_VARS = Object.freeze([
   'RELEASE_ENABLED',
   'ALLOW_UNKNOWN_COUNTRY',
   'TREE_KEY_CARRY_OVER',
+  'MIDDLE_APPS_ENABLED',
 ]);
 export const ALLOWED = new Set([
   'WORKER_URL',
@@ -59,6 +60,7 @@ export const ALLOWED = new Set([
   // Result store (src/results.js): 'true' lets a Worker-verified tree key answer for another
   // commit. Keep it unset/'false' until boxes delete ignored files after cloning (review of #258).
   'TREE_KEY_CARRY_OVER',
+  'MIDDLE_APPS_ENABLED',
   // Tiers (wtier, 2026-11-05; src/tier.js, src/policy.js): the release (large) profile's explicit
   // caps and lists, and the middle tier's rotation and VRAM floor. Account cap is now 1-8.
   'MAX_CONCURRENT_RELEASE',

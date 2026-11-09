@@ -4,7 +4,15 @@ import {
   matrixExecutionProblem,
   sameMatrixRow,
 } from './release-matrix.js';
-import { applyProfile, tierEnvironment, tierForClaims, familyOf, profileCaps } from './tier.js';
+import {
+  applyProfile,
+  tierEnvironment,
+  tierForClaims,
+  familyOf,
+  profileCaps,
+  middleAppsRequest,
+  middleAppsResult,
+} from './tier.js';
 // prettier-ignore
 import {planRelease,classifyLeg,releaseVerdict,wantsRerun} from './release.js';
 // prettier-ignore
@@ -799,6 +807,8 @@ export function createService({
       }
       const raw = await readReportBody(request, r, cfg),
         payload = parseReport(raw);
+      if (payload.kind === 'result')
+        payload.result = middleAppsResult(payload.result, r.middleAppsRequested === true);
       const digest = await sha256Hex(JSON.stringify(payload));
       if (payload.seq <= r.lastSeq) {
         if (payload.seq === r.lastSeq && digest === r.lastDigest)
@@ -1068,16 +1078,18 @@ export function createService({
             'profile',
             'remaining_seconds',
             'preferences',
+            'linuxApps',
+            'winApps',
           ],
           keys = Object.keys(rentRequest),
           matches = [
             ...text.matchAll(
-              /"(runner_nonce|tested_sha|profile|remaining_seconds|preferences)"\s*:/g,
+              /"(runner_nonce|tested_sha|profile|remaining_seconds|preferences|linuxApps|winApps)"\s*:/g,
             ),
           ];
         if (
           keys.length < 4 ||
-          keys.length > 5 ||
+          keys.length > 7 ||
           !keys.every((k) => allowed.includes(k)) ||
           !allowed.slice(0, 4).every((k) => keys.includes(k)) ||
           matches.length !== keys.length ||
@@ -1128,15 +1140,38 @@ export function createService({
     const profile =
       path === '/availability' ? url.searchParams.get('profile') : rentRequest.profile;
     if (!['check', 'sweep'].includes(profile)) refuse('BAD_REQUEST', 400);
-    if (path === '/availability' && url.search !== '?profile=' + profile)
+    if (
+      path === '/availability' &&
+      !['?profile=' + profile, '?profile=' + profile + '&apps=1'].includes(url.search)
+    )
       refuse('BAD_REQUEST', 400);
     if (!allowedWorkflowRef(c, cfg, profile))
       refuse('UNAUTHORIZED', 401, undefined, 'identity:profile_workflow');
     applyProfile(cfg, profile, tierForClaims(c, profile));
     if (path === '/availability') {
       await github.authorize(c);
-      return json((await offers.evaluate(vast, cfg, ledger, profile)).view);
+      const view = (await offers.evaluate(vast, cfg, ledger, profile)).view;
+      return json(
+        url.search.endsWith('&apps=1')
+          ? {
+              ...view,
+              apps_policy: {
+                run: key,
+                tier: cfg.tierName,
+                enabled:
+                  middleAppsRequest(profile, cfg.tierName, cfg.middleAppsEnabled).linuxApps ===
+                  true,
+              },
+            }
+          : view,
+      );
     }
+    const appRequest = middleAppsRequest(profile, cfg.tierName, cfg.middleAppsEnabled);
+    if (
+      rentRequest.linuxApps !== appRequest.linuxApps ||
+      rentRequest.winApps !== appRequest.winApps
+    )
+      refuse('BAD_REQUEST', 400);
     if (
       rentRequest.preferences !== undefined &&
       (!Array.isArray(rentRequest.preferences) ||
@@ -1336,6 +1371,8 @@ export function createService({
         ...target,
         ...spendClass({ profile }),
         tier: tierName,
+        middleAppsRequested:
+          middleAppsRequest(profile, tierName, cfg.middleAppsEnabled).linuxApps === true,
         family: chosen.family ?? familyOf(offer.die, cfg),
         ...(chosen.wanted !== undefined && chosen.wanted !== chosen.family
           ? { familyWanted: chosen.wanted }
@@ -1508,6 +1545,7 @@ export function createService({
           stages: leg?.stages ?? [],
           releaseMatrix: leg?.releaseMatrix,
           spec: leg?.spec,
+          ...middleAppsRequest(profile, tierName, cfg.middleAppsEnabled),
         }),
         // Pass-through for the hostname-wide Access policy; the Worker never verifies Access.
         ...(env.BOX_ACCESS_ID && env.BOX_ACCESS_SECRET

@@ -1,0 +1,259 @@
+{
+  "run": "middle_real_apps_20261109",
+  "cases": [
+    {
+      "mutant": "apps-stage-enabled-by-default",
+      "killers": [
+        "test_vast_payload_apps.AppsRequested.test_disabled_by_default_for_every_tier",
+        "test_vast_payload_spec.SpecStageInThePayload.test_a_failed_viewset_is_the_specviewperf_failing_row",
+        "test_vast_payload_spec.SpecStageInThePayload.test_an_explicit_disk_size_wins",
+        "test_vast_payload_spec.SpecStageInThePayload.test_both_lanes_never_start_with_the_time_a_300_minute_box_has_left",
+        "test_vast_payload_spec.SpecStageInThePayload.test_every_lane_sizes_the_disk_for_the_windows_gate [both]",
+        "test_vast_payload_spec.SpecStageInThePayload.test_every_lane_sizes_the_disk_for_the_windows_gate [laneb]",
+        "test_vast_payload_spec.SpecStageInThePayload.test_every_retry_is_a_failing_retry_row [MEDIA]",
+        "test_vast_payload_spec.SpecStageInThePayload.test_every_retry_is_a_failing_retry_row [PROVIDER]",
+        "test_vast_payload_spec.SpecStageInThePayload.test_every_retry_is_a_failing_retry_row [TIME]",
+        "test_vast_payload_spec.SpecStageInThePayload.test_every_retry_is_a_failing_retry_row [TRANSPORT]",
+        "test_vast_payload_spec.SpecStageInThePayload.test_kf_spec_is_popped_before_any_stage_runs",
+        "test_vast_payload_spec.SpecStageInThePayload.test_lane_b_starts_with_less_time_than_lane_a_needs",
+        "test_vast_payload_spec.SpecStageInThePayload.test_the_command_carries_the_lane_the_deadline_and_the_wrapper",
+        "test_vast_payload_spec.SpecStageInThePayload.test_the_command_names_the_lane_for_every_lane [both]",
+        "test_vast_payload_spec.SpecStageInThePayload.test_the_command_names_the_lane_for_every_lane [lanea]",
+        "test_vast_payload_spec.SpecStageInThePayload.test_the_command_names_the_lane_for_every_lane [laneb]",
+        "test_vast_payload_spec.SpecStageInThePayload.test_the_gate_installs_windows_on_a_disk_that_holds_a_lane",
+        "test_vast_payload_spec.SpecStageInThePayload.test_the_lane_is_not_a_pass_for_the_other_lane",
+        "test_vast_payload_spec.SpecStageInThePayload.test_the_second_windows_run_is_sized_too",
+        "test_vast_payload_spec.SpecStageInThePayload.test_the_stage_deadline_keeps_a_margin_before_the_soft_deadline",
+        "test_vast_payload_spec.SpecStageInThePayload.test_the_stage_does_not_start_without_time_for_the_whole_lane",
+        "test_vast_payload_spec.SpecStageInThePayload.test_the_stage_runs_after_the_second_windows_run_too",
+        "test_vast_payload_spec.SpecStageInThePayload.test_the_stage_runs_last_after_the_windows_gate_with_its_lane",
+        "test_vast_payload_spec.SpecStageInThePayload.test_without_a_request_the_tier_line_says_none_and_no_stage_runs",
+        "test_vast_payload_spec.SpecStageInThePayload.test_without_the_stage_the_disk_size_is_not_touched",
+        "test_vast_payload_v7.ReleaseTierPayloadTests.test_second_windows_run_failure_is_named_for_that_run",
+        "test_vast_payload_v7.ReleaseTierPayloadTests.test_second_windows_run_is_its_own_row_after_the_first",
+        "test_vast_payload_v7.ReleaseTierPayloadTests.test_second_windows_run_rows_are_unique",
+        "test_vast_payload_v7.ReleaseTierPayloadTests.test_specviewperf_media_retry_is_a_failing_row",
+        "test_vast_payload_v7.ReleaseTierPayloadTests.test_specviewperf_stage_without_its_lane_is_never_a_pass"
+      ],
+      "count": 30
+    },
+    {
+      "mutant": "apps-run-for-small-tier",
+      "killers": [
+        "test_vast_payload_apps.AppsRequested.test_enabled_runs_middle_and_large_only",
+        "test_vast_payload_apps.AppsStageInThePayload.test_small_and_adhoc_never_run_it [adhoc]",
+        "test_vast_payload_apps.AppsStageInThePayload.test_small_and_adhoc_never_run_it [small]"
+      ],
+      "count": 3
+    },
+    {
+      "mutant": "apps-missing-app-passes",
+      "killers": [
+        "test_vast_payload_apps.AppsRows.test_another_app_in_place_of_a_different_gate_app_is_not_a_pass",
+        "test_vast_payload_apps.AppsRows.test_another_app_in_place_of_a_gate_app_is_not_a_pass"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "apps-failing-app-passes",
+      "killers": [
+        "test_vast_payload_apps.AppsRealOutput.test_one_flipped_row_of_the_real_output_is_not_a_pass",
+        "test_vast_payload_apps.AppsRows.test_a_failing_row_under_a_pass_verdict_is_not_a_pass",
+        "test_vast_payload_apps.AppsRows.test_a_not_run_row_under_a_pass_verdict_is_not_a_pass",
+        "test_vast_payload_apps.AppsRows.test_another_failing_row_under_a_pass_verdict_is_not_a_pass",
+        "test_vast_payload_apps.AppsRows.test_another_not_run_row_under_a_pass_verdict_is_not_a_pass"
+      ],
+      "count": 5
+    },
+    {
+      "mutant": "apps-nonzero-exit-passes",
+      "killers": [
+        "test_vast_payload_apps.AppsRows.test_an_exit_line_of_1_is_not_a_pass",
+        "test_vast_payload_apps.AppsRows.test_an_exit_line_of_3_is_not_a_pass"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "apps-list-size-unchecked",
+      "killers": [
+        "test_vast_payload_apps.AppsRows.test_a_list_size_above_the_gate_list_is_not_a_pass",
+        "test_vast_payload_apps.AppsRows.test_a_list_size_below_the_gate_list_is_not_a_pass"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "apps-retry-passes",
+      "killers": [
+        "test_vast_payload_apps.AppsRows.test_a_retry_without_a_class_is_operator",
+        "test_vast_payload_apps.AppsRows.test_retry_box_names_the_cause_and_never_passes",
+        "test_vast_payload_apps.AppsRows.test_retry_not_built_names_the_cause_and_never_passes",
+        "test_vast_payload_apps.AppsRows.test_retry_time_names_the_cause_and_never_passes",
+        "test_vast_payload_apps.AppsStageInThePayload.test_a_missing_bundle_is_a_retry_row_never_a_pass"
+      ],
+      "count": 5
+    },
+    {
+      "mutant": "apps-stage-without-time-guard",
+      "killers": [
+        "test_vast_payload_apps.AppsStageInThePayload.test_30_minutes_left_is_a_retry_row_without_starting_the_stage",
+        "test_vast_payload_apps.AppsStageInThePayload.test_just_under_the_minimum_left_is_a_retry_row_without_starting_the_stage"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "apps-stage-selected-by-kf-stages",
+      "killers": [
+        "test_vast_payload_apps.AppsRequested.test_kf_stages_cannot_select_it",
+        "test_vast_payload_v7.ReleaseTierPayloadTests.test_refused_extras_start_no_stage (stages='apps', runs=None)"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "apps-middle-reads-the-full-list",
+      "killers": [
+        "test_vast_payload_apps.AppsGateList.test_the_middle_list_is_the_full_list_without_the_slow_apps",
+        "test_vast_payload_apps.AppsGateList.test_the_middle_tier_reads_its_own_file",
+        "test_vast_payload_apps.AppsGateList.test_tiers_map_to_the_list_and_the_lane_argument",
+        "test_vast_payload_apps.AppsRealOutput.test_the_real_g2_stage_output_grades_as_a_pass",
+        "test_vast_payload_apps.AppsRealOutput.test_the_real_g3_output_under_the_xid_watch_wrapper_is_clean_and_a_pass"
+      ],
+      "count": 5
+    },
+    {
+      "mutant": "apps-middle-runs-the-full-lane-list",
+      "killers": [
+        "test_vast_payload_apps.AppsGateList.test_tiers_map_to_the_list_and_the_lane_argument",
+        "test_vast_payload_apps.AppsStageInThePayload.test_enabled_middle_and_large_run_it_after_cuda_guest_and_before_windows [middle]",
+        "test_vast_payload_apps.AppsStageInThePayload.test_the_middle_tier_runs_the_lane_with_the_middle_argument"
+      ],
+      "count": 3
+    },
+    {
+      "mutant": "apps-tier-ignored-when-reading-the-list",
+      "killers": [
+        "test_vast_payload_apps.AppsStageInThePayload.test_enabled_middle_and_large_run_it_after_cuda_guest_and_before_windows [middle]",
+        "test_vast_payload_apps.AppsStageInThePayload.test_the_middle_tier_asks_for_the_middle_list"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "apps-stage-never-appended",
+      "killers": [
+        "test_vast_payload_apps.AppsStageInThePayload.test_30_minutes_left_is_a_retry_row_without_starting_the_stage",
+        "test_vast_payload_apps.AppsStageInThePayload.test_a_failing_gate_app_fails_the_run_and_windows_does_not_start",
+        "test_vast_payload_apps.AppsStageInThePayload.test_a_missing_bundle_is_a_retry_row_never_a_pass",
+        "test_vast_payload_apps.AppsStageInThePayload.test_enabled_middle_and_large_run_it_after_cuda_guest_and_before_windows [large]",
+        "test_vast_payload_apps.AppsStageInThePayload.test_enabled_middle_and_large_run_it_after_cuda_guest_and_before_windows [middle]",
+        "test_vast_payload_apps.AppsStageInThePayload.test_just_under_the_minimum_left_is_a_retry_row_without_starting_the_stage",
+        "test_vast_payload_apps.AppsStageInThePayload.test_the_large_tier_asks_for_the_full_list",
+        "test_vast_payload_apps.AppsStageInThePayload.test_the_middle_tier_asks_for_the_middle_list",
+        "test_vast_payload_apps.AppsStageInThePayload.test_the_middle_tier_runs_the_lane_with_the_middle_argument"
+      ],
+      "count": 9
+    },
+    {
+      "mutant": "winapps-all-output-is-pass",
+      "killers": [
+        "test_vast_payload_winapps.GradeTests.test_a_guest_failure_stays_a_failure_and_is_not_an_excuse",
+        "test_vast_payload_winapps.GradeTests.test_a_pass_of_another_revision_or_profile_is_not_a_pass",
+        "test_vast_payload_winapps.GradeTests.test_a_pass_with_a_nonzero_exit_is_not_a_pass",
+        "test_vast_payload_winapps.GradeTests.test_every_retry_class_is_named_and_never_a_pass",
+        "test_vast_payload_winapps.GradeTests.test_pass_requires_matching_summary_and_stage_counts",
+        "test_vast_payload_winapps.GradeTests.test_pass_requires_nonempty_complete_per_app_rows",
+        "test_vast_payload_winapps.GradeTests.test_refused_missing_and_doubled_verdicts_are_retries",
+        "test_vast_payload_winapps.StageTests.test_a_guest_failure_fails_the_run_with_the_apps_row",
+        "test_vast_payload_winapps.StageTests.test_a_harness_retry_fails_the_run_with_a_named_row"
+      ],
+      "count": 9
+    },
+    {
+      "mutant": "winapps-never-passes",
+      "killers": [
+        "test_vast_payload_winapps.GradeTests.test_a_guest_failure_stays_a_failure_and_is_not_an_excuse",
+        "test_vast_payload_winapps.GradeTests.test_every_retry_class_is_named_and_never_a_pass",
+        "test_vast_payload_winapps.GradeTests.test_only_a_guest_pass_of_this_revision_and_profile_is_a_row",
+        "test_vast_payload_winapps.GradeTests.test_refused_missing_and_doubled_verdicts_are_retries",
+        "test_vast_payload_winapps.StageTests.test_a_guest_failure_fails_the_run_with_the_apps_row",
+        "test_vast_payload_winapps.StageTests.test_a_harness_retry_fails_the_run_with_a_named_row",
+        "test_vast_payload_winapps.StageTests.test_the_stage_runs_right_after_the_gate_and_is_its_own_row"
+      ],
+      "count": 7
+    },
+    {
+      "mutant": "winapps-enabled-by-default",
+      "killers": [
+        "test_vast_payload_apps.AppsStageInThePayload.test_enabled_middle_and_large_run_it_after_cuda_guest_and_before_windows [large]",
+        "test_vast_payload_apps.AppsStageInThePayload.test_enabled_middle_and_large_run_it_after_cuda_guest_and_before_windows [middle]",
+        "test_vast_payload_spec.SpecStageInThePayload.test_a_failed_viewset_is_the_specviewperf_failing_row",
+        "test_vast_payload_spec.SpecStageInThePayload.test_both_lanes_never_start_with_the_time_a_300_minute_box_has_left",
+        "test_vast_payload_spec.SpecStageInThePayload.test_every_retry_is_a_failing_retry_row [MEDIA]",
+        "test_vast_payload_spec.SpecStageInThePayload.test_every_retry_is_a_failing_retry_row [PROVIDER]",
+        "test_vast_payload_spec.SpecStageInThePayload.test_every_retry_is_a_failing_retry_row [TIME]",
+        "test_vast_payload_spec.SpecStageInThePayload.test_every_retry_is_a_failing_retry_row [TRANSPORT]",
+        "test_vast_payload_spec.SpecStageInThePayload.test_kf_spec_is_popped_before_any_stage_runs",
+        "test_vast_payload_spec.SpecStageInThePayload.test_lane_b_starts_with_less_time_than_lane_a_needs",
+        "test_vast_payload_spec.SpecStageInThePayload.test_the_lane_is_not_a_pass_for_the_other_lane",
+        "test_vast_payload_spec.SpecStageInThePayload.test_the_stage_does_not_start_without_time_for_the_whole_lane",
+        "test_vast_payload_spec.SpecStageInThePayload.test_the_stage_is_disabled_for_the_default_run",
+        "test_vast_payload_spec.SpecStageInThePayload.test_the_stage_runs_after_the_second_windows_run_too",
+        "test_vast_payload_spec.SpecStageInThePayload.test_the_stage_runs_last_after_the_windows_gate_with_its_lane",
+        "test_vast_payload_spec.SpecStageInThePayload.test_without_a_request_the_tier_line_says_none_and_no_stage_runs",
+        "test_vast_payload_v7.ReleaseTierPayloadTests.test_second_windows_run_failure_is_named_for_that_run",
+        "test_vast_payload_v7.ReleaseTierPayloadTests.test_second_windows_run_is_its_own_row_after_the_first",
+        "test_vast_payload_v7.ReleaseTierPayloadTests.test_second_windows_run_rows_are_unique",
+        "test_vast_payload_v7.ReleaseTierPayloadTests.test_specviewperf_media_retry_is_a_failing_row",
+        "test_vast_payload_v7.ReleaseTierPayloadTests.test_specviewperf_stage_without_its_lane_is_never_a_pass",
+        "test_vast_payload_v7.V7Tests.test_windows_stage_is_the_default_when_the_worker_states_no_tier",
+        "test_vast_payload_v7.V7Tests.test_windows_stage_runs_last_when_the_worker_asks",
+        "test_vast_payload_winapps.RequestTests.test_absent_is_no_stage_and_the_value_is_popped",
+        "test_vast_payload_winapps.StageTests.test_no_env_no_stage_the_run_is_todays"
+      ],
+      "count": 25
+    },
+    {
+      "mutant": "winapps-request-ignored",
+      "killers": [
+        "test_vast_payload_winapps.RequestTests.test_absent_is_no_stage_and_the_value_is_popped",
+        "test_vast_payload_winapps.RequestTests.test_malformed_or_without_windows_is_refused",
+        "test_vast_payload_winapps.StageTests.test_a_guest_failure_fails_the_run_with_the_apps_row",
+        "test_vast_payload_winapps.StageTests.test_a_harness_retry_fails_the_run_with_a_named_row",
+        "test_vast_payload_winapps.StageTests.test_the_stage_runs_right_after_the_gate_and_is_its_own_row",
+        "test_vast_payload_winapps.StageTests.test_the_stage_without_the_windows_stage_is_refused_before_any_stage",
+        "test_vast_payload_winapps.StageTests.test_too_little_time_is_a_retry_not_a_verdict_on_the_guest"
+      ],
+      "count": 7
+    },
+    {
+      "mutant": "winapps-incomplete-output-is-pass",
+      "killers": [
+        "test_vast_payload_winapps.GradeTests.test_pass_requires_matching_summary_and_stage_counts",
+        "test_vast_payload_winapps.GradeTests.test_pass_requires_nonempty_complete_per_app_rows"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "arm-hook-bypassed",
+      "killers": [
+        "test_vast_payload_diagnostics.ArmDispatch.test_defer_arm_is_selected_after_timeout_options",
+        "test_vast_payload_diagnostics.ArmDispatch.test_executor_arm_is_selected_after_timeout_options",
+        "test_vast_payload_diagnostics.ArmDispatch.test_missing_page_arm_still_selects_its_own_name",
+        "test_vast_payload_guest_guard.GuestHook.test_defer_hook_keeps_real_regular_log_and_original_timeout",
+        "test_vast_payload_guest_guard.GuestHook.test_missing_hook_keeps_real_regular_log_and_original_timeout",
+        "test_vast_payload_native_fault.NativeExecHook.test_blackwell_other_process_through_hook_voids",
+        "test_vast_payload_native_fault.NativeExecHook.test_blackwell_through_real_hook_exec_and_grader",
+        "test_vast_payload_native_fault.NativeExecHook.test_fault_with_failed_command_voids",
+        "test_vast_payload_native_fault.NativeExecHook.test_fault_with_timed_out_command_voids",
+        "test_vast_payload_native_fault.NativeExecHook.test_legacy_other_process_through_hook_voids",
+        "test_vast_payload_native_fault.NativeExecHook.test_legacy_through_real_hook_exec_and_grader",
+        "test_vast_payload_native_fault.NativeExecHook.test_non_fault_executor_through_hook_voids",
+        "test_vast_payload_native_fault.NativeExecHook.test_non_fault_timer_through_hook_voids",
+        "test_vast_payload_v7.V7Tests.test_real_hook_refuses_marker_without_exact_source_proof",
+        "test_vast_payload_v7.V7Tests.test_real_hook_refuses_non_ce_fault",
+        "test_vast_payload_v7.V7Tests.test_real_hook_refuses_other_raw_arm"
+      ],
+      "count": 16
+    }
+  ],
+  "baseline_tests": 564,
+  "baseline_killers": []
+}

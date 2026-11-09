@@ -135,7 +135,7 @@ class AppsRows(unittest.TestCase):
         self.assertEqual(caught.exception.name, want)
 
     def test_retry_not_built_names_the_cause_and_never_passes(self):
-        self.retry("NOT_BUILT", "apps_retry_not_built")
+        self.retry("NOT_BUILT", "apps_retry_media")
 
     def test_retry_time_names_the_cause_and_never_passes(self):
         self.retry("TIME", "apps_retry_time")
@@ -407,7 +407,7 @@ class AppsStageInThePayload(unittest.TestCase):
         rc, result, calls = self.run_tier("middle", logs={"apps": (text, 3)})
         self.assertEqual(rc, 1)
         self.assertEqual(
-            [r["name"] for r in result["suites"] if r["fail"]], ["apps_retry_not_built"]
+            [r["name"] for r in result["suites"] if r["fail"]], ["apps_retry_media"]
         )
 
     def short_of_time(self, minutes):
@@ -540,10 +540,10 @@ class AppsGateScript(unittest.TestCase):
         self.assertIn("APPS_STAGE_RETRY class=TIME", out)
         self.assertEqual(sum(line.startswith("APP_ROW ") and "result=NOT_RUN" in line for line in out.splitlines()), 2)
 
-    def test_missing_bundle_is_retry_not_built_and_runs_nothing(self):
+    def test_missing_bundle_is_retry_media_and_runs_nothing(self):
         rc, out = self.run_gate([self.res("vectorAdd"), self.res("deviceQuery")], provisioned=False)
         self.assertEqual(rc, 3, out)
-        self.assertIn("APPS_STAGE_RETRY class=NOT_BUILT", out)
+        self.assertIn("APPS_STAGE_RETRY class=MEDIA", out)
         self.assertNotIn("APP_ROW", out)
 
     def test_bad_lists_are_refused(self):

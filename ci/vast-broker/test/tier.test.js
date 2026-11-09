@@ -92,7 +92,7 @@ test('profile table: check is the Windows master gate, sweep is Linux-only, rele
 });
 
 test('KF_WINAPPS is sent only when asked for, only with the Windows stage, only for a named profile', () => {
-  // today's callers pass nothing: no box sees the field
+  // The raw encoder has no implicit app option; admission supplies the signed middle policy.
   for (const p of ['check', 'sweep', 'release'])
     assert.ok(!('KF_WINAPPS' in tierEnvironment(p)), p);
   assert.deepEqual(tierEnvironment('check', { winApps: 'small' }), {
@@ -105,7 +105,7 @@ test('KF_WINAPPS is sent only when asked for, only with the Windows stage, only 
     assert.throws(() => tierEnvironment('check', { winApps: bad }), /winapps/, String(bad));
 });
 
-test('Windows apps remain absent from every default Worker profile', () => {
+test('the raw profile encoder does not add unrequested Windows apps', () => {
   for (const profile of ['check', 'sweep', 'release'])
     assert.ok(!Object.hasOwn(tierEnvironment(profile), 'KF_WINAPPS'));
 });

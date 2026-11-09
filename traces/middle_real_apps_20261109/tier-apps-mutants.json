@@ -1,0 +1,620 @@
+{
+  "run": "middle_real_apps_20261109",
+  "baseline_groups": [
+    {
+      "baseline": [
+        "tiers-release",
+        "batch",
+        "edits2-concurrency",
+        "config-booleans",
+        "tier-claims"
+      ],
+      "status": 0,
+      "ok": true
+    },
+    {
+      "baseline": true,
+      "status": 0,
+      "tests": 62,
+      "killers": []
+    }
+  ],
+  "tier_cases": [
+    {
+      "mutant": "PR is small",
+      "status": 1,
+      "kills": [
+        "the event picks the tier; a request field never does"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "tag not large",
+      "status": 1,
+      "kills": [
+        "the event picks the tier; a request field never does"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "release hard above check rule",
+      "status": 1,
+      "kills": [
+        "release caps are explicit, per profile, and bounded"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "design-only stage enabled",
+      "status": 1,
+      "kills": [
+        "stage slots: specviewperf may be enabled for the release; two_guests and trio may not"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "cost cap above daily",
+      "status": 1,
+      "kills": [
+        "release caps are explicit, per profile, and bounded"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "die moves family",
+      "status": 1,
+      "kills": [
+        "a family list cannot move a die across families or drop a family"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "second windows run on check",
+      "status": 1,
+      "kills": [
+        "box environment: only the release profile may ask for a second Windows run or a stage"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "one die per family",
+      "status": 1,
+      "kills": [
+        "plan: a missing matrix die is incomplete even when another die is offered",
+        "plan: a family short of two offered dies is INCOMPLETE and not admitted"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "no cost cap",
+      "status": 1,
+      "kills": [
+        "plan: over the cost cap or any cap is refused before renting",
+        "offline plan CLI: the synthetic market plans eight legs; parallelism follows the caps"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "second leg same machine",
+      "status": 1,
+      "kills": [
+        "legacy dieLegs: separate machines and hosts for a die outside the matrix",
+        "legacy dieLegs: duplicate offers of one physical machine do not make two legs"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "single machine runs windows once",
+      "status": 1,
+      "kills": [
+        "plan: two dies per family, two Windows runs per die, one box per die",
+        "dieLegs: one box per die runs Windows twice even with multiple offers",
+        "legacy dieLegs: separate machines and hosts for a die outside the matrix",
+        "legacy dieLegs: duplicate offers of one physical machine do not make two legs"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "non-PASS record passes",
+      "status": 1,
+      "kills": [
+        "classify: PASS only from the Worker PASS with every expected row passing"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "blind fail attributed",
+      "status": 1,
+      "kills": [
+        "classify: FAIL is the guest; no host reference is UNATTRIBUTED; harness rows are RETRY",
+        "classify (review F3): the box must report the planned die and a known driver"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "stop is a pass candidate",
+      "status": 1,
+      "kills": [
+        "classify: FAIL is the guest; no host reference is UNATTRIBUTED; harness rows are RETRY"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "retry row passes",
+      "status": 1,
+      "kills": [
+        "classify: FAIL is the guest; no host reference is UNATTRIBUTED; harness rows are RETRY",
+        "classify: an enabled stage is its own part; its retry row is not a pass"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "one windows pass is enough",
+      "status": 1,
+      "kills": [
+        "verdict: PASS needs every family, two dies each, linux and two Windows passes"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "incomplete release passes",
+      "status": 1,
+      "kills": [
+        "verdict: any FAIL fails the release; a missing family or die is INCOMPLETE"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "FAIL re-rented",
+      "status": 1,
+      "kills": [
+        "re-runs: RETRY and UNATTRIBUTED within the allowance; never FAIL or an owner stop"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "owner stop re-rented",
+      "status": 1,
+      "kills": [
+        "re-runs: RETRY and UNATTRIBUTED within the allowance; never FAIL or an owner stop"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "no cost guard",
+      "status": 1,
+      "kills": [
+        "the release cost cap bounds every leg start, not only the plan"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "small/middle exempt from the gap",
+      "status": 1,
+      "kills": [
+        "admin middle start: one leg, the PR path checks, the commit gap applies",
+        "F9: the gap exemption needs a RUNNING large batch and a PENDING leg of it"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "stop-all leaves releases running",
+      "status": 1,
+      "kills": [
+        "release: an owner stop-all ends the release; no leg starts afterwards"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "fork commit admitted",
+      "status": 1,
+      "kills": [
+        "start refusals: plan over the cost cap, fork commit, renting disabled, bad requests"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "rerun forgets used machines",
+      "status": 1,
+      "kills": [
+        "release: RETRY re-runs on a different machine; FAIL is never re-rented; FAIL wins",
+        "matrix retry: persisted selection and used-machine exclusions reach the next rental"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "another commit answers a cell",
+      "status": 1,
+      "kills": [
+        "a release cell counts only its own run of the same commit"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "admin leg closed as RUN_GONE",
+      "status": 1,
+      "kills": [
+        "an admin leg has no GitHub run to outlive: the cron does not close it as RUN_GONE"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "pinned die ignores avoided machines",
+      "status": 1,
+      "kills": [
+        "pinned retry selects another machine even on the same host",
+        "pinned retry refuses when every machine has already been used"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "no VRAM floor",
+      "status": 1,
+      "kills": [
+        "middle tier VRAM floor: only middle rentals, fail closed without gpu_ram"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "rotation not stored",
+      "status": 1,
+      "kills": [
+        "middle tier: PRs rotate families in order and fall back when a family has no offer"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "plan rents",
+      "status": 1,
+      "kills": [
+        "plan: prints the release it WOULD rent, and rents nothing",
+        "eight full legs require eight parallel slots before any rental",
+        "F4: a release Start needs RELEASE_ENABLED=true; the plan says so"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "release count cap is the check cap",
+      "status": 1,
+      "kills": [
+        "start: a release fans out up to the cap; each leg is a normal rental",
+        "release: all legs pass on fresh boxes -> PASS; eight mocked legs retain the existing verdict rules",
+        "release: RETRY re-runs on a different machine; FAIL is never re-rented; FAIL wins",
+        "release: an owner stop-all ends the release; no leg starts afterwards",
+        "release: the batch stop closes only its own legs",
+        "an admin leg has no GitHub run to outlive: the cron does not close it as RUN_GONE",
+        "the release cost cap bounds every leg start, not only the plan",
+        "F1/F4: turning RENTING_ENABLED off stops pending legs and re-runs at the next tick",
+        "F1/F4: turning RELEASE_ENABLED off stops pending legs and re-runs at the next tick",
+        "F2: a batch stop whose provider calls fail still leaves the release STOPPED",
+        "F8: a verified contract price that breaks the release cost cap closes the box",
+        "F9: a pending leg past its start window is MISSING, not rented later",
+        "release + store: every leg is one D1 row, tier largest; a wrong-die PASS is UNATTRIBUTED",
+        "release + store: one passing release meets the committed large requirements",
+        "matrix retry: persisted selection and used-machine exclusions reach the next rental"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "renting switch not in admit",
+      "status": 1,
+      "kills": [
+        "F1/F4: turning RENTING_ENABLED off stops pending legs and re-runs at the next tick"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "release kill switch ignored",
+      "status": 1,
+      "kills": [
+        "F1/F4: turning RELEASE_ENABLED off stops pending legs and re-runs at the next tick"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "start ignores the release kill switch",
+      "status": 1,
+      "kills": [
+        "F4: a release Start needs RELEASE_ENABLED=true; the plan says so"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "batch stop not durable first",
+      "status": 1,
+      "kills": [
+        "F2: a batch stop whose provider calls fail still leaves the release STOPPED"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "hardware not checked",
+      "status": 1,
+      "kills": [
+        "classify (review F3): the box must report the planned die and a known driver"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "release rows stored as release",
+      "status": 1,
+      "kills": [
+        "start: a release fans out up to the cap; each leg is a normal rental"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "release takes every slot",
+      "status": 1,
+      "kills": [
+        "item 8: the cap defaults to 1 and is validated (1 to 9, release at most cap - 1)"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "release writes the commit gap",
+      "status": 1,
+      "kills": [
+        "start: a release fans out up to the cap; each leg is a normal rental"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "contract price skips the cost cap",
+      "status": 1,
+      "kills": [
+        "F8: a verified contract price that breaks the release cost cap closes the box"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "no account daily cap",
+      "status": 1,
+      "kills": [
+        "offline plan CLI: the synthetic market plans eight legs; parallelism follows the caps"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "gap exemption without RUNNING",
+      "status": 1,
+      "kills": [
+        "F9: the gap exemption needs a RUNNING large batch and a PENDING leg of it"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "gap exemption for any leg state",
+      "status": 1,
+      "kills": [
+        "F9: the gap exemption needs a RUNNING large batch and a PENDING leg of it"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "no start window",
+      "status": 1,
+      "kills": [
+        "F9: a pending leg past its start window is MISSING, not rented later"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "re-run on the sibling machine",
+      "status": 1,
+      "kills": [
+        "release: RETRY re-runs on a different machine; FAIL is never re-rented; FAIL wins",
+        "matrix retry: persisted selection and used-machine exclusions reach the next rental"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "no account cap in admission",
+      "status": 1,
+      "kills": [
+        "F8: the account-wide daily cap also refuses a single PR rental (closed reason vocabulary)"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "batches never pruned",
+      "status": 1,
+      "kills": [
+        "F10: finished batches are pruned after 30 days; legs use a non-git branch name"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "config error stops teardown",
+      "status": 1,
+      "kills": [
+        "R3: a malformed RELEASE_ENABLED refuses rentals but the cron still tears down",
+        "R3: a malformed RENTING_ENABLED refuses rentals but the cron still tears down",
+        "R3: a malformed ALLOW_UNKNOWN_COUNTRY refuses rentals but the cron still tears down",
+        "R3: a malformed TREE_KEY_CARRY_OVER refuses rentals but the cron still tears down",
+        "R3: a malformed MAX_PRICE_USD_HOUR refuses rentals but the cron still tears down"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "teardown-only runs batch ticks",
+      "status": 1,
+      "kills": [
+        "R3: a malformed RELEASE_ENABLED refuses rentals but the cron still tears down",
+        "R3: a malformed RENTING_ENABLED refuses rentals but the cron still tears down",
+        "R3: a malformed ALLOW_UNKNOWN_COUNTRY refuses rentals but the cron still tears down",
+        "R3: a malformed TREE_KEY_CARRY_OVER refuses rentals but the cron still tears down",
+        "R3: a malformed MAX_PRICE_USD_HOUR refuses rentals but the cron still tears down"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "teardown keeps policy vars",
+      "status": 1,
+      "kills": [
+        "R3: the teardown configuration drops policy vars, never identity",
+        "R3: a malformed RELEASE_ENABLED refuses rentals but the cron still tears down",
+        "R3: a malformed RENTING_ENABLED refuses rentals but the cron still tears down",
+        "R3: a malformed ALLOW_UNKNOWN_COUNTRY refuses rentals but the cron still tears down",
+        "R3: a malformed TREE_KEY_CARRY_OVER refuses rentals but the cron still tears down",
+        "R3: a malformed MAX_PRICE_USD_HOUR refuses rentals but the cron still tears down"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "Worker boolean unchecked",
+      "status": 1,
+      "kills": [
+        "R3: configuration() refuses a malformed RENTING_ENABLED by name",
+        "R3: configuration() refuses a malformed ALLOW_UNKNOWN_COUNTRY by name",
+        "R3: configuration() refuses a malformed TREE_KEY_CARRY_OVER by name",
+        "R3: configuration() refuses a malformed MIDDLE_APPS_ENABLED by name",
+        "R3: a malformed RENTING_ENABLED refuses rentals but the cron still tears down",
+        "R3: a malformed ALLOW_UNKNOWN_COUNTRY refuses rentals but the cron still tears down",
+        "R3: a malformed TREE_KEY_CARRY_OVER refuses rentals but the cron still tears down"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "deploy boolean unchecked",
+      "status": 1,
+      "kills": [
+        "R3: deploy.mjs accepts only true|false for RENTING_ENABLED",
+        "R3: deploy.mjs accepts only true|false for RELEASE_ENABLED",
+        "R3: deploy.mjs accepts only true|false for ALLOW_UNKNOWN_COUNTRY",
+        "R3: deploy.mjs accepts only true|false for TREE_KEY_CARRY_OVER",
+        "R3: deploy.mjs accepts only true|false for MIDDLE_APPS_ENABLED"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "base branch ignored",
+      "status": 1,
+      "kills": [
+        "R4: tierForClaims reads the event, ref and base branch of the token",
+        "R4: a PR into next rental is recorded and stored as small"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "base from ref ignored",
+      "status": 1,
+      "kills": [
+        "R4: tierForClaims reads the event, ref and base branch of the token"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "tag ref dropped",
+      "status": 1,
+      "kills": [
+        "R4: tierForClaims reads the event, ref and base branch of the token"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "admission passes only the event",
+      "status": 1,
+      "kills": [
+        "R4: a PR into next rental is recorded and stored as small"
+      ],
+      "ok": true
+    }
+  ],
+  "windows_cases": [
+    {
+      "mutant": "winapps default enabled",
+      "count": 7,
+      "status": 1,
+      "tests": 62,
+      "killers": [
+        "Windows apps and SPEC options coexist without selecting either by default",
+        "asking for one optional stage does not ask for its sibling",
+        "profile table: check is the Windows master gate, sweep is Linux-only, release is Windows",
+        "KF_WINAPPS is sent only when asked for, only with the Windows stage, only for a named profile",
+        "the raw profile encoder does not add unrequested Windows apps",
+        "Windows apps reject unknown names and composite profile strings",
+        "the Worker writes the tier of the profile into the box environment, and only it"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "winapps request dropped",
+      "count": 3,
+      "status": 1,
+      "tests": 62,
+      "killers": [
+        "Windows apps and SPEC options coexist without selecting either by default",
+        "KF_WINAPPS is sent only when asked for, only with the Windows stage, only for a named profile",
+        "each explicit Windows apps profile is carried unchanged"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "winapps unknown profile accepted",
+      "count": 2,
+      "status": 1,
+      "tests": 62,
+      "killers": [
+        "KF_WINAPPS is sent only when asked for, only with the Windows stage, only for a named profile",
+        "Windows apps reject unknown names and composite profile strings"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "winapps on Linux-only sweep",
+      "count": 2,
+      "status": 1,
+      "tests": 62,
+      "killers": [
+        "KF_WINAPPS is sent only when asked for, only with the Windows stage, only for a named profile",
+        "the Linux-only sweep cannot request Windows apps"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "winapps ISO missing",
+      "count": 2,
+      "status": 1,
+      "tests": 61,
+      "killers": [
+        "bench-data object table is exactly the four licensed-copy keys and the two Windows app bundle keys",
+        "Windows apps allowlist proposal resolves the exact key: winapps-open.iso"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "winapps manifest missing",
+      "count": 2,
+      "status": 1,
+      "tests": 61,
+      "killers": [
+        "bench-data object table is exactly the four licensed-copy keys and the two Windows app bundle keys",
+        "Windows apps allowlist proposal resolves the exact key: winapps-open.manifest.json"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "winapps ISO wrong key",
+      "count": 2,
+      "status": 1,
+      "tests": 62,
+      "killers": [
+        "bench-data object table is exactly the four licensed-copy keys and the two Windows app bundle keys",
+        "Windows apps allowlist proposal resolves the exact key: winapps-open.iso"
+      ],
+      "ok": true
+    },
+    {
+      "mutant": "winapps manifest wrong key",
+      "count": 2,
+      "status": 1,
+      "tests": 62,
+      "killers": [
+        "bench-data object table is exactly the four licensed-copy keys and the two Windows app bundle keys",
+        "Windows apps allowlist proposal resolves the exact key: winapps-open.manifest.json"
+      ],
+      "ok": true
+    }
+  ]
+}
