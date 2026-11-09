@@ -153,12 +153,41 @@ class BoxPathsSurviveTheStrip(unittest.TestCase):
             "third_party/ogkm",
             "scripts/ci/fetch_oracles.sh",
             "scripts/ci/ignore_ladder.py",
+            "scripts/ci/full_tree_tests.py",
+            "scripts/ci/full_tree_tests.tsv",
+            "scripts/ci/runner_namespaces.py",
         ):
             with self.subTest(path):
                 self.assertTrue(
                     any(p == path or p.startswith(path + "/") for p in self.tracked), path
                 )
                 self.assertFalse(L.matches(self.pats, path), path)
+
+    def test_the_stripped_ci_job_only_calls_files_that_survive_its_own_strip(self):
+        import yaml
+
+        with open(os.path.join(self.root, ".github/workflows/ci.yml"), encoding="utf-8") as f:
+            steps = yaml.safe_load(f)["jobs"]["stripped"]["steps"]
+        names = [s.get("name", "") for s in steps]
+        strip_at = next(i for i, n in enumerate(names) if "strip the checkout" in n)
+        token = re.compile(
+            r"(?<![A-Za-z0-9_./-])(?:scripts|tools|crates|ci|docs|traces)/[A-Za-z0-9_./-]*[A-Za-z0-9_]"
+        )
+        tracked = set(self.tracked)
+        missing = []
+        for i, step in enumerate(steps):
+            for line in str(step.get("run", "")).split("\n"):
+                # Comments and the text of an echo or an error annotation are prose, not a call.
+                if line.lstrip().startswith(("#", '"')) or "echo" in line or "::error" in line:
+                    continue
+                for t in token.findall(line):
+                    if t not in tracked and not any(p.startswith(t + "/") for p in tracked):
+                        continue
+                    # Before the strip step everything is still there; from it on, only survivors.
+                    if i > strip_at and L.matches(self.pats, t):
+                        missing.append("step %r names %s, which the strip deletes" % (names[i], t))
+        self.assertGreater(len(steps), 8)
+        self.assertEqual(missing, [])
 
     def test_every_include_str_and_include_bytes_target_of_a_workspace_crate_survives(self):
         bad = []

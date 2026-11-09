@@ -162,6 +162,8 @@
 /ci/vast-reaper
 
 # --- local test and gate scripts the box payload does not run ---
+# (scripts/ci/runner_namespaces.py is NOT here: the `stripped` CI job runs it after the strip, to give this
+# checkout's test binaries the user-namespace prerequisite; a test of it lives in test_box_stripped.py.)
 /scripts/ci/test_*.py
 /scripts/ci/*_mutants.py
 /scripts/ci/clippy.sh
@@ -174,7 +176,6 @@
 /scripts/ci/doc_status_check.py
 /scripts/ci/no_gpu_uuids.py
 /scripts/ci/no_private_refs.py
-/scripts/ci/runner_namespaces.py
 /scripts/ci/workflow_lint.py
 /scripts/bench/tests
 /scripts/mutate
