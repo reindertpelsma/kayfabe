@@ -486,7 +486,7 @@ export async function setup(overrides = {}) {
         method = path.startsWith('/status') ? 'GET' : 'POST',
         token,
         ghToken = null,
-        protocol = '6',
+        protocol = '7',
       } = {},
     ) {
       if (path === '/rent' && body === undefined)

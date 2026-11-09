@@ -145,8 +145,8 @@ const MUTANTS = [
     [
       [
         I,
-        "['created', 'loading', 'starting', 'offline'].includes(i.actual_status)",
-        "['created', 'loading', 'starting'].includes(i.actual_status)",
+        "['created', 'loading', 'starting', 'scheduling', 'offline'].includes(i.actual_status)",
+        "['created', 'loading', 'starting', 'scheduling'].includes(i.actual_status)",
       ],
     ],
   ],
@@ -221,7 +221,7 @@ const MUTANTS = [
     [
       [
         I,
-        "        await closeLine(record, 'UNAVAILABLE');\n        throw Error('UNAVAILABLE');\n      }\n      await ledger.save(record);",
+        "        await closeLine(record, record.closed);\n        throw Error('UNAVAILABLE');\n      }\n      await ledger.save(record);",
         "        throw Error('UNAVAILABLE');\n      }\n      await ledger.save(record);",
       ],
     ],
@@ -231,8 +231,8 @@ const MUTANTS = [
     [
       [
         I,
-        "      await closeLine(record, 'GONE');\n      await ledger.settle(record, now());\n      return;\n    }\n    await checkContract",
-        '      await ledger.settle(record, now());\n      return;\n    }\n    await checkContract',
+        '      await closeLine(record, record.closed);\n      await ledger.settle(record, now());\n      return;\n    }\n    await recordRental(record, instance, cfg);',
+        '      await ledger.settle(record, now());\n      return;\n    }\n    await recordRental(record, instance, cfg);',
       ],
     ],
   ],
@@ -255,8 +255,8 @@ const MUTANTS = [
     [
       [
         I,
-        '[...secrets, record.id, record.label, record.nonce],\n      { tail: false },',
-        '[...secrets, record.nonce],\n      { tail: false },',
+        '[...secrets, record.id, record.label, record.nonce].flatMap',
+        '[...secrets, record.nonce].flatMap',
       ],
     ],
   ],

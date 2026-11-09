@@ -1,3 +1,4 @@
+import { redactEndpointValues } from './endpoint-values.js';
 function utf8Prefix(text, limit) {
   let bytes = new TextEncoder().encode(text);
   if (bytes.length <= limit) return text;
@@ -24,7 +25,7 @@ function keepsRun(value) {
   if (value.length > 128 || !SNAKE_NAME.test(value)) return false;
   return value.replace(/[^0-9]/g, '').length * 5 <= value.length;
 }
-export function sanitizeBoxText(bytes, cap = 8192, secrets = [], { tail = true } = {}) {
+export function sanitizeBoxText(bytes, cap = 8192, secrets = [], { tail = true, endpoints } = {}) {
   const raw = new TextDecoder('utf-8').decode(bytes),
     encoder = new TextEncoder();
   let text = raw
@@ -52,6 +53,7 @@ export function sanitizeBoxText(bytes, cap = 8192, secrets = [], { tail = true }
     );
   text = text.replace(/https?:\/\/[^\s<>"']+/gi, '[url redacted]');
   for (const secret of secrets) if (secret) text = text.split(secret).join('[redacted]');
+  text = redactEndpointValues(text, endpoints);
   text = text.replace(/:{2,}/g, (value) => value.split('').join(' ')).replaceAll('##[', '# #[');
   const lines = text.split('\n');
   if (lines.at(-1) === '') lines.pop();
@@ -81,8 +83,8 @@ export function sanitizeBoxText(bytes, cap = 8192, secrets = [], { tail = true }
     bytesDropped: Math.max(0, bytes.byteLength - shown),
   };
 }
-export function appendBoxText(record, bytes, secrets = []) {
-  const next = sanitizeBoxText(bytes, 8192, secrets);
+export function appendBoxText(record, bytes, secrets = [], options = {}) {
+  const next = sanitizeBoxText(bytes, 8192, secrets, options);
   record.bytesDropped = (record.bytesDropped || 0) + next.bytesDropped;
   appendWorkerText(record, next.text);
 }

@@ -127,7 +127,10 @@ async function publishOne({ ledger, env, entry, key, now, runId }) {
       event({ state: 'DROPPED', why: 'expired' });
       return 'DROP';
     }
-    built = await buildPublicLog(parts, exact, { omitted: entry.dropped });
+    built = await buildPublicLog(parts, exact, {
+      omitted: entry.dropped,
+      endpoints: entry.endpointRedactions,
+    });
   }
   if (built && logs && !entry.logPut) {
     await putPublic(env, logKey(runId), built.text, 'text/plain; charset=utf-8');
@@ -162,7 +165,7 @@ async function publishOne({ ledger, env, entry, key, now, runId }) {
           offsets: built ? stageOffsets(built.text) : null,
           logsBase: logsBase(env),
         });
-        doc = fitReport(redactDoc(full, exact));
+        doc = fitReport(redactDoc(full, exact, entry.endpointRedactions));
       }
     }
     if (doc !== null && logs && !entry.reportPut) {
@@ -200,9 +203,15 @@ export async function publishTick({ ledger, env, now, clock = Date.now, budgetMs
   for (const [key, stored] of await ledger.storage.list({ prefix: PUBLISH_PREFIX, limit: 64 })) {
     if (worked >= PER_TICK || clock() >= deadline) break;
     if (Number.isFinite(stored?.nextAt) && stored.nextAt > now) continue; // backing off
-    const m = /^plogq:([1-9][0-9]{0,19}-[1-9][0-9]{0,19}):([0-9])$/.exec(key);
+    const m = /^plogq:([1-9][0-9]{0,19}-[1-9][0-9]{0,19}):((?:[0-9]|[12][0-9]|3[01]))$/.exec(key);
     const entry = stored;
-    if (!m || entry === null || typeof entry !== 'object' || entry.key !== m[1]) {
+    if (
+      !m ||
+      entry === null ||
+      typeof entry !== 'object' ||
+      entry.key !== m[1] ||
+      entry.leg !== Number(m[2])
+    ) {
       await ledger.storage.delete(key);
       event({ state: 'DROPPED', why: 'entry' });
       continue;

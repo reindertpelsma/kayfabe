@@ -1,3 +1,4 @@
+import { rankingPrice } from './provider-policy.js';
 // The large (release) tier: plan, leg classification and the release verdict. Pure functions over
 // already evaluated offers and ledger records; src/index.js does the renting through the same
 // admission path as every other rental (2026-11-05, wtier; design: V3_CI_TIERS_AND_IGNORE_LADDER.md
@@ -29,9 +30,7 @@ const countryRank = (offer, cfg) => {
   return i < 0 ? cfg.preferredCountries.length : i;
 };
 const byPreference = (cfg) => (a, b) =>
-  countryRank(a, cfg) - countryRank(b, cfg) ||
-  a.pricing.effective - b.pricing.effective ||
-  a.id - b.id;
+  countryRank(a, cfg) - countryRank(b, cfg) || rankingPrice(a) - rankingPrice(b) || a.id - b.id;
 export const requiredStageRows = (stages) => {
   validateStagePolicy(stages);
   return Object.fromEntries(

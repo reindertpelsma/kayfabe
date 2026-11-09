@@ -340,7 +340,7 @@ test('workerd admission is transactional without shared service state', async (t
         if (!independent) {
           const available = await fetchRequest(
             env.WORKER_URL + '/' + bindings.BROKER_PATH_PREFIX + '/availability?profile=check',
-            { headers: { Authorization: 'Bearer ' + tokens[0], 'X-KF-Protocol': '6' } },
+            { headers: { Authorization: 'Bearer ' + tokens[0], 'X-KF-Protocol': '7' } },
           );
           assert.equal(available.status, 200);
           assert.ok(Array.isArray(available.data.offers));
@@ -351,7 +351,7 @@ test('workerd admission is transactional without shared service state', async (t
               method: 'POST',
               headers: {
                 Authorization: 'Bearer ' + token,
-                'X-KF-Protocol': '6',
+                'X-KF-Protocol': '7',
                 'X-Test-Run': String(1001 + i),
               },
               body: JSON.stringify({

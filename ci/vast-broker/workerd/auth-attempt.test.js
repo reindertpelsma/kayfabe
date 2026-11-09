@@ -66,7 +66,7 @@ for (const attempt of [3, 4])
           method: body === undefined ? 'GET' : 'POST',
           headers: {
             Authorization: 'Bearer ' + token,
-            'X-KF-Protocol': '6',
+            'X-KF-Protocol': '7',
             'Content-Type': 'application/json',
           },
           ...(body === undefined ? {} : { body: JSON.stringify(body) }),

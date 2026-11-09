@@ -3,12 +3,14 @@
 Worker text is display-only. No checkout, cache, binary/artifact input or upload.
 """
 
+import base64
+import ipaddress
 import contextlib, dataclasses, hashlib, http.client, io, json, math, os, re, secrets, signal, sys, time, traceback, urllib.parse
 from pathlib import Path
 
 MAX_RESPONSE = 262144
 # Status protocol: bump with defaults.json statusProtocol whenever the status shape changes.
-STATUS_PROTOCOL = 6
+STATUS_PROTOCOL = 7
 MAX_LOG = 4194304
 # Display policy for the box log (gate visibility, 2026-10-26): the job log shows the HEAD and the
 # TAIL of the box output inside the one display budget (65000 bytes, 200 lines, see Runner.show),
@@ -210,7 +212,7 @@ def blank_run(match):
     return run if keep else "[redacted]"
 
 
-def sanitise(raw, redactions=()):
+def sanitise(raw, redactions=(), endpoint_redactions=None):
     """The whole sanitiser, without any size cap: returns (text, original byte count).
 
     Allow TAB/LF, printable ASCII and precomposed Latin letters U+00C0..FF
@@ -223,11 +225,17 @@ def sanitise(raw, redactions=()):
         raw = raw.encode("utf-8", errors="replace")
     original = len(raw)
     text = raw.decode("utf-8", errors="replace")
-    secrets_by_length = sorted((x for x in set(redactions) if x), key=len, reverse=True)
+    secret_values = {value for value in redactions if value}
+    secret_values.update(
+        redact_endpoint_values(value, endpoint_redactions) for value in list(secret_values)
+    )
+    secrets_by_length = sorted(secret_values, key=len, reverse=True)
     # Twice: on the raw text, and again once the stripping below has run. A value split by a control
     # or non-ASCII character (`kf\x01broker`) becomes whole only after the strip.
     for secret in secrets_by_length:
         text = text.replace(secret, "[redacted]")
+    text = re.compile(r"[A-Za-z0-9_-]{32,}").sub(blank_run, text)
+    text = redact_endpoint_values(text, endpoint_redactions)
     text = re.sub(r"(?:\x1b\]|\x9d)[\s\S]*?(?:\x07|\x1b\\|\x9c|$)", "", text)
     text = re.sub(r"(?:\x1b[P^_]|[\x90\x98\x9e\x9f])[\s\S]*?(?:\x1b\\|\x9c|$)", "", text)
     text = re.sub(r"(?:\x1b\[|\x9b)[0-?]*[ -/]*[@-~]", "", text)
@@ -239,6 +247,7 @@ def sanitise(raw, redactions=()):
     )
     for secret in secrets_by_length:
         text = text.replace(secret, "[redacted]")
+    text = redact_endpoint_values(text, endpoint_redactions)
     text = re.sub(r"\bBearer\s+[^\s]+", "Bearer [redacted]", text, flags=re.I)
     text = re.sub(
         r"\b(?:gh[pousr]_[A-Za-z0-9]{20,255}|github_pat_[A-Za-z0-9_]{20,255})\b", "[redacted]", text
@@ -248,7 +257,7 @@ def sanitise(raw, redactions=()):
         r":{2,}", lambda x: (": " * (len(x[0]) // 2) + (":" if len(x[0]) % 2 else "")), text
     ).replace("##[", "# [")
     text = re.sub(r"""https?://[^\s<>"']+""", "[url redacted]", text, flags=re.I)  # signed-url
-    return text, original
+    return redact_endpoint_values(redact_endpoints(text), endpoint_redactions), original
 
 
 def marker_lines(removed, capped):
@@ -481,7 +490,7 @@ def class_token(value):
     return isinstance(value, str) and re.fullmatch("[A-Z][A-Z0-9_]{1,23}", value) is not None
 
 
-SELECTION_REASONS = {"DEFAULT_ORDER", "PREFERENCE", "ROTATE", "NONE"}
+SELECTION_REASONS = {"DEFAULT_ORDER", "PREFERENCE", "ROTATE", "PIN", "PIN_EXHAUSTED", "NONE"}
 
 
 def validate_selection(value):
@@ -693,6 +702,11 @@ OPTIONAL_STATUS_KEYS = {
     "host_driver_version",
     "host_reference",
     "provider_retries",
+    "provider_retry_allowed",
+    "rental_attempts",
+    "datacenter",
+    "ip_prefix",
+    "endpoint_redactions",
 }
 ERROR_KEYS = {"state", "verdict", "log_tail_sanitised", "bytes_dropped"}
 
@@ -826,8 +840,38 @@ def validate_status(data, ctx, manifest, http_status):
         r"unknown|\d{3}\.\d{1,3}(?:\.\d{1,2})?", host_driver
     ):
         raise Invalid()
-    if not integer(data.get("provider_retries", 0), 0, 1):
+    if not integer(data.get("provider_retries", 0), 0, 31):
         raise Invalid()
+    if "provider_retry_allowed" in data and type(data["provider_retry_allowed"]) is not bool:
+        raise Invalid()
+    if data.get("datacenter") is not None and type(data["datacenter"]) is not bool:
+        raise Invalid()
+    if "ip_prefix" in data and (
+        not isinstance(data["ip_prefix"], str)
+        or len(data["ip_prefix"]) > 64
+        or rental_prefix(data) != data["ip_prefix"]
+    ):
+        if data.get("ip_prefix") != "unknown":
+            raise Invalid()
+    if (
+        "endpoint_redactions" in data
+        and decode_endpoint_values(data["endpoint_redactions"]) is None
+    ):
+        raise Invalid()
+    attempts = data.get("rental_attempts", [])
+    if not isinstance(attempts, list) or len(attempts) > 32:
+        raise Invalid()
+    for row in attempts:
+        if (
+            type(row) is not dict
+            or set(row) != {"instance", "machine", "host", "reason", "seconds"}
+            or not provider_id(row["machine"])
+            or not provider_id(row["host"])
+            or not isinstance(row["reason"], str)
+            or not re.fullmatch("[A-Z_]{1,40}", row["reason"])
+            or not integer(row["seconds"], 0, 86400)
+        ):
+            raise Invalid()
     if data.get("host_reference", "MISSING") not in {"GREEN", "NOT_GREEN", "MISSING"}:
         raise Invalid()
     if type(data["cleanup_pending"]) is not bool or not integer(data["log_cursor"], 0, 10000):
@@ -919,15 +963,297 @@ def public_gpu(value):
     return "unknown"
 
 
+def endpoint_integer(value, base=10):
+    value = value.lstrip("0") or "0"
+    if len(value) > 40:
+        return None
+    try:
+        return int(value, base)
+    except ValueError:
+        return None
+
+
+def endpoint_ipv4(value):
+    parts = value.split(".")
+    if len(parts) > 4:
+        return []
+    values = [0]
+    for i, part in enumerate(parts):
+        if re.fullmatch(r"0x[0-9a-f]+", part, re.I):
+            candidates = [endpoint_integer(part[2:], 16)]
+        elif re.fullmatch(r"[0-9]+", part):
+            candidates = [endpoint_integer(part)]
+            if re.fullmatch(r"0[0-7]+", part):
+                candidates.append(endpoint_integer(part, 8))
+        else:
+            candidates = []
+        width = 8 * (5 - len(parts)) if i == len(parts) - 1 else 8
+        values = [
+            (n << width) + v for n in values for v in candidates if v is not None and v < 1 << width
+        ]
+    return values
+
+
+def endpoint_addresses(value):
+    if not isinstance(value, str):
+        return []
+    value = value.removeprefix("[").removesuffix("]").split("%")[0].lower()
+    if ":" not in value:
+        return endpoint_ipv4(value)
+    if "." in value:
+        prefix, tail = value.rsplit(":", 1)
+        return [
+            address
+            for n in endpoint_ipv4(tail)
+            for address in endpoint_addresses(
+                prefix + ":" + format(n >> 16, "x") + ":" + format(n & 65535, "x")
+            )
+        ]
+    halves = value.split("::")
+    if len(halves) > 2:
+        return []
+    left = halves[0].split(":") if halves[0] else []
+    right = halves[1].split(":") if len(halves) > 1 and halves[1] else []
+    count = len(left) + len(right)
+    if count != 8 if len(halves) == 1 else count >= 8:
+        return []
+    words = left + ["0"] * (8 - count) + right
+    if not all(re.fullmatch(r"[0-9a-f]{1,4}", word) for word in words):
+        return []
+    return [int("".join(word.zfill(4) for word in words), 16)]
+
+
+def valid_endpoint_values(context):
+    return (
+        type(context) is dict
+        and set(context) == {"ips", "ports", "overflow"}
+        and type(context["overflow"]) is bool
+        and type(context["ips"]) is list
+        and len(context["ips"]) <= 128
+        and all(
+            isinstance(ip, str) and len(ip) <= 64 and endpoint_addresses(ip)
+            for ip in context["ips"]
+        )
+        and type(context["ports"]) is list
+        and len(context["ports"]) <= 128
+        and all(type(port) is int and 0 < port <= 65535 for port in context["ports"])
+    )
+
+
+def decode_endpoint_values(value):
+    if not isinstance(value, str) or len(value) > 16384:
+        return None
+    try:
+        context = json.loads(base64.b64decode(value, validate=True))
+    except (ValueError, UnicodeError):
+        return None
+    return context if valid_endpoint_values(context) else None
+
+
+def merge_endpoint_values(prior, current):
+    ips = list(dict.fromkeys(prior.get("ips", []) + current.get("ips", [])))
+    ports = list(dict.fromkeys(prior.get("ports", []) + current.get("ports", [])))
+    return {
+        "ips": ips[:128],
+        "ports": ports[:128],
+        "overflow": prior.get("overflow", False)
+        or current.get("overflow", False)
+        or len(ips) > 128
+        or len(ports) > 128,
+    }
+
+
+def redact_endpoint_values(text, context=None):
+    context = context or {}
+    numbers = set()
+    for ip in context.get("ips", []):
+        for n in endpoint_addresses(ip):
+            numbers.add(n)
+            if n <= 0xFFFFFFFF:
+                numbers.add(0xFFFF00000000 + n)
+            if n >> 32 == 65535:
+                numbers.add(n & 0xFFFFFFFF)
+    ports = {str(port) for port in context.get("ports", [])}
+
+    def candidate(match):
+        return (
+            "[redacted]"
+            if context.get("overflow") or any(n in numbers for n in endpoint_addresses(match[0]))
+            else match[0]
+        )
+
+    text = re.sub(r"(?<![0-9a-f:.])[0-9a-f:.]*:[0-9a-f:.]+", candidate, text, flags=re.I)
+    text = re.sub(
+        r"(?<![0-9])(?:0x[0-9a-f]+|[0-9]+)(?:\.(?:0x[0-9a-f]+|[0-9]+)){1,3}",
+        candidate,
+        text,
+        flags=re.I,
+    )
+    for ip in context.get("ips", []):
+        text = re.sub(re.escape(ip), "[redacted]", text, flags=re.I)
+    text = re.sub(
+        r"0x[0-9a-f]+|[0-9a-f]{8,}",
+        lambda m: (
+            "[redacted]"
+            if context.get("overflow")
+            or endpoint_integer(re.sub(r"^0x", "", m[0], flags=re.I), 16) in numbers
+            else m[0]
+        ),
+        text,
+        flags=re.I,
+    )
+    return re.sub(
+        r"[0-9]+",
+        lambda m: (
+            "[redacted]"
+            if context.get("overflow")
+            or (m[0].lstrip("0") or "0") in ports
+            or endpoint_integer(m[0]) in numbers
+            else m[0]
+        ),
+        text,
+    )
+
+
+def public_ip_prefix(value):
+    if not isinstance(value, str) or len(value) > 64 or "%" in value:
+        return "unknown"
+    try:
+        address = ipaddress.ip_address(value)
+        if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped:
+            address = address.ipv4_mapped
+        if isinstance(address, ipaddress.IPv4Address):
+            return str(ipaddress.ip_network(str(address) + "/24", strict=False).network_address)
+        return str(ipaddress.ip_network(str(address) + "/48", strict=False))
+    except ValueError:
+        return "unknown"
+
+
+def public_endpoint_match(match):
+    prefix = public_ip_prefix(match[1])
+    return match[0] if prefix == "unknown" else prefix
+
+
+def port_operand_end(text, start):
+    end = start
+    if end < len(text) and text[end] in "+-":
+        end += 1
+    while end < len(text) and text[end] in " \t\r\n\v\f":
+        end += 1
+    digits = end
+    while end < len(text) and text[end] in "0123456789":
+        end += 1
+    if end == digits or (end < len(text) and re.match(r"[A-Za-z0-9_:]", text[end])):
+        return None
+    return end
+
+
+def port_separators(text, start):
+    while start < len(text) and text[start] in " \t\r\n\v\f\"'=:":
+        start += 1
+    return start
+
+
+def redact_port_fields(text):
+    pieces = []
+    through = 0
+    selectors = r"(?<![A-Za-z0-9])(?:--(?:ssh-)?port\b|-[A-Za-z0-9]*?[opP]|\b(?:ssh[_ -]?(?:port|host)|port)\b)"
+    for match in re.finditer(selectors, text, re.I):
+        if match.start() < through:
+            continue
+        start = match.end()
+        option = match[0].lower()
+        if option.startswith("-") and not option.startswith("--"):
+            option = "-" + option[-1]
+        if option == "-o":
+            start = port_separators(text, start)
+            if text[start : start + 4].lower() != "port":
+                continue
+            start += 4
+        start = port_separators(text, start)
+        end = port_operand_end(text, start)
+        if end is None:
+            continue
+        label = "-oPort=" if option == "-o" else "-p " if option == "-p" else "ssh_port="
+        pieces.append(text[through : match.start()] + label + "[redacted]")
+        through = end
+    text = "".join(pieces) + text[through:]
+    pieces = []
+    through = 0
+    endpoints = r"(?<![A-Za-z0-9_.:%-])(\[[^\[\]\s]+\]|[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*):"
+    for match in re.finditer(endpoints, text):
+        if match.start() < through:
+            continue
+        host = match[1].removeprefix("[").removesuffix("]")
+        prefix = public_ip_prefix(host)
+        context_end = match.start()
+        while context_end > 0 and text[context_end - 1] in " \t\r\n\v\f":
+            context_end -= 1
+        context = text[max(0, context_end - 96) : context_end]
+        authority = re.search(r"(?:^|\W)(?:ssh|scp|endpoint|host)[=:]?$|://$|@$", context, re.I)
+        qualified = "." in host and re.search(r"[A-Za-z]", host)
+        if prefix == "unknown" and not qualified and not authority:
+            continue
+        start = port_separators(text, match.end())
+        end = port_operand_end(text, start)
+        if end is None:
+            continue
+        pieces.append(
+            text[through : match.start()]
+            + (match[1] + ":[redacted]" if prefix == "unknown" else prefix)
+        )
+        through = end
+    return "".join(pieces) + text[through:]
+
+
+def redact_endpoints(text):
+    text = redact_port_fields(text)
+    text = re.sub(
+        r"\[?\b((?:[0-9]{1,3}\.){3}[0-9]{1,3})\]?(?::[0-9]{1,5})?(?![0-9])",
+        public_endpoint_match,
+        text,
+    )
+    return re.sub(
+        r"(?<![A-Za-z0-9_])\[?([0-9a-f]{0,4}(?::[0-9a-f]{0,4}){2,7})\]?(?::[0-9]{1,5})?(?:/48)?(?![A-Za-z0-9_])",
+        public_endpoint_match,
+        text,
+        flags=re.I,
+    )
+
+
+def rental_datacenter(data):
+    value = data.get("datacenter")
+    return "true" if value is True else "false" if value is False else "unknown"
+
+
+def rental_prefix(data):
+    value = data.get("ip_prefix", "unknown")
+    if not isinstance(value, str):
+        return "unknown"
+    return public_ip_prefix(value.removesuffix("/48"))
+
+
 def rental_line(data):
     price = data.get("dph_total")
+    country = data.get("country", "UNKNOWN")
+    country = (
+        country
+        if isinstance(country, str) and re.fullmatch(r"UNKNOWN|[A-Z]{2}", country)
+        else "UNKNOWN"
+    )
     return (
-        "RENTAL machine="
-        + shown_id(data["machine_id"])
+        "RENTAL instance="
+        + shown_id(data.get("instance_id", data["id"]))
         + " host="
         + shown_id(data["host_id"])
-        + " instance="
-        + shown_id(data.get("instance_id", data["id"]))
+        + " machine="
+        + shown_id(data["machine_id"])
+        + " datacenter="
+        + rental_datacenter(data)
+        + " country="
+        + country
+        + " ip="
+        + rental_prefix(data)
         + " gpu="
         + public_gpu(data["gpu_model"]).replace(" ", "_")
         + " price="
@@ -937,7 +1263,7 @@ def rental_line(data):
 
 def summary_cell(value):
     return (
-        str(value)
+        redact_endpoints(str(value))
         .replace("&", "&amp;")
         .replace("<", "&lt;")
         .replace(">", "&gt;")
@@ -952,8 +1278,16 @@ class Runner:
         self.ctx = ctx
         self.manifest = manifest
         self.client = client
-        self.emit = emit
+        self.emit = lambda text: emit(
+            redact_endpoint_values(
+                redact_endpoints(redact_endpoint_values(text, self.ctx.get("endpoint_redactions"))),
+                self.ctx.get("endpoint_redactions"),
+            )
+        )
         self.summary = summary
+        self.summary_write = lambda text: summary.write(
+            redact_endpoint_values(text, self.ctx.get("endpoint_redactions"))
+        )
         self.metadata = None
         self.rental_shown = False
         self.cursor = 0
@@ -980,6 +1314,8 @@ class Runner:
         # A configured RENTING_DISABLED refusal of /rent: terminal, the Worker never touched Vast.
         self.renting_disabled = False
         self.provider_retry = False
+        self.last_requested_attempt = None
+        self.notified_faults = set()
         # Edits4 F1: sticky for the whole /rent sequence. Once any /rent reply was ambiguous
         # (5xx, timeout, connection error, garbled page) a box may exist for this run.
         self.rent_ambiguous = False
@@ -1104,7 +1440,9 @@ class Runner:
         if self.displayed >= DISPLAY_BYTES or self.display_lines >= DISPLAY_LINES:
             self.display_dropped += len(text.encode())
             return
-        clean_text, original = sanitise(text, self.ctx.get("redactions", ()))
+        clean_text, original = sanitise(
+            text, self.ctx.get("redactions", ()), self.ctx.get("endpoint_redactions")
+        )
         safe, dropped, capped = render(
             clean_text,
             original,
@@ -1144,7 +1482,11 @@ class Runner:
     def sanitised(self):
         """The whole box log after the sanitiser (computed once): (text, original bytes)."""
         if self._sanitised is None:
-            self._sanitised = sanitise("".join(self.raw), self.ctx.get("redactions", ()))
+            self._sanitised = sanitise(
+                "".join(self.raw),
+                self.ctx.get("redactions", ()),
+                self.ctx.get("endpoint_redactions"),
+            )
         return self._sanitised
 
     def show_keys(self):
@@ -1184,7 +1526,9 @@ class Runner:
 
     def show_census(self, middle):
         """What the dropped middle held, from its sanitised text; box prefixes stay [untrusted]."""
-        text, _ = sanitise(middle, self.ctx.get("redactions", ()))
+        text, _ = sanitise(
+            middle, self.ctx.get("redactions", ()), self.ctx.get("endpoint_redactions")
+        )
         top, others = census(text)
         if not top:
             return
@@ -1323,6 +1667,8 @@ class Runner:
         terminal = final = admitted = False
         provider_notice = None
         self.provider_retry = False
+        self.last_requested_attempt = None
+        self.notified_faults = set()
         try:
             profile = self.ctx.get("profile", "check")
             code, availability = self.retry_read("/availability?profile=" + profile)
@@ -1391,7 +1737,7 @@ class Runner:
                 request["preferences"] = self.ctx["preferences"]
             self.rent_at = time.monotonic()
             code, data = self.retry_read("/rent", "POST", request)
-            for attempt in range(600):
+            for attempt in range(int(WAIT_BUDGET[profile] / 20) + 1):
                 try:
                     data = validate_status(data, self.ctx, self.manifest, code)
                 except Diagnosed:
@@ -1440,12 +1786,20 @@ class Runner:
                         }
                     break
                 admitted = True
+                self.ctx["endpoint_redactions"] = merge_endpoint_values(
+                    self.ctx.get("endpoint_redactions", {}),
+                    decode_endpoint_values(data.get("endpoint_redactions")) or {},
+                )
+                self._sanitised = None
                 self.metadata = data
                 if not self.transitions or self.transitions[-1][1] != data["state"]:
                     self.transitions.append((int(time.monotonic() - self.rent_at), data["state"]))
-                if self.rental_shown != data["id"] and data["id"] is not None:
+                if (
+                    self.rental_shown != (data["id"], data.get("provider_retries", 0))
+                    and data["id"] is not None
+                ):
                     self.emit(rental_line(data) + "\n")
-                    self.rental_shown = data["id"]
+                    self.rental_shown = (data["id"], data.get("provider_retries", 0))
                 final = data["state"] in {"GRACE", "NONE"} and data["result_at"] is not None
                 self.pages(data["log_cursor"])
                 if data["verdict"] == "PROVIDER_FAULT":
@@ -1456,22 +1810,71 @@ class Runner:
                         + shown_id(data["host_id"])
                         + ", not a kayfabe verdict"
                     )
-                    self.emit(provider_notice + "\n")
+                    marker = (data["id"], data.get("provider_retries", 0))
+                    if marker not in self.notified_faults:
+                        self.emit(provider_notice + "\n")
+                        self.notified_faults.add(marker)
                 if data["verdict"] == "PROVIDER_FAULT" or (
                     self.provider_retry
                     and data["state"] == "NONE"
                     and data["verdict"] == "UNAVAILABLE"
                 ):
-                    if not self.provider_retry and data.get("provider_retries", 0) == 0:
+                    if data.get("last_post_at") is not None or data.get("result_at") is not None:
+                        terminal = True
+                        result = {
+                            "state": data["state"],
+                            "verdict": "FAIL",
+                            "verified": int(data["result_at"] is not None),
+                        }
+                        break
+                    if data.get("cleanup_pending"):
+                        time.sleep(20)
+                        code, data = self.retry_read("/status/" + self.ctx["run"])
+                        continue
+                    allowed = data.get(
+                        "provider_retry_allowed",
+                        not self.provider_retry and data.get("provider_retries", 0) == 0,
+                    )
+                    if allowed:
                         self.provider_retry = True
-                        self.emit("runner: provider fault; requesting one bounded replacement\n")
+                        marker = (data["id"], data.get("provider_retries", 0))
+                        if marker == self.last_requested_attempt:
+                            time.sleep(20)
+                        else:
+                            self.emit("runner: provider fault; requesting bounded replacement\n")
+                        self.last_requested_attempt = marker
                         code, data = self.retry_read("/rent", "POST", request)
                         continue
                     self.emit("runner: provider fault; no usable replacement completed\n")
+                    for row in data.get("rental_attempts", []):
+                        self.emit(
+                            "ATTEMPT machine="
+                            + shown_id(row["machine"])
+                            + " host="
+                            + shown_id(row["host"])
+                            + " reason="
+                            + row["reason"]
+                            + " seconds="
+                            + str(row["seconds"])
+                            + "\n"
+                        )
                     terminal = True
                     result = {
                         "state": "PROVIDER_FAULT",
                         "verdict": "PROVIDER_FAULT",
+                        "verified": int(data["result_at"] is not None),
+                    }
+                    break
+                if (
+                    data.get("last_post_at") is not None
+                    and data["state"] == "NONE"
+                    and data["verdict"] == "FAIL"
+                    and data["result_at"] is None
+                ):
+                    terminal = True
+                    result = {
+                        "state": "NONE",
+                        "verdict": "FAIL",
                         "verified": int(data["result_at"] is not None),
                     }
                     break
@@ -1482,16 +1885,8 @@ class Runner:
                     self.metadata = data
                     terminal = True
                     result = {"state": data["state"], "verdict": data["verdict"], "verified": 1}
-                    # Lane 2: a failing windows_retry_<class> row is a host, harness or rental
-                    # fault (re-run on a fresh box), never a pass. Box data: it can only relabel
-                    # a FAIL so the workflow says RETRY; it never changes the verdict.
-                    self.retry = int(
-                        data["verdict"] == "FAIL"
-                        and any(
-                            r["fail"] and r["name"].startswith("windows_retry_")
-                            for r in data.get("suites") or []
-                        )
-                    )
+                    # Every failure after a box report is terminal for this check.
+                    self.retry = 0
                     self.show(data["gpu_model"])
                     break
                 if data["state"] not in {"CREATING", "BOOTING", "TESTING"}:
@@ -1517,6 +1912,13 @@ class Runner:
                 self.phase = error.phase
             result = {"state": "UNAVAILABLE", "verdict": "UNAVAILABLE", "verified": 0}
         finally:
+            if (
+                self.metadata
+                and self.metadata.get("last_post_at") is not None
+                and not (result["verified"] == 1 and result["verdict"] == "PASS")
+            ):
+                result["verdict"] = "FAIL"
+                terminal = True
             if not (result["verified"] == 1 and result["verdict"] == "PASS"):
                 self.emit(
                     diagnostic_line(
@@ -1571,7 +1973,7 @@ class Runner:
             self.phase = "summary"
             # Every interpolated Worker text passed the local allow-list. All
             # decision fields below are locally validated enums/expected values.
-            self.summary.write(
+            self.summary_write(
                 "### UNTRUSTED Worker/box output\n\n| Field | Value |\n| --- | --- |\n"
             )
             for key, value in [
@@ -1586,7 +1988,7 @@ class Runner:
                 ("Removed by sanitisation (bytes)", str(max(0, dropped - capped))),
                 ("Dropped by size cap (bytes)", str(capped)),
             ]:
-                self.summary.write("| " + key + " | " + summary_cell(value) + " |\n")
+                self.summary_write("| " + key + " | " + summary_cell(value) + " |\n")
             if self.metadata is not None:
                 d = self.metadata
                 gpu = public_gpu(d["gpu_model"])
@@ -1618,9 +2020,9 @@ class Runner:
                     ("Elapsed seconds", format(elapsed, ".3f")),
                     ("Estimated USD", format(d["cost_estimate_usd"], ".6f")),
                 ]:
-                    self.summary.write("| " + key + " | " + summary_cell(value) + " |\n")
+                    self.summary_write("| " + key + " | " + summary_cell(value) + " |\n")
                 for row in d["suites"]:
-                    self.summary.write(
+                    self.summary_write(
                         "| Suite "
                         + row["name"]
                         + " | pass="
@@ -1632,7 +2034,7 @@ class Runner:
                         + " |\n"
                     )
                 if d["profile"] == "sweep":
-                    self.summary.write(
+                    self.summary_write(
                         "| Coverage | sweep:"
                         + d["die"]
                         + ","
@@ -1642,9 +2044,9 @@ class Runner:
                         + " |\n"
                     )
             if result["verdict"] == "PROVIDER_FAULT" and provider_notice:
-                self.summary.write("\n" + provider_notice + "\n")
+                self.summary_write("\n" + provider_notice + "\n")
             fence = "`" * max(3, 1 + max([len(x) for x in re.findall("`+", safe)] + [0]))
-            self.summary.write("\n" + fence + "text\n" + safe + fence + "\n")
+            self.summary_write("\n" + fence + "text\n" + safe + fence + "\n")
         return result
 
 
@@ -1897,9 +2299,6 @@ def main():
         with open(output, "a", encoding="ascii") as outputs:
             for key in ["state", "verdict", "verified"]:
                 outputs.write(key + "=" + str(result[key]) + "\n")
-            # Written only when set (an absent output reads as empty, i.e. not RETRY).
-            if getattr(controller, "retry", 0) == 1 and result["verdict"] == "FAIL":
-                outputs.write("retry=1\n")
     except Exception:
         diagnostic = diagnostic or "runner: Actions output could not be written"
         if not diagnosed:

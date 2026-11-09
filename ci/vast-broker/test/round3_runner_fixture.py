@@ -13,7 +13,7 @@ extra_status = scope["extra_status"]
 availability = scope["availability"]
 case = sys.argv[1]
 ctx = {"sha": "a" * 40, "run": "123-1", "nonce": "f" * 64}
-manifest = {"protocol_version": 6, "worker_version": "v5", "bundle_sha256": "b" * 64}
+manifest = {"protocol_version": 7, "worker_version": "v5", "bundle_sha256": "b" * 64}
 if case.startswith("transport-"):
     import time
 
@@ -194,7 +194,7 @@ result = m.Runner(ctx, manifest, client, emit=printed.append, summary=summary).e
 output = "".join(printed) + summary.getvalue()
 if case in {"valid", "controls", "commands", "cursor-race-pass"}:
     assert result["verdict"] == "PASS", result
-elif case in {"display-only", "cursor-race-fail"}:
+elif case in {"display-only", "cursor-race-fail", "caps", "wrong-hash", "wrong-page-hash"}:
     assert result["verdict"] == "FAIL", result
 else:
     assert result["verdict"] == "UNAVAILABLE", result

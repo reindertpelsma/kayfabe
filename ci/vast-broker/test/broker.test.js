@@ -343,22 +343,30 @@ test('structured FAIL result destroys at grace expiry', async () => {
   assert.equal((await r.json()).verdict, 'FAIL');
   assert.deepEqual(h.cloud.deletes, ['900']);
 });
-test('cron checks terminated instance without provider logs', async () => {
-  const h = await setup();
-  await rent(h);
-  h.cloud.instances.get('900').actual_status = 'exited';
-  // One reading never closes (test/provider-tolerance.test.js); three over 120 s do.
-  for (const step of [0, 60000, 60000]) {
-    assert.deepEqual(h.cloud.deletes, []);
-    h.time.value += step;
-    await h.service.sweep();
-  }
-  assert.deepEqual(h.cloud.deletes, ['900']);
-  assert.equal(
-    h.cloud.calls.some((c) => c.url.includes('request_logs')),
-    false,
+for (const reported of [false, true])
+  test(
+    'cron checks exited instance ' + (reported ? 'after' : 'before') + ' first report',
+    async () => {
+      const h = await setup();
+      await rent(h);
+      if (reported)
+        assert.equal((await h.report({ seq: 1, kind: 'progress', text: 'started\n' })).status, 200);
+      h.cloud.instances.get('900').actual_status = 'exited';
+      // One reading never closes (test/provider-tolerance.test.js); three over 120 s do.
+      for (const step of [0, 60000, 60000]) {
+        assert.deepEqual(h.cloud.deletes, []);
+        h.time.value += step;
+        await h.service.sweep();
+      }
+      assert.deepEqual(h.cloud.deletes, ['900']);
+      // Before a report, an exited box can expose a fatal KVM boot log (F1b).
+      // After a report, the first-report fence forbids boot-log diagnosis.
+      assert.equal(
+        h.cloud.calls.some((c) => c.url.includes('request_logs')),
+        !reported,
+      );
+    },
   );
-});
 test('failed delete retains liability for retry', async () => {
   const h = await setup();
   await rent(h);
@@ -487,10 +495,13 @@ for (const restart of [false, true])
     );
     assert.equal(h.cloud.creates, 1);
   });
-test('reconciliation cannot adopt a changed image', async () => {
+test('legacy reconciliation cannot adopt a changed image', async () => {
   const h = await setup();
   h.cloud.ambiguous = true;
   await h.call();
+  const legacy = await h.storage.get('record:123-1');
+  delete legacy.proofVersion;
+  await h.storage.put('record:123-1', legacy);
   h.cloud.instances.get('900').image_uuid = 'foreign';
   h.cloud.ambiguous = false;
   assert.equal(await state(await h.call()), 'UNAVAILABLE');
