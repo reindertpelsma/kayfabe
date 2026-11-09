@@ -14,8 +14,15 @@
 //! `scripts/ci/fetch_oracles.sh` check it out shallow at the pinned commit), and the research clone
 //! the campaign's citations are against.
 
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+
+/// Straight to the real stderr, like `kvm_gate`: libtest swallows `eprintln!` of a passing test, and
+/// the stripped-tree CI job counts this line (a gate nobody can see is a gate nobody can count).
+fn announce(line: &str) {
+    let _ = writeln!(std::io::stderr(), "{line}");
+}
 
 fn ogkm_580() -> Option<PathBuf> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
@@ -112,10 +119,48 @@ fn one_requires_the_oracles() {
 }
 
 #[test]
-fn a_misspelt_on_requires_the_oracles_rather_than_skipping() {
-    for typo in ["true", "yes", "on", "00", " 0", "0 "] {
+fn true_requires_the_oracles_rather_than_skipping() {
+    assert!(oracles_required(Some("true")));
+}
+
+#[test]
+fn yes_requires_the_oracles_rather_than_skipping() {
+    assert!(oracles_required(Some("yes")));
+}
+
+#[test]
+fn other_spellings_of_zero_require_the_oracles_rather_than_skipping() {
+    for typo in ["00", " 0", "0 ", "off"] {
         assert!(oracles_required(Some(typo)), "{typo:?}");
     }
+}
+
+#[test]
+fn a_developer_who_sets_zero_skips_without_the_oracle() {
+    assert!(matches!(
+        gate(false, true, oracles_required(Some("0"))),
+        Gate::Skip(_)
+    ));
+}
+
+#[test]
+fn a_developer_who_sets_nothing_skips_without_the_oracle() {
+    assert!(matches!(
+        gate(false, true, oracles_required(None)),
+        Gate::Skip(_)
+    ));
+    assert!(matches!(
+        gate(false, true, oracles_required(Some(""))),
+        Gate::Skip(_)
+    ));
+}
+
+#[test]
+fn a_ci_job_that_sets_one_fails_without_the_oracle() {
+    assert!(matches!(
+        gate(false, true, oracles_required(Some("1"))),
+        Gate::Fail(_)
+    ));
 }
 
 #[test]
@@ -125,9 +170,13 @@ fn the_committed_table_is_a_fresh_derivation_from_ogkm_580() {
     let og = ogkm_580();
     let gcc = Command::new("gcc").arg("--version").output().is_ok();
     match gate(og.is_some(), gcc, required) {
-        Gate::Run => eprintln!("ORACLE-GATE: RAN hwref_is_current required={required}"),
+        Gate::Run => announce(&format!(
+            "ORACLE-GATE: RAN hwref_is_current required={required}"
+        )),
         Gate::Skip(why) => {
-            eprintln!("ORACLE-GATE: SKIPPED hwref_is_current: {why} — NOT a pass");
+            announce(&format!(
+                "ORACLE-GATE: SKIPPED hwref_is_current: {why} — NOT a pass"
+            ));
             return;
         }
         Gate::Fail(why) => panic!("KF_REQUIRE_ORACLES is set and the oracle cannot run: {why}"),

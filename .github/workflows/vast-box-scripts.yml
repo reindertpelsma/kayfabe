@@ -160,11 +160,14 @@ jobs:
       - name: Strip, floor, tree key, box-path survey and oracle fetch tests
         run: |
           python3 -m unittest scripts/ci/test_ignore_ladder.py scripts/ci/test_fetch_oracles.py \
-            scripts/ci/test_box_stripped.py scripts/ci/test_vast_merge_bar.py
+            scripts/ci/test_box_stripped.py scripts/ci/test_vast_merge_bar.py \
+            scripts/ci/test_full_tree_tests.py
       - name: Ignore-ladder strip, floor and key mutations require two named killers each
         run: python3 scripts/ci/ignore_ladder_mutants.py --jobs 2
       - name: Oracle-fetch mutations require two named killers each
         run: python3 scripts/ci/fetch_oracles_mutants.py --jobs 2
+      - name: Full-tree test list mutations require two named killers each
+        run: python3 scripts/ci/full_tree_tests_mutants.py --jobs 2
 
   # The SPECviewperf stage's tests run the real stage script against fakes (a process per command), so its mutation run is
   # its own job: it neither slows nor shares the time limit of the job above.

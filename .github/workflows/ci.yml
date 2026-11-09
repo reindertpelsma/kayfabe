@@ -110,6 +110,15 @@ jobs:
         run: bash scripts/ci/clippy.sh
       - name: Format check
         run: cargo fmt --all --check
+      # The Rust tests that judge the repository itself (documents, archived sources, cited evidence files):
+      # they cannot pass on the stripped tree, so they run here on the full tree and `stripped` skips them by
+      # name. The list is scripts/ci/full_tree_tests.tsv; a listed test that is missing or fails fails here.
+      - name: Full-tree Rust checks (the tests the stripped job skips)
+        run: python3 scripts/ci/full_tree_tests.py run
+      # The oracle gate of crates/kf-chip/tests/hwref_is_current.rs has its own tests; each mutant of it needs two
+      # named killers. The harness rewrites that one file and always restores it (this checkout is throwaway).
+      - name: Oracle-gate mutations require two named killers each
+        run: python3 scripts/ci/oracle_gate_mutants.py
       - name: v3 dependency isolation and CI guard self-tests
         run: |
           python3 scripts/ci/dependencies.py
@@ -2088,7 +2097,10 @@ jobs:
           set +e # GitHub invokes bash -e; capture the failed pipeline before returning its rc.
           set -uo pipefail
           log="${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log}"
-          KF_REQUIRE_ORACLES=1 KAYFABE_NO_KVM=1 cargo test --workspace --no-fail-fast 2>&1 | tee "$log"
+          # The tests that judge the repository (documents, archived sources, cited evidence) cannot pass on
+          # the stripped tree; `stable` runs exactly these names on the full tree (full_tree_tests.tsv).
+          skips=$(python3 scripts/ci/full_tree_tests.py skips)
+          KF_REQUIRE_ORACLES=1 KAYFABE_NO_KVM=1 cargo test --workspace --no-fail-fast -- $skips 2>&1 | tee "$log"
           rc="${PIPESTATUS[0]}"
           printf 'KAYFABE-TEST-LOG-COMPLETE rc=%s pid=%s\n' "$rc" "$$" >> "$log"
           if [ "$rc" -ne 0 ] && [ "${GITHUB_ACTIONS:-}" = true ]; then

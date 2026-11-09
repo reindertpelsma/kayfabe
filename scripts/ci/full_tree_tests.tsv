@@ -1,0 +1,15 @@
+# STATUS: LIVE, 2026-11-09. Rust tests that judge the REPOSITORY, not the product: each one reads documents,
+# archived sources or cited evidence files that .workerignore deletes, so it cannot pass on the stripped tree and
+# cannot be made to without keeping docs/, archive/ or large parts of traces/ (the md ignore line and the
+# no-negation syntax make that impractical). They are claim and structure checks in the sense of the owner's
+# stripped-tree rule: they run on the FULL tree, in the `stable` job (scripts/ci/full_tree_tests.py run), and the
+# `stripped` job skips exactly these names (full_tree_tests.py skips). Nothing is dropped: a listed test that does
+# not exist, or does not pass, fails `stable`; a test missing from this list fails `stripped`.
+# Columns (tab separated): package, test target, test name, what it reads.
+kayfabe-abi	truncated_row_reads	every_declared_site_exists_and_names_the_control_it_claims_to_argue_about	archive/crates/kayfabe-device sources
+kf-abi	truncated_row_reads	every_declared_site_exists_and_names_the_control_it_claims_to_argue_about	archive/crates/kayfabe-device sources
+kayfabe-isolate-host	guest_ring_census	the_birth_witness_can_tell_declined_from_never_asked	archive/crates/kayfabe-fwd/src/lib.rs
+kf-abi	windows_cell_provenance	every_cited_trace_line_exists_and_shows_what_the_row_says	the traces/ lines the rows cite
+kf-abi	windows_cell_provenance	no_cited_line_carries_a_closed_binary_reading	the traces/ lines the rows cite
+kf-census	scrub	the_builtin_list_is_the_documented_one	docs/design/tier_checks/tier1_ogkm.tsv
+kf-census	scrub	the_lists_cover_the_windows_only_control_ids_exactly	docs/design/V3_WINDOWS_ONLY_CONSTANTS_20261013.md
