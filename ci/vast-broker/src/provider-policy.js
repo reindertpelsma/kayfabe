@@ -61,12 +61,29 @@ const BOOT_FAILURE_STATES = new Set([
 
 export async function currentBootFailure(prior, cursor, instance, log, id, policy) {
   const state = instance.actual_status;
-  if (state !== null && !BOOT_FAILURE_STATES.has(state)) return { reason: null, cursor };
-  const direct = fatalSignature(instance, '', id, policy);
-  if (direct)
-    return { reason: direct, source: 'status', state, witness: state + ':status', cursor };
-  const delta = await bootLogDelta(cursor, log);
+  if (state !== null && state !== 'running' && !BOOT_FAILURE_STATES.has(state))
+    return { reason: null, cursor };
   const statusHash = await sha256Hex(instance.status_msg ?? '');
+  const delta = await bootLogDelta(cursor, log);
+  if (state === 'running') {
+    // Recovery establishes a fresh baseline, never authority from earlier boot history.
+    const recoveryCursor = typeof log === 'string' ? delta.cursor : {};
+    recoveryCursor.healthyStatusHash = statusHash;
+    return { reason: null, cursor: recoveryCursor };
+  }
+  const historicalStatus = cursor?.healthyStatusHash === statusHash;
+  const nextCursor = { ...delta.cursor };
+  delete nextCursor.healthyStatusHash;
+  if (historicalStatus) nextCursor.healthyStatusHash = statusHash;
+  const direct = historicalStatus ? null : fatalSignature(instance, '', id, policy);
+  if (direct)
+    return {
+      reason: direct,
+      source: 'status',
+      state,
+      witness: state + ':status',
+      cursor: nextCursor,
+    };
   let reason = fatalSignature(null, delta.fresh, id, policy);
   // No new output plus the same failing state/message preserves the original witness.
   // New progress, running recovery, changed state/message or an unreadable log cancels it.
@@ -85,7 +102,8 @@ export async function currentBootFailure(prior, cursor, instance, log, id, polic
     state,
     statusHash,
     witness: state + ':boot_log:' + statusHash,
-    cursor: delta.cursor,
+    cursor: nextCursor,
+    historicalStatus,
   };
 }
 

@@ -37,6 +37,109 @@ async function tick(h, milliseconds) {
   await h.service.sweep();
 }
 for (const restart of [false, true]) {
+  test('RV2 healthy status text stays historical across provider flap ' + restart, async () => {
+    const h = await boot();
+    Object.assign(h.cloud.instances.get('900'), {
+      actual_status: 'running',
+      status_msg: 'GPU error, unable to start instance',
+    });
+    await tick(h, 1000);
+    if (restart) h.restart();
+    h.cloud.instances.get('900').actual_status = 'created';
+    await tick(h, 1000);
+    await tick(h, 90000);
+    assert.equal((await row(h)).closed, null);
+    assert.equal((await row(h)).providerMessageClass, 'IGNORABLE');
+    assert.equal(await h.storage.get('provider-machine:100001'), undefined);
+    await h.call('/stop/123-1');
+  });
+  test(
+    'RV2 changed fatal status after healthy baseline remains actionable ' + restart,
+    async () => {
+      const h = await boot();
+      await tick(h, 1000);
+      if (restart) h.restart();
+      Object.assign(h.cloud.instances.get('900'), {
+        actual_status: 'created',
+        status_msg: 'GPU error, unable to start instance',
+      });
+      await tick(h, 1000);
+      assert.equal((await row(h)).closed, null);
+      await tick(h, 90000);
+      assert.equal((await row(h)).closed, 'PROVIDER_FAULT');
+      assert.deepEqual(h.cloud.deletes, ['900']);
+    },
+  );
+  test('RV2 unreadable recovery baseline fences historical fatal log ' + restart, async () => {
+    const h = await boot();
+    h.cloud.logText = 'preparation\n';
+    Object.assign(h.cloud.instances.get('900'), {
+      actual_status: 'created',
+      status_msg: 'Preparing GPUs...',
+    });
+    await tick(h, 1000);
+    h.cloud.logText += domainError('900') + 'Domain successfully started; GPUs ready\n';
+    h.cloud.logStatus = 503;
+    Object.assign(h.cloud.instances.get('900'), {
+      actual_status: 'running',
+      status_msg: 'Preparing GPUs complete; healthy',
+    });
+    await tick(h, 1000);
+    if (restart) h.restart();
+    h.cloud.logStatus = 200;
+    Object.assign(h.cloud.instances.get('900'), {
+      actual_status: 'created',
+      status_msg: 'Preparing GPUs...',
+    });
+    await tick(h, 1000);
+    await tick(h, 90000);
+    assert.equal((await row(h)).closed, null);
+    assert.equal(await h.storage.get('provider-machine:100001'), undefined);
+    await h.call('/stop/123-1');
+  });
+  test(
+    'RV2 fresh fatal after healthy baseline still confirms within bound ' + restart,
+    async () => {
+      const h = await boot();
+      h.cloud.logText = domainError('900') + 'Domain successfully started; GPUs ready\n';
+      await tick(h, 1000);
+      if (restart) h.restart();
+      Object.assign(h.cloud.instances.get('900'), {
+        actual_status: 'created',
+        status_msg: 'Retrying',
+      });
+      h.cloud.logText += domainError('900');
+      await tick(h, 1000);
+      assert.equal((await row(h)).closed, null);
+      await tick(h, 90000);
+      assert.equal((await row(h)).closed, 'PROVIDER_FAULT');
+      assert.deepEqual(h.cloud.deletes, ['900']);
+    },
+  );
+  test(
+    'RV2 first observed running state fences historical fatal log on later flap ' + restart,
+    async () => {
+      const h = await boot();
+      h.cloud.logText = domainError('900') + 'Domain successfully started; GPUs ready\n';
+      Object.assign(h.cloud.instances.get('900'), {
+        actual_status: 'running',
+        status_msg: 'Preparing GPUs complete; healthy',
+      });
+      await tick(h, 1000);
+      if (restart) h.restart();
+      Object.assign(h.cloud.instances.get('900'), {
+        actual_status: 'created',
+        status_msg: 'Preparing GPUs...',
+      });
+      await tick(h, 1000);
+      await tick(h, 90000);
+      assert.equal((await row(h)).closed, null);
+      assert.equal(h.cloud.instances.has('900'), true);
+      assert.equal(await h.storage.get('provider-machine:100001'), undefined);
+      assert.equal(await h.storage.get('provider-host:100'), undefined);
+      await h.call('/stop/123-1');
+    },
+  );
   test('RV2 recovered running box ignores retained fatal boot history ' + restart, async () => {
     const h = await boot();
     h.cloud.logText = domainError('900');

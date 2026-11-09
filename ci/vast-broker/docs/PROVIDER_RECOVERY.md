@@ -22,6 +22,15 @@ An unchanged log plus the same non-running state and status message preserves th
 original frozen-failure witness. New nonfatal output, changed state/message, a log
 reset or an unreadable log cancels that witness. Cursor and observation state persist
 across Worker restarts without storing raw provider log text.
+CODE READ: healthy pre-report observations advance the log baseline without granting
+failure authority. If that healthy log cannot be read, continuity is invalidated;
+the next readable log establishes a baseline. A later provider-state flap therefore
+cannot revive fatal text from before recovery, including when the first observation
+was already running. Newly emitted fatal text after a healthy baseline can still
+confirm within the configured window.
+CODE READ: status text seen during recovery is also historical across a later
+provider-state flap until that text changes. A newly changed fatal status remains
+actionable; the recovery baseline does not disable subsequent failures.
 
 CODE READ: confirmation requires at least two observations separated by
 `observationSpacingSeconds` (default 1), and at least `confirmationSeconds`

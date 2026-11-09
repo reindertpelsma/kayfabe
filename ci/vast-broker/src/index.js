@@ -39,7 +39,6 @@ import {mintBlob,checkBlobBudget} from './blobs.js';
 import {benchObject,benchBudget,benchCount,benchExpiry,benchUrl,benchRedirect} from './benchdata.js';
 import { offerPrice, providerId, applyResourceProfile } from './policy.js';
 import {
-  fatalSignature,
   providerMessageClass,
   observeFatal,
   currentBootFailure,
@@ -611,7 +610,7 @@ export function createService({
     }
     if (record.firstReportAt === undefined) {
       let log;
-      if (pendingInstance(instance) && !fatalSignature(instance, '', record.id, cfg.provider)) {
+      if (pendingInstance(instance) || instance.actual_status === 'running') {
         try {
           log = await vast.bootLog(record);
         } catch {}
@@ -628,7 +627,7 @@ export function createService({
       const signature = observation.reason;
       record.providerMessageClass = signature
         ? 'FATAL'
-        : instance.actual_status === 'running'
+        : instance.actual_status === 'running' || observation.historicalStatus
           ? 'IGNORABLE'
           : providerMessageClass(instance, '', record.id, cfg.provider).kind;
       const failure = observeFatal(
