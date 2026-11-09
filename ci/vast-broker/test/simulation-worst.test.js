@@ -149,7 +149,7 @@ test('simulation worst: create succeeds but remains created for twelve minutes',
   assert.equal((await f.h.storage.get('record:' + r.key)).ended, null);
   f.h.time.value = r.bootDeadline + 1;
   await f.h.service.sweep();
-  assert.equal((await f.h.storage.get('record:' + r.key)).closed, 'BOOT_TIMEOUT');
+  assert.equal((await f.h.storage.get('record:' + r.key)).closed, 'PROVIDER_FAULT');
   await stopAndCheck(f, 'DONE');
 });
 test('simulation worst: offer disappears between search and create', async () => {
@@ -161,7 +161,7 @@ test('simulation worst: offer disappears between search and create', async () =>
   assert.equal(f.h.cloud.creates, 0);
   const rs = await records(f.h);
   assert.equal(rs.length, 1);
-  assert.equal(rs[0].closed, 'GONE');
+  assert.equal(rs[0].closed, 'PROVIDER_FAULT');
   assert.ok(Number.isFinite(rs[0].ended));
   await stopAndCheck(f);
 });
@@ -204,8 +204,8 @@ test('simulation worst: ssh never reachable produces boot timeout', async () => 
   f.h.time.value = r.bootDeadline + 1;
   await f.h.service.sweep();
   const ended = await f.h.storage.get('record:' + r.key);
-  assert.equal(ended.closed, 'BOOT_TIMEOUT');
-  assert.equal(ended.verdict, 'UNAVAILABLE');
+  assert.equal(ended.closed, 'PROVIDER_FAULT');
+  assert.equal(ended.verdict, 'PROVIDER_FAULT');
   await stopAndCheck(f, 'DONE');
 });
 test('simulation worst: host reboots after its first heartbeat', async () => {

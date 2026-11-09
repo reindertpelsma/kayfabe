@@ -597,7 +597,7 @@ def case_diagnostics_for_a_vanished_box():
     )
     log += "".join("[box] silence approaches line %04d\n" % i for i in range(40))
     out, result, runner = run_vanished(log)
-    assert result["verified"] == 0 and result["verdict"] == "UNAVAILABLE", result
+    assert result["verified"] == 0 and result["verdict"] == "FAIL", result
     assert "DIAGNOSTICS: no PASS or FAIL result that passed the runner's checks" in out
     block = out.split("DIAGNOSTICS:", 1)[1].split("::group::", 1)[0]
     for needle in (
@@ -847,7 +847,7 @@ def requests_made(bundle):
 def case_protocol_requests_unchanged():
     for bundle in ("2828bf41" + "0" * 56, "d6bd6b36" + "0" * 56):
         assert requests_made(bundle) == GOLDEN_REQUESTS, requests_made(bundle)
-    assert m.STATUS_PROTOCOL == 6
+    assert m.STATUS_PROTOCOL == 7
 
 
 if __name__ == "__main__":

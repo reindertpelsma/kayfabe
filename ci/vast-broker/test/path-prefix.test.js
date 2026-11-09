@@ -27,7 +27,7 @@ const request = async (
   h.service.fetch(
     new Request(env.WORKER_URL + path, {
       method,
-      headers: { Authorization: 'Bearer ' + (token ?? (await jwt())), 'X-KF-Protocol': '6' },
+      headers: { Authorization: 'Bearer ' + (token ?? (await jwt())), 'X-KF-Protocol': '7' },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     }),
   );

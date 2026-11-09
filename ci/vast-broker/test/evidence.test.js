@@ -978,7 +978,7 @@ test('evidence: a replacement rental after a provider fault has its own object k
     'check/123/1.tgz',
   ]);
 });
-test('evidence: the replacement key has the -r1 suffix and no other leg exists', () => {
+test('evidence: replacement keys have bounded distinct leg suffixes', () => {
   assert.equal(
     evidenceKeys({ key: '7-3', profile: 'sweep', providerRetries: 1 }).object,
     'sweep/7/3-r1.tgz',
@@ -988,7 +988,11 @@ test('evidence: the replacement key has the -r1 suffix and no other leg exists',
     'sweep/7/3-r1.json',
   );
   assert.equal(evidenceKeys({ key: '7-3', profile: 'sweep' }).object, 'sweep/7/3.tgz');
-  assert.throws(() => evidenceKeys({ key: '7-3', profile: 'sweep', providerRetries: 2 }));
+  assert.equal(
+    evidenceKeys({ key: '7-3', profile: 'sweep', providerRetries: 2 }).object,
+    'sweep/7/3-r2.tgz',
+  );
+  assert.throws(() => evidenceKeys({ key: '7-3', profile: 'sweep', providerRetries: 32 }));
 });
 test('evidence: a busy ledger queue answers 409 BUSY, which is not an EVIDENCE_EXISTS', async () => {
   const x = await harness();

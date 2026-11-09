@@ -199,14 +199,14 @@ test('ingest: a box FAIL is recorded (cached) as FAIL', { skip: d1Skip }, async 
   assert.equal(answer.missing[0].reason, 'FAIL');
 });
 
-test('ingest: a box that never reports is UNATTRIBUTED, never PASS', { skip: d1Skip }, async () => {
+test('ingest: a pre-report provision timeout is RETRY, never PASS', { skip: d1Skip }, async () => {
   const { h, db } = await harness();
   await h.call();
   h.time.value += 11 * 60000; // past BOOT_LIMIT_MINUTES=10
   await cron(h, 2);
   const record = await h.storage.get('record:123-1');
   assert.notEqual(record.ended, null);
-  assert.deepEqual(db.rows('SELECT verdict FROM ci_runs'), [{ verdict: 'UNATTRIBUTED' }]);
+  assert.deepEqual(db.rows('SELECT verdict FROM ci_runs'), [{ verdict: 'RETRY' }]);
   assert.equal((await (await check(h)).json()).missing[0].reason, 'NO_RESULT');
 });
 
@@ -301,17 +301,11 @@ test(
       { ...h.cloud.offer, id: 6, machine_id: 100002, host_id: 200, price: 0.1 },
     ];
     const r0 = await h.storage.get('record:123-1');
-    const fault = await h.report({
-      seq: 1,
-      kind: 'result',
-      result: {
-        nonce: r0.nonce,
-        verdict: 'PROVIDER_FAULT',
-        suites: [{ name: 'provider_kvm_missing', pass: 0, fail: 1, skip: 0 }],
-        hardware: { gpu_name: 'unknown', compute_cap: 0, driver_version: 'unknown' },
-      },
-    });
-    assert.equal(fault.status, 200);
+    h.cloud.instances.get(r0.id).status_msg = 'GPU error, unable to start instance';
+    for (let i = 0; i < 2; i++) {
+      h.time.value += 20000;
+      await h.service.sweep();
+    }
     assert.equal((await h.storage.get('record:123-1')).verdict, 'PROVIDER_FAULT');
     // The replacement leg overwrites record:123-1 before any sweep could record leg 0's end.
     assert.equal((await h.call()).status, 200);

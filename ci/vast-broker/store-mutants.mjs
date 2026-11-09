@@ -243,7 +243,7 @@ const MUTANTS = [
     "if (r.verdict === 'PASS' && r.result?.verdict === 'PASS' && r.resultAt !== undefined)",
     "if (r.verdict === 'PASS')",
   ],
-  ['unreported FAIL', 'src/ingest.js', '    r.firstReportAt !== undefined &&\n', ''],
+  ['unreported FAIL', 'src/ingest.js', 'r.firstReportAt !== undefined &&', ''],
   [
     'store without tag key',
     'src/ingest.js',

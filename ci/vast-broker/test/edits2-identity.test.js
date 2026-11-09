@@ -6,8 +6,8 @@ import { setup } from './helpers.js';
 // Owner ruling 2026-10-24 item 9: every /availability offer row (offers[] and the rejected
 // rows with their reason codes) and the status object carry the public Vast machine_id and
 // host_id, so a bad hoster can be put on BAD_MACHINE_IDS / BAD_HOST_IDS from the public log.
-// No IPs, no hostnames, no offer (ask) id.
-// FALSIFIER: an id is missing or wrong, an IP or hostname crosses, the runner accepts a
+// No full IPs, no hostnames, no offer (ask) id; status may carry the network prefix.
+// FALSIFIER: an id is missing or wrong, a full IP or hostname crosses, the runner accepts a
 // malformed id or reason, or the Worker can emit a rejection code the runner refuses.
 const fixture = new URL('edits2_identity_fixture.py', import.meta.url).pathname;
 const py = (args, input) =>
@@ -71,7 +71,11 @@ test('item 9: the status object carries machine_id and host_id next to id', asyn
       'machine_id',
       'host_id',
     ]);
-    assert.doesNotMatch(JSON.stringify(data), leaks);
+    assert.doesNotMatch(
+      JSON.stringify(data),
+      /203\.0\.113\.7\b|hoster\.example|public_ipaddr|hostname/,
+    );
+    assert.equal(data.ip_prefix, '203.0.113.0');
   }
   const stopped = await (await h.call('/stop/123-1')).json();
   assert.deepEqual([stopped.machine_id, stopped.host_id], [100001, 3001]);

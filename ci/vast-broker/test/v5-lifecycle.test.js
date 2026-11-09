@@ -83,7 +83,7 @@ for (const restart of [false, true])
     assert.equal((await record(h)).ended, null);
     h.time.value = clock + 40 * minute;
     await h.service.sweep();
-    assert.equal((await record(h)).closed, 'BOOT_TIMEOUT');
+    assert.equal((await record(h)).closed, 'PROVIDER_FAULT');
     assert.equal(h.cloud.instances.has('900'), false);
   });
 for (const restart of [false, true])

@@ -1,5 +1,5 @@
 // Trusted literal renderer; display-only, with the same public fields as the BASE runner.
-export const publicLogRenderer = String.raw`import html,json,math,os,re,sys
+export const publicLogRenderer = String.raw`import html,ipaddress,json,math,os,re,sys
 mode,data_path,log_path=sys.argv[1:]
 with open(data_path,encoding='utf-8') as source:
     data=json.load(source)
@@ -9,10 +9,48 @@ def number(key,default=0):
         if math.isfinite(value) and value>=0:
             return value
     return default
+def public_ip_prefix(value):
+    if not isinstance(value, str) or len(value) > 64 or "%" in value:
+        return "unknown"
+    try:
+        address = ipaddress.ip_address(value)
+        if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped:
+            address = address.ipv4_mapped
+        if isinstance(address, ipaddress.IPv4Address):
+            return str(ipaddress.ip_network(str(address)+"/24", strict=False).network_address)
+        return str(ipaddress.ip_network(str(address)+"/48", strict=False))
+    except ValueError:
+        return "unknown"
+
+
+def public_endpoint_match(match):
+    prefix = public_ip_prefix(match[1])
+    return match[0] if prefix == "unknown" else prefix
+
+
+def redact_endpoints(text):
+    text = re.sub(r"(?<![A-Za-z0-9])-[pP][ \t]*[0-9]{1,5}\b", "-p [redacted]", text)
+    text = re.sub(r'''\b(?:ssh[_ -]?(?:port|host)|(?:ssh )?port)["']?\s*[=:]?\s*["']?[0-9]{1,5}\b''', "ssh_port=[redacted]", text, flags=re.I)
+    text = re.sub(r"\[?\b((?:[0-9]{1,3}\.){3}[0-9]{1,3})\]?(?::[0-9]{1,5})?(?![0-9])", public_endpoint_match, text)
+    return re.sub(r"(?<![A-Za-z0-9_])\[?([0-9a-f]{0,4}(?::[0-9a-f]{0,4}){2,7})\]?(?::[0-9]{1,5})?(?:/48)?(?![A-Za-z0-9_])", public_endpoint_match, text, flags=re.I)
+
+
+def rental_datacenter(data):
+    value=data.get("datacenter")
+    return "true" if value is True else "false" if value is False else "unknown"
+
+
+def rental_prefix(data):
+    value=data.get("ip_prefix", "unknown")
+    if not isinstance(value,str):
+        return "unknown"
+    return public_ip_prefix(value.removesuffix("/48"))
+
+
 def clean(text):
     text=re.sub(r'\x1b\[[0-?]*[ -/]*[@-~]','',str(text))
     text=re.sub(r'[\x00-\x08\x0b-\x1f\x7f-\x9f]','',text)
-    return re.sub(r':{2,}',lambda match:' '.join(match[0]),text).replace('##[','# #[')
+    return re.sub(r':{2,}',lambda match:' '.join(match[0]),redact_endpoints(text)).replace('##[','# #[')
 def label(key,default='unknown',limit=128):
     value=data.get(key,default)
     return ' '.join(clean(value).splitlines())[:limit] if isinstance(value,str) else default
@@ -53,8 +91,11 @@ if verdict not in {'PASS','FAIL','UNAVAILABLE'}:
     verdict='UNAVAILABLE'
 if mode=='live':
     if data.get('cursor',0)==0 and instance!='-':
-        print('RENTAL machine='+identifier('machine_id')+' host='+identifier('host_id')+
-              ' instance='+instance+' gpu='+gpu.replace(' ','_')+' price='+price)
+        country=data.get('country','UNKNOWN')
+        country=country if isinstance(country,str) and re.fullmatch(r'UNKNOWN|[A-Z]{2}',country) else 'UNKNOWN'
+        print('RENTAL instance='+instance+' host='+identifier('host_id')+' machine='+identifier('machine_id')+
+              ' datacenter='+rental_datacenter(data)+' country='+country+' ip='+rental_prefix(data)+
+              ' gpu='+gpu.replace(' ','_')+' price='+price)
     print(clean(data.get('log_increment_sanitised','')),end='')
 elif mode=='final':
     print('::group::Full bounded log: UNTRUSTED output of the rented box')

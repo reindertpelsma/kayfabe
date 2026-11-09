@@ -487,10 +487,13 @@ for (const restart of [false, true])
     );
     assert.equal(h.cloud.creates, 1);
   });
-test('reconciliation cannot adopt a changed image', async () => {
+test('legacy reconciliation cannot adopt a changed image', async () => {
   const h = await setup();
   h.cloud.ambiguous = true;
   await h.call();
+  const legacy = await h.storage.get('record:123-1');
+  delete legacy.proofVersion;
+  await h.storage.put('record:123-1', legacy);
   h.cloud.instances.get('900').image_uuid = 'foreign';
   h.cloud.ambiguous = false;
   assert.equal(await state(await h.call()), 'UNAVAILABLE');

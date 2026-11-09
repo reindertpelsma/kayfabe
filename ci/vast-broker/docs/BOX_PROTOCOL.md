@@ -1,11 +1,17 @@
 # Box interface
 
-STATUS: LIVE, 2026-11-07. Box protocol 7 (since 2026-10-23; unchanged by the evidence upload, the optional host claims and the optional run report below,
-which are additive); runner status protocol 6 (was 5 until the edits2 round of 2026-10-24). Owner
+STATUS: LIVE, 2026-11-09. Box protocol 7 (since 2026-10-23; unchanged by the evidence upload, the optional host claims and the optional run report below,
+which are additive); runner status protocol 7 (provider sessions and prefix-only rental facts, 2026-11-09). Owner
 rulings 2026-10-24: right after the runner's verified final log fetch it sends `POST /stop/<run>`
 and the Worker destroys the box at once, so the result grace below is only the fallback; box
 log text is relayed, not kept: the Worker deletes it `LOG_RETENTION_HOURS` (default 6) after the
 run ended.
+
+CODE READ, 2026-11-09: status protocol 7 adds `provider_retry_allowed`,
+`rental_attempts`, `datacenter` and `ip_prefix`; `provider_retries` is bounded by
+31. Older status protocols are refused. The first accepted log, result or structured
+run report prevents replacement. See [provider recovery](PROVIDER_RECOVERY.md).
+Historical status-protocol notes below describe their original checkpoints.
 
 CODE READ: box protocol 7; the repo reporter declares `BOX_PROTOCOL = "7"` and accepts only
 that value. Before renting, the Worker reads `scripts/ci/vast_report.py` at the exact tested SHA

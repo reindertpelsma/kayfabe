@@ -230,7 +230,7 @@ test('provider absent (Vast 404) closes at once on one reading and logs it', asy
   await at(h, 5);
   const r = await record(h);
   assert.equal(r.closed, 'GONE');
-  assert.equal(r.verdict, 'UNAVAILABLE');
+  assert.equal(r.verdict, 'FAIL');
   assert.ok((await lines(h)).includes('[Worker] provider_absent'));
   assert.match((await closeLines(h))[0], /^\[Worker\] close reason=GONE provider=absent msg=-$/);
 });
@@ -238,8 +238,11 @@ test('provider absent during BOOTING closes at once too, with a close line', asy
   const h = await rent();
   h.cloud.instances.delete('900');
   await at(h, 5);
-  assert.equal((await record(h)).closed, 'GONE');
-  assert.match((await closeLines(h))[0], /^\[Worker\] close reason=GONE provider=absent msg=-$/);
+  assert.equal((await record(h)).closed, 'PROVIDER_FAULT');
+  assert.match(
+    (await closeLines(h))[0],
+    /^\[Worker\] close reason=PROVIDER_FAULT provider=absent msg=-$/,
+  );
 });
 test('a first POST while the instance is absent (BOOTING) closes at once', async () => {
   const h = await rent();
@@ -259,11 +262,11 @@ test('BOOTING: offline is treated like created (no close, no counting) until the
   assert.deepEqual(h.cloud.deletes, []);
   // The existing boot timeout (BOOT_LIMIT_MINUTES=10) is untouched.
   await at(h, 120, (x) => x.service.sweep());
-  assert.equal((await record(h)).closed, 'BOOT_TIMEOUT');
+  assert.equal((await record(h)).closed, 'PROVIDER_FAULT');
   assert.deepEqual(h.cloud.deletes, ['900']);
   const close = await closeLines(h);
   assert.equal(close.length, 1);
-  assert.match(close[0], /^\[Worker\] close reason=BOOT_TIMEOUT provider=offline msg=-$/);
+  assert.match(close[0], /^\[Worker\] close reason=PROVIDER_FAULT provider=offline msg=-$/);
 });
 test('BOOTING: offline then running boots normally; a first POST while offline is NOT_READY, not a close', async () => {
   const h = await rent();
@@ -288,7 +291,7 @@ for (const word of ['exited', 'stopped'])
       await at(h, 60, (x) => x.service.sweep());
       assert.equal((await record(h)).closed, null);
       await at(h, 60, (x) => x.service.sweep());
-      assert.equal((await record(h)).closed, 'ENDED');
+      assert.equal((await record(h)).closed, 'PROVIDER_FAULT');
       assert.deepEqual(h.cloud.deletes, ['900']);
     },
   );
@@ -544,7 +547,7 @@ test('a provider API outage during BOOTING is bounded by the boot timeout', asyn
   h.cloud.vastError = 0;
   const close = await closeLines(h);
   assert.equal(close.length, 1);
-  assert.match(close[0], /^\[Worker\] close reason=BOOT_TIMEOUT provider=error msg=-$/);
+  assert.match(close[0], /^\[Worker\] close reason=PROVIDER_FAULT provider=error msg=-$/);
 });
 test('close line: SUPERSEDED (a newer run of the same branch)', async () => {
   const h = await setup({ MAX_CONCURRENT_RENTALS: '2' });
@@ -920,10 +923,10 @@ test('F3: a foreign instance seen by update() in BOOTING closes at once', async 
   await at(h, 5);
   assert.equal((await record(h)).closed, 'UNAVAILABLE');
 });
-test('F3: the persistent API error close is one line and a UNAVAILABLE verdict', async () => {
+test('F3: the persistent API error close is one line and FAIL after reporting', async () => {
   const h = await testing();
   h.cloud.vastError = 500;
   for (let i = 0; i < 12; i++) await at(h, 60, (x) => x.service.sweep());
-  assert.equal((await record(h)).verdict, 'UNAVAILABLE');
+  assert.equal((await record(h)).verdict, 'FAIL');
   assert.equal((await closeLines(h)).length, 1);
 });

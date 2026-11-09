@@ -72,7 +72,11 @@ export function evidenceKeys(record) {
   const m = /^([1-9][0-9]{0,19})-([1-9][0-9]{0,19})$/.exec(String(record.key));
   const profile = budgetClass(record);
   const retries = record.providerRetries ?? 0;
-  if (!m || !/^[a-z]{3,16}$/.test(profile) || !(retries === 0 || retries === 1))
+  if (
+    !m ||
+    !/^[a-z]{3,16}$/.test(profile) ||
+    !(Number.isInteger(retries) && retries >= 0 && retries < 32)
+  )
     refuse('UNAVAILABLE', 503, undefined, 'evidence_key');
   const base = profile + '/' + m[1] + '/' + m[2] + (retries ? '-r' + retries : '');
   return { run: m[1], attempt: m[2], profile, object: base + '.tgz', manifest: base + '.json' };

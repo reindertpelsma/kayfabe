@@ -15,7 +15,7 @@ async function fixture(bindings = {}, offerPatch = {}) {
   h.cloud.extraOffers = [{ ...h.cloud.offer, id: 6, machine_id: 100002, host_id: 200, price: 0.1 }];
   return { h, original };
 }
-async function fault(h, kind = 'report') {
+async function fault(h, kind = 'boot') {
   const r = await row(h);
   if (kind !== 'report') {
     h.cloud.instances.get(r.id).actual_status = kind === 'running-boot' ? 'running' : 'created';
@@ -30,20 +30,11 @@ async function fault(h, kind = 'report') {
     h.time.value = r.bootDeadline;
     return h.call('/status/123-1');
   }
-  return h.report({
-    seq: 1,
-    kind: 'result',
-    result: {
-      nonce: r.nonce,
-      verdict: 'PROVIDER_FAULT',
-      suites: [{ name: 'provider_kvm_missing', pass: 0, fail: 1, skip: 0 }],
-      hardware: { gpu_name: 'unknown', compute_cap: 0, driver_version: 'unknown' },
-    },
-  });
+  return fault(h, 'boot');
 }
 for (const kind of ['boot', 'running-boot', 'report'])
   for (const restart of [false, true])
-    test('green one provider replacement ' + kind + ' restart=' + restart, async () => {
+    test('green fresh provider replacement ' + kind + ' restart=' + restart, async () => {
       const { h, original } = await fixture();
       const stale = callbackToken(original, env.RUN_TOKEN_SECRET);
       assert.equal((await fault(h, kind)).status, 200);
@@ -51,7 +42,7 @@ for (const kind of ['boot', 'running-boot', 'report'])
       assert.equal(failed.verdict, 'PROVIDER_FAULT');
       assert.notEqual(failed.ended, null);
       assert.equal(h.cloud.instances.has('900'), false);
-      assert.ok(await h.storage.get('bad-machine:100001'));
+      assert.ok(await h.storage.get('provider-machine:100001'));
       if (restart) h.restart();
       const response = await h.call();
       assert.equal(response.status, 200);
@@ -126,7 +117,17 @@ for (const price of [0.4, 0.45])
     assert.equal((await row(h)).verdict, 'PROVIDER_FAULT');
   });
 
-for (const kind of ['pass', 'fault', 'budget', 'fail', 'unavailable', 'busy'])
+for (const kind of [
+  'pass',
+  'fault',
+  'budget',
+  'fail',
+  'unavailable',
+  'busy',
+  'manypass',
+  'manyfault',
+  'manyfail',
+])
   for (const variant of [1, 2])
     test('green BASE runner provider replacement ' + kind + variant, async () => {
       const { spawnSync } = await import('node:child_process');
@@ -165,8 +166,11 @@ for (const price of [0.4, 0.45])
     };
     h.restart();
     const response = await h.call();
-    assert.equal(response.status, 409);
-    assert.equal((await response.json()).reason, 'BUDGET:run-usd');
+    assert.equal(response.status, 200);
+    const status = await response.json();
+    assert.equal(status.id, '901');
+    assert.equal(status.verdict, 'PROVIDER_FAULT');
+    assert.match(status.log_tail_sanitised, /CONTRACT_BUDGET/);
     assert.equal(h.cloud.instances.has('901'), false);
     assert.equal((await row(h)).verdict, 'PROVIDER_FAULT');
     assert.equal((await h.storage.get('cost:123-1')).price, price);
@@ -196,8 +200,10 @@ for (const kind of ['daily-usd', 'rolling-usd', 'credit-reserve', 'daily-count']
           (error) => error.reason === 'BUDGET:daily-count',
         );
       } else {
-        assert.equal(response.status, 409);
-        assert.equal((await response.json()).reason, 'BUDGET:' + kind);
+        assert.equal(response.status, 200);
+        const status = await response.json();
+        assert.equal(status.verdict, 'PROVIDER_FAULT');
+        assert.match(status.log_tail_sanitised, new RegExp('BUDGET:' + kind));
         assert.equal(h.cloud.created.length, 1);
       }
     });

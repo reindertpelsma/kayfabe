@@ -1,12 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { setup } from './helpers.js';
-// MEASURED 2026-10-25 live: POST /rent answered 503 UNAVAILABLE repeatedly, nothing was created
-// on Vast, and the Worker gave no reason. The Worker now logs ONE static structured line when
-// Vast's create answer is not a success: status, a fixed class and a redacted, bounded excerpt
-// of the provider's own error text. The runner-facing response is unchanged.
-// FALSIFIER: no line is logged, the line carries a header/key/body sent/onstart/env/whole
-// response, key-like provider text survives, or the runner response changes or reflects text.
+// CODE READ: create diagnostics retain one bounded structured line with no request secrets.
+// Explicit refusals return a durable PROVIDER_FAULT receipt for bounded replacement;
+// ambiguous API answers remain unavailable until ownership can be established.
+// FALSIFIER: private provider text reaches the runner or refusal loses its receipt.
 const capture = async (fn) => {
   const logged = [],
     original = console.log;
@@ -99,8 +97,8 @@ for (const [name, answer, status, klass, error] of cases)
       class: klass,
       provider_error: error,
     });
-    // The runner sees exactly what it saw before: a bare 503 and no provider text.
-    assert.equal(response.status, 503);
+    assert.equal(response.status, klass === 'success_false' ? 200 : 503);
+    if (klass === 'success_false') assert.equal(JSON.parse(text).verdict, 'PROVIDER_FAULT');
     assert.ok(!text.includes(error || 'zzz-none'));
     assert.ok(!text.includes('create_failed'));
   });

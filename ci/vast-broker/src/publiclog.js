@@ -1,10 +1,12 @@
+import { redactEndpoints } from './rental.js';
 // The full public log of a run (2026-11-07; contract /root/night/REPORT_CONTRACT.md, DEPLOY.md
 // "Public logs"). When a run closes, for any reason, the Worker writes the text the box streamed
 // to the PUBLIC R2 bucket kayfabe-logs-public (https://logs.kayfabe.dev) as <run id>/log.txt.
 //
 // Policy (owner): the log is whole. No allow-list of characters, no display budget, no filter for
 // any other motive: the ONLY change is secret redaction, each secret replaced by `[redacted]` (a
-// log is never refused for holding one), plus ONE hard cap of 16 MiB that is cut with a visible
+// log is never refused for holding one). Owner addition 2026-11-09 also masks IP addresses
+// to network prefixes and removes SSH ports. There is ONE hard cap of 16 MiB that is cut with a visible
 // marker line, never silently. GPU UUIDs and board facts are not stripped (rented boxes' UUIDs are
 // public knowledge, owner ruling).
 //
@@ -188,7 +190,7 @@ export function redactPublic(text, exact = []) {
   out = redactAround(out, PRESIGNED);
   for (const [pattern, replacement] of SHAPES) out = out.replace(pattern, replacement);
   for (const value of exact) if (out.includes(value)) out = out.split(value).join(REDACTED);
-  return out;
+  return redactEndpoints(out);
 }
 
 // ---- the cap ----------------------------------------------------------------------------------

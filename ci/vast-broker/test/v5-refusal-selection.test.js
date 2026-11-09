@@ -5,7 +5,7 @@ import { setup, sha } from './helpers.js';
 // or its public metadata exposes provider identifiers rather than local enums.
 for (const denied of ['UNKNOWN', 'AD107'])
   test('V5 budget refusal reports forced preference ' + denied, async () => {
-    const h = await setup({ DAILY_SPEND_USD: '0.00001' }),
+    const h = await setup({ DAILY_SPEND_USD: '0.00001', PINNED_MIDDLE_DIES: '[]' }),
       r = await h.call('/rent', {
         body: {
           runner_nonce: 'f'.repeat(64),

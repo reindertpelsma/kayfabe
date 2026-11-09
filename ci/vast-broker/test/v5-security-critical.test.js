@@ -49,7 +49,7 @@ for (const code of [200, 400])
         ? Response.json({ success: false, error: 'no_such_ask' }, { status: code })
         : base(url, init);
     h.restart();
-    assert.equal((await h.call()).status, 503);
+    assert.equal((await h.call()).status, 200);
     const r = await h.storage.get('record:123-1');
     assert.notEqual(r.ended, null);
     // Item 8: the set of active runs (open: index) replaced the single `active` slot.

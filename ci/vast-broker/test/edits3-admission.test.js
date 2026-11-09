@@ -101,17 +101,17 @@ for (const name of ['need-constant', 'busy-wait-ends', 'ambiguous-keeps-asking']
     assert.equal(p.status, 0, p.stderr + p.stdout);
   });
 
-test('R1: a refused-create run key never rents again, also after retention', async () => {
-  const h = await setup();
+test('R1: an exhausted refused-create run key never rents again, also after retention', async () => {
+  const h = await setup({ PROVIDER_MAX_ATTEMPTS: '1' });
   const base = h.cloud.fetch;
   h.cloud.fetch = async (url, init) =>
     String(url).includes('/asks/') ? Response.json({ success: false }) : base(url, init);
   h.restart();
-  assert.equal((await h.call()).status, 503);
+  assert.equal((await h.call()).status, 200);
   h.cloud.fetch = base;
   h.restart();
   assert.ok(await h.storage.get('cost:123-1'));
-  // Before retention: the prior (GONE) record comes back, nothing new is created.
+  // Before retention: the exhausted receipt comes back, nothing new is created.
   const prior = await h.call();
   assert.equal(prior.status, 200);
   assert.equal((await prior.json()).state, 'NONE');
@@ -132,7 +132,7 @@ test('R1: another run key of the same commit may rent after a refused create', a
   h.cloud.fetch = async (url, init) =>
     String(url).includes('/asks/') ? Response.json({ success: false }) : base(url, init);
   h.restart();
-  assert.equal((await h.call()).status, 503);
+  assert.equal((await h.call()).status, 200);
   h.cloud.fetch = base;
   h.cloud.run.run_attempt = 2;
   h.restart();

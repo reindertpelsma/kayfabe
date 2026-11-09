@@ -21,7 +21,7 @@ const jwt = (n = 43) =>
   'eyJhbGciOiJIUzI1NiJ9.eyJydW4iOiIxMjMiLCJhdHRlbXB0IjoiMSJ9.' + 'S'.repeat(n);
 const ONE = (text, exact = []) => redactPublic(text, exactValues(exact));
 
-test('nothing but secrets changes: addresses, URLs, UUIDs, hashes, ANSI and unicode survive', () => {
+test('endpoint prefixes replace addresses while URLs, MACs, UUIDs, hashes and unicode survive', () => {
   const text = [
     'host 203.0.113.7 and 2001:db8::1 mac 52:54:00:12:34:56',
     'url https://example.test/a/b?x=1&y=2#frag and file:///tmp/x',
@@ -31,7 +31,10 @@ test('nothing but secrets changes: addresses, URLs, UUIDs, hashes, ANSI and unic
     'name_with_a_very_long_snake_case_test_identifier_that_is_over_32_characters --- FAILED',
     'password is mentioned but no value: password',
   ].join('\n');
-  assert.equal(ONE(text), text);
+  assert.equal(
+    ONE(text),
+    text.replace('203.0.113.7', '203.0.113.0').replace('2001:db8::1', '2001:db8::/48'),
+  );
 });
 
 test('exact values: whole, repeated, as part of a larger word, and by prefix and suffix', () => {

@@ -60,22 +60,21 @@ export function storeTierOfRecord(r) {
 }
 
 // Attribution for the store only; the ledger's verdict is untouched.
-// PASS: a verified box result PASS. FAIL: a box result FAIL, or a box that reported and then hit
-// a test-side limit (hard/heartbeat timeout, report limits). RETRY: a provider fault (the Worker
-// may replace the box once). Everything else (no box report, owner stop, supersede, provider
-// absent, rental refused) is UNATTRIBUTED, which never answers a requirement.
+// PASS requires an accepted box result. Any failure after the first report stays FAIL,
+// including persisted records written before provider-fault normalization was added.
+// A provider fault before reporting is RETRY within the session bounds. Other records
+// without a result or first report remain UNATTRIBUTED and cannot answer a requirement.
 export function storeVerdict(r) {
   if (r.ended === null || r.ended === undefined) return null;
   if (r.verdict === 'PASS' && r.result?.verdict === 'PASS' && r.resultAt !== undefined)
     return 'PASS';
-  if (r.verdict === 'PROVIDER_FAULT') return 'RETRY';
-  if (r.verdict === 'FAIL' && r.result?.verdict === 'FAIL') return 'FAIL';
   if (
-    r.verdict === 'FAIL' &&
     r.firstReportAt !== undefined &&
-    ['HARD_TIMEOUT', 'HEARTBEAT_TIMEOUT', 'LIMIT', 'TTL'].includes(r.closed)
+    ['FAIL', 'PROVIDER_FAULT', 'UNAVAILABLE'].includes(r.verdict)
   )
     return 'FAIL';
+  if (r.verdict === 'PROVIDER_FAULT') return 'RETRY';
+  if (r.verdict === 'FAIL' && r.result?.verdict === 'FAIL') return 'FAIL';
   return 'UNATTRIBUTED';
 }
 
@@ -165,6 +164,7 @@ export function rowFromRecord(r, leg, tree, now, cfg) {
   };
 }
 
+const STORE_KEY = /^store:([1-9][0-9]{0,19}-[1-9][0-9]{0,19}):((?:[0-9]|[12][0-9]|3[01]))$/;
 const entryKey = (record) => STORE_PREFIX + record.key + ':' + (record.providerRetries ?? 0);
 
 export async function enqueue(ledger, record) {
@@ -186,7 +186,7 @@ const finalTree = (t) =>
 async function pendingShas(ledger) {
   const shas = [];
   for (const [key, stored] of await ledger.storage.list({ prefix: STORE_PREFIX, limit: 64 })) {
-    const m = /^store:([1-9][0-9]{0,19}-[1-9][0-9]{0,19}):[0-9]$/.exec(key);
+    const m = STORE_KEY.exec(key);
     const record = m ? (stored?.record ?? (await ledger.get('record:' + m[1]))) : null;
     if (record && /^[0-9a-f]{40}$/.test(record.sha ?? '') && !shas.includes(record.sha))
       shas.push(record.sha);
@@ -270,7 +270,7 @@ export async function storeTick({
   let worked = 0;
   for (const [key, stored] of entries) {
     if (worked >= PER_TICK || clock() >= deadline) break;
-    const m = /^store:([1-9][0-9]{0,19}-[1-9][0-9]{0,19}):([0-9])$/.exec(key);
+    const m = STORE_KEY.exec(key);
     const entry = { attempts: 0, inflight: false, ...stored };
     const runId = m ? 'vast-' + m[1] + '-' + m[2] : null;
     const record = m ? (entry.record ?? (await ledger.get('record:' + m[1]))) : null;

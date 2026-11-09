@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { configuration } from '../src/policy.js';
 import { DEFAULTS } from '../src/defaults.js';
 import { parseVars } from '../deploy.mjs';
-import { setup, env, nonce } from './helpers.js';
+import { setup as baseSetup, env, nonce } from './helpers.js';
 // Owner ruling 2026-10-24 item 8: concurrent rentals. A set of active runs replaces the single
 // `active` slot; MAX_CONCURRENT_RENTALS (default 1, max 4) caps the account, and
 // MAX_CONCURRENT_CHECK / MAX_CONCURRENT_SWEEP may lower it per profile.
@@ -12,6 +12,8 @@ import { setup, env, nonce } from './helpers.js';
 // the cron or the reaper miss one of many runs; a push supersedes another branch's run or a
 // newer run of its own branch; two runs take the same machine; the rotation state moves on a
 // refused rent or lands on a machine another run holds.
+// These concurrency controls exercise explicit preferences and legacy rotation.
+const setup = (vars = {}) => baseSetup({ PINNED_MIDDLE_DIES: '[]', ...vars });
 const hex = (n) => n.toString(16).padStart(2, '0').repeat(20);
 const sweepClaims = (sha) => ({
   event_name: 'workflow_dispatch',
@@ -237,7 +239,9 @@ test('item 8c: a refused create of one run leaves the other run untouched', asyn
       ? Response.json({ success: false, error: 'no_such_ask' }, { status: 400 })
       : base(url, init);
   h.restart();
-  assert.equal((await rentAs(h, 202)).status, 503);
+  const refused = await rentAs(h, 202);
+  assert.equal(refused.status, 200);
+  assert.equal(refused.data.verdict, 'PROVIDER_FAULT');
   assert.notEqual((await record(h, 202)).ended, null);
   assert.equal((await record(h, 201)).ended, null);
   assert.equal((await statusOf(h, 201)).state, 'BOOTING');

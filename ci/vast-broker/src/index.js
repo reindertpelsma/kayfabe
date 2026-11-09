@@ -38,7 +38,15 @@ import {mintBlob,checkBlobBudget} from './blobs.js';
 // prettier-ignore
 import {benchObject,benchBudget,benchCount,benchExpiry,benchUrl,benchRedirect} from './benchdata.js';
 import { offerPrice, providerId, applyResourceProfile } from './policy.js';
-import { reportedProviderFault } from './provider-fault.js';
+import {
+  fatalSignature,
+  providerMessageClass,
+  observeFatal,
+  providerLossVerdict,
+  retryEligible,
+  attemptReceipt,
+} from './provider-policy.js';
+import { ipPrefix, rentalLine, redactEndpoints } from './rental.js';
 // prettier-ignore
 import {EVIDENCE_MAX_BYTES,EVIDENCE_MAX_INFLIGHT,evidenceEnabled,evidenceLength,evidenceReservation,storeEvidence} from './evidence.js';
 // prettier-ignore
@@ -149,7 +157,7 @@ export function createService({
   // in two). One line, at most DEFAULTS.providerMessageChars characters.
   const MESSAGE_INPUT_CHARS = 8192;
   const providerMessage = (record, i) => {
-    const m = i?.status_msg;
+    const m = redactEndpoints(typeof i?.status_msg === 'string' ? i.status_msg : '');
     if (typeof m !== 'string' || m === '') return '-';
     const cut = m.length > MESSAGE_INPUT_CHARS;
     let text = sanitizeBoxText(
@@ -195,6 +203,15 @@ export function createService({
   // bounded message. Never throws (a failed line must not stop the teardown) and never repeats.
   async function closeLine(record, reason) {
     if (record.ended !== null || record.closeLogged) return;
+    if (
+      record.firstReportAt === undefined &&
+      (record.id || record.noInstance) &&
+      !record.attemptLogged
+    ) {
+      record.attemptLogged = true;
+      record.rentalAttempts ??= [];
+      record.rentalAttempts.push(attemptReceipt(record, now()));
+    }
     record.closeLogged = true;
     try {
       await workerLine(
@@ -223,6 +240,10 @@ export function createService({
   function clocks(r, cfg) {
     r.phase = phase(r);
     r.bootDeadline ??= r.started + (r.provision ?? cfg.boot);
+    r.providerPolicy ??= cfg.provider;
+    r.sessionDeadline ??=
+      (r.originalStarted ?? r.started) + r.providerPolicy.sessionMinutes * 60000;
+    if (r.firstReportAt === undefined) r.bootDeadline = Math.min(r.bootDeadline, r.sessionDeadline);
     if (r.hardDeadline === undefined) r.hardDeadline = r.started + (r.ttl ?? cfg.hard);
     r.softDeadline ??= r.started + (r.ttl ?? cfg.hard) - cfg.softMargin;
     r.lastPostAt ??= r.firstReportAt ?? null;
@@ -248,6 +269,10 @@ export function createService({
     host_driver_version: r.hostDriverVersion ?? 'unknown',
     host_reference: r.result?.host_reference ?? 'MISSING',
     provider_retries: r.providerRetries ?? 0,
+    provider_retry_allowed: retryEligible(r, now(), r.providerPolicy ?? DEFAULTS.providerPolicy),
+    rental_attempts: r.rentalAttempts ?? [],
+    datacenter: r.datacenter ?? null,
+    ip_prefix: r.ipPrefix ?? 'unknown',
     sha: r.sha,
     state: phase(r),
     verdict:
@@ -287,7 +312,7 @@ export function createService({
     bundle_sha256: env.DEPLOYED_BUNDLE_SHA256 ?? '0'.repeat(64),
   });
   async function workerLine(r, message, cfg) {
-    const text = '[Worker] ' + message + '\n',
+    const text = '[Worker] ' + redactEndpoints(message) + '\n',
       bytes = new TextEncoder().encode(text).length;
     if ((r.fullBytes ?? 0) + bytes > cfg.reportBytes) {
       r.fullBytesDropped = (r.fullBytesDropped ?? 0) + bytes;
@@ -300,6 +325,12 @@ export function createService({
     r.fullBytes = (r.fullBytes ?? 0) + bytes;
     appendWorkerText(r, text);
     await ledger.save(r);
+  }
+  async function recordRental(r, instance, cfg) {
+    if (instance?.public_ipaddr) r.ipPrefix = ipPrefix(instance.public_ipaddr);
+    if (r.rentalLogged) return;
+    r.rentalLogged = true;
+    await workerLine(r, rentalLine(r), cfg);
   }
   async function rejectExpiredCallback(r, cfg, vast) {
     if (now() >= nextDeadline(r)) {
@@ -326,10 +357,11 @@ export function createService({
         if (
           previous !== undefined &&
           now() >= deadline &&
-          now() - previous >= DEFAULTS.cronPeriod
+          now() - previous >= DEFAULTS.cronPeriod &&
+          !record.ownershipUncertain
         ) {
           record.closed = 'GONE';
-          record.verdict ||= 'UNAVAILABLE';
+          record.verdict ||= record.firstReportAt !== undefined ? 'FAIL' : 'UNAVAILABLE';
           record.computeStoragePrice = 0;
           record.price = 0;
           record.bandwidthCost = 0;
@@ -340,6 +372,7 @@ export function createService({
         }
       } else {
         delete record.noContractAt;
+        delete record.ownershipUncertain;
         record.idSource = 'reconcile';
       }
       await ledger.save(record);
@@ -350,11 +383,26 @@ export function createService({
     await recover(record, vast);
     if (record.ended !== null || !record.id) return;
     await vast.destroy(record);
+    if (record.firstReportAt === undefined && record.rentalAttempts?.length) {
+      record.rentalAttempts[record.rentalAttempts.length - 1] = attemptReceipt(record, now());
+    }
+    if (
+      record.verdict === 'PROVIDER_FAULT' &&
+      !retryEligible(
+        { ...record, ended: now() },
+        now(),
+        record.providerPolicy ?? DEFAULTS.providerPolicy,
+      )
+    ) {
+      await exhaust(record, { reportBytes: lastReportBytes }, 'ATTEMPT_OR_TIME_LIMIT');
+    }
     await ledger.settle(record, now());
     console.log(JSON.stringify({ event: 'destroyed' }));
   }
   async function close(record, vast, reason, verdict = 'FAIL') {
     record.closed = reason;
+    if (record.firstReportAt !== undefined && ['UNAVAILABLE', 'PROVIDER_FAULT'].includes(verdict))
+      verdict = 'FAIL';
     record.verdict ||= verdict;
     record.liveCheckedAt = null;
     await ledger.save(record);
@@ -363,6 +411,7 @@ export function createService({
   }
   async function checkContract(record, instance, vast, cfg) {
     applyResourceProfile(cfg, budgetClass(record), record.tier);
+    if (instance?.public_ipaddr) record.ipPrefix = ipPrefix(instance.public_ipaddr);
     const price = instance && offerPrice(instance, cfg, budgetClass(record));
     const cap = profileCaps(cfg, budgetClass(record)).price;
     if (
@@ -371,6 +420,13 @@ export function createService({
       instance.inet_down_cost > cfg.maxInet ||
       price.effective > cap
     ) {
+      if (price) {
+        record.computeStoragePrice = Math.max(
+          record.computeStoragePrice ?? 0,
+          price.computeStorage,
+        );
+        record.bandwidthCost = Math.max(record.bandwidthCost ?? 0, price.bandwidth);
+      }
       await close(record, vast, 'CONTRACT_PRICE', 'UNAVAILABLE');
       refuse('UNAVAILABLE', 503);
     }
@@ -380,7 +436,7 @@ export function createService({
     if (computeStorage !== record.computeStoragePrice || bandwidth !== record.bandwidthCost) {
       const ttl = record.billingTtl ?? record.ttl + cfg.cronPeriod;
       const total = (computeStorage * ttl) / 3600000 + bandwidth;
-      if (record.providerRetries === 1 && record.retryCostUsd + total > record.runBudgetUsd) {
+      if ((record.retryCostUsd ?? 0) + total > record.runBudgetUsd) {
         record.computeStoragePrice = computeStorage;
         record.bandwidthCost = bandwidth;
         await close(record, vast, 'CONTRACT_BUDGET', 'PROVIDER_FAULT');
@@ -450,22 +506,30 @@ export function createService({
     else if (record.lastPostAt !== null && now() - record.lastPostAt >= record.heartbeatTimeout)
       reason = 'HEARTBEAT_TIMEOUT';
     if (reason) {
-      if (
-        reason === 'BOOT_TIMEOUT' &&
-        ['created', 'running'].includes(record.providerState) &&
-        record.bootFailure?.confirmed &&
-        now() - record.bootFailure.last <= cfg.cronPeriod * 2 &&
-        Number.isSafeInteger(record.machineId)
-      ) {
-        await ledger.markProviderFault(record, 'KVM_DOMAIN_NOT_FOUND', now());
-        await workerLine(record, 'host excluded after frozen KVM boot signature', cfg);
+      let expiredInstance = null;
+      if (reason === 'BOOT_TIMEOUT' && record.firstReportAt === undefined) {
+        try {
+          expiredInstance = await vast.inspect(record);
+          if (expiredInstance) {
+            record.providerState = providerWord(expiredInstance);
+            record.providerRaw = record.providerState;
+            record.providerMsg = providerMessage(record, expiredInstance);
+          }
+        } catch {}
+      }
+      const providerFault = reason === 'BOOT_TIMEOUT' && record.firstReportAt === undefined;
+      const attributable =
+        expiredInstance !== null &&
+        (record.bootFailure?.confirmed ||
+          ['created', 'loading', 'starting', 'offline', 'null'].includes(record.providerState));
+      if (providerFault) {
+        record.faultReason = attributable
+          ? (record.bootFailure?.reason ?? 'BOOT_TIMEOUT')
+          : 'PROVISIONING_TIMEOUT';
+        if (attributable)
+          await ledger.markProviderFault(record, record.faultReason, now(), cfg.provider);
       }
       await workerLine(record, 'destroy reason=' + reason, cfg);
-      const providerFault =
-        reason === 'BOOT_TIMEOUT' &&
-        ['created', 'running'].includes(record.providerState) &&
-        record.bootFailure?.confirmed &&
-        now() - record.bootFailure.last <= cfg.cronPeriod * 2;
       await close(
         record,
         vast,
@@ -484,7 +548,7 @@ export function createService({
       // retries on every cron tick until the API answers).
       if (error instanceof BrokerError && error.state === 'OWNERSHIP_MISMATCH') {
         record.closed = 'UNAVAILABLE';
-        record.verdict ||= 'UNAVAILABLE';
+        record.verdict ||= record.firstReportAt !== undefined ? 'FAIL' : 'UNAVAILABLE';
         await ledger.save(record);
         await closeLine(record, 'UNAVAILABLE');
         throw Error('UNAVAILABLE');
@@ -502,10 +566,11 @@ export function createService({
             ' s, no box post',
           cfg,
         );
-        record.closed = 'UNAVAILABLE';
-        record.verdict ||= 'UNAVAILABLE';
+        record.verdict ||= providerLossVerdict(record);
+        record.closed = record.verdict === 'PROVIDER_FAULT' ? 'PROVIDER_FAULT' : 'UNAVAILABLE';
+        record.faultReason = 'PROVIDER_API_UNAVAILABLE';
         await ledger.save(record);
-        await closeLine(record, 'UNAVAILABLE');
+        await closeLine(record, record.closed);
         throw Error('UNAVAILABLE');
       }
       await ledger.save(record);
@@ -514,15 +579,17 @@ export function createService({
     if (instance === null) {
       // Verified absence (Vast: the instance does not exist) closes at once; only a transient
       // non-running status of an instance that exists is tolerated below.
-      record.closed = 'GONE';
-      record.verdict ||= 'UNAVAILABLE';
+      record.verdict ||= providerLossVerdict(record);
+      record.closed = record.verdict === 'PROVIDER_FAULT' ? 'PROVIDER_FAULT' : 'GONE';
+      record.faultReason = 'INSTANCE_GONE';
       record.providerRaw = 'absent';
       record.providerMsg = '-';
       await workerLine(record, 'provider_absent', cfg);
-      await closeLine(record, 'GONE');
+      await closeLine(record, record.closed);
       await ledger.settle(record, now());
       return;
     }
+    await recordRental(record, instance, cfg);
     await checkContract(record, instance, vast, cfg);
     const providerState = providerWord(instance);
     record.providerRaw = providerState;
@@ -541,38 +608,27 @@ export function createService({
         cfg,
       );
     }
-    if (
-      ['created', 'running'].includes(instance.actual_status) &&
-      record.firstReportAt === undefined
-    ) {
-      // Provider diagnostics never decide test PASS and never postpone cleanup.
-      try {
-        const log = await vast.bootLog(record),
-          signature = "Domain not found: no domain with matching name 'C." + record.id + "'";
-        if (
-          typeof log === 'string' &&
-          log.includes('libvirt: QEMU Driver error') &&
-          log.includes(signature)
-        ) {
-          const hash = await sha256Hex(log),
-            prior = record.bootFailure;
-          record.bootFailure =
-            prior?.hash === hash
-              ? {
-                  ...prior,
-                  last: now(),
-                  confirmed: now() - prior.first >= DEFAULTS.bootFailureFreezeMs,
-                }
-              : { hash, first: now(), last: now(), confirmed: false };
-        } else record.bootFailure = null;
-      } catch {
-        record.bootFailure = null;
+    if (record.firstReportAt === undefined) {
+      let log = '';
+      let signature = fatalSignature(instance, '', record.id, cfg.provider);
+      if (!signature && (pendingInstance(instance) || instance.actual_status === 'running')) {
+        try {
+          log = await vast.bootLog(record);
+        } catch {}
+        signature = fatalSignature(instance, log, record.id, cfg.provider);
       }
+      const disposition = providerMessageClass(instance, log, record.id, cfg.provider);
+      record.providerMessageClass = disposition.kind;
+      record.bootFailure = observeFatal(record.bootFailure, signature, now(), cfg.provider);
       await ledger.save(record);
-    } else {
-      record.bootFailure = null;
-      await ledger.save(record);
-    }
+      if (record.bootFailure?.confirmed) {
+        record.faultReason = signature;
+        await ledger.markProviderFault(record, signature, now(), cfg.provider);
+        await workerLine(record, 'fatal provider message reason=' + signature, cfg);
+        await close(record, vast, 'PROVIDER_FAULT', 'PROVIDER_FAULT');
+        return;
+      }
+    } else record.bootFailure = null;
     const pendingBoot = record.firstReportAt === undefined && pendingInstance(instance);
     // RUN_GONE is evaluated whatever Vast reads (a box that keeps posting through a stuck status
     // must not outlive its workflow): not while a booting instance is still pending (unchanged),
@@ -618,7 +674,13 @@ export function createService({
             (record.hostId ? ' host=' + providerId(record.hostId) : ''),
           cfg,
         );
-        await close(record, vast, 'ENDED');
+        record.faultReason = 'PROVIDER_STOPPED';
+        await close(
+          record,
+          vast,
+          record.firstReportAt === undefined ? 'PROVIDER_FAULT' : 'ENDED',
+          providerLossVerdict(record),
+        );
         return;
       }
       await ledger.save(record);
@@ -686,6 +748,9 @@ export function createService({
     for (let i = 0; i < chunks.length; i++)
       await ledger.put(reportChunkKey(key, leg, i), chunks[i]);
     r.runReport = { chunks: chunks.length, bytes: encoded.length, at: now() };
+    r.firstReportAt ??= now();
+    r.lastPostAt = now();
+    if (r.phase !== 'GRACE') r.phase = 'TESTING';
     await ledger.save(r);
     return json({ state: 'STORED' });
   }
@@ -842,8 +907,8 @@ export function createService({
           preferences_ignored: r.preferencesIgnored,
         };
         r.hardware = payload.result.hardware;
-        const providerReason = reportedProviderFault(r.result, r.log);
-        if (providerReason) r.result.verdict = 'PROVIDER_FAULT';
+        if (['PROVIDER_FAULT', 'UNAVAILABLE'].includes(r.result.verdict)) r.result.verdict = 'FAIL';
+        if (r.result.verdict === 'PASS') await ledger.markProviderSuccess(r, cfg.provider);
         if (r.profile === 'sweep' && payload.result.verdict === 'PASS')
           await ledger.put('passed:' + r.die, now());
         r.resultAt = now();
@@ -852,19 +917,6 @@ export function createService({
         r.resultDeadline = r.resultAt + r.grace;
         r.phase = 'GRACE';
         r.liveCheckedAt = null;
-        if (r.verdict === 'PROVIDER_FAULT') {
-          await ledger.markProviderFault(r, 'PROVIDER_FAULT', now());
-          await workerLine(
-            r,
-            'provider fault: machine ' +
-              r.machineId +
-              ' host ' +
-              (r.hostId ?? 'unknown') +
-              ', not a kayfabe verdict',
-            cfg,
-          );
-          await close(r, vast, 'PROVIDER_FAULT', 'PROVIDER_FAULT');
-        }
       } else if (r.reportCount >= cfg.reportCount || r.reportBytes >= cfg.reportBytes)
         await close(r, vast, 'LIMIT');
       return json({
@@ -1154,17 +1206,23 @@ export function createService({
     let retrySource;
     if (prior) {
       if (prior.runnerNonce !== rentRequest.runner_nonce) refuse('BINDING_MISMATCH', 409);
+      clocks(prior, cfg);
+      if (
+        prior.rentalAttempts === undefined &&
+        prior.verdict === 'PROVIDER_FAULT' &&
+        prior.ended !== null &&
+        prior.firstReportAt === undefined
+      ) {
+        prior.rentalAttempts = [attemptReceipt(prior)];
+        if ((prior.providerRetries ?? 0) > 0) await exhaust(prior, cfg, 'LEGACY_HISTORY_MISSING');
+      }
       await recover(prior, vast);
       if (prior.verdict === 'PROVIDER_FAULT' && prior.closed && prior.ended === null)
         await cleanup(prior, vast);
       if (
-        prior.verdict === 'PROVIDER_FAULT' &&
-        prior.closed === 'PROVIDER_FAULT' &&
-        prior.ended !== null &&
-        prior.id &&
-        (prior.providerRetries ?? 0) === 0 &&
+        (prior.id || prior.noInstance) &&
         Number.isFinite(prior.runBudgetUsd) &&
-        now() < prior.softDeadline
+        retryEligible(prior, now(), cfg.provider)
       ) {
         retrySource = prior;
         cfg.hard = prior.hardDeadline - now();
@@ -1172,25 +1230,81 @@ export function createService({
       } else {
         if (prior.id && prior.ended === null)
           await checkContract(prior, await vast.inspect(prior), vast, cfg);
+        if (prior.verdict === 'PROVIDER_FAULT' && prior.ended !== null) await exhaust(prior, cfg);
         return json(expose(prior, key));
       }
     }
     // The tier comes from the verified event (src/tier.js), never from the request body.
-    const admitted = await admit({
-      key,
-      target,
-      profile,
-      tierName: tierForClaims(c, profile),
-      cfg,
-      vast,
-      github,
-      preferences: rentRequest.preferences,
-      runnerNonce: rentRequest.runner_nonce,
-      runnerSeconds: rentRequest.remaining_seconds,
-      force: Number(c.run_attempt) > 1, // An owner re-run; the SHA gap below still applies.
-      retrySource,
-    });
+    let admitted;
+    try {
+      admitted = await admit({
+        key,
+        target,
+        profile,
+        tierName: tierForClaims(c, profile),
+        cfg,
+        vast,
+        github,
+        preferences: rentRequest.preferences,
+        runnerNonce: rentRequest.runner_nonce,
+        runnerSeconds: rentRequest.remaining_seconds,
+        force: Number(c.run_attempt) > 1, // An owner re-run; the SHA gap below still applies.
+        retrySource,
+      });
+    } catch (e) {
+      if (!retrySource) throw e;
+      if (
+        e instanceof BrokerError &&
+        ['UNAVAILABLE_BUDGET', 'UNAVAILABLE', 'NOT_ELIGIBLE'].includes(e.state)
+      ) {
+        const current = await ledger.granted(key);
+        if (current && current.nonce !== retrySource.nonce) return json(expose(current, key));
+        if (e.state === 'UNAVAILABLE') await waitReplacement(retrySource, cfg);
+        else await exhaust(retrySource, cfg, e.reason ?? e.state);
+        return json(expose(retrySource, key));
+      }
+      throw e;
+    }
+    if (!admitted && retrySource) await waitReplacement(retrySource, cfg);
     return json(expose(admitted ?? retrySource, key));
+  }
+  async function waitReplacement(r, cfg) {
+    if (r.replacementWaiting) return;
+    r.replacementWaiting = true;
+    await workerLine(
+      r,
+      'replacement waiting for fresh affordable offer within session deadline',
+      cfg,
+    );
+    await ledger.save(r);
+    if (r.ended !== null) await ledger.settle(r, r.ended);
+  }
+  async function exhaust(r, cfg, why = 'LIMIT_OR_NO_OFFERS') {
+    if (r.replacementExhausted) return;
+    r.replacementExhausted = true;
+    await workerLine(
+      r,
+      'rental attempts exhausted verdict=RETRY cause=' +
+        why +
+        ' count=' +
+        (r.rentalAttempts?.length ?? 0),
+      cfg,
+    );
+    for (const a of r.rentalAttempts ?? [])
+      await workerLine(
+        r,
+        'attempt machine=' +
+          a.machine +
+          ' host=' +
+          a.host +
+          ' reason=' +
+          a.reason +
+          ' seconds=' +
+          a.seconds,
+        cfg,
+      );
+    await ledger.save(r);
+    if (r.ended !== null) await ledger.settle(r, r.ended);
   }
   // One admission path for every rental: the GitHub-triggered check and sweep, the owner's admin
   // start and each leg of a release. Every check below applies to all of them; the only
@@ -1288,9 +1402,14 @@ export function createService({
       vramFloorMb: tierName === 'middle' ? cfg.middleVramFloorMb : 0,
     });
     if (retrySource) {
-      const remaining = retrySource.runBudgetUsd - rentalCost(retrySource, retrySource.ended);
+      const remaining =
+        retrySource.runBudgetUsd -
+        (retrySource.retryCostUsd ?? 0) -
+        rentalCost(retrySource, retrySource.ended);
+      const attempts = retrySource.rentalAttempts ?? [];
       evaluation.allowed = evaluation.allowed.filter(
         (offer) =>
+          !attempts.some((a) => a.machine === offer.machine_id || a.host === offer.host_id) &&
           offer.machine_id !== retrySource.machineId &&
           providerId(retrySource.hostId) !== null &&
           providerId(offer.host_id) !== null &&
@@ -1306,20 +1425,41 @@ export function createService({
           leg.releaseMatrix,
         ),
       );
-    const chosen = await offers.select(evaluation, cfg, ledger, profile, preferences, {
-        tierName,
-        ...(leg?.die ? { die: leg.die } : {}),
-        avoidMachines: leg?.avoidMachines ?? [],
-        avoidHosts: leg?.avoidHosts ?? [],
-      }),
-      offer = chosen.offer,
-      cost = offer.pricing.total,
-      credit = await vast.credit();
+    const selection = {
+      tierName,
+      ...(leg?.die ? { die: leg.die } : {}),
+      avoidMachines: leg?.avoidMachines ?? [],
+      avoidHosts: leg?.avoidHosts ?? [],
+    };
+    let chosen = await offers.select(evaluation, cfg, ledger, profile, preferences, selection);
+    const credit = await vast.credit();
+    if (profile === 'check' && tierName === 'middle' && cfg.pinnedMiddleDies.length) {
+      const budget = await ledger.budgetSummary(cfg, now());
+      const room = Math.min(
+        profileCaps(cfg, profile).dailyUsd - budget.profiles[profile].daily_usd,
+        cfg.accountDaily - budget.daily_usd,
+        cfg.rolling - budget.rolling_usd,
+        credit - cfg.reserve - budget.outstanding_usd,
+      );
+      const affordable = evaluation.allowed.filter((candidate) => candidate.pricing.total <= room);
+      if (affordable.length) {
+        evaluation.allowed = affordable;
+        chosen = await offers.select(evaluation, cfg, ledger, profile, preferences, selection);
+      }
+    }
+    const offer = chosen.offer,
+      cost = offer.pricing.total;
     try {
       if (costGuard) costGuard(cost);
       await ledger.budgets(cfg, now(), cost, null, {
         credit,
         sameAttempt: retrySource !== undefined,
+        ...(retrySource
+          ? {
+              attemptKey: retrySource.key,
+              attemptStarted: retrySource.originalStarted ?? retrySource.started,
+            }
+          : {}),
       });
     } catch (e) {
       if (e instanceof BrokerError && e.state === 'UNAVAILABLE_BUDGET')
@@ -1354,9 +1494,15 @@ export function createService({
         country: offer.country,
         geolocation:
           typeof offer.geolocation === 'string'
-            ? offer.geolocation.replace(/[\p{Cc}\p{Cf}]/gu, ' ').slice(0, 128)
+            ? redactEndpoints(offer.geolocation)
+                .replace(/[\p{Cc}\p{Cf}]/gu, ' ')
+                .slice(0, 128)
             : 'unknown',
         dphTotal: offer.dph_total,
+        datacenter: typeof offer.datacenter === 'boolean' ? offer.datacenter : null,
+        ipPrefix: ipPrefix(offer.public_ipaddr),
+        providerPolicy: cfg.provider,
+        sessionDeadline: started + cfg.provider.sessionMinutes * 60000,
         hostDriverVersion:
           typeof offer.driver_version === 'string' &&
           /^(?:unknown|\d{3}\.\d{1,3}(?:\.\d{1,2})?)$/.test(offer.driver_version)
@@ -1367,6 +1513,7 @@ export function createService({
         hostId: providerId(offer.host_id),
         preferencesIgnored: chosen.ignored,
         selectionReason: chosen.reason,
+        pinSkipped: chosen.pinSkipped ?? [],
         bandwidthCost: offer.pricing.bandwidth,
         computeStoragePrice: offer.pricing.computeStorage,
         key,
@@ -1409,17 +1556,23 @@ export function createService({
         liveCheckedAt: null,
       };
     r.runBudgetUsd = retrySource?.runBudgetUsd ?? profileCaps(cfg, profile).dailyUsd;
-    r.providerRetries = retrySource ? 1 : 0;
+    r.providerRetries = retrySource ? (retrySource.providerRetries ?? 0) + 1 : 0;
     if (retrySource) {
-      r.originalStarted = retrySource.started;
+      r.originalStarted = retrySource.originalStarted ?? retrySource.started;
+      r.sessionDeadline =
+        retrySource.sessionDeadline ?? r.originalStarted + cfg.provider.sessionMinutes * 60000;
+      r.rentalAttempts = structuredClone(retrySource.rentalAttempts ?? []);
       r.hardDeadline = retrySource.hardDeadline;
       r.softDeadline = retrySource.softDeadline;
       r.bootDeadline = Math.min(r.bootDeadline, r.softDeadline);
       r.ttl = r.hardDeadline - r.started;
       r.billingTtl = r.ttl + cfg.cronPeriod;
       r.reportExpiry = Math.floor(r.hardDeadline / 1000);
-      r.retryCostUsd = rentalCost(retrySource, retrySource.ended);
-      r.nonce = (await sha256Hex(retrySource.nonce + n + ':provider:1')).slice(0, 32);
+      r.retryCostUsd = (retrySource.retryCostUsd ?? 0) + rentalCost(retrySource, retrySource.ended);
+      r.nonce = (await sha256Hex(retrySource.nonce + n + ':provider:' + r.providerRetries)).slice(
+        0,
+        32,
+      );
       r.priorNonces = [...(retrySource.priorNonces ?? []), retrySource.nonce];
       r.known = [...new Set([...(retrySource.known ?? []), ...(r.known ?? [])])];
       // Keep one authenticated log chain and the run-wide byte/report limits across legs.
@@ -1438,8 +1591,10 @@ export function createService({
       ])
         if (retrySource[field] !== undefined) r[field] = retrySource[field];
     }
+    r.bootDeadline = Math.min(r.bootDeadline, r.sessionDeadline);
     const runToken = await tokens.issue(r),
-      script = onstart(target.sha, cfg.repo);
+      script = onstart(target.sha, cfg.repo) + '\n# rental-proof=' + r.nonce + '\n';
+    r.proofVersion = 1;
     r.scriptHash = await sha256Hex(script);
     try {
       await ledger.reserve(r, { cfg, now: now(), cost, credit, retryNonce: retrySource?.nonce });
@@ -1470,11 +1625,12 @@ export function createService({
         tierName +
         ' family=' +
         r.family +
-        (r.familyWanted ? ' fallback_from=' + r.familyWanted : ''),
+        (r.familyWanted ? ' fallback_from=' + r.familyWanted : '') +
+        (r.pinSkipped.length ? ' pin_skipped=' + r.pinSkipped.join(',') : ''),
       cfg,
     );
     if (profile === 'sweep') await ledger.put('rotation:lastDie', r.die);
-    if (chosen.reason === 'ROTATE' && tierName === 'middle')
+    if (['ROTATE', 'PIN_EXHAUSTED'].includes(chosen.reason) && tierName === 'middle')
       await ledger.put('rotation:middleFamily', chosen.family);
     try {
       const environment = {
@@ -1517,17 +1673,38 @@ export function createService({
       r.id = await vast.create(offer, r, script, environment);
       r.idSource = 'create';
       await ledger.save(r);
-      await checkContract(r, await vast.inspect(r), vast, cfg);
+      const createdInstance = await vast.inspect(r);
+      r.contractVerified = true;
+      await recordRental(r, createdInstance, cfg);
+      await checkContract(r, createdInstance, vast, cfg);
     } catch (e) {
       if (e instanceof BrokerError && e.state === 'CREATE_REFUSED') {
-        r.closed = 'GONE';
-        r.verdict = 'UNAVAILABLE';
+        r.closed = 'PROVIDER_FAULT';
+        r.verdict = 'PROVIDER_FAULT';
+        r.noInstance = true;
+        r.faultReason = 'CREATE_REFUSED';
         r.computeStoragePrice = 0;
         r.price = 0;
         r.bandwidthCost = 0;
-        await closeLine(r, 'GONE');
+        await closeLine(r, 'PROVIDER_FAULT');
         await ledger.settle(r, now());
         await clearFailedSha(r);
+        return r;
+      }
+      if (e instanceof BrokerError && e.state === 'OWNERSHIP_MISMATCH') {
+        r.rejectedContractId = r.id;
+        r.id = null;
+        r.ownershipUncertain = true;
+        delete r.idSource;
+        r.faultReason = 'CREATE_ID_MISMATCH';
+        await ledger.save(r);
+        await recover(r, vast);
+        if (r.id) {
+          await recordRental(r, await vast.inspect(r), cfg);
+          await ledger.markProviderFault(r, r.faultReason, now(), cfg.provider);
+          await close(r, vast, 'PROVIDER_FAULT', 'PROVIDER_FAULT');
+        }
+        return r;
       }
       if (e instanceof BrokerError && e.state === 'UNAVAILABLE_BUDGET') throw e;
       refuse();

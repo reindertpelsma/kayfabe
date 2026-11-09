@@ -158,7 +158,21 @@ export function configuration(env) {
     !['true', 'false'].includes(env.ALLOW_UNKNOWN_COUNTRY ?? 'false')
   )
     refuse();
+  const pinnedMiddleDies = list('PINNED_MIDDLE_DIES', DEFAULTS.pinnedMiddleDies);
+  if (
+    new Set(pinnedMiddleDies).size !== pinnedMiddleDies.length ||
+    pinnedMiddleDies.some((d) => !DEFAULTS.dieRules.some((r) => r.die === d))
+  )
+    refuse('CONFIG_VAR:PINNED_MIDDLE_DIES', 503);
   const cfg = {
+    pinnedMiddleDies,
+    provider: (() => {
+      try {
+        return providerPolicy(env);
+      } catch (e) {
+        refuse(e.message.startsWith('CONFIG_VAR:') ? e.message : 'CONFIG_VAR:PROVIDER_POLICY', 503);
+      }
+    })(),
     preferredCountries,
     deniedCountries,
     // Edits3 C: unknown or unparseable geolocation is rejected unless the owner opts in.
@@ -651,7 +665,10 @@ export function profileCaps(cfg, profile) {
       dailyCount: cfg.dailyCount,
       concurrent: cfg.maxConcurrentProfile.check,
       hard: cfg.hardCheck,
-      dies: cfg.checkAdmitDies ?? cfg.checkDies,
+      dies:
+        cfg.tierName === 'middle'
+          ? [...new Set([...(cfg.checkAdmitDies ?? cfg.checkDies), ...cfg.pinnedMiddleDies])]
+          : (cfg.checkAdmitDies ?? cfg.checkDies),
     };
   if (profile === 'sweep')
     return {
@@ -742,4 +759,67 @@ export function offerRejections(
 }
 export function validOffer(offer, cfg, context) {
   return offerRejections(offer, cfg, context).length === 0;
+}
+
+const MAX_PROVIDER_ATTEMPTS = 32;
+export function providerPolicy(env = {}) {
+  const p = structuredClone(DEFAULTS.providerPolicy);
+  if (
+    !Number.isInteger(p.historyPerIdentity) ||
+    p.historyPerIdentity < 1 ||
+    p.historyPerIdentity > 128 ||
+    !Number.isInteger(p.historyIdentities) ||
+    p.historyIdentities < 1 ||
+    p.historyIdentities > 256 ||
+    !(p.successFactor > 0 && p.successFactor < 1)
+  )
+    throw new Error('CONFIG_VAR:PROVIDER_POLICY');
+  const numeric = {
+    PROVIDER_CONFIRM_SECONDS: ['confirmationSeconds', 1, 600],
+    PROVIDER_MAX_ATTEMPTS: ['maxAttempts', 1, MAX_PROVIDER_ATTEMPTS],
+    PROVIDER_SESSION_MINUTES: ['sessionMinutes', 1, 180],
+    PROVIDER_PENALTY_BASE_USD_HOUR: ['penaltyBaseUsdHour', 0.001, 10],
+    PROVIDER_PENALTY_HALF_LIFE_HOURS: ['penaltyHalfLifeHours', 0.01, 720],
+    PROVIDER_PENALTY_CAP_USD_HOUR: ['penaltyCapUsdHour', 0.001, 100],
+  };
+  for (const [key, [field, min, max]] of Object.entries(numeric)) {
+    if (env[key] !== undefined && (typeof env[key] !== 'string' || !/^\d+(\.\d+)?$/.test(env[key])))
+      throw new Error('CONFIG_VAR:' + key);
+    const value = Number(env[key] ?? p[field]);
+    if (
+      !Number.isFinite(value) ||
+      value < min ||
+      value > max ||
+      (field === 'maxAttempts' && !Number.isInteger(value))
+    )
+      throw new Error('CONFIG_VAR:' + key);
+    p[field] = value;
+  }
+  if (env.PROVIDER_IGNORABLE_SIGNATURES !== undefined)
+    p.ignorableSignatures = JSON.parse(env.PROVIDER_IGNORABLE_SIGNATURES);
+  if (
+    !Array.isArray(p.ignorableSignatures) ||
+    p.ignorableSignatures.length > 32 ||
+    p.ignorableSignatures.some((s) => typeof s !== 'string' || !s.length || s.length > 200)
+  )
+    throw new Error('CONFIG_VAR:PROVIDER_IGNORABLE_SIGNATURES');
+  if (env.PROVIDER_FATAL_SIGNATURES !== undefined)
+    p.fatalSignatures = JSON.parse(env.PROVIDER_FATAL_SIGNATURES);
+  if (
+    !Array.isArray(p.fatalSignatures) ||
+    !p.fatalSignatures.length ||
+    p.fatalSignatures.length > 16 ||
+    p.fatalSignatures.some(
+      (s) =>
+        !s ||
+        !/^[A-Z_]{3,40}$/.test(s.reason) ||
+        !['status', 'boot_log'].includes(s.source) ||
+        !Array.isArray(s.contains) ||
+        !s.contains.length ||
+        s.contains.length > 4 ||
+        s.contains.some((x) => typeof x !== 'string' || !x.length || x.length > 200),
+    )
+  )
+    throw new Error('CONFIG_VAR:PROVIDER_FATAL_SIGNATURES');
+  return p;
 }

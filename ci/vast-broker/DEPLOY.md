@@ -10,6 +10,18 @@ performs a deployment or a provider call. Keep `RENTING_ENABLED=false` until acc
 is no project linker), and `deploy.mjs` uploads only a bundle whose SHA-256 equals
 `deployment.json`. No Cloudflare token belongs in GitHub.
 
+## Provider recovery and middle pin (2026-11-09)
+
+[CODE READ: defaults.json, src/provider-policy.js, src/index.js, src/ledger.js, runner.py]
+Status protocol 7 carries provider-attempt receipts and prefix-only rental facts.
+The default pre-report session permits eight attempts within 90 minutes, preserving
+all original spend and runtime caps. Fatal provider signatures need confirmation;
+reported failures cannot authorize replacements. Provider penalties decay rather
+than becoming permanent exclusions. Middle checks prefer AD102, AD103, AD104 and
+AD106, in that order; `PINNED_MIDDLE_DIES=[]` restores rotation. See
+[provider recovery](docs/PROVIDER_RECOVERY.md) for variables, attribution, output
+redaction, storage bounds and API-outage limits. This source change does not deploy.
+
 ## Authorization policy
 
 [CODE READ: src/index.js, src/github.js, src/workflow-authority.js; owner rulings 2026-10-23

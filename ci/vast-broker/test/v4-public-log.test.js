@@ -24,16 +24,33 @@ for (const [name, text] of [
   ['JWT', ['eyJhbGciOiJSUzI1NiJ9', 'eyJzdWIiOiJwbGFudGVkIn0', 'S'.repeat(80)].join('.')],
   ['opaque', 'secret'.repeat(8)],
 ])
-  test('V4 public log redacts planted ' + name, async () => {
+  test('V4 box text redacts planted ' + name, async () => {
     const h = await rent();
     assert.equal((await h.report({ seq: 1, kind: 'log', text: 'value ' + text })).status, 200);
     const status = await (await h.call('/status/123-1')).json();
-    assert.ok(!status.log_tail_sanitised.includes(text), status.log_tail_sanitised);
+    const visible =
+      name === 'instance ID'
+        ? status.log_tail_sanitised
+            .split('\n')
+            .filter((line) => line.startsWith('[box]'))
+            .join('\n')
+        : status.log_tail_sanitised;
+    assert.ok(!visible.includes(text), visible);
+    if (name === 'instance ID') assert.match(status.log_tail_sanitised, /RENTAL instance=900/);
     if (name.includes('IPv')) assert.match(status.log_tail_sanitised, /\[address\]/);
     const response = await logs(h);
     assert.equal(response.status, 200);
     const page = await response.json();
-    assert.ok(!page.log_increment_sanitised.includes(text));
+    assert.ok(
+      !(
+        name === 'instance ID'
+          ? page.log_increment_sanitised
+              .split('\n')
+              .filter((line) => line.startsWith('[box]'))
+              .join('\n')
+          : page.log_increment_sanitised
+      ).includes(text),
+    );
   });
 test('V4 full log retains earlier lines beyond tail and cursor emits once', async () => {
   const h = await rent();
@@ -280,7 +297,10 @@ for (const gpu of ['RTX 3090', 'NVIDIA Quadro RTX 6000']) {
       cursor: 0,
       log_increment_sanitised: 'body\n',
     });
-    assert.match(result.stdout, /^RENTAL machine=100001 host=3001 instance=900 gpu=/);
+    assert.match(
+      result.stdout,
+      /^RENTAL instance=900 host=3001 machine=100001 datacenter=unknown country=UNKNOWN ip=unknown gpu=/,
+    );
     assert.ok(result.stdout.includes('price=0.200000'));
     assert.equal((result.stdout.match(/RENTAL /g) ?? []).length, 1);
     const next = await render('live', {

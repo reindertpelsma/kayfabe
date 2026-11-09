@@ -69,7 +69,7 @@ const cases = [
   [
     'release ranking ignores network',
     L,
-    'a.pricing.effective - b.pricing.effective',
+    'rankingPrice(a) - rankingPrice(b)',
     'a.dph_base - b.dph_base',
   ],
   [

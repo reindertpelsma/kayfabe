@@ -223,8 +223,8 @@ const MUTANTS = [
   [
     'release count cap is the check cap',
     'src/ledger.js',
-    'if (!options.sameAttempt && values.count_today >= caps.dailyCount)',
-    'if (!options.sameAttempt && values.count_today >= cfg.dailyCount)',
+    'if (!sameAttempt && values.count_today >= caps.dailyCount)',
+    'if (!sameAttempt && values.count_today >= cfg.dailyCount)',
     BATCH,
   ],
 ];

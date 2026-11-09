@@ -1,3 +1,5 @@
+import { rankingPrice } from './provider-policy.js';
+import { Ledger } from './ledger.js';
 // prettier-ignore
 import {DEFAULTS} from './defaults.js';
 // prettier-ignore
@@ -146,6 +148,9 @@ export class OfferBook {
       this.failed = false;
     }
     if (this.failed || !this.cached) refuse();
+    await ledger.storage.transaction((storage) =>
+      new Ledger(storage).migrateLegacyFaults(cfg.provider),
+    );
     const bad = [...(await ledger.storage.list({ prefix: 'bad-machine:', limit: 257 }))];
     const hosts = [...(await ledger.storage.list({ prefix: 'bad-host:', limit: 257 }))];
     if (bad.length > 256 || hosts.length > 256) refuse();
@@ -227,12 +232,21 @@ export class OfferBook {
           die,
           country: offerCountry(offer),
           pricing: offerPrice(offer, cfg, profile),
+          penalty: await ledger.providerPenalty(
+            offer.machine_id,
+            offer.host_id,
+            this.now(),
+            cfg.provider,
+          ),
         });
     }
-    const grouped = new Map();
+    allowed.sort((a, b) => rankingPrice(a) - rankingPrice(b) || a.id - b.id);
+    const grouped = new Map(),
+      scores = new Map();
     for (const offer of allowed) {
       const prior = grouped.get(offer.die);
-      if (!prior)
+      if (!prior) {
+        scores.set(offer.die, rankingPrice(offer));
         grouped.set(offer.die, {
           die: offer.die,
           gpu_name: offer.gpu_name.toUpperCase().replaceAll(' ', '_'),
@@ -245,9 +259,10 @@ export class OfferBook {
           machine_id: providerId(offer.machine_id),
           host_id: providerId(offer.host_id),
         });
-      else {
+      } else {
         prior.count++;
-        if (offer.pricing.effective < prior.effective_hourly) {
+        if (rankingPrice(offer) < scores.get(offer.die)) {
+          scores.set(offer.die, rankingPrice(offer));
           prior.gpu_name = offer.gpu_name.toUpperCase().replaceAll(' ', '_');
           prior.compute_cap = offer.compute_cap;
           prior.effective_hourly = offer.pricing.effective;
@@ -280,6 +295,30 @@ export class OfferBook {
   // 'middle' (with no preferences): the family rotation with fallback.
   async select(evaluation, cfg, ledger, profile, preferences, options = {}) {
     if (options.die !== undefined) return this.#pinned(evaluation, cfg, options);
+    if (profile === 'check' && options.tierName === 'middle' && cfg.pinnedMiddleDies.length) {
+      const skipped = [];
+      for (const die of cfg.pinnedMiddleDies) {
+        const pool = this.#order(
+          evaluation.allowed.filter((o) => o.die === die),
+          cfg,
+          [die],
+        );
+        if (pool.length)
+          return {
+            offer: pool[0],
+            ignored: preferences?.length ?? 0,
+            reason: 'PIN',
+            family: familyOf(die, cfg),
+            pinSkipped: skipped,
+          };
+        skipped.push(die);
+      }
+      return {
+        ...(await this.#rotateFamily(evaluation, cfg, ledger)),
+        reason: 'PIN_EXHAUSTED',
+        pinSkipped: skipped,
+      };
+    }
     if (profile === 'check' && options.tierName === 'middle' && preferences === undefined)
       return this.#rotateFamily(evaluation, cfg, ledger);
     const set = profile === 'check' ? cfg.checkDies : cfg.sweepDies,
@@ -312,7 +351,7 @@ export class OfferBook {
         (a, b) =>
           order.indexOf(a.die) - order.indexOf(b.die) ||
           countryRank(a, cfg) - countryRank(b, cfg) ||
-          a.pricing.effective - b.pricing.effective ||
+          rankingPrice(a) - rankingPrice(b) ||
           a.id - b.id,
       );
     if (!candidates.length) refuse('UNAVAILABLE', 503, 'NO_ALLOWED_OFFERS');
@@ -324,7 +363,11 @@ export class OfferBook {
       for (const offer of candidates)
         if (!representatives.has(offer.die)) representatives.set(offer.die, offer);
       for (const offer of representatives.values())
-        if (offer.pricing.effective < selected.pricing.effective) selected = offer;
+        if (
+          rankingPrice(offer) < rankingPrice(selected) ||
+          (rankingPrice(offer) === rankingPrice(selected) && offer.id < selected.id)
+        )
+          selected = offer;
     }
     return {
       offer: selected,
@@ -337,7 +380,7 @@ export class OfferBook {
       (a, b) =>
         dies.indexOf(a.die) - dies.indexOf(b.die) ||
         countryRank(a, cfg) - countryRank(b, cfg) ||
-        a.pricing.effective - b.pricing.effective ||
+        rankingPrice(a) - rankingPrice(b) ||
         a.id - b.id,
     );
   }

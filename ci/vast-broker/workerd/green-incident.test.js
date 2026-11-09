@@ -21,7 +21,10 @@ const faultSummary = readFileSync(
 for (const failureKind of ['declared', 'summary'])
   for (const seedCount of [0, 255])
     test(
-      'workerd actual incident ' + failureKind + ', existing bad machines=' + seedCount,
+      'workerd reported incident is terminal ' +
+        failureKind +
+        ', existing bad machines=' +
+        seedCount,
       async (t) => {
         const cloud = new MockCloud();
         const machine = failureKind === 'summary' ? 57994 : 144805;
@@ -75,10 +78,12 @@ for (const failureKind of ['declared', 'summary'])
             method: body === undefined ? 'GET' : 'POST',
             headers: {
               Authorization: 'Bearer ' + bearer,
-              'X-KF-Protocol': '6',
+              'X-KF-Protocol': '7',
               'Content-Type': 'application/json',
             },
-            ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+            ...(body === undefined || path.startsWith('/stop/')
+              ? {}
+              : { body: JSON.stringify(body) }),
           });
           // Miniflare requires its proxy response body to be consumed immediately.
           return new Response(await response.arrayBuffer(), {
@@ -115,30 +120,29 @@ for (const failureKind of ['declared', 'summary'])
             callbackToken(record),
           );
         assert.equal((await fault(original)).status, 200);
-        assert.equal(cloud.instances.has('57890737'), false);
-        assert.ok((await snapshot()).has('bad-machine:' + machine));
+        assert.equal(cloud.instances.has('57890737'), true);
+        assert.equal((await snapshot()).get('record:123-1').verdict, 'FAIL');
+        assert.equal((await snapshot()).has('provider-machine:' + machine), false);
+        assert.equal((await snapshot()).has('bad-machine:' + machine), false);
         cloud.extraOffers = [
           { ...cloud.offer, id: 6, machine_id: 144806, host_id: 224601, price: 0.21 },
         ];
-        const replacement = await rent();
-        assert.equal(replacement.status, 200);
-        assert.equal((await replacement.json()).id, '57890999');
-        const fresh = (await snapshot()).get('record:123-1');
-        assert.equal(fresh.machineId, 144806);
-        assert.equal(fresh.hostId, 224601);
-        assert.equal(fresh.hardDeadline, original.hardDeadline);
-        assert.notEqual(fresh.nonce, original.nonce);
+        const again = await rent();
+        assert.equal(again.status, 200);
+        assert.equal((await again.json()).id, '57890737');
+        assert.equal(cloud.created.length, 1);
         assert.equal((await fault(original)).status, 401);
-        assert.equal((await fault(fresh)).status, 200);
-        assert.equal((await (await rent()).json()).verdict, 'PROVIDER_FAULT');
-        assert.equal(cloud.created.length, 2);
-        assert.deepEqual(cloud.deletes.sort(), ['57890737', '57890999']);
+        assert.equal((await call('/stop/123-1', {})).status, 200);
+        assert.deepEqual(cloud.deletes, ['57890737']);
         assert.ok(cloud.instances.has('777') && cloud.instances.has('888'));
         const rows = await snapshot();
-        assert.equal([...rows.keys()].filter((key) => key.startsWith('cost:')).length, 2);
+        assert.equal([...rows.keys()].filter((k) => k.startsWith('cost:')).length, 1);
         const summary = await (await stub.fetch('https://internal.invalid/admin/list')).json();
         assert.equal(summary.budget.profiles.check.count_today, 1);
-        if (seedCount === 255)
-          assert.equal((await call('/availability?profile=check')).status, 503);
+        assert.equal((await call('/availability?profile=check')).status, 200);
+        assert.equal(
+          [...rows.keys()].filter((k) => k.startsWith('bad-machine:')).length,
+          seedCount,
+        );
       },
     );

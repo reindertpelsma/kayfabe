@@ -15,7 +15,7 @@ sys.modules["runner_diag"] = m
 spec.loader.exec_module(m)
 args = json.loads(sys.argv[1])
 SENTINEL = args["sentinel"]
-manifest = {"protocol_version": 6, "worker_version": "v5", "bundle_sha256": "b" * 64}
+manifest = {"protocol_version": 7, "worker_version": "v5", "bundle_sha256": "b" * 64}
 
 
 class Response:

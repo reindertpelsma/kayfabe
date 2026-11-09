@@ -3,12 +3,13 @@
 Worker text is display-only. No checkout, cache, binary/artifact input or upload.
 """
 
+import ipaddress
 import contextlib, dataclasses, hashlib, http.client, io, json, math, os, re, secrets, signal, sys, time, traceback, urllib.parse
 from pathlib import Path
 
 MAX_RESPONSE = 262144
 # Status protocol: bump with defaults.json statusProtocol whenever the status shape changes.
-STATUS_PROTOCOL = 6
+STATUS_PROTOCOL = 7
 MAX_LOG = 4194304
 # Display policy for the box log (gate visibility, 2026-10-26): the job log shows the HEAD and the
 # TAIL of the box output inside the one display budget (65000 bytes, 200 lines, see Runner.show),
@@ -248,7 +249,7 @@ def sanitise(raw, redactions=()):
         r":{2,}", lambda x: (": " * (len(x[0]) // 2) + (":" if len(x[0]) % 2 else "")), text
     ).replace("##[", "# [")
     text = re.sub(r"""https?://[^\s<>"']+""", "[url redacted]", text, flags=re.I)  # signed-url
-    return text, original
+    return redact_endpoints(text), original
 
 
 def marker_lines(removed, capped):
@@ -481,7 +482,7 @@ def class_token(value):
     return isinstance(value, str) and re.fullmatch("[A-Z][A-Z0-9_]{1,23}", value) is not None
 
 
-SELECTION_REASONS = {"DEFAULT_ORDER", "PREFERENCE", "ROTATE", "NONE"}
+SELECTION_REASONS = {"DEFAULT_ORDER", "PREFERENCE", "ROTATE", "PIN", "PIN_EXHAUSTED", "NONE"}
 
 
 def validate_selection(value):
@@ -693,6 +694,10 @@ OPTIONAL_STATUS_KEYS = {
     "host_driver_version",
     "host_reference",
     "provider_retries",
+    "provider_retry_allowed",
+    "rental_attempts",
+    "datacenter",
+    "ip_prefix",
 }
 ERROR_KEYS = {"state", "verdict", "log_tail_sanitised", "bytes_dropped"}
 
@@ -826,8 +831,33 @@ def validate_status(data, ctx, manifest, http_status):
         r"unknown|\d{3}\.\d{1,3}(?:\.\d{1,2})?", host_driver
     ):
         raise Invalid()
-    if not integer(data.get("provider_retries", 0), 0, 1):
+    if not integer(data.get("provider_retries", 0), 0, 31):
         raise Invalid()
+    if "provider_retry_allowed" in data and type(data["provider_retry_allowed"]) is not bool:
+        raise Invalid()
+    if data.get("datacenter") is not None and type(data["datacenter"]) is not bool:
+        raise Invalid()
+    if "ip_prefix" in data and (
+        not isinstance(data["ip_prefix"], str)
+        or len(data["ip_prefix"]) > 64
+        or rental_prefix(data) != data["ip_prefix"]
+    ):
+        if data.get("ip_prefix") != "unknown":
+            raise Invalid()
+    attempts = data.get("rental_attempts", [])
+    if not isinstance(attempts, list) or len(attempts) > 32:
+        raise Invalid()
+    for row in attempts:
+        if (
+            type(row) is not dict
+            or set(row) != {"instance", "machine", "host", "reason", "seconds"}
+            or not provider_id(row["machine"])
+            or not provider_id(row["host"])
+            or not isinstance(row["reason"], str)
+            or not re.fullmatch("[A-Z_]{1,40}", row["reason"])
+            or not integer(row["seconds"], 0, 86400)
+        ):
+            raise Invalid()
     if data.get("host_reference", "MISSING") not in {"GREEN", "NOT_GREEN", "MISSING"}:
         raise Invalid()
     if type(data["cleanup_pending"]) is not bool or not integer(data["log_cursor"], 0, 10000):
@@ -919,15 +949,79 @@ def public_gpu(value):
     return "unknown"
 
 
+def public_ip_prefix(value):
+    if not isinstance(value, str) or len(value) > 64 or "%" in value:
+        return "unknown"
+    try:
+        address = ipaddress.ip_address(value)
+        if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped:
+            address = address.ipv4_mapped
+        if isinstance(address, ipaddress.IPv4Address):
+            return str(ipaddress.ip_network(str(address) + "/24", strict=False).network_address)
+        return str(ipaddress.ip_network(str(address) + "/48", strict=False))
+    except ValueError:
+        return "unknown"
+
+
+def public_endpoint_match(match):
+    prefix = public_ip_prefix(match[1])
+    return match[0] if prefix == "unknown" else prefix
+
+
+def redact_endpoints(text):
+    text = re.sub(r"(?<![A-Za-z0-9])-[pP][ \t]*[0-9]{1,5}\b", "-p [redacted]", text)
+    text = re.sub(
+        r"""\b(?:ssh[_ -]?(?:port|host)|(?:ssh )?port)["']?\s*[=:]?\s*["']?[0-9]{1,5}\b""",
+        "ssh_port=[redacted]",
+        text,
+        flags=re.I,
+    )
+    text = re.sub(
+        r"\[?\b((?:[0-9]{1,3}\.){3}[0-9]{1,3})\]?(?::[0-9]{1,5})?(?![0-9])",
+        public_endpoint_match,
+        text,
+    )
+    return re.sub(
+        r"(?<![A-Za-z0-9_])\[?([0-9a-f]{0,4}(?::[0-9a-f]{0,4}){2,7})\]?(?::[0-9]{1,5})?(?:/48)?(?![A-Za-z0-9_])",
+        public_endpoint_match,
+        text,
+        flags=re.I,
+    )
+
+
+def rental_datacenter(data):
+    value = data.get("datacenter")
+    return "true" if value is True else "false" if value is False else "unknown"
+
+
+def rental_prefix(data):
+    value = data.get("ip_prefix", "unknown")
+    if not isinstance(value, str):
+        return "unknown"
+    return public_ip_prefix(value.removesuffix("/48"))
+
+
 def rental_line(data):
     price = data.get("dph_total")
+    country = data.get("country", "UNKNOWN")
+    country = (
+        country
+        if isinstance(country, str) and re.fullmatch(r"UNKNOWN|[A-Z]{2}", country)
+        else "UNKNOWN"
+    )
     return (
-        "RENTAL machine="
-        + shown_id(data["machine_id"])
+        "RENTAL instance="
+        + shown_id(data.get("instance_id", data["id"]))
         + " host="
         + shown_id(data["host_id"])
-        + " instance="
-        + shown_id(data.get("instance_id", data["id"]))
+        + " machine="
+        + shown_id(data["machine_id"])
+        + " datacenter="
+        + rental_datacenter(data)
+        + " country="
+        + country
+        + " ip="
+        + rental_prefix(data)
         + " gpu="
         + public_gpu(data["gpu_model"]).replace(" ", "_")
         + " price="
@@ -937,7 +1031,7 @@ def rental_line(data):
 
 def summary_cell(value):
     return (
-        str(value)
+        redact_endpoints(str(value))
         .replace("&", "&amp;")
         .replace("<", "&lt;")
         .replace(">", "&gt;")
@@ -952,7 +1046,7 @@ class Runner:
         self.ctx = ctx
         self.manifest = manifest
         self.client = client
-        self.emit = emit
+        self.emit = lambda text: emit(redact_endpoints(text))
         self.summary = summary
         self.metadata = None
         self.rental_shown = False
@@ -980,6 +1074,8 @@ class Runner:
         # A configured RENTING_DISABLED refusal of /rent: terminal, the Worker never touched Vast.
         self.renting_disabled = False
         self.provider_retry = False
+        self.last_requested_attempt = None
+        self.notified_faults = set()
         # Edits4 F1: sticky for the whole /rent sequence. Once any /rent reply was ambiguous
         # (5xx, timeout, connection error, garbled page) a box may exist for this run.
         self.rent_ambiguous = False
@@ -1323,6 +1419,8 @@ class Runner:
         terminal = final = admitted = False
         provider_notice = None
         self.provider_retry = False
+        self.last_requested_attempt = None
+        self.notified_faults = set()
         try:
             profile = self.ctx.get("profile", "check")
             code, availability = self.retry_read("/availability?profile=" + profile)
@@ -1391,7 +1489,7 @@ class Runner:
                 request["preferences"] = self.ctx["preferences"]
             self.rent_at = time.monotonic()
             code, data = self.retry_read("/rent", "POST", request)
-            for attempt in range(600):
+            for attempt in range(int(WAIT_BUDGET[profile] / 20) + 1):
                 try:
                     data = validate_status(data, self.ctx, self.manifest, code)
                 except Diagnosed:
@@ -1443,9 +1541,12 @@ class Runner:
                 self.metadata = data
                 if not self.transitions or self.transitions[-1][1] != data["state"]:
                     self.transitions.append((int(time.monotonic() - self.rent_at), data["state"]))
-                if self.rental_shown != data["id"] and data["id"] is not None:
+                if (
+                    self.rental_shown != (data["id"], data.get("provider_retries", 0))
+                    and data["id"] is not None
+                ):
                     self.emit(rental_line(data) + "\n")
-                    self.rental_shown = data["id"]
+                    self.rental_shown = (data["id"], data.get("provider_retries", 0))
                 final = data["state"] in {"GRACE", "NONE"} and data["result_at"] is not None
                 self.pages(data["log_cursor"])
                 if data["verdict"] == "PROVIDER_FAULT":
@@ -1456,22 +1557,71 @@ class Runner:
                         + shown_id(data["host_id"])
                         + ", not a kayfabe verdict"
                     )
-                    self.emit(provider_notice + "\n")
+                    marker = (data["id"], data.get("provider_retries", 0))
+                    if marker not in self.notified_faults:
+                        self.emit(provider_notice + "\n")
+                        self.notified_faults.add(marker)
                 if data["verdict"] == "PROVIDER_FAULT" or (
                     self.provider_retry
                     and data["state"] == "NONE"
                     and data["verdict"] == "UNAVAILABLE"
                 ):
-                    if not self.provider_retry and data.get("provider_retries", 0) == 0:
+                    if data.get("last_post_at") is not None or data.get("result_at") is not None:
+                        terminal = True
+                        result = {
+                            "state": data["state"],
+                            "verdict": "FAIL",
+                            "verified": int(data["result_at"] is not None),
+                        }
+                        break
+                    if data.get("cleanup_pending"):
+                        time.sleep(20)
+                        code, data = self.retry_read("/status/" + self.ctx["run"])
+                        continue
+                    allowed = data.get(
+                        "provider_retry_allowed",
+                        not self.provider_retry and data.get("provider_retries", 0) == 0,
+                    )
+                    if allowed:
                         self.provider_retry = True
-                        self.emit("runner: provider fault; requesting one bounded replacement\n")
+                        marker = (data["id"], data.get("provider_retries", 0))
+                        if marker == self.last_requested_attempt:
+                            time.sleep(20)
+                        else:
+                            self.emit("runner: provider fault; requesting bounded replacement\n")
+                        self.last_requested_attempt = marker
                         code, data = self.retry_read("/rent", "POST", request)
                         continue
                     self.emit("runner: provider fault; no usable replacement completed\n")
+                    for row in data.get("rental_attempts", []):
+                        self.emit(
+                            "ATTEMPT machine="
+                            + shown_id(row["machine"])
+                            + " host="
+                            + shown_id(row["host"])
+                            + " reason="
+                            + row["reason"]
+                            + " seconds="
+                            + str(row["seconds"])
+                            + "\n"
+                        )
                     terminal = True
                     result = {
                         "state": "PROVIDER_FAULT",
                         "verdict": "PROVIDER_FAULT",
+                        "verified": int(data["result_at"] is not None),
+                    }
+                    break
+                if (
+                    data.get("last_post_at") is not None
+                    and data["state"] == "NONE"
+                    and data["verdict"] == "FAIL"
+                    and data["result_at"] is None
+                ):
+                    terminal = True
+                    result = {
+                        "state": "NONE",
+                        "verdict": "FAIL",
                         "verified": int(data["result_at"] is not None),
                     }
                     break
@@ -1482,16 +1632,8 @@ class Runner:
                     self.metadata = data
                     terminal = True
                     result = {"state": data["state"], "verdict": data["verdict"], "verified": 1}
-                    # Lane 2: a failing windows_retry_<class> row is a host, harness or rental
-                    # fault (re-run on a fresh box), never a pass. Box data: it can only relabel
-                    # a FAIL so the workflow says RETRY; it never changes the verdict.
-                    self.retry = int(
-                        data["verdict"] == "FAIL"
-                        and any(
-                            r["fail"] and r["name"].startswith("windows_retry_")
-                            for r in data.get("suites") or []
-                        )
-                    )
+                    # Every failure after a box report is terminal for this check.
+                    self.retry = 0
                     self.show(data["gpu_model"])
                     break
                 if data["state"] not in {"CREATING", "BOOTING", "TESTING"}:
@@ -1517,6 +1659,13 @@ class Runner:
                 self.phase = error.phase
             result = {"state": "UNAVAILABLE", "verdict": "UNAVAILABLE", "verified": 0}
         finally:
+            if (
+                self.metadata
+                and self.metadata.get("last_post_at") is not None
+                and not (result["verified"] == 1 and result["verdict"] == "PASS")
+            ):
+                result["verdict"] = "FAIL"
+                terminal = True
             if not (result["verified"] == 1 and result["verdict"] == "PASS"):
                 self.emit(
                     diagnostic_line(
@@ -1897,9 +2046,6 @@ def main():
         with open(output, "a", encoding="ascii") as outputs:
             for key in ["state", "verdict", "verified"]:
                 outputs.write(key + "=" + str(result[key]) + "\n")
-            # Written only when set (an absent output reads as empty, i.e. not RETRY).
-            if getattr(controller, "retry", 0) == 1 and result["verdict"] == "FAIL":
-                outputs.write("retry=1\n")
     except Exception:
         diagnostic = diagnostic or "runner: Actions output could not be written"
         if not diagnosed:

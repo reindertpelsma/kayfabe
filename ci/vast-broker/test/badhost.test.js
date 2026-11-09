@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { setup, env } from './helpers.js';
 import { configuration } from '../src/policy.js';
+import { Ledger } from '../src/ledger.js';
 
 // FALSIFIER: this exact pre-product provider summary already gets a bounded other-host retry.
 const summary = readFileSync(new URL('./fixtures/provider-57945969.txt', import.meta.url), 'utf8');
@@ -34,7 +35,7 @@ async function report(h, text, reason = 'host_xid', verdict = 'FAIL') {
 }
 for (const reason of ['host_xid', 'provision'])
   for (const branch of ['initialization', 'unusable', 'not-ready', 'kvm'])
-    test('badhost classifies and retries ' + reason + ' ' + branch, async () => {
+    test('badhost reported failure cannot retry ' + reason + ' ' + branch, async () => {
       const h = await fixture();
       let text = summary.replaceAll('host_xid', reason);
       if (branch === 'initialization') text = text.replace('GPU unusable', 'GPU unavailable');
@@ -48,39 +49,49 @@ for (const reason of ['host_xid', 'provision'])
         text = text.replace('line=DRIVER_RC=8', 'line=no /dev/kvm').replace(/^cause .*\n/m, '');
       assert.equal((await report(h, text, reason)).status, 200);
       const first = await h.storage.get('record:123-1');
-      assert.equal(first.verdict, 'PROVIDER_FAULT');
-      assert.equal(h.cloud.instances.has('900'), false);
-      assert.equal((await h.storage.get('bad-machine:100001')).hostId, 5000);
-      assert.match(first.log, /provider fault: machine 100001 host 5000, not a kayfabe verdict/);
+      assert.equal(first.verdict, 'FAIL');
+      assert.equal(await h.storage.get('provider-machine:100001'), undefined);
+      assert.ok(h.cloud.instances.has('900'));
       h.restart();
-      const reply = await h.call();
-      assert.equal(reply.status, 200);
-      assert.equal((await reply.json()).host_id, 6000);
-      assert.equal(h.cloud.created.length, 2);
+      assert.equal((await h.call()).status, 200);
+      assert.equal(h.cloud.created.length, 1);
+      await h.call('/stop/123-1');
       assert.deepEqual(h.cloud.deletes, ['900']);
     });
+async function bootFault(h) {
+  const r = await h.storage.get('record:123-1');
+  h.cloud.instances.get(r.id).status_msg = 'GPU error, unable to start instance';
+  for (let i = 0; i < 2; i++) {
+    h.time.value += 20000;
+    await h.service.sweep();
+  }
+  return { status: 200 };
+}
 for (const variant of [1, 2]) {
-  test('badhost two distinct machines learn one durable host ' + variant, async () => {
-    const h = await fixture();
-    await h.storage.put('bad-machine:' + variant, {
-      reason: 'PROVIDER_FAULT',
-      at: h.time.value - 1,
-      hostId: 5000,
-    });
-    assert.equal((await report(h, '', 'provider_kvm_missing', 'PROVIDER_FAULT')).status, 200);
-    const host = await h.storage.get('bad-host:5000');
-    assert.equal(host.reason, 'PROVIDER_FAULT');
-    assert.deepEqual(
-      host.machines.sort((a, b) => a - b),
-      [variant, 100001],
+  test('badhost two distinct machines penalise rather than exclude host ' + variant, async () => {
+    const h = await fixture(),
+      ledger = new Ledger(h.storage),
+      p = configuration(env).provider;
+    await ledger.markProviderFault(
+      { key: 'old-1', nonce: 'a', machineId: variant, hostId: 5000 },
+      'GPU_START_ERROR',
+      h.time.value,
+      p,
     );
-    h.restart();
-    const availability = await h.call('/availability?profile=check', { method: 'GET' });
-    assert.equal(availability.status, 200);
-    assert.deepEqual(
-      (await availability.json()).offers.map((o) => o.host_id),
-      [6000],
+    await ledger.markProviderFault(
+      { key: 'old-2', nonce: 'b', machineId: 100001, hostId: 5000 },
+      'GPU_START_ERROR',
+      h.time.value,
+      p,
     );
+    assert.equal(await h.storage.get('bad-host:5000'), undefined);
+    assert.equal((await h.storage.get('provider-host:5000')).faults.length, 2);
+    assert.ok((await ledger.providerPenalty(100002, 5000, h.time.value, p)) > 0);
+    h.time.value += 60001;
+    const response = await h.call('/availability?profile=check', { method: 'GET' });
+    assert.equal(response.status, 200);
+    assert.ok((await response.json()).offers.length > 0);
+    await h.call('/stop/123-1');
   });
   test('badhost dynamic host denies cached offers ' + variant, async () => {
     const h = await fixture();
@@ -105,7 +116,7 @@ for (const variant of [1, 2]) {
     const h = await fixture();
     h.cloud.extraOffers = [h.cloud.extraOffers[0]];
     if (variant === 2) h.cloud.extraOffers[0].machine_id = 100004;
-    assert.equal((await report(h, '', 'provider_kvm_missing', 'PROVIDER_FAULT')).status, 200);
+    assert.equal((await bootFault(h)).status, 200);
     const response = await h.call();
     assert.equal(response.status, 200);
     assert.equal((await response.json()).verdict, 'PROVIDER_FAULT');
@@ -116,7 +127,7 @@ for (const variant of [1, 2]) {
     h.cloud.extraOffers = [h.cloud.extraOffers[0]];
     if (variant === 1) h.cloud.extraOffers[0].host_id = null;
     else delete h.cloud.extraOffers[0].host_id;
-    assert.equal((await report(h, '', 'provider_kvm_missing', 'PROVIDER_FAULT')).status, 200);
+    assert.equal((await bootFault(h)).status, 200);
     const response = await h.call();
     assert.equal(response.status, 200);
     assert.equal((await response.json()).verdict, 'PROVIDER_FAULT');

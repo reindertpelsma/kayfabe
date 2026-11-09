@@ -411,7 +411,7 @@
   "onstartPath": "scripts/ci/vast_onstart.sh",
   "reporterPath": "scripts/ci/vast_report.py",
   "boxProtocol": 7,
-  "statusProtocol": 6,
+  "statusProtocol": 7,
   "controlIpPerMinute": 60,
   "controlGlobalPerMinute": 600,
   "controlMaxIps": 4096,
@@ -531,5 +531,47 @@
       "state": "DESIGN_ONLY"
     }
   },
-  "accountDaily": 50
+  "accountDaily": 50,
+  "providerPolicy": {
+    "fatalSignatures": [
+      {
+        "reason": "GPU_START_ERROR",
+        "source": "status",
+        "contains": [
+          "GPU error, unable to start instance"
+        ]
+      },
+      {
+        "reason": "KVM_DOMAIN_NOT_FOUND",
+        "source": "boot_log",
+        "contains": [
+          "libvirt: QEMU Driver error",
+          "Domain not found: no domain with matching name 'C.{id}'"
+        ]
+      }
+    ],
+    "ignorableSignatures": [
+      "Verifying Checksum",
+      "Preparing GPUs",
+      "Pulling fs layer",
+      "Downloading",
+      "Retrying",
+      "daemon retry"
+    ],
+    "confirmationSeconds": 90,
+    "maxAttempts": 8,
+    "sessionMinutes": 90,
+    "penaltyBaseUsdHour": 0.25,
+    "penaltyHalfLifeHours": 24,
+    "penaltyCapUsdHour": 5,
+    "historyPerIdentity": 32,
+    "historyIdentities": 256,
+    "successFactor": 0.5
+  },
+  "pinnedMiddleDies": [
+    "AD102",
+    "AD103",
+    "AD104",
+    "AD106"
+  ]
 }

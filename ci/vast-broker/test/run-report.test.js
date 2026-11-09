@@ -766,10 +766,10 @@ test(
     await h.service.publishRuns();
     assert.deepEqual(bucket.puts.sort(), ['vast-123-1-0/log.txt', 'vast-123-1-0/report.json']);
     const log = bucket.text('vast-123-1-0/log.txt');
-    // Whole: nothing but secrets changed.
+    // Whole text, with secret and endpoint redaction.
     assert.ok(
       log.includes(
-        'café host 203.0.113.9 GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001 commit ' + 'a'.repeat(40),
+        'café host 203.0.113.0 GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0001 commit ' + 'a'.repeat(40),
       ),
     );
     assert.ok(log.includes('long line https://example.test/x?y=1'));

@@ -47,7 +47,7 @@ for (const [route, token] of [
         method: 'POST',
         headers: {
           Authorization: 'Bearer ' + (token === 'owner' ? env.OWNER_STOP_TOKEN : 'x.y.z'),
-          'X-KF-Protocol': '6',
+          'X-KF-Protocol': '7',
         },
         ...(route === '/rent' ? { body: '{}' } : {}),
       }),

@@ -12,7 +12,7 @@ for (const status of [200, 400])
         ? Response.json({ success: false }, { status })
         : base(url, init);
     h.restart();
-    assert.equal((await h.call()).status, 503);
+    assert.equal((await h.call()).status, 200);
     h.cloud.fetch = base;
     h.cloud.run.run_attempt = 2;
     h.restart();

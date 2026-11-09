@@ -1,3 +1,4 @@
+import { redactEndpoints } from './rental.js';
 import { DEFAULTS } from './defaults.js';
 // prettier-ignore
 import {fetchJson,fetchBounded,readBounded,refuse,IMAGE} from './policy.js';
@@ -10,7 +11,9 @@ import {sha256Hex} from './tokens.js';
 function providerError(r) {
   const text = r && typeof r === 'object' ? (typeof r.error === 'string' ? r.error : r.msg) : '';
   if (typeof text !== 'string') return '';
-  const clean = text.replace(/[^A-Za-z0-9 _.,:;'()/=-]/g, '').slice(0, 120);
+  const clean = redactEndpoints(text)
+    .replace(/[^A-Za-z0-9 _.,:;'()/=-]/g, '')
+    .slice(0, 120);
   const risky = (v) => /bearer/i.test(v) || /[A-Za-z0-9_-]{24}/.test(v);
   return risky(text) || risky(clean) ? '' : clean;
 }
@@ -143,14 +146,24 @@ export class Vast {
     });
     const r = await this.api('/api/v1/instances?' + query);
     if (r.success !== true || !Array.isArray(r.instances) || r.next_token) refuse();
-    const matches = r.instances.filter((x) => x.label === record.label);
+    let matches = r.instances.filter((x) => x.label === record.label);
     if (matches.length === 0) return null;
+    if (record.proofVersion === 1) {
+      const owned = [];
+      for (const candidate of matches)
+        if (
+          typeof candidate.onstart === 'string' &&
+          (await sha256Hex(candidate.onstart)) === record.scriptHash
+        )
+          owned.push(candidate);
+      matches = owned;
+    }
     if (matches.length !== 1) refuse();
     const candidate = matches[0];
     if (
       typeof candidate.onstart !== 'string' ||
       (await sha256Hex(candidate.onstart)) !== record.scriptHash ||
-      candidate.image_uuid !== IMAGE ||
+      (record.proofVersion !== 1 && candidate.image_uuid !== IMAGE) ||
       !Number.isSafeInteger(candidate.id) ||
       candidate.id <= 0
     )
@@ -169,6 +182,10 @@ export class Vast {
       (record.idSource !== 'create' && i.label !== record.label)
     )
       refuse('OWNERSHIP_MISMATCH', 409);
+    if (record.proofVersion === 1 && !record.contractVerified) {
+      if (typeof i.onstart !== 'string' || (await sha256Hex(i.onstart)) !== record.scriptHash)
+        refuse('OWNERSHIP_MISMATCH', 409);
+    }
     if (i.label !== record.label) console.log(JSON.stringify({ event: 'OWNERSHIP_MISMATCH' }));
     return i;
   }

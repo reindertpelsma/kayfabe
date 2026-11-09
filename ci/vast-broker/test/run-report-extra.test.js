@@ -442,7 +442,10 @@ test(
     const { bucket } = await runWith([keep + '\n', ...Object.values(SHAPES).map((s) => s + '\n')]);
     const log = bucket.objects.get('vast-123-1-0/log.txt');
     for (const [name, pattern] of Object.entries(PIECES)) assert.doesNotMatch(log, pattern, name);
-    assert.ok(log.includes(keep), 'the rest of the log is untouched, ANSI sequences included');
+    assert.ok(
+      log.includes(keep.replace('203.0.113.9', '203.0.113.0')),
+      'text and ANSI sequences survive endpoint redaction',
+    );
     assert.ok(log.includes('[redacted]'));
   },
 );
@@ -723,17 +726,11 @@ test(
       { ...h.cloud.offer, id: 6, machine_id: 100002, host_id: 200, price: 0.1 },
     ];
     const r0 = await h.storage.get('record:123-1');
-    await h.report({ seq: 1, kind: 'log', text: 'LEG-ZERO-MARK\n' });
-    await h.report({
-      seq: 2,
-      kind: 'result',
-      result: {
-        nonce: r0.nonce,
-        verdict: 'PROVIDER_FAULT',
-        suites: [{ name: 'provider_kvm_missing', pass: 0, fail: 1, skip: 0 }],
-        hardware: { gpu_name: 'unknown', compute_cap: 0, driver_version: 'unknown' },
-      },
-    });
+    h.cloud.instances.get(r0.id).status_msg = 'GPU error, unable to start instance LEG-ZERO-MARK';
+    for (let i = 0; i < 2; i++) {
+      h.time.value += 20000;
+      await h.service.sweep();
+    }
     assert.equal((await h.call()).status, 200);
     const r1 = await h.storage.get('record:123-1');
     assert.equal(r1.providerRetries, 1);
@@ -1263,17 +1260,11 @@ test(
       { ...h.cloud.offer, id: 6, machine_id: 100002, host_id: 200, price: 0.1 },
     ];
     const r0 = await h.storage.get('record:123-1');
-    await h.report({ seq: 1, kind: 'log', text: 'ZERO\n' });
-    await h.report({
-      seq: 2,
-      kind: 'result',
-      result: {
-        nonce: r0.nonce,
-        verdict: 'PROVIDER_FAULT',
-        suites: [{ name: 'provider_kvm_missing', pass: 0, fail: 1, skip: 0 }],
-        hardware: { gpu_name: 'unknown', compute_cap: 0, driver_version: 'unknown' },
-      },
-    });
+    h.cloud.instances.get(r0.id).status_msg = 'GPU error, unable to start instance ZERO';
+    for (let poll = 0; poll < 2; poll++) {
+      h.time.value += 20000;
+      await h.service.sweep();
+    }
     const settled = await h.storage.get('record:123-1');
     assert.ok(settled.plogChunks >= 1 && settled.plogBytes > 0);
     await h.call();
@@ -1284,7 +1275,7 @@ test(
     );
     assert.ok(r1.plogBytes >= settled.plogBytes);
     const before = r1.plogChunks;
-    await h.report({ seq: 3, kind: 'log', text: 'ONE\n' });
+    await h.report({ seq: 1, kind: 'log', text: 'ONE\n' });
     assert.equal(await h.storage.get('plog:123-1:' + before), 'ONE\n', 'numbering continues');
     assert.equal((await h.storage.get('plog:123-1:0')) !== undefined, true);
   },
@@ -1725,26 +1716,17 @@ test(
     const r0 = await h.storage.get('record:123-1');
     const token0 = callbackToken(r0, h.bindings.RUN_TOKEN_SECRET);
     // Pieces that only an exact match (not a shape) can catch: the nonce, and a fragment of the token.
-    await h.report({
-      seq: 1,
-      kind: 'log',
-      text: 'leg0 nonce ' + r0.nonce + ' frag ' + token0.slice(-24) + '\n',
-    });
-    await h.report({
-      seq: 2,
-      kind: 'result',
-      result: {
-        nonce: r0.nonce,
-        verdict: 'PROVIDER_FAULT',
-        suites: [{ name: 'provider_kvm_missing', pass: 0, fail: 1, skip: 0 }],
-        hardware: { gpu_name: 'unknown', compute_cap: 0, driver_version: 'unknown' },
-      },
-    });
+    h.cloud.instances.get(r0.id).status_msg =
+      'GPU error, unable to start instance leg0 nonce ' + r0.nonce + ' frag ' + token0.slice(-24);
+    for (let poll = 0; poll < 2; poll++) {
+      h.time.value += 20000;
+      await h.service.sweep();
+    }
     await h.call();
     const r1 = await h.storage.get('record:123-1');
     assert.deepEqual(r1.priorNonces, [r0.nonce]);
     await h.report({
-      seq: 3,
+      seq: 1,
       kind: 'result',
       result: { nonce: r1.nonce, verdict: 'PASS', suites: pass, hardware },
     });
@@ -1925,21 +1907,15 @@ test(
       { ...h.cloud.offer, id: 6, machine_id: 100002, host_id: 200, price: 0.1 },
     ];
     const r0 = await h.storage.get('record:123-1');
-    await h.report({ seq: 1, kind: 'log', text: 'z\n' });
-    await h.report({
-      seq: 2,
-      kind: 'result',
-      result: {
-        nonce: r0.nonce,
-        verdict: 'PROVIDER_FAULT',
-        suites: [{ name: 'provider_kvm_missing', pass: 0, fail: 1, skip: 0 }],
-        hardware: { gpu_name: 'unknown', compute_cap: 0, driver_version: 'unknown' },
-      },
-    });
+    h.cloud.instances.get(r0.id).status_msg = 'GPU error, unable to start instance z';
+    for (let poll = 0; poll < 2; poll++) {
+      h.time.value += 20000;
+      await h.service.sweep();
+    }
     await h.call();
     const r1 = await h.storage.get('record:123-1');
     await h.report({
-      seq: 3,
+      seq: 1,
       kind: 'result',
       result: { nonce: r1.nonce, verdict: 'PASS', suites: pass, hardware },
     });

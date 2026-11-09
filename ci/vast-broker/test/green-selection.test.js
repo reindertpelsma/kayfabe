@@ -27,31 +27,34 @@ for (const preferences of [
   ['GA106', 'AD102'],
   ['AD102', 'GA106'],
 ]) {
-  test('green explicit check preferences remain ordered ' + preferences, async () => {
-    const h = await setup();
-    h.cloud.offer.gpu_name = 'RTX_3060';
-    h.cloud.offer.compute_cap = 860;
-    h.cloud.price = 0.4;
-    h.cloud.extraOffers = [
-      {
-        ...h.cloud.offer,
-        id: 6,
-        machine_id: 100002,
-        gpu_name: 'RTX_4090',
-        compute_cap: 890,
-        price: 0.1,
-      },
-    ];
-    const response = await h.call('/rent', {
-      body: {
-        runner_nonce: 'f'.repeat(64),
-        tested_sha: h.cloud.run.head_sha,
-        profile: 'check',
-        remaining_seconds: 12000,
-        preferences,
-      },
-    });
-    assert.equal(response.status, 200);
-    assert.equal((await response.json()).die, preferences[0]);
-  });
+  test(
+    'green check preferences remain ordered when the pin is disabled ' + preferences,
+    async () => {
+      const h = await setup({ PINNED_MIDDLE_DIES: '[]' });
+      h.cloud.offer.gpu_name = 'RTX_3060';
+      h.cloud.offer.compute_cap = 860;
+      h.cloud.price = 0.4;
+      h.cloud.extraOffers = [
+        {
+          ...h.cloud.offer,
+          id: 6,
+          machine_id: 100002,
+          gpu_name: 'RTX_4090',
+          compute_cap: 890,
+          price: 0.1,
+        },
+      ];
+      const response = await h.call('/rent', {
+        body: {
+          runner_nonce: 'f'.repeat(64),
+          tested_sha: h.cloud.run.head_sha,
+          profile: 'check',
+          remaining_seconds: 12000,
+          preferences,
+        },
+      });
+      assert.equal(response.status, 200);
+      assert.equal((await response.json()).die, preferences[0]);
+    },
+  );
 }

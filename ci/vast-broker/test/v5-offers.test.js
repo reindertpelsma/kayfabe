@@ -45,6 +45,7 @@ async function harness(offers = [good], bindings = {}) {
       HARD_RUNTIME_MINUTES: '180',
       BOOT_LIMIT_MINUTES: '40',
       DAILY_SPEND_USD: '6',
+      PINNED_MIDDLE_DIES: '[]',
       ...bindings,
     }),
     base = h.cloud.fetch;
