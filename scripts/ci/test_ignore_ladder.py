@@ -22,6 +22,14 @@ import ignore_ladder as L  # noqa: E402
 HAVE_GIT = shutil.which("git") is not None
 
 
+def real_root():
+    """The checkout under test. The mutation harness copies the files elsewhere and says where."""
+    return (
+        os.environ.get("KF_LADDER_REPO")
+        or sh("git", "-C", HERE, "rev-parse", "--show-toplevel").strip()
+    )
+
+
 def sh(*cmd, cwd=None, inp=None):
     return subprocess.run(
         cmd, cwd=cwd, input=inp, check=True, capture_output=True, text=True
@@ -387,6 +395,27 @@ class Ladder(unittest.TestCase):
         p = self.problems(di="/target\n/.git\n**/.gitignore\n/.workerignore\n/.dockerignore\n")
         self.assertTrue(any("ladder" in x and "**/*.md" in x for x in p), p)
 
+    def test_the_lint_reports_what_the_strip_would_refuse_a_floor_violation(self):
+        extra = "/crates/kf-a/tests\n"
+        p = self.problems(
+            wi=self.WI + extra,
+            di=self.DI + extra,
+            files={"src/a.rs": "x", "crates/kf-a/tests/t.rs": "x", "crates/kf-a/src/lib.rs": "x"},
+        )
+        self.assertTrue(any(x.startswith("strip:") and "t.rs" in x for x in p), p)
+
+    def test_the_lint_reports_what_the_strip_would_refuse_nothing_left(self):
+        p = self.problems(
+            wi=self.WI + "/.dockerignore\n", files={"docs/x.md": "x", "docs/y.md": "y"}
+        )
+        self.assertTrue(any(x.startswith("strip:") and "nothing would be left" in x for x in p), p)
+
+    def test_the_lint_stays_clean_for_a_tree_the_strip_accepts(self):
+        self.assertEqual(
+            self.problems(files={"src/a.rs": "x", "crates/kf-a/tests/t.rs": "x", "docs/x.md": "x"}),
+            [],
+        )
+
     def test_worker_must_ignore_itself_and_git(self):
         p = self.problems(wi="/target\n**/*.md\n")
         self.assertTrue(any("self-ignore" in x for x in p), p)
@@ -522,11 +551,636 @@ class OwnIgnore(unittest.TestCase):
             )  # no .workerignore on disk either: an error, not a hash
 
 
+HAVE_NODE = shutil.which("node") is not None
+
+
+def run_cli(root, *args):
+    return subprocess.run(
+        [sys.executable, os.path.join(HERE, "ignore_ladder.py"), "--root", root, *args],
+        capture_output=True,
+        text=True,
+    )
+
+
+def tree_files(top):
+    out = set()
+    for d, dirs, files in os.walk(top):
+        dirs[:] = [x for x in dirs if x != ".git"]
+        for f in files:
+            out.add(os.path.relpath(os.path.join(d, f), top))
+    return out
+
+
+STRIP_FILES = {
+    "Cargo.toml": "[workspace]\n",
+    "crates/kf-a/src/lib.rs": "pub fn a() {}\n",
+    "crates/kf-a/tests/t.rs": "#[test] fn t() {}\n",
+    "crates/kf-a/README.md": "prose\n",
+    "docs/guide.txt": "doc\n",
+    "docs/deep/er/x.txt": "doc\n",
+    "traces/run/out.log": "log\n",
+    "scripts/ci/test_x.py": "t\n",
+    "scripts/ci/vast_payload.py": "p\n",
+    "LICENSE": "l\n",
+}
+STRIP_IGNORE = "/.git\n**/.gitignore\n/.workerignore\n**/*.md\n/docs\n/traces\n/scripts/ci/test_*.py\n/LICENSE\n"
+STRIP_KEPT = {
+    "Cargo.toml",
+    "crates/kf-a/src/lib.rs",
+    "crates/kf-a/tests/t.rs",
+    "scripts/ci/vast_payload.py",
+}
+
+
+@unittest.skipUnless(HAVE_GIT, "needs git")
+class StripStep(unittest.TestCase):
+    """The box strip step and the stripped-tree CI job delete what the commit's own .workerignore matches."""
+
+    def repo(self, tmp, files=None, ignore=STRIP_IGNORE):
+        return make_repo(tmp, files or STRIP_FILES, {".workerignore": ignore})[0]
+
+    def test_export_keeps_exactly_the_unignored_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.repo(tmp)
+            dest = os.path.join(tmp, "out")
+            p = run_cli(root, "strip", "--dest", dest)
+            self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+            self.assertEqual(tree_files(dest), STRIP_KEPT)
+            self.assertIn("IGNORE_STRIP kept=4 removed=7", p.stdout)
+
+    def test_in_place_removes_exactly_the_ignored_files_and_never_touches_git(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.repo(tmp)
+            p = run_cli(root, "strip", "--in-place")
+            self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+            self.assertEqual(tree_files(root), STRIP_KEPT)
+            self.assertTrue(os.path.isfile(os.path.join(root, ".git", "HEAD")))
+            self.assertEqual(sh("git", "-C", root, "rev-parse", "HEAD").strip()[:2].isalnum(), True)
+
+    def test_in_place_and_export_agree(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.repo(tmp)
+            dest = os.path.join(tmp, "out")
+            a = run_cli(root, "strip", "--dest", dest)
+            b = run_cli(root, "strip", "--in-place")
+            self.assertEqual(tree_files(dest), tree_files(root))
+            self.assertEqual(
+                [x for x in a.stdout.splitlines() if x.startswith("IGNORE_STRIP_KEY")],
+                [x for x in b.stdout.splitlines() if x.startswith("IGNORE_STRIP_KEY")],
+            )
+
+    def test_in_place_prunes_emptied_directories_and_keeps_untracked_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.repo(tmp)
+            os.makedirs(os.path.join(root, "target"))
+            with open(os.path.join(root, "target", "build.o"), "w") as f:
+                f.write("x")
+            run_cli(root, "strip", "--in-place")
+            self.assertFalse(os.path.exists(os.path.join(root, "docs")))
+            self.assertFalse(os.path.exists(os.path.join(root, "traces")))
+            self.assertTrue(os.path.exists(os.path.join(root, "target", "build.o")))
+
+    def test_in_place_is_idempotent_and_reads_the_commit_not_the_worktree(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.repo(tmp)
+            self.assertEqual(run_cli(root, "strip", "--in-place").returncode, 0)
+            # .workerignore itself is gone from the worktree now; a second run still reads HEAD's.
+            self.assertFalse(os.path.exists(os.path.join(root, ".workerignore")))
+            self.assertEqual(run_cli(root, "strip", "--in-place").returncode, 0)
+            self.assertEqual(tree_files(root), STRIP_KEPT)
+
+    def test_an_uncommitted_edit_of_the_ignore_file_does_not_change_what_is_stripped(self):
+        for mode in ("--in-place", "--dest"):
+            with tempfile.TemporaryDirectory() as tmp:
+                root = self.repo(tmp)
+                with open(os.path.join(root, ".workerignore"), "w") as f:
+                    f.write("/crates\n")  # the worktree file lies; the commit's own text rules
+                dest = os.path.join(tmp, "out")
+                args = ("strip", mode) + ((dest,) if mode == "--dest" else ())
+                self.assertEqual(run_cli(root, *args).returncode, 0)
+                self.assertEqual(tree_files(dest if mode == "--dest" else root), STRIP_KEPT, mode)
+
+    def test_a_missing_ignore_file_fails_closed_and_deletes_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_repo(tmp, STRIP_FILES)[0]
+            before = tree_files(root)
+            p = run_cli(root, "strip", "--in-place")
+            self.assertEqual(p.returncode, 3, p.stdout)
+            self.assertIn("IGNORE_LADDER_FAIL_CLOSED", p.stdout)
+            self.assertEqual(tree_files(root), before)
+            q = run_cli(root, "strip", "--dest", os.path.join(tmp, "o"))
+            self.assertEqual(q.returncode, 3)
+            self.assertFalse(
+                os.path.exists(os.path.join(tmp, "o")) and os.listdir(os.path.join(tmp, "o"))
+            )
+
+    def test_an_unknown_syntax_line_fails_closed_and_deletes_nothing(self):
+        for bad in ("!/crates\n", "docs\n", "/a[bc]\n", "/docs/\n", "**/*.md \n"):
+            with tempfile.TemporaryDirectory() as tmp:
+                root = self.repo(tmp, ignore=STRIP_IGNORE + bad)
+                before = tree_files(root)
+                p = run_cli(root, "strip", "--in-place")
+                self.assertEqual(p.returncode, 3, bad + p.stdout)
+                self.assertEqual(tree_files(root), before, bad)
+
+    def test_nothing_left_after_stripping_fails_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.repo(tmp, files={"docs/a.txt": "a\n", "traces/b.txt": "b\n"})
+            before = tree_files(root)
+            p = run_cli(root, "strip", "--in-place")
+            self.assertEqual(p.returncode, 3, p.stdout)
+            self.assertIn("nothing would be left", p.stdout)
+            self.assertEqual(tree_files(root), before)
+
+    def test_nothing_left_also_blocks_the_export(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.repo(tmp, files={"docs/a.txt": "a\n"}, ignore="/docs\n/.workerignore\n")
+            p = run_cli(root, "strip", "--dest", os.path.join(tmp, "o"))
+            self.assertEqual(p.returncode, 3, p.stdout)
+
+    def test_exactly_one_of_in_place_and_dest(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.repo(tmp)
+            self.assertEqual(run_cli(root, "strip").returncode, 3)
+            both = run_cli(root, "strip", "--in-place", "--dest", os.path.join(tmp, "o"))
+            self.assertEqual(both.returncode, 3)
+            self.assertIn("exactly one", both.stdout)
+            self.assertTrue(STRIP_KEPT < tree_files(root) and "docs/guide.txt" in tree_files(root))
+
+    def test_a_non_empty_destination_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.repo(tmp)
+            dest = os.path.join(tmp, "o")
+            os.makedirs(dest)
+            with open(os.path.join(dest, "stale"), "w") as f:
+                f.write("x")
+            p = run_cli(root, "strip", "--dest", dest)
+            self.assertEqual(p.returncode, 3)
+            self.assertEqual(os.listdir(dest), ["stale"])
+
+    def test_a_submodule_directory_matching_the_ignore_file_is_removed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.repo(tmp, ignore=STRIP_IGNORE + "/third_party/linux\n")
+            sha = sh("git", "-C", root, "rev-parse", "HEAD").strip()
+            sh(
+                "git",
+                "-C",
+                root,
+                "update-index",
+                "--add",
+                "--cacheinfo",
+                "160000,%s,third_party/linux" % sha,
+            )
+            sh(
+                "git",
+                "-C",
+                root,
+                "-c",
+                "user.email=t@x.invalid",
+                "-c",
+                "user.name=t",
+                "commit",
+                "-q",
+                "-m",
+                "gitlink",
+            )
+            os.makedirs(os.path.join(root, "third_party", "linux", "deep"))
+            with open(os.path.join(root, "third_party", "linux", "deep", "f.c"), "w") as f:
+                f.write("x")
+            p = run_cli(root, "strip", "--in-place")
+            self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+            self.assertFalse(os.path.exists(os.path.join(root, "third_party", "linux")))
+            self.assertFalse(os.path.exists(os.path.join(root, "third_party")))
+
+    def test_a_symlink_is_removed_not_followed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            outside = os.path.join(tmp, "outside")
+            os.makedirs(outside)
+            with open(os.path.join(outside, "precious"), "w") as f:
+                f.write("keep")
+            root = self.repo(tmp)
+            os.symlink(outside, os.path.join(root, "docs", "link"))
+            sh("git", "-C", root, "add", "-f", "docs/link")
+            sh(
+                "git",
+                "-C",
+                root,
+                "-c",
+                "user.email=t@x.invalid",
+                "-c",
+                "user.name=t",
+                "commit",
+                "-q",
+                "-m",
+                "link",
+            )
+            self.assertEqual(run_cli(root, "strip", "--in-place").returncode, 0)
+            self.assertTrue(os.path.exists(os.path.join(outside, "precious")))
+            self.assertFalse(os.path.lexists(os.path.join(root, "docs", "link")))
+
+    def test_a_parent_swapped_for_a_symlink_out_of_the_tree_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            outside = os.path.join(tmp, "outside")
+            os.makedirs(os.path.join(outside, "deep"))
+            with open(os.path.join(outside, "deep", "x.txt"), "w") as f:
+                f.write("keep")
+            root = self.repo(tmp)
+            shutil.rmtree(os.path.join(root, "docs"))
+            os.symlink(outside, os.path.join(root, "docs"))
+            p = run_cli(root, "strip", "--in-place")
+            self.assertEqual(p.returncode, 3, p.stdout)
+            self.assertTrue(os.path.exists(os.path.join(outside, "deep", "x.txt")))
+
+    def refuses(self, evil):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.repo(tmp)
+            before = tree_files(root)
+            removed = [("100644", "1" * 40, "docs/guide.txt"), ("100644", "2" * 40, evil)]
+            with self.assertRaises(L.FailClosed, msg=evil):
+                L.delete_entries(root, removed)
+            self.assertEqual(tree_files(root), before, evil)
+
+    def test_a_dot_git_component_is_refused_before_anything_is_deleted(self):
+        for evil in (".git/config", "x/.git/y", ".git"):
+            self.refuses(evil)
+
+    def test_an_empty_segment_is_refused_before_anything_is_deleted(self):
+        for evil in ("a//b", "a/", "docs//guide.txt"):
+            self.refuses(evil)
+
+    def test_dot_dot_and_absolute_paths_are_refused_before_anything_is_deleted(self):
+        for evil in ("../outside", "a/../../b", "/abs/p"):
+            self.refuses(evil)
+
+    def test_a_nested_parent_swapped_for_a_symlink_out_of_the_tree_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            outside = os.path.join(tmp, "outside")
+            os.makedirs(outside)
+            with open(os.path.join(outside, "x.txt"), "w") as f:
+                f.write("keep")
+            root = self.repo(tmp)
+            shutil.rmtree(os.path.join(root, "docs", "deep", "er"))
+            os.symlink(outside, os.path.join(root, "docs", "deep", "er"))
+            p = run_cli(root, "strip", "--in-place")
+            self.assertEqual(p.returncode, 3, p.stdout)
+            self.assertTrue(os.path.exists(os.path.join(outside, "x.txt")))
+
+    def test_a_gitlink_path_that_is_a_symlink_is_unlinked_not_followed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            outside = os.path.join(tmp, "outside")
+            os.makedirs(outside)
+            with open(os.path.join(outside, "precious"), "w") as f:
+                f.write("keep")
+            root = self.repo(tmp, ignore=STRIP_IGNORE + "/third_party/linux\n")
+            sha = sh("git", "-C", root, "rev-parse", "HEAD").strip()
+            sh(
+                "git",
+                "-C",
+                root,
+                "update-index",
+                "--add",
+                "--cacheinfo",
+                "160000,%s,third_party/linux" % sha,
+            )
+            sh(
+                "git",
+                "-C",
+                root,
+                "-c",
+                "user.email=t@x.invalid",
+                "-c",
+                "user.name=t",
+                "commit",
+                "-q",
+                "-m",
+                "g",
+            )
+            os.makedirs(os.path.join(root, "third_party"))
+            os.symlink(outside, os.path.join(root, "third_party", "linux"))
+            p = run_cli(root, "strip", "--in-place")
+            self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+            self.assertTrue(os.path.exists(os.path.join(outside, "precious")))
+            self.assertFalse(os.path.lexists(os.path.join(root, "third_party", "linux")))
+
+    def test_a_destination_that_is_the_repository_itself_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.repo(tmp)
+            before = tree_files(root)
+            p = run_cli(root, "strip", "--dest", root)
+            self.assertEqual(p.returncode, 3, p.stdout)
+            self.assertEqual(tree_files(root), before)
+
+    def test_matchjson_answers_for_the_other_implementations_and_refuses_bad_lines(self):
+        import json as _json
+
+        ok = subprocess.run(
+            [sys.executable, os.path.join(HERE, "ignore_ladder.py"), "matchjson"],
+            input=_json.dumps(
+                {
+                    "patterns": ["/docs", "**/*.md"],
+                    "paths": ["docs/a", "x/y.md", "z"],
+                    "entries": [["100644", "1" * 40, "z"], ["100644", "2" * 40, "docs/a"]],
+                }
+            ),
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(ok.returncode, 0, ok.stderr)
+        got = _json.loads(ok.stdout)
+        self.assertEqual(got["ignored"], [True, True, False])
+        self.assertEqual(len(got["key"]), 64)
+        bad = subprocess.run(
+            [sys.executable, os.path.join(HERE, "ignore_ladder.py"), "matchjson"],
+            input=_json.dumps({"patterns": ["docs"], "paths": ["docs"]}),
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(bad.returncode, 3)
+
+
+@unittest.skipUnless(HAVE_GIT, "needs git")
+class Floor(unittest.TestCase):
+    """Deleting a test or a build input with an ignore line would make it a test that never ran."""
+
+    def attempt(self, extra_files, extra_ignore):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_repo(
+                tmp, {**STRIP_FILES, **extra_files}, {".workerignore": STRIP_IGNORE + extra_ignore}
+            )[0]
+            before = tree_files(root)
+            p = run_cli(root, "strip", "--in-place")
+            return p, before == tree_files(root)
+
+    def test_ignoring_a_test_file_under_crates_fails_closed(self):
+        p, untouched = self.attempt({}, "/crates/kf-a/tests/t.rs\n")
+        self.assertEqual(p.returncode, 3, p.stdout)
+        self.assertIn("t.rs", p.stdout)
+        self.assertTrue(untouched)
+
+    def test_ignoring_a_whole_crate_fails_closed(self):
+        p, untouched = self.attempt({}, "/crates/kf-a\n")
+        self.assertEqual(p.returncode, 3, p.stdout)
+        self.assertTrue(untouched)
+
+    def test_ignoring_cargo_toml_or_the_toolchain_fails_closed(self):
+        for name in (
+            "Cargo.toml",
+            "Cargo.lock",
+            "rust-toolchain.toml",
+            "clippy.toml",
+            ".gitmodules",
+        ):
+            p, untouched = self.attempt({name: "x\n"}, "/%s\n" % name)
+            self.assertEqual(p.returncode, 3, name + p.stdout)
+            self.assertTrue(untouched, name)
+
+    def test_ignoring_docker_files_fails_closed(self):
+        for name in (
+            "Dockerfile",
+            "Dockerfile.box",
+            "docker-compose.yml",
+            "docker-compose.override.yaml",
+            ".dockerignore",
+        ):
+            p, untouched = self.attempt({name: "x\n"}, "/%s\n" % name)
+            self.assertEqual(p.returncode, 3, name + p.stdout)
+            self.assertTrue(untouched, name)
+
+    def test_ignoring_the_oracle_submodule_paths_fails_closed(self):
+        for sub in ("ogkm", "ogkm-580"):
+            files = {"third_party/%s/src/x.h" % sub: "h\n"}
+            p, untouched = self.attempt(files, "/third_party/%s\n" % sub)
+            self.assertEqual(p.returncode, 3, sub + p.stdout)
+            self.assertTrue(untouched, sub)
+
+    def test_ignoring_tools_and_firmware_and_qemu_and_cuda_fails_closed(self):
+        for root in ("tools", "firmware", "qemu", "cuda", ".cargo"):
+            p, untouched = self.attempt({root + "/x/y.c": "c\n"}, "/%s/x\n" % root)
+            self.assertEqual(p.returncode, 3, root + p.stdout)
+            self.assertTrue(untouched, root)
+
+    def test_a_deep_glob_that_reaches_a_test_fails_closed(self):
+        p, untouched = self.attempt({}, "/crates/*/tests\n")
+        self.assertEqual(p.returncode, 3, p.stdout)
+        p, untouched = self.attempt({}, "**/t.rs\n")
+        self.assertEqual(p.returncode, 3, p.stdout)
+
+    def test_prose_and_gitignore_files_under_code_roots_may_be_ignored(self):
+        p, untouched = self.attempt({"tools/x/.gitignore": "target\n", "tools/x/run.sh": "x\n"}, "")
+        self.assertEqual(p.returncode, 0, p.stdout)
+
+    def test_the_floor_names_each_offender_and_counts_the_rest(self):
+        files = {"crates/kf-a/tests/t%d.rs" % i: "x\n" for i in range(8)}
+        p, _ = self.attempt(files, "/crates/kf-a/tests\n")
+        self.assertEqual(p.returncode, 3)
+        self.assertIn("(+", p.stdout)
+
+    def test_is_kept_code_table(self):
+        yes = [
+            "crates/kf-a/src/lib.rs",
+            "crates/kf-a/tests/t.rs",
+            "crates/kf-a/Cargo.toml",
+            "qemu/hw/misc/kf3/kf3.c",
+            "cuda/walk/walk.cu",
+            "firmware/kf-gop/src/main.rs",
+            "tools/legal/NOTICE.txt",
+            ".cargo/config.toml",
+            "Cargo.toml",
+            "Cargo.lock",
+            "rust-toolchain.toml",
+            "clippy.toml",
+            ".gitmodules",
+            ".dockerignore",
+            "Dockerfile",
+            "Dockerfile.box",
+            "docker-compose.yml",
+            "docker-compose.override.yaml",
+            "third_party/ogkm",
+            "third_party/ogkm-580",
+            "third_party/ogkm-580/src/x.h",
+            "third_party/ogkm/src/x.h",
+        ]
+        no = [
+            "crates/kf-a/README.md",
+            "crates/kf-a/.gitignore",
+            "docs/a.txt",
+            "traces/x",
+            "scripts/ci/test_x.py",
+            "scripts/ci/vast_payload.py",
+            "LICENSE",
+            "KAYFABE_REV.txt",
+            "third_party/linux",
+            "third_party/gvisor/x",
+            "third_party/ogkm-other/x",
+            "crates-extra/x.rs",
+            "Dockerfiles/x",
+            "docker-compose",
+            "xDockerfile",
+        ]
+        for p in yes:
+            self.assertTrue(L.is_kept_code(p), p)
+        for p in no:
+            self.assertFalse(L.is_kept_code(p), p)
+
+    def test_the_floor_is_a_pure_function_of_paths_and_patterns(self):
+        pats = L.read_patterns("/crates/kf-a/tests\n/docs\n")
+        self.assertEqual(
+            L.floor_violations(
+                ["crates/kf-a/tests/t.rs", "crates/kf-a/src/lib.rs", "docs/a"], pats
+            ),
+            ["crates/kf-a/tests/t.rs"],
+        )
+
+
+@unittest.skipUnless(HAVE_GIT, "needs git")
+class TreeKey(unittest.TestCase):
+    """The key is the bytes ci/vast-broker/src/treekey.js computes: kf-tree-v2 over the unignored tree."""
+
+    ENT = [
+        ("100644", "a" * 40, "src/a.rs"),
+        ("100755", "b" * 40, "src/run.sh"),
+        ("120000", "c" * 40, "src/link"),
+        ("160000", "d" * 40, "third_party/sub"),
+        ("100644", "e" * 40, "docs/x.txt"),
+    ]
+    LINES = ["/docs"]
+
+    def key(self, entries=None, lines=None):
+        lines = self.LINES if lines is None else lines
+        return L.tree_key(entries or self.ENT, lines, L.read_patterns("\n".join(lines) + "\n"))
+
+    def test_the_key_does_not_depend_on_listing_order(self):
+        self.assertEqual(self.key(), self.key(list(reversed(self.ENT))))
+
+    def test_a_change_to_an_unignored_blob_moves_the_key(self):
+        e = list(self.ENT)
+        e[0] = ("100644", "f" * 40, "src/a.rs")
+        self.assertNotEqual(self.key(), self.key(e))
+
+    def test_a_mode_change_moves_the_key(self):
+        e = list(self.ENT)
+        e[1] = ("100644", "b" * 40, "src/run.sh")
+        self.assertNotEqual(self.key(), self.key(e))
+
+    def test_a_rename_moves_the_key(self):
+        e = list(self.ENT)
+        e[0] = ("100644", "a" * 40, "src/b.rs")
+        self.assertNotEqual(self.key(), self.key(e))
+
+    def test_a_change_confined_to_an_ignored_file_keeps_the_key(self):
+        e = list(self.ENT)
+        e[4] = ("100644", "9" * 40, "docs/x.txt")
+        self.assertEqual(self.key(), self.key(e))
+
+    def test_a_different_ignore_set_gives_a_different_key_even_if_the_tree_is_the_same(self):
+        self.assertNotEqual(self.key(lines=["/docs"]), self.key(lines=["/docs", "/nothing-here"]))
+
+    def test_comments_and_blank_lines_are_not_part_of_the_key(self):
+        text = "# c\n\n/docs\n"
+        pats = L.read_patterns(text)
+        self.assertEqual(pats, ["/docs"])
+
+    def test_an_empty_tree_has_no_key(self):
+        with self.assertRaises(L.FailClosed):
+            L.tree_key([("100644", "a" * 40, "docs/x")], ["/docs"], L.read_patterns("/docs\n"))
+
+    def test_the_key_text_is_the_documented_one(self):
+        import hashlib
+
+        lines = ["/docs"]
+        digest = hashlib.sha256(b"/docs").hexdigest()
+        want = hashlib.sha256(
+            ("kf-tree-v2\nignore %s\n" % digest).encode()
+            + b"".join(
+                p.encode() + b"\0" + m.encode() + b"\0" + s.encode() + b"\n"
+                for m, s, p in sorted(self.ENT, key=lambda e: e[2].encode())
+                if not p.startswith("docs/")
+            )
+        ).hexdigest()
+        self.assertEqual(self.key(lines=lines), want)
+
+    @unittest.skipUnless(HAVE_NODE, "needs node")
+    def test_treekey_js_computes_the_same_key_for_this_checkout(self):
+        try:
+            root = real_root()
+        except subprocess.CalledProcessError:
+            self.skipTest("not inside a git checkout")
+        if not os.path.exists(os.path.join(root, "ci/vast-broker/scripts/tree-key.mjs")):
+            self.skipTest("Worker tree absent")
+        p = run_cli(root, "keycheck")
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertIn("IGNORE_KEY OK", p.stdout)
+
+    def test_treekey_and_keycheck_of_a_commit_without_the_file_fail_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_repo(tmp, STRIP_FILES)[0]
+            for cmd in ("treekey", "keycheck"):
+                p = run_cli(root, cmd)
+                self.assertEqual(p.returncode, 3, cmd + p.stdout + p.stderr)
+                self.assertIn("IGNORE_LADDER_FAIL_CLOSED", p.stdout)
+
+    def test_keycheck_needs_the_worker_tree(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_repo(tmp, STRIP_FILES, {".workerignore": STRIP_IGNORE})[0]
+            p = run_cli(root, "keycheck")
+            self.assertEqual(p.returncode, 3, p.stdout)
+
+    def keycheck_with(self, fake):
+        try:
+            root = real_root()
+        except subprocess.CalledProcessError:
+            self.skipTest("not inside a git checkout")
+        if not os.path.exists(os.path.join(root, "ci/vast-broker/scripts/tree-key.mjs")):
+            self.skipTest("Worker tree absent")
+        real = L.tree_key
+        L.tree_key = fake(real)
+        old, sys.stdout = sys.stdout, open(os.devnull, "w")
+        try:
+            return L.keycheck("HEAD", root)
+        finally:
+            sys.stdout.close()
+            sys.stdout = old
+            L.tree_key = real
+
+    @unittest.skipUnless(HAVE_NODE, "needs node")
+    def test_keycheck_fails_when_the_python_key_is_all_zero(self):
+        self.assertEqual(self.keycheck_with(lambda real: lambda *a, **k: "0" * 64), 1)
+
+    @unittest.skipUnless(HAVE_NODE, "needs node")
+    def test_keycheck_fails_when_the_python_key_differs_in_one_digit(self):
+        def fake(real):
+            def f(*a, **k):
+                key = real(*a, **k)
+                return key[:-1] + ("0" if key[-1] != "0" else "1")
+
+            return f
+
+        self.assertEqual(self.keycheck_with(fake), 1)
+
+    @unittest.skipUnless(HAVE_NODE, "needs node")
+    def test_keycheck_reports_a_disagreement_as_a_failure(self):
+        try:
+            root = real_root()
+        except subprocess.CalledProcessError:
+            self.skipTest("not inside a git checkout")
+        if not os.path.exists(os.path.join(root, "ci/vast-broker/scripts/tree-key.mjs")):
+            self.skipTest("Worker tree absent")
+        real = L.tree_key
+        L.tree_key = lambda *a, **k: "0" * 64
+        old, sys.stdout = sys.stdout, open(os.devnull, "w")
+        try:
+            self.assertEqual(L.keycheck("HEAD", root), 1)
+        finally:
+            sys.stdout.close()
+            sys.stdout = old
+            L.tree_key = real
+
+
 @unittest.skipUnless(HAVE_GIT, "needs git")
 class RealTree(unittest.TestCase):
     def test_repo_ignore_files_are_a_valid_ladder_that_git_agrees_with(self):
         try:
-            root = sh("git", "-C", HERE, "rev-parse", "--show-toplevel").strip()
+            root = real_root()
         except subprocess.CalledProcessError:
             self.skipTest("not inside a git checkout")
         if not all(

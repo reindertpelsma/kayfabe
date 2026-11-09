@@ -98,8 +98,14 @@ want_all=0
 # The scoped CI namespace profile's setup and removal are explicit steps too.
 # ★ 19 -> 20 and 13 -> 14: the GPU-UUID ratchet step (scripts/ci/no_gpu_uuids.py). It reads only
 # the tree, produces no artifact and consumes none, so it runs in BOTH modes and both literals move.
-GATE_STEPS_ALL_MIN=20
-GATE_STEPS_FAST_MIN=14
+# ★ 20 -> 12 and 14 -> 12 (2026-11-09, OWNER_RULINGS section AQ): `cargo build`, the test step, the two
+# namespace-profile steps and the four reached-count steps moved from `stable` to the new `stripped` job
+# (the production half, run on the tree left after `.workerignore` is applied). Measured on the new
+# ci.yml with this extractor's own rules: 17 steps with a `run:` in --all mode (was 25) and 15 in the
+# default mode (was 17); the floors keep the slack they had (5 and 3). NOT run here, on purpose: the
+# `stripped` job DELETES files from the checkout it runs in, which must never happen to a developer tree.
+GATE_STEPS_ALL_MIN=12
+GATE_STEPS_FAST_MIN=12
 
 # ★★ A PER-INVOCATION test log, MEASURED 2026-07-30.
 #

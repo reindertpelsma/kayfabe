@@ -2,7 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 """The ignore ladder: .gitignore  is a subset of  .workerignore  is a subset of  .dockerignore.
 
-STATUS: PROPOSAL, 2026-11-05 (not wired into CI; see traces/ignore_ladder_20261105/README.md).
+STATUS: LIVE, 2026-11-09 (the matcher, the strip step and the stripped-tree key are wired into CI and
+the box payload; evidence of the first build in traces/ignore_ladder_20261105/README.md).
 
 Why: the Vast box clones the repo and then removes everything that matches `.workerignore`, and a
 test result is keyed by the hash of the sorted unignored tracked files (path, mode, blob id). A
@@ -27,21 +28,38 @@ Subcommands:
   sparse           the sparse-checkout list equivalent to the ignore file (for the box side)
   docker REV       build a real docker context from REV with the ignore file as .dockerignore and
                    compare the files docker copies with the matcher (needs a working docker)
+  strip --in-place delete, in the working tree, every tracked file that the commit's OWN
+                   .workerignore matches (never .git); the box and the stripped-tree CI job call it
+  strip --dest DIR export the commit minus the ignored files into an empty DIR
+  treekey [REV]    the kf-tree-v2 key of REV (ci/vast-broker/src/treekey.js computes the same bytes)
+  keycheck [REV]   fail unless node and treekey.js print that same key
+
+`matches` below is the ONE matcher: the strip step, the tree key and the ladder lint all call it, and
+the Worker's JavaScript matcher is cross-checked against it (ci/vast-broker/test/ladder-parity.test.js).
 """
 
 import argparse
 import functools
 import hashlib
+import io
+import json
 import os
 import re
+import shutil
+import stat
 import subprocess
 import sys
+import tarfile
 import tempfile
 
 SEG_OK = re.compile(r"^[A-Za-z0-9_.+@=,~*-]+$")
 
 
-class SyntaxProblem(Exception):
+class FailClosed(Exception):
+    """Anything that must mean "run, do not skip, do not strip" (main prints it and exits 3)."""
+
+
+class SyntaxProblem(FailClosed):
     pass
 
 
@@ -285,7 +303,8 @@ def check(root, rev=None):
         if not os.path.exists(path):
             problems.append("%s is missing" % name)
             continue
-        texts[name] = open(path, encoding="utf-8").read()
+        with open(path, encoding="utf-8") as f:
+            texts[name] = f.read()
         try:
             pats[name] = read_patterns(texts[name], name)
         except SyntaxProblem as e:
@@ -346,10 +365,213 @@ def check(root, rev=None):
     ]
     if not (sets[0] <= sets[1] <= sets[2]):
         problems.append("effective ignored sets do not nest on the tree")
+    # What the strip step would refuse, the lint refuses on every push (floor, nothing left).
+    try:
+        strip_plan(ents, pats[".workerignore"])
+    except FailClosed as e:
+        problems.append("strip: %s" % e)
     # A tracked file ignored by .gitignore is a contradiction worth naming.
     if sets[0]:
         problems.append("tracked files match .gitignore: %s" % sorted(sets[0])[:3])
     return problems
+
+
+# ---- the strip step and the tree key ---------------------------------------------------------------
+# What a stripped tree must keep whatever .workerignore says (OWNER_RULINGS section AQ: every test of
+# production code runs on the tree left after the strip). Deleting a test file with an ignore line
+# would turn it into a test that never ran, so the strip REFUSES (fail closed) when a tracked,
+# non-prose path under these roots is ignored. ci/vast-broker/src/treekey.js PROTECTED guards whole
+# roots only; this guards every file below them. The two lists are compared in
+# ci/vast-broker/test/ladder-parity.test.js.
+KEEP_DIRS = (
+    "crates",
+    "qemu",
+    "cuda",
+    "firmware",
+    "tools",
+    ".cargo",
+    "third_party/ogkm",
+    "third_party/ogkm-580",
+)
+KEEP_FILES = (
+    "Cargo.toml",
+    "Cargo.lock",
+    "rust-toolchain.toml",
+    "clippy.toml",
+    ".gitmodules",
+    ".dockerignore",
+)
+KEEP_NAME = re.compile(r"^(Dockerfile[A-Za-z0-9_.-]*|docker-compose[A-Za-z0-9_.-]*\.ya?ml)$")
+# Roots of treekey.js PROTECTED that the floor does NOT cover file by file, and why. A root absent
+# from KEEP_DIRS and from this table is a drift the parity test reports.
+PROTECTED_NOT_FLOORED = {
+    "scripts": "partly ignored on purpose (CI self-tests, local gates): scripts/ci/test_*.py ...",
+    "ci": "the Worker trees under ci/ are ignored on purpose: they run on the runner, never on a box",
+    "ci/vast-broker": "ignored by .workerignore, REFUSED by treekey.js PROTECTED: see the header of .workerignore",
+}
+
+
+def is_kept_code(path):
+    """A path the strip step may never remove. Prose (.md) and .gitignore files are excepted: a
+    test that reads one fails loudly on the stripped tree, which is how an exception is found."""
+    if path.endswith(".md") or path.rsplit("/", 1)[-1] == ".gitignore":
+        return False
+    if path in KEEP_FILES or KEEP_NAME.match(path):
+        return True
+    return any(path == d or path.startswith(d + "/") for d in KEEP_DIRS)
+
+
+def floor_violations(paths, patterns):
+    return sorted(p for p in paths if is_kept_code(p) and matches(patterns, p))
+
+
+def ignore_text_at(rev, root):
+    """The commit's OWN .workerignore, byte for byte; a missing file is fail closed."""
+    p = git("show", "%s:.workerignore" % rev, cwd=root, check=False)
+    if p.returncode != 0:
+        raise FailClosed("%s has no .workerignore in its own tree" % rev)
+    try:
+        return p.stdout.decode("utf-8")
+    except UnicodeDecodeError:
+        raise FailClosed("%s: .workerignore is not UTF-8" % rev) from None
+
+
+def strip_plan(entries, patterns):
+    """(kept, removed) entries; fail closed if nothing is left or the floor is violated."""
+    if not entries:
+        raise FailClosed("empty tree listing (truncated or unreadable)")
+    kept = [e for e in entries if not matches(patterns, e[2])]
+    removed = [e for e in entries if matches(patterns, e[2])]
+    if not kept:
+        raise FailClosed("nothing would be left after stripping")
+    bad = floor_violations([e[2] for e in entries], patterns)
+    if bad:
+        raise FailClosed(
+            "the ignore set removes code the box and the production tests need: %s%s"
+            % (", ".join(bad[:5]), " (+%d more)" % (len(bad) - 5) if len(bad) > 5 else "")
+        )
+    return kept, removed
+
+
+def tree_key(entries, pattern_lines, patterns=None):
+    """The key ci/vast-broker/src/treekey.js computes (treeKeyOf): SHA-256 over
+    'kf-tree-v2\\nignore <SHA-256 of the effective lines joined by LF>\\n' and, for every unignored
+    entry sorted by the UTF-8 bytes of its path, 'path NUL mode NUL object-sha LF'."""
+    patterns = pattern_lines if patterns is None else patterns
+    keep = sorted((os.fsencode(p), m, s) for m, s, p in entries if not matches(tuple(patterns), p))
+    if not keep:
+        raise FailClosed("no unignored file")
+    digest = hashlib.sha256("\n".join(pattern_lines).encode()).hexdigest()
+    h = hashlib.sha256()
+    h.update(b"kf-tree-v2\nignore " + digest.encode() + b"\n")
+    for p, m, s in keep:
+        h.update(p + b"\0" + m.encode() + b"\0" + s.encode() + b"\n")
+    return h.hexdigest()
+
+
+def _inside(root, full):
+    r = os.path.realpath(root)
+    return os.path.commonpath([r, os.path.realpath(os.path.dirname(full))]) == r
+
+
+def strip_in_place(root, rev="HEAD"):
+    """Delete from the working tree every tracked file the commit's own .workerignore matches.
+
+    Never touches .git, never follows a symlink, deletes only paths that `git ls-tree` lists for
+    REV. Returns (kept, removed, key)."""
+    pats = read_patterns(ignore_text_at(rev, root), "%s:.workerignore" % rev)
+    ents = tracked(rev, cwd=root)
+    kept, removed = strip_plan(ents, pats)
+    key = tree_key(ents, pats)
+    delete_entries(root, removed)
+    return len(kept), len(removed), key
+
+
+def delete_entries(root, removed):
+    """Remove the (mode, sha, path) entries from the working tree under ROOT, then the directories
+    they leave empty. Every path is checked BEFORE the first deletion: one bad path deletes nothing.
+    """
+    plan = []
+    for mode, _sha, path in removed:
+        parts = path.split("/")
+        if ".git" in parts or path.startswith("/") or ".." in parts or "" in parts:
+            raise FailClosed("refusing to delete %r" % path)
+        full = os.path.join(root, path)
+        if not _inside(root, full):
+            raise FailClosed("refusing to delete outside the tree: %r" % path)
+        plan.append((mode, path, full))
+    dirs = set()
+    for mode, path, full in plan:
+        try:
+            st = os.lstat(full)
+        except FileNotFoundError:
+            continue  # sparse checkout: never materialised
+        is_dir = stat.S_ISDIR(st.st_mode)
+        if mode == "160000" and is_dir:
+            shutil.rmtree(full)
+        elif is_dir:
+            raise FailClosed("%r is a directory on disk but a file in the tree" % path)
+        else:
+            os.remove(full)  # a symlink is removed itself, never followed
+        dirs.add(os.path.dirname(path))
+    # Prune the directories that became empty (deepest first), but never above the root.
+    for d in sorted({x for d in dirs for x in _parents(d)}, key=lambda x: -x.count("/")):
+        try:
+            os.rmdir(os.path.join(root, d))
+        except OSError:
+            pass
+
+
+def _parents(d):
+    out = []
+    while d:
+        out.append(d)
+        d = os.path.dirname(d)
+    return out
+
+
+def strip_export(rev, dest, root):
+    """Export REV into the empty directory DEST without the ignored files (no .git)."""
+    pats = read_patterns(ignore_text_at(rev, root), "%s:.workerignore" % rev)
+    ents = tracked(rev, cwd=root)
+    kept, removed = strip_plan(ents, pats)
+    key = tree_key(ents, pats)
+    os.makedirs(dest, exist_ok=True)
+    if os.listdir(dest):
+        raise FailClosed("destination %s is not empty" % dest)
+    raw = git("archive", rev, cwd=root).stdout
+    got = 0
+    with tarfile.open(fileobj=io.BytesIO(raw)) as tar:
+        for m in tar:
+            name = m.name.rstrip("/")
+            if m.type == tarfile.XGLTYPE or not name:
+                continue
+            if matches(pats, name):
+                continue
+            tar.extract(m, dest, filter="data")
+            got += 0 if m.isdir() else 1
+    # Submodule paths are directories in the archive and gitlinks in the listing.
+    want = len([e for e in kept if e[0] != "160000"])
+    if got != want:
+        raise FailClosed("exported %d files, expected %d" % (got, want))
+    return len(kept), len(removed), key
+
+
+def keycheck(rev, root):
+    """The Python key and the Worker's treekey.js key of REV must be the same bytes."""
+    pats = read_patterns(ignore_text_at(rev, root), "%s:.workerignore" % rev)
+    mine = tree_key(tracked(rev, cwd=root), pats)
+    helper = os.path.join(root, "ci/vast-broker/scripts/tree-key.mjs")
+    if not os.path.exists(helper):
+        raise FailClosed("keycheck needs the full tree: %s is absent" % helper)
+    p = subprocess.run(["node", helper, rev], cwd=root, capture_output=True, text=True, check=False)
+    theirs = p.stdout.strip()
+    print("IGNORE_KEY python=%s node=%s" % (mine, theirs))
+    if p.returncode != 0 or mine != theirs:
+        print("IGNORE_KEY_MISMATCH rc=%d %s" % (p.returncode, p.stderr[-300:]))
+        return 1
+    print("IGNORE_KEY OK")
+    return 0
 
 
 def first_parents(rev, n, cwd=None):
@@ -378,14 +600,25 @@ def main(argv=None):
     sub.add_parser("sparse")
     dk = sub.add_parser("docker")
     dk.add_argument("rev")
+    st = sub.add_parser("strip")
+    st.add_argument("rev", nargs="?", default="HEAD")
+    st.add_argument("--in-place", action="store_true")
+    st.add_argument("--dest")
+    tk = sub.add_parser("treekey")
+    tk.add_argument("rev", nargs="?", default="HEAD")
+    sub.add_parser("matchjson")
+    sub.add_parser("floorjson")
+    kc = sub.add_parser("keycheck")
+    kc.add_argument("rev", nargs="?", default="HEAD")
     a = ap.parse_args(argv)
-    root = a.root or repo_root()
+    root = a.root or (None if a.cmd in ("matchjson", "floorjson") else repo_root())
 
     def load():
         if a.ignore_rev:
             text = git("show", "%s:%s" % (a.ignore_rev, a.ignore), cwd=root).stdout.decode()
         else:
-            text = open(os.path.join(root, a.ignore), encoding="utf-8").read()
+            with open(os.path.join(root, a.ignore), encoding="utf-8") as f:
+                text = f.read()
         return read_patterns(text, a.ignore)
 
     def pats_for(rev):
@@ -398,7 +631,7 @@ def main(argv=None):
 
     try:
         return run(a, root, pats_for, load)
-    except SyntaxProblem as e:
+    except FailClosed as e:
         print("IGNORE_LADDER_FAIL_CLOSED %s" % e)
         return 3
 
@@ -431,7 +664,8 @@ def run(a, root, pats_for, load):
         return 0
     if a.cmd == "docker":
         pats = load()
-        text = open(os.path.join(root, a.ignore), encoding="utf-8").read()
+        with open(os.path.join(root, a.ignore), encoding="utf-8") as f:
+            text = f.read()
         ents = tracked(a.rev, cwd=root)
         want = {p for m, _s, p in ents if m != "160000" and not docker_matches(pats, p)}
         with tempfile.TemporaryDirectory() as tmp:
@@ -451,6 +685,44 @@ def run(a, root, pats_for, load):
         return 1 if bad else 0
     if a.cmd == "sparse":
         print("\n".join(sparse_list(load())))
+        return 0
+    if a.cmd == "strip":
+        if a.in_place == bool(a.dest):
+            raise FailClosed("strip needs exactly one of --in-place and --dest DIR")
+        if a.in_place:
+            kept, removed, key = strip_in_place(root, a.rev)
+        else:
+            kept, removed, key = strip_export(a.rev, a.dest, root)
+        print("IGNORE_STRIP kept=%d removed=%d rev=%s" % (kept, removed, a.rev))
+        print("IGNORE_STRIP_KEY %s" % key)
+        return 0
+    if a.cmd == "treekey":
+        pats = read_patterns(ignore_text_at(a.rev, root), "%s:.workerignore" % a.rev)
+        print(tree_key(tracked(a.rev, cwd=root), pats))
+        return 0
+    if a.cmd == "keycheck":
+        return keycheck(a.rev, root)
+    if a.cmd == "matchjson":
+        # stdin {"patterns": [line...], "paths": [...], "entries": [[mode, sha, path]...]}; stdout the
+        # matcher's verdicts (and the tree key when entries are given). Cross-check input for the
+        # Worker's JavaScript matcher; a pattern line outside the subset is fail closed.
+        req = json.load(sys.stdin)
+        pats = read_patterns("\n".join(req["patterns"]) + "\n", "<stdin>")
+        out = {"ignored": [matches(pats, x) for x in req.get("paths", [])]}
+        if req.get("entries"):
+            out["key"] = tree_key([tuple(e) for e in req["entries"]], pats)
+        print(json.dumps(out))
+        return 0
+    if a.cmd == "floorjson":
+        print(
+            json.dumps(
+                {
+                    "keep_dirs": list(KEEP_DIRS),
+                    "keep_files": list(KEEP_FILES),
+                    "not_floored": sorted(PROTECTED_NOT_FLOORED),
+                }
+            )
+        )
         return 0
     return 2
 

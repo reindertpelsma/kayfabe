@@ -123,6 +123,43 @@ MUTANTS = [
         'if [ "${KF_MERGE_KVM_TESTS:-0}" = 1 ]; then',
         'echo "TESTS passed 1 failed 0"\nif [ "${KF_MERGE_KVM_TESTS:-0}" = 1 ]; then',
     ),
+    # --- the strip step and the oracle requirement (2026-11-09) ----------------------------------
+    (
+        "strip-step-removed",
+        MERGE_CHECK,
+        'python3 -I scripts/ci/ignore_ladder.py strip --in-place || { echo "STRIP_FAILED: the .workerignore of $REV cannot be applied"; exit 2; }',
+        "true",
+    ),
+    (
+        "strip-failure-ignored",
+        MERGE_CHECK,
+        'echo "STRIP_FAILED: the .workerignore of $REV cannot be applied"; exit 2; }',
+        'echo "STRIP_FAILED: the .workerignore of $REV cannot be applied"; }',
+    ),
+    (
+        "strip-failure-exits-1",
+        MERGE_CHECK,
+        'cannot be applied"; exit 2; }',
+        'cannot be applied"; exit 1; }',
+    ),
+    (
+        "strip-only-prints-the-key",
+        MERGE_CHECK,
+        "ignore_ladder.py strip --in-place",
+        "ignore_ladder.py treekey",
+    ),
+    (
+        "oracles-optional-by-default",
+        MERGE_CHECK,
+        "export KF_REQUIRE_ORACLES=${KF_REQUIRE_ORACLES:-1}",
+        "export KF_REQUIRE_ORACLES=${KF_REQUIRE_ORACLES:-0}",
+    ),
+    (
+        "oracles-requirement-dropped",
+        MERGE_CHECK,
+        "export KF_REQUIRE_ORACLES=${KF_REQUIRE_ORACLES:-1}",
+        "true",
+    ),
     # --- kvm_tests.sh --------------------------------------------------------------------------
     ("kvm-tests-whole-workspace", KVM_TESTS, "-p kf-linux-raw -p kf-chan", "--workspace"),
     ("kvm-tests-fail-fast", KVM_TESTS, "cargo test -q --no-fail-fast", "cargo test -q"),

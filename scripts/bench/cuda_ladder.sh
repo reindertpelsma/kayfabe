@@ -30,7 +30,9 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/../.." && pwd)"
 BENCH=${BENCH_DIR:-/workspace/bench}
 BINS=$BENCH/cudaladder-host-bins
-CUP2_C=$REPO/archive/nvkvm/tests/mode2/cup2.c
+# [2026-11-09] A byte-for-byte copy of archive/nvkvm/tests/mode2/cup2.c, next to cup3.c and cup8.c: the box strips
+# archive/ (.workerignore) before it runs, so the source it compiles may not live there.
+CUP2_C=$REPO/scripts/bench/cup2.c
 export KAYFABE_BENCH_SIZES=${KAYFABE_BENCH_SIZES:-16,2048}
 B_ITERS=${KAYFABE_BENCH_ITERS:-20} B_BATCH=${KAYFABE_BENCH_BATCH:-10}
 die() { echo "cuda_ladder: $*" >&2; exit 2; }

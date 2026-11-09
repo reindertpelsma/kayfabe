@@ -1,23 +1,49 @@
-# .workerignore -- STATUS: PROPOSAL, 2026-11-05 (design: docs/design/V3_CI_TIERS_AND_IGNORE_LADDER.md section 4;
-# evidence in traces/ignore_ladder_20261105/).
+# .workerignore -- STATUS: LIVE, 2026-11-09 (design: docs/design/V3_CI_TIERS_AND_IGNORE_LADDER.md section 4;
+# evidence in traces/ignore_ladder_20261105/; the strip step: docs/CI_V3.md, "Stripped tree").
 #
-# Who reads it (CODE READ 2026-11-05, ci/vast-broker/src/treekey.js, PR #258): the CI Worker's
-# result store reads this file from the root of every commit it records, to compute the commit's
-# tree key. This file ignores /ci/vast-broker, a code root in treekey.js PROTECTED, so the Worker
-# refuses the whole ignore set and produces NO tree key today for any commit that carries this
-# file; its runs are stored under the per-commit key (tree_kind 'commit'). TREE_KEY_CARRY_OVER
-# stays off (unset), so a requirement counts only rows of the same commit either way. Do not drop
-# lines here or shrink PROTECTED to obtain tree keys: the box does not remove ignored files yet, so
-# a key would let a result answer for files the run may have read (review of PR #269, R1).
+# Who reads it (CODE READ 2026-11-09):
+#   1. The Vast box. scripts/bench/box/merge_check.sh runs `scripts/ci/ignore_ladder.py strip --in-place`
+#      in its checkout of the tested commit: every tracked file that a line below matches is deleted
+#      before any box stage runs, so a box test cannot depend on an ignored path. NOT YET RUN ON
+#      HARDWARE: the first gpu-vast run on a batch PR is its verification.
+#   2. The stripped-tree CI job (.github/workflows/ci.yml, job `stripped`): the same strip with the same
+#      matcher, then the GPU-free Rust build, test and clippy. The commit's OWN copy of this file is
+#      read (git show REV:.workerignore), never the working copy.
+#   3. The CI Worker's result store (ci/vast-broker/src/treekey.js, PR #258): it reads this file from the
+#      root of every commit it records, to compute the commit's tree key. The key is the hash of the
+#      unignored files plus the effective lines of this file, so adding a line changes the key.
+# ONE matcher: `matches` in scripts/ci/ignore_ladder.py. The Worker's JavaScript matcher is a second
+# implementation and is cross-checked against it (ci/vast-broker/test/ladder-parity.test.js: the real
+# files, 400 seeded adversarial pattern sets, the key bytes) and against `git check-ignore`.
+#
+# Fail closed (exit 3, nothing deleted): a missing file, a line outside the syntax below, an ignore set
+# that would delete code under crates/ qemu/ cuda/ firmware/ tools/ .cargo/ or the two oracle
+# submodules, Cargo.* / rust-toolchain.toml / clippy.toml / .gitmodules / .dockerignore / Dockerfile*
+# (prose .md and .gitignore files excepted), or a tree with nothing left. A test that needs an ignored
+# path is fixed by moving its data next to it or by listing the NEIGHBOURS here instead of the
+# directory (the syntax has no negation); never by relaxing the test.
+#
+# OWNER DECISION NEEDED, nothing here is changed silently: the line `/ci/vast-broker` below ignores a
+# code root that treekey.js PROTECTED refuses, so the Worker refuses this whole file and stores every
+# commit that carries it under its per-commit key (tree_kind 'commit'); no result falls through
+# between commits. TREE_KEY_CARRY_OVER stays off (unset). This change neither drops the line nor
+# shrinks PROTECTED. What changed since the refusal was written (review of PR #269, R1: "the box does
+# not remove ignored files, so a key would let a result answer for files the run may have read"): the
+# box now deletes them. Two ways out:
+#   (A) drop `/ci/vast-broker` here and in .dockerignore: the Worker accepts the file and keys by tree,
+#       a Worker-only change moves the key (the gate runs; the Worker is part of what it validates),
+#       and nothing else changes. RECOMMENDED until a stripped box has passed a real gate.
+#   (B) keep the line and remove ci/vast-broker from PROTECTED: sound only if no box stage reads it
+#       (scripts/ci/test_box_stripped.py proves the static half) AND the gate-skip list
+#       (ci/vast-broker/trigger-policy.mjs, which never skips ci/vast-broker/) is changed the same way.
+# Do not drop lines or shrink PROTECTED to obtain tree keys without that decision.
 #
 # The ladder:  .gitignore  is a subset of  .workerignore  is a subset of  .dockerignore.
 # Line based and checked by scripts/ci/ignore_ladder.py. Every line of the group below is
 # copied from .gitignore; the checker fails if a line is missing.
 #
-# Intended meaning (DESIGN-ONLY, not built): the Vast box clones the repository and removes
-# everything that matches this file, so a box test cannot depend on an ignored path. A test result
-# is keyed by the hash of the sorted UNIGNORED tracked files (path, mode, blob id), so a change
-# confined to ignored paths shares the result of its parent.
+# A test result is keyed by the hash of the sorted UNIGNORED tracked files (path, mode, blob id), so a
+# change confined to ignored paths shares the result of its parent.
 #
 # Syntax (asserted by the checker): every line starts with / or **/, no negation, no trailing /,
 # `**` only as a whole segment. git, docker and the checker's matcher then read it the same way.
@@ -55,6 +81,20 @@
 /site
 /.github
 /.deadman
+
+# --- repository notices and markers: read only by packaging and by documents ---
+# LICENSE*: scripts/bench/windows/appmatrix/package_bundle.py copies them into the Windows app bundle
+# (CI runner, bundle-publish.yml, full tree; it already reads THIRD_PARTY_NOTICES.md, which `**/*.md`
+# below ignores). KAYFABE_REV.txt: read by no code, only cited by documents.
+/LICENSE
+/LICENSE-APACHE
+/LICENSE-GPL
+/KAYFABE_REV.txt
+
+# --- reference submodules no GPU-free test needs (they are uninitialised empty directories) ---
+# third_party/ogkm and third_party/ogkm-580 stay: tools/derive_hwref.sh and the oracle tests read them.
+/third_party/linux
+/third_party/gvisor
 
 # --- prose (an exception, if one is found, is listed in the evidence README) ---
 **/*.md

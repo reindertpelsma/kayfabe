@@ -100,211 +100,12 @@ jobs:
           # target is a named build error there. Both are listed in rust-toolchain.toml.
           targets: x86_64-unknown-linux-musl, x86_64-unknown-uefi
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-      - name: Build
-        run: cargo build --workspace
-      - name: Allow user namespaces for this CI checkout's test executables
-        run: python3 scripts/ci/runner_namespaces.py
-      # (Deliberately not naming a test count here — it rots on every PR.)
-      #
-      # ★★ KAYFABE_NO_KVM=1 PINS THE OS-FREE CONFIGURATION. GitHub runners have no
-      # /dev/kvm, so this job was *already* running that configuration — but by accident
-      # of what the runner image happens to lack, which would lapse silently the day an
-      # image starts shipping the device. The guarantee it protects is architectural: the
-      # pure logic core must stay testable with NO OS layer, or we lock in Linux/KVM/QEMU/
-      # x86 semantics and only find out when a second VMM or a second architecture is
-      # attempted. `kayfabe-mocks` is the backend for this configuration.
-      #
-      # The with-KVM configuration is covered on developer boxes and the bench; the
-      # reached-count gate below is what stops the gated tests from silently vanishing
-      # from BOTH.
-      #
-      # ★★ `${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log}`, NOT the bare path — MEASURED
-      # 2026-07-30. The three reached-count steps below read the log this step writes, and a
-      # fixed path in `/tmp` is a SHARED name. On GitHub that is invisible: every job gets its
-      # own runner. On a real box it is not — two `scripts/ci_gates.sh --all` runs at once
-      # (two agents, or a rebuild beside a bench run) clobber each other's log, and the gates
-      # then count the OTHER run's tests. It was seen: a run on a box WITH both vendored ogkm
-      # trees reported `VBIOS-oracle gate: ran=0 skipped=0 total=0` and failed, having read a
-      # concurrent run's file.
-      #
-      # That failure mode is worse than a flake, because it lands exactly where the owner says
-      # the authoritative run happens — a real box — and nowhere CI would ever show it. The
-      # default keeps GitHub's behaviour byte-identical; `ci_gates.sh` sets the variable to a
-      # per-invocation path so concurrent local runs cannot see each other.
-      #
-      # ★★★ AND IT WRITES A COMPLETION SENTINEL. The three consumers below cannot otherwise
-      # tell "the producer ran and genuinely found zero" from "I could not read my input" —
-      # both look like `ran=0 skipped=0 total=0`, and the second is an INFRASTRUCTURE
-      # failure wearing the costume of a catastrophic regression. That cost two full gate
-      # runs to diagnose the first time it happened. The sentinel is written after the pipe
-      # and carries the run's own exit code, so a truncated, clobbered, half-written or
-      # simply absent log is a DIFFERENT and louder answer than a real count of zero.
-      - name: Test (OS-free configuration — KVM forced absent)
-        run: |
-          set +e # GitHub invokes bash -e; capture the failed pipeline before returning its rc.
-          set -uo pipefail
-          log="${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log}"
-          KAYFABE_NO_KVM=1 cargo test --workspace --no-fail-fast 2>&1 | tee "$log"
-          rc="${PIPESTATUS[0]}"
-          printf 'KAYFABE-TEST-LOG-COMPLETE rc=%s pid=%s\n' "$rc" "$$" >> "$log"
-          if [ "$rc" -ne 0 ] && [ "${GITHUB_ACTIONS:-}" = true ]; then
-            # Diagnose host policy refusals without disabling confinement or skipping tests.
-            sysctl vm.memfd_noexec kernel.apparmor_restrict_unprivileged_userns || true
-            sudo dmesg | grep -E 'apparmor=|memfd' | tail -40 || true
-          fi
-          exit "$rc"
-      - name: Remove the CI-only namespace profile
-        if: always()
-        run: python3 scripts/ci/runner_namespaces.py --remove
-      # ★★ KVM-gate non-vacuity. GitHub runners do NOT provide /dev/kvm, so the ~33
-      # tests that need a real VM fd SKIP here — and a skip that nobody counts is the
-      # "green instrument on an unexercised path" failure this repo cares most about
-      # (testing_doctrine.md §1). CI therefore asserts the gated tests were REACHED,
-      # not that they ran: RAN + SKIPPED must meet the floor. Each test binary is its
-      # own process, so the counting has to be external to the harness.
-      #
-      # This exists because CI was RED for three commits (1336ce1, 42d850c, 0a6826c)
-      # while the local suite was green on a box that happens to have KVM. The floor
-      # is what stops the reverse failure: all 33 quietly vanishing and CI staying
-      # green.
-      - name: KVM-gate reached-count (floor, not an exact match)
-        run: |
-          set -euo pipefail
-          log="${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log}"
-          # ★★★ INFRASTRUCTURE vs RESULT — they must not be representable the same way.
-          # A missing, empty, truncated or foreign log makes every count below zero, which
-          # reads as "the gated tests vanished" and is a confident wrong answer. Exit 2 (not
-          # 1) so a caller can tell "the tree is bad" from "my input was".
-          if [ ! -s "$log" ] || ! grep -q 'KAYFABE-TEST-LOG-COMPLETE' "$log"; then
-            echo "::error::INFRASTRUCTURE FAILURE, NOT A TEST RESULT: $log is missing," \
-                 "empty, or carries no completion sentinel — so the producer step did not" \
-                 "finish, or another process is writing the same path. This step reports" \
-                 "NOTHING about the tree. Set KAYFABE_TEST_LOG to a private path" \
-                 "(scripts/ci_gates.sh does) and re-run."
-            ls -l "$log" || true
-            exit 2
-          fi
-          ran=$(grep -c 'KVM-GATE: RAN' "$log" || true)
-          skipped=$(grep -c 'KVM-GATE: SKIPPED' "$log" || true)
-          total=$(( ran + skipped ))
-          # ★ 35 -> 30, 2026-09-26: the v3 archive move took the archived tests/ suite's KVM-gated
-          # tests with it. Measured on the verification box (KAYFABE_NO_KVM=1 cargo test
-          # --workspace at 29531eb5): KVM-GATE ran=0 skipped=30.
-          echo "KVM-gate: ran=$ran skipped=$skipped total=$total (floor 30)"
-          if [ "$total" -lt 30 ]; then
-            echo "::error::KVM-gated tests were not reached: $total < 30." \
-                 "Either they were deleted, or the gate stopped announcing itself." \
-                 "A silent skip is worse than a red build."
-            exit 1
-          fi
-          if [ "$ran" -gt 0 ]; then
-            echo "This runner has /dev/kvm: $ran gated tests actually executed."
-          fi
-      # ★★ SANDBOX-gate non-vacuity — the same argument as the KVM gate above, for the
-      # tests that need a mount or user namespace. They are the ONLY tests that assert the
-      # isolate's containment (a `/dev` descriptor that cannot name `..`, a child that holds
-      # no capability), so a runner where they silently stop running is a runner where a
-      # security property stops being checked while the build stays green.
-      #
-      # Deliberately a floor over RAN+SKIPPED and not an exact match: the gated set grows.
-      # The `RAN` line is printed too, so a job that HAS the capability says how many
-      # actually executed rather than leaving it to be inferred.
-      - name: SANDBOX-gate reached-count (floor, not an exact match)
-        run: |
-          set -euo pipefail
-          log="${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log}"
-          # ★★★ INFRASTRUCTURE vs RESULT — they must not be representable the same way.
-          # A missing, empty, truncated or foreign log makes every count below zero, which
-          # reads as "the gated tests vanished" and is a confident wrong answer. Exit 2 (not
-          # 1) so a caller can tell "the tree is bad" from "my input was".
-          if [ ! -s "$log" ] || ! grep -q 'KAYFABE-TEST-LOG-COMPLETE' "$log"; then
-            echo "::error::INFRASTRUCTURE FAILURE, NOT A TEST RESULT: $log is missing," \
-                 "empty, or carries no completion sentinel — so the producer step did not" \
-                 "finish, or another process is writing the same path. This step reports" \
-                 "NOTHING about the tree. Set KAYFABE_TEST_LOG to a private path" \
-                 "(scripts/ci_gates.sh does) and re-run."
-            ls -l "$log" || true
-            exit 2
-          fi
-          ran=$(grep -c 'SANDBOX-GATE: RAN' "$log" || true)
-          skipped=$(grep -c 'SANDBOX-GATE: SKIPPED' "$log" || true)
-          total=$(( ran + skipped ))
-          echo "SANDBOX-gate: ran=$ran skipped=$skipped total=$total (floor 10)"
-          if [ "$total" -lt 10 ]; then
-            echo "::error::sandbox-gated tests were not reached: $total < 10." \
-                 "Either they were deleted, or the gate stopped announcing itself." \
-                 "These are the tests that assert the isolate cannot reach the host" \
-                 "filesystem and holds no capability; a silent skip is worse than red."
-            exit 1
-          fi
-          if [ "$ran" -gt 0 ]; then
-            echo "This runner permits namespaces: $ran gated tests actually executed."
-          fi
-      - name: CAP-gate — the live capability tests, reached unprivileged and run as root
-        run: |
-          set -euo pipefail
-          log="${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log}"
-          if [ ! -s "$log" ] || ! grep -q 'KAYFABE-TEST-LOG-COMPLETE' "$log"; then
-            echo "::error::INFRASTRUCTURE FAILURE, NOT A TEST RESULT: $log is missing, empty or" \
-                 "unterminated, so this step reports nothing about the tree."
-            exit 2
-          fi
-          # `|| true`: under pipefail a grep with no match fails the substitution, and a count of
-          # zero is an answer here, not an error (the floor below decides).
-          ran_u=$(grep -o 'CAP-GATE: RAN' "$log" | wc -l || true)
-          vac_u=$(grep -o 'CAP-GATE: VACUOUS' "$log" | wc -l || true)
-          echo "CAP-gate, runner user: ran=$ran_u vacuous=$vac_u (reached floor 6)"
-          if [ $((ran_u + vac_u)) -lt 6 ]; then
-            echo "::error::the live capability tests were not reached: $((ran_u + vac_u)) < 6"
-            exit 1
-          fi
-          mapfile -t exes < <(cargo test -q -p kf-linux-raw -p kf-host -p kf-cuda --lib --no-run \
-              --message-format=json | python3 -c 'import json,sys
-          for l in sys.stdin:
-              j = json.loads(l)
-              if j.get("reason") == "compiler-artifact" and j.get("profile", {}).get("test") and j.get("executable"):
-                  print(j["executable"])')
-          if [ "${#exes[@]}" -ne 3 ]; then
-            echo "::error::expected 3 lib test binaries (kf-linux-raw, kf-host, kf-cuda), got ${#exes[@]}"
-            exit 1
-          fi
-          rootlog="$RUNNER_TEMP/cap-gate-root.log"
-          : > "$rootlog"
-          sudo grep -E '^(Uid|CapEff)' /proc/self/status
-          for e in "${exes[@]}"; do
-            sudo "$e" live_cap_ --test-threads=1 2>&1 | tee -a "$rootlog"
-          done
-          ran=$(grep -o 'CAP-GATE: RAN' "$rootlog" | wc -l || true)
-          vac=$(grep -o 'CAP-GATE: VACUOUS' "$rootlog" | wc -l || true)
-          echo "CAP-gate, root: ran=$ran vacuous=$vac (floor 6; vacuous must be 0)"
-          if [ "$vac" -ne 0 ] || [ "$ran" -lt 6 ]; then
-            echo "::error::as root every live capability test must exercise the real capset:" \
-                 "ran=$ran vacuous=$vac"
-            exit 1
-          fi
-      - name: UDMABUF-gate reached-count (floor, not an exact match)
-        run: |
-          set -euo pipefail
-          log="${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log}"
-          if [ ! -s "$log" ] || ! grep -q 'KAYFABE-TEST-LOG-COMPLETE' "$log"; then
-            echo "::error::INFRASTRUCTURE FAILURE, NOT A TEST RESULT: $log is missing," \
-                 "empty, or carries no completion sentinel. This step reports NOTHING about" \
-                 "the tree."
-            exit 2
-          fi
-          ran=$(grep -c 'UDMABUF-GATE: RAN' "$log" || true)
-          skipped=$(grep -c 'UDMABUF-GATE: SKIPPED' "$log" || true)
-          total=$(( ran + skipped ))
-          echo "UDMABUF-gate: ran=$ran skipped=$skipped total=$total (floor 2)"
-          if [ "$total" -lt 2 ]; then
-            echo "::error::udmabuf-gated tests were not reached: $total < 2." \
-                 "Either they were deleted, or the gate stopped announcing itself."
-            exit 1
-          fi
-          if [ "$skipped" -gt 0 ]; then
-            echo "::warning::$skipped udmabuf-gated test(s) SKIPPED here (no /dev/udmabuf):" \
-                 "they asserted nothing; the dma-buf rung is graded on a box or a dev host."
-          fi
+      # ★ MOVED 2026-11-09 (OWNER_RULINGS section AQ): `cargo build`, the test step and the four
+      # reached-count steps now live in the `stripped` job below, which runs them on the tree that is
+      # left after everything `.workerignore` matches is deleted. This job keeps what judges the
+      # repository as a whole: clippy with its debt ratchet, rustfmt, the structure, boundary, claim and
+      # documentation gates, and the Worker and CI-script self-tests. No check was dropped: a test that
+      # needs an ignored path fails there until the data moves next to it or the path is kept.
       - name: Clippy (errors and new warning sites fail)
         run: bash scripts/ci/clippy.sh
       - name: Format check
@@ -2203,6 +2004,271 @@ jobs:
             echo "growth stops being a count of the audit surface."
             exit 1
           fi
+  # ★ THE PRODUCTION HALF, ON THE STRIPPED TREE (2026-11-09; OWNER_RULINGS section AQ, design:
+  # docs/design/V3_CI_TIERS_AND_IGNORE_LADDER.md section 4). A vast box clones the repository and
+  # deletes everything `.workerignore` matches before it tests (scripts/bench/box/merge_check.sh), so
+  # a test of production code that reads an ignored file passes here on the full tree and fails on the
+  # box. This job removes that difference: it deletes the same files with the same matcher
+  # (scripts/ci/ignore_ladder.py strip, the one implementation) and then builds, tests and lints.
+  # The site, the docs, the Worker, the repository-structure and the claim checks keep their own
+  # filters and stay in `stable`, on the full tree.
+  # ★ KF_REQUIRE_ORACLES=1: a test that SKIPS because its oracle is missing (hwref_is_current.rs) is a
+  # FAILURE here, third_party/ogkm-580 is checked out shallow at the pinned commit (the id is verified
+  # by scripts/ci/fetch_oracles.sh), and the oracle-gate step below proves the test ran.
+  stripped:
+    name: stripped tree — build, test, clippy on what .workerignore leaves
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # The key the Worker would store for this commit and the key of the tree we are about to strip
+      # must be the same bytes (Python matcher against ci/vast-broker/src/treekey.js). Done BEFORE the
+      # strip, because the strip deletes ci/vast-broker. The strip is fail-closed (exit 3, nothing
+      # deleted) on an unreadable or unknown-syntax file, an ignore set that removes code, or a tree
+      # with nothing left.
+      - name: Tree key cross-check, then strip the checkout like a box does
+        run: |
+          set -euo pipefail
+          python3 scripts/ci/ignore_ladder.py keycheck
+          python3 scripts/ci/ignore_ladder.py strip --in-place | tee "$RUNNER_TEMP/strip.txt"
+          grep -q '^IGNORE_STRIP_KEY [0-9a-f]\{64\}$' "$RUNNER_TEMP/strip.txt"
+          test ! -e docs && test ! -e traces && test ! -e archive && test ! -e site
+          test -f Cargo.toml && test -d crates
+      - name: Oracle checkout (third_party/ogkm-580, shallow, pinned commit, id verified)
+        run: bash scripts/ci/fetch_oracles.sh | tee "$RUNNER_TEMP/oracles.txt"
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1 (tip of master on 2026-10-31; toolchain: input is explicit)
+        with:
+          toolchain: 1.99.0   # pinned with rust-toolchain.toml; bump both together
+          components: rustfmt, clippy
+          targets: x86_64-unknown-linux-musl, x86_64-unknown-uefi   # the embedded isolate image and GOP driver; see the `stable` history
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Build
+        run: cargo build --workspace
+      - name: Allow user namespaces for this CI checkout's test executables
+        run: python3 scripts/ci/runner_namespaces.py
+      # (Deliberately not naming a test count here — it rots on every PR.)
+      #
+      # ★★ KAYFABE_NO_KVM=1 PINS THE OS-FREE CONFIGURATION. GitHub runners have no
+      # /dev/kvm, so this job was *already* running that configuration — but by accident
+      # of what the runner image happens to lack, which would lapse silently the day an
+      # image starts shipping the device. The guarantee it protects is architectural: the
+      # pure logic core must stay testable with NO OS layer, or we lock in Linux/KVM/QEMU/
+      # x86 semantics and only find out when a second VMM or a second architecture is
+      # attempted. `kayfabe-mocks` is the backend for this configuration.
+      #
+      # The with-KVM configuration is covered on developer boxes and the bench; the
+      # reached-count gate below is what stops the gated tests from silently vanishing
+      # from BOTH.
+      #
+      # ★★ `${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log}`, NOT the bare path — MEASURED
+      # 2026-07-30. The three reached-count steps below read the log this step writes, and a
+      # fixed path in `/tmp` is a SHARED name. On GitHub that is invisible: every job gets its
+      # own runner. On a real box it is not — two `scripts/ci_gates.sh --all` runs at once
+      # (two agents, or a rebuild beside a bench run) clobber each other's log, and the gates
+      # then count the OTHER run's tests. It was seen: a run on a box WITH both vendored ogkm
+      # trees reported `VBIOS-oracle gate: ran=0 skipped=0 total=0` and failed, having read a
+      # concurrent run's file.
+      #
+      # That failure mode is worse than a flake, because it lands exactly where the owner says
+      # the authoritative run happens — a real box — and nowhere CI would ever show it. The
+      # default keeps GitHub's behaviour byte-identical; `ci_gates.sh` sets the variable to a
+      # per-invocation path so concurrent local runs cannot see each other.
+      #
+      # ★★★ AND IT WRITES A COMPLETION SENTINEL. The three consumers below cannot otherwise
+      # tell "the producer ran and genuinely found zero" from "I could not read my input" —
+      # both look like `ran=0 skipped=0 total=0`, and the second is an INFRASTRUCTURE
+      # failure wearing the costume of a catastrophic regression. That cost two full gate
+      # runs to diagnose the first time it happened. The sentinel is written after the pipe
+      # and carries the run's own exit code, so a truncated, clobbered, half-written or
+      # simply absent log is a DIFFERENT and louder answer than a real count of zero.
+      - name: Test (OS-free configuration — KVM forced absent)
+        run: |
+          set +e # GitHub invokes bash -e; capture the failed pipeline before returning its rc.
+          set -uo pipefail
+          log="${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log}"
+          KF_REQUIRE_ORACLES=1 KAYFABE_NO_KVM=1 cargo test --workspace --no-fail-fast 2>&1 | tee "$log"
+          rc="${PIPESTATUS[0]}"
+          printf 'KAYFABE-TEST-LOG-COMPLETE rc=%s pid=%s\n' "$rc" "$$" >> "$log"
+          if [ "$rc" -ne 0 ] && [ "${GITHUB_ACTIONS:-}" = true ]; then
+            # Diagnose host policy refusals without disabling confinement or skipping tests.
+            sysctl vm.memfd_noexec kernel.apparmor_restrict_unprivileged_userns || true
+            sudo dmesg | grep -E 'apparmor=|memfd' | tail -40 || true
+          fi
+          exit "$rc"
+      - name: Remove the CI-only namespace profile
+        if: always()
+        run: python3 scripts/ci/runner_namespaces.py --remove
+      # ★★ KVM-gate non-vacuity. GitHub runners do NOT provide /dev/kvm, so the ~33
+      # tests that need a real VM fd SKIP here — and a skip that nobody counts is the
+      # "green instrument on an unexercised path" failure this repo cares most about
+      # (testing_doctrine.md §1). CI therefore asserts the gated tests were REACHED,
+      # not that they ran: RAN + SKIPPED must meet the floor. Each test binary is its
+      # own process, so the counting has to be external to the harness.
+      #
+      # This exists because CI was RED for three commits (1336ce1, 42d850c, 0a6826c)
+      # while the local suite was green on a box that happens to have KVM. The floor
+      # is what stops the reverse failure: all 33 quietly vanishing and CI staying
+      # green.
+      - name: KVM-gate reached-count (floor, not an exact match)
+        run: |
+          set -euo pipefail
+          log="${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log}"
+          # ★★★ INFRASTRUCTURE vs RESULT — they must not be representable the same way.
+          # A missing, empty, truncated or foreign log makes every count below zero, which
+          # reads as "the gated tests vanished" and is a confident wrong answer. Exit 2 (not
+          # 1) so a caller can tell "the tree is bad" from "my input was".
+          if [ ! -s "$log" ] || ! grep -q 'KAYFABE-TEST-LOG-COMPLETE' "$log"; then
+            echo "::error::INFRASTRUCTURE FAILURE, NOT A TEST RESULT: $log is missing," \
+                 "empty, or carries no completion sentinel — so the producer step did not" \
+                 "finish, or another process is writing the same path. This step reports" \
+                 "NOTHING about the tree. Set KAYFABE_TEST_LOG to a private path" \
+                 "(scripts/ci_gates.sh does) and re-run."
+            ls -l "$log" || true
+            exit 2
+          fi
+          ran=$(grep -c 'KVM-GATE: RAN' "$log" || true)
+          skipped=$(grep -c 'KVM-GATE: SKIPPED' "$log" || true)
+          total=$(( ran + skipped ))
+          # ★ 35 -> 30, 2026-09-26: the v3 archive move took the archived tests/ suite's KVM-gated
+          # tests with it. Measured on the verification box (KAYFABE_NO_KVM=1 cargo test
+          # --workspace at 29531eb5): KVM-GATE ran=0 skipped=30.
+          echo "KVM-gate: ran=$ran skipped=$skipped total=$total (floor 30)"
+          if [ "$total" -lt 30 ]; then
+            echo "::error::KVM-gated tests were not reached: $total < 30." \
+                 "Either they were deleted, or the gate stopped announcing itself." \
+                 "A silent skip is worse than a red build."
+            exit 1
+          fi
+          if [ "$ran" -gt 0 ]; then
+            echo "This runner has /dev/kvm: $ran gated tests actually executed."
+          fi
+      # ★★ SANDBOX-gate non-vacuity — the same argument as the KVM gate above, for the
+      # tests that need a mount or user namespace. They are the ONLY tests that assert the
+      # isolate's containment (a `/dev` descriptor that cannot name `..`, a child that holds
+      # no capability), so a runner where they silently stop running is a runner where a
+      # security property stops being checked while the build stays green.
+      #
+      # Deliberately a floor over RAN+SKIPPED and not an exact match: the gated set grows.
+      # The `RAN` line is printed too, so a job that HAS the capability says how many
+      # actually executed rather than leaving it to be inferred.
+      - name: SANDBOX-gate reached-count (floor, not an exact match)
+        run: |
+          set -euo pipefail
+          log="${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log}"
+          # ★★★ INFRASTRUCTURE vs RESULT — they must not be representable the same way.
+          # A missing, empty, truncated or foreign log makes every count below zero, which
+          # reads as "the gated tests vanished" and is a confident wrong answer. Exit 2 (not
+          # 1) so a caller can tell "the tree is bad" from "my input was".
+          if [ ! -s "$log" ] || ! grep -q 'KAYFABE-TEST-LOG-COMPLETE' "$log"; then
+            echo "::error::INFRASTRUCTURE FAILURE, NOT A TEST RESULT: $log is missing," \
+                 "empty, or carries no completion sentinel — so the producer step did not" \
+                 "finish, or another process is writing the same path. This step reports" \
+                 "NOTHING about the tree. Set KAYFABE_TEST_LOG to a private path" \
+                 "(scripts/ci_gates.sh does) and re-run."
+            ls -l "$log" || true
+            exit 2
+          fi
+          ran=$(grep -c 'SANDBOX-GATE: RAN' "$log" || true)
+          skipped=$(grep -c 'SANDBOX-GATE: SKIPPED' "$log" || true)
+          total=$(( ran + skipped ))
+          echo "SANDBOX-gate: ran=$ran skipped=$skipped total=$total (floor 10)"
+          if [ "$total" -lt 10 ]; then
+            echo "::error::sandbox-gated tests were not reached: $total < 10." \
+                 "Either they were deleted, or the gate stopped announcing itself." \
+                 "These are the tests that assert the isolate cannot reach the host" \
+                 "filesystem and holds no capability; a silent skip is worse than red."
+            exit 1
+          fi
+          if [ "$ran" -gt 0 ]; then
+            echo "This runner permits namespaces: $ran gated tests actually executed."
+          fi
+      - name: CAP-gate — the live capability tests, reached unprivileged and run as root
+        run: |
+          set -euo pipefail
+          log="${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log}"
+          if [ ! -s "$log" ] || ! grep -q 'KAYFABE-TEST-LOG-COMPLETE' "$log"; then
+            echo "::error::INFRASTRUCTURE FAILURE, NOT A TEST RESULT: $log is missing, empty or" \
+                 "unterminated, so this step reports nothing about the tree."
+            exit 2
+          fi
+          # `|| true`: under pipefail a grep with no match fails the substitution, and a count of
+          # zero is an answer here, not an error (the floor below decides).
+          ran_u=$(grep -o 'CAP-GATE: RAN' "$log" | wc -l || true)
+          vac_u=$(grep -o 'CAP-GATE: VACUOUS' "$log" | wc -l || true)
+          echo "CAP-gate, runner user: ran=$ran_u vacuous=$vac_u (reached floor 6)"
+          if [ $((ran_u + vac_u)) -lt 6 ]; then
+            echo "::error::the live capability tests were not reached: $((ran_u + vac_u)) < 6"
+            exit 1
+          fi
+          mapfile -t exes < <(cargo test -q -p kf-linux-raw -p kf-host -p kf-cuda --lib --no-run \
+              --message-format=json | python3 -c 'import json,sys
+          for l in sys.stdin:
+              j = json.loads(l)
+              if j.get("reason") == "compiler-artifact" and j.get("profile", {}).get("test") and j.get("executable"):
+                  print(j["executable"])')
+          if [ "${#exes[@]}" -ne 3 ]; then
+            echo "::error::expected 3 lib test binaries (kf-linux-raw, kf-host, kf-cuda), got ${#exes[@]}"
+            exit 1
+          fi
+          rootlog="$RUNNER_TEMP/cap-gate-root.log"
+          : > "$rootlog"
+          sudo grep -E '^(Uid|CapEff)' /proc/self/status
+          for e in "${exes[@]}"; do
+            sudo "$e" live_cap_ --test-threads=1 2>&1 | tee -a "$rootlog"
+          done
+          ran=$(grep -o 'CAP-GATE: RAN' "$rootlog" | wc -l || true)
+          vac=$(grep -o 'CAP-GATE: VACUOUS' "$rootlog" | wc -l || true)
+          echo "CAP-gate, root: ran=$ran vacuous=$vac (floor 6; vacuous must be 0)"
+          if [ "$vac" -ne 0 ] || [ "$ran" -lt 6 ]; then
+            echo "::error::as root every live capability test must exercise the real capset:" \
+                 "ran=$ran vacuous=$vac"
+            exit 1
+          fi
+      - name: UDMABUF-gate reached-count (floor, not an exact match)
+        run: |
+          set -euo pipefail
+          log="${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log}"
+          if [ ! -s "$log" ] || ! grep -q 'KAYFABE-TEST-LOG-COMPLETE' "$log"; then
+            echo "::error::INFRASTRUCTURE FAILURE, NOT A TEST RESULT: $log is missing," \
+                 "empty, or carries no completion sentinel. This step reports NOTHING about" \
+                 "the tree."
+            exit 2
+          fi
+          ran=$(grep -c 'UDMABUF-GATE: RAN' "$log" || true)
+          skipped=$(grep -c 'UDMABUF-GATE: SKIPPED' "$log" || true)
+          total=$(( ran + skipped ))
+          echo "UDMABUF-gate: ran=$ran skipped=$skipped total=$total (floor 2)"
+          if [ "$total" -lt 2 ]; then
+            echo "::error::udmabuf-gated tests were not reached: $total < 2." \
+                 "Either they were deleted, or the gate stopped announcing itself."
+            exit 1
+          fi
+          if [ "$skipped" -gt 0 ]; then
+            echo "::warning::$skipped udmabuf-gated test(s) SKIPPED here (no /dev/udmabuf):" \
+                 "they asserted nothing; the dma-buf rung is graded on a box or a dev host."
+          fi
+      # ★ ORACLE-gate non-vacuity, the same argument as the KVM gate: a required oracle must have RUN.
+      # `KF_REQUIRE_ORACLES=1` already turns an absent oracle into a failure; this step also refuses a
+      # log in which the hwref test never announced itself (renamed, filtered out, deleted).
+      - name: ORACLE-gate reached-count (the oracle ran, it was not skipped)
+        run: |
+          set -euo pipefail
+          log="${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log}"
+          if [ ! -s "$log" ] || ! grep -q 'KAYFABE-TEST-LOG-COMPLETE' "$log"; then
+            echo "::error::INFRASTRUCTURE FAILURE, NOT A TEST RESULT: $log is missing or unterminated."
+            exit 2
+          fi
+          ran=$(grep -c 'ORACLE-GATE: RAN hwref_is_current required=true' "$log" || true)
+          skipped=$(grep -c 'ORACLE-GATE: SKIPPED' "$log" || true)
+          echo "ORACLE-gate: ran=$ran skipped=$skipped (ran must be >= 1, skipped must be 0)"
+          if [ "$ran" -lt 1 ] || [ "$skipped" -ne 0 ]; then
+            echo "::error::the oracle test did not run with the oracle required: ran=$ran skipped=$skipped"
+            exit 1
+          fi
+      # Compiler and denied-lint errors are fatal here; the warning-site debt ratchet needs
+      # scripts/ci/debt.py and its JSON, which the strip removes, and stays in `stable`.
+      - name: Clippy on the stripped tree (errors fail)
+        run: cargo clippy --workspace --all-targets --locked
+
   aarch64:
     name: aarch64 — core cross-checks (no x86 assumptions)
     runs-on: ubuntu-latest
@@ -2490,7 +2556,7 @@ jobs:
   gate:
     name: CI
     if: always()
-    needs: [stable, aarch64, firmware, broker, platform]
+    needs: [stable, stripped, aarch64, firmware, broker, platform]
     runs-on: ubuntu-latest
     steps:
       - name: Require every needed job to have passed

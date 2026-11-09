@@ -64,6 +64,12 @@
 /scripts/lazy_mutation_check.py
 /scripts/lifecycle_mutation_check.sh
 /scripts/v2_mutation_check.py
+/LICENSE
+/LICENSE-APACHE
+/LICENSE-GPL
+/KAYFABE_REV.txt
+/third_party/linux
+/third_party/gvisor
 /docs
 
 # --- Docker's own files ---
