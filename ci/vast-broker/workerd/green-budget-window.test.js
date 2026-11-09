@@ -4,7 +4,7 @@ import { build } from 'esbuild';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import { env, jwt, MockCloud } from '../test/helpers.js';
 
-// FALSIFIER: first admission already retains the configured dollar limit, not the offer quote.
+// FALSIFIER: first admission already retains the stricter original lease or daily ceiling.
 const prefix = 'workerd-window-' + 'p'.repeat(32);
 const bundle = await build({
   entryPoints: [new URL('./fixture.js', import.meta.url).pathname],
@@ -13,8 +13,12 @@ const bundle = await build({
   format: 'esm',
   target: 'es2022',
 });
-for (const daily of [3, 6])
-  test('workerd retains the configured run dollar allowance ' + daily, async (t) => {
+for (const [daily, expected] of [
+  [3, 0.175],
+  [6, 0.175],
+  [0.1, 0.1],
+])
+  test('workerd retains the stricter run dollar ceiling ' + daily, async (t) => {
     const cloud = new MockCloud();
     const mf = new Miniflare(
       convertV4MiniflareOptions({
@@ -49,5 +53,5 @@ for (const daily of [3, 6])
     await response.json();
     assert.equal(response.status, 200);
     const snapshot = await (await stub.fetch('https://test.invalid/snapshot')).json();
-    assert.equal(snapshot.find(([key]) => key === 'record:123-1')[1].runBudgetUsd, daily);
+    assert.equal(snapshot.find(([key]) => key === 'record:123-1')[1].runBudgetUsd, expected);
   });

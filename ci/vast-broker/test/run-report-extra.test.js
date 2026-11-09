@@ -1892,6 +1892,32 @@ test(
 );
 
 test(
+  'a later crafted queue redacts both earlier nonces while retaining ordinary text',
+  { skip: d1Skip },
+  async () => {
+    const { h, bucket } = await runWith(['ordinary\n']);
+    const record = await h.storage.get('record:123-1');
+    const prior = ['c0ffee12'.repeat(4), 'decaf123'.repeat(4)];
+    await h.storage.put('plog:333-1:0', 'ordinary-first ' + prior[0] + '\n');
+    await h.storage.put('plog:333-1:1', 'ordinary-second ' + prior[1] + '\n');
+    await h.storage.put('plogq:333-1:2', {
+      ...stuckEntry(333),
+      leg: 2,
+      chunks: 2,
+      nonce: 'b0b0b0b0'.repeat(4),
+      priorNonces: prior,
+      reportExpiry: record.reportExpiry,
+      sha: record.sha,
+    });
+    await h.service.publishRuns();
+    const log = bucket.objects.get('vast-333-1-2/log.txt');
+    assert.match(log, /ordinary-first/);
+    assert.match(log, /ordinary-second/);
+    for (const nonce0 of prior) assert.equal(log.includes(nonce0), false);
+  },
+);
+
+test(
   'the leg-1 queue entry carries the earlier nonce and the rent-time values',
   { skip: d1Skip },
   async () => {
