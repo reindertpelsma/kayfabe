@@ -63,7 +63,7 @@ if ($Mode -eq 'wer') {
     foreach ($where in 'ReportArchive', 'ReportQueue') {
         $root = Join-Path $wer $where
         if (-not (Test-Path $root)) { continue }
-        foreach ($report in Get-ChildItem $root -Filter 'Report.wer' -File -Recurse -ErrorAction SilentlyContinue) {
+        foreach ($report in Get-ChildItem $root -Filter 'Report.wer' -Force -File -Recurse -ErrorAction SilentlyContinue) {
             $f = $report.FullName
             $d = $report.Directory
             try {
@@ -86,7 +86,7 @@ if ($Mode -eq 'wer') {
     }
     $dumpRoots = @('C:\Windows\LiveKernelReports', (Join-Path $wer 'ReportArchive'), (Join-Path $wer 'ReportQueue'))
     $dumps = @(foreach ($root in $dumpRoots) {
-        if (Test-Path $root) { Get-ChildItem -LiteralPath $root -Filter '*.dmp' -File -Recurse -ErrorAction SilentlyContinue }
+        if (Test-Path $root) { Get-ChildItem -LiteralPath $root -Filter '*.dmp' -Force -File -Recurse -ErrorAction SilentlyContinue }
     }) | Sort-Object FullName -Unique
     $dumps = @($dumps)
     foreach ($f in $dumps) { Say ("WER_DUMP " + $f.LastWriteTimeUtc.ToString('yyyy-MM-ddTHH:mm:ssZ') + " $($f.Name) bytes=$($f.Length)") }
@@ -129,7 +129,7 @@ $reports = @()
 foreach ($where in 'ReportArchive', 'ReportQueue') {
     $root = Join-Path 'C:\ProgramData\Microsoft\Windows\WER' $where
     if (-not (Test-Path $root)) { continue }
-    foreach ($f in Get-ChildItem $root -Filter 'Report.wer' -File -Recurse -ErrorAction SilentlyContinue) {
+    foreach ($f in Get-ChildItem $root -Filter 'Report.wer' -Force -File -Recurse -ErrorAction SilentlyContinue) {
         try { $raw = [IO.File]::ReadAllText($f.FullName) } catch { continue }
         $lines = ($raw -replace "`0", '') -split "`r?`n"
         $et = ($lines | Where-Object { $_ -match '^EventTime=\d+$' } | Select-Object -First 1) -replace '^EventTime=', ''
@@ -163,6 +163,11 @@ function Find-Report($e) {
     }
     $found = @()
     if ($directory) { $found = @($reports | Where-Object { $_.directory -eq $directory -and $_.store -eq $store }) }
+    # Contradictory explicit evidence cannot establish the report's own time.
+    # Keep the entry fresh/unresolved instead of borrowing either record's time.
+    if ($id -and @($found | Where-Object { $_.id -ne $id }).Count) {
+        return [pscustomobject]@{ key=$null; time=$null }
+    }
     if (-not $found -and $id) { $found = @($reports | Where-Object { $_.id -eq $id }) }
     $signature = Event-Signature $e
     if (-not $found -and $signature -and -not $id -and -not $directory -and (Is-193 $e)) { $found = @($reports | Where-Object { $_.signature -eq $signature }) }
@@ -181,6 +186,7 @@ function Is-193($e) { return $e.Message -match '(?:^|\s)(?:P1|Code):\s*(?:0x)?19
 $lke = @()
 $lkeStale = 0
 $lke193Reports = @{}
+$lke193Resolved = @{}
 $lkeUnresolved = 0
 foreach ($e in $lkeAll) {
     $report = Find-Report $e
@@ -196,6 +202,7 @@ foreach ($e in $lkeAll) {
             # Missing identity is not a report. Keep those entries visible and
             # make the comparison UNKNOWN rather than inventing distinct IDs.
             if ($key) { $lke193Reports[$key] = $true }
+            if ($key -and ($null -ne $rt)) { $lke193Resolved[$key] = $true }
         }
     }
 }
@@ -214,8 +221,8 @@ $c = [ordered]@{
 $total = 0
 foreach ($k in $c.Keys) { $total += [int]$c[$k] }
 if ($Strict) { $total += $lke193Entries }
-Say ("TDR since=$Since " + (($c.Keys | ForEach-Object { "$_=$($c[$_])" }) -join ' ') + " livekernelevent193=$lke193 livekernelevent193_entries=$lke193Entries livekernelevent193_unresolved=$lkeUnresolved livekernelevent_stale=$lkeStale strict=" + [int][bool]$Strict + " total=$total")
-Get-ChildItem C:\Windows\LiveKernelReports -Recurse -ErrorAction SilentlyContinue | Where-Object { -not $_.PSIsContainer -and $_.LastWriteTimeUtc -ge $t } |
+Say ("TDR since=$Since " + (($c.Keys | ForEach-Object { "$_=$($c[$_])" }) -join ' ') + " livekernelevent193=$lke193 livekernelevent193_entries=$lke193Entries livekernelevent193_resolved=$($lke193Resolved.Count) livekernelevent193_unresolved=$lkeUnresolved livekernelevent_stale=$lkeStale strict=" + [int][bool]$Strict + " total=$total")
+Get-ChildItem C:\Windows\LiveKernelReports -Force -Recurse -ErrorAction SilentlyContinue | Where-Object { -not $_.PSIsContainer -and $_.LastWriteTimeUtc -ge $t } |
     Sort-Object LastWriteTime | ForEach-Object { Say ("LIVEDUMP " + $_.LastWriteTimeUtc.ToString('yyyy-MM-ddTHH:mm:ssZ') + " " + $_.Name + " bytes=" + $_.Length) }
 Say 'STATE_DONE mode=tdr'
 exit 0

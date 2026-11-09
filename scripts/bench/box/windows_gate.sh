@@ -94,6 +94,7 @@ ENABLE_UTC=""
 LKE193=""
 LKE193_ENTRIES=""
 LKE193_UNRESOLVED=""
+LKE193_RESOLVED=""
 LKE_DIE=unknown
 LKE_RATCHET=UNAVAILABLE
 LKESTALE=""                     # WER re-submissions of reports older than the enable (never gate)
@@ -198,6 +199,7 @@ lke_ratchet() {
     python3 -I "$SOURCE/scripts/bench/box/lke193.py" check --die "$LKE_DIE" --count "${LKE193:-?}" \
         --mode "${KF_WINGATE_LKE_RATCHET:-report}" \
         --entries "${LKE193_ENTRIES:--}" --unresolved "${LKE193_UNRESOLVED:--}" \
+        --resolved "${LKE193_RESOLVED:--}" \
         --out "$EV/lke193_ratchet.json" > "$result" 2>&1
     rc=$?
     while IFS= read -r line; do say "$line"; done < "$result"
@@ -936,6 +938,7 @@ grep -a '^GATE_TDR\|^GATE_LIVEDUMP' "$EV/tdr_counts.txt" | while read -r l; do s
 LKE193=$(sed -n 's/.* livekernelevent193=\([0-9]*\) .*/\1/p' "$EV/tdr_counts.txt" | head -1)
 LKE193_ENTRIES=$(sed -n 's/.* livekernelevent193_entries=\([0-9]*\) .*/\1/p' "$EV/tdr_counts.txt" | head -1)
 LKE193_UNRESOLVED=$(sed -n 's/.* livekernelevent193_unresolved=\([0-9]*\) .*/\1/p' "$EV/tdr_counts.txt" | head -1)
+LKE193_RESOLVED=$(sed -n 's/.* livekernelevent193_resolved=\([0-9]*\) .*/\1/p' "$EV/tdr_counts.txt" | head -1)
 LKESTALE=$(sed -n 's/.* livekernelevent_stale=\([0-9]*\) .*/\1/p' "$EV/tdr_counts.txt" | head -1)
 wer_timeline "wer_reports.txt"
 lke_ratchet

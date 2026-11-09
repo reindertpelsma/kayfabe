@@ -5,6 +5,7 @@ coordinator evidence; signatures resolve existing report identities, never repla
 """
 import datetime as dt
 import json
+import os
 from pathlib import Path
 import re
 import shutil
@@ -73,6 +74,25 @@ class DistinctReports(unittest.TestCase):
         add('strict_unidentified',[],[event(i,identity=None) for i in (1,2,3)],strict=True)
         add('reset',[report()],repeated,system_count=1)
         add('empty',[],[])
+        # RV2 #322: explicit fresh identity must not borrow an old path's time.
+        fresh_id=RID[:-1]+'2'
+        for code in ('141','193'):
+            records=[report('old',identity=RID,when='2026-11-08T02:20:15Z',code=code),
+                     report('fresh',identity=fresh_id,code=code)]
+            for label,identity,directory in (('conflict',fresh_id,'old'),('reverse_conflict',RID,'fresh'),
+                                              ('current',fresh_id,'fresh'),('old',RID,'old')):
+                ev=event(1,identity=identity,directory=directory,code=code)
+                ev['when']='2026-11-09T04:21:01Z'
+                add('rv2_'+label+'_'+code,records,[ev],strict=code=='193')
+        known=[report('first',identity=RID),report('second',identity=fresh_id)]
+        known_events=[event(1,directory='first'),event(2,identity=fresh_id,directory='second')]
+        add('rv2_overrun',known,known_events)
+        add('rv2_overrun_unknown',known,known_events+[event(3,identity=RID[:-1]+'3')])
+        add('rv2_overrun_repeated_unknown',known,known_events+[event(i,identity=RID[:-1]+'3') for i in (3,4,5)])
+        add('rv2_all_unknown',[],[event(1),event(2,identity=fresh_id),event(3,identity=RID[:-1]+'3')])
+        for code in ('141','193'):
+            add('rv2_hidden_old_'+code,[report('.rv2-hidden',when='2026-11-08T02:20:15Z',code=code)],
+                [event(1,directory='.rv2-hidden',code=code)],strict=code=='193')
         # Replay the recorded WER spellings and P1..P8 event signatures without
         # inventing event ReportIds that the coordinator's 900-char view omitted.
         for boot in ('p193_h1','p193_h2'):
@@ -95,6 +115,8 @@ class DistinctReports(unittest.TestCase):
         for name,case in cases.items():
             work=root/name; work.mkdir()
             (work/'dumps').mkdir()
+            hidden=work/'dumps/.rv2-hidden'; hidden.mkdir()
+            (hidden/'extra.dmp').write_bytes(b'synthetic')
             (work/'wer').mkdir()
             for record in case['reports']:
                 relative=record['directory']
@@ -115,7 +137,10 @@ function Get-WinEvent {
  param($FilterHashtable,$ErrorAction)
  if ($FilterHashtable.LogName -eq 'Application') {
   foreach ($event in $global:Current.events) {
-   [pscustomobject]@{Message=$event.message;TimeCreated=[DateTime]::Parse($event.when).ToUniversalTime();RecordId=$event.record}
+   # ConvertFrom-Json may already return DateTime. Re-parsing its culture string
+   # would lose the UTC kind on hosts outside UTC (RV2 used a later timestamp).
+   $stamp=if ($event.when -is [DateTime]) { $event.when } else { [DateTime]::Parse($event.when,[Globalization.CultureInfo]::InvariantCulture,[Globalization.DateTimeStyles]::RoundtripKind) }
+   [pscustomobject]@{Message=$event.message;TimeCreated=$stamp.ToUniversalTime();RecordId=$event.record}
   }
  } elseif ($FilterHashtable.ProviderName -eq 'nvlddmkm') {
   for ($i=0;$i -lt $global:Current.system_count;$i++) { [pscustomobject]@{Message='synthetic reset'} }
@@ -124,12 +149,20 @@ function Get-WinEvent {
 $out=@{}
 foreach ($case in (Get-Content -LiteralPath $Cases -Raw | ConvertFrom-Json)) {
  $global:Current=$case
+ if ([Environment]::OSVersion.Platform -eq 'Win32NT') {
+  foreach ($relative in @('dumps/.rv2-hidden','wer/ReportQueue/.rv2-hidden')) {
+   $path=Join-Path (Split-Path $case.path) $relative
+   if ([IO.Directory]::Exists($path)) { [IO.File]::SetAttributes($path,([IO.File]::GetAttributes($path) -bor [IO.FileAttributes]::Hidden -bor [IO.FileAttributes]::System)) }
+  }
+ }
  if ($case.strict) { $out[$case.name]=@(& $case.path -Mode tdr -Since '2026-11-09T02:00:00Z' -Strict) }
  else { $out[$case.name]=@(& $case.path -Mode tdr -Since '2026-11-09T02:00:00Z') }
 }
 $out | ConvertTo-Json -Depth 8 -Compress
 ''')
-        done=subprocess.run([PWSH,'-NoProfile','-File',str(script),str(root/'cases.json')],capture_output=True,text=True,timeout=90)
+        env={'PATH':os.environ['PATH'],'XDG_CONFIG_HOME':str(root/'config'),'XDG_CACHE_HOME':str(root/'cache'),
+             'PSModuleAnalysisCachePath':str(root/'module-cache'),'POWERSHELL_TELEMETRY_OPTOUT':'1'}
+        done=subprocess.run([PWSH,'-NoProfile','-File',str(script),str(root/'cases.json')],capture_output=True,text=True,timeout=180,env=env)
         if done.returncode: raise AssertionError(done.stderr+done.stdout)
         cls.data=json.loads(done.stdout)
 
@@ -177,3 +210,51 @@ $out | ConvertTo-Json -Depth 8 -Compress
         self.assertEqual(self.counts('strict_unidentified')['livekernelevent193_unresolved'],'3')
     def test_other_reset_provider_still_gates(self): self.check('reset',1,3,total=1)
     def test_no_entries_are_explicit_zero_counts(self): self.check('empty',0,0)
+    def test_rv2_conflicting_fresh_non193_id_cannot_borrow_stale_path(self):
+        self.check('rv2_conflict_141',0,0,other=1,total=1)
+    def test_rv2_conflicting_fresh_193_id_still_gates_strict(self):
+        self.check('rv2_conflict_193',0,1,total=1)
+        self.assertEqual(self.counts('rv2_conflict_193')['livekernelevent193_unresolved'],'1')
+    def test_rv2_reverse_identity_conflict_is_not_evidence_of_staleness(self):
+        self.check('rv2_reverse_conflict_141',0,0,other=1,total=1)
+        self.check('rv2_reverse_conflict_193',0,1,total=1)
+    def test_rv2_consistent_fresh_and_old_controls(self):
+        self.check('rv2_current_141',0,0,other=1,total=1)
+        self.check('rv2_current_193',1,1,total=1)
+        self.check('rv2_old_141',0,0,stale=1)
+        self.check('rv2_old_193',0,0,stale=1)
+    def ratchet_cli(self,name,mode):
+        row=self.counts(name)
+        with tempfile.TemporaryDirectory() as tmp:
+            out=Path(tmp)/'ratchet.json'
+            run=subprocess.run(['python3',str(ROOT/'scripts/bench/box/lke193.py'),'check','--die','AD102',
+                '--count',row['livekernelevent193'],'--entries',row['livekernelevent193_entries'],
+                '--unresolved',row['livekernelevent193_unresolved'],'--resolved',row['livekernelevent193_resolved'],
+                '--mode',mode,'--out',str(out)],capture_output=True,text=True,timeout=20)
+            return run,json.loads(out.read_text())
+    def test_rv2_known_overrun_cannot_be_erased_by_one_unresolved_entry(self):
+        run,row=self.ratchet_cli('rv2_overrun_unknown','gate')
+        self.assertEqual((run.returncode,row['verdict'],row['resolved_lower_bound']),(1,'FAIL',2))
+    def test_rv2_resolved_overrun_control_fails_before_unknown_entries_are_added(self):
+        run,row=self.ratchet_cli('rv2_overrun','gate')
+        self.assertEqual((run.returncode,row['verdict'],row['count'],row['resolved_count']),(1,'FAIL',2,2))
+    def test_rv2_known_overrun_survives_repeated_unresolved_submissions(self):
+        run,row=self.ratchet_cli('rv2_overrun_repeated_unknown','gate')
+        self.assertEqual((run.returncode,row['verdict'],row['resolved_lower_bound']),(1,'FAIL',2))
+    def test_rv2_known_overrun_with_unresolved_entries_remains_report_only(self):
+        run,row=self.ratchet_cli('rv2_overrun_unknown','report')
+        self.assertEqual((run.returncode,row['verdict']),(0,'WARN'))
+    def test_rv2_entirely_unresolved_reports_do_not_fabricate_an_overrun(self):
+        run,row=self.ratchet_cli('pruned','gate')
+        self.assertEqual((run.returncode,row['verdict'],row['resolved_lower_bound']),(0,'UNKNOWN',0))
+    def test_rv2_multiple_missing_reports_do_not_prove_a_fresh_overrun(self):
+        run,row=self.ratchet_cli('rv2_all_unknown','gate')
+        self.assertEqual((run.returncode,row['verdict'],row['resolved_lower_bound']),(0,'UNKNOWN',0))
+    def test_rv2_hidden_old_non193_report_keeps_stale_exclusion(self):
+        self.check('rv2_hidden_old_141',0,0,stale=1)
+    def test_rv2_hidden_old_193_report_keeps_strict_stale_exclusion(self):
+        self.check('rv2_hidden_old_193',0,0,stale=1)
+    def test_rv2_hidden_livedump_is_in_the_timeline(self):
+        self.assertTrue(any(line.startswith('GATE_LIVEDUMP ') and 'extra.dmp' in line for line in self.data['empty']))
+    def test_rv2_hidden_livedump_size_is_reported(self):
+        self.assertTrue(any('extra.dmp bytes=9' in line for line in self.data['empty']))

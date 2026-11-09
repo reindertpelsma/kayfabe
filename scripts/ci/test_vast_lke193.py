@@ -98,7 +98,22 @@ class Ratchet(unittest.TestCase):
     def test_unresolved_identity_cannot_fabricate_a_below_limit_pass(self):
         self.assertEqual(L.decide('AD102',0,entries=3,unresolved=3)['verdict'],'UNKNOWN')
     def test_unresolved_report_time_cannot_fabricate_a_gate_failure(self):
-        self.assertEqual(L.decide('TU106',3,mode='gate',entries=4,unresolved=1)['verdict'],'UNKNOWN')
+        self.assertEqual(L.decide('TU106',3,mode='gate',entries=4,unresolved=3)['verdict'],'UNKNOWN')
+    def test_rv2_legacy_cli_lower_bound_preserves_known_ad102_overrun(self):
+        self.assertEqual(L.decide('AD102',3,entries=3,unresolved=1,mode='gate')['verdict'],'FAIL')
+    def test_rv2_legacy_cli_lower_bound_preserves_known_turing_overrun(self):
+        self.assertEqual(L.decide('TU106',3,entries=3,unresolved=1,mode='gate')['verdict'],'FAIL')
+    def test_rv2_exact_resolved_count_survives_many_unknown_entries(self):
+        row=L.decide('AD102',3,entries=5,unresolved=3,resolved=2,mode='gate')
+        self.assertEqual((row['verdict'],row['resolved_count'],row['resolved_lower_bound']),('FAIL',2,2))
+    def test_rv2_resolved_zero_cannot_fabricate_a_failure(self):
+        self.assertEqual(L.decide('AD102',1,entries=3,unresolved=3,resolved=0,mode='gate')['verdict'],'UNKNOWN')
+    def test_rv2_resolved_count_cannot_exceed_distinct_count(self):
+        with self.assertRaises(ValueError): L.decide('AD102',1,resolved=2)
+    def test_rv2_resolved_count_cannot_be_negative(self):
+        with self.assertRaises(ValueError): L.decide('TU106',1,resolved=-1)
+    def test_rv2_resolved_count_cannot_contradict_the_legacy_lower_bound(self):
+        with self.assertRaises(ValueError): L.decide('TU106',3,unresolved=1,resolved=1)
 
 class Identity(unittest.TestCase):
     def probe(self, arch, impl):
@@ -169,6 +184,10 @@ class GuestDecode(unittest.TestCase):
         (root/'dumps/root.dmp').write_bytes(real)
         nested=root/'dumps/OTHER/nested'; nested.mkdir(parents=True)
         (nested/'other-name.dmp').write_bytes(real)
+        hidden=root/'dumps/.rv2-hidden'; hidden.mkdir()
+        (hidden/'extra.dmp').write_bytes(real)
+        hidden_report=archive/'.rv2-report'; hidden_report.mkdir()
+        (hidden_report/'Report.wer').write_text(real_wer,encoding='utf-16')
         for store in ('ReportArchive','ReportQueue'):
             directory=root/'wer'/store/'real'; directory.mkdir(parents=True)
             (directory/'Report.wer').write_text(real_wer,encoding='utf-16')
@@ -202,10 +221,18 @@ $out['lines']=@(Write-LkeWerLine ([IO.File]::ReadAllText((Join-Path $Root 'Repor
 $out['header_lines']=@(Write-LkeDumpHeader (Join-Path $Root 'good.dmp'))
 $out['bad_lines']=@(Write-LkeDumpHeader (Join-Path $Root 'bad_first.dmp'))
 function Get-WinEvent { @() }
+if ([Environment]::OSVersion.Platform -eq 'Win32NT') {
+ foreach ($relative in @('dumps/.rv2-hidden','wer/ReportArchive/.rv2-report')) {
+  $path=Join-Path $Root $relative
+  [IO.File]::SetAttributes($path,([IO.File]::GetAttributes($path) -bor [IO.FileAttributes]::Hidden -bor [IO.FileAttributes]::System))
+ }
+}
 $out['integration']=@(& (Join-Path $Root 'gate_state.ps1') -Mode wer)
 $out | ConvertTo-Json -Depth 8 -Compress
 ''')
-        done=subprocess.run([PWSH,'-NoProfile','-File',str(script),str(PS),str(root)],capture_output=True,text=True,timeout=60)
+        env={'PATH':os.environ['PATH'],'XDG_CONFIG_HOME':str(root/'config'),'XDG_CACHE_HOME':str(root/'cache'),
+             'PSModuleAnalysisCachePath':str(root/'module-cache'),'POWERSHELL_TELEMETRY_OPTOUT':'1'}
+        done=subprocess.run([PWSH,'-NoProfile','-File',str(script),str(PS),str(root)],capture_output=True,text=True,timeout=120,env=env)
         if done.returncode: raise AssertionError(done.stderr+done.stdout)
         cls.data=json.loads(done.stdout)
     @classmethod
@@ -224,7 +251,7 @@ $out | ConvertTo-Json -Depth 8 -Compress
     def test_collector_decodes_nested_reports(self):
         self.assertTrue(any(line.startswith('GATE_LKE report="deeper"') for line in self.data['integration']))
     def test_collector_does_not_silently_lose_a_report(self):
-        self.assertEqual(len([line for line in self.data['integration'] if line.startswith('GATE_LKE report=')]),5)
+        self.assertEqual(len([line for line in self.data['integration'] if line.startswith('GATE_LKE report=')]),6)
     def test_collector_also_decodes_non_live_reports(self):
         self.assertTrue(any('P1="ordinary"' in line for line in self.data['integration']))
     def test_collector_reads_watchdog_header_in_place(self):
@@ -249,7 +276,17 @@ $out | ConvertTo-Json -Depth 8 -Compress
     def test_collector_reads_both_wer_stores(self):
         self.assertEqual(sum('file="same-name.dmp"' in line for line in self.data['integration']),2)
     def test_collector_header_count_includes_all_locations(self):
-        self.assertIn('GATE_LKE_HEADERS files=5',self.data['integration'])
+        self.assertIn('GATE_LKE_HEADERS files=6',self.data['integration'])
+    def test_rv2_hidden_child_dump_header_is_discovered(self):
+        self.assertTrue(any('file="extra.dmp"' in line and 'bytes_read=4096' in line for line in self.data['integration']))
+    def test_rv2_hidden_child_is_in_header_total_without_unbounded_reads(self):
+        self.assertIn('GATE_LKE_HEADERS files=6',self.data['integration'])
+        self.assertTrue(all('bytes_read=4096' in line for line in self.data['integration'] if line.startswith('GATE_LKE_HEADER ')))
+    def test_rv2_hidden_report_is_decoded(self):
+        self.assertTrue(any(line.startswith('GATE_LKE report=".rv2-report"') for line in self.data['integration']))
+    def test_rv2_hidden_report_parameters_remain_raw(self):
+        row=next(line for line in self.data['integration'] if line.startswith('GATE_LKE report=".rv2-report"'))
+        self.assertIn('P1="193" P2="815" P3="2"',row)
     def test_bad_second_layout_has_no_guessed_code(self): self.assertNotIn('bugcheck=',self.data['bad_second_lines'][0])
     def test_bad_second_layout_is_refused(self): self.assertIn('REFUSED',self.data['bad_second_lines'][0])
     def test_bugcheck_is_numeric_0x193(self): self.assertEqual(self.data['good']['bugcheck'],'0x00000193')
@@ -275,7 +312,7 @@ $out | ConvertTo-Json -Depth 8 -Compress
 
 class GateIntegration(unittest.TestCase):
     gate=ROOT / 'scripts/bench/box/windows_gate.sh'
-    def run_ratchet(self, die, count, mode=None, entries=None):
+    def run_ratchet(self, die, count, mode=None, entries=None, unresolved=0, resolved=None):
         text=self.gate.read_text(); start=text.index('lke_ratchet() {'); end=text.index('\n}\n',start)+3
         with tempfile.TemporaryDirectory() as tmp:
             script='\n'.join(['SOURCE='+str(ROOT), 'EV='+tmp, 'LKE_DIE='+die, 'LKE193='+str(count),
@@ -284,7 +321,8 @@ class GateIntegration(unittest.TestCase):
             env={'PATH':os.environ['PATH']}
             if mode is not None: env['KF_WINGATE_LKE_RATCHET']=mode
             if entries is not None:
-                env['LKE193_ENTRIES']=str(entries); env['LKE193_UNRESOLVED']='0'
+                env['LKE193_ENTRIES']=str(entries); env['LKE193_UNRESOLVED']=str(unresolved)
+            if resolved is not None: env['LKE193_RESOLVED']=str(resolved)
             done=subprocess.run(['bash','-c',script],env=env,capture_output=True,text=True,timeout=20)
             record=json.loads(Path(tmp,'lke193_ratchet.json').read_text())
         return done,record
@@ -312,7 +350,7 @@ class GateIntegration(unittest.TestCase):
     def test_ad102_one_report_three_entries_does_not_trip_gate_mode(self):
         done,row=self.run_ratchet('AD102',1,'gate',entries=3)
         self.assertEqual((done.returncode,row['verdict'],row['entries']),(0,'PASS',3))
-        self.assertIn('GATE_LKE_COUNTS reports=1 entries=3 unresolved=0 unit=distinct_reports',done.stdout)
+        self.assertIn('GATE_LKE_COUNTS reports=1 entries=3 unresolved=0 resolved=- unit=distinct_reports',done.stdout)
     def test_turing_one_report_three_entries_does_not_trip_gate_mode(self):
         done,row=self.run_ratchet('TU106',1,'gate',entries=3)
         self.assertEqual((done.returncode,row['count'],row['entries']),(0,1,3))
@@ -324,6 +362,12 @@ class GateIntegration(unittest.TestCase):
         done,row=self.run_ratchet('GB206',50)
         self.assertEqual(done.returncode,0); self.assertEqual(row['verdict'],'UNKNOWN')
         self.assertIn('verdict=UNKNOWN',done.stdout)
+    def test_rv2_ad102_resolved_overrun_reaches_gate_helper(self):
+        done,row=self.run_ratchet('AD102',3,'gate',entries=5,unresolved=3,resolved=2)
+        self.assertEqual((done.returncode,row['verdict'],row['resolved_lower_bound']),(1,'FAIL',2))
+    def test_rv2_turing_resolved_overrun_reaches_gate_helper(self):
+        done,row=self.run_ratchet('TU106',3,'gate',entries=5,unresolved=3,resolved=2)
+        self.assertEqual((done.returncode,row['verdict'],row['resolved_lower_bound']),(1,'FAIL',2))
     def test_existing_strict_mode_and_other_reset_rule_remain(self):
         text=self.gate.read_text()
         self.assertIn('strict="-Strict"',text)
@@ -342,7 +386,7 @@ class GateIntegration(unittest.TestCase):
 
 class PostIdleRules(unittest.TestCase):
     """Execute the real post-idle shell checks against synthetic state/probe outputs."""
-    def run_post_idle(self, *, die='AD102', count=3, strict=False, other=0, probe_bad=''):
+    def run_post_idle(self, *, die='AD102', count=3, strict=False, other=0, probe_bad='', entries=None, unresolved=0, resolved=None, mode='report'):
         text=(ROOT/'scripts/bench/box/windows_gate.sh').read_text()
         start=text.index('lke_ratchet() {'); end=text.index('\n}\n',start)+3
         post=text[text.index('stage_begin post_idle\n'):text.index('stage_begin collect_stop\n')]
@@ -351,17 +395,18 @@ class PostIdleRules(unittest.TestCase):
             script='\n'.join([
                 'SOURCE='+str(ROOT), 'EV='+tmp, 'WV='+str(fake), 'TAG=synthetic', 'ENABLE_UTC=synthetic',
                 'LKE_DIE='+die, 'COUNT='+str(count), 'OTHER='+str(other), 'BAD='+probe_bad,
+                'RAW='+str(count if entries is None else entries), 'UNRES='+str(unresolved), 'RES='+str(count if resolved is None else resolved),
                 'say() { echo "$*"; }', 'stage_begin() { :; }', 'stage_end() { :; }',
                 'smi() { return 0; }', 'probes_round() { PROBE_BAD=$BAD; }', 'wer_timeline() { :; }',
                 'fail_op() { echo OPERATOR; exit 3; }', 'fail_guest() { echo GUEST_FAIL; exit 1; }',
                 '''gps() {
                     if [[ "$*" == *"-Mode tdr"* ]]; then
                         total=$OTHER
-                        for arg in "$@"; do [ "$arg" != -Strict ] || total=$((total+COUNT)); done
-                        echo "GATE_TDR livekernelevent193=$COUNT livekernelevent_stale=0 livekernelevent_other=$OTHER total=$total"
+                        for arg in "$@"; do [ "$arg" != -Strict ] || total=$((total+RAW)); done
+                        echo "GATE_TDR livekernelevent193=$COUNT livekernelevent193_entries=$RAW livekernelevent193_resolved=$RES livekernelevent193_unresolved=$UNRES livekernelevent_stale=0 livekernelevent_other=$OTHER total=$total"
                     else echo 'GATE_DISPLAY code=0 '; fi
                 }''', text[start:end], post, 'echo POST_IDLE_PASSED'])
-            env={'PATH':os.environ['PATH'],'KF_WINGATE_STRICT_LKE':'1' if strict else '0'}
+            env={'PATH':os.environ['PATH'],'KF_WINGATE_STRICT_LKE':'1' if strict else '0','KF_WINGATE_LKE_RATCHET':mode}
             return subprocess.run(['bash','-c',script],env=env,capture_output=True,text=True,timeout=20)
 
     def test_default_ad102_excess_passes_only_zero_reset_checks(self):
@@ -393,6 +438,14 @@ class PostIdleRules(unittest.TestCase):
     def test_d3d_probe_failure_still_fails(self):
         done=self.run_post_idle(probe_bad='d3d11')
         self.assertEqual(done.returncode,1,done.stdout+done.stderr)
+    def test_rv2_post_idle_ad102_overrun_survives_unresolved_entries(self):
+        done=self.run_post_idle(count=3,entries=5,unresolved=3,resolved=2,mode='gate')
+        self.assertEqual(done.returncode,1,done.stdout+done.stderr)
+        self.assertIn('verdict=FAIL',done.stdout)
+    def test_rv2_post_idle_turing_overrun_survives_unresolved_entries(self):
+        done=self.run_post_idle(die='TU106',count=3,entries=5,unresolved=3,resolved=2,mode='gate')
+        self.assertEqual(done.returncode,1,done.stdout+done.stderr)
+        self.assertIn('verdict=FAIL',done.stdout)
 
 class ReportFields(unittest.TestCase):
     @classmethod
@@ -436,5 +489,12 @@ class ReportFields(unittest.TestCase):
     def test_malformed_ratchet_is_not_parsed(self):
         row=self.R.build_report(['GATE_LKE_RATCHET die=../AD102 count=3 max=2 verdict=PASS'],{})['windows']
         self.assertIsNone(row['live_dumps_193_ratchet'])
+    def test_rv2_resolved_report_count_survives_in_a_failure_report(self):
+        row=self.R.build_report(['GATE_LKE_COUNTS reports=3 entries=3 unresolved=1 resolved=2 unit=distinct_reports',
+            'GATE_LKE_RATCHET die=AD102 count=3 max=1 verdict=FAIL'],{})['windows']
+        self.assertEqual((row['live_dumps_193_resolved'],row['known_live_dumps_193'],row['live_dumps_193_ratchet']),(2,3,'FAIL'))
+    def test_rv2_resolved_zero_is_not_missing(self):
+        row=self.R.build_report(['GATE_LKE_COUNTS reports=1 entries=3 unresolved=3 resolved=0 unit=distinct_reports'],{})['windows']
+        self.assertEqual(row['live_dumps_193_resolved'],0)
 
 if __name__=='__main__': unittest.main()

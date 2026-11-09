@@ -20,8 +20,8 @@ GATE='scripts/bench/box/windows_gate.sh'
 STATE='scripts/bench/windows/gate_state.ps1'
 RR='scripts/ci/vast_run_report.py'
 CASES=[
- ('equal-count-regresses',PY,'count > maximum','count >= maximum',1),
- ('excess-count-accepted',PY,"(excess if count > maximum else 'PASS')","'PASS'",1),
+ ('equal-count-regresses',PY,'lower > maximum','lower >= maximum',1),
+ ('excess-count-accepted',PY,'verdict = excess',"verdict = 'PASS'",1),
  ('unknown-borrows-ad102',PY,'row = table.get(die)',"row = table.get(die, table['AD102'])",1),
  ('count-validation-removed',PY,"if type(count) is not int or not 0 <= count <= 0x7fffffff:\n        raise ValueError('missing or invalid live dump count')",'if False:\n        pass',1),
  ('maximum-validation-removed',PY,"if type(count) is not int or not 0 <= count <= 0x7fffffff:\n            raise ValueError('invalid max_count')",'if False:\n            pass',1),
@@ -45,7 +45,7 @@ CASES=[
  ('wer-values-guessed-hex',PS,'$row[$name] = $values[$valueKey]',"$row[$name] = '0x' + $values[$valueKey]",1),
  ('wer-time-omitted',PS,"if ($values.ContainsKey('EventTime'))",'if ($false)',1),
  ('wer-bucket-omitted',PS,"@('Response.BucketId', 'BucketId', 'Response.LegacyBucketId')",'@()',1),
- ('nested-reports-hidden',STATE,"-Filter 'Report.wer' -File -Recurse","-Filter 'Report.wer' -File",2),
+ ('nested-reports-hidden',STATE,"-Filter 'Report.wer' -Force -File -Recurse","-Filter 'Report.wer' -Force -File",2),
  ('bad-header-guessed',PS,"GATE_LKE_HEADER status=REFUSED reason=","GATE_LKE_HEADER bugcheck=0x00000193 status=OK reason=",1),
  ('ratchet-failure-does-not-stop-gate',GATE,'[ "$rc" != 1 ] || fail_guest "LiveKernelEvent 193', '[ "$rc" != 1 ] || true "LiveKernelEvent 193',1),
  ('default-ratchet-gates-again',GATE,'${KF_WINGATE_LKE_RATCHET:-report}','${KF_WINGATE_LKE_RATCHET:-gate}',1),
@@ -75,14 +75,31 @@ CASES=[
  ('archive-dump-headers-hidden',STATE,", (Join-Path $wer 'ReportArchive')",'',1),
  ('queue-dump-headers-hidden',STATE,", (Join-Path $wer 'ReportQueue')",'',1),
  ('ratchet-entry-unit-admitted',PY,"if row.get('count_unit') != 'distinct_reports':",'if False:',1),
- ('raw-entries-compared-to-report-limit',PY,'count > maximum','(entries if entries is not None else count) > maximum',1),
+ ('raw-entries-compared-to-report-limit',PY,'lower > maximum','(entries if entries is not None else lower) > maximum',1),
  ('raw-count-log-line-dropped',PY,"        print('GATE_LKE_COUNTS reports=","        if False: print('GATE_LKE_COUNTS reports=",1),
  ('raw-count-report-fields-dropped',RR,'elif head == "GATE_LKE_COUNTS":','elif head == "NEVER_LKE_COUNTS":',1),
  ('raw-entry-validation-removed',PY,'if value is not None and (type(value) is not int or not 0 <= value <= 0x7fffffff):','if False:',1),
  ('inconsistent-counts-accepted',PY,'if entries is not None and (entries < count or (unresolved is not None and unresolved > entries)):','if False:',1),
- ('unresolved-comparison-invented',PY,"row is None or unresolved","row is None",1),
+ ('unresolved-comparison-invented',PY,'elif unresolved or lower < count:','elif False:',1),
  ('explicit-identity-overridden-by-signature',STATE,'$signature -and -not $id -and -not $directory -and (Is-193 $e)','$signature',1),
  ('strict-counts-reports-instead-of-entries',STATE,'if ($Strict) { $total += $lke193Entries }','if ($Strict) { $total += $lke193 }',1),
+
+ ('rv2-explicit-identity-conflict-ignored',STATE,"if ($id -and @($found | Where-Object { $_.id -ne $id }).Count)",'if ($false)',1),
+ ('rv2-consistent-identities-rejected',STATE,'$_.id -ne $id','$_.id -eq $id',1),
+ ('rv2-unresolved-erases-proven-overrun',PY,'elif lower > maximum:','elif not unresolved and lower > maximum:',1),
+ ('rv2-exact-resolved-lower-bound-ignored',PY,'lower = legacy_lower if resolved is None else resolved','lower = legacy_lower',1),
+ ('rv2-unknown-reports-treated-as-fresh',PY,'lower = legacy_lower if resolved is None else resolved','lower = count',1),
+ ('rv2-resolved-bounds-accepted',PY,'if resolved is not None and not legacy_lower <= resolved <= count:','if False:',1),
+ ('rv2-resolved-reports-not-recorded',STATE,'$lke193Resolved[$key] = $true','$null = $key',1),
+ ('rv2-missing-report-time-counted-as-resolved',STATE,'if ($key -and ($null -ne $rt))','if ($key)',1),
+ ('rv2-resolved-count-not-forwarded',GATE,'--resolved "${LKE193_RESOLVED:--}"','--resolved -',1),
+ ('rv2-resolved-count-not-collected',GATE,'LKE193_RESOLVED=$(sed -n','LKE193_RESOLVED="" #$(sed -n',1),
+ ('rv2-resolved-count-not-in-report',RR,'self.windows["live_dumps_193_resolved"] = None if m[4] in (None, "-") else int(m[4])','pass',1),
+ ('rv2-hidden-dump-headers-omitted',STATE,"-Filter '*.dmp' -Force -File -Recurse","-Filter '*.dmp' -File -Recurse",1),
+ ('rv2-hidden-wer-inventory-omitted',STATE,"foreach ($report in Get-ChildItem $root -Filter 'Report.wer' -Force","foreach ($report in Get-ChildItem $root -Filter 'Report.wer'",1),
+ ('rv2-hidden-tdr-reports-omitted',STATE,"foreach ($f in Get-ChildItem $root -Filter 'Report.wer' -Force","foreach ($f in Get-ChildItem $root -Filter 'Report.wer'",1),
+ ('rv2-hidden-livedump-timeline-omitted',STATE,'Get-ChildItem C:\\Windows\\LiveKernelReports -Force -Recurse','Get-ChildItem C:\\Windows\\LiveKernelReports -Recurse',1),
+
 ]
 FILES=[PY,PS,GATE,RR,'scripts/ci/test_vast_lke193.py','scripts/ci/vast_report.py','scripts/ci/app_policy.py',
  'scripts/ci/test_vast_lke193_counts.py',
@@ -101,11 +118,12 @@ def cases(suite):
 if sys.argv[1]=='fast':
  s=unittest.TestSuite(t for t in cases(s) if t.__class__.__name__ not in ('GuestDecode','DistinctReports'))
 r=unittest.TextTestRunner(stream=io.StringIO()).run(s)
-print(json.dumps({'tests':r.testsRun,'skips':len(r.skipped),'killers':sorted(set(getattr(t,'test_case',t).id() for t,_ in r.failures+r.errors))}))
+failed=[getattr(t,'test_case',t) for t,_ in r.failures+r.errors]
+print(json.dumps({'tests':r.testsRun,'skips':len(r.skipped),'killers':sorted(set(t.id() for t in failed if isinstance(t,unittest.TestCase))),'fixture_errors':sorted(set(t.id() for t in failed if not isinstance(t,unittest.TestCase)))}))
 '''
 
 def run(root, powershell=True):
- p=subprocess.run([sys.executable,'-c',COLLECT,'all' if powershell else 'fast'],cwd=root/'scripts/ci',capture_output=True,text=True,timeout=180,
+ p=subprocess.run([sys.executable,'-c',COLLECT,'all' if powershell else 'fast'],cwd=root/'scripts/ci',capture_output=True,text=True,timeout=360,
                   env={'PATH':os.environ['PATH'],'PYTHONDONTWRITEBYTECODE':'1'})
  if p.returncode: raise RuntimeError('harness failed: '+p.stderr[-500:])
  return json.loads(p.stdout.splitlines()[-1])
@@ -117,7 +135,7 @@ def main():
   for name in FILES:
    path=root/name; path.parent.mkdir(parents=True,exist_ok=True); shutil.copyfile(ROOT/name,path)
   baseline=run(root)
-  if baseline['killers'] or baseline['skips']:
+  if baseline['killers'] or baseline['skips'] or baseline['fixture_errors']:
    print('BASELINE NOT GREEN: '+str(baseline)); return 1
   rows=[]
   for name,file,old,new,count in CASES:
@@ -126,7 +144,7 @@ def main():
    # Python/report/shell mutations cannot change the PowerShell fixture modules.
    # Always run the complete baseline and the complete decoder/counter mutations.
    path.write_text(source.replace(old,new)); result=run(root,powershell=file in (PS,STATE)); path.write_text(source)
-   row=dict(mutant=name,tests=result['tests'],count=len(result['killers']),killers=result['killers']); rows.append(row)
+   row=dict(mutant=name,tests=result['tests'],count=len(result['killers']),killers=result['killers'],fixture_errors=result['fixture_errors']); rows.append(row)
    print(name+': '+str(row['count'])+' killers',file=sys.stderr,flush=True)
   print(json.dumps(dict(tests=baseline['tests'],cases=rows),indent=2))
   return int(any(row['count']<2 for row in rows))
