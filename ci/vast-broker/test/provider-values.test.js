@@ -110,6 +110,33 @@ for (const restart of [false, true])
     );
   });
 
+for (const state of ['error', 'exited', 'stopped'])
+  for (const restart of [false, true])
+    test('R18 F1 continuous fatal confirms across created/' + state + ' ' + restart, async () => {
+      const h = await setup({ HARD_RUNTIME_MINUTES: '180', BOOT_LIMIT_MINUTES: '75' });
+      assert.equal((await h.call()).status, 200);
+      const firstAt = h.time.value + 1000;
+      let record;
+      for (let i = 0; i < 4; i++) {
+        Object.assign(h.cloud.instances.get('900'), {
+          actual_status: i % 2 ? state : 'created',
+          status_msg: 'GPU error, unable to start instance',
+        });
+        if (restart) h.restart();
+        h.time.value = firstAt + i * 30000;
+        await h.service.sweep();
+        record = await h.storage.get('record:123-1');
+        if (i < 3) assert.equal(record.closed, null, 'must wait the full 90-second window');
+      }
+      // Clean up before the regression assertion, including when checking the old behavior.
+      await h.call('/stop/123-1');
+      assert.equal(h.cloud.instances.has('900'), false);
+      assert.equal(record.closed, 'PROVIDER_FAULT', 'unchanged recognized fatal confirms at 90s');
+      assert.equal(record.ended, firstAt + 90000);
+      assert.equal(record.bootFailure.first, firstAt);
+      assert.equal(h.cloud.deletes.filter((id) => String(id) === '900').length, 1);
+    });
+
 function rng(seed) {
   return () => {
     seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
@@ -312,6 +339,9 @@ const pending = [
   'starting',
   'offline',
   'running',
+  'error',
+  'exited',
+  'stopped',
   null,
   undefined,
 ];

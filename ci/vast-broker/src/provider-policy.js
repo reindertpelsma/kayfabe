@@ -62,10 +62,7 @@ const BOOT_FAILURE_STATES = new Set([
 ]);
 
 function bootState(state) {
-  return state == null ||
-    ['created', 'loading', 'starting', 'scheduling', 'offline', 'null', 'running'].includes(state)
-    ? 'pending'
-    : state;
+  return state == null || BOOT_FAILURE_STATES.has(state) ? 'pending' : state;
 }
 
 export function orderedBootFailure(text, id, policy) {

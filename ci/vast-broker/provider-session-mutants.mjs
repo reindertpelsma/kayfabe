@@ -15,6 +15,15 @@ const broker = fileURLToPath(new URL('.', import.meta.url)),
   repo = fileURLToPath(new URL('../..', import.meta.url));
 const scratch = mkdtempSync(join(tmpdir(), 'kf-J2-provider-'));
 const cases = [
+  ...['error', 'exited', 'stopped'].map((state) => ({
+    name: 'review recognized ' + state + ' state resets continuous fatal',
+    file: 'src/provider-policy.js',
+    before: 'state == null || BOOT_FAILURE_STATES.has(state)',
+    after: "state == null || (state !== '" + state + "' && BOOT_FAILURE_STATES.has(state))",
+    pattern: '^R18 F1 continuous fatal confirms across created/' + state + ' ',
+    test: 'test/provider-values.test.js',
+    all: false,
+  })),
   {
     name: 'values masking expands text after the log cap',
     file: 'src/sanitize.js',

@@ -14,12 +14,15 @@ KVM Domain-not-found signature. The latter requires both the QEMU error marker
 and the matching instance id in newly observed output. Image pull progress, checksum verification, GPU
 preparation, daemon retries and other unmatched error text do not qualify.
 CODE READ: before the first box report, `created`, `loading`, `starting`,
-`scheduling`, `offline`, null and `running` are one pending-state class. Changing
-between those states does not reset an unchanged current fatal status or log
+`scheduling`, `offline`, null, `running`, `error`, `exited` and `stopped` use the
+same class for fatal confirmation. Changing between those states does not reset
+an unchanged current fatal status or log
 witness. `running` alone is not healthy evidence. A box report, or explicit recovery
 progress from the data table `recoverySignatures` (`Domain successfully started`,
 `GPUs ready` initially), cancels the witness. Ordinary retry/preparation text does
 not override a current fatal status. A changed status message starts a new window.
+CODE READ: this grouping applies only to recognized fatal evidence; it does not
+change the ordinary pending-status checks or attribute unmatched errors to hardware.
 CODE READ: boot log checks use only a new suffix, tracked with a bounded hashed
 cursor; retained text is never rescanned. An unchanged log plus the same pending
 class and status message preserves the frozen-failure witness. New progress,
@@ -196,7 +199,9 @@ against the mocked Vast transport. Every simulated rental checks teardown, spend
 report boundaries, attempt/time limits, pin/penalty ranking, receipts and output
 privacy. `test/provider-worst.test.js` drives the actual Worker paths through named
 outages, ambiguous/foreign creates, fatal flaps, cap exhaustion, concurrency and
-restart cases. `test/provider-values.test.js` adds the six RV2 runtime regressions,
+restart cases. `test/provider-values.test.js` covers the RV2 runtime regressions,
+including recognized failure-state flaps at 30-second polls with a 90-second
+confirmation window and a 75-minute boot limit,
 1,024 fixed random command/log shapes through JS and both Python outputs, pending-state
 permutations, message-change/recovery controls and bounded replacement history.
 `test/provider-rules.test.js` contains independent controls;
