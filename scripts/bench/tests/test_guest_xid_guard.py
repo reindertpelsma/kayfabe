@@ -275,6 +275,10 @@ class NativeExactFiveTests(unittest.TestCase):
     def check_four(self, folder, prefix, journal):
         defer = (folder / (prefix + '_defer-liveness.log')).read_text()
         missing = (folder / (prefix + '_missing-page-fault.log')).read_text()
+        # Synthetic exec attestations keep this test about the four-fault count.
+        pids = (89396, 89433) if '1ce11cf4' in prefix else (90242, 90282)
+        defer = f'KF_NATIVE_EXEC pid={pids[0]} name=kayfabe-rm-ladd\n' + defer
+        missing = f'KF_NATIVE_EXEC pid={pids[1]} name=kayfabe-rm-ladd\n' + missing
         defer = defer.replace('DL test copy       = Dead', 'DL test copy       = Live')
         lines = list(G.xid_lines(journal)); del lines[2]
         with self.assertRaises(G.GuardRefused):
