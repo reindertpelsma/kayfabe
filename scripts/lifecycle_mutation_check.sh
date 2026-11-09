@@ -85,8 +85,8 @@ source_mutant() { # name
                     self.again = true;
                     return self.idle_step(false);
 ' ;;
-  core_skip_validation) # an entry inspect_entry refused is forwarded anyway
-    m $T 'let desc = match inspect_entry(self.raw, io.max_entry_bytes()) {' 'let desc = match inspect_entry(self.raw, io.max_entry_bytes())
+  core_skip_validation) # bypass hardware-format refusal; Pointer has no copy budget
+    m $T 'let desc = match inspect_format(self.raw) {' 'let desc = match inspect_format(self.raw)
             .or(Ok::<Source, crate::user_stream::Refusal>(Source::Nop))
         {' ;;
   core_bound_without_datum) # a SET_OBJECT header (datum unscanned) counts as the binding
