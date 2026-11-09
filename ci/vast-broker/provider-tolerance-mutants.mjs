@@ -145,8 +145,8 @@ const MUTANTS = [
     [
       [
         I,
-        "['created', 'loading', 'starting', 'offline'].includes(i.actual_status)",
-        "['created', 'loading', 'starting'].includes(i.actual_status)",
+        "['created', 'loading', 'starting', 'scheduling', 'offline'].includes(i.actual_status)",
+        "['created', 'loading', 'starting', 'scheduling'].includes(i.actual_status)",
       ],
     ],
   ],
@@ -255,8 +255,8 @@ const MUTANTS = [
     [
       [
         I,
-        '[...secrets, record.id, record.label, record.nonce],\n      { tail: false },',
-        '[...secrets, record.nonce],\n      { tail: false },',
+        '[...secrets, record.id, record.label, record.nonce].flatMap',
+        '[...secrets, record.nonce].flatMap',
       ],
     ],
   ],

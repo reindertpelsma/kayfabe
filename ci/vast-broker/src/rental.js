@@ -57,11 +57,12 @@ function redactPortFields(text) {
   let out = '',
     through = 0;
   const selectors =
-    /(?<![A-Za-z0-9])(?:--(?:ssh-)?port\b|-o|-[pP]|\b(?:ssh[_ -]?(?:port|host)|port)\b)/gi;
+    /(?<![A-Za-z0-9])(?:--(?:ssh-)?port\b|-[A-Za-z0-9]*?[opP]|\b(?:ssh[_ -]?(?:port|host)|port)\b)/gi;
   for (const match of text.matchAll(selectors)) {
     if (match.index < through) continue;
     let start = match.index + match[0].length;
-    const option = match[0].toLowerCase();
+    let option = match[0].toLowerCase();
+    if (option.startsWith('-') && !option.startsWith('--')) option = '-' + option.at(-1);
     if (option === '-o') {
       start = portSeparators(text, start);
       if (text.slice(start, start + 4).toLowerCase() !== 'port') continue;

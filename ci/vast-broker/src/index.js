@@ -47,6 +47,8 @@ import {
   attemptReceipt,
 } from './provider-policy.js';
 import { ipPrefix, rentalLine, redactEndpoints } from './rental.js';
+import { mergeEndpointValues, redactEndpointValues } from './endpoint-values.js';
+import { redactPublic, EXACT_MIN } from './publiclog.js';
 // prettier-ignore
 import {EVIDENCE_MAX_BYTES,EVIDENCE_MAX_INFLIGHT,evidenceEnabled,evidenceLength,evidenceReservation,storeEvidence} from './evidence.js';
 // prettier-ignore
@@ -139,12 +141,15 @@ export function createService({
     env.ROW_TAG_KEY,
     ...endpointSecrets(env),
   ].filter(Boolean);
+  const publicSecrets = secrets.filter(
+    (value) => typeof value === 'string' && value.length >= EXACT_MIN,
+  );
   // Newly created real provider rows can omit/null actual_status. This grants
   // only the existing provisioning window, never callback/liveness authority.
   // `offline` flaps on a booting instance (measured 2026-11-06, vanish hunt) and is treated like `created`.
   const pendingInstance = (i) =>
     i.actual_status == null ||
-    ['created', 'loading', 'starting', 'offline'].includes(i.actual_status);
+    ['created', 'loading', 'starting', 'scheduling', 'offline'].includes(i.actual_status);
   // The provider's raw status word, restricted to [a-z_]{1,16}; anything else is `unknown`.
   const providerWord = (i) => {
     const a = i?.actual_status;
@@ -157,20 +162,32 @@ export function createService({
   // in two). One line, at most DEFAULTS.providerMessageChars characters.
   const MESSAGE_INPUT_CHARS = 8192;
   const providerMessage = (record, i) => {
-    const m = redactEndpoints(typeof i?.status_msg === 'string' ? i.status_msg : '');
+    const redactions = [...secrets, record.id, record.label, record.nonce].flatMap((value) =>
+      value ? [value, redactEndpointValues(value, record.endpointRedactions)] : [],
+    );
+    const m = redactPublic(
+      typeof i?.status_msg === 'string' ? i.status_msg : '',
+      [...publicSecrets, record.nonce],
+      record.endpointRedactions,
+    );
     if (typeof m !== 'string' || m === '') return '-';
     const cut = m.length > MESSAGE_INPUT_CHARS;
     let text = sanitizeBoxText(
       new TextEncoder().encode(m.slice(0, MESSAGE_INPUT_CHARS)),
       16384,
-      [...secrets, record.id, record.label, record.nonce],
+      redactions,
       { tail: false },
     )
       .text.replace(/^\[box\] /gm, '')
       .replace(/\s+/g, ' ')
       .trim();
     if (cut) text = text.replace(/[A-Za-z0-9_-]+$/, '');
-    return Array.from(text).slice(0, DEFAULTS.providerMessageChars).join('') || '-';
+    return (
+      redactEndpointValues(
+        Array.from(text).slice(0, DEFAULTS.providerMessageChars).join(''),
+        record.endpointRedactions,
+      ) || '-'
+    );
   };
   // Provider readings that are not `running`. `exited` and `stopped` are definite (the instance is
   // down); every other word, and a provider API error, is ambiguous (flaps were measured on live
@@ -273,6 +290,9 @@ export function createService({
     rental_attempts: r.rentalAttempts ?? [],
     datacenter: r.datacenter ?? null,
     ip_prefix: r.ipPrefix ?? 'unknown',
+    endpoint_redactions: btoa(
+      JSON.stringify(r.endpointRedactions ?? { ips: [], ports: [], overflow: false }),
+    ),
     sha: r.sha,
     state: phase(r),
     verdict:
@@ -288,7 +308,7 @@ export function createService({
       (r.bandwidthCost ?? 0) +
       (r.retryCostUsd ?? 0),
     log_cursor: r.logChunks ?? 0,
-    log_tail_sanitised: r.log || '',
+    log_tail_sanitised: redactEndpointValues(r.log || '', r.endpointRedactions),
     bytes_dropped: r.fullBytesDropped ?? r.bytesDropped ?? 0,
     tail_bytes_dropped: r.bytesDropped || 0,
     runner_nonce: r.runnerNonce ?? '',
@@ -312,7 +332,7 @@ export function createService({
     bundle_sha256: env.DEPLOYED_BUNDLE_SHA256 ?? '0'.repeat(64),
   });
   async function workerLine(r, message, cfg) {
-    const text = '[Worker] ' + redactEndpoints(message) + '\n',
+    const text = '[Worker] ' + redactPublic(message, publicSecrets, r.endpointRedactions) + '\n',
       bytes = new TextEncoder().encode(text).length;
     if ((r.fullBytes ?? 0) + bytes > cfg.reportBytes) {
       r.fullBytesDropped = (r.fullBytesDropped ?? 0) + bytes;
@@ -327,6 +347,10 @@ export function createService({
     await ledger.save(r);
   }
   async function recordRental(r, instance, cfg) {
+    r.endpointRedactions = mergeEndpointValues(r.endpointRedactions, instance);
+    r.log = redactEndpointValues(r.log ?? '', r.endpointRedactions);
+    appendWorkerText(r, '');
+    r.geolocation = redactPublic(r.geolocation ?? 'unknown', publicSecrets, r.endpointRedactions);
     if (instance?.public_ipaddr) r.ipPrefix = ipPrefix(instance.public_ipaddr);
     if (r.rentalLogged) return;
     r.rentalLogged = true;
@@ -856,6 +880,7 @@ export function createService({
             throw Error('NOT_LIVE');
           }
           if (instance !== undefined) {
+            await recordRental(r, instance, cfg);
             r.providerRaw = providerWord(instance);
             r.providerMsg = providerMessage(r, instance);
           }
@@ -900,20 +925,31 @@ export function createService({
       )
         refuse('BAD_REPORT', 400);
       if (payload.text !== undefined) {
-        const bytes = new TextEncoder().encode(payload.text),
-          redactions = [...secrets, bearer, r.id, r.label, r.nonce];
+        const redactions = [...secrets, bearer, r.id, r.label, r.nonce].flatMap((value) =>
+          value ? [value, redactEndpointValues(value, r.endpointRedactions)] : [],
+        );
+        const privateText = redactPublic(
+          payload.text,
+          [...publicSecrets, bearer, r.nonce],
+          r.endpointRedactions,
+        );
+        const bytes = new TextEncoder().encode(privateText);
+        const removedBefore = new TextEncoder().encode(payload.text).length - bytes.length;
         const safe = sanitizeBoxText(
           bytes,
           Math.max(0, cfg.reportBytes - (r.fullBytes ?? 0)),
           redactions,
-          { tail: false },
+          { tail: false, endpoints: r.endpointRedactions },
         );
+        safe.bytesDropped = Math.max(0, safe.bytesDropped + removedBefore);
         await ledger.appendLog(r, safe.text);
         // The text as the box sent it, for the public log (redacted when it is published).
-        if (logsEnabled(env)) await ledger.appendPublicLog(r, payload.text);
+        if (logsEnabled(env)) await ledger.appendPublicLog(r, privateText);
         r.fullBytes = (r.fullBytes ?? 0) + new TextEncoder().encode(safe.text).length;
         r.fullBytesDropped = (r.fullBytesDropped ?? 0) + safe.bytesDropped;
-        appendBoxText(r, bytes, redactions);
+        const priorDropped = r.bytesDropped ?? 0;
+        appendBoxText(r, bytes, redactions, { endpoints: r.endpointRedactions });
+        r.bytesDropped = priorDropped + Math.max(0, r.bytesDropped - priorDropped + removedBefore);
       }
       r.lastSeq = payload.seq;
       r.lastDigest = digest;
@@ -1524,6 +1560,7 @@ export function createService({
         dphTotal: offer.dph_total,
         datacenter: typeof offer.datacenter === 'boolean' ? offer.datacenter : null,
         ipPrefix: ipPrefix(offer.public_ipaddr),
+        endpointRedactions: mergeEndpointValues(retrySource?.endpointRedactions, offer),
         providerPolicy: cfg.provider,
         sessionDeadline: started + cfg.provider.sessionMinutes * 60000,
         hostDriverVersion:

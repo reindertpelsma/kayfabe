@@ -1,4 +1,5 @@
 import { redactEndpoints } from './rental.js';
+import { redactEndpointValues } from './endpoint-values.js';
 // The full public log of a run (2026-11-07; contract /root/night/REPORT_CONTRACT.md, DEPLOY.md
 // "Public logs"). When a run closes, for any reason, the Worker writes the text the box streamed
 // to the PUBLIC R2 bucket kayfabe-logs-public (https://logs.kayfabe.dev) as <run id>/log.txt.
@@ -182,7 +183,7 @@ const PRESIGNED =
   /X-Amz-(?:Signature|Credential|Security-Token)=|AWSAccessKeyId=|[?&]Signature=[0-9a-f]{32,256}/gi;
 
 // The redaction of one text. `exact` comes from exactValues().
-export function redactPublic(text, exact = []) {
+export function redactPublic(text, exact = [], endpoints) {
   // Shapes first, then values: every run token starts with the same 16 characters (the HS256 JWT
   // header), so replacing the fragment of OUR token first would break the shape of every other JWT.
   let out = redactKeyBlocks(text);
@@ -190,7 +191,7 @@ export function redactPublic(text, exact = []) {
   out = redactAround(out, PRESIGNED);
   for (const [pattern, replacement] of SHAPES) out = out.replace(pattern, replacement);
   for (const value of exact) if (out.includes(value)) out = out.split(value).join(REDACTED);
-  return redactEndpoints(out);
+  return redactEndpointValues(redactEndpoints(redactEndpointValues(out, endpoints)), endpoints);
 }
 
 // ---- the cap ----------------------------------------------------------------------------------
@@ -214,8 +215,12 @@ function suffixBytes(text, bytes) {
 // The published log of a run from the stored pieces (the texts the box streamed, in order):
 // redacted, then capped. `omitted` = bytes the ledger could not store (its own cap) and said so.
 // Over the cap, the head and the tail stay and a marker line says how much is gone.
-export async function buildPublicLog(parts, exact, { omitted = 0, max = LOG_MAX_BYTES } = {}) {
-  let text = redactPublic(attribute(parts.join('')), exact);
+export async function buildPublicLog(
+  parts,
+  exact,
+  { omitted = 0, max = LOG_MAX_BYTES, endpoints } = {},
+) {
+  let text = attribute(redactPublic(parts.join(''), exact, endpoints));
   let bytes = encoder.encode(text).length;
   let cut = 0;
   if (omitted > 0) {
@@ -231,6 +236,8 @@ export async function buildPublicLog(parts, exact, { omitted = 0, max = LOG_MAX_
     text = head + '\n[kayfabe-log] CUT: ' + cut + ' bytes omitted here (16 MiB cap)\n' + end;
     bytes = encoder.encode(text).length;
   }
+  text = redactEndpointValues(text, endpoints);
+  bytes = encoder.encode(text).length;
   return { text, bytes, cut, sha256: await sha256Hex(text) };
 }
 

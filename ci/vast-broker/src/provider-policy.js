@@ -52,6 +52,8 @@ const BOOT_FAILURE_STATES = new Set([
   'created',
   'loading',
   'starting',
+  'scheduling',
+  'running',
   'offline',
   'null',
   'error',
@@ -59,34 +61,51 @@ const BOOT_FAILURE_STATES = new Set([
   'stopped',
 ]);
 
+function bootState(state) {
+  return state == null ||
+    ['created', 'loading', 'starting', 'scheduling', 'offline', 'null', 'running'].includes(state)
+    ? 'pending'
+    : state;
+}
+
 export function orderedBootFailure(text, id, policy) {
   let reason = null;
   let progress = false;
+  let healthy = false;
   let fragment = '';
   for (const line of text.split('\n')) {
     fragment += line + '\n';
     const fatal = fatalSignature(null, fragment, id, policy);
     if (fatal) {
       reason = fatal;
+      healthy = false;
       fragment = '';
     } else if (
       policy.ignorableSignatures.some((s) => line.toLowerCase().includes(s.toLowerCase()))
     ) {
       reason = null;
       progress = true;
+      healthy = policy.recoverySignatures.some((s) => line.toLowerCase().includes(s.toLowerCase()));
       fragment = '';
     }
   }
-  return { reason, progress };
+  return { reason, progress, healthy };
 }
 
 export async function currentBootFailure(prior, cursor, instance, log, id, policy) {
   const state = instance.actual_status;
-  if (state !== null && state !== 'running' && !BOOT_FAILURE_STATES.has(state))
+  if (state != null && state !== 'running' && !BOOT_FAILURE_STATES.has(state))
     return { reason: null, cursor };
   const statusHash = await sha256Hex(instance.status_msg ?? '');
   const delta = await bootLogDelta(cursor, log);
-  if (state === 'running') {
+  const outcome = orderedBootFailure(delta.fresh, id, policy);
+  const recoveredStatus =
+    cursor?.healthyStatusHash !== statusHash &&
+    !fatalSignature(instance, '', id, policy) &&
+    policy.recoverySignatures.some((s) =>
+      (instance.status_msg ?? '').toLowerCase().includes(s.toLowerCase()),
+    );
+  if ((outcome.healthy && !outcome.reason) || recoveredStatus) {
     // Recovery establishes a fresh baseline, never authority from earlier boot history.
     const recoveryCursor = typeof log === 'string' ? delta.cursor : {};
     recoveryCursor.healthyStatusHash = statusHash;
@@ -102,20 +121,20 @@ export async function currentBootFailure(prior, cursor, instance, log, id, polic
       reason: direct,
       source: 'status',
       state,
-      witness: state + ':status',
+      statusHash,
+      witness: bootState(state) + ':status:' + statusHash,
       cursor: nextCursor,
     };
-  const outcome = orderedBootFailure(delta.fresh, id, policy);
   let reason = outcome.reason;
-  let witness = state + ':boot_log:' + statusHash;
+  let witness = bootState(state) + ':boot_log:' + statusHash;
   // No new output plus the same failing state/message preserves the original witness.
-  // New progress, running recovery, changed state/message or an unreadable log cancels it.
+  // New progress, changed message or an unreadable log cancels it. Pending-state flaps do not.
   if (
     !reason &&
     delta.stable &&
     !delta.fresh.trim() &&
     prior?.source === 'boot_log' &&
-    prior.state === state &&
+    bootState(prior.state) === bootState(state) &&
     prior.statusHash === statusHash
   ) {
     reason = prior.reason;
@@ -124,7 +143,7 @@ export async function currentBootFailure(prior, cursor, instance, log, id, polic
   else if (
     prior?.source === 'boot_log' &&
     prior.reason === reason &&
-    prior.state === state &&
+    bootState(prior.state) === bootState(state) &&
     prior.statusHash === statusHash
   )
     witness = prior.witness;

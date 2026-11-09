@@ -1,4 +1,5 @@
 import { redactEndpoints } from './rental.js';
+import { redactEndpointValues } from './endpoint-values.js';
 import { DEFAULTS } from './defaults.js';
 // prettier-ignore
 import {fetchJson,fetchBounded,readBounded,refuse,IMAGE} from './policy.js';
@@ -8,22 +9,22 @@ import {sha256Hex} from './tokens.js';
 // status, a fixed class and a short excerpt of the provider's own error text. The excerpt is
 // restricted to a plain character set and dropped whole if it could carry a credential.
 // Nothing else (headers, key, body sent, onstart, env, the response) is ever logged.
-function providerError(r) {
+function providerError(r, endpoints) {
   const text = r && typeof r === 'object' ? (typeof r.error === 'string' ? r.error : r.msg) : '';
   if (typeof text !== 'string') return '';
-  const clean = redactEndpoints(text)
+  const clean = redactEndpoints(redactEndpointValues(text, endpoints))
     .replace(/[^A-Za-z0-9 _.,:;'()/=-]/g, '')
     .slice(0, 120);
   const risky = (v) => /bearer/i.test(v) || /[A-Za-z0-9_-]{24}/.test(v);
   return risky(text) || risky(clean) ? '' : clean;
 }
-function logCreateFailed(status, klass, r) {
+function logCreateFailed(status, klass, r, endpoints) {
   console.log(
     JSON.stringify({
       event: 'create_failed',
       status: Number.isSafeInteger(status) ? status : null,
       class: klass,
-      provider_error: providerError(r),
+      provider_error: providerError(r, endpoints),
     }),
   );
 }
@@ -129,12 +130,12 @@ export class Vast {
       r.success === false &&
       r.new_contract === undefined
     ) {
-      logCreateFailed(response.status, 'success_false', r);
+      logCreateFailed(response.status, 'success_false', r, record.endpointRedactions);
       refuse('CREATE_REFUSED', 503);
     }
     if (r.success !== true || !Number.isSafeInteger(r.new_contract) || r.new_contract <= 0) {
       const klass = !ok ? 'http_refusal' : r.success === false ? 'success_false' : 'no_contract';
-      logCreateFailed(response.status, klass, r);
+      logCreateFailed(response.status, klass, r, record.endpointRedactions);
       refuse();
     }
     return String(r.new_contract);

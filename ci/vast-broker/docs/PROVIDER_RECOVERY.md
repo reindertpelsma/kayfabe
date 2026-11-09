@@ -13,24 +13,22 @@ The initial fatal rules are the GPU start error and the owned instance's exact
 KVM Domain-not-found signature. The latter requires both the QEMU error marker
 and the matching instance id in newly observed output. Image pull progress, checksum verification, GPU
 preparation, daemon retries and other unmatched error text do not qualify.
-For known non-running provider states, fatal status rules take precedence over
-ignorable progress on the same status line.
-CODE READ (`src/provider-policy.js`, `src/index.js`): running state clears a pending
-fatal witness, including a retained fatal status message. Boot log checks use only a
-new suffix, tracked with a bounded hashed cursor; retained text is never rescanned.
-An unchanged log plus the same non-running state and status message preserves the
-original frozen-failure witness. New progress output, changed state/message, a log
-reset or an unreadable log cancels that witness. Cursor and observation state persist
-across Worker restarts without storing raw provider log text.
-CODE READ: healthy pre-report observations advance the log baseline without granting
-failure authority. If that healthy log cannot be read, continuity is invalidated;
-the next readable log establishes a baseline. A later provider-state flap therefore
-cannot revive fatal text from before recovery, including when the first observation
-was already running. Newly emitted fatal text after a healthy baseline can still
-confirm within the configured window.
-CODE READ: status text seen during recovery is also historical across a later
-provider-state flap until that text changes. A newly changed fatal status remains
-actionable; the recovery baseline does not disable subsequent failures.
+CODE READ: before the first box report, `created`, `loading`, `starting`,
+`scheduling`, `offline`, null and `running` are one pending-state class. Changing
+between those states does not reset an unchanged current fatal status or log
+witness. `running` alone is not healthy evidence. A box report, or explicit recovery
+progress from the data table `recoverySignatures` (`Domain successfully started`,
+`GPUs ready` initially), cancels the witness. Ordinary retry/preparation text does
+not override a current fatal status. A changed status message starts a new window.
+CODE READ: boot log checks use only a new suffix, tracked with a bounded hashed
+cursor; retained text is never rescanned. An unchanged log plus the same pending
+class and status message preserves the frozen-failure witness. New progress,
+changed message, a log reset or an unreadable log cancels that log witness. Cursor
+and observation state persist across Worker restarts without raw provider log text.
+CODE READ: recovery advances the log baseline. If that log is unreadable, continuity
+is invalidated and the next readable log establishes a baseline. Status text seen
+during recovery remains historical across later pending-state flaps until it changes.
+New fatal text after recovery remains actionable and must pass its own full window.
 CODE READ: each new log suffix is processed in order. A later progress/healthy
 line from the configured ignorable-signature table clears an earlier fatal
 event in that batch; a subsequent fatal event wins again. Error-only tails still
@@ -165,13 +163,28 @@ name `datacenter`; neither inspected schema establishes a datacenter-id response
 field, so this implementation does not invent or print an id. The instance schema
 names `public_ipaddr`; only its IPv4 network address at /24 or canonical IPv6 /48
 prefix is retained in public metadata. IPv4-mapped IPv6 is normalized to IPv4.
-The full address and SSH port are never public fields. Invalid address-like
-text, including MAC addresses and version strings, keeps its original spelling. Output redaction covers
-bare/bracketed endpoints, named SSH ports, command-line ports (including compact/quoted `-oPort` options), provider diagnostics,
-box log text, error paths and summaries. Port operands are parsed structurally
-after short/long options, configuration keys and endpoint/URL host separators;
-optional signs and arbitrarily many leading zeros do not bypass the mask.
-Numeric MAC addresses, counts and version text remain negative controls.
+CODE READ: the full address and SSH port are private control facts. The Worker
+keeps at most 128 distinct addresses and 128 ports across replacement attempts;
+if that bound is exceeded, text redaction conservatively masks all numeric/address
+candidates. The authenticated status response carries an optional base64-encoded
+`endpoint_redactions` JSON context (`ips`, `ports`, `overflow`) for the trusted
+runner/renderer. Encoding is not an access boundary: this field is private,
+validated before use, and never printed or copied into a public report.
+CODE READ: every text output first masks by semantic value, independent of command
+syntax: IPv4 dotted/zero-padded, integer/hex and mapped IPv6 aliases, and IPv6
+compressed/expanded aliases. Every digit run numerically equal to a private SSH
+port becomes `[redacted]`, including leading zeros and digits glued to option
+letters. This privacy rule also masks unrelated numeric labels when their value
+happens to equal that port. Counts, MACs and versions that do not match stay intact.
+CODE READ: credential shapes and known secrets are removed before endpoint masking,
+so a coincident port cannot split a credential and defeat its existing filter.
+Raw box text is masked before sanitisation removes endpoint context,
+then masked again after stripping, before the existing line/byte limits, on runner
+output/summary, and at public log/report
+publication. The runner retains context across attempts; the publication queue
+snapshots it. A first report also learns endpoint facts from its live provider
+inspection, without waiting for a status poll. Existing structural endpoint/SSH-option masking remains a backstop
+for old records without provider endpoint facts, including clustered short options.
 Reuse parsing accepts the new bounded
 rental-line shape; runs with multiple rental lines remain ineligible for reuse
 under its existing single-rental proof rule.
@@ -183,7 +196,10 @@ against the mocked Vast transport. Every simulated rental checks teardown, spend
 report boundaries, attempt/time limits, pin/penalty ranking, receipts and output
 privacy. `test/provider-worst.test.js` drives the actual Worker paths through named
 outages, ambiguous/foreign creates, fatal flaps, cap exhaustion, concurrency and
-restart cases. `test/provider-rules.test.js` contains independent controls;
+restart cases. `test/provider-values.test.js` adds the six RV2 runtime regressions,
+1,024 fixed random command/log shapes through JS and both Python outputs, pending-state
+permutations, message-change/recovery controls and bounded replacement history.
+`test/provider-rules.test.js` contains independent controls;
 `provider-session-mutants.mjs` requires at least two distinct assertion-failing
 test names for every mutant, and rejects syntax/import/setup failures as killers.
 `test/provider-mutants.test.js` runs that harness in ordinary Worker CI.

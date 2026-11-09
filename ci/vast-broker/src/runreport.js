@@ -244,11 +244,13 @@ export function cleanClaimsReport(raw) {
 // the document (keys are fixed words) is run over the Worker's exact values and the secret shapes,
 // so a payload error string naming the secret path, the Access pair, a nonce or a password-like
 // assignment never reaches report.json, D1 or the public API.
-export function redactDoc(value, exact) {
-  if (typeof value === 'string') return redactPublic(value, exact);
-  if (Array.isArray(value)) return value.map((v) => redactDoc(v, exact));
+export function redactDoc(value, exact, endpoints) {
+  if (typeof value === 'string') return redactPublic(value, exact, endpoints);
+  if (Array.isArray(value)) return value.map((v) => redactDoc(v, exact, endpoints));
   if (value !== null && typeof value === 'object')
-    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, redactDoc(v, exact)]));
+    return Object.fromEntries(
+      Object.entries(value).map(([k, v]) => [k, redactDoc(v, exact, endpoints)]),
+    );
   return value;
 }
 

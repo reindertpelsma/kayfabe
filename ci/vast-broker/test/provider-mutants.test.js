@@ -12,7 +12,7 @@ test('provider invariants have two named killers per mutant', { timeout: 1200000
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const report = JSON.parse(result.stdout);
   assert.equal(report.status, 'PASS');
-  assert.equal(report.cases.length, 88);
+  assert.equal(report.cases.length, 112);
   console.log(JSON.stringify(report));
   for (const row of report.cases)
     assert.ok(row.kills >= 2 && new Set(row.killers).size >= 2, row.mutant);

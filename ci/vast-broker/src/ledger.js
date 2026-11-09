@@ -399,6 +399,7 @@ export class Ledger {
           // The values the box held in earlier legs of this run or at rent time (review of #282, F4/F5).
           priorNonces: record.priorNonces ?? [],
           known: record.known ?? [],
+          endpointRedactions: record.endpointRedactions,
           runnerNonce: record.runnerNonce ?? null,
           reportExpiry: record.reportExpiry,
           at: now,

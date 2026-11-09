@@ -806,6 +806,13 @@ export function providerPolicy(env = {}) {
     p.ignorableSignatures.some((s) => typeof s !== 'string' || !s.length || s.length > 200)
   )
     throw new Error('CONFIG_VAR:PROVIDER_IGNORABLE_SIGNATURES');
+  if (
+    !Array.isArray(p.recoverySignatures) ||
+    !p.recoverySignatures.length ||
+    p.recoverySignatures.length > 32 ||
+    p.recoverySignatures.some((s) => typeof s !== 'string' || !s.length || s.length > 200)
+  )
+    throw new Error('CONFIG_VAR:PROVIDER_RECOVERY_SIGNATURES');
   if (env.PROVIDER_FATAL_SIGNATURES !== undefined)
     p.fatalSignatures = JSON.parse(env.PROVIDER_FATAL_SIGNATURES);
   if (

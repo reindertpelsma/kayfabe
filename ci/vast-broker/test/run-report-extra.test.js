@@ -2029,3 +2029,26 @@ for (const leg of [10, 31])
       assert.equal((await h.storage.list({ prefix: 'plogq:' })).size, 0);
     },
   );
+
+for (const variant of [1, 2])
+  test(
+    'publish: legacy stored chunks still mask signing secret ' + variant,
+    { skip: d1Skip },
+    async () => {
+      const secret = 'legacy-signing-' + variant + '-unique-value-' + 'm'.repeat(12);
+      const { bucket } = await runWith([], {
+        overrides: { RUN_TOKEN_SECRET: secret },
+        mutate: async (h) => {
+          const ledger = new Ledger(h.storage),
+            record = await h.storage.get('record:123-1');
+          // Legacy chunks predate masking at ingestion; publication must still redact them.
+          await ledger.appendPublicLog(record, 'legacy diagnostic ' + secret + ' end\n');
+          await ledger.save(record);
+        },
+      });
+      const text = bucket.objects.get('vast-123-1-0/log.txt');
+      assert.match(text, /legacy diagnostic/);
+      assert.equal(text.includes(secret.slice(0, 16)), false);
+      assert.equal(text.includes(secret), false);
+    },
+  );

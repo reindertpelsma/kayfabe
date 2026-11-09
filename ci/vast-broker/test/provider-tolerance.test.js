@@ -332,6 +332,7 @@ test('status line: addresses, bearer tokens, long token-like runs and secrets ar
   assert.match(line, / end$/);
   assert.ok(!/Bearer abcdef|10\.1\.2\.3|mock-vast-binding/.test(line));
   assert.ok(!line.includes('a'.repeat(32)), 'long token-like runs are redacted');
+  assert.ok(!/\b900\b/.test(line), 'the known instance id is redacted too');
 });
 test('status line: the message is bounded to 120 characters', async () => {
   const { line } = await offlineWith('word '.repeat(500));

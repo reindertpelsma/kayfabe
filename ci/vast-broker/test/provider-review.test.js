@@ -39,6 +39,7 @@ async function tick(h, milliseconds) {
 for (const restart of [false, true]) {
   test('RV2 healthy status text stays historical across provider flap ' + restart, async () => {
     const h = await boot();
+    h.cloud.logText = 'Domain successfully started; GPUs ready\n';
     Object.assign(h.cloud.instances.get('900'), {
       actual_status: 'running',
       status_msg: 'GPU error, unable to start instance',
@@ -57,6 +58,7 @@ for (const restart of [false, true]) {
     'RV2 changed fatal status after healthy baseline remains actionable ' + restart,
     async () => {
       const h = await boot();
+      h.cloud.logText = 'Domain successfully started; GPUs ready\n';
       await tick(h, 1000);
       if (restart) h.restart();
       Object.assign(h.cloud.instances.get('900'), {
@@ -82,7 +84,7 @@ for (const restart of [false, true]) {
     h.cloud.logStatus = 503;
     Object.assign(h.cloud.instances.get('900'), {
       actual_status: 'running',
-      status_msg: 'Preparing GPUs complete; healthy',
+      status_msg: 'GPUs ready; healthy',
     });
     await tick(h, 1000);
     if (restart) h.restart();
@@ -123,7 +125,7 @@ for (const restart of [false, true]) {
       h.cloud.logText = domainError('900') + 'Domain successfully started; GPUs ready\n';
       Object.assign(h.cloud.instances.get('900'), {
         actual_status: 'running',
-        status_msg: 'Preparing GPUs complete; healthy',
+        status_msg: 'GPUs ready; healthy',
       });
       await tick(h, 1000);
       if (restart) h.restart();
@@ -152,7 +154,7 @@ for (const restart of [false, true]) {
     if (restart) h.restart();
     Object.assign(h.cloud.instances.get('900'), {
       actual_status: 'running',
-      status_msg: 'Preparing GPUs complete; healthy',
+      status_msg: 'GPUs ready; healthy',
     });
     h.cloud.logText += 'Domain successfully started; GPUs ready\n';
     await tick(h, 1000);
@@ -398,8 +400,9 @@ for (const restart of [false, true]) {
     assert.equal(await h.storage.get('provider-machine:100001'), undefined);
     await h.call('/stop/123-1');
   });
-  test('RV2 running state cancels a retained fatal status message ' + restart, async () => {
+  test('RV2 recovery progress cancels a retained fatal status message ' + restart, async () => {
     const h = await boot();
+    h.cloud.logText = 'Domain successfully started; GPUs ready\n';
     Object.assign(h.cloud.instances.get('900'), {
       actual_status: 'running',
       status_msg: 'GPU error, unable to start instance',
@@ -657,6 +660,7 @@ for (const state of ['unrecognised', { invalid: true }])
 for (const restart of [false, true]) {
   test('RV2 terminal historical log after running remains inert ' + restart, async () => {
     const h = await boot();
+    h.cloud.instances.get('900').status_msg = 'GPUs ready';
     h.cloud.logText = domainError('900');
     await tick(h, 1000);
     if (restart) h.restart();

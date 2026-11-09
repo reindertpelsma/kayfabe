@@ -127,7 +127,10 @@ async function publishOne({ ledger, env, entry, key, now, runId }) {
       event({ state: 'DROPPED', why: 'expired' });
       return 'DROP';
     }
-    built = await buildPublicLog(parts, exact, { omitted: entry.dropped });
+    built = await buildPublicLog(parts, exact, {
+      omitted: entry.dropped,
+      endpoints: entry.endpointRedactions,
+    });
   }
   if (built && logs && !entry.logPut) {
     await putPublic(env, logKey(runId), built.text, 'text/plain; charset=utf-8');
@@ -162,7 +165,7 @@ async function publishOne({ ledger, env, entry, key, now, runId }) {
           offsets: built ? stageOffsets(built.text) : null,
           logsBase: logsBase(env),
         });
-        doc = fitReport(redactDoc(full, exact));
+        doc = fitReport(redactDoc(full, exact, entry.endpointRedactions));
       }
     }
     if (doc !== null && logs && !entry.reportPut) {

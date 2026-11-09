@@ -42,9 +42,11 @@ for (const kind of ['boot', 'running-boot', 'report'])
       assert.equal(failed.verdict, 'PROVIDER_FAULT');
       assert.notEqual(failed.ended, null);
       assert.equal(h.cloud.instances.has('900'), false);
-      if (kind === 'running-boot')
-        assert.equal(await h.storage.get('provider-machine:100001'), undefined);
-      else assert.ok(await h.storage.get('provider-machine:100001'));
+      assert.ok(await h.storage.get('provider-machine:100001'));
+      if (kind === 'running-boot') {
+        assert.equal(failed.faultReason, 'KVM_DOMAIN_NOT_FOUND');
+        assert.equal(failed.ended, original.started + 240000);
+      }
       if (restart) h.restart();
       const response = await h.call();
       assert.equal(response.status, 200);

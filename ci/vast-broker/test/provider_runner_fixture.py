@@ -1,5 +1,6 @@
 """Deterministic provider session controller; no network or rental."""
 
+import base64
 import importlib.util
 import io
 import json
@@ -38,6 +39,8 @@ raw = (
     + ("-p" if variant == 1 else "-P")
     + port
 )
+if variant == 2:
+    raw += " context-free operand=+000" + port + " alternate=3405803848"
 diagnostic = (
     raw
     + " ssh -oPort=+000"
@@ -108,6 +111,10 @@ def status(verdict="UNAVAILABLE", posted=False):
             for i in range(rents if fault else rents - 1)
         ],
     }
+    if variant == 2:
+        result["endpoint_redactions"] = base64.b64encode(
+            json.dumps({"ips": [ip], "ports": [int(port)], "overflow": False}).encode()
+        ).decode()
     if case == "failed-hash" and final:
         result["state"] = "NONE"
         result["log_sha256"] = "c" * 64

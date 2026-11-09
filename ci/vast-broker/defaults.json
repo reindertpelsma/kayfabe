@@ -560,6 +560,10 @@
       "Domain successfully started",
       "GPUs ready"
     ],
+    "recoverySignatures": [
+      "Domain successfully started",
+      "GPUs ready"
+    ],
     "confirmationSeconds": 90,
     "observationSpacingSeconds": 1,
     "maxAttempts": 8,
