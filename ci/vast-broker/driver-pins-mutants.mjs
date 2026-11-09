@@ -179,6 +179,7 @@ try {
     'scripts/ci/release_driver_media.py',
     'scripts/ci/test_release_driver_media.py',
     'scripts/bench/native_xid_guard.py',
+    'scripts/bench/native_fault_names.json',
     'scripts/bench/provision_host_driver.sh',
     'scripts/bench/box/provision_full.sh',
   ]) {
