@@ -712,6 +712,69 @@ CASES += [
     ("winapps-incomplete-output-is-pass", scoped("winapps_rows", 'if (len(grade) == 1 and count and grade[0][0] == grade[0][1] == count[1]\n                    and len(app_lines) == len(passed) == len(set(passed)) == int(count[1])):', 'if True:')),
 ]
 
+CASES += [
+    ("xd1-blackwell-host-names-refused", guard_replace(
+        "engine in HOST_FAULT_NAMES['engines']", "engine in HOST_FAULT_NAMES['engines'] and not engine.startswith('GR_HOST')"
+    ), "native_xid_guard.py"),
+    ("xd1-legacy-host-names-refused", guard_replace(
+        "engine in HOST_FAULT_NAMES['engines']", "engine.startswith('GR_HOST')"
+    ), "native_xid_guard.py"),
+    ("xd1-only-captured-host-zero", guard_replace(
+        "engine in HOST_FAULT_NAMES['engines']", "engine in ('GR_HOST0', 'GR0_PBDMA0')"
+    ), "native_xid_guard.py"),
+    ("xd1-host-engine-unchecked", guard_replace(
+        "engine in HOST_FAULT_NAMES['engines']", "True"
+    ), "native_xid_guard.py"),
+    ("xd1-esc-client-unchecked", guard_replace(
+        "client in HOST_FAULT_NAMES['clients']", "True"
+    ), "native_xid_guard.py"),
+    ("xd1-native-pid-ignored", guard_replace(
+        "Counter(actual) != Counter(expected)", "Counter(x[:-1] for x in actual) != Counter(x[:-1] for x in expected)"
+    ), "native_xid_guard.py"),
+    ("xd1-missing-or-duplicate-identity-admitted", guard_replace(
+        "raise GuardRefused('missing/duplicate native exec identity')", "return 4242"
+    ), "native_xid_guard.py"),
+    ("xd1-command-window-ignored", scoped(
+        "xid_ok", "watched_command_output(text)", "arm_output"
+    )),
+    ("xd1-contract-va-unchecked", guard_replace(
+        "if int(markers[0][1], 16) != 0x0000000a11000000:", "if False:"
+    ), "native_xid_guard.py"),
+    ("xd1-notifier-unchecked", guard_replace(
+        "if not re.search(r'R3 notifier\\s*= fired=true status=0xffff except_type=0x1f\\b', tail):", "if False:"
+    ), "native_xid_guard.py"),
+    ("xd1-native-exec-uninstalled", HOOK.replace(
+        'raw_args+=(python3 -I "$KF_PAYLOAD_ROOT/scripts/bench/native_xid_guard.py" native-exec)', ':'
+    ), "vast_payload_hooks.sh"),
+    ("xd1-native-interrupt-unchecked", guard_replace(
+        r'intr [0-9a-f]{8}\.', r'intr [0-9a-f]+\.'
+    ), "native_xid_guard.py"),
+    ("xd1-interrupt-value-captured", guard_replace(
+        r'intr [0-9a-f]{8}\.', r'intr 00000000\.'
+    ), "native_xid_guard.py"),
+    ("xd1-identity-after-operation-admitted", guard_replace(
+        "if 'FAULT_MARK=' in source[:markers[0].start()]:", "if False:"
+    ), "native_xid_guard.py"),
+    ("xd1-hidden-second-xid-admitted", guard_replace(
+        "m = pattern.fullmatch(line)", "m = pattern.search(line)"
+    ), "native_xid_guard.py"),
+    ("xd1-framing-selection-canonical-only", guard_scoped(
+        "xid_lines", "if WATCHED_FAULT.search(line)", 'if "NVRM: Xid" in line'
+    ), "native_xid_guard.py"),
+    ("xd1-framing-prefix-selector-ignored", guard_replace(
+        "if m is None or WATCHED_FAULT.search(m['prefix']):", "if m is None:"
+    ), "native_xid_guard.py"),
+    ("xd1-framing-pci-text-unrestricted", guard_replace(
+        r'PCI:[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}(?:\.[0-7])?', r'PCI:[^)]+'
+    ), "native_xid_guard.py"),
+    ("xd1-framing-watch-splits-control-characters", scoped(
+        "watch_delta", '.split("\\n")', '.splitlines()'
+    )),
+    ("xd1-framing-census-strips-control-characters", guard_scoped(
+        "xid_lines", "journal.split('\\n')", "journal.splitlines()"
+    ), "native_xid_guard.py"),
+]
+
 COLLECT = """import io,json,unittest,importlib.util
 from pathlib import Path
 s=unittest.defaultTestLoader.discover('scripts/ci',pattern='test_vast_payload*.py')
@@ -752,6 +815,7 @@ def main():
             "test_vast_payload.py",
             "test_vast_payload_v7.py",
             "test_vast_payload_admission.py",
+            "test_vast_payload_native_fault.py",
             "test_vast_payload_diagnostics.py",
             "test_vast_payload_failures.py",
             "test_vast_payload_guest_guard.py",
@@ -795,6 +859,7 @@ def main():
         shutil.copyfile(HERE.parents[1] / "ci/vast-broker/defaults.json", root / "ci/vast-broker/defaults.json")
         shutil.copyfile(HERE.parent / "bench/host_xid_watch.sh", bench / "host_xid_watch.sh")
         shutil.copyfile(HERE.parent / "bench/native_xid_guard.py", bench / "native_xid_guard.py")
+        shutil.copyfile(HERE.parent / "bench/native_fault_names.json", bench / "native_fault_names.json")
         (bench / "tests").mkdir()
         for name in (
             "test_native_xid_guard.py",
