@@ -589,6 +589,21 @@ class Cli(unittest.TestCase):
         self.assertEqual(v["NEED_GB"], "130")
         self.assertEqual(v["IDS"], ",".join(lane.lane_ids("lanea", TBL)))
 
+    def test_table_override_narrows_a_lane_for_a_proof_run(self):
+        # KF_SPEC_TABLE swaps the lane table (ids, vars, the tar filter's --table default); unset, lanes.json is used
+        import os
+        with tempfile.TemporaryDirectory() as d:
+            t = json.loads((SPEC / "lanes.json").read_text())
+            t["lanes"]["laneb"] = ["medical-04", "catia-07"]
+            f = Path(d) / "t.json"
+            f.write_text(json.dumps(t))
+            env = dict(os.environ, KF_SPEC_TABLE=str(f))
+            r = subprocess.run([sys.executable, "-I", str(SPEC / "lane.py"), "ids", "laneb"], capture_output=True, text=True, env=env)
+            self.assertEqual(r.stdout.strip(), "medical-04,catia-07")
+            self.assertEqual(self.run_cli("ids", "laneb").stdout.strip(), ",".join(lane.lane_ids("laneb", TBL)))
+            r = subprocess.run([sys.executable, "-I", str(SPEC / "lane.py"), "timeout", "maya-07", "100000"], capture_output=True, text=True, env=env)
+            self.assertEqual(r.stdout.split(), ["full", "1200"])
+
     def test_a_bad_lane_is_exit_2(self):
         self.assertEqual(self.run_cli("ids", "lanec").returncode, 2)
         self.assertEqual(self.run_cli("vars", "lanec").returncode, 2)

@@ -91,6 +91,15 @@ class H(http.server.BaseHTTPRequestHandler):
             if rng: self.send_header('Content-Range', 'bytes %d-%d/%d' % (start, len(data) - 1, len(data)))
             self.send_header('Content-Length', str(len(body)))
             self.end_headers()
+            cc = os.path.join(T, 'cut-count')
+            if os.path.exists(cc):
+                # cut the first N bodies after M bytes each (a connection that closes mid-body, as the real cut did)
+                done = os.path.join(T, 'cuts-done')
+                n = int(open(cc).read().split()[0]); m = int(open(cc).read().split()[1])
+                k = int(open(done).read()) if os.path.exists(done) else 0
+                if k < n:
+                    open(done, 'w').write(str(k + 1))
+                    self.wfile.write(body[:m]); self.wfile.flush(); self.connection.close(); return
             if os.path.exists(os.path.join(T, 'truncate-once')) and not state['truncated'] and not rng:
                 state['truncated'] = True
                 self.wfile.write(body[:100000]); self.wfile.flush(); self.connection.close(); return
@@ -177,6 +186,35 @@ rm -f "$T/out/obj1"
 run f4 specviewperf-15.0.0.CHECKSUMS.txt --sha256 "$obj1_sha" --out "$T/out/obj1"
 check "interrupted download resumes and verifies" bash -c "test $rc -eq 0 && cmp -s '$T/out/obj1' '$T/data/obj1'"
 rm -f "$T/truncate-once"
+
+# several cuts in a row: the SAME locator is resumed (one Worker request), each try making progress
+rm -f "$T/out/obj1" "$T/cuts-done"
+echo "4 60000" >"$T/cut-count"
+: >"$T/server.log"
+run g1 specviewperf-15.0.0.CHECKSUMS.txt --sha256 "$obj1_sha" --out "$T/out/obj1"
+check "four cuts in a row resume and verify" bash -c "test $rc -eq 0 && cmp -s '$T/out/obj1' '$T/data/obj1'"
+check "four cuts used ONE Worker URL" test "$(grep -c '/p/bench-data/' "$T/server.log")" -eq 1
+check "four cuts took five R2 requests" test "$(grep -c '/r2/' "$T/server.log")" -eq 5
+check "resume output has no secrets" nosecrets g1
+# no progress at all: bounded by the three mints, one try each, then exit 1 (never a loop, never a pass)
+rm -f "$T/out/obj1" "$T/out/obj1.part" "$T/cuts-done"
+echo "1000 0" >"$T/cut-count"
+: >"$T/server.log"
+run g2 specviewperf-15.0.0.CHECKSUMS.txt --sha256 "$obj1_sha" --out "$T/out/obj1"
+check "no progress gives up with exit 1" test "$rc" -eq 1
+check "no progress asked the Worker exactly 3 times" test "$(grep -c '/p/bench-data/' "$T/server.log")" -eq 3
+check "no progress made exactly 3 R2 requests" test "$(grep -c '/r2/' "$T/server.log")" -eq 3
+check "no progress leaves no final file" test ! -e "$T/out/obj1"
+check "no progress output has no secrets" nosecrets g2
+# slow progress: the resume count per locator is bounded (KF_FETCH_RESUMES=1: two tries per mint, three mints)
+rm -f "$T/out/obj1" "$T/out/obj1.part" "$T/cuts-done"
+echo "1000 10000" >"$T/cut-count"
+: >"$T/server.log"
+KF_FETCH_RESUMES=1 run g3 specviewperf-15.0.0.CHECKSUMS.txt --sha256 "$obj1_sha" --out "$T/out/obj1"
+check "bounded resumes exit 1" test "$rc" -eq 1
+check "bounded resumes: 3 mints" test "$(grep -c '/p/bench-data/' "$T/server.log")" -eq 3
+check "bounded resumes: 2 tries per mint" test "$(grep -c '/r2/' "$T/server.log")" -eq 6
+rm -f "$T/cut-count" "$T/cuts-done" "$T/out/obj1.part"
 
 : >"$T/server.log"
 run f5 specviewperf-15.0.0.SPEC_General_License.pdf --sha256 "$obj1_sha" --out "$T/out/lic"

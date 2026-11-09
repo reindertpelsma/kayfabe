@@ -25,6 +25,7 @@ is RETRY: never a pass, never an excuse. Scores are never read: this module sees
 
 import argparse
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -40,8 +41,10 @@ WORKLOAD = re.compile(r"[a-z][a-z_]*-[0-9]{2}")
 SUBTEST = re.compile(r"[A-Za-z0-9_]{1,48}")
 
 
-def table(path=TABLE):
-    return json.loads(Path(path).read_text())
+def table(path=None):
+    """The lane table. KF_SPEC_TABLE (an operator's file, same shape) replaces lanes.json: how a proof run narrows a lane to
+    two viewsets without any other code path changing (docs/design/V3_SPEC_GATE.md)."""
+    return json.loads(Path(path or os.environ.get("KF_SPEC_TABLE") or TABLE).read_text())
 
 
 def lane_ids(lane, tbl=None):
