@@ -1452,6 +1452,9 @@ def main():
             KAYFABE_REPO=str(root),
             BENCH_DIR=str(bench),
             KF_DEVICE="kf3",
+            # [2026-11-09] OWNER_RULINGS section AQ: an oracle that cannot run is a failure on a box,
+            # never a printed SKIP that cargo counts as a pass (crates/kf-chip/tests/hwref_is_current.rs).
+            KF_REQUIRE_ORACLES="1",
             CARGO_TARGET_DIR=str(root / "target"),
             CARGO_BUILD_JOBS=str(min(8, os.cpu_count() or 2)),
             # Quiet only: cargo's own progress and colour. Lint level and RUSTFLAGS are not touched.

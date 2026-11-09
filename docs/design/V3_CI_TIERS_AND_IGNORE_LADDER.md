@@ -7,6 +7,18 @@ tree today. Parent document: [V3_PLATFORM_TESTING.md](V3_PLATFORM_TESTING.md), w
 and §4 (fall-through key) this document corrects. Every number below is a design target unless a
 source is cited. Only §8 reports a result.
 
+**Correction, 2026-11-09 (section 4 is built; the sentence "Nothing here is implemented" above is no
+longer true of it):** `.workerignore`, `.dockerignore`, the ladder lint (`scripts/ci/ignore_ladder.py
+check`) and the tree key (`ci/vast-broker/src/treekey.js`) exist. New with this correction: the strip
+step (`ignore_ladder.py strip --in-place`, called by `scripts/bench/box/merge_check.sh` for the box
+checkout and by the `stripped` job of `.github/workflows/ci.yml`), a cross-check that the Python matcher
+and `treekey.js` compute the same key (`ignore_ladder.py keycheck`,
+`ci/vast-broker/test/ladder-parity.test.js`), `KF_REQUIRE_ORACLES=1` with
+`scripts/ci/fetch_oracles.sh`, and a strip floor that refuses to delete code. The strip has not run on
+hardware yet. The gate-skip decision of `gpu-vast.yml` still uses its own hard-coded list on purpose;
+see "Stripped tree" in `docs/CI_V3.md` for why it does not read `.workerignore`. Sections 1, 2, 3
+(the Worker half) and 5 to 8 remain design.
+
 Labels: **OWNER DECISION** is binding text from the owner. **AGREED RECOMMENDATION** was proposed by
 the coordinator and the owner agreed; it is binding as intent and can still change when built.
 **OPEN** is undecided. All of them are intent, not facts.
