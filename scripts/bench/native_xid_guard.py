@@ -29,6 +29,17 @@ COPY_ENGINE_CLIENT = "HUBCLIENT_CE*"
 HOST_SEMAPHORE_ENGINE = "HOST_SEMAPHORE"
 HOST_SEMAPHORE_CLIENT = "ESC"
 HOST_FAULT_NAMES = json.loads(Path(__file__).with_name('native_fault_names.json').read_text())
+# Same case-insensitive physical-line selection as host_xid_watch.sh. Selection
+# never grants admission: every selected line must subsequently parse in full.
+WATCHED_FAULT = re.compile(r'xid|MMU Fault|fell off the bus|GPU has fallen', re.I)
+_MONTH = r'(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)'
+_CLOCK = r'[0-9]{2}:[0-9]{2}:[0-9]{2}'
+_ISO_TIME = r'[0-9]{4}-[0-9]{2}-[0-9]{2}T' + _CLOCK + r'(?:\.[0-9]+)?(?:Z|[+-][0-9]{2}:?[0-9]{2})'
+_SYSLOG_TIME = _MONTH + r'[ \t]+[0-9]{1,2}[ \t]+' + _CLOCK
+_KERNEL_PREFIX = '(?:' + _ISO_TIME + '|' + _SYSLOG_TIME + r')[ \t]+[A-Za-z0-9_.-]+[ \t]+kernel(?:\[[0-9]+\])?:[ \t]+'
+_DMESG_PREFIX = r'\[[ \t]*[0-9]+(?:\.[0-9]+)?\][ \t]+'
+_CTIME_PREFIX = r'\[(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)[ \t]+' + _SYSLOG_TIME + r'[ \t]+[0-9]{4}\][ \t]+'
+NATIVE_LOG_PREFIX = '(?P<prefix>(?:' + _KERNEL_PREFIX + r'|kernel:[ \t]+)?(?:' + _DMESG_PREFIX + '|' + _CTIME_PREFIX + ')?)'
 
 
 def copy_engine_client(name):
@@ -42,7 +53,8 @@ class GuardRefused(ValueError):
 
 
 def xid_lines(journal):
-    return tuple(line for line in journal.splitlines() if "NVRM: Xid" in line)
+    """The watcher's complete selection, including unfamiliar fault formatting."""
+    return tuple(line for line in journal.split('\n') if WATCHED_FAULT.search(line))
 
 
 def bounded(path):
@@ -159,10 +171,10 @@ def approve_native_records(journal, expected):
     """Single native matcher for complete baselines and per-arm receipts."""
     actual = []
     lines = xid_lines(journal)
-    pattern = re.compile(r"NVRM: Xid \(PCI:[^)]+\): (?P<code>[0-9]+), pid=(?P<pid>[0-9]+), name=(?P<name>[^,]+), channel (?P<channel>0x[0-9a-f]+), intr [0-9a-f]{8}\. MMU Fault: ENGINE (?P<engine>\S+) (?P<client>\S+) faulted @ (?P<va>0x[0-9a-f_]+)\. Fault is of type (?P<fault>\S+) (?P<access>\S+)$")
+    pattern = re.compile(NATIVE_LOG_PREFIX + r"NVRM: Xid \(PCI:[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}(?:\.[0-7])?\): (?P<code>[0-9]+), pid=(?P<pid>[0-9]+), name=(?P<name>[^,]+), channel (?P<channel>0x[0-9a-f]+), intr [0-9a-f]{8}\. MMU Fault: ENGINE (?P<engine>\S+) (?P<client>\S+) faulted @ (?P<va>0x[0-9a-f_]+)\. Fault is of type (?P<fault>\S+) (?P<access>\S+)$")
     for line in lines:
-        m = pattern.search(line)
-        if m is None or line.count('NVRM: Xid') != 1:
+        m = pattern.fullmatch(line)
+        if m is None or WATCHED_FAULT.search(m['prefix']):
             raise GuardRefused("unmatched Xid record")
         engine = m['engine']
         client = COPY_ENGINE_CLIENT if m['engine'] == 'CE0' and copy_engine_client(m['client']) else m['client']

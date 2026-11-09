@@ -128,6 +128,40 @@ require two named killers each.
 exception. No GPU was run in XD1; guest containment and batch results remain unverified.
 An authorized exact-revision GPU gate is still needed to establish those outcomes.
 
+### RV2 record-framing correction, 2026-11-09
+
+**MEASURED (GPU-free hook reproducer and tests, 2026-11-09):** review of PR #321 at
+`06472f298` found that an unexpected record concatenated before the expected record
+could be ignored when its prefix used `nvrm: xid` or `NVRM:  Xid`. The watcher printed
+VOID, but the grader could admit the expected suffix. This was a retained parser
+weakness, not evidence that such a physical kernel log occurred on the RTX 5070.
+The original canonical-hidden-record tests did not establish the stronger framing
+property claimed above; the correction in this section supplies that missing check.
+
+**CODE READ:** `xid_lines` now uses the watcher's case-insensitive selection expression,
+including unfamiliar Xid/MMU/bus-fault text. Native admission full-matches each selected
+physical line, with a syntactically valid PCI identifier and only supported raw,
+dmesg numeric/ctime, kernel, ISO-journal or traditional-syslog prefixes. A prefix
+containing fault-selector text is unsupported and stays VOID. An unknown fragment,
+trailing text or concatenated record cannot be treated as opaque prefix. There is no
+suffix search and no formatting-based exception to the fault identity checks.
+
+**CODE READ:** the wrapper reader and fault census split only on physical newline
+bytes. Carriage returns, vertical tabs, form feeds and Unicode line separators remain
+in the selected line and cause refusal; they cannot hide a second record or be stripped
+before parsing. Every selected line must yield one complete admitted record, and the
+resulting multiset must equal the expected source operations. Multiple records on one
+line are unsupported and therefore VOID. The shell watcher's selection/VOID rule is unchanged.
+
+**CODE READ:** `test_vast_native_framing.py` runs the real hook, watcher, native-exec
+and grader with fake dmesg for both Blackwell and legacy spellings. It covers case,
+spacing/tabs, concatenation, trailing fragments, later physical lines, embedded prefix
+or PCI fragments and physical/control-line separators, plus supported-prefix positive
+controls. Fast companion tests in `test_vast_payload_native_fault.py` exercise the
+same parser/census rules under the mutation collector. The CI `test_vast*.py` command
+discovers both files. Framing mutants retain the two-named-killer requirement and the
+existing mutation timeout; no baseline or pass rule is relaxed.
+
 [CODE READ: test_vast_payload.py, test_vast_payload_v7.py, payload_mutants.py] GPU-free checks:
 `python3 -m unittest discover -s scripts/ci -p 'test_vast_payload*.py'`
 and `python3 scripts/ci/payload_mutants.py`. Black uses line length 100; shellcheck covers both

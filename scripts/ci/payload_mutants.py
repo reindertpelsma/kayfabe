@@ -756,7 +756,22 @@ CASES += [
         "if 'FAULT_MARK=' in source[:markers[0].start()]:", "if False:"
     ), "native_xid_guard.py"),
     ("xd1-hidden-second-xid-admitted", guard_replace(
-        "if m is None or line.count('NVRM: Xid') != 1:", "if m is None:"
+        "m = pattern.fullmatch(line)", "m = pattern.search(line)"
+    ), "native_xid_guard.py"),
+    ("xd1-framing-selection-canonical-only", guard_scoped(
+        "xid_lines", "if WATCHED_FAULT.search(line)", 'if "NVRM: Xid" in line'
+    ), "native_xid_guard.py"),
+    ("xd1-framing-prefix-selector-ignored", guard_replace(
+        "if m is None or WATCHED_FAULT.search(m['prefix']):", "if m is None:"
+    ), "native_xid_guard.py"),
+    ("xd1-framing-pci-text-unrestricted", guard_replace(
+        r'PCI:[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}(?:\.[0-7])?', r'PCI:[^)]+'
+    ), "native_xid_guard.py"),
+    ("xd1-framing-watch-splits-control-characters", scoped(
+        "watch_delta", '.split("\\n")', '.splitlines()'
+    )),
+    ("xd1-framing-census-strips-control-characters", guard_scoped(
+        "xid_lines", "journal.split('\\n')", "journal.splitlines()"
     ), "native_xid_guard.py"),
 ]
 

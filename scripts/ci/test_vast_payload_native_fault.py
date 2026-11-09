@@ -321,5 +321,83 @@ class NativeExecHook(unittest.TestCase):
         self.assertEqual((rc, failed, allowed), (6, True, False), output)
 
 
+def foreign_fault(line):
+    return (
+        line.replace(": 31,", ": 79,")
+        .replace("pid=4242", "pid=9")
+        .replace("name=kayfabe-rm-ladd", "name=other")
+        .replace("channel 0x00000003", "channel 0x00000007")
+        .replace("0xa_11000000", "0xa_12000000")
+    )
+
+
+class NativeFramingCensus(unittest.TestCase):
+    def admit_physical_line(self, line, expected):
+        # Retain the exact physical line, unlike watch()'s convenience splitting.
+        text = watch(expected, 0, 1).replace("    " + expected, "    " + line)
+        text = text.replace("\nfixture\n", "\n" + SOURCE + "\n")
+        return payload.xid_ok(text, 6, "--missing-page-fault", text)
+
+    def test_blackwell_physical_separator_cannot_drop_a_record(self):
+        self.assertFalse(
+            self.admit_physical_line(BLACKWELL + "\r" + foreign_fault(BLACKWELL).lower(), BLACKWELL)
+        )
+
+    def test_legacy_physical_separator_cannot_drop_a_record(self):
+        self.assertFalse(
+            self.admit_physical_line(LEGACY + "\u2028" + foreign_fault(LEGACY).lower(), LEGACY)
+        )
+
+    def test_blackwell_trailing_physical_control_is_not_stripped(self):
+        self.assertFalse(self.admit_physical_line(BLACKWELL + "\r", BLACKWELL))
+
+    def test_legacy_trailing_physical_control_is_not_stripped(self):
+        self.assertFalse(self.admit_physical_line(LEGACY + "\u2028", LEGACY))
+
+    def test_blackwell_pci_cannot_contain_fault_fragments(self):
+        self.assertFalse(
+            self.admit_physical_line(
+                BLACKWELL.replace("PCI:0000:00:00", "PCI:0000:00:00 nvrm: xid 79"), BLACKWELL
+            )
+        )
+
+    def test_legacy_pci_cannot_contain_fault_fragments(self):
+        self.assertFalse(
+            self.admit_physical_line(
+                LEGACY.replace("PCI:0000:00:00", "PCI:0000:00:00 nvrm: xid 79"), LEGACY
+            )
+        )
+
+    def test_blackwell_supported_prefix_cannot_contain_selector(self):
+        line = "2026-11-09T02:20:00+0000 xid79 kernel: " + BLACKWELL.split("] ", 1)[1]
+        self.assertFalse(self.admit_physical_line(line, BLACKWELL))
+
+    def test_legacy_supported_prefix_cannot_contain_selector(self):
+        line = "2026-11-09T02:20:00+0000 xid79 kernel: " + LEGACY.split("] ", 1)[1]
+        self.assertFalse(self.admit_physical_line(line, LEGACY))
+
+    def refuse_native_extra(self, line):
+        # Full journal admission must not silently filter an unfamiliar extra line.
+        other = foreign_fault(line).replace("NVRM: Xid", "nvrm:  xid")
+        with self.assertRaises(payload.xid_guard.GuardRefused):
+            payload.xid_guard.approve_native_arm(
+                line + "\n" + other, "--missing-page-fault", SOURCE
+            )
+
+    def test_blackwell_full_journal_census_is_case_insensitive(self):
+        self.refuse_native_extra(BLACKWELL)
+
+    def test_legacy_full_journal_census_is_case_insensitive(self):
+        self.refuse_native_extra(LEGACY)
+
+    def test_blackwell_frozen_history_includes_noncanonical_records(self):
+        with self.assertRaises(payload.xid_guard.GuardRefused):
+            payload.xid_guard.check_unchanged(BLACKWELL + "\nnvrm:  xid 79", [BLACKWELL])
+
+    def test_legacy_frozen_history_includes_noncanonical_records(self):
+        with self.assertRaises(payload.xid_guard.GuardRefused):
+            payload.xid_guard.check_unchanged(LEGACY + "\nnvrm:  xid 79", [LEGACY])
+
+
 if __name__ == "__main__":
     unittest.main()

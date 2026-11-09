@@ -846,7 +846,7 @@ def watch_delta(text, rc, *, failed_provider=False):
         raise EvidenceError("host_xid")
     delta = [
         s[4:]
-        for s in suffix.split("NEW HOST Xid ACROSS THE COMMAND", 1)[1].splitlines()
+        for s in suffix.split("NEW HOST Xid ACROSS THE COMMAND", 1)[1].split("\n")
         if s.startswith("    ")
     ]
     if not delta or after - before != len(delta):
