@@ -70,6 +70,7 @@ class DistinctReports(unittest.TestCase):
             event(3,identity=None,pointer='fffffa4efa4e0002'),event(4,identity=None,pointer='fffffa4efa4e0002')])
         add('mixed',[report()],repeated+[event(4,identity=None,code='141'),event(5,identity=None,code='117')])
         add('strict',[report()],repeated,strict=True)
+        add('strict_unidentified',[],[event(i,identity=None) for i in (1,2,3)],strict=True)
         add('reset',[report()],repeated,system_count=1)
         add('empty',[],[])
         # Replay the recorded WER spellings and P1..P8 event signatures without
@@ -170,5 +171,8 @@ $out | ConvertTo-Json -Depth 8 -Compress
         self.assertEqual(self.counts('unidentified_mixed')['livekernelevent193_unresolved'],'4')
     def test_non193_counts_do_not_include_193_resubmissions(self): self.check('mixed',1,3,other=2,total=2)
     def test_strict_mode_still_counts_any_193_entry(self): self.check('strict',1,3,total=3)
+    def test_strict_mode_gates_unresolved_entries_with_zero_report_count(self):
+        self.check('strict_unidentified',0,3,total=3)
+        self.assertEqual(self.counts('strict_unidentified')['livekernelevent193_unresolved'],'3')
     def test_other_reset_provider_still_gates(self): self.check('reset',1,3,total=1)
     def test_no_entries_are_explicit_zero_counts(self): self.check('empty',0,0)

@@ -82,6 +82,7 @@ CASES=[
  ('inconsistent-counts-accepted',PY,'if entries is not None and (entries < count or (unresolved is not None and unresolved > entries)):','if False:',1),
  ('unresolved-comparison-invented',PY,"row is None or unresolved","row is None",1),
  ('explicit-identity-overridden-by-signature',STATE,'$signature -and -not $id -and -not $directory -and (Is-193 $e)','$signature',1),
+ ('strict-counts-reports-instead-of-entries',STATE,'if ($Strict) { $total += $lke193Entries }','if ($Strict) { $total += $lke193 }',1),
 ]
 FILES=[PY,PS,GATE,RR,'scripts/ci/test_vast_lke193.py','scripts/ci/vast_report.py','scripts/ci/app_policy.py',
  'scripts/ci/test_vast_lke193_counts.py',
