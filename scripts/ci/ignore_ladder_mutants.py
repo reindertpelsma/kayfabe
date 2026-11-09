@@ -196,6 +196,10 @@ CASES = [
             "        pass\n    except FailClosed as e:",
         ),
     ),
+    (
+        "export-extraction-errors-uncaught",
+        changed("except (tarfile.TarError, OSError) as e:", "except ZeroDivisionError as e:"),
+    ),
     ("strip-needs-exactly-one-target-lost", changed("if a.in_place == bool(a.dest):", "if False:")),
 ]
 COLLECT = """import io,json,unittest

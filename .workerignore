@@ -48,6 +48,65 @@
 # Syntax (asserted by the checker): every line starts with / or **/, no negation, no trailing /,
 # `**` only as a whole segment. git, docker and the checker's matcher then read it the same way.
 
+# --- traces/: ignored EXCEPT the evidence that tests read (include_str! and runtime reads) ---
+# The syntax has no negation, so the kept directories are listed by being left out: each line below is the
+# shortest prefix glob that matches no kept name. Kept (a test of a workspace crate reads them; the box
+# sparse list in ci/vast-broker/src/onstart.js names the same data): driver_matrix, rawclient_ce_interrupt_20261008, blackwell_host_caps_review_20261022, blackwell_hw_20261103, blackwell_provider_validation_20261023, blackwell_windows_resume_20261023, real_ga106, c_oracle_census, user_ring_scan_20261014, constants_night_20261014, real_ad104, real_ga104, real_hw_20261013, real_tu116, die_driver_sweep_20261015, constants_measure_20261014b, cap1_coldboot_hermetic.rec, cap1b_coldboot_hermetic_d6.rec.
+# A new traces/ directory whose name starts like one of these globs is ignored without a line; one that
+# starts like a kept name stays in the stripped tree (harmless, it only enters the key).
+# ORDER MATTERS TO THE WORKER, NOT TO THE STRIP: treekey.js stops at the first line that matches, and it
+# must list traces/ (part of it is kept, so it cannot skip the directory), so these lines come FIRST and
+# the broadest first. Measured 2026-11-09: 7.5 M of the Worker matcher's 20 M steps in this order,
+# more than 20 M (no key) when they follow the other lines. ci/vast-broker/test/ladder-parity.test.js
+# fails above 60 percent of the budget.
+/traces/w*
+/traces/v*
+/traces/die_c*
+/traces/s*
+/traces/g*
+/traces/a*
+/traces/bo*
+/traces/t*
+/traces/p*
+/traces/blackwell_v*
+/traces/blackwell_r*
+/traces/l*
+/traces/blackwell_win_*
+/traces/blackwell_c*
+/traces/rec*
+/traces/blackwell_a*
+/traces/capa*
+/traces/blackwell_f*
+/traces/blackwell_e*
+/traces/real_w*
+/traces/o*
+/traces/dis*
+/traces/blackwell_n*
+/traces/die_s*
+/traces/caps*
+/traces/k*
+/traces/can*
+/traces/i*
+/traces/rel*
+/traces/f*
+/traces/cw*
+/traces/do*
+/traces/m*
+/traces/de*
+/traces/h*
+/traces/e*
+/traces/n*
+/traces/cu*
+/traces/rawclient_a*
+/traces/rp*
+/traces/ru*
+/traces/E*
+/traces/bw*
+/traces/2*
+/traces/R*
+/traces/cl*
+/traces/dia*
+
 # --- everything .gitignore ignores (kept line for line) ---
 /target
 /target-*
@@ -77,7 +136,6 @@
 
 # --- trees a box never reads ---
 /archive
-/traces
 /site
 /.github
 /.deadman

@@ -752,6 +752,51 @@ class StripStep(unittest.TestCase):
             self.assertFalse(os.path.exists(os.path.join(root, "third_party", "linux")))
             self.assertFalse(os.path.exists(os.path.join(root, "third_party")))
 
+    def test_a_kept_symlink_that_escapes_the_tree_fails_the_export_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.repo(tmp)
+            os.symlink("/etc/passwd", os.path.join(root, "evil-link"))
+            sh("git", "-C", root, "add", "-f", "evil-link")
+            sh(
+                "git",
+                "-C",
+                root,
+                "-c",
+                "user.email=t@x.invalid",
+                "-c",
+                "user.name=t",
+                "commit",
+                "-q",
+                "-m",
+                "link",
+            )
+            p = run_cli(root, "strip", "--dest", os.path.join(tmp, "out"))
+            self.assertEqual(p.returncode, 3, p.stdout + p.stderr)
+            self.assertIn("IGNORE_LADDER_FAIL_CLOSED", p.stdout)
+            self.assertNotIn("Traceback", p.stderr)
+
+    def test_a_kept_relative_symlink_out_of_the_tree_fails_the_export_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.repo(tmp)
+            os.symlink("../../../outside", os.path.join(root, "crates", "kf-a", "up-link"))
+            sh("git", "-C", root, "add", "-f", "crates/kf-a/up-link")
+            sh(
+                "git",
+                "-C",
+                root,
+                "-c",
+                "user.email=t@x.invalid",
+                "-c",
+                "user.name=t",
+                "commit",
+                "-q",
+                "-m",
+                "link",
+            )
+            p = run_cli(root, "strip", "--dest", os.path.join(tmp, "out"))
+            self.assertEqual(p.returncode, 3, p.stdout + p.stderr)
+            self.assertNotIn("Traceback", p.stderr)
+
     def test_a_symlink_is_removed_not_followed(self):
         with tempfile.TemporaryDirectory() as tmp:
             outside = os.path.join(tmp, "outside")

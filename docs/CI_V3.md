@@ -1,7 +1,53 @@
 # CI scope after the v3 migration
 
-**STATUS: LIVE, 2026-09-29.** This describes the CI repair, not an expansion of the
+**STATUS: LIVE, 2026-11-09.** This describes the CI repair, not an expansion of the
 hardware support matrix or a claim of complete unsafe-code soundness.
+
+## Stripped tree (2026-11-09)
+
+**STATUS of this section: LIVE, 2026-11-09.** Owner ruling (cited as section AQ of `OWNER_RULINGS.md` in the
+lane brief; that section is not yet in this tree's `docs/OWNER_RULINGS.md`): the tests of
+production code, and the tests a Vast box depends on, run on the tree that is left after everything
+`.workerignore` matches is deleted. The site, the docs, the Worker, the repository-structure and the
+claim checks keep their own filters and run on the full tree.
+
+What exists (CODE READ unless marked):
+
+- **One matcher.** `matches` in `scripts/ci/ignore_ladder.py`. `ignore_ladder.py strip --in-place`
+  deletes the tracked files the commit's own `.workerignore` matches (read with `git show REV:.workerignore`,
+  never from the working copy; never `.git`; symlinks are removed, not followed; every path is checked
+  before the first deletion); `strip --dest DIR` exports the same tree.
+- **Fail closed (exit 3, nothing deleted):** a missing or non-UTF-8 file, a line outside the restricted
+  syntax, a tree with nothing left, and an ignore set that would delete code: any non-prose file under
+  `crates/ qemu/ cuda/ firmware/ tools/ .cargo/ third_party/ogkm third_party/ogkm-580`, `Cargo.toml`,
+  `Cargo.lock`, `rust-toolchain.toml`, `clippy.toml`, `.gitmodules`, `.dockerignore`, `Dockerfile*`,
+  `docker-compose*.yml`. `ignore_ladder.py check` reports the same refusals on every push.
+- **Key cross-check.** `ignore_ladder.py keycheck` computes the `kf-tree-v2` key twice, in Python and with
+  `ci/vast-broker/src/treekey.js`, and fails unless the bytes are equal; `ci/vast-broker/test/ladder-parity.test.js`
+  compares the two matchers on the repository's three ignore files, on 400 seeded random pattern sets and on
+  a set of lines only one side accepts (the strict side refuses them).
+- **Where it runs.** The `stripped` job of `.github/workflows/ci.yml` (GPU-free `cargo build`, `cargo test
+  --workspace`, the reached-count gates and `cargo clippy` with errors fatal) and the box's checkout in
+  `scripts/bench/box/merge_check.sh`. The `stable` job keeps clippy with its warning-debt ratchet, rustfmt,
+  and every structure, boundary, claim and documentation gate. **Not run on hardware:** the box strip has
+  never run on a rented box; the first `gpu-vast` run of a batch PR is its test.
+- **Oracles must run.** `crates/kf-chip/tests/hwref_is_current.rs` skipped (a printed line that cargo counts
+  as a pass) when `third_party/ogkm-580` or `gcc` was absent. With `KF_REQUIRE_ORACLES` set to anything but
+  empty or `0` an absence is a failure. The stripped job and `merge_check.sh` set it; a developer may leave it
+  unset and skip. `scripts/ci/fetch_oracles.sh` checks the oracle out shallow at the pinned commit and fails
+  unless the commit recorded in the tree and the id fetched both equal the pin written in the script.
+  The `stripped` job also fails unless the log carries `ORACLE-GATE: RAN hwref_is_current required=true`.
+  The other oracle test that skips when its tree is absent, the fn-1 negotiation oracle
+  (`FN1-ORACLE-GATE: SKIPPED`, ogkm 595.84, not a submodule), is **not** covered; see the PR for the decision.
+
+**Why `gpu-vast.yml` does not read `.workerignore` (decision: left out).** Its two policy jobs run the
+BASE workflow with a hard-coded skip list, so a pull request cannot change the skip set of its own run.
+Reading the PR's own `.workerignore` would hand the author the skip set. Reading the BASE copy would be
+safe against that but still weaker than today: `.workerignore` ignores `/.github` and `/ci/vast-broker`,
+whose changes run the gate today (`trigger-policy.mjs` never skips `ci/vast-broker/`), so using it as the
+skip set runs the gate less often. Making the result provably no weaker means intersecting it with the
+existing list, which is the list. What is proved instead is the property that makes a skip sound: every
+path the gate skips is also deleted by the strip (`ladder-parity.test.js`, "skip set inside strip set").
 
 ## CI repair of 2026-10-21 (branch `claude/ci-green-20261021`)
 

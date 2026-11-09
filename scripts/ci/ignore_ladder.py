@@ -548,7 +548,10 @@ def strip_export(rev, dest, root):
                 continue
             if matches(pats, name):
                 continue
-            tar.extract(m, dest, filter="data")
+            try:
+                tar.extract(m, dest, filter="data")
+            except (tarfile.TarError, OSError) as e:
+                raise FailClosed("cannot export %r: %s" % (name, e)) from None
             got += 0 if m.isdir() else 1
     # Submodule paths are directories in the archive and gitlinks in the listing.
     want = len([e for e in kept if e[0] != "160000"])

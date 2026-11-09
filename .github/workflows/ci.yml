@@ -115,6 +115,9 @@ jobs:
           python3 scripts/ci/dependencies.py
           python3 scripts/ci/debt.py frozen
           python3 scripts/ci/workflow_lint.py
+          # The ignore ladder (.gitignore <= .workerignore <= .dockerignore), the matcher against git and
+          # docker semantics on this tree, and what the strip step would refuse (the stripped-tree job runs it).
+          python3 scripts/ci/ignore_ladder.py check
           # Python < 3.14 uses the zstd CLI for bounded evidence inspection.
           if ! command -v zstd >/dev/null 2>&1; then
             sudo apt-get update -q

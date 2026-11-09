@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { PROTECTED, ignored, parseIgnore, treeKeyOf } from '../src/treekey.js';
+import { LIMITS, MatchBudget, PROTECTED, ignored, parseIgnore, treeKeyOf } from '../src/treekey.js';
 import { skippedPath } from '../trigger-policy.mjs';
 // The strip step (scripts/ci/ignore_ladder.py, `matches`) is the ONE matcher the box and the
 // stripped-tree CI job use; the Worker's treekey.js reads the same file to key a commit. If the two
@@ -74,6 +74,26 @@ test(
     const patternLines = lines(readFileSync(root + '.workerignore', 'utf8'));
     const { mine, theirs } = both(patternLines, tracked);
     assert.equal(mine.key, await treeKeyOf(tracked, theirs));
+  },
+);
+
+test(
+  'the Worker can still compute a key for .workerignore within 60 percent of its matcher budget',
+  { skip },
+  async () => {
+    // Mirrors computeTreeKey: a wholly ignored top-level directory is never listed, every other
+    // directory is. traces/ is partly kept, so its files are listed and every one of them is matched.
+    // The matcher stops at the first matching line, so the order of the lines is part of the cost.
+    const patterns = parseIgnore(readFileSync(root + '.workerignore', 'utf8'));
+    const listed = tracked.filter(
+      (e) => !e.path.includes('/') || !ignored(patterns, e.path.split('/')[0], true),
+    );
+    const budget = new MatchBudget();
+    const key = await treeKeyOf(listed, patterns, budget);
+    const used = LIMITS.steps - budget.left;
+    assert.ok(key, 'no key: the matcher budget ran out (' + used + ' steps)');
+    assert.ok(used < LIMITS.steps * 0.6, 'uses ' + used + ' of ' + LIMITS.steps + ' steps');
+    assert.ok(patterns.length < LIMITS.patterns * 0.5, patterns.length + ' lines');
   },
 );
 
