@@ -102,6 +102,7 @@ class DistinctReports(unittest.TestCase):
                 directory=work/'wer'/relative; directory.mkdir(parents=True)
                 (directory/'Report.wer').write_text(record['text'],encoding='utf-16')
             modified=state.replace("'C:\\ProgramData\\Microsoft\\Windows\\WER'",repr(str(work/'wer')))
+            modified=modified.replace("'C:\\Windows\\LiveKernelReports\\WATCHDOG'",repr(str(work/'dumps/WATCHDOG')))
             modified=modified.replace("'C:\\Windows\\LiveKernelReports'",repr(str(work/'dumps')))
             modified=modified.replace('C:\\Windows\\LiveKernelReports',repr(str(work/'dumps')))
             (work/'gate_state.ps1').write_text(modified)
