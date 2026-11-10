@@ -301,6 +301,24 @@ def _context(context):
         raise GuardRefused('guest exception is only for the two pinned negative controls')
 
 
+# Host-twin work-submit token layout, as printed by kf3's "RC host twin" line (`host_token`
+# is the channel's token, not its chid). Source: crates/kf-trap/src/tokenindex.rs, from
+# kfifoGenerateWorkSubmitTokenHal_GB202: RUNLIST_DOORBELL 30:30, RUNLIST_ID 22:16, VECTOR 11:0.
+# Bit 30 is set on every GB20x token; Turing..Hopper tokens are the bare chid (RUNLIST_ID may be
+# nonzero for non-GR engines, never bit 30). Every other bit (31, 29:23, 15:12) is reserved.
+# The host Xid record names only the chid (VECTOR), never the runlist: a masked compare cannot
+# tell two runlists apart, and the engine/client checks on the record are what bind it to a CE.
+TOKEN_VECTOR_MASK = 0x0000_0FFF
+TOKEN_LAYOUT_MASK = 0x4000_0000 | (0x7F << 16) | TOKEN_VECTOR_MASK
+
+
+def token_chid(token):
+    """The chid a host-twin work-submit token carries (VECTOR 11:0); refuses undefined bits."""
+    if token & ~TOKEN_LAYOUT_MASK:
+        raise GuardRefused('host-twin token has bits outside the work-submit token layout')
+    return token & TOKEN_VECTOR_MASK
+
+
 def _guest_record(line):
     if line.count('NVRM: Xid') != 1:
         raise GuardRefused('multiple/hidden Xid records')
@@ -406,7 +424,7 @@ def approve_guest(journal, baseline, serial, qlog, context, *, final=True):
         m = re.search(r'kf3: RC host twin (0x[0-9a-f]+) \(guest chid (0x[0-9a-f]+), engine (0x[0-9a-f]+)\) wrote its notifier: except_type=0x1f \(Xid 31\) — forwarding RC_TRIGGERED$', line)
         if m is None:
             raise GuardRefused('unparsed/unrelated host-twin fault')
-        twins.append((int(m[1], 16), int(m[2], 16)))
+        twins.append((token_chid(int(m[1], 16)), int(m[2], 16)))  # the Xid record names the chid, not the token
     if len(twins) > count or (final and len(twins) != count):
         raise GuardRefused('missing/extra physical-to-guest channel correlation')
     for i, line in enumerate(added):

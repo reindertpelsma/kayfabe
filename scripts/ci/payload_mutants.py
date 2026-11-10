@@ -781,6 +781,18 @@ CASES += [
     ("xd1-framing-census-strips-control-characters", guard_scoped(
         "xid_lines", "journal.split('\\n')", "journal.splitlines()"
     ), "native_xid_guard.py"),
+    ("xd2-twin-token-compared-whole", guard_replace(
+        "return token & TOKEN_VECTOR_MASK", "return token"
+    ), "native_xid_guard.py"),
+    ("xd2-twin-chid-mask-keeps-runlist", guard_replace(
+        "return token & TOKEN_VECTOR_MASK", "return token & 0x007F_FFFF"
+    ), "native_xid_guard.py"),
+    ("xd2-twin-token-reserved-bits-ignored", guard_replace(
+        "if token & ~TOKEN_LAYOUT_MASK:", "if False:"
+    ), "native_xid_guard.py"),
+    ("xd2-twin-host-chid-unchecked", guard_replace(
+        "twins[i] != (int(record['channel'], 16), guest_chid)", "twins[i][1] != guest_chid"
+    ), "native_xid_guard.py"),
 ]
 
 COLLECT = """import io,json,unittest,importlib.util
