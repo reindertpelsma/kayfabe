@@ -469,9 +469,20 @@ APPS_ROW = re.compile(
     re.M,
 )
 APPS_LIST_LINE = re.compile(r"^APPS_STAGE_LIST n=([0-9]+) ", re.M)
-# Its own wall-clock budget (apps_gate.sh KF_APPS_BUDGET_S) plus margin; INFERRED until a box has run
-# the whole gate list under the payload (the measurement is in traces/apps_linux_20261107/).
-APPS_MIN_REMAINING_MS = 60 * 60000
+# What the stage may take, worst case, once it starts on a FRESH box: it builds its own media (the stage runs with
+# KF_APPS_PROVISION=1, below) and then runs the matrix.
+#   provisioning  29 min   MEASURED fresh-box bundle build + guest image: 18.8 + 9.1 min overlapped with a 2.1 min host
+#                          runtime step (traces/apps_linux_20261107/README.md, 2026-11-07) and 14 + 13.5 min (fresh
+#                          build, then the stage's own provisioning pass) on 2026-11-10 (traces/apps_linux_media_20261110/)
+#   matrix        50 min   KF_APPS_BUDGET_S, the stage's hard cap (default 3000 s); MEASURED actual 1029 s = 17 min for
+#                          66/66 (same trace), slowest apps vkpeak 332 s, clpeak 112 s, gpu_burn 95 s
+#   margin        11 min   rounds the sum to 90 (the previous value, 60, was the 50 min cap plus 10)
+# The reserve is a worst-case bound on this stage alone, not the expected duration (about 46 min measured). The
+# stage's min_remaining_ms adds the Windows gate and the Windows apps that must still fit after it (below), so with
+# the mid Windows profile Linux apps start only with 90 + 75 + 70 = 235 min left. INFERRED: the 300 min hard limit
+# less the 10 min soft margin leaves 55 min for everything before this stage; the run log of the first middle-tier
+# Worker run (PR #334) puts the start of Linux apps near minute 30.
+APPS_MIN_REMAINING_MS = 90 * 60000
 
 
 def apps_requested(tier):
@@ -480,7 +491,12 @@ def apps_requested(tier):
 
 
 def linuxapps_requested(environ, tier):
-    """Worker-authored explicit middle opt-in; the old source flag remains a legacy owner control."""
+    """Worker-authored explicit middle opt-in; the old source flag remains a legacy owner control.
+
+    KF_APPS_PROVISION is consumed here too and never forwarded: a fresh Worker box has no built media, so the stage
+    is always started with KF_APPS_PROVISION=1 by the payload itself (below); whatever the environment says about it
+    cannot weaken or strengthen that."""
+    environ.pop("KF_APPS_PROVISION", None)
     value = environ.pop("KF_LINUX_APPS", None)
     if value is None:
         return apps_requested(tier)
@@ -1603,6 +1619,10 @@ def main():
             stage = make_stage(
                 "apps",
                 [
+                    # Explicit and not inherited: a Worker box has no bundle, no guest image and no PROVISIONED
+                    # marker, so without this the stage ends in about a second with class=MEDIA.
+                    "env",
+                    "KF_APPS_PROVISION=1",
                     "bash",
                     str(root / "scripts/bench/box/apps_gate.sh"),
                     tag,

@@ -1,4 +1,4 @@
-STATUS: DESIGN-ONLY, 2026-11-08. CODE READ: implementation and GPU-free fixtures exist. MEASURED: LB1 built or booted no real image. Coordinator builds, cross-verification and the GPU apps gate remain required before adoption or hosting.
+STATUS: DESIGN-ONLY, 2026-11-08 (the INTERIM section on the Worker-box path, 2026-11-10, describes code that is live but was MEASURED only by hand on one box). CODE READ: implementation and GPU-free fixtures exist. MEASURED: LB1 built or booted no real image. Coordinator builds, cross-verification and the GPU apps gate remain required before adoption or hosting.
 
 # Linux apps image recipe
 
@@ -9,6 +9,35 @@ STATUS: DESIGN-ONLY, 2026-11-08. CODE READ: implementation and GPU-free fixtures
 **CODE READ — owner correction, 2026-11-08:** reproducibility compares **PINNED inputs only**: package names/versions, pip freeze plus wheel hashes, source/model/wheel URLs and SHA256 pins, source commits/tags and recipe/tooling hashes. Compiled binary hashes, installed-distribution file digests and image hashes are **BUILT observations**, recorded and printed but not compared across builds. Missing required apps still fail. This supersedes the earlier requirement for equal app-binary hashes. The historical shell-built image is not qualified by this recipe; its app results remain [R5's dated record](../../traces/apps_linux_20261107/README.md).
 
 **Notation:** MEASURED means an LB1 test or public-input observation dated 2026-11-07; CODE READ describes implementation; DESIGN means required coordinator work; INFERRED identifies an estimate. No hardware result is inferred from a mock transcript.
+
+## Linux apps on a Worker box until the open image is qualified (INTERIM, 2026-11-10)
+
+**CODE READ:** the open image in the rest of this document is not what a Worker box runs today. A fresh Worker box has no `bundle.tgz`, no guest image and no `PROVISIONED` marker, and the stage `scripts/bench/box/apps_gate.sh` (`scripts/kfci/apps_gate.py`) used to end in about a second with `APPS_STAGE_RETRY class=MEDIA`. The payload now starts that stage as `env KF_APPS_PROVISION=1 bash apps_gate.sh ...` (`scripts/ci/vast_payload.py`), so the stage builds its own media on the box: `scripts/apps/build_bundle.sh` (CUDA toolkit, the open source builds, `bundle.tgz`), then `scripts/apps/provision_guest_apps.sh` (the guest image over slirp: `scripts/apps/setup_side.sh`). The flag is not a Worker input: the box's environment contract has no row for it, the payload consumes any ambient value, and the stage always gets `1`. This is the owner-visible "option A"; the prebuilt open image (the recipe above, hosted by hash and fetched in minutes) remains the later plan, and nothing here qualifies it.
+
+**CODE READ, owner constraints this path obeys:** boxes are untrusted and carry no secrets. Nothing from NVIDIA is stored by us: the CUDA toolkit is installed on the box, at run time, from NVIDIA's own repository (`pin_install_cuda_toolkit` in `scripts/apps/pin_lib.sh`, the one deliberate bypass of the cache-only `apt-get` shim, which holds no NVIDIA package). The open Ubuntu dev packages the build needs (`cmake`, `unzip`, `libegl-dev`, `libgles-dev`, `ocl-icd-opencl-dev`, `opencl-headers`) are in the setup-cache package policy (`provision_box.sh --packages apps`). The stage still runs before the Windows stages; a MEDIA retry cancels them, which is why a build failure must be a retry and never a graded matrix.
+
+**MEASURED, 2026-11-10 ([traces/apps_linux_media_20261110/](../../traces/apps_linux_media_20261110/README.md), one RTX 4090 box, revision `0e90b617e`):** the bundle build took 14 min (`bundle_build.log`, toolkit install included); the stage's own provisioning pass then took 13.5 min (`apps_stage.out`: `APPS_PROVISION_START` 18:24:37Z, `APPS_PROVISION_END rc=0` 18:38:04Z; a pass over sources that were already present plus the guest image); the matrix took 1029 s for 66/66 (`APPS_STAGE_MATRIX_END rc=0 secs=1029`). The slowest apps were `vkpeak` 332 s, `clpeak` 112 s and `gpu_burn` 95 s. Those builds were done by hand on that box, not under the payload. **MEASURED, 2026-11-07 ([traces/apps_linux_20261107/](../../traces/apps_linux_20261107/README.md)):** provisioning took 29 min on a fresh box (bundle 18.8 min, host runtime 2.1 min, guest image 9.1 min, the last two overlapped).
+
+**INFERRED, not measured:** the stage reserve `APPS_MIN_REMAINING_MS` is 90 min: 29 min provisioning plus the 50 min matrix cap (`KF_APPS_BUDGET_S`, default 3000 s) plus 11 min of margin; the expected duration is about 46 min (29 + 17). With the Windows gate (75) and the Windows mid apps (70) that must still fit afterwards, Linux apps start only with 235 min left, leaving 55 min of the 290-minute soft window for everything before them (a read of the first middle-tier Worker run's log puts their start near minute 30). **Never run:** this path under the payload's apt shim on a Worker box, the setup-cache rebuild with the new packages, and the pinned fetches end to end; the GPU-free tests (`test_apps_pins.py`, `test_apps_media.py`, the cases of `middle_apps_mutants.py`) use fake `curl`, `dpkg` and `apt-get` and local git remotes. The first batch gate is the first real run.
+
+**CODE READ, failure semantics:** `build_bundle.sh` exits 1, prints `BUILD_BUNDLE_FAIL count=N` and writes no `bundle.tgz` when any `BUILD_*` step failed; `provision_guest_apps.sh` exits 5 when a guest `SETUP_*` step failed. The stage also reads the provisioning log: any `BUILD_*=FAIL` or `SETUP_*=FAIL` line, or a non-zero provisioning exit, ends the stage with `APPS_PROVISION_FAIL steps=...` and `APPS_STAGE_RETRY class=MEDIA`, before any matrix runs. A retry is not a verdict on the guest; a failed pin is retried like any failed download, so a deterministic failure repeats until the pin or the source is fixed.
+
+**CODE READ, what is pinned** (`scripts/apps/pins.sh`, fetched through `scripts/apps/pin_lib.sh`, which refuses an empty, malformed or mismatching pin; `test_apps_pins.py` checks every value against `recipe.json` above). Commit and digest values were read from the upstream hosts on 2026-11-10; the commits of cuda-samples, llama.cpp and clpeak also match what the 2026-11-10 box printed.
+
+| Input | Pinned as | Not pinned |
+|---|---|---|
+| cuda-samples v12.5 | commit `9c688d7f...`; HEAD must equal it | none |
+| gpu-burn | commit `0d19c94d...` (upstream HEAD of 2026-10-02; the earlier build cloned HEAD and printed no revision, so that it equals this commit is INFERRED) | none |
+| llama.cpp | commit `4b1a27fa...`; the `LLAMA_PIN` environment override is gone | none |
+| clpeak 1.1.2 | commit `a4d617d7...`, submodules follow it | none |
+| vkpeak 20250531 | sha256 and size of the release zip | none |
+| CUDA keyring deb | sha256 per Ubuntu release (22.04, 24.04); any other release is refused | the repository's package contents are whatever NVIDIA's signed index serves |
+| CUDA toolkit | `cuda-toolkit-12-6=12.6.3-1` (nvcc 12.6.85) | the versions of its NVIDIA dependencies (library minor versions can float) |
+| Qwen2.5-1.5B GGUF (guest) | Hugging Face revision `91cad511...` plus sha256 and size, no `resolve/main` | none |
+| Blender 4.5.0 (guest) | sha256 and size of the tarball (equal to Blender's published checksum) | none |
+| open Ubuntu dev packages (host) | by the setup cache's package-policy and asset hashes | versions are those of the cache build |
+
+**Still unpinned, listed rather than hidden:** the guest's `apt-get` packages (`setup_side.sh`, Ubuntu mirror, no snapshot); the pip wheels (torch 2.6.0 and the other direct packages are pinned by version only, no hashes, torch from the PyTorch index, and their transitive dependencies float); the Hugging Face model `Qwen/Qwen2-0.5B-Instruct` (fetched by name, revision `main`; the recipe pins revision `c540970f9e29518b1d8f06ab8b24cba66ad77b6d` but the hand path does not use it yet); the base `guest.qcow2` that `provision_full.sh` builds (outside this change). The gate is a test job, not an attested release build, so these are accepted until the open image replaces the path.
 
 ## Two layers, three phases
 

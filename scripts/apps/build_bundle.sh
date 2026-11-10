@@ -4,28 +4,51 @@
 # kayfabe, not a toolchain difference.  Output: /workspace/apps/bundle/{bin,lib,samples,...}
 # + /workspace/apps/bundle.tgz.  Idempotent; every step prints BUILD_<name>=ok|FAIL.
 #
+# Exit status: 0 only when EVERY step printed ok. Any BUILD_*=FAIL makes this script print BUILD_BUNDLE_FAIL, remove
+# bundle.tgz and exit 1 (it used to write the tarball regardless, so a failed toolchain surfaced as failing apps).
+# The stage (scripts/kfci/apps_gate.py) additionally scans the log for BUILD_*=FAIL and turns it into a MEDIA retry.
+#
+# Inputs: every fetch that is ours to pin is pinned in pins.sh and fetched through pin_lib.sh, which refuses an empty,
+# malformed or mismatching pin. NVIDIA's CUDA toolkit is installed on the box from NVIDIA's own repository
+# (pin_install_cuda_toolkit) and is never stored by us.
+#
 # The app set is the one nvkvm-pv (the Mode-1 sibling) validated — see
 # docs/design/V3_APP_MATRIX.md §1 for the inventory and where each came from.
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
-W=/workspace/apps; B=$W/bundle; S=$W/srcs
+# shellcheck source=pins.sh
+. "$HERE/pins.sh"
+# shellcheck source=pin_lib.sh
+. "$HERE/pin_lib.sh"
+W=${KF_APPS_ROOT:-/workspace/apps}; B=$W/bundle; S=$W/srcs   # the stage passes KF_APPS_ROOT through
 mkdir -p "$B"/{bin,lib,samples,gpu-burn,llama,share} "$S"
 say(){ echo "[build_bundle $(date +%T)] $*"; }
-ok(){ if [ "$2" -eq 0 ]; then echo "BUILD_$1=ok"; else echo "BUILD_$1=FAIL rc=$2"; fi; }
+BUILD_FAILS=0
+ok(){ if [ "$2" -eq 0 ]; then echo "BUILD_$1=ok"; else echo "BUILD_$1=FAIL rc=$2"; BUILD_FAILS=$((BUILD_FAILS+1)); fi; }
 export DEBIAN_FRONTEND=noninteractive
 
 # ---- CUDA toolkit 12.6 (toolkit only — never the driver meta-packages) -----------------------
+# From NVIDIA's own repository, pinned (pins.sh); the only place the cache-only apt shim is bypassed (pin_lib.sh).
 if [ ! -x /usr/local/cuda-12.6/bin/nvcc ]; then
-  say "installing cuda-toolkit-12-6"
-  . /etc/os-release; REL=ubuntu${VERSION_ID//./}
-  curl -fsSL -o /tmp/cuda-keyring.deb "https://developer.download.nvidia.com/compute/cuda/repos/$REL/x86_64/cuda-keyring_1.1-1_all.deb" \
-    && dpkg -i /tmp/cuda-keyring.deb >/dev/null && apt-get update -qq \
-    && apt-get install -y -qq --no-install-recommends cuda-toolkit-12-6 >/tmp/cuda_apt.log 2>&1
-  ok cuda_toolkit $?
+  say "installing $PIN_CUDA_TOOLKIT_PACKAGE=$PIN_CUDA_TOOLKIT_VERSION from NVIDIA's repository"
+  pin_install_cuda_toolkit >/tmp/cuda_apt.log 2>&1
+  rc=$?
+  [ "$rc" -eq 0 ] || tail -n 8 /tmp/cuda_apt.log   # the reason (PIN_REFUSED, apt error) must reach the provisioning log
+  ok cuda_toolkit $rc
 fi
 export PATH=/usr/local/cuda-12.6/bin:$PATH CUDA_HOME=/usr/local/cuda-12.6
 nvcc --version | tail -1
-apt-get install -y -qq cmake git build-essential libegl-dev libgles-dev pkg-config unzip >/dev/null 2>&1
+
+# ---- open Ubuntu dev packages (policy: provision_box.sh --packages apps; the setup cache holds them) -----------
+# Through the normal `apt-get`: inside the Vast payload that is the cache-only shim, so a package that is missing
+# from the cache fails HERE, loudly, instead of failing later as a cmake or compiler error in some app build.
+apt-get install -y -qq cmake git build-essential libegl-dev libgles-dev pkg-config unzip ocl-icd-opencl-dev opencl-headers \
+  >/tmp/open_dev_apt.log 2>&1
+rc=$?
+for t in cmake git gcc make pkg-config unzip; do command -v "$t" >/dev/null 2>&1 || rc=1; done
+for h in /usr/include/EGL/egl.h /usr/include/GLES2/gl2.h /usr/include/CL/cl.h; do [ -f "$h" ] || rc=1; done
+[ "$rc" -eq 0 ] || tail -n 8 /tmp/open_dev_apt.log
+ok open_dev_packages $rc
 
 # ---- nvkvm-pv realapp kernels (static cudart; cuBLAS/cuFFT from the bundled libs) ----------
 for f in "$HERE"/src/*.cu; do
@@ -45,7 +68,7 @@ ls "$B/lib" | tr '\n' ' '; echo
 # guest has no toolkit) — both sides point CUDA_PATH here, so they compile against the same headers
 mkdir -p "$B/cuda" && cp -a /usr/local/cuda-12.6/targets/x86_64-linux/include "$B/cuda/"
 # ---- cuda-samples v12.5 (Makefile tree; the self-verifying subset) ---------------------------
-[ -d "$S/cuda-samples" ] || git clone -q --depth 1 --branch v12.5 https://github.com/NVIDIA/cuda-samples.git "$S/cuda-samples"
+pin_git_checkout "$S/cuda-samples" "$PIN_CUDA_SAMPLES_URL" "$PIN_CUDA_SAMPLES_TAG" "$PIN_CUDA_SAMPLES_COMMIT"; ok src_cuda_samples $?
 SAMPLES="1_Utilities/deviceQuery 1_Utilities/bandwidthTest 0_Introduction/vectorAdd 0_Introduction/matrixMul \
 0_Introduction/simpleStreams 0_Introduction/asyncAPI 0_Introduction/simpleAtomicIntrinsics 0_Introduction/simpleIPC \
 0_Introduction/UnifiedMemoryStreams 0_Introduction/simpleCallback 0_Introduction/simpleOccupancy 0_Introduction/clock_nvrtc \
@@ -65,15 +88,14 @@ for d in $SAMPLES; do
 done
 
 # ---- gpu-burn --------------------------------------------------------------------------------
-[ -d "$S/gpu-burn" ] || git clone -q --depth 1 https://github.com/wilicc/gpu-burn.git "$S/gpu-burn"
+pin_git_checkout "$S/gpu-burn" "$PIN_GPU_BURN_URL" "" "$PIN_GPU_BURN_COMMIT"; ok src_gpu_burn $?
 ( cd "$S/gpu-burn" && make -s CUDAPATH=/usr/local/cuda-12.6 COMPUTE=86 >/tmp/build_gpuburn.log 2>&1 ) \
   && cp -u "$S/gpu-burn/gpu_burn" "$S"/gpu-burn/compare.* "$B/gpu-burn/"
 [ -x "$B/gpu-burn/gpu_burn" ]; ok gpu_burn $?
 
 # ---- llama.cpp (CUDA backend, sm_86) --------------------------------------------------------
-# pinned to the revision of the first matrix (V3_APP_MATRIX.md §1) so reruns are comparable
-LLAMA_PIN=${LLAMA_PIN:-4b1a27f}
-[ -d "$S/llama.cpp" ] || { git clone -q https://github.com/ggml-org/llama.cpp.git "$S/llama.cpp" && git -C "$S/llama.cpp" checkout -q "$LLAMA_PIN"; }
+# pinned to the revision of the first matrix (V3_APP_MATRIX.md §1) so reruns are comparable; no environment override
+pin_git_checkout "$S/llama.cpp" "$PIN_LLAMA_URL" "" "$PIN_LLAMA_COMMIT"; ok src_llama_cpp $?
 ( cd "$S/llama.cpp" && cmake -B build -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=86 -DLLAMA_CURL=OFF \
     -DCMAKE_BUILD_TYPE=Release >/tmp/build_llama.log 2>&1 && cmake --build build -j"$(nproc)" --target llama-cli llama-bench llama-simple >>/tmp/build_llama.log 2>&1 )
 rm -f "$B"/llama/lib*.so*
@@ -83,23 +105,27 @@ find "$S/llama.cpp/build" -name '*.so*' -exec cp -P -u {} "$B/llama/" \; 2>/dev/
 git -C "$S/llama.cpp" log --oneline -1 | sed 's/^/LLAMA_REV=/'
 
 # ---- clpeak (OpenCL peak) -----------------------------------------------------------------------
-apt-get install -y -qq ocl-icd-opencl-dev opencl-headers >/dev/null 2>&1
-# 1.1.2 = the OpenCL-only release; HEAD grew CUDA fp8 backends whose ptxas needs sm_89
-git -C "$S/clpeak" describe --tags 2>/dev/null | grep -q '^1\.1\.2' || rm -rf "$S/clpeak"
-[ -d "$S/clpeak" ] || git clone -q --depth 1 --branch 1.1.2 --recurse-submodules https://github.com/krrishnarraj/clpeak.git "$S/clpeak"
+# 1.1.2 = the OpenCL-only release; HEAD grew CUDA fp8 backends whose ptxas needs sm_89 (pins.sh)
+pin_git_checkout "$S/clpeak" "$PIN_CLPEAK_URL" "$PIN_CLPEAK_TAG" "$PIN_CLPEAK_COMMIT"; ok src_clpeak $?
 ( cd "$S/clpeak" && rm -rf build && cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ >/tmp/build_clpeak.log 2>&1 && cmake --build build -j"$(nproc)" >>/tmp/build_clpeak.log 2>&1 ) \
   && cp -u "$S/clpeak/build/clpeak" "$B/bin/"
 [ -x "$B/bin/clpeak" ]; ok clpeak $?
 
 # ---- vkpeak (Vulkan compute peak) ------------------------------------------------------------
 if [ ! -x "$B/bin/vkpeak" ]; then
-  curl -fsSL -o /tmp/vkpeak.zip https://github.com/nihui/vkpeak/releases/download/20250531/vkpeak-20250531-ubuntu.zip \
-    && unzip -o -q /tmp/vkpeak.zip -d /tmp/vkpeak && cp "$(find /tmp/vkpeak -name vkpeak -type f | head -1)" "$B/bin/vkpeak" && chmod +x "$B/bin/vkpeak"
+  VKDIR=$(mktemp -d /tmp/vkpeak.XXXXXX)
+  pin_fetch_file "$PIN_VKPEAK_URL" "$VKDIR/vkpeak.zip" "$PIN_VKPEAK_SHA256" "$PIN_VKPEAK_SIZE" \
+    && unzip -o -q "$VKDIR/vkpeak.zip" -d "$VKDIR/x" && cp "$(find "$VKDIR/x" -name vkpeak -type f | head -1)" "$B/bin/vkpeak" && chmod +x "$B/bin/vkpeak"
+  rm -rf "$VKDIR"
 fi
 [ -x "$B/bin/vkpeak" ]; ok vkpeak $?
 
 cp -u "$HERE/src/ai_bench.py" "$HERE"/src/*.py "$B/share/" 2>/dev/null
 cp -u "$HERE/run_apps.sh" "$B/"
-( cd "$W" && tar czf bundle.tgz.tmp bundle && mv -f bundle.tgz.tmp bundle.tgz )
+# A bundle with any failed step is never written: the stage must see "not built", not 66 apps of which some fail.
+bundle_fail() { rm -f "$W/bundle.tgz" "$W/bundle.tgz.tmp"; echo "BUILD_BUNDLE_FAIL count=$BUILD_FAILS"; exit 1; }
+[ "$BUILD_FAILS" -eq 0 ] || bundle_fail
+( cd "$W" && tar czf bundle.tgz.tmp bundle && mv -f bundle.tgz.tmp bundle.tgz ); ok bundle_tar $?
+[ "$BUILD_FAILS" -eq 0 ] || bundle_fail
 echo "BUNDLE $(du -sh "$B" | cut -f1) $(ls -la "$W/bundle.tgz" | awk '{print $5}')B  sha=$(sha256sum "$W/bundle.tgz" | cut -c1-16)"
 echo BUILD_BUNDLE_DONE

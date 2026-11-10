@@ -364,10 +364,190 @@ CASES = [
         "  // Tiers",
         "config",
     ),
+    # ---- Linux apps media on a fresh Worker box (2026-11-10): test_apps_media.py and test_apps_pins.py ----------
+    # Provisioning flag dropped: the stage must be planned with KF_APPS_PROVISION=1 and honour it.
+    (
+        "provision-flag-dropped-from-the-stage",
+        "scripts/ci/vast_payload.py",
+        '                    "env",\n                    "KF_APPS_PROVISION=1",\n                    "bash",\n'
+        '                    str(root / "scripts/bench/box/apps_gate.sh"),',
+        '                    "bash",\n                    str(root / "scripts/bench/box/apps_gate.sh"),',
+        "py",
+    ),
+    (
+        "provision-flag-planned-as-zero",
+        "scripts/ci/vast_payload.py",
+        '"KF_APPS_PROVISION=1",',
+        '"KF_APPS_PROVISION=0",',
+        "py",
+    ),
+    (
+        "provision-flag-left-in-the-environment",
+        "scripts/ci/vast_payload.py",
+        'environ.pop("KF_APPS_PROVISION", None)',
+        'environ.get("KF_APPS_PROVISION", None)',
+        "py",
+    ),
+    (
+        "provision-flag-ignored-by-the-stage",
+        "scripts/kfci/apps_gate.py",
+        'if env.get("KF_APPS_PROVISION") == "1":',
+        "if False:",
+        "py",
+    ),
+    (
+        "apps-reserve-back-to-sixty",
+        "scripts/ci/vast_payload.py",
+        "APPS_MIN_REMAINING_MS = 90 * 60000",
+        "APPS_MIN_REMAINING_MS = 60 * 60000",
+        "py",
+    ),
+    (
+        "apps-reserve-below-provisioning-plus-matrix",
+        "scripts/ci/vast_payload.py",
+        "APPS_MIN_REMAINING_MS = 90 * 60000",
+        "APPS_MIN_REMAINING_MS = 70 * 60000",
+        "py",
+    ),
+    # Build failure laundered as an app failure (or as nothing): it must be a MEDIA retry.
+    (
+        "provision-failure-graded-as-fail",
+        "scripts/kfci/apps_gate.py",
+        "                    marker.unlink(missing_ok=True)",
+        "                    return StepResult(Verdict.FAIL)",
+        "py",
+    ),
+    (
+        "provision-log-not-read",
+        "scripts/kfci/apps_gate.py",
+        "names = provision_failures(logfile)",
+        "names = []",
+        "py",
+    ),
+    (
+        "guest-setup-failures-not-recognised",
+        "scripts/kfci/apps_gate.py",
+        "((?:BUILD|SETUP)_[A-Za-z0-9_]{1,64})",
+        "((?:BUILD)_[A-Za-z0-9_]{1,64})",
+        "py",
+    ),
+    (
+        "build-failure-after-exit-zero-ignored",
+        "scripts/kfci/apps_gate.py",
+        "            if self.failed_steps(ctx, logfile):\n                return 1\n",
+        "            if False:\n                return 1\n",
+        "py",
+    ),
+    (
+        "build-script-does-not-count-failures",
+        "scripts/apps/build_bundle.sh",
+        'echo "BUILD_$1=FAIL rc=$2"; BUILD_FAILS=$((BUILD_FAILS+1)); fi',
+        'echo "BUILD_$1=FAIL rc=$2"; fi',
+        "py",
+    ),
+    (
+        "build-script-failure-exits-zero",
+        "scripts/apps/build_bundle.sh",
+        'echo "BUILD_BUNDLE_FAIL count=$BUILD_FAILS"; exit 1; }',
+        'echo "BUILD_BUNDLE_FAIL count=$BUILD_FAILS"; exit 0; }',
+        "py",
+    ),
+    # Unpinned or mismatching input accepted.
+    (
+        "file-fetch-accepts-an-empty-pin",
+        "scripts/apps/pin_lib.sh",
+        "  pin_is_sha256 \"$want\" || { pin_refuse \"sha256 pin for $url is empty or malformed: '$want'\"; return 1; }\n",
+        "",
+        "py",
+    ),
+    (
+        "file-verify-accepts-another-digest",
+        "scripts/apps/pin_lib.sh",
+        "  [ \"$got\" = \"$want\" ] || { pin_refuse \"$path: sha256 $got is not the pinned $want\"; return 1; }\n",
+        "",
+        "py",
+    ),
+    (
+        "git-fetch-accepts-a-branch-or-empty-pin",
+        "scripts/apps/pin_lib.sh",
+        "  pin_is_commit \"$want\" || { pin_refuse \"git pin for $url is not a 40-hex commit: '$want'\"; return 1; }\n",
+        "",
+        "py",
+    ),
+    (
+        "git-fetch-accepts-a-moved-tag",
+        "scripts/apps/pin_lib.sh",
+        '  if [ "$have" != "$want" ]; then',
+        "  if false; then",
+        "py",
+    ),
+    (
+        "cuda-toolkit-through-the-apt-shim",
+        "scripts/apps/pin_lib.sh",
+        "  command apt-get -o DPkg::Lock::Timeout=300 install",
+        "  apt-get -o DPkg::Lock::Timeout=300 install",
+        "py",
+    ),
+    (
+        "cuda-keyring-unchecked",
+        "scripts/apps/pin_lib.sh",
+        '  pin_is_sha256 "$want" || { pin_refuse "no pinned CUDA keyring for $rel"; return 1; }\n',
+        "",
+        "py",
+    ),
+    (
+        "bundle-script-clones-gpu-burn-unpinned",
+        "scripts/apps/build_bundle.sh",
+        'pin_git_checkout "$S/gpu-burn" "$PIN_GPU_BURN_URL" "" "$PIN_GPU_BURN_COMMIT"; ok src_gpu_burn $?',
+        '[ -d "$S/gpu-burn" ] || git clone -q --depth 1 "$PIN_GPU_BURN_URL" "$S/gpu-burn"; ok src_gpu_burn $?',
+        "py",
+    ),
+    (
+        "bundle-script-takes-vkpeak-without-its-digest",
+        "scripts/apps/build_bundle.sh",
+        'pin_fetch_file "$PIN_VKPEAK_URL" "$VKDIR/vkpeak.zip" "$PIN_VKPEAK_SHA256" "$PIN_VKPEAK_SIZE"',
+        'curl -fsSL -o "$VKDIR/vkpeak.zip" "$PIN_VKPEAK_URL"',
+        "py",
+    ),
+    (
+        "guest-setup-takes-the-model-from-main",
+        "scripts/apps/setup_side.sh",
+        'pin_fetch_file "$PIN_GGUF_URL" "$G" "$PIN_GGUF_SHA256" "$PIN_GGUF_SIZE"',
+        'curl -fsSL -o "$G" "$PIN_GGUF_URL"',
+        "py",
+    ),
+    (
+        "model-pin-moves-to-main",
+        "scripts/apps/pins.sh",
+        "resolve/91cad51170dc346986eccefdc2dd33a9da36ead9/qwen2.5-1.5b-instruct-q4_k_m.gguf",
+        "resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf",
+        "py",
+    ),
+    (
+        "model-digest-unpinned",
+        "scripts/apps/pins.sh",
+        "PIN_GGUF_SHA256=6a1a2eb6d15622bf3c96857206351ba97e1af16c30d7a74ee38970e434e9407e",
+        "PIN_GGUF_SHA256=",
+        "py",
+    ),
+    (
+        "keyring-digest-unpinned",
+        "scripts/apps/pins.sh",
+        "PIN_CUDA_KEYRING_SHA256_ubuntu2204=d93190d50b98ad4699ff40f4f7af50f16a76dac3bb8da1eaaf366d47898ff8df",
+        "PIN_CUDA_KEYRING_SHA256_ubuntu2204=",
+        "py",
+    ),
+    (
+        "open-packages-missing-from-the-cache-policy",
+        "scripts/bench/provision_box.sh",
+        "local apps=(cmake unzip libegl-dev libgles-dev ocl-icd-opencl-dev opencl-headers)",
+        "local apps=(cmake unzip)",
+        "py",
+    ),
 ]
 COLLECT = """import io,json,sys,unittest
 sys.path.insert(0,'scripts/ci')
-s=unittest.defaultTestLoader.loadTestsFromName('test_middle_apps')
+s=unittest.defaultTestLoader.loadTestsFromNames(['test_middle_apps','test_apps_media','test_apps_pins'])
 r=unittest.TextTestRunner(stream=io.StringIO()).run(s)
 print(json.dumps(dict(tests=r.testsRun,killers=sorted({getattr(t,'test_case',t).id() for t,_ in r.failures+r.errors}),details={t.id():v[-2500:] for t,v in r.failures+r.errors})))
 """

@@ -29,7 +29,6 @@ APPS_ENV = BASE_ENV | frozenset(
         "KAYFABE_BENCH_HELPERS",
         "GQ_TIMEOUT",
         "PRE_POWEROFF_GUEST_CMD",
-        "LLAMA_PIN",
         "KF_APPS_GEEKBENCH",
         "BASH_ENV",
         "KF_APPS_ROOT",
@@ -144,6 +143,21 @@ def last_row(paths, app):
         if row:
             return row
     return ""
+
+
+# A failed provisioning step prints BUILD_<name>=FAIL (build_bundle.sh) or SETUP_<name>=FAIL (setup_side.sh, whose lines
+# provision_guest_apps.sh prefixes with "  guest: "). Either one means the media is not what the gate list needs.
+PROVISION_FAIL = re.compile(r"^(?:  guest: )?((?:BUILD|SETUP)_[A-Za-z0-9_]{1,64})=FAIL(?: |$)")
+
+
+def provision_failures(path):
+    """Names of the steps that printed =FAIL in a provisioning log; bounded, and never executes log text."""
+    names = []
+    for line, _invalid in result_lines(path):
+        match = PROVISION_FAIL.match(line)
+        if match and match[1] not in names:
+            names.append(match[1])
+    return names
 
 
 def bounded_text(text, limit):
@@ -345,6 +359,11 @@ class AppsGate(Step):
                 except (OSError, ValueError):
                     rc = 1
                 ctx.emit("APPS_PROVISION_END rc=%d %s" % (rc, timestamp()))
+                if rc:
+                    # Provisioning failed (a BUILD_*/SETUP_* step, a timeout, a guest that never answered): the
+                    # media is missing, which says nothing about the guest. Rerun on a fresh box; never grade apps.
+                    # No marker, whatever an earlier run left: the check below turns that into class=MEDIA.
+                    marker.unlink(missing_ok=True)
             if (
                 not bundle.is_file()
                 or not bundle.stat().st_size
@@ -422,6 +441,10 @@ class AppsGate(Step):
                     if built.returncode >= 0
                     else 128 - built.returncode
                 )
+            # build_bundle.sh exits non-zero on a failed step, but an older copy of it (or a step that fails after
+            # the last check) can still print BUILD_*=FAIL and exit 0: the log is the evidence, so it is read too.
+            if self.failed_steps(ctx, logfile):
+                return 1
             image = Path(ctx.env["KF_GUEST_IMG"])
             if not image.is_file():
                 copy_image(bench / "guest.qcow2", image)
@@ -437,6 +460,15 @@ class AppsGate(Step):
                 allow_env=legacy_allowlist(ctx.env),
                 log=log,
             )
-            if ran.returncode == 0:
+            if ran.returncode == 0 and not self.failed_steps(ctx, logfile):
                 marker.write_text(timestamp() + "\n")
-            return ran.returncode if ran.returncode >= 0 else 128 - ran.returncode
+                return 0
+            return ran.returncode if ran.returncode > 0 else (128 - ran.returncode if ran.returncode < 0 else 1)
+
+    @staticmethod
+    def failed_steps(ctx, logfile):
+        """Report (one bounded line) and return the failed provisioning steps of this run's log."""
+        names = provision_failures(logfile)
+        if names:
+            ctx.emit("APPS_PROVISION_FAIL steps=" + ",".join(names[:8]) + (",..." if len(names) > 8 else ""))
+        return names

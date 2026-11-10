@@ -3,11 +3,11 @@
 # hypervisor over slirp (the same shape as scripts/bench/provision_guest_llm.sh).
 # Needs /workspace/apps/bundle.tgz (build_bundle.sh). ~20-40 min (torch, blender, models).
 set -uo pipefail
-BENCH=/workspace/bench; HERE="$(cd "$(dirname "$0")" && pwd)"
+APPS=${KF_APPS_ROOT:-/workspace/apps}; BENCH=/workspace/bench; HERE="$(cd "$(dirname "$0")" && pwd)"
 say(){ echo "[$(date -Is)] $*"; }
 IMG=${KF_GUEST_IMG:-$BENCH/guest.qcow2}   # a copy keeps the LLM guest intact (boot_nvkvm.sh honours the same var)
 pgrep -x qemu-system-x86 >/dev/null && { say "⊘ a QEMU is already running — the bench is serialized, refusing"; exit 2; }
-[ -s /workspace/apps/bundle.tgz ] || { say "⊘ no /workspace/apps/bundle.tgz — run build_bundle.sh first"; exit 2; }
+[ -s "$APPS/bundle.tgz" ] || { say "⊘ no $APPS/bundle.tgz — run build_bundle.sh first"; exit 2; }
 # room for torch + blender + models (the base image has ~33 GB); cloud-init growpart extends / on boot
 if [ ! -f "$IMG.apps_resized" ]; then qemu-img resize "$IMG" +40G && touch "$IMG.apps_resized"; fi
 # ⚠ -cpu host is required (x86-64-v2 for numpy; see provision_guest_llm.sh)
@@ -25,11 +25,16 @@ $GS "sudo growpart /dev/vda 1 >/dev/null 2>&1; sudo resize2fs /dev/vda1 >/dev/nu
 # ⊘ pin the guest kernel BEFORE apt (the nvidia module is built for the running kernel)
 $GS "sudo systemctl mask --now unattended-upgrades apt-daily.service apt-daily.timer apt-daily-upgrade.service apt-daily-upgrade.timer >/dev/null 2>&1; \
      sudo apt-mark hold linux-generic linux-image-generic linux-headers-generic >/dev/null 2>&1; uname -r"
-$SCP /workspace/apps/bundle.tgz "$HERE/setup_side.sh" "$HERE/run_apps.sh" ubuntu@127.0.0.1:/var/tmp/ >/dev/null || { say "⊘ scp failed"; exit 4; }
+$SCP "$APPS/bundle.tgz" "$HERE/setup_side.sh" "$HERE/pins.sh" "$HERE/pin_lib.sh" "$HERE/run_apps.sh" ubuntu@127.0.0.1:/var/tmp/ >/dev/null || { say "⊘ scp failed"; exit 4; }
 $GS "sudo mkdir -p /opt/apps && sudo tar xzf /var/tmp/bundle.tgz -C /opt/apps && sudo cp /var/tmp/run_apps.sh /opt/apps/bundle/ && sudo rm -f /var/tmp/bundle.tgz && echo BUNDLE_IN=\$(du -sh /opt/apps/bundle | cut -f1)"
-$GS "sudo bash /var/tmp/setup_side.sh" 2>&1 | grep -E '^(SETUP_|IMPORT_OK|HF_MODEL|/dev)' | sed 's/^/  guest: /'
+SETUP_OUT=$($GS "sudo bash /var/tmp/setup_side.sh" 2>&1 | grep -E '^(SETUP_|IMPORT_OK|HF_MODEL|/dev)' | sed 's/^/  guest: /')
+printf '%s\n' "$SETUP_OUT"
+# a failed guest setup step is a provisioning failure (the stage turns it into a MEDIA retry), never an app failure later
+SETUP_FAILS=$(printf '%s\n' "$SETUP_OUT" | grep -cE '^  guest: SETUP_[A-Za-z0-9_]+=FAIL')
+grep -q '^  guest: SETUP_SIDE_DONE' <<<"$SETUP_OUT" || SETUP_FAILS=$((SETUP_FAILS+1))
 $GS "uname -r; modinfo -F version nvidia 2>&1"
 $GS "sudo poweroff" >/dev/null 2>&1
 for i in $(seq 1 30); do pgrep -x qemu-system-x86 >/dev/null || break; sleep 3; done
 pgrep -x qemu-system-x86 >/dev/null && { say "⚠ provisioning QEMU still up — killing"; kill "$(cat $BENCH/appsprov.pid)"; }
+[ "$SETUP_FAILS" -eq 0 ] || { say "⊘ guest setup: $SETUP_FAILS step(s) failed or the setup did not finish"; exit 5; }
 say "GUEST_APPS_DONE"

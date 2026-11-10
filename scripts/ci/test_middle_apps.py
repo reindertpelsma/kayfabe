@@ -419,7 +419,7 @@ class PayloadMiddle(unittest.TestCase):
             " apps=8 ", " apps=10 "
         )
         rc, result, calls = self.go(
-            soft=206, names=names, logs={"windows_apps": (text, rc)}
+            soft=236, names=names, logs={"windows_apps": (text, rc)}
         )
         self.assertEqual(rc, 0, result)
         self.assertEqual(calls[-3:], ["apps", "windows_gate", "windows_apps"])
@@ -428,7 +428,7 @@ class PayloadMiddle(unittest.TestCase):
 
     def test_all_66_apps_do_not_start_with_less_than_the_full_suffix(self):
         names = self.m.apps_gate_list(ROOT, "middle")
-        rc, result, calls = self.go(soft=204, names=names)
+        rc, result, calls = self.go(soft=234, names=names)
         self.assertEqual(rc, 1)
         self.assertNotIn("apps", calls)
         self.assertIn("apps_retry_time", [row["name"] for row in result["suites"]])
@@ -446,7 +446,7 @@ class PayloadMiddle(unittest.TestCase):
         )
 
     def test_short_suffix_does_not_start_linux_apps(self):
-        rc, result, calls = self.go(soft=204)
+        rc, result, calls = self.go(soft=234)
         self.assertEqual(rc, 1)
         self.assertNotIn("apps", calls)
         self.assertIn("apps_retry_time", [x["name"] for x in result["suites"]])
@@ -697,6 +697,9 @@ class OnstartContract(unittest.TestCase):
         popped = set(re.findall(r'environ\.(?:pop|get)\("(KF_[A-Z_]+)"', source))
         popped |= set(re.findall(r'\(\*RELEASE_DRIVER_FIELDS, "(KF_[A-Z_]+)"', source))
         popped -= {name for name in popped if name.startswith("KF_PAYLOAD_") or name.endswith("_MS")}
+        # Consumed so that no environment value reaches a child; the payload sets the stage's flag itself, so this is
+        # deliberately NOT a Worker input and has no SPEC row (test_apps_media.py checks that it has none).
+        popped -= {"KF_APPS_PROVISION"}
         for name in ("KF_MERGE_WINDOWS", "KF_TIER", "KF_WINDOWS_RUNS", "KF_STAGES", "KF_SPEC", "KF_WINAPPS", "KF_LINUX_APPS"):
             self.assertIn(name, popped, "scan blind to " + name)
         self.assertEqual(sorted(popped - spec_names), [])
