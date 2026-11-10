@@ -19,15 +19,20 @@ Box: Vast RTX 4090 (AD102), label `kf-spec1`, host driver 595.91.07, Windows 11 
 `734a4cc52` plus this branch's script-only commits. One narrowed lane (`KF_SPEC_TABLE`: lane B reduced to `medical-04` and `catia-07`), run
 through the real wrapper `vast_stage_specviewperf.sh`; the Worker was a test double on the box that answered the helper with a 302 to a presigned URL.
 
-- Setup: `windows_lane.sh` 2398 s, `windows_gate.sh` `WINDOWS_GATE_PASS` 1560 s. Download of the 42,002,015,727 B archive: 19 minutes at about
-  50 MB/s, hash 3.5 minutes, sha256 equal to the pin; **resume proven**: `curl` was killed twice on purpose (at 3.0 GB and 20.0 GB), the helper resumed
+- Setup: `windows_lane.sh` 2398 s, `windows_gate.sh` `WINDOWS_GATE_PASS` 1560 s. Download of the 42,002,015,727 B archive: 19 minutes including the
+  two deliberate stops, about 37 MB/s on average (about 50 MB/s up to the second stop, slower after it), hash 3.5 minutes, sha256 equal to the pin; **resume proven**: `curl` was killed twice on purpose (at 3.0 GB and 20.0 GB), the helper resumed
   both times with the SAME presigned URL (one Worker request in all) and the final hash matched.
-- Stage (48 minutes, archive already present and verified in 2.5 minutes, so no download inside it): copy boot ssh up in 20 s, guest prep
+- Stage (48 minutes, archive already present and verified in about 3.3 minutes (stage.log: fetch start to the verified note, partly parallel to the copy boot), so no download inside it): copy boot ssh up in 20 s, guest prep
   `exclusion=ok`, the filtered stream (zstd of the whole 94 GB tar, `tarfilter`, `ssh tar`) about 10 minutes for 8.6 GB of viewsets, copy verified
   against the manifest, `SPEC_POST cli=present icacls_rc=0 vcredist_rc=0`, archive deleted, kf3 boot ssh up in 20 s, settle wait 283 s, then
   `medical-04` PASS 10/10 (CLI 320 s; native 318 s) and `catia-07` PASS 6/6 (CLI 1118 s; native 803 s, budget 2700 s). Reset counters `total=0` for both,
-  USER_RING_GP_FORMAT / REFUSED / SCAN_BUDGET lines 0, `pointer_large_entries` sum 4,799, host Xid delta 0, host reference green before and after,
+  `USER_RING_GP_FORMAT`, `USER_RING_REFUSED` and `USER_RING_SCAN_BUDGET` lines 0 each, `pointer_large_entries` sum 4,799, host Xid delta 0, host reference green before and after,
   teardown deleted the archive and the overlay, no QEMU left. The wrapper let through only the status lines; no `Unable to gather system details` occurred.
+  Separate measured fact: the host log of that kf3 boot also holds 56 `kf3: GSP REFUSED fn76/... =0x56` lines (GSP control refusals, not USER_RING; the cause was not
+  investigated, INFERRED to be controls the guest driver asks for that kayfabe refuses as unsupported, as in the Windows gate's boots).
+  This run used `KF_SPEC_TABLE` (a narrowed lane) and printed a plain `SPECVIEWPERF_STAGE_PASS`; since the review round every narrowed run adds a
+  `SPEC_NOTE narrowed table=...` line and ends its verdict lines with ` NARROWED`, which the payload's strict verdict pattern refuses (a narrowed run can never
+  certify a lane), the payload's stage command unsets `KF_SPEC_TABLE`, and an empty lane is a usage error / RETRY operator, never a PASS.
 - **The PowerShell ran on Windows**, in this order, all through the stage: `prep`, `post`, `verify`, `launch`, `status`, `collect` and `spec_run.ps1`;
   `kill` only in a separate probe (`probe_no_cli_powershell.txt`: with no CLI present `spec_run.ps1` still writes an END record with an empty `rc=`,
   graded `FAIL NOTDONE`; a bad workload name is refused; `kill` answers `SPEC_KILL done`). The stage's own `kill` branch (a viewset that outlives its

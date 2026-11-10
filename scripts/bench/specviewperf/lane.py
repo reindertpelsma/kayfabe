@@ -239,6 +239,9 @@ def decide(rows, lane, hostref_before, hostref_after, bar1=False, xid_delta=0, a
     for a FAIL or "NONE" for a PASS. `rows` are parsed SPEC_ROW dicts (the last row of a name counts);
     `abort` names the RETRY class of a setup step that failed (media, transport, ...)."""
     expected = lane_ids(lane, tbl)
+    if not expected:
+        # no viewset is no evidence: never a PASS (an operator's table that empties a lane is a setup error)
+        return "RETRY", "OPERATOR"
     last = {}
     for r in rows:
         if r["name"] in expected:

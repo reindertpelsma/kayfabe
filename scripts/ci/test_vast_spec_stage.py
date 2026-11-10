@@ -369,6 +369,85 @@ class Copy(StageCase):
         self.assertIn("QEMU_START", evidence)
         self.assertNotIn("STALE_MARKER", evidence)
 
+    def _narrowed(self, lane="lanea", ids=None):
+        import json
+        sb = fk.Sandbox(tempfile.mkdtemp(prefix="kfspec-"))
+        self.addCleanup(lambda: shutil.rmtree(sb.root, ignore_errors=True))
+        t = json.loads((sb.src / "scripts/bench/specviewperf/lanes.json").read_text())
+        t["lanes"][lane] = t["lanes"][lane][:2] if ids is None else ids
+        f = sb.root / "narrow.json"
+        f.write_text(json.dumps(t))
+        return sb, f
+
+    def test_a_narrowed_table_marks_every_verdict_line_and_the_notes(self):
+        sb, f = self._narrowed()
+        p = sb.run("lanea", 40000, KF_SPEC_TABLE=str(f), wrapper=True)
+        lines = p.stdout.splitlines()
+        self.assertIn("SPECVIEWPERF_STAGE_PASS NARROWED", lines)
+        self.assertNotIn("SPECVIEWPERF_STAGE_PASS", lines)
+        self.assertEqual(lines[-1], "SPECVIEWPERF_STAGE_EXIT rc=0")
+        log = (sb.prov / (sb.tag + "_spec") / "stage.log").read_text()
+        self.assertIn("SPEC_NOTE narrowed table=narrow.json", log)
+
+    def test_a_narrowed_failure_and_retry_are_marked_too(self):
+        sb, f = self._narrowed()
+        sb.set("disk", "10")  # a setup RETRY (PROVIDER) of a narrowed run
+        p = sb.run("lanea", 40000, KF_SPEC_TABLE=str(f), wrapper=True)
+        self.assertIn("SPECVIEWPERF_STAGE_RETRY class=PROVIDER NARROWED", p.stdout.splitlines())
+        self.assertIn("SPEC_NOTE narrowed table=narrow.json", (sb.prov / (sb.tag + "_spec") / "stage.log").read_text())
+
+    def test_an_unnarrowed_run_has_a_plain_verdict_and_no_note(self):
+        self.go("lanea")
+        self.assertIn("SPECVIEWPERF_STAGE_PASS", self.p.stdout.splitlines())
+        self.assertNotIn("NARROWED", self.p.stdout)
+        self.assertNotIn("narrowed", self.stage_log())
+
+    def test_an_empty_lane_table_is_a_usage_error_never_a_pass(self):
+        sb, f = self._narrowed(ids=[])
+        p = sb.run("lanea", 40000, KF_SPEC_TABLE=str(f))
+        self.assertEqual(p.returncode, 2)
+        self.assertNotIn("SPECVIEWPERF_STAGE_PASS", p.stdout)
+        self.assertEqual(sb.runs(), [])
+
+    def _prefix_tag_run(self):
+        sb = fk.Sandbox(tempfile.mkdtemp(prefix="kfspec-"))
+        self.addCleanup(lambda: shutil.rmtree(sb.root, ignore_errors=True))
+        logs = sb.vm / "logs"
+        logs.mkdir(parents=True, exist_ok=True)
+        # the logs of the run of tag ci0123abcd_x: its stage tag begins with ours (spec_ci0123abcd)
+        (logs / "spec_ci0123abcd_x_copy1_run.log").write_text("[other] QEMU_START of another stage run\n")
+        (logs / "spec_ci0123abcd_x_run1_b1_qemu.log").write_text("other qemu\n")
+        p = sb.run("lanea")
+        self.assertEqual(fk.verdict_of(p.stdout), "SPECVIEWPERF_STAGE_PASS")
+        return sb, logs
+
+    def test_logs_of_a_tag_that_extends_this_tag_are_not_moved(self):
+        sb, logs = self._prefix_tag_run()
+        self.assertEqual((logs / "spec_ci0123abcd_x_copy1_run.log").read_text(), "[other] QEMU_START of another stage run\n")
+        self.assertTrue((logs / "spec_ci0123abcd_x_run1_b1_qemu.log").exists())
+        self.assertEqual([d for d in logs.iterdir() if d.name.startswith("old_")], [])
+
+    def test_the_aside_directory_holds_only_the_logs_of_this_tag(self):
+        sb = fk.Sandbox(tempfile.mkdtemp(prefix="kfspec-"))
+        self.addCleanup(lambda: shutil.rmtree(sb.root, ignore_errors=True))
+        logs = sb.vm / "logs"
+        logs.mkdir(parents=True, exist_ok=True)
+        (logs / "spec_ci0123abcd_run1_run.log").write_text("[old] ours\n")
+        (logs / "spec_ci0123abcd_x_run1_run.log").write_text("[old] a tag that extends ours\n")
+        (logs / "spec_ci0123abcd_run1_cmdline.txt").write_text("not a name win_vm.sh writes\n")
+        p = sb.run("lanea")
+        self.assertEqual(fk.verdict_of(p.stdout), "SPECVIEWPERF_STAGE_PASS")
+        olds = [d for d in logs.iterdir() if d.name.startswith("old_")]
+        self.assertEqual(len(olds), 1)
+        self.assertEqual(sorted(f.name for f in olds[0].iterdir()), ["spec_ci0123abcd_run1_run.log"])
+        self.assertTrue((logs / "spec_ci0123abcd_x_run1_run.log").exists())
+        self.assertTrue((logs / "spec_ci0123abcd_run1_cmdline.txt").exists())
+
+    def test_logs_of_a_tag_that_extends_this_tag_are_not_collected_as_evidence(self):
+        sb, logs = self._prefix_tag_run()
+        names = sorted(f.name for f in (sb.prov / (sb.tag + "_spec")).iterdir())
+        self.assertFalse([n for n in names if "_x_" in n], names)
+
     def test_the_guest_gets_16_gb_of_ram(self):
         self.go("lanea")
         for line in self.sb.runs():

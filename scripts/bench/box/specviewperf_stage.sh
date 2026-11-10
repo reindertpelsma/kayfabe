@@ -97,6 +97,12 @@ VARS=$(lane_py vars "$LANE") || { echo "$USAGE_LINE"; exit 2; }
 eval "$VARS"
 SETTLE_S=${KF_SPEC_SETTLE_S:-$SETTLE_S}
 IFS=, read -r -a LANE_IDS <<< "$IDS"
+# an empty lane is a configuration error, never a lane that passed
+[ "${#LANE_IDS[@]}" -gt 0 ] || { echo "$USAGE_LINE"; exit 2; }
+# KF_SPEC_TABLE (a proof run's own table) makes this NOT a lane run: every verdict line then ends with NARROWED, which the
+# payload's strict verdict pattern does not accept, so a narrowed PASS can never certify a lane
+NARROWED=""
+[ -z "${KF_SPEC_TABLE:-}" ] || NARROWED=" NARROWED"
 
 NOW=$(date +%s)
 if [ -n "${KF_SPEC_DEADLINE_EPOCH:-}" ]; then
@@ -296,14 +302,23 @@ delete_copy() {
     if [ -e "$VM/disk/$OVERLAY.qcow2" ]; then rm -f -- "$VM/disk/$OVERLAY.qcow2"; gone+="${gone:+,}overlay"; fi
     say "SPEC_COPY_DELETED removed=${gone:-nothing}"
 }
+# only THIS tag's logs: <TAG>_(copy|run)<n>_(run.log|run.out|b<n>_*); a tag that merely extends this one (ci1 and ci1_x) is not ours
+own_logs() {
+    local f b
+    for f in "$VM/logs/${TAG}"_*; do
+        [ -e "$f" ] || continue
+        b=${f##*/}
+        if [[ "$b" =~ ^${TAG}_(copy|run)[0-9]+_(run\.(log|out)|b[0-9]+_.+)$ ]]; then echo "$f"; fi
+    done
+}
 collect_host_logs() {
     local f
-    for f in "$VM/logs/${TAG}"_*_run.log "$VM/logs/${TAG}"_*_host_dmesg.txt "$VM/logs/${TAG}"_*_cmdline.txt; do
-        [ -f "$f" ] && cp "$f" "$EVD/" 2> /dev/null
-    done
-    for f in "$VM/logs/${TAG}"_*_qemu.log; do
-        [ -f "$f" ] && gzip -c "$f" > "$EVD/$(basename "$f").gz"
-    done
+    while read -r f; do
+        case "$f" in
+            *_run.log | *_host_dmesg.txt | *_cmdline.txt) cp "$f" "$EVD/" 2> /dev/null ;;
+            *_qemu.log) gzip -c "$f" > "$EVD/$(basename "$f").gz" ;;
+        esac
+    done < <(own_logs)
     rm -f "$EVD/cup8_host"
 }
 kill_fetch() { # a download still running is stopped with its curl: killing the helper alone leaves curl writing a (deleted) 42 GB .part
@@ -335,9 +350,9 @@ conclude() {
     say "SPEC_STAGE_COUNTS pass=$pass fail=$fail not_run=$nrun of=${#LANE_IDS[@]}"
     (cd "$EVD" && find . -path ./work -prune -o -type f ! -name MANIFEST.sha256 -print0 | sort -z | xargs -0 -r sha256sum > "$WORK/MANIFEST.sha256" && mv "$WORK/MANIFEST.sha256" MANIFEST.sha256)
     case "$kind" in
-        PASS) VERDICT=PASS; rc_final=0; say "SPECVIEWPERF_STAGE_PASS" ;;
-        FAIL) VERDICT=FAIL; rc_final=1; say "SPECVIEWPERF_STAGE_FAIL" ;;
-        *) VERDICT=RETRY; rc_final=3; say "SPECVIEWPERF_STAGE_RETRY class=${cls:-OPERATOR}" ;;
+        PASS) VERDICT=PASS; rc_final=0; say "SPECVIEWPERF_STAGE_PASS$NARROWED" ;;
+        FAIL) VERDICT=FAIL; rc_final=1; say "SPECVIEWPERF_STAGE_FAIL$NARROWED" ;;
+        *) VERDICT=RETRY; rc_final=3; say "SPECVIEWPERF_STAGE_RETRY class=${cls:-OPERATOR}$NARROWED" ;;
     esac
     exit "$rc_final"
 }
@@ -357,7 +372,7 @@ on_exit() {
         kill_fetch
         if [ "$GUEST_STARTED" = 1 ]; then teardown_guest; fi
         delete_copy
-        echo "SPECVIEWPERF_STAGE_RETRY class=OPERATOR"
+        echo "SPECVIEWPERF_STAGE_RETRY class=OPERATOR$NARROWED"
         exit 3
     fi
 }
@@ -373,6 +388,7 @@ trap 'exit 143' TERM INT HUP
 stage preflight
 say "SPEC_STAGE_LIST lane=$LANE n=${#LANE_IDS[@]}"
 note "rev=$REV tag=$T lane=$LANE release=$RELEASE deadline_left_s=$(left)"
+[ -z "$NARROWED" ] || note "narrowed table=$(basename "$KF_SPEC_TABLE") ids=$IDS: not a lane run; every verdict line of this run ends with NARROWED"
 [ "$(id -u)" = 0 ] || abort OPERATOR "not root"
 [ -c "${KF_SPEC_KVM_DEV:-/dev/kvm}" ] || abort PROVIDER "no /dev/kvm"
 [ -e "$VM/installed" ] || abort OPERATOR "windows is not installed ($VM)"
@@ -409,8 +425,8 @@ PIN=$(sed -n 's/^specviewperf-15\.0\.0\.tar\.zst sha256=\([0-9a-f]\{64\}\)$/\1/p
 # win_vm.sh APPENDS to logs/<tag>_run.log, and wait_qemu_start reads that file for this boot's QEMU_START: a stale line of an
 # earlier stage run with the same tag on this box (a retry by hand) was read as the new boot's, the wait ended at once and the
 # stage aborted "the copy boot did not come up" (proof run, 2026-11-09, second attempt). Old logs are moved aside, never deleted.
-stale=("$VM/logs/${TAG}"_*)
-if [ -e "${stale[0]}" ]; then
+mapfile -t stale < <(own_logs)
+if [ "${#stale[@]}" -gt 0 ]; then
     old=$VM/logs/old_$(date +%s)
     if mkdir -p "$old" && mv -- "${stale[@]}" "$old/"; then
         note "moved ${#stale[@]} log file(s) of an earlier run with tag $TAG to $(basename "$old")"

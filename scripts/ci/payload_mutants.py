@@ -409,6 +409,14 @@ CASES += [
     ("spec-min-remaining-ignores-the-native-walls", replace('table["factor"] * native', "native")),
     ("spec-windows-disk-not-sized", replace('            os.environ.setdefault("WINVM_DISK_GB", SPEC_DISK_GB)', "            pass")),
     ("spec-command-always-lane-both", replace('"KF_SPEC_LANE=" + spec,', '"KF_SPEC_LANE=both",')),
+    ("spec-command-keeps-the-narrowed-table", replace('                    "KF_SPEC_TABLE",\n', '                    "KF_SPEC_LANE_X",\n')),
+    (
+        "spec-narrowed-verdict-accepted",
+        replace(
+            'SPEC_VERDICT = re.compile(r"^SPECVIEWPERF_STAGE_(PASS|FAIL|RETRY)(?: class=([A-Z0-9_]{1,32}))?$", re.M)',
+            'SPEC_VERDICT = re.compile(r"^SPECVIEWPERF_STAGE_(PASS|FAIL|RETRY)(?: class=([A-Z0-9_]{1,32}))?(?: NARROWED)?$", re.M)',
+        ),
+    ),
     ("spec-deadline-without-margin", replace("SPEC_DEADLINE_MARGIN_S = 120", "SPEC_DEADLINE_MARGIN_S = 0")),
     (
         "spec-both-is-one-lane",
