@@ -262,6 +262,16 @@ only the verdict line"); without the lane file the row is `specviewperf_retry_no
 are reserved and DESIGN-ONLY: requesting them is a preflight failure. A malformed value, a stage
 outside the large tier or a duplicate is refused before the first stage.
 
+## Environment contract and the tier line (2026-11-10)
+
+CODE READ (`vast_report.py` `SPEC`, `load_provider_env`, `write_env_file`; `vast_onstart.sh`), plus an offline replay with no stage run. Every `KF_*` name the Worker can send must have a row
+in `SPEC` (`vast_report.py`): `load_provider_env` and `write_env_file` keep only those names, so a missing row drops the
+variable before the payload starts. `KF_LINUX_APPS` (exactly `1`, signed middle tier only) had no row, so a middle box ran the
+Windows apps but no Linux `apps` stage (PR #334). `ci/vast-broker/test/env-contract.test.js` checks the Worker's emitted keys and
+values against `SPEC`; `OnstartContract` in `test_middle_apps.py` drives the real `check-env --write` and the sourced env file into
+the payload plan. The `KF_PAYLOAD_TIER` line now ends with `linuxapps=0|1`, so a skipped request shows in the log
+(`vast_run_report.py` reads it as `linux_apps_requested`).
+
 ## Windows apps stage (2026-11-07)
 
 CODE READ (`vast_payload.py` `winapps_requested`, `winapps_rows`; `scripts/bench/box/windows_apps.sh`;

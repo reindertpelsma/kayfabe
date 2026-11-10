@@ -7,6 +7,7 @@ import io
 import json
 import os
 from pathlib import Path
+import re
 import sys
 import subprocess
 import tempfile
@@ -567,6 +568,138 @@ class PayloadMiddle(unittest.TestCase):
         env = {"KF_LINUX_APPS": "1"}
         self.assertIs(self.m.linuxapps_requested(env, "middle"), True)
         self.assertNotIn("KF_LINUX_APPS", env)
+
+
+class OnstartContract(unittest.TestCase):
+    """The box environment contract, driven the way vast_onstart.sh drives it (2026-11-10).
+
+    Falsifier: the Worker's environment (ci/vast-broker/src/tier.js) goes through the real
+    `vast_report.py check-env --write` and the sourced env file, and the payload then does not
+    plan the Linux `apps` stage. PR #334: KF_LINUX_APPS had no SPEC row, so it was dropped here;
+    test_middle_apps injected it straight into the payload and could not see that.
+    """
+
+    setUp = v7.V7Tests.setUp
+    _main_fixture = v7.V7Tests._main_fixture
+    BASE = {
+        "KF_PROTOCOL": "7",
+        "KF_BROKER_URL": "https://broker.example/pfx-9f3a7c1d9f3a7c1d9f3a7c1d",
+        "KF_RUN_ID": "123-1",
+        "KF_RUN_TOKEN": ".".join(["eyJhbGciOiJIUzI1NiJ9", "eyJydW4iOiI0MjQyIn0", ("Zk9_-Qw" * 7)[:43]]),
+        "KF_NONCE": "ab" * 16,
+        "KF_SHA": "1234abcd" * 5,
+        "KF_REPO": "reindertpelsma/kayfabe",
+        "KF_RUNNER_NONCE": "cd" * 32,
+        "KF_SOFT_DEADLINE": "1900000000",
+        "KF_HEARTBEAT_SECONDS": "30",
+        "KF_GRACE_FAIL": "600",
+        "KF_MERGE_WINDOWS": "1",
+        "KF_TIER": "middle",
+        "KF_WINAPPS": "mid",
+        "KF_LINUX_APPS": "1",
+    }
+
+    def onstart(self, worker_env, via="provider"):
+        """Provider env -> check-env --write -> `set -a; . file` -> the variables the payload gets."""
+        with tempfile.TemporaryDirectory() as d:
+            provider, written = Path(d, "environment"), Path(d, "run/env")
+            process = {"PATH": os.environ["PATH"]}
+            if via == "provider":
+                provider.write_text("".join("%s=%s\n" % kv for kv in worker_env.items()))
+            else:
+                provider.write_text("")
+                process.update(worker_env)
+            run = subprocess.run(
+                [
+                    sys.executable, "-B", "-I", str(ROOT / "scripts/ci/vast_report.py"),
+                    "check-env", "--write", str(written), "--provider-env", str(provider),
+                ],
+                env=process, capture_output=True, text=True, timeout=60,
+            )
+            self.assertEqual(run.returncode, 0, run.stderr)
+            sourced = subprocess.run(
+                ["bash", "-c", "set -a; . \"$1\"; env -0", "_", str(written)],
+                env={"PATH": os.environ["PATH"]}, capture_output=True, text=True, timeout=60,
+            )
+            self.assertEqual(sourced.returncode, 0, sourced.stderr)
+            box = dict(kv.split("=", 1) for kv in sourced.stdout.split("\0") if kv.startswith("KF_"))
+            return box, written.read_text()
+
+    def plan(self, box, soft=300):
+        names = apps.NAMES
+        logs = {
+            "apps": (apps.log(names=names), 0),
+            "windows_apps": winapps.apps_log("PASS", profile="mid"),
+        }
+        out = io.StringIO()
+        with patch.object(self.m, "apps_gate_list", return_value=names):
+            with patch("sys.stdout", out):
+                rc, result, calls = self._main_fixture(
+                    windows=None, soft_ms=soft * 60000, extra_env=box, stage_logs=logs
+                )
+        return rc, result, calls, out.getvalue()
+
+    def test_a_middle_run_planned_from_the_real_contract_includes_the_linux_apps_stage(self):
+        for via in ("provider", "process"):
+            with self.subTest(via=via):
+                box, _ = self.onstart(self.BASE, via)
+                self.assertEqual(box.get("KF_LINUX_APPS"), "1")
+                rc, result, calls, text = self.plan(box)
+                self.assertEqual(rc, 0, result)
+                self.assertEqual(calls[-3:], ["apps", "windows_gate", "windows_apps"])
+                self.assertIn({"name": "apps", "pass": len(apps.NAMES), "fail": 0, "skip": 0}, result["suites"])
+                self.assertRegex(text, r"KF_PAYLOAD_TIER .* winapps=mid linuxapps=1\n")
+
+    def test_the_header_line_shows_a_skipped_linux_apps_request(self):
+        env = {k: v for k, v in self.BASE.items() if k != "KF_LINUX_APPS"}
+        box, _ = self.onstart(env)
+        _, _, calls, text = self.plan(box)
+        self.assertNotIn("apps", calls)
+        self.assertRegex(text, r"KF_PAYLOAD_TIER .* tier=middle .* linuxapps=0\n")
+
+    def test_every_worker_key_survives_into_the_env_file(self):
+        _, written = self.onstart(self.BASE)
+        for name in self.BASE:
+            self.assertIn("export %s=" % name, written)
+
+    @staticmethod
+    def report():
+        # In-process, never the CLI: a violation makes the CLI post to the broker URL.
+        spec = importlib.util.spec_from_file_location("report_contract", ROOT / "scripts/ci/vast_report.py")
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = module
+        spec.loader.exec_module(module)
+        return module
+
+    def test_a_malformed_linux_apps_value_is_refused_at_the_contract(self):
+        report = self.report()
+        self.assertEqual(report.validate_env(self.BASE), [])
+        for bad in ("0", "true", "11", "yes", "1 "):
+            self.assertEqual(
+                report.validate_env({**self.BASE, "KF_LINUX_APPS": bad}),
+                ["KF_LINUX_APPS: malformed"],
+                bad,
+            )
+
+    def test_a_falsy_or_truthy_word_from_the_provider_file_is_refused(self):
+        report = self.report()
+        for bad in ("0", "true", "yes"):
+            with tempfile.TemporaryDirectory() as d:
+                provider = Path(d, "environment")
+                provider.write_text("KF_LINUX_APPS=%s\n" % bad)
+                loaded = report.load_provider_env({}, str(provider))
+            self.assertEqual(loaded, {"KF_LINUX_APPS": bad})
+            self.assertEqual(report.validate_env({**self.BASE, **loaded}), ["KF_LINUX_APPS: malformed"], bad)
+
+    def test_every_opt_in_the_payload_pops_has_a_spec_row(self):
+        spec_names = {name for name, _, _ in self.report().SPEC}
+        source = (ROOT / "scripts/ci/vast_payload.py").read_text()
+        popped = set(re.findall(r'environ\.(?:pop|get)\("(KF_[A-Z_]+)"', source))
+        popped |= set(re.findall(r'\(\*RELEASE_DRIVER_FIELDS, "(KF_[A-Z_]+)"', source))
+        popped -= {name for name in popped if name.startswith("KF_PAYLOAD_") or name.endswith("_MS")}
+        for name in ("KF_MERGE_WINDOWS", "KF_TIER", "KF_WINDOWS_RUNS", "KF_STAGES", "KF_SPEC", "KF_WINAPPS", "KF_LINUX_APPS"):
+            self.assertIn(name, popped, "scan blind to " + name)
+        self.assertEqual(sorted(popped - spec_names), [])
 
 
 class TierDefinitionTests(unittest.TestCase):

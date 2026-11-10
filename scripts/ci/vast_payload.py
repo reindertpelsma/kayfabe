@@ -1436,7 +1436,9 @@ def main():
             + " spec="
             + (spec or "none")
             + " winapps="
-            + (winapps or "none"),
+            + (winapps or "none")
+            + " linuxapps="
+            + str(int(linuxapps)),
             flush=True,
         )
         subprocess.run(["df", "-h", "/"], check=True)

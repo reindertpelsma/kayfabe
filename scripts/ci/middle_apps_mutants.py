@@ -135,6 +135,62 @@ CASES = [
         "py",
     ),
     (
+        "linux-apps-spec-row-dropped",
+        "scripts/ci/vast_report.py",
+        '    ("KF_LINUX_APPS", False, _match(r"1")),\n',
+        "",
+        "py",
+    ),
+    (
+        "linux-apps-spec-row-dropped-worker-side",
+        "scripts/ci/vast_report.py",
+        '    ("KF_LINUX_APPS", False, _match(r"1")),\n',
+        "",
+        "node",
+    ),
+    (
+        "linux-apps-spec-validator-loosened",
+        "scripts/ci/vast_report.py",
+        '("KF_LINUX_APPS", False, _match(r"1")),',
+        '("KF_LINUX_APPS", False, _match(r"1|0|true|yes")),',
+        "py",
+    ),
+    (
+        "linux-apps-spec-validator-loosened-worker-side",
+        "scripts/ci/vast_report.py",
+        '("KF_LINUX_APPS", False, _match(r"1")),',
+        '("KF_LINUX_APPS", False, _match(r"1|0|true|yes")),',
+        "node",
+    ),
+    (
+        "winapps-spec-row-dropped",
+        "scripts/ci/vast_report.py",
+        '    ("KF_WINAPPS", False, _match(r"small|mid|full")),\n',
+        "",
+        "py",
+    ),
+    (
+        "spec-lane-spec-row-dropped-worker-side",
+        "scripts/ci/vast_report.py",
+        '    ("KF_SPEC", False, _match(r"lanea|laneb|both")),\n',
+        "",
+        "node",
+    ),
+    (
+        "stages-spec-row-dropped-worker-side",
+        "scripts/ci/vast_report.py",
+        '    ("KF_STAGES", False, _match(r"[a-z][a-z0-9_]{0,31}(?::[a-z][a-z0-9_]{0,31}){0,3}")),\n',
+        "",
+        "node",
+    ),
+    (
+        "payload-header-linuxapps-dropped",
+        "scripts/ci/vast_payload.py",
+        '\n            + " linuxapps="\n            + str(int(linuxapps)),',
+        ",",
+        "py",
+    ),
+    (
         "explicit-linux-opt-in-ignored",
         "scripts/ci/vast_payload.py",
         "@linuxapps_requested",
@@ -331,7 +387,11 @@ def collect(root, mode):
         if run.returncode:
             raise RuntimeError(run.stderr[-2000:])
         return json.loads(run.stdout.splitlines()[-1])
-    tests = ["config-booleans.test.js"] if mode == "config" else ["middle-apps.test.js"]
+    tests = (
+        ["config-booleans.test.js"]
+        if mode == "config"
+        else ["middle-apps.test.js", "env-contract.test.js"]
+    )
     run = subprocess.run(
         [
             "node",

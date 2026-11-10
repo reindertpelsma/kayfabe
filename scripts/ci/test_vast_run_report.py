@@ -112,6 +112,27 @@ def result(windows=True, verdict="PASS", rows=None, claims=None):
     }
 
 
+class TierLine(unittest.TestCase):
+    """KF_PAYLOAD_TIER carries linuxapps= (2026-11-10), so a silently skipped Linux apps stage shows."""
+
+    LINE = "KF_PAYLOAD_TIER windows=1 source=worker tier=middle windows_runs=1 stages=none spec=none winapps=mid linuxapps=%s"
+
+    def parsed(self, line):
+        c = rr.Collector()
+        c.feed(line)
+        return c
+
+    def test_the_collector_reads_the_linux_apps_request(self):
+        self.assertIs(self.parsed(self.LINE % "1").linux_apps_requested, True)
+        self.assertIs(self.parsed(self.LINE % "0").linux_apps_requested, False)
+
+    def test_an_older_or_malformed_line_is_unknown_not_false(self):
+        old = "KF_PAYLOAD_TIER windows=1 source=worker tier=middle windows_runs=1 stages=none"
+        self.assertIsNone(self.parsed(old).linux_apps_requested)
+        self.assertIsNone(self.parsed(self.LINE % "yes").linux_apps_requested)
+        self.assertIs(self.parsed(self.LINE % "1").windows_requested, True)
+
+
 class Build(unittest.TestCase):
     def build(self, lines, res):
         return rr.build_report(lines, res)
