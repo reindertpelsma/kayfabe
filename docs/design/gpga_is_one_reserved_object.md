@@ -1,13 +1,70 @@
 # GPGA is ONE reserved object
 
-**STATUS: LIVE (2026-09-10; amended in place 2026-09-21, w824).** Owner's design, settled in
+**STATUS: LIVE (2026-11-10: paths and citations re-verified, see the first section; first
+written 2026-09-10, amended in place 2026-09-21, w824).** Owner's design, settled in
 conversation 2026-09-10 and **re-affirmed verbatim by the owner on 2026-09-21** (*"yes GPGA is
-just one rm object"*). Supersedes the per-leaf join described in `fbwin.rs`'s module docs, which
-is scheduled for deletion by it. ⚠ The w824 amendments below were folded in by fable with the
+just one rm object"*). Supersedes the per-leaf join described in
+`archive/crates/kayfabe-device/src/fbwin.rs`'s module docs; that crate left the workspace on
+2026-10-31 (commit `67713efb8`), so the deletion this document called for has happened.
+⚠ The w824 amendments below were folded in by fable with the
 owner's authorisation (*"its ok to update parts"*); each is marked `[w824]`, each says whether
 it is measured, cited, or inferred, and none deletes the 09-10 reasoning — where a 09-10
 conclusion no longer holds, the supersession is recorded **above** the text it supersedes and
 the text is kept for its rationale.
+
+## `[2026-11-10]` Re-verification: what was read, and what moved since 09-21 — read this first
+
+`[CODE READ 2026-11-10, checkout of origin/next 734a4cc52]` Nothing below was run on hardware
+for this pass; the measurements in the body keep their own dates and boxes. What was read:
+
+- **The rule still holds in v3.** `kf-qemu/src/device.rs` (`rm.reserve_gpga(fb_length)`, line 538)
+  reserves the one device-local object during realize, and a refusal returns an error, so the
+  device does not realise (the VM does not start). `kf-host/src/lib.rs` `reserve_gpga` (line 1821)
+  asks for contiguous, 1 GiB-aligned vidmem first (`alignment: ONE_GIB`) and falls back. The
+  walker kernel is brought up before the reservation (`kf_cuda::walk::WalkKernel`) and the store
+  is exported to it. `kf-mem/src/store.rs` models GPGA as `{token, len}` plus a bounds check,
+  with no allocator cursor.
+- **One wording correction to "The rule".** Where the rule says the advertised size *is
+  derived from the reservation that succeeded*: v3 takes `fb_length = cfg.fb_mb << 20`
+  (`device.rs:495`), lays out the BARs from it, then reserves exactly that length, and a
+  refusal aborts realize. There is no shrink-to-fit. What the code guarantees is *never
+  advertised unless reserved*; "derived" is the word the pre-v3 `kayfabe-rm-ladder` comments use
+  (`main.rs:6105`; that code was not examined), and it is not what `kf-qemu` does.
+- **Promote/demote, the fake range, `GpgaViews`, `install_join`: none is in a `kf-*` crate.**
+  A search of `crates/kf-*` for `install_join`, `FbStore`, `GpgaViews`, `GpgaShadow`, `fake range`,
+  `promot` and `demot` finds only prose comments and the unrelated RM control
+  `GPU_PROMOTE_CTX` (an ABI struct in `kf-abi`). `install_join`
+  survives only in the frozen `crates/kayfabe-isolate-host/src/fbjoin.rs` and in
+  `archive/crates/kayfabe-device/src/fbwin.rs`; `V3_BUILD.md` lists fbwin, gpgaview and the
+  promote-join as *dropped outright*. So "today" and "Today" in "What this deletes" and in
+  the DoS table describe the **pre-v3 tree on 2026-09-10**, not the product.
+- **Identity windows exist in the twins** (`kf-qemu/src/mem.rs`, `map_window`). The security
+  docs (`V3_SECURITY_MODEL.md`, S1-21) record that they are mapped in every twin, which is
+  an open finding, not a property of this design.
+- **Moved paths.** `fbwin.rs` is now `archive/crates/kayfabe-device/src/fbwin.rs`;
+  `nvkvm_gpu_emul.c` is now `archive/nvkvm/src/qemu/nvkvm_gpu_emul.c` (the `:596-604` comment
+  that names `nvkvm_m2_cpt_sync_at_release` was re-read there and still says what the text
+  below says).
+- **NVIDIA citations carry a revision now.** The bare file names were citations without a
+  revision. Each was re-read against **ogkm-580 = 580.159.04** (`third_party/ogkm-580`,
+  `b81d58e`; the submodule is not initialised in a plain checkout, so a local copy of that
+  tag was read). Results: `clc56f.h:132-176` is **slightly short**: the TLB-invalidate fields (invalidation
+  size, target address, PDB one/all, PDB aperture and address) span lines 121-178, so the body
+  now cites 121-178; `mem_utils_gm107.c:505-516` holds (the *"identity mapped to
+  VAS"* log line is at 507-509); `channel_utils.c:1053-1091` holds at 580 (`bUseVasForCeCopy` at 1053 and 1084; the text
+  cites it as `ogkm-610` and 610 was not read); `uvm_mmu.c:800-809` holds;
+  `uvm_pushbuffer.c:98-117` holds; and the *"no RM call, 10 mutex sites"* claim holds (0 hits
+  for `rmapi`, `nvUvmInterface`, `rm_gpu_ops`; 10 `uvm_mutex_lock` calls). **One citation was
+  wrong:** `uvm_mmu.c:432,462` do not point at copy-engine writes in 580.159.04. The CE
+  writes are at `uvm_mmu.c:436` (`ce_hal->memcopy` in the PDE fill), `:494` and `:1672`
+  (`ce_hal->memset_8`). UVM also has a **CPU** write path beside them (`:379`, `:500`,
+  `:1960`, `:2115`), taken when no push is supplied. The body is corrected to the CE lines
+  and says so; which path a guest's UVM takes was not examined here, and no 610 tree was
+  available, so the 610 line numbers were not compared.
+
+Not re-verified, and still as dated in the body: every `[measured ...]` figure, the PTX walker
+validation, the w422/w740 numbers, the `the_*` document names (all in `docs/archive/`), and
+the mechanism claims that rest on `THE_CONSTRAINTS.md` §56.
 
 ## `[w824]` What moved between 09-10 and 09-21 — read this first
 
@@ -48,7 +105,7 @@ finding and every measurement untouched:
    ★ **NVIDIA does exactly this itself.** CeUtils' `bUseVasForCeCopy` rewrites an FB-physical
    operand to `addr + fbAliasVA - startFbOffset` and flips `_SRC_TYPE`/`_DST_TYPE` to `_VIRTUAL`
    (`ogkm-610: channel_utils.c:1053-1091`); its own log line reads *"FB (addr, size) identity
-   mapped to VAS"* (`mem_utils_gm107.c:505-516`), with FB base and VA base **512 MiB-aligned**.
+   mapped to VAS"* (`ogkm-580: src/nvidia/src/kernel/gpu/mem_mgr/arch/maxwell/mem_utils_gm107.c:505-516`), with FB base and VA base **512 MiB-aligned**.
    The identity window is not our invention; it is the driver's own shape for this problem.
    ⚠ `[inferred, unmeasured]` `GPGA_VA_BASE` should be ≥ 512 MiB-aligned (the CeUtils rule) and
    above any VA a guest can name in that space; the tree's own reservation already tries
@@ -58,7 +115,8 @@ finding and every measurement untouched:
 ⚠ **Two things the two-VA construction does NOT decide, both recorded so they are not read as
 settled.** (i) Which VA space a **Translated** host channel is bound to when one pushbuffer mixes
 physical and virtual operands (UVM's kernel channels do: page-table writes are physical
-`uvm_mmu.c:432,462`; the pushbuffer itself is sysmem, `uvm_pushbuffer.c:114-117`). Either the
+`ogkm-580: kernel-open/nvidia-uvm/uvm_mmu.c:436,494`; the pushbuffer itself is sysmem by
+default, `ogkm-580: kernel-open/nvidia-uvm/uvm_pushbuffer.c:114-117`). Either the
 identity window is mapped into every mirrored VAS above the guest's range, or such channels
 run in the identity VA and their virtual operands are rewritten — the second is only possible
 for operands that are *methods*, never for pointers inside kernel parameters. (ii) A
@@ -118,7 +176,7 @@ request and does not create a mapping.
 | premise of promote/demote (09-10) | status after §56 |
 |---|---|
 | we *refresh* by walking the guest's tables and *keep* what we learned (a mirror the views are re-pointed from) | ⊘ **rule 2** — we store no VA table. The guest's tables are read **in place, in GPGA, by the GPU walker**, at the guest's synchronisation point, and the answer is consumed by that one host map call, not retained |
-| an unpromoted vidmem page is *"permanently dirty"*; promoted pages have dirty tracking, so edits are noticed | ⊘ **rule 3** — noticing an edit is not a mapping trigger. And the premise was **already broken for the tables that matter**: UVM writes its tables with the **copy engine** (`uvm_mmu.c:432,462`, w719b) and a DMA write into a promoted host page sets **no KVM dirty bit**. Under the identity window a CE page-table write lands in GPGA, in vidmem, where the walker reads it — the problem dissolves rather than being solved `[inferred from the mechanism; not yet measured on a live guest]` |
+| an unpromoted vidmem page is *"permanently dirty"*; promoted pages have dirty tracking, so edits are noticed | ⊘ **rule 3** — noticing an edit is not a mapping trigger. And the premise was **already broken for the tables that matter**: UVM writes its tables with the **copy engine** when it has a push (`ogkm-580: kernel-open/nvidia-uvm/uvm_mmu.c:436,494`, w719b; its CPU write path is named in the first section) and a DMA write into a promoted host page sets **no KVM dirty bit**. Under the identity window a CE page-table write lands in GPGA, in vidmem, where the walker reads it — the problem dissolves rather than being solved `[inferred from the mechanism; not measured on a live guest]` |
 | promoted buffers live in a *fake range* above GPGA, and every view is re-pointed | ⊘ gone with promotion; the scratchpad VA is the identity window only. This is also what makes `GpgaViews`' *"real work"* (§"What promotion actually costs") unnecessary |
 | demotion on an observable event | ⊘ nothing is promoted, nothing is demoted |
 
@@ -133,13 +191,13 @@ wrong reason (to make promotion affordable); the placement stands on its own.
 1. a BAR0 `MMU_INVALIDATE` register write naming a PDB — RM's walker path; ALL_VA is hard-coded
    there (`rm_cannot_express_a_narrow_invalidate`), so the scope is *that address space, whole*;
 2. a `MEM_OP_D MMU_TLB_INVALIDATE[_TARGETED]` method **in a Translated pushbuffer** — UVM's path
-   (`clc56f.h:132-176`), which carries PDB, aperture, target VA and size, i.e. the guest tells us
+   (`ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h:121-178`), which carries PDB, aperture, target VA and size, i.e. the guest tells us
    both the space and the extent. ⚠ It must be honoured at **execution** time, after the CE
    page-table writes that precede it in the same stream have retired on the host — `[w824b]`
    *retired* meaning their completion fd became ready in the loop, **never** a wait on the
    worker's stack (`THE_TRANSLATED_PLANE.md` §5) — the C latched
    at the release semaphore for this reason (`nvkvm_m2_cpt_sync_at_release`,
-   `nvkvm_gpu_emul.c:596-604`). Honouring it at decode time reads tables the engine has not
+   `archive/nvkvm/src/qemu/nvkvm_gpu_emul.c:596-604`). Honouring it at decode time reads tables the engine has not
    written yet;
 3. an RPC that carries addresses explicitly — `GPU_PROMOTE_CTX` entries, channel alloc
    (instance block, USERD, GPFIFO), `SetPageDir`/`UPDATE_BAR_PDE` for roots.
@@ -177,7 +235,7 @@ promote halves. Hang demotion off an event we see.
 ### Why the window is safe
 
 A correct guest does not edit an address space's page tables while it is invalidating them — it
-writes, then issues the invalidate (`ogkm-580: uvm_mmu.c:800-809`, writes then `wfi_membar` then
+writes, then issues the invalidate (`ogkm-580: kernel-open/nvidia-uvm/uvm_mmu.c:800-809`, writes then `wfi_membar` then
 `tlb_invalidate_all`). So the copy is safe **by construction** rather than by a lock.
 
 ⊘ Per **address space**, not globally: another thread may be writing a different space's tables
@@ -250,7 +308,7 @@ A Translated channel's entries must be read before hardware sees them
 
 | pushbuffer lives in | who puts it there | how we read it |
 |---|---|---|
-| **guest RAM (sysmem)** | UVM by default (`uvm_pushbuffer.c:98-117`, `pushbuffer_loc == SYS` unless the module parameter says `vid`); the native oracle's `cup2` pushbuffer was sysmem too (`native_dataplane_cup2_ga106.md:80,127`) | a CPU read of the guest's memfd at RAM speed. **No vidmem read at all.** This is the common case |
+| **guest RAM (sysmem)** | UVM by default (`ogkm-580: kernel-open/nvidia-uvm/uvm_pushbuffer.c:98-117`; `pushbuffer_loc` is SYS unless the `uvm_channel_pushbuffer_loc` module parameter says `vid`, `ogkm-580: kernel-open/nvidia-uvm/uvm_channel.c:3313-3335`); the native oracle's `cup2` pushbuffer was sysmem too (`native_dataplane_cup2_ga106.md:80,127`) | a CPU read of the guest's memfd at RAM speed. **No vidmem read at all.** This is the common case |
 | **vidmem** (a guest that sets `pushbuffer_loc=vid`, or a kernel ring placed in FB) | the guest | ⊘ never a CPU read — 48 MiB/s. A **CE copy** on our own raw-client channel with `src = GPGA_VA_BASE + fb_phys` (arithmetic, the identity window) into a sysmem staging buffer; or, as the owner allows, `cuMemcpyDtoH` from the libcuda context that already holds GPGA |
 
 ⚠ Both vidmem routes run **behind the trap, in the worker** (§48: ms budget there, µs in the
@@ -332,7 +390,7 @@ on — the one place we cannot afford one.
 
 ### ⚠ THERE IS NO GLOBAL QUIESCENCE — scope the refresh to the trigger's address space
 
-`[verified 2026-09-11, ogkm-580]` **UVM and RM serialise independently.** `uvm_mmu.c` contains
+`[verified 2026-09-11, ogkm-580]` **UVM and RM serialise independently.** `ogkm-580: kernel-open/nvidia-uvm/uvm_mmu.c` contains
 **no** RM interface call — no `rmapi`, no `nvUvmInterface`, no `rm_gpu_ops` — and does all
 page-tree work under its own mutex (10 sites). RM uses the GPU group lock. Neither knows about
 the other's.
