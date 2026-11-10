@@ -6,9 +6,11 @@
 #
 #   KF_SPEC_LANE=lanea|laneb|both KF_SPEC_DEADLINE_EPOCH=<epoch s> bash scripts/bench/box/specviewperf_stage.sh <tag> <prov-dir>
 #
-# STATUS: DESIGN + CODE, 2026-11-07 (docs/design/V3_SPEC_GATE.md). GPU-free tests only
+# STATUS: DESIGN + CODE, 2026-11-07 (docs/design/V3_SPEC_GATE.md), first run on a real box 2026-11-09: PASS for a two-viewset lane B on an RTX 4090
+# (traces/spec_stage_proof_20261109/); everything else is GPU-free tests only
 # (scripts/ci/test_vast_spec_stage.py, scripts/ci/spec_stage_mutants.py: a fake win_vm.sh and a fake fetch script).
-# NO BOX HAS RUN IT. DISABLED BY DEFAULT: nothing starts it until the Worker sends KF_STAGES=specviewperf with KF_SPEC.
+# DISABLED BY DEFAULT: nothing starts it until the Worker sends KF_STAGES=specviewperf with KF_SPEC.
+# Proof runs narrow a lane with KF_SPEC_TABLE=<file shaped like lanes.json> (read by lane.py and tarfilter.py).
 #
 # What it does, strictly serial:
 #   1. preflight: root, /dev/kvm, the gate's PASS and overlay, the lane, the deadline, disk and RAM; the sha256 pin
@@ -95,6 +97,12 @@ VARS=$(lane_py vars "$LANE") || { echo "$USAGE_LINE"; exit 2; }
 eval "$VARS"
 SETTLE_S=${KF_SPEC_SETTLE_S:-$SETTLE_S}
 IFS=, read -r -a LANE_IDS <<< "$IDS"
+# an empty lane is a configuration error, never a lane that passed
+[ "${#LANE_IDS[@]}" -gt 0 ] || { echo "$USAGE_LINE"; exit 2; }
+# KF_SPEC_TABLE (a proof run's own table) makes this NOT a lane run: every verdict line then ends with NARROWED, which the
+# payload's strict verdict pattern does not accept, so a narrowed PASS can never certify a lane
+NARROWED=""
+[ -z "${KF_SPEC_TABLE:-}" ] || NARROWED=" NARROWED"
 
 NOW=$(date +%s)
 if [ -n "${KF_SPEC_DEADLINE_EPOCH:-}" ]; then
@@ -294,23 +302,36 @@ delete_copy() {
     if [ -e "$VM/disk/$OVERLAY.qcow2" ]; then rm -f -- "$VM/disk/$OVERLAY.qcow2"; gone+="${gone:+,}overlay"; fi
     say "SPEC_COPY_DELETED removed=${gone:-nothing}"
 }
+# only THIS tag's logs: <TAG>_(copy|run)<n>_(run.log|run.out|b<n>_*); a tag that merely extends this one (ci1 and ci1_x) is not ours
+own_logs() {
+    local f b
+    for f in "$VM/logs/${TAG}"_*; do
+        [ -e "$f" ] || continue
+        b=${f##*/}
+        if [[ "$b" =~ ^${TAG}_(copy|run)[0-9]+_(run\.(log|out)|b[0-9]+_.+)$ ]]; then echo "$f"; fi
+    done
+}
 collect_host_logs() {
     local f
-    for f in "$VM/logs/${TAG}"_*_run.log "$VM/logs/${TAG}"_*_host_dmesg.txt "$VM/logs/${TAG}"_*_cmdline.txt; do
-        [ -f "$f" ] && cp "$f" "$EVD/" 2> /dev/null
-    done
-    for f in "$VM/logs/${TAG}"_*_qemu.log; do
-        [ -f "$f" ] && gzip -c "$f" > "$EVD/$(basename "$f").gz"
-    done
+    while read -r f; do
+        case "$f" in
+            *_run.log | *_host_dmesg.txt | *_cmdline.txt) cp "$f" "$EVD/" 2> /dev/null ;;
+            *_qemu.log) gzip -c "$f" > "$EVD/$(basename "$f").gz" ;;
+        esac
+    done < <(own_logs)
     rm -f "$EVD/cup8_host"
+}
+kill_fetch() { # a download still running is stopped with its curl: killing the helper alone leaves curl writing a (deleted) 42 GB .part
+    if [ -n "$FETCH_PID" ] && kill -0 "$FETCH_PID" 2> /dev/null; then
+        kill "$FETCH_PID" 2> /dev/null
+        pkill -f -- "fetch_bench_data.sh $OBJECT --sha256" 2> /dev/null
+        pkill -f -- "--output $ZST.part" 2> /dev/null
+    fi
 }
 conclude() {
     local xid_delta bar1=0 kind cls pass fail nrun
     stage conclude
-    if [ -n "$FETCH_PID" ] && kill -0 "$FETCH_PID" 2> /dev/null; then
-        kill "$FETCH_PID" 2> /dev/null
-        pkill -f -- "fetch_bench_data.sh $OBJECT --sha256" 2> /dev/null
-    fi
+    kill_fetch
     teardown_guest
     if [ "$GUEST_STARTED" = 1 ] && [ "$HOSTREF_BEFORE" = green ] && [ "$HOSTREF_AFTER" = unrun ]; then hostref after; fi
     xid_delta=$(sed -n 's/^HOSTREF_XID_DELTA //p' "$EVD/hostref_after.txt" 2> /dev/null)
@@ -329,9 +350,9 @@ conclude() {
     say "SPEC_STAGE_COUNTS pass=$pass fail=$fail not_run=$nrun of=${#LANE_IDS[@]}"
     (cd "$EVD" && find . -path ./work -prune -o -type f ! -name MANIFEST.sha256 -print0 | sort -z | xargs -0 -r sha256sum > "$WORK/MANIFEST.sha256" && mv "$WORK/MANIFEST.sha256" MANIFEST.sha256)
     case "$kind" in
-        PASS) VERDICT=PASS; rc_final=0; say "SPECVIEWPERF_STAGE_PASS" ;;
-        FAIL) VERDICT=FAIL; rc_final=1; say "SPECVIEWPERF_STAGE_FAIL" ;;
-        *) VERDICT=RETRY; rc_final=3; say "SPECVIEWPERF_STAGE_RETRY class=${cls:-OPERATOR}" ;;
+        PASS) VERDICT=PASS; rc_final=0; say "SPECVIEWPERF_STAGE_PASS$NARROWED" ;;
+        FAIL) VERDICT=FAIL; rc_final=1; say "SPECVIEWPERF_STAGE_FAIL$NARROWED" ;;
+        *) VERDICT=RETRY; rc_final=3; say "SPECVIEWPERF_STAGE_RETRY class=${cls:-OPERATOR}$NARROWED" ;;
     esac
     exit "$rc_final"
 }
@@ -348,9 +369,10 @@ on_exit() {
         VERDICT=RETRY
         trap - EXIT
         note "the stage script ended without a verdict (rc=$rc, stage=$STAGE)"
+        kill_fetch
         if [ "$GUEST_STARTED" = 1 ]; then teardown_guest; fi
         delete_copy
-        echo "SPECVIEWPERF_STAGE_RETRY class=OPERATOR"
+        echo "SPECVIEWPERF_STAGE_RETRY class=OPERATOR$NARROWED"
         exit 3
     fi
 }
@@ -366,6 +388,7 @@ trap 'exit 143' TERM INT HUP
 stage preflight
 say "SPEC_STAGE_LIST lane=$LANE n=${#LANE_IDS[@]}"
 note "rev=$REV tag=$T lane=$LANE release=$RELEASE deadline_left_s=$(left)"
+[ -z "$NARROWED" ] || note "narrowed table=$(basename "$KF_SPEC_TABLE") ids=$IDS: not a lane run; every verdict line of this run ends with NARROWED"
 [ "$(id -u)" = 0 ] || abort OPERATOR "not root"
 [ -c "${KF_SPEC_KVM_DEV:-/dev/kvm}" ] || abort PROVIDER "no /dev/kvm"
 [ -e "$VM/installed" ] || abort OPERATOR "windows is not installed ($VM)"
@@ -384,10 +407,33 @@ mem_gb=$(free -g | awk '/^Mem:/{print $2}')
 [ "${mem_gb:-0}" -ge 24 ] || abort PROVIDER "ram ${mem_gb:-0}G, need 24G for a 16G guest"
 if ! nvidia-smi -L > "$EVD/nvidia_smi_L.txt" 2>&1; then abort PROVIDER "nvidia-smi -L failed on the host"; fi
 GPU_NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader | head -1)
+# kf3's fb-mb is real host VRAM: the gate leaves 2 GiB on a card of 10 GiB or less (an 8 GB RTX 20xx cannot take win_vm.sh's
+# 8192 default); the kf3 boot of this stage must use the same value, or it fails on exactly those dies. An explicit
+# WINVM_KF3_FB_MB always wins.
+if [ -z "${WINVM_KF3_FB_MB:-}" ]; then
+    vram_mb=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits | head -1 | tr -dc 0-9)
+    if [ "${vram_mb:-0}" -gt 0 ] && [ "$vram_mb" -le 10240 ]; then
+        export WINVM_KF3_FB_MB=$(((vram_mb - 2048) / 1024 * 1024))
+        note "host VRAM ${vram_mb} MiB: WINVM_KF3_FB_MB=$WINVM_KF3_FB_MB"
+    fi
+fi
 note "host: gpu=\"$GPU_NAME\" cpus=$(nproc) ram_gb=$mem_gb disk_free_gb=$avail_gb need_gb=$need_gb"
 PIN=$(sed -n 's/^specviewperf-15\.0\.0\.tar\.zst sha256=\([0-9a-f]\{64\}\)$/\1/p' "$PINFILE" 2> /dev/null | head -1)
 [ -n "$PIN" ] || abort MEDIA "no sha256 pin for $OBJECT in $PINFILE (the owner pins it)"
 [ -f "$FETCH" ] || abort OPERATOR "no fetch helper"
+
+# win_vm.sh APPENDS to logs/<tag>_run.log, and wait_qemu_start reads that file for this boot's QEMU_START: a stale line of an
+# earlier stage run with the same tag on this box (a retry by hand) was read as the new boot's, the wait ended at once and the
+# stage aborted "the copy boot did not come up" (proof run, 2026-11-09, second attempt). Old logs are moved aside, never deleted.
+mapfile -t stale < <(own_logs)
+if [ "${#stale[@]}" -gt 0 ]; then
+    old=$VM/logs/old_$(date +%s)
+    if mkdir -p "$old" && mv -- "${stale[@]}" "$old/"; then
+        note "moved ${#stale[@]} log file(s) of an earlier run with tag $TAG to $(basename "$old")"
+    else
+        abort OPERATOR "could not move the logs of an earlier run with tag $TAG out of the way"
+    fi
+fi
 
 # ------------------------------------------------------------------------------------------------
 # the copy: download in the background (the Worker's /bench-data route, this run's token only)

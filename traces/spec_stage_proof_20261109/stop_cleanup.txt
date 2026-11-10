@@ -1,0 +1,8 @@
+[2026-11-09T22:28:41Z] stopping kfwin (pid 100993)
+[2026-11-09T22:29:07Z] stopped
+[2026-11-09T22:29:46Z] stopping kfwin (pid 102647)
+[2026-11-09T22:31:39Z] stopped
+[2026-11-09T23:09:33Z] stopping kfwin (pid 107738)
+[2026-11-09T23:09:51Z] stopped
+[2026-11-09T23:42:47Z] stopping kfwin (pid 108722)
+[2026-11-09T23:43:05Z] stopped

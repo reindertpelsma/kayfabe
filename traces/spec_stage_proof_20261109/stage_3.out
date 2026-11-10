@@ -1,0 +1,11 @@
+STAGE_RUN_START 3
+SPEC_STAGE_START lane=laneb
+SPEC_STAGE_LIST lane=laneb n=2
+SPEC_COPY_DELETED removed=archive
+SPEC_ROW name=medical-04 result=PASS subtests=10/10 reason=- failed=-
+SPEC_ROW name=catia-07 result=PASS subtests=6/6 reason=- failed=-
+SPEC_COPY_DELETED removed=overlay
+SPEC_STAGE_COUNTS pass=2 fail=0 not_run=0 of=2
+SPECVIEWPERF_STAGE_PASS
+SPECVIEWPERF_STAGE_EXIT rc=0
+STAGE_RUN_RC 0

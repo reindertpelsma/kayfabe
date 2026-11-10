@@ -589,6 +589,42 @@ class Cli(unittest.TestCase):
         self.assertEqual(v["NEED_GB"], "130")
         self.assertEqual(v["IDS"], ",".join(lane.lane_ids("lanea", TBL)))
 
+    def test_table_override_narrows_a_lane_for_a_proof_run(self):
+        # KF_SPEC_TABLE swaps the lane table (ids, vars, the tar filter's --table default); unset, lanes.json is used
+        import os
+        with tempfile.TemporaryDirectory() as d:
+            t = json.loads((SPEC / "lanes.json").read_text())
+            t["lanes"]["laneb"] = ["medical-04", "catia-07"]
+            f = Path(d) / "t.json"
+            f.write_text(json.dumps(t))
+            env = dict(os.environ, KF_SPEC_TABLE=str(f))
+            r = subprocess.run([sys.executable, "-I", str(SPEC / "lane.py"), "ids", "laneb"], capture_output=True, text=True, env=env)
+            self.assertEqual(r.stdout.strip(), "medical-04,catia-07")
+            self.assertEqual(self.run_cli("ids", "laneb").stdout.strip(), ",".join(lane.lane_ids("laneb", TBL)))
+            r = subprocess.run([sys.executable, "-I", str(SPEC / "lane.py"), "timeout", "maya-07", "100000"], capture_output=True, text=True, env=env)
+            self.assertEqual(r.stdout.split(), ["full", "1200"])
+
+    def _empty_lane_env(self, d):
+        import os
+        t = json.loads((SPEC / "lanes.json").read_text())
+        t["lanes"]["laneb"] = []
+        f = Path(d) / "empty.json"
+        f.write_text(json.dumps(t))
+        return dict(os.environ, KF_SPEC_TABLE=str(f))
+
+    def test_decide_refuses_an_empty_lane_as_a_pass(self):
+        t = json.loads((SPEC / "lanes.json").read_text())
+        t["lanes"]["laneb"] = []
+        self.assertEqual(lane.decide([], "laneb", "green", "green", tbl=t), ("RETRY", "OPERATOR"))
+
+    def test_decide_on_an_empty_lane_is_not_a_pass_through_the_command_line_either(self):
+        with tempfile.TemporaryDirectory() as d:
+            rows = Path(d) / "rows"
+            rows.write_text("")
+            r = subprocess.run([sys.executable, "-I", str(SPEC / "lane.py"), "decide", "laneb", "--rows", str(rows), "--before", "green", "--after", "green"],
+                               capture_output=True, text=True, env=self._empty_lane_env(d))
+            self.assertEqual(r.stdout.split(), ["RETRY", "OPERATOR"])
+
     def test_a_bad_lane_is_exit_2(self):
         self.assertEqual(self.run_cli("ids", "lanec").returncode, 2)
         self.assertEqual(self.run_cli("vars", "lanec").returncode, 2)

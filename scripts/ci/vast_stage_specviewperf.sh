@@ -48,7 +48,7 @@ status+='|^SPEC_COPY_DELETED removed=(archive|overlay|archive,overlay|nothing)$'
 rc=$(cat "$rcfile" 2>/dev/null || echo 1)
 rm -f "$rcfile"
 # the class is one of a fixed list (an allowlist: nothing a benchmark printed can be a class)
-verdict=$(grep -E '^SPECVIEWPERF_STAGE_(PASS|FAIL|RETRY( class=(NOT_BUILT|MEDIA|PROVIDER|TRANSPORT|TIME|HOSTREF|BAR1_EXCEPTION|OPERATOR|USAGE))?)$' "$log" | tail -n 1)
+verdict=$(grep -E '^SPECVIEWPERF_STAGE_(PASS|FAIL|RETRY( class=(NOT_BUILT|MEDIA|PROVIDER|TRANSPORT|TIME|HOSTREF|BAR1_EXCEPTION|OPERATOR|USAGE))?)( NARROWED)?$' "$log" | tail -n 1)
 echo "${verdict:-SPECVIEWPERF_STAGE_RETRY class=NO_VERDICT}"
 echo "SPECVIEWPERF_STAGE_EXIT rc=$rc"
 exit "$rc"

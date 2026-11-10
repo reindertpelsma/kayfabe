@@ -172,11 +172,33 @@ download_file() {
         [ "$rc" -ne 3 ] || return 0
         return "$rc"
     fi
-    printf 'url = "%s"\n' "$location" | curl --config - --fail --silent --show-error \
-        --proto '=https' --noproxy '*' --max-redirs 0 --user-agent "$ua" \
-        -C - --retry 5 --retry-delay 5 --connect-timeout 30 --speed-limit 1024 --speed-time 120 \
-        --output "$1" 2>"$errs" || rc=$?
-    [ "$rc" -eq 0 ] || { show_err; echo "fetch_bench_data: download failed (curl exit $rc)" >&2; }
+    # One locator is valid for one mint (<= 20 minutes to START a request; a running transfer is not cut by the expiry).
+    # curl's own --retry does not cover a connection that closed mid-body (exit 18, 56, ...), which is what cut the 42 GB
+    # copy at about 19.5 GB on 2026-11-09. So the SAME locator is used again, with -C - from the bytes already on disk,
+    # for as long as the previous try made progress (at most $resumes resumes); a try with no progress, a refusal
+    # (22) or a range error (33: the .part may be complete, the caller hashes it) ends this mint and the caller asks the
+    # Worker for a fresh one (at most 3 mints). Every loop is bounded; nothing here can spin.
+    local resumes=${KF_FETCH_RESUMES:-6} tries=0 before now
+    case $resumes in [0-9]|[0-9][0-9]) ;; *) resumes=6 ;; esac
+    before=$(stat -c %s -- "$1" 2>/dev/null || echo 0)
+    while :; do
+        tries=$((tries + 1))
+        rc=0
+        printf 'url = "%s"\n' "$location" | curl --config - --fail --silent --show-error \
+            --proto '=https' --noproxy '*' --max-redirs 0 --user-agent "$ua" \
+            -C - --retry 5 --retry-delay 5 --connect-timeout 30 --speed-limit 1024 --speed-time 120 \
+            --output "$1" 2>"$errs" || rc=$?
+        [ "$rc" -ne 0 ] || return 0
+        show_err
+        now=$(stat -c %s -- "$1" 2>/dev/null || echo 0)
+        echo "fetch_bench_data: transfer stopped (curl exit $rc) after $((now - before)) new bytes; part is $now bytes" >&2
+        case $rc in 22|33) break ;; esac
+        [ "$now" -gt "$before" ] && [ "$tries" -le "$resumes" ] || break
+        before=$now
+        echo "fetch_bench_data: resuming the same transfer from byte $now (resume $tries of $resumes)" >&2
+        sleep "${KF_BENCH_RETRY_SLEEP:-10}"
+    done
+    echo "fetch_bench_data: download failed (curl exit $rc)" >&2
     return "$rc"
 }
 

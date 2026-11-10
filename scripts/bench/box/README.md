@@ -112,7 +112,7 @@ ssh <alias> 'cat /root/prov/<tag>.log'           # V3_GATES_SUMMARY / KF3_RC / F
   fetches the private copy through the Worker's `/bench-data` route (pin: `specviewperf.pin`, without it RETRY class MEDIA),
   streams the lane's viewsets into a child overlay of the gate's overlay, runs each viewset once (1 iteration, FullHD) after the
   five-minute settle, and ends in `SPECVIEWPERF_STAGE_PASS` (0), `_FAIL` (1) or `_RETRY class=...` (3). It deletes the copy at the
-  end and prints status lines only. No box has run it; design, lanes, rules and what a first run needs:
+  end and prints status lines only. One box has run it (2026-11-09, RTX 4090, two viewsets PASS, `traces/spec_stage_proof_20261109/`); design, lanes, rules and what a first run needs:
   `docs/design/V3_SPEC_GATE.md`. GPU-free: `python3 -m unittest discover -s scripts/ci -p 'test_vast_spec*.py'`.
 - A merge to master needs `V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS` (2026-10-10: `gate10=FALLBACK` = host RM refused all small micro reservations by a refusal status AND the probe proved a per-2-MiB-leaf reservation works at the flat FB alias, accepted but loud; `gate10=FAIL` never), `KF3_RC=0`,
   `FAST_SUITE_PASS=30` and `BIRTH_CENSUS_OK` on the **exact revision** promoted (docs-only commits on

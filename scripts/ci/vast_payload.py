@@ -1680,6 +1680,9 @@ def main():
                 "specviewperf",
                 [
                     "env",
+                    # a proof run's narrowed table (KF_SPEC_TABLE) can never reach a lane run of the release tier
+                    "-u",
+                    "KF_SPEC_TABLE",
                     "KF_SPEC_LANE=" + spec,
                     "KF_SPEC_DEADLINE_EPOCH=" + str(soft // 1000 - SPEC_DEADLINE_MARGIN_S),
                     "bash",
