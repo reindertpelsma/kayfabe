@@ -30,6 +30,8 @@ Subcommands:
                    compare the files docker copies with the matcher (needs a working docker)
   strip --in-place delete, in the working tree, every tracked file that the commit's OWN
                    .workerignore matches (never .git); the box and the stripped-tree CI job call it
+  strip-verify [REV] after `strip --in-place`: fail unless every stripped path is absent from disk and
+                   flagged skip-worktree and `git status` reads clean (merge_check.sh runs it)
   strip --dest DIR export the commit minus the ignored files into an empty DIR
   treekey [REV]    the kf-tree-v2 key of REV (ci/vast-broker/src/treekey.js computes the same bytes)
   keycheck [REV]   fail unless node and treekey.js print that same key
@@ -490,7 +492,39 @@ def strip_in_place(root, rev="HEAD"):
     kept, removed = strip_plan(ents, pats)
     key = tree_key(ents, pats)
     delete_entries(root, removed)
+    hide_stripped_from_status(root, removed)
     return len(kept), len(removed), key
+
+
+def hide_stripped_from_status(root, removed):
+    """Mark the stripped paths skip-worktree, so `git status` still reads the tree as CLEAN.
+
+    [2026-11-10, run 42712356582] build_kf3.sh and run_fast_guest.sh name the QEMU directory
+    `kf3-bins/<rev8>[-dirty]` from `git status --porcelain --untracked-files=no`, and
+    native_xid_guard.verify_binary_revision refuses any directory that is not exactly `<rev8>`.
+    Deleted tracked files made every stripped box checkout `-dirty`, so the guest guard refused
+    the binary (thin_suite CRASH). The strip is deterministic from the commit's own .workerignore,
+    so it is not a modification; a real edit of a kept file still shows (and still adds -dirty).
+    """
+    if not removed:
+        return
+    indexed = {os.fsdecode(x) for x in git("ls-files", "-z", cwd=root).stdout.split(b"\0") if x}
+    paths = [path for _mode, _sha, path in removed if path in indexed]
+    if not paths:
+        return
+    p = git(
+        "update-index",
+        "--skip-worktree",
+        "-z",
+        "--stdin",
+        cwd=root,
+        inp=b"".join(os.fsencode(x) + b"\0" for x in paths),
+        check=False,
+    )
+    if p.returncode != 0:
+        raise FailClosed(
+            "cannot mark the stripped paths skip-worktree: " + p.stderr[-300:].decode(errors="replace")
+        )
 
 
 def delete_entries(root, removed):
@@ -534,6 +568,35 @@ def _parents(d):
         out.append(d)
         d = os.path.dirname(d)
     return out
+
+
+def verify_stripped(root, rev="HEAD"):
+    """Loud check that the in-place strip left the state the box relies on; raises FailClosed.
+
+    Run right after the strip. A later `git reset --hard`, `stash` or `checkout` would restore the
+    stripped files without this noticing (none runs on the box today)."""
+    pats = read_patterns(ignore_text_at(rev, root), "%s:.workerignore" % rev)
+    _kept, removed = strip_plan(tracked(rev, cwd=root), pats)
+    flags = {}
+    for rec in git("ls-files", "-v", "-z", cwd=root).stdout.split(b"\0"):
+        if rec:
+            flags[os.fsdecode(rec[2:])] = chr(rec[0])
+    problems = []
+    for _mode, _sha, path in removed:
+        if os.path.lexists(os.path.join(root, path)):
+            problems.append("%s is still on disk" % path)
+        elif path in flags and flags[path] not in "Ss":
+            problems.append("%s is not flagged skip-worktree (flag %r)" % (path, flags[path]))
+    status = git("status", "--porcelain", "--untracked-files=no", cwd=root).stdout.decode()
+    if status.strip():
+        problems.append("git status is not clean: " + status.strip().splitlines()[0])
+    if problems:
+        raise FailClosed(
+            "the stripped checkout is not in the expected state (%d problems; first: %s); "
+            "build_kf3.sh would name the QEMU directory -dirty and the guest guard would refuse it"
+            % (len(problems), problems[0])
+        )
+    return len(removed)
 
 
 def strip_export(rev, dest, root):
@@ -613,6 +676,8 @@ def main(argv=None):
     st.add_argument("rev", nargs="?", default="HEAD")
     st.add_argument("--in-place", action="store_true")
     st.add_argument("--dest")
+    sv = sub.add_parser("strip-verify")
+    sv.add_argument("rev", nargs="?", default="HEAD")
     tk = sub.add_parser("treekey")
     tk.add_argument("rev", nargs="?", default="HEAD")
     sub.add_parser("matchjson")
@@ -704,6 +769,9 @@ def run(a, root, pats_for, load):
             kept, removed, key = strip_export(a.rev, a.dest, root)
         print("IGNORE_STRIP kept=%d removed=%d rev=%s" % (kept, removed, a.rev))
         print("IGNORE_STRIP_KEY %s" % key)
+        return 0
+    if a.cmd == "strip-verify":
+        print("IGNORE_STRIP_VERIFIED removed=%d rev=%s" % (verify_stripped(root, a.rev), a.rev))
         return 0
     if a.cmd == "treekey":
         pats = read_patterns(ignore_text_at(a.rev, root), "%s:.workerignore" % a.rev)

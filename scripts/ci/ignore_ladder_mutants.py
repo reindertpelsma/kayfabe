@@ -214,6 +214,34 @@ CASES = [
         changed("except (tarfile.TarError, OSError) as e:", "except ZeroDivisionError as e:"),
     ),
     ("strip-needs-exactly-one-target-lost", changed("if a.in_place == bool(a.dest):", "if False:")),
+    # ---- the clean-status flag and its box-side check (2026-11-10, run 42712356582) ----
+    (
+        "flag-step-removed",
+        changed("    hide_stripped_from_status(root, removed)\n    return len(kept)", "    return len(kept)"),
+    ),
+    (
+        "flag-wrong-paths",
+        changed(
+            "paths = [path for _mode, _sha, path in removed if path in indexed]",
+            "paths = sorted(indexed)",
+        ),
+    ),
+    (
+        "flag-failure-swallowed",
+        changed(
+            '    if p.returncode != 0:\n        raise FailClosed(\n            "cannot mark',
+            '    if False:\n        raise FailClosed(\n            "cannot mark',
+        ),
+    ),
+    (
+        "verify-skips-the-disk-check",
+        changed("if os.path.lexists(os.path.join(root, path)):", "if False:"),
+    ),
+    (
+        "verify-skips-the-flag-check",
+        changed('elif path in flags and flags[path] not in "Ss":', "elif False:"),
+    ),
+    ("verify-skips-the-status-check", changed("    if status.strip():\n", "    if False:\n")),
 ]
 COLLECT = """import io,json,unittest
 s=unittest.defaultTestLoader.discover('.',pattern='test_ignore_ladder.py')
