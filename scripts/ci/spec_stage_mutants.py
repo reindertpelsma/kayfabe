@@ -200,7 +200,7 @@ MUTANTS = [
     M("stage-unlimited-boots", "stage", '    [ "$RUN_BOOTS" -lt "$MAX_BOOTS" ] || { note "max_guest_boots reached"; return 1; }', "    true",
       t("Verdicts", "the_boots_of_a_dying_guest_are_limited"), t("Verdicts", "a_guest_that_dies_every_time_is_boot_limited_and_every_row_is_a_fail_or_not_run")),
     M("stage-term-ignored", "stage", "trap 'exit 143' TERM INT HUP\n", "", IR),
-    M("stage-retry-prints-pass", "stage", '        *) VERDICT=RETRY; rc_final=3; say "SPECVIEWPERF_STAGE_RETRY class=${cls:-OPERATOR}" ;;',
+    M("stage-retry-prints-pass", "stage", '        *) VERDICT=RETRY; rc_final=3; say "SPECVIEWPERF_STAGE_RETRY class=${cls:-OPERATOR}$NARROWED" ;;',
       '        *) VERDICT=RETRY; rc_final=3; say "SPECVIEWPERF_STAGE_PASS" ;;',
       t("Inputs", "a_sha256_mismatch_is_retry_media_and_no_viewset_runs"), t("Inputs", "an_object_the_worker_does_not_know_is_retry_media")),
     M("stage-fail-exits-zero", "stage", "        FAIL) VERDICT=FAIL; rc_final=1; say", "        FAIL) VERDICT=FAIL; rc_final=0; say",
