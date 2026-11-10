@@ -112,6 +112,22 @@ class MergeCheckComposition(unittest.TestCase):
             self.assertLess(strip, text.index(later), later)
         self.assertIn("exit 2", text[strip : strip + 200])
 
+    def test_the_stripped_checkout_is_verified_right_after_the_strip_and_before_every_stage(self):
+        text = code(MERGE_CHECK)
+        strip = text.index("ignore_ladder.py strip --in-place")
+        verify = text.index("ignore_ladder.py strip-verify")
+        self.assertLess(strip, verify)
+        for later in ("crates/kf-*/Cargo.toml", "kvm_tests.sh", "v3_gates.sh", "build_kf3.sh"):
+            self.assertLess(verify, text.index(later), later)
+        self.assertIn("exit 2", text[verify : verify + 250])
+
+    def test_a_failed_strip_verify_stops_the_run_with_a_named_message(self):
+        text = code(MERGE_CHECK)
+        verify = text.index("ignore_ladder.py strip-verify")
+        line = text[verify : text.index("\n", verify)]
+        self.assertIn("STRIP_VERIFY_FAILED", line)
+        self.assertIn("exit 2", line)
+
     def test_oracles_are_required_on_the_box_unless_a_caller_says_otherwise(self):
         text = code(MERGE_CHECK)
         self.assertIn("export KF_REQUIRE_ORACLES=${KF_REQUIRE_ORACLES:-1}", text)

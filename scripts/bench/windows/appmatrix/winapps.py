@@ -373,7 +373,7 @@ class WinVmVm(Vm):
             try:
                 qgamod.Qmp(os.path.join(self.vm, "run", "qmp.sock")).cmd("quit")
                 how += "+qmp-quit"
-            except qgamod.QgaError:
+            except (qgamod.QgaError, OSError):        # QEMU exiting under us: no QMP socket, or a refused connect
                 pass
             for _ in range(30):
                 if not self.alive():

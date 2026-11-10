@@ -30,6 +30,8 @@ Subcommands:
                    compare the files docker copies with the matcher (needs a working docker)
   strip --in-place delete, in the working tree, every tracked file that the commit's OWN
                    .workerignore matches (never .git); the box and the stripped-tree CI job call it
+  strip-verify [REV] after `strip --in-place`: fail unless every stripped path is absent from disk and
+                   flagged skip-worktree and `git status` reads clean (merge_check.sh runs it)
   strip --dest DIR export the commit minus the ignored files into an empty DIR
   treekey [REV]    the kf-tree-v2 key of REV (ci/vast-broker/src/treekey.js computes the same bytes)
   keycheck [REV]   fail unless node and treekey.js print that same key
@@ -568,6 +570,35 @@ def _parents(d):
     return out
 
 
+def verify_stripped(root, rev="HEAD"):
+    """Loud check that the in-place strip left the state the box relies on; raises FailClosed.
+
+    Run right after the strip. A later `git reset --hard`, `stash` or `checkout` would restore the
+    stripped files without this noticing (none runs on the box today)."""
+    pats = read_patterns(ignore_text_at(rev, root), "%s:.workerignore" % rev)
+    _kept, removed = strip_plan(tracked(rev, cwd=root), pats)
+    flags = {}
+    for rec in git("ls-files", "-v", "-z", cwd=root).stdout.split(b"\0"):
+        if rec:
+            flags[os.fsdecode(rec[2:])] = chr(rec[0])
+    problems = []
+    for _mode, _sha, path in removed:
+        if os.path.lexists(os.path.join(root, path)):
+            problems.append("%s is still on disk" % path)
+        elif path in flags and flags[path] not in "Ss":
+            problems.append("%s is not flagged skip-worktree (flag %r)" % (path, flags[path]))
+    status = git("status", "--porcelain", "--untracked-files=no", cwd=root).stdout.decode()
+    if status.strip():
+        problems.append("git status is not clean: " + status.strip().splitlines()[0])
+    if problems:
+        raise FailClosed(
+            "the stripped checkout is not in the expected state (%d problems; first: %s); "
+            "build_kf3.sh would name the QEMU directory -dirty and the guest guard would refuse it"
+            % (len(problems), problems[0])
+        )
+    return len(removed)
+
+
 def strip_export(rev, dest, root):
     """Export REV into the empty directory DEST without the ignored files (no .git)."""
     pats = read_patterns(ignore_text_at(rev, root), "%s:.workerignore" % rev)
@@ -645,6 +676,8 @@ def main(argv=None):
     st.add_argument("rev", nargs="?", default="HEAD")
     st.add_argument("--in-place", action="store_true")
     st.add_argument("--dest")
+    sv = sub.add_parser("strip-verify")
+    sv.add_argument("rev", nargs="?", default="HEAD")
     tk = sub.add_parser("treekey")
     tk.add_argument("rev", nargs="?", default="HEAD")
     sub.add_parser("matchjson")
@@ -736,6 +769,9 @@ def run(a, root, pats_for, load):
             kept, removed, key = strip_export(a.rev, a.dest, root)
         print("IGNORE_STRIP kept=%d removed=%d rev=%s" % (kept, removed, a.rev))
         print("IGNORE_STRIP_KEY %s" % key)
+        return 0
+    if a.cmd == "strip-verify":
+        print("IGNORE_STRIP_VERIFIED removed=%d rev=%s" % (verify_stripped(root, a.rev), a.rev))
         return 0
     if a.cmd == "treekey":
         pats = read_patterns(ignore_text_at(a.rev, root), "%s:.workerignore" % a.rev)

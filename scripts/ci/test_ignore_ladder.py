@@ -622,7 +622,7 @@ class StripStep(unittest.TestCase):
         """Run 42712356582: the in-place strip made `git status` dirty, build_kf3.sh installed
         kf3-bins/<rev8>-dirty, and native_xid_guard refused it (thin_suite CRASH).
         Falsifier: remove hide_stripped_from_status and this test fails."""
-        scripts = os.path.join(os.path.dirname(HERE), "bench")
+        scripts = os.path.join(real_root(), "scripts", "bench")
         sys.path.insert(0, scripts)
         try:
             import native_xid_guard as G
@@ -631,7 +631,7 @@ class StripStep(unittest.TestCase):
         with open(os.path.join(scripts, "build_kf3.sh"), encoding="utf-8") as f:
             build = f.read()
         with open(
-            os.path.join(os.path.dirname(HERE), "fastguest", "run_fast_guest.sh"), encoding="utf-8"
+            os.path.join(real_root(), "scripts", "fastguest", "run_fast_guest.sh"), encoding="utf-8"
         ) as f:
             fast = f.read()
         # The two lines that name the directory, taken from the REAL scripts (a drift fails here).
@@ -661,6 +661,108 @@ class StripStep(unittest.TestCase):
             with open(os.path.join(root, "Cargo.toml"), "a") as f:
                 f.write("# edit\n")
             self.assertNotEqual(sh("git", "-C", root, "status", "--porcelain", "--untracked-files=no"), "")
+
+    def flags(self, root):
+        out = sh("git", "-C", root, "ls-files", "-v", "-z")
+        return {r[2:]: r[0] for r in out.split("\0") if r}
+
+    def test_in_place_flags_exactly_the_stripped_paths_skip_worktree(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.repo(tmp)
+            run_cli(root, "strip", "--in-place")
+            flags = self.flags(root)
+            for path in STRIP_FILES:
+                want = "H" if path in STRIP_KEPT else "S"
+                self.assertEqual(flags.get(path), want, path)
+
+    def test_a_kept_file_edit_after_the_strip_still_reads_dirty(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.repo(tmp)
+            run_cli(root, "strip", "--in-place")
+            with open(os.path.join(root, "Cargo.toml"), "a") as f:
+                f.write("# edit\n")
+            status = sh("git", "-C", root, "status", "--porcelain", "--untracked-files=no")
+            self.assertIn("Cargo.toml", status)
+
+    def test_a_failing_flag_step_fails_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.repo(tmp)
+            lock = os.path.join(root, ".git", "index.lock")
+            open(lock, "w").close()  # `git update-index` cannot take the lock
+            p = run_cli(root, "strip", "--in-place")
+            self.assertEqual(p.returncode, 3, p.stdout + p.stderr)
+            self.assertIn("IGNORE_LADDER_FAIL_CLOSED", p.stdout)
+            self.assertIn("skip-worktree", p.stdout)
+
+    def test_a_failing_flag_step_raises_from_the_function(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.repo(tmp)
+            open(os.path.join(root, ".git", "index.lock"), "w").close()
+            with self.assertRaises(L.FailClosed):
+                L.strip_in_place(root)
+
+    def test_strip_verify_accepts_a_stripped_checkout(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.repo(tmp)
+            run_cli(root, "strip", "--in-place")
+            p = run_cli(root, "strip-verify")
+            self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+            self.assertIn("IGNORE_STRIP_VERIFIED removed=7", p.stdout)
+
+    def test_strip_verify_refuses_a_checkout_that_was_not_stripped(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.repo(tmp)
+            p = run_cli(root, "strip-verify")
+            self.assertEqual(p.returncode, 3, p.stdout)
+            self.assertIn("still on disk", p.stdout)
+
+    def test_strip_verify_refuses_files_that_came_back(self):
+        # what a later `git checkout -- .` or `reset --hard` does on the box
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.repo(tmp)
+            run_cli(root, "strip", "--in-place")
+            sh("git", "-C", root, "update-index", "--no-skip-worktree", "docs/guide.txt")
+            sh("git", "-C", root, "checkout", "--", "docs/guide.txt")
+            p = run_cli(root, "strip-verify")
+            self.assertEqual(p.returncode, 3, p.stdout)
+            self.assertIn("docs/guide.txt is still on disk", p.stdout)
+
+    def test_strip_verify_refuses_a_cleared_skip_worktree_flag(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.repo(tmp)
+            run_cli(root, "strip", "--in-place")
+            sh("git", "-C", root, "update-index", "--no-skip-worktree", "docs/guide.txt")
+            p = run_cli(root, "strip-verify")
+            self.assertEqual(p.returncode, 3, p.stdout)
+            self.assertIn("not flagged skip-worktree", p.stdout)
+
+    def test_strip_verify_refuses_a_cleared_flag_on_a_nested_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.repo(tmp)
+            run_cli(root, "strip", "--in-place")
+            sh("git", "-C", root, "update-index", "--no-skip-worktree", "docs/deep/er/x.txt")
+            p = run_cli(root, "strip-verify")
+            self.assertEqual(p.returncode, 3, p.stdout)
+            self.assertIn("docs/deep/er/x.txt is not flagged skip-worktree", p.stdout)
+
+    def test_strip_verify_refuses_an_edited_kept_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.repo(tmp)
+            run_cli(root, "strip", "--in-place")
+            with open(os.path.join(root, "Cargo.toml"), "a") as f:
+                f.write("# edit\n")
+            p = run_cli(root, "strip-verify")
+            self.assertEqual(p.returncode, 3, p.stdout)
+            self.assertIn("git status is not clean", p.stdout)
+
+    def test_strip_verify_refuses_a_deleted_kept_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.repo(tmp)
+            run_cli(root, "strip", "--in-place")
+            os.remove(os.path.join(root, "crates", "kf-a", "src", "lib.rs"))
+            p = run_cli(root, "strip-verify")
+            self.assertEqual(p.returncode, 3, p.stdout)
+            self.assertIn("git status is not clean", p.stdout)
 
     def test_in_place_and_export_agree(self):
         with tempfile.TemporaryDirectory() as tmp:
