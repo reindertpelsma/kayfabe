@@ -16,7 +16,7 @@ availability = scope["availability"]
 args = json.loads(sys.argv[1])
 origin = "https://quiet-tenant.workers.example"
 prefix = args.get("path", "unit-path-only-" + "p" * 32)
-manifest = {"protocol_version": 6, "worker_version": "v5", "bundle_sha256": "b" * 64}
+manifest = {"protocol_version": 7, "worker_version": "v5", "bundle_sha256": "b" * 64}
 manifest["protocol_version"] = args.get("manifest_protocol", manifest["protocol_version"])
 status_protocol = args.get("status_protocol", manifest["protocol_version"])
 sha = "a" * 40
@@ -103,7 +103,9 @@ with tempfile.TemporaryDirectory(prefix="v3-r3-main-") as directory:
         route = urllib.parse.urlsplit(url).path
         if route.endswith("/availability"):
             return m.Reply(
-                200, {"content-type": "application/json"}, json.dumps(availability()).encode()
+                200,
+                {"content-type": "application/json"},
+                json.dumps(availability(apps=True)).encode(),
             )
         if route.endswith("/rent"):
             nonce = json.loads(body)["runner_nonce"]

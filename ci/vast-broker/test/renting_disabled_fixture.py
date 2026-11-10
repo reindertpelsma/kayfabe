@@ -30,7 +30,7 @@ m.time.monotonic = lambda: clock[0]
 m.time.sleep = sleep
 case = sys.argv[1]
 ctx = {"run": "123-1", "sha": "a" * 40, "nonce": "f" * 64, "profile": "check"}
-manifest = {"protocol_version": 6, "worker_version": "v5", "bundle_sha256": "b" * 64}
+manifest = {"protocol_version": 7, "worker_version": "v5", "bundle_sha256": "b" * 64}
 SENTINEL = "SeNtInEl9f3a7c1d"
 text = "box line\n"
 digest = m.chain(m.ZERO, text)
@@ -97,7 +97,7 @@ def pop(queue):
 def client(route, method="GET", body=None):
     calls.append((route, method, clock[0]))
     if route.startswith("/availability"):
-        return answer(200, scope["availability"]())
+        return answer(200, scope["availability"](apps=("&apps=1" in route)))
     if route == "/rent":
         return pop(rent_replies)
     if route.startswith("/status/"):

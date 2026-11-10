@@ -182,7 +182,9 @@ class Build(unittest.TestCase):
         self.assertEqual(
             self.doc["windows"],
             {"gate": "PASS", "install_s": 1852, "probes": ["cup8", "d3d11"], "resets": 0, "live_dumps_193": 1, "known_live_dumps_193": 1,
-             "live_dumps_193_ratchet": None, "live_dumps_193_die": None, "live_dumps_193_max": None},
+             "live_dumps_193_ratchet": None, "live_dumps_193_die": None, "live_dumps_193_max": None,
+             "live_dumps_193_entries": None, "live_dumps_193_unresolved_entries": None, "live_dumps_193_unit": None,
+             "live_dumps_193_resolved": None},
         )
 
     def test_stage_rows_map_the_payload_results(self):

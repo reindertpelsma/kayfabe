@@ -24,7 +24,7 @@ exec((HERE / "v5_fixture_data.py").read_text(), scope)
 extra_status, availability = scope["extra_status"], scope["availability"]
 
 ctx = {"sha": "a" * 40, "run": "123-1", "nonce": "f" * 64}
-manifest = {"protocol_version": 6, "worker_version": "v5", "bundle_sha256": "b" * 64}
+manifest = {"protocol_version": 7, "worker_version": "v5", "bundle_sha256": "b" * 64}
 m.time.sleep = lambda _: None
 PREFIX = len("[untrusted] ")
 

@@ -188,24 +188,33 @@ for (const variant of [1, 2])
   });
 
 for (const count of [2, 4])
-  test('workerd concurrent distinct provider faults learn a host ' + count, async (t) => {
+  test('workerd concurrent distinct provider faults penalise a host ' + count, async (t) => {
     const { call } = await fixture(t);
     const replies = await Promise.all(
       Array.from({ length: count }, (_, i) =>
-        call('/provider-fault', { record: { machineId: 800 + i, hostId: 9000 } }),
+        call('/provider-fault', {
+          record: { key: 'fault-' + i, nonce: String(i), machineId: 800 + i, hostId: 9000 },
+        }),
       ),
     );
     assert.ok(replies.every((r) => r.status === 200));
     const rows = (await call('/snapshot')).data;
-    const host = rows.find(([key]) => key === 'bad-host:9000')?.[1];
-    assert.equal(host.reason, 'PROVIDER_FAULT');
-    assert.equal(new Set(host.machines).size, 2);
-    for (const machine of host.machines)
-      assert.equal(rows.find(([key]) => key === 'bad-machine:' + machine)[1].hostId, 9000);
+    const host = rows.find(([key]) => key === 'provider-host:9000')?.[1];
+    assert.equal(host.faults.length, count);
+    assert.equal(new Set(host.faults.map((f) => f.identity)).size, count);
+    assert.equal(
+      rows.some(([key]) => key.startsWith('bad-host:')),
+      false,
+    );
+    for (let i = 0; i < count; i++)
+      assert.equal(
+        rows.find(([key]) => key === 'provider-machine:' + (800 + i))[1].faults.length,
+        1,
+      );
   });
 
 for (const hostId of [9000, 9001])
-  test('workerd repeated one-machine fault cannot condemn a host ' + hostId, async (t) => {
+  test('workerd repeated observations of one fault are idempotent ' + hostId, async (t) => {
     const { call } = await fixture(t);
     for (let i = 0; i < 3; i++)
       assert.equal(
@@ -292,7 +301,7 @@ for (const variant of [1, 2]) {
   );
 }
 
-for (const failAt of ['bad-machine:', 'bad-host:'])
+for (const failAt of ['provider-machine:', 'provider-host:'])
   test('workerd provider fault writes roll back at ' + failAt, async (t) => {
     const { call } = await fixture(t);
     await call('/seed', [['bad-machine:800', { reason: 'PROVIDER_FAULT', hostId: 9000 }]]);
@@ -303,4 +312,31 @@ for (const failAt of ['bad-machine:', 'bad-host:'])
     });
     assert.equal(response.status, 503);
     assert.deepEqual(await call('/snapshot'), before);
+  });
+
+for (const v of [1, 2])
+  test('workerd provider history evicts oldest at the bound ' + v, async (t) => {
+    const { call } = await fixture(t);
+    await call(
+      '/seed',
+      Array.from({ length: 256 }, (_, i) => [
+        'provider-machine:' + (1000 + i),
+        { at: i, faults: [] },
+      ]),
+    );
+    for (let i = 0; i < v; i++)
+      assert.equal(
+        (
+          await call('/provider-fault', {
+            record: { key: 'fresh-' + i, nonce: String(i), machineId: 800 + i, hostId: 9000 + i },
+          })
+        ).status,
+        200,
+      );
+    const rows = (await call('/snapshot')).data;
+    assert.equal(rows.filter(([k]) => k.startsWith('provider-machine:')).length, 256);
+    assert.equal(
+      rows.some(([k]) => k === 'provider-machine:1000'),
+      false,
+    );
   });

@@ -116,8 +116,11 @@ for (const gpu of ['RTX 3090', 'NVIDIA Quadro RTX 6000'])
     );
     assert.equal(run.status, 0, run.stderr);
     const { stdout, summary } = JSON.parse(run.stdout);
-    assert.equal((stdout.match(/RENTAL machine=/g) ?? []).length, 1);
-    assert.match(stdout, /RENTAL machine=100001 host=3001 instance=900 gpu=/);
+    assert.equal((stdout.match(/RENTAL instance=/g) ?? []).length, 1);
+    assert.match(
+      stdout,
+      /RENTAL instance=900 host=3001 machine=100001 datacenter=unknown country=UNKNOWN ip=unknown gpu=/,
+    );
     assert.ok(stdout.includes('price=0.200000'));
     for (const value of ['900', '100001', '3001', gpu, '570.124.06', 'GREEN', '0.200000'])
       assert.ok(summary.includes(value), value);

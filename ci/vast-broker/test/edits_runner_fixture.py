@@ -15,7 +15,7 @@ exec(Path(__file__).with_name("v5_fixture_data.py").read_text(), scope)
 m.time.sleep = lambda _: None
 case = sys.argv[1]
 ctx = {"run": "123-1", "sha": "a" * 40, "nonce": "f" * 64, "profile": "check"}
-manifest = {"protocol_version": 6, "worker_version": "v5", "bundle_sha256": "b" * 64}
+manifest = {"protocol_version": 7, "worker_version": "v5", "bundle_sha256": "b" * 64}
 text = "box line\n"
 digest = m.chain(m.ZERO, text)
 final = {
@@ -114,7 +114,7 @@ elif case in {"stop-after-invalid-final", "stop-after-unreadable-final"}:
     # final log fetch failed the hash check, or could not be read; the runner stops the run
     # too. Only paths before any result may leave the box to the Worker's timers.
     result = run()
-    assert result["verified"] == 0 and result["verdict"] == "UNAVAILABLE", result
+    assert result["verified"] == 0 and result["verdict"] == "FAIL", result
     assert [(c[0], c[1]) for c in stops()] == [("/stop/123-1", "POST")], calls
     assert calls[-1][0] == "/stop/123-1", calls
 elif case == "worker-not-needed-refused":

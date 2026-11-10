@@ -1,6 +1,6 @@
 # V3: the Windows stage of the merge bar (`KF_MERGE_WINDOWS=1`, `windows_gate.sh`)
 
-STATUS: LIVE, 2026-11-08 (DX1 policy and issue #305 metadata/ratchet implemented, GPU-free tested only; §0: required on the gpu-vast master gate, first Worker run FAIL at the reboot stage on GA106; first hardware run: section 6; teardown and state-at-failure fixes: section 3a). The gate is implemented (`scripts/bench/box/windows_gate.sh`, wired into
+STATUS: LIVE, 2026-11-09 (DX1 policy and issue #305 metadata/ratchet implemented, GPU-free tested only; §0: required on the gpu-vast master gate, first Worker run FAIL at the reboot stage on GA106; first hardware run: section 6; teardown and state-at-failure fixes: section 3a). The gate is implemented (`scripts/bench/box/windows_gate.sh`, wired into
 `scripts/bench/box/merge_check.sh` as an opt-in last stage). The first real run is recorded in
 `traces/windows_gate_20261101/README.md`; this file carries the design and the rules, that file carries the
 numbers. It implements the verification plan of [`V3_WINDOWS_ON_VAST.md`](V3_WINDOWS_ON_VAST.md) (bar (b)) as a
@@ -15,6 +15,97 @@ CODE READ: the Worker profile `check` (gpu-vast on a master PR or push) sends `K
 MEASURED, run 41749680326, rev 0ca8873e, 2026-11-04, Vast instance 59035303, RTX 3060 (GA106), host 580.159.04, guest 580.88 (`traces/gate_windows_ci_20261104/README.md`). The Linux bar was green: 9/9 gates, raw 30/30, thin 30/30, census OK, CUDA 4+4. The gate's install took 3197 s; boot1, `check --kf3` (fail=0), nv_install (GSP keys 1) and desktop_prep all passed. Then `WINDOWS_GATE_FAIL diag=KAYFABE stage=reboot why="the guest did not restart within 420 s of shutdown /r (no second QEMU)"` with the host reference green/green. The check failed. This is the first Windows gate on GA106. Cause not known (INFERRED candidates: a GA106-specific hang of the guest's shutdown with kf3, or the run loop). The evidence archive was on the destroyed box, so the next step is one manual GA106 lease that keeps it. ⊘ Correction 2026-11-04, from the coordinator: the Ampere die lane diagnosed the same signature on GA106 (dca106a) as a HARNESS defect. The guest did reboot, but the QMP event logger never attached, so the run loop ended with `no-events-file`. Fixed in 7c6586cd4 and def5114d4 (on this branch as 4300fc5d8 and 1bd1756a4): the attach retries for up to 120 s, `no-events-file` is RETRY/OPERATOR, and the logger's stderr is kept. Run 4 (41763934006, rev 942ca543, same machine) did not reach Windows: thin guest suite `concurrent-fuzz` FAIL, bare metal 30/30. Run 5 (41768641016, rev e7d6a3fa, same machine) did not reach Windows either: thin guest arm `bus-info-sweep` FAIL (`cuEventQuery refused: 700`), bare metal 30/30. So the fixed harness has not yet passed through the Worker.
 
 ## LiveKernelEvent 193 reporting (owner decision, 2026-11-08)
+
+**RV2 correction 2026-11-09 (PR #322): contradictory identities, proven overruns and hidden metadata.**
+
+**CODE READ at `a01a0cb6cb9796b277b125bf58852b3e7cd271ad`:** an explicit Report Id that contradicts the report found at the event's path
+leaves the entry unresolved. Neither record supplies a stale timestamp. Fresh code 141 still contributes to the
+non-193 total, and strict mode still counts the raw 193 entry. Consistent old reports remain excluded as stale;
+archive/queue copies and full EventTime deduplication retain their behavior.
+
+**CODE READ at `a01a0cb6cb9796b277b125bf58852b3e7cd271ad`:** the counter also tracks distinct resolved fresh reports in
+`livekernelevent193_resolved`. The gate forwards that count as `--resolved`; the evidence JSON contains
+`resolved_count` and `resolved_lower_bound`, and the local run report retains `windows.live_dumps_193_resolved`.
+A proven lower bound above the die's ceiling produces WARN by default and FAIL only with
+`KF_WINGATE_LKE_RATCHET=gate`, even when unrelated entries are unresolved. For example, two resolved fresh reports
+still exceed a ceiling of one after adding missing-file entries or repeated submissions of a missing report.
+Entirely unresolved or potentially stale evidence cannot alone establish an overrun. If the optional resolved
+count is absent, the helper uses the conservative `max(0, reports - unresolved_entries)` lower bound; if neither
+optional count is supplied, the legacy count-only interface keeps its existing meaning. UNKNOWN applies where
+no ceiling or sufficient resolved evidence exists, rather than erasing an already-proven overrun. Strict mode,
+probes, host references and non-193 zero requirements retain their enforcement. No seed or hygiene baseline changes.
+
+**CODE READ at `a01a0cb6cb9796b277b125bf58852b3e7cd271ad`:** report inventory, report-time lookup, dump headers and the dump timeline enumerate
+accessible hidden/system children with `-Force`. Header reads remain read-only and bounded to `0x1000` bytes;
+non-PAGEDU64 layouts are refused. The earlier unrestricted discovery description below is superseded by this
+accessible-child contract and implementation.
+
+**MEASURED CPU-only at `a01a0cb6cb9796b277b125bf58852b3e7cd271ad`, 2026-11-09:** the regression controls in `test_vast_lke193_counts.py` use
+RV2's two-report identity conflict and known-overrun counterexamples through the real PowerShell counter and CLI.
+`test_vast_lke193.py` includes the `.rv2-hidden/extra.dmp` header control, explicit 4096-byte checks and hidden WER
+records. No GPU, guest or vendor stack was used. **NOT VERIFIED:** Windows hidden/system attributes were not
+exercised on this Linux host; the same fixtures set those attributes when running on Windows. These controls
+establish metadata/gate behavior, not the cause or harmlessness of 193.
+
+**Earlier phase-0 text below is historical where the resolved-overrun and hidden-child corrections above differ:**
+
+**Phase-0 correction 2026-11-09 (issue #305): distinct reports, decoded headers, report-only policy retained.**
+
+**MEASURED in coordinator-supplied records at `8d495e90`:** each AD102 gate-flow boot h1/h2 has one fresh report
+and three WER event-1001 entries, plus two stale entries. The AD102 “3 against 2” comparison used entry counts,
+not distinct reports. The retained 193-report dump headers are `0x193`, p1 `0x815`, p2 `2`, p3 varying by boot,
+p4 `0`; new dumps are 262,144 B, while the 1.4 GB dump is an older artifact. These headers classify those dumps
+as VIDEO_DXGKRNL_LIVEDUMP, not `0xC1`; they do not explain reason `0x815` or establish harmlessness. Microsoft Learn
+lists p1 `0x100` Internal, not `0x815`. The owner keeps the ratchet report-only after this phase-0 classification.
+See [the selected record and provenance](../../traces/lke193_phase0_20261109/README.md). DX1 reviewed files GPU-free.
+
+**CODE READ at `3188706d9602b744dbbac434de7596063dbc7347`:** `livekernelevent193` and `windows.known_live_dumps_193` now count distinct reports,
+deduplicated by ReportIdentifier (or report-file directory identity) plus the report's full EventTime. Raw fresh
+entry counts remain `livekernelevent193_entries` and `windows.live_dumps_193_entries`; the report also records
+`live_dumps_193_unit=distinct_reports` and `live_dumps_193_unresolved_entries`. A unique signature match can resolve
+an existing report when an entry lacks its identity; a signature never becomes a report identity or overrides an
+explicit identity. Missing/ambiguous identity or report time remains visible as unresolved. The RV2 correction above supersedes
+the original blanket UNKNOWN rule when resolved reports already prove an overrun. Strict mode still gates on every non-stale 193 entry, including unresolved ones.
+
+**MEASURED source records; CODE READ seed correction at `3188706d9602b744dbbac434de7596063dbc7347`:** maxima are now AD102 = 1 (h1/h2),
+TU106 = 1 (tbB1 `wer_reports.txt`) and GA102 = 1 (am2 `wer_reports.txt`), all in distinct-report units. The TU106
+and GA102 files enumerate report identity and EventTime directly. The JSON preserves old entry maxima 2/3/4 and
+their provenance as `legacy_entry_max_count`; they are not report ceilings. **INFERRED:** converting the old AD102
+g4 count to a report count is not established by that log's two entries and one dump; the new AD102 seed instead
+uses the measured h1/h2 report records. Other dies remain unseeded. No run learns or raises a ceiling.
+
+**CODE READ at `3188706d9602b744dbbac434de7596063dbc7347`:** real WER names `Code`, `Parameter 1` through `Parameter 4`, `OS version`,
+`Service Pack`, `Product` and older `P1` through `P8` spellings are both supported, preserving raw strings and explicit
+missing fields. Dump discovery is recursive for every `*.dmp` under LiveKernelReports, ReportArchive and ReportQueue.
+Each read remains read-only and limited to the first `0x1000` bytes; only exact `PAGEDU64` headers are decoded.
+
+**MEASURED in the coordinator's phase-0 records at `8d495e90`, 2026-11-09 (h1/h2/h3):** first event entries occur about 35–43 s after enable;
+h1/h2 dump mtimes follow host GSP Running by about 1.5–2 s. Host/guest alignment uncertainty is about 2 s and host
+stamps are tailer-read times. These timings are correlation, not cause. The display-off h3 reset storm retained
+`0x141` headers; its pruned 193 dump was not read. No ETW, dump body, symbols or vendor stack was analyzed.
+The default above-limit verdict remains WARN; opt-in `KF_WINGATE_LKE_RATCHET=gate` and strict mode keep their
+meanings. Probes, resets, host references and non-193 enforcement remain required.
+
+**Earlier owner correction below, with the phase-0 evidence and unit corrections above taking precedence:**
+
+**Correction: owner decision 2026-11-09: ratchet is report-only until the dump header is classified.**
+
+**Coordinator-reported observation, 2026-11-09:** one AD102 run counted 3 against a seeded maximum of 2.
+At the initial policy correction no run revision or trace was supplied; the phase-0 records added above resolve the counting unit. DX1 did not reproduce it on hardware.
+
+**POLICY / CODE READ at `92d6c4aed`:** unset `KF_WINGATE_LKE_RATCHET` (or `report`) preserves the count,
+per-die maximum and evidence, with `GATE_LKE_RATCHET ... verdict=WARN` above a seeded maximum. It does not fail
+for that overrun. `KF_WINGATE_LKE_RATCHET=gate` explicitly restores the previous ceiling enforcement (FAIL above
+maximum). `KF_WINGATE_STRICT_LKE=1` still gates on any non-stale 193, including below the ceiling or on an
+unseeded die. Unknown dies remain UNKNOWN; no ceiling is learned or raised. `WINDOWS_GATE_PASS` still requires
+`resets=0`, passing probes before and after idle, and every non-193 reset/event code at zero.
+
+**Historical phase-0 PLAN (completed for the supplied retained 193-report headers above):** measure the actual numeric code from a real dump header. Synthetic header fixtures do not
+classify that dump, and report-only scheduling does not establish harmlessness. The gate log, `lke193_ratchet.json`
+and local run report retain count/maximum; `windows.known_live_dumps_193` and `windows.live_dumps_193_ratchet`
+retain the observed count and WARN verdict. Existing Worker publication limits below are unchanged.
+
+**Historical default below, superseded by the 2026-11-09 correction:**
 
 **CODE READ at `a1209e3da`:** with the default `strict=0`, LiveKernelEvent 193 is counted separately and gates only
 when its count exceeds the evidence-seeded maximum for the measured die. Unseeded dies have an explicit UNKNOWN verdict.
@@ -172,6 +263,12 @@ box that is then destroyed loses the install; the evidence is exported by the ga
 
 ### Open defect: LiveKernelEvent 193, per die (strict default unchanged)
 
+**Phase-0 correction 2026-11-09:** the reporting section above supersedes the older entry-count unit, decoder
+spellings and WATCHDOG-only search below. Report-only remains the default; current seeds are one distinct report
+for AD102, TU106 and GA102, with old entry maxima preserved explicitly. The supplied 193-report headers establish
+code `0x193`, not a cause or a finding of harmlessness. Historical observations below retain their original wording;
+“two reports” in old g3/g4 summaries was an entry-count description, not measured report identities.
+
 **Update 2026-11-08 (DX1, issue #305): cheap instrumentation and ratchet implemented.**
 
 **CODE READ at `a1209e3da`; MEASURED by GPU-free tests with synthetic files, not a Windows gate run:**
@@ -192,7 +289,7 @@ is the authority for the numeric code: Microsoft's
 describes a dxgkrnl live dump, whereas
 [0xC1](https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/bug-check-0xc1--special-pool-detected-memory-corruption)
 is SPECIAL_POOL_DETECTED_MEMORY_CORRUPTION. Decimal 193 equals 0xC1; WER's unqualified text alone settles neither.
-**NOT MEASURED:** no real WATCHDOG header has been read by DX1, so this change establishes no actual dump code or cause.
+**Historical scope at `a1209e3da`:** DX1 had then read no real WATCHDOG header. The supplied phase-0 header records above now establish the code for those dumps, not the cause.
 
 **CODE READ at `a1209e3da`:** `scripts/bench/box/known_live_dumps_193.json` seeds AD102 = 2 (`a5071c24`, g4),
 TU106 = 3 (`e6dad00f`, tbB1), GA102 = 4 (`006d845a`, am2), with the committed source paths and dates listed below.

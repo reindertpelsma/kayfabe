@@ -52,7 +52,7 @@ class PythonAppPolicy(unittest.TestCase):
     def test_policy_helper_uses_isolated_python_and_base_environment(self):
         ctx, calls = self.context()
         result = AppsGate().run(ctx)
-        self.assertEqual(result.retry_class, RetryClass.NOT_BUILT)
+        self.assertEqual(result.retry_class, RetryClass.MEDIA)
         argv, options = calls[0]
         self.assertEqual(argv, [sys.executable, '-I', str(ctx.root / 'scripts/ci/app_policy.py'), 'linux'])
         self.assertEqual(options['allow_env'], BASE_ENV)
@@ -61,7 +61,7 @@ class PythonAppPolicy(unittest.TestCase):
     def test_policy_helper_cannot_receive_legacy_or_unlisted_configuration(self):
         ctx, _ = self.context(real_helper=True)
         result = AppsGate().run(ctx)
-        self.assertEqual(result.retry_class, RetryClass.NOT_BUILT, ctx.output.getvalue())
+        self.assertEqual(result.retry_class, RetryClass.MEDIA, ctx.output.getvalue())
         self.assertIn(POLICY, ctx.output.getvalue())
 
     def test_failed_policy_helper_is_bad_list(self):

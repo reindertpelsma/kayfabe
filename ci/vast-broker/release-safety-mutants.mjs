@@ -263,6 +263,7 @@ try {
     'scripts/ci/vast_payload.py',
     'scripts/ci/test_vast_matrix_receipts.py',
     'scripts/bench/native_xid_guard.py',
+    'scripts/bench/native_fault_names.json',
   ]) {
     mkdirSync(dirname(join(scratch, p)), { recursive: true });
     cpSync(join(repo, p), join(scratch, p));

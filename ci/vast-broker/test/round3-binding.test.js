@@ -45,7 +45,7 @@ for (const restart of [false, true])
     const status = await (await h.call('/status/123-1')).json();
     assert.equal(status.runner_nonce, request.runner_nonce);
     assert.equal(status.sha, sha);
-    assert.equal(status.protocol_version, 6);
+    assert.equal(status.protocol_version, 7);
     const page = await (await h.call('/logs/123-1?cursor=0', { method: 'GET' })).json();
     let expected = '0'.repeat(64);
     for (const text of page.chunks) {
@@ -66,7 +66,7 @@ test('R3 missing rent nonce refuses before create', async () => {
       headers: {
         Authorization: 'Bearer ' + (await jwt()),
         'X-GH-Token': 'mock-job-token',
-        'X-KF-Protocol': '6',
+        'X-KF-Protocol': '7',
       },
     }),
   );

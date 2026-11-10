@@ -1,7 +1,42 @@
 # What I think is rotten, and what I would delete
 
-**STATUS: LIVE, 2026-09-11.** Written because the owner asked for pushback and offered to
-delete code. Opinion, grounded in what this session measured.
+**STATUS: ANSWERED, 2026-11-10 (written 2026-09-11 as LIVE; read against `origin/next` `734a4cc52` on 2026-11-10).**
+Written because the owner asked for pushback and offered to delete code. Opinion, grounded in
+what that session measured, **about the pre-v3 tree** (`kayfabe-device`, `kayfabe-qemu-raw`).
+That tree is frozen or archived and the v3 rewrite has overtaken the deletion list, so this
+text is no longer a to-do list; it is kept as the written-down case and its body is not
+updated. Successor design: [`THE_ARCHITECTURE_v3.md`](THE_ARCHITECTURE_v3.md), and
+[`V3_BUILD.md`](V3_BUILD.md) for what was copied and what was dropped.
+
+## Where each named thing is now (CODE READ 2026-11-10; read this first)
+
+Nothing here was run on hardware; the figures in the body keep their own dates and boxes.
+
+- **`promotion.rs` was deleted on 2026-09-11, the day this was written** (`da6c702d4`, w438: 332
+  lines, so the "648 lines" below is `dbtable` + `promotion` as counted that day). The design it
+  served is withdrawn in section 7. It exists in no tree now.
+- **`dbtable.rs` was wired, then archived.** It became the `DoorbellTable` (`6f8181c14`,
+  2026-09-13, "wired in SHADOW") and left the workspace with `kayfabe-device` on 2026-10-31
+  (`67713efb8`). It is now `archive/crates/kayfabe-device/src/dbtable.rs`.
+- **`shim.rs` is now `archive/crates/kayfabe-qemu-raw/src/shim.rs`** (18 788 lines there; the
+  19 598 below is the 2026-09-11 figure). The crate left the workspace in `93318f8aa`
+  (2026-09-26).
+- **Most of the inert mechanisms in section 1 are not in any `kf-*` crate.** A grep of
+  `crates/kf-*` for `measure_guest_ram_pin_rate`, `VAS_PINRATE_ROWS`, `VasPublishArm`,
+  `LANE_FULL_INVALIDATES`, `LANE_FULL_DOORBELLS`, `DoorbellTable` and `measures_pin_rate`
+  finds nothing. **One exception:** `holds_for_refresh` is a `CommandPolicy` method in
+  `kf-gsp/src/boot.rs`, with tests; `kf-rm/src/barpde.rs:210` overrides it for `UPDATE_BAR_PDE`,
+  so it has at least that consumer in code. Whether it fires on a v3 boot was **not** examined, so
+  the "0 fires against 304 RPCs" row stays a pre-v3 measurement.
+- **Section 3's barrier is consumed in v3.** `kf-chan/src/tmode.rs` (around line 970) decodes
+  `MEM_OP_D MMU_TLB_INVALIDATE[_TARGETED]` into `Ir::Invalidate { pdb }`, taking the PDB from
+  the method's fields, and `kf-chan/src/translated.rs` carries it as `Piece::Invalidate`.
+  That this removes the "91.5 %" cost was **not** measured here.
+- **Section 7's withdrawal is consistent with v3.** `kf-qemu/src/device.rs:538` reserves the one
+  device-local GPGA object during realize (`rm.reserve_gpga(fb_length)`).
+- **Not checked:** section 4's "46 environment arms" and section 6's counter-and-gate proposal.
+  `kf-rm/src/census.rs` exists, but it is a control census (served, refused, never seen), not the
+  per-mechanism "did I fire" counter section 6 proposes; no gate over it was read.
 
 ## 1. The rot is real, it has ONE shape, and it is countable
 

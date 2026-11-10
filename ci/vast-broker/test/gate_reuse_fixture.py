@@ -73,7 +73,7 @@ data = {
     "/actions/runs/123": run,
 }
 lines = [
-    "RENTAL machine=42 host=43 instance=44 gpu=RTX_3060 price=0.200000",
+    "RENTAL instance=44 host=43 machine=42 datacenter=unknown country=UNKNOWN ip=unknown gpu=RTX_3060 price=0.200000",
     "[untrusted] [Worker] selection profile=check die=GA106 reason=DEFAULT_ORDER ignored=0",
     "[untrusted] [box] CUDA_LADDER_STARTED=2026-10-27T21:59:04+00:00 mode=host reps=1 "
     "rungs=cup2,cup3,cup8,cup8bench rev=" + parent[:8],

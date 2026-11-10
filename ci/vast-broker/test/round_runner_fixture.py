@@ -15,7 +15,7 @@ exec(Path(__file__).with_name("v5_fixture_data.py").read_text(), scope)
 m.time.sleep = lambda _: None
 case = sys.argv[1]
 ctx = {"run": "123-1", "sha": "a" * 40, "nonce": "f" * 64}
-manifest = {"protocol_version": 6, "worker_version": "v5", "bundle_sha256": "b" * 64}
+manifest = {"protocol_version": 7, "worker_version": "v5", "bundle_sha256": "b" * 64}
 base = {
     "state": "TESTING",
     "verdict": "UNAVAILABLE",
@@ -98,8 +98,8 @@ messages, summary = [], io.StringIO()
 result = m.Runner(ctx, manifest, client, emit=messages.append, summary=summary).execute()
 stops = [x for x in calls if x.startswith("/stop/")]
 # Owner ruling 2026-10-24 item 4: a verified final result is followed by one stop.
-assert stops == ([] if case.startswith("exhausted") else ["/stop/123-1"]), calls
+assert stops == ["/stop/123-1"], calls
 assert reads >= 3, reads
-assert result["verdict"] == ("UNAVAILABLE" if case.startswith("exhausted") else "PASS"), result
+assert result["verdict"] == ("FAIL" if case.startswith("exhausted") else "PASS"), result
 if ids_gpu:
     print(json.dumps({"stdout": "".join(messages), "summary": summary.getvalue()}))

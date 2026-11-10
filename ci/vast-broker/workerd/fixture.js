@@ -53,6 +53,8 @@ export class AdmissionFixture {
     if (path === '/provider-fault') {
       const { record, reason = 'PROVIDER_FAULT', now = Date.now(), failAt } = await request.json();
       const failing = (storage) => ({
+        get: (...args) => storage.get(...args),
+        delete: (...args) => storage.delete(...args),
         list: (...args) => storage.list(...args),
         put: async (key, value) => {
           await storage.put(key, value);

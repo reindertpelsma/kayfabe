@@ -52,6 +52,20 @@ fi
 git -C "$CHECKOUT" reset -q --hard "$REV"
 cd "$CHECKOUT"
 echo "HEAD=$REV CHECKOUT=$CHECKOUT"
+# [2026-11-09] OWNER_RULINGS section AQ: the box tests the tree that is left after everything the
+# commit's own .workerignore matches is deleted, so a test cannot depend on an ignored path. ONE
+# matcher (scripts/ci/ignore_ladder.py `matches`, the one the stripped-tree CI job and the Worker's
+# tree-key cross-check use). Fail closed: an unreadable or unknown-syntax file, an ignore set that
+# would delete code under crates/ qemu/ cuda/ firmware/ tools/ or the pinned oracle paths, or a tree
+# with nothing left, ends the run here (exit 2) and deletes nothing. The result is printed with the
+# stripped-tree key (the Worker's key for this commit, see `ignore_ladder.py keycheck`).
+python3 -I scripts/ci/ignore_ladder.py strip --in-place || { echo "STRIP_FAILED: the .workerignore of $REV cannot be applied"; exit 2; }
+# The strip must leave `git status` clean (stripped paths are skip-worktree): build_kf3.sh names the QEMU
+# directory kf3-bins/<rev8>[-dirty] from it and the guest guard accepts only <rev8>. Loud, not silent.
+python3 -I scripts/ci/ignore_ladder.py strip-verify || { echo "STRIP_VERIFY_FAILED: the stripped checkout of $REV is not clean (see above)"; exit 2; }
+# An oracle test that cannot run is a failure here, not a skip (hwref_is_current.rs).
+export KF_REQUIRE_ORACLES=${KF_REQUIRE_ORACLES:-1}
+echo "KF_REQUIRE_ORACLES=$KF_REQUIRE_ORACLES"
 pk=()
 for manifest in crates/kf-*/Cargo.toml; do
     crate=${manifest#crates/}; pk+=(-p "${crate%/Cargo.toml}")

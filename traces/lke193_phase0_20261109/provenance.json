@@ -1,0 +1,59 @@
+{
+  "source": "coordinator-supplied scrubbed phase-0 record, 2026-11-09",
+  "measured_revision": "8d495e90",
+  "notes_sha256": "290e803f2a57b7066f4f3d0f0b74549a6720a3b4d4f53d6688bf3f2839e5c5bc",
+  "files": [
+    {
+      "file": "p193_h1/g_enable.txt",
+      "source_sha256": "5ab3410ea7eec78726acdcc7e27567666e9bf097603d478a1c31fe1384cfb3c2",
+      "copy": "verbatim scrubbed source"
+    },
+    {
+      "file": "p193_h1/g_tdr.txt",
+      "source_sha256": "7ad2da6c5dfaf89b828fc42de063cb4a6e46bf1c3f18aaf518b8b834801976e2",
+      "copy": "verbatim scrubbed source"
+    },
+    {
+      "file": "p193_h1/g_wer.txt",
+      "source_sha256": "c63ed8edce61d038c321a835480896bee0970da03d832ae855b9f787c823ee84",
+      "copy": "verbatim scrubbed source"
+    },
+    {
+      "file": "p193_h1/g_headers_post.txt",
+      "source_sha256": "ef92a65607ad5a3a9df7c5e46117db1af6703f03ec6ae1dc6df95113d77998ba",
+      "copy": "header lines only"
+    },
+    {
+      "file": "p193_h2/g_enable.txt",
+      "source_sha256": "abe343f77758bcdc95cafbd85c8cb1c1957682093aa42b8950830c11779c3ed6",
+      "copy": "verbatim scrubbed source"
+    },
+    {
+      "file": "p193_h2/g_tdr.txt",
+      "source_sha256": "94f83c3a50667d0fb917b653e90112b94313f3122eb5ff31543c386c79c81884",
+      "copy": "verbatim scrubbed source"
+    },
+    {
+      "file": "p193_h2/g_wer.txt",
+      "source_sha256": "66c9107019a5fd072a852a386c420490067a75cd9273bd9e1e85197ce8cdcf0e",
+      "copy": "verbatim scrubbed source"
+    },
+    {
+      "file": "p193_h2/g_headers.txt",
+      "source_sha256": "b8e7a6baf85a3454c9cc36a1ba3290bc0464dd2119a546a3e92b3c0d588fc4de",
+      "copy": "header lines only"
+    },
+    {
+      "file": "p193_h1/events_193.txt",
+      "source_file": "p193_h1/g_events_1001.txt",
+      "source_sha256": "e477819719fd04188b87b0ef27b8c97edef9a76dc4ac937ea226fcd04973fa1a",
+      "copy": "Application event-1001 lines containing P1: 193 only"
+    },
+    {
+      "file": "p193_h2/events_193.txt",
+      "source_file": "p193_h2/g_events_1001.txt",
+      "source_sha256": "bf318c5519c1a42eb4e908b2076b9176605d9de0e20b1d3a6d188ea4dea8f252",
+      "copy": "Application event-1001 lines containing P1: 193 only"
+    }
+  ]
+}

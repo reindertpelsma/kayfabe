@@ -229,6 +229,7 @@ try {
   });
   const paths = [
     'scripts/bench/native_xid_guard.py',
+    'scripts/bench/native_fault_names.json',
     'scripts/bench/provision_host_driver.sh',
     'scripts/bench/box/provision_full.sh',
     ...Object.values(

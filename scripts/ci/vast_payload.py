@@ -250,9 +250,9 @@ WINAPPS_PROFILES = ("small", "mid", "full")
 WINAPPS_VERDICT = re.compile(r"^WINAPPS_(PASS|FAIL|RETRY|REFUSED)\b([^\n]*)$", re.M)
 # the classes windows_apps.sh may print on a RETRY; anything else is OPERATOR
 WINAPPS_RETRY_CLASSES = {"PROVIDER", "MEDIA", "OPERATOR", "HOSTREF", "BAR1_EXCEPTION"}
-# Per-profile wall the stage needs after the gate (INFERRED from the apps' own timeouts and the guest restart
+# Per-profile wall the stage needs after the gate, including 10 min mid cleanup margin (INFERRED from the apps' own timeouts and the guest restart
 # budget, docs/design/V3_WINDOWS_APPS_GATE.md section 6; replaced by measurements when a box has run the profile).
-WINAPPS_MIN_REMAINING_MS = {"small": 40 * 60000, "mid": 60 * 60000, "full": 200 * 60000}
+WINAPPS_MIN_REMAINING_MS = {"small": 40 * 60000, "mid": 70 * 60000, "full": 200 * 60000}
 
 
 def winapps_requested(environ, windows):
@@ -341,7 +341,7 @@ def tier_requested(environ, windows):
 
 # Stage slots (names reserved in ci/vast-broker/defaults.json stageSlots). PLUMBING = the stage
 # runs through scripts/ci/vast_stage_specviewperf.sh; DESIGN_ONLY = refused if requested.
-STAGE_SLOTS = {"specviewperf": "PLUMBING", "two_guests": "DESIGN_ONLY", "trio": "DESIGN_ONLY"}
+STAGE_SLOTS = {"specviewperf": "PLUMBING", "two_guests": "DESIGN_ONLY", "trio": "DESIGN_ONLY", "llm_parity": "DESIGN_ONLY"}
 SPEC_VERDICT = re.compile(r"^SPECVIEWPERF_STAGE_(PASS|FAIL|RETRY)(?: class=([A-Z0-9_]{1,32}))?$", re.M)
 
 
@@ -456,17 +456,12 @@ def specviewperf_rows(text, rc, lane, table):
     raise EvidenceError("specviewperf_retry_operator", partial)
 
 
-# The Linux apps stage (DRAFT 2026-11-07, lane appslinux; DISABLED BY DEFAULT). It runs the app matrix
-# (scripts/apps/, ~70 CUDA, graphics, AI and video programs) in the fat guest over the GATE LIST
-# (scripts/apps/gate_list.txt: the apps that passed on bare metal AND in the guest on the measured box,
-# traces/apps_linux_20261107/). The owner enables it by setting APPS_STAGE_ENABLED = True here; then the
-# tiers `middle` and `large` run it (after cuda_guest, before windows_gate) and `small` and `adhoc` never
-# do. It is NOT selected by KF_STAGES (a Worker-sent `apps` is still refused above: the tier decides) and
-# needs no Worker change. A gate app that fails in the guest is a kayfabe finding (row `apps`); a missing
-# bundle, an exhausted budget or a boot that gave no row is `apps_retry_<class>`, never a pass.
+# Linux apps: the trusted Worker sends KF_LINUX_APPS=1 only for signed middle runs.
+# The old source flag remains a legacy owner opt-in for middle/large; its default stays off.
+# KF_STAGES never selects this stage. Missing media and incomplete output are retries, not PASS.
 APPS_STAGE_ENABLED = False
 APPS_TIERS = ("middle", "large")
-APPS_RETRY_CLASSES = {"NOT_BUILT", "TIME", "BOX", "OPERATOR", "NO_LIST", "BAD_LIST", "USAGE"}
+APPS_RETRY_CLASSES = {"MEDIA", "NOT_BUILT", "TIME", "BOX", "OPERATOR", "NO_LIST", "BAD_LIST", "USAGE"}
 APPS_VERDICT = re.compile(r"^APPS_STAGE_(PASS|FAIL|RETRY)(?: class=([A-Z_]{1,32}))?$", re.M)
 APPS_ROW = re.compile(
     r"^APP_ROW name=([A-Za-z0-9_]{1,48}) os=linux result=(PASS|FAIL|NOT_RUN)"
@@ -484,8 +479,18 @@ def apps_requested(tier):
     return bool(APPS_STAGE_ENABLED) and tier in APPS_TIERS
 
 
-# The release tier (`large`) runs the FULL gate list; `middle` runs the same list without the apps that need
-# more than a minute in the guest (scripts/apps/gate_list_middle.txt), so it fits the middle tier's budget.
+def linuxapps_requested(environ, tier):
+    """Worker-authored explicit middle opt-in; the old source flag remains a legacy owner control."""
+    value = environ.pop("KF_LINUX_APPS", None)
+    if value is None:
+        return apps_requested(tier)
+    if value != "1" or tier != "middle":
+        raise EvidenceError("preflight")
+    return True
+
+
+# Both tiers require every supported Linux app. The middle profile mirrors the full 66-probe list;
+# unsupported UVM rows stay nonpassing policy metadata. Large adds its separate real workloads.
 APPS_LISTS = {"large": ("gate_list.txt", "full"), "middle": ("gate_list_middle.txt", "middle")}
 
 
@@ -530,6 +535,8 @@ def apps_rows(text, rc, names):
         if kind == "FAIL" and rc not in (0, 3) and exits[0] != "0":
             raise EvidenceError("apps", [row("apps_passed", passed)] if passed else [])
         if kind == "RETRY":
+            # Normalize the legacy Linux missing-bundle spelling to the shared MEDIA retry class.
+            cls = "MEDIA" if cls == "NOT_BUILT" else cls
             name = "apps_retry_" + (cls.lower() if cls in APPS_RETRY_CLASSES else "operator")
             raise EvidenceError(name, [row("apps_passed", passed)] if passed else [])
     # No verdict, two verdicts, a PASS with a missing/extra/duplicate/failing app row or a non-zero exit
@@ -846,12 +853,21 @@ def watch_delta(text, rc, *, failed_provider=False):
         raise EvidenceError("host_xid")
     delta = [
         s[4:]
-        for s in suffix.split("NEW HOST Xid ACROSS THE COMMAND", 1)[1].splitlines()
+        for s in suffix.split("NEW HOST Xid ACROSS THE COMMAND", 1)[1].split("\n")
         if s.startswith("    ")
     ]
     if not delta or after - before != len(delta):
         raise EvidenceError("host_xid")
     return delta
+
+
+def watched_command_output(text):
+    """Only the command's own interval may supply fault source/identity proof."""
+    begin = "[xid-watch] --- command output begins ---\n"
+    end = "[xid-watch] --- command output ends "
+    if text.count(begin) != 1 or text.count(end) != 1:
+        raise EvidenceError("host_xid")
+    return text.split(begin, 1)[1].split(end, 1)[0]
 
 
 def xid_ok(text, rc, arm, arm_output=""):
@@ -863,7 +879,7 @@ def xid_ok(text, rc, arm, arm_output=""):
         journal = "\n".join(delta)
         if len(xid_guard.xid_lines(journal)) != len(delta):
             return False
-        xid_guard.approve_native_arm(journal, arm, arm_output)
+        xid_guard.approve_native_arm(journal, arm, watched_command_output(text))
         return True
     except (EvidenceError, xid_guard.GuardRefused, ValueError, TypeError):
         return False
@@ -1242,7 +1258,7 @@ def retain_native_control(arm, text):
         return
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)
-    (directory / (arm.removeprefix("--") + ".log")).write_text(text)
+    (directory / (arm.removeprefix("--") + ".log")).write_text(watched_command_output(text))
     defer = directory / "defer-liveness.log"
     missing = directory / "missing-page-fault.log"
     if defer.is_file() and missing.is_file():
@@ -1401,6 +1417,7 @@ def main():
         os.environ.update(selected_drivers)
 
         winapps = winapps_requested(os.environ, windows)
+        linuxapps = linuxapps_requested(os.environ, tier)
 
         spec = spec_requested(os.environ, windows, extra_stages)
         spec_tbl = spec_table(root) if spec else None
@@ -1443,6 +1460,9 @@ def main():
             KAYFABE_REPO=str(root),
             BENCH_DIR=str(bench),
             KF_DEVICE="kf3",
+            # [2026-11-09] OWNER_RULINGS section AQ: an oracle that cannot run is a failure on a box,
+            # never a printed SKIP that cargo counts as a pass (crates/kf-chip/tests/hwref_is_current.rs).
+            KF_REQUIRE_ORACLES="1",
             CARGO_TARGET_DIR=str(root / "target"),
             CARGO_BUILD_JOBS=str(min(8, os.cpu_count() or 2)),
             # Quiet only: cargo's own progress and colour. Lint level and RUSTFLAGS are not touched.
@@ -1572,7 +1592,7 @@ def main():
                 lambda rc: ladder_rows(bounded_text(path), rc, "guest", sha),
             )
         )
-        if apps_requested(tier):
+        if linuxapps:
             # After the last Linux guest stage, before Windows: the app matrix over the gate list. It
             # boots the fat guest itself (apps_matrix.sh), one boot at a time, under its own budget.
             output_apps = evidence / "apps.run"
@@ -1589,10 +1609,12 @@ def main():
                 ],
                 output_apps,
                 [matrix_log],
-                lambda rc, names=names: apps_rows(bounded_text(output_apps), rc, names),
+                lambda rc, names=names, output=output_apps: apps_rows(bounded_text(output), rc, names),
                 [matrix_log],
             )
-            stage.update(min_remaining_ms=APPS_MIN_REMAINING_MS, short_row="apps_retry_time")
+            stage.update(min_remaining_ms=APPS_MIN_REMAINING_MS + (
+                WINDOWS_MIN_REMAINING_MS + WINAPPS_MIN_REMAINING_MS[winapps] if windows and winapps else 0
+            ), short_row="apps_retry_time")
             stages.append(stage)
         if windows:
             # Last, after every Linux guest has stopped: windows_gate.sh owns the GPU from here.
@@ -1605,7 +1627,9 @@ def main():
                 lambda rc: windows_rows(bounded_text(output), rc, sha),
                 [Path(PROV_DIR) / (tag + "_windows.log")],
             )
-            stage.update(min_remaining_ms=WINDOWS_MIN_REMAINING_MS, short_row="windows_retry_time")
+            stage.update(min_remaining_ms=WINDOWS_MIN_REMAINING_MS + (
+                WINAPPS_MIN_REMAINING_MS[winapps] if winapps else 0
+            ), short_row="windows_retry_time")
             stages.append(stage)
         if windows and winapps:
             # The Windows apps stage (docs/design/V3_WINDOWS_APPS_GATE.md): the Windows app matrix, in a fresh guest
@@ -1624,7 +1648,7 @@ def main():
                 ],
                 output_apps,
                 [],
-                lambda rc: winapps_rows(bounded_text(output_apps), rc, sha, winapps),
+                lambda rc, output=output_apps: winapps_rows(bounded_text(output), rc, sha, winapps),
                 [Path(PROV_DIR) / (tag + "_winapps.log")],
             )
             stage.update(

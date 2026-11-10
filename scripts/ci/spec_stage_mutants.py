@@ -37,6 +37,7 @@ COPY = [
     "scripts/ci/vast_payload.py",
     "scripts/ci/vast_report.py",
     "scripts/bench/native_xid_guard.py",
+    "scripts/bench/native_fault_names.json",
     "scripts/bench/specviewperf/lanes.json",
     "scripts/bench/windows/spec/spec_guest.ps1",
     "scripts/bench/windows/spec/spec_run.ps1",

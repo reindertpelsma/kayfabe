@@ -169,8 +169,9 @@ class StageTests(unittest.TestCase):
         rc, result, calls = self.run_stage("full", soft_ms=100 * 60000)
         self.assertEqual(rc, 1)
         self.assertNotIn("windows_apps", calls)
+        self.assertNotIn("windows_gate", calls)  # reserve the requested apps suffix before starting the gate
         self.assertEqual(
-            [r["name"] for r in result["suites"] if r["fail"]], ["windows_apps_retry_time"]
+            [r["name"] for r in result["suites"] if r["fail"]], ["windows_retry_time"]
         )
 
     def test_the_stage_without_the_windows_stage_is_refused_before_any_stage(self):

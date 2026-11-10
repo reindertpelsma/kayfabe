@@ -15,8 +15,9 @@ exec(Path(__file__).with_name("v5_fixture_data.py").read_text(), scope)
 m.time.sleep = lambda _: None
 case = sys.argv[1]
 ctx = {"run": "123-1", "sha": "a" * 40, "nonce": "f" * 64}
-manifest = {"protocol_version": 6, "worker_version": "v5", "bundle_sha256": "b" * 64}
+manifest = {"protocol_version": 7, "worker_version": "v5", "bundle_sha256": "b" * 64}
 rents = 0
+limit = 5 if case.startswith("many") else 2
 calls = []
 clock = 0.0
 busy_replies = int(case[-1]) if case.startswith("busy") else 0
@@ -48,6 +49,12 @@ def status(verdict="UNAVAILABLE"):
         "runner_nonce": ctx["nonce"],
         "log_sha256": "0" * 64,
         "provider_retries": rents - 1,
+        "provider_retry_allowed": verdict == "PROVIDER_FAULT" and rents < limit,
+        "last_post_at": 2000 if final else None,
+        "datacenter": True,
+        "country": "US",
+        "ip_prefix": "203.0.113.0",
+        "geolocation": "host 203.0.113.71:45001 ssh_port=45001",
         **manifest,
     }
 
@@ -69,7 +76,7 @@ def client(route, method="GET", body=None):
         }
     elif route == "/rent":
         rents += 1
-        assert rents <= 2, "unbounded provider retry"
+        assert rents <= limit, "unbounded provider retry"
         if rents == 2 and case.startswith("budget"):
             code = 409
             data = {
@@ -84,10 +91,10 @@ def client(route, method="GET", body=None):
             data = status()
     elif route.startswith("/status/"):
         verdict = "PROVIDER_FAULT"
-        if rents == 2:
-            if case.startswith(("pass", "busy")):
+        if rents == limit:
+            if case.startswith(("pass", "busy", "manypass")):
                 verdict = "PASS"
-            elif case.startswith("fail"):
+            elif case.startswith(("fail", "manyfail")):
                 verdict = "FAIL"
         data = status(verdict)
         if case.startswith("busy") and rents == 1:
@@ -101,19 +108,24 @@ def client(route, method="GET", body=None):
 
 messages, summary = [], io.StringIO()
 result = m.Runner(ctx, manifest, client, emit=messages.append, summary=summary).execute()
-assert rents == 2, (result, calls)
+assert rents == limit, (result, calls)
 expected = (
     "PASS"
-    if case.startswith(("pass", "busy"))
-    else "FAIL" if case.startswith("fail") else "PROVIDER_FAULT"
+    if case.startswith(("pass", "busy", "manypass"))
+    else "FAIL" if case.startswith(("fail", "manyfail")) else "PROVIDER_FAULT"
 )
 assert result["verdict"] == expected, result
 if expected == "PROVIDER_FAULT":
     assert result["state"] == "PROVIDER_FAULT", result
 text = "".join(messages)
-assert text.count("RENTAL machine=") == (1 if case.startswith("budget") else 2), text
+assert text.count("RENTAL instance=") == (1 if case.startswith("budget") else limit), text
 assert "runner: provider fault: machine 100001 host 3001, not a kayfabe verdict" in text, text
 if expected == "PROVIDER_FAULT":
     assert "provider fault: machine " in summary.getvalue(), summary.getvalue()
     assert "host " in summary.getvalue(), summary.getvalue()
 assert calls.count("/stop/123-1") == 1, calls
+
+assert "203.0.113.71" not in text and "45001" not in text, text
+assert (
+    "203.0.113.71" not in summary.getvalue() and "45001" not in summary.getvalue()
+), summary.getvalue()

@@ -15,6 +15,8 @@ export const owner = '42';
 export const repo = 'reindertpelsma/kayfabe';
 export const env = {
   RENTING_ENABLED: 'true',
+  // Legacy scenarios exercise apps-disabled rentals; middle-apps.test.js covers production default on.
+  MIDDLE_APPS_ENABLED: 'false',
   OWNER_GITHUB_ID: owner,
   REPOSITORY_GITHUB_ID: '1234567',
   REPOSITORY: repo,
@@ -486,7 +488,7 @@ export async function setup(overrides = {}) {
         method = path.startsWith('/status') ? 'GET' : 'POST',
         token,
         ghToken = null,
-        protocol = '6',
+        protocol = '7',
       } = {},
     ) {
       if (path === '/rent' && body === undefined)

@@ -1,3 +1,4 @@
+import { enqueue } from '../src/ingest.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { setup, nonce, sha, callbackToken, env as baseEnv } from './helpers.js';
@@ -34,6 +35,7 @@ async function harness(overrides = {}, { store = true } = {}) {
   const db = store ? new FakeD1() : null;
   const bucket = new Bucket();
   const h = await setup({
+    PROVIDER_CONFIRM_SECONDS: '1',
     ...(store ? { DB: db, ROW_TAG_KEY: TAG_KEY } : {}),
     LOGS_BUCKET: bucket,
     ...overrides,
@@ -442,7 +444,10 @@ test(
     const { bucket } = await runWith([keep + '\n', ...Object.values(SHAPES).map((s) => s + '\n')]);
     const log = bucket.objects.get('vast-123-1-0/log.txt');
     for (const [name, pattern] of Object.entries(PIECES)) assert.doesNotMatch(log, pattern, name);
-    assert.ok(log.includes(keep), 'the rest of the log is untouched, ANSI sequences included');
+    assert.ok(
+      log.includes(keep.replace('203.0.113.9', '203.0.113.0')),
+      'text and ANSI sequences survive endpoint redaction',
+    );
     assert.ok(log.includes('[redacted]'));
   },
 );
@@ -723,17 +728,12 @@ test(
       { ...h.cloud.offer, id: 6, machine_id: 100002, host_id: 200, price: 0.1 },
     ];
     const r0 = await h.storage.get('record:123-1');
-    await h.report({ seq: 1, kind: 'log', text: 'LEG-ZERO-MARK\n' });
-    await h.report({
-      seq: 2,
-      kind: 'result',
-      result: {
-        nonce: r0.nonce,
-        verdict: 'PROVIDER_FAULT',
-        suites: [{ name: 'provider_kvm_missing', pass: 0, fail: 1, skip: 0 }],
-        hardware: { gpu_name: 'unknown', compute_cap: 0, driver_version: 'unknown' },
-      },
-    });
+    h.cloud.instances.get(r0.id).actual_status = 'created';
+    h.cloud.instances.get(r0.id).status_msg = 'GPU error, unable to start instance LEG-ZERO-MARK';
+    for (let i = 0; i < 2; i++) {
+      h.time.value += 20000;
+      await h.service.sweep();
+    }
     assert.equal((await h.call()).status, 200);
     const r1 = await h.storage.get('record:123-1');
     assert.equal(r1.providerRetries, 1);
@@ -1263,17 +1263,12 @@ test(
       { ...h.cloud.offer, id: 6, machine_id: 100002, host_id: 200, price: 0.1 },
     ];
     const r0 = await h.storage.get('record:123-1');
-    await h.report({ seq: 1, kind: 'log', text: 'ZERO\n' });
-    await h.report({
-      seq: 2,
-      kind: 'result',
-      result: {
-        nonce: r0.nonce,
-        verdict: 'PROVIDER_FAULT',
-        suites: [{ name: 'provider_kvm_missing', pass: 0, fail: 1, skip: 0 }],
-        hardware: { gpu_name: 'unknown', compute_cap: 0, driver_version: 'unknown' },
-      },
-    });
+    h.cloud.instances.get(r0.id).actual_status = 'created';
+    h.cloud.instances.get(r0.id).status_msg = 'GPU error, unable to start instance ZERO';
+    for (let poll = 0; poll < 2; poll++) {
+      h.time.value += 20000;
+      await h.service.sweep();
+    }
     const settled = await h.storage.get('record:123-1');
     assert.ok(settled.plogChunks >= 1 && settled.plogBytes > 0);
     await h.call();
@@ -1284,7 +1279,7 @@ test(
     );
     assert.ok(r1.plogBytes >= settled.plogBytes);
     const before = r1.plogChunks;
-    await h.report({ seq: 3, kind: 'log', text: 'ONE\n' });
+    await h.report({ seq: 1, kind: 'log', text: 'ONE\n' });
     assert.equal(await h.storage.get('plog:123-1:' + before), 'ONE\n', 'numbering continues');
     assert.equal((await h.storage.get('plog:123-1:0')) !== undefined, true);
   },
@@ -1725,26 +1720,18 @@ test(
     const r0 = await h.storage.get('record:123-1');
     const token0 = callbackToken(r0, h.bindings.RUN_TOKEN_SECRET);
     // Pieces that only an exact match (not a shape) can catch: the nonce, and a fragment of the token.
-    await h.report({
-      seq: 1,
-      kind: 'log',
-      text: 'leg0 nonce ' + r0.nonce + ' frag ' + token0.slice(-24) + '\n',
-    });
-    await h.report({
-      seq: 2,
-      kind: 'result',
-      result: {
-        nonce: r0.nonce,
-        verdict: 'PROVIDER_FAULT',
-        suites: [{ name: 'provider_kvm_missing', pass: 0, fail: 1, skip: 0 }],
-        hardware: { gpu_name: 'unknown', compute_cap: 0, driver_version: 'unknown' },
-      },
-    });
+    h.cloud.instances.get(r0.id).actual_status = 'created';
+    h.cloud.instances.get(r0.id).status_msg =
+      'GPU error, unable to start instance leg0 nonce ' + r0.nonce + ' frag ' + token0.slice(-24);
+    for (let poll = 0; poll < 2; poll++) {
+      h.time.value += 20000;
+      await h.service.sweep();
+    }
     await h.call();
     const r1 = await h.storage.get('record:123-1');
     assert.deepEqual(r1.priorNonces, [r0.nonce]);
     await h.report({
-      seq: 3,
+      seq: 1,
       kind: 'result',
       result: { nonce: r1.nonce, verdict: 'PASS', suites: pass, hardware },
     });
@@ -1910,6 +1897,32 @@ test(
 );
 
 test(
+  'a later crafted queue redacts both earlier nonces while retaining ordinary text',
+  { skip: d1Skip },
+  async () => {
+    const { h, bucket } = await runWith(['ordinary\n']);
+    const record = await h.storage.get('record:123-1');
+    const prior = ['c0ffee12'.repeat(4), 'decaf123'.repeat(4)];
+    await h.storage.put('plog:333-1:0', 'ordinary-first ' + prior[0] + '\n');
+    await h.storage.put('plog:333-1:1', 'ordinary-second ' + prior[1] + '\n');
+    await h.storage.put('plogq:333-1:2', {
+      ...stuckEntry(333),
+      leg: 2,
+      chunks: 2,
+      nonce: 'b0b0b0b0'.repeat(4),
+      priorNonces: prior,
+      reportExpiry: record.reportExpiry,
+      sha: record.sha,
+    });
+    await h.service.publishRuns();
+    const log = bucket.objects.get('vast-333-1-2/log.txt');
+    assert.match(log, /ordinary-first/);
+    assert.match(log, /ordinary-second/);
+    for (const nonce0 of prior) assert.equal(log.includes(nonce0), false);
+  },
+);
+
+test(
   'the leg-1 queue entry carries the earlier nonce and the rent-time values',
   { skip: d1Skip },
   async () => {
@@ -1925,21 +1938,16 @@ test(
       { ...h.cloud.offer, id: 6, machine_id: 100002, host_id: 200, price: 0.1 },
     ];
     const r0 = await h.storage.get('record:123-1');
-    await h.report({ seq: 1, kind: 'log', text: 'z\n' });
-    await h.report({
-      seq: 2,
-      kind: 'result',
-      result: {
-        nonce: r0.nonce,
-        verdict: 'PROVIDER_FAULT',
-        suites: [{ name: 'provider_kvm_missing', pass: 0, fail: 1, skip: 0 }],
-        hardware: { gpu_name: 'unknown', compute_cap: 0, driver_version: 'unknown' },
-      },
-    });
+    h.cloud.instances.get(r0.id).actual_status = 'created';
+    h.cloud.instances.get(r0.id).status_msg = 'GPU error, unable to start instance z';
+    for (let poll = 0; poll < 2; poll++) {
+      h.time.value += 20000;
+      await h.service.sweep();
+    }
     await h.call();
     const r1 = await h.storage.get('record:123-1');
     await h.report({
-      seq: 3,
+      seq: 1,
       kind: 'result',
       result: { nonce: r1.nonce, verdict: 'PASS', suites: pass, hardware },
     });
@@ -1979,3 +1987,94 @@ test(
     assert.ok(log.includes('path [redacted] id [redacted]'));
   },
 );
+
+for (const leg of [10, 31])
+  test(
+    'RV2 settled later attempt publishes log and structured report ' + leg,
+    { skip: d1Skip },
+    async () => {
+      const { h, bucket, db } = await harness({ PROVIDER_MAX_ATTEMPTS: '32' });
+      assert.equal((await h.call()).status, 200);
+      const record = await h.storage.get('record:123-1');
+      record.providerRetries = leg;
+      await h.storage.put('record:123-1', record);
+      await enqueue(new Ledger(h.storage), record);
+      await cron(h, 2);
+      assert.equal(
+        (await h.report({ seq: 1, kind: 'progress', text: 'later attempt public log\n' })).status,
+        200,
+      );
+      assert.equal((await post(h, base())).status, 200);
+      assert.equal(
+        (
+          await h.report({
+            seq: 2,
+            kind: 'result',
+            result: { nonce, verdict: 'PASS', suites: pass, hardware },
+          })
+        ).status,
+        200,
+      );
+      h.time.value += 11 * 60000;
+      await cron(h, 3);
+      await h.service.publishRuns();
+      const id = 'vast-123-1-' + leg;
+      assert.match(bucket.objects.get(id + '/log.txt'), /later attempt public log/);
+      const report = JSON.parse(bucket.objects.get(id + '/report.json'));
+      assert.equal(report.run_id, id);
+      assert.equal(
+        db.rows('SELECT COUNT(*) AS n FROM ci_run_reports WHERE run_id = ?', id)[0].n,
+        1,
+      );
+      assert.equal((await h.storage.list({ prefix: 'plogq:' })).size, 0);
+    },
+  );
+
+for (const variant of [1, 2])
+  test(
+    'publish: legacy stored chunks still mask signing secret ' + variant,
+    { skip: d1Skip },
+    async () => {
+      const secret = 'legacy-signing-' + variant + '-unique-value-' + 'm'.repeat(12);
+      const { bucket } = await runWith([], {
+        overrides: { RUN_TOKEN_SECRET: secret },
+        mutate: async (h) => {
+          const ledger = new Ledger(h.storage),
+            record = await h.storage.get('record:123-1');
+          // Legacy chunks predate masking at ingestion; publication must still redact them.
+          await ledger.appendPublicLog(record, 'legacy diagnostic ' + secret + ' end\n');
+          await ledger.save(record);
+        },
+      });
+      const text = bucket.objects.get('vast-123-1-0/log.txt');
+      assert.match(text, /legacy diagnostic/);
+      assert.equal(text.includes(secret.slice(0, 16)), false);
+      assert.equal(text.includes(secret), false);
+    },
+  );
+
+for (const variant of [1, 2])
+  test(
+    'publish: legacy stored chunks retain rent-time values after rotation ' + variant,
+    { skip: d1Skip },
+    async () => {
+      const field = variant === 1 ? 'BOX_ACCESS_SECRET' : 'BOX_ACCESS_ID';
+      const secret = 'legacy-rent-' + variant + '-unique-value-' + 'q'.repeat(12);
+      const { bucket } = await runWith([], {
+        overrides: { [field]: secret },
+        mutate: async (h) => {
+          const ledger = new Ledger(h.storage),
+            record = await h.storage.get('record:123-1');
+          assert.ok(record.known.includes(secret));
+          // Stored chunks can predate ingestion masking and the current environment.
+          await ledger.appendPublicLog(record, 'legacy rent diagnostic ' + secret + ' end\n');
+          await ledger.save(record);
+          h.bindings[field] = 'rotated-rent-' + variant + '-replacement-value';
+        },
+      });
+      const text = bucket.objects.get('vast-123-1-0/log.txt');
+      assert.match(text, /legacy rent diagnostic/);
+      assert.equal(text.includes(secret.slice(0, 18)), false);
+      assert.equal(text.includes(secret), false);
+    },
+  );

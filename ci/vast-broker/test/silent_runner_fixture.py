@@ -35,7 +35,7 @@ if case.startswith("bounded-"):
 sentinel = "PRIVATE-SENTINEL"
 m.time.sleep = lambda _: None
 calls = []
-manifest = {"protocol_version": 6, "worker_version": "v5", "bundle_sha256": "b" * 64}
+manifest = {"protocol_version": 7, "worker_version": "v5", "bundle_sha256": "b" * 64}
 error = {
     "state": "UNAVAILABLE",
     "verdict": "UNAVAILABLE",
@@ -57,7 +57,7 @@ def client(url, method="GET", headers=None, body=None):
         "availability" if "/availability" in url else "rent" if url.endswith("/rent") else "stop"
     )
     calls.append(route)
-    data, status = scope["availability"](), 200
+    data, status = scope["availability"](apps=True), 200
     if route == "availability":
         if case.startswith("availability-5"):
             data, status = error, int(case.rsplit("-", 1)[1])
