@@ -301,3 +301,134 @@ class PublicFetch(unittest.TestCase):
             with patch.object(F.urllib.request,'urlopen',return_value=io.BytesIO(B.canonical(receipt))),patch.object(B,'fetch_file')as download:
                 with self.assertRaises(ValueError):F.fetch('https://bundles.invalid',B.pin_text('0'*64,receipt['inputs']),root/'bad.iso')
             download.assert_not_called()
+
+
+class PublicBaseDefault(unittest.TestCase):
+    """The first real-box run (2026-11-10) passed an EMPTY --base because nothing set KF_WINAPPS_PUBLIC_BASE_URL: the fetch
+    never started (RETRY MEDIA after 6 s). Falsifier: any of these passes on `--base ''` reaching the fetcher, on a default that
+    is not the bundles domain, or on a base other than the bundles domain reaching a request."""
+    image = Images.image
+    other_bases = ['https://evil.example', 'http://bundles.kayfabe.dev', 'https://bundles.kayfabe.dev.evil.example',
+                   'https://user@bundles.kayfabe.dev', 'https://bundles.kayfabe.dev:8443', 'https://bundles.kayfabe.dev/x',
+                   'https://bundles.kayfabe.dev?x=1', 'https://account.r2.dev', 'https://bundles.invalid', 'bundles.kayfabe.dev']
+
+    def main(self, root, receipt, *base):
+        import fetch_public_bundle as F
+        import shutil
+        pin = root / 'bundle.pin'
+        pin.write_text(B.pin_text(receipt['image']['sha256'], receipt['inputs']))
+        errors = io.StringIO()
+        requests = []
+
+        def opened(request, timeout=None):
+            requests.append(request.full_url)
+            return io.BytesIO(B.canonical(receipt))
+
+        def copy(package, pin_, destination, **kwargs):
+            requests.append(pin_['url'])
+            shutil.copyfile(root / 'public/winapps-open.iso', destination)
+
+        with patch.object(F.urllib.request, 'urlopen', side_effect=opened), patch.object(F.urllib.request, 'install_opener'), \
+                patch.object(B, 'fetch_file', side_effect=copy), patch('sys.stderr', errors):
+            rc = F.main([*base, '--pin', str(pin), '--out', str(root / 'out.iso')])
+        return rc, requests, errors.getvalue()
+
+    def test_default_base_is_the_bundles_domain_and_is_fetched(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            receipt = self.image(root, 'public')
+            digest = receipt['image']['sha256']
+            rc, requests, _ = self.main(root, receipt)
+            self.assertEqual(rc, 0)
+            self.assertEqual(requests, ['https://bundles.kayfabe.dev/winapps-open/manifest-%s.json' % digest,
+                                        'https://bundles.kayfabe.dev/winapps-open/kfapps-%s.iso' % digest])
+
+    def test_the_repo_pin_names_objects_that_the_default_base_serves(self):
+        import fetch_public_bundle as F
+        pin = (Path(H.AM) / 'bundle.pin').read_text()
+        digest = [line.split('sha256=')[1] for line in pin.splitlines() if line.startswith('winapps-open.iso ')][0]
+        self.assertEqual(P.keys(digest), ('winapps-open/kfapps-%s.iso' % digest, 'winapps-open/manifest-%s.json' % digest))
+        self.assertEqual(F.resolve_base(None), 'https://bundles.kayfabe.dev')
+        self.assertEqual(P.public_base({'BUNDLE_PUBLIC_BASE_URL': F.resolve_base(None)}), 'https://bundles.kayfabe.dev')
+
+    def test_an_empty_base_is_refused_before_any_request(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            receipt = self.image(root, 'public')
+            rc, requests, errors = self.main(root, receipt, '--base', '')
+            self.assertEqual((rc, requests), (1, []))
+            self.assertIn('base-is-not-the-bundles-domain', errors)
+
+    def test_no_other_host_or_form_of_the_base_reaches_a_request(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            receipt = self.image(root, 'public')
+            for base in self.other_bases:
+                with self.subTest(base=base):
+                    rc, requests, errors = self.main(root, receipt, '--base', base)
+                    self.assertEqual((rc, requests), (1, []))
+                    self.assertIn('base-is-not-the-bundles-domain', errors)
+
+    def test_the_bundles_domain_itself_may_be_named_with_a_trailing_slash(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            receipt = self.image(root, 'public')
+            for base in ('https://bundles.kayfabe.dev', 'https://bundles.kayfabe.dev/'):
+                rc, requests, _ = self.main(root, receipt, '--base', base)
+                self.assertEqual(rc, 0)
+                self.assertTrue(requests[0].startswith('https://bundles.kayfabe.dev/winapps-open/manifest-'), requests)
+
+
+class WinAppsStageWiring(unittest.TestCase):
+    """windows_apps.sh must reach the fetcher without an empty --base, and must select a driver the catalogue pins."""
+
+    @property
+    def script(self):
+        return (Path(H.REPO) / 'scripts/bench/box/windows_apps.sh').read_text()
+
+    def fetch_argv(self, **env):
+        body = self.script
+        body = body[body.index('fetch_app_disk() {'):body.index('\nrun_loop_alive_any()')]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / 'fetch_public_bundle.py').write_text('import json,sys\nprint(json.dumps(sys.argv[1:]))\n')
+            e = {'PATH': os.environ['PATH'], **env}
+            subprocess.run(['bash', '-c', body + '\nAPPM=%s\nfetch_app_disk out.iso %s/log' % (root, root)], env=e, check=True, timeout=30)
+            return json.loads((root / 'log').read_text())
+
+    def test_unset_base_is_not_passed_on_as_an_empty_base(self):
+        argv = self.fetch_argv()
+        self.assertNotIn('--base', argv)
+        self.assertNotIn('', argv)
+        self.assertEqual(argv[-2:], ['--out', 'out.iso'])
+
+    def test_an_empty_base_variable_is_not_passed_on_either(self):
+        argv = self.fetch_argv(KF_WINAPPS_PUBLIC_BASE_URL='')
+        self.assertNotIn('--base', argv)
+        self.assertNotIn('', argv)
+
+    def test_a_set_base_is_passed_on_for_the_fetcher_to_validate(self):
+        argv = self.fetch_argv(KF_WINAPPS_PUBLIC_BASE_URL='https://bundles.kayfabe.dev')
+        self.assertEqual(argv[:2], ['--base', 'https://bundles.kayfabe.dev'])
+
+    def test_the_stage_script_selftest_is_green_with_and_without_the_variable(self):
+        script = Path(H.REPO) / 'scripts/bench/box/windows_apps.sh'
+        for env in ({}, {'KF_WINAPPS_PUBLIC_BASE_URL': ''}):
+            r = subprocess.run(['bash', str(script), '--selftest'], env={'PATH': os.environ['PATH'], 'HOME': tempfile.gettempdir(), **env}, capture_output=True, text=True, timeout=60)
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            self.assertIn('WINAPPS_SELFTEST_OK', r.stdout)
+
+    def test_the_default_official_driver_selects_every_open_profile(self):
+        import re
+        import official_runtime as O
+        import gate_profiles as G
+        default = re.search(r'^DEFAULT_OFFICIAL_DRIVER=([0-9.]+)', self.script, re.M).group(1)
+        catalogue = O.validate(B.load(B.HERE / 'official_fetch.json'))
+        apps = {a['id']: a for a in H.load_apps()['apps']}
+        for profile in ('small', 'mid', 'full'):
+            with self.subTest(profile=profile):
+                chosen = [apps[x] for x in G.resolve(profile)]
+                self.assertTrue(O.select(catalogue, chosen, default))
+                if any((a.get('requires') or {}).get('official_fetch') for a in chosen):
+                    with self.assertRaises(O.MediaDrift):  # why an unset driver was the next wall
+                        O.select(catalogue, chosen, None)

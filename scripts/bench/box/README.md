@@ -101,7 +101,7 @@ ssh <alias> 'cat /root/prov/<tag>.log'           # V3_GATES_SUMMARY / KF3_RC / F
   re-submission of an old report as `livekernelevent_stale` (never gating). First Turing PASS: `traces/turing_boot_20261103/`.
 - *[2026-11-07, DESIGN + CODE; first run `traces/winapps_20261107/`]* The Windows apps stage: `bash scripts/bench/box/windows_apps.sh <tag>`
   after a `WINDOWS_GATE_PASS` of the same tag (`KF_WINAPPS_PROFILE=small|mid|full|ids:a,b`, `KF_WINAPPS_ISO=<file>` for an app disk
-  that is already on the box). It boots fresh guests that are overlays of the gate's overlay, with the app disk on AHCI and the guest
+  that is already on the box; without it the pinned public bundle comes from the bundles domain, the only base the fetcher accepts). It boots fresh guests that are overlays of the gate's overlay, with the app disk on AHCI and the guest
   offline, runs the profile's apps (`appmatrix/winapps.py --vm winvm`), grades them (`appmatrix/grade.py`) and ends in one of
   `WINAPPS_PASS` (0), `WINAPPS_FAIL diag=KAYFABE` (1), `WINAPPS_RETRY class=...` (3, never a pass) or `WINAPPS_REFUSED` (2), then
   `WINAPPS_EXIT rc=N`. Log `<prov>/<tag>_winapps.log`, evidence `<prov>/<tag>_winapps.tgz`. A box never fetches an app from a vendor:
