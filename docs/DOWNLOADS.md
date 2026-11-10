@@ -294,6 +294,11 @@ the distinct kf3 ABI setting. official_runtime.driver_plan supplies guest-stage/
 before the parent Windows gate. The app harness checks the installed version; it never switches that
 parent driver after the gate. A mismatch is NOTRUN / MEDIA_DRIFT, not a pass.
 
+**CODE READ (2026-11-10):** the box stage `windows_apps.sh` takes the public bundle from `https://bundles.kayfabe.dev`, the only base
+`fetch_public_bundle.py` accepts (`KF_WINAPPS_PUBLIC_BASE_URL` may only repeat it; the sha256 pin is the integrity check), and defaults
+`KF_WINAPPS_OFFICIAL_DRIVER` to 580.88, the driver `windows_gate.sh` installs and the only pin. The first Vast run (PR #334 batch gate) ended
+in RETRY MEDIA after 6 s because the base was an empty string; this default is the fix, **not yet confirmed on a box**.
+
 **CODE READ:** the Linux box host validates the J4 source hash before executing it, with eight ranges and
 pinned size/hash, no Worker auth flag and a minimal environment. It captures downloader output, reports
 only package IDs/sizes/digests, rechecks files and checks bytes actually copied into KFAPPSP. Temp media
