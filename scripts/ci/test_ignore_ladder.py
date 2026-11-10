@@ -9,6 +9,7 @@ semantics and the matcher disagree, or a hash that moves when only an ignored fi
 
 import os
 import random
+import re
 import shutil
 import subprocess
 import sys
@@ -616,6 +617,50 @@ class StripStep(unittest.TestCase):
             self.assertEqual(tree_files(root), STRIP_KEPT)
             self.assertTrue(os.path.isfile(os.path.join(root, ".git", "HEAD")))
             self.assertEqual(sh("git", "-C", root, "rev-parse", "HEAD").strip()[:2].isalnum(), True)
+
+    def test_a_stripped_checkout_still_gets_the_clean_qemu_directory_the_guest_guard_accepts(self):
+        """Run 42712356582: the in-place strip made `git status` dirty, build_kf3.sh installed
+        kf3-bins/<rev8>-dirty, and native_xid_guard refused it (thin_suite CRASH).
+        Falsifier: remove hide_stripped_from_status and this test fails."""
+        scripts = os.path.join(os.path.dirname(HERE), "bench")
+        sys.path.insert(0, scripts)
+        try:
+            import native_xid_guard as G
+        finally:
+            sys.path.remove(scripts)
+        with open(os.path.join(scripts, "build_kf3.sh"), encoding="utf-8") as f:
+            build = f.read()
+        with open(
+            os.path.join(os.path.dirname(HERE), "fastguest", "run_fast_guest.sh"), encoding="utf-8"
+        ) as f:
+            fast = f.read()
+        # The two lines that name the directory, taken from the REAL scripts (a drift fails here).
+        rev_line = re.search(r"^REV=\$\(git -C \"\$REPO\" rev-parse --short=8 HEAD\)$", build, re.M)
+        dirty_line = re.search(
+            r"^\[ -z \"\$\(git -C \"\$REPO\" status --porcelain --untracked-files=no\)\" \] \|\| REV=.*$",
+            build,
+            re.M,
+        )
+        self.assertTrue(rev_line and dirty_line, "build_kf3.sh no longer names the directory so")
+        self.assertIn("status --porcelain --untracked-files=no", fast)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.repo(tmp)
+            full = sh("git", "-C", root, "rev-parse", "HEAD").strip()
+            self.assertEqual(run_cli(root, "strip", "--in-place").returncode, 0)
+            self.assertEqual(sh("git", "-C", root, "status", "--porcelain", "--untracked-files=no"), "")
+            script = rev_line.group(0) + "\n" + dirty_line.group(0) + '\necho "$REV"\n'
+            rev = subprocess.run(
+                ["bash", "-c", script], env={**os.environ, "REPO": root},
+                capture_output=True, text=True, check=True,
+            ).stdout.strip()
+            self.assertEqual(rev, full[:8])
+            G.verify_binary_revision(
+                os.path.join(tmp, "kf3-bins", rev, "qemu-system-x86_64"), full
+            )  # raises GuardRefused when the directory is `<rev8>-dirty`
+            # A real edit of a KEPT file must still read as dirty (the guard stays meaningful).
+            with open(os.path.join(root, "Cargo.toml"), "a") as f:
+                f.write("# edit\n")
+            self.assertNotEqual(sh("git", "-C", root, "status", "--porcelain", "--untracked-files=no"), "")
 
     def test_in_place_and_export_agree(self):
         with tempfile.TemporaryDirectory() as tmp:

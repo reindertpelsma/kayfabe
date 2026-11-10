@@ -490,7 +490,39 @@ def strip_in_place(root, rev="HEAD"):
     kept, removed = strip_plan(ents, pats)
     key = tree_key(ents, pats)
     delete_entries(root, removed)
+    hide_stripped_from_status(root, removed)
     return len(kept), len(removed), key
+
+
+def hide_stripped_from_status(root, removed):
+    """Mark the stripped paths skip-worktree, so `git status` still reads the tree as CLEAN.
+
+    [2026-11-10, run 42712356582] build_kf3.sh and run_fast_guest.sh name the QEMU directory
+    `kf3-bins/<rev8>[-dirty]` from `git status --porcelain --untracked-files=no`, and
+    native_xid_guard.verify_binary_revision refuses any directory that is not exactly `<rev8>`.
+    Deleted tracked files made every stripped box checkout `-dirty`, so the guest guard refused
+    the binary (thin_suite CRASH). The strip is deterministic from the commit's own .workerignore,
+    so it is not a modification; a real edit of a kept file still shows (and still adds -dirty).
+    """
+    if not removed:
+        return
+    indexed = {os.fsdecode(x) for x in git("ls-files", "-z", cwd=root).stdout.split(b"\0") if x}
+    paths = [path for _mode, _sha, path in removed if path in indexed]
+    if not paths:
+        return
+    p = git(
+        "update-index",
+        "--skip-worktree",
+        "-z",
+        "--stdin",
+        cwd=root,
+        inp=b"".join(os.fsencode(x) + b"\0" for x in paths),
+        check=False,
+    )
+    if p.returncode != 0:
+        raise FailClosed(
+            "cannot mark the stripped paths skip-worktree: " + p.stderr[-300:].decode(errors="replace")
+        )
 
 
 def delete_entries(root, removed):
