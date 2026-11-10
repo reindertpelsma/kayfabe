@@ -308,10 +308,33 @@ FASTGUEST: DONE
         c['qlog'] = c['qlog'].replace('twin 0x4000000c', 'twin 0x4000002c')
         self.assert_refused(**c)
 
+    def test_record_channel_is_compared_whole_defer(self):
+        # Only the twin token is masked; a record channel with high bits set is not the chid.
+        lines = self.lines[:5] + [l.replace('channel 0x0000001b', 'channel 0x0000101b') for l in self.lines[5:]]
+        self.assert_refused(lines=lines)
+
+    def test_record_channel_is_compared_whole_missing(self):
+        c = self.missing()
+        c['lines'][-1] = c['lines'][-1].replace('channel 0x0000001c', 'channel 0x0000101c')
+        self.assert_refused(**c)
+
+    def test_widest_runlist_field_accepts_defer(self):
+        # RUNLIST_ID is 22:16, seven bits (tokenindex.rs RUNLIST_MASK 0x7F); 0x7f is a legal runlist.
+        lines, qlog = self.blackwell(0x7F << 16)
+        self.assertIn('twin 0x7f000a ', qlog)
+        self.assertEqual(self.approve(lines=lines, qlog=qlog), tuple(lines))
+        self.assertEqual(self.approve(qlog=self.qlog.replace('twin 0x1b ', 'twin 0x7f001b ')), tuple(self.lines))
+
+    def test_widest_runlist_field_accepts_missing(self):
+        c = self.missing()
+        c['qlog'] = c['qlog'].replace('twin 0x1c', 'twin 0x7f001c')
+        self.assertEqual(self.approve(**c), tuple(c['lines']))
+
     def test_token_chid_helper_layout(self):
         self.assertEqual(G.token_chid(0x1b), 0x1b)
         self.assertEqual(G.token_chid(0x4000000a), 0xa)
         self.assertEqual(G.token_chid(0x40020fff), 0xfff)
+        self.assertEqual(G.token_chid(0x7f001b), 0x1b)
         with self.assertRaises(G.GuardRefused):
             G.token_chid(0x8000000a)
 

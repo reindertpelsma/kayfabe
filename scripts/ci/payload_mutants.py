@@ -790,6 +790,13 @@ CASES += [
     ("xd2-twin-token-reserved-bits-ignored", guard_replace(
         "if token & ~TOKEN_LAYOUT_MASK:", "if False:"
     ), "native_xid_guard.py"),
+    ("xd2-record-channel-masked", guard_replace(
+        "twins[i] != (int(record['channel'], 16), guest_chid)",
+        "twins[i] != (int(record['channel'], 16) & 0xFFF, guest_chid)"
+    ), "native_xid_guard.py"),
+    ("xd2-twin-runlist-field-narrowed", guard_replace(
+        "(0x7F << 16)", "(0x3F << 16)"
+    ), "native_xid_guard.py"),
     ("xd2-twin-host-chid-unchecked", guard_replace(
         "twins[i] != (int(record['channel'], 16), guest_chid)", "twins[i][1] != guest_chid"
     ), "native_xid_guard.py"),
