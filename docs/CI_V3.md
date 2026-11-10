@@ -16,7 +16,13 @@ What exists (CODE READ unless marked):
 - **One matcher.** `matches` in `scripts/ci/ignore_ladder.py`. `ignore_ladder.py strip --in-place`
   deletes the tracked files the commit's own `.workerignore` matches (read with `git show REV:.workerignore`,
   never from the working copy; never `.git`; symlinks are removed, not followed; every path is checked
-  before the first deletion); `strip --dest DIR` exports the same tree.
+  before the first deletion); `strip --dest DIR` exports the same tree. The in-place strip also marks the
+  removed paths `skip-worktree`, so since 2026-11-10 the `-dirty` suffix of `kf3-bins/<rev8>[-dirty]` means
+  "differs from the commit minus its own `.workerignore`" (without it every stripped box checkout was
+  `-dirty` and the guest guard refused the binary, run 42712356582). A later `git reset --hard`, `stash` or
+  `checkout` on the box would silently un-strip the tree (none runs today); `ignore_ladder.py strip-verify`,
+  called by `merge_check.sh` right after the strip, fails with exit 2 if a stripped path is on disk, not
+  flagged, or `git status` is not clean.
 - **Fail closed (exit 3, nothing deleted):** a missing or non-UTF-8 file, a line outside the restricted
   syntax, a tree with nothing left, and an ignore set that would delete code: any non-prose file under
   `crates/ qemu/ cuda/ firmware/ tools/ .cargo/ third_party/ogkm third_party/ogkm-580`, `Cargo.toml`,

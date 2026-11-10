@@ -150,6 +150,18 @@ MUTANTS = [
         "ignore_ladder.py treekey",
     ),
     (
+        "strip-verify-removed",
+        MERGE_CHECK,
+        'python3 -I scripts/ci/ignore_ladder.py strip-verify || { echo "STRIP_VERIFY_FAILED: the stripped checkout of $REV is not clean (see above)"; exit 2; }',
+        "true",
+    ),
+    (
+        "strip-verify-failure-ignored",
+        MERGE_CHECK,
+        '(see above)"; exit 2; }',
+        '(see above)"; }',
+    ),
+    (
         "oracles-optional-by-default",
         MERGE_CHECK,
         "export KF_REQUIRE_ORACLES=${KF_REQUIRE_ORACLES:-1}",

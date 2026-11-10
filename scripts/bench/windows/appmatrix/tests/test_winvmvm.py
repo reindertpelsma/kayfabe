@@ -88,6 +88,21 @@ class WinVmVmTests(unittest.TestCase):
         time.sleep(0.2)
         self.assertFalse(self.v.alive())
 
+    def test_stop_survives_qemu_exiting_before_the_qmp_quit(self):
+        # CI run 42731619783: the fake `stop` kills QEMU asynchronously, so `alive()` could still be
+        # true while the QMP socket (never created by the fake) is already unreachable.
+        self.v.launch("g5")
+        real, calls = self.v.alive, []
+
+        def racing_alive():
+            calls.append(1)
+            return True if len(calls) == 1 else real()
+
+        self.v.alive = racing_alive
+        how = self.v.stop()
+        self.assertTrue(how.startswith("clean"))
+        self.assertNotIn("qmp-quit", how)
+
     def test_a_refused_start_is_an_error_not_a_guest(self):
         open(os.environ["FAKE_REFUSE"], "w").close()
         with self.assertRaises(RuntimeError) as e:
