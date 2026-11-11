@@ -39,7 +39,7 @@ box), `cache` (one cached private copy), `manual` (manual only, nothing automate
 | 3DMark / Steel Nomad | benchmarks.ul.com | n/a | nobody | manual only |
 | Geekbench 6.4 / 6.5 / 7.0.x | cdn.geekbench.com | 228 MB | Linux lane box | per box |
 | CUDA demo suite 12.9.79 | developer.download.nvidia.com | 5 MB | app-disk builder | once |
-| CUDA samples v12.5 | github.com/NVIDIA | git | Linux apps bundle | per build (shallow) |
+| CUDA samples v12.5 | github.com/NVIDIA | git | Linux apps bundle | per build (shallow, pinned commit) |
 | Win32-OpenSSH 10.0.0.0p2 | github.com releases | 7 MB | `win_vm.sh fetch` | per box |
 | MS symbol server | msdl.microsoft.com | per file | debug analysis script | on demand |
 | VirtIO-Win 0.1.302 | fedorapeople.org | 877 MB | `win_vm.sh fetch` | per box |
@@ -51,6 +51,12 @@ downloads at run time. Geekbench sizes and the CUDA samples tag come from
 `scripts/apps/setup_side.sh`, `scripts/bench/gfxset/provision.sh` and
 `scripts/apps/build_bundle.sh`; Geekbench is not in the Windows app matrix (deferred in
 `manifest.json`). `verdict.py` cites CUDA samples v12.9 in comments only.
+
+Linux apps on a Worker box (2026-11-10, `scripts/apps/pins.sh`, `docs/design/V3_APPS_IMAGE_RECIPE.md`, section INTERIM): the
+stage builds its own media on the box, so the box also fetches gpu-burn and llama.cpp (pinned commits), clpeak 1.1.2 (pinned
+commit), the vkpeak 20250531 zip (sha256), the Qwen2.5-1.5B GGUF and the Qwen2-0.5B files (pinned revisions and sha256) and Blender 4.5.0 (sha256)
+from their public hosts, and the CUDA toolkit from NVIDIA's own package repository (pinned keyring sha256, pinned toolkit
+version). Nothing from NVIDIA is stored in our images, R2 or release assets.
 
 ## Table B: terms, caching, pins
 
@@ -293,6 +299,11 @@ versions require exact official records; no version/URL is guessed from the gues
 the distinct kf3 ABI setting. official_runtime.driver_plan supplies guest-stage/install arguments for J2
 before the parent Windows gate. The app harness checks the installed version; it never switches that
 parent driver after the gate. A mismatch is NOTRUN / MEDIA_DRIFT, not a pass.
+
+**CODE READ (2026-11-10):** the box stage `windows_apps.sh` takes the public bundle from `https://bundles.kayfabe.dev`, the only base
+`fetch_public_bundle.py` accepts (`KF_WINAPPS_PUBLIC_BASE_URL` may only repeat it; the sha256 pin is the integrity check), and defaults
+`KF_WINAPPS_OFFICIAL_DRIVER` to 580.88, the driver `windows_gate.sh` installs and the only pin. The first Vast run (PR #334 batch gate) ended
+in RETRY MEDIA after 6 s because the base was an empty string; this default is the fix, **not yet confirmed on a box**.
 
 **CODE READ:** the Linux box host validates the J4 source hash before executing it, with eight ranges and
 pinned size/hash, no Worker auth flag and a minimal environment. It captures downloader output, reports

@@ -1,0 +1,2 @@
+SPEC_ROW name=medical-04 result=PASS subtests=10/10 reason=- failed=-
+SPEC_ROW name=catia-07 result=PASS subtests=6/6 reason=- failed=-

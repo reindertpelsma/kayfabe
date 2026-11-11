@@ -1,14 +1,53 @@
 # V3 SPECviewperf gate: the `specviewperf` stage of the Vast release tier
 
-**STATUS: DESIGN-ONLY, 2026-11-08** for everything that runs on a box, the Worker and the tier plan: the stage code is present in this tree,
-**disabled by default** (nothing sends the stage until the owner enables it for the large tier), with GPU-free tests and mutants
-only; **no box, no rental and no Windows guest has run any of it**, and the stage's PowerShell has never run on Windows. The GPU-free code
+**STATUS: DESIGN-ONLY, 2026-11-08** for the Worker and the tier plan; **the stage itself ran once on a real box on 2026-11-09 (MEASURED, section
+"First real run" below): `SPECVIEWPERF_STAGE_PASS` for a two-viewset lane B (`medical-04`, `catia-07`) on an RTX 4090, 2 of 2 viewsets PASS, on
+the third attempt after two script/harness defects.** The stage code is present in this tree,
+**disabled by default** (nothing sends the stage until the owner enables it for the large tier). What has NOT run on a box: the full lanes
+(5 and 4 viewsets, 49.9 and 43.9 GB trees), the Worker and its `/bench-data` route (a test double stood in), the payload, every failure and
+retry row of the table in section 6 except `NOT_RUN SETUP`, and any other die. The GPU-free code
 (`lane.py`, `tarfilter.py`, the payload grading, the report rows) is real and tested. Parent documents:
 [`V3_WINDOWS_GATE.md`](V3_WINDOWS_GATE.md) (the gate this stage follows, same guest and same verdict philosophy),
 [`V3_CI_TIERS_AND_IGNORE_LADDER.md`](V3_CI_TIERS_AND_IGNORE_LADDER.md) (the tiers), [`../DOWNLOADS.md`](../DOWNLOADS.md)
 (handling rules of the private copy, and the section "SPECviewperf in the Vast gate") and
 [`../SPEC_RESULTS.md`](../SPEC_RESULTS.md) (what may be published). Measurements it rests on:
 `traces/specviewperf_native_20261107/README.md` (the native reference, branch of PR #289; **not on `next` yet**, so not linked) and [`traces/specviewperf_vast_20261105/`](../../traces/specviewperf_vast_20261105/README.md) (kayfabe, PR #265).
+
+## First real run, 2026-11-09 (MEASURED; evidence `traces/spec_stage_proof_20261109/`)
+
+Box: Vast RTX 4090 (AD102), label `kf-spec1`, host driver 595.91.07, Windows 11 LTSC 26100 with guest driver 580.88, kayfabe `next` tip
+`734a4cc52` plus this branch's script-only commits. One narrowed lane (`KF_SPEC_TABLE`: lane B reduced to `medical-04` and `catia-07`), run
+through the real wrapper `vast_stage_specviewperf.sh`; the Worker was a test double on the box that answered the helper with a 302 to a presigned URL.
+
+- Setup: `windows_lane.sh` 2398 s, `windows_gate.sh` `WINDOWS_GATE_PASS` 1560 s. Download of the 42,002,015,727 B archive: 19 minutes including the
+  two deliberate stops, about 37 MB/s on average (about 50 MB/s up to the second stop, slower after it), hash 3.5 minutes, sha256 equal to the pin; **resume proven**: `curl` was killed twice on purpose (at 3.0 GB and 20.0 GB), the helper resumed
+  both times with the SAME presigned URL (one Worker request in all) and the final hash matched.
+- Stage (48 minutes, archive already present and verified in about 3.3 minutes (stage.log: fetch start to the verified note, partly parallel to the copy boot), so no download inside it): copy boot ssh up in 20 s, guest prep
+  `exclusion=ok`, the filtered stream (zstd of the whole 94 GB tar, `tarfilter`, `ssh tar`) about 10 minutes for 8.6 GB of viewsets, copy verified
+  against the manifest, `SPEC_POST cli=present icacls_rc=0 vcredist_rc=0`, archive deleted, kf3 boot ssh up in 20 s, settle wait 283 s, then
+  `medical-04` PASS 10/10 (CLI 320 s; native 318 s) and `catia-07` PASS 6/6 (CLI 1118 s; native 803 s, budget 2700 s). Reset counters `total=0` for both,
+  `USER_RING_GP_FORMAT`, `USER_RING_REFUSED` and `USER_RING_SCAN_BUDGET` lines 0 each, `pointer_large_entries` sum 4,799, host Xid delta 0, host reference green before and after,
+  teardown deleted the archive and the overlay, no QEMU left. The wrapper let through only the status lines; no `Unable to gather system details` occurred.
+  Separate measured fact: the host log of that kf3 boot also holds 56 `kf3: GSP REFUSED fn76/... =0x56` lines (GSP control refusals, not USER_RING; the cause was not
+  investigated, INFERRED to be controls the guest driver asks for that kayfabe refuses as unsupported, as in the Windows gate's boots).
+  This run used `KF_SPEC_TABLE` (a narrowed lane) and printed a plain `SPECVIEWPERF_STAGE_PASS`; since the review round every narrowed run adds a
+  `SPEC_NOTE narrowed table=...` line and ends its verdict lines with ` NARROWED`, which the payload's strict verdict pattern refuses (a narrowed run can never
+  certify a lane), the payload's stage command unsets `KF_SPEC_TABLE`, and an empty lane is a usage error / RETRY operator, never a PASS.
+- **The PowerShell ran on Windows**, in this order, all through the stage: `prep`, `post`, `verify`, `launch`, `status`, `collect` and `spec_run.ps1`;
+  `kill` only in a separate probe (`probe_no_cli_powershell.txt`: with no CLI present `spec_run.ps1` still writes an END record with an empty `rc=`,
+  graded `FAIL NOTDONE`; a bad workload name is refused; `kill` answers `SPEC_KILL done`). The stage's own `kill` branch (a viewset that outlives its
+  budget) did not run.
+- Defects found and fixed on branch `claude/spec-stage-proof-20261109` (GPU-free tests and mutants added for each): (1) `fetch_bench_data.sh`: `curl --retry` does
+  not retry a connection that closes mid-body (curl exit 18, the 2026-11-09 cut at 19.5 GB), so only the outer loop with its three Worker mints resumed; the same
+  URL is now resumed (bounded, `KF_FETCH_RESUMES`, default 6, only while a try makes progress). (2) The stage read a stale `QEMU_START` from
+  `logs/<tag>_run.log` of an earlier run with the same tag (win_vm.sh appends), so a hand retry on the same box aborted TRANSPORT after 0 s (MEASURED, attempt 2);
+  old logs are moved aside. (3) The kf3 boot did not leave 2 GiB on a card of 10 GiB or less as the gate does (found by reading, not run). (4) An aborted stage
+  killed the fetch helper but not the `curl` under it (found by reading, not run; no test). Attempt 1 failed in the harness (the test double read the wrong URL file
+  shape): it showed the abort path working (`NOT_RUN SETUP` rows, `RETRY class=PROVIDER`, guest stopped, overlay deleted).
+- Observed, not fixed: the guest's free disk (`free_gb`, 40.1 GB on this box's 80 GB image) is printed by `prep` but never compared with the lane's tree,
+  so a Windows disk too small for the lane fails only after the 42 GB download, in the copy, as TRANSPORT (the payload sets `WINVM_DISK_GB=220`, which this proof
+  run did not use); the stage's kf3 boot needs the gate's signed GOP image of the SAME revision (`win_vm.sh sign`), otherwise `win_vm.sh run` builds it first
+  inside the 300 s wait for QEMU to start.
 
 Marking: **MEASURED** = a line in a file of those traces (revision, box and die in them, e.g. kayfabe rev `6a0683af` on Vast box 59248850, 2026-11-05), **CODE READ** = read in this repository,
 **INFERRED** = reasoned from those numbers, not seen, **DESIGN** = intent, **OPEN** = an owner decision. An unmarked sentence is a

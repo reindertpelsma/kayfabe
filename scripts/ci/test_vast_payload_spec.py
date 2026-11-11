@@ -75,6 +75,29 @@ class SpecRows(unittest.TestCase):
         )
 
     # One test per way a PASS can be forged; a check that only one test sees is a check one edit removes.
+    def test_a_narrowed_pass_is_not_a_pass(self):
+        # KF_SPEC_TABLE runs end every verdict line with NARROWED; the strict verdict pattern refuses them (fail closed)
+        self.refused(log("lanea", verdict="SPECVIEWPERF_STAGE_PASS NARROWED"))
+
+    def test_a_narrowed_fail_and_retry_are_not_verdicts_either(self):
+        self.refused(log("lanea", verdict="SPECVIEWPERF_STAGE_FAIL NARROWED"))
+        self.refused(log("lanea", verdict="SPECVIEWPERF_STAGE_RETRY class=TIME NARROWED"))
+
+    def test_no_release_code_sets_the_narrowed_table(self):
+        # only an operator's proof run sets KF_SPEC_TABLE: the Worker, the payload and the box start-up never do, and the payload's
+        # stage command unsets it (tested above, test_the_command_carries_the_lane_the_deadline_and_the_wrapper)
+        src = ROOT / "ci/vast-broker/src"
+        if src.is_dir():  # the mutation sandbox carries no Worker sources
+            files = sorted(src.glob("*.js")) + [
+                ROOT / "scripts/ci" / n
+                for n in ("vast_payload.sh", "vast_payload_hooks.sh", "vast_onstart.sh", "vast_box_main.sh")
+            ]
+            self.assertGreater(len(files), 20)
+            for f in files:
+                self.assertNotRegex(f.read_text(), r"KF_SPEC_TABLE\s*[=:]", f.name)
+        payload_src = (HERE / "vast_payload.py").read_text()
+        self.assertEqual(payload_src.count("KF_SPEC_TABLE"), 2)  # the comment and the `env -u`, nothing that sets it
+
     def test_a_missing_row_is_not_a_pass(self):
         self.refused(log("lanea", names=LANES["lanea"][:-1], listed=4))
 
@@ -335,12 +358,13 @@ class SpecStageInThePayload(unittest.TestCase):
         self.assertEqual(len(self.commands), 1)
         cmd = self.commands[0]
         i = cmd.index("env")
-        self.assertEqual(cmd[i + 1], "KF_SPEC_LANE=laneb")
-        deadline = int(cmd[i + 2].split("=", 1)[1])
-        self.assertTrue(cmd[i + 2].startswith("KF_SPEC_DEADLINE_EPOCH="))
+        self.assertEqual(cmd[i + 1 : i + 3], ["-u", "KF_SPEC_TABLE"])
+        self.assertEqual(cmd[i + 3], "KF_SPEC_LANE=laneb")
+        deadline = int(cmd[i + 4].split("=", 1)[1])
+        self.assertTrue(cmd[i + 4].startswith("KF_SPEC_DEADLINE_EPOCH="))
         # the soft deadline minus the margin: 300 minutes ahead, minus two minutes
         self.assertAlmostEqual(deadline, before + 300 * 60 - 120, delta=30)
-        self.assertEqual(Path(cmd[i + 4]).name, "vast_stage_specviewperf.sh")
+        self.assertEqual(Path(cmd[i + 6]).name, "vast_stage_specviewperf.sh")
         self.assertEqual(cmd[-1], "/root/prov")
 
     def test_the_command_names_the_lane_for_every_lane(self):
@@ -355,7 +379,7 @@ class SpecStageInThePayload(unittest.TestCase):
         before = int(time.time())
         self.release(spec="laneb", soft_ms=200 * 60000, logs={"specviewperf": (log("laneb"), 0)})
         cmd = self.commands[-1]
-        deadline = int(cmd[cmd.index("env") + 2].split("=", 1)[1])
+        deadline = int(cmd[cmd.index("env") + 4].split("=", 1)[1])
         soft = before + 200 * 60
         self.assertLessEqual(deadline, soft - 60)
         self.assertGreater(deadline, soft - 600)

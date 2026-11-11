@@ -1,0 +1,9 @@
+VIEWSET catia-07-1.0.6 files=29 bytes=7347262051
+VIEWSET medical-04-1.0.2 files=144 bytes=1262862531
+KEPT members=468 bytes=9086205481 dropped=5391
+VIEWSET catia-07-1.0.6 files=29 bytes=7347262051
+VIEWSET medical-04-1.0.2 files=144 bytes=1262862531
+SPEC_VERIFY_DONE
+SPEC_POST cli=present
+SPEC_POST icacls_rc=0
+SPEC_POST vcredist_rc=0

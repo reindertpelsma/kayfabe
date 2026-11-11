@@ -130,6 +130,12 @@ pub struct Counts {
     pub entries_scan: u64,
     /// See above.
     pub entries_pointer: u64,
+    /// Pointer entries above the snapshot bound; observation only.
+    pub pointer_large_entries: u64,
+    /// Largest forwarded Pointer PB length; a maximum, never a sum.
+    pub pointer_entry_max_bytes: u64,
+    /// Scan/Window refusals at the per-copy budget; observation only.
+    pub refused_scan_budget: u64,
     /// See above.
     pub entries_window: u64,
     /// Scan -> Pointer.
@@ -219,10 +225,11 @@ pub struct Counts {
 }
 
 macro_rules! counts_since {
-    ($a:expr, $b:expr, $($f:ident),*) => { Counts { $($f: $a.$f - $b.$f,)* window_entries_max: 0 } };
+    ($a:expr, $b:expr, $($f:ident),*) => { Counts { $($f: $a.$f - $b.$f,)* window_entries_max: 0, pointer_entry_max_bytes: $a.pointer_entry_max_bytes } };
 }
 impl Counts {
-    /// Field-wise `self - prev` (`window_entries_max` is a maximum, not a sum, and is reported as 0).
+    /// Additive counter deltas. Window maximum is reported separately; Pointer
+    /// maximum remains absolute for the VM collector's `fetch_max`, never summed.
     #[must_use]
     pub fn since(&self, prev: &Counts) -> Counts {
         counts_since!(
@@ -230,6 +237,8 @@ impl Counts {
             prev,
             entries_scan,
             entries_pointer,
+            pointer_large_entries,
+            refused_scan_budget,
             entries_window,
             to_pointer,
             to_window_exact,
@@ -284,6 +293,8 @@ macro_rules! lifecycle_stats {
             )*
             /// Longest Window of any channel, in entries (a maximum).
             pub window_entries_max: std::sync::atomic::AtomicU64,
+            /// Maximum Pointer descriptor length across channels (not summed).
+            pub pointer_entry_max_bytes: std::sync::atomic::AtomicU64,
             /// PHASE 1c (P1 measurement): the most 5080 SET_OBJECTs any ONE channel's scan saw (a maximum).
             pub set_object_5080_max_per_channel: std::sync::atomic::AtomicU64,
             /// The VM-wide switch of Pointer-mode markers (PHASE 1c): every channel's [`Lifecycle`] reads and sets it.
@@ -294,6 +305,7 @@ macro_rules! lifecycle_stats {
             pub fn add(&self, d: &Counts) {
                 use std::sync::atomic::Ordering::Relaxed;
                 $( if d.$f != 0 { self.$f.fetch_add(d.$f, Relaxed); } )*
+                self.pointer_entry_max_bytes.fetch_max(d.pointer_entry_max_bytes, Relaxed);
             }
             /// Record a channel's total of scanned 5080 SET_OBJECTs (kept as the maximum over channels).
             pub fn set_object_max(&self, total: u64) {
@@ -320,6 +332,7 @@ macro_rules! lifecycle_stats {
                     "set_object_5080_max_per_channel={} ",
                     self.set_object_5080_max_per_channel.load(Relaxed)
                 ));
+                s.push_str(&format!("pointer_entry_max_bytes={} ", self.pointer_entry_max_bytes.load(Relaxed)));
                 s.push_str(&format!("window_entries_max={}", self.window_entries_max.load(Relaxed)));
                 s
             }
@@ -329,6 +342,8 @@ macro_rules! lifecycle_stats {
 lifecycle_stats!(
     entries_scan,
     entries_pointer,
+    pointer_large_entries,
+    refused_scan_budget,
     entries_window,
     to_pointer,
     to_window_exact,
@@ -916,6 +931,16 @@ impl Lifecycle {
             }
             Mode::Pointer => {
                 self.counts.entries_pointer += 1;
+                if let Ok(crate::user_stream::Source::Segment(d)) =
+                    crate::user_stream::inspect_format(raw)
+                {
+                    if d.len_bytes > crate::user_storage::MAX_SOURCE_BYTES {
+                        self.counts.pointer_large_entries =
+                            self.counts.pointer_large_entries.saturating_add(1);
+                    }
+                    self.counts.pointer_entry_max_bytes =
+                        self.counts.pointer_entry_max_bytes.max(d.len_bytes);
+                }
                 self.pointer_stretch += 1;
                 #[cfg(feature = "lifecycle-mutants")]
                 if self.mutant == Some(Mutant::ForgetSync) {
@@ -983,6 +1008,11 @@ impl Lifecycle {
             self.fresh_done(FreshFirst::Refused);
         }
     }
+    /// Record a pre-read Scan/Window size refusal; it grants no progress.
+    pub fn scan_budget_refused(&mut self) {
+        self.counts.refused_scan_budget = self.counts.refused_scan_budget.saturating_add(1);
+    }
+
     /// A pushbuffer was read (via a [`ScanPermit`]).
     pub fn note_pb_read(&mut self, _permit: &ScanPermit, bytes: usize, vram: bool) {
         let b = bytes as u64;

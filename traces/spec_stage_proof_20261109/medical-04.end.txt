@@ -1,0 +1,1 @@
+SPECRUN_END workload=medical-04 rc=0 start=2026-11-09T23:17:31Z end=2026-11-09T23:22:50Z secs=320

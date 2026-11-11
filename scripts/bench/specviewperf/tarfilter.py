@@ -110,7 +110,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--lane", required=True)
     ap.add_argument("--manifest", required=True)
-    ap.add_argument("--table", default=str(lane_mod.TABLE))
+    ap.add_argument("--table", default=None)
     a = ap.parse_args(argv)
     try:
         wanted = set(lane_mod.lane_ids(a.lane, lane_mod.table(a.table)))

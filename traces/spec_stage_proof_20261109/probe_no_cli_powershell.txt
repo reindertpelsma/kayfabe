@@ -1,0 +1,39 @@
+PROBE_BOOT 2026-11-09T23:44:46+00:00
+[2026-11-09T23:44:46Z] detached: tag=probe1, log logs/probe1_run.log (stdout logs/probe1_run.out)
+desktop: GATE_BOOT utc=2026-11-09T23:44:57Z os='Microsoft Windows 11 Enterprise LTSC Evaluation' build=26100
+GATE_DESKTOP user='KFWIN\kf' dwm=1 explorer=1
+GATE_SESSIONS USERNAME SESSIONNAME ID STATE IDLE TIME LOGON TIME kf console 1 Active none 11/9/2026 11:45 PM
+GATE_DISPLAY none
+GATE_STATE_DONE mode=desktop
+--- prep
+SPEC_PREP exclusion=ok free_gb=40.1
+--- post (no tree)
+SPEC_POST cli=absent
+--- verify (no tree)
+SPEC_VERIFY_DONE
+--- launch bad name
+SPEC_GUEST REFUSED bad workload name
+--- status before launch
+SPEC_STATE end=0 running=0
+--- launch (no interactive user expected: no desktop login yet?)
+SPEC_LAUNCH ok workload=medical-04
+23:48:27 SPEC_STATE end=0 running=0
+23:48:48 SPEC_STATE end=1 running=0
+SPEC_COLLECT_BEGIN cli.log
+SPEC_COLLECT_END cli.log
+SPEC_COLLECT_BEGIN END.txt
+SPECRUN_END workload=medical-04 rc= start=2026-11-09T23:48:23Z end=2026-11-09T23:48:24Z secs=1
+SPEC_COLLECT_END END.txt
+SPEC_COLLECT_BEGIN tdr.txt
+GATE_TDR since=2026-11-09T23:48:23Z display4101=0 nvlddmkm153=0 kernelpower41=0 eventlog6008=0 bugcheck1001=0 livekernelevent_other=0 livekernelevent193=0 livekernelevent193_entries=0 livekernelevent193_resolved=0 livekernelevent193_unresolved=0 livekernelevent_stale=0 strict=0 total=0
+GATE_STATE_DONE mode=tdr
+SPEC_COLLECT_END tdr.txt
+--- kill
+SPEC_KILL done
+--- grade
+SPEC_ROW name=medical-04 result=FAIL subtests=0/0 reason=NOTDONE failed=-
+grade_rc=1
+--- stop
+[2026-11-09T23:49:12Z] stopping kfwin (pid 112372)
+[2026-11-09T23:49:37Z] stopped
+PROBE_DONE 2026-11-09T23:49:37+00:00

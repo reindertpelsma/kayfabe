@@ -337,7 +337,7 @@ CASES += [
     ),
     (
         "apps-stage-without-time-guard",
-        replace("APPS_MIN_REMAINING_MS = 60 * 60000", "APPS_MIN_REMAINING_MS = 0"),
+        replace("APPS_MIN_REMAINING_MS = 100 * 60000", "APPS_MIN_REMAINING_MS = 0"),
     ),
     (
         "apps-stage-selected-by-kf-stages",
@@ -409,6 +409,14 @@ CASES += [
     ("spec-min-remaining-ignores-the-native-walls", replace('table["factor"] * native', "native")),
     ("spec-windows-disk-not-sized", replace('            os.environ.setdefault("WINVM_DISK_GB", SPEC_DISK_GB)', "            pass")),
     ("spec-command-always-lane-both", replace('"KF_SPEC_LANE=" + spec,', '"KF_SPEC_LANE=both",')),
+    ("spec-command-keeps-the-narrowed-table", replace('                    "KF_SPEC_TABLE",\n', '                    "KF_SPEC_LANE_X",\n')),
+    (
+        "spec-narrowed-verdict-accepted",
+        replace(
+            'SPEC_VERDICT = re.compile(r"^SPECVIEWPERF_STAGE_(PASS|FAIL|RETRY)(?: class=([A-Z0-9_]{1,32}))?$", re.M)',
+            'SPEC_VERDICT = re.compile(r"^SPECVIEWPERF_STAGE_(PASS|FAIL|RETRY)(?: class=([A-Z0-9_]{1,32}))?(?: NARROWED)?$", re.M)',
+        ),
+    ),
     ("spec-deadline-without-margin", replace("SPEC_DEADLINE_MARGIN_S = 120", "SPEC_DEADLINE_MARGIN_S = 0")),
     (
         "spec-both-is-one-lane",
@@ -772,6 +780,25 @@ CASES += [
     )),
     ("xd1-framing-census-strips-control-characters", guard_scoped(
         "xid_lines", "journal.split('\\n')", "journal.splitlines()"
+    ), "native_xid_guard.py"),
+    ("xd2-twin-token-compared-whole", guard_replace(
+        "return token & TOKEN_VECTOR_MASK", "return token"
+    ), "native_xid_guard.py"),
+    ("xd2-twin-chid-mask-keeps-runlist", guard_replace(
+        "return token & TOKEN_VECTOR_MASK", "return token & 0x007F_FFFF"
+    ), "native_xid_guard.py"),
+    ("xd2-twin-token-reserved-bits-ignored", guard_replace(
+        "if token & ~TOKEN_LAYOUT_MASK:", "if False:"
+    ), "native_xid_guard.py"),
+    ("xd2-record-channel-masked", guard_replace(
+        "twins[i] != (int(record['channel'], 16), guest_chid)",
+        "twins[i] != (int(record['channel'], 16) & 0xFFF, guest_chid)"
+    ), "native_xid_guard.py"),
+    ("xd2-twin-runlist-field-narrowed", guard_replace(
+        "(0x7F << 16)", "(0x3F << 16)"
+    ), "native_xid_guard.py"),
+    ("xd2-twin-host-chid-unchecked", guard_replace(
+        "twins[i] != (int(record['channel'], 16), guest_chid)", "twins[i][1] != guest_chid"
     ), "native_xid_guard.py"),
 ]
 

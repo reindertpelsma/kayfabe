@@ -195,6 +195,10 @@ SPEC = [
     # 2026-11-07 (windows apps): the Windows apps stage and its profile (docs/design/V3_WINDOWS_APPS_GATE.md).
     # Absent (today's Worker, or a Worker that has not been told to send it): the stage does not run.
     ("KF_WINAPPS", False, _match(r"small|mid|full")),
+    # 2026-11-10 (linux apps env): the signed middle tier's Linux apps stage (ci/vast-broker/src/tier.js sends exactly
+    # "1"). Without this row load_provider_env and write_env_file dropped it and the box skipped the stage silently.
+    # Every KF_* name the Worker can send must be a row here (ci/vast-broker/test/env-contract.test.js).
+    ("KF_LINUX_APPS", False, _match(r"1")),
     # 2026-11-06 (setup picker): present only when the Worker accepts the optional host_claims block
     # in a result (ci/vast-broker/src/results.js). Absent (an older Worker): the block is not sent.
     ("KF_HOST_CLAIMS", False, _match(r"1")),

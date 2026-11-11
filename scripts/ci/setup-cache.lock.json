@@ -6,24 +6,24 @@
     "version": "22.04",
     "arch": "x86_64"
   },
-  "package_policy_sha256": "64b7ae1bb43d34ce8a6bced72982be8ff577673a95c4e90a32ce71eb94f3d51f",
+  "package_policy_sha256": "7f226a6edba6452ca22de00c58b64b9751a6372eafd176ffea3722eb95d4b810",
   "locks": {
     "Cargo.lock": "b03a6c5816caa161d42aed8d4ecef8014e3703f3002cf490fdd371a2d6e11f85",
     "firmware/kf-gop/Cargo.lock": "2b19472557f3f4fcaf2f35f2814e985dc2192435a0dd90cb5055c05cceceba93"
   },
-  "tag": "setup-cache-jammy-amd64-20261104-v1",
+  "tag": "setup-cache-jammy-amd64-20261110-v2",
   "assets": [
     {
       "kind": "debs",
       "name": "debs.tar.gz",
-      "size": 284540501,
-      "sha256": "6e09d78cc1789f990d8e612b23896cb1a00bf351f6ff97ae54a2848b04e4a827"
+      "size": 341861998,
+      "sha256": "1ee294a4bf35c470ae3914a71e26c7d59e60890adefd9f895566d9208b697d25"
     },
     {
       "kind": "vendor",
       "name": "vendor.tar.gz",
       "size": 7888026,
-      "sha256": "8ae18e78b87c29063954ef17c11496dc31d83c803b2fe9d71498b2151f892a84"
+      "sha256": "16d36e5d22d76aeb80611e4be86cb6eaa8815aee4aebce57cf7cf2e08e1ff592"
     }
   ]
 }

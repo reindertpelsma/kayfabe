@@ -19,6 +19,10 @@ CASES=[
  ('unknown-legacy-license','bundle_wheels.py',"if raw_license and not recognized: raise ValueError('unclear legacy licence field')", 'if False: raise ValueError()'),
  ('media-retry-class','../../box/windows_apps.sh','elif [ "${6:-0}" = 1 ]; then echo "RETRY MEDIA";', 'elif false; then echo "RETRY MEDIA";'),
  ('drive-letter-conflicts','guest/kf_guest_setup.ps1','if ($occupied) {','if ($false) {'),
+ ('fetch-base-default','fetch_public_bundle.py',"if value is None: return PUBLIC_BASE","if value is None: return ''"),
+ ('fetch-base-only-the-bundles-domain','fetch_public_bundle.py',"if value.rstrip('/') != PUBLIC_BASE:","if False:"),
+ ('stage-never-passes-an-empty-base','../../box/windows_apps.sh','[ -z "${KF_WINAPPS_PUBLIC_BASE_URL:-}" ] || base_args=(--base "$KF_WINAPPS_PUBLIC_BASE_URL")','base_args=(--base "${KF_WINAPPS_PUBLIC_BASE_URL:-}")'),
+ ('stage-default-official-driver','../../box/windows_apps.sh','DEFAULT_OFFICIAL_DRIVER=580.88  ','DEFAULT_OFFICIAL_DRIVER=580.65  '),
  ('public-domain-required','publish_bundle.py','if not C.https(base) or "?" in base or host.endswith((".r2.dev", ".r2.cloudflarestorage.com")):','if False:'),
 ]
 

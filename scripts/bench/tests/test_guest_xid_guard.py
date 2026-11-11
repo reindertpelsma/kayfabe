@@ -230,6 +230,114 @@ FASTGUEST: DONE
     def test_final_requires_missing_page_fault_itself(self):
         c = self.missing(); c['lines'] = self.base; self.assert_refused(**c)
 
+    # Blackwell-shaped twins. kf3 prints the channel's work-submit TOKEN as `host_token`
+    # (RUNLIST_DOORBELL 30 | RUNLIST_ID 22:16 | VECTOR 11:0, kf-trap tokenindex.rs; bit 30 on every
+    # GB20x token); the host Xid record names the bare chid. GB203 gate 2026-11-10 measured guest
+    # chid 0x3 -> `host 0x4000000a` (log), and the native arm's Xid channel equalled its token's
+    # chid. The shape below remaps the Ada fixture's host chids 0x1b/0x1c to 0xa/0xb; that the
+    # guest arm's host Xid then says 0xa/0xb is INFERRED (the log has no guest-arm Xid record).
+    def blackwell(self, token_bits=1 << 30):
+        lines = self.lines[:5] + [
+            l.replace('channel 0x0000001b', 'channel 0x0000000a').replace('channel 0x0000001c', 'channel 0x0000000b')
+            for l in self.lines[5:]]
+        qlog = self.qlog
+        for old, chid in (('0x1b', 0xa), ('0x1c', 0xb)):
+            qlog = qlog.replace('twin %s ' % old, 'twin %#x ' % (token_bits | chid))
+        return lines, qlog
+
+    def first_twin(self, qlog):
+        return [l for l in qlog.splitlines() if 'RC host twin' in l][0] + '\n'
+
+    def prime_only_serial(self):
+        return self.serial.split('info  DL prime copy', 1)[0]
+
+    def test_blackwell_token_bit30_accepts_at_final(self):
+        lines, qlog = self.blackwell()
+        self.assertIn('twin 0x4000000a ', qlog)
+        self.assertEqual(self.approve(lines=lines, qlog=qlog), tuple(lines))
+
+    def test_blackwell_token_is_pending_at_nonfinal(self):
+        lines, qlog = self.blackwell()
+        self.assertIsNone(self.approve(lines=lines[:6], serial=self.prime_only_serial(),
+                                       qlog=self.first_twin(qlog), final=False))
+
+    def test_blackwell_nonfinal_wrong_chid_refused(self):
+        lines, qlog = self.blackwell()
+        twin = self.first_twin(qlog).replace('0x4000000a', '0x4000002a')
+        self.assert_refused(lines=lines[:6], serial=self.prime_only_serial(), qlog=twin, final=False)
+
+    def test_blackwell_wrong_host_chid_refused(self):
+        lines, qlog = self.blackwell()
+        self.assert_refused(lines=lines, qlog=qlog.replace('twin 0x4000000a', 'twin 0x4000002a'))
+
+    def test_blackwell_wrong_guest_chid_refused(self):
+        lines, qlog = self.blackwell()
+        self.assert_refused(lines=lines, qlog=qlog.replace('guest chid 0x3', 'guest chid 0x7'))
+
+    def test_blackwell_bit30_alone_is_not_a_chid(self):
+        lines, qlog = self.blackwell()
+        self.assert_refused(lines=lines, qlog=qlog.replace('twin 0x4000000a', 'twin 0x40000000'))
+
+    def test_runlist_bits_in_token_do_not_change_the_chid(self):
+        # RUNLIST_ID 22:16 = 2, with and without bit 30 (non-GR engines carry a runlist before Blackwell).
+        for bits in (2 << 16, (2 << 16) | (1 << 30)):
+            lines, qlog = self.blackwell(bits)
+            self.assertEqual(self.approve(lines=lines, qlog=qlog), tuple(lines), hex(bits))
+
+    def test_runlist_shaped_wrong_chid_refused(self):
+        lines, qlog = self.blackwell(2 << 16)
+        self.assertIn('twin 0x2000a ', qlog)
+        self.assert_refused(lines=lines, qlog=qlog.replace('twin 0x2000a', 'twin 0x2002a'))
+
+    def test_token_reserved_bits_refused(self):
+        # Reserved: bit 31, bits 29:23, bits 15:12. The chid field is right but the token is not a token.
+        for junk in (1 << 31, 1 << 29, 1 << 23, 1 << 15, 1 << 12, 0xF000, 0x3F800000):
+            lines, qlog = self.blackwell(junk | (1 << 30))
+            self.assert_refused(lines=lines, qlog=qlog)
+            self.assert_refused(qlog=self.qlog.replace('twin 0x1b ', 'twin %#x ' % (junk | 0x1b)))
+        # A reserved bit on a twin whose Xid has not arrived is refused too, never pending.
+        lines, qlog = self.blackwell()
+        twin = self.first_twin(qlog).replace('0x4000000a', '0xc000000a')
+        self.assert_refused(lines=lines[:5], serial=self.prime_only_serial(), qlog=twin, final=False)
+
+    def test_blackwell_missing_page_token_accepts(self):
+        c = self.missing()
+        c['lines'][-1] = c['lines'][-1].replace('channel 0x0000001c', 'channel 0x0000000c')
+        c['qlog'] = c['qlog'].replace('twin 0x1c', 'twin 0x4000000c')
+        self.assertEqual(self.approve(**c), tuple(c['lines']))
+        c['qlog'] = c['qlog'].replace('twin 0x4000000c', 'twin 0x4000002c')
+        self.assert_refused(**c)
+
+    def test_record_channel_is_compared_whole_defer(self):
+        # Only the twin token is masked; a record channel with high bits set is not the chid.
+        lines = self.lines[:5] + [l.replace('channel 0x0000001b', 'channel 0x0000101b') for l in self.lines[5:]]
+        self.assert_refused(lines=lines)
+
+    def test_record_channel_is_compared_whole_missing(self):
+        c = self.missing()
+        c['lines'][-1] = c['lines'][-1].replace('channel 0x0000001c', 'channel 0x0000101c')
+        self.assert_refused(**c)
+
+    def test_widest_runlist_field_accepts_defer(self):
+        # RUNLIST_ID is 22:16, seven bits (tokenindex.rs RUNLIST_MASK 0x7F); 0x7f is a legal runlist.
+        lines, qlog = self.blackwell(0x7F << 16)
+        self.assertIn('twin 0x7f000a ', qlog)
+        self.assertEqual(self.approve(lines=lines, qlog=qlog), tuple(lines))
+        self.assertEqual(self.approve(qlog=self.qlog.replace('twin 0x1b ', 'twin 0x7f001b ')), tuple(self.lines))
+
+    def test_widest_runlist_field_accepts_missing(self):
+        c = self.missing()
+        c['qlog'] = c['qlog'].replace('twin 0x1c', 'twin 0x7f001c')
+        self.assertEqual(self.approve(**c), tuple(c['lines']))
+
+    def test_token_chid_helper_layout(self):
+        self.assertEqual(G.token_chid(0x1b), 0x1b)
+        self.assertEqual(G.token_chid(0x4000000a), 0xa)
+        self.assertEqual(G.token_chid(0x40020fff), 0xfff)
+        self.assertEqual(G.token_chid(0x7f001b), 0x1b)
+        with self.assertRaises(G.GuardRefused):
+            G.token_chid(0x8000000a)
+
     def assert_refused(self, **kwargs):
         with self.assertRaises(G.GuardRefused):
             self.approve(**kwargs)

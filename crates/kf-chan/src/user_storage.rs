@@ -18,9 +18,9 @@ use kf_linux_raw::{Backing, CachePolicy, CharDevice, HostOffset, HostPageSize, V
 pub const BYTES: u64 = 1 << 20;
 /// Pushbuffer region ends here; whole64KiB granules permit RO-only mapping.
 pub const GP_OFFSET: u64 = 0xe0000;
-/// Trusted source snapshot limit: any intercepted segment must fit completely
-/// in the existing private staging region. This is an allocation policy, not
-/// the hardware maximum GPFIFO length or a per-die compatibility constant.
+/// Trusted bound for each source snapshot and authored staging span. A Pointer
+/// descriptor copies no PB bytes and is bounded by the hardware format alone.
+/// This allocation policy is not a descriptor-length or per-die constant.
 pub const MAX_SOURCE_BYTES: u64 = GP_OFFSET;
 /// USERD starts here and has NO GPU VA mapping.
 pub const USERD_OFFSET: u64 = 0xf0000;
@@ -515,15 +515,16 @@ impl Storage<CpuView> {
     }
 
     /// Copy a direct USER descriptor unchanged into the private ring. This
-    /// validates format and the trusted scan budget ONLY: the worker must also
-    /// resolve the complete source in this channel's own restricted address
-    /// space and retain source/channel admission through PUT publication.
+    /// validates hardware format only. Pointer mode resolves no PB: native USER
+    /// privileges and the channel's own restricted VAS are its authority (§AI).
+    /// The worker retains GP/channel admission through PUT; a scanned entry also
+    /// retains its PB source guards. Copy/staging bounds are enforced separately.
     /// Never use this for privileged Translated work or bypass software triggers.
     pub fn write_user_gp(&self, slot: u32, entry: u64) -> Result<(), String> {
         if slot >= ENTRIES {
             return Err("USER_STORAGE_GP_BOUND".into());
         }
-        crate::user_stream::inspect_entry(entry, MAX_SOURCE_BYTES)
+        crate::user_stream::inspect_format(entry)
             .map_err(|why| format!("USER_STORAGE_USER_GP: {why:?}"))?;
         self.cpu()?
             .store_u64(HostOffset::new(GP_OFFSET + u64::from(slot) * 8), entry)
@@ -711,6 +712,9 @@ impl Storage<CpuView> {
 mod tests {
     use super::*;
     use std::cell::RefCell;
+    mod measured {
+        include!("../tests/fixtures/run3440.rs");
+    }
 
     // Exercise the production memory accessors on a real CPU mapping without
     // opening NVIDIA or making an RM call. No simulated GET is a GPU result.
@@ -740,6 +744,58 @@ mod tests {
         }
     }
 
+    #[test]
+    fn write_user_gp_stores_each_run3440_descriptor() {
+        let s = anonymous_live_storage();
+        for raw in measured::RUN3440 {
+            s.write_user_gp(0, raw).unwrap();
+            assert_eq!(
+                s.cpu()
+                    .unwrap()
+                    .load_u64(HostOffset::new(GP_OFFSET))
+                    .unwrap(),
+                raw
+            );
+            assert_eq!(s.gpu_get().unwrap(), 0);
+            assert_eq!(s.gpu_reference().unwrap(), 0);
+        }
+    }
+    #[test]
+    fn write_user_gp_stores_the_largest_representable_descriptor() {
+        let s = anonymous_live_storage();
+        let raw = kf_abi::submit::gp_entry(0x4000, 8_388_604).unwrap() | (1 << 63) | (1 << 41);
+        s.write_user_gp(0, raw).unwrap();
+        assert_eq!(
+            s.cpu()
+                .unwrap()
+                .load_u64(HostOffset::new(GP_OFFSET))
+                .unwrap(),
+            raw
+        );
+        assert_eq!(s.gpu_get().unwrap(), 0);
+    }
+    #[test]
+    fn write_user_gp_refuses_end_at_2_40() {
+        let s = anonymous_live_storage();
+        let raw = kf_abi::submit::gp_entry((1 << 40) - 4, 4).unwrap();
+        assert!(s.write_user_gp(0, raw).is_err());
+        assert_eq!(
+            s.cpu()
+                .unwrap()
+                .load_u64(HostOffset::new(GP_OFFSET))
+                .unwrap(),
+            0
+        );
+    }
+    #[test]
+    fn diagnostic_shadow_inspection_keeps_its_snapshot_budget() {
+        for raw in measured::RUN3440 {
+            assert_eq!(
+                crate::user_stream::inspect_entry(raw, MAX_SOURCE_BYTES),
+                Err(crate::user_stream::Refusal::Budget)
+            );
+        }
+    }
     #[test]
     fn private_ring_publication_keeps_user_addresses_and_never_forges_get_or_reference() {
         let s = anonymous_live_storage();
@@ -792,9 +848,10 @@ mod tests {
     }
 
     #[test]
-    fn large_user_descriptor_fits_staging_policy_and_keeps_real_credit_fields() {
+    fn large_user_descriptors_cross_snapshot_bound_without_changing_real_credit_fields() {
+        // Pointer words use hardware format; crossing the copy bound must preserve exact bits and real credit.
         let s = anonymous_live_storage();
-        for bytes in [100 << 10, GP_OFFSET] {
+        for bytes in [100 << 10, GP_OFFSET, GP_OFFSET + 4] {
             let entry = kf_abi::submit::gp_entry(0x420000, bytes).unwrap() | (1 << 41);
             s.write_user_gp(0, entry).unwrap();
             assert_eq!(
@@ -805,20 +862,6 @@ mod tests {
                 entry
             );
         }
-        let before = s
-            .cpu()
-            .unwrap()
-            .load_u64(HostOffset::new(GP_OFFSET))
-            .unwrap();
-        let oversized = kf_abi::submit::gp_entry(0x420000, GP_OFFSET + 4).unwrap();
-        assert!(s.write_user_gp(0, oversized).is_err());
-        assert_eq!(
-            s.cpu()
-                .unwrap()
-                .load_u64(HostOffset::new(GP_OFFSET))
-                .unwrap(),
-            before
-        );
         assert_eq!(s.gpu_get().unwrap(), 0);
         assert_eq!(s.gpu_reference().unwrap(), 0);
     }
@@ -845,7 +888,8 @@ mod tests {
         for entry in [
             1 << 32,
             u64::MAX,
-            kf_abi::submit::gp_entry(0x420000, MAX_SOURCE_BYTES + 4).unwrap(),
+            // Size above staging is legal for Pointer; an unrepresentable end still cannot be stored.
+            kf_abi::submit::gp_entry((1 << 40) - 4, 4).unwrap(),
         ] {
             assert!(s.write_user_gp(0, entry).is_err());
             s.write_shadow_gp(ENTRIES - 1, entry).unwrap();
@@ -878,7 +922,8 @@ mod tests {
             1 << 32, // CONTROL/ILLEGAL, not an unused NOP operand.
             good | 1,
             good | (1 << 40),
-            kf_abi::submit::gp_entry(0x420000, MAX_SOURCE_BYTES + 4).unwrap(),
+            // Size above staging is legal for Pointer; an unrepresentable end still cannot be stored.
+            kf_abi::submit::gp_entry((1 << 40) - 4, 4).unwrap(),
         ] {
             assert!(s.write_user_gp(0, bad).is_err(), "entry={bad:#x}");
             assert_eq!(
@@ -1231,6 +1276,84 @@ mod tests {
             assert!(error.retained.released());
             assert!(host.calls.borrow().is_empty());
         }
+    }
+    #[test]
+    fn user_descriptor_format_edges_and_ring_slots_are_independent_of_copy_budget() {
+        let s = anonymous_live_storage();
+        for len in [
+            MAX_SOURCE_BYTES - 4,
+            MAX_SOURCE_BYTES,
+            MAX_SOURCE_BYTES + 4,
+            8_388_604,
+        ] {
+            let raw = kf_abi::submit::gp_entry(0x4000, len).unwrap();
+            for slot in [0, ENTRIES - 1] {
+                // A legal direct word remains legal above the copy bound; slot admission is independent.
+                s.write_user_gp(slot, raw).unwrap();
+                assert_eq!(
+                    s.cpu()
+                        .unwrap()
+                        .load_u64(HostOffset::new(GP_OFFSET + u64::from(slot) * 8))
+                        .unwrap(),
+                    raw
+                );
+            }
+            for slot in [ENTRIES, ENTRIES + 1, u32::MAX] {
+                assert!(s.write_user_gp(slot, raw).is_err());
+            }
+        }
+        for len in [4, 8, 12] {
+            let raw = kf_abi::submit::gp_entry((1 << 40) - 8, len).unwrap();
+            // The end must be strictly below 2^40; equality and an end above it both refuse.
+            assert_eq!(s.write_user_gp(0, raw).is_ok(), len < 8);
+        }
+        s.write_user_gp(0, 0).unwrap(); // Zero-length CONTROL NOP remains an intact native descriptor.
+        assert_eq!(s.gpu_get().unwrap(), 0);
+        assert_eq!(s.gpu_reference().unwrap(), 0);
+    }
+
+    #[test]
+    fn authored_copy_still_stops_at_staging_boundary_without_touching_ring() {
+        let s = anonymous_live_storage();
+        let raw = kf_abi::submit::gp_entry(0x4000, 4).unwrap();
+        s.write_user_gp(0, raw).unwrap();
+        for len in [GP_OFFSET - 4, GP_OFFSET, GP_OFFSET + 4] {
+            let words = vec![0x12345678; len as usize / 4];
+            // The unchanged copy limit is inclusive, even though Pointer forwarding exceeds it.
+            assert_eq!(s.write_authored(0, &words).is_ok(), len <= GP_OFFSET);
+            assert_eq!(
+                s.cpu()
+                    .unwrap()
+                    .load_u64(HostOffset::new(GP_OFFSET))
+                    .unwrap(),
+                raw
+            );
+        }
+        s.write_authored(GP_OFFSET, &[]).unwrap(); // An empty owned write touches no bytes.
+        assert!(s.write_authored(GP_OFFSET, &[1]).is_err());
+        assert!(s.write_authored(u64::MAX - 3, &[1]).is_err());
+        assert_eq!(s.gpu_get().unwrap(), 0);
+    }
+
+    #[test]
+    fn staged_gp_spans_keep_inclusive_end_nonempty_and_checked_offsets() {
+        let s = anonymous_live_storage();
+        for len in [0, GP_OFFSET - 4, GP_OFFSET, GP_OFFSET + 4] {
+            // Authored GP spans cannot be empty or cross staging; no Pointer exemption applies.
+            assert_eq!(
+                s.write_gp_level(ENTRIES - 1, 0, len, true, true).is_ok(),
+                len > 0 && len <= GP_OFFSET
+            );
+        }
+        assert!(s.write_gp_level(0, GP_OFFSET - 4, 4, false, false).is_ok());
+        for (offset, len) in [(GP_OFFSET, 4), (GP_OFFSET - 4, 8), (u64::MAX - 3, 8)] {
+            assert!(s.write_gp_level(0, offset, len, false, false).is_err());
+        }
+        for slot in [ENTRIES, ENTRIES + 1, u32::MAX] {
+            assert!(s.write_gp_level(slot, 0, 4, false, false).is_err());
+        }
+        assert_eq!(s.gpu_get().unwrap(), 0);
+        assert_eq!(s.gpu_reference().unwrap(), 0);
     }
 }
 

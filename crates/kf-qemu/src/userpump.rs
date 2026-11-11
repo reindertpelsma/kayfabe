@@ -704,7 +704,7 @@ impl kf_chan::user_turn::Io for PumpIo<'_> {
     fn src_entries(&mut self) -> u32 {
         self.r.source.1
     }
-    fn max_entry_bytes(&mut self) -> u64 {
+    fn max_scan_bytes(&mut self) -> u64 {
         userread::MAX_BYTES as u64
     }
     fn walk_busy(&mut self) -> bool {
@@ -987,7 +987,7 @@ impl kf_chan::user_turn::Io for PumpIo<'_> {
                 }
             }
             Ev::CreditWait => Stats::bump(&me.relay_stats.credit_waits),
-            Ev::PutBound | Ev::EntryRefused | Ev::ScanRefused => {}
+            Ev::PutBound | Ev::EntryRefused | Ev::ScanRefused | Ev::ScanBudget => {}
         }
     }
 }
