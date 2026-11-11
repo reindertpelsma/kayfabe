@@ -13,7 +13,10 @@ const HEADERS = {
   "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'",
   "x-content-type-options": "nosniff",
   "referrer-policy": "no-referrer",
+  "x-robots-tag": "noindex, nofollow, noarchive",
 };
+
+const ROBOTS = "User-agent: *\nDisallow: /\n";
 
 export function esc(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -189,7 +192,18 @@ export default {
     if (request.method !== "GET" && request.method !== "HEAD") {
       return new Response("method not allowed\n", { status: 405, headers: { ...HEADERS, allow: "GET, HEAD" } });
     }
-    if (!url.pathname.endsWith("/")) return fetch(request);
+    if (url.pathname === "/robots.txt") {
+      return new Response(request.method === "HEAD" ? null : ROBOTS, {
+        status: 200,
+        headers: { ...HEADERS, "content-type": "text/plain; charset=utf-8", "cache-control": "public, max-age=3600" },
+      });
+    }
+    if (!url.pathname.endsWith("/")) {
+      const origin = await fetch(request);
+      const out = new Response(origin.body, origin);
+      out.headers.set("x-robots-tag", HEADERS["x-robots-tag"]);
+      return out;
+    }
     const prefix = normalisePrefix(url.pathname);
     const page = parsePage(url.search);
     if (prefix === null || page === null) return notFound();

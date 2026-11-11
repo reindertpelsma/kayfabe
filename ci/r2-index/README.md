@@ -47,3 +47,10 @@ through to the origin, so they are not billed as the Worker serving file bytes; 
 ## Tests
 
 `cd ci/r2-index && node --test test/*.test.js` (Node 22.13 or newer).
+
+## Crawlers
+
+The Worker answers `/robots.txt` itself on both hosts (`User-agent: *`, `Disallow: /`) and adds
+`X-Robots-Tag: noindex, nofollow, noarchive` to every listing and to every passed-through file. This is a
+request to well-behaved crawlers, not access control: nothing non-public belongs in these buckets. Until
+the Worker is deployed, the same `robots.txt` exists as an object in both buckets (uploaded 2026-11-11).

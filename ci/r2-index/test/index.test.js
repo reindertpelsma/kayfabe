@@ -76,6 +76,24 @@ test("file path passes through unchanged", async () => {
   assert.equal(fetched.length, 2);
 });
 
+test("robots.txt disallows everything on both hosts and noindex is sent on files and listings", async () => {
+  const e = env(fakeBucket(["a/b.txt"]));
+  for (const host of ["logs.kayfabe.dev", "bundles.kayfabe.dev"]) {
+    const r = await get(e, `https://${host}/robots.txt`);
+    assert.equal(r.status, 200);
+    assert.equal(await r.text(), "User-agent: *\nDisallow: /\n");
+    assert.match(r.headers.get("content-type"), /^text\/plain/);
+  }
+  assert.equal(fetched.length, 0); // served by the Worker, never the origin
+  const file = await get(e, "https://logs.kayfabe.dev/a/b.txt");
+  assert.equal(file.headers.get("x-robots-tag"), "noindex, nofollow, noarchive");
+  const list = await get(e, "https://logs.kayfabe.dev/a/");
+  assert.equal(list.headers.get("x-robots-tag"), "noindex, nofollow, noarchive");
+  const head = await get(e, "https://logs.kayfabe.dev/robots.txt", "HEAD");
+  assert.equal(head.status, 200);
+  assert.equal(await head.text(), "");
+});
+
 test("root and nested listing, folders first, hidden omitted", async () => {
   const e = env(fakeBucket(["z.txt", "run-1/a.log", "run-1/sub/x", "run-1/.hid", "run-1/_priv", ".top", "run-2/b.log"]));
   let r = await get(e, "https://logs.kayfabe.dev/");
