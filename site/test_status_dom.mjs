@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { JSDOM } from 'jsdom';
-import { withReports, nearestAnswer } from './report_fixture.mjs';
+import { withReports, nearestAnswer, SPEC_DISCLAIMER } from './report_fixture.mjs';
 
 const site = fileURLToPath(new URL('.', import.meta.url));
 const code = readFileSync(join(site, 'status/status.js'), 'utf8');
@@ -964,21 +964,45 @@ test('run page: apps are first, per OS, failures first, with seconds; rev 1 take
   assert.ok(![...page.document.querySelectorAll('section > h2')].some((h) => /SPECviewperf/.test(norm(h))));
 });
 
-test('run page: the benchmark section shows verdict, subtests, wall time against the native time, resets, Xid and refusals', async () => {
+test('run page: the benchmark section is stamped, every number carries (nc), the comparison has its own heading', async () => {
   const { document } = await render('live', 'run', '?id=' + goodRun.id, { responses: reported });
-  const table = document.querySelector('table.kf-spec');
-  assert.deepEqual(
-    [...table.querySelectorAll('thead th')].map(norm),
-    ['Viewset', 'Result', 'Subtests', 'Wall time', 'Native reference', 'Resets', 'Note'],
-  );
+  const section = document.querySelector('table.kf-spec').closest('section');
+  const body = norm(section);
+  // the stamp: the disclaimer verbatim, the exact release, the configuration
+  assert.ok(body.includes(SPEC_DISCLAIMER), 'verbatim disclaimer');
+  assert.match(body, /ReleaseSPECviewperf 15\.0\.0/);
+  assert.match(body, /Configurationhost GPU synthetic .*virtualisation layer kayfabe, guest OS Windows, guest driver 580\.88/);
+  assert.ok(section.querySelector('.kf-stamp'));
+  assert.equal([...section.children].find((n) => n.tagName === 'H2').textContent, 'SPECviewperf');
+  const table = section.querySelector('table.kf-spec');
+  assert.deepEqual([...table.querySelectorAll('thead th')].map(norm), ['Viewset', 'Result', 'Subtests', 'Resets', 'Note']);
   const rows = [...table.querySelectorAll('tbody tr')].map(tx);
-  assert.match(rows[0], /catia-07 +FAIL +4\/6 +18\.6 min +13\.4 min +2 +the guest reset: 05_Example, 06_Example/);
-  assert.match(rows[1], /maya-07 +not run +6\.7 min +not started: out of time/);
-  assert.match(rows[2], /medical-04 +PASS +10\/10 +5\.3 min +5\.3 min +0/);
-  const facts = norm(document.querySelector('ul[aria-label="Viewset counts"]'));
-  assert.match(facts, /1 passed1 failed1 not runHost Xid: 0USER_RING refusals: 0/);
-  assert.match(norm(document.querySelector('table.kf-spec').closest('section')), /Not an official SPEC result/);
-  // No score field is ever drawn, whatever the row carries.
+  assert.match(rows[0], /catia-07 +FAIL +4\/6 \(nc\) +2 \(nc\) +the guest reset: 05_Example, 06_Example/);
+  assert.match(rows[2], /medical-04 +PASS +10\/10 \(nc\) +0 \(nc\)/);
+  assert.match(norm(section.querySelector('ul[aria-label="Viewset counts"]')), /1 \(nc\) passed1 \(nc\) failed1 \(nc\) not runHost Xid: 0 \(nc\)USER_RING refusals: 0 \(nc\)/);
+  // the comparison, only under the exact heading
+  const heading = [...section.querySelectorAll('h3')].find((h) => norm(h) === '(nc) research comparison, not a SPEC-ranked result');
+  assert.ok(heading, 'comparison heading');
+  const cmp = section.querySelector('table.kf-spec-cmp');
+  assert.deepEqual([...cmp.querySelectorAll('thead th')].map(norm), ['Viewset', 'Wall time', 'Native reference']);
+  assert.match(tx(cmp.querySelectorAll('tbody tr')[0]), /catia-07 +18\.6 min \(nc\) +13\.4 min \(nc\)/);
+  assert.equal(section.querySelectorAll('table').length, 2);
+  assert.equal(heading.compareDocumentPosition(table) & 2, 2, 'the status table comes before the comparison heading');
+  // no number outside a viewset name, a release or the configuration is left without (nc)
+  const stripped = (t) => t.replace(/[a-z_]+-\d\d|\d\d_[A-Za-z]+/g, '').replace(/[\d./]+(?: (?:s|min|ms))? \(nc\)/g, '');
+  const bare = [...section.querySelectorAll('td, li')].map(tx).map(stripped).filter((t) => /\d/.test(t));
+  assert.deepEqual(bare, []);
+  // a report with benchmark rows but no valid notice draws none of them
+  for (const bad of [undefined, { text: 'x', release: 'SPECviewperf 15.0.0', configuration: 'c' }, { text: SPEC_DISCLAIMER, release: 'latest', configuration: 'c' }]) {
+    const responses = structuredClone(reported);
+    const run = responses['/v1/ci/runs/' + goodRun.id].run;
+    if (bad === undefined) delete run.report.spec_notice;
+    else run.report.spec_notice = bad;
+    const page = await render('live', 'run', '?id=' + goodRun.id, { responses });
+    assert.equal(page.document.querySelector('table.kf-spec, table.kf-spec-cmp'), null);
+    assert.doesNotMatch(norm(page.document.getElementById('kf-status-content')), /catia-07|1118|18\.6 min/);
+  }
+  // No score field is ever drawn, whatever the row carries; values are text.
   const hostile = structuredClone(reported);
   const spec = hostile['/v1/ci/runs/' + goodRun.id].run.report.spec;
   spec[0].score = 99.5;
@@ -988,10 +1012,10 @@ test('run page: the benchmark section shows verdict, subtests, wall time against
   spec[2].wall_s = 'NaN';
   spec[2].name = '<i>bad</i>';
   const page = await render('live', 'run', '?id=' + goodRun.id, { responses: hostile });
-  const section = page.document.querySelector('table.kf-spec').closest('section');
-  assert.doesNotMatch(norm(section), /99\.5|123|NaN|bad/);
-  assert.equal(section.querySelector('img, b, i, script'), null);
-  assert.match(norm(section), /<img src=x onerror=alert\(1\)>/, 'shown as text');
+  const sec = page.document.querySelector('table.kf-spec').closest('section');
+  assert.doesNotMatch(norm(sec), /99\.5|123|NaN|bad/);
+  assert.equal(sec.querySelector('img, b, i, script'), null);
+  assert.match(norm(sec), /<img src=x onerror=alert\(1\)>/, 'shown as text');
 });
 
 test('run page: the real gate run of 2026-11-10 (report without rev, 13 policy app rows, 76 tests) still renders', async () => {

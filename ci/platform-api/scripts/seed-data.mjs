@@ -791,7 +791,7 @@ function reportRows(rows) {
         ].map(([name, result, done, total, reason, failed, wall_s, native_s, resets]) => ({
           sub: win.sub, name, result, done, total, reason, failed, wall_s, native_s, resets,
         }));
-        doc.spec_host = { xid: 0, user_ring_refused: 0 };
+        doc.spec_host = { xid: 0, user_ring_refused: 0, release: '15.0.0' };
       }
     }
     doc.log.bytes = 1_000_000 + between(0, 2_000_000);

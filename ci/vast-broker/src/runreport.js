@@ -47,6 +47,25 @@ export const STAGE_RESULTS = Object.freeze([
   'UNATTRIBUTED',
 ]);
 export const SUB_VERDICTS = Object.freeze(['PASS', 'FAIL', 'RETRY', 'UNATTRIBUTED', 'NOT_RUN']);
+// The publication rule of docs/SPEC_RESULTS.md: every benchmark row leaves with `nc: true` and a notice that
+// carries the verbatim disclaimer, the exact release and the configuration. The text is identical to
+// DISCLAIMER in scripts/bench/specviewperf/spec_stamp.py (a test compares the two).
+export const SPEC_DISCLAIMER =
+  '(nc) = non-compliant: run in a virtualised configuration, not an official SPEC result and not '
+  + 'submission-compliant; SPEC and SPECviewperf are trademarks of the Standard Performance Evaluation '
+  + 'Corporation, https://www.spec.org';
+const SPEC_RELEASE = /^[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2}$/;
+export function specNotice({ release, gpuName, hostDriver, guestDriver }) {
+  const show = (v) => (typeof v === 'string' && v !== '' ? v : 'not reported');
+  return {
+    nc: '(nc)',
+    text: SPEC_DISCLAIMER,
+    release: typeof release === 'string' && SPEC_RELEASE.test(release) ? 'SPECviewperf ' + release : null,
+    configuration:
+      'host GPU ' + show(gpuName) + ', host driver ' + show(hostDriver) + ', virtualisation layer kayfabe, ' +
+      'guest OS Windows, guest driver ' + show(guestDriver),
+  };
+}
 export const SPEC_RESULTS = Object.freeze(['PASS', 'FAIL', 'NOT_RUN']);
 const SPEC_NAME = /^[a-z][a-z_]*-[0-9]{2}$/;
 const SUBTEST = /^[A-Za-z0-9_]{1,60}$/;
@@ -220,6 +239,7 @@ export function cleanClaimsReport(raw) {
     spec.push({
       sub: r.sub,
       name,
+      nc: true,
       result,
       done,
       total: Math.max(done, int(r.total, 0, 999) ?? 0),
@@ -233,7 +253,11 @@ export function cleanClaimsReport(raw) {
   const sh = object(raw.spec_host) ? raw.spec_host : null;
   const specHost =
     sh && int(sh.xid, 0, 999999) !== null
-      ? { xid: int(sh.xid, 0, 999999), user_ring_refused: int(sh.user_ring_refused, 0, 99999999) }
+      ? {
+          xid: int(sh.xid, 0, 999999),
+          user_ring_refused: int(sh.user_ring_refused, 0, 99999999),
+          release: typeof sh.release === 'string' && SPEC_RELEASE.test(sh.release) ? sh.release : null,
+        }
       : null;
   const perf = [];
   for (const p of list(raw.perf, LIMITS.perf)) {
@@ -362,6 +386,16 @@ export function buildReport({ claims, row, runId, log, offsets, logsBase }) {
     perf: claims.perf,
     spec: claims.spec,
     spec_host: claims.spec_host,
+    ...(claims.spec.length
+      ? {
+          spec_notice: specNotice({
+            release: claims.spec_host?.release,
+            gpuName: row.gpu_name,
+            hostDriver: row.host_driver,
+            guestDriver: claims.guest_drivers.windows,
+          }),
+        }
+      : {}),
     windows: claims.windows,
     ...(claims.truncated ? { truncated: claims.truncated } : {}),
     log: log

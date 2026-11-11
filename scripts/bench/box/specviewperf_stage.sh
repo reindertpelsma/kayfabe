@@ -37,7 +37,7 @@
 #       viewset, printed as soon as it is known: a killed run still reports what finished)
 #   SPEC_RUN name=<viewset> wall_s=<n|-> native_s=<n|-> resets=<n|->   (after the row of each viewset that ran: the CLI
 #       wall, the native wall of the table, the guest resets; seconds and counts, no score)
-#   SPEC_HOST xid=<n> user_ring_refused=<n|->                           (once, before the counts: the host Xid delta and
+#   SPEC_HOST xid=<n> user_ring_refused=<n|-> release=<x.y.z>                           (once, before the counts: the host Xid delta and
 #       the USER_RING_REFUSED lines of this run's qemu logs)
 #   <viewset_with_underscores> --- FAILED                                    (the payload's FINAL SUMMARY lists these)
 #   SPEC_STAGE_COUNTS pass=<n> fail=<n> not_run=<n> of=<n>
@@ -300,10 +300,15 @@ bar1_refusal() {
     [ -n "$FIRST_RUN_TAG" ] && [ -s "$q" ] || return 1
     grep -a 'realize refused' "$q" | sed 's/.*realize refused//' | grep -qi 'bar1'
 }
-ring_refused() { # the USER_RING_REFUSED lines of this run's qemu logs (`-` when there is no log to count)
-    local f n=0 seen=0
+ring_refused() { # the USER_RING_REFUSED lines of this run's qemu logs (`-` when no log could be read)
+    local f c rc n=0 seen=0
     while read -r f; do
-        case "$f" in *_qemu.log) seen=1; n=$((n + $(grep -ac 'USER_RING_REFUSED' "$f" 2> /dev/null || true))) ;; esac
+        case "$f" in
+            *_qemu.log)
+                c=$(grep -ac 'USER_RING_REFUSED' "$f" 2> /dev/null)
+                rc=$?   # 0: found, 1: none (prints 0), 2: unreadable (prints nothing)
+                if [ "$rc" -le 1 ] && [ -n "$c" ]; then seen=1; n=$((n + c)); fi ;;
+        esac
     done < <(own_logs)
     if [ "$seen" = 1 ]; then echo "$n"; else echo -; fi
 }
@@ -355,7 +360,7 @@ conclude() {
         fi
     done
     read -r kind cls < <(lane_py decide "$LANE" --rows "$ROWS" --before "$HOSTREF_BEFORE" --after "$HOSTREF_AFTER" --bar1 "$bar1" --xid "${xid_delta:-0}" ${ABORT:+--abort "$ABORT"})
-    say "SPEC_HOST xid=${xid_delta:-0} user_ring_refused=$(ring_refused)"
+    say "SPEC_HOST xid=${xid_delta:-0} user_ring_refused=$(ring_refused) release=$(lane_py release)"
     pass=$(grep -c ' result=PASS ' "$ROWS")
     fail=$(grep -c ' result=FAIL ' "$ROWS")
     nrun=$(grep -c ' result=NOT_RUN ' "$ROWS")

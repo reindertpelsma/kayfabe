@@ -88,12 +88,35 @@ export function reportOut(textValue, id, logInfo) {
   clean.rev = clean.rev === 2 ? 2 : 1;
   clean.spec = specOut(clean.spec);
   clean.spec_host = specHostOut(clean.spec_host);
+  // Unlabelled benchmark numbers never leave: a notice goes with any row, whatever the stored text had.
+  delete clean.spec_notice;
+  if (clean.spec.length) clean.spec_notice = specNotice(clean.spec_host?.release, clean);
   if (Array.isArray(clean.apps)) clean.apps = clean.apps.map(appSecs);
   clean.run_id = id;
   clean.log = logInfo;
   return clean;
 }
 
+// Identical to DISCLAIMER in scripts/bench/specviewperf/spec_stamp.py (docs/SPEC_RESULTS.md; a test compares them).
+export const SPEC_DISCLAIMER =
+  '(nc) = non-compliant: run in a virtualised configuration, not an official SPEC result and not '
+  + 'submission-compliant; SPEC and SPECviewperf are trademarks of the Standard Performance Evaluation '
+  + 'Corporation, https://www.spec.org';
+function specNotice(release, doc) {
+  const show = (v) => (typeof v === 'string' && v !== '' ? v : 'not reported');
+  const guest = doc.guest_drivers && typeof doc.guest_drivers === 'object' ? doc.guest_drivers.windows : null;
+  return {
+    nc: '(nc)',
+    text: SPEC_DISCLAIMER,
+    release:
+      typeof release === 'string' && /^[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2}$/.test(release)
+        ? 'SPECviewperf ' + release
+        : null,
+    configuration:
+      'host GPU ' + show(doc.gpu_name) + ', host driver ' + show(doc.host_driver) +
+      ', virtualisation layer kayfabe, guest OS Windows, guest driver ' + show(guest),
+  };
+}
 const SPEC_NAME_OUT = /^[a-z][a-z_]*-[0-9]{2}$/;
 const appSecs = (a) =>
   a !== null && typeof a === 'object' ? { ...a, secs: int(a.secs, 7 * 86400) } : a;
@@ -108,6 +131,7 @@ export function specOut(rows) {
     out.push({
       sub: SUB_ID.test(r.sub ?? '') ? r.sub : null,
       name: r.name,
+      nc: true,
       result: r.result,
       done,
       total: Math.max(done, int(r.total, 999) ?? 0),
@@ -125,7 +149,12 @@ export function specOut(rows) {
 export function specHostOut(h) {
   if (h === null || typeof h !== 'object' || Array.isArray(h) || int(h.xid, 999999) === null)
     return null;
-  return { xid: h.xid, user_ring_refused: int(h.user_ring_refused, 99999999) };
+  return {
+    xid: h.xid,
+    user_ring_refused: int(h.user_ring_refused, 99999999),
+    release:
+      typeof h.release === 'string' && /^[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2}$/.test(h.release) ? h.release : null,
+  };
 }
 export const testOut = (r) => ({
   sub: text(r.sub, 40),

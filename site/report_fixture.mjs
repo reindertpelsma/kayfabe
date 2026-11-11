@@ -48,6 +48,10 @@ function subrunsFor(run) {
   return subs;
 }
 
+export const SPEC_DISCLAIMER =
+  '(nc) = non-compliant: run in a virtualised configuration, not an official SPEC result and not submission-compliant; ' +
+  'SPEC and SPECviewperf are trademarks of the Standard Performance Evaluation Corporation, https://www.spec.org';
+
 function reportFor(run, index) {
   const bad = run.verdict === 'FAIL';
   const subs = subrunsFor(run);
@@ -139,7 +143,8 @@ function reportFor(run, index) {
     apps,
     perf,
     spec: index % 2 === 1 ? spec : undefined,
-    spec_host: index % 2 === 1 && spec.length ? { xid: 0, user_ring_refused: 0 } : undefined,
+    spec_host: index % 2 === 1 && spec.length ? { xid: 0, user_ring_refused: 0, release: '15.0.0' } : undefined,
+    spec_notice: index % 2 === 1 && spec.length ? { nc: '(nc)', text: SPEC_DISCLAIMER, release: 'SPECviewperf 15.0.0', configuration: 'host GPU synthetic ' + run.die + ', host driver 580.159.04, virtualisation layer kayfabe, guest OS Windows, guest driver 580.88' } : undefined,
     windows: run.platform === 'linux' ? undefined : { gate: run.verdict === 'FAIL' ? 'FAIL' : 'PASS', install_s: 1260, probes: ['cup8', 'd3d11'], resets: bad ? 1 : 0, live_dumps_193: 0 },
     log: { url: LOGS + '/' + run.id + '/log.txt', bytes, sha256: HEX(64, run.id) },
   };

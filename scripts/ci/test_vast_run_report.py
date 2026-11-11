@@ -9,6 +9,7 @@ of the fixed URL, raises, changes the result file or prints the token.
 """
 
 import json
+import re
 import os
 import sys
 import tempfile
@@ -986,7 +987,7 @@ class SpecAndAppRows(unittest.TestCase):
            "SPEC_ROW name=catia-07 result=FAIL subtests=4/6 reason=RESET failed=05_A,06_B",
            "SPEC_RUN name=catia-07 wall_s=900 native_s=803 resets=2",
            "SPEC_ROW name=maya-07 result=NOT_RUN subtests=0/0 reason=TIME failed=-",
-           "SPEC_HOST xid=0 user_ring_refused=0"]
+           "SPEC_HOST xid=0 user_ring_refused=0 release=15.0.0"]
 
     def build(self, lines):
         return rr.build_report(log_lines() + lines, result())
@@ -1001,14 +1002,14 @@ class SpecAndAppRows(unittest.TestCase):
         self.assertEqual((rows["catia-07"]["reason"], rows["catia-07"]["failed"], rows["catia-07"]["resets"]),
                          ("RESET", ["05_A", "06_B"], 2))
         self.assertEqual((rows["maya-07"]["result"], rows["maya-07"]["wall_s"]), ("NOT_RUN", None))
-        self.assertEqual(doc["spec_host"], {"xid": 0, "user_ring_refused": 0})
+        self.assertEqual(doc["spec_host"], {"xid": 0, "user_ring_refused": 0, "release": "15.0.0"})
 
     def test_no_spec_lines_no_spec_rows(self):
         doc = self.build([])
         self.assertEqual((doc["spec"], doc["spec_host"]), ([], None))
 
     def test_unknown_ring_count_is_null_not_zero(self):
-        self.assertEqual(self.build(["SPEC_HOST xid=3 user_ring_refused=-"])["spec_host"], {"xid": 3, "user_ring_refused": None})
+        self.assertEqual(self.build(["SPEC_HOST xid=3 user_ring_refused=- release=15.0.0"])["spec_host"], {"xid": 3, "user_ring_refused": None, "release": "15.0.0"})
 
     def test_hostile_run_and_host_lines_are_ignored(self):
         bad = ["SPEC_RUN name=Bad_Name-01 wall_s=1 native_s=1 resets=0",
@@ -1021,9 +1022,26 @@ class SpecAndAppRows(unittest.TestCase):
         doc = self.build(bad)
         self.assertEqual((doc["spec"], doc["spec_host"]), ([], None))
 
-    def test_run_line_without_row_is_not_a_pass(self):
+    def test_run_line_without_a_graded_row_is_ignored(self):
         doc = self.build(["SPEC_RUN name=medical-04 wall_s=5 native_s=318 resets=0"])
-        self.assertEqual(doc["spec"][0]["result"], "NOT_RUN")
+        self.assertEqual(doc["spec"], [])
+
+    def test_a_second_run_line_and_a_second_host_line_do_not_replace_the_first(self):
+        row = "SPEC_ROW name=medical-04 result=PASS subtests=1/1 reason=- failed=-"
+        doc = self.build([row, "SPEC_RUN name=medical-04 wall_s=5 native_s=318 resets=0",
+                          "SPEC_RUN name=medical-04 wall_s=9999 native_s=1 resets=7",
+                          "SPEC_HOST xid=0 user_ring_refused=0 release=15.0.0",
+                          "SPEC_HOST xid=9 user_ring_refused=9 release=14.0.0"])
+        self.assertEqual((doc["spec"][0]["wall_s"], doc["spec"][0]["resets"]), (5, 0))
+        self.assertEqual(doc["spec_host"], {"xid": 0, "user_ring_refused": 0, "release": "15.0.0"})
+
+    def test_a_repeated_row_drops_the_facts_of_the_earlier_attempt(self):
+        row = "SPEC_ROW name=medical-04 result=%s subtests=1/1 reason=- failed=-"
+        doc = self.build([row % "FAIL", "SPEC_RUN name=medical-04 wall_s=5 native_s=318 resets=0", row % "PASS"])
+        self.assertEqual((doc["spec"][0]["result"], doc["spec"][0]["wall_s"]), ("PASS", None))
+
+    def test_a_host_line_without_a_release_is_not_a_host_line(self):
+        self.assertIsNone(self.build(["SPEC_HOST xid=0 user_ring_refused=0"])["spec_host"])
 
     def test_spec_rows_are_capped(self):
         lines = ["SPEC_ROW name=w%s-%02d result=PASS subtests=1/1 reason=- failed=-" % (chr(97 + i // 99), i % 99) for i in range(300)]
@@ -1054,7 +1072,7 @@ class SpecAndAppRows(unittest.TestCase):
         self.assertEqual(sum(a["os"] == "windows" for a in real), 10)
         self.assertEqual({r["name"]: (r["result"], r["wall_s"], r["native_s"], r["done"], r["total"]) for r in doc["spec"]},
                          {"medical-04": ("PASS", 320, 318, 10, 10), "catia-07": ("PASS", 1118, 803, 6, 6)})
-        self.assertEqual(doc["spec_host"], {"xid": 0, "user_ring_refused": None})
+        self.assertEqual(doc["spec_host"], {"xid": 0, "user_ring_refused": None, "release": "15.0.0"})
 
     def test_failed_names_are_capped_in_the_spec_row_and_in_the_test_rows(self):
         line = "SPEC_ROW name=creo-04 result=FAIL subtests=1/9 reason=SUBTEST failed=a,b,c,d,e,f,g,h,i"
@@ -1083,3 +1101,14 @@ class SpecAndAppRows(unittest.TestCase):
     def test_a_host_line_with_an_extra_field_is_not_a_host_line(self):
         self.assertIsNone(self.build(["SPEC_HOST xid=0 user_ring_refused=0 fps=60"])["spec_host"])
         self.assertIsNone(self.build(["SPEC_HOST xid=0 user_ring_refused=0\x00"])["spec_host"])
+
+    def test_run_and_host_lines_with_trailing_junk_are_ignored(self):
+        row = "SPEC_ROW name=medical-04 result=PASS subtests=1/1 reason=- failed=-"
+        doc = self.build([row, "SPEC_RUN name=medical-04 wall_s=5 native_s=318 resets=0 x", "SPEC_HOST xid=0 user_ring_refused=0 release=15.0.0 x"])
+        self.assertEqual((doc["spec"][0]["wall_s"], doc["spec_host"]), (None, None))
+        doc = self.build(["SPEC_HOST xid=0 user_ring_refused=0 release=15.0.0.1"])
+        self.assertIsNone(doc["spec_host"])
+
+    def test_a_host_line_with_a_score_field_after_the_release_is_not_a_host_line(self):
+        self.assertIsNone(self.build(["SPEC_HOST xid=0 user_ring_refused=0 release=15.0.0 fps=60"])["spec_host"])
+

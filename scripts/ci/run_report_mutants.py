@@ -195,7 +195,7 @@ MUTANTS += [
         'any(r["name"].startswith(SPEC_SUITE + "_retry_") for r in spec_bad)',
     ),
     ("spec-run-with-extra-fields-accepted", 'resets=([0-9]{1,4}|-)$"', 'resets=([0-9]{1,4}|-)"'),
-    ("spec-host-with-extra-fields-accepted", 'user_ring_refused=([0-9]{1,8}|-)$")', 'user_ring_refused=([0-9]{1,8}|-)")'),
+    ("spec-host-with-extra-fields-accepted", 'release=([0-9]{1,2}\\.[0-9]{1,2}\\.[0-9]{1,2})$"', 'release=([0-9]{1,2}\\.[0-9]{1,2}\\.[0-9]{1,2})"'),
     # report rev 2: per-app seconds and the benchmark rows
     ("app seconds always null", '"secs": seconds_of(secs)}\n            for name, (res, secs, note) in c.apps.items()', '"secs": None}\n            for name, (res, secs, note) in c.apps.items()'),
     ("spec wall seconds dropped", 'row[key] = None if text == "-" else int(text)', 'row[key] = None'),

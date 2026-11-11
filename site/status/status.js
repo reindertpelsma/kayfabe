@@ -1070,9 +1070,21 @@
     SETUP: 'setup failed',
     BOOT: 'the guest did not boot',
   };
+  // Every number in this section is followed by (nc) and the section opens with the stamp that
+  // docs/SPEC_RESULTS.md requires: the disclaimer verbatim, the exact release and the configuration. The
+  // stamp text comes from the report's `spec_notice` (the API builds it from the one disclaimer text; a test
+  // compares the copies). A report with benchmark rows but no valid notice shows no benchmark rows at all.
+  const NC = '(nc)';
+  const NC_PREFIX = '(nc) = non-compliant: run in a virtualised configuration, not an official SPEC result and not submission-compliant; SPEC and SPECviewperf are trademarks of the Standard Performance Evaluation Corporation';
+  const COMPARISON = '(nc) research comparison, not a SPEC-ranked result';
   function specSection(report, scope) {
     const rows = arr(report?.spec).filter((r) => isObj(r) && /^[a-z][a-z_]*-[0-9]{2}$/.test(text(r.name)));
     if (!rows.length) return document.createDocumentFragment();
+    const notice = isObj(report.spec_notice) ? report.spec_notice : null;
+    const release = text(notice?.release);
+    const stamped = notice && text(notice.text).startsWith(NC_PREFIX) && /^SPECviewperf [0-9]+\.[0-9]+\.[0-9]+$/.test(release) && text(notice.configuration);
+    if (!stamped)
+      return section('SPECviewperf', scope + '-spec', emptyNote('Benchmark rows are hidden: this report carries no (nc) notice with the release.'));
     const sorted = rows
       .map((r, i) => ({ r, i }))
       .sort((x, y) => rank(x.r.result) - rank(y.r.result) || x.i - y.i)
@@ -1083,18 +1095,30 @@
     const host = isObj(report.spec_host) ? report.spec_host : null;
     const xid = finite(host?.xid);
     const ring = finite(host?.user_ring_refused);
-    const secs = (v) => (finite(v) !== null && v >= 0 ? fmtDuration(v * 1000) : '');
-    const count = (v) => (finite(v) !== null && v >= 0 ? String(v) : '');
+    const secs = (v) => (finite(v) !== null && v >= 0 ? fmtDuration(v * 1000) + ' ' + NC : '');
+    const count = (v) => (finite(v) !== null && v >= 0 ? v + ' ' + NC : '');
+    const sub = headingLevel === 'h2' ? 'h3' : 'h4';
+    const tag = (r) => ['PASS', 'FAIL', 'NOT_RUN'].includes(r.result) ? r.result : 'NOT_RUN';
     return section(
       'SPECviewperf',
       scope + '-spec',
-      el('p', { class: 'kf-small' }, 'Status and run times only. Not an official SPEC result.'),
+      el(
+        'div',
+        { class: 'kf-stamp' },
+        el('p', {}, text(notice.text)),
+        el('dl', { class: 'kf-facts' }, [
+          el('dt', {}, 'Release'),
+          el('dd', {}, release),
+          el('dt', {}, 'Configuration'),
+          el('dd', {}, text(notice.configuration)),
+        ]),
+      ),
       el('ul', { class: 'kf-counts', 'aria-label': 'Viewset counts' }, [
-        el('li', {}, pass + ' passed'),
-        el('li', {}, fail + ' failed'),
-        el('li', {}, rows.length - pass - fail + ' not run'),
-        xid !== null ? el('li', {}, 'Host Xid: ' + xid) : null,
-        ring !== null ? el('li', {}, 'USER_RING refusals: ' + ring) : null,
+        el('li', {}, pass + ' ' + NC + ' passed'),
+        el('li', {}, fail + ' ' + NC + ' failed'),
+        el('li', {}, rows.length - pass - fail + ' ' + NC + ' not run'),
+        xid !== null ? el('li', {}, 'Host Xid: ' + xid + ' ' + NC) : null,
+        ring !== null ? el('li', {}, 'USER_RING refusals: ' + ring + ' ' + NC) : null,
       ]),
       el(
         'div',
@@ -1108,8 +1132,8 @@
             el(
               'tr',
               {},
-              [...(multi ? ['Subrun'] : []), 'Viewset', 'Result', 'Subtests', 'Wall time', 'Native reference', 'Resets', 'Note'].map((h) =>
-                el('th', { scope: 'col', class: ['Subtests', 'Wall time', 'Native reference', 'Resets'].includes(h) ? 'kf-num' : null }, h),
+              [...(multi ? ['Subrun'] : []), 'Viewset', 'Result', 'Subtests', 'Resets', 'Note'].map((h) =>
+                el('th', { scope: 'col', class: h === 'Subtests' || h === 'Resets' ? 'kf-num' : null }, h),
               ),
             ),
           ),
@@ -1123,17 +1147,40 @@
               const total = finite(r.total);
               return el(
                 'tr',
-                { 'data-result': ['PASS', 'FAIL', 'NOT_RUN'].includes(r.result) ? r.result : 'NOT_RUN' },
+                { 'data-result': tag(r) },
                 multi ? el('td', { 'data-label': 'Subrun' }, text(r.sub)) : null,
                 el('td', { 'data-label': 'Viewset' }, text(r.name)),
                 el('td', { 'data-label': 'Result' }, resultChip(r.result)),
-                el('td', { 'data-label': 'Subtests', class: 'kf-num' }, done !== null && total !== null && total > 0 ? done + '/' + total : ''),
-                el('td', { 'data-label': 'Wall time', class: 'kf-num' }, secs(r.wall_s)),
-                el('td', { 'data-label': 'Native reference', class: 'kf-num' }, secs(r.native_s)),
+                el('td', { 'data-label': 'Subtests', class: 'kf-num' }, done !== null && total !== null && total > 0 ? done + '/' + total + ' ' + NC : ''),
                 el('td', { 'data-label': 'Resets', class: 'kf-num' }, count(r.resets)),
                 el('td', { 'data-label': 'Note' }, [why, failed.length ? (why ? ': ' : '') + failed.join(', ') : ''].join('')),
               );
             }),
+          ),
+        ),
+      ),
+      el(sub, {}, COMPARISON),
+      el('p', { class: 'kf-small' }, 'Run time in the guest next to the same viewset on a native Windows machine. Not a ranking.'),
+      el(
+        'div',
+        { class: 'kf-scroll', tabindex: 0, role: 'region', 'aria-label': 'Wall time against the native reference' },
+        el(
+          'table',
+          { class: 'kf-runs kf-cards kf-spec-cmp' },
+          el('thead', {}, el('tr', {}, [...(multi ? ['Subrun'] : []), 'Viewset', 'Wall time', 'Native reference'].map((h) => el('th', { scope: 'col', class: h === 'Viewset' || h === 'Subrun' ? null : 'kf-num' }, h)))),
+          el(
+            'tbody',
+            {},
+            sorted.map((r) =>
+              el(
+                'tr',
+                {},
+                multi ? el('td', { 'data-label': 'Subrun' }, text(r.sub)) : null,
+                el('td', { 'data-label': 'Viewset' }, text(r.name)),
+                el('td', { 'data-label': 'Wall time', class: 'kf-num' }, secs(r.wall_s)),
+                el('td', { 'data-label': 'Native reference', class: 'kf-num' }, secs(r.native_s)),
+              ),
+            ),
           ),
         ),
       ),
@@ -1355,6 +1402,7 @@
       apps: own(report?.apps),
       spec: own(report?.spec),
       spec_host: report?.spec_host,
+      spec_notice: report?.spec_notice,
       suites: own(report?.suites),
     };
     const scope = 'sub' + i;

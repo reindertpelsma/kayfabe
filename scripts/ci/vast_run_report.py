@@ -86,7 +86,9 @@ SPEC_ROW = re.compile(
 SPEC_RUN = re.compile(
     r"^SPEC_RUN name=([a-z][a-z_]*-[0-9]{2}) wall_s=([0-9]{1,6}|-) native_s=([0-9]{1,6}|-) resets=([0-9]{1,4}|-)$"
 )
-SPEC_HOST = re.compile(r"^SPEC_HOST xid=([0-9]{1,6}) user_ring_refused=([0-9]{1,8}|-)$")
+SPEC_HOST = re.compile(
+    r"^SPEC_HOST xid=([0-9]{1,6}) user_ring_refused=([0-9]{1,8}|-) release=([0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2})$"
+)
 REPORT_REV = 2  # 2: `apps[].secs`, the `spec` rows and `spec_host`; rev 1 (absent) reports render without them
 SPEC_SUITE = "spec_viewsets"  # the report's name for the stage's suite rows ("specviewperf" in the result file)
 SPEC_RESULT = {"PASS": "PASS", "FAIL": "FAIL", "NOT_RUN": "SKIP"}
@@ -232,21 +234,23 @@ class Collector:
                 self.test("windows", SPEC_SUITE, m[1], SPEC_RESULT[m[2]], None)
                 for sub in failed:
                     self.test("windows", SPEC_SUITE, "%s/%s" % (m[1], sub), "FAIL", None)
-                old = self.spec.get(m[1], {})
+                # a repeated row replaces the earlier one together with its run facts (they belong to the earlier attempt)
                 self.spec[m[1]] = {"name": m[1], "result": m[2], "done": int(m[3]), "total": int(m[4]),
                                    "reason": None if m[5] == "-" else m[5], "failed": failed,
-                                   "wall_s": old.get("wall_s"), "native_s": old.get("native_s"), "resets": old.get("resets")}
+                                   "wall_s": None, "native_s": None, "resets": None, "_facts": False}
         elif head == "SPEC_RUN":
+            # Display only: it needs the viewset's graded row, and the first line for it counts (no last-wins).
             m = SPEC_RUN.match(line)
-            if m:
-                row = self.spec.setdefault(m[1], {"name": m[1], "result": "NOT_RUN", "done": 0, "total": 0, "reason": None,
-                                                  "failed": []})
+            row = self.spec.get(m[1]) if m else None
+            if row is not None and not row["_facts"]:
+                row["_facts"] = True
                 for key, text in (("wall_s", m[2]), ("native_s", m[3]), ("resets", m[4])):
                     row[key] = None if text == "-" else int(text)
         elif head == "SPEC_HOST":
             m = SPEC_HOST.match(line)
-            if m:
-                self.spec_host = {"xid": int(m[1]), "user_ring_refused": None if m[2] == "-" else int(m[2])}
+            if m and self.spec_host is None:
+                self.spec_host = {"xid": int(m[1]), "user_ring_refused": None if m[2] == "-" else int(m[2]),
+                                  "release": m[3]}
         elif head == "GATE_LKE_COUNTS":
             m = re.fullmatch(r"GATE_LKE_COUNTS reports=([0-9]{1,10}) entries=([0-9]{1,10}|-) unresolved=([0-9]{1,10}|-) (?:resolved=([0-9]{1,10}|-) )?unit=distinct_reports", line)
             if m:
@@ -480,7 +484,7 @@ def build_report(lines, result, run_id=None):
             if name not in policy_names["windows"]
         ])[: LIMITS["apps"]],  # policy entries always present; observed supported apps follow
         "perf": perf[: LIMITS["perf"]],
-        "spec": [dict(r, sub=sub_windows) for r in c.spec.values()][: LIMITS["spec"]],
+        "spec": [dict({k: v for k, v in r.items() if k != "_facts"}, sub=sub_windows) for r in c.spec.values()][: LIMITS["spec"]],
         "spec_host": c.spec_host,
         "windows": c.windows,
     }

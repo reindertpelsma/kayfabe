@@ -31,7 +31,7 @@ PUBLIC = re.compile(
     r"^(?:SPEC_STAGE_LIST lane=(?:lanea|laneb|both) n=[0-9]{1,2}"
     r"|SPEC_ROW name=[a-z][a-z_]*-[0-9]{2} result=(?:PASS|FAIL|NOT_RUN) subtests=[0-9]{1,3}/[0-9]{1,3} reason=(?:[A-Z_]{1,16}|-) failed=(?:[A-Za-z0-9_,]{1,120}|-)"
     r"|SPEC_RUN name=[a-z][a-z_]*-[0-9]{2} wall_s=(?:[0-9]{1,6}|-) native_s=(?:[0-9]{1,6}|-) resets=(?:[0-9]{1,4}|-)"
-    r"|SPEC_HOST xid=[0-9]{1,6} user_ring_refused=(?:[0-9]{1,8}|-)"
+    r"|SPEC_HOST xid=[0-9]{1,6} user_ring_refused=(?:[0-9]{1,8}|-) release=[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2}"
     r"|[a-z][a-z_]*_[0-9]{2} --- FAILED"
     r"|SPEC_STAGE_COUNTS pass=[0-9]+ fail=[0-9]+ not_run=[0-9]+ of=[0-9]+"
     r"|SPEC_COPY_DELETED removed=(?:archive|overlay|archive,overlay|nothing)"
@@ -1152,3 +1152,39 @@ class Interrupted(StageCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RingRefused(unittest.TestCase):
+    """ring_refused of specviewperf_stage.sh: an unreadable log is no count, never an arithmetic error."""
+
+    SCRIPT = Path(__file__).resolve().parents[1] / "bench/box/specviewperf_stage.sh"
+
+    def count(self, setup):
+        with tempfile.TemporaryDirectory() as d:
+            setup(Path(d))
+            body = self.SCRIPT.read_text()
+            fn = body[body.index("ring_refused() {"):body.index("delete_copy() {")]
+            script = "own_logs() { ls -1 %s/*_qemu.log 2>/dev/null; }\n%s\nring_refused\n" % (d, fn)
+            return subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=30)
+
+    def test_counts_and_sums_readable_logs(self):
+        def setup(d):
+            (d / "a_qemu.log").write_text("USER_RING_REFUSED x\nUSER_RING_REFUSED y\n")
+            (d / "b_qemu.log").write_text("nothing\n")
+        p = self.count(setup)
+        self.assertEqual((p.stdout.strip(), p.stderr), ("2", ""))
+
+    def test_a_dangling_symlink_log_is_a_dash_and_prints_no_error(self):
+        p = self.count(lambda d: (d / "a_qemu.log").symlink_to(d / "missing"))
+        self.assertEqual((p.stdout.strip(), p.stderr), ("-", ""))
+
+    def test_an_unreadable_log_beside_a_readable_one_still_counts_the_readable_one(self):
+        def setup(d):
+            (d / "a_qemu.log").symlink_to(d / "missing")
+            (d / "b_qemu.log").write_text("USER_RING_REFUSED\n")
+        p = self.count(setup)
+        self.assertEqual((p.stdout.strip(), p.stderr), ("1", ""))
+
+    def test_no_log_is_a_dash(self):
+        p = self.count(lambda d: None)
+        self.assertEqual(p.stdout.strip(), "-")

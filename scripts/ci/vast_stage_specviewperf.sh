@@ -44,7 +44,7 @@ status='^SPEC_STAGE_LIST lane=(lanea|laneb|both) n=[0-9]{1,2}$'
 status+='|^SPEC_ROW name=[a-z][a-z_]*-[0-9]{2} result=(PASS|FAIL|NOT_RUN) subtests=[0-9]{1,3}/[0-9]{1,3} reason=([A-Z_]{1,16}|-) failed=([A-Za-z0-9_,]{1,120}|-)$'
 status+='|^[a-z][a-z_]*_[0-9]{2} --- FAILED$'
 status+='|^SPEC_RUN name=[a-z][a-z_]*-[0-9]{2} wall_s=([0-9]{1,6}|-) native_s=([0-9]{1,6}|-) resets=([0-9]{1,4}|-)$'
-status+='|^SPEC_HOST xid=[0-9]{1,6} user_ring_refused=([0-9]{1,8}|-)$'
+status+='|^SPEC_HOST xid=[0-9]{1,6} user_ring_refused=([0-9]{1,8}|-) release=[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2}$'
 status+='|^SPEC_STAGE_COUNTS pass=[0-9]{1,2} fail=[0-9]{1,2} not_run=[0-9]{1,2} of=[0-9]{1,2}$'
 status+='|^SPEC_COPY_DELETED removed=(archive|overlay|archive,overlay|nothing)$'
 { bash "$lane" "$tag" "$prov" 2>&1; echo "$?" > "$rcfile"; } | tee -a "$log" | grep --line-buffered -E "$status"
