@@ -1,0 +1,25 @@
+# Standalone folder-index Worker for the two public R2 buckets. NOT DEPLOYED; deployment is the
+# coordinator's job. No secrets, no outbound request except fetch(request) to the origin.
+name = "kayfabe-r2-index"
+main = "src/index.js"
+compatibility_date = "2026-10-26"
+workers_dev = false
+preview_urls = false
+
+# One route per public hostname (the hostnames are R2 custom domains today).
+routes = [
+  { pattern = "logs.kayfabe.dev/*", zone_name = "kayfabe.dev" },
+  { pattern = "bundles.kayfabe.dev/*", zone_name = "kayfabe.dev" },
+]
+
+[[r2_buckets]]
+binding = "BUCKET_LOGS"
+bucket_name = "kayfabe-logs-public"
+
+[[r2_buckets]]
+binding = "BUCKET_BUNDLES"
+bucket_name = "kayfabe-bundles-public"
+
+[vars]
+# hostname -> binding name. Unknown host -> 404.
+HOSTS = '{"logs.kayfabe.dev":"BUCKET_LOGS","bundles.kayfabe.dev":"BUCKET_BUNDLES"}'
