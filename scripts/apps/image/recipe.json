@@ -1636,7 +1636,7 @@
   "write_files": [
     {
       "path": "/opt/apps/data/hf/hub/models--Qwen--Qwen2-0.5B-Instruct/refs/main",
-      "content": "c540970f9e29518b1d8f06ab8b24cba66ad77b6d\n",
+      "content": "c540970f9e29518b1d8f06ab8b24cba66ad77b6d",
       "permissions": "0644"
     }
   ],

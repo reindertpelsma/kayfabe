@@ -535,6 +535,18 @@ class BundleScriptFailsClosed(unittest.TestCase):
         self.assertRegex(got.stdout, r"BUILD_BUNDLE_FAIL count=[1-9][0-9]*")
         self.assertNotIn("BUILD_BUNDLE_DONE", got.stdout)
 
+    def test_the_bundle_tree_is_world_readable_under_the_payload_umask(self):
+        # the Vast payload runs under umask 077 (vast_onstart.sh); the guest reads the bundle as an unprivileged user
+        if Path("/usr/local/cuda-12.6/bin/nvcc").exists():
+            self.skipTest("a real CUDA toolkit is installed on this machine")
+        self.box.run(
+            'cd "%s" && umask 077 && bash "%s"' % (self.box.dir, APPS / "build_bundle.sh"),
+            {"KF_APPS_ROOT": str(self.root), "PIN_OS_RELEASE_FILE": str(self.release)},
+            timeout=120,
+        )
+        for name in ("bundle", "bundle/bin", "bundle/lib", "bundle/samples", "bundle/share"):
+            self.assertEqual((self.root / name).stat().st_mode & 0o777, 0o755, name)
+
     def test_missing_cuda_libraries_are_a_build_failure(self):
         got = self.build()
         self.assertIn("BUILD_cuda_libs=FAIL", got.stdout)
@@ -764,7 +776,14 @@ class HfSnapshot(unittest.TestCase):
         self.assertEqual(got.returncode, 0, got.stderr)
         for name, _, _ in self.entries():
             self.assertTrue((self.snap / name).is_file(), name)
-        self.assertEqual((self.repo / "refs/main").read_text().strip(), self.pins["PIN_QWEN2_REV"])
+        # the exact bytes: huggingface_hub reads the ref without stripping it, so a trailing newline breaks every
+        # offline lookup (a real box, 2026-11-11: SETUP_hf_model=FAIL with all eight files present)
+        self.assertEqual((self.repo / "refs/main").read_bytes(), self.pins["PIN_QWEN2_REV"].encode())
+
+    def test_the_open_recipe_writes_the_same_refs_main_bytes(self):
+        recipe = json.loads((APPS / "image/recipe.json").read_text())
+        refs = [f for f in recipe["write_files"] if f["path"].endswith("models--Qwen--Qwen2-0.5B-Instruct/refs/main")]
+        self.assertEqual([f["content"] for f in refs], [self.pins["PIN_QWEN2_REV"]])
 
     def test_a_second_run_keeps_verified_files_without_the_network(self):
         self.assertEqual(self.snapshot().returncode, 0)
