@@ -98,13 +98,9 @@ CASES = [
         "return len(value)",
         "test_kfci_planner.PlannerSchema",
     ),
-    (
-        "apps-image-permissions-widened",
-        "apps_gate.py",
-        "source.stat().st_mode & 0o777",
-        "0o666",
-        "ImageCopy",
-    ),
+    # apps-image-permissions-widened (st_mode & 0o777 in the old copy_image helper) was removed on 2026-11-11: the helper no
+    # longer exists (the stage copies the guest image with a bounded `cp`, kfci/apps_gate.py), so there is no code left to
+    # mutate; ImageCopy now documents cp's mode/umask contract.
     (
         "wire-seed-steps-silently-skipped",
         "planner_assignment.py",
