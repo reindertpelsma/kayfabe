@@ -9,26 +9,39 @@ HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 if [ ! -f "$HERE/pins.sh" ] || [ ! -f "$HERE/pin_lib.sh" ]; then echo "SETUP_pins=FAIL rc=1"; echo SETUP_SIDE_DONE; exit 1; fi
 . "$HERE/pins.sh"
 . "$HERE/pin_lib.sh"
-A=/opt/apps; D=$A/data; mkdir -p "$D"
-ok(){ if [ "$2" -eq 0 ]; then echo "SETUP_$1=ok"; else echo "SETUP_$1=FAIL rc=$2"; fi; }
+A=${APPS_ROOT:-/opt/apps}; D=$A/data; mkdir -p "$D"   # APPS_ROOT: the same override run_apps.sh honours
+SETUP_FAILS=0
+ok(){ if [ "$2" -eq 0 ]; then echo "SETUP_$1=ok"; else echo "SETUP_$1=FAIL rc=$2"; SETUP_FAILS=$((SETUP_FAILS+1)); fi; }
 export DEBIAN_FRONTEND=noninteractive
-apt-get update -qq >/dev/null 2>&1
-apt-get install -y -qq --no-install-recommends ffmpeg vulkan-tools libvulkan1 clinfo ocl-icd-libopencl1 hashcat \
+apt-get -o Acquire::Retries=3 update -qq >/dev/null 2>&1
+apt-get -o Acquire::Retries=3 install -y -qq --no-install-recommends ffmpeg vulkan-tools libvulkan1 clinfo ocl-icd-libopencl1 hashcat \
   libegl1 libgles2 libgl1 python3-venv python3-pip curl ca-certificates unzip xz-utils libxi6 libxxf86vm1 libxfixes3 \
   libxrender1 libxkbcommon0 libsm6 libice6 >/tmp/setup_apt.log 2>&1; ok apt $?
 # ⊘ the NVIDIA OpenCL ICD file is installed by the driver .run; assert it rather than assume it
-[ -f /etc/OpenCL/vendors/nvidia.icd ] || echo "libnvidia-opencl.so.1" > /etc/OpenCL/vendors/nvidia.icd
+ICD_DIR=${OPENCL_VENDORS_DIR:-/etc/OpenCL/vendors}
+[ -f "$ICD_DIR/nvidia.icd" ] || echo "libnvidia-opencl.so.1" > "$ICD_DIR/nvidia.icd"
 
 if [ ! -x $A/venv/bin/python ]; then python3 -m venv $A/venv; fi
-$A/venv/bin/pip -q install --upgrade pip >/dev/null 2>&1
+pin_retry $A/venv/bin/pip -q install --upgrade pip >/dev/null 2>&1
 # pinned: both sides must run the same runtime (w720: "latest" drifts per site)
-$A/venv/bin/pip -q install torch==2.6.0 torchvision==0.21.0 --index-url https://download.pytorch.org/whl/cu124 >/tmp/setup_pip.log 2>&1; ok torch $?
-$A/venv/bin/pip -q install transformers==4.46.3 accelerate==1.1.1 cupy-cuda12x==13.3.0 numpy==1.26.4 >>/tmp/setup_pip.log 2>&1; ok pylibs $?
-$A/venv/bin/python -c 'import torch,torchvision,transformers,cupy;print("IMPORT_OK",torch.__version__,torchvision.__version__,transformers.__version__,cupy.__version__)' 2>&1 | tail -1
+pin_retry $A/venv/bin/pip -q install --retries 5 --timeout 30 torch==2.6.0 torchvision==0.21.0 --index-url https://download.pytorch.org/whl/cu124 >/tmp/setup_pip.log 2>&1; ok torch $?
+pin_retry $A/venv/bin/pip -q install --retries 5 --timeout 30 transformers==4.46.3 accelerate==1.1.1 cupy-cuda12x==13.3.0 numpy==1.26.4 >>/tmp/setup_pip.log 2>&1; ok pylibs $?
+# the imports row: no IMPORT_OK line means the runtime the apps need is not there (a provisioning failure, not an app result)
+IMPORTS=$($A/venv/bin/python -c 'import torch,torchvision,transformers,cupy;print("IMPORT_OK",torch.__version__,torchvision.__version__,transformers.__version__,cupy.__version__)' 2>&1 | tail -1)
+echo "$IMPORTS"
+case "$IMPORTS" in IMPORT_OK\ *) rc=0;; *) rc=1;; esac; ok imports $rc
 
-HF_HOME=$D/hf $A/venv/bin/python -c "
+# Qwen2-0.5B-Instruct at its pinned revision (pins.sh), laid out as the offline cache, then loaded OFFLINE once here:
+# the apps run offline (run_apps.sh sets HF_HUB_OFFLINE=1), so a layout that cannot be loaded must fail now as a
+# provisioning step, not later as a graded hf_generate FAIL.
+pin_hf_snapshot "$D/hf"; rc=$?
+if [ "$rc" -eq 0 ]; then
+  HF_HOME=$D/hf HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 $A/venv/bin/python -c "
 from transformers import AutoModelForCausalLM, AutoTokenizer
-m='Qwen/Qwen2-0.5B-Instruct'; AutoTokenizer.from_pretrained(m); AutoModelForCausalLM.from_pretrained(m); print('HF_MODEL_CACHED')" 2>&1 | tail -1
+m='Qwen/Qwen2-0.5B-Instruct'; AutoTokenizer.from_pretrained(m); AutoModelForCausalLM.from_pretrained(m); print('HF_MODEL_CACHED')" 2>&1 | tail -1 | tee /tmp/setup_hf.out
+  grep -qx HF_MODEL_CACHED /tmp/setup_hf.out; rc=$?
+fi
+ok hf_model $rc
 
 # Immutable revision + sha256 (pins.sh): an existing file is accepted only if it is those bytes, a download only likewise.
 G=$D/qwen2.5-1.5b-instruct-q4_k_m.gguf
@@ -61,3 +74,4 @@ else
 fi
 df -h / | tail -1
 echo SETUP_SIDE_DONE
+[ "$SETUP_FAILS" -eq 0 ]

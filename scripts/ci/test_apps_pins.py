@@ -31,7 +31,7 @@ def parse_pins():
     for line in PINS.read_text().splitlines():
         match = re.fullmatch(r"([A-Za-z0-9_]+)=(.*)", line)
         if match:
-            out[match[1]] = match[2]
+            out[match[1]] = match[2].strip('"')
     return out
 
 
@@ -51,9 +51,14 @@ class Sandbox:
         self.log.write_text("")
         self.body = self.dir / "body"
         self.body.write_bytes(b"payload")
+        # FAKE_CURL_FAIL: every call fails; FAKE_CURL_FAIL_FIRST=k: the first k calls fail (a transient origin error);
+        # FAKE_CURL_CORRUPT_FIRST=k: the first k calls deliver other bytes (a truncated or tampered download)
         self.tool("curl", 'echo "curl $*" >> "$FAKE_LOG"\n'
+                  'n=$(grep -c "^curl" "$FAKE_LOG")\n'
                   'while [ $# -gt 0 ]; do case "$1" in -o) out=$2; shift;; esac; shift; done\n'
-                  '[ -z "${FAKE_CURL_FAIL:-}" ] || exit 22\ncp "$FAKE_BODY" "$out"\n')
+                  '[ -z "${FAKE_CURL_FAIL:-}" ] || exit 22\n'
+                  '[ "$n" -gt "${FAKE_CURL_FAIL_FIRST:-0}" ] || exit 22\n'
+                  'if [ "$n" -le "${FAKE_CURL_CORRUPT_FIRST:-0}" ]; then echo corrupt > "$out"; else cp "$FAKE_BODY" "$out"; fi\n')
         self.tool("dpkg", 'echo "dpkg $*" >> "$FAKE_LOG"\n')
         self.tool("apt-get", 'echo "apt-get $*" >> "$FAKE_LOG"\n')
         self.tool("dpkg-query", 'echo -n "${FAKE_PKG_VERSION:-}"\n')
@@ -75,10 +80,11 @@ class Sandbox:
             "GIT_CONFIG_GLOBAL": "/dev/null",
             "GIT_CONFIG_SYSTEM": "/dev/null",
             "GIT_TERMINAL_PROMPT": "0",
+            "PIN_RETRY_BACKOFF": "0 0",
         }
         environment.update(env or {})
         return subprocess.run(
-            ["bash", "-c", ". %s; . %s; %s" % (PINS, LIB, script)],
+            ["bash", "-c", ". %s; . %s; PIN_RETRY_BACKOFF='0 0'; %s" % (PINS, LIB, script)],
             env=environment,
             capture_output=True,
             text=True,
@@ -418,7 +424,8 @@ class StaticContracts(unittest.TestCase):
                 self.assertIn(call, self.bundle)
 
     def test_each_failed_source_is_counted(self):
-        for step in ("src_cuda_samples", "src_gpu_burn", "src_llama_cpp", "src_clpeak", "cuda_toolkit", "open_dev_packages"):
+        for step in ("src_cuda_samples", "src_gpu_burn", "src_llama_cpp", "src_clpeak", "cuda_toolkit", "open_dev_packages",
+                     "cuda_libs", "cuda_headers"):
             with self.subTest(step):
                 self.assertRegex(self.bundle, r"\bok %s \$" % step)
 
@@ -528,6 +535,14 @@ class BundleScriptFailsClosed(unittest.TestCase):
         self.assertRegex(got.stdout, r"BUILD_BUNDLE_FAIL count=[1-9][0-9]*")
         self.assertNotIn("BUILD_BUNDLE_DONE", got.stdout)
 
+    def test_missing_cuda_libraries_are_a_build_failure(self):
+        got = self.build()
+        self.assertIn("BUILD_cuda_libs=FAIL", got.stdout)
+        self.assertIn("missing CUDA library libcudart.so.12", got.stdout)
+
+    def test_missing_cuda_headers_are_a_build_failure(self):
+        self.assertIn("BUILD_cuda_headers=FAIL", self.build().stdout)
+
     def test_the_exit_status_is_one(self):
         self.assertEqual(self.build().returncode, 1)
 
@@ -546,6 +561,346 @@ class BundleScriptFailsClosed(unittest.TestCase):
         calls = self.box.calls()
         self.assertTrue(any(c.startswith("curl") and "cuda-keyring" in c for c in calls))
         self.assertFalse([c for c in calls if c.startswith("dpkg -i")])
+
+
+class Retries(unittest.TestCase):
+    """Every provisioning fetch is tried up to three times; a persistent failure still fails; the pin check stays."""
+
+    def setUp(self):
+        self.box = Sandbox(self)
+        self.dest = self.box.dir / "out.bin"
+        self.good = sha(b"payload")
+
+    def curls(self):
+        return len([c for c in self.box.calls() if c.startswith("curl")])
+
+    def fetch(self, env=None):
+        return self.box.run('pin_fetch_file https://example.org/x "%s" "%s" 7' % (self.dest, self.good), env)
+
+    def test_one_transient_failure_is_retried(self):
+        got = self.fetch({"FAKE_CURL_FAIL_FIRST": "1"})
+        self.assertEqual(got.returncode, 0, got.stderr)
+        self.assertEqual(self.curls(), 2)
+        self.assertEqual(self.dest.read_bytes(), b"payload")
+
+    def test_two_transient_failures_are_retried(self):
+        got = self.fetch({"FAKE_CURL_FAIL_FIRST": "2"})
+        self.assertEqual(got.returncode, 0, got.stderr)
+        self.assertEqual(self.curls(), 3)
+
+    def test_a_persistent_failure_stops_after_three_attempts_and_installs_nothing(self):
+        got = self.fetch({"FAKE_CURL_FAIL": "1"})
+        self.assertNotEqual(got.returncode, 0)
+        self.assertEqual(self.curls(), 3)
+        self.assertIn("PIN_REFUSED", got.stderr)
+        self.assertFalse(self.dest.exists())
+
+    def test_a_corrupt_download_is_retried_but_never_installed(self):
+        got = self.fetch({"FAKE_CURL_CORRUPT_FIRST": "1"})
+        self.assertEqual(got.returncode, 0, got.stderr)
+        self.assertEqual(self.curls(), 2)
+        self.assertEqual(self.dest.read_bytes(), b"payload")
+
+    def test_a_persistently_wrong_download_is_refused_after_three_attempts(self):
+        got = self.fetch({"FAKE_CURL_CORRUPT_FIRST": "9"})
+        self.assertNotEqual(got.returncode, 0)
+        self.assertEqual(self.curls(), 3)
+        self.assertFalse(self.dest.exists())
+
+    def test_pin_retry_runs_a_command_at_most_three_times(self):
+        got = self.box.run('cnt=0; f() { cnt=$((cnt+1)); echo "try $cnt"; return 7; }; pin_retry f; echo "rc=$?"')
+        self.assertEqual(got.stdout.split(), ["try", "1", "try", "2", "try", "3", "rc=7"])
+
+    def test_pin_retry_stops_at_the_first_success(self):
+        got = self.box.run('cnt=0; f() { cnt=$((cnt+1)); echo "try $cnt"; [ $cnt -ge 2 ]; }; pin_retry f; echo "rc=$?"')
+        self.assertEqual(got.stdout.split(), ["try", "1", "try", "2", "rc=0"])
+
+    def test_the_attempts_are_three_in_the_pins(self):
+        self.assertRegex(parse_pins().get("PIN_RETRY_ATTEMPTS", ""), r"^3$")
+
+    def test_apt_retries_are_asked_of_apt_itself(self):
+        self.assertEqual(LIB.read_text().count("-o Acquire::Retries=3"), 2)
+        self.assertEqual((APPS / "setup_side.sh").read_text().count("-o Acquire::Retries=3"), 2)
+
+    def test_the_toolkit_update_and_install_both_retry(self):
+        release = self.box.dir / "os-release"
+        release.write_text('ID=ubuntu\nVERSION_ID="22.04"\n')
+        got = self.box.run(
+            "PIN_CUDA_KEYRING_SHA256_ubuntu2204=%s; pin_install_cuda_toolkit" % self.good,
+            {"PIN_OS_RELEASE_FILE": str(release), "FAKE_PKG_VERSION": "12.6.3-1"},
+        )
+        self.assertEqual(got.returncode, 0, got.stderr)
+        real = [c for c in self.box.calls() if c.startswith("apt-get ")]
+        self.assertEqual(len(real), 2)
+        self.assertIn("-o Acquire::Retries=3", real[0])
+        self.assertIn("-o Acquire::Retries=3", real[1])
+
+
+@unittest.skipUnless(GIT, "git is needed")
+class GitRetries(unittest.TestCase):
+    """A git wrapper fails the first k fetches (a transient origin error); the commit check still decides."""
+
+    def setUp(self):
+        self.box = Sandbox(self)
+        src = self.box.dir / "src"
+        src.mkdir()
+        env = {"PATH": os.environ["PATH"], "HOME": str(self.box.dir), "GIT_CONFIG_GLOBAL": "/dev/null",
+               "GIT_CONFIG_SYSTEM": "/dev/null"}
+
+        def git(*args):
+            return subprocess.run(["git", "-C", str(src), *args], env=env, capture_output=True, text=True,
+                                  check=True).stdout.strip()
+
+        git("init", "-q", "-b", "main")
+        (src / "f").write_text("x\n")
+        git("add", "f")
+        git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "c")
+        git("config", "uploadpack.allowAnySHA1InWant", "true")
+        self.commit = git("rev-parse", "HEAD")
+        self.url = "file://" + str(src)
+        self.dest = self.box.dir / "checkout"
+        self.box.tool("git", 'if [ "$1" = -C ] && [ "$3" = fetch ]; then\n'
+                      '  echo "gitfetch" >> "$FAKE_LOG"\n'
+                      '  n=$(grep -c "^gitfetch" "$FAKE_LOG")\n'
+                      '  [ "$n" -gt "${FAKE_GIT_FAIL_FIRST:-0}" ] || exit 128\nfi\n'
+                      'exec %s "$@"\n' % GIT)
+
+    def fetches(self):
+        return len([c for c in self.box.calls() if c == "gitfetch"])
+
+    def checkout(self, env):
+        return self.box.run('pin_git_checkout "%s" "%s" "" "%s"' % (self.dest, self.url, self.commit), env)
+
+    def test_one_transient_fetch_failure_is_retried(self):
+        got = self.checkout({"FAKE_GIT_FAIL_FIRST": "1"})
+        self.assertEqual(got.returncode, 0, got.stderr)
+        self.assertEqual(self.fetches(), 2)
+
+    def test_two_transient_fetch_failures_are_retried(self):
+        got = self.checkout({"FAKE_GIT_FAIL_FIRST": "2"})
+        self.assertEqual(got.returncode, 0, got.stderr)
+        self.assertEqual(self.fetches(), 3)
+
+    def test_a_persistent_fetch_failure_fails_after_three_attempts(self):
+        got = self.checkout({"FAKE_GIT_FAIL_FIRST": "99"})
+        self.assertNotEqual(got.returncode, 0)
+        self.assertEqual(self.fetches(), 3)
+        self.assertFalse(self.dest.exists())
+
+
+class HfSnapshot(unittest.TestCase):
+    """The Qwen2-0.5B files at the pinned revision, in the offline cache layout, every file digest-checked."""
+
+    def setUp(self):
+        self.box = Sandbox(self)
+        self.good = sha(b"payload")
+        self.home = self.box.dir / "hf"
+        self.pins = parse_pins()
+        self.repo = self.home / "hub/models--Qwen--Qwen2-0.5B-Instruct"
+        self.snap = self.repo / "snapshots" / self.pins["PIN_QWEN2_REV"]
+
+    def snapshot(self, env=None, digest=None):
+        # every pinned file replaced by one the fake curl can serve: same names, the digest of the fake body
+        override = "".join(
+            'PIN_QWEN2_FILE_%d="${PIN_QWEN2_FILE_%d%%%% *} %s 7"; ' % (n, n, digest or self.good) for n in range(1, 9)
+        )
+        return self.box.run(override + 'pin_hf_snapshot "%s"' % self.home, env)
+
+    def entries(self):
+        return [self.pins["PIN_QWEN2_FILE_%d" % n].split() for n in range(1, 9)]
+
+    def test_every_file_lands_in_the_pinned_snapshot_and_refs_main_points_at_it(self):
+        got = self.snapshot()
+        self.assertEqual(got.returncode, 0, got.stderr)
+        for name, _, _ in self.entries():
+            self.assertTrue((self.snap / name).is_file(), name)
+        self.assertEqual((self.repo / "refs/main").read_text().strip(), self.pins["PIN_QWEN2_REV"])
+
+    def test_a_second_run_keeps_verified_files_without_the_network(self):
+        self.assertEqual(self.snapshot().returncode, 0)
+        before = len([c for c in self.box.calls() if c.startswith("curl")])
+        got = self.snapshot({"FAKE_CURL_FAIL": "1"})
+        self.assertEqual(got.returncode, 0, got.stderr)
+        self.assertEqual(len([c for c in self.box.calls() if c.startswith("curl")]), before)
+
+    def test_a_tampered_file_is_fetched_again(self):
+        self.assertEqual(self.snapshot().returncode, 0)
+        (self.snap / "config.json").write_bytes(b"tampered")
+        self.assertEqual(self.snapshot().returncode, 0)
+        self.assertEqual((self.snap / "config.json").read_bytes(), b"payload")
+
+    def test_a_download_that_is_not_the_pinned_bytes_is_refused_and_leaves_no_refs(self):
+        got = self.snapshot(digest=sha(b"other"))
+        self.assertNotEqual(got.returncode, 0)
+        self.assertIn("PIN_REFUSED", got.stderr)
+        self.assertFalse((self.repo / "refs/main").exists())
+
+    def test_an_unreachable_origin_fails_and_leaves_no_refs(self):
+        got = self.snapshot({"FAKE_CURL_FAIL": "1"})
+        self.assertNotEqual(got.returncode, 0)
+        self.assertFalse((self.repo / "refs/main").exists())
+
+    def test_the_urls_name_the_pinned_revision(self):
+        self.snapshot()
+        urls = [c for c in self.box.calls() if c.startswith("curl")]
+        self.assertEqual(len(urls), 8)
+        for url in urls:
+            self.assertIn("/resolve/" + self.pins["PIN_QWEN2_REV"] + "/", url)
+
+
+class AgreesWithTheRecipeForQwen2(unittest.TestCase):
+    pins = parse_pins()
+    recipe = {a["url"].rsplit("/", 1)[1]: a for a in json.loads((APPS / "image/recipe.json").read_text())["artifacts"]
+              if "Qwen2-0.5B-Instruct" in a.get("url", "")}
+
+    def test_revision_and_files(self):
+        self.assertRegex(self.pins["PIN_QWEN2_REV"], r"^[0-9a-f]{40}$")
+        self.assertEqual(len(self.recipe), 8)
+        seen = set()
+        for n in range(1, 9):
+            name, digest, size = self.pins["PIN_QWEN2_FILE_%d" % n].split()
+            entry = self.recipe[name]
+            seen.add(name)
+            self.assertEqual((entry["sha256"], str(entry["size"])), (digest, size), name)
+            self.assertEqual(entry["url"], self.pins["PIN_QWEN2_URL_BASE"] + "/" + name)
+            self.assertRegex(digest, r"^[0-9a-f]{64}$")
+        self.assertEqual(seen, set(self.recipe))
+        self.assertIn(self.pins["PIN_QWEN2_REV"], self.pins["PIN_QWEN2_URL_BASE"])
+
+
+class SetupSideRows(unittest.TestCase):
+    """setup_side.sh with a fake venv, curl and apt-get: each row that can fail prints SETUP_<x>=FAIL and the exit is non-zero."""
+
+    PYTHON = (
+        '#!/bin/bash\necho "python $*" >> "$FAKE_LOG"\n'
+        'case "$*" in\n'
+        '  *"import torch"*) [ -z "$FAKE_IMPORT_FAIL" ] && echo "IMPORT_OK 2.6.0 0.21.0 4.46.3 13.3.0" || '
+        'echo "ModuleNotFoundError: No module named torch";;\n'
+        '  *"from transformers"*) case "$FAKE_HF" in ok) echo HF_MODEL_CACHED;; silent) ;; *) '
+        'echo "OSError: cannot load" >&2; exit 1;; esac;;\n'
+        'esac\n'
+    )
+    PIP = '#!/bin/bash\necho "pip $*" >> "$FAKE_LOG"\nn=$(grep -c "^pip " "$FAKE_LOG")\n[ "$n" -gt "${FAKE_PIP_FAIL_FIRST:-0}" ]\n'
+
+    def setUp(self):
+        self.box = Sandbox(self)
+        d = self.box.dir
+        self.apps = d / "optapps"
+        (self.apps / "venv/bin").mkdir(parents=True)
+        for name, body in (("python", self.PYTHON), ("pip", self.PIP)):
+            path = self.apps / "venv/bin" / name
+            path.write_text(body)
+            path.chmod(0o755)
+        (self.apps / "data/blender").mkdir(parents=True)
+        blender = self.apps / "data/blender/blender"
+        blender.write_text("#!/bin/bash\necho Blender 4.5.0\n")
+        blender.chmod(0o755)
+        (self.apps / "data/qwen2.5-1.5b-instruct-q4_k_m.gguf").write_bytes(b"payload")
+        self.scripts = d / "scripts"
+        self.scripts.mkdir()
+        for name in ("setup_side.sh", "pin_lib.sh"):
+            shutil.copyfile(APPS / name, self.scripts / name)
+        pins = (APPS / "pins.sh").read_text()
+        pins = re.sub(r"^PIN_GGUF_SHA256=.*$", "PIN_GGUF_SHA256=" + sha(b"payload"), pins, flags=re.M)
+        pins = re.sub(r"^PIN_GGUF_SIZE=.*$", "PIN_GGUF_SIZE=7", pins, flags=re.M)
+        for n in range(1, 9):
+            pins = re.sub(
+                r'^PIN_QWEN2_FILE_%d="(\S+) \S+ \S+"$' % n,
+                lambda m: 'PIN_QWEN2_FILE_%d="%s %s 7"' % (n, m[1], sha(b"payload")),
+                pins, flags=re.M,
+            )
+        (self.scripts / "pins.sh").write_text(pins)
+        self.box.tool("apt-get", 'echo "apt-get $*" >> "$FAKE_LOG"\n')
+        self.box.tool("df", "echo df\n")
+
+    def setup(self, env=None):
+        base = {"APPS_ROOT": str(self.apps), "FAKE_HF": "ok", "FAKE_IMPORT_FAIL": "", "PIN_RETRY_BACKOFF": "0 0",
+                "OPENCL_VENDORS_DIR": str(self.box.dir / "icd")}
+        base.update(env or {})
+        return subprocess.run(
+            ["bash", str(self.scripts / "setup_side.sh")],
+            env={"PATH": str(self.box.bin) + ":" + os.environ["PATH"], "HOME": str(self.box.dir),
+                 "FAKE_LOG": str(self.box.log), "FAKE_BODY": str(self.box.body), **base},
+            capture_output=True, text=True, timeout=60,
+        )
+
+    def test_everything_ok_exits_zero_with_every_row_ok(self):
+        got = self.setup()
+        self.assertEqual(got.returncode, 0, got.stdout + got.stderr)
+        for row in ("SETUP_imports=ok", "SETUP_hf_model=ok", "SETUP_gguf=ok", "SETUP_blender=ok", "SETUP_SIDE_DONE"):
+            self.assertIn(row, got.stdout)
+        self.assertNotIn("=FAIL", got.stdout)
+
+    def test_a_failed_import_is_a_setup_failure(self):
+        got = self.setup({"FAKE_IMPORT_FAIL": "1"})
+        self.assertIn("SETUP_imports=FAIL", got.stdout)
+        self.assertNotEqual(got.returncode, 0)
+
+    def test_the_import_row_needs_the_import_ok_line(self):
+        got = self.setup({"FAKE_IMPORT_FAIL": "1"})
+        self.assertNotIn("SETUP_imports=ok", got.stdout)
+        self.assertIn("SETUP_SIDE_DONE", got.stdout)
+
+    def test_a_model_that_cannot_be_loaded_offline_is_a_setup_failure(self):
+        got = self.setup({"FAKE_HF": "fail"})
+        self.assertIn("SETUP_hf_model=FAIL", got.stdout)
+        self.assertNotEqual(got.returncode, 0)
+
+    def test_a_silent_model_load_is_not_a_success(self):
+        got = self.setup({"FAKE_HF": "silent"})
+        self.assertIn("SETUP_hf_model=FAIL", got.stdout)
+        self.assertNotEqual(got.returncode, 0)
+
+    def test_an_unreachable_model_origin_is_a_setup_failure_and_nothing_is_loaded(self):
+        got = self.setup({"FAKE_CURL_FAIL": "1"})
+        self.assertIn("SETUP_hf_model=FAIL", got.stdout)
+        self.assertNotEqual(got.returncode, 0)
+        self.assertFalse([c for c in self.box.calls() if "from transformers" in c])
+
+    def test_the_model_is_loaded_only_offline(self):
+        self.setup()
+        text = (self.scripts / "setup_side.sh").read_text()
+        block = text[text.index("pin_hf_snapshot"): text.index("ok hf_model")]
+        self.assertIn("HF_HUB_OFFLINE=1", block)
+        self.assertIn("TRANSFORMERS_OFFLINE=1", block)
+
+    # the first three pip calls are the (retried) pip upgrade, so 4 and 5 make the torch install itself fail first
+    def test_a_transient_pip_failure_is_retried(self):
+        got = self.setup({"FAKE_PIP_FAIL_FIRST": "4"})
+        self.assertEqual(got.returncode, 0, got.stdout + got.stderr)
+        self.assertIn("SETUP_torch=ok", got.stdout)
+
+    def test_two_transient_pip_failures_are_retried(self):
+        got = self.setup({"FAKE_PIP_FAIL_FIRST": "5"})
+        self.assertEqual(got.returncode, 0, got.stdout + got.stderr)
+        self.assertIn("SETUP_torch=ok", got.stdout)
+
+    def test_a_persistent_pip_failure_is_a_setup_failure_after_three_attempts(self):
+        got = self.setup({"FAKE_PIP_FAIL_FIRST": "99"})
+        self.assertIn("SETUP_torch=FAIL", got.stdout)
+        self.assertNotEqual(got.returncode, 0)
+        torch = [c for c in self.box.calls() if c.startswith("pip ") and "torch==2.6.0" in c]
+        self.assertEqual(len(torch), 3)
+
+    def test_a_wrong_model_file_is_refused_not_cached(self):
+        pins = (self.scripts / "pins.sh").read_text().replace(sha(b"payload"), sha(b"other"))
+        (self.scripts / "pins.sh").write_text(pins)
+        (self.apps / "data/qwen2.5-1.5b-instruct-q4_k_m.gguf").unlink()
+        got = self.setup()
+        self.assertIn("SETUP_gguf=FAIL", got.stdout)
+        self.assertIn("SETUP_hf_model=FAIL", got.stdout)
+        self.assertFalse((self.apps / "data/hf/hub/models--Qwen--Qwen2-0.5B-Instruct/refs/main").exists())
+
+
+class NewRowsAreDeclared(unittest.TestCase):
+    def test_every_new_row_exists_in_the_scripts(self):
+        guest = (APPS / "setup_side.sh").read_text()
+        bundle = (APPS / "build_bundle.sh").read_text()
+        for row in ("imports", "hf_model"):
+            self.assertRegex(guest, r"\bok %s \$" % row)
+        for row in ("cuda_libs", "cuda_headers"):
+            self.assertRegex(bundle, r"\bok %s \$" % row)
+        self.assertIn('[ "$SETUP_FAILS" -eq 0 ]', guest)
 
 
 if __name__ == "__main__":

@@ -59,14 +59,17 @@ done
 gcc -O2 "$HERE/src/egl_offscreen.c" -o "$B/bin/egl_offscreen" -lEGL -lGLESv2 2>/tmp/build_egl.err; ok egl_offscreen $?
 
 # ---- CUDA libraries the dynamic apps need (guest has the driver but no toolkit) -------------
+rc=0
 for l in libcudart.so.12 libcublas.so.12 libcublasLt.so.12 libcufft.so.11 libcurand.so.10 libnvrtc.so.12 libnvrtc-builtins.so.12.6 libnvJitLink.so.12 libcusparse.so.12 libcusolver.so.11; do
-  p=$(readlink -f /usr/local/cuda-12.6/lib64/$l 2>/dev/null) && [ -f "$p" ] && cp -u "$p" "$B/lib/$l"
+  p=$(readlink -f /usr/local/cuda-12.6/lib64/$l 2>/dev/null)
+  if [ -f "$p" ] && cp -u "$p" "$B/lib/$l"; then :; else echo "missing CUDA library $l"; rc=1; fi
 done
 ls "$B/lib" | tr '\n' ' '; echo
+ok cuda_libs $rc
 
 # CUDA headers for runtime compilation (CuPy's NVRTC path #includes vector_types.h etc.; the
 # guest has no toolkit) — both sides point CUDA_PATH here, so they compile against the same headers
-mkdir -p "$B/cuda" && cp -a /usr/local/cuda-12.6/targets/x86_64-linux/include "$B/cuda/"
+mkdir -p "$B/cuda" && cp -a /usr/local/cuda-12.6/targets/x86_64-linux/include "$B/cuda/" && [ -f "$B/cuda/include/vector_types.h" ]; ok cuda_headers $?
 # ---- cuda-samples v12.5 (Makefile tree; the self-verifying subset) ---------------------------
 pin_git_checkout "$S/cuda-samples" "$PIN_CUDA_SAMPLES_URL" "$PIN_CUDA_SAMPLES_TAG" "$PIN_CUDA_SAMPLES_COMMIT"; ok src_cuda_samples $?
 SAMPLES="1_Utilities/deviceQuery 1_Utilities/bandwidthTest 0_Introduction/vectorAdd 0_Introduction/matrixMul \

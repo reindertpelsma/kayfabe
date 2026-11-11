@@ -95,6 +95,27 @@ def legacy_allowlist(env):
     return APPS_ENV | {key for key in env if key.startswith(("KF3_", "KAYFABE_"))}
 
 
+# Provisioning (build_bundle.sh, then the guest image) gets this much wall time IN TOTAL; a timeout is a MEDIA retry.
+# MEASURED 29 min on a fresh box (traces/apps_linux_20261107/) and 14 + 13.5 min on 2026-11-10
+# (traces/apps_linux_media_20261110/); 45 min leaves 16 min for a slow origin. vast_payload.APPS_MIN_REMAINING_MS is
+# derived from this, MATRIX_BUDGET_DEFAULT_S and a margin (test_apps_media.py checks the arithmetic).
+PROVISION_CAP_S = 45 * 60
+# The matrix budget the stage uses unless KF_APPS_BUDGET_S says otherwise (the stage's own hard cap on the matrix).
+MATRIX_BUDGET_DEFAULT_S = 3000
+# INFERRED: provisioning adds about 30 GB (bundle, sources, guest image copy) before the Windows stages, whose own
+# image needs room too; below this many free GB it does not start. Free space MEASURED on rented boxes: 104 GB (batch
+# gate box) and 340 GB (apps box).
+APPS_MIN_FREE_GB = 60
+
+
+def free_bytes(path):
+    """Free bytes of the file system that holds path (or its nearest existing parent)."""
+    path = Path(path)
+    while not path.exists() and path != path.parent:
+        path = path.parent
+    return shutil.disk_usage(path).free
+
+
 def timestamp():
     return datetime.now().astimezone().isoformat(timespec="seconds")
 
@@ -277,7 +298,7 @@ class AppsGate(Step):
             env.get("KF_APPS_LIST")
             or apps / ("gate_list_middle.txt" if which == "middle" else "gate_list.txt")
         )
-        budget = env.get("KF_APPS_BUDGET_S") or "3000"
+        budget = env.get("KF_APPS_BUDGET_S") or str(MATRIX_BUDGET_DEFAULT_S)
         per_boot = env.get("KF_APPS_PER_BOOT") or "100"
         poll = float(env.get("KF_APPS_POLL_S") or "5")
         if poll <= 0:
@@ -353,9 +374,12 @@ class AppsGate(Step):
             if env.get("KF_APPS_PROVISION") == "1":
                 ctx.emit("APPS_PROVISION_START " + timestamp())
                 try:
-                    rc = self.provision(
-                        ctx, apps, bench, marker, prov / (tag + "_apps_provision.log")
-                    )
+                    if not self.enough_disk(ctx, root, bench):
+                        rc = 1
+                    else:
+                        rc = self.provision(
+                            ctx, apps, bench, marker, prov / (tag + "_apps_provision.log")
+                        )
                 except (OSError, ValueError):
                     rc = 1
                 ctx.emit("APPS_PROVISION_END rc=%d %s" % (rc, timestamp()))
@@ -427,11 +451,23 @@ class AppsGate(Step):
         )
         return decide(passed, failed, unrun, len(gate), matrix_rc)
 
+    @staticmethod
+    def enough_disk(ctx, root, bench):
+        """Free-space guard before provisioning; the numbers are in the row, a shortfall is a MEDIA retry."""
+        # KF_APPS_MIN_FREE_GB is a test seam (the box's environment contract has no row for it).
+        need = int(ctx.env.get("KF_APPS_MIN_FREE_GB") or APPS_MIN_FREE_GB)
+        free = min(free_bytes(root), free_bytes(bench))
+        if free >= need * 10**9:
+            return True
+        ctx.emit("APPS_PROVISION_DISK free_gb=%d need_gb=%d" % (free // 10**9, need))
+        return False
+
     def provision(self, ctx, apps, bench, marker, logfile):
+        deadline = time.monotonic() + PROVISION_CAP_S
         with logfile.open("wb") as log:
             built = ctx.process(
                 ["bash", str(apps / "build_bundle.sh")],
-                timeout=7200,
+                timeout=PROVISION_CAP_S,
                 allow_env=legacy_allowlist(ctx.env),
                 log=log,
             )
@@ -454,9 +490,11 @@ class AppsGate(Step):
                 rb"(?m)^image=.*", lambda _: b"image=" + os.fsencode(image), staged
             )
             Path(str(image) + ".STAGED").write_bytes(updated)
+            if deadline - time.monotonic() <= 1:
+                return 124  # the build used the whole cap
             ran = ctx.process(
                 ["bash", str(apps / "provision_guest_apps.sh")],
-                timeout=7200,
+                timeout=deadline - time.monotonic(),
                 allow_env=legacy_allowlist(ctx.env),
                 log=log,
             )

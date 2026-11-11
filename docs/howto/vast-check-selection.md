@@ -40,8 +40,8 @@ planned, and the unimplemented LLM stage is refused.
 
 The middle check keeps the 300-minute box limit. Linux apps build their own media on the box
 (the CUDA toolkit comes from NVIDIA's own package repository at run time, never from us), so
-Linux apps, the Windows gate and the Windows apps together reserve 235 minutes within the
-290-minute soft window: they start only if at least that much is left, which leaves 55 minutes
+Linux apps, the Windows gate and the Windows apps together reserve 245 minutes within the
+290-minute soft window: they start only if at least that much is left, which leaves 45 minutes
 for everything before them. If earlier work leaves too little time, the next stage does not
 start and the check reports a TIME retry. Apps are not silently removed to fit. Application
 media that fails to build or install reports MEDIA retry (rerun on a fresh box) and never a

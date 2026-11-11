@@ -54,7 +54,7 @@ downloads at run time. Geekbench sizes and the CUDA samples tag come from
 
 Linux apps on a Worker box (2026-11-10, `scripts/apps/pins.sh`, `docs/design/V3_APPS_IMAGE_RECIPE.md`, section INTERIM): the
 stage builds its own media on the box, so the box also fetches gpu-burn and llama.cpp (pinned commits), clpeak 1.1.2 (pinned
-commit), the vkpeak 20250531 zip (sha256), the Qwen2.5-1.5B GGUF (pinned revision and sha256) and Blender 4.5.0 (sha256)
+commit), the vkpeak 20250531 zip (sha256), the Qwen2.5-1.5B GGUF and the Qwen2-0.5B files (pinned revisions and sha256) and Blender 4.5.0 (sha256)
 from their public hosts, and the CUDA toolkit from NVIDIA's own package repository (pinned keyring sha256, pinned toolkit
 version). Nothing from NVIDIA is stored in our images, R2 or release assets.
 

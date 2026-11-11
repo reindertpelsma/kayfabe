@@ -11,6 +11,7 @@ non-zero build exit or a failed guest setup ends in anything but `APPS_STAGE_RET
 media that did not build; or a successful provisioning does not reach the matrix.
 """
 
+import contextlib
 import os
 from pathlib import Path
 import shutil
@@ -205,6 +206,7 @@ class StageProvisioning(unittest.TestCase):
                 "KF_APPS_BUDGET_S": "30",
                 "KF_APPS_POLL_S": "0.2",
                 "BENCH_DIR": str(bench),
+                "KF_APPS_MIN_FREE_GB": "0",  # the test machine may have less than the stage's 60 GB
             }
             if provision is not None:
                 env["KF_APPS_PROVISION"] = provision
@@ -300,6 +302,215 @@ class StageProvisioning(unittest.TestCase):
                 "SETUP_c=FAILED\n  guest: SETUP_d=FAIL rc=1\nBUILD_e=FAIL\n"
             )
             self.assertEqual(provision_failures(log), ["SETUP_d", "BUILD_e"])
+
+
+def load_gate():
+    import sys
+
+    sys.path.insert(0, str(ROOT / "scripts"))
+    try:
+        from kfci import apps_gate
+        from kfci.step import Context
+    finally:
+        sys.path.pop(0)
+    return apps_gate, Context
+
+
+class ProvisioningBounds(unittest.TestCase):
+    """The provisioning is capped in TOTAL and needs free disk; the reserve is derived from the cap."""
+
+    gate, Context = load_gate()
+
+    def test_the_reserve_is_the_provisioning_cap_plus_the_matrix_cap_plus_five_minutes(self):
+        m = apps.payload()
+        derived = self.gate.PROVISION_CAP_S + self.gate.MATRIX_BUDGET_DEFAULT_S + 5 * 60
+        self.assertEqual(m.APPS_MIN_REMAINING_MS, derived * 1000)
+
+    def test_the_cap_is_forty_five_minutes_at_most(self):
+        self.assertLessEqual(self.gate.PROVISION_CAP_S, 45 * 60)
+
+    def test_the_cap_leaves_slack_over_the_measured_provisioning(self):
+        self.assertGreaterEqual(self.gate.PROVISION_CAP_S, (29 + 10) * 60)
+
+    def test_the_matrix_cap_covers_the_measured_matrix(self):
+        self.assertGreaterEqual(self.gate.MATRIX_BUDGET_DEFAULT_S, 1029)
+
+    def test_the_default_minimum_free_space_is_sixty_gigabytes(self):
+        self.assertEqual(self.gate.APPS_MIN_FREE_GB, 60)
+
+    def run_gate(self, build="", guest="", patches=(), free=None, env=None):
+        """The stage in this process, with fake build scripts, under patched constants; returns (rc, output, files, secs)."""
+        import io
+        import time
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            scripts = build_tree(root)
+            (scripts / "apps/build_bundle.sh").write_text(
+                "#!/bin/bash\ntouch \"$KF_APPS_ROOT/build.ran\"\n" + (build or StageProvisioning.GOOD_BUILD)
+            )
+            (scripts / "apps/provision_guest_apps.sh").write_text(
+                "#!/bin/bash\ntouch \"$KF_APPS_ROOT/guest.ran\"\n" + (guest or StageProvisioning.GOOD_GUEST)
+            )
+            bench = root / "bench"
+            bench.mkdir()
+            (bench / "guest.qcow2").write_text("image")
+            (bench / "guest.qcow2.STAGED").write_text("image=/x\n")
+            (root / "apps").mkdir()
+            (root / "list.txt").write_text("vectorAdd\ndeviceQuery\n")
+            (root / "matrix.sh").write_text(
+                "#!/bin/bash\nR=%s/apps/results/$2; mkdir -p $R\ntouch %s/matrix.ran\n" % (root, root)
+                + "".join(
+                    "echo 'APPRES side=guest app=%s verdict=PASS rc=0 secs=2 quiet=0 note=- boot=b1 guest_xid=0 kf3_lines=1 kf3_refusals=0' >> $R/guest.res\n"
+                    % name
+                    for name in ("vectorAdd", "deviceQuery")
+                )
+            )
+            environment = {
+                "PATH": os.environ["PATH"],
+                "KF_APPS_LIST": str(root / "list.txt"),
+                "KF_APPS_ROOT": str(root / "apps"),
+                "KF_APPS_MATRIX": str(root / "matrix.sh"),
+                "KF_APPS_BUDGET_S": "30",
+                "KF_APPS_POLL_S": "0.2",
+                "BENCH_DIR": str(bench),
+                "KF_APPS_PROVISION": "1",
+                "KF_APPS_MIN_FREE_GB": "0",
+            }
+            environment.update(env or {})
+            out = io.StringIO()
+            ctx = self.Context(
+                dict(tag="ci0abc", prov=str(root / "prov"), which="middle"),
+                environment, out, time.monotonic() + 600, root=root,
+            )
+            started = time.monotonic()
+            with contextlib.ExitStack() as stack:
+                for name, value in patches:
+                    stack.enter_context(patch.object(self.gate, name, value))
+                if free is not None:
+                    stack.enter_context(patch.object(self.gate, "free_bytes", side_effect=free))
+                result = self.gate.AppsGate().run(ctx)
+            files = {n: (root / "apps" / n).exists() for n in ("build.ran", "guest.ran", "PROVISIONED")}
+            files["matrix.ran"] = (root / "matrix.ran").exists()
+            return result.rc, out.getvalue(), files, time.monotonic() - started
+
+    # ---- the total cap -------------------------------------------------------------------------------------------
+    def test_a_hanging_build_is_stopped_at_the_cap_and_is_a_media_retry(self):
+        rc, out, files, secs = self.run_gate(build="sleep 60\n", patches=[("PROVISION_CAP_S", 2)])
+        self.assertEqual(rc, 3, out)
+        self.assertIn("APPS_STAGE_RETRY class=MEDIA", out)
+        self.assertIn("APPS_PROVISION_END rc=124", out)
+        self.assertLess(secs, 30)
+
+    def test_a_hanging_build_never_reaches_the_guest_image(self):
+        rc, out, files, secs = self.run_gate(build="sleep 60\n", patches=[("PROVISION_CAP_S", 2)])
+        self.assertFalse(files["guest.ran"])
+        self.assertFalse(files["matrix.ran"])
+        self.assertFalse(files["PROVISIONED"])
+        self.assertLess(secs, 30)  # stopped at the cap, not after the build's own 60 s
+
+    def test_a_hanging_guest_image_is_stopped_at_the_cap_and_is_a_media_retry(self):
+        rc, out, files, secs = self.run_gate(guest="sleep 60\n", patches=[("PROVISION_CAP_S", 3)])
+        self.assertEqual(rc, 3, out)
+        self.assertIn("APPS_STAGE_RETRY class=MEDIA", out)
+        self.assertLess(secs, 30)
+        self.assertFalse(files["PROVISIONED"])
+        self.assertFalse(files["matrix.ran"])
+
+    def test_the_cap_is_shared_by_the_build_and_the_guest_image(self):
+        # the build uses 3 s of a 5 s cap; the guest image gets only the 2 s that are left, not a fresh cap
+        rc, out, files, secs = self.run_gate(
+            build=StageProvisioning.GOOD_BUILD + "sleep 3\n", guest="sleep 60\n", patches=[("PROVISION_CAP_S", 5)]
+        )
+        self.assertEqual(rc, 3, out)
+        self.assertLess(secs, 6.5)  # 3 s of build plus the 2 s that were left, not plus a fresh 5 s
+        self.assertFalse(files["matrix.ran"])
+
+    def test_a_build_that_used_the_whole_cap_does_not_start_the_guest_image(self):
+        rc, out, files, secs = self.run_gate(
+            build=StageProvisioning.GOOD_BUILD + "sleep 4.2\n", patches=[("PROVISION_CAP_S", 5)]
+        )
+        self.assertEqual(rc, 3, out)
+        self.assertFalse(files["guest.ran"])
+
+    def test_the_guest_image_gets_only_the_time_the_build_left(self):
+        rc, out, files, secs = self.run_gate(
+            build=StageProvisioning.GOOD_BUILD + "sleep 2\n", guest="sleep 60\n", patches=[("PROVISION_CAP_S", 4)]
+        )
+        self.assertEqual(rc, 3, out)
+        self.assertLess(secs, 5.5)
+
+    def test_a_build_that_left_under_a_second_does_not_start_the_guest_image(self):
+        rc, out, files, secs = self.run_gate(
+            build=StageProvisioning.GOOD_BUILD + "sleep 4.6\n", patches=[("PROVISION_CAP_S", 5)]
+        )
+        self.assertEqual(rc, 3, out)
+        self.assertFalse(files["guest.ran"])
+
+    def test_provisioning_inside_the_cap_still_passes(self):
+        rc, out, files, secs = self.run_gate(patches=[("PROVISION_CAP_S", 60)])
+        self.assertEqual(rc, 0, out)
+        self.assertTrue(files["PROVISIONED"])
+
+    # ---- the free-disk guard -------------------------------------------------------------------------------------
+    def test_low_free_disk_is_a_media_retry_with_the_numbers_and_nothing_is_built(self):
+        rc, out, files, _ = self.run_gate(free=lambda path: 10 * 10**9, env={"KF_APPS_MIN_FREE_GB": ""})
+        self.assertEqual(rc, 3, out)
+        self.assertIn("APPS_PROVISION_DISK free_gb=10 need_gb=60", out)
+        self.assertIn("APPS_STAGE_RETRY class=MEDIA", out)
+        self.assertFalse(files["build.ran"])
+        self.assertFalse(files["matrix.ran"])
+
+    def test_just_under_the_minimum_is_refused_and_the_minimum_is_accepted(self):
+        rc, out, files, _ = self.run_gate(free=lambda path: 60 * 10**9 - 1, env={"KF_APPS_MIN_FREE_GB": ""})
+        self.assertEqual(rc, 3, out)
+        self.assertFalse(files["build.ran"])
+        rc, out, files, _ = self.run_gate(free=lambda path: 60 * 10**9, env={"KF_APPS_MIN_FREE_GB": ""})
+        self.assertEqual(rc, 0, out)
+        self.assertTrue(files["build.ran"])
+
+    def test_the_smaller_of_the_two_file_systems_decides(self):
+        def free(path):
+            return 500 * 10**9 if str(path).endswith("/apps") else 20 * 10**9
+
+        rc, out, files, _ = self.run_gate(free=free, env={"KF_APPS_MIN_FREE_GB": ""})
+        self.assertEqual(rc, 3, out)
+        self.assertIn("free_gb=20 need_gb=60", out)
+        self.assertFalse(files["build.ran"])
+
+    def test_a_small_apps_file_system_decides_and_the_row_names_its_free_space(self):
+        def free(path):
+            return 20 * 10**9 if str(path).endswith("/apps") else 500 * 10**9
+
+        rc, out, files, _ = self.run_gate(free=free, env={"KF_APPS_MIN_FREE_GB": ""})
+        self.assertEqual(rc, 3, out)
+        self.assertIn("free_gb=20 need_gb=60", out)
+        self.assertFalse(files["build.ran"])
+
+    def test_the_bench_file_system_just_under_the_minimum_decides(self):
+        def free(path):
+            return 500 * 10**9 if str(path).endswith("/apps") else 60 * 10**9 - 1
+
+        rc, out, files, _ = self.run_gate(free=free, env={"KF_APPS_MIN_FREE_GB": ""})
+        self.assertEqual(rc, 3, out)
+        self.assertFalse(files["build.ran"])
+
+    def test_the_apps_file_system_just_under_the_minimum_decides(self):
+        def free(path):
+            return 60 * 10**9 - 1 if str(path).endswith("/apps") else 500 * 10**9
+
+        rc, out, files, _ = self.run_gate(free=free, env={"KF_APPS_MIN_FREE_GB": ""})
+        self.assertEqual(rc, 3, out)
+        self.assertFalse(files["build.ran"])
+
+    def test_the_guard_does_not_apply_without_provisioning(self):
+        rc, out, files, _ = self.run_gate(free=lambda path: 0, env={"KF_APPS_PROVISION": "0", "KF_APPS_MIN_FREE_GB": ""})
+        self.assertNotIn("APPS_PROVISION_DISK", out)
+        self.assertFalse(files["build.ran"])
+
+    def test_free_bytes_uses_the_nearest_existing_parent(self):
+        with tempfile.TemporaryDirectory() as directory:
+            self.assertGreater(self.gate.free_bytes(Path(directory) / "no/such/dir"), 0)
 
 
 if __name__ == "__main__":

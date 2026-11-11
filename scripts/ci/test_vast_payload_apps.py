@@ -425,7 +425,7 @@ class AppsStageInThePayload(unittest.TestCase):
         self.short_of_time(30)
 
     def test_just_under_the_minimum_left_is_a_retry_row_without_starting_the_stage(self):
-        self.short_of_time(89)
+        self.short_of_time(99)
 
 
 class AppsGateScript(unittest.TestCase):

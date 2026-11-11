@@ -107,8 +107,8 @@ different `g1` and `g2` runs. INFERRED: retain the existing 50-minute matrix all
 this declared envelope. Combined timing and Windows mid's actual duration remain unverified.
 
 **CORRECTED 2026-11-10 (INFERRED; see [the INTERIM section of the apps image recipe](V3_APPS_IMAGE_RECIPE.md)):** the Linux apps stage now builds its own
-media on a fresh box, so its reserve is **90 min** (29 provisioning, 50 matrix cap, 11 margin) and the suffix below is
-**90 + 75 + 70 = 235 min**, leaving **55 minutes** (not 85) of the 290-minute soft window for everything before it. The
+media on a fresh box, so its reserve is **100 min** (45 provisioning cap, 50 matrix cap, 5 margin) and the suffix below is
+**100 + 75 + 70 = 245 min**, leaving **45 minutes** (not 85) of the 290-minute soft window for everything before it. The
 sentences below describe the earlier 205-minute envelope and are kept for the record.
 
 INFERRED admission envelope: the suffix is **60 + 75 + 70 = 205 min**. Of the 300-minute

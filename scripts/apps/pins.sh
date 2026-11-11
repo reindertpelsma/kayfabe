@@ -51,3 +51,26 @@ PIN_CUDA_KEYRING_SHA256_ubuntu2204=d93190d50b98ad4699ff40f4f7af50f16a76dac3bb8da
 PIN_CUDA_KEYRING_SHA256_ubuntu2404=d2a6b11c096396d868758b86dab1823b25e14d70333f1dfa74da5ddaf6a06dba
 PIN_CUDA_TOOLKIT_PACKAGE=cuda-toolkit-12-6
 PIN_CUDA_TOOLKIT_VERSION=12.6.3-1
+
+# --- Hugging Face model for hf_generate (guest, setup_side.sh): Qwen/Qwen2-0.5B-Instruct at one revision -------------
+# Laid out as the offline cache layout (hub/models--Qwen--Qwen2-0.5B-Instruct/snapshots/<rev>/<file>, refs/main = <rev>)
+# exactly as the open image recipe does; each file is "name sha256 size". Revision and digests agree with recipe.json
+# and model.safetensors was read from the Hugging Face API on 2026-11-10.
+PIN_QWEN2_REV=c540970f9e29518b1d8f06ab8b24cba66ad77b6d
+PIN_QWEN2_URL_BASE=https://huggingface.co/Qwen/Qwen2-0.5B-Instruct/resolve/c540970f9e29518b1d8f06ab8b24cba66ad77b6d
+PIN_QWEN2_FILE_1="LICENSE c156170b718ec29139d3653d40ed1986fd92fb7e0959b5c71f3c48f62e6636f4 11344"
+PIN_QWEN2_FILE_2="config.json 168aa1bd401abc3bc262ba15ba4e499627a8b4e006e9d050b47c22de20660185 659"
+PIN_QWEN2_FILE_3="generation_config.json e558847a8b4402616f1273797b015104dc266fe4b520056fca88823ba8f8ebe6 242"
+PIN_QWEN2_FILE_4="merges.txt 599bab54075088774b1733fde865d5bd747cbcc7a547c5bc12610e874e26f5e3 1671839"
+PIN_QWEN2_FILE_5="tokenizer.json f7c9b2dba4a296b1aa76c16a34b8225c0c118978400d4bb66bff0902d702f5b8 7028015"
+PIN_QWEN2_FILE_6="tokenizer_config.json 482bd979881423375ca5414e4e0d94cd7c5349dbb17fffd46b4d36d71e62a1bc 1287"
+PIN_QWEN2_FILE_7="vocab.json ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910 2776833"
+PIN_QWEN2_FILE_8="model.safetensors 130282af0dfa9fe5840737cc49a0d339d06075f83c5a315c3372c9a0740d0b96 988097824"
+
+# --- bounded retries of every provisioning fetch (pin_lib.sh: pin_retry, pin_fetch_file) ----------------------------
+# 3 attempts with a short backoff between them (seconds, space separated). Inside an attempt a connection that does
+# not open in 20 s, or a transfer below 50 kB/s for 60 s, ends it. The whole provisioning is capped by the stage
+# (scripts/kfci/apps_gate.py, PROVISION_CAP_S), so a persistent failure still ends as a MEDIA retry.
+PIN_RETRY_ATTEMPTS=3
+# the backoff may be set from the environment (the tests use "0 0"); the number of attempts may not
+: "${PIN_RETRY_BACKOFF:=3 10}"

@@ -470,19 +470,20 @@ APPS_ROW = re.compile(
 )
 APPS_LIST_LINE = re.compile(r"^APPS_STAGE_LIST n=([0-9]+) ", re.M)
 # What the stage may take, worst case, once it starts on a FRESH box: it builds its own media (the stage runs with
-# KF_APPS_PROVISION=1, below) and then runs the matrix.
-#   provisioning  29 min   MEASURED fresh-box bundle build + guest image: 18.8 + 9.1 min overlapped with a 2.1 min host
-#                          runtime step (traces/apps_linux_20261107/README.md, 2026-11-07) and 14 + 13.5 min (fresh
-#                          build, then the stage's own provisioning pass) on 2026-11-10 (traces/apps_linux_media_20261110/)
-#   matrix        50 min   KF_APPS_BUDGET_S, the stage's hard cap (default 3000 s); MEASURED actual 1029 s = 17 min for
-#                          66/66 (same trace), slowest apps vkpeak 332 s, clpeak 112 s, gpu_burn 95 s
-#   margin        11 min   rounds the sum to 90 (the previous value, 60, was the 50 min cap plus 10)
-# The reserve is a worst-case bound on this stage alone, not the expected duration (about 46 min measured). The
-# stage's min_remaining_ms adds the Windows gate and the Windows apps that must still fit after it (below), so with
-# the mid Windows profile Linux apps start only with 90 + 75 + 70 = 235 min left. INFERRED: the 300 min hard limit
-# less the 10 min soft margin leaves 55 min for everything before this stage; the run log of the first middle-tier
-# Worker run (PR #334) puts the start of Linux apps near minute 30.
-APPS_MIN_REMAINING_MS = 90 * 60000
+# KF_APPS_PROVISION=1, below) and then runs the matrix. Each part is capped, so the sum is a bound, not a hope:
+#   provisioning  45 min   scripts/kfci/apps_gate.py PROVISION_CAP_S, in total for the build and the guest image (a
+#                          timeout is a MEDIA retry). MEASURED 29 min on a fresh box: bundle 18.8 + guest image 9.1 min
+#                          overlapped with a 2.1 min host runtime step (traces/apps_linux_20261107/README.md,
+#                          2026-11-07), and 14 + 13.5 min on 2026-11-10 (traces/apps_linux_media_20261110/)
+#   matrix        50 min   apps_gate.py MATRIX_BUDGET_DEFAULT_S (3000 s), the stage's cap; MEASURED actual 1029 s = 17 min
+#                          for 66/66 (same trace), slowest apps vkpeak 332 s, clpeak 112 s, gpu_burn 95 s
+#   margin         5 min   policy and list checks, process kill grace (30 s per killed process), log reading
+# 45 + 50 + 5 = 100 min (test_apps_media.py checks this arithmetic against the two constants). The expected duration is
+# about 46 min (29 + 17). The stage's min_remaining_ms adds the Windows gate and the Windows apps that must still fit
+# after it (below), so with the mid Windows profile Linux apps start only with 100 + 75 + 70 = 245 min left. INFERRED:
+# the 300 min hard limit less the 10 min soft margin leaves 45 min for everything before this stage; the run log of the
+# first middle-tier Worker run (PR #334) puts the start of Linux apps near minute 30.
+APPS_MIN_REMAINING_MS = 100 * 60000
 
 
 def apps_requested(tier):
