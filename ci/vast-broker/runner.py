@@ -2172,10 +2172,12 @@ OIDC_ATTEMPTS, OIDC_BUDGET, OIDC_FIRST_DELAY, OIDC_STEP, OIDC_RETRY_AFTER = 20, 
 def oidc_token(url, bearer):
     """One GitHub OIDC token, or a Diagnosed with phase "oidc".
 
-    Retried, each time as a fresh request: a network error, HTTP 408, 429 or 5xx, and a 200 whose
-    body is not exactly one JWT-shaped value. Never retried: a redirect and every other status
-    (401/403/404: a revoked or expired request token fails at once). The bound is hard: at most
-    OIDC_ATTEMPTS requests and no new request once OIDC_BUDGET seconds have passed.
+    Retried, each time as a fresh request: a network error (including a truncated or malformed
+    reply), HTTP 408, 429 or 5xx, and a 200 whose body is not exactly one JWT-shaped value. Never
+    retried: a redirect and every other status (401/403/404: a revoked or expired request token
+    fails at once). The bound is hard: at most OIDC_ATTEMPTS requests, the last wait is clipped to
+    the budget (so the last request starts at OIDC_BUDGET seconds, never later), and no request
+    starts after that.
     The lines carry an integer status, an exception class name and counters: never a token, the
     request token, the URL or a body.
     """
@@ -2189,7 +2191,10 @@ def oidc_token(url, bearer):
         except Diagnosed:
             # A redirect from the token endpoint is not a Worker reply, and is not followed.
             what, retry = "redirect", False
-        except OSError as cause:
+        except (OSError, http.client.HTTPException, ValueError) as cause:
+            # A reply cut short (IncompleteRead) or malformed (BadStatusLine, a bad Content-Length)
+            # is as transient as a reset. Only the class name is shown: never the text. The Invalid
+            # of a bad URL or an oversized reply is not a ValueError and stays fatal.
             what, retry, network = "network " + clean(type(cause).__name__), True, True
         else:
             status = reply.status if type(reply.status) is int else 0

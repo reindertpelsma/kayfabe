@@ -23,6 +23,8 @@ RUNNER = BROKER / "runner.py"
 
 RETRY = "            retry = status in {408, 429} or 500 <= status <= 599\n"
 STOP = "        if not retry or attempt >= OIDC_ATTEMPTS or left <= 0:\n"
+AFTER = "            if status == 429:\n"
+CATCH = "        except (OSError, http.client.HTTPException, ValueError) as cause:\n"
 DELAY = (
     "        delay = min(max(OIDC_FIRST_DELAY if attempt == 1 else OIDC_STEP, wait or 0), left)\n"
 )
@@ -52,6 +54,26 @@ MUTANTS = [
         RETRY,
         "            retry = status in {401, 403, 408, 429} or 500 <= status <= 599\n",
     ),
+    (
+        "404-retried",
+        RETRY,
+        "            retry = status in {404, 408, 429} or 500 <= status <= 599\n",
+    ),
+    (
+        "300-retried",
+        RETRY,
+        "            retry = status in {300, 408, 429} or 500 <= status <= 599\n",
+    ),
+    (
+        "304-retried",
+        RETRY,
+        "            retry = status in {304, 408, 429} or 500 <= status <= 599\n",
+    ),
+    (
+        "3xx-retried",
+        RETRY,
+        "            retry = 300 <= status <= 308 or status in {408, 429} or status >= 500\n",
+    ),
     ("redirect-retried", 'what, retry = "redirect", False\n', 'what, retry = "redirect", True\n'),
     # --- bound removed -----------------------------------------------------------------------------
     ("bound-removed", STOP, "        if not retry:\n"),
@@ -76,6 +98,29 @@ MUTANTS = [
     ("token-length-unchecked", '                        and len(data["value"]) <= 8192\n', ""),
     ("status-missing-from-the-line", 'what = "HTTP " + str(status)\n', 'what = "HTTP"\n'),
     ("attempt-missing-from-the-line", '                + ", "\n                + counter\n', ""),
+    # --- Retry-After honoured outside a 429 ---------------------------------------------------------
+    ("retry-after-honoured-on-503", AFTER, "            if status in {429, 503}:\n"),
+    ("retry-after-honoured-on-5xx", AFTER, "            if status == 429 or status >= 500:\n"),
+    ("retry-after-honoured-on-408", AFTER, "            if status in {408, 429}:\n"),
+    ("retry-after-honoured-on-200", AFTER, "            if status in {200, 429}:\n"),
+    ("retry-after-honoured-on-every-status", AFTER, "            if status != 0:\n"),
+    # --- the network class --------------------------------------------------------------------------
+    (
+        "truncated-reply-fatal",
+        CATCH,
+        "        except (OSError, ValueError) as cause:\n",
+    ),
+    (
+        "malformed-reply-fatal",
+        CATCH,
+        "        except (OSError, http.client.HTTPException) as cause:\n",
+    ),
+    ("every-exception-retried", CATCH, "        except Exception as cause:\n"),
+    (
+        "invalid-retried",
+        CATCH,
+        "        except (OSError, http.client.HTTPException, Invalid) as cause:\n",
+    ),
     ("retry-after-ignored", "                    wait = min(", "                    _ = min("),
 ]
 

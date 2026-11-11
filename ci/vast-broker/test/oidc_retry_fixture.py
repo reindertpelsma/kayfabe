@@ -3,15 +3,17 @@
 usage: oidc_retry_fixture.py '<json>'      (KF_RUNNER_PATH overrides the runner under test)
   script   replies of the token endpoint, one per request; after the list (or with "repeat": the
            last entry for ever) the endpoint answers 200 with a good token. An entry is an HTTP
-           status, {"status", "retry_after"}, "timeout", "reset", "garbled", "shape", "long" or
-           "redirect".
+           status, {"status", "retry_after"} (any status, 200 included: its body is not a token),
+           "timeout", "reset", "incomplete" (a truncated reply: http.client.IncompleteRead),
+           "badlength" (ValueError, as int() of a bad Content-Length), "garbled", "shape", "long",
+           "redirect", "invalid" (Invalid, as a bad URL) or "unexpected" (RuntimeError).
   skip     good token replies before the script starts (a failure in the middle of a run)
   seconds  fake seconds one token request takes (default 0)
   frozen   the fake sleep does not advance the clock (the attempt cap alone must end the loop)
 Prints one JSON object. A runaway loop (more than 60 token requests) or a negative sleep exits 3.
 """
 
-import contextlib, hashlib, importlib.util, io, json, os, sys, tempfile, urllib.parse
+import contextlib, hashlib, http.client, importlib.util, io, json, os, sys, tempfile, urllib.parse
 from pathlib import Path
 
 spec = importlib.util.spec_from_file_location(
@@ -67,6 +69,14 @@ def token_endpoint(url, headers):
         raise TimeoutError(SENTINEL)
     if entry == "reset":
         raise ConnectionResetError(SENTINEL)
+    if entry == "incomplete":
+        raise http.client.IncompleteRead(b"partial " + SENTINEL.encode(), 7)
+    if entry == "badlength":
+        raise ValueError("invalid literal for int(): " + SENTINEL)
+    if entry == "invalid":
+        raise m.Invalid(SENTINEL)
+    if entry == "unexpected":
+        raise RuntimeError(SENTINEL)
     if entry == "redirect":
         raise m.Diagnosed(m.reply_line(302, "text/html"))
     if entry == "garbled":

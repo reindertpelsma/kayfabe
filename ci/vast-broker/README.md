@@ -31,13 +31,13 @@ The controller asks GitHub for a fresh OIDC token before every Worker call (`oid
 
 | Token endpoint reply | Action |
 | --- | --- |
-| network error or timeout | retry |
+| network error or timeout; a truncated or malformed reply | retry |
 | HTTP 5xx, 408 | retry |
 | HTTP 429 | retry; an integer `Retry-After` lengthens the wait, to at most 60 s |
 | HTTP 200 whose body is not exactly one JWT-shaped `value` of at most 8192 characters | retry, fatal when the bound is reached |
 | HTTP 401, 403, 404 and every other status; a redirect | fatal at once, no retry |
 
-The bound: at most 20 requests, and no request starts once 180 s have passed since the first (waits of 2 s, then 10 s, the last one clipped). Each retry is a new request for the same audience. Each failed fetch prints `oidc: token fetch failed: HTTP 503, attempt 3 of 20, retry in 10 s`, and the final line reads `runner: OIDC reply rejected: HTTP 503, attempt 20 of 20 phase=oidc ...`. These lines hold an integer status, an exception class name and counters: never a token, the request token, the URL or a body. A failed run makes one more Worker call (the best-effort stop), which fetches a token under its own bound.
+The bound: at most 20 requests, and no request starts later than 180 s after the first, plus the sleep overshoot of a real clock (a few ms). The waits are 2 s, then 10 s, and the last one is clipped to what is left of the budget, so the final request can start exactly on the bound, not strictly before it; a request already running keeps its own 20 s timeout. Each retry is a new request for the same audience. Each failed fetch prints `oidc: token fetch failed: HTTP 503, attempt 3 of 20, retry in 10 s`, and the final line reads `runner: OIDC reply rejected: HTTP 503, attempt 20 of 20 phase=oidc ...`. These lines hold an integer status, an exception class name and counters: never a token, the request token, the URL or a body. A failed run makes one more Worker call (the best-effort stop), which fetches a token under its own bound.
 
 ## What the runner shows of the box log
 

@@ -3,8 +3,10 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 // FALSIFIER (2026-11-11): a transient failure of the GitHub token endpoint (network, 408, 429, 5xx,
 // a garbled 200) ends a healthy run; or a refusal (401/403/404, any other 4xx, a redirect) is
-// retried; or the retry is unbounded (more than 20 requests, or a request started after 180 s); or
-// a failed fetch is not named with its status and attempt; or any line shows a token, the request
+// retried; or the retry is unbounded (more than 20 requests, or a request started after 180 s of
+// the fake clock: the last wait is clipped, so the final request starts at exactly 180 s); or
+// a truncated or malformed reply (IncompleteRead, a bad Content-Length) ends the run at once, or an
+// Invalid / unexpected exception is retried; or a failed fetch is not named with its status and attempt; or any line shows a token, the request
 // token, the URL or a body. KF_RUNNER_PATH lets scripts/ci/oidc_retry_mutants.py swap the runner.
 const run = (args) => {
   const p = spawnSync(
@@ -61,8 +63,18 @@ for (const [name, entry, note, wait] of [
   ['429 with Retry-After 9999 is capped', { status: 429, retry_after: '9999' }, 'HTTP 429', 60],
   ['429 with a date Retry-After', { status: 429, retry_after: 'Wed, 11 Nov 2026' }, 'HTTP 429', 2],
   ['503 ignores Retry-After', { status: 503, retry_after: '50' }, 'HTTP 503', 2],
+  ['500 ignores Retry-After', { status: 500, retry_after: '50' }, 'HTTP 500', 2],
+  ['408 ignores Retry-After', { status: 408, retry_after: '50' }, 'HTTP 408', 2],
+  [
+    'a 200 body not accepted ignores Retry-After',
+    { status: 200, retry_after: '50' },
+    'HTTP 200 body not accepted',
+    2,
+  ],
   ['timeout', 'timeout', 'network TimeoutError', 2],
   ['connection reset', 'reset', 'network ConnectionResetError', 2],
+  ['truncated reply (IncompleteRead)', 'incomplete', 'network IncompleteRead', 2],
+  ['malformed reply (bad Content-Length)', 'badlength', 'network ValueError', 2],
   ['garbled body', 'garbled', 'HTTP 200 body not accepted', 2],
   ['token of the wrong shape', 'shape', 'HTTP 200 body not accepted', 2],
   ['token too long', 'long', 'HTTP 200 body not accepted', 2],
@@ -102,7 +114,7 @@ test('oidc retry: a mixed outage in the middle of a run (TESTING) is survived', 
   clean(r);
 });
 
-for (const status of [400, 401, 403, 404, 409, 410, 422, 204, 302])
+for (const status of [400, 401, 403, 404, 409, 410, 422, 204, 300, 301, 302, 304, 307])
   test('oidc retry: permanent ' + status + ' fails fast with no retry', () => {
     const r = run({ script: [status], repeat: true });
     assert.equal(r.status, 1);
@@ -142,6 +154,35 @@ test('oidc retry: one redirect ends the run even when the next reply would be go
   clean(r);
 });
 
+for (const status of [404, 300, 304])
+  test('oidc retry: a ' + status + ' after transient failures still fails at once', () => {
+    const r = run({ script: [503, 'timeout', status], repeat: true });
+    assert.equal(r.status, 1);
+    assert.deepEqual(r.waits, [2, 10]);
+    assert.equal(r.oidc.length, 3 + 1);
+    assert.match(
+      r.fatal[0],
+      new RegExp(
+        '^runner: OIDC reply rejected: HTTP ' + status + ', attempt 3 of 20, not retried ',
+      ),
+    );
+    clean(r);
+  });
+
+for (const [name, entry] of [
+  ['an Invalid (a bad URL or an oversized reply)', 'invalid'],
+  ['an unexpected exception', 'unexpected'],
+])
+  test('oidc retry: ' + name + ' is fatal at once and not retried', () => {
+    const r = run({ script: [entry], repeat: true });
+    assert.equal(r.status, 1);
+    assert.deepEqual([r.routes, r.waits, r.notes, r.oidc.length], [[], [], [], 2]);
+    assert.equal(r.fatal.length, 1);
+    assert.match(r.fatal[0], /phase=availability state=UNAVAILABLE/);
+    assert.match(r.outputs, /verdict=UNAVAILABLE/);
+    clean(r);
+  });
+
 test('oidc retry: a 401 after transient failures still fails at once', () => {
   const r = run({ script: [503, 503, 401], repeat: true });
   assert.equal(r.status, 1);
@@ -160,6 +201,16 @@ const first = (r) => ({
 for (const [name, entry, line] of [
   ['503', 503, 'runner: OIDC reply rejected: HTTP 503, attempt 20 of 20'],
   ['timeout', 'timeout', 'runner: network failure: OIDC network TimeoutError, attempt 20 of 20'],
+  [
+    'truncated reply',
+    'incomplete',
+    'runner: network failure: OIDC network IncompleteRead, attempt 20 of 20',
+  ],
+  [
+    'malformed reply',
+    'badlength',
+    'runner: network failure: OIDC network ValueError, attempt 20 of 20',
+  ],
   [
     'garbled body',
     'garbled',
@@ -195,6 +246,46 @@ for (const [name, entry, line] of [
     fresh(r);
     clean(r);
   });
+
+for (const [name, entry] of [
+  ['503', 503],
+  ['timeout', 'timeout'],
+  ['truncated reply', 'incomplete'],
+  ['429 with Retry-After 9999', { status: 429, retry_after: '9999' }],
+])
+  for (const seconds of [0, 3])
+    test(`oidc retry: no request starts after 180 s (${name}, ${seconds} s a request)`, () => {
+      const r = run({ script: [entry], repeat: true, seconds });
+      assert.equal(r.status, 1);
+      const { requests } = first(r);
+      for (const call of requests) assert.ok(call.at <= 180, String(call.at));
+      // The last wait is clipped to what is left of the budget: on the fake clock the final
+      // request starts exactly on the bound when a request takes no time, never after it.
+      if (seconds === 0) assert.equal(requests.at(-1).at, 180);
+      clean(r);
+    });
+
+test('oidc retry: Retry-After outside a 429 never lengthens a wait, whatever the status', () => {
+  const r = run({
+    script: [
+      { status: 503, retry_after: '40' },
+      { status: 408, retry_after: '40' },
+      { status: 200, retry_after: '40' },
+      { status: 500, retry_after: '40' },
+    ],
+  });
+  assert.equal(r.status, 0, r.stdout);
+  assert.deepEqual(r.waits, [2, 10, 10, 10]);
+  clean(r);
+});
+
+test('oidc retry: a 503 with Retry-After is waited like any 503 for the whole budget', () => {
+  const r = run({ script: [{ status: 503, retry_after: '9999' }], repeat: true });
+  assert.equal(r.status, 1);
+  assert.deepEqual(first(r).waits, [2, ...Array(17).fill(10), 8]);
+  assert.match(r.fatal[0], /^runner: OIDC reply rejected: HTTP 503, attempt 20 of 20 /);
+  clean(r);
+});
 
 test('oidc retry: Retry-After cannot stretch the budget', () => {
   const r = run({ script: [{ status: 429, retry_after: '9999' }], repeat: true });
