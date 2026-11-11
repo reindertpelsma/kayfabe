@@ -1,0 +1,58 @@
+{
+ "_comment": "Pins for everything kfml fetches. sha256 values were measured by the author on 2026-11-11 from the official URLs; null means PIN ME (the runner fails with the measured hash).",
+ "datasets": {
+  "tinyshakespeare": {
+   "url": "https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt",
+   "filename": "tinyshakespeare-input.txt",
+   "sha256": "86c4e6aa9db7c042ec79f339dcb96d42b0075e16b8fc2e86bf0ca57e2dc565ed",
+   "license": "LicenseRef-public-domain-text-unverified-file-provenance",
+   "redistribution_ok": false
+  },
+  "cifar10_binary": {
+   "url": "https://www.cs.toronto.edu/~kriz/cifar-10-binary.tar.gz",
+   "filename": "cifar-10-binary.tar.gz",
+   "sha256": null,
+   "license": "LicenseRef-no-licence-stated",
+   "redistribution_ok": false
+  }
+ },
+ "cuda_redist": {
+  "cu128": {
+   "base_url": "https://developer.download.nvidia.com/compute/cuda/redist/",
+   "manifest": "redistrib_12.8.1.json",
+   "components": {
+    "cuda_nvcc": {
+     "path": "cuda_nvcc/linux-x86_64/cuda_nvcc-linux-x86_64-12.8.93-archive.tar.xz",
+     "sha256": "9961b3484b6b71314063709a4f9529654f96782ad39e72bf1e00f070db8210d3"
+    },
+    "cuda_cudart": {
+     "path": "cuda_cudart/linux-x86_64/cuda_cudart-linux-x86_64-12.8.90-archive.tar.xz",
+     "sha256": "8d566b5fe745c46842dc16945cf36686227536decd2302c372be86da37faca68"
+    },
+    "cuda_cccl": {
+     "path": "cuda_cccl/linux-x86_64/cuda_cccl-linux-x86_64-12.8.90-archive.tar.xz",
+     "sha256": "0740e9e01e4f15e17c5ab8d68bba4f8ec0eb6b84edccba4ac45112d2d2174e4b"
+    }
+   }
+  },
+  "cu126": {
+   "base_url": "https://developer.download.nvidia.com/compute/cuda/redist/",
+   "manifest": "redistrib_12.6.3.json",
+   "components": {
+    "cuda_nvcc": {
+     "path": "cuda_nvcc/linux-x86_64/cuda_nvcc-linux-x86_64-12.6.85-archive.tar.xz",
+     "sha256": "840deff234d9bef20d6856439c49881cb4f29423b214f9ecd2fa59b7ac323817"
+    },
+    "cuda_cudart": {
+     "path": "cuda_cudart/linux-x86_64/cuda_cudart-linux-x86_64-12.6.77-archive.tar.xz",
+     "sha256": "f74689258a60fd9c5bdfa7679458527a55e22442691ba678dcfaeffbf4391ef9"
+    },
+    "cuda_cccl": {
+     "path": "cuda_cccl/linux-x86_64/cuda_cccl-linux-x86_64-12.6.77-archive.tar.xz",
+     "sha256": "9c3145ef01f73e50c0f5fcf923f0899c847f487c529817daa8f8b1a3ecf20925"
+    }
+   }
+  }
+ },
+ "wheel_builds": []
+}
