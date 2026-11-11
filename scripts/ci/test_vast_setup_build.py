@@ -111,6 +111,30 @@ class SetupBuild(unittest.TestCase):
         with self.assertRaises(CacheRefused):
             build.rank_probes(self.probe(seconds=0))
 
+    def probe_run(self, hanging):
+        """probe_mirrors with curl stubbed: hosts in `hanging` outlast the subprocess timeout."""
+        import subprocess
+        from unittest import mock
+
+        def run(cmd, **kwargs):
+            host = cmd[-1].split("/")[2]
+            if host in hanging:
+                raise subprocess.TimeoutExpired(cmd, kwargs["timeout"])
+            return subprocess.CompletedProcess(cmd, 0, stdout="206 8388608 1.0", stderr="")
+
+        with mock.patch.object(build.subprocess, "run", run):
+            return build.probe_mirrors(self.plan()[0])
+
+    def test_a_hanging_mirror_probe_is_a_failed_row_not_a_crash(self):
+        winner, rows = self.probe_run({build.MIRRORS[0]})
+        self.assertNotEqual(winner, build.MIRRORS[0])
+        self.assertEqual(rows[0]["status"], 0)
+        self.assertEqual(rows[0]["curl_rc"], 124)
+
+    def test_all_mirrors_hanging_refuses_by_name(self):
+        with self.assertRaises(CacheRefused):
+            self.probe_run(set(build.MIRRORS))
+
     def fetch(self, body=BODY):
         row = self.plan()[0]
         opener = Opener(body)
