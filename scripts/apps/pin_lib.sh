@@ -140,5 +140,9 @@ pin_hf_snapshot() {
     pin_verify_file "$snap/$name" "$digest" "$size" 2>/dev/null \
       || pin_fetch_file "$PIN_QWEN2_URL_BASE/$name" "$snap/$name" "$digest" "$size" || return 1
   done
-  printf '%s\n' "$PIN_QWEN2_REV" > "$repo/refs/main"
+  # EXACTLY the 40 hex characters, no newline. huggingface_hub reads this file whole (file_download.py: `commit_hash =
+  # f.read()`, no strip) and joins it into the snapshot path, so with a trailing newline every OFFLINE lookup misses
+  # (LocalEntryNotFoundError) although all files are there. MEASURED 2026-11-11 on a rented box, huggingface_hub
+  # 0.36.2 + transformers 4.46.3: SETUP_hf_model=FAIL with 41 bytes, HF_MODEL_CACHED with 40.
+  printf '%s' "$PIN_QWEN2_REV" > "$repo/refs/main"
 }

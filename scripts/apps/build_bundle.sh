@@ -15,6 +15,11 @@
 # The app set is the one nvkvm-pv (the Mode-1 sibling) validated — see
 # docs/design/V3_APP_MATRIX.md §1 for the inventory and where each came from.
 set -uo pipefail
+# The bundle is unpacked in the guest and read there by the unprivileged user too (apps_hook.sh tests
+# /opt/apps/bundle/cuda/include as `ubuntu`; provision_guest_apps.sh runs `du` on it). The Vast payload runs under
+# umask 077 (vast_onstart.sh), which made every bundle directory 0700 root. MEASURED 2026-11-11 on a rented box:
+# "du: cannot read directory '/opt/apps/bundle': Permission denied", BUNDLE_IN=4.0K. Nothing in the bundle is secret.
+umask 022
 HERE="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=pins.sh
 . "$HERE/pins.sh"

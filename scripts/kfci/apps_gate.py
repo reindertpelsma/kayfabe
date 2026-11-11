@@ -103,6 +103,11 @@ def legacy_allowlist(env):
 PROVISION_CAP_S = 45 * 60
 # The matrix budget the stage uses unless KF_APPS_BUDGET_S says otherwise (the stage's own hard cap on the matrix).
 MATRIX_BUDGET_DEFAULT_S = 3000
+# ⚠ [2026-11-11] MEASURED on a rented RTX 4090 box under the real payload (220 GB disk): `df` used 13 GB after the
+# provision stage and 58 to 60 GB after the apps provisioning, so the stage adds AT MOST 45 GB (the merge bar's own
+# files are inside that number): the toolkit (6.4 GB installed), sources, bundle (2.1 GB + 1.3 GB tarball) and the
+# guest image (24 GB once torch, the models and Blender are in). The 30 GB below was low. The guard's 60 GB still
+# covers it; the refusal itself has run only in the tests (the box had 150 GB free).
 # INFERRED: provisioning adds about 30 GB (bundle, sources, guest image copy) before the Windows stages, whose own
 # image needs room too; below this many free GB it does not start. Free space MEASURED on rented boxes: 104 GB (batch
 # gate box) and 340 GB (apps box).
@@ -524,15 +529,19 @@ class AppsGate(Step):
                 allow_env=legacy_allowlist(ctx.env),
                 log=log,
             )
+            # build_bundle.sh exits non-zero on a failed step, but an older copy of it (or a step that fails after
+            # the last check) can still print BUILD_*=FAIL and exit 0: the log is the evidence, so it is read too.
+            # It is read on a non-zero exit as well: the APPS_PROVISION_FAIL row is the only place the stage's own
+            # output names the step (a real box, 2026-11-11: the guest script exited 5 and the payload log said only
+            # "class=MEDIA", the step name stayed in a file that goes away with the box).
+            build_failed = self.failed_steps(ctx, logfile, "BUILD_")
             if built.returncode:
                 return (
                     built.returncode
                     if built.returncode >= 0
                     else 128 - built.returncode
                 )
-            # build_bundle.sh exits non-zero on a failed step, but an older copy of it (or a step that fails after
-            # the last check) can still print BUILD_*=FAIL and exit 0: the log is the evidence, so it is read too.
-            if self.failed_steps(ctx, logfile, "BUILD_"):
+            if build_failed:
                 return 1
             image = Path(ctx.env["KF_GUEST_IMG"])
             if not image.is_file():
@@ -564,7 +573,8 @@ class AppsGate(Step):
             finally:
                 # The script starts QEMU with -daemonize, so killing the script's process group does not stop it.
                 stop_provisioning_qemu(bench)
-            if ran.returncode == 0 and not self.failed_steps(ctx, logfile, "SETUP_"):
+            setup_failed = self.failed_steps(ctx, logfile, "SETUP_")  # always: the row names the step (see above)
+            if ran.returncode == 0 and not setup_failed:
                 marker.write_text(timestamp() + "\n")
                 return 0
             return ran.returncode if ran.returncode > 0 else (128 - ran.returncode if ran.returncode < 0 else 1)
