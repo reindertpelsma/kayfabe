@@ -1,0 +1,5 @@
+# STATUS: DESIGN, 2026-11-12. Exact pin of the only third-party dependency of the daemon (pure Python).
+# HASHES TODO: coordinator generates (pip download websockets==13.1 && pip hash). No hash is invented here;
+# `python3 -m kfhost setup` refuses to run while this marker is present.
+websockets==13.1 \
+    --hash=sha256:HASHES_TODO_COORDINATOR_GENERATES
