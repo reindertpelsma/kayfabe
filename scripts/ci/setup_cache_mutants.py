@@ -277,6 +277,27 @@ CASES = [
         "blob",
     ),
     (
+        "dns-probe-never-resolves",
+        "kf_dns_fallback.sh",
+        'timeout 5 getent hosts "$probe_host" >/dev/null 2>&1',
+        "false",
+        "dns",
+    ),
+    (
+        "dns-failure-reported-as-ok",
+        "kf_dns_fallback.sh",
+        'echo "KF_DNS_FALLBACK used=1 ok=0"',
+        'echo "KF_DNS_FALLBACK used=1 ok=1"',
+        "dns",
+    ),
+    (
+        "dns-failure-fails-the-run",
+        "kf_dns_fallback.sh",
+        'ok=0"\nfi\nexit 0',
+        'ok=0"\nfi\nexit 1',
+        "dns",
+    ),
+    (
         "setup-before-work",
         "vast_payload.sh",
         'python3 -I "$here/vast_setup.py" restore "$(cd "$here/../.." && pwd)"',
