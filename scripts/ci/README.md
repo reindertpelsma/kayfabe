@@ -11,6 +11,7 @@ The Worker's tiny onstart clones the repo, checks out `KF_SHA`, execs `scripts/c
 Per-run data is `KF_*` environment variables. Files: `vast_onstart.sh` (tools, env check, root-only
 env file `/run/kf-ci/env`, helpers, reporter, payload under `timeout`); `vast_report.py` (stdlib:
 `check-env [--write F]`, `daemon --log L --done D --result R`); `kf-box-kill`, `kf-box-blob-url`;
+`kf_dns_fallback.sh` (2026-11-11: run first by `vast_onstart.sh` and before `apt-get` in the GitHub jobs; if archive.ubuntu.com does not resolve it points the resolver at 1.1.1.1 and 9.9.9.9 and prints one `KF_DNS_FALLBACK used=<0|1> [ok=<0|1>]` line; never fails the run; tests `test_vast_setup_dns.py`);
 `test_vast_box.py`, `vast_box_mutants.py`; `vast_evidence.py` (2026-11-06: the failed-run evidence bundle, run by `vast_onstart.sh` after the payload; [VAST_PAYLOAD](VAST_PAYLOAD.md), "Evidence bundle"); `vast_run_report.py` (2026-11-07: the structured run report, run by `vast_onstart.sh` after the payload when the Worker sets `KF_RUN_REPORT=1`; [VAST_PAYLOAD](VAST_PAYLOAD.md), "Run report"); `fetch_evidence.py` (coordinator tool, not CI). There is no hold helper or login hook (owner ruling
 2026-10-23 19:10; the Worker has no hold route). The box sends the Worker-injected Cloudflare
 Access pair (`KF_ACCESS_ID`, `KF_ACCESS_SECRET`) as `CF-Access-Client-Id`/`-Secret` on every
