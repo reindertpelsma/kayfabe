@@ -99,12 +99,13 @@ export function reportOut(textValue, id, logInfo) {
 
 // Identical to DISCLAIMER in scripts/bench/specviewperf/spec_stamp.py (docs/SPEC_RESULTS.md; a test compares them).
 export const SPEC_DISCLAIMER =
-  '(nc) = non-compliant: run in a virtualised configuration, not an official SPEC result and not '
-  + 'submission-compliant; SPEC and SPECviewperf are trademarks of the Standard Performance Evaluation '
-  + 'Corporation, https://www.spec.org';
+  '(nc) = non-compliant: run in a virtualised configuration, not an official SPEC result and not ' +
+  'submission-compliant; SPEC and SPECviewperf are trademarks of the Standard Performance Evaluation ' +
+  'Corporation, https://www.spec.org';
 function specNotice(release, doc) {
   const show = (v) => (typeof v === 'string' && v !== '' ? v : 'not reported');
-  const guest = doc.guest_drivers && typeof doc.guest_drivers === 'object' ? doc.guest_drivers.windows : null;
+  const guest =
+    doc.guest_drivers && typeof doc.guest_drivers === 'object' ? doc.guest_drivers.windows : null;
   return {
     nc: '(nc)',
     text: SPEC_DISCLAIMER,
@@ -113,8 +114,12 @@ function specNotice(release, doc) {
         ? 'SPECviewperf ' + release
         : null,
     configuration:
-      'host GPU ' + show(doc.gpu_name) + ', host driver ' + show(doc.host_driver) +
-      ', virtualisation layer kayfabe, guest OS Windows, guest driver ' + show(guest),
+      'host GPU ' +
+      show(doc.gpu_name) +
+      ', host driver ' +
+      show(doc.host_driver) +
+      ', virtualisation layer kayfabe, guest OS Windows, guest driver ' +
+      show(guest),
   };
 }
 const SPEC_NAME_OUT = /^[a-z][a-z_]*-[0-9]{2}$/;
@@ -153,7 +158,9 @@ export function specHostOut(h) {
     xid: h.xid,
     user_ring_refused: int(h.user_ring_refused, 99999999),
     release:
-      typeof h.release === 'string' && /^[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2}$/.test(h.release) ? h.release : null,
+      typeof h.release === 'string' && /^[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2}$/.test(h.release)
+        ? h.release
+        : null,
   };
 }
 export const testOut = (r) => ({

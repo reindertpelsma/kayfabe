@@ -51,19 +51,25 @@ export const SUB_VERDICTS = Object.freeze(['PASS', 'FAIL', 'RETRY', 'UNATTRIBUTE
 // carries the verbatim disclaimer, the exact release and the configuration. The text is identical to
 // DISCLAIMER in scripts/bench/specviewperf/spec_stamp.py (a test compares the two).
 export const SPEC_DISCLAIMER =
-  '(nc) = non-compliant: run in a virtualised configuration, not an official SPEC result and not '
-  + 'submission-compliant; SPEC and SPECviewperf are trademarks of the Standard Performance Evaluation '
-  + 'Corporation, https://www.spec.org';
+  '(nc) = non-compliant: run in a virtualised configuration, not an official SPEC result and not ' +
+  'submission-compliant; SPEC and SPECviewperf are trademarks of the Standard Performance Evaluation ' +
+  'Corporation, https://www.spec.org';
 const SPEC_RELEASE = /^[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2}$/;
 export function specNotice({ release, gpuName, hostDriver, guestDriver }) {
   const show = (v) => (typeof v === 'string' && v !== '' ? v : 'not reported');
   return {
     nc: '(nc)',
     text: SPEC_DISCLAIMER,
-    release: typeof release === 'string' && SPEC_RELEASE.test(release) ? 'SPECviewperf ' + release : null,
+    release:
+      typeof release === 'string' && SPEC_RELEASE.test(release) ? 'SPECviewperf ' + release : null,
     configuration:
-      'host GPU ' + show(gpuName) + ', host driver ' + show(hostDriver) + ', virtualisation layer kayfabe, ' +
-      'guest OS Windows, guest driver ' + show(guestDriver),
+      'host GPU ' +
+      show(gpuName) +
+      ', host driver ' +
+      show(hostDriver) +
+      ', virtualisation layer kayfabe, ' +
+      'guest OS Windows, guest driver ' +
+      show(guestDriver),
   };
 }
 export const SPEC_RESULTS = Object.freeze(['PASS', 'FAIL', 'NOT_RUN']);
@@ -244,7 +250,9 @@ export function cleanClaimsReport(raw) {
       done,
       total: Math.max(done, int(r.total, 0, 999) ?? 0),
       reason: typeof r.reason === 'string' && REASON.test(r.reason) ? r.reason : null,
-      failed: list(r.failed, LIMITS.specFailed).filter((n) => typeof n === 'string' && SUBTEST.test(n)),
+      failed: list(r.failed, LIMITS.specFailed).filter(
+        (n) => typeof n === 'string' && SUBTEST.test(n),
+      ),
       wall_s: int(r.wall_s, 0, 999999),
       native_s: int(r.native_s, 0, 999999),
       resets: int(r.resets, 0, 9999),
@@ -256,7 +264,8 @@ export function cleanClaimsReport(raw) {
       ? {
           xid: int(sh.xid, 0, 999999),
           user_ring_refused: int(sh.user_ring_refused, 0, 99999999),
-          release: typeof sh.release === 'string' && SPEC_RELEASE.test(sh.release) ? sh.release : null,
+          release:
+            typeof sh.release === 'string' && SPEC_RELEASE.test(sh.release) ? sh.release : null,
         }
       : null;
   const perf = [];

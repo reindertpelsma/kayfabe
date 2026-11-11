@@ -276,8 +276,8 @@ const MUTANTS = [
     [
       [
         R,
-        '    schema: 1,\n    guest_drivers: {',
-        '    ...raw,\n    schema: 1,\n    guest_drivers: {',
+        '    rev: raw.rev === 2 ? 2 : 1,\n    guest_drivers: {',
+        '    ...raw,\n    rev: raw.rev === 2 ? 2 : 1,\n    guest_drivers: {',
       ],
     ],
   ],

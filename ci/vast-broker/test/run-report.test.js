@@ -1151,8 +1151,30 @@ test('cleanClaimsReport rev 2: app seconds and benchmark-stage rows are bounded 
       { sub: 'linux-580.159.03', name: 'd', os: 'linux', result: 'PASS', note: '', secs: 'x' },
     ],
     spec: [
-      { sub: 'windows-580.88', name: 'medical-04', result: 'PASS', done: 10, total: 10, reason: null, failed: [], wall_s: 320, native_s: 318, resets: 0 },
-      { sub: 'windows-580.88', name: 'catia-07', result: 'FAIL', done: 4, total: 2, reason: 'RESET', failed: ['05_A', 'bad name', '<b>', 'x'.repeat(61), '1', '2', '3', '4'], wall_s: 1e9, native_s: -3, resets: 2.5 },
+      {
+        sub: 'windows-580.88',
+        name: 'medical-04',
+        result: 'PASS',
+        done: 10,
+        total: 10,
+        reason: null,
+        failed: [],
+        wall_s: 320,
+        native_s: 318,
+        resets: 0,
+      },
+      {
+        sub: 'windows-580.88',
+        name: 'catia-07',
+        result: 'FAIL',
+        done: 4,
+        total: 2,
+        reason: 'RESET',
+        failed: ['05_A', 'bad name', '<b>', 'x'.repeat(61), '1', '2', '3', '4'],
+        wall_s: 1e9,
+        native_s: -3,
+        resets: 2.5,
+      },
       { sub: 'windows-580.88', name: 'medical-04', result: 'FAIL', done: 0, total: 0 },
       { sub: 'windows-580.88', name: 'Bad_Name-01', result: 'PASS' },
       { sub: 'windows-580.88', name: 'maya-07', result: 'SKIP' },
@@ -1163,16 +1185,37 @@ test('cleanClaimsReport rev 2: app seconds and benchmark-stage rows are bounded 
   });
   const out = cleanClaimsReport(r);
   assert.equal(out.rev, 2);
-  assert.deepEqual(out.apps.map((a) => a.secs), [12, null, null, null]);
-  assert.deepEqual(out.spec.map((x) => x.name), ['medical-04', 'catia-07', 'creo-04']);
-  assert.deepEqual(out.spec[0], { sub: 'windows-580.88', name: 'medical-04', nc: true, result: 'PASS', done: 10, total: 10, reason: null, failed: [], wall_s: 320, native_s: 318, resets: 0 });
+  assert.deepEqual(
+    out.apps.map((a) => a.secs),
+    [12, null, null, null],
+  );
+  assert.deepEqual(
+    out.spec.map((x) => x.name),
+    ['medical-04', 'catia-07', 'creo-04'],
+  );
+  assert.deepEqual(out.spec[0], {
+    sub: 'windows-580.88',
+    name: 'medical-04',
+    nc: true,
+    result: 'PASS',
+    done: 10,
+    total: 10,
+    reason: null,
+    failed: [],
+    wall_s: 320,
+    native_s: 318,
+    resets: 0,
+  });
   const catia = out.spec[1];
   assert.deepEqual(catia.failed, ['05_A', '1', '2'], 'cut to six first, then only safe names');
   assert.equal(catia.total, 4, 'total is never below done');
   assert.deepEqual([catia.wall_s, catia.native_s, catia.resets], [null, null, null]);
   assert.equal(out.spec[2].reason, null);
   assert.deepEqual(out.spec_host, { xid: 0, user_ring_refused: null, release: null });
-  assert.ok(out.spec.every((x) => x.nc === true), 'every benchmark row is marked (nc)');
+  assert.ok(
+    out.spec.every((x) => x.nc === true),
+    'every benchmark row is marked (nc)',
+  );
 });
 
 test('cleanClaimsReport: a rev 1 report keeps rendering (no rev, no spec, no seconds)', () => {
@@ -1184,28 +1227,88 @@ test('cleanClaimsReport: a rev 1 report keeps rendering (no rev, no spec, no sec
 });
 
 test('cleanClaimsReport: spec rows are capped and a benchmark name in a value is still dropped', () => {
-  const rows = Array.from({ length: 300 }, (_, i) => ({ sub: 'windows-580.88', name: 'w' + String.fromCharCode(97 + (i % 26)) + '-' + String(i % 100).padStart(2, '0'), result: 'PASS' }));
+  const rows = Array.from({ length: 300 }, (_, i) => ({
+    sub: 'windows-580.88',
+    name: 'w' + String.fromCharCode(97 + (i % 26)) + '-' + String(i % 100).padStart(2, '0'),
+    result: 'PASS',
+  }));
   assert.ok(cleanClaimsReport(goodReport({ rev: 2, spec: rows })).spec.length <= LIMITS.spec);
-  const named = cleanClaimsReport(goodReport({ rev: 2, spec: [{ sub: 'windows-580.88', name: 'viewperf-01', result: 'PASS' }] }));
+  const named = cleanClaimsReport(
+    goodReport({ rev: 2, spec: [{ sub: 'windows-580.88', name: 'viewperf-01', result: 'PASS' }] }),
+  );
   assert.equal(named.spec.length, 0);
 });
 
 test('buildReport: benchmark rows leave with the (nc) notice: verbatim disclaimer, exact release, configuration', () => {
-  const claims = cleanClaimsReport(goodReport({
-    rev: 2,
-    spec: [{ sub: 'windows-580.88', name: 'medical-04', result: 'PASS', done: 1, total: 1, wall_s: 320, native_s: 318, resets: 0 }],
-    spec_host: { xid: 0, user_ring_refused: 0, release: '15.0.0' },
-  }));
-  const row = { commit_sha: 'a'.repeat(40), tree_kind: 'tree', tree_hash: 'b'.repeat(64), tier: 'largest', die: 'AD102', family: 'ada', gpu_name: 'RTX 4090', host_driver: '580.159.04', started_at: null, ended_at: null, verdict: 'PASS' };
-  const doc = buildReport({ claims, row, runId: 'vast-1-1-0', log: null, offsets: null, logsBase: null });
+  const claims = cleanClaimsReport(
+    goodReport({
+      rev: 2,
+      spec: [
+        {
+          sub: 'windows-580.88',
+          name: 'medical-04',
+          result: 'PASS',
+          done: 1,
+          total: 1,
+          wall_s: 320,
+          native_s: 318,
+          resets: 0,
+        },
+      ],
+      spec_host: { xid: 0, user_ring_refused: 0, release: '15.0.0' },
+    }),
+  );
+  const row = {
+    commit_sha: 'a'.repeat(40),
+    tree_kind: 'tree',
+    tree_hash: 'b'.repeat(64),
+    tier: 'largest',
+    die: 'AD102',
+    family: 'ada',
+    gpu_name: 'RTX 4090',
+    host_driver: '580.159.04',
+    started_at: null,
+    ended_at: null,
+    verdict: 'PASS',
+  };
+  const doc = buildReport({
+    claims,
+    row,
+    runId: 'vast-1-1-0',
+    log: null,
+    offsets: null,
+    logsBase: null,
+  });
   assert.equal(doc.spec_notice.nc, '(nc)');
   assert.equal(doc.spec_notice.text, SPEC_DISCLAIMER);
   assert.match(doc.spec_notice.text, /^\(nc\) = non-compliant: .*https:\/\/www\.spec\.org$/);
   assert.equal(doc.spec_notice.release, 'SPECviewperf 15.0.0');
-  assert.equal(doc.spec_notice.configuration, 'host GPU RTX 4090, host driver 580.159.04, virtualisation layer kayfabe, guest OS Windows, guest driver 580.88');
+  assert.equal(
+    doc.spec_notice.configuration,
+    'host GPU RTX 4090, host driver 580.159.04, virtualisation layer kayfabe, guest OS Windows, guest driver 580.88',
+  );
   assert.ok(doc.spec.every((x) => x.nc === true));
-  const none = buildReport({ claims: cleanClaimsReport(goodReport()), row, runId: 'vast-1-1-0', log: null, offsets: null, logsBase: null });
+  const none = buildReport({
+    claims: cleanClaimsReport(goodReport()),
+    row,
+    runId: 'vast-1-1-0',
+    log: null,
+    offsets: null,
+    logsBase: null,
+  });
   assert.ok(!('spec_notice' in none), 'no rows, no notice');
-  const noRelease = cleanClaimsReport(goodReport({ rev: 2, spec: [{ sub: 'windows-580.88', name: 'medical-04', result: 'PASS' }] }));
-  assert.equal(buildReport({ claims: noRelease, row, runId: 'vast-1-1-0', log: null, offsets: null, logsBase: null }).spec_notice.release, null);
+  const noRelease = cleanClaimsReport(
+    goodReport({ rev: 2, spec: [{ sub: 'windows-580.88', name: 'medical-04', result: 'PASS' }] }),
+  );
+  assert.equal(
+    buildReport({
+      claims: noRelease,
+      row,
+      runId: 'vast-1-1-0',
+      log: null,
+      offsets: null,
+      logsBase: null,
+    }).spec_notice.release,
+    null,
+  );
 });

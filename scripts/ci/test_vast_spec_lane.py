@@ -665,8 +665,8 @@ class RunFacts(unittest.TestCase):
     """`SPEC_RUN`: seconds and counts only, from the guest's own END and reset lines and the table."""
 
     def test_the_real_proof_run_facts(self):
-        t = HERE.parents[1] / "traces/spec_stage_proof_20261109"
-        line = lane.facts_line("catia-07", text(t / "catia-07.end.txt"), text(t / "catia-07.tdr.txt"), TBL)
+        # copies of traces/spec_stage_proof_20261109/catia-07.{end,tdr}.txt (the mutant sandbox and the stripped tree have no traces/)
+        line = lane.facts_line("catia-07", text(FIX / "proof_catia-07.end.txt"), text(FIX / "proof_catia-07.tdr.txt"), TBL)
         self.assertEqual(line, "SPEC_RUN name=catia-07 wall_s=1118 native_s=803 resets=0")
 
     def test_missing_sources_are_dashes_never_zero(self):
