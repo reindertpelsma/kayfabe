@@ -611,6 +611,56 @@ class Retries(unittest.TestCase):
         got = self.box.run('cnt=0; f() { cnt=$((cnt+1)); echo "try $cnt"; return 7; }; pin_retry f; echo "rc=$?"')
         self.assertEqual(got.stdout.split(), ["try", "1", "try", "2", "try", "3", "rc=7"])
 
+    def tries(self, attempts=None, backoff=None, body="return 7"):
+        import time
+
+        prefix = "" if attempts is None else "PIN_RETRY_ATTEMPTS='%s'; " % attempts
+        prefix += "" if backoff is None else "PIN_RETRY_BACKOFF='%s'; " % backoff
+        started = time.monotonic()
+        got = self.box.run(
+            prefix + 'cnt=0; f() { cnt=$((cnt+1)); echo try; %s; }; pin_retry f; echo "rc=$?"' % body, timeout=40
+        )
+        self.elapsed = time.monotonic() - started
+        return got.stdout.split().count("try"), got
+
+    def test_non_numeric_attempt_counts_fail_closed_to_three(self):
+        for value in ("abc", "3; echo pwned", " ", "2.5"):
+            with self.subTest(value):
+                count, got = self.tries(value)
+                self.assertEqual(count, 3, got.stdout + got.stderr)
+                self.assertNotIn("pwned", got.stdout)
+
+    def test_out_of_range_attempt_counts_fail_closed_to_three(self):
+        for value in ("0", "-1", "6", "99999"):
+            with self.subTest(value):
+                count, got = self.tries(value)
+                self.assertEqual(count, 3, got.stdout + got.stderr)
+
+    def test_attempt_counts_from_one_to_five_are_honoured(self):
+        for value in ("1", "2", "4", "5"):
+            with self.subTest(value):
+                count, _ = self.tries(value)
+                self.assertEqual(count, int(value))
+
+    def test_a_non_numeric_backoff_means_three_seconds(self):
+        count, got = self.tries("2", "abc")
+        self.assertEqual(count, 2)
+        self.assertIn("rc=7", got.stdout)
+        self.assertGreaterEqual(self.elapsed, 2.5)
+
+    def test_a_huge_backoff_means_three_seconds(self):
+        count, got = self.tries("2", "99999")
+        self.assertEqual(count, 2)
+        self.assertGreaterEqual(self.elapsed, 2.5)
+        self.assertLess(self.elapsed, 30)
+
+    def test_a_callee_cannot_clobber_the_retry_state(self):
+        for body in ("n=100; rc=0; attempts=1; waits=x; w=y; return 7", "unset n rc attempts waits w; return 7"):
+            with self.subTest(body):
+                count, got = self.tries(body=body)
+                self.assertEqual(count, 3, got.stdout)
+                self.assertIn("rc=7", got.stdout)
+
     def test_pin_retry_stops_at_the_first_success(self):
         got = self.box.run('cnt=0; f() { cnt=$((cnt+1)); echo "try $cnt"; [ $cnt -ge 2 ]; }; pin_retry f; echo "rc=$?"')
         self.assertEqual(got.stdout.split(), ["try", "1", "try", "2", "rc=0"])
@@ -830,6 +880,33 @@ class SetupSideRows(unittest.TestCase):
         for row in ("SETUP_imports=ok", "SETUP_hf_model=ok", "SETUP_gguf=ok", "SETUP_blender=ok", "SETUP_SIDE_DONE"):
             self.assertIn(row, got.stdout)
         self.assertNotIn("=FAIL", got.stdout)
+
+    def test_the_opencl_icd_is_written_and_has_a_row(self):
+        got = self.setup()
+        self.assertIn("SETUP_icd=ok", got.stdout)
+        self.assertEqual((self.box.dir / "icd/nvidia.icd").read_text().strip(), "libnvidia-opencl.so.1")
+
+    def test_an_icd_directory_that_cannot_be_created_is_a_setup_failure(self):
+        blocker = self.box.dir / "blocker"
+        blocker.write_text("a file, not a directory")
+        got = self.setup({"OPENCL_VENDORS_DIR": str(blocker / "vendors")})
+        self.assertIn("SETUP_icd=FAIL", got.stdout)
+        self.assertNotEqual(got.returncode, 0)
+
+    def test_an_icd_file_that_cannot_be_written_is_a_setup_failure(self):
+        directory = self.box.dir / "icd"
+        directory.mkdir()
+        (directory / "nvidia.icd").mkdir()  # a directory where the file should be
+        got = self.setup()
+        self.assertIn("SETUP_icd=FAIL", got.stdout)
+        self.assertNotEqual(got.returncode, 0)
+
+    def test_every_expected_setup_row_is_printed_ok_on_a_good_run(self):
+        got = self.setup()
+        rows = [l.strip() for l in (APPS / "expected_rows.txt").read_text().splitlines() if l.startswith("SETUP_")]
+        self.assertEqual(len(rows), 8)
+        for row in rows:
+            self.assertIn(row + "=ok", got.stdout)
 
     def test_a_failed_import_is_a_setup_failure(self):
         got = self.setup({"FAKE_IMPORT_FAIL": "1"})

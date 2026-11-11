@@ -15,6 +15,8 @@ qemu-system-x86_64 -enable-kvm -cpu host -m 12G -smp 8 -display none \
   -drive if=virtio,file="$IMG",format=qcow2 \
   -netdev user,id=n0,hostfwd=tcp::2222-:22 -device virtio-net-pci,netdev=n0 \
   -serial file:"$BENCH/appsprov_serial.log" -daemonize -pidfile "$BENCH/appsprov.pid"
+# the stage kills this script's process group on a timeout; QEMU is daemonized, so stop it here as well
+trap '[ -s "$BENCH/appsprov.pid" ] && kill "$(cat "$BENCH/appsprov.pid")" 2>/dev/null; exit 143' TERM INT
 GS="ssh -i $BENCH/guest_key -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o ConnectTimeout=8 -o ServerAliveInterval=20 ubuntu@127.0.0.1"
 SCP="scp -i $BENCH/guest_key -P 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR"
 for i in $(seq 1 60); do $GS true >/dev/null 2>&1 && break; sleep 5; done
@@ -32,6 +34,11 @@ printf '%s\n' "$SETUP_OUT"
 # a failed guest setup step is a provisioning failure (the stage turns it into a MEDIA retry), never an app failure later
 SETUP_FAILS=$(printf '%s\n' "$SETUP_OUT" | grep -cE '^  guest: SETUP_[A-Za-z0-9_]+=FAIL')
 grep -q '^  guest: SETUP_SIDE_DONE' <<<"$SETUP_OUT" || SETUP_FAILS=$((SETUP_FAILS+1))
+# ... and every expected SETUP_ row (expected_rows.txt, the one list) must be present with =ok: a setup that died before
+# printing its row is not a success
+while read -r ROW; do
+  grep -qE "^  guest: ${ROW}=ok( |$)" <<<"$SETUP_OUT" || { say "⊘ expected row $ROW is missing or not ok"; SETUP_FAILS=$((SETUP_FAILS+1)); }
+done < <(grep -E '^SETUP_' "$HERE/expected_rows.txt")
 $GS "uname -r; modinfo -F version nvidia 2>&1"
 $GS "sudo poweroff" >/dev/null 2>&1
 for i in $(seq 1 30); do pgrep -x qemu-system-x86 >/dev/null || break; sleep 3; done

@@ -491,12 +491,20 @@ def apps_requested(tier):
     return bool(APPS_STAGE_ENABLED) and tier in APPS_TIERS
 
 
+APPS_STAGE_KNOBS = ("KF_APPS_BUDGET_S", "KF_APPS_MIN_FREE_GB", "KF_APPS_TEST_MIN_FREE_GB")
+
+
 def linuxapps_requested(environ, tier):
     """Worker-authored explicit middle opt-in; the old source flag remains a legacy owner control.
 
     KF_APPS_PROVISION is consumed here too and never forwarded: a fresh Worker box has no built media, so the stage
     is always started with KF_APPS_PROVISION=1 by the payload itself (below); whatever the environment says about it
-    cannot weaken or strengthen that."""
+    cannot weaken or strengthen that. The same holds for the stage's other knobs, which the 100-minute reserve below
+    assumes at their defaults: KF_APPS_BUDGET_S (matrix budget), KF_APPS_MIN_FREE_GB and KF_APPS_TEST_MIN_FREE_GB
+    (free-disk minimum) are popped, so the stage always runs with its own constants (apps_gate.py also clamps a
+    longer budget to the default). None has a row in the box's environment contract."""
+    for knob in APPS_STAGE_KNOBS:
+        environ.pop(knob, None)
     environ.pop("KF_APPS_PROVISION", None)
     value = environ.pop("KF_LINUX_APPS", None)
     if value is None:
@@ -1636,7 +1644,7 @@ def main():
                 [matrix_log],
             )
             stage.update(min_remaining_ms=APPS_MIN_REMAINING_MS + (
-                WINDOWS_MIN_REMAINING_MS + WINAPPS_MIN_REMAINING_MS[winapps] if windows and winapps else 0
+                WINDOWS_MIN_REMAINING_MS + (WINAPPS_MIN_REMAINING_MS[winapps] if winapps else 0) if windows else 0
             ), short_row="apps_retry_time")
             stages.append(stage)
         if windows:

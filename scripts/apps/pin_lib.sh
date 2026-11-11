@@ -76,15 +76,22 @@ pin_fetch_once() {
 # pin_retry CMD...: run CMD up to PIN_RETRY_ATTEMPTS times (default 3), sleeping the PIN_RETRY_BACKOFF seconds
 # (space separated, default "3 10") between attempts. Returns the last status. No retry of anything that is not a fetch.
 pin_retry() {
-  local attempts=${PIN_RETRY_ATTEMPTS:-3} n=1 rc waits
-  read -r -a waits <<<"${PIN_RETRY_BACKOFF:-3 10}"
+  # Local names carry a prefix so that a callee (which shares our dynamic scope) cannot collide with them. The attempts
+  # value must be a number from 1 to 5 and every backoff a number of seconds up to 999: anything else fails closed to
+  # the defaults (3 attempts, 3 s), never to a loop without end.
+  local _pr_attempts=${PIN_RETRY_ATTEMPTS:-3} _pr_n=1 _pr_rc _pr_waits _pr_w
+  [[ $_pr_attempts =~ ^[1-5]$ ]] || _pr_attempts=3
+  read -r -a _pr_waits <<<"${PIN_RETRY_BACKOFF:-3 10}"
+  [ "${#_pr_waits[@]}" -gt 0 ] || _pr_waits=(3)
   while true; do
     "$@"
-    rc=$?
-    [ "$rc" -eq 0 ] && return 0
-    [ "$n" -ge "$attempts" ] && return "$rc"
-    sleep "${waits[$((n - 1))]:-${waits[-1]:-3}}"
-    n=$((n + 1))
+    _pr_rc=$?
+    [ "$_pr_rc" -eq 0 ] && return 0
+    [ "$_pr_n" -ge "$_pr_attempts" ] && return "$_pr_rc"
+    _pr_w=${_pr_waits[$((_pr_n - 1))]:-${_pr_waits[${#_pr_waits[@]} - 1]}}
+    [[ $_pr_w =~ ^[0-9]{1,3}$ ]] || _pr_w=3
+    sleep "$_pr_w"
+    _pr_n=$((_pr_n + 1))
   done
 }
 

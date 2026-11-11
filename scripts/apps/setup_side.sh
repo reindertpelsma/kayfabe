@@ -19,7 +19,7 @@ apt-get -o Acquire::Retries=3 install -y -qq --no-install-recommends ffmpeg vulk
   libxrender1 libxkbcommon0 libsm6 libice6 >/tmp/setup_apt.log 2>&1; ok apt $?
 # ⊘ the NVIDIA OpenCL ICD file is installed by the driver .run; assert it rather than assume it
 ICD_DIR=${OPENCL_VENDORS_DIR:-/etc/OpenCL/vendors}
-[ -f "$ICD_DIR/nvidia.icd" ] || echo "libnvidia-opencl.so.1" > "$ICD_DIR/nvidia.icd"
+mkdir -p "$ICD_DIR" && { [ -f "$ICD_DIR/nvidia.icd" ] || echo "libnvidia-opencl.so.1" > "$ICD_DIR/nvidia.icd"; } && [ -s "$ICD_DIR/nvidia.icd" ]; ok icd $?
 
 if [ ! -x $A/venv/bin/python ]; then python3 -m venv $A/venv; fi
 pin_retry $A/venv/bin/pip -q install --upgrade pip >/dev/null 2>&1

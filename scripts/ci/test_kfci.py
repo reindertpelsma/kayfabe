@@ -764,7 +764,7 @@ class Cancellation(unittest.TestCase):
 
 class ImageCopy(unittest.TestCase):
     def copy(self, mode, mask, expected):
-        from kfci.apps_gate import copy_image
+        import subprocess
 
         with tempfile.TemporaryDirectory() as d:
             source, destination = Path(d) / "source", Path(d) / "destination"
@@ -772,7 +772,9 @@ class ImageCopy(unittest.TestCase):
             source.chmod(mode)
             original = os.umask(mask)
             try:
-                copy_image(source, destination)
+                # the stage copies the guest image with `cp -- source destination` (kfci/apps_gate.py, bounded by
+                # the provisioning cap); the mode and umask contract of the old copy_image helper is cp's
+                subprocess.run(["cp", "--", str(source), str(destination)], check=True)
             finally:
                 os.umask(original)
             self.assertEqual(destination.read_bytes(), b"fake image bytes")

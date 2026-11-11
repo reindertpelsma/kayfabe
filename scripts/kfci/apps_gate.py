@@ -12,6 +12,7 @@ from pathlib import Path
 import os
 import re
 import shutil
+import signal
 import sys
 import tempfile
 import time
@@ -116,17 +117,46 @@ def free_bytes(path):
     return shutil.disk_usage(path).free
 
 
+def clamp_budget(value):
+    """The matrix budget: the default unless a plain duration BELOW it is given. The payload's reserve
+    (vast_payload.APPS_MIN_REMAINING_MS) assumes at most the default, so a longer value is cut to the default; a value
+    GNU timeout cannot parse is passed on and fails there (an OPERATOR retry), it never extends anything."""
+    default = str(MATRIX_BUDGET_DEFAULT_S)
+    match = re.fullmatch(r"([0-9]+)([smhd]?)", value or "")
+    if not match:
+        return value or default
+    seconds = int(match[1]) * {"": 1, "s": 1, "m": 60, "h": 3600, "d": 86400}[match[2]]
+    return value if 0 < seconds <= MATRIX_BUDGET_DEFAULT_S else default
+
+
+def stop_provisioning_qemu(bench):
+    """Stop the QEMU that provision_guest_apps.sh daemonized (its pidfile), and only a process that is a QEMU."""
+    pidfile = Path(bench) / "appsprov.pid"
+    try:
+        pid = int(pidfile.read_text().split()[0])
+        if pid <= 1 or not Path("/proc/%d/comm" % pid).read_text().startswith("qemu-system"):
+            return False
+    except (OSError, ValueError, IndexError):
+        return False
+    for sig, wait in ((signal.SIGTERM, 10), (signal.SIGKILL, 5)):
+        try:
+            os.kill(pid, sig)
+        except ProcessLookupError:
+            return True
+        for _ in range(wait * 10):
+            try:
+                os.kill(pid, 0)
+                # a zombie still answers kill(0); comm of a reaped pid is gone
+                if Path("/proc/%d/stat" % pid).read_text().split(") ")[-1].startswith("Z"):
+                    return True
+            except (ProcessLookupError, OSError):
+                return True
+            time.sleep(0.1)
+    return False
+
+
 def timestamp():
     return datetime.now().astimezone().isoformat(timespec="seconds")
-
-
-def copy_image(source, destination):
-    """Like cp to a new image: retain source permissions subject to the umask."""
-    descriptor = os.open(
-        destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, source.stat().st_mode & 0o777
-    )
-    with os.fdopen(descriptor, "wb") as target, source.open("rb") as original:
-        shutil.copyfileobj(original, target)
 
 
 def result_lines(path):
@@ -169,6 +199,23 @@ def last_row(paths, app):
 # A failed provisioning step prints BUILD_<name>=FAIL (build_bundle.sh) or SETUP_<name>=FAIL (setup_side.sh, whose lines
 # provision_guest_apps.sh prefixes with "  guest: "). Either one means the media is not what the gate list needs.
 PROVISION_FAIL = re.compile(r"^(?:  guest: )?((?:BUILD|SETUP)_[A-Za-z0-9_]{1,64})=FAIL(?: |$)")
+
+
+def expected_rows(prefix, root):
+    """The provisioning rows that must be present and ok (scripts/apps/expected_rows.txt, the one list)."""
+    rows = []
+    for line in (Path(root) / "scripts/apps/expected_rows.txt").read_text().splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and line.startswith(prefix):
+            rows.append(line)
+    return rows
+
+
+PROVISION_OK = re.compile(r"^(?:  guest: )?((?:BUILD|SETUP)_[A-Za-z0-9_]{1,64})=ok(?: |$)")
+
+
+def provision_ok_rows(path):
+    return {m[1] for line, _invalid in result_lines(path) if (m := PROVISION_OK.match(line))}
 
 
 def provision_failures(path):
@@ -240,9 +287,9 @@ class AppsGate(Step):
     needs = ("linux_apps_ready",)
     produces = ("linux_apps_checked",)
     estimated_minutes = 50
-    timeout_seconds = (
-        10200  # optional provisioning (2 h) plus the default matrix budget
-    )
+    # Optional provisioning (PROVISION_CAP_S in total) plus the matrix (its budget, capped at the default, and
+    # GNU timeout's 30 s kill grace) plus 5 minutes for the policy and list checks.
+    timeout_seconds = PROVISION_CAP_S + MATRIX_BUDGET_DEFAULT_S + 5 * 60
 
     def __init__(self, profile=None):
         self.profile = profile
@@ -298,7 +345,7 @@ class AppsGate(Step):
             env.get("KF_APPS_LIST")
             or apps / ("gate_list_middle.txt" if which == "middle" else "gate_list.txt")
         )
-        budget = env.get("KF_APPS_BUDGET_S") or str(MATRIX_BUDGET_DEFAULT_S)
+        budget = clamp_budget(env.get("KF_APPS_BUDGET_S"))
         per_boot = env.get("KF_APPS_PER_BOOT") or "100"
         poll = float(env.get("KF_APPS_POLL_S") or "5")
         if poll <= 0:
@@ -454,8 +501,14 @@ class AppsGate(Step):
     @staticmethod
     def enough_disk(ctx, root, bench):
         """Free-space guard before provisioning; the numbers are in the row, a shortfall is a MEDIA retry."""
-        # KF_APPS_MIN_FREE_GB is a test seam (the box's environment contract has no row for it).
-        need = int(ctx.env.get("KF_APPS_MIN_FREE_GB") or APPS_MIN_FREE_GB)
+        # KF_APPS_TEST_MIN_FREE_GB is the tests' only way to go below the minimum. Production cannot reach it: the
+        # box's environment contract has no row for it (test_apps_media.py), and the payload pops it with the other
+        # KF_APPS_* knobs before any stage starts (vast_payload.linuxapps_requested). Anything but a plain number
+        # >= 0 is an error (a MEDIA retry); the production minimum is the constant.
+        override = ctx.env.get("KF_APPS_TEST_MIN_FREE_GB")
+        need = APPS_MIN_FREE_GB if not override else int(override)
+        if need < 0:
+            raise ValueError("negative free-space minimum")
         free = min(free_bytes(root), free_bytes(bench))
         if free >= need * 10**9:
             return True
@@ -479,11 +532,20 @@ class AppsGate(Step):
                 )
             # build_bundle.sh exits non-zero on a failed step, but an older copy of it (or a step that fails after
             # the last check) can still print BUILD_*=FAIL and exit 0: the log is the evidence, so it is read too.
-            if self.failed_steps(ctx, logfile):
+            if self.failed_steps(ctx, logfile, "BUILD_"):
                 return 1
             image = Path(ctx.env["KF_GUEST_IMG"])
             if not image.is_file():
-                copy_image(bench / "guest.qcow2", image)
+                # A bounded cp (the copy is part of the shared cap; its time was never measured on its own).
+                remaining = deadline - time.monotonic()
+                if remaining <= 1:
+                    return 124
+                copied = ctx.process(
+                    ["cp", "--", str(bench / "guest.qcow2"), str(image)], timeout=remaining
+                )
+                if copied.returncode:
+                    image.unlink(missing_ok=True)  # never leave a partial image that a rerun would trust
+                    return copied.returncode if copied.returncode > 0 else 128 - copied.returncode
             # The old sed changes every image= line and preserves all other bytes.
             staged = (bench / "guest.qcow2.STAGED").read_bytes()
             updated = re.sub(
@@ -492,21 +554,28 @@ class AppsGate(Step):
             Path(str(image) + ".STAGED").write_bytes(updated)
             if deadline - time.monotonic() <= 1:
                 return 124  # the build used the whole cap
-            ran = ctx.process(
-                ["bash", str(apps / "provision_guest_apps.sh")],
-                timeout=deadline - time.monotonic(),
-                allow_env=legacy_allowlist(ctx.env),
-                log=log,
-            )
-            if ran.returncode == 0 and not self.failed_steps(ctx, logfile):
+            try:
+                ran = ctx.process(
+                    ["bash", str(apps / "provision_guest_apps.sh")],
+                    timeout=deadline - time.monotonic(),
+                    allow_env=legacy_allowlist(ctx.env),
+                    log=log,
+                )
+            finally:
+                # The script starts QEMU with -daemonize, so killing the script's process group does not stop it.
+                stop_provisioning_qemu(bench)
+            if ran.returncode == 0 and not self.failed_steps(ctx, logfile, "SETUP_"):
                 marker.write_text(timestamp() + "\n")
                 return 0
             return ran.returncode if ran.returncode > 0 else (128 - ran.returncode if ran.returncode < 0 else 1)
 
     @staticmethod
-    def failed_steps(ctx, logfile):
-        """Report (one bounded line) and return the failed provisioning steps of this run's log."""
+    def failed_steps(ctx, logfile, prefix):
+        """Report (one bounded line) and return the failed provisioning steps of this run's log: every row that
+        printed =FAIL, and every EXPECTED row of the stage (prefix BUILD_ or SETUP_) that is not present with =ok."""
         names = provision_failures(logfile)
+        present = provision_ok_rows(logfile)
+        names += ["missing_" + row for row in expected_rows(prefix, ctx.root) if row not in present]
         if names:
             ctx.emit("APPS_PROVISION_FAIL steps=" + ",".join(names[:8]) + (",..." if len(names) > 8 else ""))
         return names

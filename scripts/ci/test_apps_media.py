@@ -13,10 +13,13 @@ media that did not build; or a successful provisioning does not reach the matrix
 
 import contextlib
 import os
+import re
+import subprocess
 from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 
@@ -25,6 +28,13 @@ import test_vast_payload_v7 as v7
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
+EXPECTED = [
+    line.strip()
+    for line in (ROOT / "scripts/apps/expected_rows.txt").read_text().splitlines()
+    if line.strip() and not line.startswith("#")
+]
+EXPECTED_BUILD = [r for r in EXPECTED if r.startswith("BUILD_")]
+EXPECTED_SETUP = [r for r in EXPECTED if r.startswith("SETUP_")]
 PROVISION_MINUTES = 29  # measured, see the comment above APPS_MIN_REMAINING_MS
 MATRIX_CAP_S = 3000  # KF_APPS_BUDGET_S default of the stage
 
@@ -170,8 +180,14 @@ def build_tree(root):
 class StageProvisioning(unittest.TestCase):
     """The stage with KF_APPS_PROVISION=1 and fake build/provision scripts: what a failed step turns into."""
 
-    GOOD_BUILD = "echo BUILD_gpu_burn=ok\nmkdir -p \"$KF_APPS_ROOT\"; echo bundle > \"$KF_APPS_ROOT/bundle.tgz\"\n"
-    GOOD_GUEST = "echo '  guest: SETUP_gguf=ok'\necho '  guest: SETUP_SIDE_DONE'\n"
+    # every expected row (scripts/apps/expected_rows.txt) printed ok, as the real scripts do
+    GOOD_BUILD = (
+        "".join("echo %s=ok\n" % row for row in EXPECTED_BUILD)
+        + "mkdir -p \"$KF_APPS_ROOT\"; echo bundle > \"$KF_APPS_ROOT/bundle.tgz\"\n"
+    )
+    GOOD_GUEST = (
+        "".join("echo '  guest: %s=ok'\n" % row for row in EXPECTED_SETUP) + "echo '  guest: SETUP_SIDE_DONE'\n"
+    )
 
     def run_stage(self, build=None, guest=None, provision="1", marker_first=False):
         with tempfile.TemporaryDirectory() as directory:
@@ -206,7 +222,7 @@ class StageProvisioning(unittest.TestCase):
                 "KF_APPS_BUDGET_S": "30",
                 "KF_APPS_POLL_S": "0.2",
                 "BENCH_DIR": str(bench),
-                "KF_APPS_MIN_FREE_GB": "0",  # the test machine may have less than the stage's 60 GB
+                "KF_APPS_TEST_MIN_FREE_GB": "0",  # the test machine may have less than the stage's 60 GB
             }
             if provision is not None:
                 env["KF_APPS_PROVISION"] = provision
@@ -338,7 +354,7 @@ class ProvisioningBounds(unittest.TestCase):
     def test_the_default_minimum_free_space_is_sixty_gigabytes(self):
         self.assertEqual(self.gate.APPS_MIN_FREE_GB, 60)
 
-    def run_gate(self, build="", guest="", patches=(), free=None, env=None):
+    def run_gate(self, build="", guest="", patches=(), free=None, env=None, preimage=False):
         """The stage in this process, with fake build scripts, under patched constants; returns (rc, output, files, secs)."""
         import io
         import time
@@ -356,6 +372,8 @@ class ProvisioningBounds(unittest.TestCase):
             bench.mkdir()
             (bench / "guest.qcow2").write_text("image")
             (bench / "guest.qcow2.STAGED").write_text("image=/x\n")
+            if preimage:  # the guest image copy already exists, so the stage goes straight to the guest image step
+                (bench / "guest_apps.qcow2").write_text("image")
             (root / "apps").mkdir()
             (root / "list.txt").write_text("vectorAdd\ndeviceQuery\n")
             (root / "matrix.sh").write_text(
@@ -375,7 +393,7 @@ class ProvisioningBounds(unittest.TestCase):
                 "KF_APPS_POLL_S": "0.2",
                 "BENCH_DIR": str(bench),
                 "KF_APPS_PROVISION": "1",
-                "KF_APPS_MIN_FREE_GB": "0",
+                "KF_APPS_TEST_MIN_FREE_GB": "0",
             }
             environment.update(env or {})
             out = io.StringIO()
@@ -392,6 +410,9 @@ class ProvisioningBounds(unittest.TestCase):
                 result = self.gate.AppsGate().run(ctx)
             files = {n: (root / "apps" / n).exists() for n in ("build.ran", "guest.ran", "PROVISIONED")}
             files["matrix.ran"] = (root / "matrix.ran").exists()
+            pidfile = bench / "appsprov.pid"
+            files["pid"] = int(pidfile.read_text()) if pidfile.exists() else None
+            files["image"] = (bench / "guest_apps.qcow2").exists()
             return result.rc, out.getvalue(), files, time.monotonic() - started
 
     # ---- the total cap -------------------------------------------------------------------------------------------
@@ -428,7 +449,7 @@ class ProvisioningBounds(unittest.TestCase):
 
     def test_a_build_that_used_the_whole_cap_does_not_start_the_guest_image(self):
         rc, out, files, secs = self.run_gate(
-            build=StageProvisioning.GOOD_BUILD + "sleep 4.2\n", patches=[("PROVISION_CAP_S", 5)]
+            build=StageProvisioning.GOOD_BUILD + "sleep 4.2\n", patches=[("PROVISION_CAP_S", 5)], preimage=True
         )
         self.assertEqual(rc, 3, out)
         self.assertFalse(files["guest.ran"])
@@ -442,7 +463,7 @@ class ProvisioningBounds(unittest.TestCase):
 
     def test_a_build_that_left_under_a_second_does_not_start_the_guest_image(self):
         rc, out, files, secs = self.run_gate(
-            build=StageProvisioning.GOOD_BUILD + "sleep 4.6\n", patches=[("PROVISION_CAP_S", 5)]
+            build=StageProvisioning.GOOD_BUILD + "sleep 4.6\n", patches=[("PROVISION_CAP_S", 5)], preimage=True
         )
         self.assertEqual(rc, 3, out)
         self.assertFalse(files["guest.ran"])
@@ -454,7 +475,7 @@ class ProvisioningBounds(unittest.TestCase):
 
     # ---- the free-disk guard -------------------------------------------------------------------------------------
     def test_low_free_disk_is_a_media_retry_with_the_numbers_and_nothing_is_built(self):
-        rc, out, files, _ = self.run_gate(free=lambda path: 10 * 10**9, env={"KF_APPS_MIN_FREE_GB": ""})
+        rc, out, files, _ = self.run_gate(free=lambda path: 10 * 10**9, env={"KF_APPS_TEST_MIN_FREE_GB": ""})
         self.assertEqual(rc, 3, out)
         self.assertIn("APPS_PROVISION_DISK free_gb=10 need_gb=60", out)
         self.assertIn("APPS_STAGE_RETRY class=MEDIA", out)
@@ -462,10 +483,10 @@ class ProvisioningBounds(unittest.TestCase):
         self.assertFalse(files["matrix.ran"])
 
     def test_just_under_the_minimum_is_refused_and_the_minimum_is_accepted(self):
-        rc, out, files, _ = self.run_gate(free=lambda path: 60 * 10**9 - 1, env={"KF_APPS_MIN_FREE_GB": ""})
+        rc, out, files, _ = self.run_gate(free=lambda path: 60 * 10**9 - 1, env={"KF_APPS_TEST_MIN_FREE_GB": ""})
         self.assertEqual(rc, 3, out)
         self.assertFalse(files["build.ran"])
-        rc, out, files, _ = self.run_gate(free=lambda path: 60 * 10**9, env={"KF_APPS_MIN_FREE_GB": ""})
+        rc, out, files, _ = self.run_gate(free=lambda path: 60 * 10**9, env={"KF_APPS_TEST_MIN_FREE_GB": ""})
         self.assertEqual(rc, 0, out)
         self.assertTrue(files["build.ran"])
 
@@ -473,7 +494,7 @@ class ProvisioningBounds(unittest.TestCase):
         def free(path):
             return 500 * 10**9 if str(path).endswith("/apps") else 20 * 10**9
 
-        rc, out, files, _ = self.run_gate(free=free, env={"KF_APPS_MIN_FREE_GB": ""})
+        rc, out, files, _ = self.run_gate(free=free, env={"KF_APPS_TEST_MIN_FREE_GB": ""})
         self.assertEqual(rc, 3, out)
         self.assertIn("free_gb=20 need_gb=60", out)
         self.assertFalse(files["build.ran"])
@@ -482,7 +503,7 @@ class ProvisioningBounds(unittest.TestCase):
         def free(path):
             return 20 * 10**9 if str(path).endswith("/apps") else 500 * 10**9
 
-        rc, out, files, _ = self.run_gate(free=free, env={"KF_APPS_MIN_FREE_GB": ""})
+        rc, out, files, _ = self.run_gate(free=free, env={"KF_APPS_TEST_MIN_FREE_GB": ""})
         self.assertEqual(rc, 3, out)
         self.assertIn("free_gb=20 need_gb=60", out)
         self.assertFalse(files["build.ran"])
@@ -491,7 +512,7 @@ class ProvisioningBounds(unittest.TestCase):
         def free(path):
             return 500 * 10**9 if str(path).endswith("/apps") else 60 * 10**9 - 1
 
-        rc, out, files, _ = self.run_gate(free=free, env={"KF_APPS_MIN_FREE_GB": ""})
+        rc, out, files, _ = self.run_gate(free=free, env={"KF_APPS_TEST_MIN_FREE_GB": ""})
         self.assertEqual(rc, 3, out)
         self.assertFalse(files["build.ran"])
 
@@ -499,18 +520,348 @@ class ProvisioningBounds(unittest.TestCase):
         def free(path):
             return 60 * 10**9 - 1 if str(path).endswith("/apps") else 500 * 10**9
 
-        rc, out, files, _ = self.run_gate(free=free, env={"KF_APPS_MIN_FREE_GB": ""})
+        rc, out, files, _ = self.run_gate(free=free, env={"KF_APPS_TEST_MIN_FREE_GB": ""})
         self.assertEqual(rc, 3, out)
         self.assertFalse(files["build.ran"])
 
     def test_the_guard_does_not_apply_without_provisioning(self):
-        rc, out, files, _ = self.run_gate(free=lambda path: 0, env={"KF_APPS_PROVISION": "0", "KF_APPS_MIN_FREE_GB": ""})
+        rc, out, files, _ = self.run_gate(free=lambda path: 0, env={"KF_APPS_PROVISION": "0", "KF_APPS_TEST_MIN_FREE_GB": ""})
         self.assertNotIn("APPS_PROVISION_DISK", out)
         self.assertFalse(files["build.ran"])
 
     def test_free_bytes_uses_the_nearest_existing_parent(self):
         with tempfile.TemporaryDirectory() as directory:
             self.assertGreater(self.gate.free_bytes(Path(directory) / "no/such/dir"), 0)
+
+
+def alive(pid):
+    """True while the process runs; a zombie that nobody reaped counts as dead."""
+    try:
+        os.kill(pid, 0)
+        state = Path("/proc/%d/stat" % pid).read_text().split(") ")[-1][:1]
+    except (ProcessLookupError, OSError):
+        return False
+    return state != "Z"
+
+
+class StageKnobs(unittest.TestCase):
+    """The stage's knobs cannot be set from the environment in production; the tests have one explicit seam."""
+
+    gate, Context = load_gate()
+    setUp = v7.V7Tests.setUp
+    _main_fixture = v7.V7Tests._main_fixture
+    go = PayloadPlansProvisioning.go
+
+    def run_gate(self, **kw):
+        return ProvisioningBounds.run_gate(self, **kw)
+
+    def test_the_payload_pops_every_knob_before_any_stage(self):
+        snapshots = []
+        env = {k: "1" for k in ("KF_APPS_BUDGET_S", "KF_APPS_MIN_FREE_GB", "KF_APPS_TEST_MIN_FREE_GB")}
+        rc, _, _ = self.go(env=env, probe=snapshots.append)
+        self.assertEqual(rc, 0)
+        self.assertTrue(snapshots)
+        for knob in env:
+            self.assertTrue(all(knob not in snap for snap in snapshots), knob)
+
+    def test_the_budget_knob_is_popped_by_the_direct_call(self):
+        env = {"KF_LINUX_APPS": "1", "KF_APPS_BUDGET_S": "99999"}
+        apps.payload().linuxapps_requested(env, "middle")
+        self.assertNotIn("KF_APPS_BUDGET_S", env)
+
+    def test_the_free_space_knobs_are_popped_by_the_direct_call(self):
+        env = {"KF_LINUX_APPS": "1", "KF_APPS_MIN_FREE_GB": "0", "KF_APPS_TEST_MIN_FREE_GB": "0"}
+        apps.payload().linuxapps_requested(env, "middle")
+        self.assertEqual(env, {})
+
+    def test_none_of_the_knobs_has_a_row_in_the_environment_contract(self):
+        text = (HERE / "vast_report.py").read_text()
+        for knob in ("KF_APPS_BUDGET_S", "KF_APPS_MIN_FREE_GB", "KF_APPS_TEST_MIN_FREE_GB", "KF_APPS_PROVISION"):
+            self.assertNotIn(knob, text)
+
+    # ---- the matrix budget is clamped to the default --------------------------------------------------------------
+    def test_a_longer_budget_is_cut_to_the_default(self):
+        for value in ("99999", "3001", "51m", "2h", "1d"):
+            self.assertEqual(self.gate.clamp_budget(value), str(self.gate.MATRIX_BUDGET_DEFAULT_S), value)
+
+    def test_a_shorter_or_equal_budget_is_kept(self):
+        for value in ("30", "3000", "10m", "50m", "1s"):
+            self.assertEqual(self.gate.clamp_budget(value), value)
+
+    def test_no_budget_is_the_default_and_zero_is_the_default(self):
+        self.assertEqual(self.gate.clamp_budget(None), "3000")
+        self.assertEqual(self.gate.clamp_budget(""), "3000")
+        self.assertEqual(self.gate.clamp_budget("0"), "3000")
+
+    def test_an_unparsable_budget_is_passed_on_to_fail_there(self):
+        self.assertEqual(self.gate.clamp_budget("abc"), "abc")
+
+    def test_the_stage_uses_the_clamped_budget(self):
+        rc, out, files, _ = self.run_gate(env={"KF_APPS_BUDGET_S": "99999"})
+        self.assertIn("budget_s=3000 ", out)
+
+    # ---- the free-space minimum ----------------------------------------------------------------------------------
+    def test_the_old_knob_name_no_longer_lowers_the_minimum(self):
+        rc, out, files, _ = self.run_gate(
+            free=lambda path: 10 * 10**9, env={"KF_APPS_TEST_MIN_FREE_GB": "", "KF_APPS_MIN_FREE_GB": "0"}
+        )
+        self.assertEqual(rc, 3, out)
+        self.assertFalse(files["build.ran"])
+
+    def test_a_negative_minimum_is_an_error_not_a_disabled_guard(self):
+        rc, out, files, _ = self.run_gate(free=lambda path: 10 * 10**9, env={"KF_APPS_TEST_MIN_FREE_GB": "-5"})
+        self.assertEqual(rc, 3, out)
+        self.assertFalse(files["build.ran"])
+
+    def test_another_negative_minimum_is_an_error_too(self):
+        rc, out, files, _ = self.run_gate(free=lambda path: 10**12, env={"KF_APPS_TEST_MIN_FREE_GB": "-1"})
+        self.assertEqual(rc, 3, out)
+        self.assertFalse(files["build.ran"])
+
+    def test_a_garbage_minimum_is_an_error_not_a_disabled_guard(self):
+        rc, out, files, _ = self.run_gate(free=lambda path: 10**12, env={"KF_APPS_TEST_MIN_FREE_GB": "lots"})
+        self.assertEqual(rc, 3, out)
+        self.assertFalse(files["build.ran"])
+
+
+class ExpectedRows(unittest.TestCase):
+    """A missing row is a provisioning failure, like a FAIL row (scripts/apps/expected_rows.txt, the one list)."""
+
+    run_gate = ProvisioningBounds.run_gate
+    gate, Context = load_gate()
+
+    def test_the_list_is_exactly_what_the_stage_expects(self):
+        self.assertEqual(
+            EXPECTED_BUILD,
+            ["BUILD_" + n for n in (
+                "open_dev_packages", "cuda_libs", "cuda_headers", "src_cuda_samples", "src_gpu_burn",
+                "src_llama_cpp", "src_clpeak", "egl_offscreen", "gpu_burn", "llama_cpp", "clpeak", "vkpeak",
+                "bundle_tar")],
+        )
+        self.assertEqual(
+            EXPECTED_SETUP,
+            ["SETUP_" + n for n in ("apt", "icd", "torch", "pylibs", "imports", "hf_model", "gguf", "blender")],
+        )
+
+    def test_every_expected_row_is_printed_by_its_script(self):
+        bundle = (ROOT / "scripts/apps/build_bundle.sh").read_text()
+        guest = (ROOT / "scripts/apps/setup_side.sh").read_text()
+        for row in EXPECTED_BUILD:
+            self.assertRegex(bundle, r"\bok %s \$" % row[len("BUILD_"):], row)
+        for row in EXPECTED_SETUP:
+            self.assertRegex(guest, r"\bok %s \$" % row[len("SETUP_"):], row)
+
+    GUEST_LOOP = re.compile(r"while read -r ROW; do\n.*?\ndone < <\(grep -E '\^SETUP_' \"\$HERE/expected_rows.txt\"\)\n", re.S)
+
+    def check_loop(self, setup_out):
+        """Run the expected-rows loop of provision_guest_apps.sh on a given guest output; returns SETUP_FAILS."""
+        text = (ROOT / "scripts/apps/provision_guest_apps.sh").read_text()
+        loop = self.GUEST_LOOP.search(text)
+        self.assertIsNotNone(loop)
+        script = 'say() { echo "$*"; }\nHERE="%s"\nSETUP_FAILS=0\nSETUP_OUT=$(cat)\n%secho "FAILS=$SETUP_FAILS"\n' % (
+            ROOT / "scripts/apps", loop[0])
+        got = subprocess.run(["bash", "-c", script], input=setup_out, capture_output=True, text=True, timeout=30)
+        return int(re.search(r"FAILS=(\d+)", got.stdout)[1])
+
+    def guest_output(self, drop=None, replace=None):
+        rows = ["  guest: %s=ok" % r for r in EXPECTED_SETUP if r != drop]
+        text = "\n".join(rows) + "\n  guest: SETUP_SIDE_DONE\n"
+        return text.replace(*replace) if replace else text
+
+    def test_the_guest_script_counts_nothing_when_every_row_is_ok(self):
+        self.assertEqual(self.check_loop(self.guest_output()), 0)
+
+    def test_the_guest_script_counts_every_missing_row(self):
+        for row in EXPECTED_SETUP:
+            with self.subTest(row):
+                self.assertEqual(self.check_loop(self.guest_output(drop=row)), 1)
+
+    def test_the_guest_script_counts_a_row_that_is_not_ok(self):
+        self.assertEqual(self.check_loop(self.guest_output(replace=("SETUP_gguf=ok", "SETUP_gguf=SKIPPED"))), 1)
+
+    def test_the_guest_script_still_exits_five_on_any_count(self):
+        text = (ROOT / "scripts/apps/provision_guest_apps.sh").read_text()
+        self.assertIn('[ "$SETUP_FAILS" -eq 0 ] || {', text)
+        self.assertIn("exit 5", text)
+
+    def test_every_build_row_missing_is_a_media_retry(self):
+        for row in EXPECTED_BUILD:
+            with self.subTest(row):
+                build = StageProvisioning.GOOD_BUILD.replace("echo %s=ok\n" % row, "")
+                self.assertNotEqual(build, StageProvisioning.GOOD_BUILD)
+                rc, out, files, _ = self.run_gate(build=build)
+                self.assertEqual(rc, 3, out)
+                self.assertIn("APPS_STAGE_RETRY class=MEDIA", out)
+                self.assertIn("missing_" + row, out)
+                self.assertFalse(files["guest.ran"])
+                self.assertFalse(files["matrix.ran"])
+
+    def test_every_setup_row_missing_is_a_media_retry(self):
+        for row in EXPECTED_SETUP:
+            with self.subTest(row):
+                guest = StageProvisioning.GOOD_GUEST.replace("echo '  guest: %s=ok'\n" % row, "")
+                self.assertNotEqual(guest, StageProvisioning.GOOD_GUEST)
+                rc, out, files, _ = self.run_gate(guest=guest)
+                self.assertEqual(rc, 3, out)
+                self.assertIn("APPS_STAGE_RETRY class=MEDIA", out)
+                self.assertIn("missing_" + row, out)
+                self.assertFalse(files["PROVISIONED"])
+                self.assertFalse(files["matrix.ran"])
+
+    def test_a_row_that_is_not_ok_does_not_count_as_present(self):
+        rc, out, files, _ = self.run_gate(guest=StageProvisioning.GOOD_GUEST.replace("SETUP_gguf=ok", "SETUP_gguf=SKIPPED"))
+        self.assertEqual(rc, 3, out)
+        self.assertIn("missing_SETUP_gguf", out)
+
+    def test_all_rows_present_is_not_a_failure(self):
+        rc, out, files, _ = self.run_gate()
+        self.assertEqual(rc, 0, out)
+        self.assertNotIn("APPS_PROVISION_FAIL", out)
+
+
+class BoundedCopyAndQemu(unittest.TestCase):
+    """The image copy is inside the shared cap, and a daemonized provisioning QEMU does not outlive a failed stage."""
+
+    run_gate = ProvisioningBounds.run_gate
+    gate, Context = load_gate()
+
+    def fake_path(self, name, body):
+        directory = Path(tempfile.mkdtemp(prefix="fakebin-"))
+        self.addCleanup(shutil.rmtree, directory, True)
+        tool = directory / name
+        tool.write_text("#!/bin/bash\n" + body)
+        tool.chmod(0o755)
+        return {"PATH": str(directory) + ":" + os.environ["PATH"]}
+
+    def test_a_hanging_image_copy_is_stopped_at_the_cap(self):
+        env = self.fake_path("cp", "sleep 60\n")
+        rc, out, files, secs = self.run_gate(env=env, patches=[("PROVISION_CAP_S", 3)])
+        self.assertEqual(rc, 3, out)
+        self.assertIn("APPS_STAGE_RETRY class=MEDIA", out)
+        self.assertLess(secs, 30)
+
+    def test_a_hanging_image_copy_never_reaches_the_guest_image(self):
+        env = self.fake_path("cp", "sleep 60\n")
+        rc, out, files, secs = self.run_gate(env=env, patches=[("PROVISION_CAP_S", 3)])
+        self.assertFalse(files["guest.ran"])
+        self.assertFalse(files["PROVISIONED"])
+        self.assertLess(secs, 30)
+
+    def test_a_failed_copy_is_a_media_retry_and_leaves_no_image(self):
+        env = self.fake_path("cp", 'echo partial > "$3"; exit 1\n')
+        rc, out, files, _ = self.run_gate(env=env)
+        self.assertEqual(rc, 3, out)
+        self.assertFalse(files["image"])
+        self.assertFalse(files["guest.ran"])
+
+    def test_a_copy_killed_at_the_cap_leaves_no_image(self):
+        env = self.fake_path("cp", 'echo partial > "$3"; sleep 60\n')
+        rc, out, files, _ = self.run_gate(env=env, patches=[("PROVISION_CAP_S", 3)])
+        self.assertEqual(rc, 3, out)
+        self.assertFalse(files["image"])
+
+    def test_the_real_copy_still_works(self):
+        rc, out, files, _ = self.run_gate()
+        self.assertEqual(rc, 0, out)
+        self.assertTrue(files["image"])
+
+    # A copy of bash under the name of a QEMU (coreutils may be one multicall binary that refuses a renamed copy of sleep);
+    # it waits on a fifo with a timeout, no child process.
+    FAKE = 'mkfifo "$0.fifo"; read -t 300 < "$0.fifo"'
+    QEMU = (
+        'cp /bin/bash "$KF_APPS_ROOT/qemu-system-x86_64"\n'
+        'setsid "$KF_APPS_ROOT/qemu-system-x86_64" -c \'mkfifo "$0.fifo"; read -t 300 < "$0.fifo"\' "$KF_APPS_ROOT/fake" >/dev/null 2>&1 &\n'
+        'echo $! > "$BENCH_DIR/appsprov.pid"\n'
+        'sleep 1\n'
+    )
+
+    def test_a_daemonized_qemu_is_stopped_when_the_guest_image_times_out(self):
+        rc, out, files, _ = self.run_gate(guest=self.QEMU + "sleep 60\n", patches=[("PROVISION_CAP_S", 4)])
+        self.assertEqual(rc, 3, out)
+        self.assertIsNotNone(files["pid"])
+        self.assertFalse(alive(files["pid"]))
+
+    def test_a_daemonized_qemu_is_stopped_when_the_guest_image_fails(self):
+        rc, out, files, _ = self.run_gate(guest=self.QEMU + "exit 5\n")
+        self.assertEqual(rc, 3, out)
+        self.assertIsNotNone(files["pid"])
+        self.assertFalse(alive(files["pid"]))
+
+    def stop(self, name):
+        with tempfile.TemporaryDirectory() as directory:
+            binary = Path(directory) / name
+            shutil.copyfile("/bin/bash", binary)
+            binary.chmod(0o755)
+            import subprocess
+
+            child = subprocess.Popen([str(binary), "-c", 'mkfifo "$0.fifo"; read -t 30 < "$0.fifo"', str(binary)])
+            time.sleep(0.3)
+            self.addCleanup(lambda: (child.kill(), child.wait()))
+            (Path(directory) / "appsprov.pid").write_text("%d\n" % child.pid)
+            result = self.gate.stop_provisioning_qemu(directory)
+            return result, child
+
+    def test_only_a_qemu_is_stopped(self):
+        result, child = self.stop("sleep")
+        self.assertFalse(result)
+        self.assertIsNone(child.poll())
+
+    def test_another_process_name_is_not_stopped_either(self):
+        result, child = self.stop("notqemu")
+        self.assertFalse(result)
+        self.assertIsNone(child.poll())
+
+    def test_a_qemu_is_stopped(self):
+        result, child = self.stop("qemu-system-x86_64")
+        self.assertTrue(result)
+        child.wait(timeout=5)
+
+    def test_a_missing_or_garbage_pidfile_is_ignored(self):
+        with tempfile.TemporaryDirectory() as directory:
+            self.assertFalse(self.gate.stop_provisioning_qemu(directory))
+            (Path(directory) / "appsprov.pid").write_text("not a pid\n")
+            self.assertFalse(self.gate.stop_provisioning_qemu(directory))
+            (Path(directory) / "appsprov.pid").write_text("1\n")
+            self.assertFalse(self.gate.stop_provisioning_qemu(directory))
+
+    def test_the_stage_timeout_matches_what_the_code_does(self):
+        step = self.gate.AppsGate()
+        cap, budget = self.gate.PROVISION_CAP_S, self.gate.MATRIX_BUDGET_DEFAULT_S
+        self.assertEqual(step.timeout_seconds, cap + budget + 300)
+
+    def test_the_stage_timeout_covers_the_matrix_kill_grace(self):
+        step = self.gate.AppsGate()
+        self.assertGreaterEqual(step.timeout_seconds, self.gate.PROVISION_CAP_S + self.gate.MATRIX_BUDGET_DEFAULT_S + 30)
+
+    def test_the_stage_timeout_is_not_the_old_two_hours_of_provisioning(self):
+        step = self.gate.AppsGate()
+        self.assertLessEqual(step.timeout_seconds, self.gate.PROVISION_CAP_S + self.gate.MATRIX_BUDGET_DEFAULT_S + 600)
+
+
+class WindowsWithoutWindowsApps(unittest.TestCase):
+    setUp = PayloadPlansProvisioning.setUp
+    _main_fixture = v7.V7Tests._main_fixture
+    go = PayloadPlansProvisioning.go
+
+    def minutes(self, extra=0):
+        gate = self.m.WINDOWS_MIN_REMAINING_MS
+        return (self.m.APPS_MIN_REMAINING_MS + gate) // 60000 + extra
+
+    def test_the_windows_gate_is_reserved_when_there_are_no_windows_apps(self):
+        rc, result, calls = self.go(soft=self.minutes(-1), windows="1")
+        self.assertEqual(rc, 1)
+        self.assertNotIn("apps", calls)
+        self.assertIn("apps_retry_time", [row["name"] for row in result["suites"]])
+
+    def test_far_too_little_time_for_the_gate_does_not_start_the_apps(self):
+        rc, result, calls = self.go(soft=self.minutes(-25), windows="1")
+        self.assertEqual(rc, 1)
+        self.assertNotIn("apps", calls)
+
+    def test_with_the_gate_reserved_the_apps_start(self):
+        rc, result, calls = self.go(soft=self.minutes(2), windows="1")
+        self.assertEqual(rc, 0, result)
+        self.assertIn("apps", calls)
 
 
 if __name__ == "__main__":
