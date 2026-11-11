@@ -2164,6 +2164,85 @@ def access_headers(environ):
     return {"CF-Access-Client-Id": ident, "CF-Access-Client-Secret": secret}
 
 
+# The GitHub token endpoint is asked before every Worker call. A transient failure there (measured
+# 2026-11-10: a healthy run died at 58 minutes) is retried inside a hard bound; a refusal is not.
+OIDC_ATTEMPTS, OIDC_BUDGET, OIDC_FIRST_DELAY, OIDC_STEP, OIDC_RETRY_AFTER = 20, 180, 2, 10, 60
+
+
+def oidc_token(url, bearer):
+    """One GitHub OIDC token, or a Diagnosed with phase "oidc".
+
+    Retried, each time as a fresh request: a network error, HTTP 408, 429 or 5xx, and a 200 whose
+    body is not exactly one JWT-shaped value. Never retried: a redirect and every other status
+    (401/403/404: a revoked or expired request token fails at once). The bound is hard: at most
+    OIDC_ATTEMPTS requests and no new request once OIDC_BUDGET seconds have passed.
+    The lines carry an integer status, an exception class name and counters: never a token, the
+    request token, the URL or a body.
+    """
+    started = time.monotonic()
+    attempt = 0
+    while True:
+        attempt += 1
+        status, wait, token, network = None, None, None, False
+        try:
+            reply = https_request(url, headers={"Authorization": "Bearer " + bearer})
+        except Diagnosed:
+            # A redirect from the token endpoint is not a Worker reply, and is not followed.
+            what, retry = "redirect", False
+        except OSError as cause:
+            what, retry, network = "network " + clean(type(cause).__name__), True, True
+        else:
+            status = reply.status if type(reply.status) is int else 0
+            what = "HTTP " + str(status)
+            retry = status in {408, 429} or 500 <= status <= 599
+            if status == 429:
+                after = str(reply.headers.get("retry-after", ""))
+                if re.fullmatch("[0-9]{1,4}", after):
+                    wait = min(int(after), OIDC_RETRY_AFTER)
+            if status == 200:
+                what, retry = "HTTP 200 body not accepted", True
+                try:
+                    data = strict_json(reply.body)
+                    if (
+                        isinstance(data, dict)
+                        and set(data) == {"value"}
+                        and isinstance(data["value"], str)
+                        and len(data["value"]) <= 8192
+                        and re.fullmatch(
+                            r"[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+", data["value"]
+                        )
+                    ):
+                        token = data["value"]
+                except Invalid:
+                    pass
+        if token is not None:
+            return token
+        left = OIDC_BUDGET - (time.monotonic() - started)
+        counter = "attempt " + str(attempt) + " of " + str(OIDC_ATTEMPTS)
+        if not retry or attempt >= OIDC_ATTEMPTS or left <= 0:
+            error = Diagnosed(
+                ("runner: network failure: OIDC " if network else "runner: OIDC reply rejected: ")
+                + what
+                + ", "
+                + counter
+                + ("" if retry else ", not retried")
+            )
+            error.phase = "oidc"
+            raise error from None
+        delay = min(max(OIDC_FIRST_DELAY if attempt == 1 else OIDC_STEP, wait or 0), left)
+        print(
+            "oidc: token fetch failed: "
+            + what
+            + ", "
+            + counter
+            + ", retry in "
+            + format(delay, ".0f")
+            + " s",
+            flush=True,
+        )
+        time.sleep(delay)
+
+
 def https_request(url, method="GET", headers=None, body=None):
     u = urllib.parse.urlsplit(url)
     if u.scheme != "https" or not u.hostname or u.username or u.password or u.fragment:
@@ -2324,40 +2403,10 @@ def main():
                 "ACTIONS_ID_TOKEN_REQUEST_TOKEN"
             ):
                 raise Diagnosed(setting_line("GITHUB_OIDC", "empty"))
-            try:
-                token_reply = https_request(
-                    os.environ["ACTIONS_ID_TOKEN_REQUEST_URL"] + "&audience=" + audience,
-                    headers={
-                        "Authorization": "Bearer " + os.environ["ACTIONS_ID_TOKEN_REQUEST_TOKEN"]
-                    },
-                )
-            except Diagnosed:
-                # A redirect from the token endpoint is not a Worker reply.
-                error = Diagnosed("runner: OIDC reply rejected")
-                error.phase = "oidc"
-                raise error from None
-            except OSError as cause:
-                error = Diagnosed(network_line(cause))
-                error.phase = "oidc"
-                raise error from None
-            try:
-                token_data = strict_json(token_reply.body)
-                if (
-                    token_reply.status != 200
-                    or set(token_data) != {"value"}
-                    or not isinstance(token_data["value"], str)
-                    or not re.fullmatch(
-                        r"[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+",
-                        token_data["value"],
-                    )
-                    or len(token_data["value"]) > 8192
-                ):
-                    raise Invalid()
-            except Invalid:
-                error = Diagnosed("runner: OIDC reply rejected")
-                error.phase = "oidc"
-                raise error from None
-            token = token_data["value"]
+            token = oidc_token(
+                os.environ["ACTIONS_ID_TOKEN_REQUEST_URL"] + "&audience=" + audience,
+                os.environ["ACTIONS_ID_TOKEN_REQUEST_TOKEN"],
+            )
             ctx["redactions"].append(token)
             print("::add-mask::" + token, flush=True)
             return https_request(
