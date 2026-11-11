@@ -93,6 +93,20 @@ test("pages past the end are 404 and, once the end is known, cost no R2 list cal
   assert.equal(c.calls.length, cold);
 });
 
+test("made-up folders: empty folder is 404 and cold listings are budgeted per minute", async () => {
+  const { COLD_LIMIT } = await import("../src/index.js");
+  const e = env(fakeBucket(["real/a.txt"]));
+  assert.equal((await get(e, "https://logs.kayfabe.dev/real/")).status, 200);
+  assert.equal((await get(e, "https://logs.kayfabe.dev/nope/")).status, 404);
+  const before = e.BUCKET_LOGS.calls.length;
+  const codes = [];
+  for (let i = 0; i < COLD_LIMIT * 3; i++) codes.push((await get(e, `https://logs.kayfabe.dev/fake-${i}/`)).status);
+  assert.ok(e.BUCKET_LOGS.calls.length - before <= COLD_LIMIT * 2, "list calls bounded by the budget");
+  assert.ok(codes.includes(429), "a flood of distinct folders is refused with 429");
+  // cached real folders are still served while the budget is exhausted
+  assert.equal((await get(e, "https://logs.kayfabe.dev/real/")).status, 200);
+});
+
 test("robots.txt disallows everything on both hosts and noindex is sent on files and listings", async () => {
   const e = env(fakeBucket(["a/b.txt"]));
   for (const host of ["logs.kayfabe.dev", "bundles.kayfabe.dev"]) {

@@ -54,3 +54,12 @@ The Worker answers `/robots.txt` itself on both hosts (`User-agent: *`, `Disallo
 `X-Robots-Tag: noindex, nofollow, noarchive` to every listing and to every passed-through file. This is a
 request to well-behaved crawlers, not access control: nothing non-public belongs in these buckets. Until
 the Worker is deployed, the same `robots.txt` exists as an object in both buckets (uploaded 2026-11-11).
+
+## Abuse bounds
+
+R2 lists are Class A operations. Bounds, all in the Worker (design intent, tested with fakes): rendered pages,
+the cursor chain and the per-folder page count are cached for 300 s in the Cache API; a page past the known end
+returns 404 without a list call; a folder that does not exist (or holds only hidden entries) is a 404; and cache
+misses that must call R2 are limited to `COLD_LIMIT` (30) per host per minute per data center, after which new
+folders get 429 with `Retry-After: 60` while cached pages keep being served. Caches are per data center, so the
+worst case scales with the number of data centers an attacker can reach.

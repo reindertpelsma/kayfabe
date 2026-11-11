@@ -4,6 +4,9 @@
 export const PAGE_SIZE = 100;
 export const MAX_PAGE = 1000;
 export const TTL = 300;
+// Cold listings (cache misses that call R2) allowed per host per minute per data center. A crawler asking for
+// many different made-up folders gets 429 instead of an unbounded number of Class A operations.
+export const COLD_LIMIT = 30;
 export const MAX_PREFIX = 512;
 // Objects whose name (last path segment) starts with one of these are not listed.
 export const HIDDEN_PREFIXES = [".", "_"];
@@ -145,6 +148,22 @@ function notFound() {
   return new Response("not found\n", { status: 404, headers: { ...HEADERS, "content-type": "text/plain; charset=utf-8" } });
 }
 
+async function coldBudgetOk(cache, host) {
+  const key = cacheKey("budget", host, String(Math.floor(Date.now() / 60000)));
+  const cur = (await cacheGetJson(cache, key)) || { n: 0 };
+  if (cur.n >= COLD_LIMIT) return false;
+  cur.n++;
+  await cachePutJson(cache, key, cur);
+  return true;
+}
+
+function busy() {
+  return new Response("busy, retry later\n", {
+    status: 429,
+    headers: { ...HEADERS, "content-type": "text/plain; charset=utf-8", "retry-after": "60" },
+  });
+}
+
 async function listing(request, bucket, host, prefix, page) {
   const cache = caches.default;
   const head = request.method === "HEAD";
@@ -160,6 +179,7 @@ async function listing(request, bucket, host, prefix, page) {
   // A page past the known end costs nothing: no R2 list call (a crawler asking for page 2..1000 of a small
   // folder must not spend Class A operations on every request).
   if (total != null && page > total) return null;
+  if (!(await coldBudgetOk(cache, host))) return busy();
   // Walk from the furthest cached cursor at or before the wanted page.
   let reached = Math.min(page, chain.cursors.length + 1);
   let cursor = reached > 1 ? chain.cursors[reached - 2] : undefined;
@@ -185,6 +205,8 @@ async function listing(request, bucket, host, prefix, page) {
     cachePutJson(cache, chainKey, chain),
     total != null ? cachePutJson(cache, countKey, total) : Promise.resolve(),
   ]);
+  // A folder that does not exist (or holds only hidden entries) is a 404, not an empty index.
+  if (prefix !== "" && page === 1 && data.folders.length === 0 && data.files.length === 0) return null;
   const html = render(host, prefix, page, data, total);
   await cache.put(pageKey, new Response(html, { headers: { ...HEADERS, "cache-control": `public, max-age=${TTL}` } }));
   return new Response(head ? null : html, { status: 200, headers: HEADERS });
