@@ -23,6 +23,22 @@ The Vast box and its operator are untrusted. The Vast account key stays in the W
 
 The ledger reserves liability before rental and applies daily and rolling budgets, a prepaid credit reserve and limits on concurrent work. The default check policy is $1 effective/hour, $6/day, $30 per rolling 30 days and an $8 credit reserve, with one active rental and a 300-minute hard deadline for the check profile, which runs the Windows stage of the master gate ([howto](../../docs/howto/gpu-vast-windows.md)); the sweep keeps three hours. The separate owner-dispatched sweep profile has its own hourly and daily caps. Transfer allowances are reservations, not provider-enforced usage limits. Missed cron runs or provider failures can leave a box billing beyond its deadline; these controls do not guarantee a hard external bill ceiling.
 
+## The runner's token fetch (built 2026-11-11, not yet on master)
+
+STATUS: LIVE as code on branch `claude/runner-oidc-retry-20261111`, 2026-11-11; not yet on master, so no GitHub run has used it. Every behaviour below is CODE READ plus the GPU-free tests in `test/oidc-retry.test.js` (fake token endpoint, fake clock) and the mutants in `scripts/ci/oidc_retry_mutants.py`; no real box has run with it.
+
+The controller asks GitHub for a fresh OIDC token before every Worker call (`oidc_token` in `runner.py`). Measured 2026-11-10 (master gate of PR #327, attempt 7): one rejected token reply at minute 58 ended a healthy run with `runner: OIDC reply rejected phase=oidc state=TESTING http=none`. The HTTP status was not logged, so "a transient failure of the token endpoint" is an inference. The fetch is now retried inside a hard bound, and a refusal is still fatal at once:
+
+| Token endpoint reply | Action |
+| --- | --- |
+| network error or timeout; a truncated or malformed reply | retry |
+| HTTP 5xx, 408 | retry |
+| HTTP 429 | retry; an integer `Retry-After` lengthens the wait, to at most 60 s |
+| HTTP 200 whose body is not exactly one JWT-shaped `value` of at most 8192 characters | retry, fatal when the bound is reached |
+| HTTP 401, 403, 404 and every other status; a redirect | fatal at once, no retry |
+
+The bound: at most 20 requests, and no request starts later than 180 s after the first, plus the sleep overshoot of a real clock (a few ms). The waits are 2 s, then 10 s, and the last one is clipped to what is left of the budget, so the final request can start exactly on the bound, not strictly before it; a request already running keeps its own 20 s timeout. Each retry is a new request for the same audience. Each failed fetch prints `oidc: token fetch failed: HTTP 503, attempt 3 of 20, retry in 10 s`, and the final line reads `runner: OIDC reply rejected: HTTP 503, attempt 20 of 20 phase=oidc ...`. These lines hold an integer status, an exception class name and counters: never a token, the request token, the URL or a body. A failed run makes one more Worker call (the best-effort stop), which fetches a token under its own bound.
+
 ## What the runner shows of the box log
 
 STATUS: LIVE as code on branch `claude/runlog-20261105`, 2026-11-05; not yet on master, so no GitHub run has used it. Every behaviour below is CODE READ plus the GPU-free tests in `test/runner-runlog.test.js`; none is MEASURED on a real run. The box log is untrusted text: every displayed line is prefixed `[untrusted] ` and passes `sanitise()` in [runner.py](runner.py) (redaction of the Worker origin, path, Access values and OIDC token, applied on the raw text and again after the character strip so that a value split by a control character cannot reassemble; terminal sequences; characters outside printable ASCII and Latin-1 letters; `Bearer` and GitHub tokens; runs of 32 or more identifier characters; URLs; `::` and `##[`; lines over 1000 bytes). The runner writes no file and uploads nothing: `gpu-vast.yml` has no `uses:` step in the job that holds the Worker credentials. The full log is meant to come from the Worker (public logs bucket), not from the runner.
