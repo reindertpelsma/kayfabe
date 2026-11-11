@@ -228,8 +228,8 @@ CASES = [
     (
         "gate-suffix-reserve-lost",
         "scripts/ci/vast_payload.py",
-        "WINDOWS_MIN_REMAINING_MS + (",
-        "WINDOWS_MIN_REMAINING_MS + 0 * (",
+        "min_remaining_ms=WINDOWS_MIN_REMAINING_MS + (",
+        "min_remaining_ms=WINDOWS_MIN_REMAINING_MS + 0 * (",
         "py",
     ),
     (
@@ -427,8 +427,8 @@ CASES = [
     (
         "guest-setup-failures-not-recognised",
         "scripts/kfci/apps_gate.py",
-        "((?:BUILD|SETUP)_[A-Za-z0-9_]{1,64})",
-        "((?:BUILD)_[A-Za-z0-9_]{1,64})",
+        "((?:BUILD|SETUP)_[A-Za-z0-9_]{1,64})=FAIL",
+        "((?:BUILD)_[A-Za-z0-9_]{1,64})=FAIL",
         "py",
     ),
     (
