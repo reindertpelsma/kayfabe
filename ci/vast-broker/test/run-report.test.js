@@ -190,7 +190,10 @@ test('cleanClaimsReport: shape kept, unknown keys dropped, identity never taken 
     'apps',
     'guest_drivers',
     'perf',
+    'rev',
     'schema',
+    'spec',
+    'spec_host',
     'stages',
     'subruns',
     'suites',
@@ -1135,4 +1138,52 @@ test('the payload tier file and the docs name the same box variable', () => {
     'utf8',
   );
   assert.match(readme, /KF_RUN_REPORT/);
+});
+
+test('cleanClaimsReport rev 2: app seconds and benchmark-stage rows are bounded and sanitised', () => {
+  const r = goodReport({
+    rev: 2,
+    apps: [
+      { sub: 'linux-580.159.03', name: 'a', os: 'linux', result: 'PASS', note: 'ok', secs: 12 },
+      { sub: 'linux-580.159.03', name: 'b', os: 'linux', result: 'PASS', note: '', secs: -1 },
+      { sub: 'linux-580.159.03', name: 'c', os: 'linux', result: 'PASS', note: '', secs: 1e12 },
+      { sub: 'linux-580.159.03', name: 'd', os: 'linux', result: 'PASS', note: '', secs: 'x' },
+    ],
+    spec: [
+      { sub: 'windows-580.88', name: 'medical-04', result: 'PASS', done: 10, total: 10, reason: null, failed: [], wall_s: 320, native_s: 318, resets: 0 },
+      { sub: 'windows-580.88', name: 'catia-07', result: 'FAIL', done: 4, total: 2, reason: 'RESET', failed: ['05_A', 'bad name', '<b>', 'x'.repeat(61), '1', '2', '3', '4'], wall_s: 1e9, native_s: -3, resets: 2.5 },
+      { sub: 'windows-580.88', name: 'medical-04', result: 'FAIL', done: 0, total: 0 },
+      { sub: 'windows-580.88', name: 'Bad_Name-01', result: 'PASS' },
+      { sub: 'windows-580.88', name: 'maya-07', result: 'SKIP' },
+      { sub: 'windows-580.88', name: 'creo-04', result: 'FAIL', reason: 'lower case' },
+      { sub: 'nope', name: 'energy-04', result: 'PASS' },
+    ],
+    spec_host: { xid: 0, user_ring_refused: 'many', extra: 1 },
+  });
+  const out = cleanClaimsReport(r);
+  assert.equal(out.rev, 2);
+  assert.deepEqual(out.apps.map((a) => a.secs), [12, null, null, null]);
+  assert.deepEqual(out.spec.map((x) => x.name), ['medical-04', 'catia-07', 'creo-04']);
+  assert.deepEqual(out.spec[0], { sub: 'windows-580.88', name: 'medical-04', result: 'PASS', done: 10, total: 10, reason: null, failed: [], wall_s: 320, native_s: 318, resets: 0 });
+  const catia = out.spec[1];
+  assert.deepEqual(catia.failed, ['05_A', '1', '2'], 'cut to six first, then only safe names');
+  assert.equal(catia.total, 4, 'total is never below done');
+  assert.deepEqual([catia.wall_s, catia.native_s, catia.resets], [null, null, null]);
+  assert.equal(out.spec[2].reason, null);
+  assert.deepEqual(out.spec_host, { xid: 0, user_ring_refused: null });
+});
+
+test('cleanClaimsReport: a rev 1 report keeps rendering (no rev, no spec, no seconds)', () => {
+  const out = cleanClaimsReport(goodReport());
+  assert.equal(out.rev, 1);
+  assert.deepEqual(out.spec, []);
+  assert.equal(out.spec_host, null);
+  assert.ok(out.apps.every((a) => a.secs === null));
+});
+
+test('cleanClaimsReport: spec rows are capped and a benchmark name in a value is still dropped', () => {
+  const rows = Array.from({ length: 300 }, (_, i) => ({ sub: 'windows-580.88', name: 'w' + String.fromCharCode(97 + (i % 26)) + '-' + String(i % 100).padStart(2, '0'), result: 'PASS' }));
+  assert.ok(cleanClaimsReport(goodReport({ rev: 2, spec: rows })).spec.length <= LIMITS.spec);
+  const named = cleanClaimsReport(goodReport({ rev: 2, spec: [{ sub: 'windows-580.88', name: 'viewperf-01', result: 'PASS' }] }));
+  assert.equal(named.spec.length, 0);
 });

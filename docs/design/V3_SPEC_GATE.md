@@ -233,6 +233,13 @@ them. (A private copy of scores would be a separate owner decision and a separat
   `runreport.js` drops every string that names the benchmark (`FORBIDDEN = /specviewperf|viewperf/`), so a row named `specviewperf` would
   never arrive; the neutral name is how the owner's request for pass/fail in the report is met without touching that guard.** Whether
   the stage may be named in the report is the owner's call (OPEN, section 11); this PR does not change the Worker's filter.
+- **Report rev 2 (2026-11-11, GPU-free tests only; no real run has produced these rows yet).** The report carries `rev: 2`, an
+  `apps[].secs` and a `spec` array: per viewset the result, the subtests done and total, the reason word, the failed subtest names (at
+  most six), `wall_s` (the CLI wall, from the guest's own `SPECRUN_END` line), `native_s` (the native wall of the same viewset from
+  `lanes.json`, MEASURED) and `resets`; and `spec_host` (the host Xid delta and the USER_RING_REFUSED lines of the run's qemu logs, `null`
+  when there is no log). They come from two new status lines, `SPEC_RUN` and `SPEC_HOST` (seconds and counts only; the wrapper's allow-list
+  admits exactly these shapes). **This is a deliberate change from "no timing":** a wall time is not a score and the owner asked for it
+  beside the native time. The test rows stay without a time. A report without `rev` is rev 1 and renders without these fields.
 - A SPECviewperf lane that could not finish (RETRY rows) is a RETRY of the Windows subrun in the report, not a failure of the guest.
 
 ## 9. The payload and the Worker (DISABLED BY DEFAULT)

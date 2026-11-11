@@ -28,7 +28,9 @@ itself, and nothing here can change a verdict. SPECviewperf SCORES are never inc
 stage (scripts/bench/box/specviewperf_stage.sh, disabled by default) contributes status only: one test row per viewset
 (PASS, FAIL or SKIP for a viewset that did not run) and one FAIL row per failed subtest, under the neutral suite name
 `spec_viewsets` (the Worker drops anything that names the benchmark, ci/vast-broker/src/runreport.js), with no timing
-and no number; its graded suite rows are renamed to the same prefix. They belong to the Windows subrun. The helper
+and no number. Report rev 2 (2026-11-11) adds, beside them, `apps[].secs`, the `spec` rows (subtests, reason, failed names, the
+viewset's wall seconds and the native reference, resets) and `spec_host` (host Xid, USER_RING refusals): seconds and counts from
+the strictly shaped SPEC_RUN / SPEC_HOST lines, never a score; its graded suite rows are renamed to the same prefix. They belong to the Windows subrun. The helper
 never raises, never changes the result file and prints one outcome line.
 """
 
@@ -47,7 +49,7 @@ import app_policy
 import vast_report as contract  # noqa: E402  (the one definition of the box environment contract)
 
 MAX_BYTES = 262144  # the Worker's cap (ci/vast-broker/src/runreport.js REPORT_MAX_BYTES)
-LIMITS = {"tests": 2000, "apps": 500, "perf": 200, "stages": 64, "suites": 20, "subruns": 64}
+LIMITS = {"tests": 2000, "apps": 500, "perf": 200, "stages": 64, "suites": 20, "subruns": 64, "spec": 40}
 LINE_MAX = 8192  # longer lines are not parsed
 LOG_MAX = 32 * 1024 * 1024
 HOST_SUITES = ("cuda_host", "kvm_tests", "gates", "kf3_build", "raw_suite")
@@ -76,9 +78,16 @@ def windows_app_result(cls, verdict):
 # The SPECviewperf stage's status rows (scripts/bench/box/specviewperf_stage.sh; the wrapper lets only these through):
 # a viewset, its result and the names of its failed subtests. Nothing here is a number a benchmark measured.
 SPEC_ROW = re.compile(
-    r"^SPEC_ROW name=([a-z][a-z_]*-[0-9]{2}) result=(PASS|FAIL|NOT_RUN) subtests=[0-9]{1,3}/[0-9]{1,3}"
-    r" reason=(?:[A-Z_]{1,16}|-) failed=([A-Za-z0-9_,]{1,120}|-)$"
+    r"^SPEC_ROW name=([a-z][a-z_]*-[0-9]{2}) result=(PASS|FAIL|NOT_RUN) subtests=([0-9]{1,3})/([0-9]{1,3})"
+    r" reason=([A-Z_]{1,16}|-) failed=([A-Za-z0-9_,]{1,120}|-)$"
 )
+# Seconds and counts only (scripts/bench/specviewperf/lane.py `facts`): the wall of the viewset's run, the native wall of the
+# same viewset from lanes.json, the guest resets; then, once, the host Xid delta and the USER_RING refusals of the run.
+SPEC_RUN = re.compile(
+    r"^SPEC_RUN name=([a-z][a-z_]*-[0-9]{2}) wall_s=([0-9]{1,6}|-) native_s=([0-9]{1,6}|-) resets=([0-9]{1,4}|-)$"
+)
+SPEC_HOST = re.compile(r"^SPEC_HOST xid=([0-9]{1,6}) user_ring_refused=([0-9]{1,8}|-)$")
+REPORT_REV = 2  # 2: `apps[].secs`, the `spec` rows and `spec_host`; rev 1 (absent) reports render without them
 SPEC_SUITE = "spec_viewsets"  # the report's name for the stage's suite rows ("specviewperf" in the result file)
 SPEC_RESULT = {"PASS": "PASS", "FAIL": "FAIL", "NOT_RUN": "SKIP"}
 # The stage markers whose position in the published log delimits a subrun (the Worker finds them).
@@ -115,6 +124,12 @@ def number(text):
     except (TypeError, ValueError):
         return None
     return value if value == value and abs(value) < 1e15 else None
+
+
+def seconds_of(text):
+    """Whole seconds of an `secs=` text (a row's wall time), or None."""
+    ms = seconds_ms(text)
+    return None if ms is None else int(round(ms / 1000.0))
 
 
 def whole_ms(text):
@@ -159,6 +174,8 @@ class Collector:
         self.tests = {}  # (sub key, suite, name) -> row, last one wins
         self.apps = {}  # app name -> (result, secs text, note), last one wins
         self.windows_apps = {}  # same shape, separate namespace from Linux
+        self.spec = {}  # viewset -> row (last one wins)
+        self.spec_host = None
         self.bench = {"host": {}, "guest": {}}
         self.stage_rows = {}
         self.stage_end = {}
@@ -211,9 +228,25 @@ class Collector:
             # The SPECviewperf stage: one row per viewset and one FAIL row per failed subtest, status only, no time.
             m = SPEC_ROW.match(line)
             if m:
+                failed = [] if m[6] == "-" else m[6].split(",")[:6]
                 self.test("windows", SPEC_SUITE, m[1], SPEC_RESULT[m[2]], None)
-                for sub in ([] if m[3] == "-" else m[3].split(","))[:6]:
+                for sub in failed:
                     self.test("windows", SPEC_SUITE, "%s/%s" % (m[1], sub), "FAIL", None)
+                old = self.spec.get(m[1], {})
+                self.spec[m[1]] = {"name": m[1], "result": m[2], "done": int(m[3]), "total": int(m[4]),
+                                   "reason": None if m[5] == "-" else m[5], "failed": failed,
+                                   "wall_s": old.get("wall_s"), "native_s": old.get("native_s"), "resets": old.get("resets")}
+        elif head == "SPEC_RUN":
+            m = SPEC_RUN.match(line)
+            if m:
+                row = self.spec.setdefault(m[1], {"name": m[1], "result": "NOT_RUN", "done": 0, "total": 0, "reason": None,
+                                                  "failed": []})
+                for key, text in (("wall_s", m[2]), ("native_s", m[3]), ("resets", m[4])):
+                    row[key] = None if text == "-" else int(text)
+        elif head == "SPEC_HOST":
+            m = SPEC_HOST.match(line)
+            if m:
+                self.spec_host = {"xid": int(m[1]), "user_ring_refused": None if m[2] == "-" else int(m[2])}
         elif head == "GATE_LKE_COUNTS":
             m = re.fullmatch(r"GATE_LKE_COUNTS reports=([0-9]{1,10}) entries=([0-9]{1,10}|-) unresolved=([0-9]{1,10}|-) (?:resolved=([0-9]{1,10}|-) )?unit=distinct_reports", line)
             if m:
@@ -426,6 +459,7 @@ def build_report(lines, result, run_id=None):
             stages.append({"name": name, "result": "UNATTRIBUTED", "rc": rc, "duration_ms": duration})
     doc = {
         "schema": 1,
+        "rev": REPORT_REV,
         "guest_drivers": {"linux": linux_driver, "windows": windows_driver},
         "stages": stages[: LIMITS["stages"]],
         "suites": rows,
@@ -433,18 +467,21 @@ def build_report(lines, result, run_id=None):
         "tests": tests[: LIMITS["tests"]],
         "apps": ([
             {"sub": sub_linux if p["os"] == "linux" else sub_windows, "name": p["name"], "os": p["os"],
-             "result": "NOT_RUN", "note": (c.apps if p["os"] == "linux" else c.windows_apps)[p["name"]][2][:200]}
+             "result": "NOT_RUN", "note": (c.apps if p["os"] == "linux" else c.windows_apps)[p["name"]][2][:200],
+             "secs": seconds_of((c.apps if p["os"] == "linux" else c.windows_apps)[p["name"]][1])}
             for p in policy
         ] + [
-            {"sub": sub_linux, "name": name, "os": "linux", "result": res, "note": note[:200]}
-            for name, (res, _secs, note) in c.apps.items()
+            {"sub": sub_linux, "name": name, "os": "linux", "result": res, "note": note[:200], "secs": seconds_of(secs)}
+            for name, (res, secs, note) in c.apps.items()
             if name not in policy_names["linux"]
         ] + [
-            {"sub": sub_windows, "name": name, "os": "windows", "result": res, "note": note[:200]}
-            for name, (res, _secs, note) in c.windows_apps.items()
+            {"sub": sub_windows, "name": name, "os": "windows", "result": res, "note": note[:200], "secs": seconds_of(secs)}
+            for name, (res, secs, note) in c.windows_apps.items()
             if name not in policy_names["windows"]
         ])[: LIMITS["apps"]],  # policy entries always present; observed supported apps follow
         "perf": perf[: LIMITS["perf"]],
+        "spec": [dict(r, sub=sub_windows) for r in c.spec.values()][: LIMITS["spec"]],
+        "spec_host": c.spec_host,
         "windows": c.windows,
     }
     return bound(doc)

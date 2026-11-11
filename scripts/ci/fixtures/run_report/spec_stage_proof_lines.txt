@@ -1,0 +1,5 @@
+SPEC_ROW name=medical-04 result=PASS subtests=10/10 reason=- failed=-
+SPEC_ROW name=catia-07 result=PASS subtests=6/6 reason=- failed=-
+SPEC_RUN name=medical-04 wall_s=320 native_s=318 resets=0
+SPEC_RUN name=catia-07 wall_s=1118 native_s=803 resets=0
+SPEC_HOST xid=0 user_ring_refused=-

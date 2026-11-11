@@ -30,6 +30,8 @@ LANE_B = ["medical-04", "maya-07", "catia-07", "solidworks-08", "unreal_engine-0
 PUBLIC = re.compile(
     r"^(?:SPEC_STAGE_LIST lane=(?:lanea|laneb|both) n=[0-9]{1,2}"
     r"|SPEC_ROW name=[a-z][a-z_]*-[0-9]{2} result=(?:PASS|FAIL|NOT_RUN) subtests=[0-9]{1,3}/[0-9]{1,3} reason=(?:[A-Z_]{1,16}|-) failed=(?:[A-Za-z0-9_,]{1,120}|-)"
+    r"|SPEC_RUN name=[a-z][a-z_]*-[0-9]{2} wall_s=(?:[0-9]{1,6}|-) native_s=(?:[0-9]{1,6}|-) resets=(?:[0-9]{1,4}|-)"
+    r"|SPEC_HOST xid=[0-9]{1,6} user_ring_refused=(?:[0-9]{1,8}|-)"
     r"|[a-z][a-z_]*_[0-9]{2} --- FAILED"
     r"|SPEC_STAGE_COUNTS pass=[0-9]+ fail=[0-9]+ not_run=[0-9]+ of=[0-9]+"
     r"|SPEC_COPY_DELETED removed=(?:archive|overlay|archive,overlay|nothing)"
@@ -151,6 +153,17 @@ class HappyPath(StageCase):
         self.go("lanea")
         for line in self.p.stdout.splitlines():
             self.assertRegex(line, PUBLIC)
+
+    def test_each_viewset_that_ran_prints_its_seconds_and_the_host_line_comes_once_before_the_counts(self):
+        self.go("lanea")
+        runs = [l for l in self.p.stdout.splitlines() if l.startswith("SPEC_RUN ")]
+        self.assertEqual([l.split()[1] for l in runs], ["name=" + n for n in LANE_A])
+        for line in runs:
+            self.assertRegex(line, r"^SPEC_RUN name=\S+ wall_s=[0-9]+ native_s=[0-9]+ resets=[0-9]+$")
+        hosts = [l for l in self.p.stdout.splitlines() if l.startswith("SPEC_HOST ")]
+        self.assertEqual(len(hosts), 1)
+        lines = self.p.stdout.splitlines()
+        self.assertLess(lines.index(hosts[0]), lines.index(next(l for l in lines if l.startswith("SPEC_STAGE_COUNTS"))))
 
     def test_the_stage_prints_one_verdict_line_last(self):
         self.go("lanea")

@@ -261,9 +261,9 @@ class Build(unittest.TestCase):
         self.assertEqual(
             supported_apps(doc),
             [
-                {"sub": sub, "name": "blender", "os": "linux", "result": "PASS", "note": "ok"},
-                {"sub": sub, "name": "ollama", "os": "linux", "result": "FAIL", "note": "FAIL exit 1 with spaces in the note"},
-                {"sub": sub, "name": "vlc", "os": "linux", "result": "NOT_RUN", "note": "no result row (budget or boot)"},
+                {"sub": sub, "name": "blender", "os": "linux", "result": "PASS", "note": "ok", "secs": 41},
+                {"sub": sub, "name": "ollama", "os": "linux", "result": "FAIL", "note": "FAIL exit 1 with spaces in the note", "secs": 90},
+                {"sub": sub, "name": "vlc", "os": "linux", "result": "NOT_RUN", "note": "no result row (budget or boot)", "secs": None},
             ],
         )
         rows = {t["name"]: t for t in doc["tests"] if t["suite"] == "apps_linux"}
@@ -375,7 +375,7 @@ class WindowsApps(unittest.TestCase):
 
     def test_windows_app_is_reported_with_its_subrun_and_measured_time(self):
         doc = self.build([self.line()])
-        self.assertEqual(supported_apps(doc), [dict(sub="windows-580.88", name="vectorAdd", os="windows", result="PASS", note="-")])
+        self.assertEqual(supported_apps(doc), [dict(sub="windows-580.88", name="vectorAdd", os="windows", result="PASS", note="-", secs=2)])
         row = next(t for t in doc["tests"] if t["suite"] == "apps_windows")
         self.assertEqual((row["sub"], row["result"], row["ms"]), ("windows-580.88", "PASS", 2000))
         self.assertIn("windows_apps", doc["subruns"][2]["log_stages"])
@@ -834,8 +834,9 @@ class Transport2(unittest.TestCase):
 
 
 class SpecStatusRows(unittest.TestCase):
-    """The SPECviewperf stage (disabled by default) reports status only: a test row per viewset and per failed
-    subtest under the neutral suite `spec_viewsets`, no time, no number, in the Windows subrun."""
+    """The SPECviewperf stage (disabled by default) reports status: a test row per viewset and per failed
+    subtest under the neutral suite `spec_viewsets` (no time, no number), in the Windows subrun; the `spec` rows
+    add the subtest counts and, from SPEC_RUN/SPEC_HOST lines, seconds and counts (never a score)."""
 
     ROWS = [
         "SPEC_ROW name=energy-04 result=PASS subtests=6/6 reason=- failed=-",
@@ -973,3 +974,112 @@ class SpecStatusRows(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SpecAndAppRows(unittest.TestCase):
+    """Report rev 2: per-app seconds and the per-viewset `spec` rows. FALSIFIER: a number that no line of the payload
+    printed, a score-shaped field, a row in the wrong subrun, a hostile name or line that gets through, or a rev 1
+    report that stops being a report."""
+
+    RUN = ["SPEC_ROW name=medical-04 result=PASS subtests=10/10 reason=- failed=-",
+           "SPEC_RUN name=medical-04 wall_s=320 native_s=318 resets=0",
+           "SPEC_ROW name=catia-07 result=FAIL subtests=4/6 reason=RESET failed=05_A,06_B",
+           "SPEC_RUN name=catia-07 wall_s=900 native_s=803 resets=2",
+           "SPEC_ROW name=maya-07 result=NOT_RUN subtests=0/0 reason=TIME failed=-",
+           "SPEC_HOST xid=0 user_ring_refused=0"]
+
+    def build(self, lines):
+        return rr.build_report(log_lines() + lines, result())
+
+    def test_rev_and_spec_rows(self):
+        doc = self.build(self.RUN)
+        self.assertEqual(doc["schema"], 1)
+        self.assertEqual(doc["rev"], 2)
+        rows = {r["name"]: r for r in doc["spec"]}
+        self.assertEqual(rows["medical-04"], {"name": "medical-04", "result": "PASS", "done": 10, "total": 10, "reason": None,
+            "failed": [], "wall_s": 320, "native_s": 318, "resets": 0, "sub": "windows-580.88"})
+        self.assertEqual((rows["catia-07"]["reason"], rows["catia-07"]["failed"], rows["catia-07"]["resets"]),
+                         ("RESET", ["05_A", "06_B"], 2))
+        self.assertEqual((rows["maya-07"]["result"], rows["maya-07"]["wall_s"]), ("NOT_RUN", None))
+        self.assertEqual(doc["spec_host"], {"xid": 0, "user_ring_refused": 0})
+
+    def test_no_spec_lines_no_spec_rows(self):
+        doc = self.build([])
+        self.assertEqual((doc["spec"], doc["spec_host"]), ([], None))
+
+    def test_unknown_ring_count_is_null_not_zero(self):
+        self.assertEqual(self.build(["SPEC_HOST xid=3 user_ring_refused=-"])["spec_host"], {"xid": 3, "user_ring_refused": None})
+
+    def test_hostile_run_and_host_lines_are_ignored(self):
+        bad = ["SPEC_RUN name=Bad_Name-01 wall_s=1 native_s=1 resets=0",
+               "SPEC_RUN name=medical-04 wall_s=1e9 native_s=1 resets=0",
+               "SPEC_RUN name=medical-04 wall_s=1 native_s=1 resets=0 score=9",
+               "SPEC_RUN name=medical-04 wall_s=1234567 native_s=1 resets=0",
+               "SPEC_HOST xid=-1 user_ring_refused=0",
+               "SPEC_HOST xid=0 user_ring_refused=0 fps=3",
+               "SPEC_HOST xid=0 user_ring_refused=<script>"]
+        doc = self.build(bad)
+        self.assertEqual((doc["spec"], doc["spec_host"]), ([], None))
+
+    def test_run_line_without_row_is_not_a_pass(self):
+        doc = self.build(["SPEC_RUN name=medical-04 wall_s=5 native_s=318 resets=0"])
+        self.assertEqual(doc["spec"][0]["result"], "NOT_RUN")
+
+    def test_spec_rows_are_capped(self):
+        lines = ["SPEC_ROW name=w%s-%02d result=PASS subtests=1/1 reason=- failed=-" % (chr(97 + i // 99), i % 99) for i in range(300)]
+        self.assertLessEqual(len(self.build(lines)["spec"]), rr.LIMITS["spec"])
+
+    def test_failed_subtests_are_capped_at_six(self):
+        names = ",".join("s%d" % i for i in range(20))
+        line = "SPEC_ROW name=creo-04 result=FAIL subtests=1/20 reason=SUBTEST failed=" + names[:100].rstrip(",")
+        self.assertLessEqual(len(self.build([line])["spec"][0]["failed"]), 6)
+
+    def test_app_seconds_come_from_the_row_and_hostile_values_are_null(self):
+        lines = ["APP_ROW name=a os=linux result=PASS secs=12.4 guest_xid=0 note=-",
+                 "APP_ROW name=b os=linux result=PASS secs=nan guest_xid=0 note=-",
+                 "APP_ROW name=c os=linux result=PASS secs=99999999999 guest_xid=0 note=-"]
+        apps = {a["name"]: a["secs"] for a in self.build(lines)["apps"]}
+        self.assertEqual((apps["a"], apps["b"], apps["c"]), (12, None, None))
+
+    def test_the_document_has_no_benchmark_name_and_no_score_word(self):
+        text = json.dumps(self.build(self.RUN))
+        self.assertNotRegex(text, r"(?i)viewperf|score|fps|composite")
+
+    def test_real_evidence_lines_build_66_linux_and_10_windows_app_rows(self):
+        base = Path(__file__).resolve().parent / "fixtures" / "run_report"
+        lines = (base / "apps_matrix_lines.txt").read_text().splitlines() + (base / "spec_stage_proof_lines.txt").read_text().splitlines()
+        doc = rr.build_report(log_lines() + lines, result())
+        real = [a for a in doc["apps"] if a["secs"] is not None]
+        self.assertEqual(sum(a["os"] == "linux" for a in real), 66)
+        self.assertEqual(sum(a["os"] == "windows" for a in real), 10)
+        self.assertEqual({r["name"]: (r["result"], r["wall_s"], r["native_s"], r["done"], r["total"]) for r in doc["spec"]},
+                         {"medical-04": ("PASS", 320, 318, 10, 10), "catia-07": ("PASS", 1118, 803, 6, 6)})
+        self.assertEqual(doc["spec_host"], {"xid": 0, "user_ring_refused": None})
+
+    def test_failed_names_are_capped_in_the_spec_row_and_in_the_test_rows(self):
+        line = "SPEC_ROW name=creo-04 result=FAIL subtests=1/9 reason=SUBTEST failed=a,b,c,d,e,f,g,h,i"
+        doc = self.build([line])
+        self.assertEqual(doc["spec"][0]["failed"], list("abcdef"))
+        self.assertEqual(sorted(t["name"] for t in doc["tests"] if t["name"].startswith("creo-04/")),
+                         ["creo-04/" + c for c in "abcdef"])
+
+    def test_a_hundred_viewsets_are_cut_to_the_spec_cap_and_keep_the_first(self):
+        lines = ["SPEC_ROW name=v%s-%02d result=PASS subtests=1/1 reason=- failed=-" % (chr(97 + i // 50), i % 50) for i in range(100)]
+        doc = self.build(lines)
+        self.assertEqual(len(doc["spec"]), rr.LIMITS["spec"])
+        self.assertEqual(doc["spec"][0]["name"], "va-00")
+
+    def test_rev_is_two_beside_schema_one_and_names_the_new_keys(self):
+        doc = self.build([])
+        self.assertEqual((doc["schema"], doc["rev"], rr.REPORT_REV), (1, 2, 2))
+        self.assertTrue({"spec", "spec_host"} <= set(doc))
+
+    def test_a_run_line_with_an_extra_field_is_not_a_run_line(self):
+        doc = self.build(["SPEC_ROW name=medical-04 result=PASS subtests=1/1 reason=- failed=-",
+                          "SPEC_RUN name=medical-04 wall_s=5 native_s=6 resets=0 score=1"])
+        self.assertIsNone(doc["spec"][0]["wall_s"])
+        self.assertNotIn("score", json.dumps(doc))
+
+    def test_a_host_line_with_an_extra_field_is_not_a_host_line(self):
+        self.assertIsNone(self.build(["SPEC_HOST xid=0 user_ring_refused=0 fps=60"])["spec_host"])
+        self.assertIsNone(self.build(["SPEC_HOST xid=0 user_ring_refused=0\x00"])["spec_host"])

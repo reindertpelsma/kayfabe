@@ -83,11 +83,50 @@ export function reportOut(textValue, id, logInfo) {
   if (doc === null || typeof doc !== 'object' || Array.isArray(doc) || doc.schema !== 1)
     return null;
   const clean = JSON.parse(JSON.stringify(doc));
+  // rev 2 rows (apps seconds, benchmark-stage rows) are re-bounded here as well: the page renders
+  // them, so they are shaped again whatever the stored text says. A rev 1 report has none.
+  clean.rev = clean.rev === 2 ? 2 : 1;
+  clean.spec = specOut(clean.spec);
+  clean.spec_host = specHostOut(clean.spec_host);
+  if (Array.isArray(clean.apps)) clean.apps = clean.apps.map(appSecs);
   clean.run_id = id;
   clean.log = logInfo;
   return clean;
 }
 
+const SPEC_NAME_OUT = /^[a-z][a-z_]*-[0-9]{2}$/;
+const appSecs = (a) =>
+  a !== null && typeof a === 'object' ? { ...a, secs: int(a.secs, 7 * 86400) } : a;
+export function specOut(rows) {
+  if (!Array.isArray(rows)) return [];
+  const out = [];
+  for (const r of rows.slice(0, 40)) {
+    if (r === null || typeof r !== 'object' || Array.isArray(r)) continue;
+    if (typeof r.name !== 'string' || !SPEC_NAME_OUT.test(r.name)) continue;
+    if (!['PASS', 'FAIL', 'NOT_RUN'].includes(r.result)) continue;
+    const done = int(r.done, 999) ?? 0;
+    out.push({
+      sub: SUB_ID.test(r.sub ?? '') ? r.sub : null,
+      name: r.name,
+      result: r.result,
+      done,
+      total: Math.max(done, int(r.total, 999) ?? 0),
+      reason: typeof r.reason === 'string' && /^[A-Z_]{1,16}$/.test(r.reason) ? r.reason : null,
+      failed: (Array.isArray(r.failed) ? r.failed.slice(0, 6) : []).filter(
+        (n) => typeof n === 'string' && /^[A-Za-z0-9_]{1,60}$/.test(n),
+      ),
+      wall_s: int(r.wall_s, 999999),
+      native_s: int(r.native_s, 999999),
+      resets: int(r.resets, 9999),
+    });
+  }
+  return out;
+}
+export function specHostOut(h) {
+  if (h === null || typeof h !== 'object' || Array.isArray(h) || int(h.xid, 999999) === null)
+    return null;
+  return { xid: h.xid, user_ring_refused: int(h.user_ring_refused, 99999999) };
+}
 export const testOut = (r) => ({
   sub: text(r.sub, 40),
   suite: safe(r.suite, 48),

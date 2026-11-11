@@ -35,6 +35,10 @@
 #   SPEC_STAGE_LIST lane=<l> n=<n>
 #   SPEC_ROW name=<viewset> result=PASS|FAIL|NOT_RUN subtests=<done>/<total> reason=<WORD|-> failed=<names|->   (one per
 #       viewset, printed as soon as it is known: a killed run still reports what finished)
+#   SPEC_RUN name=<viewset> wall_s=<n|-> native_s=<n|-> resets=<n|->   (after the row of each viewset that ran: the CLI
+#       wall, the native wall of the table, the guest resets; seconds and counts, no score)
+#   SPEC_HOST xid=<n> user_ring_refused=<n|->                           (once, before the counts: the host Xid delta and
+#       the USER_RING_REFUSED lines of this run's qemu logs)
 #   <viewset_with_underscores> --- FAILED                                    (the payload's FINAL SUMMARY lists these)
 #   SPEC_STAGE_COUNTS pass=<n> fail=<n> not_run=<n> of=<n>
 #   SPECVIEWPERF_STAGE_PASS | SPECVIEWPERF_STAGE_FAIL | SPECVIEWPERF_STAGE_RETRY class=<A-Z_>
@@ -296,6 +300,13 @@ bar1_refusal() {
     [ -n "$FIRST_RUN_TAG" ] && [ -s "$q" ] || return 1
     grep -a 'realize refused' "$q" | sed 's/.*realize refused//' | grep -qi 'bar1'
 }
+ring_refused() { # the USER_RING_REFUSED lines of this run's qemu logs (`-` when there is no log to count)
+    local f n=0 seen=0
+    while read -r f; do
+        case "$f" in *_qemu.log) seen=1; n=$((n + $(grep -ac 'USER_RING_REFUSED' "$f" 2> /dev/null || true))) ;; esac
+    done < <(own_logs)
+    if [ "$seen" = 1 ]; then echo "$n"; else echo -; fi
+}
 delete_copy() {
     local gone=""
     if [ -e "$ZST" ] || [ -e "$ZST.part" ]; then rm -f -- "$ZST" "$ZST.part"; gone=archive; fi
@@ -344,6 +355,7 @@ conclude() {
         fi
     done
     read -r kind cls < <(lane_py decide "$LANE" --rows "$ROWS" --before "$HOSTREF_BEFORE" --after "$HOSTREF_AFTER" --bar1 "$bar1" --xid "${xid_delta:-0}" ${ABORT:+--abort "$ABORT"})
+    say "SPEC_HOST xid=${xid_delta:-0} user_ring_refused=$(ring_refused)"
     pass=$(grep -c ' result=PASS ' "$ROWS")
     fail=$(grep -c ' result=FAIL ' "$ROWS")
     nrun=$(grep -c ' result=NOT_RUN ' "$ROWS")
@@ -655,6 +667,7 @@ for w in "${LANE_IDS[@]}"; do
             continue
         fi
         emit_row "$GRADE_LINE"
+        say "$(lane_py facts "$w" --end "$WORK/$w/END.txt" --tdr "$WORK/$w/tdr.txt" 2> /dev/null)"
         # a guest that reset, hung or was killed is not evidence for the next viewset: the next one gets a fresh boot
         case "$GRADE_LINE" in *"reason=RESET"* | *"reason=TIMEOUT"* | *"reason=GUEST"*) FRESH=1 ;; esac
         break

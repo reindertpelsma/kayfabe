@@ -712,25 +712,41 @@
   function stageChip(result) {
     return resultChip(result);
   }
-  // Where a run's log lives. Accepted: the report contract's `log.url` (only when it is exactly the
-  // configured log origin + <run id>/log.txt) or the earlier `log.key`/`log.direct` pair (the origin
+  // Where a run's log lives. The origin is the configured one or, when the build has none, the one in
+  // the API's own `log.url`, accepted only on the API's own site as <origin>/<this run id>/log.txt. Accepted:
+  // that url (exactly origin + <run id>/log.txt) or the earlier `log.key`/`log.direct` pair (the origin
   // plus a key). Nothing else is ever linked.
+  function logOrigin(data) {
+    if (logs) return logs;
+    const log = isObj(data.log) ? data.log : isObj(data.report?.log) ? data.report.log : null;
+    if (typeof log?.url !== 'string' || !api) return '';
+    try {
+      const url = new URL(log.url);
+      const suffix = new URL(api).hostname.split('.').slice(1).join('.');
+      const sameSite = suffix.includes('.') && (url.hostname === suffix || url.hostname.endsWith('.' + suffix));
+      const plain = url.protocol === 'https:' && !url.username && !url.password && !url.port && !url.search && !url.hash;
+      return sameSite && plain && url.pathname === '/' + data.id + '/log.txt' ? url.origin : '';
+    } catch {
+      return '';
+    }
+  }
   function logHref(data) {
     const log = isObj(data.log) ? data.log : isObj(data.report?.log) ? data.report.log : null;
     if (!log) return { present: false, href: '' };
+    const origin = logOrigin(data);
     if (typeof log.url === 'string' && log.url) {
-      const want = logs && PATTERN.id.test(data.id ?? '') ? logs + '/' + data.id + '/log.txt' : '';
+      const want = origin && PATTERN.id.test(data.id ?? '') ? origin + '/' + data.id + '/log.txt' : '';
       return { present: true, href: want && log.url === want ? want : '', log };
     }
     if (!PATTERN.logKey.test(log.key ?? '')) return { present: false, href: '' };
     const direct = typeof log.direct === 'string' ? log.direct : '';
-    const href = logs ? logs + '/' + log.key : '';
+    const href = origin ? origin + '/' + log.key : '';
     return { present: true, href: href && (!direct || direct === href) ? href : '', log, key: log.key };
   }
   function logLink(found) {
     if (!found.present) return el('p', {}, 'No public log.');
     if (found.href) return el('p', {}, el('a', { href: found.href, type: 'text/plain' }, found.key ?? found.href));
-    return el('p', {}, 'Log object ', el('code', {}, found.key ?? 'log.txt'), ' (no log origin is configured).');
+    return el('p', {}, 'Log object ', el('code', {}, found.key ?? 'log.txt'), ' (no link).');
   }
   function runButtons(data, found, asSession) {
     const buttons = [];
@@ -743,17 +759,18 @@
               { class: 'kf-btn', href: found.href, type: 'text/plain', target: '_blank', rel: 'noopener noreferrer' },
               'Full log' + (size !== null ? ' (' + fmtBytes(size) + ')' : ''),
             )
-          : el('span', { class: 'kf-btn', 'aria-disabled': 'true' }, 'Full log: no log origin in this build'),
+          : el('span', { class: 'kf-btn', 'aria-disabled': 'true' }, 'Full log: no link'),
       );
     } else if (data.state !== 'running') {
       buttons.push(el('span', { class: 'kf-btn', 'aria-disabled': 'true' }, 'Full log: none stored for this run'));
     }
     if (isObj(data.report)) {
-      const href = logs && PATTERN.id.test(data.id ?? '') ? logs + '/' + data.id + '/report.json' : '';
+      const origin = logOrigin(data);
+      const href = origin && PATTERN.id.test(data.id ?? '') ? origin + '/' + data.id + '/report.json' : '';
       buttons.push(
         href
           ? el('a', { class: 'kf-btn kf-btn-2', href, type: 'application/json', target: '_blank', rel: 'noopener noreferrer' }, 'Download report.json')
-          : el('span', { class: 'kf-btn kf-btn-2', 'aria-disabled': 'true' }, 'report.json: no log origin in this build'),
+          : el('span', { class: 'kf-btn kf-btn-2', 'aria-disabled': 'true' }, 'report.json: no link'),
       );
     }
     if (!asSession)
@@ -953,53 +970,185 @@
       ),
     );
   }
+  // Apps: one table per guest OS (app, result, time, note), failures first, counts on top. The time is
+  // the row's own `secs` (report rev 2) or, for an older report, the matching test row of the same
+  // subrun. A note of "-" is no note. Everything is drawn with text nodes.
+  const APP_OS = [
+    ['linux', 'Linux'],
+    ['windows', 'Windows'],
+  ];
+  function appMillis(a, report) {
+    const secs = finite(a.secs);
+    if (secs !== null && secs >= 0) return secs * 1000;
+    const suite = a.os === 'windows' ? 'apps_windows' : a.os === 'linux' ? 'apps_linux' : '';
+    if (!suite) return null;
+    const hit = arr(report.tests).find((t) => isObj(t) && t.suite === suite && t.sub === a.sub && t.name === a.name);
+    const ms = finite(hit?.ms);
+    return ms !== null && ms >= 0 ? ms : null;
+  }
   function appsSection(report, scope) {
-    const head = 'Applications';
-    const reason = 'Not measured yet: the application matrix stage does not exist in CI yet.';
-    if (!isObj(report)) return section(head, scope + '-apps', emptyNote(reason));
+    const head = 'Apps';
+    if (!isObj(report)) return section(head, scope + '-apps', emptyNote('No stored report for this run.'));
     const apps = arr(report.apps).filter((a) => isObj(a) && text(a.name));
-    if (!apps.length) return section(head, scope + '-apps', emptyNote(reason));
-    const sorted = apps
-      .map((a, i) => ({ a, i }))
-      .sort((x, y) => rank(x.a.result) - rank(y.a.result) || x.i - y.i)
-      .map((x) => x.a);
-    const tally = (r) => apps.filter((a) => a.result === r).length;
+    if (!apps.length) return section(head, scope + '-apps', emptyNote('No app results in this report.'));
+    const sub = headingLevel === 'h2' ? 'h3' : 'h4';
+    const groups = APP_OS.map(([os, label]) => [os, label, apps.filter((a) => a.os === os)]);
+    const other = apps.filter((a) => a.os !== 'linux' && a.os !== 'windows');
+    if (other.length) groups.push(['', 'Other', other]);
+    const tally = (rows, r) => rows.filter((a) => a.result === r).length;
+    const countText = (rows) => {
+      const pass = tally(rows, 'PASS');
+      const fail = tally(rows, 'FAIL');
+      return pass + ' passed, ' + fail + ' failed, ' + (rows.length - pass - fail) + ' not run';
+    };
+    const parts = [
+      el(
+        'ul',
+        { class: 'kf-counts', 'aria-label': 'App counts' },
+        groups.filter(([, , rows]) => rows.length).map(([, label, rows]) => el('li', {}, el('strong', {}, label), ': ' + countText(rows))),
+      ),
+    ];
+    for (const [os, label, rows] of groups) {
+      if (!rows.length) continue;
+      const sorted = rows
+        .map((a, i) => ({ a, i }))
+        .sort((x, y) => rank(x.a.result) - rank(y.a.result) || x.i - y.i)
+        .map((x) => x.a);
+      const multi = manySubs(sorted);
+      parts.push(
+        el(sub, {}, label + ' apps (' + rows.length + ')'),
+        el(
+          'div',
+          { class: 'kf-scroll', tabindex: 0, role: 'region', 'aria-label': label + ' apps' },
+          el(
+            'table',
+            { class: 'kf-runs kf-cards kf-apps', 'data-os': os },
+            el(
+              'thead',
+              {},
+              el('tr', {}, [...(multi ? ['Subrun'] : []), 'App', 'Result', 'Time', 'Note'].map((h) => el('th', { scope: 'col', class: h === 'Time' ? 'kf-num' : null }, h))),
+            ),
+            el(
+              'tbody',
+              {},
+              sorted.map((a) => {
+                const ms = appMillis(a, report);
+                const note = text(a.note).trim();
+                return el(
+                  'tr',
+                  { 'data-result': ['PASS', 'FAIL', 'NOT_RUN'].includes(a.result) ? a.result : 'NOT_RUN' },
+                  multi ? el('td', { 'data-label': 'Subrun' }, text(a.sub)) : null,
+                  el('td', { 'data-label': 'App' }, text(a.name)),
+                  el('td', { 'data-label': 'Result' }, resultChip(a.result)),
+                  el('td', { 'data-label': 'Time', class: 'kf-num' }, ms !== null ? fmtDuration(ms) : ''),
+                  el('td', { 'data-label': 'Note' }, note === '-' ? '' : note),
+                );
+              }),
+            ),
+          ),
+        ),
+      );
+    }
+    return section(head, scope + '-apps', ...parts);
+  }
+  // Benchmark viewsets: one row per viewset the report holds, shown only when there are rows. Status, subtest
+  // counts and run times only: a report holds none. The native reference is the same viewset's
+  // time on a native Windows machine, as the report states it.
+  const SPEC_WHY = {
+    RESET: 'the guest reset',
+    TIMEOUT: 'ran past its time limit',
+    TIME: 'not started: out of time',
+    SUBTEST: 'a subtest failed',
+    GUEST: 'the guest stopped',
+    NOTDONE: 'did not finish',
+    REFUSED: 'refused by the benchmark',
+    DISPLAY: 'no display',
+    GATHER: 'could not start',
+    LAUNCH: 'could not start',
+    NO_TDR: 'no reset counters',
+    RC: 'bad exit code',
+    SETUP: 'setup failed',
+    BOOT: 'the guest did not boot',
+  };
+  function specSection(report, scope) {
+    const rows = arr(report?.spec).filter((r) => isObj(r) && /^[a-z][a-z_]*-[0-9]{2}$/.test(text(r.name)));
+    if (!rows.length) return document.createDocumentFragment();
+    const sorted = rows
+      .map((r, i) => ({ r, i }))
+      .sort((x, y) => rank(x.r.result) - rank(y.r.result) || x.i - y.i)
+      .map((x) => x.r);
+    const multi = manySubs(sorted);
+    const pass = rows.filter((r) => r.result === 'PASS').length;
+    const fail = rows.filter((r) => r.result === 'FAIL').length;
+    const host = isObj(report.spec_host) ? report.spec_host : null;
+    const xid = finite(host?.xid);
+    const ring = finite(host?.user_ring_refused);
+    const secs = (v) => (finite(v) !== null && v >= 0 ? fmtDuration(v * 1000) : '');
+    const count = (v) => (finite(v) !== null && v >= 0 ? String(v) : '');
     return section(
-      head,
-      scope + '-apps',
-      el('ul', { class: 'kf-counts', 'aria-label': 'Application counts' }, [
-        el('li', {}, tally('PASS') + ' passed'),
-        el('li', {}, tally('FAIL') + ' failed'),
-        el('li', {}, apps.length - tally('PASS') - tally('FAIL') + ' not run'),
+      'SPECviewperf',
+      scope + '-spec',
+      el('p', { class: 'kf-small' }, 'Status and run times only. Not an official SPEC result.'),
+      el('ul', { class: 'kf-counts', 'aria-label': 'Viewset counts' }, [
+        el('li', {}, pass + ' passed'),
+        el('li', {}, fail + ' failed'),
+        el('li', {}, rows.length - pass - fail + ' not run'),
+        xid !== null ? el('li', {}, 'Host Xid: ' + xid) : null,
+        ring !== null ? el('li', {}, 'USER_RING refusals: ' + ring) : null,
       ]),
       el(
         'div',
-        { class: 'kf-scroll', tabindex: 0, role: 'region', 'aria-label': 'Applications' },
+        { class: 'kf-scroll', tabindex: 0, role: 'region', 'aria-label': 'SPECviewperf viewsets' },
         el(
           'table',
-          { class: 'kf-runs kf-cards kf-apps' },
-          el('thead', {}, el('tr', {}, [...(manySubs(sorted) ? ['Subrun'] : []), 'Application', 'Guest OS', 'Result', 'Note'].map((h) => el('th', { scope: 'col' }, h)))),
+          { class: 'kf-runs kf-cards kf-spec' },
+          el(
+            'thead',
+            {},
+            el(
+              'tr',
+              {},
+              [...(multi ? ['Subrun'] : []), 'Viewset', 'Result', 'Subtests', 'Wall time', 'Native reference', 'Resets', 'Note'].map((h) =>
+                el('th', { scope: 'col', class: ['Subtests', 'Wall time', 'Native reference', 'Resets'].includes(h) ? 'kf-num' : null }, h),
+              ),
+            ),
+          ),
           el(
             'tbody',
             {},
-            sorted.map((a) =>
-              el(
+            sorted.map((r) => {
+              const failed = arr(r.failed).map(text).filter(Boolean);
+              const why = SPEC_WHY[text(r.reason)] ?? text(r.reason);
+              const done = finite(r.done);
+              const total = finite(r.total);
+              return el(
                 'tr',
-                {},
-                manySubs(sorted) ? el('td', { 'data-label': 'Subrun' }, text(a.sub)) : null,
-                el('td', { 'data-label': 'Application' }, text(a.name)),
-                el('td', { 'data-label': 'Guest OS' }, a.os === 'windows' ? 'Windows' : a.os === 'linux' ? 'Linux' : ''),
-                el('td', { 'data-label': 'Result' }, resultChip(a.result)),
-                el('td', { 'data-label': 'Note' }, text(a.note)),
-              ),
-            ),
+                { 'data-result': ['PASS', 'FAIL', 'NOT_RUN'].includes(r.result) ? r.result : 'NOT_RUN' },
+                multi ? el('td', { 'data-label': 'Subrun' }, text(r.sub)) : null,
+                el('td', { 'data-label': 'Viewset' }, text(r.name)),
+                el('td', { 'data-label': 'Result' }, resultChip(r.result)),
+                el('td', { 'data-label': 'Subtests', class: 'kf-num' }, done !== null && total !== null && total > 0 ? done + '/' + total : ''),
+                el('td', { 'data-label': 'Wall time', class: 'kf-num' }, secs(r.wall_s)),
+                el('td', { 'data-label': 'Native reference', class: 'kf-num' }, secs(r.native_s)),
+                el('td', { 'data-label': 'Resets', class: 'kf-num' }, count(r.resets)),
+                el('td', { 'data-label': 'Note' }, [why, failed.length ? (why ? ': ' : '') + failed.join(', ') : ''].join('')),
+              );
+            }),
           ),
         ),
       ),
     );
   }
+  // The probes: performance numbers and every individual test, behind one closed toggle. A failure
+  // count in the label keeps a red probe from hiding.
+  function probesDetails(report, scope) {
+    const tests = arr(report?.tests).filter((t) => isObj(t));
+    const bad = tests.filter((t) => t.result === 'FAIL' || t.result === 'REFUSED').length;
+    const label = 'Probes and tests' + (tests.length ? ' (' + tests.length + (bad ? ', ' + bad + ' failed' : '') + ')' : '');
+    return el('details', { class: 'kf-details kf-probes' }, el('summary', {}, label), perfSection(report, scope), testsSection(report, scope));
+  }
   function windowsSection(data, scope) {
-    if (data.platform !== 'windows' && data.platform !== 'both') return null;
+    if (data.platform !== 'windows' && data.platform !== 'both') return document.createDocumentFragment();
     const w = isObj(data.report?.windows) ? data.report.windows : null;
     const head = 'Windows gate';
     if (!w) return section(head, scope + '-win', emptyNote('Not measured yet: this report has no Windows block.'));
@@ -1117,11 +1266,11 @@
     content.replaceChildren(
       el('p', {}, el('a', { href: page('', {}) }, 'Back to the matrix')),
       runSummary(data, running, found),
-      perfSection(report, 'run'),
-      testsSection(report, 'run'),
       appsSection(report, 'run'),
+      specSection(report, 'run'),
       windowsSection(data, 'run'),
       stagesSection(stages, 'run'),
+      probesDetails(report, 'run'),
       el(
         'details',
         { class: 'kf-details' },
@@ -1204,6 +1353,8 @@
       perf: own(report?.perf),
       tests: own(report?.tests),
       apps: own(report?.apps),
+      spec: own(report?.spec),
+      spec_host: report?.spec_host,
       suites: own(report?.suites),
     };
     const scope = 'sub' + i;
@@ -1228,9 +1379,9 @@
       ),
       s.verdict === 'NOT_RUN' ? emptyNote('Not run' + (reason ? ': ' + reason : '. No reason was reported.')) : reason ? el('p', { class: 'kf-note' }, reason) : null,
       s.verdict === 'NOT_RUN' ? null : [
-        perfSection(slice, scope),
-        testsSection(slice, scope),
         appsSection(slice, scope),
+        specSection(slice, scope),
+        probesDetails(slice, scope),
         stageNames.length
           ? section(
               'Stages',
@@ -1283,10 +1434,10 @@
           'sub-none',
           emptyNote('Not measured yet: this session has no subrun breakdown. Runs recorded before the report existed list their stages only.'),
         ),
-        perfSection(report, 'run'),
-        testsSection(report, 'run'),
         appsSection(report, 'run'),
+        specSection(report, 'run'),
         stagesSection(arr(data.stages), 'run'),
+        probesDetails(report, 'run'),
       );
     } else {
       parts.push(

@@ -382,6 +382,14 @@ viewport-benchmark row is dropped even if a report carried one. The committed fi
 reports, subruns or stats yet, so fixture mode shows those empty states; the DOM tests build the
 pages against `site/report_fixture.mjs`, a synthetic extension in the contract's shape.
 
+**UPDATE 2026-11-11 (run page, built; real runs have not yet produced the new rows).** The run and session pages put
+**Apps** first (a Linux and a Windows table: app, result, time, note; counts; failures first), then a **SPECviewperf** section that
+exists only when the report has `spec` rows (status, subtests, wall time beside the native time, resets, host Xid, USER_RING
+refusals; no scores), then the Windows gate and stages; performance numbers and individual tests sit behind one closed toggle. The
+log links no longer need `STATUS_LOGS_BASE`: without it the origin is taken from the API's own `log.url`, accepted only on the API's
+own site for this run's `log.txt`. The report gained `rev: 2` (`apps[].secs`, `spec`, `spec_host`; docs/design/V3_SPEC_GATE.md,
+section 8); older reports render as before, with the app time read from the matching test row.
+
 **Assumed shapes (the contract is silent; INFERRED, to be reconciled with the Worker's answer):**
 `/v1/ci/stats` returns `{stats: [{die, family, tier, host_driver, run_id, commit, ended_at, verdict,
 pass, fail, skip, perf: [...]}]}`; `/v1/ci/subruns` returns `{subruns: [{run_id, sub, kind, os, die,

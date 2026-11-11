@@ -1,0 +1,1551 @@
+{
+ "api": "v1",
+ "run": {
+  "commit": "ef7814eb1abd29f3ffcd3420d2d7a6ce518e6629",
+  "die": "GA102",
+  "ended_at": "2026-11-10T12:44:27Z",
+  "family": "ampere",
+  "host": {
+   "claimed": [
+    "cpu_vendor",
+    "host_driver",
+    "guest_driver"
+   ],
+   "gpu_name": "NVIDIA GeForce RTX 3090",
+   "guests": [
+    {
+     "driver": "580.159.04",
+     "os": "linux",
+     "os_version": "ubuntu-24.04"
+    },
+    {
+     "driver": "580.88",
+     "os": "windows",
+     "os_version": "11-ltsc-2024-26100"
+    }
+   ],
+   "host_driver": "580.159.04"
+  },
+  "id": "vast-42761776706-9-0",
+  "log": {
+   "bytes": 1028067,
+   "sha256": "3b8e72fa8a846aa5805f0cc0da0c8a0be970673e30036571e4f624cfa1156f86",
+   "url": "https://logs.kayfabe.dev/vast-42761776706-9-0/log.txt"
+  },
+  "platform": "both",
+  "profile": "check",
+  "report": {
+   "apps": [
+    {
+     "name": "overlay_yuv_probe",
+     "note": "manual: needs real display",
+     "os": "windows",
+     "result": "NOT_RUN",
+     "sub": "windows-580.88"
+    },
+    {
+     "name": "overlay_yuv_hide",
+     "note": "manual: needs real display",
+     "os": "windows",
+     "result": "NOT_RUN",
+     "sub": "windows-580.88"
+    },
+    {
+     "name": "overlay_yuv_occlude",
+     "note": "manual: needs real display",
+     "os": "windows",
+     "result": "NOT_RUN",
+     "sub": "windows-580.88"
+    },
+    {
+     "name": "overlay_yuv_resize",
+     "note": "manual: needs real display",
+     "os": "windows",
+     "result": "NOT_RUN",
+     "sub": "windows-580.88"
+    },
+    {
+     "name": "overlay_yuv_move",
+     "note": "manual: needs real display",
+     "os": "windows",
+     "result": "NOT_RUN",
+     "sub": "windows-580.88"
+    },
+    {
+     "name": "overlay_yuv_recreate",
+     "note": "manual: needs real display",
+     "os": "windows",
+     "result": "NOT_RUN",
+     "sub": "windows-580.88"
+    },
+    {
+     "name": "overlay_yuv_fullscreen",
+     "note": "manual: needs real display",
+     "os": "windows",
+     "result": "NOT_RUN",
+     "sub": "windows-580.88"
+    },
+    {
+     "name": "overlay_yuv_soak",
+     "note": "manual: needs real display",
+     "os": "windows",
+     "result": "NOT_RUN",
+     "sub": "windows-580.88"
+    },
+    {
+     "name": "managed_t",
+     "note": "unsupported (UVM)",
+     "os": "windows",
+     "result": "NOT_RUN",
+     "sub": "windows-580.88"
+    },
+    {
+     "name": "UnifiedMemoryStreams",
+     "note": "unsupported (UVM)",
+     "os": "linux",
+     "result": "NOT_RUN",
+     "sub": "linux-580.159.04"
+    },
+    {
+     "name": "UnifiedMemoryPerf",
+     "note": "unsupported (UVM)",
+     "os": "linux",
+     "result": "NOT_RUN",
+     "sub": "linux-580.159.04"
+    },
+    {
+     "name": "conjugateGradientUM",
+     "note": "unsupported (UVM)",
+     "os": "linux",
+     "result": "NOT_RUN",
+     "sub": "linux-580.159.04"
+    },
+    {
+     "name": "attach_verify",
+     "note": "unsupported (UVM)",
+     "os": "linux",
+     "result": "NOT_RUN",
+     "sub": "linux-580.159.04"
+    }
+   ],
+   "commit": "ef7814eb1abd29f3ffcd3420d2d7a6ce518e6629",
+   "die": "GA102",
+   "ended_at": "2026-11-10T12:44:27Z",
+   "family": "ampere",
+   "gpu_name": "NVIDIA GeForce RTX 3090",
+   "guest_drivers": {
+    "linux": "580.159.04",
+    "windows": "580.88"
+   },
+   "host_driver": "580.159.04",
+   "log": {
+    "bytes": 1028067,
+    "sha256": "3b8e72fa8a846aa5805f0cc0da0c8a0be970673e30036571e4f624cfa1156f86",
+    "url": "https://logs.kayfabe.dev/vast-42761776706-9-0/log.txt"
+   },
+   "perf": [
+    {
+     "higher_is_better": true,
+     "name": "cup8bench N=2048 gflops",
+     "ref_ratio": null,
+     "ref_value": null,
+     "sub": "host",
+     "suite": "cuda_host",
+     "unit": "GFLOPS",
+     "value": 2133.032
+    },
+    {
+     "higher_is_better": true,
+     "name": "cup8bench N=2048 batch_gflops",
+     "ref_ratio": null,
+     "ref_value": null,
+     "sub": "host",
+     "suite": "cuda_host",
+     "unit": "GFLOPS",
+     "value": 2225.679
+    },
+    {
+     "higher_is_better": false,
+     "name": "cup8bench N=2048 med_ms",
+     "ref_ratio": null,
+     "ref_value": null,
+     "sub": "host",
+     "suite": "cuda_host",
+     "unit": "ms",
+     "value": 8.054
+    },
+    {
+     "higher_is_better": false,
+     "name": "cup8bench N=2048 first_ms",
+     "ref_ratio": null,
+     "ref_value": null,
+     "sub": "host",
+     "suite": "cuda_host",
+     "unit": "ms",
+     "value": 8.053
+    },
+    {
+     "higher_is_better": false,
+     "name": "cup8bench N=2048 p90_ms",
+     "ref_ratio": null,
+     "ref_value": null,
+     "sub": "host",
+     "suite": "cuda_host",
+     "unit": "ms",
+     "value": 8.056
+    },
+    {
+     "higher_is_better": false,
+     "name": "cup8bench N=2048 min_ms",
+     "ref_ratio": null,
+     "ref_value": null,
+     "sub": "host",
+     "suite": "cuda_host",
+     "unit": "ms",
+     "value": 7.512
+    },
+    {
+     "higher_is_better": false,
+     "name": "cup8bench N=2048 batch_per_launch_ms",
+     "ref_ratio": null,
+     "ref_value": null,
+     "sub": "host",
+     "suite": "cuda_host",
+     "unit": "ms",
+     "value": 7.719
+    },
+    {
+     "higher_is_better": false,
+     "name": "cup8bench N=2048 h2d_ms",
+     "ref_ratio": null,
+     "ref_value": null,
+     "sub": "host",
+     "suite": "cuda_host",
+     "unit": "ms",
+     "value": 2.833
+    },
+    {
+     "higher_is_better": false,
+     "name": "cup8bench N=2048 d2h_med_ms",
+     "ref_ratio": null,
+     "ref_value": null,
+     "sub": "host",
+     "suite": "cuda_host",
+     "unit": "ms",
+     "value": 1.351
+    },
+    {
+     "higher_is_better": false,
+     "name": "cup8bench N=2048 submit_med_ms",
+     "ref_ratio": null,
+     "ref_value": null,
+     "sub": "host",
+     "suite": "cuda_host",
+     "unit": "ms",
+     "value": 0.002
+    },
+    {
+     "higher_is_better": false,
+     "name": "cup8bench N=2048 sync_med_ms",
+     "ref_ratio": null,
+     "ref_value": null,
+     "sub": "host",
+     "suite": "cuda_host",
+     "unit": "ms",
+     "value": 8.052
+    },
+    {
+     "higher_is_better": true,
+     "name": "cup8bench N=2048 h2d_GBps",
+     "ref_ratio": null,
+     "ref_value": null,
+     "sub": "host",
+     "suite": "cuda_host",
+     "unit": "GB/s",
+     "value": 11.844134133427461
+    },
+    {
+     "higher_is_better": true,
+     "name": "cup8bench N=2048 d2h_GBps",
+     "ref_ratio": null,
+     "ref_value": null,
+     "sub": "host",
+     "suite": "cuda_host",
+     "unit": "GB/s",
+     "value": 12.418368615840118
+    },
+    {
+     "higher_is_better": false,
+     "name": "cup8bench init_ms",
+     "ref_ratio": null,
+     "ref_value": null,
+     "sub": "host",
+     "suite": "cuda_host",
+     "unit": "ms",
+     "value": 1618.25
+    },
+    {
+     "higher_is_better": false,
+     "name": "cup8bench ctx_ms",
+     "ref_ratio": null,
+     "ref_value": null,
+     "sub": "host",
+     "suite": "cuda_host",
+     "unit": "ms",
+     "value": 91.78
+    },
+    {
+     "higher_is_better": false,
+     "name": "cup8bench module_ms",
+     "ref_ratio": null,
+     "ref_value": null,
+     "sub": "host",
+     "suite": "cuda_host",
+     "unit": "ms",
+     "value": 13.46
+    },
+    {
+     "higher_is_better": true,
+     "name": "cup8bench N=16 gflops",
+     "ref_ratio": null,
+     "ref_value": null,
+     "sub": "host",
+     "suite": "cuda_host",
+     "unit": "GFLOPS",
+     "value": 1.402
+    },
+    {
+     "higher_is_better": true,
+     "name": "cup8bench N=16 batch_gflops",
+     "ref_ratio": null,
+     "ref_value": null,
+     "sub": "host",
+     "suite": "cuda_host",
+     "unit": "GFLOPS",
+     "value": 2.878
+    },
+    {
+     "higher_is_better": false,
+     "name": "cup8bench N=16 med_ms",
+     "ref_ratio": null,
+     "ref_value": null,
+     "sub": "host",
+     "suite": "cuda_host",
+     "unit": "ms",
+     "value": 0.006
+    },
+    {
+     "higher_is_better": false,
+     "name": "cup8bench N=16 first_ms",
+     "ref_ratio": null,
+     "ref_value": null,
+     "sub": "host",
+     "suite": "cuda_host",
+     "unit": "ms",
+     "value": 0.019
+    },
+    {
+     "higher_is_better": false,
+     "name": "cup8bench N=16 p90_ms",
+     "ref_ratio": null,
+     "ref_value": null,
+     "sub": "host",
+     "suite": "cuda_host",
+     "unit": "ms",
+     "value": 0.006
+    },
+    {
+     "higher_is_better": false,
+     "name": "cup8bench N=16 min_ms",
+     "ref_ratio": null,
+     "ref_value": null,
+     "sub": "host",
+     "suite": "cuda_host",
+     "unit": "ms",
+     "value": 0.006
+    },
+    {
+     "higher_is_better": false,
+     "name": "cup8bench N=16 batch_per_launch_ms",
+     "ref_ratio": null,
+     "ref_value": null,
+     "sub": "host",
+     "suite": "cuda_host",
+     "unit": "ms",
+     "value": 0.003
+    },
+    {
+     "higher_is_better": false,
+     "name": "cup8bench N=16 h2d_ms",
+     "ref_ratio": null,
+     "ref_value": null,
+     "sub": "host",
+     "suite": "cuda_host",
+     "unit": "ms",
+     "value": 0.023
+    },
+    {
+     "higher_is_better": false,
+     "name": "cup8bench N=16 d2h_med_ms",
+     "ref_ratio": null,
+     "ref_value": null,
+     "sub": "host",
+     "suite": "cuda_host",
+     "unit": "ms",
+     "value": 0.005
+    },
+    {
+     "higher_is_better": false,
+     "name": "cup8bench N=16 submit_med_ms",
+     "ref_ratio": null,
+     "ref_value": null,
+     "sub": "host",
+     "suite": "cuda_host",
+     "unit": "ms",
+     "value": 0.002
+    },
+    {
+     "higher_is_better": false,
+     "name": "cup8bench N=16 sync_med_ms",
+     "ref_ratio": null,
+     "ref_value": null,
+     "sub": "host",
+     "suite": "cuda_host",
+     "unit": "ms",
+     "value": 0.004
+    },
+    {
+     "higher_is_better": false,
+     "name": "cup8bench module_ms",
+     "ref_ratio": 12.262258543833582,
+     "ref_value": 13.46,
+     "sub": "linux-580.159.04",
+     "suite": "cuda_fat",
+     "unit": "ms",
+     "value": 165.05
+    },
+    {
+     "higher_is_better": true,
+     "name": "cup8bench N=16 gflops",
+     "ref_ratio": 0.2161198288159772,
+     "ref_value": 1.402,
+     "sub": "linux-580.159.04",
+     "suite": "cuda_fat",
+     "unit": "GFLOPS",
+     "value": 0.303
+    },
+    {
+     "higher_is_better": true,
+     "name": "cup8bench N=16 batch_gflops",
+     "ref_ratio": 0.12126476719944404,
+     "ref_value": 2.878,
+     "sub": "linux-580.159.04",
+     "suite": "cuda_fat",
+     "unit": "GFLOPS",
+     "value": 0.349
+    },
+    {
+     "higher_is_better": false,
+     "name": "cup8bench N=16 med_ms",
+     "ref_ratio": 4.5,
+     "ref_value": 0.006,
+     "sub": "linux-580.159.04",
+     "suite": "cuda_fat",
+     "unit": "ms",
+     "value": 0.027
+    },
+    {
+     "higher_is_better": false,
+     "name": "cup8bench N=16 first_ms",
+     "ref_ratio": 2.210526315789474,
+     "ref_value": 0.019,
+     "sub": "linux-580.159.04",
+     "suite": "cuda_fat",
+     "unit": "ms",
+     "value": 0.042
+    },
+    {
+     "higher_is_better": false,
+     "name": "cup8bench N=16 p90_ms",
+     "ref_ratio": 5,
+     "ref_value": 0.006,
+     "sub": "linux-580.159.04",
+     "suite": "cuda_fat",
+     "unit": "ms",
+     "value": 0.03
+    },
+    {
+     "higher_is_better": false,
+     "name": "cup8bench N=16 min_ms",
+     "ref_ratio": 4.333333333333333,
+     "ref_value": 0.006,
+     "sub": "linux-580.159.04",
+     "suite": "cuda_fat",
+     "unit": "ms",
+     "value": 0.026
+    },
+    {
+     "higher_is_better": false,
+     "name": "cup8bench N=16 batch_per_launch_ms",
+     "ref_ratio": 7.666666666666666,
+     "ref_value": 0.003,
+     "sub": "linux-580.159.04",
+     "suite": "cuda_fat",
+     "unit": "ms",
+     "value": 0.023
+    },
+    {
+     "higher_is_better": false,
+     "name": "cup8bench N=16 h2d_ms",
+     "ref_ratio": 80.60869565217392,
+     "ref_value": 0.023,
+     "sub": "linux-580.159.04",
+     "suite": "cuda_fat",
+     "unit": "ms",
+     "value": 1.854
+    },
+    {
+     "higher_is_better": false,
+     "name": "cup8bench N=16 d2h_med_ms",
+     "ref_ratio": 5,
+     "ref_value": 0.005,
+     "sub": "linux-580.159.04",
+     "suite": "cuda_fat",
+     "unit": "ms",
+     "value": 0.025
+    },
+    {
+     "higher_is_better": false,
+     "name": "cup8bench N=16 submit_med_ms",
+     "ref_ratio": 12,
+     "ref_value": 0.002,
+     "sub": "linux-580.159.04",
+     "suite": "cuda_fat",
+     "unit": "ms",
+     "value": 0.024
+    },
+    {
+     "higher_is_better": false,
+     "name": "cup8bench N=16 sync_med_ms",
+     "ref_ratio": 0.75,
+     "ref_value": 0.004,
+     "sub": "linux-580.159.04",
+     "suite": "cuda_fat",
+     "unit": "ms",
+     "value": 0.003
+    },
+    {
+     "higher_is_better": true,
+     "name": "cup8bench N=2048 gflops",
+     "ref_ratio": 0.9986221491285643,
+     "ref_value": 2133.032,
+     "sub": "linux-580.159.04",
+     "suite": "cuda_fat",
+     "unit": "GFLOPS",
+     "value": 2130.093
+    },
+    {
+     "higher_is_better": true,
+     "name": "cup8bench N=2048 batch_gflops",
+     "ref_ratio": 0.9658450297639507,
+     "ref_value": 2225.679,
+     "sub": "linux-580.159.04",
+     "suite": "cuda_fat",
+     "unit": "GFLOPS",
+     "value": 2149.661
+    },
+    {
+     "higher_is_better": false,
+     "name": "cup8bench N=2048 med_ms",
+     "ref_ratio": 1.0013657809783958,
+     "ref_value": 8.054,
+     "sub": "linux-580.159.04",
+     "suite": "cuda_fat",
+     "unit": "ms",
+     "value": 8.065
+    },
+    {
+     "higher_is_better": false,
+     "name": "cup8bench N=2048 first_ms",
+     "ref_ratio": 1.0047187383583756,
+     "ref_value": 8.053,
+     "sub": "linux-580.159.04",
+     "suite": "cuda_fat",
+     "unit": "ms",
+     "value": 8.091
+    },
+    {
+     "higher_is_better": false,
+     "name": "cup8bench N=2048 p90_ms",
+     "ref_ratio": 1.0019860973187686,
+     "ref_value": 8.056,
+     "sub": "linux-580.159.04",
+     "suite": "cuda_fat",
+     "unit": "ms",
+     "value": 8.072
+    },
+    {
+     "higher_is_better": false,
+     "name": "cup8bench N=2048 min_ms",
+     "ref_ratio": 1.0726837060702876,
+     "ref_value": 7.512,
+     "sub": "linux-580.159.04",
+     "suite": "cuda_fat",
+     "unit": "ms",
+     "value": 8.058
+    },
+    {
+     "higher_is_better": false,
+     "name": "cup8bench N=2048 batch_per_launch_ms",
+     "ref_ratio": 1.0353672755538281,
+     "ref_value": 7.719,
+     "sub": "linux-580.159.04",
+     "suite": "cuda_fat",
+     "unit": "ms",
+     "value": 7.992
+    },
+    {
+     "higher_is_better": false,
+     "name": "cup8bench N=2048 h2d_ms",
+     "ref_ratio": 1.2393222732086127,
+     "ref_value": 2.833,
+     "sub": "linux-580.159.04",
+     "suite": "cuda_fat",
+     "unit": "ms",
+     "value": 3.511
+    },
+    {
+     "higher_is_better": false,
+     "name": "cup8bench N=2048 d2h_med_ms",
+     "ref_ratio": 1.150259067357513,
+     "ref_value": 1.351,
+     "sub": "linux-580.159.04",
+     "suite": "cuda_fat",
+     "unit": "ms",
+     "value": 1.554
+    },
+    {
+     "higher_is_better": false,
+     "name": "cup8bench N=2048 submit_med_ms",
+     "ref_ratio": 12.5,
+     "ref_value": 0.002,
+     "sub": "linux-580.159.04",
+     "suite": "cuda_fat",
+     "unit": "ms",
+     "value": 0.025
+    },
+    {
+     "higher_is_better": false,
+     "name": "cup8bench N=2048 sync_med_ms",
+     "ref_ratio": 0.9985096870342771,
+     "ref_value": 8.052,
+     "sub": "linux-580.159.04",
+     "suite": "cuda_fat",
+     "unit": "ms",
+     "value": 8.04
+    },
+    {
+     "higher_is_better": true,
+     "name": "cup8bench N=2048 h2d_GBps",
+     "ref_ratio": 0.806892623184278,
+     "ref_value": 11.844134133427461,
+     "sub": "linux-580.159.04",
+     "suite": "cuda_fat",
+     "unit": "GB/s",
+     "value": 9.55694446026773
+    },
+    {
+     "higher_is_better": true,
+     "name": "cup8bench N=2048 d2h_GBps",
+     "ref_ratio": 0.8693693693693694,
+     "ref_value": 12.418368615840118,
+     "sub": "linux-580.159.04",
+     "suite": "cuda_fat",
+     "unit": "GB/s",
+     "value": 10.796149292149291
+    },
+    {
+     "higher_is_better": false,
+     "name": "cup8bench init_ms",
+     "ref_ratio": 0.882484164993048,
+     "ref_value": 1618.25,
+     "sub": "linux-580.159.04",
+     "suite": "cuda_fat",
+     "unit": "ms",
+     "value": 1428.08
+    },
+    {
+     "higher_is_better": false,
+     "name": "cup8bench ctx_ms",
+     "ref_ratio": 5.004031379385487,
+     "ref_value": 91.78,
+     "sub": "linux-580.159.04",
+     "suite": "cuda_fat",
+     "unit": "ms",
+     "value": 459.27
+    }
+   ],
+   "run_id": "vast-42761776706-9-0",
+   "schema": 1,
+   "stages": [
+    {
+     "duration_ms": 1396000,
+     "name": "provision",
+     "rc": 0,
+     "result": "PASS"
+    },
+    {
+     "duration_ms": 11338,
+     "name": "cuda_host",
+     "rc": 0,
+     "result": "PASS"
+    },
+    {
+     "duration_ms": 1014739,
+     "name": "merge_bar",
+     "rc": 6,
+     "result": "PASS"
+    },
+    {
+     "duration_ms": 249640,
+     "name": "cuda_guest",
+     "rc": 0,
+     "result": "PASS"
+    },
+    {
+     "duration_ms": 2786837,
+     "name": "windows_gate",
+     "rc": 0,
+     "result": "PASS"
+    }
+   ],
+   "started_at": "2026-11-10T10:48:08Z",
+   "subruns": [
+    {
+     "counts": {
+      "fail": 0,
+      "pass": 44,
+      "skip": 0
+     },
+     "duration_ms": 229320,
+     "ended_at": null,
+     "guest_driver": null,
+     "host_driver": "580.159.04",
+     "kind": "host_bare",
+     "log_range": {
+      "end_byte": 1005070,
+      "start_byte": 3037
+     },
+     "os": "host",
+     "reason": null,
+     "stages": [
+      "cuda_host",
+      "gates",
+      "kf3_build",
+      "raw_suite"
+     ],
+     "started_at": null,
+     "sub": "host",
+     "verdict": "PASS"
+    },
+    {
+     "counts": {
+      "fail": 0,
+      "pass": 35,
+      "skip": 0
+     },
+     "duration_ms": 131838,
+     "ended_at": null,
+     "guest_driver": "580.159.04",
+     "host_driver": "580.159.04",
+     "kind": "linux_guest",
+     "log_range": {
+      "end_byte": 1013940,
+      "start_byte": 8036
+     },
+     "os": "linux",
+     "reason": null,
+     "stages": [
+      "thin_suite",
+      "birth_census",
+      "cuda_fat"
+     ],
+     "started_at": null,
+     "sub": "linux-580.159.04",
+     "verdict": "PASS"
+    },
+    {
+     "counts": {
+      "fail": 0,
+      "pass": 1,
+      "skip": 0
+     },
+     "duration_ms": 13000,
+     "ended_at": null,
+     "guest_driver": "580.88",
+     "host_driver": "580.159.04",
+     "kind": "windows_guest",
+     "log_range": {
+      "end_byte": 1026993,
+      "start_byte": 1013940
+     },
+     "os": "windows",
+     "reason": null,
+     "stages": [
+      "windows_gate"
+     ],
+     "started_at": null,
+     "sub": "windows-580.88",
+     "verdict": "PASS"
+    }
+   ],
+   "suites": [
+    {
+     "fail": 0,
+     "name": "provision",
+     "pass": 1,
+     "skip": 0
+    },
+    {
+     "fail": 0,
+     "name": "cuda_host",
+     "pass": 4,
+     "skip": 0
+    },
+    {
+     "fail": 0,
+     "name": "gates",
+     "pass": 9,
+     "skip": 0
+    },
+    {
+     "fail": 0,
+     "name": "kf3_build",
+     "pass": 1,
+     "skip": 0
+    },
+    {
+     "fail": 0,
+     "name": "raw_suite",
+     "pass": 30,
+     "skip": 0
+    },
+    {
+     "fail": 0,
+     "name": "thin_suite",
+     "pass": 30,
+     "skip": 0
+    },
+    {
+     "fail": 0,
+     "name": "birth_census",
+     "pass": 1,
+     "skip": 0
+    },
+    {
+     "fail": 0,
+     "name": "cuda_fat",
+     "pass": 4,
+     "skip": 0
+    },
+    {
+     "fail": 0,
+     "name": "windows_gate",
+     "pass": 1,
+     "skip": 0
+    }
+   ],
+   "tests": [
+    {
+     "ms": 2111,
+     "name": "cup2",
+     "result": "PASS",
+     "sub": "host",
+     "suite": "cuda_host"
+    },
+    {
+     "ms": 2044,
+     "name": "cup3",
+     "result": "PASS",
+     "sub": "host",
+     "suite": "cuda_host"
+    },
+    {
+     "ms": 2094,
+     "name": "cup8",
+     "result": "PASS",
+     "sub": "host",
+     "suite": "cuda_host"
+    },
+    {
+     "ms": 2406,
+     "name": "cup8bench",
+     "result": "PASS",
+     "sub": "host",
+     "suite": "cuda_host"
+    },
+    {
+     "ms": 5874,
+     "name": "timer",
+     "result": "PASS",
+     "sub": "host",
+     "suite": "raw_suite"
+    },
+    {
+     "ms": 5911,
+     "name": "engines",
+     "result": "PASS",
+     "sub": "host",
+     "suite": "raw_suite"
+    },
+    {
+     "ms": 5951,
+     "name": "doorbell-census",
+     "result": "PASS",
+     "sub": "host",
+     "suite": "raw_suite"
+    },
+    {
+     "ms": 5867,
+     "name": "gpu-info-sweep",
+     "result": "PASS",
+     "sub": "host",
+     "suite": "raw_suite"
+    },
+    {
+     "ms": 9086,
+     "name": "bus-info-sweep",
+     "result": "PASS",
+     "sub": "host",
+     "suite": "raw_suite"
+    },
+    {
+     "ms": 9541,
+     "name": "concurrency",
+     "result": "PASS",
+     "sub": "host",
+     "suite": "raw_suite"
+    },
+    {
+     "ms": 18017,
+     "name": "defer-liveness",
+     "result": "PASS",
+     "sub": "host",
+     "suite": "raw_suite"
+    },
+    {
+     "ms": 6271,
+     "name": "blockage-coverage",
+     "result": "PASS",
+     "sub": "host",
+     "suite": "raw_suite"
+    },
+    {
+     "ms": 5885,
+     "name": "alias-two-vas",
+     "result": "PASS",
+     "sub": "host",
+     "suite": "raw_suite"
+    },
+    {
+     "ms": 5886,
+     "name": "alias-unmap-observe",
+     "result": "PASS",
+     "sub": "host",
+     "suite": "raw_suite"
+    },
+    {
+     "ms": 5845,
+     "name": "map-propagation",
+     "result": "PASS",
+     "sub": "host",
+     "suite": "raw_suite"
+    },
+    {
+     "ms": 6273,
+     "name": "late-map-race",
+     "result": "PASS",
+     "sub": "host",
+     "suite": "raw_suite"
+    },
+    {
+     "ms": 8859,
+     "name": "missing-page-fault",
+     "result": "PASS",
+     "sub": "host",
+     "suite": "raw_suite"
+    },
+    {
+     "ms": 5926,
+     "name": "uvm-invalidate",
+     "result": "PASS",
+     "sub": "host",
+     "suite": "raw_suite"
+    },
+    {
+     "ms": 5978,
+     "name": "uvm-mean",
+     "result": "PASS",
+     "sub": "host",
+     "suite": "raw_suite"
+    },
+    {
+     "ms": 5903,
+     "name": "executor-vas",
+     "result": "PASS",
+     "sub": "host",
+     "suite": "raw_suite"
+    },
+    {
+     "ms": 5856,
+     "name": "guest-ring-channel",
+     "result": "PASS",
+     "sub": "host",
+     "suite": "raw_suite"
+    },
+    {
+     "ms": 3817,
+     "name": "dictated-ring",
+     "result": "PASS",
+     "sub": "host",
+     "suite": "raw_suite"
+    },
+    {
+     "ms": 5858,
+     "name": "dictated-ring-negative",
+     "result": "PASS",
+     "sub": "host",
+     "suite": "raw_suite"
+    },
+    {
+     "ms": 5889,
+     "name": "ce-client",
+     "result": "PASS",
+     "sub": "host",
+     "suite": "raw_suite"
+    },
+    {
+     "ms": 10280,
+     "name": "ce-client-guest-ram",
+     "result": "PASS",
+     "sub": "host",
+     "suite": "raw_suite"
+    },
+    {
+     "ms": 5797,
+     "name": "guest-ram-pin",
+     "result": "PASS",
+     "sub": "host",
+     "suite": "raw_suite"
+    },
+    {
+     "ms": 5865,
+     "name": "bar1-crossing",
+     "result": "PASS",
+     "sub": "host",
+     "suite": "raw_suite"
+    },
+    {
+     "ms": 5858,
+     "name": "atomics-probe",
+     "result": "PASS",
+     "sub": "host",
+     "suite": "raw_suite"
+    },
+    {
+     "ms": 5888,
+     "name": "pce-mask-probe",
+     "result": "PASS",
+     "sub": "host",
+     "suite": "raw_suite"
+    },
+    {
+     "ms": 23923,
+     "name": "gpga-reserve-probe",
+     "result": "PASS",
+     "sub": "host",
+     "suite": "raw_suite"
+    },
+    {
+     "ms": 5920,
+     "name": "map-stress",
+     "result": "PASS",
+     "sub": "host",
+     "suite": "raw_suite"
+    },
+    {
+     "ms": 6111,
+     "name": "concurrent-fuzz",
+     "result": "PASS",
+     "sub": "host",
+     "suite": "raw_suite"
+    },
+    {
+     "ms": 5866,
+     "name": "cross-client-leak",
+     "result": "PASS",
+     "sub": "host",
+     "suite": "raw_suite"
+    },
+    {
+     "ms": 6664,
+     "name": "rpc-mixed-allocs",
+     "result": "PASS",
+     "sub": "host",
+     "suite": "raw_suite"
+    },
+    {
+     "ms": 839,
+     "name": "timer",
+     "result": "PASS",
+     "sub": "linux-580.159.04",
+     "suite": "thin_suite"
+    },
+    {
+     "ms": 1340,
+     "name": "engines",
+     "result": "PASS",
+     "sub": "linux-580.159.04",
+     "suite": "thin_suite"
+    },
+    {
+     "ms": 2140,
+     "name": "doorbell-census",
+     "result": "PASS",
+     "sub": "linux-580.159.04",
+     "suite": "thin_suite"
+    },
+    {
+     "ms": 850,
+     "name": "gpu-info-sweep",
+     "result": "PASS",
+     "sub": "linux-580.159.04",
+     "suite": "thin_suite"
+    },
+    {
+     "ms": 4109,
+     "name": "bus-info-sweep",
+     "result": "PASS",
+     "sub": "linux-580.159.04",
+     "suite": "thin_suite"
+    },
+    {
+     "ms": 6960,
+     "name": "concurrency",
+     "result": "PASS",
+     "sub": "linux-580.159.04",
+     "suite": "thin_suite"
+    },
+    {
+     "ms": 13050,
+     "name": "defer-liveness",
+     "result": "PASS",
+     "sub": "linux-580.159.04",
+     "suite": "thin_suite"
+    },
+    {
+     "ms": 1260,
+     "name": "blockage-coverage",
+     "result": "PASS",
+     "sub": "linux-580.159.04",
+     "suite": "thin_suite"
+    },
+    {
+     "ms": 830,
+     "name": "alias-two-vas",
+     "result": "PASS",
+     "sub": "linux-580.159.04",
+     "suite": "thin_suite"
+    },
+    {
+     "ms": 969,
+     "name": "alias-unmap-observe",
+     "result": "PASS",
+     "sub": "linux-580.159.04",
+     "suite": "thin_suite"
+    },
+    {
+     "ms": 890,
+     "name": "map-propagation",
+     "result": "PASS",
+     "sub": "linux-580.159.04",
+     "suite": "thin_suite"
+    },
+    {
+     "ms": 1259,
+     "name": "late-map-race",
+     "result": "PASS",
+     "sub": "linux-580.159.04",
+     "suite": "thin_suite"
+    },
+    {
+     "ms": 4050,
+     "name": "missing-page-fault",
+     "result": "PASS",
+     "sub": "linux-580.159.04",
+     "suite": "thin_suite"
+    },
+    {
+     "ms": 1349,
+     "name": "uvm-invalidate",
+     "result": "PASS",
+     "sub": "linux-580.159.04",
+     "suite": "thin_suite"
+    },
+    {
+     "ms": 2570,
+     "name": "uvm-mean",
+     "result": "PASS",
+     "sub": "linux-580.159.04",
+     "suite": "thin_suite"
+    },
+    {
+     "ms": 910,
+     "name": "executor-vas",
+     "result": "PASS",
+     "sub": "linux-580.159.04",
+     "suite": "thin_suite"
+    },
+    {
+     "ms": 980,
+     "name": "guest-ring-channel",
+     "result": "PASS",
+     "sub": "linux-580.159.04",
+     "suite": "thin_suite"
+    },
+    {
+     "ms": 900,
+     "name": "dictated-ring",
+     "result": "PASS",
+     "sub": "linux-580.159.04",
+     "suite": "thin_suite"
+    },
+    {
+     "ms": 799,
+     "name": "dictated-ring-negative",
+     "result": "PASS",
+     "sub": "linux-580.159.04",
+     "suite": "thin_suite"
+    },
+    {
+     "ms": 879,
+     "name": "ce-client",
+     "result": "PASS",
+     "sub": "linux-580.159.04",
+     "suite": "thin_suite"
+    },
+    {
+     "ms": 48520,
+     "name": "ce-client-guest-ram",
+     "result": "PASS",
+     "sub": "linux-580.159.04",
+     "suite": "thin_suite"
+    },
+    {
+     "ms": 830,
+     "name": "guest-ram-pin",
+     "result": "PASS",
+     "sub": "linux-580.159.04",
+     "suite": "thin_suite"
+    },
+    {
+     "ms": 849,
+     "name": "bar1-crossing",
+     "result": "PASS",
+     "sub": "linux-580.159.04",
+     "suite": "thin_suite"
+    },
+    {
+     "ms": 839,
+     "name": "atomics-probe",
+     "result": "PASS",
+     "sub": "linux-580.159.04",
+     "suite": "thin_suite"
+    },
+    {
+     "ms": 859,
+     "name": "pce-mask-probe",
+     "result": "PASS",
+     "sub": "linux-580.159.04",
+     "suite": "thin_suite"
+    },
+    {
+     "ms": 18540,
+     "name": "gpga-reserve-probe",
+     "result": "PASS",
+     "sub": "linux-580.159.04",
+     "suite": "thin_suite"
+    },
+    {
+     "ms": 1320,
+     "name": "map-stress",
+     "result": "PASS",
+     "sub": "linux-580.159.04",
+     "suite": "thin_suite"
+    },
+    {
+     "ms": 3429,
+     "name": "concurrent-fuzz",
+     "result": "PASS",
+     "sub": "linux-580.159.04",
+     "suite": "thin_suite"
+    },
+    {
+     "ms": 930,
+     "name": "cross-client-leak",
+     "result": "PASS",
+     "sub": "linux-580.159.04",
+     "suite": "thin_suite"
+    },
+    {
+     "ms": 1789,
+     "name": "rpc-mixed-allocs",
+     "result": "PASS",
+     "sub": "linux-580.159.04",
+     "suite": "thin_suite"
+    },
+    {
+     "ms": null,
+     "name": "cup2",
+     "result": "PASS",
+     "sub": "linux-580.159.04",
+     "suite": "cuda_fat"
+    },
+    {
+     "ms": null,
+     "name": "cup3",
+     "result": "PASS",
+     "sub": "linux-580.159.04",
+     "suite": "cuda_fat"
+    },
+    {
+     "ms": 4000,
+     "name": "cup8",
+     "result": "PASS",
+     "sub": "linux-580.159.04",
+     "suite": "cuda_fat"
+    },
+    {
+     "ms": 3000,
+     "name": "cup8bench",
+     "result": "PASS",
+     "sub": "linux-580.159.04",
+     "suite": "cuda_fat"
+    },
+    {
+     "ms": 2000,
+     "name": "cup8",
+     "result": "PASS",
+     "sub": "windows-580.88",
+     "suite": "windows_gate"
+    },
+    {
+     "ms": 1000,
+     "name": "d3d11",
+     "result": "PASS",
+     "sub": "windows-580.88",
+     "suite": "windows_gate"
+    },
+    {
+     "ms": 1000,
+     "name": "cup3",
+     "result": "PASS",
+     "sub": "windows-580.88",
+     "suite": "windows_gate"
+    },
+    {
+     "ms": 3000,
+     "name": "d3d12",
+     "result": "PASS",
+     "sub": "windows-580.88",
+     "suite": "windows_gate"
+    },
+    {
+     "ms": 1000,
+     "name": "cup8#2",
+     "result": "PASS",
+     "sub": "windows-580.88",
+     "suite": "windows_gate"
+    },
+    {
+     "ms": 1000,
+     "name": "d3d11#2",
+     "result": "PASS",
+     "sub": "windows-580.88",
+     "suite": "windows_gate"
+    },
+    {
+     "ms": 1000,
+     "name": "cup3#2",
+     "result": "PASS",
+     "sub": "windows-580.88",
+     "suite": "windows_gate"
+    },
+    {
+     "ms": 3000,
+     "name": "d3d12#2",
+     "result": "PASS",
+     "sub": "windows-580.88",
+     "suite": "windows_gate"
+    }
+   ],
+   "tier": "middle",
+   "tree": "73947adc6ef9fca39978b25054e2801c7826584e08ed8e8a4d6d0e45cf4b5086",
+   "verdict": "PASS",
+   "windows": {
+    "gate": "PASS",
+    "install_s": 1560,
+    "live_dumps_193": 1,
+    "probes": [
+     "cup8",
+     "d3d11"
+    ],
+    "resets": 0
+   }
+  },
+  "source": "reproduced",
+  "stages": [
+   {
+    "duration_ms": null,
+    "name": "provision",
+    "rc": null,
+    "result": "PASS"
+   },
+   {
+    "duration_ms": null,
+    "name": "cuda_host",
+    "rc": null,
+    "result": "PASS"
+   },
+   {
+    "duration_ms": null,
+    "name": "gates",
+    "rc": null,
+    "result": "PASS"
+   },
+   {
+    "duration_ms": null,
+    "name": "kf3_build",
+    "rc": null,
+    "result": "PASS"
+   },
+   {
+    "duration_ms": null,
+    "name": "raw_suite",
+    "rc": null,
+    "result": "PASS"
+   },
+   {
+    "duration_ms": null,
+    "name": "thin_suite",
+    "rc": null,
+    "result": "PASS"
+   },
+   {
+    "duration_ms": null,
+    "name": "birth_census",
+    "rc": null,
+    "result": "PASS"
+   },
+   {
+    "duration_ms": null,
+    "name": "cuda_fat",
+    "rc": null,
+    "result": "PASS"
+   },
+   {
+    "duration_ms": null,
+    "name": "windows_gate",
+    "rc": null,
+    "result": "PASS"
+   }
+  ],
+  "started_at": "2026-11-10T10:48:08Z",
+  "state": "final",
+  "subruns": [
+   {
+    "counts": {
+     "fail": 0,
+     "pass": 44,
+     "skip": 0
+    },
+    "duration_ms": 229320,
+    "ended_at": null,
+    "guest_driver": null,
+    "host_driver": "580.159.04",
+    "kind": "host_bare",
+    "log_range": {
+     "end_byte": 1005070,
+     "start_byte": 3037
+    },
+    "os": "host",
+    "reason": null,
+    "stages": [
+     "cuda_host",
+     "gates",
+     "kf3_build",
+     "raw_suite"
+    ],
+    "started_at": null,
+    "sub": "host",
+    "verdict": "PASS"
+   },
+   {
+    "counts": {
+     "fail": 0,
+     "pass": 35,
+     "skip": 0
+    },
+    "duration_ms": 131838,
+    "ended_at": null,
+    "guest_driver": "580.159.04",
+    "host_driver": "580.159.04",
+    "kind": "linux_guest",
+    "log_range": {
+     "end_byte": 1013940,
+     "start_byte": 8036
+    },
+    "os": "linux",
+    "reason": null,
+    "stages": [
+     "thin_suite",
+     "birth_census",
+     "cuda_fat"
+    ],
+    "started_at": null,
+    "sub": "linux-580.159.04",
+    "verdict": "PASS"
+   },
+   {
+    "counts": {
+     "fail": 0,
+     "pass": 1,
+     "skip": 0
+    },
+    "duration_ms": 13000,
+    "ended_at": null,
+    "guest_driver": "580.88",
+    "host_driver": "580.159.04",
+    "kind": "windows_guest",
+    "log_range": {
+     "end_byte": 1026993,
+     "start_byte": 1013940
+    },
+    "os": "windows",
+    "reason": null,
+    "stages": [
+     "windows_gate"
+    ],
+    "started_at": null,
+    "sub": "windows-580.88",
+    "verdict": "PASS"
+   }
+  ],
+  "tier": "middle",
+  "tree": {
+   "hash": "73947adc6ef9fca39978b25054e2801c7826584e08ed8e8a4d6d0e45cf4b5086",
+   "kind": "tree"
+  },
+  "verdict": "PASS"
+ }
+}
