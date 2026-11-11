@@ -157,6 +157,9 @@ async function listing(request, bucket, host, prefix, page) {
   // cursors[k] is the cursor that fetches page k+2.
   const chain = (await cacheGetJson(cache, chainKey)) || { cursors: [] };
   let total = await cacheGetJson(cache, countKey);
+  // A page past the known end costs nothing: no R2 list call (a crawler asking for page 2..1000 of a small
+  // folder must not spend Class A operations on every request).
+  if (total != null && page > total) return null;
   // Walk from the furthest cached cursor at or before the wanted page.
   let reached = Math.min(page, chain.cursors.length + 1);
   let cursor = reached > 1 ? chain.cursors[reached - 2] : undefined;
@@ -170,7 +173,11 @@ async function listing(request, bucket, host, prefix, page) {
       total = reached;
     }
     if (reached === page) break;
-    if (!data.next) return null; // beyond the end
+    if (!data.next) {
+      // Beyond the end: remember the end so repeating the request is free.
+      await Promise.all([cachePutJson(cache, chainKey, chain), cachePutJson(cache, countKey, total)]);
+      return null;
+    }
     cursor = data.next;
     reached++;
   }

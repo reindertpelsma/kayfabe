@@ -76,6 +76,23 @@ test("file path passes through unchanged", async () => {
   assert.equal(fetched.length, 2);
 });
 
+test("pages past the end are 404 and, once the end is known, cost no R2 list call", async () => {
+  const e = env(fakeBucket(["a.txt", "b.txt"]));
+  const b = e.BUCKET_LOGS;
+  assert.equal((await get(e, "https://logs.kayfabe.dev/?page=1")).status, 200);
+  const afterFirst = b.calls.length;
+  for (const p of [2, 500, 999, 2, 500]) assert.equal((await get(e, `https://logs.kayfabe.dev/?page=${p}`)).status, 404);
+  assert.equal(b.calls.length, afterFirst); // count 1 was cached by the first listing
+  // cold cache: the first out-of-range request may list once, repeats must not
+  store.clear();
+  const c = env(fakeBucket(["a.txt"])).BUCKET_LOGS;
+  const e2 = { ...e, BUCKET_LOGS: c };
+  await get(e2, "https://logs.kayfabe.dev/?page=3");
+  const cold = c.calls.length;
+  for (const p of [3, 4, 7, 3]) assert.equal((await get(e2, `https://logs.kayfabe.dev/?page=${p}`)).status, 404);
+  assert.equal(c.calls.length, cold);
+});
+
 test("robots.txt disallows everything on both hosts and noindex is sent on files and listings", async () => {
   const e = env(fakeBucket(["a/b.txt"]));
   for (const host of ["logs.kayfabe.dev", "bundles.kayfabe.dev"]) {
