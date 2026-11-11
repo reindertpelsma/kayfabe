@@ -68,6 +68,12 @@ is frozen (see *Layout*).
   emulated channels, which have no GPU work behind them, complete in the VMM.
 - **Unsafe** code only in `kf-linux-raw`, `kf-qemu` and `kf-cuda`, and only in files named
   `*_unsafe.rs`.
+- **Shell is glue, logic is Python.** Shell only for short linear command sequences (roughly under
+  50-100 lines, `set -euo pipefail`, no state beyond the exit code). Parsing, state, background jobs,
+  retries, recovery and anything that builds a report or verdict is Python. A shell script moves to
+  Python when its stage is touched anyway; there is no bulk rewrite. (Paid for: a provisioning
+  script with background tracks and a late-read fatal flag printed success while its guest image was
+  missing.)
 - User-visible behaviour change updates docs/howto/ in the same PR; never put design notes into docs/howto/.
 - **Doc hygiene** (paid for repeatedly):
   - An unmarked sentence is a claim of fact. Mark design intent and anything not measured.
