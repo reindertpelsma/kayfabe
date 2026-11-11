@@ -133,6 +133,7 @@ jobs:
           python3 scripts/ci/ignore_ladder.py check
           # Python < 3.14 uses the zstd CLI for bounded evidence inspection.
           if ! command -v zstd >/dev/null 2>&1; then
+            sudo bash scripts/ci/kf_dns_fallback.sh || true
             sudo apt-get update -q
             sudo apt-get install -y -q zstd
           fi
@@ -2474,6 +2475,7 @@ jobs:
       # kernel has no built-in simpledrm.
       - name: Install QEMU, OVMF and the stand-in's tools
         run: |
+          sudo bash scripts/ci/kf_dns_fallback.sh || true
           sudo apt-get update -q
           sudo apt-get install -y -q qemu-system-x86 ovmf busybox-static sbsigntool cpio
           if [ -e /dev/kvm ]; then
@@ -2506,6 +2508,7 @@ jobs:
           node --test ci/vast-broker/workerd/*.test.js
       - name: Install the broker's build dependencies and FUSE
         run: |
+          sudo bash scripts/ci/kf_dns_fallback.sh || true
           sudo apt-get update -q
           sudo apt-get install -y -q build-essential pkg-config python3 fuse3 \
             libwayland-dev wayland-protocols libxcb1-dev libxcb-dri3-dev libxcb-present-dev \

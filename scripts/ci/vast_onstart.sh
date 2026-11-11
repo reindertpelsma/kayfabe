@@ -26,6 +26,11 @@ missing_tools() {
         command -v "$tool" >/dev/null 2>&1 || echo "$tool"
     done
 }
+# Earliest network use below: bounded DNS fallback (never fails the run; prints one KF_DNS_FALLBACK line).
+# Skipped under the KF_CI_* test overrides so a test never rewrites the host resolver.
+if [ -z "${KF_CI_WORKSPACE:-}${KF_CI_BIN_DIR:-}${KF_CI_RUN_DIR:-}" ]; then
+    bash "$here/kf_dns_fallback.sh" || true
+fi
 if [ -n "$(missing_tools)" ]; then
     export DEBIAN_FRONTEND=noninteractive
     apt-get update -qq && apt-get install -y -qq curl python3 git ca-certificates

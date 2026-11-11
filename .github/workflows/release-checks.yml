@@ -56,6 +56,7 @@ jobs:
           targets: x86_64-unknown-linux-musl, x86_64-unknown-uefi
       - name: Documented build packages (no driver or VM provisioning)
         run: |
+          sudo bash scripts/ci/kf_dns_fallback.sh || true
           sudo apt-get update -q
           mapfile -t packages < <(bash scripts/bench/provision_box.sh --packages full)
           sudo apt-get install -y --no-install-recommends "${packages[@]}" musl-tools
