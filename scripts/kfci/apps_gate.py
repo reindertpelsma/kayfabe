@@ -524,15 +524,19 @@ class AppsGate(Step):
                 allow_env=legacy_allowlist(ctx.env),
                 log=log,
             )
+            # build_bundle.sh exits non-zero on a failed step, but an older copy of it (or a step that fails after
+            # the last check) can still print BUILD_*=FAIL and exit 0: the log is the evidence, so it is read too.
+            # It is read on a non-zero exit as well: the APPS_PROVISION_FAIL row is the only place the stage's own
+            # output names the step (a real box, 2026-11-11: the guest script exited 5 and the payload log said only
+            # "class=MEDIA", the step name stayed in a file that goes away with the box).
+            build_failed = self.failed_steps(ctx, logfile, "BUILD_")
             if built.returncode:
                 return (
                     built.returncode
                     if built.returncode >= 0
                     else 128 - built.returncode
                 )
-            # build_bundle.sh exits non-zero on a failed step, but an older copy of it (or a step that fails after
-            # the last check) can still print BUILD_*=FAIL and exit 0: the log is the evidence, so it is read too.
-            if self.failed_steps(ctx, logfile, "BUILD_"):
+            if build_failed:
                 return 1
             image = Path(ctx.env["KF_GUEST_IMG"])
             if not image.is_file():
@@ -564,7 +568,8 @@ class AppsGate(Step):
             finally:
                 # The script starts QEMU with -daemonize, so killing the script's process group does not stop it.
                 stop_provisioning_qemu(bench)
-            if ran.returncode == 0 and not self.failed_steps(ctx, logfile, "SETUP_"):
+            setup_failed = self.failed_steps(ctx, logfile, "SETUP_")  # always: the row names the step (see above)
+            if ran.returncode == 0 and not setup_failed:
                 marker.write_text(timestamp() + "\n")
                 return 0
             return ran.returncode if ran.returncode > 0 else (128 - ran.returncode if ran.returncode < 0 else 1)

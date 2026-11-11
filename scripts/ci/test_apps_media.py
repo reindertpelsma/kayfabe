@@ -295,6 +295,19 @@ class StageProvisioning(unittest.TestCase):
         got = self.run_stage(build=self.GOOD_BUILD + "echo BUILD_vkpeak=FAIL rc=1\n")
         self.assertIn("APPS_PROVISION_FAIL steps=BUILD_vkpeak\n", got["out"])
 
+    def test_a_failed_guest_step_is_named_when_the_guest_script_exits_nonzero(self):
+        # the real provision_guest_apps.sh exits 5 on a failed row: the stage's output must still name the step
+        got = self.run_stage(
+            guest=self.GOOD_GUEST.replace("SETUP_hf_model=ok", "SETUP_hf_model=FAIL rc=1") + "exit 5\n"
+        )
+        self.assert_media_retry(got)
+        self.assertIn("APPS_PROVISION_FAIL steps=SETUP_hf_model,missing_SETUP_hf_model\n", got["out"])
+
+    def test_a_failed_build_step_is_named_when_the_build_exits_nonzero(self):
+        got = self.run_stage(build=self.GOOD_BUILD + "echo BUILD_vkpeak=FAIL rc=1\nexit 1\n")
+        self.assert_media_retry(got)
+        self.assertIn("APPS_PROVISION_FAIL steps=BUILD_vkpeak\n", got["out"])
+
     def test_a_guest_setup_fail_line_is_a_media_retry(self):
         self.assert_media_retry(
             self.run_stage(guest="echo '  guest: SETUP_gguf=FAIL rc=1'\necho '  guest: SETUP_SIDE_DONE'\n")
