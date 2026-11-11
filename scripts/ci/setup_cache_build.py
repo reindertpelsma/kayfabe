@@ -99,29 +99,34 @@ def rank_probes(rows):
 def probe_mirrors(row, require=True):
     def probe(host):
         url = "https://" + host + "/ubuntu/" + row["control"]["Filename"]
-        p = subprocess.run(
-            [
-                "curl",
-                "--silent",
-                "--fail",
-                "--proto",
-                "=https",
-                "--max-redirs",
-                "0",
-                "--max-time",
-                "10",
-                "--range",
-                "0-8388607",
-                "--output",
-                "/dev/null",
-                "--write-out",
-                "%{http_code} %{size_download} %{time_total}",
-                url,
-            ],
-            capture_output=True,
-            text=True,
-            timeout=12,
-        )
+        try:
+            p = subprocess.run(
+                [
+                    "curl",
+                    "--silent",
+                    "--fail",
+                    "--proto",
+                    "=https",
+                    "--max-redirs",
+                    "0",
+                    "--max-time",
+                    "10",
+                    "--range",
+                    "0-8388607",
+                    "--output",
+                    "/dev/null",
+                    "--write-out",
+                    "%{http_code} %{size_download} %{time_total}",
+                    url,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=12,
+            )
+        except subprocess.TimeoutExpired:
+            # A mirror that does not answer (a slow resolver can outlast curl's own limit) is a
+            # failed probe like any other, never a crash of the whole setup (seen 2026-11-11).
+            return {"host": host, "status": 0, "bytes": 0, "seconds": 0, "curl_rc": 124}
         try:
             code, size, seconds = p.stdout.split()
             return {
