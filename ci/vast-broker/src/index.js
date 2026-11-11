@@ -2612,6 +2612,7 @@ export function createService({
     },
   };
 }
+export { HostBox } from './hostbox.js';
 export class BrokerLedger {
   constructor(ctx, env) {
     this.ctx = ctx;
@@ -3051,6 +3052,16 @@ export function createGateway({ authorize, fetcher = fetch, now = Date.now } = {
         return Response.json(
           { state: error.state ?? 'UNAVAILABLE' },
           { status: error.status ?? 503 },
+        );
+      }
+      // Custom-host daemons (docs/design/V3_CUSTOM_HOSTS.md): the WebSocket goes to the box's own
+      // Durable Object, which checks the per-box token. No run-token or OIDC check applies here.
+      const hostId =
+        path === null ? null : /^\/hosts\/([a-z0-9][a-z0-9-]{0,39})\/ws$/.exec(path)?.[1];
+      if (hostId) {
+        if (!env.HOSTS || request.method !== 'GET') return notFound();
+        return env.HOSTS.get(env.HOSTS.idFromName(hostId)).fetch(
+          new Request('https://internal.invalid/hosts/' + hostId + '/ws', request),
         );
       }
       if (path === null || !routeKind(path)) return notFound();

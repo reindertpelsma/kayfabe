@@ -429,3 +429,119 @@ test('admin UI page offers Plan and a confirmed Start', async () => {
   assert.match(html, /'\/api\/plan'/);
   assert.match(html, /'\/api\/start'/);
 });
+
+// Custom hosts admin (/api/hosts*): owner only, forwarded to the HostBox DOs on the internal origin.
+// FALSIFIER: a request without the owner's Access identity reaches a HostBox, a malformed box id,
+// method, query, content type or oversized body is forwarded, or the forwarded origin is not internal.
+const hosts = async () => {
+  const forwarded = [];
+  const names = [];
+  const HOSTS = {
+    idFromName: (n) => (names.push(n), n),
+    get: () => ({
+      fetch: async (request) => {
+        forwarded.push({
+          url: request.url,
+          method: request.method,
+          body: request.body ? await request.text() : undefined,
+        });
+        return Response.json({ ok: true }, { status: 201 });
+      },
+    }),
+  };
+  return { h: await fixture({ HOSTS }), forwarded, names };
+};
+const hostPaths = [
+  ["GET", "/api/hosts"],
+  ["GET", "/api/hosts/rack-1"],
+  ["PUT", "/api/hosts/rack-1"],
+  ["DELETE", "/api/hosts/rack-1"],
+  ["POST", "/api/hosts/rack-1/token"],
+  ["POST", "/api/hosts/rack-1/cmd"],
+];
+for (const [method, path] of hostPaths) {
+  test(
+    "hosts admin without JWT or with the wrong email is refused " +
+      method +
+      " " +
+      path,
+    async () => {
+      const { h, forwarded } = await hosts();
+      const body =
+        method === "PUT" || path.endsWith("/cmd") ? { x: 1 } : undefined;
+      assert.equal((await h.call(path, { method, body })).status, 401);
+      const other = await token({ email: "other@example.com" });
+      assert.equal(
+        (await h.call(path, { method, body, bearer: other })).status,
+        403,
+      );
+      assert.equal(forwarded.length, 0);
+    },
+  );
+  test(
+    "hosts admin forwards to the internal origin " + method + " " + path,
+    async () => {
+      const { h, forwarded, names } = await hosts();
+      const body =
+        method === "PUT" || path.endsWith("/cmd")
+          ? { enabled: true }
+          : undefined;
+      const r = await h.call(path, { method, body, bearer: await token() });
+      assert.equal(r.status, 201);
+      assert.equal(forwarded.length, 1);
+      assert.equal(
+        forwarded[0].url,
+        "https://internal.invalid" + path.replace("/api", "/admin"),
+      );
+      assert.equal(forwarded[0].method, method);
+      assert.deepEqual(names, [path === "/api/hosts" ? "__index__" : "rack-1"]);
+      if (body) assert.equal(forwarded[0].body, JSON.stringify(body));
+    },
+  );
+}
+for (const [name, method, path, extra] of [
+  ["uppercase id", "GET", "/api/hosts/Rack", {}],
+  ["reserved index id", "GET", "/api/hosts/__index__", {}],
+  ["encoded slash", "GET", "/api/hosts/a%2Fb", {}],
+  ["unknown sub-route", "POST", "/api/hosts/rack-1/shell", { body: {} }],
+  ["wrong method list", "POST", "/api/hosts", { body: {} }],
+  ["wrong method token", "GET", "/api/hosts/rack-1/token", {}],
+  ["query string", "GET", "/api/hosts?x=1", {}],
+])
+  test("hosts admin refuses " + name, async () => {
+    const { h, forwarded } = await hosts();
+    const r = await h.call(path, { method, bearer: await token(), ...extra });
+    assert.ok([404].includes(r.status), String(r.status));
+    assert.equal(forwarded.length, 0);
+  });
+test("hosts admin: foreign origin, content type and size are refused for writes", async () => {
+  const { h, forwarded } = await hosts();
+  const bearer = await token();
+  const put = (init) =>
+    h.call("/api/hosts/rack-1", { method: "PUT", bearer, ...init });
+  assert.equal(
+    (await put({ body: { a: 1 }, headers: { Origin: "https://evil.example" } }))
+      .status,
+    403,
+  );
+  assert.equal(
+    (await put({ body: { a: 1 }, headers: { "Content-Type": "text/plain" } }))
+      .status,
+    400,
+  );
+  assert.equal((await put({ body: { a: "x".repeat(9000) } })).status, 400);
+  const del = await h.call("/api/hosts/rack-1", {
+    method: "DELETE",
+    bearer,
+    headers: { Origin: "https://evil.example" },
+  });
+  assert.equal(del.status, 403);
+  assert.equal(forwarded.length, 0);
+});
+test("hosts admin: without the HOSTS binding the routes are 404", async () => {
+  const h = await fixture();
+  assert.equal(
+    (await h.call("/api/hosts", { bearer: await token() })).status,
+    404,
+  );
+});
