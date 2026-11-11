@@ -170,6 +170,7 @@ test("hostile paths and page values", async () => {
   assert.equal(e.BUCKET_LOGS.calls.length, 0);
   assert.equal(normalisePrefix("/a/b/"), "a/b/");
   for (const p of ["/../", "/a/../", "/a/./", "/a/%2e%2e/"]) assert.equal(normalisePrefix(p), null, p);
+  for (const p of ["//", "///", "//a/"]) assert.equal(normalisePrefix(p), null, p);
   assert.equal(parsePage(""), 1);
 });
 

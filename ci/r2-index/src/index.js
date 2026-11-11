@@ -35,7 +35,7 @@ export function normalisePrefix(pathname) {
   if (p.length > MAX_PREFIX) return null;
   if (/[\u0000-\u001f\u007f\\]/.test(p)) return null;
   if (p === "") return "";
-  if (p.includes("//")) return null;
+  if (p.startsWith("/") || p.includes("//")) return null;
   if (p.slice(0, -1).split("/").some((s) => s === ".." || s === ".")) return null;
   return p;
 }
