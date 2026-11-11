@@ -262,6 +262,16 @@ only the verdict line"); without the lane file the row is `specviewperf_retry_no
 are reserved and DESIGN-ONLY: requesting them is a preflight failure. A malformed value, a stage
 outside the large tier or a duplicate is refused before the first stage.
 
+## Environment contract and the tier line (2026-11-10)
+
+CODE READ (`vast_report.py` `SPEC`, `load_provider_env`, `write_env_file`; `vast_onstart.sh`), plus an offline replay with no stage run. Every `KF_*` name the Worker can send must have a row
+in `SPEC` (`vast_report.py`): `load_provider_env` and `write_env_file` keep only those names, so a missing row drops the
+variable before the payload starts. `KF_LINUX_APPS` (exactly `1`, signed middle tier only) had no row, so a middle box ran the
+Windows apps but no Linux `apps` stage (PR #334). `ci/vast-broker/test/env-contract.test.js` checks the Worker's emitted keys and
+values against `SPEC`; `OnstartContract` in `test_middle_apps.py` drives the real `check-env --write` and the sourced env file into
+the payload plan. The `KF_PAYLOAD_TIER` line now ends with `linuxapps=0|1`, so a skipped request shows in the log
+(`vast_run_report.py` reads it as `linux_apps_requested`).
+
 ## Windows apps stage (2026-11-07)
 
 CODE READ (`vast_payload.py` `winapps_requested`, `winapps_rows`; `scripts/bench/box/windows_apps.sh`;
@@ -435,7 +445,7 @@ the tested SHA. Grading: one `APPS_STAGE_PASS`, exit 0, exactly one PASS `APP_RO
 no other, else the row `apps` (a gate app failed in the guest, a kayfabe finding) or `apps_retry_<class>`
 (`not_built`, `time`, `box`, `operator`, ...: not a verdict on the guest; the Worker already reads
 `<x>_retry_<y>` rows as RETRY). The stage has its own time budget (`KF_APPS_BUDGET_S`, default 3000 s) and does
-not start with less than `APPS_MIN_REMAINING_MS` left. Per-app rows leave the box as `APP_ROW` log lines and
+not start with less than `APPS_MIN_REMAINING_MS` left (100 min since 2026-11-10, because the stage is planned as `env KF_APPS_PROVISION=1 bash apps_gate.sh ...` and builds its own media on a fresh box; the payload consumes any ambient `KF_APPS_PROVISION`, and a failed `BUILD_*`/`SETUP_*` step is `apps_retry_media`, never `apps`; derivation in the comment above the constant and in `docs/design/V3_APPS_IMAGE_RECIPE.md`). Per-app rows leave the box as `APP_ROW` log lines and
 become `apps[]` and `tests[]` rows (suite `apps_linux`) in `report.json` through `vast_run_report.py` (PR #282).
 GPU-free checks: `test_vast_payload_apps.py`, `test_apps_matrix_table.py`, the `apps-*` cases of
 `payload_mutants.py` (two killers each).

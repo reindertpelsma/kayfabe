@@ -12,6 +12,7 @@ from pathlib import Path
 import os
 import re
 import shutil
+import signal
 import sys
 import tempfile
 import time
@@ -29,7 +30,6 @@ APPS_ENV = BASE_ENV | frozenset(
         "KAYFABE_BENCH_HELPERS",
         "GQ_TIMEOUT",
         "PRE_POWEROFF_GUEST_CMD",
-        "LLAMA_PIN",
         "KF_APPS_GEEKBENCH",
         "BASH_ENV",
         "KF_APPS_ROOT",
@@ -96,17 +96,72 @@ def legacy_allowlist(env):
     return APPS_ENV | {key for key in env if key.startswith(("KF3_", "KAYFABE_"))}
 
 
+# Provisioning (build_bundle.sh, then the guest image) gets this much wall time IN TOTAL; a timeout is a MEDIA retry.
+# MEASURED 29 min on a fresh box (traces/apps_linux_20261107/) and 14 + 13.5 min on 2026-11-10
+# (traces/apps_linux_media_20261110/); 45 min leaves 16 min for a slow origin. vast_payload.APPS_MIN_REMAINING_MS is
+# derived from this, MATRIX_BUDGET_DEFAULT_S and a margin (test_apps_media.py checks the arithmetic).
+PROVISION_CAP_S = 45 * 60
+# The matrix budget the stage uses unless KF_APPS_BUDGET_S says otherwise (the stage's own hard cap on the matrix).
+MATRIX_BUDGET_DEFAULT_S = 3000
+# ⚠ [2026-11-11] MEASURED on a rented RTX 4090 box under the real payload (220 GB disk): `df` used 13 GB after the
+# provision stage and 58 to 60 GB after the apps provisioning, so the stage adds AT MOST 45 GB (the merge bar's own
+# files are inside that number): the toolkit (6.4 GB installed), sources, bundle (2.1 GB + 1.3 GB tarball) and the
+# guest image (24 GB once torch, the models and Blender are in). The 30 GB below was low. The guard's 60 GB still
+# covers it; the refusal itself has run only in the tests (the box had 150 GB free).
+# INFERRED: provisioning adds about 30 GB (bundle, sources, guest image copy) before the Windows stages, whose own
+# image needs room too; below this many free GB it does not start. Free space MEASURED on rented boxes: 104 GB (batch
+# gate box) and 340 GB (apps box).
+APPS_MIN_FREE_GB = 60
+
+
+def free_bytes(path):
+    """Free bytes of the file system that holds path (or its nearest existing parent)."""
+    path = Path(path)
+    while not path.exists() and path != path.parent:
+        path = path.parent
+    return shutil.disk_usage(path).free
+
+
+def clamp_budget(value):
+    """The matrix budget: the default unless a plain duration BELOW it is given. The payload's reserve
+    (vast_payload.APPS_MIN_REMAINING_MS) assumes at most the default, so a longer value is cut to the default; a value
+    GNU timeout cannot parse is passed on and fails there (an OPERATOR retry), it never extends anything."""
+    default = str(MATRIX_BUDGET_DEFAULT_S)
+    match = re.fullmatch(r"([0-9]+)([smhd]?)", value or "")
+    if not match:
+        return value or default
+    seconds = int(match[1]) * {"": 1, "s": 1, "m": 60, "h": 3600, "d": 86400}[match[2]]
+    return value if 0 < seconds <= MATRIX_BUDGET_DEFAULT_S else default
+
+
+def stop_provisioning_qemu(bench):
+    """Stop the QEMU that provision_guest_apps.sh daemonized (its pidfile), and only a process that is a QEMU."""
+    pidfile = Path(bench) / "appsprov.pid"
+    try:
+        pid = int(pidfile.read_text().split()[0])
+        if pid <= 1 or not Path("/proc/%d/comm" % pid).read_text().startswith("qemu-system"):
+            return False
+    except (OSError, ValueError, IndexError):
+        return False
+    for sig, wait in ((signal.SIGTERM, 10), (signal.SIGKILL, 5)):
+        try:
+            os.kill(pid, sig)
+        except ProcessLookupError:
+            return True
+        for _ in range(wait * 10):
+            try:
+                os.kill(pid, 0)
+                # a zombie still answers kill(0); comm of a reaped pid is gone
+                if Path("/proc/%d/stat" % pid).read_text().split(") ")[-1].startswith("Z"):
+                    return True
+            except (ProcessLookupError, OSError):
+                return True
+            time.sleep(0.1)
+    return False
+
+
 def timestamp():
     return datetime.now().astimezone().isoformat(timespec="seconds")
-
-
-def copy_image(source, destination):
-    """Like cp to a new image: retain source permissions subject to the umask."""
-    descriptor = os.open(
-        destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, source.stat().st_mode & 0o777
-    )
-    with os.fdopen(descriptor, "wb") as target, source.open("rb") as original:
-        shutil.copyfileobj(original, target)
 
 
 def result_lines(path):
@@ -144,6 +199,38 @@ def last_row(paths, app):
         if row:
             return row
     return ""
+
+
+# A failed provisioning step prints BUILD_<name>=FAIL (build_bundle.sh) or SETUP_<name>=FAIL (setup_side.sh, whose lines
+# provision_guest_apps.sh prefixes with "  guest: "). Either one means the media is not what the gate list needs.
+PROVISION_FAIL = re.compile(r"^(?:  guest: )?((?:BUILD|SETUP)_[A-Za-z0-9_]{1,64})=FAIL(?: |$)")
+
+
+def expected_rows(prefix, root):
+    """The provisioning rows that must be present and ok (scripts/apps/expected_rows.txt, the one list)."""
+    rows = []
+    for line in (Path(root) / "scripts/apps/expected_rows.txt").read_text().splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and line.startswith(prefix):
+            rows.append(line)
+    return rows
+
+
+PROVISION_OK = re.compile(r"^(?:  guest: )?((?:BUILD|SETUP)_[A-Za-z0-9_]{1,64})=ok(?: |$)")
+
+
+def provision_ok_rows(path):
+    return {m[1] for line, _invalid in result_lines(path) if (m := PROVISION_OK.match(line))}
+
+
+def provision_failures(path):
+    """Names of the steps that printed =FAIL in a provisioning log; bounded, and never executes log text."""
+    names = []
+    for line, _invalid in result_lines(path):
+        match = PROVISION_FAIL.match(line)
+        if match and match[1] not in names:
+            names.append(match[1])
+    return names
 
 
 def bounded_text(text, limit):
@@ -205,9 +292,9 @@ class AppsGate(Step):
     needs = ("linux_apps_ready",)
     produces = ("linux_apps_checked",)
     estimated_minutes = 50
-    timeout_seconds = (
-        10200  # optional provisioning (2 h) plus the default matrix budget
-    )
+    # Optional provisioning (PROVISION_CAP_S in total) plus the matrix (its budget, capped at the default, and
+    # GNU timeout's 30 s kill grace) plus 5 minutes for the policy and list checks.
+    timeout_seconds = PROVISION_CAP_S + MATRIX_BUDGET_DEFAULT_S + 5 * 60
 
     def __init__(self, profile=None):
         self.profile = profile
@@ -263,7 +350,7 @@ class AppsGate(Step):
             env.get("KF_APPS_LIST")
             or apps / ("gate_list_middle.txt" if which == "middle" else "gate_list.txt")
         )
-        budget = env.get("KF_APPS_BUDGET_S") or "3000"
+        budget = clamp_budget(env.get("KF_APPS_BUDGET_S"))
         per_boot = env.get("KF_APPS_PER_BOOT") or "100"
         poll = float(env.get("KF_APPS_POLL_S") or "5")
         if poll <= 0:
@@ -339,12 +426,20 @@ class AppsGate(Step):
             if env.get("KF_APPS_PROVISION") == "1":
                 ctx.emit("APPS_PROVISION_START " + timestamp())
                 try:
-                    rc = self.provision(
-                        ctx, apps, bench, marker, prov / (tag + "_apps_provision.log")
-                    )
+                    if not self.enough_disk(ctx, root, bench):
+                        rc = 1
+                    else:
+                        rc = self.provision(
+                            ctx, apps, bench, marker, prov / (tag + "_apps_provision.log")
+                        )
                 except (OSError, ValueError):
                     rc = 1
                 ctx.emit("APPS_PROVISION_END rc=%d %s" % (rc, timestamp()))
+                if rc:
+                    # Provisioning failed (a BUILD_*/SETUP_* step, a timeout, a guest that never answered): the
+                    # media is missing, which says nothing about the guest. Rerun on a fresh box; never grade apps.
+                    # No marker, whatever an earlier run left: the check below turns that into class=MEDIA.
+                    marker.unlink(missing_ok=True)
             if (
                 not bundle.is_file()
                 or not bundle.stat().st_size
@@ -408,35 +503,89 @@ class AppsGate(Step):
         )
         return decide(passed, failed, unrun, len(gate), matrix_rc)
 
+    @staticmethod
+    def enough_disk(ctx, root, bench):
+        """Free-space guard before provisioning; the numbers are in the row, a shortfall is a MEDIA retry."""
+        # KF_APPS_TEST_MIN_FREE_GB is the tests' only way to go below the minimum. Production cannot reach it: the
+        # box's environment contract has no row for it (test_apps_media.py), and the payload pops it with the other
+        # KF_APPS_* knobs before any stage starts (vast_payload.linuxapps_requested). Anything but a plain number
+        # >= 0 is an error (a MEDIA retry); the production minimum is the constant.
+        override = ctx.env.get("KF_APPS_TEST_MIN_FREE_GB")
+        need = APPS_MIN_FREE_GB if not override else int(override)
+        if need < 0:
+            raise ValueError("negative free-space minimum")
+        free = min(free_bytes(root), free_bytes(bench))
+        if free >= need * 10**9:
+            return True
+        ctx.emit("APPS_PROVISION_DISK free_gb=%d need_gb=%d" % (free // 10**9, need))
+        return False
+
     def provision(self, ctx, apps, bench, marker, logfile):
+        deadline = time.monotonic() + PROVISION_CAP_S
         with logfile.open("wb") as log:
             built = ctx.process(
                 ["bash", str(apps / "build_bundle.sh")],
-                timeout=7200,
+                timeout=PROVISION_CAP_S,
                 allow_env=legacy_allowlist(ctx.env),
                 log=log,
             )
+            # build_bundle.sh exits non-zero on a failed step, but an older copy of it (or a step that fails after
+            # the last check) can still print BUILD_*=FAIL and exit 0: the log is the evidence, so it is read too.
+            # It is read on a non-zero exit as well: the APPS_PROVISION_FAIL row is the only place the stage's own
+            # output names the step (a real box, 2026-11-11: the guest script exited 5 and the payload log said only
+            # "class=MEDIA", the step name stayed in a file that goes away with the box).
+            build_failed = self.failed_steps(ctx, logfile, "BUILD_")
             if built.returncode:
                 return (
                     built.returncode
                     if built.returncode >= 0
                     else 128 - built.returncode
                 )
+            if build_failed:
+                return 1
             image = Path(ctx.env["KF_GUEST_IMG"])
             if not image.is_file():
-                copy_image(bench / "guest.qcow2", image)
+                # A bounded cp (the copy is part of the shared cap; its time was never measured on its own).
+                remaining = deadline - time.monotonic()
+                if remaining <= 1:
+                    return 124
+                copied = ctx.process(
+                    ["cp", "--", str(bench / "guest.qcow2"), str(image)], timeout=remaining
+                )
+                if copied.returncode:
+                    image.unlink(missing_ok=True)  # never leave a partial image that a rerun would trust
+                    return copied.returncode if copied.returncode > 0 else 128 - copied.returncode
             # The old sed changes every image= line and preserves all other bytes.
             staged = (bench / "guest.qcow2.STAGED").read_bytes()
             updated = re.sub(
                 rb"(?m)^image=.*", lambda _: b"image=" + os.fsencode(image), staged
             )
             Path(str(image) + ".STAGED").write_bytes(updated)
-            ran = ctx.process(
-                ["bash", str(apps / "provision_guest_apps.sh")],
-                timeout=7200,
-                allow_env=legacy_allowlist(ctx.env),
-                log=log,
-            )
-            if ran.returncode == 0:
+            if deadline - time.monotonic() <= 1:
+                return 124  # the build used the whole cap
+            try:
+                ran = ctx.process(
+                    ["bash", str(apps / "provision_guest_apps.sh")],
+                    timeout=deadline - time.monotonic(),
+                    allow_env=legacy_allowlist(ctx.env),
+                    log=log,
+                )
+            finally:
+                # The script starts QEMU with -daemonize, so killing the script's process group does not stop it.
+                stop_provisioning_qemu(bench)
+            setup_failed = self.failed_steps(ctx, logfile, "SETUP_")  # always: the row names the step (see above)
+            if ran.returncode == 0 and not setup_failed:
                 marker.write_text(timestamp() + "\n")
-            return ran.returncode if ran.returncode >= 0 else 128 - ran.returncode
+                return 0
+            return ran.returncode if ran.returncode > 0 else (128 - ran.returncode if ran.returncode < 0 else 1)
+
+    @staticmethod
+    def failed_steps(ctx, logfile, prefix):
+        """Report (one bounded line) and return the failed provisioning steps of this run's log: every row that
+        printed =FAIL, and every EXPECTED row of the stage (prefix BUILD_ or SETUP_) that is not present with =ok."""
+        names = provision_failures(logfile)
+        present = provision_ok_rows(logfile)
+        names += ["missing_" + row for row in expected_rows(prefix, ctx.root) if row not in present]
+        if names:
+            ctx.emit("APPS_PROVISION_FAIL steps=" + ",".join(names[:8]) + (",..." if len(names) > 8 else ""))
+        return names

@@ -17,9 +17,11 @@
 #
 # Inputs (never from a vendor: DOCS: docs/DOWNLOADS.md "Windows app bundle"):
 #   KF_WINAPPS_ISO=<file>   an app disk that is already on the box (by hand); or
-#   the pinned public bundle from KF_WINAPPS_PUBLIC_BASE_URL, fetched by fetch_public_bundle.py without
-#   a run token; the sha256 pin is scripts/bench/windows/appmatrix/bundle.pin. Official runtime inputs are
-#   fetched by the host from pinned origins, with KF_WINAPPS_OFFICIAL_DRIVER selected by J2. Missing required media is RETRY class=MEDIA, never pass.
+#   the pinned public bundle, fetched by fetch_public_bundle.py without a run token from the public bundles
+#   domain (that script's own default; the base is not a secret, and KF_WINAPPS_PUBLIC_BASE_URL, if set, may only name that
+#   same domain: any other value is refused there); the sha256 pin is scripts/bench/windows/appmatrix/bundle.pin.
+#   Official runtime inputs are fetched by the host from pinned origins for the Windows driver KF_WINAPPS_OFFICIAL_DRIVER
+#   (default: the driver the gate installs, DEFAULT_OFFICIAL_DRIVER below). Missing required media is RETRY class=MEDIA, never pass.
 #
 # Verdict lines. THE GATE IS THE GUEST PASSING (owner, 2026-11-01): exit 0 only for WINAPPS_PASS. A host fault, a
 # harness fault, a missing input or a rental fault is RETRY (exit 3, "re-run on a fresh box"), never a pass and never
@@ -69,6 +71,8 @@ GATE_TAG=${KF_WINAPPS_GATE_TAG:-gate_$(printf %s "$T" | tr -c 'A-Za-z0-9_' '_' |
 FLAGS=${KF_WINGATE_FLAGS:-$WIN/kf3_flags.sample.env}
 GDRV=${KF_WINGATE_GUEST_DRIVER:-580.65.06}
 ARM=${KF_WINGATE_ARM:-B}
+DEFAULT_OFFICIAL_DRIVER=580.88          # the Windows driver windows_gate.sh installs (and checks); official_fetch.json pins it
+official_driver() { printf %s "${KF_WINAPPS_OFFICIAL_DRIVER:-$DEFAULT_OFFICIAL_DRIVER}"; }
 VM=$WINVM_ROOT/${WINVM_NAME:-kfwin}
 REV=$(git -C "$SOURCE" rev-parse --short=8 HEAD 2> /dev/null || echo norev)
 REVDIR=$REV
@@ -118,6 +122,16 @@ classify() {
     esac
 }
 
+# The pinned public bundle. The base URL is fetch_public_bundle.py's own default (the bundles domain; the sha256 pin, not the
+# URL, protects integrity). KF_WINAPPS_PUBLIC_BASE_URL is passed on only when it is set and non-empty, and that script
+# refuses any value but the bundles domain. An EMPTY --base is never passed: it made the first Vast run end in
+# RETRY MEDIA after 6 s (2026-11-10, nothing in the repo ever set the variable).
+fetch_app_disk() { # <out-iso> <log-file>
+    local base_args=()
+    [ -z "${KF_WINAPPS_PUBLIC_BASE_URL:-}" ] || base_args=(--base "$KF_WINAPPS_PUBLIC_BASE_URL")
+    python3 -I "$APPM/fetch_public_bundle.py" "${base_args[@]}" --pin "$APPM/bundle.pin" --out "$1" > "$2" 2>&1
+}
+
 run_loop_alive_any() { pgrep -f "win_vm\.sh run " > /dev/null; }
 teardown_all() {
     local w=0
@@ -165,6 +179,32 @@ selftest() {
     cs missing-official-hostref 'RETRY MEDIA' RETRY RED RED 0 0 1
     cs official-driver-drift 'RETRY MEDIA_DRIFT' RETRY green green 0 0 2
     cs unknown-kind-never-pass 'RETRY OPERATOR' MAYBE green green 0 0
+    # the app-disk fetch never passes an empty --base (a stub fetcher records its argv) and passes a set base on unchanged
+    local tmpd base_case
+    tmpd=$(mktemp -d)
+    printf 'import json,sys\nprint(json.dumps(sys.argv[1:]))\n' > "$tmpd/fetch_public_bundle.py"
+    for base_case in unset empty set; do
+        n=$((n + 1))
+        out=$(
+            APPM=$tmpd
+            unset KF_WINAPPS_PUBLIC_BASE_URL
+            [ "$base_case" != empty ] || export KF_WINAPPS_PUBLIC_BASE_URL=
+            [ "$base_case" != set ] || export KF_WINAPPS_PUBLIC_BASE_URL=the-base
+            fetch_app_disk out.iso "$tmpd/log" && cat "$tmpd/log"
+        )
+        case "$base_case:$out" in
+            'unset:["--pin", "'*'bundle.pin", "--out", "out.iso"]' | 'empty:["--pin", "'*'bundle.pin", "--out", "out.iso"]' | 'set:["--base", "the-base", "--pin", "'*) ;;
+            *) bad=$((bad + 1)); echo "WINAPPS_SELFTEST_FAIL case=app-disk-base-$base_case got: $out" ;;
+        esac
+    done
+    rm -rf "$tmpd"
+    # the default official driver is one the catalogue pins (a driver the guest does not have fails closed in winapps.py)
+    n=$((n + 1))
+    grep -q "\"$DEFAULT_OFFICIAL_DRIVER\": \"nvidia_driver/$DEFAULT_OFFICIAL_DRIVER\"" "$APPM/official_fetch.json" \
+        || { bad=$((bad + 1)); echo "WINAPPS_SELFTEST_FAIL case=default-official-driver-not-pinned $DEFAULT_OFFICIAL_DRIVER"; }
+    n=$((n + 1))
+    [ "$(unset KF_WINAPPS_OFFICIAL_DRIVER; official_driver)" = "$DEFAULT_OFFICIAL_DRIVER" ] && [ "$(KF_WINAPPS_OFFICIAL_DRIVER=1.2 official_driver)" = 1.2 ] \
+        || { bad=$((bad + 1)); echo "WINAPPS_SELFTEST_FAIL case=official-driver-default"; }
     # a log can only pass through verdict(): the exit code and the line agree
     n=$((n + 1))
     out=$(
@@ -228,7 +268,7 @@ if [ -z "$ISO" ]; then
     fi
     ISO=/workspace/winapps/kfapps.iso
     mkdir -p "$(dirname "$ISO")"
-    if ! python3 -I "$APPM/fetch_public_bundle.py" --base "${KF_WINAPPS_PUBLIC_BASE_URL:-}" --pin "$APPM/bundle.pin" --out "$ISO" > "$EV/fetch_bundle.txt" 2>&1; then
+    if ! fetch_app_disk "$ISO" "$EV/fetch_bundle.txt"; then
         verdict RETRY MEDIA "fetch of winapps-open.iso failed (fetch_bundle.txt): $(tail -1 "$EV/fetch_bundle.txt" | head -c 160)"
         exit 3
     fi
@@ -242,7 +282,7 @@ IMGMAN=${KF_WINAPPS_IMAGE_MANIFEST:-$(dirname "$ISO")/winapps-open.manifest.json
 # J2 selects the Windows driver version explicitly. The Python host harness owns
 # official downloads/transient media for the entire run; no permanent second ISO.
 OFFICIAL_ARGS=()
-if [ -n "${KF_WINAPPS_OFFICIAL_DRIVER:-}" ]; then OFFICIAL_ARGS=(--official-driver "$KF_WINAPPS_OFFICIAL_DRIVER"); fi
+OFFICIAL_ARGS=(--official-driver "$(official_driver)")
 
 stage hostref_before
 LIBCUDA=-lcuda

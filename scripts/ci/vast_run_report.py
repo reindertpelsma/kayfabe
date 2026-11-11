@@ -163,6 +163,7 @@ class Collector:
         self.stage_rows = {}
         self.stage_end = {}
         self.windows_requested = None
+        self.linux_apps_requested = None  # KF_PAYLOAD_TIER linuxapps=0|1; None for an older payload's line
         self.windows = {"gate": None, "install_s": None, "probes": [], "resets": None, "live_dumps_193": None, "known_live_dumps_193": None,
                         "live_dumps_193_ratchet": None, "live_dumps_193_die": None, "live_dumps_193_max": None,
                         "live_dumps_193_entries": None, "live_dumps_193_unresolved_entries": None, "live_dumps_193_unit": None,
@@ -242,6 +243,8 @@ class Collector:
         elif head == "KF_PAYLOAD_TIER":
             flag = kvs(line).get("windows")
             self.windows_requested = flag == "1" if flag in ("0", "1") else None
+            apps_flag = kvs(line).get("linuxapps")
+            self.linux_apps_requested = apps_flag == "1" if apps_flag in ("0", "1") else None
         elif head == "KF_PAYLOAD_STAGE_END":
             d = kvs(line)
             if "name" in d:

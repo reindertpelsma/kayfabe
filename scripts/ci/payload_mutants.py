@@ -337,7 +337,7 @@ CASES += [
     ),
     (
         "apps-stage-without-time-guard",
-        replace("APPS_MIN_REMAINING_MS = 60 * 60000", "APPS_MIN_REMAINING_MS = 0"),
+        replace("APPS_MIN_REMAINING_MS = 100 * 60000", "APPS_MIN_REMAINING_MS = 0"),
     ),
     (
         "apps-stage-selected-by-kf-stages",

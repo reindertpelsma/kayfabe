@@ -1,0 +1,26 @@
+# The provisioning rows that must be PRESENT with =ok for the Linux apps media to count as built (the one list).
+# Read by scripts/kfci/apps_gate.py (BUILD_ rows after build_bundle.sh, SETUP_ rows after the guest image) and by
+# provision_guest_apps.sh (SETUP_ rows). A missing row is a provisioning failure, like a row that says FAIL: a script
+# that died before printing its row must not pass. Rows that are conditional are not listed: BUILD_cuda_toolkit (only
+# when the toolkit is absent), SETUP_geekbench (policy skip, KF_APPS_GEEKBENCH=1 only). One row per line.
+BUILD_open_dev_packages
+BUILD_cuda_libs
+BUILD_cuda_headers
+BUILD_src_cuda_samples
+BUILD_src_gpu_burn
+BUILD_src_llama_cpp
+BUILD_src_clpeak
+BUILD_egl_offscreen
+BUILD_gpu_burn
+BUILD_llama_cpp
+BUILD_clpeak
+BUILD_vkpeak
+BUILD_bundle_tar
+SETUP_apt
+SETUP_icd
+SETUP_torch
+SETUP_pylibs
+SETUP_imports
+SETUP_hf_model
+SETUP_gguf
+SETUP_blender

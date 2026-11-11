@@ -152,7 +152,8 @@ transient KFAPPSP disk and local manifest live only for the run and are removed 
 Nothing NVIDIA is uploaded to R2/GitHub; no Actions media artifact/cache is created. The guest stays offline.
 Both disks are read-only, fixed K: (KFAPPS) and P: (KFAPPSP).
 
-J2 must select the exact Windows driver with --official-driver VERSION or KF_WINAPPS_OFFICIAL_DRIVER.
+J2 must select the exact Windows driver with --official-driver VERSION or KF_WINAPPS_OFFICIAL_DRIVER
+(the box stage `windows_apps.sh` defaults it to 580.88, the driver its gate installs).
 Only known catalogue versions are accepted; currently 580.88 is pinned. Driver staging/install belongs
 before the parent Windows gate; the app harness checks that selected version and does not change it after
 the gate. --guest-driver is the separate kf3 ABI setting. A missing pin or wrong installed version is

@@ -469,9 +469,21 @@ APPS_ROW = re.compile(
     re.M,
 )
 APPS_LIST_LINE = re.compile(r"^APPS_STAGE_LIST n=([0-9]+) ", re.M)
-# Its own wall-clock budget (apps_gate.sh KF_APPS_BUDGET_S) plus margin; INFERRED until a box has run
-# the whole gate list under the payload (the measurement is in traces/apps_linux_20261107/).
-APPS_MIN_REMAINING_MS = 60 * 60000
+# What the stage may take, worst case, once it starts on a FRESH box: it builds its own media (the stage runs with
+# KF_APPS_PROVISION=1, below) and then runs the matrix. Each part is capped, so the sum is a bound, not a hope:
+#   provisioning  45 min   scripts/kfci/apps_gate.py PROVISION_CAP_S, in total for the build and the guest image (a
+#                          timeout is a MEDIA retry). MEASURED 29 min on a fresh box: bundle 18.8 + guest image 9.1 min
+#                          overlapped with a 2.1 min host runtime step (traces/apps_linux_20261107/README.md,
+#                          2026-11-07), and 14 + 13.5 min on 2026-11-10 (traces/apps_linux_media_20261110/)
+#   matrix        50 min   apps_gate.py MATRIX_BUDGET_DEFAULT_S (3000 s), the stage's cap; MEASURED actual 1029 s = 17 min
+#                          for 66/66 (same trace), slowest apps vkpeak 332 s, clpeak 112 s, gpu_burn 95 s
+#   margin         5 min   policy and list checks, process kill grace (30 s per killed process), log reading
+# 45 + 50 + 5 = 100 min (test_apps_media.py checks this arithmetic against the two constants). The expected duration is
+# about 46 min (29 + 17). The stage's min_remaining_ms adds the Windows gate and the Windows apps that must still fit
+# after it (below), so with the mid Windows profile Linux apps start only with 100 + 75 + 70 = 245 min left. INFERRED:
+# the 300 min hard limit less the 10 min soft margin leaves 45 min for everything before this stage; the run log of the
+# first middle-tier Worker run (PR #334) puts the start of Linux apps near minute 30.
+APPS_MIN_REMAINING_MS = 100 * 60000
 
 
 def apps_requested(tier):
@@ -479,8 +491,21 @@ def apps_requested(tier):
     return bool(APPS_STAGE_ENABLED) and tier in APPS_TIERS
 
 
+APPS_STAGE_KNOBS = ("KF_APPS_BUDGET_S", "KF_APPS_MIN_FREE_GB", "KF_APPS_TEST_MIN_FREE_GB")
+
+
 def linuxapps_requested(environ, tier):
-    """Worker-authored explicit middle opt-in; the old source flag remains a legacy owner control."""
+    """Worker-authored explicit middle opt-in; the old source flag remains a legacy owner control.
+
+    KF_APPS_PROVISION is consumed here too and never forwarded: a fresh Worker box has no built media, so the stage
+    is always started with KF_APPS_PROVISION=1 by the payload itself (below); whatever the environment says about it
+    cannot weaken or strengthen that. The same holds for the stage's other knobs, which the 100-minute reserve below
+    assumes at their defaults: KF_APPS_BUDGET_S (matrix budget), KF_APPS_MIN_FREE_GB and KF_APPS_TEST_MIN_FREE_GB
+    (free-disk minimum) are popped, so the stage always runs with its own constants (apps_gate.py also clamps a
+    longer budget to the default). None has a row in the box's environment contract."""
+    for knob in APPS_STAGE_KNOBS:
+        environ.pop(knob, None)
+    environ.pop("KF_APPS_PROVISION", None)
     value = environ.pop("KF_LINUX_APPS", None)
     if value is None:
         return apps_requested(tier)
@@ -1436,7 +1461,9 @@ def main():
             + " spec="
             + (spec or "none")
             + " winapps="
-            + (winapps or "none"),
+            + (winapps or "none")
+            + " linuxapps="
+            + str(int(linuxapps)),
             flush=True,
         )
         subprocess.run(["df", "-h", "/"], check=True)
@@ -1601,6 +1628,10 @@ def main():
             stage = make_stage(
                 "apps",
                 [
+                    # Explicit and not inherited: a Worker box has no bundle, no guest image and no PROVISIONED
+                    # marker, so without this the stage ends in about a second with class=MEDIA.
+                    "env",
+                    "KF_APPS_PROVISION=1",
                     "bash",
                     str(root / "scripts/bench/box/apps_gate.sh"),
                     tag,
@@ -1613,7 +1644,7 @@ def main():
                 [matrix_log],
             )
             stage.update(min_remaining_ms=APPS_MIN_REMAINING_MS + (
-                WINDOWS_MIN_REMAINING_MS + WINAPPS_MIN_REMAINING_MS[winapps] if windows and winapps else 0
+                WINDOWS_MIN_REMAINING_MS + (WINAPPS_MIN_REMAINING_MS[winapps] if winapps else 0) if windows else 0
             ), short_row="apps_retry_time")
             stages.append(stage)
         if windows:

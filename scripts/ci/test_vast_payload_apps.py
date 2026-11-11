@@ -336,7 +336,8 @@ class AppsStageInThePayload(unittest.TestCase):
         original = self.m.watched
 
         def spy(command, root, name):
-            if str(command[1]).endswith("apps_gate.sh"):
+            # the stage is `env KF_APPS_PROVISION=1 bash apps_gate.sh ...` (test_apps_media.py)
+            if any(str(part).endswith("apps_gate.sh") for part in command):
                 self.commands.append(list(command))
             return original(command, root, name)
 
@@ -424,7 +425,7 @@ class AppsStageInThePayload(unittest.TestCase):
         self.short_of_time(30)
 
     def test_just_under_the_minimum_left_is_a_retry_row_without_starting_the_stage(self):
-        self.short_of_time(59)
+        self.short_of_time(99)
 
 
 class AppsGateScript(unittest.TestCase):

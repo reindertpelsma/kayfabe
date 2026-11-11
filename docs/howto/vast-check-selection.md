@@ -38,12 +38,15 @@ Push/small keeps today's Linux/Windows check without the application stages. A r
 large-tier contract adds SPECviewperf and a real LLM workload; that orchestration remains
 planned, and the unimplemented LLM stage is refused.
 
-The middle check keeps the 300-minute box limit. It reserves 205 minutes for Linux apps,
-Windows gate and Windows apps together, within the 290-minute soft window. If earlier work
-leaves too little time, the next stage does not start and the check reports a TIME retry.
-Apps are not silently removed to fit. Missing application media reports MEDIA retry; missing
-app output cannot pass; a guest failure fails the check. Manual and unsupported apps receive
-no passing credit. See [budget settings](vast-budget-settings.md) and
+The middle check keeps the 300-minute box limit. Linux apps build their own media on the box
+(the CUDA toolkit comes from NVIDIA's own package repository at run time, never from us), so
+Linux apps, the Windows gate and the Windows apps together reserve 245 minutes within the
+290-minute soft window: they start only if at least that much is left, which leaves 45 minutes
+for everything before them. If earlier work leaves too little time, the next stage does not
+start and the check reports a TIME retry. Apps are not silently removed to fit. Application
+media that fails to build or install reports MEDIA retry (rerun on a fresh box) and never a
+failed app; missing app output cannot pass; a guest failure fails the check. Manual and
+unsupported apps receive no passing credit. See [budget settings](vast-budget-settings.md) and
 [CI downloads](ci-downloads.md).
 
 The owner can set Worker var `MIDDLE_APPS_ENABLED=false` to stop requesting both application

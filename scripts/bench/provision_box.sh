@@ -32,11 +32,18 @@ kf_packages() {
   # (vast_payload_hooks.sh), so a package the gate installs must be in the setup cache's policy.
   local windows=(swtpm swtpm-tools sbsigntool python3-virt-firmware xorriso netpbm p7zip-full
                  gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64 openssl)
+  # The Linux apps stage builds its own media on the box (scripts/apps/build_bundle.sh, KF_APPS_PROVISION=1) under the
+  # same cache-only apt shim, so every OPEN Ubuntu package it installs must be in the setup cache's policy
+  # (2026-11-10). The NVIDIA CUDA toolkit is deliberately NOT here: it comes from NVIDIA's own repository at run time
+  # (pin_lib.sh: pin_install_cuda_toolkit) and never enters the cache, our images, R2 or a release asset.
+  # Together with `required` (git, build-essential, pkg-config) these are everything build_bundle.sh installs.
+  local apps=(cmake unzip libegl-dev libgles-dev ocl-icd-opencl-dev opencl-headers)
   case "$profile" in
     ci) printf '%s\n' "${required[@]}" ;;
     full) printf '%s\n' "${required[@]}" "${optional[@]}" ;;
     bench) printf '%s\n' "${bench[@]}" ;;
     windows) printf '%s\n' "${windows[@]}" ;;
+    apps) printf '%s\n' "${apps[@]}" ;;
     *) echo "unknown provisioning profile" >&2; return 2 ;;
   esac
 }
