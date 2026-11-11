@@ -118,3 +118,35 @@ test('the whole environment of a mocked signed middle rental passes the box cont
     await h.call('/stop/123-1');
   }
 });
+// Regression 2026-11-11: KF_LINUX_APPS was dropped between tier.js and the box. The emission side:
+// the signed middle tier's request, taken from middleAppsRequest exactly as index.js builds it, must
+// put both opt-ins into the environment; every other tier/profile must carry neither.
+// Killers: (1) the exact-value asserts below, (2) the SPEC membership of each emitted name.
+import { middleAppsRequest } from '../src/tier.js';
+test('the middle tier request carries KF_LINUX_APPS=1 and KF_WINAPPS=mid, and only it', () => {
+  const env = tierEnvironment('check', {
+    tierName: 'middle',
+    ...middleAppsRequest('check', 'middle', true),
+  });
+  assert.equal(env.KF_LINUX_APPS, '1');
+  assert.equal(env.KF_WINAPPS, 'mid');
+  const { spec } = contract({ env: {} });
+  for (const name of ['KF_LINUX_APPS', 'KF_WINAPPS']) assert.ok(spec.includes(name), name);
+  assert.deepEqual(contract({ pairs: Object.entries(env) }).malformed, []);
+  for (const [profile, tierName, enabled] of [
+    ['check', 'middle', false],
+    ['check', 'small', true],
+    ['check', 'adhoc', true],
+    ['sweep', 'middle', true],
+    ['release', 'large', true],
+  ]) {
+    const e = tierEnvironment(profile, {
+      tierName,
+      ...middleAppsRequest(profile, tierName, enabled),
+    });
+    assert.ok(
+      !('KF_LINUX_APPS' in e) && !('KF_WINAPPS' in e),
+      profile + '/' + tierName + '/' + enabled,
+    );
+  }
+});
