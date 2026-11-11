@@ -434,7 +434,7 @@ CASES = [
     (
         "build-failure-after-exit-zero-ignored",
         "scripts/kfci/apps_gate.py",
-        '            if self.failed_steps(ctx, logfile, "BUILD_"):\n                return 1\n',
+        "            if build_failed:\n                return 1\n",
         "            if False:\n                return 1\n",
         "py",
     ),

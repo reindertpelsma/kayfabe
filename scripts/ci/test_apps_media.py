@@ -332,6 +332,19 @@ class StageProvisioning(unittest.TestCase):
             )
             self.assertEqual(provision_failures(log), ["SETUP_d", "BUILD_e"])
 
+    def test_a_setup_fail_row_alone_is_a_named_failure(self):
+        import sys
+
+        sys.path.insert(0, str(ROOT / "scripts"))
+        try:
+            from kfci.apps_gate import provision_failures
+        finally:
+            sys.path.pop(0)
+        with tempfile.TemporaryDirectory() as directory:
+            log = Path(directory) / "p.log"
+            log.write_text("SETUP_hf_model=FAIL\n  guest: SETUP_icd=FAIL rc=1\n")
+            self.assertEqual(provision_failures(log), ["SETUP_hf_model", "SETUP_icd"])
+
 
 def load_gate():
     import sys
