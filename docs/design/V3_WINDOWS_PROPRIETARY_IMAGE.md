@@ -1,5 +1,5 @@
 STATUS: DESIGN-ONLY, 2026-11-12. Owner design (binding), gap analysis against draft PRs #293/#302/#300/#303, GPU-free
-tooling (`scripts/bench/windows/propimage.py`, tested by `scripts/ci/test_propimage.py`, 128 tests, 50 mutants in
+tooling (`scripts/bench/windows/propimage.py`, tested by `scripts/ci/test_propimage.py`, 154 tests, 58 mutants in
 `scripts/ci/propimage_mutants.py`, each with at least two killers; counts from a fresh run on 2026-11-12). No VM was started, nothing was deleted on the PC, no R2 object was written.
 Labels: MEASURED = a file or command run on 2026-11-12 (named); CODE READ = read in a named file; INFERRED = reasoning,
 not tested; DESIGN INTENT = owner or coordinator decision, not built; UNTESTED = no run yet.
@@ -235,3 +235,21 @@ Preflight on the PC: GPU lock free and recorded in `/root/prov/PC_ACTIVE.log`, `
 10. Original disk: start online (install mode), log out and unregister every app, confirm on the vendor websites, delete that disk.
 11. CI-shape test: `unpack`, `clone`, `ci` mode, `verify` prints all MATCH, each app starts offline. An offline edit of the backup
     means repeating step 9 on that copy.
+
+## 9. Setup-mode launch, measured 2026-11-12 (first real start)
+
+- Windows ISO: `/srv/win-storage/win11x64.iso`, 8,471,603,200 B, official multi-edition en-US, build 26200 (25H2), Windows 11 Pro =
+  image index 6, sha256 `768984706b909479417b2368438909440f2967ff05c6a9195ed2667254e465e3` (MEASURED by the coordinator, pinned here).
+  virtio-win 0.1.302 ISO sha256 `303f7ae4...67949d`, OpenSSH MSI and NVIDIA 580.88 sha256 equal the pins in `win_vm.sh` (MEASURED on the PC).
+- Disk bus: virtio-blk with serial from the seed, as in CI. No driver click: `propimage_autounattend.xml.in` lists the virtio-win ISO under
+  `PnpCustomizationsWinPE` (`viostor\w11\amd64` on D..K) and stages NetKVM and friends offline. The three CDs (Windows ISO, virtio-win, KFUNATTEND)
+  sit on separate q35 AHCI ports; only the Windows ISO has a boot index. UEFI shows "Press any key to boot from CD or DVD" for a few seconds:
+  a key press is needed, or `system_reset` and press again (MEASURED: first boot timed out to "No bootable option").
+- Setup screen reached (MEASURED, screendump through QMP): Windows 11 Setup reached the Product key page, so the answer file's language
+  settings applied; whether the rest of the answer file (edition index 6, partitions, local account, OpenSSH first-logon commands) applies is
+  UNTESTED at this point. Fallback: the owner clicks "I don't have a product key", picks Windows 11 Pro, and uses the documented local-account path
+  below if OOBE asks for a Microsoft account.
+- Windows 11 Setup's supported-CPU check would reject the Zen 1 profile (INFERRED from Microsoft's CPU list); the answer file bypasses only that check
+  (`BypassCPUCheck`); TPM and Secure Boot checks stay on (swtpm CRB, OVMF secure-boot code with Microsoft keys `OVMF_VARS_4M.ms.fd`).
+- Working directory on the PC: `/workspace/bench/propimage_20261112/` (state.json, image.qcow2 160 G thin, firmware/, tpm/, media/, bin/, keys/,
+  run/). The swtpm AppArmor local rule gained one line for this directory. Launcher: `scripts/bench/windows/propimage_run.sh setup` as user ubuntu.

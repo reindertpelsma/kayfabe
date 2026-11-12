@@ -951,5 +951,208 @@ class PropTests(unittest.TestCase):
             self.p.validate_state(s)
 
 
+    # --- unattended media, state files, cdroms
+    PUB = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFixtureFixtureFixtureFixtureFixtureFixtu test"
+
+    def template(self):
+        return (ROOT / "scripts/bench/windows/propimage_autounattend.xml.in").read_text(encoding="utf-8")
+
+    def test_unattend_is_deterministic_and_filled(self):
+        a = self.p.render_unattend(self.template(), self.state)
+        self.assertEqual(a, self.p.render_unattend(self.template(), self.state))
+        self.assertNotIn("@@", a)
+        self.assertIn("<Name>kfimage</Name>", a)
+        self.assertIn(self.p.derive_password(SEED), a)
+        self.assertIn("<Key>/IMAGE/INDEX</Key><Value>6</Value>", a)
+        self.assertIn("E:\\viostor\\w11\\amd64", a)
+        self.assertIn("OpenSSH-Win64-v10.0.0.0.msi", a)
+
+    def test_unattend_is_wellformed_xml_and_keeps_secure_boot_and_tpm_checks(self):
+        import xml.dom.minidom
+        a = self.p.render_unattend(self.template(), self.state)
+        xml.dom.minidom.parseString(a.encode())
+        self.assertIn("BypassCPUCheck", a)
+        self.assertNotIn("BypassTPMCheck", a)
+        self.assertNotIn("BypassSecureBootCheck", a)
+
+    def test_unattend_has_no_key_and_no_harness_script(self):
+        a = self.p.render_unattend(self.template(), self.state)
+        self.assertNotIn("ProductKey", a)
+        self.assertNotIn("kf-firstlogon", a)
+        self.assertNotIn("-ExecutionPolicy", a)
+
+    def test_password_is_derived_from_the_seed(self):
+        self.assertEqual(self.p.derive_password(SEED), self.p.derive_password(SEED))
+        self.assertNotEqual(self.p.derive_password(SEED), self.p.derive_password("kayfabe-prop-v2"))
+        self.assertRegex(self.p.derive_password(SEED), r"^Kf-[0-9a-f]{16}$")
+
+    def test_render_rejects_bad_user_and_computer_names(self):
+        for u in ("a b", "x<y", "", "1abc", "a" * 21):
+            s = copy.deepcopy(self.state)
+            s["guest"]["user"] = u
+            with self.assertRaises(self.p.PropError):
+                self.p.render_unattend(self.template(), s)
+        with self.assertRaises(self.p.PropError):
+            self.p.render_unattend(self.template(), self.state, computer="bad name")
+
+    def test_render_refuses_a_template_without_a_placeholder(self):
+        with self.assertRaises(self.p.PropError):
+            self.p.render_unattend(self.template().replace("@@USER@@", "root"), self.state)
+
+    def test_media_dir_contents(self):
+        self.state["guest"]["ssh_public_key"] = self.PUB
+        msi = self.tmp / "OpenSSH-Win64-v10.0.0.0.msi"
+        msi.write_bytes(b"msi")
+        names = self.p.write_media_dir(self.state, self.tmp / "media", msi)
+        self.assertEqual(names, ["OpenSSH-Win64-v10.0.0.0.msi", "administrators_authorized_keys", "autounattend.xml"])
+        self.assertEqual((self.tmp / "media/administrators_authorized_keys").read_text().strip(), self.PUB)
+
+    def test_media_dir_needs_a_public_key(self):
+        msi = self.tmp / "OpenSSH-Win64-v10.0.0.0.msi"
+        msi.write_bytes(b"msi")
+        with self.assertRaises(self.p.PropError):
+            self.p.write_media_dir(self.state, self.tmp / "m1", msi)
+        self.state["guest"]["ssh_public_key"] = "ssh-rsa AAAA x"
+        with self.assertRaises(self.p.PropError):
+            self.p.write_media_dir(self.state, self.tmp / "m2", msi)
+
+    def test_media_dir_refuses_unpinned_msi_name(self):
+        self.state["guest"]["ssh_public_key"] = self.PUB
+        other = self.tmp / "evil.msi"
+        other.write_bytes(b"x")
+        with self.assertRaises(self.p.PropError):
+            self.p.write_media_dir(self.state, self.tmp / "m3", other)
+
+    def test_capture_and_restore_files_round_trip(self):
+        wd = self.tmp / "wd"
+        (wd / "tpm").mkdir(parents=True)
+        (wd / "firmware").mkdir()
+        (wd / "tpm/tpm2-00.permall").write_bytes(b"perm")
+        (wd / "firmware/OVMF_VARS.fd").write_bytes(b"vars")
+        names = self.p.capture_files(self.state, wd)
+        self.assertEqual(names, ["firmware/OVMF_VARS.fd", "tpm/tpm2-00.permall"])
+        self.assertTrue(self.p.validate_state(self.state))
+        out = self.tmp / "out"
+        self.p.restore_files(self.state, out)
+        self.assertEqual((out / "tpm/tpm2-00.permall").read_bytes(), b"perm")
+        self.assertEqual((out / "firmware/OVMF_VARS.fd").read_bytes(), b"vars")
+        self.assertEqual({v for _, v, _ in self.p.verify_host(self.state, out)}, {"MATCH"})
+
+    def test_capture_files_requires_tpm_and_ovmf(self):
+        wd = self.tmp / "wd2"
+        (wd / "tpm").mkdir(parents=True)
+        (wd / "firmware").mkdir()
+        (wd / "firmware/OVMF_VARS.fd").write_bytes(b"v")
+        with self.assertRaises(self.p.PropError):
+            self.p.capture_files(self.state, wd)
+        (wd / "tpm/tpm2-00.permall").write_bytes(b"p")
+        (wd / "firmware/OVMF_VARS.fd").unlink()
+        with self.assertRaises(self.p.PropError):
+            self.p.capture_files(self.state, wd)
+
+    def test_capture_files_refuses_symlinks(self):
+        wd = self.tmp / "wd3"
+        (wd / "tpm").mkdir(parents=True)
+        (wd / "firmware").mkdir()
+        (self.tmp / "real").write_bytes(b"x")
+        (wd / "tpm/tpm2-00.permall").symlink_to(self.tmp / "real")
+        (wd / "firmware/OVMF_VARS.fd").write_bytes(b"v")
+        with self.assertRaises(self.p.PropError):
+            self.p.capture_files(self.state, wd)
+
+    def test_setup_argv_attaches_install_media_windows_iso_first(self):
+        a = self.argv("setup", cdroms=["/m/win.iso", "/m/virtio.iso", "/m/unattend.iso"])
+        j = " ".join(a)
+        self.assertIn("file=/m/win.iso", j)
+        self.assertIn("file=/m/virtio.iso", j)
+        self.assertEqual(self.opt(a, "-device", "ide-cd,drive=cd0"), ["ide-cd,drive=cd0,bus=ide.0,bootindex=1"])
+        self.assertEqual(self.opt(a, "-device", "ide-cd,drive=cd1"), ["ide-cd,drive=cd1,bus=ide.1"])
+        self.assertEqual(j.count("media=cdrom"), 3)
+        self.assertEqual(j.count("readonly=on,file=/m/"), 3)
+
+    def test_each_cdrom_has_its_own_ahci_port(self):
+        a = self.argv("setup", cdroms=["/a", "/b", "/c"])
+        self.assertEqual([v.split("bus=")[1].split(",")[0] for v in self.opt(a, "-device", "ide-cd")], ["ide.0", "ide.1", "ide.2"])
+
+    def test_more_than_six_cdroms_refused(self):
+        with self.assertRaises(self.p.PropError):
+            self.argv("setup", cdroms=["/x"] * 7)
+
+    def test_six_cdroms_are_accepted(self):
+        self.assertEqual(self.argv("setup", cdroms=["/x%d" % i for i in range(6)]).count("-drive"), 2 + 1 + 6)
+
+    def test_cli_refuses_seven_cdroms(self):
+        sp = self.tmp / "c7.json"
+        sp.write_text(json.dumps(self.state))
+        args = ["argv", str(sp), "setup", "--disk", "/d", "--workdir", "/w", "--no-cpu-preflight"]
+        for i in range(7):
+            args += ["--cdrom", "/x%d" % i]
+        self.assertEqual(self.p.main(args), 2)
+
+    def test_no_cdroms_by_default(self):
+        self.assertNotIn("ide-cd", " ".join(self.argv("ci")))
+
+    def test_s3_s4_disabled_in_every_mode(self):
+        for mode in self.p.MODES:
+            j = " ".join(self.argv(mode))
+            self.assertIn("ICH9-LPC.disable_s3=1", j)
+            self.assertIn("ICH9-LPC.disable_s4=1", j)
+
+    def test_cli_media_password_capture(self):
+        import contextlib
+        import io
+        self.state["guest"]["ssh_public_key"] = self.PUB
+        sp = self.tmp / "st.json"
+        sp.write_text(json.dumps(self.state))
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(self.p.main(["password", str(sp)]), 0)
+        self.assertEqual(out.getvalue().strip(), self.p.derive_password(SEED))
+
+
+    def test_unattend_rejects_xml_injection_in_user(self):
+        for u in ('a"b', "a</Name><X/>", "a&b"):
+            s = copy.deepcopy(self.state)
+            s["guest"]["user"] = u
+            with self.assertRaises(self.p.PropError):
+                self.p.render_unattend(self.template(), s)
+
+    def test_media_dir_rejects_multi_line_key(self):
+        msi = self.tmp / "OpenSSH-Win64-v10.0.0.0.msi"
+        msi.write_bytes(b"m")
+        self.state["guest"]["ssh_public_key"] = self.PUB + "\nssh-ed25519 AAAAevil"
+        with self.assertRaises(self.p.PropError):
+            self.p.write_media_dir(self.state, self.tmp / "m4", msi)
+
+    def test_media_dir_refuses_msi_name_with_suffix(self):
+        self.state["guest"]["ssh_public_key"] = self.PUB
+        other = self.tmp / "OpenSSH-Win64-v10.0.0.0.msi.bak"
+        other.write_bytes(b"x")
+        with self.assertRaises(self.p.PropError):
+            self.p.write_media_dir(self.state, self.tmp / "m5", other)
+
+    def test_capture_files_refuses_symlinked_ovmf_vars(self):
+        wd = self.tmp / "wd4"
+        (wd / "tpm").mkdir(parents=True)
+        (wd / "firmware").mkdir()
+        (wd / "tpm/tpm2-00.permall").write_bytes(b"p")
+        (self.tmp / "realv").write_bytes(b"v")
+        (wd / "firmware/OVMF_VARS.fd").symlink_to(self.tmp / "realv")
+        with self.assertRaises(self.p.PropError):
+            self.p.capture_files(self.state, wd)
+
+    def test_s3_s4_flags_are_global_options(self):
+        a = self.argv("offline")
+        self.assertEqual([a[i] for i, v in enumerate(a) if v.startswith("ICH9-LPC.disable_s")], ["ICH9-LPC.disable_s3=1", "ICH9-LPC.disable_s4=1"])
+        for i, v in enumerate(a):
+            if v.startswith("ICH9-LPC"):
+                self.assertEqual(a[i - 1], "-global")
+
+    def test_only_the_first_cdrom_has_a_boot_index(self):
+        a = self.argv("setup", cdroms=["/m/a.iso", "/m/b.iso"])
+        self.assertEqual(" ".join(a).count("bootindex"), 1)
+        self.assertNotIn("bootindex", " ".join(self.argv("setup")))
+
+
 if __name__ == "__main__":
     unittest.main()

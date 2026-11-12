@@ -12,6 +12,8 @@ docs/design/V3_WINDOWS_PROPRIETARY_IMAGE.md. Logic lives here; shell is glue onl
   propimage.py verify-host STATE --tpm-dir D    part 1 of the first check: swtpm/OVMF files == state, CPU preflight
   propimage.py record STATE --ssh-key K         fill MachineGuid, EK hash, stop time, CPU fingerprint from the guest
   propimage.py verify STATE --ssh-key K         parts 1-3 over ssh (PowerShell sent on stdin)
+  propimage.py media STATE --msi M --out D      the KFUNATTEND CD directory (autounattend.xml, key, MSI)
+  propimage.py capture-files|restore-files STATE --workdir W   embed or restore swtpm + OVMF vars
   propimage.py pack  STATE IMAGE --out X.zip    one zip64 blob: image.qcow2 + state.json + manifest
   propimage.py unpack X.zip --dir D             extract and check every sha256
 
@@ -224,7 +226,7 @@ def slirp_net(subnet):
 
 
 def build_argv(state, mode, disk, workdir, ovmf_code="/usr/share/OVMF/OVMF_CODE_4M.secboot.fd",
-               qemu=None, uid=1000, broker_sock=None, gop_efi=None, display="broker"):
+               qemu=None, uid=1000, broker_sock=None, gop_efi=None, display="broker", cdroms=()):
     """The exact qemu argv. disk: the image path (install/offline) or the clone (ci)."""
     require(mode in MODES, "mode must be one of %s" % (MODES,))
     require(display in ("broker", "off"), "display must be broker or off")
@@ -243,8 +245,9 @@ def build_argv(state, mode, disk, workdir, ovmf_code="/usr/share/OVMF/OVMF_CODE_
          "-smbios", "type=2,manufacturer=%s,product=%s,serial=%s" % (_comma(sm["manufacturer"]), _comma(sm["product"]), sm["baseboard_serial"]),
          "-smbios", "type=3,manufacturer=%s,serial=%s" % (_comma(sm["manufacturer"]), sm["chassis_serial"]),
          "-global", "driver=cfi.pflash01,property=secure,value=on",
+         "-global", "ICH9-LPC.disable_s3=1", "-global", "ICH9-LPC.disable_s4=1",
          "-drive", "if=pflash,format=raw,unit=0,readonly=on,file=" + ovmf_code,
-         "-drive", "if=pflash,format=raw,unit=1,file=%s/OVMF_VARS.fd" % wd,
+         "-drive", "if=pflash,format=raw,unit=1,file=%s/firmware/OVMF_VARS.fd" % wd,
          "-rtc", rtc + ",driftfix=slew",
          "-chardev", "socket,id=chrtpm,path=%s/swtpm.sock" % wd, "-tpmdev", "emulator,id=tpm0,chardev=chrtpm",
          "-device", "tpm-crb,tpmdev=tpm0",
@@ -255,6 +258,11 @@ def build_argv(state, mode, disk, workdir, ovmf_code="/usr/share/OVMF/OVMF_CODE_
          "-device", "virtio-net-pci,netdev=n0,mac=" + ids["nics"][0]["mac"],
          "-object", "rng-random,id=rng0,filename=/dev/urandom", "-device", "virtio-rng-pci,rng=rng0",
          "-qmp", "unix:%s/qmp.sock,server=on,wait=off" % wd, "-msg", "timestamp=on"]
+    require(len(cdroms) <= 6, "the q35 AHCI controller has 6 ports")
+    for i, iso in enumerate(cdroms):
+        # read-only install media on the q35 AHCI bus (Windows ISO first: it boots, then the disk)
+        a += ["-drive", "if=none,id=cd%d,format=raw,media=cdrom,readonly=on,file=%s" % (i, iso),
+              "-device", "ide-cd,drive=cd%d,bus=ide.%d%s" % (i, i, ",bootindex=1" if i == 0 else "")]   # q35 AHCI: one unit per port
     if mode == "setup":
         # Windows setup first on std VGA, as the gate does; kayfabe's QEMU has no GTK front end, so the
         # distro QEMU (gtk, measured on the PC) shows it on the physical desktop.
@@ -444,6 +452,83 @@ def unpack(zpath, dest):
     return state
 
 
+# ---------------------------------------------------------------- unattended setup media
+UNATTEND_TEMPLATE = Path(__file__).with_name("propimage_autounattend.xml.in")
+OPENSSH_MSI = "OpenSSH-Win64-v10.0.0.0.msi"
+
+
+def derive_password(seed):
+    """Throwaway local-account password, derived from the seed (the image is a local test VM)."""
+    return "Kf-" + _h(seed, "guest-password").hex()[:16]
+
+
+def render_unattend(template, state, computer="KFPROP"):
+    """autounattend.xml for Windows 11 Pro: offline local account, virtio drivers from the virtio-win ISO,
+    OpenSSH from the pinned MSI. Deterministic: the same state gives the same bytes."""
+    user = state["guest"]["user"]
+    require(re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,19}", user), "bad guest user name")
+    require(re.fullmatch(r"[A-Z][A-Z0-9-]{0,14}", computer), "bad computer name")
+    letters = "DEFGHIJK"
+    winpe = "\n".join('    <PathAndCredentials wcm:action="add" wcm:keyValue="%d"><Path>%s:\\viostor\\w11\\amd64</Path></PathAndCredentials>' % (k + 1, L)
+                      for k, L in enumerate(letters))
+    offline, k = [], 1
+    for drv in ("NetKVM", "vioserial", "viorng", "pvpanic", "fwcfg", "smbus"):
+        for L in letters:
+            offline.append('    <PathAndCredentials wcm:action="add" wcm:keyValue="%d"><Path>%s:\\%s\\w11\\amd64</Path></PathAndCredentials>' % (k, L, drv))
+            k += 1
+    out = template
+    for key, val in (("@@WINPE_DRIVER_PATHS@@", winpe), ("@@OFFLINE_DRIVER_PATHS@@", "\n".join(offline)), ("@@USER@@", user),
+                     ("@@COMPUTERNAME@@", computer), ("@@PASSWORD@@", derive_password(state["seed"])),
+                     ("@@OPENSSH_MSI@@", OPENSSH_MSI)):
+        require(key in out, "template lacks " + key)
+        out = out.replace(key, val)
+    require("@@" not in out, "unfilled placeholder in the template")
+    return out
+
+
+def write_media_dir(state, outdir, msi_path, template_path=UNATTEND_TEMPLATE):
+    """The directory that becomes the KFUNATTEND CD: autounattend.xml, the authorized key, the OpenSSH MSI."""
+    out = Path(outdir)
+    out.mkdir(parents=True, exist_ok=True)
+    pub = state["guest"].get("ssh_public_key")
+    require(pub and re.match(r"^ssh-ed25519 [A-Za-z0-9+/=]+( .*)?$", pub.strip()), "state has no ssh public key (run init with --ssh-key-dir)")
+    (out / "autounattend.xml").write_text(render_unattend(Path(template_path).read_text(encoding="utf-8"), state), encoding="utf-8")
+    (out / "administrators_authorized_keys").write_text(pub.strip() + "\n")
+    require(Path(msi_path).name == OPENSSH_MSI, "unexpected OpenSSH MSI file name")
+    data = Path(msi_path).read_bytes()
+    (out / OPENSSH_MSI).write_bytes(data)
+    return sorted(p.name for p in out.iterdir())
+
+
+STATE_FILES = ("tpm/tpm2-00.permall", "tpm/tpm2-00.savestate", "tpm/tpm2-00.volatilestate", "firmware/OVMF_VARS.fd")
+
+
+def capture_files(state, workdir):
+    """Embed the swtpm state files and the OVMF variables (written by a stopped VM; layout tpm/*, firmware/OVMF_VARS.fd under the work directory) into the state."""
+    wd = Path(workdir)
+    files = {}
+    for name in STATE_FILES:
+        src = wd / name
+        if src.is_symlink() or not src.is_file():
+            require(name.endswith(("savestate", "volatilestate")), "missing required file " + name)
+            continue
+        data = src.read_bytes()
+        files[name] = {"bytes": len(data), "sha256": hashlib.sha256(data).hexdigest(),
+                       "data_base64": base64.b64encode(data).decode()}
+    state["files"] = files
+    return sorted(files)
+
+
+def restore_files(state, workdir):
+    """Write the embedded blobs back (same layout as capture)."""
+    wd = Path(workdir)
+    for name, rec in state["files"].items():
+        dst = wd / name
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        dst.write_bytes(base64.b64decode(rec["data_base64"], validate=True))
+        dst.chmod(0o600)
+
+
 # ---------------------------------------------------------------- cli
 def _print_rows(rows):
     for item, verdict, detail in rows:
@@ -458,10 +543,15 @@ def main(argv=None):
     sub = ap.add_subparsers(dest="verb", required=True)
     p = sub.add_parser("ids"); p.add_argument("seed")
     p = sub.add_parser("init"); p.add_argument("seed"); p.add_argument("--out", required=True)
+    p.add_argument("--ssh-key-dir", help="directory with id_ed25519 and id_ed25519.pub for the guest")
+    p = sub.add_parser("media"); p.add_argument("state"); p.add_argument("--msi", required=True); p.add_argument("--out", required=True)
+    p = sub.add_parser("capture-files"); p.add_argument("state"); p.add_argument("--workdir", required=True)
+    p = sub.add_parser("restore-files"); p.add_argument("state"); p.add_argument("--workdir", required=True)
+    p = sub.add_parser("password"); p.add_argument("state")
     p = sub.add_parser("argv"); p.add_argument("state"); p.add_argument("mode", choices=MODES)
     p.add_argument("--disk", required=True); p.add_argument("--workdir", required=True)
     p.add_argument("--broker-sock"); p.add_argument("--gop-efi"); p.add_argument("--uid", type=int, default=1000)
-    p.add_argument("--display", default="broker"); p.add_argument("--qemu")
+    p.add_argument("--display", default="broker"); p.add_argument("--qemu"); p.add_argument("--cdrom", action="append", default=[])
     p.add_argument("--cpuinfo", default="/proc/cpuinfo")
     p.add_argument("--no-cpu-preflight", action="store_true", help="print the argv on a host that cannot run it; never for a start")
     p = sub.add_parser("verify-host"); p.add_argument("state"); p.add_argument("--tpm-dir", required=True)
@@ -476,7 +566,25 @@ def main(argv=None):
         if a.verb == "ids":
             print(json.dumps(derive_ids(a.seed), indent=2))
         elif a.verb == "init":
-            Path(a.out).write_text(json.dumps(init_state(a.seed), indent=2) + "\n")
+            st = init_state(a.seed)
+            if a.ssh_key_dir:
+                kd = Path(a.ssh_key_dir)
+                st["guest"]["ssh_private_key"] = (kd / "id_ed25519").read_text()
+                st["guest"]["ssh_public_key"] = (kd / "id_ed25519.pub").read_text().strip()
+            Path(a.out).write_text(json.dumps(st, indent=2) + "\n")
+        elif a.verb in ("media", "capture-files", "restore-files", "password"):
+            st = json.loads(Path(a.state).read_text())
+            validate_state(st)
+            if a.verb == "media":
+                print(" ".join(write_media_dir(st, a.out, a.msi)))
+            elif a.verb == "password":
+                print(derive_password(st["seed"]))
+            elif a.verb == "capture-files":
+                print("captured: " + " ".join(capture_files(st, a.workdir)))
+                Path(a.state).write_text(json.dumps(st, indent=2) + "\n")
+            else:
+                restore_files(st, a.workdir)
+                print("restored")
         elif a.verb in ("argv", "verify-host", "verify", "record"):
             state = json.loads(Path(a.state).read_text())
             validate_state(state)
@@ -494,7 +602,7 @@ def main(argv=None):
                         print(CPU_REFUSAL, file=sys.stderr)
                         return 3
                 print(shlex.join(build_argv(state, a.mode, a.disk, a.workdir, qemu=a.qemu, uid=a.uid,
-                                            broker_sock=a.broker_sock, gop_efi=a.gop_efi, display=a.display)))
+                                            broker_sock=a.broker_sock, gop_efi=a.gop_efi, display=a.display, cdroms=a.cdrom)))
                 print("# swtpm: " + shlex.join(swtpm_argv(a.workdir)))
                 print("# clone: " + shlex.join(clone_cmd(a.disk, str(a.disk) + ".clone")))
             elif a.verb == "verify-host":

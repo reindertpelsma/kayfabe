@@ -121,6 +121,23 @@ CASES = [
          "test_compare_cpu_informational_items_only_warn", "test_compare_without_recorded_fingerprint_is_mismatch"),
     case("warn-not-failing", 'bad = [r for r in rows if r[1] == "MISMATCH"]\n    print("RESULT', 'bad = [r for r in rows if r[1] != "MATCH"]\n    print("RESULT',
          "test_warn_does_not_fail_the_result", "test_result_line_says_match_when_only_warnings"),
+    # unattended media, state files, install media
+    case("unattend-user-validated", 'require(re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,19}", user), "bad guest user name")', 'pass',
+         "test_render_rejects_bad_user_and_computer_names", "test_unattend_rejects_xml_injection_in_user"),
+    case("unattend-key-required", 'require(pub and re.match(r"^ssh-ed25519 [A-Za-z0-9+/=]+( .*)?$", pub.strip()), "state has no ssh public key (run init with --ssh-key-dir)")', 'pass',
+         "test_media_dir_needs_a_public_key", "test_media_dir_rejects_multi_line_key"),
+    case("unattend-msi-pinned-name", 'require(Path(msi_path).name == OPENSSH_MSI, "unexpected OpenSSH MSI file name")', 'pass',
+         "test_media_dir_refuses_unpinned_msi_name", "test_media_dir_refuses_msi_name_with_suffix"),
+    case("capture-requires-files", 'require(name.endswith(("savestate", "volatilestate")), "missing required file " + name)', 'pass',
+         "test_capture_files_requires_tpm_and_ovmf", "test_capture_files_refuses_symlinks"),
+    case("capture-no-symlinks", 'if src.is_symlink() or not src.is_file():', 'if not src.is_file():',
+         "test_capture_files_refuses_symlinks", "test_capture_files_refuses_symlinked_ovmf_vars"),
+    case("s3-disabled", '"-global", "ICH9-LPC.disable_s3=1", "-global", "ICH9-LPC.disable_s4=1",', '',
+         "test_s3_s4_disabled_in_every_mode", "test_s3_s4_flags_are_global_options"),
+    case("windows-iso-boots-first", '",bootindex=1" if i == 0 else ""', '""',
+         "test_setup_argv_attaches_install_media_windows_iso_first", "test_only_the_first_cdrom_has_a_boot_index"),
+    case("cdrom-port-limit", 'require(len(cdroms) <= 6, "the q35 AHCI controller has 6 ports")', 'pass',
+         "test_more_than_six_cdroms_refused", "test_cli_refuses_seven_cdroms"),
 ]
 
 
@@ -143,6 +160,7 @@ def main():
         (tree / "scripts/ci").mkdir(parents=True)
         shutil.copy(test_src, tree / "scripts/ci/test_propimage.py")
         shutil.copy(ROOT / "scripts/bench/windows/win_vm.sh", tree / "scripts/bench/windows/win_vm.sh")
+        shutil.copy(ROOT / "scripts/bench/windows/propimage_autounattend.xml.in", tree / "scripts/bench/windows/propimage_autounattend.xml.in")
         shutil.copytree(ROOT / "scripts/ci/fixtures/cpuflags", tree / "scripts/ci/fixtures/cpuflags")
         target = tree / "scripts/bench/windows/propimage.py"
         target.write_text(SRC)
