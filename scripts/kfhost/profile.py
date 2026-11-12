@@ -60,6 +60,48 @@ def needs_ancestry(profile):
     return profile == "borrowed"
 
 
+# The Worker's IP-encoding mappers (hosts.js MAPPERS, enabled ones): the fallback host is `<a-b-c-d>.<zone>`.
+SEED_MAPPER_ZONES = ("sslip.io", "traefik.me")
+
+
+def public_ipv4(value):
+    """Dotted quad in public space, as the Worker's publicIpv4 (private, loopback, link-local, CGNAT, multicast,
+    benchmarking and documentation ranges refused); None otherwise."""
+    m = re.fullmatch(r"(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})", value) if isinstance(value, str) else None
+    if not m or any(int(x) > 255 or str(int(x)) != x for x in m.groups()):
+        return None
+    a, b, c, _ = (int(x) for x in m.groups())
+    if (a in (0, 10, 127) or a >= 224 or (a == 100 and 64 <= b <= 127) or (a == 169 and b == 254)
+            or (a == 172 and 16 <= b <= 31) or (a == 192 and b == 168) or (a == 192 and b == 0 and c in (0, 2))
+            or (a == 198 and b in (18, 19)) or (a == 198 and b == 51 and c == 100)
+            or (a == 203 and b == 0 and c == 113) or (a == 192 and b == 88 and c == 99)):
+        return None
+    return value
+
+
+def check_seed(sd):
+    """The Worker's validateSeedRef: url http://<public ipv4>:<port>/<8-char token>/<name>; fallback_url (or null)
+    the same path on `<a-b-c-d>.<mapper zone>` of the SAME ip and port. Anything else (private IP, other host,
+    name mismatch) is refused: the daemon never fetches from an address the Worker would not contact."""
+    if not (isinstance(sd, dict) and set(sd) <= SEED_KEYS):
+        raise Refused("invalid seed")
+    name = sd.get("name")
+    if not (isinstance(name, str) and SEED_NAME.fullmatch(name) and ".." not in name
+            and isinstance(sd.get("sha256"), str) and re.fullmatch(r"[0-9a-f]{64}", sd["sha256"])
+            and type(sd.get("size")) is int and sd["size"] >= 1):
+        raise Refused("invalid seed")
+    u = re.fullmatch(r"http://([0-9.]+):([0-9]{1,5})/([a-z0-9]{8})/" + re.escape(name), sd.get("url") or "")
+    if not (u and public_ipv4(u.group(1)) and 1 <= int(u.group(2)) <= 65535):
+        raise Refused("invalid seed url (needs a public IPv4)")
+    fb = sd.get("fallback_url")
+    if fb is not None:
+        zones = "|".join(re.escape(z) for z in SEED_MAPPER_ZONES)
+        f = re.fullmatch(r"http://([0-9]{1,3}(?:-[0-9]{1,3}){3})\.(?:" + zones + r"):" + u.group(2) + "/" + u.group(3) + "/"
+                         + re.escape(name), fb) if isinstance(fb, str) else None
+        if not (f and f.group(1).replace("-", ".") == u.group(1)):
+            raise Refused("invalid seed fallback_url")
+
+
 def check_offer(profile, offer, cfg, now_ms):
     """Return the validated offer or raise Refused(reason)."""
     if not isinstance(offer, dict) or set(offer) - OFFER_KEYS:
@@ -95,22 +137,14 @@ def check_offer(profile, offer, cfg, now_ms):
     if not isinstance(stages, list) or len(stages) > 32 or not all(isinstance(s, str) and s in STAGES for s in stages):
         raise Refused("stage not in allowlist")
     if "seed" in a:
-        sd = a["seed"]
-        url_ok = lambda u: isinstance(u, str) and re.fullmatch(r"https?://[A-Za-z0-9._:/-]{1,300}", u) is not None  # noqa: E731
-        if not (isinstance(sd, dict) and set(sd) <= SEED_KEYS and url_ok(sd.get("url"))
-                and ("fallback_url" not in sd or url_ok(sd["fallback_url"]))
-                and isinstance(sd.get("sha256"), str) and re.fullmatch(r"[0-9a-f]{64}", sd["sha256"])
-                and type(sd.get("size")) is int and sd["size"] >= 1
-                and isinstance(sd.get("name"), str) and SEED_NAME.fullmatch(sd["name"]) and ".." not in sd["name"]):
-            raise Refused("invalid seed")
-    run = offer.get("run")
-    if run is not None:
-        if not (isinstance(run, dict) and set(run) <= RUN_KEYS
-                and re.fullmatch(r"[0-9a-f]{32}", str(run.get("nonce", "")))
-                and re.fullmatch(r"[0-9a-f]{64}", str(run.get("runner_nonce", "")))
-                and run.get("sha", a["commit"]) == a["commit"]
-                and ("request_id" not in run or run["request_id"] == offer["request_id"])):
-            raise Refused("invalid run section")
+        check_seed(a["seed"])
+    run = offer.get("run")  # required by the Worker's contract: nonce, runner_nonce, sha (the result echoes them)
+    if not (isinstance(run, dict) and set(run) <= RUN_KEYS
+            and re.fullmatch(r"[0-9a-f]{32}", str(run.get("nonce", "")))
+            and re.fullmatch(r"[0-9a-f]{64}", str(run.get("runner_nonce", "")))
+            and run.get("sha") == a["commit"]
+            and ("request_id" not in run or run["request_id"] == offer["request_id"])):
+        raise Refused("invalid or missing run section (nonce, runner_nonce, sha)")
     if "env" in a and not (
         isinstance(a["env"], dict)
         and all(isinstance(k, str) and re.fullmatch(r"KF_[A-Z0-9_]{1,60}", k) and isinstance(v, str) for k, v in a["env"].items())
