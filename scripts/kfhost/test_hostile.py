@@ -100,7 +100,7 @@ class HostileWorker(Base):
         self.factory = lambda cfg, caps: RecordingRunner(cfg, caps)
 
     def attempt(self, **assignment_over):
-        a = {"repo": REPO, "commit": self.c2, "tree_key": self.key(self.c2), "stages": ["merge_bar"]}
+        a = {"repo": REPO, "commit": self.c2, "tree_key": self.key(self.c2), "steps": [{"stage": "merge_bar"}]}
         a.update(assignment_over)
         o = offer(assignment=a, run={"nonce": "c" * 32, "runner_nonce": "d" * 64, "sha": a["commit"]})
         d, conn, _ = self.serve([welcome("borrowed"), o, lambda c: [time.sleep(0.05) for _ in range(100) if not {"ready", "nack"} & set(c.types())],
@@ -183,7 +183,7 @@ class HostileWorker(Base):
         self.assertFalse(hasattr(ctx, "seed_path"))
 
     def test_tree_key_mismatch_reaches_only_the_run_report_in_non_strict_profiles(self):
-        a = {"repo": REPO, "commit": self.c2, "tree_key": "e" * 64, "stages": ["merge_bar"]}
+        a = {"repo": REPO, "commit": self.c2, "tree_key": "e" * 64, "steps": [{"stage": "merge_bar"}]}
         o = offer(assignment=a, run={"nonce": "c" * 32, "runner_nonce": "d" * 64, "sha": self.c2})
         d, conn, _ = self.serve([welcome("standard"), o, lambda c: [time.sleep(0.05) for _ in range(100) if not RecordingRunner.reports],
                                  None, Closed(4401)], ceiling="standard")

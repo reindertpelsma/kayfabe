@@ -128,7 +128,9 @@ class JobRunner:
 
     def kfci_assignment(self, offer):
         a = offer["assignment"]
-        steps = [{"id": STAGE_TO_KFCI[s]} for s in a.get("stages", [])] or [{"id": "merge_bar"}]
+        # Exactly the steps the Worker listed, in order; nothing is derived or interpreted here.
+        steps = [dict({"id": STAGE_TO_KFCI[st["stage"]]}, **({"parameters": {"apps": list(st["apps"])}} if "apps" in st else {}))
+                 for st in a.get("steps", [])] or [{"id": "merge_bar"}]
         budget = max(60, int(offer["deadline_ms"] / 1000 - time.time()))  # deadline is epoch milliseconds
         return {"version": 1, "id": offer["run_id"][:90], "budget_seconds": budget, "steps": steps}
 

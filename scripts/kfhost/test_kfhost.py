@@ -179,7 +179,7 @@ class FakeRunner:
 
 def offer(**over):
     o = {"type": "offer", "v": 1, "offer_id": "0123456789abcdef", "request_id": "req-1", "run_id": "123-1", "run_token": "jwt.tok-en",
-         "assignment": {"repo": REPO, "commit": SHA, "tree_key": TREE, "stages": ["merge_bar"]},
+         "assignment": {"repo": REPO, "commit": SHA, "tree_key": TREE, "steps": [{"stage": "merge_bar"}]},
          "deadline_ms": int(time.time() * 1000) + 3600_000,
          "run": {"nonce": "c" * 32, "runner_nonce": "d" * 64, "sha": SHA}}
     o.update(over)
@@ -385,12 +385,17 @@ class OfferTests(Base):
             "extra assignment field": offer(assignment=dict(base["assignment"], script="rm -rf /")),
             "env": offer(assignment=dict(base["assignment"], env={"KF_X": "1"})),
             "requirements": offer(assignment=dict(base["assignment"], requirements={})),
+            "old stages": offer(assignment=dict(base["assignment"], stages=["merge_bar"])),
+            "step bare string": offer(assignment=dict(base["assignment"], steps=["merge_bar"])),
+            "step extra key": offer(assignment=dict(base["assignment"], steps=[{"stage": "apps", "cmd": "id"}])),
+            "app shell": offer(assignment=dict(base["assignment"], steps=[{"stage": "apps", "apps": ["a;id"]}])),
+            "too many steps": offer(assignment=dict(base["assignment"], steps=[{"stage": "provision"}] * 33)),
             "extra top field": dict(base, cmd="id"),
             "short commit": offer(assignment=dict(base["assignment"], commit="abc123")),
             "uppercase commit": offer(assignment=dict(base["assignment"], commit="A" * 40)),
             "branch name": offer(assignment=dict(base["assignment"], commit="main")),
-            "stage not allowed": offer(assignment=dict(base["assignment"], stages=["rm_rf"])),
-            "stage shell": offer(assignment=dict(base["assignment"], stages=["merge;id"])),
+            "stage not allowed": offer(assignment=dict(base["assignment"], steps=[{"stage": "rm_rf"}])),
+            "stage shell": offer(assignment=dict(base["assignment"], steps=[{"stage": "merge;id"}])),
             "bad tree": offer(assignment=dict(base["assignment"], tree_key="xyz")),
             "bad run id": offer(run_id="../x"),
         }

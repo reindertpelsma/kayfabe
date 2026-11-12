@@ -22,8 +22,14 @@ SEED_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,99}\Z")
 OFFER_KEYS = {"type", "v", "offer_id", "request_id", "run_id", "run_token", "assignment", "deadline_ms", "run"}
 RUN_KEYS = {"nonce", "runner_nonce", "sha", "request_id"}
 SEED_KEYS = {"url", "fallback_url", "sha256", "size", "name"}
-BORROWED_ASSIGNMENT_KEYS = {"repo", "commit", "tree_key", "stages"}
-OPEN_ASSIGNMENT_KEYS = BORROWED_ASSIGNMENT_KEYS | {"requirements", "env", "seed"}
+# The Worker plans (requirements stay there) and tells the daemon what to run, step by step. The daemon NEVER
+# receives requirements (owner ruling 2026-11-12): an offer that carries them is refused by name.
+BORROWED_ASSIGNMENT_KEYS = {"repo", "commit", "tree_key", "steps"}
+OPEN_ASSIGNMENT_KEYS = BORROWED_ASSIGNMENT_KEYS | {"env", "seed"}
+STEPS_MAX = 32
+APPS_PER_STEP_MAX = 32
+APP_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}\Z")  # the Worker's APP_NAME, golden fixture app_name_regex
+STEP_KEYS = {"stage", "apps"}
 # Epoch milliseconds; anything below this is seconds (or garbage) and is refused rather than misread.
 MIN_DEADLINE_MS = 10**11
 MAX_DEADLINE_MS = 4 * 10**12
@@ -124,6 +130,10 @@ def check_offer(profile, offer, cfg, now_ms):
     if profile == "borrowed" and any("seed" in k or "url" in k for k in a):
         raise Refused("borrowed never receives artifacts from other boxes (%s): build from public sources only"
                       % ",".join(sorted(k for k in a if "seed" in k or "url" in k)))
+    if "requirements" in a:
+        raise Refused("requirements are never sent to the daemon: the Worker plans, the daemon runs the listed steps")
+    if "stages" in a:
+        raise Refused("stages is not part of the offer: use steps")
     allowed = BORROWED_ASSIGNMENT_KEYS if profile == "borrowed" else OPEN_ASSIGNMENT_KEYS
     if set(a) - allowed:
         raise Refused("fields not allowed for profile %s: %s" % (profile, ",".join(sorted(set(a) - allowed))))
@@ -133,9 +143,7 @@ def check_offer(profile, offer, cfg, now_ms):
         raise Refused("commit must be 40 lowercase hex")
     if not (isinstance(a.get("tree_key"), str) and TREE_KEY.fullmatch(a["tree_key"])):
         raise Refused("tree_key must be 64 lowercase hex")
-    stages = a.get("stages", [])
-    if not isinstance(stages, list) or len(stages) > 32 or not all(isinstance(s, str) and s in STAGES for s in stages):
-        raise Refused("stage not in allowlist")
+    check_steps(a.get("steps", []))
     if "seed" in a:
         check_seed(a["seed"])
     run = offer.get("run")  # required by the Worker's contract: nonce, runner_nonce, sha (the result echoes them)
@@ -151,6 +159,20 @@ def check_offer(profile, offer, cfg, now_ms):
     ):
         raise Refused("invalid env")
     return offer
+
+
+def check_steps(steps):
+    if not isinstance(steps, list) or len(steps) > STEPS_MAX:
+        raise Refused("steps must be a list of at most %d" % STEPS_MAX)
+    for st in steps:
+        if not isinstance(st, dict) or set(st) - STEP_KEYS:
+            raise Refused("step must be an object with only stage and apps")
+        if not isinstance(st.get("stage"), str) or st["stage"] not in STAGES:
+            raise Refused("stage not in allowlist")
+        apps = st.get("apps")
+        if "apps" in st and (not isinstance(apps, list) or len(apps) > APPS_PER_STEP_MAX
+                             or not all(isinstance(n, str) and APP_NAME.fullmatch(n) for n in apps)):
+            raise Refused("apps must be a list of at most %d allowlisted app names" % APPS_PER_STEP_MAX)
 
 
 def allows_cmd(profile, cfg, commands_until_ms, now_ms):
