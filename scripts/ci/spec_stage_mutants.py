@@ -36,6 +36,7 @@ COPY = [
     "scripts/ci/test_vast_spec_stage.py",
     "scripts/ci/vast_payload.py",
     "scripts/ci/vast_report.py",
+    "scripts/ci/broker_ci.py",  # vast_payload.py imports it
     "scripts/bench/native_xid_guard.py",
     "scripts/bench/native_fault_names.json",
     "scripts/bench/specviewperf/lanes.json",

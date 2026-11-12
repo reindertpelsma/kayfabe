@@ -856,6 +856,7 @@ def main():
             "host_claims_vectors.json",
             "test_vast_box.py",
             "vast_report.py",
+            "broker_ci.py",
         ]:
             shutil.copyfile(HERE / name, ci / name)
         bench = root / "scripts/bench"

@@ -3,6 +3,14 @@
 **STATUS: LIVE, 2026-11-09.** This describes the CI repair, not an expansion of the
 hardware support matrix or a claim of complete unsafe-code soundness.
 
+## Display broker in the box run (2026-11-12)
+
+**STATUS of this section: PLUMBING, 2026-11-12; GPU-free tests only, never run on a box.** Middle and large tiers run
+the guest stages with the headless display broker attached plus an explicit `broker` stage; a broker failure is a
+FAIL (rows `broker_*`). Gates: `scripts/ci/test_broker_ci.py` (in the `scripts/ci` unittest discovery) and
+`scripts/ci/broker_ci_mutants.py` (each mutant needs two killing tests). Design and the unproven list:
+[design/V3_BROKER_IN_CI.md](design/V3_BROKER_IN_CI.md).
+
 ## Stripped tree (2026-11-09)
 
 **STATUS of this section: LIVE, 2026-11-09.** Owner ruling (cited as section AQ of `OWNER_RULINGS.md` in the

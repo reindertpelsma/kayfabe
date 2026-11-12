@@ -14,6 +14,11 @@ execution remains DESIGN-ONLY; the LLM adapter is deliberately refused.
 | middle, PR to master | Small check plus the complete Linux middle gate list and Windows `mid` probe profile | Implemented, pending matching Worker deployment and first combined run |
 | large, release | Everything in middle plus SPECviewperf and a real LLM workload | Intent only; no new large-tier execution wiring |
 
+OWNER RULING 2026-11-12 (PLUMBING, GPU-free tested, not run on a box): both middle and large also run their guest
+stages with the display broker attached and a short explicit broker stage; small does not. A broker failure is a FAIL.
+See [V3_BROKER_IN_CI.md](V3_BROKER_IN_CI.md). It is selected in the payload from `KF_TIER` (default on for middle and
+large, `KF_BROKER=0|1` for manual runs), so `TIER_CONTENTS` in `src/tier.js` does not list it.
+
 CODE READ, RV2 round-18 correction (2026-11-09): both `gate_list_middle.txt` and
 `gate_list.txt` name the same **66 supported Linux probes**, in full order. Middle includes
 `clpeak`, `gpu_burn` and `vkpeak`; the earlier 63-app reduction did not meet the owner's ALL-apps

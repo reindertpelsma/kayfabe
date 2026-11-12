@@ -892,6 +892,15 @@ cmd_run() {
     dev=$(kf3_device_props "$gop" "${WINVM_KF3_DISPLAY:-on}")
     [ -z "$gdrv" ] || dev+=",guest-driver=$gdrv"
     [ -z "$extra" ] || dev+=",$extra"
+    # 2026-11-12 (docs/design/V3_BROKER_IN_CI.md, PLUMBING, not run on a box): the CI payload's broker wrapper sets
+    # WINVM_BROKER_SOCK; the device then attaches to that broker (display=on required) and the guest gets a usb-tablet
+    # (this harness VM has PS/2 only, and the broker's absolute pointer needs a tablet). Unset: nothing changes.
+    if [ -n "${WINVM_BROKER_SOCK:-}" ]; then
+      [ "${WINVM_KF3_DISPLAY:-on}" = on ] || die "WINVM_BROKER_SOCK needs WINVM_KF3_DISPLAY=on"
+      case "$WINVM_BROKER_SOCK" in /*) ;; *) die "WINVM_BROKER_SOCK must be an absolute path" ;; esac
+      dev+=",display-broker=$WINVM_BROKER_SOCK,display-broker-uid=${WINVM_BROKER_UID:-0}"
+      QA+=(-device qemu-xhci,id=xhci0 -device usb-tablet,bus=xhci0.0,id=tab0)
+    fi
     QA+=(-vga none -device "$dev")
     # every command kf3's chain answers, logged with its id and result (kf-rm census, log only)
     export KF3_RPC_TRACE=${KF3_RPC_TRACE:-1}

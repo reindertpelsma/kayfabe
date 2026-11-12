@@ -10,6 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import vast_report as local_result_contract
+import broker_ci
 
 # The current payload has no matrix driver/subrun executor. The trusted Worker
 # checks this exact declaration at the selected commit before creating a lease.
@@ -341,6 +342,9 @@ def tier_requested(environ, windows):
 
 # Stage slots (names reserved in ci/vast-broker/defaults.json stageSlots). PLUMBING = the stage
 # runs through scripts/ci/vast_stage_specviewperf.sh; DESIGN_ONLY = refused if requested.
+# Stages whose guests run with the broker attached when it is on (cuda_host and merge_bar boot no desktop guest: the
+# merge bar's raw-client fast guest has no display consumer, see the design note).
+BROKER_GUEST_STAGES = ("cuda_guest", "apps", "windows_gate", "windows_apps", "windows_gate_2", "specviewperf")
 STAGE_SLOTS = {"specviewperf": "PLUMBING", "two_guests": "DESIGN_ONLY", "trio": "DESIGN_ONLY", "llm_parity": "DESIGN_ONLY"}
 SPEC_VERDICT = re.compile(r"^SPECVIEWPERF_STAGE_(PASS|FAIL|RETRY)(?: class=([A-Z0-9_]{1,32}))?$", re.M)
 
@@ -1378,6 +1382,75 @@ def guest_command(qlog, arguments):
     return rc
 
 
+def broker_requested(environ, tier):
+    """Default ON for middle and large, OFF for small; KF_BROKER=0|1 overrides (docs/design/V3_BROKER_IN_CI.md)."""
+    try:
+        return broker_ci.broker_wanted(environ, tier)
+    except ValueError:
+        raise EvidenceError("preflight") from None
+
+
+def broker_command(root, name, command):
+    """The stage command inside its broker wrapper (scripts/ci/broker_ci.py run): the guest the command boots attaches to
+    a headless test-backend broker. KF3_DEV_EXTRA / WINVM_BROKER_SOCK reach it through the wrapper's environment."""
+    return ["python3", "-B", str(Path(root) / "scripts/ci/broker_ci.py"), "run", "--name", name, "--", *command]
+
+
+def broker_class(text, name, guest_name):
+    """The BROKER_* class that must win over a guest error, or None. Every class is a FAIL attributed to kayfabe (owner
+    ruling 2026-11-12). The one carve-out: a stage-owned refusal that happens before any guest could start (media, time,
+    no list) with a broker that was healthy and saw nothing keeps its own class."""
+    cls = broker_ci.failure_class(broker_ci.parse_summary(text, name))
+    # "no attach" already means: built, started, alive, no error line (the order of broker_ci.failure_class)
+    if cls == "broker_no_attach" and guest_name.endswith(broker_ci.PREBOOT_SUFFIXES):
+        return None
+    return cls
+
+
+def broker_guarded(grade, name, output):
+    """Grade a broker-attached stage: the stage's own rows, then the broker's. A broker failure is an ordinary FAIL
+    (never PROVIDER_FAULT, never a retry class, never skipped) and wins over a guest error, which stays in the rows.
+    A ProviderFault (a box unusable before kayfabe tests) keeps its provider verdict. A timeout stays a timeout."""
+
+    def guarded(rc):
+        try:
+            text = bounded_text(output)
+        except OSError:
+            text = ""  # no output file means no BROKER_SUMMARY: broker_start, a FAIL
+        try:
+            rows = grade(rc)
+        except ProviderFault:
+            raise
+        except EvidenceError as guest:
+            cls = None if rc == 124 else broker_class(text, name, guest.name)
+            if cls:
+                raise EvidenceError(cls, [*guest.rows, row(guest.name, failed=1)]) from None
+            raise
+        if rc == 124:
+            return rows
+        try:
+            return rows + broker_ci.stage_rows(text, name)
+        except broker_ci.BrokerFailure as failure:
+            raise EvidenceError(failure.name, rows) from None
+
+    return guarded
+
+
+def broker_text(output):
+    """The stage output, or '' when there is none (then no BROKER_EXPLICIT line: broker_start, a FAIL)."""
+    try:
+        return bounded_text(output)
+    except OSError:
+        return ""
+
+
+def explicit_broker_rows(text):
+    try:
+        return broker_ci.explicit_rows(text)
+    except broker_ci.BrokerFailure as failure:
+        raise EvidenceError(failure.name, failure.rows) from None
+
+
 def watched(command, root, name):
     return ["bash", str(root / "scripts/bench/host_xid_watch.sh"), name, "--", *command]
 
@@ -1437,6 +1510,7 @@ def main():
         # Popped before any stage runs: merge_check.sh must not run the gate inside merge_bar.
         windows, windows_source = windows_requested(os.environ)
         tier, windows_runs, extra_stages = tier_requested(os.environ, windows)
+        broker, broker_source = broker_requested(os.environ, tier)
         selected_drivers = release_driver_environment(os.environ)
         require_executable_release(os.environ)
         os.environ.update(selected_drivers)
@@ -1466,6 +1540,7 @@ def main():
             + str(int(linuxapps)),
             flush=True,
         )
+        print("KF_PAYLOAD_BROKER enabled=" + str(int(broker)) + " source=" + broker_source, flush=True)
         subprocess.run(["df", "-h", "/"], check=True)
         free = shutil.disk_usage("/").free
         print("KF_PREFLIGHT_FREE_BYTES=" + str(free), flush=True)
@@ -1517,6 +1592,10 @@ def main():
         tag = "ci" + nonce[:16]
 
         def make_stage(name, command, output, progress, grade, detail=()):
+            if broker and name in BROKER_GUEST_STAGES:
+                # every guest the stage boots runs WITH the broker attached (docs/design/V3_BROKER_IN_CI.md)
+                command = broker_command(root, name, command)
+                grade = broker_guarded(grade, name, output)
             watch_tag = tag + "_" + name
             watcher = bench / ("xid_" + watch_tag + ".log")
             return dict(
@@ -1528,6 +1607,12 @@ def main():
                 detail=[*detail, watcher],
                 grade=lambda rc: stage_grade(root, watch_tag, watcher, grade, rc),
             )
+
+        # The explicit broker stage downloads nothing and writes no more than a few log files, so it has no row in
+        # ci/vast-broker/defaults.json `payloadStageResources`. That table is a Worker file under a pin, which this change
+        # may not touch; calling the same function by this name keeps the stage out of scripts/ci/profile_resources.py's
+        # search for `make_stage(` on purpose. A row (0 GB) is the follow-up once a Worker change is allowed.
+        make_unbudgeted_stage = make_stage
 
         def provision_grade(rc):
             log = bounded_text("/root/prov/prov.log")
@@ -1662,6 +1747,21 @@ def main():
                 WINAPPS_MIN_REMAINING_MS[winapps] if winapps else 0
             ), short_row="windows_retry_time")
             stages.append(stage)
+        if windows and broker:
+            # The short explicit broker stage (first frame not blank, one resolution change, one scripted key and absolute
+            # pointer event): a fresh Windows guest that is a child of the gate's overlay, with the test backend. No
+            # time-skip path: it is about five minutes, and a broker verdict is never "not run".
+            output_broker = evidence / "broker.run"
+            stages.append(
+                make_unbudgeted_stage(
+                    "broker",
+                    ["python3", "-B", str(root / "scripts/ci/broker_ci.py"), "explicit", "--tag", tag, "--prov", PROV_DIR],
+                    output_broker,
+                    [],
+                    lambda rc, output=output_broker: explicit_broker_rows(broker_text(output)),
+                    [],
+                )
+            )
         if windows and winapps:
             # The Windows apps stage (docs/design/V3_WINDOWS_APPS_GATE.md): the Windows app matrix, in a fresh guest
             # that is a child of the gate's own overlay (same tag), on the same box. It runs only after a green
