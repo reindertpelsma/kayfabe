@@ -1,6 +1,35 @@
-**STATUS: LIVE, 2026-11-07.** CODE READ: GPU-free downloader and merged pinned-download integrations; hardware throughput is unqualified.
+**STATUS: LIVE, 2026-11-12.** CODE READ: GPU-free downloader and merged pinned-download integrations; hardware throughput is unqualified. 2026-11-12 (owner): downloads are verify-then-rename and `--fallback-url` exists (section *Verify-then-rename and fallback*, which supersedes the statements below that OUT is written directly and that a bad hash preserves the bytes).
 
 # Parallel CI downloads
+
+## Verify-then-rename and fallback
+
+CODE READ, owner rules of 2026-11-12 (`scripts/ci/kf_fetch.py`; these override the older text below):
+
+- The connection is untrusted; the pin (`--sha256`, optional `--size`) comes from the caller, i.e. from
+  the Worker, never from the server being downloaded. Every download (http and https) is written to
+  `OUT.unverified` and renamed to `OUT` only after the size and the SHA-256 both matched: fsync of the
+  file, atomic `os.replace`, fsync of the directory. `OUT` never exists during a transfer or after a failure.
+- A stale `OUT` is removed at the start. If `OUT` already matches the pin (and `--size`), the tool prints
+  `FETCH_DONE ... streams=0` and exits 0 without any network use.
+- A SIZE or HASH failure (a response or chunk above the expected size, a size or pin mismatch after the
+  full transfer, a size change on refresh) DELETES `OUT.unverified` and its state; prints `FETCH_BAD_HASH`
+  on a hash mismatch. Only a plain interruption (network error, timeout, SIGKILL) keeps the partial file
+  and the state, so the next run resumes. The state binds the `.unverified` path (`target`); a state from
+  the previous layout, or for another path, is stale and ignored. The state keeps its name `OUT.fetch-state.json`.
+- `--fallback-url URL` (once): after ANY non-local failure of the primary, the whole download is retried from the
+  fallback with a fresh `.unverified` and state (never bytes from two sources), the same pin and size. Non-local
+  means everything the network can do to the stream after or before the TCP connection: connect/DNS/TLS error,
+  reset, stall past the read timeout (`KF_FETCH_TIMEOUT`, default 30 s, tests only), truncation, any non-2xx/206
+  status (class AUTH for 401/403), an HTML block page, wrong Content-Range/Content-Length, size over or under, and a
+  pin mismatch. Local failures (bad arguments or pin shape, disk or permission errors) never fall back. It prints
+  `FETCH_FALLBACK reason=NETWORK|HASH|SIZE|AUTH` (class of the primary failure, no URL), never receives
+  `--worker-auth` headers and never follows redirects. The per-chunk retry policy is unchanged. If both fail, the
+  exit status is that of the last failure. Purpose: hosts behind http/DNS proxies or NAT64 may reach the hostname form
+  (for example `http://92-67-98-9.sslip.io:PORT/...`) but not the raw IPv4 URL; the caller composes both.
+- Callers that use `OUT` after exit 0 are unchanged: `scripts/ci/vast_setup.py`, `scripts/bench/box/fetch_bench_data.sh`
+  (exit 3 now ends in the script itself, since no `.part` is left to hash), `scripts/apps/image/official.py`
+  (`Download` API, re-verifies), `scripts/bench/windows/appmatrix/official_runtime.py`.
 
 ## Evidence and limits
 
@@ -52,7 +81,7 @@ CODE READ (`scripts/ci/kf_fetch.py`):
   redirect resolution makes one origin request; an origin 500/reset fails that
   resolution without spending further mints. Only final-object requests retry. An ordinary
   AccessDenied/401 does not trigger an expiry refresh. A refresh that changes size,
-  ETag or range support fails SIZE, preserving the partial download for a fresh run.
+  ETag or range support fails SIZE (the partial file is deleted, see above).
 - Five attempts per chunk use exponential backoff starting at 250 ms. Requests
   time out after 30 seconds without socket progress. Each response must match its
   exact range, ETag, representation and length. Strong ETags also use If-Match.
@@ -68,9 +97,8 @@ CODE READ (`scripts/ci/kf_fetch.py`):
 - Before preallocation on resume, each saved chunk must lie within the existing
   file's length and its local bytes must match its saved hash. A changed size or
   ETag restarts; malformed state is discarded. A saved hash is not authority to
-  skip the final SHA-256 over OUT. A bad final hash preserves OUT and the checkpoint
-  file, clears trusted completions for a future retry, prints FETCH_BAD_HASH and
-  exits nonzero. The tool itself deletes no downloaded bytes on hash failure.
+  skip the final SHA-256 over the downloaded file. A bad final hash prints FETCH_BAD_HASH,
+  deletes the `.unverified` file and the checkpoint (2026-11-12; formerly the bytes were kept) and exits nonzero.
 - FETCH_PROGRESS reports completed bytes, total bytes and MBps; FETCH_DONE reports
   elapsed seconds, MBps and stream count. MBps is newly completed bytes per elapsed
   invocation time, including probe, resume verification and final hashing; it is

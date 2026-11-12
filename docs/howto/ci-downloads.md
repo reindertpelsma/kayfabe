@@ -26,7 +26,7 @@ For an authenticated bench-data route, also pass `--worker-auth` with the run's
 existing `KF_RUN_TOKEN` and optional paired `KF_ACCESS_ID`/`KF_ACCESS_SECRET`
 environment values. Those headers are sent only to the original endpoint.
 
-Re-run the same command after interruption to resume. Keep the output and its
+Re-run the same command after interruption to resume. Keep the `.unverified` file and its
 `.fetch-state.json` sidecar together; `--state FILE` chooses a different sidecar.
 Completed chunks are checked against the local file before reuse, and the final
 file must match the SHA-256 you supplied. A server without range support uses one
@@ -34,6 +34,14 @@ stream and restarts an interrupted transfer.
 
 `FETCH_PROGRESS` reports completed bytes and the total. `FETCH_DONE` means the
 final hash matched. `FETCH_FAIL` names NETWORK, HASH, SIZE or AUTH. On a hash
-failure, the standalone downloader prints `FETCH_BAD_HASH`, keeps the bytes for
-inspection and clears trusted completions so another run downloads them again.
-The bench-data wrapper retains its existing cleanup and exit-code behavior.
+failure, the standalone downloader prints `FETCH_BAD_HASH`, deletes the partial
+download and exits 3.
+
+The download is written to `<out>.unverified` and renamed to `<out>` only after the size
+and the SHA-256 you pinned both match, so `<out>` never holds unverified bytes. After a
+plain interruption the partial `.unverified` file stays and the next run resumes it.
+If `<out>` already matches the pin, the command finishes without network use. Add
+`--fallback-url URL` to retry the whole download from a second address when the first
+fails for any reason other than a local one, such as a reset, a block page, a stall or a hash mismatch (for example the hostname form of a raw
+IPv4 URL behind a proxy); it gets no `--worker-auth` headers and follows no redirects.
+The bench-data wrapper retains its existing exit-code behavior.
