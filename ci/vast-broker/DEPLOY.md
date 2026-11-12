@@ -1043,13 +1043,13 @@ rows per die. See [the design and review corrections](../../docs/design/V3_RELEA
 
 CODE READ (`src/release.js` `planRehearsal`, `src/index.js` `batchRequest`/`adminStart`/`admit`, `src/tier.js`,
 `src/github.js` `boxProtocol`, `ci/vast-admin/worker.js`, `scripts/ci/vast_payload.py`); GPU-free tests only
-(`test/release-rehearsal.test.js`, `scripts/ci/test_vast_payload_rehearsal.py`, fifteen new mutants in
+(`test/release-rehearsal.test.js`, `scripts/ci/test_vast_payload_rehearsal.py`, twenty-five new mutants in
 `scripts/mutate-tiers.mjs`, five in `scripts/ci/middle_apps_mutants.py`); **nothing is deployed, no Vast box has
 run it.** Design and the exact scope: [V3_RELEASE_REHEARSAL.md](../../docs/design/V3_RELEASE_REHEARSAL.md).
 
 What it is: an admin Start `{commit_sha, tier:"large", die:"AD102", rehearsal:true}` (the page has a
 "Rehearsal" checkbox) that plans and rents the large payload on that one die through the normal admission, cost
-and verdict path, without a tag and without clearing any matrix blocker. The plan and every report row say the
+and verdict path, without a tag and without clearing any matrix blocker. The plan, batch view and every verdict cell say the
 driver sub-run matrix was NOT executed; the verdict is at most `REHEARSAL_PASS`; the legs never count toward a
 release record and are never queued for the result store. A plain large Start is unchanged and is still refused
 with `MATRIX_NOT_EXECUTABLE`. The large tier also sends the middle apps pair now ("large includes middle").
@@ -1064,7 +1064,7 @@ Cloudflare token is involved here):
 | `RELEASE_COST_CAP_USD` | optional, `12` suggested (default 40, must be <= `RELEASE_DAILY_USD` 40) | a tighter bound than the default; the default also passes |
 | `RELEASE_RERUNS_PER_LEG` | `0` suggested for the first run | a failed leg cannot silently re-rent |
 | `RELEASE_STAGES` | `[]` for the first run, or `["specviewperf"]` to add the SPEC lanes (two legs, A then B) | SPEC stays its own slot |
-| `MIDDLE_APPS_ENABLED` | unset or `true` (only `false` turns the apps pair off, for middle and now large) | the apps pair |
+| `MIDDLE_APPS_ENABLED` | unset or `true`; `false` turns the apps pair off for middle, and a large plan or leg is then REFUSED (`APPS_DISABLED`) | the apps pair |
 | `ROLLING_SPEND_USD` | at least the current rolling spend plus the estimate | the existing cap |
 
 Unchanged on purpose: cost cap 40, credit reserve 8, daily limits, the 300 minute hard limit, `RENTING_ENABLED`.
@@ -1081,13 +1081,13 @@ Hungary price). That snapshot is old; the live admin Plan decides.
 
 Time (INFERRED from measured stage times, not measured for a large leg): a large leg runs the middle parts
 (about 101 minutes on a 4090 host, MEASURED once on 2026-11-10) plus the second Windows gate (16 to 50
-minutes) plus SPEC. SPEC lane B (133 minutes needed) fits; lane A (169) fits only on a fast host and without
-the second gate, otherwise the stage ends `specviewperf_retry_time` (a retry, never a pass). Decide whether the
-first rehearsal should run with `RELEASE_STAGES=[]`.
+minutes) plus SPEC. With SPEC only the last lane leg (lane B, 133 minutes needed) carries the apps; lane A carries none, so the
+apps no longer starve it (review S1). A SPEC stage that still lacks time ends `specviewperf_retry_time` (a retry,
+never a pass); keep `RELEASE_RERUNS_PER_LEG=0` for the first run so it cannot re-rent.
 
 Bundle pin. `deployment.json` `bundle_sha256` and `DEPLOYED_BUNDLE_SHA256` in `wrangler.toml` are updated in the
 same change, by the documented rule above: `wrangler deploy --config wrangler.toml --dry-run --outdir <dir>`,
-SHA-256 of `<dir>/index.js`, twice, identical: `669fb9ce4feacd97d55b5048f4928df3c624aa792704cde6a8c6230e87223b6c`
+SHA-256 of `<dir>/index.js`, twice, identical: `384374d7176e9c9d92c6a94cb99a2735d55b5bae73bd09e288996b087b7d86a8`
 (was `d7a30055f2b1e6ebd56f21b0404e7ac4a9484caf107552f3a52beb2717305b12`). There is no regeneration script; the
 procedure is manual. MEASURED trap: the hash is reproduced only with `node_modules` physically inside the checkout
 (`npm ci --ignore-scripts` there); with `node_modules` as a symlink to another directory the unchanged `next`

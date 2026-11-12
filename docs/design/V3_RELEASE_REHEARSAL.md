@@ -69,9 +69,13 @@ flag `APPS_STAGE_ENABLED` (off) keeps its old large profile.
 `TIER_CONTENTS.large.state` is `APPS_SENT` (the apps pair is sent; the tier as a whole is still not
 executable); `llm_parity` stays DESIGN_ONLY and SPECviewperf keeps its own slot state in `defaults.json`.
 
+**Which leg carries the apps (review S1, 2026-11-12).** Without SPEC every large leg carries the apps pair. With SPEC (two lane legs) only the LAST lane leg (lane B, 133 minute guard) carries it: the apps and Windows start guards do not reserve SPEC's time, so apps before lane A (169 minutes) would starve it on a slow host and a `specviewperf_retry_time` RETRY would trigger a paid rerun. Chosen over adding SPEC's time to the apps guards because that would make lane A refuse the apps on every host (245 + 169 > 290). The first rehearsal keeps `RELEASE_RERUNS_PER_LEG=0` so a timing RETRY cannot silently re-rent.
+
+**No inherited kill switch (review S2).** A large plan (and a rehearsal plan) is refused with `APPS_DISABLED`, and a large leg is not rented (`NOT_ELIGIBLE`/`APPS_DISABLED`, which also ends a running batch), while `MIDDLE_APPS_ENABLED=false`. The release never runs without apps.
+
 INFERRED (not measured): on a 4090-class host the middle part takes about 101 minutes (MEASURED once,
-2026-11-10), so lane B of SPEC still has its 133 minutes; lane A (169) fits only with a fast host and
-no second Windows gate. A SPEC leg on a slow host can end `specviewperf_retry_time`: a retry, never a
+2026-11-10), so lane B of SPEC still has its 133 minutes; lane A (169) carries no apps and is bounded only by
+the earlier stages. A SPEC leg on a slow host can end `specviewperf_retry_time`: a retry, never a
 pass. The first rehearsal is a timing discovery, not a pass-expected run.
 
 ## 4. What it does not prove
