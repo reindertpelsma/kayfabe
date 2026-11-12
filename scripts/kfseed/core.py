@@ -51,7 +51,7 @@ http {{
     scgi_temp_path {run}/tmp/scgi;
     server {{
         listen {port} default_server;
-        error_page 400 401 403 404 405 408 413 414 431 494 500 502 503 504 = /_drop;
+        error_page 400 401 403 404 405 408 413 414 416 431 494 500 502 503 504 505 = /_drop;
         absolute_redirect off;
         merge_slashes off;
         if ($request !~ "^(GET|HEAD) /{token}/({alts}) HTTP/1\\.[01]$") {{ return 444; }}
@@ -59,6 +59,8 @@ http {{
         if ($request_method !~ ^(GET|HEAD)$) {{ return 444; }}
         if ($http_content_length) {{ return 444; }}
         if ($http_transfer_encoding) {{ return 444; }}
+        if ($http_expect) {{ return 444; }}
+        if ($http_upgrade) {{ return 444; }}
         client_max_body_size 1;
         client_body_buffer_size 1k;
         client_body_timeout 5s;

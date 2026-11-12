@@ -55,13 +55,16 @@ class Pure(Base):
         self.assertNotRegex(text, r"location /ab12cd34")
         self.assertIn("absolute_redirect off;", text)
         self.assertIn("merge_slashes off;", text)
+        self.assertNotIn("ignore_invalid_headers", text)  # does not affect colon-less lines; see README
+        self.assertIn("if ($http_expect) { return 444; }", text)
+        self.assertIn("if ($http_upgrade) { return 444; }", text)
         self.assertIn('if ($request !~ "^(GET|HEAD) /ab12cd34/(probe\\.txt|art\\.bin) HTTP/1\\.[01]$") { return 444; }', text)
         self.assertNotRegex(text, r"return 30\d")
-        self.assertIn("400 401 403 404 405 408 413 414 431 494 500 502 503 504 = /_drop;", text)
+        self.assertIn("400 401 403 404 405 408 413 414 416 431 494 500 502 503 504 505 = /_drop;", text)
         self.assertIn("autoindex off;", text)
         self.assertIn("limit_except GET HEAD { deny all; }", text)
         self.assertIn("location / { return 444; }", text)
-        self.assertIn("error_page 400 401 403 404 405 408 413 414 431 494 500 502 503 504 = /_drop;", text)
+        self.assertIn("error_page 400 401 403 404 405 408 413 414 416 431 494 500 502 503 504 505 = /_drop;", text)
         self.assertIn("if ($request_method !~ ^(GET|HEAD)$) { return 444; }", text)
         self.assertIn("if ($http_content_length) { return 444; }", text)
         self.assertIn("if ($http_transfer_encoding) { return 444; }", text)
@@ -311,6 +314,53 @@ class RealNginx(Selfcheck):
         got, dt = self.raw(self.line("Content-Length: 10000000\r\n", method="POST") + b"x" * 10_000_000)
         self.assertEqual(got, b"")
         self.assertLess(time.time() - t0, 5)
+
+    def malformed(self, path):
+        """Exact byte strings of malformed requests, built against `path`."""
+        return {
+            "HTTP/9.9": ("GET %s HTTP/9.9\r\nHost: x\r\nConnection: close\r\n\r\n" % path).encode(),
+            "header without colon": ("GET %s HTTP/1.1\r\nHost: x\r\nBadHeader\r\nConnection: close\r\n\r\n" % path).encode(),
+            "Expect 100-continue": ("GET %s HTTP/1.1\r\nHost: x\r\nExpect: 100-continue\r\nConnection: close\r\n\r\n" % path).encode(),
+            "Upgrade websocket": ("GET %s HTTP/1.1\r\nHost: x\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n" % path).encode(),
+            "Range bytes=abc": ("GET %s HTTP/1.1\r\nHost: x\r\nRange: bytes=abc\r\nConnection: close\r\n\r\n" % path).encode(),
+            "Range beyond end": ("GET %s HTTP/1.1\r\nHost: x\r\nRange: bytes=99999999-\r\nConnection: close\r\n\r\n" % path).encode(),
+        }
+
+    def test_malformed_valid_path_no_reply(self):
+        self.start_once()
+        for name, data in self.malformed("/%s/art.bin" % self.token).items():
+            if name == "header without colon":
+                continue  # nginx accepts it (README); needs the token, covered by the wrong-token test
+            got, dt = self.raw(data)
+            self.assertEqual(got, b"", name)
+            self.assertIsNotNone(dt, name)
+
+    def test_malformed_wrong_token_and_path_no_reply(self):
+        self.start_once()
+        for path in ("/zzzzzzzz/art.bin", "/%s/nope" % self.token, "/", "/%s/probe.txt" % "zzzzzzzz"):
+            for name, data in self.malformed(path).items():
+                got, dt = self.raw(data)
+                self.assertEqual(got, b"", (name, path))
+                self.assertIsNotNone(dt, (name, path))
+
+    def test_lf_only_line_endings_documented_behaviour(self):
+        self.start_once()
+        got, _ = self.raw(("GET /%s/probe.txt HTTP/1.1\nHost: x\nConnection: close\n\n" % self.token).encode())
+        self.assertTrue(got.startswith(b"HTTP/1.1 200"), got[:40])  # nginx accepts bare LF; needs the token anyway
+        got, _ = self.raw(self.malformed("/%s/probe.txt" % self.token)["header without colon"])
+        self.assertTrue(got.startswith(b"HTTP/1.1 200"), got[:40])  # colon-less header line is accepted on a valid path
+        got, _ = self.raw(b"GET /zzzzzzzz/probe.txt HTTP/1.1\nHost: x\nConnection: close\n\n")
+        self.assertEqual(got, b"")
+
+    def test_valid_requests_still_work(self):
+        self.start_once()
+        for extra, status in (("", b"200"), ("Range: bytes=0-9\r\n", b"206")):
+            got, _ = self.raw(self.line(extra))
+            self.assertTrue(got.startswith(b"HTTP/1.1 " + status), (extra, got[:40]))
+        got, _ = self.raw(self.line(method="HEAD"))
+        self.assertTrue(got.startswith(b"HTTP/1.1 200") and got.endswith(b"\r\n\r\n"))
+        got, _ = self.raw(self.line(path="/%s/probe.txt" % self.token))
+        self.assertTrue(got.endswith(b"kfseed-probe-v1\n"))
 
     def test_slow_partial_request_dropped(self):
         self.start_once()
