@@ -516,6 +516,8 @@ struct Aux {
     software: Option<Software>,
     patched: Vec<u32>,
     receipts: Vec<userread::Receipt<'static>>,
+    /// The last streamed publication returned `Retry` only because a lock or walk was busy.
+    retry_busy: bool,
     doorbells: u64,
     /// Measurement only: when the outstanding SYNC_WAIT gate was authored.
     gate_at: Option<std::time::Instant>,
@@ -563,6 +565,7 @@ enum PendingAction {
 /// The guarded private-ring publication shared by the pump's segment machinery and by the per-entry turn's I/O
 /// ([`PumpIo`]): source guards, allocation / software liveness, topology generation, then `write`, then the doorbell.
 #[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments)]
 fn publish_guarded(
     me: &ChanPlane,
     r: &userrelay::Record,
@@ -576,6 +579,42 @@ fn publish_guarded(
         &kf_chan::user_storage::Storage<kf_chan::user_storage::CpuView>,
     ) -> Result<(), String>,
 ) -> Turn<()> {
+    publish_guarded_classified(
+        me,
+        r,
+        ram_generation,
+        software,
+        ring,
+        gp,
+        pb,
+        pbs,
+        write,
+        &std::cell::Cell::new(false),
+    )
+}
+
+fn publish_guarded_classified(
+    me: &ChanPlane,
+    r: &userrelay::Record,
+    ram_generation: u64,
+    software: Option<&Option<Software>>,
+    ring: Option<&Mapping<'static>>,
+    gp: Option<&Snapshot<'static>>,
+    pb: Option<&Snapshot<'static>>,
+    pbs: &[userread::Receipt<'static>],
+    write: impl FnOnce(
+        &kf_chan::user_storage::Storage<kf_chan::user_storage::CpuView>,
+    ) -> Result<(), String>,
+    stale: &std::cell::Cell<bool>,
+) -> Turn<()> {
+    // `stale` is set when a `Retry` is NOT merely a busy lock or walk: a changed source translation, a changed or
+    // not-ready software object, a stopped channel. Only then must a complete stream restart from part 0.
+    let source_error = |e: userread::Refusal, phase: &'static str| {
+        if matches!(e, userread::Refusal::Changed) {
+            stale.set(true);
+        }
+        source_error(e, phase)
+    };
     if me.inbox.walk_busy() {
         me.inbox.wait_walk(r.idx);
         return Err(Failure::Retry);
@@ -589,6 +628,7 @@ fn publish_guarded(
                 .filter(|t| t.user_ring && Arc::ptr_eq(&t.allocation, &r.allocation))
                 .ok_or("USER_RING_ALLOCATION_GONE")?;
             if software.is_some_and(|expected| !same_software(expected, &t.user_defapi)) {
+                stale.set(true);
                 return Err(Failure::Retry);
             }
             if let Some(sw) = &t.user_defapi {
@@ -596,10 +636,12 @@ fn publish_guarded(
                     return Err("USER_RING_SOFTWARE_OBJECT_GONE".into());
                 }
                 if !sw.ready.load(Ordering::Acquire) {
+                    stale.set(true);
                     return Err(Failure::Retry);
                 }
             }
             if t.stopped || t.disabled {
+                stale.set(true);
                 return Err(Failure::Retry);
             }
             if me.stop.load(Ordering::Acquire) {
@@ -670,6 +712,24 @@ fn snapshot_with(
         cache,
     )
     .map_err(|e| source_error(e, "USER_RING_SOURCE"))
+}
+
+/// The turn's final `Need` from its outcome. A `Retry` is `Contended` (register with the lock holder, wait for its
+/// hand-off) EXCEPT after a stream restart (`restart_owed`): that retry has no lock holder to wake it (a changed source,
+/// a scan re-read), so the relay is re-served at once. `again` alone never turns a `Retry` into `Again`: that is
+/// Phase 1 behaviour (a busy lock after a published entry still hands off).
+fn need_after(
+    out: &Turn<bool>,
+    again: bool,
+    restart_owed: bool,
+) -> Option<kf_chan::user_loop::Need> {
+    use kf_chan::user_loop::Need;
+    match out {
+        Ok(_) if again => Some(Need::Again),
+        Err(Failure::Retry) if restart_owed => Some(Need::Again),
+        Err(Failure::Retry) => Some(Need::Contended),
+        _ => None,
+    }
 }
 
 /// The real accessors of the per-entry turn (`kf_chan::user_turn::Io`), borrowed from the pump's fields that are not
@@ -917,7 +977,9 @@ impl kf_chan::user_turn::Io for PumpIo<'_> {
         if self.aux.receipts.len() != usize::from(parts) || parts == 0 {
             return Err("USER_RING_STREAM_RECEIPTS".into());
         }
-        publish_guarded(
+        let stale = std::cell::Cell::new(false);
+        self.aux.retry_busy = false;
+        let published = publish_guarded_classified(
             self.me,
             self.r,
             self.ram_generation,
@@ -933,9 +995,18 @@ impl kf_chan::user_turn::Io for PumpIo<'_> {
                 storage.write_user_gp(slot, entry)?;
                 storage.publish_put(put)
             },
-        )?;
+            &stale,
+        );
+        if matches!(published, Err(Failure::Retry)) && !stale.get() {
+            // only a busy lock or walk: the receipts and the GP snapshot are as valid as before
+            self.aux.retry_busy = true;
+        }
+        published?;
         *self.source_admitted = true;
         Ok(())
+    }
+    fn retry_keeps_stream(&self) -> bool {
+        self.aux.retry_busy
     }
     fn drop_receipts(&mut self) {
         self.aux.receipts.clear();
@@ -1081,11 +1152,7 @@ impl kf_chan::user_turn::Io for PumpIo<'_> {
                 }
             }
             Ev::CreditWait => Stats::bump(&me.relay_stats.credit_waits),
-            Ev::PutBound
-            | Ev::EntryRefused
-            | Ev::ScanRefused
-            | Ev::ScanBudget
-            | Ev::StagedSpanBudget => {}
+            Ev::PutBound | Ev::EntryRefused | Ev::ScanRefused | Ev::StagedSpanBudget => {}
         }
     }
 }
@@ -1984,11 +2051,8 @@ impl Pump {
         if self.core.lazy.flush_due() {
             me.relay_stats.lazy.add(&self.core.lazy.take_delta());
         }
-        match &out {
-            Ok(_) if self.core.again => self.core.need = Need::Again,
-            Err(Failure::Retry) if self.core.again => self.core.need = Need::Again,
-            Err(Failure::Retry) => self.core.need = Need::Contended,
-            _ => {}
+        if let Some(need) = need_after(&out, self.core.again, self.core.restart_owed) {
+            self.core.need = need;
         }
         out
     }
@@ -2959,8 +3023,12 @@ impl ChanPlane {
             }
             Err(Failure::Retry) => {
                 if let Some(p) = &mut r.pump {
-                    p.core.cancel_stream();
-                    p.aux.receipts.clear();
+                    // Covers a `Retry` raised OUTSIDE `Relay::step` (inside a step the relay already dropped the
+                    // stream and its receipts, or deliberately kept them after a busy part copy or publication).
+                    if !p.core.retry_kept_stream() {
+                        p.core.cancel_stream();
+                        p.aux.receipts.clear();
+                    }
                     // A changed/contended prepublication snapshot has no native
                     // credit. Re-read it rather than retrying a permanently stale
                     // view. Staged native work and its receipt state stay owned.
@@ -3372,6 +3440,59 @@ impl kf_chan::worker::RelayLoop for ChanPlane {
 
 #[cfg(test)]
 mod tests {
+    use kf_chan::user_loop::Need;
+
+    /// S2 (review of PR #360): only a STREAM restart turns a `Retry` into an immediate re-serve. A published entry
+    /// (`again`) followed by a busy lock still hands off to the lock holder, exactly as Phase 1 did.
+    #[test]
+    fn a_retry_after_a_published_entry_still_hands_off_and_only_a_stream_restart_reserves_at_once()
+    {
+        assert_eq!(
+            super::need_after(&Err(Failure::Retry), true, false),
+            Some(Need::Contended),
+            "Phase 1: `again` alone never skips the lock hand-off"
+        );
+        assert_eq!(
+            super::need_after(&Err(Failure::Retry), false, false),
+            Some(Need::Contended)
+        );
+        assert_eq!(
+            super::need_after(&Err(Failure::Retry), true, true),
+            Some(Need::Again),
+            "a restart has no lock holder to wake it"
+        );
+        assert_eq!(super::need_after(&Ok(true), true, false), Some(Need::Again));
+        assert_eq!(super::need_after(&Ok(false), false, false), None);
+        assert_eq!(super::need_after(&Err("x".into()), true, true), None);
+    }
+
+    /// The classification of a streamed publication's `Retry`: a changed source, a changed or not-ready software
+    /// object and a stopped channel mark it `stale` (restart from part 0); a busy lock or walk does not.
+    #[test]
+    fn publish_guarded_marks_only_changed_sources_and_software_as_stale() {
+        let pump = include_str!("userpump.rs");
+        let pump = pump.split("#[cfg(test)]").next().unwrap();
+        let f = pump
+            .split("fn publish_guarded_classified(")
+            .nth(1)
+            .unwrap()
+            .split("fn snapshot_with(")
+            .next()
+            .unwrap();
+        assert_eq!(
+            f.matches("stale.set(true)").count(),
+            4,
+            "Changed + three non-busy Retry sites"
+        );
+        assert!(f.contains("userread::Refusal::Changed"));
+        for busy in [
+            "walk_busy",
+            "me.pt.try_lock()",
+            "r.lease.storage.try_lock()",
+        ] {
+            assert!(f.contains(busy), "{busy}");
+        }
+    }
     use super::*;
     use kf_abi::submit::method_header_inc as h;
     fn sw(guest: u32, number: u16) -> Software {

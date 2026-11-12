@@ -6,7 +6,10 @@ Usage: python3 -B scripts/stream_mutation_check.py OUTDIR [MUTANT ...]   (CARGO_
 Follows scripts/descriptor_mutation_check.py: a green baseline first, exact one-site source edits, the file
 restored in a finally block, a compile error never counts as a kill. Each mutant must fail at least two named
 tests. The fourteen mutants are those of traces/descriptor_bound_20261018/phase2.md (2026-10-22, PR #79), redefined
-here as committed edits because that campaign was run by hand.
+here as committed edits because that campaign was run by hand. The review of PR #360 added R1, R2, R5, R7, R8, R9, R11
+and the two S1 mutants. R10 (the pump's `aux.receipts.clear()` after `switch_source`, userpump.rs `migrate`) is EQUIVALENT and
+has no mutant: `switch_source` calls `cancel_stream`, which sets `discard_receipts`, and the next turn's `Obs` phase drops
+the receipts (`begin_stream` also clears them), so the explicit clear changes no observable state.
 """
 import json
 import re
@@ -17,6 +20,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 CH = "crates/kf-chan/src/"
 QR = "crates/kf-qemu/src/userread.rs"
+PUMP = "crates/kf-qemu/src/userpump.rs"
 CHAN_TESTS = ["cargo", "test", "-p", "kf-chan", "--lib", "--test", "user_turn_unit", "--test", "ring",
               "--no-fail-fast"]
 QEMU_TESTS = ["cargo", "test", "-p", "kf-qemu", "--lib", "userread", "--no-fail-fast"]
@@ -59,6 +63,25 @@ M = {
     "one_copy_exceeds_snapshot_bound": (CH + "user_chunk.rs",
         "Some((self.va.checked_add(self.next)?, left.min(self.maximum)))",
         "Some((self.va.checked_add(self.next)?, left.min(self.maximum.saturating_add(4))))", CHAN_TESTS),
+    # ---- the PR #360 review's own mutants (R1..R11); R10 is documented as equivalent below
+    "r1_per_copy_bound_above_staging_accepted": (CH + "user_chunk.rs",
+        "            || maximum > crate::user_storage::MAX_SOURCE_BYTES\n", "", CHAN_TESTS),
+    "r2_part_ceiling_plus_one": (CH + "user_chunk.rs",
+        "        if parts > u64::from(MAX_PARTS) {", "        if parts > u64::from(MAX_PARTS) + 1 {", CHAN_TESTS),
+    "r5_switch_source_keeps_the_stream": (CH + "user_turn.rs",
+        "        self.cancel_stream();\n        self.generation = generation;", "        self.generation = generation;", CHAN_TESTS),
+    "r7_retire_keeps_the_stream": (CH + "user_turn.rs",
+        "        self.cancel_stream();\n        self.lazy.invalidate(Invalidate::Retire);", "        self.lazy.invalidate(Invalidate::Retire);", CHAN_TESTS),
+    "r8_part_word_count_not_checked": (CH + "user_chunk.rs",
+        "            != Some(bytes)\n        {\n            return Err(Refusal::Bounds);", "            == Some(bytes)\n        {\n            return Err(Refusal::Bounds);", CHAN_TESTS),
+    "r9_receipt_piece_bound_dropped": (QR,
+        "            || r.pieces > PIECES\n", "", QEMU_TESTS),
+    "r11_restart_does_not_reserve": (PUMP,
+        "        Err(Failure::Retry) if restart_owed => Some(Need::Again),\n", "", QEMU_TESTS),
+    "s1_busy_publication_restarts_the_stream": (CH + "user_turn.rs",
+        "                    Phase::PubStream => io.retry_keeps_stream(),", "                    Phase::PubStream => false,", CHAN_TESTS),
+    "s1_busy_part_copy_restarts_the_stream": (CH + "user_turn.rs",
+        "                    Phase::Part => true,", "                    Phase::Part => false,", CHAN_TESTS),
     "guest_cursor_does_not_wrap": (CH + "user_turn.rs",
         "self.next_get = self.cursor.checked_add(1).ok_or(\"USER_RING_CURSOR\")? & (entries - 1);",
         "self.next_get = self.cursor.checked_add(1).ok_or(\"USER_RING_CURSOR\")?;", CHAN_TESTS),

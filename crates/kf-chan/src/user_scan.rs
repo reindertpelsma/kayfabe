@@ -267,10 +267,19 @@ impl Scan {
                     outcome = PartOutcome::Ended { at: absolute };
                     break;
                 }
+                // The shared decoder intentionally collapses old INC/NON_INC
+                // into sized-only Legacy. Never invent method/binding semantics.
+                // Canonical zero DMA_NOP still has no arguments and is accepted.
                 if h.form == MethodForm::Legacy && h.arg_words != 0 {
                     return Err(Refusal::Legacy);
                 }
                 if h.form == MethodForm::SubDeviceMask {
+                    // Public595.84 clc56f.h DMA_TERT_OP/DMA_SUBDEVICE_MASK;
+                    // open-gpu-doc9fdf5c4 dev_ram.ref SSDM/STORE/USE. These are
+                    // header-only controls and still execute while inactive.
+                    // (Checked in this port against Public580.159.04 clc56f.h:289-348, which defines
+                    // DMA_TERT_OP GRP0 SET/STORE/USE_SUB_DEV_MASK and the SUBDEVICE_MASK field; the 595.84 tree and
+                    // the open-gpu-doc dev_ram.ref were not available to re-check.)
                     let mask = next.subdevice.as_mut().ok_or(Refusal::SubDeviceMask(raw))?;
                     if raw & 0xf != 0 {
                         return Err(Refusal::SubDeviceMask(raw));
@@ -316,6 +325,10 @@ impl Scan {
             let consumed = n.checked_add(1).ok_or(Refusal::Header)?;
             next.pending = (consumed < h.arg_words).then_some((h, consumed));
             if let Some(call) = call {
+                // Public FIFO software methods cannot straddle GP segments.
+                // (Rationale carried over from the pre-port parser; not re-verified here. In a streamed descriptor
+                // the parts are ONE GP segment, so a packet open across a part cut is legal and `PartCursor` keeps
+                // its original header position.)
                 if h.arg_words != 1 || n != 0 {
                     return Err(Refusal::SoftwarePacket);
                 }

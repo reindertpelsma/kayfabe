@@ -2122,6 +2122,9 @@ fn fingerprint(cfg: Option<kf_chan::user_lazy::LazyConfig>) -> (u64, usize, usiz
                     "segments_streamed: ",
                     "stream_parts_max: ",
                     "window_entry_max_bytes: ",
+                    "stream_restarts: ",
+                    "stream_restarts_max: ",
+                    "stream_publish_retries: ",
                 ]
                 .iter()
                 .any(|prefix| field.starts_with(prefix))
@@ -2606,4 +2609,65 @@ fn lazy_a_slow_pbdma_and_a_small_private_ring_run_on_the_credit_floor_without_st
         low += relay.lazy.counts.obs_forced_low_credit;
     }
     assert!(low > 100, "the credit floor really forced looks: {low}");
+}
+
+// ------------------------------------------------------------------------------------------------
+// ★ 2026-11-12 (review S3 of PR #360): the oracles above never stream (every segment is 0-4 words under the 917,504-byte
+// bound). Offer the same relay a ONE-WORD per-copy bound: every two-or-more-word segment is classified in parts.
+
+fn run_limited(
+    stream: &[Ge],
+    sched: &[Sched],
+    mode: LifecycleMode,
+    entries: u32,
+    priv_entries: u32,
+    limit: u64,
+) -> (Out, Relay) {
+    let mut sim = Sim::new(entries, priv_entries, stream, sched.to_vec());
+    let mut relay = new_relay_mode(priv_entries, mode);
+    relay.scan_limit = limit;
+    drive(&mut sim, &mut relay, 400_000);
+    sim.out.dead |= relay.dead;
+    (sim.out, relay)
+}
+
+#[test]
+fn streaming_a_tiny_copy_bound_forwards_exactly_what_the_unbounded_relay_forwards() {
+    let mut streamed_segments = 0;
+    let mut parts_max = 0;
+    for seed in 0..300u64 {
+        let mut rng = Rng::new(0x57EA_0000 + seed);
+        let n = 5 + rng.below(80) as usize;
+        let straddles = rng.chance(60);
+        let stream = gen_stream(&mut rng, n, straddles, false);
+        let ring = 8u32 << rng.below(4);
+        let priv_entries = 8u32 << rng.below(3);
+        for mode in LifecycleMode::ALL {
+            let (whole, w) = run_stream_mode(&stream, &[], mode, ring, priv_entries);
+            let (parts, p) = run_limited(&stream, &[], mode, ring, priv_entries, 4);
+            assert_eq!(
+                parts.forwarded, whole.forwarded,
+                "seed {seed} {mode:?}: streaming changed what is forwarded"
+            );
+            assert_eq!(parts.dead, whole.dead, "seed {seed} {mode:?}");
+            assert_eq!(
+                (p.cursor, p.relayed),
+                (w.cursor, w.relayed),
+                "seed {seed} {mode:?}"
+            );
+            assert_eq!(p.scan, w.scan, "seed {seed} {mode:?}: parser state");
+            let c = p.life.counts();
+            streamed_segments += c.segments_streamed;
+            parts_max = parts_max.max(c.stream_parts_max);
+            assert_eq!(
+                c.stream_restarts, 0,
+                "seed {seed} {mode:?}: no retry in this harness"
+            );
+        }
+    }
+    assert!(
+        streamed_segments > 1_000,
+        "the variant must really stream: {streamed_segments}"
+    );
+    assert!(parts_max >= 2, "{parts_max}");
 }

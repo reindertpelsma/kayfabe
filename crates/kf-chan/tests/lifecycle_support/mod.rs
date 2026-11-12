@@ -313,6 +313,9 @@ struct EnvIo<'a, E: Env> {
     /// I8 bookkeeping of the turn: the cursor, the `GP_PUT` loaded (once), the entry loaded.
     cursor: u32,
     turn: &'a mut TurnIo,
+    /// The trusted per-copy bound (`Io::max_scan_bytes`): the production constant, or a tiny one that makes ordinary
+    /// segments stream in parts.
+    limit: u64,
 }
 
 /// What the stub ring / store remembers of the current turn (invariant I8).
@@ -340,7 +343,7 @@ impl<E: Env> Io for EnvIo<'_, E> {
         self.env.src_entries()
     }
     fn max_scan_bytes(&mut self) -> u64 {
-        kf_chan::user_storage::MAX_SOURCE_BYTES
+        self.limit
     }
     fn gp_put(&mut self) -> Turn<Option<u32>> {
         if self.turn.put.is_some() {
@@ -400,6 +403,40 @@ impl<E: Env> Io for EnvIo<'_, E> {
         }
         Ok((self.env.read_pb(entry), false))
     }
+    fn read_part(&mut self, entry: u64, seg: &GpSegment, _part: u8) -> Turn<(Vec<u32>, bool)> {
+        if self.turn.loaded != Some(entry) {
+            self.env.event(Ev::BeyondPut); // a pushbuffer only for the entry loaded in this turn
+        }
+        let Ok(Source::Segment(d)) = inspect_format(entry) else {
+            return Err("test: part of a non-segment".into());
+        };
+        let all = self.env.read_pb(entry);
+        let start = usize::try_from((seg.gpu_va - d.gpu_va) / 4).expect("offset");
+        let count = usize::try_from(seg.len_bytes / 4).expect("count");
+        // the guest may have changed the pushbuffer between parts: whatever is there NOW, padded with the poison word
+        let part = (start..start + count)
+            .map(|i| all.get(i).copied().unwrap_or(POISON))
+            .collect();
+        Ok((part, false))
+    }
+    fn publish_streamed(
+        &mut self,
+        fetch: &mut Fetch,
+        generation: u64,
+        guest_get: u32,
+        entry: u64,
+        _parts: u8,
+    ) -> Turn<()> {
+        fetch
+            .publish(Some((generation, guest_get)))
+            .map_err(str::to_owned)?;
+        self.env.publish(Pub::Guest {
+            tested: *self.validated,
+            stored: entry,
+            scanned: true,
+        });
+        Ok(())
+    }
     fn stage(&mut self, scan: &Scan, words: &[u32]) -> Turn<Staged> {
         let mut next = scan.clone();
         match next.segment(words, sw) {
@@ -451,7 +488,7 @@ impl<E: Env> Io for EnvIo<'_, E> {
             turn::Ev::PutBound => self.env.event(Ev::PutBound),
             turn::Ev::EntryRefused => self.env.event(Ev::EntryRefused),
             turn::Ev::ScanRefused => self.env.event(Ev::ScanRefused),
-            turn::Ev::ScanBudget | turn::Ev::StagedSpanBudget => {}
+            turn::Ev::StagedSpanBudget => {}
             turn::Ev::CarriedUngated { .. } => self.env.event(Ev::CarriedUngated),
             turn::Ev::Retry { .. } => self.env.event(Ev::Retry),
             turn::Ev::GatePublished | turn::Ev::GateProceeded | turn::Ev::CreditWait => {}
@@ -469,6 +506,8 @@ pub struct Relay {
     validated: u64,
     turn_io: TurnIo,
     pub cursor_after_switch: Cursor,
+    /// The per-copy bound the relay is offered; a small value makes ordinary segments stream in parts.
+    pub scan_limit: u64,
 }
 
 impl Deref for Relay {
@@ -500,6 +539,7 @@ impl Relay {
             validated: 0,
             turn_io: TurnIo::default(),
             cursor_after_switch: Cursor::Zero,
+            scan_limit: kf_chan::user_storage::MAX_SOURCE_BYTES,
         }
     }
 
@@ -554,6 +594,7 @@ impl Relay {
         validated: &'a mut u64,
         cursor: u32,
         turn: &'a mut TurnIo,
+        limit: u64,
     ) -> EnvIo<'a, E> {
         EnvIo {
             env,
@@ -561,6 +602,7 @@ impl Relay {
             validated,
             cursor,
             turn,
+            limit,
         }
     }
 
@@ -581,6 +623,7 @@ impl Relay {
                         &mut self.validated,
                         self.core.cursor,
                         &mut self.turn_io,
+                        self.scan_limit,
                     );
                     self.core.step(&mut io)
                 };
@@ -615,6 +658,7 @@ impl Relay {
                         &mut self.validated,
                         self.core.cursor,
                         &mut self.turn_io,
+                        self.scan_limit,
                     );
                     let _ = self.core.credit_need(&mut io);
                     self.sub = Sub::Core;
@@ -650,6 +694,7 @@ impl Relay {
                         &mut self.validated,
                         self.core.cursor,
                         &mut self.turn_io,
+                        self.scan_limit,
                     );
                     let _ = self.core.credit_need(&mut io);
                     self.sub = Sub::Core;

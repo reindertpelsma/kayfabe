@@ -106,8 +106,6 @@ pub enum Ev {
     PutBound,
     /// Hardware-format validation refused the loaded value.
     EntryRefused,
-    /// Scan/Window would require a snapshot above the trusted per-copy bound.
-    ScanBudget,
     /// A trigger requires a whole patched span above staging.
     StagedSpanBudget,
     /// The scan refused a segment for good.
@@ -248,20 +246,24 @@ pub trait Io {
     fn begin_stream(&mut self) -> Turn<()> {
         Ok(())
     }
-    /// Copy exactly one bounded part and retain its source receipt.
-    fn read_part(&mut self, entry: u64, seg: &GpSegment, _part: u8) -> Turn<(Vec<u32>, bool)> {
-        self.read_pb(entry, seg)
-    }
-    /// Re-admit all source receipts and publish the original word once.
+    /// Copy exactly one bounded part and retain its source receipt. REQUIRED (no default): an implementation that
+    /// forgot it would read a part without keeping the receipt that publication re-admits.
+    fn read_part(&mut self, entry: u64, seg: &GpSegment, part: u8) -> Turn<(Vec<u32>, bool)>;
+    /// Re-admit all source receipts and publish the original word once. REQUIRED (no default): a default that fell
+    /// back to `publish_entry` would publish a streamed word without re-admitting its parts.
     fn publish_streamed(
         &mut self,
         fetch: &mut Fetch,
         generation: u64,
         guest_get: u32,
         entry: u64,
-        _parts: u8,
-    ) -> Turn<()> {
-        self.publish_entry(PubKind::Stream, fetch, generation, guest_get, entry)
+        parts: u8,
+    ) -> Turn<()>;
+    /// After `publish_streamed` returned `Retry`: the cause was only a busy lock or walk (the receipts are as valid as
+    /// before), not a changed source or a changed software object. The relay then keeps the stream and retries ONLY the
+    /// publication; otherwise the stream restarts from part 0.
+    fn retry_keeps_stream(&self) -> bool {
+        false
     }
     /// Drop owned source receipts on completion, restart or teardown.
     fn drop_receipts(&mut self) {}
@@ -365,6 +367,13 @@ pub struct Relay {
     stream_planned: bool,
     stream_maximum: u64,
     discard_receipts: bool,
+    /// A stream restart (not a kept retry) ended this turn: the owner must re-serve at once (nobody holds a lock to
+    /// wake it). Reset by `claim`.
+    pub restart_owed: bool,
+    /// The retry that ended this turn kept the stream (a busy part copy or publication); reset by `claim`.
+    retry_kept: bool,
+    /// Restarts of the segment now streaming (reset at publication).
+    stream_restart_run: u32,
 }
 
 impl Relay {
@@ -416,6 +425,9 @@ impl Relay {
             stream_planned: false,
             stream_maximum: 0,
             discard_receipts: false,
+            restart_owed: false,
+            retry_kept: false,
+            stream_restart_run: 0,
         })
     }
 
@@ -477,6 +489,8 @@ impl Relay {
     pub fn claim(&mut self) {
         self.need = Need::Idle;
         self.again = false;
+        self.restart_owed = false;
+        self.retry_kept = false;
         self.scan_failed = false;
         self.published = None;
         self.phase = Phase::Obs;
@@ -540,6 +554,12 @@ impl Relay {
         had
     }
 
+    /// The retry that ended the turn kept the stream and its receipts (the owner must not drop them).
+    #[must_use]
+    pub fn retry_kept_stream(&self) -> bool {
+        self.retry_kept
+    }
+
     /// No turn is running.
     #[must_use]
     pub fn idle(&self) -> bool {
@@ -572,8 +592,27 @@ impl Relay {
     /// # Errors
     /// A refusal or a retry request from the I/O or from the entry's own validation.
     pub fn step(&mut self, io: &mut impl Io) -> Turn<Step> {
+        let phase = self.phase;
         let r = self.step_inner(io);
         if let Err(e) = &r {
+            // A busy part copy, or a publication that was only busy, keeps the stream and its receipts: the parts
+            // already copied are re-admitted at publication whatever happens, so keeping them is as safe as copying
+            // again, and a ten-part segment does not need eleven clean turns in a row.
+            let keep = matches!(e, Fail::Retry)
+                && self.stream.is_some()
+                && match phase {
+                    Phase::Part => true,
+                    Phase::PubStream => io.retry_keeps_stream(),
+                    _ => false,
+                };
+            if keep {
+                self.retry_kept = true;
+                if phase == Phase::PubStream {
+                    self.life.stream_publish_retried();
+                }
+                self.phase = Phase::Idle;
+                return r;
+            }
             let restart = self.cancel_stream();
             if self.discard_receipts {
                 io.drop_receipts();
@@ -581,6 +620,9 @@ impl Relay {
             }
             self.phase = Phase::Idle;
             if matches!(e, Fail::Retry) && restart {
+                self.stream_restart_run = self.stream_restart_run.saturating_add(1);
+                self.life.stream_restarted(self.stream_restart_run);
+                self.restart_owed = true;
                 self.again = true;
                 self.set_need(Need::Again);
             }
@@ -981,7 +1023,7 @@ impl Relay {
             let begun = Stream::begin(desc, self.raw, &self.scan, self.stream_maximum);
             self.stream = Some(begun.map_err(|e| {
                 format!(
-                    "USER_RING_STREAM {e:?} len={} max={} mode={:?} entry={:#018x} cursor={:#x} put={:#x} live={} post_switch={}",
+                    "USER_RING_STREAM {e:?} len={} max={} mode={:?} entry={:#018x} cursor={:#x} put={:#x} live={} post_switch={} stream_restarts_total={}",
                     desc.len_bytes,
                     self.stream_maximum,
                     self.life.mode(),
@@ -989,7 +1031,8 @@ impl Relay {
                     self.cursor,
                     self.put,
                     io.registry_live(),
-                    self.life.post_switch_remaining()
+                    self.life.post_switch_remaining(),
+                    self.life.counts().stream_restarts
                 )
             })?);
             io.begin_stream()?;
@@ -1031,8 +1074,8 @@ impl Relay {
                     _ => 0,
                 };
                 let (live, post_switch) = (io.registry_live(), self.life.post_switch_remaining());
-                Err(format!("USER_RING_STAGED_SPAN_BUDGET len={len} trigger_at={at_word} max={} mode={:?} entry={:#018x} cursor={:#x} put={:#x} live={live} post_switch={post_switch}",
-                    self.stream_maximum, self.life.mode(), self.raw, self.cursor, self.put).into())
+                Err(format!("USER_RING_STAGED_SPAN_BUDGET len={len} trigger_at={at_word} max={} mode={:?} entry={:#018x} cursor={:#x} put={:#x} live={live} post_switch={post_switch} stream_restarts={} stream_restarts_total={}",
+                    self.stream_maximum, self.life.mode(), self.raw, self.cursor, self.put, self.stream_restart_run, self.life.counts().stream_restarts).into())
             }
             Err(ChunkRefusal::Scan(e)) => {
                 let was_retrying = self.grace.retrying();
@@ -1047,6 +1090,8 @@ impl Relay {
                         cursor: self.cursor,
                     });
                     self.cancel_stream();
+                    self.stream_restart_run = self.stream_restart_run.saturating_add(1);
+                    self.life.stream_restarted(self.stream_restart_run);
                     io.drop_receipts();
                     self.discard_receipts = false;
                     self.again = true;
@@ -1082,6 +1127,7 @@ impl Relay {
         )?;
         let stream = self.stream.take().ok_or("USER_RING_STREAM_ABSENT")?;
         self.life.segment_streamed(stream.parts());
+        self.stream_restart_run = 0;
         self.scan = stream.into_scan();
         self.life.segment_scanned(self.scan.carried().is_some());
         let cursor = self.cursor;

@@ -133,13 +133,14 @@ pub(crate) fn admit_all<T>(
         let r = &receipt.0;
         match resolve(&guard, r.va, r.end, r.pieces) {
             Ok(spans) if spans == r.spans => {}
-            Ok(_) | Err(Refusal::Missing(_) | Refusal::Bounds) => return Err(Refusal::Changed),
+            // the same classes as `Snapshot::admit`: a different translation is `Changed`, a vanished one stays final
+            Ok(_) => return Err(Refusal::Changed),
             Err(e) => return Err(e),
         }
     }
     let _blocks = try_read(&first.ram.blocks)?;
     if first.generation == 0 || first.ram.generation.load(Ordering::Relaxed) != first.generation {
-        return Err(Refusal::Changed);
+        return Err(Refusal::Topology);
     }
     Ok(publish())
 }
@@ -1025,6 +1026,34 @@ mod tests {
             .collect()
     }
 
+    /// R9 (review of PR #360): a receipt whose span or piece count exceeds the traversal bound is refused at
+    /// publication, whatever the creation path allowed.
+    fn over_the_bound(which: usize, pieces: bool) {
+        let (ram, _, rows, log, generation) = fixture();
+        let mut receipts = stream_receipts(&ram, &rows, &log, generation);
+        if pieces {
+            receipts[which].0.pieces = PIECES + 1;
+        } else {
+            let one = receipts[which].0.spans[0].clone();
+            receipts[which].0.spans = vec![one; PIECES + 1];
+        }
+        assert_eq!(
+            admit_all(&receipts, || panic!("over the bound")),
+            Err(Refusal::Bounds)
+        );
+    }
+    #[test]
+    fn stream_receipts_over_the_piece_bound_on_the_first_part_forbid_publication() {
+        over_the_bound(0, true);
+    }
+    #[test]
+    fn stream_receipts_over_the_piece_bound_on_a_later_part_forbid_publication() {
+        over_the_bound(2, true);
+    }
+    #[test]
+    fn stream_receipts_over_the_span_bound_forbid_publication() {
+        over_the_bound(1, false);
+    }
     #[test]
     fn stream_receipts_first_replaced_part_cannot_reserve_credit() {
         let (ram, _, rows, log, generation) = fixture();
@@ -1043,7 +1072,10 @@ mod tests {
         let receipts = stream_receipts(&ram, &rows, &log, generation);
         let mut writes = 0;
         rows.write().unwrap().remove(&0x11000);
-        assert_eq!(admit_all(&receipts, || writes += 1), Err(Refusal::Changed));
+        assert!(matches!(
+            admit_all(&receipts, || writes += 1),
+            Err(Refusal::Missing(_))
+        ));
         assert_eq!(writes, 0);
     }
     #[test]
@@ -1102,7 +1134,7 @@ mod tests {
         ram.add(block);
         assert_eq!(
             admit_all(&receipts, || panic!("revoked topology")),
-            Err(Refusal::Changed)
+            Err(Refusal::Topology)
         );
     }
     #[test]
@@ -1112,7 +1144,7 @@ mod tests {
         ram.generation.fetch_add(1, Ordering::Release);
         assert_eq!(
             admit_all(&receipts, || panic!("late revoke")),
-            Err(Refusal::Changed)
+            Err(Refusal::Topology)
         );
     }
     #[test]

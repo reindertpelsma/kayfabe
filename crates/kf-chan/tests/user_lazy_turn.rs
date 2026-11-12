@@ -159,6 +159,19 @@ impl Io for Mock {
             }
         }
     }
+    fn read_part(&mut self, entry: u64, seg: &GpSegment, _part: u8) -> Turn<(Vec<u32>, bool)> {
+        self.read_pb(entry, seg)
+    }
+    fn publish_streamed(
+        &mut self,
+        fetch: &mut Fetch,
+        generation: u64,
+        guest_get: u32,
+        entry: u64,
+        _parts: u8,
+    ) -> Turn<()> {
+        self.publish_entry(PubKind::Stream, fetch, generation, guest_get, entry)
+    }
     fn publish_entry(
         &mut self,
         kind: PubKind,
