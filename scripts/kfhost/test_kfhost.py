@@ -16,7 +16,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from kfhost import cli, config, fetch, jobs, probes, profile  # noqa: E402
+from kfhost import cli, config, fetch, jobs, probes, profile, seeder  # noqa: E402
 from kfhost.daemon import CMD_MAX_BYTES, Daemon  # noqa: E402
 from kfhost.fetch import FetchError  # noqa: E402
 from kfhost.transport import Closed, Connection, Transport  # noqa: E402
@@ -80,6 +80,27 @@ class FakeTransport(Transport):
         if isinstance(item, Closed):
             raise item
         return item
+
+
+class FakeSys:
+    """Fake command runner for prepare_seeder: records argv, never touches the system."""
+
+    def __init__(self, nginx="nginx version: nginx/1.24", fail=(), after=None, kfseed=0):
+        self.nginx, self.fail, self.after, self.kfseed, self.calls = nginx, fail, after, kfseed, []
+
+    def __call__(self, argv):
+        self.calls.append(list(argv))
+        if argv[0] == "nginx":
+            return (0, self.nginx) if self.nginx else (None, "")
+        if argv[:3] == ["python3", "-m", "kfseed"]:
+            return self.kfseed, "drift: 1.24 -> 1.26" if self.kfseed else "ok"
+        if argv[0] == "apt-get":
+            if argv[1] in self.fail:
+                return 100, "E: failed"
+            if self.after is not None:
+                self.nginx = self.after
+            return 0, ""
+        return None, ""
 
 
 class FakeProbes(probes.Probes):
@@ -170,7 +191,8 @@ class Base(unittest.TestCase):
         conn = FakeConn(script, self.clock)
         tr = FakeTransport([conn] if conns is None else conns, self.clock)
         d = Daemon(cfg, tr, self.factory, prober=kw.pop("prober", FakeProbes()), clock=self.clock,
-                   sleep=lambda s: setattr(self.clock, "t", self.clock.t + s), seed_timeout=0.3, **kw)
+                   sleep=lambda s: setattr(self.clock, "t", self.clock.t + s), seed_timeout=0.3,
+                   seeder_run=kw.pop("seeder_run", FakeSys()), euid=kw.pop("euid", 0), **kw)
         return d, conn, tr
 
     def run_one(self, d):
@@ -465,6 +487,67 @@ class CmdTests(Base):
         self.assertIn("3", "".join(m["data"] for m in conn.sent if m["type"] == "cmd_output"))
 
 
+class SeederTests(unittest.TestCase):
+    which = staticmethod(lambda n: "/usr/bin/" + n)
+
+    def prep(self, profile, euid, fake):
+        return seeder.prepare_seeder(profile, euid, run=fake, which=self.which)
+
+    def apt(self, fake):
+        return [c for c in fake.calls if c[0] == "apt-get"]
+
+    def test_owned_root_upgrades_in_order_and_logs_versions(self):
+        f = FakeSys(after="nginx version: nginx/1.26")
+        r = self.prep("owned", 0, f)
+        self.assertEqual(self.apt(f), [["apt-get", "update"], ["apt-get", "install", "-y", "--only-upgrade", "nginx-light"]])
+        text = "\n".join(r["log"])
+        self.assertIn("1.24", text)
+        self.assertIn("1.26", text)
+        self.assertTrue(r["available"])
+
+    def test_owned_root_installs_when_missing(self):
+        f = FakeSys(nginx=None)
+        orig = f.__call__
+
+        def run(argv):
+            if argv[:2] == ["apt-get", "install"]:
+                f.nginx = "nginx version: nginx/1.26"
+            return orig(argv)
+
+        r = seeder.prepare_seeder("owned", 0, run=run, which=self.which)
+        self.assertIn(["apt-get", "install", "-y", "nginx-light"], f.calls)
+        self.assertTrue(r["available"])
+
+    def test_owned_nonroot_never_runs_apt_and_warns_on_drift(self):
+        f = FakeSys(kfseed=1)
+        r = self.prep("owned", 1000, f)
+        self.assertEqual(self.apt(f), [])
+        self.assertIn(["python3", "-m", "kfseed", "check"], f.calls)
+        self.assertTrue(any("drifted" in w for w in r["warnings"]))
+        self.assertTrue(r["available"])
+
+    def test_container_and_borrowed_never_run_apt_even_as_root(self):
+        for prof in ("container", "borrowed"):
+            f = FakeSys(kfseed=1)
+            r = self.prep(prof, 0, f)
+            self.assertEqual(self.apt(f), [], prof)
+            self.assertTrue(r["warnings"])
+
+    def test_missing_nginx_unavailable_where_no_changes_allowed(self):
+        for prof, euid in (("borrowed", 0), ("container", 0), ("owned", 1000)):
+            r = self.prep(prof, euid, FakeSys(nginx=None))
+            self.assertFalse(r["available"], prof)
+
+    def test_apt_failure_with_nginx_present_still_available_with_warning(self):
+        r = self.prep("owned", 0, FakeSys(fail=("update",)))
+        self.assertTrue(r["available"])
+        self.assertIn("nginx update failed", r["warnings"])
+
+    def test_apt_failure_with_nginx_missing_unavailable(self):
+        r = self.prep("owned", 0, FakeSys(nginx=None, fail=("update",)))
+        self.assertFalse(r["available"])
+
+
 class SeedTests(Base):
     def seed(self, reply):
         results = []
@@ -506,6 +589,29 @@ class SeedTests(Base):
         d, conn, results = self.seed(None)
         self.assertFalse(results[0])
         self.assertFalse(d.seed_ok)
+
+    def test_missing_nginx_makes_seeding_unavailable_and_job_continues(self):
+        FakeRunner.gate = None
+        results, logs = [], []
+        art = {"name": "a", "sha256": "0" * 64, "size": 1}
+        d, conn, _ = self.serve([welcome(), None, Closed(1006)], seeder_run=FakeSys(nginx=None, fail=("update", "install")))
+        d.profile = "owned"
+        d.run_forever(max_sessions=1)
+        d.conn = type("C", (), {"send": lambda s, t: None})()
+        results.append(d.seed_register("o1", art, "/x", log=logs.append))
+        results.append(d.seed_register("o1", art, "/x", log=logs.append))
+        self.assertEqual(results, [False, False])
+        self.assertFalse(d.seed_ok)
+        self.assertTrue(any("unavailable" in l for l in logs))
+        self.assertEqual(len([m for m in conn.sent if m["type"] == "seed_register"]), 0)
+
+    def test_drift_warning_in_seed_register_frame(self):
+        script = [welcome("container"), lambda c: threading.Thread(target=lambda: d.seed_register("o1", {"name": "a", "sha256": "0" * 64, "size": 1}, "/x")).start(),
+                  lambda c: self.wait_sent(c), {"type": "seed_ack", "ok": True}, None, None, Closed(1006)]
+        d, conn, _ = self.serve(script, seeder_run=FakeSys(kfseed=1), ceiling="container")
+        self.run_one(d)
+        reg = [m for m in conn.sent if m["type"] == "seed_register"][0]
+        self.assertTrue(any("drifted" in w for w in reg["warnings"]))
 
     def test_new_session_re_enables(self):
         d, _, _ = self.serve([welcome(), Closed(4409)])

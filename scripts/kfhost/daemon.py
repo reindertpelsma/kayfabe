@@ -11,6 +11,7 @@ from . import VERSION, probes
 from .config import ws_url
 from .fetch import FetchError
 from .jobs import JobContext
+from .seeder import prepare_seeder
 from .profile import Refused, allows_cmd, check_offer, effective
 from .transport import Closed
 
@@ -22,7 +23,7 @@ EXIT_OK, EXIT_STOP = 0, 3
 
 class Daemon:
     def __init__(self, cfg, transport, runner_factory, prober=None, clock=time.monotonic, sleep=time.sleep,
-                 rng=None, seed_timeout=15.0):
+                 rng=None, seed_timeout=15.0, seeder_run=None, euid=None):
         self.cfg, self.transport, self.runner_factory = cfg, transport, runner_factory
         self.prober = prober or probes.Probes()
         self.clock, self.sleep, self.rng = clock, sleep, rng or random.Random()
@@ -33,6 +34,9 @@ class Daemon:
         self.conn = None
         self.active = None  # {"offer_id","run_id","runner","thread"}
         self.cmd_thread = None
+        self.seeder_run = seeder_run
+        self.euid = os.geteuid() if euid is None else euid
+        self.seeder = None
         self.seed_ok = True  # False after a refused/failed seed_register: seeding unavailable this session
         self._seed_event, self._seed_reply = threading.Event(), None
         self.threads = []
@@ -119,6 +123,7 @@ class Daemon:
         with self.lock:
             self.conn = conn
         self.seed_ok = True
+        self.seeder = None
         ok, self.caps = self.hello()
         next_beat = self.clock() + self.heartbeat_s
         while not self.stopping:
@@ -197,22 +202,31 @@ class Daemon:
                 self.send({"type": "nack", "offer_id": offer["offer_id"], "reason": ("fetch: %s" % error)[:200]})
                 return
             self.send({"type": "ack", "offer_id": offer["offer_id"]})
-            ctx = JobContext(offer, profile, self.cfg, self.seed_register_for(offer), lambda: act["cancelled"])
+            ctx = JobContext(offer, profile, self.cfg, None, lambda: act["cancelled"])
+            ctx.seed = lambda artifact, path: self.seed_register(offer["offer_id"], artifact, path, log=getattr(ctx, "log", None))
             runner.run(ctx, checkout)
         finally:
             self.active = None
 
     # ---- seeding ----
-    def seed_register_for(self, offer):
-        return lambda artifact, path: self.seed_register(offer["offer_id"], artifact, path)
-
-    def seed_register(self, offer_id, artifact, path):
-        """Send seed_register, wait for seed_ack. Anything but ok:true disables seeding for the session."""
+    def seed_register(self, offer_id, artifact, path, log=None):
+        """prepare_seeder once per session, send seed_register (with warnings), wait for seed_ack.
+        Anything but ok:true, or an unavailable nginx, disables seeding for the session."""
+        if not self.seed_ok:
+            return False
+        if self.seeder is None:
+            kw = {"run": self.seeder_run} if self.seeder_run else {}
+            self.seeder = prepare_seeder(self.profile, self.euid, **kw)
+            for line in self.seeder["log"] + ["seeder warning: " + w for w in self.seeder["warnings"]]:
+                (log or (lambda _t: None))(line)
+            if not self.seeder["available"]:
+                self.seed_ok = False
         if not self.seed_ok:
             return False
         self._seed_event.clear()
         self._seed_reply = None
-        if not self.send({"type": "seed_register", "offer_id": offer_id, "artifact": artifact, "path": path}):
+        if not self.send({"type": "seed_register", "offer_id": offer_id, "artifact": artifact, "path": path,
+                          "warnings": self.seeder["warnings"]}):
             self.seed_ok = False
             return False
         if not self._seed_event.wait(self.seed_timeout):

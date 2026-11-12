@@ -123,6 +123,7 @@ class JobRunner:
     def run(self, ctx, checkout):
         rep = self.reporting(self.cfg, ctx.offer)
         rep.progress("Custom host %s accepted the run" % self.cfg["box_id"])
+        ctx.log = lambda text: rep.feed((text + "\n").encode())
         try:
             rc = self.execute(ctx, checkout, rep)
         finally:
