@@ -228,6 +228,16 @@ impl TranslatedRing {
         }
     }
 
+    /// ★ 2026-10-19: the CE class this guest-KERNEL copy-engine ring's own host channel holds
+    /// ([`crate::tmode::TState::ce_object`]); `0` (the default) keeps the strict `NoCeObject`
+    /// refusal. Derived by the caller from the host ring, never from the guest. No effect on a
+    /// ring that is not in T-mode.
+    pub fn set_ce_object(&mut self, class: u32) {
+        if let Some((st, _)) = self.tmode.as_deref_mut() {
+            st.ce_object = class;
+        }
+    }
+
     /// `(GR-tier methods re-authored, inert software-subchannel binds)` so far (T-mode only).
     #[must_use]
     pub fn gr_counts(&self) -> (u64, u64) {

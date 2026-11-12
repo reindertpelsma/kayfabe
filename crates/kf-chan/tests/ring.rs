@@ -621,3 +621,173 @@ fn a_refused_unmap_does_not_leave_the_other_maps_live() {
     assert_eq!(r, Err(0x10), "the first refusal");
     assert_eq!(unmap_every::<u64>(&[1, 2], |_| Ok(())), Ok(()));
 }
+
+/// ★ 2026-10-19 (Windows run 3017, token 0x806): a kernel copy-engine ring that has been idle since
+/// birth sees GP entry 34 carry `SET_SEMAPHORE_A/B/PAYLOAD` + `LAUNCH_DMA` on subchannel 4 with no
+/// `SET_OBJECT` anywhere before it. Without the ring's own CE class the ring is refused at gp 34
+/// (`NoCeObject`; the device then declares the kernel channel DEAD and poisoned). With it — the
+/// class the ring's host channel holds from birth — the entry is handed out as work and retires.
+fn run3017_ring(mem: &mut Mem) {
+    for gp in 0..34 {
+        mem.entry(gp, control(0, 0)); // NOP control entries: consumed, still retire
+    }
+    let mut w = m(4, 0x240, &[0x1, 0x2023_3060, 0x476c]);
+    w.extend(m(4, ce::LAUNCH_DMA, &[0x4c]));
+    seg(mem, 34, PB, &w);
+}
+
+#[test]
+fn a_kernel_ce_ring_with_no_set_object_is_refused_at_gp_34_without_its_class() {
+    let mut mem = Mem::default();
+    run3017_ring(&mut mem);
+    let mut r = TranslatedRing::new_tmode(GPFIFO, 64, 0);
+    let end = loop {
+        match r.next(35, &mut mem, is_ce, &W) {
+            Ok(Next::Idle) => panic!("ring went idle without work"),
+            Ok(_) => {}
+            Err(e) => break e,
+        }
+    };
+    assert_eq!(
+        end,
+        RingRefusal::Rewrite {
+            gp: 34,
+            why: Refusal::NoCeObject {
+                subch: 4,
+                method: 0x240
+            }
+        }
+    );
+}
+
+#[test]
+fn a_kernel_ce_ring_with_no_set_object_runs_gp_34_with_its_own_ce_class() {
+    let mut mem = Mem::default();
+    run3017_ring(&mut mem);
+    let mut r = TranslatedRing::new_tmode(GPFIFO, 64, 0);
+    r.set_ce_object(CE_CLASS);
+    let mut binds = 0;
+    let mut last_retire = None;
+    loop {
+        match r.next(35, &mut mem, is_ce, &W).expect("no refusal") {
+            Next::Idle => break,
+            Next::Bind { ir, retires } => {
+                binds += ir.len();
+                last_retire = retires.or(last_retire);
+            }
+            Next::Submit { retires, .. } => last_retire = retires.or(last_retire),
+            other => panic!("{other:?}"),
+        }
+    }
+    assert_eq!(binds, 1, "one launch");
+    assert_eq!(last_retire, Some(35), "entry 34 retires");
+}
+
+/// A ring built without the configuration (every user-tier or unconfigured ring) never gains it,
+/// whatever `set_gr` was last given for another field.
+#[test]
+fn an_unconfigured_ring_keeps_refusing_after_set_gr_with_other_fields() {
+    let mut mem = Mem::default();
+    run3017_ring(&mut mem);
+    let mut r = TranslatedRing::new_tmode(GPFIFO, 64, 0);
+    r.set_gr(kf_chan::tmode::GrConfig {
+        inert_sw_subch: true,
+        deferred_api: true,
+        ..Default::default()
+    });
+    r.set_ce_object(0);
+    let end = loop {
+        match r.next(35, &mut mem, is_ce, &W) {
+            Ok(Next::Idle) => panic!("idle"),
+            Ok(_) => {}
+            Err(e) => break e,
+        }
+    };
+    assert!(matches!(
+        end,
+        RingRefusal::Rewrite {
+            gp: 34,
+            why: Refusal::NoCeObject { .. }
+        }
+    ));
+}
+
+/// With the ring's CE class set, a method the CE table does not name is still refused at its
+/// entry (the leniency removes the missing-object refusal only), and the refusal is by name.
+#[test]
+fn a_kernel_ce_ring_with_its_class_still_refuses_what_the_table_does_not_name() {
+    let mut mem = Mem::default();
+    for gp in 0..3 {
+        mem.entry(gp, control(0, 0));
+    }
+    seg(&mut mem, 3, PB, &m(4, 0x104, &[0]));
+    let mut r = TranslatedRing::new_tmode(GPFIFO, 64, 0);
+    r.set_ce_object(CE_CLASS);
+    let end = loop {
+        match r.next(4, &mut mem, is_ce, &W) {
+            Ok(Next::Idle) => panic!("idle"),
+            Ok(_) => {}
+            Err(e) => break e,
+        }
+    };
+    assert_eq!(
+        end,
+        RingRefusal::Rewrite {
+            gp: 3,
+            why: Refusal::Unclassified {
+                subch: 4,
+                method: 0x104
+            }
+        }
+    );
+}
+
+/// ★ 2026-11-12 (energy-04, PC): the same ring shape as run 3017 with the energy-04 words
+/// (semaphore VA `0x1_2023_b060`, payload `0x244a9`). A kernel CE ring that holds its host CE
+/// class retires GP 34 as one launch; without the class it is refused (killers: the class
+/// plumbing, and the ring-level refusal).
+fn energy04_ring(mem: &mut Mem) {
+    for gp in 0..34 {
+        mem.entry(gp, control(0, 0));
+    }
+    let mut w = m(4, 0x240, &[0x1, 0x2023_b060, 0x2_44a9]);
+    w.extend(m(4, ce::LAUNCH_DMA, &[0x4c]));
+    seg(mem, 34, PB, &w);
+}
+
+#[test]
+fn energy04_gp_34_retires_on_a_kernel_ce_ring_and_is_refused_on_any_other() {
+    let run = |class: u32| {
+        let mut mem = Mem::default();
+        energy04_ring(&mut mem);
+        let mut r = TranslatedRing::new_tmode(GPFIFO, 64, 0);
+        r.set_ce_object(class);
+        let (mut binds, mut last) = (0, None);
+        loop {
+            match r.next(35, &mut mem, is_ce, &W) {
+                Ok(Next::Idle) => return Ok((binds, last)),
+                Ok(Next::Bind { ir, retires }) => {
+                    binds += ir.len();
+                    last = retires.or(last);
+                }
+                Ok(Next::Submit { retires, .. }) => last = retires.or(last),
+                Ok(other) => panic!("{other:?}"),
+                Err(e) => return Err(e),
+            }
+        }
+    };
+    assert_eq!(run(CE_CLASS), Ok((1, Some(35))));
+    for class in [0, 0xC56F, 0xC9B0] {
+        assert_eq!(
+            run(class),
+            Err(RingRefusal::Rewrite {
+                gp: 34,
+                why: Refusal::NoCeObject {
+                    subch: 4,
+                    method: 0x240
+                }
+            }),
+            "class {class:#x}"
+        );
+    }
+}

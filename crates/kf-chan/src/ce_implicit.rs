@@ -1,0 +1,98 @@
+// SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
+//! ★ 2026-10-19 — WHICH rings get the CE-implicit binding ([`crate::tmode::TState::ce_object`]).
+//!
+//! The decision is a pure function of facts the HOST holds, so the birth route cannot be talked
+//! into it by a guest: the channel is guest-KERNEL work (facts guest userspace cannot produce:
+//! `kernel_client && !user_work`), its engine is a copy engine, and the ring's own host channel
+//! holds a copy-engine object of a class the T-mode CE table knows. Anything else gets `0` (the
+//! strict `NoCeObject` behaviour).
+
+use crate::ttables::Tier;
+
+/// The CE class a Translated ring decodes copy-engine methods against when the guest sends no
+/// `SET_OBJECT`, or `0` for none.
+///
+/// - `kernel_work` — the channel is guest-KERNEL work, not a user-tier (Passthrough) channel;
+/// - `copy_engine` — the guest channel's engine is a copy engine;
+/// - `host_ce` — the class of the CE object the ring's host channel holds
+///   ([`crate::host::HostRing::ce_object_class`]), `None` on a graphics or video ring.
+#[must_use]
+pub fn implicit_ce_class(kernel_work: bool, copy_engine: bool, host_ce: Option<u32>) -> u32 {
+    match host_ce {
+        Some(class) if kernel_work && copy_engine && Tier::of_ce_class(class).is_some() => class,
+        _ => 0,
+    }
+}
+
+/// The CE class a ring's host channel holds a CE object of, or `None` for a graphics ring
+/// (`has_gr_context`) or a video ring (`has_video_context`). [`crate::host::HostRing::ce_object_class`]
+/// is this over the ring's own fields.
+#[must_use]
+pub fn host_ce_object_class(
+    has_gr_context: bool,
+    has_video_context: bool,
+    ce_class: u32,
+) -> Option<u32> {
+    (!has_gr_context && !has_video_context).then_some(ce_class)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::implicit_ce_class;
+
+    #[test]
+    fn a_graphics_or_video_host_ring_reports_no_ce_object() {
+        use super::host_ce_object_class;
+        assert_eq!(host_ce_object_class(true, false, 0xC7B5), None);
+        assert_eq!(host_ce_object_class(false, true, 0xC7B5), None);
+        assert_eq!(host_ce_object_class(true, true, 0xC7B5), None);
+        assert_eq!(host_ce_object_class(false, false, 0xC7B5), Some(0xC7B5));
+    }
+
+    #[test]
+    fn a_kernel_copy_engine_ring_gets_its_host_ce_class() {
+        for class in [0xC5B5, 0xC6B5, 0xC7B5, 0xC8B5, 0xC9B5, 0xCAB5] {
+            assert_eq!(implicit_ce_class(true, true, Some(class)), class);
+        }
+    }
+
+    #[test]
+    fn a_user_tier_channel_never_gains_it() {
+        assert_eq!(implicit_ce_class(false, true, Some(0xC7B5)), 0);
+    }
+
+    #[test]
+    fn a_non_copy_engine_channel_never_gains_it() {
+        assert_eq!(implicit_ce_class(true, false, Some(0xC7B5)), 0);
+        assert_eq!(implicit_ce_class(false, false, Some(0xC7B5)), 0);
+    }
+
+    #[test]
+    fn a_ring_with_no_host_ce_object_gets_nothing() {
+        assert_eq!(implicit_ce_class(true, true, None), 0);
+        assert_eq!(implicit_ce_class(true, true, Some(0)), 0);
+    }
+
+    #[test]
+    fn a_video_or_graphics_class_gets_nothing() {
+        for class in [0xC9B0, 0xC7B0, 0xC997, 0xC7C0, 0x5080, 0xC56F] {
+            assert_eq!(implicit_ce_class(true, true, Some(class)), 0, "{class:#x}");
+        }
+    }
+
+    #[test]
+    fn a_number_next_to_a_copy_class_gets_nothing() {
+        for class in [0xC7B4, 0xC7B6, 0xCBB5, 0xC4B5, 0xDEAD, u32::MAX] {
+            assert_eq!(implicit_ce_class(true, true, Some(class)), 0, "{class:#x}");
+        }
+    }
+
+    #[test]
+    fn no_class_reaches_a_user_tier_or_non_copy_engine_channel() {
+        for class in [0xC5B5, 0xC6B5, 0xC7B5, 0xC8B5, 0xC9B5, 0xCAB5] {
+            assert_eq!(implicit_ce_class(false, true, Some(class)), 0);
+            assert_eq!(implicit_ce_class(true, false, Some(class)), 0);
+            assert_eq!(implicit_ce_class(false, false, Some(class)), 0);
+        }
+    }
+}

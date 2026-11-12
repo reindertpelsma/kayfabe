@@ -776,6 +776,19 @@ impl HostRing {
         self.gr_context
     }
 
+    /// ★ 2026-10-19: the CE class this ring's host channel holds a real object of — `Some` only
+    /// for a copy-engine ring (`on_engine_layout` allocates it at birth), `None` for a graphics
+    /// or video ring. The class a guest-KERNEL CE ring's methods decode against when the guest
+    /// sends no `SET_OBJECT` ([`crate::tmode::TState::ce_object`]).
+    #[must_use]
+    pub fn ce_object_class(&self) -> Option<u32> {
+        crate::ce_implicit::host_ce_object_class(
+            self.gr_context.is_some(),
+            self.video_context.is_some(),
+            self.ce_class,
+        )
+    }
+
     /// Real owned video object and engine whose constructor promoted a Falcon context.
     #[must_use]
     pub fn video_context(&self) -> Option<(u32, u32, u32)> {
