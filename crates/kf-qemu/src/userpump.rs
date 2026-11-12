@@ -562,6 +562,64 @@ enum PendingAction {
     },
 }
 
+/// Why a publication attempt asked for a retry that is NOT merely a busy lock or walk. A complete stream restarts from
+/// part 0 only for these; a busy-only retry keeps the stream and its receipts (`admit_all` re-resolves every receipt on
+/// each attempt, so keeping them is as safe as copying again).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Stale {
+    /// A source translation changed (`userread::Refusal::Changed`).
+    SourceChanged,
+    /// The channel's software object is not the one the parser used.
+    SoftwareChanged,
+    /// The software object exists but is not ready.
+    SoftwareNotReady,
+    /// The channel is stopped or disabled.
+    Stopped,
+}
+type Why = std::cell::Cell<Option<Stale>>;
+
+/// `source_error` that also records a changed source as the retry's cause.
+fn source_error_marked(e: userread::Refusal, phase: &'static str, why: &Why) -> Failure {
+    if matches!(e, userread::Refusal::Changed) {
+        why.set(Some(Stale::SourceChanged));
+    }
+    source_error(e, phase)
+}
+
+/// The pre-checks inside the USERD admission, on plain values so that a test drives each one: `software_matches` (the
+/// parser's software identity is still the channel's), `software` = (live, ready) of the channel's software object, and
+/// whether the channel is stopped or disabled. Order and refusals are the production order.
+fn admission_checks(
+    software_matches: bool,
+    software: Option<(bool, bool)>,
+    stopped: bool,
+    why: &Why,
+) -> Turn<()> {
+    if !software_matches {
+        why.set(Some(Stale::SoftwareChanged));
+        return Err(Failure::Retry);
+    }
+    if let Some((live, ready)) = software {
+        if !live {
+            return Err("USER_RING_SOFTWARE_OBJECT_GONE".into());
+        }
+        if !ready {
+            why.set(Some(Stale::SoftwareNotReady));
+            return Err(Failure::Retry);
+        }
+    }
+    if stopped {
+        why.set(Some(Stale::Stopped));
+        return Err(Failure::Retry);
+    }
+    Ok(())
+}
+
+/// Whether a failed publication leaves the stream and its receipts valid: a `Retry` with no stale cause.
+fn keeps_stream(published: &Turn<()>, why: &Why) -> bool {
+    matches!(published, Err(Failure::Retry)) && why.get().is_none()
+}
+
 /// The guarded private-ring publication shared by the pump's segment machinery and by the per-entry turn's I/O
 /// ([`PumpIo`]): source guards, allocation / software liveness, topology generation, then `write`, then the doorbell.
 #[allow(clippy::too_many_arguments)]
@@ -588,7 +646,7 @@ fn publish_guarded(
         pb,
         pbs,
         write,
-        &std::cell::Cell::new(false),
+        &Why::new(None),
     )
 }
 
@@ -605,16 +663,11 @@ fn publish_guarded_classified(
     write: impl FnOnce(
         &kf_chan::user_storage::Storage<kf_chan::user_storage::CpuView>,
     ) -> Result<(), String>,
-    stale: &std::cell::Cell<bool>,
+    why: &Why,
 ) -> Turn<()> {
-    // `stale` is set when a `Retry` is NOT merely a busy lock or walk: a changed source translation, a changed or
-    // not-ready software object, a stopped channel. Only then must a complete stream restart from part 0.
-    let source_error = |e: userread::Refusal, phase: &'static str| {
-        if matches!(e, userread::Refusal::Changed) {
-            stale.set(true);
-        }
-        source_error(e, phase)
-    };
+    // `why` records a retry that is NOT merely a busy lock or walk (see `Stale`).
+    let source_error =
+        |e: userread::Refusal, phase: &'static str| source_error_marked(e, phase, why);
     if me.inbox.walk_busy() {
         me.inbox.wait_walk(r.idx);
         return Err(Failure::Retry);
@@ -627,23 +680,17 @@ fn publish_guarded_classified(
                 .get_mut(&r.key)
                 .filter(|t| t.user_ring && Arc::ptr_eq(&t.allocation, &r.allocation))
                 .ok_or("USER_RING_ALLOCATION_GONE")?;
-            if software.is_some_and(|expected| !same_software(expected, &t.user_defapi)) {
-                stale.set(true);
-                return Err(Failure::Retry);
-            }
-            if let Some(sw) = &t.user_defapi {
-                if !sw.live.load(Ordering::Acquire) {
-                    return Err("USER_RING_SOFTWARE_OBJECT_GONE".into());
-                }
-                if !sw.ready.load(Ordering::Acquire) {
-                    stale.set(true);
-                    return Err(Failure::Retry);
-                }
-            }
-            if t.stopped || t.disabled {
-                stale.set(true);
-                return Err(Failure::Retry);
-            }
+            admission_checks(
+                software.is_none_or(|expected| same_software(expected, &t.user_defapi)),
+                t.user_defapi.as_ref().map(|sw| {
+                    (
+                        sw.live.load(Ordering::Acquire),
+                        sw.ready.load(Ordering::Acquire),
+                    )
+                }),
+                t.stopped || t.disabled,
+                why,
+            )?;
             if me.stop.load(Ordering::Acquire) {
                 return Err("USER_RING_PUBLICATION_STOPPED".into());
             }
@@ -977,7 +1024,7 @@ impl kf_chan::user_turn::Io for PumpIo<'_> {
         if self.aux.receipts.len() != usize::from(parts) || parts == 0 {
             return Err("USER_RING_STREAM_RECEIPTS".into());
         }
-        let stale = std::cell::Cell::new(false);
+        let why = Why::new(None);
         self.aux.retry_busy = false;
         let published = publish_guarded_classified(
             self.me,
@@ -995,12 +1042,10 @@ impl kf_chan::user_turn::Io for PumpIo<'_> {
                 storage.write_user_gp(slot, entry)?;
                 storage.publish_put(put)
             },
-            &stale,
+            &why,
         );
-        if matches!(published, Err(Failure::Retry)) && !stale.get() {
-            // only a busy lock or walk: the receipts and the GP snapshot are as valid as before
-            self.aux.retry_busy = true;
-        }
+        // a busy lock or walk only: the receipts and the GP snapshot are as valid as before
+        self.aux.retry_busy = keeps_stream(&published, &why);
         published?;
         *self.source_admitted = true;
         Ok(())
@@ -1053,6 +1098,8 @@ impl kf_chan::user_turn::Io for PumpIo<'_> {
         marks: &mut kf_chan::user_gate::Marks,
     ) -> Turn<u64> {
         let mut count = 0;
+        // never consulted for the gate (a stream publishes only after its gate); cleared so no earlier attempt leaks
+        self.aux.retry_busy = false;
         // the barrier, then the marker (a packet is not open: the gate's open-packet branch)
         publish_guarded(
             self.me,
@@ -1081,8 +1128,11 @@ impl kf_chan::user_turn::Io for PumpIo<'_> {
         fetch: &mut Fetch,
         marks: &mut kf_chan::user_gate::Marks,
     ) -> Turn<()> {
-        // No guest source is involved, so no source guard is taken.
-        publish_guarded(
+        // No guest source is involved, so no source guard is taken. A marker publication also decides, from ITS OWN
+        // classification, whether a retry keeps a complete stream (the credit wait of the publish phase can land here):
+        // `retry_busy` is never read from an earlier attempt.
+        let why = Why::new(None);
+        let published = publish_guarded_classified(
             self.me,
             self.r,
             self.ram_generation,
@@ -1097,7 +1147,10 @@ impl kf_chan::user_turn::Io for PumpIo<'_> {
                 storage.write_host_marker(slot, value)?;
                 storage.publish_put(put)
             },
-        )?;
+            &why,
+        );
+        self.aux.retry_busy = keeps_stream(&published, &why);
+        published?;
         Stats::bump(&self.me.relay_stats.markers);
         Ok(())
     }
@@ -3482,33 +3535,98 @@ mod tests {
         assert_eq!(super::need_after(&Err("x".into()), true, true), None);
     }
 
-    /// The classification of a streamed publication's `Retry`: a changed source, a changed or not-ready software
-    /// object and a stopped channel mark it `stale` (restart from part 0); a busy lock or walk does not.
-    #[test]
-    fn publish_guarded_marks_only_changed_sources_and_software_as_stale() {
-        let pump = include_str!("userpump.rs");
-        let pump = pump.split("#[cfg(test)]").next().unwrap();
-        let f = pump
-            .split("fn publish_guarded_classified(")
-            .nth(1)
-            .unwrap()
-            .split("fn snapshot_with(")
-            .next()
-            .unwrap();
-        assert_eq!(
-            f.matches("stale.set(true)").count(),
-            4,
-            "Changed + three non-busy Retry sites"
-        );
-        assert!(f.contains("userread::Refusal::Changed"));
-        for busy in [
-            "walk_busy",
-            "me.pt.try_lock()",
-            "r.lease.storage.try_lock()",
-        ] {
-            assert!(f.contains(busy), "{busy}");
-        }
+    fn retry() -> Turn<()> {
+        Err(Failure::Retry)
     }
+
+    /// F1 (round-2 review of PR #360): the keep-or-restart decision after a failed complete-stream publication, driven
+    /// through the production classification functions (`source_error_marked`, `admission_checks`, `keeps_stream`).
+    #[test]
+    fn a_busy_source_or_lock_keeps_the_stream() {
+        let why = Why::new(None);
+        let e = source_error_marked(userread::Refusal::Busy, "t", &why);
+        assert_eq!(e, Failure::Retry);
+        assert_eq!(why.get(), None);
+        assert!(keeps_stream(&retry(), &why));
+        // the pre-checks pass: nothing stale, nothing to keep
+        assert_eq!(
+            admission_checks(true, Some((true, true)), false, &why),
+            Ok(())
+        );
+        assert_eq!(why.get(), None);
+    }
+
+    #[test]
+    fn a_changed_source_restarts_the_stream() {
+        let why = Why::new(None);
+        let e = source_error_marked(userread::Refusal::Changed, "t", &why);
+        assert_eq!(e, Failure::Retry);
+        assert_eq!(why.get(), Some(Stale::SourceChanged));
+        assert!(!keeps_stream(&retry(), &why));
+    }
+
+    #[test]
+    fn a_changed_software_object_restarts_the_stream() {
+        let why = Why::new(None);
+        assert_eq!(
+            admission_checks(false, Some((true, true)), false, &why),
+            Err(Failure::Retry)
+        );
+        assert_eq!(why.get(), Some(Stale::SoftwareChanged));
+        assert!(!keeps_stream(&retry(), &why));
+    }
+
+    #[test]
+    fn a_software_object_that_is_not_ready_restarts_the_stream() {
+        let why = Why::new(None);
+        assert_eq!(
+            admission_checks(true, Some((true, false)), false, &why),
+            Err(Failure::Retry)
+        );
+        assert_eq!(why.get(), Some(Stale::SoftwareNotReady));
+        assert!(!keeps_stream(&retry(), &why));
+    }
+
+    #[test]
+    fn a_stopped_or_disabled_channel_restarts_the_stream() {
+        let why = Why::new(None);
+        assert_eq!(
+            admission_checks(true, None, true, &why),
+            Err(Failure::Retry)
+        );
+        assert_eq!(why.get(), Some(Stale::Stopped));
+        assert!(!keeps_stream(&retry(), &why));
+    }
+
+    #[test]
+    fn a_freed_software_object_is_a_refusal_not_a_retry() {
+        let why = Why::new(None);
+        assert_eq!(
+            admission_checks(true, Some((false, true)), false, &why),
+            Err(Failure::Refused("USER_RING_SOFTWARE_OBJECT_GONE".into()))
+        );
+        assert_eq!(why.get(), None);
+        assert!(!keeps_stream(&Err("x".into()), &why), "only a retry keeps");
+        assert!(!keeps_stream(&Ok(()), &why));
+    }
+
+    #[test]
+    fn every_stale_cause_restarts_and_only_a_busy_retry_keeps() {
+        let causes: [Box<dyn Fn(&Why)>; 4] = [
+            Box::new(|w| drop(source_error_marked(userread::Refusal::Changed, "t", w))),
+            Box::new(|w| drop(admission_checks(false, None, false, w))),
+            Box::new(|w| drop(admission_checks(true, Some((true, false)), false, w))),
+            Box::new(|w| drop(admission_checks(true, None, true, w))),
+        ];
+        for (i, cause) in causes.iter().enumerate() {
+            let why = Why::new(None);
+            cause(&why);
+            assert!(why.get().is_some(), "cause {i} is recorded");
+            assert!(!keeps_stream(&retry(), &why), "cause {i} restarts");
+        }
+        assert!(keeps_stream(&retry(), &Why::new(None)));
+    }
+
     use super::*;
     use kf_abi::submit::method_header_inc as h;
     fn sw(guest: u32, number: u16) -> Software {

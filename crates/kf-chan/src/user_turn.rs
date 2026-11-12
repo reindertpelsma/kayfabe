@@ -372,7 +372,7 @@ pub struct Relay {
     pub restart_owed: bool,
     /// The retry that ended this turn kept the stream (a busy part copy or publication); reset by `claim`.
     retry_kept: bool,
-    /// Restarts of the segment now streaming (reset at publication).
+    /// Restarts of the segment now streaming (reset at publication, ring switch and retire).
     stream_restart_run: u32,
 }
 
@@ -510,6 +510,8 @@ impl Relay {
     /// lifecycle keeps a Window open over the new ring's first entries ([`Lifecycle::source_switched`]).
     pub fn switch_source(&mut self, generation: u64) {
         self.cancel_stream();
+        // the segment that was streaming is abandoned: its restarts must not be charged to the next one
+        self.stream_restart_run = 0;
         self.generation = generation;
         self.cursor = 0;
         self.grace.clear();
@@ -537,6 +539,7 @@ impl Relay {
     /// where it used to call `Lifecycle::teardown` itself.
     pub fn retire(&mut self) {
         self.cancel_stream();
+        self.stream_restart_run = 0;
         self.lazy.invalidate(Invalidate::Retire);
         self.life.teardown();
     }

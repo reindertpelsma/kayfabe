@@ -2674,3 +2674,27 @@ fn eleven_parts_at_the_pumps_bound_are_refused_by_the_relay() {
     );
     assert!(io.part_reads.is_empty());
 }
+
+#[test]
+fn a_ring_switch_does_not_charge_the_abandoned_segments_restarts_to_the_next() {
+    // F3 (round-2 review): `stream_restarts_max` is the most restarts any ONE segment needed.
+    let mut io = Mock::new(16);
+    let mut r = stream_window(&mut io);
+    install_wide(&mut io, &r, wide_words(1_026_596), false);
+    turn(&mut r, &mut io).unwrap();
+    io.publish_retry_once = true; // a stale cause: one restart of the first segment
+    assert_eq!(turn(&mut r, &mut io), Err(Fail::Retry));
+    turn(&mut r, &mut io).unwrap(); // restarted: part 0 again, the stream is live
+    r.switch_source(2);
+    io.ring[0] = kf_abi::submit::gp_entry(STREAM_VA, 1_026_596).unwrap() | (1 << 41);
+    io.put = 1;
+    turn(&mut r, &mut io).unwrap(); // part 0 of the second segment
+    io.publish_retry_once = true; // one restart of the second segment
+    assert_eq!(turn(&mut r, &mut io), Err(Fail::Retry));
+    let c = format!("{:?}", r.life.counts());
+    assert!(c.contains("stream_restarts: 2"), "{c}");
+    assert!(
+        c.contains("stream_restarts_max: 1"),
+        "no segment needed two restarts: {c}"
+    );
+}

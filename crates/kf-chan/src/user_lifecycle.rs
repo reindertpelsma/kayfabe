@@ -147,7 +147,9 @@ pub struct Counts {
     pub stream_parts_max: u64,
     /// Largest PB length of any entry forwarded in Window mode; a maximum, never a sum.
     pub window_entry_max_bytes: u64,
-    /// Streams dropped on a retry and restarted from part 0 (a changed source, a scan re-read, a changed software object).
+    /// Streams dropped on a retry and restarted from part 0. Causes: a changed source translation, a scan re-read (grace),
+    /// a changed or not-ready software object, a stopped or disabled channel, or a retry outside a part copy or a busy-only
+    /// publication (those two keep the stream and are not counted here).
     pub stream_restarts: u64,
     /// Most restarts any ONE segment needed; a maximum, never a sum.
     pub stream_restarts_max: u64,
