@@ -3612,11 +3612,11 @@ mod tests {
 
     #[test]
     fn every_stale_cause_restarts_and_only_a_busy_retry_keeps() {
-        let causes: [Box<dyn Fn(&Why)>; 4] = [
-            Box::new(|w| drop(source_error_marked(userread::Refusal::Changed, "t", w))),
-            Box::new(|w| drop(admission_checks(false, None, false, w))),
-            Box::new(|w| drop(admission_checks(true, Some((true, false)), false, w))),
-            Box::new(|w| drop(admission_checks(true, None, true, w))),
+        let causes: [fn(&Why); 4] = [
+            |w| drop(source_error_marked(userread::Refusal::Changed, "t", w)),
+            |w| drop(admission_checks(false, None, false, w)),
+            |w| drop(admission_checks(true, Some((true, false)), false, w)),
+            |w| drop(admission_checks(true, None, true, w)),
         ];
         for (i, cause) in causes.iter().enumerate() {
             let why = Why::new(None);
