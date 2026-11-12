@@ -104,7 +104,7 @@ the binary archive so no pickle is ever loaded. Kaggle is not used.
 ### nvcc (for `cuda_ext_inline`)
 
 The test needs an nvcc whose major.minor equals `torch.version.cuda`; `kfml check` detects and compares,
-`KF_ML_NVCC_LOOSE=1` downgrades a mismatch to a warning. Measured on 2026-11-11: the pip package
+`KF_ML_NVCC_LOOSE=1` downgrades a mismatch to a warning. Observed by the author on 2026-11-11: the pip package
 `nvidia-cuda-nvcc-cu12` does **not** contain an `nvcc` binary (only `ptxas`, `libnvvm`, `libdevice` and
 headers), so the "pip nvcc" route does not work. `setup --with-nvcc` instead downloads three official
 NVIDIA redist archives (`cuda_nvcc`, `cuda_cudart`, `cuda_cccl`, sha256 in `pins.json`, taken from
@@ -170,5 +170,6 @@ refusals, `check`/`list`. It also asserts that all workload modules import witho
 
 All six workloads on a GPU; the loss/accuracy thresholds; `torch.compile` behavior on Turing; the Triton
 autotune configs on sm_75 shared-memory limits (OutOfResources configs should be skipped by the autotuner);
-the `--with-nvcc` tree; Docker; `build-wheels`; the driver minimum table; the CIFAR-10 sha256 if it shows
-`null` in `pins.json` (run `fetch-data`, it prints the measured hash).
+the `--with-nvcc` tree; Docker; `build-wheels`; the driver minimum table; the CIFAR-10 sha256 pin
+(`pins.json` holds the hash `fetch-data` printed in the native run on the RTX 4070 PC, 2026-11-12,
+`/workspace/bench/kfml_20261112`; it has not been compared with a second download).
