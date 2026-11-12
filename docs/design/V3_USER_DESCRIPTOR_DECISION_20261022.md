@@ -19,7 +19,11 @@ CODE READ, the port: `Scan`/`Window` segments above 917,504 bytes are classified
 turn, worker only, each part's source receipt re-admitted at publication) and the guest's original word is forwarded unchanged.
 A registered software trigger inside such a segment refuses as `USER_RING_STAGED_SPAN_BUDGET` (H-E; a trigger needs a whole
 patched span in the 917,504-byte staging region). `USER_RING_SCAN_BUDGET` is no longer emitted. New observation counters in
-`USER_RING_LIFECYCLE`: `segments_streamed`, `stream_parts_max`, `window_entry_max_bytes`.
+`USER_RING_LIFECYCLE`: `segments_streamed`, `stream_parts_max`, `window_entry_max_bytes`, and (review of PR #360, S1)
+`stream_restarts`, `stream_restarts_max`, `stream_publish_retries`. A busy part copy or a merely busy publication keeps the
+stream and its receipts and retries only that step; a changed source, a changed or not-ready software object or a scan re-read
+restarts from part 0 and is counted. INFERRED, to be settled by the hardware run: that restarts stay rare under the creo-04
+mapping churn (`stream_restarts` must be reported next to `segments_streamed`).
 
 **CODE READ, UR1:** Pointer/NOP admission uses the hardware format and forwards the intact
 word. Scan/Window still refuse above the 917,504-byte copy/staging bound before any gate or

@@ -565,7 +565,6 @@ enum PendingAction {
 /// The guarded private-ring publication shared by the pump's segment machinery and by the per-entry turn's I/O
 /// ([`PumpIo`]): source guards, allocation / software liveness, topology generation, then `write`, then the doorbell.
 #[allow(clippy::too_many_arguments)]
-#[allow(clippy::too_many_arguments)]
 fn publish_guarded(
     me: &ChanPlane,
     r: &userrelay::Record,
@@ -593,6 +592,7 @@ fn publish_guarded(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn publish_guarded_classified(
     me: &ChanPlane,
     r: &userrelay::Record,

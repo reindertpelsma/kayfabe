@@ -1034,7 +1034,7 @@ mod tests {
         if pieces {
             receipts[which].0.pieces = PIECES + 1;
         } else {
-            let one = receipts[which].0.spans[0].clone();
+            let one = receipts[which].0.spans[0];
             receipts[which].0.spans = vec![one; PIECES + 1];
         }
         assert_eq!(
