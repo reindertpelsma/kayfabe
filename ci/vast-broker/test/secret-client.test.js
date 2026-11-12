@@ -46,15 +46,15 @@ for (const path of ['', prefix])
     const required = [
       origin,
       'quiet-tenant.workers.example',
-      'quiet-tenant',
-      'workers',
-      'example',
       encodeURIComponent(origin),
       'mock.jwt.value',
       ...(path ? [path] : []),
     ];
     const first = r.calls.find((x) => !x.url.startsWith('https://oidc.example/'));
     for (const value of required) assert.ok(first.masks.includes(value), 'missing mask ' + value);
+    // 2026-11-12: hostname labels are public and are not masked (they would hide the log URLs).
+    for (const label of ['quiet-tenant', 'workers', 'example'])
+      assert.ok(!first.masks.includes(label), 'label masked ' + label);
   });
 for (const failure of ['rent', 'status'])
   test('transport failures print no endpoint diagnostics ' + failure, () => {

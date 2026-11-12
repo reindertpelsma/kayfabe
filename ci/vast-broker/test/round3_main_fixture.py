@@ -4,7 +4,7 @@ import contextlib, hashlib, importlib.util, io, json, os, sys, tempfile, urllib.
 from pathlib import Path
 
 spec = importlib.util.spec_from_file_location(
-    "runner_main", Path(__file__).resolve().parents[1] / "runner.py"
+    "runner_main", os.environ.get("KF_RUNNER_PATH") or Path(__file__).resolve().parents[1] / "runner.py"
 )
 m = importlib.util.module_from_spec(spec)
 sys.modules["runner_main"] = m

@@ -218,5 +218,73 @@ def case_summary_status_url():
     assert "| Status URL leg 0 | " + STATUS0 + " |" in summary, summary[:500]
 
 
+
+def masked_main(url):
+    """Run main() through round3_main_fixture; apply every ::add-mask:: value like GitHub does."""
+    import json, subprocess
+
+    here = Path(__file__).resolve().parent
+    p = subprocess.run(
+        [sys.executable, "-I", str(here / "round3_main_fixture.py"), json.dumps({"url": url, "push": True})],
+        capture_output=True,
+        text=True,
+        env={"PATH": os.environ.get("PATH", ""), "KF_RUNNER_PATH": os.environ.get("KF_RUNNER_PATH", "")},
+    )
+    assert p.returncode == 0, p.stderr
+    out = json.loads(p.stdout)["stdout"]
+    masks = [x[len("::add-mask::"):] for x in out.splitlines() if x.startswith("::add-mask::")]
+    shown = []
+    for line in out.splitlines():
+        if line.startswith("::add-mask::"):
+            continue
+        for value in sorted(masks, key=len, reverse=True):
+            line = line.replace(value, "***")
+        shown.append(line)
+    return shown, masks
+
+
+def check_survives(url):
+    shown, masks = masked_main(url)
+    text = "\n".join(shown)
+    assert "LOG_URL leg=0 https://logs.kayfabe.dev/vast-123-1-0/log.txt" in shown, text[:800]
+    assert "STATUS_URL leg=0 https://kayfabe.dev/status/run/?id=vast-123-1-0" in shown, text[:800]
+    assert any(x.startswith("VERDICT ") and "***" not in x for x in shown), shown[-3:]
+    return masks
+
+
+def case_mask_survives_ci_origin():
+    check_survives("https://ci.kayfabe.dev")
+
+
+def case_mask_survives_workers_dev_origin():
+    check_survives("https://kayfabe-ci.some-account.workers.dev")
+
+
+def case_mask_no_labels():
+    """The origin, hostname and path prefix are masked; no bare hostname label is."""
+    masks = check_survives("https://ci.kayfabe.dev")
+    assert "https://ci.kayfabe.dev" in masks and "ci.kayfabe.dev" in masks, masks
+    for label in ["ci", "kayfabe", "dev"]:
+        assert label not in masks, masks
+    assert any(len(x) >= 32 and x.startswith("unit-path-only-") for x in masks), masks
+
+
+def case_mask_secrets_kept():
+    import json, subprocess
+
+    here = Path(__file__).resolve().parent
+    p = subprocess.run(
+        [sys.executable, "-I", str(here / "round3_main_fixture.py"), json.dumps({"access": True, "push": True})],
+        capture_output=True,
+        text=True,
+        env={"PATH": os.environ.get("PATH", ""), "KF_RUNNER_PATH": os.environ.get("KF_RUNNER_PATH", "")},
+    )
+    out = json.loads(p.stdout)["stdout"]
+    masks = [x[len("::add-mask::"):] for x in out.splitlines() if x.startswith("::add-mask::")]
+    for secret in ["runner-a.access", "a" * 64, "mock.jwt.value"]:
+        assert secret in masks, secret
+    assert any(x.startswith("unit-path-only-") for x in masks)
+
+
 if __name__ == "__main__":
     globals()["case_" + sys.argv[1].replace("-", "_")]()

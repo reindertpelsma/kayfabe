@@ -29,6 +29,10 @@ const CASES = [
   'stage-cap-overview',
   'summary-log-url',
   'summary-status-url',
+  'mask-survives-ci-origin',
+  'mask-survives-workers-dev-origin',
+  'mask-no-labels',
+  'mask-secrets-kept',
 ];
 for (const name of CASES)
   test('runner urls: ' + name, () => {

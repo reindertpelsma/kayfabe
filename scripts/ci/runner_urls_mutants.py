@@ -75,6 +75,23 @@ MUTANTS = [
     ("verdict-through-budget", VERDICT, "        self.show(self.verdict_line(result))\n"),
     ("overview-dropped", OVERVIEW, ""),
     ("overview-through-budget", EMIT_OVERVIEW, '        self.show("\\n".join(out) + "\\n")\n'),
+    # --- hostname labels masked again (2026-11-12) ---
+    (
+        "labels-masked",
+        "    return [origin, urllib.parse.urlsplit(origin).hostname, prefix]\n",
+        "    return [origin, urllib.parse.urlsplit(origin).hostname, prefix,\n"
+        '        *urllib.parse.urlsplit(origin).hostname.split(".")]\n',
+    ),
+    (
+        "kayfabe-label-masked",
+        "    return [origin, urllib.parse.urlsplit(origin).hostname, prefix]\n",
+        '    return [origin, urllib.parse.urlsplit(origin).hostname, prefix, "kayfabe"]\n',
+    ),
+    (
+        "prefix-not-masked",
+        "    return [origin, urllib.parse.urlsplit(origin).hostname, prefix]\n",
+        "    return [origin, urllib.parse.urlsplit(origin).hostname]\n",
+    ),
     # --- stage lines ----------------------------------------------------------------------------
     ("stage-name-unanchored", ANCHOR, ""),
     ("stage-not-marked-box-reported", '            line += " (box-reported)"\n', ""),

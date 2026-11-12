@@ -80,6 +80,16 @@ class Diagnosed(Invalid):
         self.line = line
 
 
+def worker_masks(origin, prefix):
+    """Values masked in the job log (::add-mask::) and redacted from displayed box text.
+
+    The origin string, its hostname and the secret path prefix. NOT the individual hostname labels
+    (2026-11-12): the hostname is a public repo variable, and masking `kayfabe` / `dev` / `ci`
+    would turn the printed LOG_URL / STATUS_URL (logs.kayfabe.dev, kayfabe.dev) into `***`.
+    """
+    return [origin, urllib.parse.urlsplit(origin).hostname, prefix]
+
+
 def public_urls(run, leg):
     """(log url, status url) of leg `leg` of run `run` ("<github run>-<attempt>"), or None.
 
@@ -2471,12 +2481,7 @@ def main():
                 short = re.fullmatch("[A-Za-z0-9_-]*", prefix) and len(prefix) < 32
                 reason = "too short" if short else "bad characters"
             raise Diagnosed(setting_line("WORKER_PATH", reason))
-        for value in [
-            origin,
-            urllib.parse.urlsplit(origin).hostname,
-            prefix,
-            *urllib.parse.urlsplit(origin).hostname.split("."),
-        ]:
+        for value in worker_masks(origin, prefix):
             if value:
                 print("::add-mask::" + value, flush=True)
         print(
@@ -2507,13 +2512,7 @@ def main():
             "sha": sha,
             "run": run,
             "nonce": secrets.token_hex(32),
-            "redactions": [
-                origin,
-                urllib.parse.urlsplit(origin).hostname,
-                prefix,
-                urllib.parse.quote(origin, safe=""),
-                *urllib.parse.urlsplit(origin).hostname.split("."),
-            ],
+            "redactions": [*worker_masks(origin, prefix), urllib.parse.quote(origin, safe="")],
         }
 
         phase = "access"
