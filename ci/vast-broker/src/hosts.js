@@ -31,6 +31,11 @@ export const WIRE_STAGES = Object.freeze([
   'specviewperf',
   'ladder',
 ]);
+// An offer tells the daemon what to run, step by step, in order: [{stage, apps?}]. The Worker's planner
+// computes the waterfall from its own requirements; the daemon never receives or interprets them.
+export const STEPS_MAX = 32;
+export const APPS_PER_STEP_MAX = 32;
+export const APP_NAME = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/;
 export const COMMANDS_MAX_MS = 4 * 3600 * 1000;
 export const HOST_TIERS = Object.freeze(['small', 'middle', 'large']);
 export const BOX_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
@@ -251,11 +256,10 @@ export function sanitizeCapabilities(caps) {
 // ---- BORROWED (parked: the owner has not decided whether the first merge carries this mode) ---------
 // Everything that is specific to the `borrowed` (distrust us) profile is in this section and in the
 // `isBorrowed`, `BORROWED_ASSIGNMENT_KEYS` and `seedAllowed` uses elsewhere, so it can move to a
-// follow-up branch in one step: a borrowed box gets a declarative assignment only (no env, no
-// requirements) and never consumes artifacts from another box. Owner ruling 2026-11-12: all other
+// follow-up branch in one step: a borrowed box gets a declarative assignment only (no env) and never consumes artifacts from another box. Owner ruling 2026-11-12: all other
 // hosts trust each other for artifacts (they cannot affect the release artifact or reach private R2).
 export const isBorrowed = (profile) => profile === 'borrowed';
-export const BORROWED_ASSIGNMENT_KEYS = Object.freeze(['repo', 'commit', 'tree_key', 'stages']);
+export const BORROWED_ASSIGNMENT_KEYS = Object.freeze(['repo', 'commit', 'tree_key', 'steps']);
 export const seedAllowed = (consumerProfile) => !isBorrowed(consumerProfile);
 
 // A git-only box (profile borrowed, or a registry snapshot that reports enforced.trust_git_only; the
@@ -319,9 +323,9 @@ export function validateSeedRef(seed) {
 }
 
 // Validates the assignment of an offer for the profile and returns a normalised copy. `borrowed`
-// gets exactly repo/commit/tree_key/stages; no env, no requirements, nothing that could be read as a
+// gets exactly repo/commit/tree_key/steps; no env, nothing that could be read as a
 // script or command. EVERY profile (owned too) gets the canonical repo URL from the allowlist
-// (default REPO_ALLOWLIST), never an arbitrary URL, and stage names from WIRE_STAGES.
+// (default REPO_ALLOWLIST), never an arbitrary URL, and step stage names from WIRE_STAGES. `requirements` is never accepted (the daemon is told what to run, not why).
 export function validateAssignment(
   profile,
   assignment,
@@ -335,8 +339,7 @@ export function validateAssignment(
         'repo',
         'commit',
         'tree_key',
-        'stages',
-        'requirements',
+        'steps',
         'env',
         ...(allowSeed ? ['seed'] : []),
       ];
@@ -345,18 +348,25 @@ export function validateAssignment(
   if (!COMMIT.test(assignment.commit ?? '')) bad('OFFER_COMMIT');
   if (!TREE_KEY.test(assignment.tree_key ?? '')) bad('OFFER_TREE_KEY');
   const out = { repo: assignment.repo, commit: assignment.commit, tree_key: assignment.tree_key };
-  if (assignment.stages !== undefined) {
-    const s = assignment.stages;
-    if (!Array.isArray(s) || s.length > 32 || s.some((x) => typeof x !== 'string'))
-      bad('OFFER_STAGES');
-    if (s.some((x) => !WIRE_STAGES.includes(x))) bad('OFFER_STAGES');
-    out.stages = [...s];
-  }
-  if (assignment.requirements !== undefined) {
-    // Opaque to the daemon; bounded JSON of plain data.
-    if (!isObject(assignment.requirements) || JSON.stringify(assignment.requirements).length > 4096)
-      bad('OFFER_REQUIREMENTS');
-    out.requirements = assignment.requirements;
+  if (assignment.steps !== undefined) {
+    const st = assignment.steps;
+    if (!Array.isArray(st) || st.length > STEPS_MAX) bad('OFFER_STEPS');
+    out.steps = st.map((x) => {
+      if (!isObject(x)) bad('OFFER_STEPS');
+      onlyKeys(x, ['stage', 'apps'], 'OFFER_STEPS');
+      if (typeof x.stage !== 'string' || !WIRE_STAGES.includes(x.stage)) bad('OFFER_STEPS');
+      const step = { stage: x.stage };
+      if (x.apps !== undefined) {
+        if (
+          !Array.isArray(x.apps) ||
+          x.apps.length > APPS_PER_STEP_MAX ||
+          x.apps.some((n) => typeof n !== 'string' || !APP_NAME.test(n))
+        )
+          bad('OFFER_STEPS');
+        step.apps = [...x.apps];
+      }
+      return step;
+    });
   }
   // A seed reference is built by the Worker from a seeder's record, never accepted from a planner
   // (allowSeed is only set for the frame check and by the DO after it built it).
