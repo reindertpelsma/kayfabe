@@ -43,7 +43,10 @@ def case_start_order():
 
 def case_urls_exact():
     assert m.public_urls(RUN, 0) == (LOG0, STATUS0)
-    assert m.public_urls("43092074455-1", 3)[1] == "https://kayfabe.dev/status/run/?id=vast-43092074455-1-3"
+    assert (
+        m.public_urls("43092074455-1", 3)[1]
+        == "https://kayfabe.dev/status/run/?id=vast-43092074455-1-3"
+    )
 
 
 def case_bad_run():
@@ -122,13 +125,21 @@ def case_stage_lines():
     out, _ = hf.run(log)
     assert "\nSTAGE_START cuda_host (box-reported)\n" in out, out
     assert "\nSTAGE_END cuda_host rc=0 duration_ms=40000 (box-reported)\n" in out
-    assert "evil" not in re.sub(r"(?m)^\[untrusted\] .*$", "", out), "stage name outside the pattern"
+    assert "evil" not in re.sub(
+        r"(?m)^\[untrusted\] .*$", "", out
+    ), "stage name outside the pattern"
     assert out.count("STAGE_START cuda_host (box-reported)") >= 2, "live and overview"
 
 
 def case_summary_has_urls():
     printed, summary = [], io.StringIO()
-    r = m.Runner(hf.ctx, hf.manifest, lambda *_: (_ for _ in ()).throw(OSError()), emit=printed.append, summary=summary)
+    r = m.Runner(
+        hf.ctx,
+        hf.manifest,
+        lambda *_: (_ for _ in ()).throw(OSError()),
+        emit=printed.append,
+        summary=summary,
+    )
     r.execute()
     assert "| Log URL leg 0 | " + LOG0 + " |" in summary.getvalue(), summary.getvalue()[:600]
     assert "| Status URL leg 0 | " + STATUS0 + " |" in summary.getvalue()
@@ -156,8 +167,16 @@ def case_bad_run_execute():
     """A whole execute() with an id that is not validated prints and summarises no URL."""
     for bad in ["123-1/../x", "x\n::stop-commands::", "0-1", "https://evil.example/1-1"]:
         out, summary = run_bad(bad)
-        assert "LOG_URL" not in out and "STATUS_URL" not in out and "evil" not in out.replace("[untrusted]", ""), out
-        assert "Log URL" not in summary and "Status URL" not in summary and "logs.kayfabe" not in summary
+        assert (
+            "LOG_URL" not in out
+            and "STATUS_URL" not in out
+            and "evil" not in out.replace("[untrusted]", "")
+        ), out
+        assert (
+            "Log URL" not in summary
+            and "Status URL" not in summary
+            and "logs.kayfabe" not in summary
+        )
 
 
 def case_bad_leg_announce():
@@ -191,7 +210,9 @@ def case_stage_name_long():
 
 
 def case_stage_marked():
-    out, _ = hf.run("KF_PAYLOAD_STAGE_START name=one\nKF_PAYLOAD_STAGE_END name=one rc=3 duration_ms=5\n")
+    out, _ = hf.run(
+        "KF_PAYLOAD_STAGE_START name=one\nKF_PAYLOAD_STAGE_END name=one rc=3 duration_ms=5\n"
+    )
     lines = re.findall(r"^STAGE_(?:START|END) .*$", out, re.M)
     assert len(lines) >= 4 and all(x.endswith(" (box-reported)") for x in lines), lines
 
@@ -218,21 +239,28 @@ def case_summary_status_url():
     assert "| Status URL leg 0 | " + STATUS0 + " |" in summary, summary[:500]
 
 
-
 def masked_main(url):
     """Run main() through round3_main_fixture; apply every ::add-mask:: value like GitHub does."""
     import json, subprocess
 
     here = Path(__file__).resolve().parent
     p = subprocess.run(
-        [sys.executable, "-I", str(here / "round3_main_fixture.py"), json.dumps({"url": url, "push": True})],
+        [
+            sys.executable,
+            "-I",
+            str(here / "round3_main_fixture.py"),
+            json.dumps({"url": url, "push": True}),
+        ],
         capture_output=True,
         text=True,
-        env={"PATH": os.environ.get("PATH", ""), "KF_RUNNER_PATH": os.environ.get("KF_RUNNER_PATH", "")},
+        env={
+            "PATH": os.environ.get("PATH", ""),
+            "KF_RUNNER_PATH": os.environ.get("KF_RUNNER_PATH", ""),
+        },
     )
     assert p.returncode == 0, p.stderr
     out = json.loads(p.stdout)["stdout"]
-    masks = [x[len("::add-mask::"):] for x in out.splitlines() if x.startswith("::add-mask::")]
+    masks = [x[len("::add-mask::") :] for x in out.splitlines() if x.startswith("::add-mask::")]
     shown = []
     for line in out.splitlines():
         if line.startswith("::add-mask::"):
@@ -274,13 +302,21 @@ def case_mask_secrets_kept():
 
     here = Path(__file__).resolve().parent
     p = subprocess.run(
-        [sys.executable, "-I", str(here / "round3_main_fixture.py"), json.dumps({"access": True, "push": True})],
+        [
+            sys.executable,
+            "-I",
+            str(here / "round3_main_fixture.py"),
+            json.dumps({"access": True, "push": True}),
+        ],
         capture_output=True,
         text=True,
-        env={"PATH": os.environ.get("PATH", ""), "KF_RUNNER_PATH": os.environ.get("KF_RUNNER_PATH", "")},
+        env={
+            "PATH": os.environ.get("PATH", ""),
+            "KF_RUNNER_PATH": os.environ.get("KF_RUNNER_PATH", ""),
+        },
     )
     out = json.loads(p.stdout)["stdout"]
-    masks = [x[len("::add-mask::"):] for x in out.splitlines() if x.startswith("::add-mask::")]
+    masks = [x[len("::add-mask::") :] for x in out.splitlines() if x.startswith("::add-mask::")]
     for secret in ["runner-a.access", "a" * 64, "mock.jwt.value"]:
         assert secret in masks, secret
     assert any(x.startswith("unit-path-only-") for x in masks)

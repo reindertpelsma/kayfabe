@@ -1446,7 +1446,10 @@ class Runner:
     def show_overview(self, result):
         """The overview, emitted outside the display budget: every line is trusted or validated."""
         out = [
-            "OVERVIEW tested_sha=" + self.ctx["sha"] + " profile=" + self.ctx.get("profile", "check")
+            "OVERVIEW tested_sha="
+            + self.ctx["sha"]
+            + " profile="
+            + self.ctx.get("profile", "check")
         ]
         for leg, urls in self.announced.items():
             out.append("LEG " + str(leg) + " " + self.leg_info.get(leg, "no box admitted"))
@@ -2183,14 +2186,8 @@ class Runner:
                 ("State", result["state"]),
                 ("Verdict", result["verdict"]),
                 ("Tested SHA", self.ctx["sha"]),
-                *[
-                    ("Log URL leg " + str(leg), urls[0])
-                    for leg, urls in self.announced.items()
-                ],
-                *[
-                    ("Status URL leg " + str(leg), urls[1])
-                    for leg, urls in self.announced.items()
-                ],
+                *[("Log URL leg " + str(leg), urls[0]) for leg, urls in self.announced.items()],
+                *[("Status URL leg " + str(leg), urls[1]) for leg, urls in self.announced.items()],
                 ("Worker version", self.manifest["worker_version"]),
                 ("Expected bundle SHA256", self.manifest["bundle_sha256"]),
                 ("Received log hash", self.hash),
