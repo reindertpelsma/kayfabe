@@ -104,15 +104,16 @@ def cmd_world(a):
     print(f"world ok secs={time.time()-t0:.1f}")
 
 def build_cmd(a, d):
-    feats = ["has_quick_plays_support", "is_quick_play_singleplayer"]
+    feats = ["has_quick_plays_support", "is_quick_play_singleplayer", "has_custom_resolution"]
+    if getattr(a, "mp", None): feats = ["has_quick_plays_support", "is_quick_play_multiplayer", "has_custom_resolution"]
     cp = [f"{a.root}/libraries/{l['downloads']['artifact']['path']}" for l in d["libraries"] if rule_ok(l.get("rules"))]
     cp.append(f"{a.root}/versions/{a.version}/{a.version}.jar")
     def sub(s):
         m = {"auth_player_name": "Dev", "version_name": a.version, "game_directory": f"{a.root}/game",
              "assets_root": f"{a.root}/assets", "assets_index_name": d["assetIndex"]["id"],
              "auth_uuid": OFFLINE_UUID, "auth_access_token": "0", "clientid": "0", "auth_xuid": "0",
-             "user_type": "legacy", "version_type": "release", "resolution_width": "854",
-             "resolution_height": "480", "quickPlayPath": f"{a.root}/game/quickplay.json",
+             "user_type": "legacy", "version_type": "release", "resolution_width": str(getattr(a, "w", 854)),
+             "resolution_height": str(getattr(a, "h", 480)), "quickPlayMultiplayer": getattr(a, "mp", "") or "", "quickPlayPath": f"{a.root}/game/quickplay.json",
              "quickPlaySingleplayer": "trial", "launcher_name": "kf-trial", "launcher_version": "0",
              "natives_directory": f"{a.root}/natives", "classpath": ":".join(cp)}
         return re.sub(r"\$\{(\w+)\}", lambda x: m.get(x.group(1), x.group(0)), s)
@@ -191,12 +192,13 @@ def cmd_run(a):
     print("MC_TRIAL " + ("PASS" if ok else "FAIL") + f" gpu_real={ok_gpu}")
     sys.exit(0 if ok else 1)
 
-ap = argparse.ArgumentParser()
-ap.add_argument("cmd", choices=["fetch", "world", "run"])
-ap.add_argument("--root", required=True)
-ap.add_argument("--version", default="1.21.8")
-ap.add_argument("--wait", type=int, default=20)
-ap.add_argument("--join-timeout", type=int, default=240)
-ap.add_argument("--allow-software", action="store_true", help="do not require a real GPU renderer")
-a = ap.parse_args()
-{"fetch": cmd_fetch, "world": cmd_world, "run": cmd_run}[a.cmd](a)
+if __name__ == "__main__":
+    ap = argparse.ArgumentParser()
+    ap.add_argument("cmd", choices=["fetch", "world", "run"])
+    ap.add_argument("--root", required=True)
+    ap.add_argument("--version", default="1.21.8")
+    ap.add_argument("--wait", type=int, default=20)
+    ap.add_argument("--join-timeout", type=int, default=240)
+    ap.add_argument("--allow-software", action="store_true", help="do not require a real GPU renderer")
+    a = ap.parse_args()
+    {"fetch": cmd_fetch, "world": cmd_world, "run": cmd_run}[a.cmd](a)

@@ -69,3 +69,48 @@ All resolved; no wall hit 3 times.
 
 ## Run it
 `python3 -B -I mc_trial.py fetch|world --root DIR`, then on the PC `run_trial.sh DIR` (takes /root/prov/pc_gpu.lock, logs START/END).
+
+## Follow-up: harder, repeatable stress (2026-11-12, stopped early on the owner's priority change)
+
+STATUS: RESEARCH. Code: `mc_stress.py`, `run_stress.sh`. Not run again after the final option change (see "Unverified").
+
+What was built (measured, ran end to end):
+- World: official server jar, seed `kayfabe-2026`, default generator, 6,400 chunks (5x5 tiles of 16x16 chunks, x/z -640..639)
+  pregenerated with `forceload` tiles in 97 s, 85 MB, copied fresh into every run. Done without any extra tool.
+- Client: dedicated server on localhost (online-mode=false), client joins with `--quickPlayMultiplayer localhost:25599`
+  (manifest feature flag `is_quick_play_multiplayer`; `has_custom_resolution` is needed for 1280x720). Options: render
+  distance 32, simulation distance 16, fancy graphics, smooth lighting, mipmap 4, vsync off, maxFps 260 (the "unlimited" value).
+  Join took 4.0-4.6 s.
+- Load: no input injection needed for movement. The server console runs `/tp Dev x 110 z yaw pitch` at 10 Hz on a circle of
+  radius 80 (25 s per lap, yaw spinning twice per lap, pitch oscillating) for 100 s, so the path is deterministic. 120 entities
+  (60 sheep, 30 villagers, 30 cows) on a seeded ring around it, summoned at the world surface. Creative mode + resistance.
+- FPS, independent of the game's own logging: the F3 overlay is switched on with a key press through `/dev/uinput`
+  (root; XTest did not reach the window), the game window is captured with `xwd -id`, and the leading "NNN fps" number
+  is decoded from the PNG by template matching against the game's own `ascii.png` font (PIL, no OCR tool). Sampled every 5 s
+  (20 samples per run). Decoder checked by eye on one screenshot (762 fps read as 762). Cross-check: `nvidia-smi` utilisation
+  once per second.
+- Pass criteria per run: JVM alive at the end, no crash-reports, zero `NVRM: Xid` lines in dmesg during the run, glxinfo
+  renderer NVIDIA plus `libnvidia-glcore` mapped in the JVM, FPS median above a floor with at least 10 samples.
+
+Results (3 runs, identical scripted path; last complete pass `--fps-min 100`, before the inactivity-limiter fix):
+- 3/3 runs PASS on the criteria above; Xid count 0 in all; no crash report; `NVIDIA GeForce RTX 4070/PCIe/SSE2`.
+- FPS medians 372.0 / 399.0 / 365.5 (run-to-run spread about 9 %). Per-sample range roughly 270 to 1080 inside a lap
+  (it follows the camera pitch and position, so the pattern repeats every lap).
+- GPU utilisation median 45-50 %, max 90-95 %. So at 1280x720 this is still CPU/main-thread limited on the RTX 4070 (inferred from
+  hundreds of fps and half-used GPU; not profiled). To make it GPU-bound raise the resolution (4K) or use fabulous graphics; not tried.
+
+Problems found:
+- After about 65 s the F3 number reads a constant 29-30 fps in every run. Cause is inferred: the game's inactivity FPS limiter
+  (no real input for one minute caps to 30 fps; the camera is moved by `/tp`, which is not input). I set `inactivityFpsLimit:"minutes"`
+  (no effect, the 30 fps remained) and then `"afk"` (a rerun was queued but cancelled by the owner's priority change before it
+  started). So the "FPS within band" check currently only holds for the first 13 samples; the last 7 are the limiter, not the GPU.
+  Fix to try next: confirm the option name/values from the options file the game writes on exit, or inject a periodic harmless
+  mouse/key event through the same uinput device.
+- The pass band floor (100 fps) is arbitrary and only guards against collapse; a real band needs more runs on a quiet box.
+- Runs used the GNOME session's Xwayland as user ubuntu and share the desktop with other jobs; each run is about 2.2 min wall.
+
+Unverified: the `afk` setting, anything above 720p, and behaviour inside a kayfabe guest. The first-sample FPS values
+after a lap restart show the chunk and entity load, not steady state.
+
+Cleanup: scratch dir, venv and scripts on the PC deleted, `/root` permission restored to 700, queued GPU run cancelled
+(logged in PC_ACTIVE.log), no GPU job held.
