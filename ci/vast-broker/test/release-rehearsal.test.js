@@ -305,7 +305,7 @@ test('classifyLeg: rehearsal drops matrix receipts only; a real release leg stil
   assert.notEqual(classifyLeg(record, opts).verdict, 'PASS');
   assert.notEqual(classifyLeg(record, { ...opts, rehearsal: false }).verdict, 'PASS');
 });
-test('a rehearsal record can never become a stored release PASS row', () => {
+test('a rehearsal record can never become a stored release PASS row (the large guard is what stops it)', () => {
   const cfg = applyProfile(configuration({ ...env, ...vars }), 'release', 'large');
   const rows = Object.entries(PASSING).map(([name, pass]) => ({ name, pass, fail: 0, skip: 0 }));
   const record = {
@@ -313,18 +313,26 @@ test('a rehearsal record can never become a stored release PASS row', () => {
     sha,
     die: 'AD102',
     family: 'ada',
-    tier: 'large',
-    budgetClass: 'release',
-    rehearsal: true,
+    tier: 'middle',
+    budgetClass: 'check',
     windowsRuns: 2,
     stages: [],
     ended: 1,
+    resultAt: 1,
     verdict: 'PASS',
     hardware,
     result: { verdict: 'PASS', suites: rows, host_reference: 'GREEN', hardware },
   };
-  const row = rowFromRecord(record, 1, { key: 'k', kind: 'tree' }, 0, cfg);
-  assert.notEqual(row?.verdict, 'PASS');
+  const row = (r) => rowFromRecord(r, 1, { key: 'k', kind: 'tree' }, 0, cfg);
+  // control: the same record as a middle row IS a stored PASS, so the check below can fail
+  assert.equal(row(record).verdict, 'PASS');
+  // as a large rehearsal record, or as a large record without a matrix row, it is not
+  assert.equal(
+    row({ ...record, tier: 'large', budgetClass: 'release', rehearsal: true }).verdict,
+    'UNATTRIBUTED',
+  );
+  assert.equal(row({ ...record, tier: 'large' }).verdict, 'UNATTRIBUTED');
+  assert.equal(row({ ...record, budgetClass: 'release' }).verdict, 'UNATTRIBUTED');
 });
 test('dieLegs: a rehearsal skips the host-driver filter and carries no matrix fields; a normal call is unchanged', () => {
   const cfg = applyProfile(configuration({ ...env, ...vars }), 'release', 'large');
@@ -443,3 +451,171 @@ for (const rehearsal of [undefined, false])
       assert.notEqual((await batchOf(h, id)).legs[0].state, 'STARTED');
     },
   );
+
+// ---- review of PR #355 (2026-11-12): S1 apps only on the last SPEC lane leg, S2 APPS_DISABLED, S3 admission checks ----
+const SPEC = { RELEASE_STAGES: '["specviewperf"]' };
+const twoMachines = (h) => {
+  h.cloud.extraOffers = [
+    { ...h.cloud.offer, id: 12, machine_id: 200012, host_id: 3012, price: 0.4 },
+  ];
+};
+const persisted = async (h, { leg = {}, batch = {} } = {}) => {
+  const id = '8123456789012345678';
+  await h.storage.put('batch:' + id, {
+    id,
+    sha,
+    tier: 'large',
+    profile: 'release',
+    rehearsal: true,
+    rehearsalDie: 'AD102',
+    state: 'RUNNING',
+    created: h.time.value,
+    updated: h.time.value,
+    runnerNonce: 'f'.repeat(64),
+    costCapUsd: 12,
+    estimateUsd: 1,
+    windowsRunsPerDie: 2,
+    diesPerFamily: 1,
+    releaseDies: { ada: ['AD102'] },
+    stages: [],
+    reruns: 0,
+    legs: [
+      {
+        seq: 1,
+        key: id + '-1',
+        family: 'ada',
+        die: 'AD102',
+        windowsRuns: 2,
+        state: 'PENDING',
+        avoidMachines: [],
+        avoidHosts: [],
+        rerunDepth: 0,
+        queued: h.time.value,
+        ...leg,
+      },
+    ],
+    verdict: null,
+    ...batch,
+  });
+  await h.storage.put('batch-open:' + id, id);
+  return id;
+};
+test('S1: with SPEC only the LAST lane leg carries the apps pair (plan, env, record)', async () => {
+  const h = await harness(SPEC);
+  twoMachines(h);
+  const { plan } = await h.service.adminPlan(body());
+  const legs = plan.families[0].cells[0].legs;
+  assert.deepEqual(
+    legs.map((l) => [l.spec, l.apps]),
+    [
+      ['lanea', false],
+      ['laneb', undefined],
+    ],
+  );
+  const { batch: id } = await h.service.adminStart(body());
+  const [a] = creates(h);
+  assert.equal(a.env.KF_SPEC, 'lanea');
+  assert.ok(!('KF_LINUX_APPS' in a.env) && !('KF_WINAPPS' in a.env));
+  let batch = await batchOf(h, id);
+  assert.equal((await h.storage.get('record:' + batch.legs[0].key)).middleAppsRequested, false);
+  await finish(h, batch.legs[0].key, 'PASS', {
+    ...LINUX,
+    windows_gate: 1,
+    specviewperf_lanea: 1,
+  });
+  await tick(h);
+  batch = await batchOf(h, id);
+  const b = creates(h).find((c) => c.env.KF_SPEC === 'laneb');
+  assert.equal(b.env.KF_LINUX_APPS, '1');
+  assert.equal(b.env.KF_WINAPPS, 'mid');
+  assert.equal((await h.storage.get('record:' + batch.legs[1].key)).middleAppsRequested, true);
+  // lane B without the apps rows is not a pass; with them the batch ends REHEARSAL_PASS
+  await finish(h, batch.legs[1].key, 'PASS', {
+    ...LINUX,
+    apps: 66,
+    windows_apps: 10,
+    windows_gate: 1,
+    specviewperf_laneb: 1,
+  });
+  await tick(h);
+  assert.equal((await batchOf(h, id)).verdict, 'REHEARSAL_PASS');
+});
+test('S1: a SPEC lane B leg that skips the apps rows is not a pass', async () => {
+  const h = await harness(SPEC);
+  twoMachines(h);
+  const { batch: id } = await h.service.adminStart(body());
+  let batch = await batchOf(h, id);
+  await finish(h, batch.legs[0].key, 'PASS', { ...LINUX, windows_gate: 1, specviewperf_lanea: 1 });
+  await tick(h);
+  batch = await batchOf(h, id);
+  await finish(h, batch.legs[1].key, 'PASS', {
+    ...LINUX,
+    windows_gate: 1,
+    specviewperf_laneb: 1,
+  });
+  await tick(h);
+  assert.notEqual((await batchOf(h, id)).verdict, 'REHEARSAL_PASS');
+});
+test('S2: MIDDLE_APPS_ENABLED=false refuses a large plan, a rehearsal plan and a rehearsal start', async () => {
+  const h = await harness({ MIDDLE_APPS_ENABLED: 'false' });
+  const plain = (await h.service.adminPlan({ commit_sha: sha, tier: 'large' })).plan;
+  assert.ok(plain.refusals.includes('APPS_DISABLED'), JSON.stringify(plain.refusals));
+  const { plan } = await h.service.adminPlan(body());
+  assert.ok(plan.refusals.includes('APPS_DISABLED'));
+  assert.equal(plan.admitted, false);
+  await assert.rejects(
+    () => h.service.adminStart(body()),
+    (e) => e.reason === 'PLAN_REFUSED',
+  );
+  assert.equal(h.cloud.creates, 0);
+  // and the enabled case does not have the refusal
+  const on = await harness();
+  assert.ok(!(await on.service.adminPlan(body())).plan.refusals.includes('APPS_DISABLED'));
+});
+test('S2: a persisted pending rehearsal leg is not rented while the apps pair is off, and the batch ends', async () => {
+  const h = await harness({ MIDDLE_APPS_ENABLED: 'false' });
+  const id = await persisted(h);
+  await h.service.sweep();
+  assert.equal(h.cloud.creates, 0);
+  const batch = await batchOf(h, id);
+  assert.equal(batch.legs[0].state, 'MISSING');
+  assert.equal(batch.legs[0].lastRefusal, 'APPS_DISABLED');
+});
+test('S3: a persisted rehearsal leg that carries a matrix row is refused at admission', async () => {
+  const h = await harness();
+  const row = structuredClone(RELEASE_MATRIX.dies.find((d) => d.die === 'AD102'));
+  const id = await persisted(h, { leg: { releaseMatrix: row } });
+  await h.service.sweep();
+  assert.equal(h.cloud.creates, 0);
+  assert.notEqual((await batchOf(h, id)).legs[0].state, 'STARTED');
+});
+test('S3: a persisted rehearsal leg whose die is not in the matrix is refused at admission', async () => {
+  const h = await harness();
+  // an offer exists for the die, so only the matrix membership check can stop the leg
+  h.cloud.offer = { ...h.cloud.offer, gpu_name: 'RTX_3060', compute_cap: 860, gpu_ram: 12288 };
+  const id = await persisted(h, { leg: { die: 'GA106', family: 'ampere' } });
+  await h.service.sweep();
+  assert.equal(h.cloud.creates, 0);
+  assert.notEqual((await batchOf(h, id)).legs[0].state, 'STARTED');
+});
+test('S3: a Start whose matrix die is not in RELEASE_DIES is refused', async () => {
+  const dies = JSON.stringify({
+    turing: ['TU106', 'TU116'],
+    ampere: ['GA102', 'GA104'],
+    ada: ['AD104', 'AD103'],
+    blackwell: ['GB202', 'GB205'],
+  });
+  const h = await harness({ RELEASE_DIES: dies });
+  await assert.rejects(
+    () => h.service.adminStart(body()),
+    (e) => e.state === 'BAD_REQUEST',
+  );
+  assert.equal(h.cloud.creates, 0);
+});
+test('S3: the daily rental count cap applies to a rehearsal plan', async () => {
+  const h = await harness({ ...SPEC, RELEASE_DAILY_RENTALS: '1' });
+  twoMachines(h);
+  const { plan } = await h.service.adminPlan(body());
+  assert.equal(plan.legs, 2);
+  assert.ok(plan.refusals.includes('DAILY_COUNT'), JSON.stringify(plan.refusals));
+});
