@@ -1,5 +1,5 @@
 STATUS: DESIGN-ONLY, 2026-11-12. Owner design (binding), gap analysis against draft PRs #293/#302/#300/#303, GPU-free
-tooling (`scripts/bench/windows/propimage.py`, tested by `scripts/ci/test_propimage.py`, 154 tests, 58 mutants in
+tooling (`scripts/bench/windows/propimage.py`, tested by `scripts/ci/test_propimage.py`, 158 tests, 59 mutants in
 `scripts/ci/propimage_mutants.py`, each with at least two killers; counts from a fresh run on 2026-11-12). No VM was started, nothing was deleted on the PC, no R2 object was written.
 Labels: MEASURED = a file or command run on 2026-11-12 (named); CODE READ = read in a named file; INFERRED = reasoning,
 not tested; DESIGN INTENT = owner or coordinator decision, not built; UNTESTED = no run yet.
@@ -243,7 +243,7 @@ Preflight on the PC: GPU lock free and recorded in `/root/prov/PC_ACTIVE.log`, `
   virtio-win 0.1.302 ISO sha256 `303f7ae4...67949d`, OpenSSH MSI and NVIDIA 580.88 sha256 equal the pins in `win_vm.sh` (MEASURED on the PC).
 - Disk bus: virtio-blk with serial from the seed, as in CI. No driver click: `propimage_autounattend.xml.in` lists the virtio-win ISO under
   `PnpCustomizationsWinPE` (`viostor\w11\amd64` on D..K) and stages NetKVM and friends offline. The three CDs (Windows ISO, virtio-win, KFUNATTEND)
-  sit on separate q35 AHCI ports; only the Windows ISO has a boot index. UEFI shows "Press any key to boot from CD or DVD" for a few seconds:
+  sit on separate q35 AHCI ports; only the Windows ISO has a boot index. (The first start used a separate KFUNATTEND CD whose answer file also ran the OpenSSH install at first logon; since the owner's rule of one way to get SSH in, that is gone: one CD, KFTOOLS, below.) UEFI shows "Press any key to boot from CD or DVD" for a few seconds:
   a key press is needed, or `system_reset` and press again (MEASURED: first boot timed out to "No bootable option").
 - Setup screen reached (MEASURED, screendump through QMP): Windows 11 Setup reached the Product key page, so the answer file's language
   settings applied; whether the rest of the answer file (edition index 6, partitions, local account, OpenSSH first-logon commands) applies is
@@ -253,3 +253,41 @@ Preflight on the PC: GPU lock free and recorded in `/root/prov/PC_ACTIVE.log`, `
   (`BypassCPUCheck`); TPM and Secure Boot checks stay on (swtpm CRB, OVMF secure-boot code with Microsoft keys `OVMF_VARS_4M.ms.fd`).
 - Working directory on the PC: `/workspace/bench/propimage_20261112/` (state.json, image.qcow2 160 G thin, firmware/, tpm/, media/, bin/, keys/,
   run/). The swtpm AppArmor local rule gained one line for this directory. Launcher: `scripts/bench/windows/propimage_run.sh setup` as user ubuntu.
+
+
+## 10. One install CD (KFTOOLS), SSH, GPU driver (2026-11-12; owner rules: minimal scripts, nothing left in the guest)
+
+Final file list of the CD (`propimage.py tools`, label KFTOOLS): `autounattend.xml`, `OpenSSH-Win64-v10.0.0.0.msi`, `setup_ssh.ps1`,
+`580.88-desktop-win10-win11-64bit-international-dch-whql.exe` (both installers sha256-checked against the `win_vm.sh` pins before the CD is built).
+No README (the steps are here), no virtio-win copy (its own CD is attached separately). SSH has ONE way in: `setup_ssh.ps1` (FirstLogonCommands removed
+from the answer file). The owner's single command, in an admin PowerShell, drive letter of the CD from File Explorer:
+`powershell -ExecutionPolicy Bypass -File D:\setup_ssh.ps1`. It checks the MSI hash, installs it (`ADDLOCAL=Client,Server`; feature names UNVERIFIED until the
+first run), sets sshd Automatic and starts it, creates the TCP 22 rule only if missing, sets `HKLM:\SOFTWARE\OpenSSH` DefaultShell to Windows PowerShell,
+writes `C:\ProgramData\ssh\administrators_authorized_keys` (the VM's PUBLIC key only) with `icacls /inheritance:r /grant Administrators:F SYSTEM:F`,
+restarts sshd and prints SSH_READY, the SMBIOS UUID and MachineGuid.
+
+Hot-plug into the running setup VM (MEASURED 2026-11-12 on the PC; the QMP socket is `$D/qmp.sock`; `usb-storage` alone does not work: it needs `drive=`,
+and a USB disk would hide the ISO9660 filesystem from Windows, so a USB SCSI bridge with a `scsi-cd` is used):
+
+    {"execute":"blockdev-add","arguments":{"driver":"raw","node-name":"tools0","read-only":true,"file":{"driver":"file","filename":"<D>/media/tools.iso","read-only":true}}}
+    {"execute":"device_add","arguments":{"driver":"usb-bot","id":"toolsusb","bus":"xhci.0"}}
+    {"execute":"device_add","arguments":{"driver":"scsi-cd","id":"toolscd","bus":"toolsusb.0","drive":"tools0"}}
+
+`query-block` then lists `toolscd` as removable with `tools.iso` inserted (MEASURED). That Windows lists it as a CD drive is UNTESTED until the owner is at the desktop.
+Later starts attach tools.iso as the fourth q35 AHCI CD (`propimage_run.sh`), no hot-plug needed.
+
+GPU registry settings, only these three, each from the existing gate material, none for convenience:
+
+| key | value | why | source |
+|---|---|---|---|
+| `HKLM\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\<index>` `EnableGpuFirmware` | 1 | forces GSP (without it: Code 43) | `scripts/bench/windows/gsp_on.ps1:50`, `docs/howto/windows-guest.md:18` |
+| `HKLM\SYSTEM\CurrentControlSet\Services\nvlddmkm` `EnableGpuFirmware` | 1 | same flag, both are needed | `scripts/bench/windows/gsp_on.ps1:55`, `docs/howto/windows-guest.md:19` |
+| `HKLM\SOFTWARE\Microsoft\Windows\Dwm` `OverlayTestMode` | 5 | Start menu reset the display driver on Windows 11 Pro without it | `scripts/bench/windows/desktop_prep.ps1:53`, `docs/howto/windows-guest.md:20` |
+
+The first two are written by the existing `gsp_on.ps1` (device disabled, INF added, keys written, device enabled), run over ssh from git with the host-extracted driver
+copied over the same ssh; the third is one `reg add` over ssh. No new script. `gsp_on.ps1` leaves `C:\kf` and its log: the driver directory, `C:\kf` and the
+transcript are deleted over ssh when the install is done (nothing of the harness stays in the guest). Whether the host-extracted INF route or the silent `.exe` is better
+is open: the `.exe` alone cannot write the class key before nvlddmkm's first start (INFERRED from the gsp_on.ps1 header), so the INF route is used.
+The setup-VM answer file keeps: language, disk layout, edition index 6, local account, BypassCPUCheck, BitLocker/Windows Update/VBS/Fast Startup/crash-dump/Smart App
+Control registry lines of the existing LTSC template (CODE READ in `propimage_autounattend.xml.in`; each is a tweak from `autounattend.xml.in`, to be trimmed to the minimum
+the owner approves: open item O4).

@@ -16,7 +16,7 @@ for d in tpm firmware run; do install -d -m 0700 "$D/$d"; done
 extra=()
 case "$MODE" in
   setup)
-    for f in "$D"/media/win.iso "$D"/media/virtio-win.iso "$D"/media/unattend.iso; do
+    for f in "$D"/media/win.iso "$D"/media/virtio-win.iso "$D"/media/tools.iso; do
       [ -r "$f" ] || { echo "missing $f" >&2; exit 2; }; extra+=(--cdrom "$f"); done ;;
   install|offline) extra+=(--broker-sock "${PROP_BROKER_SOCK:?broker socket}" --gop-efi "${PROP_GOP_EFI:?signed gop efi}" --uid "$(id -u)") ;;
   ci) extra+=(--display off) ;;

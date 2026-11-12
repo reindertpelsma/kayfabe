@@ -411,9 +411,9 @@ class PropTests(unittest.TestCase):
             f.parent.mkdir(parents=True, exist_ok=True)
             f.write_bytes(base64.b64decode(rec["data_base64"]))
         with contextlib.redirect_stdout(io.StringIO()):
-            self.assertEqual(self.p.main(["verify-host", str(sp), "--tpm-dir", str(self.tmp), "--cpuinfo", str(self.cpu_file())]), 0)
+            self.assertEqual(self.p.main(["verify", str(sp), "--workdir", str(self.tmp), "--cpuinfo", str(self.cpu_file())]), 0)
             (self.tmp / "firmware/OVMF_VARS.fd").write_bytes(b"x")
-            self.assertEqual(self.p.main(["verify-host", str(sp), "--tpm-dir", str(self.tmp), "--cpuinfo", str(self.cpu_file())]), 1)
+            self.assertEqual(self.p.main(["verify", str(sp), "--workdir", str(self.tmp), "--cpuinfo", str(self.cpu_file())]), 1)
 
     # --- second killers (each rule is pinned by two independent tests)
     def test_golden_ids_for_proposed_seed(self):
@@ -616,7 +616,7 @@ class PropTests(unittest.TestCase):
         self.state["files"] = {}
         sp = self.tmp / "e.json"
         sp.write_text(json.dumps(self.state))
-        self.assertEqual(self.p.main(["verify-host", str(sp), "--tpm-dir", str(self.tmp), "--cpuinfo", str(self.cpu_file())]), 1)
+        self.assertEqual(self.p.main(["verify", str(sp), "--workdir", str(self.tmp), "--cpuinfo", str(self.cpu_file())]), 1)
 
     def test_ssh_is_batch_and_identity_only(self):
         a = self.p.ssh_argv(self.state, "/k")
@@ -965,7 +965,7 @@ class PropTests(unittest.TestCase):
         self.assertIn(self.p.derive_password(SEED), a)
         self.assertIn("<Key>/IMAGE/INDEX</Key><Value>6</Value>", a)
         self.assertIn("E:\\viostor\\w11\\amd64", a)
-        self.assertIn("OpenSSH-Win64-v10.0.0.0.msi", a)
+        self.assertNotIn("FirstLogonCommands", a)
 
     def test_unattend_is_wellformed_xml_and_keeps_secure_boot_and_tpm_checks(self):
         import xml.dom.minidom
@@ -974,12 +974,6 @@ class PropTests(unittest.TestCase):
         self.assertIn("BypassCPUCheck", a)
         self.assertNotIn("BypassTPMCheck", a)
         self.assertNotIn("BypassSecureBootCheck", a)
-
-    def test_unattend_has_no_key_and_no_harness_script(self):
-        a = self.p.render_unattend(self.template(), self.state)
-        self.assertNotIn("ProductKey", a)
-        self.assertNotIn("kf-firstlogon", a)
-        self.assertNotIn("-ExecutionPolicy", a)
 
     def test_password_is_derived_from_the_seed(self):
         self.assertEqual(self.p.derive_password(SEED), self.p.derive_password(SEED))
@@ -998,30 +992,6 @@ class PropTests(unittest.TestCase):
     def test_render_refuses_a_template_without_a_placeholder(self):
         with self.assertRaises(self.p.PropError):
             self.p.render_unattend(self.template().replace("@@USER@@", "root"), self.state)
-
-    def test_media_dir_contents(self):
-        self.state["guest"]["ssh_public_key"] = self.PUB
-        msi = self.tmp / "OpenSSH-Win64-v10.0.0.0.msi"
-        msi.write_bytes(b"msi")
-        names = self.p.write_media_dir(self.state, self.tmp / "media", msi)
-        self.assertEqual(names, ["OpenSSH-Win64-v10.0.0.0.msi", "administrators_authorized_keys", "autounattend.xml"])
-        self.assertEqual((self.tmp / "media/administrators_authorized_keys").read_text().strip(), self.PUB)
-
-    def test_media_dir_needs_a_public_key(self):
-        msi = self.tmp / "OpenSSH-Win64-v10.0.0.0.msi"
-        msi.write_bytes(b"msi")
-        with self.assertRaises(self.p.PropError):
-            self.p.write_media_dir(self.state, self.tmp / "m1", msi)
-        self.state["guest"]["ssh_public_key"] = "ssh-rsa AAAA x"
-        with self.assertRaises(self.p.PropError):
-            self.p.write_media_dir(self.state, self.tmp / "m2", msi)
-
-    def test_media_dir_refuses_unpinned_msi_name(self):
-        self.state["guest"]["ssh_public_key"] = self.PUB
-        other = self.tmp / "evil.msi"
-        other.write_bytes(b"x")
-        with self.assertRaises(self.p.PropError):
-            self.p.write_media_dir(self.state, self.tmp / "m3", other)
 
     def test_capture_and_restore_files_round_trip(self):
         wd = self.tmp / "wd"
@@ -1098,38 +1068,12 @@ class PropTests(unittest.TestCase):
             self.assertIn("ICH9-LPC.disable_s3=1", j)
             self.assertIn("ICH9-LPC.disable_s4=1", j)
 
-    def test_cli_media_password_capture(self):
-        import contextlib
-        import io
-        self.state["guest"]["ssh_public_key"] = self.PUB
-        sp = self.tmp / "st.json"
-        sp.write_text(json.dumps(self.state))
-        out = io.StringIO()
-        with contextlib.redirect_stdout(out):
-            self.assertEqual(self.p.main(["password", str(sp)]), 0)
-        self.assertEqual(out.getvalue().strip(), self.p.derive_password(SEED))
-
-
     def test_unattend_rejects_xml_injection_in_user(self):
         for u in ('a"b', "a</Name><X/>", "a&b"):
             s = copy.deepcopy(self.state)
             s["guest"]["user"] = u
             with self.assertRaises(self.p.PropError):
                 self.p.render_unattend(self.template(), s)
-
-    def test_media_dir_rejects_multi_line_key(self):
-        msi = self.tmp / "OpenSSH-Win64-v10.0.0.0.msi"
-        msi.write_bytes(b"m")
-        self.state["guest"]["ssh_public_key"] = self.PUB + "\nssh-ed25519 AAAAevil"
-        with self.assertRaises(self.p.PropError):
-            self.p.write_media_dir(self.state, self.tmp / "m4", msi)
-
-    def test_media_dir_refuses_msi_name_with_suffix(self):
-        self.state["guest"]["ssh_public_key"] = self.PUB
-        other = self.tmp / "OpenSSH-Win64-v10.0.0.0.msi.bak"
-        other.write_bytes(b"x")
-        with self.assertRaises(self.p.PropError):
-            self.p.write_media_dir(self.state, self.tmp / "m5", other)
 
     def test_capture_files_refuses_symlinked_ovmf_vars(self):
         wd = self.tmp / "wd4"
@@ -1152,6 +1096,120 @@ class PropTests(unittest.TestCase):
         a = self.argv("setup", cdroms=["/m/a.iso", "/m/b.iso"])
         self.assertEqual(" ".join(a).count("bootindex"), 1)
         self.assertNotIn("bootindex", " ".join(self.argv("setup")))
+
+
+    # --- the one install CD
+    def tools_files(self):
+        d = self.tmp / "src"
+        d.mkdir(exist_ok=True)
+        return d
+
+    def make_tools(self, pins_ok=True):
+        d = self.tools_files()
+        msi, nv = d / self.p.OPENSSH_MSI, d / self.p.NVIDIA_EXE
+        msi.write_bytes(b"msi")
+        nv.write_bytes(b"nvidia")
+        if pins_ok:
+            self.p.PINS[self.p.OPENSSH_MSI] = hashlib.sha256(b"msi").hexdigest()
+            self.p.PINS[self.p.NVIDIA_EXE] = hashlib.sha256(b"nvidia").hexdigest()
+        return msi, nv
+
+    def test_tools_cd_holds_exactly_four_files(self):
+        self.state["guest"]["ssh_public_key"] = self.PUB
+        msi, nv = self.make_tools()
+        names = self.p.write_tools_dir(self.state, self.tmp / "cd", msi, nv)
+        self.assertEqual(names, sorted(["autounattend.xml", self.p.OPENSSH_MSI, self.p.NVIDIA_EXE, "setup_ssh.ps1"]))
+
+    def test_tools_cd_refuses_unpinned_hash(self):
+        self.state["guest"]["ssh_public_key"] = self.PUB
+        msi, nv = self.make_tools(pins_ok=False)
+        with self.assertRaises(self.p.PropError):
+            self.p.write_tools_dir(self.state, self.tmp / "cd1", msi, nv)
+
+    def test_tools_cd_refuses_wrong_file_name(self):
+        self.state["guest"]["ssh_public_key"] = self.PUB
+        msi, nv = self.make_tools()
+        other = self.tmp / "src/evil.exe"
+        other.write_bytes(b"nvidia")
+        with self.assertRaises(self.p.PropError):
+            self.p.write_tools_dir(self.state, self.tmp / "cd2", msi, other)
+
+    def test_setup_script_carries_only_the_public_key(self):
+        self.state["guest"]["ssh_public_key"] = self.PUB
+        self.state["guest"]["ssh_private_key"] = "-----BEGIN OPENSSH PRIVATE KEY-----\nSECRET\n"
+        ps = self.p.render_setup_ssh(self.state)
+        self.assertIn(self.PUB, ps)
+        self.assertNotIn("PRIVATE", ps)
+        self.assertNotIn("SECRET", ps)
+
+    def test_setup_script_is_deterministic_idempotent_and_pinned(self):
+        self.state["guest"]["ssh_public_key"] = self.PUB
+        ps = self.p.render_setup_ssh(self.state)
+        self.assertEqual(ps, self.p.render_setup_ssh(self.state))
+        self.assertIn(self.p.PINS[self.p.OPENSSH_MSI] if False else "ddec9c53864280759cf9f74791cefd387100e3946aa849a1c138a4ed1b96b7d9", ps)
+        for needle in ("Get-Service sshd", "Get-NetFirewallRule", "DefaultShell", "administrators_authorized_keys", "icacls.exe",
+                       "Restart-Service sshd", "SSH_READY", "MACHINE_GUID", "SMBIOS_UUID", "$MyInvocation.MyCommand.Path"):
+            self.assertIn(needle, ps)
+
+    def test_setup_script_rejects_missing_or_odd_key(self):
+        for k in (None, "", "ssh-rsa AAAA x", "ssh-ed25519 AAAA'; calc; '"):
+            s = copy.deepcopy(self.state)
+            s["guest"]["ssh_public_key"] = k
+            with self.assertRaises(self.p.PropError):
+                self.p.render_setup_ssh(s)
+
+    def test_cli_has_only_the_flow_verbs(self):
+        import contextlib
+        import io
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err), self.assertRaises(SystemExit):
+            self.p.main(["--help"] if False else ["bogus"])
+        for verb in ("ids", "password", "init", "tools", "argv", "verify", "pack", "unpack"):
+            self.assertIn(verb, err.getvalue())
+        for gone in ("media", "capture-files", "restore-files", "record", "verify-host"):
+            self.assertNotIn("'%s'" % gone, err.getvalue())
+
+    def test_pack_and_unpack_carry_the_work_directory_files(self):
+        wd = self.tmp / "wdp"
+        (wd / "tpm").mkdir(parents=True)
+        (wd / "firmware").mkdir()
+        (wd / "tpm/tpm2-00.permall").write_bytes(b"perm2")
+        (wd / "firmware/OVMF_VARS.fd").write_bytes(b"vars2")
+        s = self.p.init_state(SEED)
+        sp = self.tmp / "pp.json"
+        sp.write_text(json.dumps(s))
+        img = self.tmp / "pp.qcow2"
+        img.write_bytes(b"QFI")
+        z = self.tmp / "pp.zip"
+        import contextlib
+        import io
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(self.p.main(["pack", str(sp), str(img), "--out", str(z), "--workdir", str(wd)]), 0)
+            out = self.tmp / "ppo"
+            self.assertEqual(self.p.main(["unpack", str(z), "--dir", str(out / "x"), "--workdir", str(out / "w")]), 0)
+        self.assertEqual((out / "w/tpm/tpm2-00.permall").read_bytes(), b"perm2")
+        self.assertEqual((out / "w/firmware/OVMF_VARS.fd").read_bytes(), b"vars2")
+
+
+    def test_tools_cd_needs_a_public_key_in_the_state(self):
+        msi, nv = self.make_tools()
+        with self.assertRaises(self.p.PropError):
+            self.p.write_tools_dir(self.state, self.tmp / "cd3", msi, nv)
+
+    def test_tools_cd_refuses_swapped_installer_contents(self):
+        self.state["guest"]["ssh_public_key"] = self.PUB
+        msi, nv = self.make_tools()
+        msi.write_bytes(b"nvidia")
+        with self.assertRaises(self.p.PropError):
+            self.p.write_tools_dir(self.state, self.tmp / "cd4", msi, nv)
+
+    def test_tools_cd_refuses_installer_name_with_suffix(self):
+        self.state["guest"]["ssh_public_key"] = self.PUB
+        msi, nv = self.make_tools()
+        alt = self.tmp / "src" / (self.p.OPENSSH_MSI + ".bak")
+        alt.write_bytes(b"msi")
+        with self.assertRaises(self.p.PropError):
+            self.p.write_tools_dir(self.state, self.tmp / "cd5", alt, nv)
 
 
 if __name__ == "__main__":

@@ -103,31 +103,7 @@
    </LocalAccount></LocalAccounts></UserAccounts>
    <AutoLogon><Enabled>true</Enabled><Username>@@USER@@</Username><LogonCount>1</LogonCount>
     <Password><Value>@@PASSWORD@@</Value><PlainText>true</PlainText></Password></AutoLogon>
-   <!-- OpenSSH server from the pinned official MSI on the KFUNATTEND CD, key login only for the state's key.
-        Plain cmd commands, nothing is stored in the image besides the installed software. -->
-   <FirstLogonCommands>
-    <SynchronousCommand wcm:action="add"><Order>1</Order>
-     <CommandLine>cmd /c for %d in (D E F G H I J K) do @if exist %d:\@@OPENSSH_MSI@@ msiexec /i %d:\@@OPENSSH_MSI@@ /qn /norestart</CommandLine>
-    </SynchronousCommand>
-    <SynchronousCommand wcm:action="add"><Order>2</Order>
-     <CommandLine>cmd /c if not exist C:\ProgramData\ssh mkdir C:\ProgramData\ssh</CommandLine>
-    </SynchronousCommand>
-    <SynchronousCommand wcm:action="add"><Order>3</Order>
-     <CommandLine>cmd /c for %d in (D E F G H I J K) do @if exist %d:\administrators_authorized_keys copy /y %d:\administrators_authorized_keys C:\ProgramData\ssh\administrators_authorized_keys</CommandLine>
-    </SynchronousCommand>
-    <SynchronousCommand wcm:action="add"><Order>4</Order>
-     <CommandLine>icacls C:\ProgramData\ssh\administrators_authorized_keys /inheritance:r /grant Administrators:F /grant SYSTEM:F</CommandLine>
-    </SynchronousCommand>
-    <SynchronousCommand wcm:action="add"><Order>5</Order>
-     <CommandLine>sc config sshd start= auto</CommandLine>
-    </SynchronousCommand>
-    <SynchronousCommand wcm:action="add"><Order>6</Order>
-     <CommandLine>netsh advfirewall firewall add rule name=OpenSSH-Server-In-TCP dir=in action=allow protocol=TCP localport=22</CommandLine>
-    </SynchronousCommand>
-    <SynchronousCommand wcm:action="add"><Order>7</Order>
-     <CommandLine>net start sshd</CommandLine>
-    </SynchronousCommand>
-   </FirstLogonCommands>
+   <!-- SSH is installed by the owner's one command (setup_ssh.ps1 on the tools CD): one way only. -->
    <TimeZone>UTC</TimeZone>
   </component>
  </settings>
