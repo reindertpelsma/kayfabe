@@ -40,6 +40,11 @@ def run_all(specs, env, environ=None, root=None, reference_dir=None, record_dir=
         cuda_home = root / "cuda_home"
         if (cuda_home / "bin" / "nvcc").exists():
             cenv["CUDA_HOME"] = str(cuda_home)
+        # torch headers include cusparse.h/cublas_v2.h/...; the venv's nvidia-*-cu12 wheels carry them
+        # (the minimal nvcc redist does not), so expose their include dirs to nvcc and the host compiler.
+        incs = sorted(str(p) for p in root.glob("lib/python*/site-packages/nvidia/*/include") if p.is_dir())
+        if incs and (cuda_home / "bin" / "nvcc").exists() and "CPATH" not in cenv:
+            cenv["CPATH"] = os.pathsep.join(incs)
         # Venv-contained host gcc <= 14 for nvcc (tools/hostcc_gcc14.sh); hosts whose default gcc is newer
         # than the nvcc supports (Ubuntu 26.04: gcc 15 vs nvcc 12.8) cannot compile .cu otherwise.
         gxx14 = root / "gcc14" / "usr" / "bin" / "g++-14"
