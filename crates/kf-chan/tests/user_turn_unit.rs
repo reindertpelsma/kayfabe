@@ -1385,3 +1385,150 @@ fn ring_switch_in_window_keeps_copy_bound_even_after_registry_drains() {
         Call::ReadPb(_) | Call::Stage | Call::Gate | Call::Entry(..)
     )));
 }
+
+// ---- creo-04 replay (2026-11-12): Phase 2 streaming of an oversized Window-mode segment.
+// MEASURED: Vast 4090, kf3 5d7a5bc6, log line 14142: `USER_RING_SCAN_BUDGET len=1042284 max=917504 mode=Window
+// entry=0x0fe76e022f5d102c cursor=0x2 put=0x3f8`, directly after `USER_RING_MIGRATED ... generation=2`.
+// These tests state the Phase 2 contract (docs/design/V3_USER_DESCRIPTOR_DECISION_20261022.md section 4.3); they are
+// EXPECTED RED on a tree without Phase 2 (the relay refuses with USER_RING_SCAN_BUDGET and dies).
+
+/// The creo segment word: C56F entry, VA 0x2_2f5d102c, length 1,042,284, LEVEL=subroutine, no SYNC_WAIT.
+const CREO_WORD: u64 = 0x0fe76e022f5d102c;
+const CREO_BYTES: u64 = 1_042_284;
+
+/// `total` words of complete method packets (`INC sub0 0x100 x n` plus `n` data words); `total` must not be 1.
+fn pb_filler(total: usize) -> Vec<u32> {
+    let mut out = Vec::with_capacity(total);
+    let mut left = total;
+    while left > 0 {
+        let n = (left - 1).min(2000);
+        out.push(kf_abi::submit::method_header_inc(0, 0x100, n as u32).unwrap());
+        out.extend(std::iter::repeat_n(0x1234_5678u32, n));
+        left -= n + 1;
+        assert_ne!(left, 1, "a lone word is not a packet");
+    }
+    out
+}
+
+/// Window mode, migrated to generation 2, two ordinary entries relayed (cursor 2), registry empty: the creo state.
+fn creo_relay(io: &mut Mock) -> Relay {
+    let mut r = flipped_relay(io, false);
+    turn(&mut r, io).unwrap();
+    assert_eq!(r.life.mode(), Mode::Window);
+    r.switch_source(2);
+    io.live = 0;
+    io.epoch += 1;
+    for slot in 0..2u32 {
+        io.put_entry(slot, &ge(10 + slot as u8, Kind::Plain));
+    }
+    io.put = 2;
+    for _ in 0..2 {
+        turn(&mut r, io).unwrap();
+    }
+    assert_eq!((r.cursor, r.life.mode()), (2, Mode::Window));
+    io.calls.clear();
+    io.events.clear();
+    r
+}
+
+/// Offer `raw` (with `pb`) at slot 2 and queue ordinary entries up to `put = 0x3f8` behind it.
+fn offer_creo(io: &mut Mock, raw: u64, pb: Vec<u32>) {
+    io.ring[2] = raw;
+    io.pb.insert(raw & !support::SYNC, pb);
+    for slot in 3..0x3f8u32 {
+        io.put_entry(slot, &ge(100 + (slot % 100) as u8, Kind::Plain));
+    }
+    io.put = 0x3f8;
+}
+
+#[test]
+fn creo_entry_in_window_after_migration_is_streamed_not_refused() {
+    assert_eq!(
+        kf_abi::submit::gp_entry(0x2_2f5d_102c, CREO_BYTES).unwrap() | (1 << 41),
+        CREO_WORD,
+        "the fixture word decodes as the measured segment"
+    );
+    let mut io = Mock::new(2048);
+    let mut r = creo_relay(&mut io);
+    offer_creo(&mut io, CREO_WORD, pb_filler((CREO_BYTES / 4) as usize));
+    let result = turn(&mut r, &mut io);
+    assert!(
+        result.is_ok(),
+        "creo-04: a legitimate 1,042,284-byte segment must not kill the relay: {result:?}"
+    );
+    assert!(!r.dead);
+    assert!(format!("{:?}", r.life.counts()).contains("refused_scan_budget: 0"));
+    assert!(
+        io.calls
+            .iter()
+            .any(|c| matches!(c, Call::Entry(_, w) if *w == CREO_WORD)),
+        "the guest's original word is forwarded unchanged: {:?}",
+        io.calls
+    );
+}
+
+#[test]
+fn creo_entry_with_a_software_trigger_in_part_one_refuses_as_staged_span_budget() {
+    let mut io = Mock::new(2048);
+    let mut r = creo_relay(&mut io);
+    let mut pb = vec![
+        kf_abi::submit::method_header_inc(6, 0x200, 1).unwrap(),
+        support::HANDLE,
+    ];
+    pb.extend(pb_filler((CREO_BYTES / 4) as usize - 2));
+    offer_creo(&mut io, CREO_WORD, pb);
+    let e = turn(&mut r, &mut io).unwrap_err();
+    assert!(
+        matches!(e, Fail::Refused(ref why) if why.starts_with("USER_RING_STAGED_SPAN_BUDGET ")),
+        "a trigger inside an oversized segment cannot be staged: {e:?}"
+    );
+    assert!(
+        !io.calls
+            .iter()
+            .any(|c| matches!(c, Call::Entry(_, w) if *w == CREO_WORD))
+    );
+    assert!(!io.calls.contains(&Call::Gate));
+}
+
+#[test]
+fn trigger_in_a_later_part_of_an_oversized_segment_refuses_as_staged_span_budget() {
+    let mut io = Mock::new(2048);
+    let mut r = creo_relay(&mut io);
+    let words = (CREO_BYTES / 4) as usize;
+    let before = 240_000usize; // past the first 229,376-word part
+    let mut pb = pb_filler(before);
+    pb.push(kf_abi::submit::method_header_inc(6, 0x200, 1).unwrap());
+    pb.push(support::HANDLE);
+    pb.extend(pb_filler(words - before - 2));
+    offer_creo(&mut io, CREO_WORD, pb);
+    let e = turn(&mut r, &mut io).unwrap_err();
+    assert!(
+        matches!(e, Fail::Refused(ref why) if why.starts_with("USER_RING_STAGED_SPAN_BUDGET ")),
+        "{e:?}"
+    );
+    assert!(
+        !io.calls
+            .iter()
+            .any(|c| matches!(c, Call::Entry(_, w) if *w == CREO_WORD))
+    );
+}
+
+#[test]
+fn the_largest_representable_segment_streams_in_at_most_ten_parts() {
+    // 8,388,604 bytes = 9 full parts + one partial: ten is the bound, and no representable word needs an eleventh.
+    let bytes = 8_388_604u64;
+    assert_eq!(bytes.div_ceil(kf_chan::user_storage::MAX_SOURCE_BYTES), 10);
+    let raw = kf_abi::submit::gp_entry(0x4000, bytes).unwrap() | (1 << 41);
+    let mut io = Mock::new(2048);
+    let mut r = creo_relay(&mut io);
+    offer_creo(&mut io, raw, pb_filler((bytes / 4) as usize));
+    let result = turn(&mut r, &mut io);
+    assert!(result.is_ok(), "{result:?}");
+    assert!(
+        io.calls
+            .iter()
+            .any(|c| matches!(c, Call::Entry(_, w) if *w == raw))
+    );
+    let parts = format!("{:?}", r.life.counts());
+    assert!(parts.contains("stream_parts_max: 10"), "{parts}");
+}
