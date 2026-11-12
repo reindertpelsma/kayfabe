@@ -761,6 +761,62 @@ function reportRows(rows) {
       log: { bytes: 0, sha256: hex('synthetic-log-' + run.run_id) },
     };
     for (const s of subs) for (const t of s.tests) doc.tests.push({ sub: s.sub, ...t });
+    if (run.run_id === 'syn-ci-p-2') {
+      // Synthetic apps and benchmark-stage rows (report rev 2) so the run page has something to show.
+      // No random draws here: the rest of the seed stays byte-identical.
+      const lin = subs.find((s) => s.os === 'linux');
+      const win = subs.find((s) => s.os === 'windows');
+      doc.rev = 2;
+      doc.apps = [
+        ...(lin
+          ? [
+              ['alpha_demo', 'PASS', 2, ''],
+              ['beta_render', 'PASS', 31, 'warn: harmless message'],
+              ['gamma_solver', 'FAIL', 90, 'exit 1 after 3 retries'],
+              ['delta_viewer', 'NOT_RUN', null, 'no result row (budget or boot)'],
+            ].map(([name, result, secs, note]) => ({
+              sub: lin.sub,
+              name,
+              os: 'linux',
+              result,
+              note,
+              secs,
+            }))
+          : []),
+        ...(win
+          ? [
+              ['alpha_win', 'PASS', 8, ''],
+              ['beta_win', 'FAIL', 120, 'timeout'],
+            ].map(([name, result, secs, note]) => ({
+              sub: win.sub,
+              name,
+              os: 'windows',
+              result,
+              note,
+              secs,
+            }))
+          : []),
+      ];
+      if (win) {
+        doc.spec = [
+          ['medical-04', 'PASS', 10, 10, null, [], 322, 318, 0],
+          ['catia-07', 'FAIL', 4, 6, 'RESET', ['05_SynthA', '06_SynthB'], 940, 803, 1],
+          ['maya-07', 'NOT_RUN', 0, 0, 'TIME', [], null, 400, null],
+        ].map(([name, result, done, total, reason, failed, wall_s, native_s, resets]) => ({
+          sub: win.sub,
+          name,
+          result,
+          done,
+          total,
+          reason,
+          failed,
+          wall_s,
+          native_s,
+          resets,
+        }));
+        doc.spec_host = { xid: 0, user_ring_refused: 0, release: '15.0.0' };
+      }
+    }
     doc.log.bytes = 1_000_000 + between(0, 2_000_000);
     rows.ci_run_reports.push({
       run_id: run.run_id,

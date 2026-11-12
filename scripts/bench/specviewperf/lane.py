@@ -220,6 +220,23 @@ def row_line(row):
         row["name"], row["result"], row["done"], row["total"], row["reason"], failed)
 
 
+def end_secs(text):
+    m = re.search(r"^SPECRUN_END workload=\S+ rc=-?[0-9]+ .*\bsecs=([0-9]{1,6})\b", text or "", re.M)
+    return int(m.group(1)) if m else None
+
+
+def facts_line(workload, end_text, tdr_text, tbl=None):
+    """`SPEC_RUN`: the wall time of one viewset's CLI run (the guest's own SPECRUN_END line), the native
+    wall of the same viewset from the table (MEASURED, lanes.json) and the guest resets of the run. Seconds
+    and counts only: no score and no subtest time. A missing source is `-`."""
+    tbl = tbl or table()
+    wall, resets = end_secs(end_text), tdr_total(tdr_text)
+    native = tbl.get("viewsets", {}).get(workload, {}).get("native_s")
+    return "SPEC_RUN name=%s wall_s=%s native_s=%s resets=%s" % (
+        workload, "-" if wall is None else wall,
+        native if isinstance(native, int) else "-", "-" if resets is None else resets)
+
+
 ROW_PATTERN = re.compile(
     r"^SPEC_ROW name=([a-z][a-z_]*-[0-9]{2}) result=(PASS|FAIL|NOT_RUN) subtests=([0-9]{1,3})/([0-9]{1,3})"
     r" reason=([A-Z_]{1,16}|-) failed=([A-Za-z0-9_,]{1,120}|-)$"
@@ -308,6 +325,10 @@ def main(argv=None):
     p.add_argument("--tdr", required=True)
     p.add_argument("--timeout", choices=("full", "cut", "dead", "silent", "launch"))
     p.add_argument("--scrub-out")
+    p = sub.add_parser("facts")
+    p.add_argument("workload")
+    p.add_argument("--end", required=True)
+    p.add_argument("--tdr", required=True)
     p = sub.add_parser("decide")
     p.add_argument("lane")
     p.add_argument("--rows", required=True)
@@ -363,6 +384,8 @@ def main(argv=None):
                 Path(a.scrub_out).write_text(scrub_cli(text(a.cli)))
             print(row_line(row))
             return {"PASS": 0, "FAIL": 1}.get(row["result"], 3)
+        elif a.cmd == "facts":
+            print(facts_line(a.workload, text(a.end), text(a.tdr), tbl))
         elif a.cmd == "decide":
             rows = [r for r in (parse_row(s.strip()) for s in text(a.rows).splitlines()) if r]
             kind, cls = decide(rows, a.lane, a.before, a.after, bool(a.bar1), a.xid, a.abort or None, tbl)

@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { JSDOM } from 'jsdom';
-import { withReports, nearestAnswer } from './report_fixture.mjs';
+import { withReports, nearestAnswer, SPEC_DISCLAIMER } from './report_fixture.mjs';
 
 const site = fileURLToPath(new URL('.', import.meta.url));
 const code = readFileSync(join(site, 'status/status.js'), 'utf8');
@@ -27,7 +27,9 @@ function write(mode) {
   const args =
     mode === 'fixture'
       ? `fixture=${JSON.stringify(join(site, 'status/fixture.json'))}`
-      : `api_base=${JSON.stringify(API)}, logs_base="https://logs.kayfabe.dev"`;
+      : mode === 'nologs'
+        ? `api_base=${JSON.stringify(API)}`
+        : `api_base=${JSON.stringify(API)}, logs_base="https://logs.kayfabe.dev"`;
   const run = spawnSync(
     'python3',
     [
@@ -38,10 +40,10 @@ function write(mode) {
     { encoding: 'utf8' },
   );
   assert.equal(run.status, 0, run.stderr);
-  assert.equal(run.stdout.trim(), mode);
+  assert.equal(run.stdout.trim(), mode === 'nologs' ? 'live' : mode);
   return out;
 }
-const pages = { fixture: write('fixture'), live: write('live') };
+const pages = { fixture: write('fixture'), live: write('live'), nologs: write('nologs') };
 
 async function render(mode, path, search = '', opts = {}) {
   const responses = opts.responses ?? fixture.responses;
@@ -389,7 +391,8 @@ test('no SPECviewperf score, GPU identifier or address can be drawn from the com
   const all = JSON.stringify(coverage) + JSON.stringify(fixture);
   assert.doesNotMatch(all, /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/);
   assert.doesNotMatch(all, /\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/);
-  assert.doesNotMatch(code, /scores|specviewperf/i);
+  // The page may name the benchmark (a section for its status rows, owner request 2026-11-11), never a score.
+  assert.doesNotMatch(code, /scores?/i);
 });
 
 // --- Find my setup (site/status/find) ---------------------------------------------------------
@@ -807,7 +810,7 @@ const goodRun = reportRuns.find((r) => r.verdict === 'PASS' && r.platform === 'b
 const badRun = reportRuns.find((r) => r.verdict === 'FAIL');
 const LOGS = 'https://logs.kayfabe.dev';
 
-test('run page: summary block first, then numbers, tests, applications, stages, raw details closed', async () => {
+test('run page: summary, apps, the benchmark rows, stages; probes and tests and raw details closed', async () => {
   const { document } = await render('live', 'run', '?id=' + goodRun.id, { responses: reported });
   const content = document.getElementById('kf-status-content');
   const order = [...content.children].map((n) => n.getAttribute('aria-label') || n.querySelector('h2')?.textContent || n.tagName);
@@ -817,8 +820,12 @@ test('run page: summary block first, then numbers, tests, applications, stages, 
     assert.match(summary, new RegExp(word), word);
   assert.match(summary, /43\.0 min/);
   const headings = [...content.querySelectorAll(':scope > section > h2')].map(norm);
-  assert.deepEqual(headings, ['Performance numbers', 'Tests', 'Applications', 'Windows gate', 'Stages']);
-  const details = content.querySelector('details.kf-details');
+  assert.deepEqual(headings, ['Apps', 'SPECviewperf', 'Windows gate', 'Stages']);
+  const probes = content.querySelector(':scope > details.kf-probes');
+  assert.equal(probes.open, false, 'probes and tests are collapsed');
+  assert.match(norm(probes.querySelector('summary')), /^Probes and tests \(\d+\)$/);
+  assert.ok(probes.querySelector('table.kf-perf') && probes.querySelector('table.kf-tests'));
+  const details = content.querySelector(':scope > details.kf-details:not(.kf-probes)');
   assert.equal(details.open, false, 'raw details are collapsed');
   assert.match(norm(details), /Result key/);
   assert.match(norm(details), /Log SHA-256/);
@@ -836,7 +843,18 @@ test('run page: the log and report buttons open the configured origin and this r
   // The fixture build has no log origin: the button says so and is not a link.
   const noOrigin = await render('fixture', 'run', '?id=' + goodRun.id, { responses: reported });
   assert.equal(noOrigin.document.querySelector('.kf-summary a[href*="log.txt"]'), null);
-  assert.match(norm(noOrigin.document.querySelector('.kf-summary')), /Full log: no log origin in this build/);
+  assert.match(norm(noOrigin.document.querySelector('.kf-summary')), /Full log: no link/);
+  // A build without a log origin takes it from the API's own log.url, on the API's site and for this run only.
+  const derived = await render('nologs', 'run', '?id=' + goodRun.id, { responses: reported });
+  assert.equal(derived.document.querySelector('.kf-summary a.kf-btn[href$="/log.txt"]').href, LOGS + '/' + goodRun.id + '/log.txt');
+  assert.equal(derived.document.querySelector('.kf-summary a.kf-btn[href$="/report.json"]').href, LOGS + '/' + goodRun.id + '/report.json');
+  for (const url of ['https://evil.example/' + goodRun.id + '/log.txt', 'https://kayfabe.dev.evil.example/' + goodRun.id + '/log.txt', 'http://logs.kayfabe.dev/' + goodRun.id + '/log.txt', 'https://u:p@logs.kayfabe.dev/' + goodRun.id + '/log.txt', 'https://logs.kayfabe.dev:8443/' + goodRun.id + '/log.txt', LOGS + '/other-run-1/log.txt', LOGS + '/' + goodRun.id + '/log.txt?x=1']) {
+    const responses = structuredClone(reported);
+    responses['/v1/ci/runs/' + goodRun.id].run.log.url = url;
+    const page = await render('nologs', 'run', '?id=' + goodRun.id, { responses });
+    assert.equal(page.document.querySelector('.kf-summary a[href*="log.txt"], .kf-summary a[href*="report.json"], a[href*="evil"]'), null, url);
+    assert.match(norm(page.document.querySelector('.kf-summary')), /Full log: no link/, url);
+  }
   // A log url that is another origin, or another run's key, is never linked.
   for (const url of ['https://evil.example/' + goodRun.id + '/log.txt', LOGS + '/other-run-1/log.txt', LOGS + '/' + goodRun.id + '/x.txt']) {
     const responses = structuredClone(reported);
@@ -867,7 +885,7 @@ test('run page: performance rows show value, unit, direction and the reference r
   const run = responses['/v1/ci/runs/' + goodRun.id].run;
   run.report.perf.push({ sub: 'host', name: 'SPECviewperf 2020 maya', value: 321, unit: 'fps', suite: 'x' });
   const page = await render('live', 'run', '?id=' + goodRun.id, { responses });
-  assert.doesNotMatch(norm(page.document.getElementById('kf-status-content')), /SPECviewperf|321/);
+  assert.doesNotMatch(norm(page.document.getElementById('kf-status-content')), /SPECviewperf 2020|321/);
 });
 
 test('run page: tests list FAIL first, count per suite, and filter by result', async () => {
@@ -875,7 +893,7 @@ test('run page: tests list FAIL first, count per suite, and filter by result', a
   const rows = [...document.querySelectorAll('table.kf-tests tbody tr')];
   assert.equal(rows[0].dataset.result, 'FAIL');
   assert.ok(rows[0].querySelector('.kf-v-fail'));
-  assert.match(norm(document.querySelector('.kf-counts')), /thin_suite: \d+ pass, 1 fail, \d+ skipped/);
+  assert.match(norm(document.querySelector('details.kf-probes .kf-counts')), /thin_suite: \d+ pass, 1 fail, \d+ skipped/);
   const press = (name) => [...document.querySelectorAll('.kf-seg button')].find((b) => norm(b) === name);
   press('Failed or refused').click();
   assert.deepEqual(rows.filter((r) => !r.hidden).map((r) => r.dataset.result), ['FAIL']);
@@ -890,8 +908,9 @@ test('run page: what is absent says so and nothing is invented', async () => {
   const { document } = await render('fixture', 'run', '?id=' + passRun.id);
   const text = norm(document.getElementById('kf-status-content'));
   assert.match(text, /Not measured yet: this run has no stored report/);
-  assert.match(text, /the application matrix stage does not exist in CI yet/);
-  assert.equal(document.querySelector('table.kf-perf, table.kf-tests, table.kf-apps'), null);
+  assert.match(text, /AppsNo stored report for this run\./);
+  assert.doesNotMatch(text, /\bnull\b/);
+  assert.equal(document.querySelector('table.kf-perf, table.kf-tests, table.kf-apps, table.kf-spec'), null);
   assert.equal(document.querySelector('.kf-counts'), null);
   // A report without numbers or applications.
   const responses = structuredClone(reported);
@@ -902,7 +921,7 @@ test('run page: what is absent says so and nothing is invented', async () => {
   const page = await render('live', 'run', '?id=' + goodRun.id, { responses });
   const t = tx(page.document.getElementById('kf-status-content'));
   assert.match(t, /this report holds no performance numbers\. Nothing is estimated here/);
-  assert.match(t, /the application matrix stage does not exist in CI yet/);
+  assert.match(t, /Apps No app results in this report\./);
   assert.match(tx(page.document.getElementById('kf-status-content')), /Windows gate Not measured yet: this report has no Windows block/);
 });
 
@@ -918,6 +937,105 @@ test('run page: report values are text, never markup, and bad numbers are droppe
   assert.match(norm(document.querySelector('table.kf-tests')), /<img src=x/);
   assert.doesNotMatch(norm(document.querySelector('table.kf-perf')), /NaN/);
   assert.equal(document.querySelector('table.kf-apps .kf-v-pass'), null, 'an unknown result is not a pass');
+});
+
+test('run page: apps are first, per OS, failures first, with seconds; rev 1 takes the time from the test rows', async () => {
+  const { document } = await render('live', 'run', '?id=' + goodRun.id, { responses: reported });
+  const counts = norm(document.querySelector('ul[aria-label="App counts"]'));
+  assert.equal(counts, 'Linux: 2 passed, 1 failed, 1 not runWindows: 1 passed, 1 failed, 1 not run');
+  const [linux, windows] = [...document.querySelectorAll('table.kf-apps')];
+  assert.equal(linux.dataset.os, 'linux');
+  assert.deepEqual([...linux.querySelectorAll('thead th')].map(norm), ['App', 'Result', 'Time', 'Note']);
+  assert.deepEqual([...linux.querySelectorAll('tbody tr')].map((r) => r.dataset.result), ['FAIL', 'NOT_RUN', 'PASS', 'PASS']);
+  const rows = [...linux.querySelectorAll('tbody tr')].map(tx);
+  assert.match(rows[0], /blender_cycles +FAIL +1\.6 min +exit 1 after 3 retries/);
+  assert.match(rows[2], /deviceQuery +PASS +3\.0 s *$/, 'a note of "-" is no note');
+  assert.match(tx(windows.querySelector('tbody tr')), /Edge video +FAIL +8\.0 min/);
+  // A rev 1 report has no seconds on the app rows: the time comes from the matching test row.
+  const old = structuredClone(reported);
+  const run = old['/v1/ci/runs/' + goodRun.id].run;
+  run.report.apps = [{ sub: 'windows-580.88', name: 'Unigine Heaven', os: 'windows', result: 'PASS', note: '' }];
+  run.report.tests.push({ sub: 'windows-580.88', suite: 'apps_windows', name: 'Unigine Heaven', result: 'PASS', ms: 61000 });
+  delete run.report.rev;
+  delete run.report.spec;
+  const page = await render('live', 'run', '?id=' + goodRun.id, { responses: old });
+  assert.match(tx(page.document.querySelector('table.kf-apps tbody tr')), /Unigine Heaven +PASS +61\.0 s/);
+  assert.equal(page.document.querySelector('table.kf-spec'), null, 'no benchmark rows, no section');
+  assert.ok(![...page.document.querySelectorAll('section > h2')].some((h) => /SPECviewperf/.test(norm(h))));
+});
+
+test('run page: the benchmark section is stamped, every number carries (nc), the comparison has its own heading', async () => {
+  const { document } = await render('live', 'run', '?id=' + goodRun.id, { responses: reported });
+  const section = document.querySelector('table.kf-spec').closest('section');
+  const body = norm(section);
+  // the stamp: the disclaimer verbatim, the exact release, the configuration
+  assert.ok(body.includes(SPEC_DISCLAIMER), 'verbatim disclaimer');
+  assert.match(body, /ReleaseSPECviewperf 15\.0\.0/);
+  assert.match(body, /Configurationhost GPU synthetic .*virtualisation layer kayfabe, guest OS Windows, guest driver 580\.88/);
+  assert.ok(section.querySelector('.kf-stamp'));
+  assert.equal([...section.children].find((n) => n.tagName === 'H2').textContent, 'SPECviewperf');
+  const table = section.querySelector('table.kf-spec');
+  assert.deepEqual([...table.querySelectorAll('thead th')].map(norm), ['Viewset', 'Result', 'Subtests', 'Resets', 'Note']);
+  const rows = [...table.querySelectorAll('tbody tr')].map(tx);
+  assert.match(rows[0], /catia-07 +FAIL +4\/6 \(nc\) +2 \(nc\) +the guest reset: 05_Example, 06_Example/);
+  assert.match(rows[2], /medical-04 +PASS +10\/10 \(nc\) +0 \(nc\)/);
+  assert.match(norm(section.querySelector('ul[aria-label="Viewset counts"]')), /1 \(nc\) passed1 \(nc\) failed1 \(nc\) not runHost Xid: 0 \(nc\)USER_RING refusals: 0 \(nc\)/);
+  // the comparison, only under the exact heading
+  const heading = [...section.querySelectorAll('h3')].find((h) => norm(h) === '(nc) research comparison, not a SPEC-ranked result');
+  assert.ok(heading, 'comparison heading');
+  const cmp = section.querySelector('table.kf-spec-cmp');
+  assert.deepEqual([...cmp.querySelectorAll('thead th')].map(norm), ['Viewset', 'Wall time', 'Native reference']);
+  assert.match(tx(cmp.querySelectorAll('tbody tr')[0]), /catia-07 +18\.6 min \(nc\) +13\.4 min \(nc\)/);
+  assert.equal(section.querySelectorAll('table').length, 2);
+  assert.equal(heading.compareDocumentPosition(table) & 2, 2, 'the status table comes before the comparison heading');
+  // no number outside a viewset name, a release or the configuration is left without (nc)
+  const stripped = (t) => t.replace(/[a-z_]+-\d\d|\d\d_[A-Za-z]+/g, '').replace(/[\d./]+(?: (?:s|min|ms))? \(nc\)/g, '');
+  const bare = [...section.querySelectorAll('td, li')].map(tx).map(stripped).filter((t) => /\d/.test(t));
+  assert.deepEqual(bare, []);
+  // a report with benchmark rows but no valid notice draws none of them
+  for (const bad of [undefined, { text: 'x', release: 'SPECviewperf 15.0.0', configuration: 'c' }, { text: SPEC_DISCLAIMER, release: 'latest', configuration: 'c' }]) {
+    const responses = structuredClone(reported);
+    const run = responses['/v1/ci/runs/' + goodRun.id].run;
+    if (bad === undefined) delete run.report.spec_notice;
+    else run.report.spec_notice = bad;
+    const page = await render('live', 'run', '?id=' + goodRun.id, { responses });
+    assert.equal(page.document.querySelector('table.kf-spec, table.kf-spec-cmp'), null);
+    assert.doesNotMatch(norm(page.document.getElementById('kf-status-content')), /catia-07|1118|18\.6 min/);
+  }
+  // No score field is ever drawn, whatever the row carries; values are text.
+  const hostile = structuredClone(reported);
+  const spec = hostile['/v1/ci/runs/' + goodRun.id].run.report.spec;
+  spec[0].score = 99.5;
+  spec[0].fps = 123;
+  spec[1].failed = ['<img src=x onerror=alert(1)>'];
+  spec[1].reason = '<b>x</b>';
+  spec[2].wall_s = 'NaN';
+  spec[2].name = '<i>bad</i>';
+  const page = await render('live', 'run', '?id=' + goodRun.id, { responses: hostile });
+  const sec = page.document.querySelector('table.kf-spec').closest('section');
+  assert.doesNotMatch(norm(sec), /99\.5|123|NaN|bad/);
+  assert.equal(sec.querySelector('img, b, i, script'), null);
+  assert.match(norm(sec), /<img src=x onerror=alert\(1\)>/, 'shown as text');
+});
+
+test('run page: the real gate run of 2026-11-10 (report without rev, 13 policy app rows, 76 tests) still renders', async () => {
+  const real = JSON.parse(readFileSync(join(site, 'testdata/run_vast_42761776706_9_0.json'), 'utf8'));
+  const id = real.run.id;
+  const responses = { ['/v1/ci/runs/' + id]: real };
+  for (const mode of ['live', 'nologs']) {
+    const { document } = await render(mode, 'run', '?id=' + id, { responses });
+    const content = document.getElementById('kf-status-content');
+    const t = norm(content);
+    assert.doesNotMatch(t, /\bnull\b|undefined|NaN/);
+    assert.match(norm(document.querySelector('ul[aria-label="App counts"]')), /^Linux: 0 passed, 0 failed, 4 not runWindows: 0 passed, 0 failed, 9 not run$/);
+    assert.equal(document.querySelector('table.kf-spec'), null, 'no benchmark rows in this report, no section');
+    assert.equal(content.querySelector(':scope > details.kf-probes').open, false);
+    assert.match(norm(content.querySelector(':scope > details.kf-probes > summary')), /^Probes and tests \(76\)/);
+    const full = document.querySelector('.kf-summary a.kf-btn[href$="/log.txt"]');
+    assert.equal(full.href, LOGS + '/' + id + '/log.txt', mode);
+    assert.equal(document.querySelector('.kf-summary a.kf-btn[href$="/report.json"]').href, LOGS + '/' + id + '/report.json', mode);
+    assert.doesNotMatch(norm(document.querySelector('.kf-summary')), /no link|no log origin/);
+  }
 });
 
 test('session page: header, a row per subrun with its log range, and a section per subrun', async () => {

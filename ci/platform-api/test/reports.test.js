@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { api, seededDatabase, MIGRATION } from './helpers.js';
+import { SPEC_DISCLAIMER } from '../src/subruns.js';
 import { syntheticRows } from '../scripts/seed-data.mjs';
 // Run reports, the log identity and stats on the public API (migration 0004). FALSIFIER: a run
 // page without its subruns, report or log identity when they exist, or with invented ones when they
@@ -391,4 +392,95 @@ test('a run still in flight is never immutable, report or not', async () => {
     (await call('/v1/ci/runs/' + running.run_id)).headers.get('cache-control'),
     'public, max-age=30',
   );
+});
+
+test('rev 2 rows pass through, shaped again; a rev 1 report gets empty ones', async () => {
+  const rows2 = syntheticRows();
+  const target = rows2.ci_run_reports.find((r) => r.run_id === 'syn-ci-p-2');
+  const doc = JSON.parse(target.report_json);
+  doc.rev = 2;
+  doc.apps = [
+    { sub: 'linux-580.95.05', name: 'a', os: 'linux', result: 'PASS', note: '', secs: 7 },
+    { sub: 'x', name: 'b', os: 'linux', result: 'PASS', note: '', secs: 'junk' },
+  ];
+  doc.spec = [
+    {
+      sub: 'windows-580.88',
+      name: 'medical-04',
+      result: 'PASS',
+      done: 10,
+      total: 10,
+      reason: null,
+      failed: [],
+      wall_s: 320,
+      native_s: 318,
+      resets: 0,
+    },
+    { sub: 'windows-580.88', name: '<img>', result: 'PASS' },
+    {
+      sub: 'windows-580.88',
+      name: 'catia-07',
+      result: 'FAIL',
+      done: 1,
+      total: 6,
+      reason: 'RESET',
+      failed: ['05_A', '<script>', 7],
+      wall_s: 'x',
+      native_s: 803,
+      resets: -1,
+    },
+  ];
+  doc.spec_host = { xid: 0, user_ring_refused: 'many', release: '15.0.0' };
+  doc.spec_notice = { text: 'forged', release: 'SPECviewperf latest' };
+  doc.gpu_name = 'RTX 4090';
+  doc.host_driver = '580.159.04';
+  doc.guest_drivers = { linux: null, windows: '580.88' };
+  target.report_json = JSON.stringify(doc);
+  const { call } = api({
+    database: seededDatabase({ rows: rows2 }).reader,
+    env: { LOGS_BASE: BASE },
+  });
+  const r = await call('/v1/ci/runs/syn-ci-p-2');
+  const rep = r.body.run.report;
+  assert.equal(rep.rev, 2);
+  assert.deepEqual(
+    rep.apps.map((a) => a.secs),
+    [7, null],
+  );
+  assert.deepEqual(
+    rep.spec.map((x) => x.name),
+    ['medical-04', 'catia-07'],
+  );
+  assert.deepEqual(rep.spec[1].failed, ['05_A']);
+  assert.deepEqual(
+    [rep.spec[1].wall_s, rep.spec[1].native_s, rep.spec[1].resets],
+    [null, 803, null],
+  );
+  assert.deepEqual(rep.spec_host, { xid: 0, user_ring_refused: null, release: '15.0.0' });
+  assert.ok(
+    rep.spec.every((x) => x.nc === true),
+    'every row is marked (nc)',
+  );
+  assert.equal(rep.spec_notice.nc, '(nc)');
+  assert.equal(
+    rep.spec_notice.text,
+    SPEC_DISCLAIMER,
+    'a stored notice is replaced by the real one',
+  );
+  assert.match(
+    rep.spec_notice.text,
+    /^\(nc\) = non-compliant: run in a virtualised configuration, not an official SPEC result and not submission-compliant; SPEC and SPECviewperf are trademarks of the Standard Performance Evaluation Corporation, https:\/\/www\.spec\.org$/,
+  );
+  assert.equal(rep.spec_notice.release, 'SPECviewperf 15.0.0');
+  assert.equal(
+    rep.spec_notice.configuration,
+    'host GPU RTX 4090, host driver 580.159.04, virtualisation layer kayfabe, guest OS Windows, guest driver 580.88',
+  );
+  assert.doesNotMatch(r.text, /forged/);
+  assert.doesNotMatch(r.text, /<img>|<script>/);
+  const old = await call('/v1/ci/runs/syn-ci-p-8');
+  assert.equal(old.body.run.report.rev, 1);
+  assert.deepEqual(old.body.run.report.spec, []);
+  assert.equal(old.body.run.report.spec_host, null);
+  assert.ok(!('spec_notice' in old.body.run.report), 'no benchmark rows, no notice');
 });

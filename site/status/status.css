@@ -879,3 +879,10 @@ th[aria-sort="descending"] .kf-sort::after {
   content: "\2298\00a0";
   content: "\2298\00a0" / "";
 }
+
+.kf-stamp {
+  border: 1px solid var(--kf-line, currentColor);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  margin-block: 0.5rem;
+}

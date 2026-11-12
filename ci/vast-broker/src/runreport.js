@@ -23,6 +23,8 @@ export const LIMITS = Object.freeze({
   subruns: 64,
   probes: 8,
   subStages: 16,
+  spec: 40,
+  specFailed: 6,
 });
 const ISO = /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,3})?Z$/;
 const STAGE = /^[a-z][a-z0-9_]{0,47}$/;
@@ -45,6 +47,35 @@ export const STAGE_RESULTS = Object.freeze([
   'UNATTRIBUTED',
 ]);
 export const SUB_VERDICTS = Object.freeze(['PASS', 'FAIL', 'RETRY', 'UNATTRIBUTED', 'NOT_RUN']);
+// The publication rule of docs/SPEC_RESULTS.md: every benchmark row leaves with `nc: true` and a notice that
+// carries the verbatim disclaimer, the exact release and the configuration. The text is identical to
+// DISCLAIMER in scripts/bench/specviewperf/spec_stamp.py (a test compares the two).
+export const SPEC_DISCLAIMER =
+  '(nc) = non-compliant: run in a virtualised configuration, not an official SPEC result and not ' +
+  'submission-compliant; SPEC and SPECviewperf are trademarks of the Standard Performance Evaluation ' +
+  'Corporation, https://www.spec.org';
+const SPEC_RELEASE = /^[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2}$/;
+export function specNotice({ release, gpuName, hostDriver, guestDriver }) {
+  const show = (v) => (typeof v === 'string' && v !== '' ? v : 'not reported');
+  return {
+    nc: '(nc)',
+    text: SPEC_DISCLAIMER,
+    release:
+      typeof release === 'string' && SPEC_RELEASE.test(release) ? 'SPECviewperf ' + release : null,
+    configuration:
+      'host GPU ' +
+      show(gpuName) +
+      ', host driver ' +
+      show(hostDriver) +
+      ', virtualisation layer kayfabe, ' +
+      'guest OS Windows, guest driver ' +
+      show(guestDriver),
+  };
+}
+export const SPEC_RESULTS = Object.freeze(['PASS', 'FAIL', 'NOT_RUN']);
+const SPEC_NAME = /^[a-z][a-z_]*-[0-9]{2}$/;
+const SUBTEST = /^[A-Za-z0-9_]{1,60}$/;
+const REASON = /^[A-Z_]{1,16}$/;
 export const APP_RESULTS = Object.freeze(['PASS', 'FAIL', 'NOT_RUN']);
 export const SUB_KINDS = Object.freeze({
   host_bare: 'host',
@@ -191,8 +222,52 @@ export function cleanClaimsReport(raw) {
     const result = oneOf(a.result, APP_RESULTS);
     const os = oneOf(a.os, ['linux', 'windows']);
     if (name === null || result === null || os === null) continue;
-    apps.push({ sub: a.sub, name, os, result, note: text(a.note, 200) ?? '' });
+    apps.push({
+      sub: a.sub,
+      name,
+      os,
+      result,
+      note: text(a.note, 200) ?? '',
+      // rev 2: the row's own seconds (a report without it has none)
+      secs: int(a.secs, 0, 7 * 86400),
+    });
   }
+  // rev 2: one row per viewset of the benchmark stage, seconds and counts only (never a score).
+  const spec = [];
+  const specNames = new Set();
+  for (const r of list(raw.spec, LIMITS.spec)) {
+    if (!object(r) || typeof r.sub !== 'string' || !ids.has(r.sub)) continue;
+    const name = named(r.name, SPEC_NAME, 24);
+    const result = oneOf(r.result, SPEC_RESULTS);
+    if (name === null || result === null || specNames.has(name)) continue;
+    specNames.add(name);
+    const done = int(r.done, 0, 999) ?? 0;
+    spec.push({
+      sub: r.sub,
+      name,
+      nc: true,
+      result,
+      done,
+      total: Math.max(done, int(r.total, 0, 999) ?? 0),
+      reason: typeof r.reason === 'string' && REASON.test(r.reason) ? r.reason : null,
+      failed: list(r.failed, LIMITS.specFailed).filter(
+        (n) => typeof n === 'string' && SUBTEST.test(n),
+      ),
+      wall_s: int(r.wall_s, 0, 999999),
+      native_s: int(r.native_s, 0, 999999),
+      resets: int(r.resets, 0, 9999),
+    });
+  }
+  const sh = object(raw.spec_host) ? raw.spec_host : null;
+  const specHost =
+    sh && int(sh.xid, 0, 999999) !== null
+      ? {
+          xid: int(sh.xid, 0, 999999),
+          user_ring_refused: int(sh.user_ring_refused, 0, 99999999),
+          release:
+            typeof sh.release === 'string' && SPEC_RELEASE.test(sh.release) ? sh.release : null,
+        }
+      : null;
   const perf = [];
   for (const p of list(raw.perf, LIMITS.perf)) {
     if (!object(p) || typeof p.sub !== 'string' || !ids.has(p.sub)) continue;
@@ -217,6 +292,8 @@ export function cleanClaimsReport(raw) {
   const guests = object(raw.guest_drivers) ? raw.guest_drivers : {};
   return {
     schema: 1,
+    // 2 when the box sent the rev 2 fields; a report without `rev` is rev 1
+    rev: raw.rev === 2 ? 2 : 1,
     guest_drivers: {
       linux: typeof guests.linux === 'string' && DRIVER.test(guests.linux) ? guests.linux : null,
       windows:
@@ -228,6 +305,8 @@ export function cleanClaimsReport(raw) {
     tests,
     apps,
     perf,
+    spec,
+    spec_host: specHost,
     windows: {
       gate: oneOf(w.gate, ['PASS', 'FAIL', 'RETRY']),
       install_s: int(w.install_s, 0, 7 * 86400),
@@ -295,6 +374,7 @@ export function buildReport({ claims, row, runId, log, offsets, logsBase }) {
   });
   return {
     schema: 1,
+    rev: claims.rev,
     run_id: runId,
     commit: row.commit_sha,
     tree: row.tree_kind === 'tree' ? row.tree_hash : null,
@@ -313,6 +393,18 @@ export function buildReport({ claims, row, runId, log, offsets, logsBase }) {
     tests: claims.tests,
     apps: claims.apps,
     perf: claims.perf,
+    spec: claims.spec,
+    spec_host: claims.spec_host,
+    ...(claims.spec.length
+      ? {
+          spec_notice: specNotice({
+            release: claims.spec_host?.release,
+            gpuName: row.gpu_name,
+            hostDriver: row.host_driver,
+            guestDriver: claims.guest_drivers.windows,
+          }),
+        }
+      : {}),
     windows: claims.windows,
     ...(claims.truncated ? { truncated: claims.truncated } : {}),
     log: log

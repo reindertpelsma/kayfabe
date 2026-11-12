@@ -25,8 +25,8 @@ SOURCE = (HERE / "vast_run_report.py").read_text()
 MUTANTS = [
     (
         "apps-invented",
-        "            for name, (res, _secs, note) in c.apps.items()",
-        '            for name, (res, _secs, note) in list(c.apps.items()) + [("invented", ("PASS", None, ""))]',
+        "            for name, (res, secs, note) in c.apps.items()",
+        '            for name, (res, secs, note) in list(c.apps.items()) + [("invented", ("PASS", None, ""))]',
     ),
     (
         "not-run-without-reason",
@@ -65,7 +65,7 @@ MUTANTS = [
     ("provider-fault-is-fail", '"PROVIDER_FAULT": "RETRY"', '"PROVIDER_FAULT": "FAIL"'),
     ("document-unbounded", "        while size() > limit and doc[key]:", "        while False:"),
     ("apps-rows-of-another-os", 'os=linux result=(PASS|FAIL|NOT_RUN)"', 'os=\\S+ result=(PASS|FAIL|NOT_RUN)"'),
-    ("app-note-unbounded", '"os": "linux", "result": res, "note": note[:200]}', '"os": "linux", "result": res, "note": note}'),
+    ("app-note-unbounded", '"os": "linux", "result": res, "note": note[:200], "secs"', '"os": "linux", "result": res, "note": note, "secs"'),
     ("app-not-run-is-a-pass-test", '"SKIP" if m[2] == "NOT_RUN" else m[2]', "m[2]"),
     (
         "apps-suite-outside-the-linux-subrun",
@@ -156,7 +156,7 @@ MUTANTS += [
     ("windows-missing-is-pass", '    return "NOT_RUN"\n', '    return "PASS"\n'),
     ("windows-failure-is-pass", '        return "FAIL"\n    return "NOT_RUN"', '        return "PASS"\n    return "NOT_RUN"'),
     ("windows-success-is-not-run", '        return "PASS"\n    if (cls', '        return "NOT_RUN"\n    if (cls'),
-    ("windows-note-unbounded", '"os": "windows", "result": res, "note": note[:200]}', '"os": "windows", "result": res, "note": note}'),
+    ("windows-note-unbounded", '"os": "windows", "result": res, "note": note[:200], "secs"', '"os": "windows", "result": res, "note": note, "secs"'),
     ("windows-log-stage-missing", '"windows": ["windows_gate", "windows_apps", "windows_gate_2"]', '"windows": ["windows_gate", "windows_gate_2"]'),
 ]
 
@@ -164,14 +164,14 @@ MUTANTS += [
 MUTANTS += [
     (
         "spec-row-with-extra-fields-accepted",
-        'failed=([A-Za-z0-9_,]{1,120}|-)$"\n)\nSPEC_SUITE',
-        'failed=([A-Za-z0-9_,]{1,120}|-)"\n)\nSPEC_SUITE',
+        'failed=([A-Za-z0-9_,]{1,120}|-)$"\n)\n# Seconds and counts',
+        'failed=([A-Za-z0-9_,]{1,120}|-)"\n)\n# Seconds and counts',
     ),
     ("spec-not-run-is-a-pass", '"NOT_RUN": "SKIP"}', '"NOT_RUN": "PASS"}'),
     ("spec-row-with-a-time", "SPEC_RESULT[m[2]], None)", "SPEC_RESULT[m[2]], 1000)"),
     (
         "spec-failed-subtests-dropped",
-        '                for sub in ([] if m[3] == "-" else m[3].split(","))[:6]:',
+        "                for sub in failed:",
         "                for sub in []:",
     ),
     (
@@ -194,6 +194,15 @@ MUTANTS += [
         'all(r["name"].startswith(SPEC_SUITE + "_retry_") for r in spec_bad)',
         'any(r["name"].startswith(SPEC_SUITE + "_retry_") for r in spec_bad)',
     ),
+    ("spec-run-with-extra-fields-accepted", 'resets=([0-9]{1,4}|-)$"', 'resets=([0-9]{1,4}|-)"'),
+    ("spec-host-with-extra-fields-accepted", 'release=([0-9]{1,2}\\.[0-9]{1,2}\\.[0-9]{1,2})$"', 'release=([0-9]{1,2}\\.[0-9]{1,2}\\.[0-9]{1,2})"'),
+    # report rev 2: per-app seconds and the benchmark rows
+    ("app seconds always null", '"secs": seconds_of(secs)}\n            for name, (res, secs, note) in c.apps.items()', '"secs": None}\n            for name, (res, secs, note) in c.apps.items()'),
+    ("spec wall seconds dropped", 'row[key] = None if text == "-" else int(text)', 'row[key] = None'),
+    ("spec host ring unknown read as zero", '"user_ring_refused": None if m[2] == "-" else int(m[2])', '"user_ring_refused": int(m[2]) if m[2] != "-" else 0'),
+    ("spec failed names uncapped", 'm[6].split(",")[:6]', 'm[6].split(",")'),
+    ("spec rows uncapped", '[: LIMITS["spec"]]', ''),
+    ("rev not stated", '"rev": REPORT_REV,', ''),
 ]
 
 COLLECT = """import io,json,sys,unittest
@@ -227,6 +236,7 @@ def workdir(parent, name, source):
         dst = root / rel
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(HERE.parents[1] / rel, dst)
+    shutil.copytree(HERE / "fixtures" / "run_report", ci / "fixtures" / "run_report")
     (ci / "vast_run_report.py").write_text(source)
     return ci
 

@@ -48,12 +48,17 @@ function subrunsFor(run) {
   return subs;
 }
 
+export const SPEC_DISCLAIMER =
+  '(nc) = non-compliant: run in a virtualised configuration, not an official SPEC result and not submission-compliant; ' +
+  'SPEC and SPECviewperf are trademarks of the Standard Performance Evaluation Corporation, https://www.spec.org';
+
 function reportFor(run, index) {
   const bad = run.verdict === 'FAIL';
   const subs = subrunsFor(run);
   const tests = [];
   const perf = [];
   const apps = [];
+  const spec = [];
   let clock = Date.parse(run.started_at ?? '2026-10-04T08:00:00Z');
   for (const s of subs) {
     const names =
@@ -71,12 +76,30 @@ function reportFor(run, index) {
         { sub: s.sub, name: s.kind === 'host_bare' ? 'cup8bench FP32 matmul (host)' : 'cup8bench FP32 matmul (guest)', value: s.kind === 'host_bare' ? 20.5 : 19.9, unit: 'TFLOPS', higher_is_better: true, suite: s.kind === 'host_bare' ? 'cuda_host' : 'cuda_guest', ref_value: s.kind === 'host_bare' ? null : 20.5, ref_ratio: s.kind === 'host_bare' ? null : 0.97 },
         { sub: s.sub, name: 'pushbuffer upload', value: 11.2, unit: 'GB/s', higher_is_better: true, suite: 'cuda_guest', ref_value: null, ref_ratio: null },
       );
-    if (s.kind === 'windows_guest' && index % 2 === 1)
+    // Odd runs carry report rev 2 (app seconds, benchmark rows); even runs are rev 1 and take app times from test rows.
+    if (s.kind === 'linux_guest' && index % 2 === 1)
       apps.push(
-        { sub: s.sub, name: 'Unigine Heaven', os: 'windows', result: 'PASS', note: '' },
-        { sub: s.sub, name: 'Edge video', os: 'windows', result: 'FAIL', note: 'driver reset after 8 minutes' },
-        { sub: s.sub, name: 'Blender', os: 'windows', result: 'NOT_RUN', note: 'not scheduled' },
+        { sub: s.sub, name: 'deviceQuery', os: 'linux', result: 'PASS', note: '-', secs: 3 },
+        { sub: s.sub, name: 'blender_cycles', os: 'linux', result: 'FAIL', note: 'exit 1 after 3 retries', secs: 95 },
+        { sub: s.sub, name: 'vlc', os: 'linux', result: 'NOT_RUN', note: 'no result row (budget or boot)', secs: null },
+        { sub: s.sub, name: 'hashcat', os: 'linux', result: 'PASS', note: 'warn: a harmless message', secs: 33 },
       );
+    if (s.kind === 'windows_guest' && index % 2 === 1) {
+      apps.push(
+        { sub: s.sub, name: 'Unigine Heaven', os: 'windows', result: 'PASS', note: '', secs: 61 },
+        { sub: s.sub, name: 'Edge video', os: 'windows', result: 'FAIL', note: 'driver reset after 8 minutes', secs: 480 },
+        { sub: s.sub, name: 'Blender', os: 'windows', result: 'NOT_RUN', note: 'not scheduled', secs: null },
+      );
+      spec.push(
+        { sub: s.sub, name: 'medical-04', result: 'PASS', done: 10, total: 10, reason: null, failed: [], wall_s: 320, native_s: 318, resets: 0 },
+        { sub: s.sub, name: 'catia-07', result: 'FAIL', done: 4, total: 6, reason: 'RESET', failed: ['05_Example', '06_Example'], wall_s: 1118, native_s: 803, resets: 2 },
+        { sub: s.sub, name: 'maya-07', result: 'NOT_RUN', done: 0, total: 0, reason: 'TIME', failed: [], wall_s: null, native_s: 400, resets: null },
+      );
+    }
+    if (s.kind === 'windows_guest' && index % 2 === 0) {
+      apps.push({ sub: s.sub, name: 'Unigine Heaven', os: 'windows', result: 'PASS', note: '' });
+      tests.push({ sub: s.sub, suite: 'apps_windows', name: 'Unigine Heaven', result: 'PASS', ms: 61000 });
+    }
     s.verdict = bad && s.kind === 'linux_guest' ? 'FAIL' : run.verdict === 'PASS' ? 'PASS' : s.kind === 'windows_guest' && run.verdict !== 'FAIL' ? run.verdict : 'PASS';
     const pass = tests.filter((t) => t.sub === s.sub && t.result === 'PASS').length;
     const fail = tests.filter((t) => t.sub === s.sub && t.result === 'FAIL').length;
@@ -103,6 +126,7 @@ function reportFor(run, index) {
   const bytes = 120000 + index * 4096;
   return {
     schema: 1,
+    rev: index % 2 === 1 ? 2 : 1,
     run_id: run.id,
     commit: run.commit,
     tier: run.tier,
@@ -118,6 +142,9 @@ function reportFor(run, index) {
     tests,
     apps,
     perf,
+    spec: index % 2 === 1 ? spec : undefined,
+    spec_host: index % 2 === 1 && spec.length ? { xid: 0, user_ring_refused: 0, release: '15.0.0' } : undefined,
+    spec_notice: index % 2 === 1 && spec.length ? { nc: '(nc)', text: SPEC_DISCLAIMER, release: 'SPECviewperf 15.0.0', configuration: 'host GPU synthetic ' + run.die + ', host driver 580.159.04, virtualisation layer kayfabe, guest OS Windows, guest driver 580.88' } : undefined,
     windows: run.platform === 'linux' ? undefined : { gate: run.verdict === 'FAIL' ? 'FAIL' : 'PASS', install_s: 1260, probes: ['cup8', 'd3d11'], resets: bad ? 1 : 0, live_dumps_193: 0 },
     log: { url: LOGS + '/' + run.id + '/log.txt', bytes, sha256: HEX(64, run.id) },
   };

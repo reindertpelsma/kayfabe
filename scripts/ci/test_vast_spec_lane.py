@@ -661,5 +661,26 @@ class Cli(unittest.TestCase):
             self.assertEqual(p.stdout.split(), ["RETRY", "MEDIA"])
 
 
+class RunFacts(unittest.TestCase):
+    """`SPEC_RUN`: seconds and counts only, from the guest's own END and reset lines and the table."""
+
+    def test_the_real_proof_run_facts(self):
+        # copies of traces/spec_stage_proof_20261109/catia-07.{end,tdr}.txt (the mutant sandbox and the stripped tree have no traces/)
+        line = lane.facts_line("catia-07", text(FIX / "proof_catia-07.end.txt"), text(FIX / "proof_catia-07.tdr.txt"), TBL)
+        self.assertEqual(line, "SPEC_RUN name=catia-07 wall_s=1118 native_s=803 resets=0")
+
+    def test_missing_sources_are_dashes_never_zero(self):
+        self.assertEqual(lane.facts_line("medical-04", "", "", TBL), "SPEC_RUN name=medical-04 wall_s=- native_s=318 resets=-")
+
+    def test_a_viewset_outside_the_table_has_no_native_time(self):
+        self.assertIn("native_s=-", lane.facts_line("zzz-01", END_OK % "zzz-01", "", TBL))
+
+    def test_the_line_has_no_other_field_whatever_the_inputs_say(self):
+        hostile = "SPECRUN_END workload=x rc=0 start=a end=b secs=7 score=99\nGATE_TDR a=1 total=3 fps=9\n"
+        line = lane.facts_line("medical-04", hostile, hostile, TBL)
+        self.assertRegex(line, r"^SPEC_RUN name=[a-z_]+-[0-9]{2} wall_s=[0-9-]+ native_s=[0-9-]+ resets=[0-9-]+$")
+        self.assertEqual(line, "SPEC_RUN name=medical-04 wall_s=7 native_s=318 resets=-")  # a trailing field makes the reset line no reset line
+
+
 if __name__ == "__main__":
     unittest.main()

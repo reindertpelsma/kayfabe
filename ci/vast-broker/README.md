@@ -207,6 +207,7 @@ real R2, D1, Worker or box has run any of it. Contract: `/root/night/REPORT_CONT
   sends nothing. The Worker re-validates and bounds it (`src/runreport.js`), sets the run's identity itself, writes
   `<run id>/report.json` to the bucket, and stores it in D1 (migration 0004: `ci_run_reports`, `ci_subruns`,
   `ci_run_tests`, `ci_run_perf`, `ci_run_apps`, all additive). SPECviewperf data is dropped.
+  Report rev 2 (2026-11-11, additive, still `schema: 1`): `rev`, `apps[].secs`, `spec[]` and `spec_host` (docs/design/V3_SPEC_GATE.md, section 8). `cleanClaimsReport` keeps only their shape (names, enums and integers within fixed bounds; a name that carries the benchmark's name is dropped); no D1 column is added, the rows live in the stored `report_json`, which the public API serves; a report without `rev` is rev 1.
 - **Host sessions and subruns.** A rental is a host session; its results belong to subruns: `host`,
   `linux-<driver>`, `windows-<driver>`. The public API ranks subruns by similarity
   ([ci/platform-api/README.md](../platform-api/README.md), `/v1/ci/subruns`).

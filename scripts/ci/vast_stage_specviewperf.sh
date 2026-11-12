@@ -15,8 +15,9 @@
 # Scores never leave the box through this stage: the lane's whole output goes to a private file (mode 0600 in a 0700
 # directory that is not streamed), and only lines that match one of the strict STATUS patterns below are printed to the
 # streamed log AS THEY ARRIVE (a killed run still reports the viewsets that finished): a viewset name, PASS/FAIL/NOT_RUN,
-# a count of completed subtests of the total, a reason word and the names of failed subtests. Nothing else passes: no
-# note, no timing, no number a benchmark prints (docs/SPEC_RESULTS.md). The verdict line is printed once, at the end.
+# a count of completed subtests of the total, a reason word and the names of failed subtests, plus (SPEC_RUN, SPEC_HOST)
+# the wall seconds of a viewset's run beside the native reference, the guest resets, the host Xid delta and the
+# USER_RING refusals. Nothing else passes: no note, no number a benchmark prints (docs/SPEC_RESULTS.md). The verdict line is printed once, at the end.
 set -u
 [ "$#" -eq 2 ] || { echo "SPECVIEWPERF_STAGE_RETRY class=USAGE"; exit 2; }
 tag=$1 prov=$2
@@ -42,6 +43,8 @@ rcfile=$private/specviewperf_$tag.rc
 status='^SPEC_STAGE_LIST lane=(lanea|laneb|both) n=[0-9]{1,2}$'
 status+='|^SPEC_ROW name=[a-z][a-z_]*-[0-9]{2} result=(PASS|FAIL|NOT_RUN) subtests=[0-9]{1,3}/[0-9]{1,3} reason=([A-Z_]{1,16}|-) failed=([A-Za-z0-9_,]{1,120}|-)$'
 status+='|^[a-z][a-z_]*_[0-9]{2} --- FAILED$'
+status+='|^SPEC_RUN name=[a-z][a-z_]*-[0-9]{2} wall_s=([0-9]{1,6}|-) native_s=([0-9]{1,6}|-) resets=([0-9]{1,4}|-)$'
+status+='|^SPEC_HOST xid=[0-9]{1,6} user_ring_refused=([0-9]{1,8}|-) release=[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2}$'
 status+='|^SPEC_STAGE_COUNTS pass=[0-9]{1,2} fail=[0-9]{1,2} not_run=[0-9]{1,2} of=[0-9]{1,2}$'
 status+='|^SPEC_COPY_DELETED removed=(archive|overlay|archive,overlay|nothing)$'
 { bash "$lane" "$tag" "$prov" 2>&1; echo "$?" > "$rcfile"; } | tee -a "$log" | grep --line-buffered -E "$status"

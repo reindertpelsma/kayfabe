@@ -1,0 +1,76 @@
+APP_ROW name=BlackScholes os=linux result=PASS secs=2 guest_xid=0 note=warn:Max absolute error: 1.192093E-05
+APP_ROW name=MersenneTwisterGP11213 os=linux result=PASS secs=2 guest_xid=0 note=warn:Max absolute error: 0.000000E+00
+APP_ROW name=asyncAPI os=linux result=PASS secs=1 guest_xid=0 note=-
+APP_ROW name=bandwidthTest os=linux result=PASS secs=6 guest_xid=0 note=-
+APP_ROW name=bf16TensorCoreGemm os=linux result=PASS secs=18 guest_xid=0 note=-
+APP_ROW name=blackscholes os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=blender_cycles os=linux result=PASS secs=11 guest_xid=0 note=-
+APP_ROW name=cdpSimpleQuicksort os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=clinfo os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=clpeak os=linux result=PASS secs=116 guest_xid=0 note=-
+APP_ROW name=concurrentKernels os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=conjugateGradient os=linux result=PASS secs=3 guest_xid=0 note=warn:Test Summary: Error amount = 0.000000
+APP_ROW name=conv2d os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=cudaTensorCoreGemm os=linux result=PASS secs=5 guest_xid=0 note=-
+APP_ROW name=cupy os=linux result=PASS secs=4 guest_xid=0 note=-
+APP_ROW name=deviceQuery os=linux result=PASS secs=4 guest_xid=0 note=-
+APP_ROW name=egl_offscreen os=linux result=PASS secs=7 guest_xid=0 note=-
+APP_ROW name=fastWalshTransform os=linux result=PASS secs=5 guest_xid=0 note=-
+APP_ROW name=fft_cufft os=linux result=PASS secs=3 guest_xid=0 note=-
+APP_ROW name=globalToShmemAsyncCopy os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=gpu_burn os=linux result=PASS secs=95 guest_xid=0 note=-
+APP_ROW name=graphMemoryNodes os=linux result=PASS secs=4 guest_xid=0 note=-
+APP_ROW name=hashcat os=linux result=PASS secs=33 guest_xid=0 note=warn:This means that hashcat cannot use the full parallel power of your device(s).
+APP_ROW name=hf_generate os=linux result=PASS secs=14 guest_xid=0 note=-
+APP_ROW name=histogram os=linux result=PASS secs=3 guest_xid=0 note=-
+APP_ROW name=llama_bench os=linux result=PASS secs=3 guest_xid=0 note=-
+APP_ROW name=llama_cpp_gen os=linux result=PASS secs=4 guest_xid=0 note=warn:done_getting_tensors: tensor 'token_embd.weight' (q4_K) (and 0 others) cannot be used with preferred buffer type CU
+APP_ROW name=mandelbrot os=linux result=PASS secs=1 guest_xid=0 note=-
+APP_ROW name=matrixMul os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=matrixMulDrv os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=memcpy2d os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=nbody os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=nvdec_h264 os=linux result=PASS secs=7 guest_xid=0 note=-
+APP_ROW name=nvenc_h264 os=linux result=PASS secs=8 guest_xid=0 note=-
+APP_ROW name=nvenc_hevc os=linux result=PASS secs=8 guest_xid=0 note=-
+APP_ROW name=nvidia_smi os=linux result=PASS secs=1 guest_xid=0 note=-
+APP_ROW name=reduce os=linux result=PASS secs=6 guest_xid=0 note=-
+APP_ROW name=reduction os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=scan os=linux result=PASS secs=3 guest_xid=0 note=-
+APP_ROW name=sgemm_cublas os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=sha256 os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=simpleAtomicIntrinsics os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=simpleCUBLAS os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=simpleCUFFT os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=simpleCallback os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=simpleCooperativeGroups os=linux result=PASS secs=1 guest_xid=0 note=-
+APP_ROW name=simpleCudaGraphs os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=simpleIPC os=linux result=PASS secs=4 guest_xid=0 note=-
+APP_ROW name=simpleOccupancy os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=simpleStreams os=linux result=PASS secs=3 guest_xid=0 note=-
+APP_ROW name=simpleZeroCopy os=linux result=PASS secs=1 guest_xid=0 note=-
+APP_ROW name=sortingNetworks os=linux result=PASS secs=9 guest_xid=0 note=-
+APP_ROW name=stream_created os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=stream_created2nd os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=stream_default os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=stream_nonblocking os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=stream_perthread os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=stream_triad os=linux result=PASS secs=3 guest_xid=0 note=-
+APP_ROW name=stream_two os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=torch_ai_bench os=linux result=PASS secs=23 guest_xid=0 note=-
+APP_ROW name=torch_correct os=linux result=PASS secs=77 guest_xid=0 note=-
+APP_ROW name=transpose os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=vectorAdd os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=vectorAddDrv os=linux result=PASS secs=2 guest_xid=0 note=-
+APP_ROW name=vkpeak os=linux result=PASS secs=476 guest_xid=0 note=-
+APP_ROW name=vulkaninfo os=linux result=PASS secs=2 guest_xid=0 note=warn:error: XDG_RUNTIME_DIR is invalid or not set in the environment.
+WINAPPS_APP app=cup8_ladder class=pass verdict=PASS batched=PASS alone=- secs=6 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=deviceQuery_demo class=pass verdict=PASS batched=PASS alone=- secs=8 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=dxprobe_d3d11 class=pass verdict=PASS batched=PASS alone=- secs=7 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=dxprobe_d3d12 class=pass verdict=PASS batched=PASS alone=- secs=12 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=edge_webgl class=pass verdict=PASS batched=PASS alone=- secs=31 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=glgears_wgl class=pass verdict=PASS batched=PASS alone=- secs=16 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=matmul_t class=pass verdict=PASS batched=PASS alone=- secs=31 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=nvidia_smi class=pass verdict=PASS batched=PASS alone=- secs=8 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=torch_correct class=pass verdict=PASS batched=PASS alone=- secs=34 tdr=0 wer=0 gsp=0 note=-
+WINAPPS_APP app=vulkaninfo class=pass verdict=PASS batched=PASS alone=- secs=8 tdr=0 wer=0 gsp=0 note=warn:WARNING: [Loader Message] Code 0 : windows_read_data_files_in_registry: Registry lookup failed
