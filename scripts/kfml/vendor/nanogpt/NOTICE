@@ -1,0 +1,6 @@
+nanoGPT model.py, taken verbatim (no local modification).
+Upstream:  https://github.com/karpathy/nanoGPT
+Commit:    3adf61e154c3fe3fca428ad6bc3818b27a3b8291
+File:      model.py (LICENSE alongside is the upstream LICENSE at the same commit)
+License:   MIT (SPDX: MIT), Copyright (c) 2022 Andrej Karpathy
+Vendored:  2026-11-11. Nothing from this project is fetched at run time.
