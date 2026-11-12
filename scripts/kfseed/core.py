@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 """Pure pieces: token, artifact specs, nginx config text, staging dir, seed_register payload."""
+import hashlib
 import os
 import re
 import secrets
-import shutil
 import stat
 
 PROBE_NAME = "probe.txt"
@@ -30,7 +30,7 @@ def check_token(token):
 
 def parse_artifact(spec):
     name, sep, sha = spec.partition(":")
-    if not sep or not NAME_RE.match(name) or name == PROBE_NAME or not SHA_RE.match(sha):
+    if not sep or not NAME_RE.match(name) or ".." in name or name == PROBE_NAME or not SHA_RE.match(sha):
         raise SeedError("artifact must be NAME:SHA256 (NAME [A-Za-z0-9._-], sha256 lowercase hex, not %s)" % PROBE_NAME)
     return name, sha
 
@@ -90,7 +90,7 @@ def render_config(run_dir, stage_dir, port, token, names):
     """names: the registered artifact names; only exact-match locations for them and probe.txt are served."""
     check_token(token)
     for n in names:
-        if not NAME_RE.match(n) or n == PROBE_NAME:
+        if not NAME_RE.match(n) or ".." in n or n == PROBE_NAME:
             raise SeedError("unsafe artifact name %r" % n)
     if not isinstance(port, int) or not 1 <= port <= 65535:
         raise SeedError("port out of range")
@@ -103,30 +103,64 @@ def render_config(run_dir, stage_dir, port, token, names):
     return CONFIG_TEMPLATE.format(run=run_dir, stage=stage, port=port, token=token, locations=locs, alts=alts)
 
 
-def build_stage(stage_dir, root, artifacts):
-    """Create stage_dir with ONLY the registered artifacts (hard link, else copy) and probe.txt."""
+def build_stage(stage_dir, root, artifacts, hooks=None):
+    """Create stage_dir with ONLY the registered artifacts (copied) and probe.txt.
+
+    Each source is opened with O_NOFOLLOW and checked with fstat on the open fd (regular file); the bytes served are
+    the bytes copied from that fd, hashed while copying, and must match the registered sha256. Returns
+    {name: (sha256, size)} of the STAGED bytes. hooks: test seam {"before_open": f(path), "after_open": f(path)}.
+    """
+    hooks = hooks or {}
     os.makedirs(stage_dir, mode=0o755, exist_ok=True)
     os.chmod(stage_dir, 0o755)
-    sizes = {}
-    for name, _sha in artifacts:
+    staged = {}
+    for name, sha in artifacts:
+        if not NAME_RE.match(name) or ".." in name or name == PROBE_NAME:
+            raise SeedError("unsafe artifact name %r" % name)
         src = os.path.join(root, name)
-        if os.path.islink(src) or not os.path.isfile(src):
-            raise SeedError("artifact %s is not a regular file under the root" % name)
-        dst = os.path.join(stage_dir, name)
+        st = os.lstat(src) if os.path.lexists(src) else None
+        if st is None or not stat.S_ISREG(st.st_mode):
+            raise SeedError("artifact %s is not a regular file under the root (symlinks are refused)" % name)
+        if hooks.get("before_open"):
+            hooks["before_open"](src)
         try:
-            os.link(src, dst)
-            if not os.stat(dst).st_mode & stat.S_IROTH:
-                os.unlink(dst)
-                raise OSError
-        except OSError:
-            shutil.copyfile(src, dst)
-            os.chmod(dst, 0o644)
-        sizes[name] = os.stat(dst).st_size
+            fd = os.open(src, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+        except OSError as e:
+            raise SeedError("artifact %s cannot be opened without following links: %s" % (name, e.strerror)) from None
+        try:
+            fst = os.fstat(fd)
+            if not stat.S_ISREG(fst.st_mode) or (fst.st_dev, fst.st_ino) != (st.st_dev, st.st_ino):
+                raise SeedError("artifact %s changed or is not a regular file" % name)
+            if hooks.get("after_open"):
+                hooks["after_open"](src)
+            dst = os.path.join(stage_dir, name)
+            h = hashlib.sha256()
+            size = 0
+            out = os.open(dst, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC, 0o644)
+            try:
+                while True:
+                    data = os.read(fd, 1 << 20)
+                    if not data:
+                        break
+                    h.update(data)
+                    size += len(data)
+                    view = memoryview(data)
+                    while view:
+                        view = view[os.write(out, view):]
+                os.fchmod(out, 0o644)
+            finally:
+                os.close(out)
+        finally:
+            os.close(fd)
+        if h.hexdigest() != sha:
+            os.unlink(dst)
+            raise SeedError("artifact %s: sha256 of the staged bytes differs from the registered value" % name)
+        staged[name] = (h.hexdigest(), size)
     probe = os.path.join(stage_dir, PROBE_NAME)
     with open(probe, "wb") as f:
         f.write(PROBE_CONTENT)
     os.chmod(probe, 0o644)
-    return sizes
+    return staged
 
 
 def seed_register_payload(name, sha256, size, token):

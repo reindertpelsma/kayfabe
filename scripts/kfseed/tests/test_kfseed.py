@@ -93,7 +93,7 @@ class Pure(Base):
         stage = os.path.join(self.tmp, "stage")
         sizes = core.build_stage(stage, self.root, [("art.bin", SHA)])
         self.assertEqual(sorted(os.listdir(stage)), ["art.bin", "probe.txt"])
-        self.assertEqual(sizes, {"art.bin": len(DATA)})
+        self.assertEqual(sizes, {"art.bin": (SHA, len(DATA))})
         self.assertEqual(open(os.path.join(stage, "probe.txt"), "rb").read(), b"kfseed-probe-v1\n")
 
     def test_stage_rejects_missing_and_symlink(self):
@@ -101,6 +101,64 @@ class Pure(Base):
         for n in ("ln", "missing"):
             with self.assertRaises(core.SeedError):
                 core.build_stage(os.path.join(self.tmp, "s" + n), self.root, [(n, SHA)])
+
+    def test_stage_sha_mismatch_refused(self):
+        with self.assertRaises(core.SeedError):
+            core.build_stage(os.path.join(self.tmp, "st"), self.root, [("art.bin", "0" * 64)])
+        self.assertFalse(os.path.exists(os.path.join(self.tmp, "st", "art.bin")))
+
+    def swap_to(self, target):
+        def hook(path):
+            os.unlink(path)
+            if target is None:
+                with open(path, "wb") as f:
+                    f.write(b"other regular file")
+            else:
+                os.symlink(target, path)
+        return hook
+
+    def secret(self):
+        p = os.path.join(self.tmp, "rootonly.txt")
+        with open(p, "w") as f:
+            f.write("TOP-SECRET")
+        return p
+
+    def stage_contents(self, stage):
+        return b"".join(open(os.path.join(stage, n), "rb").read() for n in os.listdir(stage))
+
+    def test_swap_to_symlink_before_open_never_served(self):
+        stage = os.path.join(self.tmp, "st")
+        with self.assertRaises(core.SeedError):
+            core.build_stage(stage, self.root, [("art.bin", SHA)], hooks={"before_open": self.swap_to(self.secret())})
+        self.assertNotIn(b"TOP-SECRET", self.stage_contents(stage))
+
+    def test_swap_to_other_file_before_open_refused(self):
+        stage = os.path.join(self.tmp, "st")
+        with self.assertRaises(core.SeedError):
+            core.build_stage(stage, self.root, [("art.bin", SHA)], hooks={"before_open": self.swap_to(None)})
+        self.assertNotIn(b"other regular file", self.stage_contents(stage))
+
+    def test_swap_after_open_serves_original_bytes_only(self):
+        stage = os.path.join(self.tmp, "st")
+        staged = core.build_stage(stage, self.root, [("art.bin", SHA)], hooks={"after_open": self.swap_to(self.secret())})
+        self.assertEqual(open(os.path.join(stage, "art.bin"), "rb").read(), DATA)
+        self.assertEqual(staged["art.bin"], (SHA, len(DATA)))
+        self.assertNotIn(b"TOP-SECRET", self.stage_contents(stage))
+
+    def test_stage_modes_and_no_links(self):
+        stage = os.path.join(self.tmp, "st")
+        core.build_stage(stage, self.root, [("art.bin", SHA)])
+        self.assertEqual(oct(os.stat(stage).st_mode & 0o777), "0o755")
+        for n in os.listdir(stage):
+            st = os.stat(os.path.join(stage, n))
+            self.assertEqual(oct(st.st_mode & 0o777), "0o644")
+        self.assertEqual(os.stat(os.path.join(stage, "art.bin")).st_nlink, 1)  # copied, not hard linked
+
+    def test_name_rules(self):
+        for bad in ("a..b", "..", ".x", "", "a" * 101):
+            with self.assertRaises(core.SeedError, msg=bad):
+                core.parse_artifact(bad + ":" + SHA)
+        core.parse_artifact("a.b-c_d:" + SHA)
 
     def test_artifact_spec(self):
         self.assertEqual(core.parse_artifact("a.b:" + SHA), ("a.b", SHA))
@@ -237,6 +295,40 @@ NGINX = shutil.which("nginx")
 NGINX_PATH = NGINX
 
 PKG_CWD = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+class ShadowAndPayload(Base):
+    def test_check_with_dash_I_ignores_cwd(self):
+        plant = os.path.join(self.tmp, "plant")
+        os.makedirs(os.path.join(plant, "kfseed"))
+        marker = os.path.join(self.tmp, "SHADOW-RAN")
+        body = "open(%r, 'w').write('x')\nraise SystemExit(99)\n" % marker
+        for mod in ("kfseed/__init__.py", "kfseed/cli.py", "kfseed/core.py", "json.py", "argparse.py", "subprocess.py", "shutil.py"):
+            with open(os.path.join(plant, mod), "w") as f:
+                f.write(body)
+        main = os.path.join(PKG_CWD, "kfseed", "__main__.py")
+        r = subprocess.run([sys.executable, "-I", main, "check"], cwd=plant, capture_output=True, text=True)
+        self.assertFalse(os.path.exists(marker), r.stderr)
+        self.assertIn(r.returncode, (0, 2), r.stderr)
+        self.assertIn("nginx", r.stdout)
+
+    def test_payload_has_computed_values(self):
+        port = free_port()
+        # registered sha matches, so the payload carries the staged sha256/size
+        p = subprocess.Popen([sys.executable, "-B", "-I", os.path.join(PKG_CWD, "kfseed", "__main__.py"), "serve", "--root", self.root,
+                              "--port", str(port), "--token", self.token, "--artifact", "art.bin:" + SHA,
+                              "--fallback-python-server", "--force-fallback"],
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, cwd=self.tmp)
+        self.addCleanup(lambda: (p.terminate(), p.wait(20)))
+        info = json.loads(p.stdout.readline())
+        self.assertEqual(info["payloads"][0]["artifact"], {"name": "art.bin", "sha256": SHA, "size": len(DATA)})
+
+    def test_serve_refuses_wrong_sha(self):
+        p = subprocess.run([sys.executable, "-B", "-m", "kfseed", "serve", "--root", self.root, "--port", str(free_port()),
+                            "--artifact", "art.bin:" + "1" * 64, "--fallback-python-server", "--force-fallback"],
+                           capture_output=True, text=True, cwd=PKG_CWD, timeout=30)
+        self.assertEqual((p.returncode, p.stdout), (3, ""))
+        self.assertIn("differs", p.stderr)
 
 
 class Startup(Base):

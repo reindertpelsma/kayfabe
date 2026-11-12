@@ -100,7 +100,12 @@ def serve(args):
     run = tempfile.mkdtemp(prefix="kfseed-")
     os.chmod(run, 0o755)
     stage = os.path.join(run, "stage")
-    sizes = core.build_stage(stage, args.root, arts)
+    try:
+        staged = core.build_stage(stage, args.root, arts)
+    except core.SeedError as e:
+        shutil.rmtree(run, ignore_errors=True)
+        sys.stderr.write("kfseed: %s\n" % e)
+        return 3
     for sub in ("body", "proxy", "fastcgi", "uwsgi", "scgi"):
         os.makedirs(os.path.join(run, "tmp", sub))
     use_dev = args.fallback_python_server and not (nginx and not args.force_fallback)
@@ -130,7 +135,7 @@ def serve(args):
             sys.stderr.write("kfseed: seeder not ready: %s\n%s" % (why, _tail(run, token)))
             return 3
         out = {"token": token, "port": args.port,
-               "payloads": [core.seed_register_payload(n, s, sizes[n], token) for n, s in arts]}
+               "payloads": [core.seed_register_payload(n, *staged[n], token) for n, _ in arts]}
         print(json.dumps(out), flush=True)
         while not stop and (not args.serve_until or time.time() < args.serve_until):
             if proc and proc.poll() is not None:
