@@ -1213,33 +1213,30 @@ fn scan_boundary(window: bool) {
         let raw = kf_abi::submit::gp_entry(0x4000, len).unwrap();
         io.ring[slot as usize] = raw;
         io.put = (slot + 1) & 15;
-        // Only the admitted copy cases allocate PB bytes in this test.
         if len <= cap {
             io.pb.insert(raw, vec![0; len as usize / 4]);
+        } else {
+            io.wide = Some((0x4000, vec![0; len as usize / 4]));
         }
         let issued = r.fetch.issued();
-        let result = turn(&mut r, &mut io);
-        if len > cap {
-            assert!(
-                matches!(result, Err(Fail::Refused(ref why)) if why.starts_with("USER_RING_SCAN_BUDGET "))
-            );
-            assert_eq!(
-                r.fetch.issued(),
-                issued,
-                "size refusal creates no native receipt"
-            );
-            assert_eq!(r.cursor, slot);
-            assert!(!io.calls.iter().any(|c| matches!(
-                c,
-                Call::ReadPb(_) | Call::Stage | Call::Gate | Call::Entry(..)
-            )));
-        } else {
-            result.unwrap();
-            // Scan and Window admit the copy bound inclusively; all larger copies stop before any read or gate.
-            assert_eq!(io.count(&Call::ReadPb(raw)), 1);
-            assert_eq!(r.cursor, (slot + 1) & 15);
-            assert!(!r.dead);
+        // Phase 2: Scan and Window admit a copy of at most the bound inclusively; a larger descriptor is classified in
+        // bounded parts, one per turn, and its original word is forwarded once. Nothing is refused for size.
+        let mut turns = 0;
+        while r.cursor == slot {
+            turns += 1;
+            assert!(turns <= 10, "len {len}: more than ten parts");
+            turn(&mut r, &mut io).unwrap();
         }
+        assert!(!r.dead);
+        assert_eq!(r.cursor, (slot + 1) & 15);
+        assert_eq!(turns as u64, len.div_ceil(cap), "len {len}");
+        assert!(io.part_reads.iter().all(|(_, n)| *n <= cap));
+        assert_eq!(
+            io.part_reads.iter().map(|(_, n)| *n).sum::<u64>(),
+            if len > cap { len } else { 0 }
+        );
+        assert!(r.fetch.issued() > issued);
+        assert!(format!("{:?}", r.life.counts()).contains("refused_scan_budget: 0"));
     }
 }
 
@@ -1357,7 +1354,7 @@ fn window_to_pointer_transition_releases_only_the_copy_bound() {
 }
 
 #[test]
-fn ring_switch_in_window_keeps_copy_bound_even_after_registry_drains() {
+fn ring_switch_in_window_streams_an_oversized_entry_even_after_registry_drains() {
     let mut io = Mock::new(16);
     let mut r = flipped_relay(&mut io, false);
     turn(&mut r, &mut io).unwrap();
@@ -1365,22 +1362,20 @@ fn ring_switch_in_window_keeps_copy_bound_even_after_registry_drains() {
     r.switch_source(2);
     io.live = 0;
     io.epoch += 1;
-    io.ring[0] =
-        kf_abi::submit::gp_entry(0x4000, kf_chan::user_storage::MAX_SOURCE_BYTES + 4).unwrap();
+    let len = kf_chan::user_storage::MAX_SOURCE_BYTES + 4;
+    io.ring[0] = kf_abi::submit::gp_entry(0x4000, len).unwrap();
+    io.wide = Some((0x4000, vec![0; len as usize / 4]));
     io.put = 1;
     io.calls.clear();
-    let issued = r.fetch.issued();
-    let result = turn(&mut r, &mut io);
-    // A Window migration retains its post-switch scan obligation even when registrations drain.
-    assert!(
-        matches!(result, Err(Fail::Refused(ref why)) if why.starts_with("USER_RING_SCAN_BUDGET "))
-    );
-    assert_eq!(r.fetch.issued(), issued);
-    assert_eq!(r.cursor, 0);
-    assert!(!io.calls.iter().any(|c| matches!(
-        c,
-        Call::ReadPb(_) | Call::Stage | Call::Gate | Call::Entry(..)
-    )));
+    // The post-switch scan obligation (Window kept for POST_SWITCH_SCAN entries) no longer kills a large entry.
+    turn(&mut r, &mut io).unwrap();
+    assert_eq!(r.cursor, 0, "first part only: nothing published yet");
+    turn(&mut r, &mut io).unwrap();
+    assert_eq!(r.cursor, 1);
+    assert!(!r.dead);
+    assert_eq!(r.life.mode(), Mode::Window);
+    assert_eq!(r.life.counts().post_switch_scanned, 1);
+    assert_eq!(io.part_reads.len(), 2);
 }
 
 // ---- creo-04 replay (2026-11-12): Phase 2 streaming of an oversized Window-mode segment.
@@ -1428,14 +1423,34 @@ fn creo_relay(io: &mut Mock) -> Relay {
     r
 }
 
-/// Offer `raw` (with `pb`) at slot 2 and queue ordinary entries up to `put = 0x3f8` behind it.
-fn offer_creo(io: &mut Mock, raw: u64, pb: Vec<u32>) {
+/// Offer `raw` (with its pushbuffer `words`, read in bounded parts) at slot 2 and queue ordinary entries up to
+/// `put = 0x3f8` behind it.
+fn offer_creo(io: &mut Mock, raw: u64, words: Vec<u32>) {
+    let va = (raw & 0xffff_ffff) & !3 | ((raw >> 32) & 0xff) << 32;
+    io.wide = Some((va, words));
     io.ring[2] = raw;
-    io.pb.insert(raw & !support::SYNC, pb);
     for slot in 3..0x3f8u32 {
         io.put_entry(slot, &ge(100 + (slot % 100) as u8, Kind::Plain));
     }
     io.put = 0x3f8;
+}
+
+/// Run worker turns until `raw` is forwarded, a turn fails, or `max` turns pass (each part is one turn).
+fn run_until_forwarded(r: &mut Relay, io: &mut Mock, raw: u64, max: usize) -> Result<usize, Fail> {
+    for n in 1..=max {
+        turn(r, io)?;
+        if io
+            .calls
+            .iter()
+            .any(|c| matches!(c, Call::Entry(_, w) if *w == raw))
+        {
+            return Ok(n);
+        }
+    }
+    panic!(
+        "{raw:#x} was not forwarded in {max} turns: {:?}",
+        r.life.counts()
+    );
 }
 
 #[test]
@@ -1448,19 +1463,26 @@ fn creo_entry_in_window_after_migration_is_streamed_not_refused() {
     let mut io = Mock::new(2048);
     let mut r = creo_relay(&mut io);
     offer_creo(&mut io, CREO_WORD, pb_filler((CREO_BYTES / 4) as usize));
-    let result = turn(&mut r, &mut io);
-    assert!(
-        result.is_ok(),
-        "creo-04: a legitimate 1,042,284-byte segment must not kill the relay: {result:?}"
+    let turns = run_until_forwarded(&mut r, &mut io, CREO_WORD, 8)
+        .expect("creo-04: a legitimate 1,042,284-byte segment must not kill the relay");
+    assert_eq!(turns, 2, "917,504 + 124,780 bytes: two parts, two turns");
+    assert_eq!(
+        io.part_reads,
+        vec![(0x2_2f5d_102c, 917_504), (0x2_2f5d_102c + 917_504, 124_780)]
     );
     assert!(!r.dead);
-    assert!(format!("{:?}", r.life.counts()).contains("refused_scan_budget: 0"));
-    assert!(
-        io.calls
+    let c = format!("{:?}", r.life.counts());
+    assert!(c.contains("refused_scan_budget: 0"), "{c}");
+    assert!(c.contains("segments_streamed: 1"), "{c}");
+    assert!(c.contains("stream_parts_max: 2"), "{c}");
+    assert!(c.contains("window_entry_max_bytes: 1042284"), "{c}");
+    assert_eq!(
+        native_words(&io)
             .iter()
-            .any(|c| matches!(c, Call::Entry(_, w) if *w == CREO_WORD)),
-        "the guest's original word is forwarded unchanged: {:?}",
-        io.calls
+            .filter(|w| **w == CREO_WORD)
+            .count(),
+        1,
+        "the guest's original word is forwarded exactly once, unchanged"
     );
 }
 
@@ -1474,16 +1496,13 @@ fn creo_entry_with_a_software_trigger_in_part_one_refuses_as_staged_span_budget(
     ];
     pb.extend(pb_filler((CREO_BYTES / 4) as usize - 2));
     offer_creo(&mut io, CREO_WORD, pb);
-    let e = turn(&mut r, &mut io).unwrap_err();
+    let e = run_until_forwarded(&mut r, &mut io, CREO_WORD, 8).unwrap_err();
     assert!(
-        matches!(e, Fail::Refused(ref why) if why.starts_with("USER_RING_STAGED_SPAN_BUDGET ")),
+        matches!(e, Fail::Refused(ref why) if why.starts_with("USER_RING_STAGED_SPAN_BUDGET ")
+            && why.contains(" live=0 post_switch=6")),
         "a trigger inside an oversized segment cannot be staged: {e:?}"
     );
-    assert!(
-        !io.calls
-            .iter()
-            .any(|c| matches!(c, Call::Entry(_, w) if *w == CREO_WORD))
-    );
+    assert!(!native_words(&io).contains(&CREO_WORD));
     assert!(!io.calls.contains(&Call::Gate));
 }
 
@@ -1498,16 +1517,12 @@ fn trigger_in_a_later_part_of_an_oversized_segment_refuses_as_staged_span_budget
     pb.push(support::HANDLE);
     pb.extend(pb_filler(words - before - 2));
     offer_creo(&mut io, CREO_WORD, pb);
-    let e = turn(&mut r, &mut io).unwrap_err();
+    let e = run_until_forwarded(&mut r, &mut io, CREO_WORD, 8).unwrap_err();
     assert!(
         matches!(e, Fail::Refused(ref why) if why.starts_with("USER_RING_STAGED_SPAN_BUDGET ")),
         "{e:?}"
     );
-    assert!(
-        !io.calls
-            .iter()
-            .any(|c| matches!(c, Call::Entry(_, w) if *w == CREO_WORD))
-    );
+    assert!(!native_words(&io).contains(&CREO_WORD));
 }
 
 #[test]
@@ -1519,15 +1534,11 @@ fn the_largest_representable_segment_streams_in_at_most_ten_parts() {
     let mut io = Mock::new(2048);
     let mut r = creo_relay(&mut io);
     offer_creo(&mut io, raw, pb_filler((bytes / 4) as usize));
-    let result = turn(&mut r, &mut io);
-    assert!(result.is_ok(), "{result:?}");
-    assert!(
-        io.calls
-            .iter()
-            .any(|c| matches!(c, Call::Entry(_, w) if *w == raw))
-    );
-    let parts = format!("{:?}", r.life.counts());
-    assert!(parts.contains("stream_parts_max: 10"), "{parts}");
+    let turns = run_until_forwarded(&mut r, &mut io, raw, 12).unwrap();
+    assert_eq!(turns, 10);
+    assert_eq!(io.part_reads.len(), 10);
+    let c = format!("{:?}", r.life.counts());
+    assert!(c.contains("stream_parts_max: 10"), "{c}");
 }
 
 // Phase 2 RED: all calls below exercise the existing production Relay API.

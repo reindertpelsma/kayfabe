@@ -978,10 +978,20 @@ impl Relay {
             let Some(Source::Segment(desc)) = self.desc else {
                 return Err("USER_RING_STREAM_FORMAT".into());
             };
-            self.stream = Some(
-                Stream::begin(desc, self.raw, &self.scan, self.stream_maximum)
-                    .map_err(|e| format!("USER_RING_STREAM {e:?}"))?,
-            );
+            let begun = Stream::begin(desc, self.raw, &self.scan, self.stream_maximum);
+            self.stream = Some(begun.map_err(|e| {
+                format!(
+                    "USER_RING_STREAM {e:?} len={} max={} mode={:?} entry={:#018x} cursor={:#x} put={:#x} live={} post_switch={}",
+                    desc.len_bytes,
+                    self.stream_maximum,
+                    self.life.mode(),
+                    self.raw,
+                    self.cursor,
+                    self.put,
+                    io.registry_live(),
+                    self.life.post_switch_remaining()
+                )
+            })?);
             io.begin_stream()?;
         }
         let stream = self.stream.as_ref().ok_or("USER_RING_STREAM_ABSENT")?;
@@ -1020,7 +1030,8 @@ impl Relay {
                     Some(Source::Segment(d)) => d.len_bytes,
                     _ => 0,
                 };
-                Err(format!("USER_RING_STAGED_SPAN_BUDGET len={len} trigger_at={at_word} max={} mode={:?} entry={:#018x} cursor={:#x} put={:#x}",
+                let (live, post_switch) = (io.registry_live(), self.life.post_switch_remaining());
+                Err(format!("USER_RING_STAGED_SPAN_BUDGET len={len} trigger_at={at_word} max={} mode={:?} entry={:#018x} cursor={:#x} put={:#x} live={live} post_switch={post_switch}",
                     self.stream_maximum, self.life.mode(), self.raw, self.cursor, self.put).into())
             }
             Err(ChunkRefusal::Scan(e)) => {
@@ -1070,6 +1081,7 @@ impl Relay {
             stream.parts(),
         )?;
         let stream = self.stream.take().ok_or("USER_RING_STREAM_ABSENT")?;
+        self.life.segment_streamed(stream.parts());
         self.scan = stream.into_scan();
         self.life.segment_scanned(self.scan.carried().is_some());
         let cursor = self.cursor;
