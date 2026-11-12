@@ -879,3 +879,43 @@ export function wantsRerun(leg, reruns) {
     (leg.rerunDepth ?? 0) < reruns
   );
 }
+// The CPU-vendor cover of a RUNNING release (owner 2026-11-13: a rental that fails is replaced, and the vendor rule is re-applied
+// to the replacement). The large legs that stand for `vendor`: pinned to it and still waiting to rent, or rented from it and
+// still running or passed. A leg that ended RETRY/UNATTRIBUTED/FAIL covers nothing.
+export function vendorCover(batch, vendor, except) {
+  return batch.legs.filter(
+    (l) =>
+      l !== except &&
+      l.legTier !== 'middle' &&
+      ((l.state === 'PENDING' && l.cpuVendor === vendor) ||
+        (l.cpuVendorOffered === vendor &&
+          (l.state === 'STARTED' || (l.state === 'ENDED' && l.outcome?.verdict === 'PASS')))),
+  );
+}
+// The pin of a re-run: the failed leg's own pin, or its rented vendor when the other legs no longer cover that required vendor.
+export function pinForRerun(batch, leg, min) {
+  if (leg.cpuVendor) return leg.cpuVendor;
+  const v = leg.cpuVendorOffered;
+  if (leg.legTier === 'middle' || !(min?.[v] > 0)) return undefined;
+  return vendorCover(batch, v, leg).length < min[v] ? v : undefined;
+}
+// A pinned leg that finds no offer of its vendor gives the pin to another waiting large leg (one that has not already failed to
+// find that vendor), and rents unpinned itself, so its die is still covered. Returns the leg that took the pin, or null (the
+// vendor then stays uncovered and the verdict says CPU_VENDOR_MISSING). Nothing moves when the other legs already cover it.
+export function movePin(batch, leg, min) {
+  const v = leg.cpuVendor;
+  if (!v || leg.legTier === 'middle') return null;
+  leg.pinFailed = [...new Set([...(leg.pinFailed ?? []), v])];
+  delete leg.cpuVendor;
+  if (vendorCover(batch, v, leg).length >= (min?.[v] ?? 0)) return null;
+  const next = batch.legs.find(
+    (l) =>
+      l !== leg &&
+      l.state === 'PENDING' &&
+      l.legTier !== 'middle' &&
+      !l.cpuVendor &&
+      !(l.pinFailed ?? []).includes(v),
+  );
+  if (next) next.cpuVendor = v;
+  return next ?? null;
+}

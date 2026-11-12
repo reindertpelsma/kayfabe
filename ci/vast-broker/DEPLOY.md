@@ -1133,5 +1133,7 @@ regenerated ONCE here for everything merged since the previous pin: the `#347` h
 regenerating it on purpose, so `next` carried a stale pin (`384374d7176e9c9d92c6a94cb99a2735d55b5bae73bd09e288996b087b7d86a8`) until this change. MEASURED 2026-11-12 with wrangler 4.152.0
 and a PHYSICAL `node_modules` inside the checkout (a symlinked one gives a different hash, see above): two `wrangler deploy --config wrangler.toml
 --dry-run --outdir <dir>` runs, SHA-256 of `<dir>/index.js`, identical: `52bb9a0b11b59cb52db6312a7a7dd1f3af14c688aa4cb5396adbc3c278ab2ed2`. Local dry-runs only: no upload, no deploy, no Worker call.
+
+Bundle pin (2026-11-13, release resilience, `claude/release-resilience-20261113`). Regenerated ONCE at the end of that branch because `src/index.js` and `src/release.js` changed (a failed rental is replaced alone; design in `docs/design/V3_RELEASE_RESILIENCE.md`). Old pin `52bb9a0b11b59cb52db6312a7a7dd1f3af14c688aa4cb5396adbc3c278ab2ed2`, new pin `51ae370c7ae3df4189186745d0cf07110953fe17de348d636aa2e94345b920ac`, in all three places (`deployment.json`, `wrangler.toml`, this file). MEASURED 2026-11-13 with wrangler 4.152.0 and a physical `node_modules` in the checkout: two `wrangler deploy --config wrangler.toml --dry-run --outdir <dir>` runs gave identical SHA-256 of `<dir>/index.js`. Local dry-runs only: no upload, no deploy, no Worker call.
 Order after merge: master must carry this pin before the coordinator deploys; set `RELEASE_ENABLED=false` before any rollback.
 

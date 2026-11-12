@@ -16,7 +16,7 @@ import {
   middleAppsResult,
 } from './tier.js';
 // prettier-ignore
-import {planRelease,planRehearsal,REHEARSAL_SCOPE,classifyLeg,releaseVerdict,wantsRerun} from './release.js';
+import {planRelease,planRehearsal,REHEARSAL_SCOPE,classifyLeg,releaseVerdict,wantsRerun,movePin,pinForRerun} from './release.js';
 // prettier-ignore
 import {DEFAULTS} from './defaults.js';
 import {
@@ -2164,6 +2164,8 @@ export function createService({
       if (wasEnded) continue;
       if (batch.state === 'RUNNING' && wantsRerun(l, batch.reruns)) {
         const n = Math.max(...batch.legs.map((x) => x.seq)) + 1;
+        // Owner 2026-11-13: the vendor rule is re-applied to the replacement (it keeps the vendor the release still needs).
+        const pin = pinForRerun(batch, l, RELEASE_MATRIX.policy.cpu_vendor_min);
         batch.legs.push({
           seq: n,
           key: batch.id + '-' + n,
@@ -2171,7 +2173,7 @@ export function createService({
           die: l.die,
           windowsRuns: l.windowsRuns,
           ...(l.legTier ? { legTier: l.legTier } : {}),
-          ...(l.cpuVendor ? { cpuVendor: l.cpuVendor } : {}),
+          ...(pin ? { cpuVendor: pin } : {}),
           ...(l.releaseMatrix ? { releaseMatrix: l.releaseMatrix } : {}),
           ...(l.spec ? { spec: l.spec, phase: l.phase } : {}),
           ...(l.apps === false ? { apps: false } : {}),
@@ -2208,6 +2210,11 @@ export function createService({
         if (dependency.state !== 'ENDED') continue;
         const previous = await ledger.get('record:' + dependency.key);
         if (!previous || previous.ended === null || previous.ended === undefined) continue;
+        // A lane A that did not end in a verdict (rental or harness fault) names a machine and host that lane B does not rent again.
+        if (['RETRY', 'UNATTRIBUTED'].includes(dependency.outcome?.verdict)) {
+          l.avoidMachines = [...new Set([...l.avoidMachines, previous.machineId])];
+          if (previous.hostId) l.avoidHosts = [...new Set([...l.avoidHosts, previous.hostId])];
+        }
         if (l.queued === null) l.queued = now();
       }
       if (
@@ -2271,6 +2278,7 @@ export function createService({
         l.state = 'STARTED';
         delete l.lastRefusal;
         l.machineId = started.machineId;
+        if (started.cpuVendorOffered !== undefined) l.cpuVendorOffered = started.cpuVendorOffered;
         l.family ??= started.family;
         l.die ??= started.die;
         // A later leg of the same die (the second Windows run) belongs on another machine.
@@ -2289,7 +2297,8 @@ export function createService({
         // and a crash cannot lose the siblings' machine avoidance.
         await ledger.put('batch:' + batch.id, batch);
       } catch (e) {
-        if (await ledger.get('record:' + l.key)) l.state = 'STARTED';
+        const recorded = await ledger.get('record:' + l.key);
+        if (recorded) l.state = 'STARTED';
         const reason = e instanceof BrokerError ? (e.reason ?? e.state) : 'UNAVAILABLE';
         l.lastRefusal = reason;
         // Review F1/F4: admit() refused because renting or releases are switched off: nothing of
@@ -2310,7 +2319,21 @@ export function createService({
           for (const x of batch.legs) if (x.state === 'PENDING') x.state = 'MISSING';
           break;
         }
-        // No offer for this die: try the next leg. Busy, a cap or anything else: next tick.
+        // A create that failed after the rental was recorded is an unproven box (the cron reconciles or closes it and the leg is
+        // re-run): the legs after it go on. Owner 2026-11-13: a rental that fails never holds up the others.
+        if (recorded) {
+          l.machineId = recorded.machineId ?? null;
+          continue;
+        }
+        // No offer for this die: try the next leg (a leg pinned to a vendor that vanished gives its pin away). Busy, a cap or
+        // anything else: next tick.
+        if (
+          reason === 'NO_ALLOWED_OFFERS' &&
+          l.cpuVendor &&
+          batch.tier === 'large' &&
+          !batch.rehearsal
+        )
+          movePin(batch, l, RELEASE_MATRIX.policy.cpu_vendor_min);
         if (reason !== 'NO_ALLOWED_OFFERS') break;
       }
     }

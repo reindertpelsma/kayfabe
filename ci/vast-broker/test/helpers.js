@@ -211,6 +211,12 @@ export class MockCloud {
   // Concurrency harness: further offers, the contract ids handed out in order (default 900)
   // and per-run-id GitHub run rows (default `run`).
   extraOffers = [];
+  // Resilience harness (2026-11-13): offers that Vast stops listing (and refuses to create), asks whose create is
+  // refused with Vast's `success: false`, and asks whose create answers an HTTP 500 without a body.
+  hiddenOffers = new Set();
+  refuseAsks = new Set();
+  errorAsks = new Set();
+  createAttempts = [];
   contracts = null;
   created = [];
   runs = new Map();
@@ -305,13 +311,20 @@ export class MockCloud {
           row(this.offer, this.price),
           // Optional further market rows (concurrency and identity tests); each may carry
           // its own `price` (USD per hour, storage included).
-          ...this.extraOffers.map(({ price, ...offer }) => row(offer, price ?? this.price)),
+          ...this.extraOffers
+            .filter((offer) => !this.hiddenOffers.has(offer.id))
+            .map(({ price, ...offer }) => row(offer, price ?? this.price)),
         ],
       });
     }
     if (/^\/api\/v0\/asks\/[1-9][0-9]*$/.test(u.pathname)) {
+      const requested = Number(u.pathname.split('/').at(-1));
+      this.createAttempts.push(requested);
+      if (this.errorAsks.has(requested)) return new Response('upstream', { status: 500 });
+      if (this.refuseAsks.has(requested) || this.hiddenOffers.has(requested))
+        return Response.json({ success: false, error: 'no_such_ask' }, { status: 400 });
       this.creates++;
-      const ask = Number(u.pathname.split('/').at(-1)),
+      const ask = requested,
         extra = this.extraOffers.find((x) => x.id === ask),
         offer = extra ?? this.offer,
         price = extra?.price ?? this.price,
