@@ -23,6 +23,7 @@ const bundle = await build({
         this.mode = 'ok';
         this.fetcher = async (url) => {
           this.probes.push(String(url));
+          if (this.mode === 'first-fails' && String(url).includes('sslip.io')) return new Response('no', {status: 522});
           if (this.mode === 'wrong') return new Response('something else');
           if (this.mode === 'redirect')
             return new Response(null, {status: 302, headers: {Location: 'http://10.0.0.1/'}});
@@ -698,4 +699,39 @@ test('admin: a seeder hostname cannot be configured', async (t) => {
     hostname: 'seed.example.org',
   };
   assert.equal((await h.put('rack-1', { seeder })).data.error, 'CONFIG_SEEDER');
+});
+
+test('seeder: the fallback_url names the mapper that passed the probe', async (t) => {
+  const h = await runtime(t);
+  await h.put('rack-1');
+  await h.call('rack-1', 'POST', '/__t/mode', 1, 'first-fails');
+  const c = await h.hello('rack-1', await h.mint('rack-1'));
+  await h.call('rack-1', 'POST', '/internal/offer', offerBody());
+  const o = await c.next('offer');
+  c.send({ type: 'ack', offer_id: o.offer_id });
+  await new Promise((r) => setTimeout(r, 100));
+  const tok = 'S'.repeat(24);
+  c.send({
+    type: 'seed_register',
+    offer_id: o.offer_id,
+    artifact: { name: 'a.tar', sha256: 'd'.repeat(64), size: 1 },
+    path: '/' + tok + '/a.tar',
+  });
+  assert.equal((await c.next('seed_ack')).ok, true);
+  const v = await h.view('rack-1');
+  assert.equal(v.seed.fallback_url, 'http://203-0-113-9.traefik.me:40022/' + tok + '/a.tar');
+  assert.equal(v.seed.url, 'http://203.0.113.9:40022/' + tok + '/a.tar');
+  assert.deepEqual((await h.call('rack-1', 'GET', '/__t/probes')).data, [
+    'http://203-0-113-9.sslip.io:40022/' + tok + '/probe.txt',
+    'http://203-0-113-9.traefik.me:40022/' + tok + '/probe.txt',
+  ]);
+  // Both names failing is "cannot open a port".
+  await h.call('rack-1', 'POST', '/__t/mode', 1, 'wrong');
+  c.send({
+    type: 'seed_register',
+    offer_id: o.offer_id,
+    artifact: { name: 'a.tar', sha256: 'd'.repeat(64), size: 1 },
+    path: '/' + tok + '/a.tar',
+  });
+  assert.equal((await c.next('seed_ack')).ok, false);
 });

@@ -16,6 +16,7 @@ import {
   inWindow,
   mintBoxToken,
   probeSeeder,
+  MAPPERS,
   probeHostnames,
   seedFallbackUrl,
   publicIp,
@@ -319,7 +320,7 @@ test('probe success contacts exactly the configured address, once', async () => 
     options.push(init);
     return new Response(SEED_PROBE_CONTENT);
   });
-  assert.deepEqual(r, { ok: true });
+  assert.deepEqual(r, { ok: true, hostname: '203-0-113-9.sslip.io' });
   assert.deepEqual(urls, ['http://203-0-113-9.sslip.io:40022/' + TOKEN + '/' + PROBE_FILE]);
   assert.equal(options[0].redirect, 'manual');
 });
@@ -329,19 +330,19 @@ test('probe refuses an IPv6 literal (not supported for now)', async () => {
     'BAD_ADDRESS',
   );
 });
-test('probe: wrong content is final (no retry), prefix or suffix differences too', async () => {
+test('probe: wrong content fails every name (one attempt each), prefix or suffix differences too', async () => {
   for (const body of ['nope', SEED_PROBE_CONTENT + 'x', SEED_PROBE_CONTENT.trim(), '']) {
     let calls = 0;
     const r = await probe(async () => (calls++, new Response(body)));
     assert.deepEqual(r, { ok: false, reason: 'WRONG_CONTENT' });
-    assert.equal(calls, 1);
+    assert.equal(calls, 2);
   }
 });
 test('probe: an oversized body is wrong content', async () => {
   const r = await probe(answer('x'.repeat(5000)));
   assert.equal(r.reason, 'WRONG_CONTENT');
 });
-test('probe: redirects are refused and not followed', async () => {
+test('probe: redirects are refused and not followed (a failure of that name)', async () => {
   let calls = 0;
   const r = await probe(
     async () => (
@@ -350,11 +351,11 @@ test('probe: redirects are refused and not followed', async () => {
     ),
   );
   assert.deepEqual(r, { ok: false, reason: 'REDIRECT' });
-  assert.equal(calls, 1);
+  assert.equal(calls, 2);
   const o = await probe(async () => ({ type: 'opaqueredirect', status: 0 }));
   assert.equal(o.reason, 'REDIRECT');
 });
-test('probe: timeout, one retry, then false; a fetcher that ignores the signal is bounded too', async () => {
+test('probe: timeout on each name, then false; a fetcher that ignores the signal is bounded too', async () => {
   let calls = 0;
   const hang = () => (calls++, new Promise(() => {}));
   const t0 = Date.now();
@@ -379,13 +380,13 @@ test('probe: the timeout is capped at 5 s even if asked for more', async () => {
   }
   assert.ok(seen.length && seen.every((ms) => ms <= 5000));
 });
-test('probe: retry recovers from one failure; two HTTP errors fail', async () => {
+test('probe: the second name recovers from a failure of the first; two HTTP errors fail', async () => {
   let calls = 0;
   const flaky = async () => {
     if (calls++ === 0) throw new Error('reset');
     return new Response(SEED_PROBE_CONTENT);
   };
-  assert.deepEqual(await probe(flaky), { ok: true });
+  assert.deepEqual(await probe(flaky), { ok: true, hostname: '203-0-113-9.traefik.me' });
   calls = 0;
   const r = await probe(async () => (calls++, new Response('x', { status: 503 })));
   assert.deepEqual(r, { ok: false, reason: 'HTTP_503' });
@@ -464,9 +465,22 @@ test('gateway forwards /hosts/<id>/ws to that box DO on the internal origin, not
 });
 
 // ---- probe hostnames (MEASURED 2026-11-12: Workers cannot fetch a raw IP, hostnames work) ---------
-test('probeHostnames: sslip first, nip fallback, nothing else', () => {
-  assert.deepEqual(probeHostnames('92.67.98.9'), ['92-67-98-9.sslip.io', '92.67.98.9.nip.io']);
+test('probeHostnames: sslip.io then traefik.me, dash form, nothing else', () => {
+  assert.deepEqual(probeHostnames('92.67.98.9'), ['92-67-98-9.sslip.io', '92-67-98-9.traefik.me']);
   assert.deepEqual(probeHostnames('92.67.98.9', 'seed.example.org'), probeHostnames('92.67.98.9'));
+  assert.deepEqual(
+    MAPPERS.map((m) => [m.zone, m.enabled]),
+    [
+      ['sslip.io', true],
+      ['traefik.me', true],
+      ['local-ip.sh', false],
+    ],
+  );
+  assert.ok(
+    !probeHostnames('92.67.98.9').some((n) =>
+      /nip\.io$|local-ip|cloud-ip|xip/.test(n.replace('sslip.io', '')),
+    ),
+  );
 });
 test('probeHostnames: only a public dotted-quad; no IPv6, private, CGNAT, loopback, link-local', () => {
   for (const bad of [
@@ -492,30 +506,39 @@ test('probeHostnames: only a public dotted-quad; no IPv6, private, CGNAT, loopba
     assert.deepEqual(probeHostnames(bad), [], String(bad));
   assert.equal(publicIpv4('2001:db8::1'), null);
 });
-test('probe uses a hostname, never the raw IP; second attempt uses the fallback name', async () => {
+test('probe uses hostnames, never the raw IP; one attempt per name, in order', async () => {
   const urls = [];
   const r = await probe(async (u) => (urls.push(u), new Response('x', { status: 503 })));
-  assert.equal(r.reason, 'HTTP_503');
+  assert.deepEqual(r, { ok: false, reason: 'HTTP_503' });
   assert.deepEqual(urls, [
     'http://203-0-113-9.sslip.io:40022/' + TOKEN + '/probe.txt',
-    'http://203.0.113.9.nip.io:40022/' + TOKEN + '/probe.txt',
+    'http://203-0-113-9.traefik.me:40022/' + TOKEN + '/probe.txt',
   ]);
   for (const u of urls) assert.doesNotMatch(new URL(u).hostname, /^[0-9.]+$/);
 });
-test('probe: the fallback name can succeed after the first fails', async () => {
+test('probe: first name fails, second succeeds => ok with the second name; the first success stops the walk', async () => {
   let n = 0;
   const hosts = [];
   const r = await probe(async (u) => {
     hosts.push(new URL(u).hostname);
     return n++ === 0 ? new Response('no', { status: 522 }) : new Response(SEED_PROBE_CONTENT);
   });
-  assert.deepEqual(r, { ok: true });
-  assert.deepEqual(hosts, ['203-0-113-9.sslip.io', '203.0.113.9.nip.io']);
+  assert.deepEqual(r, { ok: true, hostname: '203-0-113-9.traefik.me' });
+  assert.deepEqual(hosts, ['203-0-113-9.sslip.io', '203-0-113-9.traefik.me']);
+  const first = [];
+  const ok = await probe(async (u) => (first.push(u), new Response(SEED_PROBE_CONTENT)));
+  assert.equal(ok.hostname, '203-0-113-9.sslip.io');
+  assert.equal(first.length, 1);
 });
 
-test('seedFallbackUrl: sslip.io form of the same ip', () => {
-  const f = (ip) => seedFallbackUrl(ip, 40022, TOKEN, 'kf3.tar');
+test('seedFallbackUrl: the hostname that passed, else the first mapper; never an unknown host', () => {
+  const f = (ip, host) => seedFallbackUrl(ip, 40022, TOKEN, 'kf3.tar', host);
   assert.equal(f('203.0.113.9'), 'http://203-0-113-9.sslip.io:40022/' + TOKEN + '/kf3.tar');
+  assert.equal(
+    f('203.0.113.9', '203-0-113-9.traefik.me'),
+    'http://203-0-113-9.traefik.me:40022/' + TOKEN + '/kf3.tar',
+  );
+  assert.equal(f('203.0.113.9', 'evil.example'), null);
   assert.equal(f('10.0.0.1'), null);
   assert.equal(f('2001:db8::1'), null);
 });

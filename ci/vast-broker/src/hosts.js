@@ -96,13 +96,22 @@ export function publicIp(value) {
 export const publicIpv4 = (value) =>
   typeof value === 'string' && /^[0-9.]+$/.test(value) ? publicIp(value) : null;
 // Workers cannot fetch() a raw IP (Cloudflare answers 403/1003, MEASURED 2026-11-12); a hostname that
-// resolves to the IP works on a non-standard port. Candidates, in order: <a-b-c-d>.sslip.io, then
-// <a.b.c.d>.nip.io. Pure; IPv4 in public space only. The connection is untrusted anyway (consumers
-// verify size and sha256), so there is no own-zone or admin-chosen name.
+// resolves to the IP works on a non-standard port. IP-encoding DNS mappers, in the order tried. This
+// is the one place to add or drop a mapper. sslip.io and nip.io share nameservers (one operator),
+// so nip.io is not an independent second path and is not listed; local-ip.sh works but is disabled.
+// traefik.me through a real Worker fetch is not yet measured (integration).
+export const MAPPERS = Object.freeze([
+  Object.freeze({ zone: 'sslip.io', enabled: true }),
+  Object.freeze({ zone: 'traefik.me', enabled: true }),
+  Object.freeze({ zone: 'local-ip.sh', enabled: false }),
+]);
+// Names for a public dotted-quad, `<a-b-c-d>.<zone>` per enabled mapper; [] for anything else (IPv6,
+// private, loopback, link-local, CGNAT, non-dotted-quad). The connection is untrusted anyway
+// (consumers verify size and sha256), so there is no own-zone or admin-chosen name.
 export function probeHostnames(ip) {
   const v4 = publicIpv4(ip);
   if (!v4) return [];
-  return [v4.replaceAll('.', '-') + '.sslip.io', v4 + '.nip.io'];
+  return MAPPERS.filter((m) => m.enabled).map((m) => v4.replaceAll('.', '-') + '.' + m.zone);
 }
 const validPort = (p) => Number.isInteger(p) && p >= 1 && p <= 65535;
 
@@ -367,12 +376,14 @@ export function seedUrl(ip, port, token, name) {
   return 'http://' + host + ':' + port + '/' + token + '/' + name;
 }
 
-// The consumer's second form of the artifact URL: the hostname form, built with the probe's own
-// mapper (<a-b-c-d>.sslip.io; nip.io is the probe's retry name). For boxes
-// behind http proxies, DNS proxies or NAT64 that only reach the hostname. null if no valid host.
-export function seedFallbackUrl(ip, port, token, name) {
-  const host = probeHostnames(ip)[0];
-  return host ? 'http://' + host + ':' + port + '/' + token + '/' + name : null;
+// The consumer's second form of the artifact URL: the hostname form. `host` is the name that passed
+// the probe (a name known to work from Cloudflare's side); without one, the first mapper's name.
+// For boxes behind http proxies, DNS proxies or NAT64 that only reach the hostname. null if the
+// address is not a public IPv4.
+export function seedFallbackUrl(ip, port, token, name, host) {
+  const names = probeHostnames(ip);
+  const chosen = host === undefined ? names[0] : names.includes(host) ? host : undefined;
+  return chosen ? 'http://' + chosen + ':' + port + '/' + token + '/' + name : null;
 }
 
 async function readBounded(response, limit) {
@@ -394,12 +405,14 @@ async function readBounded(response, limit) {
   return new TextDecoder('utf-8', { fatal: false }).decode(await new Blob(parts).arrayBuffer());
 }
 
-// Fetches http://<hostname>:<port>/<token>/probe.txt with the injected fetcher and compares the body
-// exactly. The hostname is derived from ip (see probeHostnames); ip and port come from the caller's TRUSTED source (the
-// Vast API's report for a Vast instance, the admin's config for a custom box), never from the box.
-// Each attempt is hard-bounded by timeoutMs (<= 5 s: a closed port otherwise blocks ~19 s in
-// Cloudflare); there is one retry, which uses the next candidate name when there is one. A redirect
-// or a wrong body is final. A raw IP is never fetched. Returns {ok: true} or {ok: false, reason}.
+// Fetches http://<name>:<port>/<token>/probe.txt for each name of probeHostnames(ip), in order, with
+// the injected fetcher: ONE attempt per name, each hard-bounded by timeoutMs (<= 5 s: a closed port
+// otherwise blocks ~19 s in Cloudflare). The first name that returns the exact probe text wins;
+// redirects are never followed and count as a failure of that name. ip and port come from the
+// caller's TRUSTED source (the Vast API's report for a Vast instance, the admin's config for a
+// custom box), never from the box. A raw IP is never fetched. If every name fails the box is
+// "cannot open a port" for the session. Returns {ok: true, hostname} or {ok: false, reason}
+// (the reason of the last name).
 export async function probeSeeder({
   fetcher,
   ip,
@@ -416,16 +429,8 @@ export async function probeSeeder({
   if (typeof fetcher !== 'function') return { ok: false, reason: 'NO_FETCHER' };
   const limit = Math.min(timeoutMs, 5000);
   let reason = 'UNREACHABLE';
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const url =
-      'http://' +
-      names[Math.min(attempt, names.length - 1)] +
-      ':' +
-      port +
-      '/' +
-      token +
-      '/' +
-      PROBE_FILE;
+  for (const hostname of names) {
+    const url = 'http://' + hostname + ':' + port + '/' + token + '/' + PROBE_FILE;
     const controller = new AbortController();
     let timer;
     // The race also bounds a fetcher that ignores the abort signal.
@@ -445,15 +450,20 @@ export async function probeSeeder({
         }),
         deadline,
       ]);
-      if (response.type === 'opaqueredirect' || (response.status >= 300 && response.status < 400))
-        return { ok: false, reason: 'REDIRECT' };
+      if (response.type === 'opaqueredirect' || (response.status >= 300 && response.status < 400)) {
+        reason = 'REDIRECT';
+        continue;
+      }
       if (response.status !== 200) {
         reason = 'HTTP_' + response.status;
         continue;
       }
       const body = await readBounded(response, 1024);
-      if (body !== expected) return { ok: false, reason: 'WRONG_CONTENT' };
-      return { ok: true };
+      if (body !== expected) {
+        reason = 'WRONG_CONTENT';
+        continue;
+      }
+      return { ok: true, hostname };
     } catch {
       reason = controller.signal.aborted ? 'TIMEOUT' : 'UNREACHABLE';
     } finally {

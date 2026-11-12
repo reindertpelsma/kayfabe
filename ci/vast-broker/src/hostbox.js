@@ -375,6 +375,7 @@ export class HostBox {
         config.seeder.external_port,
         sp[1],
         a.name,
+        probe.hostname,
       ),
       sha256: a.sha256,
       size: a.size,
