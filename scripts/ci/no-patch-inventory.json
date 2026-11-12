@@ -282,6 +282,7 @@
     "scripts/bench/windows/host_tools/build/build-observer.sh": "76dc96f5f629c2d306fd6d0c1ca949b47ccf11dd5765172139d81f0b3ffd84c1",
     "scripts/bench/windows/host_tools/misc/root_home/deploy.sh": "6f59791007b9d404098c4b0cb5646fe13636415d7381c43f584b82c3abdea85a",
     "scripts/bench/windows/host_tools/misc/root_home/deploy2.sh": "8cb52f3243928709fdab85c8590b4df076b4a19ad4a6db18a843d736ae11b4be",
+    "scripts/kfml/kfml/pins.py": "ef0f9d8dfb0a268e0a0db3d996218ab913b51b3c5b5f41b35f8d9af825861e06",
     "scripts/rpctrace/build_instrumented.sh": "5ced1351277b2fcfed0ed8c7d16fee05e9562af3f147128420af07058cc455e9",
     "tools/host_patches/h5_userd_dma/box/build_h5.sh": "98cf1c76eb20a59a556574be2ed390e97312d661989c6baf51817c65479fdc65",
     "tools/uvm_efs/box/build_efs.sh": "66ba1b08e0f5a73eb81cccb78eefb74d66f1117e18a720ad125276b089d3831a",
