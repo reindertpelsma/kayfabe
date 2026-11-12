@@ -98,6 +98,29 @@ CASES = [
          "test_unpack_rejects_compressed_members", "test_unpack_rejects_compressed_members"),
     case("unpack-sha", 'require(sha256_file(dest / name) == want, "sha256 mismatch for " + name)', 'pass',
          "test_unpack_detects_tampered_image", "test_unpack_detects_tampered_image"),
+    # CPU profile: blocking checks only (the fingerprint flags and brand are informational)
+    case("cpu-preflight-vendor", '"MATCH" if vendor == c["vendor"] else "MISMATCH"', '"MATCH"',
+         "test_preflight_refuses_intel_host", "test_argv_cli_refuses_with_named_error"),
+    case("cpu-preflight-features", '"MATCH" if not missing and flags else "MISMATCH"', '"MATCH"',
+         "test_preflight_names_missing_feature", "test_preflight_refuses_empty_cpuinfo"),
+    case("cpu-named-model-not-host", 'return ",".join([c["base_model"], "model-id="', 'return ",".join(["host", "model-id="',
+         "test_every_mode_uses_the_named_profile_not_host", "test_cpu_arg_pins_family_model_stepping_explicitly"),
+    case("cpu-family-pinned", '"family=%d" % c["family"], ', '',
+         "test_every_mode_uses_the_named_profile_not_host", "test_cpu_arg_pins_family_model_stepping_explicitly"),
+    case("cpu-removals-required", 'require(not set(FORBIDDEN_GUEST_FLAGS) - set(c["remove"]),', 'require(True,',
+         "test_validate_rejects_profile_without_avx512_removal", "test_validate_rejects_rtm_not_removed"),
+    case("cpu-vendor-validated", 'require(c["vendor"] == "AuthenticAMD", ', 'require(True, ',
+         "test_validate_rejects_vendor_spoof_profile", "test_pack_refuses_spoofed_vendor"),
+    case("cpu-brand-validated", 'require(re.fullmatch(r"[A-Za-z0-9 ._()-]{1,48}", c["model_id"]),', 'require(True,',
+         "test_validate_rejects_brand_injection", "test_validate_rejects_comma_brand_only"),
+    case("cpu-vendor-blocking", '("vendor", "cpu_vendor", True)', '("vendor", "cpu_vendor", False)',
+         "test_compare_cpu_blocking_items_mismatch", "test_compare_without_recorded_fingerprint_is_mismatch"),
+    case("cpu-fms-blocking", '("description", "cpu_family_model_stepping", True)', '("description", "cpu_family_model_stepping", False)',
+         "test_compare_cpu_blocking_items_mismatch", "test_compare_without_recorded_fingerprint_is_mismatch"),
+    case("cpu-brand-informational", '("brand", "cpu_brand", False)', '("brand", "cpu_brand", True)',
+         "test_compare_cpu_informational_items_only_warn", "test_compare_without_recorded_fingerprint_is_mismatch"),
+    case("warn-not-failing", 'bad = [r for r in rows if r[1] == "MISMATCH"]\n    print("RESULT', 'bad = [r for r in rows if r[1] != "MATCH"]\n    print("RESULT',
+         "test_warn_does_not_fail_the_result", "test_result_line_says_match_when_only_warnings"),
 ]
 
 
@@ -119,6 +142,8 @@ def main():
         (tree / "scripts/bench/windows").mkdir(parents=True)
         (tree / "scripts/ci").mkdir(parents=True)
         shutil.copy(test_src, tree / "scripts/ci/test_propimage.py")
+        shutil.copy(ROOT / "scripts/bench/windows/win_vm.sh", tree / "scripts/bench/windows/win_vm.sh")
+        shutil.copytree(ROOT / "scripts/ci/fixtures/cpuflags", tree / "scripts/ci/fixtures/cpuflags")
         target = tree / "scripts/bench/windows/propimage.py"
         target.write_text(SRC)
         code, _, out = run(tree)

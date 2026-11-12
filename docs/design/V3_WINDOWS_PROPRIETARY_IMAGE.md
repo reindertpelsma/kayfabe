@@ -1,6 +1,6 @@
 STATUS: DESIGN-ONLY, 2026-11-12. Owner design (binding), gap analysis against draft PRs #293/#302/#300/#303, GPU-free
-tooling (`scripts/bench/windows/propimage.py`, tested by `scripts/ci/test_propimage.py`, 39 mutants in
-`scripts/ci/propimage_mutants.py`). No VM was started, nothing was deleted on the PC, no R2 object was written.
+tooling (`scripts/bench/windows/propimage.py`, tested by `scripts/ci/test_propimage.py`, 128 tests, 50 mutants in
+`scripts/ci/propimage_mutants.py`, each with at least two killers; counts from a fresh run on 2026-11-12). No VM was started, nothing was deleted on the PC, no R2 object was written.
 Labels: MEASURED = a file or command run on 2026-11-12 (named); CODE READ = read in a named file; INFERRED = reasoning,
 not tested; DESIGN INTENT = owner or coordinator decision, not built; UNTESTED = no run yet.
 
@@ -131,13 +131,50 @@ Not covered by the tool (shell/ssh glue or later): starting swtpm and QEMU, rest
 owner has a physical desktop: no VNC path), Samba share for bulk copy (an insecure share bound to loopback via the slirp hostfwd
 is the idea; not designed here), R2 upload (coordinator).
 
+## 5b. Fixed CPU profile (image modes only)
+
+DESIGN INTENT (owner, 2026-11-12): every propimage mode (setup, install, offline, ci) runs the same named CPU model, never
+`-cpu host`, so the machine is the same during capture and in CI. This is an exception for image modes only: the owner's earlier
+rule "CPU overrides rejected" (PR #302) applies to the default launcher argv, and `win_vm.sh` keeps `host,-vmx,...` untouched
+(test `test_win_vm_default_argv_is_untouched`).
+
+- Profile `kayfabe-amd-v1` (`propimage.CPU_PROFILE`): base model `EPYC-v1`, `model-id=AMD Virtual CPU`, family 23, model 1, stepping 2,
+  `-avx512f,-rtm,-hle,-mpx,-sgx,-vmx,-svm`, and the Hyper-V enlightenments of arm B (`hv-relaxed, hv-vapic, hv-spinlocks=0x1fff,
+  hv-time, hv-vpindex, hv-synic, hv-stimer, hv-crash`). Core count: `-smp N,sockets=1,cores=N,threads=1` with N from the state
+  (default 8), never from the host.
+- Derived, not guessed: QEMU 10.2.1 (the coordinator's and the PC's distro build) lists EPYC-v1 and its `query-cpu-model-expansion` (type full)
+  reports vendor AuthenticAMD, family 23, model 1, stepping 2 and no AVX-512, RTM, HLE, MPX or SGX (MEASURED, 2026-11-12). The model
+  carries AVX2, BMI1/2, FMA, F16C, MOVBE, SSE4.2, AES, PCLMUL, RDRAND, POPCNT and XSAVE. The explicit removals are redundant with the
+  named model and are kept so the intent is in the argv. `-svm` is a decision (open item O3): the gate does not need nested
+  virtualization and the model would otherwise ask KVM for nested SVM; revert it if an app needs it.
+- Vendor: the guest vendor is AuthenticAMD because the image is captured on the AMD PC. No vendor spoofing on Intel hosts (the MSR
+  and erratum paths in Windows and the drivers are UNTESTED under a spoof). Planner/Worker requirement for later: this image only goes
+  to AMD hosts (the offer's cpu_name vendor). OPEN O1: an Intel profile is a separate image; OPEN O2: a vendor-spoof experiment.
+- Host preflight: `propimage.py argv` and `verify-host` read `/proc/cpuinfo` (first processor) and refuse with `CPU_PROFILE_UNSUPPORTED`
+  (argv exits 3 and prints nothing to start) when the vendor is not AuthenticAMD or a required flag is missing
+  (`required_host_flags`, 32 kernel-named flags; the QEMU-to-kernel flag-name mapping is INFERRED). `--no-cpu-preflight` only prints the
+  argv on a host that cannot run it. The sanity test checks the required flags exist in the two dumps we have, stored as fixtures in
+  `scripts/ci/fixtures/cpuflags/`: the PC (Ryzen 9 7900, Zen 4; MEASURED) and a Vast EPYC 7B12 (Zen 2, MEASURED through a nested
+  hypervisor, which hides some flags). This is a sanity check, not a strict intersection gate.
+- Fingerprint in `verify` (INFORMATIONAL except two items): `propimage.py record` stores, from the guest, vendor, `Win32_Processor`
+  Name, Manufacturer, Family and Description ("AMD64 Family F Model M Stepping S"), ProcessorId, core and logical counts, and a sha256
+  over the sorted list of feature flags the guest reports (via `IsProcessorFeaturePresent`: a coarse list, UNTESTED; the PF numbers
+  in `GUEST_PS` are from memory of winnt.h and must be checked on first run). Blocking MISMATCH: vendor and family/model/stepping. WARN
+  only: brand, ProcessorId, core/logical counts, flags hash, forbidden flags seen. ProcessorId (INFERRED) derives from CPUID leaf 1
+  EAX/EDX, so a fixed family/model/stepping fixes its signature half; what can still vary is the feature bits in EDX and anything the
+  host adds. UNKNOWN how strictly each app (3DMark, Steam games, DaVinci Resolve, SolidWorks) binds its licence or behaviour to the CPU: no claim.
+- The real strictness test is hardware validation, NOT RUN: restore the same image on the PC and on a Vast AMD host of a different Zen
+  generation, run `verify`, diff the fingerprints and start every app offline. Only if an app complains do we tighten the profile.
+  The flag-intersection rule the owner floated (profile flags only if every supported host has them and no successor dropped them) is
+  parked: the model above is Zen 1 by construction, which is the conservative end.
+
 ## 6. Open questions for the coordinator
 
 Q1 `propimage.py argv` versus extending `win_vm.sh`; Q2 setup-mode display with the distro QEMU (needs its OVMF paths and
 the swtpm AppArmor rule the PC already has for `win_vm.sh`); Q3 whether the guest user `kfimage` and the key live in `state.json`
 (per the owner: yes); Q4 DaVinci Resolve and SolidWorks licences may bind to the machine id: the seed makes that stable, which is
 the point, but registering twice (CI clones) is a vendor-terms question for the owner; Q5 clock hypothesis test (section 3)
-needs one boot slot after the GPU lock frees.
+needs one boot slot after the GPU lock frees; O1 Intel profile, O2 vendor-spoof experiment, O3 `-svm` removal (section 5b).
 
 ## 7. PC disk plan (MEASURED 2026-11-12 13:30Z, read-only `du`; nothing deleted)
 

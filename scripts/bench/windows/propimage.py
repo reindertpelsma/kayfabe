@@ -7,8 +7,10 @@ docs/design/V3_WINDOWS_PROPRIETARY_IMAGE.md. Logic lives here; shell is glue onl
 
   propimage.py ids   SEED                       print the ids derived from a seed string
   propimage.py init  SEED --out state.json      state skeleton (ids, net, clock rule); no secrets
-  propimage.py argv  STATE MODE --disk D ...    print the exact qemu argv (+ swtpm argv, clone cmd)
-  propimage.py verify-host STATE --tpm-dir D    part 1 of the first check: swtpm/OVMF files == state
+  propimage.py argv  STATE MODE --disk D ...    print the exact qemu argv (+ swtpm argv, clone cmd); refuses with
+                                                CPU_PROFILE_UNSUPPORTED when the host cannot run the CPU profile
+  propimage.py verify-host STATE --tpm-dir D    part 1 of the first check: swtpm/OVMF files == state, CPU preflight
+  propimage.py record STATE --ssh-key K         fill MachineGuid, EK hash, stop time, CPU fingerprint from the guest
   propimage.py verify STATE --ssh-key K         parts 1-3 over ssh (PowerShell sent on stdin)
   propimage.py pack  STATE IMAGE --out X.zip    one zip64 blob: image.qcow2 + state.json + manifest
   propimage.py unpack X.zip --dir D             extract and check every sha256
@@ -19,6 +21,7 @@ The same machine ids, disk serial, MAC, subnet and swtpm state apply in every mo
 """
 import argparse
 import base64
+import copy
 import datetime as dt
 import hashlib
 import json
@@ -86,6 +89,65 @@ def derive_ids(seed, nics=1, disks=1):
     }
 
 
+
+# ---------------------------------------------------------------- CPU profile
+# Image-mode-only exception (2026-11-12 owner ruling) to the "CPU overrides rejected" rule of PR #302, which
+# applies to win_vm.sh's DEFAULT argv and is untouched: every propimage mode uses ONE named CPU model, never
+# `-cpu host`. Base model, defaults and property names were read from `qemu-system-x86_64 -cpu help` and
+# `query-cpu-model-expansion` (type full) of QEMU 10.2.1: EPYC-v1 = AuthenticAMD family 23 model 1 stepping 2, with
+# AVX2, BMI1/2, FMA, F16C, MOVBE, SSE4.2, AES, PCLMUL, RDRAND, POPCNT, XSAVE and no AVX-512, RTM, HLE, MPX or SGX.
+# Zen 1 is the oldest supported host, so every later Zen host should support it (INFERRED; hardware validation below).
+CPU_PROFILE_NAME = "kayfabe-amd-v1"
+CPU_PROFILE = {
+    "name": CPU_PROFILE_NAME, "base_model": "EPYC-v1", "vendor": "AuthenticAMD",
+    "model_id": "AMD Virtual CPU", "family": 23, "model": 1, "stepping": 2,
+    # explicit removals: redundant with the named model (QEMU exposes only the model's features) and kept so the
+    # intent is visible in the argv; -vmx is the gate's setting; -svm is a decision (open item O3 in the design doc)
+    "remove": ["avx512f", "rtm", "hle", "mpx", "sgx", "vmx", "svm"],
+    "hv_flags": ["hv-relaxed", "hv-vapic", "hv-spinlocks=0x1fff", "hv-time", "hv-vpindex", "hv-synic", "hv-stimer", "hv-crash"],
+    # host /proc/cpuinfo flag names the host must show (QEMU name to kernel name mapping INFERRED)
+    "required_host_flags": ["3dnowprefetch", "abm", "adx", "aes", "avx", "avx2", "bmi1", "bmi2", "clflushopt", "clzero",
+                            "cx16", "f16c", "fma", "fsgsbase", "lahf_lm", "misalignsse", "movbe", "pclmulqdq", "popcnt",
+                            "rdrand", "rdseed", "rdtscp", "sha_ni", "smap", "smep", "sse4_1", "sse4_2", "sse4a",
+                            "ssse3", "xsave", "xsavec", "xsaveopt"],
+}
+CPU_REFUSAL = "CPU_PROFILE_UNSUPPORTED"
+FORBIDDEN_GUEST_FLAGS = ("avx512f", "rtm", "hle", "mpx", "sgx")
+
+
+def cpu_arg(state):
+    c = state["cpu"]
+    return ",".join([c["base_model"], "model-id=" + c["model_id"], "family=%d" % c["family"], "model=%d" % c["model"],
+                     "stepping=%d" % c["stepping"]] + ["-" + f for f in c["remove"]] + c["hv_flags"])
+
+
+def parse_cpuinfo(text):
+    """First processor record of /proc/cpuinfo: vendor_id and the flag set."""
+    vendor, flags = None, set()
+    for line in text.splitlines():
+        if not line.strip() and (vendor or flags):
+            break
+        k, _, v = line.partition(":")
+        k, v = k.strip(), v.strip()
+        if k == "vendor_id" and vendor is None:
+            vendor = v
+        elif k == "flags" and not flags:
+            flags = set(v.split())
+    return vendor, flags
+
+
+def cpu_preflight(state, cpuinfo_text):
+    """Host-side check that KVM can run the profile. -> rows; any MISMATCH row means CPU_PROFILE_UNSUPPORTED."""
+    c = state["cpu"]
+    vendor, flags = parse_cpuinfo(cpuinfo_text)
+    rows = [("cpu_vendor", "MATCH" if vendor == c["vendor"] else "MISMATCH",
+             "profile %s needs %s, host is %s (no vendor spoofing; Intel needs its own image)" % (c["name"], c["vendor"], vendor))]
+    missing = sorted(set(c["required_host_flags"]) - flags)
+    rows.append(("cpu_features", "MATCH" if not missing and flags else "MISMATCH",
+                 "missing host flags: %s" % (", ".join(missing) if missing else ("none" if flags else "no flags line"))))
+    return rows
+
+
 # ---------------------------------------------------------------- state
 def utc(text):
     require(isinstance(text, str) and re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", text), "bad UTC time: %r" % (text,))
@@ -101,7 +163,8 @@ def init_state(seed, nics=1, disks=1):
     return {
         "state_version": STATE_VERSION, "seed": seed, "ids": ids,
         "clock": {"last_time_at_stop_utc": None, "gap_s": ids["clock_gap_s"]},
-        "qemu": {"machine": "pc-q35-10.2", "smp": 8, "ram_mb": 8192, "fb_mb": 4096},
+        "qemu": {"machine": "pc-q35-10.2", "smp": 8, "ram_mb": 8192, "fb_mb": 4096},   # smp fixed: never the host's
+        "cpu": copy.deepcopy(CPU_PROFILE), "cpu_fingerprint": None,
         "files": {},   # name -> {bytes, sha256, data_base64}: tpm/*, firmware/OVMF_VARS.fd
         "guest": {"user": "kfimage", "machine_guid": None, "ek_pub_hash": None, "ssh_private_key": None,
                   "ssh_public_key": None},
@@ -120,6 +183,15 @@ def validate_state(state):
     require(re.fullmatch(r"GPU-[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}", ids["gpu_uuid"]), "bad GPU uuid")
     require(re.fullmatch(r"10\.\d+\.\d+\.0/24", ids["net"]["subnet"]), "slirp subnet must be a 10.x.y.0/24")
     require(1024 <= ids["net"]["ssh_port"] <= 65535, "bad ssh port")
+    c = state["cpu"]
+    require(c["name"] == CPU_PROFILE_NAME and c["base_model"] == "EPYC-v1", "unknown CPU profile")
+    require(c["vendor"] == "AuthenticAMD", "the image CPU vendor is AuthenticAMD (no spoofing)")
+    require(re.fullmatch(r"[A-Za-z0-9 ._()-]{1,48}", c["model_id"]), "bad CPU brand string")
+    require(all(type(c[k]) is int and 0 <= c[k] < 256 for k in ("family", "model", "stepping")), "bad CPU family/model/stepping")
+    require(all(re.fullmatch(r"[a-z0-9_.]+", f) for f in c["remove"]), "bad CPU removal flag")
+    require(all(re.fullmatch(r"hv-[a-z-]+(=0x[0-9a-f]+)?", f) for f in c["hv_flags"]), "bad Hyper-V flag")
+    require(not set(FORBIDDEN_GUEST_FLAGS) - set(c["remove"]), "profile must remove avx512f, rtm, hle, mpx, sgx")
+    require(1 <= state["qemu"]["smp"] <= 64, "bad smp")
     for name, rec in state["files"].items():
         data = base64.b64decode(rec["data_base64"], validate=True)
         require(len(data) == rec["bytes"] and hashlib.sha256(data).hexdigest() == rec["sha256"], "blob mismatch: " + name)
@@ -165,7 +237,7 @@ def build_argv(state, mode, disk, workdir, ovmf_code="/usr/share/OVMF/OVMF_CODE_
     sm = ids["smbios"]
     a = [qemu, "-name", "propimage-" + mode,
          "-machine", q["machine"] + ",accel=kvm,smm=on", "-m", str(q["ram_mb"]),
-         "-smp", "%d,sockets=1,cores=%d,threads=1" % (q["smp"], q["smp"]), "-cpu", "host,-vmx",
+         "-smp", "%d,sockets=1,cores=%d,threads=1" % (q["smp"], q["smp"]), "-cpu", cpu_arg(state),
          "-uuid", sm["uuid"],
          "-smbios", "type=1,manufacturer=%s,product=%s,serial=%s" % (_comma(sm["manufacturer"]), _comma(sm["product"]), sm["serial"]),
          "-smbios", "type=2,manufacturer=%s,product=%s,serial=%s" % (_comma(sm["manufacturer"]), _comma(sm["product"]), sm["baseboard_serial"]),
@@ -225,9 +297,33 @@ $o.disk_serials=@(Get-CimInstance Win32_DiskDrive | ForEach-Object { $_.SerialNu
 $o.gpu_uuid=((& nvidia-smi --query-gpu=uuid --format=csv,noheader) | Select-Object -First 1)
 $o.date_utc=(Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
 $t=Get-Tpm; $o.tpm_present=[bool]$t.TpmPresent; $o.tpm_ready=[bool]$t.TpmReady
+$pr=Get-CimInstance Win32_Processor | Select-Object -First 1
+$o.cpu_name=$pr.Name; $o.cpu_manufacturer=$pr.Manufacturer; $o.cpu_family=$pr.Family; $o.cpu_description=$pr.Description
+$o.cpu_processor_id=$pr.ProcessorId; $o.cpu_cores=[int]$pr.NumberOfCores; $o.cpu_logical=[int]$pr.NumberOfLogicalProcessors
+Add-Type -Namespace K -Name P -MemberDefinition '[DllImport("kernel32.dll")] public static extern bool IsProcessorFeaturePresent(uint f);'
+$pf=@{ssse3=36;sse4_1=37;sse4_2=38;avx=39;avx2=40;avx512f=41;xsave=17;cx16=14;rdtscp=32}
+$o.cpu_flags=@($pf.Keys | Where-Object { [K.P]::IsProcessorFeaturePresent($pf[$_]) } | Sort-Object)
 $ek=Get-TpmEndorsementKeyInfo; $o.ek_pub_hash=$ek.PublicKeyHash
 $o | ConvertTo-Json -Compress
 """
+
+
+def cpu_fingerprint(guest):
+    """Guest-visible CPU identity: what is recorded at backup time and compared on every run."""
+    flags = sorted(guest.get("cpu_flags") or [])
+    return {"vendor": guest.get("cpu_manufacturer"), "brand": guest.get("cpu_name"), "family": guest.get("cpu_family"),
+            "description": guest.get("cpu_description"), "processor_id": guest.get("cpu_processor_id"),
+            "cores": guest.get("cpu_cores"), "logical": guest.get("cpu_logical"), "flags": flags,
+            "flags_sha256": hashlib.sha256("\n".join(flags).encode()).hexdigest()}
+
+
+def fill_from_guest(state, guest):
+    """Record the non-derivable facts once, from the guest, before the backup."""
+    state["guest"]["machine_guid"] = guest.get("machine_guid")
+    state["guest"]["ek_pub_hash"] = guest.get("ek_pub_hash")
+    state["clock"]["last_time_at_stop_utc"] = guest.get("date_utc")
+    state["cpu_fingerprint"] = cpu_fingerprint(guest)
+    return state
 
 
 def compare(state, guest, max_clock_age_s=1800):
@@ -235,8 +331,9 @@ def compare(state, guest, max_clock_age_s=1800):
     ids = state["ids"]
     out = []
 
-    def add(name, want, got):
-        out.append((name, "MATCH" if want == got and want is not None else "MISMATCH", "want=%r got=%r" % (want, got)))
+    def add(name, want, got, blocking=True):
+        ok = want == got and want is not None
+        out.append((name, "MATCH" if ok else ("MISMATCH" if blocking else "WARN"), "want=%r got=%r" % (want, got)))
 
     sm = ids["smbios"]
     add("smbios_uuid", sm["uuid"], (guest.get("smbios_uuid") or "").lower())
@@ -260,12 +357,25 @@ def compare(state, guest, max_clock_age_s=1800):
             out.append(("clock", "MISMATCH", str(e)))
     else:
         out.append(("clock", "MISMATCH", "state has no last_time_at_stop_utc"))
+    # CPU fingerprint: vendor and family/model/stepping block; brand, ProcessorId, counts and flags are
+    # informational (WARN): the real strictness test is the cross-host restore with the apps started offline.
+    want = state.get("cpu_fingerprint")
+    got = cpu_fingerprint(guest)
+    for key, item, blocking in (("vendor", "cpu_vendor", True), ("description", "cpu_family_model_stepping", True),
+                                ("brand", "cpu_brand", False), ("processor_id", "cpu_processor_id", False),
+                                ("cores", "cpu_cores", False), ("logical", "cpu_logical", False),
+                                ("flags_sha256", "cpu_flags_sha256", False)):
+        add(item, want[key] if want else None, got[key], blocking)
+    bad = sorted(set(got["flags"]) & set(FORBIDDEN_GUEST_FLAGS))
+    known = guest.get("cpu_flags") is not None
+    out.append(("cpu_no_forbidden_flags", "WARN" if bad or not known else "MATCH",
+                "guest shows: %s" % (bad or ("none" if known else "no flag list reported"))))
     out.append(("tpm_present", "MATCH" if guest.get("tpm_present") else "MISMATCH", repr(guest.get("tpm_present"))))
     add("tpm_ek_pub_hash", state["guest"]["ek_pub_hash"], guest.get("ek_pub_hash"))
     return out
 
 
-def verify_host(state, tpm_dir):
+def verify_host(state, tpm_dir, cpuinfo_text=None):
     """Part 1 of the first check, before the guest runs: restored swtpm/OVMF files equal the state."""
     out = []
     root = Path(tpm_dir)
@@ -275,6 +385,8 @@ def verify_host(state, tpm_dir):
         out.append(("file:" + name, "MATCH" if got == rec["sha256"] else "MISMATCH", "want=%s got=%s" % (rec["sha256"][:12], (got or "missing")[:12])))
     if not state["files"]:
         out.append(("files", "MISMATCH", "state embeds no swtpm/OVMF files"))
+    if cpuinfo_text is not None:
+        out += cpu_preflight(state, cpuinfo_text)
     return out
 
 
@@ -336,7 +448,7 @@ def unpack(zpath, dest):
 def _print_rows(rows):
     for item, verdict, detail in rows:
         print("%-9s %-18s %s" % (verdict, item, detail))
-    bad = [r for r in rows if r[1] != "MATCH"]
+    bad = [r for r in rows if r[1] == "MISMATCH"]
     print("RESULT %s" % ("MATCH" if not bad else "MISMATCH (%d)" % len(bad)))
     return 0 if not bad else 1
 
@@ -350,9 +462,13 @@ def main(argv=None):
     p.add_argument("--disk", required=True); p.add_argument("--workdir", required=True)
     p.add_argument("--broker-sock"); p.add_argument("--gop-efi"); p.add_argument("--uid", type=int, default=1000)
     p.add_argument("--display", default="broker"); p.add_argument("--qemu")
+    p.add_argument("--cpuinfo", default="/proc/cpuinfo")
+    p.add_argument("--no-cpu-preflight", action="store_true", help="print the argv on a host that cannot run it; never for a start")
     p = sub.add_parser("verify-host"); p.add_argument("state"); p.add_argument("--tpm-dir", required=True)
+    p.add_argument("--cpuinfo", default="/proc/cpuinfo")
     p = sub.add_parser("verify"); p.add_argument("state"); p.add_argument("--ssh-key", required=True)
-    p.add_argument("--tpm-dir")
+    p.add_argument("--tpm-dir"); p.add_argument("--cpuinfo", default="/proc/cpuinfo")
+    p = sub.add_parser("record"); p.add_argument("state"); p.add_argument("--ssh-key", required=True)
     p = sub.add_parser("pack"); p.add_argument("state"); p.add_argument("image"); p.add_argument("--out", required=True)
     p = sub.add_parser("unpack"); p.add_argument("zip"); p.add_argument("--dir", required=True)
     a = ap.parse_args(argv)
@@ -361,19 +477,31 @@ def main(argv=None):
             print(json.dumps(derive_ids(a.seed), indent=2))
         elif a.verb == "init":
             Path(a.out).write_text(json.dumps(init_state(a.seed), indent=2) + "\n")
-        elif a.verb in ("argv", "verify-host", "verify"):
+        elif a.verb in ("argv", "verify-host", "verify", "record"):
             state = json.loads(Path(a.state).read_text())
             validate_state(state)
             require(seed_matches(state), "state ids do not match its seed")
+            if a.verb == "record":
+                fill_from_guest(state, run_guest_probe(state, a.ssh_key))
+                Path(a.state).write_text(json.dumps(state, indent=2) + "\n")
+                print("recorded machine_guid, ek_pub_hash, last_time_at_stop_utc, cpu_fingerprint")
+                return 0
             if a.verb == "argv":
+                if not a.no_cpu_preflight:
+                    bad = [r for r in cpu_preflight(state, Path(a.cpuinfo).read_text()) if r[1] != "MATCH"]
+                    if bad:
+                        _print_rows(bad)
+                        print(CPU_REFUSAL, file=sys.stderr)
+                        return 3
                 print(shlex.join(build_argv(state, a.mode, a.disk, a.workdir, qemu=a.qemu, uid=a.uid,
                                             broker_sock=a.broker_sock, gop_efi=a.gop_efi, display=a.display)))
                 print("# swtpm: " + shlex.join(swtpm_argv(a.workdir)))
                 print("# clone: " + shlex.join(clone_cmd(a.disk, str(a.disk) + ".clone")))
             elif a.verb == "verify-host":
-                return _print_rows(verify_host(state, a.tpm_dir))
+                return _print_rows(verify_host(state, a.tpm_dir, Path(a.cpuinfo).read_text()))
             else:
-                rows = verify_host(state, a.tpm_dir) if a.tpm_dir else []
+                rows = verify_host(state, a.tpm_dir, Path(a.cpuinfo).read_text()) if a.tpm_dir else cpu_preflight(state, Path(a.cpuinfo).read_text())
+                rows = rows
                 return _print_rows(rows + compare(state, run_guest_probe(state, a.ssh_key)))
         elif a.verb == "pack":
             print(json.dumps(pack(a.state, a.image, a.out)))

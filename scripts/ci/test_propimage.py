@@ -39,6 +39,13 @@ class PropTests(unittest.TestCase):
         s["files"] = {"tpm/tpm2-00.permall": blob(b"tpm-state"), "firmware/OVMF_VARS.fd": blob(b"ovmf")}
         s["guest"].update(machine_guid="11111111-2222-3333-4444-555555555555", ek_pub_hash="AB" * 32)
         self.state = s
+        self.fp = self.p.cpu_fingerprint(self.cpu_guest())
+        s["cpu_fingerprint"] = self.fp
+
+    def cpu_guest(self):
+        return {"cpu_manufacturer": "AuthenticAMD", "cpu_name": "AMD Virtual CPU", "cpu_family": 107,
+                "cpu_description": "AMD64 Family 23 Model 1 Stepping 2", "cpu_processor_id": "178BFBFF00800F12",
+                "cpu_cores": 8, "cpu_logical": 8, "cpu_flags": ["avx", "avx2", "sse4_1", "sse4_2", "ssse3", "xsave"]}
 
     def argv(self, mode, **kw):
         kw.setdefault("broker_sock", "/run/user/1000/kf.sock")
@@ -249,7 +256,7 @@ class PropTests(unittest.TestCase):
                 "macs": [n["mac"] for n in ids["nics"]], "disk_serials": [d["serial"] for d in ids["disks"]],
                 "gpu_uuid": ids["gpu_uuid"], "machine_guid": self.state["guest"]["machine_guid"],
                 "date_utc": self.p.fmt(base + __import__("datetime").timedelta(seconds=60)),
-                "tpm_present": True, "ek_pub_hash": self.state["guest"]["ek_pub_hash"]}
+                "tpm_present": True, "ek_pub_hash": self.state["guest"]["ek_pub_hash"], **self.cpu_guest()}
 
     def verdicts(self, guest):
         return {i: v for i, v, _ in self.p.compare(self.state, guest)}
@@ -404,9 +411,9 @@ class PropTests(unittest.TestCase):
             f.parent.mkdir(parents=True, exist_ok=True)
             f.write_bytes(base64.b64decode(rec["data_base64"]))
         with contextlib.redirect_stdout(io.StringIO()):
-            self.assertEqual(self.p.main(["verify-host", str(sp), "--tpm-dir", str(self.tmp)]), 0)
+            self.assertEqual(self.p.main(["verify-host", str(sp), "--tpm-dir", str(self.tmp), "--cpuinfo", str(self.cpu_file())]), 0)
             (self.tmp / "firmware/OVMF_VARS.fd").write_bytes(b"x")
-            self.assertEqual(self.p.main(["verify-host", str(sp), "--tpm-dir", str(self.tmp)]), 1)
+            self.assertEqual(self.p.main(["verify-host", str(sp), "--tpm-dir", str(self.tmp), "--cpuinfo", str(self.cpu_file())]), 1)
 
     # --- second killers (each rule is pinned by two independent tests)
     def test_golden_ids_for_proposed_seed(self):
@@ -567,7 +574,8 @@ class PropTests(unittest.TestCase):
 
     def test_none_guest_values_never_match(self):
         g = {k: None for k in self.guest()}
-        self.assertEqual(set(self.verdicts(g).values()), {"MISMATCH"})
+        v = self.verdicts(g)
+        self.assertEqual([k for k, x in v.items() if x == "MATCH"], [])
 
     def test_state_without_ek_hash_never_matches_tpm(self):
         self.state["guest"]["ek_pub_hash"] = None
@@ -608,7 +616,7 @@ class PropTests(unittest.TestCase):
         self.state["files"] = {}
         sp = self.tmp / "e.json"
         sp.write_text(json.dumps(self.state))
-        self.assertEqual(self.p.main(["verify-host", str(sp), "--tpm-dir", str(self.tmp)]), 1)
+        self.assertEqual(self.p.main(["verify-host", str(sp), "--tpm-dir", str(self.tmp), "--cpuinfo", str(self.cpu_file())]), 1)
 
     def test_ssh_is_batch_and_identity_only(self):
         a = self.p.ssh_argv(self.state, "/k")
@@ -687,6 +695,260 @@ class PropTests(unittest.TestCase):
                            compress_type=zipfile.ZIP_DEFLATED if i.filename == "state.json" else zipfile.ZIP_STORED)
         with self.assertRaises(self.p.PropError):
             self.p.unpack(bad, self.tmp / "d2")
+
+
+    # --- CPU profile (image-mode-only exception; win_vm.sh default untouched)
+    CPUINFO_OK = "processor\t: 0\nvendor_id\t: AuthenticAMD\ncpu family\t: 25\nflags\t\t: %s\n\nprocessor\t: 1\nflags\t: x\n"
+
+    def host_flags(self, drop=()):
+        return " ".join(sorted(set(self.state["cpu"]["required_host_flags"]) - set(drop)) + ["svm", "avx512f"])
+
+    def test_every_mode_uses_the_named_profile_not_host(self):
+        for mode in self.p.MODES:
+            a = self.argv(mode)
+            cpu = a[a.index("-cpu") + 1]
+            self.assertTrue(cpu.startswith("EPYC-v1,model-id=AMD Virtual CPU,family=23,model=1,stepping=2,"), cpu)
+            self.assertNotIn("host", cpu.split(","))
+            self.assertEqual(cpu, self.p.cpu_arg(self.state))
+
+    def test_profile_removes_forbidden_features_and_keeps_hyperv_arm_b(self):
+        cpu = self.p.cpu_arg(self.state).split(",")
+        for f in ("avx512f", "rtm", "hle", "mpx", "sgx", "vmx"):
+            self.assertIn("-" + f, cpu)
+        for f in ("hv-relaxed", "hv-vapic", "hv-spinlocks=0x1fff", "hv-time", "hv-vpindex", "hv-synic", "hv-stimer", "hv-crash"):
+            self.assertIn(f, cpu)
+        self.assertNotIn("+avx512f", cpu)
+
+    def test_profile_does_not_enable_avx512_anywhere(self):
+        self.assertNotIn("avx512", " ".join(self.argv("ci")).replace("-avx512f", ""))
+
+    def test_smp_is_fixed_by_the_state_not_the_host(self):
+        a = self.argv("ci")
+        self.assertEqual(a[a.index("-smp") + 1], "8,sockets=1,cores=8,threads=1")
+        self.state["qemu"]["smp"] = 4
+        a = self.argv("ci")
+        self.assertEqual(a[a.index("-smp") + 1], "4,sockets=1,cores=4,threads=1")
+
+    def test_win_vm_default_argv_is_untouched(self):
+        sh = (ROOT / "scripts/bench/windows/win_vm.sh").read_text()
+        self.assertIn('A) echo "host,-vmx" ;;', sh)
+        self.assertIn("host,-vmx,hv-relaxed", sh)
+        self.assertNotIn("EPYC", sh)
+
+    def test_preflight_passes_on_amd_host_with_flags(self):
+        rows = self.p.cpu_preflight(self.state, self.CPUINFO_OK % self.host_flags())
+        self.assertEqual({v for _, v, _ in rows}, {"MATCH"})
+
+    def test_preflight_refuses_intel_host(self):
+        txt = (self.CPUINFO_OK % self.host_flags()).replace("AuthenticAMD", "GenuineIntel")
+        v = {i: x for i, x, _ in self.p.cpu_preflight(self.state, txt)}
+        self.assertEqual(v["cpu_vendor"], "MISMATCH")
+        self.assertEqual(v["cpu_features"], "MATCH")
+
+    def test_preflight_names_missing_feature(self):
+        rows = self.p.cpu_preflight(self.state, self.CPUINFO_OK % self.host_flags(drop=("avx2", "bmi2")))
+        d = {i: (x, y) for i, x, y in rows}
+        self.assertEqual(d["cpu_features"][0], "MISMATCH")
+        self.assertIn("avx2", d["cpu_features"][1])
+        self.assertIn("bmi2", d["cpu_features"][1])
+
+    def test_preflight_refuses_empty_cpuinfo(self):
+        v = {i: x for i, x, _ in self.p.cpu_preflight(self.state, "")}
+        self.assertEqual(v, {"cpu_vendor": "MISMATCH", "cpu_features": "MISMATCH"})
+
+    def test_preflight_uses_first_processor_only(self):
+        txt = "vendor_id\t: AuthenticAMD\nflags\t: aes\n\nvendor_id\t: AuthenticAMD\nflags\t: %s\n" % self.host_flags()
+        self.assertEqual(self.p.cpu_preflight(self.state, txt)[1][1], "MISMATCH")
+
+    def test_required_flags_include_the_owner_list(self):
+        for f in ("avx2", "bmi1", "bmi2", "fma", "f16c", "movbe", "sse4_2", "aes", "pclmulqdq", "rdrand", "popcnt", "xsave"):
+            self.assertIn(f, self.state["cpu"]["required_host_flags"])
+        for f in ("avx512f", "rtm", "hle", "mpx", "sgx"):
+            self.assertNotIn(f, self.state["cpu"]["required_host_flags"])
+
+    def cpu_file(self):
+        f = self.tmp / "cpuinfo.ok"
+        f.write_text(self.CPUINFO_OK % self.host_flags())
+        return f
+
+    def test_argv_cli_refuses_with_named_error(self):
+        import contextlib
+        import io
+        sp = self.tmp / "s.json"
+        sp.write_text(json.dumps(self.state))
+        ci = self.tmp / "cpuinfo"
+        ci.write_text("vendor_id\t: GenuineIntel\nflags\t: avx2\n")
+        err, out = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stderr(err), contextlib.redirect_stdout(out):
+            rc = self.p.main(["argv", str(sp), "ci", "--disk", "/d", "--workdir", "/w", "--display", "off", "--cpuinfo", str(ci)])
+        self.assertEqual(rc, 3)
+        self.assertIn("CPU_PROFILE_UNSUPPORTED", err.getvalue())
+        self.assertNotIn("qemu-system", out.getvalue())
+
+    def test_argv_cli_prints_on_matching_host_and_on_override(self):
+        import contextlib
+        import io
+        sp = self.tmp / "s.json"
+        sp.write_text(json.dumps(self.state))
+        ci = self.tmp / "cpuinfo"
+        ci.write_text(self.CPUINFO_OK % self.host_flags())
+        args = ["argv", str(sp), "ci", "--disk", "/d", "--workdir", "/w", "--display", "off"]
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(self.p.main(args + ["--cpuinfo", str(ci)]), 0)
+        self.assertIn("-cpu 'EPYC-v1,model-id=AMD Virtual CPU", out.getvalue())
+        ci.write_text("vendor_id\t: GenuineIntel\nflags\t: x\n")
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(self.p.main(args + ["--cpuinfo", str(ci), "--no-cpu-preflight"]), 0)
+
+    def test_verify_host_includes_cpu_rows(self):
+        names = {i for i, _, _ in self.p.verify_host(self.state, self.tmp, self.CPUINFO_OK % self.host_flags())}
+        self.assertTrue({"cpu_vendor", "cpu_features"} <= names)
+        names = {i for i, _, _ in self.p.verify_host(self.state, self.tmp)}
+        self.assertFalse({"cpu_vendor"} & names)
+
+    def test_state_has_profile_and_fingerprint_slot(self):
+        s = self.p.init_state(SEED)
+        self.assertEqual(s["cpu"]["name"], "kayfabe-amd-v1")
+        self.assertIsNone(s["cpu_fingerprint"])
+        self.assertEqual(s["cpu"]["vendor"], "AuthenticAMD")
+
+    def test_validate_rejects_vendor_spoof_profile(self):
+        s = copy.deepcopy(self.state)
+        s["cpu"]["vendor"] = "GenuineIntel"
+        with self.assertRaises(self.p.PropError):
+            self.p.validate_state(s)
+
+    def test_validate_rejects_profile_without_avx512_removal(self):
+        s = copy.deepcopy(self.state)
+        s["cpu"]["remove"] = [f for f in s["cpu"]["remove"] if f != "avx512f"]
+        with self.assertRaises(self.p.PropError):
+            self.p.validate_state(s)
+
+    def test_validate_rejects_rtm_not_removed(self):
+        s = copy.deepcopy(self.state)
+        s["cpu"]["remove"].remove("rtm")
+        with self.assertRaises(self.p.PropError):
+            self.p.validate_state(s)
+
+    def test_validate_rejects_brand_injection(self):
+        for bad in ("A,B", "a=b", "x" * 49, ""):
+            s = copy.deepcopy(self.state)
+            s["cpu"]["model_id"] = bad
+            with self.assertRaises(self.p.PropError):
+                self.p.validate_state(s)
+
+    def test_validate_rejects_bad_hyperv_flag(self):
+        s = copy.deepcopy(self.state)
+        s["cpu"]["hv_flags"].append("hv-time,+avx512f")
+        with self.assertRaises(self.p.PropError):
+            self.p.validate_state(s)
+
+    def test_validate_rejects_unknown_profile_and_bad_family(self):
+        s = copy.deepcopy(self.state)
+        s["cpu"]["name"] = "other"
+        with self.assertRaises(self.p.PropError):
+            self.p.validate_state(s)
+        s = copy.deepcopy(self.state)
+        s["cpu"]["family"] = "23"
+        with self.assertRaises(self.p.PropError):
+            self.p.validate_state(s)
+
+    def test_fingerprint_flags_hash_is_over_sorted_list(self):
+        a = self.p.cpu_fingerprint(dict(self.cpu_guest(), cpu_flags=["b", "a"]))
+        b = self.p.cpu_fingerprint(dict(self.cpu_guest(), cpu_flags=["a", "b"]))
+        self.assertEqual(a["flags_sha256"], b["flags_sha256"])
+        self.assertEqual(a["flags_sha256"], hashlib.sha256(b"a\nb").hexdigest())
+        self.assertNotEqual(a["flags_sha256"], self.p.cpu_fingerprint(dict(self.cpu_guest(), cpu_flags=["a"]))["flags_sha256"])
+
+    def test_compare_cpu_blocking_items_mismatch(self):
+        for key, bad, item in (("cpu_manufacturer", "GenuineIntel", "cpu_vendor"),
+                               ("cpu_description", "AMD64 Family 25 Model 97 Stepping 2", "cpu_family_model_stepping")):
+            g = self.guest()
+            g[key] = bad
+            self.assertEqual(self.verdicts(g)[item], "MISMATCH", key)
+
+    def test_compare_cpu_informational_items_only_warn(self):
+        for key, bad, item in (("cpu_name", "AMD Ryzen 9 7900", "cpu_brand"), ("cpu_processor_id", "178BFBFF00A60F12", "cpu_processor_id"),
+                               ("cpu_cores", 12, "cpu_cores"), ("cpu_logical", 24, "cpu_logical"),
+                               ("cpu_flags", ["avx2"], "cpu_flags_sha256")):
+            g = self.guest()
+            g[key] = bad
+            self.assertEqual(self.verdicts(g)[item], "WARN", key)
+            self.assertEqual([r[0] for r in self.p.compare(self.state, g) if r[1] == "MISMATCH"], [])
+
+    def test_warn_does_not_fail_the_result(self):
+        import contextlib
+        import io
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(self.p._print_rows([("a", "MATCH", ""), ("b", "WARN", "")]), 0)
+            self.assertEqual(self.p._print_rows([("a", "MATCH", ""), ("b", "MISMATCH", "")]), 1)
+
+    def test_profile_flags_exist_on_the_two_measured_amd_hosts(self):
+        # minimal sanity (not a strict gate): the PC (Zen 4) and a Vast EPYC 7B12 (Zen 2, through a hypervisor)
+        fx = ROOT / "scripts/ci/fixtures/cpuflags"
+        for name in ("pc_zen4.txt", "vast_epyc7b12_zen2.txt"):
+            text = (fx / name).read_text().replace("vendor_id:", "vendor_id\t:").replace("flags:", "flags\t:")
+            vendor, flags = self.p.parse_cpuinfo(text)
+            self.assertEqual(vendor, "AuthenticAMD")
+            self.assertEqual(sorted(set(self.state["cpu"]["required_host_flags"]) - flags), [], name)
+        self.assertFalse(set(self.p.FORBIDDEN_GUEST_FLAGS) & set(self.state["cpu"]["required_host_flags"]))
+
+    def test_compare_flags_forbidden_in_guest(self):
+        g = self.guest()
+        g["cpu_flags"] = g["cpu_flags"] + ["avx512f"]
+        self.assertEqual(self.verdicts(g)["cpu_no_forbidden_flags"], "WARN")
+        g["cpu_flags"] = None
+        self.assertEqual(self.verdicts(g)["cpu_no_forbidden_flags"], "WARN")
+
+    def test_compare_without_recorded_fingerprint_is_mismatch(self):
+        self.state["cpu_fingerprint"] = None
+        v = self.verdicts(self.guest())
+        self.assertEqual(v["cpu_vendor"], "MISMATCH")
+        self.assertEqual(v["cpu_family_model_stepping"], "MISMATCH")
+        for item in ("cpu_brand", "cpu_processor_id", "cpu_flags_sha256", "cpu_logical"):
+            self.assertEqual(v[item], "WARN", item)
+
+    def test_probe_script_reads_cpu_identity(self):
+        for needle in ("Win32_Processor", "ProcessorId", "NumberOfLogicalProcessors", "IsProcessorFeaturePresent", "cpu_flags"):
+            self.assertIn(needle, self.p.GUEST_PS)
+
+    def test_fill_from_guest_records_non_derivable_facts(self):
+        s = self.p.init_state(SEED)
+        self.p.fill_from_guest(s, self.guest())
+        self.assertEqual(s["guest"]["machine_guid"], self.state["guest"]["machine_guid"])
+        self.assertEqual(s["clock"]["last_time_at_stop_utc"], self.guest()["date_utc"])
+        self.assertEqual(s["cpu_fingerprint"], self.fp)
+        self.assertEqual(s["guest"]["ek_pub_hash"], "AB" * 32)
+
+
+    def test_result_line_says_match_when_only_warnings(self):
+        import contextlib
+        import io
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            rc = self.p._print_rows([("x", "WARN", "d"), ("y", "WARN", "d")])
+        self.assertEqual(rc, 0)
+        self.assertIn("RESULT MATCH", out.getvalue())
+
+    def test_cpu_arg_pins_family_model_stepping_explicitly(self):
+        parts = self.p.cpu_arg(self.state).split(",")
+        self.assertEqual(parts[:5], ["EPYC-v1", "model-id=AMD Virtual CPU", "family=23", "model=1", "stepping=2"])
+
+    def test_pack_refuses_spoofed_vendor(self):
+        self.state["cpu"]["vendor"] = "GenuineIntel"
+        sp = self.tmp / "v.json"
+        sp.write_text(json.dumps(self.state))
+        img = self.tmp / "iv"
+        img.write_bytes(b"x")
+        with self.assertRaises(self.p.PropError):
+            self.p.pack(sp, img, self.tmp / "v.zip")
+
+    def test_validate_rejects_comma_brand_only(self):
+        s = copy.deepcopy(self.state)
+        s["cpu"]["model_id"] = "AMD,+avx512f"
+        with self.assertRaises(self.p.PropError):
+            self.p.validate_state(s)
 
 
 if __name__ == "__main__":
