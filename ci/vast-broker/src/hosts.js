@@ -335,14 +335,7 @@ export function validateAssignment(
   if (!PROFILES.includes(profile)) bad('OFFER_PROFILE');
   const allowed = isBorrowed(profile)
     ? BORROWED_ASSIGNMENT_KEYS
-    : [
-        'repo',
-        'commit',
-        'tree_key',
-        'steps',
-        'env',
-        ...(allowSeed ? ['seed'] : []),
-      ];
+    : ['repo', 'commit', 'tree_key', 'steps', 'env', ...(allowSeed ? ['seed'] : [])];
   onlyKeys(assignment, allowed, 'OFFER_ASSIGNMENT_KEYS');
   if (!repoAllowlist.includes(assignment.repo)) bad('OFFER_REPO');
   if (!COMMIT.test(assignment.commit ?? '')) bad('OFFER_COMMIT');

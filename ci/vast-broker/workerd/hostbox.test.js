@@ -505,7 +505,7 @@ test('borrowed: only repo, commit, tree key and allowlisted stage names are acce
     { env: { KF_A: '1' } },
     { requirements: {} },
     { script: 'x' },
-    { stages: ['rm'] },
+    { stages: ['rm'] }, // the pre-steps key is no longer accepted by any profile
   ]) {
     const r = await h.call(
       'b-1',
@@ -520,11 +520,11 @@ test('borrowed: only repo, commit, tree key and allowlisted stage names are acce
     'b-1',
     'POST',
     '/internal/offer',
-    offerBody({ assignment: { ...assignment, stages: ['windows_gate'] } }),
+    offerBody({ assignment: { ...assignment, steps: [{ stage: 'windows_gate' }] } }),
   );
   assert.equal(ok.status, 200);
   const offer = await c.next('offer');
-  assert.deepEqual(Object.keys(offer.assignment).sort(), ['commit', 'repo', 'stages', 'tree_key']);
+  assert.deepEqual(Object.keys(offer.assignment).sort(), ['commit', 'repo', 'steps', 'tree_key']);
 });
 
 test('commands: owned only; container, standard and borrowed refuse, nothing is sent', async (t) => {

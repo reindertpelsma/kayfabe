@@ -639,10 +639,17 @@ test('assignment: wire formats are exact (tree key, commit, stage names)', () =>
     'ladder',
   ]);
   for (const p of ['owned', 'standard']) {
-    refused(() => validateAssignment(p, { ...assignment, steps: [{ stage: 'rm -rf' }] }), 'OFFER_STEPS');
-    refused(() => validateAssignment(p, { ...assignment, steps: [{ stage: 'gates' }] }), 'OFFER_STEPS');
+    refused(
+      () => validateAssignment(p, { ...assignment, steps: [{ stage: 'rm -rf' }] }),
+      'OFFER_STEPS',
+    );
+    refused(
+      () => validateAssignment(p, { ...assignment, steps: [{ stage: 'gates' }] }),
+      'OFFER_STEPS',
+    );
     assert.deepEqual(
-      validateAssignment(p, { ...assignment, steps: WIRE_STAGES.map((stage) => ({ stage })) }).steps,
+      validateAssignment(p, { ...assignment, steps: WIRE_STAGES.map((stage) => ({ stage })) })
+        .steps,
       WIRE_STAGES.map((stage) => ({ stage })),
     );
   }
