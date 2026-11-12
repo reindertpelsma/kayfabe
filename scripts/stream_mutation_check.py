@@ -24,6 +24,7 @@ PUMP = "crates/kf-qemu/src/userpump.rs"
 CHAN_TESTS = ["cargo", "test", "-p", "kf-chan", "--lib", "--test", "user_turn_unit", "--test", "ring",
               "--no-fail-fast"]
 QEMU_TESTS = ["cargo", "test", "-p", "kf-qemu", "--lib", "userread", "--no-fail-fast"]
+PUMP_TESTS = ["cargo", "test", "-p", "kf-qemu", "--lib", "userpump", "--no-fail-fast"]
 
 # name: (file, old, new, test command)
 M = {
@@ -77,7 +78,7 @@ M = {
     "r9_receipt_piece_bound_dropped": (QR,
         "            || r.pieces > PIECES\n", "", QEMU_TESTS),
     "r11_restart_does_not_reserve": (PUMP,
-        "        Err(Failure::Retry) if restart_owed => Some(Need::Again),\n", "", QEMU_TESTS),
+        "        Err(Failure::Retry) if restart_owed => Some(Need::Again),\n", "", PUMP_TESTS),
     "s1_busy_publication_restarts_the_stream": (CH + "user_turn.rs",
         "                    Phase::PubStream => io.retry_keeps_stream(),", "                    Phase::PubStream => false,", CHAN_TESTS),
     "s1_busy_part_copy_restarts_the_stream": (CH + "user_turn.rs",
@@ -102,9 +103,9 @@ def main():
     out = Path(sys.argv[1])
     out.mkdir(parents=True, exist_ok=True)
     names = sys.argv[2:] or list(M)
-    for tests in (CHAN_TESTS, QEMU_TESTS):
+    for tests in (CHAN_TESTS, QEMU_TESTS, PUMP_TESTS):
         if any(M[n][3] is tests for n in names):
-            rc, text = run(tests, out / f"baseline_{tests[3]}.log")
+            rc, text = run(tests, out / f"baseline_{tests[3]}_{tests[-2]}.log")
             if rc != 0:
                 sys.exit(f"baseline for {tests[3]} is not green: {failed(text)}")
     result = {}

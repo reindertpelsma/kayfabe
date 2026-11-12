@@ -2601,7 +2601,76 @@ fn retire_mid_stream_releases_the_receipts() {
     turn(&mut r, &mut io).unwrap();
     let dropped = io.dropped;
     r.retire();
+    assert!(!r.cancel_stream(), "no stream is pending after retire");
     turn(&mut r, &mut io).unwrap();
     assert!(io.dropped > dropped, "the receipts are released");
     assert_eq!(r.life.mode(), Mode::Dead);
+}
+
+#[test]
+fn a_ten_part_segment_survives_one_busy_copy_on_every_part_without_a_restart() {
+    // S1: a retry used to throw away every earlier part; now each part is copied exactly once.
+    let bytes = 8_388_604u64;
+    for part in 1..10u64 {
+        let mut io = Mock::new(16);
+        let mut r = relay();
+        let raw = install_wide(&mut io, &r, wide_words(bytes), false);
+        io.read_retry_once = Some(STREAM_VA + part * COPY_BOUND);
+        let mut retries = 0;
+        for _ in 0..40 {
+            match turn(&mut r, &mut io) {
+                Ok(()) => {}
+                Err(Fail::Retry) => retries += 1,
+                Err(e) => panic!("{e:?}"),
+            }
+            if native_words(&io) == vec![raw] {
+                break;
+            }
+        }
+        assert_eq!(native_words(&io), vec![raw], "part {part}");
+        assert_eq!(retries, 1, "part {part}");
+        assert_eq!(
+            io.part_reads.len(),
+            10,
+            "part {part}: no part is copied twice"
+        );
+        assert!(format!("{:?}", r.life.counts()).contains("stream_restarts: 0"));
+    }
+}
+
+#[test]
+fn repeated_busy_publications_never_copy_a_part_again() {
+    let mut io = Mock::new(16);
+    let mut r = stream_window(&mut io);
+    let raw = install_wide(&mut io, &r, wide_words(1_026_596), false);
+    turn(&mut r, &mut io).unwrap();
+    io.retry_busy = true;
+    for _ in 0..3 {
+        io.publish_retry_once = true;
+        assert_eq!(turn(&mut r, &mut io), Err(Fail::Retry));
+        assert!(r.retry_kept_stream());
+    }
+    turn(&mut r, &mut io).unwrap();
+    assert_eq!(native_words(&io), vec![raw]);
+    assert_eq!(io.part_reads.len(), 2);
+    let c = format!("{:?}", r.life.counts());
+    assert!(
+        c.contains("stream_publish_retries: 3") && c.contains("stream_restarts: 0"),
+        "{c}"
+    );
+}
+
+#[test]
+fn eleven_parts_at_the_pumps_bound_are_refused_by_the_relay() {
+    // R2, a second angle through the relay: a bound that makes ceil(len / bound) == 11.
+    let mut io = Mock::new(16);
+    let mut r = stream_window(&mut io);
+    io.scan_bound = 93_332;
+    install_wide(&mut io, &r, wide_words(1_026_596), false);
+    let e = turn(&mut r, &mut io).unwrap_err();
+    assert!(
+        matches!(e, Fail::Refused(ref why) if why.starts_with("USER_RING_STREAM Bounds ")),
+        "{e:?}"
+    );
+    assert!(io.part_reads.is_empty());
 }

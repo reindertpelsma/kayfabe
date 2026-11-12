@@ -3442,11 +3442,10 @@ impl kf_chan::worker::RelayLoop for ChanPlane {
 mod tests {
     use kf_chan::user_loop::Need;
 
-    /// S2 (review of PR #360): only a STREAM restart turns a `Retry` into an immediate re-serve. A published entry
-    /// (`again`) followed by a busy lock still hands off to the lock holder, exactly as Phase 1 did.
+    /// S2 (review of PR #360): a published entry (`again`) followed by a busy lock still hands off to the lock
+    /// holder, exactly as Phase 1 did.
     #[test]
-    fn a_retry_after_a_published_entry_still_hands_off_and_only_a_stream_restart_reserves_at_once()
-    {
+    fn a_retry_after_a_published_entry_still_hands_off() {
         assert_eq!(
             super::need_after(&Err(Failure::Retry), true, false),
             Some(Need::Contended),
@@ -3456,10 +3455,18 @@ mod tests {
             super::need_after(&Err(Failure::Retry), false, false),
             Some(Need::Contended)
         );
+    }
+
+    /// S2: only a STREAM restart re-serves at once (it has no lock holder to wake it).
+    #[test]
+    fn only_a_stream_restart_reserves_a_retry_at_once() {
+        assert_eq!(
+            super::need_after(&Err(Failure::Retry), false, true),
+            Some(Need::Again)
+        );
         assert_eq!(
             super::need_after(&Err(Failure::Retry), true, true),
-            Some(Need::Again),
-            "a restart has no lock holder to wake it"
+            Some(Need::Again)
         );
         assert_eq!(super::need_after(&Ok(true), true, false), Some(Need::Again));
         assert_eq!(super::need_after(&Ok(false), false, false), None);
