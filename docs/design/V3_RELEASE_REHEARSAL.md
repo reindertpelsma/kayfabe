@@ -80,7 +80,7 @@ pass. The first rehearsal is a timing discovery, not a pass-expected run.
 
 ## 4. What it does not prove
 
-Not proven: the driver matrix (host swap, Linux guest staging, Windows driver media, sub-runs,
+No run covers: the driver matrix (host swap, Linux guest staging, Windows driver media, sub-runs,
 cross sub-runs); the eight-die release; two dies per family; the release verdict `PASS`; the live
 `/bench-data` route under the Worker; that a large leg fits its 300 minutes on any host; that the
 required SPEC row names survive ingest (`specviewperf_lanea/laneb`, F10 of the rehearsal plan). A

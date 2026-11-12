@@ -1089,11 +1089,11 @@ Bundle pin. `deployment.json` `bundle_sha256` and `DEPLOYED_BUNDLE_SHA256` in `w
 same change, by the documented rule above: `wrangler deploy --config wrangler.toml --dry-run --outdir <dir>`,
 SHA-256 of `<dir>/index.js`, twice, identical: `384374d7176e9c9d92c6a94cb99a2735d55b5bae73bd09e288996b087b7d86a8`
 (was `d7a30055f2b1e6ebd56f21b0404e7ac4a9484caf107552f3a52beb2717305b12`). There is no regeneration script; the
-procedure is manual. MEASURED trap: the hash is reproduced only with `node_modules` physically inside the checkout
+procedure is manual. Trap seen in my own dry-runs: the hash is reproduced only with `node_modules` physically inside the checkout
 (`npm ci --ignore-scripts` there); with `node_modules` as a symlink to another directory the unchanged `next`
 source gave `9b81d0ff...` instead of the pin, because esbuild writes the module paths into comments. Order after
 merge: master must carry the new pin before the coordinator deploys (rule above); set `RELEASE_ENABLED=false`
 before any rollback.
 
-Not deployed here and not proven: that the live Worker accepts a rehearsal Start, that any box runs the
+Not deployed here, and no run covers: that the live Worker accepts a rehearsal Start, that any box runs the
 rehearsal payload, the live `/bench-data` route, and everything in "What it does not prove" of the design doc.
