@@ -61,10 +61,7 @@
     "run_report_only_keys": [
       "tree_key_mismatch"
     ],
-    "ack_semantics": "ack = offer accepted (profile checks passed, before the fetch); ready = commit fetched and verified; nack = refused or, after an ack, failed (the run is released, the requirement stays unmet, nothing is recorded as a result)",
-    "step_max": 32,
-    "apps_per_step_max": 32,
-    "app_name_regex": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$"
+    "ack_semantics": "ack = offer accepted (profile checks passed, before the fetch); ready = commit fetched and verified; nack = refused or, after an ack, failed (the run is released, the requirement stays unmet, nothing is recorded as a result)"
   },
   "daemon_to_worker": {
     "hello": {
@@ -752,13 +749,9 @@
             "repo": "https://github.com/reindertpelsma/kayfabe",
             "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-            "steps": [
-              {
-                "stage": "provision"
-              },
-              {
-                "stage": "windows_gate"
-              }
+            "stages": [
+              "provision",
+              "windows_gate"
             ]
           },
           "deadline_ms": 1800000000000
@@ -779,55 +772,17 @@
             "repo": "https://github.com/reindertpelsma/kayfabe",
             "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-            "steps": [
-              {
-                "stage": "provision"
-              },
-              {
-                "stage": "apps",
-                "apps": [
-                  "nvidia_smi",
-                  "deviceQuery"
-                ]
-              },
-              {
-                "stage": "windows_gate"
-              }
-            ]
-          },
-          "deadline_ms": 1800000000000
-        },
-        {
-          "type": "offer",
-          "v": 1,
-          "offer_id": "0123456789abcdef",
-          "request_id": "req-1",
-          "run_id": "123-1",
-          "run_token": "h.p.s",
-          "run": {
-            "nonce": "cccccccccccccccccccccccccccccccc",
-            "runner_nonce": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-            "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-          },
-          "assignment": {
-            "repo": "https://github.com/reindertpelsma/kayfabe",
-            "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-            "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "stages": [
+              "provision",
+              "windows_gate"
+            ],
             "seed": {
               "url": "http://93.184.216.34:40022/ab12cd34/kf3.tar",
               "fallback_url": "http://93-184-216-34.sslip.io:40022/ab12cd34/kf3.tar",
               "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
               "size": 1234,
               "name": "kf3.tar"
-            },
-            "steps": [
-              {
-                "stage": "provision"
-              },
-              {
-                "stage": "windows_gate"
-              }
-            ]
+            }
           },
           "deadline_ms": 1800000000000
         },
@@ -847,21 +802,17 @@
             "repo": "https://github.com/reindertpelsma/kayfabe",
             "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "stages": [
+              "provision",
+              "windows_gate"
+            ],
             "seed": {
               "url": "http://93.184.216.34:40022/ab12cd34/kf3.tar",
               "fallback_url": null,
               "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
               "size": 1234,
               "name": "kf3.tar"
-            },
-            "steps": [
-              {
-                "stage": "provision"
-              },
-              {
-                "stage": "windows_gate"
-              }
-            ]
+            }
           },
           "deadline_ms": 1800000000000
         }
@@ -884,13 +835,9 @@
               "repo": "https://github.com/reindertpelsma/kayfabe",
               "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "steps": [
-                {
-                  "stage": "provision"
-                },
-                {
-                  "stage": "windows_gate"
-                }
+              "stages": [
+                "provision",
+                "windows_gate"
               ]
             },
             "deadline_ms": 1800000000000,
@@ -915,13 +862,9 @@
               "repo": "https://github.com/reindertpelsma/kayfabe",
               "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "steps": [
-                {
-                  "stage": "provision"
-                },
-                {
-                  "stage": "windows_gate"
-                }
+              "stages": [
+                "provision",
+                "windows_gate"
               ]
             },
             "deadline_ms": 1.5
@@ -945,13 +888,9 @@
               "repo": "reindertpelsma/kayfabe",
               "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "steps": [
-                {
-                  "stage": "provision"
-                },
-                {
-                  "stage": "windows_gate"
-                }
+              "stages": [
+                "provision",
+                "windows_gate"
               ]
             },
             "deadline_ms": 1800000000000
@@ -975,13 +914,9 @@
               "repo": "https://github.com/reindertpelsma/kayfabe",
               "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "tree_key": "kf-tree-v2:abc",
-              "steps": [
-                {
-                  "stage": "provision"
-                },
-                {
-                  "stage": "windows_gate"
-                }
+              "stages": [
+                "provision",
+                "windows_gate"
               ]
             },
             "deadline_ms": 1800000000000
@@ -1005,10 +940,8 @@
               "repo": "https://github.com/reindertpelsma/kayfabe",
               "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "steps": [
-                {
-                  "stage": "gates"
-                }
+              "stages": [
+                "gates"
               ]
             },
             "deadline_ms": 1800000000000
@@ -1032,13 +965,9 @@
               "repo": "https://github.com/reindertpelsma/kayfabe",
               "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "steps": [
-                {
-                  "stage": "provision"
-                },
-                {
-                  "stage": "windows_gate"
-                }
+              "stages": [
+                "provision",
+                "windows_gate"
               ]
             },
             "deadline_ms": 1800000000000
@@ -1057,13 +986,9 @@
               "repo": "https://github.com/reindertpelsma/kayfabe",
               "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "steps": [
-                {
-                  "stage": "provision"
-                },
-                {
-                  "stage": "windows_gate"
-                }
+              "stages": [
+                "provision",
+                "windows_gate"
               ]
             },
             "deadline_ms": 1800000000000
@@ -1087,13 +1012,9 @@
               "repo": "https://github.com/reindertpelsma/kayfabe",
               "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "steps": [
-                {
-                  "stage": "provision"
-                },
-                {
-                  "stage": "windows_gate"
-                }
+              "stages": [
+                "provision",
+                "windows_gate"
               ]
             },
             "deadline_ms": 1800000000000
@@ -1117,13 +1038,9 @@
               "repo": "https://github.com/reindertpelsma/kayfabe",
               "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "steps": [
-                {
-                  "stage": "provision"
-                },
-                {
-                  "stage": "windows_gate"
-                }
+              "stages": [
+                "provision",
+                "windows_gate"
               ]
             },
             "deadline_ms": 1800000000000
@@ -1147,13 +1064,9 @@
               "repo": "https://github.com/reindertpelsma/kayfabe",
               "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "steps": [
-                {
-                  "stage": "provision"
-                },
-                {
-                  "stage": "windows_gate"
-                }
+              "stages": [
+                "provision",
+                "windows_gate"
               ]
             },
             "deadline_ms": 1800000000000
@@ -1177,21 +1090,17 @@
               "repo": "https://github.com/reindertpelsma/kayfabe",
               "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "stages": [
+                "provision",
+                "windows_gate"
+              ],
               "seed": {
                 "url": "http://10.0.0.1:40022/ab12cd34/kf3.tar",
                 "fallback_url": "http://93-184-216-34.sslip.io:40022/ab12cd34/kf3.tar",
                 "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
                 "size": 1234,
                 "name": "kf3.tar"
-              },
-              "steps": [
-                {
-                  "stage": "provision"
-                },
-                {
-                  "stage": "windows_gate"
-                }
-              ]
+              }
             },
             "deadline_ms": 1800000000000
           },
@@ -1214,21 +1123,17 @@
               "repo": "https://github.com/reindertpelsma/kayfabe",
               "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "stages": [
+                "provision",
+                "windows_gate"
+              ],
               "seed": {
                 "url": "http://93.184.216.34:40022/ab12cd34/other.tar",
                 "fallback_url": "http://93-184-216-34.sslip.io:40022/ab12cd34/kf3.tar",
                 "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
                 "size": 1234,
                 "name": "kf3.tar"
-              },
-              "steps": [
-                {
-                  "stage": "provision"
-                },
-                {
-                  "stage": "windows_gate"
-                }
-              ]
+              }
             },
             "deadline_ms": 1800000000000
           },
@@ -1251,21 +1156,17 @@
               "repo": "https://github.com/reindertpelsma/kayfabe",
               "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "stages": [
+                "provision",
+                "windows_gate"
+              ],
               "seed": {
                 "url": "http://93.184.216.34:40022/ab12cd34/kf3.tar",
                 "fallback_url": "http://evil.example:40022/ab12cd34/kf3.tar",
                 "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
                 "size": 1234,
                 "name": "kf3.tar"
-              },
-              "steps": [
-                {
-                  "stage": "provision"
-                },
-                {
-                  "stage": "windows_gate"
-                }
-              ]
+              }
             },
             "deadline_ms": 1800000000000
           },
@@ -1288,352 +1189,21 @@
               "repo": "https://github.com/reindertpelsma/kayfabe",
               "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "stages": [
+                "provision",
+                "windows_gate"
+              ],
               "seed": {
                 "url": "http://93.184.216.34:40022/ab12cd34/kf3.tar",
                 "fallback_url": "http://93-184-216-34.sslip.io:40022/ab12cd34/kf3.tar",
                 "sha256": "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD",
                 "size": 1234,
                 "name": "kf3.tar"
-              },
-              "steps": [
-                {
-                  "stage": "provision"
-                },
-                {
-                  "stage": "windows_gate"
-                }
-              ]
-            },
-            "deadline_ms": 1800000000000
-          },
-          "why": "seed sha256"
-        },
-        {
-          "frame": {
-            "type": "offer",
-            "v": 1,
-            "offer_id": "0123456789abcdef",
-            "request_id": "req-1",
-            "run_id": "123-1",
-            "run_token": "h.p.s",
-            "run": {
-              "nonce": "cccccccccccccccccccccccccccccccc",
-              "runner_nonce": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-              "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-            },
-            "assignment": {
-              "repo": "https://github.com/reindertpelsma/kayfabe",
-              "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-              "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "steps": [
-                {
-                  "stage": "provision"
-                },
-                {
-                  "stage": "windows_gate"
-                }
-              ],
-              "requirements": {
-                "tier": "small"
               }
             },
             "deadline_ms": 1800000000000
           },
-          "why": "requirements are never sent to a daemon (the Worker plans, the daemon runs the listed steps)"
-        },
-        {
-          "frame": {
-            "type": "offer",
-            "v": 1,
-            "offer_id": "0123456789abcdef",
-            "request_id": "req-1",
-            "run_id": "123-1",
-            "run_token": "h.p.s",
-            "run": {
-              "nonce": "cccccccccccccccccccccccccccccccc",
-              "runner_nonce": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-              "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-            },
-            "assignment": {
-              "repo": "https://github.com/reindertpelsma/kayfabe",
-              "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-              "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "steps": [
-                {
-                  "stage": "provision"
-                },
-                {
-                  "stage": "windows_gate"
-                }
-              ],
-              "stages": [
-                "provision"
-              ]
-            },
-            "deadline_ms": 1800000000000
-          },
-          "why": "stages is gone: steps is the one mechanism"
-        },
-        {
-          "frame": {
-            "type": "offer",
-            "v": 1,
-            "offer_id": "0123456789abcdef",
-            "request_id": "req-1",
-            "run_id": "123-1",
-            "run_token": "h.p.s",
-            "run": {
-              "nonce": "cccccccccccccccccccccccccccccccc",
-              "runner_nonce": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-              "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-            },
-            "assignment": {
-              "repo": "https://github.com/reindertpelsma/kayfabe",
-              "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-              "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "steps": [
-                {
-                  "stage": "rm_rf"
-                }
-              ]
-            },
-            "deadline_ms": 1800000000000
-          },
-          "why": "step stage not allowlisted"
-        },
-        {
-          "frame": {
-            "type": "offer",
-            "v": 1,
-            "offer_id": "0123456789abcdef",
-            "request_id": "req-1",
-            "run_id": "123-1",
-            "run_token": "h.p.s",
-            "run": {
-              "nonce": "cccccccccccccccccccccccccccccccc",
-              "runner_nonce": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-              "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-            },
-            "assignment": {
-              "repo": "https://github.com/reindertpelsma/kayfabe",
-              "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-              "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "steps": [
-                "provision"
-              ]
-            },
-            "deadline_ms": 1800000000000
-          },
-          "why": "step is not an object"
-        },
-        {
-          "frame": {
-            "type": "offer",
-            "v": 1,
-            "offer_id": "0123456789abcdef",
-            "request_id": "req-1",
-            "run_id": "123-1",
-            "run_token": "h.p.s",
-            "run": {
-              "nonce": "cccccccccccccccccccccccccccccccc",
-              "runner_nonce": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-              "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-            },
-            "assignment": {
-              "repo": "https://github.com/reindertpelsma/kayfabe",
-              "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-              "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "steps": [
-                {
-                  "stage": "apps",
-                  "cmd": "id"
-                }
-              ]
-            },
-            "deadline_ms": 1800000000000
-          },
-          "why": "step carries an extra key"
-        },
-        {
-          "frame": {
-            "type": "offer",
-            "v": 1,
-            "offer_id": "0123456789abcdef",
-            "request_id": "req-1",
-            "run_id": "123-1",
-            "run_token": "h.p.s",
-            "run": {
-              "nonce": "cccccccccccccccccccccccccccccccc",
-              "runner_nonce": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-              "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-            },
-            "assignment": {
-              "repo": "https://github.com/reindertpelsma/kayfabe",
-              "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-              "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "steps": [
-                {
-                  "stage": "apps",
-                  "apps": [
-                    "a;id"
-                  ]
-                }
-              ]
-            },
-            "deadline_ms": 1800000000000
-          },
-          "why": "app name not allowed"
-        },
-        {
-          "frame": {
-            "type": "offer",
-            "v": 1,
-            "offer_id": "0123456789abcdef",
-            "request_id": "req-1",
-            "run_id": "123-1",
-            "run_token": "h.p.s",
-            "run": {
-              "nonce": "cccccccccccccccccccccccccccccccc",
-              "runner_nonce": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-              "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-            },
-            "assignment": {
-              "repo": "https://github.com/reindertpelsma/kayfabe",
-              "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-              "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "steps": [
-                {
-                  "stage": "apps",
-                  "apps": "nvidia_smi"
-                }
-              ]
-            },
-            "deadline_ms": 1800000000000
-          },
-          "why": "apps must be an array of strings"
-        },
-        {
-          "frame": {
-            "type": "offer",
-            "v": 1,
-            "offer_id": "0123456789abcdef",
-            "request_id": "req-1",
-            "run_id": "123-1",
-            "run_token": "h.p.s",
-            "run": {
-              "nonce": "cccccccccccccccccccccccccccccccc",
-              "runner_nonce": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-              "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-            },
-            "assignment": {
-              "repo": "https://github.com/reindertpelsma/kayfabe",
-              "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-              "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "steps": [
-                {
-                  "stage": "provision"
-                },
-                {
-                  "stage": "provision"
-                },
-                {
-                  "stage": "provision"
-                },
-                {
-                  "stage": "provision"
-                },
-                {
-                  "stage": "provision"
-                },
-                {
-                  "stage": "provision"
-                },
-                {
-                  "stage": "provision"
-                },
-                {
-                  "stage": "provision"
-                },
-                {
-                  "stage": "provision"
-                },
-                {
-                  "stage": "provision"
-                },
-                {
-                  "stage": "provision"
-                },
-                {
-                  "stage": "provision"
-                },
-                {
-                  "stage": "provision"
-                },
-                {
-                  "stage": "provision"
-                },
-                {
-                  "stage": "provision"
-                },
-                {
-                  "stage": "provision"
-                },
-                {
-                  "stage": "provision"
-                },
-                {
-                  "stage": "provision"
-                },
-                {
-                  "stage": "provision"
-                },
-                {
-                  "stage": "provision"
-                },
-                {
-                  "stage": "provision"
-                },
-                {
-                  "stage": "provision"
-                },
-                {
-                  "stage": "provision"
-                },
-                {
-                  "stage": "provision"
-                },
-                {
-                  "stage": "provision"
-                },
-                {
-                  "stage": "provision"
-                },
-                {
-                  "stage": "provision"
-                },
-                {
-                  "stage": "provision"
-                },
-                {
-                  "stage": "provision"
-                },
-                {
-                  "stage": "provision"
-                },
-                {
-                  "stage": "provision"
-                },
-                {
-                  "stage": "provision"
-                },
-                {
-                  "stage": "provision"
-                }
-              ]
-            },
-            "deadline_ms": 1800000000000
-          },
-          "why": "too many steps"
+          "why": "seed sha256"
         }
       ]
     },

@@ -155,15 +155,14 @@ const assignment = {
   repo: CANONICAL_REPO,
   commit: 'a'.repeat(40),
   tree_key: 'b'.repeat(64),
-  steps: [{ stage: 'windows_gate' }],
+  stages: ['windows_gate'],
 };
-test('borrowed assignment: exactly repo, commit, tree_key, allowlisted steps', () => {
+test('borrowed assignment: exactly repo, commit, tree_key, allowlisted stages', () => {
   assert.deepEqual(validateAssignment('borrowed', assignment), assignment);
   assert.ok(WIRE_STAGES.includes('windows_gate'));
   for (const extra of [
     { env: { KF_X: '1' } },
     { requirements: {} },
-    { stages: ['windows_gate'] },
     { script: 'rm -rf /' },
     { cmd: 'x' },
     { url: 'http://x' },
@@ -172,35 +171,18 @@ test('borrowed assignment: exactly repo, commit, tree_key, allowlisted steps', (
       () => validateAssignment('borrowed', { ...assignment, ...extra }),
       'OFFER_ASSIGNMENT_KEYS',
     );
-  for (const steps of [
-    [{ stage: 'rm -rf' }],
-    [{ stage: 'not_a_stage' }],
-    'gates',
-    ['windows_gate'],
-    [{ stage: 'apps', cmd: 'id' }],
-    [{ stage: 'apps', apps: ['a;id'] }],
-    [{ stage: 'apps', apps: 'x' }],
-    Array(33).fill({ stage: 'provision' }),
-  ])
-    refused(() => validateAssignment('borrowed', { ...assignment, steps }), 'OFFER_STEPS');
+  for (const stages of [['rm -rf'], ['not_a_stage'], 'gates', [1]])
+    refused(() => validateAssignment('borrowed', { ...assignment, stages }), 'OFFER_STAGES');
   refused(() => validateAssignment('borrowed', { ...assignment, commit: 'HEAD' }), 'OFFER_COMMIT');
   refused(() => validateAssignment('borrowed', { ...assignment, repo: '../x' }), 'OFFER_REPO');
   refused(() => validateAssignment('borrowed', { ...assignment, tree_key: '' }), 'OFFER_TREE_KEY');
 });
-test('no profile accepts requirements: the Worker plans, the daemon runs the listed steps', () => {
-  for (const p of ['owned', 'container', 'standard', 'borrowed'])
-    refused(
-      () => validateAssignment(p, { ...assignment, requirements: { tier: 'small' } }),
-      'OFFER_ASSIGNMENT_KEYS',
-    );
-  const steps = [{ stage: 'provision' }, { stage: 'apps', apps: ['nvidia_smi', 'deviceQuery'] }];
-  assert.deepEqual(validateAssignment('owned', { ...assignment, steps }).steps, steps);
-});
-test('owned and container assignments may carry bounded env', () => {
+test('owned and container assignments may carry bounded env and requirements', () => {
   for (const p of ['owned', 'container']) {
     const a = validateAssignment(p, {
       ...assignment,
       env: { KF_DEVICE: 'kf3' },
+      requirements: { tier: 'small' },
     });
     assert.deepEqual(a.env, { KF_DEVICE: 'kf3' });
     refused(() => validateAssignment(p, { ...assignment, env: { PATH: '/x' } }), 'OFFER_ENV');
@@ -639,18 +621,11 @@ test('assignment: wire formats are exact (tree key, commit, stage names)', () =>
     'ladder',
   ]);
   for (const p of ['owned', 'standard']) {
-    refused(
-      () => validateAssignment(p, { ...assignment, steps: [{ stage: 'rm -rf' }] }),
-      'OFFER_STEPS',
-    );
-    refused(
-      () => validateAssignment(p, { ...assignment, steps: [{ stage: 'gates' }] }),
-      'OFFER_STEPS',
-    );
+    refused(() => validateAssignment(p, { ...assignment, stages: ['rm -rf'] }), 'OFFER_STAGES');
+    refused(() => validateAssignment(p, { ...assignment, stages: ['gates'] }), 'OFFER_STAGES');
     assert.deepEqual(
-      validateAssignment(p, { ...assignment, steps: WIRE_STAGES.map((stage) => ({ stage })) })
-        .steps,
-      WIRE_STAGES.map((stage) => ({ stage })),
+      validateAssignment(p, { ...assignment, stages: [...WIRE_STAGES] }).stages,
+      WIRE_STAGES,
     );
   }
 });

@@ -7,9 +7,6 @@ import {
   SEED_PROBE_CONTENT,
   SEED_TOKEN,
   WIRE_STAGES,
-  APP_NAME,
-  STEPS_MAX,
-  APPS_PER_STEP_MAX,
   validateDaemonFrame,
   validateServerFrame,
 } from '../src/hosts.js';
@@ -22,9 +19,6 @@ test('fixture constants equal the Worker constants', () => {
   const c = fx.constants;
   assert.equal(c.canonical_repo, CANONICAL_REPO);
   assert.deepEqual(c.stage_names, [...WIRE_STAGES]);
-  assert.equal(c.step_max, STEPS_MAX);
-  assert.equal(c.apps_per_step_max, APPS_PER_STEP_MAX);
-  assert.equal(new RegExp(c.app_name_regex).source, APP_NAME.source);
   assert.equal(c.probe_content, SEED_PROBE_CONTENT);
   assert.equal(c.probe_path, '/<token>/' + PROBE_FILE);
   assert.equal(new RegExp(c.seed_token_regex).source, SEED_TOKEN.source);
