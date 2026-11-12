@@ -360,8 +360,8 @@ CASES = [
     (
         "deployed-switch-not-allowed",
         BROKER + "deploy.mjs",
-        "  'MIDDLE_APPS_ENABLED',\n  // Tiers",
-        "  // Tiers",
+        "  'MIDDLE_APPS_ENABLED',\n  // Custom hosts",
+        "  // Custom hosts",
         "config",
     ),
     # ---- Linux apps media on a fresh Worker box (2026-11-10): test_apps_media.py and test_apps_pins.py ----------

@@ -2612,6 +2612,7 @@ export function createService({
     },
   };
 }
+export { HostBox } from './hostbox.js';
 export class BrokerLedger {
   constructor(ctx, env) {
     this.ctx = ctx;
@@ -2896,6 +2897,8 @@ export function createGateway({ authorize, fetcher = fetch, now = Date.now } = {
   let boxVerifier, boxSecret;
   let boxWindow = -1;
   const boxCounts = new Map();
+  const hostUpgrades = new Map();
+  let hostUpgradeWindow = -1;
   const evidenceCounts = new Map();
   // Uploads this isolate holds in memory right now (each is up to 8 MiB, twice while it is joined).
   let evidenceHeld = 0;
@@ -3051,6 +3054,34 @@ export function createGateway({ authorize, fetcher = fetch, now = Date.now } = {
         return Response.json(
           { state: error.state ?? 'UNAVAILABLE' },
           { status: error.status ?? 503 },
+        );
+      }
+      // Custom-host daemons (docs/design/V3_CUSTOM_HOSTS.md): the WebSocket goes to the box's own
+      // Durable Object, which checks the per-box token. No run-token or OIDC check applies here.
+      const hostId =
+        path === null ? null : /^\/hosts\/([a-z0-9][a-z0-9-]{0,39})\/ws$/.exec(path)?.[1];
+      if (hostId) {
+        if (!env.HOSTS || request.method !== 'GET') return notFound();
+        // Cheap pre-check before a Durable Object is woken (review L1): an upgrade with no
+        // well-formed box token, and a flood from one address, never reach DO storage. Whether the
+        // box exists is the DO's answer (the Worker has no box list outside its DOs).
+        const window = Math.floor(now() / 60000);
+        if (hostUpgradeWindow !== window) {
+          hostUpgradeWindow = window;
+          hostUpgrades.clear();
+        }
+        const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown';
+        const seen = hostUpgrades.get(ip) ?? 0;
+        if (seen >= 30 || (!hostUpgrades.has(ip) && hostUpgrades.size >= 1024))
+          return new Response('Too many requests', { status: 429 });
+        hostUpgrades.set(ip, seen + 1);
+        if (
+          request.headers.get('Upgrade') !== 'websocket' ||
+          !/^Bearer kfh_[A-Za-z0-9_-]{43}$/.test(request.headers.get('Authorization') ?? '')
+        )
+          return new Response('Unauthorized', { status: 401 });
+        return env.HOSTS.get(env.HOSTS.idFromName(hostId)).fetch(
+          new Request('https://internal.invalid/hosts/' + hostId + '/ws', request),
         );
       }
       if (path === null || !routeKind(path)) return notFound();

@@ -16,9 +16,19 @@ head_sampling_rate = 1
 name = "LEDGER"
 class_name = "BrokerLedger"
 
+# Custom hosts (src/hostbox.js, docs/design/V3_CUSTOM_HOSTS.md): one HostBox Durable Object per
+# enrolled box (WebSocket hibernation), plus one reserved instance that lists the box ids.
+[[durable_objects.bindings]]
+name = "HOSTS"
+class_name = "HostBox"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["BrokerLedger"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["HostBox"]
 
 # Result store (src/results.js, src/ingest.js): the one platform database, shared with the
 # public read-only Worker (ci/platform-api); this Worker is its only writer (owner ruling
