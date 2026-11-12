@@ -67,6 +67,9 @@ export const ALLOWED = new Set([
   // commit. Keep it unset/'false' until boxes delete ignored files after cloning (review of #258).
   'TREE_KEY_CARRY_OVER',
   'MIDDLE_APPS_ENABLED',
+  // Custom hosts (docs/design/V3_CUSTOM_HOSTS.md): the 40-hex commit of scripts/kfhost that the admin
+  // enrol route pins in its bootstrap command. No default: the route refuses while it is unset.
+  'HOST_DAEMON_COMMIT',
   // Tiers (wtier, 2026-11-05; src/tier.js, src/policy.js): the release (large) profile's explicit
   // caps and lists, and the middle tier's rotation and VRAM floor. Account cap is now 1-8.
   'MAX_CONCURRENT_RELEASE',
@@ -129,6 +132,8 @@ export function parseVars(text) {
   for (const key of BOOLEAN_VARS)
     if (vars.has(key) && !['true', 'false'].includes(vars.get(key)))
       fail(key + ' must be true or false');
+  if (vars.has('HOST_DAEMON_COMMIT') && !/^[0-9a-f]{40}$/.test(vars.get('HOST_DAEMON_COMMIT')))
+    fail('HOST_DAEMON_COMMIT must be a 40-hex commit sha');
   if (vars.has('WORKER_URL') && !bareOrigin(vars.get('WORKER_URL')))
     fail('WORKER_URL must be the bare https origin (no trailing slash, path, query or user)');
   return vars;

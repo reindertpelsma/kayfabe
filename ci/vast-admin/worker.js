@@ -94,12 +94,18 @@ export const createAdmin = ({ fetcher = fetch, now = Date.now } = {}) => ({
     // forward to the HostBox Durable Objects over the internal origin; this Worker only checks the
     // owner's Access identity (above), the origin and the box id, and bounds the body.
     const hostRoute =
-      /^\/api\/hosts(?:\/([a-z0-9][a-z0-9-]{0,39})(\/token|\/cmd)?)?$/.exec(
+      /^\/api\/hosts(?:\/([a-z0-9][a-z0-9-]{0,39})(\/token|\/cmd|\/commands-until|\/enrol)?)?$/.exec(
         url.pathname,
       );
     if (hostRoute && !url.search) {
       const [, id, sub] = hostRoute;
-      const allowed = !id ? ['GET'] : sub ? ['POST'] : ['GET', 'PUT', 'DELETE'];
+      const allowed = !id
+        ? ['GET']
+        : sub === '/commands-until'
+          ? ['PUT']
+          : sub
+            ? ['POST']
+            : ['GET', 'PUT', 'DELETE'];
       if (!allowed.includes(request.method) || !env.HOSTS)
         return json({ error: 'Not found' }, 404);
       const mutating = request.method !== 'GET';

@@ -1,0 +1,699 @@
+{
+  "_comment": "Golden wire fixture for custom hosts (docs/design/V3_CUSTOM_HOSTS.md). The Worker's validators (src/hosts.js validateDaemonFrame / validateServerFrame) accept every `valid` frame and refuse every `invalid` one; the daemon side copies this file. Frames use `type`; `v` is optional and must be 1.",
+  "constants": {
+    "canonical_repo": "https://github.com/reindertpelsma/kayfabe",
+    "tree_key_regex": "^[0-9a-f]{64}$",
+    "commit_regex": "^[0-9a-f]{40}$",
+    "stage_names": [
+      "provision",
+      "cuda_host",
+      "merge_bar",
+      "cuda_guest",
+      "apps",
+      "windows_gate",
+      "windows_apps",
+      "specviewperf",
+      "ladder"
+    ],
+    "compute_cap_example": "8.9",
+    "pci_device_id_regex": "^[0-9a-f]{4}$",
+    "seed_token_regex": "^[a-z0-9]{8}$",
+    "probe_path": "/<token>/probe.txt",
+    "probe_content": "kfseed-probe-v1\n",
+    "deadline_field": "deadline_ms",
+    "offer_id_regex": "^[0-9a-f]{16}$",
+    "cmd_id_regex": "^[0-9a-f]{16}$",
+    "upgrade_route": "/hosts/<box_id>/ws",
+    "auth_header": "Authorization: Bearer <kfh_ token>",
+    "close_codes": {
+      "bad_token": 4401,
+      "disabled": 4403,
+      "heartbeat_timeout": 4408,
+      "replaced_or_live_connection_exists": 4409
+    }
+  },
+  "daemon_to_worker": {
+    "hello": {
+      "valid": [
+        {
+          "type": "hello",
+          "box_id": "rack-1",
+          "version": "0.1",
+          "capabilities": {
+            "gpu_name": "NVIDIA GeForce RTX 4070",
+            "compute_cap": "8.9",
+            "pci_device_id": "2786",
+            "vram_gb": 12,
+            "driver": "580.65.06",
+            "module_flavor": "open",
+            "kvm": true,
+            "cpu_model": "x",
+            "cores": 16,
+            "ram_gb": 64,
+            "disk_free_gb": 500,
+            "display": true,
+            "can_swap_driver": false,
+            "container": false,
+            "os": "linux",
+            "kernel": "6.8.0"
+          }
+        },
+        {
+          "v": 1,
+          "type": "hello",
+          "box_id": "rack-1",
+          "capabilities": {}
+        }
+      ],
+      "invalid": [
+        {
+          "frame": {
+            "type": "hello",
+            "box_id": "Rack_1",
+            "capabilities": {
+              "gpu_name": "NVIDIA GeForce RTX 4070",
+              "compute_cap": "8.9",
+              "pci_device_id": "2786",
+              "vram_gb": 12,
+              "driver": "580.65.06",
+              "module_flavor": "open",
+              "kvm": true,
+              "cpu_model": "x",
+              "cores": 16,
+              "ram_gb": 64,
+              "disk_free_gb": 500,
+              "display": true,
+              "can_swap_driver": false,
+              "container": false,
+              "os": "linux",
+              "kernel": "6.8.0"
+            }
+          },
+          "why": "box id format"
+        },
+        {
+          "frame": {
+            "type": "hello",
+            "box_id": "rack-1"
+          },
+          "why": "no capabilities"
+        },
+        {
+          "frame": {
+            "type": "hello",
+            "box_id": "rack-1",
+            "capabilities": {
+              "gpu_name": "NVIDIA GeForce RTX 4070",
+              "compute_cap": "8.9",
+              "pci_device_id": "2786",
+              "vram_gb": 12,
+              "driver": "580.65.06",
+              "module_flavor": "open",
+              "kvm": true,
+              "cpu_model": "x",
+              "cores": 16,
+              "ram_gb": 64,
+              "disk_free_gb": 500,
+              "display": true,
+              "can_swap_driver": false,
+              "container": false,
+              "os": "linux",
+              "kernel": "6.8.0"
+            },
+            "shell": "id"
+          },
+          "why": "unknown key"
+        },
+        {
+          "frame": {
+            "v": 2,
+            "type": "hello",
+            "box_id": "rack-1",
+            "capabilities": {
+              "gpu_name": "NVIDIA GeForce RTX 4070",
+              "compute_cap": "8.9",
+              "pci_device_id": "2786",
+              "vram_gb": 12,
+              "driver": "580.65.06",
+              "module_flavor": "open",
+              "kvm": true,
+              "cpu_model": "x",
+              "cores": 16,
+              "ram_gb": 64,
+              "disk_free_gb": 500,
+              "display": true,
+              "can_swap_driver": false,
+              "container": false,
+              "os": "linux",
+              "kernel": "6.8.0"
+            }
+          },
+          "why": "version"
+        }
+      ]
+    },
+    "heartbeat": {
+      "valid": [
+        {
+          "type": "heartbeat",
+          "ts": 1800000000,
+          "state": "idle"
+        },
+        {
+          "v": 1,
+          "type": "heartbeat",
+          "state": "busy",
+          "run_id": "123-1"
+        }
+      ],
+      "invalid": [
+        {
+          "frame": {
+            "type": "heartbeat",
+            "state": "sleeping"
+          },
+          "why": "state"
+        },
+        {
+          "frame": {
+            "type": "heartbeat",
+            "state": "busy",
+            "run_id": "0-1"
+          },
+          "why": "run id"
+        },
+        {
+          "frame": {
+            "type": "heartbeat"
+          },
+          "why": "no state"
+        }
+      ]
+    },
+    "ack": {
+      "valid": [
+        {
+          "type": "ack",
+          "offer_id": "0123456789abcdef"
+        }
+      ],
+      "invalid": [
+        {
+          "frame": {
+            "type": "ack",
+            "offer_id": "o1"
+          },
+          "why": "offer id format"
+        },
+        {
+          "frame": {
+            "type": "ack"
+          },
+          "why": "no offer id"
+        }
+      ]
+    },
+    "nack": {
+      "valid": [
+        {
+          "type": "nack",
+          "offer_id": "0123456789abcdef",
+          "reason": "busy"
+        }
+      ],
+      "invalid": [
+        {
+          "frame": {
+            "type": "nack",
+            "offer_id": "0123456789abcdef",
+            "reason": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+          },
+          "why": "reason too long"
+        },
+        {
+          "frame": {
+            "type": "nack",
+            "offer_id": "zz"
+          },
+          "why": "offer id format"
+        }
+      ]
+    },
+    "seed_register": {
+      "valid": [
+        {
+          "type": "seed_register",
+          "offer_id": "0123456789abcdef",
+          "artifact": {
+            "name": "kf3.tar",
+            "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+            "size": 1234
+          },
+          "path": "/ab12cd34/kf3.tar"
+        }
+      ],
+      "invalid": [
+        {
+          "frame": {
+            "type": "seed_register",
+            "offer_id": "0123456789abcdef",
+            "artifact": {
+              "name": "kf3.tar",
+              "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+              "size": 1234
+            },
+            "path": "/ab12cd34567/kf3.tar"
+          },
+          "why": "token is exactly 8 chars"
+        },
+        {
+          "frame": {
+            "type": "seed_register",
+            "offer_id": "0123456789abcdef",
+            "artifact": {
+              "name": "kf3.tar",
+              "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+              "size": 1234
+            },
+            "path": "/AB12CD34/kf3.tar"
+          },
+          "why": "token is lowercase"
+        },
+        {
+          "frame": {
+            "type": "seed_register",
+            "offer_id": "0123456789abcdef",
+            "artifact": {
+              "name": "kf3.tar",
+              "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+              "size": 1234
+            },
+            "path": "/ab12cd34/other.tar"
+          },
+          "why": "path name differs"
+        },
+        {
+          "frame": {
+            "type": "seed_register",
+            "offer_id": "0123456789abcdef",
+            "artifact": {
+              "name": "kf3.tar",
+              "sha256": "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD",
+              "size": 1
+            },
+            "path": "/ab12cd34/kf3.tar"
+          },
+          "why": "sha256 uppercase"
+        },
+        {
+          "frame": {
+            "type": "seed_register",
+            "artifact": {
+              "name": "kf3.tar",
+              "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+              "size": 1
+            },
+            "path": "/ab12cd34/kf3.tar"
+          },
+          "why": "no offer id"
+        }
+      ]
+    },
+    "cmd_output": {
+      "valid": [
+        {
+          "type": "cmd_output",
+          "cmd_id": "fedcba9876543210",
+          "seq": 0,
+          "stream": "stdout",
+          "data": "hi\n"
+        },
+        {
+          "type": "cmd_output",
+          "cmd_id": "fedcba9876543210",
+          "seq": 1,
+          "stream": "stderr",
+          "data": "",
+          "eof": true
+        }
+      ],
+      "invalid": [
+        {
+          "frame": {
+            "type": "cmd_output",
+            "cmd_id": "fedcba9876543210",
+            "seq": -1,
+            "stream": "stdout",
+            "data": ""
+          },
+          "why": "seq"
+        },
+        {
+          "frame": {
+            "type": "cmd_output",
+            "cmd_id": "fedcba9876543210",
+            "seq": 0,
+            "stream": "tty",
+            "data": ""
+          },
+          "why": "stream"
+        }
+      ]
+    },
+    "cmd_done": {
+      "valid": [
+        {
+          "type": "cmd_done",
+          "cmd_id": "fedcba9876543210",
+          "rc": 0
+        },
+        {
+          "type": "cmd_done",
+          "cmd_id": "fedcba9876543210",
+          "rc": 126
+        }
+      ],
+      "invalid": [
+        {
+          "frame": {
+            "type": "cmd_done",
+            "cmd_id": "fedcba9876543210",
+            "rc": "0"
+          },
+          "why": "rc type"
+        },
+        {
+          "frame": {
+            "type": "cmd_done",
+            "cmd_id": "c1",
+            "rc": 0
+          },
+          "why": "cmd id format"
+        }
+      ]
+    },
+    "unknown": {
+      "valid": [],
+      "invalid": [
+        {
+          "frame": {
+            "type": "shell",
+            "cmd": "id"
+          },
+          "why": "unknown type"
+        },
+        {
+          "frame": {
+            "hello": 1
+          },
+          "why": "no type"
+        }
+      ]
+    }
+  },
+  "worker_to_daemon": {
+    "welcome": {
+      "valid": [
+        {
+          "type": "welcome",
+          "v": 1,
+          "box_id": "rack-1",
+          "profile": "standard",
+          "heartbeat_s": 15
+        }
+      ],
+      "invalid": [
+        {
+          "frame": {
+            "type": "welcome",
+            "v": 1,
+            "box_id": "rack-1",
+            "profile": "root",
+            "heartbeat_s": 15
+          },
+          "why": "profile"
+        }
+      ]
+    },
+    "offer": {
+      "valid": [
+        {
+          "type": "offer",
+          "v": 1,
+          "offer_id": "0123456789abcdef",
+          "request_id": "req-1",
+          "run_id": "123-1",
+          "run_token": "h.p.s",
+          "assignment": {
+            "repo": "https://github.com/reindertpelsma/kayfabe",
+            "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "stages": [
+              "provision",
+              "windows_gate"
+            ]
+          },
+          "deadline_ms": 1800000000000
+        }
+      ],
+      "invalid": [
+        {
+          "frame": {
+            "type": "offer",
+            "v": 1,
+            "offer_id": "0123456789abcdef",
+            "request_id": "req-1",
+            "run_id": "123-1",
+            "run_token": "h.p.s",
+            "assignment": {
+              "repo": "https://github.com/reindertpelsma/kayfabe",
+              "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "stages": [
+                "provision",
+                "windows_gate"
+              ]
+            },
+            "deadline_ms": 1800000000000,
+            "deadline": 1800000000
+          },
+          "why": "deadline must be deadline_ms"
+        },
+        {
+          "frame": {
+            "type": "offer",
+            "v": 1,
+            "offer_id": "0123456789abcdef",
+            "request_id": "req-1",
+            "run_id": "123-1",
+            "run_token": "h.p.s",
+            "assignment": {
+              "repo": "https://github.com/reindertpelsma/kayfabe",
+              "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "stages": [
+                "provision",
+                "windows_gate"
+              ]
+            },
+            "deadline_ms": 1.5
+          },
+          "why": "deadline_ms integer"
+        },
+        {
+          "frame": {
+            "type": "offer",
+            "v": 1,
+            "offer_id": "0123456789abcdef",
+            "request_id": "req-1",
+            "run_id": "123-1",
+            "run_token": "h.p.s",
+            "assignment": {
+              "repo": "reindertpelsma/kayfabe",
+              "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "stages": [
+                "provision",
+                "windows_gate"
+              ]
+            },
+            "deadline_ms": 1800000000000
+          },
+          "why": "repo must be the canonical URL"
+        },
+        {
+          "frame": {
+            "type": "offer",
+            "v": 1,
+            "offer_id": "0123456789abcdef",
+            "request_id": "req-1",
+            "run_id": "123-1",
+            "run_token": "h.p.s",
+            "assignment": {
+              "repo": "https://github.com/reindertpelsma/kayfabe",
+              "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "tree_key": "kf-tree-v2:abc",
+              "stages": [
+                "provision",
+                "windows_gate"
+              ]
+            },
+            "deadline_ms": 1800000000000
+          },
+          "why": "tree key shape"
+        },
+        {
+          "frame": {
+            "type": "offer",
+            "v": 1,
+            "offer_id": "0123456789abcdef",
+            "request_id": "req-1",
+            "run_id": "123-1",
+            "run_token": "h.p.s",
+            "assignment": {
+              "repo": "https://github.com/reindertpelsma/kayfabe",
+              "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "stages": [
+                "gates"
+              ]
+            },
+            "deadline_ms": 1800000000000
+          },
+          "why": "stage name"
+        },
+        {
+          "frame": {
+            "type": "offer",
+            "v": 1,
+            "offer_id": "o1",
+            "request_id": "req-1",
+            "run_id": "123-1",
+            "run_token": "h.p.s",
+            "assignment": {
+              "repo": "https://github.com/reindertpelsma/kayfabe",
+              "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "tree_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "stages": [
+                "provision",
+                "windows_gate"
+              ]
+            },
+            "deadline_ms": 1800000000000
+          },
+          "why": "offer id format"
+        }
+      ]
+    },
+    "cancel": {
+      "valid": [
+        {
+          "type": "cancel",
+          "offer_id": "0123456789abcdef"
+        }
+      ],
+      "invalid": [
+        {
+          "frame": {
+            "type": "cancel"
+          },
+          "why": "no offer id"
+        }
+      ]
+    },
+    "seed_ack": {
+      "valid": [
+        {
+          "type": "seed_ack",
+          "ok": true
+        },
+        {
+          "type": "seed_ack",
+          "ok": false,
+          "reason": "TIMEOUT"
+        }
+      ],
+      "invalid": [
+        {
+          "frame": {
+            "type": "seed_ack",
+            "ok": "yes"
+          },
+          "why": "ok type"
+        }
+      ]
+    },
+    "cmd": {
+      "valid": [
+        {
+          "type": "cmd",
+          "cmd_id": "fedcba9876543210",
+          "argv": [
+            "nvidia-smi",
+            "-L"
+          ]
+        },
+        {
+          "type": "cmd",
+          "cmd_id": "fedcba9876543210",
+          "shell": "uptime"
+        }
+      ],
+      "invalid": [
+        {
+          "frame": {
+            "type": "cmd",
+            "cmd_id": "fedcba9876543210"
+          },
+          "why": "neither argv nor shell"
+        },
+        {
+          "frame": {
+            "type": "cmd",
+            "cmd_id": "fedcba9876543210",
+            "argv": [
+              "a"
+            ],
+            "shell": "b"
+          },
+          "why": "both"
+        }
+      ]
+    },
+    "error": {
+      "valid": [
+        {
+          "type": "error",
+          "code": "UNKNOWN_OFFER"
+        }
+      ],
+      "invalid": [
+        {
+          "frame": {
+            "type": "error"
+          },
+          "why": "no code"
+        }
+      ]
+    }
+  },
+  "run_report_fields": {
+    "_comment": "Extra field of the existing run report (POST /run-report): a boolean fact about the run, never part of the verdict. Omitted when the tree keys are equal. Any other type is dropped by the Worker.",
+    "tree_key_mismatch": {
+      "valid": [
+        true,
+        false
+      ],
+      "invalid": [
+        "yes",
+        1,
+        0,
+        null,
+        {},
+        [
+          true
+        ]
+      ]
+    }
+  }
+}

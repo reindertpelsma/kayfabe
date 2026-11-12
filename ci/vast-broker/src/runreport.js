@@ -214,6 +214,10 @@ export function cleanClaimsReport(raw) {
     });
   }
   const w = object(raw.windows) ? raw.windows : {};
+  // Custom hosts: a tree-key mismatch the daemon saw (a warning, never a refusal, on a non-git-only
+  // profile). A boolean is kept as a fact about the run; any other type is dropped. It never
+  // affects the verdict by itself.
+  const mismatch = typeof raw.tree_key_mismatch === 'boolean' ? raw.tree_key_mismatch : undefined;
   const guests = object(raw.guest_drivers) ? raw.guest_drivers : {};
   return {
     schema: 1,
@@ -228,6 +232,7 @@ export function cleanClaimsReport(raw) {
     tests,
     apps,
     perf,
+    ...(mismatch === undefined ? {} : { tree_key_mismatch: mismatch }),
     windows: {
       gate: oneOf(w.gate, ['PASS', 'FAIL', 'RETRY']),
       install_s: int(w.install_s, 0, 7 * 86400),
@@ -314,6 +319,9 @@ export function buildReport({ claims, row, runId, log, offsets, logsBase }) {
     apps: claims.apps,
     perf: claims.perf,
     windows: claims.windows,
+    ...(claims.tree_key_mismatch === undefined
+      ? {}
+      : { tree_key_mismatch: claims.tree_key_mismatch }),
     ...(claims.truncated ? { truncated: claims.truncated } : {}),
     log: log
       ? {

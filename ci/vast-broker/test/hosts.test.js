@@ -4,7 +4,26 @@ import './helpers.js';
 import { createGateway } from '../src/index.js';
 import { env } from './helpers.js';
 import {
-  BORROWED_STAGES,
+  CANONICAL_REPO,
+  COMMANDS_MAX_MS,
+  COMMIT_SKIP,
+  MAIN_REFS,
+  explainHosts,
+  isGitOnly,
+  REPO_ALLOWLIST,
+  WIRE_STAGES,
+  checkKnownArtifact,
+  commandsOpen,
+  customHostResultCountable,
+  dieOf,
+  hexEqual,
+  isBorrowed,
+  seedAllowed,
+  seedFor,
+  validateCommandsUntil,
+  validateDaemonFrame,
+  validateKnownArtifacts,
+  validateServerFrame,
   HostError,
   LIVENESS_MS,
   PROBE_FILE,
@@ -132,14 +151,14 @@ test('window: normal, wrapping, always', () => {
 });
 
 const assignment = {
-  repo: 'reindertpelsma/kayfabe',
+  repo: CANONICAL_REPO,
   commit: 'a'.repeat(40),
-  tree_key: 'kf-tree-v2:' + 'b'.repeat(16),
+  tree_key: 'b'.repeat(64),
   stages: ['windows_gate'],
 };
 test('borrowed assignment: exactly repo, commit, tree_key, allowlisted stages', () => {
   assert.deepEqual(validateAssignment('borrowed', assignment), assignment);
-  assert.ok(BORROWED_STAGES.includes('windows_gate'));
+  assert.ok(WIRE_STAGES.includes('windows_gate'));
   for (const extra of [
     { env: { KF_X: '1' } },
     { requirements: {} },
@@ -210,6 +229,7 @@ const snap = (id, patch = {}, cfg = {}, caps = {}) => ({
   config: { ...validateHostConfig({ ...goodConfig, tiers: ['small', 'middle', 'large'] }), ...cfg },
   capabilities: {
     compute_cap: '8.9',
+    die: 'AD104',
     vram_gb: 12,
     driver: '580.1',
     kvm: true,
@@ -226,7 +246,7 @@ const snap = (id, patch = {}, cfg = {}, caps = {}) => ({
 const req = { tier: 'middle', family: 'ada' };
 test('hostsFor: qualifying box is returned', () => {
   assert.deepEqual(hostsFor(req, [snap('a')], NOW), [
-    { box_id: 'a', profile: 'owned', opportunistic: false },
+    { box_id: 'a', profile: 'owned', opportunistic: false, hourly_price_usd: null },
   ]);
 });
 for (const [name, snapshot, reason] of [
@@ -249,7 +269,8 @@ test('hostsFor: unknown tier is never selected', () => {
   assert.equal(hostRejection({ tier: 'largest' }, snap('a'), NOW), null);
 });
 test('hostsFor: capability requirements', () => {
-  const r = (extra, s = snap('a')) => hostRejection({ ...req, ...extra }, s, NOW);
+  const push = { event_name: 'push', ref: 'refs/heads/next' };
+  const r = (extra, s = snap('a')) => hostRejection({ ...req, run: push, ...extra }, s, NOW);
   assert.equal(r({ min_vram_gb: 16 }), 'VRAM');
   assert.equal(r({ min_vram_gb: 12 }), null);
   assert.equal(r({ kvm: true }, snap('a', {}, {}, { kvm: false })), 'KVM');
@@ -305,7 +326,7 @@ test('box token: minted shape, hashed compare, wrong and malformed refused', asy
 });
 
 // ---- probe -------------------------------------------------------------------------------------
-const TOKEN = 'T'.repeat(24);
+const TOKEN = 'tokn1234';
 const answer =
   (body, init = {}) =>
   async () =>
@@ -406,6 +427,8 @@ test('probe: bad address, port or token never reaches the fetcher', async () => 
     [{ port: '80' }, 'BAD_PORT'],
     [{ token: '../etc/passwd' }, 'BAD_TOKEN'],
     [{ token: 'short' }, 'BAD_TOKEN'],
+    [{ token: 'TOKN1234' }, 'BAD_TOKEN'],
+    [{ token: 'tokn12345' }, 'BAD_TOKEN'],
     [{ token: TOKEN + '/../x' }, 'BAD_TOKEN'],
   ])
     assert.equal((await probe(f, patch)).reason, reason, JSON.stringify(patch));
@@ -431,7 +454,7 @@ test('gateway forwards /hosts/<id>/ws to that box DO on the internal origin, not
   const mk = (path, init = {}) =>
     gw.fetch(
       new Request('https://broker.example' + path, {
-        headers: { Upgrade: 'websocket', Authorization: 'Bearer kfh_x' },
+        headers: { Upgrade: 'websocket', Authorization: 'Bearer kfh_' + 'A'.repeat(43) + '' },
         ...init,
       }),
       e,
@@ -440,7 +463,7 @@ test('gateway forwards /hosts/<id>/ws to that box DO on the internal origin, not
   assert.equal(await ok.text(), 'forwarded');
   assert.deepEqual(names, ['rack-1']);
   assert.equal(seen[0].url, 'https://internal.invalid/hosts/rack-1/ws');
-  assert.equal(seen[0].headers.get('Authorization'), 'Bearer kfh_x');
+  assert.equal(seen[0].headers.get('Authorization'), 'Bearer kfh_' + 'A'.repeat(43) + '');
   for (const bad of [
     '/hosts/Rack/ws',
     '/hosts/a/b/ws',
@@ -541,4 +564,285 @@ test('seedFallbackUrl: the hostname that passed, else the first mapper; never an
   assert.equal(f('203.0.113.9', 'evil.example'), null);
   assert.equal(f('10.0.0.1'), null);
   assert.equal(f('2001:db8::1'), null);
+});
+
+// ---- review fixes (2026-11-12) -----------------------------------------------------------------
+import { configuration } from '../src/policy.js';
+import { RunTokens } from '../src/tokens.js';
+
+test('config: profile defaults to standard; the command window is not a config key', () => {
+  const { profile, ...rest } = goodConfig;
+  assert.equal(validateHostConfig(rest).profile, 'standard');
+  refused(() => validateHostConfig({ ...goodConfig, commands_until: 1 }), 'CONFIG_KEYS');
+  for (const p of ['owned', 'container', 'standard', 'borrowed'])
+    assert.equal(validateHostConfig({ ...goodConfig, profile: p }).profile, p);
+});
+
+test('assignment: the canonical repo URL for EVERY profile, never an arbitrary URL', () => {
+  assert.equal(CANONICAL_REPO, 'https://github.com/reindertpelsma/kayfabe');
+  assert.deepEqual(REPO_ALLOWLIST, [CANONICAL_REPO]);
+  for (const p of ['owned', 'container', 'standard', 'borrowed']) {
+    for (const repo of [
+      'https://evil.example/kayfabe',
+      'http://github.com/reindertpelsma/kayfabe',
+      CANONICAL_REPO + '.git',
+      CANONICAL_REPO + '/',
+      'reindertpelsma/kayfabe',
+      'file:///etc',
+    ])
+      refused(() => validateAssignment(p, { ...assignment, repo }), 'OFFER_REPO');
+    assert.equal(validateAssignment(p, assignment).repo, CANONICAL_REPO);
+  }
+  // The allowlist is configurable (an array of URLs), not widened by the box.
+  const other = 'https://github.com/example/fork';
+  assert.equal(validateAssignment('owned', { ...assignment, repo: other }, [other]).repo, other);
+  refused(() => validateAssignment('owned', assignment, [other]), 'OFFER_REPO');
+});
+test('assignment: wire formats are exact (tree key, commit, stage names)', () => {
+  for (const tree_key of [
+    'B'.repeat(64),
+    'b'.repeat(63),
+    'b'.repeat(65),
+    'kf-tree-v2:' + 'b'.repeat(16),
+  ])
+    refused(() => validateAssignment('owned', { ...assignment, tree_key }), 'OFFER_TREE_KEY');
+  for (const commit of ['A'.repeat(40), 'a'.repeat(39), 'a'.repeat(64)])
+    refused(() => validateAssignment('owned', { ...assignment, commit }), 'OFFER_COMMIT');
+  assert.deepEqual(WIRE_STAGES, [
+    'provision',
+    'cuda_host',
+    'merge_bar',
+    'cuda_guest',
+    'apps',
+    'windows_gate',
+    'windows_apps',
+    'specviewperf',
+    'ladder',
+  ]);
+  for (const p of ['owned', 'standard']) {
+    refused(() => validateAssignment(p, { ...assignment, stages: ['rm -rf'] }), 'OFFER_STAGES');
+    refused(() => validateAssignment(p, { ...assignment, stages: ['gates'] }), 'OFFER_STAGES');
+    assert.deepEqual(
+      validateAssignment(p, { ...assignment, stages: [...WIRE_STAGES] }).stages,
+      WIRE_STAGES,
+    );
+  }
+});
+
+test('commands: owned AND an admin window of at most 4 h; unset or expired is closed', () => {
+  const now = Date.now();
+  assert.equal(validateCommandsUntil(null, now), null);
+  assert.equal(validateCommandsUntil(now + 1000, now), now + 1000);
+  assert.equal(validateCommandsUntil(now + COMMANDS_MAX_MS, now), now + COMMANDS_MAX_MS);
+  for (const bad of [now, now - 1, now + COMMANDS_MAX_MS + 1, '1', 1.5, undefined, NaN])
+    refused(() => validateCommandsUntil(bad, now), 'COMMANDS_UNTIL');
+  const owned = { profile: 'owned', commands_until: now + 1000 };
+  assert.equal(commandsOpen(owned, now), true);
+  assert.equal(commandsOpen(owned, now + 1000), false, 'expired');
+  assert.equal(commandsOpen({ profile: 'owned' }, now), false, 'unset');
+  assert.equal(commandsOpen({ profile: 'owned', commands_until: null }, now), false);
+  for (const profile of ['container', 'standard', 'borrowed'])
+    assert.equal(commandsOpen({ profile, commands_until: now + 1000 }, now), false, profile);
+});
+
+test('die: derived by the Worker from name and compute capability, fail closed', () => {
+  const cfg = configuration(env);
+  assert.equal(dieOf({ gpu_name: 'NVIDIA GeForce RTX 4070', compute_cap: '8.9' }, cfg), 'AD104');
+  assert.equal(dieOf({ gpu_name: 'NVIDIA GeForce RTX 3080', compute_cap: '8.6' }, cfg), 'GA102');
+  assert.equal(dieOf({ gpu_name: 'NVIDIA GeForce RTX 9999', compute_cap: '8.9' }, cfg), 'CC_89');
+  assert.equal(dieOf({ gpu_name: 'RTX 4070' }, cfg), undefined);
+  assert.equal(dieOf({ compute_cap: '8.9' }, cfg), undefined);
+  assert.equal(dieOf({ gpu_name: 'RTX 4070', compute_cap: '89' }, cfg), undefined);
+  assert.equal(dieOf(null, cfg), undefined);
+  // The box cannot claim a die: it is not a capability field.
+  assert.equal('die' in sanitizeCapabilities({ die: 'AD104', gpu_name: 'x' }), false);
+  assert.deepEqual(sanitizeCapabilities({ pci_device_id: '2786' }), { pci_device_id: '2786' });
+  assert.deepEqual(sanitizeCapabilities({ pci_device_id: '0x2786' }), {});
+});
+test('selection: a box without a derived die never satisfies a die requirement', () => {
+  const noDie = snap('a', { capabilities: { compute_cap: '8.9', vram_gb: 12 } });
+  assert.equal(hostRejection({ ...req, die: 'AD104' }, noDie, NOW), 'DIE');
+  assert.equal(hostRejection({ tier: 'middle', die: 'AD104' }, noDie, NOW), 'DIE');
+  assert.equal(hostRejection(req, noDie, NOW), null, 'a family-only requirement still works');
+});
+
+test('seeds: every host trusts every other except that a borrowed host never consumes', () => {
+  const record = { url: 'u', sha256: 'a'.repeat(64), size: 1, source: 'seeder_reported' };
+  const seeders = ['owned', 'container', 'standard', 'borrowed'];
+  for (const seeder of seeders)
+    for (const consumer of seeders) {
+      const expected = consumer !== 'borrowed';
+      assert.equal(seedAllowed(consumer), expected, seeder + '->' + consumer);
+      assert.equal(seedFor({ ...record, seeder_profile: seeder }, consumer) !== null, expected);
+    }
+  assert.equal(seedFor(null, 'owned'), null);
+  assert.ok(isBorrowed('borrowed') && !isBorrowed('standard'));
+});
+test('seeds: an independently known hash and size must match; none known = seeder_reported', () => {
+  const art = { name: 'kf3.tar', sha256: 'd'.repeat(64), size: 10 };
+  assert.equal(checkKnownArtifact(undefined, art), 'seeder_reported');
+  assert.equal(checkKnownArtifact({}, art), 'seeder_reported');
+  assert.equal(
+    checkKnownArtifact({ 'kf3.tar': { sha256: art.sha256, size: 10 } }, art),
+    'worker_pinned',
+  );
+  refused(
+    () => checkKnownArtifact({ 'kf3.tar': { sha256: 'e'.repeat(64), size: 10 } }, art),
+    'HASH_MISMATCH',
+  );
+  refused(
+    () => checkKnownArtifact({ 'kf3.tar': { sha256: art.sha256, size: 11 } }, art),
+    'HASH_MISMATCH',
+  );
+  refused(
+    () => checkKnownArtifact({ 'other.tar': { sha256: art.sha256, size: 10 } }, art),
+    'ARTIFACT_UNKNOWN',
+  );
+  assert.equal(validateKnownArtifacts(undefined), undefined);
+  refused(
+    () => validateKnownArtifacts({ 'a b': { sha256: 'd'.repeat(64), size: 1 } }),
+    'OFFER_ARTIFACTS',
+  );
+  refused(
+    () => validateKnownArtifacts({ a: { sha256: 'D'.repeat(64), size: 1 } }),
+    'OFFER_ARTIFACTS',
+  );
+  refused(
+    () => validateKnownArtifacts({ a: { sha256: 'd'.repeat(64), size: 0 } }),
+    'OFFER_ARTIFACTS',
+  );
+});
+
+test('a custom-host result counts only for an enabled tier of that box and profile', () => {
+  const config = {
+    box_id: 'rack-1',
+    profile: 'standard',
+    enabled: true,
+    tiers: ['small', 'middle'],
+  };
+  const claims = { box: 'rack-1', hp: 'standard' };
+  assert.equal(customHostResultCountable(claims, config, 'small'), true);
+  assert.equal(customHostResultCountable(claims, config, 'middle'), true);
+  assert.equal(customHostResultCountable(claims, config, 'large'), false);
+  assert.equal(customHostResultCountable(claims, config, 'largest'), false);
+  assert.equal(customHostResultCountable(claims, { ...config, enabled: false }, 'small'), false);
+  assert.equal(customHostResultCountable(claims, { ...config, box_id: 'rack-2' }, 'small'), false);
+  assert.equal(customHostResultCountable(claims, { ...config, profile: 'owned' }, 'small'), false);
+  assert.equal(customHostResultCountable({}, config, 'small'), false, 'a Vast token has no box');
+  assert.equal(customHostResultCountable(claims, config, 'weird'), false);
+});
+test('run token: box and profile claims, both or neither', async () => {
+  const tokens = new RunTokens(env.RUN_TOKEN_SECRET);
+  const base = {
+    run: '123',
+    attempt: '1',
+    sha: 'a'.repeat(40),
+    nonce: 'c'.repeat(32),
+    key: '123-1',
+    label: 'kf-ci-123-1',
+    reportExpiry: Math.floor(Date.now() / 1000) + 600,
+  };
+  const withHost = await tokens.verifyStateless(
+    await tokens.issue({ ...base, box: 'rack-1', hp: 'standard' }),
+  );
+  assert.equal(withHost.box, 'rack-1');
+  assert.equal(withHost.hp, 'standard');
+  const plain = await tokens.verifyStateless(await tokens.issue(base));
+  assert.equal(plain.box, undefined);
+  for (const extra of [
+    { box: 'rack-1' },
+    { hp: 'standard' },
+    { box: 'Rack', hp: 'standard' },
+    { box: 'rack-1', hp: 'root' },
+  ])
+    await assert.rejects(tokens.issue({ ...base, ...extra }));
+});
+test('hexEqual is exact and length-safe', () => {
+  assert.ok(hexEqual('ab12', 'ab12'));
+  assert.ok(!hexEqual('ab12', 'ab13'));
+  assert.ok(!hexEqual('ab12', 'ab1'));
+  assert.ok(!hexEqual(undefined, 'ab'));
+});
+
+test('selection: cheaper hourly price first; unknown price after known; price never qualifies a box', () => {
+  const priced = (id, price, cfg = {}) => snap(id, {}, { hourly_price_usd: price, ...cfg });
+  const list = [
+    priced('a', null),
+    priced('b', 0.9),
+    priced('c', 0.2),
+    priced('d', 0),
+    priced('e', 0.2),
+    priced('f', 0.1, { opportunistic: true }),
+    priced('g', 0.05, { enabled: false }),
+  ];
+  assert.deepEqual(
+    hostsFor(req, list, NOW).map((x) => [x.box_id, x.hourly_price_usd]),
+    [
+      ['d', 0],
+      ['c', 0.2],
+      ['e', 0.2],
+      ['b', 0.9],
+      ['a', null],
+      ['f', 0.1],
+    ],
+  );
+  refused(() => validateHostConfig({ ...goodConfig, hourly_price_usd: 50.01 }), 'CONFIG_PRICE');
+  refused(() => validateHostConfig({ ...goodConfig, hourly_price_usd: -0.01 }), 'CONFIG_PRICE');
+  refused(() => validateHostConfig({ ...goodConfig, hourly_price_usd: NaN }), 'CONFIG_PRICE');
+  assert.equal(validateHostConfig({ ...goodConfig, hourly_price_usd: 50 }).hourly_price_usd, 50);
+  assert.equal(validateHostConfig(goodConfig).hourly_price_usd, null);
+});
+
+test('git-only boxes are scheduled only commits the Worker knows are in master or next history', () => {
+  const run = (event_name, ref) => ({ ...req, run: { event_name, ref } });
+  const git = snap('g', {}, { profile: 'borrowed' });
+  const std = snap('s', {}, { profile: 'standard' });
+  assert.equal(hostRejection(run('push', 'refs/heads/master'), git, NOW), null);
+  assert.equal(hostRejection(run('push', 'refs/heads/next'), git, NOW), null);
+  for (const bad of [
+    run('pull_request', 'refs/pull/1/merge'),
+    run('pull_request', 'refs/heads/next'),
+    run('workflow_dispatch', 'refs/heads/master'),
+    run('workflow_dispatch', 'refs/heads/feature'),
+    run('push', 'refs/heads/feature'),
+    run('push', 'refs/tags/v1'),
+    run('push', 'refs/heads/master2'),
+    req,
+    { ...req, run: {} },
+    { ...req, run: null },
+  ])
+    assert.equal(hostRejection(bad, git, NOW), COMMIT_SKIP, JSON.stringify(bad.run));
+  // A snapshot that reports enforced.trust_git_only is git-only whatever its profile.
+  const enforced = { ...std, enforced: { trust_git_only: true } };
+  assert.equal(hostRejection(run('pull_request', 'refs/pull/1/merge'), enforced, NOW), COMMIT_SKIP);
+  assert.equal(hostRejection(run('push', 'refs/heads/next'), enforced, NOW), null);
+  // Everyone else has no commit restriction, with or without claims.
+  for (const s of [
+    std,
+    snap('o', {}, { profile: 'owned' }),
+    snap('c', {}, { profile: 'container' }),
+  ])
+    for (const r of [
+      run('pull_request', 'refs/pull/1/merge'),
+      run('workflow_dispatch', 'refs/heads/x'),
+      req,
+    ])
+      assert.equal(hostRejection(r, s, NOW), null);
+  assert.equal(isGitOnly(git), true);
+  assert.equal(isGitOnly(std), false);
+  assert.deepEqual(MAIN_REFS, ['refs/heads/master', 'refs/heads/next']);
+  // hostsFor skips the git-only box for a PR and the skip reason is recorded for debug output.
+  const pr = run('pull_request', 'refs/pull/1/merge');
+  assert.deepEqual(
+    hostsFor(pr, [git, std], NOW).map((x) => x.box_id),
+    ['s'],
+  );
+  assert.deepEqual(explainHosts(pr, [git, std], NOW), [
+    { box_id: 'g', reason: COMMIT_SKIP },
+    { box_id: 's', reason: null },
+  ]);
+  assert.deepEqual(
+    hostsFor(run('push', 'refs/heads/next'), [git, std], NOW).map((x) => x.box_id),
+    ['g', 's'],
+  );
 });

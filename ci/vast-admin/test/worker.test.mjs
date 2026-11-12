@@ -458,6 +458,8 @@ const hostPaths = [
   ["DELETE", "/api/hosts/rack-1"],
   ["POST", "/api/hosts/rack-1/token"],
   ["POST", "/api/hosts/rack-1/cmd"],
+  ["PUT", "/api/hosts/rack-1/commands-until"],
+  ["POST", "/api/hosts/rack-1/enrol"],
 ];
 for (const [method, path] of hostPaths) {
   test(
@@ -468,7 +470,7 @@ for (const [method, path] of hostPaths) {
     async () => {
       const { h, forwarded } = await hosts();
       const body =
-        method === "PUT" || path.endsWith("/cmd") ? { x: 1 } : undefined;
+        method === "PUT" || (path.endsWith("/cmd") || path.endsWith("/commands-until")) ? { x: 1 } : undefined;
       assert.equal((await h.call(path, { method, body })).status, 401);
       const other = await token({ email: "other@example.com" });
       assert.equal(
@@ -483,7 +485,7 @@ for (const [method, path] of hostPaths) {
     async () => {
       const { h, forwarded, names } = await hosts();
       const body =
-        method === "PUT" || path.endsWith("/cmd")
+        method === "PUT" || (path.endsWith("/cmd") || path.endsWith("/commands-until"))
           ? { enabled: true }
           : undefined;
       const r = await h.call(path, { method, body, bearer: await token() });
@@ -506,6 +508,8 @@ for (const [name, method, path, extra] of [
   ["unknown sub-route", "POST", "/api/hosts/rack-1/shell", { body: {} }],
   ["wrong method list", "POST", "/api/hosts", { body: {} }],
   ["wrong method token", "GET", "/api/hosts/rack-1/token", {}],
+  ["wrong method enrol", "GET", "/api/hosts/rack-1/enrol", {}],
+  ["wrong method commands-until", "POST", "/api/hosts/rack-1/commands-until", { body: {} }],
   ["query string", "GET", "/api/hosts?x=1", {}],
 ])
   test("hosts admin refuses " + name, async () => {
