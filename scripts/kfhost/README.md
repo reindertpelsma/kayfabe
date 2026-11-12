@@ -4,7 +4,7 @@ STATUS: DESIGN, NOT RUN ON HARDWARE (2026-11-12). Revised the same day after the
 
 ## What it is
 
-An enrolled, non-Vast machine runs `python3 -m kfhost run --config FILE`. The daemon holds one outbound WebSocket to the Worker's per-box Durable Object (W1), reports measured capabilities, takes job offers and, on `owned` boxes only, remote commands. Logs, progress and results never travel over the socket: they go over the existing HTTPS box protocol (`POST /report/<run>`, Bearer run token from the offer) through `scripts/ci/vast_report.py`'s `Reporter`.
+An enrolled, non-Vast machine runs `python3 -m kfhost run --config FILE`. The daemon holds one outbound WebSocket to the Worker's per-box Durable Object (W1), reports the capabilities it probes, takes job offers and, on `owned` boxes only, remote commands. Logs, progress and results never travel over the socket: they go over the existing HTTPS box protocol (`POST /report/<run>`, Bearer run token from the offer) through `scripts/ci/vast_report.py`'s `Reporter`.
 
 ## Commands
 
