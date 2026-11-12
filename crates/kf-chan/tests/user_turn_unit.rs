@@ -2698,3 +2698,28 @@ fn a_ring_switch_does_not_charge_the_abandoned_segments_restarts_to_the_next() {
         "no segment needed two restarts: {c}"
     );
 }
+
+#[test]
+fn restarts_before_a_ring_switch_do_not_inflate_the_next_segments_maximum() {
+    // F3, a second angle: two restarts of the abandoned segment, one of the next: the maximum is 2, never 3.
+    let mut io = Mock::new(16);
+    let mut r = stream_window(&mut io);
+    install_wide(&mut io, &r, wide_words(1_026_596), false);
+    turn(&mut r, &mut io).unwrap();
+    for _ in 0..2 {
+        io.publish_retry_once = true;
+        assert_eq!(turn(&mut r, &mut io), Err(Fail::Retry));
+        turn(&mut r, &mut io).unwrap();
+    }
+    r.switch_source(2);
+    io.ring[0] = kf_abi::submit::gp_entry(STREAM_VA, 1_026_596).unwrap() | (1 << 41);
+    io.put = 1;
+    turn(&mut r, &mut io).unwrap();
+    io.publish_retry_once = true;
+    assert_eq!(turn(&mut r, &mut io), Err(Fail::Retry));
+    let c = format!("{:?}", r.life.counts());
+    assert!(
+        c.contains("stream_restarts: 3") && c.contains("stream_restarts_max: 2"),
+        "{c}"
+    );
+}

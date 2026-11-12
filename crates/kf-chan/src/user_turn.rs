@@ -370,7 +370,7 @@ pub struct Relay {
     /// A stream restart (not a kept retry) ended this turn: the owner must re-serve at once (nobody holds a lock to
     /// wake it). Reset by `claim`.
     pub restart_owed: bool,
-    /// The retry that ended this turn kept the stream (a busy part copy or publication); reset by `claim`.
+    /// The retry that ended this turn kept the stream (a retried part copy or a busy-only publication); reset by `claim`.
     retry_kept: bool,
     /// Restarts of the segment now streaming (reset at publication, ring switch and retire).
     stream_restart_run: u32,
@@ -598,7 +598,8 @@ impl Relay {
         let phase = self.phase;
         let r = self.step_inner(io);
         if let Err(e) = &r {
-            // A busy part copy, or a publication that was only busy, keeps the stream and its receipts: the parts
+            // A retried part copy (any `Retry` there: the failed part was never pushed), or a publication that was only
+            // busy, keeps the stream and its receipts: the parts
             // already copied are re-admitted at publication whatever happens, so keeping them is as safe as copying
             // again, and a ten-part segment does not need eleven clean turns in a row.
             let keep = matches!(e, Fail::Retry)
