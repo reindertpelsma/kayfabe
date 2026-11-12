@@ -7,6 +7,11 @@ selection, the ignore/tree-key controls and the admin routes now exist; the orig
 Middle applications are implemented in the pending change described by
 [V3_MIDDLE_REAL_APPS.md](V3_MIDDLE_REAL_APPS.md); matching Worker deployment and a combined
 hardware run remain unverified. Large-tier SPEC plus real LLM execution remains design intent.
+2026-11-12 (draft PR `claude/release-rehearsal-20261112`, not merged, not deployed): a large leg also
+requests the middle apps pair ("large includes middle", owner), and the owner's Start may name one die
+with `rehearsal: true` (a named scope that never clears a matrix blocker and ends at most
+`REHEARSAL_PASS`); see [V3_RELEASE_REHEARSAL.md](V3_RELEASE_REHEARSAL.md). Everything in this paragraph
+is GPU-free tested only.
 Parent document: [V3_PLATFORM_TESTING.md](V3_PLATFORM_TESTING.md), whose §2 (tiers), §1 and §4
 (fall-through key) this document corrects. Numbers are design targets unless a run is cited.
 
@@ -36,7 +41,7 @@ the coordinator and the owner agreed; it is binding as intent and can still chan
 | Coverage | middle plus SPECviewperf and a real LLM workload; at least 1 driver and 2 dies per family; Windows and Linux required on Turing, Ampere, Ada and Blackwell; at least 2 Windows runs per die | today's check plus all 66 supported Linux apps and Windows `mid`'s 10 apps (including all 8 small apps) | today's Linux bar and required Windows gate; no apps request |
 | Parallelism | up to 8 Vast boxes at once | 1 box | rides on the box the middle run already rented (AGREED RECOMMENDATION) |
 | Time and cost | hours and several USD are fine; real workload execution is DESIGN-ONLY | 300 min hard limit: reserve 245 min for Linux apps (which build their own media on the box, 2026-11-10) + Windows gate + Windows mid apps, 45 min for earlier work and 10 min soft margin; RETRY on insufficient time (the reserve was 205 min with 85 min for earlier work until 2026-11-10; see `V3_APPS_IMAGE_RECIPE.md`, INTERIM) | existing check budget; no new apps allocation |
-| Excluded | nothing by tier intent; LLM slot is refused pending its adapter | SPECviewperf and real LLM workload | SPECviewperf, real LLM workload and apps |
+| Excluded | nothing by tier intent; LLM slot is refused pending its adapter; a rehearsal also excludes the driver sub-run matrix (stated in every report row) | SPECviewperf and real LLM workload | SPECviewperf, real LLM workload and apps |
 | Retries | none: **RETRY never passes** | none | none |
 | Die choice | every die in the release matrix | **rotation** across families per PR, with fallback; the family is recorded on the run (AGREED RECOMMENDATION) | the middle run's die |
 | VRAM floor | no offer filter (see §5) | a tier setting here only (AGREED RECOMMENDATION) | inherited |

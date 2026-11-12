@@ -129,12 +129,18 @@ export const createAdmin = ({ fetcher = fetch, now = Date.now } = {}) => ({
           !run ||
           typeof run !== 'object' ||
           Array.isArray(run) ||
-          !Object.keys(run).every((k) => ['commit_sha', 'tier', 'die'].includes(k)) ||
+          !Object.keys(run).every((k) => ['commit_sha', 'tier', 'die', 'rehearsal'].includes(k)) ||
           typeof run.commit_sha !== 'string' ||
           !/^[0-9a-f]{40}$/.test(run.commit_sha) ||
           !['small', 'middle', 'large'].includes(run.tier) ||
+          // 2026-11-12: `rehearsal` is exactly true, large only, one die. A large Start with a die and no
+          // rehearsal is refused here as before (the broker checks the same again).
+          (run.rehearsal !== undefined &&
+            (run.rehearsal !== true || run.tier !== 'large' || run.die === undefined)) ||
           (run.die !== undefined &&
-            (typeof run.die !== 'string' || !/^[A-Z][A-Z0-9_]{1,23}$/.test(run.die)))
+            ((run.tier === 'large' && run.rehearsal !== true) ||
+              typeof run.die !== 'string' ||
+              !/^[A-Z][A-Z0-9_]{1,23}$/.test(run.die)))
         )
           throw Error();
         body = JSON.stringify(run);
@@ -225,7 +231,8 @@ const PAGE = `<!doctype html>
     <option value="small">small</option>
     <option value="large">large (release)</option>
   </select></label>
-  <label>Die (optional, not for large) <input id="start-die" size="8" maxlength="24"></label>
+  <label>Die (optional; for large only with Rehearsal) <input id="start-die" size="8" maxlength="24"></label>
+  <label><input id="start-rehearsal" type="checkbox"> Rehearsal (large, ONE die, driver sub-run matrix NOT executed; never a release PASS)</label>
   <button id="plan" type="button">Plan</button>
   <button id="start" type="button">Start</button>
 </fieldset>
@@ -265,6 +272,7 @@ function runRequest() {
   };
   const die = document.getElementById('start-die').value.trim();
   if (die) body.die = die;
+  if (document.getElementById('start-rehearsal').checked) body.rehearsal = true;
   return body;
 }
 async function post(path, body) {
@@ -283,7 +291,7 @@ if (planButton) planButton.onclick = () => post('/api/plan', runRequest());
 const startButton = document.getElementById('start');
 if (startButton) startButton.onclick = async () => {
   const body = runRequest();
-  if (!confirm('Start a ' + body.tier + ' run of ' + body.commit_sha + '? It rents boxes.')) return;
+  if (!confirm('Start a ' + (body.rehearsal ? body.tier + ' REHEARSAL (' + body.die + ', driver sub-run matrix NOT executed)' : body.tier + ' run') + ' of ' + body.commit_sha + '? It rents boxes.')) return;
   await post('/api/start', body);
   await refresh();
 };

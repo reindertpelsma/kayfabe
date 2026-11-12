@@ -14,6 +14,11 @@ import vast_report as local_result_contract
 # The current payload has no matrix driver/subrun executor. The trusted Worker
 # checks this exact declaration at the selected commit before creating a lease.
 PAYLOAD_RELEASE_MATRIX_EXECUTOR = 0
+# 2026-11-12: this payload understands the named release REHEARSAL scope (KF_RELEASE_REHEARSAL=1, large tier, one die, NO driver
+# sub-run matrix). It is not an executor of the matrix: PAYLOAD_RELEASE_MATRIX_EXECUTOR stays 0 and a real matrix leg is still
+# refused (require_executable_release). The trusted Worker checks this exact declaration at the selected commit before it creates
+# a rehearsal lease (ci/vast-broker/src/github.js boxProtocol {rehearsal:true}).
+PAYLOAD_RELEASE_REHEARSAL = 1
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "bench"))
 import native_xid_guard as xid_guard
@@ -245,6 +250,23 @@ def require_executable_release(environ):
     selected = release_driver_environment(environ)
     if selected:
         raise EvidenceError("release_retry_matrix_proposed")
+
+def rehearsal_requested(environ, tier):
+    """KF_RELEASE_REHEARSAL=1 names the release REHEARSAL scope (docs/design/V3_RELEASE_REHEARSAL.md): the large tier on ONE
+    die with the driver sub-run matrix NOT executed. It only labels the run (the KF_PAYLOAD_TIER line); it grants nothing:
+    require_executable_release still runs, and a rehearsal that also carries any matrix driver/subrun field is refused (invalid
+    combination), so a real matrix leg can never be passed off as a rehearsal. Only the large tier, only exactly "1"."""
+    value = environ.pop("KF_RELEASE_REHEARSAL", None)
+    if value is None:
+        return False
+    if value != "1" or tier != "large":
+        raise EvidenceError("preflight")
+    # a rehearsal never carries the matrix, and a matrix leg is never a rehearsal (the matrix still goes through
+    # release_driver_environment and require_executable_release below, unchanged)
+    if any(name in environ for name in (*RELEASE_DRIVER_FIELDS, "KF_WINGATE_GUEST_DRIVER", "KF_RELEASE_SUBRUNS", "KF_RELEASE_DRIVER_PINS")):
+        raise EvidenceError("release_retry_matrix_invalid")
+    return True
+
 
 WINAPPS_PROFILES = ("small", "mid", "full")
 WINAPPS_VERDICT = re.compile(r"^WINAPPS_(PASS|FAIL|RETRY|REFUSED)\b([^\n]*)$", re.M)
@@ -509,7 +531,8 @@ def linuxapps_requested(environ, tier):
     value = environ.pop("KF_LINUX_APPS", None)
     if value is None:
         return apps_requested(tier)
-    if value != "1" or tier != "middle":
+    # 2026-11-12 (owner: large includes middle): the large tier requests the same Linux apps stage as middle.
+    if value != "1" or tier not in ("middle", "large"):
         raise EvidenceError("preflight")
     return True
 
@@ -1437,11 +1460,14 @@ def main():
         # Popped before any stage runs: merge_check.sh must not run the gate inside merge_bar.
         windows, windows_source = windows_requested(os.environ)
         tier, windows_runs, extra_stages = tier_requested(os.environ, windows)
+        rehearsal = rehearsal_requested(os.environ, tier)
         selected_drivers = release_driver_environment(os.environ)
         require_executable_release(os.environ)
         os.environ.update(selected_drivers)
 
         winapps = winapps_requested(os.environ, windows)
+        # The explicit Worker request runs the middle app profile in every tier that sends it (large includes middle).
+        apps_tier = "middle" if tier == "large" and "KF_LINUX_APPS" in os.environ else tier
         linuxapps = linuxapps_requested(os.environ, tier)
 
         spec = spec_requested(os.environ, windows, extra_stages)
@@ -1454,6 +1480,8 @@ def main():
             + windows_source
             + " tier="
             + tier
+            + " rehearsal="
+            + str(int(rehearsal))
             + " windows_runs="
             + str(windows_runs)
             + " stages="
@@ -1623,7 +1651,7 @@ def main():
             # After the last Linux guest stage, before Windows: the app matrix over the gate list. It
             # boots the fat guest itself (apps_matrix.sh), one boot at a time, under its own budget.
             output_apps = evidence / "apps.run"
-            names = apps_gate_list(root, tier)
+            names = apps_gate_list(root, apps_tier)
             matrix_log = Path(PROV_DIR) / (tag + "_apps_matrix.log")
             stage = make_stage(
                 "apps",
@@ -1636,7 +1664,7 @@ def main():
                     str(root / "scripts/bench/box/apps_gate.sh"),
                     tag,
                     PROV_DIR,
-                    APPS_LISTS[tier][1],
+                    APPS_LISTS[apps_tier][1],
                 ],
                 output_apps,
                 [matrix_log],

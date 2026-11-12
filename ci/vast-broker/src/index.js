@@ -14,7 +14,7 @@ import {
   middleAppsResult,
 } from './tier.js';
 // prettier-ignore
-import {planRelease,classifyLeg,releaseVerdict,wantsRerun} from './release.js';
+import {planRelease,planRehearsal,REHEARSAL_SCOPE,classifyLeg,releaseVerdict,wantsRerun} from './release.js';
 // prettier-ignore
 import {DEFAULTS} from './defaults.js';
 import {
@@ -1439,14 +1439,23 @@ export function createService({
     if (env.RENTING_ENABLED !== 'true') refuse('RENTING_DISABLED', 503);
     if (profile === 'release' && !cfg.releaseEnabled) refuse('RELEASE_DISABLED', 503);
     if (profile === 'release' || tierName === 'large' || leg?.releaseMatrix !== undefined) {
-      requireMatrixExecution(cfg, leg?.releaseMatrix, true);
+      // The named REHEARSAL scope (2026-11-12): one die of the matrix, no driver matrix, large tier on the release
+      // profile only. The matrix refusal below stays exactly as it was for every other release leg.
+      const rehearsal = leg?.rehearsal === true;
+      if (rehearsal) {
+        if (
+          leg.releaseMatrix !== undefined ||
+          !RELEASE_MATRIX.dies.some((row) => row.die === leg.die)
+        )
+          refuse('NOT_ELIGIBLE', 409, 'MATRIX_PLAN_CHANGED');
+      } else requireMatrixExecution(cfg, leg?.releaseMatrix, true);
       if (profile !== 'release' || tierName !== 'large')
         refuse('NOT_ELIGIBLE', 409, 'MATRIX_PLAN_CHANGED');
       if (JSON.stringify(leg?.stages) !== JSON.stringify(cfg.releaseStages))
         refuse('NOT_ELIGIBLE', 409, 'MATRIX_PLAN_CHANGED');
       if (cfg.releaseStages.includes('specviewperf') && !['lanea', 'laneb'].includes(leg?.spec))
         refuse('NOT_ELIGIBLE', 409, 'MATRIX_PLAN_CHANGED');
-      await github.boxProtocol(target.sha, { matrix: true });
+      await github.boxProtocol(target.sha, rehearsal ? { rehearsal: true } : { matrix: true });
     }
     // Review R1: one attempt per run key, also after retention removed the record. Guaranteed:
     // while the spend row exists the key is refused. The row is pruned once its run ended more
@@ -1584,6 +1593,7 @@ export function createService({
               windowsRuns: leg.windowsRuns,
               stages: leg.stages,
               ...(leg.releaseMatrix ? { releaseMatrix: structuredClone(leg.releaseMatrix) } : {}),
+              ...(leg.rehearsal === true ? { rehearsal: true } : {}),
               ...(leg.spec ? { spec: leg.spec } : {}),
             }
           : { source: 'github' }),
@@ -1707,7 +1717,8 @@ export function createService({
       throw e;
     }
     // Result store queue (src/ingest.js); never affects admission or the rental.
-    if (storeEnabled(env))
+    // A rehearsal leg is never a release record: it is not queued for the result store (src/ingest.js).
+    if (storeEnabled(env) && r.rehearsal !== true)
       try {
         if (retrySource) await freeze(ledger, retrySource);
         await enqueue(ledger, r);
@@ -1767,6 +1778,7 @@ export function createService({
           stages: leg?.stages ?? [],
           releaseMatrix: leg?.releaseMatrix,
           spec: leg?.spec,
+          ...(leg?.rehearsal === true ? { rehearsal: true } : {}),
           ...middleAppsRequest(profile, tierName, cfg.middleAppsEnabled),
         }),
         // Pass-through for the hostname-wide Access policy; the Worker never verifies Access.
@@ -1823,7 +1835,7 @@ export function createService({
   // Its legs are ordinary rentals through admit(); the cron tick classifies ended legs, schedules
   // a fresh-box re-run for RETRY/UNATTRIBUTED within the release cost cap, starts pending legs as
   // slots and caps allow, and finishes with a verdict over (family, die, platform) cells.
-  const BATCH_KEYS = ['commit_sha', 'die', 'tier'];
+  const BATCH_KEYS = ['commit_sha', 'die', 'tier', 'rehearsal'];
   function batchRequest(body) {
     if (
       !body ||
@@ -1832,8 +1844,12 @@ export function createService({
       !Object.keys(body).every((k) => BATCH_KEYS.includes(k)) ||
       !hexSha(body.commit_sha) ||
       !['small', 'middle', 'large'].includes(body.tier) ||
+      // The named rehearsal scope: exactly `true`, large only, and only together with one die. A large Start
+      // that names a die without it is refused as before; `rehearsal` without a die or on another tier is too.
+      (body.rehearsal !== undefined &&
+        (body.rehearsal !== true || body.tier !== 'large' || body.die === undefined)) ||
       (body.die !== undefined &&
-        (body.tier === 'large' ||
+        ((body.tier === 'large' && body.rehearsal !== true) ||
           typeof body.die !== 'string' ||
           !/^[A-Z][A-Z0-9_]{1,23}$/.test(body.die)))
     )
@@ -1860,6 +1876,12 @@ export function createService({
       const evaluation = await new OfferBook(now).evaluate(vast, cfg, ledger, 'release', {
         market,
       });
+      if (request.rehearsal === true)
+        return planRehearsal(evaluation.allowed, cfg, {
+          budget: await ledger.budgetSummary(cfg, now()),
+          credit: await vast.credit(),
+          die: request.die,
+        });
       return planRelease(evaluation.allowed, cfg, {
         budget: await ledger.budgetSummary(cfg, now()),
         credit: await vast.credit(),
@@ -1908,7 +1930,13 @@ export function createService({
       cfg = batchConfig(request.tier),
       vast = new Vast(fetcher, cfg, env.VAST_API_KEY),
       token = env.GITHUB_API_TOKEN;
-    if (request.die !== undefined && !tierDies(cfg, request.tier).includes(request.die))
+    if (request.rehearsal === true) {
+      if (
+        !cfg.releaseAdmitDies.includes(request.die) ||
+        !RELEASE_MATRIX.dies.some((row) => row.die === request.die)
+      )
+        refuse('BAD_REQUEST', 400, 'DIE_NOT_IN_TIER');
+    } else if (request.die !== undefined && !tierDies(cfg, request.tier).includes(request.die))
       refuse('BAD_REQUEST', 400, 'DIE_NOT_IN_TIER');
     if (request.tier === 'large' && !cfg.releaseEnabled) refuse('RELEASE_DISABLED', 503);
     if (token && (token.length > 1024 || !/^[\x21-\x7e]+$/.test(token))) refuse();
@@ -1916,8 +1944,14 @@ export function createService({
     // Forks never trigger rentals: the commit must be on this repository's master or next.
     await github.reachable(request.commit_sha);
     if (request.tier === 'large') {
-      requireMatrixExecution(cfg);
-      await github.boxProtocol(request.commit_sha, { matrix: true });
+      // A rehearsal does not pass the matrix check (the matrix is not executable and the rehearsal says so); every
+      // other large Start still must.
+      if (request.rehearsal === true)
+        await github.boxProtocol(request.commit_sha, { rehearsal: true });
+      else {
+        requireMatrixExecution(cfg);
+        await github.boxProtocol(request.commit_sha, { matrix: true });
+      }
     }
     await github.boxProtocol(request.commit_sha);
     for (const [, open] of await ledger.storage.list({ prefix: 'batch-open:', limit: 257 })) {
@@ -1986,6 +2020,7 @@ export function createService({
       ),
       costCapUsd: request.tier === 'large' ? cfg.releaseCostCap : null,
       estimateUsd: plan.estimate_usd,
+      ...(request.rehearsal === true ? { rehearsal: true, rehearsalDie: request.die } : {}),
       windowsRunsPerDie: request.tier === 'large' ? cfg.releaseWindowsRuns : 1,
       diesPerFamily: cfg.releaseDiesPerFamily,
       releaseDies: request.tier === 'large' ? cfg.releaseDies : {},
@@ -2013,6 +2048,9 @@ export function createService({
       estimate_usd: batch.estimateUsd,
       spent_usd: batch.spentUsd ?? 0,
       verdict,
+      ...(batch.rehearsal === true
+        ? { ...REHEARSAL_SCOPE, rehearsal: true, die: batch.rehearsalDie }
+        : {}),
       legs: batch.legs.map((l) => ({
         key: l.key,
         family: l.family,
@@ -2066,6 +2104,7 @@ export function createService({
           cfg,
           releaseMatrix: l.releaseMatrix,
           spec: l.spec,
+          rehearsal: batch.rehearsal === true,
         },
       );
       // Regrade old persisted outcomes from accepted rows, while keeping a FAIL
@@ -2156,6 +2195,7 @@ export function createService({
             windowsRuns: l.windowsRuns,
             releaseMatrix: l.releaseMatrix,
             spec: l.spec,
+            ...(batch.rehearsal === true ? { rehearsal: true } : {}),
             stages: batch.stages,
             avoidMachines: l.avoidMachines,
             avoidHosts: l.avoidHosts,

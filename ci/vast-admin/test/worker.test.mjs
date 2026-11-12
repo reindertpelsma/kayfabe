@@ -346,6 +346,8 @@ for (const [path, target] of [
   for (const body of [
     { commit_sha: sha, tier: 'large' },
     { commit_sha: sha, tier: 'small', die: 'GA106' },
+    // 2026-11-12: the named rehearsal scope, large + one die + rehearsal:true
+    { commit_sha: sha, tier: 'large', die: 'AD102', rehearsal: true },
   ])
     test('admin UI ' + path + ' forwards once ' + JSON.stringify(body), async () => {
       const h = await fixture();
@@ -364,6 +366,15 @@ for (const body of [
   { commit_sha: sha, tier: 'large', profile: 'check' },
   { commit_sha: sha, tier: 'small', die: '../x' },
   { commit_sha: sha, tier: 'small', die: 'GA106', pad: 'x'.repeat(600) },
+  // a die for large needs the rehearsal scope; the scope needs large, a die and exactly true
+  { commit_sha: sha, tier: 'large', die: 'AD102' },
+  { commit_sha: sha, tier: 'large', die: 'AD102', rehearsal: false },
+  { commit_sha: sha, tier: 'large', die: 'AD102', rehearsal: 'true' },
+  { commit_sha: sha, tier: 'large', die: 'AD102', rehearsal: 1 },
+  { commit_sha: sha, tier: 'large', rehearsal: true },
+  { commit_sha: sha, tier: 'middle', die: 'AD102', rehearsal: true },
+  { commit_sha: sha, tier: 'small', rehearsal: true },
+  { commit_sha: sha, tier: 'large', die: 'ad102', rehearsal: true },
   null,
   [],
 ])

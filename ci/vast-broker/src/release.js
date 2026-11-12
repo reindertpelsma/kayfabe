@@ -41,11 +41,14 @@ export const requiredStageRows = (stages) => {
   );
 };
 // One full leg per matrix die; the compatibility path for other callers retains the old split.
-export function dieLegs(offers, cfg, matrixRow) {
+// `rehearsal` (2026-11-12): the named one-die rehearsal scope. The leg carries NO driver matrix (no release_matrix, drivers,
+// pins or subruns: the payload would refuse them, and they would be a false claim), and the host is not filtered by what it
+// could swap, because nothing is swapped. The row is still the die's matrix row, for the box policy only.
+export function dieLegs(offers, cfg, matrixRow, { rehearsal = false } = {}) {
   validateStagePolicy(cfg.releaseStages);
   const releaseMatrix = cfg.releaseMatrix ?? RELEASE_MATRIX;
   matrixRow ??= releaseMatrix.dies.find((d) => d.die === offers[0]?.die);
-  if (matrixRow)
+  if (matrixRow && !rehearsal)
     offers = offers.filter((o) =>
       hostProvidesDrivers(
         o.host_capabilities ?? releaseMatrix.host_capabilities.vast_kvm,
@@ -60,7 +63,8 @@ export function dieLegs(offers, cfg, matrixRow) {
   const leg = (o, windowsRuns, extra = {}) => ({
     ...extra,
     windows_runs: windowsRuns,
-    ...(matrixRow
+    ...(rehearsal ? { rehearsal: true } : {}),
+    ...(matrixRow && !rehearsal
       ? {
           release_matrix: structuredClone(matrixRow),
           drivers: structuredClone(matrixRow.drivers),
@@ -191,6 +195,101 @@ export function planRelease(allowed, cfg, { budget, credit } = {}) {
     refusals,
   };
 }
+// The named REHEARSAL scope (owner request 2026-11-12; docs/design/V3_RELEASE_REHEARSAL.md): the large tier's payload on ONE
+// matrix die, through the same admission, cost and verdict machinery, WITHOUT the driver sub-run matrix. It never hides a
+// matrix blocker: they are listed in the plan as `matrix_blockers`, `execution_ready` stays false, and every report row says
+// the sub-run matrix was not executed. The most it can end in is REHEARSAL_PASS (releaseVerdict); it is never a release PASS.
+export const REHEARSAL_SCOPE = Object.freeze({
+  scope: 'REHEARSAL',
+  driver_subrun_matrix: 'NOT_EXECUTED',
+  max_verdict: 'REHEARSAL_PASS',
+  counts_toward_release: false,
+});
+export function planRehearsal(allowed, cfg, { budget, credit, die } = {}) {
+  validateStagePolicy(cfg.releaseStages);
+  const releaseMatrix = cfg.releaseMatrix ?? RELEASE_MATRIX;
+  const matrixErrors = validateReleaseMatrix(releaseMatrix, cfg);
+  if (matrixErrors.length) throw Error('release matrix: ' + matrixErrors.join('; '));
+  const row = releaseMatrix.dies.find((d) => d.die === die);
+  const refusals = [];
+  if (!row) refusals.push('DIE_NOT_IN_MATRIX');
+  const family = row?.die_family;
+  const offers = row ? allowed.filter((o) => o.die === die && familyOf(o.die, cfg) === family) : [];
+  const planned = row ? dieLegs(offers, cfg, row, { rehearsal: true }) : [];
+  if (row && !planned.length) refusals.push('NO_OFFER');
+  const estimate = planned.reduce((sum, l) => sum + l.est_usd, 0);
+  // Legs of one die run one after the other (SPEC lanes) or on one box, so one slot is enough.
+  const parallel = Math.min(cfg.maxConcurrentProfile.release, cfg.maxConcurrent);
+  if (cfg.releaseCostCap < estimate) refusals.push('COST_CAP');
+  if (parallel < 1) refusals.push('NO_SLOTS');
+  if (!cfg.releaseEnabled) refusals.push('RELEASE_DISABLED');
+  if (budget) {
+    // Same caps as a release plan, written out here so a change to one is a visible change to both.
+    const today = budget.profiles.release;
+    if (cfg.releaseDaily < today.daily_usd + estimate) refusals.push('DAILY_USD');
+    if (cfg.accountDaily < budget.daily_usd + estimate) refusals.push('ACCOUNT_DAILY_USD');
+    if (cfg.releaseDailyCount < today.count_today + planned.length) refusals.push('DAILY_COUNT');
+    if (cfg.rolling < budget.rolling_usd + estimate) refusals.push('ROLLING_USD');
+    if (credit !== undefined && credit < cfg.reserve + estimate + budget.outstanding_usd)
+      refusals.push('CREDIT_RESERVE');
+  }
+  const executionProblem = matrixExecutionProblem(releaseMatrix, cfg);
+  return {
+    ...REHEARSAL_SCOPE,
+    rehearsal: true,
+    rehearsal_die: die,
+    resource_profile: resourceCaps(cfg, 'release', 'large'),
+    matrix_status: releaseMatrix.status,
+    // Stated, never removed: what the matrix still lacks. A rehearsal does not clear any of it.
+    matrix_blockers: releaseMatrix.dies.flatMap((d) =>
+      d.blockers.map((reason) => ({ die: d.die, reason })),
+    ),
+    matrix_execution_problem: executionProblem,
+    execution_ready: executionProblem === null,
+    tier: 'large',
+    profile: 'release',
+    hard_minutes: cfg.hardRelease / 60000,
+    price_cap_usd_hour: cfg.releasePrice,
+    cost_cap_usd: cfg.releaseCostCap,
+    account_daily_cap_usd: cfg.accountDaily,
+    release_enabled: cfg.releaseEnabled,
+    daily_cap_usd: cfg.releaseDaily,
+    daily_rentals_cap: cfg.releaseDailyCount,
+    rolling_cap_usd: cfg.rolling,
+    parallel,
+    windows_runs_per_die: cfg.releaseWindowsRuns,
+    reruns_per_leg: cfg.releaseReruns,
+    stages: cfg.releaseStages,
+    required_stage_rows_per_die: requiredStageRows(cfg.releaseStages),
+    families: row
+      ? [
+          {
+            family,
+            dies_wanted: [die],
+            cells: planned.length
+              ? [
+                  {
+                    die,
+                    offers: offers.length,
+                    same_machine: new Set(planned.map((l) => l.machine_id)).size === 1,
+                    legs: planned,
+                    est_usd: round(estimate),
+                  },
+                ]
+              : [],
+            missing: planned.length ? [] : [{ die, reason: 'NO_OFFER' }],
+            complete: planned.length > 0,
+            est_usd: round(estimate),
+          },
+        ]
+      : [],
+    legs: planned.length,
+    estimate_usd: round(estimate),
+    rerun_headroom_usd: round(Math.max(0, cfg.releaseCostCap - estimate)),
+    admitted: refusals.length === 0,
+    refusals,
+  };
+}
 // Rows that say "not a verdict on the guest": a host, harness, time or rental fault.
 export function retryRow(name) {
   return (
@@ -227,7 +326,7 @@ export function hardwareMatch(record, { die, family, cfg } = {}) {
 }
 export function classifyLeg(
   record,
-  { windowsRuns = 1, stages = [], die, family, cfg, releaseMatrix, spec } = {},
+  { windowsRuns = 1, stages = [], die, family, cfg, releaseMatrix, spec, rehearsal = false } = {},
 ) {
   const windowsNames =
     windowsRuns === 0
@@ -235,10 +334,13 @@ export function classifyLeg(
       : windowsRuns === 2
         ? ['windows_gate', 'windows_gate_2']
         : ['windows_gate'];
+  // A rehearsal leg is graded WITHOUT matrix receipts: the sub-run matrix is not executed, and that is stated in the
+  // verdict (releaseVerdict), never turned into a pass. A rehearsal that also carries a matrix row is not a rehearsal.
   const matrixRequired = releaseMatrix !== undefined || cfg?.profile === 'release';
+  const matrixCoverage = matrixRequired && !rehearsal;
   const matrixRow =
     releaseMatrix ?? (cfg?.releaseMatrix ?? RELEASE_MATRIX).dies?.find((r) => r.die === die);
-  const definitions = matrixRequired ? matrixReceiptDefinitions(matrixRow) : [];
+  const definitions = matrixCoverage ? matrixReceiptDefinitions(matrixRow) : [];
   const stageRequirements = requiredStageRows(stages);
   const ownStageRows = Object.fromEntries(
     stages.map((stage) => [
@@ -250,7 +352,7 @@ export function classifyLeg(
     linux: v,
     windows: windowsNames.map(() => v),
     stages: Object.fromEntries(stages.map((s) => [s, v])),
-    ...(matrixRequired
+    ...(matrixCoverage
       ? {
           matrix: Object.fromEntries(
             (definitions.length ? definitions : [{ id: 'missing' }]).map((r) => [r.id, v]),
@@ -370,7 +472,7 @@ export function classifyLeg(
     }),
   );
   const coverage = {
-    ...(matrixRequired ? { matrix: definitions.length ? matrixParts : { missing: 'RETRY' } } : {}),
+    ...(matrixCoverage ? { matrix: definitions.length ? matrixParts : { missing: 'RETRY' } } : {}),
     ...(stages.length ? { stageRows } : {}),
   };
   if (record.verdict === 'PASS' && result?.verdict === 'PASS') {
@@ -501,7 +603,11 @@ export function releaseVerdict(batch, { releaseMatrix = RELEASE_MATRIX } = {}) {
           1,
           legs,
         );
-    if (batch.tier === 'large') {
+    if (batch.tier === 'large' && batch.rehearsal === true) {
+      // Stated in the report: the driver sub-run matrix was not executed. This cell can never be PASS.
+      cell(family, die, 'matrix:driver_subruns', [], 1, legs);
+      cells[cells.length - 1].verdict = 'NOT_EXECUTED';
+    } else if (batch.tier === 'large') {
       const row = releaseMatrix?.dies?.find((r) => r.die === die);
       const definitions = matrixReceiptDefinitions(row);
       for (const definition of definitions.length ? definitions : [{ id: 'missing' }])
@@ -527,6 +633,25 @@ export function releaseVerdict(batch, { releaseMatrix = RELEASE_MATRIX } = {}) {
   for (const c of cells) {
     families[c.family] ??= new Set();
     families[c.family].add(c.die);
+  }
+  if (batch.tier === 'large' && batch.rehearsal === true) {
+    // One die, no sub-run matrix: the highest verdict is REHEARSAL_PASS, over every cell except the one that says
+    // "not executed". It is not a release verdict and a release PASS stays impossible while matrix blockers exist.
+    const executed = cells.filter((c) => c.platform !== 'matrix:driver_subruns');
+    const verdict = cells.some((c) => c.verdict === 'FAIL')
+      ? 'FAIL'
+      : active
+        ? 'RUNNING'
+        : executed.length && executed.every((c) => c.verdict === 'PASS')
+          ? 'REHEARSAL_PASS'
+          : 'INCOMPLETE';
+    return {
+      verdict,
+      complete: false,
+      ...REHEARSAL_SCOPE,
+      rehearsal: true,
+      cells: cells.map((c) => ({ ...c, ...REHEARSAL_SCOPE })),
+    };
   }
   const complete =
     batch.tier !== 'large' ||

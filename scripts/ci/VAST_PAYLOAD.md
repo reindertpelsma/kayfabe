@@ -262,6 +262,19 @@ only the verdict line"); without the lane file the row is `specviewperf_retry_no
 are reserved and DESIGN-ONLY: requesting them is a preflight failure. A malformed value, a stage
 outside the large tier or a duplicate is refused before the first stage.
 
+## Release rehearsal marker and large apps (2026-11-12)
+
+CODE READ (`vast_payload.py` `rehearsal_requested`, `linuxapps_requested`, `main`); GPU-free tests only
+(`test_vast_payload_rehearsal.py`); no box ran this. `KF_RELEASE_REHEARSAL=1` (a reporter SPEC row; exactly
+`"1"`, only with `KF_TIER=large`, else `preflight`) labels the run as the named one-die rehearsal
+([V3_RELEASE_REHEARSAL.md](../../docs/design/V3_RELEASE_REHEARSAL.md)): the `KF_PAYLOAD_TIER` line gains
+`rehearsal=0|1`. It grants nothing. A rehearsal that also carries any matrix driver or sub-run field is
+`release_retry_matrix_invalid`, and `require_executable_release` is unchanged: a real matrix leg is still
+refused (`release_retry_matrix_proposed`). The payload declares `PAYLOAD_RELEASE_REHEARSAL = 1` (the Worker checks
+it before renting a rehearsal leg) and still `PAYLOAD_RELEASE_MATRIX_EXECUTOR = 0`. `KF_LINUX_APPS=1` is now
+accepted for the large tier as well as middle ("large includes middle"), and then runs the middle apps profile
+(`apps_gate_list(root, "middle")`); small and adhoc still refuse it.
+
 ## Environment contract and the tier line (2026-11-10)
 
 CODE READ (`vast_report.py` `SPEC`, `load_provider_env`, `write_env_file`; `vast_onstart.sh`), plus an offline replay with no stage run. Every `KF_*` name the Worker can send must have a row

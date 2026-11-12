@@ -200,16 +200,51 @@ CASES = [
     (
         "linux-opt-in-tier-ignored",
         "scripts/ci/vast_payload.py",
-        'value != "1" or tier != "middle"',
+        'value != "1" or tier not in ("middle", "large")',
         'value != "1"',
         "py",
     ),
     (
         "linux-opt-in-value-ignored",
         "scripts/ci/vast_payload.py",
-        'value != "1" or tier != "middle"',
-        'tier != "middle"',
+        'value != "1" or tier not in ("middle", "large")',
+        'tier not in ("middle", "large")',
         "py",
+    ),
+    (
+        "rehearsal-marker-any-tier",
+        "scripts/ci/vast_payload.py",
+        'if value != "1" or tier != "large":',
+        'if value != "1":',
+        "py",
+    ),
+    (
+        "rehearsal-allows-matrix-fields",
+        "scripts/ci/vast_payload.py",
+        '    if any(name in environ for name in (*RELEASE_DRIVER_FIELDS, "KF_WINGATE_GUEST_DRIVER", "KF_RELEASE_SUBRUNS", "KF_RELEASE_DRIVER_PINS")):',
+        "    if False:",
+        "py",
+    ),
+    (
+        "large-apps-profile-not-middle",
+        "scripts/ci/vast_payload.py",
+        'apps_tier = "middle" if tier == "large" and "KF_LINUX_APPS" in os.environ else tier',
+        "apps_tier = tier",
+        "py",
+    ),
+    (
+        "payload-rehearsal-declaration-dropped",
+        "scripts/ci/vast_payload.py",
+        "PAYLOAD_RELEASE_REHEARSAL = 1\n",
+        "PAYLOAD_RELEASE_REHEARSAL = 0\n",
+        "py",
+    ),
+    (
+        "rehearsal-spec-row-dropped-worker-side",
+        "scripts/ci/vast_report.py",
+        '    ("KF_RELEASE_REHEARSAL", False, _match(r"1")),\n',
+        "",
+        "node",
     ),
     (
         "linux-transport-flag-leaks",
@@ -822,7 +857,7 @@ CASES = [
 ]
 COLLECT = """import io,json,sys,unittest
 sys.path.insert(0,'scripts/ci')
-s=unittest.defaultTestLoader.loadTestsFromNames(['test_middle_apps','test_apps_media','test_apps_pins'])
+s=unittest.defaultTestLoader.loadTestsFromNames(['test_middle_apps','test_apps_media','test_apps_pins','test_vast_payload_rehearsal'])
 r=unittest.TextTestRunner(stream=io.StringIO()).run(s)
 print(json.dumps(dict(tests=r.testsRun,killers=sorted({getattr(t,'test_case',t).id() for t,_ in r.failures+r.errors}),details={t.id():v[-2500:] for t,v in r.failures+r.errors})))
 """
