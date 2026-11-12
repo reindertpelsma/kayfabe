@@ -1,6 +1,12 @@
 # CI tiers, the admin start route, the tree-hash key and the ignore ladder
 
-**STATUS: DESIGN-ONLY for the release workload contract, updated 2026-11-09.**
+**STATUS: DESIGN-ONLY for the release workload contract, updated 2026-11-12 (broker added to middle and large).**
+**Owner ruling 2026-11-12:** the display broker is part of the MIDDLE and LARGE tiers and not of small; the guests
+the middle/large stages already boot run with it attached, plus a short explicit broker stage, and **a broker failure
+is a FAIL** (never a retry, operator, provider or skipped class). PLUMBING only: GPU-free tested, no box run;
+[V3_BROKER_IN_CI.md](V3_BROKER_IN_CI.md) is the design and records what is not proven. `TIER_CONTENTS` in
+`ci/vast-broker/src/tier.js` is not changed (a change would need a pin regeneration); the payload selects the broker
+from `KF_TIER`.
 The tier intent below includes the owner's 2026-11-09 clarification. CODE READ: signed tier
 selection, the ignore/tree-key controls and the admin routes now exist; the original
 2026-11-05 sections below describe their design history, not a current implementation census.
@@ -33,10 +39,10 @@ the coordinator and the owner agreed; it is binding as intent and can still chan
 | | LARGEST (release) | MIDDLE (PR to master) | SMALL |
 |---|---|---|---|
 | Event | release tag | PR to master (the `next` -> master batch) | push, and manual |
-| Coverage | middle plus SPECviewperf and a real LLM workload; at least 1 driver and 2 dies per family; Windows and Linux required on Turing, Ampere, Ada and Blackwell; at least 2 Windows runs per die | today's check plus all 66 supported Linux apps and Windows `mid`'s 10 apps (including all 8 small apps) | today's Linux bar and required Windows gate; no apps request |
+| Coverage | middle (including the broker, same plumbing; **a real-display-backend row is OPEN**, see V3_BROKER_IN_CI.md) plus SPECviewperf and a real LLM workload; at least 1 driver and 2 dies per family; Windows and Linux required on Turing, Ampere, Ada and Blackwell; at least 2 Windows runs per die | today's check plus all 66 supported Linux apps and Windows `mid`'s 10 apps (including all 8 small apps); **2026-11-12: every Linux/Windows guest stage runs with the headless test-backend display broker attached, plus the explicit `broker` stage (rows `broker_frames`, `broker_resize`, `broker_input`); not yet run** | today's Linux bar and required Windows gate; no apps request |
 | Parallelism | up to 8 Vast boxes at once | 1 box | rides on the box the middle run already rented (AGREED RECOMMENDATION) |
 | Time and cost | hours and several USD are fine; real workload execution is DESIGN-ONLY | 300 min hard limit: reserve 245 min for Linux apps (which build their own media on the box, 2026-11-10) + Windows gate + Windows mid apps, 45 min for earlier work and 10 min soft margin; RETRY on insufficient time (the reserve was 205 min with 85 min for earlier work until 2026-11-10; see `V3_APPS_IMAGE_RECIPE.md`, INTERIM) | existing check budget; no new apps allocation |
-| Excluded | nothing by tier intent; LLM slot is refused pending its adapter | SPECviewperf and real LLM workload | SPECviewperf, real LLM workload and apps |
+| Excluded | nothing by tier intent; LLM slot is refused pending its adapter | SPECviewperf and real LLM workload | SPECviewperf, real LLM workload, apps and the broker (`KF_BROKER=1` overrides on a manual run) |
 | Retries | none: **RETRY never passes** | none | none |
 | Die choice | every die in the release matrix | **rotation** across families per PR, with fallback; the family is recorded on the run (AGREED RECOMMENDATION) | the middle run's die |
 | VRAM floor | no offer filter (see §5) | a tier setting here only (AGREED RECOMMENDATION) | inherited |
@@ -51,6 +57,8 @@ the coordinator and the owner agreed; it is binding as intent and can still chan
   the exact lists and guarded budget above. No app is silently dropped to fit. Large inherits
   middle and adds SPEC plus a real LLM workload; `llm_parity` is reserved and refused until its
   CI adapter exists. See the linked middle-apps design for historical timing sources.
+- **OWNER RULING, 2026-11-12:** the display broker joins middle and large (small stays without). PLUMBING, not run:
+  [V3_BROKER_IN_CI.md](V3_BROKER_IN_CI.md). A failing broker fails the stage and the tier verdict.
 - **OPEN:** the exact middle-tier rotation order and the fallback die when the rotation's die has no
   offer.
 

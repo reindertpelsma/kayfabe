@@ -717,7 +717,7 @@ class ReleaseTierPayloadTests(unittest.TestCase):
     _main_fixture = V7Tests._main_fixture
 
     def _release(self, stages=None, runs="2", tier="large", windows="1", logs=None, spec=None):
-        env = {"KF_TIER": tier}
+        env = {"KF_TIER": tier, "KF_BROKER": "0"}  # these tests are not about the broker (test_broker_ci.py is)
         if spec is not None:
             env["KF_SPEC"] = spec
         if runs is not None:

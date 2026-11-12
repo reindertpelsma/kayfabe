@@ -66,6 +66,8 @@ jobs:
           node ci/vast-broker/scripts/mutate-tiers.mjs
           # Trusted middle real-app policy, evidence completeness and suffix budgets: >=2 named killers.
           python3 scripts/ci/middle_apps_mutants.py
+          # Display broker in the box run (2026-11-12): a broker failure is a FAIL, never a retry/provider/skip; >=2 killers each.
+          python3 scripts/ci/broker_ci_mutants.py
           # Runner OIDC token retry (2026-11-11): transient retried, refusal not, hard bound; >=2 killers.
           python3 scripts/ci/oidc_retry_mutants.py
           # Proposed release matrix and payload contract: two named killers per mutant.

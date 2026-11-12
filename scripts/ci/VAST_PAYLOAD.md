@@ -1,6 +1,6 @@
 # Thin Vast payload
 
-STATUS: LIVE, 2026-11-09 (XD1 host-semaphore admission correction is GPU-free tested, not hardware-qualified; the apps stage is a DRAFT, disabled by default, no box has run it under the payload; host claims added by branch `claude/setup-picker-20261106`; release-tier
+STATUS: LIVE, 2026-11-12 (the display-broker plumbing is GPU-free tested and never run on a box; earlier, 2026-11-09: XD1 host-semaphore admission correction is GPU-free tested, not hardware-qualified; the apps stage is a DRAFT, disabled by default, no box has run it under the payload; host claims added by branch `claude/setup-picker-20261106`; release-tier
 extras added by branch `claude/worker-tier-20261105`; the evidence bundle added by branch
 `claude/ci-evidence-bundle-20261106`; the run report added by branch `claude/report-20261107`; none has
 run on a box).
@@ -261,6 +261,15 @@ the strict status lines (see "SPECviewperf stage" below, which supersedes the 20
 only the verdict line"); without the lane file the row is `specviewperf_retry_not_built`, never a pass. Slots `two_guests` and `trio`
 are reserved and DESIGN-ONLY: requesting them is a preflight failure. A malformed value, a stage
 outside the large tier or a duplicate is refused before the first stage.
+
+**Display broker (2026-11-12, PLUMBING, GPU-free tested, never run on a box; [V3_BROKER_IN_CI.md](../../docs/design/V3_BROKER_IN_CI.md)).**
+`KF_TIER` is no longer only informational: `middle` and `large` run the guest stages (`cuda_guest`, `apps`,
+`windows_gate`, `windows_apps`, `windows_gate_2`, `specviewperf`) inside `scripts/ci/broker_ci.py run`, which keeps one
+headless test-backend broker around the stage, and add the `broker` stage after the Windows gate. `small` and `adhoc`
+do not. `KF_BROKER=0|1` overrides for a manual run; it is not sent by the Worker, is popped before any stage, and
+anything else is `preflight`. A broker failure (rows `broker_*`) is a plain FAIL, never a retry class, never a provider
+fault and never skipped; only a `ProviderFault` keeps its provider verdict. The `KF_PAYLOAD_TIER` line ends
+`broker=<0|1> broker_source=<tier|env>`.
 
 ## Environment contract and the tier line (2026-11-10)
 
