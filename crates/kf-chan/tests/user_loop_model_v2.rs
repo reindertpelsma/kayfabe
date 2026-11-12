@@ -2527,7 +2527,12 @@ fn pin_publish_rings_the_native_doorbell_after_the_pt_lock_is_released() {
         "pin: the doorbell is rung after the admission (pt guard) ended"
     );
     assert!(
-        p.contains("if t.stopped || t.disabled {\n                stale.set(true);\n                return Err(Failure::Retry);"),
+        p.contains("t.stopped || t.disabled,")
+            && after(USERPUMP, "fn admission_checks(")
+                .split("/// Whether a failed publication")
+                .next()
+                .unwrap()
+                .contains("if stopped {\n        why.set(Some(Stale::Stopped));\n        return Err(Failure::Retry);"),
         "pin: publish refuses a disabled twin"
     );
 }
