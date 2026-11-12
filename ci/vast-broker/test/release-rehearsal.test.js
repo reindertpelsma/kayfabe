@@ -619,3 +619,128 @@ test('S3: the daily rental count cap applies to a rehearsal plan', async () => {
   assert.equal(plan.legs, 2);
   assert.ok(plan.refusals.includes('DAILY_COUNT'), JSON.stringify(plan.refusals));
 });
+
+// ---- round 2 of the review of PR #355: R1 (a lane B rerun keeps the apps pair) and two NITs ----
+const envOfLeg = async (h, key) => {
+  const record = await h.storage.get('record:' + key);
+  return { record, env: creates(h).find((c) => c.label === record.label).env };
+};
+test('R1: a rerun of lane B keeps the apps pair; a rerun of lane A still has none', async () => {
+  const h = await harness({ ...SPEC, RELEASE_RERUNS_PER_LEG: '2', MAX_CONCURRENT_RENTALS: '5' });
+  h.cloud.extraOffers = [12, 13, 14, 15].map((n) => ({
+    ...h.cloud.offer,
+    id: n,
+    machine_id: 200000 + n,
+    host_id: 3000 + n,
+    price: 0.4,
+  }));
+  const { batch: id } = await h.service.adminStart(body());
+  let batch = await batchOf(h, id);
+  const [a1] = batch.legs;
+  assert.equal(a1.spec, 'lanea');
+  // lane A is retried (a retry row is not a verdict on the guest); lane B starts once A has ended
+  await finish(h, a1.key, 'FAIL', { ...LINUX, windows_retry_media: -1 });
+  await tick(h);
+  batch = await batchOf(h, id);
+  const a2 = batch.legs.find((l) => l.rerunOf === a1.key);
+  const b1 = batch.legs.find((l) => l.spec === 'laneb' && !l.rerunOf);
+  const states = JSON.stringify(batch.legs.map((l) => [l.key, l.spec, l.state]));
+  assert.ok(a2 && a2.state === 'STARTED', states);
+  assert.ok(b1 && b1.state === 'STARTED', states);
+  const a2run = await envOfLeg(h, a2.key);
+  assert.equal(a2run.env.KF_SPEC, 'lanea');
+  assert.ok(!('KF_LINUX_APPS' in a2run.env) && !('KF_WINAPPS' in a2run.env));
+  assert.equal(a2run.record.middleAppsRequested, false);
+  assert.equal((await envOfLeg(h, b1.key)).env.KF_LINUX_APPS, '1');
+  // lane B is retried: the rerun must still carry the apps (nothing else in the release requires them)
+  // (a second test below covers a leg without SPEC)
+  await finish(h, b1.key, 'FAIL', { ...LINUX, windows_retry_media: -1 });
+  await finish(h, a2.key, 'PASS', { ...LINUX, windows_gate: 1, specviewperf_lanea: 1 });
+  await tick(h);
+  batch = await batchOf(h, id);
+  const b2 = batch.legs.find((l) => l.rerunOf === b1.key);
+  assert.ok(
+    b2 && b2.state === 'STARTED',
+    JSON.stringify(batch.legs.map((l) => [l.key, l.spec, l.state])),
+  );
+  assert.equal(b2.apps, undefined);
+  const b2run = await envOfLeg(h, b2.key);
+  assert.equal(b2run.env.KF_SPEC, 'laneb');
+  assert.equal(b2run.env.KF_LINUX_APPS, '1');
+  assert.equal(b2run.env.KF_WINAPPS, 'mid');
+  assert.equal(b2run.record.middleAppsRequested, true);
+});
+test('R1b: the rerun of a rehearsal leg without SPEC keeps the apps pair', async () => {
+  const h = await harness({ RELEASE_RERUNS_PER_LEG: '1', MAX_CONCURRENT_RENTALS: '3' });
+  h.cloud.extraOffers = [12, 13].map((n) => ({
+    ...h.cloud.offer,
+    id: n,
+    machine_id: 200000 + n,
+    host_id: 3000 + n,
+    price: 0.4,
+  }));
+  const { batch: id } = await h.service.adminStart(body());
+  let batch = await batchOf(h, id);
+  await finish(h, batch.legs[0].key, 'FAIL', { ...LINUX, windows_retry_media: -1 });
+  await tick(h);
+  batch = await batchOf(h, id);
+  const rerun = batch.legs.find((l) => l.rerunOf === batch.legs[0].key);
+  assert.ok(
+    rerun && rerun.state === 'STARTED',
+    JSON.stringify(batch.legs.map((l) => [l.key, l.state])),
+  );
+  const run = await envOfLeg(h, rerun.key);
+  assert.equal(run.env.KF_LINUX_APPS, '1');
+  assert.equal(run.env.KF_WINAPPS, 'mid');
+  assert.equal(run.env.KF_RELEASE_REHEARSAL, '1');
+  assert.equal(run.record.middleAppsRequested, true);
+});
+test(
+  'N1: a rehearsal leg asks for no run report even when the result store is enabled',
+  { skip: d1Skip },
+  async () => {
+    const h = await harness({ DB: new FakeD1(), ROW_TAG_KEY: 't'.repeat(48) });
+    await h.service.adminStart(body());
+    assert.ok(!('KF_RUN_REPORT' in creates(h)[0].env));
+  },
+);
+test('N2: the shared credit rule is NaN- and string-safe (anything but a sufficient number is short)', async () => {
+  for (const credit of [Number.NaN, 'lots', null]) {
+    const h = await harness();
+    h.cloud.credit = credit;
+    const { plan } = await h.service
+      .adminPlan(body())
+      .catch((e) => ({ plan: { refusals: [e.state ?? 'ERR'] } }));
+    assert.ok(plan.refusals.length > 0, String(credit));
+  }
+  // direct: the helper behind both plans, through the offline plan
+  const cfg = applyProfile(configuration({ ...env, ...vars }), 'release', 'large');
+  const budget = {
+    profiles: { release: { daily_usd: 0, count_today: 0 } },
+    daily_usd: 0,
+    rolling_usd: 0,
+    outstanding_usd: 0,
+  };
+  const offer = {
+    id: 1,
+    die: 'AD102',
+    machine_id: 5,
+    host_id: 6,
+    country: 'US',
+    gpu_name: 'RTX 4090',
+    dph_total: 0.5,
+    pricing: { total: 2, effective: 0.5 },
+  };
+  for (const credit of [Number.NaN, 'lots'])
+    assert.ok(
+      planRehearsal([offer], cfg, { die: 'AD102', budget, credit }).refusals.includes(
+        'CREDIT_RESERVE',
+      ),
+      String(credit),
+    );
+  assert.ok(
+    !planRehearsal([offer], cfg, { die: 'AD102', budget, credit: 500 }).refusals.includes(
+      'CREDIT_RESERVE',
+    ),
+  );
+});

@@ -1043,7 +1043,7 @@ rows per die. See [the design and review corrections](../../docs/design/V3_RELEA
 
 CODE READ (`src/release.js` `planRehearsal`, `src/index.js` `batchRequest`/`adminStart`/`admit`, `src/tier.js`,
 `src/github.js` `boxProtocol`, `ci/vast-admin/worker.js`, `scripts/ci/vast_payload.py`); GPU-free tests only
-(`test/release-rehearsal.test.js`, `scripts/ci/test_vast_payload_rehearsal.py`, twenty-five new mutants in
+(`test/release-rehearsal.test.js`, `scripts/ci/test_vast_payload_rehearsal.py`, twenty-nine new mutants in
 `scripts/mutate-tiers.mjs`, five in `scripts/ci/middle_apps_mutants.py`); **nothing is deployed, no Vast box has
 run it.** Design and the exact scope: [V3_RELEASE_REHEARSAL.md](../../docs/design/V3_RELEASE_REHEARSAL.md).
 
