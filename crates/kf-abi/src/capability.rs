@@ -124,7 +124,7 @@
 //!
 //! | boundary | what changes | nvproxy |
 //! |---|---|---|
-//! | 550.54.04 | the shared base + `NVC36F_CTRL_GET_CLASS_ENGINEID` (the control is in the 535.104.05 and 545.23.06 rows too, below; ogkm: `ctrlc36f.h:70`, present from 515.43.04 through 550.90.07, `docs/design/V3_DRIVER_CROSSCHECK_20261112.md` H4) | `version.go:360` |
+//! | 550.54.04 | the shared base + `NVC36F_CTRL_GET_CLASS_ENGINEID` (the control is in the 535.104.05 and 545.23.06 rows too, below; `ogkm-515.43.04` and `ogkm-550.90.07`: `ctrlc36f.h:70` (the define, present at both and at the tags between; absent at `ogkm-580` and `ogkm-610`, where the control no longer exists), `docs/design/V3_DRIVER_CROSSCHECK_20261112.md` H4) | `version.go:360` |
 //! | 550.90.07 | +`NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE` | `version.go:906` |
 //! | 555.42.02 | **−**`NVC36F_CTRL_GET_CLASS_ENGINEID` | `version.go:933` |
 //! | 560.28.03 | +8 alloc classes, +`NV_SEMAPHORE_SURFACE_CTRL_CMD_UNBIND_CHANNEL` | `version.go:945-977` |
