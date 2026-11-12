@@ -63,12 +63,28 @@ class FixtureConstants(unittest.TestCase):
         self.assertEqual(config.PUBLIC_REPO, CONST["canonical_repo"])
         self.assertEqual(list(profile.STAGES), CONST["stage_names"])
         self.assertRegex("a" * 64, CONST["tree_key_regex"])
+        self.assertEqual(profile.STEPS_MAX, CONST["step_max"])
+        self.assertEqual(profile.APPS_PER_STEP_MAX, CONST["apps_per_step_max"])
+        self.assertEqual("^" + profile.APP_NAME.pattern.replace("\\Z", "$"), CONST["app_name_regex"])
         self.assertEqual(CONST["deadline_field"], "deadline_ms")
         self.assertEqual(CONST["upgrade_route"], "/hosts/<box_id>/ws")
         self.assertEqual(config.load.__module__, "kfhost.config")
         with tempfile.TemporaryDirectory() as t:
             self.assertEqual(cfg_for(t, "standard", box_id="x")["ws_path"], CONST["upgrade_route"].replace("<box_id>", "x"))
         self.assertEqual(CONST["close_codes"]["bad_token"], 4401)
+
+
+class StepsRunExactly(Base):
+    def test_listed_steps_in_order_and_requirements_refused(self):
+        cfg = cfg_for(self.tmp.name, "standard")
+        steps = [{"stage": "provision"}, {"stage": "apps", "apps": ["nvidia_smi"]}, {"stage": "windows_gate"}]
+        o = offer()
+        o["assignment"]["steps"] = steps
+        k = jobs.JobRunner(cfg, {}).kfci_assignment(o)["steps"]
+        self.assertEqual(k, [{"id": "provision"}, {"id": "apps", "parameters": {"apps": ["nvidia_smi"]}}, {"id": "windows_gate"}])
+        o["assignment"]["requirements"] = {"tier": "small"}
+        with self.assertRaisesRegex(profile.Refused, "requirements are never sent"):
+            profile.check_offer("standard", o, cfg, int(time.time() * 1000))
 
 
 class ServerFramesParse(Base):
