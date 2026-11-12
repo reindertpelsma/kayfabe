@@ -162,16 +162,16 @@ def init_state(seed, nics=1, disks=1):
     return {
         "state_version": STATE_VERSION, "seed": seed, "ids": ids,
         "clock": {"last_time_at_stop_utc": None, "gap_s": ids["clock_gap_s"]},
-        "qemu": {"machine": "pc-q35-10.2", "smp": 8, "ram_mb": 8192, "fb_mb": 4096},   # smp fixed: never the host's
+        "qemu": {"machine": "pc-q35-10.2", "smp": 8, "ram_mb": 8192, "fb_mb": 4096, "guest_driver": "580.65.06"},   # smp fixed: never the host's
         "cpu": copy.deepcopy(CPU_PROFILE), "cpu_fingerprint": None,
         "files": {},   # name -> {bytes, sha256, data_base64}: tpm/*, firmware/OVMF_VARS.fd
-        "guest": {"user": "kfimage", "machine_guid": None, "ek_pub_hash": None, "ssh_private_key": None,
+        "guest": {"user": "kfimage", "password": derive_password(seed), "machine_guid": None, "ek_pub_hash": None, "ssh_private_key": None,
                   "ssh_public_key": None},
         "software": [], "offline_checks": {},
     }
 
 
-def validate_state(state):
+def validate_state(state, require_password=False):
     require(state.get("state_version") == STATE_VERSION, "unknown state_version")
     ids = state["ids"]
     require(re.fullmatch(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", ids["smbios"]["uuid"]), "bad SMBIOS uuid")
@@ -182,6 +182,9 @@ def validate_state(state):
     require(re.fullmatch(r"GPU-[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}", ids["gpu_uuid"]), "bad GPU uuid")
     require(re.fullmatch(r"10\.\d+\.\d+\.0/24", ids["net"]["subnet"]), "slirp subnet must be a 10.x.y.0/24")
     require(1024 <= ids["net"]["ssh_port"] <= 65535, "bad ssh port")
+    pw = state["guest"].get("password")
+    require(pw is None or pw == derive_password(state["seed"]), "guest.password is not the seed-derived password")
+    require(pw is not None or not require_password, "state has no guest.password")
     c = state["cpu"]
     require(c["name"] == CPU_PROFILE_NAME and c["base_model"] == "EPYC-v1", "unknown CPU profile")
     require(c["vendor"] == "AuthenticAMD", "the image CPU vendor is AuthenticAMD (no spoofing)")
@@ -191,6 +194,7 @@ def validate_state(state):
     require(all(re.fullmatch(r"hv-[a-z-]+(=0x[0-9a-f]+)?", f) for f in c["hv_flags"]), "bad Hyper-V flag")
     require(not set(FORBIDDEN_GUEST_FLAGS) - set(c["remove"]), "profile must remove avx512f, rtm, hle, mpx, sgx")
     require(1 <= state["qemu"]["smp"] <= 64, "bad smp")
+    require(re.fullmatch(r"\d+\.\d+\.\d+", state["qemu"]["guest_driver"]), "bad guest-driver")
     for name, rec in state["files"].items():
         data = base64.b64decode(rec["data_base64"], validate=True)
         require(len(data) == rec["bytes"] and hashlib.sha256(data).hexdigest() == rec["sha256"], "blob mismatch: " + name)
@@ -235,7 +239,9 @@ def build_argv(state, mode, disk, workdir, ovmf_code="/usr/share/OVMF/OVMF_CODE_
     rtc = "base=utc" if base is None else "base=%s,clock=vm" % base.strftime("%Y-%m-%dT%H:%M:%S")
     sm = ids["smbios"]
     a = [qemu, "-name", "propimage-" + mode,
-         "-machine", q["machine"] + ",accel=kvm,smm=on", "-m", str(q["ram_mb"]),
+         # guest RAM in a shared memfd backend (kf3 needs it; win_vm.sh does the same), in every mode so the machine is one
+         "-object", "memory-backend-memfd,id=ram0,size=%dM,share=on" % q["ram_mb"],
+         "-machine", q["machine"] + ",accel=kvm,smm=on,memory-backend=ram0", "-m", str(q["ram_mb"]),
          "-smp", "%d,sockets=1,cores=%d,threads=1" % (q["smp"], q["smp"]), "-cpu", cpu_arg(state),
          "-uuid", sm["uuid"],
          "-smbios", "type=1,manufacturer=%s,product=%s,serial=%s" % (_comma(sm["manufacturer"]), _comma(sm["product"]), sm["serial"]),
@@ -267,7 +273,8 @@ def build_argv(state, mode, disk, workdir, ovmf_code="/usr/share/OVMF/OVMF_CODE_
               "-device", "usb-kbd,bus=xhci.0"]
     else:
         kf3 = ["kf3-gpu", "id=kf0", "fb-mb=%d" % q["fb_mb"], "bar1-size=134217728", "bar2-size=33554432",
-               "gpu-uuid=" + ids["gpu_uuid"]]
+               "gpu-uuid=" + ids["gpu_uuid"],
+               "guest-driver=" + q["guest_driver"]]   # display wire layout of the Windows 580.88 driver (windows-guest.md:87)
         a += ["-vga", "none"]
         if display == "broker":
             require(broker_sock and gop_efi, "broker display needs broker_sock and gop_efi")
@@ -308,7 +315,7 @@ $o.cpu_processor_id=$pr.ProcessorId; $o.cpu_cores=[int]$pr.NumberOfCores; $o.cpu
 Add-Type -Namespace K -Name P -MemberDefinition '[DllImport("kernel32.dll")] public static extern bool IsProcessorFeaturePresent(uint f);'
 $pf=@{ssse3=36;sse4_1=37;sse4_2=38;avx=39;avx2=40;avx512f=41;xsave=17;cx16=14;rdtscp=32}
 $o.cpu_flags=@($pf.Keys | Where-Object { [K.P]::IsProcessorFeaturePresent($pf[$_]) } | Sort-Object)
-$ek=Get-TpmEndorsementKeyInfo; $o.ek_pub_hash=$ek.PublicKeyHash
+$ek=Get-TpmEndorsementKeyInfo; if ($ek.PublicKey) { $o.ek_pub_hash=([BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash($ek.PublicKey.RawData)) -replace '-','') }
 $o | ConvertTo-Json -Compress
 """
 
@@ -424,6 +431,9 @@ def pack(state_path, image, out):
     state = json.loads(Path(state_path).read_text())
     validate_state(state)
     require(seed_matches(state), "state ids do not match its seed")
+    if state["guest"].get("password") is None:   # older states: write the derived login into the file that is packed
+        state["guest"]["password"] = derive_password(state["seed"])
+        Path(state_path).write_text(json.dumps(state, indent=2) + "\n")
     members = {"image.qcow2": sha256_file(image), "state.json": hashlib.sha256(Path(state_path).read_bytes()).hexdigest()}
     manifest = {"manifest_version": 1, "members": members}
     with zipfile.ZipFile(out, "w", compression=zipfile.ZIP_STORED, allowZip64=True) as z:
@@ -444,7 +454,7 @@ def unpack(zpath, dest):
             z.extract(name, dest)
             require(sha256_file(dest / name) == want, "sha256 mismatch for " + name)
     state = json.loads((dest / "state.json").read_text())
-    validate_state(state)
+    validate_state(state, require_password=True)
     require(seed_matches(state), "state ids do not match its seed")
     return state
 

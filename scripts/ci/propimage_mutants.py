@@ -140,6 +140,22 @@ CASES = [
          "test_setup_argv_attaches_install_media_windows_iso_first", "test_only_the_first_cdrom_has_a_boot_index"),
     case("cdrom-port-limit", 'require(len(cdroms) <= 6, "the q35 AHCI controller has 6 ports")', 'pass',
          "test_more_than_six_cdroms_refused", "test_cli_refuses_seven_cdroms"),
+    case("memfd-backend-bound", ',accel=kvm,smm=on,memory-backend=ram0"', ',accel=kvm,smm=on"',
+         "test_guest_ram_is_a_shared_memfd_backend_in_every_mode", "test_machine_option_binds_the_ram_backend"),
+    case("memfd-backend-shared", 'size=%dM,share=on"', 'size=%dM,share=off"',
+         "test_guest_ram_is_a_shared_memfd_backend_in_every_mode", "test_machine_option_binds_the_ram_backend"),
+    case("guest-driver-abi", '"guest-driver=" + q["guest_driver"]]', '"x=1"]',
+         "test_kf3_device_carries_guest_driver_abi", "test_guest_driver_in_every_kf3_mode"),
+    case("guest-driver-validated", 'require(re.fullmatch(r"\\d+\\.\\d+\\.\\d+", state["qemu"]["guest_driver"]), "bad guest-driver")', 'pass',
+         "test_validate_rejects_bad_guest_driver", "test_validate_rejects_nonnumeric_guest_driver"),
+    case("password-must-be-derived", 'require(pw is None or pw == derive_password(state["seed"]), "guest.password is not the seed-derived password")', 'pass',
+         "test_validate_refuses_a_foreign_password", "test_unpack_refuses_a_foreign_password"),
+    case("password-required-on-unpack", 'validate_state(state, require_password=True)', 'validate_state(state)',
+         "test_unpack_refuses_a_package_without_a_password", "test_unpack_refuses_a_null_password"),
+    case("pack-adds-password", 'if state["guest"].get("password") is None:', 'if False:',
+         "test_pack_adds_the_password_to_an_older_state", "test_cli_pack_writes_the_password_into_the_packed_state"),
+    case("init-writes-password", '"password": derive_password(seed), ', '', 
+         "test_init_state_writes_the_derived_password", "test_cli_init_writes_the_password"),
 ]
 
 

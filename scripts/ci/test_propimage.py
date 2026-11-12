@@ -322,7 +322,7 @@ class PropTests(unittest.TestCase):
 
     def test_probe_script_asks_for_every_item(self):
         for needle in ("MachineGuid", "Win32_ComputerSystemProduct", "Win32_BIOS", "Win32_BaseBoard", "Get-NetAdapter",
-                       "Win32_DiskDrive", "nvidia-smi", "Get-Tpm", "Get-TpmEndorsementKeyInfo", "ToUniversalTime"):
+                       "Win32_DiskDrive", "nvidia-smi", "Get-Tpm", "Get-TpmEndorsementKeyInfo", "PublicKey.RawData", "ToUniversalTime"):
             self.assertIn(needle, self.p.GUEST_PS)
 
     def test_run_guest_probe_parses_last_json_line(self):
@@ -1158,6 +1158,41 @@ class PropTests(unittest.TestCase):
             with self.assertRaises(self.p.PropError):
                 self.p.render_setup_ssh(s)
 
+    def test_guest_ram_is_a_shared_memfd_backend_in_every_mode(self):
+        for mode in self.p.MODES:
+            a = self.argv(mode)
+            j = " ".join(a)
+            self.assertIn("memory-backend-memfd,id=ram0,size=8192M,share=on", j)
+            self.assertIn("memory-backend=ram0", j)
+
+    def test_machine_option_binds_the_ram_backend(self):
+        a = self.argv("ci", display="off")
+        self.assertIn("memory-backend=ram0", a[a.index("-machine") + 1])
+        self.assertIn("share=on", a[a.index("-object") + 1])
+        self.assertEqual(a[a.index("-m") + 1], "8192")
+
+    def test_kf3_device_carries_guest_driver_abi(self):
+        dev = self.opt(self.argv("install"), "-device", "kf3-gpu")[0]
+        self.assertIn("guest-driver=580.65.06", dev)
+        self.assertIn("guest-driver=580.65.06", self.opt(self.argv("ci", display="off"), "-device", "kf3-gpu")[0])
+
+    def test_guest_driver_in_every_kf3_mode(self):
+        for mode in ("install", "offline", "ci"):
+            self.assertIn("guest-driver=580.65.06", " ".join(self.argv(mode)))
+        self.assertNotIn("guest-driver", " ".join(self.argv("setup")))
+
+    def test_validate_rejects_nonnumeric_guest_driver(self):
+        s = copy.deepcopy(self.state)
+        s["qemu"]["guest_driver"] = "latest"
+        with self.assertRaises(self.p.PropError):
+            self.p.validate_state(s)
+
+    def test_validate_rejects_bad_guest_driver(self):
+        s = copy.deepcopy(self.state)
+        s["qemu"]["guest_driver"] = "580.65.06,x=1"
+        with self.assertRaises(self.p.PropError):
+            self.p.validate_state(s)
+
     def test_cli_has_only_the_flow_verbs(self):
         import contextlib
         import io
@@ -1210,6 +1245,116 @@ class PropTests(unittest.TestCase):
         alt.write_bytes(b"msi")
         with self.assertRaises(self.p.PropError):
             self.p.write_tools_dir(self.state, self.tmp / "cd5", alt, nv)
+
+
+    # --- the login lives in the state
+    def test_init_state_writes_the_derived_password(self):
+        st = self.p.init_state(SEED)
+        self.assertEqual(st["guest"]["user"], "kfimage")
+        self.assertEqual(st["guest"]["password"], self.p.derive_password(SEED))
+
+    def test_validate_refuses_a_foreign_password(self):
+        s = copy.deepcopy(self.state)
+        s["guest"]["password"] = "Kf-0000000000000000"
+        with self.assertRaises(self.p.PropError):
+            self.p.validate_state(s)
+
+    def test_validate_can_require_a_password(self):
+        s = copy.deepcopy(self.state)
+        s["guest"].pop("password", None)
+        self.assertTrue(self.p.validate_state(s))
+        with self.assertRaises(self.p.PropError):
+            self.p.validate_state(s, require_password=True)
+
+    def test_verify_cli_refuses_a_foreign_password(self):
+        s = copy.deepcopy(self.state)
+        s["guest"]["password"] = "Kf-ffffffffffffffff"
+        sp = self.tmp / "pw.json"
+        sp.write_text(json.dumps(s))
+        self.assertEqual(self.p.main(["verify", str(sp), "--cpuinfo", str(self.cpu_file())]), 2)
+
+    def test_pack_adds_the_password_to_an_older_state(self):
+        s = copy.deepcopy(self.state)
+        s["guest"].pop("password", None)
+        sp = self.tmp / "old.json"
+        sp.write_text(json.dumps(s))
+        img = self.tmp / "old.qcow2"
+        img.write_bytes(b"QFI")
+        z = self.tmp / "old.zip"
+        self.p.pack(sp, img, z)
+        with zipfile.ZipFile(z) as zf:
+            packed = json.loads(zf.read("state.json"))
+        self.assertEqual(packed["guest"]["password"], self.p.derive_password(SEED))
+        self.assertEqual(json.loads(sp.read_text())["guest"]["password"], self.p.derive_password(SEED))
+        self.assertEqual(self.p.unpack(z, self.tmp / "oldx")["guest"]["password"], self.p.derive_password(SEED))
+
+    def test_unpack_refuses_a_package_without_a_password(self):
+        out, _ = self.make_pkg()
+        bad = self.tmp / "nopw.zip"
+        with zipfile.ZipFile(out) as z, zipfile.ZipFile(bad, "w", zipfile.ZIP_STORED) as w:
+            members = {i.filename: z.read(i.filename) for i in z.infolist()}
+            st = json.loads(members["state.json"])
+            st["guest"].pop("password")
+            members["state.json"] = json.dumps(st).encode()
+            m = json.loads(members["manifest.json"])
+            m["members"]["state.json"] = hashlib.sha256(members["state.json"]).hexdigest()
+            members["manifest.json"] = json.dumps(m).encode()
+            for k, v in members.items():
+                w.writestr(k, v)
+        with self.assertRaises(self.p.PropError):
+            self.p.unpack(bad, self.tmp / "nopwx")
+
+    def test_unpack_refuses_a_foreign_password(self):
+        out, _ = self.make_pkg()
+        bad = self.tmp / "fpw.zip"
+        with zipfile.ZipFile(out) as z, zipfile.ZipFile(bad, "w", zipfile.ZIP_STORED) as w:
+            members = {i.filename: z.read(i.filename) for i in z.infolist()}
+            st = json.loads(members["state.json"])
+            st["guest"]["password"] = "Kf-1111111111111111"
+            members["state.json"] = json.dumps(st).encode()
+            m = json.loads(members["manifest.json"])
+            m["members"]["state.json"] = hashlib.sha256(members["state.json"]).hexdigest()
+            members["manifest.json"] = json.dumps(m).encode()
+            for k, v in members.items():
+                w.writestr(k, v)
+        with self.assertRaises(self.p.PropError):
+            self.p.unpack(bad, self.tmp / "fpwx")
+
+
+    def test_unpack_refuses_a_null_password(self):
+        out, _ = self.make_pkg()
+        bad = self.tmp / "nullpw.zip"
+        with zipfile.ZipFile(out) as z, zipfile.ZipFile(bad, "w", zipfile.ZIP_STORED) as w:
+            members = {i.filename: z.read(i.filename) for i in z.infolist()}
+            st = json.loads(members["state.json"])
+            st["guest"]["password"] = None
+            members["state.json"] = json.dumps(st).encode()
+            m = json.loads(members["manifest.json"])
+            m["members"]["state.json"] = hashlib.sha256(members["state.json"]).hexdigest()
+            members["manifest.json"] = json.dumps(m).encode()
+            for k, v in members.items():
+                w.writestr(k, v)
+        with self.assertRaises(self.p.PropError):
+            self.p.unpack(bad, self.tmp / "nullpwx")
+
+    def test_cli_pack_writes_the_password_into_the_packed_state(self):
+        import contextlib
+        import io
+        s = copy.deepcopy(self.state)
+        s["guest"].pop("password", None)
+        sp = self.tmp / "cp.json"
+        sp.write_text(json.dumps(s))
+        img = self.tmp / "cp.qcow2"
+        img.write_bytes(b"QFI")
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(self.p.main(["pack", str(sp), str(img), "--out", str(self.tmp / "cp.zip")]), 0)
+        with zipfile.ZipFile(self.tmp / "cp.zip") as zf:
+            self.assertIn("password", json.loads(zf.read("state.json"))["guest"])
+
+    def test_cli_init_writes_the_password(self):
+        out = self.tmp / "init.json"
+        self.assertEqual(self.p.main(["init", SEED, "--out", str(out)]), 0)
+        self.assertEqual(json.loads(out.read_text())["guest"]["password"], self.p.derive_password(SEED))
 
 
 if __name__ == "__main__":

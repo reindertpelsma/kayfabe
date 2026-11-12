@@ -1,6 +1,6 @@
-STATUS: DESIGN-ONLY, 2026-11-12. Owner design (binding), gap analysis against draft PRs #293/#302/#300/#303, GPU-free
-tooling (`scripts/bench/windows/propimage.py`, tested by `scripts/ci/test_propimage.py`, 158 tests, 59 mutants in
-`scripts/ci/propimage_mutants.py`, each with at least two killers; counts from a fresh run on 2026-11-12). No VM was started, nothing was deleted on the PC, no R2 object was written.
+STATUS: DESIGN-ONLY with measured first runs (sections 9-11), 2026-11-12. Owner design (binding), gap analysis against draft PRs #293/#302/#300/#303, GPU-free
+tooling (`scripts/bench/windows/propimage.py`, tested by `scripts/ci/test_propimage.py`, 174 tests, 67 mutants in
+`scripts/ci/propimage_mutants.py`, each with at least two killers; counts from a fresh run on 2026-11-12). Sections 9 to 11 record real runs on the PC (setup VM, install mode, GPU driver); nothing was deleted on the PC and no R2 object was written.
 Labels: MEASURED = a file or command run on 2026-11-12 (named); CODE READ = read in a named file; INFERRED = reasoning,
 not tested; DESIGN INTENT = owner or coordinator decision, not built; UNTESTED = no run yet.
 
@@ -291,3 +291,31 @@ is open: the `.exe` alone cannot write the class key before nvlddmkm's first sta
 The setup-VM answer file keeps: language, disk layout, edition index 6, local account, BypassCPUCheck, BitLocker/Windows Update/VBS/Fast Startup/crash-dump/Smart App
 Control registry lines of the existing LTSC template (CODE READ in `propimage_autounattend.xml.in`; each is a tweak from `autounattend.xml.in`, to be trimmed to the minimum
 the owner approves: open item O4).
+
+## 11. First run of the setup VM, SSH verify and the GPU install (MEASURED 2026-11-12, PC, times Z)
+
+- `verify` against the setup VM over the loopback ssh forward: SMBIOS UUID, three serials, MAC and virtio disk serial as the guest sees them all MATCH the seed-derived
+  ids; TPM present (swtpm CRB); CPU as the guest sees it: `AMD Virtual CPU`, `AuthenticAMD`, `AMD64 Family 23 Model 1 Stepping 2`, ProcessorId `178BFBFF00800F12`
+  (CPUID leaf 1 EAX 0x00800F12 = family 23 model 1 stepping 2), 8 cores/8 logical, flags avx, avx2, cx16, rdtscp, sse4_1, sse4_2, ssse3, xsave, none of avx512f/rtm/hle/mpx/sgx.
+  GPU UUID: none yet (Basic Display only; expected). Clock: the guest ran the real clock (setup mode); the faked-clock check was not meaningful there.
+  `Get-TpmEndorsementKeyInfo.PublicKeyHash` is empty in the guest, so the EK hash is now computed as sha256 over `PublicKey.RawData` (the probe was fixed).
+- Install mode: swtpm and OVMF vars unchanged except one added Secure Boot db certificate (the signing key of the boot GOP, enrolled with `virt-fw-vars --add-db`,
+  backup `firmware/OVMF_VARS.before-gop.fd`); kf3 qemu `0ad35b8d`, `gop=on`, `guest-driver=580.65.06`, the gate's KF3_* flags from `kf3_flags.sample.env`, the broker as the
+  session user on Wayland (normal path), internet on (slirp restrict=off). The guest booted and answered ssh; broker log shows frames and cursor events.
+- Guest changes made over ssh, exactly: NVIDIA 580.88 (INF route, `gsp_on.ps1 -NoEnable`: published name oem15.inf, version 32.0.15.8088; class key 0001 and `nvlddmkm`
+  `EnableGpuFirmware` read back 1), Dwm `OverlayTestMode=5`, `HKLM:\SOFTWARE\OpenSSH` `DefaultShell` = Windows PowerShell (one value, the only deviation from an
+  official install), then `pnputil /enable-device` (gsp_on's `-NoEnable` leaves the device disabled and a reboot does not re-enable it: CM_PROB_DISABLED, code 22, MEASURED;
+  `gsp_on.ps1` without `-NoEnable` does the enable itself and is the better call next time). `C:\kf` (driver copy, script, log) was deleted afterwards (`Test-Path C:\kf` False).
+- Result after reboot and enable: `Win32_PnPEntity` NVIDIA GeForce RTX 4070 `ConfigManagerErrorCode 0`, status OK; `nvidia-smi` in the guest prints GPU UUID
+  `GPU-57a1c1f8-d5e0-2e79-d42f-98f8f35ca554` (= the seed-derived one) and driver 580.88. No new host `NVRM: Xid` (the two in dmesg date from host uptime 6580 s, host uptime now 58096 s).
+  What is not verified by me: the Windows desktop on the broker window and mouse/keyboard (the owner's eyes).
+
+## 12. What the state contains (private-R2 artifact)
+
+`state.json` is shipped only inside the private R2 package (never in git, public releases or shared caches): `seed`, the derived ids (SMBIOS uuid and three serials,
+MAC, disk serial, GPU UUID, slirp subnet, loopback ssh port, clock gap), `guest.user` and `guest.password` (the derived `Kf-<16 hex>`; the seed is public, so the password is
+effectively public: accepted for a loopback-only local test VM, MEASURED nothing else is exposed by it), the VM's ssh key pair (intentionally exposed), the swtpm and OVMF
+variable blobs (base64, sha256), `machine_guid` and the TPM EK hash (recorded from the guest, not derivable), the CPU profile and the recorded CPU fingerprint, the clock rule and the
+last time at stop, the qemu machine shape and the kf3 `guest-driver` ABI, software versions and the per-app offline results. `init` writes `guest.password`; `pack` adds it to an older
+state (and writes it back to the packed state file); `validate_state` (so `verify`, `argv`, `pack`, `unpack`) refuses a password that is not the derivation, and `unpack` refuses a
+package without one. The PC's running state.json is not edited until `pack`: `init` must NOT be re-run on it (it would replace the ssh keys and drop the recorded fingerprint).
