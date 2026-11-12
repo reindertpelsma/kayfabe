@@ -1562,13 +1562,18 @@
       "target": "/opt/apps/source/local/conv2d.cu"
     },
     {
+      "path": "scripts/apps/src/cuda_drv_probe.c",
+      "sha256": "3ed29e8f4c37a59c6f2a0a663a976ae3a6129b410fc513f1a2b7d378d5d0c944",
+      "target": "/opt/apps/source/local/cuda_drv_probe.c"
+    },
+    {
       "path": "scripts/apps/src/cupy_check.py",
       "sha256": "d771248d505f9ba887c292b87c900251e60022a8e1829bd46b24064533c525fe",
       "target": "/opt/apps/source/local/cupy_check.py"
     },
     {
       "path": "scripts/apps/src/egl_offscreen.c",
-      "sha256": "4da6abc0f8c9e316ed2eb4ff6bbd3418a48abf7bec90edeb548ace929648a479",
+      "sha256": "0a63209c432c9f83af7c38126e91bf483c0fbee23ffbc8968c70b3f4035be176",
       "target": "/opt/apps/source/local/egl_offscreen.c"
     },
     {
@@ -1602,6 +1607,11 @@
       "target": "/opt/apps/source/local/reduce.cu"
     },
     {
+      "path": "scripts/apps/src/renderer_check.py",
+      "sha256": "02a193c7af1a5f4dbfe4ae18c124a251615a8ba30f64469c6df071686b32a638",
+      "target": "/opt/apps/source/local/renderer_check.py"
+    },
+    {
       "path": "scripts/apps/src/sgemm_cublas.cu",
       "sha256": "71dd6129abeac6878057f9f7775c4415d601c6458f1c667b51bee0235e499bac",
       "target": "/opt/apps/source/local/sgemm_cublas.cu"
@@ -1628,7 +1638,7 @@
     },
     {
       "path": "scripts/apps/run_apps.sh",
-      "sha256": "c1a33bf2a2dfc44dc5a119d58bdfbb0a12cfdc84cda33cccfa47aae824792f74",
+      "sha256": "6b64a4fb8da66061581a123ba90998de70d69134992324e98d73e5c3b763dae0",
       "target": "/opt/apps/bundle/run_apps.sh",
       "permissions": "0755"
     }
@@ -1656,6 +1666,10 @@
     {
       "from": "/opt/apps/source/local/hf_generate.py",
       "to": "/opt/apps/bundle/share/hf_generate.py"
+    },
+    {
+      "from": "/opt/apps/source/local/renderer_check.py",
+      "to": "/opt/apps/bundle/share/renderer_check.py"
     },
     {
       "from": "/opt/apps/source/local/torch_correct.py",
@@ -2059,6 +2073,30 @@
       "outputs": [
         {
           "path": "/opt/apps/bundle/bin/egl_offscreen",
+          "sha256": "inventory-only"
+        }
+      ],
+      "requires": "open-layer",
+      "shared_runtime_outputs": {}
+    },
+    {
+      "name": "cuda_drv_probe",
+      "source": "local",
+      "cwd": "/opt/apps/source/local",
+      "commands": [
+        [
+          "gcc",
+          "-O2",
+          "-Wall",
+          "cuda_drv_probe.c",
+          "-o",
+          "/opt/apps/bundle/bin/cuda_drv_probe",
+          "-ldl"
+        ]
+      ],
+      "outputs": [
+        {
+          "path": "/opt/apps/bundle/bin/cuda_drv_probe",
           "sha256": "inventory-only"
         }
       ],
@@ -3463,6 +3501,7 @@
       "/opt/apps/bundle/bin/stream_probe",
       "/opt/apps/bundle/bin/stream_triad",
       "/opt/apps/bundle/bin/egl_offscreen",
+      "/opt/apps/bundle/bin/cuda_drv_probe",
       "/opt/apps/bundle/samples/deviceQuery",
       "/opt/apps/bundle/samples/bandwidthTest",
       "/opt/apps/bundle/samples/vectorAdd",
@@ -3511,6 +3550,7 @@
       "/opt/apps/bundle/share/ai_bench.py",
       "/opt/apps/bundle/share/blender_render.py",
       "/opt/apps/bundle/share/cupy_check.py",
+      "/opt/apps/bundle/share/renderer_check.py",
       "/opt/apps/bundle/share/hf_generate.py",
       "/opt/apps/bundle/share/torch_correct.py"
     ],
@@ -4229,6 +4269,7 @@
       "/opt/apps/bundle/bin/stream_probe",
       "/opt/apps/bundle/bin/stream_triad",
       "/opt/apps/bundle/bin/egl_offscreen",
+      "/opt/apps/bundle/bin/cuda_drv_probe",
       "/opt/apps/bundle/samples/deviceQuery",
       "/opt/apps/bundle/samples/bandwidthTest",
       "/opt/apps/bundle/samples/vectorAdd",
@@ -4278,6 +4319,7 @@
       "/opt/apps/bundle/share/ai_bench.py",
       "/opt/apps/bundle/share/blender_render.py",
       "/opt/apps/bundle/share/cupy_check.py",
+      "/opt/apps/bundle/share/renderer_check.py",
       "/opt/apps/bundle/share/hf_generate.py",
       "/opt/apps/bundle/share/torch_correct.py"
     ],
