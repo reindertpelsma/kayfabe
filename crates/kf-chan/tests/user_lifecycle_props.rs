@@ -2119,6 +2119,9 @@ fn fingerprint(cfg: Option<kf_chan::user_lazy::LazyConfig>) -> (u64, usize, usiz
                     "pointer_entry_max_bytes: ",
                     "refused_scan_budget: ",
                     "refused_staged_span_budget: ",
+                    "segments_streamed: ",
+                    "stream_parts_max: ",
+                    "window_entry_max_bytes: ",
                 ]
                 .iter()
                 .any(|prefix| field.starts_with(prefix))

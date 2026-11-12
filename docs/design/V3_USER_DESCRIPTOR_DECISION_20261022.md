@@ -1,7 +1,25 @@
 # Oversized USER descriptors: the decision
 
-**STATUS: LIVE, 2026-11-09. Authority: the 2026-10-22 mode-scoped admission decision.
-UR1 ports Phase 1 to `next`; Phase 2 below remains DESIGN-ONLY and unimplemented.**
+**STATUS: LIVE, 2026-11-12. Authority: the 2026-10-22 mode-scoped admission decision.
+UR1 ported Phase 1 to `next` (2026-11-09). 2026-11-12: Phase 2 (streamed classification in bounded parts) is ported to
+`next` on branch `claude/user-ring-phase2-20261112`, GPU-free green, hardware NOT yet run.**
+
+**CORRECTION, 2026-11-12 (folded above the text it corrects): the H-D falsifier (section 7) fired, and "Phase 2 remains
+DESIGN-ONLY and unimplemented" below is no longer true.**
+MEASURED (one log line, creo-04 `07_WorldCarShadedEdges`, Windows, Vast 4090, fixed kf3 `5d7a5bc6`, 2026-11-12): kf3 log line 14142,
+`USER_RING_REFUSED 0xc1d00070:0xff040010 host 0x39: USER_RING_SCAN_BUDGET len=1042284 max=917504 mode=Window
+entry=0x0fe76e022f5d102c cursor=0x2 put=0x3f8`, directly after `USER_RING_MIGRATED ... generation=2` (line 14141). The
+entry is a normal UMD segment (LEVEL=subroutine, no SYNC_WAIT); `mode=Window` was reached right after a ring migration.
+INFERRED, not measured: that the refusal (a dead relay: no completion, no `GP_GET` write-back) caused the guest stall and the
+three `nvlddmkm 153` events at 14:02:03-05 (the refusal's wall time is not in the copied log). INFERRED: Window mode was forced
+only by `POST_SWITCH_SCAN` (the live registration count was not logged then; the refusal text now carries `live=` and
+`post_switch=`). Analysis: `/root/night/userring_scan_budget_20261112.md` (not in git). NOT proven until a creo-04 run on hardware
+with the Phase 2 binary shows subtest 07 completing with zero refusals and a nonzero `segments_streamed`.
+CODE READ, the port: `Scan`/`Window` segments above 917,504 bytes are classified in at most ten bounded parts (one per worker
+turn, worker only, each part's source receipt re-admitted at publication) and the guest's original word is forwarded unchanged.
+A registered software trigger inside such a segment refuses as `USER_RING_STAGED_SPAN_BUDGET` (H-E; a trigger needs a whole
+patched span in the 917,504-byte staging region). `USER_RING_SCAN_BUDGET` is no longer emitted. New observation counters in
+`USER_RING_LIFECYCLE`: `segments_streamed`, `stream_parts_max`, `window_entry_max_bytes`.
 
 **CODE READ, UR1:** Pointer/NOP admission uses the hardware format and forwards the intact
 word. Scan/Window still refuse above the 917,504-byte copy/staging bound before any gate or
@@ -300,6 +318,7 @@ Phase 2 changes behaviour only for Scan/Window entries above 917,504, which are 
   **Falsifier:** catia 03 still fails with zero refusals of any budget name. Then pursue T1 H1/H2 with T1's diagnostics.
 - **H-D (INFERRED):** all twelve refusals were in Pointer mode.
   **Falsifier:** a `USER_RING_SCAN_BUDGET` under Phase 1 in the catia run. Phase 2 then becomes required for catia, not just for completeness.
+  **Result, 2026-11-12:** fired, in creo-04 (not catia), `mode=Window` after a migration (see the correction at the top).
 - **H-E (INFERRED):** production workloads do not put a registered trigger inside a segment above 917,504 bytes.
   **Falsifier:** `USER_RING_STAGED_SPAN_BUDGET > 0` in any lane. Option F then becomes required, with its own design review.
 
