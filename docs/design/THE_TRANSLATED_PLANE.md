@@ -1297,3 +1297,24 @@ it. A mutation that starts the action before the drain fence fails it (2026-10-0
 - **Open for the owner:** ruling B applied to the deferred INITIALIZE/PROMOTE ("golden context is
   guest-kernel-only"); `PRESERVE_CTX` (migration) has no twin equivalent; the GR ctxsw binds and
   `FIFO_UPDATE_CHANNEL_INFO` are refused.
+
+## §30 — `[2026-11-12]` A guest-kernel copy-engine ring decodes against its host channel's CE class when no `SET_OBJECT` was sent
+
+**STATUS: DESIGN-ONLY at the hardware level; the decode is implemented and unit-tested (GPU-free). Not merged to master, not run on a GPU.**
+
+- **MEASURED (PC kf3 log, kayfabe `42642d5d`, RTX 4070, SPEC energy-04):** a kernel copy-engine ring (token `0x806`, engine `0xb`, class `0xc56f`
+  channel with an RM-allocated `0xc7b5` object) was refused at GP 34 with `NoCeObject { subch: 4, method: 576 }`. The six words are
+  `SET_SEMAPHORE_A/B/PAYLOAD` (semaphore VA `0x1_2023_b060`, payload `0x244a9`) and `LAUNCH_DMA 0x4c` (a one-word release with flush, no data
+  transfer). Nothing in GP 0-33 sent a `SET_OBJECT`. The device then marked the channel dead and completed nothing for it. The same refusal
+  shape appears in at least nine Windows boots of 2026-10-20 and in run 3017.
+- **INFERRED, not measured on bare metal:** hardware subchannels 0-4 reach the channel's engine without `SET_OBJECT` (the public `dev_ram.ref`
+  statement quoted in `V3_USERD_RELAY.md`, and the same Windows driver behaviour already measured on the NVDEC ring in run 2990).
+- **Change (branch `claude/ce2-kernel-ring-20261019`, merged for review in `claude/ce2-kernel-ring-merge-20261112`):** `TState::ce_object` is set once at
+  ring birth from `HostRing::ce_object_class()`, only for guest-kernel work (`kernel_client && !user_work`) on a copy engine whose host channel
+  holds a CE class the table knows (`kf_chan::ce_implicit::implicit_ce_class`). `TState::ce_tier()` is the guest's own `SET_OBJECT` class if it sent
+  one (the guest-bound class wins, as before), else the host class, else none (`NoCeObject`, as before). The class never comes from guest bytes and
+  no bind is authored for it. Every method still goes through the CE method table (unnamed methods are still `Unclassified`, field checks and
+  placement checks unchanged). User-tier rings, graphics rings and video rings get class `0` and are unchanged.
+- **Tested (GPU-free):** `crates/kf-chan/src/tmode_ce_tests.rs` and `crates/kf-chan/tests/ring.rs`, including the energy-04 words.
+- **NOT proven:** that this removes the energy-04 reset. That needs a hardware run (energy-04 alone, three times, with the fixed binary, kf3 trace
+  flags and the guest overlay kept). Whether entries 0-33 of that ring complete on the host is also unknown.

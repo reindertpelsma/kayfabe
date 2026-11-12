@@ -24,7 +24,7 @@ fn is_ce(c: u32) -> bool {
     kf_chip::is_any_dma_copy_class(c)
 }
 
-/// The Ada CE class of the measured guest (`RUN31_CE` in `tmode_gr_tests.rs` binds `0xC7B5`).
+/// The Ada CE class of the guest of run 3017 (2026-10-19; `RUN31_CE` in `tmode_gr_tests.rs` binds `0xC7B5`).
 const C7B5: u32 = 0xC7B5;
 
 /// GP 34 of the kernel CE ring, all 6 words as logged by `ring REFUSED segment`:
@@ -96,7 +96,7 @@ fn an_unconfigured_ring_refuses_the_measured_segment_as_before() {
 }
 
 /// CORRECT behaviour: a kernel CE ring whose host channel holds a `C7B5` object decodes the
-/// measured segment against that class — the release is one `Ir::Launch` on subchannel 4 at the
+/// logged run 3017 (2026-10-19) segment against that class — the release is one `Ir::Launch` on subchannel 4 at the
 /// guest's semaphore VA, payload `0x476c`, four bytes — and authors no `SET_OBJECT`.
 #[test]
 fn the_measured_run3017_segment_is_decoded_against_the_rings_own_ce_class() {
@@ -407,4 +407,120 @@ fn the_census_counts_a_run_under_the_derived_class() {
     assert_eq!(c.count(0xC9B5, SubKind::Ce, 0x244), 8);
     assert_eq!(c.launches_of(0xC9B5, 0x4c), 8);
     assert_eq!(c.count(0, SubKind::Ce, 0x244), 0);
+}
+
+// ---- energy-04 (PC, RTX 4070, kayfabe 42642d5d, 2026-11-12) ----------------------------------
+
+/// The 6 words kayfabe refused in the energy-04 SPEC run (RTX 4070, 2026-11-12, rev 42642d5d), read from the PC kf3 log (the same
+/// shape as [`RUN3017_GP34`]; only `SET_SEMAPHORE_B` and the payload differ): semaphore VA
+/// `0x1_2023_b060`, payload `0x244a9`, `LAUNCH_DMA` `0x4c`, subchannel 4, no `SET_OBJECT` before.
+const ENERGY04_GP34: [u32; 6] = [
+    0x2003_8090,
+    0x0000_0001,
+    0x2023_b060,
+    0x0002_44a9,
+    0x2001_80c0,
+    0x0000_004c,
+];
+
+fn launches(ir: &[Ir]) -> Vec<&crate::tmode::CeLaunch> {
+    ir.iter()
+        .filter_map(|i| match i {
+            Ir::Launch(l) => Some(&**l),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Killers: (1) the ring must not refuse without a `SET_OBJECT` when its host class is `C7B5`
+/// (mutant: `ce_tier()` at the refusal site replaced by `st.tier`); (2) the release must be
+/// authored with the host-derived tier, VA and payload (mutant: wrong tier or dropped semaphore).
+#[test]
+fn energy04_words_on_a_kernel_ce_ring_without_set_object_are_authored_as_the_ce_release() {
+    let mut st = cfg(C7B5);
+    let ir = decode(&ENERGY04_GP34, is_ce, &mut st, None).expect("admitted without SET_OBJECT");
+    let l = launches(&ir);
+    assert_eq!(l.len(), 1, "{ir:?}");
+    assert_eq!((l[0].sub, l[0].tier), (4, crate::ttables::Tier::C7b5));
+    let sema = l[0].sema.expect("a semaphore release");
+    assert_eq!(
+        (sema.va, sema.payload, sema.bytes),
+        (0x1_2023_b060, 0x2_44a9, 4)
+    );
+    assert!(l[0].src.is_none() && l[0].dst.is_none(), "no data moved");
+    assert!(
+        !ir.iter().any(|i| matches!(i, Ir::Words(_))),
+        "nothing guest-chosen is authored as a bind: {ir:?}"
+    );
+    assert_eq!(st.tier, None, "the guest bound nothing");
+    // Authored through the windows: the host word stream names a window address, never the VA.
+    let w = windows();
+    let mut out = Vec::new();
+    for i in &ir {
+        super::bind(i, &Rows, &w, &mut out).expect("bound");
+    }
+    assert!(out.contains(&h(4, 0x300, 1)));
+    assert!(
+        !out.contains(&0x2023_b060),
+        "the guest VA low word is not emitted"
+    );
+}
+
+/// Killers: a host channel whose class is not a CE class gives no leniency (graphics, video,
+/// neighbour numbers, zero), and the same words on a user-tier / unconfigured ring (class 0)
+/// are refused exactly as before.
+#[test]
+fn energy04_words_are_still_refused_without_a_host_ce_class() {
+    for class in [0, 0xC56F, 0xC9B0, 0xC997, 0x5080, 0xC7B4, 0xC7B6, u32::MAX] {
+        assert_eq!(
+            decode(&ENERGY04_GP34, is_ce, &mut cfg(class), None),
+            Err(Refusal::NoCeObject {
+                subch: 4,
+                method: 0x240
+            }),
+            "class {class:#x}"
+        );
+    }
+}
+
+/// When the guest does send `SET_OBJECT` itself, the guest-bound class decides from then on (it
+/// is the behaviour before this change, unchanged), and a non-CE class is still refused as a
+/// foreign class. Both are safe: the guest's choice is limited to the CE classes the table knows,
+/// the bind word authored is the class alone, and the host channel never gains a method set the
+/// guest's own `SET_OBJECT` did not already unlock.
+#[test]
+fn energy04_words_after_a_guest_set_object_follow_the_guests_class() {
+    let mut st = cfg(C7B5);
+    let mut seg = vec![h(4, 0, 1), 0xC8B5];
+    seg.extend_from_slice(&ENERGY04_GP34);
+    let ir = decode(&seg, is_ce, &mut st, None).expect("bind then release");
+    assert_eq!(st.tier, Some(crate::ttables::Tier::C8b5));
+    assert_eq!(launches(&ir)[0].tier, crate::ttables::Tier::C8b5);
+    let mut bad = vec![h(4, 0, 1), 0xC997];
+    bad.extend_from_slice(&ENERGY04_GP34);
+    assert_eq!(
+        decode(&bad, is_ce, &mut cfg(C7B5), None),
+        Err(Refusal::ForeignClass {
+            subch: 4,
+            class: 0xC997
+        })
+    );
+}
+
+/// The derived class admits only what the CE method table names: next to the release, an
+/// unnamed method and a software-subchannel method are still refused by name.
+#[test]
+fn energy04_release_is_admitted_but_unnamed_methods_next_to_it_are_not() {
+    let mut seg = ENERGY04_GP34.to_vec();
+    seg.extend_from_slice(&[h(4, 0x104, 1), 0]);
+    assert_eq!(
+        decode(&seg, is_ce, &mut cfg(C7B5), None),
+        Err(Refusal::Unclassified {
+            subch: 4,
+            method: 0x104
+        })
+    );
+    let mut seg2 = vec![h(4, 0x7FC, 1), 0];
+    seg2.extend_from_slice(&ENERGY04_GP34);
+    assert!(decode(&seg2, is_ce, &mut cfg(C7B5), None).is_err());
 }

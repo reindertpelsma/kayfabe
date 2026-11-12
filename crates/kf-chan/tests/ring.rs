@@ -741,3 +741,53 @@ fn a_kernel_ce_ring_with_its_class_still_refuses_what_the_table_does_not_name() 
         }
     );
 }
+
+/// ★ 2026-11-12 (energy-04, PC): the same ring shape as run 3017 with the energy-04 words
+/// (semaphore VA `0x1_2023_b060`, payload `0x244a9`). A kernel CE ring that holds its host CE
+/// class retires GP 34 as one launch; without the class it is refused (killers: the class
+/// plumbing, and the ring-level refusal).
+fn energy04_ring(mem: &mut Mem) {
+    for gp in 0..34 {
+        mem.entry(gp, control(0, 0));
+    }
+    let mut w = m(4, 0x240, &[0x1, 0x2023_b060, 0x2_44a9]);
+    w.extend(m(4, ce::LAUNCH_DMA, &[0x4c]));
+    seg(mem, 34, PB, &w);
+}
+
+#[test]
+fn energy04_gp_34_retires_on_a_kernel_ce_ring_and_is_refused_on_any_other() {
+    let run = |class: u32| {
+        let mut mem = Mem::default();
+        energy04_ring(&mut mem);
+        let mut r = TranslatedRing::new_tmode(GPFIFO, 64, 0);
+        r.set_ce_object(class);
+        let (mut binds, mut last) = (0, None);
+        loop {
+            match r.next(35, &mut mem, is_ce, &W) {
+                Ok(Next::Idle) => return Ok((binds, last)),
+                Ok(Next::Bind { ir, retires }) => {
+                    binds += ir.len();
+                    last = retires.or(last);
+                }
+                Ok(Next::Submit { retires, .. }) => last = retires.or(last),
+                Ok(other) => panic!("{other:?}"),
+                Err(e) => return Err(e),
+            }
+        }
+    };
+    assert_eq!(run(CE_CLASS), Ok((1, Some(35))));
+    for class in [0, 0xC56F, 0xC9B0] {
+        assert_eq!(
+            run(class),
+            Err(RingRefusal::Rewrite {
+                gp: 34,
+                why: Refusal::NoCeObject {
+                    subch: 4,
+                    method: 0x240
+                }
+            }),
+            "class {class:#x}"
+        );
+    }
+}
