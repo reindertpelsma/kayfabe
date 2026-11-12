@@ -26,6 +26,7 @@ const offer = (id, compute, inet, disk = 120) => ({
   id,
   machine_id: 80000 + id,
   gpu_name: 'RTX_4070',
+  cpu_name: 'AMD EPYC 7B13',
   compute_cap: 890,
   geolocation: 'Texas, US',
   dph_base: compute,

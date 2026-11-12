@@ -271,9 +271,9 @@ test('plan: an Intel offer on a MIDDLE die never satisfies the rule', () => {
   assert.equal(plan.cpu_vendor.swaps.length, 0);
   assert.equal(plan.admitted, false);
 });
-test('plan: ARM hosts are never planned and unknown CPUs count for neither vendor', () => {
+test('plan: ARM hosts are never planned', () => {
   const cfg = cfgOf();
-  const armOffer = offer(cfg, 'GA102', { cpu: 'Neoverse-N1', price: 0.01 });
+  const armOffer = offer(cfg, 'GA102', { cpu: 'Neoverse-N1', price: 0.01, id: 900 });
   const arm = planRelease(market(cfg, [armOffer, offer(cfg, 'AD102', { cpu: INTEL })]), cfg);
   // the cheapest GA102 offer is the ARM one: it is skipped, not merely classified
   assert.ok(
@@ -281,17 +281,29 @@ test('plan: ARM hosts are never planned and unknown CPUs count for neither vendo
       .flatMap((f) => f.cells.flatMap((c) => c.legs))
       .every((l) => l.offer_id !== armOffer.id),
   );
-  assert.equal(arm.cpu_vendor.planned.other, 0);
-  assert.ok(largeLegs(arm).every((l) => l.cpu_vendor !== 'arm'));
-  assert.equal(arm.cpu_vendor.planned.arm, 0);
+  assert.ok(largeLegs(arm).every((l) => l.cpu_vendor === 'amd' || l.cpu_vendor === 'intel'));
   assert.deepEqual(arm.cpu_vendor.missing, []);
-  const unknown = planRelease(
-    market(cfg, [offer(cfg, 'AD102', { cpu: 'Mystery CPU', price: 0.01 })]),
-    cfg,
-  );
-  assert.deepEqual(unknown.cpu_vendor.planned, { amd: 3, intel: 0, other: 1, arm: 0 });
-  assert.deepEqual(unknown.cpu_vendor.missing, ['intel']);
 });
+// Owner review of #361: an empty or unfamiliar cpu_name is not rentable for a release leg (it could never satisfy the vendor rule).
+for (const [name, cpu] of [
+  ['unfamiliar', 'Mystery CPU'],
+  ['empty', ''],
+  ['missing', undefined],
+]) {
+  test(`plan: a ${name} cpu_name is never planned`, () => {
+    const cfg = cfgOf();
+    const odd = offer(cfg, 'AD102', { cpu: cpu ?? '', price: 0.01, id: 901 });
+    // Intel is offered (at the same price) on another large die, so the cover needs no swap on AD102 itself.
+    const intel = offer(cfg, 'GA102', { cpu: INTEL, price: 0.2, id: 902 });
+    const plan = planRelease(market(cfg, [odd, intel]), cfg);
+    assert.ok(
+      plan.families
+        .flatMap((f) => f.cells.flatMap((c) => c.legs))
+        .every((l) => l.offer_id !== odd.id),
+    );
+    assert.deepEqual(plan.cpu_vendor.planned.other, 0);
+  });
+}
 test('plan: with SPEC the two lanes of the swapped die stay on different machines when two are offered', () => {
   const cfg = cfgOf({ RELEASE_STAGES: '["specviewperf"]' });
   const rows = market(cfg, [
@@ -659,6 +671,29 @@ matrixTest(
     for (const leg of done.legs) {
       assert.ok(['amd', 'intel'].includes(leg.cpuVendorReported), leg.key);
       assert.equal(leg.cpuVendorReported, leg.cpuVendorOffered);
+    }
+  },
+);
+matrixTest(
+  'rent: a host with an empty cpu_name is never rented, even when it is the cheapest',
+  async () => {
+    const rows = vendorMarket();
+    rows.push({
+      ...rows.find((o) => o.id === 7001),
+      id: 7600,
+      machine_id: 76000,
+      host_id: 9600,
+      cpu_name: '',
+      dph_total: 0.12,
+      dph_base: 0.12 - 0.2 * (300 / 720),
+    });
+    const h = await harness(rows);
+    const { batch: id } = await h.service.adminStart({ commit_sha: sha, tier: 'large' });
+    const batch = await h.storage.get('batch:' + id);
+    for (const leg of batch.legs) {
+      const record = await h.storage.get('record:' + leg.key);
+      assert.notEqual(record.machineId, 76000);
+      assert.ok(['amd', 'intel'].includes(record.cpuVendorOffered));
     }
   },
 );

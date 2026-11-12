@@ -21,6 +21,7 @@ import {
   driverPinsFor,
   legTierOfRow,
   vendorOfCpuName,
+  rentableCpuName,
   CPU_VENDOR_REQUIRED,
 } from './release-matrix.js';
 import { DEFAULTS } from './defaults.js';
@@ -54,7 +55,7 @@ export const requiredStageRows = (stages) => {
 // leg; `second: null` pins "no second machine" (the second leg then reuses the first box).
 // Matrix v2 (owner 2026-11-12): a die whose matrix profile is 'middle' (the second die of each family) is ONE middle leg:
 // one Windows run, the apps, no SPEC lanes, priced at the middle hard limit (RELEASE_MIDDLE_HARD_RUNTIME_MINUTES).
-// Hosts whose cpu_name is an ARM CPU are never planned (every box is x86).
+// Hosts whose cpu_name is not recognised as AMD or Intel (empty, ARM, unfamiliar) are never planned.
 export function eligibleOffers(offers, releaseMatrix, matrixRow) {
   const swappable = matrixRow
     ? offers.filter((o) =>
@@ -64,7 +65,7 @@ export function eligibleOffers(offers, releaseMatrix, matrixRow) {
         ),
       )
     : offers;
-  return swappable.filter((o) => vendorOfCpuName(o.cpu_name) !== 'arm');
+  return swappable.filter((o) => rentableCpuName(o.cpu_name));
 }
 export function legEstimate(o, cfg, legTier) {
   if (legTier !== 'middle') return o.pricing.total;

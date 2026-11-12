@@ -14,6 +14,9 @@ export function vendorOfCpuName(name) {
     return 'intel';
   return 'other';
 }
+// A host a release may rent: its cpu_name must be recognised as AMD or Intel. An empty, missing, ARM-like or unfamiliar name is not
+// rentable (it could never satisfy the vendor rule and nothing says it is x86).
+export const rentableCpuName = (name) => ['amd', 'intel'].includes(vendorOfCpuName(name));
 // 'large' = the die's full profile (flagship, SPEC lanes, two Windows gates); 'middle' = the second die.
 export const legTierOfRow = (row) => (row?.profile === 'middle' ? 'middle' : 'large');
 const AXES = ['host_driver', 'linux_guest_driver', 'windows_guest_driver'];

@@ -9,9 +9,10 @@ A release does ONE large run per die family (Turing, Ampere, Ada, Blackwell): th
 runs the MIDDLE profile** (small as a sub-run): 4 large + 4 middle. The large run's SPECviewperf is split over two boxes (lane A and lane B on
 separate rentals, 2 SPEC legs per large die, `requiresSeparateRentals`), so a release is 4 x 2 large boxes + 4 middle boxes = **12 rentals** with
 SPEC (8 without: a large die is then one box that runs the Windows gate twice). Peak concurrency is 8, not 12: lane B of a die waits for its lane A
-(`waitForLeg`), and a release may hold at most 8 slots (`MAX_CONCURRENT_RENTALS` is a single digit, release = cap - 1). Release cost target about
-20 USD (`RELEASE_COST_CAP_USD=20`, no reruns by default). Marking: the shape is OWNER DECISION; the code facts below are CODE READ and
-tested GPU-free; every cost number is the planner's WORST CASE on an offer list, never a measurement.
+(`waitForLeg`), and a release may hold at most 8 slots (`MAX_CONCURRENT_RENTALS` is a single digit, release = cap - 1). The owner's cost target was
+about 20 USD; the first-release cap is `RELEASE_COST_CAP_USD=30` (coordinator decision 2026-11-12, because the planner's worst case on the synthetic market is
+about 25.6 USD for the 12 legs), no reruns by default. Marking: the shape is OWNER DECISION. The code facts below are CODE READ, covered by GPU-free
+tests only. Every cost number is a planner estimate (a worst case priced at the hard limits, computed on an offer list), not a measurement.
 
 - Matrix data: `policy.full_profile_dies_per_family: 1`, `policy.second_die_profile: "middle"`; a flagship row has `profile: "full"`, a second-die row
   `profile: "middle"` (validated per role). `dies_per_die_family: 2`, `die_count: 8` and the per-die drivers, sub-runs and cross sub-runs are unchanged.
@@ -25,7 +26,7 @@ tested GPU-free; every cost number is the planner's WORST CASE on an offer list,
   other-vendor offer of the same die (same matrix host filter; the SPEC lanes of a die stay on different machines when two are offered), never trading
   one required vendor for the other; the legs that cover a vendor are pinned to it (`cpuVendor`) so the rent step cannot wander. If no admissible
   combination covers both vendors the plan is refused with `CPU_VENDOR_MISSING` and `INCOMPLETE` (never admitted, never PASS). The vendor comes from the
-  offer's `cpu_name` (AMD/EPYC/Ryzen = amd, Intel/Xeon/Core = intel, ARM-like = arm and never planned, anything else = other: counts for neither).
+  offer's `cpu_name` (AMD/EPYC/Ryzen = amd, Intel/Xeon/Core = intel). A host whose `cpu_name` is empty, missing, ARM-like or unfamiliar is never planned and never rented for a release leg (it could not satisfy the rule and nothing says it is x86).
   Judge: a release is PASS only if, besides every cell, a PASSING large leg per required vendor has a rent-time vendor (offer `cpu_name`) AND a box
   report (`host_claims.cpu_vendor`) that agree; a mismatch, a missing report or a missing vendor leaves the release `INCOMPLETE` with reason
   `CPU_VENDOR_MISSING`. A claim alone can never satisfy the rule.

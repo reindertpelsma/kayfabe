@@ -61,12 +61,17 @@ const cases = [
   ],
   ['covering legs not pinned', REL, 'l.pin_cpu_vendor = v;', ''],
   [
-    'ARM hosts planned',
+    'unrecognised hosts planned',
     REL,
-    "return swappable.filter((o) => vendorOfCpuName(o.cpu_name) !== 'arm');",
+    'return swappable.filter((o) => rentableCpuName(o.cpu_name));',
     'return swappable;',
   ],
-  ['vendor classifier loses ARM', V, 'if (/\\b(?:arm|aarch64', 'if (false && /\\b(?:arm|aarch64'],
+  [
+    'unfamiliar CPU names rentable',
+    V,
+    "['amd', 'intel'].includes(vendorOfCpuName(name))",
+    "['amd', 'intel', 'other'].includes(vendorOfCpuName(name))",
+  ],
   // planner: the middle profile
   [
     'middle die planned as a large run',
@@ -129,10 +134,15 @@ const cases = [
   [
     'vendor pin ignored at rent',
     IDX,
-    "return v !== 'arm' && (leg?.cpuVendor === undefined || v === leg.cpuVendor);",
-    'return true;',
+    'return rentableCpuName(o.cpu_name) && (leg?.cpuVendor === undefined || v === leg.cpuVendor);',
+    'return rentableCpuName(o.cpu_name);',
   ],
-  ['ARM host rented', IDX, "return v !== 'arm' && (leg?.cpuVendor", 'return (leg?.cpuVendor'],
+  [
+    'unrecognised host rented',
+    IDX,
+    'return rentableCpuName(o.cpu_name) && (leg?.cpuVendor',
+    'return (leg?.cpuVendor',
+  ],
   [
     'pin not carried into the batch leg',
     IDX,

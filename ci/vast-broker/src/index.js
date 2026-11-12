@@ -2,6 +2,7 @@ import {
   RELEASE_MATRIX,
   hostProvidesDrivers,
   vendorOfCpuName,
+  rentableCpuName,
   matrixExecutionProblem,
   sameMatrixRow,
 } from './release-matrix.js';
@@ -1555,7 +1556,7 @@ export function createService({
     if (profile === 'release' && !leg?.rehearsal)
       evaluation.allowed = evaluation.allowed.filter((o) => {
         const v = vendorOfCpuName(o.cpu_name);
-        return v !== 'arm' && (leg?.cpuVendor === undefined || v === leg.cpuVendor);
+        return rentableCpuName(o.cpu_name) && (leg?.cpuVendor === undefined || v === leg.cpuVendor);
       });
     const selection = {
       tierName,

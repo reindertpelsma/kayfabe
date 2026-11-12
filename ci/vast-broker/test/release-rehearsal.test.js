@@ -36,6 +36,7 @@ async function harness(extra = {}, { payload = PAYLOAD_REHEARSAL } = {}) {
     ...h.cloud.offer,
     id: 11,
     gpu_name: 'RTX_4090',
+    cpu_name: 'AMD EPYC 7B13',
     compute_cap: 890,
     machine_id: 200011,
     host_id: 3011,
