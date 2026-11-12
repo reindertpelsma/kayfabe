@@ -6,9 +6,10 @@ from . import VERSION
 class Closed(Exception):
     """The peer closed (or the link dropped). code is the WebSocket close code or None."""
 
-    def __init__(self, code=None):
-        super().__init__("closed %s" % code)
+    def __init__(self, code=None, http_status=None):
+        super().__init__("closed %s" % (code if http_status is None else "http %s" % http_status))
         self.code = code
+        self.http_status = http_status  # set when the upgrade itself was answered with a non-101 status
 
 
 class Connection:
@@ -41,7 +42,7 @@ class WebsocketsTransport(Transport):
             raise Closed(None) from error
         except WebSocketException as error:
             code = getattr(getattr(error, "response", None), "status_code", None)
-            raise Closed(None if code is None else 4000 + code) from error
+            raise Closed(None, http_status=code) from error
 
         class Conn(Connection):
             def send(self, text):

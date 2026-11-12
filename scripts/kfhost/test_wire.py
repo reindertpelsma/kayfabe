@@ -83,7 +83,11 @@ class ServerFramesParse(Base):
         for f in W2D["offer"]["valid"]:
             got = profile.check_offer("standard", dict(f), self.cfg(), int(time.time() * 1000))
             self.assertEqual(got["deadline_ms"], f["deadline_ms"])
-            profile.check_offer("borrowed", dict(f), self.cfg(), int(time.time() * 1000))
+            if "seed" in f["assignment"]:  # borrowed never consumes an artifact from other boxes
+                with self.assertRaises(Refused):
+                    profile.check_offer("borrowed", dict(f), self.cfg(), int(time.time() * 1000))
+            else:
+                profile.check_offer("borrowed", dict(f), self.cfg(), int(time.time() * 1000))
 
     def test_every_invalid_offer_is_refused(self):
         for case in W2D["offer"]["invalid"]:
@@ -95,7 +99,7 @@ class ServerFramesParse(Base):
                                 + [None, Closed(4401)])
         d.log = lambda m: None
         d.run_forever(max_sessions=1)
-        self.assertEqual(d.profile, "standard")  # the fixture welcome (profile standard) is the last one applied
+        self.assertEqual(d.profile, "owned")  # the last fixture welcome (owned, commands_until_ms null) is the one applied
 
     def test_cmd_frames_from_the_fixture_are_refused_cleanly_without_the_flags(self):
         d, conn, _ = self.serve([welcome("standard")] + [dict(f) for f in W2D["cmd"]["valid"]] + [lambda c: d.join(), None, Closed(4401)],
@@ -370,8 +374,9 @@ class CmdWindowAndLifecycle(Base):
 
 class HttpUpgradeRefusals(Base):
     def test_non_101_answers_retry_slowly_with_growing_backoff_never_tight(self):
-        for code in (4302, 4403, 4404, 4429, 4500, 4503):
-            conns = [Closed(code)] * 3 + [Closed(4401)]
+        for status in (302, 401, 403, 404, 429, 500, 503):  # HTTP 401 is NOT close code 4401: it retries, slowly
+            code = status
+            conns = [Closed(None, http_status=status)] * 3 + [Closed(4401)]
             d, _, tr = self.serve([], conns=conns)
             d.log = lambda m: None
             d.rng = type("R", (), {"random": lambda s: 1.0})()
@@ -384,11 +389,13 @@ class HttpUpgradeRefusals(Base):
         self.assertIsNone(Daemon.slow_params(1006))
         self.assertIsNone(Daemon.slow_params(4408))
         self.assertIsNone(Daemon.slow_params(4401))
-        self.assertEqual(Daemon.slow_params(4302), (30.0, 300.0))
+        self.assertIsNone(Daemon.slow_params(4302))  # a WebSocket close code, not an HTTP status
+        self.assertEqual(Daemon.slow_params(None, 401), (30.0, 300.0))
 
-    def test_websockets_adapter_maps_http_status_to_4000_plus(self):
+    def test_websockets_adapter_keeps_http_status_apart_from_close_codes(self):
         src = (Path(__file__).with_name("transport.py")).read_text()
-        self.assertIn("4000 + code", src)
+        self.assertIn("http_status=code", src)
+        self.assertNotIn("4000 + code", src)
 
 
 if __name__ == "__main__":

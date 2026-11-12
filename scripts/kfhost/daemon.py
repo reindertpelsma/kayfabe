@@ -143,17 +143,16 @@ class Daemon:
     # Reconnect pacing per close code: (base, cap) seconds. 4409 = someone else holds the slot; 4403 = box
     # disabled or a transient Access 403. Neither stops the daemon; only 4401 (bad token) does.
     SLOW = {4409: (120.0, 600.0), 4403: (30.0, 300.0)}
-    # A non-101 HTTP answer on the upgrade (3xx incl. an Access redirect, 403, 5xx) reaches us as 4000+status
-    # from the transport: retry slowly with exponential backoff from 30 s, never a tight loop.
+    # A non-101 HTTP answer on the upgrade (401, 404, 429, 3xx incl. an Access redirect, 403, 5xx) reaches us as
+    # Closed.http_status (NOT as a close code: HTTP 401 is not WebSocket close 4401). Retry slowly with
+    # exponential backoff from 30 s, never a tight loop, never stop.
     HTTP_SLOW = (30.0, 300.0)
 
     @classmethod
-    def slow_params(cls, code):
-        if code in cls.SLOW:
-            return cls.SLOW[code]
-        if isinstance(code, int) and 4300 <= code <= 4599 and code not in (4401, 4408):
+    def slow_params(cls, code, http_status=None):
+        if http_status is not None:
             return cls.HTTP_SLOW
-        return None
+        return cls.SLOW.get(code)
 
     def run_forever(self, max_sessions=None):
         """Return an exit code: 3 on 4401 (bad token); 0 on a stop request or when max_sessions is reached."""
@@ -164,11 +163,11 @@ class Daemon:
             if self.idle_expired():
                 return EXIT_OK
             sessions += 1
-            code, welcomed = None, False
+            code, welcomed, http_status = None, False, None
             try:
                 conn = self.transport.connect(ws_url(self.cfg), self.headers())
             except Closed as error:
-                code = error.code
+                code, http_status = error.code, getattr(error, "http_status", None)
             else:
                 try:
                     welcomed = self.session(conn)
@@ -182,10 +181,10 @@ class Daemon:
             if code == 4401:
                 self.log("kfhost: box token rejected (close 4401); fix the token in the config and restart")
                 return EXIT_STOP
-            if self.slow_params(code):
-                self.log("kfhost: close %s (%s); retrying slowly" % (code, "another connection holds this box's slot"
+            if self.slow_params(code, http_status):
+                self.log("kfhost: close %s (%s); retrying slowly" % (code if http_status is None else "http %s" % http_status, "another connection holds this box's slot"
                          if code == 4409 else "box disabled, access refused or upgrade not accepted"))
-                base, cap = self.slow_params(code)
+                base, cap = self.slow_params(code, http_status)
                 attempt += 1
                 delay = self.backoff_delay(attempt - 1, base, cap)
             else:
@@ -236,6 +235,9 @@ class Daemon:
             self.profile = derive(self.local, msg)
             cu = msg.get("commands_until_ms")
             self.commands_until_ms = cu if type(cu) is int else None
+            rate = msg.get("cmd_output_per_s")
+            if type(rate) in (int, float) and 0 < rate < 1 / self.cmd_interval:  # only ever slower than our default
+                self.cmd_interval = 1.0 / rate
             hb = msg.get("heartbeat_s")
             if isinstance(hb, (int, float)) and 1 <= hb <= 120:
                 self.heartbeat_s = hb
