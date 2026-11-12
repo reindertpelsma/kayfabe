@@ -234,6 +234,79 @@ class NginxCheck(Base):
 
 
 NGINX = shutil.which("nginx")
+NGINX_PATH = NGINX
+
+PKG_CWD = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+class Startup(Base):
+    def serve(self, port, extra=(), env=None):
+        return subprocess.Popen(
+            [sys.executable, "-B", "-m", "kfseed", "serve", "--root", self.root, "--port", str(port), "--token", self.token,
+             "--artifact", "art.bin:" + SHA, *extra],
+            cwd=PKG_CWD, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
+
+    def runs(self):
+        return {n for n in os.listdir(tempfile.gettempdir()) if n.startswith("kfseed-")}
+
+    def occupy(self):
+        s = socket.socket()
+        s.bind(("0.0.0.0", 0))
+        s.listen(5)
+        self.addCleanup(s.close)
+        return s.getsockname()[1]
+
+    def check_port_in_use(self, extra):
+        port = self.occupy()
+        before = self.runs()
+        p = self.serve(port, extra)
+        out, err = p.communicate(timeout=30)
+        self.assertEqual(p.returncode, 3, err)
+        self.assertEqual(out, "")
+        self.assertIn("already in use", err)
+        self.assertEqual(self.runs(), before)
+
+    def test_port_in_use_dev(self):
+        self.check_port_in_use(["--fallback-python-server", "--force-fallback"])
+
+    @unittest.skipUnless(NGINX_PATH, "SKIP nginx-not-installed")
+    def test_port_in_use_nginx_no_leftover(self):
+        pg = lambda: set(subprocess.run(["pgrep", "-f", "kfseed-.*nginx.conf"], capture_output=True, text=True).stdout.split())
+        before = pg()  # other kfseed instances (not ours) may be running on this host
+        self.check_port_in_use([])
+        self.assertEqual(pg() - before, set())
+
+    def test_payload_printed_only_after_probe_passes(self):
+        port = free_port()
+        p = self.serve(port, ["--fallback-python-server", "--force-fallback"])
+        self.addCleanup(lambda: (p.terminate(), p.wait(20)))
+        info = json.loads(p.stdout.readline())
+        # no waiting: the very first line implies the probe already passed
+        c = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+        c.request("GET", "/%s/probe.txt" % self.token)
+        self.assertEqual(c.getresponse().read(), b"kfseed-probe-v1\n")
+        c.close()
+        self.assertEqual(info["payloads"][0]["path"], "/%s/art.bin" % self.token)
+
+    @unittest.skipUnless(NGINX_PATH, "SKIP nginx-not-installed")
+    def test_nginx_payload_after_probe(self):
+        port = free_port()
+        p = self.serve(port)
+        self.addCleanup(lambda: (p.terminate(), p.wait(20)))
+        json.loads(p.stdout.readline())
+        c = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+        c.request("GET", "/%s/probe.txt" % self.token)
+        self.assertEqual(c.getresponse().read(), b"kfseed-probe-v1\n")
+        c.close()
+
+    def test_nginx_missing_exits_2(self):
+        empty = os.path.join(self.tmp, "empty")
+        os.mkdir(empty)
+        p = self.serve(free_port(), env={"PATH": empty})
+        out, err = p.communicate(timeout=30)
+        self.assertEqual((p.returncode, out), (2, ""))
+        self.assertIn("apt-get install", err)
+
 
 
 @unittest.skipUnless(NGINX, "SKIP nginx-not-installed: real-nginx integration test needs nginx on PATH")

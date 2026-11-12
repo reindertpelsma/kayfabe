@@ -1,5 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 import argparse
+import http.client
+import socket
 import json
 import os
 import shutil
@@ -26,6 +28,58 @@ def _artifacts(args):
         sys.exit("kfseed: %s" % e)
 
 
+def port_in_use(port):
+    """True if something already listens on, or holds, the port (so we never talk to someone else's server)."""
+    try:
+        socket.create_connection(("127.0.0.1", port), 1).close()
+        return True
+    except OSError:
+        pass
+    b = socket.socket()
+    try:
+        b.bind(("0.0.0.0", port))
+        return False
+    except OSError:
+        return True
+    finally:
+        b.close()
+
+
+def probe_ok(port, token):
+    try:
+        c = http.client.HTTPConnection("127.0.0.1", port, timeout=2)
+        try:
+            c.request("GET", "/%s/%s" % (token, core.PROBE_NAME))
+            r = c.getresponse()
+            return r.status == 200 and r.read() == core.PROBE_CONTENT
+        finally:
+            c.close()
+    except (OSError, http.client.HTTPException):
+        return False
+
+
+def wait_ready(port, token, proc, run, timeout=5.0):
+    """None when the server answers the probe with the exact content, else a reason string."""
+    end = time.time() + timeout
+    while time.time() < end:
+        if proc and proc.poll() is not None:
+            return "nginx exited early (rc %s)" % proc.returncode
+        if proc and "[emerg]" in _tail(run, token):
+            return "nginx reported an [emerg] error"
+        if probe_ok(port, token):
+            return None
+        time.sleep(0.1)
+    return "probe did not return the expected content within %.0f s" % timeout
+
+
+def _tail(run, token, n=10):
+    try:
+        with open(os.path.join(run, "error.log"), errors="replace") as f:
+            return "".join(f.readlines()[-n:]).replace(token, "<token>")
+    except OSError:
+        return ""
+
+
 def serve(args):
     if args.check:
         return check_nginx(args)
@@ -40,6 +94,9 @@ def serve(args):
         return 2
     token = args.token or core.make_token()
     core.check_token(token)
+    if port_in_use(args.port):
+        sys.stderr.write("kfseed: port %d is already in use; refusing to start\n" % args.port)
+        return 3
     run = tempfile.mkdtemp(prefix="kfseed-")
     os.chmod(run, 0o755)
     stage = os.path.join(run, "stage")
@@ -54,7 +111,11 @@ def serve(args):
     try:
         if use_dev:
             sys.stderr.write("kfseed: DEV-ONLY python server (not for production)\n")
-            srv = devserver.start_thread(stage, token, args.port)
+            try:
+                srv = devserver.start_thread(stage, token, args.port)
+            except OSError as e:
+                sys.stderr.write("kfseed: cannot bind port %d: %s\n" % (args.port, e))
+                return 3
         else:
             conf = os.path.join(run, "nginx.conf")
             with open(conf, "w") as f:
@@ -64,6 +125,10 @@ def serve(args):
                 sys.stderr.write(t.stderr)
                 return 3
             proc = subprocess.Popen([nginx, "-c", conf, "-p", run])
+        why = wait_ready(args.port, token, proc, run)
+        if why:
+            sys.stderr.write("kfseed: seeder not ready: %s\n%s" % (why, _tail(run, token)))
+            return 3
         out = {"token": token, "port": args.port,
                "payloads": [core.seed_register_payload(n, s, sizes[n], token) for n, s in arts]}
         print(json.dumps(out), flush=True)
