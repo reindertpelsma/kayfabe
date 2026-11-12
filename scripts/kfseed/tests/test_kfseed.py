@@ -48,21 +48,43 @@ class Pure(Base):
             core.check_token("ABCDEFGH")
 
     def test_config_exact(self):
-        text = core.render_config("/tmp/r", "/tmp/r/stage", 8123, "ab12cd34")
+        text = core.render_config("/tmp/r", "/tmp/r/stage", 8123, "ab12cd34", ["art.bin"])
         self.assertIn("listen 8123 default_server;", text)
-        self.assertIn("location /ab12cd34/ {\n            alias /tmp/r/stage/;", text)
+        self.assertIn("location = /ab12cd34/art.bin {\n            alias /tmp/r/stage/art.bin;", text)
+        self.assertIn("location = /ab12cd34/probe.txt {\n            alias /tmp/r/stage/probe.txt;", text)
+        self.assertNotRegex(text, r"location /ab12cd34")
+        self.assertIn("absolute_redirect off;", text)
+        self.assertIn("merge_slashes off;", text)
+        self.assertIn('if ($request !~ "^(GET|HEAD) /ab12cd34/(probe\\.txt|art\\.bin) HTTP/1\\.[01]$") { return 444; }', text)
+        self.assertNotRegex(text, r"return 30\d")
+        self.assertIn("400 401 403 404 405 408 413 414 431 494 500 502 503 504 = /_drop;", text)
         self.assertIn("autoindex off;", text)
         self.assertIn("limit_except GET HEAD { deny all; }", text)
         self.assertIn("location / { return 444; }", text)
-        self.assertIn("error_page 400 403 404 405 = @drop;", text)
-        self.assertIn("location @drop { return 444; }", text)
+        self.assertIn("error_page 400 401 403 404 405 408 413 414 431 494 500 502 503 504 = /_drop;", text)
+        self.assertIn("if ($request_method !~ ^(GET|HEAD)$) { return 444; }", text)
+        self.assertIn("if ($http_content_length) { return 444; }", text)
+        self.assertIn("if ($http_transfer_encoding) { return 444; }", text)
+        for d in ("client_max_body_size 1;", "client_body_buffer_size 1k;", "client_body_timeout 5s;",
+                  "client_header_timeout 5s;", "client_header_buffer_size 1k;", "large_client_header_buffers 2 1k;",
+                  "send_timeout 30s;", "keepalive_timeout 15s;", "keepalive_requests 100;",
+                  "reset_timedout_connection on;"):
+            self.assertIn(d, text)
+        self.assertNotRegex(text, r"client_max_body_size\s+0")
+        self.assertIn("location = /_drop { internal; return 444; }", text)
         self.assertNotIn("return 404", text)
         for s in ("sendfile on;", "access_log off;", "server_tokens off;", "daemon off;", "pid /tmp/r/nginx.pid;"):
             self.assertIn(s, text)
         self.assertNotIn("autoindex on", text)
-        self.assertLess(len(text.splitlines()), 35)
+        self.assertLess(len(text.splitlines()), 60)
         with self.assertRaises(core.SeedError):
-            core.render_config("/tmp/r;x", "/tmp/s", 80, "ab12cd34")
+            core.render_config("/tmp/r;x", "/tmp/s", 80, "ab12cd34", ["a"])
+        for bad in ("a b", "a;b", "a{b", "a\nb", "../x", "a/b", "a" * 101, ".hidden", "probe.txt", "a$b", "a%2e"):
+            with self.assertRaises(core.SeedError, msg=bad):
+                core.render_config("/tmp/r", "/tmp/s", 80, "ab12cd34", [bad])
+            with self.assertRaises(core.SeedError, msg=bad):
+                core.parse_artifact(bad + ":" + SHA)
+        core.parse_artifact("a" * 100 + ":" + SHA)
 
     def test_stage_only_registered(self):
         stage = os.path.join(self.tmp, "stage")
@@ -237,6 +259,104 @@ class RealNginx(Selfcheck):
 
     def test_selfcheck_catches_open_root(self):
         self.skipTest("covered by the dev-server variant; nginx config is exact-text tested")
+
+    def raw(self, data, wait=10, close_write=False):
+        """Send raw bytes; return (bytes received, seconds until the server closed or wait expired)."""
+        t0 = time.time()
+        got = b""
+        with socket.create_connection(("127.0.0.1", self.port), 5) as s:
+            s.settimeout(wait)
+            try:
+                s.sendall(data)
+                while True:
+                    d = s.recv(65536)
+                    if not d:
+                        break
+                    got += d
+            except (ConnectionResetError, BrokenPipeError):
+                pass
+            except socket.timeout:
+                return got, None
+        return got, time.time() - t0
+
+    def line(self, extra="", method="GET", path=None):
+        path = path or "/%s/art.bin" % self.token
+        return ("%s %s HTTP/1.1\r\nHost: x\r\n%sConnection: close\r\n\r\n" % (method, path, extra)).encode()
+
+    def test_odd_methods_and_bodies_get_no_reply(self):
+        self.start_once()
+        cases = {
+            "PROPFIND": self.line(method="PROPFIND"), "TRACE": self.line(method="TRACE"),
+            "OPTIONS": self.line(method="OPTIONS"), "DELETE": self.line(method="DELETE"),
+            "PUT": self.line(method="PUT"), "POST": self.line(method="POST"),
+            "CONNECT": b"CONNECT 127.0.0.1:80 HTTP/1.1\r\nHost: x\r\n\r\n",
+            "made-up": self.line(method="FROBNICATE"), "lowercase get": self.line(method="get"),
+            "GET with content-length": self.line("Content-Length: 1000\r\n") .replace(b"\r\n\r\n", b"\r\n\r\n" + b"x" * 1000),
+            "GET chunked": self.line("Transfer-Encoding: chunked\r\n").replace(b"\r\n\r\n", b"\r\n\r\n5\r\nhello\r\n0\r\n\r\n"),
+            "no trailing slash": self.line(path="/" + self.token), "dir": self.line(path="/%s/" % self.token),
+            "double slash": self.line(path="//%s/art.bin" % self.token), "dot": self.line(path="/%s/./art.bin" % self.token),
+            "dotdot": self.line(path="/%s/../%s/art.bin" % (self.token, self.token)),
+            "enc dotdot": self.line(path="/%s/%%2e%%2e/art.bin" % self.token),
+            "enc slash": self.line(path="/%s%%2fart.bin" % self.token), "enc slash2": self.line(path="/%s/%%2fart.bin" % self.token),
+            "trailing slash file": self.line(path="/%s/art.bin/" % self.token),
+            "unknown name": self.line(path="/%s/secret.txt" % self.token), "root": self.line(path="/"),
+            "wrong token": self.line(path="/zzzzzzzz/art.bin"), "absolute uri": self.line(path="http://x/%s/art.bin" % self.token),
+            "4KB header": self.line("X-Pad: " + "a" * 4096 + "\r\n"),
+        }
+        for name, data in cases.items():
+            got, dt = self.raw(data)
+            self.assertEqual(got, b"", name)
+            self.assertIsNotNone(dt, name + " not closed")
+        t0 = time.time()
+        got, dt = self.raw(self.line("Content-Length: 10000000\r\n", method="POST") + b"x" * 10_000_000)
+        self.assertEqual(got, b"")
+        self.assertLess(time.time() - t0, 5)
+
+    def test_slow_partial_request_dropped(self):
+        self.start_once()
+        s = socket.create_connection(("127.0.0.1", self.port), 5)
+        self.addCleanup(s.close)
+        s.sendall(b"GET /abc")
+        s.settimeout(9)
+        t0 = time.time()
+        try:
+            data = s.recv(100)
+        except ConnectionResetError:  # reset_timedout_connection
+            data = b""
+        self.assertEqual(data, b"")
+        self.assertLess(time.time() - t0, 8)
+
+    def test_big_artifact_slow_reader(self):
+        big = os.path.join(self.root, "big.bin")
+        blob = os.urandom(1 << 20) * 20
+        with open(big, "wb") as f:
+            f.write(blob)
+        bsha = hashlib.sha256(blob).hexdigest()
+        port = free_port()
+        proc = subprocess.Popen(
+            [sys.executable, "-m", "kfseed", "serve", "--root", self.root, "--port", str(port), "--token", self.token,
+             "--artifact", "big.bin:" + bsha],
+            cwd=os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), stdout=subprocess.PIPE, text=True)
+        self.addCleanup(lambda: (proc.terminate(), proc.wait(20)))
+        proc.stdout.readline()
+        time.sleep(0.5)
+        c = http.client.HTTPConnection("127.0.0.1", port, timeout=20)
+        c.request("GET", "/%s/big.bin" % self.token)
+        r = c.getresponse()
+        h = hashlib.sha256()
+        while True:
+            d = r.read(1 << 20)
+            if not d:
+                break
+            h.update(d)
+            time.sleep(0.05)  # slow reader; send_timeout is the gap between writes
+        c.close()
+        self.assertEqual(h.hexdigest(), bsha)
+        self.assertEqual(selfcheck.selfcheck("http://127.0.0.1:%d/%s/" % (port, self.token), [("big.bin", bsha)]), [])
+
+    def start_once(self):
+        if not hasattr(self, "port"):
+            self.port = self.start()
 
     def test_runtime_dir_removed_on_sigterm(self):
         self.start()

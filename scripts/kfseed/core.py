@@ -9,7 +9,7 @@ import stat
 PROBE_NAME = "probe.txt"
 PROBE_CONTENT = b"kfseed-probe-v1\n"
 TOKEN_RE = re.compile(r"^[a-z0-9]{8}$")
-NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$")
 SHA_RE = re.compile(r"^[0-9a-f]{64}$")
 ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789"
 
@@ -51,27 +51,54 @@ http {{
     scgi_temp_path {run}/tmp/scgi;
     server {{
         listen {port} default_server;
-        error_page 400 403 404 405 = @drop;
-        location @drop {{ return 444; }}
-        location /{token}/ {{
-            alias {stage}/;
-            autoindex off;
-            limit_except GET HEAD {{ deny all; }}
-        }}
+        error_page 400 401 403 404 405 408 413 414 431 494 500 502 503 504 = /_drop;
+        absolute_redirect off;
+        merge_slashes off;
+        if ($request !~ "^(GET|HEAD) /{token}/({alts}) HTTP/1\\.[01]$") {{ return 444; }}
+        location = /_drop {{ internal; return 444; }}
+        if ($request_method !~ ^(GET|HEAD)$) {{ return 444; }}
+        if ($http_content_length) {{ return 444; }}
+        if ($http_transfer_encoding) {{ return 444; }}
+        client_max_body_size 1;
+        client_body_buffer_size 1k;
+        client_body_timeout 5s;
+        client_header_timeout 5s;
+        client_header_buffer_size 1k;
+        large_client_header_buffers 2 1k;
+        send_timeout 30s;
+        keepalive_timeout 15s;
+        keepalive_requests 100;
+        reset_timedout_connection on;
+{locations}
         location / {{ return 444; }}
     }}
 }}
 """
 
 
-def render_config(run_dir, stage_dir, port, token):
+LOCATION = """\
+        location = /{token}/{name} {{
+            alias {stage}/{name};
+            autoindex off;
+            limit_except GET HEAD {{ deny all; }}
+        }}"""
+
+
+def render_config(run_dir, stage_dir, port, token, names):
+    """names: the registered artifact names; only exact-match locations for them and probe.txt are served."""
     check_token(token)
+    for n in names:
+        if not NAME_RE.match(n) or n == PROBE_NAME:
+            raise SeedError("unsafe artifact name %r" % n)
     if not isinstance(port, int) or not 1 <= port <= 65535:
         raise SeedError("port out of range")
     for p in (run_dir, stage_dir):
         if not re.match(r"^/[A-Za-z0-9._/-]+$", p):
             raise SeedError("unsafe path for nginx config: %r" % p)
-    return CONFIG_TEMPLATE.format(run=run_dir, stage=stage_dir.rstrip("/"), port=port, token=token)
+    stage = stage_dir.rstrip("/")
+    alts = "|".join(re.escape(n) for n in [PROBE_NAME, *names])
+    locs = "\n".join(LOCATION.format(token=token, name=n, stage=stage) for n in [PROBE_NAME, *names])
+    return CONFIG_TEMPLATE.format(run=run_dir, stage=stage, port=port, token=token, locations=locs, alts=alts)
 
 
 def build_stage(stage_dir, root, artifacts):

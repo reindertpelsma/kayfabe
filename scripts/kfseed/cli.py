@@ -58,7 +58,7 @@ def serve(args):
         else:
             conf = os.path.join(run, "nginx.conf")
             with open(conf, "w") as f:
-                f.write(core.render_config(run, stage, args.port, token))
+                f.write(core.render_config(run, stage, args.port, token, [n for n, _ in arts]))
             t = subprocess.run([nginx, "-t", "-c", conf, "-p", run], capture_output=True, text=True)
             if t.returncode:
                 sys.stderr.write(t.stderr)
