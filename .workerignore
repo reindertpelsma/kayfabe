@@ -152,6 +152,7 @@
 
 # --- Cloudflare Worker code and its tests: run by CI on the runner, never on a box ---
 /ci/platform-api
+/ci/r2-index
 /ci/vast-admin
 /ci/vast-reaper
 
