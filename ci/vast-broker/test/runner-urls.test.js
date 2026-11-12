@@ -33,6 +33,7 @@ const CASES = [
   'mask-survives-workers-dev-origin',
   'mask-no-labels',
   'mask-secrets-kept',
+  'overview-no-rental-marker',
 ];
 for (const name of CASES)
   test('runner urls: ' + name, () => {

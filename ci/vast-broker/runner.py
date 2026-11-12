@@ -1972,7 +1972,8 @@ class Runner:
                     self.rental_shown = (data["id"], data.get("provider_retries", 0))
                 if data["id"] is not None:
                     self.leg_info[data.get("provider_retries", 0)] = (
-                        rental_line(data)
+                        # Not the live `RENTAL instance=` marker: that is logged once per leg.
+                        rental_line(data).removeprefix("RENTAL ")
                         + " state="
                         + clean(data["state"])
                         + " verdict="

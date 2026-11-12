@@ -322,5 +322,16 @@ def case_mask_secrets_kept():
     assert any(x.startswith("unit-path-only-") for x in masks)
 
 
+def case_overview_no_rental_marker():
+    """The overview never reuses the live `RENTAL instance=` marker (logged once per leg)."""
+    printed = []
+    r = m.Runner(hf.ctx, hf.manifest, lambda *_: None, emit=printed.append)
+    r.announce(0)
+    r.leg_info[0] = "instance=1 host=2 machine=3 state=GRACE verdict=PASS"
+    r.show_overview({"state": "GRACE", "verdict": "PASS", "verified": 1})
+    assert "RENTAL instance=" not in "".join(printed)
+    assert "LEG 0 instance=1" in "".join(printed)
+
+
 if __name__ == "__main__":
     globals()["case_" + sys.argv[1].replace("-", "_")]()
