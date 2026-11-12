@@ -7,13 +7,28 @@ never change packages: they run the `python3 -m kfseed check` equivalent (instal
 
 import shutil
 import subprocess
+import sys
+import tempfile
+from pathlib import Path
 
 PKG = "nginx-light"
 
 
+SCRIPTS_DIR = str(Path(__file__).resolve().parents[1])  # the daemon's own trusted tree, absolute
+KFSEED_CODE = ("import sys,runpy;sys.path.insert(0,%r);sys.argv=['kfseed']+sys.argv[1:];"
+               "runpy.run_module('kfseed',run_name='__main__')" % SCRIPTS_DIR)
+
+
+def kfseed_argv(*args):
+    """python3 -I, absolute module location, no cwd on sys.path: a planted kfseed in the cwd is not imported."""
+    return [sys.executable, "-I", "-c", KFSEED_CODE, *args]
+
+
 def default_run(argv, timeout=600):
+    """Run in a fresh temp dir outside any checkout (never the daemon's or a job's cwd)."""
     try:
-        done = subprocess.run(argv, capture_output=True, text=True, timeout=timeout, check=False)
+        with tempfile.TemporaryDirectory() as cwd:
+            done = subprocess.run(argv, capture_output=True, text=True, timeout=timeout, check=False, cwd=cwd)
     except (OSError, subprocess.SubprocessError):
         return None, ""
     return done.returncode, (done.stdout + done.stderr).strip()
@@ -52,7 +67,7 @@ def prepare_seeder(profile, euid, run=default_run, which=shutil.which):
                 return {"available": False, "warnings": warnings, "log": log}
             return {"available": True, "warnings": warnings, "log": log}
     else:
-        rc, text = run(["python3", "-m", "kfseed", "check"])
+        rc, text = run(kfseed_argv("check"))
         log.append("seeder: no system changes allowed (profile %s, euid %s); kfseed check rc=%s" % (profile, euid, rc))
         if rc == 0:
             # exit 0 = nginx present, even with a WARNING line; drift is read from the output only

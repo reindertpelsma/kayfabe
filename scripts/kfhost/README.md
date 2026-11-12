@@ -1,6 +1,6 @@
 # kfhost: the custom-host daemon (work package W2)
 
-STATUS: DESIGN, NOT RUN ON HARDWARE (2026-11-12). Written against the shared contract `CUSTOM_HOSTS_SPEC.md` (coordinator, 2026-11-12) and tested only against a fake transport. Nothing is deployed. The daemon never runs on Vast boxes.
+STATUS: DESIGN, NOT RUN ON HARDWARE (2026-11-12). Revised the same day after the trust review (PR #345-#347) and four owner rulings; the borrowed mode is PARKED (see below). Written against the shared contract `CUSTOM_HOSTS_SPEC.md` (coordinator, 2026-11-12) and tested only against a fake transport. Nothing is deployed. The daemon never runs on Vast boxes.
 
 ## What it is
 
@@ -14,21 +14,34 @@ An enrolled, non-Vast machine runs `python3 -m kfhost run --config FILE`. The da
 
 ## Behaviour
 
-- `hello` carries capabilities measured on the host (nvidia-smi, `/proc/driver/nvidia/version`, `/dev/kvm`, cpu, RAM, disk, container, display, `can_swap_driver` = root and not a container). Unmeasurable fields are `null`; nothing is guessed. `compute_cap` is the integer form of the box protocol (8.9 is 890).
-- Heartbeat every 15 s (the welcome may change it); reconnect with exponential backoff and jitter (cap 60 s). A dropped socket never stops a running job; the next heartbeat reports `busy` with the run id.
-- Close codes: 4401 and 4403 stop with exit 3 and no retry; 4409 (replaced by a newer connection) exits 0.
-- Effective profile = the strictest of the server's welcome profile and the local ceiling (an unknown value counts as `borrowed`).
-- `borrowed`: offers carry only `repo`, `commit`, `tree_key`, `stages`; repo must be in the allowlist, commit 40 lowercase hex, stages from a fixed list. The commit is fetched with `git` from the public URL into a temp dir under `work_dir` and `git rev-parse HEAD` must equal the commit, else the offer is nacked and nothing runs. Runs in standalone mode (no sudo, no installs, minimal environment, no `cmd`).
-- `container`: no `cmd` frames, no driver swaps; `env` (`KF_*` names) allowed. `owned`: `cmd` frames run one at a time with a timeout (default 300 s, max 3600 s), 256 KiB output bound, chunked `cmd_output` and a `cmd_done`; never while a run is active unless the frame sets `allow_during_run: true`.
-- `prepare_seeder()` (`seeder.py`), once per session before the first `seed_register`: only effective profile `owned` AND root runs `apt-get update` then `apt-get install -y --only-upgrade nginx-light` (plain install if nginx is missing), logging `nginx -v` before and after in the job log. `container`, `borrowed` and non-root never change packages: they run `python3 -m kfseed check`, read drift from its output, and put a warning in the job log and in the `seed_register` frame (`warnings`). Nginx missing and not installable, or an apt failure with nginx missing, marks seeding unavailable for the session; an apt failure with nginx present only warns, and the job continues. dnf/apk are not handled (logged and skipped). The `kfseed` module is W3's and is not present here: its contract as reported by the coordinator for W3 PR #345 head cb8adf2f9 (not run here): installed/candidate lines, a `WARNING:` line for drift, exit 0 when nginx is present, exit 2 only when missing; any other exit is treated as check unavailable (warn, do not block).
-- `seed_register`: a job calls `Daemon.seed_register`; anything but `seed_ack {ok: true}` (or no answer in time) marks seeding unavailable until the next connection.
+Local flags decide what the daemon enforces; the Worker cannot loosen them. Config keys or command-line flags: `trust_git_only` / `--trust-git-only` (restriction; hidden old alias `--distrust-us`), `container` / `--container` (restriction), `allow_cmd` / `--allow-cmd` (power, default off). Default = `standard`. The effective profile is derived (`profile.derive`): restrictions apply if either side sets them (the welcome may add `profile: borrowed|container` or `trust_git_only`/`container: true`, and everything else in it is ignored, so it can never loosen); powers need both (`owned` = local `allow_cmd` AND welcome profile `owned`). `hello` carries `enforced` (the local flags).
+
+- `hello` carries capabilities measured on the host (nvidia-smi, `/proc/driver/nvidia/version`, `/dev/kvm`, cpu, RAM, disk, container, display, `can_swap_driver`). Unmeasurable fields are `null`; nothing is guessed. Wire format follows the Worker: `compute_cap` is the string nvidia-smi prints (`"8.9"`), `pci_device_id` the 4-hex device id (lowercase, from `pci.device_id`), `gpu_name`. (Whether the Worker wants the 4-hex form or a `0x` prefix is an assumption.)
+- Heartbeat every 15 s; reconnect with exponential backoff and jitter (cap 60 s). A dropped socket never stops a running job; the next heartbeat reports `busy` with the run id.
+- Close codes: 4401 (bad token) stops with exit 3 and a clear log line. 4409 (another connection holds the slot) and 4403 (box disabled or a transient Access 403) do NOT exit: they log and retry slowly (4409: 120 s base, 600 s cap; 4403: 30 s base, 300 s cap).
+- Frames: larger than 256 KiB or nested deeper than 32 are dropped before `json.loads`; a handler exception never kills the loop.
+- Offers (`profile.check_offer`, every profile): `repo` must EXACTLY equal an entry of `repo_allowlist` (canonical URLs, default only the public kayfabe repo; no prefix or lookalike matching; git runs with `http.followRedirects=false`); `commit` 40 lowercase hex; `tree_key` 64 lowercase hex; stages from the one `profile.STAGES` constant; `deadline` is an integer in epoch milliseconds (seconds or a past value is refused). The offer is acked EARLY, as soon as these checks pass; after the fetch is verified a `ready` frame follows, a failed verification sends `nack`. The Worker re-offers idempotently by `offer_id`.
+- Verification (`fetch.py`, every profile but owned): fetch ONLY `refs/heads/master` and `refs/heads/next` (no `refs/pull/*`, no arbitrary SHA) and require the commit to be an ancestor of one of them. Every profile recomputes the tree key on the host (`treekey.py`, a port of `ci/vast-broker/src/treekey.js`, kf-tree-v2, checked against JS-generated vectors in `tests/fixtures/treekey_vectors.json`) and refuses a mismatch.
+- The job time cap comes from `deadline`: the run is cancelled when it passes.
+- Jobs get a scrubbed environment: no config path, no box or Access token, no run token; a throwaway HOME/XDG/TMPDIR under `work_dir` (owned keeps its real HOME). The config file may not live inside `work_dir`.
+- `cmd` frames: only with local `allow_cmd` AND profile `owned` (the Worker enabled it) AND an active `commands_until_ms` from the welcome. One at a time, timeout (default 300 s, max 3600 s), 256 KiB output bound; never during a run unless the frame sets `allow_during_run: true`.
+- `prepare_seeder()` (`seeder.py`), once per session before the first `seed_register`: only profile `owned` AND root runs `apt-get update` then `apt-get install -y --only-upgrade nginx-light` (plain install if missing), logging `nginx -v` before and after. Every other profile never changes packages: it runs `kfseed check`, reads drift from its output (a `WARNING:` line = drifted; `candidate: unknown`; exit 0 = nginx present, exit 2 only when missing, any other exit = check unavailable, warn only) and warns in the job log and in the `seed_register` frame (`warnings`). Missing nginx that cannot be installed marks seeding unavailable for the session; an apt failure with nginx present only warns. kfseed runs as `python3 -I`, from a fresh temp cwd, with an absolute module location, so a planted module is never imported.
+- `seed_register`: anything but `seed_ack {ok: true}` (or no answer in time) marks seeding unavailable until the next connection.
+
+## Running from a pinned commit
+
+The daemon is the Python in the checked-out commit itself: Concretely: `git clone <public repo>`, `git checkout <sha>`, `cd scripts`, `python3 -m kfhost setup --venv DIR`, then `DIR/bin/python -m kfhost run --config FILE [--allow-cmd] [--container]`. Pin the sha you reviewed; nothing the Worker sends changes the daemon's own code.
+
+## PARKED: borrowed mode (`--trust-git-only`), owner decision pending (2026-11-12)
+
+The coordinator may move this mode out of the first merge. Its code is isolated for a one-step move: `profile_borrowed.py` (build flag `ENABLED = False`: the daemon refuses to start with `--trust-git-only` while it is False; a Worker-added restriction, which only tightens, is still applied), `downloads.py` (repo-pinned download resolver `pins_from_checkout`, `verify_attestation` interface that always answers False with "attestation verification not available"; never wired into a real fetch yet) and the `borrowed` branches in `profile.py`, `daemon.py`, `jobs.py`, `fetch.py`. Borrowed refuses root, sets `PR_SET_NO_NEW_PRIVS` (ctypes, best effort), refuses assignments naming a seed_url or other box artifacts, and may still seed. Not extended further until the decision.
 
 ## Not verified / open (do not read these as claims)
 
 - The real `websockets` adapter (`transport.WebsocketsTransport`) is not exercised by any test; the Worker route (`ws_path`, provisional) and the box-token header are guesses until W1 fixes them.
-- The stage allowlist, the stage-to-kfci-step mapping and the result shape (nonce binding) in `jobs.py` are provisional integration points, marked in code. `tree_key` is validated for shape only, not compared to the checkout.
+- The stage-to-kfci-step mapping and the result shape (nonce binding) in `jobs.py` are provisional integration points, marked in code. The Worker's `hosts-wire.json` fixture was not on the W1 branch when this was written, so no frame is tested against it. The `commands_until_ms`, `trust_git_only`/`container` welcome fields and the `ready`/`enforced` frames are as the coordinator described them, not read from Worker code. Not run against real git over HTTPS (blob-filter fetch, GitHub redirects): tests use a local repo.
 - Never run on a GPU or against the real Worker.
 
 ## Tests
 
-`python3 -m unittest scripts/kfhost/test_kfhost.py` (from `scripts/`: `python3 -m unittest kfhost.test_kfhost`). Stdlib only, fake transport and fake probes, local git fixture.
+from `scripts/`: `python3 -m unittest kfhost.test_kfhost kfhost.test_hardening`. Stdlib only, fake transport and fake probes, local git fixture.

@@ -5,10 +5,13 @@ import os
 import re
 import stat
 
-PROFILES = ("borrowed", "container", "owned")  # strictest first
+PROFILES = ("borrowed", "container", "standard", "owned")  # derived names (profile.derive); only owned may run cmd
 PUBLIC_REPO = "https://github.com/reindertpelsma/kayfabe"
-REQUIRED = ("worker_url", "box_id", "box_token", "access_id", "access_secret", "profile_ceiling", "work_dir")
-OPTIONAL = {"repo_allowlist", "ws_path", "heartbeat_s", "stage_allowlist"}
+REQUIRED = ("worker_url", "box_id", "box_token", "access_id", "access_secret", "work_dir")
+# Local flags. trust_git_only and container are RESTRICTIONS (the Worker may add them, never remove them);
+# allow_cmd is a POWER (needs the Worker to enable it as well). Default: standard.
+FLAGS = ("trust_git_only", "allow_cmd", "container")
+OPTIONAL = {"repo_allowlist", "ws_path", "heartbeat_s", "distrust_us"} | set(FLAGS)
 BOX_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}\Z")
 
 
@@ -44,14 +47,20 @@ def load(path):
         raise ConfigError("worker_url must be https:// without a trailing slash")
     if not BOX_ID.fullmatch(raw["box_id"]):
         raise ConfigError("invalid box_id")
-    if raw["profile_ceiling"] not in PROFILES:
-        raise ConfigError("profile_ceiling must be one of " + "|".join(PROFILES))
     cfg = dict(raw)
+    if "distrust_us" in cfg:  # old name of trust_git_only
+        cfg["trust_git_only"] = cfg.pop("distrust_us")
     cfg.setdefault("repo_allowlist", [PUBLIC_REPO])
     cfg.setdefault("ws_path", "/hosts/%s/ws" % cfg["box_id"])  # PROVISIONAL: W1 fixes the route
     cfg.setdefault("heartbeat_s", 15)
+    for flag in FLAGS:
+        cfg.setdefault(flag, False)
+        if cfg[flag] is not True and cfg[flag] is not False:
+            raise ConfigError("%s must be true or false" % flag)
     if not isinstance(cfg["repo_allowlist"], list) or not all(isinstance(r, str) for r in cfg["repo_allowlist"]):
         raise ConfigError("repo_allowlist must be a list of URLs")
+    if not all(r.startswith("https://") and not r.endswith("/") for r in cfg["repo_allowlist"]):
+        raise ConfigError("repo_allowlist entries must be canonical https:// URLs without a trailing slash")
     return cfg
 
 

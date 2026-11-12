@@ -57,24 +57,26 @@ class Probes:
 
 def gpu(p):
     out = p.run(
-        ["nvidia-smi", "--query-gpu=name,compute_cap,memory.total,driver_version", "--format=csv,noheader,nounits"]
+        ["nvidia-smi", "--query-gpu=name,compute_cap,memory.total,driver_version,pci.device_id",
+         "--format=csv,noheader,nounits"]
     )
-    blank = dict(gpu_name=None, compute_cap=None, vram_gb=None, driver=None)
+    blank = dict(gpu_name=None, compute_cap=None, vram_gb=None, driver=None, pci_device_id=None)
     if not out or not out.strip():
         return blank
     parts = [x.strip() for x in out.strip().splitlines()[0].split(",")]
-    if len(parts) != 4:
+    if len(parts) != 5:
         return blank
-    name, cap, mem, drv = parts
-    try:
-        cap_i = int(round(float(cap) * 100))  # integer capability like the box protocol (8.9 -> 890)
-    except ValueError:
-        cap_i = None
+    name, cap, mem, drv, pci = parts
+    # compute_cap is the string nvidia-smi prints ("8.9"), as the Worker's hello validator requires.
+    cap = cap if re.fullmatch(r"[0-9]{1,2}\.[0-9]", cap) else None
     try:
         vram = round(float(mem) / 1024, 1)
     except ValueError:
         vram = None
-    return dict(gpu_name=name or None, compute_cap=cap_i, vram_gb=vram, driver=drv or None)
+    # pci.device_id prints 0xDDDDVVVV (device then vendor); keep the 4-hex device id, lowercase.
+    m = re.fullmatch(r"0x([0-9A-Fa-f]{4})[0-9A-Fa-f]{4}", pci)
+    return dict(gpu_name=name or None, compute_cap=cap, vram_gb=vram, driver=drv or None,
+                pci_device_id=m.group(1).lower() if m else None)
 
 
 def module_flavor(p):

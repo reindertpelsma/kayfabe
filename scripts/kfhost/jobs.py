@@ -9,12 +9,22 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from pathlib import Path
 
+from .downloads import DownloadPolicy
 from .fetch import FetchError, fetch_commit
-from .profile import standalone
+from .profile import needs_ancestry, standalone
+
+# Stage names (profile.STAGES) -> kfci step ids. INTEGRATION POINT: identity until the Worker's planner
+# assignment (scripts/kfci/planner_assignment.py) fixes the real mapping.
+STAGE_TO_KFCI = {n: n for n in ("provision", "cuda_host", "merge_bar", "cuda_guest", "apps", "windows_gate",
+                                "windows_apps", "specviewperf", "ladder")}
+# Best effort: no_new_privs for the whole job tree, then exec the real command.
+NNP_WRAPPER = ("import ctypes,os,sys;ctypes.CDLL(None,use_errno=True).prctl(38,1,0,0,0);"
+               "os.execv(sys.executable,[sys.executable,'-I']+sys.argv[1:])")
 
 CI_DIR = Path(__file__).resolve().parents[1] / "ci"
 
@@ -57,6 +67,7 @@ class JobContext:
     def __init__(self, offer, profile, cfg, seed, cancelled):
         self.offer, self.profile, self.cfg = offer, profile, cfg
         self.seed, self.cancelled = seed, cancelled
+        self.downloads = None  # DownloadPolicy, set by the runner once the checkout exists
 
 
 class JobRunner:
@@ -66,42 +77,52 @@ class JobRunner:
         self.cfg, self.caps, self.reporting, self.fetch = cfg, caps, reporting, fetch
         self.proc = None
 
-    def prepare(self, offer):
-        """Fetch + verify BEFORE the offer is acked. Returns the checkout dir; raises FetchError."""
+    def prepare(self, offer, profile):
+        """Fetch + verify BEFORE running. Returns the checkout dir; raises FetchError."""
         a = offer["assignment"]
-        return self.fetch(a["repo"], a["commit"], self.cfg["work_dir"])
+        return self.fetch(a["repo"], a["commit"], self.cfg["work_dir"], a["tree_key"], strict=needs_ancestry(profile))
 
     def kfci_assignment(self, offer):
         a = offer["assignment"]
-        steps = [{"id": s} for s in a.get("stages", [])] or [{"id": "merge"}]
-        # INTEGRATION POINT: stage names map to kfci step ids 1:1 here; the real mapping/budget comes
-        # from the Worker's planner assignment (scripts/kfci/planner_assignment.py), not yet specified.
-        deadline = offer.get("deadline")
-        budget = max(60, int(deadline - time.time())) if isinstance(deadline, (int, float)) else 3600
+        steps = [{"id": STAGE_TO_KFCI[s]} for s in a.get("stages", [])] or [{"id": "merge_bar"}]
+        budget = max(60, int(offer["deadline"] / 1000 - time.time()))  # deadline is epoch milliseconds
         return {"version": 1, "id": offer["run_id"][:90], "budget_seconds": budget, "steps": steps}
 
-    def child_env(self, ctx, checkout):
-        keep = {"PATH": os.environ.get("PATH", "/usr/bin:/bin")}
+    def child_env(self, ctx, scratch):
+        """Scrubbed: no config path, no box/Access token, no run token. Throwaway HOME/XDG/TMPDIR for every
+        profile but owned (which keeps its real HOME)."""
+        env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "LANG": os.environ.get("LANG", "C.UTF-8")}
+        home = Path(scratch) / "home"
+        tmp = Path(scratch) / "tmp"
+        for d in (home, tmp):
+            d.mkdir(parents=True, exist_ok=True)
+        env.update(TMPDIR=str(tmp))
+        if ctx.profile != "owned":
+            env.update(HOME=str(home), XDG_CONFIG_HOME=str(home / ".config"), XDG_CACHE_HOME=str(home / ".cache"),
+                       XDG_DATA_HOME=str(home / ".local/share"))
+        elif os.environ.get("HOME"):
+            env["HOME"] = os.environ["HOME"]
         if standalone(ctx.profile):
-            keep.update(HOME=checkout, KF_STANDALONE="1", KF_NO_SYSTEM_CHANGES="1")
+            env.update(KF_STANDALONE="1", KF_NO_SYSTEM_CHANGES="1")
         else:
-            keep.update({k: v for k, v in os.environ.items() if k in ("HOME", "LANG")})
-            keep.update(ctx.offer["assignment"].get("env", {}))
-        return keep
+            env.update(ctx.offer["assignment"].get("env", {}))
+        return env
 
     def cancel(self):
         proc = self.proc
         if proc and proc.poll() is None:
             proc.terminate()
 
-    def execute(self, ctx, checkout, rep):
+    def execute(self, ctx, checkout, rep, scratch):
         """Run scripts/kfci in the checkout; stream its output to the reporter; return rc."""
         plan = Path(checkout) / "kfhost-assignment.json"
         plan.write_text(json.dumps(self.kfci_assignment(ctx.offer)))
-        self.proc = subprocess.Popen(
-            [sys.executable, "-I", str(Path(checkout) / "scripts/kfci/main.py"), "direct", str(plan)],
-            cwd=checkout, env=self.child_env(ctx, checkout), stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-        )
+        main = str(Path(checkout) / "scripts/kfci/main.py")
+        argv = [sys.executable, "-I", main, "direct", str(plan)]
+        if standalone(ctx.profile):
+            argv = [sys.executable, "-I", "-c", NNP_WRAPPER, main, "direct", str(plan)]
+        self.proc = subprocess.Popen(argv, cwd=checkout, env=self.child_env(ctx, scratch),
+                                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         for chunk in iter(lambda: self.proc.stdout.read1(8192), b""):
             rep.feed(chunk)
         self.proc.stdout.close()
@@ -110,8 +131,11 @@ class JobRunner:
     def result(self, ctx, rc):
         a = ctx.offer["assignment"]
         caps = self.caps
-        cap = caps.get("compute_cap")
         hardware = None
+        try:
+            cap = int(round(float(caps.get("compute_cap")) * 100))  # capability string "8.9" -> 890
+        except (TypeError, ValueError):
+            cap = None
         if caps.get("gpu_name") and cap and caps.get("driver"):
             hardware = {"gpu_name": caps["gpu_name"], "compute_cap": cap, "driver_version": caps["driver"]}
         # OPEN QUESTION for W1: nonce / runner_nonce binding of a custom-host result is not specified.
@@ -124,10 +148,14 @@ class JobRunner:
         rep = self.reporting(self.cfg, ctx.offer)
         rep.progress("Custom host %s accepted the run" % self.cfg["box_id"])
         ctx.log = lambda text: rep.feed((text + "\n").encode())
+        ctx.downloads = DownloadPolicy(ctx.profile, checkout, log=ctx.log)
+        os.makedirs(self.cfg["work_dir"], mode=0o700, exist_ok=True)
+        scratch = tempfile.mkdtemp(prefix="scratch-", dir=self.cfg["work_dir"])
         try:
-            rc = self.execute(ctx, checkout, rep)
+            rc = self.execute(ctx, checkout, rep, scratch)
         finally:
             shutil.rmtree(checkout, ignore_errors=True)
+            shutil.rmtree(scratch, ignore_errors=True)
         if ctx.cancelled():
             rc = 3
         rep.finish(self.result(ctx, rc), "Run finished on a custom host.")

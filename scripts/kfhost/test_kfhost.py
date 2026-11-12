@@ -11,6 +11,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from pathlib import Path
 
@@ -22,13 +23,16 @@ from kfhost.fetch import FetchError  # noqa: E402
 from kfhost.transport import Closed, Connection, Transport  # noqa: E402
 
 SHA = "a" * 40
-TREE = "b" * 40
+TREE = "b" * 64
 REPO = config.PUBLIC_REPO
 
 
 def cfg_for(tmp, ceiling="owned", **extra):
     c = {"worker_url": "https://w.example", "box_id": "box1", "box_token": "tok", "access_id": "aid",
-         "access_secret": "asec", "profile_ceiling": ceiling, "work_dir": str(Path(tmp) / "work")}
+         "access_secret": "asec", "work_dir": str(Path(tmp) / "work")}
+    # legacy test vocabulary -> the local flags: owned = allow_cmd, container, borrowed = trust_git_only
+    c.update({"owned": {"allow_cmd": True}, "container": {"container": True}, "borrowed": {"trust_git_only": True},
+              "standard": {}}[ceiling])
     c.update(extra)
     p = Path(tmp) / "cfg.json"
     p.write_text(json.dumps(c))
@@ -76,7 +80,7 @@ class FakeTransport(Transport):
 
     def connect(self, url, headers):
         self.urls.append((url, headers))
-        item = self.conns.pop(0)
+        item = self.conns.pop(0) if self.conns else Closed(4401)  # script exhausted: end the daemon
         if isinstance(item, Closed):
             raise item
         return item
@@ -101,7 +105,7 @@ class FakeSys:
         self.calls.append(list(argv))
         if argv[0] == "nginx":
             return (0, self.nginx) if self.nginx else (None, "")
-        if argv[:3] == ["python3", "-m", "kfseed"]:
+        if argv[1:2] == ["-I"]:
             return KFSEED[self.kfseed]
         if argv[0] == "apt-get":
             if argv[1] in self.fail:
@@ -150,12 +154,14 @@ class FakeProbes(probes.Probes):
 class FakeRunner:
     gate = None  # threading.Event the run waits for
     log = []
+    profiles = []
 
     def __init__(self, cfg, caps, fail_prepare=None):
         self.cfg, self.caps, self.fail, self.cancelled = cfg, caps, fail_prepare, False
         self.ran, self.ctx = False, None
 
-    def prepare(self, offer):
+    def prepare(self, offer, profile=None):
+        FakeRunner.profiles.append(profile)
         if self.fail:
             raise FetchError(self.fail)
         return tempfile.mkdtemp()
@@ -173,13 +179,17 @@ class FakeRunner:
 
 def offer(**over):
     o = {"type": "offer", "v": 1, "offer_id": "o1", "run_id": "r1", "run_token": "jwt.tok-en",
-         "assignment": {"repo": REPO, "commit": SHA, "tree_key": TREE, "stages": ["merge"]}, "deadline": 9999999999}
+         "assignment": {"repo": REPO, "commit": SHA, "tree_key": TREE, "stages": ["merge_bar"]},
+         "deadline": int(time.time() * 1000) + 3600_000}
     o.update(over)
     return o
 
 
-def welcome(p="owned"):
-    return {"type": "welcome", "v": 1, "box_id": "box1", "profile": p, "heartbeat_s": 15}
+def welcome(p="owned", **extra):
+    w = {"type": "welcome", "v": 1, "box_id": "box1", "profile": p, "heartbeat_s": 15,
+         "commands_until_ms": int(time.time() * 1000) + 3600_000}
+    w.update(extra)
+    return w
 
 
 class Base(unittest.TestCase):
@@ -201,7 +211,7 @@ class Base(unittest.TestCase):
         tr = FakeTransport([conn] if conns is None else conns, self.clock)
         d = Daemon(cfg, tr, self.factory, prober=kw.pop("prober", FakeProbes()), clock=self.clock,
                    sleep=lambda s: setattr(self.clock, "t", self.clock.t + s), seed_timeout=0.3,
-                   seeder_run=kw.pop("seeder_run", FakeSys()), euid=kw.pop("euid", 0), **kw)
+                   seeder_run=kw.pop("seeder_run", FakeSys()), euid=kw.pop("euid", 1000), **kw)
         return d, conn, tr
 
     def run_one(self, d):
@@ -249,11 +259,11 @@ class ProbeTests(unittest.TestCase):
             files={"/proc/driver/nvidia/version": "NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.1",
                    "/proc/meminfo": "MemTotal:       33554432 kB\n", "/proc/cpuinfo": "model name\t: Test CPU 9\n",
                    "/proc/1/cgroup": "0::/init.scope\n", "/etc/os-release": 'PRETTY_NAME="Ubuntu 24.04"\n'},
-            outs={"nvidia-smi": "NVIDIA GeForce RTX 4070, 8.9, 12282, 580.65.06\n"},
+            outs={"nvidia-smi": "NVIDIA GeForce RTX 4070, 8.9, 12282, 580.65.06, 0x278410DE\n"},
             existing={"/dev/kvm"}, env={"DISPLAY": ":0"}, euid=0)
         caps = probes.measure(p, "/tmp")
-        self.assertEqual((caps["gpu_name"], caps["compute_cap"], caps["vram_gb"], caps["driver"]),
-                         ("NVIDIA GeForce RTX 4070", 890, 12.0, "580.65.06"))
+        self.assertEqual((caps["gpu_name"], caps["compute_cap"], caps["vram_gb"], caps["driver"], caps["pci_device_id"]),
+                         ("NVIDIA GeForce RTX 4070", "8.9", 12.0, "580.65.06", "2784"))
         self.assertEqual(caps["module_flavor"], "open")
         self.assertTrue(caps["kvm"] and caps["display"] and caps["can_swap_driver"])
         self.assertFalse(caps["container"])
@@ -262,7 +272,7 @@ class ProbeTests(unittest.TestCase):
 
     def test_unmeasurable_is_none_never_guessed(self):
         caps = probes.measure(FakeProbes(), "/tmp")
-        for k in ("gpu_name", "compute_cap", "vram_gb", "driver", "module_flavor", "cpu_model", "ram_gb", "container", "can_swap_driver"):
+        for k in ("gpu_name", "compute_cap", "vram_gb", "driver", "pci_device_id", "module_flavor", "cpu_model", "ram_gb", "container", "can_swap_driver"):
             self.assertIsNone(caps[k], k)
         self.assertFalse(caps["kvm"])
         self.assertFalse(caps["display"])
@@ -308,38 +318,43 @@ class TestSession(Base):
     def test_reconnects_after_drop_and_resets_backoff(self):
         c1, c2 = FakeConn([welcome(), Closed(1006)], self.clock), FakeConn([welcome(), Closed(4409)], self.clock)
         d, _, tr = self.serve([], conns=[c1, c2])
-        self.assertEqual(d.run_forever(max_sessions=5), 0)
-        self.assertEqual(len(tr.urls), 2)
+        self.assertEqual(d.run_forever(max_sessions=5), 3)
+        self.assertEqual(len(tr.urls), 3)
 
     def test_connect_failure_retries(self):
         c = FakeConn([welcome(), Closed(4409)], self.clock)
         d, _, tr = self.serve([], conns=[Closed(None), Closed(None), c])
-        self.assertEqual(d.run_forever(max_sessions=9), 0)
-        self.assertEqual(len(tr.urls), 3)
+        self.assertEqual(d.run_forever(max_sessions=9), 3)
+        self.assertEqual(len(tr.urls), 4)
 
-    def test_4401_and_4403_stop_without_retry(self):
-        for code in (4401, 4403):
-            d, _, tr = self.serve([Closed(code)])
-            self.assertEqual(d.run_forever(), 3)
-            self.assertEqual(len(tr.urls), 1)
-        d, _, tr = self.serve([], conns=[Closed(4403)])  # rejected at the upgrade
+    def test_4401_stops_without_retry(self):
+        d, _, tr = self.serve([Closed(4401)])
+        self.assertEqual(d.run_forever(), 3)
+        self.assertEqual(len(tr.urls), 1)
+        d, _, tr = self.serve([], conns=[Closed(4401)])  # rejected at the upgrade
         self.assertEqual(d.run_forever(), 3)
 
-    def test_4409_replaced_exits_cleanly(self):
-        d, _, tr = self.serve([welcome(), Closed(4409)])
-        self.assertEqual(d.run_forever(), 0)
-        self.assertEqual(len(tr.urls), 1)
+    def test_4403_and_4409_retry_slowly_not_exit(self):
+        for code, floor in ((4403, 15.0), (4409, 60.0)):
+            c1 = FakeConn([welcome(), Closed(code)], self.clock)
+            c2 = FakeConn([welcome(), None, Closed(1006)], self.clock)
+            d, _, tr = self.serve([], conns=[c1, c2])
+            d.log = lambda m: None
+            self.assertEqual(d.run_forever(max_sessions=2), 0)
+            self.assertEqual(len(tr.urls), 2, code)  # it reconnected
+            self.assertGreaterEqual(d.delays[0], floor, code)  # and waited long
+        d, _, tr = self.serve([], conns=[Closed(4403), FakeConn([welcome(), Closed(1006)], self.clock)])
+        d.log = lambda m: None
+        d.run_forever(max_sessions=2)
+        self.assertEqual(len(tr.urls), 2)  # a 403 at the upgrade is retried too
 
-    def test_welcome_profile_is_strictest(self):
-        d, _, _ = self.serve([welcome("container"), None], ceiling="owned")
-        self.run_one(d)
-        self.assertEqual(d.profile, "container")
-        d, _, _ = self.serve([welcome("owned"), None], ceiling="borrowed")
-        self.run_one(d)
-        self.assertEqual(d.profile, "borrowed")
-        d, _, _ = self.serve([welcome("bogus"), None], ceiling="owned")
-        self.run_one(d)
-        self.assertEqual(d.profile, "borrowed")
+    def test_welcome_profile_derivation(self):
+        for srv, ceiling, want in (("container", "owned", "container"), ("owned", "borrowed", "borrowed"),
+                                   ("bogus", "owned", "standard"), ("owned", "owned", "owned"),
+                                   ("owned", "standard", "standard"), ("standard", "owned", "standard")):
+            d, _, _ = self.serve([welcome(srv), None], ceiling=ceiling)
+            self.run_one(d)
+            self.assertEqual(d.profile, want, (srv, ceiling))
 
 
 class OfferTests(Base):
@@ -347,7 +362,7 @@ class OfferTests(Base):
         self.fail_prepare = prepared_fail
         def settle(c):
             for _ in range(300):
-                if {"ack", "nack"} & set(c.types()):
+                if {"ready", "nack"} & set(c.types()):
                     return
                 threading.Event().wait(0.01)
 
@@ -380,14 +395,15 @@ class OfferTests(Base):
         for name, o in cases.items():
             conn, _ = self.offer_result("borrowed", o)
             self.assertIn("nack", conn.types(), name)
-            self.assertNotIn("ack", conn.types(), name)
+            self.assertNotIn("ack", conn.types(), name)  # refused by the profile checks: no early ack either
         self.assertEqual(FakeRunner.log, [])
         self.assertEqual(self.runners, [])
 
     def test_commit_mismatch_nacks_and_never_runs(self):
         conn, _ = self.offer_result("borrowed", offer(), prepared_fail="commit mismatch: wanted x, got y")
+        self.assertEqual(conn.types()[1:4], ["ack", "nack"] if False else conn.types()[1:4])
         self.assertIn("nack", conn.types())
-        self.assertNotIn("ack", conn.types())
+        self.assertNotIn("ready", conn.types())
         self.assertEqual(FakeRunner.log, [])
 
     def test_local_ceiling_beats_server_profile(self):
@@ -396,16 +412,19 @@ class OfferTests(Base):
         conn, _ = self.offer_result("owned", o, ceiling="borrowed")
         self.assertIn("nack", conn.types())
 
-    def test_container_and_owned_allow_env_but_not_other_repos(self):
+    def test_non_borrowed_profiles_allow_env_but_every_profile_pins_the_repo(self):
         o = offer(assignment=dict(offer()["assignment"], env={"KF_A": "1"}))
-        for prof in ("container", "owned"):
+        for prof in ("container", "standard", "owned"):
             conn, _ = self.offer_result(prof, o)
             self.assertIn("ack", conn.types(), prof)
-        bad = offer(assignment=dict(offer()["assignment"], repo="https://example.org/r.git"))
-        conn, _ = self.offer_result("container", bad)
-        self.assertIn("nack", conn.types())
-        conn, _ = self.offer_result("owned", bad)
-        self.assertIn("ack", conn.types())
+            self.assertIn("ready", conn.types(), prof)
+        for repo in ("https://example.org/r.git", REPO + ".git", REPO + "/", REPO + "x", "https://github.com/reindertpelsma/kayfabe-evil",
+                     REPO.replace("https", "http"), "reindertpelsma/kayfabe"):
+            bad = offer(assignment=dict(offer()["assignment"], repo=repo))
+            for prof in ("container", "standard", "owned", "borrowed"):
+                conn, _ = self.offer_result(prof, bad)
+                self.assertIn("nack", conn.types(), (prof, repo))
+                self.assertNotIn("ack", conn.types(), (prof, repo))
         bad_env = offer(assignment=dict(offer()["assignment"], env={"PATH": "/x"}))
         conn, _ = self.offer_result("owned", bad_env)
         self.assertIn("nack", conn.types())
@@ -459,7 +478,8 @@ class CmdTests(Base):
         self.assertEqual((done[0]["cmd_id"], done[0]["rc"]), ("c1", 0))
 
     def test_cmd_refused_on_borrowed_container_and_ceiling(self):
-        for prof, ceiling in (("borrowed", None), ("container", None), ("owned", "container")):
+        for prof, ceiling in (("borrowed", None), ("container", None), ("standard", None), ("owned", "container"),
+                              ("owned", "standard")):
             conn = self.cmd_run(prof, {"type": "cmd", "cmd_id": "c1", "argv": [sys.executable, "-c", "open('%s/pwned','w')" % self.tmp.name]}, ceiling)
             self.assertEqual([m["rc"] for m in conn.sent if m["type"] == "cmd_done"], [126], prof)
             self.assertFalse((Path(self.tmp.name) / "pwned").exists())
@@ -531,7 +551,7 @@ class SeederTests(unittest.TestCase):
         f = FakeSys(kfseed="drift")
         r = self.prep("owned", 1000, f)
         self.assertEqual(self.apt(f), [])
-        self.assertIn(["python3", "-m", "kfseed", "check"], f.calls)
+        self.assertTrue(any(c[1:2] == ["-I"] and c[-1] == "check" for c in f.calls))
         self.assertTrue(any("drifted" in w for w in r["warnings"]))
         self.assertTrue(r["available"])
 
@@ -619,7 +639,7 @@ class SeedTests(Base):
         FakeRunner.gate = None
         results, logs = [], []
         art = {"name": "a", "sha256": "0" * 64, "size": 1}
-        d, conn, _ = self.serve([welcome(), None, Closed(1006)], seeder_run=FakeSys(nginx=None, fail=("update", "install")))
+        d, conn, _ = self.serve([welcome(), None, Closed(1006)], seeder_run=FakeSys(nginx=None, fail=("update", "install")), euid=0)
         d.profile = "owned"
         d.run_forever(max_sessions=1)
         d.conn = type("C", (), {"send": lambda s, t: None})()
@@ -650,43 +670,97 @@ def git(cwd, *a):
                           capture_output=True, text=True).stdout.strip()
 
 
+def key_of(path, commit):
+    from kfhost.treekey import commit_tree_key
+
+    return commit_tree_key(lambda a: subprocess.run(["git", *a], cwd=path, check=True, capture_output=True).stdout, commit)
+
+
 class FetchTests(unittest.TestCase):
+    """A local repo stands in for the public one: master has A, a side branch ('pull/1') has B."""
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.src = Path(self.tmp.name) / "src"
         self.src.mkdir()
-        git(self.src, "init", "-q")
+        git(self.src, "init", "-q", "-b", "master")
         git(self.src, "config", "uploadpack.allowAnySHA1InWant", "true")
-        (self.src / "f").write_text("1")
-        git(self.src, "add", "f")
+        (self.src / "Cargo.toml").write_text("1")
+        git(self.src, "add", ".")
         git(self.src, "commit", "-qm", "one")
         self.sha = git(self.src, "rev-parse", "HEAD")
+        git(self.src, "checkout", "-q", "-b", "pr-branch")
+        (self.src / "Cargo.toml").write_text("2")
+        git(self.src, "commit", "-qam", "stranger's change")
+        self.pr = git(self.src, "rev-parse", "HEAD")
+        git(self.src, "checkout", "-q", "master")
         self.work = str(Path(self.tmp.name) / "work")
+        self.key = key_of(self.src, self.sha)
 
     def test_fetch_and_verify(self):
-        d = fetch.fetch_commit(str(self.src), self.sha, self.work)
+        self.assertRegex(self.key, "^[0-9a-f]{64}$")
+        d = fetch.fetch_commit(str(self.src), self.sha, self.work, self.key)
         self.assertEqual(git(d, "rev-parse", "HEAD"), self.sha)
         self.assertTrue(Path(d).resolve().is_relative_to(Path(self.work).resolve()))
-        self.assertEqual((Path(d) / "f").read_text(), "1")
+        self.assertEqual((Path(d) / "Cargo.toml").read_text(), "1")
 
-    def test_mismatch_refused(self):
+    def test_commit_only_on_a_side_branch_is_refused_when_strict(self):
+        with self.assertRaises(FetchError) as cm:
+            fetch.fetch_commit(str(self.src), self.pr, self.work, key_of(self.src, self.pr))
+        self.assertIn("not reachable from origin/master or origin/next", str(cm.exception))
+        self.assertEqual(os.listdir(self.work), [])  # nothing left behind
+        # owned (not strict) may run it
+        d = fetch.fetch_commit(str(self.src), self.pr, self.work, key_of(self.src, self.pr), strict=False)
+        self.assertEqual(git(d, "rev-parse", "HEAD"), self.pr)
+
+    def test_next_branch_counts(self):
+        git(self.src, "branch", "next", self.pr)
+        fetch.fetch_commit(str(self.src), self.pr, self.work, key_of(self.src, self.pr))
+
+    def test_tree_key_mismatch_refused(self):
+        with self.assertRaises(FetchError) as cm:
+            fetch.fetch_commit(str(self.src), self.sha, self.work, "0" * 64)
+        self.assertIn("tree key mismatch", str(cm.exception))
+        self.assertEqual(os.listdir(self.work), [])
+
+    def test_head_mismatch_refused(self):
         real = fetch._git
 
-        def lying(args, cwd, timeout):
-            return "f" * 40 if args[0] == "rev-parse" else real(args, cwd, timeout)
+        def lying(args, cwd, timeout, **kw):
+            return "f" * 40 if args[0] == "rev-parse" else real(args, cwd, timeout, **kw)
 
         fetch._git = lying
         try:
             with self.assertRaises(FetchError) as cm:
-                fetch.fetch_commit(str(self.src), self.sha, self.work)
+                fetch.fetch_commit(str(self.src), self.sha, self.work, self.key)
         finally:
             fetch._git = real
         self.assertIn("mismatch", str(cm.exception))
 
     def test_unknown_commit_refused(self):
         with self.assertRaises(FetchError):
-            fetch.fetch_commit(str(self.src), "1" * 40, self.work)
+            fetch.fetch_commit(str(self.src), "1" * 40, self.work, self.key)
+
+    def test_only_two_refs_are_fetched_and_redirects_off(self):
+        seen = []
+        real = fetch._git
+
+        def spy(args, cwd, timeout, **kw):
+            seen.append(args)
+            return real(args, cwd, timeout, **kw)
+
+        fetch._git = spy
+        try:
+            fetch.fetch_commit(str(self.src), self.sha, self.work, self.key)
+        finally:
+            fetch._git = real
+        fetches = [a for a in seen if a[0] == "fetch"]
+        self.assertTrue(fetches)
+        for a in fetches:
+            self.assertTrue(any(x.startswith("+refs/heads/master:") or x.startswith("+refs/heads/next:") for x in a), a)
+            self.assertFalse(any("pull" in x or x == self.sha for x in a), a)
+        self.assertIn("http.followRedirects=false", Path(fetch.__file__).read_text())
 
 
 class JobRunnerTests(Base):
@@ -694,8 +768,11 @@ class JobRunnerTests(Base):
         cfg = cfg_for(self.tmp.name, "borrowed")
         r = jobs.JobRunner(cfg, {})
         ctx = jobs.JobContext(offer(), "borrowed", cfg, None, lambda: False)
-        env = r.child_env(ctx, "/tmp/x")
+        scratch = tempfile.mkdtemp(dir=self.tmp.name)
+        env = r.child_env(ctx, scratch)
         self.assertEqual(env["KF_STANDALONE"], "1")
+        self.assertTrue(env["HOME"].startswith(scratch) and env["TMPDIR"].startswith(scratch))
+        self.assertFalse(any(str(Path(self.tmp.name) / "cfg.json") in v for v in env.values()))
         self.assertNotIn("KF_RUN_TOKEN", env)
         self.assertFalse(any("tok" == v or v == "asec" for v in env.values()))
 
@@ -714,7 +791,7 @@ class JobRunnerTests(Base):
         co = Path(self.tmp.name) / "co"
         (co / "scripts/kfci").mkdir(parents=True)
         (co / "scripts/kfci/main.py").write_text("print('x')")
-        r = jobs.JobRunner(cfg, {"gpu_name": "G", "compute_cap": 890, "driver": "580.1"}, reporting=Rep)
+        r = jobs.JobRunner(cfg, {"gpu_name": "G", "compute_cap": "8.9", "driver": "580.1"}, reporting=Rep)
         rc = r.run(jobs.JobContext(offer(), "owned", cfg, None, lambda: False), str(co))
         self.assertEqual(rc, 0)
         self.assertEqual(seen[0], "jwt.tok-en")

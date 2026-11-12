@@ -4,6 +4,7 @@ import json
 import os
 import random
 import subprocess
+import sys
 import threading
 import time
 
@@ -12,7 +13,7 @@ from .config import ws_url
 from .fetch import FetchError
 from .jobs import JobContext
 from .seeder import prepare_seeder
-from .profile import Refused, allows_cmd, check_offer, effective
+from .profile import Refused, allows_cmd, check_offer, derive, local_flags
 from .transport import Closed
 
 CMD_MAX_BYTES = 256 * 1024
@@ -21,20 +22,59 @@ CMD_DEFAULT_TIMEOUT, CMD_MAX_TIMEOUT = 300, 3600
 EXIT_OK, EXIT_STOP = 0, 3
 
 
+MAX_FRAME = 256 * 1024
+MAX_NESTING = 32
+
+
+def parse_frame(raw):
+    """A JSON object from a frame, or None. Size and nesting are checked BEFORE json.loads."""
+    if not isinstance(raw, str) or len(raw) > MAX_FRAME:
+        return None
+    depth = peak = 0
+    in_str = esc = False
+    for ch in raw:
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+        elif ch == '"':
+            in_str = True
+        elif ch in "[{":
+            depth += 1
+            peak = max(peak, depth)
+            if peak > MAX_NESTING:
+                return None
+        elif ch in "]}":
+            depth -= 1
+    try:
+        msg = json.loads(raw)
+    except (ValueError, RecursionError):
+        return None
+    return msg if isinstance(msg, dict) else None
+
+
 class Daemon:
     def __init__(self, cfg, transport, runner_factory, prober=None, clock=time.monotonic, sleep=time.sleep,
-                 rng=None, seed_timeout=15.0, seeder_run=None, euid=None):
+                 rng=None, seed_timeout=15.0, seeder_run=None, euid=None, wall=time.time, log=None):
         self.cfg, self.transport, self.runner_factory = cfg, transport, runner_factory
         self.prober = prober or probes.Probes()
         self.clock, self.sleep, self.rng = clock, sleep, rng or random.Random()
         self.seed_timeout = seed_timeout
-        self.profile = cfg["profile_ceiling"]  # until welcome; the strictest of both afterwards
+        self.local = local_flags(cfg)  # enforced locally; the Worker can add restrictions, never remove them
+        self.profile = derive(self.local)  # no power before a welcome
         self.heartbeat_s = cfg["heartbeat_s"]
         self.lock = threading.Lock()
         self.conn = None
         self.active = None  # {"offer_id","run_id","runner","thread"}
         self.cmd_thread = None
         self.seeder_run = seeder_run
+        self.wall = wall
+        self.log = log or (lambda m: print(m, file=sys.stderr, flush=True))
+        self.commands_until_ms = None
+        self.delays = []  # every sleep the loop asked for (observable in tests)
         self.euid = os.geteuid() if euid is None else euid
         self.seeder = None
         self.seed_ok = True  # False after a refused/failed seed_register: seeding unavailable this session
@@ -57,11 +97,12 @@ class Daemon:
 
     def hello(self):
         caps = probes.measure(self.prober, self.cfg["work_dir"])
-        return self.send({"type": "hello", "box_id": self.cfg["box_id"], "version": VERSION, "capabilities": caps}), caps
+        return self.send({"type": "hello", "box_id": self.cfg["box_id"], "version": VERSION, "capabilities": caps,
+                          "enforced": dict(self.local)}), caps
 
     def heartbeat(self):
         act = self.active
-        msg = {"type": "heartbeat", "ts": int(time.time()), "state": "busy" if act else "idle"}
+        msg = {"type": "heartbeat", "ts": int(self.wall()), "state": "busy" if act else "idle"}
         if act:
             msg["run_id"] = act["run_id"]
         self.send(msg)
@@ -77,45 +118,47 @@ class Daemon:
     def backoff_delay(self, attempt, base=1.0, cap=60.0):
         return min(cap, base * 2 ** min(attempt, 10)) * (0.5 + 0.5 * self.rng.random())
 
+    # Reconnect pacing per close code: (base, cap) seconds. 4409 = someone else holds the slot; 4403 = box
+    # disabled or a transient Access 403. Neither stops the daemon; only 4401 (bad token) does.
+    SLOW = {4409: (120.0, 600.0), 4403: (30.0, 300.0)}
+
     def run_forever(self, max_sessions=None):
-        """Return an exit code: 0 on replace (4409) or stop request, 3 on 4401/4403."""
+        """Return an exit code: 3 on 4401 (bad token); 0 on a stop request or when max_sessions is reached."""
         attempt, sessions = 0, 0
         while not self.stopping:
             if max_sessions is not None and sessions >= max_sessions:
                 return EXIT_OK
             sessions += 1
+            code, welcomed = None, False
             try:
                 conn = self.transport.connect(ws_url(self.cfg), self.headers())
             except Closed as error:
-                code = self.closed_code(error)
-                if code is not None:
-                    return code
-                self.sleep(self.backoff_delay(attempt))
+                code = error.code
+            else:
+                try:
+                    welcomed = self.session(conn)
+                except Closed as error:
+                    code = error.code
+                    welcomed = getattr(self, "_welcomed", False)
+                finally:
+                    with self.lock:
+                        self.conn = None
+                    conn.close()
+            if code == 4401:
+                self.log("kfhost: box token rejected (close 4401); fix the token in the config and restart")
+                return EXIT_STOP
+            if code in self.SLOW:
+                self.log("kfhost: close %s (%s); retrying slowly" % (code, "another connection holds this box's slot"
+                         if code == 4409 else "box disabled or access refused"))
+                base, cap = self.SLOW[code]
                 attempt += 1
-                continue
-            try:
-                welcomed = self.session(conn)
-            except Closed as error:
-                code = self.closed_code(error)
-                if code is not None:
-                    return code
-                welcomed = getattr(self, "_welcomed", False)
-            finally:
-                with self.lock:
-                    self.conn = None
-                conn.close()
-            attempt = 0 if welcomed else attempt + 1
-            self.sleep(self.backoff_delay(attempt))
+                delay = self.backoff_delay(attempt - 1, base, cap)
+            else:
+                attempt = 0 if welcomed else attempt + 1
+                delay = self.backoff_delay(attempt)
+            self.delays.append(delay)
+            self.sleep(delay)
         return EXIT_OK
-
-    @staticmethod
-    def closed_code(error):
-        """None = retry. 4401/4403 stop with an error; 4409 means another connection replaced us: exit."""
-        if error.code in (4401, 4403):
-            return EXIT_STOP
-        if error.code == 4409:
-            return EXIT_OK
-        return None
 
     def session(self, conn):
         """Serve one connection until it drops (raises Closed). Running jobs are not touched."""
@@ -124,6 +167,7 @@ class Daemon:
             self.conn = conn
         self.seed_ok = True
         self.seeder = None
+        self.commands_until_ms = None
         ok, self.caps = self.hello()
         next_beat = self.clock() + self.heartbeat_s
         while not self.stopping:
@@ -134,12 +178,16 @@ class Daemon:
                 next_beat = self.clock() + self.heartbeat_s
             if raw is None:
                 continue
-            try:
-                msg = json.loads(raw)
-            except ValueError:
+            msg = parse_frame(raw)
+            if msg is None:
+                self.log("kfhost: dropped an invalid or oversized frame")
                 continue
-            if isinstance(msg, dict):
+            try:
                 self.dispatch(msg)
+            except Closed:
+                raise
+            except Exception as error:  # a hostile frame must never kill the daemon
+                self.log("kfhost: frame handler failed: %s" % type(error).__name__)
         return self._welcomed
 
     # ---- dispatch ----
@@ -147,7 +195,9 @@ class Daemon:
         kind = msg.get("type")
         if kind == "welcome":
             self._welcomed = True
-            self.profile = effective(msg.get("profile"), self.cfg["profile_ceiling"])
+            self.profile = derive(self.local, msg)
+            cu = msg.get("commands_until_ms")
+            self.commands_until_ms = cu if type(cu) is int else None
             hb = msg.get("heartbeat_s")
             if isinstance(hb, (int, float)) and 1 <= hb <= 120:
                 self.heartbeat_s = hb
@@ -179,13 +229,18 @@ class Daemon:
     def on_offer(self, msg):
         oid = msg.get("offer_id") if isinstance(msg.get("offer_id"), str) else "?"
         try:
-            offer = check_offer(self.profile, {k: v for k, v in msg.items()}, self.cfg)
+            offer = check_offer(self.profile, dict(msg), self.cfg, int(self.wall() * 1000))
+            if self.profile == "borrowed" and self.euid == 0:
+                raise Refused("borrowed refuses to run as root")
         except Refused as error:
             self.send({"type": "nack", "offer_id": oid, "reason": str(error)[:200]})
             return
         if self.active is not None or self.cmd_thread is not None and self.cmd_thread.is_alive():
             self.send({"type": "nack", "offer_id": oid, "reason": "busy"})
             return
+        # Early ack: the offer passed the profile checks. A drop during the fetch loses nothing (the Worker
+        # re-offers idempotently by offer_id); `ready` follows verification, `nack` follows a failed one.
+        self.send({"type": "ack", "offer_id": oid})
         runner = self.runner_factory(self.cfg, self.caps)
         self.active = {"offer_id": oid, "run_id": offer["run_id"], "runner": runner, "cancelled": False}
         t = threading.Thread(target=self.job, args=(offer, runner, self.profile), daemon=True)
@@ -195,17 +250,31 @@ class Daemon:
 
     def job(self, offer, runner, profile):
         act = self.active
+        timer = None
         try:
             try:
-                checkout = runner.prepare(offer)  # fetch + verify the commit BEFORE acking
+                checkout = runner.prepare(offer, profile)  # fetch + verify BEFORE anything runs
             except (FetchError, OSError) as error:
-                self.send({"type": "nack", "offer_id": offer["offer_id"], "reason": ("fetch: %s" % error)[:200]})
+                self.send({"type": "nack", "offer_id": offer["offer_id"], "reason": ("verify: %s" % error)[:200]})
                 return
-            self.send({"type": "ack", "offer_id": offer["offer_id"]})
+            self.send({"type": "ready", "offer_id": offer["offer_id"]})
+            # Time cap from the Worker's deadline (epoch milliseconds): cancel the run when it passes.
+            left = max(0.0, offer["deadline"] / 1000.0 - self.wall())
+
+            def expire():
+                act["cancelled"] = True
+                act["expired"] = True
+                runner.cancel()
+
+            timer = threading.Timer(left, expire)
+            timer.daemon = True
+            timer.start()
             ctx = JobContext(offer, profile, self.cfg, None, lambda: act["cancelled"])
             ctx.seed = lambda artifact, path: self.seed_register(offer["offer_id"], artifact, path, log=getattr(ctx, "log", None))
             runner.run(ctx, checkout)
         finally:
+            if timer:
+                timer.cancel()
             self.active = None
 
     # ---- seeding ----
@@ -243,8 +312,8 @@ class Daemon:
         if not isinstance(cid, (str, int)):
             return
         refuse = None
-        if not allows_cmd(self.profile):
-            refuse = "cmd refused: profile %s" % self.profile
+        if not allows_cmd(self.profile, self.cfg, self.commands_until_ms, int(self.wall() * 1000)):
+            refuse = "cmd refused: needs profile owned, local allow_cmd and an active commands_until"
         elif self.cmd_thread is not None and self.cmd_thread.is_alive():
             refuse = "cmd refused: another command is running"
         elif self.active is not None and msg.get("allow_during_run") is not True:

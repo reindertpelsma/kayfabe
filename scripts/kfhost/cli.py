@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 from . import config as config_mod
+from . import profile_borrowed
 from .daemon import Daemon
 from .jobs import JobRunner
 from .transport import WebsocketsTransport
@@ -65,6 +66,16 @@ def check(out=print, which=shutil.which, importer=__import__, exists=os.path.exi
     return 1 if missing else 0
 
 
+def set_no_new_privs():
+    """PR_SET_NO_NEW_PRIVS (best effort; returns False when it could not be set)."""
+    try:
+        import ctypes
+
+        return ctypes.CDLL(None, use_errno=True).prctl(38, 1, 0, 0, 0) == 0
+    except (OSError, AttributeError):
+        return False
+
+
 def run(args):
     try:
         cfg = config_mod.load(args.config)
@@ -72,6 +83,21 @@ def run(args):
         print("kfhost: refusing to start: %s" % error, file=sys.stderr)
         return 2
     os.makedirs(cfg["work_dir"], mode=0o700, exist_ok=True)
+    work = Path(cfg["work_dir"]).resolve()
+    if work == Path(args.config).resolve().parent or work in Path(args.config).resolve().parents:
+        print("kfhost: refusing to start: the config file must not live inside work_dir (jobs run there)", file=sys.stderr)
+        return 2
+    for flag in config_mod.FLAGS:  # command-line flags only ever ADD (OR with the config)
+        cfg[flag] = cfg[flag] or getattr(args, flag, False)
+    if cfg["trust_git_only"] and not profile_borrowed.ENABLED:
+        print("kfhost: refusing to start: --trust-git-only is not enabled in this build "
+              "(kfhost/profile_borrowed.py ENABLED is False)", file=sys.stderr)
+        return 2
+    if cfg["trust_git_only"]:
+        if os.geteuid() == 0:
+            print("kfhost: refusing to start: profile borrowed must not run as root; use an unprivileged user", file=sys.stderr)
+            return 2
+        set_no_new_privs()
     daemon = Daemon(cfg, WebsocketsTransport(), JobRunner)
     return daemon.run_forever()
 
@@ -84,6 +110,11 @@ def main(argv=None):
     sub.add_parser("check")
     r = sub.add_parser("run")
     r.add_argument("--config", required=True)
+    r.add_argument("--distrust-us", dest="trust_git_only", action="store_true",
+                   help="treat the Worker as untrusted: borrowed rules, never root, no cmd, no system changes")
+    r.add_argument("--allow-cmd", dest="allow_cmd", action="store_true",
+                   help="power: permit remote commands/owned behaviour (the Worker must enable it too)")
+    r.add_argument("--container", dest="container", action="store_true", help="enforce container limits")
     args = p.parse_args(argv)
     if args.cmd == "setup":
         return setup(args.venv)
