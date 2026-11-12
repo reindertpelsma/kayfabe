@@ -51,12 +51,14 @@ http {{
     scgi_temp_path {run}/tmp/scgi;
     server {{
         listen {port} default_server;
+        error_page 400 403 404 405 = @drop;
+        location @drop {{ return 444; }}
         location /{token}/ {{
             alias {stage}/;
             autoindex off;
             limit_except GET HEAD {{ deny all; }}
         }}
-        location / {{ return 404; }}
+        location / {{ return 444; }}
     }}
 }}
 """

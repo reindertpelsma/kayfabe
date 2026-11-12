@@ -93,7 +93,10 @@ def check_nginx(args):
 
 
 def check(args):
-    bad = selfcheck.selfcheck(args.url, _artifacts(args))
+    report = []
+    bad = selfcheck.selfcheck(args.url, _artifacts(args), report=report)
+    for r in report:
+        print("PASS " + r)
     for b in bad:
         print("FAIL " + b)
     print("selfcheck: %s" % ("FAIL" if bad else "ok"))

@@ -53,7 +53,10 @@ class Pure(Base):
         self.assertIn("location /ab12cd34/ {\n            alias /tmp/r/stage/;", text)
         self.assertIn("autoindex off;", text)
         self.assertIn("limit_except GET HEAD { deny all; }", text)
-        self.assertIn("location / { return 404; }", text)
+        self.assertIn("location / { return 444; }", text)
+        self.assertIn("error_page 400 403 404 405 = @drop;", text)
+        self.assertIn("location @drop { return 444; }", text)
+        self.assertNotIn("return 404", text)
         for s in ("sendfile on;", "access_log off;", "server_tokens off;", "daemon off;", "pid /tmp/r/nginx.pid;"):
             self.assertIn(s, text)
         self.assertNotIn("autoindex on", text)
@@ -100,14 +103,18 @@ class Selfcheck(Base):
 
     def req(self, method, path, headers=None):
         c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
-        c.request(method, path, headers=headers or {})
-        r = c.getresponse()
-        data = r.read()
-        c.close()
-        return r.status, data, r
+        try:
+            c.request(method, path, headers=headers or {})
+            r = c.getresponse()
+            return r.status, r.read(), r
+        finally:
+            c.close()
 
     def test_selfcheck_passes(self):
-        self.assertEqual(selfcheck.selfcheck(self.url(), [("art.bin", SHA)], chunk=100_000), [])
+        report = []
+        self.assertEqual(selfcheck.selfcheck(self.url(), [("art.bin", SHA)], chunk=100_000, report=report), [])
+        self.assertEqual(len(report), 5)
+        self.assertTrue(all(r.endswith("no reply (ok)") for r in report), report)
 
     def test_sha_mismatch_detected(self):
         bad = selfcheck.selfcheck(self.url(), [("art.bin", "0" * 64)])
@@ -122,11 +129,10 @@ class Selfcheck(Base):
         self.assertEqual((s, body), (206, DATA[10:20]))
         s, body, r = self.req("HEAD", "/%s/art.bin" % t)
         self.assertEqual((s, body, r.getheader("Content-Length")), (200, b"", str(len(DATA))))
-        self.assertEqual(self.req("GET", "/")[0], 404)
-        self.assertEqual(self.req("GET", "/wrongtok/art.bin")[0], 404)
-        self.assertEqual(self.req("GET", "/%s/secret.txt" % t)[0], 404)
-        self.assertIn(self.req("GET", "/%s/" % t)[0], (403, 404))  # no listing; nginx says 403 for a directory
-        self.assertIn(self.req("POST", "/%s/art.bin" % t)[0], (403, 405))
+        for method, path in (("GET", "/"), ("GET", "/wrongtok/art.bin"), ("GET", "/%s/secret.txt" % t),
+                             ("GET", "/%s/" % t), ("POST", "/%s/art.bin" % t), ("PUT", "/%s/art.bin" % t)):
+            with self.assertRaises((http.client.RemoteDisconnected, ConnectionResetError), msg=(method, path)):
+                self.req(method, path)
         self.assertTrue(u.endswith("/"))
 
     def test_selfcheck_catches_open_root(self):
@@ -148,7 +154,7 @@ class Selfcheck(Base):
         threading.Thread(target=srv.serve_forever, daemon=True).start()
         self.addCleanup(srv.shutdown)
         bad = selfcheck.selfcheck("http://127.0.0.1:%d/%s/" % (srv.server_address[1], self.token), [("art.bin", SHA)])
-        self.assertIn("GET / must be 404", bad)
+        self.assertIn("GET / must get no reply (connection closed)", bad)
         self.assertTrue(url)
 
 

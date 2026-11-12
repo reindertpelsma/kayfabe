@@ -19,9 +19,8 @@ def make_handler(stage, token):
             pass
 
         def _deny(self, code):
-            self.send_response(code)
-            self.send_header("Content-Length", "0")
-            self.end_headers()
+            # like nginx `return 444`: close without any reply
+            self.close_connection = True
 
         def _serve(self, body):
             if not self.path.startswith(prefix):

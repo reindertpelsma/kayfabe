@@ -22,33 +22,43 @@ def _req(base, method, rel, headers=None, read=True):
         conn.close()
 
 
-def selfcheck(url, artifacts, chunk=CHUNK):
-    """Return a list of failure strings (empty = pass). artifacts: [(name, sha256)]."""
+def silent(host, port, method, path):
+    """True when the server closes the connection without sending any reply (nginx 444)."""
+    c = http.client.HTTPConnection(host, port, timeout=10)
+    try:
+        c.request(method, path)
+        c.getresponse().read()
+        return False
+    except (http.client.RemoteDisconnected, ConnectionResetError, BrokenPipeError):
+        return True
+    finally:
+        c.close()
+
+
+def selfcheck(url, artifacts, chunk=CHUNK, report=None):
+    """Return a list of failure strings (empty = pass). artifacts: [(name, sha256)].
+
+    Invalid requests must get NO reply (silent drop); each such case is appended to report as a line.
+    """
     bad = []
+    report = report if report is not None else []
     u = urllib.parse.urlsplit(url)
-    root = "%s://%s/" % (u.scheme, u.netloc)
-
-    def rootreq(method, path):
-        c = http.client.HTTPConnection(u.hostname, u.port or 80, timeout=10)
-        try:
-            c.request(method, path)
-            r = c.getresponse()
-            r.read()
-            return r.status
-        finally:
-            c.close()
-
     s, _, body = _req(url, "GET", PROBE_NAME)
     if s != 200 or body != PROBE_CONTENT:
         bad.append("probe: status %s or content mismatch" % s)
-    if rootreq("GET", "/") != 404:
-        bad.append("GET / must be 404")
     parts = u.path.strip("/").split("/")
-    wrong = "/%s/%s" % ("zzzzzzzz" if parts[0] != "zzzzzzzz" else "yyyyyyyy", PROBE_NAME)
-    if rootreq("GET", wrong) != 404:
-        bad.append("wrong token must be 404")
-    if rootreq("POST", u.path.rstrip("/") + "/" + PROBE_NAME) not in (403, 405):
-        bad.append("POST must be denied (403/405)")
+    base = u.path.rstrip("/")
+    other = "zzzzzzzz" if parts[0] != "zzzzzzzz" else "yyyyyyyy"
+    for label, method, path in (
+            ("GET /", "GET", "/"),
+            ("wrong token", "GET", "/%s/%s" % (other, PROBE_NAME)),
+            ("directory under token", "GET", base + "/"),
+            ("missing file", "GET", base + "/no-such-file"),
+            ("POST", "POST", base + "/" + PROBE_NAME)):
+        if silent(u.hostname, u.port or 80, method, path):
+            report.append("%s: no reply (ok)" % label)
+        else:
+            bad.append("%s must get no reply (connection closed)" % label)
     for name, sha in artifacts:
         s, h, _ = _req(url, "HEAD", name)
         try:
