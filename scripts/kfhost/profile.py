@@ -49,8 +49,9 @@ def derive(local, welcome=None):
 
 
 def needs_ancestry(profile):
-    """Every profile but owned runs only commits reachable from the public master or next."""
-    return profile != "owned"
+    """Only under --trust-git-only (profile borrowed): master/next-only fetch, ancestry check, tree key refusal.
+    Every other profile does what the Worker says, including the commit."""
+    return profile == "borrowed"
 
 
 def check_offer(profile, offer, cfg, now_ms):

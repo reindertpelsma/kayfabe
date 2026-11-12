@@ -700,29 +700,36 @@ class FetchTests(unittest.TestCase):
 
     def test_fetch_and_verify(self):
         self.assertRegex(self.key, "^[0-9a-f]{64}$")
-        d = fetch.fetch_commit(str(self.src), self.sha, self.work, self.key)
+        d, mismatch = fetch.fetch_commit(str(self.src), self.sha, self.work, self.key)
+        self.assertFalse(mismatch)
         self.assertEqual(git(d, "rev-parse", "HEAD"), self.sha)
         self.assertTrue(Path(d).resolve().is_relative_to(Path(self.work).resolve()))
         self.assertEqual((Path(d) / "Cargo.toml").read_text(), "1")
 
-    def test_commit_only_on_a_side_branch_is_refused_when_strict(self):
+    def test_standard_fetches_a_commit_that_exists_only_on_a_side_branch(self):
+        d, mismatch = fetch.fetch_commit(str(self.src), self.pr, self.work, key_of(self.src, self.pr))
+        self.assertEqual(git(d, "rev-parse", "HEAD"), self.pr)
+        self.assertFalse(mismatch)
+
+    def test_trust_git_only_refuses_the_side_branch_commit(self):
         with self.assertRaises(FetchError) as cm:
-            fetch.fetch_commit(str(self.src), self.pr, self.work, key_of(self.src, self.pr))
+            fetch.fetch_commit(str(self.src), self.pr, self.work, key_of(self.src, self.pr), strict=True)
         self.assertIn("not reachable from origin/master or origin/next", str(cm.exception))
         self.assertEqual(os.listdir(self.work), [])  # nothing left behind
-        # owned (not strict) may run it
-        d = fetch.fetch_commit(str(self.src), self.pr, self.work, key_of(self.src, self.pr), strict=False)
-        self.assertEqual(git(d, "rev-parse", "HEAD"), self.pr)
+        d, _ = fetch.fetch_commit(str(self.src), self.sha, self.work, self.key, strict=True)  # master commit is fine
+        self.assertEqual(git(d, "rev-parse", "HEAD"), self.sha)
 
-    def test_next_branch_counts(self):
+    def test_next_branch_counts_when_strict(self):
         git(self.src, "branch", "next", self.pr)
-        fetch.fetch_commit(str(self.src), self.pr, self.work, key_of(self.src, self.pr))
+        fetch.fetch_commit(str(self.src), self.pr, self.work, key_of(self.src, self.pr), strict=True)
 
-    def test_tree_key_mismatch_refused(self):
+    def test_tree_key_mismatch_warns_for_standard_and_refuses_when_strict(self):
+        d, mismatch = fetch.fetch_commit(str(self.src), self.sha, self.work, "0" * 64)
+        self.assertTrue(mismatch)
+        self.assertTrue(Path(d).is_dir())
         with self.assertRaises(FetchError) as cm:
-            fetch.fetch_commit(str(self.src), self.sha, self.work, "0" * 64)
+            fetch.fetch_commit(str(self.src), self.sha, self.work, "0" * 64, strict=True)
         self.assertIn("tree key mismatch", str(cm.exception))
-        self.assertEqual(os.listdir(self.work), [])
 
     def test_head_mismatch_refused(self):
         real = fetch._git
@@ -736,13 +743,13 @@ class FetchTests(unittest.TestCase):
                 fetch.fetch_commit(str(self.src), self.sha, self.work, self.key)
         finally:
             fetch._git = real
-        self.assertIn("mismatch", str(cm.exception))
+        self.assertIn("commit mismatch", str(cm.exception))
 
     def test_unknown_commit_refused(self):
         with self.assertRaises(FetchError):
             fetch.fetch_commit(str(self.src), "1" * 40, self.work, self.key)
 
-    def test_only_two_refs_are_fetched_and_redirects_off(self):
+    def test_strict_fetches_only_two_refs_and_redirects_are_off(self):
         seen = []
         real = fetch._git
 
@@ -752,7 +759,7 @@ class FetchTests(unittest.TestCase):
 
         fetch._git = spy
         try:
-            fetch.fetch_commit(str(self.src), self.sha, self.work, self.key)
+            fetch.fetch_commit(str(self.src), self.sha, self.work, self.key, strict=True)
         finally:
             fetch._git = real
         fetches = [a for a in seen if a[0] == "fetch"]
@@ -775,6 +782,34 @@ class JobRunnerTests(Base):
         self.assertFalse(any(str(Path(self.tmp.name) / "cfg.json") in v for v in env.values()))
         self.assertNotIn("KF_RUN_TOKEN", env)
         self.assertFalse(any("tok" == v or v == "asec" for v in env.values()))
+
+    def test_tree_key_mismatch_is_a_warning_and_a_result_field_for_standard(self):
+        logs, results = [], []
+
+        class Rep:
+            def __init__(s, cfg, o):
+                pass
+            progress = lambda s, x: None
+
+            def feed(s, data):
+                logs.append(data.decode())
+
+            def finish(s, result, note):
+                results.append(result)
+
+        cfg = cfg_for(self.tmp.name, "standard")
+        co = Path(self.tmp.name) / "co"
+        (co / "scripts/kfci").mkdir(parents=True)
+        (co / "scripts/kfci/main.py").write_text("print('x')")
+        r = jobs.JobRunner(cfg, {}, reporting=Rep, fetch=lambda *a, **k: (str(co), True))
+        self.assertEqual(r.prepare(offer(), "standard"), str(co))
+        r.run(jobs.JobContext(offer(), "standard", cfg, None, lambda: False), str(co))
+        self.assertTrue(any("WARNING" in l and "tree key" in l for l in logs))
+        self.assertTrue(results[0]["tree_key_mismatch"])
+        # no mismatch: no field
+        r2 = jobs.JobRunner(cfg, {}, reporting=Rep, fetch=lambda *a, **k: (str(co), False))
+        r2.prepare(offer(), "standard")
+        self.assertNotIn("tree_key_mismatch", r2.result(jobs.JobContext(offer(), "standard", cfg, None, lambda: False), 0))
 
     def test_report_goes_through_reporter_with_run_token(self):
         seen = []

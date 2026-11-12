@@ -76,11 +76,15 @@ class JobRunner:
     def __init__(self, cfg, caps, reporting=Reporting, fetch=fetch_commit):
         self.cfg, self.caps, self.reporting, self.fetch = cfg, caps, reporting, fetch
         self.proc = None
+        self.tree_key_mismatch = False
 
     def prepare(self, offer, profile):
         """Fetch + verify BEFORE running. Returns the checkout dir; raises FetchError."""
         a = offer["assignment"]
-        return self.fetch(a["repo"], a["commit"], self.cfg["work_dir"], a["tree_key"], strict=needs_ancestry(profile))
+        checkout, mismatch = self.fetch(a["repo"], a["commit"], self.cfg["work_dir"], a["tree_key"],
+                                        strict=needs_ancestry(profile))
+        self.tree_key_mismatch = mismatch  # only ever True here for non-strict profiles (strict refuses)
+        return checkout
 
     def kfci_assignment(self, offer):
         a = offer["assignment"]
@@ -142,12 +146,17 @@ class JobRunner:
         out = {"verdict": "PASS" if rc == 0 else "FAIL", "suites": [{"name": "kfci", "pass": int(rc == 0), "fail": int(rc != 0), "skip": 0}], "sha": a["commit"]}
         if hardware:
             out["hardware"] = hardware
+        if self.tree_key_mismatch:  # OPEN QUESTION for W1: does the result schema accept this key?
+            out["tree_key_mismatch"] = True
         return out
 
     def run(self, ctx, checkout):
         rep = self.reporting(self.cfg, ctx.offer)
         rep.progress("Custom host %s accepted the run" % self.cfg["box_id"])
         ctx.log = lambda text: rep.feed((text + "\n").encode())
+        if self.tree_key_mismatch:
+            ctx.log("WARNING: the tree key recomputed on this host differs from the offer's tree_key "
+                    "(tree_key_mismatch=true in the result); running anyway because the Worker is trusted here")
         ctx.downloads = DownloadPolicy(ctx.profile, checkout, log=ctx.log)
         os.makedirs(self.cfg["work_dir"], mode=0o700, exist_ok=True)
         scratch = tempfile.mkdtemp(prefix="scratch-", dir=self.cfg["work_dir"])

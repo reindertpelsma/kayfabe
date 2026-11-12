@@ -137,13 +137,13 @@ class WireAndFlow(Base):
         self.run_one(d)
         self.assertEqual([t for t in conn.types() if t in ("ack", "ready", "nack")], ["ack", "nack"])
 
-    def test_strict_fetch_for_every_profile_but_owned(self):
+    def test_ancestry_only_for_trust_git_only(self):
         for prof in ("borrowed", "container", "standard", "owned"):
             FakeRunner.profiles = []
             d, conn, _ = self.serve([welcome(prof), offer(), lambda c: self.wait_ran(), Closed(1006)], ceiling=prof)
             self.run_one(d)
             self.assertEqual(FakeRunner.profiles, [prof])
-            self.assertEqual(profile.needs_ancestry(prof), prof != "owned")
+            self.assertEqual(profile.needs_ancestry(prof), prof == "borrowed")
 
     def test_borrowed_refuses_seed_url_and_root(self):
         o = offer(assignment=dict(offer()["assignment"], seed_url="http://1.2.3.4:80/x/y"))
