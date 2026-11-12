@@ -1,6 +1,6 @@
 # CI tiers, the admin start route, the tree-hash key and the ignore ladder
 
-**STATUS: DESIGN-ONLY for the release workload contract, updated 2026-11-09.**
+**STATUS: DESIGN-ONLY for the release workload contract, updated 2026-11-12 (release shape v2 in the coverage row).**
 The tier intent below includes the owner's 2026-11-09 clarification. CODE READ: signed tier
 selection, the ignore/tree-key controls and the admin routes now exist; the original
 2026-11-05 sections below describe their design history, not a current implementation census.
@@ -38,7 +38,7 @@ the coordinator and the owner agreed; it is binding as intent and can still chan
 | | LARGEST (release) | MIDDLE (PR to master) | SMALL |
 |---|---|---|---|
 | Event | release tag | PR to master (the `next` -> master batch) | push, and manual |
-| Coverage | middle plus SPECviewperf and a real LLM workload; at least 1 driver and 2 dies per family; Windows and Linux required on Turing, Ampere, Ada and Blackwell; at least 2 Windows runs per die | today's check plus all 66 supported Linux apps and Windows `mid`'s 10 apps (including all 8 small apps) | today's Linux bar and required Windows gate; no apps request |
+| Coverage | middle plus SPECviewperf and a real LLM workload; at least 1 driver and 2 dies per family (2026-11-12, OWNER-CONFIRMED: the flagship die is the family's large run, the second die runs the MIDDLE profile; at least one large box on an Intel and one on an AMD host CPU, `V3_RELEASE_MATRIX.md`); Windows and Linux required on Turing, Ampere, Ada and Blackwell; at least 2 Windows runs per large die (one per middle die) | today's check plus all 66 supported Linux apps and Windows `mid`'s 10 apps (including all 8 small apps) | today's Linux bar and required Windows gate; no apps request |
 | Parallelism | up to 8 Vast boxes at once | 1 box | rides on the box the middle run already rented (AGREED RECOMMENDATION) |
 | Time and cost | hours and several USD are fine; real workload execution is DESIGN-ONLY | 300 min hard limit: reserve 245 min for Linux apps (which build their own media on the box, 2026-11-10) + Windows gate + Windows mid apps, 45 min for earlier work and 10 min soft margin; RETRY on insufficient time (the reserve was 205 min with 85 min for earlier work until 2026-11-10; see `V3_APPS_IMAGE_RECIPE.md`, INTERIM) | existing check budget; no new apps allocation |
 | Excluded | nothing by tier intent; LLM slot is refused pending its adapter; a rehearsal also excludes the driver sub-run matrix (stated in every report row) | SPECviewperf and real LLM workload | SPECviewperf, real LLM workload and apps |

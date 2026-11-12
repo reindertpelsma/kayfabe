@@ -38,6 +38,8 @@ function allowed(cfg, die, { id, machine, host, price = 0.2, country = 'US' }) {
     machine_id: machine,
     host_id: host,
     gpu_name: 'GPU ' + die,
+    // Matrix v2: alternate vendors by id (odd = AMD, even = Intel), so a plan can cover both (src/release.js).
+    cpu_name: id % 2 ? 'AMD EPYC 7B13' : 'Intel(R) Xeon(R) Gold 6338',
     compute_cap: cc,
     country,
     dph_total: price,
@@ -201,7 +203,7 @@ test('the Worker sends no SPECviewperf stage and no lane by default', () => {
   assert.equal(DEFAULTS.stageSlots.specviewperf.state, 'PLUMBING');
   assert.deepEqual(planRelease(market(cfgOf()), cfgOf()).required_stage_rows_per_die, {});
 });
-test('plan: two dies per family, two Windows runs per die, one box per die', () => {
+test('plan: per family one LARGE die (two Windows runs) and one MIDDLE die (one run), one box per die', () => {
   const cfg = cfgOf();
   const plan = planRelease(market(cfg), cfg);
   assert.deepEqual(plan.refusals, []);
@@ -219,14 +221,25 @@ test('plan: two dies per family, two Windows runs per die, one box per die', () 
   for (const f of plan.families)
     for (const c of f.cells) {
       const runs = c.legs.reduce((s, l) => s + l.windows_runs, 0);
-      assert.ok(runs >= 2, c.die);
+      // Owner 2026-11-12: the flagship die is the family's large run, the second die the middle profile.
+      assert.equal(
+        c.leg_tier,
+        ['TU106', 'GA102', 'AD102', 'GB202'].includes(c.die) ? 'large' : 'middle',
+      );
+      assert.equal(runs, c.leg_tier === 'large' ? 2 : 1, c.die);
       assert.equal(new Set(c.legs.map((l) => l.machine_id)).size, c.legs.length, c.die);
       assert.equal(c.same_machine, c.legs.length === 1);
     }
-  // Owner decision 2026-11-07: eight boxes; each box runs Windows twice.
+  // Eight boxes without SPEC: four large (Windows twice, hard limit 300 min) and four middle (once, middle hard limit).
   assert.equal(plan.legs, 8);
+  assert.deepEqual([plan.large_legs, plan.middle_legs], [4, 4]);
   const per = 0.2 * hours(cfg);
-  assert.ok(Math.abs(plan.estimate_usd - 8 * per) < 1e-3, String(plan.estimate_usd));
+  const middlePer = (0.2 * (cfg.releaseMiddleHard + cfg.cronPeriod)) / 3600000;
+  assert.ok(middlePer < per);
+  assert.ok(
+    Math.abs(plan.estimate_usd - (4 * per + 4 * middlePer)) < 1e-3,
+    String(plan.estimate_usd),
+  );
   assert.deepEqual(Object.keys(plan.estimate_by_family_usd), Object.keys(cfg.families));
 });
 test('plan: a missing matrix die is incomplete even when another die is offered', () => {
@@ -262,13 +275,21 @@ test('plan: over the cost cap or any cap is refused before renting', () => {
   const capped = planRelease(market(big), big, { budget, credit: 9 });
   assert.deepEqual(capped.refusals, ['DAILY_USD', 'DAILY_COUNT', 'ROLLING_USD', 'CREDIT_RESERVE']);
 });
-test('dieLegs: one box per die runs Windows twice even with multiple offers', () => {
+test('dieLegs: one box per large die runs Windows twice even with multiple offers; a middle die is one single-run leg', () => {
   const cfg = cfgOf();
   const offers = [
-    allowed(cfg, 'AD104', { id: 1, machine: 11, host: 7, price: 0.1 }),
-    allowed(cfg, 'AD104', { id: 2, machine: 12, host: 7, price: 0.11 }),
-    allowed(cfg, 'AD104', { id: 3, machine: 13, host: 8, price: 0.3 }),
+    allowed(cfg, 'AD102', { id: 1, machine: 11, host: 7, price: 0.1 }),
+    allowed(cfg, 'AD102', { id: 2, machine: 12, host: 7, price: 0.11 }),
+    allowed(cfg, 'AD102', { id: 3, machine: 13, host: 8, price: 0.3 }),
   ];
+  const middle = dieLegs(
+    offers.map((o) => ({ ...o, die: 'AD104' })),
+    cfg,
+  );
+  assert.deepEqual(
+    middle.map((l) => [l.machine_id, l.windows_runs, l.leg_tier, l.hard_minutes]),
+    [[11, 1, 'middle', cfg.releaseMiddleHard / 60000]],
+  );
   const legs = dieLegs(offers, cfg);
   assert.deepEqual(
     legs.map((l) => [l.machine_id, l.host_id, l.windows_runs]),
@@ -367,18 +388,35 @@ test('classify: an enabled stage is its own part; its retry row is not a pass', 
     ['RETRY', 'PASS', ['PASS'], { specviewperf: 'RETRY' }],
   );
 });
+const middleDies = new Set(
+  RELEASE_MATRIX.dies.filter((r) => r.profile === 'middle').map((r) => r.die),
+);
+// Matrix v2: the second die of each family is a middle leg; large legs carry confirmed vendors (offer and box report agree).
+let vendorTurn = 0;
 const leg = (key, family, die, outcome, state = 'ENDED', machineId = 1) => ({
   key,
   family,
   die,
   state,
   machineId,
+  ...(middleDies.has(die) ? { legTier: 'middle' } : {}),
+  ...(!middleDies.has(die) && outcome
+    ? (() => {
+        const v = vendorTurn++ % 2 ? 'intel' : 'amd';
+        return { cpuVendorOffered: v, cpuVendorReported: v };
+      })()
+    : {}),
   releaseMatrix: RELEASE_MATRIX.dies.find((r) => r.die === die),
   outcome: outcome
     ? { matrix: receiptParts(RELEASE_MATRIX.dies.find((r) => r.die === die)), ...outcome }
     : outcome,
 });
-const out = (linux, windows) => ({ verdict: 'X', linux, windows, stages: {} });
+const out = (linux, windows) => ({
+  verdict: [linux, ...windows].every((v) => v === 'PASS') ? 'PASS' : 'X',
+  linux,
+  windows,
+  stages: {},
+});
 const fullBatch = (legs) => ({
   tier: 'large',
   windowsRunsPerDie: 2,
@@ -392,7 +430,16 @@ function passingLegs() {
   let n = 1;
   for (const [family, dies] of Object.entries(DEFAULTS.releaseDies))
     for (const die of dies.slice(0, 2))
-      legs.push(leg('8-' + n++, family, die, out('PASS', ['PASS', 'PASS']), 'ENDED', n));
+      legs.push(
+        leg(
+          '8-' + n++,
+          family,
+          die,
+          out('PASS', middleDies.has(die) ? ['PASS'] : ['PASS', 'PASS']),
+          'ENDED',
+          n,
+        ),
+      );
   return legs;
 }
 test('verdict: PASS needs every family, two dies each, linux and two Windows passes', () => {

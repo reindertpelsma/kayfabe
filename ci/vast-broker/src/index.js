@@ -1,6 +1,8 @@
 import {
   RELEASE_MATRIX,
   hostProvidesDrivers,
+  vendorOfCpuName,
+  rentableCpuName,
   matrixExecutionProblem,
   sameMatrixRow,
 } from './release-matrix.js';
@@ -1434,6 +1436,13 @@ export function createService({
     market,
     costGuard,
   }) {
+    // Matrix v2 (owner 2026-11-12): a release MIDDLE leg (the second die of a family) rents with its own, shorter hard
+    // limit; the planner prices it with the same number. A copy: the caller's cfg serves the batch's other legs.
+    const middleLeg = leg?.legTier === 'middle';
+    if (middleLeg && profile === 'release') {
+      cfg = { ...cfg, hard: cfg.releaseMiddleHard, ttl: cfg.releaseMiddleHard };
+      cfg.boot = Math.min(cfg.boot, cfg.hard);
+    }
     // Review F1: the switches are checked here, on the one admission path, so turning renting (or
     // the release kill switch) off also stops cron-started release legs and re-runs.
     if (env.RENTING_ENABLED !== 'true') refuse('RENTING_DISABLED', 503);
@@ -1454,9 +1463,19 @@ export function createService({
       } else requireMatrixExecution(cfg, leg?.releaseMatrix, true);
       if (profile !== 'release' || tierName !== 'large')
         refuse('NOT_ELIGIBLE', 409, 'MATRIX_PLAN_CHANGED');
-      if (JSON.stringify(leg?.stages) !== JSON.stringify(cfg.releaseStages))
+      if (JSON.stringify(leg?.stages) !== JSON.stringify(middleLeg ? [] : cfg.releaseStages))
         refuse('NOT_ELIGIBLE', 409, 'MATRIX_PLAN_CHANGED');
-      if (cfg.releaseStages.includes('specviewperf') && !['lanea', 'laneb'].includes(leg?.spec))
+      if (
+        !middleLeg &&
+        cfg.releaseStages.includes('specviewperf') &&
+        !['lanea', 'laneb'].includes(leg?.spec)
+      )
+        refuse('NOT_ELIGIBLE', 409, 'MATRIX_PLAN_CHANGED');
+      if (
+        middleLeg &&
+        (leg?.spec !== undefined ||
+          RELEASE_MATRIX.dies.find((d) => d.die === leg.die)?.profile !== 'middle')
+      )
         refuse('NOT_ELIGIBLE', 409, 'MATRIX_PLAN_CHANGED');
       await github.boxProtocol(target.sha, rehearsal ? { rehearsal: true } : { matrix: true });
     }
@@ -1532,6 +1551,13 @@ export function createService({
           leg.releaseMatrix,
         ),
       );
+    // Owner 2026-11-12: every box is x86, and the legs that cover a required CPU vendor rent only from that vendor
+    // (the vendor of the offer's cpu_name; the judge cross-checks it with the box's own report).
+    if (profile === 'release' && !leg?.rehearsal)
+      evaluation.allowed = evaluation.allowed.filter((o) => {
+        const v = vendorOfCpuName(o.cpu_name);
+        return rentableCpuName(o.cpu_name) && (leg?.cpuVendor === undefined || v === leg.cpuVendor);
+      });
     const selection = {
       tierName,
       ...(leg?.die ? { die: leg.die } : {}),
@@ -1584,7 +1610,12 @@ export function createService({
         ...spendClass({ profile }),
         tier: tierName,
         middleAppsRequested:
-          middleAppsRequest(profile, tierName, cfg.middleAppsEnabled, leg?.apps).linuxApps === true,
+          middleAppsRequest(
+            profile,
+            middleLeg ? 'middle' : tierName,
+            cfg.middleAppsEnabled,
+            leg?.apps,
+          ).linuxApps === true,
         family: chosen.family ?? familyOf(offer.die, cfg),
         ...(chosen.wanted !== undefined && chosen.wanted !== chosen.family
           ? { familyWanted: chosen.wanted }
@@ -1601,6 +1632,7 @@ export function createService({
             }
           : { source: 'github' }),
         die: offer.die,
+        ...(profile === 'release' ? { cpuVendorOffered: vendorOfCpuName(offer.cpu_name) } : {}),
         country: offer.country,
         geolocation:
           typeof offer.geolocation === 'string'
@@ -1777,13 +1809,18 @@ export function createService({
         // The tier: a pure function of the profile and the verified event or admin batch
         // (src/tier.js), never a request field.
         ...tierEnvironment(profile, {
-          tierName,
+          tierName: middleLeg ? 'middle' : tierName,
           windowsRuns: leg?.windowsRuns ?? 1,
           stages: leg?.stages ?? [],
           releaseMatrix: leg?.releaseMatrix,
           spec: leg?.spec,
           ...(leg?.rehearsal === true ? { rehearsal: true } : {}),
-          ...middleAppsRequest(profile, tierName, cfg.middleAppsEnabled, leg?.apps),
+          ...middleAppsRequest(
+            profile,
+            middleLeg ? 'middle' : tierName,
+            cfg.middleAppsEnabled,
+            leg?.apps,
+          ),
         }),
         // Pass-through for the hostname-wide Access policy; the Worker never verifies Access.
         ...(env.BOX_ACCESS_ID && env.BOX_ACCESS_SECRET
@@ -1985,6 +2022,8 @@ export function createService({
         family,
         die,
         windowsRuns,
+        ...(selected.leg_tier === 'middle' ? { legTier: 'middle' } : {}),
+        ...(selected.pin_cpu_vendor ? { cpuVendor: selected.pin_cpu_vendor } : {}),
         ...(releaseMatrix ? { releaseMatrix } : {}),
         ...(selected.spec
           ? {
@@ -2061,6 +2100,7 @@ export function createService({
         family: l.family,
         die: l.die,
         windows_runs: l.windowsRuns,
+        ...(l.legTier ? { leg_tier: l.legTier } : {}),
         ...(l.releaseMatrix ? { release_matrix: l.releaseMatrix } : {}),
         state: l.state,
         verdict: l.outcome?.verdict ?? null,
@@ -2103,7 +2143,7 @@ export function createService({
         r?.sha === batch.sha && r?.batch === batch.id ? r : undefined,
         {
           windowsRuns: l.windowsRuns,
-          stages: batch.stages,
+          stages: l.legTier === 'middle' ? [] : batch.stages,
           die: batch.tier === 'large' ? l.die : (l.die ?? r?.die),
           family: batch.tier === 'large' ? l.family : (l.family ?? r?.family),
           cfg,
@@ -2115,6 +2155,10 @@ export function createService({
       // Regrade old persisted outcomes from accepted rows, while keeping a FAIL
       // sticky even if a record has subsequently disappeared or changed shape.
       if (l.outcome?.verdict !== 'FAIL') l.outcome = classified;
+      // Owner 2026-11-12 (CPU vendor): the vendor the Worker saw at rent time and the one the box reports about itself;
+      // releaseVerdict counts a vendor only when both agree.
+      if (r?.cpuVendorOffered !== undefined) l.cpuVendorOffered = r.cpuVendorOffered;
+      l.cpuVendorReported = r?.result?.host_claims?.cpu_vendor ?? null;
       l.costUsd = r ? rentalCost(r, r.ended) : 0;
       l.machineId = r?.machineId ?? null;
       if (wasEnded) continue;
@@ -2126,6 +2170,8 @@ export function createService({
           family: l.family,
           die: l.die,
           windowsRuns: l.windowsRuns,
+          ...(l.legTier ? { legTier: l.legTier } : {}),
+          ...(l.cpuVendor ? { cpuVendor: l.cpuVendor } : {}),
           ...(l.releaseMatrix ? { releaseMatrix: l.releaseMatrix } : {}),
           ...(l.spec ? { spec: l.spec, phase: l.phase } : {}),
           ...(l.apps === false ? { apps: false } : {}),
@@ -2201,9 +2247,11 @@ export function createService({
             windowsRuns: l.windowsRuns,
             releaseMatrix: l.releaseMatrix,
             spec: l.spec,
+            ...(l.legTier ? { legTier: l.legTier } : {}),
+            ...(l.cpuVendor ? { cpuVendor: l.cpuVendor } : {}),
             ...(l.apps === false ? { apps: false } : {}),
             ...(batch.rehearsal === true ? { rehearsal: true } : {}),
-            stages: batch.stages,
+            stages: l.legTier === 'middle' ? [] : batch.stages,
             avoidMachines: l.avoidMachines,
             avoidHosts: l.avoidHosts,
           },

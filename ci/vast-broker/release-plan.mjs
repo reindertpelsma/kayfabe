@@ -63,7 +63,7 @@ export async function offlinePlan(market, vars = {}, { credit, rehearsal } = {})
     ...(credit === undefined ? {} : { credit }),
   });
 }
-function table(plan) {
+export function table(plan) {
   const lines = [
     'release plan (offline; rents nothing)' +
       (plan.rehearsal
@@ -81,6 +81,16 @@ function table(plan) {
       plan.admitted +
       (plan.refusals.length ? ' refusals=' + plan.refusals.join(',') : ''),
   ];
+  if (plan.cpu_vendor)
+    lines.push(
+      '  cpu_vendor required=' +
+        JSON.stringify(plan.cpu_vendor.required) +
+        ' planned=' +
+        JSON.stringify(plan.cpu_vendor.planned) +
+        ' swaps=' +
+        plan.cpu_vendor.swaps.length +
+        (plan.cpu_vendor.missing.length ? ' MISSING=' + plan.cpu_vendor.missing.join(',') : ''),
+    );
   for (const f of plan.families) {
     lines.push('  ' + f.family + ' est_usd=' + f.est_usd + (f.complete ? '' : ' INCOMPLETE'));
     for (const c of f.cells)
@@ -96,6 +106,11 @@ function table(plan) {
             l.gpu_name +
             ' dph=' +
             l.dph_total +
+            ' tier=' +
+            (l.leg_tier ?? 'large') +
+            ' cpu=' +
+            l.cpu_vendor +
+            (l.pin_cpu_vendor ? '(pinned)' : '') +
             ' windows_runs=' +
             l.windows_runs +
             ' est_usd=' +

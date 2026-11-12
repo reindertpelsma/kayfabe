@@ -159,7 +159,7 @@ const marketFixture = JSON.parse(
   readFileSync(new URL('./fixtures/release-market-synthetic.json', import.meta.url)),
 );
 const releaseVars = { RELEASE_ENABLED: 'true', MAX_CONCURRENT_RENTALS: '9' };
-test('planner fixture: exactly eight full legs retain every driver and subrun', async () => {
+test('planner fixture: eight legs (four large, four middle) retain every driver and subrun', async () => {
   const plan = await offlinePlan(marketFixture.offers, releaseVars);
   assert.equal(plan.legs, 8);
   assert.equal(plan.parallel, 8);
@@ -174,8 +174,10 @@ test('planner fixture: exactly eight full legs retain every driver and subrun', 
     assert.deepEqual(l.drivers, matrix.dies[i].drivers);
     assert.deepEqual(l.subruns, matrix.dies[i].subruns);
     assert.deepEqual(l.cross_subrun, matrix.dies[i].cross_subrun);
-    assert.equal(l.profile, 'full');
-    assert.equal(l.windows_runs, 2);
+    // Owner 2026-11-12: flagship = the family's full (large) run, second die = middle profile, one Windows run.
+    assert.equal(l.profile, matrix.dies[i].role === 'flagship' ? 'full' : 'middle');
+    assert.equal(l.leg_tier, matrix.dies[i].role === 'flagship' ? 'large' : 'middle');
+    assert.equal(l.windows_runs, matrix.dies[i].role === 'flagship' ? 2 : 1);
   }
 });
 test('planner fixture: per-leg payload selection is the matrix selection', async () => {

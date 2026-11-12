@@ -79,7 +79,9 @@ export function checkedResult(result) {
 // ---------------------------------------------------------------------------------------------
 // Host claims: what the box says about its CPU, OS versions and drivers. Public (the picker on the
 // status site) but only ever CLAIMS: the box read them from its own /proc and nvidia-smi, the
-// Worker checks their shape and nothing else, and no verdict, die or requirement reads them.
+// Worker checks their shape and nothing else, and no verdict, die or requirement reads them, with ONE exception
+// (2026-11-12): the release judge (src/release.js cpuVendorCoverage) reads cpu_vendor, only to CROSS-CHECK the vendor the Worker
+// saw in the offer; a claim alone can never satisfy the vendor rule and a wrong claim can only make a release INCOMPLETE.
 // cleanClaims is TOTAL: any input gives a clean object, every invalid field becomes null, so a bad
 // claim can never refuse a report or a row (which would lose the run's result).
 // ---------------------------------------------------------------------------------------------

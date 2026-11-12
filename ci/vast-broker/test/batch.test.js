@@ -39,6 +39,8 @@ function releaseMarket(h, { drop = [], twice = TWICE, price = 0.2, sameHost = []
         ...h.cloud.offer,
         id,
         gpu_name: gpu,
+        // Matrix v2: alternating CPU vendors by id (odd AMD, even Intel), so a release can cover both.
+        cpu_name: id % 2 ? 'AMD EPYC 7B13' : 'Intel(R) Xeon(R) Gold 6338',
         compute_cap: cc,
         machine_id: 200000 + id,
         // sameHost: both machines of the die on one host (only machine avoidance separates them).
@@ -112,6 +114,10 @@ async function finish(h, key, verdict, spec, hardware) {
         hardware: hardware ?? boxHardware((await h.storage.get('record:' + key)).die),
         host_reference: 'GREEN',
         ...(matrixRow ? { matrix_receipts: receipts(matrixRow) } : {}),
+        // an honest box reports the CPU vendor the Worker saw in the offer (the release judge cross-checks it)
+        ...(record.cpuVendorOffered
+          ? { host_claims: { cpu_vendor: record.cpuVendorOffered } }
+          : {}),
       },
     },
     { run: key },
@@ -192,8 +198,11 @@ test('start: a release fans out up to the cap; each leg is a normal rental', asy
   );
   assert.equal(h.cloud.creates, 8);
   const bodies = creates(h);
+  const middleDies = new Set(['TU116', 'GA104', 'AD104', 'GB205']);
   for (const body of bodies) {
-    assert.equal(body.env.KF_TIER, 'large');
+    // Matrix v2: the second die of each family is a middle-tier box inside the release.
+    const die = (await h.storage.get('record:' + body.label.slice('kf-ci-'.length))).die;
+    assert.equal(body.env.KF_TIER, middleDies.has(die) ? 'middle' : 'large');
     assert.equal(body.env.KF_MERGE_WINDOWS, '1');
     assert.match(body.label, /^kf-ci-8[0-9]{18}-[0-9]+$/);
     assert.equal(body.env.KF_RUN_ID, body.label.slice('kf-ci-'.length));
@@ -208,7 +217,7 @@ test('start: a release fans out up to the cap; each leg is a normal rental', asy
     );
   }
   const batch = await batchOf(h, started.batch);
-  // Each die runs Windows twice on one box (owner decision 2026-11-07).
+  // Each LARGE die runs Windows twice on one box (owner decision 2026-11-07); a middle die runs it once (2026-11-12).
   for (const l of batch.legs.filter((x) => x.state === 'STARTED')) {
     const r = await h.storage.get('record:' + l.key);
     assert.equal(r.die, l.die);
@@ -221,7 +230,8 @@ test('start: a release fans out up to the cap; each leg is a normal rental', asy
     assert.equal(r.batch, batch.id);
     const body = bodies.find((b) => b.label === r.label);
     assert.equal(body.env.KF_WINDOWS_RUNS, l.windowsRuns === 2 ? '2' : undefined);
-    assert.equal(r.hardDeadline - r.started, 300 * 60000);
+    assert.equal(r.hardDeadline - r.started, (l.legTier === 'middle' ? 240 : 300) * 60000);
+    assert.equal(l.windowsRuns, l.legTier === 'middle' ? 1 : 2);
   }
   for (const die of TWICE) {
     const machines = batch.legs.filter((l) => l.die === die && l.machineId).map((l) => l.machineId);
@@ -810,7 +820,20 @@ test(
       requirements,
       now: h.time.value,
     });
-    assert.deepEqual(answer, { met: true, missing: [], inflight: [] });
+    // KNOWN GAP (2026-11-12, ci/requirements.toml): the committed large blocks still ask two Windows runs of EVERY die, while release
+    // shape v2 runs the second die of each family as a middle leg with one. The release verdict (above) is PASS; the requirements
+    // answer names exactly the four middle dies and nothing else. Pinned so that closing the gap is a visible change.
+    assert.equal(answer.met, false);
+    assert.deepEqual(answer.inflight, []);
+    assert.deepEqual(
+      answer.missing.map((m) => [m.family, m.reason]),
+      [
+        ['turing', 'TOO_FEW_PASSES'],
+        ['ampere', 'TOO_FEW_PASSES'],
+        ['ada', 'TOO_FEW_PASSES'],
+        ['blackwell', 'TOO_FEW_PASSES'],
+      ],
+    );
     // (One Windows run too few per die is covered in requirements.test.js: a stage row deleted
     // here would break the row's HMAC tag and answer TAMPERED instead.)
   },

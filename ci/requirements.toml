@@ -22,7 +22,11 @@ family = "any"
 dies = ["any"]
 platforms = ["linux"]
 
-# LARGEST (release tag): at least 2 dies per family; Linux and Windows on Turing, Ampere, Ada and
+# LARGEST (release tag): KNOWN GAP (2026-11-12): release shape v2 (owner-confirmed; the flagship die is the family's large run with two
+# Windows gate runs, the second die a MIDDLE leg with one) is NOT yet expressed in the blocks below: they still require two Windows
+# runs on every die, so a v2 release can PASS the release verdict while this file says TOO_FEW_PASSES for the four middle dies.
+# Needs an owner/coordinator decision (per-die blocks with explicit dies, or a lower floor); nothing reads this file for a gate yet.
+# At least 2 dies per family; Linux and Windows on Turing, Ampere, Ada and
 # Blackwell. As in the release verdict (ci/vast-broker/src/release.js): per die at least 1 Linux
 # PASS and at least 2 passing Windows gate runs, counted in the trailing PASS streak of the die's
 # rows of this commit: two rows of one run each (two machines), or one row whose box ran the gate

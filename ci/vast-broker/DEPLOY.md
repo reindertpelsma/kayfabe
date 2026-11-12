@@ -1097,3 +1097,41 @@ before any rollback.
 
 Not deployed here, and no run covers: that the live Worker accepts a rehearsal Start, that any box runs the
 rehearsal payload, the live `/bench-data` route, and everything in "What it does not prove" of the design doc.
+
+## Release matrix v2: one large run per family, CPU-vendor rule (2026-11-12)
+
+STATUS: DESIGN-ONLY, 2026-11-12 for the deployment; the source is CODE READ and GPU-free tested in the draft PR
+`claude/release-matrix-v2-20261112`. **Nothing is deployed, nothing was rented or run.** The owner-confirmed shape, the matrix data and the
+planner/judge behaviour are in [V3_RELEASE_MATRIX.md](../../docs/design/V3_RELEASE_MATRIX.md) ("Release shape v2"). The matrix is still
+`status: "proposed"` and every blocker stays, so a release Start is still refused (`MATRIX_NOT_EXECUTABLE`) after this deploy; the plan (rents nothing)
+shows the new shape, the vendor cover and the recomputed estimate.
+
+Vars the owner sets for the FIRST release (public vars; `deploy.mjs` accepts them; INFERRED values are marked):
+
+| var | value | why |
+|---|---|---|
+| `RELEASE_ENABLED` | `true` | the kill switch (default false); set to `false` before any rollback deploy |
+| `MAX_CONCURRENT_RENTALS` | `9`, with `MAX_CONCURRENT_CHECK=1` and `MAX_CONCURRENT_SWEEP=1` | 9 is the largest account cap (one digit); the release gets cap - 1 = 8 slots. 12 rentals with SPEC run in two waves (4 lane A + 4 middle, then 4 lane B), never 12 at once; the plan needs `parallel >= 8` (`PARALLEL_SLOTS`), one slot stays for the master gate |
+| `RELEASE_COST_CAP_USD` | `30` (coordinator decision 2026-11-12; the owner's target was about 20; code default stays 40) | the plan is refused `COST_CAP` when its WORST-CASE estimate exceeds it. The worst case prices every large leg at the 300-minute limit, so on the SYNTHETIC fixture market it is about 25.6 USD for the 12 legs even with cheap hosts, which a cap of 20 would refuse. Real spend is expected to be lower (INFERRED, unmeasured) |
+| `RELEASE_DAILY_USD` | `40` (default) | must be >= the cost cap |
+| `RELEASE_RERUNS_PER_LEG` | `0` | no silent re-rent; a RETRY/UNATTRIBUTED leg is a human decision |
+| `RELEASE_STAGES` | `["specviewperf"]` | adds the two SPEC lanes per large die; `[]` gives 8 rentals and two Windows gates per large box |
+| `RELEASE_DAILY_RENTALS` | `24` (default) | 12 legs, with room for the checks |
+| `RELEASE_MIDDLE_HARD_RUNTIME_MINUTES` | unset (default 240; INFERRED from 101 min measured once on a 4090 and a slow-host factor of about 2.3; lower only) | the hard limit and the price basis of a middle leg |
+| `MIDDLE_APPS_ENABLED` | unset or `true` | a release plan refuses `APPS_DISABLED` otherwise |
+| `ROLLING_SPEND_USD`, `ACCOUNT_DAILY_USD`, credit | at least the current spend plus the estimate; credit at least 8 + estimate | the existing caps |
+
+Offline plan (rents nothing): `ci/vast-broker/release-plan.mjs` with an offer list and the vars above (usage in README.md, "Plan first"); the market must carry Vast's `cpu_name` per offer (live offers do; the committed
+synthetic fixture has invented alternating AMD/Intel names). New refusal: `CPU_VENDOR_MISSING` (with `INCOMPLETE`). The batch view and the verdict carry
+`cpu_vendor` (required, planned/confirmed, swaps, mismatched, unreported, missing).
+
+Decisions the owner still has to make: see the PR description (cost cap versus worst case, the middle hard limit, whether lane B should run beside lane A,
+what a vendor-less release is allowed to record).
+
+Bundle pin (2026-11-12, release matrix v2). `deployment.json` `bundle_sha256` and `DEPLOYED_BUNDLE_SHA256` in `wrangler.toml` are
+regenerated ONCE here for everything merged since the previous pin: the `#347` hosts Durable Object and the `#355` rehearsal path were merged without
+regenerating it on purpose, so `next` carried a stale pin (`384374d7176e9c9d92c6a94cb99a2735d55b5bae73bd09e288996b087b7d86a8`) until this change. MEASURED 2026-11-12 with wrangler 4.152.0
+and a PHYSICAL `node_modules` inside the checkout (a symlinked one gives a different hash, see above): two `wrangler deploy --config wrangler.toml
+--dry-run --outdir <dir>` runs, SHA-256 of `<dir>/index.js`, identical: `52bb9a0b11b59cb52db6312a7a7dd1f3af14c688aa4cb5396adbc3c278ab2ed2`. Local dry-runs only: no upload, no deploy, no Worker call.
+Order after merge: master must carry this pin before the coordinator deploys; set `RELEASE_ENABLED=false` before any rollback.
+

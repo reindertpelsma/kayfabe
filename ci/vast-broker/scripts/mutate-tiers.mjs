@@ -123,14 +123,14 @@ const MUTANTS = [
   [
     'one windows pass is enough',
     'src/release.js',
-    "batch.tier === 'large' ? need : 1,",
+    "batch.tier === 'large' && !middleDie ? need : 1,",
     '1,',
     PURE,
   ],
   [
     'incomplete release passes',
     'src/release.js',
-    'complete && cells.length && cells.every',
+    'complete &&\n          vendor.missing.length === 0 &&\n          cells.length &&\n          cells.every',
     'cells.length && cells.every',
     PURE,
   ],
@@ -608,7 +608,7 @@ MUTANTS.push(
   [
     'large leg without the middle apps pair',
     'src/tier.js',
-    "    (profile === 'release' && tierName === 'large');\n  return mine && enabled",
+    "    (profile === 'release' && (tierName === 'large' || tierName === 'middle'));\n  return mine && enabled",
     '    false;\n  return mine && enabled',
     REHEARSAL,
   ],

@@ -389,7 +389,19 @@ executed; at most `REHEARSAL_PASS`, never a release PASS or a release record) is
 [V3_RELEASE_REHEARSAL.md](../../docs/design/V3_RELEASE_REHEARSAL.md). The middle tier's VRAM floor
 (`MIDDLE_VRAM_FLOOR_MB`) is off (0) until the footprints of the first trio run exist (TBD).
 
-**What a release rents.** Two measured dies per family from `releaseDies` in `defaults.json`
+**Release shape v2 (owner CONFIRMED 2026-11-12; draft PR `claude/release-matrix-v2-20261112`, NOT merged, NOT deployed, no box has run it).**
+A release is ONE large run per family: the flagship die of each family (TU106, GA102, AD102, GB202) runs the full LARGE profile and the second
+die (TU116, GA104, AD104, GB205) the MIDDLE profile (one box, one Windows run, the apps, no SPEC, its own hard limit
+`RELEASE_MIDDLE_HARD_RUNTIME_MINUTES`, default 240, INFERRED). With SPEC that is 4 x 2 large boxes + 4 middle boxes = 12 rentals at a peak of 8
+(lane B waits for lane A); without SPEC 8 rentals. The plan carries `large_legs`, `middle_legs`, `middle_hard_minutes` and a `cpu_vendor` block.
+**CPU-vendor rule:** over all large boxes at least one Intel and one AMD host CPU (`policy.cpu_vendor_min` in `release-matrix.json`); the planner swaps
+one slot to the cheapest other-vendor offer of the same die when needed, refuses with `CPU_VENDOR_MISSING` + `INCOMPLETE` when no combination covers both,
+and the judge counts a vendor only from a PASSING large leg whose offer `cpu_name` and the box's own `host_claims.cpu_vendor` agree. Middle boxes never
+count. The matrix stays `proposed` with all its blockers. Details and the first-release vars: [DEPLOY.md](DEPLOY.md), "Release matrix v2";
+design: [V3_RELEASE_MATRIX.md](../../docs/design/V3_RELEASE_MATRIX.md). The paragraphs below describe the earlier two-full-dies-per-family shape
+(2026-11-05..11-07) and are superseded where they conflict.
+
+**What a release rents (before v2).** Two measured dies per family from `releaseDies` in `defaults.json`
 (TU106, TU116; GA106, GA104, then GA102; AD104, AD102, then AD103, AD106; GB205, GB206, then GB202,
 GB203), falling to the next listed die when one has no eligible offer. Every box runs Linux and
 Windows. Each die gets two Windows runs: two boxes on different machines (different hosts when
@@ -423,7 +435,7 @@ driver; anything else is a RETRY.
 **Plan first (rents nothing).** On the admin page (`kayfabe-vast-admin`, owner Access identity),
 enter the commit, choose the tier and press **Plan**: the Worker evaluates the live market with the
 release rules and prints the dies, machines, legs, the estimate per family and any refusal
-(`INCOMPLETE`, `COST_CAP`, `NO_SLOTS`, `RELEASE_DISABLED`, `DAILY_USD`, `ACCOUNT_DAILY_USD`,
+(`INCOMPLETE`, `CPU_VENDOR_MISSING`, `COST_CAP`, `NO_SLOTS`, `RELEASE_DISABLED`, `DAILY_USD`, `ACCOUNT_DAILY_USD`,
 `DAILY_COUNT`, `ROLLING_USD`, `CREDIT_RESERVE`). Offline,
 the same planner runs on an offer list:
 

@@ -106,10 +106,11 @@ export function middleAppsResult(result, requested) {
 }
 // `legApps === false` (release legs only): a SPEC lane leg that does not carry the apps (see dieLegs).
 export function middleAppsRequest(profile, tierName, enabled, legApps) {
-  // large includes middle: the release profile's large tier asks for the same pair (owner, 2026-11-12).
+  // large includes middle: the release profile's large tier asks for the same pair (owner, 2026-11-12). A release MIDDLE leg
+  // (matrix v2: the second die of a family) is a release-profile leg with tierName 'middle' and asks for it too.
   const mine =
     (profile === 'check' && tierName === 'middle') ||
-    (profile === 'release' && tierName === 'large');
+    (profile === 'release' && (tierName === 'large' || tierName === 'middle'));
   return mine && enabled && (legApps !== false || profile !== 'release')
     ? { linuxApps: true, winApps: TIER_CONTENTS.middle.appProfiles.windows }
     : {};
@@ -168,7 +169,7 @@ export function tierEnvironment(
   if (linuxApps !== undefined) {
     const mine =
       (profile === 'check' && tierName === 'middle') ||
-      (profile === 'release' && tierName === 'large');
+      (profile === 'release' && (tierName === 'large' || tierName === 'middle'));
     if (!mine || linuxApps !== true) throw Error('linuxapps');
     env.KF_LINUX_APPS = '1';
   }
