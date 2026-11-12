@@ -58,7 +58,7 @@ def parse_frame(raw):
 
 class Daemon:
     def __init__(self, cfg, transport, runner_factory, prober=None, clock=time.monotonic, sleep=time.sleep,
-                 rng=None, seed_timeout=15.0, seeder_run=None, euid=None, wall=time.time, log=None):
+                 rng=None, seed_timeout=15.0, seeder_run=None, euid=None, wall=time.time, log=None, exit_idle_s=None):
         self.cfg, self.transport, self.runner_factory = cfg, transport, runner_factory
         self.prober = prober or probes.Probes()
         self.clock, self.sleep, self.rng = clock, sleep, rng or random.Random()
@@ -73,7 +73,10 @@ class Daemon:
         self.seeder_run = seeder_run
         self.wall = wall
         self.log = log or (lambda m: print(m, file=sys.stderr, flush=True))
+        self.exit_idle_s = exit_idle_s
         self.commands_until_ms = None
+        self.idle_clock = self.idle_wall = None
+        self.touch()
         self.delays = []  # every sleep the loop asked for (observable in tests)
         self.euid = os.geteuid() if euid is None else euid
         self.seeder = None
@@ -81,6 +84,22 @@ class Daemon:
         self._seed_event, self._seed_reply = threading.Event(), None
         self.threads = []
         self.stopping = False
+
+    def touch(self):
+        """The box was just busy (or just started): the idle clock restarts."""
+        self.idle_clock, self.idle_wall = self.clock(), int(self.wall())
+
+    def busy(self):
+        return self.active is not None or (self.cmd_thread is not None and self.cmd_thread.is_alive())
+
+    def idle_expired(self):
+        if self.exit_idle_s is None or self.busy():
+            return False
+        if self.clock() - self.idle_clock >= self.exit_idle_s:
+            self.log("kfhost: idle for %g minutes with no job; exiting cleanly (exit 0) so the rental can be released"
+                     % (self.exit_idle_s / 60))
+            return True
+        return False
 
     # ---- sending ----
     def send(self, msg):
@@ -105,6 +124,8 @@ class Daemon:
         msg = {"type": "heartbeat", "ts": int(self.wall()), "state": "busy" if act else "idle"}
         if act:
             msg["run_id"] = act["run_id"]
+        elif not self.busy():
+            msg["idle_since"] = self.idle_wall
         self.send(msg)
 
     # ---- connection loop ----
@@ -127,6 +148,8 @@ class Daemon:
         attempt, sessions = 0, 0
         while not self.stopping:
             if max_sessions is not None and sessions >= max_sessions:
+                return EXIT_OK
+            if self.idle_expired():
                 return EXIT_OK
             sessions += 1
             code, welcomed = None, False
@@ -173,6 +196,9 @@ class Daemon:
         while not self.stopping:
             wait = max(0.05, min(1.0, next_beat - self.clock()))
             raw = conn.recv(wait)
+            if self.idle_expired():
+                self.stopping = True
+                return self._welcomed
             if self.clock() >= next_beat:
                 self.heartbeat()
                 next_beat = self.clock() + self.heartbeat_s
@@ -242,6 +268,7 @@ class Daemon:
         # re-offers idempotently by offer_id); `ready` follows verification, `nack` follows a failed one.
         self.send({"type": "ack", "offer_id": oid})
         runner = self.runner_factory(self.cfg, self.caps)
+        self.touch()
         self.active = {"offer_id": oid, "run_id": offer["run_id"], "runner": runner, "cancelled": False}
         t = threading.Thread(target=self.job, args=(offer, runner, self.profile), daemon=True)
         self.active["thread"] = t
@@ -276,6 +303,7 @@ class Daemon:
             if timer:
                 timer.cancel()
             self.active = None
+            self.touch()
 
     # ---- seeding ----
     def seed_register(self, offer_id, artifact, path, log=None):
@@ -333,6 +361,7 @@ class Daemon:
         argv = msg["argv"] if msg.get("argv") is not None else ["/bin/sh", "-c", msg["shell"]]
         timeout = msg.get("timeout")
         timeout = min(timeout, CMD_MAX_TIMEOUT) if isinstance(timeout, (int, float)) and timeout > 0 else CMD_DEFAULT_TIMEOUT
+        self.touch()
         self.cmd_thread = self.spawn(self.run_cmd, cid, argv, timeout)
 
     def run_cmd(self, cid, argv, timeout):
@@ -386,3 +415,4 @@ class Daemon:
         note = ("[output truncated at %d bytes]" % CMD_MAX_BYTES if truncated[0] else "") + ("[timeout]" if timed_out else "")
         emit("stderr", note, True)
         self.send({"type": "cmd_done", "cmd_id": cid, "rc": 124 if timed_out else rc})
+        self.touch()

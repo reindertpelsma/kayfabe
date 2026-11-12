@@ -28,6 +28,19 @@ Local flags decide what the daemon enforces; the Worker cannot loosen them. Conf
 - `prepare_seeder()` (`seeder.py`), once per session before the first `seed_register`: only profile `owned` AND root runs `apt-get update` then `apt-get install -y --only-upgrade nginx-light` (plain install if missing), logging `nginx -v` before and after. Every other profile never changes packages: it runs `kfseed check`, reads drift from its output (a `WARNING:` line = drifted; `candidate: unknown`; exit 0 = nginx present, exit 2 only when missing, any other exit = check unavailable, warn only) and warns in the job log and in the `seed_register` frame (`warnings`). Missing nginx that cannot be installed marks seeding unavailable for the session; an apt failure with nginx present only warns. kfseed runs as `python3 -I`, from a fresh temp cwd, with an absolute module location, so a planted module is never imported.
 - `seed_register`: anything but `seed_ack {ok: true}` (or no answer in time) marks seeding unavailable until the next connection.
 
+## One command for a host from any provider (hourly rentals)
+
+`bootstrap.py` (stdlib only) pins the daemon to a commit, builds the venv, writes the 0600 config and starts the daemon, all inside one work dir; `--dry-run` prints the plan and changes nothing. Secrets come from files (mode 600) or stdin, never argv. Recipe the admin page would print (token written to a file first; `<sha>` is the pinned commit):
+
+```
+umask 077; mkdir -p kfh && cd kfh && read -rs T && printf %s "$T" > tok && read -rs S && printf %s "$S" > sec
+curl -fsSLO https://raw.githubusercontent.com/reindertpelsma/kayfabe/<sha>/scripts/kfhost/bootstrap.py
+python3 bootstrap.py --repo https://github.com/reindertpelsma/kayfabe --commit <sha> --worker-url <worker> \
+  --box-id <id> --token-file tok --access-id <access-id> --access-secret-file sec -- --exit-when-idle 50
+```
+
+`--exit-when-idle MINUTES` (default off) makes the daemon exit 0 with a log line after that long with no job and no cmd running; the clock restarts after every job, and heartbeats report `idle_since`, so the owner or a supervisor can release the rental. Not verified: the bootstrap and recipe have only been run against a local git repo with fakes (no venv was built, `setup` is refused until the lock hashes exist, nothing was fetched over HTTPS).
+
 ## Running from a pinned commit
 
 The daemon is the Python in the checked-out commit itself: Concretely: `git clone <public repo>`, `git checkout <sha>`, `cd scripts`, `python3 -m kfhost setup --venv DIR`, then `DIR/bin/python -m kfhost run --config FILE [--allow-cmd] [--container]`. Pin the sha you reviewed; nothing the Worker sends changes the daemon's own code.
@@ -44,4 +57,4 @@ The coordinator may move this mode out of the first merge. Its code is isolated 
 
 ## Tests
 
-from `scripts/`: `python3 -m unittest kfhost.test_kfhost kfhost.test_hardening`. Stdlib only, fake transport and fake probes, local git fixture.
+from `scripts/`: `python3 -m unittest kfhost.test_kfhost kfhost.test_hardening kfhost.test_bootstrap_idle`. Stdlib only, fake transport and fake probes, local git fixture.

@@ -98,7 +98,11 @@ def run(args):
             print("kfhost: refusing to start: profile borrowed must not run as root; use an unprivileged user", file=sys.stderr)
             return 2
         set_no_new_privs()
-    daemon = Daemon(cfg, WebsocketsTransport(), JobRunner)
+    idle = getattr(args, "exit_when_idle", None)
+    if idle is not None and idle <= 0:
+        print("kfhost: --exit-when-idle needs a positive number of minutes", file=sys.stderr)
+        return 2
+    daemon = Daemon(cfg, WebsocketsTransport(), JobRunner, exit_idle_s=None if idle is None else idle * 60)
     return daemon.run_forever()
 
 
@@ -114,6 +118,8 @@ def main(argv=None):
                    help="treat the Worker as untrusted: borrowed rules, never root, no cmd, no system changes")
     r.add_argument("--allow-cmd", dest="allow_cmd", action="store_true",
                    help="power: permit remote commands/owned behaviour (the Worker must enable it too)")
+    r.add_argument("--exit-when-idle", dest="exit_when_idle", type=float, default=None, metavar="MINUTES",
+                   help="exit 0 after MINUTES with no job (default off), so an hourly rental can be released")
     r.add_argument("--container", dest="container", action="store_true", help="enforce container limits")
     args = p.parse_args(argv)
     if args.cmd == "setup":
