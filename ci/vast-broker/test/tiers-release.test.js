@@ -21,7 +21,13 @@ import { env } from './helpers.js';
 // a PASS; a FAIL is re-rented; a DESIGN_ONLY stage (two_guests, trio) can be enabled.
 // Release-ready defaults for these tests: the kill switch on and an account cap of 9 (release 8).
 const cfgOf = (extra = {}) =>
-  configuration({ ...env, RELEASE_ENABLED: 'true', MAX_CONCURRENT_RENTALS: '9', ...extra });
+  configuration({
+    ...env,
+    RELEASE_ENABLED: 'true',
+    MAX_CONCURRENT_RENTALS: '9',
+    MIDDLE_APPS_ENABLED: undefined, // large includes middle: a release plan needs the apps pair on
+    ...extra,
+  });
 const hours = (cfg) => (cfg.hardRelease + cfg.cronPeriod) / 3600000;
 // One allowed offer as src/offers.js evaluates it (die, country and pricing filled in).
 function allowed(cfg, die, { id, machine, host, price = 0.2, country = 'US' }) {

@@ -31,6 +31,9 @@ const countryRank = (offer, cfg) => {
 };
 const byPreference = (cfg) => (a, b) =>
   countryRank(a, cfg) - countryRank(b, cfg) || rankingPrice(a) - rankingPrice(b) || a.id - b.id;
+// One credit rule for the release plan and the rehearsal plan (NaN-safe: anything but a sufficient number is short).
+const creditShort = (credit, cfg, estimate, budget) =>
+  credit !== undefined && !(credit >= cfg.reserve + estimate + budget.outstanding_usd);
 export const requiredStageRows = (stages) => {
   validateStagePolicy(stages);
   return Object.fromEntries(
@@ -88,6 +91,10 @@ export function dieLegs(offers, cfg, matrixRow, { rehearsal = false } = {}) {
     return lanes.map((spec, index) =>
       leg(index === 0 ? first : (second ?? first), 1, {
         spec,
+        // Large includes middle, but the apps (about 57 min) run only on the LAST lane leg: lane A needs 169 min left
+        // for SPEC and the apps guard does not reserve SPEC's time, so apps before lane A would starve it on a slow host
+        // and trigger a paid rerun. Lane B (133 min) carries them. Absent `apps` means true (legs without SPEC).
+        ...(index < lanes.length - 1 ? { apps: false } : {}),
         phase: index,
         ...(index > 0 ? { after_lane: lanes[0], reuse_machine: !second } : {}),
       }),
@@ -154,14 +161,15 @@ export function planRelease(allowed, cfg, { budget, credit } = {}) {
   if (parallel < releaseMatrix.policy.parallel_boxes) refusals.push('PARALLEL_SLOTS');
   if (parallel < 1) refusals.push('NO_SLOTS');
   if (!cfg.releaseEnabled) refusals.push('RELEASE_DISABLED');
+  // large includes middle: the release never inherits the middle apps kill switch (a release without apps is not a release)
+  if (!cfg.middleAppsEnabled) refusals.push('APPS_DISABLED');
   if (budget) {
     const today = budget.profiles.release;
     if (today.daily_usd + estimate > cfg.releaseDaily) refusals.push('DAILY_USD');
     if (budget.daily_usd + estimate > cfg.accountDaily) refusals.push('ACCOUNT_DAILY_USD');
     if (today.count_today + legs > cfg.releaseDailyCount) refusals.push('DAILY_COUNT');
     if (budget.rolling_usd + estimate > cfg.rolling) refusals.push('ROLLING_USD');
-    if (credit !== undefined && !(credit >= cfg.reserve + estimate + budget.outstanding_usd))
-      refusals.push('CREDIT_RESERVE');
+    if (creditShort(credit, cfg, estimate, budget)) refusals.push('CREDIT_RESERVE');
   }
   return {
     resource_profile: resourceCaps(cfg, 'release', 'large'),
@@ -223,6 +231,7 @@ export function planRehearsal(allowed, cfg, { budget, credit, die } = {}) {
   if (cfg.releaseCostCap < estimate) refusals.push('COST_CAP');
   if (parallel < 1) refusals.push('NO_SLOTS');
   if (!cfg.releaseEnabled) refusals.push('RELEASE_DISABLED');
+  if (!cfg.middleAppsEnabled) refusals.push('APPS_DISABLED');
   if (budget) {
     // Same caps as a release plan, written out here so a change to one is a visible change to both.
     const today = budget.profiles.release;
@@ -230,8 +239,7 @@ export function planRehearsal(allowed, cfg, { budget, credit, die } = {}) {
     if (cfg.accountDaily < budget.daily_usd + estimate) refusals.push('ACCOUNT_DAILY_USD');
     if (cfg.releaseDailyCount < today.count_today + planned.length) refusals.push('DAILY_COUNT');
     if (cfg.rolling < budget.rolling_usd + estimate) refusals.push('ROLLING_USD');
-    if (credit !== undefined && credit < cfg.reserve + estimate + budget.outstanding_usd)
-      refusals.push('CREDIT_RESERVE');
+    if (creditShort(credit, cfg, estimate, budget)) refusals.push('CREDIT_RESERVE');
   }
   const executionProblem = matrixExecutionProblem(releaseMatrix, cfg);
   return {

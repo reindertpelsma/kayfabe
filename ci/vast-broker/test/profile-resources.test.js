@@ -16,6 +16,7 @@ const cfgFor = (tier) =>
       BOOT_LIMIT_MINUTES: '75',
       MAX_PRICE_USD_HOUR: '2',
       MAX_CONCURRENT_RENTALS: '9',
+      ...(tier === 'large' ? { MIDDLE_APPS_ENABLED: undefined } : {}),
     }),
     tier === 'large' ? 'release' : tier === 'adhoc' ? 'sweep' : 'check',
     tier,
@@ -212,6 +213,7 @@ async function largeService() {
   const h = await setup({
     MAX_CONCURRENT_RENTALS: '9',
     RELEASE_ENABLED: 'true',
+    MIDDLE_APPS_ENABLED: undefined,
     ROLLING_SPEND_USD: '200',
     ACCOUNT_DAILY_USD: '50',
   });

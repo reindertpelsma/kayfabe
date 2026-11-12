@@ -14,6 +14,7 @@ const vars = {
   DAILY_SPEND_USD: '40',
   ACCOUNT_DAILY_USD: '100',
   RELEASE_DAILY_RENTALS: '64',
+  MIDDLE_APPS_ENABLED: undefined,
 };
 const market = JSON.parse(
   readFileSync(new URL('./fixtures/release-market-synthetic.json', import.meta.url)),

@@ -1438,6 +1438,9 @@ export function createService({
     // the release kill switch) off also stops cron-started release legs and re-runs.
     if (env.RENTING_ENABLED !== 'true') refuse('RENTING_DISABLED', 503);
     if (profile === 'release' && !cfg.releaseEnabled) refuse('RELEASE_DISABLED', 503);
+    // large includes middle: a release leg never rents with the apps pair switched off (MIDDLE_APPS_ENABLED=false)
+    if (profile === 'release' && !cfg.middleAppsEnabled)
+      refuse('NOT_ELIGIBLE', 409, 'APPS_DISABLED');
     if (profile === 'release' || tierName === 'large' || leg?.releaseMatrix !== undefined) {
       // The named REHEARSAL scope (2026-11-12): one die of the matrix, no driver matrix, large tier on the release
       // profile only. The matrix refusal below stays exactly as it was for every other release leg.
@@ -1581,7 +1584,7 @@ export function createService({
         ...spendClass({ profile }),
         tier: tierName,
         middleAppsRequested:
-          middleAppsRequest(profile, tierName, cfg.middleAppsEnabled).linuxApps === true,
+          middleAppsRequest(profile, tierName, cfg.middleAppsEnabled, leg?.apps).linuxApps === true,
         family: chosen.family ?? familyOf(offer.die, cfg),
         ...(chosen.wanted !== undefined && chosen.wanted !== chosen.family
           ? { familyWanted: chosen.wanted }
@@ -1756,7 +1759,8 @@ export function createService({
         // 2026-11-07 (run report): this Worker accepts POST /run-report/<run> (src/runreport.js).
         // A box sends its report only when it sees this variable, so a box from a newer commit
         // never calls a route an older Worker does not have. Only with a result store to keep it.
-        ...(storeEnabled(env) ? { KF_RUN_REPORT: '1' } : {}),
+        // a rehearsal has no run row and is never a record: no report is requested (its public log is still published)
+        ...(storeEnabled(env) && leg?.rehearsal !== true ? { KF_RUN_REPORT: '1' } : {}),
         KF_BROKER_URL: cfg.audience + '/' + env.BROKER_PATH_PREFIX,
         KF_RUN_ID: key,
         KF_RUN_TOKEN: runToken,
@@ -1779,7 +1783,7 @@ export function createService({
           releaseMatrix: leg?.releaseMatrix,
           spec: leg?.spec,
           ...(leg?.rehearsal === true ? { rehearsal: true } : {}),
-          ...middleAppsRequest(profile, tierName, cfg.middleAppsEnabled),
+          ...middleAppsRequest(profile, tierName, cfg.middleAppsEnabled, leg?.apps),
         }),
         // Pass-through for the hostname-wide Access policy; the Worker never verifies Access.
         ...(env.BOX_ACCESS_ID && env.BOX_ACCESS_SECRET
@@ -1985,6 +1989,7 @@ export function createService({
         ...(selected.spec
           ? {
               spec: selected.spec,
+              ...(selected.apps === false ? { apps: false } : {}),
               phase: selected.phase,
               reuseMachine: selected.reuse_machine ?? false,
               ...(selected.after_lane
@@ -2123,6 +2128,7 @@ export function createService({
           windowsRuns: l.windowsRuns,
           ...(l.releaseMatrix ? { releaseMatrix: l.releaseMatrix } : {}),
           ...(l.spec ? { spec: l.spec, phase: l.phase } : {}),
+          ...(l.apps === false ? { apps: false } : {}),
           state: 'PENDING',
           // Review F10: a fresh box: not a machine any leg of this die used, the failed one
           // included (its machineId is set above), so two Windows runs stay on two machines.
@@ -2195,6 +2201,7 @@ export function createService({
             windowsRuns: l.windowsRuns,
             releaseMatrix: l.releaseMatrix,
             spec: l.spec,
+            ...(l.apps === false ? { apps: false } : {}),
             ...(batch.rehearsal === true ? { rehearsal: true } : {}),
             stages: batch.stages,
             avoidMachines: l.avoidMachines,
@@ -2248,6 +2255,8 @@ export function createService({
             'MATRIX_PLAN_CHANGED',
             'MATRIX_REPORTER_CAPABILITY',
             'MATRIX_PAYLOAD_CAPABILITY',
+            'REHEARSAL_PAYLOAD_CAPABILITY',
+            'APPS_DISABLED',
           ].includes(reason)
         ) {
           for (const x of batch.legs) if (x.state === 'PENDING') x.state = 'MISSING';

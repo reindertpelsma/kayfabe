@@ -22,6 +22,7 @@ const vars = {
   ROLLING_SPEND_USD: '200',
   DAILY_SPEND_USD: '40',
   ACCOUNT_DAILY_USD: '100',
+  MIDDLE_APPS_ENABLED: undefined,
 };
 async function harness(extra = {}) {
   const h = await setup({ ...vars, ...extra });
@@ -474,6 +475,12 @@ async function finishLeg(h, leg, { fail = false, spec = leg.spec } = {}) {
     ...subrunSuites(row),
   ];
   if (spec) suites.push({ name: 'specviewperf_' + spec, pass: 1, fail: 0, skip: 0 });
+  // large includes middle: the leg that requested the apps pair reports the full counts
+  if (record.middleAppsRequested)
+    suites.push(
+      { name: 'apps', pass: 66, fail: 0, skip: 0 },
+      { name: 'windows_apps', pass: 10, fail: 0, skip: 0 },
+    );
   if (fail) {
     const old = suites.find((r) => r.name === 'windows_subrun_580');
     old.pass = 0;

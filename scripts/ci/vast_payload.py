@@ -478,7 +478,8 @@ def specviewperf_rows(text, rc, lane, table):
     raise EvidenceError("specviewperf_retry_operator", partial)
 
 
-# Linux apps: the trusted Worker sends KF_LINUX_APPS=1 only for signed middle runs.
+# Linux apps: the trusted Worker sends KF_LINUX_APPS=1 for signed middle runs and (2026-11-12, large includes middle) for the
+# owner's large legs that carry the apps (the last SPEC lane leg, or every leg without SPEC).
 # The old source flag remains a legacy owner opt-in for middle/large; its default stays off.
 # KF_STAGES never selects this stage. Missing media and incomplete output are retries, not PASS.
 APPS_STAGE_ENABLED = False
