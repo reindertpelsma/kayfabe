@@ -12,7 +12,7 @@ REQUIRED = ("worker_url", "box_id", "box_token", "access_id", "access_secret", "
 # allow_cmd is a POWER (needs the Worker to enable it as well). Default: standard.
 FLAGS = ("trust_git_only", "allow_cmd", "container")
 OPTIONAL = {"repo_allowlist", "ws_path", "heartbeat_s", "distrust_us"} | set(FLAGS)
-BOX_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}\Z")
+BOX_ID = re.compile(r"[a-z0-9][a-z0-9-]{0,39}\Z")  # the Worker's format
 
 
 class ConfigError(ValueError):

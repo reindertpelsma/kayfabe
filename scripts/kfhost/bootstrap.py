@@ -7,8 +7,8 @@ STATUS: DESIGN, NOT RUN ON HARDWARE (2026-11-12).
       [--access-id ID --access-secret-file FILE] [--work-dir DIR] [--dry-run] [-- kfhost run flags]
 
 It prints what it will do, then: clones the daemon at the PINNED commit into DIR/checkout and refuses unless
-`git rev-parse HEAD` equals SHA; creates DIR/venv through `kfhost setup --venv`; writes DIR/config.json with
-mode 0600; execs `kfhost run`. It touches nothing outside DIR, installs no system package, and takes secrets
+`git rev-parse HEAD` equals SHA; creates DIR/venv through `kfhost setup --venv`; writes DIR/secrets/config.json
+(mode 0600, in a 0700 directory outside the jobs' tree); execs `kfhost run`. It touches nothing outside DIR, installs no system package, and takes secrets
 only from files or stdin (`-`), never argv. --dry-run prints the plan and changes nothing.
 """
 
@@ -64,8 +64,8 @@ def plan_lines(a, work):
         "kfhost bootstrap will, inside %s only:" % work,
         "  1. git clone %s at commit %s into %s/checkout and refuse unless HEAD equals it" % (a.repo, a.commit, work),
         "  2. create the venv %s/venv with `python3 -m kfhost setup --venv` (pip, hash-locked; no system packages)" % work,
-        "  3. write %s/config.json with mode 0600 (secrets read from files/stdin, never argv)" % work,
-        "  4. exec `kfhost run --config %s/config.json %s` as this user" % (work, " ".join(a.run_flags)),
+        "  3. write %s/secrets/config.json with mode 0600 in a 0700 directory that is neither the jobs' cwd nor an ancestor of it (secrets read from files/stdin, never argv)" % work,
+        "  4. exec `kfhost run --config %s/secrets/config.json %s` as this user" % (work, " ".join(a.run_flags)),
     ]
 
 
@@ -117,7 +117,7 @@ def main(argv=None, run=subprocess.run, execv=os.execv, stdin=sys.stdin, out=pri
             return 0
         token = read_secret(a.token_file, stdin)  # read before any change so a bad file costs nothing
         secret = read_secret(a.access_secret_file, stdin)
-        if (work / "checkout").exists() or (work / "config.json").exists():
+        if (work / "checkout").exists() or (work / "secrets").exists():
             raise BootstrapError("%s already holds a checkout or config; use a fresh --work-dir" % work)
         work.mkdir(mode=0o700, parents=True, exist_ok=True)
         checkout(a.repo, a.commit, work / "checkout", git)
@@ -129,9 +129,11 @@ def main(argv=None, run=subprocess.run, execv=os.execv, stdin=sys.stdin, out=pri
             raise BootstrapError("kfhost setup failed; nothing was started")
         cfg = {"worker_url": a.worker_url, "box_id": a.box_id, "box_token": token,
                "access_id": a.access_id, "access_secret": secret, "work_dir": str(work / "jobs")}
-        write_config(work / "config.json", cfg)
+        (work / "secrets").mkdir(mode=0o700)
+        os.chmod(work / "secrets", 0o700)
+        write_config(work / "secrets" / "config.json", cfg)
         flags = [x for x in a.run_flags if x != "--"]
-        cmd = [str(venv / "bin" / "python"), "-m", "kfhost", "run", "--config", str(work / "config.json"), *flags]
+        cmd = [str(venv / "bin" / "python"), "-m", "kfhost", "run", "--config", str(work / "secrets" / "config.json"), *flags]
         out("+ " + " ".join(cmd))
         os.chdir(scripts)
         execv(cmd[0], cmd)

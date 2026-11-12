@@ -89,7 +89,7 @@ class FakeTransport(Transport):
 KFSEED = {  # the real `python3 -m kfseed check` outputs and exit codes (W3 PR #345 cb8adf2f9)
     "same": (0, "nginx installed: 1.24\nnginx candidate: 1.24"),
     "drift": (0, "nginx installed: 1.24\nnginx candidate: 1.26\nWARNING: installed != candidate"),
-    "unknown": (0, "nginx installed: 1.24\nnginx candidate: unknown"),
+    "unknown": (0, "nginx installed: 1.24\nnginx candidate: candidate unknown"),  # kfseed's exact text (D7)
     "missing": (2, "nginx not installed: apt-get install nginx-light"),
     "odd": (1, "boom"),
 }
@@ -178,9 +178,10 @@ class FakeRunner:
 
 
 def offer(**over):
-    o = {"type": "offer", "v": 1, "offer_id": "o1", "run_id": "r1", "run_token": "jwt.tok-en",
+    o = {"type": "offer", "v": 1, "offer_id": "0123456789abcdef", "request_id": "req-1", "run_id": "123-1", "run_token": "jwt.tok-en",
          "assignment": {"repo": REPO, "commit": SHA, "tree_key": TREE, "stages": ["merge_bar"]},
-         "deadline": int(time.time() * 1000) + 3600_000}
+         "deadline_ms": int(time.time() * 1000) + 3600_000,
+         "run": {"nonce": "c" * 32, "runner_nonce": "d" * 64, "sha": SHA}}
     o.update(over)
     return o
 
@@ -212,6 +213,7 @@ class Base(unittest.TestCase):
         d = Daemon(cfg, tr, self.factory, prober=kw.pop("prober", FakeProbes()), clock=self.clock,
                    sleep=lambda s: setattr(self.clock, "t", self.clock.t + s), seed_timeout=0.3,
                    seeder_run=kw.pop("seeder_run", FakeSys()), euid=kw.pop("euid", 1000), **kw)
+        d.cmd_interval = 0  # pacing has its own test
         return d, conn, tr
 
     def run_one(self, d):
@@ -373,7 +375,7 @@ class OfferTests(Base):
     def test_borrowed_accepts_clean_offer(self):
         conn, d = self.offer_result("borrowed", offer())
         self.assertIn("ack", conn.types())
-        self.assertEqual(FakeRunner.log, ["o1"])
+        self.assertEqual(FakeRunner.log, ["0123456789abcdef"])
         self.assertTrue(self.runners[0].ctx.profile == "borrowed")
 
     def test_borrowed_rejections(self):
@@ -431,14 +433,14 @@ class OfferTests(Base):
 
     def test_busy_nack_and_cancel(self):
         FakeRunner.gate = threading.Event()
-        o2 = offer(offer_id="o2", run_id="r2")
+        o2 = offer(offer_id="0123456789abcdee", run_id="123-2")
         d, conn, _ = self.serve([welcome(), offer(), lambda c: self.wait_active(d), o2,
-                                 {"type": "cancel", "offer_id": "o1"}, None, Closed(1006)])
+                                 {"type": "cancel", "offer_id": "0123456789abcdef"}, None, Closed(1006)])
         rc = d.run_forever(max_sessions=1)
         FakeRunner.gate.set()
         d.join()
         nacks = [m for m in conn.sent if m["type"] == "nack"]
-        self.assertEqual([(n["offer_id"], n["reason"]) for n in nacks], [("o2", "busy")])
+        self.assertEqual([(n["offer_id"], n["reason"]) for n in nacks], [("0123456789abcdee", "busy")])
         self.assertTrue(self.runners[0].cancelled)
 
     def wait_active(self, d):
@@ -455,7 +457,7 @@ class OfferTests(Base):
         d.run_forever(max_sessions=3)
         self.assertTrue(d.active is not None and d.active["thread"].is_alive())
         busy = [m for m in c2.sent if m["type"] == "heartbeat"]
-        self.assertTrue(busy and busy[0]["state"] == "busy" and busy[0]["run_id"] == "r1")
+        self.assertTrue(busy and busy[0]["state"] == "busy" and busy[0]["run_id"] == "123-1")
         FakeRunner.gate.set()
         d.join()
         self.assertIsNone(d.active)
@@ -468,34 +470,34 @@ class CmdTests(Base):
         return conn
 
     def test_owned_runs_cmd_and_streams(self):
-        conn = self.cmd_run("owned", {"type": "cmd", "cmd_id": "c1", "argv": [sys.executable, "-c", "print('hi'); import sys; sys.stderr.write('err')"]})
+        conn = self.cmd_run("owned", {"type": "cmd", "cmd_id": "00000000000000c1", "argv": [sys.executable, "-c", "print('hi'); import sys; sys.stderr.write('err')"]})
         out = [m for m in conn.sent if m["type"] == "cmd_output"]
         self.assertIn("hi", "".join(m["data"] for m in out if m["stream"] == "stdout"))
         self.assertIn("err", "".join(m["data"] for m in out if m["stream"] == "stderr"))
         self.assertEqual([m["seq"] for m in out], list(range(len(out))))
         self.assertTrue(out[-1]["eof"])
         done = [m for m in conn.sent if m["type"] == "cmd_done"]
-        self.assertEqual((done[0]["cmd_id"], done[0]["rc"]), ("c1", 0))
+        self.assertEqual((done[0]["cmd_id"], done[0]["rc"]), ("00000000000000c1", 0))
 
     def test_cmd_refused_on_borrowed_container_and_ceiling(self):
         for prof, ceiling in (("borrowed", None), ("container", None), ("standard", None), ("owned", "container"),
                               ("owned", "standard")):
-            conn = self.cmd_run(prof, {"type": "cmd", "cmd_id": "c1", "argv": [sys.executable, "-c", "open('%s/pwned','w')" % self.tmp.name]}, ceiling)
+            conn = self.cmd_run(prof, {"type": "cmd", "cmd_id": "00000000000000c1", "argv": [sys.executable, "-c", "open('%s/pwned','w')" % self.tmp.name]}, ceiling)
             self.assertEqual([m["rc"] for m in conn.sent if m["type"] == "cmd_done"], [126], prof)
             self.assertFalse((Path(self.tmp.name) / "pwned").exists())
 
     def test_output_bound_and_timeout(self):
         code = "import sys\nfor _ in range(200):\n sys.stdout.write('x'*4096)"
-        conn = self.cmd_run("owned", {"type": "cmd", "cmd_id": "c1", "argv": [sys.executable, "-c", code]})
+        conn = self.cmd_run("owned", {"type": "cmd", "cmd_id": "00000000000000c1", "argv": [sys.executable, "-c", code]})
         total = sum(len(m["data"]) for m in conn.sent if m["type"] == "cmd_output" and m["stream"] == "stdout")
         self.assertLessEqual(total, CMD_MAX_BYTES)
         self.assertIn("truncated", [m for m in conn.sent if m["type"] == "cmd_output"][-1]["data"])
-        conn = self.cmd_run("owned", {"type": "cmd", "cmd_id": "c2", "argv": ["sleep", "30"], "timeout": 0.5})
+        conn = self.cmd_run("owned", {"type": "cmd", "cmd_id": "00000000000000c2", "argv": ["sleep", "30"], "timeout": 0.5})
         self.assertEqual([m["rc"] for m in conn.sent if m["type"] == "cmd_done"], [124])
 
     def test_cmd_not_during_run_unless_explicit(self):
         FakeRunner.gate = threading.Event()
-        c = {"type": "cmd", "cmd_id": "c1", "argv": ["true"]}
+        c = {"type": "cmd", "cmd_id": "00000000000000c1", "argv": ["true"]}
         wait = lambda conn: [self.wait_active(d)]
         d, conn, _ = self.serve([welcome(), offer(), wait, c, lambda c_: d.join(0.5), None, Closed(1006)])
         d.run_forever(max_sessions=1)
@@ -510,9 +512,9 @@ class CmdTests(Base):
             threading.Event().wait(0.01)
 
     def test_cmd_needs_exactly_argv_or_shell(self):
-        conn = self.cmd_run("owned", {"type": "cmd", "cmd_id": "c1"})
+        conn = self.cmd_run("owned", {"type": "cmd", "cmd_id": "00000000000000c1"})
         self.assertEqual([m["rc"] for m in conn.sent if m["type"] == "cmd_done"], [126])
-        conn = self.cmd_run("owned", {"type": "cmd", "cmd_id": "c2", "shell": "echo $((1+2))"})
+        conn = self.cmd_run("owned", {"type": "cmd", "cmd_id": "00000000000000c2", "shell": "echo $((1+2))"})
         self.assertIn("3", "".join(m["data"] for m in conn.sent if m["type"] == "cmd_output"))
 
 
@@ -599,8 +601,8 @@ class SeedTests(Base):
         art = {"name": "a.tar", "sha256": "0" * 64, "size": 3}
 
         def go(conn):
-            results.append(d.seed_register("o1", art, "/x/a.tar"))
-            results.append(d.seed_register("o1", art, "/x/a.tar"))
+            results.append(d.seed_register("0123456789abcdef", art, "/ab12cd34/a.tar"))
+            results.append(d.seed_register("0123456789abcdef", art, "/ab12cd34/a.tar"))
 
         script = [welcome(), lambda c: threading.Thread(target=go, args=(c,)).start(), None, None]
         if reply is not None:
@@ -643,15 +645,15 @@ class SeedTests(Base):
         d.profile = "owned"
         d.run_forever(max_sessions=1)
         d.conn = type("C", (), {"send": lambda s, t: None})()
-        results.append(d.seed_register("o1", art, "/x", log=logs.append))
-        results.append(d.seed_register("o1", art, "/x", log=logs.append))
+        results.append(d.seed_register("0123456789abcdef", art, "/ab12cd34/a", log=logs.append))
+        results.append(d.seed_register("0123456789abcdef", art, "/ab12cd34/a", log=logs.append))
         self.assertEqual(results, [False, False])
         self.assertFalse(d.seed_ok)
         self.assertTrue(any("unavailable" in l for l in logs))
         self.assertEqual(len([m for m in conn.sent if m["type"] == "seed_register"]), 0)
 
     def test_drift_warning_in_seed_register_frame(self):
-        script = [welcome("container"), lambda c: threading.Thread(target=lambda: d.seed_register("o1", {"name": "a", "sha256": "0" * 64, "size": 1}, "/x")).start(),
+        script = [welcome("container"), lambda c: threading.Thread(target=lambda: d.seed_register("0123456789abcdef", {"name": "a", "sha256": "0" * 64, "size": 1}, "/ab12cd34/a")).start(),
                   lambda c: self.wait_sent(c), {"type": "seed_ack", "ok": True}, None, None, Closed(1006)]
         d, conn, _ = self.serve(script, seeder_run=FakeSys(kfseed="drift"), ceiling="container")
         self.run_one(d)
@@ -783,8 +785,8 @@ class JobRunnerTests(Base):
         self.assertNotIn("KF_RUN_TOKEN", env)
         self.assertFalse(any("tok" == v or v == "asec" for v in env.values()))
 
-    def test_tree_key_mismatch_is_a_warning_and_a_result_field_for_standard(self):
-        logs, results = [], []
+    def test_tree_key_mismatch_warns_and_goes_only_to_the_run_report(self):
+        logs, results, reports = [], [], []
 
         class Rep:
             def __init__(s, cfg, o):
@@ -802,14 +804,16 @@ class JobRunnerTests(Base):
         (co / "scripts/kfci").mkdir(parents=True)
         (co / "scripts/kfci/main.py").write_text("print('x')")
         r = jobs.JobRunner(cfg, {}, reporting=Rep, fetch=lambda *a, **k: (str(co), True))
+        r.hardware_fn = lambda: {"gpu_name": "G", "compute_cap": 890, "driver_version": "580.1"}
+        r.report_fn = lambda cfg_, o, lines, result, mismatch: reports.append((result, mismatch))
         self.assertEqual(r.prepare(offer(), "standard"), str(co))
         r.run(jobs.JobContext(offer(), "standard", cfg, None, lambda: False), str(co))
         self.assertTrue(any("WARNING" in l and "tree key" in l for l in logs))
-        self.assertTrue(results[0]["tree_key_mismatch"])
-        # no mismatch: no field
+        self.assertNotIn("tree_key_mismatch", results[0])  # never in the result
+        self.assertEqual(reports[0][1], True)  # only the run-report path carries it
         r2 = jobs.JobRunner(cfg, {}, reporting=Rep, fetch=lambda *a, **k: (str(co), False))
         r2.prepare(offer(), "standard")
-        self.assertNotIn("tree_key_mismatch", r2.result(jobs.JobContext(offer(), "standard", cfg, None, lambda: False), 0))
+        self.assertFalse(r2.tree_key_mismatch)
 
     def test_report_goes_through_reporter_with_run_token(self):
         seen = []
@@ -827,11 +831,15 @@ class JobRunnerTests(Base):
         (co / "scripts/kfci").mkdir(parents=True)
         (co / "scripts/kfci/main.py").write_text("print('x')")
         r = jobs.JobRunner(cfg, {"gpu_name": "G", "compute_cap": "8.9", "driver": "580.1"}, reporting=Rep)
+        r.hardware_fn = lambda: {"gpu_name": "G", "compute_cap": 890, "driver_version": "580.1"}
+        r.report_fn = lambda *a: None
         rc = r.run(jobs.JobContext(offer(), "owned", cfg, None, lambda: False), str(co))
         self.assertEqual(rc, 0)
         self.assertEqual(seen[0], "jwt.tok-en")
         self.assertEqual(seen[1]["verdict"], "PASS")
+        self.assertEqual(sorted(seen[1]), ["hardware", "nonce", "runner_nonce", "sha", "suites", "verdict"])
         self.assertEqual(seen[1]["hardware"]["compute_cap"], 890)
+        self.assertEqual((seen[1]["nonce"], seen[1]["runner_nonce"], seen[1]["sha"]), ("c" * 32, "d" * 64, SHA))
         self.assertFalse(co.exists())
 
 

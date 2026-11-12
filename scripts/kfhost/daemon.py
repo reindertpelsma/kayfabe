@@ -3,12 +3,13 @@
 import json
 import os
 import random
+import shutil
 import subprocess
 import sys
 import threading
 import time
 
-from . import VERSION, probes
+from . import VERSION, frames, probes
 from .config import ws_url
 from .fetch import FetchError
 from .jobs import JobContext
@@ -74,6 +75,7 @@ class Daemon:
         self.wall = wall
         self.log = log or (lambda m: print(m, file=sys.stderr, flush=True))
         self.exit_idle_s = exit_idle_s
+        self.cmd_interval = 0.1
         self.commands_until_ms = None
         self.idle_clock = self.idle_wall = None
         self.touch()
@@ -87,7 +89,7 @@ class Daemon:
 
     def touch(self):
         """The box was just busy (or just started): the idle clock restarts."""
-        self.idle_clock, self.idle_wall = self.clock(), int(self.wall())
+        self.idle_clock, self.idle_wall = self.clock(), int(self.wall() * 1000)  # idle_wall: epoch milliseconds
 
     def busy(self):
         return self.active is not None or (self.cmd_thread is not None and self.cmd_thread.is_alive())
@@ -116,17 +118,16 @@ class Daemon:
 
     def hello(self):
         caps = probes.measure(self.prober, self.cfg["work_dir"])
-        return self.send({"type": "hello", "box_id": self.cfg["box_id"], "version": VERSION, "capabilities": caps,
-                          "enforced": dict(self.local)}), caps
+        caps = {k: v for k, v in caps.items() if v is not None}  # unmeasured fields are omitted, never guessed
+        return self.send(frames.hello(self.cfg["box_id"], VERSION, caps, self.local)), caps
 
     def heartbeat(self):
         act = self.active
-        msg = {"type": "heartbeat", "ts": int(self.wall()), "state": "busy" if act else "idle"}
         if act:
-            msg["run_id"] = act["run_id"]
-        elif not self.busy():
-            msg["idle_since"] = self.idle_wall
-        self.send(msg)
+            self.send(frames.heartbeat(self.wall(), "busy", run_id=act["run_id"]))
+        else:
+            self.send(frames.heartbeat(self.wall(), "busy" if self.busy() else "idle",
+                                       idle_since_ms=None if self.busy() else self.idle_wall))
 
     # ---- connection loop ----
     def headers(self):
@@ -142,6 +143,17 @@ class Daemon:
     # Reconnect pacing per close code: (base, cap) seconds. 4409 = someone else holds the slot; 4403 = box
     # disabled or a transient Access 403. Neither stops the daemon; only 4401 (bad token) does.
     SLOW = {4409: (120.0, 600.0), 4403: (30.0, 300.0)}
+    # A non-101 HTTP answer on the upgrade (3xx incl. an Access redirect, 403, 5xx) reaches us as 4000+status
+    # from the transport: retry slowly with exponential backoff from 30 s, never a tight loop.
+    HTTP_SLOW = (30.0, 300.0)
+
+    @classmethod
+    def slow_params(cls, code):
+        if code in cls.SLOW:
+            return cls.SLOW[code]
+        if isinstance(code, int) and 4300 <= code <= 4599 and code not in (4401, 4408):
+            return cls.HTTP_SLOW
+        return None
 
     def run_forever(self, max_sessions=None):
         """Return an exit code: 3 on 4401 (bad token); 0 on a stop request or when max_sessions is reached."""
@@ -170,10 +182,10 @@ class Daemon:
             if code == 4401:
                 self.log("kfhost: box token rejected (close 4401); fix the token in the config and restart")
                 return EXIT_STOP
-            if code in self.SLOW:
+            if self.slow_params(code):
                 self.log("kfhost: close %s (%s); retrying slowly" % (code, "another connection holds this box's slot"
-                         if code == 4409 else "box disabled or access refused"))
-                base, cap = self.SLOW[code]
+                         if code == 4409 else "box disabled, access refused or upgrade not accepted"))
+                base, cap = self.slow_params(code)
                 attempt += 1
                 delay = self.backoff_delay(attempt - 1, base, cap)
             else:
@@ -259,14 +271,14 @@ class Daemon:
             if self.profile == "borrowed" and self.euid == 0:
                 raise Refused("borrowed refuses to run as root")
         except Refused as error:
-            self.send({"type": "nack", "offer_id": oid, "reason": str(error)[:200]})
+            self.send(frames.nack(oid, error))
             return
         if self.active is not None or self.cmd_thread is not None and self.cmd_thread.is_alive():
-            self.send({"type": "nack", "offer_id": oid, "reason": "busy"})
+            self.send(frames.nack(oid, "busy"))
             return
         # Early ack: the offer passed the profile checks. A drop during the fetch loses nothing (the Worker
         # re-offers idempotently by offer_id); `ready` follows verification, `nack` follows a failed one.
-        self.send({"type": "ack", "offer_id": oid})
+        self.send(frames.ack(oid))
         runner = self.runner_factory(self.cfg, self.caps)
         self.touch()
         self.active = {"offer_id": oid, "run_id": offer["run_id"], "runner": runner, "cancelled": False}
@@ -278,15 +290,22 @@ class Daemon:
     def job(self, offer, runner, profile):
         act = self.active
         timer = None
+        oid = offer["offer_id"]
+        checkout = None
         try:
             try:
                 checkout = runner.prepare(offer, profile)  # fetch + verify BEFORE anything runs
             except (FetchError, OSError) as error:
-                self.send({"type": "nack", "offer_id": offer["offer_id"], "reason": ("verify: %s" % error)[:200]})
+                self.send(frames.nack(oid, "verify: %s" % error))
                 return
-            self.send({"type": "ready", "offer_id": offer["offer_id"]})
-            # Time cap from the Worker's deadline (epoch milliseconds): cancel the run when it passes.
-            left = max(0.0, offer["deadline"] / 1000.0 - self.wall())
+            # D2: a cancel or the deadline that arrived during the fetch aborts before the run starts.
+            if act["cancelled"] or self.wall() * 1000 >= offer["deadline_ms"]:
+                self.send(frames.nack(oid, "cancelled" if act["cancelled"] else "deadline passed during fetch"))
+                shutil.rmtree(checkout, ignore_errors=True)
+                return
+            self.send(frames.ready(oid))
+            # Time cap from the Worker's deadline_ms (epoch milliseconds): cancel the run when it passes.
+            left = max(0.0, offer["deadline_ms"] / 1000.0 - self.wall())
 
             def expire():
                 act["cancelled"] = True
@@ -297,7 +316,7 @@ class Daemon:
             timer.daemon = True
             timer.start()
             ctx = JobContext(offer, profile, self.cfg, None, lambda: act["cancelled"])
-            ctx.seed = lambda artifact, path: self.seed_register(offer["offer_id"], artifact, path, log=getattr(ctx, "log", None))
+            ctx.seed = lambda artifact, path: self.seed_register(oid, artifact, path, log=getattr(ctx, "log", None))
             runner.run(ctx, checkout)
         finally:
             if timer:
@@ -322,8 +341,12 @@ class Daemon:
             return False
         self._seed_event.clear()
         self._seed_reply = None
-        if not self.send({"type": "seed_register", "offer_id": offer_id, "artifact": artifact, "path": path,
-                          "warnings": self.seeder["warnings"]}):
+        try:
+            frame = frames.seed_register(offer_id, artifact, path, self.seeder["warnings"])
+        except ValueError:
+            self.seed_ok = False
+            return False
+        if not self.send(frame):
             self.seed_ok = False
             return False
         if not self._seed_event.wait(self.seed_timeout):
@@ -337,10 +360,12 @@ class Daemon:
     # ---- remote commands (owned only) ----
     def on_cmd(self, msg):
         cid = msg.get("cmd_id")
-        if not isinstance(cid, (str, int)):
+        if not (isinstance(cid, str) and frames.CMD_ID.fullmatch(cid)):
             return
+        # The window travels in each cmd frame (and in the welcome); the frame's own value wins.
+        until = msg["commands_until_ms"] if "commands_until_ms" in msg else self.commands_until_ms
         refuse = None
-        if not allows_cmd(self.profile, self.cfg, self.commands_until_ms, int(self.wall() * 1000)):
+        if not allows_cmd(self.profile, self.cfg, until, int(self.wall() * 1000)):
             refuse = "cmd refused: needs profile owned, local allow_cmd and an active commands_until"
         elif self.cmd_thread is not None and self.cmd_thread.is_alive():
             refuse = "cmd refused: another command is running"
@@ -355,8 +380,8 @@ class Daemon:
             elif shell is not None and not isinstance(shell, str):
                 refuse = "invalid shell"
         if refuse:
-            self.send({"type": "cmd_output", "cmd_id": cid, "seq": 0, "stream": "stderr", "data": refuse, "eof": True})
-            self.send({"type": "cmd_done", "cmd_id": cid, "rc": 126})
+            self.send(frames.cmd_output(cid, 0, "stderr", refuse, True))
+            self.send(frames.cmd_done(cid, 126))
             return
         argv = msg["argv"] if msg.get("argv") is not None else ["/bin/sh", "-c", msg["shell"]]
         timeout = msg.get("timeout")
@@ -369,9 +394,17 @@ class Daemon:
         sent = [0]
         lock = threading.Lock()
 
+        last = [0.0]
+
         def emit(stream, data, eof=False):
             with lock:
-                self.send({"type": "cmd_output", "cmd_id": cid, "seq": seq[0], "stream": stream, "data": data, "eof": eof})
+                # Pace to the Worker's per-socket bucket: at most one frame per cmd_interval (default 10/s),
+                # each at most CMD_CHUNK bytes, the total bounded by CMD_MAX_BYTES.
+                wait = last[0] + self.cmd_interval - time.monotonic()
+                if wait > 0:
+                    time.sleep(wait)
+                last[0] = time.monotonic()
+                self.send(frames.cmd_output(cid, seq[0], stream, data, eof))
                 seq[0] += 1
 
         try:
@@ -379,7 +412,7 @@ class Daemon:
                                     start_new_session=True)
         except OSError as error:
             emit("stderr", "spawn failed: %s" % error, True)
-            self.send({"type": "cmd_done", "cmd_id": cid, "rc": 127})
+            self.send(frames.cmd_done(cid, 127))
             return
         truncated = [False]
 
@@ -414,5 +447,5 @@ class Daemon:
         proc.stderr.close()
         note = ("[output truncated at %d bytes]" % CMD_MAX_BYTES if truncated[0] else "") + ("[timeout]" if timed_out else "")
         emit("stderr", note, True)
-        self.send({"type": "cmd_done", "cmd_id": cid, "rc": 124 if timed_out else rc})
+        self.send(frames.cmd_done(cid, 124 if timed_out else rc))
         self.touch()

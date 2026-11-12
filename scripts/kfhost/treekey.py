@@ -229,6 +229,20 @@ def commit_tree_key(git, commit):
                 if mode not in ("100644", "100755"):
                     return None
                 text = git(["cat-file", "blob", sha]).decode("utf-8")
-        return tree_key_of(entries, patterns_for(text))
+        patterns = patterns_for(text)
+        if patterns is None:
+            return None
+        # Like computeTreeKey: a wholly ignored top-level directory is never listed, so nothing below it is
+        # validated or charged to the matcher budget (the JS never sees those files either).
+        skipped, kept = {}, []
+        for e in entries:
+            top, sep, _ = e[0].partition("/")
+            if sep:
+                if top not in skipped:
+                    skipped[top] = ignored(patterns, top, True)
+                if skipped[top]:
+                    continue
+            kept.append(e)
+        return tree_key_of(kept, patterns)
     except (ValueError, UnicodeError, subprocess.SubprocessError, OSError):
         return None

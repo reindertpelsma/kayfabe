@@ -61,6 +61,43 @@ class Reporting:
         return self.reporter.finish(result, note, None)
 
 
+def load_payload_module():
+    """scripts/ci/vast_payload.py, for its `hardware()` helper (the Vast payload's own nvidia-smi reading)."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("kfhost_vast_payload", CI_DIR / "vast_payload.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def load_run_report_module():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("kfhost_vast_run_report", CI_DIR / "vast_run_report.py")
+    mod = importlib.util.module_from_spec(spec)
+    sys.path.insert(0, str(CI_DIR))
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def post_run_report(cfg, offer, log_lines, result, tree_key_mismatch, module=None, transport=None):
+    """POST /run-report/<run_id> through vast_run_report.py's builder and Transport. tree_key_mismatch travels
+    ONLY here (a boolean fact), never in the result. Best effort: returns True when a post was attempted OK."""
+    try:
+        mod = module or load_run_report_module()
+        doc = mod.build_report(log_lines, result)
+        if tree_key_mismatch:
+            doc["tree_key_mismatch"] = True
+        body = json.dumps(doc, separators=(",", ":")).encode()
+        access = {"KF_ACCESS_ID": cfg["access_id"], "KF_ACCESS_SECRET": cfg["access_secret"]}
+        transport = transport or mod.Transport(offer["run_token"], access=access)
+        status, _ = transport.post("%s/run-report/%s" % (cfg["worker_url"], offer["run_id"]), body)
+        return status == 200
+    except Exception:  # noqa: BLE001  (a report problem must never touch the run)
+        return False
+
+
 class JobContext:
     """What a running job may do besides computing: read the offer, register a seed, check cancel."""
 
@@ -77,6 +114,9 @@ class JobRunner:
         self.cfg, self.caps, self.reporting, self.fetch = cfg, caps, reporting, fetch
         self.proc = None
         self.tree_key_mismatch = False
+        self.hardware_fn = None  # injectable; default: the Vast payload's own helper
+        self.report_fn = post_run_report
+        self.log_lines = []
 
     def prepare(self, offer, profile):
         """Fetch + verify BEFORE running. Returns the checkout dir; raises FetchError."""
@@ -89,7 +129,7 @@ class JobRunner:
     def kfci_assignment(self, offer):
         a = offer["assignment"]
         steps = [{"id": STAGE_TO_KFCI[s]} for s in a.get("stages", [])] or [{"id": "merge_bar"}]
-        budget = max(60, int(offer["deadline"] / 1000 - time.time()))  # deadline is epoch milliseconds
+        budget = max(60, int(offer["deadline_ms"] / 1000 - time.time()))  # deadline is epoch milliseconds
         return {"version": 1, "id": offer["run_id"][:90], "budget_seconds": budget, "steps": steps}
 
     def child_env(self, ctx, scratch):
@@ -110,6 +150,8 @@ class JobRunner:
             env.update(KF_STANDALONE="1", KF_NO_SYSTEM_CHANGES="1")
         else:
             env.update(ctx.offer["assignment"].get("env", {}))
+        if getattr(ctx, "seed_path", None):
+            env["KF_SEED_FILE"] = ctx.seed_path
         return env
 
     def cancel(self):
@@ -129,31 +171,64 @@ class JobRunner:
                                      stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         for chunk in iter(lambda: self.proc.stdout.read1(8192), b""):
             rep.feed(chunk)
+            if sum(map(len, self.log_lines)) < 2_000_000:  # the run report reads the same lines
+                self.log_lines.extend(chunk.decode("utf-8", "replace").splitlines())
         self.proc.stdout.close()
         return self.proc.wait()
 
+    def hardware(self):
+        fn = self.hardware_fn
+        if fn is None:
+            try:
+                fn = load_payload_module().hardware
+            except Exception:  # noqa: BLE001
+                fn = None
+        if fn is None:
+            return {"gpu_name": "unknown", "compute_cap": 0, "driver_version": "unknown"}
+        return fn()
+
     def result(self, ctx, rc):
+        """EXACTLY the Worker's key set (ci/vast-broker/src/results.js): hardware, nonce, runner_nonce, sha, suites,
+        verdict. nonce/runner_nonce/sha come from the offer's run section; without it there is no valid result
+        (None). tree_key_mismatch is NOT here: it goes through the run-report route."""
         a = ctx.offer["assignment"]
-        caps = self.caps
-        hardware = None
-        try:
-            cap = int(round(float(caps.get("compute_cap")) * 100))  # capability string "8.9" -> 890
-        except (TypeError, ValueError):
-            cap = None
-        if caps.get("gpu_name") and cap and caps.get("driver"):
-            hardware = {"gpu_name": caps["gpu_name"], "compute_cap": cap, "driver_version": caps["driver"]}
-        # OPEN QUESTION for W1: nonce / runner_nonce binding of a custom-host result is not specified.
-        out = {"verdict": "PASS" if rc == 0 else "FAIL", "suites": [{"name": "kfci", "pass": int(rc == 0), "fail": int(rc != 0), "skip": 0}], "sha": a["commit"]}
-        if hardware:
-            out["hardware"] = hardware
-        if self.tree_key_mismatch:  # OPEN QUESTION for W1: does the result schema accept this key?
-            out["tree_key_mismatch"] = True
-        return out
+        run = ctx.offer.get("run")
+        if not run or "nonce" not in run or "runner_nonce" not in run:
+            return None
+        return {
+            "hardware": self.hardware(),
+            "nonce": run["nonce"],
+            "runner_nonce": run["runner_nonce"],
+            "sha": run.get("sha", a["commit"]),
+            "suites": [{"name": "kfci", "pass": int(rc == 0), "fail": int(rc != 0), "skip": 0}],
+            "verdict": "PASS" if rc == 0 else "FAIL",
+        }
+
+    def consume_seed(self, ctx, scratch):
+        """Fetch the Worker-named seed (kf_fetch, SHA-256 + size pinned, fallback_url tried second). Any failure
+        only logs: the job builds locally. borrowed never gets here with a seed (the offer is refused earlier)."""
+        seed = ctx.offer["assignment"].get("seed")
+        if not seed:
+            return
+        out = Path(scratch) / "seed"
+        out.mkdir(exist_ok=True)
+        target = out / seed["name"]
+        urls = [seed["url"]] + ([seed["fallback_url"]] if seed.get("fallback_url") else [])
+        for url in urls:
+            if ctx.downloads.fetch(url, seed["sha256"], seed["size"], target, source="worker") == 0:
+                ctx.seed_path = str(target)
+                ctx.log("seed fetched from %s; verified sha256 and size" % url.split("/")[2])
+                return
+        ctx.log("seed unavailable (all URLs failed); building locally")
 
     def run(self, ctx, checkout):
         rep = self.reporting(self.cfg, ctx.offer)
         rep.progress("Custom host %s accepted the run" % self.cfg["box_id"])
-        ctx.log = lambda text: rep.feed((text + "\n").encode())
+        def log(text):
+            self.log_lines.append(text)
+            rep.feed((text + "\n").encode())
+
+        ctx.log = log
         if self.tree_key_mismatch:
             ctx.log("WARNING: the tree key recomputed on this host differs from the offer's tree_key "
                     "(tree_key_mismatch=true in the result); running anyway because the Worker is trusted here")
@@ -161,11 +236,17 @@ class JobRunner:
         os.makedirs(self.cfg["work_dir"], mode=0o700, exist_ok=True)
         scratch = tempfile.mkdtemp(prefix="scratch-", dir=self.cfg["work_dir"])
         try:
+            self.consume_seed(ctx, scratch)
             rc = self.execute(ctx, checkout, rep, scratch)
         finally:
             shutil.rmtree(checkout, ignore_errors=True)
             shutil.rmtree(scratch, ignore_errors=True)
         if ctx.cancelled():
             rc = 3
-        rep.finish(self.result(ctx, rc), "Run finished on a custom host.")
+        result = self.result(ctx, rc)
+        if result is None:
+            ctx.log("ERROR: the offer carries no run section (nonce, runner_nonce); no valid result can be reported")
+        rep.finish(result, "Run finished on a custom host.")
+        if result is not None:
+            self.report_fn(self.cfg, ctx.offer, self.log_lines, result, self.tree_key_mismatch)
         return rc

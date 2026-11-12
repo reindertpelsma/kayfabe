@@ -74,7 +74,7 @@ def prepare_seeder(profile, euid, run=default_run, which=shutil.which):
             for line in text.splitlines():
                 if line.startswith("WARNING:"):
                     warnings.append("nginx drifted: " + line[len("WARNING:"):].strip()[:200])
-                elif line.startswith("nginx candidate:") and line.split(":", 1)[1].strip() == "unknown":
+                elif line.startswith("nginx candidate:") and line.split(":", 1)[1].strip() in ("unknown", "candidate unknown"):
                     warnings.append("nginx candidate version unknown")
         elif rc == 2:
             old = None  # exit 2 = nginx missing (install help printed)

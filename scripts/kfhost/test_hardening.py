@@ -51,6 +51,27 @@ class TreeKeyParity(unittest.TestCase):
         got = treekey.tree_key_of([("b", "100644", sha(2)), ("a", "100755", sha(1))], treekey.parse_ignore("# c\n/docs/\n\n"))
         self.assertEqual(got, want)
 
+    def test_wholly_ignored_top_level_directories_are_skipped(self):
+        # Like computeTreeKey, nothing under a wholly ignored top-level directory is validated or budgeted.
+        # MEASURED 2026-11-12 on this repository (next 0d243aa4c..): the JS key and this port's key were equal and BOTH
+        # used 7,647,460 of 20,000,000 matcher steps (before the skip the port used 12.55M and would hit None on growth).
+        sha = lambda n: "%040x" % n  # noqa: E731
+        ls = "".join("100644 blob %s\t%s\0" % (sha(i), p) for i, p in ((1, "Cargo.toml"), (2, "docs/ok.md"), (3, "docs/bad//x"),
+                                                                       (4, "a/deep/%s" % "/".join("d" * 70 for _ in range(1)))))
+        ig = "/docs/\n"
+
+        def git(args):
+            if args[0] == "ls-tree":
+                return (ls + "100644 blob %s\t.workerignore\0" % sha(9)).encode()
+            return ig.encode()
+
+        key = treekey.commit_tree_key(git, "HEAD")
+        entries = [("Cargo.toml", "100644", sha(1)), (".workerignore", "100644", sha(9)), ("a/deep/" + "d" * 70, "100644", sha(4))]
+        self.assertEqual(key, treekey.tree_key_of(entries, treekey.patterns_for(ig)))
+        self.assertIsNotNone(key)
+        flat = [("docs/bad//x", "100644", sha(3))] + entries
+        self.assertIsNone(treekey.tree_key_of(flat, treekey.patterns_for(ig)))  # without the skip it would fail closed
+
     def test_fail_closed(self):
         p = treekey.patterns_for("")
         sha = "%040x" % 1
@@ -106,12 +127,12 @@ class WireAndFlow(Base):
         cfg, now = cfg_for(self.tmp.name), int(time.time() * 1000)
         for dl in (int(time.time()) + 3600, now - 1000, "x", None, 1.5e12, True):
             with self.assertRaises(Refused):
-                profile.check_offer("standard", offer(deadline=dl), cfg, now)
-        profile.check_offer("standard", offer(deadline=now + 5000), cfg, now)
+                profile.check_offer("standard", offer(deadline_ms=dl), cfg, now)
+        profile.check_offer("standard", offer(deadline_ms=now + 5000), cfg, now)
 
     def test_deadline_enforces_a_time_cap(self):
         FakeRunner.gate = threading.Event()
-        o = offer(deadline=int(time.time() * 1000) + 400)
+        o = offer(deadline_ms=int(time.time() * 1000) + 400)
         d, conn, _ = self.serve([welcome(), o, lambda c: self.wait_ran(), None, Closed(1006)])
         d.run_forever(max_sessions=1)
         for _ in range(100):
@@ -145,8 +166,8 @@ class WireAndFlow(Base):
             self.assertEqual(FakeRunner.profiles, [prof])
             self.assertEqual(profile.needs_ancestry(prof), prof == "borrowed")
 
-    def test_borrowed_refuses_seed_url_and_root(self):
-        o = offer(assignment=dict(offer()["assignment"], seed_url="http://1.2.3.4:80/x/y"))
+    def test_borrowed_refuses_seed_and_root(self):
+        o = offer(assignment=dict(offer()["assignment"], seed={"url": "http://1.2.3.4:80/ab12cd34/k.tar", "sha256": "e" * 64, "size": 5, "name": "k.tar"}))
         with self.assertRaises(Refused) as cm:
             profile.check_offer("borrowed", o, cfg_for(self.tmp.name), int(time.time() * 1000))
         self.assertIn("never receives artifacts from other boxes", str(cm.exception))
@@ -195,7 +216,7 @@ class FlagModel(Base):
         self.assertEqual(d.profile, "standard")
 
     def run_cmd(self, ceiling, w):
-        c = {"type": "cmd", "cmd_id": "c1", "argv": ["true"]}
+        c = {"type": "cmd", "cmd_id": "00000000000000c1", "argv": ["true"]}
         d, conn, _ = self.serve([w, c, lambda cc: d.join(), None, Closed(1006)], ceiling=ceiling)
         self.run_one(d)
         return [m["rc"] for m in conn.sent if m["type"] == "cmd_done"]

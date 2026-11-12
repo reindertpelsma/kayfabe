@@ -68,7 +68,7 @@ class IdleExit(Base):
         self.assertTrue(beats and isinstance(beats[0]["idle_since"], int))
 
     def test_running_cmd_blocks_exit(self):
-        c = {"type": "cmd", "cmd_id": "c1", "argv": [sys.executable, "-c", "import time;time.sleep(0.5)"]}
+        c = {"type": "cmd", "cmd_id": "00000000000000c1", "argv": [sys.executable, "-c", "import time;time.sleep(0.5)"]}
         d, conn, _ = self.serve_idle([welcome(), c] + [None] * 130 + [lambda x: d.join(), None, None], 2)
         d.run_forever()
         done = [m for m in conn.sent if m["type"] == "cmd_done"]
@@ -114,8 +114,12 @@ class Bootstrap(unittest.TestCase):
     def test_happy_path_pinned_checkout_config_0600_and_exec(self):
         code = self.run_with_url()
         self.assertEqual(code, 0, "\n".join(self.out))
-        cfgp = self.work / "config.json"
+        cfgp = self.work / "secrets" / "config.json"
         self.assertEqual(stat.S_IMODE(cfgp.stat().st_mode), 0o600)
+        self.assertEqual(stat.S_IMODE(cfgp.parent.stat().st_mode), 0o700)
+        jobs_dir = Path(json.loads(cfgp.read_text())["work_dir"])
+        self.assertNotIn(cfgp.parent, [jobs_dir, *jobs_dir.parents[:1]])  # not the jobs' cwd, not its parent dir
+        self.assertNotEqual(cfgp.parent, jobs_dir.parent)
         cfg = json.loads(cfgp.read_text())
         self.assertEqual((cfg["box_token"], cfg["access_secret"]), (TOKEN, SECRET))
         self.assertEqual(git(self.work / "checkout", "rev-parse", "HEAD"), self.sha)
@@ -158,7 +162,7 @@ class Bootstrap(unittest.TestCase):
                             out=self.out.append, git=fake_git)
         self.assertEqual(rc, 2)
         self.assertEqual((self.calls, self.execs), ([], []))
-        self.assertFalse((self.work / "config.json").exists())
+        self.assertFalse((self.work / "secrets" / "config.json").exists())
 
     def test_unknown_commit_and_bad_format_refused(self):
         self.assertEqual(self.go(commit="abc"), 2)
@@ -203,7 +207,7 @@ class Bootstrap(unittest.TestCase):
                             run=lambda argv, cwd, check: type("R", (), {"returncode": 1})(),
                             execv=lambda *a: self.execs.append(a), out=self.out.append, git=fake)
         self.assertEqual(rc, 2)
-        self.assertFalse((self.work / "config.json").exists())
+        self.assertFalse((self.work / "secrets" / "config.json").exists())
         self.assertEqual(self.execs, [])
 
 
