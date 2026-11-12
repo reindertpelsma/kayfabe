@@ -445,7 +445,7 @@ class WiredIntoMain(unittest.TestCase):
         if broker is not None:
             env["KF_BROKER"] = broker
         with patch.object(self.m, "watched", side_effect=spy):
-            rc, result, calls = self._main_fixture(windows=windows, soft_ms=300 * 60000, extra_env=env)
+            rc, result, calls = self._main_fixture(windows=windows, soft_ms=300 * 60000, extra_env=env, broker=True)
         return seen, result
 
     def test_small_has_no_broker_and_middle_large_wrap_the_guest_stages(self):
@@ -694,7 +694,7 @@ class MoreCoverage(unittest.TestCase):
         seen = []
         t = WiredIntoMain("run")
         t.setUp()
-        t._main_fixture(windows="0", soft_ms=300 * 60000, extra_env={"KF_TIER": "small", "KF_BROKER": "0"},
+        t._main_fixture(windows="0", soft_ms=300 * 60000, extra_env={"KF_TIER": "small", "KF_BROKER": "0"}, broker=True,
                         probe=lambda env: seen.append("KF_BROKER" in env))
         self.assertTrue(seen)
         self.assertFalse(any(seen))
@@ -871,7 +871,7 @@ class ExplicitStageInMain(unittest.TestCase):
             env["KF_BROKER"] = broker
         # the wrapped stages' own broker grading is covered above; here only the stage list is looked at
         with patch.object(self.m, "broker_guarded", side_effect=lambda grade, name, output: grade):
-            return self._main_fixture(windows=windows, soft_ms=300 * 60000, extra_env=env)
+            return self._main_fixture(windows=windows, soft_ms=300 * 60000, extra_env=env, broker=True)
 
     def test_it_runs_right_after_the_windows_gate(self):
         rc, result, calls = self.run_it()

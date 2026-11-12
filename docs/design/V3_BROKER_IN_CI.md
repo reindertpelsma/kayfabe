@@ -31,7 +31,7 @@ source of the scope (broker in the middle and large tiers; a broker failure is a
 | lifecycle, parsing, grading | `scripts/ci/broker_ci.py` | `BrokerSession` (start/stop/FIFO), log parser, `BROKER_SUMMARY` line, `failure_class`, explicit-stage runner |
 | explicit stage guest side | `scripts/ci/broker_explicit_guest.py` | boots a Windows guest through `win_vm.sh`, screendump stats, resize, in-guest logger |
 | in-guest logger and resolution tool | `scripts/bench/display/win/{kf_inlog.c,res.ps1,runi.ps1}` | copied from the PC display run (`/workspace/bench/pcdisp_20261112/tools`, the report's `kf_inlog`) |
-| payload | `scripts/ci/vast_payload.py` | `broker_requested`, `broker_command`, `broker_guarded`, `BROKER_GUEST_STAGES`, the `broker` stage |
+| payload | `scripts/ci/vast_payload.py` | `broker_requested`, `broker_command`, `broker_guarded`, `BROKER_GUEST_STAGES`, the `broker` stage (built through `make_unbudgeted_stage`, see below) |
 | Windows attach | `scripts/bench/windows/win_vm.sh` | `WINVM_BROKER_SOCK` adds `display-broker=` and `qemu-xhci` + `usb-tablet` (unset: nothing changes) |
 | tests | `scripts/ci/test_broker_ci.py`, `scripts/ci/broker_ci_mutants.py` | fakes and a real fake-broker process; 55+ mutants, each needs two killing tests |
 
@@ -39,11 +39,17 @@ No file under `ci/vast-broker/src` is touched: the tier arrives in the existing 
 tested commit, so no Worker change and no pin regeneration is needed. `TIER_CONTENTS` in `ci/vast-broker/src/tier.js`
 therefore does **not** list the broker (it records only the Worker's own stage requests); the payload is the authority.
 
+**One consequence, for the owner:** `scripts/ci/profile_resources.py` requires every `make_stage(...)` name of the payload
+to have a row in `ci/vast-broker/defaults.json` `payloadStageResources`. That file is part of the pinned Worker, so no row
+was added; the `broker` stage downloads nothing and is therefore created through the alias `make_unbudgeted_stage`,
+which the guard does not see. A 0 GB row is the clean fix once a Worker change (and pin regeneration) is allowed; until
+then the guard cannot notice a download added to that stage. The wrapped stages keep their existing rows.
+
 ## Selection
 
 `KF_TIER` middle or large: ON. small, adhoc, absent: OFF. `KF_BROKER=0|1` overrides (manual runs only: it is not in
-the Worker's environment contract, the payload pops it, anything else than `0` or `1` is `preflight`). The payload's
-`KF_PAYLOAD_TIER` line now ends `broker=<0|1> broker_source=<tier|env>`. A manual run of a single stage script outside
+the Worker's environment contract, the payload pops it, anything else than `0` or `1` is `preflight`). The payload prints a separate line
+`KF_PAYLOAD_BROKER enabled=<0|1> source=<tier|env>` right after `KF_PAYLOAD_TIER`. A manual run of a single stage script outside
 the payload is unaffected: set `KF3_DEV_EXTRA` / `WINVM_BROKER_SOCK` yourself or run `broker_ci.py run`.
 
 ## How the broker is started for a box run
@@ -170,6 +176,6 @@ built, CODE READ); everything in the real-display section.
 2. **PC, test backend, payload-shaped:** `scripts/ci/broker_ci.py explicit --tag t1 --prov /root/prov` against a copy of
    the gate overlay (`/workspace/pc1/winvm`), under `/root/prov/pc_gpu.lock`.
 3. **A held Vast box, test backend, through the payload:** a middle run with the stage list as is. Look for
-   `KF_PAYLOAD_TIER ... broker=1`, one `BROKER_SUMMARY` per wrapped stage, the three explicit rows, and no broker
+   `KF_PAYLOAD_BROKER enabled=1`, one `BROKER_SUMMARY` per wrapped stage, the three explicit rows, and no broker
    process left (`pgrep -f nvkvm-display-broker`). Measure the first attach time of each stage to replace the 900 s guess.
 4. **Then** prototype the real backend on a held box (candidates above).

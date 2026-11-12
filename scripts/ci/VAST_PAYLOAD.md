@@ -268,8 +268,7 @@ outside the large tier or a duplicate is refused before the first stage.
 headless test-backend broker around the stage, and add the `broker` stage after the Windows gate. `small` and `adhoc`
 do not. `KF_BROKER=0|1` overrides for a manual run; it is not sent by the Worker, is popped before any stage, and
 anything else is `preflight`. A broker failure (rows `broker_*`) is a plain FAIL, never a retry class, never a provider
-fault and never skipped; only a `ProviderFault` keeps its provider verdict. The `KF_PAYLOAD_TIER` line ends
-`broker=<0|1> broker_source=<tier|env>`.
+fault and never skipped; only a `ProviderFault` keeps its provider verdict. A separate line `KF_PAYLOAD_BROKER enabled=<0|1> source=<tier|env>` follows `KF_PAYLOAD_TIER`.
 
 ## Environment contract and the tier line (2026-11-10)
 

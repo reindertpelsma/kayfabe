@@ -316,7 +316,7 @@ class SpecStageInThePayload(unittest.TestCase):
     _main_fixture = v7.V7Tests._main_fixture
 
     def release(self, spec="lanea", stages="specviewperf", runs=None, tier="large", windows="1", logs=None, soft_ms=300 * 60000, extra=None):
-        env = {"KF_TIER": tier, "KF_BROKER": "0"}  # these tests are not about the broker (test_broker_ci.py is)
+        env = {"KF_TIER": tier}
         if runs is not None:
             env["KF_WINDOWS_RUNS"] = runs
         if stages is not None:

@@ -330,7 +330,7 @@ class AppsStageInThePayload(unittest.TestCase):
     _main_fixture = v7.V7Tests._main_fixture
 
     def run_tier(self, tier, enabled=True, logs=None, windows="0", soft_ms=300 * 60000):
-        env = {"KF_TIER": tier, "KF_BROKER": "0"}  # these tests are not about the broker (test_broker_ci.py is)
+        env = {"KF_TIER": tier}
         self.listed = []
         self.commands = []
         original = self.m.watched

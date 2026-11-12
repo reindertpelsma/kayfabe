@@ -293,7 +293,10 @@ class V7Tests(unittest.TestCase):
         soft_ms=10000,
         extra_env=None,
         stage_logs=None,
+        broker=False,
     ):
+        # The broker is on by default for middle/large (docs/design/V3_BROKER_IN_CI.md); these fixture tests are about
+        # other stages, so it is off unless a test asks (broker=True). test_broker_ci.py is the broker's own suite.
         from types import SimpleNamespace
 
         native_path = Path
@@ -403,6 +406,7 @@ class V7Tests(unittest.TestCase):
                         "KF_SOFT_DEADLINE_MS": str(int(time.time() * 1000) + soft_ms),
                         "KF_PROVISION_PROFILE": "full",
                         **({} if windows is None else {"KF_MERGE_WINDOWS": windows}),
+                        **({} if broker else {"KF_BROKER": "0"}),
                         **(extra_env or {}),
                     },
                 ),
@@ -717,7 +721,7 @@ class ReleaseTierPayloadTests(unittest.TestCase):
     _main_fixture = V7Tests._main_fixture
 
     def _release(self, stages=None, runs="2", tier="large", windows="1", logs=None, spec=None):
-        env = {"KF_TIER": tier, "KF_BROKER": "0"}  # these tests are not about the broker (test_broker_ci.py is)
+        env = {"KF_TIER": tier}
         if spec is not None:
             env["KF_SPEC"] = spec
         if runs is not None:
