@@ -512,12 +512,33 @@ mod tests {
             assert_eq!(abi_measured_in(MEASURED_TSV, t), Ok(()), "{t}");
         }
         // ⊘ before 575 `drm_nvidia_get_dev_info_params` has no `mig_device`: every later field
-        // sits 4 bytes lower, which the DRM core would have zero-filled into a silent misread
-        let e = abi_measured_in(MEASURED_TSV, "570.148.08").unwrap_err();
-        assert!(matches!(e, DrmNvRefusal::Unmeasurable(..)), "{e:?}");
-        assert!(e.to_string().contains("mig_device"), "{e}");
+        // sits 4 bytes lower, which the DRM core would have zero-filled into a silent misread.
+        // Since 2026-11-12 the probe is per-item tolerant: the tag is MEASURED (the struct is
+        // 20 B at 535.309.01, 28 B at 545.23.08, 32 B at 570.148.08), the absent member is an
+        // `ABSENT` row, and the rung is refused as DIFFERING, with the measured size, not as
+        // unmeasurable.
+        for (t, size) in [
+            ("535.309.01", "20"),
+            ("545.23.08", "28"),
+            ("570.148.08", "32"),
+        ] {
+            let e = abi_measured_in(MEASURED_TSV, t).unwrap_err();
+            assert!(matches!(e, DrmNvRefusal::Differs(..)), "{t}: {e:?}");
+            assert!(
+                MEASURED_TSV.contains(&format!(
+                    "{t}\tsizeof:drm_nvidia_get_dev_info_params\t{size}\n"
+                )),
+                "{t}: measured struct size {size}"
+            );
+            assert!(
+                MEASURED_TSV.contains(&format!(
+                    "{t}\toffsetof:drm_nvidia_get_dev_info_params.mig_device\tABSENT"
+                )),
+                "{t}: mig_device is an ABSENT row"
+            );
+        }
         assert!(matches!(
-            abi_measured_in(MEASURED_TSV, "580.159.03"),
+            abi_measured_in(MEASURED_TSV, "580.82.09"),
             Err(DrmNvRefusal::NotMeasured(_))
         ));
         let moved = MEASURED_TSV.replace(

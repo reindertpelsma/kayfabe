@@ -124,7 +124,7 @@
 //!
 //! | boundary | what changes | nvproxy |
 //! |---|---|---|
-//! | 550.54.04 | the shared base + `NVC36F_CTRL_GET_CLASS_ENGINEID` | `version.go:360` |
+//! | 550.54.04 | the shared base + `NVC36F_CTRL_GET_CLASS_ENGINEID` (the control is in the 535.104.05 and 545.23.06 rows too, below; ogkm: `ctrlc36f.h:70`, present from 515.43.04 through 550.90.07, `docs/design/V3_DRIVER_CROSSCHECK_20261112.md` H4) | `version.go:360` |
 //! | 550.90.07 | +`NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE` | `version.go:906` |
 //! | 555.42.02 | **−**`NVC36F_CTRL_GET_CLASS_ENGINEID` | `version.go:933` |
 //! | 560.28.03 | +8 alloc classes, +`NV_SEMAPHORE_SURFACE_CTRL_CMD_UNBIND_CHANNEL` | `version.go:945-977` |
@@ -1811,8 +1811,15 @@ pub(crate) static DENIED_CLASSES: &[DeniedEntry] = &[
 // its block. That absent name IS the removal — there is nothing else to it, and nothing
 // to un-inherit.
 
-/// Present at 550.54.04 and 550.90.07; **deleted** at 555.42.02
-/// (`gvisor nvproxy: version.go:933` — `delete(abi.controlCmd,
+/// Present at every boundary from 535.104.05 through 550.90.07 (the 535.104.05, 545.23.06,
+/// 550.54.04 and 550.90.07 rows all name this block); **deleted** at 555.42.02
+/// (the open source agrees with the nvproxy chain below, `[measured 2026-11-12]`: ogkm
+/// `src/common/sdk/nvidia/inc/ctrl/ctrlc36f.h:70` defines `NVC36F_CTRL_GET_CLASS_ENGINEID
+/// (0xc36f0101)` at 535.104.05, 535.309.01, 550.40.07, 550.54.14 and 550.90.07 and has no
+/// such define at 555.42.02; `src/nvidia/generated/g_kernel_channel_nvoc.c` lists method
+/// `0xc36f0101u` in kernel_channel's exported-method table at 535.309.01 and 550.54.14 and not
+/// at 555.42.02. Same finding in `docs/design/V3_DRIVER_CROSSCHECK_20261112.md`, H4.)
+/// nvproxy spells the same deletion (`gvisor nvproxy: version.go:933` — `delete(abi.controlCmd,
 /// nvgpu.NVC36F_CTRL_GET_CLASS_ENGINEID)`) and never re-added.
 ///
 /// ★ The C's list is the 575-era set, so it never had this row and neither did this port
