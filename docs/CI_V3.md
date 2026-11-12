@@ -276,3 +276,11 @@ pointer policy, which is not yet adopted:
 > preserve history and incoming links. Archive contents are read-only after the
 > move and excluded from active checks. Changed documents must clear the
 > freshness ratchet; never re-record debt to bypass it.
+
+## Job log of the real-GPU gate: URLs and verdict (2026-11-12)
+
+**STATUS of this section: LIVE as code on a branch, 2026-11-12; reaches runs only after master carries it (the gate runner is fetched from the pinned BASE ref); not measured on a real run.**
+The runner prints `LOG_URL` and `STATUS_URL` for each leg before the first Worker call, then an `OVERVIEW` and a final
+`VERDICT` line outside the display budget. The raw box log on `logs.kayfabe.dev` is the complete log; the job log's
+head/tail budget (not a GitHub limit) stays as a safety net. Details: `ci/vast-broker/README.md`, section
+"Public URLs, overview and verdict in the job log".
