@@ -77,7 +77,12 @@ export function publicIp(value) {
       (a === 172 && b >= 16 && b <= 31) ||
       (a === 192 && b === 168) ||
       (a === 192 && b === 0 && c === 0) ||
-      (a === 198 && (b === 18 || b === 19))
+      (a === 198 && (b === 18 || b === 19)) ||
+      // TEST-NET-1/2/3 and the 6to4 relay anycast block (documentation space; 240/4 is in a >= 224).
+      (a === 192 && b === 0 && c === 2) ||
+      (a === 198 && b === 51 && c === 100) ||
+      (a === 203 && b === 0 && c === 113) ||
+      (a === 192 && b === 88 && c === 99)
     )
       return null;
     return value;
@@ -274,15 +279,67 @@ const COMMIT = /^[0-9a-f]{40}$/;
 const TREE_KEY = /^[0-9a-f]{64}$/;
 const ENV_NAME = /^KF_[A-Z0-9_]{1,60}$/;
 
+// {url, fallback_url, sha256, size, name}: what a consumer needs to fetch an artifact from a seeder.
+// The ip form is http://<public ipv4>:<port>/<8-char token>/<name>, the fallback the hostname form.
+export function validateSeedRef(seed) {
+  onlyKeys(seed, ['url', 'fallback_url', 'sha256', 'size', 'name'], 'OFFER_SEED');
+  const name = seed.name;
+  if (
+    !SEED_NAME_RE.test(name ?? '') ||
+    !/^[0-9a-f]{64}$/.test(seed.sha256 ?? '') ||
+    !Number.isSafeInteger(seed.size) ||
+    seed.size < 1
+  )
+    bad('OFFER_SEED');
+  const u = /^http:\/\/([0-9.]+):([0-9]{1,5})\/([a-z0-9]{8})\/([A-Za-z0-9._-]{1,100})$/.exec(
+    seed.url ?? '',
+  );
+  if (!u || !publicIpv4(u[1]) || !validPort(Number(u[2])) || u[4] !== name) bad('OFFER_SEED');
+  if (seed.fallback_url !== null) {
+    const f = new RegExp(
+      '^http://([0-9]{1,3}(?:-[0-9]{1,3}){3})\\.(?:' +
+        MAPPERS.map((m) => m.zone.replaceAll('.', '\\.')).join('|') +
+        '):' +
+        u[2] +
+        '/' +
+        u[3] +
+        '/' +
+        name.replace(/[.]/g, '\\.') +
+        '$',
+    ).exec(seed.fallback_url ?? '');
+    if (!f || f[1].replaceAll('-', '.') !== u[1]) bad('OFFER_SEED');
+  }
+  return {
+    url: seed.url,
+    fallback_url: seed.fallback_url,
+    sha256: seed.sha256,
+    size: seed.size,
+    name,
+  };
+}
+
 // Validates the assignment of an offer for the profile and returns a normalised copy. `borrowed`
 // gets exactly repo/commit/tree_key/stages; no env, no requirements, nothing that could be read as a
 // script or command. EVERY profile (owned too) gets the canonical repo URL from the allowlist
 // (default REPO_ALLOWLIST), never an arbitrary URL, and stage names from WIRE_STAGES.
-export function validateAssignment(profile, assignment, repoAllowlist = REPO_ALLOWLIST) {
+export function validateAssignment(
+  profile,
+  assignment,
+  repoAllowlist = REPO_ALLOWLIST,
+  { allowSeed = false } = {},
+) {
   if (!PROFILES.includes(profile)) bad('OFFER_PROFILE');
   const allowed = isBorrowed(profile)
     ? BORROWED_ASSIGNMENT_KEYS
-    : ['repo', 'commit', 'tree_key', 'stages', 'requirements', 'env'];
+    : [
+        'repo',
+        'commit',
+        'tree_key',
+        'stages',
+        'requirements',
+        'env',
+        ...(allowSeed ? ['seed'] : []),
+      ];
   onlyKeys(assignment, allowed, 'OFFER_ASSIGNMENT_KEYS');
   if (!repoAllowlist.includes(assignment.repo)) bad('OFFER_REPO');
   if (!COMMIT.test(assignment.commit ?? '')) bad('OFFER_COMMIT');
@@ -301,6 +358,9 @@ export function validateAssignment(profile, assignment, repoAllowlist = REPO_ALL
       bad('OFFER_REQUIREMENTS');
     out.requirements = assignment.requirements;
   }
+  // A seed reference is built by the Worker from a seeder's record, never accepted from a planner
+  // (allowSeed is only set for the frame check and by the DO after it built it).
+  if (assignment.seed !== undefined) out.seed = validateSeedRef(assignment.seed);
   if (assignment.env !== undefined) {
     const e = assignment.env;
     if (
@@ -514,14 +574,27 @@ export function validateDaemonFrame(f) {
     case 'hello':
       if (!BOX_ID.test(f.box_id ?? '') || !isObject(f.capabilities)) return 'HELLO';
       if (f.version !== undefined && !str(f.version, 64)) return 'HELLO';
-      return only(['box_id', 'version', 'capabilities']);
+      // The daemon's own local flags (read-only facts to the Worker): at most 8 booleans.
+      if (
+        f.enforced !== undefined &&
+        (!isObject(f.enforced) ||
+          Object.keys(f.enforced).length > 8 ||
+          Object.entries(f.enforced).some(
+            ([k, v]) => !/^[a-z][a-z_]{0,31}$/.test(k) || typeof v !== 'boolean',
+          ))
+      )
+        return 'HELLO';
+      return only(['box_id', 'version', 'capabilities', 'enforced']);
     case 'heartbeat':
       if (f.state !== 'idle' && f.state !== 'busy') return 'HEARTBEAT';
       if (f.ts !== undefined && !int(f.ts)) return 'HEARTBEAT';
       if (f.run_id !== undefined && !RUN_ID.test(f.run_id)) return 'HEARTBEAT';
-      return only(['ts', 'state', 'run_id']);
+      if (f.idle_since !== undefined && !int(f.idle_since)) return 'HEARTBEAT';
+      return only(['ts', 'state', 'run_id', 'idle_since']);
     case 'ack':
       return OFFER_ID.test(f.offer_id ?? '') ? only(['offer_id']) : 'ACK';
+    case 'ready':
+      return OFFER_ID.test(f.offer_id ?? '') ? only(['offer_id']) : 'READY';
     case 'nack':
       if (!OFFER_ID.test(f.offer_id ?? '') || (f.reason !== undefined && !str(f.reason, 200)))
         return 'NACK';
@@ -540,7 +613,14 @@ export function validateDaemonFrame(f) {
         SEED_PATH.exec(f.path)[2] !== a.name
       )
         return 'SEED';
-      return only(['offer_id', 'artifact', 'path']);
+      if (
+        f.warnings !== undefined &&
+        (!Array.isArray(f.warnings) ||
+          f.warnings.length > 5 ||
+          f.warnings.some((w) => !str(w, 200) || /[^\x20-\x7e]/.test(w)))
+      )
+        return 'SEED';
+      return only(['offer_id', 'artifact', 'path', 'warnings']);
     }
     case 'cmd_output':
       if (
@@ -568,7 +648,14 @@ export function validateServerFrame(f) {
     case 'welcome':
       if (!BOX_ID.test(f.box_id ?? '') || !PROFILES.includes(f.profile) || !int(f.heartbeat_s))
         return 'WELCOME';
-      return only(['box_id', 'profile', 'heartbeat_s']);
+      if (
+        f.commands_until_ms !== undefined &&
+        f.commands_until_ms !== null &&
+        !int(f.commands_until_ms)
+      )
+        return 'WELCOME';
+      if (f.cmd_output_per_s !== undefined && !int(f.cmd_output_per_s)) return 'WELCOME';
+      return only(['box_id', 'profile', 'heartbeat_s', 'commands_until_ms', 'cmd_output_per_s']);
     case 'offer':
       if (
         !OFFER_ID.test(f.offer_id ?? '') ||
@@ -576,15 +663,29 @@ export function validateServerFrame(f) {
         !RUN_ID.test(f.run_id ?? '') ||
         !str(f.run_token, 1024) ||
         !int(f.deadline_ms) ||
-        !isObject(f.assignment)
+        !isObject(f.assignment) ||
+        !isObject(f.run) ||
+        !hasOnly(f.run, ['nonce', 'runner_nonce', 'sha']) ||
+        !/^[0-9a-f]{32}$/.test(f.run.nonce ?? '') ||
+        !/^[0-9a-f]{64}$/.test(f.run.runner_nonce ?? '') ||
+        !COMMIT.test(f.run.sha ?? '') ||
+        f.run.sha !== f.assignment.commit
       )
         return 'OFFER';
       try {
-        validateAssignment('owned', f.assignment);
+        validateAssignment('owned', f.assignment, REPO_ALLOWLIST, { allowSeed: true });
       } catch {
         return 'OFFER';
       }
-      return only(['offer_id', 'request_id', 'run_id', 'run_token', 'assignment', 'deadline_ms']);
+      return only([
+        'offer_id',
+        'request_id',
+        'run_id',
+        'run_token',
+        'run',
+        'assignment',
+        'deadline_ms',
+      ]);
     case 'cancel':
       return OFFER_ID.test(f.offer_id ?? '') ? only(['offer_id']) : 'CANCEL';
     case 'seed_ack':
@@ -592,9 +693,13 @@ export function validateServerFrame(f) {
         return 'SEED_ACK';
       return only(['ok', 'reason']);
     case 'cmd':
-      if (!CMD_ID.test(f.cmd_id ?? '') || (f.argv === undefined) === (f.shell === undefined))
+      if (
+        !CMD_ID.test(f.cmd_id ?? '') ||
+        (f.argv === undefined) === (f.shell === undefined) ||
+        !int(f.commands_until_ms)
+      )
         return 'CMD';
-      return only(['cmd_id', 'argv', 'shell']);
+      return only(['cmd_id', 'argv', 'shell', 'commands_until_ms']);
     case 'error':
       return str(f.code, 64) ? only(['code']) : 'ERROR';
     default:
@@ -631,7 +736,10 @@ export async function boxTokenMatches(storedHash, provided) {
 
 // ---- seeder probe --------------------------------------------------------------------------------
 export const SEED_TOKEN = /^[a-z0-9]{8}$/;
-export const SEED_NAME = /^[A-Za-z0-9._-]{1,100}$/;
+// Artifact names: the charset both sides share; no `..`, no leading dash or dot (they would be read as
+// an option or a hidden/relative path).
+export const SEED_NAME = /^(?![-.])(?!.*\.\.)[A-Za-z0-9._-]{1,100}$/;
+const SEED_NAME_RE = SEED_NAME;
 // The path a box registers: /<8-char token>/<artifact name>.
 export const SEED_PATH = /^\/([a-z0-9]{8})\/([A-Za-z0-9._-]{1,100})$/;
 

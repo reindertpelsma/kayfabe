@@ -70,6 +70,8 @@ export const ALLOWED = new Set([
   // Custom hosts (docs/design/V3_CUSTOM_HOSTS.md): the 40-hex commit of scripts/kfhost that the admin
   // enrol route pins in its bootstrap command. No default: the route refuses while it is unset.
   'HOST_DAEMON_COMMIT',
+  // The public Cloudflare Access client id printed in the enrol command (the secret is never known).
+  'HOST_ACCESS_ID',
   // Tiers (wtier, 2026-11-05; src/tier.js, src/policy.js): the release (large) profile's explicit
   // caps and lists, and the middle tier's rotation and VRAM floor. Account cap is now 1-8.
   'MAX_CONCURRENT_RELEASE',

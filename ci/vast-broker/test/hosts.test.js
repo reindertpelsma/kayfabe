@@ -23,6 +23,7 @@ import {
   validateCommandsUntil,
   validateDaemonFrame,
   validateKnownArtifacts,
+  validateSeedRef,
   validateServerFrame,
   HostError,
   LIVENESS_MS,
@@ -57,7 +58,7 @@ const goodConfig = {
   enabled: true,
   profile: 'owned',
   tiers: ['middle', 'small'],
-  seeder: { enabled: true, remote_ip: '203.0.113.9', external_port: 40022, inner_port: 8080 },
+  seeder: { enabled: true, remote_ip: '93.184.216.34', external_port: 40022, inner_port: 8080 },
   window: null,
   opportunistic: false,
   notes: 'rack 2',
@@ -66,7 +67,7 @@ const goodConfig = {
 test('config: valid body is normalised, tiers sorted', () => {
   const c = validateHostConfig(goodConfig);
   assert.deepEqual(c.tiers, ['middle', 'small']);
-  assert.equal(c.seeder.remote_ip, '203.0.113.9');
+  assert.equal(c.seeder.remote_ip, '93.184.216.34');
   assert.equal(c.window, null);
 });
 for (const [name, patch, code] of [
@@ -111,7 +112,7 @@ test('config: a disabled seeder needs no address', () => {
 });
 
 test('publicIp', () => {
-  for (const ok of ['203.0.113.9', '8.8.8.8', '2001:db8::1']) assert.ok(publicIp(ok), ok);
+  for (const ok of ['93.184.216.34', '8.8.8.8', '2001:db8::1']) assert.ok(publicIp(ok), ok);
   for (const no of [
     '0.0.0.0',
     '10.1.1.1',
@@ -332,7 +333,7 @@ const answer =
   async () =>
     new Response(body, init);
 const probe = (fetcher, extra = {}) =>
-  probeSeeder({ fetcher, ip: '203.0.113.9', port: 40022, token: TOKEN, timeoutMs: 40, ...extra });
+  probeSeeder({ fetcher, ip: '93.184.216.34', port: 40022, token: TOKEN, timeoutMs: 40, ...extra });
 test('probe success contacts exactly the configured address, once', async () => {
   const urls = [];
   const options = [];
@@ -341,8 +342,8 @@ test('probe success contacts exactly the configured address, once', async () => 
     options.push(init);
     return new Response(SEED_PROBE_CONTENT);
   });
-  assert.deepEqual(r, { ok: true, hostname: '203-0-113-9.sslip.io' });
-  assert.deepEqual(urls, ['http://203-0-113-9.sslip.io:40022/' + TOKEN + '/' + PROBE_FILE]);
+  assert.deepEqual(r, { ok: true, hostname: '93-184-216-34.sslip.io' });
+  assert.deepEqual(urls, ['http://93-184-216-34.sslip.io:40022/' + TOKEN + '/' + PROBE_FILE]);
   assert.equal(options[0].redirect, 'manual');
 });
 test('probe refuses an IPv6 literal (not supported for now)', async () => {
@@ -407,7 +408,7 @@ test('probe: the second name recovers from a failure of the first; two HTTP erro
     if (calls++ === 0) throw new Error('reset');
     return new Response(SEED_PROBE_CONTENT);
   };
-  assert.deepEqual(await probe(flaky), { ok: true, hostname: '203-0-113-9.traefik.me' });
+  assert.deepEqual(await probe(flaky), { ok: true, hostname: '93-184-216-34.traefik.me' });
   calls = 0;
   const r = await probe(async () => (calls++, new Response('x', { status: 503 })));
   assert.deepEqual(r, { ok: false, reason: 'HTTP_503' });
@@ -421,7 +422,7 @@ test('probe: bad address, port or token never reaches the fetcher', async () => 
     [{ ip: '127.0.0.1' }, 'BAD_ADDRESS'],
     [{ ip: 'evil.example' }, 'BAD_ADDRESS'],
     [{ ip: '2001:db8::1' }, 'BAD_ADDRESS'],
-    [{ ip: '203.0.113.9@evil.example' }, 'BAD_ADDRESS'],
+    [{ ip: '93.184.216.34@evil.example' }, 'BAD_ADDRESS'],
     [{ port: 0 }, 'BAD_PORT'],
     [{ port: 70000 }, 'BAD_PORT'],
     [{ port: '80' }, 'BAD_PORT'],
@@ -433,7 +434,7 @@ test('probe: bad address, port or token never reaches the fetcher', async () => 
   ])
     assert.equal((await probe(f, patch)).reason, reason, JSON.stringify(patch));
   assert.equal(
-    (await probeSeeder({ ip: '203.0.113.9', port: 80, token: TOKEN })).reason,
+    (await probeSeeder({ ip: '93.184.216.34', port: 80, token: TOKEN })).reason,
     'NO_FETCHER',
   );
   assert.equal(calls, 0);
@@ -534,8 +535,8 @@ test('probe uses hostnames, never the raw IP; one attempt per name, in order', a
   const r = await probe(async (u) => (urls.push(u), new Response('x', { status: 503 })));
   assert.deepEqual(r, { ok: false, reason: 'HTTP_503' });
   assert.deepEqual(urls, [
-    'http://203-0-113-9.sslip.io:40022/' + TOKEN + '/probe.txt',
-    'http://203-0-113-9.traefik.me:40022/' + TOKEN + '/probe.txt',
+    'http://93-184-216-34.sslip.io:40022/' + TOKEN + '/probe.txt',
+    'http://93-184-216-34.traefik.me:40022/' + TOKEN + '/probe.txt',
   ]);
   for (const u of urls) assert.doesNotMatch(new URL(u).hostname, /^[0-9.]+$/);
 });
@@ -546,22 +547,22 @@ test('probe: first name fails, second succeeds => ok with the second name; the f
     hosts.push(new URL(u).hostname);
     return n++ === 0 ? new Response('no', { status: 522 }) : new Response(SEED_PROBE_CONTENT);
   });
-  assert.deepEqual(r, { ok: true, hostname: '203-0-113-9.traefik.me' });
-  assert.deepEqual(hosts, ['203-0-113-9.sslip.io', '203-0-113-9.traefik.me']);
+  assert.deepEqual(r, { ok: true, hostname: '93-184-216-34.traefik.me' });
+  assert.deepEqual(hosts, ['93-184-216-34.sslip.io', '93-184-216-34.traefik.me']);
   const first = [];
   const ok = await probe(async (u) => (first.push(u), new Response(SEED_PROBE_CONTENT)));
-  assert.equal(ok.hostname, '203-0-113-9.sslip.io');
+  assert.equal(ok.hostname, '93-184-216-34.sslip.io');
   assert.equal(first.length, 1);
 });
 
 test('seedFallbackUrl: the hostname that passed, else the first mapper; never an unknown host', () => {
   const f = (ip, host) => seedFallbackUrl(ip, 40022, TOKEN, 'kf3.tar', host);
-  assert.equal(f('203.0.113.9'), 'http://203-0-113-9.sslip.io:40022/' + TOKEN + '/kf3.tar');
+  assert.equal(f('93.184.216.34'), 'http://93-184-216-34.sslip.io:40022/' + TOKEN + '/kf3.tar');
   assert.equal(
-    f('203.0.113.9', '203-0-113-9.traefik.me'),
-    'http://203-0-113-9.traefik.me:40022/' + TOKEN + '/kf3.tar',
+    f('93.184.216.34', '93-184-216-34.traefik.me'),
+    'http://93-184-216-34.traefik.me:40022/' + TOKEN + '/kf3.tar',
   );
-  assert.equal(f('203.0.113.9', 'evil.example'), null);
+  assert.equal(f('93.184.216.34', 'evil.example'), null);
   assert.equal(f('10.0.0.1'), null);
   assert.equal(f('2001:db8::1'), null);
 });
@@ -845,4 +846,71 @@ test('git-only boxes are scheduled only commits the Worker knows are in master o
     hostsFor(run('push', 'refs/heads/next'), [git, std], NOW).map((x) => x.box_id),
     ['g', 's'],
   );
+});
+
+test('publicIp: documentation, 6to4-relay and reserved space are refused', () => {
+  for (const ip of [
+    '192.0.2.1',
+    '198.51.100.7',
+    '203.0.113.9',
+    '192.88.99.1',
+    '240.0.0.1',
+    '255.255.255.255',
+  ])
+    assert.equal(publicIp(ip), null, ip);
+  for (const ip of [
+    '93.184.216.34',
+    '8.8.8.8',
+    '192.0.3.1',
+    '198.51.101.1',
+    '203.0.114.1',
+    '192.88.100.1',
+  ])
+    assert.equal(publicIp(ip), ip, ip);
+});
+
+test('assignment: a planner can never supply a seed; the Worker-built reference is validated', () => {
+  const seed = {
+    url: 'http://93.184.216.34:40022/ab12cd34/kf3.tar',
+    fallback_url: 'http://93-184-216-34.sslip.io:40022/ab12cd34/kf3.tar',
+    sha256: 'd'.repeat(64),
+    size: 1234,
+    name: 'kf3.tar',
+  };
+  for (const p of ['owned', 'container', 'standard', 'borrowed']) {
+    refused(() => validateAssignment(p, { ...assignment, seed }), 'OFFER_ASSIGNMENT_KEYS');
+  }
+  const ok = validateAssignment('standard', { ...assignment, seed }, REPO_ALLOWLIST, {
+    allowSeed: true,
+  });
+  assert.deepEqual(ok.seed, seed);
+  assert.equal(
+    validateAssignment(
+      'standard',
+      { ...assignment, seed: { ...seed, fallback_url: null } },
+      REPO_ALLOWLIST,
+      { allowSeed: true },
+    ).seed.fallback_url,
+    null,
+  );
+  // A borrowed consumer is never given a seed, even by the frame check's switch.
+  refused(
+    () =>
+      validateAssignment('borrowed', { ...assignment, seed }, REPO_ALLOWLIST, { allowSeed: true }),
+    'OFFER_ASSIGNMENT_KEYS',
+  );
+  for (const bad of [
+    { ...seed, url: 'http://10.0.0.1:40022/ab12cd34/kf3.tar' },
+    { ...seed, url: 'https://93.184.216.34:40022/ab12cd34/kf3.tar' },
+    { ...seed, url: 'http://example.com:40022/ab12cd34/kf3.tar' },
+    { ...seed, url: 'http://93.184.216.34:40022/AB12CD34/kf3.tar' },
+    { ...seed, url: 'http://93.184.216.34:40022/ab12cd34/other.tar' },
+    { ...seed, fallback_url: 'http://93-184-216-35.sslip.io:40022/ab12cd34/kf3.tar' },
+    { ...seed, fallback_url: 'http://evil.example:40022/ab12cd34/kf3.tar' },
+    { ...seed, fallback_url: 'http://93-184-216-34.sslip.io:40023/ab12cd34/kf3.tar' },
+    { ...seed, sha256: 'x' },
+    { ...seed, size: 0 },
+    { ...seed, extra: 1 },
+  ])
+    refused(() => validateSeedRef(bad), 'OFFER_SEED');
 });

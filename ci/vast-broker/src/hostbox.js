@@ -15,9 +15,10 @@ import {
   HEARTBEAT_S,
   HostError,
   LIVENESS_MS,
-  CANONICAL_REPO,
   REPO_ALLOWLIST,
   SEED_PATH,
+  seedAllowed,
+  validateSeedRef,
   checkKnownArtifact,
   commandsOpen,
   dieOfEnv,
@@ -56,6 +57,12 @@ export const CMD_FLUSH_BYTES = 4096;
 export const CMD_FLUSH_MS = 1000;
 export const BUCKET_CAPACITY = 20;
 export const BUCKET_PER_S = 10;
+// cmd_output frames get their own, larger bucket (a chatty command is paced by the daemon to this).
+export const CMD_OUTPUT_BURST = 40;
+export const CMD_OUTPUT_PER_S = 20;
+// A coarse bucket in front of the JSON parse, for every frame.
+export const RAW_BURST = 80;
+export const RAW_PER_S = 40;
 const BEARER = /^Bearer (kfh_[A-Za-z0-9_-]{43})$/;
 
 const json = (data, status = 200) =>
@@ -101,6 +108,7 @@ export class HostBox {
     // Injectable for tests; the seeder probe uses this fetcher and nothing else.
     this.fetcher = (...args) => fetch(...args);
     this.pending = new Map(); // cmd_id -> buffered output not yet flushed
+    this.probing = new Map(); // offer_id -> {token, promise} of the probe in flight
     this.buckets = new WeakMap(); // ws -> token bucket
   }
   now() {
@@ -143,10 +151,18 @@ export class HostBox {
       return a?.helloed && now - a.seen < LIVENESS_MS;
     });
   }
-  bucket(ws, now) {
-    let b = this.buckets.get(ws);
-    if (!b) this.buckets.set(ws, (b = { tokens: BUCKET_CAPACITY, at: now }));
-    b.tokens = Math.min(BUCKET_CAPACITY, b.tokens + ((now - b.at) / 1000) * BUCKET_PER_S);
+  // kind: 'raw' (before parsing, every frame), 'frame' (every frame but cmd_output), 'out' (cmd_output).
+  bucket(ws, now, kind = 'frame') {
+    const [cap, per] =
+      kind === 'raw'
+        ? [RAW_BURST, RAW_PER_S]
+        : kind === 'out'
+          ? [CMD_OUTPUT_BURST, CMD_OUTPUT_PER_S]
+          : [BUCKET_CAPACITY, BUCKET_PER_S];
+    let all = this.buckets.get(ws);
+    if (!all) this.buckets.set(ws, (all = {}));
+    const b = (all[kind] ??= { tokens: cap, at: now });
+    b.tokens = Math.min(cap, b.tokens + ((now - b.at) / 1000) * per);
     b.at = now;
     if (b.tokens < 1) return false;
     b.tokens -= 1;
@@ -156,7 +172,7 @@ export class HostBox {
   // ---- views -------------------------------------------------------------------------------
   async state() {
     await this.flushCommands();
-    const [config, caps, hb, offer, version, tokenHash, tokenAt, seed, commands] =
+    const [config, caps, hb, offer, version, tokenHash, tokenAt, seed, commands, enforced] =
       await Promise.all(
         [
           'config',
@@ -168,14 +184,15 @@ export class HostBox {
           'tokenAt',
           'seed',
           'commands',
+          'enforced',
         ].map((k) => this.get(k)),
       );
-    return { config, caps, hb, offer, version, tokenHash, tokenAt, seed, commands };
+    return { config, caps, hb, offer, version, tokenHash, tokenAt, seed, commands, enforced };
   }
   offerPending(offer, now) {
     if (!offer || now >= offer.deadline_ms) return false;
     if (offer.status === 'offered') return now - offer.offeredAt < ACK_TIMEOUT_MS;
-    return offer.status === 'acked';
+    return offer.status === 'acked' || offer.status === 'ready';
   }
   async snapshot() {
     const s = await this.state(),
@@ -206,6 +223,8 @@ export class HostBox {
       token_minted_at: s.tokenAt ?? null,
       offer: s.offer ? { ...s.offer } : null,
       seed: s.seed ?? null,
+      // The daemon's own local flags from its last hello: read-only facts.
+      enforced: s.enforced ?? null,
       commands: s.commands ?? [],
     };
   }
@@ -319,7 +338,7 @@ export class HostBox {
     if (ws.readyState !== OPEN) return;
     const now = this.now();
     if (typeof message !== 'string' || message.length > MAX_FRAME) return ws.close(1009, 'frame');
-    if (!this.bucket(ws, now)) return ws.close(1008, 'rate limit');
+    if (!this.bucket(ws, now, 'raw')) return ws.close(1008, 'rate limit');
     let m;
     try {
       m = JSON.parse(message);
@@ -327,6 +346,8 @@ export class HostBox {
       return ws.close(1007, 'json');
     }
     const attachment = ws.deserializeAttachment() ?? {};
+    if (!this.bucket(ws, now, m?.type === 'cmd_output' ? 'out' : 'frame'))
+      return ws.close(1008, 'rate limit');
     const problem = validateDaemonFrame(m);
     if (problem === 'FRAME' || problem === 'VERSION' || (problem && !attachment.helloed))
       return ws.close(1008, 'frame');
@@ -343,6 +364,8 @@ export class HostBox {
       const die = dieOfEnv(caps, this.env);
       if (die) caps.die = die;
       await this.put('caps', caps);
+      // Read-only facts about the daemon's own local restrictions (the admin cannot edit them).
+      await this.put('enforced', m.enforced ?? null);
       await this.put('version', typeof m.version === 'string' ? m.version.slice(0, 64) : null);
       await this.put('hb', { ts: now, state: 'idle' });
       ws.serializeAttachment({
@@ -358,6 +381,8 @@ export class HostBox {
         box_id: config.box_id,
         profile: config.profile,
         heartbeat_s: HEARTBEAT_S,
+        commands_until_ms: config.commands_until ?? null,
+        cmd_output_per_s: CMD_OUTPUT_PER_S,
       });
       await this.ctx.storage.setAlarm(now + LIVENESS_MS);
       return;
@@ -367,6 +392,7 @@ export class HostBox {
       case 'heartbeat':
         return this.onHeartbeat(ws, attachment, m, now);
       case 'ack':
+      case 'ready':
       case 'nack':
         ws.serializeAttachment({ ...attachment, seen: now });
         return this.onAck(ws, m);
@@ -393,29 +419,36 @@ export class HostBox {
     ws.serializeAttachment(next);
     if (m.state === 'idle' && !m.run_id) {
       const offer = await this.get('offer');
-      if (offer?.status === 'acked' && now - offer.ackedAt > ACK_GRACE_MS)
+      if (['acked', 'ready'].includes(offer?.status) && now - offer.ackedAt > ACK_GRACE_MS)
         await this.put('offer', { ...offer, status: 'done' });
     }
   }
+  // ack = the offer is accepted (profile checks passed, before the fetch); ready = the commit is
+  // fetched and verified; nack = refused, or failed after an ack (the run is released and the
+  // requirement stays unmet: it is never recorded as a result).
   async onAck(ws, m) {
     const offer = await this.get('offer');
+    const now = this.now();
     // An ack that arrives after the ack timeout (or after the box was marked lost) still counts
-    // while the offer's deadline has not passed: the daemon acks only after it has fetched and
-    // verified the commit, and a dropped connection must not lose that ack.
+    // while the offer's deadline has not passed: a dropped connection must not lose it.
+    const open = ['offered', 'lost'].includes(offer?.status);
+    const running = ['acked', 'ready'].includes(offer?.status);
     if (
       !offer ||
       m.offer_id !== offer.offer_id ||
-      !['offered', 'lost'].includes(offer.status) ||
-      this.now() >= offer.deadline_ms
+      now >= offer.deadline_ms ||
+      !(m.type === 'ack' ? open : m.type === 'ready' ? offer.status === 'acked' : open || running)
     )
       return this.send(ws, { type: 'error', code: 'UNKNOWN_OFFER' });
-    if (m.type === 'ack')
-      await this.put('offer', { ...offer, status: 'acked', ackedAt: this.now() });
+    if (m.type === 'ack') await this.put('offer', { ...offer, status: 'acked', ackedAt: now });
+    else if (m.type === 'ready')
+      await this.put('offer', { ...offer, status: 'ready', readyAt: now });
     else
       await this.put('offer', {
         ...offer,
-        status: 'nacked',
+        status: running ? 'failed' : 'nacked',
         reason: typeof m.reason === 'string' ? m.reason.slice(0, 128) : '',
+        ...(running ? { failedAt: now, unmet: true } : {}),
       });
   }
   async onSeed(ws, m, config) {
@@ -425,7 +458,7 @@ export class HostBox {
     const a = m.artifact;
     if (
       !offer ||
-      offer.status !== 'acked' ||
+      !['acked', 'ready'].includes(offer.status) ||
       m.offer_id !== offer.offer_id ||
       this.now() >= offer.deadline_ms
     )
@@ -439,17 +472,27 @@ export class HostBox {
       return answer(false, e.code ?? 'BAD_REGISTRATION');
     }
     const token = SEED_PATH.exec(m.path)[1];
-    // At most ONE probe per offer: its result is cached on the offer and reused.
+    // At most ONE probe per offer: its result is cached on the offer and reused, and concurrent
+    // registrations share the one probe that is in flight.
     let probe = offer.probe;
     if (probe && probe.token !== token) return answer(false, 'PROBE_USED');
     if (!probe) {
-      // Only the admin-configured address is contacted; nothing the box said selects it.
-      const result = await probeSeeder({
-        fetcher: this.fetcher,
-        ip: config.seeder.remote_ip,
-        port: config.seeder.external_port,
-        token,
-      });
+      let flight = this.probing.get(offer.offer_id);
+      if (flight && flight.token !== token) return answer(false, 'PROBE_USED');
+      if (!flight) {
+        // Only the admin-configured address is contacted; nothing the box said selects it.
+        flight = {
+          token,
+          promise: probeSeeder({
+            fetcher: this.fetcher,
+            ip: config.seeder.remote_ip,
+            port: config.seeder.external_port,
+            token,
+          }).finally(() => this.probing.delete(offer.offer_id)),
+        };
+        this.probing.set(offer.offer_id, flight);
+      }
+      const result = await flight.promise;
       probe = { token, ok: result.ok, hostname: result.hostname, reason: result.reason };
       // The probe took seconds; the offer may have been replaced meanwhile (a new generation). A
       // stale probe never writes anything.
@@ -460,7 +503,7 @@ export class HostBox {
         current.generation !== offer.generation
       )
         return answer(false, 'STALE_OFFER');
-      await this.put('offer', { ...current, probe });
+      if (!current.probe) await this.put('offer', { ...current, probe });
     }
     if (!probe.ok) return answer(false, probe.reason);
     const current = await this.get('offer');
@@ -476,14 +519,20 @@ export class HostBox {
       seeder_profile: config.profile,
       url: seedUrl(s.remote_ip, s.external_port, token, a.name),
       fallback_url: seedFallbackUrl(s.remote_ip, s.external_port, token, a.name, probe.hostname),
+      name: a.name,
       sha256: a.sha256,
       size: a.size,
+      // The seeder's own notes about its staging (bounded, printable); shown to the admin.
+      warnings: Array.isArray(m.warnings) ? m.warnings : [],
       registered_at: this.now(),
     });
     return answer(true);
   }
 
-  // Command output is buffered and flushed in batches; output after done is ignored.
+  // Command output is buffered and flushed in batches; output after done is ignored. Eviction of the
+  // object loses the buffer, so the first buffered frame of a burst leaves a durable `dirty_since`
+  // marker and an alarm flushes within CMD_FLUSH_MS; if the object is rebuilt while the marker is
+  // set, the log is flagged `incomplete` instead of silently claiming a complete run.
   async cmdEntry(id) {
     let e = this.pending.get(id);
     if (e) return e;
@@ -495,11 +544,16 @@ export class HostBox {
       rc: null,
       done: !!stored.done,
       dirty: false,
+      lost: stored.dirty_since !== undefined,
       last: this.now(),
       bytes: stored.output.length,
     };
     this.pending.set(id, e);
     return e;
+  }
+  async scheduleAlarm(at) {
+    const current = await this.ctx.storage.getAlarm();
+    if (current === null || at < current) await this.ctx.storage.setAlarm(at);
   }
   async onCommand(m, now) {
     const e = await this.cmdEntry(m.cmd_id);
@@ -514,7 +568,17 @@ export class HostBox {
     e.text += m.data.slice(0, room);
     e.bytes += Math.min(room, m.data.length);
     if (m.data.length > room) e.truncated = true;
-    e.dirty = true;
+    if (!e.dirty) {
+      // First buffered frame of a burst: durable marker plus a flush alarm.
+      e.dirty = true;
+      const commands = (await this.get('commands')) ?? [];
+      const c = commands.find((x) => x.cmd_id === m.cmd_id);
+      if (c && c.dirty_since === undefined) {
+        c.dirty_since = now;
+        await this.put('commands', commands);
+      }
+      await this.scheduleAlarm(Date.now() + CMD_FLUSH_MS);
+    }
     if (e.text.length >= CMD_FLUSH_BYTES || now - e.last >= CMD_FLUSH_MS)
       await this.flushCommands();
   }
@@ -527,6 +591,8 @@ export class HostBox {
       if (c && !c.done) {
         c.output = (c.output + e.text).slice(0, MAX_CMD_OUTPUT);
         if (e.truncated) c.truncated = true;
+        if (e.lost) c.incomplete = true;
+        delete c.dirty_since;
         if (e.done) {
           c.done = true;
           c.rc = e.rc;
@@ -552,6 +618,7 @@ export class HostBox {
   // Liveness: no frame for LIVENESS_MS closes the socket. Sockets carry their own last-seen time in
   // the attachment, so a heartbeat costs no storage write; the alarm reschedules itself.
   async alarm() {
+    await this.flushCommands();
     const now = this.now();
     const sockets = this.openSockets();
     if (!sockets.length) return;
@@ -675,19 +742,33 @@ export class HostBox {
       ? '/' + this.env.BROKER_PATH_PREFIX
       : '';
     const token = await this.rotateToken();
-    const raw = CANONICAL_REPO.replace('https://github.com/', 'https://raw.githubusercontent.com/');
-    const command = [
-      "umask 077 && printf '%s' '" + token + "' > kfhost.token",
-      'curl -fsSL ' + raw + '/' + commit + '/scripts/kfhost/bootstrap.py -o kfhost-bootstrap.py',
-      'python3 kfhost-bootstrap.py --worker-url ' +
-        origin +
-        prefix +
-        ' --box-id ' +
-        id +
-        ' --commit ' +
-        commit +
-        ' --token-file kfhost.token',
-    ].join(' && ');
+    const repo = this.repoAllowlist()[0];
+    if (!repo.startsWith('https://github.com/')) throw new HostError('ENROL_UNAVAILABLE', 503);
+    const raw = repo.replace('https://github.com/', 'https://raw.githubusercontent.com/');
+    // The public Access client id (a var; a placeholder until set). The Access client SECRET is never
+    // known to the Worker: the admin writes it into ./accessfile before running the command.
+    const accessId = /^[A-Za-z0-9._-]{8,128}$/.test(this.env.HOST_ACCESS_ID ?? '')
+      ? this.env.HOST_ACCESS_ID
+      : '<ACCESS_ID>';
+    const command =
+      '# First write the Cloudflare Access client SECRET (the Worker does not know it) into ./accessfile, ' +
+      "e.g.: umask 077; printf '%s' '<ACCESS_SECRET>' > accessfile\n" +
+      [
+        "umask 077 && printf '%s' '" + token + "' > kfhost.token",
+        'curl -fsSL ' + raw + '/' + commit + '/scripts/kfhost/bootstrap.py -o kfhost-bootstrap.py',
+        'python3 kfhost-bootstrap.py --repo ' +
+          repo +
+          ' --commit ' +
+          commit +
+          ' --worker-url ' +
+          origin +
+          prefix +
+          ' --box-id ' +
+          id +
+          ' --token-file kfhost.token --access-id ' +
+          accessId +
+          ' --access-secret-file accessfile',
+      ].join(' && ');
     return json({ box_id: id, shown_once: true, command });
   }
   async adminCmd(id, body) {
@@ -713,7 +794,13 @@ export class HostBox {
       done: false,
     });
     await this.put('commands', commands.slice(-MAX_COMMANDS));
-    this.send(sockets[0], { type: 'cmd', cmd_id, ...cmd });
+    // The daemon verifies freshness against commands_until_ms before it runs anything.
+    this.send(sockets[0], {
+      type: 'cmd',
+      cmd_id,
+      ...cmd,
+      commands_until_ms: config.commands_until,
+    });
     return json({ cmd_id });
   }
 
@@ -738,10 +825,10 @@ export class HostBox {
       previous &&
       body.request_id === previous.request_id &&
       now < previous.deadline_ms &&
-      ['offered', 'lost', 'acked'].includes(previous.status)
+      ['offered', 'lost', 'acked', 'ready'].includes(previous.status)
         ? previous
         : null;
-    if (again?.status === 'acked')
+    if (['acked', 'ready'].includes(again?.status))
       return json({ offer_id: again.offer_id, run_id: again.run_id, duplicate: true });
     if (!again && (snap.state !== 'idle' || snap.offer_pending)) throw new HostError('BUSY', 409);
     const run = body.run;
@@ -750,6 +837,8 @@ export class HostBox {
       !numericId(run.run) ||
       !numericId(run.attempt) ||
       !/^[0-9a-f]{32}$/.test(run.nonce ?? '') ||
+      // The daemon returns nonce, runner_nonce and sha in its result (the existing result schema).
+      !/^[0-9a-f]{64}$/.test(run.runner_nonce ?? '') ||
       !Number.isSafeInteger(run.reportExpiry) ||
       !Number.isSafeInteger(body.deadline_ms) ||
       body.deadline_ms <= now ||
@@ -762,6 +851,26 @@ export class HostBox {
       this.repoAllowlist(),
     );
     const artifacts = validateKnownArtifacts(body.artifacts);
+    // A consumer may be handed a seeder's artifact: the Worker builds the reference from the
+    // seeder's own record (never from the planner or the box), and a borrowed consumer never gets one.
+    if (body.seed_from !== undefined) {
+      if (!seedAllowed(snap.config.profile)) throw new HostError('SEED_NOT_ALLOWED', 403);
+      if (!BOX_ID.test(body.seed_from ?? '') || body.seed_from === snap.config.box_id)
+        throw new HostError('OFFER_SEED', 400);
+      const r = await this.stub(body.seed_from).fetch(
+        'https://internal.invalid/internal/seed?consumer=' + snap.config.profile,
+      );
+      if (r.status === 403) throw new HostError('SEED_NOT_ALLOWED', 403);
+      const rec = r.ok ? await r.json() : null;
+      if (!rec || typeof rec.name !== 'string') throw new HostError('SEED_UNAVAILABLE', 409);
+      assignment.seed = validateSeedRef({
+        url: rec.url,
+        fallback_url: rec.fallback_url ?? null,
+        sha256: rec.sha256,
+        size: rec.size,
+        name: rec.name,
+      });
+    }
     const key = run.run + '-' + run.attempt;
     let run_token;
     try {
@@ -809,6 +918,8 @@ export class HostBox {
       request_id: body.request_id,
       run_id: key,
       run_token,
+      // What the result schema needs back: nonce, runner_nonce and sha (the commit).
+      run: { nonce: run.nonce, runner_nonce: run.runner_nonce, sha: assignment.commit },
       assignment,
       deadline_ms: body.deadline_ms,
     });

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { build } from 'esbuild';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import { env } from '../test/helpers.js';
-import { CANONICAL_REPO, SEED_PROBE_CONTENT } from '../src/hosts.js';
+import { CANONICAL_REPO, SEED_PROBE_CONTENT, validateServerFrame } from '../src/hosts.js';
 
 // FALSIFIER: in a real workerd the HostBox Durable Object accepts a bad or missing token, a
 // disabled box or a stale connection; keeps two live connections; lets a non-owned box receive a
@@ -43,6 +43,8 @@ const bundle = await build({
         if (p === '/__t/alarm') { await this.alarm(); return new Response('ok'); }
         if (p === '/__t/storage') return Response.json([...(await this.ctx.storage.list())]);
         if (p === '/__t/release') { this.release?.(); return new Response('ok'); }
+        if (p === '/__t/sockets') return Response.json(this.ctx.getWebSockets().map((w) => w.readyState));
+        if (p === '/__t/evict') { this.pending.clear(); this.buckets = new WeakMap(); this.probing.clear(); return new Response('ok'); }
         if (p === '/__t/logs') return Response.json(this.logs);
         if (p === '/__t/probes') return Response.json(this.probes);
         return super.fetch(request);
@@ -60,7 +62,7 @@ const config = (patch = {}) => ({
   enabled: true,
   profile: 'owned',
   tiers: ['small', 'middle'],
-  seeder: { enabled: true, remote_ip: '203.0.113.9', external_port: 40022, inner_port: 8080 },
+  seeder: { enabled: true, remote_ip: '93.184.216.34', external_port: 40022, inner_port: 8080 },
   window: null,
   opportunistic: false,
   notes: '',
@@ -81,6 +83,7 @@ const run = {
   run: '123',
   attempt: '1',
   nonce: 'c'.repeat(32),
+  runner_nonce: 'e'.repeat(64),
   reportExpiry: Math.floor(Date.now() / 1000) + 3600,
 };
 const offerBody = (extra = {}) => ({
@@ -167,7 +170,7 @@ const runtime = async (t, extraBindings = {}) => {
     };
     const send = (frame) => sock.send(JSON.stringify({ v: 1, ...frame }));
     const code = () => {
-      return Promise.race([closedP, new Promise((res) => setTimeout(() => res('open'), 1500))]);
+      return Promise.race([closedP, new Promise((res) => setTimeout(() => res('open'), 4000))]);
     };
     return { sock, frames, next, send, code, closedP };
   };
@@ -297,6 +300,8 @@ test('ws: hello stores sanitised capabilities, welcome names the server-side pro
     box_id: 'rack-1',
     profile: 'borrowed',
     heartbeat_s: 15,
+    commands_until_ms: null,
+    cmd_output_per_s: 20,
   });
   const v = await h.view('rack-1');
   assert.equal(v.connected, true);
@@ -381,13 +386,19 @@ test('a live connection is never kicked by a newer one; a silent one is replaced
   assert.equal(third.welcome.type, 'welcome');
 });
 
+// Sockets the Durable Object itself still holds open (what a client sees can lag in miniflare: a
+// close issued right after accept is not always delivered, so the server side is what is asserted).
+const openSockets = async (h, id) =>
+  (await h.call(id, 'GET', '/__t/sockets')).data.filter((state) => state === 1).length;
+
 test('token rotation during an upgrade never leaves an old-token socket alive', async (t) => {
   const h = await runtime(t);
   await h.put('rack-1');
   for (let i = 0; i < 8; i++) {
     const old = await h.mint('rack-1');
     const [c] = await Promise.all([h.connect('rack-1', old), h.mint('rack-1')]);
-    assert.equal(await c.code(), 4401, 'round ' + i);
+    await h.wait(async () => (await openSockets(h, 'rack-1')) === 0, 'round ' + i + ' closed');
+    assert.ok([4401, 'open'].includes(await c.code()), 'round ' + i);
     assert.equal((await h.view('rack-1')).connected, false, 'round ' + i);
   }
   // Also with a hello in flight right behind the upgrade.
@@ -395,7 +406,7 @@ test('token rotation during an upgrade never leaves an old-token socket alive', 
   const c = await h.connect('rack-1', old);
   c.send({ type: 'hello', box_id: 'rack-1', capabilities: caps });
   await h.mint('rack-1');
-  assert.equal(await c.code(), 4401);
+  await h.wait(async () => (await openSockets(h, 'rack-1')) === 0, 'closed');
   assert.equal((await h.view('rack-1')).connected, false);
 });
 
@@ -695,11 +706,11 @@ test('seeder: probes only the configured address; the box cannot choose another'
   reg(c, offer);
   assert.equal((await c.next('seed_ack')).ok, true);
   assert.deepEqual((await h.call('rack-1', 'GET', '/__t/probes')).data, [
-    'http://203-0-113-9.sslip.io:40022/' + TOK + '/probe.txt',
+    'http://93-184-216-34.sslip.io:40022/' + TOK + '/probe.txt',
   ]);
   const v = await h.view('rack-1');
-  assert.equal(v.seed.url, 'http://203.0.113.9:40022/' + TOK + '/kf3.tar');
-  assert.equal(v.seed.fallback_url, 'http://203-0-113-9.sslip.io:40022/' + TOK + '/kf3.tar');
+  assert.equal(v.seed.url, 'http://93.184.216.34:40022/' + TOK + '/kf3.tar');
+  assert.equal(v.seed.fallback_url, 'http://93-184-216-34.sslip.io:40022/' + TOK + '/kf3.tar');
   assert.equal(v.seed.sha256, 'd'.repeat(64));
   assert.equal(v.seed.size, 1234);
   assert.equal(v.seed.source, 'seeder_reported');
@@ -894,7 +905,7 @@ test('admin: a seeder hostname cannot be configured', async (t) => {
   const h = await runtime(t);
   const seeder = {
     enabled: true,
-    remote_ip: '203.0.113.9',
+    remote_ip: '93.184.216.34',
     external_port: 40022,
     inner_port: 8080,
     hostname: 'seed.example.org',
@@ -910,11 +921,11 @@ test('seeder: the fallback_url names the mapper that passed the probe', async (t
   reg(c, offer);
   assert.equal((await c.next('seed_ack')).ok, true);
   const v = await h.view('rack-1');
-  assert.equal(v.seed.fallback_url, 'http://203-0-113-9.traefik.me:40022/' + TOK + '/kf3.tar');
-  assert.equal(v.seed.url, 'http://203.0.113.9:40022/' + TOK + '/kf3.tar');
+  assert.equal(v.seed.fallback_url, 'http://93-184-216-34.traefik.me:40022/' + TOK + '/kf3.tar');
+  assert.equal(v.seed.url, 'http://93.184.216.34:40022/' + TOK + '/kf3.tar');
   assert.deepEqual((await h.call('rack-1', 'GET', '/__t/probes')).data, [
-    'http://203-0-113-9.sslip.io:40022/' + TOK + '/probe.txt',
-    'http://203-0-113-9.traefik.me:40022/' + TOK + '/probe.txt',
+    'http://93-184-216-34.sslip.io:40022/' + TOK + '/probe.txt',
+    'http://93-184-216-34.traefik.me:40022/' + TOK + '/probe.txt',
   ]);
   // Both names failing is "cannot open a port" (a fresh offer gets a fresh probe).
   await h.call('rack-1', 'POST', '/internal/cancel', { offer_id: offer.offer_id });
@@ -1110,4 +1121,345 @@ test('enrol refuses without a pinned HOST_DAEMON_COMMIT and for an unknown box, 
   }
   const h = await runtime(t, { HOST_DAEMON_COMMIT: COMMIT });
   assert.equal((await enrol(h, 'nobody')).status, 404);
+});
+
+test('hello: enforced flags are stored read-only; idle heartbeats with idle_since keep the box alive', async (t) => {
+  const h = await runtime(t);
+  await h.put('rack-1');
+  const flags = { distrust_us: false, allow_cmd: true, container: false };
+  const c = await h.hello('rack-1', await h.mint('rack-1'), { enforced: flags });
+  assert.deepEqual((await h.view('rack-1')).enforced, flags);
+  // The admin config has no way to edit them.
+  assert.equal(
+    (await h.put('rack-1', { enforced: { allow_cmd: false } })).data.error,
+    'CONFIG_KEYS',
+  );
+  // An idle heartbeat as the daemon sends it is accepted (not a protocol error) and keeps liveness.
+  c.send({ type: 'heartbeat', ts: 1800000000, state: 'idle', idle_since: 1799999000000 });
+  await new Promise((r) => setTimeout(r, 100));
+  await h.call('rack-1', 'POST', '/__t/skew', 1, '30000');
+  c.send({ type: 'heartbeat', ts: 1800000030, state: 'idle', idle_since: 1799999000000 });
+  await new Promise((r) => setTimeout(r, 100));
+  await h.call('rack-1', 'POST', '/__t/skew', 1, '60000');
+  c.send({ type: 'heartbeat', ts: 1800000060, state: 'idle', idle_since: 1799999000000 });
+  await new Promise((r) => setTimeout(r, 100));
+  await h.call('rack-1', 'POST', '/__t/alarm', 1, '');
+  assert.equal((await h.view('rack-1')).connected, true);
+  assert.equal(await openSockets(h, 'rack-1'), 1);
+  // A bad value is answered with an error frame, not a close.
+  c.send({ type: 'heartbeat', state: 'idle', idle_since: 'now' });
+  assert.equal((await c.next('error')).code, 'BAD_FRAME');
+});
+
+test('ack, ready, nack: ack is accepted, ready is verified, nack after an ack fails the run', async (t) => {
+  const h = await runtime(t);
+  await h.put('rack-1');
+  const c = await h.hello('rack-1', await h.mint('rack-1'));
+  await h.call('rack-1', 'POST', '/internal/offer', offerBody());
+  const o = await c.next('offer');
+  // ready before ack is refused; ack; ready.
+  c.send({ type: 'ready', offer_id: o.offer_id });
+  assert.equal((await c.next('error')).code, 'UNKNOWN_OFFER');
+  c.send({ type: 'ack', offer_id: o.offer_id });
+  await h.wait(async () => (await h.view('rack-1')).offer.status === 'acked', 'acked');
+  assert.equal((await h.call('rack-1', 'GET', '/internal/snapshot')).data.offer_pending, true);
+  c.send({ type: 'ready', offer_id: o.offer_id });
+  await h.wait(async () => (await h.view('rack-1')).offer.status === 'ready', 'ready');
+  assert.equal((await h.call('rack-1', 'GET', '/internal/snapshot')).data.offer_pending, true);
+  // The same request after ready is a duplicate, not a second delivery.
+  assert.equal(
+    (await h.call('rack-1', 'POST', '/internal/offer', offerBody())).data.duplicate,
+    true,
+  );
+  // A nack after the ack (the daemon's verification failed): failed, released, unmet.
+  c.send({ type: 'nack', offer_id: o.offer_id, reason: 'tree key mismatch' });
+  await h.wait(async () => (await h.view('rack-1')).offer.status === 'failed', 'failed');
+  const v = await h.view('rack-1');
+  assert.equal(v.offer.reason, 'tree key mismatch');
+  assert.equal(v.offer.unmet, true);
+  assert.equal((await h.call('rack-1', 'GET', '/internal/snapshot')).data.offer_pending, false);
+  // The box can take a new offer; a nack of the failed one is now unknown.
+  assert.equal(
+    (await h.call('rack-1', 'POST', '/internal/offer', offerBody({ request_id: 'req-2' }))).status,
+    200,
+  );
+  await c.next('offer');
+  c.send({ type: 'nack', offer_id: o.offer_id });
+  assert.equal((await c.next('error')).code, 'UNKNOWN_OFFER');
+});
+
+test('offer: the run section carries nonce, runner_nonce and the commit; runner_nonce is required', async (t) => {
+  const h = await runtime(t);
+  await h.put('rack-1');
+  const c = await h.hello('rack-1', await h.mint('rack-1'));
+  const { runner_nonce, ...noRunner } = run;
+  assert.equal(
+    (await h.call('rack-1', 'POST', '/internal/offer', offerBody({ run: noRunner }))).data.error,
+    'OFFER_RUN',
+  );
+  assert.equal(
+    (
+      await h.call(
+        'rack-1',
+        'POST',
+        '/internal/offer',
+        offerBody({ run: { ...run, runner_nonce: 'e'.repeat(63) } }),
+      )
+    ).data.error,
+    'OFFER_RUN',
+  );
+  assert.equal((await h.call('rack-1', 'POST', '/internal/offer', offerBody())).status, 200);
+  const offer = await c.next('offer');
+  assert.deepEqual(offer.run, { nonce: run.nonce, runner_nonce: run.runner_nonce, sha });
+  assert.equal(validateServerFrame(offer), null);
+  // The runner nonce is not stored on the Worker's offer record.
+  const raw = await h.call('rack-1', 'GET', '/__t/storage');
+  assert.ok(!raw.text.includes(run.runner_nonce));
+});
+
+test('welcome and cmd carry commands_until_ms; a window can be reopened', async (t) => {
+  const h = await runtime(t);
+  await h.put('own-1');
+  const set = await h.open('own-1');
+  const until = set.data.config.commands_until;
+  const c = await h.hello('own-1', await h.mint('own-1'));
+  assert.equal(c.welcome.commands_until_ms, until);
+  assert.equal(c.welcome.cmd_output_per_s, 20);
+  assert.equal(validateServerFrame(c.welcome), null);
+  assert.equal(
+    (await h.call('own-1', 'POST', '/admin/hosts/own-1/cmd', { shell: 'id' })).status,
+    200,
+  );
+  const cmd = await c.next('cmd');
+  assert.equal(cmd.commands_until_ms, until);
+  assert.equal(validateServerFrame(cmd), null);
+});
+
+test('cmd_output has its own larger bucket; a real flood is still closed 1008', async (t) => {
+  const h = await runtime(t);
+  await h.put('own-1');
+  await h.open('own-1');
+  const c = await h.hello('own-1', await h.mint('own-1'));
+  await h.call('own-1', 'POST', '/admin/hosts/own-1/cmd', { shell: 'yes' });
+  const cmd = await c.next('cmd');
+  const out = (i) =>
+    c.send({
+      type: 'cmd_output',
+      cmd_id: cmd.cmd_id,
+      seq: i,
+      stream: 'stdout',
+      data: 'x'.repeat(100),
+    });
+  for (let i = 0; i < 38; i++) out(i);
+  await new Promise((r) => setTimeout(r, 300));
+  assert.equal(await openSockets(h, 'own-1'), 1, '38 quick output frames are fine');
+  for (let i = 0; i < 120; i++) out(100 + i);
+  assert.equal(await c.code(), 1008);
+});
+
+test('seeder: concurrent registrations share ONE probe; another token meanwhile is PROBE_USED', async (t) => {
+  const h = await runtime(t);
+  await h.put('rack-1');
+  const { c, offer } = await ackedOffer(h, 'rack-1');
+  await h.call('rack-1', 'POST', '/__t/mode', 1, 'hold');
+  reg(c, offer);
+  reg(c, offer);
+  await h.wait(
+    async () => (await h.call('rack-1', 'GET', '/__t/probes')).data.length > 0,
+    'probe in flight',
+  );
+  reg(c, offer, { path: '/zz9y8x7w/kf3.tar' });
+  assert.equal((await c.next('seed_ack')).reason, 'PROBE_USED');
+  await h.call('rack-1', 'POST', '/__t/release', 1, '');
+  assert.equal((await c.next('seed_ack')).ok, true);
+  assert.equal((await c.next('seed_ack')).ok, true);
+  assert.equal(
+    (await h.call('rack-1', 'GET', '/__t/probes')).data.length,
+    1,
+    'one probe, one name',
+  );
+});
+
+test('seeder: warnings are stored and shown to the admin', async (t) => {
+  const h = await runtime(t);
+  await h.put('rack-1');
+  const { c, offer } = await ackedOffer(h, 'rack-1');
+  reg(c, offer, { warnings: ['candidate unknown', 'staged copy differs'] });
+  assert.equal((await c.next('seed_ack')).ok, true);
+  const v = await h.view('rack-1');
+  assert.deepEqual(v.seed.warnings, ['candidate unknown', 'staged copy differs']);
+  assert.equal(v.seed.name, 'kf3.tar');
+  reg(c, offer, { warnings: Array(6).fill('w') });
+  assert.equal((await c.next('error')).code, 'BAD_FRAME');
+});
+
+test('consumer path: an offer can carry a seed built from a seeder record, never for borrowed', async (t) => {
+  const h = await runtime(t);
+  await h.put('seed-1', { profile: 'standard' });
+  const { c: sc, offer: so } = await ackedOffer(h, 'seed-1');
+  reg(sc, so);
+  assert.equal((await sc.next('seed_ack')).ok, true);
+  const record = (await h.view('seed-1')).seed;
+  // A standard consumer gets the reference, built by the Worker from the record.
+  await h.put('cons-1', { profile: 'standard' });
+  const cc = await h.hello('cons-1', await h.mint('cons-1'));
+  const made = await h.call(
+    'cons-1',
+    'POST',
+    '/internal/offer',
+    offerBody({ seed_from: 'seed-1' }),
+  );
+  assert.equal(made.status, 200, made.text);
+  const offer = await cc.next('offer');
+  assert.deepEqual(offer.assignment.seed, {
+    url: record.url,
+    fallback_url: record.fallback_url,
+    sha256: record.sha256,
+    size: record.size,
+    name: record.name,
+  });
+  assert.equal(validateServerFrame(offer), null);
+  // A planner cannot supply the seed itself; a missing seeder is unavailable; self is refused.
+  assert.equal(
+    (await h.call('cons-1', 'POST', '/internal/cancel', { offer_id: offer.offer_id })).status,
+    200,
+  );
+  const planner = await h.call(
+    'cons-1',
+    'POST',
+    '/internal/offer',
+    offerBody({ request_id: 'r2', assignment: { ...assignment, seed: offer.assignment.seed } }),
+  );
+  assert.equal(planner.data.error, 'OFFER_ASSIGNMENT_KEYS');
+  assert.equal(
+    (
+      await h.call(
+        'cons-1',
+        'POST',
+        '/internal/offer',
+        offerBody({ request_id: 'r3', seed_from: 'nobody' }),
+      )
+    ).data.error,
+    'SEED_UNAVAILABLE',
+  );
+  assert.equal(
+    (
+      await h.call(
+        'cons-1',
+        'POST',
+        '/internal/offer',
+        offerBody({ request_id: 'r4', seed_from: 'cons-1' }),
+      )
+    ).data.error,
+    'OFFER_SEED',
+  );
+  // A borrowed consumer never receives a seed.
+  await h.put('bor-1', { profile: 'borrowed' });
+  const bc = await h.hello('bor-1', await h.mint('bor-1'));
+  const refused = await h.call(
+    'bor-1',
+    'POST',
+    '/internal/offer',
+    offerBody({ seed_from: 'seed-1' }),
+  );
+  assert.equal(refused.status, 403);
+  assert.equal(refused.data.error, 'SEED_NOT_ALLOWED');
+  assert.equal(bc.frames.filter((f) => f.type === 'offer').length, 0);
+});
+
+test('eviction between cmd_output and cmd_done: flushed output survives, a lost tail is flagged incomplete', async (t) => {
+  const h = await runtime(t);
+  await h.put('own-1');
+  await h.open('own-1');
+  const c = await h.hello('own-1', await h.mint('own-1'));
+  const run1 = async (flushFirst) => {
+    const r = await h.call('own-1', 'POST', '/admin/hosts/own-1/cmd', { shell: 'job' });
+    const cmd = await c.next('cmd');
+    c.send({
+      type: 'cmd_output',
+      cmd_id: cmd.cmd_id,
+      seq: 0,
+      stream: 'stdout',
+      data: 'part one\n',
+    });
+    if (flushFirst)
+      await new Promise((x) => setTimeout(x, 1700)); // the flush alarm fires
+    else await new Promise((x) => setTimeout(x, 100));
+    await h.call('own-1', 'GET', '/__t/evict'); // the object is rebuilt: in-memory state is gone
+    c.send({ type: 'cmd_done', cmd_id: cmd.cmd_id, rc: 0 });
+    await h.wait(
+      async () => (await h.view('own-1')).commands.find((x) => x.cmd_id === r.data.cmd_id)?.done,
+      'done',
+    );
+    return (await h.view('own-1')).commands.find((x) => x.cmd_id === r.data.cmd_id);
+  };
+  const flushed = await run1(true);
+  assert.equal(flushed.output, 'part one\n');
+  assert.ok(!flushed.incomplete, 'the alarm flushed it before the eviction');
+  const lost = await run1(false);
+  assert.equal(lost.done, true);
+  assert.equal(
+    lost.incomplete,
+    true,
+    'a tail that may have been lost is never presented as complete',
+  );
+  assert.equal(lost.dirty_since, undefined);
+});
+
+test('enrol: the command parses with bootstrap.py (flag set copied from the daemon README)', async (t) => {
+  const prefix = 'P'.repeat(40);
+  const h = await runtime(t, {
+    HOST_DAEMON_COMMIT: COMMIT,
+    BROKER_PATH_PREFIX: prefix,
+    HOST_ACCESS_ID: 'abcdef0123456789.access',
+  });
+  await h.put('rack-1');
+  const { command } = (await enrol(h, 'rack-1')).data;
+  const [comment, line] = command.split('\n');
+  assert.match(comment, /^# .*Access client SECRET.*accessfile/);
+  assert.equal(command.split('\n').length, 2);
+  const run = line.split(' && ').at(-1);
+  assert.match(run, /^python3 kfhost-bootstrap\.py /);
+  // bootstrap.py (PR #346): required --repo --commit --worker-url --box-id --token-file; optional
+  // --access-id --access-secret-file --work-dir --dry-run (every flag takes a value except --dry-run).
+  const tokens = run.split(' ').slice(2);
+  const flags = {};
+  for (let i = 0; i < tokens.length; i += 2) flags[tokens[i]] = tokens[i + 1];
+  const known = [
+    '--repo',
+    '--commit',
+    '--worker-url',
+    '--box-id',
+    '--token-file',
+    '--access-id',
+    '--access-secret-file',
+    '--work-dir',
+  ];
+  assert.ok(
+    Object.keys(flags).every((f) => known.includes(f)),
+    JSON.stringify(flags),
+  );
+  for (const required of ['--repo', '--commit', '--worker-url', '--box-id', '--token-file'])
+    assert.ok(flags[required], required);
+  assert.equal(flags['--repo'], CANONICAL_REPO);
+  assert.equal(flags['--commit'], COMMIT);
+  assert.equal(flags['--access-id'], 'abcdef0123456789.access');
+  assert.equal(flags['--access-secret-file'], 'accessfile');
+  assert.equal(flags['--token-file'], 'kfhost.token');
+  assert.ok(
+    !command.includes('ACCESS_SECRET') || /<ACCESS_SECRET>/.test(comment),
+    'only a placeholder for the secret',
+  );
+  // Without HOST_ACCESS_ID the command carries a placeholder the admin replaces.
+  const h2 = await runtime(t, { HOST_DAEMON_COMMIT: COMMIT });
+  await h2.put('rack-2');
+  const c2 = (await enrol(h2, 'rack-2')).data.command;
+  assert.match(c2, /--access-id <ACCESS_ID> /);
+  // A repo allowlist that is not on github.com cannot be enrolled (the bootstrap URL is raw github).
+  const h3 = await runtime(t, {
+    HOST_DAEMON_COMMIT: COMMIT,
+    HOST_REPO_ALLOWLIST: JSON.stringify(['https://git.example/x']),
+  });
+  await h3.put('rack-3');
+  assert.equal((await enrol(h3, 'rack-3')).status, 503);
 });

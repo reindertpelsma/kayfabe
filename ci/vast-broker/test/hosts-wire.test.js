@@ -45,6 +45,7 @@ test('fixture covers every frame type the validators know', () => {
     'heartbeat',
     'hello',
     'nack',
+    'ready',
     'seed_register',
     'unknown',
   ]);
@@ -111,4 +112,32 @@ test('run report: tree_key_mismatch is kept when boolean, dropped otherwise, nev
     logsBase: null,
   });
   assert.equal('tree_key_mismatch' in plain, false);
+});
+
+import { checkedResult } from '../src/results.js';
+import { BOX_ID, SEED_NAME } from '../src/hosts.js';
+test('fixture constants: id and name rules, pacing, hardware shape and the exact result key set', () => {
+  const c = fx.constants;
+  assert.equal(new RegExp(c.box_id_regex).source, BOX_ID.source);
+  assert.equal(new RegExp(c.artifact_name_regex).source, SEED_NAME.source);
+  assert.equal(c.cmd_output_per_s, 20);
+  const result = {
+    hardware: c.result_hardware_shape,
+    nonce: 'c'.repeat(32),
+    runner_nonce: 'e'.repeat(64),
+    sha: 'a'.repeat(40),
+    suites: [{ name: 'gates', pass: 1, fail: 0, skip: 0 }],
+    verdict: 'PASS',
+  };
+  assert.deepEqual(Object.keys(result).sort(), c.result_keys);
+  assert.deepEqual(Object.keys(c.result_hardware_shape).sort(), c.result_hardware_keys);
+  assert.doesNotThrow(() => checkedResult(structuredClone(result)));
+  // tree_key_mismatch belongs to the run report only: the result route refuses it.
+  for (const key of c.run_report_only_keys)
+    assert.throws(() => checkedResult({ ...structuredClone(result), [key]: true }), /BAD_REPORT/);
+  // The offer's run section carries what the result needs back.
+  const offer = fx.worker_to_daemon.offer.valid[0];
+  assert.deepEqual(Object.keys(offer.run).sort(), ['nonce', 'runner_nonce', 'sha']);
+  assert.equal(offer.run.nonce.length, 32);
+  assert.equal(offer.run.runner_nonce.length, 64);
 });
