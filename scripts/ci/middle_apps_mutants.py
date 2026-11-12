@@ -325,8 +325,8 @@ CASES = [
     (
         "signed-tier-ignored",
         BROKER + "src/tier.js",
-        "tierName === 'middle' && enabled",
-        "enabled",
+        "return mine && enabled",
+        "return enabled",
         "node",
     ),
     (
